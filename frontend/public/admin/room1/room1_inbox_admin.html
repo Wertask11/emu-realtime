@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Room1｜お預かり箱 管理</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body {
+  background:#0f0f0f;
+  color:#fff;
+  font-family: system-ui, sans-serif;
+}
+.container {
+  max-width:900px;
+  margin:auto;
+  padding:24px;
+}
+.item {
+  background:#161616;
+  border:1px solid #333;
+  border-radius:8px;
+  padding:16px;
+  margin-bottom:16px;
+}
+.meta { font-size:12px; opacity:.7; margin-bottom:8px; }
+button {
+  padding:6px 12px;
+  border:none;
+  border-radius:4px;
+  cursor:pointer;
+}
+.approve { background:#2ecc71; }
+.editor {
+  margin-top:16px;
+  border-top:1px dashed #444;
+  padding-top:16px;
+}
+textarea {
+  width:100%;
+  background:#0f0f0f;
+  color:#fff;
+  border:1px solid #333;
+  border-radius:4px;
+  padding:8px;
+  margin-bottom:10px;
+}
+</style>
+</head>
+
+
+<body>
+<div class="container">
+<h2>📮 Room1 お預かり箱（管理）</h2>
+<div id="list"></div>
+</div>
+
+<script>
+let inbox = [];
+
+/* =====================
+   お預かり箱取得（API）
+===================== */
+fetch("/api/room1/submissions")
+.then(res => res.json())
+.then(data => {
+  inbox = data.filter(i => i.status === "pending");
+  render();
+});
+
+function render() {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  inbox.forEach(item => {
+    const title = `${item.theme}｜${item.subTheme}`;
+
+    const div = document.createElement("div");
+    div.className = "item";
+    div.innerHTML = `
+      <div class="meta">${title}<br>${item.createdAt}</div>
+      <div>${item.content}</div>
+
+      <button class="approve" onclick="openEditor(${item.id})">昇華</button>
+      <button onclick="reject(${item.id})"
+        style="margin-left:8px; background:#555;">
+        見送り
+      </button>
+
+      <div class="editor" id="editor-${item.id}" style="display:none">
+        <strong>タイトル：</strong>${title}<br><br>
+
+        <textarea id="summary-${item.id}" rows="2"
+          placeholder="要約（一覧・冒頭用）"></textarea>
+
+        <textarea id="body-${item.id}" rows="4"
+          placeholder="学習コンテンツ本文"></textarea>
+
+        <textarea id="note-${item.id}" rows="3"
+          placeholder="補足・背景・注意点"></textarea>
+
+        <button class="approve" onclick="save(${item.id})">
+          昇華して反映
+        </button>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function openEditor(id) {
+  const editor = document.getElementById(`editor-${id}`);
+  if (!editor) {
+    console.error("editor not found:", id);
+    return;
+  }
+
+  // 他の editor を閉じたい場合（任意）
+  document.querySelectorAll(".editor").forEach(e => {
+    e.style.display = "none";
+  });
+
+  editor.style.display = "block";
+}
+
+/* =====================
+   昇華（API）
+===================== */
+function save(id) {
+  const summary = document.getElementById(`summary-${id}`).value;
+  const body = document.getElementById(`body-${id}`).value;
+  const note = document.getElementById(`note-${id}`).value;
+
+  fetch(`/api/room1/approve/${id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ summary, body, note })
+  })
+  .then(res => res.json())
+  .then(() => {
+    alert("Room1 学習コンテンツに反映された");
+    location.reload();
+  });
+}
+
+function reject(id) {
+  if (!confirm("この投稿を見送りますか？（削除されます）")) return;
+
+  fetch(`/api/room1/reject/${id}`, {
+    method: "POST"
+  })
+  .then(res => res.json())
+  .then(result => {
+    if (result.success) {
+      inbox = inbox.filter(i => i.id !== id);
+      render();
+      alert("投稿を見送りました");
+    } else {
+      alert("見送りに失敗しました");
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    alert("通信エラー");
+  });
+}
+
+</script>
+</body>
+</html>
