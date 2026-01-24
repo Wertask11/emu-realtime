@@ -61,12 +61,12 @@ let inbox = [];
 /* =====================
    お預かり箱取得（API）
 ===================== */
-fetch("/api/room1/submissions")
-.then(res => res.json())
-.then(data => {
-  inbox = data.filter(i => i.status === "pending");
-  render();
-});
+fetch("https://emu-realtime-4.onrender.com/api/room1/submissions")
+  .then(res => res.json())
+  .then(data => {
+    inbox = data.filter(i => i.status === "pending");
+    render();
+  });
 
 function render() {
   const list = document.getElementById("list");
@@ -131,7 +131,7 @@ function save(id) {
   const body = document.getElementById(`body-${id}`).value;
   const note = document.getElementById(`note-${id}`).value;
 
-  fetch(`/api/room1/approve/${id}`, {
+  fetch(`${API_BASE}/api/room1/approve/${id}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ summary, body, note })
@@ -146,7 +146,7 @@ function save(id) {
 function reject(id) {
   if (!confirm("この投稿を見送りますか？（削除されます）")) return;
 
-  fetch(`/api/room1/reject/${id}`, {
+  fetch(`${API_BASE}/api/room1/reject/${id}`, {
     method: "POST"
   })
   .then(res => res.json())
