@@ -7,7 +7,7 @@ window.createAction = function ({
   value = null
 }) {
   return {
-    id: crypto.randomUUID(),
+    id: Date.now() + Math.random(),
     userId,
     type, // "post" | "nft_buy" | "good" | "change" | "discussion"
     targetId,

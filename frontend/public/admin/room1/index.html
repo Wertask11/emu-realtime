@@ -302,6 +302,7 @@ function toggleDeposit() {
   box.style.display = box.style.display === "block" ? "none" : "block";
 }
 
+
 let currentHits = [];
 let viewState = "list";
 
@@ -313,10 +314,10 @@ let currentBlueMain = "";
 /* ===== 追加：Room1学習コンテンツを保持 ===== */
 let room1Contents = [];
 
-const API_BASE = "https://emu-realtime-4.onrender.com";
+const API_BASE = window.location.origin;
 
 /* ===== 追加：初回ロード時に一度だけ取得 ===== */
-fetch("https://emu-realtime-4.onrender.com/api/room1/contents")
+fetch(`${API_BASE}/api/room1/contents`)
   .then(res => res.json())
   .then(data => {
     room1Contents = Array.isArray(data) ? data : [];
@@ -523,7 +524,7 @@ function submitDeposit(){
     return;
   }
 
-  fetch("https://emu-realtime-4.onrender.com/api/room1/submit", {
+ fetch(`${API_BASE}/api/room1/submit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -541,6 +542,7 @@ function submitDeposit(){
       '<option value="">サブテーマを選択</option>';
     document.getElementById("depositBox").style.display = "none";
   });
+  console.log("submitDeposit 実行");
 }
 
 const subThemeMap = {

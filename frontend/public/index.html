@@ -82,6 +82,44 @@ textarea { width:100%; height:60px; margin-top:10px; resize:none; }
 .nextBtn {position: absolute;bottom:-20px;right:20px;z-index: 10;}
 .reply-quote {font-size: 0.75em;opacity: 0.6;border-left: 3px solid #aaa;padding-left: 6px;margin-bottom: 4px;cursor: pointer;}
 .reply-quote:hover {opacity: 1;background: rgba(0,0,0,0.05);}
+body.guest .free-only,body.guest .paid-only {display: none;}
+body.free .paid-only {display: none;}
+
+/*　投稿バッジ　*/
+.badge {font-size: 11px;padding: 2px 6px;border-radius: 6px;margin-left: 6px;vertical-align: middle;font-weight: bold;}
+.badge-paid {background: #e6ffe6;color: #1e8e3e;}
+.badge-free {background: #e6f0ff;color: #1a73e8;}
+.badge-guest {background: #f0f0f0;color: #666;}
+
+/*推し共*/
+.emu-custom-slot {
+  width: 100%;
+  height: 220px;
+  margin-top: 16px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  overflow: hidden;
+  transition: 0.3s ease;
+}
+
+.emu-custom-slot:hover {
+  border: 1px solid rgba(77,163,255,0.6);
+}
+
+.emu-upload-label {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.5);
+  cursor: pointer;
+}
 
 </style>
 </head>
@@ -93,22 +131,55 @@ textarea { width:100%; height:60px; margin-top:10px; resize:none; }
 </div>
 
 <!-- ウォレット接続画面 -->
-<div id="walletScreen" style="display:none;justify-content:center;align-items:center;height:100vh;flex-direction:column;gap:20px;">
-  <h2>ウォレットに接続してください</h2>
-  <button id="connectWalletButton" style="padding:10px 20px;font-size:16px;cursor:pointer;">MetaMaskに接続</button>
+<div id="walletScreen"
+  style="display:none;justify-content:center;align-items:center;height:100vh;flex-direction:column;gap:20px;">
+
+  <h2>利用方法を選んでください！</h2>
+
+  <!-- ① 通常ウォレット接続（既存） -->
+  <button id="connectWalletButton"
+    style="padding:10px 20px;font-size:16px;cursor:pointer;">
+    MetaMaskに接続して利用する（Emu＋）
+  </button>
+
+  <!-- ② 無料NFT -->
+<button id="freeNftButton"
+  onclick="onFreeNftClick()"
+  style="padding:10px 20px;font-size:16px;">
+  無料NFTを受け取って利用する(Emu)
+</button>
+
+<button id="guestButton"
+  onclick="onGuestClick()"
+  style="padding:10px 20px;font-size:16px;">
+  接続せずにゲストとして利用する(guest)
+</button>
+
   <p id="walletStatus" style="color:#555;"></p>
 </div>
 
 <!-- メイン画面 -->
 <div id="mainApp" style="display:none;">
-  <header class="header">
-    <a id="logo" class="logo" href="#">Emu</a>
-    <div class="header-right">
-      <input type="search" class="search-bar" placeholder="検索...">
-      <button id="openPostFormButton" class="post-button">投稿</button>
-      <button id="walletAddressButton" class="wallet-button">ウォレット未接続</button>
-    </div>
-  </header>
+<header class="header" style="display: flex; align-items: center; padding: 0 20px;">
+  <a id="logo" class="logo" href="#" style="margin-right: 10px;">Emu</a>
+
+  <div id="login-bonus-mini-container" style="display: flex; align-items: center; gap: 8px; background: #f0f8ff; border: 1px solid #007bff; border-radius: 20px; padding: 4px 12px;">
+    <span id="bonus-status-text" style="font-size: 13px; font-weight: bold; color: #007bff;">🎁 0.5 EMUER</span>
+    <button id="loginBonusBtn" style="background: #007bff; color: white; border: none; border-radius: 15px; padding: 3px 10px; font-size: 11px; cursor: pointer; white-space: nowrap;">
+      受取
+    </button>
+    <span id="next-bonus-time" style="font-size: 10px; color: #666;"></span>
+  </div>
+
+  <div style="flex-grow: 1;"></div>
+
+  <div class="header-right" style="display: flex; align-items: center; gap: 10px;">
+    <input type="search" class="search-bar" placeholder="検索...">
+    <button id="openPostFormButton" class="post-button">投稿</button>
+    <button id="walletAddressButton" class="wallet-button">ウォレット未接続</button>
+  </div>
+</header>
+
 
   <div class="container">
     <!-- 左サイドバー -->
@@ -158,6 +229,10 @@ textarea { width:100%; height:60px; margin-top:10px; resize:none; }
             </div>
           </li>
         </ul>
+  <div id="emu-custom-slot" class="emu-custom-slot">
+    <label for="emuImageUpload" class="emu-upload-label">＋ 推し共を設定</label>
+    <input type="file" id="emuImageUpload" accept="image/*" hidden>
+  </div>
       </nav>
     </aside>
 
@@ -170,6 +245,11 @@ textarea { width:100%; height:60px; margin-top:10px; resize:none; }
         </div>
       </div>
     </main>
+
+<button class="action-good free-only paid-only">👍</button>
+<button class="action-change free-only paid-only">👍</button>
+<button class="action-post guest-only free-only paid-only">投稿</button>
+
 
     <!-- 右サイドバー -->
     <aside class="right-sidebar">
@@ -207,7 +287,6 @@ textarea { width:100%; height:60px; margin-top:10px; resize:none; }
   <div class="wallet-action-buttons">
     <button id="convertButton">変換</button>
     <button id="exchangeBtn">取引所</button>
-
   </div>
 
 
@@ -246,7 +325,7 @@ textarea { width:100%; height:60px; margin-top:10px; resize:none; }
       </div>
       <div class="form-actions">
         <button type="submit" class="action-button primary">投稿</button>
-        <button type="button" id="saveDraftButton" class="action-button secondary">セーブ</button>
+        <button type="button" id="saveDraftButton" class="action-button secondary">下書き</button>
         <button type="button" id="clearFormButton" class="action-button danger">消去</button>
       </div>
     </form>
@@ -345,75 +424,151 @@ textarea { width:100%; height:60px; margin-top:10px; resize:none; }
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 <script src="/actionschema.js"></script>
 <script src="/actionhub.js"></script>
+<script src="/socket.io/socket.io.js"></script>
 
 <script>
-/* ======= 全体の状態 ======= */
+document.addEventListener("DOMContentLoaded", async () => {
+  const auth = localStorage.getItem("emu_auth");
 
+  if (!auth) return;
+
+  const parsed = JSON.parse(auth);
+
+  if (!window.ethereum) return;
+
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+
+  try {
+    await provider.send("eth_requestAccounts", []);
+  } catch (e) {
+    console.log("接続拒否");
+    return;
+  }
+
+  window.connectedAccount = parsed.address;
+  console.log("復元ウォレット:", window.connectedAccount);
+});
+</script>
+
+<script>
+/* ======= 全体のJS ======= */
+
+//画面・レイヤー管理
 const logoScreen = document.getElementById("logoScreen");
 const walletScreen = document.getElementById("walletScreen");
 const mainApp = document.getElementById("mainApp");
+
+//ウォレット表示・状態
 const walletStatus = document.getElementById("walletStatus");
 const walletAddressButton = document.getElementById("walletAddressButton");
 
+//テーマ・ライブラリーUI
 const themeButton = document.getElementById('themeButton');
 const themeSubButtons = document.getElementById('themeSubButtons');
 const libraryButton = document.getElementById('libraryButton');
 const librarySubButtons = document.getElementById('librarySubButtons');
 
+//投稿フォームモーダル
 const postFormModal = document.getElementById('postFormModal');
 const openPostFormButton = document.getElementById('openPostFormButton');
 const closeButton = postFormModal.querySelector('.close-button');
+
+//投稿フォーム入力
 const postForm = document.getElementById('postForm');
 const postTitleInput = document.getElementById('postTitle');
 const postBodyInput = document.getElementById('postBody');
 const postTagsInput = document.getElementById('postTags');
 
+//投稿表示・下書き管理
 const postFeed = document.getElementById("postFeed");
 const saveDraftButton = document.getElementById('saveDraftButton');
+if (saveDraftButton && isFreeOnlyUser()) {
+  saveDraftButton.disabled = true;
+  saveDraftButton.textContent = "下書き（有料限定）";
+  saveDraftButton.style.opacity = "0.5";
+}
 const clearFormButton = document.getElementById('clearFormButton');
 
+//ライブラリー（下書き一覧）
 const libraryDraftsButton = document.getElementById("libraryDrafts");
 const draftsContainer = document.getElementById("draftsContainer");
 
+//マイウォレット画面
 const myWalletButton = document.getElementById("myWalletButton");
 const myWalletPage = document.getElementById("myWalletPage");
 const closeWalletPage = document.getElementById("closeWalletPage");
 
+//交換・変換
 const convertButton = document.getElementById("convertButton");
-const exchangeButton = document.getElementById("exchangeButton");
 
-// 状態（localStorageで永続化）
+// 投稿下書き関連
 let drafts = [];
 let editingPostId = null;
-let editMode = null; // null | "draft" | "theme"
+let editMode = null;
 
 // 予定 Emuer（変換前の合計 Emuer 単位）と累計 Emuer（保有）
-
 let totalgoodcount = 0;
 let totalchangecount = 0;
 let pendingEmuer = parseInt(localStorage.getItem("pendingEmuer")) || 0;
-let totalEmuer = parseInt(localStorage.getItem("totalEmuer")) || 0;
 let currentUserId = null;
 let posts = [];
 
+//goodした記事・changeした記事
+let myGoodIds = [];
+let myChangeIds = [];
+
+// ===== 連続議論記録 =====
+let discussionState = JSON.parse(
+  localStorage.getItem("room3_discussion")
+) || {
+  lastDate: null,
+  streak: 0
+};
+
+function saveDiscussionState() {
+  localStorage.setItem(
+    "room3_discussion",
+    JSON.stringify(discussionState)
+  );
+}
+
 
 // ===== スマートコントラクト設定 =====
-const EMUER_CONTRACT_ADDRESS = "0x87737A60691966EEca30831EA8218981aC757cd4"; // EmuerTokenコントラストアドレス
+//　Emu　コントラクト情報
+const EMUER_CONTRACT_ADDRESS = "0xd82DfC2b54a65f16e4E249C21f056D7c8dEbFD19"; // EmuerTokenコントラストアドレス
 const EMUER_CONTRACT_ABI = [
 	{
 		"inputs": [
 			{
-				"internalType": "address",
-				"name": "user",
-				"type": "address"
+				"internalType": "address[]",
+				"name": "_users",
+				"type": "address[]"
 			},
 			{
-				"internalType": "uint256",
-				"name": "change",
-				"type": "uint256"
+				"internalType": "uint256[]",
+				"name": "_amounts",
+				"type": "uint256[]"
 			}
 		],
-		"name": "addChange",
+		"name": "addChangeBatch",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address[]",
+				"name": "_users",
+				"type": "address[]"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "_amounts",
+				"type": "uint256[]"
+			}
+		],
+		"name": "addGoodBatch",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -422,37 +577,27 @@ const EMUER_CONTRACT_ABI = [
 		"inputs": [
 			{
 				"internalType": "address",
-				"name": "user",
+				"name": "_emuNFT",
 				"type": "address"
 			},
 			{
-				"internalType": "uint256",
-				"name": "good",
-				"type": "uint256"
-			}
-		],
-		"name": "addGood",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "tokenId",
-				"type": "uint256"
+				"internalType": "address",
+				"name": "_jpyc",
+				"type": "address"
 			},
 			{
-				"internalType": "uint256",
-				"name": "emuPrice",
-				"type": "uint256"
+				"internalType": "address",
+				"name": "_treasury",
+				"type": "address"
 			}
 		],
-		"name": "addNFTtoWarehouse",
-		"outputs": [],
 		"stateMutability": "nonpayable",
-		"type": "function"
+		"type": "constructor"
+	},
+	{
+		"inputs": [],
+		"name": "AlreadyClaimed",
+		"type": "error"
 	},
 	{
 		"inputs": [
@@ -477,74 +622,6 @@ const EMUER_CONTRACT_ABI = [
 		],
 		"stateMutability": "nonpayable",
 		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "tokenId",
-				"type": "uint256"
-			}
-		],
-		"name": "buyNFT",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "tokenId",
-				"type": "uint256"
-			}
-		],
-		"name": "buyNFTWithJPYC",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "amount",
-				"type": "uint256"
-			}
-		],
-		"name": "convertChange",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "amount",
-				"type": "uint256"
-			}
-		],
-		"name": "convertGood",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "_emuNFTs",
-				"type": "address"
-			},
-			{
-				"internalType": "address",
-				"name": "_jpyc",
-				"type": "address"
-			}
-		],
-		"stateMutability": "nonpayable",
-		"type": "constructor"
 	},
 	{
 		"inputs": [
@@ -634,10 +711,194 @@ const EMUER_CONTRACT_ABI = [
 	},
 	{
 		"inputs": [],
+		"name": "InsufficientPoints",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "LengthMismatch",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "MonthlyCapExceeded",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "NFTNotAvailable",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "OwnableInvalidOwner",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "OwnableUnauthorizedAccount",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "TooSmallAmount",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "TransferFailed",
+		"type": "error"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "Approval",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "useJPYC",
+				"type": "bool"
+			}
+		],
+		"name": "buyNFT",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "ChangeAdded",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "convertChange",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "convertGood",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "GoodAdded",
+		"type": "event"
+	},
+	{
+		"inputs": [],
 		"name": "loginBonus",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "buyer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "bool",
+				"name": "usedJPYC",
+				"type": "bool"
+			}
+		],
+		"name": "NFTPurchased",
+		"type": "event"
 	},
 	{
 		"inputs": [
@@ -674,53 +935,6 @@ const EMUER_CONTRACT_ABI = [
 		"type": "function"
 	},
 	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "owner",
-				"type": "address"
-			}
-		],
-		"name": "OwnableInvalidOwner",
-		"type": "error"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "account",
-				"type": "address"
-			}
-		],
-		"name": "OwnableUnauthorizedAccount",
-		"type": "error"
-	},
-	{
-		"anonymous": false,
-		"inputs": [
-			{
-				"indexed": true,
-				"internalType": "address",
-				"name": "owner",
-				"type": "address"
-			},
-			{
-				"indexed": true,
-				"internalType": "address",
-				"name": "spender",
-				"type": "address"
-			},
-			{
-				"indexed": false,
-				"internalType": "uint256",
-				"name": "value",
-				"type": "uint256"
-			}
-		],
-		"name": "Approval",
-		"type": "event"
-	},
-	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -742,6 +956,55 @@ const EMUER_CONTRACT_ABI = [
 	{
 		"inputs": [],
 		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bool",
+				"name": "active",
+				"type": "bool"
+			}
+		],
+		"name": "setBoostActive",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "emuerPrice",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "jpycPrice",
+				"type": "uint256"
+			}
+		],
+		"name": "setNFTPrice",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_treasury",
+				"type": "address"
+			}
+		],
+		"name": "setTreasury",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -864,12 +1127,12 @@ const EMUER_CONTRACT_ABI = [
 	{
 		"inputs": [
 			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
 			}
 		],
-		"name": "availableNFTs",
+		"name": "balanceOf",
 		"outputs": [
 			{
 				"internalType": "uint256",
@@ -881,14 +1144,86 @@ const EMUER_CONTRACT_ABI = [
 		"type": "function"
 	},
 	{
-		"inputs": [
+		"inputs": [],
+		"name": "BOOST_CHANGE_RATE",
+		"outputs": [
 			{
-				"internalType": "address",
-				"name": "account",
-				"type": "address"
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
 			}
 		],
-		"name": "balanceOf",
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "BOOST_GOOD_RATE",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "boostActive",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "burnRate",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "carryOverRate",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "CHANGE_RATE",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "CHANGE_REWARD",
 		"outputs": [
 			{
 				"internalType": "uint256",
@@ -914,25 +1249,12 @@ const EMUER_CONTRACT_ABI = [
 	},
 	{
 		"inputs": [],
-		"name": "emuNFTs",
+		"name": "emuNFT",
 		"outputs": [
 			{
 				"internalType": "contract IERC721",
 				"name": "",
 				"type": "address"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "getAvailableNFTs",
-		"outputs": [
-			{
-				"internalType": "uint256[]",
-				"name": "",
-				"type": "uint256[]"
 			}
 		],
 		"stateMutability": "view",
@@ -946,16 +1268,47 @@ const EMUER_CONTRACT_ABI = [
 				"type": "uint256"
 			}
 		],
-		"name": "getNFTPrices",
+		"name": "getNFTInfo",
 		"outputs": [
 			{
 				"internalType": "uint256",
-				"name": "emuPrice",
+				"name": "emuerPrice",
 				"type": "uint256"
 			},
 			{
 				"internalType": "uint256",
 				"name": "jpycPrice",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "available",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "GOOD_RATE",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "INITIAL_SUPPLY",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
 				"type": "uint256"
 			}
 		],
@@ -970,6 +1323,19 @@ const EMUER_CONTRACT_ABI = [
 				"internalType": "contract IERC20",
 				"name": "",
 				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "lastMonthTimestamp",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",
@@ -992,7 +1358,7 @@ const EMUER_CONTRACT_ABI = [
 			},
 			{
 				"internalType": "uint256",
-				"name": "emuPrice",
+				"name": "emuerPrice",
 				"type": "uint256"
 			},
 			{
@@ -1004,6 +1370,58 @@ const EMUER_CONTRACT_ABI = [
 				"internalType": "bool",
 				"name": "available",
 				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "LOGIN_INTERVAL",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "MAX_SUPPLY",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "mintedThisMonth",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "monthlyCap",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",
@@ -1037,6 +1455,19 @@ const EMUER_CONTRACT_ABI = [
 	},
 	{
 		"inputs": [],
+		"name": "redistributeRate",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
 		"name": "symbol",
 		"outputs": [
 			{
@@ -1062,14 +1493,27 @@ const EMUER_CONTRACT_ABI = [
 		"type": "function"
 	},
 	{
-		"inputs": [
+		"inputs": [],
+		"name": "treasury",
+		"outputs": [
 			{
 				"internalType": "address",
-				"name": "user",
+				"name": "",
 				"type": "address"
 			}
 		],
-		"name": "userInfo",
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "users",
 		"outputs": [
 			{
 				"internalType": "uint256",
@@ -1089,54 +1533,28 @@ const EMUER_CONTRACT_ABI = [
 		],
 		"stateMutability": "view",
 		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"name": "users",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "goodCount",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "changeCount",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "lastLoginTimestamp",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "warehouse",
-		"outputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
 	}
 ];
 
 // NFT コントラクト情報
-const NFT_ADDRESS = "0x79abF86a899D4c04b024077AF4B6b45795509684"; // テストNFTコントラクトアドレス
+const NFT_ADDRESS = "0x9Ab366f73c7fB4a1e9Ed24CA9013c2e71AB77406"; // テストNFTコントラクトアドレス
 const NFT_ABI = [
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_initialFreeTokenURI",
+				"type": "string"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [],
+		"name": "AlreadyClaimed",
+		"type": "error"
+	},
 	{
 		"inputs": [
 			{
@@ -1157,8 +1575,15 @@ const NFT_ABI = [
 	},
 	{
 		"inputs": [],
+		"name": "claimFree",
+		"outputs": [],
 		"stateMutability": "nonpayable",
-		"type": "constructor"
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "ClaimNotActive",
+		"type": "error"
 	},
 	{
 		"inputs": [
@@ -1264,6 +1689,11 @@ const NFT_ABI = [
 		"type": "error"
 	},
 	{
+		"inputs": [],
+		"name": "InvalidAddress",
+		"type": "error"
+	},
+	{
 		"inputs": [
 			{
 				"internalType": "address",
@@ -1272,7 +1702,7 @@ const NFT_ABI = [
 			},
 			{
 				"internalType": "string",
-				"name": "tokenURI_",
+				"name": "customTokenURI",
 				"type": "string"
 			}
 		],
@@ -1481,6 +1911,32 @@ const NFT_ABI = [
 		"type": "function"
 	},
 	{
+		"inputs": [
+			{
+				"internalType": "bool",
+				"name": "_active",
+				"type": "bool"
+			}
+		],
+		"name": "setClaimActive",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_newURI",
+				"type": "string"
+			}
+		],
+		"name": "setFreeTokenURI",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -1539,6 +1995,1057 @@ const NFT_ABI = [
 		"name": "transferOwnership",
 		"outputs": [],
 		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "balanceOf",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "claimActive",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "claimedFree",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "currentTokenId",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "freeTokenURI",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			}
+		],
+		"name": "getApproved",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "operator",
+				"type": "address"
+			}
+		],
+		"name": "isApprovedForAll",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "name",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			}
+		],
+		"name": "ownerOf",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes4",
+				"name": "interfaceId",
+				"type": "bytes4"
+			}
+		],
+		"name": "supportsInterface",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "symbol",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			}
+		],
+		"name": "tokenURI",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "totalSupply",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+
+// JPYC コントラクト情報
+const JPYC_ADDRESS = "0x407A6540B0DA450bfb45992172a389e8DE9Cbbc1"; // JPYCコントラクトアドレス
+const JPYC_ABI = [
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "approve",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "allowance",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "needed",
+				"type": "uint256"
+			}
+		],
+		"name": "ERC20InsufficientAllowance",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "sender",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "balance",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "needed",
+				"type": "uint256"
+			}
+		],
+		"name": "ERC20InsufficientBalance",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "approver",
+				"type": "address"
+			}
+		],
+		"name": "ERC20InvalidApprover",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "receiver",
+				"type": "address"
+			}
+		],
+		"name": "ERC20InvalidReceiver",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "sender",
+				"type": "address"
+			}
+		],
+		"name": "ERC20InvalidSender",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			}
+		],
+		"name": "ERC20InvalidSpender",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "mint",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "OwnableInvalidOwner",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "OwnableUnauthorizedAccount",
+		"type": "error"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "Approval",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "previousOwner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipTransferred",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "transfer",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "from",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "Transfer",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "from",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "transferFrom",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "spender",
+				"type": "address"
+			}
+		],
+		"name": "allowance",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "balanceOf",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "decimals",
+		"outputs": [
+			{
+				"internalType": "uint8",
+				"name": "",
+				"type": "uint8"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "name",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "symbol",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "totalSupply",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+
+window.ERC721_ABI = [
+  "function balanceOf(address owner) view returns (uint256)"
+];
+
+//Free accsess nftコントラクト情報
+const Free_NFT_ADDRESS = "0x1b47a3D36c6F033a8e75a585E1571AD437Ab102d"; // free accsess NFTコントラクトアドレス
+const FREE_NFT_ABI = [
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "initialBaseURI",
+				"type": "string"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [],
+		"name": "AlreadyClaimed",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			}
+		],
+		"name": "approve",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "claim",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "sender",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "ERC721IncorrectOwner",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "operator",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			}
+		],
+		"name": "ERC721InsufficientApproval",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "approver",
+				"type": "address"
+			}
+		],
+		"name": "ERC721InvalidApprover",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "operator",
+				"type": "address"
+			}
+		],
+		"name": "ERC721InvalidOperator",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "ERC721InvalidOwner",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "receiver",
+				"type": "address"
+			}
+		],
+		"name": "ERC721InvalidReceiver",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "sender",
+				"type": "address"
+			}
+		],
+		"name": "ERC721InvalidSender",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			}
+		],
+		"name": "ERC721NonexistentToken",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "OwnableInvalidOwner",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "OwnableUnauthorizedAccount",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "from",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			}
+		],
+		"name": "safeTransferFrom",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "operator",
+				"type": "address"
+			},
+			{
+				"internalType": "bool",
+				"name": "approved",
+				"type": "bool"
+			}
+		],
+		"name": "setApprovalForAll",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "SoulboundCannotTransfer",
+		"type": "error"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "approved",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			}
+		],
+		"name": "Approval",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "operator",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "bool",
+				"name": "approved",
+				"type": "bool"
+			}
+		],
+		"name": "ApprovalForAll",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "previousOwner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipTransferred",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "from",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bytes",
+				"name": "data",
+				"type": "bytes"
+			}
+		],
+		"name": "safeTransferFrom",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "newBaseURI",
+				"type": "string"
+			}
+		],
+		"name": "setBaseURI",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "from",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			}
+		],
+		"name": "Transfer",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "from",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "tokenId",
+				"type": "uint256"
+			}
+		],
+		"name": "transferFrom",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "activeUserCount",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -1712,344 +3219,7 @@ const NFT_ABI = [
 		"stateMutability": "view",
 		"type": "function"
 	}
-];
-
-
-// ===== JPYC コントラクト =====
-const JPYC_ADDRESS = "0x2D1E2508D94474eD0de6Cc0D68DaE3CD5f241A1e"; // JPYCコントラクトアドレス
-const JPYC_ABI = [
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "spender",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "value",
-				"type": "uint256"
-			}
-		],
-		"name": "approve",
-		"outputs": [
-			{
-				"internalType": "bool",
-				"name": "",
-				"type": "bool"
-			}
-		],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"stateMutability": "nonpayable",
-		"type": "constructor"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "spender",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "allowance",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "needed",
-				"type": "uint256"
-			}
-		],
-		"name": "ERC20InsufficientAllowance",
-		"type": "error"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "sender",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "balance",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "needed",
-				"type": "uint256"
-			}
-		],
-		"name": "ERC20InsufficientBalance",
-		"type": "error"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "approver",
-				"type": "address"
-			}
-		],
-		"name": "ERC20InvalidApprover",
-		"type": "error"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "receiver",
-				"type": "address"
-			}
-		],
-		"name": "ERC20InvalidReceiver",
-		"type": "error"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "sender",
-				"type": "address"
-			}
-		],
-		"name": "ERC20InvalidSender",
-		"type": "error"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "spender",
-				"type": "address"
-			}
-		],
-		"name": "ERC20InvalidSpender",
-		"type": "error"
-	},
-	{
-		"anonymous": false,
-		"inputs": [
-			{
-				"indexed": true,
-				"internalType": "address",
-				"name": "owner",
-				"type": "address"
-			},
-			{
-				"indexed": true,
-				"internalType": "address",
-				"name": "spender",
-				"type": "address"
-			},
-			{
-				"indexed": false,
-				"internalType": "uint256",
-				"name": "value",
-				"type": "uint256"
-			}
-		],
-		"name": "Approval",
-		"type": "event"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "to",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "value",
-				"type": "uint256"
-			}
-		],
-		"name": "transfer",
-		"outputs": [
-			{
-				"internalType": "bool",
-				"name": "",
-				"type": "bool"
-			}
-		],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"anonymous": false,
-		"inputs": [
-			{
-				"indexed": true,
-				"internalType": "address",
-				"name": "from",
-				"type": "address"
-			},
-			{
-				"indexed": true,
-				"internalType": "address",
-				"name": "to",
-				"type": "address"
-			},
-			{
-				"indexed": false,
-				"internalType": "uint256",
-				"name": "value",
-				"type": "uint256"
-			}
-		],
-		"name": "Transfer",
-		"type": "event"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "from",
-				"type": "address"
-			},
-			{
-				"internalType": "address",
-				"name": "to",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "value",
-				"type": "uint256"
-			}
-		],
-		"name": "transferFrom",
-		"outputs": [
-			{
-				"internalType": "bool",
-				"name": "",
-				"type": "bool"
-			}
-		],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "owner",
-				"type": "address"
-			},
-			{
-				"internalType": "address",
-				"name": "spender",
-				"type": "address"
-			}
-		],
-		"name": "allowance",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "account",
-				"type": "address"
-			}
-		],
-		"name": "balanceOf",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "decimals",
-		"outputs": [
-			{
-				"internalType": "uint8",
-				"name": "",
-				"type": "uint8"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "name",
-		"outputs": [
-			{
-				"internalType": "string",
-				"name": "",
-				"type": "string"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "symbol",
-		"outputs": [
-			{
-				"internalType": "string",
-				"name": "",
-				"type": "string"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "totalSupply",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	}
-];
-
-/* ===== School Park 公式NFT 定義 ===== */
-const OFFICIAL_NFTS = [
-  {
-    key: "paid",
-    name: "School Park Paid NFT (HEXA)",
-    contract: "0xC333F84fd2FD86760e7dC5a288b7a9D4128F2Dab"
-  },
-  {
-    key: "free",
-    name: "School Park Free Test NFT",
-    contract: "0x79abF86a899D4c04b024077AF4B6b45795509684"
-  }
-];
-
-window.ERC721_ABI = [
-  "function balanceOf(address owner) view returns (uint256)"
-];
+]
 
 
 let emuerContract;
@@ -2061,11 +3231,23 @@ let signer;
 function savePending() {
   localStorage.setItem("pendingEmuer", pendingEmuer);
 }
-function saveTotal() {
-  localStorage.setItem("totalEmuer", totalEmuer);
-}
+
 function getOfficialNFT(key) {
-  return OFFICIAL_NFTS.find(nft => nft.key === key);
+  const officialNFTs = {
+    free: {
+      key: "free",
+      name: "School Park Free Access NFT",
+      contract: "0x1b47a3D36c6F033a8e75a585E1571AD437Ab102d"
+    }
+  };
+
+  return officialNFTs[key];
+}
+
+function goTomainapp() {
+  console.trace("🔥 goTomainapp 呼ばれた");
+  walletScreen.style.display = "none";
+  mainApp.style.display = "block";
 }
 
 /* ======= ロゴ → ウォレット → メイン ======= */
@@ -2075,127 +3257,136 @@ logoScreen.addEventListener("click", () => {
 });
 
 // ===== 公式NFTチェック（グローバル） =====
+// --- [1] グローバル定数の定義（Amoy用） ---
+const AMOY_CHAIN_ID = "0x13882"; // 80002 (Amoy)
+
+// --- [2] 接続ボタン（connectWalletButton）の処理を復活 ---
+document.getElementById("connectWalletButton").addEventListener("click", async () => {
+  if (typeof window.ethereum === "undefined") {
+    alert("MetaMaskがインストールされていません。");
+    return;
+  }
+
+  try {
+    // ① ウォレット接続要求
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const account = accounts[0];
+    window.connectedAccount = account;
+    currentUserId = account; // 以前の変数も更新
+
+    console.log("🦊 Wallet Connected:", account);
+
+    // ② Amoyネットワークへ切り替え（手動切り替えの手間をなくす）
+    const chainId = await ethereum.request({ method: "eth_chainId" });
+    if (chainId !== AMOY_CHAIN_ID) {
+      try {
+        await ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: AMOY_CHAIN_ID }]
+        });
+      } catch (switchError) {
+        // ネットワークが追加されていない場合などはここでエラーが出るのでalert等で通知
+        console.error("ネットワーク切り替え失敗", switchError);
+      }
+    }
+
+    // ③ 公式NFTチェックの実行（復活！）
+    // ※ ここで内部的に window.checkHexaNFT() と window.checkFreeNFT() が走ります
+    await window.checkHexaNFT();
+    await window.checkFreeNFT();
+
+    window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT;
+    console.log("🏫 公式NFT最終判定:", window.hasOfficialNFT);
+
+    // ④ ethers.js 各種コントラクト初期化（これが消えると利用画面でエラーになります）
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    signer = provider.getSigner();
+    
+    // EmuerやJPYCのコントラクトを再セット
+    emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_CONTRACT_ABI, signer);
+    jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
+
+    // ⑤ 画面表示の更新と遷移
+    const walletStatus = document.getElementById("walletStatus");
+    const walletAddressButton = document.getElementById("walletAddressButton");
+    
+    if(walletStatus) walletStatus.textContent = "接続成功: " + account;
+    if(walletAddressButton) {
+      walletAddressButton.textContent = account.substring(0, 6) + "..." + account.slice(-4);
+    }
+
+    // メイン画面へ！
+    console.log("🚀 goTomainapp() を呼び出します");
+    goTomainapp();
+	updateBonusCountdown();
+
+  } catch (err) {
+    console.error("❌ 接続・初期化エラー:", err);
+    alert("エラー: " + err.message);
+  }
+});
+
+// --- [3] checkHexaNFT も Amoy 対応で上書き（念押し） ---
+window.checkHexaNFT = async function () {
+  try {
+    // 💡 テスト中は Amoy 以外なら切り替える
+    const originalChainId = await ethereum.request({ method: "eth_chainId" });
+    if (originalChainId !== AMOY_CHAIN_ID) {
+      await ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: AMOY_CHAIN_ID }]
+      });
+    }
+
+    const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
+    const paidNFT = getOfficialNFT("paid");
+    if (!paidNFT.contract) return;
+
+    const nft = new ethers.Contract(paidNFT.contract, ERC721_ABI, tempProvider);
+    const balance = await nft.balanceOf(window.connectedAccount);
+    window.hasPaidNFT = balance.gt(0);
+    
+    console.log("✅ 有料NFT(Amoy版)チェック完了:", window.hasPaidNFT);
+  } catch (e) {
+    console.error("❌ 有料NFTチェック失敗", e);
+    window.hasPaidNFT = false;
+  }
+  // ※ ここで元に戻す(originalChainId)処理は消したままにしておきます
+};
+
 window.checkFreeNFT = async function () {
   try {
+    // 💡 ここでも念のためチェーン確認
     const chainId = await ethereum.request({ method: "eth_chainId" });
-    console.log("🎟 無料NFTチェック開始 / チェーン:", chainId);
+    if (chainId !== AMOY_CHAIN_ID) return; 
 
     const provider = new ethers.providers.Web3Provider(window.ethereum);
-    
     const freeNFT = getOfficialNFT("free");
-
-const nft = new ethers.Contract(
-  freeNFT.contract,
-  ERC721_ABI,
-  provider
-);
+    const nft = new ethers.Contract(freeNFT.contract, ERC721_ABI, provider);
 
     const balance = await nft.balanceOf(window.connectedAccount);
     window.hasFreeNFT = balance.gt(0);
-
-    console.log(
-      "✅ 無料NFT:",
-      window.hasFreeNFT,
-      "| balance:",
-      balance.toString()
-    );
+    console.log("✅ 無料NFTチェック完了:", window.hasFreeNFT);
 
   } catch (e) {
     console.error("❌ 無料NFTチェック失敗", e);
     window.hasFreeNFT = false;
-  } finally {
-    console.log(
-      "🌐 無料NFTチェック後チェーン:",
-      await ethereum.request({ method: "eth_chainId" })
-    );
   }
 };
 
+//取引所制限
+function canUseExchange() {
+  // 有料NFTは常にOK
+  if (window.emuAuth?.type === "paidNFT") return true;
 
-window.checkHexaNFT = async function () {
-  let originalChainId;
-
-  try {
-    originalChainId = await ethereum.request({ method: "eth_chainId" });
-    console.log("🔁 元のチェーン:", originalChainId);
-
-    if (originalChainId !== "0x89") {
-      await ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0x89" }] // Polygon
-      });
-    }
-
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    
-    const paidNFT = getOfficialNFT("paid");
-
-const nft = new ethers.Contract(
-  paidNFT.contract,
-  ERC721_ABI,
-  provider
-);
-
-    const balance = await nft.balanceOf(window.connectedAccount);
-    window.hasPaidNFT = balance.gt(0);
-
-    console.log("✅ 有料NFT:", window.hasPaidNFT);
-
-  } catch (e) {
-    console.error("❌ 有料NFTチェック失敗", e);
-    window.hasPaidNFT = false;
-
-  } finally {
-    // 🔑 ここが超重要
-    const current = await ethereum.request({ method: "eth_chainId" });
-
-    if (originalChainId && current !== originalChainId) {
-      console.log("↩ 元チェーンに戻す:", originalChainId);
-      await ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: originalChainId }]
-      });
-    }
-
-    console.log("🌐 現在のチェーン:", await ethereum.request({ method: "eth_chainId" }));
+  // 無料NFTは月曜日のみ
+  if (window.emuAuth?.type === "freeNFT") {
+    const today = new Date();
+    return today.getDay() === 1; // 月曜
   }
 
-};
-
-
-
-document.getElementById("connectWalletButton").addEventListener("click", async () => {
-  if (typeof window.ethereum !== "undefined") {
-    try {
-      // ← ここに console.log を追加
-      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      console.log("accounts", accounts);
-      currentUserId = accounts[0];
-
-
-      const account = accounts[0];
-      window.connectedAccount = account;
-      walletStatus.textContent = "接続成功: " + account;
-      walletAddressButton.textContent = account.substring(0,6) + "..." + account.slice(-4);
-
-      // ethers.js 初期化
-      provider = new ethers.providers.Web3Provider(window.ethereum);
-      signer = provider.getSigner();
-      emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_CONTRACT_ABI, signer);
-      jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
-
-      await window.checkHexaNFT();
-      await window.checkFreeNFT();
-
-      window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT;
-
-console.log("🏫 公式NFT最終判定:", window.hasOfficialNFT);
-
-if (!window.hasOfficialNFT) {
-  alert("School Park公式NFTを保有していません。\n購入・取得後にご利用ください。");
-  return; // ← ここで止まる
+  return false;
 }
-
 
 	  // === START: Exchange UI handlers & loaders ===
 
@@ -2222,10 +3413,10 @@ function normalizeTokenURI(uri) {
 // === END: Exchange UI handlers & loaders ===
 	 
 	 
-	  setTimeout(() => {
+	 /* setTimeout(() => {
         walletScreen.style.display = "none";
         mainApp.style.display = "block";
-      }, 400);
+      }, 400); //メイン画面に移行*/
 
 
 //NFTカードレイアウト
@@ -2247,9 +3438,9 @@ function openNFTDetail(metadata, tokenId, emuPrice, jpycPrice) {
   modalBody.innerHTML = `
     <h3>${metadata.name || `NFT #${tokenId}`}</h3>
     ${metadata.image ? `<img src="${normalizeTokenURI(metadata.image)}" style="max-width:100%">` : ""}
-    <p><strong>ジャンル:</strong> ${metadata.genre || "オンライン"}</p>
-    <p><strong>用途:</strong> ${metadata.usage || "Emu内で使用"}</p>
-    <p><strong>特典:</strong> ${metadata.perks || "拡張機能（投稿制限の解除）"}</p>
+    <p><strong>ジャンル:</strong> ${metadata.genre || "（例）オフライン・限定イベントグッズ"}</p>
+    <p><strong>用途:</strong> ${metadata.usage || "（例）現実衣類として使用"}</p>
+    <p><strong>特典:</strong> ${metadata.perks || "（例）Emuリリース記念限定TシャツがもらえるNFTです！サイズはS，M，Lのみ"}</p>
     <p>${metadata.description || ""}</p>
     <hr>
     <p>Emuer: ${ethers.utils.formatUnits(emuPrice, 18)}</p>
@@ -2261,6 +3452,7 @@ function openNFTDetail(metadata, tokenId, emuPrice, jpycPrice) {
 // NFTカード生成（createNFTCard)
 function createNFTCard(tokenId, metadata, emuPrice, jpycPrice) {
   const card = document.createElement("div");
+  card.id = `nft-${tokenId}`;
   card.style.border = "1px solid #ccc";
   card.style.padding = "10px";
   card.style.borderRadius = "8px";
@@ -2291,9 +3483,12 @@ emuBtn.textContent = "Emuerで交換";
 emuBtn.onclick = async () => {
   try {
     console.log("Emuer交換開始 tokenId:", tokenId);
-
-    const tx = await emuerContract.buyNFT(tokenId);
+    const tx = await emuerContract.buyNFT(tokenId, false, AMOY_GAS_OPTION);
+    
     await tx.wait();
+    // 交換完了したNFTを即座に画面から削除
+    const nftElement = document.getElementById(`nft-${tokenId}`);
+    if (nftElement) nftElement.remove();
 
     alert("Emuerで交換成功！");
   } catch (err) {
@@ -2304,8 +3499,8 @@ emuBtn.onclick = async () => {
 
 card.appendChild(emuBtn);
 
-  const jpycBtn = document.createElement("button");
-  jpycBtn.textContent = "JPYCで交換";
+const jpycBtn = document.createElement("button");
+jpycBtn.textContent = "JPYCで交換";
 
 jpycBtn.onclick = async () => {
   try {
@@ -2327,8 +3522,12 @@ jpycBtn.onclick = async () => {
     console.log("JPYC approve 完了");
 
     // ④ NFT購入
-    const tx2 = await emuerContract.buyNFTWithJPYC(tokenId);
+    const tx2 = await emuerContract.buyNFT(tokenId, true, AMOY_GAS_OPTION);
     await tx2.wait();
+
+    // ⑤ 交換完了したNFTは即座に画面から削除
+    const nftElement = document.getElementById(`nft-${tokenId}`);
+    if (nftElement) nftElement.remove();
 
     alert("JPYCでNFT交換完了！");
   } catch (err) {
@@ -2354,47 +3553,56 @@ async function loadExchangeableNFTs() {
   try {
     nftListDiv.innerHTML = "<p>読み込み中…</p>";
 
-    const tokenIds = await emuerContract.getAvailableNFTs();
-    const ids = tokenIds.map(id => id.toString());
-    if (!ids.length) {
-      nftListDiv.innerHTML = "<p>現在、交換可能なNFTはありません。</p>";
-      return;
-    }
-
-    const nftAddr = await emuerContract.emuNFTs();
-    const nftAbi = [
-      "function tokenURI(uint256 tokenId) view returns (string)"
-    ];
+    // 1. NFTコントラクトのアドレスを取得（コントラクトの変数名 emuNFT に合わせる）
+    const nftAddr = await emuerContract.emuNFT; 
+    const nftAbi = ["function tokenURI(uint256 tokenId) view returns (string)"];
     const nftContract = new ethers.Contract(nftAddr, nftAbi, provider);
 
     nftListDiv.innerHTML = "";
+    let foundCount = 0;
 
-	for (const tokenId of ids) {
-  try {
-    const info = await emuerContract.listedNFTs(tokenId);
-    if (!info.available) continue;
+    // 2. とりあえず ID 1〜10 を確認するループ（運用に合わせて範囲は変えてOK）
+    for (let i = 1; i <= 10; i++) {
+      try {
+        // コントラクトの listedNFTs マッピングを直接見に行く
+        const info = await emuerContract.listedNFTs(i);
+        
+        // 出品中でなければスキップ
+        if (!info.available) continue;
 
-    const emuPrice = info.emuPrice;
-    const jpycPrice = info.jpycPrice;
+        foundCount++;
+        const tokenId = i.toString();
+        
+        // 価格取得（Solidity側の変数名 emuerPrice / jpycPrice に合わせる）
+        const emuPrice = info.emuerPrice;
+        const jpycPrice = info.jpycPrice;
 
-    let metadata = {};
-    try {
-      const uri = await nftContract.tokenURI(tokenId);
-      const normalized = normalizeTokenURI(uri);
-      if (normalized && normalized.startsWith("http")) {
-        const res = await fetch(normalized);
-        if (res.ok) metadata = await res.json();
+        // メタデータ取得
+        let metadata = {};
+        try {
+          const uri = await nftContract.tokenURI(tokenId);
+          const normalized = normalizeTokenURI(uri);
+          if (normalized && normalized.startsWith("http")) {
+            const res = await fetch(normalized);
+            if (res.ok) metadata = await res.json();
+          }
+        } catch (e) {
+          console.warn(`tokenURI取得失敗: ${tokenId}`, e);
+        }
+
+        // カードを作成して表示
+        const card = createNFTCard(tokenId, metadata, emuPrice, jpycPrice);
+        nftListDiv.appendChild(card);
+
+      } catch (e) {
+        console.error(`NFT読み込みエラー ID ${i}:`, e);
       }
-    } catch (e) {
-      console.warn(`tokenURI取得失敗: ${tokenId}`, e);
     }
 
-    const card = createNFTCard(tokenId, metadata, emuPrice, jpycPrice);
-    nftListDiv.appendChild(card);
-  } catch (e) {
-    console.error(`NFT読み込みエラー token ${tokenId}:`, e);
-  }
-}
+    // 1つも見つからなかった場合
+    if (foundCount === 0) {
+      nftListDiv.innerHTML = "<p>現在、交換可能なNFTはありません。</p>";
+    }
 
   } catch (err) {
     console.error("Error loading NFTs:", err);
@@ -2402,45 +3610,79 @@ async function loadExchangeableNFTs() {
   }
 }
 
-// ボタンに接続
-if (exchangeBtn) {
+
+// 取引所ボタンに接続
+document.addEventListener("DOMContentLoaded", () => {
+  const exchangeBtn = document.getElementById("exchangeBtn");
+
+  if (!exchangeBtn) {
+    console.warn("❌ exchangeBtn not found");
+    return;
+  }
+
   exchangeBtn.addEventListener("click", async () => {
+    console.log("🔥 exchangeBtn clicked");
+
+    const userType = getCurrentUserType();
+    console.log("👤 userType:", userType);
+
+    // ゲストは完全禁止
+    if (userType === "guest") {
+      alert("ゲストは取引所を利用できません");
+      return;
+    }
+
+    // 無料は週1（月曜）
+    /*if (userType === "free" && !canUseExchange()) {
+      alert("無料ユーザーは週1回（毎週月曜日のみ）ご利用いただけます。");
+      return;
+    }*/
+
+    // 有料 or 許可された無料のみ
     nftExchangeSection.style.display = "block";
     await loadExchangeableNFTs();
   });
-} else {
-  console.warn("exchangeBtn が見つかりません。");
-}
-
-	
-    } catch (err) {
-      console.error("接続エラー詳細:", err); // ←追加
-      walletStatus.textContent = "接続エラー: " + err.message;
-    }
-  } else {
-    walletStatus.textContent = "MetaMaskがインストールされていません。";
-  }
 });
-
-async function initWallet() {
-  if (!window.ethereum) return;
-
-  const accounts = await ethereum.request({
-    method: "eth_accounts"
-  });
-
-  window.currentUserId = accounts[0] ?? null;
-
-  console.log("👤 currentUserId:", window.currentUserId);
-}
-
-initWallet();
-
-console.log("👤 currentUserId:", window.currentUserId);
 
 /* ======= UI トグル ======= */
 themeButton.addEventListener('click', () => themeSubButtons.classList.toggle('hidden'));
 libraryButton.addEventListener('click', () => librarySubButtons.classList.toggle('hidden'));
+
+
+function getPosterId() {
+  // ウォレット接続ユーザー
+  if (window.connectedAccount) {
+    return window.connectedAccount.toLowerCase();
+  }
+
+  // ゲスト
+  if (window.emuAuth?.type === "guest") {
+    return "guest:" + window.emuAuth.guestId;
+  }
+
+  // それ以外（ありえないが保険）
+  return "unknown";
+}
+
+function getAuthorInfo() {
+  // ウォレットユーザー
+  if (window.connectedAccount) {
+    return {
+      authorId: window.connectedAccount.toLowerCase(),
+      userType: "wallet" // paid or free
+    };
+  }
+
+  // ゲスト
+  if (window.emuAuth?.type === "guest") {
+    return {
+      authorId: "guest:" + window.emuAuth.guestId,
+      userType: "guest"
+    };
+  }
+
+  throw new Error("author情報を取得できません");
+}
 
 /* ======= 投稿フォーム ======= */
 function openPostForm() { postFormModal.style.display = 'flex'; }
@@ -2473,15 +3715,36 @@ document.querySelectorAll(".theme-specific-button").forEach(btn => {
 });
 
 /* ======= 下書き ======= */
-saveDraftButton.addEventListener('click', function () {
+saveDraftButton.addEventListener("click", function () {
+  const userType = getCurrentUserType();
+
+  if (userType === "guest") {
+    alert("ゲストは下書き機能を利用できません");
+    return;
+  }
+
+  if (isFreeOnlyUser()) {
+    alert("この機能は有料NFTユーザー限定です");
+    return;
+  }
+
   const title = postTitleInput.value.trim();
   const body = postBodyInput.value.trim();
   const tags = postTagsInput.value.trim();
-  if (!title || !body) { alert("タイトルと本文は必須です！"); return; }
+
+  if (!title || !body) {
+    alert("タイトルと本文は必須です！");
+    return;
+  }
 
   if (editMode === "draft" && editingPostId) {
     const draft = drafts.find(d => d.id === editingPostId);
-    if (draft) { draft.title = title; draft.body = body; draft.tags = tags; alert("下書きを更新しました！"); }
+    if (draft) {
+      draft.title = title;
+      draft.body = body;
+      draft.tags = tags;
+      alert("下書きを更新しました！");
+    }
   } else {
     const draftId = Date.now();
     drafts.push({ id: draftId, title, body, tags });
@@ -2489,7 +3752,8 @@ saveDraftButton.addEventListener('click', function () {
   }
 
   closePostForm();
-  editingPostId = null; editMode = null;
+  editingPostId = null;
+  editMode = null;
 });
 
 function editDraft(draft) {
@@ -2546,6 +3810,7 @@ function attachReactionHandlers(postElement) {
   let goodClicked = false;
   let changeClicked = false;
 
+
   // 👍 goodボタン
   if (goodButton) {
     goodButton.addEventListener("click", () => {
@@ -2557,9 +3822,15 @@ function attachReactionHandlers(postElement) {
         postData.goodUsers.push(currentUserId);
         postData.goodCount = (postData.goodCount ?? 0) + 1;
         goodCountEl.textContent = postData.goodCount;
-      }
+		// localStorage にも保存
+const myGoods = JSON.parse(localStorage.getItem("myGoods")) || [];
+if (!myGoods.includes(String(postData.id))) {
+  myGoods.push(String(postData.id));
+  localStorage.setItem("myGoods", JSON.stringify(myGoods));
+}
+}
 
-      // Emuer処理
+      // Emuer処理(good)
       pendingEmuer += 10;
       savePending();
       if (myWalletPage.style.display === "block") renderWallet();
@@ -2577,9 +3848,15 @@ function attachReactionHandlers(postElement) {
         postData.changeUsers.push(currentUserId);
         postData.changeCount = (postData.changeCount ?? 0) + 1;
         changeCountEl.textContent = postData.changeCount;
-      }
+		const myChanges = JSON.parse(localStorage.getItem("myChanges")) || [];
 
-      // Emuer処理
+if (!myChanges.includes(String(postData.id))) {
+  myChanges.push(String(postData.id));
+  localStorage.setItem("myChanges", JSON.stringify(myChanges));
+}
+}
+
+      // Emuer処理(change)
       pendingEmuer += 20;
       savePending();
       if (myWalletPage.style.display === "block") renderWallet();
@@ -2591,22 +3868,26 @@ function attachReactionHandlers(postElement) {
 function createPostElementFromData(post) {
   const postElement = document.createElement("div");
   postElement.classList.add("post");
+  postElement.postData = post;
   postElement.dataset.id = post.id;
   postElement.dataset.good = post.goodCount ?? 0;
   postElement.dataset.change = post.changeCount ?? 0;
 
-  postElement.innerHTML = `
-    <h3>${escapeHtml(post.title)}</h3>
-    <p>${escapeHtml(post.body)}</p>
-    <div class="tags">
-      #${post.tags.split(",").map(t => t.trim()).filter(Boolean).map(escapeHtml).join(" #")}
-    </div>
-    <div class="post-actions">
-      <button class="good-button">👍 <span class="good-count">${post.goodCount ?? 0}</span></button>
-      <button class="change-button">🤝 <span class="change-count">${post.changeCount ?? 0}</span></button>
-      <button class="edit-button">編集</button>
-    </div>
-  `;
+postElement.innerHTML = `
+  <h3>
+    ${escapeHtml(post.title)}
+    ${getUserTypeBadge(post.userType)}
+  </h3>
+  <p>${escapeHtml(post.body)}</p>
+  <div class="tags">
+    #${post.tags.split(",").map(t => t.trim()).filter(Boolean).map(escapeHtml).join(" #")}
+  </div>
+  <div class="post-actions">
+    <button class="good-button">👍 <span class="good-count">${post.goodCount ?? 0}</span></button>
+    <button class="change-button">🤝 <span class="change-count">${post.changeCount ?? 0}</span></button>
+    <button class="edit-button">編集</button>
+  </div>
+`;
 
   // reaction ハンドラ
   attachReactionHandlers(postElement);
@@ -2628,19 +3909,36 @@ function createPostElementFromData(post) {
   return postElement;
 }
 
+function normalizeUserType(rawType) {
+  if (rawType === "paidNFT") return "paid";
+  if (rawType === "freeNFT") return "free";
+  return "guest";
+}
+
 function createPostData({ title, body, tags }) {
-  const postData = {
+  const auth = window.emuAuth || { type: "guest" };
+
+  return {
     id: Date.now(),
     title,
     body,
     tags,
-    createdAt: Date.now(),
-    goodCount: 0,
-    changeCount: 0
+    userId: auth.address || auth.guestId || "guest",
+    userType: normalizeUserType(auth.type),
+    createdAt: new Date().toISOString()
   };
+}
 
-  posts.push(postData);
-  return postData;
+function getUserTypeBadge(type) {
+  switch (type) {
+    case "paid":
+      return `<span class="badge badge-paid"有料利用者</span>`;
+    case "free":
+      return `<span class="badge badge-free">無料利用者</span>`;
+    case "guest":
+    default:
+      return `<span class="badge badge-guest">ゲスト利用者</span>`;
+  }
 }
 
 function renderPosts(postList = posts) {
@@ -2652,6 +3950,7 @@ function renderPosts(postList = posts) {
     postFeed.appendChild(el);
   });
 }
+
 
 /* 投稿フォーム submit */
 postForm.addEventListener("submit", function (e) {
@@ -2681,17 +3980,15 @@ postForm.addEventListener("submit", function (e) {
       postId = post.id;
       alert("テーマ投稿を更新しました！（タイトルは固定）");
     }
-  } else {
-    const post = createPostData({ title, body, tags });
-    postId = post.id;
-    alert("投稿しました！");
-  }
+} else {
+  const post = createPostData({ title, body, tags });
+  posts.unshift(post);
+  renderPosts();
+  alert("投稿しました！");
+}
 
-  if (!currentUserId) {
-    console.warn("❌ currentUserId is not ready");
-    alert("ウォレット接続が完了していません");
-    return;
-  }
+const author = getAuthorInfo();
+
 
   emitAction(createAction({
     userId: currentUserId,
@@ -2711,75 +4008,178 @@ document.querySelectorAll(".post").forEach(p => attachReactionHandlers(p));
 
 /* ======= マイウォレット画面 ======= */
 function renderWallet() {
-  // total good / change は「全投稿の総合計（他者に押された回数の合計）」を表示
-  let goodTotal = 0;
-  let changeTotal = 0;
-  document.querySelectorAll(".post").forEach(p => {
-    const g = parseInt(p.querySelector(".good-count")?.textContent || p.dataset.good || "0", 10);
-    const c = parseInt(p.querySelector(".change-count")?.textContent || p.dataset.change || "0", 10);
-    goodTotal += g; changeTotal += c;
-  });
+  // 💡 【修正】投稿を数える古いロジック(goodTotalなど)は、スマコン移行後は不要なので削除しました。
 
-  // wallet の予定Emuerは pendingEmuer（Emuer単位）、累計は totalEmuer
-  document.getElementById("walletGoodCount").textContent = goodTotal;
-  document.getElementById("walletChangeCount").textContent = changeTotal;
-  document.getElementById("walletEmuerCount").textContent = pendingEmuer;
-  document.getElementById("walletTotalEmuer").textContent = totalEmuer;
+  // 1. 予定Emuer数を画面に表示
+  const pendingEl = document.getElementById("walletEmuerCount");
+  if (pendingEl) pendingEl.textContent = pendingEmuer;
+
+  // 2. ウォレット内の本物のEmuer残高を表示
+  const totalEmuerEl = document.getElementById("walletTotalEmuer");
+  if (totalEmuerEl) totalEmuerEl.textContent = totalEmuer;
+
+  // 💡 GoodとChangeの表示は、syncPendingEmuer() 内で直接書き換えるので、ここでは何もしません。
 }
 
-myWalletButton.addEventListener("click", () => {
-  // メインを隠す
+// マイウォレットを開く時の処理
+myWalletButton.addEventListener("click", async () => {
+  if (!window.connectedAccount) {
+    alert("ウォレットを接続してください");
+    return;
+  }
+
   document.querySelector(".main-content").style.display = "none";
   myWalletPage.style.display = "block";
-  // 常に pendingEmuer を表示（これ防止で誤解が出てた部分を改良）
-  renderWallet();
+
+  try {
+    // 1. 最新のEmuerトークン残高を取得
+    const balance = await emuerContract.balanceOf(window.connectedAccount);
+    totalEmuer = Math.floor(parseFloat(ethers.utils.formatUnits(balance, 18)));
+
+    // 2. スマコンからGood/Change/予定数を取得して画面を更新
+    await syncPendingEmuer(); 
+    
+    // 3. 最後に全体を整える
+    renderWallet();
+  } catch (e) {
+    console.error("マイウォレット読み込みエラー:", e);
+  }
 });
 
+// 「閉じる」ボタンの処理
 closeWalletPage.addEventListener("click", () => {
   myWalletPage.style.display = "none";
   document.querySelector(".main-content").style.display = "block";
 });
 
+/* ======= 1. ポイントとトークンの完全同期関数 ======= */
+async function syncPendingEmuer() {
+  // アカウントがなければ何もしない
+  const accounts = await ethereum.request({ method: 'eth_accounts' });
+  if (accounts.length === 0) return;
+  
+  const myAddr = accounts[0]; // 常に「今のアカウント(0番目)」を固定
 
-/* ======= 変換ボタン: 週1回（月曜）のみ ======= */
+  try {
+    // A. ポイント情報(Good/Change)をスマコンから取得
+    const userData = await emuerContract.users(myAddr);
+    const goodVal = parseInt(userData.good.toString());
+    const changeVal = parseInt(userData.change.toString());
 
-// 次の月曜日まで何日あるかを返す
-function daysUntilNextConversion() {
-  const now = new Date();
-  const day = now.getDay(); // 0=日曜, 1=月曜, ... 6=土曜
-  let daysToMonday = (1 - day + 7) % 7;
-  return daysToMonday;
-}
+    // B. トークン残高(ERC20)をスマコンから取得
+    const balanceBN = await emuerContract.balanceOf(myAddr);
+    const totalEmuerVal = Math.floor(parseFloat(ethers.utils.formatUnits(balanceBN, 18)));
 
-// ボタン状態を更新
-function updateConvertButton() {
-  const daysLeft = daysUntilNextConversion();
-  if (daysLeft === 0) {
-    convertButton.disabled = false;
-    convertButton.textContent = "変換";
-  } else {
-    convertButton.disabled = true;
-    convertButton.textContent = `次回変換まであと${daysLeft}日`;
+    // C. 画面表示を一気に更新
+    if (document.getElementById("walletGoodCount")) document.getElementById("walletGoodCount").innerText = goodVal;
+    if (document.getElementById("walletChangeCount")) document.getElementById("walletChangeCount").innerText = changeVal;
+    if (document.getElementById("walletTotalEmuer")) document.getElementById("walletTotalEmuer").innerText = totalEmuerVal;
+
+    // D. 変換予定数を計算 (10 Good = 1, 20 Change = 3)
+    const goodEmuer = Math.floor(goodVal / 10);
+    const changeEmuer = Math.floor(changeVal / 20) * 3;
+    pendingEmuer = goodEmuer + changeEmuer;
+
+    if (document.getElementById("walletEmuerCount")) {
+      document.getElementById("walletEmuerCount").innerText = pendingEmuer;
+    }
+
+    console.log(`📊 同期完了[${myAddr.substring(0,6)}...]: G:${goodVal} C:${changeVal} T:${totalEmuerVal}`);
+  } catch (e) {
+    console.error("❌ 同期失敗:", e);
   }
 }
 
-// 初期チェックと定期更新（毎分）
-updateConvertButton();
-setInterval(updateConvertButton, 60*1000);
+/* ======= 2. 変換ボタンの表示制御（曜日チェック） ======= */
+// 💡 テスト時は true、本番は false にしてください
+const isTestMode = false; 
 
+function updateConvertButton() {
+  const convertBtn = document.getElementById("convertButton");
+  if (!convertBtn) return;
 
+  const now = new Date();
+  const day = now.getDay(); // 0:日, 1:月, ..., 6:土
+  
+  // ユーザー種別を取得（あなたの既存システム window.emuAuth.type を参照）
+  const userType = window.emuAuth?.type || "guest"; 
 
-// 実際の変換処理（ガス代はユーザー負担）
-convertButton.addEventListener("click", async () => {
-  if (pendingEmuer <= 0) {
-    alert("変換する予定の Emuer がありません。");
+  console.log("--- 変換ボタンの状態チェック ---");
+  console.log("ユーザー種別:", userType);
+
+  // 1. 【ゲスト】は常に禁止
+  if (userType === "guest" && !isTestMode) {
+    lockButton(convertBtn, "ゲストは変換できません");
     return;
   }
 
- // 日付チェック（念のためクリック時にも確認）
- if (daysUntilNextConversion() !== 0) {
-    alert("変換は毎週月曜日のみ可能です。");
-    updateConvertButton();
+  // 2. 【有料NFT】はいつでもOK
+  if (userType === "paidNFT" || isTestMode) {
+    unlockButton(convertBtn, isTestMode && day !== 1 ? "変換（テスト中）" : "変換を実行");
+    return;
+  }
+
+  // 3. 【無料NFT】は月曜日(1)のみ
+  if (userType === "freeNFT") {
+    if (day === 1) {
+      unlockButton(convertBtn, "変換を実行");
+    } else {
+      lockButton(convertBtn, "無料NFT: 次回は月曜日です");
+    }
+    return;
+  }
+
+  // それ以外（念のためロック）
+  lockButton(convertBtn, "利用不可");
+}
+
+// 🔒 ボタンを無効化する補助関数
+function lockButton(btn, text) {
+  btn.disabled = true;
+  btn.style.backgroundColor = "#cccccc";
+  btn.style.color = "#666666";
+  btn.style.cursor = "not-allowed";
+  btn.style.pointerEvents = "none";
+  btn.textContent = text;
+  btn.onclick = null;
+}
+
+// ✅ ボタンを有効化する補助関数
+function unlockButton(btn, text) {
+  btn.disabled = false;
+  btn.style.backgroundColor = "#4CAF50";
+  btn.style.color = "#ffffff";
+  btn.style.cursor = "pointer";
+  btn.style.pointerEvents = "auto";
+  btn.textContent = text;
+  btn.onclick = handleConversion; // 変換処理を紐付け
+}
+
+
+/* ======= 3. 変換実行処理（一括処理） ======= */
+async function handleConversion() {
+  const userType = window.emuAuth?.type || "guest";
+
+  // ゲストを弾く
+  if (userType === "guest" && !isTestMode) {
+    alert("ゲストユーザーは変換機能を利用できません。");
+    return;
+  }
+
+  // 無料ユーザーの月曜チェック（テストモード以外）
+  if (userType === "freeNFT" && new Date().getDay() !== 1 && !isTestMode) {
+    alert("無料ユーザーは月曜日のみ変換可能です。");
+    return;
+  }
+
+  // --- 以降は、これまでの正常な変換処理 ---
+  const accounts = await ethereum.request({ method: 'eth_accounts' });
+  const myAddr = accounts[0];
+  
+  await syncPendingEmuer();
+  
+  if (pendingEmuer <= 0) {
+    alert("変換できるポイントがありません");
     return;
   }
 
@@ -2787,34 +4187,35 @@ convertButton.addEventListener("click", async () => {
     convertButton.disabled = true;
     convertButton.textContent = "処理中...";
 
-    // BigNumber に変換
-    const amountBN = ethers.BigNumber.from(pendingEmuer.toString());
+    const userData = await emuerContract.users(myAddr);
 
-    // MetaMask で convertGood を呼ぶ
-    const tx = await emuerContract.convertGood(amountBN);
-    await tx.wait();
+    if (userData.good > 0) {
+      const tx1 = await emuerContract.convertGood(userData.good);
+      await tx1.wait();
+    }
+    if (userData.change > 0) {
+      const tx2 = await emuerContract.convertChange(userData.change);
+      await tx2.wait();
+    }
 
-    // フロント反映
-    totalEmuer += pendingEmuer;
-    pendingEmuer = 0;
-    saveTotal();
-    savePending();
-    renderWallet();
-
-    alert("変換完了！スマートコントラクトに反映されました。ガス代はユーザー負担です。");
+    alert("🎉 変換が完了しました！");
+    await syncPendingEmuer();
   } catch (err) {
     console.error(err);
-    alert("変換失敗: " + err.message);
+    alert("変換に失敗しました");
   } finally {
     updateConvertButton();
   }
-});
+}
 
-// =====================
+// 紐付け
+convertButton.onclick = handleConversion;
+
+
 // 初期設定（最上部）
 // =====================
 const overlay = document.getElementById("room3Overlay");
-//const socket = io(); //
+const socket = io();
 
 const walletAddress = localStorage.getItem("emuWallet");
 let currentStep = 1;
@@ -2824,6 +4225,11 @@ let replyTarget = null;
 // Explore / Room 制御
 // =====================
 document.getElementById("exploreBtn").onclick = () => {
+  if (getCurrentUserType() === "guest") {
+    alert("ゲストは探索機能を利用できません");
+    return;
+  }
+
   document.getElementById("exploreOverlay").style.display = "flex";
 };
 
@@ -2831,8 +4237,30 @@ function closeExplore() {
   document.getElementById("exploreOverlay").style.display = "none";
 }
 
+
+function getCurrentUserType() {
+  // guest
+  if (window.emuAuth?.type === "guest") return "guest";
+
+  // wallet接続あり
+  if (window.connectedAccount) {
+    if (window.hasPaidNFT) return "paid";
+    if (window.hasFreeNFT) return "free";
+  }
+
+  // それ以外は全部 guest 扱い
+  return "guest";
+}
+
+
 function openRoom(roomId) {
   closeExplore();
+
+  // 🚫 無料NFTユーザーは room1 NG
+ /* if (roomId === 1 && isFreeOnlyUser()) {
+    alert("無料NFTユーザーはRoom1を利用できません。\n有料NFTを取得すると解放されます。");
+    return;
+  }*/
 
   if (roomId === 1) {
     openRoom1();
@@ -2840,17 +4268,19 @@ function openRoom(roomId) {
     openRoom2();
   } else if (roomId === 3) {
     openRoom3();
-  } 
+  }
 }
 
-/*function openRoom3() {
+function openRoom3() {
   overlay.style.display = "flex";
   showStep(1);
 
+if (socket && socket.connected) {
   socket.emit("join room3", {
     wallet: walletAddress
   });
-}*/
+}
+}
 
 // =====================
 // Step 制御
@@ -2875,7 +4305,7 @@ function closePopup(){
   document.getElementById('discussion').innerHTML = '';
 }
 
-/*document.getElementById('postBtn').addEventListener('click', ()=>{
+document.getElementById('postBtn').addEventListener('click', ()=>{
   const input = document.getElementById('userInput');
   const text = input.value.trim();
   if(!text) return;
@@ -2893,11 +4323,11 @@ function closePopup(){
   document.getElementById("replyInfo").style.display = "none";
   input.placeholder = "ここに意見を書こう";
   input.value = '';
-});*/
+});
 
-/*socket.on("today topic", (topic) => {
+socket.on("today topic", (topic) => {
   document.getElementById("topic").textContent = topic;
-});*/
+});
 
 function scrollToMessage(messageId) {
   const target = document.querySelector(
@@ -2913,12 +4343,12 @@ function scrollToMessage(messageId) {
 
   // 一瞬ハイライト
   target.style.boxShadow = "0 0 0 2px #4da3ff";
-  setTimeout(() => {
+  goTomainapp(() => {
     target.style.boxShadow = "";
   }, 1200);
 }
 
-/*function renderMessage(data) {
+function renderMessage(data) {
   const disc = document.getElementById("discussion");
   const msg = document.createElement("div");
 
@@ -2965,9 +4395,9 @@ function scrollToMessage(messageId) {
 
   msg.appendChild(replyBtn);
   disc.appendChild(msg);
-}*/
+}
 
-/*socket.on("room3 history", (history) => {
+socket.on("room3 history", (history) => {
   const disc = document.getElementById("discussion");
   disc.innerHTML = "";
 
@@ -2980,7 +4410,7 @@ socket.on("room3 message", (data) => {
   renderMessage(data);
   const disc = document.getElementById("discussion");
   disc.scrollTop = disc.scrollHeight;
-});*/
+});
 
 
 const action = {
@@ -2993,28 +4423,7 @@ const action = {
 
 localStorage.setItem("emu:lastAction", JSON.stringify(action));
 
-function openRoom2() {
-  const overlay = document.getElementById("room3Overlay");
-  const iframe = document.getElementById("room2Frame");
-  const popup = document.querySelector("#room3Overlay .popup");
 
-  overlay.style.display = "flex";
-
-  // popup（room3用）を完全に消す
-  if (popup) popup.style.display = "none";
-
-  // iframe（room2）を全面表示
-  iframe.style.display = "block";
-  iframe.src = "/Emu_room2/index.html";
-}
-
-function closeRoom2() {
-  const room2Overlay = document.getElementById("room2Overlay");
-  const room2Frame = document.getElementById("room2Frame");
-
-  room2Frame.src = "";
-  room2Overlay.style.display = "none";
-}
 
 function openRoom2() {
   const overlay = document.getElementById("room3Overlay");
@@ -3048,6 +4457,38 @@ function closePopup() {
   if (closeBtn) closeBtn.style.display = "none";
 }
 
+function handleDiscussion() {
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (discussionState.lastDate === today) return;
+
+  const yesterday = new Date(Date.now() - 86400000)
+    .toISOString()
+    .slice(0, 10);
+
+  if (discussionState.lastDate === yesterday) {
+    discussionState.streak += 1;
+  } else {
+    discussionState.streak = 1;
+  }
+
+  discussionState.lastDate = today;
+  saveDiscussionState();
+
+  if ([3, 5, 7].includes(discussionState.streak)) {
+
+    const iframe = document.getElementById("room2Frame");
+
+    iframe.contentWindow.postMessage(
+      {
+        type: "discussion_star",
+        level: discussionState.streak
+      },
+      "*"
+    );
+  }
+}
+
 // ===== 全ての投稿：中央だけ更新 =====
 function refreshAllPosts(postList = posts) {
   const postFeed = document.getElementById("postFeed");
@@ -3063,7 +4504,7 @@ function refreshAllPosts(postList = posts) {
 }
 
 // 今月のテーマ
-let currentTheme = "2026";//今月のテーマ
+let currentTheme = "はじまり";//今月のテーマ
 
 // トレンド用
 function getTrendPosts() {
@@ -3095,8 +4536,6 @@ document.addEventListener("DOMContentLoaded", () => {
     console.warn("refreshAllPosts ボタンが見つからない");
   }
 
-  
-
   // 新規
   const newBtn = document.getElementById("filterNewBtn");
   if (newBtn) {
@@ -3112,6 +4551,18 @@ document.addEventListener("DOMContentLoaded", () => {
 const goodBtn = document.getElementById("filterGoodBtn");
 if (goodBtn) {
   goodBtn.addEventListener("click", () => {
+	const userType = getCurrentUserType();
+
+	if (getCurrentUserType() === "guest") {
+      alert("ゲストはこの機能を利用できません");
+      return;
+    }
+
+    if (userType === "free") {
+        alert("この機能は有料NFTユーザー限定です");
+        return;
+    }
+
     console.log("✅ good フィルタ");
     refreshAllPosts(getGoodPosts());
   });
@@ -3123,6 +4574,18 @@ if (goodBtn) {
 const changeBtn = document.getElementById("filterChangeBtn");
 if (changeBtn) {
   changeBtn.addEventListener("click", () => {
+	const userType = getCurrentUserType();
+
+	if (getCurrentUserType() === "guest") {
+      alert("ゲストはこの機能を利用できません");
+      return;
+    }
+
+	    if (userType === "free") {
+        alert("この機能は有料NFTユーザー限定です");
+        return;
+    }
+
     console.log("✅ change フィルタ");
     refreshAllPosts(getChangePosts());
   });
@@ -3158,6 +4621,11 @@ function getChangePosts() {
 const recommendBtn = document.getElementById("filterRecommendBtn");
 if (recommendBtn) {
   recommendBtn.addEventListener("click", () => {
+	if (getCurrentUserType() === "guest") {
+      alert("ゲストはこの機能を利用できません");
+      return;
+    }
+
     console.log("✅ おすすめボタン");
     refreshAllPosts(getRecommendedPosts());
   });
@@ -3168,7 +4636,7 @@ if (recommendBtn) {
 // トレンド
 const trendBtn = document.getElementById("filterTrendBtn");
 if (trendBtn) {
-  trendBtn.addEventListener("click", () => {
+  trendBtn.addEventListener("click", () => {+
     console.log("✅ トレンドボタン");
     refreshAllPosts(getTrendPosts());
   });
@@ -3178,15 +4646,31 @@ if (trendBtn) {
 
 // 検索
 const searchInput = document.querySelector(".search-bar");
+
 if (searchInput) {
   searchInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      const keyword = searchInput.value.trim();
-      console.log("🔍 検索キーワード:", keyword);
+    if (e.key !== "Enter") return;
 
-      const results = searchPostsByTag(keyword);
-      refreshAllPosts(results); // 検索結果だけ表示
+    const userType = getCurrentUserType();
+
+    //ゲストユーザー制限
+    if (userType === "guest") {
+      alert("ゲストは検索機能を利用できません");
+      return;
     }
+
+    //無料NFTユーザー制限
+    if (userType === "free") {
+      alert("検索機能は有料NFTユーザー限定です");
+      return;
+    }
+
+    // ===== ここから通常処理 =====
+    const keyword = searchInput.value.trim();
+    console.log("🔍 検索キーワード:", keyword);
+
+    const results = searchPostsByTag(keyword);
+    refreshAllPosts(results);
   });
 }
 
@@ -3206,75 +4690,61 @@ function searchPostsByTag(keyword) {
 
 // 左側マイライブラリーボタン
 function getMyGoodPosts() {
-  console.log("📚 自分がgoodした記事を取得");
+  console.log("👍自分がgoodした記事を取得");
 
-  const dummyPosts = [
-    { title: "AI時代の学び方", author: "Emu", date: "2026-01-10" },
-    { title: "NFTって結局何？", author: "Golem", date: "2026-01-08" }
-  ];
+  const myGoods =
+    JSON.parse(localStorage.getItem("myGoods")) || [];
+const filtered = posts.filter(post =>
+  myGoods.includes(String(post.id))
+);
 
   const area = document.getElementById("postFeed");
   if (!area) return;
 
-  area.innerHTML = "<h2>📘 goodした記事</h2>";
+  area.innerHTML = "<h2>👍goodした記事</h2>";
 
-  dummyPosts.forEach(post => {
-    const div = document.createElement("div");
-    div.className = "post-card";
-    div.innerHTML = `
-      <h3>${post.title}</h3>
-      <p>${post.author}</p>
-      <small>${post.date}</small>
-    `;
-    area.appendChild(div);
-  });
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  const myGoodBtn = document.getElementById("myGoodBtn");
-
-  if (!myGoodBtn) {
-    console.error("❌ myGoodBtn が見つからない");
+  if (filtered.length === 0) {
+    area.innerHTML += "<p>まだgoodしていません</p>";
     return;
   }
 
-  myGoodBtn.addEventListener("click", getMyGoodPosts);
-});
+  filtered.forEach(post => {
+    const el = createPostElementFromData(post);
+    area.appendChild(el);
+  });
+}
 
 function getMyChangePosts() {
-  console.log("📘 自分がchangeした記事を取得");
+  console.log("🤝自分がchangeした記事を取得");
 
-  const dummyPosts = [
-    { title: "意見が変わった瞬間", author: "Emu", date: "2026-01-09" },
-    { title: "考え直してよかった話", author: "Giselle", date: "2026-01-07" }
-  ];
+  const myChanges =
+    JSON.parse(localStorage.getItem("myChanges")) || [];
+const filtered = posts.filter(post =>
+  myChanges.includes(String(post.id))
+);
 
   const area = document.getElementById("postFeed");
   if (!area) return;
 
-  area.innerHTML = "<h2>🔄 changeした記事</h2>";
+  area.innerHTML = "<h2>🤝changeした記事</h2>";
 
-  dummyPosts.forEach(post => {
-    const div = document.createElement("div");
-    div.className = "post-card";
-    div.innerHTML = `
-      <h3>${post.title}</h3>
-      <p>${post.author}</p>
-      <small>${post.date}</small>
-    `;
-    area.appendChild(div);
+  if (filtered.length === 0) {
+    area.innerHTML += "<p>まだchangeしていません</p>";
+    return;
+  }
+
+  filtered.forEach(post => {
+    const el = createPostElementFromData(post);
+    area.appendChild(el);
   });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  const myChangeBtn = document.getElementById("myChangeBtn");
+  document.getElementById("myGoodBtn")
+    ?.addEventListener("click", getMyGoodPosts);
 
-  if (!myChangeBtn) {
-    console.error("myChangeBtn が見つからない");
-    return;
-  }
-
-  myChangeBtn.addEventListener("click", getMyChangePosts);
+  document.getElementById("myChangeBtn")
+    ?.addEventListener("click", getMyChangePosts);
 });
 
 function openRoom1() {
@@ -3288,7 +4758,7 @@ function openRoom1() {
   frame.style.display = "block";
 
   // room1（今まで作ったやつ）を読み込む
-  frame.src = "/admin/room1/index.html"; 
+  frame.src = "/admin/room1/index.html";
 }
 
 function closeRoom1() {
@@ -3297,6 +4767,580 @@ function closeRoom1() {
   frame.src = ""; // 念のためリセット
 }
 
+window.checkFreeNFT = async function () {
+  try {
+    if (!window.connectedAccount) return false;
+
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const freeNFT = getOfficialNFT("free");
+
+    if (!freeNFT || !freeNFT.contract) {
+      throw new Error("freeNFT contract 未定義");
+    }
+
+    const nft = new ethers.Contract(
+      freeNFT.contract,
+      ERC721_ABI,
+      provider
+    );
+
+    const balance = await nft.balanceOf(window.connectedAccount);
+    window.hasFreeNFT = balance.gt(0);
+
+    console.log("🎟 無料NFT:", balance.toString());
+    return window.hasFreeNFT;
+
+  } catch (e) {
+    console.error("❌ 無料NFTチェック失敗", e);
+    window.hasFreeNFT = false;
+    return false;
+  }
+};
+
+window.onFreeNftClick = async function () {
+  if (!window.ethereum) {
+    alert("MetaMaskをインストールしてください");
+    return;
+  }
+
+  // ① connect
+  const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+  window.connectedAccount = accounts[0];
+
+  // auth保存
+  window.emuAuth = {
+    type: "freeNFT",
+    address: window.connectedAccount
+  };
+  localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
+
+  // ② すでに持ってる？
+  const hasNFT = await window.checkFreeNFT();
+
+  if (!hasNFT) {
+    const ok = confirm("無料NFTを受け取りますか？");
+    if (!ok) return;
+
+    // ③ claim 実行（already claimed はOK）
+    await window.claimFreeNFT();
+
+    // ④ 再チェック
+    await window.checkFreeNFT();
+  }
+
+  // ⑤ 最終判定
+  if (!window.hasFreeNFT) {
+    alert("無料NFTを取得できませんでした");
+    return;
+  }
+
+  // ⑥ 公式NFT判定
+  await window.checkHexaNFT();
+  window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT;
+
+  provider = new ethers.providers.Web3Provider(window.ethereum);
+signer = provider.getSigner();
+
+emuerContract = new ethers.Contract(
+  EMUER_CONTRACT_ADDRESS,
+  EMUER_CONTRACT_ABI,
+  signer
+);
+
+jpycContract = new ethers.Contract(
+  JPYC_ADDRESS,
+  JPYC_ABI,
+  signer
+);
+
+  console.log("🏫 FreeNFT OK → メイン画面へ");
+  const account = window.connectedAccount;
+
+walletStatus.textContent = "接続成功: " + account;
+
+walletAddressButton.textContent =
+  account.substring(0, 6) + "..." + account.slice(-4);
+
+  goTomainapp();
+};
+
+  // 公式NFT最終判定
+  async function checkOfficialNFTAndProceed() {
+  await window.checkHexaNFT();
+
+  window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT;
+
+  return true;
+}
+
+window.restoreAuth = function () {
+  const saved = localStorage.getItem("emu_auth");
+  if (!saved) return;
+  try {
+    const auth = JSON.parse(saved);
+    window.emuAuth = auth;
+    console.log("✅ Auth restored:", auth.type);
+  } catch (e) {
+    console.error("❌ Auth restore failed", e);
+  }
+};
+
+
+// --- 追加する設定 ---
+const AMOY_GAS_OPTION = {
+  maxPriorityFeePerGas: ethers.utils.parseUnits("25", "gwei"), 
+  maxFeePerGas: ethers.utils.parseUnits("50", "gwei"),
+  gasLimit: 300000 
+};
+
+window.claimFreeNFT = async function () {
+  try {
+    // 1. ethers v5 用のプロバイダー設定
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+
+    // 2. getOfficialNFT("free") からアドレスを確実に取得
+    const freeNFTInfo = getOfficialNFT("free");
+    if (!freeNFTInfo || !freeNFTInfo.contract) {
+        throw new Error("NFTのアドレスが見つかりません。getOfficialNFTを確認してください。");
+    }
+    const contractAddress = freeNFTInfo.contract;
+
+    console.log("🚀 Calling claim on:", contractAddress);
+
+    // 3. コントラクト作成 (長い方の FREE_NFT_ABI を使用)
+    const nft = new ethers.Contract(
+      contractAddress,
+      FREE_NFT_ABI,
+      signer
+    );
+
+    // 4. トランザクション実行
+console.log("📝 Sending claim tx with Amoy gas settings...");
+    const tx = await nft.claim(AMOY_GAS_OPTION); // 💡 引数にガス設定を入れる
+    
+    console.log("📝 claim tx hash:", tx.hash);
+    await tx.wait();
+  } catch (e) {
+    // すでに受け取り済みのエラーをキャッチ
+    const errorMsg = e?.error?.message || e?.reason || e?.message || "";
+    if (errorMsg.includes("AlreadyClaimed") || errorMsg.includes("already claimed")) {
+      console.log("ℹ️ 既に取得済みです。そのまま続行します。");
+      return; 
+    }
+    
+    console.error("❌ Claim Error:", e);
+    alert("エラー: " + errorMsg);
+    throw e;
+  }
+};
+
+window.addEventListener("load", restoreAuth);
+
+function resolveUserType() {
+  if (window.hasPaidNFT) return "paid";
+  if (window.hasFreeNFT) return "free";
+  return "guest";
+}
+
+window.userType = resolveUserType();
+
+
+//アクセス管理
+const ACCESS = {
+  guest: {
+    view: true,
+    good: false,
+	change: false,
+    comment: false,
+    post: true,
+    room1: false,
+    room2: true,
+	room3: false
+  },
+  free: {
+    view: true,
+    good: true,
+	change: true,
+    comment: false,
+    post: true,
+    room1: false,
+    room2: true,
+	room3: true
+  },
+  paid: {
+    view: true,
+    good: true,
+	change: true,
+    comment: true,
+    post: true,
+    room1: true,
+    room2: true,
+	room3: true
+  }
+};
+
+function can(action) {
+  return ACCESS[window.userType]?.[action] === true;
+}
+
+function applyAccessControl() {
+  document.body.classList.remove("guest", "free", "paid");
+  document.body.classList.add(window.userType);
+
+  toggle(".btn-post", can("post"));
+  toggle(".btn-room2", can("room2"));
+  toggle(".btn-room3", can("room3"));
+  toggle(".btn-good-list", can("goodList"));
+  toggle(".btn-change-list", can("changeList"));
+  toggle(".right-buttons", can("rightButtons"));
+  toggle(".btn-search", can("search"));
+}
+
+applyAccessControl();
+
+function toggle(selector, enabled) {
+  document.querySelectorAll(selector).forEach(el => {
+    el.style.display = enabled ? "" : "none";
+  });
+}
+
+function onPost() {
+  if (!can("post")) {
+    alert("投稿は制限されています");
+    return;
+  }
+  openPostModal();
+}
+
+function goToRoom(room) {
+
+  // ✅ ゲストは探索不可
+  if (isGuestUser()) {
+    alert("ゲストは探索機能（ルーム）を利用できません");
+    console.log("🚫 guest blocked:", room);
+    return;
+  }
+
+  // 既存のアクセス制御
+  if (!can(room)) {
+    alert("このルームは利用できません");
+    return;
+  }
+
+  openRoom(room);
+}
+
+function canConvert() {
+  if (!can("convert")) return false;
+
+  if (window.userType === "paid") return true;
+  if (window.userType === "free") return checkWeeklyLimit("convert");
+  if (window.userType === "guest") return checkWeeklyLimit("convert");
+
+  return false;
+}
+
+function canExchange() {
+  if (!can("exchange")) return false;
+
+  if (window.userType === "paid") return true;
+  if (window.userType === "free") return checkWeeklyLimit("exchange");
+  if (window.userType === "guest") return checkMonthlyLimit("exchange");
+
+  return false;
+}
+
+function isGuestUser() {
+  return !window.currentUserId;
+}
+
+function applyGuestRestrictions() {
+  if (!isGuestUser()) return;
+
+  console.log("⚪ ゲスト制限を適用");
+
+  /* ===== 探索ボタン（room1,2,3） ===== */
+  document.querySelectorAll(".explore-button").forEach(btn => {
+    btn.disabled = true;
+    btn.classList.add("disabled");
+    btn.title = "ゲストは探索機能を利用できません";
+  });
+
+  /* ===== 下書き ===== */
+  const draftBtn = document.getElementById("draftButton");
+  if (draftBtn) {
+    draftBtn.disabled = true;
+    draftBtn.classList.add("disabled");
+  }
+
+  /* ===== 検索 ===== */
+  const searchInput = document.getElementById("searchInput");
+  const searchBtn = document.getElementById("searchButton");
+
+  if (searchInput) {
+    searchInput.disabled = true;
+    searchInput.placeholder = "ゲストは検索機能を利用できません";
+  }
+  if (searchBtn) {
+    searchBtn.disabled = true;
+  }
+}
+
+window.onGuestClick = function () {
+  console.log("👤 Guest Login");
+
+  window.emuAuth = {
+    type: "guest",
+    guestId: crypto.randomUUID(),
+    createdAt: Date.now()
+  };
+
+  localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
+
+  // 権限反映
+  window.hasFreeNFT = false;
+  window.hasPaidNFT = false;
+  window.hasOfficialNFT = false;
+
+  applyGuestRestrictions();
+
+  console.log("🏫 Guest → メイン画面へ");
+  goTomainapp();
+};
+
+function blockGuest(featureName) {
+  const userType = getCurrentUserType();
+  if (userType === "guest") {
+    alert(`ゲストは${featureName}を利用できません`);
+    return true; // ← ブロックした
+  }
+  return false; // ← 通してOK
+}
+
+function isFreeOnlyUser() {
+  return window.hasFreeNFT && !window.hasPaidNFT;
+}
+
+function isMonday() {
+  const today = new Date();
+  return today.getDay() === 1; // 0:日, 1:月, 2:火...
+}
+
+function handleGood(postId) {
+  const myGoods =
+    JSON.parse(localStorage.getItem("myGoods")) || [];
+
+  if (!myGoods.includes(postId)) {
+    myGoods.push(postId);
+    localStorage.setItem("myGoods", JSON.stringify(myGoods));
+  }
+}
+
+function handleChange(postId) {
+  const myChanges =
+    JSON.parse(localStorage.getItem("myChanges")) || [];
+
+  if (!myChanges.includes(postId)) {
+    myChanges.push(postId);
+    localStorage.setItem("myChanges", JSON.stringify(myChanges));
+  }
+}
+
+//左下枠推し共処理
+document.addEventListener("DOMContentLoaded", async () => {
+
+  const TARGET_IDS = [2, 3, 4];
+
+  const uploadInput = document.getElementById("emuImageUpload");
+  const customSlot = document.getElementById("emu-custom-slot");
+  const uploadLabel = document.querySelector(".emu-upload-label");
+
+  if (!window.ethereum) {
+    uploadLabel.innerText = "⚠ MetaMask未接続";
+    uploadInput.disabled = true;
+    return;
+  }
+
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  await provider.send("eth_requestAccounts", []);
+  const signer = provider.getSigner();
+  const nftContract = new ethers.Contract(NFT_ADDRESS, NFT_ABI, provider);
+
+  // 🔥 画像変更イベントは最初に1回だけ登録
+  uploadInput.addEventListener("change", function () {
+    const file = this.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const imageData = e.target.result;
+      localStorage.setItem("emu_custom_image", imageData);
+      customSlot.style.backgroundImage = `url(${imageData})`;
+      uploadLabel.style.display = "none";
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // 🔥 ダブルクリック復活
+  customSlot.addEventListener("dblclick", () => {
+    if (!uploadInput.disabled) {
+      uploadInput.click();
+    }
+  });
+
+  function lockUI() {
+    uploadLabel.innerText = "🔒 推し共NFTで解放";
+    uploadInput.disabled = true;
+  }
+
+  function unlockUI() {
+    uploadInput.disabled = false;
+    uploadLabel.innerText = "推しを…推しを！";
+
+    const savedImage = localStorage.getItem("emu_custom_image");
+    if (savedImage) {
+      customSlot.style.backgroundImage = `url(${savedImage})`;
+      uploadLabel.style.display = "none";
+    }
+  }
+
+  async function checkAccess() {
+    const userAddress = await signer.getAddress();
+    let hasAccess = false;
+
+    for (let tokenId of TARGET_IDS) {
+      try {
+        const owner = await nftContract.ownerOf(tokenId);
+        if (owner.toLowerCase() === userAddress.toLowerCase()) {
+          hasAccess = true;
+          break;
+        }
+      } catch {}
+    }
+
+    hasAccess ? unlockUI() : lockUI();
+  }
+
+  // 初回チェック
+  await checkAccess();
+
+  // NFT転送監視
+  nftContract.on("Transfer", async (from, to) => {
+    const userAddress = await signer.getAddress();
+    if (
+      from.toLowerCase() === userAddress.toLowerCase() ||
+      to.toLowerCase() === userAddress.toLowerCase()
+    ) {
+      await checkAccess();
+    }
+  });
+
+  window.ethereum.on("accountsChanged", checkAccess);
+
+});
+
+// ログボ実行関数
+async function handleLoginBonus() {
+  const btn = document.getElementById("loginBonusBtn");
+  try {
+    btn.disabled = true;
+    btn.textContent = "通信中...";
+
+    const tx = await emuerContract.loginBonus(AMOY_GAS_OPTION);
+    await tx.wait();
+
+    alert("🎉 0.5 EMUER を獲得しました！");
+    
+    // ✅ 受取直後にカウントダウンを即時更新！
+    updateBonusCountdown();
+
+  } catch (err) {
+      // エラー処理...
+      updateBonusCountdown(); // エラー時も状態を確認
+  }
+}
+
+// ボタンにイベントを紐付け
+document.getElementById("loginBonusBtn").addEventListener("click", handleLoginBonus);
+
+async function checkNextBonusTime() {
+  const userInfo = await emuerContract.users(window.connectedAccount);
+  const lastLogin = userInfo.lastLogin.toNumber(); // unix timestamp
+  
+  if (lastLogin === 0) {
+    document.getElementById("next-bonus-time").textContent = "初回ボーナス受取可能です！";
+    return;
+  }
+
+  const nextAvailable = lastLogin + (24 * 60 * 60); // +1日
+  const now = Math.floor(Date.now() / 1000);
+
+  if (now < nextAvailable) {
+    const diff = nextAvailable - now;
+    const hours = Math.floor(diff / 3600);
+    const minutes = Math.floor((diff % 3600) / 60);
+    document.getElementById("next-bonus-time").textContent = `次回まであと: ${hours}時間${minutes}分`;
+    document.getElementById("loginBonusBtn").disabled = true; // 時間外はボタン無効化
+  } else {
+    document.getElementById("next-bonus-time").textContent = "今すぐ受け取れます！";
+    document.getElementById("loginBonusBtn").disabled = false;
+  }
+}
+
+
+// カウントダウンを更新する関数
+async function updateBonusCountdown() {
+    const bonusBtn = document.getElementById("loginBonusBtn");
+    const nextTimeSpan = document.getElementById("next-bonus-time");
+    const statusText = document.getElementById("bonus-status-text");
+
+    if (!window.connectedAccount || !emuerContract) return;
+
+    try {
+        // スマコンから最終ログイン時間を取得
+        const userInfo = await emuerContract.users(window.connectedAccount);
+        const lastLogin = userInfo.lastLogin.toNumber(); // unix timestamp
+
+        if (lastLogin === 0) {
+            nextTimeSpan.textContent = "初回受取OK!";
+            return;
+        }
+
+        const nextAvailable = lastLogin + (24 * 60 * 60); // 24時間後
+        const now = Math.floor(Date.now() / 1000);
+
+        if (now < nextAvailable) {
+            // まだ時間が経過していない場合
+            const diff = nextAvailable - now;
+            const hours = Math.floor(diff / 3600);
+            const minutes = Math.floor((diff % 3600) / 60);
+            const seconds = diff % 60;
+
+            // ボタンを無効化してメッセージを変える
+            bonusBtn.disabled = true;
+            bonusBtn.style.backgroundColor = "#cccccc";
+            bonusBtn.style.cursor = "not-allowed";
+            bonusBtn.textContent = "待機中";
+            
+            statusText.textContent = "🎁 次回まで";
+            nextTimeSpan.textContent = `${hours}h ${minutes}m ${seconds}s`;
+
+            // 1秒ごとに再計算（リアルタイム更新）
+            setTimeout(updateBonusCountdown, 1000);
+        } else {
+            // 24時間経過している場合
+            bonusBtn.disabled = false;
+            bonusBtn.style.backgroundColor = "#007bff";
+            bonusBtn.style.cursor = "pointer";
+            bonusBtn.textContent = "受取";
+            statusText.textContent = "🎁 0.5 EMUER";
+            nextTimeSpan.textContent = "今すぐOK!";
+        }
+    } catch (e) {
+        console.error("Countdown error:", e);
+    }
+}
 
 </script>
 <iframe
