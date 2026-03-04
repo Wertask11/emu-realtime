@@ -366,5 +366,21 @@ function updateStarList() {
   starInfoUI.innerHTML = html;
 }
 
-// 星が追加されたり、読み込まれたりした時に呼ぶようにする
-// renderループの中でたまに更新するか、アクションが起きた時に呼び出します
+// メイン画面（親）からの postMessage を受け取る
+window.addEventListener("message", (event) => {
+  const action = event.data;
+  console.log("🌟 Room2 received message from parent:", action);
+
+  if (action.type === "NEW_POST") {
+    // 予兆を表示する（もし pendingBirth 等の変数があれば）
+    if (typeof showBirthHint === "function") {
+      showBirthHint();
+    }
+    
+    // 星を追加する関数を呼ぶ
+    // ※あなたの room2.js 内で星を追加している関数名（例: createStar, addNewStar 等）に変えてください
+    if (typeof createStar === "function") {
+      createStar("post"); 
+    }
+  }
+});
