@@ -366,18 +366,36 @@ function updateStarList() {
   starInfoUI.innerHTML = html;
 }
 
+/* ==========================
+   External Action Listener (Parent Message)
+========================== */
 window.addEventListener("message", (event) => {
-  // 🛡️ 自分が送ったアクション（typeがあるもの）以外は無視
+  // 🛡️ 自分が定義したアクション（typeがあるもの）以外は無視
   if (!event.data || !event.data.type) return;
 
   const action = event.data;
+  console.log("🌟 Room2 received action:", action.type);
 
-  // ログは必要な時だけ出すようにするとスッキリします
-  if (action.type === "NEW_POST") {
-    console.log("🌟 Room2 received NEW_POST!");
-    if (typeof createStar === "function") {
-      createStar("post"); 
-    }
+  switch (action.type) {
+    case "NEW_POST":
+      // 投稿アクション（既存の累積ロジックへ）
+      // あなたのコードでは10回で1つ星が出る設定になっています
+      handlePostAccumulation("post");
+      break;
+
+    case "NFT_PURCHASE":
+      // NFT購入アクション（青い星を生成）
+      spawnNFTStar();
+      break;
+
+    case "STREAK_3DAY":
+      // 3日連続交流アクション（黄色の星を生成）
+      // projectId があれば渡し、なければ "default"
+      handleDiscussionStreak(action.projectId || "default");
+      break;
+
+    default:
+      console.log("ℹ️ その他、未定義のアクション:", action.type);
   }
 });
 
