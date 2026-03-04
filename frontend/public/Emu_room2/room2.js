@@ -366,21 +366,18 @@ function updateStarList() {
   starInfoUI.innerHTML = html;
 }
 
-// メイン画面（親）からの postMessage を受け取る
 window.addEventListener("message", (event) => {
-  const action = event.data;
-  console.log("🌟 Room2 received message from parent:", action);
+  // 🛡️ 自分が送ったアクション（typeがあるもの）以外は無視
+  if (!event.data || !event.data.type) return;
 
+  const action = event.data;
+
+  // ログは必要な時だけ出すようにするとスッキリします
   if (action.type === "NEW_POST") {
-    // 予兆を表示する（もし pendingBirth 等の変数があれば）
-    if (typeof showBirthHint === "function") {
-      showBirthHint();
-    }
-    
-    // 星を追加する関数を呼ぶ
-    // ※あなたの room2.js 内で星を追加している関数名（例: createStar, addNewStar 等）に変えてください
+    console.log("🌟 Room2 received NEW_POST!");
     if (typeof createStar === "function") {
       createStar("post"); 
     }
   }
 });
+
