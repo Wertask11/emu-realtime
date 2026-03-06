@@ -5228,6 +5228,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const customSlot = document.getElementById("emu-custom-slot");
   const uploadLabel = document.querySelector(".emu-upload-label");
 
+    if (getCurrentUserType() === "guest") {
+    uploadLabel.innerText = "🔒 ゲスト利用不可";
+    uploadInput.disabled = true;
+
+    customSlot.addEventListener("click", () => showUpgradeModal("guestToWallet"));
+    return;
+  }
   if (!window.ethereum) {
     uploadLabel.innerText = "⚠ MetaMask未接続";
     uploadInput.disabled = true;
