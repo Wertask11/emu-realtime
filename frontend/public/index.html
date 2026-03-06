@@ -5221,7 +5221,7 @@ function handleChange(postId) {
   }
 }
 
-//左下枠推し共処理（スコープエラー修正版）
+//左下枠推し共処理（リロードなし自動更新版）
 document.addEventListener("DOMContentLoaded", async () => {
   const TARGET_IDS = [2, 3, 5];
   const uploadInput = document.getElementById("emuImageUpload");
@@ -5232,7 +5232,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   uploadInput.disabled = true;
   uploadLabel.innerText = "🔒 読み込み中...";
 
-  // 2. 共通のロック・解除関数
   const applyGuestLock = () => {
     uploadLabel.innerText = "🔒 ゲスト利用不可";
     customSlot.onclick = () => showUpgradeModal("guestToWallet");
@@ -5247,14 +5246,57 @@ document.addEventListener("DOMContentLoaded", async () => {
     uploadInput.disabled = false;
     uploadLabel.innerText = "推しを…推しを！";
     customSlot.onclick = null;
+    customSlot.style.cursor = "pointer";
     const savedImage = localStorage.getItem("emu_custom_image");
     if (savedImage) {
       customSlot.style.backgroundImage = `url(${savedImage})`;
       uploadLabel.style.display = "none";
     }
-  };
+  }
 
-  // 3. 画像保存・ダブルクリック（ここには nftContract を使わないので安全）
+  // 2. NFT所有権のメインチェック関数（ここが何度も呼ばれる）
+  async function checkAccess() {
+    if (!window.ethereum) {
+      applyGuestLock();
+      return;
+    }
+
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const accounts = await provider.listAccounts();
+      
+      if (accounts.length === 0) {
+        applyGuestLock();
+        return;
+      }
+
+      const userAddress = accounts[0];
+      const contract = new ethers.Contract(NFT_ADDRESS, NFT_ABI, provider);
+
+      let hasAccess = false;
+      for (let tokenId of TARGET_IDS) {
+        try {
+          const owner = await contract.ownerOf(tokenId);
+          if (owner.toLowerCase() === userAddress.toLowerCase()) {
+            hasAccess = true;
+            break;
+          }
+        } catch (e) { /* IDなしエラー等は無視 */ }
+      }
+
+      // すでに解放済みの場合は、何度も上書きしないように判定
+      if (hasAccess) {
+        if (uploadInput.disabled) unlockUI(); 
+      } else {
+        applyFreeLock();
+      }
+
+    } catch (err) {
+      console.error("Access Check Error:", err);
+    }
+  }
+
+  // 3. 画像保存とダブルクリック
   uploadInput.addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -5271,62 +5313,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!uploadInput.disabled) uploadInput.click();
   });
 
-  // 4. NFT所有権のメインチェック
-  async function checkAccess() {
-    if (!window.ethereum) {
-      applyGuestLock();
-      return;
-    }
+  // --- 🚀 自動更新の仕掛け ---
 
-    try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const accounts = await provider.listAccounts();
-      if (accounts.length === 0) {
-        applyGuestLock();
-        return;
-      }
-
-      const userAddress = accounts[0];
-      // ここでコントラクトを定義
-      const contract = new ethers.Contract(NFT_ADDRESS, NFT_ABI, provider);
-
-      let hasAccess = false;
-      for (let tokenId of TARGET_IDS) {
-        try {
-          const owner = await contract.ownerOf(tokenId);
-          if (owner.toLowerCase() === userAddress.toLowerCase()) {
-            hasAccess = true;
-            break;
-          }
-        } catch (e) { /* IDなしエラー等をスルー */ }
-      }
-
-      hasAccess ? unlockUI() : applyFreeLock();
-
-    } catch (err) {
-      console.error("Access Check Error:", err);
-      applyGuestLock();
-    }
-  }
-
-  // 実行
+  // 初回チェック
   await checkAccess();
 
-
-  // NFT転送監視
-  nftContract.on("Transfer", async (from, to) => {
-    const userAddress = await signer.getAddress();
-    if (
-      from.toLowerCase() === userAddress.toLowerCase() ||
-      to.toLowerCase() === userAddress.toLowerCase()
-    ) {
-      await checkAccess();
+  // 3秒ごとにチェック（交換完了を検知して自動でアンロック）
+  const intervalId = setInterval(async () => {
+    // すでに解放されていたらチェックを止める（負荷軽減）
+    if (!uploadInput.disabled) {
+       // 解放済みなら何もしない
+    } else {
+       await checkAccess();
     }
-  });
+  }, 3000);
 
-  window.ethereum.on("accountsChanged", checkAccess);
-
+  // アカウント切り替え時
+  if (window.ethereum) {
+    window.ethereum.on("accountsChanged", () => checkAccess());
+  }
 });
+
 
 // ログボ実行関数
 async function handleLoginBonus() {
