@@ -3310,12 +3310,22 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
     // ⑤ 画面表示の更新と遷移
     const walletStatus = document.getElementById("walletStatus");
     const walletAddressButton = document.getElementById("walletAddressButton");
-    
-    if(walletStatus) walletStatus.textContent = "接続成功: " + account;
-    if(walletAddressButton) {
-      walletAddressButton.textContent = account.substring(0, 6) + "..." + account.slice(-4);
+    const userMode = localStorage.getItem("userMode"); // ゲストかどうかを確認
+
+    if (walletStatus) {
+      walletStatus.textContent = (userMode === "guest") ? "ゲストログイン中" : "接続成功: " + account;
     }
 
+    if (walletAddressButton) {
+      if (userMode === "guest") {
+        // ゲストの場合の表示
+        walletAddressButton.textContent = "👤 ゲスト利用中";
+      } else {
+        // 通常のウォレットアドレス表示
+        walletAddressButton.textContent = account.substring(0, 6) + "..." + account.slice(-4);
+      }
+    }
+    
     // メイン画面へ！
     console.log("🚀 goTomainapp() を呼び出します");
     goTomainapp();
@@ -5088,6 +5098,7 @@ function applyGuestRestrictions() {
   }
 }
 
+//ゲスト（guest）ログイン処理
 window.onGuestClick = function () {
   console.log("👤 Guest Login");
 
@@ -5097,9 +5108,10 @@ window.onGuestClick = function () {
     createdAt: Date.now()
   };
 
+  // ★ これを追加：メイン画面が「あ、ゲストだ」と一目でわかるフラグ
+  localStorage.setItem("userMode", "guest"); 
   localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
 
-  // 権限反映
   window.hasFreeNFT = false;
   window.hasPaidNFT = false;
   window.hasOfficialNFT = false;
@@ -5109,6 +5121,7 @@ window.onGuestClick = function () {
   console.log("🏫 Guest → メイン画面へ");
   goTomainapp();
 };
+
 
 function blockGuest(featureName) {
   const userType = getCurrentUserType();
