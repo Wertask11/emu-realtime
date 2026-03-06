@@ -3842,6 +3842,8 @@ function attachReactionHandlers(postElement) {
   // 👍 goodボタン
   if (goodButton) {
     goodButton.addEventListener("click", () => {
+	const type = getCurrentUserType();
+  if (type === "guest") return showUpgradeModal("guestToWallet");
       if (goodClicked) { alert("すでにgoodしています！"); return; }
       goodClicked = true;
 
@@ -3868,6 +3870,8 @@ if (!myGoods.includes(String(postData.id))) {
   // 🤝 changeボタン
   if (changeButton) {
     changeButton.addEventListener("click", () => {
+	const type = getCurrentUserType();
+  if (type === "guest") return showUpgradeModal("guestToWallet");
       if (changeClicked) { alert("すでにchangeしています！"); return; }
       changeClicked = true;
 
@@ -4254,12 +4258,12 @@ let replyTarget = null;
 // =====================
 document.getElementById("exploreBtn").onclick = () => {
   if (getCurrentUserType() === "guest") {
-    alert("ゲストは探索機能を利用できません");
+    showUpgradeModal("guestToWallet"); 
     return;
   }
-
   document.getElementById("exploreOverlay").style.display = "flex";
 };
+
 
 function closeExplore() {
   document.getElementById("exploreOverlay").style.display = "none";
@@ -4280,6 +4284,32 @@ function getCurrentUserType() {
   return "guest";
 }
 
+// ダイアログを表示する関数
+function showUpgradeModal(type) {
+  const modal = document.getElementById("upgradeModal");
+  const msg = document.getElementById("modalMessage");
+  const actionBtn = document.getElementById("modalActionBtn");
+
+  if (type === "guestToWallet") {
+    msg.innerHTML = "この機能を利用するには、<b>ウォレット接続</b>が必要です。<br>Emuの全機能を楽しんでみませんか？";
+    actionBtn.onclick = () => { location.href = "index.html"; };
+    actionBtn.textContent = "今すぐ接続する";
+  } 
+  else if (type === "freeToPaid") {
+    msg.innerHTML = "この機能は<b>有料NFTユーザー限定</b>です。<br>特別なエリアや機能が解放されます。";
+    actionBtn.onclick = () => { /* 取引所を開くか、特定のURLへ */ 
+      closeUpgradeModal();
+      document.getElementById("exchangeBtn").click(); 
+    };
+    actionBtn.textContent = "NFTを確認する";
+  }
+
+  modal.style.display = "flex";
+}
+
+function closeUpgradeModal() {
+  document.getElementById("upgradeModal").style.display = "none";
+}
 
 function openRoom(roomId) {
   closeExplore();
@@ -4568,6 +4598,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const newBtn = document.getElementById("filterNewBtn");
   if (newBtn) {
     newBtn.addEventListener("click", () => {
+	const type = getCurrentUserType();
+  if (type === "guest") return showUpgradeModal("guestToWallet");
       console.log("✅ 新規ボタンが押された");
       refreshAllPosts(getNewPosts());
     });
@@ -4649,6 +4681,8 @@ function getChangePosts() {
 const recommendBtn = document.getElementById("filterRecommendBtn");
 if (recommendBtn) {
   recommendBtn.addEventListener("click", () => {
+const type = getCurrentUserType();
+  if (type === "guest") return showUpgradeModal("guestToWallet");
 	if (getCurrentUserType() === "guest") {
       alert("ゲストはこの機能を利用できません");
       return;
@@ -4681,19 +4715,19 @@ if (searchInput) {
 
     const userType = getCurrentUserType();
 
-    //ゲストユーザー制限
+    // --- 1. ゲストユーザー制限（alertを書き換え） ---
     if (userType === "guest") {
-      alert("ゲストは検索機能を利用できません");
+      showUpgradeModal("guestToWallet"); // ここ！
       return;
     }
 
-    //無料NFTユーザー制限
+    // --- 2. 無料NFTユーザー制限（alertを書き換え） ---
     if (userType === "free") {
-      alert("検索機能は有料NFTユーザー限定です");
+      showUpgradeModal("freeToPaid"); // ここ！
       return;
     }
 
-    // ===== ここから通常処理 =====
+    // ===== ここから通常処理（有料ユーザーのみ到達） =====
     const keyword = searchInput.value.trim();
     console.log("🔍 検索キーワード:", keyword);
 
@@ -4718,13 +4752,15 @@ function searchPostsByTag(keyword) {
 
 // 左側マイライブラリーボタン
 function getMyGoodPosts() {
+  if (getCurrentUserType() === "guest") {
+    showUpgradeModal("guestToWallet");
+    return;
+  }
+
   console.log("👍自分がgoodした記事を取得");
 
-  const myGoods =
-    JSON.parse(localStorage.getItem("myGoods")) || [];
-const filtered = posts.filter(post =>
-  myGoods.includes(String(post.id))
-);
+  const myGoods = JSON.parse(localStorage.getItem("myGoods")) || [];
+  const filtered = posts.filter(post => myGoods.includes(String(post.id)));
 
   const area = document.getElementById("postFeed");
   if (!area) return;
@@ -4742,7 +4778,12 @@ const filtered = posts.filter(post =>
   });
 }
 
+
 function getMyChangePosts() {
+if (getCurrentUserType() === "guest") {
+    showUpgradeModal("guestToWallet");
+    return;
+  }
   console.log("🤝自分がchangeした記事を取得");
 
   const myChanges =
@@ -5389,6 +5430,17 @@ async function updateBonusCountdown() {
     background:#0f0f0f;
   ">
 </iframe>
+<div id="upgradeModal" class="modal" style="display: none; align-items: center; justify-content: center;">
+  <div class="modal-content" style="text-align: center; border: 2px solid #007bff;">
+    <h2 id="modalTitle">🚀 ランクアップが必要です</h2>
+    <p id="modalMessage" style="color: #666; line-height: 1.6;"></p>
+    <div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;">
+      <button onclick="closeUpgradeModal()" class="action-button secondary">閉じる</button>
+      <button id="modalActionBtn" class="action-button primary">ログイン画面へ</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
 
