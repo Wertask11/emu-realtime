@@ -3310,6 +3310,11 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
     // ⑤ 画面表示の更新と遷移
     const walletStatus = document.getElementById("walletStatus");
     const walletAddressButton = document.getElementById("walletAddressButton");
+	
+	if (typeof account !== "undefined" && account) {
+      localStorage.removeItem("userMode"); // ウォレット接続されたらゲストのメモを消去
+    }
+
     const userMode = localStorage.getItem("userMode"); // ゲストかどうかを確認
 
     if (walletStatus) {
@@ -5372,26 +5377,6 @@ async function updateBonusCountdown() {
     background:#0f0f0f;
   ">
 </iframe>
-<script>
-  // ページが読み込まれたら強制的にチェックする
-  (function() {
-    const checkGuest = () => {
-      const btn = document.getElementById("walletAddressButton");
-      const mode = localStorage.getItem("userMode");
-      
-      if (btn && mode === "guest") {
-        console.log("強制書き換え: ゲストモードを確認しました");
-        btn.textContent = "👤 ゲスト利用中";
-        btn.style.color = "#aaa";
-      }
-    };
-    
-    // 読み込み直後と、1秒後の2回実行（タイミングのズレ防止）
-    window.addEventListener('load', checkGuest);
-    setTimeout(checkGuest, 1000);
-  })();
-</script>
-
 </body>
 </html>
 
