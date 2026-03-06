@@ -5231,20 +5231,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   const uploadLabel = document.querySelector(".emu-upload-label");
   const userType = getCurrentUserType();
 
-  if (userType === "guest" || userType === "free") {
-    uploadLabel.innerText = "🔒 専用NFTで解放";
+  // 1. ゲスト（未接続）は即座にブロックして終了
+  if (userType === "guest") {
+    uploadLabel.innerText = "🔒 ゲスト利用不可";
     uploadInput.disabled = true;
-
     customSlot.style.cursor = "pointer";
     customSlot.addEventListener("click", () => {
-      if (userType === "guest") {
-        showUpgradeModal("guestToWallet");
-      } else {
-        showUpgradeModal("freeToPaid");
-      }
+      showUpgradeModal("guestToWallet");
     });
-    return;
+    return; 
   }
+
+  // 2. 接続済み（free または paid）の場合、MetaMaskを確認
   if (!window.ethereum) {
     uploadLabel.innerText = "⚠ MetaMask未接続";
     uploadInput.disabled = true;
@@ -5256,7 +5254,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const signer = provider.getSigner();
   const nftContract = new ethers.Contract(NFT_ADDRESS, NFT_ABI, provider);
 
-  // 🔥 画像変更イベントは最初に1回だけ登録
+  // 画像変更イベントの登録
   uploadInput.addEventListener("change", function () {
     const file = this.files[0];
     if (!file) return;
@@ -5271,21 +5269,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     reader.readAsDataURL(file);
   });
 
-  // 🔥 ダブルクリック復活
+  // ダブルクリックでアップロード画面を開く
   customSlot.addEventListener("dblclick", () => {
     if (!uploadInput.disabled) {
       uploadInput.click();
     }
   });
 
+  // ロック時の表示（NFTを持っていない場合）
   function lockUI() {
-    uploadLabel.innerText = "🔒 推し共NFTで解放";
+    uploadLabel.innerText = "🔒 専用NFTで解放";
     uploadInput.disabled = true;
+    customSlot.style.cursor = "pointer";
+    // クリックで購入案内を出す
+    customSlot.onclick = () => showUpgradeModal("freeToPaid"); 
   }
 
+  // 解放時の表示（NFTを持っている場合）
   function unlockUI() {
     uploadInput.disabled = false;
     uploadLabel.innerText = "推しを…推しを！";
+    customSlot.style.cursor = "default";
+    customSlot.onclick = null; // 購入案内を解除
 
     const savedImage = localStorage.getItem("emu_custom_image");
     if (savedImage) {
@@ -5294,24 +5299,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  // NFT所有確認のメインロジック
   async function checkAccess() {
-    const userAddress = await signer.getAddress();
-    let hasAccess = false;
+    try {
+      const userAddress = await signer.getAddress();
+      let hasAccess = false;
 
-    for (let tokenId of TARGET_IDS) {
-      try {
-        const owner = await nftContract.ownerOf(tokenId);
-        if (owner.toLowerCase() === userAddress.toLowerCase()) {
-          hasAccess = true;
-          break;
+      for (let tokenId of TARGET_IDS) {
+        try {
+          const owner = await nftContract.ownerOf(tokenId);
+          if (owner.toLowerCase() === userAddress.toLowerCase()) {
+            hasAccess = true;
+            break;
+          }
+        } catch (e) {
+          // エラー（IDが存在しない等）は無視して次へ
         }
-      } catch {}
-    }
+      }
 
-    hasAccess ? unlockUI() : lockUI();
+      hasAccess ? unlockUI() : lockUI();
+    } catch (err) {
+      console.error("Access check error:", err);
+      lockUI();
+    }
   }
 
-  // 初回チェック
+  // 初回チェック実行
   await checkAccess();
 
   // NFT転送監視
