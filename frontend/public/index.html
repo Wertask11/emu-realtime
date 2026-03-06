@@ -163,17 +163,15 @@ body.free .paid-only {display: none;}
 <header class="header" style="display: flex; align-items: center; padding: 0 20px;">
   <a id="logo" class="logo" href="#" style="margin-right: 10px;">Emu</a>
 
-<div id="login-bonus-mini-container" style="display: flex; align-items: center; gap: 10px; background: #f0f8ff; border: 1px solid #007bff; border-radius: 20px; padding: 6px 15px; width: fit-content;">
-  <span id="bonus-status-text" style="font-size: 13px; font-weight: bold; color: #007bff;">🎁 0.5 EMUER</span>
-  
-  <button id="loginBonusBtn" style="background: #007bff; color: white; border: none; border-radius: 15px; padding: 4px 12px; font-size: 11px; cursor: pointer; white-space: nowrap;">
-    受取
-  </button>
+  <div id="login-bonus-area" style="display: flex; align-items: center; gap: 10px;">
+    <div id="login-bonus-mini-container" style="display: flex; align-items: center; gap: 8px; background: #f0f8ff; border: 1px solid #007bff; border-radius: 20px; padding: 4px 12px;">
+      <span id="bonus-status-text" style="font-size: 13px; font-weight: bold; color: #007bff;">🎁 0.5 EMUER</span>
+      <button id="loginBonusBtn" style="background: #007bff; color: white; border: none; border-radius: 15px; padding: 3px 10px; font-size: 11px; cursor: pointer;">受取</button>
+    </div>
 
-  <button id="buyNftBtn" class="buy-nft-btn" onclick="openMarketplace()" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); color: #fff; border: none; border-radius: 15px; padding: 4px 12px; font-size: 11px; cursor: pointer; font-weight: bold; white-space: nowrap;">
-    🛒 公式NFTを購入
-  </button>
-
+    <button id="buyNftBtn" onclick="openMarketplace()" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); color: #fff; border: none; border-radius: 20px; padding: 6px 15px; font-size: 12px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap;">
+      🛒 公式NFTを購入
+    </button>
   <span id="next-bonus-time" style="font-size: 10px; color: #666;"></span>
 </div>
 
@@ -5236,12 +5234,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   const uploadInput = document.getElementById("emuImageUpload");
   const customSlot = document.getElementById("emu-custom-slot");
   const uploadLabel = document.querySelector(".emu-upload-label");
+  const userType = getCurrentUserType();
 
-    if (getCurrentUserType() === "guest") {
-    uploadLabel.innerText = "🔒 ゲスト利用不可";
+  if (userType === "guest" || userType === "free") {
+    uploadLabel.innerText = "🔒 専用NFTで解放";
     uploadInput.disabled = true;
 
-    customSlot.addEventListener("click", () => showUpgradeModal("guestToWallet"));
+    customSlot.style.cursor = "pointer";
+    customSlot.addEventListener("click", () => {
+      if (userType === "guest") {
+        showUpgradeModal("guestToWallet");
+      } else {
+        showUpgradeModal("freeToPaid");
+      }
+    });
     return;
   }
   if (!window.ethereum) {
