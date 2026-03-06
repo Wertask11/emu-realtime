@@ -429,27 +429,39 @@ body.free .paid-only {display: none;}
 
 <script>
 document.addEventListener("DOMContentLoaded", async () => {
+  const walletAddressButton = document.getElementById("walletAddressButton");
+  const userMode = localStorage.getItem("userMode"); // ★ゲストかどうかを確認
   const auth = localStorage.getItem("emu_auth");
 
+  // 1. まずゲスト判定を先に行う
+  if (userMode === "guest" && walletAddressButton) {
+    console.log("👤 Guestモード表示を適用します");
+    walletAddressButton.textContent = "👤 ゲスト利用中";
+    walletAddressButton.style.color = "#aaa";
+    return; // ゲストならここで処理終了（ウォレット復元は不要）
+  }
+
+  // 2. ゲストじゃない場合のみ、今までのウォレット復元処理をする
   if (!auth) return;
-
   const parsed = JSON.parse(auth);
-
   if (!window.ethereum) return;
 
   const provider = new ethers.providers.Web3Provider(window.ethereum);
-
   try {
-    await provider.send("eth_requestAccounts", []);
+    // 接続済みならアカウント復元（ここは今までのロジック）
+    const accounts = await provider.send("eth_accounts", []); // 修正：勝手にメタマスクが立ち上がらないよう eth_accounts にするのが一般的
+    if (accounts.length > 0) {
+      window.connectedAccount = accounts[0];
+      if (walletAddressButton) {
+        walletAddressButton.textContent = window.connectedAccount.substring(0, 6) + "..." + window.connectedAccount.slice(-4);
+      }
+    }
   } catch (e) {
-    console.log("接続拒否");
-    return;
+    console.log("復元失敗", e);
   }
-
-  window.connectedAccount = parsed.address;
-  console.log("復元ウォレット:", window.connectedAccount);
 });
 </script>
+
 
 <script>
 /* ======= 全体のJS ======= */
