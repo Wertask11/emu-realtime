@@ -3286,35 +3286,33 @@ const AMOY_CHAIN_ID = "0x13882"; // 80002 (Amoy)
 
 // --- [2] 接続ボタン（connectWalletButton）の処理を復活 ---
 document.getElementById("connectWalletButton").addEventListener("click", async () => {
-  if (typeof window.ethereum === "undefined") {
-    alert("MetaMaskがインストールされていません。");
-    return;
-  }
+  if (typeof window.ethereum === "undefined") return;
 
   try {
-    // ① ウォレット接続要求
+    // 1. まず接続
     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-    const account = accounts[0];
-    window.connectedAccount = account;
-    currentUserId = account; // 以前の変数も更新
+    window.connectedAccount = accounts[0];
 
-    console.log("🦊 Wallet Connected:", account);
-
-    // ② Amoyネットワークへ切り替え（ここで1回だけ行う）
-    const chainId = await ethereum.request({ method: "eth_chainId" });
+    // 2. ネットワーク切り替えを「待機」する
+    const chainId = await window.ethereum.request({ method: "eth_chainId" });
     if (chainId !== AMOY_CHAIN_ID) {
-        await ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: AMOY_CHAIN_ID }]
-        });
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: AMOY_CHAIN_ID }]
+      });
+      // 💡 重要：切り替え直後はMetaMaskが不安定なので、一瞬待つかリロードを促す
+      console.log("ネットワークを切り替えました。一旦処理を止めます。");
+      return; 
     }
 
-    // ③ 各種NFTチェックを順番に実行（OpenSea版もここに追加！）
+    // 3. ネットワークがAmoyであることを確認してから、1つずつ「順番に」実行
+    // ※ checkHexaNFTなどの中身から「switch処理」は必ず消しておいてください
     await window.checkHexaNFT();
+    await new Promise(resolve => setTimeout(resolve, 500)); // 0.5秒休憩（RPCエラー防止）
     await window.checkOpenSeaNFT();
+    await new Promise(resolve => setTimeout(resolve, 500)); // 0.5秒休憩
     await window.checkFreeNFT();
 
-    // 全体の判定（どれか一つでも持っていればOK）
     window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT || window.hasOpenSeaNFT;
 
     // ④ ethers.js 各種コントラクト初期化（これが消えると利用画面でエラーになります）
@@ -3400,15 +3398,14 @@ window.checkOpenSeaNFT = async function () {
 
 window.checkFreeNFT = async function () {
   try {
-    // 💡 ここでも念のためチェーン確認
-    const chainId = await ethereum.request({ method: "eth_chainId" });
-    if (chainId !== AMOY_CHAIN_ID) return; 
-
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const freeNFT = getOfficialNFT("free");
-    const nft = new ethers.Contract(freeNFT.contract, ERC721_ABI, provider);
+    
+    if (!freeNFT || !freeNFT.contract) return;
 
+    const nft = new ethers.Contract(freeNFT.contract, ERC721_ABI, provider);
     const balance = await nft.balanceOf(window.connectedAccount);
+    
     window.hasFreeNFT = balance.gt(0);
     console.log("✅ 無料NFTチェック完了:", window.hasFreeNFT);
 
@@ -3417,6 +3414,7 @@ window.checkFreeNFT = async function () {
     window.hasFreeNFT = false;
   }
 };
+
 
 //取引所制限
 function canUseExchange() {
