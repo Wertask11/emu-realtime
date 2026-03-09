@@ -441,34 +441,36 @@ body.free .paid-only {display: none;}
 <script>
 document.addEventListener("DOMContentLoaded", async () => {
   const walletAddressButton = document.getElementById("walletAddressButton");
-  const userMode = localStorage.getItem("userMode"); // ★ゲストかどうかを確認
+  const userMode = localStorage.getItem("userMode");
   const auth = localStorage.getItem("emu_auth");
 
-  // 1. まずゲスト判定を先に行う
+  // ゲスト判定
   if (userMode === "guest" && walletAddressButton) {
-    console.log("👤 Guestモード表示を適用します");
     walletAddressButton.textContent = "👤 ゲスト利用中";
     walletAddressButton.style.color = "#aaa";
-    return; // ゲストならここで処理終了（ウォレット復元は不要）
+    return;
   }
 
-  // 2. ゲストじゃない場合のみ、今までのウォレット復元処理をする
-  if (!auth) return;
-  const parsed = JSON.parse(auth);
-  if (!window.ethereum) return;
-
-  const provider = new ethers.providers.Web3Provider(window.ethereum);
-  try {
-    // 接続済みならアカウント復元（ここは今までのロジック）
-    const accounts = await provider.send("eth_accounts", []); // 修正：勝手にメタマスクが立ち上がらないよう eth_accounts にするのが一般的
-    if (accounts.length > 0) {
-      window.connectedAccount = accounts[0];
-      if (walletAddressButton) {
-        walletAddressButton.textContent = window.connectedAccount.substring(0, 6) + "..." + window.connectedAccount.slice(-4);
+  // 自動復元
+  if (auth && window.ethereum) {
+    try {
+      const parsed = JSON.parse(auth);
+      const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
+      const accounts = await tempProvider.send("eth_accounts", []);
+      
+      if (accounts.length > 0) {
+        window.connectedAccount = accounts[0];
+        // 起動時のチェックも1つずつ順番に
+        await window.checkFreeNFT();
+        await window.checkHexaNFT();
+        
+        if (walletAddressButton) {
+          walletAddressButton.textContent = window.connectedAccount.substring(0, 6) + "..." + window.connectedAccount.slice(-4);
+        }
       }
+    } catch (e) {
+      console.log("自動復元スキップ:", e.message);
     }
-  } catch (e) {
-    console.log("復元失敗", e);
   }
 });
 </script>
@@ -3245,7 +3247,7 @@ const FREE_NFT_ABI = [
 	}
 ]
 
-
+let isConnectingNow = false;
 let emuerContract;
 let jpycContract;
 let provider;
@@ -3358,18 +3360,17 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
   }
 });
 
-let isConnectingNow = false;
 window.checkHexaNFT = async function () {
   try {
     const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
     const paidNFT = getOfficialNFT("paid");
-    if (!paidNFT || !paidNFT.contract) return;
+    if (!paidNFT?.contract) return;
     const nft = new ethers.Contract(paidNFT.contract, ERC721_ABI, tempProvider);
     const balance = await nft.balanceOf(window.connectedAccount);
     window.hasPaidNFT = balance.gt(0);
-    console.log("✅ HEXA版チェック完了:", window.hasPaidNFT);
+    console.log("✅ HEXA NFT:", window.hasPaidNFT);
   } catch (e) {
-    console.error("❌ HEXAチェック失敗", e);
+    console.warn("NFTチェック待機中または失敗（無視して続行）", e.message);
     window.hasPaidNFT = false;
   }
 };
@@ -3378,13 +3379,12 @@ window.checkOpenSeaNFT = async function () {
   try {
     const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
     const openseaNFT = getOfficialNFT("opensea");
-    if (!openseaNFT || !openseaNFT.contract) return;
+    if (!openseaNFT?.contract) return;
     const nft = new ethers.Contract(openseaNFT.contract, ERC721_ABI, tempProvider);
     const balance = await nft.balanceOf(window.connectedAccount);
     window.hasOpenSeaNFT = balance.gt(0);
-    console.log("✅ OpenSea版チェック完了:", window.hasOpenSeaNFT);
+    console.log("✅ OpenSea NFT:", window.hasOpenSeaNFT);
   } catch (e) {
-    console.error("❌ OpenSeaチェック失敗:", e);
     window.hasOpenSeaNFT = false;
   }
 };
@@ -3394,19 +3394,17 @@ window.checkFreeNFT = async function () {
     if (!window.connectedAccount) return false;
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const freeNFT = getOfficialNFT("free");
-    if (!freeNFT || !freeNFT.contract) throw new Error("freeNFT contract 未定義");
+    if (!freeNFT?.contract) return false;
     const nft = new ethers.Contract(freeNFT.contract, ERC721_ABI, provider);
     const balance = await nft.balanceOf(window.connectedAccount);
     window.hasFreeNFT = balance.gt(0);
-    console.log("✅ 無料NFTチェック完了:", window.hasFreeNFT);
+    console.log("✅ Free NFT:", window.hasFreeNFT);
     return window.hasFreeNFT;
   } catch (e) {
-    console.error("❌ 無料NFTチェック失敗", e);
     window.hasFreeNFT = false;
     return false;
   }
 };
-
 
 //取引所制限
 function canUseExchange() {
@@ -4873,7 +4871,7 @@ window.checkFreeNFT = async function () {
 };
 
 window.onFreeNftClick = async function () {
-  if (isConnectingNow) return; // 処理中はガード
+  if (isConnectingNow) return; // すでに処理中なら何もしない
   isConnectingNow = true;
 
   if (!window.ethereum) {
@@ -4883,101 +4881,113 @@ window.onFreeNftClick = async function () {
   }
 
   try {
-    // ① ウォレット接続
+    // 1. ウォレット接続リクエスト（ここが最初の await）
     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
     window.connectedAccount = accounts[0];
 
-    // ② ネットワーク切り替え（1回だけ確実に実行）
+    // 2. ネットワーク切り替え（Amoy）
     const chainId = await window.ethereum.request({ method: "eth_chainId" });
-    if (chainId !== AMOY_CHAIN_ID) {
+    const AMOY_ID = "0x13882"; // 80002
+    if (chainId !== AMOY_ID) {
       try {
         await window.ethereum.request({
           method: "wallet_switchEthereumChain",
-          params: [{ chainId: AMOY_CHAIN_ID }]
+          params: [{ chainId: AMOY_ID }]
         });
-      } catch (err) {
-        console.error("切り替えエラー", err);
-        alert("Amoyネットワークに切り替えてから再度お試しください。");
+      } catch (switchError) {
+        alert("Amoyネットワークへの切り替えが必要です");
         isConnectingNow = false;
         return;
       }
     }
 
-    // ③ 順番にチェック（0.3秒の間隔を空けてRPCエラーを物理的に回避）
+    // 3. NFTチェックを「順番に」行う（同時に投げないことでRPCエラーを防ぐ）
     await window.checkFreeNFT();
-    await new Promise(r => setTimeout(r, 300));
     await window.checkHexaNFT();
-    await new Promise(r => setTimeout(r, 300));
     await window.checkOpenSeaNFT();
 
-    // ④ 無料NFTを持っていない場合の処理
+    // 4. 無料NFTのClaim判定
     if (!window.hasFreeNFT) {
-      const ok = confirm("無料NFTを受け取りますか？");
+      const ok = confirm("無料NFT（参加証）を受け取りますか？");
       if (ok) {
-        await window.claimFreeNFT(); // claim処理
-        await window.checkFreeNFT(); // 終わったら再確認
+        await window.claimFreeNFT(); // Claim処理内でも await 必須
+        await window.checkFreeNFT(); // 再確認
       }
     }
 
-    // ⑤ 最終判定
+    // 5. 権限確定
     window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT || window.hasOpenSeaNFT;
-
-    if (!window.hasOfficialNFT) {
-      alert("公式NFTを保有している必要があります。");
-      isConnectingNow = false;
-      return;
-    }
-
-    // ⑥ auth保存 & 初期化
+    
+    // Auth情報の更新
     window.emuAuth = {
-      type: window.hasPaidNFT || window.hasOpenSeaNFT ? "paidNFT" : "freeNFT",
+      type: (window.hasPaidNFT || window.hasOpenSeaNFT) ? "paidNFT" : "freeNFT",
       address: window.connectedAccount
     };
     localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
-    localStorage.removeItem("userMode"); // ゲストフラグ解除
+    localStorage.removeItem("userMode"); // ゲストモード解除
 
-    // コントラクト再セット
+    // 6. コントラクトインスタンスの初期化
     provider = new ethers.providers.Web3Provider(window.ethereum);
     signer = provider.getSigner();
     emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_CONTRACT_ABI, signer);
     jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
 
-    // UI更新
-    walletStatus.textContent = "接続成功: " + window.connectedAccount;
-    walletAddressButton.textContent = window.connectedAccount.substring(0, 6) + "..." + window.connectedAccount.slice(-4);
-
-    console.log("🏫 全チェック完了 → メイン画面へ");
-    goTomainapp();
-    updateBonusCountdown();
+    // 7. 画面遷移
+    if (walletStatus) walletStatus.textContent = "接続済み: " + window.connectedAccount.substring(0,6);
+    if (walletAddressButton) {
+      walletAddressButton.textContent = window.connectedAccount.substring(0, 6) + "..." + window.connectedAccount.slice(-4);
+    }
+    
+    console.log("✅ 全工程完了。メインアプリへ移行します。");
+    goTomainapp(); // 既存の遷移関数を実行
+    if (typeof updateBonusCountdown === 'function') updateBonusCountdown();
 
   } catch (err) {
-    console.error("❌ 接続エラー:", err);
-    if (err.code === -32002) alert("MetaMaskでリクエストが保留中です。");
+    console.error("❌ 接続フローでエラー:", err);
+    if (err.code === -32002) alert("MetaMaskですでにリクエストが開いています。確認してください。");
   } finally {
     isConnectingNow = false;
   }
 };
 
-  // 公式NFT最終判定
-  async function checkOfficialNFTAndProceed() {
+// 公式NFT最終判定（完全に終わるまで待機するように修正）
+async function checkOfficialNFTAndProceed() {
+  console.log("🧐 NFT最終チェック開始...");
+  
+  // 1つずつ順番に完了を待つ（RPCエラー防止）
+  await window.checkFreeNFT();
   await window.checkHexaNFT();
+  await window.checkOpenSeaNFT();
 
-  window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT;
+  // すべてのNFTタイプを網羅して判定
+  window.hasOfficialNFT = !!(window.hasFreeNFT || window.hasPaidNFT || window.hasOpenSeaNFT);
 
-  return true;
+  console.log("📊 最終判定結果:", window.hasOfficialNFT);
+  return window.hasOfficialNFT; // 判定結果をしっかり返す
 }
 
+// Auth復元（安全性を強化）
 window.restoreAuth = function () {
   const saved = localStorage.getItem("emu_auth");
-  if (!saved) return;
+  if (!saved) {
+    console.log("ℹ️ 保存されたAuthはありません");
+    return;
+  }
+  
   try {
     const auth = JSON.parse(saved);
-    window.emuAuth = auth;
-    console.log("✅ Auth restored:", auth.type);
+    // データの整合性チェック
+    if (auth && auth.address && auth.type) {
+      window.emuAuth = auth;
+      window.connectedAccount = auth.address; // アドレスも復元
+      console.log("✅ Auth restored:", auth.type, "for", auth.address);
+    }
   } catch (e) {
-    console.error("❌ Auth restore failed", e);
+    console.error("❌ Auth restore failed - LocalStorageをクリアします", e);
+    localStorage.removeItem("emu_auth");
   }
 };
+
 
 
 // --- 追加する設定 ---
