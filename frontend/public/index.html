@@ -3393,38 +3393,46 @@ window.checkHexaNFT = async function () {
   // ※ ここで元に戻す(originalChainId)処理は消したままにしておきます
 };
 
-Window.checkOpenSeaNFT = async function () {
+window.checkOpenSeaNFT = async function () {
+  // すでにチェック中、またはチェック済みの場合は走らせないガードを入れるとより安全です
+  if (window.isCheckingNFT) return;
+  window.isCheckingNFT = true;
+
   try {
-    // 1. ネットワークチェック (Amoy)
-    const originalChainId = await ethereum.request({ method: "eth_chainId" });
-    if (originalChainId !== AMOY_CHAIN_ID) {
-      await ethereum.request({
+    const chainId = await window.ethereum.request({ method: "eth_chainId" });
+    
+    // 💡 現在のChainIDがすでにAmoyなら、switch要求を出さない（ループ防止）
+    if (chainId !== AMOY_CHAIN_ID) {
+      console.log("Amoyへネットワーク切り替えを要求します...");
+      await window.ethereum.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: AMOY_CHAIN_ID }]
       });
+      // 切り替え後はブラウザのリロードが入る場合があるため、一旦ここで終了
+      window.isCheckingNFT = false;
+      return;
     }
 
     const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
+    const openseaNFT = getOfficialNFT("opensea");
     
-    // 2. OpenSea版コントラクト情報の取得
-    // getOfficialNFT("opensea") など、OpenSea版のアドレスを返すように定義しておいてください
-    const openseaNFT = getOfficialNFT("opensea"); 
     if (!openseaNFT.contract) {
-        console.warn("⚠️ OpenSea版のコントラクトアドレスが設定されていません");
-        return;
+      console.error("OpenSeaコントラクトアドレスが未設定です");
+      window.isCheckingNFT = false;
+      return;
     }
 
-    // 3. コントラクトとの接続とバランス確認
     const nft = new ethers.Contract(openseaNFT.contract, ERC721_ABI, tempProvider);
     const balance = await nft.balanceOf(window.connectedAccount);
     
-    // 4. 結果をグローバル変数に格納
     window.hasOpenSeaNFT = balance.gt(0);
-    
-    console.log("✅ OpenSea版NFT(Amoy版)チェック完了:", window.hasOpenSeaNFT);
+    console.log("✅ OpenSea版NFTチェック完了:", window.hasOpenSeaNFT);
+
   } catch (e) {
-    console.error("❌ OpenSea版NFTチェック失敗", e);
-    window.hasOpenSeaNFT = false;
+    // ユーザーがMetaMaskのポップアップを拒否（キャンセル）した際もここに来る
+    console.error("❌ チェック失敗:", e.message);
+  } finally {
+    window.isCheckingNFT = false; // 処理が終わったらフラグを戻す
   }
 };
 
