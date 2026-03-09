@@ -3358,20 +3358,18 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
   }
 });
 
+let isConnectingNow = false;
 window.checkHexaNFT = async function () {
   try {
-    // 💡 切り替え処理を削除し、チェックだけに専念させる
     const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
     const paidNFT = getOfficialNFT("paid");
-    if (!paidNFT.contract) return;
-
+    if (!paidNFT || !paidNFT.contract) return;
     const nft = new ethers.Contract(paidNFT.contract, ERC721_ABI, tempProvider);
     const balance = await nft.balanceOf(window.connectedAccount);
     window.hasPaidNFT = balance.gt(0);
-    
-    console.log("✅ 有料NFT(HEXA)チェック完了:", window.hasPaidNFT);
+    console.log("✅ HEXA版チェック完了:", window.hasPaidNFT);
   } catch (e) {
-    console.error("❌ 有料NFTチェック失敗", e);
+    console.error("❌ HEXAチェック失敗", e);
     window.hasPaidNFT = false;
   }
 };
@@ -3380,38 +3378,32 @@ window.checkOpenSeaNFT = async function () {
   try {
     const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
     const openseaNFT = getOfficialNFT("opensea");
-    
-    if (!openseaNFT.contract) return;
-
+    if (!openseaNFT || !openseaNFT.contract) return;
     const nft = new ethers.Contract(openseaNFT.contract, ERC721_ABI, tempProvider);
     const balance = await nft.balanceOf(window.connectedAccount);
-    
     window.hasOpenSeaNFT = balance.gt(0);
-    console.log("✅ OpenSea版NFTチェック完了:", window.hasOpenSeaNFT);
+    console.log("✅ OpenSea版チェック完了:", window.hasOpenSeaNFT);
   } catch (e) {
     console.error("❌ OpenSeaチェック失敗:", e);
     window.hasOpenSeaNFT = false;
   }
 };
 
-
-
 window.checkFreeNFT = async function () {
   try {
+    if (!window.connectedAccount) return false;
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const freeNFT = getOfficialNFT("free");
-    
-    if (!freeNFT || !freeNFT.contract) return;
-
+    if (!freeNFT || !freeNFT.contract) throw new Error("freeNFT contract 未定義");
     const nft = new ethers.Contract(freeNFT.contract, ERC721_ABI, provider);
     const balance = await nft.balanceOf(window.connectedAccount);
-    
     window.hasFreeNFT = balance.gt(0);
     console.log("✅ 無料NFTチェック完了:", window.hasFreeNFT);
-
+    return window.hasFreeNFT;
   } catch (e) {
     console.error("❌ 無料NFTチェック失敗", e);
     window.hasFreeNFT = false;
+    return false;
   }
 };
 
@@ -4881,70 +4873,89 @@ window.checkFreeNFT = async function () {
 };
 
 window.onFreeNftClick = async function () {
+  if (isConnectingNow) return; // 処理中はガード
+  isConnectingNow = true;
+
   if (!window.ethereum) {
     alert("MetaMaskをインストールしてください");
+    isConnectingNow = false;
     return;
   }
 
-  // ① connect
-  const accounts = await ethereum.request({ method: "eth_requestAccounts" });
-  window.connectedAccount = accounts[0];
+  try {
+    // ① ウォレット接続
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    window.connectedAccount = accounts[0];
 
-  // auth保存
-  window.emuAuth = {
-    type: "freeNFT",
-    address: window.connectedAccount
-  };
-  localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
+    // ② ネットワーク切り替え（1回だけ確実に実行）
+    const chainId = await window.ethereum.request({ method: "eth_chainId" });
+    if (chainId !== AMOY_CHAIN_ID) {
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: AMOY_CHAIN_ID }]
+        });
+      } catch (err) {
+        console.error("切り替えエラー", err);
+        alert("Amoyネットワークに切り替えてから再度お試しください。");
+        isConnectingNow = false;
+        return;
+      }
+    }
 
-  // ② すでに持ってる？
-  const hasNFT = await window.checkFreeNFT();
-
-  if (!hasNFT) {
-    const ok = confirm("無料NFTを受け取りますか？");
-    if (!ok) return;
-
-    // ③ claim 実行（already claimed はOK）
-    await window.claimFreeNFT();
-
-    // ④ 再チェック
+    // ③ 順番にチェック（0.3秒の間隔を空けてRPCエラーを物理的に回避）
     await window.checkFreeNFT();
+    await new Promise(r => setTimeout(r, 300));
+    await window.checkHexaNFT();
+    await new Promise(r => setTimeout(r, 300));
+    await window.checkOpenSeaNFT();
+
+    // ④ 無料NFTを持っていない場合の処理
+    if (!window.hasFreeNFT) {
+      const ok = confirm("無料NFTを受け取りますか？");
+      if (ok) {
+        await window.claimFreeNFT(); // claim処理
+        await window.checkFreeNFT(); // 終わったら再確認
+      }
+    }
+
+    // ⑤ 最終判定
+    window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT || window.hasOpenSeaNFT;
+
+    if (!window.hasOfficialNFT) {
+      alert("公式NFTを保有している必要があります。");
+      isConnectingNow = false;
+      return;
+    }
+
+    // ⑥ auth保存 & 初期化
+    window.emuAuth = {
+      type: window.hasPaidNFT || window.hasOpenSeaNFT ? "paidNFT" : "freeNFT",
+      address: window.connectedAccount
+    };
+    localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
+    localStorage.removeItem("userMode"); // ゲストフラグ解除
+
+    // コントラクト再セット
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    signer = provider.getSigner();
+    emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_CONTRACT_ABI, signer);
+    jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
+
+    // UI更新
+    walletStatus.textContent = "接続成功: " + window.connectedAccount;
+    walletAddressButton.textContent = window.connectedAccount.substring(0, 6) + "..." + window.connectedAccount.slice(-4);
+
+    console.log("🏫 全チェック完了 → メイン画面へ");
+    goTomainapp();
+    updateBonusCountdown();
+
+  } catch (err) {
+    console.error("❌ 接続エラー:", err);
+    if (err.code === -32002) alert("MetaMaskでリクエストが保留中です。");
+  } finally {
+    isConnectingNow = false;
   }
-
-  // ⑤ 最終判定
-  if (!window.hasFreeNFT) {
-    alert("無料NFTを取得できませんでした");
-    return;
-  }
-
-  // ⑥ 公式NFT判定
-  await window.checkHexaNFT();
-  window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT;
-
-  provider = new ethers.providers.Web3Provider(window.ethereum);
-signer = provider.getSigner();
-
-emuerContract = new ethers.Contract(
-  EMUER_CONTRACT_ADDRESS,
-  EMUER_CONTRACT_ABI,
-  signer
-);
-
-jpycContract = new ethers.Contract(
-  JPYC_ADDRESS,
-  JPYC_ABI,
-  signer
-);
-
-  console.log("🏫 FreeNFT OK → メイン画面へ");
-  const account = window.connectedAccount;
-
-walletStatus.textContent = "接続成功: " + account;
-
-walletAddressButton.textContent =
-  account.substring(0, 6) + "..." + account.slice(-4);
-
-  goTomainapp();
 };
 
   // 公式NFT最終判定
