@@ -559,7 +559,7 @@ function saveDiscussionState() {
 
 // ===== スマートコントラクト設定 =====
 //　Emu　コントラクト情報
-const EMUER_CONTRACT_ADDRESS = "0xd82DfC2b54a65f16e4E249C21f056D7c8dEbFD19"; // EmuerTokenコントラストアドレス
+const EMUER_CONTRACT_ADDRESS = "0x30CbB69b138ab22D6CB8a2F75BFF48db758C1738"; // EmuerTokenコントラストアドレス
 const EMUER_CONTRACT_ABI = [
 	{
 		"inputs": [
@@ -1561,7 +1561,7 @@ const EMUER_CONTRACT_ABI = [
 ];
 
 // NFT コントラクト情報
-const NFT_ADDRESS = "0x9Ab366f73c7fB4a1e9Ed24CA9013c2e71AB77406"; // テストNFTコントラクトアドレス
+const NFT_ADDRESS = "0xc2FFf0b46D35E032b573E440f41a7F3ECdC464c5"; // テストNFTコントラクトアドレス
 const NFT_ABI = [
 	{
 		"inputs": [
@@ -2253,7 +2253,7 @@ const NFT_ABI = [
 ];
 
 // JPYC コントラクト情報
-const JPYC_ADDRESS = "0x407A6540B0DA450bfb45992172a389e8DE9Cbbc1"; // JPYCコントラクトアドレス
+const JPYC_ADDRESS = "0xCdb7C148bF0BB230A270bB74B11201A168B05f4c"; // JPYCコントラクトアドレス
 const JPYC_ABI = [
 	{
 		"inputs": [
@@ -2667,7 +2667,7 @@ window.ERC721_ABI = [
 ];
 
 //Free accsess nftコントラクト情報
-const Free_NFT_ADDRESS = "0x1b47a3D36c6F033a8e75a585E1571AD437Ab102d"; // free accsess NFTコントラクトアドレス
+const Free_NFT_ADDRESS = "0x705e08B704E49bc24E78832be7c9E061266A3535"; // free accsess NFTコントラクトアドレス
 const FREE_NFT_ABI = [
 	{
 		"inputs": [
@@ -3261,7 +3261,7 @@ function getOfficialNFT(key) {
     free: {
       key: "free",
       name: "School Park Free Access NFT",
-      contract: "0x1b47a3D36c6F033a8e75a585E1571AD437Ab102d"
+      contract: "0x705e08B704E49bc24E78832be7c9E061266A3535"
     }
   };
 
@@ -3392,6 +3392,42 @@ window.checkHexaNFT = async function () {
   }
   // ※ ここで元に戻す(originalChainId)処理は消したままにしておきます
 };
+
+Window.checkOpenSeaNFT = async function () {
+  try {
+    // 1. ネットワークチェック (Amoy)
+    const originalChainId = await ethereum.request({ method: "eth_chainId" });
+    if (originalChainId !== AMOY_CHAIN_ID) {
+      await ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: AMOY_CHAIN_ID }]
+      });
+    }
+
+    const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
+    
+    // 2. OpenSea版コントラクト情報の取得
+    // getOfficialNFT("opensea") など、OpenSea版のアドレスを返すように定義しておいてください
+    const openseaNFT = getOfficialNFT("opensea"); 
+    if (!openseaNFT.contract) {
+        console.warn("⚠️ OpenSea版のコントラクトアドレスが設定されていません");
+        return;
+    }
+
+    // 3. コントラクトとの接続とバランス確認
+    const nft = new ethers.Contract(openseaNFT.contract, ERC721_ABI, tempProvider);
+    const balance = await nft.balanceOf(window.connectedAccount);
+    
+    // 4. 結果をグローバル変数に格納
+    window.hasOpenSeaNFT = balance.gt(0);
+    
+    console.log("✅ OpenSea版NFT(Amoy版)チェック完了:", window.hasOpenSeaNFT);
+  } catch (e) {
+    console.error("❌ OpenSea版NFTチェック失敗", e);
+    window.hasOpenSeaNFT = false;
+  }
+};
+
 
 window.checkFreeNFT = async function () {
   try {
