@@ -3833,67 +3833,96 @@ function escapeHtml(s) {
 }
 
 /* attachReactionHandlers: 1投稿要素につき1回だけハンドラを付ける */
-function attachReactionHandlers(postElement) {
-  // 二重登録防止
+async function attachReactionHandlers(postElement) {
+  // ブラウザ上の二重登録防止
   if (postElement.dataset.handlersAttached === "true") return;
   postElement.dataset.handlersAttached = "true";
 
-  const postId = postElement.dataset.id; // FirebaseのドキュメントID
+  const postId = postElement.dataset.id; 
+  const postData = postElement.postData; // 投稿データ
+  
+  // 今のアドレス（小文字にして比較しやすくする）
+  const myAddr = window.connectedAccount ? window.connectedAccount.toLowerCase() : null;
 
-  // 👍 goodボタンの処理
+  // 👍 Goodボタンの処理
   const goodButton = postElement.querySelector(".good-button");
   if (goodButton) {
     goodButton.addEventListener("click", async () => {
-      // 1. ユーザーチェック (既存ロジック)
       const type = getCurrentUserType();
       if (type === "guest") return showUpgradeModal("guestToWallet");
+      if (!myAddr) return alert("ウォレットを接続してください");
+
+      // 【不正防止1】自分の投稿には押せない
+      if (postData.address && postData.address.toLowerCase() === myAddr) {
+        alert("自分の投稿にGoodは押せません！");
+        return;
+      }
+
+      // 【不正防止2】1回しか押せない（Firebaseから届いたリストを確認）
+      if (postData.goodUsers && postData.goodUsers.includes(myAddr)) {
+        alert("すでにGood済みです！");
+        return;
+      }
 
       try {
-        // 2. Firebaseの数値を+1する
         const postRef = window.fbLib.doc(window.db, "posts", postId);
+        // 数値を+1し、かつ「誰が押したか」リストに自分のアドレスを追加
         await window.fbLib.updateDoc(postRef, {
-          goodCount: window.fbLib.increment(1)
+          goodCount: window.fbLib.increment(1),
+          goodUsers: window.fbLib.arrayUnion(myAddr) 
         });
 
-        // 3. Emuer処理 (既存ロジック)
+        // ポイント処理
         pendingEmuer += 10;
         savePending();
         if (myWalletPage.style.display === "block") renderWallet();
 
-        console.log("✅ Firebase: Good updated!");
+        console.log("✅ Firebase: Good記録完了");
       } catch (e) {
         console.error("Firebase Good Error:", e);
       }
     });
   }
 
-  // 🤝 changeボタンの処理
+  // 🤝 Changeボタンの処理
   const changeButton = postElement.querySelector(".change-button");
   if (changeButton) {
     changeButton.addEventListener("click", async () => {
-      // 1. ユーザーチェック
       const type = getCurrentUserType();
       if (type === "guest") return showUpgradeModal("guestToWallet");
+      if (!myAddr) return alert("ウォレットを接続してください");
+
+      // 【不正防止1】自分の投稿には押せない
+      if (postData.address && postData.address.toLowerCase() === myAddr) {
+        alert("自分の投稿にChangeは押せません！");
+        return;
+      }
+
+      // 【不正防止2】1回しか押せない
+      if (postData.changeUsers && postData.changeUsers.includes(myAddr)) {
+        alert("すでにChange済みです！");
+        return;
+      }
 
       try {
-        // 2. Firebaseの数値を+1する
         const postRef = window.fbLib.doc(window.db, "posts", postId);
         await window.fbLib.updateDoc(postRef, {
-          changeCount: window.fbLib.increment(1)
+          changeCount: window.fbLib.increment(1),
+          changeUsers: window.fbLib.arrayUnion(myAddr)
         });
 
-        // 3. Emuer処理
         pendingEmuer += 20;
         savePending();
         if (myWalletPage.style.display === "block") renderWallet();
 
-        console.log("✅ Firebase: Change updated!");
+        console.log("✅ Firebase: Change記録完了");
       } catch (e) {
         console.error("Firebase Change Error:", e);
       }
     });
   }
 }
+
 
 
 /* addPostToFeed: 投稿を追加（表示上は reaction の数 = 0 で始まる） */
@@ -3924,22 +3953,37 @@ postElement.innerHTML = `
   // reaction ハンドラ
   attachReactionHandlers(postElement);
 
-  // ★ 編集ボタン
+  // ★ 編集ボタンの制御
   const editBtn = postElement.querySelector(".edit-button");
-  editBtn.addEventListener("click", () => {
-    editMode = "theme";
-    editingPostId = post.id;
+  
+  // 今ログインしている人のアドレス（小文字）
+  const myAddr = window.connectedAccount ? window.connectedAccount.toLowerCase() : null;
+  // 投稿者のアドレス（小文字）
+  const postAuthorAddr = post.address ? post.address.toLowerCase() : "";
 
-    postTitleInput.value = post.title;
-    postBodyInput.value = post.body;
-    postTagsInput.value = post.tags;
+  // 自分以外の投稿なら、編集ボタンを消す（または隠す）
+  if (myAddr !== postAuthorAddr) {
+    editBtn.style.display = "none"; 
+  } else {
+    // 自分の投稿なら、編集ボタンを表示してクリック可能にする
+    editBtn.style.display = "inline-block";
+    editBtn.addEventListener("click", () => {
+      editMode = "theme";
+      editingPostId = post.id; // FirebaseのドキュメントIDをセット
 
-    postTitleInput.disabled = true;
-    openPostForm();
-  });
+      postTitleInput.value = post.title;
+      postBodyInput.value = post.body;
+      postTagsInput.value = post.tags;
+
+      // タイトルは変更不可にする（既存ロジック）
+      postTitleInput.disabled = true;
+      openPostForm();
+    });
+  }
 
   return postElement;
 }
+
 
 function normalizeUserType(rawType) {
   if (rawType === "paidNFT") return "paid";
@@ -4758,61 +4802,78 @@ function searchPostsByTag(keyword) {
 }
 
 // 左側マイライブラリーボタン
-function getMyGoodPosts() {
-  if (getCurrentUserType() === "guest") {
-    showUpgradeModal("guestToWallet");
-    return;
-  }
+// 👍 自分がGoodした記事を取得
+async function getMyGoodPosts() {
+  const type = getCurrentUserType();
+  if (type === "guest") return showUpgradeModal("guestToWallet");
 
-  console.log("👍自分がgoodした記事を取得");
+  const myAddr = window.connectedAccount?.toLowerCase();
+  if (!myAddr) return alert("ウォレットを接続してください");
 
-  const myGoods = JSON.parse(localStorage.getItem("myGoods")) || [];
-  const filtered = posts.filter(post => myGoods.includes(String(post.id)));
-
+  console.log("📡 FirebaseからGoodした記事を取得中...");
   const area = document.getElementById("postFeed");
   if (!area) return;
+  area.innerHTML = "<h2>👍 Goodした記事</h2><p>読み込み中...</p>";
 
-  area.innerHTML = "<h2>👍goodした記事</h2>";
+  try {
+    const postsRef = window.fbLib.collection(window.db, "posts");
+    // goodUsers リストの中に自分のアドレスが含まれるものを検索
+    const q = window.fbLib.query(postsRef, window.fbLib.where("goodUsers", "array-contains", myAddr));
+    const querySnapshot = await window.fbLib.getDocs(q);
 
-  if (filtered.length === 0) {
-    area.innerHTML += "<p>まだgoodしていません</p>";
-    return;
+    area.innerHTML = "<h2>👍 Goodした記事</h2>";
+
+    if (querySnapshot.empty) {
+      area.innerHTML += "<p>まだGoodした記事はありません</p>";
+      return;
+    }
+
+    querySnapshot.forEach((doc) => {
+      const postData = { id: doc.id, ...doc.data() };
+      const el = createPostElementFromData(postData);
+      area.appendChild(el);
+    });
+  } catch (e) {
+    console.error("Good記事取得エラー:", e);
+    area.innerHTML = "<p>データの取得に失敗しました</p>";
   }
-
-  filtered.forEach(post => {
-    const el = createPostElementFromData(post);
-    area.appendChild(el);
-  });
 }
 
+// 🤝 自分がChangeした記事を取得
+async function getMyChangePosts() {
+  const type = getCurrentUserType();
+  if (type === "guest") return showUpgradeModal("guestToWallet");
 
-function getMyChangePosts() {
-if (getCurrentUserType() === "guest") {
-    showUpgradeModal("guestToWallet");
-    return;
-  }
-  console.log("🤝自分がchangeした記事を取得");
+  const myAddr = window.connectedAccount?.toLowerCase();
+  if (!myAddr) return alert("ウォレットを接続してください");
 
-  const myChanges =
-    JSON.parse(localStorage.getItem("myChanges")) || [];
-const filtered = posts.filter(post =>
-  myChanges.includes(String(post.id))
-);
-
+  console.log("📡 FirebaseからChangeした記事を取得中...");
   const area = document.getElementById("postFeed");
   if (!area) return;
+  area.innerHTML = "<h2>🤝 Changeした記事</h2><p>読み込み中...</p>";
 
-  area.innerHTML = "<h2>🤝changeした記事</h2>";
+  try {
+    const postsRef = window.fbLib.collection(window.db, "posts");
+    // changeUsers リストの中に自分のアドレスが含まれるものを検索
+    const q = window.fbLib.query(postsRef, window.fbLib.where("changeUsers", "array-contains", myAddr));
+    const querySnapshot = await window.fbLib.getDocs(q);
 
-  if (filtered.length === 0) {
-    area.innerHTML += "<p>まだchangeしていません</p>";
-    return;
+    area.innerHTML = "<h2>🤝 Changeした記事</h2>";
+
+    if (querySnapshot.empty) {
+      area.innerHTML += "<p>まだChangeした記事はありません</p>";
+      return;
+    }
+
+    querySnapshot.forEach((doc) => {
+      const postData = { id: doc.id, ...doc.data() };
+      const el = createPostElementFromData(postData);
+      area.appendChild(el);
+    });
+  } catch (e) {
+    console.error("Change記事取得エラー:", e);
+    area.innerHTML = "<p>データの取得に失敗しました</p>";
   }
-
-  filtered.forEach(post => {
-    const el = createPostElementFromData(post);
-    area.appendChild(el);
-  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -5524,7 +5585,8 @@ setTimeout(() => {
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { 
     getFirestore, collection, addDoc, getDocs, query, orderBy, onSnapshot,
-    doc, updateDoc, increment, where // ← where を追加
+    doc, updateDoc, increment, where, 
+    arrayUnion // ← 重複防止に必須な機能を追加
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -5545,11 +5607,13 @@ setTimeout(() => {
   window.db = db;
   window.fbLib = { 
     collection, addDoc, getDocs, query, orderBy, onSnapshot,
-    doc, updateDoc, increment, where // ← ここにも where を追加
+    doc, updateDoc, increment, where, 
+    arrayUnion // ← ここにも忘れず追加！
   };
 
-  console.log("🔥 Firebase Ready with Query functions!");
+  console.log("🔥 Firebase Ready with Query & Security functions!");
 </script>
+
 
 
 </body>
