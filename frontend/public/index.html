@@ -4599,18 +4599,40 @@ function handleDiscussion() {
 }
 
 // ===== 全ての投稿：中央だけ更新 =====
-function refreshAllPosts(postList = posts) {
+async function refreshAllPosts() {
   const postFeed = document.getElementById("postFeed");
+  if (!postFeed) return;
 
-  // ← ここで既存の投稿をすべて消す
-  postFeed.innerHTML = "";
+  console.log("📡 Firebaseから最新の投稿を取得中...");
+  postFeed.innerHTML = "<p>読み込み中...</p>"; // 読み込み中を表示
 
-  // postList を順番に描画
-  postList.forEach(post => {
-    const postElement = createPostElementFromData(post);
-    postFeed.appendChild(postElement);
-  });
+  try {
+    const postsRef = window.fbLib.collection(window.db, "posts");
+    const q = window.fbLib.query(postsRef, window.fbLib.orderBy("createdAt", "desc"));
+    const querySnapshot = await window.fbLib.getDocs(q);
+
+    // 既存の投稿をすべて消す
+    postFeed.innerHTML = "";
+
+    if (querySnapshot.empty) {
+      postFeed.innerHTML = "<p>投稿がありません</p>";
+      return;
+    }
+
+    querySnapshot.forEach((doc) => {
+      const postData = { id: doc.id, ...doc.data() };
+      // createPostElementFromData を使って描画
+      const postElement = createPostElementFromData(postData);
+      postFeed.appendChild(postElement);
+    });
+    
+    console.log("✅ 全ての投稿を更新しました");
+  } catch (e) {
+    console.error("投稿の更新に失敗しました:", e);
+    postFeed.innerHTML = "<p>更新に失敗しました</p>";
+  }
 }
+
 
 // 今月のテーマ
 let currentTheme = "はじまり";//今月のテーマ
@@ -4623,27 +4645,52 @@ function getTrendPosts() {
 }
 
 // おすすめ用
-function getRecommendedPosts() {
-  return posts
-    .filter(p => p.recommended)
-    .sort((a,b) => b.createdAt - a.createdAt);
+async function filterRecommendedPosts() {
+  const postFeed = document.getElementById("postFeed");
+  if (!postFeed) return;
+
+  console.log("📡 Firebaseからおすすめ投稿を取得中...");
+  postFeed.innerHTML = "<p>読み込み中...</p>";
+
+  try {
+    const postsRef = window.fbLib.collection(window.db, "posts");
+    // recommended が true のものだけを、新しい順に取得
+    const q = window.fbLib.query(
+      postsRef, 
+      window.fbLib.where("recommended", "==", true),
+      window.fbLib.orderBy("createdAt", "desc")
+    );
+    const querySnapshot = await window.fbLib.getDocs(q);
+
+    postFeed.innerHTML = "<h2>✨ おすすめの投稿</h2>";
+
+    if (querySnapshot.empty) {
+      postFeed.innerHTML += "<p>おすすめ投稿はまだありません</p>";
+      return;
+    }
+
+    querySnapshot.forEach((doc) => {
+      const postData = { id: doc.id, ...doc.data() };
+      const el = createPostElementFromData(postData);
+      postFeed.appendChild(el);
+    });
+
+    console.log("✅ おすすめ投稿の更新完了");
+  } catch (e) {
+    console.error("おすすめ取得エラー:", e);
+    postFeed.innerHTML = "<p>データの取得に失敗しました。インデックスの設定が必要かもしれません。</p>";
+  }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  // postFeed
-  const postFeed = document.getElementById("postFeed");
-  console.log("postFeed:", postFeed);
 
   // 全ての投稿
-  const refreshBtn = document.getElementById("refreshAllPosts");
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", () => {
-      console.log("✅ 全ての投稿ボタンが押された");
-      refreshAllPosts(posts);
-    });
-  } else {
-    console.warn("refreshAllPosts ボタンが見つからない");
-  }
+const refreshBtn = document.getElementById("refreshAllPosts");
+if (refreshBtn) {
+  refreshBtn.addEventListener("click", () => {
+    console.log("✅ 全ての投稿ボタンが押された");
+    refreshAllPosts();
+  });
+}
 
   // 新規
   const newBtn = document.getElementById("filterNewBtn");
@@ -4703,7 +4750,7 @@ if (changeBtn) {
 } else {
   console.warn("filterChangeBtn が見つからない");
 }
-});
+
 
 function getNewPosts() {
   const now = Date.now();
@@ -4732,19 +4779,14 @@ function getChangePosts() {
 const recommendBtn = document.getElementById("filterRecommendBtn");
 if (recommendBtn) {
   recommendBtn.addEventListener("click", () => {
-const type = getCurrentUserType();
-  if (type === "guest") return showUpgradeModal("guestToWallet");
-	if (getCurrentUserType() === "guest") {
-      alert("ゲストはこの機能を利用できません");
-      return;
-    }
+    const type = getCurrentUserType();
+    if (type === "guest") return showUpgradeModal("guestToWallet");
 
-    console.log("✅ おすすめボタン");
-    refreshAllPosts(getRecommendedPosts());
+    console.log("✅ おすすめボタンが押されました");
+    filterRecommendedPosts(); // Firebaseから取得する関数を呼ぶ
   });
-} else {
-  console.warn("filterRecommendBtn が見つからない");
 }
+
 
 // トレンド
 const trendBtn = document.getElementById("filterTrendBtn");
