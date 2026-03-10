@@ -4021,7 +4021,7 @@ function createPostData({ title, body, tags }) {
 function getUserTypeBadge(type) {
   switch (type) {
     case "paid":
-      return `<span class="badge badge-paid"有料利用者</span>`;
+      return `<span class="badge badge-paid">有料利用者</span>`;
     case "free":
       return `<span class="badge badge-free">無料利用者</span>`;
     case "guest":
@@ -4057,18 +4057,37 @@ postForm.addEventListener("submit", async function (e) { // asyncを追加
 
   // --- Firebase保存処理 ---
   try {
-    // 1. Firebaseの「posts」コレクションにデータを追加
-    await window.fbLib.addDoc(window.fbLib.collection(window.db, "posts"), {
+    const userType = getCurrentUserType();
+    const postData = {
       title: title,
       body: body,
       tags: tags,
-      userType: getCurrentUserType(), // 有料/無料バッジの判定
-      address: window.connectedAccount || "unknown", // ウォレットアドレス
-      goodCount: 0,
-      changeCount: 0,
-      createdAt: new Date(), // 投稿日時
-      userId: currentUserId || "guest"
-    });
+      userType: userType, // ここで 'paid' か 'free' か 'guest' が入ります
+      address: window.connectedAccount || "unknown",
+      userId: currentUserId || "guest",
+      updatedAt: new Date() // 更新日時を記録
+    };
+
+    // 編集中のIDがあるかチェック
+    const editingId = localStorage.getItem("editingPostId");
+
+    if (editingId) {
+      // 【更新モード】既存の投稿を上書き
+      const postRef = window.fbLib.doc(window.db, "posts", editingId);
+      await window.fbLib.updateDoc(postRef, postData);
+      console.log("✅ 投稿を更新しました:", editingId);
+      localStorage.removeItem("editingPostId"); // 終わったらクリア
+    } else {
+      // 【新規モード】新しく投稿
+      postData.createdAt = new Date();
+      postData.goodCount = 0;
+      postData.changeCount = 0;
+      await window.fbLib.addDoc(window.fbLib.collection(window.db, "posts"), postData);
+      console.log("✅ 新規投稿を作成しました");
+    }
+
+    // 成功したら画面を閉じる等の処理（既存のコードをここに）
+    closePostModal(); 
 
     alert("🔥 Firebaseに投稿が保存されました！");
     
