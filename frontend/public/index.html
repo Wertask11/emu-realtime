@@ -3838,74 +3838,63 @@ function attachReactionHandlers(postElement) {
   if (postElement.dataset.handlersAttached === "true") return;
   postElement.dataset.handlersAttached = "true";
 
-  const postData = postElement.postData; // addPostToFeedでセットされている想定
-  if (!postData) return;
+  const postId = postElement.dataset.id; // FirebaseのドキュメントID
 
+  // 👍 goodボタンの処理
   const goodButton = postElement.querySelector(".good-button");
-  const changeButton = postElement.querySelector(".change-button");
-  const goodCountEl = postElement.querySelector(".good-count");
-  const changeCountEl = postElement.querySelector(".change-count");
-
-  let goodClicked = false;
-  let changeClicked = false;
-
-
-  // 👍 goodボタン
   if (goodButton) {
-    goodButton.addEventListener("click", () => {
-	const type = getCurrentUserType();
-  if (type === "guest") return showUpgradeModal("guestToWallet");
-      if (goodClicked) { alert("すでにgoodしています！"); return; }
-      goodClicked = true;
+    goodButton.addEventListener("click", async () => {
+      // 1. ユーザーチェック (既存ロジック)
+      const type = getCurrentUserType();
+      if (type === "guest") return showUpgradeModal("guestToWallet");
 
-      if (!postData.goodUsers) postData.goodUsers = [];
-      if (!postData.goodUsers.includes(currentUserId)) {
-        postData.goodUsers.push(currentUserId);
-        postData.goodCount = (postData.goodCount ?? 0) + 1;
-        goodCountEl.textContent = postData.goodCount;
-		// localStorage にも保存
-const myGoods = JSON.parse(localStorage.getItem("myGoods")) || [];
-if (!myGoods.includes(String(postData.id))) {
-  myGoods.push(String(postData.id));
-  localStorage.setItem("myGoods", JSON.stringify(myGoods));
-}
-}
+      try {
+        // 2. Firebaseの数値を+1する
+        const postRef = window.fbLib.doc(window.db, "posts", postId);
+        await window.fbLib.updateDoc(postRef, {
+          goodCount: window.fbLib.increment(1)
+        });
 
-      // Emuer処理(good)
-      pendingEmuer += 10;
-      savePending();
-      if (myWalletPage.style.display === "block") renderWallet();
+        // 3. Emuer処理 (既存ロジック)
+        pendingEmuer += 10;
+        savePending();
+        if (myWalletPage.style.display === "block") renderWallet();
+
+        console.log("✅ Firebase: Good updated!");
+      } catch (e) {
+        console.error("Firebase Good Error:", e);
+      }
     });
   }
 
-  // 🤝 changeボタン
+  // 🤝 changeボタンの処理
+  const changeButton = postElement.querySelector(".change-button");
   if (changeButton) {
-    changeButton.addEventListener("click", () => {
-	const type = getCurrentUserType();
-  if (type === "guest") return showUpgradeModal("guestToWallet");
-      if (changeClicked) { alert("すでにchangeしています！"); return; }
-      changeClicked = true;
+    changeButton.addEventListener("click", async () => {
+      // 1. ユーザーチェック
+      const type = getCurrentUserType();
+      if (type === "guest") return showUpgradeModal("guestToWallet");
 
-      if (!postData.changeUsers) postData.changeUsers = [];
-      if (!postData.changeUsers.includes(currentUserId)) {
-        postData.changeUsers.push(currentUserId);
-        postData.changeCount = (postData.changeCount ?? 0) + 1;
-        changeCountEl.textContent = postData.changeCount;
-		const myChanges = JSON.parse(localStorage.getItem("myChanges")) || [];
+      try {
+        // 2. Firebaseの数値を+1する
+        const postRef = window.fbLib.doc(window.db, "posts", postId);
+        await window.fbLib.updateDoc(postRef, {
+          changeCount: window.fbLib.increment(1)
+        });
 
-if (!myChanges.includes(String(postData.id))) {
-  myChanges.push(String(postData.id));
-  localStorage.setItem("myChanges", JSON.stringify(myChanges));
-}
-}
+        // 3. Emuer処理
+        pendingEmuer += 20;
+        savePending();
+        if (myWalletPage.style.display === "block") renderWallet();
 
-      // Emuer処理(change)
-      pendingEmuer += 20;
-      savePending();
-      if (myWalletPage.style.display === "block") renderWallet();
+        console.log("✅ Firebase: Change updated!");
+      } catch (e) {
+        console.error("Firebase Change Error:", e);
+      }
     });
   }
 }
+
 
 /* addPostToFeed: 投稿を追加（表示上は reaction の数 = 0 で始まる） */
 function createPostElementFromData(post) {
@@ -5515,9 +5504,11 @@ setTimeout(() => {
 </div>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, collection, addDoc, getDocs, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { 
+    getFirestore, collection, addDoc, getDocs, query, orderBy, onSnapshot,
+    doc, updateDoc, increment 
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-  // 画像3枚目にあった設定（そのまま使えます）
   const firebaseConfig = {
     apiKey: "AIzaSyC1DxDoszk8iryEcYrfUZWowN2V1FGaV0Y",
     authDomain: "emu-schoolpark.firebaseapp.com",
@@ -5528,15 +5519,16 @@ setTimeout(() => {
     measurementId: "G-RY03BJF8JJ"
   };
 
-  // 初期化
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  // あなたの既存のJSから使えるように「窓口(window)」に登録
   window.db = db;
-  window.fbLib = { collection, addDoc, getDocs, query, orderBy, onSnapshot };
+  window.fbLib = { 
+    collection, addDoc, getDocs, query, orderBy, onSnapshot,
+    doc, updateDoc, increment 
+  };
 
-  console.log("🔥 Firebase Ready!");
+  console.log("🔥 Firebase Ready with Reactions!");
 </script>
 
 </body>
