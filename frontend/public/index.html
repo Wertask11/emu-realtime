@@ -3296,74 +3296,60 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
     const account = accounts[0];
     window.connectedAccount = account;
-    currentUserId = account; // 以前の変数も更新
+    currentUserId = account;
 
     console.log("🦊 Wallet Connected:", account);
 
-    // ② Amoyネットワークへ切り替え（手動切り替えの手間をなくす）
-    const chainId = await ethereum.request({ method: "eth_chainId" });
-    if (chainId !== AMOY_CHAIN_ID) {
+    // ② ネットワークチェック（PolygonかAmoyならそのまま、それ以外なら案内）
+    const chainId = await window.ethereum.request({ method: "eth_chainId" });
+    const POLYGON_MAINNET = "0x89";   // 137
+    const AMOY_TESTNET = "0x13882";  // 80002
+
+    if (chainId !== POLYGON_MAINNET && chainId !== AMOY_TESTNET) {
+      // 本番用Polygonに切り替えを促す（テスト中ならAMOYでも可）
       try {
-        await ethereum.request({
+        await window.ethereum.request({
           method: "wallet_switchEthereumChain",
-          params: [{ chainId: AMOY_CHAIN_ID }]
+          params: [{ chainId: POLYGON_MAINNET }] 
         });
-      } catch (switchError) {
-        // ネットワークが追加されていない場合などはここでエラーが出るのでalert等で通知
-        console.error("ネットワーク切り替え失敗", switchError);
+      } catch (e) {
+        console.log("Polygonメインネットへの切り替えがキャンセルまたは失敗しました");
       }
     }
 
-    // ③ 公式NFTチェックの実行（復活！）
-    // ※ ここで内部的に window.checkHexaNFT() と window.checkFreeNFT() が走ります
+    // ③ 公式NFTチェックの実行
+    // ここで先ほど作った「ハイブリッド判定版」の checkHexaNFT が動きます
     await window.checkHexaNFT();
     await window.checkFreeNFT();
 
     window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT;
     console.log("🏫 公式NFT最終判定:", window.hasOfficialNFT);
 
-    // ④ ethers.js 各種コントラクト初期化（これが消えると利用画面でエラーになります）
+    // ④ ethers.js 初期化
     provider = new ethers.providers.Web3Provider(window.ethereum);
     signer = provider.getSigner();
     
-    // EmuerやJPYCのコントラクトを再セット
+    // コントラクト再セット
     emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_CONTRACT_ABI, signer);
     jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
 
-    // ⑤ 画面表示の更新と遷移
-    const walletStatus = document.getElementById("walletStatus");
+    // ⑤ UI更新
+    localStorage.removeItem("userMode");
     const walletAddressButton = document.getElementById("walletAddressButton");
-	
-	if (typeof account !== "undefined" && account) {
-      localStorage.removeItem("userMode"); // ウォレット接続されたらゲストのメモを消去
-    }
-
-    const userMode = localStorage.getItem("userMode"); // ゲストかどうかを確認
-
-    if (walletStatus) {
-      walletStatus.textContent = (userMode === "guest") ? "ゲストログイン中" : "接続成功: " + account;
-    }
-
     if (walletAddressButton) {
-      if (userMode === "guest") {
-        // ゲストの場合の表示
-        walletAddressButton.textContent = "👤 ゲスト利用中";
-      } else {
-        // 通常のウォレットアドレス表示
-        walletAddressButton.textContent = account.substring(0, 6) + "..." + account.slice(-4);
-      }
+      walletAddressButton.textContent = account.substring(0, 6) + "..." + account.slice(-4);
     }
     
-    // メイン画面へ！
-    console.log("🚀 goTomainapp() を呼び出します");
+    console.log("🚀 メインアプリへ遷移します。現在のType:", getCurrentUserType());
     goTomainapp();
-	updateBonusCountdown();
+    updateBonusCountdown();
 
   } catch (err) {
-    console.error("❌ 接続・初期化エラー:", err);
+    console.error("❌ 接続エラー:", err);
     alert("エラー: " + err.message);
   }
 });
+
 
 // --- [3] checkHexaNFT も Amoy 対応で上書き（念押し） ---
 window.checkHexaNFT = async function () {
@@ -3372,40 +3358,42 @@ window.checkHexaNFT = async function () {
     const network = await provider.getNetwork();
     const chainId = network.chainId;
 
-    // --- [A] 本番環境 (Polygon Mainnet: 137) の場合 ---
-    if (chainId === 137) {
-      const contractAddr = "0xC333F84fd2FD86760e7dC5a288b7a9D4128F2Dab";
+    if (chainId === 137) { // Polygon Mainnet
+      const hexaAddr = "0xC333F84fd2FD86760e7dC5a288b7a9D4128F2Dab";
+      const osAddr = "0x20a32466e6d9c43d73c569b8a934e6622d89c2db";
       const abi = ["function balanceOf(address account, uint256 id) view returns (uint256)"];
-      const nft = new ethers.Contract(contractAddr, abi, provider);
+      
+      const hexaContract = new ethers.Contract(hexaAddr, abi, provider);
+      const osContract = new ethers.Contract(osAddr, abi, provider);
 
-      // HEXAのID 1〜13をスキャン
-      let hasIt = false;
-      for (let id = 1; id <= 13; id++) {
-        const b = await nft.balanceOf(window.connectedAccount, id);
-        if (b.gt(0)) { hasIt = true; break; }
-      }
-      window.hasPaidNFT = hasIt;
-      console.log("💎 Polygonメインネット: 本物NFT判定:", window.hasPaidNFT);
+      console.log("📡 両方のコレクションをスキャン中...");
 
-    // --- [B] テスト環境 (Amoy: 80002) の場合 ---
-    } else if (chainId === 80002) {
-      const testNFT = getOfficialNFT("paid"); // 今まで通りのテスト用
+      // HEXA(13種類) と OpenSea(20種類) の判定を並列で実行
+      const hexaChecks = Array.from({ length: 13 }, (_, i) => hexaContract.balanceOf(window.connectedAccount, i + 1));
+      const osChecks = Array.from({ length: 20 }, (_, i) => osContract.balanceOf(window.connectedAccount, i + 1));
+
+      // RPCエラーを防ぐため、すべてのリクエストをまとめて送信
+      const allBalances = await Promise.all([...hexaChecks, ...osChecks].map(p => p.catch(() => ethers.BigNumber.from(0))));
+
+      // どこかに1つでも残高があれば有料ユーザー
+      window.hasPaidNFT = allBalances.some(b => b.gt(0));
+      console.log("💎 Polygonメインネット判定完了:", window.hasPaidNFT);
+
+    } else if (chainId === 80002) { // Amoy Testnet
+      const testNFT = getOfficialNFT("paid");
       if (!testNFT.contract) return;
       const nft = new ethers.Contract(testNFT.contract, ERC721_ABI, provider);
       const balance = await nft.balanceOf(window.connectedAccount);
       window.hasPaidNFT = balance.gt(0);
-      console.log("🛠️ Amoyテストネット: テスト用NFT判定:", window.hasPaidNFT);
-
-    } else {
-      console.warn("⚠️ 未対応のネットワークです。PolygonまたはAmoyに切り替えてください。");
-      window.hasPaidNFT = false;
+      console.log("🛠️ Amoyテスト判定完了:", window.hasPaidNFT);
     }
 
   } catch (e) {
-    console.error("❌ 有料NFTチェック失敗", e);
+    console.error("❌ NFTチェックエラー:", e);
     window.hasPaidNFT = false;
   }
 };
+
 
 window.checkFreeNFT = async function () {
   try {
