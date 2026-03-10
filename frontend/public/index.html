@@ -4765,51 +4765,21 @@ document.getElementById("filterNewBtn")?.addEventListener("click", () => {
   filterNewPosts();
 });
 
-  // 👍 good
-const goodBtn = document.getElementById("filterGoodBtn");
-if (goodBtn) {
-  goodBtn.addEventListener("click", () => {
-	const userType = getCurrentUserType();
+// 👍 Goodボタン
+document.getElementById("filterGoodBtn")?.addEventListener("click", () => {
+  const userType = getCurrentUserType();
+  if (userType === "guest") return showUpgradeModal("guestToWallet");
+  if (userType === "free") return showUpgradeModal("freeToPaid");
+  filterHighGoodPosts();
+});
 
-	if (getCurrentUserType() === "guest") {
-      alert("ゲストはこの機能を利用できません");
-      return;
-    }
-
-    if (userType === "free") {
-        alert("この機能は有料NFTユーザー限定です");
-        return;
-    }
-
-    console.log("✅ good フィルタ");
-    refreshAllPosts(getGoodPosts());
-  });
-} else {
-  console.warn("filterGoodBtn が見つからない");
-}
-
-// 🤝 change
-const changeBtn = document.getElementById("filterChangeBtn");
-if (changeBtn) {
-  changeBtn.addEventListener("click", () => {
-	const userType = getCurrentUserType();
-
-	if (getCurrentUserType() === "guest") {
-      alert("ゲストはこの機能を利用できません");
-      return;
-    }
-
-	    if (userType === "free") {
-        alert("この機能は有料NFTユーザー限定です");
-        return;
-    }
-
-    console.log("✅ change フィルタ");
-    refreshAllPosts(getChangePosts());
-  });
-} else {
-  console.warn("filterChangeBtn が見つからない");
-}
+// 🤝 Changeボタン
+document.getElementById("filterChangeBtn")?.addEventListener("click", () => {
+  const userType = getCurrentUserType();
+  if (userType === "guest") return showUpgradeModal("guestToWallet");
+  if (userType === "free") return showUpgradeModal("freeToPaid");
+  filterHighChangePosts();
+});
 
 
 function getNewPosts() {
@@ -4821,18 +4791,68 @@ function getNewPosts() {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
-// 👍 good が100以上の投稿
-function getGoodPosts() {
-  return posts
-    .filter(post => (post.goodCount ?? 0) >= 100)
-    .sort((a, b) => (b.goodCount ?? 0) - (a.goodCount ?? 0));
+// ✅ Goodが100以上の投稿を取得
+async function filterHighGoodPosts() {
+  const postFeed = document.getElementById("postFeed");
+  if (!postFeed) return;
+
+  postFeed.innerHTML = "<h2>👍 Good 100+</h2><p>読み込み中...</p>";
+
+  try {
+    const postsRef = window.fbLib.collection(window.db, "posts");
+    const q = window.fbLib.query(
+      postsRef,
+      window.fbLib.where("goodCount", ">=", 100),
+      window.fbLib.orderBy("goodCount", "desc")
+    );
+    const querySnapshot = await window.fbLib.getDocs(q);
+
+    postFeed.innerHTML = "<h2>👍 Good 100+</h2>";
+
+    if (querySnapshot.empty) {
+      postFeed.innerHTML += "<p>100 Good 以上の投稿はまだありません</p>";
+      return;
+    }
+
+    querySnapshot.forEach((doc) => {
+      postFeed.appendChild(createPostElementFromData({ id: doc.id, ...doc.data() }));
+    });
+  } catch (e) {
+    console.error("Goodフィルタエラー:", e);
+    postFeed.innerHTML = "<p>取得失敗（インデックス作成が必要かもしれません）</p>";
+  }
 }
 
-// 🤝 change が100以上の投稿
-function getChangePosts() {
-  return posts
-    .filter(post => (post.changeCount ?? 0) >= 100)
-    .sort((a, b) => (b.changeCount ?? 0) - (a.changeCount ?? 0));
+// ✅ Changeが100以上の投稿を取得
+async function filterHighChangePosts() {
+  const postFeed = document.getElementById("postFeed");
+  if (!postFeed) return;
+
+  postFeed.innerHTML = "<h2>🤝 Change 100+</h2><p>読み込み中...</p>";
+
+  try {
+    const postsRef = window.fbLib.collection(window.db, "posts");
+    const q = window.fbLib.query(
+      postsRef,
+      window.fbLib.where("changeCount", ">=", 100),
+      window.fbLib.orderBy("changeCount", "desc")
+    );
+    const querySnapshot = await window.fbLib.getDocs(q);
+
+    postFeed.innerHTML = "<h2>🤝 Change 100+</h2>";
+
+    if (querySnapshot.empty) {
+      postFeed.innerHTML += "<p>100 Change 以上の投稿はまだありません</p>";
+      return;
+    }
+
+    querySnapshot.forEach((doc) => {
+      postFeed.appendChild(createPostElementFromData({ id: doc.id, ...doc.data() }));
+    });
+  } catch (e) {
+    console.error("Changeフィルタエラー:", e);
+    postFeed.innerHTML = "<p>取得失敗（インデックス作成が必要かもしれません）</p>";
+  }
 }
 
 // おすすめ
@@ -4850,46 +4870,48 @@ if (recommendBtn) {
 
 // 検索
 const searchInput = document.querySelector(".search-bar");
-
 if (searchInput) {
   searchInput.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
-
     const userType = getCurrentUserType();
+    if (userType === "guest") return showUpgradeModal("guestToWallet");
+    if (userType === "free") return showUpgradeModal("freeToPaid");
 
-    // --- 1. ゲストユーザー制限（alertを書き換え） ---
-    if (userType === "guest") {
-      showUpgradeModal("guestToWallet"); // ここ！
-      return;
-    }
-
-    // --- 2. 無料NFTユーザー制限（alertを書き換え） ---
-    if (userType === "free") {
-      showUpgradeModal("freeToPaid"); // ここ！
-      return;
-    }
-
-    // ===== ここから通常処理（有料ユーザーのみ到達） =====
-    const keyword = searchInput.value.trim();
-    console.log("🔍 検索キーワード:", keyword);
-
-    const results = searchPostsByTag(keyword);
-    refreshAllPosts(results);
+    executeSearch(searchInput.value.trim());
   });
 }
 
 // 検索関数（DOMContentLoaded の外、上の方に置く）
-function searchPostsByTag(keyword) {
-  const lowerKeyword = keyword.toLowerCase();
-  if (!lowerKeyword) return [];
+async function executeSearch(keyword) {
+  const postFeed = document.getElementById("postFeed");
+  if (!postFeed || !keyword) return;
 
-  return posts
-    .filter(post =>
-      post.tags.split(",").some(tag =>
-        tag.trim().toLowerCase().includes(lowerKeyword)
-      )
-    )
-    .sort((a, b) => b.createdAt - a.createdAt);
+  postFeed.innerHTML = `<h2>🔍 「${keyword}」の検索結果</h2><p>検索中...</p>`;
+
+  try {
+    const postsRef = window.fbLib.collection(window.db, "posts");
+    // Firebaseでは部分一致検索が難しいため、「タグ配列に完全に含まれるか」で検索します
+    const q = window.fbLib.query(
+      postsRef,
+      window.fbLib.where("tags", "array-contains", keyword),
+      window.fbLib.orderBy("createdAt", "desc")
+    );
+    const querySnapshot = await window.fbLib.getDocs(q);
+
+    postFeed.innerHTML = `<h2>🔍 「${keyword}」の検索結果</h2>`;
+
+    if (querySnapshot.empty) {
+      postFeed.innerHTML += "<p>一致する投稿が見つかりませんでした。タグを正確に入力してください。</p>";
+      return;
+    }
+
+    querySnapshot.forEach((doc) => {
+      postFeed.appendChild(createPostElementFromData({ id: doc.id, ...doc.data() }));
+    });
+  } catch (e) {
+    console.error("検索エラー:", e);
+    postFeed.innerHTML = "<p>検索に失敗しました</p>";
+  }
 }
 
 // 左側マイライブラリーボタン
