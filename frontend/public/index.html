@@ -4638,10 +4638,38 @@ async function refreshAllPosts() {
 let currentTheme = "はじまり";//今月のテーマ
 
 // トレンド用
-function getTrendPosts() {
-  return posts
-    .filter(p => p.tags.includes(currentTheme))
-    .sort((a,b) => b.createdAt - a.createdAt);
+async function filterTrendPosts() {
+  const postFeed = document.getElementById("postFeed");
+  if (!postFeed) return;
+
+  console.log(`📡 トレンド（テーマ：${currentTheme}）を取得中...`);
+  postFeed.innerHTML = "<p>読み込み中...</p>";
+
+  try {
+    const postsRef = window.fbLib.collection(window.db, "posts");
+    // tags 配列の中に currentTheme が含まれるものを検索
+    const q = window.fbLib.query(
+      postsRef,
+      window.fbLib.where("tags", "array-contains", currentTheme),
+      window.fbLib.orderBy("createdAt", "desc")
+    );
+    const querySnapshot = await window.fbLib.getDocs(q);
+
+    postFeed.innerHTML = `<h2>🔥 トレンド: ${currentTheme}</h2>`;
+
+    if (querySnapshot.empty) {
+      postFeed.innerHTML += "<p>このテーマの投稿はまだありません</p>";
+      return;
+    }
+
+    querySnapshot.forEach((doc) => {
+      const postData = { id: doc.id, ...doc.data() };
+      postFeed.appendChild(createPostElementFromData(postData));
+    });
+  } catch (e) {
+    console.error("トレンド取得エラー:", e);
+    postFeed.innerHTML = "<p>データの取得に失敗しました（インデックス作成が必要かもしれません）</p>";
+  }
 }
 
 // おすすめ用
@@ -4692,18 +4720,50 @@ if (refreshBtn) {
   });
 }
 
-  // 新規
-  const newBtn = document.getElementById("filterNewBtn");
-  if (newBtn) {
-    newBtn.addEventListener("click", () => {
-	const type = getCurrentUserType();
-  if (type === "guest") return showUpgradeModal("guestToWallet");
-      console.log("✅ 新規ボタンが押された");
-      refreshAllPosts(getNewPosts());
+// ✅ 新規：24時間以内の投稿を取得
+async function filterNewPosts() {
+  const postFeed = document.getElementById("postFeed");
+  if (!postFeed) return;
+
+  console.log("📡 24時間以内の新規投稿を取得中...");
+  postFeed.innerHTML = "<p>読み込み中...</p>";
+
+  try {
+    const postsRef = window.fbLib.collection(window.db, "posts");
+    // 24時間前の時刻を計算
+    const yesterday = Date.now() - (24 * 60 * 60 * 1000);
+    
+    const q = window.fbLib.query(
+      postsRef,
+      window.fbLib.where("createdAt", ">=", yesterday),
+      window.fbLib.orderBy("createdAt", "desc")
+    );
+    const querySnapshot = await window.fbLib.getDocs(q);
+
+    postFeed.innerHTML = "<h2>✨ 新規投稿 (24時間以内)</h2>";
+
+    if (querySnapshot.empty) {
+      postFeed.innerHTML += "<p>24時間以内の新規投稿はありません</p>";
+      return;
+    }
+
+    querySnapshot.forEach((doc) => {
+      const postData = { id: doc.id, ...doc.data() };
+      postFeed.appendChild(createPostElementFromData(postData));
     });
-  } else {
-    console.error("filterNewBtn が見つからない");
+  } catch (e) {
+    console.error("新規取得エラー:", e);
+    postFeed.innerHTML = "<p>データの取得に失敗しました</p>";
   }
+}
+
+// ✅ ボタンのイベント登録
+document.getElementById("filterTrendBtn")?.addEventListener("click", filterTrendPosts);
+document.getElementById("filterNewBtn")?.addEventListener("click", () => {
+  const type = getCurrentUserType();
+  if (type === "guest") return showUpgradeModal("guestToWallet");
+  filterNewPosts();
+});
 
   // 👍 good
 const goodBtn = document.getElementById("filterGoodBtn");
@@ -4787,17 +4847,6 @@ if (recommendBtn) {
   });
 }
 
-
-// トレンド
-const trendBtn = document.getElementById("filterTrendBtn");
-if (trendBtn) {
-  trendBtn.addEventListener("click", () => {+
-    console.log("✅ トレンドボタン");
-    refreshAllPosts(getTrendPosts());
-  });
-} else {
-  console.warn("filterTrendBtn が見つからない");
-}
 
 // 検索
 const searchInput = document.querySelector(".search-bar");
