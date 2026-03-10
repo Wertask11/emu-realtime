@@ -4076,37 +4076,54 @@ closeWalletPage.addEventListener("click", () => {
 
 /* ======= 1. ポイントとトークンの完全同期関数 ======= */
 async function syncPendingEmuer() {
-  // アカウントがなければ何もしない
   const accounts = await ethereum.request({ method: 'eth_accounts' });
   if (accounts.length === 0) return;
-  
-  const myAddr = accounts[0]; // 常に「今のアカウント(0番目)」を固定
+  const myAddr = accounts[0].toLowerCase(); // 小文字で統一して比較
 
   try {
-    // A. ポイント情報(Good/Change)をスマコンから取得
-    const userData = await emuerContract.users(myAddr);
-    const goodVal = parseInt(userData.good.toString());
-    const changeVal = parseInt(userData.change.toString());
+    // --- 1. Firebaseから「自分の投稿」のGood/Change合計を計算 ---
+    const postsRef = window.fbLib.collection(window.db, "posts");
+    // 投稿者(address)が自分であるものを検索
+    const q = window.fbLib.query(postsRef, window.fbLib.where("address", "==", myAddr));
+    const querySnapshot = await window.fbLib.getDocs(q);
 
-    // B. トークン残高(ERC20)をスマコンから取得
+    let fbGoodTotal = 0;
+    let fbChangeTotal = 0;
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      fbGoodTotal += (data.goodCount || 0);
+      fbChangeTotal += (data.changeCount || 0);
+    });
+
+    // --- 2. スマコンから取得（これまでの確定分） ---
+    const userData = await emuerContract.users(myAddr);
+    const scGoodVal = parseInt(userData.good.toString());
+    const scChangeVal = parseInt(userData.change.toString());
+
+    // --- 3. 合算して表示 (Firebase最新 + スマコン確定分) ---
+    // ※ 運用方針によりますが、まずはFirebaseの総数を表示するのが「リアルタイム」感が出ます
+    const displayGood = fbGoodTotal; 
+    const displayChange = fbChangeTotal;
+
+    if (document.getElementById("walletGoodCount")) document.getElementById("walletGoodCount").innerText = displayGood;
+    if (document.getElementById("walletChangeCount")) document.getElementById("walletChangeCount").innerText = displayChange;
+
+    // --- 4. トークン残高などの処理 (既存のまま) ---
     const balanceBN = await emuerContract.balanceOf(myAddr);
     const totalEmuerVal = Math.floor(parseFloat(ethers.utils.formatUnits(balanceBN, 18)));
-
-    // C. 画面表示を一気に更新
-    if (document.getElementById("walletGoodCount")) document.getElementById("walletGoodCount").innerText = goodVal;
-    if (document.getElementById("walletChangeCount")) document.getElementById("walletChangeCount").innerText = changeVal;
     if (document.getElementById("walletTotalEmuer")) document.getElementById("walletTotalEmuer").innerText = totalEmuerVal;
 
-    // D. 変換予定数を計算 (10 Good = 1, 20 Change = 3)
-    const goodEmuer = Math.floor(goodVal / 10);
-    const changeEmuer = Math.floor(changeVal / 20) * 3;
+    // 変換予定数の計算ロジック
+    const goodEmuer = Math.floor(displayGood / 10);
+    const changeEmuer = Math.floor(displayChange / 20) * 3;
     pendingEmuer = goodEmuer + changeEmuer;
 
     if (document.getElementById("walletEmuerCount")) {
       document.getElementById("walletEmuerCount").innerText = pendingEmuer;
     }
 
-    console.log(`📊 同期完了[${myAddr.substring(0,6)}...]: G:${goodVal} C:${changeVal} T:${totalEmuerVal}`);
+    console.log(`📊 Firebase同期完了: Good:${fbGoodTotal} Change:${fbChangeTotal}`);
   } catch (e) {
     console.error("❌ 同期失敗:", e);
   }
@@ -5503,10 +5520,11 @@ setTimeout(() => {
   </div>
 </div>
 <script type="module">
+  // Firebase 本体と Firestore 機能を読み込む
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { 
     getFirestore, collection, addDoc, getDocs, query, orderBy, onSnapshot,
-    doc, updateDoc, increment 
+    doc, updateDoc, increment, where // ← where を追加
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -5519,17 +5537,20 @@ setTimeout(() => {
     measurementId: "G-RY03BJF8JJ"
   };
 
+  // 初期化
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
+  // 外部ファイル（script.js）から使えるように窓口を作る
   window.db = db;
   window.fbLib = { 
     collection, addDoc, getDocs, query, orderBy, onSnapshot,
-    doc, updateDoc, increment 
+    doc, updateDoc, increment, where // ← ここにも where を追加
   };
 
-  console.log("🔥 Firebase Ready with Reactions!");
+  console.log("🔥 Firebase Ready with Query functions!");
 </script>
+
 
 </body>
 </html>
