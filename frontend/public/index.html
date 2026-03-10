@@ -3368,29 +3368,43 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
 // --- [3] checkHexaNFT も Amoy 対応で上書き（念押し） ---
 window.checkHexaNFT = async function () {
   try {
-    // 💡 テスト中は Amoy 以外なら切り替える
-    const originalChainId = await ethereum.request({ method: "eth_chainId" });
-    if (originalChainId !== AMOY_CHAIN_ID) {
-      await ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: AMOY_CHAIN_ID }]
-      });
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const network = await provider.getNetwork();
+    const chainId = network.chainId;
+
+    // --- [A] 本番環境 (Polygon Mainnet: 137) の場合 ---
+    if (chainId === 137) {
+      const contractAddr = "0xC333F84fd2FD86760e7dC5a288b7a9D4128F2Dab";
+      const abi = ["function balanceOf(address account, uint256 id) view returns (uint256)"];
+      const nft = new ethers.Contract(contractAddr, abi, provider);
+
+      // HEXAのID 1〜13をスキャン
+      let hasIt = false;
+      for (let id = 1; id <= 13; id++) {
+        const b = await nft.balanceOf(window.connectedAccount, id);
+        if (b.gt(0)) { hasIt = true; break; }
+      }
+      window.hasPaidNFT = hasIt;
+      console.log("💎 Polygonメインネット: 本物NFT判定:", window.hasPaidNFT);
+
+    // --- [B] テスト環境 (Amoy: 80002) の場合 ---
+    } else if (chainId === 80002) {
+      const testNFT = getOfficialNFT("paid"); // 今まで通りのテスト用
+      if (!testNFT.contract) return;
+      const nft = new ethers.Contract(testNFT.contract, ERC721_ABI, provider);
+      const balance = await nft.balanceOf(window.connectedAccount);
+      window.hasPaidNFT = balance.gt(0);
+      console.log("🛠️ Amoyテストネット: テスト用NFT判定:", window.hasPaidNFT);
+
+    } else {
+      console.warn("⚠️ 未対応のネットワークです。PolygonまたはAmoyに切り替えてください。");
+      window.hasPaidNFT = false;
     }
 
-    const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
-    const paidNFT = getOfficialNFT("paid");
-    if (!paidNFT.contract) return;
-
-    const nft = new ethers.Contract(paidNFT.contract, ERC721_ABI, tempProvider);
-    const balance = await nft.balanceOf(window.connectedAccount);
-    window.hasPaidNFT = balance.gt(0);
-    
-    console.log("✅ 有料NFT(Amoy版)チェック完了:", window.hasPaidNFT);
   } catch (e) {
     console.error("❌ 有料NFTチェック失敗", e);
     window.hasPaidNFT = false;
   }
-  // ※ ここで元に戻す(originalChainId)処理は消したままにしておきます
 };
 
 window.checkFreeNFT = async function () {
@@ -4322,18 +4336,19 @@ function closeExplore() {
 
 
 function getCurrentUserType() {
-  // guest
-  if (window.emuAuth?.type === "guest") return "guest";
+  // 1. ゲスト判定
+  if (localStorage.getItem("userMode") === "guest") return "guest";
 
-  // wallet接続あり
-  if (window.connectedAccount) {
-    if (window.hasPaidNFT) return "paid";
-    if (window.hasFreeNFT) return "free";
-  }
+  // 2. 有料NFT判定（window.checkHexaNFT の結果を使う）
+  if (window.hasPaidNFT) return "paid";
 
-  // それ以外は全部 guest 扱い
-  return "guest";
+  // 3. 無料NFT判定（もしあれば）
+  if (window.hasFreeNFT) return "free";
+
+  // 4. 何も持っていなければデフォルトで free (または guest)
+  return "guest"; 
 }
+
 
 // ダイアログを表示する関数
 function showUpgradeModal(type) {
