@@ -3995,8 +3995,9 @@ function renderPosts(postList = posts) {
 }
 
 
-/* 投稿フォーム submit */
-postForm.addEventListener("submit", function (e) {
+/* 投稿フォーム・投稿処理 submit */
+/* 投稿フォーム submit (Firebase版) */
+postForm.addEventListener("submit", async function (e) { // asyncを追加
   e.preventDefault();
 
   const title = postTitleInput.value.trim();
@@ -4008,42 +4009,33 @@ postForm.addEventListener("submit", function (e) {
     return;
   }
 
-  let postId = null;
+  // --- Firebase保存処理 ---
+  try {
+    // 1. Firebaseの「posts」コレクションにデータを追加
+    await window.fbLib.addDoc(window.fbLib.collection(window.db, "posts"), {
+      title: title,
+      body: body,
+      tags: tags,
+      userType: getCurrentUserType(), // 有料/無料バッジの判定
+      address: window.connectedAccount || "unknown", // ウォレットアドレス
+      goodCount: 0,
+      changeCount: 0,
+      createdAt: new Date(), // 投稿日時
+      userId: currentUserId || "guest"
+    });
 
-  if (editMode === "draft" && editingPostId) {
-    drafts = drafts.filter(d => d.id !== editingPostId);
-    const post = createPostData({ title, body, tags });
-    postId = post.id;
-    alert("下書きから投稿に昇格しました！");
-  } else if (editMode === "theme" && editingPostId) {
-    const post = posts.find(p => p.id == postElement.dataset.id);
-    if (post) {
-      post.body = body;
-      post.tags = tags;
-      postId = post.id;
-      alert("テーマ投稿を更新しました！（タイトルは固定）");
-    }
-} else {
-  const post = createPostData({ title, body, tags });
-  posts.unshift(post);
-  renderPosts();
-  alert("投稿しました！");
-}
-
-const author = getAuthorInfo();
-
-
-  emitAction(createAction({
-    userId: currentUserId,
-    type: "post",
-    targetId: postId
-  }));
-
-  renderPosts();
-
-  closePostForm();
-  editingPostId = null;
-  editMode = null;
+    alert("🔥 Firebaseに投稿が保存されました！");
+    
+    // 入力欄をクリアして閉じる
+    postTitleInput.value = "";
+    postBodyInput.value = "";
+    postTagsInput.value = "";
+    closePostForm();
+    
+  } catch (error) {
+    console.error("Firebaseへの保存に失敗:", error);
+    alert("投稿に失敗しました。コンソールを確認してください。");
+  }
 });
 
 /* 初期状態である投稿要素があればハンドラを付与 */
@@ -4051,8 +4043,6 @@ document.querySelectorAll(".post").forEach(p => attachReactionHandlers(p));
 
 /* ======= マイウォレット画面 ======= */
 function renderWallet() {
-  // 💡 【修正】投稿を数える古いロジック(goodTotalなど)は、スマコン移行後は不要なので削除しました。
-
   // 1. 予定Emuer数を画面に表示
   const pendingEl = document.getElementById("walletEmuerCount");
   if (pendingEl) pendingEl.textContent = pendingEmuer;
@@ -5491,6 +5481,31 @@ function openMarketplace() {
     </div>
   </div>
 </div>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, getDocs, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  // 画像3枚目にあった設定（そのまま使えます）
+  const firebaseConfig = {
+    apiKey: "AIzaSyC1DxDoszk8iryEcYrfUZWowN2V1FGaV0Y",
+    authDomain: "emu-schoolpark.firebaseapp.com",
+    projectId: "emu-schoolpark",
+    storageBucket: "emu-schoolpark.firebasestorage.app",
+    messagingSenderId: "961356157466",
+    appId: "1:961356157466:web:96a4536b35c57d46ee77a3",
+    measurementId: "G-RY03BJF8JJ"
+  };
+
+  // 初期化
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // あなたの既存のJSから使えるように「窓口(window)」に登録
+  window.db = db;
+  window.fbLib = { collection, addDoc, getDocs, query, orderBy, onSnapshot };
+
+  console.log("🔥 Firebase Ready!");
+</script>
 
 </body>
 </html>
