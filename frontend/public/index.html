@@ -4642,35 +4642,40 @@ async function filterTrendPosts() {
   const postFeed = document.getElementById("postFeed");
   if (!postFeed) return;
 
-  console.log(`📡 トレンド（テーマ：${currentTheme}）を取得中...`);
   postFeed.innerHTML = "<p>読み込み中...</p>";
 
   try {
     const postsRef = window.fbLib.collection(window.db, "posts");
-    // tags 配列の中に currentTheme が含まれるものを検索
-    const q = window.fbLib.query(
-      postsRef,
-      window.fbLib.where("tags", "array-contains", currentTheme),
-      window.fbLib.orderBy("createdAt", "desc")
-    );
+    // まずは最新順に全取得し、プログラム側でタグ判定（確実な方法）
+    const q = window.fbLib.query(postsRef, window.fbLib.orderBy("createdAt", "desc"));
     const querySnapshot = await window.fbLib.getDocs(q);
 
     postFeed.innerHTML = `<h2>🔥 トレンド: ${currentTheme}</h2>`;
-
-    if (querySnapshot.empty) {
-      postFeed.innerHTML += "<p>このテーマの投稿はまだありません</p>";
-      return;
-    }
+    let foundCount = 0;
 
     querySnapshot.forEach((doc) => {
-      const postData = { id: doc.id, ...doc.data() };
-      postFeed.appendChild(createPostElementFromData(postData));
+      const data = doc.data();
+      const tags = data.tags;
+      
+      // 文字列でも配列でも判定できるようにする
+      const hasTag = Array.isArray(tags) 
+        ? tags.includes(currentTheme) 
+        : (typeof tags === "string" && tags.includes(currentTheme));
+
+      if (hasTag) {
+        postFeed.appendChild(createPostElementFromData({ id: doc.id, ...data }));
+        foundCount++;
+      }
     });
+
+    if (foundCount === 0) {
+      postFeed.innerHTML += `<p>「${currentTheme}」の投稿はまだありません</p>`;
+    }
   } catch (e) {
     console.error("トレンド取得エラー:", e);
-    postFeed.innerHTML = "<p>データの取得に失敗しました（インデックス作成が必要かもしれません）</p>";
   }
 }
+
 
 // おすすめ用
 async function filterRecommendedPosts() {
@@ -4725,14 +4730,15 @@ async function filterNewPosts() {
   const postFeed = document.getElementById("postFeed");
   if (!postFeed) return;
 
-  console.log("📡 24時間以内の新規投稿を取得中...");
   postFeed.innerHTML = "<p>読み込み中...</p>";
 
   try {
     const postsRef = window.fbLib.collection(window.db, "posts");
-    // 24時間前の時刻を計算
+    
+    // 24時間前のミリ秒
     const yesterday = Date.now() - (24 * 60 * 60 * 1000);
     
+    // createdAt がミリ秒(数値)で保存されていることを前提に検索
     const q = window.fbLib.query(
       postsRef,
       window.fbLib.where("createdAt", ">=", yesterday),
@@ -4748,12 +4754,13 @@ async function filterNewPosts() {
     }
 
     querySnapshot.forEach((doc) => {
-      const postData = { id: doc.id, ...doc.data() };
-      postFeed.appendChild(createPostElementFromData(postData));
+      postFeed.appendChild(createPostElementFromData({ id: doc.id, ...doc.data() }));
     });
   } catch (e) {
     console.error("新規取得エラー:", e);
-    postFeed.innerHTML = "<p>データの取得に失敗しました</p>";
+    // エラーが出る場合は createdAt の形式が違う可能性があるので、全取得して比較
+    console.log("fallback実行...");
+    refreshAllPosts(); 
   }
 }
 
@@ -4769,7 +4776,7 @@ document.getElementById("filterNewBtn")?.addEventListener("click", () => {
 document.getElementById("filterGoodBtn")?.addEventListener("click", () => {
   const userType = getCurrentUserType();
   if (userType === "guest") return showUpgradeModal("guestToWallet");
-  if (userType === "free") return showUpgradeModal("freeToPaid");
+  /*if (userType === "free") return showUpgradeModal("freeToPaid");*/
   filterHighGoodPosts();
 });
 
@@ -4777,7 +4784,7 @@ document.getElementById("filterGoodBtn")?.addEventListener("click", () => {
 document.getElementById("filterChangeBtn")?.addEventListener("click", () => {
   const userType = getCurrentUserType();
   if (userType === "guest") return showUpgradeModal("guestToWallet");
-  if (userType === "free") return showUpgradeModal("freeToPaid");
+  /*if (userType === "free") return showUpgradeModal("freeToPaid");*/
   filterHighChangePosts();
 });
 
