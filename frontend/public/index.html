@@ -4726,43 +4726,57 @@ if (refreshBtn) {
 }
 
 // ✅ 新規：24時間以内の投稿を取得
+// ✅ 新規：24時間以内の投稿を取得（型に依存しない確実版）
 async function filterNewPosts() {
   const postFeed = document.getElementById("postFeed");
   if (!postFeed) return;
 
+  console.log("📡 24時間以内の投稿をスキャン中...");
   postFeed.innerHTML = "<p>読み込み中...</p>";
 
   try {
     const postsRef = window.fbLib.collection(window.db, "posts");
-    
-    // 24時間前のミリ秒
-    const yesterday = Date.now() - (24 * 60 * 60 * 1000);
-    
-    // createdAt がミリ秒(数値)で保存されていることを前提に検索
-    const q = window.fbLib.query(
-      postsRef,
-      window.fbLib.where("createdAt", ">=", yesterday),
-      window.fbLib.orderBy("createdAt", "desc")
-    );
+    // まずは最新順に全取得
+    const q = window.fbLib.query(postsRef, window.fbLib.orderBy("createdAt", "desc"));
     const querySnapshot = await window.fbLib.getDocs(q);
 
     postFeed.innerHTML = "<h2>✨ 新規投稿 (24時間以内)</h2>";
-
-    if (querySnapshot.empty) {
-      postFeed.innerHTML += "<p>24時間以内の新規投稿はありません</p>";
-      return;
-    }
+    const now = Date.now(); // 現在時刻（ミリ秒）
+    const dayInMs = 24 * 60 * 60 * 1000; // 24時間のミリ秒
+    let foundCount = 0;
 
     querySnapshot.forEach((doc) => {
-      postFeed.appendChild(createPostElementFromData({ id: doc.id, ...doc.data() }));
+      const data = doc.data();
+      let postTime = 0;
+
+      // --- 投稿日時の型を判定して数値に変換 ---
+      if (typeof data.createdAt === "number") {
+        postTime = data.createdAt; // すでに数値の場合
+      } else if (data.createdAt && data.createdAt.toMillis) {
+        postTime = data.createdAt.toMillis(); // Firebase Timestamp型の場合
+      } else if (data.createdAt && data.createdAt.seconds) {
+        postTime = data.createdAt.seconds * 1000; // 秒単位で入っている場合
+      }
+
+      // 24時間以内（現在時刻との差が1日分以内）なら表示
+      if (postTime > 0 && (now - postTime) <= dayInMs) {
+        const postElement = createPostElementFromData({ id: doc.id, ...data });
+        postFeed.appendChild(postElement);
+        foundCount++;
+      }
     });
+
+    if (foundCount === 0) {
+      postFeed.innerHTML += "<p>24時間以内の新規投稿はありません</p>";
+    }
+    console.log(`✅ ${foundCount}件の新規投稿を表示しました`);
+
   } catch (e) {
     console.error("新規取得エラー:", e);
-    // エラーが出る場合は createdAt の形式が違う可能性があるので、全取得して比較
-    console.log("fallback実行...");
-    refreshAllPosts(); 
+    postFeed.innerHTML = "<p>取得に失敗しました</p>";
   }
 }
+
 
 // ✅ ボタンのイベント登録
 document.getElementById("filterTrendBtn")?.addEventListener("click", filterTrendPosts);
@@ -4776,7 +4790,7 @@ document.getElementById("filterNewBtn")?.addEventListener("click", () => {
 document.getElementById("filterGoodBtn")?.addEventListener("click", () => {
   const userType = getCurrentUserType();
   if (userType === "guest") return showUpgradeModal("guestToWallet");
-  /*if (userType === "free") return showUpgradeModal("freeToPaid");*/
+  if (userType === "free") return showUpgradeModal("freeToPaid");
   filterHighGoodPosts();
 });
 
@@ -4784,7 +4798,7 @@ document.getElementById("filterGoodBtn")?.addEventListener("click", () => {
 document.getElementById("filterChangeBtn")?.addEventListener("click", () => {
   const userType = getCurrentUserType();
   if (userType === "guest") return showUpgradeModal("guestToWallet");
-  /*if (userType === "free") return showUpgradeModal("freeToPaid");*/
+  if (userType === "free") return showUpgradeModal("freeToPaid");
   filterHighChangePosts();
 });
 
