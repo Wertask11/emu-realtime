@@ -4041,9 +4041,8 @@ function renderPosts(postList = posts) {
 }
 
 
-/* 投稿フォーム・投稿処理 submit */
 /* 投稿フォーム submit (Firebase版) */
-postForm.addEventListener("submit", async function (e) { // asyncを追加
+postForm.addEventListener("submit", async function (e) {
   e.preventDefault();
 
   const title = postTitleInput.value.trim();
@@ -4057,28 +4056,32 @@ postForm.addEventListener("submit", async function (e) { // asyncを追加
 
   // --- Firebase保存処理 ---
   try {
+    // 💡 投稿の瞬間に改めてNFTチェックを走らせ、判定を確定させる
+    // これでテスターさんの「ゲストバッジ問題」を防ぎます
+    if (window.checkHexaNFT) await window.checkHexaNFT();
+    if (window.checkFreeNFT) await window.checkFreeNFT();
+
     const userType = getCurrentUserType();
     const postData = {
       title: title,
       body: body,
       tags: tags,
-      userType: userType, // ここで 'paid' か 'free' か 'guest' が入ります
+      userType: userType, 
       address: window.connectedAccount || "unknown",
       userId: currentUserId || "guest",
-      updatedAt: new Date() // 更新日時を記録
+      updatedAt: new Date()
     };
 
-    // 編集中のIDがあるかチェック
     const editingId = localStorage.getItem("editingPostId");
 
     if (editingId) {
-      // 【更新モード】既存の投稿を上書き
+      // 【更新モード】
       const postRef = window.fbLib.doc(window.db, "posts", editingId);
       await window.fbLib.updateDoc(postRef, postData);
       console.log("✅ 投稿を更新しました:", editingId);
-      localStorage.removeItem("editingPostId"); // 終わったらクリア
+      localStorage.removeItem("editingPostId");
     } else {
-      // 【新規モード】新しく投稿
+      // 【新規モード】
       postData.createdAt = new Date();
       postData.goodCount = 0;
       postData.changeCount = 0;
@@ -4086,22 +4089,28 @@ postForm.addEventListener("submit", async function (e) { // asyncを追加
       console.log("✅ 新規投稿を作成しました");
     }
 
-    // 成功したら画面を閉じる等の処理（既存のコードをここに）
-    closePostModal(); 
-
+    // ❌ 修正: closePostModal(); は削除（存在しないため）
+    
     alert("🔥 Firebaseに投稿が保存されました！");
     
     // 入力欄をクリアして閉じる
     postTitleInput.value = "";
     postBodyInput.value = "";
     postTagsInput.value = "";
+    
+    // ✅ 正しい関数名で閉じる
     closePostForm();
+
+    // 画面をリロードして反映を確認
+    location.reload();
     
   } catch (error) {
     console.error("Firebaseへの保存に失敗:", error);
-    alert("投稿に失敗しました。コンソールを確認してください。");
+    // エラー内容を具体的に出して、原因特定をしやすくする
+    alert("投稿に失敗しました。理由: " + error.message);
   }
 });
+
 
 /* 初期状態である投稿要素があればハンドラを付与 */
 document.querySelectorAll(".post").forEach(p => attachReactionHandlers(p));
