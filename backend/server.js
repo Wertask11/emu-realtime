@@ -18,7 +18,7 @@ const server = http.createServer(app);
 // ★ここを書き換え
 const io = new Server(server, {
   cors: {
-    origin: "https://emu-realtime-qzrq.vercel.app", // 特定のURLのみ許可して安定させる
+    origin: "https://schoolpark-emu.vercel.app/", // 特定のURLのみ許可して安定させる
     methods: ["GET", "POST"],
     credentials: true
   }
