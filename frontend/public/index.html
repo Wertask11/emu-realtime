@@ -3307,7 +3307,68 @@ logoScreen.addEventListener("click", () => {
 const AMOY_CHAIN_ID = "0x13882"; // 80002
 const SEPOLIA_CHAIN_ID = "0xaa36a7"; // 11155111
 
-// --- [3] checkHexaNFT の修正：テスト環境では動かさない ---
+// --- [2] 接続ボタン（connectWalletButton）の処理を復活（修正版を組み込み） ---
+document.getElementById("connectWalletButton").addEventListener("click", async () => {
+  if (typeof window.ethereum === "undefined") {
+    alert("MetaMaskがインストールされていません。");
+    return;
+  }
+
+  try {
+    // ① ウォレット接続要求
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const account = accounts[0];
+    window.connectedAccount = account;
+    currentUserId = account;
+
+    console.log("🦊 Wallet Connected:", account);
+
+    // ② ネットワークチェック
+    const chainId = await window.ethereum.request({ method: "eth_chainId" });
+    const POLYGON_MAINNET = "0x89";   // 137
+    const AMOY_TESTNET = "0x13882";  // 80002
+
+    // ★テスト中はここを柔軟にする（AmoyかPolygonなら通す）
+    if (chainId !== POLYGON_MAINNET && chainId !== AMOY_TESTNET) {
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: AMOY_TESTNET }] // 一旦テスト用にAmoyを優先
+        });
+      } catch (e) {
+        console.log("切り替えキャンセル");
+      }
+    }
+
+    // ③ 公式NFTチェックの実行（修正後の関数を呼ぶ）
+    await window.checkHexaNFT();
+    await window.checkFreeNFT();
+
+    window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT;
+    console.log("🏫 公式NFT最終判定:", window.hasOfficialNFT);
+
+    // ④ ethers.js 初期化
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    signer = provider.getSigner();
+    
+    // コントラクト再セット
+    emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_CONTRACT_ABI, signer);
+
+    // ⑤ UI更新してメインへ
+    localStorage.removeItem("userMode");
+    const walletAddressButton = document.getElementById("walletAddressButton");
+    if (walletAddressButton) {
+      walletAddressButton.textContent = account.substring(0, 6) + "..." + account.slice(-4);
+    }
+    
+    goTomainapp();
+
+  } catch (err) {
+    console.error("❌ 接続エラー:", err);
+  }
+});
+
+// --- [3] checkHexaNFT の修正（メインネット以外では走らせない） ---
 window.checkHexaNFT = async function () {
   if (!window.connectedAccount) return;
 
@@ -3315,12 +3376,10 @@ window.checkHexaNFT = async function () {
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const network = await provider.getNetwork();
 
-    // ★重要：Polygonメインネット(137)の時だけ重いチェックを実行
     if (network.chainId === 137) { 
       const hexaAddr = "0xC333F84fd2FD86760e7dC5a288b7a9D4128F2Dab";
       const osAddr = "0x20a32466e6d9c43d73c569b8a934e6622d89c2db";
       const abi = ["function balanceOf(address account, uint256 id) view returns (uint256)"];
-      
       const hexaContract = new ethers.Contract(hexaAddr, abi, provider);
       const osContract = new ethers.Contract(osAddr, abi, provider);
       const targetAddr = window.connectedAccount;
@@ -3334,30 +3393,21 @@ window.checkHexaNFT = async function () {
 
       const allBalances = await Promise.all([...hexaChecks, ...osChecks]);
       window.hasPaidNFT = allBalances.some(b => b.gt(0));
-      console.log("💎 メインネットNFT判定:", window.hasPaidNFT);
     } else {
-      // テストネット（SepoliaやAmoy）ではスキップ
-      console.log("⚠️ テストネットワークのため、メインネット用NFTチェックをスキップしました");
       window.hasPaidNFT = false;
     }
   } catch (e) {
-    console.error("❌ NFTチェックエラー:", e);
     window.hasPaidNFT = false;
   }
 };
 
+// --- [4] checkFreeNFT の修正 ---
 window.checkFreeNFT = async function () {
   try {
     const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const network = await provider.getNetwork();
-
-    // 💡 SepoliaやAmoyなど、適切なテストネットの時だけチェックする
-    // getOfficialNFT("free") が現在のネットワークに対応したアドレスを返すようにしてください
     const freeNFT = getOfficialNFT("free");
     
-    // アドレスが定義されていない、または形式が不正な場合は実行しない（CALL_EXCEPTION防止）
-    if (!freeNFT || !freeNFT.contract || freeNFT.contract === "0x0000000000000000000000000000000000000000") {
-        console.log("🆓 このネットワークには無料NFTが設定されていません");
+    if (!freeNFT || !freeNFT.contract || freeNFT.contract.startsWith("0x000")) {
         window.hasFreeNFT = false;
         return;
     }
@@ -3365,13 +3415,11 @@ window.checkFreeNFT = async function () {
     const nft = new ethers.Contract(freeNFT.contract, ["function balanceOf(address) view returns (uint256)"], provider);
     const balance = await nft.balanceOf(window.connectedAccount);
     window.hasFreeNFT = balance.gt(0);
-    console.log("✅ 無料NFTチェック完了:", window.hasFreeNFT);
-
   } catch (e) {
-    console.warn("❌ 無料NFTチェック失敗（コントラクト未デプロイの可能性）", e.message);
     window.hasFreeNFT = false;
   }
 };
+
 
 //取引所制限
 function canUseExchange() {
