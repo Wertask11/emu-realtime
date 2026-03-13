@@ -5561,14 +5561,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkAccess();
 
   // 3秒ごとにチェック（交換完了を検知して自動でアンロック）
-  const intervalId = setInterval(async () => {
-    // すでに解放されていたらチェックを止める（負荷軽減）
-    if (!uploadInput.disabled) {
-       // 解放済みなら何もしない
-    } else {
-       await checkAccess();
-    }
-  }, 3000);
+const intervalId = setInterval(async () => {
+  // 🛡️ ガード追加：ウォレットが繋がっていないなら何もしない
+  if (!window.connectedAccount) return;
+
+  if (!uploadInput.disabled) {
+     // 解放済みなら何もしない
+  } else {
+     // checkAccess自体を呼ぶのを一旦止めるか、条件を絞る
+     // await checkAccess(); 
+  }
+}, 3000);
+
 
   // アカウント切り替え時
   if (window.ethereum) {
