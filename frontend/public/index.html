@@ -3093,35 +3093,39 @@ setTimeout(() => {
   import { 
     getFirestore, collection, addDoc, getDocs, query, orderBy, onSnapshot,
     doc, updateDoc, increment, where, 
-    arrayUnion // ← 重複防止に必須な機能を追加
+    arrayUnion 
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  // 認証機能（MetaMaskログイン等で使用）も本番用に準備
+  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
+  // 【本番用】Firebase設定
   const firebaseConfig = {
-    apiKey: "AIzaSyC1DxDoszk8iryEcYrfUZWowN2V1FGaV0Y",
-    authDomain: "emu-schoolpark.firebaseapp.com",
-    projectId: "emu-schoolpark",
-    storageBucket: "emu-schoolpark.firebasestorage.app",
-    messagingSenderId: "961356157466",
-    appId: "1:961356157466:web:96a4536b35c57d46ee77a3",
-    measurementId: "G-RY03BJF8JJ"
+    apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
+    authDomain: "emusch-2a111.firebaseapp.com",
+    projectId: "emusch-2a111",
+    storageBucket: "emusch-2a111.firebasestorage.app",
+    messagingSenderId: "795496371585",
+    appId: "1:795496371585:web:51deec91b8a2152e4c8480",
+    measurementId: "G-JZ5LJJ5X1C"
   };
 
   // 初期化
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  const auth = getAuth(app);
 
   // 外部ファイル（script.js）から使えるように窓口を作る
   window.db = db;
+  window.auth = auth; // 認証も外部から使えるように追加
   window.fbLib = { 
     collection, addDoc, getDocs, query, orderBy, onSnapshot,
     doc, updateDoc, increment, where, 
-    arrayUnion // ← ここにも忘れず追加！
+    arrayUnion,
+    signInAnonymously // 匿名認証用
   };
 
-  console.log("🔥 Firebase Ready with Query & Security functions!");
+  console.log("🚀 Production Firebase (EmuSch) is Ready!");
 </script>
-
-
 
 </body>
 </html>
