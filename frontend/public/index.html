@@ -2951,6 +2951,9 @@ jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
 	if (typeof updateBonusCountdown === "function") {
         await updateBonusCountdown(); 
     }
+if (typeof updateConvertButton === "function") {
+    updateConvertButton();
+}
     goTomainapp();
 
   } catch (err) {
@@ -3813,27 +3816,35 @@ function updateConvertButton() {
   if (!convertBtn) return;
 
   const now = new Date();
-  const day = now.getDay(); // 0:日, 1:月, ..., 6:土
+  const day = now.getDay(); 
   
-  // ユーザー種別を取得（あなたの既存システム window.emuAuth.type を参照）
-  const userType = window.emuAuth?.type || "guest"; 
+  // window.hasPaidNFT や window.hasFreeNFT は接続コードの中で判定されているはず
+  let userType = "guest";
+  if (window.hasPaidNFT) {
+    userType = "paidNFT";
+  } else if (window.hasFreeNFT) {
+    userType = "freeNFT";
+  } else if (window.connectedAccount) {
+    // ウォレットは繋がっているがNFTがない状態（必要なら）
+    userType = "walletUser"; 
+  }
 
   console.log("--- 変換ボタンの状態チェック ---");
-  console.log("ユーザー種別:", userType);
+  console.log("判定された種別:", userType);
 
-  // 1. 【ゲスト】は常に禁止
-  if (userType === "guest" && !isTestMode) {
-    lockButton(convertBtn, "ゲストは変換できません");
+  // 1. 【ゲスト】チェック（アドレスすら無い場合）
+  if (!window.connectedAccount && !isTestMode) {
+    lockButton(convertBtn, "ウォレットを接続してください");
     return;
   }
 
   // 2. 【有料NFT】はいつでもOK
   if (userType === "paidNFT" || isTestMode) {
-    unlockButton(convertBtn, isTestMode && day !== 1 ? "変換（テスト中）" : "変換を実行");
+    unlockButton(convertBtn, "変換を実行");
     return;
   }
 
-  // 3. 【無料NFT】は月曜日(1)のみ
+  // 3. 【無料NFT】は月曜日のみ
   if (userType === "freeNFT") {
     if (day === 1) {
       unlockButton(convertBtn, "変換を実行");
@@ -3843,9 +3854,10 @@ function updateConvertButton() {
     return;
   }
 
-  // それ以外（念のためロック）
-  lockButton(convertBtn, "利用不可");
+  // それ以外（NFTを持っていないウォレットユーザーなど）
+  lockButton(convertBtn, "NFTが必要です");
 }
+
 
 // 🔒 ボタンを無効化する補助関数
 function lockButton(btn, text) {
