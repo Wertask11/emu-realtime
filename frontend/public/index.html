@@ -3883,8 +3883,15 @@ function unlockButton(btn, text) {
 
 
 /* ======= 3. 変換実行処理（一括処理） ======= */
+/* ======= 3. 変換実行処理（一括処理） ======= */
 async function handleConversion() {
-  const userType = window.emuAuth?.type || "guest";
+  // --- 判定ロジックを updateConvertButton と同じものに修正 ---
+  let userType = "guest";
+  if (window.hasPaidNFT) {
+    userType = "paidNFT";
+  } else if (window.hasFreeNFT) {
+    userType = "freeNFT";
+  }
 
   // ゲストを弾く
   if (userType === "guest" && !isTestMode) {
@@ -3892,26 +3899,27 @@ async function handleConversion() {
     return;
   }
 
-  // 無料ユーザーの月曜チェック（テストモード以外）
+  // 無料ユーザーの月曜チェック
   if (userType === "freeNFT" && new Date().getDay() !== 1 && !isTestMode) {
     alert("無料ユーザーは月曜日のみ変換可能です。");
     return;
   }
 
-  // --- 以降は、これまでの正常な変換処理 ---
-  const accounts = await ethereum.request({ method: 'eth_accounts' });
-  const myAddr = accounts[0];
+  // --- 以降、変換処理 ---
+  // window.connectedAccount があるはずなのでそれを使う
+  const myAddr = window.connectedAccount;
+  if (!myAddr) {
+    alert("ウォレットを接続してください");
+    return;
+  }
   
   await syncPendingEmuer();
   
-  if (pendingEmuer <= 0) {
-    alert("変換できるポイントがありません");
-    return;
-  }
-
+  // (以下、既存の try-catch 処理はそのまま)
+  const btn = document.getElementById("convertButton"); // 変数名を合わせる
   try {
-    convertButton.disabled = true;
-    convertButton.textContent = "処理中...";
+    btn.disabled = true;
+    btn.textContent = "処理中...";
 
     const userData = await emuerContract.users(myAddr);
 
@@ -3933,9 +3941,6 @@ async function handleConversion() {
     updateConvertButton();
   }
 }
-
-// 紐付け
-convertButton.onclick = handleConversion;
 
 
 // 初期設定（最上部）
@@ -4010,10 +4015,10 @@ function openRoom(roomId) {
   closeExplore();
 
   // 🚫 無料NFTユーザーは room1 NG
- /* if (roomId === 1 && isFreeOnlyUser()) {
+ if (roomId === 1 && isFreeOnlyUser()) {
     alert("無料NFTユーザーはRoom1を利用できません。\n有料NFTを取得すると解放されます。");
     return;
-  }*/
+  }
 
   if (roomId === 1) {
     openRoom1();
