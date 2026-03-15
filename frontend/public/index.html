@@ -3883,7 +3883,6 @@ function unlockButton(btn, text) {
 
 
 /* ======= 3. 変換実行処理（一括処理） ======= */
-/* ======= 3. 変換実行処理（一括処理） ======= */
 async function handleConversion() {
   // --- 判定ロジックを updateConvertButton と同じものに修正 ---
   let userType = "guest";
@@ -3921,13 +3920,23 @@ async function handleConversion() {
     btn.disabled = true;
     btn.textContent = "処理中...";
 
+    // 1. 最新の残高をコントラクトから取得
     const userData = await emuerContract.users(myAddr);
 
-    if (userData.good > 0) {
+    // 2. good も change も 0 ならここで止める！
+    if (Number(userData.good) === 0 && Number(userData.change) === 0) {
+      alert("変換に必要なgood・change数がありません！");
+      btn.disabled = false;
+      btn.textContent = "変換を実行";
+      return; 
+    }
+
+    // 3. どちらかが 0 より大きい場合のみ通信
+    if (Number(userData.good) > 0) {
       const tx1 = await emuerContract.convertGood(userData.good);
       await tx1.wait();
     }
-    if (userData.change > 0) {
+    if (Number(userData.change) > 0) {
       const tx2 = await emuerContract.convertChange(userData.change);
       await tx2.wait();
     }
