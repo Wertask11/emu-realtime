@@ -87,7 +87,9 @@ async function showWalletSuccessModal(account) {
 
   // ① 現在のEmuer残高を即取得
   try {
-    const contract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_CONTRACT_ABI, provider);
+    // ★ provider を毎回新しく作る（既存のglobal providerが古い場合の対策）
+    const _provider = new ethers.providers.Web3Provider(window.ethereum);
+    const contract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_CONTRACT_ABI, _provider);
     const balBN = await contract.balanceOf(account);
     const bal = parseFloat(ethers.utils.formatUnits(balBN, 18));
     amountEl.textContent = bal % 1 === 0 ? bal.toFixed(0) : bal.toFixed(4);
