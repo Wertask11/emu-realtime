@@ -164,7 +164,7 @@ async function _registerAirdrop(account) {
     localStorage.setItem(alreadyKey, "1");
     console.log("🎉 エアドロ登録完了:", account);
     _showAirdropBanner("new");
-
+_showReceiveToast(document.getElementById("wsBalanceCard"), "+100 EMUER");
   } catch (err) {
     console.error("エアドロ登録エラー:", err.message);
     _showAirdropBanner("pending");
