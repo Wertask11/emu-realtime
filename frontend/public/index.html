@@ -478,9 +478,10 @@ async function checkGenesisStatus(address) {
     const docRef = window.fbLib.doc(
       window.db, "airdrop_registrations", address.toLowerCase()
     );
-    const snap = await docRef.get();
-    return snap.exists;
+    const snap = await window.fbLib.getDoc(docRef);
+    return snap.exists();
   } catch(e) {
+    console.error("GENESIS確認エラー:", e);
     return false;
   }
 }
@@ -5508,10 +5509,10 @@ setTimeout(() => {
 <script type="module">
   // Firebase 本体と Firestore 機能を読み込む
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { 
+import { 
     getFirestore, collection, addDoc, getDocs, query, orderBy, onSnapshot,
     doc, updateDoc, increment, where, 
-    arrayUnion 
+    arrayUnion, getDoc
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   // 認証機能（MetaMaskログイン等で使用）も本番用に準備
   import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -5535,11 +5536,11 @@ setTimeout(() => {
   // 外部ファイル（script.js）から使えるように窓口を作る
   window.db = db;
   window.auth = auth; // 認証も外部から使えるように追加
-  window.fbLib = { 
+window.fbLib = { 
     collection, addDoc, getDocs, query, orderBy, onSnapshot,
     doc, updateDoc, increment, where, 
-    arrayUnion,
-    signInAnonymously // 匿名認証用
+    arrayUnion, getDoc,
+    signInAnonymously
   };
 
   console.log("🚀 Production Firebase (EmuSch) is Ready!");
