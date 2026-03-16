@@ -130,6 +130,14 @@ body.free .paid-only {display: none;}
   cursor: pointer;
 }
 
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(46,204,113,0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(46,204,113,0); }
+}
+#airdropCounter {
+  animation: pulse 2s infinite;
+}
+
 </style>
 </head>
 <body>
@@ -144,6 +152,30 @@ body.free .paid-only {display: none;}
   style="display:none;justify-content:center;align-items:center;height:100vh;flex-direction:column;gap:20px;">
 
   <h2>利用方法を選んでください！</h2>
+
+<!-- ★ リアルタイム接続者カウンター -->
+<div id="airdropCounter" style="
+  background: linear-gradient(135deg, #0f1f0f, #1a2e1a);
+  border: 1px solid #2a5c2a;
+  border-radius: 12px;
+  padding: 12px 24px;
+  text-align: center;
+  margin-bottom: 8px;
+">
+  <div style="font-size: 12px; color: #7ec87e; margin-bottom: 4px; letter-spacing: 1px;">
+    🔴 LIVE · エアドロ参加状況
+  </div>
+  <div style="font-size: 28px; font-weight: bold; color: #fff;">
+    <span id="connectedCount">--</span>
+    <span style="font-size: 14px; color: #aaa;">/ 100 名</span>
+  </div>
+  <div style="font-size: 13px; color: #ff9966; margin-top: 4px;">
+    残り <span id="remainingCount" style="font-weight:bold; color:#ff6633;">--</span> 枠
+  </div>
+  <div style="background:#1a3a1a;border-radius:6px;height:6px;margin-top:8px;overflow:hidden;">
+    <div id="progressBar" style="height:100%;background:linear-gradient(90deg,#2ecc71,#f39c12);width:0%;transition:width 0.8s ease;border-radius:6px;"></div>
+  </div>
+</div>
 
   <!-- ① 通常ウォレット接続（既存） -->
   <button id="connectWalletButton"
@@ -438,6 +470,29 @@ body.free .paid-only {display: none;}
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script src="/wallet-success-ui.js"></script>
 <script>
+	// ★ リアルタイム接続者カウンター
+function startAirdropCounter() {
+  if (!window.fbLib || !window.db) {
+    setTimeout(startAirdropCounter, 500);
+    return;
+  }
+  const colRef = window.fbLib.collection(window.db, "airdrop_registrations");
+  window.fbLib.onSnapshot(colRef, (snapshot) => {
+    const count = snapshot.size;
+    const remaining = Math.max(0, 100 - count);
+    const pct = Math.min(100, (count / 100) * 100);
+    const countEl = document.getElementById("connectedCount");
+    const remainEl = document.getElementById("remainingCount");
+    const barEl = document.getElementById("progressBar");
+    if (countEl) countEl.textContent = count;
+    if (remainEl) {
+      remainEl.textContent = remaining;
+      remainEl.style.color = remaining <= 10 ? "#ff3333" : "#ff6633";
+    }
+    if (barEl) barEl.style.width = pct + "%";
+  });
+}
+startAirdropCounter();
 document.addEventListener("DOMContentLoaded", async () => {
   const walletAddressButton = document.getElementById("walletAddressButton");
   const userMode = localStorage.getItem("userMode"); // ★ゲストかどうかを確認
