@@ -292,6 +292,90 @@ airdropRouter.post("/batch/run", async (req, res) => {
 app.use("/airdrop", airdropRouter);
 
 // =====================
+// ★ 初投稿ボーナス API
+// =====================
+const firstPostRouter = express.Router();
+
+// POST /first-post/register — 投稿フォームから呼ぶ
+firstPostRouter.post("/register", async (req, res) => {
+  const { address } = req.body;
+  if (!address) return res.status(400).json({ error: "MISSING_ADDRESS" });
+  if (!db) return res.json({ success: true, message: "テストモード" });
+
+  try {
+    const docRef = db.collection("first_post_bonus")
+      .doc(address.toLowerCase());
+    const existing = await docRef.get();
+    if (existing.exists) {
+      return res.status(409).json({ error: "ALREADY_REGISTERED" });
+    }
+    await docRef.set({
+      address: address.toLowerCase(),
+      registeredAt: new Date(),
+      status: "pending",
+      amount: "30"
+    });
+    console.log("✅ 初投稿ボーナス登録:", address);
+    return res.json({ success: true });
+  } catch(e) {
+    console.error("初投稿ボーナス登録エラー:", e);
+    return res.status(500).json({ error: "SERVER_ERROR" });
+  }
+});
+
+app.use("/first-post", firstPostRouter);
+
+// ★ 初投稿ボーナス バッチ（毎日AM2:10 JST）
+async function runFirstPostBatch() {
+  if (!db || !emuerContract) return;
+  console.log("🚀 初投稿ボーナスバッチ開始:", new Date().toISOString());
+
+  try {
+    const snapshot = await db.collection("first_post_bonus")
+      .where("status", "==", "pending")
+      .limit(50).get();
+
+    if (snapshot.empty) { console.log("ℹ️ 初投稿ボーナス対象なし"); return; }
+
+    const addresses = snapshot.docs.map(d => d.data().address);
+    const amounts = addresses.map(() =>
+      ethers.utils.parseUnits("30", 18)
+    );
+
+    const batch = db.batch();
+    snapshot.docs.forEach(doc =>
+      batch.update(doc.ref, { status: "processing" })
+    );
+    await batch.commit();
+
+    const tx = await emuerContract.addGoodBatch(addresses, amounts, {
+      maxPriorityFeePerGas: ethers.utils.parseUnits("40", "gwei"),
+      maxFeePerGas: ethers.utils.parseUnits("100", "gwei"),
+      gasLimit: 500000
+    });
+    const receipt = await tx.wait();
+
+    const doneBatch = db.batch();
+    snapshot.docs.forEach(doc =>
+      doneBatch.update(doc.ref, {
+        status: "done",
+        txHash: receipt.transactionHash,
+        processedAt: new Date()
+      })
+    );
+    await doneBatch.commit();
+    console.log(`🎉 初投稿ボーナス完了: ${addresses.length}件`);
+  } catch(err) {
+    console.error("❌ 初投稿ボーナスバッチエラー:", err);
+  }
+}
+
+cron.schedule("10 2 * * *", () => {
+  console.log("⏰ 初投稿ボーナスバッチ起動");
+  runFirstPostBatch();
+}, { timezone: "Asia/Tokyo" });
+
+// =====================
 // ★ Dプラン: cron スケジュール（毎日 AM2:00 JST）
 // =====================
 cron.schedule("0 2 * * *", () => {
@@ -304,6 +388,7 @@ cron.schedule("0 3 15 4 *", () => {
   console.log("🏁 最終エアドロバッチ起動");
   runAirdropBatch();
 }, { timezone: "Asia/Tokyo" });
+
 
 // =====================
 // Room1 path
