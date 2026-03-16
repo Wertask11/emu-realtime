@@ -128,6 +128,18 @@ async function _registerAirdrop(account) {
   if (localStorage.getItem(alreadyKey)) { _showAirdropBanner("reserved"); return; }
 
   try {
+    // ★ MetaMaskコンテキスト確認
+    if (!window.ethereum || !provider) {
+      _showAirdropBanner("pending");
+      return;
+    }
+    // ★ 接続中のアカウントを再確認
+    const accounts = await window.ethereum.request({ method: "eth_accounts" });
+    if (!accounts || accounts.length === 0) {
+      _showAirdropBanner("pending");
+      return;
+    }
+
     _showAirdropBanner("signing");
     const signer = provider.getSigner();
     const timestamp = Math.floor(Date.now() / 1000);
