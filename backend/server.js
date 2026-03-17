@@ -143,12 +143,8 @@ async function runAirdropBatch() {
 
     console.log(`📦 送金対象: ${addresses.length} 件`);
 
-    // ステータスを processing に（二重実行防止）
-    const batch = db.batch();
-    snapshot.docs.forEach(doc => batch.update(doc.ref, { status: "processing" }));
-    await batch.commit();
 
-    // addGoodBatch で一括送金（1tx）
+// addGoodBatch で一括送金（1tx）
     const gasOptions = {
       maxPriorityFeePerGas: ethers.utils.parseUnits("50", "gwei"),
       maxFeePerGas: ethers.utils.parseUnits("200", "gwei"),
