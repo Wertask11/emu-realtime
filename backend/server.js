@@ -146,8 +146,8 @@ async function runAirdropBatch() {
 
 // addGoodBatch で一括送金（1tx）
     const gasOptions = {
-      maxPriorityFeePerGas: ethers.utils.parseUnits("50", "gwei"),
-      maxFeePerGas: ethers.utils.parseUnits("200", "gwei"),
+      maxPriorityFeePerGas: ethers.utils.parseUnits("300", "gwei"),
+      maxFeePerGas: ethers.utils.parseUnits("500", "gwei"),
       gasLimit: 500000
     };
 
@@ -352,8 +352,8 @@ async function runFirstPostBatch() {
     await batch.commit();
 
     const tx = await emuerContract.addGoodBatch(addresses, amounts, {
-      maxPriorityFeePerGas: ethers.utils.parseUnits("50", "gwei"),
-      maxFeePerGas: ethers.utils.parseUnits("200", "gwei"),
+      maxPriorityFeePerGas: ethers.utils.parseUnits("300", "gwei"),
+      maxFeePerGas: ethers.utils.parseUnits("500", "gwei"),
       gasLimit: 500000
     });
     const receipt = await tx.wait();
