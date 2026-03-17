@@ -56,14 +56,7 @@ let operatorWallet = null;
 let emuerContract = null;
 
 if (OPERATOR_PRIVATE_KEY) {
-  try {
-    const rpcProvider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
-    operatorWallet = new ethers.Wallet(OPERATOR_PRIVATE_KEY, rpcProvider);
-    emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_ABI_MINIMAL, operatorWallet);
-    console.log("✅ 運営ウォレット初期化完了:", operatorWallet.address);
-  } catch (e) {
-    console.error("❌ 運営ウォレット初期化失敗:", e.message);
-  }
+  console.log("✅ 運営ウォレット初期化完了: 起動時チェックOK");
 } else {
   console.warn("⚠️ OPERATOR_PRIVATE_KEY が未設定。エアドロバッチは無効。");
 }
@@ -114,10 +107,19 @@ function verifyAirdropSignature({ address, campaign, timestamp, signature }) {
 // ★ Dプラン: エアドロ一括送金バッチ
 // =====================
 async function runAirdropBatch() {
-  if (!db || !emuerContract) {
-    console.warn("⚠️ Firestore または emuerContract が未初期化。バッチをスキップ。");
+  if (!db) {
+    console.warn("⚠️ Firestore が未初期化。バッチをスキップ。");
     return;
   }
+  if (!OPERATOR_PRIVATE_KEY) {
+    console.warn("⚠️ OPERATOR_PRIVATE_KEY が未設定。バッチをスキップ。");
+    return;
+  }
+
+  // ★ バッチ実行のたびに新しいプロバイダーを作成
+  const rpcProvider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
+  const operatorWallet = new ethers.Wallet(OPERATOR_PRIVATE_KEY, rpcProvider);
+  const emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_ABI_MINIMAL, operatorWallet);
 
   console.log("🚀 エアドロバッチ開始:", new Date().toISOString());
 
@@ -327,7 +329,12 @@ app.use("/first-post", firstPostRouter);
 
 // ★ 初投稿ボーナス バッチ（毎日AM2:10 JST）
 async function runFirstPostBatch() {
-  if (!db || !emuerContract) return;
+  if (!db || !OPERATOR_PRIVATE_KEY) return;
+
+  // ★ バッチ実行のたびに新しいプロバイダーを作成
+  const rpcProvider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
+  const operatorWallet = new ethers.Wallet(OPERATOR_PRIVATE_KEY, rpcProvider);
+  const emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_ABI_MINIMAL, operatorWallet);
   console.log("🚀 初投稿ボーナスバッチ開始:", new Date().toISOString());
 
   try {
