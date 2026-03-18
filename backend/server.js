@@ -151,10 +151,22 @@ async function runAirdropBatch() {
       gasLimit: 500000
     };
 
-    console.log("⛽ トランザクション送信中...");
-    const tx = await emuerContract.addGoodBatch(addresses, amounts, gasOptions);
+    // ★ nonceを明示的に取得（詰まり防止）
+    const nonce = await operatorWallet.getTransactionCount("pending");
+    console.log("⛽ トランザクション送信中... nonce:", nonce);
+    const tx = await emuerContract.addGoodBatch(addresses, amounts, {
+      ...gasOptions,
+      nonce
+    });
     console.log("📝 TX Hash:", tx.hash);
     const receipt = await tx.wait();
+    
+    // ★ 送金確定チェック（statusが1=成功のときだけdoneにする）
+    if (!receipt || receipt.status !== 1) {
+      console.error("❌ TX失敗: receipt.status =", receipt?.status);
+      throw new Error("TX failed: status=" + receipt?.status);
+    }
+    
     console.log("✅ TX確定:", receipt.transactionHash);
 
     // done に更新
@@ -351,13 +363,23 @@ async function runFirstPostBatch() {
     );
     await batch.commit();
 
+    const nonce = await operatorWallet.getTransactionCount("pending");
+    console.log("⛽ 初投稿バッチ送信中... nonce:", nonce);
     const tx = await emuerContract.addGoodBatch(addresses, amounts, {
       maxPriorityFeePerGas: ethers.utils.parseUnits("300", "gwei"),
       maxFeePerGas: ethers.utils.parseUnits("500", "gwei"),
-      gasLimit: 500000
+      gasLimit: 500000,
+      nonce
     });
+
+    console.log("📝 初投稿TX Hash:", tx.hash);
     const receipt = await tx.wait();
 
+    // ★ 送金確定チェック
+    if (!receipt || receipt.status !== 1) {
+      console.error("❌ 初投稿TX失敗: receipt.status =", receipt?.status);
+      throw new Error("TX failed: status=" + receipt?.status);
+    }
     const doneBatch = db.batch();
     snapshot.docs.forEach(doc =>
       doneBatch.update(doc.ref, {
