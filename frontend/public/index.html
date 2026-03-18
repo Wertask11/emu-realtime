@@ -3741,10 +3741,16 @@ postForm.addEventListener("submit", async function (e) {
   // --- Firebase保存処理 ---
   try {
     const userType = getCurrentUserType();
+    // ★ タグを正規化（#を除去・カンマorスペース区切りを配列に）
+    const normalizedTags = tags
+      .split(/[,\s]+/)
+      .map(t => t.trim().replace(/^#/, ""))
+      .filter(Boolean);
+
     const postData = {
       title: title,
       body: body,
-      tags: tags,
+      tags: normalizedTags.join(","),
       userType: userType, 
       address: window.connectedAccount || "unknown",
       userId: currentUserId || "guest",
@@ -4442,10 +4448,14 @@ async function filterTrendPosts() {
       const data = doc.data();
       const tags = data.tags;
       
-      // 文字列でも配列でも判定できるようにする
-      const hasTag = Array.isArray(tags) 
-        ? tags.includes(currentTheme) 
-        : (typeof tags === "string" && tags.includes(currentTheme));
+
+      // ★ タグ文字列を分割して判定（#記号も除去）
+      const tagList = Array.isArray(tags)
+        ? tags.map(t => t.replace(/^#/, "").trim())
+        : (typeof tags === "string"
+            ? tags.split(/[,\s]+/).map(t => t.replace(/^#/, "").trim())
+            : []);
+      const hasTag = tagList.some(t => t === currentTheme);
 
       if (hasTag) {
         postFeed.appendChild(createPostElementFromData({ id: doc.id, ...data }));
