@@ -48,8 +48,10 @@ const CAMPAIGN_DEADLINE = new Date("2026-04-14T23:59:59+09:00");
 // addGoodBatch のみ使用（コントラクト改修なし）
 const EMUER_ABI_MINIMAL = [
   "function addGoodBatch(address[] calldata _users, uint256[] calldata _amounts) external",
+  "function transfer(address to, uint256 amount) returns (bool)",
   "function balanceOf(address account) view returns (uint256)"
 ];
+
 
 // 運営ウォレット・コントラクト（OPERATOR_PRIVATE_KEY がある場合のみ初期化）
 let operatorWallet = null;
@@ -151,13 +153,22 @@ async function runAirdropBatch() {
       gasLimit: 500000
     };
 
-    // ★ nonceを明示的に取得（詰まり防止）
-    const nonce = await operatorWallet.getTransactionCount("pending");
-    console.log("⛽ トランザクション送信中... nonce:", nonce);
-    const tx = await emuerContract.addGoodBatch(addresses, amounts, {
-      ...gasOptions,
-      nonce
-    });
+    // ★ 各アドレスに直接transferで送金
+    for (let i = 0; i < addresses.length; i++) {
+      const nonce = await operatorWallet.getTransactionCount("pending");
+      console.log(`⛽ transfer送信中... ${addresses[i]} nonce:`, nonce);
+      const tx = await emuerContract.transfer(addresses[i], amounts[i], {
+        ...gasOptions,
+        nonce
+      });
+      console.log("📝 TX Hash:", tx.hash);
+      const receipt = await tx.wait();
+      if (!receipt || receipt.status !== 1) {
+        throw new Error("TX failed: status=" + receipt?.status);
+      }
+      console.log(`✅ ${addresses[i]} に100EMUER送金完了`);
+    }
+
     console.log("📝 TX Hash:", tx.hash);
     const receipt = await tx.wait();
     
