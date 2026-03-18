@@ -4705,10 +4705,9 @@ async function executeSearch(keyword) {
 
   try {
     const postsRef = window.fbLib.collection(window.db, "posts");
-    // Firebaseでは部分一致検索が難しいため、「タグ配列に完全に含まれるか」で検索します
+    // ★ タグが文字列で保存されているので全件取得して部分一致で検索
     const q = window.fbLib.query(
       postsRef,
-      window.fbLib.where("tags", "array-contains", keyword),
       window.fbLib.orderBy("createdAt", "desc")
     );
     const querySnapshot = await window.fbLib.getDocs(q);
@@ -4716,13 +4715,31 @@ async function executeSearch(keyword) {
     postFeed.innerHTML = `<h2>🔍 「${keyword}」の検索結果</h2>`;
 
     if (querySnapshot.empty) {
-      postFeed.innerHTML += "<p>一致する投稿が見つかりませんでした。タグを正確に入力してください。</p>";
+      postFeed.innerHTML += "<p>投稿がありません</p>";
       return;
     }
 
+    let foundCount = 0;
     querySnapshot.forEach((doc) => {
-      postFeed.appendChild(createPostElementFromData({ id: doc.id, ...doc.data() }));
+      const data = doc.data();
+      const title = data.title || "";
+      const body = data.body || "";
+      const tags = data.tags || "";
+
+      // ★ タイトル・本文・タグのいずれかにキーワードが含まれたら表示
+      if (
+        title.includes(keyword) ||
+        body.includes(keyword) ||
+        tags.includes(keyword)
+      ) {
+        postFeed.appendChild(createPostElementFromData({ id: doc.id, ...data }));
+        foundCount++;
+      }
     });
+
+    if (foundCount === 0) {
+      postFeed.innerHTML += "<p>一致する投稿が見つかりませんでした。</p>";
+    }
   } catch (e) {
     console.error("検索エラー:", e);
     postFeed.innerHTML = "<p>検索に失敗しました</p>";
