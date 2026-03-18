@@ -154,6 +154,7 @@ async function runAirdropBatch() {
     };
 
     // ★ 各アドレスに直接transferで送金
+    const txHashes = [];
     for (let i = 0; i < addresses.length; i++) {
       const nonce = await operatorWallet.getTransactionCount("pending");
       console.log(`⛽ transfer送信中... ${addresses[i]} nonce:`, nonce);
@@ -167,31 +168,21 @@ async function runAirdropBatch() {
         throw new Error("TX failed: status=" + receipt?.status);
       }
       console.log(`✅ ${addresses[i]} に100EMUER送金完了`);
+      txHashes.push(receipt.transactionHash);
     }
-
-    console.log("📝 TX Hash:", tx.hash);
-    const receipt = await tx.wait();
-    
-    // ★ 送金確定チェック（statusが1=成功のときだけdoneにする）
-    if (!receipt || receipt.status !== 1) {
-      console.error("❌ TX失敗: receipt.status =", receipt?.status);
-      throw new Error("TX failed: status=" + receipt?.status);
-    }
-    
-    console.log("✅ TX確定:", receipt.transactionHash);
 
     // done に更新
     const doneBatch = db.batch();
-    snapshot.docs.forEach(doc => {
+    snapshot.docs.forEach((doc, i) => {
       doneBatch.update(doc.ref, {
         status: "done",
-        txHash: receipt.transactionHash,
+        txHash: txHashes[i] || txHashes[0],
         processedAt: new Date()
       });
     });
     await doneBatch.commit();
 
-    console.log(`🎉 エアドロ完了: ${addresses.length} 件 / TX: ${receipt.transactionHash}`);
+    console.log(`🎉 エアドロ完了: ${addresses.length} 件`);
 
   } catch (err) {
     console.error("❌ バッチエラー:", err);
