@@ -3048,9 +3048,27 @@ await showWalletSuccessModal(account);
 window.checkHexaNFT = async function () {
   if (!window.connectedAccount) return;
 
+  // ★ まずFirestoreのpaid_usersを優先チェック（HEXA譲渡不可NFT対応）
+  if (window.db && window.fbLib) {
+    try {
+      const docRef = window.fbLib.doc(
+        window.db, "paid_users", window.connectedAccount.toLowerCase()
+      );
+      const snap = await window.fbLib.getDoc(docRef);
+      if (snap.exists()) {
+        window.hasPaidNFT = true;
+        console.log("✅ Firestore有料ユーザー確認済み:", window.connectedAccount);
+        return;
+      }
+    } catch(e) {
+      console.error("Firestore有料ユーザーチェックエラー:", e);
+    }
+  }
+
   try {
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const network = await provider.getNetwork();
+
 
     // Polygonメインネット(137)でのみ実行
     if (network.chainId === 137) { 
@@ -3061,10 +3079,15 @@ window.checkHexaNFT = async function () {
       const osContract = new ethers.Contract(osAddr, abi, provider);
       const targetAddr = window.connectedAccount;
 
-      // HEXAとOpenSeaのNFTを並列でチェック
-      const hexaChecks = Array.from({ length: 13 }, (_, i) => 
-        hexaContract.balanceOf(targetAddr, i + 1).catch(() => ethers.BigNumber.from(0))
+      // ★ 既知のtokenId（64174, 64219, 64220）＋1〜13をチェック
+      const hexaTokenIds = [
+        ...Array.from({ length: 13 }, (_, i) => i + 1),
+        64174, 64219, 64220
+      ];
+      const hexaChecks = hexaTokenIds.map(id =>
+        hexaContract.balanceOf(targetAddr, id).catch(() => ethers.BigNumber.from(0))
       );
+
       const osChecks = Array.from({ length: 20 }, (_, i) => 
         osContract.balanceOf(targetAddr, i + 1).catch(() => ethers.BigNumber.from(0))
       );
