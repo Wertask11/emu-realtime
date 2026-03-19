@@ -3180,19 +3180,51 @@ window.onclick = (e) => {
 };
 
 function openNFTDetail(metadata, tokenId, emuPrice, jpycPrice) {
-  modalBody.innerHTML = `
-    <h3>${metadata.name || `NFT #${tokenId}`}</h3>
-    ${metadata.image ? `<img src="${normalizeTokenURI(metadata.image)}" style="max-width:100%">` : ""}
-    <p><strong>ジャンル:</strong> ${metadata.genre || "（例）オフライン・限定イベントグッズ"}</p>
-    <p><strong>用途:</strong> ${metadata.usage || "（例）現実衣類として使用"}</p>
-    <p><strong>特典:</strong> ${metadata.perks || "（例）Emuリリース記念限定TシャツがもらえるNFTです！サイズはS，M，Lのみ"}</p>
-    <p>${metadata.description || ""}</p>
-    <hr>
-    <p>Emuer: ${ethers.utils.formatUnits(emuPrice, 18)}</p>
-    <p>JPYC: ${ethers.utils.formatUnits(jpycPrice, 18)}</p>
-  `;
+  const imageUrl = metadata.image ? normalizeTokenURI(metadata.image) : null;
+  let showingImage = true;
+
+  function renderModal() {
+    modalBody.innerHTML = `
+      <div style="position:relative;">
+        <h3 style="margin-right:80px;">${metadata.name || `NFT #${tokenId}`}</h3>
+
+        <!-- ★ 表裏切り替えボタン -->
+        <button id="flipBtn" style="
+          position:absolute;top:0;right:0;
+          background:#f0f0f0;border:none;border-radius:20px;
+          padding:4px 12px;font-size:12px;cursor:pointer;
+        ">${showingImage ? "📋 詳細を見る" : "🖼 画像を見る"}</button>
+      </div>
+
+      ${showingImage
+        ? `${imageUrl
+            ? `<img src="${imageUrl}" style="width:100%;border-radius:8px;margin:10px 0;">`
+            : "<p>画像なし</p>"}`
+        : `
+          <div style="margin:10px 0;line-height:1.8;">
+            <p><strong>ジャンル:</strong> ${metadata.genre || "未設定"}</p>
+            <p><strong>用途:</strong> ${metadata.usage || "未設定"}</p>
+            <p><strong>特典:</strong> ${metadata.perks || "未設定"}</p>
+            <p>${metadata.description || ""}</p>
+            <hr>
+            <p><strong>EMUER価格:</strong> ${ethers.utils.formatUnits(emuPrice, 18)} EMUER</p>
+            <p><strong>JPYC価格:</strong> ${jpycPrice.eq(0) ? "なし" : ethers.utils.formatUnits(jpycPrice, 18) + " JPYC"}</p>
+          </div>
+        `
+      }
+    `;
+
+    // 切り替えボタンのイベント
+    document.getElementById("flipBtn").addEventListener("click", () => {
+      showingImage = !showingImage;
+      renderModal();
+    });
+  }
+
+  renderModal();
   nftModal.style.display = "block";
 }
+
 
 // NFTカード生成（createNFTCard)
 function createNFTCard(tokenId, metadata, emuPrice, jpycPrice) {
@@ -3310,7 +3342,7 @@ async function loadExchangeableNFTs() {
     nftListDiv.innerHTML = "<p>読み込み中…</p>";
 
     // 1. NFTコントラクトのアドレスを取得（コントラクトの変数名 emuNFT に合わせる）
-    const nftAddr = await emuerContract.emuNFT; 
+    const nftAddr = await emuerContract.emuNFT();
     const nftAbi = ["function tokenURI(uint256 tokenId) view returns (string)"];
     const nftContract = new ethers.Contract(nftAddr, nftAbi, provider);
 
