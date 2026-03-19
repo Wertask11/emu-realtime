@@ -3226,8 +3226,14 @@ const emuBtn = document.createElement("button");
 emuBtn.textContent = "Emuerで交換";
 
 emuBtn.onclick = async () => {
+  // ★ emuerPrice が0の場合はEMUER交換不可
+  if (emuPrice.eq(0)) {
+    alert("このNFTはEMUERでの交換には対応していません。");
+    return;
+  }
   try {
     console.log("Emuer交換開始 tokenId:", tokenId);
+
     const tx = await emuerContract.buyNFT(tokenId, false, POLYGON_GAS_OPTION);
     
     await tx.wait();
@@ -3248,6 +3254,11 @@ const jpycBtn = document.createElement("button");
 jpycBtn.textContent = "JPYCで交換";
 
 jpycBtn.onclick = async () => {
+  // ★ jpycPrice が0の場合はJPYC交換不可
+  if (jpycPrice.eq(0)) {
+    alert("このNFTはJPYCでの交換には対応していません。");
+    return;
+  }
   try {
     console.log("JPYC交換開始 tokenId:", tokenId);
 
