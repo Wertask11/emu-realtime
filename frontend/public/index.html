@@ -203,21 +203,50 @@ body.free .paid-only {display: none;}
 </div>
 
   <!-- ① 通常ウォレット接続（既存） -->
+<!-- 利用規約同意チェックボックス -->
+  <div id="termsAgreement" style="
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    max-width: 360px;
+    font-size: 13px;
+    line-height: 1.6;
+  ">
+    <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;">
+      <input type="checkbox" id="agreeTerms" style="margin-top:3px; width:16px; height:16px; flex-shrink:0;">
+      <span>
+        <a href="/terms.html" target="_blank" style="color:#007bff;">利用規約</a>
+        および
+        <a href="/privacy.html" target="_blank" style="color:#007bff;">プライバシーポリシー</a>
+        に同意する
+        <br>
+        <span style="font-size:11px; color:#888;">
+          ※業務用デバイスでの利用は禁止されています
+        </span>
+      </span>
+    </label>
+  </div>
+
   <button id="connectWalletButton"
-    style="padding:10px 20px;font-size:16px;cursor:pointer;">
+    style="padding:10px 20px;font-size:16px;cursor:pointer; opacity:0.4; cursor:not-allowed;"
+    disabled>
     MetaMaskに接続して利用する（Emu＋）
   </button>
 
   <!-- ② 無料NFT -->
 <button id="freeNftButton"
   onclick="onFreeNftClick()"
-  style="padding:10px 20px;font-size:16px;">
+  style="padding:10px 20px;font-size:16px; opacity:0.4; cursor:not-allowed;"
+  disabled>
   無料NFTを受け取って利用する(Emu)
 </button>
 
 <button id="guestButton"
   onclick="onGuestClick()"
-  style="padding:10px 20px;font-size:16px;">
+  style="padding:10px 20px;font-size:16px; opacity:0.4; cursor:not-allowed;"
+  disabled>
   接続せずにゲストとして利用する(guest)
 </button>
 
@@ -489,6 +518,23 @@ body.free .paid-only {display: none;}
 
   </div>
 
+
+<!-- フッター -->
+<div id="siteFooter" style="
+  display: none;
+  text-align: center;
+  padding: 16px;
+  font-size: 12px;
+  color: #aaa;
+  border-top: 1px solid #eee;
+  margin-top: 20px;
+">
+  <a href="/terms.html" target="_blank" style="color:#aaa; margin: 0 8px;">利用規約</a>
+  ｜
+  <a href="/privacy.html" target="_blank" style="color:#aaa; margin: 0 8px;">プライバシーポリシー</a>
+  <br>
+  <span style="font-size:11px;">© 2026 LLC.DAO School Park</span>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 <script src="/actionschema.js"></script>
@@ -2988,12 +3034,33 @@ function goTomainapp() {
   console.trace("🔥 goTomainapp 呼ばれた");
   walletScreen.style.display = "none";
   mainApp.style.display = "block";
+  document.getElementById("siteFooter").style.display = "block";
 }
 
 /* ======= ロゴ → ウォレット → メイン ======= */
 logoScreen.addEventListener("click", () => {
   logoScreen.style.display = "none";
   walletScreen.style.display = "flex";
+});
+
+// 利用規約チェックボックス制御
+document.getElementById("agreeTerms").addEventListener("change", function() {
+  const buttons = [
+    document.getElementById("connectWalletButton"),
+    document.getElementById("freeNftButton"),
+    document.getElementById("guestButton")
+  ];
+  buttons.forEach(btn => {
+    if (this.checked) {
+      btn.disabled = false;
+      btn.style.opacity = "1";
+      btn.style.cursor = "pointer";
+    } else {
+      btn.disabled = true;
+      btn.style.opacity = "0.4";
+      btn.style.cursor = "not-allowed";
+    }
+  });
 });
 
 // --- [1] グローバル定数の更新 ---
