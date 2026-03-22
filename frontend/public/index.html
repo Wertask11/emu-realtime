@@ -3308,10 +3308,16 @@ emuBtn.onclick = async () => {
 
     const tx = await emuerContract.buyNFT(tokenId, false, POLYGON_GAS_OPTION);
     
-    await tx.wait();
+await tx.wait();
     // 交換完了したNFTを即座に画面から削除
     const nftElement = document.getElementById(`nft-${tokenId}`);
     if (nftElement) nftElement.remove();
+
+    // ★ room2に青い星を生成
+    const room2Frame = document.getElementById("room2Frame");
+    if (room2Frame && room2Frame.contentWindow) {
+      room2Frame.contentWindow.postMessage({ type: "NFT_PURCHASE" }, "*");
+    }
 
     alert("Emuerで交換成功！");
   } catch (err) {
@@ -3925,8 +3931,16 @@ const editingId = localStorage.getItem("editingPostId");
     closePostForm();
 
     // 💡 location.reload() の代わりにこれを入れる！
-    console.log("🔄 画面をリロードせずに投稿一覧を更新します...");
-    await refreshAllPosts(); 
+console.log("🔄 画面をリロードせずに投稿一覧を更新します...");
+    await refreshAllPosts();
+
+// ★ room2に投稿アクションを通知（開いていない場合は累積）
+    const room2Frame = document.getElementById("room2Frame");
+    if (room2Frame && room2Frame.style.display === "block" && room2Frame.contentWindow) {
+      room2Frame.contentWindow.postMessage({ type: "NEW_POST" }, "*");
+    } else {
+      room2PendingPosts++;
+    }
     
     // オプション：一番上までスクロールさせると親切です
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4431,6 +4445,9 @@ localStorage.setItem("emu:lastAction", JSON.stringify(action));
 
 
 
+// ★ room2に送る累積カウント
+let room2PendingPosts = 0;
+
 function openRoom2() {
   const overlay = document.getElementById("room3Overlay");
   const iframe = document.getElementById("room2Frame");
@@ -4444,6 +4461,14 @@ function openRoom2() {
   iframe.src = "/Emu_room2/index.html";
 
   closeBtn.style.display = "block";
+
+  // ★ room2が読み込まれたら累積分を一括送信
+  iframe.onload = () => {
+    for (let i = 0; i < room2PendingPosts; i++) {
+      iframe.contentWindow.postMessage({ type: "NEW_POST" }, "*");
+    }
+    room2PendingPosts = 0;
+  };
 }
 
 function closePopup() {
@@ -4485,10 +4510,11 @@ function handleDiscussion() {
 
     const iframe = document.getElementById("room2Frame");
 
-    iframe.contentWindow.postMessage(
+iframe.contentWindow.postMessage(
       {
-        type: "discussion_star",
-        level: discussionState.streak
+        type: "STREAK_3DAY",
+        level: discussionState.streak,
+        projectId: "default"
       },
       "*"
     );
