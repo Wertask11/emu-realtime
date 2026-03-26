@@ -163,6 +163,396 @@ body.free .paid-only {display: none;}
   animation: pulse 2s infinite;
 }
 
+:root {
+  --w-accent: #00C9A7;
+  --w-accent2: #7B61FF;
+  --w-bg: #1a1a1a;
+  --w-surface: #242424;
+  --w-border: #333;
+  --w-text: #F0F0EE;
+  --w-muted: #888;
+  --w-radius: 16px;
+  --w-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+  --w-ease: cubic-bezier(0.34,1.56,0.64,1);
+}
+
+/* ── FLOATING BUTTON ── */
+#emu-contact-btn {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 9990;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--w-accent), var(--w-accent2));
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 8px 32px rgba(0,201,167,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  transition: transform 0.3s var(--w-ease), box-shadow 0.3s ease;
+  animation: widgetPop 0.6s var(--w-ease) 1s both;
+}
+@keyframes widgetPop {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+#emu-contact-btn:hover {
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 16px 40px rgba(0,201,167,0.5);
+}
+#emu-contact-btn.open {
+  transform: rotate(45deg);
+}
+.btn-ripple {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid rgba(0,201,167,0.4);
+  animation: ripple 2s ease-out infinite;
+}
+@keyframes ripple {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* ── LABEL TOOLTIP ── */
+#emu-contact-label {
+  position: fixed;
+  bottom: 34px;
+  left: 90px;
+  z-index: 9989;
+  background: var(--w-bg);
+  border: 1px solid var(--w-border);
+  color: var(--w-text);
+  padding: 6px 14px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-family: 'Noto Sans JP', sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: labelFade 0.4s 2s ease both;
+  opacity: 0;
+}
+@keyframes labelFade {
+  0% { opacity: 0; transform: translateX(-8px); }
+  20%,80% { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0; }
+}
+
+/* ── PANEL ── */
+#emu-contact-panel {
+  position: fixed;
+  bottom: 90px;
+  left: 24px;
+  z-index: 9991;
+  width: 380px;
+  max-height: 90vh;
+  background: var(--w-bg);
+  border-radius: var(--w-radius);
+  box-shadow: var(--w-shadow);
+  overflow: hidden;
+  transform-origin: bottom left;
+  transform: scale(0.85) translateY(20px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.4s var(--w-ease), opacity 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+#emu-contact-panel.open {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+  pointer-events: all;
+}
+@media (max-width: 480px) {
+  #emu-contact-panel {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    bottom: 80px;
+  }
+  #emu-contact-btn, #emu-contact-label {
+    left: 16px;
+  }
+}
+
+/* ── PANEL HEADER ── */
+.w-header {
+  padding: 20px 20px 0;
+  flex-shrink: 0;
+}
+.w-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.w-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.w-logo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--w-accent);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+.w-logo-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--w-text);
+}
+.w-close {
+  background: var(--w-surface);
+  border: none;
+  color: var(--w-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.w-close:hover { background: #333; color: var(--w-text); }
+
+/* ── CATEGORY BUTTONS ── */
+.w-categories {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.w-cat-btn {
+  background: var(--w-surface);
+  border: 1px solid var(--w-border);
+  color: var(--w-text);
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-family: 'Noto Sans JP', sans-serif;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.w-cat-btn:hover {
+  border-color: var(--w-accent);
+  background: rgba(0,201,167,0.06);
+}
+.w-cat-btn.selected {
+  border-color: var(--w-accent);
+  background: rgba(0,201,167,0.12);
+  color: var(--w-accent);
+}
+.w-cat-icon { font-size: 16px; }
+
+/* ── PROGRESS ── */
+.w-progress {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  margin-top: 12px;
+}
+.w-prog-dot {
+  height: 3px;
+  flex: 1;
+  border-radius: 100px;
+  background: var(--w-border);
+  transition: background 0.4s ease;
+}
+.w-prog-dot.active { background: var(--w-accent); }
+.w-prog-dot.done { background: rgba(0,201,167,0.4); }
+
+/* ── SCROLLABLE BODY ── */
+.w-body {
+  padding: 0 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.w-body::-webkit-scrollbar { width: 4px; }
+.w-body::-webkit-scrollbar-track { background: transparent; }
+.w-body::-webkit-scrollbar-thumb { background: var(--w-border); border-radius: 2px; }
+
+/* ── STEP SCREENS ── */
+.w-step { display: none; }
+.w-step.active { display: block; animation: stepIn 0.3s ease both; }
+@keyframes stepIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.w-step-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--w-text);
+  margin-bottom: 4px;
+}
+.w-step-sub {
+  font-size: 13px;
+  color: var(--w-muted);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+/* ── FORM FIELDS ── */
+.w-field { margin-bottom: 14px; }
+.w-label {
+  display: block;
+  font-size: 12px;
+  color: var(--w-muted);
+  margin-bottom: 5px;
+}
+.w-required { color: var(--w-accent); margin-left: 2px; }
+.w-input, .w-select, .w-textarea {
+  width: 100%;
+  background: var(--w-surface);
+  border: 1px solid var(--w-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--w-text);
+  font-size: 14px;
+  font-family: 'Noto Sans JP', sans-serif;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.w-input:focus, .w-select:focus, .w-textarea:focus {
+  outline: none;
+  border-color: var(--w-accent);
+  box-shadow: 0 0 0 3px rgba(0,201,167,0.12);
+}
+.w-textarea {
+  resize: none;
+  min-height: 90px;
+  line-height: 1.6;
+}
+.w-select option { background: var(--w-surface); }
+.w-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* ── BUTTONS ── */
+.w-footer {
+  padding: 16px 20px;
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--w-border);
+  margin-top: 8px;
+}
+.w-btn-back {
+  background: var(--w-surface);
+  border: 1px solid var(--w-border);
+  color: var(--w-muted);
+  padding: 10px 20px;
+  border-radius: 100px;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: 'Noto Sans JP', sans-serif;
+  transition: background 0.2s, color 0.2s;
+}
+.w-btn-back:hover { background: #2a2a2a; color: var(--w-text); }
+.w-btn-next {
+  flex: 1;
+  background: var(--w-accent);
+  color: #0A0A0A;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 100px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: 'Noto Sans JP', sans-serif;
+  transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.w-btn-next:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,201,167,0.35); }
+.w-btn-next:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* ── SUCCESS ── */
+#w-success {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 32px;
+  min-height: 260px;
+}
+#w-success.show { display: flex; animation: stepIn 0.4s ease; }
+.w-success-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  animation: bounceIn 0.6s var(--w-ease);
+}
+@keyframes bounceIn {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+.w-success-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--w-text);
+  margin-bottom: 8px;
+}
+.w-success-msg {
+  font-size: 13px;
+  color: var(--w-muted);
+  line-height: 1.7;
+  margin-bottom: 24px;
+}
+.w-back-link {
+  font-size: 13px;
+  color: var(--w-accent);
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+
+/* ── ERROR STATE ── */
+.w-error {
+  font-size: 12px;
+  color: #ff6b6b;
+  margin-top: 4px;
+  display: none;
+}
+.w-input.error, .w-textarea.error {
+  border-color: #ff6b6b;
+}
+
+/* ── LINK TO HP ── */
+.w-hp-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--w-surface);
+  border: 1px solid var(--w-border);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  text-decoration: none;
+  color: var(--w-text);
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+.w-hp-link:hover { border-color: var(--w-accent); }
+.w-hp-link span:first-child { font-size: 20px; }
+.w-hp-link-info small { display: block; color: var(--w-muted); font-size: 11px; margin-top: 2px; }
+
 </style>
 </head>
 <body>
@@ -3171,10 +3561,9 @@ window.checkHexaNFT = async function () {
       const osContract = new ethers.Contract(osAddr, abi, provider);
       const targetAddr = window.connectedAccount;
 
-      // ★ 既知のtokenId（64174, 64219, 64220）＋1〜13をチェック
       const hexaTokenIds = [
         ...Array.from({ length: 13 }, (_, i) => i + 1),
-        64174, 64219, 64220
+        64174, 64219, 64220, 64449, 64451, 64450
       ];
       const hexaChecks = hexaTokenIds.map(id =>
         hexaContract.balanceOf(targetAddr, id).catch(() => ethers.BigNumber.from(0))
@@ -5767,7 +6156,421 @@ window.fbLib = {
 
   console.log("🚀 Production Firebase (EmuSch) is Ready!");
 </script>
+<!-- FLOATING BUTTON -->
+<button id="emu-contact-btn" onclick="toggleContactPanel()" title="お問い合わせ">
+  <div class="btn-ripple"></div>
+  💬
+</button>
+<div id="emu-contact-label">お問い合わせ・イベント申込</div>
 
+<!-- PANEL -->
+<div id="emu-contact-panel">
+
+  <!-- HEADER -->
+  <div class="w-header">
+    <div class="w-header-top">
+      <div class="w-logo">
+        <div class="w-logo-dot"></div>
+        <div class="w-logo-text">SchoolPark サポート</div>
+      </div>
+      <button class="w-close" onclick="toggleContactPanel()">✕</button>
+    </div>
+
+    <!-- PROGRESS -->
+    <div class="w-progress" id="w-progress">
+      <div class="w-prog-dot active" id="wp-1"></div>
+      <div class="w-prog-dot" id="wp-2"></div>
+      <div class="w-prog-dot" id="wp-3"></div>
+    </div>
+  </div>
+
+  <!-- SCROLLABLE BODY -->
+  <div class="w-body" id="w-body">
+
+    <!-- STEP 1: CATEGORY -->
+    <div class="w-step active" id="ws-1">
+      <div class="w-step-title">どのようなご用件ですか？</div>
+      <div class="w-step-sub">種別を選ぶと、必要な項目だけが表示されます。</div>
+
+      <!-- HP LINK -->
+      <a href="https://schoolpark.jp" target="_blank" class="w-hp-link">
+        <span>🌐</span>
+        <div class="w-hp-link-info">
+          <strong>SchoolParkのホームページ</strong>
+          <small>FAQ・詳細情報はこちら</small>
+        </div>
+        <span style="margin-left:auto;opacity:.4">→</span>
+      </a>
+
+      <div class="w-categories" id="w-categories">
+        <button class="w-cat-btn" data-type="general" onclick="selectCategory(this)">
+          <span class="w-cat-icon">💬</span>一般的なご質問
+        </button>
+        <button class="w-cat-btn" data-type="event" onclick="selectCategory(this)">
+          <span class="w-cat-icon">🎪</span>イベント申込
+        </button>
+        <button class="w-cat-btn" data-type="media" onclick="selectCategory(this)">
+          <span class="w-cat-icon">📰</span>取材・メディア
+        </button>
+        <button class="w-cat-btn" data-type="investor" onclick="selectCategory(this)">
+          <span class="w-cat-icon">💰</span>投資家・提携
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 2: FORM (動的に内容が変わる) -->
+    <div class="w-step" id="ws-2">
+      <div id="w-form-content"><!-- JS で注入 --></div>
+    </div>
+
+    <!-- STEP 3: CONFIRM -->
+    <div class="w-step" id="ws-3">
+      <div class="w-step-title">内容の確認</div>
+      <div class="w-step-sub">以下の内容で送信します。</div>
+      <div id="w-confirm-content" style="display:flex;flex-direction:column;gap:10px">
+        <!-- JS で注入 -->
+      </div>
+    </div>
+
+  </div><!-- /w-body -->
+
+  <!-- SUCCESS -->
+  <div id="w-success">
+    <div class="w-success-icon">✅</div>
+    <div class="w-success-title">送信完了しました！</div>
+    <div class="w-success-msg">内容を確認の上、2〜3営業日以内にご連絡いたします。<br>自動返信メールもご確認ください。</div>
+    <button class="w-back-link" onclick="resetWidget()">← 最初に戻る</button>
+  </div>
+
+  <!-- FOOTER BUTTONS -->
+  <div class="w-footer" id="w-footer">
+    <button class="w-btn-back" id="w-back" onclick="prevStep()" style="display:none">← 戻る</button>
+    <button class="w-btn-next" id="w-next" onclick="nextStep()" disabled>
+      種別を選んでください
+    </button>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════
+// STATE
+// ══════════════════════════
+let selectedType = null;
+let formData = {};
+
+const FORMS = {
+  general: {
+    label: '💬 一般的なご質問',
+    fields: [
+      { id:'name', label:'お名前', type:'text', placeholder:'山田 太郎', required: true },
+      { id:'email', label:'メールアドレス', type:'email', placeholder:'hello@example.com', required: true },
+      { id:'message', label:'お問い合わせ内容', type:'textarea', placeholder:'ご質問・ご意見をご記入ください', required: true },
+    ]
+  },
+  event: {
+    label: '🎪 イベント申込',
+    fields: [
+      { id:'name', label:'お名前', type:'text', placeholder:'山田 太郎', required: true },
+      { id:'email', label:'メールアドレス', type:'email', placeholder:'hello@example.com', required: true },
+      {
+        id:'child_age', label:'お子様の年齢', type:'select',
+        options:['','未就学児','小学生（低学年）','小学生（高学年）','中学生','高校生','子どもなし（大人のみ）']
+      },
+      {
+        id:'participants', label:'参加人数', type:'select',
+        options:['','1名','2名（親子）','3〜5名','6名以上（団体）']
+      },
+      { id:'message', label:'ご要望・ご質問', type:'textarea', placeholder:'希望日程・配慮事項など', required: false },
+    ]
+  },
+  media: {
+    label: '📰 取材・メディア',
+    fields: [
+      { id:'company', label:'会社名・媒体名', type:'text', placeholder:'〇〇新聞社', required: true },
+      { id:'name', label:'担当者名', type:'text', placeholder:'山田 太郎', required: true },
+      { id:'email', label:'メールアドレス', type:'email', placeholder:'press@example.com', required: true },
+      { id:'message', label:'取材・掲載内容', type:'textarea', placeholder:'取材の趣旨・掲載媒体・希望日程など', required: true },
+    ]
+  },
+  investor: {
+    label: '💰 投資家・提携',
+    fields: [
+      { id:'company', label:'会社名・ファンド名', type:'text', placeholder:'〇〇 Ventures', required: true },
+      { id:'name', label:'お名前・役職', type:'text', placeholder:'山田 太郎（Partner）', required: true },
+      { id:'email', label:'メールアドレス', type:'email', placeholder:'invest@example.com', required: true },
+      {
+        id:'scale', label:'投資規模・関心領域', type:'select',
+        options:['','〜100万円（グラント）','100〜500万円（シード）','500万〜1000万円','1000万円以上','業務提携のみ']
+      },
+      { id:'message', label:'メッセージ', type:'textarea', placeholder:'ご関心の背景をお聞かせください', required: true },
+    ]
+  }
+};
+
+// ══════════════════════════
+// TOGGLE
+// ══════════════════════════
+function toggleContactPanel() {
+  const btn = document.getElementById('emu-contact-btn');
+  const panel = document.getElementById('emu-contact-panel');
+  const label = document.getElementById('emu-contact-label');
+  btn.classList.toggle('open');
+  panel.classList.toggle('open');
+  label.style.display = 'none';
+}
+
+// ══════════════════════════
+// CATEGORY SELECT
+// ══════════════════════════
+function selectCategory(el) {
+  document.querySelectorAll('.w-cat-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedType = el.dataset.type;
+
+  const nextBtn = document.getElementById('w-next');
+  nextBtn.disabled = false;
+  nextBtn.textContent = '次へ →';
+}
+
+// ══════════════════════════
+// RENDER FORM
+// ══════════════════════════
+function renderForm() {
+  const config = FORMS[selectedType];
+  let html = `<div class="w-step-title">${config.label}</div>
+    <div class="w-step-sub">必要事項をご入力ください。</div>`;
+
+  config.fields.forEach(f => {
+    html += `<div class="w-field">
+      <label class="w-label">${f.label}${f.required ? '<span class="w-required">*</span>' : ''}</label>`;
+
+    if (f.type === 'textarea') {
+      html += `<textarea id="wf-${f.id}" class="w-textarea" placeholder="${f.placeholder||''}">${formData[f.id]||''}</textarea>`;
+    } else if (f.type === 'select') {
+      html += `<select id="wf-${f.id}" class="w-select">`;
+      f.options.forEach((opt,i) => {
+        const selected = formData[f.id] === opt ? 'selected' : '';
+        html += `<option value="${opt}" ${selected}>${opt || '選択してください'}</option>`;
+      });
+      html += `</select>`;
+    } else {
+      html += `<input id="wf-${f.id}" type="${f.type}" class="w-input" placeholder="${f.placeholder||''}" value="${formData[f.id]||''}">`;
+    }
+    html += `<div class="w-error" id="we-${f.id}">この項目は必須です</div>
+    </div>`;
+  });
+
+  document.getElementById('w-form-content').innerHTML = html;
+}
+
+// ══════════════════════════
+// VALIDATE FORM
+// ══════════════════════════
+function validateForm() {
+  const config = FORMS[selectedType];
+  let valid = true;
+
+  config.fields.forEach(f => {
+    if (!f.required) return;
+    const el = document.getElementById('wf-' + f.id);
+    const errEl = document.getElementById('we-' + f.id);
+    if (!el) return;
+
+    const val = el.value.trim();
+    if (!val) {
+      el.classList.add('error');
+      if (errEl) errEl.style.display = 'block';
+      valid = false;
+    } else {
+      el.classList.remove('error');
+      if (errEl) errEl.style.display = 'none';
+
+      // Email validation
+      if (f.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+        el.classList.add('error');
+        if (errEl) { errEl.textContent = '有効なメールアドレスを入力してください'; errEl.style.display = 'block'; }
+        valid = false;
+      }
+    }
+  });
+  return valid;
+}
+
+// ══════════════════════════
+// SAVE FORM DATA
+// ══════════════════════════
+function saveFormData() {
+  const config = FORMS[selectedType];
+  config.fields.forEach(f => {
+    const el = document.getElementById('wf-' + f.id);
+    if (el) formData[f.id] = el.value;
+  });
+}
+
+// ══════════════════════════
+// RENDER CONFIRM
+// ══════════════════════════
+function renderConfirm() {
+  const config = FORMS[selectedType];
+  let html = '';
+  config.fields.forEach(f => {
+    const val = formData[f.id];
+    if (!val) return;
+    html += `<div style="background:rgba(255,255,255,0.03);border:1px solid var(--w-border);border-radius:8px;padding:12px 14px">
+      <div style="font-size:11px;color:var(--w-muted);margin-bottom:4px">${f.label}</div>
+      <div style="font-size:14px;color:var(--w-text);white-space:pre-wrap;word-break:break-all">${escapeHtml(val)}</div>
+    </div>`;
+  });
+  document.getElementById('w-confirm-content').innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ══════════════════════════
+// STEP NAVIGATION
+// ══════════════════════════
+function nextStep() {
+  const nextBtn = document.getElementById('w-next');
+
+  if (currentStep === 1) {
+    if (!selectedType) return;
+    goToStep(2);
+    renderForm();
+    nextBtn.textContent = '確認する →';
+    document.getElementById('w-back').style.display = 'block';
+    return;
+  }
+
+  if (currentStep === 2) {
+    if (!validateForm()) return;
+    saveFormData();
+    goToStep(3);
+    renderConfirm();
+    nextBtn.textContent = '送信する ✓';
+    return;
+  }
+
+  if (currentStep === 3) {
+    submitContact();
+    return;
+  }
+}
+
+function prevStep() {
+  if (currentStep === 2) {
+    goToStep(1);
+    document.getElementById('w-back').style.display = 'none';
+    document.getElementById('w-next').textContent = '次へ →';
+    document.getElementById('w-next').disabled = !selectedType;
+    return;
+  }
+  if (currentStep === 3) {
+    goToStep(2);
+    renderForm();
+    document.getElementById('w-next').textContent = '確認する →';
+    return;
+  }
+}
+
+function goToStep(n) {
+  document.querySelectorAll('.w-step').forEach(s => s.classList.remove('active'));
+  document.getElementById('ws-' + n).classList.add('active');
+  updateProgress(n);
+  currentStep = n;
+  document.getElementById('w-body').scrollTop = 0;
+}
+
+function updateProgress(n) {
+  [1,2,3].forEach(i => {
+    const dot = document.getElementById('wp-' + i);
+    if (!dot) return;
+    dot.className = 'w-prog-dot';
+    if (i < n) dot.classList.add('done');
+    else if (i === n) dot.classList.add('active');
+  });
+}
+
+// ══════════════════════════
+// SUBMIT
+// ══════════════════════════
+function submitContact() {
+  const nextBtn = document.getElementById('w-next');
+  nextBtn.disabled = true;
+  nextBtn.textContent = '送信中…';
+
+  // Firebase Firestore に保存
+  const payload = {
+    type: selectedType,
+    ...formData,
+    submittedAt: new Date().toISOString(),
+    source: 'emu-widget'
+  };
+
+  console.log('📬 Contact submitted:', payload);
+
+  // ★ 実際のAPIコール（Firebase or Resend）
+  const doSubmit = async () => {
+    try {
+      // Firestore に保存（window.fbLib が利用可能な場合）
+      if (window.fbLib && window.db) {
+        await window.fbLib.addDoc(
+          window.fbLib.collection(window.db, 'contact_submissions'),
+          payload
+        );
+        console.log('✅ Saved to Firestore');
+      }
+
+      // Render バックエンドへ送信（任意）
+      // await fetch('https://emu-realtime.onrender.com/api/contact', {
+      //   method: 'POST',
+      //   headers: {'Content-Type':'application/json'},
+      //   body: JSON.stringify(payload)
+      // });
+
+    } catch (e) {
+      console.error('送信エラー:', e);
+    } finally {
+      showSuccess();
+    }
+  };
+
+  setTimeout(() => doSubmit(), 800);
+}
+
+function showSuccess() {
+  document.getElementById('w-body').style.display = 'none';
+  document.getElementById('w-footer').style.display = 'none';
+  document.getElementById('w-progress').style.display = 'none';
+  document.getElementById('w-success').classList.add('show');
+}
+
+function resetWidget() {
+  currentStep = 1;
+  selectedType = null;
+  formData = {};
+  document.getElementById('w-body').style.display = 'block';
+  document.getElementById('w-footer').style.display = 'flex';
+  document.getElementById('w-progress').style.display = 'flex';
+  document.getElementById('w-success').classList.remove('show');
+  document.querySelectorAll('.w-cat-btn').forEach(b => b.classList.remove('selected'));
+  goToStep(1);
+  document.getElementById('w-back').style.display = 'none';
+  const nextBtn = document.getElementById('w-next');
+  nextBtn.disabled = true;
+  nextBtn.textContent = '種別を選んでください';
+}
+
+// ══════════════════════════
+// AUTO-HIDE LABEL
+// ══════════════════════════
+setTimeout(() => {
+  const label = document.getElementById('emu-contact-label');
+  if (label) label.style.display = 'none';
+}, 4000);
+</script>
 </body>
 </html>
 
