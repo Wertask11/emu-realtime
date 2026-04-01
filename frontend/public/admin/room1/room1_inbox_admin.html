@@ -1,748 +1,172 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8" />
-<title>Emu | Room1 - 学び</title>
+<meta charset="UTF-8">
+<title>Room1｜お預かり箱 管理</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
-body.dark {
-  --bg-main: #1E1E1E;
-  --bg-header: #252526;
-  --bg-card: #2A2A2A;
-  --bg-card-hover: #333333;
-  --border: #3C3C3C;
-  --text-main: #D4D4D4;
-  --text-sub: #AFAFAF;
-  --accent: #569CD6;
-  --accent-green: #4EC9B0;
-  --accent-red: #F44747;
-  --accent-yellow: #DCDCAA;
-  --bg-form: #1a1a2e;
-  --border-form: #4a4a6a;
-}
-body.light {
-  --bg-main: #F5F5F5;
-  --bg-header: #FFFFFF;
-  --bg-card: #FFFFFF;
-  --bg-card-hover: #F0F0F0;
-  --border: #DDDDDD;
-  --text-main: #2C2C2C;
-  --text-sub: #555555;
-  --accent: #3A6EA5;
-  --accent-green: #1e8a5a;
-  --accent-red: #c0392b;
-  --accent-yellow: #b7950b;
-  --bg-form: #f0f4ff;
-  --border-form: #aab8d8;
-}
 body {
-  margin: 0;
-  background: var(--bg-main);
-  color: var(--text-main);
+  background:#0f0f0f;
+  color:#fff;
   font-family: system-ui, sans-serif;
-  transition: background 0.2s, color 0.2s;
 }
-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-header);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.container {
+  max-width:900px;
+  margin:auto;
+  padding:24px;
 }
-header h1 { margin: 0; font-size: 18px; }
-.header-actions { display: flex; align-items: center; gap: 10px; }
-.header-btn {
-  cursor: pointer; font-size: 13px; color: var(--accent);
-  border: 1px solid var(--border); padding: 6px 10px;
-  border-radius: 6px; background: transparent;
+.item {
+  background:#161616;
+  border:1px solid #333;
+  border-radius:8px;
+  padding:16px;
+  margin-bottom:16px;
 }
-.header-btn:hover { opacity: 0.85; }
-
-#container { padding: 24px; }
-
-.section-title { margin-bottom: 16px; font-size: 16px; color: var(--text-sub); }
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+.meta { font-size:12px; opacity:.7; margin-bottom:8px; }
+button {
+  padding:6px 12px;
+  border:none;
+  border-radius:4px;
+  cursor:pointer;
 }
-.card {
-  background: var(--bg-card); border: 1px solid var(--border);
-  padding: 20px; cursor: pointer; transition: 0.2s; border-radius: 6px;
+.approve { background:#2ecc71; }
+.editor {
+  margin-top:16px;
+  border-top:1px dashed #444;
+  padding-top:16px;
 }
-.card:hover { background: var(--bg-card-hover); }
-.card h2 { margin: 0 0 8px; font-size: 16px; }
-.card p { margin: 0; font-size: 13px; color: var(--text-sub); }
-
-.back-btn { margin-bottom: 16px; cursor: pointer; color: var(--accent); font-size: 14px; }
-.mode-btns { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
-
-ul.sub-list { list-style: disc; padding-left: 20px; }
-ul.sub-list li { margin-bottom: 10px; cursor: pointer; color: var(--accent); }
-ul.sub-list li:hover { text-decoration: underline; }
-
-/* =============================
-   直接投稿フォーム
-============================= */
-.direct-add-wrapper {
-  margin-top: 40px;
-  border-top: 2px solid var(--accent);
-  padding-top: 28px;
-}
-.direct-add-title {
-  font-size: 15px; font-weight: bold;
-  color: var(--accent); margin-bottom: 16px;
-  display: flex; align-items: center; gap: 8px;
-}
-.direct-add-title::before { content: '✏️'; }
-
-.direct-form {
-  background: var(--bg-form);
-  border: 1px solid var(--border-form);
-  border-radius: 10px;
-  padding: 24px;
-}
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-.form-row-single { margin-bottom: 14px; }
-.form-row-single label,
-.form-row label {
-  display: block; font-size: 12px;
-  color: var(--text-sub); margin-bottom: 4px;
-}
-.direct-form select,
-.direct-form textarea,
-.direct-form input[type="text"] {
-  width: 100%;
-  background: var(--bg-card);
-  color: var(--text-main);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-family: inherit;
-  font-size: 13px;
-  box-sizing: border-box;
-  transition: border-color 0.2s;
-}
-.direct-form select:focus,
-.direct-form textarea:focus,
-.direct-form input[type="text"]:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-.direct-form textarea { resize: vertical; }
-
-/* ブルーファイル用サブサブテーマ行 */
-#blueSubSubRow { display: none; }
-
-.form-actions {
-  display: flex; gap: 10px; justify-content: flex-end;
-  margin-top: 16px; flex-wrap: wrap;
-}
-.btn-submit {
-  background: var(--accent); color: #fff;
-  border: none; border-radius: 6px;
-  padding: 10px 20px; cursor: pointer;
-  font-size: 14px; font-weight: bold;
-}
-.btn-submit:hover { opacity: 0.85; }
-.btn-clear {
-  background: transparent; color: var(--text-sub);
-  border: 1px solid var(--border); border-radius: 6px;
-  padding: 10px 16px; cursor: pointer; font-size: 14px;
-}
-.btn-clear:hover { border-color: var(--accent-red); color: var(--accent-red); }
-
-.success-toast {
-  display: none; margin-top: 12px;
-  background: rgba(78,201,176,0.15);
-  border: 1px solid var(--accent-green);
-  color: var(--accent-green);
-  padding: 10px 16px; border-radius: 6px;
-  font-size: 13px;
-}
-
-/* =============================
-   お預かり箱
-============================= */
-.deposit-wrapper {
-  margin-top: 48px;
-  border-top: 1px solid var(--border);
-  padding-top: 32px;
-}
-.deposit-toggle {
-  cursor: pointer; color: var(--accent);
-  border: 1px solid var(--accent);
-  padding: 12px 16px; border-radius: 6px;
-  background: transparent; font-size: 14px;
-}
-.deposit-box { display: none; margin-top: 24px; }
-.deposit-box textarea,
-.deposit-box select {
-  width: 100%; margin-top: 12px; padding: 10px;
-  background: var(--bg-card); color: var(--text-main);
-  border: 1px solid var(--border); border-radius: 6px;
-  font-family: inherit; box-sizing: border-box;
-}
-.deposit-box button {
-  margin-top: 16px; padding: 10px 16px;
-  background: transparent; color: var(--accent);
-  border: 1px solid var(--accent); border-radius: 6px; cursor: pointer;
-}
-
-/* =============================
-   コンテンツ詳細ビュー
-============================= */
-#detailList .card { margin-bottom: 14px; }
-
-/* =============================
-   モード選択ボタン
-============================= */
-.mode-btn-active {
-  border-color: var(--accent) !important;
-  background: rgba(86,156,214,0.1) !important;
-  color: var(--accent);
+textarea {
+  width:100%;
+  background:#0f0f0f;
+  color:#fff;
+  border:1px solid #333;
+  border-radius:4px;
+  padding:8px;
+  margin-bottom:10px;
 }
 </style>
 </head>
 
-<body class="dark">
 
-<header>
-  <h1 id="headerTitle">Room1｜マネーリテラシー</h1>
-  <div class="header-actions">
-    <button id="backToEmuBtn" class="header-btn" onclick="parent.closeRoom1()">← Emu</button>
-    <button class="header-btn" onclick="toggleTheme()">🌗</button>
-  </div>
-</header>
-
-<div id="container">
-
-  <!-- モード選択 -->
-  <div class="mode-btns">
-    <div class="card" id="mode-money" onclick="switchMode('money')">マネーリテラシー</div>
-    <div class="card" id="mode-net" onclick="switchMode('net')">ネットリテラシー</div>
-    <div class="card" id="mode-life" onclick="switchMode('life')">ライフリテラシー</div>
-    <div class="card" id="mode-blue" onclick="switchMode('blue')">ブルーファイル</div>
-  </div>
-
-  <!-- テーマ一覧 -->
-  <div id="list"></div>
-
-  <!-- サブテーマ一覧（ブルーファイル用） -->
-  <div id="sub" style="display:none;">
-    <div class="back-btn" onclick="backToList()">← 戻る</div>
-    <h2 id="subTitle"></h2>
-    <ul class="sub-list" id="subList"></ul>
-  </div>
-
-  <!-- コンテンツ詳細 -->
-  <div id="detail" style="display:none;">
-    <div class="back-btn" onclick="backToSub()">← 戻る</div>
-    <h2 id="detailTitle"></h2>
-    <div id="detailList"></div>
-    <div id="detailBody"></div>
-  </div>
-
-  <!-- ════════════════════════════════
-       直接コンテンツ追加フォーム
-  ════════════════════════════════ -->
-  <div class="direct-add-wrapper">
-    <div class="direct-add-title">学習コンテンツを直接追加</div>
-
-    <div class="direct-form">
-      <!-- テーマ選択行 -->
-      <div class="form-row" id="themeSelectRow">
-        <div>
-          <label>テーマ *</label>
-          <select id="da-theme" onchange="onDAThemeChange()">
-            <option value="">選択してください</option>
-            <option value="money">マネーリテラシー</option>
-            <option value="net">ネットリテラシー</option>
-            <option value="life">ライフリテラシー</option>
-            <option value="blue">ブルーファイル</option>
-          </select>
-        </div>
-        <div>
-          <label>サブテーマ *</label>
-          <select id="da-sub" onchange="onDASubChange()" disabled>
-            <option value="">先にテーマを選択</option>
-          </select>
-        </div>
-        <!-- ブルーファイルのみ：サブサブテーマ -->
-        <div id="blueSubSubRow">
-          <label>サブサブテーマ（ブルーファイルのみ）</label>
-          <select id="da-subsub" disabled>
-            <option value="">先にサブテーマを選択</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- 内容入力 -->
-      <div class="form-row-single">
-        <label>要約（一覧・冒頭用）</label>
-        <input type="text" id="da-summary" placeholder="例：生活防衛資金は月収3〜6ヶ月分を目安に" />
-      </div>
-      <div class="form-row-single">
-        <label>本文 *</label>
-        <textarea id="da-body" rows="5" placeholder="学習コンテンツ本文を入力..."></textarea>
-      </div>
-      <div class="form-row-single">
-        <label>補足・背景・注意点</label>
-        <textarea id="da-note" rows="3" placeholder="補足情報があれば..."></textarea>
-      </div>
-
-      <div class="form-actions">
-        <button class="btn-clear" onclick="clearDAForm()">クリア</button>
-        <button class="btn-submit" onclick="submitDirectAdd()">📚 コンテンツを追加</button>
-      </div>
-
-      <div class="success-toast" id="daSuccessToast">
-        ✅ コンテンツを追加しました！Room1に反映されます。
-      </div>
-    </div>
-  </div>
-
-  <!-- お預かり箱 -->
-  <div class="deposit-wrapper">
-    <button class="deposit-toggle" onclick="toggleDeposit()">📮 お預かり箱</button>
-    <div class="deposit-box" id="depositBox">
-      <p style="font-size:13px; color:var(--text-sub); line-height:1.6;">
-        マネー・ネット・ライフ・ブルーファイルに関する気づきや疑問、体験をお預かりします。<br>
-        運営や専門家が目を通し、価値のあるものは学習コンテンツとして反映されます。
-      </p>
-      <select id="depositTheme" onchange="onDepositThemeChange()">
-        <option value="">関連するテーマを選択</option>
-        <option value="money">マネーリテラシー</option>
-        <option value="net">ネットリテラシー</option>
-        <option value="life">ライフリテラシー</option>
-        <option value="blue">ブルーファイル</option>
-      </select>
-      <select id="depositSubTheme" disabled>
-        <option value="">サブテーマを選択</option>
-      </select>
-      <textarea id="depositContent" rows="4" placeholder="ここに内容を書いてください"></textarea>
-      <button onclick="submitDeposit()">預ける</button>
-    </div>
-  </div>
-
-</div><!-- /container -->
+<body>
+<div class="container">
+<h2>📮 Room1 お預かり箱（管理）</h2>
+<div id="list"></div>
+</div>
 
 <script>
-// ═══════════════════════════════════
-// データ定義
-// ═══════════════════════════════════
+// ✅ 修正後（RenderのURLを直接入れる）
 const API_BASE = "https://emu-realtime.onrender.com";
+let inbox = [];
 
-const data = {
-  money: {
-    title: "Room1｜マネーリテラシー",
-    items: [
-      ["増やし方","資産・収入をどう増やすか"],
-      ["育て方","時間を味方につける考え方"],
-      ["守り方","失わない・騙されない"],
-      ["使い方","価値ある支出とは何か"],
-      ["付き合い方","感情・幸福・距離感"],
-      ["稼ぎ方","労働・スキル・仕組み"],
-      ["見極め方","情報・人・話の真偽"],
-      ["回し方","流れを止めない設計"]
-    ]
-  },
-  net: {
-    title: "Room1｜ネットリテラシー",
-    items: [
-      ["SNSとの付き合い方","距離感と健全な使い方"],
-      ["炎上・トラブル対策","守る・避ける・対処する"],
-      ["詐欺・フェイクの見抜き方","疑う力を持つ"],
-      ["個人情報・セキュリティ","守るべき境界線"],
-      ["AIとの付き合い方","使う側でいるために"],
-      ["発信と責任","言葉の影響力"],
-      ["ネットの法律・ルール","知らないと損する知識"]
-    ]
-  },
-  life: {
-    title: "Room1｜ライフリテラシー",
-    items: [
-      ["感情との向き合い方","自分を理解する力"],
-      ["交渉","対話で前に進める技術"],
-      ["家事","生活を回す基本スキル"],
-      ["エチケット","人との距離感と礼節"],
-      ["セルフケア","自分を守り整える"],
-      ["レジリエンス","折れない・立ち直る力"],
-      ["パブリック","社会との関わり方"]
-    ]
-  },
-  blue: {
-    title: "Room1｜ブルーファイル",
-    mains: {
-      "リーダーシップ":   ["理念","ビジョン","戦略","変革","創造的能力","創造的態度"],
-      "マネジメント":     ["目標設定","計画立案","進捗管理","目標達成","計数管理"],
-      "人材活用":         ["組織運営","人材発掘・活用","業務委任","人材育成","動機付け","人的ネットワーク"],
-      "意思決定":         ["決断力","解決案の提示","問題分析","情報収集","改善"],
-      "ヒューマンスキル": ["状況把握","自己客観視点","チームワーク","共感力","異文化コミュニケーション","傾聴力","説得力","プレゼンテーション","企画提案力","伝達力"],
-      "志向":             ["クオリティ","カスタマー","プロフィット","スペシャリティ"],
-      "姿勢":             ["成長・学習意欲","柔軟な対応","主体的な行動","誠実な対応","ルール遵守","マナー意識"],
-      "エネルギー":       ["信念","タフネス","ストレスコントロール","継続力"]
-    }
-  }
-};
-
-// ═══════════════════════════════════
-// 状態管理
-// ═══════════════════════════════════
-let currentMode = "money";
-let currentBlueMain = "";
-let currentHits = [];
-let viewState = "list";
-let room1Contents = [];
-
-// ═══════════════════════════════════
-// 初期化
-// ═══════════════════════════════════
-fetch(`${API_BASE}/api/room1/contents`)
+/* =====================
+   お預かり箱取得（API）
+===================== */
+fetch(`${API_BASE}/api/room1/submissions`)
   .then(res => res.json())
-  .then(d => { room1Contents = Array.isArray(d) ? d : []; })
-  .catch(() => { room1Contents = []; });
-
-window.addEventListener('load', () => {
-  renderList();
-  updateModeButtons();
-});
-
-// ═══════════════════════════════════
-// テーマ・モード表示
-// ═══════════════════════════════════
-function toggleTheme() {
-  document.body.classList.toggle("dark");
-  document.body.classList.toggle("light");
-}
-
-function switchMode(mode) {
-  currentMode = mode;
-  currentBlueMain = "";
-  renderList();
-  updateModeButtons();
-}
-
-function updateModeButtons() {
-  ['money','net','life','blue'].forEach(m => {
-    const el = document.getElementById(`mode-${m}`);
-    if (el) {
-      el.classList.toggle('mode-btn-active', m === currentMode);
-    }
+  .then(data => {
+    inbox = data.filter(i => i.status === "pending");
+    render();
   });
-}
 
-function renderList() {
+function render() {
   const list = document.getElementById("list");
-  document.getElementById("sub").style.display = "none";
-  document.getElementById("detail").style.display = "none";
+  list.innerHTML = "";
 
-  if (currentMode !== "blue") {
-    list.innerHTML = `
-      <div class="section-title">どれを磨く？</div>
-      <div class="grid">
-        ${data[currentMode].items.map(i =>
-          `<div class="card" onclick="openDetail('${i[0]}')"><h2>${i[0]}</h2><p>${i[1]}</p></div>`
-        ).join("")}
-      </div>`;
-  } else {
-    list.innerHTML = `
-      <div class="section-title">どれを磨く？</div>
-      <div class="grid">
-        ${Object.keys(data.blue.mains).map(m =>
-          `<div class="card" onclick="openBlueMain('${m}')"><h2>${m}</h2></div>`
-        ).join("")}
-      </div>`;
-  }
+  inbox.forEach(item => {
+    const title = `${item.theme}｜${item.subTheme}`;
 
-  document.getElementById("headerTitle").textContent = data[currentMode].title;
-  list.style.display = "block";
-}
+    const div = document.createElement("div");
+    div.className = "item";
+    div.innerHTML = `
+      <div class="meta">${title}<br>${item.createdAt}</div>
+      <div>${item.content}</div>
 
-function openBlueMain(main) {
-  currentBlueMain = main;
-  document.getElementById("list").style.display = "none";
-  document.getElementById("detail").style.display = "none";
-  document.getElementById("sub").style.display = "block";
-  document.getElementById("subTitle").textContent = main;
-  document.getElementById("subList").innerHTML =
-    data.blue.mains[main].map(s =>
-      `<li onclick="openDetail('${s}', '${main}')">${s}</li>`
-    ).join("");
-}
+      <button class="approve" onclick="openEditor(${item.id})">昇華</button>
+      <button onclick="reject(${item.id})"
+        style="margin-left:8px; background:#555;">
+        見送り
+      </button>
 
-function openDetail(title, blueMain) {
-  viewState = "list";
-  document.getElementById("list").style.display = "none";
-  document.getElementById("sub").style.display = "none";
-  document.getElementById("detail").style.display = "block";
-  document.getElementById("detailTitle").textContent = title;
+      <div class="editor" id="editor-${item.id}" style="display:none">
+        <strong>タイトル：</strong>${title}<br><br>
 
-  // ブルーファイルはサブテーマ（blueMain）で追加フィルタ
-  if (currentMode === 'blue' && blueMain) {
-    currentHits = room1Contents.filter(c =>
-      c.subTheme === blueMain && c.subSubTheme === title && typeof c.body === 'string'
-    );
-  } else {
-    currentHits = room1Contents.filter(c =>
-      c.subTheme === title && typeof c.body === 'string'
-    );
-  }
+        <textarea id="summary-${item.id}" rows="2"
+          placeholder="要約（一覧・冒頭用）"></textarea>
 
-  if (currentHits.length === 0) {
-    document.getElementById("detailList").innerHTML =
-      '<p style="color:var(--text-sub); font-size:13px;">このテーマは現在準備中です。</p>';
-    document.getElementById("detailBody").innerHTML = "";
-    return;
-  }
-  renderHitList();
-}
+        <textarea id="body-${item.id}" rows="4"
+          placeholder="学習コンテンツ本文"></textarea>
 
-function renderHitList() {
-  const list = document.getElementById("detailList");
-  list.innerHTML = currentHits.map((h, i) => `
-    <div class="card" onclick="openPost(${i})">
-      <strong>📘 ${h.summary || '学習コンテンツ'}</strong>
-      ${h.body ? `<p style="font-size:13px;color:var(--text-sub);margin-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${h.body}</p>` : ""}
-      <span style="font-size:11px;color:var(--text-sub);">${new Date(h.createdAt).toLocaleString()}</span>
-    </div>
-  `).join("");
-  document.getElementById("detailBody").innerHTML = "";
-}
+        <textarea id="note-${item.id}" rows="3"
+          placeholder="補足・背景・注意点"></textarea>
 
-function openPost(index) {
-  viewState = "post";
-  const post = currentHits[index];
-  if (!post) return;
-  document.getElementById("detailTitle").textContent =
-    (post.theme || '') + '｜' + (post.subTheme || '') + (post.subSubTheme ? '｜' + post.subSubTheme : '');
-  document.getElementById("detailList").innerHTML = "";
-  document.getElementById("detailBody").innerHTML = `
-    <div style="line-height:1.9;margin-bottom:24px;">
-      <strong>📝 要約</strong><br>
-      ${post.summary ? post.summary.replace(/\n/g,"<br>") : "—"}
-    </div>
-    <div style="line-height:1.9;margin-bottom:32px;">
-      <strong>📘 本文</strong><br>
-      ${post.body.replace(/\n/g,"<br>")}
-    </div>
-    ${post.note ? `
-      <div style="border-top:1px dashed var(--border);padding-top:16px;color:var(--text-sub);font-size:13px;">
-        ⚠ 補足・注意<br>${post.note.replace(/\n/g,"<br>")}
-      </div>` : ""}
-  `;
-}
-
-function backToList() {
-  currentBlueMain = "";
-  renderList();
-}
-
-function backToSub() {
-  if (viewState === "post") {
-    viewState = "list";
-    renderHitList();
-    return;
-  }
-  if (currentMode !== "blue" || !currentBlueMain) {
-    renderList();
-    return;
-  }
-  openBlueMain(currentBlueMain);
-}
-
-// ═══════════════════════════════════
-// 直接コンテンツ追加フォーム
-// ═══════════════════════════════════
-
-// テーマ変更 → サブテーマを動的生成
-function onDAThemeChange() {
-  const theme = document.getElementById("da-theme").value;
-  const subSel = document.getElementById("da-sub");
-  const subsubRow = document.getElementById("blueSubSubRow");
-  const subsubSel = document.getElementById("da-subsub");
-
-  subSel.innerHTML = '<option value="">選択してください</option>';
-  subsubSel.innerHTML = '<option value="">先にサブテーマを選択</option>';
-  subsubSel.disabled = true;
-
-  if (!theme) {
-    subSel.disabled = true;
-    subsubRow.style.display = "none";
-    return;
-  }
-
-  subSel.disabled = false;
-
-  if (theme === "blue") {
-    // ブルーファイル：サブテーマ = メインカテゴリ
-    Object.keys(data.blue.mains).forEach(m => {
-      const opt = document.createElement("option");
-      opt.value = m; opt.textContent = m;
-      subSel.appendChild(opt);
-    });
-    subsubRow.style.display = "block";
-  } else {
-    // 通常テーマ
-    data[theme].items.forEach(item => {
-      const opt = document.createElement("option");
-      opt.value = item[0]; opt.textContent = item[0];
-      subSel.appendChild(opt);
-    });
-    subsubRow.style.display = "none";
-  }
-}
-
-// サブテーマ変更 → ブルーファイルのみサブサブテーマを動的生成
-function onDASubChange() {
-  const theme = document.getElementById("da-theme").value;
-  const sub = document.getElementById("da-sub").value;
-  const subsubSel = document.getElementById("da-subsub");
-
-  if (theme !== "blue" || !sub) {
-    subsubSel.innerHTML = '<option value="">-</option>';
-    subsubSel.disabled = true;
-    return;
-  }
-
-  subsubSel.innerHTML = '<option value="">選択してください（任意）</option>';
-  const items = data.blue.mains[sub] || [];
-  items.forEach(item => {
-    const opt = document.createElement("option");
-    opt.value = item; opt.textContent = item;
-    subsubSel.appendChild(opt);
+        <button class="approve" onclick="save(${item.id})">
+          昇華して反映
+        </button>
+      </div>
+    `;
+    list.appendChild(div);
   });
-  subsubSel.disabled = false;
 }
 
-// フォーム送信
-async function submitDirectAdd() {
-  const theme   = document.getElementById("da-theme").value;
-  const sub     = document.getElementById("da-sub").value;
-  const subsub  = document.getElementById("da-subsub").value;
-  const summary = document.getElementById("da-summary").value.trim();
-  const body    = document.getElementById("da-body").value.trim();
-  const note    = document.getElementById("da-note").value.trim();
-
-  if (!theme || !sub || !body) {
-    alert("テーマ・サブテーマ・本文は必須です");
+function openEditor(id) {
+  const editor = document.getElementById(`editor-${id}`);
+  if (!editor) {
+    console.error("editor not found:", id);
     return;
   }
 
-  const payload = {
-    theme,
-    subTheme: sub,
-    subSubTheme: subsub || "",
-    summary,
-    body,
-    note,
-    createdAt: new Date().toISOString()
-  };
+  // 他の editor を閉じたい場合（任意）
+  document.querySelectorAll(".editor").forEach(e => {
+    e.style.display = "none";
+  });
 
-  try {
-    const btn = document.querySelector('.btn-submit');
-    btn.disabled = true;
-    btn.textContent = "追加中...";
-
-    const res = await fetch(`${API_BASE}/api/room1/direct-add`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) throw new Error("Server error");
-
-    // ローカルにも追加してすぐ反映
-    room1Contents.push(payload);
-
-    const toast = document.getElementById("daSuccessToast");
-    toast.style.display = "block";
-    setTimeout(() => { toast.style.display = "none"; }, 3000);
-
-    clearDAForm();
-    btn.disabled = false;
-    btn.textContent = "📚 コンテンツを追加";
-
-  } catch (err) {
-    alert("追加に失敗しました: " + err.message);
-    document.querySelector('.btn-submit').disabled = false;
-    document.querySelector('.btn-submit').textContent = "📚 コンテンツを追加";
-  }
+  editor.style.display = "block";
 }
 
-function clearDAForm() {
-  document.getElementById("da-theme").value = "";
-  document.getElementById("da-sub").innerHTML = '<option value="">先にテーマを選択</option>';
-  document.getElementById("da-sub").disabled = true;
-  document.getElementById("da-subsub").innerHTML = '<option value="">先にサブテーマを選択</option>';
-  document.getElementById("da-subsub").disabled = true;
-  document.getElementById("blueSubSubRow").style.display = "none";
-  document.getElementById("da-summary").value = "";
-  document.getElementById("da-body").value = "";
-  document.getElementById("da-note").value = "";
-}
+/* =====================
+   昇華（API）
+===================== */
+function save(id) {
+  const summary = document.getElementById(`summary-${id}`).value;
+  const body = document.getElementById(`body-${id}`).value;
+  const note = document.getElementById(`note-${id}`).value;
 
-// ═══════════════════════════════════
-// お預かり箱
-// ═══════════════════════════════════
-function toggleDeposit() {
-  const box = document.getElementById("depositBox");
-  box.style.display = box.style.display === "block" ? "none" : "block";
-}
-
-function onDepositThemeChange() {
-  const theme = document.getElementById("depositTheme").value;
-  const subSel = document.getElementById("depositSubTheme");
-  subSel.innerHTML = '<option value="">サブテーマを選択</option>';
-  subSel.disabled = !theme;
-  if (!theme) return;
-
-  if (theme === "blue") {
-    Object.keys(data.blue.mains).forEach(m => {
-      const opt = document.createElement("option");
-      opt.value = m; opt.textContent = m;
-      subSel.appendChild(opt);
-    });
-  } else {
-    data[theme].items.forEach(item => {
-      const opt = document.createElement("option");
-      opt.value = item[0]; opt.textContent = item[0];
-      subSel.appendChild(opt);
-    });
-  }
-}
-
-function submitDeposit() {
-  const theme   = document.getElementById("depositTheme").value;
-  const subTheme = document.getElementById("depositSubTheme").value;
-  const content = document.getElementById("depositContent").value.trim();
-
-  if (!theme || !subTheme || !content) {
-    alert("テーマ・サブテーマ・内容を入力してください");
-    return;
-  }
-
-  fetch(`${API_BASE}/api/room1/submit`, {
+  fetch(`${API_BASE}/api/room1/approve/${id}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ theme, subTheme, content })
+    body: JSON.stringify({ summary, body, note })
   })
   .then(res => res.json())
   .then(() => {
-    alert("📮 お預かりしました！");
-    document.getElementById("depositContent").value = "";
-    document.getElementById("depositTheme").value = "";
-    document.getElementById("depositSubTheme").innerHTML = '<option value="">サブテーマを選択</option>';
-    document.getElementById("depositSubTheme").disabled = true;
-    document.getElementById("depositBox").style.display = "none";
+    alert("Room1 学習コンテンツに反映された");
+    location.reload();
   });
 }
+
+function reject(id) {
+  if (!confirm("この投稿を見送りますか？（削除されます）")) return;
+
+  fetch(`${API_BASE}/api/room1/reject/${id}`, {
+    method: "POST"
+  })
+  .then(res => res.json())
+  .then(result => {
+    if (result.success) {
+      inbox = inbox.filter(i => i.id !== id);
+      render();
+      alert("投稿を見送りました");
+    } else {
+      alert("見送りに失敗しました");
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    alert("通信エラー");
+  });
+}
+
 </script>
 </body>
 </html>
