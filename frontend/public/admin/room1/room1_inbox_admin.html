@@ -2,171 +2,622 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Room1｜お預かり箱 管理</title>
+<title>Room1｜管理画面</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
+* { box-sizing: border-box; }
+
 body {
-  background:#0f0f0f;
-  color:#fff;
+  background: #0f0f0f;
+  color: #d4d4d4;
   font-family: system-ui, sans-serif;
+  margin: 0;
 }
+
 .container {
-  max-width:900px;
-  margin:auto;
-  padding:24px;
+  max-width: 960px;
+  margin: auto;
+  padding: 24px;
 }
-.item {
-  background:#161616;
-  border:1px solid #333;
-  border-radius:8px;
-  padding:16px;
-  margin-bottom:16px;
+
+h1 {
+  font-size: 20px;
+  color: #fff;
+  margin: 0 0 28px;
+  border-bottom: 1px solid #2a2a2a;
+  padding-bottom: 16px;
 }
-.meta { font-size:12px; opacity:.7; margin-bottom:8px; }
+
+/* ═══ タブ ═══ */
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 28px;
+  border-bottom: 2px solid #2a2a2a;
+}
+.tab-btn {
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: 0.15s;
+}
+.tab-btn:hover { color: #d4d4d4; }
+.tab-btn.active {
+  color: #4ec9b0;
+  border-bottom-color: #4ec9b0;
+  font-weight: bold;
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ═══ 直接追加フォーム ═══ */
+.direct-form {
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.direct-form h2 {
+  margin: 0 0 20px;
+  font-size: 15px;
+  color: #4ec9b0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.form-field { display: flex; flex-direction: column; gap: 6px; }
+.form-field label { font-size: 12px; color: #888; }
+
+.direct-form select,
+.direct-form textarea,
+.direct-form input[type="text"] {
+  width: 100%;
+  background: #0f0f0f;
+  color: #d4d4d4;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+
+.direct-form select:focus,
+.direct-form textarea:focus,
+.direct-form input[type="text"]:focus {
+  border-color: #4ec9b0;
+  outline: none;
+}
+
+.direct-form select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.direct-form textarea { resize: vertical; }
+
+/* ブルーファイルのサブサブテーマ行 */
+#subsub-row { display: none; }
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.btn-add {
+  background: #4ec9b0;
+  color: #0f0f0f;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn-add:hover { opacity: 0.85; }
+.btn-add:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-clear {
+  background: transparent;
+  color: #888;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-clear:hover { border-color: #666; color: #d4d4d4; }
+
+.toast {
+  display: none;
+  margin-top: 14px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.toast.success {
+  background: rgba(78,201,176,0.1);
+  border: 1px solid #4ec9b0;
+  color: #4ec9b0;
+}
+.toast.error {
+  background: rgba(244,71,71,0.1);
+  border: 1px solid #f44747;
+  color: #f44747;
+}
+
+/* ═══ お預かり箱一覧 ═══ */
+.inbox-item {
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 18px;
+  margin-bottom: 14px;
+  transition: border-color 0.15s;
+}
+.inbox-item:hover { border-color: #3a3a3a; }
+
+.item-meta {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 10px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.item-meta .tag {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: #888;
+  font-size: 11px;
+}
+
+.item-content {
+  color: #c8c8c8;
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 14px;
+  white-space: pre-wrap;
+}
+
+.item-actions {
+  display: flex;
+  gap: 8px;
+}
+
 button {
-  padding:6px 12px;
-  border:none;
-  border-radius:4px;
-  cursor:pointer;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: opacity 0.15s;
 }
-.approve { background:#2ecc71; }
+button:hover { opacity: 0.8; }
+
+.btn-approve { background: #2ecc71; color: #0f0f0f; font-weight: bold; }
+.btn-reject { background: #3a3a3a; color: #888; }
+
+/* 昇華エディタ */
 .editor {
-  margin-top:16px;
-  border-top:1px dashed #444;
-  padding-top:16px;
+  display: none;
+  margin-top: 16px;
+  border-top: 1px dashed #333;
+  padding-top: 16px;
 }
-textarea {
-  width:100%;
-  background:#0f0f0f;
-  color:#fff;
-  border:1px solid #333;
-  border-radius:4px;
-  padding:8px;
-  margin-bottom:10px;
+.editor h4 { margin: 0 0 12px; font-size: 13px; color: #888; }
+.editor textarea,
+.editor input[type="text"] {
+  width: 100%;
+  background: #0f0f0f;
+  color: #d4d4d4;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 10px;
+  font-family: inherit;
+  font-size: 13px;
+}
+.editor textarea { resize: vertical; }
+
+.empty-state {
+  text-align: center;
+  color: #555;
+  padding: 48px 24px;
+  font-size: 14px;
 }
 </style>
 </head>
 
-
 <body>
 <div class="container">
-<h2>📮 Room1 お預かり箱（管理）</h2>
-<div id="list"></div>
-</div>
+  <h1>📚 Room1 管理画面</h1>
+
+  <!-- タブ -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('direct')">✏️ 直接追加</button>
+    <button class="tab-btn" onclick="switchTab('inbox')">📮 お預かり箱 <span id="inbox-count" style="color:#666;"></span></button>
+  </div>
+
+  <!-- ══════════════════════════
+       タブ1: 直接コンテンツ追加
+  ══════════════════════════ -->
+  <div id="tab-direct" class="tab-content active">
+    <div class="direct-form">
+      <h2>📝 学習コンテンツを直接追加</h2>
+
+      <!-- テーマ・サブテーマ・サブサブテーマ -->
+      <div class="form-grid" id="theme-grid">
+        <div class="form-field">
+          <label>テーマ *</label>
+          <select id="da-theme" onchange="onThemeChange()">
+            <option value="">選択してください</option>
+            <option value="money">マネーリテラシー</option>
+            <option value="net">ネットリテラシー</option>
+            <option value="life">ライフリテラシー</option>
+            <option value="blue">ブルーファイル</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>サブテーマ *</label>
+          <select id="da-sub" disabled onchange="onSubChange()">
+            <option value="">先にテーマを選択</option>
+          </select>
+        </div>
+        <div class="form-field" id="subsub-row">
+          <label>サブサブテーマ（ブルーファイルのみ）</label>
+          <select id="da-subsub" disabled>
+            <option value="">先にサブテーマを選択</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 内容入力 -->
+      <div class="form-field" style="margin-bottom:14px;">
+        <label>要約（一覧・冒頭用）</label>
+        <input type="text" id="da-summary" placeholder="例：生活防衛資金は月収3〜6ヶ月分を目安に" />
+      </div>
+      <div class="form-field" style="margin-bottom:14px;">
+        <label>本文 *</label>
+        <textarea id="da-body" rows="6" placeholder="学習コンテンツ本文を入力..."></textarea>
+      </div>
+      <div class="form-field">
+        <label>補足・背景・注意点</label>
+        <textarea id="da-note" rows="3" placeholder="補足情報があれば..."></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn-clear" onclick="clearForm()">クリア</button>
+        <button class="btn-add" id="btn-add" onclick="submitDirect()">📚 コンテンツを追加</button>
+      </div>
+
+      <div class="toast" id="toast"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════
+       タブ2: お預かり箱
+  ══════════════════════════ -->
+  <div id="tab-inbox" class="tab-content">
+    <div id="inbox-list">
+      <div class="empty-state">読み込み中...</div>
+    </div>
+  </div>
+
+</div><!-- /container -->
 
 <script>
-// ✅ 修正後（RenderのURLを直接入れる）
 const API_BASE = "https://emu-realtime.onrender.com";
-let inbox = [];
 
-/* =====================
-   お預かり箱取得（API）
-===================== */
-fetch(`${API_BASE}/api/room1/submissions`)
-  .then(res => res.json())
-  .then(data => {
-    inbox = data.filter(i => i.status === "pending");
-    render();
+// ════════════════════════
+// テーマデータ定義
+// ════════════════════════
+const themeData = {
+  money: {
+    subs: ["増やし方","育て方","守り方","使い方","付き合い方","稼ぎ方","見極め方","回し方"]
+  },
+  net: {
+    subs: ["SNSとの付き合い方","炎上・トラブル対策","詐欺・フェイクの見抜き方","個人情報・セキュリティ","AIとの付き合い方","発信と責任","ネットの法律・ルール"]
+  },
+  life: {
+    subs: ["感情との向き合い方","交渉","家事","エチケット","セルフケア","レジリエンス","パブリック"]
+  },
+  blue: {
+    subs: {
+      "リーダーシップ":   ["理念","ビジョン","戦略","変革","創造的能力","創造的態度"],
+      "マネジメント":     ["目標設定","計画立案","進捗管理","目標達成","計数管理"],
+      "人材活用":         ["組織運営","人材発掘・活用","業務委任","人材育成","動機付け","人的ネットワーク"],
+      "意思決定":         ["決断力","解決案の提示","問題分析","情報収集","改善"],
+      "ヒューマンスキル": ["状況把握","自己客観視点","チームワーク","共感力","異文化コミュニケーション","傾聴力","説得力","プレゼンテーション","企画提案力","伝達力"],
+      "志向":             ["クオリティ","カスタマー","プロフィット","スペシャリティ"],
+      "姿勢":             ["成長・学習意欲","柔軟な対応","主体的な行動","誠実な対応","ルール遵守","マナー意識"],
+      "エネルギー":       ["信念","タフネス","ストレスコントロール","継続力"]
+    }
+  }
+};
+
+// ════════════════════════
+// タブ切替
+// ════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', (tab === 'direct' && i === 0) || (tab === 'inbox' && i === 1));
   });
+  document.getElementById('tab-direct').classList.toggle('active', tab === 'direct');
+  document.getElementById('tab-inbox').classList.toggle('active', tab === 'inbox');
 
-function render() {
-  const list = document.getElementById("list");
-  list.innerHTML = "";
-
-  inbox.forEach(item => {
-    const title = `${item.theme}｜${item.subTheme}`;
-
-    const div = document.createElement("div");
-    div.className = "item";
-    div.innerHTML = `
-      <div class="meta">${title}<br>${item.createdAt}</div>
-      <div>${item.content}</div>
-
-      <button class="approve" onclick="openEditor(${item.id})">昇華</button>
-      <button onclick="reject(${item.id})"
-        style="margin-left:8px; background:#555;">
-        見送り
-      </button>
-
-      <div class="editor" id="editor-${item.id}" style="display:none">
-        <strong>タイトル：</strong>${title}<br><br>
-
-        <textarea id="summary-${item.id}" rows="2"
-          placeholder="要約（一覧・冒頭用）"></textarea>
-
-        <textarea id="body-${item.id}" rows="4"
-          placeholder="学習コンテンツ本文"></textarea>
-
-        <textarea id="note-${item.id}" rows="3"
-          placeholder="補足・背景・注意点"></textarea>
-
-        <button class="approve" onclick="save(${item.id})">
-          昇華して反映
-        </button>
-      </div>
-    `;
-    list.appendChild(div);
-  });
+  if (tab === 'inbox') loadInbox();
 }
 
-function openEditor(id) {
-  const editor = document.getElementById(`editor-${id}`);
-  if (!editor) {
-    console.error("editor not found:", id);
+// ════════════════════════
+// 直接追加フォーム
+// ════════════════════════
+function onThemeChange() {
+  const theme = document.getElementById('da-theme').value;
+  const subSel = document.getElementById('da-sub');
+  const subsubRow = document.getElementById('subsub-row');
+  const subsubSel = document.getElementById('da-subsub');
+
+  // リセット
+  subSel.innerHTML = '<option value="">選択してください</option>';
+  subsubSel.innerHTML = '<option value="">先にサブテーマを選択</option>';
+  subsubSel.disabled = true;
+  subSel.disabled = !theme;
+
+  if (!theme) {
+    subsubRow.style.display = 'none';
     return;
   }
 
-  // 他の editor を閉じたい場合（任意）
-  document.querySelectorAll(".editor").forEach(e => {
-    e.style.display = "none";
-  });
-
-  editor.style.display = "block";
+  if (theme === 'blue') {
+    // ブルーファイル：サブ = メインカテゴリ
+    Object.keys(themeData.blue.subs).forEach(key => {
+      const opt = document.createElement('option');
+      opt.value = key; opt.textContent = key;
+      subSel.appendChild(opt);
+    });
+    subsubRow.style.display = 'block';
+  } else {
+    themeData[theme].subs.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      subSel.appendChild(opt);
+    });
+    subsubRow.style.display = 'none';
+  }
 }
 
-/* =====================
-   昇華（API）
-===================== */
-function save(id) {
+function onSubChange() {
+  const theme = document.getElementById('da-theme').value;
+  const sub   = document.getElementById('da-sub').value;
+  const subsubSel = document.getElementById('da-subsub');
+
+  if (theme !== 'blue' || !sub) {
+    subsubSel.innerHTML = '<option value="">-</option>';
+    subsubSel.disabled = true;
+    return;
+  }
+
+  subsubSel.innerHTML = '<option value="">選択してください（任意）</option>';
+  (themeData.blue.subs[sub] || []).forEach(item => {
+    const opt = document.createElement('option');
+    opt.value = item; opt.textContent = item;
+    subsubSel.appendChild(opt);
+  });
+  subsubSel.disabled = false;
+}
+
+async function submitDirect() {
+  const theme   = document.getElementById('da-theme').value;
+  const sub     = document.getElementById('da-sub').value;
+  const subsub  = document.getElementById('da-subsub').value;
+  const summary = document.getElementById('da-summary').value.trim();
+  const body    = document.getElementById('da-body').value.trim();
+  const note    = document.getElementById('da-note').value.trim();
+
+  if (!theme || !sub || !body) {
+    showToast('テーマ・サブテーマ・本文は必須です', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-add');
+  btn.disabled = true;
+  btn.textContent = '追加中...';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/room1/direct-add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme, subTheme: sub, subSubTheme: subsub || '', summary, body, note })
+    });
+
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+    showToast('✅ コンテンツをRoom1に追加しました！', 'success');
+    clearForm();
+  } catch (err) {
+    showToast('❌ 追加に失敗しました: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📚 コンテンツを追加';
+  }
+}
+
+function clearForm() {
+  ['da-theme','da-sub','da-subsub'].forEach(id => {
+    const el = document.getElementById(id);
+    el.value = '';
+    if (id !== 'da-theme') el.disabled = true;
+  });
+  document.getElementById('subsub-row').style.display = 'none';
+  document.getElementById('da-sub').innerHTML = '<option value="">先にテーマを選択</option>';
+  document.getElementById('da-subsub').innerHTML = '<option value="">先にサブテーマを選択</option>';
+  document.getElementById('da-summary').value = '';
+  document.getElementById('da-body').value = '';
+  document.getElementById('da-note').value = '';
+}
+
+function showToast(msg, type) {
+  const toast = document.getElementById('toast');
+  toast.className = `toast ${type}`;
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  setTimeout(() => { toast.style.display = 'none'; }, 4000);
+}
+
+// ════════════════════════
+// お預かり箱
+// ════════════════════════
+let inbox = [];
+
+function loadInbox() {
+  fetch(`${API_BASE}/api/room1/submissions`)
+    .then(res => res.json())
+    .then(data => {
+      inbox = data.filter(i => i.status === 'pending');
+      document.getElementById('inbox-count').textContent =
+        inbox.length > 0 ? `(${inbox.length})` : '';
+      renderInbox();
+    })
+    .catch(() => {
+      document.getElementById('inbox-list').innerHTML =
+        '<div class="empty-state">データの取得に失敗しました</div>';
+    });
+}
+
+function renderInbox() {
+  const list = document.getElementById('inbox-list');
+
+  if (inbox.length === 0) {
+    list.innerHTML = '<div class="empty-state">📭 未対応のお預かりはありません</div>';
+    return;
+  }
+
+  list.innerHTML = inbox.map(item => {
+    const themeLabel = {
+      money: 'マネーリテラシー',
+      net: 'ネットリテラシー',
+      life: 'ライフリテラシー',
+      blue: 'ブルーファイル'
+    }[item.theme] || item.theme;
+
+    return `
+      <div class="inbox-item" id="item-${item.id}">
+        <div class="item-meta">
+          <span class="tag">${themeLabel}</span>
+          <span class="tag">${item.subTheme}</span>
+          <span>${new Date(item.createdAt).toLocaleString('ja-JP')}</span>
+        </div>
+        <div class="item-content">${escapeHtml(item.content)}</div>
+        <div class="item-actions">
+          <button class="btn-approve" onclick="openEditor(${item.id})">✨ 昇華</button>
+          <button class="btn-reject" onclick="rejectItem(${item.id})">見送り</button>
+        </div>
+        <div class="editor" id="editor-${item.id}">
+          <h4>昇華エディタ — テーマ: ${themeLabel} / ${item.subTheme}</h4>
+          <label style="font-size:12px;color:#888;">要約（一覧・冒頭用）</label>
+          <input type="text" id="summary-${item.id}" placeholder="要約を入力..." />
+          <label style="font-size:12px;color:#888;">学習コンテンツ本文</label>
+          <textarea id="body-${item.id}" rows="5" placeholder="元の内容をもとに編集...">${escapeHtml(item.content)}</textarea>
+          <label style="font-size:12px;color:#888;">補足・背景・注意点</label>
+          <textarea id="note-${item.id}" rows="3" placeholder="補足情報..."></textarea>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button class="btn-approve" onclick="approveItem(${item.id})">✅ 昇華して反映</button>
+            <button class="btn-reject" onclick="closeEditor(${item.id})">閉じる</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function openEditor(id) {
+  document.querySelectorAll('.editor').forEach(e => e.style.display = 'none');
+  document.getElementById(`editor-${id}`).style.display = 'block';
+}
+
+function closeEditor(id) {
+  document.getElementById(`editor-${id}`).style.display = 'none';
+}
+
+async function approveItem(id) {
   const summary = document.getElementById(`summary-${id}`).value;
-  const body = document.getElementById(`body-${id}`).value;
-  const note = document.getElementById(`note-${id}`).value;
+  const body    = document.getElementById(`body-${id}`).value;
+  const note    = document.getElementById(`note-${id}`).value;
 
-  fetch(`${API_BASE}/api/room1/approve/${id}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ summary, body, note })
-  })
-  .then(res => res.json())
-  .then(() => {
-    alert("Room1 学習コンテンツに反映された");
-    location.reload();
-  });
-}
-
-function reject(id) {
-  if (!confirm("この投稿を見送りますか？（削除されます）")) return;
-
-  fetch(`${API_BASE}/api/room1/reject/${id}`, {
-    method: "POST"
-  })
-  .then(res => res.json())
-  .then(result => {
+  try {
+    const res = await fetch(`${API_BASE}/api/room1/approve/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary, body, note })
+    });
+    const result = await res.json();
     if (result.success) {
       inbox = inbox.filter(i => i.id !== id);
-      render();
-      alert("投稿を見送りました");
+      renderInbox();
+      document.getElementById('inbox-count').textContent =
+        inbox.length > 0 ? `(${inbox.length})` : '';
+      alert('✅ Room1に反映しました！');
     } else {
-      alert("見送りに失敗しました");
+      alert('反映に失敗しました');
     }
-  })
-  .catch(err => {
-    console.error(err);
-    alert("通信エラー");
-  });
+  } catch (err) {
+    alert('エラー: ' + err.message);
+  }
 }
 
+async function rejectItem(id) {
+  if (!confirm('この投稿を見送りますか？（削除されます）')) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/room1/reject/${id}`, { method: 'POST' });
+    const result = await res.json();
+    if (result.success) {
+      inbox = inbox.filter(i => i.id !== id);
+      renderInbox();
+      document.getElementById('inbox-count').textContent =
+        inbox.length > 0 ? `(${inbox.length})` : '';
+    } else {
+      alert('見送りに失敗しました');
+    }
+  } catch (err) {
+    alert('エラー: ' + err.message);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 </script>
 </body>
 </html>

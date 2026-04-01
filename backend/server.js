@@ -522,6 +522,45 @@ app.get("/api/room1/contents", (req, res) => {
   }
 });
 
+// ════════════════════════════════════════
+// Room1 直接コンテンツ追加 API
+// ════════════════════════════════════════
+app.post("/api/room1/direct-add", (req, res) => {
+  try {
+    const { theme, subTheme, subSubTheme, summary, body, note } = req.body;
+
+    // バリデーション
+    if (!theme || !subTheme || !body) {
+      return res.status(400).json({ error: "theme, subTheme, body は必須です" });
+    }
+
+    const contents = readJSON(contentsPath);
+
+    const newItem = {
+      // titleは互換性のために残す（既存のフォーマットに合わせる）
+      title: subSubTheme
+        ? `${theme}/${subTheme}/${subSubTheme}`
+        : `${theme}/${subTheme}`,
+      theme,
+      subTheme,
+      subSubTheme: subSubTheme || "",   // ← ブルーファイル用サブサブテーマ
+      summary: summary || "",
+      body,
+      note: note || "",
+      createdAt: new Date().toISOString()
+    };
+
+    contents.push(newItem);
+    writeJSON(contentsPath, contents);
+
+    console.log(`✅ Direct add: ${newItem.title}`);
+    res.json({ success: true, item: newItem });
+
+  } catch (err) {
+    console.error("direct-add error:", err);
+    res.status(500).json({ error: "追加に失敗しました" });
+  }
+});
 
 // =====================
 // Room3（既存のまま）
