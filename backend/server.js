@@ -5,11 +5,10 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const { randomUUID } = require("crypto");
-const fs = require("fs");
 const path = require("path");
 const cors = require("cors");
-const ethers = require("ethers");  // ★追加
-const cron = require("node-cron"); // ★追加 (npm install node-cron)
+const ethers = require("ethers");
+const cron = require("node-cron");
 
 // =====================
 // App / Server
@@ -37,34 +36,8 @@ app.use(
 );
 
 // =====================
-// ★ Dプラン: ethers / コントラクト設定
+// Firebase Admin 初期化
 // =====================
-const OPERATOR_PRIVATE_KEY = process.env.OPERATOR_PRIVATE_KEY;
-const EMUER_CONTRACT_ADDRESS = process.env.EMUER_CONTRACT_ADDRESS || "0x4418d5250Dae4b1125ADFCD5C0779B1412E4a964";
-const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL || "https://polygon-rpc.com";
-const CAMPAIGN_ID = "EmuRelease2026";
-const CAMPAIGN_DEADLINE = new Date("2026-04-14T23:59:59+09:00");
-
-// addGoodBatch のみ使用（コントラクト改修なし）
-const EMUER_ABI_MINIMAL = [
-  "function addGoodBatch(address[] calldata _users, uint256[] calldata _amounts) external",
-  "function transfer(address to, uint256 amount) returns (bool)",
-  "function balanceOf(address account) view returns (uint256)"
-];
-
-
-// 運営ウォレット・コントラクト（OPERATOR_PRIVATE_KEY がある場合のみ初期化）
-let operatorWallet = null;
-let emuerContract = null;
-
-if (OPERATOR_PRIVATE_KEY) {
-  console.log("✅ 運営ウォレット初期化完了: 起動時チェックOK");
-} else {
-  console.warn("⚠️ OPERATOR_PRIVATE_KEY が未設定。エアドロバッチは無効。");
-}
-
-// ★ Firestore (firebase-admin) — Firebase初期化はこのファイルの下部のModule importで行う想定
-// render.com では GOOGLE_APPLICATION_CREDENTIALS か initializeApp で設定してください
 let db = null;
 const initFirestore = () => {
   try {
@@ -78,13 +51,43 @@ const initFirestore = () => {
     db = admin.firestore();
     console.log("✅ Firestore 初期化完了");
   } catch (e) {
-    console.warn("⚠️ Firestore 初期化失敗（firebase-adminがない場合は省略可）:", e.message);
+    console.warn("⚠️ Firestore 初期化失敗:", e.message);
   }
 };
 initFirestore();
 
 // =====================
-// ★ Dプラン: EIP-712 署名検証
+// Ethers / コントラクト設定（Dプラン）
+// =====================
+const OPERATOR_PRIVATE_KEY = process.env.OPERATOR_PRIVATE_KEY;
+const EMUER_CONTRACT_ADDRESS = process.env.EMUER_CONTRACT_ADDRESS || "0x4418d5250Dae4b1125ADFCD5C0779B1412E4a964";
+const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL || "https://polygon-rpc.com";
+const CAMPAIGN_ID = "EmuRelease2026";
+const CAMPAIGN_DEADLINE = new Date("2026-04-14T23:59:59+09:00");
+
+const EMUER_ABI_MINIMAL = [
+  "function addGoodBatch(address[] calldata _users, uint256[] calldata _amounts) external",
+  "function balanceOf(address account) view returns (uint256)"
+];
+
+let operatorWallet = null;
+let emuerContract = null;
+
+if (OPERATOR_PRIVATE_KEY) {
+  try {
+    const rpcProvider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
+    operatorWallet = new ethers.Wallet(OPERATOR_PRIVATE_KEY, rpcProvider);
+    emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_ABI_MINIMAL, operatorWallet);
+    console.log("✅ 運営ウォレット初期化完了:", operatorWallet.address);
+  } catch (e) {
+    console.error("❌ 運営ウォレット初期化失敗:", e.message);
+  }
+} else {
+  console.warn("⚠️ OPERATOR_PRIVATE_KEY 未設定");
+}
+
+// =====================
+// EIP-712 署名検証（Dプラン）
 // =====================
 function verifyAirdropSignature({ address, campaign, timestamp, signature }) {
   try {
@@ -106,96 +109,62 @@ function verifyAirdropSignature({ address, campaign, timestamp, signature }) {
 }
 
 // =====================
-// ★ Dプラン: エアドロ一括送金バッチ
+// エアドロ一括送金バッチ（Dプラン）
 // =====================
 async function runAirdropBatch() {
-  if (!db) {
-    console.warn("⚠️ Firestore が未初期化。バッチをスキップ。");
+  if (!db || !emuerContract) {
+    console.warn("⚠️ Firestore または emuerContract が未初期化。バッチをスキップ。");
     return;
   }
-  if (!OPERATOR_PRIVATE_KEY) {
-    console.warn("⚠️ OPERATOR_PRIVATE_KEY が未設定。バッチをスキップ。");
-    return;
-  }
-
-  // ★ バッチ実行のたびに新しいプロバイダーを作成
-  const rpcProvider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
-  const operatorWallet = new ethers.Wallet(OPERATOR_PRIVATE_KEY, rpcProvider);
-  const emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_ABI_MINIMAL, operatorWallet);
-
   console.log("🚀 エアドロバッチ開始:", new Date().toISOString());
-
   try {
-    // pending を最大50件取得
     const snapshot = await db
       .collection("airdrop_registrations")
       .where("status", "==", "pending")
       .limit(50)
       .get();
 
-    if (snapshot.empty) {
-      console.log("ℹ️ 送金対象なし");
-      return;
-    }
+    if (snapshot.empty) { console.log("ℹ️ 送金対象なし"); return; }
 
     const targets = snapshot.docs.map(doc => doc.data());
     const addresses = targets.map(t => t.address);
-    // 100 EMUER × 件数（good ポイントとして付与）
     const amounts = addresses.map(() => ethers.utils.parseUnits("100", 18));
 
     console.log(`📦 送金対象: ${addresses.length} 件`);
 
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => batch.update(doc.ref, { status: "processing" }));
+    await batch.commit();
 
-// addGoodBatch で一括送金（1tx）
     const gasOptions = {
-      maxPriorityFeePerGas: ethers.utils.parseUnits("300", "gwei"),
-      maxFeePerGas: ethers.utils.parseUnits("500", "gwei"),
+      maxPriorityFeePerGas: ethers.utils.parseUnits("40", "gwei"),
+      maxFeePerGas: ethers.utils.parseUnits("100", "gwei"),
       gasLimit: 500000
     };
 
-    // ★ 各アドレスに直接transferで送金
-    const txHashes = [];
-    for (let i = 0; i < addresses.length; i++) {
-      const nonce = await operatorWallet.getTransactionCount("pending");
-      console.log(`⛽ transfer送信中... ${addresses[i]} nonce:`, nonce);
-      const tx = await emuerContract.transfer(addresses[i], amounts[i], {
-        ...gasOptions,
-        nonce
-      });
-      console.log("📝 TX Hash:", tx.hash);
-      const receipt = await tx.wait();
-      if (!receipt || receipt.status !== 1) {
-        throw new Error("TX failed: status=" + receipt?.status);
-      }
-      console.log(`✅ ${addresses[i]} に100EMUER送金完了`);
-      txHashes.push(receipt.transactionHash);
-    }
+    const tx = await emuerContract.addGoodBatch(addresses, amounts, gasOptions);
+    console.log("📝 TX Hash:", tx.hash);
+    const receipt = await tx.wait();
+    console.log("✅ TX確定:", receipt.transactionHash);
 
-    // done に更新
     const doneBatch = db.batch();
-    snapshot.docs.forEach((doc, i) => {
+    snapshot.docs.forEach(doc => {
       doneBatch.update(doc.ref, {
         status: "done",
-        txHash: txHashes[i] || txHashes[0],
+        txHash: receipt.transactionHash,
         processedAt: new Date()
       });
     });
     await doneBatch.commit();
-
     console.log(`🎉 エアドロ完了: ${addresses.length} 件`);
 
   } catch (err) {
     console.error("❌ バッチエラー:", err);
-    // processing → pending にロールバック
     try {
-      const stuck = await db
-        .collection("airdrop_registrations")
-        .where("status", "==", "processing")
-        .get();
+      const stuck = await db.collection("airdrop_registrations").where("status", "==", "processing").get();
       const rb = db.batch();
       stuck.docs.forEach(doc => rb.update(doc.ref, { status: "pending", errorMessage: err.message }));
       await rb.commit();
-      console.log("🔄 ロールバック完了");
     } catch (rbErr) {
       console.error("❌ ロールバック失敗:", rbErr);
     }
@@ -203,358 +172,184 @@ async function runAirdropBatch() {
 }
 
 // =====================
-// ★ Dプラン: エアドロ API エンドポイント
+// エアドロ API（Dプラン）
 // =====================
 const airdropRouter = express.Router();
 
-// POST /airdrop/register — フロントからの接続証明受付
 airdropRouter.post("/register", async (req, res) => {
   const { address, campaign, timestamp, signature } = req.body;
-
-  if (!address || !campaign || !timestamp || !signature) {
-    return res.status(400).json({ error: "MISSING_PARAMS" });
-  }
-  if (campaign !== CAMPAIGN_ID) {
-    return res.status(400).json({ error: "INVALID_CAMPAIGN" });
-  }
-
-  // タイムスタンプ5分チェック（リプレイ攻撃防止）
+  if (!address || !campaign || !timestamp || !signature) return res.status(400).json({ error: "MISSING_PARAMS" });
+  if (campaign !== CAMPAIGN_ID) return res.status(400).json({ error: "INVALID_CAMPAIGN" });
   const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - timestamp) > 300) {
-    return res.status(400).json({ error: "TIMESTAMP_EXPIRED" });
-  }
-
-  // キャンペーン期間チェック
-  if (new Date() > CAMPAIGN_DEADLINE) {
-    return res.status(400).json({ error: "CAMPAIGN_ENDED" });
-  }
-
-  // 署名検証
-  if (!verifyAirdropSignature({ address, campaign, timestamp, signature })) {
-    return res.status(401).json({ error: "INVALID_SIGNATURE" });
-  }
+  if (Math.abs(now - timestamp) > 300) return res.status(400).json({ error: "TIMESTAMP_EXPIRED" });
+  if (new Date() > CAMPAIGN_DEADLINE) return res.status(400).json({ error: "CAMPAIGN_ENDED" });
+  if (!verifyAirdropSignature({ address, campaign, timestamp, signature })) return res.status(401).json({ error: "INVALID_SIGNATURE" });
 
   if (!db) {
-    // Firestoreなし環境のフォールバック（開発用）
     console.log("⚠️ Firestore未接続 - 登録をスキップ:", address);
     return res.json({ success: true, message: "受付完了（テストモード）" });
   }
-
   try {
     const docRef = db.collection("airdrop_registrations").doc(address.toLowerCase());
     const existing = await docRef.get();
-
-    if (existing.exists) {
-      return res.status(409).json({ error: "ALREADY_REGISTERED" });
-    }
-
-    await docRef.set({
-      address: address.toLowerCase(),
-      campaign,
-      timestamp,
-      registeredAt: new Date(),
-      status: "pending",
-      amount: "100"
-    });
-
+    if (existing.exists) return res.status(409).json({ error: "ALREADY_REGISTERED" });
+    await docRef.set({ address: address.toLowerCase(), campaign, timestamp, registeredAt: new Date(), status: "pending", amount: "100" });
     console.log("✅ エアドロ登録:", address);
     return res.json({ success: true, message: "100 EMUER 受取予約が完了しました" });
-
   } catch (e) {
     console.error("Firestore書き込みエラー:", e);
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 });
 
-// GET /airdrop/status/:address — 状態確認
 airdropRouter.get("/status/:address", async (req, res) => {
   if (!db) return res.json({ registered: false });
-
   try {
-    const doc = await db
-      .collection("airdrop_registrations")
-      .doc(req.params.address.toLowerCase())
-      .get();
-
+    const doc = await db.collection("airdrop_registrations").doc(req.params.address.toLowerCase()).get();
     if (!doc.exists) return res.json({ registered: false });
-
     const data = doc.data();
-    return res.json({
-      registered: true,
-      status: data.status,
-      amount: data.amount,
-      txHash: data.txHash || null
-    });
+    return res.json({ registered: true, status: data.status, amount: data.amount, txHash: data.txHash || null });
   } catch (e) {
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 });
 
-// POST /airdrop/batch/run — 管理者用手動バッチ実行
 airdropRouter.post("/batch/run", async (req, res) => {
   const adminKey = req.headers["x-admin-key"];
-  if (adminKey !== process.env.ADMIN_SECRET_KEY) {
-    return res.status(403).json({ error: "UNAUTHORIZED" });
-  }
+  if (adminKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: "UNAUTHORIZED" });
   res.json({ message: "バッチを開始します" });
   runAirdropBatch();
 });
 
-// ★ エアドロルーターをアプリに接続
 app.use("/airdrop", airdropRouter);
 
-// =====================
-// ★ 初投稿ボーナス API
-// =====================
-const firstPostRouter = express.Router();
+cron.schedule("0 2 * * *", () => { console.log("⏰ 定期エアドロバッチ起動"); runAirdropBatch(); }, { timezone: "Asia/Tokyo" });
+cron.schedule("0 3 15 4 *", () => { console.log("🏁 最終エアドロバッチ起動"); runAirdropBatch(); }, { timezone: "Asia/Tokyo" });
 
-// POST /first-post/register — 投稿フォームから呼ぶ
-firstPostRouter.post("/register", async (req, res) => {
-  const { address } = req.body;
-  if (!address) return res.status(400).json({ error: "MISSING_ADDRESS" });
-  if (!db) return res.json({ success: true, message: "テストモード" });
+// ════════════════════════════════════════
+// お問い合わせ API（復元）
+// ════════════════════════════════════════
+app.post("/api/contact", async (req, res) => {
+  const { type, name, email, company, message, scale, source } = req.body;
+
+  if (!name || !email || !message) {
+    return res.status(400).json({ error: "必須項目が不足しています" });
+  }
+
+  const payload = {
+    type: type || "general",
+    name, email,
+    company: company || "",
+    message,
+    scale: scale || "",
+    source: source || "unknown",
+    submittedAt: new Date().toISOString()
+  };
 
   try {
-    const docRef = db.collection("first_post_bonus")
-      .doc(address.toLowerCase());
-    const existing = await docRef.get();
-    if (existing.exists) {
-      return res.status(409).json({ error: "ALREADY_REGISTERED" });
+    // 1. Firestoreに保存
+    if (db) {
+      await db.collection("contact_submissions").add(payload);
+      console.log("✅ Firestore: contact saved");
     }
-    await docRef.set({
-      address: address.toLowerCase(),
-      registeredAt: new Date(),
-      status: "pending",
-      amount: "30"
-    });
-    console.log("✅ 初投稿ボーナス登録:", address);
-    return res.json({ success: true });
-  } catch(e) {
-    console.error("初投稿ボーナス登録エラー:", e);
-    return res.status(500).json({ error: "SERVER_ERROR" });
-  }
-});
 
-app.use("/first-post", firstPostRouter);
+    // 2. Notionに保存
+    const NOTION_TOKEN = process.env.NOTION_TOKEN;
+    const NOTION_DB_ID = "32b72abf64104a618d3d2ec00d3b37ba";
 
-// ★ 初投稿ボーナス バッチ（毎日AM2:10 JST）
-async function runFirstPostBatch() {
-  if (!db || !OPERATOR_PRIVATE_KEY) return;
+    if (NOTION_TOKEN) {
+      const typeMap = { general: "💬一般", event: "🎪イベント", media: "📰取材", investor: "💰投資家" };
+      const sourceMap = { "emu-widget": "Emuウィジェット", "hp-form": "HPフォーム" };
 
-  // ★ バッチ実行のたびに新しいプロバイダーを作成
-  const rpcProvider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
-  const operatorWallet = new ethers.Wallet(OPERATOR_PRIVATE_KEY, rpcProvider);
-  const emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_ABI_MINIMAL, operatorWallet);
-  console.log("🚀 初投稿ボーナスバッチ開始:", new Date().toISOString());
+      const notionRes = await fetch("https://api.notion.com/v1/pages", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${NOTION_TOKEN}`,
+          "Content-Type": "application/json",
+          "Notion-Version": "2022-06-28"
+        },
+        body: JSON.stringify({
+          parent: { database_id: NOTION_DB_ID },
+          properties: {
+            "件名・概要": { title: [{ text: { content: `[${typeMap[type] || type}] ${name}` } }] },
+            "種別": { select: { name: typeMap[type] || "💬一般" } },
+            "ステータス": { select: { name: "未対応" } },
+            "送信者名": { rich_text: [{ text: { content: name } }] },
+            "メールアドレス": { email: email },
+            "会社名": { rich_text: [{ text: { content: company || "" } }] },
+            "メッセージ": { rich_text: [{ text: { content: message.slice(0, 2000) } }] },
+            "ソース": { select: { name: sourceMap[source] || "直接" } },
+            "送信日時": { date: { start: new Date().toISOString() } }
+          }
+        })
+      });
 
-  try {
-    const snapshot = await db.collection("first_post_bonus")
-      .where("status", "==", "pending")
-      .limit(50).get();
-
-    if (snapshot.empty) { console.log("ℹ️ 初投稿ボーナス対象なし"); return; }
-
-    const addresses = snapshot.docs.map(d => d.data().address);
-    const amounts = addresses.map(() =>
-      ethers.utils.parseUnits("30", 18)
-    );
-
-    const batch = db.batch();
-    snapshot.docs.forEach(doc =>
-      batch.update(doc.ref, { status: "processing" })
-    );
-    await batch.commit();
-
-    const nonce = await operatorWallet.getTransactionCount("pending");
-    console.log("⛽ 初投稿バッチ送信中... nonce:", nonce);
-    const tx = await emuerContract.addGoodBatch(addresses, amounts, {
-      maxPriorityFeePerGas: ethers.utils.parseUnits("300", "gwei"),
-      maxFeePerGas: ethers.utils.parseUnits("500", "gwei"),
-      gasLimit: 500000,
-      nonce
-    });
-
-    console.log("📝 初投稿TX Hash:", tx.hash);
-    const receipt = await tx.wait();
-
-    // ★ 送金確定チェック
-    if (!receipt || receipt.status !== 1) {
-      console.error("❌ 初投稿TX失敗: receipt.status =", receipt?.status);
-      throw new Error("TX failed: status=" + receipt?.status);
+      if (!notionRes.ok) {
+        const err = await notionRes.json();
+        console.error("Notion API error:", err);
+      } else {
+        console.log("✅ Notion: contact saved");
+      }
     }
-    const doneBatch = db.batch();
-    snapshot.docs.forEach(doc =>
-      doneBatch.update(doc.ref, {
-        status: "done",
-        txHash: receipt.transactionHash,
-        processedAt: new Date()
-      })
-    );
-    await doneBatch.commit();
-    console.log(`🎉 初投稿ボーナス完了: ${addresses.length}件`);
-  } catch(err) {
-    console.error("❌ 初投稿ボーナスバッチエラー:", err);
-  }
-}
 
-cron.schedule("10 2 * * *", () => {
-  console.log("⏰ 初投稿ボーナスバッチ起動");
-  runFirstPostBatch();
-}, { timezone: "Asia/Tokyo" });
-
-// =====================
-// ★ Dプラン: cron スケジュール（毎日 AM2:00 JST）
-// =====================
-cron.schedule("0 2 * * *", () => {
-  console.log("⏰ 定期エアドロバッチ起動");
-  runAirdropBatch();
-}, { timezone: "Asia/Tokyo" });
-
-// キャンペーン最終日翌日（4/15 AM3:00）に最終バッチ
-cron.schedule("0 3 15 4 *", () => {
-  console.log("🏁 最終エアドロバッチ起動");
-  runAirdropBatch();
-}, { timezone: "Asia/Tokyo" });
-
-
-// =====================
-// Room1 path
-// =====================
-const room1AdminDir = path.join(
-  __dirname, "public", "Emu_room1", "room1_admin.html"
-);
-const submissionsPath = path.join(room1AdminDir, "data", "submissions.json");
-const contentsPath = path.join(room1AdminDir, "data", "contents.json");
-
-function ensureFile(filePath) {
-  if (!fs.existsSync(filePath)) {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, "[]", "utf8");
-  }
-}
-function readJSON(filePath) {
-  ensureFile(filePath);
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
-}
-function writeJSON(filePath, data) {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-}
-
-// =====================
-// Room1 API（既存のまま）
-// =====================
-app.post("/api/room1/reject/:id", (req, res) => {
-  try {
-    const submissions = readJSON(submissionsPath);
-    const index = submissions.findIndex(s => String(s.id) === req.params.id);
-    if (index === -1) return res.status(404).json({ error: "not found" });
-    submissions.splice(index, 1);
-    writeJSON(submissionsPath, submissions);
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "reject failed" });
+    console.error("Contact API error:", err);
+    res.status(500).json({ error: "サーバーエラー" });
   }
 });
 
-app.post("/api/room1/submit", (req, res) => {
-  try {
-    const submissions = readJSON(submissionsPath);
-    submissions.push({
-      id: Date.now(),
-      theme: req.body.theme,
-      subTheme: req.body.subTheme,
-      content: req.body.content,
-      status: "pending",
-      createdAt: new Date().toISOString()
-    });
-    writeJSON(submissionsPath, submissions);
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "submit failed" });
-  }
-});
+// ════════════════════════════════════════
+// Room1 API（Firestore永続化版）
+// ════════════════════════════════════════
 
-app.get("/api/room1/submissions", (req, res) => {
+// ── コレクション名 ──
+const ROOM1_CONTENTS_COL = "room1_contents";
+const ROOM1_SUBMISSIONS_COL = "room1_submissions";
+
+// コンテンツ一覧取得
+app.get("/api/room1/contents", async (req, res) => {
   try {
-    res.json(readJSON(submissionsPath));
+    if (!db) return res.json([]);
+    const snapshot = await db
+      .collection(ROOM1_CONTENTS_COL)
+      .orderBy("createdAt", "asc")
+      .get();
+    const contents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(contents);
   } catch (err) {
-    console.error(err);
+    console.error("contents get error:", err);
     res.status(500).json([]);
   }
 });
 
-app.post("/api/room1/approve/:id", (req, res) => {
-  try {
-    const submissions = readJSON(submissionsPath);
-    const contents = readJSON(contentsPath);
-    const index = submissions.findIndex(s => String(s.id) === req.params.id);
-    if (index === -1) return res.status(404).json({ error: "not found" });
-    const item = submissions[index];
-    const { summary, body, note } = req.body;
-    contents.push({
-      title: `${item.theme}/${item.subTheme}`,
-      theme: item.theme,
-      subTheme: item.subTheme,
-      summary: summary || "",
-      body: body || item.content,
-      note: note || "",
-      createdAt: new Date().toISOString()
-    });
-    submissions.splice(index, 1);
-    writeJSON(submissionsPath, submissions);
-    writeJSON(contentsPath, contents);
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "approve failed" });
-  }
-});
-
-app.get("/api/room1/contents", (req, res) => {
-  try {
-    const contents = readJSON(contentsPath);
-    res.json(contents);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "failed to load contents" });
-  }
-});
-
-// ════════════════════════════════════════
-// Room1 直接コンテンツ追加 API
-// ════════════════════════════════════════
-app.post("/api/room1/direct-add", (req, res) => {
+// ── 直接追加（管理者のみ）──
+app.post("/api/room1/direct-add", async (req, res) => {
   try {
     const { theme, subTheme, subSubTheme, summary, body, note } = req.body;
 
-    // バリデーション
     if (!theme || !subTheme || !body) {
       return res.status(400).json({ error: "theme, subTheme, body は必須です" });
     }
 
-    const contents = readJSON(contentsPath);
-
     const newItem = {
-      // titleは互換性のために残す（既存のフォーマットに合わせる）
       title: subSubTheme
         ? `${theme}/${subTheme}/${subSubTheme}`
         : `${theme}/${subTheme}`,
       theme,
       subTheme,
-      subSubTheme: subSubTheme || "",   // ← ブルーファイル用サブサブテーマ
+      subSubTheme: subSubTheme || "",
       summary: summary || "",
       body,
       note: note || "",
       createdAt: new Date().toISOString()
     };
 
-    contents.push(newItem);
-    writeJSON(contentsPath, contents);
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
 
-    console.log(`✅ Direct add: ${newItem.title}`);
-    res.json({ success: true, item: newItem });
+    const docRef = await db.collection(ROOM1_CONTENTS_COL).add(newItem);
+    console.log(`✅ Direct add: ${newItem.title} (${docRef.id})`);
+    res.json({ success: true, item: { id: docRef.id, ...newItem } });
 
   } catch (err) {
     console.error("direct-add error:", err);
@@ -562,39 +357,111 @@ app.post("/api/room1/direct-add", (req, res) => {
   }
 });
 
+// ── お預かり箱：送信 ──
+app.post("/api/room1/submit", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+
+    const item = {
+      theme: req.body.theme,
+      subTheme: req.body.subTheme,
+      content: req.body.content,
+      status: "pending",
+      createdAt: new Date().toISOString()
+    };
+
+    const docRef = await db.collection(ROOM1_SUBMISSIONS_COL).add(item);
+    res.json({ success: true, id: docRef.id });
+  } catch (err) {
+    console.error("submit error:", err);
+    res.status(500).json({ error: "submit failed" });
+  }
+});
+
+// ── お預かり箱：一覧取得 ──
+app.get("/api/room1/submissions", async (req, res) => {
+  try {
+    if (!db) return res.json([]);
+    const snapshot = await db
+      .collection(ROOM1_SUBMISSIONS_COL)
+      .where("status", "==", "pending")
+      .orderBy("createdAt", "desc")
+      .get();
+    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(items);
+  } catch (err) {
+    console.error("submissions get error:", err);
+    res.status(500).json([]);
+  }
+});
+
+// ── お預かり箱：昇華（承認）──
+app.post("/api/room1/approve/:id", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+
+    // 元の投稿を取得
+    const submDoc = await db.collection(ROOM1_SUBMISSIONS_COL).doc(req.params.id).get();
+    if (!submDoc.exists) return res.status(404).json({ error: "not found" });
+
+    const item = submDoc.data();
+    const { summary, body, note } = req.body;
+
+    // コンテンツとして保存
+    const newItem = {
+      title: `${item.theme}/${item.subTheme}`,
+      theme: item.theme,
+      subTheme: item.subTheme,
+      subSubTheme: "",
+      summary: summary || "",
+      body: body || item.content,
+      note: note || "",
+      createdAt: new Date().toISOString()
+    };
+    await db.collection(ROOM1_CONTENTS_COL).add(newItem);
+
+    // 元の投稿を done に
+    await db.collection(ROOM1_SUBMISSIONS_COL).doc(req.params.id).update({ status: "done" });
+
+    console.log(`✅ Approved: ${newItem.title}`);
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("approve error:", err);
+    res.status(500).json({ error: "approve failed" });
+  }
+});
+
+// ── お預かり箱：見送り（削除）──
+app.post("/api/room1/reject/:id", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+    await db.collection(ROOM1_SUBMISSIONS_COL).doc(req.params.id).update({ status: "rejected" });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("reject error:", err);
+    res.status(500).json({ error: "reject failed" });
+  }
+});
+
 // =====================
-// Room3（既存のまま）
+// Room3 リアルタイム
 // =====================
 const topics = [
-  "なぜ空は青いのか？",
-  "AIに感情や権利は認めるべきか？",
-  "日本の義務教育は本当に必要か？",
-  "仕事と趣味、どちらを優先すべきか？",
-  "SNSは社会にとってプラスかマイナスか？",
-  "遺伝子編集は許されるべきか？",
-  "自動運転車の事故責任は誰が取るべきか？",
-  "人は動物園で動物を見るべきか？",
-  "給料は能力で決まるべきか？年功序列でよいか？",
-  "本を紙で読むのと電子書籍で読むの、どちらがよいか？",
-  "学校でプログラミングは必修にすべきか？",
-  "旅行は国内と海外どちらが価値があるか？",
-  "長時間労働は本当に悪か？",
-  "宇宙旅行は一般人も行くべきか？",
-  "服装の自由はどこまで許されるべきか？",
-  "ゲームは教育に役立つか？",
-  "自然エネルギーだけで日本はやっていけるか？",
-  "タバコやお酒の規制はもっと厳しくすべきか？",
-  "結婚は必ず必要か？",
-  "犬と猫、どちらが飼いやすいか？",
-  "健康のために運動は義務化すべきか？",
-  "ロボットが人間の仕事を奪うのは良いことか？",
-  "音楽はジャンルで人を判断できるか？",
-  "美術館や博物館は学校に必修にすべきか？",
-  "お金よりも時間を優先すべきか？",
-  "お祭りや伝統行事は続けるべきか？",
-  "記憶力より創造力が大事か？",
-  "動物実験は許されるべきか？",
-  "日本は移民をもっと受け入れるべきか？",
+  "なぜ空は青いのか？", "AIに感情や権利は認めるべきか？", "日本の義務教育は本当に必要か？",
+  "仕事と趣味、どちらを優先すべきか？", "SNSは社会にとってプラスかマイナスか？",
+  "遺伝子編集は許されるべきか？", "自動運転車の事故責任は誰が取るべきか？",
+  "人は動物園で動物を見るべきか？", "給料は能力で決まるべきか？年功序列でよいか？",
+  "本を紙で読むのと電子書籍で読むの、どちらがよいか？", "学校でプログラミングは必修にすべきか？",
+  "旅行は国内と海外どちらが価値があるか？", "長時間労働は本当に悪か？",
+  "宇宙旅行は一般人も行くべきか？", "服装の自由はどこまで許されるべきか？",
+  "ゲームは教育に役立つか？", "自然エネルギーだけで日本はやっていけるか？",
+  "タバコやお酒の規制はもっと厳しくすべきか？", "結婚は必ず必要か？",
+  "犬と猫、どちらが飼いやすいか？", "健康のために運動は義務化すべきか？",
+  "ロボットが人間の仕事を奪うのは良いことか？", "音楽はジャンルで人を判断できるか？",
+  "美術館や博物館は学校に必修にすべきか？", "お金よりも時間を優先すべきか？",
+  "お祭りや伝統行事は続けるべきか？", "記憶力より創造力が大事か？",
+  "動物実験は許されるべきか？", "日本は移民をもっと受け入れるべきか？",
   "成功するために努力と才能、どちらが重要か？"
 ];
 
@@ -610,19 +477,13 @@ io.on("connection", (socket) => {
   socket.emit("today topic", getTodayTopic());
   socket.emit("room3 history", Array.from(messages.values()));
 
-  socket.on("join room3", ({ wallet }) => {
-    socket.wallet = wallet;
-  });
+  socket.on("join room3", ({ wallet }) => { socket.wallet = wallet; });
 
   socket.on("room3 message", (data) => {
     const messageId = randomUUID();
     const message = {
-      id: socket.id,
-      wallet: socket.wallet,
-      messageId,
-      text: data.text,
-      replyTo: data.replyTo || null,
-      timestamp: Date.now()
+      id: socket.id, wallet: socket.wallet, messageId,
+      text: data.text, replyTo: data.replyTo || null, timestamp: Date.now()
     };
     messages.set(messageId, message);
     io.emit("room3 message", message);
