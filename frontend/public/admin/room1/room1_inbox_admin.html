@@ -462,7 +462,11 @@ async function submitDirect() {
 
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
-    showToast('✅ コンテンツをRoom1に追加しました！', 'success');
+    showToast("✅ コンテンツをRoom1に追加しました！", "success");
+    // Room1本体（iframe）に通知して即反映
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "room1_content_added" }, "*");
+    }
     clearForm();
   } catch (err) {
     showToast('❌ 追加に失敗しました: ' + err.message, 'error');
