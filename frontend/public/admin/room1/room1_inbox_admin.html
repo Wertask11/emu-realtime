@@ -4,257 +4,94 @@
 <meta charset="UTF-8">
 <title>Room1｜管理画面</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
 * { box-sizing: border-box; }
+body { background:#0f0f0f; color:#d4d4d4; font-family:system-ui,sans-serif; margin:0; }
+.container { max-width:960px; margin:auto; padding:24px; }
+h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2a; padding-bottom:16px; }
 
-body {
-  background: #0f0f0f;
-  color: #d4d4d4;
-  font-family: system-ui, sans-serif;
-  margin: 0;
-}
-
-.container {
-  max-width: 960px;
-  margin: auto;
-  padding: 24px;
-}
-
-h1 {
-  font-size: 20px;
-  color: #fff;
-  margin: 0 0 28px;
-  border-bottom: 1px solid #2a2a2a;
-  padding-bottom: 16px;
-}
-
-/* ═══ タブ ═══ */
-.tabs {
-  display: flex;
-  gap: 0;
-  margin-bottom: 28px;
-  border-bottom: 2px solid #2a2a2a;
-}
+.tabs { display:flex; margin-bottom:28px; border-bottom:2px solid #2a2a2a; }
 .tab-btn {
-  padding: 10px 20px;
-  background: transparent;
-  border: none;
-  color: #888;
-  font-size: 14px;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  transition: 0.15s;
+  padding:10px 20px; background:transparent; border:none; color:#888;
+  font-size:14px; cursor:pointer; border-bottom:2px solid transparent;
+  margin-bottom:-2px; transition:0.15s;
 }
-.tab-btn:hover { color: #d4d4d4; }
-.tab-btn.active {
-  color: #4ec9b0;
-  border-bottom-color: #4ec9b0;
-  font-weight: bold;
-}
+.tab-btn:hover { color:#d4d4d4; }
+.tab-btn.active { color:#4ec9b0; border-bottom-color:#4ec9b0; font-weight:bold; }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
 
-.tab-content { display: none; }
-.tab-content.active { display: block; }
-
-/* ═══ 直接追加フォーム ═══ */
+/* 直接追加フォーム */
 .direct-form {
-  background: #161616;
-  border: 1px solid #2a2a2a;
-  border-radius: 10px;
-  padding: 24px;
-  margin-bottom: 24px;
+  background:#161616; border:1px solid #2a2a2a;
+  border-radius:10px; padding:24px; margin-bottom:24px;
 }
-
-.direct-form h2 {
-  margin: 0 0 20px;
-  font-size: 15px;
-  color: #4ec9b0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 14px;
-  margin-bottom: 16px;
-}
-
-.form-grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-bottom: 16px;
-}
-
-.form-field { display: flex; flex-direction: column; gap: 6px; }
-.form-field label { font-size: 12px; color: #888; }
-
+.direct-form h2 { margin:0 0 20px; font-size:15px; color:#4ec9b0; }
+.form-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:16px; }
+.form-field { display:flex; flex-direction:column; gap:6px; }
+.form-field label { font-size:12px; color:#888; }
 .direct-form select,
 .direct-form textarea,
 .direct-form input[type="text"] {
-  width: 100%;
-  background: #0f0f0f;
-  color: #d4d4d4;
-  border: 1px solid #333;
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-family: inherit;
-  font-size: 13px;
-  transition: border-color 0.2s;
+  width:100%; background:#0f0f0f; color:#d4d4d4;
+  border:1px solid #333; border-radius:6px;
+  padding:8px 10px; font-family:inherit; font-size:13px;
+  transition:border-color 0.2s;
 }
-
 .direct-form select:focus,
 .direct-form textarea:focus,
-.direct-form input[type="text"]:focus {
-  border-color: #4ec9b0;
-  outline: none;
-}
-
-.direct-form select:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.direct-form textarea { resize: vertical; }
-
-/* ブルーファイルのサブサブテーマ行 */
-#subsub-row { display: none; }
-
-.form-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 18px;
-}
-
+.direct-form input[type="text"]:focus { border-color:#4ec9b0; outline:none; }
+.direct-form select:disabled { opacity:0.4; cursor:not-allowed; }
+.direct-form textarea { resize:vertical; }
+#subsub-row { display:none; }
+.form-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
 .btn-add {
-  background: #4ec9b0;
-  color: #0f0f0f;
-  border: none;
-  border-radius: 6px;
-  padding: 10px 22px;
-  font-size: 14px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: opacity 0.15s;
+  background:#4ec9b0; color:#0f0f0f; border:none; border-radius:6px;
+  padding:10px 22px; font-size:14px; font-weight:bold; cursor:pointer;
 }
-.btn-add:hover { opacity: 0.85; }
-.btn-add:disabled { opacity: 0.4; cursor: not-allowed; }
-
+.btn-add:hover { opacity:0.85; }
+.btn-add:disabled { opacity:0.4; cursor:not-allowed; }
 .btn-clear {
-  background: transparent;
-  color: #888;
-  border: 1px solid #333;
-  border-radius: 6px;
-  padding: 10px 16px;
-  font-size: 14px;
-  cursor: pointer;
+  background:transparent; color:#888; border:1px solid #333;
+  border-radius:6px; padding:10px 16px; font-size:14px; cursor:pointer;
 }
-.btn-clear:hover { border-color: #666; color: #d4d4d4; }
+.btn-clear:hover { border-color:#666; color:#d4d4d4; }
+.toast { display:none; margin-top:14px; padding:10px 16px; border-radius:6px; font-size:13px; }
+.toast.success { background:rgba(78,201,176,0.1); border:1px solid #4ec9b0; color:#4ec9b0; }
+.toast.error { background:rgba(244,71,71,0.1); border:1px solid #f44747; color:#f44747; }
 
-.toast {
-  display: none;
-  margin-top: 14px;
-  padding: 10px 16px;
-  border-radius: 6px;
-  font-size: 13px;
-}
-.toast.success {
-  background: rgba(78,201,176,0.1);
-  border: 1px solid #4ec9b0;
-  color: #4ec9b0;
-}
-.toast.error {
-  background: rgba(244,71,71,0.1);
-  border: 1px solid #f44747;
-  color: #f44747;
-}
-
-/* ═══ お預かり箱一覧 ═══ */
+/* お預かり箱 */
 .inbox-item {
-  background: #161616;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
-  padding: 18px;
-  margin-bottom: 14px;
-  transition: border-color 0.15s;
+  background:#161616; border:1px solid #2a2a2a;
+  border-radius:8px; padding:18px; margin-bottom:14px;
 }
-.inbox-item:hover { border-color: #3a3a3a; }
-
-.item-meta {
-  font-size: 12px;
-  color: #666;
-  margin-bottom: 10px;
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+.item-meta { font-size:12px; color:#666; margin-bottom:10px; display:flex; gap:12px; flex-wrap:wrap; }
+.tag {
+  background:#1e1e1e; border:1px solid #333; border-radius:4px;
+  padding:2px 8px; color:#888; font-size:11px;
 }
-.item-meta .tag {
-  background: #1e1e1e;
-  border: 1px solid #333;
-  border-radius: 4px;
-  padding: 2px 8px;
-  color: #888;
-  font-size: 11px;
-}
-
-.item-content {
-  color: #c8c8c8;
-  font-size: 14px;
-  line-height: 1.7;
-  margin-bottom: 14px;
-  white-space: pre-wrap;
-}
-
-.item-actions {
-  display: flex;
-  gap: 8px;
-}
-
-button {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: opacity 0.15s;
-}
-button:hover { opacity: 0.8; }
-
-.btn-approve { background: #2ecc71; color: #0f0f0f; font-weight: bold; }
-.btn-reject { background: #3a3a3a; color: #888; }
-
-/* 昇華エディタ */
+.item-content { color:#c8c8c8; font-size:14px; line-height:1.7; margin-bottom:14px; white-space:pre-wrap; }
+.item-actions { display:flex; gap:8px; }
+.btn-approve { background:#2ecc71; color:#0f0f0f; border:none; border-radius:4px; padding:8px 16px; font-size:13px; font-weight:bold; cursor:pointer; }
+.btn-approve:hover { opacity:0.85; }
+.btn-reject { background:#3a3a3a; color:#888; border:none; border-radius:4px; padding:8px 16px; font-size:13px; cursor:pointer; }
+.btn-reject:hover { background:#444; color:#d4d4d4; }
 .editor {
-  display: none;
-  margin-top: 16px;
-  border-top: 1px dashed #333;
-  padding-top: 16px;
+  display:none; margin-top:16px; border-top:1px dashed #333; padding-top:16px;
 }
-.editor h4 { margin: 0 0 12px; font-size: 13px; color: #888; }
+.editor h4 { margin:0 0 12px; font-size:13px; color:#888; }
+.editor-label { font-size:12px; color:#888; display:block; margin-bottom:4px; }
 .editor textarea,
 .editor input[type="text"] {
-  width: 100%;
-  background: #0f0f0f;
-  color: #d4d4d4;
-  border: 1px solid #2a2a2a;
-  border-radius: 4px;
-  padding: 8px;
-  margin-bottom: 10px;
-  font-family: inherit;
-  font-size: 13px;
+  width:100%; background:#0f0f0f; color:#d4d4d4;
+  border:1px solid #2a2a2a; border-radius:4px;
+  padding:8px; margin-bottom:12px; font-family:inherit; font-size:13px;
+  box-sizing:border-box;
 }
-.editor textarea { resize: vertical; }
-
-.empty-state {
-  text-align: center;
-  color: #555;
-  padding: 48px 24px;
-  font-size: 14px;
-}
+.editor textarea { resize:vertical; }
+.editor-actions { display:flex; gap:8px; margin-top:4px; }
+.empty-state { text-align:center; color:#555; padding:48px 24px; font-size:14px; }
+.loading { text-align:center; color:#666; padding:32px; }
 </style>
 </head>
 
@@ -262,21 +99,16 @@ button:hover { opacity: 0.8; }
 <div class="container">
   <h1>📚 Room1 管理画面</h1>
 
-  <!-- タブ -->
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('direct')">✏️ 直接追加</button>
     <button class="tab-btn" onclick="switchTab('inbox')">📮 お預かり箱 <span id="inbox-count" style="color:#666;"></span></button>
   </div>
 
-  <!-- ══════════════════════════
-       タブ1: 直接コンテンツ追加
-  ══════════════════════════ -->
+  <!-- タブ1: 直接追加 -->
   <div id="tab-direct" class="tab-content active">
     <div class="direct-form">
       <h2>📝 学習コンテンツを直接追加</h2>
-
-      <!-- テーマ・サブテーマ・サブサブテーマ -->
-      <div class="form-grid" id="theme-grid">
+      <div class="form-grid">
         <div class="form-field">
           <label>テーマ *</label>
           <select id="da-theme" onchange="onThemeChange()">
@@ -294,14 +126,12 @@ button:hover { opacity: 0.8; }
           </select>
         </div>
         <div class="form-field" id="subsub-row">
-          <label>サブサブテーマ（ブルーファイルのみ）</label>
+          <label>サブサブテーマ（ブルーのみ）</label>
           <select id="da-subsub" disabled>
             <option value="">先にサブテーマを選択</option>
           </select>
         </div>
       </div>
-
-      <!-- 内容入力 -->
       <div class="form-field" style="margin-bottom:14px;">
         <label>要約（一覧・冒頭用）</label>
         <input type="text" id="da-summary" placeholder="例：生活防衛資金は月収3〜6ヶ月分を目安に" />
@@ -314,101 +144,75 @@ button:hover { opacity: 0.8; }
         <label>補足・背景・注意点</label>
         <textarea id="da-note" rows="3" placeholder="補足情報があれば..."></textarea>
       </div>
-
       <div class="form-actions">
         <button class="btn-clear" onclick="clearForm()">クリア</button>
         <button class="btn-add" id="btn-add" onclick="submitDirect()">📚 コンテンツを追加</button>
       </div>
-
       <div class="toast" id="toast"></div>
     </div>
   </div>
 
-  <!-- ══════════════════════════
-       タブ2: お預かり箱
-  ══════════════════════════ -->
+  <!-- タブ2: お預かり箱 -->
   <div id="tab-inbox" class="tab-content">
-    <div id="inbox-list">
-      <div class="empty-state">読み込み中...</div>
-    </div>
+    <div id="inbox-list"><div class="loading">📮 読み込み中...</div></div>
   </div>
-
-</div><!-- /container -->
+</div>
 
 <script>
-const API_BASE = "https://emu-realtime.onrender.com";
+var API_BASE = 'https://emu-realtime.onrender.com';
 
-// ════════════════════════
-// テーマデータ定義
-// ════════════════════════
-const themeData = {
-  money: {
-    subs: ["増やし方","育て方","守り方","使い方","付き合い方","稼ぎ方","見極め方","回し方"]
-  },
-  net: {
-    subs: ["SNSとの付き合い方","炎上・トラブル対策","詐欺・フェイクの見抜き方","個人情報・セキュリティ","AIとの付き合い方","発信と責任","ネットの法律・ルール"]
-  },
-  life: {
-    subs: ["感情との向き合い方","交渉","家事","エチケット","セルフケア","レジリエンス","パブリック"]
-  },
-  blue: {
+var themeData = {
+  money: { subs: ['増やし方','育て方','守り方','使い方','付き合い方','稼ぎ方','見極め方','回し方'] },
+  net:   { subs: ['SNSとの付き合い方','炎上・トラブル対策','詐欺・フェイクの見抜き方','個人情報・セキュリティ','AIとの付き合い方','発信と責任','ネットの法律・ルール'] },
+  life:  { subs: ['感情との向き合い方','交渉','家事','エチケット','セルフケア','レジリエンス','パブリック'] },
+  blue:  {
     subs: {
-      "リーダーシップ":   ["理念","ビジョン","戦略","変革","創造的能力","創造的態度"],
-      "マネジメント":     ["目標設定","計画立案","進捗管理","目標達成","計数管理"],
-      "人材活用":         ["組織運営","人材発掘・活用","業務委任","人材育成","動機付け","人的ネットワーク"],
-      "意思決定":         ["決断力","解決案の提示","問題分析","情報収集","改善"],
-      "ヒューマンスキル": ["状況把握","自己客観視点","チームワーク","共感力","異文化コミュニケーション","傾聴力","説得力","プレゼンテーション","企画提案力","伝達力"],
-      "志向":             ["クオリティ","カスタマー","プロフィット","スペシャリティ"],
-      "姿勢":             ["成長・学習意欲","柔軟な対応","主体的な行動","誠実な対応","ルール遵守","マナー意識"],
-      "エネルギー":       ["信念","タフネス","ストレスコントロール","継続力"]
+      'リーダーシップ':   ['理念','ビジョン','戦略','変革','創造的能力','創造的態度'],
+      'マネジメント':     ['目標設定','計画立案','進捗管理','目標達成','計数管理'],
+      '人材活用':         ['組織運営','人材発掘・活用','業務委任','人材育成','動機付け','人的ネットワーク'],
+      '意思決定':         ['決断力','解決案の提示','問題分析','情報収集','改善'],
+      'ヒューマンスキル': ['状況把握','自己客観視点','チームワーク','共感力','異文化コミュニケーション','傾聴力','説得力','プレゼンテーション','企画提案力','伝達力'],
+      '志向':             ['クオリティ','カスタマー','プロフィット','スペシャリティ'],
+      '姿勢':             ['成長・学習意欲','柔軟な対応','主体的な行動','誠実な対応','ルール遵守','マナー意識'],
+      'エネルギー':       ['信念','タフネス','ストレスコントロール','継続力']
     }
   }
 };
 
-// ════════════════════════
-// タブ切替
-// ════════════════════════
+// ─── タブ ───
 function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+  document.querySelectorAll('.tab-btn').forEach(function(btn, i) {
     btn.classList.toggle('active', (tab === 'direct' && i === 0) || (tab === 'inbox' && i === 1));
   });
   document.getElementById('tab-direct').classList.toggle('active', tab === 'direct');
   document.getElementById('tab-inbox').classList.toggle('active', tab === 'inbox');
-
   if (tab === 'inbox') loadInbox();
 }
 
-// ════════════════════════
-// 直接追加フォーム
-// ════════════════════════
+// ─── 直接追加フォーム ───
 function onThemeChange() {
-  const theme = document.getElementById('da-theme').value;
-  const subSel = document.getElementById('da-sub');
-  const subsubRow = document.getElementById('subsub-row');
-  const subsubSel = document.getElementById('da-subsub');
+  var theme = document.getElementById('da-theme').value;
+  var subSel = document.getElementById('da-sub');
+  var subsubRow = document.getElementById('subsub-row');
+  var subsubSel = document.getElementById('da-subsub');
 
-  // リセット
   subSel.innerHTML = '<option value="">選択してください</option>';
   subsubSel.innerHTML = '<option value="">先にサブテーマを選択</option>';
   subsubSel.disabled = true;
   subSel.disabled = !theme;
 
-  if (!theme) {
-    subsubRow.style.display = 'none';
-    return;
-  }
+  if (!theme) { subsubRow.style.display = 'none'; return; }
 
   if (theme === 'blue') {
-    // ブルーファイル：サブ = メインカテゴリ
-    Object.keys(themeData.blue.subs).forEach(key => {
-      const opt = document.createElement('option');
+    Object.keys(themeData.blue.subs).forEach(function(key) {
+      var opt = document.createElement('option');
       opt.value = key; opt.textContent = key;
       subSel.appendChild(opt);
     });
     subsubRow.style.display = 'block';
   } else {
-    themeData[theme].subs.forEach(s => {
-      const opt = document.createElement('option');
+    themeData[theme].subs.forEach(function(s) {
+      var opt = document.createElement('option');
       opt.value = s; opt.textContent = s;
       subSel.appendChild(opt);
     });
@@ -417,19 +221,17 @@ function onThemeChange() {
 }
 
 function onSubChange() {
-  const theme = document.getElementById('da-theme').value;
-  const sub   = document.getElementById('da-sub').value;
-  const subsubSel = document.getElementById('da-subsub');
-
+  var theme = document.getElementById('da-theme').value;
+  var sub = document.getElementById('da-sub').value;
+  var subsubSel = document.getElementById('da-subsub');
   if (theme !== 'blue' || !sub) {
     subsubSel.innerHTML = '<option value="">-</option>';
     subsubSel.disabled = true;
     return;
   }
-
   subsubSel.innerHTML = '<option value="">選択してください（任意）</option>';
-  (themeData.blue.subs[sub] || []).forEach(item => {
-    const opt = document.createElement('option');
+  (themeData.blue.subs[sub] || []).forEach(function(item) {
+    var opt = document.createElement('option');
     opt.value = item; opt.textContent = item;
     subsubSel.appendChild(opt);
   });
@@ -437,36 +239,37 @@ function onSubChange() {
 }
 
 async function submitDirect() {
-  const theme   = document.getElementById('da-theme').value;
-  const sub     = document.getElementById('da-sub').value;
-  const subsub  = document.getElementById('da-subsub').value;
-  const summary = document.getElementById('da-summary').value.trim();
-  const body    = document.getElementById('da-body').value.trim();
-  const note    = document.getElementById('da-note').value.trim();
+  var theme   = document.getElementById('da-theme').value;
+  var sub     = document.getElementById('da-sub').value;
+  var subsub  = document.getElementById('da-subsub').value;
+  var summary = document.getElementById('da-summary').value.trim();
+  var body    = document.getElementById('da-body').value.trim();
+  var note    = document.getElementById('da-note').value.trim();
 
   if (!theme || !sub || !body) {
     showToast('テーマ・サブテーマ・本文は必須です', 'error');
     return;
   }
 
-  const btn = document.getElementById('btn-add');
+  var btn = document.getElementById('btn-add');
   btn.disabled = true;
   btn.textContent = '追加中...';
 
   try {
-    const res = await fetch(`${API_BASE}/api/room1/direct-add`, {
+    var res = await fetch(API_BASE + '/api/room1/direct-add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ theme, subTheme: sub, subSubTheme: subsub || '', summary, body, note })
+      body: JSON.stringify({
+        theme: theme,
+        subTheme: sub,
+        subSubTheme: subsub || '',
+        summary: summary,
+        body: body,
+        note: note
+      })
     });
-
-    if (!res.ok) throw new Error(`Server error: ${res.status}`);
-
-    showToast("✅ コンテンツをRoom1に追加しました！", "success");
-    // Room1本体（iframe）に通知して即反映
-    if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: "room1_content_added" }, "*");
-    }
+    if (!res.ok) throw new Error('Server error: ' + res.status);
+    showToast('✅ コンテンツをRoom1に追加しました！', 'success');
     clearForm();
   } catch (err) {
     showToast('❌ 追加に失敗しました: ' + err.message, 'error');
@@ -477,147 +280,231 @@ async function submitDirect() {
 }
 
 function clearForm() {
-  ['da-theme','da-sub','da-subsub'].forEach(id => {
-    const el = document.getElementById(id);
-    el.value = '';
-    if (id !== 'da-theme') el.disabled = true;
-  });
+  document.getElementById('da-theme').value = '';
+  var subSel = document.getElementById('da-sub');
+  subSel.innerHTML = '<option value="">先にテーマを選択</option>';
+  subSel.disabled = true;
+  var subsubSel = document.getElementById('da-subsub');
+  subsubSel.innerHTML = '<option value="">先にサブテーマを選択</option>';
+  subsubSel.disabled = true;
   document.getElementById('subsub-row').style.display = 'none';
-  document.getElementById('da-sub').innerHTML = '<option value="">先にテーマを選択</option>';
-  document.getElementById('da-subsub').innerHTML = '<option value="">先にサブテーマを選択</option>';
   document.getElementById('da-summary').value = '';
   document.getElementById('da-body').value = '';
   document.getElementById('da-note').value = '';
 }
 
 function showToast(msg, type) {
-  const toast = document.getElementById('toast');
-  toast.className = `toast ${type}`;
+  var toast = document.getElementById('toast');
+  toast.className = 'toast ' + type;
   toast.textContent = msg;
   toast.style.display = 'block';
-  setTimeout(() => { toast.style.display = 'none'; }, 4000);
+  setTimeout(function() { toast.style.display = 'none'; }, 4000);
 }
 
-// ════════════════════════
-// お預かり箱
-// ════════════════════════
-let inbox = [];
+// ─── お預かり箱 ───
+// ★ポイント：inboxItemsをモジュールスコープに保持してidを確実に管理
+var inboxItems = [];
 
 function loadInbox() {
-  fetch(`${API_BASE}/api/room1/submissions`)
-    .then(res => res.json())
-    .then(data => {
-      inbox = data.filter(i => i.status === 'pending');
-      document.getElementById('inbox-count').textContent =
-        inbox.length > 0 ? `(${inbox.length})` : '';
+  document.getElementById('inbox-list').innerHTML = '<div class="loading">📮 読み込み中...</div>';
+
+  fetch(API_BASE + '/api/room1/submissions')
+    .then(function(res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      // pendingのみ（サーバー側でフィルタ済みだが念のため）
+      inboxItems = Array.isArray(data) ? data.filter(function(i) { return i.status === 'pending'; }) : [];
+      updateInboxCount();
       renderInbox();
     })
-    .catch(() => {
+    .catch(function(err) {
+      console.error('loadInbox error:', err);
       document.getElementById('inbox-list').innerHTML =
-        '<div class="empty-state">データの取得に失敗しました</div>';
+        '<div class="empty-state">❌ データの取得に失敗しました<br><small>' + err.message + '</small></div>';
     });
 }
 
-function renderInbox() {
-  const list = document.getElementById('inbox-list');
+function updateInboxCount() {
+  var el = document.getElementById('inbox-count');
+  el.textContent = inboxItems.length > 0 ? '(' + inboxItems.length + ')' : '';
+}
 
-  if (inbox.length === 0) {
+var themeLabels = {
+  money: 'マネーリテラシー', net: 'ネットリテラシー',
+  life: 'ライフリテラシー', blue: 'ブルーファイル'
+};
+
+function renderInbox() {
+  var list = document.getElementById('inbox-list');
+
+  if (inboxItems.length === 0) {
     list.innerHTML = '<div class="empty-state">📭 未対応のお預かりはありません</div>';
     return;
   }
 
-  list.innerHTML = inbox.map(item => {
-    const themeLabel = {
-      money: 'マネーリテラシー',
-      net: 'ネットリテラシー',
-      life: 'ライフリテラシー',
-      blue: 'ブルーファイル'
-    }[item.theme] || item.theme;
-
-    return `
-      <div class="inbox-item" id="item-${item.id}">
-        <div class="item-meta">
-          <span class="tag">${themeLabel}</span>
-          <span class="tag">${item.subTheme}</span>
-          <span>${new Date(item.createdAt).toLocaleString('ja-JP')}</span>
-        </div>
-        <div class="item-content">${escapeHtml(item.content)}</div>
-        <div class="item-actions">
-          <button class="btn-approve" onclick="openEditor(${item.id})">✨ 昇華</button>
-          <button class="btn-reject" onclick="rejectItem(${item.id})">見送り</button>
-        </div>
-        <div class="editor" id="editor-${item.id}">
-          <h4>昇華エディタ — テーマ: ${themeLabel} / ${item.subTheme}</h4>
-          <label style="font-size:12px;color:#888;">要約（一覧・冒頭用）</label>
-          <input type="text" id="summary-${item.id}" placeholder="要約を入力..." />
-          <label style="font-size:12px;color:#888;">学習コンテンツ本文</label>
-          <textarea id="body-${item.id}" rows="5" placeholder="元の内容をもとに編集...">${escapeHtml(item.content)}</textarea>
-          <label style="font-size:12px;color:#888;">補足・背景・注意点</label>
-          <textarea id="note-${item.id}" rows="3" placeholder="補足情報..."></textarea>
-          <div style="display:flex;gap:8px;margin-top:12px;">
-            <button class="btn-approve" onclick="approveItem(${item.id})">✅ 昇華して反映</button>
-            <button class="btn-reject" onclick="closeEditor(${item.id})">閉じる</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
+  // DOM要素で構築（innerHTML文字列結合ではなくDOMで構築 → onclick問題を回避）
+  list.innerHTML = '';
+  inboxItems.forEach(function(item, idx) {
+    list.appendChild(buildInboxItem(item, idx));
+  });
 }
 
-function openEditor(id) {
-  document.querySelectorAll('.editor').forEach(e => e.style.display = 'none');
-  document.getElementById(`editor-${id}`).style.display = 'block';
+function buildInboxItem(item, idx) {
+  var label = themeLabels[item.theme] || item.theme;
+
+  var wrapper = document.createElement('div');
+  wrapper.className = 'inbox-item';
+  wrapper.id = 'item-wrapper-' + idx;
+
+  // メタ
+  var meta = document.createElement('div');
+  meta.className = 'item-meta';
+  meta.innerHTML = '<span class="tag">' + label + '</span>' +
+    '<span class="tag">' + esc(item.subTheme || '') + '</span>' +
+    '<span>' + new Date(item.createdAt).toLocaleString('ja-JP') + '</span>';
+  wrapper.appendChild(meta);
+
+  // 本文
+  var content = document.createElement('div');
+  content.className = 'item-content';
+  content.textContent = item.content || '';
+  wrapper.appendChild(content);
+
+  // アクションボタン
+  var actions = document.createElement('div');
+  actions.className = 'item-actions';
+
+  var approveBtn = document.createElement('button');
+  approveBtn.className = 'btn-approve';
+  approveBtn.textContent = '✨ 昇華';
+  approveBtn.onclick = function() { openEditor(idx); };
+
+  var rejectBtn = document.createElement('button');
+  rejectBtn.className = 'btn-reject';
+  rejectBtn.textContent = '見送り';
+  rejectBtn.onclick = function() { rejectItem(idx); };
+
+  actions.appendChild(approveBtn);
+  actions.appendChild(rejectBtn);
+  wrapper.appendChild(actions);
+
+  // 昇華エディタ
+  var editor = document.createElement('div');
+  editor.className = 'editor';
+  editor.id = 'editor-' + idx;
+
+  editor.innerHTML =
+    '<h4>昇華エディタ — ' + esc(label) + ' / ' + esc(item.subTheme || '') + '</h4>' +
+    '<label class="editor-label">要約（一覧・冒頭用）</label>' +
+    '<input type="text" id="ed-summary-' + idx + '" placeholder="要約を入力..." />' +
+    '<label class="editor-label">学習コンテンツ本文</label>' +
+    '<textarea id="ed-body-' + idx + '" rows="6">' + esc(item.content || '') + '</textarea>' +
+    '<label class="editor-label">補足・背景・注意点</label>' +
+    '<textarea id="ed-note-' + idx + '" rows="3" placeholder="補足情報..."></textarea>';
+
+  var edActions = document.createElement('div');
+  edActions.className = 'editor-actions';
+
+  var saveBtn = document.createElement('button');
+  saveBtn.className = 'btn-approve';
+  saveBtn.textContent = '✅ 昇華して反映';
+  saveBtn.onclick = function() { approveItem(idx); };
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn-reject';
+  cancelBtn.textContent = '閉じる';
+  cancelBtn.onclick = function() { closeEditor(idx); };
+
+  edActions.appendChild(saveBtn);
+  edActions.appendChild(cancelBtn);
+  editor.appendChild(edActions);
+  wrapper.appendChild(editor);
+
+  return wrapper;
 }
 
-function closeEditor(id) {
-  document.getElementById(`editor-${id}`).style.display = 'none';
+function openEditor(idx) {
+  // 他のエディタを全部閉じる
+  document.querySelectorAll('.editor').forEach(function(e) { e.style.display = 'none'; });
+  var ed = document.getElementById('editor-' + idx);
+  if (ed) ed.style.display = 'block';
 }
 
-async function approveItem(id) {
-  const summary = document.getElementById(`summary-${id}`).value;
-  const body    = document.getElementById(`body-${id}`).value;
-  const note    = document.getElementById(`note-${id}`).value;
+function closeEditor(idx) {
+  var ed = document.getElementById('editor-' + idx);
+  if (ed) ed.style.display = 'none';
+}
+
+async function approveItem(idx) {
+  var item = inboxItems[idx];
+  if (!item) { alert('対象が見つかりません'); return; }
+
+  var docId = item.id; // FirestoreのドキュメントID
+  var summary = document.getElementById('ed-summary-' + idx).value;
+  var body    = document.getElementById('ed-body-'    + idx).value;
+  var note    = document.getElementById('ed-note-'    + idx).value;
+
+  if (!body.trim()) { alert('本文を入力してください'); return; }
+
+  var saveBtn = document.querySelector('#editor-' + idx + ' .btn-approve');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '処理中...'; }
 
   try {
-    const res = await fetch(`${API_BASE}/api/room1/approve/${id}`, {
+    var res = await fetch(API_BASE + '/api/room1/approve/' + encodeURIComponent(docId), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary, body, note })
+      body: JSON.stringify({ summary: summary, body: body, note: note })
     });
-    const result = await res.json();
+
+    var result = await res.json();
+
     if (result.success) {
-      inbox = inbox.filter(i => i.id !== id);
+      // リストから削除して再描画
+      inboxItems.splice(idx, 1);
+      updateInboxCount();
       renderInbox();
-      document.getElementById('inbox-count').textContent =
-        inbox.length > 0 ? `(${inbox.length})` : '';
       alert('✅ Room1に反映しました！');
     } else {
-      alert('反映に失敗しました');
+      alert('反映に失敗しました: ' + (result.error || '不明なエラー'));
     }
   } catch (err) {
+    console.error('approveItem error:', err);
     alert('エラー: ' + err.message);
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '✅ 昇華して反映'; }
   }
 }
 
-async function rejectItem(id) {
-  if (!confirm('この投稿を見送りますか？（削除されます）')) return;
+async function rejectItem(idx) {
+  var item = inboxItems[idx];
+  if (!item) { alert('対象が見つかりません'); return; }
+
+  if (!confirm('この投稿を見送りますか？')) return;
+
+  var docId = item.id;
+
   try {
-    const res = await fetch(`${API_BASE}/api/room1/reject/${id}`, { method: 'POST' });
-    const result = await res.json();
+    var res = await fetch(API_BASE + '/api/room1/reject/' + encodeURIComponent(docId), {
+      method: 'POST'
+    });
+    var result = await res.json();
+
     if (result.success) {
-      inbox = inbox.filter(i => i.id !== id);
+      inboxItems.splice(idx, 1);
+      updateInboxCount();
       renderInbox();
-      document.getElementById('inbox-count').textContent =
-        inbox.length > 0 ? `(${inbox.length})` : '';
     } else {
-      alert('見送りに失敗しました');
+      alert('見送りに失敗しました: ' + (result.error || '不明なエラー'));
     }
   } catch (err) {
+    console.error('rejectItem error:', err);
     alert('エラー: ' + err.message);
   }
 }
 
-function escapeHtml(s) {
+function esc(s) {
   return String(s || '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');

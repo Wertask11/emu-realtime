@@ -462,6 +462,103 @@ app.post("/api/room1/reject/:id", async (req, res) => {
   }
 });
 
+// ════════════════════════════════════════
+// ランキング API
+// server.js の Room1 API セクションの後に追加
+// ════════════════════════════════════════
+
+// ── ランキング取得 ──
+// GET /api/ranking?type=good|change|total&limit=10
+app.get('/api/ranking', async (req, res) => {
+  try {
+    if (!db) return res.json([]);
+
+    var type  = req.query.type  || 'good';   // good / change / total
+    var limit = parseInt(req.query.limit) || 10;
+    if (limit > 50) limit = 50; // 最大50件
+
+    var postsRef = db.collection('posts');
+    var snapshot;
+
+    if (type === 'change') {
+      // changeCount降順
+      snapshot = await postsRef
+        .where('changeCount', '>', 0)
+        .orderBy('changeCount', 'desc')
+        .limit(limit)
+        .get();
+    } else if (type === 'total') {
+      // goodCount降順で取得してJS側で総合スコア計算
+      // (good×1 + change×2) ← changeの重みを少し高く
+      snapshot = await postsRef
+        .orderBy('goodCount', 'desc')
+        .limit(limit * 3) // 多めに取ってJS側でソート
+        .get();
+    } else {
+      // good（デフォルト）
+      snapshot = await postsRef
+        .where('goodCount', '>', 0)
+        .orderBy('goodCount', 'desc')
+        .limit(limit)
+        .get();
+    }
+
+    var items = snapshot.docs.map(function(doc) {
+      var d = doc.data();
+      return {
+        id:          doc.id,
+        title:       d.title       || '無題',
+        body:        (d.body || '').slice(0, 80), // プレビュー用
+        goodCount:   d.goodCount   || 0,
+        changeCount: d.changeCount || 0,
+        totalScore:  (d.goodCount || 0) + (d.changeCount || 0) * 2,
+        userType:    d.userType    || 'guest',
+        address:     d.address     || '',
+        createdAt:   d.createdAt   || ''
+      };
+    });
+
+    // totalの場合はJS側でソート
+    if (type === 'total') {
+      items.sort(function(a, b) { return b.totalScore - a.totalScore; });
+      items = items.slice(0, limit);
+    }
+
+    res.json(items);
+
+  } catch (err) {
+    console.error('ranking error:', err);
+    // インデックスエラーの場合はインデックスなしで再試行
+    try {
+      var snapshot2 = await db.collection('posts').get();
+      var all = snapshot2.docs.map(function(doc) {
+        var d = doc.data();
+        return {
+          id: doc.id, title: d.title || '無題',
+          body: (d.body || '').slice(0, 80),
+          goodCount: d.goodCount || 0, changeCount: d.changeCount || 0,
+          totalScore: (d.goodCount || 0) + (d.changeCount || 0) * 2,
+          userType: d.userType || 'guest', address: d.address || '',
+          createdAt: d.createdAt || ''
+        };
+      });
+
+      var type2 = req.query.type || 'good';
+      if (type2 === 'change') {
+        all.sort(function(a, b) { return b.changeCount - a.changeCount; });
+      } else if (type2 === 'total') {
+        all.sort(function(a, b) { return b.totalScore - a.totalScore; });
+      } else {
+        all.sort(function(a, b) { return b.goodCount - a.goodCount; });
+      }
+
+      res.json(all.slice(0, parseInt(req.query.limit) || 10));
+    } catch (err2) {
+      res.status(500).json([]);
+    }
+  }
+});
+
 // =====================
 // Room3 リアルタイム
 // =====================

@@ -553,6 +553,49 @@ body.free .paid-only {display: none;}
 .w-hp-link span:first-child { font-size: 20px; }
 .w-hp-link-info small { display: block; color: var(--w-muted); font-size: 11px; margin-top: 2px; }
 
+/* ランキングパネル */
+.rank-tab {
+  background:transparent;
+  border:none;
+  border-bottom:2px solid transparent;
+  padding:6px 4px;
+  font-size:11px;
+  cursor:pointer;
+  color:#888;
+  transition:0.15s;
+}
+.rank-tab:hover { color:#333; }
+.rank-tab-active { color:#007bff !important; border-bottom-color:#007bff !important; font-weight:bold; }
+
+.rank-item {
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  padding:8px 4px;
+  border-bottom:1px solid #f0f0f0;
+  cursor:pointer;
+  transition:background 0.1s;
+}
+.rank-item:last-child { border-bottom:none; }
+.rank-item:hover { background:#f8f9fa; border-radius:4px; }
+
+.rank-num {
+  font-size:13px;
+  font-weight:bold;
+  min-width:20px;
+  text-align:center;
+  margin-top:1px;
+}
+.rank-num.gold   { color:#f0a500; }
+.rank-num.silver { color:#a0a0a0; }
+.rank-num.bronze { color:#cd7f32; }
+.rank-num.other  { color:#ccc; }
+
+.rank-body { flex:1; overflow:hidden; }
+.rank-title { font-size:12px; font-weight:bold; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rank-preview { font-size:11px; color:#888; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rank-score { font-size:10px; color:#007bff; margin-top:3px; }
+
 </style>
 </head>
 <body>
@@ -755,6 +798,16 @@ body.free .paid-only {display: none;}
 </li>
         </ul>
       </nav>
+<div id="rankingPanel" style="margin-top:20px;">
+  <!-- タブ -->
+  <div style="display:flex;gap:0;border-bottom:1px solid #ddd;margin-bottom:10px;">
+    <button onclick="loadRanking('good')"   id="rank-tab-good"   class="rank-tab rank-tab-active" style="flex:1;">👍 Good</button>
+    <button onclick="loadRanking('change')" id="rank-tab-change" class="rank-tab"                 style="flex:1;">🤝 Change</button>
+    <button onclick="loadRanking('total')"  id="rank-tab-total"  class="rank-tab"                 style="flex:1;">🏆 総合</button>
+  </div>
+  <!-- リスト -->
+  <div id="rankingList" style="font-size:12px;color:#555;">読み込み中...</div>
+</div>
     </aside>
   </div>
 </div>
@@ -6570,6 +6623,135 @@ setTimeout(() => {
   const label = document.getElementById('emu-contact-label');
   if (label) label.style.display = 'none';
 }, 4000);
+</script>
+<script>
+// ═══════════════════════════════
+// ランキング機能
+// ═══════════════════════════════
+var currentRankType = 'good';
+var rankingCache = {};   // { good: [], change: [], total: [] }
+var rankingLoading = false;
+
+function loadRanking(type) {
+  currentRankType = type;
+
+  // タブのアクティブ切替
+  ['good','change','total'].forEach(function(t) {
+    var tab = document.getElementById('rank-tab-' + t);
+    if (tab) tab.classList.toggle('rank-tab-active', t === type);
+  });
+
+  // キャッシュがあれば即表示（60秒TTL）
+  var cached = rankingCache[type];
+  if (cached && (Date.now() - cached.fetchedAt < 60000)) {
+    renderRanking(cached.items, type);
+    return;
+  }
+
+  // 取得
+  var listEl = document.getElementById('rankingList');
+  if (listEl) listEl.innerHTML = '<span style="color:#aaa;">読み込み中...</span>';
+
+  fetch('https://emu-realtime.onrender.com/api/ranking?type=' + type + '&limit=10')
+    .then(function(res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      rankingCache[type] = { items: data, fetchedAt: Date.now() };
+      renderRanking(data, type);
+    })
+    .catch(function(err) {
+      console.error('ranking fetch error:', err);
+      if (listEl) listEl.innerHTML = '<span style="color:#aaa;">取得できませんでした</span>';
+    });
+}
+
+function renderRanking(items, type) {
+  var listEl = document.getElementById('rankingList');
+  if (!listEl) return;
+
+  if (!items || items.length === 0) {
+    listEl.innerHTML = '<span style="color:#aaa;">まだランキングデータがありません</span>';
+    return;
+  }
+
+  var numClasses = ['gold','silver','bronze','other','other','other','other','other','other','other'];
+
+  var html = '';
+  items.forEach(function(item, idx) {
+    var numClass = numClasses[idx] || 'other';
+    var medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1) + '';
+    var score = type === 'change'
+      ? '🤝 ' + item.changeCount
+      : type === 'total'
+      ? '🏆 ' + item.totalScore + '  👍' + item.goodCount + ' 🤝' + item.changeCount
+      : '👍 ' + item.goodCount;
+
+    var titleSafe = esc(item.title);
+    var previewSafe = esc(item.body);
+
+    html +=
+      '<div class="rank-item" onclick="jumpToPost(\'' + esc(item.id) + '\')" title="' + titleSafe + '">' +
+        '<div class="rank-num ' + numClass + '">' + medal + '</div>' +
+        '<div class="rank-body">' +
+          '<div class="rank-title">' + titleSafe + '</div>' +
+          '<div class="rank-preview">' + previewSafe + '</div>' +
+          '<div class="rank-score">' + score + '</div>' +
+        '</div>' +
+      '</div>';
+  });
+
+  listEl.innerHTML = html;
+}
+
+// ランキングの投稿をクリックしたら投稿フィードに該当投稿をハイライト
+function jumpToPost(postId) {
+  // 投稿フィード内の該当要素を探してスクロール
+  var el = document.querySelector('[data-id="' + postId + '"]');
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // ハイライト
+    el.style.transition = 'box-shadow 0.3s';
+    el.style.boxShadow = '0 0 0 3px #007bff';
+    setTimeout(function() { el.style.boxShadow = ''; }, 2000);
+  } else {
+    // 投稿が現在のフィードに表示されていない場合は全投稿を読み込む
+    if (typeof refreshAllPosts === 'function') {
+      refreshAllPosts().then(function() {
+        var el2 = document.querySelector('[data-id="' + postId + '"]');
+        if (el2) {
+          el2.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el2.style.transition = 'box-shadow 0.3s';
+          el2.style.boxShadow = '0 0 0 3px #007bff';
+          setTimeout(function() { el2.style.boxShadow = ''; }, 2000);
+        }
+      });
+    }
+  }
+}
+
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// 初回ロード（DOMContentLoaded後 or 遅延実行）
+// Emu本体のDOMContentLoadedと競合しないよう setTimeout で遅延
+setTimeout(function() {
+  if (document.getElementById('rankingPanel')) {
+    loadRanking('good');
+  }
+}, 1500);
+
+// 5分ごとにキャッシュをクリアして最新に
+setInterval(function() {
+  rankingCache = {};
+  if (document.getElementById('rankingPanel')) {
+    loadRanking(currentRankType);
+  }
+}, 5 * 60 * 1000);
 </script>
 </body>
 </html>
