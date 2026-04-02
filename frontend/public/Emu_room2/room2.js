@@ -37,12 +37,26 @@ function loadUserName() {
 }
 
 function askUserName() {
-  const name = prompt("あなたの名前を入力してください");
+  var name = prompt('あなたの名前を入力してください（ランキングに表示されます）');
   if (name && name.trim()) {
-    localStorage.setItem(USER_NAME_KEY, name.trim());
+    var trimmed = name.trim().slice(0, 30); // 最大30文字
+ 
+    // 1. localStorage に保存（既存の動作）
+    localStorage.setItem(USER_NAME_KEY, trimmed);
     loadUserName();
+ 
+    // 2. Emu本体（親ウィンドウ）に通知してFirestoreにも保存
+    //    （window.parent = Emuのmain index.html）
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({
+        type: 'room2_name_set',
+        displayName: trimmed
+      }, '*');
+      console.log('📨 Room2→Emu: 名前を通知しました:', trimmed);
+    }
   }
 }
+
 userNameDisplay.addEventListener("click", askUserName);
 
 /* ==========================
