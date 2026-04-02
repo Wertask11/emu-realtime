@@ -300,14 +300,15 @@ app.post("/api/contact", async (req, res) => {
 });
 
 // ════════════════════════════════════════
-// Room1 API（Firestore永続化版）
+// Room1 API ── Firestore永続化版（修正版）
+// backend/server.js の Room1 APIセクションを
+// このコードに完全置き換えてください
 // ════════════════════════════════════════
 
-// ── コレクション名 ──
-const ROOM1_CONTENTS_COL = "room1_contents";
+const ROOM1_CONTENTS_COL   = "room1_contents";
 const ROOM1_SUBMISSIONS_COL = "room1_submissions";
 
-// コンテンツ一覧取得
+// ── コンテンツ一覧取得 ──
 app.get("/api/room1/contents", async (req, res) => {
   try {
     if (!db) return res.json([]);
@@ -319,7 +320,14 @@ app.get("/api/room1/contents", async (req, res) => {
     res.json(contents);
   } catch (err) {
     console.error("contents get error:", err);
-    res.status(500).json([]);
+    // orderByでインデックスエラーが出た場合はorderByなしで再試行
+    try {
+      const snapshot2 = await db.collection(ROOM1_CONTENTS_COL).get();
+      const contents2 = snapshot2.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(contents2);
+    } catch (err2) {
+      res.status(500).json([]);
+    }
   }
 });
 
@@ -331,6 +339,8 @@ app.post("/api/room1/direct-add", async (req, res) => {
     if (!theme || !subTheme || !body) {
       return res.status(400).json({ error: "theme, subTheme, body は必須です" });
     }
+
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
 
     const newItem = {
       title: subSubTheme
@@ -345,15 +355,13 @@ app.post("/api/room1/direct-add", async (req, res) => {
       createdAt: new Date().toISOString()
     };
 
-    if (!db) return res.status(500).json({ error: "Firestore未接続" });
-
     const docRef = await db.collection(ROOM1_CONTENTS_COL).add(newItem);
     console.log(`✅ Direct add: ${newItem.title} (${docRef.id})`);
     res.json({ success: true, item: { id: docRef.id, ...newItem } });
 
   } catch (err) {
     console.error("direct-add error:", err);
-    res.status(500).json({ error: "追加に失敗しました" });
+    res.status(500).json({ error: "追加に失敗しました: " + err.message });
   }
 });
 
@@ -363,31 +371,43 @@ app.post("/api/room1/submit", async (req, res) => {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
 
     const item = {
-      theme: req.body.theme,
-      subTheme: req.body.subTheme,
-      content: req.body.content,
-      status: "pending",
+      theme:     req.body.theme    || "",
+      subTheme:  req.body.subTheme || "",
+      content:   req.body.content  || "",
+      status:    "pending",
       createdAt: new Date().toISOString()
     };
 
     const docRef = await db.collection(ROOM1_SUBMISSIONS_COL).add(item);
+    console.log(`✅ Submission added: ${docRef.id}`);
     res.json({ success: true, id: docRef.id });
   } catch (err) {
     console.error("submit error:", err);
-    res.status(500).json({ error: "submit failed" });
+    res.status(500).json({ error: "submit failed: " + err.message });
   }
 });
 
-// ── お預かり箱：一覧取得 ──
+// ── お預かり箱：一覧取得（pendingのみ）──
 app.get("/api/room1/submissions", async (req, res) => {
   try {
     if (!db) return res.json([]);
+
+    // whereのみ（orderByなし → インデックス不要）
     const snapshot = await db
       .collection(ROOM1_SUBMISSIONS_COL)
       .where("status", "==", "pending")
-      .orderBy("createdAt", "desc")
       .get();
+
     const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // JS側で新しい順にソート
+    items.sort((a, b) => {
+      const ta = a.createdAt || "";
+      const tb = b.createdAt || "";
+      return tb.localeCompare(ta); // 降順
+    });
+
+    console.log(`📬 Submissions取得: ${items.length}件`);
     res.json(items);
   } catch (err) {
     console.error("submissions get error:", err);
@@ -400,47 +420,45 @@ app.post("/api/room1/approve/:id", async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
 
-    // 元の投稿を取得
     const submDoc = await db.collection(ROOM1_SUBMISSIONS_COL).doc(req.params.id).get();
     if (!submDoc.exists) return res.status(404).json({ error: "not found" });
 
     const item = submDoc.data();
     const { summary, body, note } = req.body;
 
-    // コンテンツとして保存
     const newItem = {
-      title: `${item.theme}/${item.subTheme}`,
-      theme: item.theme,
-      subTheme: item.subTheme,
+      title:       `${item.theme}/${item.subTheme}`,
+      theme:       item.theme,
+      subTheme:    item.subTheme,
       subSubTheme: "",
-      summary: summary || "",
-      body: body || item.content,
-      note: note || "",
-      createdAt: new Date().toISOString()
+      summary:     summary || "",
+      body:        body    || item.content,
+      note:        note    || "",
+      createdAt:   new Date().toISOString()
     };
-    await db.collection(ROOM1_CONTENTS_COL).add(newItem);
 
-    // 元の投稿を done に
+    await db.collection(ROOM1_CONTENTS_COL).add(newItem);
     await db.collection(ROOM1_SUBMISSIONS_COL).doc(req.params.id).update({ status: "done" });
 
-    console.log(`✅ Approved: ${newItem.title}`);
+    console.log(`✅ Approved & added to contents: ${newItem.title}`);
     res.json({ success: true });
 
   } catch (err) {
     console.error("approve error:", err);
-    res.status(500).json({ error: "approve failed" });
+    res.status(500).json({ error: "approve failed: " + err.message });
   }
 });
 
-// ── お預かり箱：見送り（削除）──
+// ── お預かり箱：見送り ──
 app.post("/api/room1/reject/:id", async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     await db.collection(ROOM1_SUBMISSIONS_COL).doc(req.params.id).update({ status: "rejected" });
+    console.log(`🗑️ Rejected: ${req.params.id}`);
     res.json({ success: true });
   } catch (err) {
     console.error("reject error:", err);
-    res.status(500).json({ error: "reject failed" });
+    res.status(500).json({ error: "reject failed: " + err.message });
   }
 });
 

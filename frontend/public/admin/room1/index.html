@@ -46,7 +46,6 @@ header h1 { margin: 0; font-size: 18px; }
 ul.sub-list { list-style: disc; padding-left: 20px; }
 ul.sub-list li { margin-bottom: 10px; cursor: pointer; color: var(--accent); }
 ul.sub-list li:hover { text-decoration: underline; }
-#detailList .card { margin-bottom: 14px; }
 
 /* お預かり箱 */
 .deposit-wrapper { margin-top: 48px; border-top: 1px solid var(--border); padding-top: 32px; }
@@ -67,19 +66,36 @@ ul.sub-list li:hover { text-decoration: underline; }
   border-radius: 6px; cursor: pointer;
 }
 
-/* リフレッシュ中インジケーター */
-#refresh-indicator {
-  display: none; position: fixed; bottom: 16px; right: 16px;
-  background: var(--accent-green); color: #fff;
-  padding: 8px 14px; border-radius: 20px; font-size: 12px;
-  animation: fadeIn 0.3s ease;
+/* 更新バッジ */
+#new-badge {
+  display: none;
+  position: fixed;
+  bottom: 20px; right: 20px;
+  background: var(--accent-green);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 999;
+  animation: slideUp 0.3s ease;
 }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 </style>
 </head>
 
 <body class="dark">
-<div id="refresh-indicator">🔄 更新中...</div>
+
+<!-- 新コンテンツ通知バッジ -->
+<button id="new-badge" onclick="applyNewContents()">
+  🆕 新しいコンテンツが追加されました → 反映する
+</button>
 
 <header>
   <h1 id="headerTitle">Room1｜マネーリテラシー</h1>
@@ -137,9 +153,9 @@ ul.sub-list li:hover { text-decoration: underline; }
 </div>
 
 <script>
-const API_BASE = "https://emu-realtime.onrender.com";
+var API_BASE = "https://emu-realtime.onrender.com";
 
-const themeData = {
+var themeData = {
   money: {
     title: "Room1｜マネーリテラシー",
     items: [
@@ -182,59 +198,71 @@ const themeData = {
   }
 };
 
-let currentMode = "money";
-let currentBlueMain = "";
-let currentHits = [];
-let viewState = "list";
-let room1Contents = [];
-// 現在の詳細表示の文脈を保持（再読込後に再描画するため）
-let currentDetailKey = { title: "", blueMain: "" };
+var currentMode = "money";
+var currentBlueMain = "";
+var currentHits = [];
+var viewState = "list";
+var room1Contents = [];        // 現在表示中のコンテンツ
+var latestContents = null;     // バックグラウンドで取得した最新（未適用）
+var currentDetailTitle = "";
+var currentDetailBlueMain = "";
 
-// ══════════════════════════════════
-// コンテンツ読み込み（Firestoreから）
-// ══════════════════════════════════
-async function loadContents(silent = false) {
-  if (!silent) {
-    const ind = document.getElementById("refresh-indicator");
-    if (ind) { ind.style.display = "block"; setTimeout(() => ind.style.display = "none", 1500); }
-  }
-  try {
-    const res = await fetch(`${API_BASE}/api/room1/contents`);
-    const data = await res.json();
-    room1Contents = Array.isArray(data) ? data : [];
-    console.log(`📚 Room1コンテンツ読み込み: ${room1Contents.length}件`);
-  } catch (e) {
-    console.error("contents load error", e);
-    room1Contents = [];
+// ══════════════════════════════════════
+// コンテンツ読み込み
+// ══════════════════════════════════════
+function loadContents(onDone) {
+  fetch(API_BASE + '/api/room1/contents')
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      var arr = Array.isArray(data) ? data : [];
+      if (onDone) onDone(arr);
+    })
+    .catch(function(e) {
+      console.error("contents load error", e);
+      if (onDone) onDone([]);
+    });
+}
+
+// 初回ロード
+function init() {
+  loadContents(function(data) {
+    room1Contents = data;
+    renderList();
+  });
+
+  // 30秒ごとにバックグラウンドポーリング
+  setInterval(function() {
+    loadContents(function(data) {
+      // 件数が増えていたら通知バッジを表示
+      if (data.length > room1Contents.length) {
+        latestContents = data;
+        var badge = document.getElementById('new-badge');
+        if (badge) badge.style.display = 'block';
+      }
+    });
+  }, 30 * 1000);
+}
+
+// バッジをクリックして反映
+function applyNewContents() {
+  if (!latestContents) return;
+  room1Contents = latestContents;
+  latestContents = null;
+  document.getElementById('new-badge').style.display = 'none';
+
+  // 現在詳細ビューを開いていれば再描画
+  if (document.getElementById('detail').style.display === 'block' && currentDetailTitle) {
+    openDetail(currentDetailTitle, currentDetailBlueMain);
+  } else {
+    renderList();
   }
 }
 
-// 管理画面から「追加完了」のメッセージを受け取る
-window.addEventListener("message", async (event) => {
-  if (event.data && event.data.type === "room1_content_added") {
-    console.log("📨 管理画面から追加通知を受信 → 再読み込み");
-    await loadContents(true);
-    // 現在詳細ビューを開いているなら再描画
-    if (document.getElementById("detail").style.display === "block" && currentDetailKey.title) {
-      openDetail(currentDetailKey.title, currentDetailKey.blueMain);
-    }
-  }
-});
+window.addEventListener('load', init);
 
-// ──────────────────────────
-// 初期化
-// ──────────────────────────
-window.addEventListener("load", async () => {
-  await loadContents(true);
-  renderList();
-
-  // 5分ごとにサイレント更新（ページ開きっぱなしでも最新を取得）
-  setInterval(() => loadContents(true), 5 * 60 * 1000);
-});
-
-// ══════════════════════════════════
+// ══════════════════════════════════════
 // UI
-// ══════════════════════════════════
+// ══════════════════════════════════════
 function toggleTheme() {
   document.body.classList.toggle("dark");
   document.body.classList.toggle("light");
@@ -247,27 +275,26 @@ function switchMode(mode) {
 }
 
 function renderList() {
-  const list = document.getElementById("list");
+  var list = document.getElementById("list");
   document.getElementById("sub").style.display = "none";
   document.getElementById("detail").style.display = "none";
 
   if (currentMode !== "blue") {
-    list.innerHTML = `
-      <div class="section-title">どれを磨く？</div>
-      <div class="grid">
-        ${themeData[currentMode].items.map(i =>
-          `<div class="card" onclick="openDetail('${escJs(i[0])}')"><h2>${i[0]}</h2><p>${i[1]}</p></div>`
-        ).join("")}
-      </div>`;
+    var html = '<div class="section-title">どれを磨く？</div><div class="grid">';
+    themeData[currentMode].items.forEach(function(i) {
+      html += '<div class="card" onclick="openDetail(\'' + escJs(i[0]) + '\')"><h2>' + i[0] + '</h2><p>' + i[1] + '</p></div>';
+    });
+    html += '</div>';
+    list.innerHTML = html;
   } else {
-    list.innerHTML = `
-      <div class="section-title">どれを磨く？</div>
-      <div class="grid">
-        ${Object.keys(themeData.blue.mains).map(m =>
-          `<div class="card" onclick="openBlueMain('${escJs(m)}')"><h2>${m}</h2></div>`
-        ).join("")}
-      </div>`;
+    var html2 = '<div class="section-title">どれを磨く？</div><div class="grid">';
+    Object.keys(themeData.blue.mains).forEach(function(m) {
+      html2 += '<div class="card" onclick="openBlueMain(\'' + escJs(m) + '\')"><h2>' + m + '</h2></div>';
+    });
+    html2 += '</div>';
+    list.innerHTML = html2;
   }
+
   document.getElementById("headerTitle").textContent = themeData[currentMode].title;
   list.style.display = "block";
 }
@@ -278,30 +305,31 @@ function openBlueMain(main) {
   document.getElementById("detail").style.display = "none";
   document.getElementById("sub").style.display = "block";
   document.getElementById("subTitle").textContent = main;
-  document.getElementById("subList").innerHTML =
-    themeData.blue.mains[main].map(s =>
-      `<li onclick="openDetail('${escJs(s)}', '${escJs(main)}')">${s}</li>`
-    ).join("");
+  var subListHtml = "";
+  themeData.blue.mains[main].forEach(function(s) {
+    subListHtml += '<li onclick="openDetail(\'' + escJs(s) + '\', \'' + escJs(main) + '\')">' + s + '</li>';
+  });
+  document.getElementById("subList").innerHTML = subListHtml;
 }
 
 function openDetail(title, blueMain) {
   viewState = "list";
-  currentDetailKey = { title, blueMain: blueMain || "" };
+  currentDetailTitle = title;
+  currentDetailBlueMain = blueMain || "";
 
   document.getElementById("list").style.display = "none";
   document.getElementById("sub").style.display = "none";
   document.getElementById("detail").style.display = "block";
   document.getElementById("detailTitle").textContent = title;
 
-  // ブルーファイルはサブサブテーマで絞り込み
   if (currentMode === "blue" && blueMain) {
-    currentHits = room1Contents.filter(c =>
-      (c.theme === "blue") && (c.subTheme === blueMain) && (c.subSubTheme === title) && typeof c.body === "string"
-    );
+    currentHits = room1Contents.filter(function(c) {
+      return c.theme === "blue" && c.subTheme === blueMain && c.subSubTheme === title && typeof c.body === "string";
+    });
   } else {
-    currentHits = room1Contents.filter(c =>
-      c.subTheme === title && typeof c.body === "string"
-    );
+    currentHits = room1Contents.filter(function(c) {
+      return c.subTheme === title && typeof c.body === "string";
+    });
   }
 
   if (currentHits.length === 0) {
@@ -314,32 +342,32 @@ function openDetail(title, blueMain) {
 }
 
 function renderHitList() {
-  document.getElementById("detailList").innerHTML = currentHits.map((h, i) => `
-    <div class="card" onclick="openPost(${i})">
-      <strong>📘 ${h.summary || "学習コンテンツ"}</strong>
-      ${h.body ? `<p style="font-size:13px;color:var(--text-sub);margin-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${h.body}</p>` : ""}
-      <span style="font-size:11px;color:var(--text-sub);">${new Date(h.createdAt).toLocaleString()}</span>
-    </div>
-  `).join("");
+  var html = "";
+  currentHits.forEach(function(h, i) {
+    html += '<div class="card" onclick="openPost(' + i + ')">' +
+      '<strong>📘 ' + (h.summary || '学習コンテンツ') + '</strong>';
+    if (h.body) {
+      html += '<p style="font-size:13px;color:var(--text-sub);margin-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + h.body + '</p>';
+    }
+    html += '<span style="font-size:11px;color:var(--text-sub);">' + new Date(h.createdAt).toLocaleString() + '</span></div>';
+  });
+  document.getElementById("detailList").innerHTML = html;
   document.getElementById("detailBody").innerHTML = "";
 }
 
 function openPost(index) {
   viewState = "post";
-  const post = currentHits[index];
+  var post = currentHits[index];
   if (!post) return;
-  document.getElementById("detailTitle").textContent =
-    [post.theme, post.subTheme, post.subSubTheme].filter(Boolean).join("｜");
+  var parts = [post.theme, post.subTheme, post.subSubTheme].filter(Boolean);
+  document.getElementById("detailTitle").textContent = parts.join("｜");
   document.getElementById("detailList").innerHTML = "";
-  document.getElementById("detailBody").innerHTML = `
-    <div style="line-height:1.9;margin-bottom:24px;">
-      <strong>📝 要約</strong><br>${post.summary ? post.summary.replace(/\n/g,"<br>") : "—"}
-    </div>
-    <div style="line-height:1.9;margin-bottom:32px;">
-      <strong>📘 本文</strong><br>${post.body.replace(/\n/g,"<br>")}
-    </div>
-    ${post.note ? `<div style="border-top:1px dashed var(--border);padding-top:16px;color:var(--text-sub);font-size:13px;">⚠ 補足・注意<br>${post.note.replace(/\n/g,"<br>")}</div>` : ""}
-  `;
+  document.getElementById("detailBody").innerHTML =
+    '<div style="line-height:1.9;margin-bottom:24px;"><strong>📝 要約</strong><br>' +
+    (post.summary ? post.summary.replace(/\n/g,"<br>") : "—") +
+    '</div><div style="line-height:1.9;margin-bottom:32px;"><strong>📘 本文</strong><br>' +
+    post.body.replace(/\n/g,"<br>") + '</div>' +
+    (post.note ? '<div style="border-top:1px dashed var(--border);padding-top:16px;color:var(--text-sub);font-size:13px;">⚠ 補足・注意<br>' + post.note.replace(/\n/g,"<br>") + '</div>' : "");
 }
 
 function backToList() { currentBlueMain = ""; renderList(); }
@@ -350,50 +378,50 @@ function backToSub() {
   openBlueMain(currentBlueMain);
 }
 
-function escJs(s) { return String(s).replace(/'/g, "\\'"); }
+function escJs(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 
-// ══════════════════════════════════
+// ══════════════════════════════════════
 // お預かり箱（ユーザー送信）
-// ══════════════════════════════════
+// ══════════════════════════════════════
 function toggleDeposit() {
-  const box = document.getElementById("depositBox");
+  var box = document.getElementById("depositBox");
   box.style.display = box.style.display === "block" ? "none" : "block";
 }
 
 function onDepositThemeChange() {
-  const theme = document.getElementById("depositTheme").value;
-  const subSel = document.getElementById("depositSubTheme");
+  var theme = document.getElementById("depositTheme").value;
+  var subSel = document.getElementById("depositSubTheme");
   subSel.innerHTML = "<option value=''>サブテーマを選択</option>";
   subSel.disabled = !theme;
   if (!theme) return;
 
   if (theme === "blue") {
-    Object.keys(themeData.blue.mains).forEach(m => {
-      const opt = document.createElement("option");
+    Object.keys(themeData.blue.mains).forEach(function(m) {
+      var opt = document.createElement("option");
       opt.value = m; opt.textContent = m; subSel.appendChild(opt);
     });
   } else {
-    themeData[theme].items.forEach(item => {
-      const opt = document.createElement("option");
+    themeData[theme].items.forEach(function(item) {
+      var opt = document.createElement("option");
       opt.value = item[0]; opt.textContent = item[0]; subSel.appendChild(opt);
     });
   }
 }
 
 function submitDeposit() {
-  const theme   = document.getElementById("depositTheme").value;
-  const subTheme = document.getElementById("depositSubTheme").value;
-  const content = document.getElementById("depositContent").value.trim();
+  var theme    = document.getElementById("depositTheme").value;
+  var subTheme = document.getElementById("depositSubTheme").value;
+  var content  = document.getElementById("depositContent").value.trim();
 
   if (!theme || !subTheme || !content) { alert("テーマ・サブテーマ・内容を入力してください"); return; }
 
-  fetch(`${API_BASE}/api/room1/submit`, {
+  fetch(API_BASE + '/api/room1/submit', {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ theme, subTheme, content })
+    body: JSON.stringify({ theme: theme, subTheme: subTheme, content: content })
   })
-  .then(res => res.json())
-  .then(() => {
+  .then(function(res) { return res.json(); })
+  .then(function() {
     alert("📮 お預かりしました！");
     document.getElementById("depositContent").value = "";
     document.getElementById("depositTheme").value = "";
