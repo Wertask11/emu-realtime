@@ -462,100 +462,195 @@ app.post("/api/room1/reject/:id", async (req, res) => {
   }
 });
 
-// ════════════════════════════════════════
-// ランキング API
-// server.js の Room1 API セクションの後に追加
-// ════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// ユーザープロフィール API + ランキング API（拡張版）
+// server.js の既存ランキングAPIを全てこれに置き換える
+// ════════════════════════════════════════════════════════
+
+// ── ユーザー名の保存 ──
+// POST /api/user/setname
+// body: { address, displayName }
+app.post('/api/user/setname', async (req, res) => {
+  try {
+    var address     = (req.body.address     || '').toLowerCase().trim();
+    var displayName = (req.body.displayName || '').trim().slice(0, 30);
+
+    if (!address || !displayName) {
+      return res.status(400).json({ error: 'address と displayName が必要です' });
+    }
+
+    if (!db) return res.status(500).json({ error: 'Firestore未接続' });
+
+    await db.collection('user_profiles').doc(address).set({
+      address:     address,
+      displayName: displayName,
+      updatedAt:   new Date().toISOString()
+    }, { merge: true });
+
+    console.log('✅ DisplayName set:', address, '->', displayName);
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error('setname error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── ユーザー名の取得（単体） ──
+// GET /api/user/name/:address
+app.get('/api/user/name/:address', async (req, res) => {
+  try {
+    if (!db) return res.json({ displayName: null });
+    var docId = req.params.address.toLowerCase();
+    var doc = await db.collection('user_profiles').doc(docId).get();
+    if (!doc.exists) return res.json({ displayName: null });
+    res.json({ displayName: doc.data().displayName || null });
+  } catch (err) {
+    res.status(500).json({ displayName: null });
+  }
+});
+
+// ── ユーザー名テーブルを一括取得（ランキング用） ──
+async function fetchAllDisplayNames() {
+  if (!db) return {};
+  try {
+    var snapshot = await db.collection('user_profiles').get();
+    var map = {};
+    snapshot.docs.forEach(function(doc) {
+      var d = doc.data();
+      if (d.address && d.displayName) {
+        map[d.address.toLowerCase()] = d.displayName;
+      }
+    });
+    return map;
+  } catch (e) {
+    console.error('fetchAllDisplayNames error:', e);
+    return {};
+  }
+}
+
+// ── ショートアドレス表示用ヘルパー ──
+function shortAddr(addr) {
+  if (!addr || addr === 'unknown') return '匿名';
+  return addr.slice(0, 6) + '...' + addr.slice(-4);
+}
 
 // ── ランキング取得 ──
-// GET /api/ranking?type=good|change|total&limit=10
+// GET /api/ranking?type=good_post|change_post|total_post|posted|good_given|change_given&limit=10
+//
+// type一覧:
+//   good_post    ... 投稿へのgood獲得数ランキング（投稿者視点）
+//   change_post  ... 投稿へのchange獲得数ランキング（投稿者視点）
+//   total_post   ... 総合スコア（good×1 + change×2）投稿者ランキング
+//   posted       ... 投稿数ランキング
+//   good_given   ... 他人にgoodした回数ランキング（行動者ランキング）
+//   change_given ... 他人にchangeした回数ランキング（行動者ランキング）
 app.get('/api/ranking', async (req, res) => {
   try {
     if (!db) return res.json([]);
 
-    var type  = req.query.type  || 'good';   // good / change / total
-    var limit = parseInt(req.query.limit) || 10;
-    if (limit > 50) limit = 50; // 最大50件
+    var type  = req.query.type  || 'good_post';
+    var limit = Math.min(parseInt(req.query.limit) || 10, 50);
 
-    var postsRef = db.collection('posts');
-    var snapshot;
+    // ユーザー名テーブルを並列取得
+    var namesPromise = fetchAllDisplayNames();
 
-    if (type === 'change') {
-      // changeCount降順
-      snapshot = await postsRef
-        .where('changeCount', '>', 0)
-        .orderBy('changeCount', 'desc')
-        .limit(limit)
-        .get();
-    } else if (type === 'total') {
-      // goodCount降順で取得してJS側で総合スコア計算
-      // (good×1 + change×2) ← changeの重みを少し高く
-      snapshot = await postsRef
-        .orderBy('goodCount', 'desc')
-        .limit(limit * 3) // 多めに取ってJS側でソート
-        .get();
-    } else {
-      // good（デフォルト）
-      snapshot = await postsRef
-        .where('goodCount', '>', 0)
-        .orderBy('goodCount', 'desc')
-        .limit(limit)
-        .get();
+    var items = [];
+
+    if (type === 'good_post' || type === 'change_post' || type === 'total_post' || type === 'posted') {
+      // ── 投稿コレクションを集計 ──
+      var postsSnap = await db.collection('posts').get();
+      var names = await namesPromise;
+
+      if (type === 'posted') {
+        // 投稿数：addressごとにカウント
+        var countMap = {};
+        postsSnap.docs.forEach(function(doc) {
+          var addr = (doc.data().address || '').toLowerCase();
+          if (!addr || addr === 'unknown') return;
+          countMap[addr] = (countMap[addr] || 0) + 1;
+        });
+        items = Object.keys(countMap).map(function(addr) {
+          return {
+            address:     addr,
+            displayName: names[addr] || shortAddr(addr),
+            score:       countMap[addr],
+            scoreLabel:  '📝 ' + countMap[addr] + '件'
+          };
+        });
+        items.sort(function(a, b) { return b.score - a.score; });
+
+      } else {
+        // good_post / change_post / total_post：投稿者ごとに獲得数を集計
+        var scoreMap = {};
+        postsSnap.docs.forEach(function(doc) {
+          var d    = doc.data();
+          var addr = (d.address || '').toLowerCase();
+          if (!addr || addr === 'unknown') return;
+          if (!scoreMap[addr]) scoreMap[addr] = { good: 0, change: 0, posts: 0 };
+          scoreMap[addr].good   += (d.goodCount   || 0);
+          scoreMap[addr].change += (d.changeCount || 0);
+          scoreMap[addr].posts  += 1;
+        });
+
+        items = Object.keys(scoreMap).map(function(addr) {
+          var s     = scoreMap[addr];
+          var score = type === 'change_post'
+            ? s.change
+            : type === 'total_post'
+            ? s.good + s.change * 2
+            : s.good;
+          var label = type === 'change_post'
+            ? '🤝 ' + s.change
+            : type === 'total_post'
+            ? '🏆 ' + (s.good + s.change * 2) + '  👍' + s.good + ' 🤝' + s.change
+            : '👍 ' + s.good;
+          return {
+            address:     addr,
+            displayName: names[addr] || shortAddr(addr),
+            score:       score,
+            scoreLabel:  label
+          };
+        });
+        items.sort(function(a, b) { return b.score - a.score; });
+      }
+
+    } else if (type === 'good_given' || type === 'change_given') {
+      // ── goodUsers / changeUsers を集計（行動者ランキング） ──
+      var postsSnap2 = await db.collection('posts').get();
+      var names2 = await namesPromise;
+      var field = type === 'good_given' ? 'goodUsers' : 'changeUsers';
+      var emoji = type === 'good_given' ? '👍' : '🤝';
+
+      var givenMap = {};
+      postsSnap2.docs.forEach(function(doc) {
+        var users = doc.data()[field];
+        if (!Array.isArray(users)) return;
+        users.forEach(function(addr) {
+          if (!addr) return;
+          var a = addr.toLowerCase();
+          givenMap[a] = (givenMap[a] || 0) + 1;
+        });
+      });
+
+      items = Object.keys(givenMap).map(function(addr) {
+        return {
+          address:     addr,
+          displayName: names2[addr] || shortAddr(addr),
+          score:       givenMap[addr],
+          scoreLabel:  emoji + ' ' + givenMap[addr] + '回'
+        };
+      });
+      items.sort(function(a, b) { return b.score - a.score; });
     }
 
-    var items = snapshot.docs.map(function(doc) {
-      var d = doc.data();
-      return {
-        id:          doc.id,
-        title:       d.title       || '無題',
-        body:        (d.body || '').slice(0, 80), // プレビュー用
-        goodCount:   d.goodCount   || 0,
-        changeCount: d.changeCount || 0,
-        totalScore:  (d.goodCount || 0) + (d.changeCount || 0) * 2,
-        userType:    d.userType    || 'guest',
-        address:     d.address     || '',
-        createdAt:   d.createdAt   || ''
-      };
-    });
-
-    // totalの場合はJS側でソート
-    if (type === 'total') {
-      items.sort(function(a, b) { return b.totalScore - a.totalScore; });
-      items = items.slice(0, limit);
-    }
-
+    // 0件フィルタ・上位N件に絞る
+    items = items.filter(function(i) { return i.score > 0; }).slice(0, limit);
     res.json(items);
 
   } catch (err) {
     console.error('ranking error:', err);
-    // インデックスエラーの場合はインデックスなしで再試行
-    try {
-      var snapshot2 = await db.collection('posts').get();
-      var all = snapshot2.docs.map(function(doc) {
-        var d = doc.data();
-        return {
-          id: doc.id, title: d.title || '無題',
-          body: (d.body || '').slice(0, 80),
-          goodCount: d.goodCount || 0, changeCount: d.changeCount || 0,
-          totalScore: (d.goodCount || 0) + (d.changeCount || 0) * 2,
-          userType: d.userType || 'guest', address: d.address || '',
-          createdAt: d.createdAt || ''
-        };
-      });
-
-      var type2 = req.query.type || 'good';
-      if (type2 === 'change') {
-        all.sort(function(a, b) { return b.changeCount - a.changeCount; });
-      } else if (type2 === 'total') {
-        all.sort(function(a, b) { return b.totalScore - a.totalScore; });
-      } else {
-        all.sort(function(a, b) { return b.goodCount - a.goodCount; });
-      }
-
-      res.json(all.slice(0, parseInt(req.query.limit) || 10));
-    } catch (err2) {
-      res.status(500).json([]);
-    }
+    res.status(500).json([]);
   }
 });
 

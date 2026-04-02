@@ -554,47 +554,95 @@ body.free .paid-only {display: none;}
 .w-hp-link-info small { display: block; color: var(--w-muted); font-size: 11px; margin-top: 2px; }
 
 /* ランキングパネル */
+#rankingPanel {
+  margin-top: 16px;
+  border-top: 1px solid #eee;
+  padding-top: 12px;
+}
+#rankingPanel h4 {
+  font-size: 12px;
+  color: #888;
+  margin: 0 0 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+ 
+/* タブ行 */
+.rank-tabs {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
 .rank-tab {
-  background:transparent;
-  border:none;
-  border-bottom:2px solid transparent;
-  padding:6px 4px;
-  font-size:11px;
-  cursor:pointer;
-  color:#888;
-  transition:0.15s;
+  flex: 1;
+  min-width: 48px;
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 2px;
+  font-size: 10px;
+  cursor: pointer;
+  color: #888;
+  transition: 0.15s;
+  white-space: nowrap;
+  text-align: center;
 }
-.rank-tab:hover { color:#333; }
-.rank-tab-active { color:#007bff !important; border-bottom-color:#007bff !important; font-weight:bold; }
-
+.rank-tab:hover { border-color: #007bff; color: #007bff; }
+.rank-tab.rank-tab-active {
+  background: #007bff;
+  border-color: #007bff;
+  color: #fff;
+  font-weight: bold;
+}
+ 
+/* リスト */
+#rankingList {
+  font-size: 12px;
+  color: #555;
+  min-height: 40px;
+}
+ 
 .rank-item {
-  display:flex;
-  align-items:flex-start;
-  gap:8px;
-  padding:8px 4px;
-  border-bottom:1px solid #f0f0f0;
-  cursor:pointer;
-  transition:background 0.1s;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 4px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s;
 }
-.rank-item:last-child { border-bottom:none; }
-.rank-item:hover { background:#f8f9fa; border-radius:4px; }
-
-.rank-num {
-  font-size:13px;
-  font-weight:bold;
-  min-width:20px;
-  text-align:center;
-  margin-top:1px;
+.rank-item:last-child { border-bottom: none; }
+.rank-item:hover { background: #f8f9fa; }
+ 
+.rank-medal {
+  font-size: 14px;
+  min-width: 22px;
+  text-align: center;
 }
-.rank-num.gold   { color:#f0a500; }
-.rank-num.silver { color:#a0a0a0; }
-.rank-num.bronze { color:#cd7f32; }
-.rank-num.other  { color:#ccc; }
-
-.rank-body { flex:1; overflow:hidden; }
-.rank-title { font-size:12px; font-weight:bold; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.rank-preview { font-size:11px; color:#888; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.rank-score { font-size:10px; color:#007bff; margin-top:3px; }
+.rank-num-plain {
+  font-size: 11px;
+  font-weight: bold;
+  color: #ccc;
+  min-width: 22px;
+  text-align: center;
+}
+ 
+.rank-body { flex: 1; overflow: hidden; }
+.rank-name {
+  font-size: 12px;
+  font-weight: bold;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rank-score {
+  font-size: 10px;
+  color: #007bff;
+  margin-top: 2px;
+}
 
 </style>
 </head>
@@ -798,15 +846,16 @@ body.free .paid-only {display: none;}
 </li>
         </ul>
       </nav>
-<div id="rankingPanel" style="margin-top:20px;">
-  <!-- タブ -->
-  <div style="display:flex;gap:0;border-bottom:1px solid #ddd;margin-bottom:10px;">
-    <button onclick="loadRanking('good')"   id="rank-tab-good"   class="rank-tab rank-tab-active" style="flex:1;">👍 Good</button>
-    <button onclick="loadRanking('change')" id="rank-tab-change" class="rank-tab"                 style="flex:1;">🤝 Change</button>
-    <button onclick="loadRanking('total')"  id="rank-tab-total"  class="rank-tab"                 style="flex:1;">🏆 総合</button>
+<div id="rankingPanel">
+  <h4>🏅 ランキング</h4>
+  <div class="rank-tabs">
+    <button class="rank-tab rank-tab-active" onclick="loadRanking('good_post')"   id="rtab-good_post"   title="獲得Good数">👍 Good</button>
+    <button class="rank-tab"                 onclick="loadRanking('change_post')" id="rtab-change_post" title="獲得Change数">🤝 Change</button>
+    <button class="rank-tab"                 onclick="loadRanking('total_post')"  id="rtab-total_post"  title="総合スコア">🏆 総合</button>
+    <button class="rank-tab"                 onclick="loadRanking('posted')"      id="rtab-posted"      title="投稿数">📝 投稿</button>
+    <button class="rank-tab"                 onclick="loadRanking('good_given')"  id="rtab-good_given"  title="Goodした回数">💪 活動</button>
   </div>
-  <!-- リスト -->
-  <div id="rankingList" style="font-size:12px;color:#555;">読み込み中...</div>
+  <div id="rankingList"><span style="color:#aaa;font-size:12px;">読み込み中...</span></div>
 </div>
     </aside>
   </div>
@@ -6625,131 +6674,178 @@ setTimeout(() => {
 }, 4000);
 </script>
 <script>
-// ═══════════════════════════════
-// ランキング機能
-// ═══════════════════════════════
-var currentRankType = 'good';
-var rankingCache = {};   // { good: [], change: [], total: [] }
-var rankingLoading = false;
-
+// ════════════════════════════════════════
+// ランキング機能 v2
+// ════════════════════════════════════════
+var _rankType    = 'good_post';
+var _rankCache   = {};   // { type: { items, fetchedAt } }
+var RANK_API     = 'https://emu-realtime.onrender.com';
+var RANK_CACHE_TTL = 60 * 1000; // 60秒
+ 
+// タブ切替 + データ取得
 function loadRanking(type) {
-  currentRankType = type;
-
-  // タブのアクティブ切替
-  ['good','change','total'].forEach(function(t) {
-    var tab = document.getElementById('rank-tab-' + t);
-    if (tab) tab.classList.toggle('rank-tab-active', t === type);
+  _rankType = type;
+ 
+  // タブ見た目
+  var tabs = ['good_post','change_post','total_post','posted','good_given'];
+  tabs.forEach(function(t) {
+    var el = document.getElementById('rtab-' + t);
+    if (el) el.classList.toggle('rank-tab-active', t === type);
   });
-
-  // キャッシュがあれば即表示（60秒TTL）
-  var cached = rankingCache[type];
-  if (cached && (Date.now() - cached.fetchedAt < 60000)) {
-    renderRanking(cached.items, type);
+ 
+  // キャッシュ確認
+  var cached = _rankCache[type];
+  if (cached && Date.now() - cached.fetchedAt < RANK_CACHE_TTL) {
+    _renderRanking(cached.items, type);
     return;
   }
-
-  // 取得
+ 
   var listEl = document.getElementById('rankingList');
-  if (listEl) listEl.innerHTML = '<span style="color:#aaa;">読み込み中...</span>';
-
-  fetch('https://emu-realtime.onrender.com/api/ranking?type=' + type + '&limit=10')
-    .then(function(res) {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res.json();
+  if (listEl) listEl.innerHTML = '<span style="color:#aaa;font-size:12px;">読み込み中...</span>';
+ 
+  fetch(RANK_API + '/api/ranking?type=' + type + '&limit=10')
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
     })
     .then(function(data) {
-      rankingCache[type] = { items: data, fetchedAt: Date.now() };
-      renderRanking(data, type);
+      _rankCache[type] = { items: data, fetchedAt: Date.now() };
+      _renderRanking(data, type);
     })
     .catch(function(err) {
       console.error('ranking fetch error:', err);
-      if (listEl) listEl.innerHTML = '<span style="color:#aaa;">取得できませんでした</span>';
+      var el = document.getElementById('rankingList');
+      if (el) el.innerHTML = '<span style="color:#aaa;font-size:12px;">取得できませんでした</span>';
     });
 }
-
-function renderRanking(items, type) {
-  var listEl = document.getElementById('rankingList');
-  if (!listEl) return;
-
+ 
+function _renderRanking(items, type) {
+  var el = document.getElementById('rankingList');
+  if (!el) return;
+ 
   if (!items || items.length === 0) {
-    listEl.innerHTML = '<span style="color:#aaa;">まだランキングデータがありません</span>';
+    el.innerHTML = '<span style="color:#aaa;font-size:12px;">まだデータがありません</span>';
     return;
   }
-
-  var numClasses = ['gold','silver','bronze','other','other','other','other','other','other','other'];
-
+ 
+  var medals = ['🥇','🥈','🥉'];
   var html = '';
   items.forEach(function(item, idx) {
-    var numClass = numClasses[idx] || 'other';
-    var medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1) + '';
-    var score = type === 'change'
-      ? '🤝 ' + item.changeCount
-      : type === 'total'
-      ? '🏆 ' + item.totalScore + '  👍' + item.goodCount + ' 🤝' + item.changeCount
-      : '👍 ' + item.goodCount;
-
-    var titleSafe = esc(item.title);
-    var previewSafe = esc(item.body);
-
+    var medal = idx < 3
+      ? '<span class="rank-medal">' + medals[idx] + '</span>'
+      : '<span class="rank-num-plain">' + (idx + 1) + '</span>';
+ 
     html +=
-      '<div class="rank-item" onclick="jumpToPost(\'' + esc(item.id) + '\')" title="' + titleSafe + '">' +
-        '<div class="rank-num ' + numClass + '">' + medal + '</div>' +
+      '<div class="rank-item" onclick="_rankItemClick(\'' + _esc(item.address) + '\', \'' + type + '\')" title="' + _esc(item.address) + '">' +
+        medal +
         '<div class="rank-body">' +
-          '<div class="rank-title">' + titleSafe + '</div>' +
-          '<div class="rank-preview">' + previewSafe + '</div>' +
-          '<div class="rank-score">' + score + '</div>' +
+          '<div class="rank-name">' + _esc(item.displayName || '匿名') + '</div>' +
+          '<div class="rank-score">' + _esc(item.scoreLabel) + '</div>' +
         '</div>' +
       '</div>';
   });
-
-  listEl.innerHTML = html;
+  el.innerHTML = html;
 }
-
-// ランキングの投稿をクリックしたら投稿フィードに該当投稿をハイライト
-function jumpToPost(postId) {
-  // 投稿フィード内の該当要素を探してスクロール
-  var el = document.querySelector('[data-id="' + postId + '"]');
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    // ハイライト
-    el.style.transition = 'box-shadow 0.3s';
-    el.style.boxShadow = '0 0 0 3px #007bff';
-    setTimeout(function() { el.style.boxShadow = ''; }, 2000);
+ 
+// ランキングのユーザーをクリック → そのユーザーの投稿を表示
+function _rankItemClick(address, type) {
+  if (!address) return;
+ 
+  // 投稿系ランキングならそのユーザーの投稿を検索して表示
+  if (type === 'posted' || type === 'good_post' || type === 'change_post' || type === 'total_post') {
+    _showUserPosts(address);
   } else {
-    // 投稿が現在のフィードに表示されていない場合は全投稿を読み込む
-    if (typeof refreshAllPosts === 'function') {
-      refreshAllPosts().then(function() {
-        var el2 = document.querySelector('[data-id="' + postId + '"]');
-        if (el2) {
-          el2.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          el2.style.transition = 'box-shadow 0.3s';
-          el2.style.boxShadow = '0 0 0 3px #007bff';
-          setTimeout(function() { el2.style.boxShadow = ''; }, 2000);
-        }
-      });
-    }
+    // 活動ランキング（good_given等）は全投稿を表示してスクロール
+    if (typeof refreshAllPosts === 'function') refreshAllPosts();
   }
 }
-
-function esc(s) {
+ 
+// 特定ユーザーの投稿一覧を表示
+function _showUserPosts(address) {
+  if (!window.fbLib || !window.db) return;
+ 
+  var postFeed = document.getElementById('postFeed');
+  if (!postFeed) return;
+  postFeed.innerHTML = '<p>読み込み中...</p>';
+ 
+  var q = window.fbLib.query(
+    window.fbLib.collection(window.db, 'posts'),
+    window.fbLib.where('address', '==', address),
+    window.fbLib.orderBy('createdAt', 'desc')
+  );
+ 
+  window.fbLib.getDocs(q).then(function(snap) {
+    // ユーザー名を取得して見出しに使う
+    fetch(RANK_API + '/api/user/name/' + encodeURIComponent(address))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var name = d.displayName || (address.slice(0,6) + '...' + address.slice(-4));
+        postFeed.innerHTML = '<h3 style="margin:0 0 12px;font-size:14px;color:#666;">📋 ' + _esc(name) + ' の投稿</h3>';
+        if (snap.empty) {
+          postFeed.innerHTML += '<p style="color:#aaa;">投稿がありません</p>';
+          return;
+        }
+        snap.forEach(function(doc) {
+          if (typeof createPostElementFromData === 'function') {
+            postFeed.appendChild(createPostElementFromData({ id: doc.id, ...doc.data() }));
+          }
+        });
+      });
+  }).catch(function(err) {
+    postFeed.innerHTML = '<p>取得に失敗しました</p>';
+    console.error(err);
+  });
+}
+ 
+function _esc(s) {
   return String(s || '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-
-// 初回ロード（DOMContentLoaded後 or 遅延実行）
-// Emu本体のDOMContentLoadedと競合しないよう setTimeout で遅延
+ 
+// ── Room2でユーザー名を設定したとき → Firestoreにも保存 ──
+// Room2のroom2.js の askUserName() を以下に差し替えるか、
+// index.html からRoom2のiframeのpostMessageを受け取る形で連携する
+//
+// 方式：Room2のiframeからpostMessageを受け取ってサーバーに保存
+window.addEventListener('message', function(event) {
+  // Room2からの名前更新通知
+  if (event.data && event.data.type === 'room2_name_set') {
+    var name    = event.data.displayName;
+    var address = window.connectedAccount;
+    if (!name || !address) return;
+ 
+    fetch(RANK_API + '/api/user/setname', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: address, displayName: name })
+    }).then(function() {
+      console.log('✅ DisplayName saved:', name);
+      // キャッシュをクリアして次回取得時に反映
+      _rankCache = {};
+    }).catch(function(e) {
+      console.error('setname error:', e);
+    });
+  }
+ 
+  // Room1の即反映通知（既存）
+  if (event.data && event.data.type === 'room1_content_added') {
+    console.log('📨 Room1コンテンツ追加通知受信');
+  }
+});
+ 
+// 初回ロード（1.5秒遅延でEmu本体のDOMと競合しない）
 setTimeout(function() {
   if (document.getElementById('rankingPanel')) {
-    loadRanking('good');
+    loadRanking('good_post');
   }
 }, 1500);
-
-// 5分ごとにキャッシュをクリアして最新に
+ 
+// 5分ごとにキャッシュクリア → 自動更新
 setInterval(function() {
-  rankingCache = {};
+  _rankCache = {};
   if (document.getElementById('rankingPanel')) {
-    loadRanking(currentRankType);
+    loadRanking(_rankType);
   }
 }, 5 * 60 * 1000);
 </script>
