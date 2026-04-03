@@ -463,33 +463,29 @@ app.post("/api/room1/reject/:id", async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════
-// ユーザープロフィール API + ランキング API（拡張版）
+// ユーザープロフィール API + ランキング API v3
 // server.js の既存ランキングAPIを全てこれに置き換える
 // ════════════════════════════════════════════════════════
 
 // ── ユーザー名の保存 ──
-// POST /api/user/setname
-// body: { address, displayName }
 app.post('/api/user/setname', async (req, res) => {
   try {
-    var address     = (req.body.address     || '').toLowerCase().trim();
-    var displayName = (req.body.displayName || '').trim().slice(0, 30);
+    const address     = (req.body.address     || '').toLowerCase().trim();
+    const displayName = (req.body.displayName || '').trim().slice(0, 30);
 
     if (!address || !displayName) {
       return res.status(400).json({ error: 'address と displayName が必要です' });
     }
-
     if (!db) return res.status(500).json({ error: 'Firestore未接続' });
 
     await db.collection('user_profiles').doc(address).set({
-      address:     address,
-      displayName: displayName,
-      updatedAt:   new Date().toISOString()
+      address,
+      displayName,
+      updatedAt: new Date().toISOString()
     }, { merge: true });
 
     console.log('✅ DisplayName set:', address, '->', displayName);
     res.json({ success: true });
-
   } catch (err) {
     console.error('setname error:', err);
     res.status(500).json({ error: err.message });
@@ -497,12 +493,11 @@ app.post('/api/user/setname', async (req, res) => {
 });
 
 // ── ユーザー名の取得（単体） ──
-// GET /api/user/name/:address
 app.get('/api/user/name/:address', async (req, res) => {
   try {
     if (!db) return res.json({ displayName: null });
-    var docId = req.params.address.toLowerCase();
-    var doc = await db.collection('user_profiles').doc(docId).get();
+    const docId = req.params.address.toLowerCase();
+    const doc = await db.collection('user_profiles').doc(docId).get();
     if (!doc.exists) return res.json({ displayName: null });
     res.json({ displayName: doc.data().displayName || null });
   } catch (err) {
@@ -510,14 +505,14 @@ app.get('/api/user/name/:address', async (req, res) => {
   }
 });
 
-// ── ユーザー名テーブルを一括取得（ランキング用） ──
+// ── ユーザー名テーブルを一括取得（ランキング用内部関数） ──
 async function fetchAllDisplayNames() {
   if (!db) return {};
   try {
-    var snapshot = await db.collection('user_profiles').get();
-    var map = {};
-    snapshot.docs.forEach(function(doc) {
-      var d = doc.data();
+    const snapshot = await db.collection('user_profiles').get();
+    const map = {};
+    snapshot.docs.forEach(doc => {
+      const d = doc.data();
       if (d.address && d.displayName) {
         map[d.address.toLowerCase()] = d.displayName;
       }
@@ -529,123 +524,115 @@ async function fetchAllDisplayNames() {
   }
 }
 
-// ── ショートアドレス表示用ヘルパー ──
+// ── アドレス短縮表示 ──
 function shortAddr(addr) {
   if (!addr || addr === 'unknown') return '匿名';
   return addr.slice(0, 6) + '...' + addr.slice(-4);
 }
 
 // ── ランキング取得 ──
-// GET /api/ranking?type=good_post|change_post|total_post|posted|good_given|change_given&limit=10
-//
-// type一覧:
-//   good_post    ... 投稿へのgood獲得数ランキング（投稿者視点）
-//   change_post  ... 投稿へのchange獲得数ランキング（投稿者視点）
-//   total_post   ... 総合スコア（good×1 + change×2）投稿者ランキング
-//   posted       ... 投稿数ランキング
-//   good_given   ... 他人にgoodした回数ランキング（行動者ランキング）
-//   change_given ... 他人にchangeした回数ランキング（行動者ランキング）
+// type: good_post | change_post | total_post | posted | good_given | change_given
 app.get('/api/ranking', async (req, res) => {
   try {
     if (!db) return res.json([]);
 
-    var type  = req.query.type  || 'good_post';
-    var limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    const type  = req.query.type  || 'good_post';
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
 
     // ユーザー名テーブルを並列取得
-    var namesPromise = fetchAllDisplayNames();
+    const namesPromise = fetchAllDisplayNames();
 
-    var items = [];
+    // ── posts コレクションを全件取得（インデックス不要・JS側でソート） ──
+    // where + orderBy の複合クエリを使わずに全件取得してJS集計する
+    // → Firestoreインデックスエラーを完全回避
+    const postsSnap = await db.collection('posts').get();
+    const names = await namesPromise;
 
-    if (type === 'good_post' || type === 'change_post' || type === 'total_post' || type === 'posted') {
-      // ── 投稿コレクションを集計 ──
-      var postsSnap = await db.collection('posts').get();
-      var names = await namesPromise;
+    let items = [];
 
-      if (type === 'posted') {
-        // 投稿数：addressごとにカウント
-        var countMap = {};
-        postsSnap.docs.forEach(function(doc) {
-          var addr = (doc.data().address || '').toLowerCase();
-          if (!addr || addr === 'unknown') return;
-          countMap[addr] = (countMap[addr] || 0) + 1;
-        });
-        items = Object.keys(countMap).map(function(addr) {
-          return {
-            address:     addr,
-            displayName: names[addr] || shortAddr(addr),
-            score:       countMap[addr],
-            scoreLabel:  '📝 ' + countMap[addr] + '件'
-          };
-        });
-        items.sort(function(a, b) { return b.score - a.score; });
+    if (type === 'posted') {
+      // ── 投稿数：addressごとにカウント ──
+      const countMap = {};
+      postsSnap.docs.forEach(doc => {
+        const addr = (doc.data().address || '').toLowerCase();
+        if (!addr || addr === 'unknown') return;
+        countMap[addr] = (countMap[addr] || 0) + 1;
+      });
 
-      } else {
-        // good_post / change_post / total_post：投稿者ごとに獲得数を集計
-        var scoreMap = {};
-        postsSnap.docs.forEach(function(doc) {
-          var d    = doc.data();
-          var addr = (d.address || '').toLowerCase();
-          if (!addr || addr === 'unknown') return;
-          if (!scoreMap[addr]) scoreMap[addr] = { good: 0, change: 0, posts: 0 };
-          scoreMap[addr].good   += (d.goodCount   || 0);
-          scoreMap[addr].change += (d.changeCount || 0);
-          scoreMap[addr].posts  += 1;
-        });
-
-        items = Object.keys(scoreMap).map(function(addr) {
-          var s     = scoreMap[addr];
-          var score = type === 'change_post'
-            ? s.change
-            : type === 'total_post'
-            ? s.good + s.change * 2
-            : s.good;
-          var label = type === 'change_post'
-            ? '🤝 ' + s.change
-            : type === 'total_post'
-            ? '🏆 ' + (s.good + s.change * 2) + '  👍' + s.good + ' 🤝' + s.change
-            : '👍 ' + s.good;
-          return {
-            address:     addr,
-            displayName: names[addr] || shortAddr(addr),
-            score:       score,
-            scoreLabel:  label
-          };
-        });
-        items.sort(function(a, b) { return b.score - a.score; });
-      }
+      items = Object.keys(countMap).map(addr => ({
+        address:     addr,
+        displayName: names[addr] || shortAddr(addr),
+        score:       countMap[addr],
+        scoreLabel:  '📝 ' + countMap[addr] + '件'
+      }));
+      items.sort((a, b) => b.score - a.score);
 
     } else if (type === 'good_given' || type === 'change_given') {
-      // ── goodUsers / changeUsers を集計（行動者ランキング） ──
-      var postsSnap2 = await db.collection('posts').get();
-      var names2 = await namesPromise;
-      var field = type === 'good_given' ? 'goodUsers' : 'changeUsers';
-      var emoji = type === 'good_given' ? '👍' : '🤝';
+      // ── 行動者ランキング：goodUsers / changeUsers 配列を集計 ──
+      const field = type === 'good_given' ? 'goodUsers' : 'changeUsers';
+      const emoji = type === 'good_given' ? '👍' : '🤝';
+      const label = type === 'good_given' ? 'Good' : 'Change';
 
-      var givenMap = {};
-      postsSnap2.docs.forEach(function(doc) {
-        var users = doc.data()[field];
+      const givenMap = {};
+      postsSnap.docs.forEach(doc => {
+        const users = doc.data()[field];
         if (!Array.isArray(users)) return;
-        users.forEach(function(addr) {
+        users.forEach(addr => {
           if (!addr) return;
-          var a = addr.toLowerCase();
+          const a = addr.toLowerCase();
           givenMap[a] = (givenMap[a] || 0) + 1;
         });
       });
 
-      items = Object.keys(givenMap).map(function(addr) {
+      items = Object.keys(givenMap).map(addr => ({
+        address:     addr,
+        displayName: names[addr] || shortAddr(addr),
+        score:       givenMap[addr],
+        scoreLabel:  emoji + ' ' + givenMap[addr] + '回 ' + label + 'した'
+      }));
+      items.sort((a, b) => b.score - a.score);
+
+    } else {
+      // ── 投稿者ランキング：good_post / change_post / total_post ──
+      const scoreMap = {};
+      postsSnap.docs.forEach(doc => {
+        const d    = doc.data();
+        const addr = (d.address || '').toLowerCase();
+        if (!addr || addr === 'unknown') return;
+        if (!scoreMap[addr]) scoreMap[addr] = { good: 0, change: 0 };
+        scoreMap[addr].good   += (d.goodCount   || 0);
+        scoreMap[addr].change += (d.changeCount || 0);
+      });
+
+      items = Object.keys(scoreMap).map(addr => {
+        const s = scoreMap[addr];
+        let score, scoreLabel;
+
+        if (type === 'change_post') {
+          score      = s.change;
+          scoreLabel = '🤝 ' + s.change + ' Change獲得';
+        } else if (type === 'total_post') {
+          score      = s.good + s.change * 2;
+          scoreLabel = '🏆 ' + score + '点  👍' + s.good + ' 🤝' + s.change;
+        } else { // good_post
+          score      = s.good;
+          scoreLabel = '👍 ' + s.good + ' Good獲得';
+        }
+
         return {
           address:     addr,
-          displayName: names2[addr] || shortAddr(addr),
-          score:       givenMap[addr],
-          scoreLabel:  emoji + ' ' + givenMap[addr] + '回'
+          displayName: names[addr] || shortAddr(addr),
+          score,
+          scoreLabel
         };
       });
-      items.sort(function(a, b) { return b.score - a.score; });
+      items.sort((a, b) => b.score - a.score);
     }
 
-    // 0件フィルタ・上位N件に絞る
-    items = items.filter(function(i) { return i.score > 0; }).slice(0, limit);
+    // 0件フィルタ・上位N件
+    items = items.filter(i => i.score > 0).slice(0, limit);
+
+    console.log(`📊 Ranking[${type}]: ${items.length}件`);
     res.json(items);
 
   } catch (err) {
