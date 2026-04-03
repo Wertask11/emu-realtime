@@ -197,7 +197,15 @@ function _showAirdropBanner(status) {
   const configs = {
     new:      { bg:"#e6f9f0", border:"1px solid #b2e8d0", icon:"🎁", text:`<strong>+${AIRDROP_AMOUNT_DISPLAY} EMUER</strong> の受取予約が完了！<br><span style="color:#888;font-size:11px">キャンペーン終了後に自動送金されます</span>` },
     reserved: { bg:"#f0f4ff", border:"1px solid #c0cfff", icon:"✅", text:`<strong>${AIRDROP_AMOUNT_DISPLAY} EMUER</strong> 受取予約済みです<br><span style="color:#888;font-size:11px">キャンペーン終了後に自動送金されます</span>` },
-    signing:  { bg:"#fff8e6", border:"1px solid #ffe099", icon:"✍️", text:`エアドロ登録のために署名をお願いします<br><span style="color:#888;font-size:11px">MetaMaskで承認してください</span>` },
+signing: {
+  bg: "#fff8e6", border: "1px solid #ffe099", icon: "✍️",
+  text: `エアドロ登録のために署名をお願いします<br>
+    <span style="color:#888;font-size:11px;">
+      ⚠️ Pocket Universe等のセキュリティツールが「未登録プロジェクト」と<br>
+      表示する場合がありますが、Emuの公式署名です。<br>
+      安全に「Continue」を押してください。
+    </span>`
+},
     pending:  { bg:"#fffbe6", border:"1px solid #ffe699", icon:"⏳", text:`エアドロ予約を受け付け中です<br><span style="color:#888;font-size:11px">しばらくお待ちください</span>` }
   };
   const c = configs[status] || configs.pending;
