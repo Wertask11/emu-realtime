@@ -614,6 +614,76 @@ body.free .paid-only {display: none;}
 }
 .rank-score { font-size: 10px; color: #007bff; margin-top: 2px; }
 
+/* 投稿完了モーダル */
+#postSuccessModal {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.55);
+  display: none; align-items: center; justify-content: center;
+  animation: fadeInBg 0.2s ease;
+}
+#postSuccessModal.active { display: flex; }
+@keyframes fadeInBg { from { opacity:0; } to { opacity:1; } }
+
+#postSuccessCard {
+  background: #fff; border-radius: 16px;
+  padding: 36px 28px; width: 100%; max-width: 360px;
+  text-align: center; position: relative; overflow: hidden;
+  animation: cardPop 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes cardPop {
+  from { transform: scale(0.8) translateY(20px); opacity: 0; }
+  to   { transform: scale(1)   translateY(0);    opacity: 1; }
+}
+
+#postSuccessCanvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
+}
+#psCheckCircle {
+  width: 60px; height: 60px; border-radius: 50%;
+  background: #e6f9f0; margin: 0 auto 14px;
+  display: flex; align-items: center; justify-content: center;
+  transform: scale(0); transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+#psCheckCircle.show { transform: scale(1); }
+#psTitle {
+  font-size: 19px; font-weight: 600; color: #111;
+  margin: 0 0 6px; opacity: 0; transform: translateY(8px);
+  transition: all 0.35s ease 0.25s;
+}
+#psTitle.show { opacity: 1; transform: translateY(0); }
+#psSub {
+  font-size: 13px; color: #888; margin: 0 0 16px;
+  opacity: 0; transition: opacity 0.35s ease 0.4s;
+}
+#psSub.show { opacity: 1; }
+#psBadge {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: #fff8e6; border: 1px solid #ffe099;
+  border-radius: 8px; padding: 7px 14px;
+  font-size: 12px; color: #b07d00;
+  opacity: 0; transform: scale(0.85);
+  transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.55s;
+  margin-bottom: 18px;
+}
+#psBadge.show { opacity: 1; transform: scale(1); }
+#psActions {
+  display: flex; gap: 10px; justify-content: center;
+  opacity: 0; transition: opacity 0.3s ease 0.75s;
+}
+#psActions.show { opacity: 1; }
+#psBtnClose {
+  background: #007bff; color: #fff; border: none;
+  border-radius: 8px; padding: 9px 20px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+}
+#psBtnClose:hover { opacity: 0.85; }
+#psBtnPost {
+  background: transparent; color: #555;
+  border: 1px solid #ddd; border-radius: 8px;
+  padding: 9px 16px; font-size: 14px; cursor: pointer;
+}
+#psBtnPost:hover { border-color: #007bff; color: #007bff; }
+
 </style>
 </head>
 <body>
@@ -998,6 +1068,7 @@ body.free .paid-only {display: none;}
   <br>
   <span style="font-size:11px;">© 2026 LLC.DAO School Park</span>
 </div>
+
 
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 <script src="/actionschema.js"></script>
@@ -4449,7 +4520,7 @@ const editingId = localStorage.getItem("editingPostId");
 
     // ❌ 修正: closePostModal(); は削除（存在しないため）
     
-    alert("🔥 Firebaseに投稿が保存されました！");
+  showPostSuccessModal();
     
     // 入力欄をクリアして閉じる
     postTitleInput.value = "";
@@ -6907,6 +6978,123 @@ setTimeout(() => {
  
 })(); // IIFE で変数汚染を防ぐ
 </script>
+// ════════════════════════════
+// 投稿完了モーダル
+// ════════════════════════════
+
+// HTML追加（bodyに直接append）
+document.body.insertAdjacentHTML('beforeend', `
+<div id="postSuccessModal">
+  <div id="postSuccessCard">
+    <canvas id="postSuccessCanvas"></canvas>
+    <div id="psCheckCircle">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+           stroke="#1a8a5a" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    </div>
+    <div id="psTitle">投稿を公開しました</div>
+    <div id="psSub">あなたの言葉が誰かに届くかもしれない</div>
+    <div id="psBadge">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="#b07d00">
+        <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+      </svg>
+      Good / Change をもらうとEMUERを獲得
+    </div>
+    <div id="psActions">
+      <button id="psBtnClose" onclick="closePostSuccessModal()">フィードを見る</button>
+      <button id="psBtnPost" onclick="closePostSuccessModal(); openPostForm();">続けて投稿</button>
+    </div>
+  </div>
+</div>
+`);
+
+var _psColors = ['#7F77DD','#1D9E75','#EF9F27','#D4537E','#378ADD','#D85A30'];
+var _psParticles = [];
+var _psAnimId = null;
+
+function showPostSuccessModal() {
+  var modal = document.getElementById('postSuccessModal');
+  modal.classList.add('active');
+
+  // リセット
+  ['psCheckCircle','psTitle','psSub','psBadge','psActions'].forEach(function(id) {
+    document.getElementById(id).classList.remove('show');
+  });
+
+  // チェックマーク → コンフェッティ
+  setTimeout(function() {
+    document.getElementById('psCheckCircle').classList.add('show');
+    _psLaunchConfetti();
+  }, 80);
+  setTimeout(function() { document.getElementById('psTitle').classList.add('show'); }, 320);
+  setTimeout(function() { document.getElementById('psSub').classList.add('show'); }, 460);
+  setTimeout(function() { document.getElementById('psBadge').classList.add('show'); }, 600);
+  setTimeout(function() { document.getElementById('psActions').classList.add('show'); }, 800);
+}
+
+function closePostSuccessModal() {
+  document.getElementById('postSuccessModal').classList.remove('active');
+  if (_psAnimId) cancelAnimationFrame(_psAnimId);
+  var c = document.getElementById('postSuccessCanvas');
+  c.getContext('2d').clearRect(0, 0, c.width, c.height);
+}
+
+function _psLaunchConfetti() {
+  if (_psAnimId) cancelAnimationFrame(_psAnimId);
+  var canvas = document.getElementById('postSuccessCanvas');
+  var ctx    = canvas.getContext('2d');
+  var card   = document.getElementById('postSuccessCard');
+  var rect   = card.getBoundingClientRect();
+  canvas.width  = rect.width;
+  canvas.height = rect.height;
+
+  _psParticles = [];
+  for (var i = 0; i < 65; i++) {
+    _psParticles.push({
+      x:        canvas.width  * Math.random(),
+      y:        -10 - Math.random() * 30,
+      vx:       (Math.random() - 0.5) * 3.5,
+      vy:       2.5 + Math.random() * 3,
+      w:        5 + Math.random() * 8,
+      h:        3 + Math.random() * 4,
+      color:    _psColors[Math.floor(Math.random() * _psColors.length)],
+      rotation: Math.random() * Math.PI * 2,
+      spin:     (Math.random() - 0.5) * 0.22,
+      life:     1
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    var alive = false;
+    _psParticles.forEach(function(p) {
+      p.x  += p.vx;
+      p.y  += p.vy;
+      p.vy += 0.09;
+      p.rotation += p.spin;
+      p.life -= 0.011;
+      if (p.life <= 0 || p.y > canvas.height + 20) return;
+      alive = true;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx.restore();
+    });
+    if (alive) { _psAnimId = requestAnimationFrame(draw); }
+    else { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+  }
+  _psAnimId = requestAnimationFrame(draw);
+}
+
+// モーダルの外クリックで閉じる
+document.getElementById('postSuccessModal').addEventListener('click', function(e) {
+  if (e.target === this) closePostSuccessModal();
+});
 </body>
 </html>
 
