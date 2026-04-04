@@ -3957,6 +3957,12 @@ jpycBtn.onclick = async () => {
     const nftElement = document.getElementById(`nft-${tokenId}`);
     if (nftElement) nftElement.remove();
 
+    // ★ room2に青い星を生成
+    const room2Frame = document.getElementById("room2Frame");
+    if (room2Frame && room2Frame.contentWindow) {
+      room2Frame.contentWindow.postMessage({ type: "NFT_PURCHASE" }, "*");
+    }
+
     alert("JPYCでNFT交換完了！");
   } catch (err) {
     console.error("JPYC交換エラー:", err);
@@ -5099,17 +5105,17 @@ function handleDiscussion() {
   saveDiscussionState();
 
   if ([3, 5, 7].includes(discussionState.streak)) {
-
     const iframe = document.getElementById("room2Frame");
-
-iframe.contentWindow.postMessage(
-      {
-        type: "STREAK_3DAY",
-        level: discussionState.streak,
-        projectId: "default"
-      },
-      "*"
-    );
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage(
+        {
+          type: "STREAK_3DAY",
+          level: discussionState.streak,
+          projectId: "default"
+        },
+        "*"
+      );
+    }
   }
 }
 
