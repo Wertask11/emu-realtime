@@ -614,75 +614,67 @@ body.free .paid-only {display: none;}
 }
 .rank-score { font-size: 10px; color: #007bff; margin-top: 2px; }
 
-/* 投稿完了モーダル */
-#postSuccessModal {
+/* 桜モーダル */
+#sakuraModal {
   position: fixed; inset: 0; z-index: 9999;
-  background: rgba(0,0,0,0.55);
+  background: rgba(0,0,0,0.5);
   display: none; align-items: center; justify-content: center;
-  animation: fadeInBg 0.2s ease;
 }
-#postSuccessModal.active { display: flex; }
-@keyframes fadeInBg { from { opacity:0; } to { opacity:1; } }
-
-#postSuccessCard {
+#sakuraModal.active { display: flex; }
+#sakuraCard {
   background: #fff; border-radius: 16px;
-  padding: 36px 28px; width: 100%; max-width: 360px;
+  padding: 36px 28px; width: 90%; max-width: 360px;
   text-align: center; position: relative; overflow: hidden;
-  animation: cardPop 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  min-height: 260px;
+  animation: sakuraPop 0.4s cubic-bezier(0.34,1.56,0.64,1);
 }
-@keyframes cardPop {
-  from { transform: scale(0.8) translateY(20px); opacity: 0; }
-  to   { transform: scale(1)   translateY(0);    opacity: 1; }
+@keyframes sakuraPop {
+  from { transform: scale(0.85) translateY(16px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
 }
-
-#postSuccessCanvas {
-  position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
-}
-#psCheckCircle {
-  width: 60px; height: 60px; border-radius: 50%;
-  background: #e6f9f0; margin: 0 auto 14px;
+#sakuraCanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#skCheck {
+  width: 58px; height: 58px; border-radius: 50%;
+  background: #fce8f0; margin: 0 auto 14px;
   display: flex; align-items: center; justify-content: center;
-  transform: scale(0); transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  transform: scale(0); transition: transform 0.45s cubic-bezier(0.34,1.6,0.64,1);
 }
-#psCheckCircle.show { transform: scale(1); }
-#psTitle {
-  font-size: 19px; font-weight: 600; color: #111;
-  margin: 0 0 6px; opacity: 0; transform: translateY(8px);
-  transition: all 0.35s ease 0.25s;
+#skCheck.show { transform: scale(1); }
+#skTitle {
+  font-size: 18px; font-weight: 600; color: #111;
+  margin: 0 0 8px; opacity: 0; transform: translateY(10px);
+  transition: all 0.4s ease 0.3s;
 }
-#psTitle.show { opacity: 1; transform: translateY(0); }
-#psSub {
-  font-size: 13px; color: #888; margin: 0 0 16px;
-  opacity: 0; transition: opacity 0.35s ease 0.4s;
+#skTitle.show { opacity: 1; transform: translateY(0); }
+#skSub {
+  font-size: 13px; color: #888; line-height: 1.6;
+  margin: 0 0 18px; opacity: 0; transition: opacity 0.4s ease 0.48s;
 }
-#psSub.show { opacity: 1; }
-#psBadge {
+#skSub.show { opacity: 1; }
+#skBadge {
   display: inline-flex; align-items: center; gap: 7px;
-  background: #fff8e6; border: 1px solid #ffe099;
-  border-radius: 8px; padding: 7px 14px;
-  font-size: 12px; color: #b07d00;
-  opacity: 0; transform: scale(0.85);
-  transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.55s;
-  margin-bottom: 18px;
+  background: #fce8f0; border: 1px solid #e8a0bf;
+  border-radius: 999px; padding: 6px 14px;
+  font-size: 12px; color: #9d3d65;
+  opacity: 0; transform: translateY(6px);
+  transition: all 0.4s ease 0.62s; margin-bottom: 20px;
 }
-#psBadge.show { opacity: 1; transform: scale(1); }
-#psActions {
+#skBadge.show { opacity: 1; transform: translateY(0); }
+#skActions {
   display: flex; gap: 10px; justify-content: center;
-  opacity: 0; transition: opacity 0.3s ease 0.75s;
+  opacity: 0; transition: opacity 0.35s ease 0.82s;
 }
-#psActions.show { opacity: 1; }
-#psBtnClose {
-  background: #007bff; color: #fff; border: none;
+#skActions.show { opacity: 1; }
+#skBtnFeed {
+  background: #c0527a; color: #fff; border: none;
   border-radius: 8px; padding: 9px 20px;
-  font-size: 14px; font-weight: 600; cursor: pointer;
+  font-size: 13px; font-weight: 600; cursor: pointer;
 }
-#psBtnClose:hover { opacity: 0.85; }
-#psBtnPost {
-  background: transparent; color: #555;
+#skBtnMore {
+  background: transparent; color: #666;
   border: 1px solid #ddd; border-radius: 8px;
-  padding: 9px 16px; font-size: 14px; cursor: pointer;
+  padding: 9px 14px; font-size: 13px; cursor: pointer;
 }
-#psBtnPost:hover { border-color: #007bff; color: #007bff; }
 
 </style>
 </head>
@@ -4520,9 +4512,7 @@ const editingId = localStorage.getItem("editingPostId");
       console.log("✅ 新規投稿を作成しました");
     }
 
-    // ❌ 修正: closePostModal(); は削除（存在しないため）
-    
-  showPostSuccessModal();
+  showSakuraModal();
     
     // 入力欄をクリアして閉じる
     postTitleInput.value = "";
@@ -6236,122 +6226,135 @@ setTimeout(() => {
   }
 }, 1000);
 
-// ════════════════════════════
-// 投稿完了モーダル
-// ════════════════════════════
-
-// HTML追加（bodyに直接append）
+// ════════ 桜モーダル ════════
 document.body.insertAdjacentHTML('beforeend', `
-<div id="postSuccessModal">
-  <div id="postSuccessCard">
-    <canvas id="postSuccessCanvas"></canvas>
-    <div id="psCheckCircle">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
-           stroke="#1a8a5a" stroke-width="2.5"
+<div id="sakuraModal">
+  <div id="sakuraCard">
+    <canvas id="sakuraCanvas"></canvas>
+    <div id="skCheck">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+           stroke="#c0527a" stroke-width="2.5"
            stroke-linecap="round" stroke-linejoin="round">
         <polyline points="20 6 9 17 4 12"/>
       </svg>
     </div>
-    <div id="psTitle">投稿を公開しました</div>
-    <div id="psSub">あなたの言葉が誰かに届くかもしれない</div>
-    <div id="psBadge">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="#b07d00">
-        <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
-      </svg>
-      Good / Change をもらうとEMUERを獲得
-    </div>
-    <div id="psActions">
-      <button id="psBtnClose" onclick="closePostSuccessModal()">フィードを見る</button>
-      <button id="psBtnPost" onclick="closePostSuccessModal(); openPostForm();">続けて投稿</button>
+    <div id="skTitle">投稿を公開しました</div>
+    <div id="skSub">あなたの言葉が、誰かの心に届くかもしれない</div>
+    <div id="skBadge">Good / Change をもらうとEMUERを獲得</div>
+    <div id="skActions">
+      <button id="skBtnFeed" onclick="closeSakuraModal()">フィードを見る</button>
+      <button id="skBtnMore" onclick="closeSakuraModal(); setTimeout(()=>openPostForm(),200);">続けて投稿</button>
     </div>
   </div>
 </div>
 `);
 
-var _psColors = ['#7F77DD','#1D9E75','#EF9F27','#D4537E','#378ADD','#D85A30'];
-var _psParticles = [];
-var _psAnimId = null;
+var _skCanvas, _skCtx, _skPetals = [], _skAnimId = null;
+var _skColors = [
+  'rgba(255,182,210,A)','rgba(255,200,220,A)',
+  'rgba(245,160,195,A)','rgba(255,220,230,A)',
+  'rgba(230,150,185,A)','rgba(255,240,245,A)'
+];
 
-function showPostSuccessModal() {
-  var modal = document.getElementById('postSuccessModal');
+function showSakuraModal() {
+  var modal = document.getElementById('sakuraModal');
   modal.classList.add('active');
-
-  // リセット
-  ['psCheckCircle','psTitle','psSub','psBadge','psActions'].forEach(function(id) {
+  ['skCheck','skTitle','skSub','skBadge','skActions'].forEach(function(id) {
     document.getElementById(id).classList.remove('show');
   });
-
-  // チェックマーク → コンフェッティ
   setTimeout(function() {
-    document.getElementById('psCheckCircle').classList.add('show');
-    _psLaunchConfetti();
+    document.getElementById('skCheck').classList.add('show');
+    _skLaunch();
   }, 80);
-  setTimeout(function() { document.getElementById('psTitle').classList.add('show'); }, 320);
-  setTimeout(function() { document.getElementById('psSub').classList.add('show'); }, 460);
-  setTimeout(function() { document.getElementById('psBadge').classList.add('show'); }, 600);
-  setTimeout(function() { document.getElementById('psActions').classList.add('show'); }, 800);
+  setTimeout(function() { document.getElementById('skTitle').classList.add('show'); }, 340);
+  setTimeout(function() { document.getElementById('skSub').classList.add('show'); }, 490);
+  setTimeout(function() { document.getElementById('skBadge').classList.add('show'); }, 640);
+  setTimeout(function() { document.getElementById('skActions').classList.add('show'); }, 860);
 }
 
-function closePostSuccessModal() {
-  document.getElementById('postSuccessModal').classList.remove('active');
-  if (_psAnimId) cancelAnimationFrame(_psAnimId);
-  var c = document.getElementById('postSuccessCanvas');
-  c.getContext('2d').clearRect(0, 0, c.width, c.height);
+function closeSakuraModal() {
+  document.getElementById('sakuraModal').classList.remove('active');
+  if (_skAnimId) cancelAnimationFrame(_skAnimId);
+  if (_skCtx && _skCanvas) _skCtx.clearRect(0,0,_skCanvas.width,_skCanvas.height);
 }
 
-function _psLaunchConfetti() {
-  if (_psAnimId) cancelAnimationFrame(_psAnimId);
-  var canvas = document.getElementById('postSuccessCanvas');
-  var ctx    = canvas.getContext('2d');
-  var card   = document.getElementById('postSuccessCard');
-  var rect   = card.getBoundingClientRect();
-  canvas.width  = rect.width;
-  canvas.height = rect.height;
+function _skDrawPetal(x, y, w, h, angle, alpha, col) {
+  _skCtx.save();
+  _skCtx.globalAlpha = Math.max(0, alpha);
+  _skCtx.translate(x, y);
+  _skCtx.rotate(angle);
+  _skCtx.beginPath();
+  _skCtx.moveTo(0, -h*0.5);
+  _skCtx.bezierCurveTo( w*0.6,-h*0.5,  w*0.6, h*0.4, 0, h*0.5);
+  _skCtx.bezierCurveTo(-w*0.6, h*0.4, -w*0.6,-h*0.5, 0,-h*0.5);
+  _skCtx.fillStyle = col;
+  _skCtx.fill();
+  _skCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+  _skCtx.lineWidth = 0.5;
+  _skCtx.beginPath();
+  _skCtx.moveTo(0,-h*0.4); _skCtx.lineTo(0,h*0.4);
+  _skCtx.stroke();
+  _skCtx.restore();
+}
 
-  _psParticles = [];
-  for (var i = 0; i < 65; i++) {
-    _psParticles.push({
-      x:        canvas.width  * Math.random(),
-      y:        -10 - Math.random() * 30,
-      vx:       (Math.random() - 0.5) * 3.5,
-      vy:       2.5 + Math.random() * 3,
-      w:        5 + Math.random() * 8,
-      h:        3 + Math.random() * 4,
-      color:    _psColors[Math.floor(Math.random() * _psColors.length)],
-      rotation: Math.random() * Math.PI * 2,
-      spin:     (Math.random() - 0.5) * 0.22,
-      life:     1
+function _skLaunch() {
+  if (_skAnimId) cancelAnimationFrame(_skAnimId);
+  _skCanvas = document.getElementById('sakuraCanvas');
+  _skCtx    = _skCanvas.getContext('2d');
+  var card  = document.getElementById('sakuraCard');
+  var rect  = card.getBoundingClientRect();
+  _skCanvas.width  = rect.width  || 360;
+  _skCanvas.height = rect.height || 260;
+
+  _skPetals = [];
+  for (var i = 0; i < 55; i++) {
+    _skPetals.push({
+      x:       _skCanvas.width  * (0.1 + Math.random() * 0.8),
+      y:       _skCanvas.height * (0.4 + Math.random() * 0.5),
+      vx:      (Math.random() - 0.35) * 1.8,
+      vy:      -(1.6 + Math.random() * 2.8),
+      w:       7 + Math.random() * 8,
+      h:       4 + Math.random() * 5,
+      angle:   Math.random() * Math.PI * 2,
+      spin:    (Math.random() - 0.5) * 0.07,
+      sway:    Math.random() * Math.PI * 2,
+      swayAmp: 0.4 + Math.random() * 0.8,
+      swaySpd: 0.02 + Math.random() * 0.03,
+      gravity: 0.012 + Math.random() * 0.01,
+      life:    1,
+      decay:   0.005 + Math.random() * 0.006,
+      color:   _skColors[Math.floor(Math.random() * _skColors.length)],
+      delay:   i * 30,
+      t:       0
     });
   }
 
   function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    _skCtx.clearRect(0, 0, _skCanvas.width, _skCanvas.height);
     var alive = false;
-    _psParticles.forEach(function(p) {
-      p.x  += p.vx;
-      p.y  += p.vy;
-      p.vy += 0.09;
-      p.rotation += p.spin;
-      p.life -= 0.011;
-      if (p.life <= 0 || p.y > canvas.height + 20) return;
+    _skPetals.forEach(function(p) {
+      if (p.delay > 0) { p.delay -= 16; return; }
+      p.t++;
+      p.x += p.vx + Math.sin(p.sway + p.t * p.swaySpd) * p.swayAmp;
+      p.y += p.vy;
+      p.vy += p.gravity;
+      p.vx *= 0.996;
+      p.angle += p.spin;
+      p.life  -= p.decay;
+      if (p.life <= 0 || p.y > _skCanvas.height + 20) return;
       alive = true;
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, p.life);
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.rotation);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
-      ctx.restore();
+      var a = Math.max(0, p.life);
+      _skDrawPetal(p.x, p.y, p.w, p.h, p.angle, a,
+                   p.color.replace('A', a.toFixed(2)));
     });
-    if (alive) { _psAnimId = requestAnimationFrame(draw); }
-    else { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+    if (alive) { _skAnimId = requestAnimationFrame(draw); }
+    else { _skCtx.clearRect(0,0,_skCanvas.width,_skCanvas.height); }
   }
-  _psAnimId = requestAnimationFrame(draw);
+  _skAnimId = requestAnimationFrame(draw);
 }
 
-// モーダルの外クリックで閉じる
-document.getElementById('postSuccessModal').addEventListener('click', function(e) {
-  if (e.target === this) closePostSuccessModal();
+document.getElementById('sakuraModal').addEventListener('click', function(e) {
+  if (e.target === this) closeSakuraModal();
 });
 
 </script>
