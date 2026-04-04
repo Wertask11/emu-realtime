@@ -1000,7 +1000,7 @@ body.free .paid-only {display: none;}
     「どうしてそう思うの？」と、好奇心を持って質問してみてください。相手の背景を知ることで、「その立場なら、そう考えるのも無理はない」という相互理解が生まれ、議論の質が一段階上がります。</p>
   </div>
 
-  <button class="nextBtn" onclick="nextStep()">次へ</button>
+  <button class="nextBtn" onclick="room3NextStep()">次へ</button>
 </div>
     <!-- Step2: コツ -->
     <div id="step2" class="section">
@@ -1012,7 +1012,7 @@ body.free .paid-only {display: none;}
         <li>冷静: 感情に飲み込まれない</li>
         <li>譲歩: 相手のメンツを守る</li>
       </ul>
-      <button class="nextBtn" onclick="nextStep()">次へ</button>
+      <button class="nextBtn" onclick="room3NextStep()">次へ</button>
     </div>
 
     <!-- Step3: チュートリアル＋議題 -->
@@ -4809,7 +4809,7 @@ const overlay = document.getElementById("room3Overlay");
 const socket = io("https://emu-realtime.onrender.com");
 
 const walletAddress = localStorage.getItem("emuWallet");
-let currentStep = 1;
+let room3CurrentStep = 1;
 let replyTarget = null;
 
 // =====================
@@ -4891,7 +4891,7 @@ function openRoom(roomId) {
 
 function openRoom3() {
   overlay.style.display = "flex";
-  showStep(1);
+  room3ShowStep(1);
 
 if (socket && socket.connected) {
   socket.emit("join room3", {
@@ -4901,17 +4901,17 @@ if (socket && socket.connected) {
 }
 
 // =====================
-// Step 制御
+// Step 制御 (room3専用)
 // =====================
-function showStep(step){
-  currentStep = step;
+function room3ShowStep(step){
+  room3CurrentStep = step;
   document.getElementById('step1').style.display = step === 1 ? 'block' : 'none';
   document.getElementById('step2').style.display = step === 2 ? 'block' : 'none';
   document.getElementById('step3').style.display = step === 3 ? 'block' : 'none';
 }
 
-function nextStep(){
-  if(currentStep < 3) showStep(currentStep + 1);
+function room3NextStep(){
+  if(room3CurrentStep < 3) room3ShowStep(room3CurrentStep + 1);
 }
 
 // =====================
