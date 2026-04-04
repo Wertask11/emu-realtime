@@ -4379,7 +4379,7 @@ if (scheduledPostsBtn) {
         return;
       }
 
-      scheduledPostsContainer.innerHTML = `<h4 style="margin:0 0 8px;font-size:13px;">⏰ 予約投稿一覧 (${items.length}件)</h4>`;
+      scheduledPostsContainer.innerHTML = `<h4 style="margin:0 0 8px;font-size:13px;">⏰ 予約投稿一覧 (${items.length}件) <button onclick="document.getElementById('scheduledPostsBtn').click()" style="font-size:11px;margin-left:8px;background:none;border:1px solid #ddd;border-radius:4px;padding:2px 8px;cursor:pointer;">🔄 更新</button></h4>`;
       items.forEach(item => {
         const dt = new Date(item.scheduledAt).toLocaleString("ja-JP");
         const el = document.createElement("div");
@@ -6446,13 +6446,10 @@ function startRealtimeUpdate() {
   });
 }
 
-// ページ読み込み時に実行を開始
-// ※ window.db が初期化されるのを少し待つために setTimeout を使うと安全です
-setTimeout(() => {
-  if (window.db && window.fbLib) {
-    startRealtimeUpdate();
-  }
-}, 1000);
+// ★ 予約投稿の自動公開に対応するため3分ごとにリフレッシュ
+setInterval(() => {
+  refreshAllPosts();
+}, 3 * 60 * 1000);
 
 // ════════ 桜モーダル ════════
 document.body.insertAdjacentHTML('beforeend', `
