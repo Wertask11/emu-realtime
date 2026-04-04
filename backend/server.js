@@ -226,6 +226,168 @@ app.use("/airdrop", airdropRouter);
 cron.schedule("0 2 * * *", () => { console.log("⏰ 定期エアドロバッチ起動"); runAirdropBatch(); }, { timezone: "Asia/Tokyo" });
 cron.schedule("0 3 15 4 *", () => { console.log("🏁 最終エアドロバッチ起動"); runAirdropBatch(); }, { timezone: "Asia/Tokyo" });
 
+// =====================
+// 予約投稿 システム
+// =====================
+const SCHEDULE_NFT_ADDRESS = process.env.SCHEDULE_NFT_ADDRESS || "";
+const SCHEDULE_NFT_ABI = ["function balanceOf(address) view returns (uint256)"];
+const SCHEDULED_POSTS_COL = "scheduled_posts";
+
+async function verifyScheduleNFT(address) {
+  if (!SCHEDULE_NFT_ADDRESS) {
+    console.warn("⚠️ SCHEDULE_NFT_ADDRESS 未設定 - NFTチェックをスキップ");
+    return false;
+  }
+  try {
+    const rpcProvider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
+    const nft = new ethers.Contract(SCHEDULE_NFT_ADDRESS, SCHEDULE_NFT_ABI, rpcProvider);
+    const balance = await nft.balanceOf(address);
+    return balance.gt(0);
+  } catch (e) {
+    console.error("Schedule NFT check error:", e.message);
+    return false;
+  }
+}
+
+async function publishScheduledPosts() {
+  if (!db) return;
+  try {
+    const now = new Date();
+    const snap = await db.collection(SCHEDULED_POSTS_COL)
+      .where("status", "==", "scheduled")
+      .get();
+
+    const due = snap.docs.filter(d => {
+      const sa = d.data().scheduledAt;
+      const date = sa?.toDate ? sa.toDate() : new Date(sa);
+      return date <= now;
+    });
+
+    if (due.length === 0) return;
+    console.log(`⏰ 予約投稿: ${due.length}件を公開します`);
+
+    for (const docSnap of due) {
+      const d = docSnap.data();
+      try {
+        const postRef = await db.collection("posts").add({
+          title: d.title,
+          body: d.body,
+          tags: d.tags || "",
+          address: d.address,
+          userId: d.userId,
+          userType: d.userType,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          goodCount: 0,
+          changeCount: 0,
+          goodUsers: [],
+          changeUsers: [],
+          scheduledPostId: docSnap.id
+        });
+        await docSnap.ref.update({
+          status: "published",
+          publishedPostId: postRef.id,
+          publishedAt: new Date()
+        });
+        console.log(`✅ 予約投稿公開: ${docSnap.id} → posts/${postRef.id}`);
+      } catch (e) {
+        console.error(`❌ 予約投稿公開失敗: ${docSnap.id}`, e.message);
+      }
+    }
+  } catch (e) {
+    console.error("publishScheduledPosts error:", e);
+  }
+}
+
+// 毎分チェック
+cron.schedule("* * * * *", () => publishScheduledPosts(), { timezone: "Asia/Tokyo" });
+
+// 予約投稿 作成
+app.post("/api/scheduled-posts", async (req, res) => {
+  const { address, title, body, tags, scheduledAt, userId, userType } = req.body;
+  if (!address || !title || !body || !scheduledAt) {
+    return res.status(400).json({ error: "MISSING_PARAMS" });
+  }
+  if (!db) return res.status(500).json({ error: "Firestore未接続" });
+
+  const scheduledDate = new Date(scheduledAt);
+  if (isNaN(scheduledDate.getTime()) || scheduledDate <= new Date()) {
+    return res.status(400).json({ error: "INVALID_DATE" });
+  }
+
+  const hasNFT = await verifyScheduleNFT(address);
+  if (!hasNFT) {
+    return res.status(403).json({ error: "SCHEDULE_NFT_REQUIRED" });
+  }
+
+  try {
+    const ref = await db.collection(SCHEDULED_POSTS_COL).add({
+      title,
+      body,
+      tags: tags || "",
+      address: address.toLowerCase(),
+      userId: userId || address.toLowerCase(),
+      userType: userType || "unknown",
+      scheduledAt: scheduledDate,
+      status: "scheduled",
+      createdAt: new Date(),
+      publishedPostId: null
+    });
+    console.log(`✅ 予約投稿登録: ${ref.id} by ${address} at ${scheduledDate.toISOString()}`);
+    res.json({ success: true, id: ref.id });
+  } catch (e) {
+    console.error("scheduled-posts create error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 予約投稿 一覧取得
+app.get("/api/scheduled-posts", async (req, res) => {
+  const address = (req.query.address || "").toLowerCase();
+  if (!address) return res.status(400).json({ error: "MISSING_ADDRESS" });
+  if (!db) return res.json([]);
+  try {
+    const snap = await db.collection(SCHEDULED_POSTS_COL)
+      .where("address", "==", address)
+      .where("status", "==", "scheduled")
+      .get();
+
+    const items = snap.docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+      scheduledAt: d.data().scheduledAt?.toDate?.()?.toISOString() || d.data().scheduledAt
+    }));
+    items.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+    res.json(items);
+  } catch (e) {
+    console.error("scheduled-posts get error:", e);
+    res.status(500).json([]);
+  }
+});
+
+// 予約投稿 キャンセル
+app.delete("/api/scheduled-posts/:id", async (req, res) => {
+  const { address } = req.body;
+  if (!db) return res.status(500).json({ error: "Firestore未接続" });
+  try {
+    const ref = db.collection(SCHEDULED_POSTS_COL).doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "NOT_FOUND" });
+    if (snap.data().address !== (address || "").toLowerCase()) {
+      return res.status(403).json({ error: "UNAUTHORIZED" });
+    }
+    if (snap.data().status !== "scheduled") {
+      return res.status(400).json({ error: "ALREADY_PUBLISHED" });
+    }
+    await ref.update({ status: "cancelled" });
+    console.log(`🗑️ 予約投稿キャンセル: ${req.params.id}`);
+    res.json({ success: true });
+  } catch (e) {
+    console.error("scheduled-posts delete error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ════════════════════════════════════════
 // お問い合わせ API（復元）
 // ════════════════════════════════════════

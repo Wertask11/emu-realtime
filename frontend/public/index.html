@@ -831,11 +831,13 @@ body.free .paid-only {display: none;}
             <div id="librarySubButtons" class="sub-nav hidden">
               <ul>
                 <li><button id="libraryDrafts" class="sub-nav-button">下書き</button></li>
+                <li><button id="scheduledPostsBtn" class="sub-nav-button">⏰ 予約投稿</button></li>
                 <li><button id="myGoodBtn" class="sub-nav-button">goodした記事</button></li>
 <li><button id="myChangeBtn" class="sub-nav-button">changeした記事</button></li>
                 <li><button id="myWalletButton" class="sub-nav-button">マイウォレット</button></li>
               </ul>
               <div id="draftsContainer" class="hidden" style="margin-top:10px;"></div>
+              <div id="scheduledPostsContainer" class="hidden" style="margin-top:10px;"></div>
             </div>
           </li>
         </ul>
@@ -946,12 +948,25 @@ body.free .paid-only {display: none;}
         <label for="postTags">タグ (カンマ区切り):</label>
         <input type="text" id="postTags">
       </div>
+      <!-- 予約投稿 日時入力（NFT所持者のみ表示） -->
+      <div id="scheduleSection" class="form-group" style="display:none;">
+        <label for="scheduleDateTime">📅 公開日時:</label>
+        <input type="datetime-local" id="scheduleDateTime" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+        <p style="font-size:11px;color:#888;margin:4px 0 0;">※ 設定した日時に自動で投稿が公開されます</p>
+      </div>
       <div class="form-actions">
         <button type="submit" class="action-button primary">投稿</button>
+        <button type="button" id="schedulePostButton" class="action-button secondary" style="display:none;">⏰ 予約投稿</button>
         <button type="button" id="saveDraftButton" class="action-button secondary">下書き</button>
         <button type="button" id="clearFormButton" class="action-button danger">消去</button>
       </div>
     </form>
+    <!-- NFT未所持の場合のロック表示 -->
+    <div id="scheduleNFTBanner" style="display:none;margin-top:12px;padding:10px 14px;background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:8px;color:#aaa;font-size:12px;text-align:center;">
+      🔒 <strong style="color:#f0b429;">予約投稿</strong> は専用NFTで解放できます →
+      <button onclick="document.getElementById('postFormModal').style.display='none'; document.getElementById('exchangeBtn').click();"
+        style="background:none;border:none;color:#f0b429;text-decoration:underline;cursor:pointer;font-size:12px;">取引所を見る</button>
+    </div>
   </div>
 </div>
 
@@ -2242,6 +2257,8 @@ const EMUER_CONTRACT_ABI = [
 
 // NFT コントラクト情報
 const NFT_ADDRESS = "0x385e0cc1fb00ECdd9AA363Bd18a7fEC68d8fA07A"; // テストNFTコントラクトアドレス
+// 予約投稿NFT（取引所に出品する専用NFTのコントラクトアドレス）
+const SCHEDULE_NFT_ADDRESS = ""; // ← 管理者がデプロイ後に設定
 const NFT_ABI = [
 	{
 		"inputs": [
@@ -3631,6 +3648,7 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
     // ③ 公式NFTチェックの実行
     await window.checkHexaNFT();
     await window.checkFreeNFT();
+    await window.checkScheduleNFT();
 
     window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT;
     console.log("🏫 本番NFT最終判定:", window.hasOfficialNFT);
@@ -3743,6 +3761,44 @@ window.checkFreeNFT = async function () {
   }
 };
 
+// --- [5] 予約投稿NFTチェック ---
+window.checkScheduleNFT = async function () {
+  window.hasScheduleNFT = false;
+  if (!window.connectedAccount || !SCHEDULE_NFT_ADDRESS) return;
+  try {
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const nft = new ethers.Contract(
+      SCHEDULE_NFT_ADDRESS,
+      ["function balanceOf(address) view returns (uint256)"],
+      provider
+    );
+    const balance = await nft.balanceOf(window.connectedAccount);
+    window.hasScheduleNFT = balance.gt(0);
+    console.log("📅 予約投稿NFT:", window.hasScheduleNFT);
+  } catch (e) {
+    console.warn("予約投稿NFTチェック失敗:", e.message);
+    window.hasScheduleNFT = false;
+  }
+  updateSchedulePostUI();
+};
+
+function updateSchedulePostUI() {
+  const scheduleBtn = document.getElementById("schedulePostButton");
+  const scheduleSection = document.getElementById("scheduleSection");
+  const scheduleBanner = document.getElementById("scheduleNFTBanner");
+  if (!scheduleBtn) return;
+
+  const isGuest = !window.connectedAccount;
+  if (!isGuest && window.hasScheduleNFT) {
+    scheduleBtn.style.display = "";
+    scheduleSection.style.display = "";
+    if (scheduleBanner) scheduleBanner.style.display = "none";
+  } else {
+    scheduleBtn.style.display = "none";
+    scheduleSection.style.display = "none";
+    if (scheduleBanner) scheduleBanner.style.display = isGuest ? "none" : "";
+  }
+}
 
 //取引所制限
 function canUseExchange() {
@@ -3859,6 +3915,14 @@ function createNFTCard(tokenId, metadata, emuPrice, jpycPrice) {
   title.textContent = metadata.name || `NFT #${tokenId}`;
   card.appendChild(title);
 
+  // 予約投稿NFTバッジ
+  if (metadata.scheduleFeature || (metadata.perks && metadata.perks.includes("予約投稿"))) {
+    const badge = document.createElement("div");
+    badge.style.cssText = "display:inline-block;background:linear-gradient(135deg,#f0b429,#e67e22);color:#fff;font-size:11px;font-weight:bold;padding:3px 8px;border-radius:12px;margin-bottom:6px;";
+    badge.textContent = "⏰ 予約投稿機能 解放";
+    card.appendChild(badge);
+  }
+
   if (metadata.image) {
     const imgWrapper = document.createElement("div");
     imgWrapper.style.cssText = `
@@ -3914,6 +3978,8 @@ await tx.wait();
     }
 
     alert("Emuerで交換成功！");
+    // 予約投稿NFT取得後にUIを更新
+    if (typeof window.checkScheduleNFT === "function") await window.checkScheduleNFT();
   } catch (err) {
     console.error("Emuer交換エラー:", err);
     alert("Emuerでの交換に失敗しました");
@@ -3964,6 +4030,8 @@ jpycBtn.onclick = async () => {
     }
 
     alert("JPYCでNFT交換完了！");
+    // 予約投稿NFT取得後にUIを更新
+    if (typeof window.checkScheduleNFT === "function") await window.checkScheduleNFT();
   } catch (err) {
     console.error("JPYC交換エラー:", err);
     alert("JPYC交換に失敗しました");
@@ -3995,8 +4063,8 @@ async function loadExchangeableNFTs() {
     nftListDiv.innerHTML = "";
     let foundCount = 0;
 
-    // 2. とりあえず ID 1〜10 を確認するループ（運用に合わせて範囲は変えてOK）
-    for (let i = 1; i <= 10; i++) {
+    // 2. ID 1〜20 を確認するループ（予約投稿NFTを含む）
+    for (let i = 1; i <= 20; i++) {
       try {
         // コントラクトの listedNFTs マッピングを直接見に行く
         const info = await emuerContract.listedNFTs(i);
@@ -4195,6 +4263,144 @@ function editDraft(draft) {
   postTitleInput.value = draft.title; postBodyInput.value = draft.body; postTagsInput.value = draft.tags;
   postTitleInput.disabled = false;
   openPostForm();
+}
+
+/* ======= 予約投稿 ======= */
+const schedulePostButton = document.getElementById("schedulePostButton");
+if (schedulePostButton) {
+  schedulePostButton.addEventListener("click", async function () {
+    if (!window.hasScheduleNFT) {
+      alert("予約投稿NFTが必要です。取引所でNFTを入手してください。");
+      return;
+    }
+    const title = postTitleInput.value.trim();
+    const body = postBodyInput.value.trim();
+    const tags = postTagsInput.value.trim();
+    const scheduledAt = document.getElementById("scheduleDateTime").value;
+
+    if (!title || !body) { alert("タイトルと本文は必須です！"); return; }
+    if (!scheduledAt) { alert("公開日時を設定してください！"); return; }
+
+    const scheduledDate = new Date(scheduledAt);
+    if (scheduledDate <= new Date()) { alert("公開日時は未来の時刻を設定してください！"); return; }
+
+    try {
+      schedulePostButton.disabled = true;
+      schedulePostButton.textContent = "予約中...";
+
+      const userType = getCurrentUserType();
+      const res = await fetch("https://emu-realtime.onrender.com/api/scheduled-posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: window.connectedAccount,
+          title, body, tags,
+          scheduledAt: scheduledDate.toISOString(),
+          userId: currentUserId || window.connectedAccount,
+          userType
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.error === "SCHEDULE_NFT_REQUIRED") {
+          alert("予約投稿NFTが確認できませんでした。NFTを取得してから再試行してください。");
+        } else if (data.error === "INVALID_DATE") {
+          alert("無効な日時です。未来の日時を設定してください。");
+        } else {
+          alert("予約に失敗しました: " + (data.error || "不明なエラー"));
+        }
+        return;
+      }
+
+      alert(`✅ 投稿を予約しました！\n公開予定: ${scheduledDate.toLocaleString("ja-JP")}`);
+      postTitleInput.value = "";
+      postBodyInput.value = "";
+      postTagsInput.value = "";
+      document.getElementById("scheduleDateTime").value = "";
+      closePostForm();
+    } catch (e) {
+      console.error("予約投稿エラー:", e);
+      alert("予約投稿に失敗しました: " + e.message);
+    } finally {
+      schedulePostButton.disabled = false;
+      schedulePostButton.textContent = "⏰ 予約投稿";
+    }
+  });
+}
+
+/* ======= 予約投稿一覧 ======= */
+const scheduledPostsBtn = document.getElementById("scheduledPostsBtn");
+const scheduledPostsContainer = document.getElementById("scheduledPostsContainer");
+
+if (scheduledPostsBtn) {
+  scheduledPostsBtn.addEventListener("click", async () => {
+    if (!window.connectedAccount) {
+      alert("ウォレットを接続してください。");
+      return;
+    }
+    if (!window.hasScheduleNFT) {
+      scheduledPostsContainer.innerHTML = `
+        <div style="padding:12px;background:#1a1a2e;border-radius:8px;color:#aaa;font-size:13px;text-align:center;">
+          🔒 予約投稿NFTを取得すると利用できます
+        </div>`;
+      scheduledPostsContainer.classList.remove("hidden");
+      return;
+    }
+
+    scheduledPostsContainer.innerHTML = "<p style='font-size:13px;color:#aaa;'>読み込み中...</p>";
+    scheduledPostsContainer.classList.remove("hidden");
+
+    try {
+      const res = await fetch(
+        `https://emu-realtime.onrender.com/api/scheduled-posts?address=${encodeURIComponent(window.connectedAccount)}`
+      );
+      const items = await res.json();
+
+      if (!Array.isArray(items) || items.length === 0) {
+        scheduledPostsContainer.innerHTML = "<p style='font-size:13px;color:#aaa;'>予約中の投稿はありません。</p>";
+        return;
+      }
+
+      scheduledPostsContainer.innerHTML = `<h4 style="margin:0 0 8px;font-size:13px;">⏰ 予約投稿一覧 (${items.length}件)</h4>`;
+      items.forEach(item => {
+        const dt = new Date(item.scheduledAt).toLocaleString("ja-JP");
+        const el = document.createElement("div");
+        el.style.cssText = "background:#fff;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;";
+        el.innerHTML = `
+          <div style="font-weight:bold;margin-bottom:4px;">${escapeHtml(item.title)}</div>
+          <div style="color:#888;font-size:11px;margin-bottom:6px;">📅 ${dt}</div>
+          <div style="color:#555;font-size:12px;overflow:hidden;max-height:40px;">${escapeHtml(item.body.slice(0, 80))}${item.body.length > 80 ? "…" : ""}</div>
+          <button data-id="${item.id}" class="cancel-schedule-btn" style="margin-top:8px;background:#fee;border:1px solid #f88;color:#c00;border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;">キャンセル</button>
+        `;
+        el.querySelector(".cancel-schedule-btn").addEventListener("click", async function () {
+          if (!confirm("この予約投稿をキャンセルしますか？")) return;
+          try {
+            const r = await fetch(
+              `https://emu-realtime.onrender.com/api/scheduled-posts/${this.dataset.id}`,
+              {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ address: window.connectedAccount })
+              }
+            );
+            const d = await r.json();
+            if (d.success) {
+              el.remove();
+              alert("予約をキャンセルしました。");
+            } else {
+              alert("キャンセルに失敗しました: " + (d.error || ""));
+            }
+          } catch (e) {
+            alert("エラー: " + e.message);
+          }
+        });
+        scheduledPostsContainer.appendChild(el);
+      });
+    } catch (e) {
+      scheduledPostsContainer.innerHTML = "<p style='color:red;font-size:13px;'>読み込みに失敗しました。</p>";
+    }
+  });
 }
 
 libraryDraftsButton.addEventListener("click", () => {
