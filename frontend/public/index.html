@@ -4079,14 +4079,31 @@ async function loadExchangeableNFTs() {
         const emuPrice = info.emuerPrice;
         const jpycPrice = info.jpycPrice;
 
-        // メタデータ取得
+// メタデータ取得
         let metadata = {};
         try {
           const uri = await nftContract.tokenURI(tokenId);
           const normalized = normalizeTokenURI(uri);
           if (normalized && normalized.startsWith("http")) {
-            const res = await fetch(normalized);
-            if (res.ok) metadata = await res.json();
+            // ★ 複数ゲートウェイでフォールバック
+            const gateways = [
+              normalized,
+              normalized.replace("https://ipfs.io/ipfs/", "https://gateway.pinata.cloud/ipfs/"),
+              normalized.replace("https://ipfs.io/ipfs/", "https://cloudflare-ipfs.com/ipfs/"),
+            ];
+            for (const gw of gateways) {
+              try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 8000);
+                const res = await fetch(gw, { signal: controller.signal });
+                clearTimeout(timeout);
+                const text = await res.text();
+                if (text.trim().startsWith("{")) {
+                  metadata = JSON.parse(text);
+                  break;
+                }
+              } catch(e) { continue; }
+            }
           }
         } catch (e) {
           console.warn(`tokenURI取得失敗: ${tokenId}`, e);
