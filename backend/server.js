@@ -837,6 +837,11 @@ io.on("connection", (socket) => {
   socket.emit("room3 history", Array.from(messages.values()));
 
   socket.on("join room3", ({ wallet }) => { socket.wallet = wallet; });
+  
+  // ★ 議題の再リクエスト
+  socket.on("request topic", () => {
+    socket.emit("today topic", getTodayTopic());
+  });
 
   socket.on("room3 message", (data) => {
     const messageId = randomUUID();

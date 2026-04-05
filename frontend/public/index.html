@@ -5116,11 +5116,35 @@ function openRoom3() {
   overlay.style.display = "flex";
   room3ShowStep(1);
 
-if (socket && socket.connected) {
-  socket.emit("join room3", {
-    wallet: walletAddress
-  });
-}
+  if (socket && socket.connected) {
+    socket.emit("join room3", { wallet: walletAddress });
+    // ★ 開くたびに議題を再リクエスト
+    socket.emit("request topic");
+  }
+
+  // ★ フォールバック：socket未接続時も議題を表示
+  const topicEl = document.getElementById("topic");
+  if (topicEl && !topicEl.textContent) {
+    const topics = [
+      "なぜ空は青いのか？", "AIに感情や権利は認めるべきか？", "日本の義務教育は本当に必要か？",
+      "仕事と趣味、どちらを優先すべきか？", "SNSは社会にとってプラスかマイナスか？",
+      "遺伝子編集は許されるべきか？", "自動運転車の事故責任は誰が取るべきか？",
+      "人は動物園で動物を見るべきか？", "給料は能力で決まるべきか？年功序列でよいか？",
+      "本を紙で読むのと電子書籍で読むの、どちらがよいか？", "学校でプログラミングは必修にすべきか？",
+      "旅行は国内と海外どちらが価値があるか？", "長時間労働は本当に悪か？",
+      "宇宙旅行は一般人も行くべきか？", "服装の自由はどこまで許されるべきか？",
+      "ゲームは教育に役立つか？", "自然エネルギーだけで日本はやっていけるか？",
+      "タバコやお酒の規制はもっと厳しくすべきか？", "結婚は必ず必要か？",
+      "犬と猫、どちらが飼いやすいか？", "健康のために運動は義務化すべきか？",
+      "ロボットが人間の仕事を奪うのは良いことか？", "音楽はジャンルで人を判断できるか？",
+      "美術館や博物館は学校に必修にすべきか？", "お金よりも時間を優先すべきか？",
+      "お祭りや伝統行事は続けるべきか？", "記憶力より創造力が大事か？",
+      "動物実験は許されるべきか？", "日本は移民をもっと受け入れるべきか？",
+      "成功するために努力と才能、どちらが重要か？"
+    ];
+    const day = new Date().getDate();
+    topicEl.textContent = topics[(day - 1) % topics.length];
+  }
 }
 
 // =====================
@@ -5182,9 +5206,8 @@ function scrollToMessage(messageId) {
     block: "center"
   });
 
-  // 一瞬ハイライト
-  target.style.boxShadow = "0 0 0 2px #4da3ff";
-  goTomainapp(() => {
+target.style.boxShadow = "0 0 0 2px #4da3ff";
+  setTimeout(() => {
     target.style.boxShadow = "";
   }, 1200);
 }
