@@ -141,9 +141,13 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
         <label>本文 *</label>
         <textarea id="da-body" rows="6" placeholder="学習コンテンツ本文を入力..."></textarea>
       </div>
-      <div class="form-field">
+      <div class="form-field" style="margin-bottom:14px;">
         <label>補足・背景・注意点</label>
         <textarea id="da-note" rows="3" placeholder="補足情報があれば..."></textarea>
+      </div>
+      <div class="form-field">
+        <label>Note記事URL（任意）</label>
+        <input type="url" id="da-noteurl" placeholder="https://note.com/..." />
       </div>
       <div class="form-actions">
         <button class="btn-clear" onclick="clearForm()">クリア</button>
@@ -246,6 +250,7 @@ async function submitDirect() {
   var summary = document.getElementById('da-summary').value.trim();
   var body    = document.getElementById('da-body').value.trim();
   var note    = document.getElementById('da-note').value.trim();
+  var noteUrl = document.getElementById('da-noteurl').value.trim();
 
   if (!theme || !sub || !body) {
     showToast('テーマ・サブテーマ・本文は必須です', 'error');
@@ -266,7 +271,8 @@ async function submitDirect() {
         subSubTheme: subsub || '',
         summary: summary,
         body: body,
-        note: note
+        note: note,
+        noteUrl: noteUrl
       })
     });
     if (!res.ok) throw new Error('Server error: ' + res.status);
@@ -292,6 +298,7 @@ function clearForm() {
   document.getElementById('da-summary').value = '';
   document.getElementById('da-body').value = '';
   document.getElementById('da-note').value = '';
+  document.getElementById('da-noteurl').value = '';
 }
 
 function showToast(msg, type) {
@@ -403,7 +410,9 @@ function buildInboxItem(item, idx) {
     '<label class="editor-label">学習コンテンツ本文</label>' +
     '<textarea id="ed-body-' + idx + '" rows="6">' + esc(item.content || '') + '</textarea>' +
     '<label class="editor-label">補足・背景・注意点</label>' +
-    '<textarea id="ed-note-' + idx + '" rows="3" placeholder="補足情報..."></textarea>';
+    '<textarea id="ed-note-' + idx + '" rows="3" placeholder="補足情報..."></textarea>' +
+    '<label class="editor-label">Note記事URL（任意）</label>' +
+    '<input type="url" id="ed-noteurl-' + idx + '" placeholder="https://note.com/..." />';
 
   var edActions = document.createElement('div');
   edActions.className = 'editor-actions';
@@ -446,6 +455,7 @@ async function approveItem(idx) {
   var summary = document.getElementById('ed-summary-' + idx).value;
   var body    = document.getElementById('ed-body-'    + idx).value;
   var note    = document.getElementById('ed-note-'    + idx).value;
+  var noteUrl = document.getElementById('ed-noteurl-' + idx).value.trim();
 
   if (!body.trim()) { alert('本文を入力してください'); return; }
 
@@ -456,7 +466,7 @@ async function approveItem(idx) {
     var res = await fetch(API_BASE + '/api/room1/approve/' + encodeURIComponent(docId), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary: summary, body: body, note: note })
+      body: JSON.stringify({ summary: summary, body: body, note: note, noteUrl: noteUrl })
     });
 
     var result = await res.json();

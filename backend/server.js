@@ -496,7 +496,7 @@ app.get("/api/room1/contents", async (req, res) => {
 // ── 直接追加（管理者のみ）──
 app.post("/api/room1/direct-add", async (req, res) => {
   try {
-    const { theme, subTheme, subSubTheme, summary, body, note } = req.body;
+    const { theme, subTheme, subSubTheme, summary, body, note, noteUrl } = req.body;
 
     if (!theme || !subTheme || !body) {
       return res.status(400).json({ error: "theme, subTheme, body は必須です" });
@@ -514,6 +514,7 @@ app.post("/api/room1/direct-add", async (req, res) => {
       summary: summary || "",
       body,
       note: note || "",
+      noteUrl: noteUrl || "",
       createdAt: new Date().toISOString()
     };
 
@@ -586,7 +587,7 @@ app.post("/api/room1/approve/:id", async (req, res) => {
     if (!submDoc.exists) return res.status(404).json({ error: "not found" });
 
     const item = submDoc.data();
-    const { summary, body, note } = req.body;
+    const { summary, body, note, noteUrl } = req.body;
 
     const newItem = {
       title:       `${item.theme}/${item.subTheme}`,
@@ -596,6 +597,7 @@ app.post("/api/room1/approve/:id", async (req, res) => {
       summary:     summary || "",
       body:        body    || item.content,
       note:        note    || "",
+      noteUrl:     noteUrl || "",
       createdAt:   new Date().toISOString()
     };
 
