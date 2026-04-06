@@ -413,3 +413,31 @@ window.addEventListener("message", (event) => {
   }
 });
 
+// ===== Room2 モード制御 =====
+function openStarMode() {
+  document.getElementById('room2ModeSelect').style.display = 'none';
+  document.getElementById('echoFieldFrame').style.display = 'none';
+  // 星座キャンバスはそのまま背景に表示される
+}
+
+function openEchoField() {
+  document.getElementById('room2ModeSelect').style.display = 'none';
+  const frame = document.getElementById('echoFieldFrame');
+  frame.src = '/Emu_room2/echo-field.html';
+  frame.style.display = 'block';
+}
+
+// ECHO FIELDから「Room2に戻る」メッセージを受け取る
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'ECHO_FIELD_BACK') {
+    document.getElementById('echoFieldFrame').style.display = 'none';
+    document.getElementById('echoFieldFrame').src = '';
+    document.getElementById('room2ModeSelect').style.display = 'flex';
+  }
+});
+
+function backToRoom2() {
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'ECHO_FIELD_BACK' }, '*');
+  }
+}
