@@ -624,6 +624,22 @@ app.post("/api/room1/reject/:id", async (req, res) => {
   }
 });
 
+// ── コンテンツ全削除（管理者のみ）──
+app.delete("/api/room1/contents/all", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+    const snapshot = await db.collection(ROOM1_CONTENTS_COL).get();
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    console.log(`🗑️ room1_contents 全削除: ${snapshot.size}件`);
+    res.json({ success: true, deleted: snapshot.size });
+  } catch (err) {
+    console.error("contents delete-all error:", err);
+    res.status(500).json({ error: "delete failed: " + err.message });
+  }
+});
+
 // ════════════════════════════════════════════════════════
 // ユーザープロフィール API + ランキング API v3
 // server.js の既存ランキングAPIを全てこれに置き換える

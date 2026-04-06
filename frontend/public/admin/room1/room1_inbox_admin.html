@@ -102,6 +102,7 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('direct')">✏️ 直接追加</button>
     <button class="tab-btn" onclick="switchTab('inbox')">📮 お預かり箱 <span id="inbox-count" style="color:#666;"></span></button>
+    <button class="tab-btn" onclick="deleteAllContents()" style="margin-left:auto;color:#f44747;border-bottom-color:transparent;">🗑️ コンテンツ全削除</button>
   </div>
 
   <!-- タブ1: 直接追加 -->
@@ -508,6 +509,22 @@ function esc(s) {
   return String(s || '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── コンテンツ全削除 ───
+async function deleteAllContents() {
+  if (!confirm('room1の学習コンテンツをすべて削除します。\nこの操作は取り消せません。本当に実行しますか？')) return;
+  try {
+    var res = await fetch(API_BASE + '/api/room1/contents/all', { method: 'DELETE' });
+    var result = await res.json();
+    if (result.success) {
+      alert('✅ ' + result.deleted + '件のコンテンツを削除しました。');
+    } else {
+      alert('❌ 削除に失敗しました: ' + (result.error || '不明なエラー'));
+    }
+  } catch (err) {
+    alert('❌ エラー: ' + err.message);
+  }
 }
 </script>
 </body>
