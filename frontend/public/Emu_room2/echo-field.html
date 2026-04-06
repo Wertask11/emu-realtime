@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+  <title>ECHO FIELD</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      background: #03050f;
+      color: #e2e8f0;
+      font-family: 'Noto Sans JP', sans-serif;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #starBg { position:fixed; inset:0; pointer-events:none; z-index:0; }
+    .star-dot {
+      position:absolute; border-radius:50%; background:white;
+      animation: twinkle var(--dur) ease-in-out infinite;
+    }
+    @keyframes twinkle { 0%,100%{opacity:var(--min-op)} 50%{opacity:1} }
+
+    /* ===== Screens ===== */
+    .screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:10; }
+    .screen.hidden { display:none!important; }
+
+    /* ===== Title ===== */
+    #titleScreen h1 {
+      font-family:'Cinzel',serif; font-size:clamp(24px,6vw,52px);
+      color:#4a9eff; letter-spacing:0.3em;
+      text-shadow:0 0 40px rgba(74,158,255,0.6); margin-bottom:6px;
+    }
+    #titleScreen .subtitle { font-size:12px; color:#64748b; letter-spacing:0.2em; margin-bottom:12px; }
+    #titleScreen .piece-preview { font-size:28px; margin-bottom:32px; letter-spacing:8px; }
+
+    .btn-primary {
+      background:linear-gradient(135deg,rgba(74,158,255,0.2),rgba(168,85,247,0.2));
+      border:1px solid rgba(74,158,255,0.5); color:#e2e8f0;
+      padding:12px 36px; font-size:15px; font-family:'Noto Sans JP',sans-serif;
+      border-radius:8px; cursor:pointer; transition:all 0.2s; margin:6px; display:inline-block;
+    }
+    .btn-primary:hover { border-color:#4a9eff; box-shadow:0 0 20px rgba(74,158,255,0.3); }
+    .btn-primary:disabled { opacity:0.35; cursor:not-allowed; }
+    .btn-secondary {
+      background:transparent; border:1px solid rgba(255,255,255,0.15); color:#94a3b8;
+      padding:8px 20px; font-size:12px; font-family:'Noto Sans JP',sans-serif;
+      border-radius:6px; cursor:pointer; transition:all 0.2s; margin:4px;
+    }
+    .btn-secondary:hover { border-color:rgba(255,255,255,0.35); color:#e2e8f0; }
+
+    /* ===== Layout Select ===== */
+    #layoutSelectScreen h2 {
+      font-family:'Cinzel',serif; color:#4a9eff;
+      font-size:20px; margin-bottom:8px;
+    }
+    #layoutSelectScreen p { font-size:12px; color:#64748b; margin-bottom:24px; }
+
+    /* ===== Status Bar ===== */
+    #statusBar {
+      position:fixed; top:0; left:0; right:0;
+      background:rgba(3,5,15,0.95); border-bottom:1px solid rgba(74,158,255,0.2);
+      padding:5px 14px; display:flex; align-items:center;
+      justify-content:space-between; z-index:100; font-size:11px; gap:8px;
+    }
+    #statusBar.hidden { display:none; }
+    .stat-group { display:flex; align-items:center; gap:8px; }
+    .stat-label { color:#475569; }
+    .stat-val { color:#4a9eff; font-weight:bold; }
+    .stat-val.cpu { color:#ef4444; }
+    #turnIndicator { font-family:'Cinzel',serif; font-size:13px; color:#a855f7; letter-spacing:0.05em; }
+
+    /* ===== Game Screen ===== */
+    #gameScreen {
+      flex-direction:row; align-items:flex-start; justify-content:center;
+      padding:46px 4px 50px; gap:8px; overflow:auto;
+    }
+
+    /* ===== Placement Panel ===== */
+    #placementPanel {
+      background:rgba(3,5,15,0.95); border:1px solid rgba(74,158,255,0.2);
+      border-radius:8px; padding:10px; min-width:110px; max-width:130px;
+      flex-shrink:0;
+    }
+    #placementPanel h3 { font-size:11px; color:#64748b; margin-bottom:8px; }
+    .piece-btn {
+      display:flex; align-items:center; gap:6px;
+      background:rgba(74,158,255,0.05); border:1px solid rgba(74,158,255,0.2);
+      border-radius:6px; padding:6px 8px; width:100%; margin-bottom:5px;
+      cursor:pointer; font-size:14px; color:#e2e8f0; transition:all 0.15s;
+      font-family:'Noto Sans JP',sans-serif;
+    }
+    .piece-btn:hover, .piece-btn.sel { border-color:#4a9eff; background:rgba(74,158,255,0.15); }
+    .piece-btn .cnt {
+      margin-left:auto; font-size:10px; color:#64748b;
+      background:rgba(255,255,255,0.08); border-radius:8px; padding:1px 5px;
+    }
+    .btn-sm {
+      background:rgba(74,158,255,0.08); border:1px solid rgba(74,158,255,0.25);
+      color:#e2e8f0; padding:5px 10px; font-size:11px;
+      font-family:'Noto Sans JP',sans-serif; border-radius:5px; cursor:pointer;
+      transition:all 0.15s; width:100%; margin-top:4px;
+    }
+    .btn-sm:hover { border-color:#4a9eff; }
+    .btn-sm:disabled { opacity:0.3; cursor:not-allowed; }
+
+    /* ===== Board ===== */
+    #boardWrap { display:flex; flex-direction:column; align-items:center; }
+    #board {
+      display:grid;
+      grid-template-columns:repeat(7,var(--cell));
+      grid-template-rows:repeat(7,var(--cell));
+      --cell:min(62px,calc((100vw - 280px) / 7));
+      gap:2px;
+      background:rgba(74,158,255,0.08);
+      border:1px solid rgba(74,158,255,0.25);
+      border-radius:4px; padding:2px;
+    }
+    .cell {
+      width:var(--cell); height:var(--cell);
+      background:rgba(3,5,15,0.85);
+      border:1px solid rgba(74,158,255,0.08);
+      border-radius:3px; display:flex; align-items:center; justify-content:center;
+      font-size:calc(var(--cell)*0.42); cursor:pointer;
+      position:relative; transition:border-color 0.1s,background 0.1s;
+      user-select:none;
+    }
+    .cell:hover { border-color:rgba(74,158,255,0.25); }
+    .cell.sel   { border:2px solid #4a9eff; box-shadow:0 0 8px rgba(74,158,255,0.5); }
+    .cell.mv    { background:rgba(74,158,255,0.12); border-color:rgba(74,158,255,0.5); animation:pb 1s ease-in-out infinite; }
+    .cell.atk   { background:rgba(239,68,68,0.12);  border-color:rgba(239,68,68,0.5);  animation:pr 1s ease-in-out infinite; }
+    .cell.pl    { background:rgba(34,197,94,0.12);  border-color:rgba(34,197,94,0.5);  animation:pg 1s ease-in-out infinite; }
+    @keyframes pb { 0%,100%{box-shadow:0 0 4px rgba(74,158,255,0.3)} 50%{box-shadow:0 0 10px rgba(74,158,255,0.6)} }
+    @keyframes pr { 0%,100%{box-shadow:0 0 4px rgba(239,68,68,0.3)}  50%{box-shadow:0 0 10px rgba(239,68,68,0.6)} }
+    @keyframes pg { 0%,100%{box-shadow:0 0 4px rgba(34,197,94,0.3)}  50%{box-shadow:0 0 10px rgba(34,197,94,0.6)} }
+
+    .piece-wrap { position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+    .piece-wrap.boosted::after {
+      content:'×2'; position:absolute; top:1px; right:1px;
+      font-size:calc(var(--cell)*0.18); color:#f59e0b; font-weight:bold;
+      background:rgba(0,0,0,0.5); border-radius:2px; padding:0 2px;
+    }
+    .hidden-piece {
+      font-size:calc(var(--cell)*0.4); color:#a855f7;
+      background:rgba(168,85,247,0.15); border-radius:3px;
+      width:80%; height:80%; display:flex; align-items:center; justify-content:center;
+    }
+
+    #phaseLabel { font-size:11px; color:#64748b; margin-top:6px; text-align:center; }
+
+    /* ===== Battle Log ===== */
+    #battleLog {
+      background:rgba(3,5,15,0.95); border:1px solid rgba(74,158,255,0.2);
+      border-radius:8px; padding:8px; width:140px; flex-shrink:0;
+      max-height:calc(100vh - 100px); overflow-y:auto;
+    }
+    #battleLog h3 { font-size:10px; color:#64748b; margin-bottom:6px; }
+    .log-entry { padding:3px 4px; border-bottom:1px solid rgba(255,255,255,0.04); font-size:10px; color:#94a3b8; line-height:1.4; }
+    .log-entry.win  { color:#22c55e; }
+    .log-entry.loss { color:#ef4444; }
+    .log-entry.tie  { color:#f59e0b; }
+
+    /* ===== Hand Area ===== */
+    #handArea {
+      position:fixed; bottom:0; left:0; right:0;
+      background:rgba(3,5,15,0.97); border-top:1px solid rgba(74,158,255,0.2);
+      padding:6px 14px; display:flex; align-items:center; gap:8px; z-index:50;
+    }
+    #handArea.hidden { display:none; }
+    .hand-lbl { font-size:10px; color:#64748b; white-space:nowrap; }
+    .hand-tok {
+      background:rgba(74,158,255,0.08); border:1px solid rgba(74,158,255,0.25);
+      border-radius:5px; padding:3px 8px; font-size:17px;
+      cursor:pointer; transition:all 0.15s;
+    }
+    .hand-tok:hover, .hand-tok.sel { border-color:#4a9eff; background:rgba(74,158,255,0.22); }
+
+    /* ===== Modal ===== */
+    #modal {
+      position:fixed; inset:0; background:rgba(0,0,0,0.82);
+      display:flex; align-items:center; justify-content:center; z-index:200;
+    }
+    #modal.hidden { display:none; }
+    #modalBox {
+      background:linear-gradient(135deg,rgba(3,5,15,0.99),rgba(8,14,38,0.99));
+      border:1px solid rgba(74,158,255,0.4); border-radius:16px;
+      padding:30px 32px; text-align:center; max-width:340px; width:90%;
+      animation:mIn 0.3s ease-out;
+    }
+    @keyframes mIn { from{transform:scale(0.8);opacity:0} to{transform:scale(1);opacity:1} }
+    #modalTitle { font-family:'Cinzel',serif; font-size:34px; margin-bottom:8px; }
+    #modalTitle.win  { color:#4a9eff; text-shadow:0 0 30px rgba(74,158,255,0.5); }
+    #modalTitle.loss { color:#ef4444; text-shadow:0 0 30px rgba(239,68,68,0.5); }
+    #modalTitle.draw { color:#f59e0b; }
+    #modalMsg { font-size:12px; color:#94a3b8; margin-bottom:22px; line-height:1.6; }
+
+    /* ===== Rules tooltip ===== */
+    #rulesBtn {
+      position:fixed; bottom:44px; right:10px;
+      background:rgba(3,5,15,0.9); border:1px solid rgba(74,158,255,0.25);
+      color:#64748b; font-size:11px; border-radius:5px;
+      padding:4px 8px; cursor:pointer; z-index:60; transition:all 0.15s;
+    }
+    #rulesBtn:hover { color:#e2e8f0; border-color:#4a9eff; }
+    #rulesPanel {
+      position:fixed; bottom:70px; right:10px; width:220px;
+      background:rgba(3,5,15,0.98); border:1px solid rgba(74,158,255,0.3);
+      border-radius:8px; padding:10px 12px; font-size:10px; line-height:1.7;
+      color:#94a3b8; z-index:60;
+    }
+    #rulesPanel.hidden { display:none; }
+    #rulesPanel h4 { font-size:11px; color:#4a9eff; margin-bottom:4px; }
+
+    @media (max-width: 600px) {
+      #board { --cell:min(44px,calc((100vw - 120px)/7)); }
+      #battleLog { display:none; }
+      #placementPanel { min-width:90px; max-width:100px; padding:6px; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="starBg"></div>
+
+<!-- ===== Title Screen ===== -->
+<div id="titleScreen" class="screen">
+  <h1>ECHO FIELD</h1>
+  <div class="subtitle">記憶 × 配置戦略 × 心理戦</div>
+  <div class="piece-preview">👑🗡️🥾🏯🗼</div>
+  <button class="btn-primary" onclick="showLayoutSelect()">ゲーム開始</button>
+  <br>
+  <button class="btn-secondary" onclick="toggleRules()" style="margin-top:12px">📖 ルール確認</button>
+  <br>
+  <button class="btn-secondary" onclick="backToRoom2()" style="margin-top:8px">← Room2に戻る</button>
+
+  <div id="rulesInfo" style="display:none;margin-top:20px;max-width:340px;font-size:11px;color:#94a3b8;background:rgba(74,158,255,0.05);border:1px solid rgba(74,158,255,0.15);border-radius:8px;padding:12px;text-align:left;line-height:1.8">
+    <b style="color:#4a9eff">駒の動き：</b><br>
+    👑 王：8方向1マス<br>
+    🗡️ 牙：前後左右1〜2マス（障害物で止まる）<br>
+    🥾 歩：前後1マス（拠点取得後：斜めも可、ブースト時2マスまで）<br>
+    🏯 本拠地：動かせない・占領されたら負け<br>
+    🗼 拠点：動かせない・隣接の味方歩を×2強化<br><br>
+    <b style="color:#4a9eff">相性（三すくみ）：</b><br>
+    🗡️牙 → 🥾歩 → 👑王 → 🗡️牙<br>
+    同種対決：ブースト込みで比較、同じなら相打ち<br>
+    王vs王のみ攻撃側が勝利<br><br>
+    <b style="color:#4a9eff">勝利条件：</b> 相手の👑王を取る or 🏯本拠地を占領
+  </div>
+</div>
+
+<!-- ===== Layout Select ===== -->
+<div id="layoutSelectScreen" class="screen hidden">
+  <h2>配置方法を選択</h2>
+  <p>9枚の駒をどこに置くか選んでください</p>
+  <button class="btn-primary" onclick="startFreePlacement()">✏️ 自由配置で開始</button>
+  <br>
+  <button class="btn-primary" id="btnUseSaved" onclick="startWithSaved()" disabled
+    style="opacity:0.35;cursor:not-allowed">🏯 基本配置で開始</button>
+  <br>
+  <button class="btn-secondary" onclick="showScreen('titleScreen')" style="margin-top:12px">← 戻る</button>
+</div>
+
+<!-- ===== Status Bar ===== -->
+<div id="statusBar" class="hidden">
+  <div class="stat-group">
+    <span class="stat-label">あなた</span>
+    <span class="stat-val" id="sBoardP">—</span>
+    <span class="stat-label">手駒</span>
+    <span class="stat-val" id="sHandP">0</span>
+    <span class="stat-label">拠点</span>
+    <span class="stat-val" id="sFortP">0</span>
+  </div>
+  <span id="turnIndicator">配置フェーズ</span>
+  <div class="stat-group">
+    <span class="stat-label">CPU</span>
+    <span class="stat-val cpu" id="sBoardC">—</span>
+    <span class="stat-label">手駒</span>
+    <span class="stat-val cpu" id="sHandC">0</span>
+    <span class="stat-label">ターン</span>
+    <span class="stat-val" id="sTurn">0</span>
+  </div>
+</div>
+
+<!-- ===== Game / Placement Screen ===== -->
+<div id="gameScreen" class="screen hidden">
+
+  <!-- Placement Panel -->
+  <div id="placementPanel">
+    <h3>配置する駒</h3>
+    <div id="pieceList"></div>
+    <div style="margin-top:8px">
+      <button class="btn-sm" id="btnSaveLayout" onclick="saveLayout()" disabled>💾 基本配置を保存</button>
+      <button class="btn-sm" id="btnStartGame"  onclick="finishPlacement()" disabled>▶ ゲーム開始</button>
+    </div>
+  </div>
+
+  <!-- Board -->
+  <div id="boardWrap">
+    <div id="board"></div>
+    <div id="phaseLabel">駒を選んでボードに配置してください</div>
+  </div>
+
+  <!-- Battle Log -->
+  <div id="battleLog">
+    <h3>⚔️ バトルログ</h3>
+    <div id="logEntries"></div>
+  </div>
+
+</div>
+
+<!-- ===== Hand Area ===== -->
+<div id="handArea" class="hidden">
+  <span class="hand-lbl">手駒：</span>
+  <div id="handTokens"></div>
+</div>
+
+<!-- Rules quick ref -->
+<button id="rulesBtn" onclick="toggleRulesPanel()" style="display:none">? ルール</button>
+<div id="rulesPanel" class="hidden">
+  <h4>相性（三すくみ）</h4>
+  🗡️牙→🥾歩→👑王→🗡️牙<br>
+  固定駒（🏯🗼）は攻撃側が常に勝つ<br>
+  同種：ブースト込み比較、同→相打ち<br>
+  👑vs👑：攻撃側が勝つ<br>
+  <h4 style="margin-top:6px">勝利</h4>
+  👑王を取る or 🏯を占領<br>
+  60手超：駒数多い方が勝ち
+</div>
+
+<!-- ===== Game Over Modal ===== -->
+<div id="modal" class="hidden">
+  <div id="modalBox">
+    <div id="modalTitle"></div>
+    <div id="modalMsg"></div>
+    <button class="btn-primary" onclick="restartGame()">🔄 もう一度</button>
+    <br>
+    <button class="btn-secondary" onclick="backToRoom2()" style="margin-top:8px">← Room2に戻る</button>
+  </div>
+</div>
+
+<script>
+/* ===================================================
+   Constants
+=================================================== */
+const PLAYER = 'player', CPU = 'cpu';
+const KING='king', FANG='fang', FOOT='foot', CASTLE='castle', FORT='fort';
+const EMOJI = { [KING]:'👑', [FANG]:'🗡️', [FOOT]:'🥾', [CASTLE]:'🏯', [FORT]:'🗼' };
+const LABEL = { [KING]:'王', [FANG]:'牙', [FOOT]:'歩', [CASTLE]:'本拠地', [FORT]:'拠点' };
+const FIXED  = new Set([CASTLE, FORT]);
+const MOBILE = [KING, FANG, FOOT];
+const INIT_PIECES = [KING, FANG, FANG, FOOT, FOOT, FOOT, CASTLE, FORT, FORT];
+// BEATS[a] = b means piece 'a' beats piece 'b'
+const BEATS = { [FANG]:FOOT, [FOOT]:KING, [KING]:FANG };
+
+/* ===================================================
+   State
+=================================================== */
+let board = [];
+let pFortCap = 0, cFortCap = 0;
+let pHand = [], cHand = [];
+let curTurn = PLAYER, turnCount = 0;
+let phase = 'placement';
+let gameOver = false;
+
+// Placement state
+let toPlace = [];
+let selPlacePiece = null;
+let savedLayout = null;
+
+// Game selection state
+let selCell = null;
+let vMoves = [], vAttacks = [], vPlaces = [];
+let selHandIdx = null;
+
+/* ===================================================
+   Stars
+=================================================== */
+function initStars() {
+  const bg = document.getElementById('starBg');
+  bg.innerHTML = '';
+  for (let i = 0; i < 120; i++) {
+    const s = document.createElement('div');
+    s.className = 'star-dot';
+    const sz = Math.random() * 2 + 0.5;
+    const minOp = Math.random() * 0.15 + 0.05;
+    s.style.cssText = `left:${Math.random()*100}%;top:${Math.random()*100}%;width:${sz}px;height:${sz}px;--min-op:${minOp};--dur:${(Math.random()*3+2).toFixed(1)}s;animation-delay:${(Math.random()*4).toFixed(1)}s`;
+    bg.appendChild(s);
+  }
+}
+
+/* ===================================================
+   Screens
+=================================================== */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+
+function showLayoutSelect() {
+  const btn = document.getElementById('btnUseSaved');
+  if (savedLayout) {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+  }
+  showScreen('layoutSelectScreen');
+}
+
+function toggleRules() {
+  const el = document.getElementById('rulesInfo');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+function toggleRulesPanel() {
+  document.getElementById('rulesPanel').classList.toggle('hidden');
+}
+
+/* ===================================================
+   Game Init
+=================================================== */
+function initGameState() {
+  board = Array(7).fill(null).map(() => Array(7).fill(null));
+  pFortCap = 0; cFortCap = 0;
+  pHand = []; cHand = [];
+  curTurn = PLAYER; turnCount = 0;
+  phase = 'placement';
+  gameOver = false;
+  toPlace = [...INIT_PIECES];
+  selPlacePiece = null;
+  selCell = null;
+  vMoves = []; vAttacks = []; vPlaces = [];
+  selHandIdx = null;
+}
+
+function buildBoardUI() {
+  const el = document.getElementById('board');
+  el.innerHTML = '';
+  for (let r = 0; r < 7; r++) {
+    for (let c = 0; c < 7; c++) {
+      const d = document.createElement('div');
+      d.className = 'cell';
+      d.dataset.r = r; d.dataset.c = c;
+      d.onclick = () => onCellClick(r, c);
+      el.appendChild(d);
+    }
+  }
+}
+
+/* ===================================================
+   Placement Phase
+=================================================== */
+function startFreePlacement() {
+  initGameState();
+  buildBoardUI();
+  showScreen('gameScreen');
+  document.getElementById('statusBar').classList.remove('hidden');
+  document.getElementById('placementPanel').style.display = 'block';
+  document.getElementById('battleLog').style.display = 'none';
+  document.getElementById('handArea').classList.add('hidden');
+  document.getElementById('rulesBtn').style.display = 'none';
+  setTurnLabel('配置フェーズ', '#a855f7');
+  renderPiecePalette();
+  renderBoard();
+  updateStatus();
+}
+
+function startWithSaved() {
+  if (!savedLayout) return;
+  initGameState();
+  buildBoardUI();
+  savedLayout.forEach(({ r, c, type }) => {
+    board[r][c] = { type, owner: PLAYER };
+    const i = toPlace.indexOf(type);
+    if (i >= 0) toPlace.splice(i, 1);
+  });
+  toPlace = [];
+  showScreen('gameScreen');
+  document.getElementById('statusBar').classList.remove('hidden');
+  document.getElementById('placementPanel').style.display = 'none';
+  document.getElementById('battleLog').style.display = 'block';
+  document.getElementById('handArea').classList.remove('hidden');
+  document.getElementById('rulesBtn').style.display = 'block';
+  _startGamePhase();
+}
+
+function renderPiecePalette() {
+  const counts = {};
+  toPlace.forEach(t => counts[t] = (counts[t]||0)+1);
+  const container = document.getElementById('pieceList');
+  container.innerHTML = '';
+  [CASTLE, FORT, KING, FANG, FOOT].forEach(type => {
+    if (!counts[type]) return;
+    const btn = document.createElement('button');
+    btn.className = 'piece-btn' + (selPlacePiece === type ? ' sel' : '');
+    btn.innerHTML = `${EMOJI[type]}<span style="font-size:11px">${LABEL[type]}</span><span class="cnt">${counts[type]}</span>`;
+    btn.onclick = () => selectPlacePiece(type);
+    container.appendChild(btn);
+  });
+  if (toPlace.length === 0) {
+    container.innerHTML = '<div style="font-size:10px;color:#22c55e;text-align:center">✓ 配置完了</div>';
+    document.getElementById('btnSaveLayout').disabled = false;
+    document.getElementById('btnStartGame').disabled = false;
+    document.getElementById('phaseLabel').textContent = '「ゲーム開始」または「基本配置を保存」';
+  }
+}
+
+function selectPlacePiece(type) {
+  if (!toPlace.includes(type)) return;
+  selPlacePiece = type;
+  vPlaces = [];
+  for (let r = 0; r < 7; r++)
+    for (let c = 0; c < 7; c++)
+      if (!board[r][c]) vPlaces.push({r,c});
+  renderBoard();
+  renderPiecePalette();
+  document.getElementById('phaseLabel').textContent = `${EMOJI[type]} ${LABEL[type]}を置く場所をクリック`;
+}
+
+function onCellClickPlacement(r, c) {
+  const cell = board[r][c];
+
+  // Pick up own piece
+  if (cell && cell.owner === PLAYER) {
+    board[r][c] = null;
+    toPlace.push(cell.type);
+    selPlacePiece = cell.type;
+    vPlaces = [];
+    for (let rr = 0; rr < 7; rr++)
+      for (let cc = 0; cc < 7; cc++)
+        if (!board[rr][cc]) vPlaces.push({r:rr,c:cc});
+    renderBoard();
+    renderPiecePalette();
+    document.getElementById('phaseLabel').textContent = `${EMOJI[cell.type]} ${LABEL[cell.type]}を置く場所をクリック`;
+    return;
+  }
+
+  if (!selPlacePiece || cell) return;
+
+  board[r][c] = { type: selPlacePiece, owner: PLAYER };
+  const i = toPlace.indexOf(selPlacePiece);
+  toPlace.splice(i, 1);
+  selPlacePiece = null;
+  vPlaces = [];
+  renderBoard();
+  renderPiecePalette();
+}
+
+function saveLayout() {
+  savedLayout = [];
+  for (let r = 0; r < 7; r++)
+    for (let c = 0; c < 7; c++)
+      if (board[r][c]?.owner === PLAYER)
+        savedLayout.push({ r, c, type: board[r][c].type });
+  // Enable "start with saved" button in layout select
+  const btn = document.getElementById('btnUseSaved');
+  btn.disabled = false; btn.style.opacity='1'; btn.style.cursor='pointer';
+  addLog('💾 基本配置を保存', '');
+}
+
+function finishPlacement() {
+  if (toPlace.length > 0) {
+    document.getElementById('phaseLabel').textContent = '残りの駒を全て配置してください';
+    return;
+  }
+  cpuAutoPlace();
+  _startGamePhase();
+}
+
+function _startGamePhase() {
+  phase = 'game';
+  curTurn = PLAYER;
+  document.getElementById('placementPanel').style.display = 'none';
+  document.getElementById('battleLog').style.display = 'block';
+  document.getElementById('handArea').classList.remove('hidden');
+  document.getElementById('rulesBtn').style.display = 'block';
+  document.getElementById('phaseLabel').textContent = 'あなたのターン：駒を選んでください';
+  renderBoard();
+  updateStatus();
+  setTurnLabel('あなたのターン', '#4a9eff');
+}
+
+function cpuAutoPlace() {
+  const layout = [
+    {r:0,c:2,type:FORT}, {r:0,c:3,type:CASTLE}, {r:0,c:4,type:FORT},
+    {r:1,c:1,type:FOOT},  {r:1,c:3,type:KING},   {r:1,c:5,type:FOOT},
+    {r:2,c:2,type:FANG},  {r:2,c:3,type:FOOT},   {r:2,c:4,type:FANG},
+  ];
+  const remaining = [...INIT_PIECES];
+  for (const { r, c, type } of layout) {
+    if (!board[r][c]) {
+      board[r][c] = { type, owner: CPU };
+      const i = remaining.indexOf(type);
+      if (i>=0) remaining.splice(i,1);
+    } else {
+      // Find empty cell in top half
+      let placed = false;
+      for (let tr = 0; tr < 4 && !placed; tr++)
+        for (let tc = 0; tc < 7 && !placed; tc++)
+          if (!board[tr][tc]) {
+            board[tr][tc] = { type, owner: CPU };
+            placed = true;
+          }
+    }
+  }
+}
+
+/* ===================================================
+   Board Rendering
+=================================================== */
+function renderBoard() {
+  for (let r = 0; r < 7; r++)
+    for (let c = 0; c < 7; c++)
+      renderCell(r, c);
+}
+
+function renderCell(r, c) {
+  const el = getCellEl(r, c);
+  const p = board[r][c];
+
+  el.classList.remove('sel','mv','atk','pl');
+  if (selCell?.r===r && selCell?.c===c) el.classList.add('sel');
+  if (vMoves.some(m=>m.r===r&&m.c===c))   el.classList.add('mv');
+  if (vAttacks.some(m=>m.r===r&&m.c===c)) el.classList.add('atk');
+  if (vPlaces.some(m=>m.r===r&&m.c===c))  el.classList.add('pl');
+
+  if (!p) { el.innerHTML = ''; return; }
+
+  const visible = p.owner===PLAYER || FIXED.has(p.type) || p.revealed;
+  const boosted = p.type===FOOT && isFootBoosted(r,c,p.owner);
+
+  if (visible) {
+    el.innerHTML = `<div class="piece-wrap${boosted?' boosted':''}">${EMOJI[p.type]}</div>`;
+  } else {
+    el.innerHTML = `<div class="piece-wrap"><div class="hidden-piece">◈</div></div>`;
+  }
+}
+
+function getCellEl(r, c) {
+  return document.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+}
+
+/* ===================================================
+   Click Handler
+=================================================== */
+function onCellClick(r, c) {
+  if (gameOver) return;
+  if (phase === 'placement') { onCellClickPlacement(r, c); return; }
+  if (curTurn !== PLAYER) return;
+
+  const p = board[r][c];
+
+  // Hand piece placement mode
+  if (selHandIdx !== null) {
+    if (!p) { placeHandPiece(r, c); }
+    else if (p.owner === PLAYER) { clearSel(); selectCell(r, c); }
+    else clearSel();
+    return;
+  }
+
+  // Move to valid square
+  if (vMoves.some(m=>m.r===r&&m.c===c)) { movePiece(selCell.r,selCell.c,r,c); return; }
+  // Attack
+  if (vAttacks.some(m=>m.r===r&&m.c===c)) { attackPiece(selCell.r,selCell.c,r,c); return; }
+  // Select own movable piece
+  if (p && p.owner===PLAYER && !FIXED.has(p.type)) { selectCell(r,c); return; }
+
+  clearSel();
+}
+
+function selectCell(r, c) {
+  clearSel();
+  selCell = {r,c};
+  const all = getReach(r, c, PLAYER);
+  vMoves   = all.filter(m => !board[m.r][m.c]);
+  vAttacks = all.filter(m => board[m.r][m.c]?.owner === CPU);
+  renderBoard();
+}
+
+function clearSel() {
+  selCell=null; vMoves=[]; vAttacks=[]; vPlaces=[]; selHandIdx=null;
+  renderBoard();
+  renderHandArea();
+}
+
+/* ===================================================
+   Movement
+=================================================== */
+function getReach(r, c, owner) {
+  const p = board[r][c];
+  if (!p) return [];
+  const forts = owner===PLAYER ? pFortCap : cFortCap;
+  const boosted = p.type===FOOT && isFootBoosted(r,c,owner);
+  switch(p.type) {
+    case KING: return kingReach(r,c,owner);
+    case FANG: return fangReach(r,c,owner,forts);
+    case FOOT: return footReach(r,c,owner,forts,boosted);
+    default:   return [];
+  }
+}
+
+function kingReach(r, c, owner) {
+  return [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
+    .map(([dr,dc])=>({r:r+dr,c:c+dc}))
+    .filter(({r,c})=>inBounds(r,c)&&board[r][c]?.owner!==owner);
+}
+
+function fangReach(r, c, owner, forts) {
+  const res = [];
+  [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,dc])=>{
+    for (let d=1; d<=2; d++) {
+      const nr=r+dr*d, nc=c+dc*d;
+      if (!inBounds(nr,nc)) break;
+      const cell=board[nr][nc];
+      if (cell) { if (cell.owner!==owner) res.push({r:nr,c:nc}); break; }
+      res.push({r:nr,c:nc});
+    }
+  });
+  if (forts>0) {
+    [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([dr,dc])=>{
+      const nr=r+dr, nc=c+dc;
+      if (inBounds(nr,nc) && board[nr][nc]?.owner!==owner) res.push({r:nr,c:nc});
+    });
+  }
+  return res;
+}
+
+function footReach(r, c, owner, forts, boosted) {
+  const fwd = owner===PLAYER ? -1 : 1;
+  const maxD = boosted ? 2 : 1;
+  const res = [];
+  const dirs = [[fwd,0],[-fwd,0]];
+  if (forts>0) dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
+  dirs.forEach(([dr,dc])=>{
+    for (let d=1; d<=maxD; d++) {
+      const nr=r+dr*d, nc=c+dc*d;
+      if (!inBounds(nr,nc)) break;
+      const cell=board[nr][nc];
+      if (cell) { if (cell.owner!==owner) res.push({r:nr,c:nc}); break; }
+      res.push({r:nr,c:nc});
+    }
+  });
+  return res;
+}
+
+function isFootBoosted(r, c, owner) {
+  return [[-1,0],[1,0],[0,-1],[0,1]].some(([dr,dc])=>{
+    const nr=r+dr, nc=c+dc;
+    return inBounds(nr,nc) && board[nr][nc]?.type===FORT && board[nr][nc]?.owner===owner;
+  });
+}
+
+function inBounds(r, c) { return r>=0&&r<7&&c>=0&&c<7; }
+
+/* ===================================================
+   Move & Attack
+=================================================== */
+function movePiece(fr,fc,tr,tc) {
+  board[tr][tc] = board[fr][fc];
+  board[fr][fc] = null;
+  clearSel();
+  endTurn();
+}
+
+function attackPiece(fr,fc,tr,tc) {
+  const atk = board[fr][fc];
+  const def = board[tr][tc];
+  atk.revealed = true;
+  def.revealed = true;
+
+  const res = resolveCombat(atk, def, fr,fc,tr,tc);
+  const aOwner = atk.owner, dOwner = def.owner;
+
+  if (res === 'atk') {
+    addLog(`${EMOJI[atk.type]}が${EMOJI[def.type]}を倒した！`, aOwner===PLAYER?'win':'loss');
+    if (MOBILE.includes(def.type)) { if (aOwner===PLAYER) pHand.push(def.type); else cHand.push(def.type); }
+    if (def.type===FORT) { if (aOwner===PLAYER) pFortCap++; else cFortCap++; }
+    board[tr][tc] = atk;
+    board[fr][fc] = null;
+    if (def.type===CASTLE) { endGame(aOwner,'本拠地を占領しました！'); return; }
+  } else if (res === 'def') {
+    addLog(`${EMOJI[def.type]}が${EMOJI[atk.type]}を撃退！`, dOwner===PLAYER?'win':'loss');
+    if (MOBILE.includes(atk.type)) { if (dOwner===PLAYER) pHand.push(atk.type); else cHand.push(atk.type); }
+    if (atk.type===FORT) { if (dOwner===PLAYER) pFortCap++; else cFortCap++; }
+    board[fr][fc] = null;
+  } else {
+    addLog(`${EMOJI[atk.type]}と${EMOJI[def.type]}が相打ち！`, 'tie');
+    board[fr][fc] = null; board[tr][tc] = null;
+  }
+
+  if (!findPiece(KING, dOwner)) { endGame(aOwner, `${aOwner===PLAYER?'あなたが':'CPUが'}王を取りました！`); return; }
+  if (!findPiece(KING, aOwner)) { endGame(dOwner, `${dOwner===PLAYER?'あなたが':'CPUが'}王を取りました！`); return; }
+
+  clearSel();
+  endTurn();
+}
+
+function resolveCombat(atk, def, ar,ac,dr,dc) {
+  if (FIXED.has(def.type)) return 'atk';
+  if (atk.type === def.type) {
+    if (atk.type === KING) return 'atk';
+    const ab = atk.type===FOOT&&isFootBoosted(ar,ac,atk.owner)?2:1;
+    const db = def.type===FOOT&&isFootBoosted(dr,dc,def.owner)?2:1;
+    if (ab>db) return 'atk'; if (db>ab) return 'def'; return 'tie';
+  }
+  if (BEATS[atk.type]===def.type) return 'atk';
+  if (BEATS[def.type]===atk.type) return 'def';
+  return 'tie';
+}
+
+function findPiece(type, owner) {
+  for (let r=0;r<7;r++) for (let c=0;c<7;c++)
+    if (board[r][c]?.type===type&&board[r][c]?.owner===owner) return {r,c};
+  return null;
+}
+
+/* ===================================================
+   Hand Pieces
+=================================================== */
+function onHandPieceClick(idx) {
+  if (curTurn!==PLAYER||gameOver||phase!=='game') return;
+  if (selHandIdx===idx) { clearSel(); return; }
+  clearSel();
+  selHandIdx = idx;
+  vPlaces = [];
+  for (let r=0;r<7;r++) for (let c=0;c<7;c++) if (!board[r][c]) vPlaces.push({r,c});
+  renderBoard();
+  renderHandArea();
+}
+
+function placeHandPiece(r, c) {
+  const type = pHand[selHandIdx];
+  board[r][c] = { type, owner: PLAYER };
+  pHand.splice(selHandIdx, 1);
+  addLog(`${EMOJI[type]}を配置`, '');
+  clearSel();
+  endTurn();
+}
+
+function renderHandArea() {
+  const c = document.getElementById('handTokens');
+  c.innerHTML = '';
+  if (pHand.length===0) {
+    c.innerHTML = '<span style="font-size:10px;color:#475569">なし</span>';
+    return;
+  }
+  pHand.forEach((type,i)=>{
+    const btn = document.createElement('div');
+    btn.className = 'hand-tok'+(selHandIdx===i?' sel':'');
+    btn.textContent = EMOJI[type];
+    btn.title = LABEL[type];
+    btn.onclick = ()=>onHandPieceClick(i);
+    c.appendChild(btn);
+  });
+}
+
+/* ===================================================
+   Turn Management
+=================================================== */
+function endTurn() {
+  turnCount++;
+  if (turnCount >= 60) {
+    const pc = countPieces(PLAYER), cc = countPieces(CPU);
+    if (pc>cc) endGame(PLAYER,`60手制限。あなた${pc}枚 vs CPU${cc}枚`);
+    else if (cc>pc) endGame(CPU,`60手制限。CPU${cc}枚 vs あなた${pc}枚`);
+    else endGame(null,'60手制限。引き分け！');
+    return;
+  }
+  curTurn = curTurn===PLAYER ? CPU : PLAYER;
+  renderBoard();
+  renderHandArea();
+  updateStatus();
+  if (curTurn===PLAYER) {
+    setTurnLabel('あなたのターン','#4a9eff');
+    document.getElementById('phaseLabel').textContent = 'あなたのターン：駒を選んでください';
+  } else {
+    setTurnLabel('CPUのターン','#ef4444');
+    document.getElementById('phaseLabel').textContent = 'CPUが考えています…';
+    setTimeout(cpuTurn, 600);
+  }
+}
+
+function countPieces(owner) {
+  let n=0;
+  for (let r=0;r<7;r++) for (let c=0;c<7;c++) if (board[r][c]?.owner===owner) n++;
+  return n + (owner===PLAYER?pHand.length:cHand.length);
+}
+
+function setTurnLabel(txt, color) {
+  const el=document.getElementById('turnIndicator');
+  el.textContent=txt; el.style.color=color;
+}
+
+function updateStatus() {
+  let pb=0,cb=0;
+  for (let r=0;r<7;r++) for (let c=0;c<7;c++) {
+    if (board[r][c]?.owner===PLAYER) pb++;
+    if (board[r][c]?.owner===CPU)    cb++;
+  }
+  document.getElementById('sBoardP').textContent = pb;
+  document.getElementById('sBoardC').textContent = cb;
+  document.getElementById('sHandP').textContent  = pHand.length;
+  document.getElementById('sHandC').textContent  = cHand.length;
+  document.getElementById('sFortP').textContent  = pFortCap;
+  document.getElementById('sTurn').textContent   = turnCount;
+}
+
+/* ===================================================
+   CPU AI
+=================================================== */
+function cpuTurn() {
+  if (gameOver) return;
+  const actions = gatherCpuActions();
+  if (!actions.length) { endTurn(); return; }
+  actions.sort((a,b)=>b.pri-a.pri);
+  const best = actions[0];
+  if (best.kind==='attack') attackPiece(best.fr,best.fc,best.tr,best.tc);
+  else if (best.kind==='move') movePiece(best.fr,best.fc,best.tr,best.tc);
+  else if (best.kind==='place') {
+    const type = cHand[best.idx];
+    board[best.tr][best.tc] = { type, owner: CPU };
+    cHand.splice(best.idx, 1);
+    addLog(`CPU: ${EMOJI[type]}を配置`, '');
+    endTurn();
+  }
+}
+
+function gatherCpuActions() {
+  const acts = [];
+  const pKing   = findPiece(KING,   PLAYER);
+  const pCastle = findPiece(CASTLE, PLAYER);
+
+  for (let r=0;r<7;r++) for (let c=0;c<7;c++) {
+    const p = board[r][c];
+    if (!p||p.owner!==CPU||FIXED.has(p.type)) continue;
+    const reach = getReach(r,c,CPU);
+    for (const {r:tr,c:tc} of reach) {
+      const t = board[tr][tc];
+      if (!t) {
+        // move
+        let pri = 1;
+        if (pKing) {
+          const d0 = Math.abs(r-pKing.r)+Math.abs(c-pKing.c);
+          const d1 = Math.abs(tr-pKing.r)+Math.abs(tc-pKing.c);
+          if (d1<d0) pri += 3;
+        }
+        acts.push({kind:'move',fr:r,fc:c,tr,tc,pri});
+      } else if (t.owner===PLAYER) {
+        // attack
+        let pri = 5;
+        if (t.type===KING)   pri=100;
+        else if (t.type===CASTLE) pri=90;
+        else if (t.type===FORT)   pri=30;
+        else {
+          const res=resolveCombat(p,t,r,c,tr,tc);
+          if (res==='atk') pri=20; else if (res==='tie') pri=3; else pri=0;
+        }
+        if (pri>0) acts.push({kind:'attack',fr:r,fc:c,tr,tc,pri});
+      }
+    }
+  }
+
+  // Place hand piece
+  if (cHand.length>0 && Math.random()<0.3) {
+    const empties=[];
+    for (let r=0;r<7;r++) for (let c=0;c<7;c++) if (!board[r][c]) empties.push({r,c});
+    if (empties.length) {
+      const pos=empties[Math.floor(Math.random()*empties.length)];
+      acts.push({kind:'place',idx:0,tr:pos.r,tc:pos.c,pri:8});
+    }
+  }
+  return acts;
+}
+
+/* ===================================================
+   Game End
+=================================================== */
+function endGame(winner, reason) {
+  gameOver = true;
+  renderBoard();
+  const title=document.getElementById('modalTitle');
+  const msg=document.getElementById('modalMsg');
+  if (winner===null) {
+    title.textContent='引き分け'; title.className='draw';
+  } else if (winner===PLAYER) {
+    title.textContent='勝利！'; title.className='win';
+  } else {
+    title.textContent='敗北…'; title.className='loss';
+  }
+  msg.textContent = reason;
+  document.getElementById('modal').classList.remove('hidden');
+}
+
+function restartGame() {
+  document.getElementById('modal').classList.add('hidden');
+  showLayoutSelect();
+}
+
+/* ===================================================
+   Battle Log
+=================================================== */
+function addLog(text, cls) {
+  const c=document.getElementById('logEntries');
+  const d=document.createElement('div');
+  d.className='log-entry '+cls;
+  d.textContent=text;
+  c.insertBefore(d,c.firstChild);
+  while(c.children.length>50) c.removeChild(c.lastChild);
+}
+
+/* ===================================================
+   Back to Room2
+=================================================== */
+function backToRoom2() {
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'ECHO_FIELD_BACK' }, '*');
+  } else {
+    history.back();
+  }
+}
+
+/* ===================================================
+   Start
+=================================================== */
+initStars();
+showScreen('titleScreen');
+</script>
+</body>
+</html>

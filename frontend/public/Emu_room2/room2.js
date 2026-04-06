@@ -380,64 +380,52 @@ function updateStarList() {
   starInfoUI.innerHTML = html;
 }
 
-/* ==========================
-   External Action Listener (Parent Message)
-========================== */
-window.addEventListener("message", (event) => {
-  // 🛡️ 自分が定義したアクション（typeがあるもの）以外は無視
-  if (!event.data || !event.data.type) return;
-
-  const action = event.data;
-  console.log("🌟 Room2 received action:", action.type);
-
-  switch (action.type) {
-    case "NEW_POST":
-      // 投稿アクション（既存の累積ロジックへ）
-      // あなたのコードでは10回で1つ星が出る設定になっています
-      handlePostAccumulation("post");
-      break;
-
-    case "NFT_PURCHASE":
-      // NFT購入アクション（青い星を生成）
-      spawnNFTStar();
-      break;
-
-    case "STREAK_3DAY":
-      // 3日連続交流アクション（黄色の星を生成）
-      // projectId があれば渡し、なければ "default"
-      handleDiscussionStreak(action.projectId || "default");
-      break;
-
-    default:
-      console.log("ℹ️ その他、未定義のアクション:", action.type);
-  }
-});
 
 // ===== Room2 モード制御 =====
 function openStarMode() {
   document.getElementById('room2ModeSelect').style.display = 'none';
   document.getElementById('echoFieldFrame').style.display = 'none';
-  // 星座キャンバスはそのまま背景に表示される
+  document.getElementById('echoFieldFrame').src = '';
 }
 
 function openEchoField() {
   document.getElementById('room2ModeSelect').style.display = 'none';
   const frame = document.getElementById('echoFieldFrame');
-  frame.src = '/Emu_room2/echo-field.html';
+  // ★ パスを相対パスに変更（Vercelのディレクトリ構造に合わせる）
+  frame.src = './echo-field.html';
   frame.style.display = 'block';
 }
 
-// ECHO FIELDから「Room2に戻る」メッセージを受け取る
-window.addEventListener('message', (e) => {
-  if (e.data && e.data.type === 'ECHO_FIELD_BACK') {
+// ★ message イベントは1つにまとめる（既存のものと統合）
+// ※ room2.js 上部にある window.addEventListener('message', ...) を
+//    以下1つに置き換えてください
+
+window.addEventListener('message', (event) => {
+  if (!event.data || !event.data.type) return;
+
+  const action = event.data;
+
+  // ECHO FIELDから戻る
+  if (action.type === 'ECHO_FIELD_BACK') {
     document.getElementById('echoFieldFrame').style.display = 'none';
     document.getElementById('echoFieldFrame').src = '';
     document.getElementById('room2ModeSelect').style.display = 'flex';
+    return;
+  }
+
+  // 星座への通知（既存処理）
+  console.log("🌟 Room2 received action:", action.type);
+  switch (action.type) {
+    case "NEW_POST":
+      handlePostAccumulation("post");
+      break;
+    case "NFT_PURCHASE":
+      spawnNFTStar();
+      break;
+    case "STREAK_3DAY":
+      handleDiscussionStreak(action.projectId || "default");
+      break;
+    default:
+      console.log("ℹ️ その他のアクション:", action.type);
   }
 });
-
-function backToRoom2() {
-  if (window.parent && window.parent !== window) {
-    window.parent.postMessage({ type: 'ECHO_FIELD_BACK' }, '*');
-  }
-}
