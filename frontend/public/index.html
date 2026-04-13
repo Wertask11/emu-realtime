@@ -1250,6 +1250,14 @@ body.paypay-mode .container {
   /* ── モーダルをスマホ幅に合わせる ── */
   .modal-content { width: 90%; max-width: 360px; }
 }
+
+/* PayPayモード時：通常コンテンツを完全非表示 */
+body.paypay-mode .container {
+  display: none !important;
+}
+body.paypay-mode .header {
+  display: none !important;
+}
 </style>
 </head>
 <body>
@@ -8096,7 +8104,6 @@ function toggleDesignMode() {
 }
 
 function applyDesignMode() {
-  // 通常モードヘッダーのボタン
   const defaultBtn = document.getElementById('designToggleBtn');
 
   if (isPayPayMode) {
@@ -8105,9 +8112,13 @@ function applyDesignMode() {
     ppUpdateBalance();
     ppRenderFavorites();
     ppGenerateBarcode();
+    // PayPayモード時はページトップへ
+    window.scrollTo({ top: 0 });
   } else {
     document.body.classList.remove('paypay-mode');
     if (defaultBtn) defaultBtn.style.display = 'inline-block';
+    // 通常モード時はページトップへ
+    window.scrollTo({ top: 0 });
   }
 }
 
