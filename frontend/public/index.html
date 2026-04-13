@@ -8267,10 +8267,11 @@ function ppFindNearSchoolPark() {
 
 // ── 初期化 ──
 document.addEventListener('DOMContentLoaded', () => {
-  checkMobileToggle();
-  applyDesignMode();
+  // ★ 初回はかならず通常モードにリセット（前回のPayPayモードを引き継がない）
+  isPayPayMode = false;
+  localStorage.setItem('emu_design_mode', 'default');
 
-  // 通常モードのデザイン切り替えボタンを追加
+  // 通常モードのデザイン切り替えボタンをヘッダーに追加
   const logo = document.getElementById('logo');
   if (logo && !document.getElementById('designToggleBtn')) {
     const btn = document.createElement('button');
@@ -8282,17 +8283,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// mainApp表示時にも適用
+// mainApp表示時（ログイン後）にボタンを表示
 const _origGoToMainApp = typeof goTomainapp === 'function' ? goTomainapp : null;
 if (_origGoToMainApp) {
   goTomainapp = function() {
     _origGoToMainApp();
     setTimeout(() => {
-      checkMobileToggle();
-      applyDesignMode();
+      checkMobileToggle(); // スマホのみボタン表示
+      // ★ 通常モードで開始（PayPayモードは適用しない）
+      document.body.classList.remove('paypay-mode');
+      const defaultBtn = document.getElementById('designToggleBtn');
+      if (defaultBtn && window.innerWidth <= 768) {
+        defaultBtn.style.display = 'inline-block';
+      }
     }, 100);
   };
 }
+
 </script>
 </body>
 </html>
