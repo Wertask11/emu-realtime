@@ -77,7 +77,15 @@
   position: relative;
 }
 /* rooms-container は横並び中央 */
-.rooms-container {display: flex;justify-content: center; /* 横方向中央 */gap: 20px;margin-top: 60px;
+.rooms-container {
+  display: flex;
+  flex-direction: column;  /* ← 縦並び */
+  align-items: center;
+  gap: 16px;
+  margin-top: 40px;
+  width: 100%;
+  padding: 0 20px;
+  box-sizing: border-box;
 }
 /* 各ルーム */
 .room {
@@ -1334,14 +1342,8 @@ body.paypay-mode .container {
 
 <!-- メイン画面 -->
 <div id="mainApp" style="display:none;">
-<header class="header" style="display: flex; align-items: center; padding: 0 20px;">
-  <a id="logo" class="logo" href="#" style="margin-right: 10px;">Emu</a>
-  <!-- スマホ・タブレット専用 モード切り替えボタン -->
-  <button id="designToggleBtn"
-    onclick="toggleDesignMode()"
-    style="display:none; background:#ff4b4b; color:#fff; border:none; border-radius:20px; padding:4px 12px; font-size:11px; font-weight:bold; cursor:pointer; margin-left:6px; flex-shrink:0;">
-    🎨 PayPay風
-  </button>
+<header class="header" style="display: flex; align-items: center; padding: 0 20px; gap: 8px; flex-wrap: wrap;">
+  <a id="logo" class="logo" href="#" style="margin-right: 10px; cursor: pointer;" onclick="toggleDesignMode(); return false;">Emu</a>
 
   <div id="login-bonus-mini-container" style="display: flex; align-items: center; gap: 8px; background: #f0f8ff; border: 1px solid #007bff; border-radius: 20px; padding: 4px 12px;">
     <span id="bonus-status-text" style="font-size: 13px; font-weight: bold; color: #007bff;">🎁 0.5 EMUER</span>
@@ -1349,14 +1351,14 @@ body.paypay-mode .container {
     <span id="next-bonus-time" style="font-size: 10px; color: #007bff; margin-left: 5px;"></span>
   </div>
 
-  <button id="buyNftBtn" onclick="openMarketplace()" style="background: linear-gradient(135deg, #ff7f83 0%, #fecfef 100%); color: #fff; border: none; border-radius: 20px; padding: 6px 15px; font-size: 12px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-left: 15px;">
+  <button id="buyNftBtn" onclick="openMarketplace()" style="background: linear-gradient(135deg, #ff7f83 0%, #fecfef 100%); color: #fff; border: none; border-radius: 20px; padding: 6px 15px; font-size: 12px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-left: 8px;">
     🛒 公式NFTを購入
   </button>
 
   <div style="flex-grow: 1;"></div>
 
-  <div class="header-right" style="display: flex; align-items: center; gap: 10px;">
-    <input type="search" class="search-bar" placeholder="検索...">
+  <div class="header-right" style="display: flex; align-items: center; gap: 8px;">
+    <input type="search" class="search-bar" placeholder="検索..." style="padding:6px 10px; border:1px solid #ccc; border-radius:4px; width: 120px;">
     <button id="openPostFormButton" class="post-button">投稿</button>
     <button id="walletAddressButton" class="wallet-button">ウォレット未接続</button>
   </div>
@@ -8219,23 +8221,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // 初回は必ず通常モードにリセット
   isPayPayMode = false;
   localStorage.setItem('emu_design_mode', 'default');
-  // ボタンはHTML内に静的配置済みのため動的生成不要
-});
 
-// ── goTomainapp 後にスマホ用ボタンを表示 ──
-// （goTomainapp は line 4168 付近で function 宣言されている）
-const _origGoToMainApp = typeof goTomainapp === 'function' ? goTomainapp : null;
-if (_origGoToMainApp) {
-  goTomainapp = function() {
-    _origGoToMainApp();
-    setTimeout(() => {
-      // 通常モードで開始
-      isPayPayMode = false;
-      document.body.classList.remove('paypay-mode');
-      checkMobileToggle(); // スマホのみボタンを表示
-    }, 100);
-  };
-}
+  // ロゴにタップ切り替えを設定（既にonclickで設定済みのため追記不要）
+  // ※ヘッダーのlogoタグに onclick="toggleDesignMode(); return false;" を付けた
+});
 
 </script>
 </body>
