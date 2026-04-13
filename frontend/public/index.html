@@ -1676,7 +1676,7 @@ body.paypay-mode #pp-post-fab {
 
 <!-- ▼ PayPayモード専用ヘッダー -->
 <div id="pp-header">
-  <div id="pp-header-logo">Emu</div>
+  <div id="pp-header-logo" onclick="toggleDesignMode()" style="cursor:pointer;">Emu</div>
   <div id="pp-header-right">
     <button id="pp-contact-btn" onclick="toggleContactPanel()">💬</button>
   </div>
@@ -1732,7 +1732,7 @@ body.paypay-mode #pp-post-fab {
 
 <!-- ▼ EMUER残高セクション -->
 <div id="pp-emuer-section">
-  <div class="pp-list-item" onclick="document.getElementById('myWalletButton').click()">
+  <div class="pp-list-item" onclick="ppOpenWalletOnly()"></div>
     <div class="pp-list-item-left">
       <span class="pp-list-icon">💰</span>
       <div>
@@ -7342,6 +7342,19 @@ document.getElementById('sakuraModal').addEventListener('click', function(e) {
   if (e.target === this) closeSakuraModal();
 });
 
+function ppOpenWalletOnly() {
+  // PayPayモード解除
+  isPayPayMode = false;
+  localStorage.setItem('emu_design_mode', 'default');
+  document.body.classList.remove('paypay-mode');
+  window.scrollTo({ top: 0 });
+  // NFT交換セクションは表示せずウォレットページだけ開く
+  document.getElementById('myWalletButton').click();
+  // NFT交換セクションを確実に非表示
+  const nftSection = document.getElementById('nftExchangeSection');
+  if (nftSection) nftSection.style.display = 'none';
+}
+
 </script>
 <iframe
   id="room1Frame"
@@ -8276,8 +8289,13 @@ function ppNavClick(tab) {
   } else if (tab === 'explore') {
     document.getElementById('exploreBtn').click();
   } else if (tab === 'exchange') {
-    document.getElementById('exchangeBtn').click();
-  } else if (tab === 'wallet') {
+  // PayPayモードを一旦解除して取引所を表示
+  isPayPayMode = false;
+  localStorage.setItem('emu_design_mode', 'default');
+  document.body.classList.remove('paypay-mode');
+  window.scrollTo({ top: 0 });
+  document.getElementById('exchangeBtn').click();
+} else if (tab === 'wallet') {
     document.getElementById('myWalletButton').click();
   } else if (tab === 'mypage') {
     document.getElementById('myWalletButton').click();
