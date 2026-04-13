@@ -1188,8 +1188,60 @@ body.paypay-mode .container {
   #pp-post-fab, #pp-nav-bar, #pp-fav-modal {
     display: none !important;
   }
+  /* デスクトップでは切り替えボタンも非表示 */
+  #designToggleBtn { display: none !important; }
 }
 
+/* ═══════════════════════════════════════════════
+   スマホ・タブレット 通常モード レイアウト修正
+   ═══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* ── ヘッダー：要素を整理してオーバーフロー防止 ── */
+  .header {
+    padding: 0 10px;
+    height: 50px;
+    flex-wrap: nowrap;
+    overflow: visible;
+  }
+  /* スマホでは省スペースのため非表示にする要素 */
+  #login-bonus-mini-container { display: none !important; }
+  #buyNftBtn                  { display: none !important; }
+  .search-bar                 { display: none !important; }
+
+  /* ウォレットボタンをコンパクトに */
+  #walletAddressButton {
+    font-size: 11px;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .post-button { padding: 5px 10px; font-size: 12px; }
+
+  /* ── コンテナ：三列→縦積み ── */
+  .container {
+    flex-direction: column;
+    padding: 8px;
+    gap: 8px;
+  }
+  .left-sidebar {
+    width: auto;
+    box-sizing: border-box;
+  }
+  /* 右サイドバーはスマホでは非表示 */
+  .right-sidebar { display: none !important; }
+
+  /* ── 切り替えボタンをヘッダー内で表示 ── */
+  #designToggleBtn {
+    flex-shrink: 0;
+    margin-left: 6px;
+    font-size: 11px !important;
+    padding: 4px 10px !important;
+  }
+
+  /* ── モーダルをスマホ幅に合わせる ── */
+  .modal-content { width: 90%; max-width: 360px; }
+}
 </style>
 </head>
 <body>
@@ -1284,6 +1336,12 @@ body.paypay-mode .container {
 <div id="mainApp" style="display:none;">
 <header class="header" style="display: flex; align-items: center; padding: 0 20px;">
   <a id="logo" class="logo" href="#" style="margin-right: 10px;">Emu</a>
+  <!-- スマホ・タブレット専用 モード切り替えボタン -->
+  <button id="designToggleBtn"
+    onclick="toggleDesignMode()"
+    style="display:none; background:#ff4b4b; color:#fff; border:none; border-radius:20px; padding:4px 12px; font-size:11px; font-weight:bold; cursor:pointer; margin-left:6px; flex-shrink:0;">
+    🎨 PayPay風
+  </button>
 
   <div id="login-bonus-mini-container" style="display: flex; align-items: center; gap: 8px; background: #f0f8ff; border: 1px solid #007bff; border-radius: 20px; padding: 4px 12px;">
     <span id="bonus-status-text" style="font-size: 13px; font-weight: bold; color: #007bff;">🎁 0.5 EMUER</span>
@@ -8161,31 +8219,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // 初回は必ず通常モードにリセット
   isPayPayMode = false;
   localStorage.setItem('emu_design_mode', 'default');
-
-  const logo = document.getElementById('logo');
-  if (logo && !document.getElementById('designToggleBtn')) {
-    const btn = document.createElement('button');
-    btn.id = 'designToggleBtn';
-    btn.textContent = '🎨 PayPay風';
-    btn.style.cssText = 'display:none;background:#ff4b4b;color:#fff;border:none;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:bold;cursor:pointer;margin-left:8px;';
-    btn.onclick = toggleDesignMode;
-    logo.parentNode.insertBefore(btn, logo.nextSibling);
-  }
+  // ボタンはHTML内に静的配置済みのため動的生成不要
 });
 
-// mainApp表示時（ログイン後）にボタンを表示
+// ── goTomainapp 後にスマホ用ボタンを表示 ──
+// （goTomainapp は line 4168 付近で function 宣言されている）
 const _origGoToMainApp = typeof goTomainapp === 'function' ? goTomainapp : null;
 if (_origGoToMainApp) {
   goTomainapp = function() {
     _origGoToMainApp();
     setTimeout(() => {
-      checkMobileToggle(); // スマホのみボタン表示
-      // ★ 通常モードで開始（PayPayモードは適用しない）
+      // 通常モードで開始
+      isPayPayMode = false;
       document.body.classList.remove('paypay-mode');
-      const defaultBtn = document.getElementById('designToggleBtn');
-      if (defaultBtn && window.innerWidth <= 768) {
-        defaultBtn.style.display = 'inline-block';
-      }
+      checkMobileToggle(); // スマホのみボタンを表示
     }, 100);
   };
 }
