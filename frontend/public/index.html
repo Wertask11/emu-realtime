@@ -5568,38 +5568,6 @@ function createPostData({ title, body, tags }) {
   };
 }
 
-function getUserTypeBadge(type, address) {
-  let badge = "";
-  switch (type) {
-    case "paid":
-      badge = `<span class="badge badge-paid">有料利用者</span>`;
-      break;
-    case "free":
-      badge = `<span class="badge badge-free">無料利用者</span>`;
-      break;
-    case "guest":
-    default:
-      badge = `<span class="badge badge-guest">ゲスト利用者</span>`;
-  }
-
-  // ★ GENESIS + EVOLVE バッジを非同期で追加
-  if (address) {
-    Promise.all([
-      checkGenesisStatus(address),
-      checkEvolveStatus(address)
-    ]).then(([isGenesis, isEvolve]) => {
-      document.querySelectorAll(
-        `.post[data-address="${address.toLowerCase()}"] .genesis-slot`
-      ).forEach(el => {
-        let badges = '';
-        if (isGenesis) badges += genesisBadge();
-        if (isEvolve) badges += evolveBadge();
-        el.innerHTML = badges;
-      });
-    });
-  }
-  return badge + `<span class="genesis-slot"></span>`;
-}
 
 function renderPosts(postList = posts) {
   const postFeed = document.getElementById("postFeed");
