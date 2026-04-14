@@ -1837,6 +1837,32 @@ function genesisBadge() {
     vertical-align:middle;
   ">👑 GENESIS</span>`;
 }
+
+// ★ EVOLVE称号判定（FirestoreのEVOLVEコレクションを確認）
+async function checkEvolveStatus(address) {
+  if (!window.db || !window.fbLib) return false;
+  try {
+    const docRef = window.fbLib.doc(
+      window.db, "evolve_users", address.toLowerCase()
+    );
+    const snap = await window.fbLib.getDoc(docRef);
+    return snap.exists();
+  } catch(e) {
+    console.error("EVOLVE確認エラー:", e);
+    return false;
+  }
+}
+
+// ★ EVOLVE バッジHTML
+function evolveBadge() {
+  return `<span style="
+    font-size:11px;padding:2px 8px;border-radius:99px;
+    background:linear-gradient(135deg,#00b4db,#0083b0);
+    color:#fff;font-weight:bold;margin-left:6px;
+    vertical-align:middle;
+  ">⚡ EVOLVE</span>`;
+}
+
 </script>
 <script>
 	// ★ リアルタイム接続者カウンター
@@ -5365,13 +5391,21 @@ function getUserTypeBadge(type, address) {
     default:
       badge = `<span class="badge badge-guest">ゲスト利用者</span>`;
   }
-  // ★ GENESIS バッジを非同期で追加
+
+  // ★ GENESIS + EVOLVE バッジを非同期で追加
   if (address) {
-    checkGenesisStatus(address).then(isGenesis => {
-      if (!isGenesis) return;
+    Promise.all([
+      checkGenesisStatus(address),
+      checkEvolveStatus(address)
+    ]).then(([isGenesis, isEvolve]) => {
       document.querySelectorAll(
         `.post[data-address="${address.toLowerCase()}"] .genesis-slot`
-      ).forEach(el => { el.innerHTML = genesisBadge(); });
+      ).forEach(el => {
+        let badges = '';
+        if (isGenesis) badges += genesisBadge();
+        if (isEvolve) badges += evolveBadge();
+        el.innerHTML = badges;
+      });
     });
   }
   return badge + `<span class="genesis-slot"></span>`;
@@ -5511,14 +5545,33 @@ function renderWallet() {
   const pendingEl = document.getElementById("walletEmuerCount");
   if (pendingEl) pendingEl.textContent = pendingEmuer;
 
-  // ★ GENESIS バッジをマイウォレットに表示
   if (window.connectedAccount) {
-    checkGenesisStatus(window.connectedAccount).then(isGenesis => {
+    Promise.all([
+      checkGenesisStatus(window.connectedAccount),
+      checkEvolveStatus(window.connectedAccount)
+    ]).then(([isGenesis, isEvolve]) => {
       const genesisEl = document.getElementById("genesisWalletBadge");
       if (genesisEl) {
-        genesisEl.innerHTML = isGenesis
-          ? genesisBadge() + " <span style='color:#888;font-size:12px'>初期ユーザー称号を保有しています</span>"
-          : "<span style='color:#aaa;font-size:12px'>GENESIS称号なし（4/14まで接続で取得可能）</span>";
+        // ★ 称号バッジケース
+        let badgeHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">';
+        badgeHtml += '<div style="background:#f9f9f9;border:1px solid #eee;border-radius:12px;padding:10px 16px;text-align:center;">';
+        badgeHtml += '<div style="font-size:11px;color:#aaa;margin-bottom:4px;">称号バッジケース</div>';
+        badgeHtml += '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">';
+        
+        if (isGenesis) {
+          badgeHtml += genesisBadge();
+        } else {
+          badgeHtml += '<span style="font-size:11px;color:#ddd;padding:2px 8px;border:1px dashed #eee;border-radius:99px;">GENESIS 未取得</span>';
+        }
+        
+        if (isEvolve) {
+          badgeHtml += evolveBadge();
+        } else {
+          badgeHtml += '<span style="font-size:11px;color:#ddd;padding:2px 8px;border:1px dashed #eee;border-radius:99px;">EVOLVE 未取得</span>';
+        }
+        
+        badgeHtml += '</div></div></div>';
+        genesisEl.innerHTML = badgeHtml;
       }
     });
   }
