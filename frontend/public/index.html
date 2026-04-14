@@ -1723,7 +1723,6 @@ body.paypay-mode #pp-post-fab {
       </div>
       <div class="pp-shortcut-item" onclick="document.getElementById('exploreBtn').click()">
         <div class="pp-shortcut-icon">🔍</div>
-        <span class="pp-shortcut-label">探索する</span>
       </div>
     </div>
     <div id="pp-favorite-content" class="pp-shortcut-grid" style="display:none;"></div>
@@ -5552,7 +5551,18 @@ myWalletButton.addEventListener("click", async () => {
 // 「閉じる」ボタンの処理
 closeWalletPage.addEventListener("click", () => {
   myWalletPage.style.display = "none";
-  document.querySelector(".main-content").style.display = "block";
+  
+  // PayPayモードから来た場合はPayPayモードに戻る
+  const savedMode = localStorage.getItem('emu_design_mode');
+  if (savedMode === 'paypay' || window._fromPayPay) {
+    window._fromPayPay = false;
+    isPayPayMode = true;
+    localStorage.setItem('emu_design_mode', 'paypay');
+    document.body.classList.add('paypay-mode');
+    window.scrollTo({ top: 0 });
+  } else {
+    document.querySelector(".main-content").style.display = "block";
+  }
 });
 
 /* ======= 1. ポイントとトークンの完全同期関数 ======= */
@@ -7343,21 +7353,18 @@ document.getElementById('sakuraModal').addEventListener('click', function(e) {
 });
 
 function ppOpenWalletOnly() {
+  window._fromPayPay = true; // ← PayPayから来たフラグ
   isPayPayMode = false;
-  localStorage.setItem('emu_design_mode', 'default');
+  localStorage.setItem('emu_design_mode', 'paypay'); // ← defaultではなくpaypayのまま
   document.body.classList.remove('paypay-mode');
   window.scrollTo({ top: 0 });
   
   setTimeout(async () => {
-    // NFT交換セクションを非表示
     const nftSection = document.getElementById('nftExchangeSection');
     if (nftSection) nftSection.style.display = 'none';
-    
-    // ウォレットを開く
     document.getElementById('myWalletButton').click();
     
-    // EMUER残高をPayPay画面の表示にも反映
-    if (window.connectedAccount && emuerContract) {
+    if (window.connectedAccount && typeof emuerContract !== 'undefined' && emuerContract) {
       try {
         const balance = await emuerContract.balanceOf(window.connectedAccount);
         const val = Math.floor(parseFloat(ethers.utils.formatUnits(balance, 18)));
@@ -7365,9 +7372,7 @@ function ppOpenWalletOnly() {
         const el2 = document.getElementById('pp-emuer-balance-main');
         if (el1) el1.textContent = val;
         if (el2) el2.textContent = val + ' EMUER';
-      } catch(e) {
-        console.error('EMUER残高取得失敗:', e);
-      }
+      } catch(e) {}
     }
   }, 100);
 }
@@ -8135,7 +8140,7 @@ const PP_ALL_SHORTCUTS = [
 ];
 
 // お気に入り（localStorageで永続化）
-let ppFavorites = JSON.parse(localStorage.getItem('emu_pp_favorites') || '["hp","bonus","near","explore"]');
+let ppFavorites = JSON.parse(localStorage.getItem('emu_pp_favorites') || '[]');
 
 // ── デザインモード切り替え ──
 let isPayPayMode = localStorage.getItem('emu_design_mode') === 'paypay';
@@ -8306,31 +8311,37 @@ function ppNavClick(tab) {
   } else if (tab === 'explore') {
     document.getElementById('exploreBtn').click();
   } else if (tab === 'exchange') {
-  // PayPayモードを一旦解除して取引所を表示
-  isPayPayMode = false;
-  localStorage.setItem('emu_design_mode', 'default');
-  document.body.classList.remove('paypay-mode');
-  window.scrollTo({ top: 0 });
-  document.getElementById('exchangeBtn').click();
-} else if (tab === 'wallet') {
-  isPayPayMode = false;
-  localStorage.setItem('emu_design_mode', 'default');
-  document.body.classList.remove('paypay-mode');
-  window.scrollTo({ top: 0 });
-  setTimeout(() => {
-    const nftSection = document.getElementById('nftExchangeSection');
-    if (nftSection) nftSection.style.display = 'none';
-    document.getElementById('myWalletButton').click();
-  }, 100);
-} else if (tab === 'mypage') {
-  isPayPayMode = false;
-  localStorage.setItem('emu_design_mode', 'default');
-  document.body.classList.remove('paypay-mode');
-  window.scrollTo({ top: 0 });
-  setTimeout(() => {
-    document.getElementById('myWalletButton').click();
-  }, 100);
-}
+    window._fromPayPay = true;
+    isPayPayMode = false;
+    document.body.classList.remove('paypay-mode');
+    window.scrollTo({ top: 0 });
+    setTimeout(() => {
+      document.getElementById('myWalletButton').click();
+      setTimeout(() => {
+        const nftSection = document.getElementById('nftExchangeSection');
+        if (nftSection) nftSection.style.display = 'block';
+        document.getElementById('exchangeBtn').click();
+      }, 300);
+    }, 100);
+  } else if (tab === 'wallet') {
+    window._fromPayPay = true;
+    isPayPayMode = false;
+    document.body.classList.remove('paypay-mode');
+    window.scrollTo({ top: 0 });
+    setTimeout(() => {
+      const nftSection = document.getElementById('nftExchangeSection');
+      if (nftSection) nftSection.style.display = 'none';
+      document.getElementById('myWalletButton').click();
+    }, 100);
+  } else if (tab === 'mypage') {
+    window._fromPayPay = true;
+    isPayPayMode = false;
+    document.body.classList.remove('paypay-mode');
+    window.scrollTo({ top: 0 });
+    setTimeout(() => {
+      document.getElementById('myWalletButton').click();
+    }, 100);
+  }
 }
 
 // ── 近くのSchoolParkを探す ──
