@@ -1270,6 +1270,44 @@ body.paypay-mode #pp-post-fab {
   display: none !important;
 }
 
+/* バッジパネル */
+#badge-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 9998;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+}
+#badge-panel.open { display: flex; }
+#badge-panel-inner {
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 480px;
+  padding: 24px 20px 40px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+#badge-panel-inner h3 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: bold;
+}
+.badge-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+.badge-panel-item:last-child { border-bottom: none; }
+.badge-panel-desc {
+  font-size: 12px;
+  color: #aaa;
+  margin-top: 2px;
+}
 
 </style>
 </head>
@@ -1973,6 +2011,84 @@ const closeWalletPage = document.getElementById("closeWalletPage");
 
 //交換・変換
 const convertButton = document.getElementById("convertButton");
+
+// ══════════════════════════
+// バッジ定義（全種類）
+// ══════════════════════════
+const BADGE_DEFINITIONS = {
+  GENESIS: {
+    id: 'GENESIS',
+    label: '👑 GENESIS',
+    style: 'background:linear-gradient(135deg,#f6d365,#fda085);color:#fff;',
+    description: '初期ユーザー称号'
+  },
+  EVOLVE: {
+    id: 'EVOLVE',
+    label: '⚡ EVOLVE',
+    style: 'background:linear-gradient(135deg,#00b4db,#0083b0);color:#fff;',
+    description: '進化者称号'
+  },
+  // ランキング報酬バッジ
+  王将: {
+    id: '王将',
+    label: '♟ 王将',
+    style: 'background:linear-gradient(135deg,#2ecc71,#27ae60);color:#fff;',
+    description: 'Good獲得ランキング1位'
+  },
+  名人: {
+    id: '名人',
+    label: '♟ 名人',
+    style: 'background:linear-gradient(135deg,#b8860b,#ffd700);color:#000;',
+    description: 'Change獲得ランキング1位'
+  },
+  竜王: {
+    id: '竜王',
+    label: '♟ 竜王',
+    style: 'background:linear-gradient(135deg,#8b0000,#dc143c);color:#fff;',
+    description: '総合ランキング1位'
+  },
+  棋聖: {
+    id: '棋聖',
+    label: '♟ 棋聖',
+    style: 'background:linear-gradient(135deg,#6a0dad,#9b59b6);color:#fff;',
+    description: '投稿数ランキング1位'
+  },
+  棋王: {
+    id: '棋王',
+    label: '♟ 棋王',
+    style: 'background:linear-gradient(135deg,#e67e22,#f39c12);color:#fff;',
+    description: 'Good活動ランキング1位'
+  },
+  王位: {
+    id: '王位',
+    label: '♟ 王位',
+    style: 'background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;',
+    description: 'Change活動ランキング1位'
+  }
+};
+
+// ランキング種別→1位バッジの対応
+const RANK_BADGE_MAP = {
+  'good_post':    '王将',
+  'change_post':  '名人',
+  'total_post':   '竜王',
+  'posted':       '棋聖',
+  'good_given':   '棋王',
+  'change_given': '王位'
+};
+
+// バッジHTMLを生成（共通関数）
+function makeBadgeHtml(badgeId, opts = {}) {
+  const def = BADGE_DEFINITIONS[badgeId];
+  if (!def) return '';
+  const size = opts.small ? 'font-size:9px;padding:1px 5px;' : 'font-size:11px;padding:2px 8px;';
+  return `<span style="
+    ${size}border-radius:99px;
+    ${def.style}
+    font-weight:bold;margin-left:4px;
+    vertical-align:middle;cursor:pointer;
+  " data-badge="${badgeId}" onclick="showBadgePanel('${badgeId}', event)">${def.label}</span>`;
+}
 
 // 投稿下書き関連
 let drafts = [];
@@ -4957,6 +5073,80 @@ function getAuthorInfo() {
   throw new Error("author情報を取得できません");
 }
 
+
+// アドレスに紐づく全バッジを取得
+async function getUserBadges(address) {
+  if (!address || !window.db || !window.fbLib) return [];
+  const addr = address.toLowerCase();
+  const badges = [];
+
+  try {
+    // GENESIS
+    const gSnap = await window.fbLib.getDoc(
+      window.fbLib.doc(window.db, 'airdrop_registrations', addr)
+    );
+    if (gSnap.exists()) badges.push('GENESIS');
+
+    // EVOLVE
+    const eSnap = await window.fbLib.getDoc(
+      window.fbLib.doc(window.db, 'evolve_users', addr)
+    );
+    if (eSnap.exists()) badges.push('EVOLVE');
+
+    // ランキング報酬バッジ
+    const rSnap = await window.fbLib.getDoc(
+      window.fbLib.doc(window.db, 'rank_badges', addr)
+    );
+    if (rSnap.exists()) {
+      const data = rSnap.data();
+      if (data.badges) badges.push(...data.badges);
+    }
+  } catch(e) {
+    console.error('バッジ取得エラー:', e);
+  }
+
+  return badges;
+}
+
+function getUserTypeBadge(type, address) {
+  let badge = '';
+  switch (type) {
+    case 'paid':  badge = `<span class="badge badge-paid">有料利用者</span>`; break;
+    case 'free':  badge = `<span class="badge badge-free">無料利用者</span>`; break;
+    default:      badge = `<span class="badge badge-guest">ゲスト利用者</span>`;
+  }
+
+  if (address) {
+    getUserBadges(address).then(badges => {
+      document.querySelectorAll(
+        `.post[data-address="${address.toLowerCase()}"] .genesis-slot`
+      ).forEach(el => {
+        if (badges.length === 0) { el.innerHTML = ''; return; }
+
+        // 最初のバッジ（GENESIS優先）を表示
+        const firstBadge = badges[0];
+        const extraCount = badges.length - 1;
+
+        let html = makeBadgeHtml(firstBadge);
+
+        // 追加バッジ数を右上に表示
+        if (extraCount > 0) {
+          html += `<span style="
+            font-size:9px;background:#ff4b4b;color:#fff;
+            border-radius:99px;padding:1px 5px;
+            font-weight:bold;margin-left:2px;
+            vertical-align:middle;cursor:pointer;
+          " onclick="showBadgePanelForAddress('${address.toLowerCase()}', event)">+${extraCount}</span>`;
+        }
+
+        el.innerHTML = html;
+      });
+    });
+  }
+
+  return badge + `<span class="genesis-slot"></span>`;
+}
+
 /* ======= 投稿フォーム ======= */
 function openPostForm() { postFormModal.style.display = 'flex'; }
 function closePostForm() { postFormModal.style.display = 'none'; }
@@ -5542,40 +5732,44 @@ document.querySelectorAll(".post").forEach(p => attachReactionHandlers(p));
 
 /* ======= マイウォレット画面 ======= */
 function renderWallet() {
-  const pendingEl = document.getElementById("walletEmuerCount");
+  const pendingEl = document.getElementById('walletEmuerCount');
   if (pendingEl) pendingEl.textContent = pendingEmuer;
 
   if (window.connectedAccount) {
-    Promise.all([
-      checkGenesisStatus(window.connectedAccount),
-      checkEvolveStatus(window.connectedAccount)
-    ]).then(([isGenesis, isEvolve]) => {
-      const genesisEl = document.getElementById("genesisWalletBadge");
-      if (genesisEl) {
-        // ★ 称号バッジケース
-        let badgeHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">';
-        badgeHtml += '<div style="background:#f9f9f9;border:1px solid #eee;border-radius:12px;padding:10px 16px;text-align:center;">';
-        badgeHtml += '<div style="font-size:11px;color:#aaa;margin-bottom:4px;">称号バッジケース</div>';
-        badgeHtml += '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">';
-        
-        if (isGenesis) {
-          badgeHtml += genesisBadge();
-        } else {
-          badgeHtml += '<span style="font-size:11px;color:#ddd;padding:2px 8px;border:1px dashed #eee;border-radius:99px;">GENESIS 未取得</span>';
-        }
-        
-        if (isEvolve) {
-          badgeHtml += evolveBadge();
-        } else {
-          badgeHtml += '<span style="font-size:11px;color:#ddd;padding:2px 8px;border:1px dashed #eee;border-radius:99px;">EVOLVE 未取得</span>';
-        }
-        
-        badgeHtml += '</div></div></div>';
-        genesisEl.innerHTML = badgeHtml;
+    getUserBadges(window.connectedAccount).then(badges => {
+      const el = document.getElementById('genesisWalletBadge');
+      if (!el) return;
+
+      let html = `
+        <div style="background:#f9f9f9;border:1px solid #eee;border-radius:12px;padding:16px;margin-bottom:16px;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:10px;">🏆 称号バッジケース (${badges.length}個)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      `;
+
+      if (badges.length === 0) {
+        html += '<span style="font-size:12px;color:#ccc;">バッジなし</span>';
+      } else {
+        badges.forEach(id => {
+          const def = BADGE_DEFINITIONS[id];
+          if (!def) return;
+          html += `
+            <div style="text-align:center;cursor:pointer;" onclick="showBadgePanelForAddress('${window.connectedAccount.toLowerCase()}', event)">
+              <span style="
+                font-size:11px;padding:4px 10px;border-radius:99px;
+                ${def.style}font-weight:bold;display:inline-block;
+              ">${def.label}</span>
+              <div style="font-size:9px;color:#aaa;margin-top:3px;">${def.description}</div>
+            </div>
+          `;
+        });
       }
+
+      html += '</div></div>';
+      el.innerHTML = html;
     });
   }
 }
+
 // マイウォレットを開く時の処理
 myWalletButton.addEventListener("click", async () => {
   if (!window.connectedAccount) {
@@ -7430,6 +7624,56 @@ function ppOpenWalletOnly() {
   }, 100);
 }
 
+// バッジパネルを開く（バッジ単体クリック）
+function showBadgePanel(badgeId, event) {
+  event.stopPropagation();
+  // 投稿カードのアドレスを取得
+  const post = event.target.closest('.post');
+  if (post) {
+    showBadgePanelForAddress(post.dataset.address, event);
+  }
+}
+
+// バッジパネルを開く（アドレス指定）
+async function showBadgePanelForAddress(address, event) {
+  if (event) event.stopPropagation();
+  const badges = await getUserBadges(address);
+  const list = document.getElementById('badge-panel-list');
+  
+  if (badges.length === 0) {
+    list.innerHTML = '<p style="color:#aaa;font-size:14px;">バッジがありません</p>';
+  } else {
+    list.innerHTML = badges.map(id => {
+      const def = BADGE_DEFINITIONS[id];
+      if (!def) return '';
+      return `
+        <div class="badge-panel-item">
+          <span style="
+            font-size:12px;padding:4px 10px;border-radius:99px;
+            ${def.style}font-weight:bold;white-space:nowrap;
+          ">${def.label}</span>
+          <div>
+            <div style="font-size:13px;font-weight:500;">${def.id}</div>
+            <div class="badge-panel-desc">${def.description}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  document.getElementById('badge-panel').classList.add('open');
+}
+
+function closeBadgePanel() {
+  document.getElementById('badge-panel').classList.remove('open');
+}
+
+// 背景クリックで閉じる
+document.getElementById('badge-panel').addEventListener('click', function(e) {
+  if (e.target === this) closeBadgePanel();
+});
+
+
 </script>
 <iframe
   id="room1Frame"
@@ -7989,15 +8233,56 @@ setTimeout(() => {
       })(item.address || '', type);
  
       // メダル/番号
-      var medal = document.createElement('span');
-      if (idx < 3) {
-        medal.className = 'rank-medal';
-        medal.textContent = medals[idx];
-      } else {
-        medal.className = 'rank-num-plain';
-        medal.textContent = idx + 1;
-      }
-      row.appendChild(medal);
+// ランキング描画内のメダル部分を修正
+var medal = document.createElement('div');
+medal.style.cssText = 'display:flex;flex-direction:column;align-items:center;min-width:32px;';
+
+var medalIcon = document.createElement('span');
+if (idx < 3) {
+  medalIcon.className = 'rank-medal';
+  medalIcon.textContent = ['🥇','🥈','🥉'][idx];
+} else {
+  medalIcon.className = 'rank-num-plain';
+  medalIcon.textContent = idx + 1;
+}
+medal.appendChild(medalIcon);
+
+// ★ 1位のみランキングバッジ
+if (idx === 0) {
+  const rankBadgeId = RANK_BADGE_MAP[type];
+  if (rankBadgeId) {
+    const def = BADGE_DEFINITIONS[rankBadgeId];
+    const badgeEl = document.createElement('span');
+    badgeEl.textContent = def.label;
+    badgeEl.style.cssText = `
+      ${def.style}
+      font-size:8px;padding:1px 5px;border-radius:3px;
+      font-weight:bold;display:block;text-align:center;margin-top:3px;
+    `;
+    medal.appendChild(badgeEl);
+
+    // ★ Firestoreにランキングバッジを保存（1位のアドレスに付与）
+    if (item.address && window.db && window.fbLib) {
+      const addr = item.address.toLowerCase();
+      const ref = window.fbLib.doc(window.db, 'rank_badges', addr);
+      window.fbLib.getDoc(ref).then(snap => {
+        const existing = snap.exists() ? (snap.data().badges || []) : [];
+        if (!existing.includes(rankBadgeId)) {
+          window.fbLib.updateDoc(ref, {
+            badges: window.fbLib.arrayUnion(rankBadgeId)
+          }).catch(() => {
+            window.fbLib.addDoc(
+              window.fbLib.collection(window.db, 'rank_badges'),
+              { badges: [rankBadgeId] }
+            );
+          });
+        }
+      });
+    }
+  }
+}
+
+row.appendChild(medal);
  
       // 名前・スコア
       var body = document.createElement('div');
@@ -8422,6 +8707,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 </script>
+<!-- ▼ バッジ一覧パネル -->
+<div id="badge-panel">
+  <div id="badge-panel-inner">
+    <h3>🏆 保有バッジ一覧</h3>
+    <div id="badge-panel-list"></div>
+    <button onclick="closeBadgePanel()" style="
+      width:100%;padding:12px;background:#f5f5f5;
+      border:none;border-radius:12px;font-size:14px;
+      margin-top:16px;cursor:pointer;
+    ">閉じる</button>
+  </div>
+</div>
 </body>
 </html>
 
