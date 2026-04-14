@@ -7673,7 +7673,7 @@ document.getElementById('badge-panel').addEventListener('click', function(e) {
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { 
     getFirestore, collection, addDoc, getDocs, query, orderBy, onSnapshot,
-    doc, updateDoc, increment, where, 
+    doc, updateDoc, setDoc, increment, where, 
     arrayUnion, getDoc
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   // 認証機能（MetaMaskログイン等で使用）も本番用に準備
@@ -7700,7 +7700,7 @@ import {
   window.auth = auth; // 認証も外部から使えるように追加
 window.fbLib = { 
     collection, addDoc, getDocs, query, orderBy, onSnapshot,
-    doc, updateDoc, increment, where, 
+    doc, updateDoc, setDoc, increment, where, 
     arrayUnion, getDoc,
     signInAnonymously
   };
@@ -8236,13 +8236,11 @@ if (idx === 0) {
       window.fbLib.getDoc(ref).then(snap => {
         const existing = snap.exists() ? (snap.data().badges || []) : [];
         if (!existing.includes(rankBadgeId)) {
-          window.fbLib.updateDoc(ref, {
+window.fbLib.updateDoc(ref, {
             badges: window.fbLib.arrayUnion(rankBadgeId)
           }).catch(() => {
-            window.fbLib.addDoc(
-              window.fbLib.collection(window.db, 'rank_badges'),
-              { badges: [rankBadgeId] }
-            );
+            // ドキュメントが存在しない場合はsetDocで作成
+            window.fbLib.setDoc(ref, { badges: [rankBadgeId] });
           });
         }
       });
