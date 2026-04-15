@@ -5660,31 +5660,39 @@ postForm.addEventListener("submit", async function (e) {
       .map(t => t.trim().replace(/^#/, ""))
       .filter(Boolean);
 
-    // 画像アップロード（あれば）
+    // 画像圧縮 → データURLに変換（Firebase Storage不要）
     let postImageUrl = '';
     const _imgEl = document.getElementById('postImage');
     const postImageFile = _imgEl && _imgEl.files && _imgEl.files[0];
     if (postImageFile) {
       try {
-        if (postImageFile.size > 5 * 1024 * 1024) throw new Error("画像は5MB以下にしてください");
-        const base64 = await new Promise((resolve, reject) => {
+        if (postImageFile.size > 8 * 1024 * 1024) throw new Error("画像は8MB以下にしてください");
+        postImageUrl = await new Promise((resolve, reject) => {
           const reader = new FileReader();
-          reader.onload = e => resolve(e.target.result.split(',')[1]);
           reader.onerror = reject;
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onerror = reject;
+            img.onload = () => {
+              const MAX = 900;
+              let w = img.width, h = img.height;
+              if (w > MAX || h > MAX) {
+                if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+                else { w = Math.round(w * MAX / h); h = MAX; }
+              }
+              const canvas = document.createElement('canvas');
+              canvas.width = w; canvas.height = h;
+              canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+              resolve(canvas.toDataURL('image/jpeg', 0.75));
+            };
+            img.src = e.target.result;
+          };
           reader.readAsDataURL(postImageFile);
         });
-        const uploadRes = await fetch('https://emu-realtime.onrender.com/upload/image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ base64, mimeType: postImageFile.type, filename: postImageFile.name })
-        });
-        const uploadData = await uploadRes.json();
-        if (!uploadData.success) throw new Error(uploadData.message || uploadData.error);
-        postImageUrl = uploadData.url;
-        console.log("✅ 画像アップロード完了:", postImageUrl);
+        console.log("✅ 画像圧縮完了");
       } catch (imgErr) {
-        console.error("⚠️ 画像アップロード失敗（テキストのみで投稿します）:", imgErr);
-        alert("画像のアップロードに失敗しました（" + imgErr.message + "）。\n画像なしで投稿を続けます。");
+        console.error("⚠️ 画像処理失敗:", imgErr);
+        alert("画像の処理に失敗しました（" + imgErr.message + "）。\n画像なしで投稿を続けます。");
       }
     }
 
