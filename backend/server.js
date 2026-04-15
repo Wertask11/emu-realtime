@@ -28,7 +28,7 @@ const io = new Server(server, {
 // Middleware
 // =====================
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(
   express.static(
     path.join(__dirname, "..", "frontend", "public")
@@ -45,13 +45,14 @@ const initFirestore = () => {
     if (!admin.apps.length) {
       const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
       admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
+        credential: admin.credential.cert(serviceAccount),
+        storageBucket: "emusch-2a111.firebasestorage.app"
       });
     }
     db = admin.firestore();
-    console.log("✅ Firestore 初期化完了");
+    console.log("✅ Firestore + Storage 初期化完了");
   } catch (e) {
-    console.warn("⚠️ Firestore 初期化失敗:", e.message);
+    console.warn("⚠️ Firebase 初期化失敗:", e.message);
   }
 };
 initFirestore();
@@ -170,6 +171,36 @@ async function runAirdropBatch() {
     }
   }
 }
+
+// =====================
+// 画像アップロード API
+// =====================
+app.post("/upload/image", async (req, res) => {
+  const { base64, mimeType, filename } = req.body;
+  if (!base64 || !mimeType || !filename) return res.status(400).json({ error: "MISSING_PARAMS" });
+
+  const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+  if (!allowedTypes.includes(mimeType)) return res.status(400).json({ error: "INVALID_TYPE" });
+
+  try {
+    const admin = require("firebase-admin");
+    const bucket = admin.storage().bucket();
+    const safeName = filename.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const destPath = `posts/${Date.now()}_${safeName}`;
+    const buffer = Buffer.from(base64, "base64");
+    const file = bucket.file(destPath);
+
+    await file.save(buffer, { contentType: mimeType });
+    await file.makePublic();
+
+    const url = `https://storage.googleapis.com/${bucket.name}/${destPath}`;
+    console.log("✅ 画像アップロード完了:", url);
+    return res.json({ success: true, url });
+  } catch (e) {
+    console.error("画像アップロードエラー:", e.message);
+    return res.status(500).json({ error: "UPLOAD_FAILED", message: e.message });
+  }
+});
 
 // =====================
 // エアドロ API（Dプラン）

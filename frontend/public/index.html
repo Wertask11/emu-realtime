@@ -5662,11 +5662,30 @@ postForm.addEventListener("submit", async function (e) {
 
     // 画像アップロード（あれば）
     let postImageUrl = '';
-    const postImageFile = document.getElementById('postImage') && document.getElementById('postImage').files[0];
-    if (postImageFile && window.storage && window.fbLib.storageRef) {
-      const imgRef = window.fbLib.storageRef(window.storage, `posts/${Date.now()}_${postImageFile.name}`);
-      const snapshot = await window.fbLib.uploadBytes(imgRef, postImageFile);
-      postImageUrl = await window.fbLib.getDownloadURL(snapshot.ref);
+    const _imgEl = document.getElementById('postImage');
+    const postImageFile = _imgEl && _imgEl.files && _imgEl.files[0];
+    if (postImageFile) {
+      try {
+        if (postImageFile.size > 5 * 1024 * 1024) throw new Error("画像は5MB以下にしてください");
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target.result.split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(postImageFile);
+        });
+        const uploadRes = await fetch('https://emu-realtime.onrender.com/upload/image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64, mimeType: postImageFile.type, filename: postImageFile.name })
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadData.success) throw new Error(uploadData.message || uploadData.error);
+        postImageUrl = uploadData.url;
+        console.log("✅ 画像アップロード完了:", postImageUrl);
+      } catch (imgErr) {
+        console.error("⚠️ 画像アップロード失敗（テキストのみで投稿します）:", imgErr);
+        alert("画像のアップロードに失敗しました（" + imgErr.message + "）。\n画像なしで投稿を続けます。");
+      }
     }
 
     const postData = {
@@ -7757,9 +7776,10 @@ function closeBadgePanel() {
 }
 
 // 背景クリックで閉じる
-document.getElementById('badge-panel').addEventListener('click', function(e) {
-  if (e.target === this) closeBadgePanel();
-});
+(function() {
+  var bp = document.getElementById('badge-panel');
+  if (bp) bp.addEventListener('click', function(e) { if (e.target === this) closeBadgePanel(); });
+})();
 
 
 </script>
@@ -7798,7 +7818,6 @@ import {
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   // 認証機能（MetaMaskログイン等で使用）も本番用に準備
   import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-  import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
   // 【本番用】Firebase設定
   const firebaseConfig = {
@@ -7815,18 +7834,15 @@ import {
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const auth = getAuth(app);
-  const storage = getStorage(app);
 
   // 外部ファイル（script.js）から使えるように窓口を作る
   window.db = db;
-  window.auth = auth; // 認証も外部から使えるように追加
-  window.storage = storage;
+  window.auth = auth;
 window.fbLib = {
     collection, addDoc, getDocs, query, orderBy, onSnapshot,
     doc, updateDoc, setDoc, increment, where,
     arrayUnion, getDoc,
-    signInAnonymously,
-    storageRef, uploadBytes, getDownloadURL
+    signInAnonymously
   };
 
   console.log("🚀 Production Firebase (EmuSch) is Ready!");
