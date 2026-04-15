@@ -46,59 +46,21 @@ const { useState, useEffect, useCallback, useRef } = React;
 
 // ── データ定義 ──
 const DOORS = [
-  {
-    id: "hikari",
-    label: "ひかりのとびら",
-    emoji: "🌟",
-    answer: "ひかり",
-    chars: ["か","り","ひ"],
-    col: { p:"#FFD700", a:"#FFE566", bg:"rgba(255,215,0,0.08)", g:"rgba(255,215,0,0.25)" }
-  },
-  {
-    id: "honoo",
-    label: "ほのおのとびら",
-    emoji: "🔥",
-    answer: "ほのお",
-    chars: ["の","ほ","お"],
-    col: { p:"#FF6B35", a:"#FFAA7F", bg:"rgba(255,107,53,0.08)", g:"rgba(255,107,53,0.25)" }
-  },
-  {
-    id: "namida",
-    label: "なみだのとびら",
-    emoji: "🌊",
-    answer: "なみだ",
-    chars: ["み","だ","な"],
-    col: { p:"#4A9EFF", a:"#7FCCFF", bg:"rgba(74,158,255,0.08)", g:"rgba(74,158,255,0.25)" }
-  },
-  {
-    id: "tsukikage",
-    label: "つきかげのとびら",
-    emoji: "🌙",
-    answer: "つきかげ",
-    chars: ["か","き","げ","つ"],
-    col: { p:"#9B6DFF", a:"#C4A8FF", bg:"rgba(155,109,255,0.08)", g:"rgba(155,109,255,0.25)" }
-  },
-  {
-    id: "hoshizora",
-    label: "ほしぞらのとびら",
-    emoji: "⭐",
-    answer: "ほしぞら",
-    chars: ["ぞ","し","ら","ほ"],
-    col: { p:"#FF6B9D", a:"#FFB0CC", bg:"rgba(255,107,157,0.08)", g:"rgba(255,107,157,0.25)" }
-  }
+  { id:1, label:"とびら①", emoji:"🚪", answer:"ミニトマト", chars:["ニ","マ","ト","ト","ミ"], emu:100,
+    col:{ p:"#FF4444", g:"rgba(255,68,68,0.35)", a:"#FF7070", bg:"rgba(255,68,68,0.1)" } },
+  { id:2, label:"とびら②", emoji:"🏚️", answer:"ケチャップ", chars:["チ","ャ","プ","ケ","ッ"], emu:150,
+    col:{ p:"#FF6B2B", g:"rgba(255,107,43,0.35)", a:"#FF9055", bg:"rgba(255,107,43,0.1)" } },
+  { id:3, label:"とびら③", emoji:"🏯", answer:"プラレール", chars:["ル","プ","ラ","レ","ー"], emu:120,
+    col:{ p:"#3B82F6", g:"rgba(59,130,246,0.35)", a:"#60A5FA", bg:"rgba(59,130,246,0.1)" } },
+  { id:4, label:"とびら④", emoji:"⛩️", answer:"さくらんぼ", chars:["ん","く","ぼ","さ","ら"], emu:130,
+    col:{ p:"#EC4899", g:"rgba(236,72,153,0.35)", a:"#F472B6", bg:"rgba(236,72,153,0.1)" } },
+  { id:5, label:"とびら⑤", emoji:"🗝️", answer:"だんごむし", chars:["ご","だ","む","し","ん"], emu:200,
+    col:{ p:"#8B5CF6", g:"rgba(139,92,246,0.35)", a:"#A78BFA", bg:"rgba(139,92,246,0.1)" } },
 ];
 
 const THEMES = [
-  "今日いちばん印象に残ったこと",
-  "最近感謝していること",
-  "挑戦してみたいこと",
-  "自分の好きな言葉や名言",
-  "最近嬉しかったこと",
-  "未来の自分へのメッセージ",
-  "今の気持ちを一言で表すと",
-  "誰かに伝えたい大切な想い",
-  "今日学んだこと・気づき",
-  "自分が大切にしている価値観",
+  "今日の学びをシェアしよう","好きな教科は何ですか？",
+  "最近気になっていること","おすすめの勉強法を教えて","今日のひとこと",
 ];
 
 // ── ユーティリティ ──
@@ -133,7 +95,7 @@ async function saveReward(uid, door) {
     const { doc, setDoc, serverTimestamp } = window._sdFb;
     const db = window._sdDb;
     await setDoc(doc(db,"users",uid,"rewards",`secretDoor_${door.id}`), {
-      doorId: door.id, label: door.label, emu: door.emu || 50, claimedAt: serverTimestamp()
+      doorId: door.id, label: door.label, emu: door.emu, claimedAt: serverTimestamp()
     });
   } catch {}
 }
@@ -147,11 +109,11 @@ function RewardModal({ door, onClose }) {
         <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 50% 0%,${c.bg},transparent 60%)`,pointerEvents:"none"}}/>
         <div style={{fontSize:76,marginBottom:18,animation:"hdRspin 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.2s both",filter:`drop-shadow(0 0 28px ${c.p})`}}>{door.emoji}</div>
         <h2 style={{fontFamily:"'Cinzel',serif",fontSize:24,fontWeight:700,background:`linear-gradient(135deg,#FFE566,${c.p})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",marginBottom:8}}>REWARD GET!</h2>
-        <p style={{color:"#B090FF",fontSize:12,marginBottom:24}}>{door.label}を開いた証</p>
+        <p style={{color:"#B090FF",fontSize:12,marginBottom:24}}>{door.label}のとびらを開いた証</p>
         <div style={{background:`linear-gradient(135deg,${c.bg},rgba(255,255,255,0.03))`,border:`1px solid ${c.p}40`,borderRadius:18,padding:"20px 24px",marginBottom:12,animation:"hdSup 0.4s 0.3s ease both"}}>
           <div style={{fontSize:34,marginBottom:7}}>💎</div>
           <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",letterSpacing:"0.15em",marginBottom:5}}>EMU獲得</div>
-          <div style={{fontSize:30,fontWeight:900,fontFamily:"'Cinzel',serif",color:"#fff"}}>{door.emu||50} <span style={{fontSize:16,color:c.a}}>EMUER</span></div>
+          <div style={{fontSize:30,fontWeight:900,fontFamily:"'Cinzel',serif",color:"#fff"}}>{door.emu} <span style={{fontSize:16,color:c.a}}>EMUER</span></div>
         </div>
         <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:18,padding:"18px 24px",marginBottom:24,animation:"hdSup 0.4s 0.45s ease both"}}>
           <div style={{fontSize:30,marginBottom:7}}>🖼️</div>
@@ -172,19 +134,16 @@ function PasswordBuilder({ collected, slots, onDrop, onRemove, color: c, active 
 
   useEffect(() => {
     const el = document.createElement("div");
+    // ★ pointer-events:none が核心 — ghost表示中でもelementFromPointが透過する
     el.style.cssText = "display:none;position:fixed;width:58px;height:58px;border-radius:14px;align-items:center;justify-content:center;font-size:26px;font-weight:700;font-family:'Noto Sans JP',sans-serif;z-index:9000;pointer-events:none;transform:translate(-50%,-50%);";
     document.body.appendChild(el);
     ghostRef.current = el;
     return () => el.remove();
   }, []);
 
+  // ★ ghost が pointer-events:none なので一時非表示が不要
   const getSlotAt = (x, y) => {
-    const g = ghostRef.current;
-    if (!g) return null;
-    const prev = g.style.display;
-    g.style.display = "none";
     const el = document.elementFromPoint(x, y);
-    g.style.display = prev;
     const s = el?.closest("[data-pw-slot]");
     return s ? parseInt(s.dataset.pwSlot) : null;
   };
@@ -210,12 +169,11 @@ function PasswordBuilder({ collected, slots, onDrop, onRemove, color: c, active 
       }
     };
     const onEnd = (x, y) => {
+      // ★ スロット検出 → ghost非表示 の順（逆にすると文字が消えるバグが発生）
       const slotIdx = getSlotAt(x, y);
       const g = ghostRef.current;
       if (g) g.style.display = "none";
-      if (slotIdx !== null) {
-        onDrop(dragState.srcType, dragState.srcIdx, dragState.char, slotIdx);
-      }
+      if (slotIdx !== null) onDrop(dragState.srcType, dragState.srcIdx, dragState.char, slotIdx);
       setDragState(null);
     };
     const onMouseMove = e => onMove(e.clientX, e.clientY);
