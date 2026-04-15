@@ -1590,6 +1590,11 @@ body.paypay-mode #pp-post-fab {
         <label for="postTags">タグ (カンマ区切り):</label>
         <input type="text" id="postTags">
       </div>
+      <div class="form-group">
+        <label for="postImage">画像 (任意):</label>
+        <input type="file" id="postImage" accept="image/*" style="width:100%;padding:6px 0;font-size:14px;">
+        <img id="postImagePreview" style="max-width:100%;max-height:200px;margin-top:8px;display:none;border-radius:8px;object-fit:contain;">
+      </div>
       <!-- 予約投稿 日時入力（NFT所持者のみ表示） -->
       <div id="scheduleSection" class="form-group" style="display:none;">
         <label for="scheduleDateTime">📅 公開日時:</label>
@@ -5188,7 +5193,32 @@ closeButton.addEventListener('click', closePostForm);
 clearFormButton.addEventListener('click', () => {
   postTitleInput.value = ""; postBodyInput.value = ""; postTagsInput.value = "";
   postTitleInput.disabled = false;
+  const imgInput = document.getElementById('postImage');
+  const imgPreview = document.getElementById('postImagePreview');
+  if (imgInput) imgInput.value = '';
+  if (imgPreview) { imgPreview.src = ''; imgPreview.style.display = 'none'; }
 });
+
+// 投稿画像プレビュー
+(function() {
+  const imgInput = document.getElementById('postImage');
+  const imgPreview = document.getElementById('postImagePreview');
+  if (imgInput && imgPreview) {
+    imgInput.addEventListener('change', function() {
+      if (this.files && this.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          imgPreview.src = e.target.result;
+          imgPreview.style.display = 'block';
+        };
+        reader.readAsDataURL(this.files[0]);
+      } else {
+        imgPreview.src = '';
+        imgPreview.style.display = 'none';
+      }
+    });
+  }
+})();
 
 /* テーマサブボタンで開く（タイトル固定） */
 document.querySelectorAll(".theme-specific-button").forEach(btn => {
@@ -5530,6 +5560,7 @@ postElement.innerHTML = `
 ${getUserTypeBadge(post.userType, post.address)}
   </h3>
   <p style="white-space: pre-wrap;">${escapeHtml(post.body)}</p>
+  ${post.imageUrl ? `<img src="${escapeHtml(post.imageUrl)}" alt="投稿画像" style="max-width:100%;max-height:400px;border-radius:8px;margin:8px 0;object-fit:contain;display:block;">` : ''}
   <div class="tags">
     #${post.tags.split(",").map(t => t.trim()).filter(Boolean).map(escapeHtml).join(" #")}
   </div>
@@ -5629,14 +5660,24 @@ postForm.addEventListener("submit", async function (e) {
       .map(t => t.trim().replace(/^#/, ""))
       .filter(Boolean);
 
+    // 画像アップロード（あれば）
+    let postImageUrl = '';
+    const postImageFile = document.getElementById('postImage') && document.getElementById('postImage').files[0];
+    if (postImageFile && window.storage && window.fbLib.storageRef) {
+      const imgRef = window.fbLib.storageRef(window.storage, `posts/${Date.now()}_${postImageFile.name}`);
+      const snapshot = await window.fbLib.uploadBytes(imgRef, postImageFile);
+      postImageUrl = await window.fbLib.getDownloadURL(snapshot.ref);
+    }
+
     const postData = {
       title: title,
       body: body,
       tags: normalizedTags.join(","),
-      userType: userType, 
+      userType: userType,
       address: window.connectedAccount || "unknown",
       userId: currentUserId || "guest",
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      ...(postImageUrl ? { imageUrl: postImageUrl } : {})
     };
 const editingId = localStorage.getItem("editingPostId");
 // ★ 初投稿ボーナス判定
@@ -5694,6 +5735,10 @@ const editingId = localStorage.getItem("editingPostId");
     postTitleInput.value = "";
     postBodyInput.value = "";
     postTagsInput.value = "";
+    const _imgInput = document.getElementById('postImage');
+    const _imgPreview = document.getElementById('postImagePreview');
+    if (_imgInput) _imgInput.value = '';
+    if (_imgPreview) { _imgPreview.src = ''; _imgPreview.style.display = 'none'; }
     
     // ✅ 正しい関数名で閉じる
     closePostForm();
@@ -7753,6 +7798,7 @@ import {
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   // 認証機能（MetaMaskログイン等で使用）も本番用に準備
   import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
   // 【本番用】Firebase設定
   const firebaseConfig = {
@@ -7769,15 +7815,18 @@ import {
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const auth = getAuth(app);
+  const storage = getStorage(app);
 
   // 外部ファイル（script.js）から使えるように窓口を作る
   window.db = db;
   window.auth = auth; // 認証も外部から使えるように追加
-window.fbLib = { 
+  window.storage = storage;
+window.fbLib = {
     collection, addDoc, getDocs, query, orderBy, onSnapshot,
-    doc, updateDoc, setDoc, increment, where, 
+    doc, updateDoc, setDoc, increment, where,
     arrayUnion, getDoc,
-    signInAnonymously
+    signInAnonymously,
+    storageRef, uploadBytes, getDownloadURL
   };
 
   console.log("🚀 Production Firebase (EmuSch) is Ready!");
@@ -8468,8 +8517,45 @@ row.appendChild(medal);
       var sdFrame = document.getElementById('secretDoorFrame');
       if (sdFrame && sdFrame.contentWindow) {
         var uid = window.currentUserId || window.connectedAccount || 'guest';
-        sdFrame.contentWindow.postMessage({ type: 'SET_USER_ID', uid: uid }, '*');
+        sdFrame.contentWindow.postMessage({
+          type: 'SET_USER_ID',
+          uid: uid,
+          walletAddress: window.connectedAccount || ''
+        }, '*');
       }
+      return;
+    }
+
+    // 秘密のとびら：EMUER報酬自動送金
+    if (event.data.type === 'SECRET_DOOR_REWARD') {
+      var doorId = event.data.doorId;
+      var amount = event.data.amount;
+      var walletAddr = window.connectedAccount;
+      if (!walletAddr) {
+        console.warn('SECRET_DOOR_REWARD: ウォレット未接続のため報酬登録スキップ');
+        return;
+      }
+      fetch('https://emu-realtime.onrender.com/secret-door/reward', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: walletAddr, doorId: doorId, amount: amount })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.success) {
+          console.log('🎉 秘密のとびら報酬登録完了 door:', doorId, amount, 'EMUER');
+          var toast = document.createElement('div');
+          toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#1a8a5a,#0d6e45);color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:bold;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+          toast.textContent = '🎉 報酬 +' + amount + ' EMUER 受取予約完了！';
+          document.body.appendChild(toast);
+          setTimeout(function() { toast.remove(); }, 4000);
+        } else if (data.error === 'ALREADY_REGISTERED') {
+          console.log('ℹ️ 秘密のとびら door:' + doorId + ' は既に受け取り済み');
+        } else {
+          console.warn('秘密のとびら報酬登録エラー:', data.error || data.message);
+        }
+      })
+      .catch(function(e) { console.error('秘密のとびら報酬リクエストエラー:', e); });
       return;
     }
 

@@ -128,7 +128,7 @@ async function runAirdropBatch() {
 
     const targets = snapshot.docs.map(doc => doc.data());
     const addresses = targets.map(t => t.address);
-    const amounts = addresses.map(() => ethers.utils.parseUnits("100", 18));
+    const amounts = targets.map(t => ethers.utils.parseUnits(String(t.amount || "100"), 18));
 
     console.log(`📦 送金対象: ${addresses.length} 件`);
 
@@ -223,8 +223,118 @@ airdropRouter.post("/batch/run", async (req, res) => {
 
 app.use("/airdrop", airdropRouter);
 
+// =====================
+// 秘密のとびら 報酬 API
+// =====================
+const SECRET_DOOR_AMOUNTS = { 1: 100, 2: 150, 3: 120, 4: 130, 5: 200 };
+
+async function runSecretDoorBatch() {
+  if (!db || !emuerContract) {
+    console.warn("⚠️ Firestore または emuerContract が未初期化。秘密のとびらバッチをスキップ。");
+    return;
+  }
+  console.log("🚀 秘密のとびらバッチ開始:", new Date().toISOString());
+  try {
+    const snapshot = await db
+      .collection("secret_door_rewards")
+      .where("status", "==", "pending")
+      .limit(50)
+      .get();
+
+    if (snapshot.empty) { console.log("ℹ️ 秘密のとびら送金対象なし"); return; }
+
+    const targets = snapshot.docs.map(doc => doc.data());
+    const addresses = targets.map(t => t.address);
+    const amounts = targets.map(t => ethers.utils.parseUnits(String(t.amount || "100"), 18));
+
+    console.log(`📦 秘密のとびら送金対象: ${addresses.length} 件`);
+
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => batch.update(doc.ref, { status: "processing" }));
+    await batch.commit();
+
+    const gasOptions = {
+      maxPriorityFeePerGas: ethers.utils.parseUnits("40", "gwei"),
+      maxFeePerGas: ethers.utils.parseUnits("100", "gwei"),
+      gasLimit: 500000
+    };
+
+    const tx = await emuerContract.addGoodBatch(addresses, amounts, gasOptions);
+    console.log("📝 TX Hash:", tx.hash);
+    const receipt = await tx.wait();
+    console.log("✅ TX確定:", receipt.transactionHash);
+
+    const doneBatch = db.batch();
+    snapshot.docs.forEach(doc => {
+      doneBatch.update(doc.ref, {
+        status: "done",
+        txHash: receipt.transactionHash,
+        processedAt: new Date()
+      });
+    });
+    await doneBatch.commit();
+    console.log(`🎉 秘密のとびら報酬完了: ${addresses.length} 件`);
+
+  } catch (err) {
+    console.error("❌ 秘密のとびらバッチエラー:", err);
+    try {
+      const stuck = await db.collection("secret_door_rewards").where("status", "==", "processing").get();
+      const rb = db.batch();
+      stuck.docs.forEach(doc => rb.update(doc.ref, { status: "pending", errorMessage: err.message }));
+      await rb.commit();
+    } catch (rbErr) {
+      console.error("❌ ロールバック失敗:", rbErr);
+    }
+  }
+}
+
+const secretDoorRouter = express.Router();
+
+secretDoorRouter.post("/reward", async (req, res) => {
+  const { address, doorId } = req.body;
+  if (!address || !doorId) return res.status(400).json({ error: "MISSING_PARAMS" });
+
+  const expectedAmount = SECRET_DOOR_AMOUNTS[Number(doorId)];
+  if (!expectedAmount) return res.status(400).json({ error: "INVALID_DOOR_ID" });
+
+  if (!db) {
+    console.log("⚠️ Firestore未接続 - 秘密のとびら登録スキップ:", address, "door:", doorId);
+    return res.json({ success: true, message: "受付完了（テストモード）" });
+  }
+  try {
+    const docId = `secretDoor_${address.toLowerCase()}_${doorId}`;
+    const docRef = db.collection("secret_door_rewards").doc(docId);
+    const existing = await docRef.get();
+    if (existing.exists) {
+      return res.status(409).json({ error: "ALREADY_REGISTERED", message: "このとびらの報酬は既に受け取り済みです" });
+    }
+    await docRef.set({
+      address: address.toLowerCase(),
+      doorId: Number(doorId),
+      amount: String(expectedAmount),
+      registeredAt: new Date(),
+      status: "pending"
+    });
+    console.log("✅ 秘密のとびら報酬登録:", address, "door:", doorId, expectedAmount, "EMUER");
+    return res.json({ success: true, message: `${expectedAmount} EMUER 受取予約が完了しました` });
+  } catch (e) {
+    console.error("秘密のとびら報酬エラー:", e);
+    return res.status(500).json({ error: "SERVER_ERROR" });
+  }
+});
+
+secretDoorRouter.post("/batch/run", async (req, res) => {
+  const adminKey = req.headers["x-admin-key"];
+  if (adminKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: "UNAUTHORIZED" });
+  res.json({ message: "秘密のとびらバッチを開始します" });
+  runSecretDoorBatch();
+});
+
+app.use("/secret-door", secretDoorRouter);
+
 cron.schedule("0 2 * * *", () => { console.log("⏰ 定期エアドロバッチ起動"); runAirdropBatch(); }, { timezone: "Asia/Tokyo" });
 cron.schedule("0 3 15 4 *", () => { console.log("🏁 最終エアドロバッチ起動"); runAirdropBatch(); }, { timezone: "Asia/Tokyo" });
+cron.schedule("30 2 * * *", () => { console.log("⏰ 秘密のとびらバッチ起動"); runSecretDoorBatch(); }, { timezone: "Asia/Tokyo" });
 
 // =====================
 // 予約投稿 システム
