@@ -1629,7 +1629,7 @@ body.paypay-mode #pp-post-fab {
     <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:8px;">
       <div class="room" onclick="openEchoFieldFromRoom4()" style="background:linear-gradient(135deg,rgba(74,158,255,0.15),rgba(168,85,247,0.1));border-color:rgba(74,158,255,0.4);">♟️ ECHO FIELD</div>
       <div class="room" onclick="openSecretDoorFromRoom4()" style="background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,107,157,0.1));border-color:rgba(255,215,0,0.35);">🔒 秘密のとびら</div>
-      <div class="room" onclick="openRingoFromRoom4()" style="background:linear-gradient(135deg,rgba(184,48,40,0.15),rgba(184,134,11,0.1));border-color:rgba(184,48,40,0.4);">🍎 林檎の方程式</div>
+      <div class="room" onclick="openRingoFromRoom4()" style="background:linear-gradient(135deg,rgba(184,48,40,0.15),rgba(184,134,11,0.1));border-color:rgba(184,48,40,0.4);position:relative;">🍎 林檎の方程式<br><span style="font-size:10px;background:#B83028;color:#fff;border-radius:3px;padding:1px 6px;position:absolute;top:6px;right:6px;" id="ringo-badge">先行公開中</span></div>
     </div>
   </div>
 </div>
@@ -6177,6 +6177,11 @@ function openRoom(roomId) {
 
 function openRoom4() {
   document.getElementById("room4Overlay").style.display = "flex";
+  var badge = document.getElementById("ringo-badge");
+  if (badge) {
+    var past = new Date() >= new Date('2026-04-18T23:59:59+09:00');
+    badge.style.display = past ? "none" : "";
+  }
 }
 
 function openEchoFieldFromRoom4() {
@@ -6194,6 +6199,15 @@ function openRingoFromRoom4() {
   openRingoGame();
 }
 function openRingoGame() {
+  // 2026-04-18（水）23:59 JST まで有料ユーザー先行公開
+  var earlyAccessDeadline = new Date('2026-04-18T23:59:59+09:00');
+  if (new Date() < earlyAccessDeadline) {
+    var utype = getCurrentUserType();
+    if (utype !== 'paid') {
+      alert('🍎 林檎の方程式\n\n現在、4月18日（水）までは有料ユーザー限定の先行公開中です。\n\n取引所で有料NFTを入手すると遊べるようになります！');
+      return;
+    }
+  }
   closeExplore();
   document.getElementById("ringoOverlay").style.display = "block";
   document.getElementById("ringoFrame").src = "/ringo-game.html";
