@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>林檎の方程式</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --r:#B83028;--rd:#8B0000;--gold:#B8860B;
+  --bg:#0C0C0C;--s1:#151515;--s2:#1C1C1C;--s3:#242424;--s4:#2C2C2C;
+  --bd:#303030;--bd2:#3C3C3C;
+  --tx:#EDEAE3;--txm:#7A7770;--txd:#4A4845;
+  --blue:#1A5FA8;--bluel:#0E2A48;--blueb:#1E3A5A;
+  --green:#1A5A2A;--greenb:#0E2A14;
+  --amber:#8A6000;--amberb:#2A1E00;
+  --bathb:#0A1E28;--bathl:#2A5A70;--bathtext:#7BB8D0;
+  --workb:#0A140A;--workl:#2A4A2A;--worktext:#7ABA7A;
+}
+body{background:var(--bg);color:var(--tx);font-family:'Noto Sans JP',sans-serif;display:flex;justify-content:center;min-height:100vh;padding:1rem}
+.g{display:none}.g.on{display:block}
+.anim{animation:fi 0.3s ease}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.shell{width:100%;max-width:440px;background:var(--s1);border:1px solid var(--bd2);border-radius:14px;overflow:hidden;height:fit-content}
+.title-wrap{padding:3rem 2rem;text-align:center}
+.apple-mark{font-size:52px;line-height:1;margin-bottom:1rem}
+.deco{width:56px;height:1px;background:var(--r);margin:0 auto 1.1rem;opacity:0.6}
+.title-jp{font-family:'Noto Serif JP',serif;font-size:26px;font-weight:700;color:var(--r);letter-spacing:0.18em;margin-bottom:3px}
+.title-en{font-size:11px;letter-spacing:0.35em;color:var(--txm);margin-bottom:1.75rem}
+.title-copy{font-size:13px;color:var(--txm);line-height:1.8;margin-bottom:2.25rem}
+.btn-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.btn-p{background:var(--r);border:none;color:#fff;font-family:'Noto Sans JP',sans-serif;font-size:14px;font-weight:700;padding:11px 28px;border-radius:5px;cursor:pointer;letter-spacing:0.07em;transition:background 0.2s}
+.btn-p:hover{background:var(--rd)}
+.btn-s{background:transparent;border:1px solid var(--bd2);color:var(--txm);font-family:'Noto Sans JP',sans-serif;font-size:13px;padding:10px 22px;border-radius:5px;cursor:pointer;transition:all 0.2s}
+.btn-s:hover{border-color:var(--txm);color:var(--tx)}
+.tut-wrap{padding:1.5rem}
+.sec-hd{font-family:'Noto Serif JP',serif;font-size:17px;color:var(--r);letter-spacing:0.1em;margin-bottom:1.25rem}
+.rule-c{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:1rem 1.1rem;margin-bottom:10px}
+.rule-ic{font-size:20px;margin-bottom:6px}
+.rule-t{font-size:13px;font-weight:700;color:var(--tx);margin-bottom:4px}
+.rule-d{font-size:12px;color:var(--txm);line-height:1.7}
+.vit-demo{display:flex;gap:3px;margin-top:8px;align-items:center}
+.vd{width:14px;height:14px;border-radius:2px}
+.ph-hd{text-align:center;padding:1.5rem 1rem 0.4rem;font-family:'Noto Serif JP',serif;font-size:17px;color:var(--r);letter-spacing:0.1em}
+.ph-sub{text-align:center;font-size:11px;color:var(--txm);padding-bottom:0.9rem;letter-spacing:0.05em}
+.sit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:9px;padding:0 1rem 1rem}
+.sit-c{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:1rem 0.7rem;text-align:center;cursor:pointer;transition:all 0.2s}
+.sit-c.available:hover,.sit-c.sel{border-color:var(--r);background:#180808;transform:translateY(-2px)}
+.sit-c.locked{opacity:0.35;cursor:default}
+.sit-em{font-size:26px;margin-bottom:5px}
+.sit-nm{font-size:13px;font-weight:700}
+.sit-ds{font-size:11px;color:var(--txm);line-height:1.5;margin-top:2px}
+.ph-btn{text-align:center;padding:0.5rem 1rem 1.25rem;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.opp-grid{display:flex;flex-wrap:wrap;gap:9px;padding:0 1rem 1rem;justify-content:center}
+.opp-c{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:0.85rem 0.9rem;cursor:pointer;transition:all 0.2s;min-width:105px;text-align:center;flex:1 1 105px;max-width:135px}
+.opp-c:hover,.opp-c.sel{border-color:var(--gold);background:#141000}
+.opp-em{font-size:24px;margin-bottom:4px}.opp-nm{font-size:13px;font-weight:700}
+.opp-tr{font-size:11px;color:var(--txm);margin-top:2px;line-height:1.4}
+.topbar,.work-topbar,.bath-topbar{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;min-height:42px}
+.topbar{border-bottom:1px solid var(--bd);background:var(--s2)}
+.work-topbar{border-bottom:1px solid var(--workl);background:var(--workb)}
+.bath-topbar{border-bottom:1px solid var(--bathl);background:var(--bathb)}
+.tb-left{display:flex;gap:7px}
+.btn-hint-b{background:var(--bluel);border:1px solid var(--blue);color:#7BB8F0;font-size:11px;font-weight:700;padding:5px 11px;border-radius:4px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:all 0.2s}
+.btn-hint-b:hover,.btn-hint-b.active{background:var(--blue);color:#fff}
+.btn-stop{background:transparent;border:1px solid var(--bd2);color:var(--txm);font-size:11px;padding:5px 11px;border-radius:4px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:all 0.2s}
+.btn-stop:hover{border-color:var(--r);color:var(--r)}
+.turn-lbl{font-size:11px;font-weight:700;padding:4px 9px;border-radius:3px}
+.tl-p{background:#0A1A2E;color:#7BB8F0;border:1px solid #1A3A5A}
+.tl-e{background:#280A0A;color:#E07070;border:1px solid #581A1A}
+.tl-bath{background:#0A1E28;color:#7BB8D0;border:1px solid #2A5A70}
+.tl-work{background:#0A140A;color:var(--worktext);border:1px solid var(--workl)}
+.e-zone{padding:12px 13px 0}
+.e-demand-label{font-size:10px;color:var(--txm);margin-bottom:3px;letter-spacing:0.08em}
+.e-demand{font-size:12px;color:#E07070;background:#280A0A;border:1px solid #581A1A;border-radius:5px;padding:5px 10px;margin-bottom:8px;display:inline-block}
+.e-row{display:flex;align-items:center;gap:11px;padding-bottom:10px;border-bottom:1px solid var(--bd)}
+.e-row-work{display:flex;align-items:center;gap:11px;padding-bottom:10px;border-bottom:1px solid var(--workl)}
+.char-fig{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:46px}
+.char-cir{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:1.5px solid}
+.ce{background:#280A0A;border-color:#581A1A;color:#E07070}
+.cp{background:#0A1A2E;border-color:#1A3A5A;color:#7BB8F0}
+.cbath{background:#0A1E28;border-color:var(--bathl);color:var(--bathtext)}
+.cwork{background:#0A140A;border-color:var(--workl);color:var(--worktext)}
+.char-lb{font-size:11px;color:var(--txm)}
+.gauge-w{flex:1}.gauge-r{display:flex;align-items:center;gap:7px}
+.gauge-nm{font-size:11px;min-width:32px}
+.gauge-tr{flex:1;height:10px;background:var(--s4);border-radius:3px;overflow:hidden;border:1px solid var(--bd)}
+.gauge-tr-work{flex:1;height:10px;background:#0A0F0A;border-radius:3px;overflow:hidden;border:1px solid var(--workl)}
+.gauge-fl{height:100%;border-radius:2px;transition:width 0.4s ease}
+.gf-e{background:var(--r)}.gf-p{background:var(--blue)}.gf-work{background:var(--workl)}.gf-bath{background:var(--bathl)}
+.gauge-v{font-size:12px;font-weight:700;min-width:16px;text-align:right}
+.gv-e{color:#E07070}.gv-p{color:#7BB8F0}.gv-work{color:var(--worktext)}.gv-bath{color:var(--bathtext)}
+.bal-e-wrap{padding:9px 13px 4px;display:flex;justify-content:flex-end;min-height:50px;align-items:center}
+.bal-e{background:var(--s3);border:1px solid var(--bd2);border-radius:10px 10px 4px 10px;padding:8px 12px;font-size:13px;line-height:1.6;max-width:84%}
+.mid-div{height:1px;background:var(--bd);margin:0 13px}
+.mid-div-work{height:1px;background:var(--workl);margin:0 13px;opacity:0.4}
+.bal-p-wrap{padding:4px 13px 8px;display:flex;align-items:center;gap:9px}
+.bal-p{background:var(--bluel);border:1px solid var(--blueb);border-radius:10px 10px 10px 4px;padding:8px 12px;font-size:13px;line-height:1.6;flex:1}
+.bal-p.ph{color:var(--txm);font-style:italic}
+.work-bal-p{background:#0A140A;border:1px solid var(--workl);border-radius:10px 10px 10px 4px;padding:8px 12px;font-size:13px;line-height:1.6;flex:1;color:#A0CFA0}
+.work-bal-p.ph{color:var(--txm);font-style:italic}
+.p-demand-wrap{padding:0 13px 8px}
+.p-demand-label{font-size:10px;color:var(--txm);letter-spacing:0.08em;margin-bottom:3px}
+.p-demand-box{font-size:12px;color:#7BB8F0;background:#0A1A2E;border:1px solid #1A3A5A;border-radius:5px;padding:5px 10px;display:inline-block}
+.p-demand-box-work{font-size:12px;color:var(--worktext);background:#0A140A;border:1px solid var(--workl);border-radius:5px;padding:5px 10px;display:inline-block}
+.p-gauge-row{padding:0 13px 10px}
+.hand-sec{border-top:1px solid var(--bd)}
+.hand-sec-work{border-top:1px solid var(--workl);background:var(--workb)}
+.hand-hd{display:flex;justify-content:space-between;align-items:center;padding:7px 12px 5px}
+.hand-lb{font-size:11px;color:var(--txm);font-weight:700;letter-spacing:0.07em}
+.deck-b{font-size:11px;color:var(--txm);background:var(--s3);border:1px solid var(--bd);border-radius:3px;padding:2px 7px}
+.deck-b-work{font-size:11px;color:var(--txm);background:#0A0F0A;border:1px solid var(--workl);border-radius:3px;padding:2px 7px}
+.hand-cards{display:flex;gap:7px;padding:0 11px 11px;overflow-x:auto}
+.card{background:var(--s2);border:1px solid var(--bd2);border-radius:7px;padding:9px 9px 7px;cursor:pointer;transition:all 0.2s;min-width:88px;flex:1;max-width:118px}
+.card:hover:not(.used):not(.locked){border-color:var(--r);transform:translateY(-3px)}
+.card.work-card{background:#0A100A;border:1px solid var(--workl)}
+.card.work-card:hover:not(.used){border-color:#5DBF5D;transform:translateY(-3px)}
+.card.bath-card{background:#0A1820;border:1px solid var(--bathl)}
+.card.bath-card:hover:not(.used){border-color:#5DCAA5;transform:translateY(-3px)}
+.card.used{opacity:0.25;pointer-events:none}
+.card.locked{opacity:0.45;pointer-events:none;border-style:dashed}
+.card.buffed{border-color:var(--gold)}
+.ct{font-size:10px;font-weight:700;letter-spacing:0.1em;margin-bottom:3px}
+.ct-p{color:#7BB8F0}.ct-e{color:#E0A870}.ct-l{color:#70C880}.ct-s{color:#B090E0}.ct-i{color:#9ADAEE}.ct-sp{color:#F0C040}.ct-w{color:#7ABA7A}
+.cn{font-size:11px;font-weight:700;color:var(--tx);margin-bottom:2px;line-height:1.3}
+.cd{font-size:10px;color:var(--txm);line-height:1.3;margin-top:2px}
+.pow-bar{display:flex;gap:2px;margin-top:3px}
+.pp{width:6px;height:6px;border-radius:1px;background:var(--gold)}
+.pp.off{background:var(--s4);border:1px solid var(--bd)}
+.pp-work{width:6px;height:6px;border-radius:1px;background:var(--workl)}
+.pp-work.off{background:#0A0F0A;border:1px solid var(--workl);opacity:0.4}
+.pp-bath{width:6px;height:6px;border-radius:1px;background:var(--bathl)}
+.pp-bath.off{background:#0A1220;border:1px solid var(--bathl);opacity:0.4}
+.hint-panel{background:var(--greenb);border-top:1px solid var(--green);padding:10px 12px;display:none}
+.hint-panel.open{display:block}
+.hint-panel-hd{font-size:10px;color:#5DBF75;font-weight:700;letter-spacing:0.1em;margin-bottom:8px}
+.hint-empty{font-size:12px;color:var(--txm);padding:4px 0}
+.hint-law{background:#0A1A0A;border:1px solid #1A3A1A;border-radius:6px;padding:9px 10px;margin-bottom:7px}
+.hint-law:last-child{margin-bottom:0}
+.hint-law-name{font-size:12px;color:#7DD89A;font-weight:700;margin-bottom:4px}
+.hint-law-body{font-size:11px;color:#5DBF75;line-height:1.75;white-space:pre-wrap}
+.hint-law-src{font-size:10px;color:var(--txm);margin-top:5px;border-top:1px solid #1A3A1A;padding-top:4px}
+.hint-note{font-size:10px;color:var(--txm);margin-top:7px}
+.flash,.flash-work,.flash-bath{margin:0 11px 8px;border-radius:6px;padding:7px 11px;font-size:12px;line-height:1.6;display:none}
+.flash{background:var(--amberb);border:1px solid var(--amber);color:#F0C040}
+.flash-work{background:var(--workb);border:1px solid var(--workl);color:var(--worktext)}
+.flash-bath{background:var(--bathb);border:1px solid var(--bathl);color:var(--bathtext)}
+.flash.on,.flash-work.on,.flash-bath.on{display:block}
+.work-context{padding:8px 13px 6px;background:var(--workb)}
+.work-context-label{font-size:10px;color:var(--txm);letter-spacing:0.08em;margin-bottom:3px}
+.work-context-box{font-size:11px;color:var(--worktext);background:#0A0F0A;border:1px solid var(--workl);border-radius:5px;padding:5px 9px;line-height:1.5}
+.result-wrap{padding:2rem 1.5rem;text-align:center}
+.r-icon{font-size:52px;margin-bottom:0.75rem;animation:bounce 0.5s ease}
+@keyframes bounce{0%{transform:scale(0)}70%{transform:scale(1.1)}100%{transform:scale(1)}}
+.r-ttl{font-family:'Noto Serif JP',serif;font-size:24px;font-weight:700;margin-bottom:0.5rem}
+.r-win{color:#D4A017}.r-lose{color:#C83030}.r-bath{color:var(--bathtext)}.r-work{color:var(--worktext)}
+.r-msg{font-size:13px;color:var(--txm);line-height:1.8;max-width:300px;margin:0 auto 1.1rem}
+.law-card{background:var(--greenb);border:1px solid var(--green);border-radius:8px;padding:1rem 1.1rem;margin:0 auto 1.1rem;max-width:380px;text-align:left}
+.law-card-hd{font-size:10px;color:#5DBF75;font-weight:700;letter-spacing:0.12em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.law-badge{background:#1A3A1A;border:1px solid var(--green);border-radius:3px;padding:2px 7px;font-size:10px;color:#5DBF75}
+.law-item{background:#0A1A0A;border:1px solid #1A3A1A;border-radius:6px;padding:9px 10px;margin-bottom:7px}
+.law-item:last-child{margin-bottom:0}
+.law-item-name{font-size:12px;color:#7DD89A;font-weight:700;margin-bottom:4px}
+.law-item-body{font-size:11px;color:#5DBF75;line-height:1.75;white-space:pre-wrap}
+.law-item-src{font-size:10px;color:var(--txm);margin-top:5px;border-top:1px solid #1A3A1A;padding-top:4px}
+.xp-row{margin:0 auto 1.4rem;max-width:280px}
+.lv-b{font-size:13px;color:var(--gold);font-weight:700;margin-bottom:5px}
+.xp-tr{height:5px;background:var(--s4);border-radius:3px;overflow:hidden;margin:4px 0}
+.xp-fl{height:100%;background:var(--r);border-radius:3px;transition:width 1.2s ease;width:0%}
+.xp-l{font-size:11px;color:var(--txm)}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<div class="g on" id="g-title">
+<div class="title-wrap anim">
+  <div class="apple-mark">🍎</div><div class="deco"></div>
+  <div class="title-jp">林檎の方程式</div>
+  <div class="title-en">THE APPLE EQUATION</div>
+  <div class="title-copy">カードゲームで交渉力を磨け。<br>あらゆるシーンで切り札を切れ。</div>
+  <div class="btn-row">
+    <button class="btn-p" onclick="go('g-tut')">チュートリアル</button>
+    <button class="btn-s" onclick="go('g-sit')">スキップしてプレイ</button>
+  </div>
+</div></div>
+
+<div class="g" id="g-tut">
+<div class="tut-wrap anim">
+  <div class="sec-hd">チュートリアル</div>
+  <div class="rule-c"><div class="rule-ic">🃏</div><div class="rule-t">カードで交渉する</div><div class="rule-d">手札から1枚選んで発言。毎ターン山札から1枚補充。使ったカードは消える。</div></div>
+  <div class="rule-c"><div class="rule-ic">⚡</div><div class="rule-t">気力ゲージ</div><div class="rule-d">相手の気力が0→交渉成功。自分の気力が0→交渉失敗。</div>
+    <div class="vit-demo"><div class="vd" style="background:#1A5FA8"></div><div class="vd" style="background:#1A5FA8"></div><div class="vd" style="background:#1A5FA8"></div><div class="vd" style="background:#1A5FA8"></div><div class="vd" style="background:#1A5FA8"></div><span style="font-size:11px;color:#7BB8F0;margin-left:8px">自分の気力</span></div>
+  </div>
+  <div class="rule-c"><div class="rule-ic">🏢</div><div class="rule-t">職場は高難度モード</div><div class="rule-d">データ・法律・戦略カードを使いこなせ。感情だけでは動かない相手もいる。</div></div>
+  <div class="rule-c"><div class="rule-ic">🛁</div><div class="rule-t">風呂場は瞑想モード</div><div class="rule-d">交渉相手は「自分自身」。内なる声と向き合う特殊なルールで進行する。</div></div>
+  <div class="rule-c"><div class="rule-ic">⚖️</div><div class="rule-t">ヒントボタン</div><div class="rule-d">交渉成功で法律を獲得。いつでも確認できる。</div></div>
+  <div class="btn-row" style="margin-top:1.5rem">
+    <button class="btn-p" onclick="go('g-sit')">プレイ開始</button>
+    <button class="btn-s" onclick="go('g-title')">戻る</button>
+  </div>
+</div></div>
+
+<div class="g" id="g-sit">
+<div class="anim">
+  <div class="ph-hd">シチュエーションを選べ</div>
+  <div class="ph-sub">交渉の舞台を決めよう</div>
+  <div class="sit-grid">
+    <div class="sit-c available" onclick="selSit('home',this)"><div class="sit-em">🏠</div><div class="sit-nm">家</div><div class="sit-ds">家族との交渉</div></div>
+    <div class="sit-c available" onclick="selSit('school',this)"><div class="sit-em">🏫</div><div class="sit-nm">学校</div><div class="sit-ds">先生・友達・先輩後輩</div></div>
+    <div class="sit-c available" onclick="selSit('park',this)"><div class="sit-em">🌳</div><div class="sit-nm">公園</div><div class="sit-ds">友達・親・店員・おじさん</div></div>
+    <div class="sit-c available" onclick="selSit('bath',this)"><div class="sit-em">🛁</div><div class="sit-nm">風呂場</div><div class="sit-ds">瞑想・自己との対話</div></div>
+    <div class="sit-c available" onclick="selSit('work',this)"><div class="sit-em">🏢</div><div class="sit-nm">職場</div><div class="sit-ds">上司・部下・同期・取引先</div></div>
+  </div>
+  <div class="ph-btn"><button class="btn-p" id="btn-sit-nxt" onclick="goOpp()" style="opacity:0.4;pointer-events:none">相手を選ぶ →</button></div>
+</div></div>
+
+<div class="g" id="g-opp">
+<div class="anim">
+  <div class="ph-hd" id="opp-hd">交渉相手を選べ</div>
+  <div class="ph-sub" id="opp-sub"></div>
+  <div class="opp-grid" id="opp-grid"></div>
+  <div class="ph-btn">
+    <button class="btn-p" id="btn-opp-nxt" onclick="startBattle()" style="opacity:0.4;pointer-events:none">交渉スタート！</button>
+    <button class="btn-s" onclick="go('g-sit')">戻る</button>
+  </div>
+</div></div>
+
+<div class="g" id="g-battle">
+  <div class="topbar">
+    <div class="tb-left"><button class="btn-hint-b" id="btn-hint" onclick="toggleHint('hint-panel','btn-hint')">⚖ ヒント</button><button class="btn-stop" onclick="endGame(false,'諦めた…交渉を中断した。')">停止</button></div>
+    <div class="turn-lbl tl-p" id="turn-lbl">あなたのターン</div>
+  </div>
+  <div class="e-zone">
+    <div class="e-demand-label">相手の要望</div><div class="e-demand" id="e-demand">—</div>
+    <div class="e-row">
+      <div class="char-fig"><div class="char-cir ce" id="e-circle">？</div><div class="char-lb" id="e-name">—</div></div>
+      <div class="gauge-w"><div class="gauge-r"><div class="gauge-nm gv-e">相手</div><div class="gauge-tr"><div class="gauge-fl gf-e" id="bar-e" style="width:100%"></div></div><div class="gauge-v gv-e" id="val-e">5</div></div></div>
+    </div>
+  </div>
+  <div class="bal-e-wrap"><div class="bal-e" id="bal-e">…</div></div>
+  <div class="mid-div"></div>
+  <div class="bal-p-wrap"><div class="bal-p ph" id="bal-p">カードを選んで発言しよう</div><div class="char-fig"><div class="char-cir cp">自</div><div class="char-lb">あなた</div></div></div>
+  <div class="p-demand-wrap"><div class="p-demand-label">あなたの要望</div><div class="p-demand-box" id="p-demand">—</div></div>
+  <div class="p-gauge-row"><div class="gauge-r"><div class="gauge-nm gv-p">自分</div><div class="gauge-tr"><div class="gauge-fl gf-p" id="bar-p" style="width:100%"></div></div><div class="gauge-v gv-p" id="val-p">5</div></div></div>
+  <div class="hand-sec"><div class="hand-hd"><div class="hand-lb">手札</div><div class="deck-b" id="deck-ct">山札 —</div></div><div class="flash" id="flash-msg"></div><div class="hand-cards" id="hand-area"></div></div>
+  <div class="hint-panel" id="hint-panel"><div class="hint-panel-hd">⚖ 獲得済み法律ヒント</div><div id="hint-law-list"><div class="hint-empty">交渉成功で法律を獲得できます。</div></div><div class="hint-note">※ 最新情報はe-Gov法令検索・外務省HPでご確認ください。</div></div>
+</div>
+
+<div class="g" id="g-battle-bath">
+  <div class="bath-topbar">
+    <div class="tb-left"><button class="btn-hint-b" id="btn-hint-bath" onclick="toggleHint('hint-panel-bath','btn-hint-bath')">⚖ ヒント</button><button class="btn-stop" onclick="endGame(false,'瞑想を途中でやめた。また挑戦しよう。')">終了</button></div>
+    <div class="turn-lbl tl-bath" id="turn-lbl-bath">内なる声のターン</div>
+  </div>
+  <div class="e-zone" style="background:var(--bathb);padding-bottom:10px">
+    <div class="e-demand-label">内なる声の要求</div><div class="e-demand" id="bath-e-demand">—</div>
+    <div class="e-row" style="border-color:var(--bathl)">
+      <div class="char-fig"><div class="char-cir ce" id="bath-e-circle">影</div><div class="char-lb" id="bath-e-name">—</div></div>
+      <div class="gauge-w"><div class="gauge-r"><div class="gauge-nm" style="color:#E07070;font-size:11px">抵抗</div><div class="gauge-tr" style="background:#0A1220;border-color:var(--bathl)"><div class="gauge-fl gf-e" id="bath-bar-e" style="width:100%"></div></div><div class="gauge-v gv-e" id="bath-val-e">5</div></div></div>
+    </div>
+  </div>
+  <div class="bal-e-wrap" style="background:var(--bathb)"><div class="bal-e" style="background:#0A1820;border-color:var(--bathl);color:var(--bathtext);font-style:italic" id="bath-bal-e">…</div></div>
+  <div class="mid-div" style="background:var(--bathl);opacity:0.4"></div>
+  <div class="bal-p-wrap" style="background:var(--bathb)"><div class="bal-p ph" style="background:#0A1A2E;border-color:#1A4A6A;color:#A0D0E8" id="bath-bal-p">カードを選んで自分と向き合おう</div><div class="char-fig"><div class="char-cir cbath">己</div><div class="char-lb">あなた</div></div></div>
+  <div class="p-demand-wrap" style="background:var(--bathb);padding-top:8px"><div class="p-demand-label">向き合いたいこと</div><div class="p-demand-box" style="color:var(--bathtext);background:var(--bathb);border-color:var(--bathl)" id="bath-p-demand">—</div></div>
+  <div style="padding:0 13px 10px;background:var(--bathb)"><div class="gauge-r"><div class="gauge-nm" style="color:var(--bathtext);font-size:11px">心の力</div><div class="gauge-tr" style="background:#0A1220;border-color:var(--bathl)"><div class="gauge-fl gf-bath" id="bath-bar-p" style="width:100%"></div></div><div class="gauge-v gv-bath" id="bath-val-p">5</div></div></div>
+  <div class="hand-sec" style="border-top-color:var(--bathl);background:var(--bathb)"><div class="hand-hd" style="background:var(--bathb)"><div class="hand-lb" style="color:var(--bathtext)">内省カード</div><div class="deck-b" style="background:#0A1220;border-color:var(--bathl)" id="bath-deck-ct">山札 —</div></div><div class="flash-bath" id="flash-bath"></div><div class="hand-cards" id="bath-hand-area" style="background:var(--bathb)"></div></div>
+  <div class="hint-panel" id="hint-panel-bath"><div class="hint-panel-hd">⚖ 獲得済み法律ヒント</div><div id="hint-law-list-bath"><div class="hint-empty">交渉成功で法律を獲得できます。</div></div><div class="hint-note">※ e-Gov法令検索・外務省HPでご確認ください。</div></div>
+</div>
+
+<div class="g" id="g-battle-work">
+  <div class="work-topbar">
+    <div class="tb-left"><button class="btn-hint-b" id="btn-hint-work" onclick="toggleHint('hint-panel-work','btn-hint-work')">⚖ ヒント</button><button class="btn-stop" onclick="endGame(false,'交渉を断念した。')">退席</button></div>
+    <div class="turn-lbl tl-work" id="turn-lbl-work">あなたのターン</div>
+  </div>
+  <div class="work-context"><div class="work-context-label">📋 場面</div><div class="work-context-box" id="work-context-text">—</div></div>
+  <div class="e-zone" style="background:var(--workb);padding-bottom:10px">
+    <div class="e-demand-label">相手の要望</div><div class="e-demand" style="color:var(--worktext);background:#0A0F0A;border-color:var(--workl)" id="work-e-demand">—</div>
+    <div class="e-row-work">
+      <div class="char-fig"><div class="char-cir cwork" id="work-e-circle">？</div><div class="char-lb" id="work-e-name">—</div></div>
+      <div class="gauge-w"><div class="gauge-r"><div class="gauge-nm" style="color:#E07070;font-size:11px">相手</div><div class="gauge-tr-work"><div class="gauge-fl gf-e" id="work-bar-e" style="width:100%"></div></div><div class="gauge-v gv-e" id="work-val-e">5</div></div></div>
+    </div>
+  </div>
+  <div class="bal-e-wrap" style="background:var(--workb)"><div class="bal-e" style="background:#0A100A;border-color:var(--workl)" id="work-bal-e">…</div></div>
+  <div class="mid-div-work"></div>
+  <div class="bal-p-wrap" style="background:var(--workb)"><div class="work-bal-p ph" id="work-bal-p">カードを選んで発言しよう</div><div class="char-fig"><div class="char-cir cwork">自</div><div class="char-lb">あなた</div></div></div>
+  <div class="p-demand-wrap" style="background:var(--workb);padding-top:6px"><div class="p-demand-label">あなたの要望</div><div class="p-demand-box-work" id="work-p-demand">—</div></div>
+  <div style="padding:0 13px 10px;background:var(--workb)"><div class="gauge-r"><div class="gauge-nm" style="color:var(--worktext);font-size:11px">自分</div><div class="gauge-tr-work"><div class="gauge-fl gf-work" id="work-bar-p" style="width:100%"></div></div><div class="gauge-v gv-work" id="work-val-p">5</div></div></div>
+  <div class="hand-sec-work"><div class="hand-hd" style="background:var(--workb)"><div class="hand-lb" style="color:var(--worktext)">手札</div><div class="deck-b-work" id="work-deck-ct">山札 —</div></div><div class="flash-work" id="flash-work"></div><div class="hand-cards" id="work-hand-area" style="background:var(--workb)"></div></div>
+  <div class="hint-panel" id="hint-panel-work"><div class="hint-panel-hd">⚖ 獲得済み法律ヒント</div><div id="hint-law-list-work"><div class="hint-empty">交渉成功で法律を獲得できます。</div></div><div class="hint-note">※ e-Gov法令検索・外務省HPでご確認ください。</div></div>
+</div>
+
+<div class="g" id="g-result">
+<div class="result-wrap anim">
+  <div class="r-icon" id="r-icon">🏆</div>
+  <div class="r-ttl" id="r-ttl"></div>
+  <div class="r-msg" id="r-msg"></div>
+  <div class="law-card" id="r-law" style="display:none"><div class="law-card-hd">⚖ この交渉で学んだ方程式 <span class="law-badge">NEW</span></div><div id="r-law-items"></div></div>
+  <div class="xp-row"><div class="lv-b" id="r-lv">Lv.1 交渉士見習い</div><div class="xp-tr"><div class="xp-fl" id="r-xp"></div></div><div class="xp-l" id="r-xp-l">XP 0 / 100</div></div>
+  <div class="btn-row"><button class="btn-p" onclick="playAgain()">もう一度プレイ</button><button class="btn-s" onclick="go('g-title')">タイトルへ</button></div>
+</div></div>
+
+</div>
+<script src="ringo_game_logic.js"></script>
+</body>
+</html>
