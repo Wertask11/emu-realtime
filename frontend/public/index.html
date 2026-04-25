@@ -344,42 +344,67 @@
 .spmap-poi-label { display:none; }  /* ラベルは詳細パネルにのみ表示 */
 /* Animations wrap (inside inner) */
 .spmap-anim-wrap { position:absolute; inset:0; pointer-events:none; z-index:12; }
-/* Train 🚂 — inner ring ~24% rx, 21% ry */
+/* Train 🚂 */
 .sp-train-car {
   position:absolute; font-size:1.3rem; line-height:1; top:0; left:0;
-  offset-path:ellipse(24% 21% at 50% 50%);
-  offset-distance:0%; offset-rotate:auto;
+  offset-path:ellipse(24% 21% at 50% 50%); offset-distance:0%; offset-rotate:auto;
   animation:spTrainRoll 20s linear infinite;
   filter:drop-shadow(0 1px 3px rgba(0,0,0,0.7));
 }
-/* Car 🚗 — outer ring road ~38% rx, 35% ry */
+/* Car 🚗 */
 .sp-car-car {
   position:absolute; font-size:1.2rem; line-height:1; top:0; left:0;
-  offset-path:ellipse(38% 35% at 50% 50%);
-  offset-distance:35%; offset-rotate:auto;
+  offset-path:ellipse(38% 35% at 50% 50%); offset-distance:35%; offset-rotate:auto;
   animation:spCarRoll 28s linear infinite;
   filter:drop-shadow(0 1px 3px rgba(0,0,0,0.7));
 }
-/* Airplane ✈️ — sky loop, large */
-.sp-plane-car {
-  position:absolute; font-size:1.4rem; line-height:1; top:0; left:0;
-  offset-path:ellipse(47% 42% at 50% 49%);
-  offset-distance:70%; offset-rotate:auto;
-  animation:spPlaneRoll 14s linear infinite;
-  filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5));
-}
-/* Walker 🚶 — footpath inside the park */
-.sp-walker-car {
+@keyframes spTrainRoll { to { offset-distance:100%; } }
+@keyframes spCarRoll   { to { offset-distance:135%; } }
+
+/* JS駆動: 人・動物・飛行機 */
+.sp-person {
   position:absolute; font-size:1.1rem; line-height:1; top:0; left:0;
-  offset-path:ellipse(15% 12% at 51% 50%);
-  offset-distance:55%; offset-rotate:0deg;
-  animation:spWalkerRoll 35s linear infinite;
+  cursor:grab; user-select:none; z-index:16; pointer-events:all;
+  transition:filter 0.1s;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+  will-change:transform;
+}
+.sp-person:hover { filter:drop-shadow(0 0 8px rgba(255,220,100,0.9)); }
+.sp-person.sp-dragging { cursor:grabbing; z-index:100; filter:drop-shadow(0 4px 12px rgba(255,220,100,0.9)); }
+.sp-animal {
+  position:absolute; font-size:1.0rem; line-height:1; top:0; left:0;
+  pointer-events:none; z-index:15; will-change:transform;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));
 }
-@keyframes spTrainRoll  { to { offset-distance:100%; } }
-@keyframes spCarRoll    { to { offset-distance:135%; } }
-@keyframes spPlaneRoll  { to { offset-distance:170%; } }
-@keyframes spWalkerRoll { to { offset-distance:155%; } }
+.sp-plane {
+  position:absolute; font-size:1.4rem; line-height:1; top:0; left:0;
+  pointer-events:none; z-index:14; will-change:transform;
+  filter:drop-shadow(0 2px 6px rgba(0,0,0,0.4));
+}
+/* Fireworks */
+@keyframes spFwBurst {
+  0%   { transform:translate(0,0) scale(1); opacity:1; }
+  100% { transform:translate(var(--fx),var(--fy)) scale(0.2); opacity:0; }
+}
+@keyframes spFwPop {
+  0%   { transform:scale(0); opacity:1; }
+  50%  { transform:scale(1.5); opacity:1; }
+  100% { transform:scale(0.5); opacity:0; }
+}
+/* Building entry popup */
+.sp-entry-popup {
+  position:absolute; background:rgba(212,168,67,0.95); color:#1a0e04;
+  padding:3px 9px; border-radius:20px; font-size:0.62rem; font-weight:700;
+  white-space:nowrap; pointer-events:none; z-index:25;
+  font-family:'Noto Sans JP',sans-serif; transform:translateX(-50%);
+  animation:spEntryPopAnim 2s ease-out forwards;
+}
+@keyframes spEntryPopAnim {
+  0%   { opacity:0; top:0; }
+  20%  { opacity:1; top:-14px; }
+  80%  { opacity:1; top:-14px; }
+  100% { opacity:0; top:-24px; }
+}
 /* Detail Panel */
 .spmap-detail {
   position:absolute; bottom:54px; right:50px; width:210px;
@@ -1900,13 +1925,12 @@ body.paypay-mode #pp-post-fab {
           <!-- Map Image -->
           <img src="images/schoolpark-map.png" class="spmap-bg-img" id="spMapBgImg" alt="SchoolPark Map" />
 
-          <!-- Animations (train / car / airplane / walker) -->
+          <!-- CSS animations (train / car) -->
           <div class="spmap-anim-wrap">
             <div class="sp-train-car">🚂</div>
             <div class="sp-car-car">🚗</div>
-            <div class="sp-plane-car">✈️</div>
-            <div class="sp-walker-car">🚶</div>
           </div>
+          <!-- JS駆動: 人10人・動物3匹・飛行機 (_renderSpLive()で生成) -->
 
           <!-- POI Markers (JSで生成) -->
           <div id="spPOIContainer"></div>
@@ -6710,6 +6734,8 @@ function openSpMap(gate) {
   _spMapZoomLevel = 1;
   _spMapFilter = "all";
   renderSpMapPois();
+  /* JS駆動アニメ起動 */
+  requestAnimationFrame(() => _startSpLive());
 
   // スクロール中央揃え（開いた直後に実行）
   requestAnimationFrame(() => {
@@ -6732,6 +6758,8 @@ function openSpMap(gate) {
 function closeSpMap() {
   document.getElementById("spMapOverlay").style.display = "none";
   closeSpDetail();
+  _stopSpLive();
+  if (_fwTimer) { clearTimeout(_fwTimer); _fwTimer = null; }
 }
 
 function renderSpMapPois(filter) {
@@ -6832,12 +6860,340 @@ function spMapZoomReset() {
   _applySpMapZoom();
 }
 function _applySpMapZoom() {
-  /* inner全体をスケール → 画像・POI・アニメが一緒に拡縮 */
   const inner = document.getElementById("spMapInner");
   if (inner) {
     inner.style.transform = `scale(${_spMapZoomLevel})`;
     inner.style.transformOrigin = "center center";
   }
+}
+
+/* ════════════════════════════════════════════════════
+   SchoolPark マップ ライブアニメーションシステム
+   ─ 人10人・犬・猫・鳥・飛行機 をJS(rAF)で駆動
+   ─ ドラッグ＆ドロップ / 建物入退場 / 花火
+   ════════════════════════════════════════════════════ */
+
+/* ── データ定義 ── */
+const SP_WALKERS = [
+  { id:'w1',  emoji:'🚶‍♂️', rx:15.5, ry:12,   cx:51, cy:50, a:0,   spd:0.40 },
+  { id:'w2',  emoji:'🚶‍♀️', rx:16.5, ry:13,   cx:51, cy:50, a:72,  spd:0.35 },
+  { id:'w3',  emoji:'👦',   rx:14.5, ry:11,   cx:51, cy:50, a:144, spd:0.50 },
+  { id:'w4',  emoji:'👧',   rx:15.8, ry:12.5, cx:51, cy:50, a:216, spd:0.45 },
+  { id:'w5',  emoji:'🧑‍🦱', rx:17.5, ry:13.5, cx:51, cy:50, a:288, spd:0.38 },
+  { id:'w6',  emoji:'🧓',   rx:13.5, ry:10.5, cx:51, cy:50, a:36,  spd:0.30 },
+  { id:'w7',  emoji:'👴',   rx:18.5, ry:14.5, cx:51, cy:50, a:108, spd:0.32 },
+  { id:'w8',  emoji:'👵',   rx:14.8, ry:11.5, cx:51, cy:50, a:180, spd:0.28 },
+  { id:'w9',  emoji:'🧑‍🦳', rx:16.2, ry:12.8, cx:51, cy:50, a:252, spd:0.42 },
+  { id:'w10', emoji:'🧑‍🦲', rx:17.2, ry:12.2, cx:51, cy:50, a:324, spd:0.36 },
+];
+const SP_ANIMALS = [
+  { id:'dog', emoji:'🐕', rx:22, ry:17.5, cx:51, cy:50, a:45,  spd:0.65 },
+  { id:'cat', emoji:'🐈', rx:23, ry:18.5, cx:51, cy:50, a:200, spd:0.52 },
+  { id:'bir', emoji:'🐦', rx:31, ry:26,   cx:51, cy:50, a:90,  spd:0.95, fly:true },
+];
+const SP_PLANE = { rx:47, ry:41, cx:50, cy:49, a:210, spd:0.60 };
+
+const FW_COLORS = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b','#cc5de8','#f06595','#fff'];
+
+/* ── ランタイム状態 ── */
+let _spLiveRunning = false;
+let _spLiveRAF = null;
+let _spDrag = null; // { wId, prevState }
+const _spWS = {};   // walker state per id
+
+function _ellipsePos(a, rx, ry, cx, cy, iw, ih) {
+  const r = a * Math.PI / 180;
+  return { x: cx/100*iw + rx/100*iw * Math.cos(r),
+           y: cy/100*ih + ry/100*ih * Math.sin(r) };
+}
+function _ellipseDir(a, spd) {
+  const r = a * Math.PI / 180;
+  const s = spd >= 0 ? 1 : -1;
+  return { dx: -Math.sin(r)*s, dy: Math.cos(r)*s };
+}
+
+/* ── rAF ループ ── */
+function _spLiveFrame() {
+  const inner = document.getElementById('spMapInner');
+  if (!inner || !_spLiveRunning) return;
+  const iw = inner.offsetWidth  || 960;
+  const ih = inner.offsetHeight || 960;
+  const t = performance.now() / 1000;
+
+  /* 人10人 */
+  SP_WALKERS.forEach(w => {
+    const st = _spWS[w.id];
+    if (!st?.el || st.state !== 'walking') return;
+    st.a = (st.a + w.spd + 360) % 360;
+    const pos = _ellipsePos(st.a, w.rx, w.ry, w.cx, w.cy, iw, ih);
+    const dir = _ellipseDir(st.a, w.spd);
+    st.x = pos.x; st.y = pos.y;
+    const bounce = Math.sin(t * 9 + w.a * 0.1) * 2.2;
+    const flipX  = dir.dx < 0 ? -1 : 1;
+    st.el.style.transform = `translate(${pos.x}px,${pos.y + bounce}px) scaleX(${flipX})`;
+  });
+
+  /* 動物 */
+  SP_ANIMALS.forEach(an => {
+    const el = document.getElementById(`spal-${an.id}`);
+    if (!el) return;
+    an.a = (an.a + an.spd + 360) % 360;
+    const pos = _ellipsePos(an.a, an.rx, an.ry, an.cx, an.cy, iw, ih);
+    const dir = _ellipseDir(an.a, an.spd);
+    const flipX = dir.dx < 0 ? -1 : 1;
+    const flutter = an.fly ? Math.sin(t * 14) * 3.5 : Math.abs(Math.sin(t * 6 + an.a)) * 1.5;
+    el.style.transform = `translate(${pos.x}px,${pos.y + flutter}px) scaleX(${flipX})`;
+  });
+
+  /* 飛行機 — ✈️は45°上向きなので (travelAngle - 45°) で補正 */
+  {
+    const pl = document.getElementById('sppl-plane');
+    if (pl) {
+      SP_PLANE.a = (SP_PLANE.a + SP_PLANE.spd + 360) % 360;
+      const pos = _ellipsePos(SP_PLANE.a, SP_PLANE.rx, SP_PLANE.ry, SP_PLANE.cx, SP_PLANE.cy, iw, ih);
+      const r = SP_PLANE.a * Math.PI / 180;
+      const travelAngleDeg = Math.atan2(Math.cos(r), -Math.sin(r)) * 180 / Math.PI;
+      pl.style.transform = `translate(${pos.x}px,${pos.y}px) rotate(${travelAngleDeg - 45}deg)`;
+    }
+  }
+
+  _spLiveRAF = requestAnimationFrame(_spLiveFrame);
+}
+
+/* ── 初期化 & 描画 ── */
+function _startSpLive() {
+  if (_spLiveRunning) return;
+  _spLiveRunning = true;
+  const inner = document.getElementById('spMapInner');
+  if (!inner) return;
+
+  /* 既存削除 */
+  inner.querySelectorAll('.sp-person,.sp-animal,.sp-plane').forEach(e => e.remove());
+
+  /* 人 */
+  SP_WALKERS.forEach(w => {
+    _spWS[w.id] = { a: w.a, state:'walking', x:0, y:0, el:null };
+    const el = document.createElement('div');
+    el.className = 'sp-person'; el.id = `spwk-${w.id}`;
+    el.textContent = w.emoji;
+    inner.appendChild(el);
+    _spWS[w.id].el = el;
+    /* ドラッグ */
+    el.addEventListener('mousedown',  e => _spGrab(w.id, e));
+    el.addEventListener('touchstart', e => _spGrab(w.id, e), {passive:false});
+  });
+
+  /* 動物 */
+  SP_ANIMALS.forEach(an => {
+    const el = document.createElement('div');
+    el.className = 'sp-animal'; el.id = `spal-${an.id}`;
+    el.textContent = an.emoji;
+    inner.appendChild(el);
+  });
+
+  /* 飛行機 */
+  const pl = document.createElement('div');
+  pl.className = 'sp-plane'; pl.id = 'sppl-plane';
+  pl.textContent = '✈️';
+  inner.appendChild(pl);
+
+  /* 花火スケジュール */
+  _scheduleFw();
+
+  _spLiveRAF = requestAnimationFrame(_spLiveFrame);
+}
+
+function _stopSpLive() {
+  _spLiveRunning = false;
+  if (_spLiveRAF) cancelAnimationFrame(_spLiveRAF);
+}
+
+/* ── ドラッグ＆ドロップ ── */
+function _spGrab(wId, e) {
+  e.preventDefault(); e.stopPropagation();
+  const st = _spWS[wId];
+  if (!st || st.state !== 'walking') return;
+  _spDrag = { wId };
+  st.state = 'dragging';
+  st.el.classList.add('sp-dragging');
+  document.addEventListener('mousemove',  _spMove);
+  document.addEventListener('mouseup',    _spDrop);
+  document.addEventListener('touchmove',  _spMove, {passive:false});
+  document.addEventListener('touchend',   _spDrop);
+}
+
+function _spMove(e) {
+  if (!_spDrag) return;
+  e.preventDefault();
+  const st = _spWS[_spDrag.wId];
+  if (!st) return;
+  const inner = document.getElementById('spMapInner');
+  if (!inner) return;
+  const rect = inner.getBoundingClientRect();
+  const cx = e.touches ? e.touches[0].clientX : e.clientX;
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  const x = cx - rect.left, y = cy - rect.top;
+  st.x = x; st.y = y;
+  st.el.style.transform = `translate(${x}px,${y}px)`;
+}
+
+function _spDrop() {
+  if (!_spDrag) return;
+  const { wId } = _spDrag;
+  _spDrag = null;
+  document.removeEventListener('mousemove',  _spMove);
+  document.removeEventListener('mouseup',    _spDrop);
+  document.removeEventListener('touchmove',  _spMove);
+  document.removeEventListener('touchend',   _spDrop);
+
+  const st = _spWS[wId];
+  if (!st) return;
+  st.el.classList.remove('sp-dragging');
+
+  /* 最寄り建物を探す */
+  const inner = document.getElementById('spMapInner');
+  const iw = inner ? (inner.offsetWidth || 960) : 960;
+  const ih = inner ? (inner.offsetHeight || 960) : 960;
+  let nearest = null, nearDist = Infinity;
+  SP_POIS.forEach(poi => {
+    const px = poi.px/100*iw, py = poi.py/100*ih;
+    const d = Math.hypot(st.x - px, st.y - py);
+    if (d < nearDist) { nearDist = d; nearest = poi; }
+  });
+
+  if (nearest && nearDist < iw * 0.11) {
+    _spEnter(wId, nearest, iw, ih);
+  } else {
+    st.state = 'walking';
+  }
+}
+
+/* ── 建物入場 ── */
+function _spEnter(wId, poi, iw, ih) {
+  const st = _spWS[wId];
+  if (!st) return;
+  st.state = 'entering';
+  const tx = poi.px/100*iw, ty = poi.py/100*ih;
+  const dx = tx - st.x, dy = ty - st.y;
+  const steps = Math.max(30, Math.hypot(dx,dy) / 2.5);
+  let step = 0;
+
+  /* 吹き出し */
+  const inner = document.getElementById('spMapInner');
+  if (inner) {
+    const pop = document.createElement('div');
+    pop.className = 'sp-entry-popup';
+    pop.style.left = tx + 'px';
+    pop.style.top  = (ty - 10) + 'px';
+    pop.textContent = `${poi.icon} ${poi.name.split(' ')[0]}に入ります`;
+    inner.appendChild(pop);
+    setTimeout(() => pop.remove(), 2100);
+  }
+
+  const iv = setInterval(() => {
+    step++;
+    const tt = step / steps;
+    const x = st.x + dx * tt;
+    const y = st.y + dy * tt;
+    const sc = 1 - tt * 0.85;
+    const op = 1 - tt;
+    st.el.style.transform = `translate(${x}px,${y}px) scale(${sc})`;
+    st.el.style.opacity   = op;
+    if (step >= steps) {
+      clearInterval(iv);
+      st.state = 'inside';
+      st.el.style.opacity = '0';
+      st.insidePoi = poi;
+      /* 5〜10秒後に退場 */
+      setTimeout(() => _spExit(wId), 5000 + Math.random() * 5000);
+    }
+  }, 16);
+}
+
+/* ── 建物退場 ── */
+function _spExit(wId) {
+  const st = _spWS[wId];
+  if (!st || !st.insidePoi) return;
+  const poi = st.insidePoi;
+  const inner = document.getElementById('spMapInner');
+  const iw = inner ? (inner.offsetWidth || 960) : 960;
+  const ih = inner ? (inner.offsetHeight || 960) : 960;
+  const tx = poi.px/100*iw, ty = poi.py/100*ih;
+  st.x = tx; st.y = ty; st.insidePoi = null;
+  st.el.style.transform = `translate(${tx}px,${ty}px) scale(0.1)`;
+  st.el.style.opacity   = '1';
+  st.state = 'exiting';
+  let sc = 0.1;
+  const iv = setInterval(() => {
+    sc = Math.min(1, sc + 0.04);
+    st.el.style.transform = `translate(${tx}px,${ty}px) scale(${sc})`;
+    if (sc >= 1) {
+      clearInterval(iv);
+      st.state = 'walking';
+    }
+  }, 16);
+}
+
+/* ── 花火 ── */
+function _firework(x, y) {
+  const inner = document.getElementById('spMapInner');
+  if (!inner) return;
+  const cnt = 14 + Math.floor(Math.random() * 8);
+  for (let i = 0; i < cnt; i++) {
+    const ang = (i / cnt) * 360 + Math.random() * 10;
+    const dist = 30 + Math.random() * 55;
+    const r = ang * Math.PI / 180;
+    const fx = (Math.cos(r) * dist).toFixed(1) + 'px';
+    const fy = (Math.sin(r) * dist).toFixed(1) + 'px';
+    const color = FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)];
+    const size = (3 + Math.random() * 5).toFixed(1);
+    const dur  = (0.9 + Math.random() * 0.5).toFixed(2);
+    const p = document.createElement('div');
+    p.style.cssText = `position:absolute;left:${x}px;top:${y}px;width:${size}px;height:${size}px;
+      border-radius:50%;background:${color};pointer-events:none;z-index:35;
+      --fx:${fx};--fy:${fy};animation:spFwBurst ${dur}s ease-out forwards;`;
+    inner.appendChild(p);
+    setTimeout(() => p.remove(), (parseFloat(dur) + 0.1) * 1000);
+  }
+  /* 中心のフラッシュ */
+  const fl = document.createElement('div');
+  fl.style.cssText = `position:absolute;left:${x-8}px;top:${y-8}px;width:16px;height:16px;
+    border-radius:50%;background:#fff;pointer-events:none;z-index:36;
+    animation:spFwPop 0.35s ease-out forwards;`;
+  inner.appendChild(fl);
+  setTimeout(() => fl.remove(), 400);
+}
+
+function _shootFireworks() {
+  const inner = document.getElementById('spMapInner');
+  if (!inner) return;
+  const iw = inner.offsetWidth || 960;
+  const ih = inner.offsetHeight || 960;
+  /* 公園上空の8か所でランダムに発射 */
+  const spots = [
+    [0.32*iw, 0.22*ih],[0.50*iw, 0.18*ih],[0.68*iw, 0.22*ih],
+    [0.28*iw, 0.35*ih],[0.52*iw, 0.30*ih],[0.72*iw, 0.32*ih],
+    [0.40*iw, 0.26*ih],[0.60*iw, 0.28*ih],
+  ];
+  let fired = 0;
+  function next() {
+    const [x, y] = spots[Math.floor(Math.random() * spots.length)];
+    _firework(x + (Math.random()-0.5)*40, y + (Math.random()-0.5)*30);
+    fired++;
+    if (fired < 10) setTimeout(next, 250 + Math.random() * 350);
+  }
+  next();
+}
+
+let _fwTimer = null;
+function _scheduleFw() {
+  if (_fwTimer) clearTimeout(_fwTimer);
+  _fwTimer = setTimeout(() => {
+    if (document.getElementById('spMapOverlay')?.style.display === 'flex') {
+      _shootFireworks();
+    }
+    _scheduleFw();
+  }, 90000 + Math.random() * 60000); /* 90〜150秒ごと */
 }
 
 
