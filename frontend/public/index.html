@@ -159,6 +159,26 @@
   .sp-gate { width:calc(50% - 5px); }
   .sp-gate-img { height:110px; }
 }
+/* SchoolPark COMING SOON（一般ユーザー用） */
+#spComingOverlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
+#spComingOverlay .spc-popup { width:88%; max-width:860px; background:#f5ede0; border-radius:16px; padding:48px 52px; box-shadow:0 8px 40px rgba(0,0,0,0.25); position:relative; display:flex; gap:48px; align-items:flex-start; font-family:'Noto Serif JP','Georgia',serif; }
+#spComingOverlay .spc-close { position:absolute; top:16px; right:20px; font-size:1.3rem; cursor:pointer; color:#888; background:none; border:none; }
+#spComingOverlay .spc-left { flex:1; }
+#spComingOverlay .spc-coming { font-size:0.78rem; font-weight:700; letter-spacing:0.12em; color:#c0622a; font-family:sans-serif; margin-bottom:18px; }
+#spComingOverlay .spc-title { font-size:1.9rem; font-weight:800; color:#1a1a1a; line-height:1.45; margin-bottom:22px; }
+#spComingOverlay .spc-desc { font-size:0.92rem; color:#555; line-height:1.8; margin-bottom:28px; font-family:sans-serif; }
+#spComingOverlay .spc-badge { display:inline-flex; align-items:center; gap:8px; background:#e8f0fe; color:#3b5fc0; border-radius:20px; padding:8px 18px; font-size:0.82rem; font-family:sans-serif; font-weight:600; }
+#spComingOverlay .spc-right { display:flex; flex-direction:column; gap:14px; min-width:200px; }
+#spComingOverlay .spc-card { background:#fff; border-radius:12px; padding:18px 20px; display:flex; align-items:center; gap:14px; box-shadow:0 2px 8px rgba(0,0,0,0.07); }
+#spComingOverlay .spc-card-icon { font-size:1.7rem; }
+#spComingOverlay .spc-card-label { font-size:0.88rem; font-weight:700; color:#1a1a1a; font-family:sans-serif; }
+#spComingOverlay .spc-card-sub { font-size:0.75rem; color:#888; font-family:sans-serif; margin-top:2px; }
+@media (max-width:640px) {
+  #spComingOverlay .spc-popup { flex-direction:column; padding:32px 24px; gap:28px; }
+  #spComingOverlay .spc-title { font-size:1.4rem; }
+  #spComingOverlay .spc-right { flex-direction:row; flex-wrap:wrap; min-width:unset; }
+  #spComingOverlay .spc-card { flex:1; min-width:130px; }
+}
 
 /* ステップ */
 .section { display:none; margin-bottom:20px; position: relative; }
@@ -1527,6 +1547,28 @@ body.paypay-mode #pp-post-fab {
         <span>🕐</span>
         <span>2026年5月20日 Emu内にて正式公開予定</span>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- SchoolPark COMING SOON（一般ユーザー用） -->
+<div id="spComingOverlay" onclick="closeSpComing(event)">
+  <div class="spc-popup" onclick="event.stopPropagation()">
+    <button class="spc-close" onclick="closeSpComing()">✕</button>
+    <div class="spc-left">
+      <div class="spc-coming">COMING 5/20</div>
+      <div class="spc-title">代表者が今この瞬間に<br>想う<br>「理想の場所」</div>
+      <div class="spc-desc">
+        学校より学べて、公園より楽しくて、会社より稼げる場所——SchoolPark<br>
+        代表者が現時点で思い描く答えを、Emu内でコンテンツとしてリリース。<br>
+        探索するボタンの上に追加されます。
+      </div>
+      <div class="spc-badge"><span>🕐</span><span>2026年5月20日 Emu内にて公開予定</span></div>
+    </div>
+    <div class="spc-right">
+      <div class="spc-card"><div class="spc-card-icon">💻</div><div><div class="spc-card-label">パソコン</div><div class="spc-card-sub">フル対応</div></div></div>
+      <div class="spc-card"><div class="spc-card-icon">📱</div><div><div class="spc-card-label">スマートフォン</div><div class="spc-card-sub">フル対応</div></div></div>
+      <div class="spc-card"><div class="spc-card-icon">⬛</div><div><div class="spc-card-label">タブレット</div><div class="spc-card-sub">フル対応 — どのデバイスからでも快適に</div></div></div>
     </div>
   </div>
 </div>
@@ -6200,12 +6242,23 @@ function closeExplore() {
   document.getElementById("exploreOverlay").style.display = "none";
 }
 
+const SP_OWNER = "0xdcc687c05f130e57597a8525771299a4efb6edf7";
 function openSchoolPark() {
-  document.getElementById("schoolparkOverlay").style.display = "flex";
+  const connected = window.connectedAccount?.toLowerCase();
+  if (connected === SP_OWNER) {
+    document.getElementById("schoolparkOverlay").style.display = "flex";
+  } else {
+    document.getElementById("spComingOverlay").style.display = "flex";
+  }
 }
 function closeSchoolPark(e) {
   if (!e || e.target === document.getElementById("schoolparkOverlay")) {
     document.getElementById("schoolparkOverlay").style.display = "none";
+  }
+}
+function closeSpComing(e) {
+  if (!e || e.target === document.getElementById("spComingOverlay")) {
+    document.getElementById("spComingOverlay").style.display = "none";
   }
 }
 
