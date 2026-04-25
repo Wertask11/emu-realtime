@@ -13,6 +13,8 @@
   gtag('config', 'G-QPQX7LM82Z');
 </script>
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     /* 基本スタイル */
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f5f6f7; color: #333; }
@@ -179,38 +181,205 @@
   #spComingOverlay .spc-right { flex-direction:row; flex-wrap:wrap; min-width:unset; }
   #spComingOverlay .spc-card { flex:1; min-width:130px; }
 }
-/* ── SchoolPark マップ ── */
-#spMapOverlay { display:none; position:fixed; inset:0; background:#07070f; z-index:1002; flex-direction:column; }
-.spmap-wrap { width:100%; height:100%; display:flex; flex-direction:column; overflow:hidden; }
-.spmap-header { display:flex; justify-content:space-between; align-items:center; padding:11px 18px; background:#0d0d1a; border-bottom:1px solid rgba(255,255,255,0.09); flex-shrink:0; gap:12px; }
-.spmap-logo { font-size:1rem; font-weight:800; color:#fff; font-family:sans-serif; display:flex; align-items:center; gap:9px; }
-.spmap-op-badge { background:#f68b1f; color:#fff; font-size:0.62rem; font-weight:700; border-radius:20px; padding:3px 9px; letter-spacing:0.04em; }
-.spmap-gate-label { font-size:0.78rem; color:#888; font-family:sans-serif; }
-.spmap-close-btn { background:none; border:1px solid rgba(255,255,255,0.18); color:#aaa; border-radius:6px; padding:4px 13px; cursor:pointer; font-size:0.9rem; margin-left:auto; }
-.spmap-body { display:flex; flex:1; overflow:hidden; }
-.spmap-canvas-wrap { flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; padding:14px; background:#07070f; }
-#spMapSvg { width:100%; max-width:800px; height:auto; border-radius:12px; display:block; }
-.spmap-sidebar { width:210px; flex-shrink:0; background:#0d0d1a; border-left:1px solid rgba(255,255,255,0.07); overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:14px; }
-.spmap-legend-ttl { font-size:0.65rem; font-weight:700; letter-spacing:0.1em; color:#555; font-family:sans-serif; margin-bottom:7px; text-transform:uppercase; }
-.spmap-legend-row { display:flex; align-items:center; gap:7px; font-size:0.78rem; color:#bbb; font-family:sans-serif; margin-bottom:5px; }
-.sp-ldot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
-.spmap-panel { background:#111125; border-radius:10px; padding:13px; flex:1; min-height:140px; }
-.spmap-panel-empty { color:#3a3a5a; font-size:0.78rem; font-family:sans-serif; text-align:center; padding-top:20px; line-height:1.6; }
-.spmap-panel-icon { font-size:1.8rem; margin-bottom:5px; }
-.spmap-panel-name { font-size:0.95rem; font-weight:800; color:#fff; font-family:sans-serif; margin-bottom:3px; }
-.spmap-panel-zone { font-size:0.68rem; color:#666; font-family:sans-serif; margin-bottom:7px; }
-.spmap-panel-desc { font-size:0.78rem; color:#aaa; font-family:sans-serif; line-height:1.65; margin-bottom:10px; }
-.spmap-panel-badge { font-size:0.66rem; font-weight:700; border-radius:20px; padding:3px 10px; font-family:sans-serif; display:inline-block; }
-.spmap-panel-badge.coming { background:#18103a; color:#a07af0; border:1px solid #3a2a6a; }
-.spmap-panel-badge.opening { background:#0a1f10; color:#4af090; border:1px solid #1a4a28; }
-.spmap-poi { cursor:pointer; }
-.spmap-poi circle { transition:r 0.12s, opacity 0.12s; }
-.spmap-poi:hover circle { opacity:1 !important; filter:brightness(1.35); }
-.spmap-poi.sp-active circle { stroke-width:3 !important; filter:brightness(1.5); }
+/* ── SchoolPark マップ（USJスタイル） ── */
+#spMapOverlay {
+  display:none; position:fixed; inset:0; z-index:1002; flex-direction:column;
+  background:#1a1208; font-family:'Noto Sans JP','Hiragino Sans',sans-serif;
+}
+/* Top Nav */
+.spmap-nav {
+  display:flex; align-items:center; background:linear-gradient(135deg,#1c0e04 0%,#2e1b07 100%);
+  border-bottom:2px solid #8B6914; padding:0 16px; flex-shrink:0; height:58px; gap:0;
+}
+.spmap-brand {
+  display:flex; flex-direction:column; justify-content:center;
+  border-right:1px solid rgba(139,105,20,0.4); padding-right:16px; margin-right:18px; flex-shrink:0;
+}
+.spmap-brand-name {
+  font-family:'Playfair Display',Georgia,serif; font-size:1.15rem; font-weight:800;
+  color:#D4A843; letter-spacing:0.04em; line-height:1.1;
+}
+.spmap-brand-sub {
+  font-size:0.48rem; font-weight:700; color:#8B6914; letter-spacing:0.18em; text-transform:uppercase;
+}
+.spmap-nav-links { display:flex; flex:1; overflow:hidden; }
+.spmap-nav-link {
+  padding:0 13px; height:58px; display:flex; align-items:center; font-size:0.78rem;
+  color:#bbb; cursor:pointer; border-bottom:3px solid transparent;
+  transition:color 0.2s,border-color 0.2s; white-space:nowrap;
+}
+.spmap-nav-link:hover { color:#fff; }
+.spmap-nav-link.active { color:#D4A843; border-bottom-color:#D4A843; }
+.spmap-ticket-btn {
+  background:#D4A843; color:#1a0e04; border:none; padding:7px 16px; border-radius:4px;
+  font-weight:700; font-size:0.8rem; cursor:pointer; white-space:nowrap; margin-left:10px;
+  font-family:'Noto Sans JP',sans-serif; flex-shrink:0;
+}
+.spmap-ticket-btn:hover { background:#f0c050; }
+.spmap-close-x {
+  background:none; border:1px solid rgba(255,255,255,0.2); color:#aaa; width:30px; height:30px;
+  border-radius:50%; cursor:pointer; font-size:0.95rem; margin-left:10px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; transition:background 0.15s;
+}
+.spmap-close-x:hover { background:rgba(255,255,255,0.12); color:#fff; }
+/* Info Bar */
+.spmap-infobar {
+  display:flex; align-items:center; gap:20px; background:#1a1208;
+  border-bottom:1px solid rgba(139,105,20,0.2); padding:6px 18px;
+  font-size:0.77rem; color:#999; flex-shrink:0;
+}
+.spmap-infobar strong { color:#D4A843; }
+/* Main */
+.spmap-main { display:flex; flex:1; overflow:hidden; }
+/* Sidebar */
+.spmap-left {
+  width:230px; flex-shrink:0;
+  background:linear-gradient(180deg,#0e0a04 0%,#130e06 100%);
+  border-right:1px solid rgba(139,105,20,0.18);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.spmap-left-header { padding:14px 14px 10px; border-bottom:1px solid rgba(139,105,20,0.18); }
+.spmap-left-title {
+  font-family:'Playfair Display',Georgia,serif; font-size:1.05rem; font-weight:800;
+  color:#D4A843; letter-spacing:0.1em;
+}
+.spmap-left-sub { font-size:0.7rem; color:#777; margin-top:3px; }
+/* Tabs */
+.spmap-tabs { display:flex; border-bottom:1px solid rgba(139,105,20,0.18); flex-shrink:0; }
+.spmtab {
+  flex:1; padding:9px 0; background:none; border:none; border-bottom:2px solid transparent;
+  cursor:pointer; font-size:0.77rem; color:#777; font-family:'Noto Sans JP',sans-serif;
+  transition:color 0.2s;
+}
+.spmtab.active { color:#D4A843; border-bottom-color:#D4A843; }
+.spmtab:hover { color:#ddd; }
+/* Area List */
+.spmap-area-list { flex:1; overflow-y:auto; padding:6px 10px; }
+.spmap-area-item {
+  display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:6px;
+  cursor:pointer; font-size:0.79rem; color:#999; transition:background 0.15s;
+}
+.spmap-area-item:hover { background:rgba(212,168,67,0.08); color:#ddd; }
+.spmap-area-item.spa-active { background:rgba(212,168,67,0.12); color:#D4A843; }
+.spmap-area-dot { width:9px; height:9px; border-radius:2px; flex-shrink:0; transform:rotate(45deg); }
+.spmap-area-count {
+  margin-left:auto; font-size:0.68rem; color:#555; background:rgba(255,255,255,0.06);
+  padding:1px 7px; border-radius:10px;
+}
+.spmap-area-item.spa-active .spmap-area-count { color:#D4A843; background:rgba(212,168,67,0.12); }
+/* Legend */
+.spmap-legend { border-top:1px solid rgba(139,105,20,0.18); padding:10px 12px; flex-shrink:0; }
+.spmap-legend-ttl {
+  font-size:0.58rem; font-weight:700; letter-spacing:0.15em; color:#555;
+  text-transform:uppercase; margin-bottom:7px;
+}
+.spmap-legend-row { display:flex; align-items:center; gap:8px; font-size:0.72rem; color:#888; margin-bottom:5px; }
+.sp-ldiamond { width:8px; height:8px; border-radius:2px; flex-shrink:0; transform:rotate(45deg); }
+/* Map Canvas */
+.spmap-canvas { flex:1; position:relative; overflow:hidden; background:#f0e8d0; }
+.spmap-bg-img {
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:contain; object-position:center; display:block;
+  user-select:none; pointer-events:none;
+}
+/* Search */
+.spmap-search { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:20; width:260px; }
+.spmap-search input {
+  width:100%; padding:8px 14px 8px 34px; background:rgba(0,0,0,0.72);
+  border:1px solid rgba(212,168,67,0.4); border-radius:20px; color:#ddd;
+  font-size:0.8rem; font-family:'Noto Sans JP',sans-serif; outline:none;
+  backdrop-filter:blur(8px); box-sizing:border-box;
+}
+.spmap-search input::placeholder { color:#666; }
+.spmap-search-icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); font-size:0.8rem; pointer-events:none; }
+/* Coords */
+.spmap-coords {
+  position:absolute; top:12px; right:12px; z-index:20; font-size:0.65rem; color:#666;
+  background:rgba(0,0,0,0.55); padding:4px 9px; border-radius:4px; font-family:monospace;
+}
+/* Gate Labels */
+.spmap-gate-tag {
+  position:absolute; bottom:8px; text-align:center;
+  font-family:'Playfair Display',Georgia,serif; font-size:0.6rem; color:#5a3a10;
+  letter-spacing:0.06em; line-height:1.3; pointer-events:none; z-index:10;
+  text-shadow:0 1px 3px rgba(255,255,255,0.8);
+}
+/* Zoom */
+.spmap-zoom { position:absolute; bottom:50px; right:12px; z-index:20; display:flex; flex-direction:column; gap:3px; }
+.spmap-zoom button {
+  width:30px; height:30px; background:rgba(14,10,4,0.85); border:1px solid rgba(212,168,67,0.35);
+  color:#D4A843; border-radius:4px; cursor:pointer; font-size:1rem; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+}
+.spmap-zoom button:hover { background:rgba(212,168,67,0.15); }
+/* POI Markers */
+#spPOIContainer { position:absolute; inset:0; pointer-events:none; z-index:15; }
+.spmap-poi-marker {
+  position:absolute; transform:translate(-50%,-50%); pointer-events:all; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; transition:transform 0.15s;
+}
+.spmap-poi-marker:hover,.spmap-poi-marker.spm-active { transform:translate(-50%,-50%) scale(1.3); z-index:20; }
+.spmap-poi-diamond {
+  width:13px; height:13px; border-radius:2px; transform:rotate(45deg);
+  border:2px solid rgba(255,255,255,0.85); box-shadow:0 0 7px rgba(255,255,255,0.5);
+  transition:box-shadow 0.15s,transform 0.15s;
+}
+.spmap-poi-marker:hover .spmap-poi-diamond { box-shadow:0 0 14px currentColor; }
+.spmap-poi-marker.spm-active .spmap-poi-diamond { box-shadow:0 0 18px currentColor; }
+.spmap-poi-label {
+  font-size:0.52rem; color:rgba(0,0,0,0.85); margin-top:4px;
+  background:rgba(255,255,255,0.82); padding:2px 5px; border-radius:3px;
+  white-space:nowrap; font-family:'Noto Sans JP',sans-serif; letter-spacing:0.02em;
+  pointer-events:none; font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,0.3);
+}
+/* Train */
+.spmap-train-wrap { position:absolute; inset:0; pointer-events:none; z-index:12; overflow:hidden; }
+.sp-train-car {
+  position:absolute; font-size:1.5rem; line-height:1; top:0; left:0;
+  offset-path:ellipse(28% 22% at 50% 50%);
+  offset-distance:0%; offset-rotate:auto;
+  animation:spTrainRoll 20s linear infinite;
+  filter:drop-shadow(0 2px 5px rgba(0,0,0,0.6));
+  pointer-events:none;
+}
+@keyframes spTrainRoll { to { offset-distance:100%; } }
+/* Detail Panel */
+.spmap-detail {
+  position:absolute; bottom:54px; right:50px; width:210px;
+  background:rgba(14,10,4,0.95); border:1px solid rgba(212,168,67,0.4);
+  border-radius:10px; padding:14px; z-index:25; display:none;
+  backdrop-filter:blur(10px); box-shadow:0 4px 20px rgba(0,0,0,0.7);
+}
+.spmap-detail.smd-open { display:block; }
+.spmap-detail-close {
+  position:absolute; top:7px; right:9px; background:none; border:none;
+  color:#666; cursor:pointer; font-size:0.95rem;
+}
+.spmap-detail-icon { font-size:1.8rem; margin-bottom:5px; }
+.spmap-detail-name {
+  font-size:0.92rem; font-weight:700; color:#fff; margin-bottom:4px;
+  font-family:'Noto Sans JP',sans-serif; line-height:1.3;
+}
+.spmap-detail-zone {
+  display:inline-block; font-size:0.65rem; border-radius:20px;
+  padding:2px 9px; margin-bottom:8px; border:1px solid;
+}
+.spmap-detail-desc {
+  font-size:0.76rem; color:#bbb; line-height:1.65; margin-bottom:10px;
+  font-family:'Noto Sans JP',sans-serif;
+}
+.spmap-detail-badge {
+  font-size:0.68rem; color:#888; background:rgba(255,255,255,0.06);
+  padding:3px 10px; border-radius:10px; display:inline-block;
+}
 @media (max-width:700px) {
-  .spmap-body { flex-direction:column; }
-  .spmap-sidebar { width:100%; max-height:180px; border-left:none; border-top:1px solid rgba(255,255,255,0.07); flex-direction:row; flex-wrap:wrap; padding:10px; }
-  .spmap-panel { min-height:unset; flex:1; min-width:180px; }
+  .spmap-nav-links { display:none; }
+  .spmap-left { width:190px; }
+  .spmap-ticket-btn { padding:6px 10px; font-size:0.72rem; }
+}
+@media (max-width:480px) {
+  .spmap-left { display:none; }
+  .spmap-brand-sub { display:none; }
 }
 
 /* ステップ */
@@ -1586,55 +1755,127 @@ body.paypay-mode #pp-post-fab {
 
 <!-- SchoolPark マップ（オーナー専用） -->
 <div id="spMapOverlay">
-  <div class="spmap-wrap">
-    <div class="spmap-header">
-      <div class="spmap-logo">🏫 SchoolPark <span class="spmap-op-badge">5/20 OPENING</span></div>
-      <span id="spMapGateLabel" class="spmap-gate-label"></span>
-      <button class="spmap-close-btn" onclick="closeSpMap()">✕ 閉じる</button>
+
+  <!-- Top Navigation -->
+  <nav class="spmap-nav">
+    <div class="spmap-brand">
+      <div class="spmap-brand-name">SchoolPark</div>
+      <div class="spmap-brand-sub">Interactive Park Map</div>
     </div>
-    <div class="spmap-body">
-      <div class="spmap-canvas-wrap">
-        <svg id="spMapSvg" viewBox="0 0 800 540" xmlns="http://www.w3.org/2000/svg">
-          <!-- 背景 -->
-          <rect width="800" height="540" fill="#07070f" rx="12"/>
-          <!-- ゾーン -->
-          <path d="M170,18 Q400,4 630,18 Q652,68 630,118 Q400,132 170,118 Q148,68 170,18" fill="#130530" stroke="#6b21a8" stroke-width="1.5" opacity="0.95"/>
-          <rect x="18" y="128" width="252" height="205" rx="14" fill="#020b24" stroke="#1e3a8a" stroke-width="1.5" opacity="0.95"/>
-          <rect x="278" y="155" width="244" height="180" rx="14" fill="#1a0d04" stroke="#78350f" stroke-width="1.5" opacity="0.85"/>
-          <rect x="530" y="128" width="252" height="205" rx="14" fill="#021509" stroke="#14532d" stroke-width="1.5" opacity="0.95"/>
-          <rect x="18" y="342" width="252" height="180" rx="14" fill="#1a0f00" stroke="#78350f" stroke-width="1.5" opacity="0.95"/>
-          <rect x="278" y="372" width="244" height="150" rx="14" fill="#1a0700" stroke="#9a3412" stroke-width="1.5" opacity="0.9"/>
-          <rect x="530" y="342" width="252" height="180" rx="14" fill="#1a0202" stroke="#991b1b" stroke-width="1.5" opacity="0.95"/>
-          <!-- 道路 -->
-          <line x1="400" y1="118" x2="400" y2="342" stroke="#ffffff12" stroke-width="10" stroke-linecap="round"/>
-          <line x1="18" y1="338" x2="782" y2="338" stroke="#ffffff12" stroke-width="10" stroke-linecap="round"/>
-          <line x1="270" y1="240" x2="530" y2="240" stroke="#ffffff08" stroke-width="6"/>
-          <!-- ゾーンラベル -->
-          <text x="400" y="46" text-anchor="middle" fill="#c084fc" font-size="13" font-family="sans-serif" font-weight="700" opacity="0.9">★ 星への道</text>
-          <text x="144" y="153" text-anchor="middle" fill="#60a5fa" font-size="12" font-family="sans-serif" font-weight="700" opacity="0.9">📚 学びの森</text>
-          <text x="400" y="178" text-anchor="middle" fill="#fb923c" font-size="12" font-family="sans-serif" font-weight="700" opacity="0.9">🌟 中央広場</text>
-          <text x="656" y="153" text-anchor="middle" fill="#4ade80" font-size="12" font-family="sans-serif" font-weight="700" opacity="0.9">🌿 遊びの丘</text>
-          <text x="144" y="365" text-anchor="middle" fill="#fbbf24" font-size="12" font-family="sans-serif" font-weight="700" opacity="0.9">💰 稼ぎの街</text>
-          <text x="400" y="395" text-anchor="middle" fill="#f97316" font-size="12" font-family="sans-serif" font-weight="700" opacity="0.9">🏠 暮らしの広場</text>
-          <text x="656" y="365" text-anchor="middle" fill="#f87171" font-size="12" font-family="sans-serif" font-weight="700" opacity="0.9">🛡️ 守りの砦</text>
-          <!-- POI markers（JSで生成） -->
-          <g id="spMapPois"></g>
-        </svg>
+    <div class="spmap-nav-links">
+      <span class="spmap-nav-link" onclick="closeSpMap()">ホーム</span>
+      <span class="spmap-nav-link active">パークマップ</span>
+      <span class="spmap-nav-link">アトラクション</span>
+      <span class="spmap-nav-link">グルメ</span>
+      <span class="spmap-nav-link">ショッピング</span>
+      <span class="spmap-nav-link">イベント</span>
+      <span class="spmap-nav-link">アクセス</span>
+    </div>
+    <button class="spmap-ticket-btn">チケット購入</button>
+    <button class="spmap-close-x" onclick="closeSpMap()" title="閉じる">✕</button>
+  </nav>
+
+  <!-- Info Bar -->
+  <div class="spmap-infobar">
+    <span>🕐 本日の営業時間：<strong>9:00〜21:00</strong></span>
+    <span>👥 混雑状況：<strong>やや混雑</strong></span>
+    <span>☀️ 天気：<strong>晴れ / 21°C</strong></span>
+    <span id="spMapGateLabel" style="margin-left:auto;font-size:0.72rem;color:#D4A843;font-family:'Playfair Display',serif;"></span>
+  </div>
+
+  <!-- Main Body -->
+  <div class="spmap-main">
+
+    <!-- Left Sidebar -->
+    <aside class="spmap-left">
+      <div class="spmap-left-header">
+        <div class="spmap-left-title">PARK MAP</div>
+        <div class="spmap-left-sub">エリアを選択してください</div>
       </div>
-      <div class="spmap-sidebar">
-        <div>
-          <div class="spmap-legend-ttl">Zone</div>
-          <div class="spmap-legend-row"><span class="sp-ldot" style="background:#a855f7"></span>星への道</div>
-          <div class="spmap-legend-row"><span class="sp-ldot" style="background:#3b82f6"></span>学びの森</div>
-          <div class="spmap-legend-row"><span class="sp-ldot" style="background:#22c55e"></span>遊びの丘</div>
-          <div class="spmap-legend-row"><span class="sp-ldot" style="background:#f59e0b"></span>稼ぎの街</div>
-          <div class="spmap-legend-row"><span class="sp-ldot" style="background:#f97316"></span>暮らしの広場</div>
-          <div class="spmap-legend-row"><span class="sp-ldot" style="background:#ef4444"></span>守りの砦</div>
+      <div class="spmap-tabs">
+        <button class="spmtab active" onclick="spMapTab(this,'area')">エリア</button>
+        <button class="spmtab" onclick="spMapTab(this,'genre')">ジャンル</button>
+        <button class="spmtab" onclick="spMapTab(this,'list')">一覧</button>
+      </div>
+      <div class="spmap-area-list" id="spAreaList">
+        <div class="spmap-area-item spa-active" onclick="spMapFilter('all',this)">
+          <span class="spmap-area-dot" style="background:#ccc"></span>すべて<span class="spmap-area-count">28</span>
         </div>
-        <div id="spMapPanel" class="spmap-panel">
-          <div class="spmap-panel-empty">コンテンツをクリック<br>すると詳細が表示されます</div>
+        <div class="spmap-area-item" onclick="spMapFilter('guard',this)">
+          <span class="spmap-area-dot" style="background:#ef4444"></span>安全・公共<span class="spmap-area-count">4</span>
+        </div>
+        <div class="spmap-area-item" onclick="spMapFilter('star',this)">
+          <span class="spmap-area-dot" style="background:#a855f7"></span>交通・インフラ<span class="spmap-area-count">4</span>
+        </div>
+        <div class="spmap-area-item" onclick="spMapFilter('learn',this)">
+          <span class="spmap-area-dot" style="background:#3b82f6"></span>学び・文化<span class="spmap-area-count">4</span>
+        </div>
+        <div class="spmap-area-item" onclick="spMapFilter('play',this)">
+          <span class="spmap-area-dot" style="background:#22c55e"></span>遊び・自然<span class="spmap-area-count">7</span>
+        </div>
+        <div class="spmap-area-item" onclick="spMapFilter('life',this)">
+          <span class="spmap-area-dot" style="background:#f97316"></span>生活・居住<span class="spmap-area-count">1</span>
+        </div>
+        <div class="spmap-area-item" onclick="spMapFilter('plaza',this)">
+          <span class="spmap-area-dot" style="background:#f59e0b"></span>健康・運動<span class="spmap-area-count">1</span>
+        </div>
+        <div class="spmap-area-item" onclick="spMapFilter('earn',this)">
+          <span class="spmap-area-dot" style="background:#eab308"></span>商業・経済<span class="spmap-area-count">7</span>
         </div>
       </div>
+      <div class="spmap-legend">
+        <div class="spmap-legend-ttl">LEGEND</div>
+        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#ef4444"></span>安全・公共</div>
+        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#a855f7"></span>交通・インフラ</div>
+        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#3b82f6"></span>学び・文化</div>
+        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#22c55e"></span>遊び・自然</div>
+        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#f97316"></span>生活・居住</div>
+        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#f59e0b"></span>健康・運動</div>
+        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#eab308"></span>商業・経済</div>
+      </div>
+    </aside>
+
+    <!-- Map Canvas -->
+    <div class="spmap-canvas" id="spMapCanvas">
+
+      <!-- Search -->
+      <div class="spmap-search">
+        <span class="spmap-search-icon">🔍</span>
+        <input type="text" id="spMapSearchInput" placeholder="スポット名・エリアで検索" oninput="spMapSearch(this.value)" />
+      </div>
+
+      <!-- Coordinates -->
+      <div class="spmap-coords">N 35.106° / E 139.024°</div>
+
+      <!-- Map Image (images/schoolpark-map.png を配置してください) -->
+      <img src="images/schoolpark-map.png" class="spmap-bg-img" id="spMapBgImg" alt="SchoolPark Map" onerror="this.style.background='radial-gradient(ellipse 70% 60% at 50% 50%,#d4c8a0 0%,#b8a878 100%)';this.style.objectFit='cover'" />
+
+      <!-- Train Animation -->
+      <div class="spmap-train-wrap">
+        <div class="sp-train-car">🚂</div>
+      </div>
+
+      <!-- POI Markers (JSで生成) -->
+      <div id="spPOIContainer"></div>
+
+      <!-- Gate Labels -->
+      <div class="spmap-gate-tag" style="left:13%;bottom:8px">↑ DAWN PLAZA<br>夜明けの広場</div>
+      <div class="spmap-gate-tag" style="left:44%;bottom:4px">↑ FRONTIER GATE<br>南エリア：冒険と救助</div>
+      <div class="spmap-gate-tag" style="right:5%;bottom:8px">↑ STARRY SKY STATION<br>星空の駅</div>
+
+      <!-- Zoom Controls -->
+      <div class="spmap-zoom">
+        <button onclick="spMapZoomIn()" title="拡大">＋</button>
+        <button onclick="spMapZoomOut()" title="縮小">－</button>
+        <button onclick="spMapZoomReset()" title="全体表示">⌂</button>
+      </div>
+
+      <!-- Detail Panel -->
+      <div class="spmap-detail" id="spDetailPanel">
+        <button class="spmap-detail-close" onclick="closeSpDetail()">✕</button>
+        <div id="spDetailContent"></div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -6352,63 +6593,64 @@ function closeSpComing(e) {
 
 /* ── SchoolPark マップ ─────────────────────────────── */
 const SP_ZONES = {
-  star:    { label:"⭐ 星への道",     color:"#a855f7" },
-  learn:   { label:"📚 学びの森",     color:"#3b82f6" },
-  plaza:   { label:"🌟 中央広場",     color:"#f59e0b" },
-  play:    { label:"🌿 遊びの丘",     color:"#22c55e" },
-  earn:    { label:"💰 稼ぎの街",     color:"#eab308" },
-  life:    { label:"🏠 暮らしの広場", color:"#f97316" },
-  guard:   { label:"🛡️ 守りの砦",    color:"#ef4444" }
+  learn: { label:"📚 Creative Academy", sub:"学びと創造", color:"#3b82f6" },
+  guard: { label:"🏥 Care Station",      sub:"安全と心身", color:"#ef4444" },
+  earn:  { label:"🏪 Life Market",        sub:"日常と稼ぎ", color:"#eab308" },
+  play:  { label:"🌿 Frontier Gate",      sub:"冒険と救助", color:"#22c55e" },
+  star:  { label:"⭐ 交通・インフラ",      sub:"",           color:"#a855f7" },
+  plaza: { label:"💪 健康・運動",          sub:"",           color:"#f59e0b" },
+  life:  { label:"🏠 暮らしの広場",        sub:"",           color:"#f97316" },
 };
 
+/* POI positions: px/py = % of map canvas (left/top) based on actual image layout */
 const SP_POIS = [
-  // 星への道（上部）
-  { id:"star1",  name:"哲学の塔",        icon:"🗼", zone:"star",  x:220, y:70,  desc:"SchoolParkの理念・哲学を語るコンテンツ",           status:"coming" },
-  { id:"star2",  name:"夢のアーカイブ",  icon:"📖", zone:"star",  x:320, y:55,  desc:"代表者の夢・ビジョンを記録したライブラリ",          status:"coming" },
-  { id:"star3",  name:"星空シアター",    icon:"🎬", zone:"star",  x:400, y:75,  desc:"映像・動画コンテンツの上映スポット",                status:"coming" },
-  { id:"star4",  name:"使命の石碑",      icon:"🪨", zone:"star",  x:490, y:55,  desc:"ミッション・パーパスを刻んだモニュメント",           status:"coming" },
-  { id:"star5",  name:"創業者の小屋",    icon:"🏚️", zone:"star",  x:580, y:70,  desc:"SchoolPark誕生の物語を語る場所",                   status:"coming" },
-  // 学びの森（左）
-  { id:"learn1", name:"教室A",           icon:"📐", zone:"learn", x:65,  y:175, desc:"基礎学習・技術スキルコンテンツ",                    status:"coming" },
-  { id:"learn2", name:"研究室",          icon:"🔬", zone:"learn", x:120, y:215, desc:"探究・リサーチ型コンテンツ",                        status:"coming" },
-  { id:"learn3", name:"図書館",          icon:"📚", zone:"learn", x:175, y:175, desc:"知識・読書・要約コンテンツ",                        status:"coming" },
-  { id:"learn4", name:"ハック道場",      icon:"💻", zone:"learn", x:65,  y:270, desc:"プログラミング・Web3技術コンテンツ",                 status:"coming" },
-  { id:"learn5", name:"スキルツリー",    icon:"🌳", zone:"learn", x:175, y:280, desc:"スキルアップロードマップ",                          status:"coming" },
-  // 中央広場（中央）
-  { id:"plaza1", name:"集会所",          icon:"🏛️", zone:"plaza", x:340, y:205, desc:"コミュニティ・DAO投票・ガバナンス",                 status:"coming" },
-  { id:"plaza2", name:"掲示板",          icon:"📋", zone:"plaza", x:400, y:195, desc:"お知らせ・アップデート情報",                        status:"coming" },
-  { id:"plaza3", name:"噴水広場",        icon:"⛲", zone:"plaza", x:370, y:255, desc:"交流・フリートーク・イベント広場",                  status:"coming" },
-  { id:"plaza4", name:"案内所",          icon:"ℹ️", zone:"plaza", x:450, y:240, desc:"SchoolPark全体ガイド・FAQ",                        status:"coming" },
-  // 遊びの丘（右）
-  { id:"play1",  name:"冒険の丘",        icon:"⛰️", zone:"play",  x:590, y:175, desc:"チャレンジ・探索型コンテンツ",                     status:"coming" },
-  { id:"play2",  name:"ゲームセンター",  icon:"🎮", zone:"play",  x:650, y:215, desc:"ゲーミフィケーション要素・クイズ",                  status:"coming" },
-  { id:"play3",  name:"アート工房",      icon:"🎨", zone:"play",  x:590, y:270, desc:"クリエイティブ・表現系コンテンツ",                  status:"coming" },
-  { id:"play4",  name:"音楽広場",        icon:"🎵", zone:"play",  x:660, y:280, desc:"音楽・エンタメコンテンツ",                         status:"coming" },
-  { id:"play5",  name:"スポーツ公園",    icon:"⚽", zone:"play",  x:720, y:185, desc:"フィジカル・健康系コンテンツ",                     status:"coming" },
-  // 稼ぎの街（左下）
-  { id:"earn1",  name:"取引所",          icon:"💱", zone:"earn",  x:65,  y:390, desc:"EMUERトークン・NFT取引情報",                        status:"coming" },
-  { id:"earn2",  name:"スタートアップ街", icon:"🏢", zone:"earn", x:130, y:365, desc:"副業・起業・収益化コンテンツ",                      status:"coming" },
-  { id:"earn3",  name:"投資学院",        icon:"📈", zone:"earn",  x:195, y:395, desc:"Web3投資・資産形成コンテンツ",                      status:"coming" },
-  { id:"earn4",  name:"フリーランス塾",  icon:"🧑‍💻", zone:"earn", x:90, y:450, desc:"フリーランス・個人ブランディング",                  status:"coming" },
-  { id:"earn5",  name:"マーケット",      icon:"🛒", zone:"earn",  x:175, y:455, desc:"SchoolParkコンテンツ販売マーケット",                status:"coming" },
-  // 暮らしの広場（中央下）
-  { id:"life1",  name:"カフェ",          icon:"☕", zone:"life",  x:340, y:415, desc:"ゆるく話せるコミュニティ雑談スペース",               status:"coming" },
-  { id:"life2",  name:"メンタルサポート", icon:"💆", zone:"life", x:405, y:445, desc:"メンタルヘルス・マインドセットコンテンツ",           status:"coming" },
-  { id:"life3",  name:"子育て広場",      icon:"👶", zone:"life",  x:460, y:415, desc:"子育て・家族・生活設計コンテンツ",                  status:"coming" },
-  // 守りの砦（右下）
-  { id:"guard1", name:"警察署",          icon:"🚔", zone:"guard", x:590, y:390, desc:"SchoolPark自治・ルール管理",                        status:"coming" },
-  { id:"guard2", name:"病院",            icon:"🏥", zone:"guard", x:660, y:420, desc:"ユーザーサポート・トラブル対応",                    status:"coming" },
-  { id:"guard3", name:"消防署",          icon:"🚒", zone:"guard", x:720, y:390, desc:"緊急対応・セキュリティ管理",                        status:"coming" },
+  // Creative Academy（北エリア：学びと創造）
+  { id:"learn1", name:"Library 図書館",        icon:"📚", zone:"learn", px:29, py:24, desc:"知識・読書・学習コンテンツ。note記事5本の閲覧・購入導線",              status:"coming" },
+  { id:"learn2", name:"Bookstore 本屋",         icon:"📖", zone:"learn", px:40, py:14, desc:"ビジネス・自己啓発書セレクション。推薦図書リスト公開",                status:"coming" },
+  { id:"learn3", name:"Art Museum 美術館",      icon:"🎨", zone:"learn", px:52, py:12, desc:"アート・クリエイティブコンテンツ。映像・写真作品展示",                status:"coming" },
+  { id:"learn4", name:"Lab 研究所",             icon:"🔬", zone:"learn", px:67, py:20, desc:"探究・リサーチ型コンテンツ。Web3・DAO研究レポート",                   status:"coming" },
+  // Care Station（西エリア：安全と心身）
+  { id:"guard1", name:"Hospital 病院",          icon:"🏥", zone:"guard", px:13, py:35, desc:"ユーザーサポート・トラブル対応。困ったときの相談窓口",                status:"coming" },
+  { id:"guard2", name:"Police Station 警察署",  icon:"🚔", zone:"guard", px:21, py:47, desc:"SchoolPark自治・ルール管理。コミュニティガイドライン",                status:"coming" },
+  { id:"guard3", name:"Security Guard 自警団",  icon:"🛡️", zone:"guard", px:24, py:56, desc:"セキュリティ・安全管理。不正アクセス対策・ウォレット保護ガイド",    status:"coming" },
+  { id:"guard4", name:"Gym ジム",               icon:"💪", zone:"guard", px:14, py:64, desc:"フィジカル・健康系コンテンツ。体を動かすことの大切さを学ぶ",         status:"coming" },
+  // Life Market（東エリア：日常と稼ぎ）
+  { id:"earn1",  name:"Hotel ホテル",            icon:"🏨", zone:"earn",  px:80, py:25, desc:"長期滞在型学習コンテンツ。連続受講でスキルを深める",                 status:"coming" },
+  { id:"earn2",  name:"Mansion マンション",      icon:"🏰", zone:"earn",  px:87, py:34, desc:"高度学習・プレミアムコンテンツ。NFT保有者向け限定エリア",           status:"coming" },
+  { id:"earn3",  name:"Shopping ショッピング",   icon:"🛍️", zone:"earn",  px:75, py:38, desc:"コンテンツ販売マーケット。HEXA NFT・個別相談チケット購入",           status:"coming" },
+  { id:"earn4",  name:"Greengrocer 八百屋",     icon:"🥦", zone:"earn",  px:83, py:44, desc:"日常知識・生活スキルコンテンツ。毎日使える実践的な情報",             status:"coming" },
+  { id:"earn5",  name:"Fruit Shop 果物屋",      icon:"🍎", zone:"earn",  px:81, py:55, desc:"健康・栄養コンテンツ。体と心を整えるライフスタイル提案",             status:"coming" },
+  { id:"earn6",  name:"Coffee 珈琲",            icon:"☕", zone:"earn",  px:83, py:63, desc:"副業・収益化コンテンツ。スキルをお金に変える方法を学ぶ",             status:"coming" },
+  { id:"earn7",  name:"Hotel ホテル（下）",      icon:"🏩", zone:"earn",  px:88, py:69, desc:"EMUERトークン・NFT収益運用コンテンツ",                              status:"coming" },
+  // Frontier Gate（南エリア：冒険と救助）
+  { id:"play1",  name:"Non-theater 映画館",     icon:"🎬", zone:"play",  px:68, py:73, desc:"映像・動画コンテンツ。SchoolParkのストーリーを映像で体験",           status:"coming" },
+  { id:"play2",  name:"Elevator エレベーター",   icon:"🛗", zone:"play",  px:74, py:79, desc:"各エリアへの移動手段。ショートカットでどこへでも",                  status:"coming" },
+  { id:"play3",  name:"Terminal Station 駅舎",  icon:"🚉", zone:"play",  px:51, py:77, desc:"各エリアへの出発点・交通ハブ。SchoolParkの玄関口",                  status:"coming" },
+  { id:"play4",  name:"Crossing 交差点",        icon:"🚦", zone:"play",  px:43, py:82, desc:"エリア間の交流スポット。様々な価値観が交差する場所",                 status:"coming" },
+  { id:"play5",  name:"Mountain Climbing 登山", icon:"⛰️", zone:"play",  px:37, py:84, desc:"チャレンジ・探索型コンテンツ。高い目標に挑む学習プログラム",        status:"coming" },
+  { id:"play6",  name:"Fishing 釣り",           icon:"🎣", zone:"play",  px:42, py:89, desc:"のんびり・趣味系コンテンツ。好きなことで稼ぐヒント",                status:"coming" },
+  { id:"play7",  name:"Elevator エレベーター",   icon:"🛗", zone:"play",  px:57, py:88, desc:"上部エリアへのアクセス。Creative Academyへ直通",                   status:"coming" },
+  // 交通・インフラ（ゲート）
+  { id:"star1",  name:"Dawn Plaza 夜明けの広場",     icon:"🌅", zone:"star", px:19, py:90, desc:"Gate A — 夜明けの広場。新しい一日の始まり。毎朝ここからSchoolParkへ",    status:"coming" },
+  { id:"star2",  name:"Frontier Gate 前線の砦",      icon:"🏰", zone:"star", px:50, py:94, desc:"Gate B — 南エリアの正面玄関。Terminal Stationへ続く冒険の入口",         status:"coming" },
+  { id:"star3",  name:"Creative Academy 学びの門",   icon:"🎓", zone:"star", px:52, py:7,  desc:"Gate C — 北エリアの入口。学びと創造の世界へようこそ",                   status:"coming" },
+  { id:"star4",  name:"Starry Sky Station 星空の駅", icon:"🚀", zone:"star", px:88, py:86, desc:"Gate D — 星空の駅。宇宙への扉。EMUERトークンで未来を切り拓く",         status:"coming" },
+  // 中央・健康
+  { id:"plaza1", name:"Fountain 噴水広場",      icon:"⛲", zone:"plaza", px:50, py:38, desc:"SchoolParkの中心。コミュニティ交流広場。DAO投票・イベント開催スポット", status:"coming" },
+  // 暮らし
+  { id:"life1",  name:"House 家",               icon:"🏡", zone:"life",  px:84, py:51, desc:"暮らし・住まいコンテンツ。生活設計・ライフプランニング",               status:"coming" },
 ];
 
 const GATE_NAMES = {
   a: "Gate A — Dawn Plaza（夜明けの広場）",
-  b: "Gate B — Terminal Station（駅舎・ターミナル）",
-  c: "Gate C — Library & School（図書館・学び舎）",
-  d: "Gate D — Starry Station（星空の駅）"
+  b: "Gate B — Frontier Gate（南エリア・冒険と救助）",
+  c: "Gate C — Creative Academy（学びと創造）",
+  d: "Gate D — Starry Sky Station（星空の駅）"
 };
 
 let _currentGate = "a";
+let _spMapZoomLevel = 1;
+let _spMapFilter = "all";
 
 function selectSpGate(gate) {
   _currentGate = gate;
@@ -6422,44 +6664,36 @@ function openSpMap(gate) {
   overlay.style.display = "flex";
   const gateEl = document.getElementById("spMapGateLabel");
   if (gateEl) gateEl.textContent = GATE_NAMES[_currentGate] || "";
+  _spMapZoomLevel = 1;
+  _spMapFilter = "all";
   renderSpMapPois();
 }
 
 function closeSpMap() {
   document.getElementById("spMapOverlay").style.display = "none";
+  closeSpDetail();
 }
 
-function renderSpMapPois() {
-  const g = document.getElementById("spMapPois");
-  if (!g) return;
-  g.innerHTML = "";
+function renderSpMapPois(filter) {
+  const container = document.getElementById("spPOIContainer");
+  if (!container) return;
+  const activeFilter = filter || _spMapFilter || "all";
+  container.innerHTML = "";
   SP_POIS.forEach(poi => {
+    if (activeFilter !== "all" && poi.zone !== activeFilter) return;
     const zone = SP_ZONES[poi.zone] || {};
     const color = zone.color || "#fff";
-    // 外側リング
-    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    circle.setAttribute("cx", poi.x);
-    circle.setAttribute("cy", poi.y);
-    circle.setAttribute("r", "13");
-    circle.setAttribute("fill", color);
-    circle.setAttribute("fill-opacity", "0.25");
-    circle.setAttribute("stroke", color);
-    circle.setAttribute("stroke-width", "1.5");
-    circle.style.cursor = "pointer";
-    circle.addEventListener("click", () => spMapSelectPoi(poi.id));
-
-    // アイコンテキスト
-    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    text.setAttribute("x", poi.x);
-    text.setAttribute("y", poi.y + 5);
-    text.setAttribute("text-anchor", "middle");
-    text.setAttribute("font-size", "13");
-    text.style.cursor = "pointer";
-    text.textContent = poi.icon;
-    text.addEventListener("click", () => spMapSelectPoi(poi.id));
-
-    g.appendChild(circle);
-    g.appendChild(text);
+    const el = document.createElement("div");
+    el.className = "spmap-poi-marker";
+    el.setAttribute("data-poi", poi.id);
+    el.style.left = poi.px + "%";
+    el.style.top  = poi.py + "%";
+    el.innerHTML = `
+      <div class="spmap-poi-diamond" style="background:${color};border-color:rgba(255,255,255,0.85);"></div>
+      <div class="spmap-poi-label">${poi.name.split(" ")[0]}</div>
+    `;
+    el.addEventListener("click", (e) => { e.stopPropagation(); spMapSelectPoi(poi.id); });
+    container.appendChild(el);
   });
 }
 
@@ -6467,33 +6701,85 @@ function spMapSelectPoi(poiId) {
   const poi = SP_POIS.find(p => p.id === poiId);
   if (!poi) return;
   const zone = SP_ZONES[poi.zone] || {};
-  const panel = document.getElementById("spMapPanel");
-  if (!panel) return;
+  const color = zone.color || "#aaa";
 
-  // SVGのリングをハイライト
-  const g = document.getElementById("spMapPois");
-  if (g) {
-    Array.from(g.querySelectorAll("circle")).forEach(c => {
-      c.setAttribute("fill-opacity", "0.25");
-      c.setAttribute("stroke-width", "1.5");
-    });
-    // 選択中のリングを強調
-    const circles = Array.from(g.querySelectorAll("circle"));
-    const idx = SP_POIS.findIndex(p => p.id === poiId);
-    if (circles[idx]) {
-      circles[idx].setAttribute("fill-opacity", "0.7");
-      circles[idx].setAttribute("stroke-width", "3");
-    }
-  }
+  // アクティブマーカー切り替え
+  document.querySelectorAll(".spmap-poi-marker").forEach(m => m.classList.remove("spm-active"));
+  const active = document.querySelector(`[data-poi="${poiId}"]`);
+  if (active) active.classList.add("spm-active");
 
-  const badgeColor = zone.color || "#aaa";
-  panel.innerHTML = `
-    <div style="font-size:2rem;margin-bottom:8px">${poi.icon}</div>
-    <div style="font-size:1rem;font-weight:800;color:#fff;margin-bottom:6px">${poi.name}</div>
-    <div style="display:inline-block;background:${badgeColor}22;color:${badgeColor};border:1px solid ${badgeColor}55;border-radius:20px;padding:2px 10px;font-size:0.72rem;margin-bottom:10px">${zone.label || poi.zone}</div>
-    <div style="font-size:0.82rem;color:#bbb;line-height:1.6;margin-bottom:14px">${poi.desc}</div>
-    <div style="display:inline-block;background:rgba(255,255,255,0.07);color:#888;border-radius:12px;padding:4px 12px;font-size:0.75rem">🕐 5/20 OPENING</div>
+  // 詳細パネル表示
+  const panel = document.getElementById("spDetailPanel");
+  const content = document.getElementById("spDetailContent");
+  if (!panel || !content) return;
+  content.innerHTML = `
+    <div class="spmap-detail-icon">${poi.icon}</div>
+    <div class="spmap-detail-name">${poi.name}</div>
+    <div class="spmap-detail-zone" style="background:${color}22;color:${color};border-color:${color}55">
+      ${zone.label}${zone.sub ? " — " + zone.sub : ""}
+    </div>
+    <div class="spmap-detail-desc">${poi.desc}</div>
+    <div class="spmap-detail-badge">🕐 5/20 OPENING</div>
   `;
+  panel.classList.add("smd-open");
+}
+
+function closeSpDetail() {
+  const panel = document.getElementById("spDetailPanel");
+  if (panel) panel.classList.remove("smd-open");
+  document.querySelectorAll(".spmap-poi-marker").forEach(m => m.classList.remove("spm-active"));
+}
+
+function spMapTab(btn, tab) {
+  document.querySelectorAll(".spmtab").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  // タブごとの表示切替（現在はエリアタブのみ実装）
+  const list = document.getElementById("spAreaList");
+  if (list) list.style.display = (tab === "list") ? "none" : "";
+}
+
+function spMapFilter(zone, el) {
+  _spMapFilter = zone;
+  document.querySelectorAll(".spmap-area-item").forEach(i => i.classList.remove("spa-active"));
+  if (el) el.classList.add("spa-active");
+  closeSpDetail();
+  renderSpMapPois(zone);
+}
+
+function spMapSearch(val) {
+  const q = val.toLowerCase();
+  const container = document.getElementById("spPOIContainer");
+  if (!container) return;
+  container.querySelectorAll(".spmap-poi-marker").forEach(m => {
+    const poiId = m.getAttribute("data-poi");
+    const poi = SP_POIS.find(p => p.id === poiId);
+    if (!poi) return;
+    const match = poi.name.toLowerCase().includes(q) || poi.desc.toLowerCase().includes(q);
+    m.style.opacity = (!q || match) ? "1" : "0.15";
+    m.style.pointerEvents = (!q || match) ? "all" : "none";
+  });
+}
+
+function spMapZoomIn() {
+  _spMapZoomLevel = Math.min(2.5, _spMapZoomLevel + 0.25);
+  _applySpMapZoom();
+}
+function spMapZoomOut() {
+  _spMapZoomLevel = Math.max(0.5, _spMapZoomLevel - 0.25);
+  _applySpMapZoom();
+}
+function spMapZoomReset() {
+  _spMapZoomLevel = 1;
+  _applySpMapZoom();
+}
+function _applySpMapZoom() {
+  const img = document.getElementById("spMapBgImg");
+  const poi = document.getElementById("spPOIContainer");
+  const train = document.querySelector(".spmap-train-wrap");
+  const scale = `scale(${_spMapZoomLevel})`;
+  if (img) img.style.transform = scale;
+  if (poi) poi.style.transform = scale;
+  if (train) train.style.transform = scale;
 }
 
 
