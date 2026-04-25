@@ -276,14 +276,28 @@
 .spmap-legend-row { display:flex; align-items:center; gap:8px; font-size:0.72rem; color:#888; margin-bottom:5px; }
 .sp-ldiamond { width:8px; height:8px; border-radius:2px; flex-shrink:0; transform:rotate(45deg); }
 /* Map Canvas */
-.spmap-canvas { flex:1; position:relative; overflow:hidden; background:#f0e8d0; }
+.spmap-canvas { flex:1; position:relative; overflow:hidden; background:#e8dfc0; }
+/* Scrollable Viewport */
+.spmap-scroll-vp {
+  width:100%; height:100%; overflow:auto; cursor:grab;
+  overscroll-behavior:contain;  /* メイン画面スクロールと干渉しない */
+}
+.spmap-scroll-vp:active { cursor:grabbing; }
+.spmap-scroll-vp::-webkit-scrollbar { width:6px; height:6px; }
+.spmap-scroll-vp::-webkit-scrollbar-track { background:rgba(0,0,0,0.1); }
+.spmap-scroll-vp::-webkit-scrollbar-thumb { background:rgba(139,105,20,0.4); border-radius:3px; }
+/* Inner container (matches image 1:1 ratio) */
+.spmap-inner {
+  position:relative; width:960px; height:960px; flex-shrink:0;
+  margin:auto; /* center when smaller than viewport */
+}
 .spmap-bg-img {
   position:absolute; inset:0; width:100%; height:100%;
-  object-fit:contain; object-position:center; display:block;
+  object-fit:fill; display:block;   /* ← contain→fill で内部コンテナにぴったり合わせる */
   user-select:none; pointer-events:none;
 }
-/* Search */
-.spmap-search { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:20; width:260px; }
+/* Search (fixed over canvas) */
+.spmap-search { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:30; width:260px; }
 .spmap-search input {
   width:100%; padding:8px 14px 8px 34px; background:rgba(0,0,0,0.72);
   border:1px solid rgba(212,168,67,0.4); border-radius:20px; color:#ddd;
@@ -292,57 +306,80 @@
 }
 .spmap-search input::placeholder { color:#666; }
 .spmap-search-icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); font-size:0.8rem; pointer-events:none; }
-/* Coords */
+/* Coords (fixed) */
 .spmap-coords {
-  position:absolute; top:12px; right:12px; z-index:20; font-size:0.65rem; color:#666;
+  position:absolute; top:12px; right:12px; z-index:30; font-size:0.65rem; color:#666;
   background:rgba(0,0,0,0.55); padding:4px 9px; border-radius:4px; font-family:monospace;
 }
-/* Gate Labels */
+/* Gate Labels (inside inner, absolute % of inner) */
 .spmap-gate-tag {
-  position:absolute; bottom:8px; text-align:center;
-  font-family:'Playfair Display',Georgia,serif; font-size:0.6rem; color:#5a3a10;
-  letter-spacing:0.06em; line-height:1.3; pointer-events:none; z-index:10;
-  text-shadow:0 1px 3px rgba(255,255,255,0.8);
+  position:absolute; text-align:center;
+  font-family:'Playfair Display',Georgia,serif; font-size:0.58rem; color:#3a2006;
+  letter-spacing:0.05em; line-height:1.35; pointer-events:none; z-index:10;
+  text-shadow:0 1px 3px rgba(255,240,180,0.9), 0 0 8px rgba(255,240,180,0.6);
+  transform:translateX(-50%);
 }
-/* Zoom */
-.spmap-zoom { position:absolute; bottom:50px; right:12px; z-index:20; display:flex; flex-direction:column; gap:3px; }
+/* Zoom (fixed) */
+.spmap-zoom { position:absolute; bottom:14px; right:14px; z-index:30; display:flex; flex-direction:column; gap:3px; }
 .spmap-zoom button {
   width:30px; height:30px; background:rgba(14,10,4,0.85); border:1px solid rgba(212,168,67,0.35);
   color:#D4A843; border-radius:4px; cursor:pointer; font-size:1rem; font-weight:700;
   display:flex; align-items:center; justify-content:center;
 }
 .spmap-zoom button:hover { background:rgba(212,168,67,0.15); }
-/* POI Markers */
+/* POI Markers (inside inner) */
 #spPOIContainer { position:absolute; inset:0; pointer-events:none; z-index:15; }
 .spmap-poi-marker {
   position:absolute; transform:translate(-50%,-50%); pointer-events:all; cursor:pointer;
   display:flex; flex-direction:column; align-items:center; transition:transform 0.15s;
 }
-.spmap-poi-marker:hover,.spmap-poi-marker.spm-active { transform:translate(-50%,-50%) scale(1.3); z-index:20; }
+.spmap-poi-marker:hover,.spmap-poi-marker.spm-active { transform:translate(-50%,-50%) scale(1.5); z-index:20; }
 .spmap-poi-diamond {
-  width:13px; height:13px; border-radius:2px; transform:rotate(45deg);
-  border:2px solid rgba(255,255,255,0.85); box-shadow:0 0 7px rgba(255,255,255,0.5);
-  transition:box-shadow 0.15s,transform 0.15s;
+  width:12px; height:12px; border-radius:2px; transform:rotate(45deg);
+  border:1.5px solid rgba(255,255,255,0.9); box-shadow:0 0 6px rgba(0,0,0,0.5);
+  transition:box-shadow 0.15s;
 }
-.spmap-poi-marker:hover .spmap-poi-diamond { box-shadow:0 0 14px currentColor; }
-.spmap-poi-marker.spm-active .spmap-poi-diamond { box-shadow:0 0 18px currentColor; }
-.spmap-poi-label {
-  font-size:0.52rem; color:rgba(0,0,0,0.85); margin-top:4px;
-  background:rgba(255,255,255,0.82); padding:2px 5px; border-radius:3px;
-  white-space:nowrap; font-family:'Noto Sans JP',sans-serif; letter-spacing:0.02em;
-  pointer-events:none; font-weight:700; box-shadow:0 1px 3px rgba(0,0,0,0.3);
-}
-/* Train */
-.spmap-train-wrap { position:absolute; inset:0; pointer-events:none; z-index:12; overflow:hidden; }
+.spmap-poi-marker:hover .spmap-poi-diamond { box-shadow:0 0 12px currentColor, 0 0 3px rgba(0,0,0,0.8); }
+.spmap-poi-marker.spm-active .spmap-poi-diamond { box-shadow:0 0 16px currentColor, 0 0 3px rgba(0,0,0,0.8); }
+.spmap-poi-label { display:none; }  /* ラベルは詳細パネルにのみ表示 */
+/* Animations wrap (inside inner) */
+.spmap-anim-wrap { position:absolute; inset:0; pointer-events:none; z-index:12; }
+/* Train 🚂 — inner ring ~24% rx, 21% ry */
 .sp-train-car {
-  position:absolute; font-size:1.5rem; line-height:1; top:0; left:0;
-  offset-path:ellipse(28% 22% at 50% 50%);
+  position:absolute; font-size:1.3rem; line-height:1; top:0; left:0;
+  offset-path:ellipse(24% 21% at 50% 50%);
   offset-distance:0%; offset-rotate:auto;
   animation:spTrainRoll 20s linear infinite;
-  filter:drop-shadow(0 2px 5px rgba(0,0,0,0.6));
-  pointer-events:none;
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,0.7));
 }
-@keyframes spTrainRoll { to { offset-distance:100%; } }
+/* Car 🚗 — outer ring road ~38% rx, 35% ry */
+.sp-car-car {
+  position:absolute; font-size:1.2rem; line-height:1; top:0; left:0;
+  offset-path:ellipse(38% 35% at 50% 50%);
+  offset-distance:35%; offset-rotate:auto;
+  animation:spCarRoll 28s linear infinite;
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,0.7));
+}
+/* Airplane ✈️ — sky loop, large */
+.sp-plane-car {
+  position:absolute; font-size:1.4rem; line-height:1; top:0; left:0;
+  offset-path:ellipse(47% 42% at 50% 49%);
+  offset-distance:70%; offset-rotate:auto;
+  animation:spPlaneRoll 14s linear infinite;
+  filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+}
+/* Walker 🚶 — footpath inside the park */
+.sp-walker-car {
+  position:absolute; font-size:1.1rem; line-height:1; top:0; left:0;
+  offset-path:ellipse(15% 12% at 51% 50%);
+  offset-distance:55%; offset-rotate:0deg;
+  animation:spWalkerRoll 35s linear infinite;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+}
+@keyframes spTrainRoll  { to { offset-distance:100%; } }
+@keyframes spCarRoll    { to { offset-distance:135%; } }
+@keyframes spPlaneRoll  { to { offset-distance:170%; } }
+@keyframes spWalkerRoll { to { offset-distance:155%; } }
 /* Detail Panel */
 .spmap-detail {
   position:absolute; bottom:54px; right:50px; width:210px;
@@ -1838,42 +1875,48 @@ body.paypay-mode #pp-post-fab {
     <!-- Map Canvas -->
     <div class="spmap-canvas" id="spMapCanvas">
 
-      <!-- Search -->
+      <!-- Fixed UI (スクロールに追従しない) -->
       <div class="spmap-search">
         <span class="spmap-search-icon">🔍</span>
         <input type="text" id="spMapSearchInput" placeholder="スポット名・エリアで検索" oninput="spMapSearch(this.value)" />
       </div>
-
-      <!-- Coordinates -->
       <div class="spmap-coords">N 35.106° / E 139.024°</div>
-
-      <!-- Map Image (images/schoolpark-map.png を配置してください) -->
-      <img src="images/schoolpark-map.png" class="spmap-bg-img" id="spMapBgImg" alt="SchoolPark Map" onerror="this.style.background='radial-gradient(ellipse 70% 60% at 50% 50%,#d4c8a0 0%,#b8a878 100%)';this.style.objectFit='cover'" />
-
-      <!-- Train Animation -->
-      <div class="spmap-train-wrap">
-        <div class="sp-train-car">🚂</div>
-      </div>
-
-      <!-- POI Markers (JSで生成) -->
-      <div id="spPOIContainer"></div>
-
-      <!-- Gate Labels -->
-      <div class="spmap-gate-tag" style="left:13%;bottom:8px">↑ DAWN PLAZA<br>夜明けの広場</div>
-      <div class="spmap-gate-tag" style="left:44%;bottom:4px">↑ FRONTIER GATE<br>南エリア：冒険と救助</div>
-      <div class="spmap-gate-tag" style="right:5%;bottom:8px">↑ STARRY SKY STATION<br>星空の駅</div>
-
-      <!-- Zoom Controls -->
       <div class="spmap-zoom">
         <button onclick="spMapZoomIn()" title="拡大">＋</button>
         <button onclick="spMapZoomOut()" title="縮小">－</button>
         <button onclick="spMapZoomReset()" title="全体表示">⌂</button>
       </div>
-
-      <!-- Detail Panel -->
       <div class="spmap-detail" id="spDetailPanel">
         <button class="spmap-detail-close" onclick="closeSpDetail()">✕</button>
         <div id="spDetailContent"></div>
+      </div>
+
+      <!-- Scrollable Viewport -->
+      <div class="spmap-scroll-vp" id="spMapVP">
+
+        <!-- Inner container (960×960px = image 1:1) -->
+        <div class="spmap-inner" id="spMapInner">
+
+          <!-- Map Image -->
+          <img src="images/schoolpark-map.png" class="spmap-bg-img" id="spMapBgImg" alt="SchoolPark Map" />
+
+          <!-- Animations (train / car / airplane / walker) -->
+          <div class="spmap-anim-wrap">
+            <div class="sp-train-car">🚂</div>
+            <div class="sp-car-car">🚗</div>
+            <div class="sp-plane-car">✈️</div>
+            <div class="sp-walker-car">🚶</div>
+          </div>
+
+          <!-- POI Markers (JSで生成) -->
+          <div id="spPOIContainer"></div>
+
+          <!-- Gate Labels (inside inner = % of image) -->
+          <div class="spmap-gate-tag" style="left:21%;top:88%">↑ DAWN PLAZA<br>夜明けの広場</div>
+          <div class="spmap-gate-tag" style="left:50%;top:93%">↑ FRONTIER GATE<br>南エリア：冒険と救助</div>
+          <div class="spmap-gate-tag" style="left:88%;top:88%">↑ STARRY SKY STATION<br>星空の駅</div>
+
+        </div>
       </div>
 
     </div>
@@ -6602,7 +6645,7 @@ const SP_ZONES = {
   life:  { label:"🏠 暮らしの広場",        sub:"",           color:"#f97316" },
 };
 
-/* POI positions: px/py = % of map canvas (left/top) based on actual image layout */
+/* POI positions: px/py = % of spmap-inner(960x960px=画像1:1) に基づく正確な建物位置 */
 const SP_POIS = [
   // Creative Academy（北エリア：学びと創造）
   { id:"learn1", name:"Library 図書館",        icon:"📚", zone:"learn", px:29, py:24, desc:"知識・読書・学習コンテンツ。note記事5本の閲覧・購入導線",              status:"coming" },
@@ -6667,6 +6710,23 @@ function openSpMap(gate) {
   _spMapZoomLevel = 1;
   _spMapFilter = "all";
   renderSpMapPois();
+
+  // スクロール中央揃え（開いた直後に実行）
+  requestAnimationFrame(() => {
+    const vp = document.getElementById("spMapVP");
+    const inner = document.getElementById("spMapInner");
+    if (!vp || !inner) return;
+    vp.scrollLeft = (inner.offsetWidth  - vp.clientWidth)  / 2;
+    vp.scrollTop  = (inner.offsetHeight - vp.clientHeight) / 2;
+  });
+
+  // マップ内ホイールがメイン画面にバブルしないよう1回だけ設定
+  const vp = document.getElementById("spMapVP");
+  if (vp && !vp._scrollBound) {
+    vp._scrollBound = true;
+    vp.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
+    vp.addEventListener("touchmove", e => e.stopPropagation(), { passive: true });
+  }
 }
 
 function closeSpMap() {
@@ -6689,9 +6749,8 @@ function renderSpMapPois(filter) {
     el.style.left = poi.px + "%";
     el.style.top  = poi.py + "%";
     el.innerHTML = `
-      <div class="spmap-poi-diamond" style="background:${color};border-color:rgba(255,255,255,0.85);"></div>
-      <div class="spmap-poi-label">${poi.name.split(" ")[0]}</div>
-    `;
+      <div class="spmap-poi-diamond" style="background:${color};border-color:rgba(255,255,255,0.9);color:${color};"></div>
+    `;  /* ラベルなし — 詳細パネルにのみ表示 */
     el.addEventListener("click", (e) => { e.stopPropagation(); spMapSelectPoi(poi.id); });
     container.appendChild(el);
   });
@@ -6773,13 +6832,12 @@ function spMapZoomReset() {
   _applySpMapZoom();
 }
 function _applySpMapZoom() {
-  const img = document.getElementById("spMapBgImg");
-  const poi = document.getElementById("spPOIContainer");
-  const train = document.querySelector(".spmap-train-wrap");
-  const scale = `scale(${_spMapZoomLevel})`;
-  if (img) img.style.transform = scale;
-  if (poi) poi.style.transform = scale;
-  if (train) train.style.transform = scale;
+  /* inner全体をスケール → 画像・POI・アニメが一緒に拡縮 */
+  const inner = document.getElementById("spMapInner");
+  if (inner) {
+    inner.style.transform = `scale(${_spMapZoomLevel})`;
+    inner.style.transformOrigin = "center center";
+  }
 }
 
 
