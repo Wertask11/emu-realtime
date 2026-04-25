@@ -344,18 +344,18 @@
 .spmap-poi-label { display:none; }  /* ラベルは詳細パネルにのみ表示 */
 /* Animations wrap (inside inner) */
 .spmap-anim-wrap { position:absolute; inset:0; pointer-events:none; z-index:12; }
-/* Train 🚂 */
+/* Train 🚂 — マップ全体の外周を周回 */
 .sp-train-car {
   position:absolute; font-size:1.3rem; line-height:1; top:0; left:0;
-  offset-path:ellipse(24% 21% at 50% 50%); offset-distance:0%; offset-rotate:auto;
-  animation:spTrainRoll 20s linear infinite;
+  offset-path:ellipse(47% 44% at 50% 50%); offset-distance:0%; offset-rotate:auto;
+  animation:spTrainRoll 55s linear infinite;
   filter:drop-shadow(0 1px 3px rgba(0,0,0,0.7));
 }
-/* Car 🚗 */
+/* Car 🚗 — マップ全体の外周を周回 */
 .sp-car-car {
   position:absolute; font-size:1.2rem; line-height:1; top:0; left:0;
-  offset-path:ellipse(38% 35% at 50% 50%); offset-distance:35%; offset-rotate:auto;
-  animation:spCarRoll 28s linear infinite;
+  offset-path:ellipse(46% 43% at 50% 50%); offset-distance:35%; offset-rotate:auto;
+  animation:spCarRoll 70s linear infinite;
   filter:drop-shadow(0 1px 3px rgba(0,0,0,0.7));
 }
 @keyframes spTrainRoll { to { offset-distance:100%; } }
@@ -363,14 +363,58 @@
 
 /* JS駆動: 人・動物・飛行機 */
 .sp-person {
-  position:absolute; font-size:1.1rem; line-height:1; top:0; left:0;
+  position:absolute; top:0; left:0;
   cursor:grab; user-select:none; z-index:16; pointer-events:all;
-  transition:filter 0.1s;
-  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));
-  will-change:transform;
+  will-change:transform; transition:filter 0.15s;
 }
-.sp-person:hover { filter:drop-shadow(0 0 8px rgba(255,220,100,0.9)); }
-.sp-person.sp-dragging { cursor:grabbing; z-index:100; filter:drop-shadow(0 4px 12px rgba(255,220,100,0.9)); }
+.sp-person:hover .sp-hum { filter:drop-shadow(0 0 6px rgba(255,220,100,0.9)); }
+.sp-person.sp-dragging { cursor:grabbing; z-index:100; }
+.sp-person.sp-dragging .sp-hum { filter:drop-shadow(0 4px 12px rgba(255,220,100,0.9)); }
+/* ─── CSS人間フィギュア ─── */
+.sp-hum {
+  position:relative; width:14px; height:30px;
+  transform:translate(-7px,-30px);
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));
+}
+.sp-hum-hair {
+  position:absolute; top:0; left:2px;
+  width:10px; height:5px; border-radius:5px 5px 0 0;
+}
+.sp-hum-head {
+  position:absolute; top:3px; left:2px;
+  width:10px; height:10px; border-radius:50%;
+}
+.sp-hum-face {
+  position:absolute; top:6px; left:4px;
+  width:6px; height:3px; overflow:hidden;
+}
+.sp-hum-eye-l, .sp-hum-eye-r {
+  position:absolute; top:0;
+  width:2px; height:2px; border-radius:50%; background:rgba(0,0,0,0.6);
+}
+.sp-hum-eye-l { left:0; } .sp-hum-eye-r { right:0; }
+.sp-hum-body {
+  position:absolute; top:13px; left:3px;
+  width:8px; height:9px; border-radius:2px 2px 0 0;
+}
+.sp-hum-arm-l, .sp-hum-arm-r {
+  position:absolute; top:14px;
+  width:3px; height:7px; border-radius:3px;
+  transform-origin:top center;
+}
+.sp-hum-arm-l { left:0; animation:spArmL 0.55s infinite alternate ease-in-out; }
+.sp-hum-arm-r { right:0; animation:spArmR 0.55s infinite alternate ease-in-out; }
+.sp-hum-legl, .sp-hum-legr {
+  position:absolute; top:22px;
+  width:5px; height:8px; border-radius:0 0 3px 3px;
+  transform-origin:top center;
+}
+.sp-hum-legl { left:2px; animation:spLegL 0.55s infinite alternate ease-in-out; }
+.sp-hum-legr { right:2px; animation:spLegR 0.55s infinite alternate ease-in-out; }
+@keyframes spLegL { from{transform:rotate(-22deg)} to{transform:rotate(22deg)} }
+@keyframes spLegR { from{transform:rotate(22deg)}  to{transform:rotate(-22deg)} }
+@keyframes spArmL { from{transform:rotate(22deg)}  to{transform:rotate(-22deg)} }
+@keyframes spArmR { from{transform:rotate(-22deg)} to{transform:rotate(22deg)} }
 .sp-animal {
   position:absolute; font-size:1.0rem; line-height:1; top:0; left:0;
   pointer-events:none; z-index:15; will-change:transform;
@@ -381,29 +425,53 @@
   pointer-events:none; z-index:14; will-change:transform;
   filter:drop-shadow(0 2px 6px rgba(0,0,0,0.4));
 }
-/* Fireworks */
+/* Fireworks — 豪華版 */
 @keyframes spFwBurst {
-  0%   { transform:translate(0,0) scale(1); opacity:1; }
-  100% { transform:translate(var(--fx),var(--fy)) scale(0.2); opacity:0; }
+  0%   { transform:translate(0,0) scale(1.2); opacity:1; }
+  60%  { opacity:0.9; }
+  100% { transform:translate(var(--fx),var(--fy)) scale(0.05); opacity:0; }
+}
+@keyframes spFwTrail {
+  0%   { transform:translate(0,0) scale(0.7); opacity:0.7; }
+  100% { transform:translate(calc(var(--fx)*0.45),calc(var(--fy)*0.45)) scale(0.1); opacity:0; }
+}
+@keyframes spFwStar {
+  0%   { transform:translate(0,0) scale(1) rotate(0deg); opacity:1; }
+  50%  { opacity:1; }
+  100% { transform:translate(var(--fx),var(--fy)) scale(0.1) rotate(180deg); opacity:0; }
 }
 @keyframes spFwPop {
-  0%   { transform:scale(0); opacity:1; }
-  50%  { transform:scale(1.5); opacity:1; }
-  100% { transform:scale(0.5); opacity:0; }
+  0%   { transform:scale(0) rotate(0deg); opacity:1; }
+  40%  { transform:scale(2.2) rotate(45deg); opacity:1; }
+  100% { transform:scale(0.8) rotate(90deg); opacity:0; }
 }
-/* Building entry popup */
+@keyframes spFwRing {
+  0%   { transform:translate(-50%,-50%) scale(0); opacity:1; border-width:3px; }
+  100% { transform:translate(-50%,-50%) scale(1); opacity:0; border-width:0px; }
+}
+@keyframes spFwGlitter {
+  0%,100% { opacity:1; transform:translate(0,0) scale(1); }
+  50%     { opacity:0.4; transform:translate(var(--gx),var(--gy)) scale(0.5); }
+}
+/* Building entry popup — 住人の近くに表示 */
 .sp-entry-popup {
-  position:absolute; background:rgba(212,168,67,0.95); color:#1a0e04;
-  padding:3px 9px; border-radius:20px; font-size:0.62rem; font-weight:700;
+  position:absolute; background:rgba(212,168,67,0.97); color:#1a0e04;
+  padding:4px 10px; border-radius:12px; font-size:0.65rem; font-weight:700;
   white-space:nowrap; pointer-events:none; z-index:25;
-  font-family:'Noto Sans JP',sans-serif; transform:translateX(-50%);
-  animation:spEntryPopAnim 2s ease-out forwards;
+  font-family:'Noto Sans JP',sans-serif;
+  box-shadow:0 2px 8px rgba(0,0,0,0.35);
+  animation:spEntryPopAnim 2.2s ease-out forwards;
+}
+.sp-entry-popup::after {
+  content:''; position:absolute; bottom:-5px; left:12px;
+  border:5px solid transparent; border-top-color:rgba(212,168,67,0.97);
+  border-bottom:0; width:0; height:0;
 }
 @keyframes spEntryPopAnim {
-  0%   { opacity:0; top:0; }
-  20%  { opacity:1; top:-14px; }
-  80%  { opacity:1; top:-14px; }
-  100% { opacity:0; top:-24px; }
+  0%   { opacity:0; transform:translateY(4px); }
+  15%  { opacity:1; transform:translateY(-2px); }
+  75%  { opacity:1; transform:translateY(-2px); }
+  100% { opacity:0; transform:translateY(-10px); }
 }
 /* Detail Panel */
 .spmap-detail {
@@ -6874,24 +6942,28 @@ function _applySpMapZoom() {
    ════════════════════════════════════════════════════ */
 
 /* ── データ定義 ── */
+/* ─── 住民データ (独立したパス・速度・向き) ───
+   spd > 0: 時計回り, spd < 0: 反時計回り
+   cx/cy: 楕円中心(%),  rx/ry: 楕円半径(%) */
 const SP_WALKERS = [
-  { id:'w1',  emoji:'🚶‍♂️', rx:15.5, ry:12,   cx:51, cy:50, a:0,   spd:0.40 },
-  { id:'w2',  emoji:'🚶‍♀️', rx:16.5, ry:13,   cx:51, cy:50, a:72,  spd:0.35 },
-  { id:'w3',  emoji:'👦',   rx:14.5, ry:11,   cx:51, cy:50, a:144, spd:0.50 },
-  { id:'w4',  emoji:'👧',   rx:15.8, ry:12.5, cx:51, cy:50, a:216, spd:0.45 },
-  { id:'w5',  emoji:'🧑‍🦱', rx:17.5, ry:13.5, cx:51, cy:50, a:288, spd:0.38 },
-  { id:'w6',  emoji:'🧓',   rx:13.5, ry:10.5, cx:51, cy:50, a:36,  spd:0.30 },
-  { id:'w7',  emoji:'👴',   rx:18.5, ry:14.5, cx:51, cy:50, a:108, spd:0.32 },
-  { id:'w8',  emoji:'👵',   rx:14.8, ry:11.5, cx:51, cy:50, a:180, spd:0.28 },
-  { id:'w9',  emoji:'🧑‍🦳', rx:16.2, ry:12.8, cx:51, cy:50, a:252, spd:0.42 },
-  { id:'w10', emoji:'🧑‍🦲', rx:17.2, ry:12.2, cx:51, cy:50, a:324, spd:0.36 },
+  { id:'w1',  rx:13.5, ry:10.0, cx:47, cy:48, a:0,   spd: 0.10 }, /* 小さい内周 CW */
+  { id:'w2',  rx:16.0, ry:12.5, cx:52, cy:52, a:80,  spd:-0.08 }, /* 中内周 CCW */
+  { id:'w3',  rx:11.5, ry: 8.5, cx:44, cy:47, a:145, spd: 0.13 }, /* 左寄り小周 CW */
+  { id:'w4',  rx:14.0, ry:11.0, cx:54, cy:51, a:220, spd:-0.11 }, /* 右寄り CCW */
+  { id:'w5',  rx:18.0, ry:13.5, cx:50, cy:53, a:290, spd: 0.09 }, /* やや大 CW */
+  { id:'w6',  rx:10.0, ry: 7.5, cx:48, cy:45, a:30,  spd: 0.12 }, /* 上寄り小 CW */
+  { id:'w7',  rx:19.5, ry:15.0, cx:51, cy:50, a:110, spd:-0.07 }, /* 大周 CCW */
+  { id:'w8',  rx:12.5, ry: 9.5, cx:53, cy:49, a:185, spd: 0.14 }, /* 右上 CW */
+  { id:'w9',  rx:15.0, ry:12.0, cx:46, cy:53, a:255, spd:-0.10 }, /* 左下 CCW */
+  { id:'w10', rx:17.0, ry:11.5, cx:51, cy:47, a:328, spd: 0.08 }, /* 上側楕円 CW */
 ];
 const SP_ANIMALS = [
-  { id:'dog', emoji:'🐕', rx:22, ry:17.5, cx:51, cy:50, a:45,  spd:0.65 },
-  { id:'cat', emoji:'🐈', rx:23, ry:18.5, cx:51, cy:50, a:200, spd:0.52 },
-  { id:'bir', emoji:'🐦', rx:31, ry:26,   cx:51, cy:50, a:90,  spd:0.95, fly:true },
+  { id:'dog', emoji:'🐕', rx:22, ry:17, cx:51, cy:50, a:45,  spd: 0.18 }, /* CW */
+  { id:'cat', emoji:'🐈', rx:24, ry:19, cx:50, cy:52, a:200, spd:-0.14 }, /* CCW */
+  { id:'bir', emoji:'🐦', rx:50, ry:45, cx:50, cy:50, a:90,  spd: 0.22, fly:true }, /* 広域 */
 ];
-const SP_PLANE = { rx:47, ry:41, cx:50, cy:49, a:210, spd:0.60 };
+/* 飛行機 — マップ外縁をゆっくり周回 */
+const SP_PLANE = { rx:54, ry:48, cx:50, cy:50, a:210, spd:0.15 };
 
 const FW_COLORS = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b','#cc5de8','#f06595','#fff'];
 
@@ -6924,12 +6996,14 @@ function _spLiveFrame() {
   SP_WALKERS.forEach(w => {
     const st = _spWS[w.id];
     if (!st?.el || st.state !== 'walking') return;
-    st.a = (st.a + w.spd + 360) % 360;
+    /* spdの符号で時計/反時計 */
+    st.a = ((st.a + w.spd) % 360 + 360) % 360;
     const pos = _ellipsePos(st.a, w.rx, w.ry, w.cx, w.cy, iw, ih);
     const dir = _ellipseDir(st.a, w.spd);
     st.x = pos.x; st.y = pos.y;
-    const bounce = Math.sin(t * 9 + w.a * 0.1) * 2.2;
-    const flipX  = dir.dx < 0 ? -1 : 1;
+    const bounce = Math.sin(t * 7 + w.a * 0.1) * 1.5;
+    /* 進行方向に向ける (spdが負なら左向き基準) */
+    const flipX = dir.dx < 0 ? -1 : 1;
     st.el.style.transform = `translate(${pos.x}px,${pos.y + bounce}px) scaleX(${flipX})`;
   });
 
@@ -6945,19 +7019,51 @@ function _spLiveFrame() {
     el.style.transform = `translate(${pos.x}px,${pos.y + flutter}px) scaleX(${flipX})`;
   });
 
-  /* 飛行機 — ✈️は45°上向きなので (travelAngle - 45°) で補正 */
+  /* 飛行機 — 楕円の接線方向を正確に計算して向きを合わせる
+     接線ベクトル: dx = -rx*sin(a), dy = ry*cos(a)
+     ✈️は右上向き(−45°)なので +45° 補正する */
   {
     const pl = document.getElementById('sppl-plane');
     if (pl) {
-      SP_PLANE.a = (SP_PLANE.a + SP_PLANE.spd + 360) % 360;
+      SP_PLANE.a = ((SP_PLANE.a + SP_PLANE.spd) % 360 + 360) % 360;
       const pos = _ellipsePos(SP_PLANE.a, SP_PLANE.rx, SP_PLANE.ry, SP_PLANE.cx, SP_PLANE.cy, iw, ih);
-      const r = SP_PLANE.a * Math.PI / 180;
-      const travelAngleDeg = Math.atan2(Math.cos(r), -Math.sin(r)) * 180 / Math.PI;
-      pl.style.transform = `translate(${pos.x}px,${pos.y}px) rotate(${travelAngleDeg - 45}deg)`;
+      const r   = SP_PLANE.a * Math.PI / 180;
+      /* 楕円接線の正確な角度 */
+      const tx  = -SP_PLANE.rx * Math.sin(r);
+      const ty  =  SP_PLANE.ry * Math.cos(r);
+      const travelAngleDeg = Math.atan2(ty, tx) * 180 / Math.PI;
+      pl.style.transform = `translate(${pos.x}px,${pos.y}px) rotate(${travelAngleDeg + 45}deg)`;
     }
   }
 
   _spLiveRAF = requestAnimationFrame(_spLiveFrame);
+}
+
+/* ── CSS人間フィギュアのカラー定義 ── */
+const _HUM_SHIRTS  = ['#e74c3c','#3498db','#2ecc71','#9b59b6','#f39c12',
+                      '#1abc9c','#e67e22','#e91e63','#00bcd4','#795548'];
+const _HUM_SKINS   = ['#F4C28A','#E8A87C','#C68642','#F4C28A','#8D5524',
+                      '#FFDBB4','#E8A87C','#C68642','#F4C28A','#FFDBB4'];
+const _HUM_HAIRS   = ['#1a1a1a','#5c3317','#222','#8B4513','#1a1a1a',
+                      '#D4A843','#1a1a1a','#5c3317','#888','#222'];
+const _HUM_PANTS   = ['#2c3e50','#1a1a1a','#3d2b1f','#2c3e50','#1a1a1a',
+                      '#2c3e50','#3d2b1f','#1a1a1a','#34495e','#3d2b1f'];
+function _makeHuman(shirtCol, skinCol, hairCol, pantsCol) {
+  return `<div class="sp-hum">
+    <div class="sp-hum-hair" style="background:${hairCol}"></div>
+    <div class="sp-hum-head" style="background:${skinCol}">
+      <div class="sp-hum-face">
+        <div class="sp-hum-eye-l"></div>
+        <div class="sp-hum-eye-r"></div>
+      </div>
+    </div>
+    <div class="sp-hum-body" style="background:${shirtCol}">
+      <div class="sp-hum-arm-l" style="background:${shirtCol}"></div>
+      <div class="sp-hum-arm-r" style="background:${shirtCol}"></div>
+    </div>
+    <div class="sp-hum-legl" style="background:${pantsCol}"></div>
+    <div class="sp-hum-legr" style="background:${pantsCol}"></div>
+  </div>`;
 }
 
 /* ── 初期化 & 描画 ── */
@@ -6970,12 +7076,14 @@ function _startSpLive() {
   /* 既存削除 */
   inner.querySelectorAll('.sp-person,.sp-animal,.sp-plane').forEach(e => e.remove());
 
-  /* 人 */
-  SP_WALKERS.forEach(w => {
+  /* 人（CSSフィギュア） */
+  SP_WALKERS.forEach((w, idx) => {
     _spWS[w.id] = { a: w.a, state:'walking', x:0, y:0, el:null };
     const el = document.createElement('div');
     el.className = 'sp-person'; el.id = `spwk-${w.id}`;
-    el.textContent = w.emoji;
+    el.innerHTML = _makeHuman(
+      _HUM_SHIRTS[idx], _HUM_SKINS[idx], _HUM_HAIRS[idx], _HUM_PANTS[idx]
+    );
     inner.appendChild(el);
     _spWS[w.id].el = el;
     /* ドラッグ */
@@ -7013,7 +7121,14 @@ function _spGrab(wId, e) {
   e.preventDefault(); e.stopPropagation();
   const st = _spWS[wId];
   if (!st || st.state !== 'walking') return;
-  _spDrag = { wId };
+  /* つかんだ瞬間のカーソルと人物の位置差を記録 */
+  const inner = document.getElementById('spMapInner');
+  const rect  = inner ? inner.getBoundingClientRect() : {left:0,top:0};
+  const cx = e.touches ? e.touches[0].clientX : e.clientX;
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  const grabOffX = (cx - rect.left) - st.x;
+  const grabOffY = (cy - rect.top)  - st.y;
+  _spDrag = { wId, grabOffX, grabOffY };
   st.state = 'dragging';
   st.el.classList.add('sp-dragging');
   document.addEventListener('mousemove',  _spMove);
@@ -7032,7 +7147,9 @@ function _spMove(e) {
   const rect = inner.getBoundingClientRect();
   const cx = e.touches ? e.touches[0].clientX : e.clientX;
   const cy = e.touches ? e.touches[0].clientY : e.clientY;
-  const x = cx - rect.left, y = cy - rect.top;
+  /* オフセット補正: つかんだ点を基準に移動 */
+  const x = (cx - rect.left) - _spDrag.grabOffX;
+  const y = (cy - rect.top)  - _spDrag.grabOffY;
   st.x = x; st.y = y;
   st.el.style.transform = `translate(${x}px,${y}px)`;
 }
@@ -7069,6 +7186,12 @@ function _spDrop() {
 }
 
 /* ── 建物入場 ── */
+const _SP_ENTRY_MSGS = [
+  'いってきます！', 'ちょっとのぞいてみよう', 'よーし！入ろう',
+  'はーい♪', 'いくよ～', 'うわ楽しそう！', 'ここかな？',
+  '入ってみよっと', 'なんだろう…', 'わあ！', 'お邪魔しまーす',
+  'ちょっと休憩', 'よし！決めた', 'いい場所発見！',
+];
 function _spEnter(wId, poi, iw, ih) {
   const st = _spWS[wId];
   if (!st) return;
@@ -7078,16 +7201,19 @@ function _spEnter(wId, poi, iw, ih) {
   const steps = Math.max(30, Math.hypot(dx,dy) / 2.5);
   let step = 0;
 
-  /* 吹き出し */
+  /* 吹き出し — 住人の近くに表示（右上か左上） */
   const inner = document.getElementById('spMapInner');
   if (inner) {
     const pop = document.createElement('div');
     pop.className = 'sp-entry-popup';
-    pop.style.left = tx + 'px';
-    pop.style.top  = (ty - 10) + 'px';
-    pop.textContent = `${poi.icon} ${poi.name.split(' ')[0]}に入ります`;
+    const msg = _SP_ENTRY_MSGS[Math.floor(Math.random() * _SP_ENTRY_MSGS.length)];
+    pop.textContent = msg;
+    /* 右上か左上かを判定（画面左半分なら右上、右半分なら左上） */
+    const offsetX = st.x < iw * 0.6 ? 4 : -(pop.offsetWidth || 80) - 4;
+    pop.style.left = (st.x + offsetX) + 'px';
+    pop.style.top  = (st.y - 36) + 'px';
     inner.appendChild(pop);
-    setTimeout(() => pop.remove(), 2100);
+    setTimeout(() => pop.remove(), 2400);
   }
 
   const iv = setInterval(() => {
@@ -7134,34 +7260,91 @@ function _spExit(wId) {
   }, 16);
 }
 
-/* ── 花火 ── */
-function _firework(x, y) {
+/* ── 花火（豪華版） ── */
+function _firework(x, y, colorSet) {
   const inner = document.getElementById('spMapInner');
   if (!inner) return;
-  const cnt = 14 + Math.floor(Math.random() * 8);
-  for (let i = 0; i < cnt; i++) {
-    const ang = (i / cnt) * 360 + Math.random() * 10;
-    const dist = 30 + Math.random() * 55;
-    const r = ang * Math.PI / 180;
-    const fx = (Math.cos(r) * dist).toFixed(1) + 'px';
-    const fy = (Math.sin(r) * dist).toFixed(1) + 'px';
-    const color = FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)];
-    const size = (3 + Math.random() * 5).toFixed(1);
-    const dur  = (0.9 + Math.random() * 0.5).toFixed(2);
-    const p = document.createElement('div');
-    p.style.cssText = `position:absolute;left:${x}px;top:${y}px;width:${size}px;height:${size}px;
-      border-radius:50%;background:${color};pointer-events:none;z-index:35;
-      --fx:${fx};--fy:${fy};animation:spFwBurst ${dur}s ease-out forwards;`;
-    inner.appendChild(p);
-    setTimeout(() => p.remove(), (parseFloat(dur) + 0.1) * 1000);
-  }
-  /* 中心のフラッシュ */
+  const colors = colorSet || FW_COLORS;
+
+  /* ① リング波紋 */
+  const ring = document.createElement('div');
+  ring.style.cssText = `position:absolute;left:${x}px;top:${y}px;
+    width:60px;height:60px;border-radius:50%;
+    border:4px solid ${colors[0]};pointer-events:none;z-index:36;
+    animation:spFwRing 0.7s ease-out forwards;`;
+  inner.appendChild(ring);
+  setTimeout(() => ring.remove(), 750);
+
+  /* ② 中心フラッシュ */
   const fl = document.createElement('div');
-  fl.style.cssText = `position:absolute;left:${x-8}px;top:${y-8}px;width:16px;height:16px;
-    border-radius:50%;background:#fff;pointer-events:none;z-index:36;
-    animation:spFwPop 0.35s ease-out forwards;`;
+  fl.style.cssText = `position:absolute;left:${x-14}px;top:${y-14}px;
+    width:28px;height:28px;border-radius:50%;
+    background:radial-gradient(circle,#fff 30%,${colors[1]} 70%);
+    pointer-events:none;z-index:37;animation:spFwPop 0.4s ease-out forwards;`;
   inner.appendChild(fl);
-  setTimeout(() => fl.remove(), 400);
+  setTimeout(() => fl.remove(), 450);
+
+  /* ③ メインバースト（丸いパーティクル） */
+  const cnt = 28 + Math.floor(Math.random() * 12);
+  for (let i = 0; i < cnt; i++) {
+    const ang  = (i / cnt) * 360 + Math.random() * 8;
+    const dist = 45 + Math.random() * 75;
+    const r    = ang * Math.PI / 180;
+    const fx   = (Math.cos(r) * dist).toFixed(1) + 'px';
+    const fy   = (Math.sin(r) * dist).toFixed(1) + 'px';
+    const col  = colors[Math.floor(Math.random() * colors.length)];
+    const sz   = (3 + Math.random() * 6).toFixed(1);
+    const dur  = (0.8 + Math.random() * 0.6).toFixed(2);
+    const delay = (Math.random() * 0.08).toFixed(3);
+    const p = document.createElement('div');
+    p.style.cssText = `position:absolute;left:${x}px;top:${y}px;
+      width:${sz}px;height:${sz}px;border-radius:50%;background:${col};
+      pointer-events:none;z-index:35;--fx:${fx};--fy:${fy};
+      animation:spFwBurst ${dur}s ${delay}s ease-out forwards;
+      box-shadow:0 0 ${parseFloat(sz)+3}px ${col};`;
+    inner.appendChild(p);
+    setTimeout(() => p.remove(), (parseFloat(dur)+parseFloat(delay)+0.1)*1000);
+  }
+
+  /* ④ 星形パーティクル（少数） */
+  const starCnt = 8 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < starCnt; i++) {
+    const ang  = (i / starCnt) * 360 + 20;
+    const dist = 55 + Math.random() * 50;
+    const r    = ang * Math.PI / 180;
+    const fx   = (Math.cos(r) * dist).toFixed(1) + 'px';
+    const fy   = (Math.sin(r) * dist).toFixed(1) + 'px';
+    const col  = colors[Math.floor(Math.random() * colors.length)];
+    const sz   = (5 + Math.random() * 4).toFixed(1);
+    const dur  = (1.0 + Math.random() * 0.5).toFixed(2);
+    const s = document.createElement('div');
+    /* 星: clip-path の代わりに正方形を45度回転 */
+    s.style.cssText = `position:absolute;left:${x}px;top:${y}px;
+      width:${sz}px;height:${sz}px;background:${col};
+      transform:rotate(45deg);pointer-events:none;z-index:35;
+      --fx:${fx};--fy:${fy};animation:spFwStar ${dur}s ease-out forwards;
+      box-shadow:0 0 8px ${col};`;
+    inner.appendChild(s);
+    setTimeout(() => s.remove(), (parseFloat(dur)+0.1)*1000);
+  }
+
+  /* ⑤ トレイル（軌跡の残光） */
+  const trailCnt = 12;
+  for (let i = 0; i < trailCnt; i++) {
+    const ang  = Math.random() * 360;
+    const dist = 20 + Math.random() * 30;
+    const r    = ang * Math.PI / 180;
+    const fx   = (Math.cos(r) * dist).toFixed(1) + 'px';
+    const fy   = (Math.sin(r) * dist).toFixed(1) + 'px';
+    const col  = colors[Math.floor(Math.random() * colors.length)];
+    const t = document.createElement('div');
+    t.style.cssText = `position:absolute;left:${x}px;top:${y}px;
+      width:2px;height:10px;border-radius:1px;background:${col};
+      pointer-events:none;z-index:34;--fx:${fx};--fy:${fy};
+      animation:spFwTrail 0.6s ease-out forwards;opacity:0.7;`;
+    inner.appendChild(t);
+    setTimeout(() => t.remove(), 700);
+  }
 }
 
 function _shootFireworks() {
@@ -7169,18 +7352,34 @@ function _shootFireworks() {
   if (!inner) return;
   const iw = inner.offsetWidth || 960;
   const ih = inner.offsetHeight || 960;
-  /* 公園上空の8か所でランダムに発射 */
+  /* カラーパレット（打ち上げごとに変える） */
+  const palettes = [
+    ['#ff6b6b','#ffd93d','#fff','#ff922b'],
+    ['#4d96ff','#74c0fc','#fff','#a5d8ff'],
+    ['#6bcb77','#69db7c','#fff','#d3f9d8'],
+    ['#cc5de8','#e599f7','#fff','#f3d9fa'],
+    ['#ffd93d','#ff922b','#fff','#ffe8cc'],
+    ['#f06595','#faa2c1','#fff','#ffdeeb'],
+  ];
+  /* 打ち上げスポット（公園上空 + マップ広域） */
   const spots = [
-    [0.32*iw, 0.22*ih],[0.50*iw, 0.18*ih],[0.68*iw, 0.22*ih],
-    [0.28*iw, 0.35*ih],[0.52*iw, 0.30*ih],[0.72*iw, 0.32*ih],
-    [0.40*iw, 0.26*ih],[0.60*iw, 0.28*ih],
+    [0.30*iw, 0.20*ih],[0.50*iw, 0.15*ih],[0.70*iw, 0.20*ih],
+    [0.25*iw, 0.32*ih],[0.52*iw, 0.28*ih],[0.74*iw, 0.30*ih],
+    [0.38*iw, 0.24*ih],[0.62*iw, 0.22*ih],[0.46*iw, 0.35*ih],
+    [0.58*iw, 0.18*ih],[0.35*iw, 0.40*ih],[0.65*iw, 0.38*ih],
   ];
   let fired = 0;
+  const total = 6 + Math.floor(Math.random() * 6); /* 6〜11発 */
   function next() {
-    const [x, y] = spots[Math.floor(Math.random() * spots.length)];
-    _firework(x + (Math.random()-0.5)*40, y + (Math.random()-0.5)*30);
+    const [bx, by] = spots[Math.floor(Math.random() * spots.length)];
+    const palette  = palettes[Math.floor(Math.random() * palettes.length)];
+    _firework(
+      bx + (Math.random()-0.5)*50,
+      by + (Math.random()-0.5)*40,
+      palette
+    );
     fired++;
-    if (fired < 10) setTimeout(next, 250 + Math.random() * 350);
+    if (fired < total) setTimeout(next, 200 + Math.random() * 300);
   }
   next();
 }
@@ -7189,11 +7388,12 @@ let _fwTimer = null;
 function _scheduleFw() {
   if (_fwTimer) clearTimeout(_fwTimer);
   _fwTimer = setTimeout(() => {
+    /* マップが表示されているときだけ発射 */
     if (document.getElementById('spMapOverlay')?.style.display === 'flex') {
       _shootFireworks();
     }
-    _scheduleFw();
-  }, 90000 + Math.random() * 60000); /* 90〜150秒ごと */
+    _scheduleFw(); /* 必ず再スケジュール（繰り返し保証） */
+  }, 28000 + Math.random() * 4000); /* 28〜32秒ごと */
 }
 
 
