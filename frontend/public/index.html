@@ -1669,6 +1669,11 @@ body.paypay-mode #siteFooter {
 body.paypay-mode #emu-contact-btn {
   display: none !important;
 }
+/* SchoolParkマップ表示中：問い合わせボタンを非表示 */
+body.spmap-open #emu-contact-btn,
+body.spmap-open #emu-contact-label {
+  display: none !important;
+}
 body.paypay-mode #pp-post-fab {
   display: none !important;
 }
@@ -6742,8 +6747,8 @@ const SP_POIS = [
   // Creative Academy（北エリア：学びと創造）
   { id:"learn1", name:"Library 図書館",        icon:"📚", zone:"learn", px:29, py:24, desc:"知識・読書・学習コンテンツ。note記事5本の閲覧・購入導線",              status:"coming" },
   { id:"learn2", name:"Bookstore 本屋",         icon:"📖", zone:"learn", px:40, py:14, desc:"ビジネス・自己啓発書セレクション。推薦図書リスト公開",                status:"coming" },
-  { id:"learn3", name:"Art Museum 美術館",      icon:"🎨", zone:"learn", px:52, py:12, desc:"アート・クリエイティブコンテンツ。映像・写真作品展示",                status:"coming" },
-  { id:"learn4", name:"Lab 研究所",             icon:"🔬", zone:"learn", px:67, py:20, desc:"探究・リサーチ型コンテンツ。Web3・DAO研究レポート",                   status:"coming" },
+  { id:"learn3", name:"Art Museum 美術館",      icon:"🎨", zone:"learn", px:62, py:10, desc:"アート・クリエイティブコンテンツ。映像・写真作品展示",                status:"coming" },
+  { id:"learn4", name:"Lab 研究所",             icon:"🔬", zone:"learn", px:67, py:22, desc:"探究・リサーチ型コンテンツ。Web3・DAO研究レポート",                   status:"coming" },
   // Care Station（西エリア：安全と心身）
   { id:"guard1", name:"Hospital 病院",          icon:"🏥", zone:"guard", px:13, py:35, desc:"ユーザーサポート・トラブル対応。困ったときの相談窓口",                status:"coming" },
   { id:"guard2", name:"Police Station 警察署",  icon:"🚔", zone:"guard", px:21, py:47, desc:"SchoolPark自治・ルール管理。コミュニティガイドライン",                status:"coming" },
@@ -6797,6 +6802,7 @@ function openSpMap(gate) {
   _currentGate = gate || _currentGate;
   const overlay = document.getElementById("spMapOverlay");
   overlay.style.display = "flex";
+  document.body.classList.add('spmap-open'); /* 問い合わせボタン非表示 */
   const gateEl = document.getElementById("spMapGateLabel");
   if (gateEl) gateEl.textContent = GATE_NAMES[_currentGate] || "";
   _spMapZoomLevel = 1;
@@ -6825,6 +6831,7 @@ function openSpMap(gate) {
 
 function closeSpMap() {
   document.getElementById("spMapOverlay").style.display = "none";
+  document.body.classList.remove('spmap-open'); /* 問い合わせボタン復元 */
   closeSpDetail();
   _stopSpLive();
   if (_fwTimer) { clearTimeout(_fwTimer); _fwTimer = null; }
