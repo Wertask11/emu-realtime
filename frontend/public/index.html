@@ -2055,8 +2055,8 @@ body.paypay-mode #pp-post-fab {
   <!-- Info Bar -->
   <div class="spmap-infobar">
     <span>🕐 本日の営業時間：<strong>9:00〜21:00</strong></span>
-    <span>👥 混雑状況：<strong>やや混雑</strong></span>
-    <span>☀️ 天気：<strong>晴れ / 21°C</strong></span>
+    <span id="spInfoCrowd">👥 混雑状況：<strong>取得中…</strong></span>
+    <span id="spInfoWeather">🌤️ 天気(fuk)：<strong>—</strong> <span id="spInfoWeatherKan" style="margin-left:8px">(kan)：<strong>—</strong></span> <span id="spInfoWeatherOsk" style="margin-left:8px">(osk)：<strong>—</strong></span></span>
     <span id="spMapGateLabel" style="margin-left:auto;font-size:0.72rem;color:#D4A843;font-family:'Playfair Display',serif;"></span>
   </div>
 
@@ -6982,6 +6982,90 @@ function selectSpGate(gate) {
   openSpMap(gate);
 }
 
+/* ══════════════════════════════════════════════════════
+   SchoolPark インフォバー: 混雑状況 + リアルタイム天気
+   ══════════════════════════════════════════════════════ */
+
+/* ── 混雑状況（Firestore アクティブセッション数で判定） ── */
+let _spSessionId = null;
+let _spCrowdUnsub = null;
+const _SP_CROWD_COL = 'sp_active_users';
+
+async function _spCrowdJoin() {
+  if (!window.db || !window.fbLib) return;
+  _spSessionId = _spSessionId || Math.random().toString(36).slice(2);
+  const ref = window.fbLib.doc(window.db, _SP_CROWD_COL, _spSessionId);
+  await window.fbLib.setDoc(ref, { ts: Date.now() });
+  /* 10分ごとにタイムスタンプを更新（タブ放置対策） */
+  _spCrowdHb = setInterval(() => window.fbLib.setDoc(ref, { ts: Date.now() }), 600000);
+
+  /* アクティブ数リッスン（10分以内を「在席」と見なす） */
+  const colRef = window.fbLib.collection(window.db, _SP_CROWD_COL);
+  _spCrowdUnsub = window.fbLib.onSnapshot(colRef, snap => {
+    const cutoff = Date.now() - 10 * 60 * 1000;
+    const active = snap.docs.filter(d => (d.data().ts || 0) > cutoff).length;
+    _spUpdateCrowd(active);
+  });
+}
+async function _spCrowdLeave() {
+  clearInterval(_spCrowdHb);
+  if (_spCrowdUnsub) { _spCrowdUnsub(); _spCrowdUnsub = null; }
+  if (window.db && window.fbLib && _spSessionId) {
+    window.fbLib.deleteDoc(
+      window.fbLib.doc(window.db, _SP_CROWD_COL, _spSessionId)
+    ).catch(() => {});
+  }
+}
+function _spUpdateCrowd(n) {
+  let icon, label;
+  if      (n >= 20) { icon = '🔴'; label = `混雑（${n}人）`; }
+  else if (n >= 10) { icon = '🟠'; label = `やや混雑（${n}人）`; }
+  else if (n >=  5) { icon = '🟢'; label = `普通（${n}人）`; }
+  else              { icon = '🟦'; label = `空いています（${n}人）`; }
+  const el = document.getElementById('spInfoCrowd');
+  if (el) el.innerHTML = `👥 混雑状況：<strong>${icon} ${label}</strong>`;
+}
+
+/* ── リアルタイム天気（Open-Meteo API / キーなし無料） ── */
+const _SP_CITIES = [
+  { key:'fuk', name:'fuk', lat:33.5904, lon:130.4017 },
+  { key:'kan', name:'kan', lat:36.5613, lon:136.6562 },
+  { key:'osk', name:'osk', lat:34.6937, lon:135.5023 },
+];
+const _WC_MAP = {
+  0:'☀️ 快晴', 1:'🌤️ 晴れ', 2:'⛅ 曇り', 3:'☁️ 曇り',
+  45:'🌫️ 霧', 48:'🌫️ 霧',
+  51:'🌦️ 小雨', 53:'🌦️ 霧雨', 55:'🌧️ 霧雨',
+  61:'🌧️ 雨', 63:'🌧️ 雨', 65:'🌧️ 大雨',
+  71:'🌨️ 雪', 73:'🌨️ 雪', 75:'❄️ 大雪',
+  80:'🌦️ にわか雨', 81:'🌦️ にわか雨', 82:'🌧️ 激しい雨',
+  95:'⛈️ 雷雨', 96:'⛈️ 雷雨', 99:'⛈️ 激しい雷雨',
+};
+async function _spFetchWeather() {
+  try {
+    const results = await Promise.all(_SP_CITIES.map(c =>
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current_weather=true`)
+        .then(r => r.json())
+    ));
+    const [fuk, kan, osk] = results.map((r, i) => {
+      const cw = r.current_weather || {};
+      const desc = _WC_MAP[cw.weathercode] || '—';
+      const temp = cw.temperature != null ? Math.round(cw.temperature) + '°C' : '—';
+      return { desc, temp, key: _SP_CITIES[i].key };
+    });
+
+    /* インフォバーを一括更新 */
+    const el = document.getElementById('spInfoWeather');
+    if (el) el.innerHTML =
+      `${fuk.desc} <strong>(fuk) ${fuk.temp}</strong>` +
+      ` &nbsp;${kan.desc} <strong>(kan) ${kan.temp}</strong>` +
+      ` &nbsp;${osk.desc} <strong>(osk) ${osk.temp}</strong>`;
+  } catch(e) {
+    const el = document.getElementById('spInfoWeather');
+    if (el) el.innerHTML = '🌤️ 天気：<strong>取得失敗</strong>';
+  }
+}
+
 function openSpMap(gate) {
   _currentGate = gate || _currentGate;
   const overlay = document.getElementById("spMapOverlay");
@@ -6993,6 +7077,9 @@ function openSpMap(gate) {
   _spMapFilter = "all";
   renderSpMapPois();
   renderSpContentList("all");
+  /* 混雑状況・天気を起動 */
+  _spCrowdJoin();
+  _spFetchWeather();
   /* JS駆動アニメ起動 */
   requestAnimationFrame(() => _startSpLive());
 
@@ -7020,6 +7107,7 @@ function closeSpMap() {
   closeSpDetail();
   _stopSpLive();
   if (_fwTimer) { clearTimeout(_fwTimer); _fwTimer = null; }
+  _spCrowdLeave(); /* Firestoreからセッション削除 */
 }
 
 /* ゾーン配列 or 'all' でPOIをフィルタ */
@@ -7161,11 +7249,11 @@ function spMapLinkClick(type) {
         <span class="spmm-mkt-icon">🌊</span>
         <div class="spmm-mkt-info">
           <div class="spmm-mkt-name">OpenSea</div>
-          <div class="spmm-mkt-sub">仮想通貨（ETH）対応 / グローバルNFTマーケット</div>
+          <div class="spmm-mkt-sub">暗号資産（ETH）対応 / グローバルNFTマーケット</div>
         </div>
         <span class="spmm-mkt-arr">→</span>
       </button>
-      <p class="spmm-desc" style="font-size:0.70rem;margin-top:14px;color:#666">※ NFT購入後はウォレットをEmuアプリに接続することで、プレミアム機能が解放されます。</p>
+      <p class="spmm-desc" style="font-size:0.70rem;margin-top:14px;color:#666">※ 各入場券をご購入後、ウォレットをEmuアプリに接続することで、各機能をご利用いただけます。</p>
     `);
   }
   else if (type === 'company') {
@@ -7181,7 +7269,7 @@ function spMapLinkClick(type) {
       </a>
       <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px 16px;font-size:0.78rem;color:#888;line-height:1.8">
         <div>📛 名称：合同会社型DAO SchoolPark</div>
-        <div>📍 運営：LLC.DAO  School Park</div>
+        <div>📍 運営：合同会社型DAO SchoolPark</div>
         <div>📅 開園予定：2025年5月20日</div>
         <div>🔗 ブロックチェーン：Ethereum / Polygon</div>
         <div>🎓 コンセプト：学校より学べて公園より楽しめて会社より稼げる場所を</div>
