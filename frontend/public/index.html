@@ -7018,51 +7018,52 @@ async function _spCrowdLeave() {
 }
 function _spUpdateCrowd(n) {
   let icon, label;
-  if      (n >= 20) { icon = '🔴'; label = `混雑（${n}人）`; }
-  else if (n >= 10) { icon = '🟠'; label = `やや混雑（${n}人）`; }
-  else if (n >=  5) { icon = '🟢'; label = `普通（${n}人）`; }
-  else              { icon = '🟦'; label = `空いています（${n}人）`; }
+  if      (n >= 20) { icon = '🔴'; label = '混雑'; }
+  else if (n >= 10) { icon = '🟠'; label = 'やや混雑'; }
+  else if (n >=  5) { icon = '🟢'; label = '普通'; }
+  else              { icon = '🟦'; label = '空いています'; }
   const el = document.getElementById('spInfoCrowd');
   if (el) el.innerHTML = `👥 混雑状況：<strong>${icon} ${label}</strong>`;
 }
 
-/* ── リアルタイム天気（Open-Meteo API / キーなし無料） ── */
-const _SP_CITIES = [
-  { key:'fuk', name:'fuk', lat:33.5904, lon:130.4017 },
-  { key:'kan', name:'kan', lat:36.5613, lon:136.6562 },
-  { key:'osk', name:'osk', lat:34.6937, lon:135.5023 },
+/* ── リアルタイム天気（wttr.in API / CORS対応） ── */
+const _SP_WEATHER_CITIES = [
+  { key:'fuk', city:'Fukuoka' },
+  { key:'kan', city:'Kanazawa' },
+  { key:'osk', city:'Osaka' },
 ];
-const _WC_MAP = {
-  0:'☀️ 快晴', 1:'🌤️ 晴れ', 2:'⛅ 曇り', 3:'☁️ 曇り',
-  45:'🌫️ 霧', 48:'🌫️ 霧',
-  51:'🌦️ 小雨', 53:'🌦️ 霧雨', 55:'🌧️ 霧雨',
-  61:'🌧️ 雨', 63:'🌧️ 雨', 65:'🌧️ 大雨',
-  71:'🌨️ 雪', 73:'🌨️ 雪', 75:'❄️ 大雪',
-  80:'🌦️ にわか雨', 81:'🌦️ にわか雨', 82:'🌧️ 激しい雨',
-  95:'⛈️ 雷雨', 96:'⛈️ 雷雨', 99:'⛈️ 激しい雷雨',
+const _WTTR_WC = {
+  113:'☀️ 快晴', 116:'🌤️ 晴れ', 119:'⛅ 曇り', 122:'☁️ 曇り',
+  143:'🌫️ 霞', 248:'🌫️ 霧', 260:'🌫️ 霧',
+  263:'🌦️ 小雨', 266:'🌦️ 小雨', 281:'🌧️ 霧雨', 284:'🌧️ 霧雨',
+  293:'🌦️ 弱い雨', 296:'🌧️ 雨', 299:'🌧️ 雨', 302:'🌧️ 雨', 305:'🌧️ 大雨', 308:'🌧️ 大雨',
+  311:'🌧️ 雨', 314:'🌧️ 雨',
+  317:'🌨️ みぞれ', 320:'🌨️ みぞれ',
+  323:'🌨️ 雪', 326:'🌨️ 雪', 329:'🌨️ 雪', 332:'🌨️ 雪', 335:'❄️ 大雪', 338:'❄️ 大雪',
+  350:'🌨️ 霰', 353:'🌦️ にわか雨', 356:'🌧️ 激しい雨', 359:'🌧️ 豪雨',
+  362:'🌨️ みぞれ', 365:'🌨️ みぞれ', 368:'🌨️ 雪', 371:'❄️ 大雪',
+  374:'🌨️ 霰', 377:'🌨️ 霰',
+  386:'⛈️ 雷雨', 389:'⛈️ 雷雨', 392:'⛈️ 雷雪', 395:'⛈️ 雷雪',
 };
 async function _spFetchWeather() {
   try {
-    const results = await Promise.all(_SP_CITIES.map(c =>
-      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current_weather=true`)
+    const results = await Promise.all(_SP_WEATHER_CITIES.map(c =>
+      fetch(`https://wttr.in/${c.city}?format=j1`, { headers:{ 'Accept':'application/json' } })
         .then(r => r.json())
     ));
-    const [fuk, kan, osk] = results.map((r, i) => {
-      const cw = r.current_weather || {};
-      const desc = _WC_MAP[cw.weathercode] || '—';
-      const temp = cw.temperature != null ? Math.round(cw.temperature) + '°C' : '—';
-      return { desc, temp, key: _SP_CITIES[i].key };
+    const parts = results.map((r, i) => {
+      const cc  = r.current_condition?.[0] || {};
+      const code = parseInt(cc.weatherCode || '116');
+      const icon = _WTTR_WC[code] || '🌤️';
+      const temp = cc.temp_C != null ? cc.temp_C + '°C' : '—';
+      const key  = _SP_WEATHER_CITIES[i].key;
+      return `${icon} <strong>(${key}) ${temp}</strong>`;
     });
-
-    /* インフォバーを一括更新 */
     const el = document.getElementById('spInfoWeather');
-    if (el) el.innerHTML =
-      `${fuk.desc} <strong>(fuk) ${fuk.temp}</strong>` +
-      ` &nbsp;${kan.desc} <strong>(kan) ${kan.temp}</strong>` +
-      ` &nbsp;${osk.desc} <strong>(osk) ${osk.temp}</strong>`;
+    if (el) el.innerHTML = parts.join(' &nbsp;');
   } catch(e) {
     const el = document.getElementById('spInfoWeather');
-    if (el) el.innerHTML = '🌤️ 天気：<strong>取得失敗</strong>';
+    if (el) el.innerHTML = '🌤️ 天気 (fuk)/(kan)/(osk)：<strong>—</strong>';
   }
 }
 
@@ -7205,18 +7206,27 @@ function spMapSelectPoi(poiId) {
     <div class="spmap-detail-badge">🕐 5/20 OPENING</div>
   `;
   panel.classList.add("smd-open");
+  /* 右上ラベルを選択中コンテンツ名に更新 */
+  const gateEl = document.getElementById("spMapGateLabel");
+  if (gateEl) gateEl.textContent = `📍 ${poi.icon} ${poi.name}`;
 }
 
 function closeSpDetail() {
   const panel = document.getElementById("spDetailPanel");
   if (panel) panel.classList.remove("smd-open");
   document.querySelectorAll(".spmap-poi-marker").forEach(m => m.classList.remove("spm-active"));
+  /* ゲート名に戻す */
+  const gateEl = document.getElementById("spMapGateLabel");
+  if (gateEl) gateEl.textContent = GATE_NAMES[_currentGate] || '';
 }
 
 function spMapFilter(zones, el) {
   _spMapFilter = zones;
   document.querySelectorAll(".spmap-area-item").forEach(i => i.classList.remove("spa-active"));
   if (el) el.classList.add("spa-active");
+  /* 検索をクリア */
+  const searchInput = document.getElementById('spMapSearchInput');
+  if (searchInput) searchInput.value = '';
   closeSpDetail();
   renderSpMapPois(zones);
   renderSpContentList(zones);
@@ -7420,18 +7430,72 @@ function spMapNavClick(type) {
   }
 }
 
+/* 検索ワードのハイライト */
+function _spHl(text, q) {
+  if (!q) return text;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) return text;
+  return text.slice(0, idx) +
+    `<mark style="background:rgba(212,168,67,0.35);color:#D4A843;border-radius:2px;padding:0 1px">${text.slice(idx, idx+q.length)}</mark>` +
+    text.slice(idx + q.length);
+}
+
 function spMapSearch(val) {
-  const q = val.toLowerCase();
+  const q = (val || '').trim();
+  const ql = q.toLowerCase();
+
+  /* ① マップ上のPOIマーカーを絞り込み表示 */
   const container = document.getElementById("spPOIContainer");
-  if (!container) return;
-  container.querySelectorAll(".spmap-poi-marker").forEach(m => {
-    const poiId = m.getAttribute("data-poi");
-    const poi = SP_POIS.find(p => p.id === poiId);
-    if (!poi) return;
-    const match = poi.name.toLowerCase().includes(q) || poi.desc.toLowerCase().includes(q);
-    m.style.opacity = (!q || match) ? "1" : "0.15";
-    m.style.pointerEvents = (!q || match) ? "all" : "none";
-  });
+  if (container) {
+    container.querySelectorAll(".spmap-poi-marker").forEach(m => {
+      const poi = SP_POIS.find(p => p.id === m.getAttribute("data-poi"));
+      if (!poi) return;
+      const match = !ql ||
+        poi.name.toLowerCase().includes(ql) ||
+        poi.desc.toLowerCase().includes(ql) ||
+        (SP_ZONES[poi.zone]?.label||'').toLowerCase().includes(ql);
+      m.style.opacity = match ? "1" : "0.1";
+      m.style.pointerEvents = match ? "all" : "none";
+      m.style.transform = match && ql ? "translate(-50%,-50%) scale(1.4)" : "";
+    });
+  }
+
+  /* ② 入力なし → コンテンツ一覧を元に戻す */
+  if (!ql) {
+    renderSpContentList(_spMapFilter);
+    return;
+  }
+
+  /* ③ 一致するPOIをサイドバーに表示（ハイライト付き） */
+  const matched = SP_POIS.filter(p =>
+    p.name.toLowerCase().includes(ql) ||
+    p.desc.toLowerCase().includes(ql) ||
+    (SP_ZONES[p.zone]?.label||'').toLowerCase().includes(ql)
+  );
+
+  const list = document.getElementById("spContentList");
+  if (list) {
+    if (matched.length === 0) {
+      list.innerHTML = `<div class="spmap-content-sep" style="color:#ef4444">「${q}」に該当なし</div>`;
+    } else {
+      let html = `<div class="spmap-content-sep">🔍 「${q}」— ${matched.length}件</div>`;
+      matched.forEach(poi => {
+        const zone = SP_ZONES[poi.zone] || {};
+        html += `<div class="spmap-content-item" id="spcitem-${poi.id}" onclick="spMapSelectPoiFromList('${poi.id}')">
+          <span class="spmap-content-icon">${poi.icon}</span>
+          <div class="spmap-content-info">
+            <div class="spmap-content-name">${_spHl(poi.name, q)}</div>
+            <div class="spmap-content-zone" style="color:${zone.color||'#666'}">${_spHl(zone.sub||zone.label||'', q)}</div>
+          </div>
+        </div>`;
+      });
+      list.innerHTML = html;
+    }
+  }
+
+  /* ④ 1件のみ → 自動で詳細パネル表示 */
+  if (matched.length === 1) spMapSelectPoi(matched[0].id);
+  else closeSpDetail();
 }
 
 function spMapZoomIn() {
