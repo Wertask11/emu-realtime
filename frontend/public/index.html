@@ -253,28 +253,59 @@
 }
 .spmtab.active { color:#D4A843; border-bottom-color:#D4A843; }
 .spmtab:hover { color:#ddd; }
-/* Area List */
-.spmap-area-list { flex:1; overflow-y:auto; padding:6px 10px; }
+/* Area List (エリア選択) */
+.spmap-area-list { flex-shrink:0; padding:6px 8px 4px; border-bottom:1px solid rgba(139,105,20,0.14); }
 .spmap-area-item {
-  display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:6px;
-  cursor:pointer; font-size:0.79rem; color:#999; transition:background 0.15s;
+  display:flex; align-items:center; gap:7px; padding:6px 8px; border-radius:6px;
+  cursor:pointer; transition:background 0.15s;
 }
-.spmap-area-item:hover { background:rgba(212,168,67,0.08); color:#ddd; }
-.spmap-area-item.spa-active { background:rgba(212,168,67,0.12); color:#D4A843; }
+.spmap-area-item:hover { background:rgba(212,168,67,0.08); }
+.spmap-area-item.spa-active { background:rgba(212,168,67,0.12); }
 .spmap-area-dot { width:9px; height:9px; border-radius:2px; flex-shrink:0; transform:rotate(45deg); }
+.spmap-area-names { display:flex; flex-direction:column; flex:1; min-width:0; }
+.spmap-area-main  { font-size:0.80rem; color:#ccc; font-weight:600; line-height:1.2; }
+.spmap-area-sub   { font-size:0.62rem; color:#666; line-height:1.2; }
+.spmap-area-item.spa-active .spmap-area-main { color:#D4A843; }
+.spmap-area-item.spa-active .spmap-area-sub  { color:#a87c20; }
 .spmap-area-count {
-  margin-left:auto; font-size:0.68rem; color:#555; background:rgba(255,255,255,0.06);
-  padding:1px 7px; border-radius:10px;
+  font-size:0.63rem; color:#555; background:rgba(255,255,255,0.06);
+  padding:1px 6px; border-radius:10px; flex-shrink:0;
 }
 .spmap-area-item.spa-active .spmap-area-count { color:#D4A843; background:rgba(212,168,67,0.12); }
-/* Legend */
-.spmap-legend { border-top:1px solid rgba(139,105,20,0.18); padding:10px 12px; flex-shrink:0; }
-.spmap-legend-ttl {
-  font-size:0.58rem; font-weight:700; letter-spacing:0.15em; color:#555;
-  text-transform:uppercase; margin-bottom:7px;
+
+/* Content List (コンテンツ一覧 in sidebar) */
+.spmap-content-list { flex:1; overflow-y:auto; padding:4px 8px 6px; }
+.spmap-content-item {
+  display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:5px;
+  cursor:pointer; transition:background 0.12s;
 }
-.spmap-legend-row { display:flex; align-items:center; gap:8px; font-size:0.72rem; color:#888; margin-bottom:5px; }
-.sp-ldiamond { width:8px; height:8px; border-radius:2px; flex-shrink:0; transform:rotate(45deg); }
+.spmap-content-item:hover { background:rgba(212,168,67,0.09); }
+.spmap-content-item.spc-active { background:rgba(212,168,67,0.14); }
+.spmap-content-icon { font-size:0.95rem; flex-shrink:0; }
+.spmap-content-info { flex:1; min-width:0; }
+.spmap-content-name { font-size:0.72rem; color:#bbb; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.spmap-content-item.spc-active .spmap-content-name { color:#D4A843; }
+.spmap-content-zone { font-size:0.60rem; color:#555; margin-top:1px; }
+.spmap-content-sep {
+  font-size:0.58rem; font-weight:700; letter-spacing:0.12em; color:#555;
+  text-transform:uppercase; padding:8px 8px 4px;
+}
+
+/* Footer Links (凡例エリア → リンクに変更) */
+.spmap-legend { border-top:1px solid rgba(139,105,20,0.18); padding:8px 10px; flex-shrink:0; }
+.spmap-legend-ttl {
+  font-size:0.55rem; font-weight:700; letter-spacing:0.15em; color:#444;
+  text-transform:uppercase; margin-bottom:5px;
+}
+.spmap-legend-link {
+  display:flex; align-items:center; gap:7px; padding:5px 6px; border-radius:5px;
+  font-size:0.72rem; color:#888; cursor:pointer; transition:background 0.12s, color 0.12s;
+  margin-bottom:1px;
+}
+.spmap-legend-link:hover { background:rgba(212,168,67,0.09); color:#D4A843; }
+.spmap-legend-link-icon { font-size:0.82rem; }
+/* 古いダイアモンドアイコン (削除) */
+.sp-ldiamond { display:none; }
 /* Map Canvas */
 .spmap-canvas { flex:1; position:relative; overflow:hidden; background:#e8dfc0; }
 /* Scrollable Viewport */
@@ -1925,48 +1956,78 @@ body.paypay-mode #pp-post-fab {
     <aside class="spmap-left">
       <div class="spmap-left-header">
         <div class="spmap-left-title">PARK MAP</div>
-        <div class="spmap-left-sub">エリアを選択してください</div>
+        <div class="spmap-left-sub" id="spAreaSubLabel">エリアを選択してください</div>
       </div>
-      <div class="spmap-tabs">
-        <button class="spmtab active" onclick="spMapTab(this,'area')">エリア</button>
-        <button class="spmtab" onclick="spMapTab(this,'genre')">ジャンル</button>
-        <button class="spmtab" onclick="spMapTab(this,'list')">一覧</button>
-      </div>
+
+      <!-- エリア選択リスト（タブなし・6項目） -->
       <div class="spmap-area-list" id="spAreaList">
         <div class="spmap-area-item spa-active" onclick="spMapFilter('all',this)">
-          <span class="spmap-area-dot" style="background:#ccc"></span>すべて<span class="spmap-area-count">28</span>
+          <span class="spmap-area-dot" style="background:#aaa"></span>
+          <div class="spmap-area-names">
+            <span class="spmap-area-main">すべて</span>
+          </div>
+          <span class="spmap-area-count" id="spCntAll">28</span>
         </div>
-        <div class="spmap-area-item" onclick="spMapFilter('guard',this)">
-          <span class="spmap-area-dot" style="background:#ef4444"></span>安全・公共<span class="spmap-area-count">4</span>
+        <div class="spmap-area-item" onclick="spMapFilter(['plaza'],this)">
+          <span class="spmap-area-dot" style="background:#f59e0b"></span>
+          <div class="spmap-area-names">
+            <span class="spmap-area-main">中央エリア</span>
+            <span class="spmap-area-sub">健康・運動</span>
+          </div>
+          <span class="spmap-area-count">1</span>
         </div>
-        <div class="spmap-area-item" onclick="spMapFilter('star',this)">
-          <span class="spmap-area-dot" style="background:#a855f7"></span>交通・インフラ<span class="spmap-area-count">4</span>
+        <div class="spmap-area-item" onclick="spMapFilter(['earn','life'],this)">
+          <span class="spmap-area-dot" style="background:#eab308"></span>
+          <div class="spmap-area-names">
+            <span class="spmap-area-main">東エリア</span>
+            <span class="spmap-area-sub">生活・住居、商業・経済</span>
+          </div>
+          <span class="spmap-area-count">8</span>
         </div>
-        <div class="spmap-area-item" onclick="spMapFilter('learn',this)">
-          <span class="spmap-area-dot" style="background:#3b82f6"></span>学び・文化<span class="spmap-area-count">4</span>
+        <div class="spmap-area-item" onclick="spMapFilter(['guard'],this)">
+          <span class="spmap-area-dot" style="background:#ef4444"></span>
+          <div class="spmap-area-names">
+            <span class="spmap-area-main">西エリア</span>
+            <span class="spmap-area-sub">安全・公共</span>
+          </div>
+          <span class="spmap-area-count">4</span>
         </div>
-        <div class="spmap-area-item" onclick="spMapFilter('play',this)">
-          <span class="spmap-area-dot" style="background:#22c55e"></span>遊び・自然<span class="spmap-area-count">7</span>
+        <div class="spmap-area-item" onclick="spMapFilter(['play'],this)">
+          <span class="spmap-area-dot" style="background:#22c55e"></span>
+          <div class="spmap-area-names">
+            <span class="spmap-area-main">南エリア</span>
+            <span class="spmap-area-sub">遊び・自然</span>
+          </div>
+          <span class="spmap-area-count">7</span>
         </div>
-        <div class="spmap-area-item" onclick="spMapFilter('life',this)">
-          <span class="spmap-area-dot" style="background:#f97316"></span>生活・居住<span class="spmap-area-count">1</span>
-        </div>
-        <div class="spmap-area-item" onclick="spMapFilter('plaza',this)">
-          <span class="spmap-area-dot" style="background:#f59e0b"></span>健康・運動<span class="spmap-area-count">1</span>
-        </div>
-        <div class="spmap-area-item" onclick="spMapFilter('earn',this)">
-          <span class="spmap-area-dot" style="background:#eab308"></span>商業・経済<span class="spmap-area-count">7</span>
+        <div class="spmap-area-item" onclick="spMapFilter(['learn'],this)">
+          <span class="spmap-area-dot" style="background:#3b82f6"></span>
+          <div class="spmap-area-names">
+            <span class="spmap-area-main">北エリア</span>
+            <span class="spmap-area-sub">学び・文化</span>
+          </div>
+          <span class="spmap-area-count">4</span>
         </div>
       </div>
+
+      <!-- コンテンツ一覧（エリア選択後に動的表示） -->
+      <div class="spmap-content-list" id="spContentList"></div>
+
+      <!-- フッターリンク -->
       <div class="spmap-legend">
-        <div class="spmap-legend-ttl">LEGEND</div>
-        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#ef4444"></span>安全・公共</div>
-        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#a855f7"></span>交通・インフラ</div>
-        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#3b82f6"></span>学び・文化</div>
-        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#22c55e"></span>遊び・自然</div>
-        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#f97316"></span>生活・居住</div>
-        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#f59e0b"></span>健康・運動</div>
-        <div class="spmap-legend-row"><span class="sp-ldiamond" style="background:#eab308"></span>商業・経済</div>
+        <div class="spmap-legend-ttl">LINKS</div>
+        <div class="spmap-legend-link" onclick="spMapLinkClick('ticket')">
+          <span class="spmap-legend-link-icon">🎫</span>チケットストア
+        </div>
+        <div class="spmap-legend-link" onclick="spMapLinkClick('company')">
+          <span class="spmap-legend-link-icon">🏢</span>企業情報
+        </div>
+        <div class="spmap-legend-link" onclick="spMapLinkClick('faq')">
+          <span class="spmap-legend-link-icon">❓</span>よくあるご質問
+        </div>
+        <div class="spmap-legend-link" onclick="spMapLinkClick('contact')">
+          <span class="spmap-legend-link-icon">📩</span>お問い合わせ
+        </div>
       </div>
     </aside>
 
@@ -6808,6 +6869,7 @@ function openSpMap(gate) {
   _spMapZoomLevel = 1;
   _spMapFilter = "all";
   renderSpMapPois();
+  renderSpContentList("all");
   /* JS駆動アニメ起動 */
   requestAnimationFrame(() => _startSpLive());
 
@@ -6837,13 +6899,20 @@ function closeSpMap() {
   if (_fwTimer) { clearTimeout(_fwTimer); _fwTimer = null; }
 }
 
+/* ゾーン配列 or 'all' でPOIをフィルタ */
+function _spZoneMatch(poi, filter) {
+  if (!filter || filter === "all") return true;
+  if (Array.isArray(filter)) return filter.includes(poi.zone);
+  return poi.zone === filter;
+}
+
 function renderSpMapPois(filter) {
   const container = document.getElementById("spPOIContainer");
   if (!container) return;
   const activeFilter = filter || _spMapFilter || "all";
   container.innerHTML = "";
   SP_POIS.forEach(poi => {
-    if (activeFilter !== "all" && poi.zone !== activeFilter) return;
+    if (!_spZoneMatch(poi, activeFilter)) return;
     const zone = SP_ZONES[poi.zone] || {};
     const color = zone.color || "#fff";
     const el = document.createElement("div");
@@ -6857,6 +6926,47 @@ function renderSpMapPois(filter) {
     el.addEventListener("click", (e) => { e.stopPropagation(); spMapSelectPoi(poi.id); });
     container.appendChild(el);
   });
+}
+
+/* 左サイドバーのコンテンツ一覧を更新 */
+function renderSpContentList(filter) {
+  const list = document.getElementById("spContentList");
+  if (!list) return;
+  const pois = SP_POIS.filter(p => _spZoneMatch(p, filter));
+  if (pois.length === 0) { list.innerHTML = ''; return; }
+
+  /* エリアごとにグループ化して表示 */
+  const AREA_LABELS = {
+    'all':           'すべてのコンテンツ',
+    'plaza':         '中央エリア — 健康・運動',
+    'earn,life':     '東エリア — 生活・住居、商業・経済',
+    'guard':         '西エリア — 安全・公共',
+    'play':          '南エリア — 遊び・自然',
+    'learn':         '北エリア — 学び・文化',
+  };
+  const key = Array.isArray(filter) ? filter.join(',') : (filter || 'all');
+  const label = AREA_LABELS[key] || '';
+
+  let html = label ? `<div class="spmap-content-sep">${label}（${pois.length}件）</div>` : '';
+  pois.forEach(poi => {
+    const zone = SP_ZONES[poi.zone] || {};
+    html += `<div class="spmap-content-item" id="spcitem-${poi.id}" onclick="spMapSelectPoiFromList('${poi.id}')">
+      <span class="spmap-content-icon">${poi.icon}</span>
+      <div class="spmap-content-info">
+        <div class="spmap-content-name">${poi.name}</div>
+        <div class="spmap-content-zone" style="color:${zone.color||'#666'}">${zone.sub||zone.label||''}</div>
+      </div>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+function spMapSelectPoiFromList(poiId) {
+  /* サイドバーのアクティブ状態更新 */
+  document.querySelectorAll(".spmap-content-item").forEach(el => el.classList.remove("spc-active"));
+  const item = document.getElementById(`spcitem-${poiId}`);
+  if (item) { item.classList.add("spc-active"); item.scrollIntoView({block:"nearest"}); }
+  spMapSelectPoi(poiId);
 }
 
 function spMapSelectPoi(poiId) {
@@ -6892,20 +7002,32 @@ function closeSpDetail() {
   document.querySelectorAll(".spmap-poi-marker").forEach(m => m.classList.remove("spm-active"));
 }
 
-function spMapTab(btn, tab) {
-  document.querySelectorAll(".spmtab").forEach(b => b.classList.remove("active"));
-  btn.classList.add("active");
-  // タブごとの表示切替（現在はエリアタブのみ実装）
-  const list = document.getElementById("spAreaList");
-  if (list) list.style.display = (tab === "list") ? "none" : "";
-}
-
-function spMapFilter(zone, el) {
-  _spMapFilter = zone;
+function spMapFilter(zones, el) {
+  _spMapFilter = zones;
   document.querySelectorAll(".spmap-area-item").forEach(i => i.classList.remove("spa-active"));
   if (el) el.classList.add("spa-active");
   closeSpDetail();
-  renderSpMapPois(zone);
+  renderSpMapPois(zones);
+  renderSpContentList(zones);
+}
+
+/* フッターリンクのクリックハンドラ（将来的に各ページへ遷移） */
+function spMapLinkClick(type) {
+  const msgs = {
+    ticket:  'チケットストアは5/20オープン予定です',
+    company: '企業情報ページは準備中です',
+    faq:     'よくあるご質問は準備中です',
+    contact: 'お問い合わせ',
+  };
+  if (type === 'contact') {
+    closeSpMap();
+    setTimeout(() => {
+      const btn = document.getElementById('emu-contact-btn');
+      if (btn) btn.click();
+    }, 300);
+  } else {
+    alert(msgs[type] || '準備中です');
+  }
 }
 
 function spMapSearch(val) {
