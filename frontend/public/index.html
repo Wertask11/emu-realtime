@@ -646,6 +646,20 @@
   font-size:0.68rem; color:#888; background:rgba(255,255,255,0.06);
   padding:3px 10px; border-radius:10px; display:inline-block;
 }
+.spmap-detail-go-btn {
+  display:block; width:100%; margin-top:4px;
+  padding:10px 0; border-radius:12px; border:none; cursor:pointer;
+  font-size:0.88rem; font-weight:700; letter-spacing:0.08em;
+  font-family:'Noto Sans JP',sans-serif;
+  background:linear-gradient(135deg,#f97316 0%,#fb923c 100%);
+  color:#fff; box-shadow:0 4px 14px rgba(249,115,22,0.45);
+  transition:transform 0.15s,box-shadow 0.15s;
+}
+.spmap-detail-go-btn:hover {
+  transform:translateY(-2px);
+  box-shadow:0 6px 20px rgba(249,115,22,0.6);
+}
+.spmap-detail-go-btn:active { transform:translateY(0); }
 @media (max-width:700px) {
   .spmap-nav-links { display:none; }
   .spmap-left { width:190px; }
@@ -6960,7 +6974,7 @@ const SP_POIS = [
   { id:"star3",  name:"Creative Academy 学びの門",   icon:"🎓", zone:"star", px:52, py:7,  desc:"Gate C — 北エリアの入口。学びと創造の世界へようこそ",                   status:"coming" },
   { id:"star4",  name:"Starry Sky Station 星空の駅", icon:"🚀", zone:"star", px:88, py:86, desc:"Gate D — 星空の駅。宇宙への扉。EMUERトークンで未来を切り拓く",         status:"coming" },
   // 中央・健康
-  { id:"plaza1", name:"Fountain 噴水広場",      icon:"⛲", zone:"plaza", px:50, py:38, desc:"SchoolParkの中心。コミュニティ交流広場。DAO投票・イベント開催スポット", status:"coming" },
+  { id:"plaza1", name:"Fountain 噴水広場",      icon:"⛲", zone:"plaza", px:50, py:38, desc:"SchoolParkの中心。コミュニティ交流広場。DAO投票・イベント開催スポット", status:"open", page:"/schoolpark/fountain.html" },
   // 暮らし
   { id:"life1",  name:"House 家",               icon:"🏡", zone:"life",  px:84, py:51, desc:"暮らし・住まいコンテンツ。生活設計・ライフプランニング",               status:"coming" },
 ];
@@ -7203,7 +7217,10 @@ function spMapSelectPoi(poiId) {
       ${zone.label}${zone.sub ? " — " + zone.sub : ""}
     </div>
     <div class="spmap-detail-desc">${poi.desc}</div>
-    <div class="spmap-detail-badge">🕐 5/20 OPENING</div>
+    ${poi.page
+      ? `<button class="spmap-detail-go-btn" onclick="window.location.href='${poi.page}'">🚪 遊びに行く</button>`
+      : `<div class="spmap-detail-badge">🕐 5/20 OPENING</div>`
+    }
   `;
   panel.classList.add("smd-open");
   /* 右上ラベルを選択中コンテンツ名に更新 */

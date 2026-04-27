@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fountain 噴水広場 — SchoolPark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a1a2e;
+    --bg2: #16213e;
+    --bg3: #0f3460;
+    --accent: #f97316;
+    --accent2: #fb923c;
+    --gold: #fbbf24;
+    --text: #e8e8f0;
+    --text2: #a0a0c0;
+    --border: rgba(255,255,255,0.08);
+    --card: rgba(255,255,255,0.04);
+    --radius: 14px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Zen Maru Gothic', 'M PLUS Rounded 1c', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  .fp-header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(26,26,46,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    display: flex; align-items: center; gap: 14px;
+    height: 56px;
+  }
+  .fp-back-btn {
+    background: none; border: 1px solid var(--border);
+    color: var(--text2); border-radius: 8px;
+    padding: 5px 12px; cursor: pointer; font-size: 0.8rem;
+    font-family: inherit; transition: all 0.15s;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .fp-back-btn:hover { background: var(--card); color: var(--text); }
+  .fp-header-title {
+    font-size: 1rem; font-weight: 700; letter-spacing: 0.03em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .fp-header-title span { color: var(--accent2); }
+  .fp-header-badge {
+    margin-left: auto;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff; font-size: 0.7rem; font-weight: 700;
+    padding: 3px 10px; border-radius: 20px; letter-spacing: 0.06em;
+  }
+
+  /* ── Hero ── */
+  .fp-hero {
+    position: relative; height: 280px; overflow: hidden;
+    background: linear-gradient(180deg, #0f3460 0%, #1a1a2e 100%);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .fp-hero-bg {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% 60%, rgba(99,179,237,0.15) 0%, transparent 70%);
+  }
+  /* Fountain SVG visual */
+  .fp-fountain-svg {
+    position: relative; z-index: 1;
+  }
+  .fp-hero-overlay {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(to top, var(--bg) 0%, transparent 100%);
+    height: 80px;
+  }
+  .fp-hero-info {
+    position: absolute; bottom: 24px; left: 24px; z-index: 2;
+  }
+  .fp-hero-name {
+    font-size: 1.5rem; font-weight: 700; letter-spacing: 0.04em;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.8);
+  }
+  .fp-hero-sub {
+    font-size: 0.78rem; color: var(--text2); margin-top: 4px;
+  }
+  .fp-hero-tags {
+    display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;
+  }
+  .fp-hero-tag {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 2px 9px; border-radius: 20px;
+    font-size: 0.7rem; color: var(--text2);
+  }
+
+  /* ── Stats row ── */
+  .fp-stats {
+    display: flex; gap: 1px;
+    background: var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .fp-stat {
+    flex: 1; background: var(--bg2);
+    padding: 12px 8px; text-align: center;
+  }
+  .fp-stat-val {
+    font-size: 1.1rem; font-weight: 700; color: var(--accent2);
+  }
+  .fp-stat-lbl {
+    font-size: 0.65rem; color: var(--text2); margin-top: 2px;
+  }
+
+  /* ── Tabs ── */
+  .fp-tabs {
+    display: flex; gap: 0;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .fp-tabs::-webkit-scrollbar { display: none; }
+  .fp-tab {
+    flex: 0 0 auto; padding: 12px 18px;
+    font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
+    color: var(--text2); cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s; white-space: nowrap;
+    font-family: inherit; background: none; border-top: none; border-left: none; border-right: none;
+  }
+  .fp-tab:hover { color: var(--text); background: var(--card); }
+  .fp-tab.active {
+    color: var(--accent2);
+    border-bottom-color: var(--accent2);
+    background: rgba(249,115,22,0.06);
+  }
+
+  /* ── Main content ── */
+  .fp-main { max-width: 720px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  /* ── Panel ── */
+  .fp-panel { display: none; }
+  .fp-panel.active { display: block; }
+
+  /* ── 掲示板 ── */
+  .fp-board-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .fp-section-title {
+    font-size: 0.9rem; font-weight: 700; color: var(--text);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .fp-section-title::before {
+    content: ''; display: inline-block;
+    width: 3px; height: 16px; border-radius: 2px;
+    background: linear-gradient(var(--accent), var(--accent2));
+  }
+  .fp-post-btn {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff; border: none; border-radius: 8px;
+    padding: 7px 14px; font-size: 0.76rem; font-weight: 700;
+    cursor: pointer; font-family: inherit; transition: transform 0.15s;
+  }
+  .fp-post-btn:hover { transform: translateY(-1px); }
+  .fp-post {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px;
+    transition: border-color 0.2s;
+  }
+  .fp-post:hover { border-color: rgba(255,255,255,0.16); }
+  .fp-post-meta {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  }
+  .fp-post-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 700; color: #fff; flex-shrink: 0;
+  }
+  .fp-post-author { font-size: 0.78rem; font-weight: 700; }
+  .fp-post-time { font-size: 0.68rem; color: var(--text2); margin-left: auto; }
+  .fp-post-body { font-size: 0.82rem; line-height: 1.7; color: var(--text); }
+  .fp-post-actions {
+    display: flex; gap: 12px; margin-top: 10px;
+  }
+  .fp-post-action {
+    background: none; border: none; color: var(--text2);
+    font-size: 0.72rem; cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; gap: 4px;
+    padding: 3px 0; transition: color 0.15s;
+  }
+  .fp-post-action:hover { color: var(--accent2); }
+
+  /* ── 投票 ── */
+  .fp-vote-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px; margin-bottom: 14px;
+  }
+  .fp-vote-title {
+    font-size: 0.92rem; font-weight: 700; margin-bottom: 6px;
+  }
+  .fp-vote-desc {
+    font-size: 0.76rem; color: var(--text2); margin-bottom: 16px; line-height: 1.6;
+  }
+  .fp-vote-option {
+    margin-bottom: 10px;
+  }
+  .fp-vote-option-label {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 0.78rem; margin-bottom: 5px;
+  }
+  .fp-vote-bar-wrap {
+    height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden;
+  }
+  .fp-vote-bar {
+    height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.5s ease;
+  }
+  .fp-vote-btn-row {
+    display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;
+  }
+  .fp-vote-choice-btn {
+    flex: 1; min-width: 100px;
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px;
+    padding: 8px 12px; font-size: 0.76rem; font-weight: 700;
+    cursor: pointer; font-family: inherit; transition: all 0.2s;
+  }
+  .fp-vote-choice-btn:hover {
+    border-color: var(--accent2); color: var(--accent2);
+    background: rgba(249,115,22,0.08);
+  }
+  .fp-vote-meta {
+    font-size: 0.68rem; color: var(--text2); margin-top: 12px;
+    display: flex; gap: 14px;
+  }
+  .fp-vote-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.7rem; padding: 2px 9px; border-radius: 20px;
+    font-weight: 700;
+  }
+  .fp-vote-status.active {
+    background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.25);
+  }
+  .fp-vote-status.closed {
+    background: rgba(255,255,255,0.06); color: var(--text2); border: 1px solid var(--border);
+  }
+
+  /* ── イベント ── */
+  .fp-event-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; margin-bottom: 12px;
+    display: flex; transition: border-color 0.2s;
+  }
+  .fp-event-card:hover { border-color: rgba(255,255,255,0.16); }
+  .fp-event-side {
+    width: 6px; flex-shrink: 0;
+    background: linear-gradient(var(--accent), var(--accent2));
+  }
+  .fp-event-body { padding: 14px 16px; flex: 1; }
+  .fp-event-name { font-size: 0.88rem; font-weight: 700; margin-bottom: 5px; }
+  .fp-event-info {
+    font-size: 0.72rem; color: var(--text2); margin-bottom: 8px; line-height: 1.6;
+  }
+  .fp-event-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .fp-event-tag {
+    background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.2);
+    color: var(--accent2); font-size: 0.65rem; padding: 2px 8px; border-radius: 20px;
+  }
+
+  /* ── ランキング ── */
+  .fp-rank-item {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 13px 16px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 12px;
+    transition: border-color 0.2s;
+  }
+  .fp-rank-item:hover { border-color: rgba(255,255,255,0.16); }
+  .fp-rank-num {
+    font-size: 1.1rem; font-weight: 700; width: 32px; text-align: center; flex-shrink: 0;
+  }
+  .fp-rank-num.gold { color: #fbbf24; }
+  .fp-rank-num.silver { color: #94a3b8; }
+  .fp-rank-num.bronze { color: #cd7c4e; }
+  .fp-rank-avatar {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; font-weight: 700; color: #fff;
+  }
+  .fp-rank-info { flex: 1; }
+  .fp-rank-name { font-size: 0.84rem; font-weight: 700; }
+  .fp-rank-score { font-size: 0.7rem; color: var(--text2); margin-top: 2px; }
+  .fp-rank-val {
+    font-size: 0.9rem; font-weight: 700; color: var(--accent2);
+  }
+
+  /* ── 願いの泉 ── */
+  .fp-wish-intro {
+    text-align: center; padding: 20px 0 24px;
+  }
+  .fp-wish-icon { font-size: 3rem; margin-bottom: 10px; }
+  .fp-wish-intro-title { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+  .fp-wish-intro-sub { font-size: 0.78rem; color: var(--text2); line-height: 1.7; }
+  .fp-wish-form {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px; margin-bottom: 18px;
+  }
+  .fp-wish-textarea {
+    width: 100%; background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: inherit; font-size: 0.84rem;
+    padding: 12px 14px; resize: vertical; min-height: 90px;
+    transition: border-color 0.2s; line-height: 1.65;
+  }
+  .fp-wish-textarea:focus { outline: none; border-color: var(--accent2); }
+  .fp-wish-textarea::placeholder { color: var(--text2); }
+  .fp-wish-send-btn {
+    width: 100%; margin-top: 10px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff; border: none; border-radius: 8px;
+    padding: 10px; font-size: 0.84rem; font-weight: 700;
+    cursor: pointer; font-family: inherit; transition: transform 0.15s;
+  }
+  .fp-wish-send-btn:hover { transform: translateY(-1px); }
+  .fp-wish-item {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 8px;
+  }
+  .fp-wish-text { font-size: 0.82rem; line-height: 1.7; font-style: italic; color: var(--text2); }
+  .fp-wish-meta { font-size: 0.68rem; color: rgba(255,255,255,0.25); margin-top: 8px; }
+
+  /* ── チャット ── */
+  .fp-chat-wrap {
+    display: flex; flex-direction: column; height: 480px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  .fp-chat-msgs {
+    flex: 1; overflow-y: auto; padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+  }
+  .fp-chat-msg { display: flex; gap: 10px; }
+  .fp-chat-msg.me { flex-direction: row-reverse; }
+  .fp-chat-avatar {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; font-weight: 700; color: #fff;
+  }
+  .fp-chat-bubble {
+    max-width: 72%; background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 9px 13px; font-size: 0.8rem; line-height: 1.65;
+  }
+  .fp-chat-msg.me .fp-chat-bubble {
+    background: rgba(249,115,22,0.15);
+    border-color: rgba(249,115,22,0.25);
+  }
+  .fp-chat-name { font-size: 0.65rem; color: var(--text2); margin-bottom: 3px; }
+  .fp-chat-input-row {
+    border-top: 1px solid var(--border); padding: 10px 12px;
+    display: flex; gap: 8px; background: var(--bg2);
+  }
+  .fp-chat-input {
+    flex: 1; background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: inherit; font-size: 0.82rem;
+    padding: 8px 12px; transition: border-color 0.2s;
+  }
+  .fp-chat-input:focus { outline: none; border-color: var(--accent2); }
+  .fp-chat-input::placeholder { color: var(--text2); }
+  .fp-chat-send {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff; border: none; border-radius: 8px;
+    padding: 8px 16px; font-size: 0.8rem; font-weight: 700;
+    cursor: pointer; font-family: inherit; transition: transform 0.15s;
+  }
+  .fp-chat-send:hover { transform: translateY(-1px); }
+
+  /* ── Fountain animation ── */
+  @keyframes fpWaterUp {
+    0%,100% { d: path("M50,80 Q40,40 50,10 Q60,40 50,80"); opacity: 0.7; }
+    50% { d: path("M50,80 Q38,35 50,5 Q62,35 50,80"); opacity: 1; }
+  }
+  @keyframes fpWaterDrop {
+    0% { transform: translate(0,0); opacity: 0.9; }
+    100% { transform: translate(var(--dx), 30px); opacity: 0; }
+  }
+  @keyframes fpRipple {
+    0% { r: 5; opacity: 0.6; }
+    100% { r: 22; opacity: 0; }
+  }
+  .fp-water-stream { animation: fpWaterUp 1.8s ease-in-out infinite; }
+  .fp-drop { animation: fpWaterDrop 1.2s ease-in infinite; }
+  .fp-ripple { animation: fpRipple 2s ease-out infinite; }
+
+  /* Opening notice */
+  .fp-opening-notice {
+    background: linear-gradient(135deg, rgba(249,115,22,0.1), rgba(251,146,60,0.08));
+    border: 1px solid rgba(249,115,22,0.25);
+    border-radius: var(--radius); padding: 14px 18px; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .fp-opening-notice-icon { font-size: 1.5rem; }
+  .fp-opening-notice-text { font-size: 0.8rem; line-height: 1.6; color: var(--text2); }
+  .fp-opening-notice-text strong { color: var(--accent2); }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="fp-header">
+  <button class="fp-back-btn" onclick="history.length > 1 ? history.back() : window.location.href='/'">
+    ← 戻る
+  </button>
+  <div class="fp-header-title">⛲ <span>Fountain</span> 噴水広場</div>
+  <div class="fp-header-badge">🟢 OPEN</div>
+</header>
+
+<!-- Hero -->
+<div class="fp-hero">
+  <div class="fp-hero-bg"></div>
+
+  <!-- Fountain SVG -->
+  <div class="fp-fountain-svg">
+    <svg width="200" height="180" viewBox="0 0 200 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Basin outer -->
+      <ellipse cx="100" cy="150" rx="75" ry="18" fill="#1e3a5f" stroke="#2d5a8e" stroke-width="2"/>
+      <!-- Basin water surface -->
+      <ellipse cx="100" cy="148" rx="65" ry="13" fill="#1d4ed8" opacity="0.5"/>
+      <!-- Ripples -->
+      <circle class="fp-ripple" cx="100" cy="148" r="5" fill="none" stroke="#60a5fa" stroke-width="1.5" style="animation-delay:0s"/>
+      <circle class="fp-ripple" cx="100" cy="148" r="5" fill="none" stroke="#60a5fa" stroke-width="1.5" style="animation-delay:0.7s"/>
+      <circle class="fp-ripple" cx="100" cy="148" r="5" fill="none" stroke="#60a5fa" stroke-width="1.5" style="animation-delay:1.4s"/>
+      <!-- Pedestal -->
+      <rect x="90" y="100" width="20" height="50" rx="4" fill="#2d5a8e"/>
+      <ellipse cx="100" cy="100" rx="16" ry="5" fill="#3b6fa0"/>
+      <!-- Top plate -->
+      <ellipse cx="100" cy="88" rx="24" ry="7" fill="#2d5a8e" stroke="#3b6fa0" stroke-width="1.5"/>
+      <!-- Water streams -->
+      <path class="fp-water-stream" d="M100,88 Q90,55 88,30" stroke="#93c5fd" stroke-width="2.5" fill="none" stroke-linecap="round" style="--dx:-15px; animation-delay:0s"/>
+      <path class="fp-water-stream" d="M100,88 Q110,55 112,30" stroke="#93c5fd" stroke-width="2.5" fill="none" stroke-linecap="round" style="animation-delay:0.3s"/>
+      <path class="fp-water-stream" d="M100,88 Q85,60 78,40" stroke="#bfdbfe" stroke-width="2" fill="none" stroke-linecap="round" style="animation-delay:0.15s"/>
+      <path class="fp-water-stream" d="M100,88 Q115,60 122,40" stroke="#bfdbfe" stroke-width="2" fill="none" stroke-linecap="round" style="animation-delay:0.45s"/>
+      <!-- Drops -->
+      <circle class="fp-drop" cx="88" cy="30" r="3" fill="#60a5fa" style="--dx:-8px; animation-delay:0s"/>
+      <circle class="fp-drop" cx="112" cy="30" r="3" fill="#60a5fa" style="--dx:8px; animation-delay:0.3s"/>
+      <circle class="fp-drop" cx="78" cy="40" r="2.5" fill="#93c5fd" style="--dx:-12px; animation-delay:0.15s"/>
+      <circle class="fp-drop" cx="122" cy="40" r="2.5" fill="#93c5fd" style="--dx:12px; animation-delay:0.45s"/>
+    </svg>
+  </div>
+
+  <div class="fp-hero-overlay"></div>
+  <div class="fp-hero-info">
+    <div class="fp-hero-name">⛲ Fountain 噴水広場</div>
+    <div class="fp-hero-sub">SchoolParkの中心 — コミュニティ交流広場</div>
+    <div class="fp-hero-tags">
+      <span class="fp-hero-tag">🗳️ DAO投票</span>
+      <span class="fp-hero-tag">🎉 イベント</span>
+      <span class="fp-hero-tag">💬 コミュニティ</span>
+      <span class="fp-hero-tag">🏛️ 中央広場</span>
+    </div>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="fp-stats">
+  <div class="fp-stat">
+    <div class="fp-stat-val" id="fpVisitors">—</div>
+    <div class="fp-stat-lbl">訪問者数</div>
+  </div>
+  <div class="fp-stat">
+    <div class="fp-stat-val" id="fpPosts">12</div>
+    <div class="fp-stat-lbl">投稿数</div>
+  </div>
+  <div class="fp-stat">
+    <div class="fp-stat-val" id="fpVotes">3</div>
+    <div class="fp-stat-lbl">進行中の投票</div>
+  </div>
+  <div class="fp-stat">
+    <div class="fp-stat-val" id="fpEvents">2</div>
+    <div class="fp-stat-lbl">イベント予定</div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="fp-tabs">
+  <button class="fp-tab active" data-tab="board" onclick="fpSwitchTab('board',this)">📋 掲示板</button>
+  <button class="fp-tab" data-tab="vote" onclick="fpSwitchTab('vote',this)">🗳️ 投票</button>
+  <button class="fp-tab" data-tab="event" onclick="fpSwitchTab('event',this)">🎉 イベント</button>
+  <button class="fp-tab" data-tab="rank" onclick="fpSwitchTab('rank',this)">🏆 ランキング</button>
+  <button class="fp-tab" data-tab="wish" onclick="fpSwitchTab('wish',this)">💫 願いの泉</button>
+  <button class="fp-tab" data-tab="chat" onclick="fpSwitchTab('chat',this)">💬 チャット</button>
+</div>
+
+<!-- Main -->
+<div class="fp-main">
+
+  <!-- Opening notice -->
+  <div class="fp-opening-notice">
+    <div class="fp-opening-notice-icon">🎊</div>
+    <div class="fp-opening-notice-text">
+      <strong>SchoolPark 5/20 グランドオープン</strong><br>
+      噴水広場はSchoolParkの中心地。DAO投票・コミュニティイベント・EMUERの流通が集まる場所です。
+    </div>
+  </div>
+
+  <!-- 掲示板 -->
+  <div class="fp-panel active" id="fp-panel-board">
+    <div class="fp-board-header">
+      <div class="fp-section-title">みんなの掲示板</div>
+      <button class="fp-post-btn" onclick="fpOpenPostModal()">＋ 投稿する</button>
+    </div>
+
+    <div id="fpBoardList">
+      <div class="fp-post">
+        <div class="fp-post-meta">
+          <div class="fp-post-avatar" style="background:linear-gradient(135deg,#f97316,#fb923c)">A</div>
+          <div class="fp-post-author">SchoolPark 運営</div>
+          <div class="fp-post-time">5/20 9:00</div>
+        </div>
+        <div class="fp-post-body">
+          🎉 SchoolPark グランドオープン！<br>
+          みなさん、ついにこの日が来ました。Fountain 噴水広場へようこそ。<br>
+          ここはSchoolParkの心臓部。自由に投稿・投票・交流してください。<br>
+          EMUERを使ってコミュニティを育てていきましょう！
+        </div>
+        <div class="fp-post-actions">
+          <button class="fp-post-action" onclick="fpLike(this)">❤️ <span>24</span></button>
+          <button class="fp-post-action">💬 <span>8</span></button>
+          <button class="fp-post-action">🔗 シェア</button>
+        </div>
+      </div>
+
+      <div class="fp-post">
+        <div class="fp-post-meta">
+          <div class="fp-post-avatar" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">K</div>
+          <div class="fp-post-author">ケンタ</div>
+          <div class="fp-post-time">5/20 10:30</div>
+        </div>
+        <div class="fp-post-body">
+          初めて来ました！噴水きれい〜🌊<br>
+          DAO投票って何を決めるんですか？気になってます。
+        </div>
+        <div class="fp-post-actions">
+          <button class="fp-post-action" onclick="fpLike(this)">❤️ <span>12</span></button>
+          <button class="fp-post-action">💬 <span>3</span></button>
+          <button class="fp-post-action">🔗 シェア</button>
+        </div>
+      </div>
+
+      <div class="fp-post">
+        <div class="fp-post-meta">
+          <div class="fp-post-avatar" style="background:linear-gradient(135deg,#10b981,#34d399)">R</div>
+          <div class="fp-post-author">りさ</div>
+          <div class="fp-post-time">5/20 11:15</div>
+        </div>
+        <div class="fp-post-body">
+          次のコンテンツ何が来るか楽しみ〜！本屋と映画館が特に気になってる📚🎬
+        </div>
+        <div class="fp-post-actions">
+          <button class="fp-post-action" onclick="fpLike(this)">❤️ <span>9</span></button>
+          <button class="fp-post-action">💬 <span>2</span></button>
+          <button class="fp-post-action">🔗 シェア</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 投票 -->
+  <div class="fp-panel" id="fp-panel-vote">
+    <div class="fp-section-title" style="margin-bottom:16px">進行中の投票</div>
+
+    <div class="fp-vote-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div class="fp-vote-title">次に開放してほしいエリアは？</div>
+        <span class="fp-vote-status active">● 投票中</span>
+      </div>
+      <div class="fp-vote-desc">SchoolParkの次のコンテンツリリースを住民の投票で決定します。あなたの声がSchoolParkを作ります。</div>
+      <div class="fp-vote-option">
+        <div class="fp-vote-option-label"><span>📚 本屋・図書館</span><span>38%</span></div>
+        <div class="fp-vote-bar-wrap"><div class="fp-vote-bar" style="width:38%"></div></div>
+      </div>
+      <div class="fp-vote-option">
+        <div class="fp-vote-option-label"><span>🎬 映画館</span><span>27%</span></div>
+        <div class="fp-vote-bar-wrap"><div class="fp-vote-bar" style="width:27%"></div></div>
+      </div>
+      <div class="fp-vote-option">
+        <div class="fp-vote-option-label"><span>🏥 病院・安全エリア</span><span>21%</span></div>
+        <div class="fp-vote-bar-wrap"><div class="fp-vote-bar" style="width:21%"></div></div>
+      </div>
+      <div class="fp-vote-option">
+        <div class="fp-vote-option-label"><span>🛍️ ショッピング</span><span>14%</span></div>
+        <div class="fp-vote-bar-wrap"><div class="fp-vote-bar" style="width:14%"></div></div>
+      </div>
+      <div class="fp-vote-btn-row">
+        <button class="fp-vote-choice-btn" onclick="fpVote(this,'opt1')">📚 本屋・図書館</button>
+        <button class="fp-vote-choice-btn" onclick="fpVote(this,'opt2')">🎬 映画館</button>
+        <button class="fp-vote-choice-btn" onclick="fpVote(this,'opt3')">🏥 病院</button>
+        <button class="fp-vote-choice-btn" onclick="fpVote(this,'opt4')">🛍️ ショッピング</button>
+      </div>
+      <div class="fp-vote-meta">
+        <span>👥 156票</span>
+        <span>⏰ 残り3日</span>
+        <span>🗝️ 1アカウント1票</span>
+      </div>
+    </div>
+
+    <div class="fp-vote-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div class="fp-vote-title">広場のイベント頻度はどのくらいがいい？</div>
+        <span class="fp-vote-status active">● 投票中</span>
+      </div>
+      <div class="fp-vote-desc">コミュニティイベントの開催ペースを決めます。</div>
+      <div class="fp-vote-option">
+        <div class="fp-vote-option-label"><span>週1回</span><span>45%</span></div>
+        <div class="fp-vote-bar-wrap"><div class="fp-vote-bar" style="width:45%"></div></div>
+      </div>
+      <div class="fp-vote-option">
+        <div class="fp-vote-option-label"><span>月2回</span><span>35%</span></div>
+        <div class="fp-vote-bar-wrap"><div class="fp-vote-bar" style="width:35%"></div></div>
+      </div>
+      <div class="fp-vote-option">
+        <div class="fp-vote-option-label"><span>月1回</span><span>20%</span></div>
+        <div class="fp-vote-bar-wrap"><div class="fp-vote-bar" style="width:20%"></div></div>
+      </div>
+      <div class="fp-vote-btn-row">
+        <button class="fp-vote-choice-btn" onclick="fpVote(this,'freq1')">週1回</button>
+        <button class="fp-vote-choice-btn" onclick="fpVote(this,'freq2')">月2回</button>
+        <button class="fp-vote-choice-btn" onclick="fpVote(this,'freq3')">月1回</button>
+      </div>
+      <div class="fp-vote-meta">
+        <span>👥 89票</span>
+        <span>⏰ 残り5日</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- イベント -->
+  <div class="fp-panel" id="fp-panel-event">
+    <div class="fp-section-title" style="margin-bottom:16px">イベント情報</div>
+
+    <div class="fp-event-card">
+      <div class="fp-event-side"></div>
+      <div class="fp-event-body">
+        <div class="fp-event-name">🎊 SchoolPark グランドオープン記念祭</div>
+        <div class="fp-event-info">
+          📅 2026年5月20日（水）9:00〜21:00<br>
+          📍 Fountain 噴水広場 全エリア<br>
+          💰 参加費：無料（EMUER獲得チャンス多数）<br>
+          <br>
+          SchoolPark開園を祝うビッグイベント！参加者全員にEMUERプレゼント。コミュニティ投票・広場ライブなど盛りだくさん。
+        </div>
+        <div class="fp-event-tags">
+          <span class="fp-event-tag">🎁 EMUER配布</span>
+          <span class="fp-event-tag">🗳️ 特別投票</span>
+          <span class="fp-event-tag">👥 全員参加</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="fp-event-card">
+      <div class="fp-event-side" style="background:linear-gradient(#6366f1,#8b5cf6)"></div>
+      <div class="fp-event-body">
+        <div class="fp-event-name">🗳️ 第1回 DAO コミュニティ投票</div>
+        <div class="fp-event-info">
+          📅 2026年5月20日〜5月27日<br>
+          📍 オンライン（噴水広場「投票」タブ）<br>
+          💰 投票者全員にEMUER 10トークン<br>
+          <br>
+          SchoolParkの次に開放するエリアを住民の投票で決定。あなたの1票がSchoolParkの未来を作ります。
+        </div>
+        <div class="fp-event-tags">
+          <span class="fp-event-tag" style="background:rgba(99,102,241,0.1);border-color:rgba(99,102,241,0.25);color:#818cf8">🗝️ DAO投票</span>
+          <span class="fp-event-tag" style="background:rgba(99,102,241,0.1);border-color:rgba(99,102,241,0.25);color:#818cf8">⏰ 7日間</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center;padding:20px 0;color:var(--text2);font-size:0.78rem">
+      📢 次のイベントは近日公開予定
+    </div>
+  </div>
+
+  <!-- ランキング -->
+  <div class="fp-panel" id="fp-panel-rank">
+    <div class="fp-section-title" style="margin-bottom:16px">今週のランキング</div>
+
+    <div id="fpRankList">
+      <div class="fp-rank-item">
+        <div class="fp-rank-num gold">🥇</div>
+        <div class="fp-rank-avatar" style="background:linear-gradient(135deg,#f97316,#fb923c)">A</div>
+        <div class="fp-rank-info">
+          <div class="fp-rank-name">SchoolPark 運営</div>
+          <div class="fp-rank-score">広場活動・投票参加・イベント主催</div>
+        </div>
+        <div class="fp-rank-val">2,480 pt</div>
+      </div>
+      <div class="fp-rank-item">
+        <div class="fp-rank-num silver">🥈</div>
+        <div class="fp-rank-avatar" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">K</div>
+        <div class="fp-rank-info">
+          <div class="fp-rank-name">ケンタ</div>
+          <div class="fp-rank-score">掲示板投稿・コメント・いいね</div>
+        </div>
+        <div class="fp-rank-val">890 pt</div>
+      </div>
+      <div class="fp-rank-item">
+        <div class="fp-rank-num bronze">🥉</div>
+        <div class="fp-rank-avatar" style="background:linear-gradient(135deg,#10b981,#34d399)">R</div>
+        <div class="fp-rank-info">
+          <div class="fp-rank-name">りさ</div>
+          <div class="fp-rank-score">投票参加・シェア・コメント</div>
+        </div>
+        <div class="fp-rank-val">650 pt</div>
+      </div>
+      <div class="fp-rank-item">
+        <div class="fp-rank-num" style="color:var(--text2)">4</div>
+        <div class="fp-rank-avatar" style="background:linear-gradient(135deg,#0ea5e9,#38bdf8)">S</div>
+        <div class="fp-rank-info">
+          <div class="fp-rank-name">サクサク</div>
+          <div class="fp-rank-score">DAO投票・いいね</div>
+        </div>
+        <div class="fp-rank-val">420 pt</div>
+      </div>
+      <div class="fp-rank-item">
+        <div class="fp-rank-num" style="color:var(--text2)">5</div>
+        <div class="fp-rank-avatar" style="background:linear-gradient(135deg,#ec4899,#f43f5e)">M</div>
+        <div class="fp-rank-info">
+          <div class="fp-rank-name">ミク</div>
+          <div class="fp-rank-score">初参加・いいね</div>
+        </div>
+        <div class="fp-rank-val">180 pt</div>
+      </div>
+    </div>
+    <div style="text-align:center;padding:16px 0 0;color:var(--text2);font-size:0.72rem">
+      🏆 ランキングはEMUER獲得量・活動量で毎週更新
+    </div>
+  </div>
+
+  <!-- 願いの泉 -->
+  <div class="fp-panel" id="fp-panel-wish">
+    <div class="fp-wish-intro">
+      <div class="fp-wish-icon">💫</div>
+      <div class="fp-wish-intro-title">願いの泉</div>
+      <div class="fp-wish-intro-sub">
+        噴水に願いを投げ込もう。<br>
+        あなたの想いがSchoolParkに刻まれます。
+      </div>
+    </div>
+
+    <div class="fp-wish-form">
+      <textarea class="fp-wish-textarea" id="fpWishInput" placeholder="SchoolParkへの想い、夢、お願いを書いてください…"></textarea>
+      <button class="fp-wish-send-btn" onclick="fpSendWish()">💫 願いを投げ込む</button>
+    </div>
+
+    <div class="fp-section-title" style="margin-bottom:14px">みんなの願い</div>
+    <div id="fpWishList">
+      <div class="fp-wish-item">
+        <div class="fp-wish-text">「学校では教えてくれなかったことを、ここで全部学びたい。SchoolParkで人生変わる気がする。」</div>
+        <div class="fp-wish-meta">💫 匿名 · 5/20</div>
+      </div>
+      <div class="fp-wish-item">
+        <div class="fp-wish-text">「EMUERでいつか生活できるようになりたい。SchoolParkでその第一歩を。」</div>
+        <div class="fp-wish-meta">💫 匿名 · 5/20</div>
+      </div>
+      <div class="fp-wish-item">
+        <div class="fp-wish-text">「病院と警察のコンテンツ早く来てほしい！社会の仕組みを楽しく学びたい。」</div>
+        <div class="fp-wish-meta">💫 匿名 · 5/20</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- チャット -->
+  <div class="fp-panel" id="fp-panel-chat">
+    <div class="fp-section-title" style="margin-bottom:14px">広場チャット</div>
+    <div class="fp-chat-wrap">
+      <div class="fp-chat-msgs" id="fpChatMsgs">
+        <div class="fp-chat-msg">
+          <div class="fp-chat-avatar" style="background:linear-gradient(135deg,#f97316,#fb923c)">運営</div>
+          <div>
+            <div class="fp-chat-name">SchoolPark 運営</div>
+            <div class="fp-chat-bubble">噴水広場へようこそ！🌊 自由に交流してください。</div>
+          </div>
+        </div>
+        <div class="fp-chat-msg">
+          <div class="fp-chat-avatar" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">K</div>
+          <div>
+            <div class="fp-chat-name">ケンタ</div>
+            <div class="fp-chat-bubble">やばい、ついにオープンした！ずっと待ってたよ〜🎉</div>
+          </div>
+        </div>
+        <div class="fp-chat-msg">
+          <div class="fp-chat-avatar" style="background:linear-gradient(135deg,#10b981,#34d399)">R</div>
+          <div>
+            <div class="fp-chat-name">りさ</div>
+            <div class="fp-chat-bubble">噴水かわいい！広場きれい〜✨</div>
+          </div>
+        </div>
+        <div class="fp-chat-msg">
+          <div class="fp-chat-avatar" style="background:linear-gradient(135deg,#0ea5e9,#38bdf8)">S</div>
+          <div>
+            <div class="fp-chat-name">サクサク</div>
+            <div class="fp-chat-bubble">EMUER投票やった！次はどこのエリア解放されるかな</div>
+          </div>
+        </div>
+      </div>
+      <div class="fp-chat-input-row">
+        <input class="fp-chat-input" id="fpChatInput" type="text" placeholder="メッセージを入力…" onkeydown="if(event.key==='Enter')fpSendChat()">
+        <button class="fp-chat-send" onclick="fpSendChat()">送信</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /fp-main -->
+
+<script>
+// Tab switching
+function fpSwitchTab(id, btn) {
+  document.querySelectorAll('.fp-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.fp-tab').forEach(t => t.classList.remove('active'));
+  const panel = document.getElementById('fp-panel-' + id);
+  if (panel) panel.classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+// Like button
+function fpLike(btn) {
+  const span = btn.querySelector('span');
+  const n = parseInt(span.textContent) + 1;
+  span.textContent = n;
+  btn.style.color = '#f87171';
+}
+
+// Vote
+function fpVote(btn, opt) {
+  const card = btn.closest('.fp-vote-card');
+  card.querySelectorAll('.fp-vote-choice-btn').forEach(b => {
+    b.style.borderColor = '';
+    b.style.color = '';
+    b.style.background = '';
+  });
+  btn.style.borderColor = 'var(--accent2)';
+  btn.style.color = 'var(--accent2)';
+  btn.style.background = 'rgba(249,115,22,0.12)';
+  // Show toast
+  const toast = document.createElement('div');
+  toast.textContent = '✅ 投票しました！ +10 EMUER';
+  toast.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(34,197,94,0.9);color:#fff;padding:10px 20px;border-radius:10px;font-size:0.8rem;font-weight:700;z-index:999;pointer-events:none;font-family:inherit';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// Send wish
+function fpSendWish() {
+  const input = document.getElementById('fpWishInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const list = document.getElementById('fpWishList');
+  const item = document.createElement('div');
+  item.className = 'fp-wish-item';
+  item.innerHTML = `
+    <div class="fp-wish-text">"${text.replace(/</g,'&lt;')}"</div>
+    <div class="fp-wish-meta">💫 あなた · たった今</div>
+  `;
+  list.insertBefore(item, list.firstChild);
+  input.value = '';
+  const toast = document.createElement('div');
+  toast.textContent = '💫 願いが泉に投げ込まれました';
+  toast.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(99,102,241,0.9);color:#fff;padding:10px 20px;border-radius:10px;font-size:0.8rem;font-weight:700;z-index:999;pointer-events:none;font-family:inherit';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// Send chat
+function fpSendChat() {
+  const input = document.getElementById('fpChatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const msgs = document.getElementById('fpChatMsgs');
+  const msg = document.createElement('div');
+  msg.className = 'fp-chat-msg me';
+  msg.innerHTML = `
+    <div class="fp-chat-avatar" style="background:linear-gradient(135deg,#f97316,#fb923c)">あ</div>
+    <div>
+      <div class="fp-chat-name" style="text-align:right">あなた</div>
+      <div class="fp-chat-bubble">${text.replace(/</g,'&lt;')}</div>
+    </div>
+  `;
+  msgs.appendChild(msg);
+  msgs.scrollTop = msgs.scrollHeight;
+  input.value = '';
+}
+
+// Open post modal (placeholder)
+function fpOpenPostModal() {
+  const text = prompt('投稿内容を入力してください：');
+  if (!text) return;
+  const list = document.getElementById('fpBoardList');
+  const post = document.createElement('div');
+  post.className = 'fp-post';
+  post.innerHTML = `
+    <div class="fp-post-meta">
+      <div class="fp-post-avatar" style="background:linear-gradient(135deg,#f97316,#fb923c)">あ</div>
+      <div class="fp-post-author">あなた</div>
+      <div class="fp-post-time">たった今</div>
+    </div>
+    <div class="fp-post-body">${text.replace(/</g,'&lt;')}</div>
+    <div class="fp-post-actions">
+      <button class="fp-post-action" onclick="fpLike(this)">❤️ <span>0</span></button>
+      <button class="fp-post-action">💬 <span>0</span></button>
+    </div>
+  `;
+  list.insertBefore(post, list.firstChild);
+}
+
+// Visitor counter (uses localStorage for demo)
+(function() {
+  const key = 'fp_visits';
+  let n = parseInt(localStorage.getItem(key) || '0') + 1;
+  localStorage.setItem(key, n);
+  const el = document.getElementById('fpVisitors');
+  if (el) el.textContent = (128 + n).toLocaleString();
+})();
+</script>
+</body>
+</html>
