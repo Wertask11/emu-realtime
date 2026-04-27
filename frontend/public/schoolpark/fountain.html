@@ -653,7 +653,7 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
       <div id="fpDAOCreateSection" class="fp-vote-card" style="display:none;margin-top:18px;border-color:rgba(251,191,36,0.3)">
         <div class="fp-dao-create-head">
           <div class="fp-section-title">📝 新しい議題を作成</div>
-          <span class="fp-dao-admin-badge">👑 管理者限定</span>
+          <span class="fp-dao-admin-badge">👑 運営・第三弾プレミアムNFT保有者限定</span>
         </div>
         <input class="fp-dao-input" id="fpNewVoteTitle" type="text" placeholder="議題タイトル（例：新エリアの名前を決める）" maxlength="60">
         <textarea class="fp-dao-textarea" id="fpNewVoteDesc" placeholder="議題の説明（任意）" maxlength="200"></textarea>
@@ -1316,18 +1316,42 @@ async function fpJoinGovernance() {
   }
 }
 
-// ─── 管理者チェック（DAO議題作成権限） ────────────────────
-// sp_dao_creators コレクションにウォレットがあれば管理者
+// ─── DAO議題作成権限チェック ──────────────────────────────
+// 資格者: ①SchoolPark運営（Firebaseオーナーアカウント）
+//         ②第三弾プレミアムNFT保有者（sp_dao_creators に登録済みウォレット）
+// 現時点では第三弾未発行のため①のみ有効。
+// NFTが売れた際に管理画面から sp_dao_creators にウォレットを追加する。
+const FP_OWNER_UID = "oy9GHjxBDxc0h74AUQfRiXj8b3y1";
+
 async function fpCheckDAOCreator() {
-  if (!fpWallet || !fpDB || !fpFBLib) return;
+  if (!fpDB || !fpFBLib) return;
+
+  // ─ ① SchoolPark運営チェック（Firebase Auth UID）──────────
+  if (window.fpCurrentUID === FP_OWNER_UID) {
+    _fpShowCreateSection("SchoolPark運営");
+    return;
+  }
+
+  // ─ ② 第三弾プレミアムNFT保有者チェック ─────────────────
+  // （ウォレットが sp_dao_creators コレクションに登録されているか）
+  if (!fpWallet) return;
   try {
     let snap = await fpFBLib.getDoc(fpFBLib.doc(fpDB, "sp_dao_creators", fpWallet.toLowerCase()));
     if (!snap.exists()) snap = await fpFBLib.getDoc(fpFBLib.doc(fpDB, "sp_dao_creators", fpWallet));
     if (snap.exists()) {
-      const sec = document.getElementById("fpDAOCreateSection");
-      if (sec) sec.style.display = "block";
+      const label = snap.data().label || "第三弾プレミアムNFT保有者";
+      _fpShowCreateSection(label);
     }
-  } catch(e) {}
+  } catch(e) { console.warn("fpCheckDAOCreator:", e); }
+}
+
+function _fpShowCreateSection(roleLabel) {
+  const sec = document.getElementById("fpDAOCreateSection");
+  if (!sec) return;
+  sec.style.display = "block";
+  // バッジにロール名を反映
+  const badge = sec.querySelector(".fp-dao-admin-badge");
+  if (badge) badge.textContent = `👑 ${roleLabel}`;
 }
 
 // ─── DAO議題作成 ──────────────────────────────────────────
@@ -1589,6 +1613,7 @@ import {
   getFirestore, collection, addDoc, getDocs, query, orderBy,
   onSnapshot, doc, updateDoc, setDoc, where, getDoc, increment, deleteDoc, limit
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
@@ -1599,8 +1624,15 @@ const firebaseConfig = {
   appId: "1:795496371585:web:51deec91b8a2152e4c8480"
 };
 
-const app = initializeApp(firebaseConfig);
-const db  = getFirestore(app);
+const app  = initializeApp(firebaseConfig);
+const db   = getFirestore(app);
+const auth = getAuth(app);
+
+// Firebase Auth で現在のサインイン状態を監視
+// DAO議題作成権限チェック（fpCheckDAOCreator）で使用
+onAuthStateChanged(auth, user => {
+  window.fpCurrentUID = user ? user.uid : null;
+});
 
 window.fpDB    = db;
 window.fpFBLib = { collection, addDoc, getDocs, query, orderBy, onSnapshot, doc, updateDoc, setDoc, where, getDoc, increment, deleteDoc, limit };

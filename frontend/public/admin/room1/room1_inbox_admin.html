@@ -200,6 +200,7 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
       <button class="btn-add" onclick="loadDAOVotes()" style="padding:7px 16px;font-size:13px">🔄 再読み込み</button>
     </div>
     <div id="dao-votes-container" style="color:#888;font-size:13px">読み込み中…</div>
+    <div class="toast" id="dao-toast" style="margin-top:12px"></div>
   </div>
 
   <!-- タブ4: Fountain イベント投稿 -->
@@ -779,12 +780,15 @@ async function loadDAOVotes() {
         var deadline = topic.deadline ? new Date(topic.deadline).toLocaleString('ja-JP') : '期限なし';
         var createdAt = topic.ts ? new Date(topic.ts).toLocaleString('ja-JP') : '';
         html += '<div style="background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:16px;margin-bottom:12px">';
-        html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">';
-        html += '<div>';
+        html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">';
+        html += '<div style="flex:1;min-width:0">';
         html += '<div style="font-weight:bold;font-size:14px;margin-bottom:3px">' + esc(topic.title || '（タイトルなし）') + '</div>';
         html += '<div style="font-size:11px;color:#666">作成: ' + createdAt + ' / 期限: ' + deadline + ' / 提案者: ' + esc((topic.creator||'').substring(0,10)+'…') + '</div>';
         html += '</div>';
+        html += '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0">';
         html += '<div style="background:#1e1e1e;border:1px solid #333;border-radius:6px;padding:4px 10px;font-size:13px;font-weight:bold;color:#a78bfa;white-space:nowrap">👥 ' + totalVotes + '票</div>';
+        html += '<button onclick="daoDeleteTopic(\'' + topic.id + '\',\'' + esc(topic.title||'').replace(/'/g,"\\'") + '\')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap;transition:background 0.15s" onmouseover="this.style.background=\'rgba(239,68,68,0.22)\'" onmouseout="this.style.background=\'rgba(239,68,68,0.12)\'">🗑️ 削除</button>';
+        html += '</div>';
         html += '</div>';
         if (Object.keys(optMap).length > 0) {
           html += daoRenderOptionBars(optMap, totalVotes, true);
@@ -801,6 +805,25 @@ async function loadDAOVotes() {
   } catch(e) {
     console.error('loadDAOVotes error:', e);
     container.innerHTML = '<div class="empty-state">❌ 読み込みに失敗しました<br><small>' + esc(e.message) + '</small></div>';
+  }
+}
+
+// ─── DAO議題削除 ──────────────────────────────────────────
+async function daoDeleteTopic(docId, title) {
+  var displayTitle = title || docId;
+  if (!confirm('議題「' + displayTitle + '」を削除しますか？\n\nこの操作は元に戻せません。\n※投票済みデータ（sp_fountain_dao_votes の dyn_xxx 集計）は残ります。')) return;
+
+  var db = window.fpAdminDB;
+  if (!db) {
+    fpShowToast('dao-toast', '🔗 Firebase未接続です', 'error');
+    return;
+  }
+  try {
+    await db.collection('sp_dao_votes_dynamic').doc(docId).delete();
+    fpShowToast('dao-toast', '✅ 議題「' + displayTitle + '」を削除しました', 'success');
+    loadDAOVotes();
+  } catch(e) {
+    fpShowToast('dao-toast', '❌ 削除に失敗しました: ' + e.message, 'error');
   }
 }
 
