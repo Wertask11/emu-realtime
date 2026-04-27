@@ -2807,23 +2807,8 @@ const logoScreen = document.getElementById("logoScreen");
 const walletScreen = document.getElementById("walletScreen");
 const mainApp = document.getElementById("mainApp");
 
-// SchoolParkコンテンツから戻った場合はロゴをスキップしてメインへ直接遷移
-(function() {
-  const savedWallet = localStorage.getItem("emuWallet");
-  if (window.location.search.includes("direct=1") && savedWallet) {
-    logoScreen.style.display  = "none";
-    walletScreen.style.display = "none";
-    mainApp.style.display     = "block";
-    const footer = document.getElementById("siteFooter");
-    if (footer) footer.style.display = "block";
-    window.connectedAccount = savedWallet;
-    currentUserId = savedWallet;
-    const walletBtn = document.getElementById("walletAddressButton");
-    if (walletBtn) walletBtn.textContent = savedWallet.slice(0,6) + "..." + savedWallet.slice(-4);
-    // URLパラメータをクリア
-    window.history.replaceState(null, "", "/");
-  }
-})();
+// SchoolParkコンテンツから戻った場合のフラグ（currentUserId宣言前なのでフラグのみ）
+const _fpDirectReturn = window.location.search.includes("direct=1") && !!localStorage.getItem("emuWallet");
 
 //ウォレット表示・状態
 const walletStatus = document.getElementById("walletStatus");
@@ -2932,6 +2917,9 @@ const RANK_BADGE_MAP = {
   'good_given':   '棋王',
   'change_given': '王位'
 };
+// 別scriptブロックのIIFEからも参照できるようwindowに公開
+window.RANK_BADGE_MAP    = RANK_BADGE_MAP;
+window.BADGE_DEFINITIONS = BADGE_DEFINITIONS;
 
 // バッジHTMLを生成（共通関数）
 function makeBadgeHtml(badgeId, opts = {}) {
@@ -2957,6 +2945,21 @@ let totalchangecount = 0;
 let pendingEmuer = parseInt(localStorage.getItem("pendingEmuer")) || 0;
 let currentUserId = null;
 let posts = [];
+
+// SchoolParkコンテンツから戻った場合：ロゴ/ウォレット画面をスキップしてメインへ
+if (_fpDirectReturn) {
+  const _savedWallet = localStorage.getItem("emuWallet");
+  logoScreen.style.display   = "none";
+  walletScreen.style.display = "none";
+  mainApp.style.display      = "block";
+  const _footer = document.getElementById("siteFooter");
+  if (_footer) _footer.style.display = "block";
+  window.connectedAccount = _savedWallet;
+  currentUserId = _savedWallet;
+  const _walletBtn = document.getElementById("walletAddressButton");
+  if (_walletBtn) _walletBtn.textContent = _savedWallet.slice(0,6) + "..." + _savedWallet.slice(-4);
+  window.history.replaceState(null, "", "/");
+}
 
 //goodした記事・changeした記事
 let myGoodIds = [];
