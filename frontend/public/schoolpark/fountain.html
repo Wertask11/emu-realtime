@@ -490,7 +490,7 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 
     <!-- 運営DAO投票 -->
     <div style="margin:18px 0 8px">
-      <span class="fp-vote-type-label fp-vote-type-dao">🟡 運営DAO投票 — NFT保有者のみ参加可能</span>
+      <span class="fp-vote-type-label fp-vote-type-dao">🟡 運営DAO投票 — Emu有料ユーザー参加可能</span>
     </div>
     <div id="fpNftStatus" style="margin-bottom:10px"></div>
 
@@ -500,7 +500,7 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
         <span class="fp-vote-status dao">👑 DAO投票</span>
       </div>
       <div class="fp-vote-desc">
-        公式NFT保有者（第一弾・第二弾・第三弾いずれか）のみが参加できるDAO投票。<br>
+        Emu有料ユーザーのみが参加できるDAO投票。<br>
         開園期終了後の入場方針を決定します。
       </div>
       <div id="fpVote2Bars"></div>
@@ -512,7 +512,7 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
       <div class="fp-vote-meta" id="fpVote2Meta">
         <span id="fpVote2Count">👥 集計中…</span>
         <span>⏰ 残り7日</span>
-        <span>🔐 NFT保有者限定</span>
+        <span>🔐 Emu有料ユーザー限定</span>
       </div>
     </div>
 
@@ -665,18 +665,10 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 <script>
 // ─── 定数 ────────────────────────────────────────────────
 const FP_SOCKET_URL    = "https://emu-realtime.onrender.com";
-const FP_POLYGON_RPC   = "https://rpc.ankr.com/polygon";
-const FP_NFT = {
-  nft1: { name:"第一弾「とびら」",   addr:"0xC333F84fd2FD86760e7dC5a288b7a9D4128F2Dab", type:"erc1155", id:1 },
-  nft2: { name:"第二弾「冷蔵庫くん」", addr:"0x20a32466e6d9c43d73c569b8a934e6622d89c2db", type:"erc1155", id:1 },
-  // 第三弾は5/15発売予定
-};
-const ERC1155_ABI = [
-  "function balanceOf(address account, uint256 id) view returns (uint256)",
-  "function balanceOfBatch(address[] accounts, uint256[] ids) view returns (uint256[])"
-];
-// チェックするトークンIDの範囲（ERC-1155はIDが様々なため0〜19を一括チェック）
-const FP_NFT_CHECK_IDS = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19];
+// 公式NFT情報（将来の第三弾プレミアムNFT DAO作成権限実装時に使用）
+// 第一弾 HEXA: 0xC333F84fd2FD86760e7dC5a288b7a9D4128F2Dab
+// 第二弾 OpenSea: 0x20a32466e6d9c43d73c569b8a934e6622d89c2db
+// 第三弾 プレミアム (5/20 HEXA発行予定): DAO投票作成権限を持つ
 
 // ウォレット検出（URL param → localStorage → 親フレーム → null の順）
 const _fpUrlParams = new URLSearchParams(window.location.search);
@@ -786,7 +778,8 @@ async function fpCheckNFT() {
     return;
   }
 
-  // ① Firestore paid_users チェック（優先・独立実行・大文字小文字両対応）
+  // Firestore paid_users チェック（ドキュメントが存在すれば参加資格あり）
+  // ※ paid_users = Emu有料ユーザー全員。hasPaidフィールドの有無は問わない
   if (fpDB && fpFBLib) {
     try {
       // 小文字で検索
@@ -795,56 +788,21 @@ async function fpCheckNFT() {
       if (!snap.exists()) {
         snap = await fpFBLib.getDoc(fpFBLib.doc(fpDB, "paid_users", fpWallet));
       }
-      if (snap.exists() && snap.data().hasPaid) {
+      if (snap.exists()) {
         fpHasNFT = true;
         fpNFTList = ["Emu有料ユーザー"];
         fpUpdateNFTStatus(true, fpNFTList);
         fpUnlockDAOVote();
-        return; // paid_usersで確認済みなのでオンチェーン不要
+        return;
       }
     } catch(e) {
-      // Firestoreエラーは無視してオンチェーンへ
+      // Firestoreエラー → 参加不可として処理
     }
   }
 
-  // ② オンチェーンチェック（複数RPCでフォールバック・balanceOfBatchでID 0〜19を一括確認）
-  const RPCS = [
-    "https://rpc.ankr.com/polygon",
-    "https://polygon-bor-rpc.publicnode.com",
-    "https://polygon.llamarpc.com"
-  ];
-  const batchAccounts = FP_NFT_CHECK_IDS.map(() => fpWallet);
-
-  for (const rpcUrl of RPCS) {
-    try {
-      const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-      const held = [];
-      for (const [key, nft] of Object.entries(FP_NFT)) {
-        try {
-          const contract = new ethers.Contract(nft.addr, ERC1155_ABI, provider);
-          // balanceOfBatchでID 0〜19を一括チェック（1回のRPC呼び出しで完結）
-          const bals = await contract.balanceOfBatch(batchAccounts, FP_NFT_CHECK_IDS);
-          if (bals.some(b => b.gt(0))) held.push(nft.name);
-        } catch(e) {
-          // balanceOfBatchが使えない場合は個別チェック（ID 0と1）
-          try {
-            const contract2 = new ethers.Contract(nft.addr, ERC1155_ABI, provider);
-            for (const id of [0, 1]) {
-              const bal = await contract2.balanceOf(fpWallet, id);
-              if (bal.gt(0)) { held.push(nft.name); break; }
-            }
-          } catch(e2) {}
-        }
-      }
-      fpHasNFT = held.length > 0;
-      fpNFTList = held;
-      fpUpdateNFTStatus(fpHasNFT, held);
-      if (fpHasNFT) fpUnlockDAOVote();
-      return; // RPCが成功したのでループを抜ける
-    } catch(e) {
-      // このRPCは失敗、次を試す
-    }
-  }
+  // paid_usersに存在しない → DAO投票不可
+  fpHasNFT = false;
+  fpNFTList = [];
   fpUpdateNFTStatus(false, []);
 }
 
@@ -854,11 +812,11 @@ function fpUpdateNFTStatus(has, list) {
     ? `<span style="font-size:0.62rem;opacity:0.55;margin-left:6px">${fpWallet.slice(0,6)}…${fpWallet.slice(-4)}</span>`
     : "";
   if (has) {
-    el.innerHTML = `<span class="fp-nft-badge">👑 NFT保有確認 — ${list.join("・")} — DAO投票参加資格あり${addrHint}</span>`;
+    el.innerHTML = `<span class="fp-nft-badge">✅ Emu有料ユーザー確認済み — DAO投票参加資格あり${addrHint}</span>`;
   } else if (!fpWallet) {
     el.innerHTML = `<span class="fp-nft-badge" style="color:var(--text2);border-color:var(--border);background:var(--card)">🔒 DAO投票にはEmuでウォレット接続が必要です</span>`;
   } else {
-    el.innerHTML = `<span class="fp-nft-badge" style="color:var(--text2);border-color:var(--border);background:var(--card)">🔒 対象NFTが見つかりません（第一弾・第二弾いずれか必要）${addrHint}</span>`;
+    el.innerHTML = `<span class="fp-nft-badge" style="color:var(--text2);border-color:var(--border);background:var(--card)">🔒 Emu有料ユーザーのみDAO投票に参加できます${addrHint}</span>`;
   }
 }
 
@@ -888,7 +846,7 @@ async function fpVoteGeneral(voteId, option, btn) {
 
 // ─── 投票（DAO） ─────────────────────────────────────────
 async function fpVoteDAO(voteId, option, btn) {
-  if (!fpHasNFT) { fpToast("🔒 NFT保有が必要です", "rgba(249,115,22,0.9)"); return; }
+  if (!fpHasNFT) { fpToast("🔒 Emu有料ユーザーのみ参加できます", "rgba(249,115,22,0.9)"); return; }
   if (!fpWallet || !fpDB || !fpFBLib) { fpToast("⚠️ 接続中です…", "rgba(100,100,100,0.9)"); return; }
   const lib = fpFBLib;
   try {
