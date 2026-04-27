@@ -2787,6 +2787,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const accounts = await provider.send("eth_accounts", []); // 修正：勝手にメタマスクが立ち上がらないよう eth_accounts にするのが一般的
     if (accounts.length > 0) {
       window.connectedAccount = accounts[0];
+      localStorage.setItem("emuWallet", accounts[0]); // 復元時も保存
       if (walletAddressButton) {
         walletAddressButton.textContent = window.connectedAccount.substring(0, 6) + "..." + window.connectedAccount.slice(-4);
       }
@@ -2805,6 +2806,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 const logoScreen = document.getElementById("logoScreen");
 const walletScreen = document.getElementById("walletScreen");
 const mainApp = document.getElementById("mainApp");
+
+// SchoolParkコンテンツから戻った場合はロゴをスキップしてメインへ直接遷移
+(function() {
+  const savedWallet = localStorage.getItem("emuWallet");
+  if (window.location.search.includes("direct=1") && savedWallet) {
+    logoScreen.style.display  = "none";
+    walletScreen.style.display = "none";
+    mainApp.style.display     = "block";
+    const footer = document.getElementById("siteFooter");
+    if (footer) footer.style.display = "block";
+    window.connectedAccount = savedWallet;
+    currentUserId = savedWallet;
+    const walletBtn = document.getElementById("walletAddressButton");
+    if (walletBtn) walletBtn.textContent = savedWallet.slice(0,6) + "..." + savedWallet.slice(-4);
+    // URLパラメータをクリア
+    window.history.replaceState(null, "", "/");
+  }
+})();
 
 //ウォレット表示・状態
 const walletStatus = document.getElementById("walletStatus");
@@ -5331,6 +5350,7 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
     const account = accounts[0];
     window.connectedAccount = account;
     currentUserId = account;
+    localStorage.setItem("emuWallet", account); // SchoolParkコンテンツ用に保存
 
     console.log("🦊 Wallet Connected:", account);
 

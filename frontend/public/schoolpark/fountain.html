@@ -70,7 +70,7 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 }
 .fp-hero-overlay {
   position:absolute; inset:0;
-  background:linear-gradient(to top, rgba(26,26,46,1) 0%, rgba(26,26,46,0.4) 55%, rgba(26,26,46,0.1) 100%);
+  background:linear-gradient(to top, rgba(26,26,46,0.85) 0%, rgba(26,26,46,0.15) 45%, transparent 100%);
 }
 .fp-hero-info {
   position:absolute; bottom:20px; left:20px; z-index:2;
@@ -268,16 +268,19 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
   flex-direction:column; gap:10px;
   scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.08) transparent;
 }
-.fp-chat-msg   { display:flex; gap:8px; }
+.fp-chat-msg   { display:flex; gap:8px; align-items:flex-start; }
 .fp-chat-msg.me { flex-direction:row-reverse; }
+.fp-chat-msg > div:last-child { flex:1; min-width:0; }
+.fp-chat-msg.me > div:last-child { text-align:right; }
 .fp-chat-avatar {
   width:30px; height:30px; border-radius:50%; flex-shrink:0;
   display:flex; align-items:center; justify-content:center;
   font-size:0.7rem; font-weight:700; color:#fff;
 }
 .fp-chat-bubble {
-  max-width:74%; background:rgba(255,255,255,0.06); border:1px solid var(--border);
+  max-width:100%; background:rgba(255,255,255,0.06); border:1px solid var(--border);
   border-radius:11px; padding:8px 12px; font-size:0.78rem; line-height:1.65;
+  word-break:break-word; white-space:pre-wrap;
 }
 .fp-chat-msg.me .fp-chat-bubble {
   background:rgba(249,115,22,0.14); border-color:rgba(249,115,22,0.22);
@@ -335,13 +338,12 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 
 <!-- ── Header ── -->
 <header class="fp-header">
-  <button class="fp-emu-btn" onclick="window.location.href='/'">Emu</button>
+  <button class="fp-emu-btn" onclick="window.location.href='/?direct=1'">Emu</button>
 
   <div class="fp-header-title">⛲ Fountain 噴水広場</div>
 
   <div class="fp-header-icons">
-    <button class="fp-hicon" id="fpWeatherIconBtn" title="天気">🌤️</button>
-    <button class="fp-hicon" title="財布" onclick="window.location.href='/'">👛</button>
+    <button class="fp-hicon" title="財布" onclick="window.location.href='/?direct=1'">👛</button>
     <button class="fp-hicon" title="タクシー">🚕</button>
     <button class="fp-hicon" title="ロボット">🤖</button>
     <button class="fp-hicon" title="設定">⚙️</button>
@@ -492,35 +494,42 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 
   <!-- ランキング -->
   <div class="fp-panel" id="fp-panel-rank">
-    <div class="fp-section-title" style="margin-bottom:16px">今週のランキング</div>
-    <div>
+    <div class="fp-section-title" style="margin-bottom:6px">コンテンツ訪問ランキング</div>
+    <div style="font-size:0.7rem;color:var(--text2);margin-bottom:14px">今週どのコンテンツに一番人が集まっているか</div>
+    <div id="fpRankList">
       <div class="fp-rank-item">
         <div class="fp-rank-num" style="color:#fbbf24">🥇</div>
-        <div class="fp-rank-avatar" style="background:linear-gradient(135deg,#f97316,#fb923c)">A</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">SchoolPark 運営</div><div class="fp-rank-score">広場活動・投票・イベント主催</div></div>
-        <div class="fp-rank-val">2,480 pt</div>
+        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">⛲</div>
+        <div class="fp-rank-info"><div class="fp-rank-name">Fountain 噴水広場</div><div class="fp-rank-score">中央広場 · コミュニティ</div></div>
+        <div class="fp-rank-val" id="fpRankVisit1">—</div>
       </div>
       <div class="fp-rank-item">
         <div class="fp-rank-num" style="color:#94a3b8">🥈</div>
-        <div class="fp-rank-avatar" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">K</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">ケンタ</div><div class="fp-rank-score">掲示板投稿・コメント・いいね</div></div>
-        <div class="fp-rank-val">890 pt</div>
+        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">📚</div>
+        <div class="fp-rank-info"><div class="fp-rank-name">本屋・図書館</div><div class="fp-rank-score">学び · COMING SOON</div></div>
+        <div class="fp-rank-val">—</div>
       </div>
       <div class="fp-rank-item">
         <div class="fp-rank-num" style="color:#cd7c4e">🥉</div>
-        <div class="fp-rank-avatar" style="background:linear-gradient(135deg,#10b981,#34d399)">R</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">りさ</div><div class="fp-rank-score">投票参加・シェア・コメント</div></div>
-        <div class="fp-rank-val">650 pt</div>
+        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">🎬</div>
+        <div class="fp-rank-info"><div class="fp-rank-name">映画館</div><div class="fp-rank-score">エンタメ · COMING SOON</div></div>
+        <div class="fp-rank-val">—</div>
       </div>
       <div class="fp-rank-item">
         <div class="fp-rank-num" style="color:var(--text2)">4</div>
-        <div class="fp-rank-avatar" style="background:linear-gradient(135deg,#0ea5e9,#38bdf8)">S</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">サクサク</div><div class="fp-rank-score">DAO投票・いいね</div></div>
-        <div class="fp-rank-val">420 pt</div>
+        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">🏥</div>
+        <div class="fp-rank-info"><div class="fp-rank-name">病院</div><div class="fp-rank-score">安全 · COMING SOON</div></div>
+        <div class="fp-rank-val">—</div>
+      </div>
+      <div class="fp-rank-item">
+        <div class="fp-rank-num" style="color:var(--text2)">5</div>
+        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">🛍️</div>
+        <div class="fp-rank-info"><div class="fp-rank-name">ショッピング</div><div class="fp-rank-score">商業 · COMING SOON</div></div>
+        <div class="fp-rank-val">—</div>
       </div>
     </div>
     <div style="text-align:center;padding:14px 0 0;color:var(--text2);font-size:0.7rem">
-      🏆 EMUER獲得量・活動量で毎週更新（Firestore連携は近日）
+      📊 コンテンツが増えると自動的に更新されます
     </div>
   </div>
 
@@ -558,7 +567,7 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 
 <!-- ── Scripts ── -->
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js" type="application/javascript"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js" type="application/javascript"></script>
 <script>
 // ─── 定数 ────────────────────────────────────────────────
 const FP_SOCKET_URL    = "https://emu-realtime.onrender.com";
@@ -570,9 +579,23 @@ const FP_NFT = {
 };
 const ERC1155_ABI = ["function balanceOf(address account, uint256 id) view returns (uint256)"];
 
-let fpWallet  = localStorage.getItem("emuWallet") || null;
+// ウォレット検出（複数手段でフォールバック）
+let fpWallet  = localStorage.getItem("emuWallet")
+             || localStorage.getItem("connectedAccount")
+             || sessionStorage.getItem("emuWallet")
+             || null;
 let fpMyName  = (fpWallet ? fpWallet.slice(0,6)+"…"+fpWallet.slice(-4) : "ゲスト");
 let fpHasNFT  = false;
+
+// 一般投票用デバイス固有ID（ウォレット不要）
+function fpGetVoterKey() {
+  let k = localStorage.getItem("fp_voter_id");
+  if (!k) {
+    k = "v_" + Date.now() + "_" + Math.random().toString(36).slice(2,9);
+    localStorage.setItem("fp_voter_id", k);
+  }
+  return k;
+}
 let fpNFTList = [];  // 保有NFT名リスト
 let fpDB = null, fpFBLib = null;
 let fpSocket = null;
@@ -636,7 +659,6 @@ async function fpFetchWeather() {
     const temp = cur.temp_C;
     const em   = fpWeatherEmoji(desc);
     document.getElementById("fpHeaderWeather").textContent = `${em} ${temp}°C`;
-    document.getElementById("fpWeatherIconBtn").textContent = em;
   } catch(e) {}
 }
 fpFetchWeather();
@@ -697,19 +719,21 @@ function fpUnlockDAOVote() {
     .forEach(btn => btn.disabled = false);
 }
 
-// ─── 投票（一般） ─────────────────────────────────────────
+// ─── 投票（一般）— ウォレット不要、デバイスIDで管理 ──────
 async function fpVoteGeneral(voteId, option, btn) {
-  if (!fpWallet) { fpToast("⚠️ Emuでウォレット接続が必要です", "rgba(249,115,22,0.9)"); return; }
   if (!fpDB || !fpFBLib) { fpToast("⚠️ 接続中です…", "rgba(100,100,100,0.9)"); return; }
+  const voterKey = fpGetVoterKey();
   const lib = fpFBLib;
   try {
-    const ref = lib.doc(fpDB, "sp_fountain_votes", `${voteId}_${fpWallet.toLowerCase()}`);
+    const ref = lib.doc(fpDB, "sp_fountain_votes", `${voteId}_${voterKey}`);
     const snap = await lib.getDoc(ref);
     if (snap.exists()) { fpToast("✅ 既に投票済みです", "rgba(99,102,241,0.9)"); return; }
-    await lib.setDoc(ref, { voteId, option, wallet: fpWallet, ts: Date.now() });
+    await lib.setDoc(ref, { voteId, option, voterKey, wallet: fpWallet || "anonymous", ts: Date.now() });
     btn.classList.add("voted");
     document.querySelectorAll(`#fpVote1Btns .fp-vote-choice-btn`).forEach(b => b.disabled = true);
-    fpToast("✅ 投票しました！ +10 EMUER", "rgba(34,197,94,0.92)");
+    // ローカルにも記録
+    localStorage.setItem(`fp_voted_${voteId}`, option);
+    fpToast("✅ 投票しました！", "rgba(34,197,94,0.92)");
     fpLoadVoteBars(voteId, "fpVote1Bars", "fpVote1Count", false);
   } catch(e) { fpToast("❌ エラー: " + e.message, "rgba(239,68,68,0.9)"); }
 }
@@ -948,6 +972,23 @@ function _esc(s) {
   if (el) el.textContent = (128+n).toLocaleString();
 })();
 
+// ─── コンテンツ訪問ランキング ──────────────────────────────
+function fpInitRankVisits() {
+  // Fountainの今日の訪問者を sp_content_visits に記録
+  if (!fpDB || !fpFBLib) return;
+  const lib = fpFBLib;
+  const today = new Date().toISOString().slice(0,10);
+  const docRef = lib.doc(fpDB, "sp_content_visits", `fountain_${today}`);
+  lib.setDoc(docRef, { contentId:"fountain", date:today, visits: lib.increment(1) }, { merge:true })
+    .catch(()=>{});
+  // 今日の訪問数を表示
+  lib.getDoc(docRef).then(snap => {
+    const v = snap.exists() ? (snap.data().visits || 1) : 1;
+    const el = document.getElementById("fpRankVisit1");
+    if (el) el.textContent = v.toLocaleString() + " 訪問";
+  }).catch(()=>{});
+}
+
 // ─── Firebase 準備待ち後に各機能を初期化 ─────────────────
 function fpWaitFirebase() {
   if (window.fpDB && window.fpFBLib) {
@@ -956,6 +997,7 @@ function fpWaitFirebase() {
     fpInitBoard();
     fpInitEvents();
     fpInitWishes();
+    fpInitRankVisits();
     // 投票バー読み込み
     fpLoadVoteBars("vote1","fpVote1Bars","fpVote1Count",false);
     fpLoadVoteBars("vote2","fpVote2Bars","fpVote2Count",true);
@@ -969,17 +1011,15 @@ function fpWaitFirebase() {
 fpWaitFirebase();
 // 投票済みチェック（ページ読み込み時）
 setTimeout(async () => {
-  if (!fpDB || !fpFBLib || !fpWallet) return;
-  // 一般投票
-  try {
-    const snap = await fpFBLib.getDoc(fpFBLib.doc(fpDB,"sp_fountain_votes",`vote1_${fpWallet.toLowerCase()}`));
-    if (snap.exists()) {
-      document.querySelectorAll("#fpVote1Btns .fp-vote-choice-btn").forEach(b => {
-        b.disabled = true;
-        if (b.textContent.includes(snap.data().option)) b.classList.add("voted");
-      });
-    }
-  } catch(e) {}
+  if (!fpDB || !fpFBLib) return;
+  // 一般投票（ローカル確認）
+  const savedVote1 = localStorage.getItem("fp_voted_vote1");
+  if (savedVote1) {
+    document.querySelectorAll("#fpVote1Btns .fp-vote-choice-btn").forEach(b => {
+      b.disabled = true;
+      if (b.textContent.includes(savedVote1)) b.classList.add("voted");
+    });
+  }
   // DAO投票済みチェック
   for (const vid of ["vote2","vote3"]) {
     try {
@@ -1001,7 +1041,7 @@ setTimeout(async () => {
 import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, getDocs, query, orderBy,
-  onSnapshot, doc, updateDoc, setDoc, where, getDoc, increment
+  onSnapshot, doc, updateDoc, setDoc, where, getDoc, increment, deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -1017,7 +1057,7 @@ const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
 window.fpDB    = db;
-window.fpFBLib = { collection, addDoc, getDocs, query, orderBy, onSnapshot, doc, updateDoc, setDoc, where, getDoc, increment };
+window.fpFBLib = { collection, addDoc, getDocs, query, orderBy, onSnapshot, doc, updateDoc, setDoc, where, getDoc, increment, deleteDoc };
 </script>
 </body>
 </html>
