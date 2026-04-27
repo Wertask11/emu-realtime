@@ -1134,19 +1134,8 @@ function fpInitEvents() {
 }
 
 // 📌 常時ピン固定で表示するコンテンツ（イベントタブ上部）
-const FP_PINNED_CONTENT = [
-  {
-    icon: "☄️",
-    title: "隕石研究所 / METEORITE LAB",
-    detail: "問題・課題・トラブルを「隕石」として捉え、科学的な研究プロセスで解決する探索スペース。\n問いを立てる → 仮説をきめる → 実行と対処 → 研究報告・考察の4ステップで課題を知識に変えます。",
-    tags: ["探索コンテンツ", "問題解決", "EMUER報酬予定"],
-    url: "/schoolpark/meteorite-lab.html",
-    btnLabel: "入所する →",
-    accentColor: "linear-gradient(#00ffc8, #00d4a8)",
-    badgeText: "🔬 NOW OPEN",
-    badgeStyle: "background:rgba(0,255,200,0.1);border:1px solid rgba(0,255,200,0.25);color:#00ffc8"
-  }
-];
+// ※ 隕石研究所は Emu 探索 > イベント に移動したためここには表示しない
+const FP_PINNED_CONTENT = [];
 
 function fpRenderEvents(events) {
   const el = document.getElementById("fpEventList");
@@ -1671,8 +1660,11 @@ const auth = getAuth(app);
 
 // Firebase Auth で現在のサインイン状態を監視
 // DAO議題作成権限チェック（fpCheckDAOCreator）で使用
+// ※ onAuthStateChanged は非同期なので、UID確定後に再チェックする
 onAuthStateChanged(auth, user => {
   window.fpCurrentUID = user ? user.uid : null;
+  // UIDが確定したタイミングでDAO作成権限を再チェック（join前に画面を開いた場合も対応）
+  fpCheckDAOCreator();
 });
 
 window.fpDB    = db;

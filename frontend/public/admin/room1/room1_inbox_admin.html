@@ -195,10 +195,65 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
 
   <!-- タブ5: DAO投票データ -->
   <div id="tab-dao-votes" class="tab-content">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2 style="font-size:15px;color:#4ec9b0;margin:0">🗳️ DAO投票データ</h2>
       <button class="btn-add" onclick="loadDAOVotes()" style="padding:7px 16px;font-size:13px">🔄 再読み込み</button>
     </div>
+
+    <!-- DAO議題作成フォーム -->
+    <div style="background:#161616;border:1px solid rgba(167,139,250,0.3);border-radius:10px;padding:22px;margin-bottom:28px">
+      <div style="font-size:14px;font-weight:bold;color:#a78bfa;margin-bottom:18px;display:flex;align-items:center;gap:8px">
+        📝 新しいDAO議題を作成
+        <span style="font-size:11px;background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:2px 8px;">👑 運営専用</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="font-size:12px;color:#888">議題タイトル <span style="color:#f87171">*</span></label>
+          <input type="text" id="dao-new-title" maxlength="60" placeholder="例：新エリアの名前を決める"
+            style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s"
+            onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="font-size:12px;color:#888">期限（任意）</label>
+          <input type="datetime-local" id="dao-new-deadline"
+            style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s;color-scheme:dark"
+            onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'">
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+        <label style="font-size:12px;color:#888">説明（任意）</label>
+        <textarea id="dao-new-desc" maxlength="200" rows="2" placeholder="議題の背景・詳細を記載..."
+          style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;resize:vertical;transition:border-color 0.2s"
+          onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'"></textarea>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;color:#888;display:block;margin-bottom:8px">選択肢（最低2つ・最大6つ） <span style="color:#f87171">*</span></label>
+        <div id="dao-new-options-list" style="display:flex;flex-direction:column;gap:8px">
+          <input type="text" class="dao-admin-opt" maxlength="40" placeholder="選択肢 1"
+            style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s"
+            onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'">
+          <input type="text" class="dao-admin-opt" maxlength="40" placeholder="選択肢 2"
+            style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s"
+            onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'">
+        </div>
+        <button onclick="daoAdminAddOption()" style="margin-top:8px;background:rgba(167,139,250,0.1);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer">
+          ＋ 選択肢を追加
+        </button>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end">
+        <button onclick="daoAdminCreateTopic()"
+          style="background:#a78bfa;color:#0f0f0f;border:none;border-radius:6px;padding:10px 24px;font-size:14px;font-weight:bold;cursor:pointer;transition:opacity 0.2s"
+          onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+          🗳️ 議題を作成・公開
+        </button>
+      </div>
+    </div>
+
+    <!-- 既存の投票データ一覧 -->
     <div id="dao-votes-container" style="color:#888;font-size:13px">読み込み中…</div>
     <div class="toast" id="dao-toast" style="margin-top:12px"></div>
   </div>
@@ -805,6 +860,64 @@ async function loadDAOVotes() {
   } catch(e) {
     console.error('loadDAOVotes error:', e);
     container.innerHTML = '<div class="empty-state">❌ 読み込みに失敗しました<br><small>' + esc(e.message) + '</small></div>';
+  }
+}
+
+// ─── DAO議題作成（管理者専用） ────────────────────────────
+function daoAdminAddOption() {
+  var list = document.getElementById('dao-new-options-list');
+  if (!list) return;
+  var count = list.querySelectorAll('.dao-admin-opt').length;
+  if (count >= 6) { fpShowToast('dao-toast', '⚠️ 選択肢は最大6つです', 'error'); return; }
+  var inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'dao-admin-opt';
+  inp.maxLength = 40;
+  inp.placeholder = '選択肢 ' + (count + 1);
+  inp.style.cssText = 'background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s;width:100%';
+  inp.addEventListener('focus', function(){ this.style.borderColor='#a78bfa'; });
+  inp.addEventListener('blur',  function(){ this.style.borderColor='#333'; });
+  list.appendChild(inp);
+}
+
+async function daoAdminCreateTopic() {
+  var db = window.fpAdminDB;
+  if (!db) { fpShowToast('dao-toast', '🔗 Firebase未接続です', 'error'); return; }
+
+  var title    = (document.getElementById('dao-new-title').value || '').trim();
+  var desc     = (document.getElementById('dao-new-desc').value  || '').trim();
+  var deadline = document.getElementById('dao-new-deadline').value;
+  var optEls   = document.querySelectorAll('#dao-new-options-list .dao-admin-opt');
+  var options  = Array.from(optEls).map(function(el){ return el.value.trim(); }).filter(Boolean);
+
+  if (!title)           { fpShowToast('dao-toast', '⚠️ タイトルを入力してください', 'error'); return; }
+  if (options.length < 2) { fpShowToast('dao-toast', '⚠️ 選択肢を2つ以上入力してください', 'error'); return; }
+
+  var data = {
+    title:    title,
+    desc:     desc || '',
+    options:  options,
+    creator:  'admin_room1',
+    ts:       Date.now(),
+    deadline: deadline ? new Date(deadline).toISOString() : null
+  };
+
+  try {
+    var docRef = await db.collection('sp_dao_votes_dynamic').add(data);
+    fpShowToast('dao-toast', '✅ 議題「' + title + '」を作成しました（ID: ' + docRef.id + '）', 'success');
+    // フォームリセット
+    document.getElementById('dao-new-title').value = '';
+    document.getElementById('dao-new-desc').value  = '';
+    document.getElementById('dao-new-deadline').value = '';
+    var list = document.getElementById('dao-new-options-list');
+    if (list) {
+      list.innerHTML = [1,2].map(function(n){
+        return '<input type="text" class="dao-admin-opt" maxlength="40" placeholder="選択肢 ' + n + '" style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor=\'#a78bfa\'" onblur="this.style.borderColor=\'#333\'">';
+      }).join('');
+    }
+    loadDAOVotes();
+  } catch(e) {
+    fpShowToast('dao-toast', '❌ 作成に失敗しました: ' + e.message, 'error');
   }
 }
 

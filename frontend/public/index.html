@@ -2435,6 +2435,7 @@ body.paypay-mode #pp-post-fab {
       <div class="room" onclick="openEchoFieldFromRoom4()" style="background:linear-gradient(135deg,rgba(74,158,255,0.15),rgba(168,85,247,0.1));border-color:rgba(74,158,255,0.4);">♟️ ECHO FIELD</div>
       <div class="room" onclick="openSecretDoorFromRoom4()" style="background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,107,157,0.1));border-color:rgba(255,215,0,0.35);">🔒 秘密のとびら</div>
       <div class="room" onclick="openRingoFromRoom4()" style="background:linear-gradient(135deg,rgba(184,48,40,0.15),rgba(184,134,11,0.1));border-color:rgba(184,48,40,0.4);position:relative;">🍎 林檎の方程式<br><span style="font-size:10px;background:#B83028;color:#fff;border-radius:3px;padding:1px 6px;position:absolute;top:6px;right:6px;" id="ringo-badge">先行公開中</span></div>
+      <div class="room" onclick="openMeteoriteFromRoom4()" style="background:linear-gradient(135deg,rgba(0,255,200,0.08),rgba(0,180,140,0.06));border-color:rgba(0,255,200,0.3);position:relative;">☄️ 隕石研究所<br><span style="font-size:10px;background:rgba(0,255,200,0.15);color:#00ffc8;border:1px solid rgba(0,255,200,0.3);border-radius:3px;padding:1px 6px;position:absolute;top:6px;right:6px;">NOW OPEN</span></div>
     </div>
   </div>
 </div>
@@ -2536,6 +2537,12 @@ body.paypay-mode #pp-post-fab {
 <div id="ringoOverlay" style="display:none;position:fixed;inset:0;z-index:1100;background:#0C0C0C;">
   <span onclick="closeRingoGame()" style="position:absolute;top:16px;right:20px;font-size:24px;cursor:pointer;z-index:1101;color:rgba(255,255,255,0.4);line-height:1;">✖</span>
   <iframe id="ringoFrame" src="" style="width:100%;height:100%;border:none;"></iframe>
+</div>
+
+<!-- 隕石研究所 オーバーレイ -->
+<div id="meteoriteLabOverlay" style="display:none;position:fixed;inset:0;z-index:1100;background:#0a0a0f;">
+  <span onclick="closeMeteoriteLab()" style="position:absolute;top:16px;right:20px;font-size:24px;cursor:pointer;z-index:1101;color:rgba(255,255,255,0.4);line-height:1;">✖</span>
+  <iframe id="meteoriteLabFrame" src="" style="width:100%;height:100%;border:none;"></iframe>
 </div>
 
 
@@ -8167,6 +8174,18 @@ function openRingoFromRoom4() {
   document.getElementById("room4Overlay").style.display = "none";
   openRingoGame();
 }
+function openMeteoriteFromRoom4() {
+  document.getElementById("room4Overlay").style.display = "none";
+  openMeteoriteLab();
+}
+function openMeteoriteLab() {
+  document.getElementById("meteoriteLabOverlay").style.display = "block";
+  document.getElementById("meteoriteLabFrame").src = "/schoolpark/meteorite-lab.html";
+}
+function closeMeteoriteLab() {
+  document.getElementById("meteoriteLabOverlay").style.display = "none";
+  document.getElementById("meteoriteLabFrame").src = "";
+}
 function openRingoGame() {
   // 2026-04-18（水）23:59 JST まで有料ユーザー先行公開
   var earlyAccessDeadline = new Date('2026-04-18T23:59:59+09:00');
@@ -10538,6 +10557,12 @@ row.appendChild(medal);
     // ECHO FIELD 直接表示時の戻る
     if (event.data.type === 'ECHO_FIELD_BACK') {
       closePopup();
+      return;
+    }
+
+    // 隕石研究所：戻る
+    if (event.data.type === 'spContentClose') {
+      closeMeteoriteLab();
       return;
     }
 
