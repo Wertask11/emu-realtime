@@ -606,7 +606,7 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
     <!-- 🟡 運営DAO投票セクション（資格確認後に表示） -->
     <div id="fpDAOSection" style="display:none">
       <div style="margin:6px 0 8px">
-        <span class="fp-vote-type-label fp-vote-type-dao">🟡 運営DAO投票 — Emu有料ユーザー参加可能</span>
+        <span class="fp-vote-type-label fp-vote-type-dao">🏛️ SchoolParkの運営に参加する！</span>
       </div>
       <div id="fpNftStatus" style="margin-bottom:10px"></div>
 
@@ -1289,6 +1289,24 @@ async function fpJoinGovernance() {
     document.getElementById("fpGovernanceCTA").style.display = "none";
     document.getElementById("fpDAOSection").style.display   = "block";
     fpToast("✅ DAO参加資格を確認しました！", "rgba(34,197,94,0.92)");
+    // DAO投票バーを読み込む（ここで初めてロード）
+    fpLoadVoteBars("vote2","fpVote2Bars","fpVote2Count",true);
+    fpLoadVoteBars("vote3","fpVote3Bars","fpVote3Count",true);
+    // DAO投票済みチェック
+    if (fpWallet) {
+      for (const vid of ["vote2","vote3"]) {
+        fpFBLib.getDoc(fpFBLib.doc(fpDB,"sp_fountain_dao_votes",`${vid}_${fpWallet.toLowerCase()}`))
+          .then(snap => {
+            if (snap.exists()) {
+              const btns = document.querySelectorAll(`#fp${vid.replace("vote","Vote")}Btns .fp-vote-choice-btn`);
+              btns.forEach(b => {
+                b.disabled = true;
+                if (b.textContent.trim().includes(snap.data().option)) b.classList.add("dao-voted");
+              });
+            }
+          }).catch(()=>{});
+      }
+    }
     // 管理者チェック
     fpCheckDAOCreator();
     // 動的DAO投票を読み込む
@@ -1437,31 +1455,35 @@ async function fpLoadComments(postId) {
   const list = document.getElementById(`fp-comments-list-${postId}`);
   if (!list || !fpDB || !fpFBLib) return;
   list.innerHTML = `<div class="fp-comment-empty">💬 読み込み中…</div>`;
-  try {
-    const lib = fpFBLib;
-    const q   = lib.query(lib.collection(fpDB, "sp_fountain_comments"),
-                          lib.where("postId","==",postId), lib.orderBy("ts","asc"));
-    lib.onSnapshot(q, snap => {
+  const lib = fpFBLib;
+  // where のみ使用（orderByとの複合インデックス不要）。クライアント側でts昇順ソート
+  const q = lib.query(lib.collection(fpDB, "sp_fountain_comments"), lib.where("postId","==",postId));
+  lib.onSnapshot(q,
+    snap => {
       if (snap.empty) {
         list.innerHTML = `<div class="fp-comment-empty">まだコメントはありません。最初のコメントをどうぞ！</div>`;
         return;
       }
-      list.innerHTML = snap.docs.map(d => {
-        const c = d.data();
-        const dt = c.ts ? new Date(c.ts).toLocaleTimeString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
+      const docs = snap.docs.map(d => ({id:d.id,...d.data()})).sort((a,b)=>(a.ts||0)-(b.ts||0));
+      const colors = ["linear-gradient(135deg,#6366f1,#8b5cf6)","linear-gradient(135deg,#10b981,#34d399)",
+                      "linear-gradient(135deg,#0ea5e9,#38bdf8)","linear-gradient(135deg,#f59e0b,#fbbf24)"];
+      list.innerHTML = docs.map(c => {
+        const dt   = c.ts ? new Date(c.ts).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
         const init = (c.author||"名").charAt(0).toUpperCase();
+        const ci   = (c.author||"").charCodeAt(0) % colors.length;
         return `<div class="fp-comment-item">
-          <div class="fp-comment-avatar">${init}</div>
+          <div class="fp-comment-avatar" style="background:${colors[ci]}">${init}</div>
           <div class="fp-comment-body">
             <div class="fp-comment-author">${_esc(c.author||"名無し")} · ${dt}</div>
             <div class="fp-comment-text">${_esc(c.text||"").replace(/\n/g,"<br>")}</div>
           </div>
         </div>`;
       }).join("");
-    });
-  } catch(e) {
-    list.innerHTML = `<div class="fp-comment-empty">コメントを読み込めませんでした</div>`;
-  }
+    },
+    err => {
+      list.innerHTML = `<div class="fp-comment-empty" style="color:#f87171">⚠️ 読み込みエラー: ${err.message}</div>`;
+    }
+  );
 }
 
 async function fpSendComment(postId) {
@@ -1543,49 +1565,22 @@ function fpWaitFirebase() {
     fpInitEvents();
     fpInitWishes();
     fpInitRankVisits();
-    // 投票バー読み込み
+    // 一般投票バーのみ読み込む（DAO投票はボタン押下後）
     fpLoadVoteBars("vote1","fpVote1Bars","fpVote1Count",false);
-    fpLoadVoteBars("vote2","fpVote2Bars","fpVote2Count",true);
-    fpLoadVoteBars("vote3","fpVote3Bars","fpVote3Count",true);
-    // 資格チェック → 既に確認済みなら自動でDAO表示
-    fpCheckNFT().then(() => {
-      if (fpHasNFT) {
-        document.getElementById("fpGovernanceCTA").style.display = "none";
-        document.getElementById("fpDAOSection").style.display    = "block";
-        fpCheckDAOCreator();
-        fpLoadDynamicDAOVotes();
-      }
-    });
+    // 投票済みチェック（一般投票のみ）
+    const savedVote1 = localStorage.getItem("fp_voted_vote1");
+    if (savedVote1) {
+      document.querySelectorAll("#fpVote1Btns .fp-vote-choice-btn").forEach(b => {
+        b.disabled = true;
+        if (b.textContent.includes(savedVote1)) b.classList.add("voted");
+      });
+    }
   } else {
     setTimeout(fpWaitFirebase, 300);
   }
 }
 fpWaitFirebase();
-// 投票済みチェック（ページ読み込み時）
-setTimeout(async () => {
-  if (!fpDB || !fpFBLib) return;
-  // 一般投票（ローカル確認）
-  const savedVote1 = localStorage.getItem("fp_voted_vote1");
-  if (savedVote1) {
-    document.querySelectorAll("#fpVote1Btns .fp-vote-choice-btn").forEach(b => {
-      b.disabled = true;
-      if (b.textContent.includes(savedVote1)) b.classList.add("voted");
-    });
-  }
-  // DAO投票済みチェック
-  for (const vid of ["vote2","vote3"]) {
-    try {
-      const snap = await fpFBLib.getDoc(fpFBLib.doc(fpDB,"sp_fountain_dao_votes",`${vid}_${fpWallet.toLowerCase()}`));
-      if (snap.exists()) {
-        const btns = document.querySelectorAll(`#fp${vid.replace("vote","Vote")}Btns .fp-vote-choice-btn`);
-        btns.forEach(b => {
-          b.disabled = true;
-          if (b.textContent.includes(snap.data().option)) b.classList.add("dao-voted");
-        });
-      }
-    } catch(e) {}
-  }
-}, 2000);
+// 一般投票済みチェックはfpWaitFirebase内で処理
 </script>
 
 <!-- Firebase module -->
