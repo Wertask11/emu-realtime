@@ -104,6 +104,7 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
     <button class="tab-btn" onclick="switchTab('inbox')">📮 お預かり箱 <span id="inbox-count" style="color:#666;"></span></button>
     <button class="tab-btn" onclick="switchTab('fountain-board')">⛲ 掲示板投稿</button>
     <button class="tab-btn" onclick="switchTab('fountain-event')">🎉 イベント投稿</button>
+    <button class="tab-btn" onclick="switchTab('dao-votes');loadDAOVotes()">🗳️ DAO投票</button>
     <button class="tab-btn" onclick="deleteAllContents()" style="margin-left:auto;color:#f44747;border-bottom-color:transparent;">🗑️ コンテンツ全削除</button>
   </div>
 
@@ -192,6 +193,15 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
     </div>
   </div>
 
+  <!-- タブ5: DAO投票データ -->
+  <div id="tab-dao-votes" class="tab-content">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <h2 style="font-size:15px;color:#4ec9b0;margin:0">🗳️ DAO投票データ</h2>
+      <button class="btn-add" onclick="loadDAOVotes()" style="padding:7px 16px;font-size:13px">🔄 再読み込み</button>
+    </div>
+    <div id="dao-votes-container" style="color:#888;font-size:13px">読み込み中…</div>
+  </div>
+
   <!-- タブ4: Fountain イベント投稿 -->
   <div id="tab-fountain-event" class="tab-content">
     <div class="direct-form">
@@ -248,7 +258,7 @@ var themeData = {
 };
 
 // ─── タブ ───
-const TAB_IDS = ['direct','inbox','fountain-board','fountain-event'];
+const TAB_IDS = ['direct','inbox','fountain-board','fountain-event','dao-votes'];
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(function(btn, i) {
     btn.classList.toggle('active', TAB_IDS[i] === tab);
@@ -678,6 +688,167 @@ function fpShowToast(id, msg, type) {
   el.className = 'toast ' + type;
   el.style.display = 'block';
   setTimeout(function(){ el.style.display='none'; }, 3000);
+}
+
+// ─── DAO投票データ ────────────────────────────────────────
+async function loadDAOVotes() {
+  var container = document.getElementById('dao-votes-container');
+  if (!container) return;
+  if (!window.fpAdminDB) {
+    container.innerHTML = '<div class="loading">🔗 Firebase接続中…</div>';
+    setTimeout(loadDAOVotes, 600);
+    return;
+  }
+  container.innerHTML = '<div class="loading">📊 投票データ読み込み中…</div>';
+
+  try {
+    var db = window.fpAdminDB;
+
+    // ── 一般投票 (sp_fountain_votes) ──
+    var generalSnap = await db.collection('sp_fountain_votes').get();
+    var generalMap = {}; // { voteId: { option: [{wallet, ts}] } }
+    generalSnap.forEach(function(d) {
+      var data = d.data();
+      var vid = data.voteId || 'unknown';
+      var opt = data.option || '?';
+      if (!generalMap[vid]) generalMap[vid] = {};
+      if (!generalMap[vid][opt]) generalMap[vid][opt] = [];
+      generalMap[vid][opt].push({ wallet: data.wallet || 'anonymous', ts: data.ts || 0 });
+    });
+
+    // ── DAO投票 (sp_fountain_dao_votes) ──
+    var daoSnap = await db.collection('sp_fountain_dao_votes').get();
+    var daoMap = {}; // { voteId: { option: [{wallet, ts}] } }
+    daoSnap.forEach(function(d) {
+      var data = d.data();
+      var vid = data.voteId || 'unknown';
+      var opt = data.option || '?';
+      if (!daoMap[vid]) daoMap[vid] = {};
+      if (!daoMap[vid][opt]) daoMap[vid][opt] = [];
+      daoMap[vid][opt].push({ wallet: data.wallet || '?', ts: data.ts || 0 });
+    });
+
+    // ── 動的DAO議題 (sp_dao_votes_dynamic) ──
+    var dynSnap = await db.collection('sp_dao_votes_dynamic').orderBy('ts', 'desc').limit(20).get();
+    var dynTopics = [];
+    dynSnap.forEach(function(d) { dynTopics.push({ id: d.id, ...d.data() }); });
+
+    // ── 描画 ──
+    var html = '';
+
+    // 一般投票セクション
+    html += '<div style="margin-bottom:28px">';
+    html += '<div style="font-size:14px;font-weight:bold;color:#4ec9b0;border-bottom:1px solid #2a2a2a;padding-bottom:8px;margin-bottom:12px">🟢 一般投票（sp_fountain_votes）</div>';
+    var generalVoteIds = Object.keys(generalMap);
+    if (generalVoteIds.length === 0) {
+      html += '<div style="color:#555;font-size:13px">投票データなし</div>';
+    } else {
+      generalVoteIds.sort().forEach(function(vid) {
+        var optMap = generalMap[vid];
+        var totalVotes = Object.values(optMap).reduce(function(s,v){ return s+v.length; }, 0);
+        html += daoRenderVoteCard(vid, optMap, totalVotes, false);
+      });
+    }
+    html += '</div>';
+
+    // DAO投票（固定）セクション
+    html += '<div style="margin-bottom:28px">';
+    html += '<div style="font-size:14px;font-weight:bold;color:#fbbf24;border-bottom:1px solid #2a2a2a;padding-bottom:8px;margin-bottom:12px">👑 DAO投票 固定議題（sp_fountain_dao_votes）</div>';
+    var fixedVoteIds = Object.keys(daoMap).filter(function(v){ return !v.startsWith('dyn_'); });
+    if (fixedVoteIds.length === 0) {
+      html += '<div style="color:#555;font-size:13px">投票データなし</div>';
+    } else {
+      fixedVoteIds.sort().forEach(function(vid) {
+        var optMap = daoMap[vid];
+        var totalVotes = Object.values(optMap).reduce(function(s,v){ return s+v.length; }, 0);
+        html += daoRenderVoteCard(vid, optMap, totalVotes, true);
+      });
+    }
+    html += '</div>';
+
+    // DAO投票（動的議題）セクション
+    html += '<div style="margin-bottom:28px">';
+    html += '<div style="font-size:14px;font-weight:bold;color:#a78bfa;border-bottom:1px solid #2a2a2a;padding-bottom:8px;margin-bottom:12px">🏛️ DAO投票 動的議題（sp_dao_votes_dynamic）</div>';
+    if (dynTopics.length === 0) {
+      html += '<div style="color:#555;font-size:13px">議題なし</div>';
+    } else {
+      dynTopics.forEach(function(topic) {
+        var dynVoteId = 'dyn_' + topic.id;
+        var optMap = daoMap[dynVoteId] || {};
+        var totalVotes = Object.values(optMap).reduce(function(s,v){ return s+v.length; }, 0);
+        var deadline = topic.deadline ? new Date(topic.deadline).toLocaleString('ja-JP') : '期限なし';
+        var createdAt = topic.ts ? new Date(topic.ts).toLocaleString('ja-JP') : '';
+        html += '<div style="background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:16px;margin-bottom:12px">';
+        html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">';
+        html += '<div>';
+        html += '<div style="font-weight:bold;font-size:14px;margin-bottom:3px">' + esc(topic.title || '（タイトルなし）') + '</div>';
+        html += '<div style="font-size:11px;color:#666">作成: ' + createdAt + ' / 期限: ' + deadline + ' / 提案者: ' + esc((topic.creator||'').substring(0,10)+'…') + '</div>';
+        html += '</div>';
+        html += '<div style="background:#1e1e1e;border:1px solid #333;border-radius:6px;padding:4px 10px;font-size:13px;font-weight:bold;color:#a78bfa;white-space:nowrap">👥 ' + totalVotes + '票</div>';
+        html += '</div>';
+        if (Object.keys(optMap).length > 0) {
+          html += daoRenderOptionBars(optMap, totalVotes, true);
+        } else {
+          html += '<div style="font-size:12px;color:#555">まだ投票なし</div>';
+        }
+        html += '</div>';
+      });
+    }
+    html += '</div>';
+
+    container.innerHTML = html;
+
+  } catch(e) {
+    console.error('loadDAOVotes error:', e);
+    container.innerHTML = '<div class="empty-state">❌ 読み込みに失敗しました<br><small>' + esc(e.message) + '</small></div>';
+  }
+}
+
+function daoRenderVoteCard(voteId, optMap, totalVotes, isDAO) {
+  var color = isDAO ? '#fbbf24' : '#4ec9b0';
+  var html = '<div style="background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:16px;margin-bottom:12px">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+  html += '<div style="font-weight:bold;font-size:14px;color:' + color + '">' + esc(voteId) + '</div>';
+  html += '<div style="background:#1e1e1e;border:1px solid #333;border-radius:6px;padding:4px 10px;font-size:13px;font-weight:bold;color:' + color + '">👥 ' + totalVotes + '票</div>';
+  html += '</div>';
+  html += daoRenderOptionBars(optMap, totalVotes, isDAO);
+  html += '</div>';
+  return html;
+}
+
+function daoRenderOptionBars(optMap, totalVotes, showVoters) {
+  var html = '';
+  var sortedOpts = Object.keys(optMap).sort(function(a,b){
+    return optMap[b].length - optMap[a].length;
+  });
+  sortedOpts.forEach(function(opt) {
+    var voters = optMap[opt];
+    var cnt = voters.length;
+    var pct = totalVotes > 0 ? Math.round(cnt / totalVotes * 100) : 0;
+    html += '<div style="margin-bottom:8px">';
+    html += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">';
+    html += '<span>' + esc(opt) + '</span>';
+    html += '<span style="color:#888">' + cnt + '票 (' + pct + '%)</span>';
+    html += '</div>';
+    html += '<div style="background:#0f0f0f;border-radius:4px;height:6px;overflow:hidden">';
+    html += '<div style="height:100%;background:linear-gradient(90deg,#4ec9b0,#22d3ee);width:' + pct + '%;transition:width 0.4s"></div>';
+    html += '</div>';
+    if (showVoters && voters.length > 0) {
+      html += '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">';
+      voters.slice(0,8).forEach(function(v) {
+        var addr = v.wallet || 'anon';
+        var short = addr === 'anonymous' ? 'anon' : (addr.length > 12 ? addr.substring(0,6)+'…'+addr.slice(-4) : addr);
+        var dt = v.ts ? new Date(v.ts).toLocaleDateString('ja-JP') : '';
+        html += '<span title="' + esc(addr) + '  ' + dt + '" style="background:#1e1e1e;border:1px solid #333;border-radius:3px;padding:1px 6px;font-size:10px;color:#888;cursor:default">' + esc(short) + '</span>';
+      });
+      if (voters.length > 8) {
+        html += '<span style="font-size:10px;color:#555">…他' + (voters.length-8) + '人</span>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+  return html;
 }
 
 // ─── コンテンツ全削除 ───
