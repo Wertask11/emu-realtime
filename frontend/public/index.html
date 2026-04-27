@@ -2218,6 +2218,14 @@ body.paypay-mode #pp-post-fab {
 
 </div>
 
+<!-- ── SchoolPark コンテンツ iframe オーバーレイ ── -->
+<div id="spContentOverlay" style="
+  display:none; position:fixed; inset:0; z-index:1600;
+  background:#1a1a2e; flex-direction:column;
+">
+  <iframe id="spContentFrame" src="" style="width:100%; height:100%; border:none; display:block;"></iframe>
+</div>
+
 <!-- SchoolPark COMING SOON（一般ユーザー用） -->
 <div id="spComingOverlay" onclick="closeSpComing(event)">
   <div class="spc-popup" onclick="event.stopPropagation()">
@@ -7144,6 +7152,36 @@ function openSpMap(gate) {
   }
 }
 
+// ── SchoolPark コンテンツ iframe オーバーレイ ─────────────────
+function openSpContent(url) {
+  const wallet = window.connectedAccount || localStorage.getItem("emuWallet") || "";
+  const sep    = url.includes("?") ? "&" : "?";
+  const fullUrl = wallet ? url + sep + "wallet=" + encodeURIComponent(wallet) : url;
+  const overlay = document.getElementById("spContentOverlay");
+  const frame   = document.getElementById("spContentFrame");
+  frame.src = fullUrl;
+  overlay.style.display = "flex";
+  document.body.classList.add("spmap-open");
+}
+
+function closeSpContent() {
+  const overlay = document.getElementById("spContentOverlay");
+  const frame   = document.getElementById("spContentFrame");
+  overlay.style.display = "none";
+  frame.src = ""; // iframeをリセット
+  document.body.classList.remove("spmap-open");
+  // SchoolParkマップに即戻り
+  openSpMap();
+}
+
+// iframe内からのメッセージを受信
+window.addEventListener("message", (e) => {
+  if (!e.data || typeof e.data !== "object") return;
+  if (e.data.type === "spContentClose") {
+    closeSpContent();
+  }
+});
+
 function closeSpMap() {
   document.getElementById("spMapOverlay").style.display = "none";
   document.body.classList.remove('spmap-open'); /* 問い合わせボタン復元 */
@@ -7246,7 +7284,7 @@ function spMapSelectPoi(poiId) {
     </div>
     <div class="spmap-detail-desc">${poi.desc}</div>
     ${poi.page
-      ? `<button class="spmap-detail-go-btn" onclick="window.location.href='${poi.page}'">🚪 遊びに行く</button>`
+      ? `<button class="spmap-detail-go-btn" onclick="openSpContent('${poi.page}')">🚪 遊びに行く</button>`
       : `<div class="spmap-detail-badge">🕐 5/20 OPENING</div>`
     }
   `;

@@ -387,12 +387,12 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 
 <!-- ── Header ── -->
 <header class="fp-header">
-  <button class="fp-emu-btn" onclick="window.location.href='/?direct=1&schoolpark=1'" style="font-size:0.75rem;padding:5px 10px;letter-spacing:0.02em">🗺️ 広場を離れる</button>
+  <button class="fp-emu-btn" onclick="fpLeave()" style="font-size:0.75rem;padding:5px 10px;letter-spacing:0.02em">🗺️ 広場を離れる</button>
 
   <div class="fp-header-title">⛲ Fountain 噴水広場</div>
 
   <div class="fp-header-icons">
-    <button class="fp-hicon" title="財布" onclick="window.location.href='/?direct=1'">👛</button>
+    <button class="fp-hicon" title="財布">👛</button>
     <button class="fp-hicon" title="タクシー" onclick="fpTaxiOpen()">🚕</button>
     <button class="fp-hicon" title="ロボット">🤖</button>
     <button class="fp-hicon" title="設定">⚙️</button>
@@ -673,11 +673,20 @@ const FP_NFT = {
 };
 const ERC1155_ABI = ["function balanceOf(address account, uint256 id) view returns (uint256)"];
 
-// ウォレット検出（複数手段でフォールバック）
-let fpWallet  = localStorage.getItem("emuWallet")
-             || localStorage.getItem("connectedAccount")
-             || sessionStorage.getItem("emuWallet")
-             || null;
+// ウォレット検出（URL param → localStorage → 親フレーム → null の順）
+const _fpUrlParams = new URLSearchParams(window.location.search);
+let fpWallet = _fpUrlParams.get("wallet")
+            || localStorage.getItem("emuWallet")
+            || localStorage.getItem("connectedAccount")
+            || sessionStorage.getItem("emuWallet")
+            || null;
+// iframeとして埋め込まれている場合、親からウォレットを取得
+if (!fpWallet) {
+  try {
+    const _pw = window.parent?.connectedAccount || window.parent?.localStorage?.getItem?.("emuWallet");
+    if (_pw) fpWallet = _pw;
+  } catch(e) {}
+}
 let fpMyName  = (fpWallet ? fpWallet.slice(0,6)+"…"+fpWallet.slice(-4) : "ゲスト");
 let fpHasNFT  = false;
 
@@ -760,15 +769,27 @@ setInterval(fpFetchWeather, 600000);
 
 // ─── NFT チェック ──────────────────────────────────────────
 async function fpCheckNFT() {
+  // ウォレットを最新化（iframeの場合、親から再取得を試みる）
+  if (!fpWallet) {
+    try {
+      const _pw = window.parent?.connectedAccount;
+      if (_pw) fpWallet = _pw;
+    } catch(e) {}
+  }
   if (!fpWallet) {
     fpUpdateNFTStatus(false, []);
     return;
   }
 
-  // ① Firestore paid_users チェック（優先・独立実行）
+  // ① Firestore paid_users チェック（優先・独立実行・大文字小文字両対応）
   if (fpDB && fpFBLib) {
     try {
-      const snap = await fpFBLib.getDoc(fpFBLib.doc(fpDB, "paid_users", fpWallet.toLowerCase()));
+      // 小文字で検索
+      let snap = await fpFBLib.getDoc(fpFBLib.doc(fpDB, "paid_users", fpWallet.toLowerCase()));
+      // 見つからなければ元のケースでも試す
+      if (!snap.exists()) {
+        snap = await fpFBLib.getDoc(fpFBLib.doc(fpDB, "paid_users", fpWallet));
+      }
       if (snap.exists() && snap.data().hasPaid) {
         fpHasNFT = true;
         fpNFTList = ["Emu有料ユーザー"];
@@ -781,34 +802,46 @@ async function fpCheckNFT() {
     }
   }
 
-  // ② オンチェーンチェック（Firestoreで未確認の場合のみ）
-  try {
-    const provider = new ethers.providers.JsonRpcProvider(FP_POLYGON_RPC);
-    const held = [];
-    for (const [key, nft] of Object.entries(FP_NFT)) {
-      try {
-        const contract = new ethers.Contract(nft.addr, ERC1155_ABI, provider);
-        const bal = await contract.balanceOf(fpWallet, nft.id);
-        if (bal.gt(0)) held.push(nft.name);
-      } catch(e) {}
+  // ② オンチェーンチェック（Firestoreで未確認の場合のみ・複数RPCでフォールバック）
+  const RPCS = [
+    "https://rpc.ankr.com/polygon",
+    "https://polygon-bor-rpc.publicnode.com",
+    "https://polygon.llamarpc.com"
+  ];
+  for (const rpcUrl of RPCS) {
+    try {
+      const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+      const held = [];
+      for (const [key, nft] of Object.entries(FP_NFT)) {
+        try {
+          const contract = new ethers.Contract(nft.addr, ERC1155_ABI, provider);
+          const bal = await contract.balanceOf(fpWallet, nft.id);
+          if (bal.gt(0)) held.push(nft.name);
+        } catch(e) {}
+      }
+      fpHasNFT = held.length > 0;
+      fpNFTList = held;
+      fpUpdateNFTStatus(fpHasNFT, held);
+      if (fpHasNFT) fpUnlockDAOVote();
+      return; // RPCが成功したのでループを抜ける
+    } catch(e) {
+      // このRPCは失敗、次を試す
     }
-    fpHasNFT = held.length > 0;
-    fpNFTList = held;
-    fpUpdateNFTStatus(fpHasNFT, held);
-    if (fpHasNFT) fpUnlockDAOVote();
-  } catch(e) {
-    fpUpdateNFTStatus(false, []);
   }
+  fpUpdateNFTStatus(false, []);
 }
 
 function fpUpdateNFTStatus(has, list) {
   const el = document.getElementById("fpNftStatus");
+  const addrHint = fpWallet
+    ? `<span style="font-size:0.62rem;opacity:0.55;margin-left:6px">${fpWallet.slice(0,6)}…${fpWallet.slice(-4)}</span>`
+    : "";
   if (has) {
-    el.innerHTML = `<span class="fp-nft-badge">👑 NFT保有確認 — ${list.join("・")} — DAO投票参加資格あり</span>`;
+    el.innerHTML = `<span class="fp-nft-badge">👑 NFT保有確認 — ${list.join("・")} — DAO投票参加資格あり${addrHint}</span>`;
   } else if (!fpWallet) {
     el.innerHTML = `<span class="fp-nft-badge" style="color:var(--text2);border-color:var(--border);background:var(--card)">🔒 DAO投票にはEmuでウォレット接続が必要です</span>`;
   } else {
-    el.innerHTML = `<span class="fp-nft-badge" style="color:var(--text2);border-color:var(--border);background:var(--card)">🔒 対象NFTが見つかりません（第一弾・第二弾・第三弾いずれか必要）</span>`;
+    el.innerHTML = `<span class="fp-nft-badge" style="color:var(--text2);border-color:var(--border);background:var(--card)">🔒 対象NFTが見つかりません（第一弾・第二弾いずれか必要）${addrHint}</span>`;
   }
 }
 
@@ -1085,6 +1118,17 @@ function fpInitRankVisits() {
     const el = document.getElementById("fpRankVisit1");
     if (el) el.textContent = v.toLocaleString() + " 訪問";
   }).catch(()=>{});
+}
+
+// ─── 広場を離れる ─────────────────────────────────────────
+function fpLeave() {
+  if (window.parent && window.parent !== window) {
+    // iframeとして埋め込まれている → 親にメッセージを送ってSchoolParkマップに戻る
+    window.parent.postMessage({ type: "spContentClose" }, "*");
+  } else {
+    // 単独ページとして開いた場合のフォールバック
+    window.location.href = "/?direct=1&schoolpark=1";
+  }
 }
 
 // ─── チャット入力 自動リサイズ ──────────────────────────────
