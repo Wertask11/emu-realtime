@@ -2808,7 +2808,8 @@ const walletScreen = document.getElementById("walletScreen");
 const mainApp = document.getElementById("mainApp");
 
 // SchoolParkコンテンツから戻った場合のフラグ（currentUserId宣言前なのでフラグのみ）
-const _fpDirectReturn = window.location.search.includes("direct=1") && !!localStorage.getItem("emuWallet");
+const _fpDirectReturn   = window.location.search.includes("direct=1") && !!localStorage.getItem("emuWallet");
+const _fpToSchoolpark   = window.location.search.includes("schoolpark=1");
 
 //ウォレット表示・状態
 const walletStatus = document.getElementById("walletStatus");
@@ -2959,6 +2960,10 @@ if (_fpDirectReturn) {
   const _walletBtn = document.getElementById("walletAddressButton");
   if (_walletBtn) _walletBtn.textContent = _savedWallet.slice(0,6) + "..." + _savedWallet.slice(-4);
   window.history.replaceState(null, "", "/");
+  // SchoolParkマップを自動的に開く
+  if (_fpToSchoolpark) {
+    setTimeout(() => { if (typeof openSpMap === "function") openSpMap(); }, 400);
+  }
 }
 
 //goodした記事・changeした記事
