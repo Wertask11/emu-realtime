@@ -102,6 +102,8 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('direct')">✏️ 直接追加</button>
     <button class="tab-btn" onclick="switchTab('inbox')">📮 お預かり箱 <span id="inbox-count" style="color:#666;"></span></button>
+    <button class="tab-btn" onclick="switchTab('fountain-board')">⛲ 掲示板投稿</button>
+    <button class="tab-btn" onclick="switchTab('fountain-event')">🎉 イベント投稿</button>
     <button class="tab-btn" onclick="deleteAllContents()" style="margin-left:auto;color:#f44747;border-bottom-color:transparent;">🗑️ コンテンツ全削除</button>
   </div>
 
@@ -161,6 +163,67 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
   <div id="tab-inbox" class="tab-content">
     <div id="inbox-list"><div class="loading">📮 読み込み中...</div></div>
   </div>
+
+  <!-- タブ3: Fountain 掲示板投稿 -->
+  <div id="tab-fountain-board" class="tab-content">
+    <div class="direct-form">
+      <h2>⛲ Fountain 噴水広場 — 掲示板に投稿</h2>
+      <div class="form-field" style="margin-bottom:14px">
+        <label>投稿者名</label>
+        <input type="text" id="fb-author" placeholder="例：SchoolPark 運営" value="SchoolPark 運営">
+      </div>
+      <div class="form-field" style="margin-bottom:14px">
+        <label>本文 *</label>
+        <textarea id="fb-body" rows="6" placeholder="掲示板の投稿内容を入力..."></textarea>
+      </div>
+      <div class="form-field" style="margin-bottom:14px">
+        <label>画像URL（任意）</label>
+        <input type="url" id="fb-img" placeholder="https://...">
+      </div>
+      <div class="form-actions">
+        <button class="btn-clear" onclick="document.getElementById('fb-body').value=''">クリア</button>
+        <button class="btn-add" onclick="fpSubmitBoard()">⛲ 掲示板に投稿</button>
+      </div>
+      <div class="toast" id="fb-toast"></div>
+    </div>
+    <div style="margin-top:20px">
+      <h2 style="font-size:14px;color:#4ec9b0;margin-bottom:12px">📋 投稿一覧</h2>
+      <div id="fb-post-list" style="color:#888;font-size:13px">読み込み中…</div>
+    </div>
+  </div>
+
+  <!-- タブ4: Fountain イベント投稿 -->
+  <div id="tab-fountain-event" class="tab-content">
+    <div class="direct-form">
+      <h2>🎉 Fountain 噴水広場 — イベントを追加</h2>
+      <div class="form-field" style="margin-bottom:14px">
+        <label>イベント名 *</label>
+        <input type="text" id="fe-title" placeholder="例：SchoolPark グランドオープン記念祭">
+      </div>
+      <div class="form-field" style="margin-bottom:14px">
+        <label>日時・場所・詳細 *</label>
+        <textarea id="fe-detail" rows="5" placeholder="📅 2026年5月20日&#10;📍 Fountain 噴水広場&#10;💰 参加費：無料&#10;&#10;内容説明…"></textarea>
+      </div>
+      <div class="form-field" style="margin-bottom:14px">
+        <label>タグ（カンマ区切り）</label>
+        <input type="text" id="fe-tags" placeholder="例：EMUER配布, DAO投票, 全員参加">
+      </div>
+      <div class="form-field" style="margin-bottom:14px">
+        <label>日付（ソート用 YYYY-MM-DD）</label>
+        <input type="date" id="fe-date" style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px">
+      </div>
+      <div class="form-actions">
+        <button class="btn-clear" onclick="document.getElementById('fe-title').value='';document.getElementById('fe-detail').value=''">クリア</button>
+        <button class="btn-add" onclick="fpSubmitEvent()">🎉 イベントを追加</button>
+      </div>
+      <div class="toast" id="fe-toast"></div>
+    </div>
+    <div style="margin-top:20px">
+      <h2 style="font-size:14px;color:#4ec9b0;margin-bottom:12px">📋 イベント一覧</h2>
+      <div id="fe-event-list" style="color:#888;font-size:13px">読み込み中…</div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -185,13 +248,18 @@ var themeData = {
 };
 
 // ─── タブ ───
+const TAB_IDS = ['direct','inbox','fountain-board','fountain-event'];
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(function(btn, i) {
-    btn.classList.toggle('active', (tab === 'direct' && i === 0) || (tab === 'inbox' && i === 1));
+    btn.classList.toggle('active', TAB_IDS[i] === tab);
   });
-  document.getElementById('tab-direct').classList.toggle('active', tab === 'direct');
-  document.getElementById('tab-inbox').classList.toggle('active', tab === 'inbox');
+  TAB_IDS.forEach(function(id) {
+    var el = document.getElementById('tab-' + id);
+    if (el) el.classList.toggle('active', id === tab);
+  });
   if (tab === 'inbox') loadInbox();
+  if (tab === 'fountain-board')  fpLoadBoardPosts();
+  if (tab === 'fountain-event')  fpLoadEvents();
 }
 
 // ─── 直接追加フォーム ───
@@ -521,6 +589,98 @@ function esc(s) {
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ─── Fountain 掲示板 ───────────────────────────────────────
+async function fpSubmitBoard() {
+  var author = document.getElementById('fb-author').value.trim() || 'SchoolPark 運営';
+  var body   = document.getElementById('fb-body').value.trim();
+  var img    = document.getElementById('fb-img').value.trim();
+  if (!body) { fpShowToast('fb-toast','本文を入力してください','error'); return; }
+  if (!window.fpAdminDB) { fpShowToast('fb-toast','Firebase接続中…','error'); return; }
+  try {
+    await window.fpAdminDB.collection('sp_fountain_board').add({ author, body, img: img||null, ts: Date.now() });
+    document.getElementById('fb-body').value = '';
+    document.getElementById('fb-img').value  = '';
+    fpShowToast('fb-toast','✅ 掲示板に投稿しました！','success');
+    fpLoadBoardPosts();
+  } catch(e) { fpShowToast('fb-toast','❌ '+e.message,'error'); }
+}
+
+function fpLoadBoardPosts() {
+  if (!window.fpAdminDB) { setTimeout(fpLoadBoardPosts,500); return; }
+  var el = document.getElementById('fb-post-list');
+  window.fpAdminDB.collection('sp_fountain_board').orderBy('ts','desc').limit(20)
+    .onSnapshot(function(snap) {
+      if (snap.empty) { el.textContent = '投稿がありません'; return; }
+      el.innerHTML = snap.docs.map(function(d) {
+        var data = d.data();
+        var dt = data.ts ? new Date(data.ts).toLocaleString('ja-JP') : '';
+        return '<div style="background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:12px;margin-bottom:8px">' +
+          '<div style="font-size:11px;color:#666;margin-bottom:6px">' + (data.author||'') + ' · ' + dt +
+          ' <button onclick="fpDeletePost(\''+d.id+'\')" style="float:right;background:none;border:none;color:#f44747;cursor:pointer;font-size:11px">削除</button></div>' +
+          '<div style="font-size:13px;white-space:pre-wrap">' + esc(data.body||'') + '</div>' +
+          '</div>';
+      }).join('');
+    });
+}
+
+async function fpDeletePost(docId) {
+  if (!confirm('この投稿を削除しますか？')) return;
+  await window.fpAdminDB.collection('sp_fountain_board').doc(docId).delete();
+}
+
+// ─── Fountain イベント ─────────────────────────────────────
+async function fpSubmitEvent() {
+  var title  = document.getElementById('fe-title').value.trim();
+  var detail = document.getElementById('fe-detail').value.trim();
+  var tagsRaw= document.getElementById('fe-tags').value.trim();
+  var date   = document.getElementById('fe-date').value;
+  if (!title || !detail) { fpShowToast('fe-toast','タイトルと詳細は必須です','error'); return; }
+  if (!window.fpAdminDB) { fpShowToast('fe-toast','Firebase接続中…','error'); return; }
+  var tags = tagsRaw ? tagsRaw.split(',').map(function(t){ return t.trim(); }).filter(Boolean) : [];
+  try {
+    await window.fpAdminDB.collection('sp_fountain_events').add({ title, detail, tags, date: date||'9999-12-31', ts: Date.now() });
+    document.getElementById('fe-title').value  = '';
+    document.getElementById('fe-detail').value = '';
+    document.getElementById('fe-tags').value   = '';
+    fpShowToast('fe-toast','✅ イベントを追加しました！','success');
+    fpLoadEvents();
+  } catch(e) { fpShowToast('fe-toast','❌ '+e.message,'error'); }
+}
+
+function fpLoadEvents() {
+  if (!window.fpAdminDB) { setTimeout(fpLoadEvents,500); return; }
+  var el = document.getElementById('fe-event-list');
+  window.fpAdminDB.collection('sp_fountain_events').orderBy('date','asc').limit(20)
+    .onSnapshot(function(snap) {
+      if (snap.empty) { el.textContent = 'イベントがありません'; return; }
+      el.innerHTML = snap.docs.map(function(d) {
+        var data = d.data();
+        var tags = (data.tags||[]).map(function(t){ return '<span style="background:#1e1e1e;border:1px solid #333;border-radius:4px;padding:1px 7px;font-size:11px;color:#888">'+esc(t)+'</span>'; }).join(' ');
+        return '<div style="background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:12px;margin-bottom:8px">' +
+          '<div style="font-weight:bold;margin-bottom:5px;font-size:13px">' + esc(data.title||'') +
+          ' <button onclick="fpDeleteEvent(\''+d.id+'\')" style="float:right;background:none;border:none;color:#f44747;cursor:pointer;font-size:11px">削除</button></div>' +
+          '<div style="font-size:12px;color:#888;white-space:pre-wrap;margin-bottom:6px">'+esc(data.detail||'')+'</div>' +
+          (tags ? '<div style="display:flex;gap:4px;flex-wrap:wrap">'+tags+'</div>' : '') +
+          '</div>';
+      }).join('');
+    });
+}
+
+async function fpDeleteEvent(docId) {
+  if (!confirm('このイベントを削除しますか？')) return;
+  await window.fpAdminDB.collection('sp_fountain_events').doc(docId).delete();
+}
+
+function fpShowToast(id, msg, type) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'toast ' + type;
+  el.style.display = 'block';
+  setTimeout(function(){ el.style.display='none'; }, 3000);
+}
+
+// ─── コンテンツ全削除 ───
 // ─── コンテンツ全削除 ───
 async function deleteAllContents() {
   if (!confirm('room1の学習コンテンツをすべて削除します。\nこの操作は取り消せません。本当に実行しますか？')) return;
@@ -536,6 +696,32 @@ async function deleteAllContents() {
     alert('❌ エラー: ' + err.message);
   }
 }
+</script>
+
+<!-- Firebase Compat SDK for admin panel -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script>
+(function() {
+  var cfg = {
+    apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
+    authDomain: "emusch-2a111.firebaseapp.com",
+    projectId: "emusch-2a111",
+    storageBucket: "emusch-2a111.firebasestorage.app",
+    messagingSenderId: "795496371585",
+    appId: "1:795496371585:web:51deec91b8a2152e4c8480"
+  };
+  // 既存のFirebaseアプリがあれば使い回す
+  try {
+    var app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg);
+    window.fpAdminDB = firebase.firestore(app);
+  } catch(e) {
+    try {
+      firebase.initializeApp(cfg, 'admin');
+      window.fpAdminDB = firebase.firestore(firebase.app('admin'));
+    } catch(e2) { console.error('Firebase init error:', e2); }
+  }
+})();
 </script>
 </body>
 </html>

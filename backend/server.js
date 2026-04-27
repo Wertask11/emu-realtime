@@ -990,13 +990,44 @@ function getTodayTopic() {
 
 const messages = new Map();
 
+// Fountain チャット履歴（メモリ）
+const fountainMessages = new Map();
+
 io.on("connection", (socket) => {
   console.log("接続:", socket.id);
   socket.emit("today topic", getTodayTopic());
   socket.emit("room3 history", Array.from(messages.values()));
+  // Fountain チャット履歴を送信
+  socket.emit("fountain history", Array.from(fountainMessages.values()).slice(-100));
 
   socket.on("join room3", ({ wallet }) => { socket.wallet = wallet; });
-  
+
+  // ★ Fountain チャット参加
+  socket.on("join fountain", ({ wallet, name }) => {
+    socket.fountainWallet = wallet || "guest";
+    socket.fountainName   = name   || "名無し";
+  });
+
+  // ★ Fountain チャットメッセージ
+  socket.on("fountain message", (data) => {
+    if (!data.text || String(data.text).trim().length === 0) return;
+    const messageId = randomUUID();
+    const message = {
+      id: socket.id,
+      wallet: socket.fountainWallet || "guest",
+      name: socket.fountainName || "名無し",
+      messageId,
+      text: String(data.text).slice(0, 500),
+      timestamp: Date.now()
+    };
+    fountainMessages.set(messageId, message);
+    // 100件を超えたら古いものを削除
+    if (fountainMessages.size > 100) {
+      fountainMessages.delete(fountainMessages.keys().next().value);
+    }
+    io.emit("fountain message", message);
+  });
+
   // ★ 議題の再リクエスト
   socket.on("request topic", () => {
     socket.emit("today topic", getTodayTopic());
