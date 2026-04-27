@@ -1133,13 +1133,53 @@ function fpInitEvents() {
   });
 }
 
+// 📌 常時ピン固定で表示するコンテンツ（イベントタブ上部）
+const FP_PINNED_CONTENT = [
+  {
+    icon: "☄️",
+    title: "隕石研究所 / METEORITE LAB",
+    detail: "問題・課題・トラブルを「隕石」として捉え、科学的な研究プロセスで解決する探索スペース。\n問いを立てる → 仮説をきめる → 実行と対処 → 研究報告・考察の4ステップで課題を知識に変えます。",
+    tags: ["探索コンテンツ", "問題解決", "EMUER報酬予定"],
+    url: "/schoolpark/meteorite-lab.html",
+    btnLabel: "入所する →",
+    accentColor: "linear-gradient(#00ffc8, #00d4a8)",
+    badgeText: "🔬 NOW OPEN",
+    badgeStyle: "background:rgba(0,255,200,0.1);border:1px solid rgba(0,255,200,0.25);color:#00ffc8"
+  }
+];
+
 function fpRenderEvents(events) {
   const el = document.getElementById("fpEventList");
+
+  // ── ピン固定コンテンツ（常時表示）
+  const pinnedHtml = FP_PINNED_CONTENT.map(item => {
+    const tags = (item.tags || []).map(t => `<span class="fp-event-tag">${_esc(t)}</span>`).join("");
+    return `<div class="fp-event-card" style="border-color:rgba(0,255,200,0.2)">
+      <div class="fp-event-side" style="background:${item.accentColor}"></div>
+      <div class="fp-event-body">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+          <span style="font-size:1.3rem">${item.icon}</span>
+          <div style="flex:1">
+            <div class="fp-event-name" style="color:#e8e8f0">${_esc(item.title)}</div>
+            <span style="display:inline-block;font-size:0.6rem;padding:1px 7px;border-radius:10px;margin-top:3px;${item.badgeStyle}">${item.badgeText}</span>
+          </div>
+        </div>
+        <div class="fp-event-info">${_esc(item.detail).replace(/\n/g,"<br>")}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;flex-wrap:wrap;gap:7px">
+          ${tags ? `<div class="fp-event-tags">${tags}</div>` : "<div></div>"}
+          <a href="${item.url}" style="background:linear-gradient(135deg,#00ffc8,#00d4a8);color:#0a0a0f;font-weight:700;font-size:0.72rem;padding:6px 14px;border-radius:7px;text-decoration:none;white-space:nowrap;transition:transform 0.15s" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">${item.btnLabel}</a>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+
+  // ── Firestore イベント
   if (events.length === 0) {
-    el.innerHTML = `<div class="fp-loading">🎉 イベントは近日公開予定</div>`;
+    el.innerHTML = pinnedHtml +
+      `<div class="fp-loading" style="margin-top:14px">🎉 コミュニティイベントは近日公開予定</div>`;
     return;
   }
-  el.innerHTML = events.map(ev => {
+  const evHtml = events.map(ev => {
     const tags = (ev.tags || []).map(t => `<span class="fp-event-tag">${_esc(t)}</span>`).join("");
     return `<div class="fp-event-card">
       <div class="fp-event-side"></div>
@@ -1150,6 +1190,7 @@ function fpRenderEvents(events) {
       </div>
     </div>`;
   }).join("");
+  el.innerHTML = pinnedHtml + evHtml;
 }
 
 // ─── 願いの泉（Firestore） ────────────────────────────────

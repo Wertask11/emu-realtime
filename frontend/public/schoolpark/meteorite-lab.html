@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>隕石研究所 — SchoolPark / Emu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Zen+Maru+Gothic:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:     #0a0a0f;
+  --bg2:    #0f0f1a;
+  --bg3:    #111122;
+  --surface:#16162a;
+  --border: rgba(0,255,200,0.12);
+  --border2:rgba(0,255,200,0.25);
+  --cyan:   #00ffc8;
+  --cyan2:  #00d4a8;
+  --cyan-dim:#1a4a3a;
+  --amber:  #f59e0b;
+  --red:    #ef4444;
+  --text:   #c8d0e0;
+  --text2:  #5a6a7a;
+  --text3:  #3a4a5a;
+  --mono:   'Space Mono', 'Courier New', monospace;
+  --sans:   'Zen Maru Gothic', sans-serif;
+  --radius: 4px;
+}
+html, body { background: var(--bg); color: var(--text); min-height: 100vh; font-family: var(--mono); }
+
+/* ── Scan-line overlay ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg,
+    transparent, transparent 2px,
+    rgba(0,255,200,0.012) 2px, rgba(0,255,200,0.012) 4px);
+}
+
+/* ── Header ── */
+.ml-header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,10,15,0.96); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border2);
+  padding: 0 20px; display: flex; align-items: center; justify-content: space-between;
+  height: 56px;
+}
+.ml-header-left { display: flex; align-items: center; gap: 14px; }
+.ml-status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--cyan); box-shadow: 0 0 8px var(--cyan);
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot { 0%,100%{ opacity:1; } 50%{ opacity:0.3; } }
+.ml-title {
+  font-size: 0.9rem; font-weight: 700; letter-spacing: 0.15em;
+  color: var(--cyan); text-transform: uppercase;
+}
+.ml-subtitle { font-size: 0.62rem; color: var(--text2); letter-spacing: 0.1em; }
+.ml-header-right { display: flex; align-items: center; gap: 16px; }
+.ml-clock { font-size: 0.68rem; color: var(--cyan-dim); text-align: right; line-height: 1.5; }
+.ml-clock strong { color: var(--cyan2); }
+.ml-back-btn {
+  background: transparent; border: 1px solid var(--border2); color: var(--text2);
+  padding: 6px 12px; font-family: var(--mono); font-size: 0.7rem; cursor: pointer;
+  transition: 0.2s; letter-spacing: 0.08em;
+}
+.ml-back-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* ── Main Layout ── */
+.ml-layout {
+  display: grid; grid-template-columns: 200px 1fr; gap: 0;
+  min-height: calc(100vh - 56px); position: relative; z-index: 1;
+}
+@media (max-width: 768px) {
+  .ml-layout { grid-template-columns: 1fr; }
+  .ml-sidebar { display: flex; flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 8px; gap: 4px; }
+  .ml-nav-btn { flex-shrink: 0; }
+}
+
+/* ── Sidebar ── */
+.ml-sidebar {
+  background: var(--bg2); border-right: 1px solid var(--border);
+  padding: 20px 0; display: flex; flex-direction: column; gap: 2px;
+}
+.ml-nav-group-label {
+  font-size: 0.55rem; color: var(--text3); letter-spacing: 0.2em;
+  padding: 14px 18px 6px; text-transform: uppercase;
+}
+.ml-nav-btn {
+  background: none; border: none; color: var(--text2); font-family: var(--mono);
+  font-size: 0.73rem; padding: 11px 18px; cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: 10px; border-left: 2px solid transparent;
+  transition: 0.15s; width: 100%; letter-spacing: 0.05em;
+}
+.ml-nav-btn:hover { color: var(--text); background: rgba(0,255,200,0.04); }
+.ml-nav-btn.active { color: var(--cyan); border-left-color: var(--cyan); background: rgba(0,255,200,0.06); }
+.ml-nav-icon { font-size: 0.9rem; flex-shrink: 0; width: 18px; }
+.ml-sidebar-divider { height: 1px; background: var(--border); margin: 14px 0; }
+
+/* ── Content ── */
+.ml-content { padding: 24px; overflow-y: auto; }
+.ml-panel { display: none; }
+.ml-panel.active { display: block; }
+
+/* ── Section Header ── */
+.ml-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 22px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
+}
+.ml-section-title {
+  font-size: 0.8rem; font-weight: 700; color: var(--cyan); letter-spacing: 0.15em;
+  text-transform: uppercase; display: flex; align-items: center; gap: 8px;
+}
+.ml-section-subtitle { font-size: 0.62rem; color: var(--text2); margin-top: 3px; letter-spacing: 0.08em; }
+.ml-action-row { display: flex; gap: 8px; }
+.ml-btn {
+  background: transparent; border: 1px solid var(--border2); color: var(--text2);
+  font-family: var(--mono); font-size: 0.68rem; padding: 6px 12px; cursor: pointer;
+  transition: 0.2s; letter-spacing: 0.08em; display: flex; align-items: center; gap: 6px;
+}
+.ml-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+.ml-btn.primary { background: var(--cyan); color: var(--bg); font-weight: 700; border-color: var(--cyan); }
+.ml-btn.primary:hover { background: var(--cyan2); }
+.ml-btn.danger { border-color: rgba(239,68,68,0.4); color: var(--red); }
+.ml-btn.danger:hover { background: rgba(239,68,68,0.1); }
+
+/* ── Meteorite List (監視) ── */
+.ml-alert-bar {
+  background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3);
+  padding: 10px 16px; font-size: 0.68rem; color: var(--amber);
+  display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+  letter-spacing: 0.05em;
+}
+.ml-alert-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); animation: pulse-dot 1.2s infinite; flex-shrink: 0; }
+.ml-met-table { width: 100%; border-collapse: collapse; }
+.ml-met-table th {
+  font-size: 0.6rem; color: var(--text2); letter-spacing: 0.15em; text-transform: uppercase;
+  padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-weight: 400;
+}
+.ml-met-table td {
+  font-size: 0.73rem; padding: 12px 12px; border-bottom: 1px solid rgba(0,255,200,0.04);
+  vertical-align: middle;
+}
+.ml-met-table tr:hover td { background: rgba(0,255,200,0.025); }
+.ml-severity {
+  display: inline-block; padding: 2px 8px; border-radius: 2px;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em;
+}
+.ml-severity.critical { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+.ml-severity.high     { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.25); }
+.ml-severity.medium   { background: rgba(0,255,200,0.08); color: var(--cyan2); border: 1px solid rgba(0,255,200,0.2); }
+.ml-severity.low      { background: rgba(255,255,255,0.04); color: var(--text2); border: 1px solid var(--border); }
+.ml-phase {
+  display: inline-block; font-size: 0.62rem; padding: 2px 8px;
+  background: rgba(0,255,200,0.05); border: 1px solid var(--border); color: var(--cyan2);
+}
+.ml-met-id { color: var(--cyan2); font-size: 0.68rem; }
+.ml-open-btn {
+  background: none; border: 1px solid var(--border); color: var(--text2);
+  font-family: var(--mono); font-size: 0.65rem; padding: 4px 10px; cursor: pointer; transition: 0.15s;
+}
+.ml-open-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+.ml-empty { text-align: center; padding: 40px 0; color: var(--text3); font-size: 0.75rem; letter-spacing: 0.08em; }
+
+/* ── Add Form ── */
+.ml-add-form {
+  background: var(--bg2); border: 1px solid var(--border);
+  padding: 20px; margin-top: 20px;
+}
+.ml-add-form-title { font-size: 0.7rem; color: var(--cyan); letter-spacing: 0.15em; margin-bottom: 16px; text-transform: uppercase; }
+.ml-form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+@media (max-width: 600px) { .ml-form-grid { grid-template-columns: 1fr; } }
+.ml-form-field { display: flex; flex-direction: column; gap: 5px; }
+.ml-label { font-size: 0.58rem; color: var(--text2); letter-spacing: 0.12em; text-transform: uppercase; }
+.ml-input, .ml-select, .ml-textarea {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  font-family: var(--mono); font-size: 0.75rem; padding: 8px 10px;
+  outline: none; transition: border-color 0.2s;
+}
+.ml-input:focus, .ml-select:focus, .ml-textarea:focus { border-color: var(--cyan2); }
+.ml-textarea { resize: vertical; min-height: 70px; }
+.ml-select option { background: var(--bg2); }
+
+/* ── Research Panel ── */
+.ml-research-header {
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 14px 18px; margin-bottom: 20px;
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 16px;
+}
+@media (max-width: 600px) { .ml-research-header { grid-template-columns: 1fr; } }
+.ml-meta-label { font-size: 0.57rem; color: var(--text2); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 4px; text-decoration: underline; }
+.ml-meta-value { font-size: 0.78rem; color: var(--cyan); font-weight: 700; }
+.ml-meta-value.amber { color: var(--amber); }
+.ml-research-step { margin-bottom: 18px; }
+.ml-step-label {
+  font-size: 0.62rem; color: var(--cyan); letter-spacing: 0.15em; text-transform: uppercase;
+  font-weight: 700; margin-bottom: 8px; display: block;
+}
+.ml-research-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 600px) { .ml-research-grid { grid-template-columns: 1fr; } }
+.ml-textarea.conclusion { background: var(--bg2); }
+.ml-form-actions { display: flex; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border); margin-top: 16px; gap: 8px; }
+
+/* ── Archive ── */
+.ml-archive-item {
+  background: var(--bg2); border: 1px solid var(--border);
+  padding: 16px 18px; margin-bottom: 10px; transition: border-color 0.2s;
+}
+.ml-archive-item:hover { border-color: var(--border2); }
+.ml-archive-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.ml-archive-title { font-size: 0.82rem; font-weight: 700; color: var(--text); }
+.ml-archive-id { font-size: 0.62rem; color: var(--cyan2); }
+.ml-archive-meta { font-size: 0.62rem; color: var(--text2); margin-top: 2px; }
+.ml-archive-body { font-size: 0.72rem; color: var(--text); line-height: 1.7; }
+.ml-archive-conclusion {
+  background: rgba(0,255,200,0.04); border: 1px solid var(--border);
+  padding: 10px 14px; margin-top: 10px; font-size: 0.7rem; color: var(--cyan2); line-height: 1.65;
+}
+.ml-archive-conclusion::before { content: "📄 考察: "; font-size: 0.62rem; color: var(--text2); }
+.ml-archive-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.ml-tag {
+  font-size: 0.6rem; padding: 2px 8px;
+  background: rgba(0,255,200,0.05); border: 1px solid var(--border);
+  color: var(--cyan2); letter-spacing: 0.08em;
+}
+.ml-loading { text-align: center; padding: 40px 0; color: var(--text2); font-size: 0.75rem; letter-spacing: 0.1em; animation: blink 1.4s infinite; }
+@keyframes blink { 0%,100%{ opacity:1; } 50%{ opacity:0.3; } }
+
+/* ── Footer ── */
+.ml-footer {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border);
+}
+@media (max-width: 600px) { .ml-footer { grid-template-columns: 1fr; } }
+.ml-footer-box {
+  border: 1px solid var(--border); padding: 14px 16px;
+}
+.ml-footer-title { font-size: 0.6rem; color: var(--text2); letter-spacing: 0.15em; text-transform: uppercase; padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.ml-footer-entry { font-size: 0.65rem; color: var(--text3); margin-bottom: 4px; }
+.ml-footer-entry.warn { color: rgba(245,158,11,0.6); }
+
+/* ── Stats Bar ── */
+.ml-stats { display: flex; gap: 0; background: var(--border); margin-bottom: 24px; }
+.ml-stat { flex: 1; background: var(--bg2); padding: 12px 10px; text-align: center; border-right: 1px solid var(--border); }
+.ml-stat:last-child { border-right: none; }
+.ml-stat-val { font-size: 1.1rem; font-weight: 700; color: var(--cyan); }
+.ml-stat-lbl { font-size: 0.58rem; color: var(--text2); margin-top: 2px; letter-spacing: 0.1em; }
+
+/* ── Toast ── */
+.ml-toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+  background: rgba(0,255,200,0.12); border: 1px solid var(--cyan2);
+  color: var(--cyan); padding: 12px 20px; font-size: 0.75rem;
+  letter-spacing: 0.05em; max-width: 280px; display: none;
+}
+.ml-toast.err { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.4); color: var(--red); }
+
+/* ── Spinner ── */
+.ml-spinner { display: inline-block; border: 2px solid var(--border2); border-top-color: var(--cyan); width: 16px; height: 16px; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="ml-header">
+  <div class="ml-header-left">
+    <div class="ml-status-dot"></div>
+    <div>
+      <div class="ml-title">☄️ 隕石研究所 / METEORITE LAB</div>
+      <div class="ml-subtitle">ESTABLISHED: 2026 | STATUS: OPERATIONAL | SYSTEM: SCHOOLPARK-EMU</div>
+    </div>
+  </div>
+  <div class="ml-header-right">
+    <div class="ml-clock">
+      <div id="mlClock"><strong>--:--</strong></div>
+      <div id="mlDate" style="font-size:0.58rem;color:var(--text3)">----/--/--</div>
+    </div>
+    <button class="ml-back-btn" onclick="mlGoBack()">← BACK</button>
+  </div>
+</header>
+
+<div class="ml-layout">
+  <!-- ── Sidebar ── -->
+  <nav class="ml-sidebar" id="mlSidebar">
+    <div class="ml-nav-group-label">NAVIGATION</div>
+    <button class="ml-nav-btn active" id="nav-observation" onclick="mlTab('observation',this)">
+      <span class="ml-nav-icon">🛡️</span> 隕石監視
+    </button>
+    <button class="ml-nav-btn" id="nav-research" onclick="mlTab('research',this)">
+      <span class="ml-nav-icon">🔬</span> 研究・解析
+    </button>
+    <button class="ml-nav-btn" id="nav-archive" onclick="mlTab('archive',this)">
+      <span class="ml-nav-icon">📄</span> 論文アーカイブ
+    </button>
+    <div class="ml-sidebar-divider"></div>
+    <div class="ml-nav-group-label">INFO</div>
+    <button class="ml-nav-btn" onclick="mlShowAbout()">
+      <span class="ml-nav-icon">❓</span> 研究所とは？
+    </button>
+    <button class="ml-nav-btn" onclick="mlGoBack()">
+      <span class="ml-nav-icon">↩</span> Emuに戻る
+    </button>
+  </nav>
+
+  <!-- ── Main Content ── -->
+  <main class="ml-content">
+
+    <!-- ── Stats Bar ── -->
+    <div class="ml-stats" id="mlStatsBar">
+      <div class="ml-stat"><div class="ml-stat-val" id="statTotal">—</div><div class="ml-stat-lbl">総隕石数</div></div>
+      <div class="ml-stat"><div class="ml-stat-val" id="statActive" style="color:var(--red)">—</div><div class="ml-stat-lbl">調査中</div></div>
+      <div class="ml-stat"><div class="ml-stat-val" id="statSolved" style="color:var(--cyan)">—</div><div class="ml-stat-lbl">解決済</div></div>
+      <div class="ml-stat"><div class="ml-stat-val" id="statPublic" style="color:var(--amber)">—</div><div class="ml-stat-lbl">公開論文</div></div>
+    </div>
+
+    <!-- ════ TAB 1: 隕石監視 ════ -->
+    <div class="ml-panel active" id="panel-observation">
+      <div class="ml-section-head">
+        <div>
+          <div class="ml-section-title">🛡️ 隕石落下観測ログ</div>
+          <div class="ml-section-subtitle">OBSERVATION LOG — ACTIVE METEORITE TRACKING</div>
+        </div>
+        <div class="ml-action-row">
+          <button class="ml-btn" onclick="mlReload()">⟳ REFRESH</button>
+          <button class="ml-btn primary" onclick="mlToggleAddForm()">＋ 新規登録</button>
+        </div>
+      </div>
+
+      <div class="ml-alert-bar" id="mlAlertBar" style="display:none">
+        <div class="ml-alert-dot"></div>
+        <span id="mlAlertText">CRITICAL級の隕石が検出されました — 対処を急いでください</span>
+      </div>
+
+      <!-- 新規登録フォーム -->
+      <div class="ml-add-form" id="mlAddForm" style="display:none">
+        <div class="ml-add-form-title">+ NEW METEORITE — 隕石を新たに登録する</div>
+        <div class="ml-form-grid">
+          <div class="ml-form-field">
+            <span class="ml-label">タイトル（問題名）</span>
+            <input class="ml-input" id="newTitle" type="text" placeholder="例: サーバー応答遅延問題" maxlength="60">
+          </div>
+          <div class="ml-form-field">
+            <span class="ml-label">深刻度 (SEVERITY)</span>
+            <select class="ml-select" id="newSeverity">
+              <option value="critical">CRITICAL — 即座に対処が必要</option>
+              <option value="high" selected>HIGH — 高優先度</option>
+              <option value="medium">MEDIUM — 中優先度</option>
+              <option value="low">LOW — 低優先度</option>
+            </select>
+          </div>
+          <div class="ml-form-field">
+            <span class="ml-label">公開設定</span>
+            <select class="ml-select" id="newPublic">
+              <option value="private">🔒 チーム限定（非公開）</option>
+              <option value="public">🌐 コミュニティ公開</option>
+            </select>
+          </div>
+        </div>
+        <div class="ml-form-field" style="margin-top:12px">
+          <span class="ml-label">概要・背景</span>
+          <textarea class="ml-textarea" id="newDesc" placeholder="どんな問題か？いつ発生したか？影響範囲は？" maxlength="300"></textarea>
+        </div>
+        <div class="ml-form-actions">
+          <button class="ml-btn" onclick="mlToggleAddForm()">キャンセル</button>
+          <button class="ml-btn primary" onclick="mlAddMeteorite()">☄️ 隕石を登録して観測開始</button>
+        </div>
+      </div>
+
+      <!-- 隕石リスト -->
+      <div id="mlMeteoriteList"><div class="ml-loading">⚡ LOADING METEORITE DATA…</div></div>
+
+      <!-- フッター -->
+      <div class="ml-footer">
+        <div class="ml-footer-box">
+          <div class="ml-footer-title">最近のチーム内レビュー</div>
+          <div class="ml-footer-entry" id="mlTeamFeed">読み込み中…</div>
+        </div>
+        <div class="ml-footer-box" style="text-align:right">
+          <div class="ml-footer-title">隕石観測アラート</div>
+          <div class="ml-footer-entry warn" id="mlAlertFeed">アラートなし</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ TAB 2: 研究・解析 ════ -->
+    <div class="ml-panel" id="panel-research">
+      <div class="ml-section-head">
+        <div>
+          <div class="ml-section-title">🔬 詳細成分分析ワークスペース</div>
+          <div class="ml-section-subtitle">RESEARCH WORKSPACE — SELECT METEORITE TO ANALYZE</div>
+        </div>
+        <div class="ml-action-row">
+          <button class="ml-btn" onclick="mlExportPDF()">↓ PDF出力</button>
+          <button class="ml-btn primary" onclick="mlSaveResearch()">
+            <span id="mlSaveSpinner" style="display:none" class="ml-spinner"></span>
+            🎯 保存・同期
+          </button>
+        </div>
+      </div>
+
+      <!-- 対象選択 -->
+      <div style="margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="ml-label">分析対象の隕石:</span>
+        <select class="ml-select" id="mlResearchTarget" onchange="mlLoadResearch()" style="flex:1;max-width:360px">
+          <option value="">— 隕石を選択してください —</option>
+        </select>
+      </div>
+
+      <!-- 研究フィールド -->
+      <div id="mlResearchForm" style="display:none">
+        <div class="ml-research-header">
+          <div><div class="ml-meta-label">隕石識別子</div><div class="ml-meta-value" id="rMetId">—</div></div>
+          <div><div class="ml-meta-label">深刻度</div><div class="ml-meta-value amber" id="rMetSeverity">—</div></div>
+          <div><div class="ml-meta-label">現在のフェーズ</div><div class="ml-meta-value" id="rMetPhase">—</div></div>
+        </div>
+
+        <div class="ml-research-step">
+          <label class="ml-step-label">1. 問いを立てる (QUESTIONING)</label>
+          <textarea class="ml-textarea" id="rQ1" placeholder="このトラブルの真の問題点はどこにあるか？" style="width:100%"></textarea>
+        </div>
+
+        <div class="ml-research-grid">
+          <div class="ml-research-step">
+            <label class="ml-step-label">2. 仮説をきめる (HYPOTHESIS)</label>
+            <textarea class="ml-textarea" id="rQ2" placeholder="解決に向けた論理的な仮説を入力…" style="width:100%;min-height:120px"></textarea>
+          </div>
+          <div class="ml-research-step">
+            <label class="ml-step-label">3. 実行と対処 (ACTION & RESULT)</label>
+            <textarea class="ml-textarea" id="rQ3" placeholder="実施したアクションとその結果を記録…" style="width:100%;min-height:120px"></textarea>
+          </div>
+        </div>
+
+        <div class="ml-research-step">
+          <label class="ml-step-label">4. 研究報告・考察 (CONCLUSION)</label>
+          <textarea class="ml-textarea conclusion" id="rQ4" placeholder="将来の再発防止策・全体の考察…" style="width:100%"></textarea>
+        </div>
+
+        <!-- フェーズ選択 -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px">
+          <span class="ml-label">現在のフェーズを更新:</span>
+          <select class="ml-select" id="rPhaseSelect" style="flex:1;max-width:260px">
+            <option>観測中</option>
+            <option>分析中</option>
+            <option>仮説立案</option>
+            <option>実行中</option>
+            <option>考察中</option>
+            <option>解決済み ✓</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="mlResearchEmpty" style="color:var(--text3);font-size:0.75rem;text-align:center;padding:60px 0;letter-spacing:0.1em">
+        ← 隕石監視タブから対象を選択するか、上のプルダウンから選んでください
+      </div>
+    </div>
+
+    <!-- ════ TAB 3: 論文アーカイブ ════ -->
+    <div class="ml-panel" id="panel-archive">
+      <div class="ml-section-head">
+        <div>
+          <div class="ml-section-title">📄 公開論文ライブラリ</div>
+          <div class="ml-section-subtitle">ARCHIVE — RESOLVED METEORITE RESEARCH PAPERS</div>
+        </div>
+        <div class="ml-action-row">
+          <select class="ml-select" id="archiveFilter" onchange="mlLoadArchive()" style="font-size:0.68rem;padding:5px 10px">
+            <option value="all">すべて</option>
+            <option value="public">公開のみ</option>
+            <option value="solved">解決済みのみ</option>
+          </select>
+        </div>
+      </div>
+      <div id="mlArchiveList"><div class="ml-loading">📄 LOADING ARCHIVE…</div></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Toast -->
+<div class="ml-toast" id="mlToast"></div>
+
+<!-- About Modal (inline) -->
+<div id="mlAboutOverlay" onclick="if(event.target===this)mlHideAbout()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:none;place-items:center;">
+  <div style="background:var(--bg2);border:1px solid var(--border2);max-width:480px;width:90%;padding:28px;position:relative">
+    <button onclick="mlHideAbout()" style="position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text2);font-size:1rem;cursor:pointer">✕</button>
+    <div style="font-size:0.8rem;font-weight:700;color:var(--cyan);letter-spacing:0.15em;margin-bottom:14px">☄️ 隕石研究所とは？</div>
+    <div style="font-size:0.78rem;color:var(--text);line-height:1.8;font-family:var(--sans)">
+      <p style="margin-bottom:10px">「隕石」は、プロジェクト・仕事・学びの中で降ってくる <strong style="color:var(--cyan)">問題・課題・トラブル</strong> の比喩です。</p>
+      <p style="margin-bottom:10px">隕石研究所では、落ちてきた隕石（課題）を <strong>科学的な研究プロセス</strong> で解析・解決します：</p>
+      <ol style="padding-left:1.2em;margin-bottom:12px;color:var(--text2);font-size:0.75rem">
+        <li style="margin-bottom:6px">🔍 <strong style="color:var(--text)">問いを立てる</strong>（真の問題点を定義）</li>
+        <li style="margin-bottom:6px">💡 <strong style="color:var(--text)">仮説をきめる</strong>（論理的な解決策の仮説）</li>
+        <li style="margin-bottom:6px">⚡ <strong style="color:var(--text)">実行と対処</strong>（アクション・結果の記録）</li>
+        <li style="margin-bottom:6px">📄 <strong style="color:var(--text)">研究報告・考察</strong>（再発防止・知識化）</li>
+      </ol>
+      <p style="font-size:0.72rem;color:var(--text2)">解決された研究は「論文アーカイブ」として蓄積され、コミュニティの共有知識になります。</p>
+    </div>
+    <button onclick="mlHideAbout()" class="ml-btn primary" style="margin-top:18px;width:100%;justify-content:center">
+      研究を始める →
+    </button>
+  </div>
+</div>
+
+<!-- ── Scripts ── -->
+<script>
+// ─── 定数 ─────────────────────────────────────────────────
+const ML_COL = 'ml_meteorites'; // Firestore コレクション名
+
+let mlDB = null, mlLib = null;
+let mlMeteoritesCache = [];
+let mlCurrentId = null;
+
+// ─── Clock ────────────────────────────────────────────────
+function mlUpdateClock() {
+  const now = new Date();
+  document.getElementById('mlClock').innerHTML =
+    `<strong>${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}</strong>`;
+  document.getElementById('mlDate').textContent =
+    `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}`;
+}
+mlUpdateClock();
+setInterval(mlUpdateClock, 10000);
+
+// ─── Tab ──────────────────────────────────────────────────
+function mlTab(id, btn) {
+  document.querySelectorAll('.ml-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.ml-nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (id === 'archive') mlLoadArchive();
+  if (id === 'research') mlPopulateResearchDropdown();
+}
+
+// ─── Toast ────────────────────────────────────────────────
+function mlToast(msg, isErr) {
+  const t = document.getElementById('mlToast');
+  t.textContent = msg;
+  t.className = 'ml-toast' + (isErr ? ' err' : '');
+  t.style.display = 'block';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.display = 'none'; }, 3500);
+}
+
+// ─── Back ─────────────────────────────────────────────────
+function mlGoBack() {
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: 'spContentClose' }, '*');
+  } else {
+    window.location.href = '/?direct=1&schoolpark=1';
+  }
+}
+
+// ─── About ────────────────────────────────────────────────
+function mlShowAbout() {
+  const o = document.getElementById('mlAboutOverlay');
+  o.style.display = 'grid';
+}
+function mlHideAbout() {
+  document.getElementById('mlAboutOverlay').style.display = 'none';
+}
+
+// ─── Add Form Toggle ──────────────────────────────────────
+function mlToggleAddForm() {
+  const f = document.getElementById('mlAddForm');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+// ─── Firebase 待機 ────────────────────────────────────────
+function mlWaitFirebase() {
+  if (window.mlDB && window.mlLib) {
+    mlDB  = window.mlDB;
+    mlLib = window.mlLib;
+    mlLoadMeteorites();
+  } else {
+    setTimeout(mlWaitFirebase, 300);
+  }
+}
+mlWaitFirebase();
+
+// ─── 隕石リスト読み込み ──────────────────────────────────
+async function mlLoadMeteorites() {
+  if (!mlDB || !mlLib) return;
+  const lib = mlLib;
+  const listEl = document.getElementById('mlMeteoriteList');
+  listEl.innerHTML = '<div class="ml-loading">⚡ LOADING…</div>';
+  try {
+    const q   = lib.query(lib.collection(mlDB, ML_COL), lib.orderBy('ts','desc'));
+    const snap = await lib.getDocs(q);
+    mlMeteoritesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    mlRenderMeteorites(mlMeteoritesCache);
+    mlUpdateStats(mlMeteoritesCache);
+    mlPopulateResearchDropdown();
+    mlUpdateAlerts(mlMeteoritesCache);
+  } catch(e) {
+    listEl.innerHTML = `<div class="ml-empty">❌ 読み込みに失敗しました<br><small style="color:var(--text3)">${_esc(e.message)}</small></div>`;
+  }
+}
+
+function mlRenderMeteorites(items) {
+  const el = document.getElementById('mlMeteoriteList');
+  if (!items.length) {
+    el.innerHTML = '<div class="ml-empty">☄️ 現在観測中の隕石はありません<br><span style="font-size:0.65rem;color:var(--text3)">＋ 新規登録ボタンから隕石を登録してください</span></div>';
+    return;
+  }
+  const rows = items.map(m => {
+    const date = m.ts ? new Date(m.ts).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    const pub  = m.isPublic ? '<span style="font-size:0.6rem;color:var(--amber)">🌐</span>' : '<span style="font-size:0.6rem;color:var(--text3)">🔒</span>';
+    return `<tr>
+      <td><span class="ml-met-id">${_esc(m.metId||m.id.slice(0,10))}</span></td>
+      <td>${_esc(m.title)}</td>
+      <td><span class="ml-severity ${m.severity||'medium'}">${(m.severity||'').toUpperCase()}</span></td>
+      <td><span class="ml-phase">${_esc(m.phase||'観測中')}</span></td>
+      <td>${pub}</td>
+      <td style="font-size:0.65rem;color:var(--text2)">${date}</td>
+      <td><button class="ml-open-btn" onclick="mlOpenResearch('${m.id}')">ANALYZE →</button></td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table class="ml-met-table">
+    <thead><tr>
+      <th>ID</th><th>タイトル</th><th>深刻度</th><th>フェーズ</th><th>公開</th><th>登録日時</th><th></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function mlUpdateStats(items) {
+  document.getElementById('statTotal').textContent  = items.length;
+  document.getElementById('statActive').textContent = items.filter(m => !m.phase?.includes('解決')).length;
+  document.getElementById('statSolved').textContent = items.filter(m => m.phase?.includes('解決')).length;
+  document.getElementById('statPublic').textContent = items.filter(m => m.isPublic).length;
+}
+
+function mlUpdateAlerts(items) {
+  const critical = items.filter(m => m.severity === 'critical' && !m.phase?.includes('解決'));
+  const bar = document.getElementById('mlAlertBar');
+  const feed = document.getElementById('mlAlertFeed');
+  if (critical.length > 0) {
+    bar.style.display = 'flex';
+    document.getElementById('mlAlertText').textContent = `CRITICAL級の隕石が ${critical.length} 件検出 — ${critical.map(m=>m.title).join(' / ')}`;
+    feed.textContent = `⚠️ CRITICAL 対処を急いでください (${critical.length}件)`;
+    feed.className = 'ml-footer-entry warn';
+  } else {
+    bar.style.display = 'none';
+    feed.textContent = 'アラートなし — システム正常';
+    feed.className = 'ml-footer-entry';
+  }
+}
+
+function mlReload() { mlLoadMeteorites(); mlToast('⟳ データを再取得しました'); }
+
+// ─── 隕石 登録 ────────────────────────────────────────────
+let mlAddLock = false;
+async function mlAddMeteorite() {
+  if (mlAddLock) return;
+  const title    = document.getElementById('newTitle').value.trim();
+  const severity = document.getElementById('newSeverity').value;
+  const isPublic = document.getElementById('newPublic').value === 'public';
+  const desc     = document.getElementById('newDesc').value.trim();
+  if (!title) { mlToast('⚠️ タイトルを入力してください', true); return; }
+  if (!mlDB || !mlLib) { mlToast('🔗 接続中です…', true); return; }
+  mlAddLock = true;
+  try {
+    const metId = 'MET-' + new Date().getFullYear() + '-' + String(Date.now()).slice(-5);
+    await mlLib.addDoc(mlLib.collection(mlDB, ML_COL), {
+      metId, title, severity, isPublic, desc: desc || '',
+      phase: '観測中', ts: Date.now(),
+      q1:'', q2:'', q3:'', q4:''
+    });
+    document.getElementById('newTitle').value = '';
+    document.getElementById('newDesc').value  = '';
+    mlToggleAddForm();
+    mlToast('☄️ 隕石を登録しました！ ID: ' + metId);
+    mlLoadMeteorites();
+  } catch(e) {
+    mlToast('❌ ' + e.message, true);
+  } finally { mlAddLock = false; }
+}
+
+// ─── 研究ドロップダウン ────────────────────────────────────
+function mlPopulateResearchDropdown() {
+  const sel = document.getElementById('mlResearchTarget');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— 隕石を選択 —</option>';
+  mlMeteoritesCache.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = `[${(m.severity||'').toUpperCase()}] ${m.metId||''} — ${m.title}`;
+    sel.appendChild(opt);
+  });
+  if (cur) sel.value = cur;
+}
+
+function mlOpenResearch(id) {
+  mlTab('research', document.getElementById('nav-research'));
+  document.getElementById('mlResearchTarget').value = id;
+  mlLoadResearch();
+}
+
+// ─── 研究データ読み込み ───────────────────────────────────
+async function mlLoadResearch() {
+  const id = document.getElementById('mlResearchTarget').value;
+  const form  = document.getElementById('mlResearchForm');
+  const empty = document.getElementById('mlResearchEmpty');
+  if (!id) { form.style.display = 'none'; empty.style.display = 'block'; return; }
+  form.style.display = 'block'; empty.style.display = 'none';
+  if (!mlDB || !mlLib) return;
+  try {
+    const snap = await mlLib.getDoc(mlLib.doc(mlDB, ML_COL, id));
+    if (!snap.exists()) return;
+    const m = { id: snap.id, ...snap.data() };
+    mlCurrentId = id;
+    document.getElementById('rMetId').textContent       = m.metId || m.id.slice(0,10);
+    document.getElementById('rMetSeverity').textContent = (m.severity||'').toUpperCase();
+    document.getElementById('rMetPhase').textContent    = m.phase || '観測中';
+    document.getElementById('rQ1').value = m.q1 || '';
+    document.getElementById('rQ2').value = m.q2 || '';
+    document.getElementById('rQ3').value = m.q3 || '';
+    document.getElementById('rQ4').value = m.q4 || '';
+    // フェーズセレクト同期
+    const phSel = document.getElementById('rPhaseSelect');
+    for (let opt of phSel.options) { if (opt.value === m.phase || opt.textContent === m.phase) { phSel.value = opt.value; break; } }
+  } catch(e) { mlToast('❌ ' + e.message, true); }
+}
+
+// ─── 研究データ保存 ───────────────────────────────────────
+let mlSaveLock = false;
+async function mlSaveResearch() {
+  if (!mlCurrentId || mlSaveLock) return;
+  if (!mlDB || !mlLib) { mlToast('🔗 接続中…', true); return; }
+  mlSaveLock = true;
+  document.getElementById('mlSaveSpinner').style.display = 'inline-block';
+  try {
+    const phase = document.getElementById('rPhaseSelect').value;
+    await mlLib.updateDoc(mlLib.doc(mlDB, ML_COL, mlCurrentId), {
+      q1:    document.getElementById('rQ1').value,
+      q2:    document.getElementById('rQ2').value,
+      q3:    document.getElementById('rQ3').value,
+      q4:    document.getElementById('rQ4').value,
+      phase: phase,
+      updatedAt: Date.now()
+    });
+    document.getElementById('rMetPhase').textContent = phase;
+    mlToast('✅ 研究データを保存しました');
+    mlLoadMeteorites();
+  } catch(e) { mlToast('❌ ' + e.message, true); }
+  finally {
+    mlSaveLock = false;
+    document.getElementById('mlSaveSpinner').style.display = 'none';
+  }
+}
+
+// ─── PDF出力（ブラウザ印刷） ──────────────────────────────
+function mlExportPDF() {
+  mlToast('🖨️ ブラウザの印刷ダイアログを使用してPDF保存できます');
+  setTimeout(() => window.print(), 600);
+}
+
+// ─── アーカイブ ───────────────────────────────────────────
+async function mlLoadArchive() {
+  if (!mlDB || !mlLib) { setTimeout(mlLoadArchive, 400); return; }
+  const filter = document.getElementById('archiveFilter').value;
+  const el = document.getElementById('mlArchiveList');
+  el.innerHTML = '<div class="ml-loading">📄 LOADING ARCHIVE…</div>';
+  try {
+    const q    = mlLib.query(mlLib.collection(mlDB, ML_COL), mlLib.orderBy('ts','desc'));
+    const snap = await mlLib.getDocs(q);
+    let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (filter === 'public') items = items.filter(m => m.isPublic);
+    if (filter === 'solved') items = items.filter(m => m.phase?.includes('解決'));
+    if (!items.length) { el.innerHTML = '<div class="ml-empty">📄 該当する論文が見つかりません</div>'; return; }
+    el.innerHTML = items.map(m => {
+      const date = m.ts ? new Date(m.ts).toLocaleString('ja-JP') : '';
+      const updt = m.updatedAt ? new Date(m.updatedAt).toLocaleString('ja-JP') : date;
+      const hasConclusion = m.q4 && m.q4.trim();
+      return `<div class="ml-archive-item">
+        <div class="ml-archive-header">
+          <div>
+            <div class="ml-archive-title">${_esc(m.title)}</div>
+            <div class="ml-archive-id">${_esc(m.metId||'')} · <span class="ml-severity ${m.severity||'medium'}" style="padding:1px 6px">${(m.severity||'').toUpperCase()}</span></div>
+            <div class="ml-archive-meta">登録: ${date} / 更新: ${updt}</div>
+          </div>
+          <div style="flex-shrink:0">
+            <span class="ml-phase">${_esc(m.phase||'観測中')}</span>
+          </div>
+        </div>
+        ${m.desc ? `<div class="ml-archive-body">${_esc(m.desc)}</div>` : ''}
+        ${m.q1 ? `<div style="margin-top:8px;font-size:0.7rem;color:var(--text2)"><span style="color:var(--cyan);font-size:0.62rem">問い:</span> ${_esc(m.q1)}</div>` : ''}
+        ${hasConclusion ? `<div class="ml-archive-conclusion">${_esc(m.q4)}</div>` : ''}
+        <div class="ml-archive-tags">
+          ${m.isPublic ? '<span class="ml-tag">🌐 公開</span>' : '<span class="ml-tag">🔒 非公開</span>'}
+          ${m.phase?.includes('解決') ? '<span class="ml-tag" style="color:var(--cyan);border-color:var(--cyan)">✓ 解決済み</span>' : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="ml-empty">❌ ${_esc(e.message)}</div>`;
+  }
+}
+
+// ─── ユーティリティ ───────────────────────────────────────
+function _esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+
+<!-- Firebase module -->
+<script type="module">
+import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, getDocs, query, orderBy,
+  doc, updateDoc, getDoc
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
+  authDomain: "emusch-2a111.firebaseapp.com",
+  projectId: "emusch-2a111",
+  storageBucket: "emusch-2a111.firebasestorage.app",
+  messagingSenderId: "795496371585",
+  appId: "1:795496371585:web:51deec91b8a2152e4c8480"
+};
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+window.mlDB  = db;
+window.mlLib = { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, getDoc };
+</script>
+</body>
+</html>
