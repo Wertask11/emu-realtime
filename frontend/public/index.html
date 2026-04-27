@@ -7154,14 +7154,25 @@ function openSpMap(gate) {
 
 // ── SchoolPark コンテンツ iframe オーバーレイ ─────────────────
 function openSpContent(url) {
-  const wallet = window.connectedAccount || localStorage.getItem("emuWallet") || "";
-  const sep    = url.includes("?") ? "&" : "?";
+  const wallet  = window.connectedAccount || localStorage.getItem("emuWallet") || "";
+  const sep     = url.includes("?") ? "&" : "?";
   const fullUrl = wallet ? url + sep + "wallet=" + encodeURIComponent(wallet) : url;
+
+  // SchoolParkマップを一旦隠す（重複表示防止）
+  const spMap = document.getElementById("spMapOverlay");
+  if (spMap) spMap.style.display = "none";
+
+  // body・htmlのスクロールを完全停止（背景スクロール防止）
+  document.documentElement.style.overflow = "hidden";
+  document.body.style.overflow = "hidden";
+  document.body.style.position = "fixed";
+  document.body.style.width = "100%";
+  document.body.dataset.scrollY = String(window.scrollY); // スクロール位置を保存
+
   const overlay = document.getElementById("spContentOverlay");
   const frame   = document.getElementById("spContentFrame");
   frame.src = fullUrl;
   overlay.style.display = "flex";
-  document.body.classList.add("spmap-open");
 }
 
 function closeSpContent() {
@@ -7169,7 +7180,15 @@ function closeSpContent() {
   const frame   = document.getElementById("spContentFrame");
   overlay.style.display = "none";
   frame.src = ""; // iframeをリセット
-  document.body.classList.remove("spmap-open");
+
+  // スクロール復元
+  const savedY = parseInt(document.body.dataset.scrollY || "0");
+  document.body.style.position = "";
+  document.body.style.width = "";
+  document.body.style.overflow = "";
+  document.documentElement.style.overflow = "";
+  window.scrollTo(0, savedY);
+
   // SchoolParkマップに即戻り
   openSpMap();
 }

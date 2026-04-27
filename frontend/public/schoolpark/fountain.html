@@ -671,7 +671,12 @@ const FP_NFT = {
   nft2: { name:"第二弾「冷蔵庫くん」", addr:"0x20a32466e6d9c43d73c569b8a934e6622d89c2db", type:"erc1155", id:1 },
   // 第三弾は5/15発売予定
 };
-const ERC1155_ABI = ["function balanceOf(address account, uint256 id) view returns (uint256)"];
+const ERC1155_ABI = [
+  "function balanceOf(address account, uint256 id) view returns (uint256)",
+  "function balanceOfBatch(address[] accounts, uint256[] ids) view returns (uint256[])"
+];
+// チェックするトークンIDの範囲（ERC-1155はIDが様々なため0〜19を一括チェック）
+const FP_NFT_CHECK_IDS = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19];
 
 // ウォレット検出（URL param → localStorage → 親フレーム → null の順）
 const _fpUrlParams = new URLSearchParams(window.location.search);
@@ -802,12 +807,14 @@ async function fpCheckNFT() {
     }
   }
 
-  // ② オンチェーンチェック（Firestoreで未確認の場合のみ・複数RPCでフォールバック）
+  // ② オンチェーンチェック（複数RPCでフォールバック・balanceOfBatchでID 0〜19を一括確認）
   const RPCS = [
     "https://rpc.ankr.com/polygon",
     "https://polygon-bor-rpc.publicnode.com",
     "https://polygon.llamarpc.com"
   ];
+  const batchAccounts = FP_NFT_CHECK_IDS.map(() => fpWallet);
+
   for (const rpcUrl of RPCS) {
     try {
       const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
@@ -815,9 +822,19 @@ async function fpCheckNFT() {
       for (const [key, nft] of Object.entries(FP_NFT)) {
         try {
           const contract = new ethers.Contract(nft.addr, ERC1155_ABI, provider);
-          const bal = await contract.balanceOf(fpWallet, nft.id);
-          if (bal.gt(0)) held.push(nft.name);
-        } catch(e) {}
+          // balanceOfBatchでID 0〜19を一括チェック（1回のRPC呼び出しで完結）
+          const bals = await contract.balanceOfBatch(batchAccounts, FP_NFT_CHECK_IDS);
+          if (bals.some(b => b.gt(0))) held.push(nft.name);
+        } catch(e) {
+          // balanceOfBatchが使えない場合は個別チェック（ID 0と1）
+          try {
+            const contract2 = new ethers.Contract(nft.addr, ERC1155_ABI, provider);
+            for (const id of [0, 1]) {
+              const bal = await contract2.balanceOf(fpWallet, id);
+              if (bal.gt(0)) { held.push(nft.name); break; }
+            }
+          } catch(e2) {}
+        }
       }
       fpHasNFT = held.length > 0;
       fpNFTList = held;
