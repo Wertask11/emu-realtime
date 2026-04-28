@@ -34,10 +34,11 @@ function initBgStars() {
 
 // ページ読み込み時に初期化
 window.addEventListener("load", () => {
+  resize();         // canvas.width/height を先に確定
   loadState();
   loadUserName();
-  resize();
   initBgStars();
+  seedHistoryStars(); // 初回のみ既存履歴を反映（resize後に実行）
   render(); // アニメーションループ開始
 });
 
@@ -106,6 +107,88 @@ function loadState() {
 }
 
 window.addEventListener("beforeunload", saveState);
+
+/* ==========================
+   初期履歴データ注入（初回のみ）
+   Firebaseの実績: 投稿44件・NFT交換7回・3日連続1回・学びコンテンツ2回
+========================== */
+function seedHistoryStars() {
+  const KEY = "room2_history_seeded_v1";
+  if (localStorage.getItem(KEY)) return; // 既に実行済み
+
+  const now = performance.now();
+  const w = canvas.width  || window.innerWidth;
+  const h = canvas.height || window.innerHeight;
+
+  // ─ 投稿44件 → floor(44/10)=4 白星、postCount=4 ─
+  for (let i = 0; i < 4; i++) {
+    const star = createStar({
+      type: "post",
+      power: 10,
+      baseColor: "#ffffff",
+      baseRadius: 3,
+      x: 80 + Math.random() * (w - 160),
+      y: 80 + Math.random() * (h - 160)
+    });
+    star.birthAt    = now - 3000 - i * 1000;
+    star.createdAt  = now - 3000 - i * 1000;
+    stars.push(star);
+  }
+  postCount = 4; // 残り端数
+
+  // ─ NFT交換7回 → 青星7個 ─
+  for (let i = 0; i < 7; i++) {
+    const star = createStar({
+      type: "nft",
+      power: 50,
+      baseColor: "#4da3ff",
+      baseRadius: 7,
+      x: 80 + Math.random() * (w - 160),
+      y: 80 + Math.random() * (h - 160)
+    });
+    star.birthAt   = now - 5000 - i * 500;
+    star.createdAt = now - 5000 - i * 500;
+    stars.push(star);
+  }
+
+  // ─ 探索・交流3日連続 → 黄色星1個 ─
+  const yellowStar = createStar({
+    type: "discussion",
+    power: 20,
+    baseColor: "#ffd166",
+    baseRadius: 5,
+    x: 80 + Math.random() * (w - 160),
+    y: 80 + Math.random() * (h - 160)
+  });
+  yellowStar.birthAt   = now - 8000;
+  yellowStar.createdAt = now - 8000;
+  stars.push(yellowStar);
+
+  // ─ 探索・学びコンテンツ2回反映 → 赤星2個 ─
+  for (let i = 0; i < 2; i++) {
+    const star = createStar({
+      type: "learning",
+      power: 30,
+      baseColor: "#ff6b6b",
+      baseRadius: 5,
+      x: 80 + Math.random() * (w - 160),
+      y: 80 + Math.random() * (h - 160)
+    });
+    star.birthAt   = now - 10000 - i * 500;
+    star.createdAt = now - 10000 - i * 500;
+    stars.push(star);
+  }
+
+  // タイムライン線を繋ぐ
+  for (let i = 1; i < stars.length; i++) {
+    links.push({ from: stars[i - 1].id, to: stars[i].id, type: "timeline" });
+  }
+
+  saveState();
+  localStorage.setItem(KEY, "1");
+  updateStarList();
+  console.log("🌟 初期星データを注入しました（14個）");
+}
 
 /* ==========================
    Star & Link Logic
@@ -509,11 +592,12 @@ function updateStarList() {
   let html = `<div style="text-align:left;font-family:sans-serif;font-size:12px;">`;
   html += `<strong style="color:#c8d8ff;border-bottom:1px solid rgba(140,170,255,0.25);display:block;margin-bottom:5px;padding-bottom:3px;font-size:12px;">🌌 あなたの星座記録</strong>`;
   if (counts.post)       html += `<div style="color:#e8eeff;">⚪ 投稿星 <span style="float:right;color:#aabbdd;">${counts.post}</span></div>`;
-  if (counts.nft)        html += `<div style="color:#e8eeff;">🔵 購入星 <span style="float:right;color:#4da3ff;">${counts.nft}</span></div>`;
+  if (counts.nft)        html += `<div style="color:#e8eeff;">🔵 NFT星 <span style="float:right;color:#4da3ff;">${counts.nft}</span></div>`;
   if (counts.discussion) html += `<div style="color:#e8eeff;">🟡 連続星 <span style="float:right;color:#ffd166;">${counts.discussion}</span></div>`;
+  if (counts.learning)   html += `<div style="color:#e8eeff;">🔴 学び星 <span style="float:right;color:#ff6b6b;">${counts.learning}</span></div>`;
   html += `<div style="border-top:1px solid rgba(140,170,255,0.2);margin-top:5px;padding-top:4px;color:#ffd166;">✨ 合計 <span style="float:right;">${stars.length}</span></div>`;
   if (postCount > 0) {
-    html += `<div style="color:#667799;font-size:10px;margin-top:3px;">次の星まで: ${remaining}投稿</div>`;
+    html += `<div style="color:#667799;font-size:10px;margin-top:3px;">次の白星まで: ${remaining}投稿</div>`;
   }
   html += `</div>`;
   starInfoUI.innerHTML = html;
@@ -529,10 +613,12 @@ function shareToX() {
   const yellow = counts.discussion || 0;
   const total  = stars.length;
 
+  const red    = counts.learning || 0;
   let parts = [];
   if (white > 0)  parts.push(`⚪ 投稿星×${white}`);
-  if (blue > 0)   parts.push(`🔵 購入星×${blue}`);
+  if (blue > 0)   parts.push(`🔵 NFT星×${blue}`);
   if (yellow > 0) parts.push(`🟡 連続星×${yellow}`);
+  if (red > 0)    parts.push(`🔴 学び星×${red}`);
 
   const body = parts.length > 0
     ? `私の星座記録：${parts.join(' / ')}（合計${total}個）`
