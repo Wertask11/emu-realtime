@@ -7,12 +7,11 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: radial-gradient(
-    circle at bottom,
-    #050b2e 0%,
-    #020316 60%,
-    #000000 100%
-  );
+  background:
+    radial-gradient(ellipse at 30% 60%, rgba(20,10,60,0.9) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(0,20,70,0.8) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 100%, rgba(5,0,30,1) 0%, transparent 70%),
+    linear-gradient(180deg, #00000f 0%, #010212 40%, #020318 100%);
   font-family: system-ui, -apple-system, BlinkMacSystemFont;
 }
 
@@ -28,26 +27,27 @@ html, body {
   z-index: 1;
 }
 
-
 /* ==========================
    Star Info UI
 ========================== */
 .star-info {
-  position: absolute;
+  position: fixed;
   bottom: 20px;
   left: 20px;
-  background: rgba(0, 0, 0, 0.5); /* 半透明の黒 */
-  backdrop-filter: blur(5px);    /* 背景をぼかすとお洒落 */
-  color: white;
-  padding: 15px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  z-index: 10;
+  background: rgba(2, 5, 25, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #c8d8ff;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(120, 160, 255, 0.18);
   min-width: 150px;
-  font-family: 'Inter', sans-serif;
-  pointer-events: none; /* クリックを背後のキャンバスに通したい場合 */
-  line-height: 1.6;
+  font-family: 'Inter', system-ui, sans-serif;
+  pointer-events: none;
+  line-height: 1.7;
+  box-shadow: 0 4px 24px rgba(0,0,50,0.5);
 }
-
 
 /* ==========================
   Detail Button
@@ -57,14 +57,20 @@ html, body {
   right: 20px;
   bottom: 20px;
   z-index: 20;
-  padding: 10px 14px;
+  padding: 9px 14px;
   border-radius: 20px;
-  border: none;
-  background: rgba(255,255,255,0.15);
-  color: #fff;
-  backdrop-filter: blur(6px);
+  border: 1px solid rgba(140,170,255,0.25);
+  background: rgba(5, 10, 40, 0.7);
+  color: #a0b8e8;
+  backdrop-filter: blur(8px);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  transition: border-color 0.2s, color 0.2s;
+}
+#detailBtn:hover {
+  border-color: rgba(140,170,255,0.5);
+  color: #d0e0ff;
 }
 
 /* ==========================
@@ -73,7 +79,7 @@ html, body {
 #detailOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0,0,15,0.75);
   display: none;
   justify-content: center;
   align-items: center;
@@ -81,20 +87,41 @@ html, body {
 }
 
 #detailModal {
-  background: #0b1020;
-  color: #fff;
-  padding: 20px;
+  background: linear-gradient(160deg, #080e28 0%, #050a1e 100%);
+  color: #c8d8ff;
+  padding: 22px;
   width: 320px;
-  border-radius: 12px;
-  box-shadow: 0 0 40px rgba(255,255,255,0.1);
+  border-radius: 14px;
+  border: 1px solid rgba(120,160,255,0.2);
+  box-shadow: 0 0 60px rgba(60,100,255,0.15);
 }
 
 #detailModal h2 {
   margin-top: 0;
+  color: #e0ecff;
+}
+
+#detailModal h3 {
+  color: #a0c0ff;
+  font-size: 13px;
+  margin-bottom: 6px;
 }
 
 #detailModal ul {
-  padding-left: 18px;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+#closeDetail {
+  margin-top: 12px;
+  padding: 7px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(120,160,255,0.3);
+  background: rgba(20,40,100,0.5);
+  color: #a0c0ff;
+  cursor: pointer;
+  font-size: 13px;
 }
 
 /* ==========================
@@ -106,72 +133,87 @@ html, body {
   margin-right: 6px;
 }
 
-/* stars */
 .legend.star {
   width: 10px;
   height: 10px;
   border-radius: 50%;
 }
 
-.legend.star.post { background: #fff; }
-.legend.star.nft { background: #4da3ff; }
-.legend.star.good { background: #fff; box-shadow: 0 0 6px #fff; }
-.legend.star.change { background: #ff6b6b; }
+.legend.star.post   { background: #fff; box-shadow: 0 0 4px #fff; }
+.legend.star.nft    { background: #4da3ff; box-shadow: 0 0 6px #4da3ff; }
+.legend.star.good   { background: #fff; box-shadow: 0 0 8px #fff; }
+.legend.star.change { background: #ff6b6b; box-shadow: 0 0 6px #ff6b6b; }
+.legend.star.room1  { background: #ffd166; box-shadow: 0 0 6px #ffd166; }
 
-/* lines */
 .legend.line {
   width: 20px;
   height: 2px;
-  background: #fff;
+  background: rgba(140,170,255,0.5);
 }
 
 .legend.line.timeline {
   background: repeating-linear-gradient(
     to right,
-    #fff 0 4px,
+    rgba(140,170,255,0.5) 0 4px,
     transparent 4px 8px
   );
 }
 
 .legend.line.collab {
-  height: 4px;
+  height: 3px;
 }
 
 .hint {
   font-size: 12px;
-  opacity: 0.8;
+  opacity: 0.7;
+  line-height: 1.6;
 }
 
+/* ==========================
+   User Name
+========================== */
 .user-name {
   position: fixed;
   top: 12px;
   left: 16px;
   z-index: 10;
-
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: bold;
+  color: #c8d8ff;
+  font-size: 13px;
+  font-weight: 600;
   letter-spacing: 0.05em;
-
-  background: rgba(0, 0, 0, 0.4);
-  padding: 6px 10px;
-  border-radius: 6px;
-
-  backdrop-filter: blur(4px);
+  background: rgba(2, 5, 25, 0.65);
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(120,160,255,0.15);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+.user-name:hover {
+  border-color: rgba(120,160,255,0.35);
 }
 
+/* ==========================
+   Birth Hint
+========================== */
 .birth-hint {
   position: fixed;
   bottom: 20px;
-  left: 20px;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(200, 220, 255, 0.9);
+  font-size: 13px;
   opacity: 0;
   transition: opacity 0.6s ease;
   pointer-events: none;
+  background: rgba(2, 5, 25, 0.6);
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(120,160,255,0.2);
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+  z-index: 10;
 }
 
 .birth-hint.active {
   opacity: 1;
 }
-

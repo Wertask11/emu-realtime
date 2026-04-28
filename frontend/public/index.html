@@ -1832,6 +1832,11 @@ body.spmap-open #emu-contact-btn,
 body.spmap-open #emu-contact-label {
   display: none !important;
 }
+/* Room2（探索・遊び）表示中：問い合わせボタンを非表示 */
+body.room2-open #emu-contact-btn,
+body.room2-open #emu-contact-label {
+  display: none !important;
+}
 body.paypay-mode #pp-post-fab {
   display: none !important;
 }
@@ -8414,8 +8419,9 @@ localStorage.setItem("emu:lastAction", JSON.stringify(action));
 
 
 
-// ★ room2に送る累積カウント
+// ★ room2に送る累積カウント・ストリーク
 let room2PendingPosts = 0;
+let room2PendingStreak = null; // { level, projectId }
 
 function openRoom2() {
   const overlay = document.getElementById("room3Overlay");
@@ -8430,13 +8436,25 @@ function openRoom2() {
   iframe.src = "/Emu_room2/index.html";
 
   closeBtn.style.display = "block";
+  document.body.classList.add('room2-open'); // 問い合わせボタン非表示
 
-  // ★ room2が読み込まれたら累積分を一括送信
+  // ★ room2が読み込まれたら、少し待ってから累積分を一括送信（初期化完了を待つため500ms遅延）
   iframe.onload = () => {
-    for (let i = 0; i < room2PendingPosts; i++) {
-      iframe.contentWindow.postMessage({ type: "NEW_POST" }, "*");
-    }
-    room2PendingPosts = 0;
+    setTimeout(() => {
+      for (let i = 0; i < room2PendingPosts; i++) {
+        iframe.contentWindow.postMessage({ type: "NEW_POST" }, "*");
+      }
+      room2PendingPosts = 0;
+      // 未送信のSTREAKがあれば送信
+      if (room2PendingStreak) {
+        iframe.contentWindow.postMessage({
+          type: "STREAK_3DAY",
+          level: room2PendingStreak.level,
+          projectId: room2PendingStreak.projectId
+        }, "*");
+        room2PendingStreak = null;
+      }
+    }, 600);
   };
 }
 
@@ -8455,6 +8473,7 @@ function closePopup() {
 
   if (popup) popup.style.display = "block";
   if (closeBtn) closeBtn.style.display = "none";
+  document.body.classList.remove('room2-open'); // 問い合わせボタン復元
 }
 
 function handleDiscussion() {
@@ -8477,7 +8496,8 @@ function handleDiscussion() {
 
   if ([3, 5, 7].includes(discussionState.streak)) {
     const iframe = document.getElementById("room2Frame");
-    if (iframe && iframe.contentWindow) {
+    const isRoom2Open = iframe && iframe.style.display === "block" && iframe.contentWindow;
+    if (isRoom2Open) {
       iframe.contentWindow.postMessage(
         {
           type: "STREAK_3DAY",
@@ -8486,6 +8506,9 @@ function handleDiscussion() {
         },
         "*"
       );
+    } else {
+      // Room2が閉じているので次回オープン時に送信
+      room2PendingStreak = { level: discussionState.streak, projectId: "default" };
     }
   }
 }
