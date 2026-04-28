@@ -265,9 +265,6 @@ body::before {
       <div class="ml-subtitle">ESTABLISHED: 2026 | STATUS: OPERATIONAL | SYSTEM: SCHOOLPARK-EMU</div>
     </div>
   </div>
-  <div class="ml-header-right">
-    <button onclick="mlGoBack()" style="background:transparent;border:1px solid rgba(0,255,200,0.3);color:rgba(255,255,255,0.5);width:32px;height:32px;border-radius:4px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;transition:0.2s;" onmouseover="this.style.borderColor='#00ffc8';this.style.color='#00ffc8'" onmouseout="this.style.borderColor='rgba(0,255,200,0.3)';this.style.color='rgba(255,255,255,0.5)'">✕</button>
-  </div>
 </header>
 
 <div class="ml-layout">
@@ -524,11 +521,10 @@ function mlToast(msg, isErr) {
 
 // ─── Back ─────────────────────────────────────────────────
 function mlGoBack() {
-  if (window.parent !== window) {
-    // iframeとして埋め込まれている場合：親ウィンドウのオーバーレイを閉じる
-    window.parent.postMessage({ type: 'spContentClose' }, '*');
-  } else {
-    // 直接アクセスの場合：Emuメイン画面へ
+  // window.top を使うことで iframe の深さに関係なく必ずトップウィンドウに届く
+  window.top.postMessage({ type: 'spContentClose' }, '*');
+  // トップウィンドウ自身の場合（直接アクセス）はEmuメインへ
+  if (window.top === window) {
     window.location.href = '/';
   }
 }
