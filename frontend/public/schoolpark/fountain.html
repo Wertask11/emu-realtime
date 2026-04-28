@@ -1336,10 +1336,10 @@ async function fpJoinGovernance() {
           }).catch(()=>{});
       }
     }
-    // 管理者チェック
+    // 管理者チェック（ウォレット確定後に実行）
     fpCheckDAOCreator();
-    // 動的DAO投票を読み込む
-    fpLoadDynamicDAOVotes();
+    // 動的DAO投票をリアルタイム監視開始（onSnapshot）
+    fpInitDynamicDAOVotes();
   } else {
     fpToast("🔒 Emu有料ユーザー・NFT保有者のみ参加できます", "rgba(239,68,68,0.9)");
     if (btn) { btn.textContent = "🔑 参加資格を確認する"; btn.disabled = false; }
@@ -1347,23 +1347,36 @@ async function fpJoinGovernance() {
 }
 
 // ─── DAO議題作成権限チェック ──────────────────────────────
-// 資格者: ①SchoolPark運営（Firebaseオーナーアカウント）
+// 資格者: ①SchoolPark運営（Firebase Auth UID または ウォレットアドレス）
 //         ②第三弾プレミアムNFT保有者（sp_dao_creators に登録済みウォレット）
 // 現時点では第三弾未発行のため①のみ有効。
-// NFTが売れた際に管理画面から sp_dao_creators にウォレットを追加する。
-const FP_OWNER_UID = "oy9GHjxBDxc0h74AUQfRiXj8b3y1";
+const FP_OWNER_UID    = "oy9GHjxBDxc0h74AUQfRiXj8b3y1";
+const FP_OWNER_WALLET = "0xdcc687c05f130e57597a8525771299a4efb6edf7";
 
 async function fpCheckDAOCreator() {
-  if (!fpDB || !fpFBLib) return;
+  // Firebase/Firestoreが未初期化なら待機して再試行
+  if (!fpDB || !fpFBLib) { setTimeout(fpCheckDAOCreator, 400); return; }
 
-  // ─ ① SchoolPark運営チェック（Firebase Auth UID）──────────
+  // ─ ① Firebase Auth UID でオーナーチェック ─────────────
   if (window.fpCurrentUID === FP_OWNER_UID) {
     _fpShowCreateSection("SchoolPark運営");
     return;
   }
 
-  // ─ ② 第三弾プレミアムNFT保有者チェック ─────────────────
-  // （ウォレットが sp_dao_creators コレクションに登録されているか）
+  // ─ ② ウォレットアドレスでオーナーチェック（MetaMask認証）
+  // fpWallet が未取得なら親フレームから再取得を試みる
+  if (!fpWallet) {
+    try {
+      const pw = window.parent?.connectedAccount;
+      if (pw) { fpWallet = pw; }
+    } catch(e) {}
+  }
+  if (fpWallet && fpWallet.toLowerCase() === FP_OWNER_WALLET) {
+    _fpShowCreateSection("SchoolPark運営");
+    return;
+  }
+
+  // ─ ③ 第三弾プレミアムNFT保有者チェック ──────────────────
   if (!fpWallet) return;
   try {
     let snap = await fpFBLib.getDoc(fpFBLib.doc(fpDB, "sp_dao_creators", fpWallet.toLowerCase()));
@@ -1422,17 +1435,17 @@ async function fpCreateVote() {
     document.getElementById("fpNewVoteDesc").value  = "";
     document.querySelectorAll("#fpNewVoteOptionsList .fp-dao-option-input").forEach((inp,i) => inp.value = "");
     fpToast("🗳️ 議題を公開しました！", "rgba(34,197,94,0.92)");
-    fpLoadDynamicDAOVotes();
+    // onSnapshot が自動で一覧を更新するため手動リロード不要
   } catch(e) { fpToast("❌ エラー: " + e.message, "rgba(239,68,68,0.9)"); }
 }
 
-// ─── ダイナミックDAO投票を読み込む ────────────────────────
-async function fpLoadDynamicDAOVotes() {
-  if (!fpDB || !fpFBLib) return;
+// ─── ダイナミックDAO投票をリアルタイム監視 ───────────────────
+// onSnapshot を使うことで管理画面や他ユーザーの作成・削除が即時反映される
+function fpInitDynamicDAOVotes() {
+  if (!fpDB || !fpFBLib) { setTimeout(fpInitDynamicDAOVotes, 400); return; }
   const lib = fpFBLib;
-  try {
-    const q = lib.query(lib.collection(fpDB, "sp_dao_votes_dynamic"), lib.orderBy("ts","desc"));
-    const snap = await lib.getDocs(q);
+  const q = lib.query(lib.collection(fpDB, "sp_dao_votes_dynamic"), lib.orderBy("ts","desc"));
+  lib.onSnapshot(q, snap => {
     const container = document.getElementById("fpDynamicDAOVotes");
     if (!container) return;
     if (snap.empty) { container.innerHTML = ""; return; }
@@ -1440,7 +1453,7 @@ async function fpLoadDynamicDAOVotes() {
     container.innerHTML = snap.docs.map(d => {
       const v = { id: d.id, ...d.data() };
       const daysLeft = Math.max(0, Math.ceil((v.deadline - Date.now()) / 86400000));
-      const btns = v.options.map(opt =>
+      const btns = (v.options || []).map(opt =>
         `<button class="fp-vote-choice-btn" onclick="fpVoteDAO('dyn_${v.id}','${_esc(opt)}',this)" ${fpHasNFT ? "" : "disabled"}>
           ${_esc(opt)}
         </button>`
@@ -1464,8 +1477,10 @@ async function fpLoadDynamicDAOVotes() {
     snap.docs.forEach(d => {
       fpLoadVoteBars(`dyn_${d.id}`, `fpDynVoteBars_${d.id}`, `fpDynVoteCount_${d.id}`, true);
     });
-  } catch(e) {}
+  });
 }
+// 後方互換：既存の呼び出し箇所は fpInitDynamicDAOVotes に統一
+function fpLoadDynamicDAOVotes() { fpInitDynamicDAOVotes(); }
 
 // ─── 掲示板 いいね（Firestore永続化） ─────────────────────
 async function fpLike(postId, btn) {
@@ -1669,6 +1684,11 @@ onAuthStateChanged(auth, user => {
 
 window.fpDB    = db;
 window.fpFBLib = { collection, addDoc, getDocs, query, orderBy, onSnapshot, doc, updateDoc, setDoc, where, getDoc, increment, deleteDoc, limit };
+
+// ページ読み込み完了後すぐにリアルタイム監視を開始（参加前でも議題一覧を表示 & 管理画面の作成が即反映）
+fpInitDynamicDAOVotes();
+// 権限チェックも即時実行（onAuthStateChanged 発火前にウォレットで判定できる場合もあるため）
+fpCheckDAOCreator();
 </script>
 </body>
 </html>
