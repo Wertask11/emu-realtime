@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchoolPark Fire Station — 消防署</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1a0505;--bg2:#220a0a;--bg3:#2d1010;
+  --accent:#ef4444;--accent2:#f87171;--warn:#f59e0b;--ok:#22c55e;--info:#60a5fa;
+  --text:#fef2f2;--text2:#fca5a5;--border:rgba(255,80,80,0.15);--card:rgba(255,80,80,0.05);
+  --radius:12px;--fire:#7f1d1d;--badge:#ef4444;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* ── Header ── */
+.header{position:sticky;top:0;z-index:100;height:54px;background:rgba(26,5,5,0.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px}
+.back-btn{background:var(--fire);color:#fff;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:0.8rem;font-weight:700;font-family:inherit;letter-spacing:0.05em;transition:opacity 0.15s;white-space:nowrap}
+.back-btn:hover{opacity:0.85}
+.header-title{font-size:0.9rem;font-weight:700;display:flex;align-items:center;gap:6px}
+.header-badge{background:var(--badge);color:#fff;font-size:0.6rem;font-weight:700;padding:2px 7px;border-radius:20px;letter-spacing:0.05em}
+.header-clock{margin-left:auto;font-size:0.72rem;color:var(--text2);white-space:nowrap}
+
+/* ── Hero ── */
+.hero{background:linear-gradient(135deg,#1a0505 0%,#7f1d1d 50%,#991b1b 100%);padding:28px 16px 22px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:"🚒";position:absolute;right:-10px;top:-10px;font-size:120px;opacity:0.08}
+.hero-icon{font-size:52px;margin-bottom:8px}
+.hero-title{font-size:1.35rem;font-weight:700;letter-spacing:0.05em}
+.hero-sub{font-size:0.78rem;color:var(--text2);margin-top:4px}
+.hero-tags{display:flex;justify-content:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.hero-tag{background:rgba(255,80,80,0.12);border:1px solid rgba(255,80,80,0.2);padding:3px 10px;border-radius:20px;font-size:0.65rem;color:var(--text2)}
+
+/* ── Stats ── */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.stat{background:var(--bg2);padding:12px 8px;text-align:center}
+.stat-val{font-size:1.1rem;font-weight:700;color:var(--accent2)}
+.stat-lbl{font-size:0.6rem;color:var(--text2);margin-top:2px}
+
+/* ── Tabs ── */
+.tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:11px 16px;font-size:0.75rem;font-weight:700;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.tab:hover{color:var(--text);background:var(--card)}
+.tab.active{color:var(--accent2);border-bottom-color:var(--accent2);background:rgba(239,68,68,0.08)}
+.main{max-width:720px;margin:0 auto;padding:16px 14px 60px}
+.panel{display:none}.panel.active{display:block}
+
+/* ── Section ── */
+.sec{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.sec-title{font-size:0.8rem;font-weight:700;color:var(--accent2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+
+/* ── Alert ── */
+.alert{border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-start}
+.alert.red{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#fca5a5}
+.alert.yellow{background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#fcd34d}
+.alert.green{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);color:#86efac}
+.alert.blue{background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);color:#93c5fd}
+.alert-icon{font-size:1.1rem;flex-shrink:0}
+.alert-title{font-size:0.78rem;font-weight:700;margin-bottom:3px}
+.alert-body{font-size:0.72rem;line-height:1.6}
+
+/* ── Flow ── */
+.flow{display:flex;flex-direction:column;gap:0}
+.flow-item{display:flex;gap:10px;align-items:flex-start}
+.flow-num{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:0.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.flow-line{width:2px;background:var(--border);margin:3px 0 3px 13px;height:18px}
+.flow-content{flex:1;padding-bottom:14px}
+.flow-title{font-size:0.8rem;font-weight:700;margin-bottom:3px}
+.flow-desc{font-size:0.71rem;color:var(--text2);line-height:1.6}
+
+/* ── Tip ── */
+.tip{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+.tip-head{display:flex;align-items:center;gap:8px;cursor:pointer}
+.tip-icon{font-size:1rem}
+.tip-title{font-size:0.78rem;font-weight:700;flex:1}
+.tip-arrow{color:var(--text2);font-size:0.7rem;transition:transform 0.2s}
+.tip.open .tip-arrow{transform:rotate(180deg)}
+.tip-body{font-size:0.72rem;color:var(--text2);margin-top:10px;line-height:1.7;border-top:1px solid var(--border);padding-top:10px;display:none}
+.tip.open .tip-body{display:block}
+
+/* ── Level ── */
+.level-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+.level-badge{padding:3px 10px;border-radius:20px;font-size:0.65rem;font-weight:700;white-space:nowrap;flex-shrink:0;margin-top:2px}
+.level-badge.lv1{background:#ef4444;color:#fff}
+.level-badge.lv2{background:#f97316;color:#fff}
+.level-badge.lv3{background:#f59e0b;color:#000}
+.level-badge.lv4{background:#22c55e;color:#000}
+.level-title{font-size:0.8rem;font-weight:700;margin-bottom:3px}
+.level-desc{font-size:0.72rem;color:var(--text2);line-height:1.6}
+
+/* ── Notice ── */
+.notice-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+.notice-meta{display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.notice-level{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700}
+.notice-level.emergency{background:#ef4444;color:#fff}
+.notice-level.warning{background:#f59e0b;color:#000}
+.notice-level.info{background:#60a5fa;color:#000}
+.notice-date{font-size:0.65rem;color:var(--text2)}
+.notice-title{font-size:0.82rem;font-weight:700;margin-bottom:4px}
+.notice-body{font-size:0.72rem;color:var(--text2);line-height:1.6}
+
+/* ── Form ── */
+.form-group{margin-bottom:12px}
+.form-label{font-size:0.75rem;font-weight:700;color:var(--text2);margin-bottom:5px;display:block}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:inherit;font-size:0.8rem;outline:none;transition:border-color 0.2s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent)}
+.form-textarea{resize:vertical;min-height:90px}
+.form-select option{background:var(--bg2)}
+.submit-btn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);padding:13px;font-weight:700;font-size:0.88rem;cursor:pointer;font-family:inherit;transition:opacity 0.2s;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:8px}
+.submit-btn:hover{opacity:0.85}
+.submit-btn:disabled{opacity:0.5;cursor:not-allowed}
+
+/* ── Owner ── */
+.owner-section{background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.owner-title{font-size:0.78rem;font-weight:700;color:var(--accent2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.owner-hidden{text-align:center;padding:24px;color:var(--text2);font-size:0.8rem}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#ef4444;color:#fff;padding:10px 20px;border-radius:20px;font-size:0.78rem;font-weight:700;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+.empty{text-align:center;padding:24px;color:var(--text2);font-size:0.8rem}
+
+/* ── Report item ── */
+.report-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+.report-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.report-type{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700;background:var(--accent);color:#fff}
+.report-status{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700}
+.report-status.pending{background:#f59e0b;color:#000}
+.report-status.resolved{background:#22c55e;color:#000}
+.report-date{font-size:0.65rem;color:var(--text2)}
+.report-body{font-size:0.75rem;line-height:1.6;margin-bottom:6px}
+.report-actions{display:flex;gap:8px;margin-top:8px}
+.btn-sm{padding:5px 12px;border-radius:8px;font-size:0.7rem;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:opacity 0.2s}
+.btn-sm:hover{opacity:0.8}
+.btn-ok{background:var(--ok);color:#000}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <button class="back-btn" onclick="goBack()">← 戻る</button>
+  <div class="header-title">🚒 <span>消防署</span> <span class="header-badge">WEST</span></div>
+  <div class="header-clock" id="clock">--:--</div>
+</div>
+
+<div class="hero">
+  <div class="hero-icon">🚒</div>
+  <div class="hero-title">Fire Station</div>
+  <div class="hero-sub">SchoolPark 西エリア — 緊急対応・危機管理センター</div>
+  <div class="hero-tags">
+    <span class="hero-tag">🔥 緊急対応</span>
+    <span class="hero-tag">📢 緊急連絡</span>
+    <span class="hero-tag">🛡️ 危機管理</span>
+    <span class="hero-tag">✅ 安全確認</span>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val" id="statNotices">—</div><div class="stat-lbl">緊急掲示</div></div>
+  <div class="stat"><div class="stat-val" id="statReports">—</div><div class="stat-lbl">対応中</div></div>
+  <div class="stat"><div class="stat-val">24h</div><div class="stat-lbl">常時対応</div></div>
+</div>
+
+<div class="tabs" id="tabBar">
+  <button class="tab active" onclick="switchTab('emergency',this)">🔥 緊急対応</button>
+  <button class="tab" onclick="switchTab('guide',this)">📋 防災ガイド</button>
+  <button class="tab" onclick="switchTab('drill',this)">🏃 避難訓練</button>
+  <button class="tab" onclick="switchTab('board',this)">📢 緊急掲示板</button>
+  <button class="tab" id="adminTab" onclick="switchTab('admin',this)" style="display:none">⚙️ 管理</button>
+</div>
+
+<div class="main">
+
+  <!-- ── 緊急対応タブ ── -->
+  <div class="panel active" id="tab-emergency">
+
+    <div class="alert red">
+      <div class="alert-icon">🚨</div>
+      <div>
+        <div class="alert-title">緊急時は即通報</div>
+        <div class="alert-body">コミュニティ内で緊急事態（スパム攻撃・大規模不正・システム障害等）が発生した場合は、すぐに緊急報告フォームを使用してください。</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🚨 緊急レベル定義</div>
+      <div class="level-card">
+        <span class="level-badge lv1">LEVEL 1 — 最緊急</span>
+        <div>
+          <div class="level-title">コミュニティ全体への脅威</div>
+          <div class="level-desc">大規模スパム攻撃・スマートコントラクト脆弱性・コミュニティ資産への不正アクセスなど、即時オーナー介入が必要な事態。</div>
+        </div>
+      </div>
+      <div class="level-card">
+        <span class="level-badge lv2">LEVEL 2 — 緊急</span>
+        <div>
+          <div class="level-title">複数ユーザーへの影響</div>
+          <div class="level-desc">フィッシング拡散・なりすましアカウント大量発生・NFT詐欺の組織的展開。複数メンバーへの被害が確認されている場合。</div>
+        </div>
+      </div>
+      <div class="level-card">
+        <span class="level-badge lv3">LEVEL 3 — 警戒</span>
+        <div>
+          <div class="level-title">個人への影響・要観察</div>
+          <div class="level-desc">特定ユーザーへのハラスメント・不審なウォレット操作・疑わしいコンテンツ拡散。継続監視が必要な状況。</div>
+        </div>
+      </div>
+      <div class="level-card">
+        <span class="level-badge lv4">LEVEL 4 — 通常</span>
+        <div>
+          <div class="level-title">軽微な問題・情報提供</div>
+          <div class="level-desc">技術的な小さなバグ・軽微なルール違反・コミュニティ改善提案など。緊急性は低いが記録しておくべき事象。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">📞 緊急連絡フロー</div>
+      <div class="flow">
+        <div class="flow-item">
+          <div class="flow-num">1</div>
+          <div class="flow-content">
+            <div class="flow-title">状況を把握する</div>
+            <div class="flow-desc">何が起きているか、いつから、誰が関わっているかを確認。スクリーンショット・トランザクションハッシュを保存。</div>
+          </div>
+        </div>
+        <div class="flow-line"></div>
+        <div class="flow-item">
+          <div class="flow-num">2</div>
+          <div class="flow-content">
+            <div class="flow-title">緊急レベルを判断する</div>
+            <div class="flow-desc">上記のレベル定義を参照し、LEVEL 1〜4のどれかに分類する。</div>
+          </div>
+        </div>
+        <div class="flow-line"></div>
+        <div class="flow-item">
+          <div class="flow-num">3</div>
+          <div class="flow-content">
+            <div class="flow-title">緊急報告を送信する</div>
+            <div class="flow-desc">「緊急掲示板」タブから緊急報告フォームを送信。LEVEL 1〜2はオーナーに即時通知されます。</div>
+          </div>
+        </div>
+        <div class="flow-line"></div>
+        <div class="flow-item">
+          <div class="flow-num">4</div>
+          <div class="flow-content">
+            <div class="flow-title">安全確認・待機</div>
+            <div class="flow-desc">報告後は不審なリンクや取引を行わず、オーナーからの対応アナウンスを待つ。</div>
+          </div>
+        </div>
+        <div class="flow-line"></div>
+        <div class="flow-item">
+          <div class="flow-num">5</div>
+          <div class="flow-content">
+            <div class="flow-title">解決確認・記録</div>
+            <div class="flow-desc">対応完了後、緊急掲示板に解決報告が掲載されます。同様の事態の再発防止策を確認してください。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── 防災ガイドタブ ── -->
+  <div class="panel" id="tab-guide">
+
+    <div class="alert yellow">
+      <div class="alert-icon">⚠️</div>
+      <div>
+        <div class="alert-title">Web3環境特有のリスク</div>
+        <div class="alert-body">SchoolParkはWeb3（ブロックチェーン）を活用しています。従来のSNSと異なり、取引は基本的に取り消し不可です。事前知識が身を守ります。</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🔥 危機シナリオ別対処法</div>
+
+      <div class="tip">
+        <div class="tip-head" onclick="toggleTip(this)">
+          <span class="tip-icon">💸</span>
+          <span class="tip-title">ウォレットが不正アクセスされた疑い</span>
+          <span class="tip-arrow">▼</span>
+        </div>
+        <div class="tip-body">
+          <strong>即座に行うこと：</strong><br>
+          1. 疑わしいサイトへの接続を全て切断<br>
+          2. MetaMask等でサイト接続の許可を全て取り消す（設定→接続済みサイト）<br>
+          3. ハードウェアウォレットを使用している場合はデバイスを物理的に切断<br>
+          4. 別の安全なウォレットを新規作成し、資産を移動<br>
+          5. シードフレーズ（秘密鍵）を絶対に誰にも教えない<br>
+          <br>
+          <strong>報告：</strong>緊急掲示板でLEVEL 1として報告してください。
+        </div>
+      </div>
+
+      <div class="tip">
+        <div class="tip-head" onclick="toggleTip(this)">
+          <span class="tip-icon">🎣</span>
+          <span class="tip-title">フィッシングサイト・偽SchoolParkを発見した</span>
+          <span class="tip-arrow">▼</span>
+        </div>
+        <div class="tip-body">
+          <strong>正規URLの確認：</strong><br>
+          SchoolParkの正規URLは <strong>schoolpark-emu.vercel.app</strong> のみです。<br>
+          <br>
+          <strong>発見時の行動：</strong><br>
+          1. 絶対にウォレット接続しない<br>
+          2. URLをスクリーンショットで保存<br>
+          3. 緊急掲示板でLEVEL 2として報告（URL含め詳細を記載）<br>
+          4. SNS等で偽サイトの存在を周知（オーナー確認後）<br>
+          <br>
+          偽サイトへのウォレット接続は即座に資産を失うリスクがあります。
+        </div>
+      </div>
+
+      <div class="tip">
+        <div class="tip-head" onclick="toggleTip(this)">
+          <span class="tip-icon">🤖</span>
+          <span class="tip-title">スパム・ボットがコミュニティを攻撃している</span>
+          <span class="tip-arrow">▼</span>
+        </div>
+        <div class="tip-body">
+          <strong>スパム攻撃の特徴：</strong><br>
+          ・短時間での大量投稿<br>
+          ・同一内容のコピー投稿<br>
+          ・不審なリンク含有メッセージの拡散<br>
+          ・プレゼント・エアドロップの偽情報拡散<br>
+          <br>
+          <strong>対処法：</strong><br>
+          1. 不審な投稿のリンクは絶対にクリックしない<br>
+          2. 緊急掲示板でLEVEL 2として報告<br>
+          3. 攻撃中はコミュニティへの投稿を一時控える<br>
+          4. オーナーの対応アナウンスを待つ
+        </div>
+      </div>
+
+      <div class="tip">
+        <div class="tip-head" onclick="toggleTip(this)">
+          <span class="tip-icon">💔</span>
+          <span class="tip-title">NFT詐欺・偽オファーに巻き込まれた</span>
+          <span class="tip-arrow">▼</span>
+        </div>
+        <div class="tip-body">
+          <strong>よくある手口：</strong><br>
+          ・「今すぐ無料ミント」への誘導<br>
+          ・偽オーナーからのDMによる高額購入オファー<br>
+          ・コントラクト承認を要求するサイトへの誘導<br>
+          ・「特別割引」を装ったラグプル<br>
+          <br>
+          <strong>被害に遭った場合：</strong><br>
+          1. それ以上の操作を停止<br>
+          2. 承認したコントラクトを即座に取り消す<br>
+          3. 証拠（TX hash、やり取り）を保存<br>
+          4. 緊急掲示板でLEVEL 2〜3として報告<br>
+          ※ブロックチェーン上のTX（送金）は基本的に取り消し不可です
+        </div>
+      </div>
+
+      <div class="tip">
+        <div class="tip-head" onclick="toggleTip(this)">
+          <span class="tip-icon">🔐</span>
+          <span class="tip-title">アカウントへの不正ログイン疑い</span>
+          <span class="tip-arrow">▼</span>
+        </div>
+        <div class="tip-body">
+          <strong>確認・対処の手順：</strong><br>
+          1. 接続済みウォレットアドレスの変更がないか確認<br>
+          2. ブラウザの保存パスワードを確認・変更<br>
+          3. 使用しているデバイスのウイルス・マルウェアスキャン<br>
+          4. Googleアカウント等外部認証を使用している場合は2段階認証を有効化<br>
+          5. SchoolParkへの異常なアクセスをオーナーに報告（LEVEL 3）
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">📊 コミュニティの火災保険（事前対策）</div>
+      <div class="alert green">
+        <div class="alert-icon">✅</div>
+        <div>
+          <div class="alert-title">日頃の備えが最大の防御</div>
+          <div class="alert-body">緊急事態は予防が一番。以下のチェックリストを定期的に確認しましょう。</div>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px">
+          <div style="font-size:0.78rem;font-weight:700;margin-bottom:8px;color:var(--accent2)">🔒 ウォレットセキュリティ</div>
+          <div style="font-size:0.72rem;color:var(--text2);line-height:2">
+            ☐ シードフレーズをオフライン（紙）で保管している<br>
+            ☐ シードフレーズをデジタルデバイスに保存していない<br>
+            ☐ MetaMaskに不審な接続承認がない（定期確認）<br>
+            ☐ ハードウェアウォレットの使用を検討している<br>
+            ☐ 使用しないサイトへの接続は削除している
+          </div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px">
+          <div style="font-size:0.78rem;font-weight:700;margin-bottom:8px;color:var(--accent2)">🌐 オンライン行動</div>
+          <div style="font-size:0.72rem;color:var(--text2);line-height:2">
+            ☐ URLをブックマークから開く習慣がある<br>
+            ☐ 知らないリンクは必ず送信者を確認している<br>
+            ☐ 「緊急」「無料」「限定」には一呼吸おいている<br>
+            ☐ DM経由のオファーを慎重に扱っている<br>
+            ☐ コントラクト承認の内容を確認している
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── 避難訓練タブ ── -->
+  <div class="panel" id="tab-drill">
+
+    <div class="alert blue">
+      <div class="alert-icon">📣</div>
+      <div>
+        <div class="alert-title">避難訓練について</div>
+        <div class="alert-body">SchoolParkでは定期的にコミュニティ全体の「安全確認訓練」を実施します。訓練は緊急掲示板でアナウンスされます。</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🏃 緊急時の行動マニュアル</div>
+
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px">
+        <div style="background:rgba(239,68,68,0.15);padding:10px 14px;border-bottom:1px solid var(--border)">
+          <div style="font-size:0.8rem;font-weight:700;color:var(--accent2)">🔴 PHASE 1：緊急発令（0〜5分）</div>
+        </div>
+        <div style="padding:12px 14px">
+          <div style="font-size:0.72rem;color:var(--text2);line-height:1.9">
+            ✦ 緊急掲示板に発令アナウンスが投稿される<br>
+            ✦ SNS（X等）でもオーナーが状況を発信<br>
+            ✦ メンバーは不要な操作を全て停止<br>
+            ✦ ウォレット接続・NFT操作を一時中断
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px">
+        <div style="background:rgba(245,158,11,0.12);padding:10px 14px;border-bottom:1px solid var(--border)">
+          <div style="font-size:0.8rem;font-weight:700;color:#fcd34d">🟡 PHASE 2：安全確認（5〜30分）</div>
+        </div>
+        <div style="padding:12px 14px">
+          <div style="font-size:0.72rem;color:var(--text2);line-height:1.9">
+            ✦ オーナーが状況調査・原因特定を実施<br>
+            ✦ 影響を受けたメンバーは被害状況を緊急掲示板へ<br>
+            ✦ 安全なメンバーは待機・SNSで情報確認<br>
+            ✦ 不確かな情報の拡散は控える
+          </div>
+        </div>
+      </div>
+
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px">
+        <div style="background:rgba(34,197,94,0.1);padding:10px 14px;border-bottom:1px solid var(--border)">
+          <div style="font-size:0.8rem;font-weight:700;color:#86efac">🟢 PHASE 3：復旧・解除（30分〜）</div>
+        </div>
+        <div style="padding:12px 14px">
+          <div style="font-size:0.72rem;color:var(--text2);line-height:1.9">
+            ✦ オーナーから「解除」アナウンスが発令<br>
+            ✦ 再発防止策・被害状況が報告される<br>
+            ✦ 通常のコミュニティ活動を再開<br>
+            ✦ 被害を受けたメンバーへのサポート実施
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">📅 定期安全確認スケジュール</div>
+      <div class="alert blue">
+        <div class="alert-icon">📆</div>
+        <div>
+          <div class="alert-title">月1回の安全確認を推奨</div>
+          <div class="alert-body">毎月1日を「SchoolPark安全確認デー」として、ウォレット設定・接続承認・パスワードを点検しましょう。緊急掲示板でリマインダーを配信します。</div>
+        </div>
+      </div>
+      <div style="margin-top:10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
+        <div style="font-size:0.78rem;font-weight:700;margin-bottom:8px;color:var(--accent2)">🗓️ 安全確認チェックリスト（月次）</div>
+        <div style="font-size:0.72rem;color:var(--text2);line-height:2">
+          ☐ MetaMaskの接続済みサイト一覧を確認・整理<br>
+          ☐ 使用したコントラクト承認を取り消す（不要なもの）<br>
+          ☐ SchoolParkのブックマークURLを確認<br>
+          ☐ 緊急掲示板の最新情報を確認<br>
+          ☐ 防災ガイドの新規項目を確認
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── 緊急掲示板タブ ── -->
+  <div class="panel" id="tab-board">
+
+    <div class="sec">
+      <div class="sec-title">📢 緊急報告を送る</div>
+      <div class="form-group">
+        <label class="form-label">緊急レベル</label>
+        <select class="form-select" id="reportLevel">
+          <option value="1">🔴 LEVEL 1 — 最緊急（コミュニティ全体への脅威）</option>
+          <option value="2">🟠 LEVEL 2 — 緊急（複数ユーザーへの影響）</option>
+          <option value="3" selected>🟡 LEVEL 3 — 警戒（個人への影響）</option>
+          <option value="4">🟢 LEVEL 4 — 通常（軽微な問題）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">事象の種類</label>
+        <select class="form-select" id="reportType">
+          <option value="wallet">💸 ウォレット不正アクセス</option>
+          <option value="phishing">🎣 フィッシング・偽サイト</option>
+          <option value="spam">🤖 スパム・ボット攻撃</option>
+          <option value="nft_fraud">🖼️ NFT詐欺・偽オファー</option>
+          <option value="harassment">😡 ハラスメント</option>
+          <option value="system">⚙️ システム障害・バグ</option>
+          <option value="other">❓ その他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">詳細（状況・URL・TX hashなど）</label>
+        <textarea class="form-textarea" id="reportBody" placeholder="何が起きているか、いつから、証拠となる情報（URLやトランザクションハッシュ等）をできる限り詳しく記載してください。"></textarea>
+      </div>
+      <button class="submit-btn" id="reportSubmitBtn" onclick="submitReport()">🚨 緊急報告を送信</button>
+    </div>
+
+    <div class="sec" style="margin-top:20px">
+      <div class="sec-title">📋 緊急掲示板</div>
+      <div id="noticeList"><div class="empty">読み込み中...</div></div>
+    </div>
+
+  </div>
+
+  <!-- ── 管理タブ ── -->
+  <div class="panel" id="tab-admin">
+    <div class="owner-section" id="adminContent">
+      <div class="owner-title">⚙️ 管理者専用パネル</div>
+      <div class="form-group">
+        <label class="form-label">掲示レベル</label>
+        <select class="form-select" id="noticeLevel">
+          <option value="emergency">🚨 緊急</option>
+          <option value="warning">⚠️ 警告</option>
+          <option value="info" selected>ℹ️ 情報</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">タイトル</label>
+        <input class="form-input" id="noticeTitle" placeholder="緊急掲示のタイトル">
+      </div>
+      <div class="form-group">
+        <label class="form-label">本文</label>
+        <textarea class="form-textarea" id="noticeBody" placeholder="メンバーへの緊急アナウンス内容を記載してください..."></textarea>
+      </div>
+      <button class="submit-btn" onclick="postNotice()">📢 緊急掲示を投稿</button>
+
+      <div style="margin-top:20px">
+        <div class="sec-title">📋 受信した緊急報告</div>
+        <div id="adminReportList"><div class="empty">読み込み中...</div></div>
+      </div>
+    </div>
+    <div class="owner-hidden" id="adminHidden" style="display:none">
+      🔒 管理者専用エリアです
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Config ──
+const OWNER_UID    = "txCTc9kWVaXMhHIJCE5n3tNkxql1";
+const OWNER_WALLET = "0x822f5fd877d53acbdb1e7e7d38b89c6a3dcb2e06";
+
+// ── URL Params ──
+const params = new URLSearchParams(location.search);
+const walletParam = params.get("wallet") || "";
+
+// ── Firebase ──
+let db = null;
+function getDb() {
+  if (db) return db;
+  if (window.top && window.top.db) { db = window.top.db; return db; }
+  if (window.parent && window.parent.db) { db = window.parent.db; return db; }
+  return null;
+}
+function getFbLib() {
+  if (window.top && window.top.fbLib) return window.top.fbLib;
+  if (window.parent && window.parent.fbLib) return window.parent.fbLib;
+  return null;
+}
+function isOwner() {
+  const uid = (window.top && window.top.currentUserUid) || (window.parent && window.parent.currentUserUid) || "";
+  const wallet = (window.top && window.top.connectedAccount) || (window.parent && window.parent.connectedAccount) || walletParam || "";
+  return uid === OWNER_UID || wallet.toLowerCase() === OWNER_WALLET.toLowerCase();
+}
+
+// ── Clock ──
+function updateClock(){
+  const now=new Date();
+  document.getElementById("clock").textContent=
+    now.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
+}
+updateClock();setInterval(updateClock,30000);
+
+// ── Tabs ──
+function switchTab(id,btn){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.getElementById("tab-"+id).classList.add("active");
+  btn.classList.add("active");
+  if(id==="board") loadNotices();
+  if(id==="admin") loadAdminReports();
+}
+
+// ── Toggle Tip ──
+function toggleTip(head){
+  head.closest(".tip").classList.toggle("open");
+}
+
+// ── Toast ──
+function showToast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg;t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),3000);
+}
+
+// ── Submit Report ──
+async function submitReport(){
+  const db=getDb(); const fbLib=getFbLib();
+  if(!db||!fbLib){showToast("❌ DB接続エラー");return;}
+  const level=document.getElementById("reportLevel").value;
+  const type=document.getElementById("reportType").value;
+  const body=document.getElementById("reportBody").value.trim();
+  if(!body){showToast("⚠️ 詳細を入力してください");return;}
+  const btn=document.getElementById("reportSubmitBtn");
+  btn.disabled=true;btn.textContent="送信中...";
+  try{
+    const wallet=(window.top&&window.top.connectedAccount)||walletParam||"匿名";
+    await fbLib.addDoc(fbLib.collection(db,"sp_fire_reports"),{
+      level:parseInt(level), type, body,
+      wallet, status:"pending",
+      createdAt:fbLib.serverTimestamp()
+    });
+    document.getElementById("reportBody").value="";
+    showToast("🚨 緊急報告を送信しました");
+    // stat update
+    loadStats();
+  }catch(e){showToast("❌ 送信失敗: "+e.message);}
+  btn.disabled=false;btn.textContent="🚨 緊急報告を送信";
+}
+
+// ── Load Notices ──
+async function loadNotices(){
+  const db=getDb(); const fbLib=getFbLib();
+  const el=document.getElementById("noticeList");
+  if(!db||!fbLib){el.innerHTML='<div class="empty">DB未接続</div>';return;}
+  try{
+    const q=fbLib.query(fbLib.collection(db,"sp_fire_notices"),fbLib.orderBy("createdAt","desc"),fbLib.limit(20));
+    const snap=await fbLib.getDocs(q);
+    if(snap.empty){el.innerHTML='<div class="empty">緊急掲示はありません</div>';return;}
+    el.innerHTML=snap.docs.map(d=>{
+      const n=d.data();
+      const dt=n.createdAt?.toDate?n.createdAt.toDate().toLocaleDateString("ja-JP"):"";
+      return `<div class="notice-card">
+        <div class="notice-meta">
+          <span class="notice-level ${n.level||'info'}">${{emergency:"🚨 緊急",warning:"⚠️ 警告",info:"ℹ️ 情報"}[n.level]||n.level}</span>
+          <span class="notice-date">${dt}</span>
+          ${isOwner()?`<button class="btn-sm" style="background:#333;color:#ccc;margin-left:auto" onclick="deleteNotice('${d.id}')">🗑️</button>`:""}
+        </div>
+        <div class="notice-title">${n.title||""}</div>
+        <div class="notice-body">${(n.body||"").replace(/\n/g,"<br>")}</div>
+      </div>`;
+    }).join("");
+  }catch(e){el.innerHTML=`<div class="empty">読み込みエラー: ${e.message}</div>`;}
+}
+
+// ── Post Notice (Admin) ──
+async function postNotice(){
+  const db=getDb(); const fbLib=getFbLib();
+  if(!db||!fbLib||!isOwner()){showToast("❌ 権限エラー");return;}
+  const level=document.getElementById("noticeLevel").value;
+  const title=document.getElementById("noticeTitle").value.trim();
+  const body=document.getElementById("noticeBody").value.trim();
+  if(!title||!body){showToast("⚠️ タイトルと本文を入力してください");return;}
+  try{
+    await fbLib.addDoc(fbLib.collection(db,"sp_fire_notices"),{
+      level, title, body, createdAt:fbLib.serverTimestamp()
+    });
+    document.getElementById("noticeTitle").value="";
+    document.getElementById("noticeBody").value="";
+    showToast("📢 緊急掲示を投稿しました");
+    loadNotices();
+  }catch(e){showToast("❌ 投稿失敗: "+e.message);}
+}
+
+// ── Delete Notice ──
+async function deleteNotice(id){
+  const db=getDb(); const fbLib=getFbLib();
+  if(!db||!fbLib||!isOwner()) return;
+  try{
+    await fbLib.deleteDoc(fbLib.doc(db,"sp_fire_notices",id));
+    showToast("🗑️ 削除しました");
+    loadNotices();
+  }catch(e){showToast("❌ 削除失敗");}
+}
+
+// ── Admin: Load Reports ──
+async function loadAdminReports(){
+  const db=getDb(); const fbLib=getFbLib();
+  const el=document.getElementById("adminReportList");
+  if(!db||!fbLib||!isOwner()){el.innerHTML='<div class="empty">権限なし</div>';return;}
+  try{
+    const q=fbLib.query(fbLib.collection(db,"sp_fire_reports"),fbLib.orderBy("createdAt","desc"),fbLib.limit(30));
+    const snap=await fbLib.getDocs(q);
+    if(snap.empty){el.innerHTML='<div class="empty">報告はありません</div>';return;}
+    el.innerHTML=snap.docs.map(d=>{
+      const r=d.data();
+      const dt=r.createdAt?.toDate?r.createdAt.toDate().toLocaleDateString("ja-JP"):"";
+      const lvColors=["","#ef4444","#f97316","#f59e0b","#22c55e"];
+      return `<div class="report-item">
+        <div class="report-meta">
+          <span class="report-type" style="background:${lvColors[r.level]||'#666'}">LV${r.level}</span>
+          <span class="report-type">${r.type||""}</span>
+          <span class="report-status ${r.status==='resolved'?'resolved':'pending'}">${r.status==='resolved'?'✅解決済':'⏳対応中'}</span>
+          <span class="report-date">${dt}</span>
+        </div>
+        <div class="report-body">${(r.body||"").replace(/\n/g,"<br>")}</div>
+        <div style="font-size:0.68rem;color:var(--text2)">👤 ${r.wallet||"匿名"}</div>
+        ${r.status!=='resolved'?`<div class="report-actions"><button class="btn-sm btn-ok" onclick="resolveReport('${d.id}')">✅ 解決済にする</button></div>`:""}
+      </div>`;
+    }).join("");
+  }catch(e){el.innerHTML=`<div class="empty">エラー: ${e.message}</div>`;}
+}
+
+// ── Resolve Report ──
+async function resolveReport(id){
+  const db=getDb(); const fbLib=getFbLib();
+  if(!db||!fbLib||!isOwner()) return;
+  try{
+    await fbLib.updateDoc(fbLib.doc(db,"sp_fire_reports",id),{status:"resolved"});
+    showToast("✅ 解決済みにしました");
+    loadAdminReports();
+  }catch(e){showToast("❌ 失敗: "+e.message);}
+}
+
+// ── Stats ──
+async function loadStats(){
+  const db=getDb(); const fbLib=getFbLib();
+  if(!db||!fbLib) return;
+  try{
+    const [ns,rs]=await Promise.all([
+      fbLib.getDocs(fbLib.collection(db,"sp_fire_notices")),
+      fbLib.getDocs(fbLib.query(fbLib.collection(db,"sp_fire_reports"),fbLib.where("status","==","pending")))
+    ]);
+    document.getElementById("statNotices").textContent=ns.size;
+    document.getElementById("statReports").textContent=rs.size;
+  }catch(e){}
+}
+
+// ── Init ──
+window.addEventListener("DOMContentLoaded",()=>{
+  if(isOwner()) document.getElementById("adminTab").style.display="";
+  loadNotices();
+  loadStats();
+});
+
+// ── Back ──
+function goBack(){
+  window.top.postMessage({type:"spContentClose"},"*");
+}
+</script>
+</body>
+</html>

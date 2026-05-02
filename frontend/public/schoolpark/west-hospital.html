@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchoolPark Hospital — 病院</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f8fafc;--bg2:#ffffff;--bg3:#f1f5f9;
+  --accent:#0ea5e9;--accent2:#0284c7;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;
+  --text:#0f172a;--text2:#64748b;--border:rgba(0,0,0,0.08);--card:rgba(14,165,233,0.04);
+  --radius:12px;--hospital:#0c4a6e;--badge:#0ea5e9;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* ── Header ── */
+.header{position:sticky;top:0;z-index:100;height:54px;background:rgba(255,255,255,0.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+.back-btn{background:var(--hospital);color:#fff;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:0.8rem;font-weight:700;font-family:inherit;letter-spacing:0.05em;transition:opacity 0.15s;white-space:nowrap}
+.back-btn:hover{opacity:0.85}
+.header-title{font-size:0.9rem;font-weight:700;display:flex;align-items:center;gap:6px;color:var(--text)}
+.header-badge{background:var(--badge);color:#fff;font-size:0.6rem;font-weight:700;padding:2px 7px;border-radius:20px;letter-spacing:0.05em}
+.header-clock{margin-left:auto;font-size:0.72rem;color:var(--text2);white-space:nowrap}
+
+/* ── Hero ── */
+.hero{background:linear-gradient(135deg,#0c4a6e 0%,#0369a1 50%,#0ea5e9 100%);padding:28px 16px 22px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:"🏥";position:absolute;right:-10px;top:-10px;font-size:120px;opacity:0.08}
+.hero-icon{font-size:52px;margin-bottom:8px}
+.hero-title{font-size:1.35rem;font-weight:700;letter-spacing:0.05em;color:#fff}
+.hero-sub{font-size:0.78rem;color:rgba(255,255,255,0.75);margin-top:4px}
+.hero-tags{display:flex;justify-content:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.hero-tag{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);padding:3px 10px;border-radius:20px;font-size:0.65rem;color:rgba(255,255,255,0.85)}
+
+/* ── Stats ── */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.stat{background:var(--bg2);padding:12px 8px;text-align:center}
+.stat-val{font-size:1.1rem;font-weight:700;color:var(--accent2)}
+.stat-lbl{font-size:0.6rem;color:var(--text2);margin-top:2px}
+
+/* ── Tabs ── */
+.tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:11px 16px;font-size:0.75rem;font-weight:700;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.tab:hover{color:var(--text);background:rgba(14,165,233,0.04)}
+.tab.active{color:var(--accent2);border-bottom-color:var(--accent2);background:rgba(14,165,233,0.05)}
+.main{max-width:720px;margin:0 auto;padding:16px 14px 60px}
+.panel{display:none}.panel.active{display:block}
+
+/* ── Section ── */
+.sec{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.sec-title{font-size:0.8rem;font-weight:700;color:var(--accent2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+
+/* ── Alert ── */
+.alert{border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-start}
+.alert.blue{background:rgba(14,165,233,0.08);border:1px solid rgba(14,165,233,0.2);color:#0369a1}
+.alert.yellow{background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#92400e}
+.alert.green{background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);color:#166534}
+.alert.red{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#991b1b}
+.alert-icon{font-size:1.1rem;flex-shrink:0}
+.alert-title{font-size:0.78rem;font-weight:700;margin-bottom:3px}
+.alert-body{font-size:0.72rem;line-height:1.6}
+
+/* ── FAQ ── */
+.faq{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;transition:box-shadow 0.2s}
+.faq:hover{box-shadow:0 2px 8px rgba(14,165,233,0.1)}
+.faq-head{display:flex;align-items:flex-start;gap:10px;cursor:pointer}
+.faq-q{font-size:0.79rem;font-weight:700;flex:1;color:var(--text);line-height:1.5}
+.faq-arrow{color:var(--text2);font-size:0.7rem;transition:transform 0.2s;margin-top:2px;flex-shrink:0}
+.faq.open .faq-arrow{transform:rotate(180deg)}
+.faq-a{font-size:0.72rem;color:var(--text2);margin-top:10px;line-height:1.7;border-top:1px solid var(--border);padding-top:10px;display:none}
+.faq.open .faq-a{display:block}
+.faq-tag{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700;flex-shrink:0}
+.faq-tag.bug{background:#fee2e2;color:#991b1b}
+.faq-tag.nft{background:#dbeafe;color:#1d4ed8}
+.faq-tag.wallet{background:#fef3c7;color:#92400e}
+.faq-tag.account{background:#d1fae5;color:#065f46}
+.faq-tag.general{background:#f1f5f9;color:#475569}
+
+/* ── Symptom checker ── */
+.symptom-btn{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer;text-align:left;font-family:inherit;transition:all 0.2s}
+.symptom-btn:hover{border-color:var(--accent);background:rgba(14,165,233,0.04)}
+.symptom-icon{font-size:1.3rem;flex-shrink:0}
+.symptom-text{font-size:0.8rem;font-weight:700;color:var(--text)}
+.symptom-sub{font-size:0.68rem;color:var(--text2);margin-top:2px}
+.diagnosis{background:var(--bg2);border:2px solid var(--accent);border-radius:var(--radius);padding:14px;display:none;margin-top:12px}
+.diagnosis.show{display:block}
+.diag-title{font-size:0.85rem;font-weight:700;color:var(--accent2);margin-bottom:8px}
+.diag-body{font-size:0.75rem;color:var(--text2);line-height:1.8}
+.diag-step{background:var(--bg3);border-radius:8px;padding:8px 12px;margin-top:8px;font-size:0.73rem;color:var(--text);line-height:1.7}
+
+/* ── Form ── */
+.form-group{margin-bottom:12px}
+.form-label{font-size:0.75rem;font-weight:700;color:var(--text2);margin-bottom:5px;display:block}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:inherit;font-size:0.8rem;outline:none;transition:border-color 0.2s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);background:#fff}
+.form-textarea{resize:vertical;min-height:90px}
+.form-select option{background:#fff}
+.submit-btn{width:100%;background:var(--accent2);color:#fff;border:none;border-radius:var(--radius);padding:13px;font-weight:700;font-size:0.88rem;cursor:pointer;font-family:inherit;transition:opacity 0.2s;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:8px}
+.submit-btn:hover{opacity:0.85}
+.submit-btn:disabled{opacity:0.5;cursor:not-allowed}
+
+/* ── Case ── */
+.case-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.03)}
+.case-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.case-tag{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700}
+.case-date{font-size:0.65rem;color:var(--text2)}
+.case-title{font-size:0.82rem;font-weight:700;margin-bottom:4px;color:var(--text)}
+.case-body{font-size:0.72rem;color:var(--text2);line-height:1.6}
+.case-solved{display:inline-flex;align-items:center;gap:4px;background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:20px;font-size:0.62rem;font-weight:700;margin-top:6px}
+
+/* ── Report item ── */
+.report-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.03)}
+.report-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.report-type{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700;background:var(--accent);color:#fff}
+.report-status{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700}
+.report-status.pending{background:#fef3c7;color:#92400e}
+.report-status.resolved{background:#d1fae5;color:#065f46}
+.report-date{font-size:0.65rem;color:var(--text2)}
+.report-body{font-size:0.75rem;line-height:1.6;color:var(--text)}
+.report-actions{display:flex;gap:8px;margin-top:8px}
+.btn-sm{padding:5px 12px;border-radius:8px;font-size:0.7rem;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:opacity 0.2s}
+.btn-sm:hover{opacity:0.8}
+.btn-ok{background:#22c55e;color:#000}
+.btn-del{background:#f1f5f9;color:#64748b}
+
+/* ── Owner ── */
+.owner-section{background:rgba(14,165,233,0.04);border:1px solid rgba(14,165,233,0.2);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.owner-title{font-size:0.78rem;font-weight:700;color:var(--accent2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent2);color:#fff;padding:10px 20px;border-radius:20px;font-size:0.78rem;font-weight:700;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+.empty{text-align:center;padding:24px;color:var(--text2);font-size:0.8rem}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <button class="back-btn" onclick="goBack()">← 戻る</button>
+  <div class="header-title">🏥 <span>病院</span> <span class="header-badge">WEST</span></div>
+  <div class="header-clock" id="clock">--:--</div>
+</div>
+
+<div class="hero">
+  <div class="hero-icon">🏥</div>
+  <div class="hero-title">Hospital</div>
+  <div class="hero-sub">SchoolPark 西エリア — ユーザーサポートセンター</div>
+  <div class="hero-tags">
+    <span class="hero-tag">🩺 症状チェック</span>
+    <span class="hero-tag">❓ FAQ</span>
+    <span class="hero-tag">📝 問い合わせ</span>
+    <span class="hero-tag">📋 解決事例</span>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val" id="statCases">—</div><div class="stat-lbl">解決事例</div></div>
+  <div class="stat"><div class="stat-val" id="statPending">—</div><div class="stat-lbl">対応中</div></div>
+  <div class="stat"><div class="stat-val">FAQ</div><div class="stat-lbl">よくある質問</div></div>
+</div>
+
+<div class="tabs" id="tabBar">
+  <button class="tab active" onclick="switchTab('reception',this)">🏥 受付</button>
+  <button class="tab" onclick="switchTab('symptom',this)">🩺 症状チェック</button>
+  <button class="tab" onclick="switchTab('faq',this)">❓ FAQ</button>
+  <button class="tab" onclick="switchTab('contact',this)">📝 問い合わせ</button>
+  <button class="tab" onclick="switchTab('cases',this)">📋 解決事例</button>
+  <button class="tab" id="adminTab" onclick="switchTab('admin',this)" style="display:none">⚙️ 管理</button>
+</div>
+
+<div class="main">
+
+  <!-- ── 受付タブ ── -->
+  <div class="panel active" id="tab-reception">
+
+    <div class="alert blue">
+      <div class="alert-icon">👋</div>
+      <div>
+        <div class="alert-title">SchoolPark病院へようこそ</div>
+        <div class="alert-body">困ったことがあればここで解決できます。症状チェックで自己診断するか、FAQを確認するか、問い合わせフォームからご連絡ください。</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🗺️ 病院の使い方</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;cursor:pointer;transition:all 0.2s" onclick="document.querySelector('[onclick*=symptom]').click()">
+          <div style="font-size:1.6rem;margin-bottom:6px">🩺</div>
+          <div style="font-size:0.8rem;font-weight:700;color:var(--text)">症状チェック</div>
+          <div style="font-size:0.68rem;color:var(--text2);margin-top:3px;line-height:1.5">何が起きているか選んで対処法を確認</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;cursor:pointer;transition:all 0.2s" onclick="document.querySelector('[onclick*=faq]').click()">
+          <div style="font-size:1.6rem;margin-bottom:6px">❓</div>
+          <div style="font-size:0.8rem;font-weight:700;color:var(--text)">よくある質問</div>
+          <div style="font-size:0.68rem;color:var(--text2);margin-top:3px;line-height:1.5">多くのユーザーが抱える疑問を確認</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;cursor:pointer;transition:all 0.2s" onclick="document.querySelector('[onclick*=contact]').click()">
+          <div style="font-size:1.6rem;margin-bottom:6px">📝</div>
+          <div style="font-size:0.8rem;font-weight:700;color:var(--text)">問い合わせ</div>
+          <div style="font-size:0.68rem;color:var(--text2);margin-top:3px;line-height:1.5">解決しない場合はフォームで連絡</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;cursor:pointer;transition:all 0.2s" onclick="document.querySelector('[onclick*=cases]').click()">
+          <div style="font-size:1.6rem;margin-bottom:6px">📋</div>
+          <div style="font-size:0.8rem;font-weight:700;color:var(--text)">解決事例</div>
+          <div style="font-size:0.68rem;color:var(--text2);margin-top:3px;line-height:1.5">過去の問い合わせと解決策を参照</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">📌 最近のお知らせ</div>
+      <div id="receptionNotices"><div class="empty">読み込み中...</div></div>
+    </div>
+
+  </div>
+
+  <!-- ── 症状チェックタブ ── -->
+  <div class="panel" id="tab-symptom">
+
+    <div class="alert blue">
+      <div class="alert-icon">🩺</div>
+      <div>
+        <div class="alert-title">症状を選んでください</div>
+        <div class="alert-body">あなたが抱えている問題に近いものを選ぶと、対処法を案内します。</div>
+      </div>
+    </div>
+
+    <button class="symptom-btn" onclick="showDiagnosis('wallet')">
+      <span class="symptom-icon">💸</span>
+      <div>
+        <div class="symptom-text">ウォレット・NFTの問題</div>
+        <div class="symptom-sub">接続できない・残高がおかしい・NFTが見えない</div>
+      </div>
+    </button>
+    <button class="symptom-btn" onclick="showDiagnosis('post')">
+      <span class="symptom-icon">📝</span>
+      <div>
+        <div class="symptom-text">投稿・コンテンツの問題</div>
+        <div class="symptom-sub">投稿できない・表示されない・削除したい</div>
+      </div>
+    </button>
+    <button class="symptom-btn" onclick="showDiagnosis('login')">
+      <span class="symptom-icon">🔐</span>
+      <div>
+        <div class="symptom-text">ログイン・アカウントの問題</div>
+        <div class="symptom-sub">ログインできない・情報が変わっている</div>
+      </div>
+    </button>
+    <button class="symptom-btn" onclick="showDiagnosis('display')">
+      <span class="symptom-icon">🖥️</span>
+      <div>
+        <div class="symptom-text">表示・動作の問題</div>
+        <div class="symptom-sub">画面が崩れる・ボタンが動かない・読み込まない</div>
+      </div>
+    </button>
+    <button class="symptom-btn" onclick="showDiagnosis('token')">
+      <span class="symptom-icon">🪙</span>
+      <div>
+        <div class="symptom-text">EMUERトークンの問題</div>
+        <div class="symptom-sub">トークンが届かない・残高がおかしい・送受信エラー</div>
+      </div>
+    </button>
+    <button class="symptom-btn" onclick="showDiagnosis('other')">
+      <span class="symptom-icon">❓</span>
+      <div>
+        <div class="symptom-text">その他の問題</div>
+        <div class="symptom-sub">上記に当てはまらないトラブル</div>
+      </div>
+    </button>
+
+    <div class="diagnosis" id="diagnosis"></div>
+
+  </div>
+
+  <!-- ── FAQタブ ── -->
+  <div class="panel" id="tab-faq">
+
+    <div class="sec">
+      <div class="sec-title">💸 ウォレット・NFT</div>
+      <div class="faq">
+        <div class="faq-head" onclick="toggleFaq(this)">
+          <span class="faq-tag wallet">ウォレット</span>
+          <span class="faq-q">ウォレットを接続したのに認証されません</span>
+          <span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">
+          以下の順番でお試しください：<br>
+          1. ページをリロードしてから再接続<br>
+          2. MetaMask等のウォレット拡張機能を最新版に更新<br>
+          3. ブラウザのキャッシュをクリア<br>
+          4. 別のブラウザで試す（ChromeまたはFirefox推奨）<br>
+          5. ウォレットアドレスに接続許可が出ているか確認<br>
+          <br>
+          それでも解決しない場合は「問い合わせ」から連絡ください。
+        </div>
+      </div>
+      <div class="faq">
+        <div class="faq-head" onclick="toggleFaq(this)">
+          <span class="faq-tag nft">NFT</span>
+          <span class="faq-q">NFTを購入したのに表示されません</span>
+          <span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">
+          NFTの反映には数分〜数十分かかる場合があります。<br>
+          1. トランザクションハッシュで確定を確認（Polygonscan等）<br>
+          2. ページを強制リロード（Ctrl+Shift+R）<br>
+          3. MetaMaskの「NFT」タブで「NFTをインポート」を試す<br>
+          4. コントラクトアドレスとトークンIDを手動入力<br>
+          <br>
+          24時間経っても表示されない場合は問い合わせください。TX hashを必ずご用意ください。
+        </div>
+      </div>
+      <div class="faq">
+        <div class="faq-head" onclick="toggleFaq(this)">
+          <span class="faq-tag wallet">ウォレット</span>
+          <span class="faq-q">ガス代って何ですか？いくらかかりますか？</span>
+          <span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">
+          ガス代とは、ブロックチェーン上の取引処理に必要な手数料です。<br>
+          SchoolParkはPolygonチェーンを使用しているため、ガス代は非常に安価（数円〜数十円程度）です。<br>
+          POL（旧MATIC）をウォレットに少量持っておく必要があります。<br>
+          <br>
+          ガス代ゼロの操作（閲覧・投稿等）と有料操作（NFT購入・トークン送金）があります。
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🪙 EMUERトークン</div>
+      <div class="faq">
+        <div class="faq-head" onclick="toggleFaq(this)">
+          <span class="faq-tag nft">トークン</span>
+          <span class="faq-q">EMUERトークンはどこで手に入りますか？</span>
+          <span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">
+          EMUERトークン（EMUER）はSchoolPark内の活動を通じて取得できます：<br>
+          • NFT購入時のボーナス付与<br>
+          • コミュニティ貢献への報酬<br>
+          • 特定のコンテンツ購入<br>
+          <br>
+          詳細はSchoolParkのトークン説明ページをご確認ください。
+        </div>
+      </div>
+      <div class="faq">
+        <div class="faq-head" onclick="toggleFaq(this)">
+          <span class="faq-tag nft">トークン</span>
+          <span class="faq-q">EMUERトークンが届きません</span>
+          <span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">
+          1. Polygonscanでトランザクションを確認<br>
+          2. MetaMaskでトークンの「インポート」を行う<br>
+           &nbsp;&nbsp;（コントラクトアドレスが必要です）<br>
+          3. 時間をおいて再確認（ブロック確定まで数分）<br>
+          <br>
+          24時間以上経過しても届かない場合は問い合わせください。
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">📝 投稿・コンテンツ</div>
+      <div class="faq">
+        <div class="faq-head" onclick="toggleFaq(this)">
+          <span class="faq-tag general">投稿</span>
+          <span class="faq-q">投稿が反映されません</span>
+          <span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">
+          1. ウォレットが接続されているか確認<br>
+          2. ページをリロードして再投稿を試みる<br>
+          3. 文字数・画像サイズの制限を確認（画像は5MB以下推奨）<br>
+          4. 別のブラウザで試す<br>
+          <br>
+          ※投稿は即時反映される場合と、数分かかる場合があります。
+        </div>
+      </div>
+      <div class="faq">
+        <div class="faq-head" onclick="toggleFaq(this)">
+          <span class="faq-tag general">投稿</span>
+          <span class="faq-q">自分の投稿を削除したい</span>
+          <span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">
+          投稿一覧から対象の投稿を長押し（PCは右クリック）すると削除オプションが表示されます。<br>
+          <br>
+          機能が見当たらない場合や、緊急で削除が必要な場合は問い合わせフォームからご連絡ください。投稿IDをお知らせください。
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🔐 アカウント・ログイン</div>
+      <div class="faq">
+        <div class="faq-head" onclick="toggleFaq(this)">
+          <span class="faq-tag account">アカウント</span>
+          <span class="faq-q">Googleログインができません</span>
+          <span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">
+          1. ブラウザのポップアップブロックを無効化<br>
+          2. シークレットモードではなく通常ウィンドウで試す<br>
+          3. Googleアカウントのサードパーティアプリ許可を確認<br>
+          4. 別のGoogleアカウントで試す<br>
+          <br>
+          解決しない場合は問い合わせから連絡ください。使用ブラウザ・OSをお知らせください。
+        </div>
+      </div>
+      <div class="faq">
+        <div class="faq-head" onclick="toggleFaq(this)">
+          <span class="faq-tag account">アカウント</span>
+          <span class="faq-q">ユーザー名を変更したい</span>
+          <span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">
+          現在、ユーザー名の変更機能は開発中です。<br>
+          変更を希望する場合は問い合わせフォームから以下を記入してお送りください：<br>
+          • 現在のウォレットアドレスまたはUID<br>
+          • 変更前・変更後のユーザー名
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🖥️ 表示・動作</div>
+      <div class="faq">
+        <div class="faq-head" onclick="toggleFaq(this)">
+          <span class="faq-tag bug">バグ</span>
+          <span class="faq-q">画面が真っ白・読み込みが終わらない</span>
+          <span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">
+          1. 強制リロード：Ctrl+Shift+R（Mac: Cmd+Shift+R）<br>
+          2. キャッシュクリア：ブラウザ設定から「閲覧履歴データを削除」<br>
+          3. 拡張機能を全て無効にして試す<br>
+          4. 別のブラウザで確認<br>
+          5. モバイルでも同じ症状か確認<br>
+          <br>
+          解決しない場合はブラウザ名・バージョン・OSを添えて問い合わせください。
+        </div>
+      </div>
+      <div class="faq">
+        <div class="faq-head" onclick="toggleFaq(this)">
+          <span class="faq-tag bug">バグ</span>
+          <span class="faq-q">スマートフォンで表示が崩れる</span>
+          <span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">
+          SchoolParkはスマートフォン対応を進めています。<br>
+          一部の画面でレイアウトが崩れる場合があります。<br>
+          <br>
+          症状が強い場合は：<br>
+          • 機種名・OSバージョン<br>
+          • 崩れている画面名<br>
+          • スクリーンショット<br>
+          を添えて問い合わせフォームからご連絡ください。
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── 問い合わせタブ ── -->
+  <div class="panel" id="tab-contact">
+
+    <div class="alert yellow">
+      <div class="alert-icon">📌</div>
+      <div>
+        <div class="alert-title">まずFAQをご確認ください</div>
+        <div class="alert-body">よくある問題はFAQで解決できます。問い合わせは「FAQ」タブを確認してもわからない場合にお使いください。</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">📝 問い合わせフォーム</div>
+      <div class="form-group">
+        <label class="form-label">カテゴリ</label>
+        <select class="form-select" id="contactCategory">
+          <option value="wallet">💸 ウォレット・NFT</option>
+          <option value="token">🪙 EMUERトークン</option>
+          <option value="post">📝 投稿・コンテンツ</option>
+          <option value="login">🔐 ログイン・アカウント</option>
+          <option value="display">🖥️ 表示・動作バグ</option>
+          <option value="request">💡 機能要望</option>
+          <option value="other">❓ その他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">問い合わせ内容</label>
+        <textarea class="form-textarea" id="contactBody" placeholder="できる限り詳しく記載してください。&#10;例：操作手順・エラーメッセージ・ウォレットアドレス・TX hash など"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">優先度</label>
+        <select class="form-select" id="contactPriority">
+          <option value="low">🟢 低（いつでも）</option>
+          <option value="medium" selected>🟡 中（数日以内）</option>
+          <option value="high">🔴 高（急ぎ）</option>
+        </select>
+      </div>
+      <button class="submit-btn" id="contactSubmitBtn" onclick="submitContact()">📨 問い合わせを送信</button>
+    </div>
+
+  </div>
+
+  <!-- ── 解決事例タブ ── -->
+  <div class="panel" id="tab-cases">
+
+    <div class="alert green">
+      <div class="alert-icon">📋</div>
+      <div>
+        <div class="alert-title">解決事例を参考にしてください</div>
+        <div class="alert-body">過去に寄せられた問い合わせと解決策を公開しています。同じ問題を抱えている方の参考になれば幸いです。</div>
+      </div>
+    </div>
+
+    <div id="caseList"><div class="empty">読み込み中...</div></div>
+
+  </div>
+
+  <!-- ── 管理タブ ── -->
+  <div class="panel" id="tab-admin">
+    <div class="owner-section">
+      <div class="owner-title">⚙️ 管理者専用パネル</div>
+      <div class="form-group">
+        <label class="form-label">お知らせタイトル</label>
+        <input class="form-input" id="noticeTitle" placeholder="お知らせのタイトル">
+      </div>
+      <div class="form-group">
+        <label class="form-label">本文</label>
+        <textarea class="form-textarea" id="noticeBody" placeholder="お知らせ内容..."></textarea>
+      </div>
+      <button class="submit-btn" onclick="postNotice()">📢 お知らせを投稿</button>
+
+      <div style="margin-top:20px">
+        <div class="owner-title">📋 受信した問い合わせ</div>
+        <div id="adminContactList"><div class="empty">読み込み中...</div></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Config ──
+const OWNER_UID    = "txCTc9kWVaXMhHIJCE5n3tNkxql1";
+const OWNER_WALLET = "0x822f5fd877d53acbdb1e7e7d38b89c6a3dcb2e06";
+
+// ── URL Params ──
+const params = new URLSearchParams(location.search);
+const walletParam = params.get("wallet") || "";
+
+// ── Firebase ──
+let db = null;
+function getDb() {
+  if (db) return db;
+  if (window.top && window.top.db) { db = window.top.db; return db; }
+  if (window.parent && window.parent.db) { db = window.parent.db; return db; }
+  return null;
+}
+function getFbLib() {
+  if (window.top && window.top.fbLib) return window.top.fbLib;
+  if (window.parent && window.parent.fbLib) return window.parent.fbLib;
+  return null;
+}
+function isOwner() {
+  const uid = (window.top && window.top.currentUserUid) || (window.parent && window.parent.currentUserUid) || "";
+  const wallet = (window.top && window.top.connectedAccount) || (window.parent && window.parent.connectedAccount) || walletParam || "";
+  return uid === OWNER_UID || wallet.toLowerCase() === OWNER_WALLET.toLowerCase();
+}
+
+// ── Clock ──
+function updateClock(){
+  const now=new Date();
+  document.getElementById("clock").textContent=
+    now.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
+}
+updateClock();setInterval(updateClock,30000);
+
+// ── Tabs ──
+function switchTab(id,btn){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.getElementById("tab-"+id).classList.add("active");
+  btn.classList.add("active");
+  if(id==="cases") loadCases();
+  if(id==="admin"){ loadAdminContacts(); }
+  if(id==="reception") loadReceptionNotices();
+}
+
+// ── FAQ Toggle ──
+function toggleFaq(head){
+  head.closest(".faq").classList.toggle("open");
+}
+
+// ── Toast ──
+function showToast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg;t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),3000);
+}
+
+// ── Symptom Checker ──
+const DIAGNOSES = {
+  wallet:{
+    title:"💸 ウォレット・NFTの診断結果",
+    steps:[
+      "まずMetaMaskが最新版か確認し、ページをリロードして再接続してください。",
+      "ブラウザのキャッシュをクリアしてから試してください（Ctrl+Shift+Delete）。",
+      "NFTが見えない場合はPolygonscanでTX確定を確認し、MetaMaskで手動インポートを試してください。",
+      "上記で解決しない場合は「問い合わせ」タブからウォレットアドレスとTX hashを添えてご連絡ください。"
+    ]
+  },
+  post:{
+    title:"📝 投稿・コンテンツの診断結果",
+    steps:[
+      "ウォレットが接続されているか確認してください。未接続だと投稿できません。",
+      "ページをリロードしてから再投稿を試みてください。",
+      "画像を添付している場合は5MB以下に圧縮してみてください。",
+      "問題が続く場合は「問い合わせ」から投稿時のエラーメッセージを添えてご連絡ください。"
+    ]
+  },
+  login:{
+    title:"🔐 ログイン・アカウントの診断結果",
+    steps:[
+      "ブラウザのポップアップブロックを無効にしてから再度ログインを試みてください。",
+      "シークレット・プライベートモードは使わず、通常ウィンドウで試してください。",
+      "別のGoogleアカウントでログインできるか確認してください。",
+      "解決しない場合は「問い合わせ」から使用ブラウザ・OSをお知らせください。"
+    ]
+  },
+  display:{
+    title:"🖥️ 表示・動作の診断結果",
+    steps:[
+      "強制リロード（Ctrl+Shift+R）を試してください。",
+      "ブラウザのキャッシュを完全にクリアしてください。",
+      "ブラウザ拡張機能を全て無効にして確認してください。",
+      "別のブラウザ（Chrome・Firefox）で試してください。まだ問題があれば「問い合わせ」からブラウザ名・OS・スクリーンショットを添えて連絡ください。"
+    ]
+  },
+  token:{
+    title:"🪙 EMUERトークンの診断結果",
+    steps:[
+      "Polygonscanでトランザクションが確定しているか確認してください。",
+      "MetaMaskで「トークンをインポート」からコントラクトアドレスを手動追加してください。",
+      "取引から24時間以上経過しても届かない場合は「問い合わせ」からTX hashを添えてご連絡ください。"
+    ]
+  },
+  other:{
+    title:"❓ その他の問題",
+    steps:[
+      "まず「FAQ」タブで似た症例がないか確認してください。",
+      "「解決事例」タブで過去の事例も参考になるかもしれません。",
+      "それでも解決しない場合は「問い合わせ」タブからできる限り詳しく状況を記載してご連絡ください。"
+    ]
+  }
+};
+function showDiagnosis(type){
+  const d=DIAGNOSES[type];
+  const el=document.getElementById("diagnosis");
+  el.classList.add("show");
+  el.innerHTML=`<div class="diag-title">${d.title}</div>
+    <div class="diag-body">以下の順番でお試しください：</div>
+    ${d.steps.map((s,i)=>`<div class="diag-step">STEP ${i+1}. ${s}</div>`).join("")}
+    <button class="submit-btn" style="margin-top:12px" onclick="document.querySelector('[onclick*=contact]').click()">
+      📝 それでも解決しない場合は問い合わせる
+    </button>`;
+  el.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+// ── Submit Contact ──
+async function submitContact(){
+  const db=getDb(); const fbLib=getFbLib();
+  if(!db||!fbLib){showToast("❌ DB接続エラー");return;}
+  const category=document.getElementById("contactCategory").value;
+  const body=document.getElementById("contactBody").value.trim();
+  const priority=document.getElementById("contactPriority").value;
+  if(!body){showToast("⚠️ 問い合わせ内容を入力してください");return;}
+  const btn=document.getElementById("contactSubmitBtn");
+  btn.disabled=true;btn.textContent="送信中...";
+  try{
+    const wallet=(window.top&&window.top.connectedAccount)||walletParam||"匿名";
+    await fbLib.addDoc(fbLib.collection(db,"sp_hospital_contacts"),{
+      category, body, priority, wallet,
+      status:"pending",
+      createdAt:fbLib.serverTimestamp()
+    });
+    document.getElementById("contactBody").value="";
+    showToast("📨 問い合わせを送信しました");
+    loadStats();
+  }catch(e){showToast("❌ 送信失敗: "+e.message);}
+  btn.disabled=false;btn.textContent="📨 問い合わせを送信";
+}
+
+// ── Load Cases ──
+async function loadCases(){
+  const db=getDb(); const fbLib=getFbLib();
+  const el=document.getElementById("caseList");
+  if(!db||!fbLib){el.innerHTML='<div class="empty">DB未接続</div>';return;}
+  try{
+    const q=fbLib.query(
+      fbLib.collection(db,"sp_hospital_contacts"),
+      fbLib.where("status","==","resolved"),
+      fbLib.where("public","==",true),
+      fbLib.orderBy("createdAt","desc"),
+      fbLib.limit(20)
+    );
+    const snap=await fbLib.getDocs(q);
+    if(snap.empty){
+      el.innerHTML='<div class="empty">解決事例はまだありません</div>';
+      return;
+    }
+    const catLabel={wallet:"💸 ウォレット",token:"🪙 トークン",post:"📝 投稿",login:"🔐 アカウント",display:"🖥️ 表示",request:"💡 要望",other:"❓ その他"};
+    const catColor={wallet:"#fef3c7",token:"#dbeafe",post:"#f0fdf4",login:"#d1fae5",display:"#fee2e2",request:"#f3e8ff",other:"#f1f5f9"};
+    const catTextColor={wallet:"#92400e",token:"#1d4ed8",post:"#166534",login:"#065f46",display:"#991b1b",request:"#6b21a8",other:"#475569"};
+    el.innerHTML=snap.docs.map(d=>{
+      const c=d.data();
+      const dt=c.createdAt?.toDate?c.createdAt.toDate().toLocaleDateString("ja-JP"):"";
+      return `<div class="case-card">
+        <div class="case-meta">
+          <span class="case-tag" style="background:${catColor[c.category]||"#f1f5f9"};color:${catTextColor[c.category]||"#475569"}">${catLabel[c.category]||c.category}</span>
+          <span class="case-date">${dt}</span>
+        </div>
+        <div class="case-body">${(c.body||"").substring(0,200).replace(/\n/g,"<br>")}${c.body?.length>200?"...":""}</div>
+        ${c.resolution?`<div style="margin-top:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;font-size:0.72rem;color:#166534"><strong>✅ 解決策：</strong>${c.resolution.replace(/\n/g,"<br>")}</div>`:""}
+        <span class="case-solved">✅ 解決済み</span>
+      </div>`;
+    }).join("");
+  }catch(e){el.innerHTML=`<div class="empty">読み込みエラー: ${e.message}</div>`;}
+}
+
+// ── Load Reception Notices ──
+async function loadReceptionNotices(){
+  const db=getDb(); const fbLib=getFbLib();
+  const el=document.getElementById("receptionNotices");
+  if(!db||!fbLib){el.innerHTML='<div class="empty">—</div>';return;}
+  try{
+    const q=fbLib.query(fbLib.collection(db,"sp_hospital_notices"),fbLib.orderBy("createdAt","desc"),fbLib.limit(3));
+    const snap=await fbLib.getDocs(q);
+    if(snap.empty){el.innerHTML='<div class="empty">お知らせはありません</div>';return;}
+    el.innerHTML=snap.docs.map(d=>{
+      const n=d.data();
+      const dt=n.createdAt?.toDate?n.createdAt.toDate().toLocaleDateString("ja-JP"):"";
+      return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="font-size:0.78rem;font-weight:700;color:var(--text)">${n.title||""}</div>
+          <div style="font-size:0.65rem;color:var(--text2)">${dt}</div>
+        </div>
+        <div style="font-size:0.72rem;color:var(--text2);line-height:1.6">${(n.body||"").replace(/\n/g,"<br>")}</div>
+      </div>`;
+    }).join("");
+  }catch(e){el.innerHTML='<div class="empty">—</div>';}
+}
+
+// ── Post Notice (Admin) ──
+async function postNotice(){
+  const db=getDb(); const fbLib=getFbLib();
+  if(!db||!fbLib||!isOwner()){showToast("❌ 権限エラー");return;}
+  const title=document.getElementById("noticeTitle").value.trim();
+  const body=document.getElementById("noticeBody").value.trim();
+  if(!title||!body){showToast("⚠️ タイトルと本文を入力してください");return;}
+  try{
+    await fbLib.addDoc(fbLib.collection(db,"sp_hospital_notices"),{
+      title, body, createdAt:fbLib.serverTimestamp()
+    });
+    document.getElementById("noticeTitle").value="";
+    document.getElementById("noticeBody").value="";
+    showToast("📢 お知らせを投稿しました");
+  }catch(e){showToast("❌ 投稿失敗: "+e.message);}
+}
+
+// ── Admin: Load Contacts ──
+async function loadAdminContacts(){
+  const db=getDb(); const fbLib=getFbLib();
+  const el=document.getElementById("adminContactList");
+  if(!db||!fbLib||!isOwner()){el.innerHTML='<div class="empty">権限なし</div>';return;}
+  try{
+    const q=fbLib.query(fbLib.collection(db,"sp_hospital_contacts"),fbLib.orderBy("createdAt","desc"),fbLib.limit(30));
+    const snap=await fbLib.getDocs(q);
+    if(snap.empty){el.innerHTML='<div class="empty">問い合わせはありません</div>';return;}
+    const priorityColor={low:"#22c55e",medium:"#f59e0b",high:"#ef4444"};
+    el.innerHTML=snap.docs.map(d=>{
+      const r=d.data();
+      const dt=r.createdAt?.toDate?r.createdAt.toDate().toLocaleDateString("ja-JP"):"";
+      return `<div class="report-item">
+        <div class="report-meta">
+          <span class="report-type">${r.category||""}</span>
+          <span class="report-status ${r.status==='resolved'?'resolved':'pending'}">${r.status==='resolved'?'✅解決済':'⏳対応中'}</span>
+          <span style="color:${priorityColor[r.priority]||'#888'};font-size:0.65rem;font-weight:700">${{low:"🟢低",medium:"🟡中",high:"🔴高"}[r.priority]||""}</span>
+          <span class="report-date">${dt}</span>
+        </div>
+        <div class="report-body">${(r.body||"").replace(/\n/g,"<br>")}</div>
+        <div style="font-size:0.68rem;color:var(--text2);margin-top:4px">👤 ${r.wallet||"匿名"}</div>
+        ${r.status!=='resolved'?`
+        <div class="report-actions" style="flex-wrap:wrap;gap:6px">
+          <button class="btn-sm btn-ok" onclick="resolveContact('${d.id}',false)">✅ 解決済</button>
+          <button class="btn-sm btn-ok" onclick="resolveContact('${d.id}',true)" style="background:#0ea5e9;color:#fff">✅ 解決済＋事例公開</button>
+        </div>` : ""}
+      </div>`;
+    }).join("");
+  }catch(e){el.innerHTML=`<div class="empty">エラー: ${e.message}</div>`;}
+}
+
+// ── Resolve Contact ──
+async function resolveContact(id, makePublic){
+  const db=getDb(); const fbLib=getFbLib();
+  if(!db||!fbLib||!isOwner()) return;
+  try{
+    const data={status:"resolved"};
+    if(makePublic) data.public=true;
+    await fbLib.updateDoc(fbLib.doc(db,"sp_hospital_contacts",id),data);
+    showToast(makePublic?"✅ 解決済＋事例公開しました":"✅ 解決済にしました");
+    loadAdminContacts();
+    loadStats();
+  }catch(e){showToast("❌ 失敗: "+e.message);}
+}
+
+// ── Stats ──
+async function loadStats(){
+  const db=getDb(); const fbLib=getFbLib();
+  if(!db||!fbLib) return;
+  try{
+    const [resolved,pending]=await Promise.all([
+      fbLib.getDocs(fbLib.query(fbLib.collection(db,"sp_hospital_contacts"),fbLib.where("status","==","resolved"))),
+      fbLib.getDocs(fbLib.query(fbLib.collection(db,"sp_hospital_contacts"),fbLib.where("status","==","pending")))
+    ]);
+    document.getElementById("statCases").textContent=resolved.size;
+    document.getElementById("statPending").textContent=pending.size;
+  }catch(e){}
+}
+
+// ── Init ──
+window.addEventListener("DOMContentLoaded",()=>{
+  if(isOwner()) document.getElementById("adminTab").style.display="";
+  loadReceptionNotices();
+  loadStats();
+});
+
+// ── Back ──
+function goBack(){
+  window.top.postMessage({type:"spContentClose"},"*");
+}
+</script>
+</body>
+</html>
