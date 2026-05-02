@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>East Mall | SchoolPark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Noto+Serif+JP:wght@300;400;500;700&family=Zen+Maru+Gothic:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════
+   DESIGN TOKENS
+═══════════════════════════════════════ */
+:root {
+  /* Palette */
+  --cream:       #faf7f4;
+  --cream2:      #f5f0ea;
+  --cream3:      #ede6dd;
+  --white:       #ffffff;
+  --text:        #2d2520;
+  --text2:       #8a7f78;
+  --text3:       #c4b8b0;
+  --border:      rgba(180,160,145,0.2);
+  --border2:     rgba(180,160,145,0.12);
+  --card:        rgba(255,255,255,0.72);
+
+  /* Accents */
+  --rose:        #e8a4b0;
+  --rose2:       #d4788a;
+  --rose3:       #c05570;
+  --gold:        #c9a96e;
+  --gold2:       #b8924d;
+  --blush:       #f9eef0;
+  --sale:        #d4485a;
+  --new:         #6b9e8a;
+  --glow-rose:   rgba(232,164,176,0.22);
+
+  /* Layout */
+  --radius:      16px;
+  --radius-sm:   10px;
+  --header-h:    56px;
+
+  /* Typography */
+  --font-serif:  'Cormorant Garamond', 'Noto Serif JP', serif;
+  --font-sans:   'Zen Maru Gothic', sans-serif;
+  --font-jp:     'Noto Serif JP', serif;
+}
+
+/* ═══════════════════════════════════════
+   BASE
+═══════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-jp);
+  background: var(--cream);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font-family: inherit; cursor: pointer; border: none; outline: none; background: none; }
+input, textarea, select { font-family: inherit; outline: none; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--cream2); }
+::-webkit-scrollbar-thumb { background: var(--rose); border-radius: 2px; }
+
+#app {
+  max-width: 720px;
+  margin: 0 auto;
+  min-height: 100vh;
+  position: relative;
+  background: var(--cream);
+}
+
+/* ═══════════════════════════════════════
+   HEADER
+═══════════════════════════════════════ */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--header-h);
+  background: rgba(250,247,244,0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 14px;
+}
+
+.header-back {
+  color: var(--text2);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  letter-spacing: 0.06em;
+  padding: 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+.header-back:hover { color: var(--rose3); }
+.header-back::before {
+  content: '←';
+  font-size: 14px;
+}
+
+.header-title {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--text);
+  font-style: italic;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.cart-btn {
+  position: relative;
+  font-size: 20px;
+  padding: 4px;
+  color: var(--text);
+  transition: transform 0.2s;
+  line-height: 1;
+}
+.cart-btn.bounce {
+  animation: cartBounce 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+@keyframes cartBounce {
+  0%,100% { transform: scale(1) rotate(0deg); }
+  20% { transform: scale(1.35) rotate(-12deg); }
+  50% { transform: scale(0.92) rotate(6deg); }
+  75% { transform: scale(1.08); }
+}
+
+.cart-badge {
+  position: absolute;
+  top: -3px; right: -6px;
+  background: var(--rose3);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 15px; height: 15px;
+  border-radius: 8px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  font-family: var(--font-sans);
+}
+.cart-badge.visible { display: flex; }
+
+.header-clock {
+  font-size: 11px;
+  color: var(--text3);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+}
+
+/* ═══════════════════════════════════════
+   HERO
+═══════════════════════════════════════ */
+.hero {
+  height: 200px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(150deg, #f9eef0 0%, #faf7f4 35%, #f5f0ea 65%, #fce8ec 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* Soft radial bloom */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 55% 70% at 30% 40%, rgba(232,164,176,0.28) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 50% at 75% 60%, rgba(201,169,110,0.14) 0%, transparent 60%);
+}
+
+/* Shimmer beam */
+.hero-beam {
+  position: absolute;
+  top: 0; left: -50%;
+  width: 25%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,255,255,0.0) 30%,
+    rgba(255,255,255,0.55) 50%,
+    rgba(255,255,255,0.0) 70%,
+    transparent 100%
+  );
+  animation: heroShimmer 4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes heroShimmer {
+  0%   { left: -50%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { left: 130%; opacity: 0; }
+}
+
+/* Floating petal particles */
+.hero-petal {
+  position: absolute;
+  font-size: 12px;
+  opacity: 0;
+  animation: petalFall linear infinite;
+  pointer-events: none;
+  user-select: none;
+}
+@keyframes petalFall {
+  0%   { opacity: 0; transform: translateY(-10px) rotate(0deg); }
+  10%  { opacity: 0.6; }
+  90%  { opacity: 0.3; }
+  100% { opacity: 0; transform: translateY(220px) rotate(360deg); }
+}
+
+.hero-eyebrow {
+  position: relative;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  color: var(--rose2);
+  text-transform: uppercase;
+}
+
+.hero-title {
+  position: relative;
+  font-family: var(--font-serif);
+  font-size: 42px;
+  font-weight: 300;
+  letter-spacing: 0.18em;
+  color: var(--text);
+  font-style: italic;
+  line-height: 1;
+}
+.hero-title span {
+  color: var(--rose2);
+}
+
+.hero-divider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 120px;
+}
+.hero-divider::before,
+.hero-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rose);
+  opacity: 0.5;
+}
+.hero-divider-dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--rose2);
+}
+
+.hero-sale-pill {
+  position: relative;
+  background: var(--rose3);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  padding: 6px 20px;
+  border-radius: 20px;
+  animation: salePulse 2.2s ease-in-out infinite;
+}
+@keyframes salePulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(0.98); }
+}
+
+/* ═══════════════════════════════════════
+   TABS
+═══════════════════════════════════════ */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: rgba(250,247,244,0.95);
+  position: sticky;
+  top: var(--header-h);
+  z-index: 90;
+  backdrop-filter: blur(12px);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 14px 4px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text2);
+  letter-spacing: 0.08em;
+  border-bottom: 1.5px solid transparent;
+  transition: color 0.25s, border-color 0.25s;
+  position: relative;
+}
+.tab-btn:hover { color: var(--rose3); }
+.tab-btn.active {
+  color: var(--rose3);
+  border-bottom-color: var(--rose3);
+}
+
+/* ═══════════════════════════════════════
+   TAB PANELS
+═══════════════════════════════════════ */
+.tab-panel { display: none; padding: 24px 18px 120px; }
+.tab-panel.active { display: block; animation: panelFadeIn 0.35s ease; }
+@keyframes panelFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════
+   CATEGORY FILTER
+═══════════════════════════════════════ */
+.category-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+  scrollbar-width: none;
+}
+.category-scroll::-webkit-scrollbar { display: none; }
+
+.cat-btn {
+  flex-shrink: 0;
+  padding: 7px 18px;
+  border-radius: 20px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  background: var(--white);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  transition: all 0.22s;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.cat-btn:hover { border-color: var(--rose); color: var(--rose3); }
+.cat-btn.active {
+  background: var(--rose3);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(192,85,112,0.22);
+}
+
+/* ═══════════════════════════════════════
+   SHOP GRID
+═══════════════════════════════════════ */
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.shop-card {
+  background: var(--white);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 20px 16px 16px;
+  cursor: pointer;
+  transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.28s ease, border-color 0.28s;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.shop-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, var(--glow-rose) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.shop-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 36px rgba(192,85,112,0.13), 0 2px 8px rgba(0,0,0,0.06);
+  border-color: rgba(232,164,176,0.5);
+}
+.shop-card:hover::after { opacity: 1; }
+
+.shop-emoji {
+  font-size: 38px;
+  display: block;
+  margin-bottom: 12px;
+  transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1);
+}
+.shop-card:hover .shop-emoji { transform: scale(1.1); }
+
+.shop-badge {
+  position: absolute;
+  top: 12px; right: 12px;
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  border-radius: 8px;
+  text-transform: uppercase;
+}
+.badge-new { background: #e8f5f0; color: var(--new); border: 1px solid rgba(107,158,138,0.25); }
+.badge-sale {
+  background: #fdf0f0;
+  color: var(--sale);
+  border: 1px solid rgba(212,72,90,0.2);
+  animation: salePulse 2s ease-in-out infinite;
+}
+.badge-hot { background: #fdf6e8; color: var(--gold2); border: 1px solid rgba(201,169,110,0.25); }
+
+.shop-name {
+  font-family: var(--font-jp);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.3;
+  color: var(--text);
+}
+.shop-category {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--rose2);
+  margin-bottom: 6px;
+  letter-spacing: 0.08em;
+}
+.shop-desc {
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+.shop-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text3);
+}
+.shop-rating { color: var(--gold); font-weight: 500; letter-spacing: 0.04em; }
+
+/* ═══════════════════════════════════════
+   SECTION TITLE
+═══════════════════════════════════════ */
+.section-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 18px;
+}
+.section-title-en {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--text);
+  letter-spacing: 0.1em;
+}
+.section-title-jp {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  color: var(--text2);
+  text-transform: uppercase;
+}
+
+/* ═══════════════════════════════════════
+   MODAL
+═══════════════════════════════════════ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(45,37,32,0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.modal {
+  background: var(--cream);
+  border-radius: 24px 24px 0 0;
+  width: 100%;
+  max-width: 720px;
+  max-height: 82vh;
+  overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+  padding-bottom: 50px;
+  box-shadow: 0 -8px 40px rgba(0,0,0,0.1);
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+
+.modal-handle {
+  display: flex;
+  justify-content: center;
+  padding: 14px 0 6px;
+}
+.modal-handle-bar {
+  width: 36px; height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.modal-header {
+  padding: 4px 22px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid var(--border2);
+}
+.modal-shop-emoji { font-size: 32px; }
+.modal-shop-info { flex: 1; }
+.modal-shop-name {
+  font-family: var(--font-jp);
+  font-size: 18px;
+  font-weight: 500;
+  margin-bottom: 3px;
+}
+.modal-shop-meta {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text2);
+  letter-spacing: 0.04em;
+}
+.modal-close {
+  width: 32px; height: 32px;
+  background: var(--cream2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: 50%;
+  font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.modal-close:hover { background: var(--rose3); color: #fff; border-color: transparent; }
+
+.modal-products {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.product-card {
+  background: var(--white);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  padding: 18px 14px 14px;
+  text-align: center;
+  transition: transform 0.24s ease, box-shadow 0.24s ease;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.product-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(192,85,112,0.1);
+}
+
+.product-emoji {
+  font-size: 44px;
+  display: block;
+  margin-bottom: 10px;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+.product-card:hover .product-emoji { transform: scale(1.1); }
+.product-name {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+.product-desc {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--text2);
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+.product-price {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--rose3);
+  margin-bottom: 12px;
+  letter-spacing: 0.04em;
+}
+.product-price span {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--text2);
+  letter-spacing: 0.08em;
+}
+
+.add-cart-btn {
+  width: 100%;
+  padding: 9px;
+  background: var(--rose3);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  transition: opacity 0.2s, transform 0.15s;
+  box-shadow: 0 2px 8px rgba(192,85,112,0.2);
+}
+.add-cart-btn:hover { opacity: 0.88; }
+.add-cart-btn:active { transform: scale(0.97); }
+
+/* ═══════════════════════════════════════
+   TAB② NEW & SALE
+═══════════════════════════════════════ */
+.carousel-wrap {
+  overflow-x: auto;
+  margin: 0 -18px;
+  padding: 4px 18px 18px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.carousel-wrap::-webkit-scrollbar { display: none; }
+
+.carousel { display: flex; gap: 12px; width: max-content; }
+
+.carousel-card {
+  width: 148px;
+  background: var(--white);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  padding: 16px 14px;
+  text-align: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.carousel-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(192,85,112,0.12);
+}
+.carousel-card-emoji { font-size: 38px; display: block; margin-bottom: 8px; }
+.carousel-card-name {
+  font-size: 12px; font-weight: 500;
+  margin-bottom: 5px; line-height: 1.4;
+}
+.carousel-card-shop {
+  font-family: var(--font-sans);
+  font-size: 10px; color: var(--text2); margin-bottom: 6px;
+}
+.carousel-card-price {
+  font-family: var(--font-serif);
+  font-size: 15px; color: var(--rose3); margin-bottom: 6px;
+}
+.carousel-card-badge {
+  display: inline-block;
+  background: #e8f5f0; color: var(--new);
+  font-family: var(--font-sans);
+  font-size: 9px; font-weight: 500;
+  padding: 2px 8px; border-radius: 8px;
+  letter-spacing: 0.1em; margin-bottom: 8px;
+  border: 1px solid rgba(107,158,138,0.2);
+}
+.carousel-card-add {
+  width: 100%; padding: 7px;
+  background: var(--rose3); color: #fff;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 10px; font-weight: 500; letter-spacing: 0.06em;
+  transition: opacity 0.2s;
+}
+.carousel-card-add:hover { opacity: 0.88; }
+
+/* Countdown */
+.sale-section { margin-top: 36px; }
+
+.countdown-bar {
+  background: var(--white);
+  border: 1px solid rgba(212,72,90,0.15);
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.countdown-label {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text2);
+  letter-spacing: 0.06em;
+}
+.countdown-timer {
+  font-family: var(--font-serif);
+  font-size: 22px; font-weight: 400;
+  color: var(--sale);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+}
+
+.sale-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.sale-card {
+  background: var(--white);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 20px 14px 14px;
+  text-align: center;
+  transition: transform 0.25s ease, box-shadow 0.25s;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.sale-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(212,72,90,0.04) 0%, transparent 40%);
+}
+.sale-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(212,72,90,0.1); }
+
+.sale-off-tag {
+  position: absolute;
+  top: 12px; left: 12px;
+  background: var(--sale);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 10px; font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.06em;
+}
+.sale-card-emoji { font-size: 40px; display: block; margin: 8px 0 10px; }
+.sale-card-name { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+.sale-card-shop {
+  font-family: var(--font-sans);
+  font-size: 10px; color: var(--text2); margin-bottom: 8px;
+}
+.sale-price-original {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text3);
+  text-decoration: line-through; margin-bottom: 2px;
+}
+.sale-price-current {
+  font-family: var(--font-serif);
+  font-size: 20px; font-weight: 400; color: var(--sale);
+  margin-bottom: 12px; letter-spacing: 0.04em;
+}
+.sale-add-btn {
+  width: 100%; padding: 9px;
+  background: var(--sale); color: #fff;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 11px; font-weight: 500; letter-spacing: 0.06em;
+  transition: opacity 0.2s;
+}
+.sale-add-btn:hover { opacity: 0.88; }
+
+/* ═══════════════════════════════════════
+   TAB③ MY BAG
+═══════════════════════════════════════ */
+.empty-bag {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 70px 20px 40px;
+  gap: 14px;
+  text-align: center;
+}
+.empty-bag-icon {
+  font-size: 64px;
+  animation: floatBag 3.5s ease-in-out infinite;
+}
+@keyframes floatBag {
+  0%,100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-12px) rotate(4deg); }
+}
+.empty-bag-text {
+  font-family: var(--font-serif);
+  font-size: 20px; font-weight: 300; font-style: italic;
+  color: var(--text2);
+}
+.empty-bag-sub {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text3);
+  line-height: 1.8; letter-spacing: 0.06em;
+}
+
+.cart-list { display: flex; flex-direction: column; gap: 10px; }
+
+.cart-item {
+  background: var(--white);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: box-shadow 0.22s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  animation: cartItemIn 0.3s ease;
+}
+@keyframes cartItemIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.cart-item:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
+
+.cart-item-emoji { font-size: 32px; flex-shrink: 0; }
+.cart-item-info { flex: 1; min-width: 0; }
+.cart-item-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+.cart-item-shop {
+  font-family: var(--font-sans);
+  font-size: 10px; color: var(--text2); margin-bottom: 4px; letter-spacing: 0.04em;
+}
+.cart-item-price {
+  font-family: var(--font-serif);
+  font-size: 15px; color: var(--rose3);
+}
+
+.cart-item-qty {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+.qty-btn {
+  width: 28px; height: 28px;
+  background: var(--cream2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.17s;
+}
+.qty-btn:hover { background: var(--rose3); color: #fff; border-color: transparent; }
+.qty-val {
+  font-family: var(--font-serif);
+  font-size: 16px; min-width: 20px; text-align: center;
+}
+
+.cart-item-del {
+  color: var(--text3);
+  font-size: 17px;
+  padding: 4px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+.cart-item-del:hover { color: var(--sale); }
+
+/* Cart Footer */
+.cart-footer {
+  position: fixed;
+  bottom: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 100%; max-width: 720px;
+  background: rgba(250,247,244,0.97);
+  backdrop-filter: blur(18px);
+  border-top: 1px solid var(--border);
+  padding: 16px 20px;
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 80;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.06);
+}
+.cart-footer.visible { display: flex; }
+
+.cart-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.cart-total-label {
+  font-family: var(--font-sans);
+  font-size: 12px; color: var(--text2); letter-spacing: 0.06em;
+}
+.cart-total-amount {
+  font-family: var(--font-serif);
+  font-size: 24px; font-weight: 400; color: var(--rose3);
+}
+.cart-total-amount span {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text2); letter-spacing: 0.08em;
+}
+
+.buy-btn {
+  width: 100%;
+  padding: 15px;
+  background: var(--rose3);
+  color: #fff;
+  border-radius: 14px;
+  font-family: var(--font-jp);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  box-shadow: 0 4px 18px rgba(192,85,112,0.28);
+  transition: opacity 0.2s, transform 0.15s;
+}
+.buy-btn:hover { opacity: 0.9; }
+.buy-btn:active { transform: scale(0.99); }
+
+/* ═══════════════════════════════════════
+   TAB④ OWNER
+═══════════════════════════════════════ */
+.owner-section {
+  background: var(--white);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.owner-section-title {
+  font-family: var(--font-serif);
+  font-size: 16px; font-weight: 400; font-style: italic;
+  color: var(--rose3);
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+  letter-spacing: 0.06em;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 12px; margin-bottom: 20px;
+}
+.stat-box {
+  background: var(--cream2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  text-align: center;
+}
+.stat-num {
+  font-family: var(--font-serif);
+  font-size: 24px; font-weight: 400;
+  color: var(--rose3);
+  letter-spacing: 0.04em;
+}
+.stat-label {
+  font-family: var(--font-sans);
+  font-size: 10px; color: var(--text2);
+  margin-top: 3px; letter-spacing: 0.08em;
+}
+
+.form-group { margin-bottom: 14px; }
+.form-label {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text2);
+  margin-bottom: 6px; display: block;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.form-input {
+  width: 100%;
+  background: var(--cream2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 10px 14px;
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.form-input:focus {
+  border-color: var(--rose);
+  box-shadow: 0 0 0 3px rgba(232,164,176,0.15);
+}
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.form-submit {
+  width: 100%;
+  padding: 12px;
+  background: var(--rose3);
+  color: #fff;
+  border-radius: 10px;
+  font-family: var(--font-jp);
+  font-size: 14px; font-weight: 500;
+  letter-spacing: 0.06em;
+  margin-top: 4px;
+  transition: opacity 0.2s;
+}
+.form-submit:hover { opacity: 0.88; }
+
+.owner-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 70px 20px;
+  gap: 14px;
+  text-align: center;
+}
+.owner-gate-icon { font-size: 52px; }
+.owner-gate-text {
+  font-family: var(--font-serif);
+  font-size: 20px; font-style: italic; color: var(--text2);
+}
+.owner-gate-sub {
+  font-family: var(--font-sans);
+  font-size: 12px; color: var(--text3); line-height: 1.8;
+}
+
+.shop-manage-list { display: flex; flex-direction: column; gap: 10px; }
+.shop-manage-item {
+  background: var(--cream2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex; align-items: center; gap: 10px;
+}
+.shop-manage-emoji { font-size: 22px; }
+.shop-manage-info { flex: 1; }
+.shop-manage-name { font-size: 14px; font-weight: 500; }
+.shop-manage-cat {
+  font-family: var(--font-sans);
+  font-size: 10px; color: var(--text2);
+}
+.shop-manage-actions { display: flex; gap: 6px; }
+.edit-btn {
+  background: var(--blush);
+  border: 1px solid rgba(232,164,176,0.35);
+  color: var(--rose3);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-family: var(--font-sans);
+  font-size: 11px; font-weight: 500;
+  transition: all 0.2s;
+}
+.edit-btn:hover { background: var(--rose3); color: #fff; }
+.delete-btn {
+  background: rgba(212,72,90,0.07);
+  border: 1px solid rgba(212,72,90,0.2);
+  color: var(--sale);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-family: var(--font-sans);
+  font-size: 11px; font-weight: 500;
+  transition: all 0.2s;
+}
+.delete-btn:hover { background: var(--sale); color: #fff; }
+
+/* ═══════════════════════════════════════
+   TOAST
+═══════════════════════════════════════ */
+#toast-container {
+  position: fixed;
+  bottom: 90px; right: 16px;
+  z-index: 500;
+  display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  display: flex; align-items: center; gap: 8px;
+  animation: toastIn 0.32s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events: all;
+  max-width: 260px;
+  color: var(--text);
+  letter-spacing: 0.04em;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px) scale(0.9); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+.toast.out {
+  animation: toastOut 0.25s ease forwards;
+}
+@keyframes toastOut {
+  to { opacity: 0; transform: translateX(20px) scale(0.9); }
+}
+.toast.success { border-left: 3px solid var(--new); }
+.toast.error   { border-left: 3px solid var(--sale); }
+.toast.info    { border-left: 3px solid var(--rose); }
+
+/* ═══════════════════════════════════════
+   CONFETTI (Petal)
+═══════════════════════════════════════ */
+#confetti-canvas {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 999;
+  display: none;
+}
+
+/* ═══════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════ */
+@media (max-width: 480px) {
+  .shop-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .hero-title { font-size: 34px; }
+  .stats-row { grid-template-columns: 1fr 1fr; }
+  .form-row { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="confetti-canvas"></canvas>
+<div id="toast-container"></div>
+
+<div id="app">
+
+  <!-- Header -->
+  <header class="header">
+    <button class="header-back" onclick="goBack()">戻る</button>
+    <div class="header-title">East Area Mall</div>
+    <div class="header-right">
+      <button class="cart-btn" id="cartBtn" onclick="switchTab('bag')">
+        🛍
+        <span class="cart-badge" id="cartBadge">0</span>
+      </button>
+      <span class="header-clock" id="clock">00:00:00</span>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <div class="hero" id="hero">
+    <div class="hero-beam"></div>
+    <div class="hero-eyebrow">SchoolPark × Shopping</div>
+    <div class="hero-title"><span>East</span> Area Mall</div>
+    <div class="hero-divider"><div class="hero-divider-dot"></div></div>
+    <div class="hero-sale-pill">✦ Spring Sale — 最大 50% OFF</div>
+  </div>
+
+  <!-- Tabs -->
+  <nav class="tabs">
+    <button class="tab-btn active" onclick="switchTab('shops')">Shop</button>
+    <button class="tab-btn" onclick="switchTab('sale')">New &amp; Sale</button>
+    <button class="tab-btn" onclick="switchTab('bag')">My Bag</button>
+    <button class="tab-btn" id="ownerTabBtn" onclick="switchTab('owner')" style="display:none">Manage</button>
+  </nav>
+
+  <!-- Tab① Shops -->
+  <div class="tab-panel active" id="panel-shops">
+    <div class="category-scroll" id="catFilter">
+      <button class="cat-btn active" data-cat="all" onclick="filterCat('all',this)">All</button>
+      <button class="cat-btn" data-cat="fashion" onclick="filterCat('fashion',this)">Fashion</button>
+      <button class="cat-btn" data-cat="zakka" onclick="filterCat('zakka',this)">雑貨</button>
+      <button class="cat-btn" data-cat="food" onclick="filterCat('food',this)">Food</button>
+      <button class="cat-btn" data-cat="digital" onclick="filterCat('digital',this)">Digital</button>
+      <button class="cat-btn" data-cat="art" onclick="filterCat('art',this)">Art</button>
+    </div>
+    <div class="shop-grid" id="shopGrid"></div>
+  </div>
+
+  <!-- Tab② New & Sale -->
+  <div class="tab-panel" id="panel-sale">
+    <div class="section-title">
+      <div class="section-title-en">New Arrivals</div>
+      <div class="section-title-jp">新着商品</div>
+    </div>
+    <div class="carousel-wrap"><div class="carousel" id="newCarousel"></div></div>
+
+    <div class="sale-section">
+      <div class="section-title">
+        <div class="section-title-en">On Sale</div>
+        <div class="section-title-jp">セール中</div>
+      </div>
+      <div class="countdown-bar">
+        <span class="countdown-label">セール終了まで</span>
+        <span class="countdown-timer" id="countdownTimer">--:--:--</span>
+      </div>
+      <div class="sale-grid" id="saleGrid"></div>
+    </div>
+  </div>
+
+  <!-- Tab③ My Bag -->
+  <div class="tab-panel" id="panel-bag">
+    <div id="bagContent"></div>
+  </div>
+
+  <!-- Tab④ Owner -->
+  <div class="tab-panel" id="panel-owner">
+    <div id="ownerContent"></div>
+  </div>
+
+</div><!-- #app -->
+
+<!-- Shop Modal -->
+<div class="modal-overlay" id="shopModal" onclick="closeModalOutside(event)">
+  <div class="modal" id="modalInner">
+    <div class="modal-handle"><div class="modal-handle-bar"></div></div>
+    <div class="modal-header">
+      <span class="modal-shop-emoji" id="modalEmoji"></span>
+      <div class="modal-shop-info">
+        <div class="modal-shop-name" id="modalName"></div>
+        <div class="modal-shop-meta" id="modalCat"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-products" id="modalProducts"></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════
+   DATA
+═══════════════════════ */
+const SHOPS = [
+  { id:1, name:"スタイルラボ", category:"fashion", emoji:"🧥",
+    desc:"最新トレンドを厳選したセレクトショップ。",
+    rating:4.8, items:24, badge:"HOT",
+    products:[
+      { id:101, name:"ネオンジャケット", emoji:"🧥", price:3200, desc:"光沢のあるネオンカラー" },
+      { id:102, name:"ホログラムパンツ", emoji:"👖", price:2800, desc:"虹色に輝くパンツ" },
+      { id:103, name:"スターTシャツ", emoji:"⭐", price:1200, desc:"星柄のユニークTシャツ" },
+      { id:104, name:"クラウドスニーカー", emoji:"👟", price:4500, desc:"雲のように軽い履き心地" },
+    ]
+  },
+  { id:2, name:"バッグ工房", category:"zakka", emoji:"👜",
+    desc:"手仕事の温もりを感じる個性的なバッグ。",
+    rating:4.6, items:18, badge:"NEW",
+    products:[
+      { id:201, name:"ミニトートバッグ", emoji:"👜", price:2200, desc:"コンパクトで使いやすい" },
+      { id:202, name:"ショルダーポーチ", emoji:"👝", price:1800, desc:"肩掛けスタイル" },
+      { id:203, name:"キャンバスリュック", emoji:"🎒", price:3600, desc:"大容量でスタイリッシュ" },
+    ]
+  },
+  { id:3, name:"アートギャラリー", category:"art", emoji:"🎨",
+    desc:"SchoolParkアーティストの限定作品集。",
+    rating:4.9, items:8, badge:null,
+    products:[
+      { id:301, name:"デジタルポスター", emoji:"🖼", price:1500, desc:"限定デジタルアート" },
+      { id:302, name:"ネオンアクリル画", emoji:"🎨", price:8000, desc:"ネオンカラーの世界" },
+      { id:303, name:"アニメスケッチ", emoji:"✏️", price:2400, desc:"手描きアニメイラスト" },
+    ]
+  },
+  { id:4, name:"スイーツファクトリー", category:"food", emoji:"🍰",
+    desc:"バーチャルスイーツで特別な体験を。",
+    rating:4.7, items:15, badge:"SALE",
+    products:[
+      { id:401, name:"マジックケーキ", emoji:"🎂", price:800, desc:"食べると不思議な気分に" },
+      { id:402, name:"ネオンマカロン", emoji:"🟣", price:400, desc:"カラフルで可愛いマカロン" },
+      { id:403, name:"スターゼリー", emoji:"⭐", price:350, desc:"星形のキラキラゼリー" },
+      { id:404, name:"クリスタルクッキー", emoji:"🍪", price:600, desc:"宝石のようなクッキー" },
+    ]
+  },
+  { id:5, name:"テックショップ", category:"digital", emoji:"📱",
+    desc:"仮想ガジェット＆デジタルアイテムの専門店。",
+    rating:4.5, items:30, badge:"HOT",
+    products:[
+      { id:501, name:"ホログラムタブレット", emoji:"📱", price:12000, desc:"3Dホログラム表示対応" },
+      { id:502, name:"ネオンキーボード", emoji:"⌨️", price:5500, desc:"発光メカニカルキーボード" },
+      { id:503, name:"AIイヤフォン", emoji:"🎧", price:7800, desc:"AIが音楽を選んでくれる" },
+      { id:504, name:"スマートウォッチX", emoji:"⌚", price:9000, desc:"多機能スマートウォッチ" },
+    ]
+  },
+  { id:6, name:"アクセサリーズ", category:"zakka", emoji:"💎",
+    desc:"キラキラ輝くバーチャルジュエリー。",
+    rating:4.4, items:42, badge:"SALE",
+    products:[
+      { id:601, name:"スターピアス", emoji:"⭐", price:1200, desc:"星型の輝くピアス" },
+      { id:602, name:"ネオンリング", emoji:"💍", price:1800, desc:"夜光るネオンリング" },
+      { id:603, name:"クリスタルネックレス", emoji:"💎", price:2800, desc:"透明感のあるクリスタル" },
+    ]
+  },
+  { id:7, name:"フォトスタジオ", category:"art", emoji:"🖼",
+    desc:"仮想フォトアイテム・フレームの専門店。",
+    rating:4.6, items:12, badge:"NEW",
+    products:[
+      { id:701, name:"ネオンフォトフレーム", emoji:"🖼", price:1600, desc:"光るフォトフレーム" },
+      { id:702, name:"スターライトフィルター", emoji:"✨", price:900, desc:"写真をSFに変えるフィルター" },
+      { id:703, name:"ホログラムスタンプ", emoji:"🌟", price:700, desc:"特別なスタンプセット" },
+    ]
+  },
+  { id:8, name:"コスメストア", category:"zakka", emoji:"🧴",
+    desc:"バーチャルコスメティックブランドの旗艦店。",
+    rating:4.8, items:28, badge:"NEW",
+    products:[
+      { id:801, name:"オーロラリップ", emoji:"💄", price:1400, desc:"オーロラ色に輝くリップ" },
+      { id:802, name:"グリッターアイシャドウ", emoji:"✨", price:1900, desc:"きらきらグリッター" },
+      { id:803, name:"ネオンネイル", emoji:"💅", price:1100, desc:"蛍光色のネイル" },
+    ]
+  },
+];
+
+const NEW_ITEMS = [
+  { id:901, name:"オーロラリップ", emoji:"💄", price:1400, shop:"コスメストア" },
+  { id:902, name:"AIイヤフォン", emoji:"🎧", price:7800, shop:"テックショップ" },
+  { id:903, name:"ネオンフォトフレーム", emoji:"🖼", price:1600, shop:"フォトスタジオ" },
+  { id:904, name:"キャンバスリュック", emoji:"🎒", price:3600, shop:"バッグ工房" },
+  { id:905, name:"ホログラムパンツ", emoji:"👖", price:2800, shop:"スタイルラボ" },
+  { id:906, name:"ネオンリング", emoji:"💍", price:1800, shop:"アクセサリーズ" },
+];
+
+const SALE_ITEMS = [
+  { id:401, name:"マジックケーキ", emoji:"🎂", shop:"スイーツファクトリー", original:800, off:30 },
+  { id:601, name:"スターピアス", emoji:"⭐", shop:"アクセサリーズ", original:1200, off:40 },
+  { id:101, name:"ネオンジャケット", emoji:"🧥", shop:"スタイルラボ", original:3200, off:25 },
+  { id:301, name:"デジタルポスター", emoji:"🖼", shop:"アートギャラリー", original:1500, off:50 },
+  { id:503, name:"AIイヤフォン", emoji:"🎧", shop:"テックショップ", original:7800, off:20 },
+  { id:202, name:"ショルダーポーチ", emoji:"👝", shop:"バッグ工房", original:1800, off:35 },
+];
+
+/* ═══════════════════════
+   STATE
+═══════════════════════ */
+/* [MIGRATE] cart localStorage → Firestore sp_shopping_carts */
+let cart = JSON.parse(localStorage.getItem('sp_cart') || '[]');
+let currentTab = 'shops';
+let currentFilter = 'all';
+const SALE_END = new Date(Date.now() + 2*24*3600000 + 7*3600000 + 23*60000);
+
+/* [MIGRATE] ?owner=1 → isOwner()関数に差し替え */
+const isOwner = () => new URLSearchParams(location.search).get('owner') === '1';
+
+/* ═══════════════════════
+   PETALS
+═══════════════════════ */
+function spawnPetals() {
+  const hero = document.getElementById('hero');
+  const petalEmojis = ['🌸','🌷','✿','·','◦'];
+  for (let i = 0; i < 12; i++) {
+    const p = document.createElement('div');
+    p.className = 'hero-petal';
+    p.textContent = petalEmojis[Math.floor(Math.random() * petalEmojis.length)];
+    p.style.cssText = `
+      left: ${Math.random()*100}%;
+      top: -10px;
+      font-size: ${8 + Math.random()*10}px;
+      animation-duration: ${4 + Math.random()*4}s;
+      animation-delay: ${Math.random()*6}s;
+    `;
+    hero.appendChild(p);
+  }
+}
+
+/* ═══════════════════════
+   CLOCK
+═══════════════════════ */
+function startClock() {
+  const el = document.getElementById('clock');
+  const tick = () => el.textContent = new Date().toLocaleTimeString('ja-JP',{hour12:false});
+  tick(); setInterval(tick, 1000);
+}
+
+/* ═══════════════════════
+   COUNTDOWN
+═══════════════════════ */
+function startCountdown() {
+  const el = document.getElementById('countdownTimer');
+  const tick = () => {
+    const d = SALE_END - Date.now();
+    if (d <= 0) { el.textContent = 'セール終了'; return; }
+    const h = String(Math.floor(d/3600000)).padStart(2,'0');
+    const m = String(Math.floor(d%3600000/60000)).padStart(2,'0');
+    const s = String(Math.floor(d%60000/1000)).padStart(2,'0');
+    el.textContent = `${h}:${m}:${s}`;
+  };
+  tick(); setInterval(tick, 1000);
+}
+
+/* ═══════════════════════
+   TABS
+═══════════════════════ */
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  const order = ['shops','sale','bag','owner'];
+  const i = order.indexOf(tab);
+  const btns = document.querySelectorAll('.tab-btn');
+  if (i >= 0 && btns[i]) btns[i].classList.add('active');
+  if (tab === 'bag') renderBag();
+  const footer = document.getElementById('cartFooter');
+  if (footer) footer.className = 'cart-footer' + (tab === 'bag' && cart.length > 0 ? ' visible' : '');
+}
+
+/* ═══════════════════════
+   SHOP GRID
+═══════════════════════ */
+function renderShops() {
+  const shops = currentFilter === 'all' ? SHOPS : SHOPS.filter(s => s.category === currentFilter);
+  document.getElementById('shopGrid').innerHTML = shops.map(shopCardHTML).join('');
+}
+
+function shopCardHTML(s) {
+  const badgeClass = s.badge === 'NEW' ? 'badge-new' : s.badge === 'SALE' ? 'badge-sale' : s.badge === 'HOT' ? 'badge-hot' : '';
+  const badgeLabel = s.badge === 'HOT' ? '✦ HOT' : s.badge === 'SALE' ? 'SALE' : s.badge || '';
+  return `
+  <div class="shop-card" onclick="openShop(${s.id})">
+    ${s.badge ? `<span class="shop-badge ${badgeClass}">${badgeLabel}</span>` : ''}
+    <span class="shop-emoji">${s.emoji}</span>
+    <div class="shop-name">${s.name}</div>
+    <div class="shop-category">${catLabel(s.category)}</div>
+    <div class="shop-desc">${s.desc}</div>
+    <div class="shop-footer">
+      <span class="shop-rating">★ ${s.rating}</span>
+      <span style="font-family:var(--font-sans);font-size:10px;color:var(--text3)">${s.items}点</span>
+    </div>
+  </div>`;
+}
+
+function catLabel(c) {
+  return {fashion:'Fashion',zakka:'雑貨',food:'Food',digital:'Digital',art:'Art'}[c] || c;
+}
+
+function filterCat(cat, btn) {
+  currentFilter = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderShops();
+}
+
+/* ═══════════════════════
+   MODAL
+═══════════════════════ */
+function openShop(id) {
+  const shop = SHOPS.find(s => s.id === id);
+  if (!shop) return;
+  document.getElementById('modalEmoji').textContent = shop.emoji;
+  document.getElementById('modalName').textContent = shop.name;
+  document.getElementById('modalCat').textContent = catLabel(shop.category) + '  ·  ★' + shop.rating + '  ·  ' + shop.items + '点';
+  document.getElementById('modalProducts').innerHTML = shop.products.map(p => productCardHTML(p, shop.name)).join('');
+  document.getElementById('shopModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function productCardHTML(p, shopName) {
+  return `
+  <div class="product-card">
+    <span class="product-emoji">${p.emoji}</span>
+    <div class="product-name">${p.name}</div>
+    <div class="product-desc">${p.desc}</div>
+    <div class="product-price">${p.price.toLocaleString()} <span>EMUER</span></div>
+    <button class="add-cart-btn" onclick="addToCart(${p.id},'${es(p.name)}','${p.emoji}',${p.price},'${es(shopName)}')">カートに追加</button>
+  </div>`;
+}
+const es = s => s.replace(/'/g,"\\'");
+
+function closeModal() {
+  document.getElementById('shopModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function closeModalOutside(e) {
+  if (e.target === document.getElementById('shopModal')) closeModal();
+}
+
+/* ═══════════════════════
+   CAROUSELS
+═══════════════════════ */
+function renderNewCarousel() {
+  document.getElementById('newCarousel').innerHTML = NEW_ITEMS.map(item => `
+  <div class="carousel-card">
+    <span class="carousel-card-emoji">${item.emoji}</span>
+    <div class="carousel-card-name">${item.name}</div>
+    <div class="carousel-card-shop">${item.shop}</div>
+    <div class="carousel-card-price">${item.price.toLocaleString()} <span style="font-family:var(--font-sans);font-size:10px;color:var(--text2)">EMUER</span></div>
+    <span class="carousel-card-badge">NEW</span>
+    <button class="carousel-card-add" onclick="addToCart(${item.id},'${es(item.name)}','${item.emoji}',${item.price},'${es(item.shop)}')">カートに追加</button>
+  </div>`).join('');
+}
+
+function renderSaleGrid() {
+  document.getElementById('saleGrid').innerHTML = SALE_ITEMS.map(item => {
+    const sp = Math.floor(item.original * (1 - item.off/100));
+    return `
+    <div class="sale-card">
+      <span class="sale-off-tag">${item.off}% OFF</span>
+      <span class="sale-card-emoji">${item.emoji}</span>
+      <div class="sale-card-name">${item.name}</div>
+      <div class="sale-card-shop">${item.shop}</div>
+      <div class="sale-price-original">${item.original.toLocaleString()} EMUER</div>
+      <div class="sale-price-current">${sp.toLocaleString()} <span style="font-family:var(--font-sans);font-size:12px">EMUER</span></div>
+      <button class="sale-add-btn" onclick="addToCart(${item.id},'${es(item.name)}','${item.emoji}',${sp},'${es(item.shop)}')">カートに追加</button>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════
+   CART
+═══════════════════════ */
+/* [MIGRATE] cart localStorage → Firestore sp_shopping_carts addDoc/getDocs */
+function saveCart() { localStorage.setItem('sp_cart', JSON.stringify(cart)); }
+
+function updateCartBadge() {
+  const total = cart.reduce((s,i) => s+i.qty, 0);
+  const b = document.getElementById('cartBadge');
+  b.textContent = total;
+  b.className = 'cart-badge' + (total > 0 ? ' visible' : '');
+}
+
+function addToCart(id, name, emoji, price, shop) {
+  const ex = cart.find(i => i.id === id);
+  if (ex) ex.qty++; else cart.push({id,name,emoji,price,shop,qty:1});
+  saveCart(); updateCartBadge(); bounceCart();
+  showToast(`${name} をバッグに追加しました`, 'success');
+  if (currentTab === 'bag') renderBag();
+}
+
+function bounceCart() {
+  const btn = document.getElementById('cartBtn');
+  btn.classList.remove('bounce');
+  void btn.offsetWidth;
+  btn.classList.add('bounce');
+}
+
+function changeQty(id, delta) {
+  const item = cart.find(i => i.id === id);
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) cart = cart.filter(i => i.id !== id);
+  saveCart(); updateCartBadge(); renderBag();
+}
+
+function removeFromCart(id) {
+  cart = cart.filter(i => i.id !== id);
+  saveCart(); updateCartBadge(); renderBag();
+  showToast('アイテムを削除しました', 'info');
+}
+
+function renderBag() {
+  const container = document.getElementById('bagContent');
+  let footer = document.getElementById('cartFooter');
+
+  if (cart.length === 0) {
+    container.innerHTML = `
+      <div class="empty-bag">
+        <div class="empty-bag-icon">🛍</div>
+        <div class="empty-bag-text">My bag is empty</div>
+        <div class="empty-bag-sub">気になる商品を見つけて<br>バッグに入れてみましょう</div>
+      </div>`;
+    if (footer) footer.className = 'cart-footer';
+    return;
+  }
+
+  const total = cart.reduce((s,i) => s+i.price*i.qty, 0);
+  container.innerHTML = `
+    <div class="cart-list">
+      ${cart.map(item => `
+      <div class="cart-item">
+        <span class="cart-item-emoji">${item.emoji}</span>
+        <div class="cart-item-info">
+          <div class="cart-item-name">${item.name}</div>
+          <div class="cart-item-shop">${item.shop}</div>
+          <div class="cart-item-price">${(item.price*item.qty).toLocaleString()} <span style="font-family:var(--font-sans);font-size:10px;color:var(--text2)">EMUER</span></div>
+        </div>
+        <div class="cart-item-qty">
+          <button class="qty-btn" onclick="changeQty(${item.id},-1)">−</button>
+          <span class="qty-val">${item.qty}</span>
+          <button class="qty-btn" onclick="changeQty(${item.id},1)">＋</button>
+        </div>
+        <button class="cart-item-del" onclick="removeFromCart(${item.id})">🗑</button>
+      </div>`).join('')}
+    </div>
+    <div style="height:130px"></div>`;
+
+  const footerHTML = `
+    <div class="cart-total-row">
+      <span class="cart-total-label">合計 ${cart.reduce((s,i)=>s+i.qty,0)}点</span>
+      <span class="cart-total-amount">${total.toLocaleString()} <span>EMUER</span></span>
+    </div>
+    <button class="buy-btn" onclick="purchase()">購入する — ${total.toLocaleString()} EMUER</button>`;
+
+  if (!footer) {
+    footer = document.createElement('div');
+    footer.id = 'cartFooter';
+    footer.className = 'cart-footer' + (currentTab === 'bag' ? ' visible' : '');
+    footer.innerHTML = footerHTML;
+    document.getElementById('app').appendChild(footer);
+  } else {
+    footer.className = 'cart-footer' + (currentTab === 'bag' ? ' visible' : '');
+    footer.innerHTML = footerHTML;
+  }
+}
+
+/* ═══════════════════════
+   PURCHASE
+═══════════════════════ */
+function purchase() {
+  if (!cart.length) return;
+  /* [MIGRATE] 購入処理: console.log → Firestore sp_shopping_orders に addDoc */
+  const order = { items:[...cart], total:cart.reduce((s,i)=>s+i.price*i.qty,0), timestamp:new Date().toISOString() };
+  console.log('[MIGRATE] Order:', order);
+  cart = []; saveCart(); updateCartBadge(); renderBag();
+  launchPetals();
+  showToast('✦ ご購入ありがとうございます', 'success');
+}
+
+/* ═══════════════════════
+   PETAL CONFETTI
+═══════════════════════ */
+function launchPetals() {
+  const canvas = document.getElementById('confetti-canvas');
+  canvas.style.display = 'block';
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  const colors = ['#e8a4b0','#f3c5cc','#c9a96e','#d4788a','#f9eef0','#fce7f3','#e0c9d0','#b8924d'];
+  const pieces = Array.from({length:120},() => ({
+    x: Math.random() * canvas.width,
+    y: -20 - Math.random() * 80,
+    r: 3 + Math.random() * 5,
+    d: 1.5 + Math.random() * 2.5,
+    color: colors[Math.floor(Math.random()*colors.length)],
+    angle: Math.random() * Math.PI * 2,
+    spin: (Math.random()-0.5) * 0.15,
+    drift: (Math.random()-0.5) * 1.5,
+    opacity: 0.7 + Math.random() * 0.3,
+  }));
+  let frame = 0;
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    pieces.forEach(p => {
+      ctx.save();
+      ctx.globalAlpha = p.opacity * Math.min(1, (180-frame)/30);
+      ctx.fillStyle = p.color;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, p.r, p.r*0.45, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+      p.y += p.d; p.angle += p.spin; p.x += p.drift;
+    });
+    frame++;
+    if (frame < 180) requestAnimationFrame(draw);
+    else { ctx.clearRect(0,0,canvas.width,canvas.height); canvas.style.display='none'; }
+  }
+  draw();
+}
+
+/* ═══════════════════════
+   OWNER PANEL
+═══════════════════════ */
+function renderOwnerPanel() {
+  const container = document.getElementById('ownerContent');
+  if (!isOwner()) {
+    container.innerHTML = `
+      <div class="owner-gate">
+        <div class="owner-gate-icon">🔐</div>
+        <div class="owner-gate-text">Owner Only Area</div>
+        <div class="owner-gate-sub">URLに <code style="background:var(--cream2);padding:2px 8px;border-radius:6px;font-size:12px">?owner=1</code> を付けてアクセスしてください。<br><small style="opacity:0.6">※移植時は isOwner() 関数で判定します</small></div>
+      </div>`;
+    return;
+  }
+  container.innerHTML = `
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-num">42</div><div class="stat-label">本日の注文</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:var(--gold2)">128,400</div><div class="stat-label">EMUER 売上</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:var(--new)">8</div><div class="stat-label">ショップ数</div></div>
+    </div>
+    <div class="owner-section">
+      <div class="owner-section-title">✦ Shop List</div>
+      <div class="shop-manage-list">
+        ${SHOPS.map(s=>`
+        <div class="shop-manage-item">
+          <span class="shop-manage-emoji">${s.emoji}</span>
+          <div class="shop-manage-info">
+            <div class="shop-manage-name">${s.name}</div>
+            <div class="shop-manage-cat">${catLabel(s.category)} · ${s.items}点</div>
+          </div>
+          <div class="shop-manage-actions">
+            <button class="edit-btn" onclick="showToast('${es(s.name)}を編集します','info')">編集</button>
+            <button class="delete-btn" onclick="confirmDeleteShop(${s.id})">削除</button>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div class="owner-section">
+      <div class="owner-section-title">✦ New Shop</div>
+      <div class="form-group">
+        <label class="form-label">Shop Name</label>
+        <input type="text" class="form-input" id="newShopName" placeholder="例：フラワーショップ">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-input" id="newShopCat">
+            <option value="fashion">Fashion</option>
+            <option value="zakka">雑貨</option>
+            <option value="food">Food</option>
+            <option value="digital">Digital</option>
+            <option value="art">Art</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Emoji</label>
+          <input type="text" class="form-input" id="newShopEmoji" placeholder="🌸" maxlength="2">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <input type="text" class="form-input" id="newShopDesc" placeholder="ショップの説明">
+      </div>
+      <button class="form-submit" onclick="addShop()">ショップを追加</button>
+    </div>
+    <div class="owner-section">
+      <div class="owner-section-title">✦ Sale Setting</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Rate (%)</label>
+          <input type="number" class="form-input" id="saleRate" placeholder="30" min="1" max="99">
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Date</label>
+          <input type="datetime-local" class="form-input" id="saleEnd">
+        </div>
+      </div>
+      <button class="form-submit" onclick="saveSaleSetting()">セールを設定</button>
+    </div>`;
+}
+
+function addShop() {
+  const name = document.getElementById('newShopName').value.trim();
+  if (!name) { showToast('ショップ名を入力してください', 'error'); return; }
+  const emoji = document.getElementById('newShopEmoji').value.trim() || '🏪';
+  const cat = document.getElementById('newShopCat').value;
+  const desc = document.getElementById('newShopDesc').value.trim();
+  SHOPS.push({id:Date.now(),name,category:cat,emoji,desc,rating:5.0,items:0,badge:'NEW',products:[]});
+  renderShops(); renderOwnerPanel();
+  showToast(`${name} を追加しました`, 'success');
+}
+
+function confirmDeleteShop(id) {
+  const shop = SHOPS.find(s=>s.id===id);
+  if (!shop) return;
+  if (confirm(`「${shop.name}」を削除しますか？`)) {
+    SHOPS.splice(SHOPS.indexOf(shop),1);
+    renderShops(); renderOwnerPanel();
+    showToast(`${shop.name} を削除しました`, 'info');
+  }
+}
+
+function saveSaleSetting() {
+  const rate = document.getElementById('saleRate').value;
+  if (!rate) { showToast('セール率を入力してください', 'error'); return; }
+  showToast(`${rate}% OFF セールを設定しました`, 'success');
+}
+
+/* ═══════════════════════
+   TOAST
+═══════════════════════ */
+function showToast(message, type) {
+  const icons = {success:'✦', error:'✕', info:'·'};
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${icons[type]}</span><span>${message}</span>`;
+  c.appendChild(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(()=>t.remove(),300); }, 3000);
+}
+
+/* ═══════════════════════
+   BACK
+═══════════════════════ */
+function goBack() {
+  window.top.postMessage({ type: 'spContentClose' }, '*');
+}
+
+/* ═══════════════════════
+   INIT
+═══════════════════════ */
+function init() {
+  if (isOwner()) document.getElementById('ownerTabBtn').style.display = '';
+  renderShops();
+  renderNewCarousel();
+  renderSaleGrid();
+  renderBag();
+  renderOwnerPanel();
+  updateCartBadge();
+  startClock();
+  startCountdown();
+  spawnPetals();
+}
+
+init();
+</script>
+</body>
+</html>
