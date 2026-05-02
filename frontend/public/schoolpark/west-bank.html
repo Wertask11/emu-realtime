@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SchoolPark Bank — 銀行</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#020810;--surface:#040e1c;--card:#071424;--border:#0e2440;
+  --gold:#d4a017;--gold2:#f0c040;--blue:#1e6fff;--cyan:#00c8ff;
+  --green:#00e676;--red:#ff4444;
+  --text:#d0e8ff;--muted:#3a6080;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
+.close-btn{position:fixed;top:12px;right:14px;background:rgba(212,160,23,.2);border:1px solid var(--border);color:var(--gold);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px;z-index:9999}
+.close-btn:hover{background:rgba(212,160,23,.35)}
+
+/* ========== BANK SCENE ========== */
+.bank-scene{position:relative;height:200px;overflow:hidden;background:var(--bg);border-bottom:2px solid var(--border)}
+
+/* 大理石の床 */
+.marble-floor{position:absolute;bottom:0;left:0;right:0;height:40px;background:linear-gradient(to bottom,#0a1828,#050e18);border-top:2px solid #1a3050}
+.marble-lines{position:absolute;bottom:0;left:0;right:0;height:40px;background:repeating-linear-gradient(90deg,transparent,transparent 60px,rgba(30,80,150,.12) 60px,rgba(30,80,150,.12) 61px)}
+
+/* 天井 */
+.bank-ceiling{position:absolute;top:0;left:0;right:0;height:22px;background:linear-gradient(to bottom,#0a1828,var(--bg));border-bottom:1px solid var(--border)}
+/* シャンデリア */
+.chandelier{position:absolute;top:6px;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:flex-end}
+.chand-light{width:8px;height:8px;border-radius:50%;background:var(--gold2);box-shadow:0 0 10px var(--gold),0 0 20px rgba(212,160,23,.3);animation:chandPulse 3s infinite alternate}
+.chand-light:nth-child(2){width:12px;height:12px;animation-delay:.5s}
+.chand-light:nth-child(3){animation-delay:1s}
+@keyframes chandPulse{from{opacity:.6}to{opacity:1}}
+
+/* 柱 */
+.column{position:absolute;bottom:40px;width:20px;background:linear-gradient(to right,#0a1828,#1a3050,#0a1828);border:1px solid #1a3050;border-radius:2px}
+.col1{left:24px;height:120px}
+.col2{right:24px;height:120px}
+.col-capital{position:absolute;top:-8px;left:-4px;right:-4px;height:8px;background:linear-gradient(to right,#0e2440,#1e4060,#0e2440);border-radius:2px}
+
+/* テラーカウンター */
+.counter{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);width:180px;height:50px;background:linear-gradient(to bottom,#0e2440,#071424);border:1px solid #1a3050;border-radius:6px 6px 0 0}
+.counter-top{position:absolute;top:0;left:0;right:0;height:6px;background:linear-gradient(to right,#8a6000,var(--gold),#8a6000);border-radius:6px 6px 0 0}
+.counter-window{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:80px;height:28px;background:#020810;border:1px solid var(--border);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted)}
+
+/* 金庫 */
+.vault{position:absolute;right:30px;bottom:40px;width:60px;height:70px;background:linear-gradient(135deg,#0a1828,#1a3050);border:2px solid #2a5080;border-radius:4px}
+.vault-door{position:absolute;inset:4px;border:1px solid #1a3050;border-radius:3px;background:linear-gradient(135deg,#050e18,#0e2440)}
+.vault-handle{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:20px;height:20px;border:2px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.vault-handle::after{content:'';width:10px;height:2px;background:var(--gold);position:absolute}
+.vault-locked{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--gold);letter-spacing:.05em}
+
+/* ティッカー */
+.ticker{position:absolute;top:24px;left:0;right:0;height:18px;background:#020810;border-top:1px solid var(--border);border-bottom:1px solid var(--border);overflow:hidden;display:flex;align-items:center}
+.ticker-content{display:flex;gap:40px;white-space:nowrap;animation:tickerMove 20s linear infinite;font-size:10px;color:var(--gold)}
+@keyframes tickerMove{0%{transform:translateX(100vw)}100%{transform:translateX(-100%)}}
+
+/* ========== コンテンツ ========== */
+.bank-header{text-align:center;padding:14px 16px 12px;border-bottom:1px solid var(--border)}
+.bank-title{font-family:'Playfair Display',serif;font-size:19px;color:#fff;margin-bottom:3px}
+.bank-sub{font-size:11px;color:var(--muted)}
+
+.tabs{display:flex;gap:6px;margin:12px 16px;overflow-x:auto}
+.tab{padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:12px;white-space:nowrap;transition:all .2s}
+.tab.active{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
+.panel{display:none;padding:0 16px 32px}.panel.active{display:block}
+.s-title{font-size:13px;font-weight:700;color:var(--gold);margin:0 0 12px;display:flex;align-items:center;gap:6px}
+
+/* 残高カード */
+.balance-card{background:linear-gradient(135deg,#071424,#0e1e34);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:16px;position:relative;overflow:hidden}
+.balance-card::before{content:'';position:absolute;top:-30px;right:-30px;width:100px;height:100px;background:radial-gradient(circle,rgba(212,160,23,.1),transparent 70%)}
+.balance-label{font-size:11px;color:var(--muted);margin-bottom:4px;letter-spacing:.06em}
+.balance-value{font-size:28px;font-weight:700;color:var(--gold2);margin-bottom:2px}
+.balance-unit{font-size:13px;color:var(--muted);margin-left:4px}
+.balance-pending{font-size:12px;color:var(--cyan);margin-top:6px}
+.balance-addr{font-size:10px;color:var(--muted);margin-top:4px;word-break:break-all}
+.refresh-btn{position:absolute;top:14px;right:14px;background:rgba(212,160,23,.15);border:1px solid var(--border);color:var(--gold);padding:5px 10px;border-radius:10px;font-size:11px;cursor:pointer}
+.refresh-btn:hover{background:rgba(212,160,23,.3)}
+
+/* レート表示 */
+.rate-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:14px}
+.rate-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)}
+.rate-row:last-child{border-bottom:none}
+.rate-from{font-size:13px;font-weight:700;color:#fff}
+.rate-arrow{color:var(--muted);font-size:14px}
+.rate-to{font-size:13px;font-weight:700;color:var(--gold2)}
+.rate-note{font-size:10px;color:var(--muted);text-align:right}
+
+/* 変換ボタンエリア */
+.convert-area{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px}
+.convert-status{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;margin-bottom:12px;font-size:12px}
+.status-ok{background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.2);color:var(--green)}
+.status-warn{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:#f59e0b}
+.status-locked{background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.2);color:var(--red)}
+.convert-detail{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.convert-item{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center}
+.convert-item-label{font-size:10px;color:var(--muted);margin-bottom:4px}
+.convert-item-val{font-size:18px;font-weight:700;color:#fff}
+.convert-item-rate{font-size:10px;color:var(--cyan);margin-top:3px}
+.convert-btn{width:100%;padding:14px;border-radius:12px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:'Zen Maru Gothic',sans-serif;transition:opacity .2s}
+.convert-btn.active{background:linear-gradient(135deg,#8a6000,var(--gold2));color:#000}
+.convert-btn.active:hover{opacity:.85}
+.convert-btn.disabled{background:rgba(255,255,255,.05);color:var(--muted);border:1px solid var(--border);cursor:not-allowed}
+
+/* NFT状態 */
+.nft-status-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px}
+.nft-plan-row{display:flex;gap:8px;flex-wrap:wrap}
+.nft-plan{flex:1;min-width:100px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center}
+.nft-plan.active-plan{border-color:var(--gold);background:rgba(212,160,23,.08)}
+.nft-plan-icon{font-size:22px;margin-bottom:4px}
+.nft-plan-name{font-size:11px;font-weight:700;color:#fff;margin-bottom:2px}
+.nft-plan-perm{font-size:10px;color:var(--muted);line-height:1.5}
+
+/* 取引ガイド */
+.guide-list{display:flex;flex-direction:column;gap:10px}
+.guide-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;gap:10px}
+.guide-num{width:24px;height:24px;border-radius:50%;background:var(--gold);color:#000;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.guide-text{font-size:12px;color:var(--muted);line-height:1.6}
+.guide-text strong{color:#fff}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<button class="close-btn" onclick="window.top.postMessage({type:'spContentClose'},'*')">✕ 閉じる</button>
+
+<!-- 銀行シーン -->
+<div class="bank-scene">
+  <div class="bank-ceiling">
+    <div class="chandelier">
+      <div class="chand-light"></div>
+      <div class="chand-light"></div>
+      <div class="chand-light"></div>
+    </div>
+  </div>
+  <div class="ticker">
+    <div class="ticker-content">
+      EMUER / ETH &nbsp;▲ &nbsp;｜&nbsp; SchoolPark Bank OPEN &nbsp;｜&nbsp; EMUER変換 受付中 &nbsp;｜&nbsp; good 10pt = 1 EMUER &nbsp;｜&nbsp; change 20pt = 3 EMUER &nbsp;｜&nbsp; 有料NFTは毎日変換可 &nbsp;｜&nbsp; 無料NFTは月曜日のみ &nbsp;｜&nbsp;
+    </div>
+  </div>
+  <div class="column col1"><div class="col-capital"></div></div>
+  <div class="column col2"><div class="col-capital"></div></div>
+  <div class="counter">
+    <div class="counter-top"></div>
+    <div class="counter-window">🏦 窓口</div>
+  </div>
+  <div class="vault">
+    <div class="vault-door">
+      <div class="vault-handle"></div>
+    </div>
+    <div class="vault-locked">🔒</div>
+  </div>
+  <div class="marble-floor"><div class="marble-lines"></div></div>
+</div>
+
+<div class="bank-header">
+  <div class="bank-title">SchoolPark Bank</div>
+  <div class="bank-sub">EMUERの変換・残高確認・取引ガイド</div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('convert')">💱 変換</div>
+  <div class="tab" onclick="switchTab('balance')">💰 残高</div>
+  <div class="tab" onclick="switchTab('guide')">📋 ガイド</div>
+</div>
+
+<!-- 変換パネル -->
+<div class="panel active" id="panel-convert">
+  <div class="s-title">💱 EMUER変換窓口</div>
+
+  <!-- NFTプラン状態 -->
+  <div class="nft-status-card">
+    <div style="font-size:12px;color:var(--gold);font-weight:700;margin-bottom:10px">🔑 あなたのアクセス権</div>
+    <div class="nft-plan-row">
+      <div class="nft-plan" id="planGuest">
+        <div class="nft-plan-icon">👤</div>
+        <div class="nft-plan-name">ゲスト</div>
+        <div class="nft-plan-perm">変換: ✗<br>閲覧: △</div>
+      </div>
+      <div class="nft-plan" id="planFree">
+        <div class="nft-plan-icon">🆓</div>
+        <div class="nft-plan-name">無料NFT</div>
+        <div class="nft-plan-perm">変換: 月曜のみ<br>閲覧: ◎</div>
+      </div>
+      <div class="nft-plan" id="planPaid">
+        <div class="nft-plan-icon">👑</div>
+        <div class="nft-plan-name">有料NFT</div>
+        <div class="nft-plan-perm">変換: 毎日<br>閲覧: ◎</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 変換ステータス -->
+  <div class="convert-status status-warn" id="convertStatus">
+    ⏳ ウォレット情報を読み込んでいます...
+  </div>
+
+  <!-- 変換内容 -->
+  <div class="convert-detail">
+    <div class="convert-item">
+      <div class="convert-item-label">👍 good ポイント</div>
+      <div class="convert-item-val" id="goodCount">—</div>
+      <div class="convert-item-rate">÷10 = EMUER</div>
+    </div>
+    <div class="convert-item">
+      <div class="convert-item-label">🔄 change ポイント</div>
+      <div class="convert-item-val" id="changeCount">—</div>
+      <div class="convert-item-rate">÷20×3 = EMUER</div>
+    </div>
+  </div>
+
+  <!-- 変換予定 -->
+  <div class="rate-box" style="margin-bottom:12px">
+    <div class="rate-row">
+      <span style="font-size:12px;color:var(--muted)">変換予定 EMUER</span>
+      <span style="font-size:16px;font-weight:700;color:var(--gold2)" id="pendingDisplay">— EMUER</span>
+    </div>
+    <div class="rate-row">
+      <span style="font-size:12px;color:var(--muted)">現在の残高</span>
+      <span style="font-size:14px;font-weight:700;color:#fff" id="balanceDisplay">— EMUER</span>
+    </div>
+  </div>
+
+  <!-- 変換ボタン -->
+  <button class="convert-btn disabled" id="mainConvertBtn" onclick="executeConvert()">
+    🏦 変換を実行する
+  </button>
+  <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:8px" id="convertNote"></div>
+</div>
+
+<!-- 残高パネル -->
+<div class="panel" id="panel-balance">
+  <div class="s-title">💰 口座残高</div>
+
+  <div class="balance-card">
+    <button class="refresh-btn" onclick="loadBalance()">↻ 更新</button>
+    <div class="balance-label">EMUER 保有残高</div>
+    <div><span class="balance-value" id="mainBalance">—</span><span class="balance-unit">EMUER</span></div>
+    <div class="balance-pending" id="mainPending">変換待ち: — EMUER</div>
+    <div class="balance-addr" id="mainAddr">ウォレット: 未接続</div>
+  </div>
+
+  <div class="s-title">📊 変換レート</div>
+  <div class="rate-box">
+    <div class="rate-row">
+      <div><div class="rate-from">👍 good × 10</div><div class="rate-note">10 good ごとに変換</div></div>
+      <span class="rate-arrow">→</span>
+      <div class="rate-to">1 EMUER</div>
+    </div>
+    <div class="rate-row">
+      <div><div class="rate-from">🔄 change × 20</div><div class="rate-note">20 change ごとに変換</div></div>
+      <span class="rate-arrow">→</span>
+      <div class="rate-to">3 EMUER</div>
+    </div>
+    <div class="rate-row">
+      <div><div class="rate-from">🎁 初投稿ボーナス</div><div class="rate-note">初回投稿時に付与</div></div>
+      <span class="rate-arrow">→</span>
+      <div class="rate-to">30 EMUER</div>
+    </div>
+    <div class="rate-row">
+      <div><div class="rate-from">📅 ログインボーナス</div><div class="rate-note">毎日ログインで付与</div></div>
+      <span class="rate-arrow">→</span>
+      <div class="rate-to">0.5 EMUER</div>
+    </div>
+  </div>
+</div>
+
+<!-- ガイドパネル -->
+<div class="panel" id="panel-guide">
+  <div class="s-title">📋 EMUERとは</div>
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;font-size:12px;color:var(--muted);line-height:1.8">
+    EMUERはSchoolPark / Emuのコミュニティトークン（ERC-20）です。Emuアプリへの投稿にgood・changeが集まるとEMUERに変換できます。NFT購入・SchoolPark内サービス利用に使えます。
+  </div>
+  <div class="s-title">📖 変換の手順</div>
+  <div class="guide-list">
+    <div class="guide-item"><div class="guide-num">1</div><div class="guide-text"><strong>Emuアプリで投稿する</strong><br>探索・学びの投稿を公開して、good・changeを集めよう</div></div>
+    <div class="guide-item"><div class="guide-num">2</div><div class="guide-text"><strong>ウォレットを接続する</strong><br>MetaMaskなどのウォレットをEmuアプリに接続してください</div></div>
+    <div class="guide-item"><div class="guide-num">3</div><div class="guide-text"><strong>変換タブで実行</strong><br>このページの「変換を実行」ボタンを押すとEMUERが付与されます</div></div>
+    <div class="guide-item"><div class="guide-num">4</div><div class="guide-text"><strong>残高を確認</strong><br>変換後は残高タブで保有EMUERを確認できます</div></div>
+  </div>
+  <div style="margin-top:14px;padding:12px 14px;background:rgba(212,160,23,.08);border:1px solid rgba(212,160,23,.2);border-radius:12px">
+    <div style="font-size:12px;color:var(--gold);font-weight:700;margin-bottom:6px">⚠️ 変換条件</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.8">
+      <strong style="color:#fff">有料NFT保持者：</strong>毎日変換可能<br>
+      <strong style="color:#fff">無料NFT保持者：</strong>月曜日のみ変換可能<br>
+      <strong style="color:#fff">ゲスト（未接続）：</strong>変換不可
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== タブ ==========
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',['convert','balance','guide'][i]===name)});
+  document.querySelectorAll('.panel').forEach(p=>{p.classList.toggle('active',p.id==='panel-'+name)});
+  if(name==='balance') loadBalance();
+  if(name==='convert') loadConvertInfo();
+}
+
+// ========== 親からの情報取得 ==========
+function getTop(){try{return window.top;}catch(e){return null;}}
+
+function getUserType(){
+  const t=getTop();if(!t)return 'guest';
+  if(t.hasPaidNFT) return 'paid';
+  if(t.hasFreeNFT) return 'free';
+  return 'guest';
+}
+
+function getAccount(){
+  const t=getTop();if(!t)return null;
+  return t.connectedAccount||t.walletAddress||null;
+}
+
+// ========== NFTプラン表示 ==========
+function updatePlanBadge(){
+  const type=getUserType();
+  document.getElementById('planGuest').classList.toggle('active-plan', type==='guest');
+  document.getElementById('planFree').classList.toggle('active-plan', type==='free');
+  document.getElementById('planPaid').classList.toggle('active-plan', type==='paid');
+}
+
+// ========== 変換情報読み込み ==========
+async function loadConvertInfo(){
+  updatePlanBadge();
+  const t=getTop();
+  const addr=getAccount();
+  const statusEl=document.getElementById('convertStatus');
+  const btn=document.getElementById('mainConvertBtn');
+  const noteEl=document.getElementById('convertNote');
+
+  if(!addr){
+    statusEl.className='convert-status status-locked';
+    statusEl.textContent='🔒 ウォレット未接続 — Emuアプリでウォレットを接続してください';
+    btn.className='convert-btn disabled';
+    btn.textContent='🔒 ウォレット接続が必要です';
+    noteEl.textContent='';
+    document.getElementById('goodCount').textContent='—';
+    document.getElementById('changeCount').textContent='—';
+    document.getElementById('pendingDisplay').textContent='— EMUER';
+    document.getElementById('balanceDisplay').textContent='— EMUER';
+    return;
+  }
+
+  const type=getUserType();
+
+  // 月曜チェック（無料NFT）
+  const isMonday = new Date().getDay()===1;
+  if(type==='guest'){
+    statusEl.className='convert-status status-locked';
+    statusEl.textContent='🔒 NFTが必要です — SchoolParkのNFTを取得すると変換できます';
+    btn.className='convert-btn disabled';
+    btn.textContent='🔒 NFT取得後に変換可能';
+    noteEl.textContent='公式NFTはEmuアプリの取引所から取得できます';
+    return;
+  }
+  if(type==='free'&&!isMonday){
+    statusEl.className='convert-status status-warn';
+    statusEl.textContent='📅 無料NFTは月曜日のみ変換可能です';
+    btn.className='convert-btn disabled';
+    btn.textContent='📅 月曜日に変換できます';
+    noteEl.textContent='有料NFTにアップグレードすると毎日変換可能になります';
+    // 残高だけ表示
+    tryLoadBalance(addr);
+    return;
+  }
+
+  // 読み込み
+  statusEl.className='convert-status status-warn';
+  statusEl.textContent='⏳ ポイントを確認しています...';
+
+  try{
+    if(t && t.syncPendingEmuer){
+      await t.syncPendingEmuer();
+    }
+    // コントラクトから取得
+    const contract=t&&t.emuerContract;
+    if(contract){
+      const userData=await contract.users(addr);
+      const good=parseInt(userData.good.toString());
+      const change=parseInt(userData.change.toString());
+      document.getElementById('goodCount').textContent=good;
+      document.getElementById('changeCount').textContent=change;
+      const pending=Math.floor(good/10)+Math.floor(change/20)*3;
+      document.getElementById('pendingDisplay').textContent=pending+' EMUER';
+
+      const bal=await contract.balanceOf(addr);
+      const balVal=Math.floor(parseFloat((t.ethers||window.ethers).utils.formatUnits(bal,18)));
+      document.getElementById('balanceDisplay').textContent=balVal+' EMUER';
+
+      if(good===0&&change===0){
+        statusEl.className='convert-status status-warn';
+        statusEl.textContent='📭 変換可能なポイントがありません — Emuで投稿してgood・changeを集めよう！';
+        btn.className='convert-btn disabled';
+        btn.textContent='📭 ポイント不足';
+        noteEl.textContent='good 10pt または change 20pt から変換できます';
+      } else {
+        statusEl.className='convert-status status-ok';
+        statusEl.textContent='✅ 変換可能！ '+pending+' EMUERに変換できます';
+        btn.className='convert-btn active';
+        btn.textContent='🏦 '+pending+' EMUERに変換する';
+        noteEl.textContent='変換にはガス代（ETH）が少量必要です';
+      }
+    }
+  }catch(e){
+    // Firestoreからフォールバック
+    const pd=t&&t.pendingEmuer!=null?t.pendingEmuer:0;
+    document.getElementById('pendingDisplay').textContent=pd+' EMUER';
+    if(pd>0){
+      statusEl.className='convert-status status-ok';
+      statusEl.textContent='✅ 変換可能！ '+pd+' EMUERに変換できます';
+      btn.className='convert-btn active';
+      btn.textContent='🏦 '+pd+' EMUERに変換する';
+    } else {
+      statusEl.className='convert-status status-warn';
+      statusEl.textContent='📭 変換可能なポイントがありません';
+      btn.className='convert-btn disabled';
+      btn.textContent='📭 ポイント不足';
+    }
+  }
+}
+
+async function tryLoadBalance(addr){
+  try{
+    const t=getTop();const contract=t&&t.emuerContract;
+    if(contract){
+      const bal=await contract.balanceOf(addr);
+      const v=Math.floor(parseFloat((t.ethers||window.ethers).utils.formatUnits(bal,18)));
+      document.getElementById('balanceDisplay').textContent=v+' EMUER';
+    }
+  }catch(e){}
+}
+
+// ========== 変換実行（親の処理を呼ぶ） ==========
+async function executeConvert(){
+  const btn=document.getElementById('mainConvertBtn');
+  if(btn.classList.contains('disabled')) return;
+  const t=getTop();
+  if(!t){alert('エラー: 親ウィンドウに接続できません');return;}
+  // 親の handleConversion を呼ぶ
+  if(typeof t.handleConversion==='function'){
+    btn.disabled=true;
+    btn.textContent='⏳ 処理中...';
+    try{
+      await t.handleConversion();
+      // 変換完了後に情報を再読み込み
+      setTimeout(()=>{
+        btn.disabled=false;
+        loadConvertInfo();
+      },1500);
+    }catch(e){
+      btn.disabled=false;
+      btn.textContent='🏦 変換を実行する';
+      alert('変換に失敗しました: '+e.message);
+    }
+  } else {
+    // フォールバック: 直接実行
+    const addr=getAccount();
+    if(!addr){alert('ウォレット未接続');return;}
+    const contract=t.emuerContract;
+    if(!contract){alert('コントラクトに接続できません');return;}
+    btn.disabled=true;btn.textContent='⏳ 処理中...';
+    try{
+      const userData=await contract.users(addr);
+      if(Number(userData.good)===0&&Number(userData.change)===0){alert('変換に必要なポイントがありません');btn.disabled=false;btn.textContent='🏦 変換を実行する';return;}
+      if(Number(userData.good)>0){const tx1=await contract.convertGood(userData.good);await tx1.wait();}
+      if(Number(userData.change)>0){const tx2=await contract.convertChange(userData.change);await tx2.wait();}
+      alert('🎉 変換が完了しました！');
+      if(t.syncPendingEmuer) await t.syncPendingEmuer();
+      setTimeout(()=>{btn.disabled=false;loadConvertInfo();},500);
+    }catch(e){
+      console.error(e);btn.disabled=false;btn.textContent='🏦 変換を実行する';
+      alert('変換に失敗しました');
+    }
+  }
+}
+
+// ========== 残高タブ ==========
+async function loadBalance(){
+  const addr=getAccount();
+  const addrEl=document.getElementById('mainAddr');
+  const balEl=document.getElementById('mainBalance');
+  const pendEl=document.getElementById('mainPending');
+  if(!addr){
+    addrEl.textContent='ウォレット: 未接続';balEl.textContent='—';pendEl.textContent='変換待ち: — EMUER';return;
+  }
+  addrEl.textContent='ウォレット: '+addr.slice(0,6)+'...'+addr.slice(-4);
+  const t=getTop();
+  try{
+    const contract=t&&t.emuerContract;
+    if(contract){
+      const bal=await contract.balanceOf(addr);
+      const v=Math.floor(parseFloat((t.ethers||window.ethers).utils.formatUnits(bal,18)));
+      balEl.textContent=v;
+      const userData=await contract.users(addr);
+      const good=parseInt(userData.good.toString());
+      const change=parseInt(userData.change.toString());
+      const pending=Math.floor(good/10)+Math.floor(change/20)*3;
+      pendEl.textContent='変換待ち: '+pending+' EMUER';
+    }
+  }catch(e){
+    const pd=t&&t.pendingEmuer!=null?t.pendingEmuer:0;
+    pendEl.textContent='変換待ち: '+pd+' EMUER (概算)';
+  }
+}
+
+// 初期化
+loadConvertInfo();
+</script>
+</body>
+</html>
