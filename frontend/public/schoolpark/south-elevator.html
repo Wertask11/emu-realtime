@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchoolPark Elevator — エレベーター</title>
+<link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#e0f2fe;--bg2:#fff;--bg3:#f0f9ff;
+  --accent:#0284c7;--accent2:#38bdf8;--yellow:#fbbf24;--green:#22c55e;--red:#ef4444;--purple:#a855f7;--orange:#f97316;
+  --text:#0c4a6e;--text2:#0369a1;--border:rgba(2,132,199,0.15);
+  --radius:16px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif;min-height:100vh;overflow-x:hidden}
+
+.header{position:sticky;top:0;z-index:100;height:56px;background:var(--accent);display:flex;align-items:center;gap:10px;padding:0 14px;box-shadow:0 2px 8px rgba(2,132,199,0.3)}
+.back-btn{background:rgba(255,255,255,0.25);color:#fff;border:none;border-radius:10px;padding:6px 14px;cursor:pointer;font-size:0.85rem;font-weight:700;font-family:inherit;transition:opacity 0.15s}
+.back-btn:hover{opacity:0.85}
+.header-title{font-size:1rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px}
+
+.hero{background:linear-gradient(180deg,#0284c7 0%,#0ea5e9 60%,#7dd3fc 100%);padding:24px 16px 20px;text-align:center;position:relative;overflow:hidden}
+.hero-cloud{position:absolute;font-size:3rem;opacity:0.15;animation:float 4s ease-in-out infinite}
+.hero-cloud:nth-child(1){left:5%;top:10%;animation-delay:0s}
+.hero-cloud:nth-child(2){right:8%;top:20%;animation-delay:2s}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.hero-icon{font-size:56px;margin-bottom:6px;animation:bounce 1.5s ease-in-out infinite}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.hero-title{font-size:1.6rem;font-weight:700;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2)}
+.hero-sub{font-size:0.85rem;color:rgba(255,255,255,0.85);margin-top:4px}
+
+.tabs{display:flex;background:var(--bg2);border-bottom:3px solid var(--accent2);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:13px 18px;font-size:0.8rem;font-weight:700;color:var(--text2);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-3px;transition:all 0.2s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);background:rgba(2,132,199,0.05)}
+.main{max-width:720px;margin:0 auto;padding:16px 14px 60px}
+.panel{display:none}.panel.active{display:block}
+
+.sec{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(2,132,199,0.06)}
+.sec-title{font-size:0.9rem;font-weight:700;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+
+/* ── バーチャルエレベーター ── */
+.elevator-wrap{display:flex;gap:12px;align-items:flex-end;justify-content:center;padding:8px 0}
+.elevator-shaft{width:100px;background:#d1d5db;border-radius:8px;padding:4px;position:relative;overflow:hidden;border:2px solid #9ca3af}
+.shaft-inner{height:320px;position:relative;background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);border-radius:6px;overflow:hidden}
+.floor-line{position:absolute;left:0;right:0;height:1px;background:#9ca3af;opacity:0.5}
+.floor-label{position:absolute;right:4px;font-size:0.55rem;color:#6b7280;font-weight:700}
+.elevator-car{position:absolute;left:4px;right:4px;height:56px;background:linear-gradient(135deg,#fbbf24,#f59e0b);border-radius:6px;border:2px solid #d97706;box-shadow:0 2px 8px rgba(245,158,11,0.4);transition:bottom 0.8s cubic-bezier(0.4,0,0.2,1);display:flex;align-items:center;justify-content:center;font-size:1.4rem}
+.elevator-car.moving{animation:shake 0.15s ease-in-out 4}
+@keyframes shake{0%,100%{transform:translateX(0)}50%{transform:translateX(2px)}}
+.floor-panel{flex:1;max-width:200px}
+.floor-btn-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.floor-btn{padding:14px 8px;border-radius:12px;border:3px solid transparent;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.15s;text-align:center;box-shadow:0 3px 6px rgba(0,0,0,0.1)}
+.floor-btn:active{transform:scale(0.92);box-shadow:inset 0 2px 4px rgba(0,0,0,0.2)}
+.floor-btn.b1{background:#7dd3fc;border-color:#38bdf8;color:#0c4a6e}
+.floor-btn.f1{background:#86efac;border-color:#4ade80;color:#14532d}
+.floor-btn.f2{background:#fde68a;border-color:#fbbf24;color:#78350f}
+.floor-btn.f3{background:#fca5a5;border-color:#f87171;color:#7f1d1d}
+.floor-btn.f4{background:#c4b5fd;border-color:#a78bfa;color:#3b0764}
+.floor-btn.f5{background:#fdba74;border-color:#fb923c;color:#7c2d12}
+.floor-btn.roof{background:#e0e7ff;border-color:#818cf8;color:#1e1b4b}
+.floor-btn.active-floor{box-shadow:inset 0 2px 4px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.8)!important;opacity:0.8}
+.current-floor{text-align:center;background:var(--bg3);border:2px solid var(--accent2);border-radius:10px;padding:8px;font-size:0.9rem;font-weight:700;color:var(--accent)}
+
+/* ── フロア説明 ── */
+.floor-info{background:var(--bg3);border:2px solid var(--border);border-radius:var(--radius);padding:14px;margin-top:12px;min-height:80px;transition:all 0.3s}
+.floor-info-icon{font-size:2rem;margin-bottom:6px}
+.floor-info-title{font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:4px}
+.floor-info-desc{font-size:0.78rem;color:var(--text2);line-height:1.7}
+
+/* ── エレベーター豆知識 ── */
+.fact-card{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+.fact-icon{font-size:2rem;flex-shrink:0}
+.fact-title{font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:4px}
+.fact-body{font-size:0.75rem;color:var(--text2);line-height:1.7}
+.fact-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:0.62rem;font-weight:700;margin-bottom:4px}
+
+/* ── クイズ ── */
+.quiz-card{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+.quiz-q{font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:12px;line-height:1.5}
+.quiz-options{display:flex;flex-direction:column;gap:8px}
+.quiz-opt{padding:11px 14px;border-radius:12px;border:2px solid var(--border);background:var(--bg3);cursor:pointer;font-size:0.8rem;font-weight:700;color:var(--text);font-family:inherit;text-align:left;transition:all 0.15s}
+.quiz-opt:hover{border-color:var(--accent2);background:rgba(2,132,199,0.05)}
+.quiz-opt.correct{background:rgba(34,197,94,0.15);border-color:#4ade80;color:#166534}
+.quiz-opt.wrong{background:rgba(239,68,68,0.1);border-color:#f87171;color:#991b1b}
+.quiz-result{padding:12px 14px;border-radius:12px;margin-top:10px;font-size:0.82rem;font-weight:700;text-align:center;display:none}
+.quiz-result.show{display:block}
+.quiz-result.ok{background:rgba(34,197,94,0.15);border:2px solid #4ade80;color:#166534}
+.quiz-result.ng{background:rgba(239,68,68,0.1);border:2px solid #f87171;color:#991b1b}
+.quiz-next{width:100%;margin-top:10px;padding:12px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-size:0.85rem;font-weight:700;cursor:pointer;font-family:inherit;display:none}
+.quiz-next.show{display:block}
+.quiz-score{text-align:center;padding:20px;font-size:1.1rem;font-weight:700;color:var(--accent);display:none}
+.quiz-score.show{display:block}
+
+/* ── しくみ ── */
+.mechanism-step{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+.mech-num{width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;font-size:0.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.mech-title{font-size:0.82rem;font-weight:700;margin-bottom:3px}
+.mech-desc{font-size:0.73rem;color:var(--text2);line-height:1.7}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 20px;border-radius:20px;font-size:0.82rem;font-weight:700;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+
+/* ── 音ボタン ── */
+.sound-btn{background:rgba(255,255,255,0.9);border:2px solid var(--accent2);border-radius:10px;padding:6px 10px;font-size:0.75rem;cursor:pointer;font-family:inherit;font-weight:700;color:var(--accent);transition:all 0.15s}
+.sound-btn:hover{background:var(--accent);color:#fff}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <button class="back-btn" onclick="goBack()">← もどる</button>
+  <div class="header-title">🛗 SchoolPark エレベーター</div>
+</div>
+
+<div class="hero">
+  <div class="hero-cloud">☁️</div>
+  <div class="hero-cloud">☁️</div>
+  <div class="hero-icon">🛗</div>
+  <div class="hero-title">エレベーター</div>
+  <div class="hero-sub">のって・しらべて・たのしもう！</div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('ride',this)">🛗 のってみよう</button>
+  <button class="tab" onclick="switchTab('facts',this)">🌍 せかいのすごいエレベーター</button>
+  <button class="tab" onclick="switchTab('how',this)">⚙️ しくみ</button>
+  <button class="tab" onclick="switchTab('rules',this)">📋 マナー</button>
+  <button class="tab" onclick="switchTab('quiz',this)">❓ クイズ</button>
+</div>
+
+<div class="main">
+
+  <!-- のってみようタブ -->
+  <div class="panel active" id="tab-ride">
+    <div class="sec">
+      <div class="sec-title">🛗 SchoolPark エレベーター</div>
+      <p style="font-size:0.78rem;color:var(--text2);margin-bottom:14px;line-height:1.7">ボタンをおすと、エレベーターがそのかいへうごくよ！どのかいにいってみたい？🎉</p>
+
+      <div class="elevator-wrap">
+        <div class="elevator-shaft">
+          <div class="shaft-inner" id="shaft">
+            <!-- Floor lines -->
+            <div class="floor-line" style="bottom:266px"></div>
+            <div class="floor-label" style="bottom:268px">RF</div>
+            <div class="floor-line" style="bottom:213px"></div>
+            <div class="floor-label" style="bottom:215px">5F</div>
+            <div class="floor-line" style="bottom:160px"></div>
+            <div class="floor-label" style="bottom:162px">4F</div>
+            <div class="floor-line" style="bottom:107px"></div>
+            <div class="floor-label" style="bottom:109px">3F</div>
+            <div class="floor-line" style="bottom:54px"></div>
+            <div class="floor-label" style="bottom:56px">2F</div>
+            <div class="floor-label" style="bottom:4px">1F</div>
+            <!-- Elevator car -->
+            <div class="elevator-car" id="elevatorCar" style="bottom:4px">🛗</div>
+          </div>
+        </div>
+
+        <div class="floor-panel">
+          <div class="floor-btn-grid">
+            <button class="floor-btn roof" onclick="goFloor('RF',266)">🏙️<br><small>屋上</small></button>
+            <button class="floor-btn f5" onclick="goFloor('5F',213)">🌌<br><small>5F</small></button>
+            <button class="floor-btn f4" onclick="goFloor('4F',160)">📚<br><small>4F</small></button>
+            <button class="floor-btn f3" onclick="goFloor('3F',107)">🎮<br><small>3F</small></button>
+            <button class="floor-btn f2" onclick="goFloor('2F',54)">🍰<br><small>2F</small></button>
+            <button class="floor-btn f1" onclick="goFloor('1F',4)">🏠<br><small>1F</small></button>
+          </div>
+          <div class="current-floor" id="currentFloor">📍 いま：1F</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="floor-info" id="floorInfo">
+      <div class="floor-info-icon" id="floorIcon">🏠</div>
+      <div class="floor-info-title" id="floorTitle">1F — エントランスホール</div>
+      <div class="floor-info-desc" id="floorDesc">SchoolPark エレベーターへようこそ！ここは 1かい（1F）。エントランスホールです。うえのボタンをおして、すきなかいへいってみてね！</div>
+    </div>
+  </div>
+
+  <!-- せかいのすごいエレベータータブ -->
+  <div class="panel" id="tab-facts">
+
+    <div class="sec">
+      <div class="sec-title">🌍 せかいいちのエレベーター</div>
+
+      <div class="fact-card">
+        <div class="fact-icon">🗼</div>
+        <div>
+          <span class="fact-badge" style="background:#fde68a;color:#78350f">🇯🇵 にほん</span>
+          <div class="fact-title">ヨコハマランドマークタワー</div>
+          <div class="fact-body">
+            かいすう：<strong>70かい</strong><br>
+            エレベーターのはやさ：<strong>びょうそく12.5メートル</strong>（にほんいちのはやさ！）<br>
+            1かいから69かいまで、<strong>わずか40びょう</strong>でいけるよ！新幹線みたいにはやいね🚄
+          </div>
+        </div>
+      </div>
+
+      <div class="fact-card">
+        <div class="fact-icon">🌃</div>
+        <div>
+          <span class="fact-badge" style="background:#bfdbfe;color:#1e3a8a">🇦🇪 ドバイ</span>
+          <div class="fact-title">ブルジュ・ハリファ（世界一たかいビル）</div>
+          <div class="fact-body">
+            たかさ：<strong>828メートル</strong>（世界一たかいビル！）<br>
+            エレベーターのかいすう：<strong>57きも</strong>はしってるよ<br>
+            いちばんたかいかいは<strong>148かい</strong>！くものうえまでのぼれそう☁️
+          </div>
+        </div>
+      </div>
+
+      <div class="fact-card">
+        <div class="fact-icon">⚡</div>
+        <div>
+          <span class="fact-badge" style="background:#fca5a5;color:#7f1d1d">🇨🇳 ちゅうごく</span>
+          <div class="fact-title">世界一はやいエレベーター（上海タワー）</div>
+          <div class="fact-body">
+            はやさ：<strong>びょうそく18メートル</strong>（世界一はやい！）<br>
+            これは<strong>じかんそく64.8km</strong>と同じはやさだよ🏎️<br>
+            耳がキーンってなりそうだね！
+          </div>
+        </div>
+      </div>
+
+      <div class="fact-card">
+        <div class="fact-icon">🏔️</div>
+        <div>
+          <span class="fact-badge" style="background:#d1fae5;color:#064e3b">🇨🇭 スイス</span>
+          <div class="fact-title">ハンメルシュワント展望エレベーター</div>
+          <div class="fact-body">
+            山のがけを<strong>たてにまっすぐ</strong>のぼるエレベーター！<br>
+            たかさ：<strong>558メートルのがけっぷち</strong>をのぼるよ🧗<br>
+            窓からみえるけしきは、まるで空をとんでるみたい！
+          </div>
+        </div>
+      </div>
+
+      <div class="fact-card">
+        <div class="fact-icon">🎠</div>
+        <div>
+          <span class="fact-badge" style="background:#e9d5ff;color:#3b0764">🇫🇷 フランス</span>
+          <div class="fact-title">エッフェル塔のエレベーター</div>
+          <div class="fact-body">
+            エッフェル塔のなかにある<strong>ナナメにうごく</strong>めずらしいエレベーター！<br>
+            1889年から100年以上うごいてるよ🗼（とても古いエレベーター！）<br>
+            ナナメに動くのはとてもめずらしくて、世界でもほとんどないよ！
+          </div>
+        </div>
+      </div>
+
+      <div class="fact-card">
+        <div class="fact-icon">🌊</div>
+        <div>
+          <span class="fact-badge" style="background:#bae6fd;color:#0c4a6e">🇩🇪 ドイツ</span>
+          <div class="fact-title">マクデブルク水のエレベーター</div>
+          <div class="fact-body">
+            なんと<strong>ふねをのせてうごく</strong>エレベーター！（本当はシップリフト）<br>
+            大きなふねが箱にはいって、<strong>34メートル上下</strong>に動くよ🚢<br>
+            まるでふねがエレベーターにのってるみたいでふしぎだね！
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">📊 エレベーターのすごいかずじ</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:2px solid #93c5fd;border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:1.6rem;font-weight:700;color:#1d4ed8">約100万き</div>
+          <div style="font-size:0.7rem;color:#1e3a8a;margin-top:3px">せかいのエレベーターの数</div>
+        </div>
+        <div style="background:linear-gradient(135deg,#d1fae5,#a7f3d0);border:2px solid #6ee7b7;border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:1.6rem;font-weight:700;color:#065f46">毎日30億人</div>
+          <div style="font-size:0.7rem;color:#064e3b;margin-top:3px">エレベーターにのる人数</div>
+        </div>
+        <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #fbbf24;border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:1.6rem;font-weight:700;color:#78350f">18m/秒</div>
+          <div style="font-size:0.7rem;color:#92400e;margin-top:3px">世界一はやいはやさ</div>
+        </div>
+        <div style="background:linear-gradient(135deg,#fce7f3,#fbcfe8);border:2px solid #f9a8d4;border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:1.6rem;font-weight:700;color:#831843">1852年</div>
+          <div style="font-size:0.7rem;color:#831843;margin-top:3px">せかいで最初のエレベーター</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- しくみタブ -->
+  <div class="panel" id="tab-how">
+
+    <div class="sec">
+      <div class="sec-title">⚙️ エレベーターはどうやってうごくの？</div>
+      <div class="alert" style="background:rgba(2,132,199,0.08);border:2px solid rgba(2,132,199,0.2);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;display:flex;gap:10px">
+        <div style="font-size:1.1rem">💡</div>
+        <div style="font-size:0.78rem;color:var(--text2);line-height:1.7">エレベーターは、大きなモーター（電気のちから）とロープ、それからオモリをつかって動くよ！むかしの「つるべ」（井戸のバケツ）とおなじしくみなんだ。</div>
+      </div>
+
+      <div class="mechanism-step">
+        <div class="mech-num">1</div>
+        <div>
+          <div class="mech-title">🔘 ボタンをおす</div>
+          <div class="mech-desc">エレベーターのボタンをおすと、「いきたいかい」がコンピューターにつたわるよ。コンピューターはどのエレベーターをよぶかかんがえる「おへや」みたいなもの！</div>
+        </div>
+      </div>
+
+      <div class="mechanism-step">
+        <div class="mech-num">2</div>
+        <div>
+          <div class="mech-title">⚡ モーターがうごく</div>
+          <div class="mech-desc">たくさんの電気をつかった大きなモーターがうごくよ。モーターはビルのいちばんうえ（機械室）についてることがおおいよ。じつはエレベーターの「エンジン」なんだ！</div>
+        </div>
+      </div>
+
+      <div class="mechanism-step">
+        <div class="mech-num">3</div>
+        <div>
+          <div class="mech-title">🪢 ロープがひっぱる</div>
+          <div class="mech-desc">モーターがワイヤーロープをまきとったりゆるめたりすることで、かごがうえにいったりしたにいったりするよ。ロープはとても丈夫で、ふつうひとつのエレベーターに8〜20本もついてるよ！</div>
+        </div>
+      </div>
+
+      <div class="mechanism-step">
+        <div class="mech-num">4</div>
+        <div>
+          <div class="mech-title">⚖️ つりあいおもり（カウンターウェイト）</div>
+          <div class="mech-desc">かごとは反対がわに「おもり」がついていて、かごがかるくなるようにバランスをとってるよ。このしくみで電気を少なくてすむの！むかしの「つるべ」とおなじだね。</div>
+        </div>
+      </div>
+
+      <div class="mechanism-step">
+        <div class="mech-num">5</div>
+        <div>
+          <div class="mech-title">🛑 ブレーキ（あんぜんそうち）</div>
+          <div class="mech-desc">エレベーターには、いっぱいあんぜんそうちがついてるよ！ロープがきれても止まるしくみ（調速機・非常止め）があって、とてもあんぜんにできてるんだ。</div>
+        </div>
+      </div>
+
+      <div class="mechanism-step">
+        <div class="mech-num">6</div>
+        <div>
+          <div class="mech-title">🚪 ドアがひらく</div>
+          <div class="mech-desc">かごがかいにとうちゃくすると、ドアが自動でひらくよ！ドアにはひとやものがはさまれないようにセンサーがついてるの。もしドアにふれてもすぐひらきなおすよ。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🔒 エレベーターのあんぜんそうち</div>
+      <div style="display:grid;gap:8px">
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.3rem;flex-shrink:0">🪢</div>
+          <div>
+            <div style="font-size:0.8rem;font-weight:700;margin-bottom:2px">ワイヤーロープ（8〜20本！）</div>
+            <div style="font-size:0.71rem;color:var(--text2);line-height:1.5">1本で十分つなげるのに、たくさんつかうことでぜったいにぷつんとならないようにしてる！</div>
+          </div>
+        </div>
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.3rem;flex-shrink:0">🏃</div>
+          <div>
+            <div style="font-size:0.8rem;font-weight:700;margin-bottom:2px">調速機・非常止め</div>
+            <div style="font-size:0.71rem;color:var(--text2);line-height:1.5">はやくなりすぎるとじどうでとまるしくみ。ロープがきれてもかごはおちないよ！</div>
+          </div>
+        </div>
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.3rem;flex-shrink:0">🔦</div>
+          <div>
+            <div style="font-size:0.8rem;font-weight:700;margin-bottom:2px">停電しても安全</div>
+            <div style="font-size:0.71mn;color:var(--text2);line-height:1.5">停電のときは自動で一番近いかいにいって、ドアがひらくよ。なかにとじこめられないしくみがあるよ！</div>
+          </div>
+        </div>
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.3rem;flex-shrink:0">📞</div>
+          <div>
+            <div style="font-size:0.8rem;font-weight:700;margin-bottom:2px">非常通報ボタン（🔔ボタン）</div>
+            <div style="font-size:0.71rem;color:var(--text2);line-height:1.5">もしとじこめられても、かご内の🔔ボタンをおすと管理室や警備室につながるよ！あわてなくても大丈夫。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- マナータブ -->
+  <div class="panel" id="tab-rules">
+
+    <div class="sec">
+      <div class="sec-title">📋 エレベーターのマナーとルール</div>
+      <div style="background:rgba(2,132,199,0.08);border:2px solid rgba(2,132,199,0.2);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;font-size:0.78rem;color:var(--text2);line-height:1.7">
+        エレベーターはみんなでつかうもの。おたがいにきもちよくつかえるよう、マナーをおぼえておこう！😊
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="background:#d1fae5;border:2px solid #6ee7b7;border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.4rem;flex-shrink:0">✅</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;color:#065f46;margin-bottom:2px">おりるひとがさきにおりる</div>
+            <div style="font-size:0.72rem;color:#047857;line-height:1.5">エレベーターがひらいたら、まず中からおりるひとをまってから、じぶんたちがのりこもう！</div>
+          </div>
+        </div>
+        <div style="background:#d1fae5;border:2px solid #6ee7b7;border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.4rem;flex-shrink:0">✅</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;color:#065f46;margin-bottom:2px">ドアのそばに立つひとはボタンをおす</div>
+            <div style="font-size:0.72rem;color:#047857;line-height:1.5">ドアのちかくに立った人は、「なんかいですか？」とほかのひとにきいてあげると親切だよ！</div>
+          </div>
+        </div>
+        <div style="background:#d1fae5;border:2px solid #6ee7b7;border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.4rem;flex-shrink:0">✅</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;color:#065f46;margin-bottom:2px">「ひらく」ボタンでまってあげる</div>
+            <div style="font-size:0.72rem;color:#047857;line-height:1.5">おじいちゃん・おばあちゃん・ベビーカーのひとがいたら、「ひらく」ボタンをおしてまってあげよう！</div>
+          </div>
+        </div>
+        <div style="background:#fef3c7;border:2px solid #fbbf24;border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.4rem;flex-shrink:0">⚠️</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;color:#78350f;margin-bottom:2px">ドアをおさえすぎない</div>
+            <div style="font-size:0.72rem;color:#92400e;line-height:1.5">ドアをてでずっとおさえると、エレベーターがこわれてしまうことがあるよ。「ひらく」ボタンをつかおう！</div>
+          </div>
+        </div>
+        <div style="background:#fef3c7;border:2px solid #fbbf24;border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.4rem;flex-shrink:0">⚠️</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;color:#78350f;margin-bottom:2px">とびはねない・はしらない</div>
+            <div style="font-size:0.72rem;color:#92400e;line-height:1.5">エレベーターの中でとびはねると、センサーがはんのうしてとまることがあるよ。しずかに乗ろう！</div>
+          </div>
+        </div>
+        <div style="background:#fee2e2;border:2px solid #fca5a5;border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.4rem;flex-shrink:0">❌</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;color:#7f1d1d;margin-bottom:2px">いたずらでボタンをおさない</div>
+            <div style="font-size:0.72rem;color:#991b1b;line-height:1.5">いらないかいのボタンをぜんぶおすのはいたずらだよ。みんながつかうものだからやさしくつかおう！</div>
+          </div>
+        </div>
+        <div style="background:#fee2e2;border:2px solid #fca5a5;border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.4rem;flex-shrink:0">❌</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;color:#7f1d1d;margin-bottom:2px">🔔ボタンのいたずらはぜったいダメ！</div>
+            <div style="font-size:0.72rem;color:#991b1b;line-height:1.5">🔔（非常ボタン）をおすと警備室や管理室につながるよ。本当に困っているときだけおすボタン！</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🚨 もしとじこめられたら？</div>
+      <div style="background:rgba(239,68,68,0.06);border:2px solid rgba(239,68,68,0.15);border-radius:var(--radius);padding:14px">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:10px;align-items:flex-start">
+            <div style="background:#ef4444;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0">1</div>
+            <div style="font-size:0.78rem;color:var(--text);line-height:1.6"><strong>あわてない・さわがない</strong>。エレベーターは安全な場所だよ。</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start">
+            <div style="background:#ef4444;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0">2</div>
+            <div style="font-size:0.78rem;color:var(--text);line-height:1.6"><strong>🔔ボタンをおす</strong>。するとひとがたすけにきてくれるよ。</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start">
+            <div style="background:#ef4444;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0">3</div>
+            <div style="font-size:0.78rem;color:var(--text);line-height:1.6"><strong>ドアをこじあけようとしない</strong>。じぶんであけようとするのは危険！</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start">
+            <div style="background:#ef4444;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0">4</div>
+            <div style="font-size:0.78rem;color:var(--text);line-height:1.6"><strong>スマホがあれば110か119に電話</strong>。おとなとたすけをよぼう。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- クイズタブ -->
+  <div class="panel" id="tab-quiz">
+    <div class="sec">
+      <div class="sec-title">❓ エレベーター クイズ！</div>
+      <div id="quizContainer">
+        <!-- JS でかきかえる -->
+      </div>
+      <div class="quiz-score" id="quizScore"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Tabs ──
+function switchTab(id,btn){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.getElementById("tab-"+id).classList.add("active");
+  btn.classList.add("active");
+  if(id==="quiz") initQuiz();
+}
+
+// ── Clock (simple) ──
+function showToast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),3000); }
+
+// ── Elevator ──
+const FLOORS = {
+  "RF":{ icon:"🏙️", title:"屋上（ルーフトップ）", desc:"SchoolPark の屋上だよ！はれた日にはとおくまでみえるよ。🌤️ このかいからはSchoolParkのまちぜんたいがみわたせる！ここがいちばんうえのかいだよ。" },
+  "5F":{ icon:"🌌", title:"5F — Emu 星空ホール", desc:"Emu（エミュ）の星空ルームがあるかい！ここでは星座をみたりメンバーがつながる場所だよ✨ よぞらにうかぶほしがきれいだよ！" },
+  "4F":{ icon:"📚", title:"4F — がくしゅう・ラボ", desc:"べんきょうしたり、あたらしいことをまなぶかい！Web3・ブロックチェーンのことをたのしくまなべるよ📖 はかせになれるかな？🔬" },
+  "3F":{ icon:"🎮", title:"3F — あそび・たんけん", desc:"SchoolParkのたんけんゾーン！いろんなばしょをたんけんしてみよう🗺️ あたらしいはっけんがまってるよ！" },
+  "2F":{ icon:"🍰", title:"2F — カフェ・にぎわいホール", desc:"みんなでかたりあうばしょ！おいしいものをたべながら（きもちで）、ともだちとはなそう☕🍰 コミュニティのひろばだよ！" },
+  "1F":{ icon:"🏠", title:"1F — エントランスホール", desc:"SchoolPark エレベーターへようこそ！ここは 1かい（1F）。エントランスホールです。うえのボタンをおして、すきなかいへいってみてね！" }
+};
+let currentFloorKey = "1F";
+
+function goFloor(floor, bottomPx){
+  const car = document.getElementById("elevatorCar");
+  const prevBtn = document.querySelector(".floor-btn.active-floor");
+  if(prevBtn) prevBtn.classList.remove("active-floor");
+
+  car.style.bottom = bottomPx + "px";
+  car.classList.add("moving");
+  setTimeout(()=>car.classList.remove("moving"), 800);
+
+  currentFloorKey = floor;
+  document.getElementById("currentFloor").textContent = "📍 いま：" + floor;
+
+  const f = FLOORS[floor];
+  if(f){
+    document.getElementById("floorIcon").textContent = f.icon;
+    document.getElementById("floorTitle").textContent = f.title;
+    document.getElementById("floorDesc").textContent = f.desc;
+  }
+  showToast(floor + " に とうちゃく！ " + (FLOORS[floor]?.icon||""));
+}
+
+// ── Quiz ──
+const QUIZ_DATA = [
+  { q:"エレベーターをはつめいしたのはなんねん？", opts:["1852年","1952年","1752年","2000年"], ans:0, hint:"よく150ねん以上まえのことだよ！" },
+  { q:"せかいで一番はやいエレベーターがある国はどこ？", opts:["日本","アメリカ","中国","ドバイ"], ans:2, hint:"上海タワーにあるよ！" },
+  { q:"エレベーターの中で「ひらく」ボタンはどんなきごう？", opts:["→ ←（やじるしが外むき）","← →（やじるしが内むき）","▲（さんかく）","○（まる）"], ans:0, hint:"ドアが広がるように、やじるしが外がわをさしてるよ！" },
+  { q:"エレベーターのかごをつるロープはふつうなんぼんある？", opts:["1〜2本","3〜4本","8〜20本","50本以上"], ans:2, hint:"あんぜんのためにたくさんつかってるんだよ！" },
+  { q:"乗るときと降りるとき、どちらが先？", opts:["乗るひとが先","降りるひとが先","おなじでいい","どちらでもいい"], ans:1, hint:"なかにいるひとをさきにだしてあげよう！" },
+  { q:"エレベーターがとまったとき、一番さいしょにすることは？", opts:["ドアをこじあける","🔔ボタンをおす","おおごえでさけぶ","てんじょうからにげる"], ans:1, hint:"あわてずに🔔ボタン！たすけがくるよ。" },
+  { q:"ヨコハマランドマークタワーのエレベーターで、1かいから69かいまで何びょうかかる？", opts:["10秒","40秒","2分","5分"], ans:1, hint:"にほんいちはやいエレベーターだよ！" },
+  { q:"エレベーターの中でやってはいけないことは？", opts:["静かにたつ","ドアのよこにたつ","とびはねる","「ひらく」ボタンをおす"], ans:2, hint:"センサーがはんのうしてとまることがあるよ！" },
+];
+
+let quizIndex=0, quizScore=0, quizAnswered=false;
+
+function initQuiz(){
+  quizIndex=0; quizScore=0; quizAnswered=false;
+  document.getElementById("quizScore").classList.remove("show");
+  renderQuiz();
+}
+
+function renderQuiz(){
+  if(quizIndex>=QUIZ_DATA.length){
+    document.getElementById("quizContainer").innerHTML="";
+    const sc=document.getElementById("quizScore");
+    const pct=Math.round(quizScore/QUIZ_DATA.length*100);
+    let msg = pct===100?"🏆 まんてん！エレベーターはかせ！":pct>=75?"⭐ すごい！よくしってるね！":pct>=50?"😊 なかなかいいね！もういちどちょうせんしよう！":"📚 もっとしらべてみよう！";
+    sc.innerHTML=`<div style="font-size:1.6rem;margin-bottom:8px">🎉</div><div>${QUIZ_DATA.length}もん中 <strong>${quizScore}もん</strong> せいかい！</div><div style="font-size:0.85rem;margin-top:8px;color:var(--text2)">${msg}</div><button onclick="initQuiz()" style="margin-top:14px;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:12px 24px;font-size:0.85rem;font-weight:700;cursor:pointer;font-family:inherit">もういちどチャレンジ！</button>`;
+    sc.classList.add("show");
+    return;
+  }
+  const q=QUIZ_DATA[quizIndex]; quizAnswered=false;
+  document.getElementById("quizContainer").innerHTML=`
+    <div class="quiz-card">
+      <div style="font-size:0.72rem;color:var(--text2);margin-bottom:6px">もんだい ${quizIndex+1} / ${QUIZ_DATA.length}</div>
+      <div class="quiz-q">${q.q}</div>
+      <div class="quiz-options">${q.opts.map((o,i)=>`<button class="quiz-opt" onclick="answerQuiz(${i})">${o}</button>`).join("")}</div>
+      <div class="quiz-result" id="quizResult"></div>
+      <button class="quiz-next" id="quizNextBtn" onclick="nextQuiz()">つぎのもんだい ▶</button>
+    </div>`;
+}
+
+function answerQuiz(chosen){
+  if(quizAnswered) return;
+  quizAnswered=true;
+  const q=QUIZ_DATA[quizIndex];
+  const opts=document.querySelectorAll(".quiz-opt");
+  opts.forEach((o,i)=>{
+    if(i===q.ans) o.classList.add("correct");
+    else if(i===chosen&&chosen!==q.ans) o.classList.add("wrong");
+    o.style.pointerEvents="none";
+  });
+  const res=document.getElementById("quizResult");
+  if(chosen===q.ans){
+    quizScore++;
+    res.textContent="⭐ せいかい！" + q.hint;
+    res.className="quiz-result show ok";
+  } else {
+    res.textContent="❌ ざんねん！こたえは「"+q.opts[q.ans]+"」だよ。" + q.hint;
+    res.className="quiz-result show ng";
+  }
+  document.getElementById("quizNextBtn").classList.add("show");
+}
+
+function nextQuiz(){ quizIndex++; renderQuiz(); }
+
+// ── Init ──
+window.addEventListener("DOMContentLoaded",()=>{
+  initQuiz();
+});
+
+// ── Back ──
+function goBack(){ window.top.postMessage({type:"spContentClose"},"*"); }
+</script>
+</body>
+</html>
