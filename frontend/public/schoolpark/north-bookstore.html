@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SchoolPark Bookstore — 本屋</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#060400;--surface:#0e0900;--card:#161000;--border:#2a1e00;
+  --accent:#ff9d3a;--gold:#ffd700;--brown:#8b5e00;
+  --text:#f4e8cc;--muted:#7a6040;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
+.close-btn{position:fixed;top:12px;right:14px;background:rgba(255,157,58,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px;z-index:9999}
+.close-btn:hover{background:rgba(255,157,58,.35)}
+
+/* ========== BOOKSTORE SCENE ========== */
+.shop-scene{position:relative;height:220px;overflow:hidden;background:linear-gradient(to bottom,#0e0800,#1a0f00);border-bottom:2px solid var(--border)}
+
+/* 天井・床 */
+.shop-ceiling{position:absolute;top:0;left:0;right:0;height:24px;background:linear-gradient(to bottom,#1a0d00,#0e0800)}
+.shop-ceiling-lights{display:flex;gap:50px;justify-content:center;align-items:center;height:100%;padding:0 20px}
+.shop-light{position:relative}
+.shop-light::before{content:'';width:40px;height:4px;background:rgba(255,220,100,.8);display:block;border-radius:2px;box-shadow:0 0 12px rgba(255,220,100,.6),0 0 24px rgba(255,180,50,.3)}
+.shop-light::after{content:'';position:absolute;top:4px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:20px solid transparent;border-right:20px solid transparent;border-top:50px solid rgba(255,200,80,.05)}
+.shop-floor{position:absolute;bottom:0;left:0;right:0;height:16px;background:linear-gradient(to bottom,#2a1800,#1a0d00);border-top:2px solid #3a2800}
+
+/* 本棚ユニット */
+.shop-shelves{position:absolute;bottom:16px;left:0;right:0;display:flex;gap:4px;padding:0 8px;height:150px;align-items:flex-end}
+.shelf-unit{background:linear-gradient(to right,#2a1800,#1e1200,#2a1800);border:1px solid #3a2800;border-radius:4px;padding:4px 4px 2px;flex:1;display:flex;flex-direction:column;gap:3px}
+.shelf-plank{display:flex;align-items:flex-end;gap:2px;border-bottom:3px solid #4a3000;padding:2px 2px 1px;min-height:46px}
+.sp-book{border-radius:2px 2px 0 0;flex-shrink:0;position:relative;cursor:pointer;transition:transform .15s}
+.sp-book:hover{transform:translateY(-4px)}
+
+/* 値札エリア */
+.price-stand{position:absolute;bottom:16px;right:16px;background:rgba(20,12,0,.9);border:1px solid #4a3000;border-radius:8px;padding:8px 12px;text-align:center}
+.price-stand-title{font-size:9px;color:var(--muted);margin-bottom:4px}
+.price-stand-price{font-size:16px;font-weight:700;color:var(--gold)}
+.price-stand-sub{font-size:9px;color:var(--muted)}
+
+/* 店名看板 */
+.shop-sign{position:absolute;top:28px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#3a2000,#6a3800);border:2px solid #8a5000;border-radius:8px;padding:6px 20px;white-space:nowrap;text-align:center}
+.shop-sign-text{font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.08em}
+.shop-sign-sub{font-size:9px;color:rgba(255,215,0,.6)}
+
+/* 暖色グロー */
+.warm-glow{position:absolute;top:24px;left:0;right:0;height:100px;background:radial-gradient(ellipse at center top,rgba(255,160,60,.06),transparent 70%);pointer-events:none}
+
+/* ========== コンテンツ ========== */
+.page{padding:16px}
+.tabs{display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px}
+.tab{padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:12px;white-space:nowrap;transition:all .2s}
+.tab.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
+.panel{display:none}.panel.active{display:block}
+.section-title{font-size:14px;font-weight:700;color:var(--accent);margin:0 0 12px;display:flex;align-items:center;gap:6px}
+
+/* 本カード（棚陳列） */
+.books-shelf-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;margin-bottom:16px}
+.shelf-book-card{flex-shrink:0;width:120px;background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .2s,border-color .2s}
+.shelf-book-card:hover{transform:translateY(-3px);border-color:var(--accent)}
+.shelf-book-cover{height:80px;display:flex;align-items:center;justify-content:center;font-size:36px}
+.shelf-book-info{padding:8px}
+.shelf-book-title{font-size:10px;font-weight:700;color:#fff;line-height:1.3;margin-bottom:3px}
+.shelf-book-price{font-size:11px;color:var(--gold);font-weight:700}
+
+/* 詳細リスト */
+.book-detail-list{display:flex;flex-direction:column;gap:12px}
+.book-detail{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.book-detail-inner{display:flex;gap:12px;padding:12px}
+.book-cover-block{width:56px;flex-shrink:0}
+.book-cover-art{width:56px;height:78px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:28px;border:1px solid rgba(255,255,255,.1)}
+.book-info{}
+.book-title{font-size:13px;font-weight:700;color:#fff;line-height:1.4;margin-bottom:3px}
+.book-author{font-size:11px;color:var(--accent);margin-bottom:4px}
+.book-desc{font-size:12px;color:var(--muted);line-height:1.6}
+.book-actions{padding:0 12px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.book-price{font-size:14px;font-weight:700;color:var(--gold)}
+.book-price-sub{font-size:10px;color:var(--muted)}
+.buy-btn{padding:7px 14px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:linear-gradient(135deg,#6a3000,var(--accent));color:#000;transition:opacity .2s}
+.buy-btn:hover{opacity:.85}
+.preview-btn{padding:7px 14px;border-radius:20px;font-size:11px;cursor:pointer;background:rgba(255,157,58,.15);border:1px solid var(--border);color:var(--accent)}
+
+/* 試し読みモーダル */
+#modal{display:none;position:fixed;inset:0;background:rgba(6,4,0,.95);z-index:200;overflow-y:auto;padding:20px 16px 40px}
+.modal-body{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;max-width:600px;margin:0 auto}
+.modal-title{font-size:15px;font-weight:700;color:#fff;line-height:1.5;margin-bottom:6px}
+.modal-author{font-size:11px;color:var(--accent);margin-bottom:14px}
+.modal-text{font-size:13px;line-height:1.9;color:var(--text)}
+.modal-text p{margin-bottom:12px}
+.modal-text .hl{color:var(--accent);font-weight:700}
+.modal-cta{margin-top:16px;padding:14px;background:rgba(255,157,58,.1);border:1px solid rgba(255,157,58,.3);border-radius:10px;text-align:center}
+.modal-close-btn{position:sticky;top:0;display:flex;justify-content:flex-end;margin-bottom:12px}
+
+/* おすすめPOP */
+.pop-tag{display:inline-block;background:linear-gradient(135deg,#8b3000,var(--accent));color:#000;font-size:9px;font-weight:700;padding:2px 10px;border-radius:10px;margin-left:6px}
+.new-tag{background:linear-gradient(135deg,#006030,#00c060);color:#fff}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<button class="close-btn" onclick="window.top.postMessage({type:'spContentClose'},'*')">✕ 閉じる</button>
+
+<!-- 本屋シーン -->
+<div class="shop-scene">
+  <div class="shop-ceiling">
+    <div class="shop-ceiling-lights">
+      <div class="shop-light"></div>
+      <div class="shop-light"></div>
+      <div class="shop-light"></div>
+    </div>
+  </div>
+  <div class="shop-floor"></div>
+  <div class="shop-sign">
+    <div class="shop-sign-text">SchoolPark Bookstore</div>
+    <div class="shop-sign-sub">本との出会いがここにある</div>
+  </div>
+  <div class="shop-shelves">
+    <div class="shelf-unit"><div class="shelf-plank" id="sp1"></div><div class="shelf-plank" id="sp2"></div></div>
+    <div class="shelf-unit"><div class="shelf-plank" id="sp3"></div><div class="shelf-plank" id="sp4"></div></div>
+    <div class="shelf-unit"><div class="shelf-plank" id="sp5"></div><div class="shelf-plank" id="sp6"></div></div>
+  </div>
+  <div class="price-stand">
+    <div class="price-stand-title">今週のおすすめ</div>
+    <div class="price-stand-price">¥500〜</div>
+    <div class="price-stand-sub">対話形式 5本</div>
+  </div>
+  <div class="warm-glow"></div>
+</div>
+
+<!-- コンテンツ -->
+<div class="page">
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('original')">✍️ SchoolPark本</div>
+    <div class="tab" onclick="switchTab('recommend')">📚 推薦図書</div>
+    <div class="tab" onclick="switchTab('corner')">☕ 試し読み</div>
+  </div>
+
+  <!-- SchoolPark本 -->
+  <div class="panel active" id="panel-original">
+    <div class="section-title">✍️ SchoolPark オリジナル作品</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">対話形式インタビュー記事。実際に生き方を変えた人たちの知恵を、読みやすい会話形式でお届け。</div>
+
+    <!-- 横スクロール棚 -->
+    <div class="books-shelf-row">
+      <div class="shelf-book-card" onclick="openModal(0)">
+        <div class="shelf-book-cover" style="background:linear-gradient(135deg,#1a0a30,#3a1060)">🌿</div>
+        <div class="shelf-book-info">
+          <div class="shelf-book-title">しもまゆ対談<br>適応の作法</div>
+          <div class="shelf-book-price">¥500</div>
+        </div>
+      </div>
+      <div class="shelf-book-card" onclick="openModal(1)">
+        <div class="shelf-book-cover" style="background:linear-gradient(135deg,#001a30,#002a60)">🎓</div>
+        <div class="shelf-book-info">
+          <div class="shelf-book-title">及川直之対談<br>変化の技術</div>
+          <div class="shelf-book-price">¥800</div>
+        </div>
+      </div>
+      <div class="shelf-book-card" onclick="openModal(2)">
+        <div class="shelf-book-cover" style="background:linear-gradient(135deg,#1a0000,#3a1000)">🔄</div>
+        <div class="shelf-book-info">
+          <div class="shelf-book-title">ケンタ<br>人生再起動</div>
+          <div class="shelf-book-price">¥800</div>
+        </div>
+      </div>
+      <div class="shelf-book-card" onclick="openModal(3)">
+        <div class="shelf-book-cover" style="background:linear-gradient(135deg,#001a10,#002a20)">🧘</div>
+        <div class="shelf-book-info">
+          <div class="shelf-book-title">サクサク<br>ストレス制御</div>
+          <div class="shelf-book-price">¥800</div>
+        </div>
+      </div>
+      <div class="shelf-book-card" onclick="openModal(4)">
+        <div class="shelf-book-cover" style="background:linear-gradient(135deg,#1a001a,#3a0030)">✨</div>
+        <div class="shelf-book-info">
+          <div class="shelf-book-title">りさやりがい<br>やりがい×ストレス</div>
+          <div class="shelf-book-price">¥800</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="book-detail-list">
+      <div class="book-detail">
+        <div class="book-detail-inner">
+          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#1a0a30,#3a1060)">🌿</div></div>
+          <div class="book-info">
+            <div class="book-title">「自分のできること」の境界線を引く<span class="pop-tag new-tag">NEW</span></div>
+            <div class="book-author">しもまゆ</div>
+            <div class="book-desc">柔軟さと芯のなさは違う。適応の作法を語る対談。</div>
+          </div>
+        </div>
+        <div class="book-actions">
+          <div><span class="book-price">¥500</span> <span class="book-price-sub">固定</span></div>
+          <button class="preview-btn" onclick="openModal(0)">試し読み</button>
+          <button class="buy-btn" onclick="window.open('https://note.com','_blank')">購入する →</button>
+        </div>
+      </div>
+
+      <div class="book-detail">
+        <div class="book-detail-inner">
+          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#001a30,#002a60)">🎓</div></div>
+          <div class="book-info">
+            <div class="book-title">「安定」という軸があるから変わり続けられる<span class="pop-tag">人気</span></div>
+            <div class="book-author">及川直之</div>
+            <div class="book-desc">教育者が語る真の柔軟性と変化の技術。</div>
+          </div>
+        </div>
+        <div class="book-actions">
+          <div><span class="book-price">¥800</span> <span class="book-price-sub">リポストで¥500</span></div>
+          <button class="preview-btn" onclick="openModal(1)">試し読み</button>
+          <button class="buy-btn" onclick="window.open('https://note.com','_blank')">購入する →</button>
+        </div>
+      </div>
+
+      <div class="book-detail">
+        <div class="book-detail-inner">
+          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#1a0000,#3a1000)">🔄</div></div>
+          <div class="book-info">
+            <div class="book-title">【人生再起動】「予定通り」を捨てたら楽になった</div>
+            <div class="book-author">ケンタ</div>
+            <div class="book-desc">元ニート歴4年から副業・起業へ。芯のある柔軟さ。</div>
+          </div>
+        </div>
+        <div class="book-actions">
+          <div><span class="book-price">¥800</span> <span class="book-price-sub">リポストで¥500</span></div>
+          <button class="preview-btn" onclick="openModal(2)">試し読み</button>
+          <button class="buy-btn" onclick="window.open('https://note.com','_blank')">購入する →</button>
+        </div>
+      </div>
+
+      <div class="book-detail">
+        <div class="book-detail-inner">
+          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#001a10,#002a20)">🧘</div></div>
+          <div class="book-info"><div class="book-title">ストレスをコントロールする思考法</div>
+          <div class="book-author">サクサク</div>
+          <div class="book-desc">日常のストレス源を特定し自分の対処法を構築する。</div></div>
+        </div>
+        <div class="book-actions">
+          <div><span class="book-price">¥800</span> <span class="book-price-sub">リポストで¥500</span></div>
+          <button class="preview-btn" onclick="openModal(3)">試し読み</button>
+          <button class="buy-btn" onclick="window.open('https://note.com','_blank')">購入する →</button>
+        </div>
+      </div>
+
+      <div class="book-detail">
+        <div class="book-detail-inner">
+          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#1a001a,#3a0030)">✨</div></div>
+          <div class="book-info"><div class="book-title">「やりがい」から逆算するストレス解消術</div>
+          <div class="book-author">りさやりがい</div>
+          <div class="book-desc">やりがいを軸に感情を整理し前進するメソッド。</div></div>
+        </div>
+        <div class="book-actions">
+          <div><span class="book-price">¥800</span> <span class="book-price-sub">リポストで¥500</span></div>
+          <button class="preview-btn" onclick="openModal(4)">試し読み</button>
+          <button class="buy-btn" onclick="window.open('https://note.com','_blank')">購入する →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 推薦図書 -->
+  <div class="panel" id="panel-recommend">
+    <div class="section-title">📚 店長おすすめセレクション</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">SchoolParkの4つのリテラシーテーマに沿って、店長が厳選した参考書籍。</div>
+    <div class="book-detail-list">
+
+      <div class="book-detail">
+        <div class="book-detail-inner">
+          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#002020,#004040)">💰</div></div>
+          <div class="book-info">
+            <div class="book-title">お金の大学<span class="pop-tag">マネー</span></div>
+            <div class="book-author">両@リベ大学長</div>
+            <div class="book-desc">貯める・稼ぐ・増やす・守る・使う。5つの力を身につけるための入門書。</div>
+          </div>
+        </div>
+        <div class="book-actions"><div><span class="book-price-sub">一般書籍</span></div><button class="preview-btn" onclick="window.open('https://amzn.to/','_blank')">詳細を見る</button></div>
+      </div>
+
+      <div class="book-detail">
+        <div class="book-detail-inner">
+          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#001830,#002a50)">🌐</div></div>
+          <div class="book-info">
+            <div class="book-title">NFTの教科書<span class="pop-tag">ネット</span></div>
+            <div class="book-author">天野 彬 (編著)</div>
+            <div class="book-desc">NFT・Web3の基礎から応用まで。デジタル経済の新常識を網羅。</div>
+          </div>
+        </div>
+        <div class="book-actions"><div><span class="book-price-sub">一般書籍</span></div><button class="preview-btn" onclick="window.open('https://amzn.to/','_blank')">詳細を見る</button></div>
+      </div>
+
+      <div class="book-detail">
+        <div class="book-detail-inner">
+          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#1a1000,#3a2800)">🌿</div></div>
+          <div class="book-info">
+            <div class="book-title">嫌われる勇気<span class="pop-tag">ライフ</span></div>
+            <div class="book-author">岸見 一郎 / 古賀 史健</div>
+            <div class="book-desc">アドラー心理学を対話形式で学ぶ。自分らしく生きるための思考法。</div>
+          </div>
+        </div>
+        <div class="book-actions"><div><span class="book-price-sub">一般書籍</span></div><button class="preview-btn" onclick="window.open('https://amzn.to/','_blank')">詳細を見る</button></div>
+      </div>
+
+      <div class="book-detail">
+        <div class="book-detail-inner">
+          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#200020,#400040)">🤝</div></div>
+          <div class="book-info">
+            <div class="book-title">人を動かす<span class="pop-tag">ヒューマン</span></div>
+            <div class="book-author">D・カーネギー</div>
+            <div class="book-desc">人間関係の本質を説いた不朽の名作。コミュニケーションの基礎書。</div>
+          </div>
+        </div>
+        <div class="book-actions"><div><span class="book-price-sub">一般書籍</span></div><button class="preview-btn" onclick="window.open('https://amzn.to/','_blank')">詳細を見る</button></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 試し読みコーナー -->
+  <div class="panel" id="panel-corner">
+    <div class="section-title">☕ 試し読みコーナー</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px;font-size:12px;color:var(--muted);line-height:1.7">ゆっくり座って、気になる本を試し読みしてみてください。SchoolParkオリジナル作品の冒頭を無料でお読みいただけます。</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div onclick="openModal(0)" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:border-color .2s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <span style="font-size:28px">🌿</span>
+        <div><div style="font-size:13px;font-weight:700;color:#fff">しもまゆ対談 — 適応の作法</div><div style="font-size:11px;color:var(--muted)">ライフリテラシー · タップして試し読み</div></div>
+        <span style="margin-left:auto;color:var(--accent)">▶</span>
+      </div>
+      <div onclick="openModal(1)" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:border-color .2s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <span style="font-size:28px">🎓</span>
+        <div><div style="font-size:13px;font-weight:700;color:#fff">及川直之対談 — 変化の技術</div><div style="font-size:11px;color:var(--muted)">ライフリテラシー · タップして試し読み</div></div>
+        <span style="margin-left:auto;color:var(--accent)">▶</span>
+      </div>
+      <div onclick="openModal(2)" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:border-color .2s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <span style="font-size:28px">🔄</span>
+        <div><div style="font-size:13px;font-weight:700;color:#fff">ケンタ — 人生再起動</div><div style="font-size:11px;color:var(--muted)">ライフリテラシー · タップして試し読み</div></div>
+        <span style="margin-left:auto;color:var(--accent)">▶</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 試し読みモーダル -->
+<div id="modal">
+  <div class="modal-close-btn">
+    <button onclick="closeModal()" style="background:rgba(255,157,58,.2);border:1px solid var(--border);color:var(--accent);padding:7px 16px;border-radius:20px;cursor:pointer;font-size:12px">✕ 閉じる</button>
+  </div>
+  <div class="modal-body">
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-author" id="modalAuthor"></div>
+    <div class="modal-text" id="modalText"></div>
+    <div class="modal-cta">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">📖 続きはnoteで購入してお読みください</div>
+      <button onclick="window.open('https://note.com','_blank')" style="background:linear-gradient(135deg,#6a3000,var(--accent));color:#000;border:none;padding:10px 22px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer">noteで全文を読む →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== 本棚 ==========
+const BC=['#8b2222','#225588','#228822','#886622','#662288','#cc5500','#335599','#7a2255','#4a7a22','#cc7700'];
+function buildShopShelves(){
+  for(let i=1;i<=6;i++){
+    const plank=document.getElementById('sp'+i);
+    if(!plank)continue;
+    const cnt=6+Math.floor(Math.random()*4);
+    for(let j=0;j<cnt;j++){
+      const b=document.createElement('div');
+      b.className='sp-book';
+      const h=30+Math.floor(Math.random()*18);
+      const w=10+Math.floor(Math.random()*7);
+      b.style.cssText=`height:${h}px;width:${w}px;background:${BC[Math.floor(Math.random()*BC.length)]}`;
+      plank.appendChild(b);
+    }
+  }
+}
+buildShopShelves();
+
+// ========== タブ ==========
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',['original','recommend','corner'][i]===name)});
+  document.querySelectorAll('.panel').forEach(p=>{p.classList.toggle('active',p.id==='panel-'+name)});
+}
+
+// ========== 試し読み ==========
+const PREVIEWS=[
+  {
+    title:'「自分のできること」の境界線を引く。変化の波に呑まれず、しなやかに生き抜くための「適応」の作法',
+    author:'しもまゆ（魅力を言語化するnote発信サポート）',
+    text:`<p>── 今日はよろしくお願いします。「適応の作法」というテーマを選んだ理由を教えてください。</p>
+<p><span class="hl">しもまゆ：</span>変化が激しい時代に「柔軟に対応できる人」と言われる一方で、それが「芯のなさ」と混同されていると感じているんです。</p>
+<p>── 「柔軟さ」と「芯のなさ」は、どこが違うのでしょうか。</p>
+<p><span class="hl">しもまゆ：</span>私が思う柔軟さというのは、<span class="hl">「やり方を変えられること」</span>なんです。でも芯のなさは「目的ごと変えてしまうこと」。本当に大事なものを守るために、方法は柔軟に変える。それがしなやかに生き抜く人の特徴だと思っています。</p>
+<p style="color:var(--muted);font-size:11px">※ 以下、続きはnoteで全文をお読みください</p>`
+  },
+  {
+    title:'「安定」という軸があるからこそ、人はどこまでも変わり続けられる。',
+    author:'及川直之（私立中高一貫校教員・地方Web3連携協会理事）',
+    text:`<p>── 及川さんは「予定通りにいかなかったこと」が特にないとおっしゃると聞きました。</p>
+<p><span class="hl">及川：</span>そうですね（笑）。予定を「ゴールへの道筋」として細かく決めすぎないんです。</p>
+<p>── それはどういう考え方なのでしょう？</p>
+<p><span class="hl">及川：</span><span class="hl">大きな方向性だけ決めて、具体的な手段は状況に合わせて変える。</span>だから「予定が狂う」という感覚がそもそもない。安定した軸があるから、どんな変化にも対応できるんです。</p>
+<p style="color:var(--muted);font-size:11px">※ 以下、続きはnoteで全文をお読みください</p>`
+  },
+  {
+    title:'【人生再起動】「予定通り」を捨てたら、生きるのが楽になった。',
+    author:'ケンタ（30代・元ニート歴4年→副業・起業チャレンジ中）',
+    text:`<p>── ニート歴4年から今の状況になるまで、何がターニングポイントでしたか？</p>
+<p><span class="hl">ケンタ：</span>「こうあるべき」をやめたことですね。30代にもなって就職もせず、周りと比べてばかりいた。でも、<span class="hl">「予定通り」じゃないことが、実は全然悪いことじゃない</span>と気づいたとき、すごく楽になったんです。</p>
+<p>── 具体的にどうやって気持ちを切り替えたんですか？</p>
+<p><span class="hl">ケンタ：</span>まず「自分に何ができるか」だけ考えるようにした。過去の失敗じゃなく、今日できること。それだけ。小さいことを積み上げていたら、副業が始まって、今につながった。</p>
+<p style="color:var(--muted);font-size:11px">※ 以下、続きはnoteで全文をお読みください</p>`
+  },
+  {title:'ストレスをコントロールする思考法',author:'サクサク',text:`<p>日常のストレス源を特定し、自分なりの対処法を構築するための実践的思考法。</p><p style="color:var(--muted);font-size:11px">本文は近日公開予定です。</p>`},
+  {title:'「やりがい」から逆算するストレス解消術',author:'りさやりがい',text:`<p>やりがいを軸に置いたとき、ストレスはどう変わるか。感情の整理と前進のための実践メソッド。</p><p style="color:var(--muted);font-size:11px">本文は近日公開予定です。</p>`}
+];
+function openModal(idx){
+  const p=PREVIEWS[idx];if(!p)return;
+  document.getElementById('modalTitle').textContent=p.title;
+  document.getElementById('modalAuthor').textContent=p.author;
+  document.getElementById('modalText').innerHTML=p.text;
+  document.getElementById('modal').style.display='block';
+  document.getElementById('modal').scrollTop=0;
+}
+function closeModal(){document.getElementById('modal').style.display='none';}
+</script>
+</body>
+</html>
