@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchoolPark Security Guard — 自警団</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1a1500;--bg2:#221d00;--bg3:#2d2600;
+  --accent:#eab308;--accent2:#facc15;--danger:#ef4444;--ok:#22c55e;--info:#60a5fa;
+  --text:#fefce8;--text2:#fde68a;--border:rgba(250,204,21,0.15);--card:rgba(250,204,21,0.04);
+  --radius:12px;--guardbg:#713f12;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
+
+.header{position:sticky;top:0;z-index:100;height:54px;background:rgba(26,21,0,0.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px}
+.back-btn{background:var(--guardbg);color:#fff;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:0.8rem;font-weight:700;font-family:inherit;letter-spacing:0.05em;transition:opacity 0.15s;white-space:nowrap}
+.back-btn:hover{opacity:0.85}
+.header-title{font-size:0.9rem;font-weight:700;display:flex;align-items:center;gap:6px}
+.header-badge{background:var(--accent);color:#000;font-size:0.6rem;font-weight:700;padding:2px 7px;border-radius:20px}
+.header-clock{margin-left:auto;font-size:0.72rem;color:var(--text2);white-space:nowrap}
+
+.hero{background:linear-gradient(135deg,#1a1500 0%,#713f12 50%,#92400e 100%);padding:28px 16px 22px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:"🛡️";position:absolute;right:-10px;top:-10px;font-size:120px;opacity:0.08}
+.hero-icon{font-size:52px;margin-bottom:8px}
+.hero-title{font-size:1.35rem;font-weight:700;letter-spacing:0.05em}
+.hero-sub{font-size:0.78rem;color:var(--text2);margin-top:4px}
+.hero-tags{display:flex;justify-content:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.hero-tag{background:rgba(250,204,21,0.12);border:1px solid rgba(250,204,21,0.2);padding:3px 10px;border-radius:20px;font-size:0.65rem;color:var(--text2)}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.stat{background:var(--bg2);padding:12px 8px;text-align:center}
+.stat-val{font-size:1.1rem;font-weight:700;color:var(--accent2)}
+.stat-lbl{font-size:0.6rem;color:var(--text2);margin-top:2px}
+
+.tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:11px 16px;font-size:0.75rem;font-weight:700;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.tab:hover{color:var(--text);background:var(--card)}
+.tab.active{color:var(--accent2);border-bottom-color:var(--accent2);background:rgba(234,179,8,0.07)}
+.main{max-width:720px;margin:0 auto;padding:16px 14px 60px}
+.panel{display:none}.panel.active{display:block}
+
+.sec{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.sec-title{font-size:0.8rem;font-weight:700;color:var(--accent2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+
+.alert{border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-start}
+.alert.yellow{background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.25);color:#fde68a}
+.alert.green{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);color:#86efac}
+.alert.red{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:#fca5a5}
+.alert.blue{background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);color:#93c5fd}
+.alert-icon{font-size:1.1rem;flex-shrink:0}
+.alert-title{font-size:0.78rem;font-weight:700;margin-bottom:3px}
+.alert-body{font-size:0.72rem;line-height:1.6}
+
+.tip{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+.tip-head{display:flex;align-items:center;gap:8px;cursor:pointer}
+.tip-icon{font-size:1rem;flex-shrink:0}
+.tip-title{font-size:0.78rem;font-weight:700;flex:1}
+.tip-arrow{color:var(--text2);font-size:0.7rem;transition:transform 0.2s;flex-shrink:0}
+.tip.open .tip-arrow{transform:rotate(180deg)}
+.tip-body{font-size:0.72rem;color:var(--text2);margin-top:10px;line-height:1.7;border-top:1px solid var(--border);padding-top:10px;display:none}
+.tip.open .tip-body{display:block}
+
+.check-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.check-item:last-child{border-bottom:none}
+.check-icon{font-size:1.1rem;flex-shrink:0;margin-top:1px}
+.check-title{font-size:0.78rem;font-weight:700;margin-bottom:3px}
+.check-desc{font-size:0.71rem;color:var(--text2);line-height:1.6}
+.check-badge{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700;flex-shrink:0;margin-top:2px}
+.check-badge.good{background:rgba(34,197,94,0.15);color:#86efac;border:1px solid rgba(34,197,94,0.3)}
+.check-badge.warn{background:rgba(234,179,8,0.15);color:#fde68a;border:1px solid rgba(234,179,8,0.3)}
+.check-badge.bad{background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.3)}
+
+.patrol-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+.patrol-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.patrol-type{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700;background:var(--accent);color:#000}
+.patrol-status{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700}
+.patrol-status.active{background:rgba(34,197,94,0.15);color:#86efac;border:1px solid rgba(34,197,94,0.3)}
+.patrol-status.resolved{background:rgba(96,165,250,0.15);color:#93c5fd;border:1px solid rgba(96,165,250,0.3)}
+.patrol-date{font-size:0.65rem;color:var(--text2)}
+.patrol-body{font-size:0.75rem;line-height:1.6}
+.patrol-actions{display:flex;gap:8px;margin-top:8px}
+.btn-sm{padding:5px 12px;border-radius:8px;font-size:0.7rem;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:opacity 0.2s}
+.btn-sm:hover{opacity:0.8}
+.btn-ok{background:var(--ok);color:#000}
+
+.form-group{margin-bottom:12px}
+.form-label{font-size:0.75rem;font-weight:700;color:var(--text2);margin-bottom:5px;display:block}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:inherit;font-size:0.8rem;outline:none;transition:border-color 0.2s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent)}
+.form-textarea{resize:vertical;min-height:90px}
+.form-select option{background:var(--bg2)}
+.submit-btn{width:100%;background:var(--accent);color:#000;border:none;border-radius:var(--radius);padding:13px;font-weight:700;font-size:0.88rem;cursor:pointer;font-family:inherit;transition:opacity 0.2s;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:8px}
+.submit-btn:hover{opacity:0.85}
+.submit-btn:disabled{opacity:0.5;cursor:not-allowed}
+
+.rank-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;display:flex;gap:12px;align-items:center}
+.rank-icon{font-size:1.8rem;flex-shrink:0}
+.rank-title{font-size:0.82rem;font-weight:700;margin-bottom:3px}
+.rank-desc{font-size:0.71rem;color:var(--text2);line-height:1.5}
+.rank-badge{padding:3px 10px;border-radius:20px;font-size:0.65rem;font-weight:700;flex-shrink:0}
+.rank-badge.s{background:#eab308;color:#000}
+.rank-badge.a{background:#94a3b8;color:#000}
+.rank-badge.b{background:#78350f;color:#fde68a}
+
+.owner-section{background:rgba(234,179,8,0.06);border:1px solid rgba(234,179,8,0.2);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.owner-title{font-size:0.78rem;font-weight:700;color:var(--accent2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.empty{text-align:center;padding:24px;color:var(--text2);font-size:0.8rem}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#000;padding:10px 20px;border-radius:20px;font-size:0.78rem;font-weight:700;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <button class="back-btn" onclick="goBack()">← 戻る</button>
+  <div class="header-title">🛡️ <span>自警団</span> <span class="header-badge">WEST</span></div>
+  <div class="header-clock" id="clock">--:--</div>
+</div>
+
+<div class="hero">
+  <div class="hero-icon">🛡️</div>
+  <div class="hero-title">Security Guard</div>
+  <div class="hero-sub">SchoolPark 西エリア — セキュリティ・安全管理センター</div>
+  <div class="hero-tags">
+    <span class="hero-tag">🔒 ウォレット保護</span>
+    <span class="hero-tag">🔍 セキュリティ診断</span>
+    <span class="hero-tag">👁️ 不審活動報告</span>
+    <span class="hero-tag">🏅 自警団ランク</span>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val" id="statPatrols">—</div><div class="stat-lbl">報告件数</div></div>
+  <div class="stat"><div class="stat-val" id="statActive">—</div><div class="stat-lbl">対応中</div></div>
+  <div class="stat"><div class="stat-val">24h</div><div class="stat-lbl">常時警戒</div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('wallet',this)">🔒 ウォレット保護</button>
+  <button class="tab" onclick="switchTab('check',this)">🔍 セキュリティ診断</button>
+  <button class="tab" onclick="switchTab('report',this)">👁️ 不審報告</button>
+  <button class="tab" onclick="switchTab('rank',this)">🏅 自警団ランク</button>
+  <button class="tab" id="adminTab" onclick="switchTab('admin',this)" style="display:none">⚙️ 管理</button>
+</div>
+
+<div class="main">
+
+  <!-- ウォレット保護タブ -->
+  <div class="panel active" id="tab-wallet">
+    <div class="alert yellow">
+      <div class="alert-icon">🛡️</div>
+      <div>
+        <div class="alert-title">あなたの資産はあなた自身が守る</div>
+        <div class="alert-body">Web3では「自分の秘密鍵＝全権限」です。銀行のような補償はありません。正しい知識で自分の資産を守りましょう。</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🔑 シードフレーズの鉄則</div>
+      <div class="tip">
+        <div class="tip-head" onclick="toggleTip(this)">
+          <span class="tip-icon">📝</span>
+          <span class="tip-title">シードフレーズとは？絶対やってはいけないこと</span>
+          <span class="tip-arrow">▼</span>
+        </div>
+        <div class="tip-body">
+          シードフレーズ（リカバリーフレーズ）は12〜24単語のウォレット復元コードです。<br><br>
+          <strong>❌ 絶対NG：</strong><br>
+          ・スクリーンショットで保存<br>
+          ・クラウド（Google Drive・iCloud等）に保存<br>
+          ・SNSやチャットで送信<br>
+          ・誰にも見せる・教える<br>
+          ・Webフォームに入力<br><br>
+          <strong>✅ 正しい管理：</strong><br>
+          ・紙に書いてオフライン保管（複数箇所）<br>
+          ・金属プレートへの刻印（上級者向け）<br>
+          ・絶対に他人に見せない
+        </div>
+      </div>
+      <div class="tip">
+        <div class="tip-head" onclick="toggleTip(this)">
+          <span class="tip-icon">🦊</span>
+          <span class="tip-title">MetaMaskの安全な使い方</span>
+          <span class="tip-arrow">▼</span>
+        </div>
+        <div class="tip-body">
+          <strong>接続管理：</strong><br>
+          ・定期的に「接続済みサイト」を確認・整理<br>
+          ・使わなくなったサイトは接続を削除<br>
+          ・見知らぬサイトへの接続は慎重に<br><br>
+          <strong>コントラクト承認（Approve）：</strong><br>
+          ・承認量を必要最小限に設定（「無制限承認」を避ける）<br>
+          ・Revoke.cash 等で定期的に承認を取り消す<br>
+          ・何を承認しているか必ず確認してから署名する<br><br>
+          <strong>パスワード：</strong><br>
+          ・MetaMaskのパスワードは強力なものを設定<br>
+          ・PCを離れるときはロックする習慣を
+        </div>
+      </div>
+      <div class="tip">
+        <div class="tip-head" onclick="toggleTip(this)">
+          <span class="tip-icon">💎</span>
+          <span class="tip-title">ハードウェアウォレットの導入を検討する</span>
+          <span class="tip-arrow">▼</span>
+        </div>
+        <div class="tip-body">
+          大切な資産を長期保管するなら、ハードウェアウォレット（Ledger・Trezor等）が最も安全です。<br><br>
+          <strong>メリット：</strong><br>
+          ・秘密鍵がインターネットに接触しない<br>
+          ・マルウェアがあっても資産は安全<br>
+          ・フィッシングサイトへの誤接続も防止<br><br>
+          <strong>費用：</strong>1〜2万円程度（資産が大きくなったら検討を）<br><br>
+          ※公式サイトからのみ購入。中古・転売品は絶対NG（改ざんリスク）
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🕵️ フィッシング・詐欺を見分ける</div>
+      <div class="tip">
+        <div class="tip-head" onclick="toggleTip(this)">
+          <span class="tip-icon">🎣</span>
+          <span class="tip-title">フィッシング詐欺の見分け方・5パターン</span>
+          <span class="tip-arrow">▼</span>
+        </div>
+        <div class="tip-body">
+          <strong>パターン1：偽サイト誘導</strong><br>
+          URLが「schoolpark-emu.vercel.app」以外のSchoolPark → 全て偽物<br><br>
+          <strong>パターン2：偽DM</strong><br>
+          「オーナーです。シードフレーズを教えてください」→ 絶対に本物のオーナーは聞きません<br><br>
+          <strong>パターン3：緊急煽り</strong><br>
+          「今すぐサインしないとNFTが消えます」→ 冷静に。本物はそんなことを言いません<br><br>
+          <strong>パターン4：無料NFT・エアドロップ</strong><br>
+          「無料でNFTをミントできます」→ コントラクト承認＝財布を開ける行為です<br><br>
+          <strong>パターン5：なりすまし</strong><br>
+          アイコン・名前が似ているアカウント → 必ず公式SNSのリンクから確認
+        </div>
+      </div>
+      <div class="tip">
+        <div class="tip-head" onclick="toggleTip(this)">
+          <span class="tip-icon">✍️</span>
+          <span class="tip-title">「署名（Sign）」と「承認（Approve）」の違い</span>
+          <span class="tip-arrow">▼</span>
+        </div>
+        <div class="tip-body">
+          <strong>署名（Sign）：</strong>ガス代不要・メッセージへの署名。ログイン認証等で使用。<br>
+          悪意あるサイトでは「Permit」署名でトークンを盗まれる場合も。内容を必ず確認。<br><br>
+          <strong>承認（Approve）：</strong>コントラクトにトークン操作権限を与える。ガス代発生。<br>
+          「無制限承認」は危険。「必要な量のみ承認」が基本。<br><br>
+          どちらも「何を承認しているか」を読む習慣が最大の防御です。
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🛡️ SchoolPark正規チャンネル一覧</div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <div style="display:grid;gap:1px;background:var(--border)">
+          <div style="background:var(--bg3);padding:10px 14px">
+            <div style="font-size:0.72rem;color:var(--text2);margin-bottom:2px">🌐 公式サイト（SchoolPark）</div>
+            <div style="font-size:0.8rem;font-weight:700;color:var(--accent2)">schoolpark-emu.vercel.app</div>
+          </div>
+          <div style="background:var(--bg3);padding:10px 14px">
+            <div style="font-size:0.72rem;color:var(--text2);margin-bottom:2px">🐦 公式X（Twitter）</div>
+            <div style="font-size:0.8rem;font-weight:700;color:var(--accent2)">公式プロフィールページを確認</div>
+          </div>
+          <div style="background:var(--bg3);padding:10px 14px">
+            <div style="font-size:0.72rem;color:var(--text2);margin-bottom:2px">📣 公式アナウンス</div>
+            <div style="font-size:0.8rem;font-weight:700;color:var(--accent2)">このサイト内の各掲示板のみ</div>
+          </div>
+        </div>
+        <div style="padding:10px 14px;font-size:0.7rem;color:var(--text2);line-height:1.7">
+          ⚠️ 上記以外のチャンネルからの「公式情報」は全て疑ってください。DM・外部サイトへのウォレット接続は慎重に。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- セキュリティ診断タブ -->
+  <div class="panel" id="tab-check">
+    <div class="alert yellow">
+      <div class="alert-icon">🔍</div>
+      <div>
+        <div class="alert-title">あなたのセキュリティを自己診断</div>
+        <div class="alert-body">各項目の達成状況を確認し、あなたのセキュリティレベルを把握しましょう。</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🔑 ウォレット管理</div>
+      <div class="check-item">
+        <div>
+          <div class="check-title">シードフレーズをオフライン（紙）で保管している</div>
+          <div class="check-desc">スクリーンショット・クラウド保存は❌。紙に書いて安全な場所に保管を。</div>
+        </div>
+        <span class="check-badge good">必須</span>
+      </div>
+      <div class="check-item">
+        <div>
+          <div class="check-title">シードフレーズをデジタル端末に保存していない</div>
+          <div class="check-desc">写真アプリ・メモアプリ・Googleドライブ等への保存は危険です。</div>
+        </div>
+        <span class="check-badge good">必須</span>
+      </div>
+      <div class="check-item">
+        <div>
+          <div class="check-title">MetaMaskのパスワードが8文字以上・複雑</div>
+          <div class="check-desc">誕生日・名前など推測しやすいパスワードは避けましょう。</div>
+        </div>
+        <span class="check-badge warn">推奨</span>
+      </div>
+      <div class="check-item">
+        <div>
+          <div class="check-title">接続済みサイトを定期的に整理している</div>
+          <div class="check-desc">MetaMask → 設定 → 接続済みサイト で確認・削除できます。</div>
+        </div>
+        <span class="check-badge warn">推奨</span>
+      </div>
+      <div class="check-item">
+        <div>
+          <div class="check-title">コントラクト承認を最小限に設定している</div>
+          <div class="check-desc">Revoke.cash 等で不要な承認を取り消しましょう。</div>
+        </div>
+        <span class="check-badge warn">推奨</span>
+      </div>
+      <div class="check-item">
+        <div>
+          <div class="check-title">ハードウェアウォレットを使用している</div>
+          <div class="check-desc">大きな資産の長期保管には最も安全な選択肢です。</div>
+        </div>
+        <span class="check-badge bad">上級</span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🌐 オンライン行動</div>
+      <div class="check-item">
+        <div>
+          <div class="check-title">SchoolParkをブックマークからのみアクセスしている</div>
+          <div class="check-desc">検索結果やDMのリンクからのアクセスはフィッシングリスクがあります。</div>
+        </div>
+        <span class="check-badge good">必須</span>
+      </div>
+      <div class="check-item">
+        <div>
+          <div class="check-title">知らない人からのDMのリンクをクリックしない</div>
+          <div class="check-desc">「無料NFT」「緊急確認」系のDMはほぼ詐欺です。</div>
+        </div>
+        <span class="check-badge good">必須</span>
+      </div>
+      <div class="check-item">
+        <div>
+          <div class="check-title">コントラクト承認前に内容を確認している</div>
+          <div class="check-desc">「Approve」「Permit」の内容を必ず読んでから署名を。</div>
+        </div>
+        <span class="check-badge warn">推奨</span>
+      </div>
+      <div class="check-item">
+        <div>
+          <div class="check-title">PCのウイルス対策ソフトが有効</div>
+          <div class="check-desc">マルウェアによるウォレット情報漏洩を防ぎます。</div>
+        </div>
+        <span class="check-badge warn">推奨</span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🏆 あなたのセキュリティランク</div>
+      <div id="rankResult" style="text-align:center;padding:20px;color:var(--text2);font-size:0.8rem">
+        上記の項目を確認してセルフチェックしてください。<br>全「必須」項目をクリア → 🛡️ 自警団メンバー認定！
+      </div>
+    </div>
+  </div>
+
+  <!-- 不審報告タブ -->
+  <div class="panel" id="tab-report">
+    <div class="alert yellow">
+      <div class="alert-icon">👁️</div>
+      <div>
+        <div class="alert-title">コミュニティをみんなで守ろう</div>
+        <div class="alert-body">不審なアカウント・詐欺の試み・なりすましを発見したら報告してください。自警団全員の目がSchoolParkを守ります。</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🚨 不審活動を報告する</div>
+      <div class="form-group">
+        <label class="form-label">報告の種類</label>
+        <select class="form-select" id="reportType">
+          <option value="phishing">🎣 フィッシング・偽サイト</option>
+          <option value="impersonation">🎭 なりすましアカウント</option>
+          <option value="spam">🤖 スパム・ボット</option>
+          <option value="scam">💸 詐欺（NFT・トークン）</option>
+          <option value="harassment">😡 ハラスメント</option>
+          <option value="suspicious">🔍 不審な行動（その他）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">詳細（URL・ウォレットアドレス・スクリーンショット説明など）</label>
+        <textarea class="form-textarea" id="reportBody" placeholder="できる限り詳しく。証拠となるURL・アドレス・発生時刻等を記載してください。"></textarea>
+      </div>
+      <button class="submit-btn" id="reportSubmitBtn" onclick="submitReport()">🚨 報告を送信</button>
+    </div>
+
+    <div class="sec" style="margin-top:20px">
+      <div class="sec-title">📋 パトロールログ（最近の報告）</div>
+      <div id="patrolList"><div class="empty">読み込み中...</div></div>
+    </div>
+  </div>
+
+  <!-- 自警団ランクタブ -->
+  <div class="panel" id="tab-rank">
+    <div class="alert green">
+      <div class="alert-icon">🏅</div>
+      <div>
+        <div class="alert-title">自警団メンバーランク制度</div>
+        <div class="alert-body">セキュリティ知識の習得・不審活動の報告・コミュニティ貢献によってランクが上がります。</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🏆 ランク一覧</div>
+      <div class="rank-card">
+        <div class="rank-icon">🥇</div>
+        <div style="flex:1">
+          <div class="rank-title">団長（Commander）</div>
+          <div class="rank-desc">全セキュリティチェッククリア・5件以上の有効報告・オーナー認定。SchoolParkのセキュリティを最前線で守るリーダー。</div>
+        </div>
+        <span class="rank-badge s">S</span>
+      </div>
+      <div class="rank-card">
+        <div class="rank-icon">🥈</div>
+        <div style="flex:1">
+          <div class="rank-title">隊員（Member）</div>
+          <div class="rank-desc">必須セキュリティチェッククリア・1件以上の有効報告。コミュニティを積極的に守る自警団の正式メンバー。</div>
+        </div>
+        <span class="rank-badge a">A</span>
+      </div>
+      <div class="rank-card">
+        <div class="rank-icon">🥉</div>
+        <div style="flex:1">
+          <div class="rank-title">見習い（Trainee）</div>
+          <div class="rank-desc">ウォレット保護ガイドを一読した段階。セキュリティ意識を持ち始めたメンバー。</div>
+        </div>
+        <span class="rank-badge b">B</span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">📜 自警団の誓い</div>
+      <div style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);border-radius:var(--radius);padding:16px;text-align:center">
+        <div style="font-size:1.5rem;margin-bottom:10px">🛡️</div>
+        <div style="font-size:0.85rem;font-weight:700;color:var(--accent2);margin-bottom:12px">自警団員の誓い</div>
+        <div style="font-size:0.75rem;color:var(--text2);line-height:2">
+          一、シードフレーズを誰にも渡さない<br>
+          一、不審なリンクは踏まない・広めない<br>
+          一、詐欺・不審を発見したら即報告する<br>
+          一、コミュニティメンバーを詐欺から守る<br>
+          一、正しい知識を自ら学び続ける
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 管理タブ -->
+  <div class="panel" id="tab-admin">
+    <div class="owner-section">
+      <div class="owner-title">⚙️ 管理者専用パネル — パトロールログ管理</div>
+      <div id="adminReportList"><div class="empty">読み込み中...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const OWNER_UID    = "txCTc9kWVaXMhHIJCE5n3tNkxql1";
+const OWNER_WALLET = "0x822f5fd877d53acbdb1e7e7d38b89c6a3dcb2e06";
+const params = new URLSearchParams(location.search);
+const walletParam = params.get("wallet") || "";
+
+let db = null;
+function getDb(){ if(db)return db; if(window.top?.db){db=window.top.db;return db;} if(window.parent?.db){db=window.parent.db;return db;} return null; }
+function getFbLib(){ if(window.top?.fbLib)return window.top.fbLib; if(window.parent?.fbLib)return window.parent.fbLib; return null; }
+function isOwner(){
+  const uid=(window.top?.currentUserUid)||(window.parent?.currentUserUid)||"";
+  const wallet=(window.top?.connectedAccount)||(window.parent?.connectedAccount)||walletParam||"";
+  return uid===OWNER_UID||wallet.toLowerCase()===OWNER_WALLET.toLowerCase();
+}
+function updateClock(){ const n=new Date(); document.getElementById("clock").textContent=n.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}); }
+updateClock(); setInterval(updateClock,30000);
+function showToast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),3000); }
+function toggleTip(h){ h.closest(".tip").classList.toggle("open"); }
+
+function switchTab(id,btn){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.getElementById("tab-"+id).classList.add("active");
+  btn.classList.add("active");
+  if(id==="report") loadPatrols();
+  if(id==="admin") loadAdminReports();
+}
+
+async function submitReport(){
+  const db=getDb(); const fbLib=getFbLib();
+  if(!db||!fbLib){showToast("❌ DB接続エラー");return;}
+  const type=document.getElementById("reportType").value;
+  const body=document.getElementById("reportBody").value.trim();
+  if(!body){showToast("⚠️ 詳細を入力してください");return;}
+  const btn=document.getElementById("reportSubmitBtn");
+  btn.disabled=true; btn.textContent="送信中...";
+  try{
+    const wallet=(window.top?.connectedAccount)||walletParam||"匿名";
+    await fbLib.addDoc(fbLib.collection(db,"sp_guard_reports"),{ type, body, wallet, status:"active", createdAt:fbLib.serverTimestamp() });
+    document.getElementById("reportBody").value="";
+    showToast("🚨 報告を送信しました");
+    loadStats(); loadPatrols();
+  }catch(e){ showToast("❌ 送信失敗: "+e.message); }
+  btn.disabled=false; btn.textContent="🚨 報告を送信";
+}
+
+async function loadPatrols(){
+  const db=getDb(); const fbLib=getFbLib();
+  const el=document.getElementById("patrolList");
+  if(!db||!fbLib){el.innerHTML='<div class="empty">DB未接続</div>';return;}
+  try{
+    const q=fbLib.query(fbLib.collection(db,"sp_guard_reports"),fbLib.orderBy("createdAt","desc"),fbLib.limit(20));
+    const snap=await fbLib.getDocs(q);
+    if(snap.empty){el.innerHTML='<div class="empty">報告はまだありません</div>';return;}
+    const typeLabel={phishing:"🎣 フィッシング",impersonation:"🎭 なりすまし",spam:"🤖 スパム",scam:"💸 詐欺",harassment:"😡 ハラスメント",suspicious:"🔍 不審行動"};
+    el.innerHTML=snap.docs.map(d=>{
+      const r=d.data(); const dt=r.createdAt?.toDate?r.createdAt.toDate().toLocaleDateString("ja-JP"):"";
+      return `<div class="patrol-card">
+        <div class="patrol-meta">
+          <span class="patrol-type">${typeLabel[r.type]||r.type}</span>
+          <span class="patrol-status ${r.status==='resolved'?'resolved':'active'}">${r.status==='resolved'?'✅解決':'🔍調査中'}</span>
+          <span class="patrol-date">${dt}</span>
+        </div>
+        <div class="patrol-body">${(r.body||"").replace(/\n/g,"<br>")}</div>
+      </div>`;
+    }).join("");
+  }catch(e){ el.innerHTML=`<div class="empty">エラー: ${e.message}</div>`; }
+}
+
+async function loadAdminReports(){
+  const db=getDb(); const fbLib=getFbLib();
+  const el=document.getElementById("adminReportList");
+  if(!db||!fbLib||!isOwner()){el.innerHTML='<div class="empty">権限なし</div>';return;}
+  try{
+    const q=fbLib.query(fbLib.collection(db,"sp_guard_reports"),fbLib.orderBy("createdAt","desc"),fbLib.limit(30));
+    const snap=await fbLib.getDocs(q);
+    if(snap.empty){el.innerHTML='<div class="empty">報告はありません</div>';return;}
+    const typeLabel={phishing:"🎣 フィッシング",impersonation:"🎭 なりすまし",spam:"🤖 スパム",scam:"💸 詐欺",harassment:"😡 ハラスメント",suspicious:"🔍 不審行動"};
+    el.innerHTML=snap.docs.map(d=>{
+      const r=d.data(); const dt=r.createdAt?.toDate?r.createdAt.toDate().toLocaleDateString("ja-JP"):"";
+      return `<div class="patrol-card">
+        <div class="patrol-meta">
+          <span class="patrol-type">${typeLabel[r.type]||r.type}</span>
+          <span class="patrol-status ${r.status==='resolved'?'resolved':'active'}">${r.status==='resolved'?'✅解決':'🔍調査中'}</span>
+          <span class="patrol-date">${dt}</span>
+        </div>
+        <div class="patrol-body">${(r.body||"").replace(/\n/g,"<br>")}</div>
+        <div style="font-size:0.68rem;color:var(--text2);margin-top:4px">👤 ${r.wallet||"匿名"}</div>
+        ${r.status!=='resolved'?`<div class="patrol-actions"><button class="btn-sm btn-ok" onclick="resolveReport('${d.id}')">✅ 解決済にする</button></div>`:""}
+      </div>`;
+    }).join("");
+  }catch(e){ el.innerHTML=`<div class="empty">エラー: ${e.message}</div>`; }
+}
+
+async function resolveReport(id){
+  const db=getDb(); const fbLib=getFbLib();
+  if(!db||!fbLib||!isOwner()) return;
+  try{ await fbLib.updateDoc(fbLib.doc(db,"sp_guard_reports",id),{status:"resolved"}); showToast("✅ 解決済"); loadAdminReports(); }
+  catch(e){ showToast("❌ 失敗"); }
+}
+
+async function loadStats(){
+  const db=getDb(); const fbLib=getFbLib(); if(!db||!fbLib) return;
+  try{
+    const [all,active]=await Promise.all([
+      fbLib.getDocs(fbLib.collection(db,"sp_guard_reports")),
+      fbLib.getDocs(fbLib.query(fbLib.collection(db,"sp_guard_reports"),fbLib.where("status","==","active")))
+    ]);
+    document.getElementById("statPatrols").textContent=all.size;
+    document.getElementById("statActive").textContent=active.size;
+  }catch(e){}
+}
+
+window.addEventListener("DOMContentLoaded",()=>{
+  if(isOwner()) document.getElementById("adminTab").style.display="";
+  loadStats(); loadPatrols();
+});
+
+function goBack(){ window.top.postMessage({type:"spContentClose"},"*"); }
+</script>
+</body>
+</html>

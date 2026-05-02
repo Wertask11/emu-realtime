@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchoolPark Gym — ジム</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1a0a00;--bg2:#221200;--bg3:#2d1a00;
+  --accent:#f97316;--accent2:#fb923c;--ok:#22c55e;--info:#60a5fa;--warn:#eab308;
+  --text:#fff7ed;--text2:#fed7aa;--border:rgba(249,115,22,0.15);--card:rgba(249,115,22,0.04);
+  --radius:12px;--gymbg:#7c2d12;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
+
+.header{position:sticky;top:0;z-index:100;height:54px;background:rgba(26,10,0,0.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px}
+.back-btn{background:var(--gymbg);color:#fff;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:0.8rem;font-weight:700;font-family:inherit;letter-spacing:0.05em;transition:opacity 0.15s;white-space:nowrap}
+.back-btn:hover{opacity:0.85}
+.header-title{font-size:0.9rem;font-weight:700;display:flex;align-items:center;gap:6px}
+.header-badge{background:var(--accent);color:#fff;font-size:0.6rem;font-weight:700;padding:2px 7px;border-radius:20px}
+.header-clock{margin-left:auto;font-size:0.72rem;color:var(--text2);white-space:nowrap}
+
+.hero{background:linear-gradient(135deg,#1a0a00 0%,#7c2d12 50%,#9a3412 100%);padding:28px 16px 22px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:"💪";position:absolute;right:-10px;top:-10px;font-size:120px;opacity:0.08}
+.hero-icon{font-size:52px;margin-bottom:8px}
+.hero-title{font-size:1.35rem;font-weight:700;letter-spacing:0.05em}
+.hero-sub{font-size:0.78rem;color:var(--text2);margin-top:4px}
+.hero-tags{display:flex;justify-content:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.hero-tag{background:rgba(249,115,22,0.12);border:1px solid rgba(249,115,22,0.2);padding:3px 10px;border-radius:20px;font-size:0.65rem;color:var(--text2)}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.stat{background:var(--bg2);padding:12px 8px;text-align:center}
+.stat-val{font-size:1.1rem;font-weight:700;color:var(--accent2)}
+.stat-lbl{font-size:0.6rem;color:var(--text2);margin-top:2px}
+
+.tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:11px 16px;font-size:0.75rem;font-weight:700;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.tab:hover{color:var(--text);background:var(--card)}
+.tab.active{color:var(--accent2);border-bottom-color:var(--accent2);background:rgba(249,115,22,0.07)}
+.main{max-width:720px;margin:0 auto;padding:16px 14px 60px}
+.panel{display:none}.panel.active{display:block}
+
+.sec{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.sec-title{font-size:0.8rem;font-weight:700;color:var(--accent2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+
+.alert{border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-start}
+.alert.orange{background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.25);color:#fed7aa}
+.alert.green{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);color:#86efac}
+.alert.yellow{background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.2);color:#fde68a}
+.alert.blue{background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);color:#93c5fd}
+.alert-icon{font-size:1.1rem;flex-shrink:0}
+.alert-title{font-size:0.78rem;font-weight:700;margin-bottom:3px}
+.alert-body{font-size:0.72rem;line-height:1.6}
+
+/* Training Card */
+.train-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;transition:border-color 0.2s}
+.train-card:hover{border-color:rgba(249,115,22,0.4)}
+.train-head{display:flex;gap:10px;align-items:flex-start}
+.train-icon{font-size:1.6rem;flex-shrink:0}
+.train-title{font-size:0.85rem;font-weight:700;margin-bottom:3px}
+.train-sub{font-size:0.71rem;color:var(--text2);line-height:1.5}
+.train-meta{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.train-tag{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700}
+.train-tag.lv1{background:rgba(34,197,94,0.15);color:#86efac;border:1px solid rgba(34,197,94,0.3)}
+.train-tag.lv2{background:rgba(234,179,8,0.15);color:#fde68a;border:1px solid rgba(234,179,8,0.3)}
+.train-tag.lv3{background:rgba(249,115,22,0.15);color:#fed7aa;border:1px solid rgba(249,115,22,0.3)}
+.train-tag.time{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+
+/* Progress */
+.progress-wrap{margin-bottom:14px}
+.progress-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.progress-title{font-size:0.75rem;font-weight:700}
+.progress-val{font-size:0.72rem;color:var(--text2)}
+.progress-bar{height:8px;background:var(--bg3);border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width 0.5s ease}
+
+/* Log item */
+.log-item{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)}
+.log-item:last-child{border-bottom:none}
+.log-date{font-size:0.65rem;color:var(--text2);white-space:nowrap;margin-top:2px;flex-shrink:0}
+.log-content{flex:1}
+.log-title{font-size:0.78rem;font-weight:700;margin-bottom:2px}
+.log-desc{font-size:0.7rem;color:var(--text2);line-height:1.5}
+.log-xp{font-size:0.68rem;font-weight:700;color:var(--accent2);flex-shrink:0}
+
+/* Challenge */
+.challenge-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.challenge-head{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.challenge-icon{font-size:1.4rem;flex-shrink:0}
+.challenge-title{font-size:0.85rem;font-weight:700;flex:1}
+.challenge-badge{padding:3px 10px;border-radius:20px;font-size:0.65rem;font-weight:700;flex-shrink:0}
+.challenge-badge.active{background:var(--accent);color:#fff}
+.challenge-badge.coming{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+.challenge-badge.done{background:rgba(34,197,94,0.2);color:#86efac;border:1px solid rgba(34,197,94,0.3)}
+.challenge-desc{font-size:0.73rem;color:var(--text2);line-height:1.6;margin-bottom:8px}
+.challenge-reward{font-size:0.7rem;color:var(--accent2);font-weight:700}
+
+/* Rank */
+.rank-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;display:flex;gap:12px;align-items:center}
+.rank-icon{font-size:1.8rem;flex-shrink:0}
+.rank-title{font-size:0.82rem;font-weight:700;margin-bottom:3px}
+.rank-desc{font-size:0.71rem;color:var(--text2);line-height:1.5}
+.rank-badge{padding:3px 10px;border-radius:20px;font-size:0.65rem;font-weight:700;flex-shrink:0}
+.rank-badge.s{background:#f97316;color:#fff}
+.rank-badge.a{background:#eab308;color:#000}
+.rank-badge.b{background:#78350f;color:#fed7aa}
+.rank-badge.c{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+
+/* Admin / Form */
+.owner-section{background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.2);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.owner-title{font-size:0.78rem;font-weight:700;color:var(--accent2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.form-group{margin-bottom:12px}
+.form-label{font-size:0.75rem;font-weight:700;color:var(--text2);margin-bottom:5px;display:block}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:inherit;font-size:0.8rem;outline:none;transition:border-color 0.2s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent)}
+.form-textarea{resize:vertical;min-height:80px}
+.form-select option{background:var(--bg2)}
+.submit-btn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);padding:13px;font-weight:700;font-size:0.88rem;cursor:pointer;font-family:inherit;transition:opacity 0.2s;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:8px}
+.submit-btn:hover{opacity:0.85}
+.submit-btn:disabled{opacity:0.5;cursor:not-allowed}
+
+.btn-sm{padding:5px 12px;border-radius:8px;font-size:0.7rem;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:opacity 0.2s}
+.btn-sm:hover{opacity:0.8}
+.btn-ok{background:var(--ok);color:#000}
+.empty{text-align:center;padding:24px;color:var(--text2);font-size:0.8rem}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 20px;border-radius:20px;font-size:0.78rem;font-weight:700;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <button class="back-btn" onclick="goBack()">← 戻る</button>
+  <div class="header-title">💪 <span>ジム</span> <span class="header-badge">WEST</span></div>
+  <div class="header-clock" id="clock">--:--</div>
+</div>
+
+<div class="hero">
+  <div class="hero-icon">💪</div>
+  <div class="hero-title">Gym</div>
+  <div class="hero-sub">SchoolPark 西エリア — スキルアップ・継続トレーニングセンター</div>
+  <div class="hero-tags">
+    <span class="hero-tag">🧠 Web3スキル</span>
+    <span class="hero-tag">🔥 習慣化</span>
+    <span class="hero-tag">🏆 チャレンジ</span>
+    <span class="hero-tag">📈 成長記録</span>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val" id="statChallenges">4</div><div class="stat-lbl">チャレンジ</div></div>
+  <div class="stat"><div class="stat-val" id="statMenus">12</div><div class="stat-lbl">トレーニング</div></div>
+  <div class="stat"><div class="stat-val">∞</div><div class="stat-lbl">成長上限なし</div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('menu',this)">🏋️ トレーニング</button>
+  <button class="tab" onclick="switchTab('habit',this)">🔥 習慣化</button>
+  <button class="tab" onclick="switchTab('challenge',this)">🏆 チャレンジ</button>
+  <button class="tab" onclick="switchTab('rank',this)">📈 成長ランク</button>
+  <button class="tab" id="adminTab" onclick="switchTab('admin',this)" style="display:none">⚙️ 管理</button>
+</div>
+
+<div class="main">
+
+  <!-- トレーニングタブ -->
+  <div class="panel active" id="tab-menu">
+    <div class="alert orange">
+      <div class="alert-icon">🏋️</div>
+      <div>
+        <div class="alert-title">Web3時代の「体を鍛える」＝スキルを鍛える</div>
+        <div class="alert-body">フィジカルと同じく、Web3・DAO・クリエイターとしての力も日々のトレーニングで伸びます。自分のペースで続けることが最強です。</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">💡 初心者メニュー（まずここから）</div>
+      <div class="train-card">
+        <div class="train-head">
+          <div class="train-icon">🔑</div>
+          <div>
+            <div class="train-title">ウォレット作成・基礎セキュリティ</div>
+            <div class="train-sub">MetaMaskの作成・シードフレーズ管理・接続の基本。すべてのWeb3活動の土台です。</div>
+          </div>
+        </div>
+        <div class="train-meta">
+          <span class="train-tag lv1">初級</span>
+          <span class="train-tag time">⏱️ 30分</span>
+        </div>
+      </div>
+      <div class="train-card">
+        <div class="train-head">
+          <div class="train-icon">🪙</div>
+          <div>
+            <div class="train-title">NFTの基礎を知る</div>
+            <div class="train-sub">NFTとは何か・なぜ価値があるのか・SchoolParkのNFTを読み解く。自分でNFTを評価できるようになろう。</div>
+          </div>
+        </div>
+        <div class="train-meta">
+          <span class="train-tag lv1">初級</span>
+          <span class="train-tag time">⏱️ 45分</span>
+        </div>
+      </div>
+      <div class="train-card">
+        <div class="train-head">
+          <div class="train-icon">📝</div>
+          <div>
+            <div class="train-title">SchoolParkに初めて投稿する</div>
+            <div class="train-sub">アカウント接続→プロフィール設定→初投稿の流れ。まず一歩踏み出すことが最大のトレーニングです。</div>
+          </div>
+        </div>
+        <div class="train-meta">
+          <span class="train-tag lv1">初級</span>
+          <span class="train-tag time">⏱️ 15分</span>
+        </div>
+      </div>
+      <div class="train-card">
+        <div class="train-head">
+          <div class="train-icon">💬</div>
+          <div>
+            <div class="train-title">コミュニティで発言する</div>
+            <div class="train-sub">他のメンバーの投稿に反応・コメントする。「見るだけ」から「参加者」へシフトする最初の一歩。</div>
+          </div>
+        </div>
+        <div class="train-meta">
+          <span class="train-tag lv1">初級</span>
+          <span class="train-tag time">⏱️ 10分</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🔥 中級メニュー（スキルを伸ばす）</div>
+      <div class="train-card">
+        <div class="train-head">
+          <div class="train-icon">⛓️</div>
+          <div>
+            <div class="train-title">ブロックチェーンの仕組みを理解する</div>
+            <div class="train-sub">トランザクション・ガス代・コントラクトの基礎。「なぜこうなるのか」を理解すると行動に自信が生まれます。</div>
+          </div>
+        </div>
+        <div class="train-meta">
+          <span class="train-tag lv2">中級</span>
+          <span class="train-tag time">⏱️ 60分</span>
+        </div>
+      </div>
+      <div class="train-card">
+        <div class="train-head">
+          <div class="train-icon">🏛️</div>
+          <div>
+            <div class="train-title">DAOの概念と参加方法</div>
+            <div class="train-sub">SchoolParkがDAOとして目指す姿・投票・提案・コミュニティ自治の仕組みを学ぶ。</div>
+          </div>
+        </div>
+        <div class="train-meta">
+          <span class="train-tag lv2">中級</span>
+          <span class="train-tag time">⏱️ 45分</span>
+        </div>
+      </div>
+      <div class="train-card">
+        <div class="train-head">
+          <div class="train-icon">✍️</div>
+          <div>
+            <div class="train-title">自分の「探索」を言語化して投稿する</div>
+            <div class="train-sub">日々の気づき・学び・体験を投稿に変える力。アウトプットが最速の学習法です。</div>
+          </div>
+        </div>
+        <div class="train-meta">
+          <span class="train-tag lv2">中級</span>
+          <span class="train-tag time">⏱️ 20分 / 日</span>
+        </div>
+      </div>
+      <div class="train-card">
+        <div class="train-head">
+          <div class="train-icon">💸</div>
+          <div>
+            <div class="train-title">Web3での収益化を理解する</div>
+            <div class="train-sub">NFT・コンテンツ・トークン・コミュニティ参加による収益化の仕組みと SchoolParkでの実践方法。</div>
+          </div>
+        </div>
+        <div class="train-meta">
+          <span class="train-tag lv2">中級</span>
+          <span class="train-tag time">⏱️ 60分</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">💥 上級メニュー（プロになる）</div>
+      <div class="train-card">
+        <div class="train-head">
+          <div class="train-icon">🛠️</div>
+          <div>
+            <div class="train-title">スマートコントラクトを読む</div>
+            <div class="train-sub">Solidityの基礎・Etherscanでのコード確認。投資・参加前に「コントラクトを自分で読む」ができると最強。</div>
+          </div>
+        </div>
+        <div class="train-meta">
+          <span class="train-tag lv3">上級</span>
+          <span class="train-tag time">⏱️ 継続学習</span>
+        </div>
+      </div>
+      <div class="train-card">
+        <div class="train-head">
+          <div class="train-icon">📊</div>
+          <div>
+            <div class="train-title">オンチェーンデータを分析する</div>
+            <div class="train-sub">Dune Analytics・Nansen等でコミュニティの動向を読む。データで動くWeb3プレイヤーを目指す。</div>
+          </div>
+        </div>
+        <div class="train-meta">
+          <span class="train-tag lv3">上級</span>
+          <span class="train-tag time">⏱️ 継続学習</span>
+        </div>
+      </div>
+      <div class="train-card">
+        <div class="train-head">
+          <div class="train-icon">🌐</div>
+          <div>
+            <div class="train-title">コミュニティリーダーとして発信する</div>
+            <div class="train-sub">SNSでの定期発信・イベント企画・メンバー育成。SchoolParkを共に成長させるリーダーへ。</div>
+          </div>
+        </div>
+        <div class="train-meta">
+          <span class="train-tag lv3">上級</span>
+          <span class="train-tag time">⏱️ 継続活動</span>
+        </div>
+      </div>
+      <div class="train-card">
+        <div class="train-head">
+          <div class="train-icon">🏗️</div>
+          <div>
+            <div class="train-title">自分のプロジェクトを立ち上げる</div>
+            <div class="train-sub">SchoolParkで学んだすべてを活かして自分のDAO・NFT・コンテンツビジネスを作る。最高峰のゴール。</div>
+          </div>
+        </div>
+        <div class="train-meta">
+          <span class="train-tag lv3">上級</span>
+          <span class="train-tag time">⏱️ プロジェクト次第</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 習慣化タブ -->
+  <div class="panel" id="tab-habit">
+    <div class="alert orange">
+      <div class="alert-icon">🔥</div>
+      <div>
+        <div class="alert-title">継続こそが最強のトレーニング</div>
+        <div class="alert-body">1日30分の習慣を1年続ければ、180時間のスキルになります。毎日少しずつでOK。まずは3日続けることから始めましょう。</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">📅 毎日の鍛錬メニュー（デイリールーティン）</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;display:flex;align-items:center;gap:12px">
+          <div style="font-size:1.4rem">☀️</div>
+          <div style="flex:1">
+            <div style="font-size:0.8rem;font-weight:700;margin-bottom:2px">朝のルーティン（5分）</div>
+            <div style="font-size:0.7rem;color:var(--text2);line-height:1.5">SchoolParkのタイムラインを確認・気になる投稿に反応する</div>
+          </div>
+          <span style="font-size:0.65rem;font-weight:700;color:var(--accent2)">⭐×1</span>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;display:flex;align-items:center;gap:12px">
+          <div style="font-size:1.4rem">✏️</div>
+          <div style="flex:1">
+            <div style="font-size:0.8rem;font-weight:700;margin-bottom:2px">アウトプット（15分）</div>
+            <div style="font-size:0.7rem;color:var(--text2);line-height:1.5">その日の気づき・学び・体験を投稿する。短くてもOK</div>
+          </div>
+          <span style="font-size:0.65rem;font-weight:700;color:var(--accent2)">⭐×3</span>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;display:flex;align-items:center;gap:12px">
+          <div style="font-size:1.4rem">📚</div>
+          <div style="flex:1">
+            <div style="font-size:0.8rem;font-weight:700;margin-bottom:2px">インプット（20分）</div>
+            <div style="font-size:0.7rem;color:var(--text2);line-height:1.5">Web3・DAO・NFT関連の記事・動画を1つ消化する</div>
+          </div>
+          <span style="font-size:0.65rem;font-weight:700;color:var(--accent2)">⭐×2</span>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;display:flex;align-items:center;gap:12px">
+          <div style="font-size:1.4rem">🔒</div>
+          <div style="flex:1">
+            <div style="font-size:0.8rem;font-weight:700;margin-bottom:2px">セキュリティチェック（5分）</div>
+            <div style="font-size:0.7rem;color:var(--text2);line-height:1.5">ウォレット接続状況・不審なDMがないかを確認</div>
+          </div>
+          <span style="font-size:0.65rem;font-weight:700;color:var(--accent2)">⭐×1</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🔁 3日・7日・30日チャレンジの効果</div>
+      <div style="display:grid;gap:8px">
+        <div style="background:var(--bg2);border:1px solid rgba(34,197,94,0.3);border-radius:var(--radius);padding:12px 14px">
+          <div style="font-size:0.8rem;font-weight:700;color:#86efac;margin-bottom:4px">🟢 3日継続</div>
+          <div style="font-size:0.72rem;color:var(--text2);line-height:1.6">「習慣のとっかかり」ができる。3日続けられたら7日が見えてくる。星座に黄星が生まれる🌟</div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid rgba(234,179,8,0.3);border-radius:var(--radius);padding:12px 14px">
+          <div style="font-size:0.8rem;font-weight:700;color:#fde68a;margin-bottom:4px">🟡 7日継続</div>
+          <div style="font-size:0.72rem;color:var(--text2);line-height:1.6">「習慣の基盤」が生まれる。1週間のルーティンが体に刷り込まれ始める。</div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid rgba(249,115,22,0.3);border-radius:var(--radius);padding:12px 14px">
+          <div style="font-size:0.8rem;font-weight:700;color:#fed7aa;margin-bottom:4px">🟠 30日継続</div>
+          <div style="font-size:0.72rem;color:var(--text2);line-height:1.6">「プレイヤーとしての地力」が身につく。コミュニティ内での存在感が大きく変わる。</div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid rgba(239,68,68,0.3);border-radius:var(--radius);padding:12px 14px">
+          <div style="font-size:0.8rem;font-weight:700;color:#fca5a5;margin-bottom:4px">🔴 90日継続</div>
+          <div style="font-size:0.72rem;color:var(--text2);line-height:1.6">「コミュニティの中核メンバー」へ。信頼と実績が積み重なり、影響力が生まれる段階。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">💡 スランプを乗り越える3つの方法</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:11px 14px">
+          <div style="font-size:0.78rem;font-weight:700;margin-bottom:3px">① 量を減らす（やめない）</div>
+          <div style="font-size:0.71rem;color:var(--text2);line-height:1.5">「今日は投稿できない」→「いいねだけする」に変える。完全にやめないことが大事。</div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:11px 14px">
+          <div style="font-size:0.78rem;font-weight:700;margin-bottom:3px">② 仲間と一緒に動く</div>
+          <div style="font-size:0.71rem;color:var(--text2);line-height:1.5">誰かが投稿しているのを見ると自分もやる気になる。コミュニティの力を借りよう。</div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:11px 14px">
+          <div style="font-size:0.78rem;font-weight:700;margin-bottom:3px">③ なぜ始めたか振り返る</div>
+          <div style="font-size:0.71rem;color:var(--text2);line-height:1.5">「なぜSchoolParkにいるのか」を再確認。原点に戻ることで再点火できる。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- チャレンジタブ -->
+  <div class="panel" id="tab-challenge">
+    <div class="alert yellow">
+      <div class="alert-icon">🏆</div>
+      <div>
+        <div class="alert-title">コミュニティチャレンジ</div>
+        <div class="alert-body">期間限定のチャレンジをクリアして、星座に星を増やしましょう。完了するとSchoolPark内での実績になります。</div>
+      </div>
+    </div>
+
+    <div id="challengeList">
+      <div class="challenge-card">
+        <div class="challenge-head">
+          <div class="challenge-icon">📝</div>
+          <div class="challenge-title">30日連続投稿チャレンジ</div>
+          <span class="challenge-badge active">🔥 開催中</span>
+        </div>
+        <div class="challenge-desc">30日間、毎日SchoolParkに投稿する。短くてもOK。「継続」という最強の筋肉を鍛えよう。</div>
+        <div class="challenge-reward">🎁 達成報告 → 赤星＋コミュニティ認定バッジ</div>
+      </div>
+      <div class="challenge-card">
+        <div class="challenge-head">
+          <div class="challenge-icon">🌟</div>
+          <div class="challenge-title">初NFT取得チャレンジ</div>
+          <span class="challenge-badge active">🔥 開催中</span>
+        </div>
+        <div class="challenge-desc">SchoolParkで最初のNFTを取得する。購入・プレゼント・交換どれでもOK。Web3参加者への第一歩。</div>
+        <div class="challenge-reward">🎁 達成 → 青星が星座に生まれる</div>
+      </div>
+      <div class="challenge-card">
+        <div class="challenge-head">
+          <div class="challenge-icon">💬</div>
+          <div class="challenge-title">探索3日連続チャレンジ</div>
+          <span class="challenge-badge active">🔥 開催中</span>
+        </div>
+        <div class="challenge-desc">3日連続でSchoolParkの探索エリアを訪問し、発見・気づきを投稿する。継続の種を植えよう。</div>
+        <div class="challenge-reward">🎁 達成 → 黄色い星が星座に生まれる</div>
+      </div>
+      <div class="challenge-card">
+        <div class="challenge-head">
+          <div class="challenge-icon">📖</div>
+          <div class="challenge-title">学びコンテンツ完走チャレンジ</div>
+          <span class="challenge-badge active">🔥 開催中</span>
+        </div>
+        <div class="challenge-desc">noteで販売中の学びシリーズを1本読み、SchoolParkに感想を投稿する。インプットとアウトプットの両立。</div>
+        <div class="challenge-reward">🎁 達成 → 赤い星（学び星）が星座に生まれる</div>
+      </div>
+    </div>
+
+    <div class="sec" style="margin-top:8px">
+      <div class="sec-title">📣 チャレンジ達成を報告する</div>
+      <div class="form-group">
+        <label class="form-label">達成したチャレンジ</label>
+        <select class="form-select" id="achieveType">
+          <option value="30days">📝 30日連続投稿</option>
+          <option value="first_nft">🌟 初NFT取得</option>
+          <option value="streak3">💬 探索3日連続</option>
+          <option value="learning">📖 学びコンテンツ完走</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">達成の証拠・コメント（投稿URL・感想など）</label>
+        <textarea class="form-textarea" id="achieveBody" placeholder="達成を証明できる投稿URLや、チャレンジを通じての気づき・感想をどうぞ！"></textarea>
+      </div>
+      <button class="submit-btn" id="achieveSubmitBtn" onclick="submitAchieve()">🏆 達成報告を送る</button>
+    </div>
+  </div>
+
+  <!-- 成長ランクタブ -->
+  <div class="panel" id="tab-rank">
+    <div class="alert orange">
+      <div class="alert-icon">📈</div>
+      <div>
+        <div class="alert-title">SchoolPark成長ランク</div>
+        <div class="alert-body">投稿数・継続日数・チャレンジ達成・コミュニティ貢献でランクが上がります。</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🏆 ランク一覧</div>
+      <div class="rank-card">
+        <div class="rank-icon">🔥</div>
+        <div style="flex:1">
+          <div class="rank-title">レジェンド（Legend）</div>
+          <div class="rank-desc">投稿100件以上・全チャレンジクリア・コミュニティ在籍90日以上・オーナー認定。SchoolParkの伝説的メンバー。</div>
+        </div>
+        <span class="rank-badge s">S</span>
+      </div>
+      <div class="rank-card">
+        <div class="rank-icon">⚡</div>
+        <div style="flex:1">
+          <div class="rank-title">エース（Ace）</div>
+          <div class="rank-desc">投稿50件以上・チャレンジ2つ以上達成・継続30日以上。コミュニティを引っ張る存在感のあるメンバー。</div>
+        </div>
+        <span class="rank-badge a">A</span>
+      </div>
+      <div class="rank-card">
+        <div class="rank-icon">💪</div>
+        <div style="flex:1">
+          <div class="rank-title">レギュラー（Regular）</div>
+          <div class="rank-desc">投稿10件以上・チャレンジ1つ達成・継続7日以上。ジムの常連として認められたメンバー。</div>
+        </div>
+        <span class="rank-badge b">B</span>
+      </div>
+      <div class="rank-card">
+        <div class="rank-icon">🌱</div>
+        <div style="flex:1">
+          <div class="rank-title">ビギナー（Beginner）</div>
+          <div class="rank-desc">SchoolParkに参加した全てのメンバー。ここから始まる成長の第一歩。</div>
+        </div>
+        <span class="rank-badge c">C</span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">💪 ジムの格言</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);border-radius:8px;padding:12px 14px;text-align:center">
+          <div style="font-size:0.85rem;font-weight:700;color:var(--accent2);margin-bottom:4px">「継続は力なり」</div>
+          <div style="font-size:0.7rem;color:var(--text2)">1日1%の成長を365日続けると、約37倍になる。</div>
+        </div>
+        <div style="background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);border-radius:8px;padding:12px 14px;text-align:center">
+          <div style="font-size:0.85rem;font-weight:700;color:var(--accent2);margin-bottom:4px">「完璧より完了」</div>
+          <div style="font-size:0.7rem;color:var(--text2)">100点の投稿を1本より、60点の投稿を10本。量が質を生む。</div>
+        </div>
+        <div style="background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.2);border-radius:8px;padding:12px 14px;text-align:center">
+          <div style="font-size:0.85rem;font-weight:700;color:var(--accent2);margin-bottom:4px">「コミュニティは最強のジム」</div>
+          <div style="font-size:0.7rem;color:var(--text2)">仲間と一緒にいることで、一人では到達できない場所へ行ける。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 管理タブ -->
+  <div class="panel" id="tab-admin">
+    <div class="owner-section">
+      <div class="owner-title">⚙️ 管理者専用 — チャレンジ達成報告</div>
+      <div id="adminAchieveList"><div class="empty">読み込み中...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const OWNER_UID    = "txCTc9kWVaXMhHIJCE5n3tNkxql1";
+const OWNER_WALLET = "0x822f5fd877d53acbdb1e7e7d38b89c6a3dcb2e06";
+const params = new URLSearchParams(location.search);
+const walletParam = params.get("wallet") || "";
+
+let db = null;
+function getDb(){ if(db)return db; if(window.top?.db){db=window.top.db;return db;} if(window.parent?.db){db=window.parent.db;return db;} return null; }
+function getFbLib(){ if(window.top?.fbLib)return window.top.fbLib; if(window.parent?.fbLib)return window.parent.fbLib; return null; }
+function isOwner(){
+  const uid=(window.top?.currentUserUid)||(window.parent?.currentUserUid)||"";
+  const wallet=(window.top?.connectedAccount)||(window.parent?.connectedAccount)||walletParam||"";
+  return uid===OWNER_UID||wallet.toLowerCase()===OWNER_WALLET.toLowerCase();
+}
+function updateClock(){ const n=new Date(); document.getElementById("clock").textContent=n.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}); }
+updateClock(); setInterval(updateClock,30000);
+function showToast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),3000); }
+
+function switchTab(id,btn){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.getElementById("tab-"+id).classList.add("active");
+  btn.classList.add("active");
+  if(id==="admin") loadAdminAchieves();
+}
+
+async function submitAchieve(){
+  const db=getDb(); const fbLib=getFbLib();
+  if(!db||!fbLib){showToast("❌ DB接続エラー");return;}
+  const type=document.getElementById("achieveType").value;
+  const body=document.getElementById("achieveBody").value.trim();
+  if(!body){showToast("⚠️ コメントを入力してください");return;}
+  const btn=document.getElementById("achieveSubmitBtn");
+  btn.disabled=true; btn.textContent="送信中...";
+  try{
+    const wallet=(window.top?.connectedAccount)||walletParam||"匿名";
+    await fbLib.addDoc(fbLib.collection(db,"sp_gym_achievements"),{
+      type, body, wallet, status:"pending", createdAt:fbLib.serverTimestamp()
+    });
+    document.getElementById("achieveBody").value="";
+    showToast("🏆 達成報告を送りました！");
+  }catch(e){ showToast("❌ 送信失敗: "+e.message); }
+  btn.disabled=false; btn.textContent="🏆 達成報告を送る";
+}
+
+async function loadAdminAchieves(){
+  const db=getDb(); const fbLib=getFbLib();
+  const el=document.getElementById("adminAchieveList");
+  if(!db||!fbLib||!isOwner()){el.innerHTML='<div class="empty">権限なし</div>';return;}
+  try{
+    const q=fbLib.query(fbLib.collection(db,"sp_gym_achievements"),fbLib.orderBy("createdAt","desc"),fbLib.limit(30));
+    const snap=await fbLib.getDocs(q);
+    if(snap.empty){el.innerHTML='<div class="empty">達成報告はありません</div>';return;}
+    const typeLabel={
+      "30days":"📝 30日連続投稿","first_nft":"🌟 初NFT","streak3":"💬 探索3日連続","learning":"📖 学びコンテンツ"
+    };
+    el.innerHTML=snap.docs.map(d=>{
+      const r=d.data(); const dt=r.createdAt?.toDate?r.createdAt.toDate().toLocaleDateString("ja-JP"):"";
+      return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+          <span style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700">${typeLabel[r.type]||r.type}</span>
+          <span style="font-size:0.65rem;color:var(--text2)">${dt}</span>
+          <span style="padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700;${r.status==='approved'?'background:rgba(34,197,94,0.2);color:#86efac':'background:rgba(234,179,8,0.2);color:#fde68a'}">${r.status==='approved'?'✅承認済':'⏳確認中'}</span>
+        </div>
+        <div style="font-size:0.75rem;line-height:1.6;margin-bottom:4px">${(r.body||"").replace(/\n/g,"<br>")}</div>
+        <div style="font-size:0.68rem;color:var(--text2)">👤 ${r.wallet||"匿名"}</div>
+        ${r.status!=='approved'?`<div style="margin-top:8px"><button class="btn-sm btn-ok" onclick="approveAchieve('${d.id}')">✅ 承認する</button></div>`:""}
+      </div>`;
+    }).join("");
+  }catch(e){ el.innerHTML=`<div class="empty">エラー: ${e.message}</div>`; }
+}
+
+async function approveAchieve(id){
+  const db=getDb(); const fbLib=getFbLib(); if(!db||!fbLib||!isOwner()) return;
+  try{ await fbLib.updateDoc(fbLib.doc(db,"sp_gym_achievements",id),{status:"approved"}); showToast("✅ 承認しました"); loadAdminAchieves(); }
+  catch(e){ showToast("❌ 失敗"); }
+}
+
+window.addEventListener("DOMContentLoaded",()=>{
+  if(isOwner()) document.getElementById("adminTab").style.display="";
+});
+
+function goBack(){ window.top.postMessage({type:"spContentClose"},"*"); }
+</script>
+</body>
+</html>
