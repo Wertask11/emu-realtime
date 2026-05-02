@@ -1129,6 +1129,40 @@ body.free .paid-only {display: none;}
   font-family: 'Noto Sans JP', sans-serif;
 }
 
+/* ── CONTACT PANEL TABS ── */
+.w-tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--w-border);
+  flex-shrink: 0;
+  margin: 0 0 0 0;
+}
+.w-tab {
+  flex: 1;
+  padding: 10px 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  color: var(--w-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-family: 'Noto Sans JP', sans-serif;
+  transition: color .15s, border-color .15s;
+}
+.w-tab.active {
+  color: var(--w-accent);
+  border-bottom-color: var(--w-accent);
+}
+/* チュートリアルパネル本体 */
+.w-tutorial-body {
+  display: none;
+  padding: 24px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+.w-tutorial-body.active { display: block; }
+
 /* ── ERROR STATE ── */
 .w-error {
   font-size: 12px;
@@ -10104,6 +10138,12 @@ window.fbLib = {
     </div>
   </div>
 
+  <!-- TAB BAR -->
+  <div class="w-tab-bar">
+    <button class="w-tab active" id="wtab-contact" onclick="switchContactTab('contact')">📬 お問い合わせ</button>
+    <button class="w-tab" id="wtab-tutorial" onclick="switchContactTab('tutorial')">📖 チュートリアル</button>
+  </div>
+
   <!-- SCROLLABLE BODY -->
   <div class="w-body" id="w-body">
 
@@ -10153,6 +10193,19 @@ window.fbLib = {
     </div>
 
   </div><!-- /w-body -->
+
+  <!-- TUTORIAL BODY -->
+  <div class="w-tutorial-body" id="w-tutorial-body">
+    <div style="text-align:center;padding:12px 0 24px">
+      <div style="font-size:3rem;margin-bottom:14px">📖</div>
+      <div style="font-size:0.95rem;color:#D4A843;font-weight:700;margin-bottom:10px;font-family:'Noto Sans JP',sans-serif">SchoolPark チュートリアル</div>
+      <div style="color:var(--w-muted);font-size:0.82rem;line-height:1.85;font-family:'Noto Sans JP',sans-serif">
+        SchoolParkの楽しみ方・使い方を<br>ステップごとに紹介するガイドです。<br><br>
+        <span style="color:#D4A843;font-weight:700">近日公開予定</span><br>
+        現在コンテンツを準備中です。<br>お楽しみに！
+      </div>
+    </div>
+  </div>
 
   <!-- SUCCESS -->
   <div id="w-success">
@@ -10231,6 +10284,21 @@ const FORMS = {
 // ══════════════════════════
 // TOGGLE
 // ══════════════════════════
+/* ── コンタクトパネル タブ切り替え ── */
+function switchContactTab(tab) {
+  const isContact = tab === 'contact';
+  document.getElementById('wtab-contact').classList.toggle('active', isContact);
+  document.getElementById('wtab-tutorial').classList.toggle('active', !isContact);
+  // お問い合わせ側の要素
+  document.getElementById('w-body').style.display      = isContact ? '' : 'none';
+  document.getElementById('w-progress').style.display  = isContact ? '' : 'none';
+  document.getElementById('w-footer').style.display    = isContact ? '' : 'none';
+  const success = document.getElementById('w-success');
+  if (success) success.style.display = 'none';
+  // チュートリアル側
+  document.getElementById('w-tutorial-body').classList.toggle('active', !isContact);
+}
+
 function toggleContactPanel() {
   const btn = document.getElementById('emu-contact-btn');
   const panel = document.getElementById('emu-contact-panel');
