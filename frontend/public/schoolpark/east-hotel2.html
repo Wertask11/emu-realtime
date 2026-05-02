@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grand Oasis Annex - 2号店</title>
+    <style>
+        :root {
+            --bg-main: #05070a;
+            --bg-card: #0f121d;
+            --bg-input: #1a1f2e;
+            --accent-neon: #d4af37;
+            --accent-glow: rgba(212, 175, 55, 0.3);
+            --text-main: #f0f0f0;
+            --text-dim: #8e94a5;
+            --border: #22283d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 1440px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- Navigation --- */
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 25px;
+            background: rgba(5, 7, 10, 0.8);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .nav-left { display: flex; align-items: center; gap: 20px; }
+        .app-brand { font-weight: 800; letter-spacing: 2px; color: var(--accent-neon); }
+        .nav-icons { display: flex; gap: 15px; font-size: 1.2rem; cursor: pointer; }
+
+        /* --- Hero Section --- */
+        .hero {
+            height: 400px;
+            background: linear-gradient(rgba(0,0,0,0) 50%, var(--bg-main)), 
+                        url('https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&q=80&w=1440');
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 50px;
+        }
+
+        .hero-title { font-size: 3rem; margin-bottom: 10px; text-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .btn-checkin {
+            background: var(--accent-neon);
+            color: black;
+            border: none;
+            padding: 12px 35px;
+            border-radius: 50px;
+            font-weight: bold;
+            cursor: pointer;
+            width: fit-content;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-checkin:hover { transform: translateY(-2px); box-shadow: 0 5px 15px var(--accent-glow); }
+        .btn-checkin.active { background: #444; color: #888; cursor: default; }
+
+        /* --- Dashboard Stats --- */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1px;
+            background: var(--border);
+            margin: -20px 50px 30px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        .stat-card { background: var(--bg-card); padding: 25px; text-align: center; }
+        .stat-num { display: block; font-size: 1.5rem; font-weight: bold; color: var(--accent-neon); }
+        .stat-label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; margin-top: 5px; }
+
+        /* --- Tabs --- */
+        .tab-bar {
+            display: flex;
+            gap: 30px;
+            padding: 0 50px;
+            border-bottom: 1px solid var(--border);
+        }
+        .tab {
+            padding: 15px 5px;
+            cursor: pointer;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            position: relative;
+        }
+        .tab.active { color: var(--accent-neon); font-weight: bold; }
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px; left: 0; width: 100%; height: 2px;
+            background: var(--accent-neon);
+            box-shadow: 0 0 10px var(--accent-neon);
+        }
+
+        /* --- Content Area --- */
+        .content { padding: 40px 50px; flex: 1; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        /* --- Form Elements --- */
+        .form-group { margin-bottom: 15px; }
+        input, textarea, select {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            padding: 12px;
+            color: white;
+            border-radius: 8px;
+            outline: none;
+        }
+        input:focus { border-color: var(--accent-neon); }
+
+        .btn-add-opt {
+            background: none;
+            border: 1px dashed var(--accent-neon);
+            color: var(--accent-neon);
+            padding: 10px;
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+
+        /* --- Staff Rating System --- */
+        .staff-eval {
+            background: rgba(255,255,255,0.03);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 1px solid rgba(212, 175, 55, 0.1);
+        }
+
+        .locked-screen {
+            text-align: center;
+            padding: 80px;
+            background: var(--bg-card);
+            border-radius: 20px;
+            border: 1px dashed var(--border);
+        }
+
+        .vote-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            text-align: left;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .vote-btn:hover { border-color: var(--accent-neon); }
+        .voted { background: var(--accent-neon); color: black; font-weight: bold; }
+
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <nav class="top-nav">
+        <div class="nav-left">
+            <button style="background:none; border:1px solid #444; color:#888; padding:5px 12px; border-radius:4px; cursor:pointer;" onclick="window.top.postMessage({type:'spContentClose'},'*')">EXIT</button>
+            <div class="app-brand">GRAND OASIS <span style="font-weight:300;">ANNEX</span></div>
+        </div>
+        <div class="nav-icons">
+            <span>👛</span> <span>🚕</span> <span>🤖</span> <span>⚙️</span>
+        </div>
+    </nav>
+
+    <div class="hero">
+        <div class="hero-title">Welcome to Annex</div>
+        <button class="btn-checkin" id="checkin-btn" onclick="handleCheckin()">CHECK IN</button>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card"><span class="stat-num">2,408</span><span class="stat-label">DAILY VISITORS</span></div>
+        <div class="stat-card"><span class="stat-num" id="count-guest">12</span><span class="stat-label">ACTIVE ROOMS</span></div>
+        <div class="stat-card"><span class="stat-num" id="count-vote">1</span><span class="stat-label">SURVEYS</span></div>
+        <div class="stat-card"><span class="stat-num">LIVE</span><span class="stat-label">LOUNGE MUSIC</span></div>
+    </div>
+
+    <div class="tab-bar">
+        <div class="tab active" onclick="switchTab(event, 'board')">GUEST FEED</div>
+        <div class="tab" onclick="switchTab(event, 'survey')">SURVEYS</div>
+        <div class="tab" onclick="switchTab(event, 'concierge')">CONCIERGE</div>
+    </div>
+
+    <main class="content">
+        <!-- 掲示板 -->
+        <div id="board" class="tab-pane active">
+            <div id="post-area">
+                <!-- JavaScriptで制御 -->
+            </div>
+            <div id="feed-list">
+                <div class="card">
+                    <p style="color:var(--accent-neon); font-size:0.8rem; margin-bottom:5px;">OFFICIAL</p>
+                    <p>2号店「ANNEX」へようこそ。ここでは最新のスマート体験をご提供します。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- アンケート -->
+        <div id="survey" class="tab-pane">
+            <div id="survey-area">
+                <!-- JavaScriptでチェックイン判定 -->
+            </div>
+        </div>
+
+        <!-- コンシェルジュ -->
+        <div id="concierge" class="tab-pane">
+            <div class="card">
+                <h3>Request to Concierge</h3>
+                <div class="form-group" style="margin-top:15px;">
+                    <textarea rows="4" placeholder="ご要望をご記入ください..."></textarea>
+                </div>
+                <button class="btn-checkin" onclick="alert('送信しました')">SEND MESSAGE</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    let isCheckedIn = false;
+    let votesCount = 1;
+
+    function handleCheckin() {
+        if(!isCheckedIn) {
+            isCheckedIn = true;
+            document.getElementById('checkin-btn').innerText = "ENJOY YOUR STAY";
+            document.getElementById('checkin-btn').classList.add('active');
+            document.getElementById('count-guest').innerText = "13";
+            renderUI();
+            alert("チェックイン完了：スマートキーを発行しました。");
+        }
+    }
+
+    function switchTab(e, tabName) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        document.getElementById(tabName).classList.add('active');
+        renderUI();
+    }
+
+    function renderUI() {
+        const postArea = document.getElementById('post-area');
+        const surveyArea = document.getElementById('survey-area');
+
+        // 掲示板フォーム
+        if(isCheckedIn) {
+            postArea.innerHTML = `
+                <div class="card">
+                    <textarea id="p-text" placeholder="ゲストとして投稿..."></textarea>
+                    <button class="btn-checkin" style="margin-top:10px;" onclick="addPost()">POST</button>
+                </div>`;
+        } else {
+            postArea.innerHTML = `<div class="card" style="text-align:center; color:var(--text-dim);">🔒 投稿にはチェックインが必要です</div>`;
+        }
+
+        // アンケートエリア
+        if(isCheckedIn) {
+            if(!document.getElementById('survey-form')) {
+                surveyArea.innerHTML = `
+                    <div class="card" id="survey-form">
+                        <h3 style="color:var(--accent-neon);">Create New Survey</h3>
+                        <div class="form-group" style="margin-top:15px;">
+                            <input type="text" id="v-title" placeholder="議題を入力してください">
+                        </div>
+                        <div id="opt-container">
+                            <input type="text" class="opt-in" style="margin-bottom:10px;" placeholder="案①">
+                            <input type="text" class="opt-in" style="margin-bottom:10px;" placeholder="案②">
+                        </div>
+                        <button class="btn-add-opt" onclick="addOption()">＋ 選択肢を追加</button>
+
+                        <div class="staff-eval">
+                            <p style="font-size:0.8rem; margin-bottom:10px;">従業員の評価項目を追加しますか？</p>
+                            <select id="s-eval-type">
+                                <option value="none">追加しない</option>
+                                <option value="active">素晴らしいスタッフがいた（評価項目追加）</option>
+                                <option value="missing">今回は特になし（該当者なしの項目追加）</option>
+                            </select>
+                        </div>
+
+                        <button class="btn-checkin" style="width:100%" onclick="createSurvey()">PUBLISH SURVEY</button>
+                    </div>
+                    <div id="survey-list"></div>`;
+                renderInitialSurvey();
+            }
+        } else {
+            surveyArea.innerHTML = `
+                <div class="locked-screen">
+                    <h2 style="margin-bottom:10px;">🔒 Guest Only</h2>
+                    <p style="color:var(--text-dim);">この機能はチェックイン済みのゲスト専用です。<br>トップのチェックインボタンからお手続きください。</p>
+                </div>`;
+        }
+    }
+
+    function addOption() {
+        const input = document.createElement('input');
+        input.className = 'opt-in';
+        input.style.marginBottom = '10px';
+        input.placeholder = `案${document.querySelectorAll('.opt-in').length + 1}`;
+        document.getElementById('opt-container').appendChild(input);
+    }
+
+    function createSurvey() {
+        const title = document.getElementById('v-title').value;
+        const opts = Array.from(document.querySelectorAll('.opt-in')).map(i => i.value).filter(v => v !== "");
+        const evalType = document.getElementById('s-eval-type').value;
+
+        if(!title || opts.length < 2) return;
+
+        let extra = "";
+        if(evalType === "active") extra = "【評価対象：優秀なスタッフ】";
+        if(evalType === "missing") extra = "【評価対象：該当者なし（推し無し）】";
+
+        addSurveyToUI(title, opts, extra);
+        votesCount++;
+        document.getElementById('count-vote').innerText = votesCount;
+        
+        // Clear
+        document.getElementById('v-title').value = "";
+        document.getElementById('opt-container').innerHTML = `<input type="text" class="opt-in" style="margin-bottom:10px;" placeholder="案①"><input type="text" class="opt-in" style="margin-bottom:10px;" placeholder="案②">`;
+    }
+
+    function renderInitialSurvey() {
+        addSurveyToUI("2号店限定アメニティについて", ["オーガニックセット", "快眠サポートセット"], "");
+    }
+
+    function addSurveyToUI(title, opts, extra) {
+        const list = document.getElementById('survey-list');
+        const card = document.createElement('div');
+        card.className = 'card';
+        
+        let btns = opts.map(o => `<button class="vote-btn" onclick="vote(this)">${o}</button>`).join('');
+        if(extra) btns += `<button class="vote-btn" style="border-style:dashed" onclick="vote(this)">${extra}</button>`;
+
+        card.innerHTML = `<h4>${title}</h4><div style="margin-top:15px;">${btns}</div>`;
+        list.prepend(card);
+    }
+
+    function vote(btn) {
+        const parent = btn.parentElement;
+        parent.querySelectorAll('button').forEach(b => {
+            b.disabled = true;
+            b.style.opacity = "0.5";
+        });
+        btn.classList.add('voted');
+        btn.style.opacity = "1";
+    }
+
+    function addPost() {
+        const text = document.getElementById('p-text').value;
+        if(!text) return;
+        const list = document.getElementById('feed-list');
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = `<p style="color:var(--text-dim); font-size:0.7rem; margin-bottom:5px;">GUEST SUBMISSION</p><p>${text}</p>`;
+        list.prepend(div);
+        document.getElementById('p-text').value = "";
+    }
+</script>
+
+</body>
+</html>

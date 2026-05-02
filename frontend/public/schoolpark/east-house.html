@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE VISION REALTY - オンライン店舗</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #1A1C29; --bg-header: #11121A; --bg-card: #252836; --bg-card-hover: #2D3142;
+            --accent: #F9812A; --text-main: #FFFFFF; --text-muted: #8C92A4; --border-color: #2D3142;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-main); color: var(--text-main); font-family: 'Noto Sans JP', sans-serif; min-height: 100vh; overflow-x: hidden;}
+
+        /* --- ヘッダー --- */
+        .top-header { background-color: var(--bg-header); height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--border-color); }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .leave-btn { background-color: var(--accent); color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+        .header-title { font-size: 0.95rem; font-weight: 500; display: flex; align-items: center; gap: 8px;}
+        .header-icons { display: flex; gap: 8px; margin-left: 10px;}
+        .icon-circle { width: 26px; height: 26px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; }
+        .icon-circle.pink { background-color: #E91E63; color: #fff; }
+        .icon-circle.yellow { background-color: #FFC107; color: #000; }
+        .icon-circle.white { background-color: #E0E0E0; color: #000; }
+        .icon-circle.grey { background-color: #607D8B; color: #fff; }
+        .header-right { font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 10px;}
+
+        /* --- ヒーローバナー --- */
+        .hero-banner { position: relative; height: 300px; background-image: url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1920&q=80'); background-size: cover; background-position: center; display: flex; align-items: flex-end; padding: 20px 40px; }
+        .hero-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to top, rgba(17,18,26,1) 0%, rgba(17,18,26,0.1) 100%); }
+        .hero-content { position: relative; z-index: 2; width: 100%; padding-bottom: 15px; }
+        .hero-title { font-size: 1.8rem; font-weight: bold; margin-bottom: 5px; display: flex; align-items: center; gap: 10px;}
+        .hero-subtitle { font-size: 0.9rem; color: #ddd; margin-bottom: 12px; }
+
+        /* --- 統計バー --- */
+        .stats-bar { display: flex; padding: 0 20px 20px; border-bottom: 1px solid var(--border-color); }
+        .stat-item { flex: 1; text-align: center; border-right: 1px solid rgba(255,255,255,0.05); }
+        .stat-item:last-child { border-right: none; }
+        .stat-num { font-family: 'Montserrat', sans-serif; color: var(--accent); font-size: 1.3rem; font-weight: 700; margin-bottom: 2px; }
+        .stat-label { color: var(--text-muted); font-size: 0.75rem; }
+
+        /* --- タブ --- */
+        .tabs { display: flex; background-color: var(--bg-header); padding: 0 30px; border-bottom: 1px solid var(--border-color); height: 45px; }
+        .tab { padding: 0 15px; color: var(--text-muted); font-size: 0.85rem; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+        /* --- メインコンテンツ --- */
+        .main-content { padding: 25px 40px; max-width: 1200px; margin: 0 auto; }
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .section-title { font-size: 1.1rem; font-weight: bold; display: flex; align-items: center; gap: 8px; margin-bottom: 15px; }
+        .section-title::before { content: ''; display: block; width: 3px; height: 16px; background-color: var(--accent); border-radius: 2px; }
+
+        /* --- 物件カード --- */
+        .property-card { background-color: var(--bg-card); border-radius: 12px; padding: 15px; display: flex; gap: 20px; margin-bottom: 15px; border: 1px solid var(--border-color); transition: background 0.2s; }
+        .property-card:hover { background-color: var(--bg-card-hover); }
+        .property-img { width: 160px; height: 100px; border-radius: 8px; object-fit: cover; }
+        .property-info { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+        .property-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .property-title { font-size: 1.05rem; font-weight: bold; margin-bottom: 5px; }
+        .property-price { font-family: 'Montserrat', sans-serif; color: var(--accent); font-weight: 700; font-size: 1.1rem; letter-spacing: 0.05em;}
+        .property-specs { display: flex; gap: 15px; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px; }
+        .property-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 10px; }
+        .detail-btn { background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 6px 16px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+        .detail-btn:hover { background: var(--accent); color: #fff; }
+
+        /* --- モーダル詳細画面 --- */
+        #detail-modal { position: fixed; top: 100%; left: 0; width: 100%; height: 100%; background: var(--bg-main); z-index: 100; overflow-y: auto; transition: top 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); padding: 0 20px 50px; }
+        #detail-modal.open { top: 0; }
+        .close-btn { position: sticky; top: 20px; left: 100%; width: 40px; height: 40px; background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; color: white; border: none; z-index: 110; margin-bottom: -40px;}
+        .detail-content { max-width: 800px; margin: 40px auto 0; background: var(--bg-card); padding: 30px; border-radius: 12px; border: 1px solid var(--border-color);}
+        .detail-content h2 { font-size: 1.6rem; color: var(--accent); margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;}
+        .detail-content h3 { font-size: 1rem; margin: 25px 0 10px; color: #fff; background: rgba(255,255,255,0.05); padding: 8px 15px; border-radius: 4px; display: inline-block;}
+        .detail-content p { font-size: 0.95rem; line-height: 1.8; color: var(--text-muted); margin-bottom: 15px; }
+        
+        .media-box { width: 100%; max-height: 400px; background: #000; border-radius: 8px; margin-bottom: 20px; overflow: hidden; display: flex; justify-content: center; align-items: center;}
+        .media-box video { width: 100%; height: 100%; object-fit: contain; }
+        .media-none { background: rgba(255,255,255,0.05); color: #888; width: 100%; padding: 40px 0; text-align: center; border-radius: 8px; border: 1px dashed #555; display: none; }
+        
+        .buy-action-btn { width: 100%; padding: 15px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; margin-top: 30px; cursor: pointer; }
+        .buy-action-btn:hover { opacity: 0.9; }
+
+        /* --- 提案・商談・チャット UI --- */
+        .placeholder-box { background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 12px; padding: 50px; text-align: center; color: var(--text-muted); margin-bottom: 20px;}
+        .proposal-form { display: flex; flex-direction: column; gap: 15px; max-width: 600px; background: var(--bg-card); padding: 30px; border-radius: 12px; border: 1px solid var(--border-color);}
+        .form-control { background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: white; padding: 12px; border-radius: 6px; font-family: inherit; width: 100%;}
+        
+        /* ファイルアップロードボタンの装飾 */
+        input[type="file"] { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px; border: 1px dashed var(--accent); color: #ddd; cursor: pointer;}
+        input[type="file"]::file-selector-button { background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-right: 10px; font-weight: bold;}
+
+        .submit-btn { background: var(--accent); color: #fff; padding: 15px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px;}
+        .meeting-panel { background: linear-gradient(135deg, #252836 0%, #11121A 100%); border: 1px solid var(--accent); border-radius: 12px; padding: 20px; margin-bottom: 20px;}
+        .final-buy-btn { background: #4CAF50; color: white; border: none; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; width: 100%; font-size: 1.1rem;}
+
+        /* チャット */
+        .chat-container { display: none; flex-direction: column; height: 500px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden;}
+        .chat-history { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px;}
+        .message { max-width: 75%; padding: 10px 15px; border-radius: 12px; font-size: 0.9rem; line-height: 1.5;}
+        .message.agent { background: #333; color: #fff; align-self: flex-start; border-bottom-left-radius: 2px;}
+        .message.user { background: var(--accent); color: #fff; align-self: flex-end; border-bottom-right-radius: 2px;}
+        .chat-input-area { display: flex; padding: 15px; background: var(--bg-header); border-top: 1px solid var(--border-color);}
+        .chat-input-area input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: white; padding: 12px; border-radius: 6px; outline: none;}
+        .chat-input-area button { background: var(--accent); color: white; border: none; padding: 0 20px; margin-left: 10px; border-radius: 6px; font-weight:bold; cursor: pointer;}
+
+        /* --- 祝賀エフェクト (購入完了) --- */
+        #celebration-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.5s;
+        }
+        #celebration-screen.show { opacity: 1; pointer-events: auto; }
+        .celebrate-title { font-family: 'Montserrat', sans-serif; font-size: 4rem; color: #FFD700; text-shadow: 0 0 20px rgba(255, 215, 0, 0.5); margin-bottom: 10px; transform: scale(0.5); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);}
+        #celebration-screen.show .celebrate-title { transform: scale(1); }
+        .celebrate-sub { font-size: 1.2rem; color: #fff; margin-bottom: 30px;}
+        .close-celebrate { background: transparent; border: 1px solid #fff; color: #fff; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        .confetti { position: absolute; width: 10px; height: 10px; background-color: #f00; opacity: 0; z-index: 1001;}
+        @keyframes fall {
+            0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="top-header">
+        <div class="header-left">
+            <button class="leave-btn" onclick="window.top.postMessage({type:'spContentClose'},'*')"><i class="material-icons" style="font-size:16px;">logout</i> 広場を離れる</button>
+            <div class="header-title">
+                <i class="material-icons" style="font-size:18px;">business</i> Fountain 噴水広場 (THE VISION REALTY)
+            </div>
+            <div class="header-icons">
+                <div class="icon-circle pink"><i class="material-icons" style="font-size:14px;">account_balance_wallet</i></div>
+                <div class="icon-circle yellow"><i class="material-icons" style="font-size:14px;">local_taxi</i></div>
+                <div class="icon-circle white"><i class="material-icons" style="font-size:14px;">smart_toy</i></div>
+                <div class="icon-circle grey"><i class="material-icons" style="font-size:14px;">settings</i></div>
+            </div>
+        </div>
+        <div class="header-right">
+            <i class="material-icons" style="font-size:16px; color:#FFC107;">wb_sunny</i> 17°C
+            <span style="margin-left:10px;">09:01 | 2026/04/29</span>
+        </div>
+    </header>
+
+    <div class="hero-banner">
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+            <div class="hero-title"><i class="material-icons" style="font-size:28px;">apartment</i> Central Showroom</div>
+            <div class="hero-subtitle">最高級物件と商談のためのバーチャルラウンジ</div>
+        </div>
+    </div>
+
+    <!-- 統計バー -->
+    <div class="stats-bar">
+        <div class="stat-item"><div class="stat-num">1,245</div><div class="stat-label">訪問者数</div></div>
+        <div class="stat-item"><div class="stat-num" id="stat-count">5</div><div class="stat-label">取扱物件数</div></div>
+        <div class="stat-item"><div class="stat-num" id="stat-meeting">0</div><div class="stat-label">進行中の商談</div></div>
+        <div class="stat-item">
+            <div class="stat-num" id="stat-revenue">82,000 <span style="font-size:0.7rem; color:#8C92A4;">EMUER</span></div>
+            <div class="stat-label">売り上げ(利益)</div>
+        </div>
+    </div>
+
+    <!-- タブ -->
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('tab-board')"><i class="material-icons" style="font-size:16px;">receipt_long</i> みんなの物件ボード</div>
+        <div class="tab" onclick="switchTab('tab-chat')"><i class="material-icons" style="font-size:16px;">chat</i> エージェントチャット</div>
+        <div class="tab" onclick="switchTab('tab-proposal')"><i class="material-icons" style="font-size:16px;">add_home</i> 提案 (物件追加)</div>
+        <div class="tab" onclick="switchTab('tab-meeting')"><i class="material-icons" style="font-size:16px;">business_center</i> 契約・商談ルーム</div>
+    </div>
+
+    <div class="main-content">
+        <!-- 物件ボード -->
+        <div id="tab-board" class="tab-content active">
+            <div class="section-title">新着物件一覧</div>
+            <div id="board-container"></div>
+        </div>
+
+        <!-- チャット -->
+        <div id="tab-chat" class="tab-content">
+            <div class="section-title">エージェント・チャットルーム</div>
+            <div id="chat-start-box" class="placeholder-box">
+                <i class="material-icons" style="font-size:40px; color:#444;">support_agent</i>
+                <h3 style="color:#fff; margin-top:10px;">オンライン・コンシェルジュ</h3>
+                <p style="margin-top:10px;">担当エージェント（神崎）へご要望をお伝えください。</p>
+                <button onclick="startChat()" style="margin-top:20px; padding:10px 20px; background:var(--accent); color:#fff; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">チャットを開始する</button>
+            </div>
+            <div id="chat-ui" class="chat-container">
+                <div class="chat-history" id="chat-history">
+                    <div class="message agent">THE VISION REALTY 代表の神崎です。どのような物件をお探しですか？</div>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="メッセージを入力...">
+                    <button onclick="sendMessage()">送信</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 提案フォーム（ファイル選択式に変更） -->
+        <div id="tab-proposal" class="tab-content">
+            <div class="section-title">新規物件の提案</div>
+            <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:20px;">写真や動画を端末から直接アップロードできます。審査なしで即座にボードへ追加されます。</p>
+            <form class="proposal-form" onsubmit="submitProposal(event)">
+                <input type="text" id="prop-title" class="form-control" required placeholder="物件タイトル (必須)">
+                <input type="number" id="prop-price" class="form-control" required placeholder="希望価格 EMUER (必須)">
+                <input type="text" id="prop-layout" class="form-control" required placeholder="間取り・広さ (必須)">
+                <textarea id="prop-desc" class="form-control" rows="3" required placeholder="アピールポイント (必須)"></textarea>
+                
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <label style="font-size:0.8rem; color:#aaa;">メイン画像を選択（任意 / スマホのアルバム対応）</label>
+                    <input type="file" id="prop-img-file" accept="image/*">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <label style="font-size:0.8rem; color:#aaa;">空間ビデオを選択（任意 / スマホの動画対応）</label>
+                    <input type="file" id="prop-video-file" accept="video/*">
+                </div>
+
+                <button type="submit" class="submit-btn">物件をボードに追加する</button>
+            </form>
+        </div>
+
+        <!-- 商談ルーム -->
+        <div id="tab-meeting" class="tab-content">
+            <div class="section-title">契約・商談ルーム</div>
+            <div id="meeting-empty" class="placeholder-box">
+                <i class="material-icons" style="font-size:40px; color:#444;">handshake</i>
+                <h3 style="color:#fff; margin-top:10px;">現在進行中の商談はありません</h3>
+                <p style="margin-top:10px;">物件詳細画面から「この物件を購入する」を押すと、ここに移動します。</p>
+            </div>
+            <div id="meeting-container"></div>
+        </div>
+
+    </div>
+
+    <!-- モーダル（デザイン画像・間取り図を削除し洗練） -->
+    <div id="detail-modal">
+        <button class="close-btn" onclick="closeDetail()"><i class="material-icons">close</i></button>
+        <div class="detail-content">
+            <h2 id="modal-title">物件タイトル</h2>
+            
+            <h3>空間映像 (Video)</h3>
+            <div class="media-box" id="modal-video-box">
+                <video id="modal-video" src="" autoplay loop muted playsinline controls></video>
+            </div>
+            <div id="modal-video-none" class="media-none"><i class="material-icons" style="font-size:32px;">videocam_off</i><br>空間ビデオは設定されていません</div>
+
+            <h3>間取り・スペック (Layout)</h3>
+            <p id="modal-layout" style="font-weight:bold; color:#fff; background:rgba(255,255,255,0.05); padding:10px; border-radius:6px; margin-bottom: 15px;">間取りテキスト</p>
+
+            <h3>コンセプト (Concept)</h3>
+            <p id="modal-concept">コンセプトが入ります。</p>
+
+            <h3>販売価格</h3>
+            <p id="modal-price" style="font-family:'Montserrat', sans-serif; font-size:2rem; font-weight:700; color:var(--accent);">0 EMUER</p>
+
+            <button class="buy-action-btn" id="modal-buy-btn" onclick="moveToMeeting()">この物件を購入する（商談ルームへ）</button>
+        </div>
+    </div>
+
+    <!-- 購入完了エフェクト画面 -->
+    <div id="celebration-screen">
+        <h1 class="celebrate-title">SOLD OUT!</h1>
+        <p class="celebrate-sub">契約成立。物件の所有権があなたに移転しました。</p>
+        <button class="close-celebrate" onclick="closeCelebration()">店舗へ戻る</button>
+    </div>
+
+    <script>
+        // --- 初期データ ---
+        let totalRevenue = 82000;
+
+        // 確実に再生されるCoverrの直リンク動画ソースを使用
+        const reliableVideos = [
+            "https://cdn.coverr.co/videos/coverr-a-beautiful-modern-living-room-5264/1080p.mp4",
+            "https://cdn.coverr.co/videos/coverr-a-house-with-a-pool-3096/1080p.mp4",
+            "https://cdn.coverr.co/videos/coverr-living-room-in-a-modern-house-5268/1080p.mp4",
+            "https://cdn.coverr.co/videos/coverr-sunlight-in-a-living-room-5263/1080p.mp4",
+            "https://cdn.coverr.co/videos/coverr-modern-living-room-with-a-fireplace-5266/1080p.mp4"
+        ];
+
+        let properties = [
+            {
+                id: 1, title: "摩天楼を支配するペントハウス", price: 12800000,
+                layout: "1LDK (240㎡) + プライベートバー",
+                concept: "金融特区「Metro-Core」中心部。音声一つで照明、温度がシンクロするスマートホーム。",
+                img: "https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=400&q=80",
+                video: reliableVideos[0]
+            },
+            {
+                id: 2, title: "静寂を纏う、和モダンの邸宅", price: 4500000,
+                layout: "2LDK (180㎡) + 枯山水中庭",
+                concept: "外部のノイズを完全に遮断する専用ゲート付き。「静寂の装置」としての家。",
+                img: "https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=400&q=80",
+                video: reliableVideos[2]
+            },
+            {
+                id: 3, title: "森と呼吸する、オーガニック・ヴィラ", price: 6200000,
+                layout: "4LDK (300㎡) + ウッドデッキ",
+                concept: "国立公園に隣接する特別な保護区画。薪ストーブの火を囲む究極の贅沢。",
+                img: "https://images.unsplash.com/photo-1510798831971-661eb04b3739?auto=format&fit=crop&w=400&q=80",
+                video: reliableVideos[1]
+            },
+            {
+                id: 4, title: "天空のサイバー・ロフト", price: 8900000,
+                layout: "1Studio (120㎡) + VRポッド",
+                concept: "ネオン街を見下ろすクリエイター専用のハブ。超高速通信とメタバース直結環境。",
+                img: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=400&q=80",
+                video: reliableVideos[3]
+            },
+            {
+                id: 5, title: "夕凪のオーシャン・テラス", price: 5400000,
+                layout: "3LDK (210㎡) + インフィニティプール",
+                concept: "リビングから海へと続くシームレスな設計。波の音だけが聞こえるプライベート空間。",
+                img: "https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&w=400&q=80",
+                video: reliableVideos[1]
+            }
+        ];
+
+        let meetingRooms = []; 
+        let currentModalId = null;
+
+        function formatNumber(num) { return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+        function updateRevenueDisplay() { document.getElementById('stat-revenue').innerHTML = `${formatNumber(totalRevenue)} <span style="font-size:0.7rem; color:#8C92A4;">EMUER</span>`; }
+
+        // --- ボードの描画 ---
+        function renderBoard() {
+            const container = document.getElementById('board-container');
+            container.innerHTML = '';
+            properties.forEach(p => {
+                const img = p.img || "https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?auto=format&fit=crop&w=400&q=80";
+                container.innerHTML += `
+                <div class="property-card">
+                    <img class="property-img" src="${img}">
+                    <div class="property-info">
+                        <div>
+                            <div class="property-header">
+                                <div class="property-title">${p.title}</div>
+                                <div class="property-price">${formatNumber(p.price)} EMUER</div>
+                            </div>
+                            <div class="property-specs"><span><i class="material-icons" style="font-size:12px;">bed</i> ${p.layout}</span></div>
+                        </div>
+                        <div class="property-footer">
+                            <button class="detail-btn" onclick="openDetail(${p.id})">詳細を見る</button>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            document.getElementById('stat-count').innerText = properties.length;
+        }
+
+        // --- タブ切り替え ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        // --- 詳細モーダル（映像の有無で切り替え） ---
+        function openDetail(id) {
+            currentModalId = id;
+            const p = properties.find(prop => prop.id === id);
+            
+            document.getElementById('modal-title').innerText = p.title;
+            document.getElementById('modal-layout').innerText = p.layout;
+            document.getElementById('modal-concept').innerText = p.concept;
+            document.getElementById('modal-price').innerText = formatNumber(p.price) + " EMUER";
+            
+            const videoBox = document.getElementById('modal-video-box');
+            const videoNone = document.getElementById('modal-video-none');
+            const videoElement = document.getElementById('modal-video');
+
+            if(p.video && p.video !== "") {
+                videoBox.style.display = 'flex';
+                videoNone.style.display = 'none';
+                videoElement.src = p.video;
+            } else {
+                videoBox.style.display = 'none';
+                videoNone.style.display = 'block';
+                videoElement.src = "";
+            }
+
+            document.getElementById('detail-modal').classList.add('open');
+        }
+        function closeDetail() { 
+            document.getElementById('detail-modal').classList.remove('open'); 
+            document.getElementById('modal-video').pause();
+        }
+
+        // --- 提案（ローカルファイル選択式） ---
+        function submitProposal(e) {
+            e.preventDefault();
+            
+            // ファイルの取得と一時的なURL（Blob）の生成
+            const imgFile = document.getElementById('prop-img-file').files[0];
+            const videoFile = document.getElementById('prop-video-file').files[0];
+            
+            const imgUrl = imgFile ? URL.createObjectURL(imgFile) : "";
+            const videoUrl = videoFile ? URL.createObjectURL(videoFile) : "";
+
+            const newProp = {
+                id: Date.now(),
+                title: document.getElementById('prop-title').value,
+                price: parseInt(document.getElementById('prop-price').value),
+                layout: document.getElementById('prop-layout').value,
+                concept: document.getElementById('prop-desc').value,
+                img: imgUrl || "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=400&q=80", // 画像がない場合はデフォルト
+                video: videoUrl
+            };
+            
+            properties.unshift(newProp);
+            renderBoard();
+            e.target.reset();
+            document.querySelectorAll('.tab')[0].click();
+        }
+
+        // --- 商談・購入システム ---
+        function moveToMeeting() {
+            const p = properties.find(prop => prop.id === currentModalId);
+            if(!meetingRooms.find(m => m.id === p.id)) {
+                meetingRooms.push(p);
+            }
+            closeDetail();
+            renderMeeting();
+            document.querySelectorAll('.tab')[3].click();
+        }
+
+        function renderMeeting() {
+            const container = document.getElementById('meeting-container');
+            const empty = document.getElementById('meeting-empty');
+            document.getElementById('stat-meeting').innerText = meetingRooms.length;
+
+            if(meetingRooms.length === 0) {
+                empty.style.display = 'block';
+                container.innerHTML = ''; return;
+            }
+            
+            empty.style.display = 'none';
+            container.innerHTML = '';
+            meetingRooms.forEach(m => {
+                container.innerHTML += `
+                <div class="meeting-panel">
+                    <h3 style="color:var(--accent); margin-bottom:10px;">${m.title}</h3>
+                    <p style="font-size:0.9rem; color:#ccc;">決済額: ${formatNumber(m.price)} EMUER</p>
+                    <button class="final-buy-btn" onclick="finalPurchase(${m.id}, ${m.price})">確定して購入する</button>
+                </div>`;
+            });
+        }
+
+        function finalPurchase(id, price) {
+            meetingRooms = meetingRooms.filter(m => m.id !== id);
+            renderMeeting();
+            
+            properties = properties.filter(p => p.id !== id);
+            
+            // 利益加算
+            totalRevenue += price;
+            updateRevenueDisplay();
+
+            // ★ 自動補充システム：購入されるごとに3件の物件を自動生成
+            generateAutoProperties(3);
+            renderBoard();
+
+            fireCelebration();
+        }
+
+        // --- 物件自動補充ロジック ---
+        const autoAdjectives = ["光溢れる", "天空の", "静かな", "アーバン", "オーシャン", "プレミアム", "秘密の"];
+        const autoNouns = ["レジデンス", "テラス", "ロフト", "ヴィラ", "ペントハウス", "スタジオ"];
+        
+        function generateAutoProperties(count) {
+            for(let i=0; i<count; i++) {
+                const title = autoAdjectives[Math.floor(Math.random()*autoAdjectives.length)] + autoNouns[Math.floor(Math.random()*autoNouns.length)];
+                const price = (Math.floor(Math.random() * 80) + 20) * 100000; // 200万〜1000万
+                const video = reliableVideos[Math.floor(Math.random()*reliableVideos.length)];
+                
+                properties.unshift({
+                    id: Date.now() + i,
+                    title: title + " (新着)",
+                    price: price,
+                    layout: "1LDK〜",
+                    concept: "前の物件が購入されたため、THE VISION REALTYのAIが新たに解放したプレミアム物件です。",
+                    img: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=400&q=80",
+                    video: video
+                });
+            }
+        }
+
+        // --- 紙吹雪＆祝賀エフェクト ---
+        function fireCelebration() {
+            const screen = document.getElementById('celebration-screen');
+            screen.classList.add('show');
+            for(let i=0; i<80; i++) {
+                let confetti = document.createElement('div');
+                confetti.classList.add('confetti');
+                confetti.style.left = Math.random() * 100 + 'vw';
+                confetti.style.backgroundColor = ['#F9812A', '#FFD700', '#FFFFFF', '#00FFFF'][Math.floor(Math.random() * 4)];
+                confetti.style.animation = `fall ${Math.random() * 2 + 1.5}s linear forwards`;
+                confetti.style.animationDelay = Math.random() * 0.5 + 's';
+                screen.appendChild(confetti);
+            }
+        }
+        function closeCelebration() {
+            const screen = document.getElementById('celebration-screen');
+            screen.classList.remove('show');
+            setTimeout(() => {
+                screen.querySelectorAll('.confetti').forEach(c => c.remove());
+            }, 500);
+            document.querySelectorAll('.tab')[0].click(); // 購入後はボードへ戻る
+        }
+
+        // --- チャットシステム ---
+        function startChat() {
+            document.getElementById('chat-start-box').style.display = 'none';
+            document.getElementById('chat-ui').style.display = 'flex';
+        }
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+            const history = document.getElementById('chat-history');
+            const userMsg = document.createElement('div');
+            userMsg.className = 'message user'; userMsg.innerText = text;
+            history.appendChild(userMsg);
+            input.value = ''; history.scrollTop = history.scrollHeight;
+
+            setTimeout(() => {
+                let reply = "承知いたしました。その条件で最適な物件をピックアップいたします。";
+                if (text.includes("提案") || text.includes("追加")) reply = "「提案」タブからスマホの写真・動画フォルダを開いて、物件を直接追加できます。画像がない場合は自動的に『なし』と表示されるのでご安心ください。";
+                const agentMsg = document.createElement('div');
+                agentMsg.className = 'message agent'; agentMsg.innerText = reply;
+                history.appendChild(agentMsg); history.scrollTop = history.scrollHeight;
+            }, 1000);
+        }
+        document.getElementById('chat-input').addEventListener('keypress', function (e) { if (e.key === 'Enter') sendMessage(); });
+
+        // 初期化
+        renderBoard();
+        renderMeeting();
+    </script>
+</body>
+</html>

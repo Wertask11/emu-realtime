@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>east-coffee | 琥珀の刻 プレミアム・エディション</title>
+    <style>
+        :root {
+            --bg:      #1e293b;
+            --bg-dark: #0f172a;
+            --bg-nav:  #334155;
+            --card:    #1e293b;
+            --text:    #f8fafc;
+            --text2:   #cbd5e1;
+            --border:  rgba(255,255,255,0.15);
+            --radius:  12px;
+            --accent:  #f97316;
+            --accent2: #fbbf24;
+            --success: #4ade80;
+            --danger:  #f87171;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg-dark);
+            color: var(--text);
+            font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* --- UI Components --- */
+        .top-nav {
+            height: 48px; background: var(--bg-nav);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 16px; font-size: 13px; position: sticky; top: 0; z-index: 1000;
+            border-bottom: 1px solid var(--border);
+        }
+        .btn-exit {
+            background: var(--accent); color: white; border: none;
+            padding: 4px 12px; border-radius: 6px; font-weight: bold; cursor: pointer;
+        }
+
+        .hero {
+            height: 260px; position: relative;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.1), var(--bg-dark)),
+                        url('https://images.unsplash.com/photo-1443675780476-6297a3f783af?q=80&w=2074&auto=format&fit=crop') center/cover;
+            display: flex; align-items: flex-end; padding: 30px;
+        }
+        .hero-title { font-size: 26px; font-weight: bold; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+        
+        .stats-bar {
+            background: rgba(30, 41, 59, 0.5); display: grid; grid-template-columns: repeat(4, 1fr);
+            border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+        }
+        .stat-item { padding: 16px; text-align: center; border-right: 1px solid var(--border); }
+        .stat-value { font-size: 20px; font-weight: bold; color: var(--accent2); display: block; transition: 0.3s; }
+        .stat-label { font-size: 11px; color: var(--text2); }
+
+        .tab-container {
+            background: var(--bg-dark); border-bottom: 1px solid var(--border);
+            display: flex; padding: 0 20px; overflow-x: auto;
+        }
+        .tab-item {
+            padding: 14px 20px; font-size: 14px; color: var(--text2); cursor: pointer;
+            white-space: nowrap; position: relative;
+        }
+        .tab-item.active { color: var(--accent); font-weight: bold; }
+        .tab-item.active::after {
+            content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 2px; background: var(--accent);
+        }
+
+        .content { max-width: 1000px; margin: 0 auto; padding: 24px 20px; min-height: 80vh; }
+        .panel { display: none; animation: fadeIn 0.3s ease; }
+        .panel.active { display: block; }
+
+        /* --- Menu Cards --- */
+        .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+        .menu-img-card {
+            background: var(--card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden;
+            transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative;
+        }
+        .menu-img-card:hover { transform: scale(1.03); border-color: var(--accent2); box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+        .menu-photo { width: 100%; height: 140px; object-fit: cover; }
+        .menu-info { padding: 15px; }
+        .price-tag { color: var(--accent2); font-weight: bold; font-size: 1.1rem; }
+
+        .btn-purchase {
+            width: 100%; margin-top: 10px; background: var(--accent); color: white; border: none;
+            padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer;
+            transition: 0.2s; position: relative; overflow: hidden;
+        }
+        .btn-purchase:active { transform: scale(0.95); }
+
+        /* --- Ranking (Reverted to Detailed Version) --- */
+        .rank-item {
+            display: flex; align-items: center; gap: 15px; background: var(--card);
+            margin-bottom: 12px; padding: 12px; border-radius: 10px; border: 1px solid var(--border);
+        }
+        .rank-badge {
+            width: 30px; height: 30px; background: var(--bg-nav); display: flex;
+            align-items: center; justify-content: center; border-radius: 50%; font-weight: bold; color: var(--accent2);
+        }
+
+        /* --- Owner Mode --- */
+        .owner-dashboard { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        .pl-sheet {
+            background: #020617; border-radius: 12px; padding: 20px;
+            font-family: monospace; border: 1px solid var(--success);
+        }
+        .pl-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1e293b; }
+        .pl-total { font-weight: bold; color: var(--success); border-top: 1px solid var(--success); margin-top: 10px; padding-top: 10px; }
+        
+        .inventory-list { background: var(--card); padding: 15px; border-radius: 12px; border: 1px solid var(--border); }
+        .progress-bar { height: 8px; background: #334155; border-radius: 4px; overflow: hidden; margin-top: 6px; }
+        .progress-fill { height: 100%; background: var(--accent2); transition: width 1s; }
+
+        /* --- Animations & Effects --- */
+        .particle {
+            position: fixed; pointer-events: none; z-index: 3000;
+            animation: particle-fly 1.2s forwards ease-out;
+        }
+        @keyframes particle-fly {
+            0% { transform: translate(0,0) rotate(0deg); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) rotate(720deg); opacity: 0; }
+        }
+
+        #toast-container {
+            position: fixed; bottom: 30px; right: 20px; z-index: 5000;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .toast {
+            background: rgba(15, 23, 42, 0.95); border-left: 4px solid var(--accent2);
+            color: white; padding: 15px 25px; border-radius: 8px; font-size: 14px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 12px;
+            animation: slideIn 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+        }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .bump { animation: bumpAnim 0.3s; }
+        @keyframes bumpAnim {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); color: var(--success); }
+            100% { transform: scale(1); }
+        }
+
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 2000;
+        }
+        .modal-content { background: var(--card); padding: 20px; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div id="toast-container"></div>
+
+    <nav class="top-nav">
+        <div class="nav-left">
+            <button class="btn-exit" onclick="handleExit()">広場を離れる</button>
+            <div class="building-info" style="margin-left: 10px; font-weight: bold;">☕ 琥珀の刻 (Amber Time)</div>
+        </div>
+        <div class="nav-right" id="clock-display">2026/04/30 13:00</div>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-content">
+            <h1 class="hero-title">☕ 琥珀の刻 - Amber Time</h1>
+            <p style="color: var(--text2); font-size: 14px;">上質な香りと、確かな経営を愉しむ</p>
+        </div>
+    </header>
+
+    <section class="stats-bar">
+        <div class="stat-item"><span class="stat-value">242</span><span class="stat-label">訪問数</span></div>
+        <div class="stat-item"><span class="stat-value" id="total-transactions">1,408</span><span class="stat-label">取引数</span></div>
+        <div class="stat-item"><span class="stat-value">58</span><span class="stat-label">常連客数</span></div>
+        <div class="stat-item"><span class="stat-value">4.2k</span><span class="stat-label">いいね数</span></div>
+    </section>
+
+    <div class="tab-container">
+        <div class="tab-item active" onclick="switchTab(this, 'menu')">📋 メニュー</div>
+        <div class="tab-item" onclick="switchTab(this, 'tables')">🪑 テーブル</div>
+        <div class="tab-item" onclick="switchTab(this, 'ranking')">📈 商品ランク</div>
+        <div class="tab-item" id="owner-btn" onclick="switchTab(this, 'owner')" style="background:rgba(251,191,36,0.1); color:var(--accent2); border-radius:8px 8px 0 0;">👑 オーナー経営</div>
+    </div>
+
+    <main class="content">
+        <!-- パネル: メニュー -->
+        <div id="panel-menu" class="panel active">
+            <div id="notice-banner" style="background: linear-gradient(90deg, #422006, #1e293b); padding: 15px; border-radius: 10px; border: 1px solid var(--accent); margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
+                <span style="font-size: 24px;">📢</span>
+                <div>
+                    <strong style="color:var(--accent2)">本日のおすすめ</strong>
+                    <p style="font-size: 12px; color: var(--text2);">本日のエメラルド・ゲイシャは、華やかなジャスミンの香りが特徴です。</p>
+                </div>
+            </div>
+            <div class="menu-grid" id="menu-list"></div>
+        </div>
+
+        <!-- パネル: テーブル -->
+        <div id="panel-tables" class="panel">
+            <h3 style="margin-bottom:15px; border-left:4px solid var(--accent); padding-left:10px;">座席案内</h3>
+            <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:15px;">
+                <div style="background:var(--card); padding:20px; border-radius:12px; text-align:center; border:1px solid var(--border);">
+                    <strong>窓際カウンター</strong>
+                    <button class="btn-purchase" style="background:#475569" onclick="openSeat('カウンター', '陽光が差し込む特等席です', 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500')">着席する</button>
+                </div>
+                <div style="background:var(--card); padding:20px; border-radius:12px; text-align:center; border:1px solid var(--border);">
+                    <strong>プレミアム・ソファ</strong>
+                    <button class="btn-purchase" style="background:#475569" onclick="openSeat('ソファ', '深い思索に耽るための静寂があります', 'https://images.unsplash.com/photo-1559925393-8be0ec418dc9?w=500')">着席する</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- パネル: 商品ランク (Reverted to Detailed Ranking) -->
+        <div id="panel-ranking" class="panel">
+            <h3 style="margin-bottom:15px; border-left:4px solid var(--accent); padding-left:10px;">商品別売上ランキング (ABC分析)</h3>
+            <div id="product-ranking-list"></div>
+        </div>
+
+        <!-- パネル: オーナー経営 -->
+        <div id="panel-owner" class="panel">
+            <div class="owner-dashboard">
+                <div class="pl-sheet">
+                    <h4 style="color:var(--success); margin-bottom:15px;">損益計算書 (P/L) - 本日累計</h4>
+                    <div class="pl-row"><span>売上高</span><span id="pl-sales">0 EMUER</span></div>
+                    <div class="pl-row"><span>売上原価 (Food Cost)</span><span style="color:var(--danger)">- 35,400</span></div>
+                    <div class="pl-row"><span>売上総利益</span><span id="pl-gross">0 EMUER</span></div>
+                    <div class="pl-row"><span>販売管理費 (人件費等)</span><span style="color:var(--danger)">- 12,000</span></div>
+                    <div class="pl-total"><span>当期純利益</span><span id="pl-net">0 EMUER</span></div>
+                    <div style="margin-top:20px; padding:15px; background:rgba(74,222,128,0.1); border-radius:12px; border: 1px solid var(--success);">
+                        <strong style="color:var(--success)">💡 経営分析アドバイス</strong>
+                        <p id="mgmt-advice" style="font-size:12px; margin-top:5px; color:var(--text2);"></p>
+                    </div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:15px;">
+                    <div class="inventory-list">
+                        <h4 style="font-size:14px; margin-bottom:10px;">在庫状況</h4>
+                        <div style="margin-bottom:10px;">
+                            <div style="display:flex; justify-content:space-between; font-size:11px;"><span>希少豆「ゲイシャ」</span><span>25%</span></div>
+                            <div class="progress-bar"><div class="progress-fill" style="width:25%; background:var(--danger)"></div></div>
+                        </div>
+                        <div>
+                            <div style="display:flex; justify-content:space-between; font-size:11px;"><span>特選ミルク</span><span>80%</span></div>
+                            <div class="progress-bar"><div class="progress-fill" style="width:80%"></div></div>
+                        </div>
+                    </div>
+                    <div class="inventory-list" style="background:var(--bg-nav)">
+                        <h4 style="font-size:14px; margin-bottom:10px;">重要経営指標</h4>
+                        <div style="font-size:13px;">推定客単価: <span id="kpi-upa" style="color:var(--accent2)">0</span> EMUER</div>
+                        <div style="font-size:13px;">目標FL比率: <span style="color:var(--success)">58%</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="seat-modal" class="modal" onclick="closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 id="modal-title"></h3>
+            <p id="modal-desc" style="margin: 15px 0; color: var(--text2); font-size: 14px;"></p>
+            <button class="btn-exit" onclick="closeModal()">戻る</button>
+        </div>
+    </div>
+
+    <script>
+        const menuItems = [
+            { id: 1, name: "琥珀ブレンド", price: 550, photo: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500", sales: 452, cost: 120, category: "Star" },
+            { id: 2, name: "水出し冷珈琲", price: 650, photo: "https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=500", sales: 310, cost: 100, category: "Star" },
+            { id: 3, name: "自家製カヌレ", price: 450, photo: "https://images.unsplash.com/photo-1578326457399-3b34dbbf23b8?w=500", sales: 280, cost: 90, category: "Plowhorse" },
+            { id: 4, name: "エメラルド・ゲイシャ", price: 1200, photo: "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=500", sales: 85, cost: 450, category: "Puzzle" },
+            { id: 5, name: "季節のフルーツタルト", price: 850, photo: "https://images.unsplash.com/photo-1519915028121-7d3463d20b13?w=500", sales: 120, cost: 320, category: "Puzzle" },
+            { id: 6, name: "アーティザン・サンド", price: 950, photo: "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=500", sales: 95, cost: 400, category: "Dog" },
+            { id: 7, name: "マニュアルドリップ 3種", price: 1500, photo: "https://images.unsplash.com/photo-1544787210-22bb133930bc?w=500", sales: 42, cost: 600, category: "Puzzle" },
+            { id: 8, name: "抹茶エスプレッソ", price: 780, photo: "https://images.unsplash.com/photo-1515823064-d6e0c04616a7?w=500", sales: 156, cost: 180, category: "Plowhorse" },
+            { id: 9, name: "アニバーサリー・ケヱキ", price: 2500, photo: "https://images.unsplash.com/photo-1535141192574-5d4897c12636?w=500", sales: 15, cost: 1100, category: "Dog" }
+        ];
+
+        let transactionCount = 1408;
+
+        window.onload = () => {
+            renderMenu();
+            renderRanking();
+            calculateFinances();
+            updateClock();
+            setInterval(updateClock, 1000);
+        };
+
+        function updateClock() {
+            document.getElementById('clock-display').innerText = new Date().toLocaleString('ja-JP');
+        }
+
+        function switchTab(el, tabId) {
+            document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            el.classList.add('active');
+            document.getElementById(`panel-${tabId}`).classList.add('active');
+            document.getElementById('notice-banner').style.display = (tabId === 'menu') ? 'flex' : 'none';
+        }
+
+        function renderMenu() {
+            const container = document.getElementById('menu-list');
+            container.innerHTML = menuItems.map(item => `
+                <div class="menu-img-card">
+                    <img src="${item.photo}" class="menu-photo">
+                    <div class="menu-info">
+                        <div style="font-weight:bold; font-size:15px;">${item.name}</div>
+                        <div class="price-tag">${item.price.toLocaleString()} <span style="font-size:10px">EMUER</span></div>
+                        <button class="btn-purchase" onclick="purchaseEffect(event, '${item.name}')">購入する</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- 楽しい購入演出 ---
+        function purchaseEffect(e, name) {
+            playCashSound();
+            const particles = ['🪙', '☕', '✨', '🫘'];
+            for (let i = 0; i < 15; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.innerText = particles[Math.floor(Math.random() * particles.length)];
+                p.style.left = e.clientX + 'px';
+                p.style.top = e.clientY + 'px';
+                p.style.setProperty('--tx', (Math.random() - 0.5) * 300 + 'px');
+                p.style.setProperty('--ty', (Math.random() - 1.0) * 300 + 'px');
+                p.style.fontSize = Math.random() * 20 + 10 + 'px';
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 1200);
+            }
+            transactionCount++;
+            const transEl = document.getElementById('total-transactions');
+            transEl.innerText = transactionCount.toLocaleString();
+            transEl.classList.remove('bump');
+            void transEl.offsetWidth; 
+            transEl.classList.add('bump');
+            showToast(`『${name}』を購入しました。芳醇な香りをお楽しみください。`);
+        }
+
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `<span>☕</span><span>${msg}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
+        }
+
+        function playCashSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.3);
+            } catch(e) {}
+        }
+
+        // --- 商品別売上ランキング (前回のスタイルに復旧) ---
+        function renderRanking() {
+            const container = document.getElementById('product-ranking-list');
+            const sorted = [...menuItems].sort((a, b) => b.sales - a.sales);
+            
+            container.innerHTML = sorted.map((item, i) => `
+                <div class="rank-item">
+                    <div class="rank-badge">${i+1}</div>
+                    <img src="${item.photo}" style="width:50px; height:50px; border-radius:6px; object-fit:cover;">
+                    <div style="flex:1">
+                        <strong>${item.name}</strong>
+                        <div style="font-size:11px; color:var(--text2)">カテゴリ分析: ${item.category}</div>
+                    </div>
+                    <div style="text-align:right">
+                        <div style="font-weight:bold; color:var(--accent2)">${item.sales} 購入</div>
+                        <div style="font-size:10px; color:var(--text2)">本日売上個数</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function calculateFinances() {
+            let totalSales = 0;
+            let totalCost = 0;
+            menuItems.forEach(item => {
+                totalSales += (item.price * item.sales);
+                totalCost += (item.cost * item.sales);
+            });
+            const opex = 120000;
+            const gross = totalSales - totalCost;
+            const net = gross - opex;
+
+            document.getElementById('pl-sales').innerText = totalSales.toLocaleString() + " EMUER";
+            document.getElementById('pl-gross').innerText = gross.toLocaleString() + " EMUER";
+            document.getElementById('pl-net').innerText = net.toLocaleString() + " EMUER";
+            document.getElementById('kpi-upa').innerText = Math.floor(totalSales / 1408).toLocaleString();
+            document.getElementById('mgmt-advice').innerText = net > 500000 ? 
+                "好調です。高単価商品（ゲイシャ等）の購入率をさらに高める施策を検討しましょう。" : 
+                "原価率の低い『琥珀ブレンド』の購入を促すなど、利益率の改善を検討してください。";
+        }
+
+        function openSeat(title, desc) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-desc').innerText = desc;
+            document.getElementById('seat-modal').style.display = 'flex';
+        }
+        function closeModal() { document.getElementById('seat-modal').style.display = 'none'; }
+
+        function handleExit() {
+            if(window.parent !== window) window.top.postMessage({type:'spContentClose'}, '*');
+            else alert("広場に戻ります。");
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>フレッシュベジタブル マルシェ</title>
+    <style>
+        /* Base Styles & Reset */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            background-color: #15161e;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        button {
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #1e202b;
+            padding: 8px 20px;
+            border-bottom: 1px solid #2a2d3e;
+            height: 48px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn-leave {
+            background-color: #f27a24;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-leave:hover { background-color: #e06915; }
+
+        .shop-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        /* 復活したアイコン群 */
+        .header-icons {
+            display: flex;
+            gap: 8px;
+            margin-left: 10px;
+        }
+
+        .icon-badge {
+            width: 24px;
+            height: 24px;
+            background-color: #2a2d3e;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12px;
+            color: #8f95b2;
+            text-align: right;
+        }
+
+        .header-time {
+            font-size: 14px;
+            font-weight: bold;
+            color: #fff;
+            line-height: 1.1;
+        }
+
+        /* Hero Section */
+        .hero {
+            position: relative;
+            height: 320px;
+            background: linear-gradient(to bottom, #4a7c59, #2d4a36);
+            background-image: 
+                radial-gradient(circle at 20% 50%, rgba(255,255,255,0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(0,0,0,0.2) 0%, transparent 50%);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 20px 30px;
+            border-bottom: 1px solid #15161e;
+        }
+
+        .hero h1 {
+            font-size: 22px;
+            color: #fff;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-shadow: 1px 1px 4px rgba(0,0,0,0.6);
+        }
+
+        .hero p {
+            font-size: 13px;
+            color: #d1d5db;
+            margin-bottom: 12px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+        }
+
+        /* Stats Grid */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            background-color: #1a1c25;
+            border-bottom: 1px solid #2a2d3e;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 18px 0;
+            border-right: 1px solid #2a2d3e;
+        }
+        .stat-item:last-child { border-right: none; }
+        .stat-value { color: #f27a24; font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+        .stat-label { color: #798099; font-size: 11px; }
+
+        /* Tabs */
+        .tabs-wrapper {
+            background-color: #1a1c25;
+            border-bottom: 1px solid #2a2d3e;
+            padding: 0 30px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 25px;
+        }
+
+        .tab {
+            padding: 14px 0;
+            font-size: 13px;
+            font-weight: bold;
+            color: #798099;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border-bottom: 2px solid transparent;
+            user-select: none;
+        }
+
+        .tab:hover { color: #fff; }
+        .tab.active {
+            color: #f27a24;
+            border-bottom: 2px solid #f27a24;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 30px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Lists & Items */
+        ul.item-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        li.item-row {
+            background-color: #1e202b;
+            border: 1px solid #2a2d3e;
+            border-radius: 6px;
+            padding: 12px 16px;
+        }
+
+        .item-main {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .item-name {
+            font-size: 15px;
+            font-weight: bold;
+            color: #fff;
+            width: 200px;
+        }
+
+        .item-price {
+            color: #f27a24;
+            font-weight: bold;
+            width: 120px;
+        }
+
+        .item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Buttons */
+        .btn-detail {
+            background-color: #2a2d3e;
+            color: #d1d5db;
+            border: 1px solid #3f445e;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .btn-detail:hover { background-color: #3f445e; }
+
+        .btn-add {
+            background-color: #f27a24;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .btn-add:hover { background-color: #e06915; }
+
+        .btn-add-all {
+            background-color: #48bb78;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-top: 12px;
+            width: 100%;
+        }
+        .btn-add-all:hover { background-color: #38a169; }
+
+        .btn-remove {
+            background-color: #e53e3e;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .btn-remove:hover { background-color: #c53030; }
+
+        .btn-pay {
+            background-color: #48bb78;
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 20px;
+            width: 100%;
+            transition: 0.2s;
+        }
+        .btn-pay:hover { background-color: #38a169; }
+        .btn-pay:disabled { background-color: #2a2d3e; color: #798099; cursor: not-allowed; }
+
+        /* Details section */
+        .item-detail {
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px dashed #3f445e;
+            color: #a0aec0;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        /* Management text */
+        .knowledge-box {
+            background-color: #1e202b;
+            border-left: 4px solid #f27a24;
+            padding: 20px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        .knowledge-box h3 { margin-bottom: 10px; color: #fff; }
+
+        /* Checkout summary */
+        .checkout-summary {
+            background-color: #1e202b;
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .total-amount {
+            font-size: 36px;
+            color: #f27a24;
+            font-weight: bold;
+            margin: 15px 0;
+            text-shadow: 0 0 10px rgba(242, 122, 36, 0.2);
+        }
+        
+        .empty-msg {
+            color: #798099;
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+        }
+
+        /* Toast notification */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #48bb78;
+            color: #fff;
+            text-align: center;
+            border-radius: 4px;
+            padding: 12px;
+            position: fixed;
+            z-index: 10;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            font-size: 14px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        #toast.show {
+            visibility: visible;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+
+        /* Payment Modal (オンライン演出) */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .payment-success {
+            background: #1e202b;
+            border: 2px solid #f27a24;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(242, 122, 36, 0.2);
+            transform: scale(0.8);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .payment-success.show {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .success-icon {
+            font-size: 60px;
+            margin-bottom: 10px;
+            animation: bounce 1s infinite alternate;
+        }
+
+        .payment-success h2 {
+            color: #fff;
+            margin-bottom: 15px;
+        }
+
+        .payment-success p {
+            color: #a0aec0;
+            margin-bottom: 25px;
+        }
+
+        .btn-close-modal {
+            background-color: #f27a24;
+            color: #fff;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .btn-close-modal:hover { background-color: #e06915; }
+
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-10px); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="header-left">
+            <button class="btn-leave" onclick="window.top.postMessage({type:'spContentClose'},'*')">🚪 マルシェを離れる</button>
+            <div class="shop-title">🥬 フレッシュベジタブル マルシェ</div>
+            <!-- 復活したアイコン -->
+            <div class="header-icons">
+                <div class="icon-badge">👛</div>
+                <div class="icon-badge">🛻</div>
+                <div class="icon-badge">🔔</div>
+                <div class="icon-badge">⚙️</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div>☀️ 17°C</div>
+            <div style="text-align: right;">
+                <div class="header-time">09:01</div>
+                <div>2024/04/29(水)</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Banner -->
+    <div class="hero">
+        <div>
+            <h1>🥬 フレッシュベジタブル マルシェ</h1>
+            <p>新鮮な野菜と健康な食生活をサポートします</p>
+        </div>
+    </div>
+
+    <!-- 4つのデータ -->
+    <div class="stats">
+        <div class="stat-item">
+            <div class="stat-value">185</div>
+            <div class="stat-label">訪問者数</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" id="stat-trades">42</div>
+            <div class="stat-label">取引数</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">トマト</div>
+            <div class="stat-label">売れ筋</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" id="stat-sales">15,400 EMUER</div>
+            <div class="stat-label">売り上げ（利益）</div>
+        </div>
+    </div>
+
+    <!-- タブ -->
+    <div class="tabs-wrapper">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('products', this)">📦 商品</div>
+            <div class="tab" onclick="switchTab('recipes', this)">🍲 献立</div>
+            <div class="tab" onclick="switchTab('management', this)">⚙️ 管理</div>
+            <div class="tab" onclick="switchTab('cart', this)">🛒 かご (<span id="cart-badge">0</span>)</div>
+            <div class="tab" onclick="switchTab('checkout', this)">💰 会計</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        
+        <!-- 商品タブ -->
+        <div id="tab-products" class="tab-content active">
+            <h2 style="margin-bottom: 15px; font-size: 18px;">新鮮な野菜一覧</h2>
+            <ul class="item-list" id="product-list">
+                <!-- JSで生成 -->
+            </ul>
+        </div>
+
+        <!-- 献立タブ -->
+        <div id="tab-recipes" class="tab-content">
+            <h2 style="margin-bottom: 15px; font-size: 18px;">おすすめの献立</h2>
+            <ul class="item-list" id="recipe-list">
+                <!-- JSで生成 -->
+            </ul>
+        </div>
+
+        <!-- 管理タブ -->
+        <div id="tab-management" class="tab-content">
+            <h2 style="margin-bottom: 15px; font-size: 18px;">食事と栄養の知識</h2>
+            
+            <div class="knowledge-box">
+                <h3>📚 五大栄養素について</h3>
+                <p>私たちの体を作るためには、5つの大切な栄養素が必要です。<br>
+                「炭水化物」「脂質」「たんぱく質」「無機質（ミネラル）」「ビタミン」です。<br>
+                これらをバランスよく食べることが、元気に過ごす秘訣です。</p>
+            </div>
+
+            <div class="knowledge-box">
+                <h3>🌟 ビタミンの役割（ビタミンBなど）</h3>
+                <p><strong>ビタミンB群：</strong> ご飯やパンなどのエネルギー源を、体が使える力に変えるのを助ける「着火剤」のような役割をします。豚肉やほうれん草に多く含まれます。<br><br>
+                <strong>ビタミンC：</strong> 病気から体を守る力を強くしたり、肌をきれいに保ったりします。トマト、キャベツ、ピーマンなどの野菜や果物にたっぷり入っています。</p>
+            </div>
+
+            <div class="knowledge-box">
+                <h3>🥗 栄養を上手にとるには？</h3>
+                <p>野菜は熱を加えるとカサが減ってたくさん食べられますが、水に溶けやすいビタミンもあります。<br>
+                スープや味噌汁にすると、溶け出した栄養も一緒に飲めるのでおすすめです！</p>
+            </div>
+        </div>
+
+        <!-- かごタブ -->
+        <div id="tab-cart" class="tab-content">
+            <h2 style="margin-bottom: 15px; font-size: 18px;">かごの中身</h2>
+            <ul class="item-list" id="cart-list">
+                <!-- JSで生成 -->
+            </ul>
+        </div>
+
+        <!-- 会計タブ -->
+        <div id="tab-checkout" class="tab-content">
+            <h2 style="margin-bottom: 15px; font-size: 18px;">お会計</h2>
+            <div class="checkout-summary">
+                <p>かごに入っている商品の合計金額</p>
+                <div class="total-amount" id="checkout-total">0 EMUER</div>
+                <button class="btn-pay" id="btn-pay" onclick="processPayment()">EMUERで支払う</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- トースト通知 -->
+    <div id="toast">商品をかごに入れました</div>
+
+    <!-- 決済完了演出のモーダル -->
+    <div id="payment-modal" class="modal-overlay">
+        <div class="payment-success" id="payment-box">
+            <div class="success-icon">✨🛍️✨</div>
+            <h2>決済が完了しました！</h2>
+            <p>新鮮な食材をお買い上げいただき<br>ありがとうございます！</p>
+            <button class="btn-close-modal" onclick="closeModal()">お店にもどる</button>
+        </div>
+    </div>
+
+    <script>
+        // --- データ定義 ---
+        const products = [
+            { id: 1, name: "完熟トマト（3個）", price: 250, origin: "熊本県", producer: "阿蘇ファーム" },
+            { id: 2, name: "春キャベツ（1玉）", price: 180, origin: "群馬県", producer: "嬬恋農園" },
+            { id: 3, name: "泥付きにんじん（3本）", price: 150, origin: "千葉県", producer: "香取オーガニック" },
+            { id: 4, name: "新玉ねぎ（4個）", price: 200, origin: "兵庫県", producer: "淡路島たまねぎ組合" },
+            { id: 5, name: "ほうれん草（1束）", price: 120, origin: "埼玉県", producer: "深谷グリーン" }
+        ];
+
+        const recipes = [
+            { 
+                id: 1, 
+                name: "野菜たっぷりミネストローネ", 
+                desc: "トマトの酸味と野菜の甘みが美味しいスープです。",
+                ingredients: ["完熟トマト", "春キャベツ", "新玉ねぎ", "泥付きにんじん"],
+                steps: "野菜を角切りにし、トマトベースのスープで柔らかくなるまで煮込みます。"
+            },
+            { 
+                id: 2, 
+                name: "春キャベツと豚肉の塩炒め", 
+                desc: "ビタミンBたっぷり！ご飯が進む一品です。",
+                ingredients: ["春キャベツ", "新玉ねぎ", "（豚肉）"],
+                steps: "豚肉を炒め、ざく切りにした春キャベツと玉ねぎをサッと炒め合わせて塩こしょうで味付けします。"
+            }
+        ];
+
+        let cart = []; 
+        let totalSales = 15400; 
+        let totalTrades = 42;   
+
+        // --- 初期化 ---
+        window.onload = () => {
+            renderProducts();
+            renderRecipes();
+            updateCartUI();
+        };
+
+        // --- タブ切り替え機能 ---
+        function switchTab(tabId, element) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            element.classList.add('active');
+
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+        }
+
+        // --- 詳細の開閉 ---
+        function toggleDetail(elementId) {
+            const detailDiv = document.getElementById(elementId);
+            if (detailDiv.style.display === "none" || detailDiv.style.display === "") {
+                detailDiv.style.display = "block";
+            } else {
+                detailDiv.style.display = "none";
+            }
+        }
+
+        // --- 商品一覧の描画（絵文字削除） ---
+        function renderProducts() {
+            const list = document.getElementById('product-list');
+            list.innerHTML = '';
+            
+            products.forEach(p => {
+                list.innerHTML += `
+                    <li class="item-row">
+                        <div class="item-main">
+                            <span class="item-name">${p.name}</span>
+                            <span class="item-price">${p.price} EMUER</span>
+                            <div class="item-actions">
+                                <button class="btn-detail" onclick="toggleDetail('prod-${p.id}')">詳細</button>
+                                <button class="btn-add" onclick="addToCart(${p.id})">かごに入れる</button>
+                            </div>
+                        </div>
+                        <div id="prod-${p.id}" class="item-detail">
+                            ・原産地：${p.origin}<br>
+                            ・生産者：${p.producer}
+                        </div>
+                    </li>
+                `;
+            });
+        }
+
+        // --- 献立一覧の描画（絵文字削除 ＆ 一括購入ボタン追加） ---
+        function renderRecipes() {
+            const list = document.getElementById('recipe-list');
+            list.innerHTML = '';
+
+            recipes.forEach(r => {
+                list.innerHTML += `
+                    <li class="item-row">
+                        <div class="item-main">
+                            <span class="item-name" style="width:auto;">${r.name}</span>
+                            <div class="item-actions">
+                                <button class="btn-detail" onclick="toggleDetail('recipe-${r.id}')">詳細</button>
+                            </div>
+                        </div>
+                        <div id="recipe-${r.id}" class="item-detail">
+                            【どんな料理？】<br>
+                            ${r.desc}<br><br>
+                            【作り方】<br>
+                            ${r.steps}<br><br>
+                            【これを作るための商品】<br>
+                            ・${r.ingredients.join('<br>・')}
+                            
+                            <button class="btn-add-all" onclick="addAllToCart(${r.id})">この献立の材料を一括でかごに入れる</button>
+                        </div>
+                    </li>
+                `;
+            });
+        }
+
+        // --- かご機能 ---
+        function addToCart(productId) {
+            const product = products.find(p => p.id === productId);
+            cart.push(product);
+            updateCartUI();
+            showToast(`「${product.name}」をかごに入れました`);
+        }
+
+        // 献立一括購入ロジック
+        function addAllToCart(recipeId) {
+            const recipe = recipes.find(r => r.id === recipeId);
+            let addedCount = 0;
+
+            recipe.ingredients.forEach(ingredient => {
+                // 商品一覧の中に、材料名が含まれる商品があるかチェック (豚肉などは無視される)
+                const product = products.find(p => p.name.includes(ingredient) || ingredient.includes(p.name));
+                if (product) {
+                    cart.push(product);
+                    addedCount++;
+                }
+            });
+
+            if (addedCount > 0) {
+                updateCartUI();
+                showToast(`${addedCount}点の材料を一括でかごに入れました！`);
+            } else {
+                showToast(`かごに追加できる商品がありませんでした。`);
+            }
+        }
+
+        function removeFromCart(index) {
+            cart.splice(index, 1);
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            document.getElementById('cart-badge').innerText = cart.length;
+
+            const list = document.getElementById('cart-list');
+            list.innerHTML = '';
+            let total = 0;
+
+            if (cart.length === 0) {
+                list.innerHTML = '<div class="empty-msg">かごには何も入っていません</div>';
+            } else {
+                cart.forEach((p, index) => {
+                    total += p.price;
+                    list.innerHTML += `
+                        <li class="item-row">
+                            <div class="item-main">
+                                <span class="item-name">${p.name}</span>
+                                <span class="item-price">${p.price} EMUER</span>
+                                <div class="item-actions">
+                                    <button class="btn-remove" onclick="removeFromCart(${index})">もどす</button>
+                                </div>
+                            </div>
+                        </li>
+                    `;
+                });
+            }
+
+            document.getElementById('checkout-total').innerText = total + ' EMUER';
+            document.getElementById('btn-pay').disabled = (cart.length === 0);
+        }
+
+        // --- 会計機能と楽しい演出 ---
+        function processPayment() {
+            const btn = document.getElementById('btn-pay');
+            btn.innerText = "通信中...";
+            btn.disabled = true;
+
+            // 少し待ってから決済完了を演出
+            setTimeout(() => {
+                let currentTotal = cart.reduce((sum, item) => sum + item.price, 0);
+                totalSales += currentTotal;
+                totalTrades += 1;
+                
+                // ヘッダーの数値を更新
+                document.getElementById('stat-sales').innerText = totalSales.toLocaleString() + ' EMUER';
+                document.getElementById('stat-trades').innerText = totalTrades;
+                
+                // アラートの代わりにモーダルを表示
+                const modal = document.getElementById('payment-modal');
+                const box = document.getElementById('payment-box');
+                modal.style.display = 'flex';
+                // 少し遅らせてアニメーション用クラスを付与
+                setTimeout(() => box.classList.add('show'), 10);
+
+                // かごをリセット
+                cart = [];
+                updateCartUI();
+                btn.innerText = "EMUERで支払う";
+            }, 800);
+        }
+
+        // モーダルを閉じる
+        function closeModal() {
+            const modal = document.getElementById('payment-modal');
+            const box = document.getElementById('payment-box');
+            box.classList.remove('show');
+            // アニメーションが終わってから非表示にする
+            setTimeout(() => {
+                modal.style.display = 'none';
+                // 商品タブへ自動で戻るおもてなし
+                switchTab('products', document.querySelector('.tab:nth-child(1)'));
+            }, 300);
+        }
+
+        // --- 通知トースト ---
+        function showToast(message) {
+            const toast = document.getElementById("toast");
+            toast.innerText = message;
+            toast.className = "show";
+            setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
+        }
+
+    </script>
+</body>
+</html>

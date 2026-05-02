@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grand Oasis グランドオアシス</title>
+    <style>
+        :root {
+            --bg-main: #0f111a;
+            --bg-secondary: #1a1d2e;
+            --bg-tertiary: #252a41;
+            --accent-gold: #c5a059;
+            --accent-gold-hover: #b48e46;
+            --text-main: #ffffff;
+            --text-secondary: #a0a5b5;
+            --border-color: #2d334a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Times New Roman", "YuMincho", "Hiragino Mincho ProN", serif;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            line-height: 1.5;
+            display: flex;
+            justify-content: center;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 1440px;
+            background-color: var(--bg-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* トップナビゲーション */
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: var(--bg-main);
+        }
+
+        .top-nav-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn-leave {
+            background-color: var(--bg-tertiary);
+            color: var(--text-main);
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .app-title-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .app-title {
+            font-weight: bold;
+            font-size: 0.9rem;
+            letter-spacing: 0.05em;
+        }
+
+        .title-icons {
+            display: flex;
+            gap: 10px;
+            font-size: 1.1rem;
+        }
+
+        .top-nav-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .weather-time {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        /* ヒーローセクション */
+        .hero-section {
+            position: relative;
+            height: 320px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.8)), 
+                        url('https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=1440') center/cover;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 30px;
+        }
+
+        .hero-title {
+            font-size: 2.2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: var(--accent-gold);
+        }
+
+        .hero-subtitle {
+            font-size: 1rem;
+            color: #e0e0e0;
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .pill-btn {
+            background-color: rgba(197, 160, 89, 0.15);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--accent-gold);
+            color: var(--accent-gold);
+            padding: 8px 18px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .btn-checkin {
+            background-color: var(--accent-gold);
+            color: var(--bg-main);
+            font-weight: bold;
+        }
+
+        .btn-checkin.registered {
+            background-color: #ffffff;
+            border-color: #ffffff;
+            cursor: default;
+        }
+
+        /* ステータスバー */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 0;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .stat-item:last-child { border-right: none; }
+
+        .stat-value {
+            color: var(--accent-gold);
+            font-size: 1.3rem;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            margin-top: 4px;
+        }
+
+        /* タブナビゲーション */
+        .tab-menu {
+            display: flex;
+            background-color: var(--bg-secondary);
+            padding: 0 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .tab-item {
+            padding: 18px 20px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .tab-item.active {
+            color: var(--accent-gold);
+            font-weight: bold;
+        }
+
+        .tab-item.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; width: 100%; height: 2px;
+            background-color: var(--accent-gold);
+        }
+
+        /* メインコンテンツ */
+        .main-content { padding: 30px; flex: 1; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* バナー */
+        .announcement-banner {
+            background-color: rgba(197, 160, 89, 0.05);
+            border: 1px solid var(--accent-gold);
+            border-radius: 4px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .banner-text h4 { color: var(--accent-gold); margin-bottom: 5px; }
+        .banner-text p { color: var(--text-secondary); font-size: 0.9rem; }
+
+        /* セクションタイトル */
+        .section-title {
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            border-left: 2px solid var(--accent-gold);
+            padding-left: 15px;
+            letter-spacing: 0.1em;
+        }
+
+        /* カードデザイン */
+        .post-card {
+            background-color: var(--bg-secondary);
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid transparent;
+            transition: 0.3s;
+        }
+
+        .post-card:hover { border-color: var(--accent-gold); }
+
+        /* フォーム */
+        .post-form {
+            background-color: var(--bg-secondary);
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        .post-form textarea, .post-form input, .post-form select {
+            width: 100%;
+            background: var(--bg-main);
+            border: 1px solid var(--border-color);
+            color: white;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+
+        .post-form button {
+            background-color: var(--accent-gold);
+            color: var(--bg-main);
+            border: none;
+            padding: 10px 25px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        /* 投票オプション */
+        .vote-options-container {
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .vote-option-btn {
+            background: var(--bg-tertiary);
+            color: white;
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .vote-option-btn.voted { background: var(--accent-gold); color: var(--bg-main); }
+
+        .btn-plus {
+            background: none !important;
+            color: var(--accent-gold) !important;
+            font-size: 1.5rem;
+            border: 1px dashed var(--accent-gold) !important;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+
+        .locked-msg {
+            text-align: center;
+            padding: 100px 20px;
+            color: var(--text-secondary);
+            background: var(--bg-secondary);
+            font-style: italic;
+        }
+
+        .staff-rating-box {
+            background: rgba(197, 160, 89, 0.1);
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <header class="top-nav">
+        <div class="top-nav-left">
+            <button class="btn-leave" onclick="window.top.postMessage({type:'spContentClose'},'*')">🗝️ ホテルを離れる</button>
+            <div class="app-title-area">
+                <div class="app-title">🏨 Grand Oasis グランドオアシス</div>
+                <div class="title-icons">👛 🚕 🤖 ⚙️</div>
+            </div>
+        </div>
+        <div class="top-nav-right">
+            <div class="weather-time">
+                <span>🌙 14°C</span>
+                <span style="text-align: right; line-height: 1.2;">21:45<br>2026/05/02(土)</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="hero-section">
+        <div class="hero-title">Grand Oasis</div>
+        <div class="hero-subtitle">至福のひとときを、あなたに。</div>
+        <div class="hero-actions">
+            <button class="pill-btn">🍷 ルームサービス</button>
+            <button class="pill-btn">🧖 スパ予約</button>
+            <button class="pill-btn btn-checkin" id="btn-checkin">チェックイン</button>
+        </div>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat-item">
+            <div class="stat-value" id="stat-visitors">1,204</div>
+            <div class="stat-label">本日の来客数</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value"><span id="stat-guests">42</span> 室</div>
+            <div class="stat-label">現在の宿泊数</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value"><span id="stat-votes-count">1</span> 件</div>
+            <div class="stat-label">ゲストアンケート</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">3 個</div>
+            <div class="stat-label">館内イベント</div>
+        </div>
+    </div>
+
+    <nav class="tab-menu">
+        <div class="tab-item active" data-tab="board">🏛️ ゲスト専用掲示板</div>
+        <div class="tab-item" data-tab="vote">📜 サービス改善アンケート</div>
+        <div class="tab-item" data-tab="ranking">💎 ロイヤリティ・ランキング</div>
+        <div class="tab-item" data-tab="request">✉️ コンシェルジュへの要望</div>
+    </nav>
+
+    <main class="main-content">
+        <!-- 掲示板タブ -->
+        <div id="tab-board" class="tab-content active">
+            <div class="announcement-banner">
+                <div class="banner-text">
+                    <h4>Grand Oasis 究極のホスピタリティを。</h4>
+                    <p>当ホテルでの体験はゲストの皆様と共に創り上げます。ようこそ、至高の空間へ。</p>
+                </div>
+            </div>
+            <h3 class="section-title">ゲスト専用掲示板</h3>
+            <div id="post-form-container"></div>
+            <div id="board-list"></div>
+        </div>
+
+        <!-- アンケートタブ -->
+        <div id="tab-vote" class="tab-content">
+            <h3 class="section-title">サービス改善アンケート</h3>
+            <div id="vote-main-area"></div>
+        </div>
+
+        <!-- ランキングタブ -->
+        <div id="tab-ranking" class="tab-content">
+            <h3 class="section-title">エグゼクティブ・ランキング</h3>
+            <table class="rank-table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr><th style="padding:15px; color:var(--text-secondary); text-align: left;">Rank</th><th style="color:var(--text-secondary); text-align: left;">Name</th><th style="color:var(--text-secondary); text-align: left;">Status</th><th style="color:var(--text-secondary); text-align: left;">Points</th></tr>
+                </thead>
+                <tbody id="ranking-body">
+                    <tr style="border-bottom:1px solid var(--border-color);"><td style="padding:15px;">Gold</td><td>Mr. Henderson</td><td>Ambassador</td><td>12,500 pts</td></tr>
+                    <tr style="border-bottom:1px solid var(--border-color);"><td style="padding:15px;">Silver</td><td>佐藤 健一 様</td><td>Diamond</td><td>8,400 pts</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 要望タブ -->
+        <div id="tab-request" class="tab-content">
+            <h3 class="section-title">コンシェルジュへのお問い合わせ</h3>
+            <div class="post-form">
+                <textarea id="request-text" rows="4" placeholder="タクシーの手配、レストランの予約、お部屋の備品など、何なりとお申し付けください。"></textarea>
+                <button onclick="submitRequest()">メッセージを送信</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    let isGuest = false;
+    let guestCount = 42;
+    let visitorCount = 1204;
+    let votesCount = 1;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        renderContextualUI();
+
+        const tabs = document.querySelectorAll('.tab-item');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+                renderContextualUI();
+            });
+        });
+    });
+
+    document.getElementById('btn-checkin').addEventListener('click', function() {
+        if (!isGuest) {
+            isGuest = true;
+            guestCount++;
+            document.getElementById('stat-guests').innerText = guestCount;
+            this.innerText = "🛎️ 滞在中";
+            this.classList.add('registered');
+            renderContextualUI();
+            alert("チェックインが完了いたしました。ごゆっくりお過ごしください。");
+        }
+    });
+
+    function renderContextualUI() {
+        const postForm = document.getElementById('post-form-container');
+        if (isGuest) {
+            postForm.innerHTML = `
+                <div class="post-form">
+                    <textarea id="post-text" rows="3" placeholder="滞在中の感想や情報共有をどうぞ..."></textarea>
+                    <button onclick="submitPost()">投稿する</button>
+                </div>`;
+        } else {
+            postForm.innerHTML = `<div class="post-form locked"><p>🔒 掲示板への投稿は宿泊中のゲスト様限定です。</p></div>`;
+        }
+
+        const voteArea = document.getElementById('vote-main-area');
+        if (isGuest) {
+            if (!document.getElementById('vote-creator-form')) {
+                voteArea.innerHTML = `
+                    <div id="vote-creator-form" class="post-form" style="border: 1px solid var(--accent-gold);">
+                        <h4 style="margin-bottom:15px; color:var(--accent-gold);">新しいアンケートを提案</h4>
+                        <input type="text" id="vote-title" placeholder="提案内容（例：ラウンジの営業時間について）">
+                        <div id="dynamic-options">
+                            <input type="text" class="opt-input" placeholder="案①">
+                            <input type="text" class="opt-input" placeholder="案②">
+                        </div>
+                        <button type="button" class="btn-plus" onclick="addOptionField()">＋ 項目を追加</button>
+                        
+                        <div class="staff-rating-box">
+                            <h5 style="color:var(--accent-gold); margin-bottom:10px;">従業員の評価（任意）</h5>
+                            <select id="staff-rating-select">
+                                <option value="">素晴らしい対応をしたスタッフはいましたか？</option>
+                                <option value="excellent">はい、非常に素晴らしいスタッフがいました</option>
+                                <option value="good">はい、良い対応のスタッフがいました</option>
+                                <option value="none">特に印象に残る人はいなかった</option>
+                            </select>
+                            <input type="text" id="staff-name" placeholder="スタッフ名（わかる場合のみ）">
+                        </div>
+
+                        <div style="text-align:right;">
+                            <button onclick="createNewVote()">アンケートを作成</button>
+                        </div>
+                    </div>
+                    <div id="vote-list-container"></div>`;
+                renderInitialVotes();
+            }
+        } else {
+            voteArea.innerHTML = `
+                <div class="locked-msg">
+                    🔒 住民投票は住民限定の機能です。<br>
+                    上の「チェックイン」でゲストになってから再度ご利用ください！
+                </div>`;
+        }
+    }
+
+    function addOptionField() {
+        const container = document.getElementById('dynamic-options');
+        const count = container.querySelectorAll('input').length + 1;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'opt-input';
+        input.placeholder = `案${count}`;
+        container.appendChild(input);
+    }
+
+    function createNewVote() {
+        const title = document.getElementById('vote-title').value;
+        const options = Array.from(document.querySelectorAll('.opt-input')).map(i => i.value).filter(v => v.trim() !== "");
+        
+        const rating = document.getElementById('staff-rating-select').value;
+        const staffName = document.getElementById('staff-name').value;
+
+        if (!title || options.length < 2) {
+            alert("議題と少なくとも2つの案を入力してください。");
+            return;
+        }
+
+        let ratingInfo = "";
+        if (rating === "excellent" || rating === "good") {
+            ratingInfo = `<div style="margin-top:10px; font-size:0.85rem; color:#52c41a;">✨ スタッフ評価あり: ${staffName || "名前未特定"}</div>`;
+        } else if (rating === "none") {
+            ratingInfo = `<div style="margin-top:10px; font-size:0.85rem; color:var(--text-secondary);">🗨️ スタッフ評価: 今回はいませんでした</div>`;
+        }
+
+        addVoteToUI(title, options, ratingInfo);
+        votesCount++;
+        document.getElementById('stat-votes-count').innerText = votesCount;
+
+        // Reset form
+        document.getElementById('vote-title').value = "";
+        document.getElementById('staff-name').value = "";
+        document.getElementById('staff-rating-select').value = "";
+        document.getElementById('dynamic-options').innerHTML = `
+            <input type="text" class="opt-input" placeholder="案①">
+            <input type="text" class="opt-input" placeholder="案②">`;
+    }
+
+    function renderInitialVotes() {
+        addVoteToUI("朝食ビュッフェの追加メニュー要望", ["和食の品数を増やす", "低糖質スイーツの導入", "地元の名産品コーナー"], "");
+    }
+
+    function addVoteToUI(title, options, extraInfo = "") {
+        const container = document.getElementById('vote-list-container');
+        const card = document.createElement('div');
+        card.className = 'post-card';
+        let optionsHtml = options.map(opt => `<button class="vote-option-btn" onclick="castVote(this)">${opt}</button>`).join('');
+        card.innerHTML = `
+            <div style="font-weight:bold; font-size:1.1rem; margin-bottom:10px; color:var(--accent-gold);">Q: ${title}</div>
+            <div class="vote-options-container">${optionsHtml}</div>
+            ${extraInfo}`;
+        container.prepend(card);
+    }
+
+    function castVote(btn) {
+        const allBtns = btn.closest('.vote-options-container').querySelectorAll('.vote-option-btn');
+        allBtns.forEach(b => { b.disabled = true; b.style.opacity = "0.4"; });
+        btn.classList.add('voted');
+        btn.style.opacity = "1";
+        alert("貴重なご意見をありがとうございました。");
+    }
+
+    function submitPost() {
+        const text = document.getElementById('post-text').value;
+        if (!text) return;
+        addBoardItem("Guest", text, "宿泊者");
+        document.getElementById('post-text').value = "";
+    }
+
+    function submitRequest() {
+        const text = document.getElementById('request-text').value;
+        if (!text) return;
+        addBoardItem("Request", text, "要望");
+        document.getElementById('request-text').value = "";
+        alert("コンシェルジュが承りました。");
+    }
+
+    function addBoardItem(author, text, tag) {
+        const list = document.getElementById('board-list');
+        const card = document.createElement('div');
+        card.className = 'post-card';
+        card.style.display = "flex";
+        card.style.justifyContent = "space-between";
+        card.innerHTML = `
+            <div style="display:flex; align-items:center; gap:15px;">
+                <div style="width:40px; height:40px; border:1px solid var(--accent-gold); border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--accent-gold); font-weight:bold;">${author[0]}</div>
+                <div><b>${author}</b> <span style="font-size:0.7rem; color:var(--accent-gold); border:1px solid var(--accent-gold); padding:1px 5px; margin-left:10px;">${tag}</span><br>${text}</div>
+            </div>`;
+        list.prepend(card);
+    }
+</script>
+
+</body>
+</html>
