@@ -682,9 +682,15 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 
   <!-- ランキング -->
   <div class="fp-panel" id="fp-panel-rank">
-    <div class="fp-section-title" style="margin-bottom:6px">コンテンツ訪問ランキング</div>
-    <div style="font-size:0.7rem;color:var(--text2);margin-bottom:14px">今週どのコンテンツに一番人が集まっているか</div>
-    <div id="fpRankList">
+    <!-- タブ切り替え -->
+    <div style="display:flex;gap:6px;margin-bottom:14px">
+      <button id="fpRankTabSP" onclick="fpRankSwitch('sp')" style="flex:1;padding:7px 4px;border-radius:8px;border:1px solid rgba(249,115,22,0.5);background:rgba(249,115,22,0.15);color:#f97316;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit">🏛️ コンテンツ訪問</button>
+      <button id="fpRankTabEmu" onclick="fpRankSwitch('emu')" style="flex:1;padding:7px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#888;font-size:0.75rem;cursor:pointer;font-family:inherit">⭐ Emu人気投稿</button>
+    </div>
+
+    <!-- SchoolPark訪問ランキング -->
+    <div id="fpRankListSP">
+      <div style="font-size:0.68rem;color:var(--text2);margin-bottom:10px">今週どのコンテンツに一番人が集まっているか</div>
       <div class="fp-rank-item">
         <div class="fp-rank-num" style="color:#fbbf24">🥇</div>
         <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">⛲</div>
@@ -694,28 +700,35 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
       <div class="fp-rank-item">
         <div class="fp-rank-num" style="color:#94a3b8">🥈</div>
         <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">📚</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">本屋・図書館</div><div class="fp-rank-score">学び · COMING SOON</div></div>
+        <div class="fp-rank-info"><div class="fp-rank-name">図書館・本屋</div><div class="fp-rank-score">学び · 北エリア</div></div>
         <div class="fp-rank-val">—</div>
       </div>
       <div class="fp-rank-item">
         <div class="fp-rank-num" style="color:#cd7c4e">🥉</div>
         <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">🎬</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">映画館</div><div class="fp-rank-score">エンタメ · COMING SOON</div></div>
+        <div class="fp-rank-info"><div class="fp-rank-name">映画館</div><div class="fp-rank-score">エンタメ · 南エリア</div></div>
         <div class="fp-rank-val">—</div>
       </div>
       <div class="fp-rank-item">
         <div class="fp-rank-num" style="color:var(--text2)">4</div>
-        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">🏥</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">病院</div><div class="fp-rank-score">安全 · COMING SOON</div></div>
+        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">🏦</div>
+        <div class="fp-rank-info"><div class="fp-rank-name">Bank 銀行</div><div class="fp-rank-score">EMUER変換 · 西エリア</div></div>
         <div class="fp-rank-val">—</div>
       </div>
       <div class="fp-rank-item">
         <div class="fp-rank-num" style="color:var(--text2)">5</div>
-        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">🛍️</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">ショッピング</div><div class="fp-rank-score">商業 · COMING SOON</div></div>
+        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">🏛️</div>
+        <div class="fp-rank-info"><div class="fp-rank-name">Museum 博物館</div><div class="fp-rank-score">投稿展示 · 北エリア</div></div>
         <div class="fp-rank-val">—</div>
       </div>
     </div>
+
+    <!-- Emu人気投稿ランキング -->
+    <div id="fpRankListEmu" style="display:none">
+      <div style="font-size:0.68rem;color:var(--text2);margin-bottom:10px">Emuでいいねが多い投稿トップ5</div>
+      <div id="fpEmuRankItems"><div class="fp-loading">⭐ 読み込み中…</div></div>
+    </div>
+
     <div style="text-align:center;padding:14px 0 0;color:var(--text2);font-size:0.7rem">
       📊 コンテンツが増えると自動的に更新されます
     </div>
@@ -1261,11 +1274,35 @@ function fpAppendChatMsg(m, isMe) {
   const ci = (m.wallet||"").charCodeAt(2) % nameColors.length;
   div.innerHTML = `
     <div class="fp-chat-avatar" style="background:${nameColors[ci]}">${initials}</div>
-    <div>
-      <div class="fp-chat-name">${_esc(m.name||"名無し")} <span style="font-size:0.6rem;opacity:0.5">${dt}</span></div>
+    <div style="min-width:0">
+      <div class="fp-chat-name" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+        <span>${_esc(m.name||"名無し")}</span>
+        <span id="chat-badge-${m.wallet||Date.now()}" style="display:inline-flex;gap:3px;align-items:center"></span>
+        <span style="font-size:0.6rem;opacity:0.5">${dt}</span>
+      </div>
       <div class="fp-chat-bubble">${_esc(m.text||"").replace(/\n/g,"<br>")}</div>
     </div>`;
   msgs.appendChild(div);
+
+  // バッジを親ウィンドウから取得して表示
+  if (m.wallet) {
+    const badgeSlot = div.querySelector(`#chat-badge-${m.wallet}`);
+    if (badgeSlot) {
+      try {
+        const top = window.top;
+        if (top && typeof top.getUserBadges === 'function' && typeof top.makeBadgeHtml === 'function') {
+          top.getUserBadges(m.wallet).then(badges => {
+            if (!badges || badges.length === 0) return;
+            badgeSlot.innerHTML = top.makeBadgeHtml(badges[0]);
+            if (badges.length > 1) {
+              badgeSlot.innerHTML += `<span style="font-size:9px;background:#ff4b4b;color:#fff;border-radius:99px;padding:1px 5px;font-weight:bold;cursor:pointer"
+                onclick="window.top.showBadgePanelForAddress('${m.wallet.toLowerCase()}',event)">+${badges.length-1}</span>`;
+            }
+          }).catch(()=>{});
+        }
+      } catch(e) {}
+    }
+  }
 }
 
 function fpSendChat() {
@@ -1305,6 +1342,52 @@ function fpInitRankVisits() {
     const el = document.getElementById("fpRankVisit1");
     if (el) el.textContent = v.toLocaleString() + " 訪問";
   }).catch(()=>{});
+}
+
+// ─── ランキング切り替え ───────────────────────────────────
+function fpRankSwitch(mode) {
+  const spPanel  = document.getElementById('fpRankListSP');
+  const emuPanel = document.getElementById('fpRankListEmu');
+  const tabSP    = document.getElementById('fpRankTabSP');
+  const tabEmu   = document.getElementById('fpRankTabEmu');
+  if (!spPanel || !emuPanel) return;
+
+  const isEmu = mode === 'emu';
+  spPanel.style.display  = isEmu ? 'none' : 'block';
+  emuPanel.style.display = isEmu ? 'block' : 'none';
+
+  if (tabSP)  { tabSP.style.background  = isEmu ? 'rgba(255,255,255,0.04)' : 'rgba(249,115,22,0.15)'; tabSP.style.borderColor  = isEmu ? 'rgba(255,255,255,0.1)' : 'rgba(249,115,22,0.5)';  tabSP.style.color  = isEmu ? '#888' : '#f97316';  tabSP.style.fontWeight  = isEmu ? '400' : '700'; }
+  if (tabEmu) { tabEmu.style.background = isEmu ? 'rgba(212,168,67,0.15)'  : 'rgba(255,255,255,0.04)'; tabEmu.style.borderColor = isEmu ? 'rgba(212,168,67,0.5)'  : 'rgba(255,255,255,0.1)'; tabEmu.style.color = isEmu ? '#D4A843' : '#888'; tabEmu.style.fontWeight = isEmu ? '700' : '400'; }
+
+  if (isEmu) fpLoadEmuRanking();
+}
+
+function fpLoadEmuRanking() {
+  const container = document.getElementById('fpEmuRankItems');
+  if (!container || !fpDB || !fpFBLib) return;
+  container.innerHTML = '<div class="fp-loading">⭐ 読み込み中…</div>';
+  const lib = fpFBLib;
+  const q = lib.query(
+    lib.collection(fpDB, 'posts'),
+    lib.orderBy('goodCount', 'desc'),
+    lib.limit(5)
+  );
+  lib.getDocs(q).then(snap => {
+    if (snap.empty) { container.innerHTML = '<div class="fp-loading">投稿がありません</div>'; return; }
+    const medals = ['🥇','🥈','🥉','4','5'];
+    const colors = ['#fbbf24','#94a3b8','#cd7c4e','var(--text2)','var(--text2)'];
+    container.innerHTML = snap.docs.map((d, i) => {
+      const p = d.data();
+      const title = (p.title||'（無題）').replace(/</g,'&lt;');
+      const good  = p.goodCount || 0;
+      return `<div class="fp-rank-item">
+        <div class="fp-rank-num" style="color:${colors[i]}">${medals[i]}</div>
+        <div style="font-size:1.2rem;width:34px;text-align:center;flex-shrink:0">📝</div>
+        <div class="fp-rank-info"><div class="fp-rank-name">${title}</div><div class="fp-rank-score">Emu投稿 · 👍 ${good}</div></div>
+        <div class="fp-rank-val">${good} good</div>
+      </div>`;
+    }).join('');
+  }).catch(() => { container.innerHTML = '<div class="fp-loading">⚠️ 読み込みエラー</div>'; });
 }
 
 // ─── 運営参加ゲート ───────────────────────────────────────

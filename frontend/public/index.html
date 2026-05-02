@@ -3011,8 +3011,8 @@ if (_fpDirectReturn) {
   const _walletBtn = document.getElementById("walletAddressButton");
   if (_walletBtn) _walletBtn.textContent = _savedWallet.slice(0,6) + "..." + _savedWallet.slice(-4);
   window.history.replaceState(null, "", "/");
-  // ★ 常にSchoolParkマップを自動的に開く
-  setTimeout(() => { if (typeof openSpMap === "function") openSpMap(); }, 400);
+  // ★ 常にSchoolParkマップを自動的に開く（同期）
+  if (typeof openSpMap === "function") openSpMap();
 }
 
 //goodした記事・changeした記事
@@ -5363,8 +5363,8 @@ function goTomainapp() {
   walletScreen.style.display = "none";
   mainApp.style.display = "block";
   document.getElementById("siteFooter").style.display = "block";
-  // ★ ログイン後はSchoolParkマップを直接開く（即時）
-  setTimeout(() => { if (typeof openSpMap === "function") openSpMap(); }, 0);
+  // ★ ログイン後はSchoolParkマップを同期的に開く（フラッシュ防止）
+  if (typeof openSpMap === "function") openSpMap();
 }
 
 /* ======= ロゴ → ウォレット → メイン ======= */
@@ -7052,7 +7052,7 @@ const SP_POIS = [
   { id:"play7",  name:"Terminal Station 駅舎（下）",icon:"🚇", zone:"play",  px:57, py:88, desc:"南エリア中央の交通ハブ。各方面への乗り換えポイント",                status:"open", page:"/schoolpark/south-station2.html" },
   // 交通・インフラ（ゲート）
   { id:"star1",  name:"Dawn Plaza 夜明けの広場",     icon:"🌅", zone:"star", px:19, py:90, desc:"Gate A — 夜明けの広場。新しい一日の始まり。毎朝ここからSchoolParkへ",    status:"coming" },
-  { id:"star2",  name:"Frontier Gate 前線の砦",      icon:"🏰", zone:"star", px:50, py:94, desc:"Gate B — 南エリアの正面玄関。Terminal Stationへ続く冒険の入口",         status:"coming" },
+  { id:"star2",  name:"Frontier Gate 前線の砦",      icon:"🏰", zone:"star", px:50, py:94, desc:"Gate B — 南エリアの正面玄関。Emuの探索・遊びへのゲートウェイ",           status:"open",   action:"openExplore" },
   { id:"star3",  name:"Creative Academy 学びの門",   icon:"🎓", zone:"star", px:52, py:7,  desc:"Gate C — 北エリアの入口。学びと創造の世界へようこそ。Emuへのゲートウェイ",  status:"open", action:"openEmu" },
   { id:"star4",  name:"Starry Sky Station 星空の駅", icon:"🚀", zone:"star", px:88, py:86, desc:"Gate D — 星空の駅。宇宙への扉。EMUERトークンで未来を切り拓く",         status:"coming" },
   // 中央・健康
@@ -7174,21 +7174,23 @@ function openSpMap(gate) {
   _spMapFilter = "all";
   renderSpMapPois();
   renderSpContentList("all");
-  /* デフォルトズーム適用 */
-  requestAnimationFrame(() => _applySpMapZoom());
+  /* デフォルトズーム同期適用 */
+  _applySpMapZoom();
   /* 混雑状況・天気を起動 */
   _spCrowdJoin();
   _spFetchWeather();
   /* JS駆動アニメ起動 */
   requestAnimationFrame(() => _startSpLive());
 
-  // スクロール中央揃え（開いた直後に実行）
+  // スクロール中央揃え（ズームを考慮）
   requestAnimationFrame(() => {
     const vp = document.getElementById("spMapVP");
     const inner = document.getElementById("spMapInner");
     if (!vp || !inner) return;
-    vp.scrollLeft = (inner.offsetWidth  - vp.clientWidth)  / 2;
-    vp.scrollTop  = (inner.offsetHeight - vp.clientHeight) / 2;
+    const vizW = inner.offsetWidth  * _spMapZoomLevel;
+    const vizH = inner.offsetHeight * _spMapZoomLevel;
+    vp.scrollLeft = Math.max(0, (vizW - vp.clientWidth)  / 2);
+    vp.scrollTop  = Math.max(0, (vizH - vp.clientHeight) / 2);
   });
 
   // マップ内ホイールがメイン画面にバブルしないよう1回だけ設定
@@ -7360,6 +7362,8 @@ function spMapSelectPoi(poiId) {
     <div class="spmap-detail-desc">${poi.desc}</div>
     ${poi.action === "openEmu"
       ? `<button class="spmap-detail-go-btn" onclick="closeSpMap()">🎓 Emuへ入る</button>`
+      : poi.action === "openExplore"
+        ? `<button class="spmap-detail-go-btn" onclick="closeSpMap();setTimeout(()=>{const b=document.getElementById('exploreBtn');if(b)b.click();},150)">🔍 探索・遊びへ</button>`
       : poi.eastKey
         ? `<button class="spmap-detail-go-btn" onclick="openEastBuilding('${poi.eastKey}')">🚪 遊びに行く</button>`
         : poi.page
@@ -7574,20 +7578,15 @@ function spMapNavClick(type) {
     return;
   }
   if (type === 'events') {
-    const events = [
-      { tag:'CAMPAIGN', title:'🎫 HEXA NFT 先行販売キャンペーン', date:'〜 2025年5月19日', desc:'開園前の特別価格でSchoolPark公式NFTを販売中。NFT保有者は開園後すぐにプレミアムコンテンツにアクセスできます。' },
-      { tag:'EVENT', title:'🎉 SchoolPark グランドオープン', date:'2025年5月20日（予定）', desc:'SchoolPark正式開園日。28のコンテンツエリアが一斉公開されます。開園記念イベントも予定しています。' },
-      { tag:'CAMPAIGN', title:'🎁 RTキャンペーン（HEXA NFTプレゼント）', date:'2025年5月15日〜', desc:'公式Xアカウントをフォロー＆リポストで抽選でHEXA NFT 1枚プレゼント。詳細は公式Xをご確認ください。' },
-      { tag:'CAMPAIGN', title:'🤝 モニター先行招待（5名限定）', date:'2025年5月17日〜', desc:'SchoolParkを先行体験するモニター5名を募集。フィードバックいただいた方には特典あり。' },
-      { tag:'INFO', title:'📚 note記事シリーズ「探索・学び」更新中', date:'随時更新', desc:'SchoolParkの世界観・哲学・使い方をnote記事で発信中。無料記事から有料コンテンツまで幅広く公開しています。' },
-    ];
-    openSpModal('🎪 イベント・キャンペーン', events.map(ev => `
-      <div class="spmm-event-card">
-        <div class="spmm-event-tag">${ev.tag}</div>
-        <div class="spmm-event-title">${ev.title}</div>
-        <div class="spmm-event-date">📅 ${ev.date}</div>
-        <div class="spmm-event-desc">${ev.desc}</div>
-      </div>`).join(''));
+    openSpModal('🎪 探索・イベント', `
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <button id="spEvTab1" onclick="spEvSwitch('探索')" style="flex:1;padding:7px;border-radius:8px;border:1px solid rgba(212,168,67,0.5);background:rgba(212,168,67,0.2);color:#D4A843;font-size:0.78rem;font-weight:700;cursor:pointer">🔍 探索</button>
+        <button id="spEvTab2" onclick="spEvSwitch('イベント')" style="flex:1;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#aaa;font-size:0.78rem;cursor:pointer">🎉 イベント</button>
+        <button id="spEvTab3" onclick="spEvSwitch('campaign')" style="flex:1;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#aaa;font-size:0.78rem;cursor:pointer">📢 キャンペーン</button>
+      </div>
+      <div id="spEvList" style="display:flex;flex-direction:column;gap:10px"><div style="color:#777;text-align:center;padding:20px;font-size:0.8rem">⏳ 読み込み中…</div></div>
+    `);
+    spEvSwitch('探索');
     return;
   }
   if (type === 'tutorial') {
@@ -7604,6 +7603,79 @@ function spMapNavClick(type) {
     `);
     return;
   }
+}
+
+/* ── イベントモーダル内タブ切り替え ── */
+function spEvSwitch(tag) {
+  // タブボタンスタイル更新
+  const tabs = { '探索':'spEvTab1', 'イベント':'spEvTab2', 'campaign':'spEvTab3' };
+  const labels = { '探索':'🔍 探索', 'イベント':'🎉 イベント', 'campaign':'📢 キャンペーン' };
+  Object.entries(tabs).forEach(([k, id]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const active = k === tag;
+    btn.style.background = active ? 'rgba(212,168,67,0.2)' : 'rgba(255,255,255,0.04)';
+    btn.style.borderColor = active ? 'rgba(212,168,67,0.5)' : 'rgba(255,255,255,0.1)';
+    btn.style.color = active ? '#D4A843' : '#aaa';
+    btn.style.fontWeight = active ? '700' : '400';
+  });
+
+  const list = document.getElementById('spEvList');
+  if (!list) return;
+  list.innerHTML = '<div style="color:#777;text-align:center;padding:20px;font-size:0.8rem">⏳ 読み込み中…</div>';
+
+  if (tag === 'campaign') {
+    // 静的キャンペーン情報
+    const campaigns = [
+      { tag:'CAMPAIGN', title:'🎫 HEXA NFT 先行販売', date:'〜 2025年5月19日', desc:'開園前の特別価格でSchoolPark公式NFTを販売中。' },
+      { tag:'EVENT',    title:'🎉 SchoolPark グランドオープン', date:'2025年5月20日（予定）', desc:'28コンテンツエリアが一斉公開されます。' },
+      { tag:'CAMPAIGN', title:'🎁 RTキャンペーン（HEXA NFT）', date:'2025年5月15日〜', desc:'公式Xをフォロー＆RTで抽選プレゼント。' },
+    ];
+    list.innerHTML = campaigns.map(ev => `
+      <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px">
+        <div style="font-size:0.65rem;color:#D4A843;font-weight:700;margin-bottom:4px">${ev.tag}</div>
+        <div style="font-size:0.82rem;font-weight:700;margin-bottom:4px">${ev.title}</div>
+        <div style="font-size:0.7rem;color:#888;margin-bottom:6px">📅 ${ev.date}</div>
+        <div style="font-size:0.76rem;color:#aaa">${ev.desc}</div>
+      </div>`).join('');
+    return;
+  }
+
+  // Firestoreから探索 or イベント タグの投稿を取得
+  if (!window.db || !window.fbLib) {
+    list.innerHTML = '<div style="color:#888;text-align:center;padding:20px;font-size:0.8rem">🔒 ログイン後に表示されます</div>';
+    return;
+  }
+  const lib = window.fbLib;
+  const q = lib.query(
+    lib.collection(window.db, 'posts'),
+    lib.where('tags', 'array-contains', tag),
+    lib.orderBy('createdAt', 'desc'),
+    lib.limit(15)
+  );
+  lib.getDocs(q).then(snap => {
+    if (snap.empty) {
+      list.innerHTML = `<div style="color:#777;text-align:center;padding:20px;font-size:0.8rem">📭 ${tag}タグの投稿がありません</div>`;
+      return;
+    }
+    list.innerHTML = snap.docs.map(d => {
+      const p = d.data();
+      const title = (p.title || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const body  = (p.body  || '').replace(/</g,'&lt;').replace(/>/g,'&gt;').slice(0, 80);
+      const goodC = p.goodCount || 0;
+      return `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;cursor:pointer"
+                onclick="closeSpModal();setTimeout(()=>{closeSpMap();},50)">
+        <div style="font-size:0.82rem;font-weight:700;margin-bottom:4px">${title}</div>
+        <div style="font-size:0.74rem;color:#aaa;margin-bottom:8px">${body}${body.length>=80?'…':''}</div>
+        <div style="display:flex;gap:10px;font-size:0.7rem;color:#666">
+          <span>👍 ${goodC}</span>
+          <span>🏷️ ${tag}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }).catch(() => {
+    list.innerHTML = '<div style="color:#e55;text-align:center;padding:20px;font-size:0.8rem">⚠️ 読み込みエラー</div>';
+  });
 }
 
 /* 検索ワードのハイライト */
@@ -7690,7 +7762,7 @@ function _applySpMapZoom() {
   const inner = document.getElementById("spMapInner");
   if (inner) {
     inner.style.transform = `scale(${_spMapZoomLevel})`;
-    inner.style.transformOrigin = "center center";
+    inner.style.transformOrigin = "top left";  /* top-left でスクロール動作を直感的に */
   }
 }
 
