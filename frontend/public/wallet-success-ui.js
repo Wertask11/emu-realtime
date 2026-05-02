@@ -60,7 +60,7 @@ const AIRDROP_AMOUNT_DISPLAY = 100;
           <p class="ws-balance-unit">EMUER</p>
         </div>
         <p class="ws-status" id="wsStatus">チェーンに接続中...</p>
-        <button class="ws-cta-btn" onclick="closeWalletSuccessAndStart()">Emuを始める →</button>
+        <button class="ws-cta-btn" onclick="closeWalletSuccessAndStart()">SchoolParkを始める →</button>
         <br>
         <button class="ws-share-btn" onclick="shareWalletSuccess()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
