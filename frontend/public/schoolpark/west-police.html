@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchoolPark Police Station — 警察署</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#1c2230;
+  --accent:#3b82f6;--accent2:#60a5fa;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;
+  --text:#e6edf3;--text2:#8b949e;--border:rgba(255,255,255,0.08);--card:rgba(255,255,255,0.03);
+  --radius:12px;--police:#1e3a5f;--badge:#fbbf24;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* ── Header ── */
+.header{position:sticky;top:0;z-index:100;height:54px;background:rgba(13,17,23,0.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px}
+.back-btn{background:var(--police);color:#fff;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:0.8rem;font-weight:700;font-family:inherit;letter-spacing:0.05em;transition:opacity 0.15s;white-space:nowrap}
+.back-btn:hover{opacity:0.85}
+.header-title{font-size:0.9rem;font-weight:700;display:flex;align-items:center;gap:6px}
+.header-badge{background:var(--badge);color:#000;font-size:0.6rem;font-weight:700;padding:2px 7px;border-radius:20px;letter-spacing:0.05em}
+.header-clock{margin-left:auto;font-size:0.72rem;color:var(--text2);white-space:nowrap}
+
+/* ── Hero ── */
+.hero{background:linear-gradient(135deg,#0d1b2e 0%,var(--police) 50%,#1a2a4a 100%);padding:28px 16px 22px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:"🚔";position:absolute;right:-10px;top:-10px;font-size:120px;opacity:0.06}
+.hero-icon{font-size:52px;margin-bottom:8px}
+.hero-title{font-size:1.35rem;font-weight:700;letter-spacing:0.05em}
+.hero-sub{font-size:0.78rem;color:var(--text2);margin-top:4px}
+.hero-tags{display:flex;justify-content:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.hero-tag{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);padding:3px 10px;border-radius:20px;font-size:0.65rem;color:var(--text2)}
+
+/* ── Stats ── */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.stat{background:var(--bg2);padding:12px 8px;text-align:center}
+.stat-val{font-size:1.1rem;font-weight:700;color:var(--accent2)}
+.stat-lbl{font-size:0.6rem;color:var(--text2);margin-top:2px}
+
+/* ── Tabs ── */
+.tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:11px 16px;font-size:0.75rem;font-weight:700;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.tab:hover{color:var(--text);background:var(--card)}
+.tab.active{color:var(--accent2);border-bottom-color:var(--accent2);background:rgba(59,130,246,0.06)}
+.main{max-width:720px;margin:0 auto;padding:16px 14px 60px}
+.panel{display:none}.panel.active{display:block}
+
+/* ── Section ── */
+.section-title{font-size:0.88rem;font-weight:700;display:flex;align-items:center;gap:7px;margin-bottom:12px}
+.section-title::before{content:'';display:inline-block;width:3px;height:15px;border-radius:2px;background:linear-gradient(var(--accent),var(--accent2))}
+.section+.section{margin-top:24px}
+
+/* ── Card ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:9px;transition:border-color 0.2s}
+.card:hover{border-color:rgba(255,255,255,0.14)}
+
+/* ── Rule item ── */
+.rule-item{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--border)}
+.rule-item:last-child{border-bottom:none}
+.rule-num{width:26px;height:26px;border-radius:50%;background:var(--police);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:var(--accent2);flex-shrink:0}
+.rule-body{flex:1}
+.rule-title{font-size:0.82rem;font-weight:700;margin-bottom:3px}
+.rule-desc{font-size:0.74rem;color:var(--text2);line-height:1.6}
+.rule-badge{display:inline-block;font-size:0.58rem;padding:2px 7px;border-radius:10px;margin-top:4px;font-weight:700}
+.rule-badge.ban{background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3)}
+.rule-badge.warn{background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)}
+.rule-badge.ok{background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)}
+
+/* ── Security tip ── */
+.tip-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start}
+.tip-icon{font-size:1.6rem;flex-shrink:0}
+.tip-title{font-size:0.82rem;font-weight:700;margin-bottom:4px}
+.tip-body{font-size:0.74rem;color:var(--text2);line-height:1.6}
+
+/* ── Report Form ── */
+.form-group{margin-bottom:14px}
+.form-label{font-size:0.78rem;font-weight:700;margin-bottom:5px;display:block;color:var(--text2)}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:0.82rem;font-family:inherit;transition:border-color 0.2s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--accent)}
+.form-textarea{resize:vertical;min-height:90px;line-height:1.6}
+.form-select option{background:var(--bg2)}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:8px;padding:10px 22px;cursor:pointer;font-size:0.82rem;font-weight:700;font-family:inherit;transition:opacity 0.2s}
+.btn-primary:hover{opacity:0.85}
+.btn-primary:disabled{opacity:0.4;cursor:not-allowed}
+
+/* ── Report list ── */
+.report-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px}
+.report-meta{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.report-type{font-size:0.62rem;padding:2px 8px;border-radius:10px;font-weight:700;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.2)}
+.report-time{font-size:0.65rem;color:var(--text2);margin-left:auto}
+.report-body{font-size:0.78rem;line-height:1.6}
+.report-status{font-size:0.62rem;padding:2px 8px;border-radius:10px;font-weight:700}
+.report-status.pending{background:rgba(245,158,11,0.15);color:#f59e0b}
+.report-status.resolved{background:rgba(34,197,94,0.15);color:#22c55e}
+
+/* ── Notice (官報) ── */
+.notice-card{background:var(--card);border-left:3px solid var(--accent2);border-radius:0 var(--radius) var(--radius) 0;padding:12px 14px;margin-bottom:8px}
+.notice-date{font-size:0.65rem;color:var(--text2);margin-bottom:4px}
+.notice-title{font-size:0.85rem;font-weight:700;margin-bottom:5px}
+.notice-body{font-size:0.76rem;color:var(--text2);line-height:1.7}
+
+/* ── Admin ── */
+.admin-section{background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+.admin-title{font-size:0.8rem;font-weight:700;color:#ef4444;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+
+/* ── Skeleton ── */
+.skeleton{background:linear-gradient(90deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.08) 50%,rgba(255,255,255,0.04) 100%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px;height:20px;margin-bottom:8px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:24px;right:16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:0.8rem;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:9999;opacity:0;transform:translateY(8px);transition:all 0.3s;pointer-events:none;max-width:280px}
+#toast.show{opacity:1;transform:translateY(0)}
+#toast.success{border-left:3px solid var(--ok)}
+#toast.error{border-left:3px solid var(--danger)}
+#toast.info{border-left:3px solid var(--accent)}
+
+@media(max-width:480px){.stats{grid-template-columns:repeat(3,1fr)}.rule-num{width:22px;height:22px;font-size:0.62rem}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <button class="back-btn" onclick="goBack()">← 戻る</button>
+  <div class="header-title">🚔 SchoolPark 警察署 <span class="header-badge">WEST</span></div>
+  <div class="header-clock" id="hClock"></div>
+</div>
+
+<div class="hero">
+  <div class="hero-icon">🚔</div>
+  <div class="hero-title">SchoolPark Police Station</div>
+  <div class="hero-sub">コミュニティの安全と秩序を守る機関</div>
+  <div class="hero-tags">
+    <span class="hero-tag">コミュニティルール</span>
+    <span class="hero-tag">ウォレット保護</span>
+    <span class="hero-tag">違反報告</span>
+    <span class="hero-tag">官報</span>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val" id="statRules">10</div><div class="stat-lbl">基本ルール数</div></div>
+  <div class="stat"><div class="stat-val" id="statReports">—</div><div class="stat-lbl">未処理報告</div></div>
+  <div class="stat"><div class="stat-val" id="statNotices">—</div><div class="stat-lbl">公式通達</div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab(this,'rules')">📋 コミュニティルール</button>
+  <button class="tab" onclick="switchTab(this,'security')">🔒 セキュリティ</button>
+  <button class="tab" onclick="switchTab(this,'report')">📩 違反報告</button>
+  <button class="tab" onclick="switchTab(this,'notices')">📢 官報</button>
+  <button class="tab" id="adminTab" style="display:none" onclick="switchTab(this,'admin')">⚙️ 管理</button>
+</div>
+
+<div class="main">
+
+  <!-- ① コミュニティルール -->
+  <div id="panel-rules" class="panel active">
+    <div class="section">
+      <div class="section-title">基本ルール（全員適用）</div>
+      <div class="card">
+        <div class="rule-item">
+          <div class="rule-num">1</div>
+          <div class="rule-body">
+            <div class="rule-title">他者を尊重する</div>
+            <div class="rule-desc">誹謗中傷・差別的発言・ハラスメントは一切禁止。すべてのメンバーが安心して参加できる場を維持します。</div>
+            <span class="rule-badge ban">違反→即退場</span>
+          </div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-num">2</div>
+          <div class="rule-body">
+            <div class="rule-title">スパム・宣伝行為の禁止</div>
+            <div class="rule-desc">無関係な商品・サービスの宣伝、同一内容の連続投稿は禁止。SchoolPark公認コンテンツのみ案内可能です。</div>
+            <span class="rule-badge ban">違反→投稿停止</span>
+          </div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-num">3</div>
+          <div class="rule-body">
+            <div class="rule-title">個人情報の取り扱い</div>
+            <div class="rule-desc">他のメンバーの個人情報（本名・住所・電話番号等）を無断で公開することは禁止です。ウォレットアドレスも同様。</div>
+            <span class="rule-badge ban">違反→永久BAN</span>
+          </div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-num">4</div>
+          <div class="rule-body">
+            <div class="rule-title">不正行為・詐欺の禁止</div>
+            <div class="rule-desc">NFT・EMUER・JPYCに関わる詐欺的行為、フィッシングリンクの共有、なりすまし行為は絶対禁止です。</div>
+            <span class="rule-badge ban">違反→通報＋BAN</span>
+          </div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-num">5</div>
+          <div class="rule-body">
+            <div class="rule-title">著作権の遵守</div>
+            <div class="rule-desc">他者が制作したコンテンツ（画像・テキスト・動画等）を無断転載・販売することは禁止です。</div>
+            <span class="rule-badge warn">警告→投稿削除</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">DAO・投票ルール</div>
+      <div class="card">
+        <div class="rule-item">
+          <div class="rule-num">6</div>
+          <div class="rule-body">
+            <div class="rule-title">投票権の不正取得禁止</div>
+            <div class="rule-desc">複数アカウントによる投票操作は禁止。1ウォレット＝1票が原則です。</div>
+            <span class="rule-badge ban">違反→投票権剥奪</span>
+          </div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-num">7</div>
+          <div class="rule-body">
+            <div class="rule-title">議題の誠実な運用</div>
+            <div class="rule-desc">DAO議題は誠実な目的のみ使用可。虚偽の情報を含む議題は運営が削除できます。</div>
+            <span class="rule-badge warn">警告→議題削除</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">NFT・トークンルール</div>
+      <div class="card">
+        <div class="rule-item">
+          <div class="rule-num">8</div>
+          <div class="rule-body">
+            <div class="rule-title">EMUER・JPYCの適正利用</div>
+            <div class="rule-desc">SchoolPark内のトークンはコミュニティ活動目的のみ利用可能。マネーロンダリング等の違法行為は禁止です。</div>
+            <span class="rule-badge ban">違反→法的対応</span>
+          </div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-num">9</div>
+          <div class="rule-body">
+            <div class="rule-title">NFTの転売制限（一部）</div>
+            <div class="rule-desc">プレミアムNFT（第三弾）はコミュニティ参加目的での保有が前提です。純粋な転売目的の大量購入は制限される場合があります。</div>
+            <span class="rule-badge warn">ガイダンス対象</span>
+          </div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-num">10</div>
+          <div class="rule-body">
+            <div class="rule-title">ルール違反の報告義務</div>
+            <div class="rule-desc">違反を目撃した場合は黙認せず「違反報告」タブから報告してください。コミュニティ全体の安全はメンバー全員で守ります。</div>
+            <span class="rule-badge ok">推奨行動</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② セキュリティ -->
+  <div id="panel-security" class="panel">
+    <div class="section">
+      <div class="section-title">ウォレット・MetaMask 保護</div>
+      <div class="tip-card">
+        <div class="tip-icon">🔑</div>
+        <div>
+          <div class="tip-title">シードフレーズは絶対に共有しない</div>
+          <div class="tip-body">12〜24語のシードフレーズ（リカバリーフレーズ）は誰にも教えないでください。SchoolPark運営・サポートも聞くことはありません。聞いてくる相手は100%詐欺です。</div>
+        </div>
+      </div>
+      <div class="tip-card">
+        <div class="tip-icon">🌐</div>
+        <div>
+          <div class="tip-title">URLを必ず確認する</div>
+          <div class="tip-body">SchoolParkの正規URLは <strong>emu-realtime.onrender.com</strong> のみです。「schoolpark-official.com」などの類似URLは全て偽サイトです。ブックマークからのみアクセスしてください。</div>
+        </div>
+      </div>
+      <div class="tip-card">
+        <div class="tip-icon">✍️</div>
+        <div>
+          <div class="tip-title">署名リクエストの内容を確認する</div>
+          <div class="tip-body">MetaMaskの署名リクエストが出たとき、内容を必ず確認してください。「Transfer」「Approve」など資産移動を含む場合は要注意。SchoolParkはログイン時のみ署名を要求します。</div>
+        </div>
+      </div>
+      <div class="tip-card">
+        <div class="tip-icon">📱</div>
+        <div>
+          <div class="tip-title">二段階認証を設定する</div>
+          <div class="tip-body">MetaMaskのパスワードに加え、メールアドレスに紐付けられたFirebaseアカウントにも二段階認証を設定することを強くお勧めします。</div>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">詐欺の見分け方</div>
+      <div class="tip-card">
+        <div class="tip-icon">🚫</div>
+        <div>
+          <div class="tip-title">「NFT当選」「無料エアドロ」に注意</div>
+          <div class="tip-body">突然のDMで「あなたのNFTが当選しました」「無料でEMUERが貰えます」などの連絡は全て詐欺です。公式情報はSchoolPark内の掲示板からのみ発信されます。</div>
+        </div>
+      </div>
+      <div class="tip-card">
+        <div class="tip-icon">👤</div>
+        <div>
+          <div class="tip-title">なりすましアカウントに注意</div>
+          <div class="tip-body">SNSやDMで「SchoolPark運営」「Emu公式」と名乗る場合は、実際の公式アカウントと照合してください。ウォレットアドレスや送金を求めてくる場合は即座にブロック・報告してください。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 違反報告 -->
+  <div id="panel-report" class="panel">
+    <div class="section">
+      <div class="section-title">違反を報告する</div>
+      <div class="card">
+        <div class="form-group">
+          <label class="form-label">違反の種類 <span style="color:var(--danger)">*</span></label>
+          <select class="form-select" id="rptType">
+            <option value="">選択してください</option>
+            <option value="harass">ハラスメント・誹謗中傷</option>
+            <option value="spam">スパム・無断宣伝</option>
+            <option value="fraud">詐欺・フィッシング</option>
+            <option value="privacy">個人情報漏洩</option>
+            <option value="copyright">著作権侵害</option>
+            <option value="dao">DAO投票の不正</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">対象ユーザー（ウォレットアドレスまたはユーザー名）</label>
+          <input class="form-input" id="rptTarget" placeholder="0x... または ニックネーム">
+        </div>
+        <div class="form-group">
+          <label class="form-label">詳細 <span style="color:var(--danger)">*</span></label>
+          <textarea class="form-textarea" id="rptBody" placeholder="いつ・どこで・何が起きたかを具体的に記載してください"></textarea>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">証拠URL（任意）</label>
+          <input class="form-input" id="rptEvidence" placeholder="スクリーンショットのURL・投稿リンクなど">
+        </div>
+      </div>
+      <button class="btn-primary" id="rptSubmitBtn" onclick="submitReport()" style="width:100%;margin-top:4px">📩 報告を送信する</button>
+      <p style="font-size:0.68rem;color:var(--text2);text-align:center;margin-top:8px">報告内容は運営のみが確認します。虚偽報告は対象者への謝罪が必要になる場合があります。</p>
+    </div>
+    <div class="section">
+      <div class="section-title">自分の報告履歴</div>
+      <div id="myReports"><div class="skeleton" style="height:60px"></div></div>
+    </div>
+  </div>
+
+  <!-- ④ 官報 -->
+  <div id="panel-notices" class="panel">
+    <div class="section">
+      <div class="section-title">SchoolPark 公式通達</div>
+      <div id="noticeList"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton" style="height:80px"></div></div>
+    </div>
+  </div>
+
+  <!-- ⑤ 管理（オーナーのみ） -->
+  <div id="panel-admin" class="panel">
+    <div class="section-title" style="margin-bottom:16px">⚙️ 警察署 管理パネル</div>
+
+    <div class="admin-section">
+      <div class="admin-title">📢 官報を投稿する</div>
+      <div class="form-group">
+        <label class="form-label">タイトル</label>
+        <input class="form-input" id="adNoticeTitle" placeholder="通達タイトル">
+      </div>
+      <div class="form-group">
+        <label class="form-label">本文</label>
+        <textarea class="form-textarea" id="adNoticeBody" placeholder="通達内容（改行対応）"></textarea>
+      </div>
+      <button class="btn-primary" onclick="postNotice()">📢 官報を投稿</button>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-title">📩 未処理の報告一覧</div>
+      <div id="allReports"><div class="skeleton"></div><div class="skeleton"></div></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+const OWNER_UID    = "oy9GHjxBDxc0h74AUQfRiXj8b3y1";
+const OWNER_WALLET = "0xdcc687c05f130e57597a8525771299a4efb6edf7";
+
+function isOwner() {
+  var uid    = window.fbCurrentUser?.uid || window.fpCurrentUID;
+  var wallet = window.connectedAccount || "";
+  return uid === OWNER_UID || wallet.toLowerCase() === OWNER_WALLET;
+}
+function db()  { return window.db; }
+function lib() { return window.fbLib; }
+
+/* ── 時計 ── */
+function updateClock() {
+  var now = new Date();
+  document.getElementById("hClock").textContent =
+    now.getHours().toString().padStart(2,"0") + ":" + now.getMinutes().toString().padStart(2,"0");
+}
+updateClock(); setInterval(updateClock,1000);
+
+/* ── Toast ── */
+function showToast(msg, type) {
+  var t = document.getElementById("toast");
+  t.textContent = msg; t.className = "show " + (type||"info");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function(){ t.className = ""; }, 3000);
+}
+
+/* ── タブ ── */
+function switchTab(el, id) {
+  document.querySelectorAll(".tab").forEach(function(t){ t.classList.remove("active"); });
+  document.querySelectorAll(".panel").forEach(function(p){ p.classList.remove("active"); });
+  el.classList.add("active");
+  document.getElementById("panel-"+id).classList.add("active");
+  if (id === "notices")  loadNotices();
+  if (id === "report")   loadMyReports();
+  if (id === "admin")    loadAllReports();
+}
+
+/* ── 戻る ── */
+function goBack() {
+  window.top.postMessage({ type: "spContentClose" }, "*");
+}
+
+/* ── 初期化 ── */
+window.addEventListener("load", function() {
+  // オーナー判定（少し待つ）
+  setTimeout(function() {
+    if (isOwner()) {
+      document.getElementById("adminTab").style.display = "";
+    }
+    loadNotices();
+    loadStats();
+  }, 600);
+});
+
+/* ── 統計 ── */
+function loadStats() {
+  if (!db() || !lib()) return;
+  var L = lib();
+  // 未処理報告数
+  L.getDocs(L.query(L.collection(db(),"sp_police_reports"), L.where("status","==","pending")))
+    .then(function(s){ document.getElementById("statReports").textContent = s.size; })
+    .catch(function(){ document.getElementById("statReports").textContent = "—"; });
+  // 官報数
+  L.getDocs(L.collection(db(),"sp_police_notices"))
+    .then(function(s){ document.getElementById("statNotices").textContent = s.size; })
+    .catch(function(){});
+}
+
+/* ── 官報読み込み ── */
+function loadNotices() {
+  var el = document.getElementById("noticeList");
+  if (!db() || !lib()) {
+    el.innerHTML = renderNotice("2026.05.02","SchoolPark 西エリア開設のお知らせ","警察署・消防署を含む西エリアが正式オープンしました。コミュニティルールを必ずご確認ください。");
+    return;
+  }
+  var L = lib();
+  L.getDocs(L.query(L.collection(db(),"sp_police_notices"), L.orderBy("ts","desc")))
+    .then(function(snap) {
+      if (snap.empty) {
+        el.innerHTML = "<div style='font-size:0.78rem;color:var(--text2);text-align:center;padding:20px'>まだ官報はありません</div>";
+        return;
+      }
+      el.innerHTML = snap.docs.map(function(d) {
+        var data = d.data();
+        var date = data.ts ? new Date(data.ts).toLocaleDateString("ja-JP") : "—";
+        return renderNotice(date, data.title, data.body, d.id);
+      }).join("");
+    }).catch(function() {
+      el.innerHTML = renderNotice("2026.05.02","SchoolPark 西エリア開設のお知らせ","警察署・消防署を含む西エリアが正式オープンしました。コミュニティルールを必ずご確認ください。");
+    });
+}
+function renderNotice(date, title, body, id) {
+  var delBtn = isOwner() && id ? "<button onclick=\"deleteNotice('"+id+"')\" style='background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;padding:2px 8px;font-size:0.62rem;cursor:pointer;margin-top:6px'>削除</button>" : "";
+  return "<div class='notice-card'><div class='notice-date'>"+date+"</div><div class='notice-title'>"+title+"</div><div class='notice-body'>"+body.replace(/\n/g,"<br>")+"</div>"+delBtn+"</div>";
+}
+
+/* ── 違反報告 ── */
+function submitReport() {
+  var type = document.getElementById("rptType").value;
+  var body = document.getElementById("rptBody").value.trim();
+  if (!type || !body) { showToast("種類と詳細は必須です", "error"); return; }
+
+  if (!db() || !lib()) { showToast("✅ 報告を受け付けました（オフラインモード）", "success"); return; }
+
+  var btn = document.getElementById("rptSubmitBtn");
+  btn.disabled = true;
+  var L = lib();
+  L.addDoc(L.collection(db(),"sp_police_reports"), {
+    type:     type,
+    target:   document.getElementById("rptTarget").value.trim(),
+    body:     body,
+    evidence: document.getElementById("rptEvidence").value.trim(),
+    reporter: window.connectedAccount || "anonymous",
+    status:   "pending",
+    ts:       Date.now()
+  }).then(function() {
+    showToast("✅ 報告を送信しました。運営が確認します。", "success");
+    document.getElementById("rptType").value    = "";
+    document.getElementById("rptTarget").value  = "";
+    document.getElementById("rptBody").value    = "";
+    document.getElementById("rptEvidence").value= "";
+    btn.disabled = false;
+    loadMyReports();
+    loadStats();
+  }).catch(function(e) {
+    showToast("送信に失敗しました: "+e.message, "error");
+    btn.disabled = false;
+  });
+}
+
+function loadMyReports() {
+  var el = document.getElementById("myReports");
+  var wallet = window.connectedAccount || "";
+  if (!wallet || !db() || !lib()) {
+    el.innerHTML = "<div style='font-size:0.78rem;color:var(--text2);padding:10px 0'>ウォレット接続後に確認できます</div>";
+    return;
+  }
+  var L = lib();
+  L.getDocs(L.query(L.collection(db(),"sp_police_reports"), L.where("reporter","==",wallet), L.orderBy("ts","desc")))
+    .then(function(snap) {
+      if (snap.empty) { el.innerHTML = "<div style='font-size:0.78rem;color:var(--text2);padding:10px 0'>報告履歴はありません</div>"; return; }
+      el.innerHTML = snap.docs.slice(0,5).map(function(d) {
+        var r = d.data();
+        var date = r.ts ? new Date(r.ts).toLocaleString("ja-JP") : "—";
+        var st = r.status === "resolved" ? "<span class='report-status resolved'>✓ 解決済み</span>" : "<span class='report-status pending'>⏳ 確認中</span>";
+        return "<div class='report-card'><div class='report-meta'><span class='report-type'>"+r.type+"</span>"+st+"<span class='report-time'>"+date+"</span></div><div class='report-body'>"+r.body+"</div></div>";
+      }).join("");
+    }).catch(function(){ el.innerHTML = "<div style='font-size:0.78rem;color:var(--text2);padding:10px 0'>読み込めませんでした</div>"; });
+}
+
+/* ── Admin ── */
+function postNotice() {
+  var title = document.getElementById("adNoticeTitle").value.trim();
+  var body  = document.getElementById("adNoticeBody").value.trim();
+  if (!title || !body) { showToast("タイトルと本文は必須です","error"); return; }
+  if (!db() || !lib()) { showToast("Firebase未接続","error"); return; }
+  var L = lib();
+  L.addDoc(L.collection(db(),"sp_police_notices"), { title:title, body:body, ts:Date.now() })
+    .then(function() {
+      showToast("📢 官報を投稿しました","success");
+      document.getElementById("adNoticeTitle").value = "";
+      document.getElementById("adNoticeBody").value  = "";
+      loadNotices(); loadStats();
+    }).catch(function(e){ showToast("失敗: "+e.message,"error"); });
+}
+
+function deleteNotice(id) {
+  if (!confirm("この官報を削除しますか？")) return;
+  lib().deleteDoc(lib().doc(db(),"sp_police_notices",id))
+    .then(function(){ showToast("削除しました","success"); loadNotices(); })
+    .catch(function(e){ showToast("失敗: "+e.message,"error"); });
+}
+
+function loadAllReports() {
+  var el = document.getElementById("allReports");
+  if (!db() || !lib()) { el.innerHTML = "<div style='font-size:0.78rem;color:var(--text2)'>Firebase未接続</div>"; return; }
+  var L = lib();
+  L.getDocs(L.query(L.collection(db(),"sp_police_reports"), L.orderBy("ts","desc")))
+    .then(function(snap) {
+      if (snap.empty) { el.innerHTML = "<div style='font-size:0.78rem;color:var(--text2)'>報告はありません</div>"; return; }
+      el.innerHTML = snap.docs.map(function(d) {
+        var r = d.data();
+        var date = r.ts ? new Date(r.ts).toLocaleString("ja-JP") : "—";
+        var resolveBtn = r.status !== "resolved"
+          ? "<button onclick=\"resolveReport('"+d.id+"')\" style='background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#22c55e;border-radius:6px;padding:2px 8px;font-size:0.62rem;cursor:pointer;margin-top:6px'>✓ 解決済みにする</button>" : "";
+        return "<div class='report-card'><div class='report-meta'><span class='report-type'>"+r.type+"</span><span style='font-size:0.65rem;color:var(--text2)'>"+r.reporter.slice(0,6)+"…</span><span class='report-time'>"+date+"</span></div><div class='report-body'>"+r.body+"</div>"+resolveBtn+"</div>";
+      }).join("");
+    }).catch(function(e){ el.innerHTML = "<div style='font-size:0.78rem;color:var(--text2);'>読込エラー: "+e.message+"</div>"; });
+}
+
+function resolveReport(id) {
+  lib().updateDoc(lib().doc(db(),"sp_police_reports",id), { status:"resolved" })
+    .then(function(){ showToast("✓ 解決済みにしました","success"); loadAllReports(); loadStats(); })
+    .catch(function(e){ showToast("失敗: "+e.message,"error"); });
+}
+</script>
+</body>
+</html>
