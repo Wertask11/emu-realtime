@@ -199,7 +199,8 @@
   border-right:1px solid rgba(139,105,20,0.18);
   display:flex; flex-direction:column; overflow:hidden;
 }
-.spmap-left-header { padding:14px 14px 10px; border-bottom:1px solid rgba(139,105,20,0.18); }
+.spmap-left-header { padding:14px 14px 10px; border-bottom:1px solid rgba(139,105,20,0.18); display:flex; align-items:flex-start; justify-content:space-between; gap:6px; }
+.spmap-left-close { display:none; background:none; border:none; color:#888; font-size:1.1rem; cursor:pointer; padding:0; line-height:1; flex-shrink:0; }
 .spmap-left-title {
   font-family:'Playfair Display',Georgia,serif; font-size:1.05rem; font-weight:800;
   color:#D4A843; letter-spacing:0.1em;
@@ -621,54 +622,91 @@
   box-shadow:0 6px 20px rgba(249,115,22,0.6);
 }
 .spmap-detail-go-btn:active { transform:translateY(0); }
-@media (max-width:700px) {
-  .spmap-nav-links { display:none; }
-  .spmap-left { width:190px; }
-  .spmap-ticket-btn { padding:6px 10px; font-size:0.72rem; }
+/* ── ハンバーガーボタン（モバイル専用） ── */
+.spmap-menu-btn {
+  display:none;
+  background:none; border:1px solid rgba(212,168,67,0.4);
+  color:#D4A843; padding:6px 11px; border-radius:4px;
+  cursor:pointer; font-size:1.15rem; flex-shrink:0;
+  line-height:1;
 }
-@media (max-width:480px) {
-  .spmap-left { display:none; }
-  .spmap-brand-sub { display:none; }
+/* ドロワー背景 */
+#spMapMenuBackdrop {
+  display:none; position:absolute; inset:0;
+  background:rgba(0,0,0,0.55); z-index:49;
 }
-/* ── スマホ・タブレット対応 ── */
+#spMapMenuBackdrop.open { display:block; }
+
+/* ── タブレット（〜768px） ── */
 @media (max-width:768px) {
-  /* ナビ */
-  .spmap-nav { height:48px; padding:0 10px; gap:6px; }
+  /* ナビ全体 */
+  .spmap-nav { height:50px; padding:0 10px; gap:6px; }
   .spmap-brand { gap:6px; }
-  .spmap-brand-logo { width:28px; height:28px; font-size:1rem; }
-  .spmap-brand-name { font-size:0.85rem; }
-  .spmap-ticket-btn { padding:5px 10px; font-size:0.7rem; }
-  /* 詳細パネルをモバイル向けに下部固定 */
+  .spmap-brand-name { font-size:0.82rem; }
+  .spmap-brand-sub { display:none; }
+  /* ナビリンクを横スクロールで表示 */
+  .spmap-nav-links {
+    display:flex; overflow-x:auto; scrollbar-width:none; flex:1;
+  }
+  .spmap-nav-links::-webkit-scrollbar { display:none; }
+  .spmap-nav-link { font-size:0.7rem; padding:0 9px; white-space:nowrap; }
+  .spmap-ticket-btn { padding:5px 9px; font-size:0.68rem; }
+  /* サイドバー幅を縮める */
+  .spmap-left { width:180px; }
+  /* 詳細パネル：下部固定シート */
   .spmap-detail {
-    position:fixed;
-    bottom:0; left:0; right:0;
-    width:100% !important;
-    max-width:100%;
+    position:fixed; bottom:0; left:0; right:0;
+    width:100% !important; max-width:100%;
     border-radius:14px 14px 0 0;
-    max-height:55vh;
-    overflow-y:auto;
-    box-sizing:border-box;
+    max-height:55vh; overflow-y:auto; box-sizing:border-box;
   }
   /* 検索バー */
-  .spmap-search { width:calc(100% - 90px); left:10px; transform:none; }
+  .spmap-search { width:calc(100% - 100px); left:10px; transform:none; }
   /* ズームボタン */
   .spmap-zoom { bottom:8px; right:8px; }
   .spmap-zoom button { width:34px; height:34px; font-size:1.1rem; }
-  /* モーダル系 */
+  /* モーダル全幅 */
   .spmm-box { width:calc(100% - 24px) !important; max-width:100% !important; margin:12px; }
+  /* Infobar 改行なしスクロール */
+  .spmap-infobar { overflow-x:auto; scrollbar-width:none; flex-wrap:nowrap; gap:14px; }
+  .spmap-infobar::-webkit-scrollbar { display:none; }
 }
+
+/* ── スマホ（〜480px） ── */
 @media (max-width:480px) {
-  /* ナビさらに縮小 */
-  .spmap-nav { height:44px; padding:0 8px; }
-  .spmap-brand-name { font-size:0.78rem; }
-  .spmap-brand-sub { display:none; }
+  /* ナビ */
+  .spmap-nav { height:46px; padding:0 8px; gap:5px; }
+  .spmap-brand-name { font-size:0.75rem; }
   .spmap-ticket-btn { display:none; }
-  /* 検索バー */
-  .spmap-search { width:calc(100% - 20px); left:10px; transform:none; }
+  /* ☰ ボタン表示 */
+  .spmap-menu-btn { display:flex; align-items:center; }
+  /* ナビリンクを横スクロール */
+  .spmap-nav-links { display:flex; overflow-x:auto; scrollbar-width:none; flex:1; }
+  .spmap-nav-links::-webkit-scrollbar { display:none; }
+  .spmap-nav-link { font-size:0.68rem; padding:0 8px; white-space:nowrap; }
+  /* サイドバー：ドロワー化（左からスライド） */
+  .spmap-left {
+    display:flex !important;
+    position:absolute; left:0; top:0; bottom:0;
+    z-index:50; width:230px !important;
+    transform:translateX(-100%);
+    transition:transform 0.25s cubic-bezier(0.4,0,0.2,1);
+  }
+  .spmap-left.spmap-left-open { transform:translateX(0); }
+  /* ドロワー内に閉じるボタン */
+  .spmap-left-close { display:flex !important; }
+  /* Infobar 非表示（スペース確保） */
+  .spmap-infobar { display:none; }
+  /* 検索バー幅 */
+  .spmap-search { width:calc(100% - 110px); left:8px; transform:none; }
   /* 詳細パネル */
   .spmap-detail { max-height:65vh; }
-  /* コンテンツ一覧のモーダルも全幅 */
-  .spmm-box { border-radius:12px 12px 0 0; position:fixed; bottom:0; left:0; right:0; margin:0; width:100% !important; max-height:80vh; overflow-y:auto; }
+  /* モーダル下部固定 */
+  .spmm-box {
+    border-radius:14px 14px 0 0; position:fixed;
+    bottom:0; left:0; right:0; margin:0;
+    width:100% !important; max-height:82vh; overflow-y:auto;
+  }
 }
 
 /* ステップ */
@@ -2021,6 +2059,7 @@ body.paypay-mode #pp-post-fab {
       <span class="spmap-nav-link" onclick="spMapNavClick('tutorial')">チュートリアル</span>
     </div>
     <button class="spmap-ticket-btn" onclick="spMapLinkClick('ticket')">チケット購入</button>
+    <button class="spmap-menu-btn" onclick="toggleSpMapMenu()" aria-label="メニュー">☰</button>
     <!-- ✕ボタン廃止: SchoolParkが常設メイン画面のため閉じるボタンは不要 -->
   </nav>
 
@@ -2035,11 +2074,17 @@ body.paypay-mode #pp-post-fab {
   <!-- Main Body -->
   <div class="spmap-main">
 
+    <!-- ドロワー背景（スマホ用） -->
+    <div id="spMapMenuBackdrop" onclick="toggleSpMapMenu()"></div>
+
     <!-- Left Sidebar -->
     <aside class="spmap-left">
       <div class="spmap-left-header">
-        <div class="spmap-left-title">PARK MAP</div>
-        <div class="spmap-left-sub" id="spAreaSubLabel">エリアを選択してください</div>
+        <div>
+          <div class="spmap-left-title">PARK MAP</div>
+          <div class="spmap-left-sub" id="spAreaSubLabel">エリアを選択してください</div>
+        </div>
+        <button class="spmap-left-close" onclick="toggleSpMapMenu()" aria-label="閉じる">✕</button>
       </div>
 
       <!-- エリア選択リスト（タブなし・6項目） -->
@@ -7199,6 +7244,16 @@ window.addEventListener("message", (e) => {
     closeSpContent();
   }
 });
+
+/* ── モバイル：サイドバードロワー開閉 ── */
+function toggleSpMapMenu() {
+  const sidebar  = document.querySelector('.spmap-left');
+  const backdrop = document.getElementById('spMapMenuBackdrop');
+  if (!sidebar || !backdrop) return;
+  const isOpen = sidebar.classList.contains('spmap-left-open');
+  sidebar.classList.toggle('spmap-left-open', !isOpen);
+  backdrop.classList.toggle('open', !isOpen);
+}
 
 function closeSpMap() {
   document.getElementById("spMapOverlay").style.display = "none";
