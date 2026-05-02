@@ -7031,13 +7031,13 @@ const SP_POIS = [
   { id:"guard3", name:"Security Guard 自警団",  icon:"🛡️", zone:"guard", px:24, py:56, desc:"セキュリティ・安全管理。不正アクセス対策・ウォレット保護ガイド",    status:"coming" },
   { id:"guard4", name:"Gym ジム",               icon:"💪", zone:"guard", px:14, py:64, desc:"フィジカル・健康系コンテンツ。体を動かすことの大切さを学ぶ",         status:"coming" },
   // Life Market（東エリア：日常と稼ぎ）
-  { id:"earn1",  name:"Hotel ホテル",            icon:"🏨", zone:"earn",  px:80, py:25, desc:"長期滞在型学習コンテンツ。連続受講でスキルを深める",                 status:"coming" },
-  { id:"earn2",  name:"Mansion マンション",      icon:"🏰", zone:"earn",  px:87, py:34, desc:"高度学習・プレミアムコンテンツ。NFT保有者向け限定エリア",           status:"coming" },
+  { id:"earn1",  name:"Hotel ホテル",            icon:"🏨", zone:"earn",  px:80, py:25, desc:"長期滞在型学習コンテンツ。連続受講でスキルを深める",                 status:"open",   eastKey:"hotel"   },
+  { id:"earn2",  name:"Mansion マンション",      icon:"🏰", zone:"earn",  px:87, py:34, desc:"高度学習・プレミアムコンテンツ。NFT保有者向け限定エリア",           status:"open",   eastKey:"mansion" },
   { id:"earn3",  name:"Shopping ショッピング",   icon:"🛍️", zone:"earn",  px:75, py:38, desc:"コンテンツ販売マーケット。HEXA NFT・個別相談チケット購入",           status:"coming" },
-  { id:"earn4",  name:"Greengrocer 八百屋",     icon:"🥦", zone:"earn",  px:83, py:44, desc:"日常知識・生活スキルコンテンツ。毎日使える実践的な情報",             status:"coming" },
-  { id:"earn5",  name:"Fruit Shop 果物屋",      icon:"🍎", zone:"earn",  px:81, py:55, desc:"健康・栄養コンテンツ。体と心を整えるライフスタイル提案",             status:"coming" },
-  { id:"earn6",  name:"Coffee 珈琲",            icon:"☕", zone:"earn",  px:83, py:63, desc:"副業・収益化コンテンツ。スキルをお金に変える方法を学ぶ",             status:"coming" },
-  { id:"earn7",  name:"Hotel ホテル（下）",      icon:"🏩", zone:"earn",  px:88, py:69, desc:"EMUERトークン・NFT収益運用コンテンツ",                              status:"coming" },
+  { id:"earn4",  name:"Greengrocer 八百屋",     icon:"🥦", zone:"earn",  px:83, py:44, desc:"日常知識・生活スキルコンテンツ。毎日使える実践的な情報",             status:"open",   eastKey:"yakuya"  },
+  { id:"earn5",  name:"Fruit Shop 果物屋",      icon:"🍎", zone:"earn",  px:81, py:55, desc:"健康・栄養コンテンツ。体と心を整えるライフスタイル提案",             status:"open",   eastKey:"fruits"  },
+  { id:"earn6",  name:"Coffee 珈琲",            icon:"☕", zone:"earn",  px:83, py:63, desc:"副業・収益化コンテンツ。スキルをお金に変える方法を学ぶ",             status:"open",   eastKey:"coffee"  },
+  { id:"earn7",  name:"Hotel ホテル（下）",      icon:"🏩", zone:"earn",  px:88, py:69, desc:"EMUERトークン・NFT収益運用コンテンツ",                              status:"open",   eastKey:"hotel2"  },
   // Frontier Gate（南エリア：冒険と救助）
   { id:"play1",  name:"Non-theater 映画館",     icon:"🎬", zone:"play",  px:68, py:73, desc:"映像・動画コンテンツ。SchoolParkのストーリーを映像で体験",           status:"coming" },
   { id:"play2",  name:"Elevator エレベーター",   icon:"🛗", zone:"play",  px:74, py:79, desc:"各エリアへの移動手段。ショートカットでどこへでも",                  status:"coming" },
@@ -7054,7 +7054,7 @@ const SP_POIS = [
   // 中央・健康
   { id:"plaza1", name:"Fountain 噴水広場",      icon:"⛲", zone:"plaza", px:50, py:38, desc:"SchoolParkの中心。コミュニティ交流広場。DAO投票・イベント開催スポット", status:"open", page:"/schoolpark/fountain.html" },
   // 暮らし
-  { id:"life1",  name:"House 家",               icon:"🏡", zone:"life",  px:84, py:51, desc:"暮らし・住まいコンテンツ。生活設計・ライフプランニング",               status:"coming" },
+  { id:"life1",  name:"House 家",               icon:"🏡", zone:"life",  px:84, py:51, desc:"暮らし・住まいコンテンツ。生活設計・ライフプランニング",               status:"open",   eastKey:"house"   },
 ];
 
 const GATE_NAMES = {
@@ -7352,9 +7352,11 @@ function spMapSelectPoi(poiId) {
       ${zone.label}${zone.sub ? " — " + zone.sub : ""}
     </div>
     <div class="spmap-detail-desc">${poi.desc}</div>
-    ${poi.page
-      ? `<button class="spmap-detail-go-btn" onclick="openSpContent('${poi.page}')">🚪 遊びに行く</button>`
-      : `<div class="spmap-detail-badge">🕐 5/20 OPENING</div>`
+    ${poi.eastKey
+      ? `<button class="spmap-detail-go-btn" onclick="openEastBuilding('${poi.eastKey}')">🚪 遊びに行く</button>`
+      : poi.page
+        ? `<button class="spmap-detail-go-btn" onclick="openSpContent('${poi.page}')">🚪 遊びに行く</button>`
+        : `<div class="spmap-detail-badge">🕐 COMING SOON</div>`
     }
   `;
   panel.classList.add("smd-open");
@@ -8242,12 +8244,26 @@ var EAST_BUILDINGS = {
 };
 function openEastBuilding(key) {
   var b = EAST_BUILDINGS[key]; if (!b) return;
+  // SchoolParkマップを閉じる
+  var spMap = document.getElementById("spMapOverlay");
+  if (spMap) spMap.style.display = "none";
+  // スクロール固定
+  document.documentElement.style.overflow = "hidden";
+  document.body.style.overflow = "hidden";
+  document.body.style.position = "fixed";
+  document.body.style.width = "100%";
+  // オーバーレイを開く
   document.getElementById(b.overlay).style.display = "block";
   document.getElementById(b.frame).src = b.src;
 }
 function closeEastBuilding(overlayId, frameId) {
   document.getElementById(overlayId).style.display = "none";
   document.getElementById(frameId).src = "";
+  // スクロール固定を解除
+  document.documentElement.style.overflow = "";
+  document.body.style.overflow = "";
+  document.body.style.position = "";
+  document.body.style.width = "";
 }
 function openRingoGame() {
   // 2026-04-18（水）23:59 JST まで有料ユーザー先行公開
