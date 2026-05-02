@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SchoolPark Museum — 博物館</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#04060a;--surface:#070c14;--card:#0c1220;--border:#162030;
+  --accent:#7eb8e8;--gold:#d4a017;--amber:#f59e0b;--green:#00e676;
+  --text:#d8eaf8;--muted:#3a5870;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
+.close-btn{position:fixed;top:12px;right:14px;background:rgba(126,184,232,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px;z-index:9999}
+.close-btn:hover{background:rgba(126,184,232,.35)}
+
+/* ========== MUSEUM SCENE ========== */
+.museum-scene{position:relative;height:200px;overflow:hidden;background:var(--bg);border-bottom:2px solid var(--border)}
+.ms-ceiling{position:absolute;top:0;left:0;right:0;height:24px;background:linear-gradient(to bottom,#0a1020,var(--bg));border-bottom:1px solid var(--border)}
+.ms-floor{position:absolute;bottom:0;left:0;right:0;height:36px;background:linear-gradient(to bottom,#080d18,#04060a);border-top:2px solid #162030}
+.ms-floor-tile{position:absolute;bottom:0;left:0;right:0;height:36px;background:repeating-linear-gradient(90deg,transparent,transparent 50px,rgba(30,80,140,.1) 50px,rgba(30,80,140,.1) 51px)}
+.ms-col{position:absolute;bottom:36px;width:16px;background:linear-gradient(to right,#0a1828,#1a3050,#0a1828);border:1px solid #1a3050}
+.ms-col::before{content:'';position:absolute;top:-8px;left:-4px;right:-4px;height:8px;background:#1e3a5a;border-radius:1px}
+.c1{left:20px;height:100px}.c2{left:55px;height:110px}.c3{right:55px;height:110px}.c4{right:20px;height:100px}
+.ceiling-spots{position:absolute;top:6px;left:0;right:0;display:flex;justify-content:space-around;padding:0 30px}
+.cs{width:6px;height:6px;border-radius:50%;background:rgba(200,230,255,.9);box-shadow:0 0 8px rgba(200,230,255,.6),0 0 20px rgba(150,200,255,.3)}
+.display-cases{position:absolute;bottom:36px;left:0;right:0;display:flex;justify-content:space-around;padding:0 16px;align-items:flex-end}
+.dc{width:70px;background:linear-gradient(to bottom,#0a1828,#071020);border:1px solid #1a3050;border-radius:4px 4px 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:border-color .2s}
+.dc:hover{border-color:var(--accent)}
+.dc1{height:80px}.dc2{height:95px}.dc3{height:80px}
+.dc-icon{font-size:28px;margin-bottom:4px}
+.dc-label{font-size:8px;color:var(--muted);text-align:center;padding:0 4px}
+.dc-base{width:80px;height:8px;background:linear-gradient(to bottom,#1e3a5a,#0a1828);border:1px solid #1a3050;border-top:none}
+.visitor{position:absolute;bottom:36px;font-size:18px;opacity:.5}
+.v1{animation:vWalk 10s linear infinite}.v2{animation:vWalk 14s linear infinite 4s}
+@keyframes vWalk{0%{left:-20px}100%{left:calc(100% + 20px)}}
+
+/* ========== コンテンツ ========== */
+.page{padding:16px}
+.tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto}
+.tab{padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:12px;white-space:nowrap;transition:all .2s}
+.tab.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
+.panel{display:none}.panel.active{display:block}
+.s-title{font-size:14px;font-weight:700;color:var(--accent);margin:0 0 12px;display:flex;align-items:center;gap:6px}
+.exhibit-list{display:flex;flex-direction:column;gap:12px}
+.exhibit{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;position:relative;cursor:pointer;transition:border-color .2s}
+.exhibit:hover{border-color:var(--accent)}
+.exhibit-num{position:absolute;top:10px;left:12px;width:24px;height:24px;background:var(--accent);color:#000;font-size:10px;font-weight:700;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.exhibit-body{padding:12px 14px 12px 44px}
+.exhibit-title{font-size:13px;font-weight:700;color:#fff;line-height:1.4;margin-bottom:4px}
+.exhibit-author{font-size:10px;color:var(--accent);margin-bottom:6px}
+.exhibit-text{font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:8px}
+.exhibit-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.etag{font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(126,184,232,.12);color:var(--accent);border:1px solid rgba(126,184,232,.2)}
+.exhibit-footer{display:flex;gap:10px;font-size:11px;color:var(--muted)}
+.loading-indicator{text-align:center;padding:30px;color:var(--muted);font-size:13px}
+.hall-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.hall-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;cursor:pointer;transition:border-color .2s}
+.hall-card:hover{border-color:var(--accent)}
+.hall-icon{font-size:26px;margin-bottom:6px}
+.hall-name{font-size:12px;font-weight:700;color:#fff;margin-bottom:3px}
+.hall-desc{font-size:10px;color:var(--muted)}
+#viewer{display:none;position:fixed;inset:0;background:rgba(4,6,10,.97);z-index:200;overflow-y:auto;padding:20px 16px 40px}
+.viewer-head{position:sticky;top:0;display:flex;justify-content:flex-end;padding-bottom:10px;background:rgba(4,6,10,.97)}
+.viewer-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;max-width:600px;margin:0 auto}
+.viewer-label{font-size:10px;color:var(--accent);letter-spacing:.1em;margin-bottom:6px}
+.viewer-title{font-family:'Playfair Display',serif;font-size:17px;color:#fff;line-height:1.5;margin-bottom:8px}
+.viewer-author{font-size:12px;color:var(--accent);margin-bottom:14px}
+.viewer-body{font-size:13px;color:var(--muted);line-height:1.9}
+.viewer-body p{margin-bottom:12px}
+.viewer-stats{display:flex;gap:14px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+.vstat{font-size:12px;color:var(--muted)}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<button class="close-btn" onclick="window.top.postMessage({type:'spContentClose'},'*')">✕ 閉じる</button>
+
+<div class="museum-scene">
+  <div class="ms-ceiling"></div>
+  <div class="ms-floor"><div class="ms-floor-tile"></div></div>
+  <div class="ceiling-spots"><div class="cs"></div><div class="cs"></div><div class="cs"></div><div class="cs"></div></div>
+  <div class="ms-col c1"></div><div class="ms-col c2"></div><div class="ms-col c3"></div><div class="ms-col c4"></div>
+  <div class="display-cases">
+    <div><div class="dc dc1" onclick="switchTab('explore')"><div class="dc-icon">🔍</div><div class="dc-label">探索</div></div><div class="dc-base"></div></div>
+    <div><div class="dc dc2" onclick="switchTab('learn')"><div class="dc-icon">📖</div><div class="dc-label">学び</div></div><div class="dc-base"></div></div>
+    <div><div class="dc dc3" onclick="switchTab('recommend')"><div class="dc-icon">⭐</div><div class="dc-label">殿堂</div></div><div class="dc-base"></div></div>
+  </div>
+  <div class="visitor v1" style="left:-20px">🚶</div>
+  <div class="visitor v2" style="left:60px">🧑‍🎓</div>
+</div>
+
+<div style="text-align:center;padding:14px 16px 10px">
+  <div style="font-family:'Playfair Display',serif;font-size:19px;color:#fff">SchoolPark Museum</div>
+  <div style="font-size:11px;color:var(--muted);margin-top:3px">コミュニティの記録と知恵を展示する博物館</div>
+</div>
+
+<div class="page">
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('explore')">🔍 探索ホール</div>
+    <div class="tab" onclick="switchTab('learn')">📖 学びホール</div>
+    <div class="tab" onclick="switchTab('recommend')">⭐ 殿堂</div>
+    <div class="tab" onclick="switchTab('about')">🏛️ 案内</div>
+  </div>
+
+  <div class="panel active" id="panel-explore">
+    <div class="s-title">🔍 探索ホール — Emuの「探索」投稿を展示</div>
+    <div class="exhibit-list" id="exploreList"><div class="loading-indicator">📡 展示物を読み込んでいます...</div></div>
+  </div>
+
+  <div class="panel" id="panel-learn">
+    <div class="s-title">📖 学びホール — Emuの「学び」投稿を展示</div>
+    <div class="exhibit-list" id="learnList"><div class="loading-indicator">📡 展示物を読み込んでいます...</div></div>
+  </div>
+
+  <div class="panel" id="panel-recommend">
+    <div class="s-title">⭐ おすすめ殿堂 — good上位の名作投稿</div>
+    <div class="exhibit-list" id="recommendList"><div class="loading-indicator">📡 展示物を読み込んでいます...</div></div>
+  </div>
+
+  <div class="panel" id="panel-about">
+    <div class="s-title">🏛️ 博物館について</div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;font-size:13px;color:var(--muted);line-height:1.8">
+      SchoolPark Museumは、Emuコミュニティメンバーの投稿を「展示物」として展示する博物館です。探索・学びの記録がここに永久保存されます。あなたの投稿も、この博物館の展示物になるかもしれません。
+    </div>
+    <div class="s-title">📋 3つのホール</div>
+    <div class="hall-grid">
+      <div class="hall-card" onclick="switchTab('explore')"><div class="hall-icon">🔍</div><div class="hall-name">探索ホール</div><div class="hall-desc">「探索」タグの投稿</div></div>
+      <div class="hall-card" onclick="switchTab('learn')"><div class="hall-icon">📖</div><div class="hall-name">学びホール</div><div class="hall-desc">「学び」タグの投稿</div></div>
+      <div class="hall-card" onclick="switchTab('recommend')"><div class="hall-icon">⭐</div><div class="hall-name">おすすめ殿堂</div><div class="hall-desc">good上位の名作</div></div>
+      <div class="hall-card" onclick="switchTab('about')"><div class="hall-icon">🏛️</div><div class="hall-name">館内案内</div><div class="hall-desc">博物館の使い方</div></div>
+    </div>
+    <div style="padding:12px 14px;background:rgba(212,160,23,.08);border:1px solid rgba(212,160,23,.2);border-radius:12px">
+      <div style="font-size:12px;color:var(--gold);font-weight:700;margin-bottom:6px">💡 展示されるには</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.8">Emuアプリで「探索」または「学び」タグをつけて投稿すると、この博物館に展示されます。good・changeが多い投稿は「おすすめ殿堂」に選ばれます。</div>
+    </div>
+  </div>
+</div>
+
+<div id="viewer">
+  <div class="viewer-head">
+    <button onclick="closeViewer()" style="background:rgba(126,184,232,.2);border:1px solid var(--border);color:var(--accent);padding:7px 16px;border-radius:20px;cursor:pointer;font-size:12px">✕ 閉じる</button>
+  </div>
+  <div class="viewer-card" id="viewerCard"></div>
+</div>
+
+<script>
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',['explore','learn','recommend','about'][i]===name)});
+  document.querySelectorAll('.panel').forEach(p=>{p.classList.toggle('active',p.id==='panel-'+name)});
+  if(name==='explore') loadPosts('探索','exploreList');
+  else if(name==='learn') loadPosts('学び','learnList');
+  else if(name==='recommend') loadRecommend();
+}
+function getDb(){try{return window.top.db||null;}catch(e){return null;}}
+function getFbLib(){try{return window.top.fbLib||null;}catch(e){return null;}}
+function timeAgo(ts){if(!ts)return '';try{const d=ts.toDate?ts.toDate():new Date(ts);const diff=Math.floor((Date.now()-d.getTime())/1000);if(diff<60)return diff+'秒前';if(diff<3600)return Math.floor(diff/60)+'分前';if(diff<86400)return Math.floor(diff/3600)+'時間前';return Math.floor(diff/86400)+'日前';}catch(e){return '';}}
+function excerpt(body,n=80){if(!body)return '';const p=body.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();return p.length>n?p.slice(0,n)+'…':p;}
+let cache={};
+function buildCard(doc,num){
+  const d=doc.data();const tags=(d.tags||[]).slice(0,3);
+  return `<div class="exhibit" onclick="openViewer('${doc.id}')">
+    <div class="exhibit-num">${num}</div>
+    <div class="exhibit-body">
+      <div class="exhibit-title">${d.title||'無題'}</div>
+      <div class="exhibit-author">${(d.address||'匿名').slice(0,6)}… · ${timeAgo(d.createdAt)}</div>
+      <div class="exhibit-text">${excerpt(d.body||d.text)}</div>
+      <div class="exhibit-tags">${tags.map(t=>`<span class="etag">${t}</span>`).join('')}</div>
+      <div class="exhibit-footer"><span>👍 ${d.goodCount||0}</span><span>🔄 ${d.changeCount||0}</span></div>
+    </div></div>`;
+}
+function empty(msg){return `<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">${msg}</div>`;}
+async function loadPosts(tag,listId){
+  const el=document.getElementById(listId);if(!el)return;
+  const db=getDb();const lib=getFbLib();
+  if(!db||!lib){el.innerHTML=buildSamples(tag);return;}
+  try{
+    const {collection,query,where,orderBy,limit,getDocs}=lib;
+    const q=query(collection(db,'posts'),where('tags','array-contains',tag),orderBy('createdAt','desc'),limit(12));
+    const snap=await getDocs(q);
+    if(snap.empty){el.innerHTML=empty('まだ展示物がありません。Emuで「'+tag+'」タグをつけて投稿しよう！');return;}
+    snap.docs.forEach(d=>{cache[d.id]=d.data();});
+    el.innerHTML=snap.docs.map((d,i)=>buildCard(d,i+1)).join('');
+  }catch(e){el.innerHTML=buildSamples(tag);}
+}
+async function loadRecommend(){
+  const el=document.getElementById('recommendList');if(!el)return;
+  const db=getDb();const lib=getFbLib();
+  if(!db||!lib){el.innerHTML=empty('データを読み込めませんでした');return;}
+  try{
+    const {collection,query,where,orderBy,limit,getDocs}=lib;
+    const q=query(collection(db,'posts'),where('goodCount','>=',5),orderBy('goodCount','desc'),limit(12));
+    const snap=await getDocs(q);
+    if(snap.empty){el.innerHTML=empty('good上位の投稿はまだありません。名作を目指して投稿しよう！');return;}
+    snap.docs.forEach(d=>{cache[d.id]=d.data();});
+    el.innerHTML=snap.docs.map((d,i)=>buildCard(d,i+1)).join('');
+  }catch(e){el.innerHTML=empty('読み込みエラーが発生しました');}
+}
+const SAMPLES_DATA=[
+  {id:'s1',title:'Web3の世界への第一歩',addr:'0xAbcd',body:'ブロックチェーンとは何か。初めてMetaMaskを触ったあの日から、世界が変わって見えた。自分のウォレットを持った瞬間、何かが腑に落ちた。',tags:['探索','初心者'],good:14,change:5,ago:'2日前'},
+  {id:'s2',title:'DAO組織で働くということ',addr:'0xEf01',body:'従来の会社組織とDAOの違い。自律分散という概念が、私の働き方観を根本から変えた。上司の指示を待たず、自分の判断でコントリビュートする自由。',tags:['学び','DAO'],good:28,change:12,ago:'5日前'},
+  {id:'s3',title:'NFTアートを始めて気づいたこと',addr:'0x2345',body:'デジタルアートに所有権が生まれる。クリエイターエコノミーの新しい形を実感した記録。無限にコピーできるはずのデータが唯一のものになる逆説。',tags:['探索','NFT'],good:9,change:3,ago:'1週間前'},
+];
+function buildSamples(tag){
+  return SAMPLES_DATA.filter(s=>s.tags.some(t=>t===tag||tag==='')).map((s,i)=>`<div class="exhibit" onclick="openViewerDirect(${i})">
+    <div class="exhibit-num">${i+1}</div>
+    <div class="exhibit-body">
+      <div class="exhibit-title">${s.title}</div>
+      <div class="exhibit-author">${s.addr}… · ${s.ago}</div>
+      <div class="exhibit-text">${s.body}</div>
+      <div class="exhibit-tags">${s.tags.map(t=>`<span class="etag">${t}</span>`).join('')}</div>
+      <div class="exhibit-footer"><span>👍 ${s.good}</span><span>🔄 ${s.change}</span></div>
+    </div></div>`).join('')||empty('まだ展示物がありません');
+}
+function openViewerDirect(i){const s=SAMPLES_DATA[i];if(!s)return;showViewer(s.title,s.addr+'…',`<p>${s.body}</p>`,s.tags,s.good,s.change,s.ago);}
+async function openViewer(id){
+  let d=cache[id];
+  if(!d){const db=getDb();const lib=getFbLib();if(db&&lib){try{const {doc,getDoc}=lib;const snap=await getDoc(doc(db,'posts',id));if(snap.exists())d=snap.data();}catch(e){}}}
+  if(!d)return;
+  showViewer(d.title||'無題',(d.address||'匿名').slice(0,8)+'…',`<p>${(d.body||d.text||'').replace(/<[^>]+>/g,'').replace(/\n/g,'</p><p>')}</p>`,d.tags||[],d.goodCount||0,d.changeCount||0,timeAgo(d.createdAt));
+}
+function showViewer(title,author,bodyHtml,tags,good,change,ago){
+  const tagHtml=(tags||[]).map(t=>`<span class="etag">${t}</span>`).join('');
+  document.getElementById('viewerCard').innerHTML=`
+    <div class="viewer-label">🏛️ EXHIBIT No.${String(Date.now()).slice(-4)}</div>
+    <div class="viewer-title">${title}</div>
+    <div class="viewer-author">${author} · ${ago}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${tagHtml}</div>
+    <div class="viewer-body">${bodyHtml}</div>
+    <div class="viewer-stats"><span class="vstat">👍 good: <strong style="color:#fff">${good}</strong></span><span class="vstat">🔄 change: <strong style="color:#fff">${change}</strong></span></div>`;
+  document.getElementById('viewer').style.display='block';
+  document.getElementById('viewer').scrollTop=0;
+}
+function closeViewer(){document.getElementById('viewer').style.display='none';}
+loadPosts('探索','exploreList');
+</script>
+</body>
+</html>
