@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchoolPark Terminal Station</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f172a;--bg2:#1e293b;--bg3:#263045;
+  --accent:#f59e0b;--accent2:#fbbf24;--green:#22c55e;--red:#ef4444;--blue:#38bdf8;
+  --text:#f1f5f9;--text2:#94a3b8;--border:rgba(255,255,255,0.08);
+  --radius:12px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
+
+.header{position:sticky;top:0;z-index:100;height:54px;background:rgba(15,23,42,0.97);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px}
+.back-btn{background:var(--accent);color:#000;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:0.8rem;font-weight:700;font-family:inherit;white-space:nowrap}
+.header-title{font-size:0.9rem;font-weight:700;display:flex;align-items:center;gap:6px}
+.header-clock{margin-left:auto;font-size:0.9rem;font-weight:700;color:var(--accent2);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ── Hero ── */
+.hero{background:linear-gradient(160deg,#0f172a 0%,#1e3a5f 50%,#0f172a 100%);padding:24px 16px 20px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:"🚉";position:absolute;right:-5px;top:-5px;font-size:110px;opacity:0.06}
+.hero-icon{font-size:48px;margin-bottom:8px}
+.hero-title{font-size:1.3rem;font-weight:700;letter-spacing:0.1em;color:#fff}
+.hero-en{font-size:0.72rem;color:var(--text2);letter-spacing:0.15em;margin-top:2px}
+.hero-tags{display:flex;justify-content:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.hero-tag{background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);padding:2px 8px;border-radius:20px;font-size:0.62rem;color:var(--accent2)}
+
+/* ── 発車標 (Departure Board) ── */
+.board{background:#000;border:2px solid rgba(245,158,11,0.3);border-radius:var(--radius);overflow:hidden;margin-bottom:14px}
+.board-header{background:rgba(245,158,11,0.1);padding:8px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(245,158,11,0.2)}
+.board-title{font-size:0.72rem;font-weight:700;color:var(--accent2);letter-spacing:0.1em}
+.board-rows{padding:4px 0}
+.board-row{display:grid;grid-template-columns:60px 1fr 80px 56px;gap:4px;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.05)}
+.board-row:last-child{border-bottom:none}
+.board-time{font-size:1rem;font-weight:700;color:var(--accent2);font-variant-numeric:tabular-nums}
+.board-dest{font-size:0.8rem;font-weight:700;color:var(--text)}
+.board-dest span{font-size:0.62rem;color:var(--text2);display:block;margin-top:1px}
+.board-track{text-align:center}
+.board-track-num{background:var(--blue);color:#000;font-size:0.65rem;font-weight:700;padding:2px 6px;border-radius:4px}
+.board-status{text-align:right;font-size:0.7rem;font-weight:700}
+.board-status.ontime{color:var(--green)}
+.board-status.soon{color:var(--accent2);animation:blink 1s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
+.board-status.delayed{color:var(--red)}
+
+/* ── 路線図 ── */
+.routemap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+.route-title{font-size:0.8rem;font-weight:700;color:var(--accent2);margin-bottom:14px;display:flex;align-items:center;gap:6px}
+.route-line{display:flex;align-items:center;margin-bottom:16px;gap:0;overflow-x:auto;scrollbar-width:none;padding:4px 0}
+.route-line::-webkit-scrollbar{display:none}
+.route-station{display:flex;flex-direction:column;align-items:center;flex-shrink:0;position:relative}
+.route-dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff;position:relative;z-index:2;flex-shrink:0}
+.route-dot.current{width:18px;height:18px;border:3px solid var(--accent2);box-shadow:0 0 10px var(--accent)}
+.route-seg{height:3px;flex:1;min-width:24px;flex-shrink:0;margin-top:5px}
+.route-label{font-size:0.6rem;margin-top:4px;text-align:center;white-space:nowrap;max-width:52px;line-height:1.3}
+.route-wrap{display:flex;align-items:center;gap:0}
+
+/* ── エリアカード ── */
+.tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:11px 16px;font-size:0.75rem;font-weight:700;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.tab.active{color:var(--accent2);border-bottom-color:var(--accent2);background:rgba(245,158,11,0.05)}
+.main{max-width:720px;margin:0 auto;padding:14px 14px 60px}
+.panel{display:none}.panel.active{display:block}
+.sec{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+.sec-title{font-size:0.8rem;font-weight:700;color:var(--accent2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+
+.area-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;gap:12px;align-items:center}
+.area-icon{font-size:1.6rem;flex-shrink:0}
+.area-name{font-size:0.82rem;font-weight:700;margin-bottom:2px}
+.area-desc{font-size:0.7rem;color:var(--text2);line-height:1.5}
+.area-badge{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700;flex-shrink:0;white-space:nowrap}
+.area-badge.open{background:rgba(34,197,94,0.15);color:#86efac;border:1px solid rgba(34,197,94,0.3)}
+.area-badge.coming{background:rgba(148,163,184,0.1);color:var(--text2);border:1px solid var(--border)}
+
+/* ── 案内板 ── */
+.sign-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sign{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center;cursor:pointer;transition:border-color 0.2s}
+.sign:hover{border-color:var(--accent)}
+.sign-icon{font-size:1.6rem;margin-bottom:6px}
+.sign-label{font-size:0.72rem;font-weight:700;color:var(--text)}
+.sign-sub{font-size:0.62rem;color:var(--text2);margin-top:2px}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#000;padding:10px 20px;border-radius:20px;font-size:0.78rem;font-weight:700;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="header">
+  <button class="back-btn" onclick="goBack()">← 戻る</button>
+  <div class="header-title">🚉 <span>Terminal Station</span></div>
+  <div class="header-clock" id="clock">--:--:--</div>
+</div>
+
+<div class="hero">
+  <div class="hero-icon">🚉</div>
+  <div class="hero-title">ターミナル駅舎</div>
+  <div class="hero-en">SCHOOLPARK TERMINAL STATION</div>
+  <div class="hero-tags">
+    <span class="hero-tag">🚃 全路線接続</span>
+    <span class="hero-tag">🗺️ 路線図</span>
+    <span class="hero-tag">📋 発車情報</span>
+    <span class="hero-tag">🏙️ 各エリアへ</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('board',this)">📋 発車案内</button>
+  <button class="tab" onclick="switchTab('route',this)">🗺️ 路線図</button>
+  <button class="tab" onclick="switchTab('area',this)">🏙️ エリアガイド</button>
+  <button class="tab" onclick="switchTab('info',this)">ℹ️ 駅情報</button>
+</div>
+
+<div class="main">
+
+  <!-- 発車案内 -->
+  <div class="panel active" id="tab-board">
+    <div class="board">
+      <div class="board-header">
+        <span style="font-size:0.9rem">🚃</span>
+        <span class="board-title">DEPARTURE BOARD — 発車案内</span>
+        <span style="margin-left:auto;font-size:0.7rem;color:var(--text2)" id="boardTime">--:--</span>
+      </div>
+      <div class="board-rows" id="boardRows"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🔔 ご案内</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:10px 12px;font-size:0.75rem;color:#86efac;line-height:1.7">
+          🟢 SchoolPark内のすべてのエリアへ、このターミナル駅からアクセスできます。<br>
+          東エリア・西エリア・南エリア・北エリア — 全路線ここが出発点です。
+        </div>
+        <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:10px 12px;font-size:0.75rem;color:var(--accent2);line-height:1.7">
+          🚃 <strong>地下ホーム（B1F）</strong>もご利用いただけます。<br>
+          より深い没入体験は <strong>駅舎（下）</strong> からどうぞ。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 路線図 -->
+  <div class="panel" id="tab-route">
+    <div class="sec">
+      <div class="sec-title">🗺️ SchoolPark 路線図</div>
+
+      <div style="margin-bottom:16px">
+        <div style="font-size:0.7rem;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:4px">
+          <div style="width:12px;height:3px;background:var(--accent)"></div>
+          <span>SP東西線（イーストウェストライン）</span>
+        </div>
+        <div class="route-line">
+          <div class="route-wrap">
+            <div class="route-station"><div class="route-dot" style="background:#60a5fa"></div><div class="route-label" style="color:#60a5fa">西<br>エリア</div></div>
+            <div class="route-seg" style="background:var(--accent)"></div>
+            <div class="route-station"><div class="route-dot" style="background:#a78bfa"></div><div class="route-label" style="color:#a78bfa">🔒 Guard<br>District</div></div>
+            <div class="route-seg" style="background:var(--accent)"></div>
+            <div class="route-station"><div class="route-dot current" style="background:var(--accent)"></div><div class="route-label" style="color:var(--accent2);font-weight:700">🚉 Terminal<br>★HERE</div></div>
+            <div class="route-seg" style="background:var(--accent)"></div>
+            <div class="route-station"><div class="route-dot" style="background:#f87171"></div><div class="route-label" style="color:#f87171">🎓 Learn<br>District</div></div>
+            <div class="route-seg" style="background:var(--accent)"></div>
+            <div class="route-station"><div class="route-dot" style="background:#4ade80"></div><div class="route-label" style="color:#4ade80">東<br>エリア</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <div style="font-size:0.7rem;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:4px">
+          <div style="width:12px;height:3px;background:#38bdf8"></div>
+          <span>SP南北線（ノースサウスライン）</span>
+        </div>
+        <div class="route-line">
+          <div class="route-wrap">
+            <div class="route-station"><div class="route-dot" style="background:#818cf8"></div><div class="route-label" style="color:#818cf8">🎓 北<br>エリア</div></div>
+            <div class="route-seg" style="background:#38bdf8"></div>
+            <div class="route-station"><div class="route-dot" style="background:#fb923c"></div><div class="route-label" style="color:#fb923c">Emu<br>Room2</div></div>
+            <div class="route-seg" style="background:#38bdf8"></div>
+            <div class="route-station"><div class="route-dot current" style="background:var(--accent)"></div><div class="route-label" style="color:var(--accent2);font-weight:700">🚉 Terminal<br>★HERE</div></div>
+            <div class="route-seg" style="background:#38bdf8"></div>
+            <div class="route-station"><div class="route-dot" style="background:#4ade80"></div><div class="route-label" style="color:#4ade80">南<br>エリア</div></div>
+            <div class="route-seg" style="background:#38bdf8"></div>
+            <div class="route-station"><div class="route-dot" style="background:#fbbf24"></div><div class="route-label" style="color:#fbbf24">Frontier<br>Gate</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:8px;padding:10px 12px;font-size:0.72rem;color:var(--text2);line-height:1.7">
+        ★ = 現在地（ターミナル駅舎）<br>
+        全路線の乗り換えはターミナル駅にて。各エリアへの直通列車が随時発車しています。
+      </div>
+    </div>
+  </div>
+
+  <!-- エリアガイド -->
+  <div class="panel" id="tab-area">
+    <div class="sec">
+      <div class="sec-title">🏙️ 各エリアへのアクセス</div>
+      <div class="area-card">
+        <div class="area-icon">🏭</div>
+        <div style="flex:1"><div class="area-name">東エリア — Life Market</div><div class="area-desc">八百屋・果物屋・家・マンション・珈琲・ホテル。日常と収益の世界</div></div>
+        <span class="area-badge open">🟢 OPEN</span>
+      </div>
+      <div class="area-card">
+        <div class="area-icon">🛡️</div>
+        <div style="flex:1"><div class="area-name">西エリア — Guard District</div><div class="area-desc">病院・警察署・消防署・自警団・ジム。安全と成長の世界</div></div>
+        <span class="area-badge open">🟢 OPEN</span>
+      </div>
+      <div class="area-card">
+        <div class="area-icon">⛰️</div>
+        <div style="flex:1"><div class="area-name">南エリア — Frontier Gate</div><div class="area-desc">エレベーター・つり・とざん・映画館・交差点。冒険と遊びの世界</div></div>
+        <span class="area-badge open">🟢 OPEN</span>
+      </div>
+      <div class="area-card">
+        <div class="area-icon">🎓</div>
+        <div style="flex:1"><div class="area-name">北エリア — Creative Academy</div><div class="area-desc">学び・研究・クリエイティブコンテンツ。知識と創造の世界</div></div>
+        <span class="area-badge coming">🔜 COMING</span>
+      </div>
+      <div class="area-card">
+        <div class="area-icon">🌌</div>
+        <div style="flex:1"><div class="area-name">Emu Room2 — 星空</div><div class="area-desc">あなたの行動が星になる探索・遊びの空間</div></div>
+        <span class="area-badge open">🟢 OPEN</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 駅情報 -->
+  <div class="panel" id="tab-info">
+    <div class="sec">
+      <div class="sec-title">ℹ️ ターミナル駅舎について</div>
+      <div style="display:grid;gap:8px">
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between">
+          <span style="font-size:0.75rem;color:var(--text2)">駅名</span>
+          <span style="font-size:0.75rem;font-weight:700">SchoolPark Terminal Station</span>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between">
+          <span style="font-size:0.75rem;color:var(--text2)">所在エリア</span>
+          <span style="font-size:0.75rem;font-weight:700">南エリア — Frontier Gate</span>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between">
+          <span style="font-size:0.75rem;color:var(--text2)">ホーム数</span>
+          <span style="font-size:0.75rem;font-weight:700">地上2番線 / 地下1番線（B1F）</span>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between">
+          <span style="font-size:0.75rem;color:var(--text2)">営業時間</span>
+          <span style="font-size:0.75rem;font-weight:700">24時間 365日</span>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between">
+          <span style="font-size:0.75rem;color:var(--text2)">接続路線</span>
+          <span style="font-size:0.75rem;font-weight:700">SP東西線 / SP南北線</span>
+        </div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">🚇 地下ホームへ</div>
+      <div style="background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.2);border-radius:var(--radius);padding:14px;text-align:center">
+        <div style="font-size:2rem;margin-bottom:8px">🚇</div>
+        <div style="font-size:0.85rem;font-weight:700;margin-bottom:6px;color:var(--blue)">地下ホーム（B1F）</div>
+        <div style="font-size:0.75rem;color:var(--text2);line-height:1.7;margin-bottom:12px">ホームに降りる感覚をリアルに体験。<br>発車メロディ・列車の到着・アナウンスを楽しもう。</div>
+        <button onclick="goBack();setTimeout(()=>window.top.postMessage({type:'openStation2'},'*'),100)" style="background:var(--blue);color:#000;border:none;border-radius:8px;padding:10px 20px;font-size:0.8rem;font-weight:700;cursor:pointer;font-family:inherit">🚇 地下ホームへ行く</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+function switchTab(id,btn){ document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active")); document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active")); document.getElementById("tab-"+id).classList.add("active"); btn.classList.add("active"); }
+function showToast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),3000); }
+
+// ── Clock ──
+function updateClock(){
+  const n=new Date();
+  const s=t=>String(t).padStart(2,"0");
+  const str=s(n.getHours())+":"+s(n.getMinutes())+":"+s(n.getSeconds());
+  document.getElementById("clock").textContent=str;
+  document.getElementById("boardTime").textContent=str.slice(0,5);
+}
+updateClock(); setInterval(updateClock,1000);
+
+// ── 発車ボード ──
+const LINES=[
+  {dest:"東エリア（Life Market）",en:"East Area",track:"1",color:"#4ade80"},
+  {dest:"西エリア（Guard District）",en:"West Area",track:"2",color:"#60a5fa"},
+  {dest:"Emu Room2（星空）",en:"Emu Star Room",track:"1",color:"#fb923c"},
+  {dest:"南 Frontier Gate",en:"South Gate",track:"2",color:"#fbbf24"},
+  {dest:"北エリア（予定）",en:"North Area",track:"1",color:"#a78bfa"},
+  {dest:"東エリア（Life Market）",en:"East Area",track:"2",color:"#4ade80"},
+];
+function buildBoard(){
+  const now=new Date(); const rows=document.getElementById("boardRows");
+  rows.innerHTML=LINES.map((l,i)=>{
+    const t=new Date(now.getTime()+(i*4+2)*60000);
+    const s=n=>String(n).padStart(2,"0");
+    const time=s(t.getHours())+":"+s(t.getMinutes());
+    const diff=Math.round((t-now)/60000);
+    const status=diff<=2?`<span class="board-status soon">まもなく</span>`:diff<=5?`<span class="board-status ontime">${diff}分後</span>`:`<span class="board-status ontime">定刻</span>`;
+    return `<div class="board-row">
+      <div class="board-time">${time}</div>
+      <div class="board-dest" style="color:${l.color}">${l.dest}<span>${l.en}</span></div>
+      <div class="board-track"><span class="board-track-num">${l.track}番線</span></div>
+      <div>${status}</div>
+    </div>`;
+  }).join("");
+}
+buildBoard(); setInterval(buildBoard,30000);
+function goBack(){ window.top.postMessage({type:"spContentClose"},"*"); }
+</script>
+</body>
+</html>
