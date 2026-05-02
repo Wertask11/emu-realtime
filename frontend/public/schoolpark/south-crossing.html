@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SchoolPark Crossing — 交差点</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#080c10;--surface:#0d1218;--card:#121820;--border:#1e2a38;
+  --accent:#00c8ff;--yellow:#ffd700;--green:#00e676;--red:#ff4444;
+  --text:#d0e8f8;--muted:#5a7a8a;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
+.close-btn{position:fixed;top:12px;right:14px;background:rgba(0,200,255,.15);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px;z-index:9999}
+.close-btn:hover{background:rgba(0,200,255,.3)}
+
+/* ========== CROSSING SCENE ========== */
+.crossing-scene{position:relative;height:280px;background:#0d1218;overflow:hidden;border-bottom:1px solid var(--border)}
+
+/* 道路 */
+.road-h,.road-v{position:absolute;background:#1a2030}
+.road-h{left:0;right:0;top:50%;transform:translateY(-50%);height:70px}
+.road-v{top:0;bottom:0;left:50%;transform:translateX(-50%);width:70px}
+
+/* 歩道 */
+.sidewalk{position:absolute;background:#0d1218;border:1px solid var(--border)}
+.sw-tl{top:0;left:0;width:calc(50% - 35px);height:calc(50% - 35px)}
+.sw-tr{top:0;right:0;width:calc(50% - 35px);height:calc(50% - 35px)}
+.sw-bl{bottom:0;left:0;width:calc(50% - 35px);height:calc(50% - 35px)}
+.sw-br{bottom:0;right:0;width:calc(50% - 35px);height:calc(50% - 35px)}
+
+/* 横断歩道 */
+.crosswalk-h,.crosswalk-v{position:absolute;display:flex;gap:4px}
+.crosswalk-h{left:calc(50% - 35px);width:70px;top:calc(50% - 48px);flex-direction:column}
+.crosswalk-v{top:calc(50% - 35px);height:70px;left:calc(50% - 48px);flex-direction:row}
+.cw-stripe{background:rgba(255,255,255,.12);flex-shrink:0}
+.crosswalk-h .cw-stripe{width:100%;height:8px}
+.crosswalk-v .cw-stripe{height:100%;width:8px}
+
+/* 信号機 */
+.traffic-light{position:absolute;background:#0a0f18;border:2px solid #2a3a4a;border-radius:8px;width:22px;display:flex;flex-direction:column;align-items:center;padding:4px 3px;gap:3px;z-index:10}
+.tl-tl{top:calc(50% - 70px);left:calc(50% - 60px)}
+.tl-tr{top:calc(50% - 70px);right:calc(50% - 60px)}
+.tl-bl{bottom:calc(50% - 70px);left:calc(50% - 60px)}
+.tl-br{bottom:calc(50% - 70px);right:calc(50% - 60px)}
+.light{width:14px;height:14px;border-radius:50%;background:#1a1a1a;transition:background .3s,box-shadow .3s}
+.light.on-red{background:#ff4444;box-shadow:0 0 10px #ff4444}
+.light.on-yellow{background:#ffd700;box-shadow:0 0 10px #ffd700}
+.light.on-green{background:#00e676;box-shadow:0 0 10px #00e676}
+
+/* 方向標識 */
+.sign{position:absolute;background:rgba(0,200,255,.1);border:1px solid rgba(0,200,255,.3);border-radius:8px;padding:5px 10px;font-size:10px;color:var(--accent);font-weight:700;white-space:nowrap;z-index:10}
+.sign-n{top:8px;left:50%;transform:translateX(-50%)}
+.sign-s{bottom:8px;left:50%;transform:translateX(-50%)}
+.sign-w{top:50%;left:8px;transform:translateY(-50%)}
+.sign-e{top:50%;right:8px;transform:translateY(-50%)}
+
+/* 歩行者シルエット */
+.pedestrian{position:absolute;font-size:18px;transition:transform .1s;z-index:8}
+.ped1{top:calc(50% - 55px);left:calc(50% - 50px);animation:pedWalkH 4s linear infinite}
+.ped2{top:calc(50% - 45px);right:calc(50% - 80px);animation:pedWalkH 5s linear infinite reverse 1s}
+.ped3{left:calc(50% - 55px);top:calc(50% - 90px);animation:pedWalkV 4.5s linear infinite 2s}
+@keyframes pedWalkH{0%{transform:translateX(-30px)}100%{transform:translateX(30px)}}
+@keyframes pedWalkV{0%{transform:translateY(-20px)}100%{transform:translateY(20px)}}
+
+/* 車シルエット */
+.car{position:absolute;font-size:22px;z-index:6}
+.car-e{top:calc(50% - 12px);animation:carMoveE 6s linear infinite}
+.car-w{top:calc(50% + 2px);animation:carMoveW 8s linear infinite 2s}
+@keyframes carMoveE{0%{left:-40px}100%{left:calc(100% + 40px)}}
+@keyframes carMoveW{0%{right:-40px;transform:scaleX(-1)}100%{right:calc(100% + 40px);transform:scaleX(-1)}}
+
+/* ========== CONTENT ========== */
+.page{padding:16px}
+.tabs{display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px}
+.tab{padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:12px;white-space:nowrap;transition:all .2s}
+.tab.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
+.panel{display:none}
+.panel.active{display:block}
+
+.section-title{font-size:14px;font-weight:700;color:var(--accent);margin:0 0 12px;display:flex;align-items:center;gap:6px}
+
+/* 方面案内 */
+.directions-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.direction-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;cursor:pointer;transition:transform .2s,border-color .2s}
+.direction-card:hover{transform:translateY(-2px);border-color:var(--accent)}
+.dir-arrow{font-size:24px;margin-bottom:6px}
+.dir-name{font-size:13px;font-weight:700;color:#fff;margin-bottom:3px}
+.dir-sub{font-size:11px;color:var(--muted)}
+.dir-badge{display:inline-block;margin-top:6px;font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(0,200,255,.15);color:var(--accent);border:1px solid rgba(0,200,255,.2)}
+
+/* 交差点ノート */
+.note-form{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px}
+.note-form textarea{width:100%;background:#0a1218;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:13px;font-family:inherit;resize:vertical;min-height:80px;margin-bottom:10px}
+.note-form textarea:focus{outline:none;border-color:var(--accent)}
+.note-form textarea::placeholder{color:var(--muted)}
+.post-btn{background:linear-gradient(135deg,#006080,var(--accent));color:#000;border:none;padding:9px 20px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer}
+.post-btn:disabled{opacity:.5;cursor:not-allowed}
+.note-feed{display:flex;flex-direction:column;gap:10px}
+.note-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px}
+.note-header{display:flex;justify-content:space-between;margin-bottom:6px}
+.note-user{font-size:11px;color:var(--accent);font-weight:700}
+.note-time{font-size:10px;color:var(--muted)}
+.note-body{font-size:13px;line-height:1.6}
+.note-tags{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.note-tag{font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(0,200,255,.1);color:var(--accent);border:1px solid rgba(0,200,255,.2)}
+
+/* 交通情報 */
+.traffic-info{display:flex;flex-direction:column;gap:10px}
+.traffic-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;align-items:flex-start;gap:12px}
+.traffic-icon{font-size:24px;flex-shrink:0}
+.traffic-label{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-bottom:4px;display:inline-block}
+.label-green{background:rgba(0,230,118,.2);color:var(--green);border:1px solid rgba(0,230,118,.3)}
+.label-yellow{background:rgba(255,215,0,.15);color:var(--yellow);border:1px solid rgba(255,215,0,.3)}
+.label-red{background:rgba(255,68,68,.15);color:var(--red);border:1px solid rgba(255,68,68,.3)}
+.traffic-desc{font-size:12px;color:var(--muted);line-height:1.6}
+
+/* SPマップリンク */
+.area-links{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.area-link{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center}
+.area-icon{font-size:28px;margin-bottom:6px}
+.area-name{font-size:12px;font-weight:700;color:#fff;margin-bottom:3px}
+.area-spots{font-size:11px;color:var(--muted)}
+.area-status{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;justify-content:center}
+.spot-tag{font-size:9px;padding:2px 6px;border-radius:8px;background:rgba(0,200,255,.1);color:var(--accent)}
+
+/* 信号状態表示 */
+.light-status{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:14px}
+.light-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.light-status-text{font-size:12px}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<button class="close-btn" onclick="window.top.postMessage({type:'spContentClose'},'*')">✕ 閉じる</button>
+
+<!-- 交差点シーン -->
+<div class="crossing-scene">
+  <div class="road-h"></div>
+  <div class="road-v"></div>
+  <div class="sidewalk sw-tl"></div><div class="sidewalk sw-tr"></div>
+  <div class="sidewalk sw-bl"></div><div class="sidewalk sw-br"></div>
+  <div class="crosswalk-h"><div class="cw-stripe"></div><div class="cw-stripe"></div><div class="cw-stripe"></div><div class="cw-stripe"></div></div>
+  <div class="crosswalk-v"><div class="cw-stripe"></div><div class="cw-stripe"></div><div class="cw-stripe"></div><div class="cw-stripe"></div></div>
+  <!-- 信号機 -->
+  <div class="traffic-light tl-tl" id="tl1"><div class="light on-red" id="r1"></div><div class="light" id="y1"></div><div class="light" id="g1"></div></div>
+  <div class="traffic-light tl-tr" id="tl2"><div class="light on-red" id="r2"></div><div class="light" id="y2"></div><div class="light" id="g2"></div></div>
+  <div class="traffic-light tl-bl" id="tl3"><div class="light on-red" id="r3"></div><div class="light" id="y3"></div><div class="light" id="g3"></div></div>
+  <div class="traffic-light tl-br" id="tl4"><div class="light on-red" id="r4"></div><div class="light" id="y4"></div><div class="light" id="g4"></div></div>
+  <!-- 方向標識 -->
+  <div class="sign sign-n">↑ 北エリア</div>
+  <div class="sign sign-s">↓ 南エリア</div>
+  <div class="sign sign-w">← 西エリア</div>
+  <div class="sign sign-e">東エリア →</div>
+  <!-- 歩行者 -->
+  <div class="pedestrian ped1">🚶</div>
+  <div class="pedestrian ped2">🚶‍♀️</div>
+  <div class="pedestrian ped3">🧑</div>
+  <!-- 車 -->
+  <div class="car car-e">🚗</div>
+  <div class="car car-w">🚙</div>
+</div>
+
+<!-- コンテンツ -->
+<div class="page">
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('guide')">🗺️ エリア案内</div>
+    <div class="tab" onclick="switchTab('note')">📝 交差点ノート</div>
+    <div class="tab" onclick="switchTab('traffic')">🚦 交通情報</div>
+  </div>
+
+  <!-- エリア案内 -->
+  <div class="panel active" id="panel-guide">
+    <div id="lightStatusBar" class="light-status">
+      <div class="light-dot" id="statusDot" style="background:#ff4444;box-shadow:0 0 8px #ff4444"></div>
+      <div class="light-status-text" id="statusText">🔴 停止中 — 横断歩道: 待機</div>
+    </div>
+
+    <div class="section-title">🧭 行きたい方面を選ぼう</div>
+    <div class="directions-grid">
+      <div class="direction-card">
+        <div class="dir-arrow">⬆️</div>
+        <div class="dir-name">北エリア</div>
+        <div class="dir-sub">中心部・商業区</div>
+        <div class="dir-badge">Emu本体</div>
+      </div>
+      <div class="direction-card">
+        <div class="dir-arrow">➡️</div>
+        <div class="dir-name">東エリア</div>
+        <div class="dir-sub">クリエイター・学習</div>
+        <div class="dir-badge">制作・研究</div>
+      </div>
+      <div class="direction-card">
+        <div class="dir-arrow">⬇️</div>
+        <div class="dir-name">南エリア</div>
+        <div class="dir-sub">子ども・エンタメ</div>
+        <div class="dir-badge">今ここ</div>
+      </div>
+      <div class="direction-card">
+        <div class="dir-arrow">⬅️</div>
+        <div class="dir-name">西エリア</div>
+        <div class="dir-sub">安全・セキュリティ</div>
+        <div class="dir-badge">警察・病院</div>
+      </div>
+    </div>
+
+    <div class="section-title">🏘️ 各エリアのスポット</div>
+    <div class="area-links">
+      <div class="area-link">
+        <div class="area-icon">🛡️</div>
+        <div class="area-name">西エリア</div>
+        <div class="area-spots">安全・インフラ</div>
+        <div class="area-status">
+          <span class="spot-tag">警察署</span>
+          <span class="spot-tag">消防署</span>
+          <span class="spot-tag">病院</span>
+          <span class="spot-tag">自警団</span>
+          <span class="spot-tag">ジム</span>
+        </div>
+      </div>
+      <div class="area-link">
+        <div class="area-icon">🎠</div>
+        <div class="area-name">南エリア</div>
+        <div class="area-spots">体験・子ども</div>
+        <div class="area-status">
+          <span class="spot-tag">映画館</span>
+          <span class="spot-tag">駅舎</span>
+          <span class="spot-tag">エレベーター</span>
+          <span class="spot-tag">釣り</span>
+          <span class="spot-tag">登山</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 交差点ノート -->
+  <div class="panel" id="panel-note">
+    <div class="section-title">📝 交差点ノート — ひとことメモ</div>
+    <div class="note-form">
+      <textarea id="noteInput" placeholder="交差点で出会ったこと、思ったこと、伝えたいことを書いてみよう。&#10;例)「駅舎の発車メロディが好き」「西エリアの病院が役に立った」"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="noteTag" style="background:#0a1218;border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:10px;font-size:12px;font-family:inherit">
+          <option value="ひとこと">💬 ひとこと</option>
+          <option value="発見">🔍 発見</option>
+          <option value="質問">❓ 質問</option>
+          <option value="おすすめ">⭐ おすすめ</option>
+          <option value="感謝">🙏 感謝</option>
+        </select>
+        <button class="post-btn" onclick="postNote()">📮 投稿する</button>
+      </div>
+    </div>
+    <div class="section-title">💬 みんなのノート</div>
+    <div class="note-feed" id="noteFeed">
+      <div style="text-align:center;color:var(--muted);font-size:12px;padding:20px">読み込み中...</div>
+    </div>
+  </div>
+
+  <!-- 交通情報 -->
+  <div class="panel" id="panel-traffic">
+    <div class="section-title">🚦 現在の交通状況</div>
+    <div class="traffic-info">
+      <div class="traffic-item">
+        <div class="traffic-icon">🚉</div>
+        <div>
+          <span class="traffic-label label-green">通常運行</span>
+          <div class="traffic-desc">SP東西線・南北線ともに通常運行中。駅舎（🚉）から各エリアへのアクセスが快適です。</div>
+        </div>
+      </div>
+      <div class="traffic-item">
+        <div class="traffic-icon">🛗</div>
+        <div>
+          <span class="traffic-label label-green">運行中</span>
+          <div class="traffic-desc">エレベーターは全フロア通常稼働中。RF（屋上）からの眺めをお楽しみください。</div>
+        </div>
+      </div>
+      <div class="traffic-item">
+        <div class="traffic-icon">🎬</div>
+        <div>
+          <span class="traffic-label label-green">上映中</span>
+          <div class="traffic-desc">青空文庫シアター特別上映中。走れメロス・羅生門・蜘蛛の糸の3本立てです。</div>
+        </div>
+      </div>
+      <div class="traffic-item">
+        <div class="traffic-icon">🚧</div>
+        <div>
+          <span class="traffic-label label-yellow">整備中</span>
+          <div class="traffic-desc">北エリア・東エリアは現在整備中。近日公開予定のスポットが増える予定です。</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px">
+      <div class="section-title">🕐 信号サイクル</div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px">
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+          <div style="width:14px;height:14px;border-radius:50%;background:#ff4444;box-shadow:0 0 8px #ff4444;flex-shrink:0"></div>
+          <div style="font-size:12px"><strong>赤 (STOP)</strong> — 30秒</div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+          <div style="width:14px;height:14px;border-radius:50%;background:#ffd700;box-shadow:0 0 8px #ffd700;flex-shrink:0"></div>
+          <div style="font-size:12px"><strong>黄 (CAUTION)</strong> — 5秒</div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <div style="width:14px;height:14px;border-radius:50%;background:#00e676;box-shadow:0 0 8px #00e676;flex-shrink:0"></div>
+          <div style="font-size:12px"><strong>緑 (GO)</strong> — 25秒</div>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:var(--muted)">🚶 歩行者信号: 緑信号の間は横断可能。黄信号になったら急いで渡り切ってください。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== TAB ====================
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach((t,i)=>{
+    t.classList.toggle('active',['guide','note','traffic'][i]===name)});
+  document.querySelectorAll('.panel').forEach(p=>{
+    p.classList.toggle('active',p.id==='panel-'+name)});
+  if(name==='note') loadNotes();
+}
+
+// ==================== TRAFFIC LIGHTS ====================
+let lightState='red'; // red -> green -> yellow -> red
+let lightTimer=null;
+const CYCLE={red:8000,green:6000,yellow:2000};
+
+function setLights(state){
+  lightState=state;
+  const ids=[1,2,3,4];
+  ids.forEach(i=>{
+    document.getElementById('r'+i).className='light'+(state==='red'?' on-red':'');
+    document.getElementById('y'+i).className='light'+(state==='yellow'?' on-yellow':'');
+    document.getElementById('g'+i).className='light'+(state==='green'?' on-green':'');
+  });
+  const dot=document.getElementById('statusDot');
+  const txt=document.getElementById('statusText');
+  if(state==='red'){
+    dot.style.cssText='background:#ff4444;box-shadow:0 0 8px #ff4444';
+    txt.textContent='🔴 停止中 — 横断歩道: 待機';
+  } else if(state==='yellow'){
+    dot.style.cssText='background:#ffd700;box-shadow:0 0 8px #ffd700';
+    txt.textContent='🟡 注意 — 横断歩道: 急いで渡って！';
+  } else {
+    dot.style.cssText='background:#00e676;box-shadow:0 0 8px #00e676';
+    txt.textContent='🟢 進行中 — 横断歩道: 渡れます';
+  }
+  lightTimer=setTimeout(()=>{
+    if(state==='red') setLights('green');
+    else if(state==='green') setLights('yellow');
+    else setLights('red');
+  }, CYCLE[state]);
+}
+setLights('red');
+
+// ==================== FIREBASE NOTES ====================
+let db=null;
+function getDb(){
+  if(db) return db;
+  try{ db=window.top.db||null; }catch(e){}
+  return db;
+}
+
+async function loadNotes(){
+  const feed=document.getElementById('noteFeed');
+  const d=getDb();
+  if(!d){
+    feed.innerHTML=buildSampleNotes();
+    return;
+  }
+  try{
+    const {collection,query,orderBy,limit,getDocs}=window.top.fbLib;
+    const q=query(collection(d,'sp_crossing_notes'),orderBy('createdAt','desc'),limit(20));
+    const snap=await getDocs(q);
+    if(snap.empty){feed.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:20px">まだ投稿がありません。最初のひとことを残してみよう！</div>';return;}
+    feed.innerHTML=snap.docs.map(doc=>{
+      const n=doc.data();
+      return noteHTML(n.user||'匿名',n.body,n.tag||'ひとこと',n.createdAt?.toDate?.()?.toLocaleString('ja-JP')||'—');
+    }).join('');
+  }catch(e){feed.innerHTML=buildSampleNotes();}
+}
+
+function buildSampleNotes(){
+  const samples=[
+    {user:'ケンタ',body:'駅舎（下）の発車メロディが最高！また行きたい',tag:'おすすめ',time:'2026/05/02 10:30'},
+    {user:'りさ',body:'映画館で蜘蛛の糸を見ました。お釈迦様の絵がきれいだった',tag:'感謝',time:'2026/05/02 09:15'},
+    {user:'サクサク',body:'西エリアの自警団でウォレット診断してみたら勉強になった',tag:'発見',time:'2026/05/01 21:00'},
+  ];
+  return samples.map(n=>noteHTML(n.user,n.body,n.tag,n.time)).join('');
+}
+
+function noteHTML(user,body,tag,time){
+  return `<div class="note-item"><div class="note-header"><span class="note-user">${user}</span><span class="note-time">${time}</span></div><div class="note-body">${body}</div><div class="note-tags"><span class="note-tag">${tag}</span></div></div>`;
+}
+
+async function postNote(){
+  const input=document.getElementById('noteInput');
+  const tagEl=document.getElementById('noteTag');
+  const body=input.value.trim();
+  if(!body){alert('ひとことを入力してください');return;}
+  const btn=document.querySelector('.post-btn');
+  btn.disabled=true;btn.textContent='投稿中...';
+  const d=getDb();
+  if(d){
+    try{
+      const {collection,addDoc,serverTimestamp}=window.top.fbLib;
+      let user='匿名';
+      try{
+        const uid=window.top.auth?.currentUser?.uid;
+        if(uid){
+          const {doc,getDoc}=window.top.fbLib;
+          const snap=await getDoc(doc(d,'users',uid));
+          if(snap.exists()) user=snap.data().name||'匿名';
+        }
+      }catch(e){}
+      await addDoc(collection(d,'sp_crossing_notes'),{body,tag:tagEl.value,user,createdAt:serverTimestamp()});
+    }catch(e){console.error(e);}
+  }
+  input.value='';btn.disabled=false;btn.textContent='📮 投稿する';
+  loadNotes();
+}
+</script>
+</body>
+</html>

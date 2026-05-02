@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SchoolPark Cinema — 青空文庫シアター</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#050008;--surface:#0d0015;--card:#140020;--border:#2a0045;
+  --accent:#9b30ff;--gold:#ffd700;--screen:#e8f4ff;
+  --text:#e0d0ff;--muted:#7a6a99;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
+.close-btn{position:fixed;top:12px;right:14px;background:rgba(155,48,255,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px;z-index:9999}
+.close-btn:hover{background:rgba(155,48,255,.4)}
+
+/* ========== LOBBY ========== */
+#lobby{padding:20px 16px 32px}
+.lobby-header{text-align:center;padding:24px 0 20px}
+.projector-icon{font-size:52px;filter:drop-shadow(0 0 18px #9b30ff);animation:projflicker 3s infinite}
+@keyframes projflicker{0%,100%{filter:drop-shadow(0 0 18px #9b30ff)}50%{filter:drop-shadow(0 0 30px #c070ff)}}
+.lobby-title{font-size:22px;font-weight:700;color:#fff;margin:8px 0 4px}
+.lobby-sub{font-size:13px;color:var(--muted)}
+
+.now-playing{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin:0 0 20px;display:flex;align-items:center;gap:12px}
+.np-badge{background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;white-space:nowrap}
+.np-title{font-size:13px;color:#fff;font-weight:700}
+.np-sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+.section-title{font-size:14px;font-weight:700;color:var(--accent);margin:0 0 12px;letter-spacing:.05em;display:flex;align-items:center;gap:6px}
+
+.movies-grid{display:grid;gap:14px}
+.movie-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;cursor:pointer;transition:transform .2s,border-color .2s}
+.movie-card:hover{transform:translateY(-2px);border-color:var(--accent)}
+.movie-poster{height:110px;display:flex;align-items:center;justify-content:center;font-size:54px;position:relative;overflow:hidden}
+.movie-poster::after{content:'';position:absolute;inset:0;background:linear-gradient(to bottom,transparent 50%,rgba(0,0,0,.7))}
+.movie-info{padding:12px 14px 14px}
+.movie-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:3px}
+.movie-author{font-size:11px;color:var(--accent);margin-bottom:6px}
+.movie-desc{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px}
+.movie-meta{display:flex;gap:8px;flex-wrap:wrap}
+.tag{font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);color:var(--muted)}
+.watch-btn{width:100%;padding:10px;background:linear-gradient(135deg,#4a0080,var(--accent));color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-top:10px;transition:opacity .2s}
+.watch-btn:hover{opacity:.85}
+
+/* ========== THEATER ========== */
+#theater{display:none;position:fixed;inset:0;background:#000;z-index:100;flex-direction:column}
+.theater-room{position:relative;height:100vh;overflow:hidden;background:#02000a}
+
+/* 天井 */
+.ceiling{height:30px;background:linear-gradient(to bottom,#0a0015,#05000d);border-bottom:1px solid #1a0030}
+.ceiling-lights{display:flex;gap:40px;justify-content:center;padding:8px;align-items:center}
+.ceiling-light{width:8px;height:8px;background:radial-gradient(circle,#ffd76040,transparent);border-radius:50%;box-shadow:0 0 12px #ffd760;animation:lightpulse 2s infinite alternate}
+@keyframes lightpulse{from{opacity:.4}to{opacity:.9}}
+
+/* 座席エリア */
+.seats-area{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0 10px;position:relative}
+.seat-row{display:flex;gap:4px}
+.seat{width:20px;height:16px;background:#1a0030;border-radius:4px 4px 0 0;border:1px solid #2a0045;position:relative}
+.seat.occupied::after{content:'';position:absolute;top:-8px;left:3px;width:14px;height:14px;background:#2a1040;border-radius:50% 50% 0 0}
+/* 通路光 */
+.aisle{height:4px;width:200px;background:linear-gradient(to right,transparent,rgba(155,48,255,.15),transparent);margin:2px 0}
+
+/* スクリーンエリア */
+.screen-area{position:relative;margin:0 auto;width:calc(100% - 20px);max-width:400px}
+.curtain-left,.curtain-right{position:absolute;top:0;width:50%;height:100%;z-index:10;transition:width 1.5s cubic-bezier(.4,0,.2,1)}
+.curtain-left{background:linear-gradient(to right,#3a0060,#1a0040);left:0;transform-origin:left;border-right:3px solid #5a0090}
+.curtain-right{background:linear-gradient(to left,#3a0060,#1a0040);right:0;transform-origin:right;border-left:3px solid #5a0090}
+.curtain-fold{position:absolute;top:0;bottom:0;width:8px;background:rgba(0,0,0,.3)}
+.curtain-left .curtain-fold{right:0}
+.curtain-right .curtain-fold{left:0}
+.screen-frame{background:#000;border:3px solid #333;border-radius:4px;overflow:hidden;aspect-ratio:16/9;position:relative}
+.screen-glow{position:absolute;inset:-15px;background:radial-gradient(ellipse at center,rgba(200,200,255,.08),transparent 70%);pointer-events:none;z-index:-1}
+
+/* プロジェクタービーム */
+.projector-beam{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);width:0;height:0;border-left:60px solid transparent;border-right:60px solid transparent;border-bottom:80px solid rgba(155,48,255,.04);pointer-events:none;z-index:5}
+
+/* スクリーンコンテンツ */
+.screen-scene{width:100%;height:100%;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.scene-bg{position:absolute;inset:0;transition:background 1.5s}
+.scene-content{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:8px 10px 0}
+.scene-art{font-size:40px;margin-bottom:4px;filter:drop-shadow(0 2px 8px rgba(0,0,0,.8))}
+.scene-text{background:rgba(0,0,0,.75);color:#fff;font-size:11px;line-height:1.6;padding:6px 8px;border-radius:6px;text-align:center;width:100%;backdrop-filter:blur(4px)}
+.scene-chapter{font-size:9px;color:#ffd700;margin-bottom:2px;letter-spacing:.08em}
+
+/* 進行バー */
+.progress-bar-wrap{height:3px;background:#111;width:100%}
+.progress-bar{height:100%;background:linear-gradient(to right,var(--accent),var(--gold));transition:width .5s linear}
+
+/* コントロール */
+.controls{background:#05000d;padding:10px 16px;display:flex;align-items:center;gap:10px;border-top:1px solid #1a0030;flex-wrap:wrap}
+.ctrl-btn{background:rgba(155,48,255,.2);border:1px solid var(--border);color:var(--text);padding:7px 14px;border-radius:20px;cursor:pointer;font-size:12px;transition:background .2s}
+.ctrl-btn:hover{background:rgba(155,48,255,.4)}
+.ctrl-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.movie-playing-title{flex:1;font-size:12px;color:var(--muted);text-align:center}
+
+/* ========== LOADING ========== */
+#loading{display:none;position:fixed;inset:0;background:#000;z-index:200;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.loading-film{font-size:48px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:#9b30ff;font-size:14px;letter-spacing:.1em}
+
+/* ========== SCROLLBAR ========== */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:#050008}
+::-webkit-scrollbar-thumb{background:#2a0045;border-radius:2px}
+</style>
+</head>
+<body>
+<button class="close-btn" onclick="window.top.postMessage({type:'spContentClose'},'*')">✕ 閉じる</button>
+
+<!-- ローディング -->
+<div id="loading">
+  <div class="loading-film">🎞️</div>
+  <div class="loading-text">シアターの電気を消しています...</div>
+</div>
+
+<!-- ロビー -->
+<div id="lobby">
+  <div class="lobby-header">
+    <div class="projector-icon">🎬</div>
+    <div class="lobby-title">SchoolPark Cinema</div>
+    <div class="lobby-sub">青空文庫 × 絵物語 — パブリックドメインの名作を映像体験</div>
+  </div>
+
+  <div class="now-playing">
+    <div class="np-badge">上映中</div>
+    <div>
+      <div class="np-title">青空文庫シアター 特別上映</div>
+      <div class="np-sub">著作権フリーの名作文学を、絵と文で体験する没入シアター</div>
+    </div>
+  </div>
+
+  <div class="section-title">🎞️ 上映ラインナップ</div>
+  <div class="movies-grid">
+
+    <div class="movie-card" onclick="startMovie(0)">
+      <div class="movie-poster" style="background:linear-gradient(135deg,#0a2040,#1a4080)">🏃</div>
+      <div class="movie-info">
+        <div class="movie-title">走れメロス</div>
+        <div class="movie-author">太宰 治 / Osamu Dazai（1940）</div>
+        <div class="movie-desc">メロスは激怒した。暴君に死刑を宣告されながらも、友の命を賭けた約束を果たすため、メロスは走り続ける。友情と信頼の物語。</div>
+        <div class="movie-meta">
+          <span class="tag">友情</span><span class="tag">信頼</span><span class="tag">6シーン</span><span class="tag">青空文庫</span>
+        </div>
+        <button class="watch-btn">▶ 観る</button>
+      </div>
+    </div>
+
+    <div class="movie-card" onclick="startMovie(1)">
+      <div class="movie-poster" style="background:linear-gradient(135deg,#1a0a00,#402010)">🌧️</div>
+      <div class="movie-info">
+        <div class="movie-title">羅生門</div>
+        <div class="movie-author">芥川 龍之介 / Ryunosuke Akutagawa（1915）</div>
+        <div class="movie-desc">飢えと絶望の末、下人は羅生門の楼上で老婆と出会う。生きるためには悪を行うしかないのか。人間の本性を問う傑作。</div>
+        <div class="movie-meta">
+          <span class="tag">人間の本性</span><span class="tag">生存</span><span class="tag">5シーン</span><span class="tag">青空文庫</span>
+        </div>
+        <button class="watch-btn">▶ 観る</button>
+      </div>
+    </div>
+
+    <div class="movie-card" onclick="startMovie(2)">
+      <div class="movie-poster" style="background:linear-gradient(135deg,#001a20,#003a50)">🕷️</div>
+      <div class="movie-info">
+        <div class="movie-title">蜘蛛の糸</div>
+        <div class="movie-author">芥川 龍之介 / Ryunosuke Akutagawa（1918）</div>
+        <div class="movie-desc">地獄に堕ちた盗賊カンダタに、お釈迦様は一本の蜘蛛の糸を垂らした。果たして彼は極楽へたどり着けるのか。</div>
+        <div class="movie-meta">
+          <span class="tag">生死</span><span class="tag">慈悲</span><span class="tag">5シーン</span><span class="tag">青空文庫</span>
+        </div>
+        <button class="watch-btn">▶ 観る</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:24px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:14px">
+    <div style="font-size:12px;color:var(--accent);font-weight:700;margin-bottom:8px">📚 青空文庫について</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.7">青空文庫は、著作権の消滅した作品（没後70年以上）を無料公開するデジタル図書館です。SchoolPark Cinemaでは、これら名作文学を独自の絵と映像で体験できます。</div>
+  </div>
+</div>
+
+<!-- シアタールーム -->
+<div id="theater">
+  <div class="theater-room">
+    <!-- 天井 -->
+    <div class="ceiling">
+      <div class="ceiling-lights">
+        <div class="ceiling-light"></div><div class="ceiling-light"></div>
+        <div class="ceiling-light"></div><div class="ceiling-light"></div>
+      </div>
+    </div>
+
+    <!-- 座席 -->
+    <div class="seats-area">
+      <div class="seat-row" id="row1"></div>
+      <div class="aisle"></div>
+      <div class="seat-row" id="row2"></div>
+      <div class="seat-row" id="row3"></div>
+    </div>
+
+    <!-- スクリーン -->
+    <div class="screen-area">
+      <div class="projector-beam"></div>
+      <div class="curtain-left" id="curtainL"><div class="curtain-fold"></div></div>
+      <div class="curtain-right" id="curtainR"><div class="curtain-fold"></div></div>
+      <div class="screen-glow"></div>
+      <div class="screen-frame">
+        <div class="screen-scene" id="screenScene">
+          <div class="scene-bg" id="sceneBg"></div>
+          <div class="scene-content">
+            <div class="scene-art" id="sceneArt">🎬</div>
+            <div class="scene-text">
+              <div class="scene-chapter" id="sceneChapter"></div>
+              <div id="sceneText">上映開始をお待ちください</div>
+            </div>
+          </div>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- コントロール -->
+  <div class="controls">
+    <button class="ctrl-btn" id="playPauseBtn" onclick="togglePlay()">⏸ 一時停止</button>
+    <div class="movie-playing-title" id="playingTitle">—</div>
+    <button class="ctrl-btn" id="soundBtn" onclick="toggleSound()">🔊 音声</button>
+    <button class="ctrl-btn" onclick="exitTheater()">← ロビーへ</button>
+  </div>
+</div>
+
+<script>
+// ==================== MOVIE DATA ====================
+const MOVIES = [
+  {
+    title:"走れメロス",
+    author:"太宰 治",
+    scenes:[
+      {bg:"linear-gradient(135deg,#0a2040,#1a6090)",art:"🏘️",chapter:"第一幕 — 旅の始まり",text:"メロスは激怒した。メロスは村の牧人。妹の婚礼の品を買いに、はるばるシラクスの市に出てきた。"},
+      {bg:"linear-gradient(135deg,#200010,#500030)",art:"👑",chapter:"第二幕 — 暴君の王城",text:"「人を信じてはならぬ。」暴君ディオニスは言った。「どうせ人は裏切る」—メロスは王の前に立ち向かった。"},
+      {bg:"linear-gradient(135deg,#1a1000,#3a2800)",art:"⛓️",chapter:"第三幕 — 友の誓い",text:"「セリヌンティウスよ、俺を信じてくれ。三日後の日没までに必ず戻る。」石柱に縛られた友は静かに頷いた。"},
+      {bg:"linear-gradient(135deg,#001a30,#002a50)",art:"🌊",chapter:"第四幕 — 激流を越えて",text:"大雨が降り、川は氾濫していた。橋は流された。それでもメロスは水に飛び込んだ。泳いだ。泳ぎ続けた。"},
+      {bg:"linear-gradient(135deg,#2a1000,#6a3000)",art:"🌅",chapter:"第五幕 — 陽が沈む前に",text:"間に合わぬかもしれない。それでも走れ。友が待っている。信頼が待っている。メロスの足は止まらなかった。"},
+      {bg:"linear-gradient(135deg,#002800,#004a10)",art:"🤝",chapter:"第六幕 — 友情の証明",text:"「メロス、お前は遅かった。」涙をこらえ、二人は抱き合った。「人の心は信じられる」—暴君の心も揺れた。"},
+    ]
+  },
+  {
+    title:"羅生門",
+    author:"芥川 龍之介",
+    scenes:[
+      {bg:"linear-gradient(135deg,#100800,#281500)",art:"🌧️",chapter:"第一幕 — 荒廃の京",text:"ある日の暮れ方のことである。一人の下人が、羅生門の下で雨やみを待っていた。平安末期、都は荒れ果てていた。"},
+      {bg:"linear-gradient(135deg,#080808,#151015)",art:"🚪",chapter:"第二幕 — 楼上への階段",text:"下人は引き剥ぎか餓死かを選ばなければならない。重い足を引きずり、楼上へ続く階段を上り始めた。"},
+      {bg:"linear-gradient(135deg,#1a0000,#380000)",art:"🔥",chapter:"第三幕 — 老婆との対峙",text:"楼上には老婆がいた。死人の髪を一本一本抜いている。下人は恐怖と嫌悪に駆られた。「何をしている！」"},
+      {bg:"linear-gradient(135deg,#0a0010,#1a0030)",art:"💭",chapter:"第四幕 — 老婆の言い訳",text:"「この女は生前、蛇を干魚と偽って売っていた。生きるためには仕方がない—私もそれと同じことだ。」"},
+      {bg:"linear-gradient(135deg,#000000,#0a0008)",art:"🌃",chapter:"第五幕 — 闇の中へ",text:"下人は老婆の着物を剥ぎ取り、闇の中に消えた。そのあと、老婆がどうなったか、誰も知らない。"},
+    ]
+  },
+  {
+    title:"蜘蛛の糸",
+    author:"芥川 龍之介",
+    scenes:[
+      {bg:"linear-gradient(135deg,#001520,#002a40)",art:"☁️",chapter:"第一幕 — 極楽の朝",text:"ある朝、お釈迦様は極楽の蓮池のほとりを歩いていた。池の底にはるかな地獄が透けて見えた。"},
+      {bg:"linear-gradient(135deg,#1a0000,#300000)",art:"🔥",chapter:"第二幕 — 地獄の底",text:"地獄の底では無数の罪人が、真っ暗な血の池に沈んでいた。その中にカンダタという大泥棒がいた。"},
+      {bg:"linear-gradient(135dest,#000a20,#001a40)",art:"🕷️",chapter:"第三幕 — 一本の糸",text:"お釈迦様はカンダタが生前、蜘蛛を踏まずに逃がしてやったことを思い出した。細い銀の糸を垂らした。"},
+      {bg:"linear-gradient(135deg,#0a0a00,#201a00)",art:"🧗",chapter:"第四幕 — 登る罪人たち",text:"カンダタは懸命に登り始めた。しかし他の罪人たちも続々と糸につかまってきた。「離れろ！糸が切れる！」"},
+      {bg:"linear-gradient(135deg,#000000,#050510)",art:"✨",chapter:"第五幕 — 糸は切れた",text:"その瞬間、蜘蛛の糸はプツリと切れた。哀れカンダタは再び地獄の底へ。極楽の蓮池は静かに揺れていた。"},
+    ]
+  }
+];
+
+// ==================== STATE ====================
+let currentMovie = null;
+let currentScene = 0;
+let isPlaying = false;
+let sceneTimer = null;
+let soundEnabled = true;
+let audioCtx = null;
+
+// ==================== SEATS ====================
+function buildSeats(){
+  for(let r=1;r<=3;r++){
+    const row=document.getElementById('row'+r);
+    if(!row)continue;
+    const count=r===1?6:r===2?8:10;
+    for(let i=0;i<count;i++){
+      const s=document.createElement('div');
+      s.className='seat'+(Math.random()<.6?' occupied':'');
+      row.appendChild(s);
+    }
+  }
+}
+
+// ==================== AUDIO ====================
+function getAudioCtx(){
+  if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  return audioCtx;
+}
+function playAmbient(){
+  if(!soundEnabled) return;
+  try{
+    const ctx=getAudioCtx();
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.connect(gain);gain.connect(ctx.destination);
+    osc.type='sine';
+    osc.frequency.setValueAtTime(60,ctx.currentTime);
+    gain.gain.setValueAtTime(0,ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.03,ctx.currentTime+1);
+    gain.gain.linearRampToValueAtTime(0,ctx.currentTime+3);
+    osc.start(ctx.currentTime);osc.stop(ctx.currentTime+3);
+  }catch(e){}
+}
+function playSceneChime(){
+  if(!soundEnabled) return;
+  try{
+    const ctx=getAudioCtx();
+    [523,659,784].forEach((f,i)=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.frequency.value=f;
+      gain.gain.setValueAtTime(0,ctx.currentTime+i*.12);
+      gain.gain.linearRampToValueAtTime(0.06,ctx.currentTime+i*.12+.05);
+      gain.gain.linearRampToValueAtTime(0,ctx.currentTime+i*.12+.4);
+      osc.start(ctx.currentTime+i*.12);
+      osc.stop(ctx.currentTime+i*.12+.5);
+    });
+  }catch(e){}
+}
+function toggleSound(){
+  soundEnabled=!soundEnabled;
+  document.getElementById('soundBtn').textContent=soundEnabled?'🔊 音声':'🔇 音声';
+  document.getElementById('soundBtn').classList.toggle('active',soundEnabled);
+}
+
+// ==================== THEATER ====================
+function startMovie(idx){
+  currentMovie=idx;currentScene=0;isPlaying=true;
+  document.getElementById('loading').style.display='flex';
+  setTimeout(()=>{
+    document.getElementById('loading').style.display='none';
+    document.getElementById('lobby').style.display='none';
+    const theater=document.getElementById('theater');
+    theater.style.display='flex';
+    document.getElementById('playingTitle').textContent=MOVIES[idx].title+' — '+MOVIES[idx].author;
+    buildSeats();
+    openCurtains();
+    setTimeout(()=>{showScene(0);},1600);
+    playAmbient();
+  },1800);
+}
+
+function openCurtains(){
+  document.getElementById('curtainL').style.width='0';
+  document.getElementById('curtainR').style.width='0';
+}
+function closeCurtains(){
+  document.getElementById('curtainL').style.width='50%';
+  document.getElementById('curtainR').style.width='50%';
+}
+
+function showScene(idx){
+  if(!MOVIES[currentMovie]) return;
+  const scenes=MOVIES[currentMovie].scenes;
+  if(idx>=scenes.length){endMovie();return;}
+  currentScene=idx;
+  const s=scenes[idx];
+  document.getElementById('sceneBg').style.background=s.bg;
+  document.getElementById('sceneArt').textContent=s.art;
+  document.getElementById('sceneChapter').textContent=s.chapter;
+  document.getElementById('sceneText').textContent=s.text;
+  const pct=((idx+1)/scenes.length)*100;
+  document.getElementById('progressBar').style.width=pct+'%';
+  playSceneChime();
+  if(isPlaying) scheduleNext();
+}
+
+function scheduleNext(){
+  clearTimeout(sceneTimer);
+  sceneTimer=setTimeout(()=>{
+    showScene(currentScene+1);
+  },6000);
+}
+
+function togglePlay(){
+  isPlaying=!isPlaying;
+  const btn=document.getElementById('playPauseBtn');
+  if(isPlaying){
+    btn.textContent='⏸ 一時停止';
+    scheduleNext();
+  } else {
+    btn.textContent='▶ 再生';
+    clearTimeout(sceneTimer);
+  }
+}
+
+function endMovie(){
+  clearTimeout(sceneTimer);
+  isPlaying=false;
+  document.getElementById('sceneArt').textContent='🎞️';
+  document.getElementById('sceneChapter').textContent='— 完 —';
+  document.getElementById('sceneText').textContent='ご鑑賞ありがとうございました。青空文庫でフルテキストをお読みいただけます。';
+  document.getElementById('progressBar').style.width='100%';
+  document.getElementById('playPauseBtn').textContent='▶ 最初から';
+  document.getElementById('playPauseBtn').onclick=()=>{currentScene=0;isPlaying=true;document.getElementById('playPauseBtn').textContent='⏸ 一時停止';document.getElementById('playPauseBtn').onclick=togglePlay;showScene(0);};
+}
+
+function exitTheater(){
+  clearTimeout(sceneTimer);
+  closeCurtains();
+  setTimeout(()=>{
+    document.getElementById('theater').style.display='none';
+    document.getElementById('lobby').style.display='block';
+    document.getElementById('progressBar').style.width='0%';
+    document.getElementById('playPauseBtn').textContent='⏸ 一時停止';
+    document.getElementById('playPauseBtn').onclick=togglePlay;
+  },800);
+}
+
+// init
+buildSeats();
+</script>
+</body>
+</html>
