@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchoolPark Mountain — とざん</title>
+<link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0fdf4;--bg2:#fff;--bg3:#f0fdf4;
+  --accent:#16a34a;--accent2:#4ade80;--blue:#0ea5e9;--yellow:#fbbf24;--red:#ef4444;--orange:#f97316;--brown:#92400e;
+  --text:#052e16;--text2:#166534;--border:rgba(22,163,74,0.15);
+  --radius:16px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif;min-height:100vh;overflow-x:hidden}
+.header{position:sticky;top:0;z-index:100;height:56px;background:var(--accent);display:flex;align-items:center;gap:10px;padding:0 14px;box-shadow:0 2px 8px rgba(22,163,74,0.3)}
+.back-btn{background:rgba(255,255,255,0.25);color:#fff;border:none;border-radius:10px;padding:6px 14px;cursor:pointer;font-size:0.85rem;font-weight:700;font-family:inherit}
+.header-title{font-size:1rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px}
+.hero{background:linear-gradient(180deg,#166534 0%,#16a34a 40%,#86efac 80%,#d1fae5 100%);padding:24px 16px 20px;text-align:center;position:relative;overflow:hidden}
+.cloud{position:absolute;font-size:2.5rem;opacity:0.2;animation:drift 6s ease-in-out infinite}
+.cloud:nth-child(1){top:8%;left:5%;animation-delay:0s}
+.cloud:nth-child(2){top:15%;right:8%;animation-delay:3s}
+@keyframes drift{0%,100%{transform:translateX(0)}50%{transform:translateX(12px)}}
+.hero-icon{font-size:56px;margin-bottom:6px;animation:climb 2s ease-in-out infinite}
+@keyframes climb{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.hero-title{font-size:1.6rem;font-weight:700;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.3)}
+.hero-sub{font-size:0.85rem;color:rgba(255,255,255,0.9);margin-top:4px}
+.tabs{display:flex;background:var(--bg2);border-bottom:3px solid var(--accent2);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:13px 16px;font-size:0.78rem;font-weight:700;color:var(--text2);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-3px;transition:all 0.2s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);background:rgba(22,163,74,0.05)}
+.main{max-width:720px;margin:0 auto;padding:16px 14px 60px}
+.panel{display:none}.panel.active{display:block}
+.sec{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(22,163,74,0.06)}
+.sec-title{font-size:0.9rem;font-weight:700;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+
+/* ── バーチャル登山 ── */
+.mountain-scene{width:100%;height:200px;background:linear-gradient(180deg,#93c5fd 0%,#dbeafe 40%,#86efac 65%,#4ade80 80%,#92400e 90%,#78350f 100%);border-radius:var(--radius);position:relative;overflow:hidden;border:3px solid var(--accent);margin-bottom:14px}
+.mtn-peak{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:80px solid transparent;border-right:80px solid transparent;border-bottom:100px solid #6b7280}
+.mtn-snow{position:absolute;bottom:105px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:28px solid transparent;border-right:28px solid transparent;border-bottom:35px solid #fff}
+.mtn-cloud{position:absolute;top:15px;font-size:1.8rem;opacity:0.7;animation:drift 5s ease-in-out infinite}
+.mtn-cloud:nth-child(2){left:8%;animation-delay:0s}
+.mtn-cloud:nth-child(3){right:10%;animation-delay:2.5s}
+.climber{position:absolute;font-size:1.6rem;transition:bottom 1s cubic-bezier(0.4,0,0.2,1),left 0.8s ease;bottom:36px;left:10%}
+.progress-path{position:absolute;bottom:36px;left:12%;right:12%;height:3px;background:rgba(255,255,255,0.4);border-radius:2px}
+.progress-done{height:100%;background:#fbbf24;border-radius:2px;transition:width 1s ease}
+.stage-btn-wrap{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.stage-btn{padding:12px 6px;border-radius:12px;border:2px solid var(--border);font-size:0.8rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.15s;text-align:center;background:var(--bg3)}
+.stage-btn:active{transform:scale(0.95)}
+.stage-btn.s0{background:#dbeafe;border-color:#93c5fd;color:#1d4ed8}
+.stage-btn.s1{background:#d1fae5;border-color:#6ee7b7;color:#065f46}
+.stage-btn.s2{background:#fef3c7;border-color:#fbbf24;color:#78350f}
+.stage-btn.s3{background:#fce7f3;border-color:#f9a8d4;color:#831843}
+.stage-btn.s4{background:#ede9fe;border-color:#c4b5fd;color:#3b0764}
+.stage-btn.s5{background:#fee2e2;border-color:#fca5a5;color:#7f1d1d}
+.stage-info{background:var(--bg3);border:2px solid var(--border);border-radius:var(--radius);padding:14px;min-height:70px;transition:all 0.3s}
+.stage-icon{font-size:2rem;margin-bottom:6px}
+.stage-title{font-size:0.88rem;font-weight:700;margin-bottom:4px}
+.stage-desc{font-size:0.75rem;color:var(--text2);line-height:1.7}
+
+/* ── 山カード ── */
+.mtn-card{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+.mtn-icon{font-size:2rem;flex-shrink:0}
+.mtn-title{font-size:0.88rem;font-weight:700;margin-bottom:4px}
+.mtn-body{font-size:0.75rem;color:var(--text2);line-height:1.7}
+.mtn-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:0.62rem;font-weight:700;margin-bottom:4px}
+
+/* ── どうぐ ── */
+.tool-card{background:var(--bg3);border:2px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start}
+.tool-icon{font-size:1.6rem;flex-shrink:0}
+.tool-title{font-size:0.82rem;font-weight:700;margin-bottom:2px}
+.tool-desc{font-size:0.72rem;color:var(--text2);line-height:1.6}
+
+/* クイズ */
+.quiz-card{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+.quiz-q{font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:12px;line-height:1.5}
+.quiz-options{display:flex;flex-direction:column;gap:8px}
+.quiz-opt{padding:11px 14px;border-radius:12px;border:2px solid var(--border);background:var(--bg3);cursor:pointer;font-size:0.8rem;font-weight:700;color:var(--text);font-family:inherit;text-align:left;transition:all 0.15s}
+.quiz-opt.correct{background:rgba(34,197,94,0.15);border-color:#4ade80;color:#166534}
+.quiz-opt.wrong{background:rgba(239,68,68,0.1);border-color:#f87171;color:#991b1b}
+.quiz-result{padding:12px 14px;border-radius:12px;margin-top:10px;font-size:0.82rem;font-weight:700;text-align:center;display:none}
+.quiz-result.show{display:block}
+.quiz-result.ok{background:rgba(34,197,94,0.15);border:2px solid #4ade80;color:#166534}
+.quiz-result.ng{background:rgba(239,68,68,0.1);border:2px solid #f87171;color:#991b1b}
+.quiz-next{width:100%;margin-top:10px;padding:12px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-size:0.85rem;font-weight:700;cursor:pointer;font-family:inherit;display:none}
+.quiz-next.show{display:block}
+.quiz-score{text-align:center;padding:20px;font-size:1.1rem;font-weight:700;color:var(--accent);display:none}
+.quiz-score.show{display:block}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 20px;border-radius:20px;font-size:0.82rem;font-weight:700;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="header">
+  <button class="back-btn" onclick="goBack()">← もどる</button>
+  <div class="header-title">⛰️ SchoolPark とざん</div>
+</div>
+<div class="hero">
+  <div class="cloud">☁️</div>
+  <div class="cloud">☁️</div>
+  <div class="hero-icon">⛰️</div>
+  <div class="hero-title">とざん</div>
+  <div class="hero-sub">のぼって・しらべて・たのしもう！</div>
+</div>
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('climb',this)">⛰️ のぼってみよう</button>
+  <button class="tab" onclick="switchTab('mtn',this)">🌍 せかいのやま</button>
+  <button class="tab" onclick="switchTab('tools',this)">🎒 どうぐ</button>
+  <button class="tab" onclick="switchTab('rules',this)">📋 マナー</button>
+  <button class="tab" onclick="switchTab('quiz',this)">❓ クイズ</button>
+</div>
+<div class="main">
+
+  <!-- のぼってみようタブ -->
+  <div class="panel active" id="tab-climb">
+    <div class="sec">
+      <div class="sec-title">⛰️ バーチャルとざん！</div>
+      <p style="font-size:0.78rem;color:var(--text2);margin-bottom:10px;line-height:1.7">ボタンをおして、やまをのぼってみよう！どんなけしきがみえるかな？🌄</p>
+      <div class="mountain-scene">
+        <div class="mtn-cloud">☁️</div>
+        <div class="mtn-cloud">☁️</div>
+        <div class="mtn-peak"></div>
+        <div class="mtn-snow"></div>
+        <div class="progress-path"><div class="progress-done" id="progDone" style="width:0%"></div></div>
+        <div class="climber" id="climber">🧗</div>
+      </div>
+      <div class="stage-btn-wrap">
+        <button class="stage-btn s0" onclick="goStage(0)">🏠 出発！</button>
+        <button class="stage-btn s1" onclick="goStage(1)">🌲 森</button>
+        <button class="stage-btn s2" onclick="goStage(2)">🪨 岩場</button>
+        <button class="stage-btn s3" onclick="goStage(3)">☁️ 雲の上</button>
+        <button class="stage-btn s4" onclick="goStage(4)">❄️ 雪原</button>
+        <button class="stage-btn s5" onclick="goStage(5)">🏔️ ちょうじょう！</button>
+      </div>
+      <div class="stage-info" id="stageInfo">
+        <div class="stage-icon">🏠</div>
+        <div class="stage-title">ここからスタート！</div>
+        <div class="stage-desc">ボタンをおして、やまをのぼっていこう！きけんなばしょもあるから、じゅんばんにのぼってね🎒</div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">📋 とざんの基本3つ</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:12px">
+          <div style="background:var(--accent);color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">1</div>
+          <div><div style="font-size:0.82rem;font-weight:700;margin-bottom:2px">じゅんびをしっかりする</div><div style="font-size:0.72rem;color:var(--text2);line-height:1.5">みず・ごはん・きがえ・ちず・きゅうきゅうばこ。やまはコンビニがないから、ぜんぶもっていこう！</div></div>
+        </div>
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:12px">
+          <div style="background:var(--accent);color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">2</div>
+          <div><div style="font-size:0.82rem;font-weight:700;margin-bottom:2px">ゆっくりあるく</div><div style="font-size:0.72rem;color:var(--text2);line-height:1.5">やまではいそいではいけないよ。ゆっくりいっぽいっぽあるくのが、とうちゃくするためのコツ！</div></div>
+        </div>
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:12px">
+          <div style="background:var(--accent);color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">3</div>
+          <div><div style="font-size:0.82rem;font-weight:700;margin-bottom:2px">みんないっしょにかえる</div><div style="font-size:0.72rem;color:var(--text2);line-height:1.5">グループでのぼるときは、ぜったいにひとりではぐれてはいけないよ。ちょうじょうよりかぞくのほうがたいせつ！</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- せかいのやまタブ -->
+  <div class="panel" id="tab-mtn">
+    <div class="sec">
+      <div class="sec-title">🌍 せかいのすごいやま</div>
+      <div class="mtn-card">
+        <div class="mtn-icon">🏔️</div>
+        <div>
+          <span class="mtn-badge" style="background:#dbeafe;color:#1d4ed8">🇳🇵 ネパール</span>
+          <div class="mtn-title">エベレスト（世界一たかい山）</div>
+          <div class="mtn-body">たかさ：<strong>8,849メートル</strong>！飛行機がとぶたかさとほぼおなじくらい✈️ てっぺんではさんそがうすくて、とくべつなどうぐなしでは人間がいきていけないの。のぼったひとは世界で約6,000人だけ！</div>
+        </div>
+      </div>
+      <div class="mtn-card">
+        <div class="mtn-icon">🗻</div>
+        <div>
+          <span class="mtn-badge" style="background:#d1fae5;color:#064e3b">🇯🇵 にほん</span>
+          <div class="mtn-title">富士山（ふじさん）</div>
+          <div class="mtn-body">にほんでいちばんたかいやま！たかさ<strong>3,776メートル</strong>🗻 まいとしなつに30万人以上がのぼるよ。しらゆきがのこるすがたはまるでアイスクリームみたい！世界遺産（せかいいさん）にもなってるよ。</div>
+        </div>
+      </div>
+      <div class="mtn-card">
+        <div class="mtn-icon">🌋</div>
+        <div>
+          <span class="mtn-badge" style="background:#fee2e2;color:#7f1d1d">🌋 かざん</span>
+          <div class="mtn-title">マウナケア（いちばんおおきいやま）</div>
+          <div class="mtn-body">ハワイにある山で、うみのそこからはかると<strong>たかさ10,210メートル</strong>でエベレストよりたかい！うみのなかにほとんどかくれているの。てっぺんには世界の天文台がたくさんあって、せいざをかんそくしてるよ🌟</div>
+        </div>
+      </div>
+      <div class="mtn-card">
+        <div class="mtn-icon">🌋</div>
+        <div>
+          <span class="mtn-badge" style="background:#fef3c7;color:#78350f">🌋 かざん</span>
+          <div class="mtn-title">キラウエア（ずっとふきつづけるかざん）</div>
+          <div class="mtn-body">ハワイのかざんで、<strong>1983年から40年以上ふきつづけてる</strong>！あつあつのマグマがながれてうみにはいるんだ🌊 あかくかがやくマグマのながれはとてもきれいだけど、きけんだからちかよっちゃダメ！</div>
+        </div>
+      </div>
+      <div class="mtn-card">
+        <div class="mtn-icon">⛰️</div>
+        <div>
+          <span class="mtn-badge" style="background:#e9d5ff;color:#3b0764">🇨🇭 スイス</span>
+          <div class="mtn-title">マッターホルン（かっこいいかたち）</div>
+          <div class="mtn-body">さんかくのするどいかたちがとてもかっこいい山！たかさ<strong>4,478メートル</strong>。チョコレートの「トブラローネ」のパッケージのモデルになってるよ🍫 ふゆはゆきとこおりでおおわれてるよ。</div>
+        </div>
+      </div>
+      <div class="mtn-card">
+        <div class="mtn-icon">🏔️</div>
+        <div>
+          <span class="mtn-badge" style="background:#d1fae5;color:#064e3b">🇯🇵 にほん</span>
+          <div class="mtn-title">北アルプス（ほくアルプス）</div>
+          <div class="mtn-body">にほんの「やまのなか」！まつもとのちかくにある3,000メートル級のやまやま⛰️ うつくしいけしきと、むかしのにほんのなごりがのこる山ごやがあるよ。3,190mのおくほたかだけもここ！</div>
+        </div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">📊 やまのすごいかずじ</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);border:2px solid #86efac;border-radius:var(--radius);padding:12px;text-align:center"><div style="font-size:1.5rem;font-weight:700;color:#166534">8,849m</div><div style="font-size:0.7rem;color:#14532d;margin-top:2px">エベレストのたかさ</div></div>
+        <div style="background:linear-gradient(135deg,#fef9c3,#fef08a);border:2px solid #fde047;border-radius:var(--radius);padding:12px;text-align:center"><div style="font-size:1.5rem;font-weight:700;color:#713f12">3,776m</div><div style="font-size:0.7rem;color:#78350f;margin-top:2px">富士山のたかさ</div></div>
+        <div style="background:linear-gradient(135deg,#fee2e2,#fecaca);border:2px solid #fca5a5;border-radius:var(--radius);padding:12px;text-align:center"><div style="font-size:1.5rem;font-weight:700;color:#991b1b">約30万人</div><div style="font-size:0.7rem;color:#7f1d1d;margin-top:2px">ふじさんにのぼる人数（年）</div></div>
+        <div style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:2px solid #c4b5fd;border-radius:var(--radius);padding:12px;text-align:center"><div style="font-size:1.5rem;font-weight:700;color:#4c1d95">約6,000人</div><div style="font-size:0.7rem;color:#3b0764;margin-top:2px">エベレストとうちょうしゃ</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- どうぐタブ -->
+  <div class="panel" id="tab-tools">
+    <div class="sec">
+      <div class="sec-title">🎒 とざんのどうぐしょうかい</div>
+      <div class="tool-card"><div class="tool-icon">👟</div><div><div class="tool-title">とざんぐつ（トレッキングシューズ）</div><div class="tool-desc">やまのでこぼこみちをあるくための、そこがぶあつくてすべりにくいくつ！あしをまもるためにかかせないよ。サイズはすこしおおきめがいいよ！</div></div></div>
+      <div class="tool-card"><div class="tool-icon">🎒</div><div><div class="tool-title">リュックサック</div><div class="tool-desc">りょうてがつかえるようにリュックがいちばん！みず・ごはん・きがえ・ちずをいれよう。やまようのリュックはかるくてぬれにくいよ。</div></div></div>
+      <div class="tool-card"><div class="tool-icon">💧</div><div><div class="tool-title">みず・おやつ・おひるごはん</div><div class="tool-desc">やまにはおみせがないよ！ひとりで500ml以上のみずをもっていこう。カロリーのたかいおやつ（チョコやようかん）もエネルギーをくれるよ🍫</div></div></div>
+      <div class="tool-card"><div class="tool-icon">🗺️</div><div><div class="tool-title">ちず・コンパス・GPS</div><div class="tool-desc">やまでまいごになったらとてもきけん！ちずをよめるおとなといっしょに、スマホのGPSもつかえるといいよ。スマホはじゅうでんをきらさないように！</div></div></div>
+      <div class="tool-card"><div class="tool-icon">🏕️</div><div><div class="tool-title">レインウェア（かっぱ）</div><div class="tool-desc">やまのてんきはかわりやすい！かっぱをかならずもっていこう。やまのなかでぬれると、きゅうにさむくなってきけんだよ🌧️</div></div></div>
+      <div class="tool-card"><div class="tool-icon">🏮</div><div><div class="tool-title">ヘッドライト</div><div class="tool-desc">やまでくらくなったらこわい！あたまにつけるライトがあるとべんり。でんちがきれないようにたしかめてからもっていこう💡</div></div></div>
+      <div class="tool-card"><div class="tool-icon">🩹</div><div><div class="tool-title">きゅうきゅうばこ</div><div class="tool-desc">こけたりすりきずができたときにひつよう！バンドエイド・さんかく巾（きん）・ほうたい・きんきゅうようのアルミシートをいれよう。</div></div></div>
+      <div class="tool-card"><div class="tool-icon">🥢</div><div><div class="tool-title">トレッキングポール（ストック）</div><div class="tool-desc">おとなのつえのやまばん！くだりのときにあしをまもってくれるよ。こどもにもちょうどいいサイズがあるよ。</div></div></div>
+    </div>
+  </div>
+
+  <!-- マナータブ -->
+  <div class="panel" id="tab-rules">
+    <div class="sec">
+      <div class="sec-title">📋 やまのマナーとルール</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="background:#d1fae5;border:2px solid #6ee7b7;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">✅</div><div><div style="font-size:0.82rem;font-weight:700;color:#065f46;margin-bottom:2px">ゴミはかならずもちかえる</div><div style="font-size:0.72rem;color:#047857;line-height:1.5">やまにゴミをすてるのはダメ！つちのうえにすてたものは、なかなかくさらないの。バナナのかわも1年以上のこるよ🍌</div></div></div>
+        <div style="background:#d1fae5;border:2px solid #6ee7b7;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">✅</div><div><div style="font-size:0.82rem;font-weight:700;color:#065f46;margin-bottom:2px">くだりの人がゆうせん（登山道ルール）</div><div style="font-size:0.72rem;color:#047857;line-height:1.5">せまい道でくだりのひととすれちがうとき、くだりのひとにみちをゆずろう。かかとがきくからのぼりのほうがとめやすいんだよ！</div></div></div>
+        <div style="background:#d1fae5;border:2px solid #6ee7b7;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">✅</div><div><div style="font-size:0.82rem;font-weight:700;color:#065f46;margin-bottom:2px">「こんにちは！」とあいさつする</div><div style="font-size:0.72rem;color:#047857;line-height:1.5">すれちがうひとには「こんにちは！」とあいさつするのがやまのマナー！あいさつするとたのしいきもちになるし、あんぜんかくにんにもなるよ😊</div></div></div>
+        <div style="background:#fef3c7;border:2px solid #fbbf24;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">⚠️</div><div><div style="font-size:0.82rem;font-weight:700;color:#78350f;margin-bottom:2px">てんきがわるくなったらすぐひきかえす</div><div style="font-size:0.72rem;color:#92400e;line-height:1.5">くもがあつくなってきたらキケン！かみなりがなりはじめたらすぐにおりよう。やまのてんきはとつぜんかわるよ⚡</div></div></div>
+        <div style="background:#fef3c7;border:2px solid #fbbf24;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">⚠️</div><div><div style="font-size:0.82rem;font-weight:700;color:#78350f;margin-bottom:2px">じかんのよゆうをもってのぼる</div><div style="font-size:0.72rem;color:#92400e;line-height:1.5">くらくなるまえにかえれるじかんをかくにんしよう。やまでくらくなるのはとてもきけんだよ🌙</div></div></div>
+        <div style="background:#fee2e2;border:2px solid #fca5a5;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">❌</div><div><div style="font-size:0.82rem;font-weight:700;color:#7f1d1d;margin-bottom:2px">ひとりでいかない・みちからでない</div><div style="font-size:0.72rem;color:#991b1b;line-height:1.5">やまはかならずおとなといっしょに！とうざんどうからでるとまいごになるよ。たんけんしたくても、みちのうえだけにしよう。</div></div></div>
+        <div style="background:#fee2e2;border:2px solid #fca5a5;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">❌</div><div><div style="font-size:0.82rem;font-weight:700;color:#7f1d1d;margin-bottom:2px">いきものをもちかえらない</div><div style="font-size:0.72rem;color:#991b1b;line-height:1.5">やまのはなやいきものは、やまのせいたいをたもつためにいるよ。きれいなはなやむしをみつけても、ぜったいにとったりしないでね🌸</div></div></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">🆘 もしもまいごになったら</div>
+      <div style="background:rgba(239,68,68,0.06);border:2px solid rgba(239,68,68,0.15);border-radius:var(--radius);padding:14px">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:10px"><div style="background:#ef4444;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0">1</div><div style="font-size:0.78rem;line-height:1.6"><strong>うごかない！</strong>そこでじっとまつ。うごくとますますまいごになるよ。</div></div>
+          <div style="display:flex;gap:10px"><div style="background:#ef4444;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0">2</div><div style="font-size:0.78rem;line-height:1.6"><strong>おおごえでさけぶ！</strong>「たすけて！」とさけぼう。やまびこがこえをとおくにとどけてくれるよ。</div></div>
+          <div style="display:flex;gap:10px"><div style="background:#ef4444;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0">3</div><div style="font-size:0.78rem;line-height:1.6"><strong>スマホで110か119！</strong>けいたいのでんちをたいせつに。やまのうえはつながりにくいことがあるよ。</div></div>
+          <div style="display:flex;gap:10px"><div style="background:#ef4444;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0">4</div><div style="font-size:0.78rem;line-height:1.6"><strong>あたたかくする！</strong>レインウェアをきてさむさをふせごう。アルミシートがあるとなおいいよ。</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- クイズタブ -->
+  <div class="panel" id="tab-quiz">
+    <div class="sec">
+      <div class="sec-title">❓ とざん クイズ！</div>
+      <div id="quizContainer"></div>
+      <div class="quiz-score" id="quizScore"></div>
+    </div>
+  </div>
+
+</div>
+<div class="toast" id="toast"></div>
+<script>
+function switchTab(id,btn){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.getElementById("tab-"+id).classList.add("active");
+  btn.classList.add("active");
+  if(id==="quiz") initQuiz();
+}
+function showToast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),3000); }
+
+// ── バーチャル登山 ──
+const STAGES=[
+  {pct:0,left:"10%",icon:"🏠",title:"しゅっぱつ！",desc:"さあ、やまのぼりのはじまり！リュックのじゅんびはOK？みず・ごはん・かっぱをわすれずに！いってきます🎒"},
+  {pct:20,left:"28%",icon:"🌲",title:"もりのなか",desc:"こわいどうぶつはいないかな？もりのなかはすずしくてきもちいい！ときどきとりのなきごえがきこえるよ🐦 おちばをふんだらカサカサといい音がするよ"},
+  {pct:45,left:"48%",icon:"🪨",title:"いわばゾーン",desc:"でっかいいわがたくさん！てとあしをつかってのぼろう。すべりやすいから、いちどにひとつずつ、ゆっくりね🪨 きつくなってきたかな？"},
+  {pct:65,left:"62%",icon:"☁️",title:"くものうえ！",desc:"わあ！くものうえにでた！しろいくもがフワフワうかんでる☁️ したにはもりがみえる！とおくのやまもみえるよ。すごいけしきだね🌄"},
+  {pct:85,left:"74%",icon:"❄️",title:"ゆきのせかい",desc:"てっぺんはゆきがのこってるよ！さむいけど、しろくてきれい❄️ ゆきにてをつけてみたらつめたかった！ゆきだるまをつくりたいな⛄"},
+  {pct:100,left:"85%",icon:"🏔️",title:"ちょうじょう！！",desc:"やったー！ちょうじょうとうちゃく！🎉🏔️ ここからみえるけしきは、にほんでいちばんきれいだよ！がんばってのぼったからみれるけしき。さいこうだね！！"},
+];
+let curStage=0;
+function goStage(n){
+  curStage=n; const s=STAGES[n];
+  const c=document.getElementById("climber");
+  c.style.left=s.left; c.style.bottom="36px";
+  document.getElementById("progDone").style.width=s.pct+"%";
+  document.getElementById("stageInfo").innerHTML=`<div class="stage-icon">${s.icon}</div><div class="stage-title">${s.title}</div><div class="stage-desc">${s.desc}</div>`;
+  showToast(s.icon+" "+s.title);
+}
+
+// ── クイズ ──
+const QUIZ_DATA=[
+  {q:"せかいでいちばんたかいやまはなに？",opts:["ふじさん","エベレスト","マッターホルン","キラウエア"],ans:1,hint:"ネパールとちゅうごくのさかいにあるよ！"},
+  {q:"ふじさんのたかさはなんメートル？",opts:["2,776m","3,776m","4,776m","8,849m"],ans:1,hint:"さんろく（3776）とおぼえよう！"},
+  {q:"やまでゴミをすてたらどうなる？",opts:["すぐきえる","動物がたべてくれる","ながいあいだのこる","雨がながしてくれる"],ans:2,hint:"バナナのかわも1年以上のこるよ！"},
+  {q:"せまいみちですれちがうとき、どちらがゆうせん？",opts:["のぼり","くだり","こどもがゆうせん","どちらでもいい"],ans:1,hint:"くだりのほうがとめにくいからゆずってあげよう！"},
+  {q:"やまでまいごになったとき、まずどうする？",opts:["はしる","うごかずにじっとまつ","かわにはいる","きをのぼる"],ans:1,hint:"うごくとますますまいごになるよ！"},
+  {q:"とざんのとき、てんきがわるくなったら？",opts:["そのまますすむ","かくれる","すぐひきかえす","キャンプする"],ans:2,hint:"ちょうじょうよりいのちがたいせつ！"},
+  {q:"ふじさんにまいとしのぼるひとはどのくらい？",opts:["やく3万人","やく30万人","やく300万人","やく1万人"],ans:1,hint:"にほんでいちばんにんきのやまだよ！"},
+];
+let qi=0,qs=0,qa=false;
+function initQuiz(){ qi=0;qs=0;qa=false; document.getElementById("quizScore").classList.remove("show"); renderQuiz(); }
+function renderQuiz(){
+  if(qi>=QUIZ_DATA.length){ document.getElementById("quizContainer").innerHTML=""; const sc=document.getElementById("quizScore"); const p=Math.round(qs/QUIZ_DATA.length*100); const m=p===100?"🏔️ まんてん！とざんはかせ！":p>=75?"⭐ すごい！よくしってるね！":"📚 もっとしらべてみよう！"; sc.innerHTML=`<div style="font-size:1.6rem;margin-bottom:8px">🎉</div><div>${QUIZ_DATA.length}もん中 <strong>${qs}もん</strong> せいかい！</div><div style="font-size:0.85rem;margin-top:8px;color:var(--text2)">${m}</div><button onclick="initQuiz()" style="margin-top:14px;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:12px 24px;font-size:0.85rem;font-weight:700;cursor:pointer;font-family:inherit">もういちどチャレンジ！</button>`; sc.classList.add("show"); return; }
+  const q=QUIZ_DATA[qi]; qa=false;
+  document.getElementById("quizContainer").innerHTML=`<div class="quiz-card"><div style="font-size:0.72rem;color:var(--text2);margin-bottom:6px">もんだい ${qi+1} / ${QUIZ_DATA.length}</div><div class="quiz-q">${q.q}</div><div class="quiz-options">${q.opts.map((o,i)=>`<button class="quiz-opt" onclick="answerQuiz(${i})">${o}</button>`).join("")}</div><div class="quiz-result" id="qr"></div><button class="quiz-next" id="qn" onclick="nextQuiz()">つぎ ▶</button></div>`;
+}
+function answerQuiz(c){ if(qa)return; qa=true; const q=QUIZ_DATA[qi]; document.querySelectorAll(".quiz-opt").forEach((o,i)=>{ if(i===q.ans)o.classList.add("correct"); else if(i===c&&c!==q.ans)o.classList.add("wrong"); o.style.pointerEvents="none"; }); const r=document.getElementById("qr"); if(c===q.ans){ qs++; r.textContent="⭐ せいかい！"+q.hint; r.className="quiz-result show ok"; } else { r.textContent="❌ ざんねん！こたえは「"+q.opts[q.ans]+"」。"+q.hint; r.className="quiz-result show ng"; } document.getElementById("qn").classList.add("show"); }
+function nextQuiz(){ qi++; renderQuiz(); }
+window.addEventListener("DOMContentLoaded",()=>initQuiz());
+function goBack(){ window.top.postMessage({type:"spContentClose"},"*"); }
+</script>
+</body>
+</html>

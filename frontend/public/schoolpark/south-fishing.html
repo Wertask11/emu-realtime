@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchoolPark Fishing — つり</title>
+<link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#e0f7fa;--bg2:#fff;--bg3:#f0feff;
+  --accent:#0891b2;--accent2:#22d3ee;--green:#22c55e;--yellow:#fbbf24;--red:#ef4444;--orange:#f97316;
+  --text:#083344;--text2:#0e7490;--border:rgba(8,145,178,0.15);
+  --radius:16px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif;min-height:100vh;overflow-x:hidden}
+.header{position:sticky;top:0;z-index:100;height:56px;background:var(--accent);display:flex;align-items:center;gap:10px;padding:0 14px;box-shadow:0 2px 8px rgba(8,145,178,0.3)}
+.back-btn{background:rgba(255,255,255,0.25);color:#fff;border:none;border-radius:10px;padding:6px 14px;cursor:pointer;font-size:0.85rem;font-weight:700;font-family:inherit}
+.header-title{font-size:1rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px}
+.hero{background:linear-gradient(180deg,#0891b2 0%,#06b6d4 50%,#67e8f9 100%);padding:24px 16px 20px;text-align:center;position:relative;overflow:hidden}
+.wave{position:absolute;bottom:0;left:0;right:0;height:30px;background:rgba(255,255,255,0.15);clip-path:ellipse(55% 100% at 50% 100%)}
+.hero-icon{font-size:56px;margin-bottom:6px;animation:bob 2s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-6px) rotate(3deg)}}
+.hero-title{font-size:1.6rem;font-weight:700;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2)}
+.hero-sub{font-size:0.85rem;color:rgba(255,255,255,0.85);margin-top:4px}
+.tabs{display:flex;background:var(--bg2);border-bottom:3px solid var(--accent2);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:13px 16px;font-size:0.78rem;font-weight:700;color:var(--text2);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-3px;transition:all 0.2s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);background:rgba(8,145,178,0.05)}
+.main{max-width:720px;margin:0 auto;padding:16px 14px 60px}
+.panel{display:none}.panel.active{display:block}
+.sec{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(8,145,178,0.06)}
+.sec-title{font-size:0.9rem;font-weight:700;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+
+/* ── バーチャルつり ── */
+.pond{width:100%;height:180px;background:linear-gradient(180deg,#67e8f9 0%,#0891b2 60%,#0e7490 100%);border-radius:var(--radius);position:relative;overflow:hidden;margin-bottom:14px;cursor:pointer;user-select:none;border:3px solid var(--accent)}
+.pond-surface{position:absolute;top:30px;left:0;right:0;height:6px;background:rgba(255,255,255,0.25);border-radius:3px}
+.ripple{position:absolute;border-radius:50%;border:2px solid rgba(255,255,255,0.5);animation:rippleOut 1s ease-out forwards;pointer-events:none}
+@keyframes rippleOut{from{width:10px;height:10px;opacity:1;transform:translate(-50%,-50%)}to{width:60px;height:60px;opacity:0;transform:translate(-50%,-50%)}}
+.rod{position:absolute;top:0;left:50%;transform:translateX(-50%);width:4px;height:80px;background:linear-gradient(180deg,#92400e,#d97706);border-radius:2px;transform-origin:top center}
+.line{position:absolute;left:50%;width:2px;background:rgba(255,255,255,0.7);transform-origin:top center;transition:height 0.5s}
+.float-indicator{position:absolute;top:26px;left:50%;transform:translateX(-50%);font-size:1.2rem;transition:left 0.5s}
+.fish-emoji{position:absolute;font-size:1.4rem;animation:swim 3s ease-in-out infinite;bottom:30px}
+@keyframes swim{0%,100%{transform:translateX(0) scaleX(1)}50%{transform:translateX(40px) scaleX(-1)}}
+.fish-emoji:nth-child(2){animation-delay:1s;bottom:50px;left:10%}
+.fish-emoji:nth-child(3){animation-delay:2s;bottom:70px;right:15%}
+.catch-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.4rem;font-weight:700;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,0.4);opacity:0;transition:opacity 0.3s;text-align:center;white-space:nowrap}
+.catch-msg.show{opacity:1}
+.cast-btn{width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.cast-btn:active{transform:scale(0.97)}
+.catch-result{background:var(--bg3);border:2px solid var(--border);border-radius:var(--radius);padding:14px;margin-top:12px;text-align:center;min-height:70px}
+.catch-fish-icon{font-size:2.5rem;display:block;margin-bottom:6px}
+.catch-fish-name{font-size:0.95rem;font-weight:700;margin-bottom:4px}
+.catch-fish-desc{font-size:0.75rem;color:var(--text2);line-height:1.7}
+
+/* ── さかなカード ── */
+.fish-card{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+.fish-icon{font-size:2.2rem;flex-shrink:0}
+.fish-title{font-size:0.88rem;font-weight:700;margin-bottom:4px}
+.fish-body{font-size:0.75rem;color:var(--text2);line-height:1.7}
+.fish-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:0.62rem;font-weight:700;margin-bottom:4px}
+
+/* ── どうぐ ── */
+.tool-card{background:var(--bg3);border:2px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start}
+.tool-icon{font-size:1.6rem;flex-shrink:0}
+.tool-title{font-size:0.82rem;font-weight:700;margin-bottom:2px}
+.tool-desc{font-size:0.72rem;color:var(--text2);line-height:1.6}
+
+/* ── クイズ ── */
+.quiz-card{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+.quiz-q{font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:12px;line-height:1.5}
+.quiz-options{display:flex;flex-direction:column;gap:8px}
+.quiz-opt{padding:11px 14px;border-radius:12px;border:2px solid var(--border);background:var(--bg3);cursor:pointer;font-size:0.8rem;font-weight:700;color:var(--text);font-family:inherit;text-align:left;transition:all 0.15s}
+.quiz-opt.correct{background:rgba(34,197,94,0.15);border-color:#4ade80;color:#166534}
+.quiz-opt.wrong{background:rgba(239,68,68,0.1);border-color:#f87171;color:#991b1b}
+.quiz-result{padding:12px 14px;border-radius:12px;margin-top:10px;font-size:0.82rem;font-weight:700;text-align:center;display:none}
+.quiz-result.show{display:block}
+.quiz-result.ok{background:rgba(34,197,94,0.15);border:2px solid #4ade80;color:#166534}
+.quiz-result.ng{background:rgba(239,68,68,0.1);border:2px solid #f87171;color:#991b1b}
+.quiz-next{width:100%;margin-top:10px;padding:12px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-size:0.85rem;font-weight:700;cursor:pointer;font-family:inherit;display:none}
+.quiz-next.show{display:block}
+.quiz-score{text-align:center;padding:20px;font-size:1.1rem;font-weight:700;color:var(--accent);display:none}
+.quiz-score.show{display:block}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 20px;border-radius:20px;font-size:0.82rem;font-weight:700;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="header">
+  <button class="back-btn" onclick="goBack()">← もどる</button>
+  <div class="header-title">🎣 SchoolPark つり</div>
+</div>
+<div class="hero">
+  <div class="wave"></div>
+  <div class="hero-icon">🎣</div>
+  <div class="hero-title">つり</div>
+  <div class="hero-sub">つって・しらべて・たのしもう！</div>
+</div>
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('game',this)">🎣 つってみよう</button>
+  <button class="tab" onclick="switchTab('fish',this)">🐟 すごいさかな</button>
+  <button class="tab" onclick="switchTab('tools',this)">🪣 どうぐ</button>
+  <button class="tab" onclick="switchTab('rules',this)">📋 マナー</button>
+  <button class="tab" onclick="switchTab('quiz',this)">❓ クイズ</button>
+</div>
+<div class="main">
+
+  <!-- つってみようタブ -->
+  <div class="panel active" id="tab-game">
+    <div class="sec">
+      <div class="sec-title">🎣 バーチャルつりたいけん！</div>
+      <p style="font-size:0.78rem;color:var(--text2);margin-bottom:10px;line-height:1.7">ボタンをおして、さかなをつってみよう！どんなさかながつれるかな？🐟</p>
+      <div class="pond" id="pond">
+        <div class="pond-surface"></div>
+        <div class="fish-emoji" style="left:20%">🐟</div>
+        <div class="fish-emoji" style="left:50%">🐡</div>
+        <div class="fish-emoji" style="left:70%">🐠</div>
+        <div class="rod"></div>
+        <div class="line" id="fishLine" style="position:absolute;left:50%;top:80px;width:2px;height:40px;background:rgba(255,255,255,0.7)"></div>
+        <div class="float-indicator" id="floatEmoji">🎈</div>
+        <div class="catch-msg" id="catchMsg"></div>
+      </div>
+      <button class="cast-btn" id="castBtn" onclick="castLine()">🎣 つりざおをキャスト！</button>
+      <div class="catch-result" id="catchResult">
+        <div style="font-size:0.82rem;color:var(--text2);padding:10px 0">↑ ボタンをおしてつりをはじめよう！</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">📝 つりの基本3ステップ</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:12px;align-items:center">
+          <div style="background:var(--accent);color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">1</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;margin-bottom:2px">えさをつける</div>
+            <div style="font-size:0.72rem;color:var(--text2);line-height:1.5">ハリにえさをつけるよ。いもむし・ミミズ・さかなのえさ（コマセ）など、さかなによってちがうよ！</div>
+          </div>
+        </div>
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:12px;align-items:center">
+          <div style="background:var(--accent);color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">2</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;margin-bottom:2px">キャストする（なげる）</div>
+            <div style="font-size:0.72rem;color:var(--text2);line-height:1.5">つりざおをうしろにひいて、まえにブンとなげる。ウキがついているかかくにん！</div>
+          </div>
+        </div>
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:12px;align-items:center">
+          <div style="background:var(--accent);color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">3</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;margin-bottom:2px">アワセる（ひっぱる）</div>
+            <div style="font-size:0.72rem;color:var(--text2);line-height:1.5">ウキがしずんだら、ざおをグイっとひきあげる！これがアワセ。さかながかかったら、おちついてリールをまく！</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- すごいさかなタブ -->
+  <div class="panel" id="tab-fish">
+    <div class="sec">
+      <div class="sec-title">🌍 せかいのすごいさかな</div>
+      <div class="fish-card">
+        <div class="fish-icon">🐋</div>
+        <div>
+          <span class="fish-badge" style="background:#dbeafe;color:#1d4ed8">🌊 うみ</span>
+          <div class="fish-title">クジラ（世界一おおきいいきもの）</div>
+          <div class="fish-body">シロナガスクジラは<strong>たいちょう約33メートル</strong>！バスが8だいぶんのながさだよ。じつはさかなじゃなくて「ほにゅうるい」なんだ。つりではなく、みるだけでも大感動まちがいなし！</div>
+        </div>
+      </div>
+      <div class="fish-card">
+        <div class="fish-icon">🐡</div>
+        <div>
+          <span class="fish-badge" style="background:#fef3c7;color:#78350f">⚠️ キケン</span>
+          <div class="fish-title">フグ（どくをもつさかな）</div>
+          <div class="fish-body">フグのきも・うなぎ・さかなのくがわにはつよいどくがあるよ。でもとくべつなちょうりしかおいしくたべられないの。<strong>ぜったいにじぶんでさわらないこと！</strong></div>
+        </div>
+      </div>
+      <div class="fish-card">
+        <div class="fish-icon">🦈</div>
+        <div>
+          <span class="fish-badge" style="background:#fce7f3;color:#831843">🌊 かいよう</span>
+          <div class="fish-title">ジンベイザメ（世界一おおきいさかな）</div>
+          <div class="fish-body">たいちょう<strong>やく18メートル</strong>！世界で一番おおきいさかなだよ。でも、えさはプランクトンというちいさいいきものなの。おおきいのに、おとなしいんだね😊</div>
+        </div>
+      </div>
+      <div class="fish-card">
+        <div class="fish-icon">🐠</div>
+        <div>
+          <span class="fish-badge" style="background:#d1fae5;color:#064e3b">🐠 ねったい</span>
+          <div class="fish-title">クマノミ（ニモのモデル）</div>
+          <div class="fish-body">えいがの「ニモ」のモデルになったさかな！イソギンチャクというどくのあるいきものにまもられてくらしてるよ。おやこでいっしょにいるよ🧡</div>
+        </div>
+      </div>
+      <div class="fish-card">
+        <div class="fish-icon">🦑</div>
+        <div>
+          <span class="fish-badge" style="background:#e9d5ff;color:#3b0764">🌊 ふかかい</span>
+          <div class="fish-title">ダイオウイカ（世界一おおきいイカ）</div>
+          <div class="fish-body">たいちょう<strong>やく13メートル</strong>！めがバスケットボールくらいおおきいの👀 ふかい海にすんでいて、みたにんげんはほとんどいないなぞのいきものだよ！</div>
+        </div>
+      </div>
+      <div class="fish-card">
+        <div class="fish-icon">🎣</div>
+        <div>
+          <span class="fish-badge" style="background:#d1fae5;color:#064e3b">🇯🇵 にほん</span>
+          <div class="fish-title">マグロ（はやさ日本一のさかな）</div>
+          <div class="fish-body">おすしやさんでよくみるマグロ！およぐはやさは<strong>じかんそく90km以上</strong>。いちどもとまらずにおよぎつづけるよ。とまると死んでしまうの。まぐろおにぎりおいしいよね🍱</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🎣 つりやすいさかな（初心者むけ）</div>
+      <div style="display:grid;gap:8px">
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.4rem">🐟</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700">コイ / フナ</div>
+            <div style="font-size:0.72rem;color:var(--text2);line-height:1.5">こうえんのいけやかわにいるよ。えさはパンでもOK！はじめてつりをするひとにおすすめ🌿</div>
+          </div>
+        </div>
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.4rem">🐟</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700">キンギョ / メダカ（まずはここから）</div>
+            <div style="font-size:0.72rem;color:var(--text2);line-height:1.5">きんぎょすくいで練習してからリアルつりへ！いどうもすくなくてつりやすいよ🐠</div>
+          </div>
+        </div>
+        <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:10px">
+          <div style="font-size:1.4rem">🐟</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:700">アジ / サバ（うみつり）</div>
+            <div style="font-size:0.72rem;color:var(--text2);line-height:1.5">つりぼりや堤防からかんたんにつれるよ。つれたらかぞくでたべよう！おいしい🍣</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- どうぐタブ -->
+  <div class="panel" id="tab-tools">
+    <div class="sec">
+      <div class="sec-title">🪣 つりのどうぐしょうかい</div>
+      <div class="tool-card"><div class="tool-icon">🎣</div><div><div class="tool-title">つりざお（ロッド）</div><div class="tool-desc">さかなをつるためのぼう。たんぼうとながいぼうがあって、つりかたにあわせてえらぶよ。たためるものもあって、もちはこびやすいよ！</div></div></div>
+      <div class="tool-card"><div class="tool-icon">🪝</div><div><div class="tool-title">ハリ（フック）</div><div class="tool-desc">さかなをひっかけるちいさなハリ。さきがとがっているから、さわるときはちゅうい！大人といっしょにつけてもらおう。</div></div></div>
+      <div class="tool-card"><div class="tool-icon">🎈</div><div><div class="tool-title">ウキ（フロート）</div><div class="tool-desc">みずにうかぶあかやしろのたま。さかながえさをくわえると、ウキがしずむよ！ウキがうごいたらチャンス！</div></div></div>
+      <div class="tool-card"><div class="tool-icon">🧲</div><div><div class="tool-title">オモリ（シンカー）</div><div class="tool-desc">ハリをしずめるためのおもい金ぞく。オモリがおもいほど、えさをふかいところにおくれるよ。</div></div></div>
+      <div class="tool-card"><div class="tool-icon">🪣</div><div><div class="tool-title">バケツ・クーラーボックス</div><div class="tool-desc">つれたさかなをいれるいれもの。みずをいれておくと、さかながいきたままよろこぶよ。たべるときはクーラーボックスにこおりといっしょにいれよう。</div></div></div>
+      <div class="tool-card"><div class="tool-icon">🧤</div><div><div class="tool-title">グローブ・ライフジャケット</div><div class="tool-desc">ハリやさかなのひれでてがきずつかないようにグローブ！水のそばではライフジャケットをかならずつけようね⚓</div></div></div>
+      <div class="tool-card"><div class="tool-icon">🐛</div><div><div class="tool-title">えさ（ルアー）</div><div class="tool-desc">ミミズ・ゴカイ（海むし）・オキアミなどのリアルえさと、プラスチックでできたニセモノえさ（ルアー）があるよ。ルアーはてがよごれなくておすすめ！</div></div></div>
+    </div>
+  </div>
+
+  <!-- マナータブ -->
+  <div class="panel" id="tab-rules">
+    <div class="sec">
+      <div class="sec-title">📋 つりのマナーとルール</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="background:#d1fae5;border:2px solid #6ee7b7;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">✅</div><div><div style="font-size:0.82rem;font-weight:700;color:#065f46;margin-bottom:2px">ゴミはかならずもちかえる</div><div style="font-size:0.72rem;color:#047857;line-height:1.5">みずべにゴミをすてると、さかなやいきものがくるしむよ。ビニール・えさのふくろ・つりいとは全部もちかえろう！</div></div></div>
+        <div style="background:#d1fae5;border:2px solid #6ee7b7;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">✅</div><div><div style="font-size:0.82rem;font-weight:700;color:#065f46;margin-bottom:2px">つりの場所のルールをまもる</div><div style="font-size:0.72rem;color:#047857;line-height:1.5">つっていいばしょとダメなばしょがあるよ。「つり禁止」のかんばんがあったらしたがおう！</div></div></div>
+        <div style="background:#d1fae5;border:2px solid #6ee7b7;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">✅</div><div><div style="font-size:0.82rem;font-weight:700;color:#065f46;margin-bottom:2px">つりいとをすてない</div><div style="font-size:0.72rem;color:#047857;line-height:1.5">つりいとはとりや小動物のからだにからまってきけん！かならずいとはぜんぶもちかえろう。</div></div></div>
+        <div style="background:#fef3c7;border:2px solid #fbbf24;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">⚠️</div><div><div style="font-size:0.82rem;font-weight:700;color:#78350f;margin-bottom:2px">みずべでははしらない</div><div style="font-size:0.72rem;color:#92400e;line-height:1.5">みずべはすべりやすい！はしるとおちてしまうことがあるよ。ゆっくりあるこう。</div></div></div>
+        <div style="background:#fef3c7;border:2px solid #fbbf24;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">⚠️</div><div><div style="font-size:0.82rem;font-weight:700;color:#78350f;margin-bottom:2px">ライフジャケットをつける</div><div style="font-size:0.72rem;color:#92400e;line-height:1.5">うみやかわのそばではかならずライフジャケット！おちてもうかんでいられるよ⚓</div></div></div>
+        <div style="background:#fee2e2;border:2px solid #fca5a5;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">❌</div><div><div style="font-size:0.82rem;font-weight:700;color:#7f1d1d;margin-bottom:2px">ひとりでいかない</div><div style="font-size:0.72rem;color:#991b1b;line-height:1.5">つりはかならずおとなといっしょに！ひとりでみずべにいくのはぜったいダメだよ。</div></div></div>
+        <div style="background:#fee2e2;border:2px solid #fca5a5;border-radius:12px;padding:12px 14px;display:flex;gap:10px"><div style="font-size:1.4rem">❌</div><div><div style="font-size:0.82rem;font-weight:700;color:#7f1d1d;margin-bottom:2px">ハリをそのままもちあるかない</div><div style="font-size:0.72rem;color:#991b1b;line-height:1.5">ハリはとてもとがっている！ハリを出したまままわりをあるかないようにしよう。さやにいれてもちはこぼう。</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- クイズタブ -->
+  <div class="panel" id="tab-quiz">
+    <div class="sec">
+      <div class="sec-title">❓ つり クイズ！</div>
+      <div id="quizContainer"></div>
+      <div class="quiz-score" id="quizScore"></div>
+    </div>
+  </div>
+
+</div>
+<div class="toast" id="toast"></div>
+<script>
+function switchTab(id,btn){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.getElementById("tab-"+id).classList.add("active");
+  btn.classList.add("active");
+  if(id==="quiz") initQuiz();
+}
+function showToast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),3000); }
+
+// ── バーチャルつり ──
+const FISH_LIST = [
+  {icon:"🐟",name:"コイ",desc:"こうえんのいけによくいるさかな！おおきくてつよい！えさはパンでもつれるよ🍞"},
+  {icon:"🐡",name:"フグ",desc:"ふくれるさかな！でもどくがあるからさわらないでね⚠️ つれたらすぐはなしてあげよう"},
+  {icon:"🐠",name:"クマノミ",desc:"ニモのモデル！オレンジとしろのしましまがかわいいね🧡"},
+  {icon:"🦑",name:"イカ",desc:"うみでつれるよ！げそがたくさんあって、スミをはくんだ🖤"},
+  {icon:"🦐",name:"エビ",desc:"ちいさいけど、えびつりはたのしい！えびせんのえびだよ🍤"},
+  {icon:"🐙",name:"タコ",desc:"あしが8ほんのタコ！あたまがよくて、びんをあけることもできるよ🐙"},
+  {icon:"🎣",name:"マグロ",desc:"おすしのマグロ！はやさはじかんそく90km！すごいね🍣"},
+  {icon:"⭐",name:"ヒトデ",desc:"ほしのかたちのいきもの！うごくのはとてもゆっくりだよ⭐"},
+];
+let casting=false;
+function castLine(){
+  if(casting) return;
+  casting=true;
+  const btn=document.getElementById("castBtn");
+  const msg=document.getElementById("catchMsg");
+  const line=document.getElementById("fishLine");
+  const floatEmoji=document.getElementById("floatEmoji");
+  btn.textContent="🎣 まってるよ…"; btn.disabled=true;
+  floatEmoji.textContent="🎈";
+  line.style.height="100px";
+  const waitTime=1500+Math.random()*2000;
+  setTimeout(()=>{
+    floatEmoji.textContent="💦";
+    msg.textContent="ウキがしずんだ！"; msg.classList.add("show");
+    setTimeout(()=>{
+      const fish=FISH_LIST[Math.floor(Math.random()*FISH_LIST.length)];
+      msg.textContent=fish.icon+" つれた！";
+      line.style.height="20px";
+      document.getElementById("catchResult").innerHTML=`<span class="catch-fish-icon">${fish.icon}</span><div class="catch-fish-name">「${fish.name}」がつれた！</div><div class="catch-fish-desc">${fish.desc}</div>`;
+      showToast(fish.icon+" "+fish.name+"がつれたよ！");
+      setTimeout(()=>{ msg.classList.remove("show"); msg.textContent=""; floatEmoji.textContent="🎈"; btn.textContent="🎣 もういちどキャスト！"; btn.disabled=false; casting=false; line.style.height="40px"; },1500);
+    },800);
+  },waitTime);
+}
+
+// ── クイズ ──
+const QUIZ_DATA=[
+  {q:"ウキがしずんだら、どうする？",opts:["まだまってる","ざおをひきあげる（アワセ）","にげる","ないてしまう"],ans:1,hint:"アワセが大事！ぐっとひきあげよう！"},
+  {q:"つりのあと、ゴミはどうする？",opts:["すてていい","うめる","もちかえる","川になげる"],ans:2,hint:"自然のためにかならずもちかえろう！"},
+  {q:"みずべではなにをつけるといい？",opts:["ぼうし","ライフジャケット","マスク","サングラス"],ans:1,hint:"おちてもうかんでいられるよ⚓"},
+  {q:"ニモのモデルになったさかなはなに？",opts:["マグロ","クマノミ","サメ","タコ"],ans:1,hint:"オレンジとしろのしましまだよ！"},
+  {q:"世界一おおきいさかなはなに？",opts:["マグロ","クジラ","ジンベイザメ","タイ"],ans:2,hint:"ほにゅうるいのクジラとはちがうよ！"},
+  {q:"つりをするとき、ひとりでいっていい？",opts:["いい","ダメ！おとなといっしょに","はやければいい","夜だけいい"],ans:1,hint:"かならずおとなといっしょに！"},
+  {q:"マグロはどのくらいのはやさでおよぐ？",opts:["じかんそく10km","じかんそく30km","じかんそく90km以上","じかんそく200km"],ans:2,hint:"とってもはやいんだよ！"},
+];
+let qi=0,qs=0,qa=false;
+function initQuiz(){ qi=0;qs=0;qa=false; document.getElementById("quizScore").classList.remove("show"); renderQuiz(); }
+function renderQuiz(){
+  if(qi>=QUIZ_DATA.length){ document.getElementById("quizContainer").innerHTML=""; const sc=document.getElementById("quizScore"); const p=Math.round(qs/QUIZ_DATA.length*100); const m=p===100?"🏆 まんてん！つりはかせ！":p>=75?"⭐ すごい！よくしってるね！":"📚 もっとしらべてみよう！"; sc.innerHTML=`<div style="font-size:1.6rem;margin-bottom:8px">🎉</div><div>${QUIZ_DATA.length}もん中 <strong>${qs}もん</strong> せいかい！</div><div style="font-size:0.85rem;margin-top:8px;color:var(--text2)">${m}</div><button onclick="initQuiz()" style="margin-top:14px;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:12px 24px;font-size:0.85rem;font-weight:700;cursor:pointer;font-family:inherit">もういちどチャレンジ！</button>`; sc.classList.add("show"); return; }
+  const q=QUIZ_DATA[qi]; qa=false;
+  document.getElementById("quizContainer").innerHTML=`<div class="quiz-card"><div style="font-size:0.72rem;color:var(--text2);margin-bottom:6px">もんだい ${qi+1} / ${QUIZ_DATA.length}</div><div class="quiz-q">${q.q}</div><div class="quiz-options">${q.opts.map((o,i)=>`<button class="quiz-opt" onclick="answerQuiz(${i})">${o}</button>`).join("")}</div><div class="quiz-result" id="qr"></div><button class="quiz-next" id="qn" onclick="nextQuiz()">つぎ ▶</button></div>`;
+}
+function answerQuiz(c){ if(qa)return; qa=true; const q=QUIZ_DATA[qi]; document.querySelectorAll(".quiz-opt").forEach((o,i)=>{ if(i===q.ans)o.classList.add("correct"); else if(i===c&&c!==q.ans)o.classList.add("wrong"); o.style.pointerEvents="none"; }); const r=document.getElementById("qr"); if(c===q.ans){ qs++; r.textContent="⭐ せいかい！"+q.hint; r.className="quiz-result show ok"; } else { r.textContent="❌ ざんねん！こたえは「"+q.opts[q.ans]+"」。"+q.hint; r.className="quiz-result show ng"; } document.getElementById("qn").classList.add("show"); }
+function nextQuiz(){ qi++; renderQuiz(); }
+window.addEventListener("DOMContentLoaded",()=>initQuiz());
+function goBack(){ window.top.postMessage({type:"spContentClose"},"*"); }
+</script>
+</body>
+</html>
