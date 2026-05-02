@@ -2001,7 +2001,7 @@ body.paypay-mode #pp-post-fab {
       <nav class="main-nav">
         <ul>
           <li>
-  <button class="nav-button" id="schoolparkBtn" onclick="openSchoolPark()" style="color:#f68b1f;">🗺️ マップへ戻る</button>
+  <button class="nav-button" id="schoolparkBtn" onclick="openSchoolPark()" style="color:#f68b1f;">🗺️ SchoolParkに戻る</button>
 </li>
           <li>
   <button class="nav-button" id="exploreBtn">探索する</button>
@@ -2061,11 +2061,12 @@ body.paypay-mode #pp-post-fab {
       <div class="spmap-brand-sub">Interactive Park Map</div>
     </div>
     <div class="spmap-nav-links">
-      <span class="spmap-nav-link" onclick="closeSpMap()">🎓 Creative Academy（Emu）</span>
+      <span class="spmap-nav-link" onclick="closeSpMap()">Emu</span>
       <span class="spmap-nav-link active" onclick="spMapNavClick('map')">パークマップ</span>
       <span class="spmap-nav-link" onclick="spMapNavClick('gourmet')">グルメ</span>
       <span class="spmap-nav-link" onclick="spMapNavClick('shopping')">ショッピング</span>
       <span class="spmap-nav-link" onclick="spMapNavClick('events')">イベント</span>
+      <span class="spmap-nav-link" onclick="spMapNavClick('tutorial')">チュートリアル</span>
     </div>
     <button class="spmap-ticket-btn" onclick="spMapLinkClick('ticket')">チケット購入</button>
     <button class="spmap-close-x" onclick="closeSpMap()" title="閉じる">✕</button>
@@ -5362,8 +5363,8 @@ function goTomainapp() {
   walletScreen.style.display = "none";
   mainApp.style.display = "block";
   document.getElementById("siteFooter").style.display = "block";
-  // ★ ログイン後はSchoolParkマップを直接開く
-  setTimeout(() => { if (typeof openSpMap === "function") openSpMap(); }, 150);
+  // ★ ログイン後はSchoolParkマップを直接開く（即時）
+  setTimeout(() => { if (typeof openSpMap === "function") openSpMap(); }, 0);
 }
 
 /* ======= ロゴ → ウォレット → メイン ======= */
@@ -7052,7 +7053,7 @@ const SP_POIS = [
   // 交通・インフラ（ゲート）
   { id:"star1",  name:"Dawn Plaza 夜明けの広場",     icon:"🌅", zone:"star", px:19, py:90, desc:"Gate A — 夜明けの広場。新しい一日の始まり。毎朝ここからSchoolParkへ",    status:"coming" },
   { id:"star2",  name:"Frontier Gate 前線の砦",      icon:"🏰", zone:"star", px:50, py:94, desc:"Gate B — 南エリアの正面玄関。Terminal Stationへ続く冒険の入口",         status:"coming" },
-  { id:"star3",  name:"Creative Academy 学びの門",   icon:"🎓", zone:"star", px:52, py:7,  desc:"Gate C — 北エリアの入口。学びと創造の世界へようこそ",                   status:"coming" },
+  { id:"star3",  name:"Creative Academy 学びの門",   icon:"🎓", zone:"star", px:52, py:7,  desc:"Gate C — 北エリアの入口。学びと創造の世界へようこそ。Emuへのゲートウェイ",  status:"open", action:"openEmu" },
   { id:"star4",  name:"Starry Sky Station 星空の駅", icon:"🚀", zone:"star", px:88, py:86, desc:"Gate D — 星空の駅。宇宙への扉。EMUERトークンで未来を切り拓く",         status:"coming" },
   // 中央・健康
   { id:"plaza1", name:"Fountain 噴水広場",      icon:"⛲", zone:"plaza", px:50, py:38, desc:"SchoolParkの中心。コミュニティ交流広場。DAO投票・イベント開催スポット", status:"open", page:"/schoolpark/fountain.html" },
@@ -7169,10 +7170,12 @@ function openSpMap(gate) {
   document.body.classList.add('spmap-open'); /* 問い合わせボタン非表示 */
   const gateEl = document.getElementById("spMapGateLabel");
   if (gateEl) gateEl.textContent = GATE_NAMES[_currentGate] || "";
-  _spMapZoomLevel = 1;
+  _spMapZoomLevel = 0.75;
   _spMapFilter = "all";
   renderSpMapPois();
   renderSpContentList("all");
+  /* デフォルトズーム適用 */
+  requestAnimationFrame(() => _applySpMapZoom());
   /* 混雑状況・天気を起動 */
   _spCrowdJoin();
   _spFetchWeather();
@@ -7355,11 +7358,13 @@ function spMapSelectPoi(poiId) {
       ${zone.label}${zone.sub ? " — " + zone.sub : ""}
     </div>
     <div class="spmap-detail-desc">${poi.desc}</div>
-    ${poi.eastKey
-      ? `<button class="spmap-detail-go-btn" onclick="openEastBuilding('${poi.eastKey}')">🚪 遊びに行く</button>`
-      : poi.page
-        ? `<button class="spmap-detail-go-btn" onclick="openSpContent('${poi.page}')">🚪 遊びに行く</button>`
-        : `<div class="spmap-detail-badge">🕐 COMING SOON</div>`
+    ${poi.action === "openEmu"
+      ? `<button class="spmap-detail-go-btn" onclick="closeSpMap()">🎓 Emuへ入る</button>`
+      : poi.eastKey
+        ? `<button class="spmap-detail-go-btn" onclick="openEastBuilding('${poi.eastKey}')">🚪 遊びに行く</button>`
+        : poi.page
+          ? `<button class="spmap-detail-go-btn" onclick="openSpContent('${poi.page}')">🚪 遊びに行く</button>`
+          : `<div class="spmap-detail-badge">🕐 COMING SOON</div>`
     }
   `;
   panel.classList.add("smd-open");
@@ -7583,6 +7588,20 @@ function spMapNavClick(type) {
         <div class="spmm-event-date">📅 ${ev.date}</div>
         <div class="spmm-event-desc">${ev.desc}</div>
       </div>`).join(''));
+    return;
+  }
+  if (type === 'tutorial') {
+    openSpModal('📖 チュートリアル', `
+      <div class="spmm-coming-soon">
+        <div class="spmm-cs-icon">📖</div>
+        <div style="font-size:0.92rem;color:#D4A843;font-weight:700;margin-bottom:8px">SchoolPark チュートリアル</div>
+        <div style="color:#777;font-size:0.80rem;line-height:1.75">
+          SchoolParkの楽しみ方・使い方を<br>ステップごとに紹介するガイドです。<br><br>
+          <span style="color:#D4A843;font-weight:700">近日公開予定</span><br>
+          現在コンテンツを準備中です。お楽しみに！
+        </div>
+      </div>
+    `);
     return;
   }
 }
