@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SchoolPark Lab — 研究所</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Zen+Maru+Gothic:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#020a04;--surface:#051008;--card:#081508;--border:#0a2a0a;
+  --green:#00ff88;--green2:#00c060;--dim:#1a4a20;
+  --amber:#f59e0b;--red:#ef4444;--cyan:#00d4ff;
+  --text:#c0e8c8;--muted:#3a7a44;--mono:'Space Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden}
+
+/* スキャンライン */
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,100,.008) 2px,rgba(0,255,100,.008) 4px)}
+
+.close-btn{position:fixed;top:12px;right:14px;background:rgba(0,255,136,.15);border:1px solid var(--border);color:var(--green);padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--mono);z-index:9999}
+.close-btn:hover{background:rgba(0,255,136,.25)}
+
+/* ========== LAB SCENE ========== */
+.lab-scene{position:relative;height:200px;overflow:hidden;background:var(--bg);border-bottom:1px solid var(--border)}
+
+/* 天井 */
+.lab-ceiling{position:absolute;top:0;left:0;right:0;height:20px;background:linear-gradient(to bottom,#040c06,var(--bg));border-bottom:1px solid var(--border)}
+.lab-ceiling-pipes{display:flex;gap:0;height:100%;align-items:center;padding:0 10px}
+.pipe{height:4px;background:linear-gradient(to right,#0a2a0a,#0f3a0f,#0a2a0a);flex:1;margin:0 6px}
+
+/* 机・機器 */
+.lab-bench{position:absolute;bottom:0;left:0;right:0;height:48px;background:linear-gradient(to bottom,#051008,#020a04);border-top:2px solid #0f3a0f}
+.equipment{position:absolute;bottom:48px;display:flex;align-items:flex-end;gap:8px;padding:0 12px}
+.monitor{width:60px;height:50px;background:#020a04;border:2px solid var(--green2);border-radius:3px;display:flex;flex-direction:column;padding:4px;position:relative}
+.monitor::after{content:'';position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:14px;height:6px;background:#051008;border:1px solid var(--green2);border-top:none}
+.monitor-screen{flex:1;background:#000a02;border-radius:1px;overflow:hidden;display:flex;flex-direction:column;gap:1px;padding:2px}
+.mon-line{height:2px;border-radius:1px;animation:monAnim 2s linear infinite}
+.mon-line:nth-child(1){background:var(--green2);animation-delay:0s}
+.mon-line:nth-child(2){background:var(--green2);animation-delay:.3s;width:70%}
+.mon-line:nth-child(3){background:var(--amber);animation-delay:.6s;width:50%}
+.mon-line:nth-child(4){background:var(--green2);animation-delay:.9s;width:85%}
+.mon-line:nth-child(5){background:var(--green2);animation-delay:1.2s;width:40%}
+@keyframes monAnim{0%,100%{opacity:.4}50%{opacity:1}}
+
+.flask{width:24px;height:36px;border:2px solid var(--green2);border-radius:0 0 12px 12px;background:linear-gradient(to bottom,transparent 40%,rgba(0,255,136,.25));position:relative}
+.flask::before{content:'';position:absolute;top:-6px;left:4px;width:12px;height:6px;border:2px solid var(--green2);border-bottom:none}
+.flask-liquid{position:absolute;bottom:0;left:0;right:0;background:rgba(0,255,136,.4);border-radius:0 0 10px 10px;animation:bubbleUp 3s ease-in-out infinite}
+@keyframes bubbleUp{0%,100%{height:40%}50%{height:55%}}
+
+.tube{width:10px;height:45px;border:1.5px solid var(--green2);border-radius:5px;background:linear-gradient(to bottom,transparent,rgba(0,200,100,.2));position:relative;overflow:hidden}
+.tube-bubble{position:absolute;width:6px;height:6px;border-radius:50%;background:rgba(0,255,136,.6);animation:rise 2s linear infinite}
+@keyframes rise{0%{bottom:-8px;opacity:0}50%{opacity:1}100%{bottom:50px;opacity:0}}
+
+/* データストリーム */
+.data-stream{position:absolute;top:20px;right:20px;width:80px;font-size:7px;font-family:var(--mono);color:var(--green2);opacity:.5;line-height:1.6;animation:streamScroll 4s linear infinite}
+@keyframes streamScroll{0%{transform:translateY(0)}100%{transform:translateY(-40px)}}
+
+/* ステータスLED */
+.status-leds{position:absolute;top:24px;left:12px;display:flex;flex-direction:column;gap:4px}
+.led{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.led-g{background:var(--green);box-shadow:0 0 6px var(--green);animation:ledPulse 2s infinite}
+.led-a{background:var(--amber);box-shadow:0 0 6px var(--amber);animation:ledPulse 3s infinite 1s}
+@keyframes ledPulse{0%,100%{opacity:.6}50%{opacity:1}}
+
+/* ========== ヘッダー ========== */
+.lab-header{background:rgba(2,10,4,.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:0 16px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.lab-title-block{display:flex;align-items:center;gap:10px}
+.lab-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:ledPulse 2s infinite}
+.lab-title{font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--green);text-transform:uppercase}
+.lab-subtitle{font-size:10px;color:var(--muted);letter-spacing:.08em}
+.switch-btn{background:rgba(0,200,255,.15);border:1px solid rgba(0,200,255,.3);color:var(--cyan);padding:6px 12px;border-radius:4px;font-size:11px;cursor:pointer;font-family:var(--mono);display:flex;align-items:center;gap:6px;transition:background .2s}
+.switch-btn:hover{background:rgba(0,200,255,.3)}
+
+/* ========== コンテンツ ========== */
+.lab-body{padding:16px}
+.tabs{display:flex;gap:4px;margin-bottom:14px;overflow-x:auto}
+.tab{padding:7px 12px;background:var(--card);border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:11px;white-space:nowrap;font-family:var(--mono);color:var(--muted);transition:all .2s}
+.tab.active{background:var(--green2);color:#000;border-color:var(--green2);font-weight:700}
+.panel{display:none}.panel.active{display:block}
+.s-title{font-size:12px;font-weight:700;color:var(--green);margin:0 0 10px;letter-spacing:.08em;display:flex;align-items:center;gap:6px}
+.s-title::before{content:'>';}
+
+/* レポートカード */
+.report-list{display:flex;flex-direction:column;gap:10px}
+.report{background:var(--card);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.report-head{padding:10px 12px 8px;display:flex;gap:10px;align-items:flex-start}
+.report-id{font-size:9px;color:var(--green2);font-family:var(--mono);letter-spacing:.1em;margin-bottom:3px}
+.report-title{font-size:13px;font-weight:700;color:#fff;line-height:1.4;margin-bottom:3px;font-family:'Zen Maru Gothic',sans-serif}
+.report-tag{display:inline-block;font-size:9px;padding:2px 8px;border-radius:2px;background:rgba(0,255,136,.12);color:var(--green2);border:1px solid rgba(0,255,136,.2)}
+.report-body{padding:0 12px 10px;font-size:12px;color:var(--muted);line-height:1.7;font-family:'Zen Maru Gothic',sans-serif}
+.report-bar{padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.status-badge{font-size:9px;padding:2px 8px;border-radius:2px;font-family:var(--mono)}
+.badge-active{background:rgba(0,255,136,.15);color:var(--green);border:1px solid rgba(0,255,136,.3)}
+.badge-draft{background:rgba(245,158,11,.12);color:var(--amber);border:1px solid rgba(245,158,11,.3)}
+.badge-done{background:rgba(0,200,255,.12);color:var(--cyan);border:1px solid rgba(0,200,255,.3)}
+.read-btn{padding:5px 12px;background:rgba(0,255,136,.1);border:1px solid var(--border);color:var(--green2);font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)}
+
+/* 実験ログ */
+.log-terminal{background:#000a02;border:1px solid var(--border);border-radius:4px;padding:12px;font-family:var(--mono);font-size:11px;line-height:1.8;max-height:280px;overflow-y:auto}
+.log-line{display:flex;gap:8px}
+.log-time{color:var(--muted);flex-shrink:0}
+.log-ok{color:var(--green)}
+.log-warn{color:var(--amber)}
+.log-info{color:var(--cyan)}
+.log-cursor{display:inline-block;width:8px;height:14px;background:var(--green);animation:blink .8s infinite;vertical-align:middle}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* 研究者バッジ */
+.scientist-badge{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:14px;text-align:center;margin-bottom:14px}
+.sb-icon{font-size:40px;margin-bottom:8px}
+.sb-name{font-size:14px;font-weight:700;color:#fff;margin-bottom:4px}
+.sb-rank{font-size:11px;color:var(--green);font-family:var(--mono);letter-spacing:.1em;margin-bottom:8px}
+.sb-bars{display:flex;flex-direction:column;gap:4px}
+.sb-bar-row{display:flex;gap:8px;align-items:center}
+.sb-bar-label{font-size:10px;color:var(--muted);width:80px;text-align:right;font-family:var(--mono)}
+.sb-bar-track{flex:1;height:6px;background:#0a2a0a;border-radius:3px;overflow:hidden}
+.sb-bar-fill{height:100%;border-radius:3px;background:linear-gradient(to right,var(--green2),var(--green));animation:fillAnim .8s ease-out both}
+@keyframes fillAnim{from{width:0}}
+
+/* 隕石研究所 iframe */
+#meteorOverlay{display:none;position:fixed;inset:0;z-index:300;background:#0a0a0f;flex-direction:column}
+.meteor-bar{background:rgba(10,10,15,.96);border-bottom:1px solid rgba(0,255,200,.2);padding:0 16px;height:48px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.back-btn{background:rgba(0,255,200,.15);border:1px solid rgba(0,255,200,.3);color:#00ffc8;padding:6px 14px;border-radius:4px;font-size:12px;cursor:pointer;font-family:var(--mono)}
+.meteor-label{font-size:11px;color:rgba(0,255,200,.7);font-family:var(--mono);letter-spacing:.1em}
+#meteorFrame{flex:1;border:none;width:100%}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<button class="close-btn" onclick="window.top.postMessage({type:'spContentClose'},'*')">✕ CLOSE</button>
+
+<!-- ラボシーン -->
+<div class="lab-scene">
+  <div class="lab-ceiling">
+    <div class="lab-ceiling-pipes">
+      <div class="pipe"></div><div class="pipe"></div><div class="pipe"></div>
+    </div>
+  </div>
+  <div class="status-leds">
+    <div class="led led-g"></div>
+    <div class="led led-g"></div>
+    <div class="led led-a"></div>
+  </div>
+  <div class="equipment">
+    <div class="monitor"><div class="monitor-screen"><div class="mon-line"></div><div class="mon-line"></div><div class="mon-line"></div><div class="mon-line"></div><div class="mon-line"></div></div></div>
+    <div class="flask" style="margin-left:8px"><div class="flask-liquid"></div></div>
+    <div class="tube"><div class="tube-bubble" style="animation-delay:0s"></div><div class="tube-bubble" style="animation-delay:1s"></div></div>
+    <div class="tube"><div class="tube-bubble" style="animation-delay:.5s"></div></div>
+    <div class="monitor" style="margin-left:8px"><div class="monitor-screen"><div class="mon-line"></div><div class="mon-line"></div><div class="mon-line"></div><div class="mon-line"></div><div class="mon-line"></div></div></div>
+  </div>
+  <div class="data-stream" id="dataStream"></div>
+  <div class="lab-bench"></div>
+</div>
+
+<!-- ヘッダー -->
+<div class="lab-header">
+  <div class="lab-title-block">
+    <div class="lab-dot"></div>
+    <div>
+      <div class="lab-title">SchoolPark Lab</div>
+      <div class="lab-subtitle">RESEARCH STATION — ONLINE</div>
+    </div>
+  </div>
+  <button class="switch-btn" onclick="openMeteor()">☄️ 隕石研究所</button>
+</div>
+
+<!-- コンテンツ -->
+<div class="lab-body">
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('research')">📄 研究レポート</div>
+    <div class="tab" onclick="switchTab('log')">💻 実験ログ</div>
+    <div class="tab" onclick="switchTab('scientist')">🔬 研究者</div>
+  </div>
+
+  <!-- 研究レポート -->
+  <div class="panel active" id="panel-research">
+    <div class="s-title">RESEARCH REPORTS</div>
+    <div class="report-list">
+
+      <div class="report">
+        <div class="report-head">
+          <div>
+            <div class="report-id">SP-LAB-001 / 2026-04</div>
+            <div class="report-title">DAO組織モデルの有効性検証 — SchoolParkにおける実践事例</div>
+            <div class="report-tag">DAO</div>
+          </div>
+        </div>
+        <div class="report-body">合同会社型DAOという新しい組織形態の実験。意思決定の分散化、トークンを使ったガバナンス、メンバー参加型運営の有効性をSchoolParkの実データで検証する。</div>
+        <div class="report-bar"><span class="status-badge badge-active">ACTIVE</span><span style="font-size:10px;color:var(--muted)">2026.04 〜</span><button class="read-btn">READ</button></div>
+      </div>
+
+      <div class="report">
+        <div class="report-head">
+          <div>
+            <div class="report-id">SP-LAB-002 / 2026-04</div>
+            <div class="report-title">EMUERトークンエコノミクス — 流通設計と価値安定化の研究</div>
+            <div class="report-tag">Tokenomics</div>
+          </div>
+        </div>
+        <div class="report-body">ERC-20トークンEMUERの流通量・取引量・価格推移を分析。コミュニティ内での利用促進と価値安定のための施策を科学的に検討する研究。</div>
+        <div class="report-bar"><span class="status-badge badge-active">ACTIVE</span><span style="font-size:10px;color:var(--muted)">2026.04 〜</span><button class="read-btn">READ</button></div>
+      </div>
+
+      <div class="report">
+        <div class="report-head">
+          <div>
+            <div class="report-id">SP-LAB-003 / 2026-03</div>
+            <div class="report-title">Web3リテラシー教育の効果測定 — note記事読後の行動変容調査</div>
+            <div class="report-tag">Education</div>
+          </div>
+        </div>
+        <div class="report-body">SchoolParkが販売するnoteコンテンツを読んだユーザーの行動変容を追跡。マネー・ライフ・ネットリテラシー教育の定量的効果を明らかにする。</div>
+        <div class="report-bar"><span class="status-badge badge-draft">DRAFT</span><span style="font-size:10px;color:var(--muted)">2026.03</span><button class="read-btn">READ</button></div>
+      </div>
+
+      <div class="report">
+        <div class="report-head">
+          <div>
+            <div class="report-id">SP-LAB-004 / 2026-02</div>
+            <div class="report-title">分散型SNSにおけるコミュニティ形成メカニズムの比較研究</div>
+            <div class="report-tag">SNS / Community</div>
+          </div>
+        </div>
+        <div class="report-body">X（旧Twitter）・Farcaster・Lensの3プラットフォームにおけるSchoolParkコミュニティの成長パターンを比較。分散型SNSの優位性を検証。</div>
+        <div class="report-bar"><span class="status-badge badge-done">COMPLETED</span><span style="font-size:10px;color:var(--muted)">2026.02</span><button class="read-btn">READ</button></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 実験ログ -->
+  <div class="panel" id="panel-log">
+    <div class="s-title">EXPERIMENT LOG</div>
+    <div class="log-terminal" id="logTerminal">
+      <div class="log-line"><span class="log-time">09:00:01</span><span class="log-ok">[SYS]  SchoolPark Lab initialized. All systems nominal.</span></div>
+      <div class="log-line"><span class="log-time">09:00:03</span><span class="log-info">[NET]  Connected to Ethereum mainnet. Block: 21,847,302</span></div>
+      <div class="log-line"><span class="log-time">09:00:05</span><span class="log-ok">[DB]   Firebase Firestore: CONNECTED</span></div>
+      <div class="log-line"><span class="log-time">09:01:12</span><span class="log-info">[LAB]  Loading SP-LAB-001 dataset...</span></div>
+      <div class="log-line"><span class="log-time">09:01:14</span><span class="log-ok">[LAB]  Dataset loaded. Records: 1,247 entries</span></div>
+      <div class="log-line"><span class="log-time">09:02:30</span><span class="log-warn">[WARN] EMUER circulation anomaly detected. Investigating...</span></div>
+      <div class="log-line"><span class="log-time">09:02:45</span><span class="log-ok">[LAB]  Anomaly resolved. Normal trading pattern confirmed.</span></div>
+      <div class="log-line"><span class="log-time">09:05:00</span><span class="log-info">[NOTE] SP-LAB-003 draft updated. Section 2 added.</span></div>
+      <div class="log-line"><span class="log-time">09:10:22</span><span class="log-ok">[SYS]  All experiments running. Awaiting data collection.</span></div>
+      <div id="liveLogs"></div>
+      <div><span class="log-cursor"></span></div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px">
+      <button onclick="addLog()" style="background:rgba(0,255,136,.1);border:1px solid var(--border);color:var(--green);padding:7px 14px;border-radius:3px;font-size:11px;cursor:pointer;font-family:var(--mono)">▶ RUN EXPERIMENT</button>
+      <button onclick="clearLogs()" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:var(--red);padding:7px 14px;border-radius:3px;font-size:11px;cursor:pointer;font-family:var(--mono)">■ CLEAR</button>
+    </div>
+  </div>
+
+  <!-- 研究者 -->
+  <div class="panel" id="panel-scientist">
+    <div class="s-title">YOUR SCIENTIST PROFILE</div>
+    <div class="scientist-badge">
+      <div class="sb-icon">🔬</div>
+      <div class="sb-name">Research Scientist</div>
+      <div class="sb-rank">RANK: JUNIOR RESEARCHER</div>
+      <div class="sb-bars">
+        <div class="sb-bar-row">
+          <div class="sb-bar-label">Web3</div>
+          <div class="sb-bar-track"><div class="sb-bar-fill" style="width:65%"></div></div>
+          <div style="font-size:10px;color:var(--green);min-width:30px">65%</div>
+        </div>
+        <div class="sb-bar-row">
+          <div class="sb-bar-label">DAO</div>
+          <div class="sb-bar-track"><div class="sb-bar-fill" style="width:48%"></div></div>
+          <div style="font-size:10px;color:var(--green);min-width:30px">48%</div>
+        </div>
+        <div class="sb-bar-row">
+          <div class="sb-bar-label">Tokenomics</div>
+          <div class="sb-bar-track"><div class="sb-bar-fill" style="width:30%"></div></div>
+          <div style="font-size:10px;color:var(--green);min-width:30px">30%</div>
+        </div>
+        <div class="sb-bar-row">
+          <div class="sb-bar-label">Education</div>
+          <div class="sb-bar-track"><div class="sb-bar-fill" style="width:72%"></div></div>
+          <div style="font-size:10px;color:var(--green);min-width:30px">72%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="s-title">RESEARCH ACHIEVEMENTS</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:4px;padding:10px 12px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">📄</span>
+        <div><div style="font-size:12px;font-weight:700;color:#fff">First Report</div><div style="font-size:10px;color:var(--muted)">最初のレポートを読んだ</div></div>
+        <span style="margin-left:auto;font-size:18px">✅</span>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:4px;padding:10px 12px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">☄️</span>
+        <div><div style="font-size:12px;font-weight:700;color:#fff">Meteorite Explorer</div><div style="font-size:10px;color:var(--muted)">隕石研究所を訪れた</div></div>
+        <span style="margin-left:auto;font-size:18px">🔒</span>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:4px;padding:10px 12px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">🧪</span>
+        <div><div style="font-size:12px;font-weight:700;color:#fff">Lab Veteran</div><div style="font-size:10px;color:var(--muted)">実験ログを10回実行した</div></div>
+        <span style="margin-left:auto;font-size:18px">🔒</span>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;padding:12px;background:rgba(0,200,255,.06);border:1px solid rgba(0,200,255,.15);border-radius:4px">
+      <div style="font-size:11px;color:var(--cyan);font-family:var(--mono);margin-bottom:6px">> 隕石研究所との連携</div>
+      <div style="font-size:12px;color:var(--muted);font-family:'Zen Maru Gothic',sans-serif;line-height:1.7">下のボタンからEmuの「隕石研究所」に切り替えられます。SchoolPark研究所と隕石研究所を行き来して、2つの研究分野を探求してください。</div>
+      <button onclick="openMeteor()" style="margin-top:10px;background:rgba(0,200,255,.15);border:1px solid rgba(0,200,255,.3);color:var(--cyan);padding:8px 16px;border-radius:4px;font-size:12px;cursor:pointer;font-family:var(--mono);width:100%">☄️ 隕石研究所に切り替え →</button>
+    </div>
+  </div>
+</div>
+
+<!-- 隕石研究所オーバーレイ -->
+<div id="meteorOverlay" style="display:none;position:fixed;inset:0;z-index:300;background:#0a0a0f;flex-direction:column">
+  <div class="meteor-bar">
+    <button class="back-btn" onclick="closeMeteor()">← SchoolPark Lab</button>
+    <div class="meteor-label">☄️ METEORITE RESEARCH LAB — EMU EVENT</div>
+  </div>
+  <iframe id="meteorFrame" src="" style="flex:1;border:none;width:100%"></iframe>
+</div>
+
+<script>
+// ========== データストリーム ==========
+const HEX='0123456789ABCDEF';
+function genStream(){
+  let s='';
+  for(let i=0;i<10;i++){
+    for(let j=0;j<4;j++)s+=HEX[Math.floor(Math.random()*16)];
+    s+=' ';
+    if(i%3===2)s+='\n';
+  }
+  return s;
+}
+setInterval(()=>{
+  const el=document.getElementById('dataStream');
+  if(el) el.textContent=genStream();
+},800);
+
+// ========== タブ ==========
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',['research','log','scientist'][i]===name)});
+  document.querySelectorAll('.panel').forEach(p=>{p.classList.toggle('active',p.id==='panel-'+name)});
+}
+
+// ========== 実験ログ ==========
+let logCount=0;
+const EXPERIMENT_LOGS=[
+  (t)=>`[EXP]  Running DAO governance simulation... t+${t}s`,
+  (t)=>`[DATA] Fetching EMUER on-chain data... ${Math.floor(Math.random()*10000)} transactions found`,
+  (t)=>`[CALC] Calculating community growth rate: +${(Math.random()*5).toFixed(2)}% / week`,
+  (t)=>`[OK]   Hypothesis SP-H-00${Math.floor(Math.random()*9)+1} confirmed. p-value: ${(Math.random()*.04+.001).toFixed(4)}`,
+  (t)=>`[NET]  New block mined. Gas: ${Math.floor(20+Math.random()*15)} gwei`,
+  (t)=>`[LAB]  Sample size updated: n=${Math.floor(1000+Math.random()*500)}`,
+  (t)=>`[WARN] Outlier detected in dataset. Flagging for review.`,
+  (t)=>`[SYS]  Memory usage: ${Math.floor(40+Math.random()*30)}% | CPU: ${Math.floor(10+Math.random()*20)}%`,
+];
+function addLog(){
+  const el=document.getElementById('liveLogs');
+  const log=EXPERIMENT_LOGS[logCount%EXPERIMENT_LOGS.length];
+  logCount++;
+  const now=new Date();
+  const time=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const text=log(logCount);
+  const cls=text.includes('[OK]')||text.includes('[SYS]')||text.includes('[DB]')?'log-ok':text.includes('[WARN]')?'log-warn':'log-info';
+  const line=document.createElement('div');
+  line.className='log-line';
+  line.innerHTML=`<span class="log-time">${time}</span><span class="${cls}">${text}</span>`;
+  el.appendChild(line);
+  const t=document.getElementById('logTerminal');
+  t.scrollTop=t.scrollHeight;
+  // Meteorite achievementのアンロック演出
+  if(logCount>=10){
+    const achievements=document.querySelectorAll('.sb-bar-fill');
+    if(achievements.length>0) achievements[0].style.width='75%';
+  }
+}
+function clearLogs(){document.getElementById('liveLogs').innerHTML='';}
+
+// ========== 隕石研究所 ==========
+function openMeteor(){
+  const overlay=document.getElementById('meteorOverlay');
+  overlay.style.display='flex';
+  document.getElementById('meteorFrame').src='/schoolpark/meteorite-lab.html';
+  // 実績解除
+  const locks=document.querySelectorAll('.scientist-badge ~ div .report-bar, #panel-scientist .sb-bar-fill');
+}
+function closeMeteor(){
+  document.getElementById('meteorOverlay').style.display='none';
+  document.getElementById('meteorFrame').src='';
+}
+// 隕石研究所からのメッセージ受信（spContentClose等）
+window.addEventListener('message',(e)=>{
+  if(e.data&&e.data.type==='spContentClose'){
+    // 子iframe内で閉じるが押されたら隕石研究所を閉じてこちらに戻る
+    closeMeteor();
+  }
+});
+</script>
+</body>
+</html>
