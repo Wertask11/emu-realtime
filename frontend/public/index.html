@@ -1988,7 +1988,7 @@ body.paypay-mode #pp-post-fab {
       <span class="spmap-nav-link" onclick="spMapNavClick('tutorial')">チュートリアル</span>
     </div>
     <button class="spmap-ticket-btn" onclick="spMapLinkClick('ticket')">チケット購入</button>
-    <button class="spmap-close-x" onclick="closeSpMap()" title="閉じる">✕</button>
+    <!-- ✕ボタン廃止: SchoolParkが常設メイン画面のため閉じるボタンは不要 -->
   </nav>
 
   <!-- Info Bar -->
@@ -6962,7 +6962,7 @@ const SP_POIS = [
   { id:"play6",  name:"Fishing 釣り",           icon:"🎣", zone:"play",  px:42, py:89, desc:"つって・しらべて・たのしもう！せかいのすごいさかなとつりかた",       status:"open", page:"/schoolpark/south-fishing.html" },
   { id:"play7",  name:"Terminal Station 駅舎（下）",icon:"🚇", zone:"play",  px:57, py:88, desc:"南エリア中央の交通ハブ。各方面への乗り換えポイント",                status:"open", page:"/schoolpark/south-station2.html" },
   // 交通・インフラ（ゲート）
-  { id:"star1",  name:"Dawn Plaza 夜明けの広場",     icon:"🌅", zone:"star", px:19, py:90, desc:"Gate A — 夜明けの広場。新しい一日の始まり。毎朝ここからSchoolParkへ",    status:"coming" },
+  /* Gate A — Dawn Plaza 削除済み */
   { id:"star2",  name:"Frontier Gate 前線の砦",      icon:"🏰", zone:"star", px:50, py:94, desc:"Gate B — 南エリアの正面玄関。Emuの探索・遊びへのゲートウェイ",           status:"open",   action:"openExplore" },
   { id:"star3",  name:"Creative Academy 学びの門",   icon:"🎓", zone:"star", px:52, py:7,  desc:"Gate C — 北エリアの入口。学びと創造の世界へようこそ。Emuへのゲートウェイ",  status:"open", action:"openEmu" },
   { id:"star4",  name:"Starry Sky Station 星空の駅", icon:"🚀", zone:"star", px:88, py:86, desc:"Gate D — 星空の駅。宇宙への扉。EMUERトークンで未来を切り拓く",         status:"coming" },
@@ -7093,15 +7093,13 @@ function openSpMap(gate) {
   /* JS駆動アニメ起動 */
   requestAnimationFrame(() => _startSpLive());
 
-  // スクロール中央揃え（ズームを考慮）
+  // スクロール中央揃え（レイアウトサイズ基準で中央に合わせる）
   requestAnimationFrame(() => {
     const vp = document.getElementById("spMapVP");
     const inner = document.getElementById("spMapInner");
     if (!vp || !inner) return;
-    const vizW = inner.offsetWidth  * _spMapZoomLevel;
-    const vizH = inner.offsetHeight * _spMapZoomLevel;
-    vp.scrollLeft = Math.max(0, (vizW - vp.clientWidth)  / 2);
-    vp.scrollTop  = Math.max(0, (vizH - vp.clientHeight) / 2);
+    vp.scrollLeft = Math.max(0, (inner.offsetWidth  - vp.clientWidth)  / 2);
+    vp.scrollTop  = Math.max(0, (inner.offsetHeight - vp.clientHeight) / 2);
   });
 
   // マップ内ホイールがメイン画面にバブルしないよう1回だけ設定
@@ -7489,15 +7487,25 @@ function spMapNavClick(type) {
     return;
   }
   if (type === 'events') {
-    openSpModal('🎪 探索・イベント', `
-      <div style="display:flex;gap:6px;margin-bottom:14px">
-        <button id="spEvTab1" onclick="spEvSwitch('探索')" style="flex:1;padding:7px;border-radius:8px;border:1px solid rgba(212,168,67,0.5);background:rgba(212,168,67,0.2);color:#D4A843;font-size:0.78rem;font-weight:700;cursor:pointer">🔍 探索</button>
-        <button id="spEvTab2" onclick="spEvSwitch('イベント')" style="flex:1;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#aaa;font-size:0.78rem;cursor:pointer">🎉 イベント</button>
-        <button id="spEvTab3" onclick="spEvSwitch('campaign')" style="flex:1;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#aaa;font-size:0.78rem;cursor:pointer">📢 キャンペーン</button>
-      </div>
-      <div id="spEvList" style="display:flex;flex-direction:column;gap:10px"><div style="color:#777;text-align:center;padding:20px;font-size:0.8rem">⏳ 読み込み中…</div></div>
-    `);
-    spEvSwitch('探索');
+    const evItems = [
+      { icon:'♟️', label:'ECHO FIELD', color:'rgba(74,158,255,0.18)', border:'rgba(74,158,255,0.45)', desc:'戦略・思考ゲーム。AIと対戦しながら判断力を鍛えよう。', fn:'openEchoFieldDirect()' },
+      { icon:'🔒', label:'秘密のとびら', color:'rgba(255,215,0,0.1)', border:'rgba(255,215,0,0.4)', desc:'謎を解いて扉を開けるとEMUER報酬が手に入る。探索とアドベンチャーが融合。', fn:'openSecretDoor()' },
+      { icon:'🍎', label:'林檎の方程式', color:'rgba(184,48,40,0.18)', border:'rgba(184,48,40,0.45)', desc:'思考実験・論理パズル。哲学と数式の境界を遊ぶ先行公開コンテンツ。', fn:'openRingoGame()' },
+      { icon:'☄️', label:'隕石研究所', color:'rgba(0,180,130,0.2)', border:'rgba(0,220,170,0.5)', desc:'隕石・宇宙・地球の謎を探究する研究所。科学コンテンツでEmuの世界が広がる。', fn:'openMeteoriteLab()' },
+    ];
+    openSpModal('🎪 イベント・コンテンツ', evItems.map(it => `
+      <div style="background:${it.color};border:1px solid ${it.border};border-radius:12px;padding:16px;cursor:pointer;transition:opacity .15s"
+        onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'"
+        onclick="closeSpModal();setTimeout(()=>{ closeSpMap(); ${it.fn} },80)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:1.8rem">${it.icon}</span>
+          <div>
+            <div style="font-size:0.9rem;font-weight:700;color:#e8e8f0">${it.label}</div>
+          </div>
+        </div>
+        <div style="font-size:0.76rem;color:#aaa;line-height:1.6">${it.desc}</div>
+        <div style="margin-top:10px;text-align:right;font-size:0.72rem;color:${it.border.replace('0.45','0.9').replace('0.4','0.9').replace('0.5','0.9')}">▶ 開く</div>
+      </div>`).join(''));
     return;
   }
   if (type === 'tutorial') {
@@ -7673,7 +7681,7 @@ function _applySpMapZoom() {
   const inner = document.getElementById("spMapInner");
   if (inner) {
     inner.style.transform = `scale(${_spMapZoomLevel})`;
-    inner.style.transformOrigin = "top left";  /* top-left でスクロール動作を直感的に */
+    inner.style.transformOrigin = "center center";  /* center で常に中央表示 */
   }
 }
 

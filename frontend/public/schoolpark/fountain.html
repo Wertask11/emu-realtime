@@ -685,7 +685,7 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
     <!-- タブ切り替え -->
     <div style="display:flex;gap:6px;margin-bottom:14px">
       <button id="fpRankTabSP" onclick="fpRankSwitch('sp')" style="flex:1;padding:7px 4px;border-radius:8px;border:1px solid rgba(249,115,22,0.5);background:rgba(249,115,22,0.15);color:#f97316;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit">🏛️ コンテンツ訪問</button>
-      <button id="fpRankTabEmu" onclick="fpRankSwitch('emu')" style="flex:1;padding:7px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#888;font-size:0.75rem;cursor:pointer;font-family:inherit">⭐ Emu人気投稿</button>
+      <button id="fpRankTabEmu" onclick="fpRankSwitch('emu')" style="flex:1;padding:7px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#888;font-size:0.75rem;cursor:pointer;font-family:inherit">⭐ Emuランキング</button>
     </div>
 
     <!-- SchoolPark訪問ランキング -->
@@ -725,7 +725,7 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 
     <!-- Emu人気投稿ランキング -->
     <div id="fpRankListEmu" style="display:none">
-      <div style="font-size:0.68rem;color:var(--text2);margin-bottom:10px">Emuでいいねが多い投稿トップ5</div>
+      <div style="font-size:0.68rem;color:var(--text2);margin-bottom:10px">good数・change数・投稿数の合計スコアで上位6名を表示</div>
       <div id="fpEmuRankItems"><div class="fp-loading">⭐ 読み込み中…</div></div>
     </div>
 
@@ -1367,24 +1367,42 @@ function fpLoadEmuRanking() {
   if (!container || !fpDB || !fpFBLib) return;
   container.innerHTML = '<div class="fp-loading">⭐ 読み込み中…</div>';
   const lib = fpFBLib;
-  const q = lib.query(
-    lib.collection(fpDB, 'posts'),
-    lib.orderBy('goodCount', 'desc'),
-    lib.limit(5)
-  );
-  lib.getDocs(q).then(snap => {
+  // 全投稿を取得してユーザーごとに集計（good・change・投稿数）
+  lib.getDocs(lib.collection(fpDB, 'posts')).then(snap => {
     if (snap.empty) { container.innerHTML = '<div class="fp-loading">投稿がありません</div>'; return; }
-    const medals = ['🥇','🥈','🥉','4','5'];
-    const colors = ['#fbbf24','#94a3b8','#cd7c4e','var(--text2)','var(--text2)'];
-    container.innerHTML = snap.docs.map((d, i) => {
+
+    // ユーザーごとに集計
+    const userMap = {};
+    snap.docs.forEach(d => {
       const p = d.data();
-      const title = (p.title||'（無題）').replace(/</g,'&lt;');
-      const good  = p.goodCount || 0;
-      return `<div class="fp-rank-item">
-        <div class="fp-rank-num" style="color:${colors[i]}">${medals[i]}</div>
-        <div style="font-size:1.2rem;width:34px;text-align:center;flex-shrink:0">📝</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">${title}</div><div class="fp-rank-score">Emu投稿 · 👍 ${good}</div></div>
-        <div class="fp-rank-val">${good} good</div>
+      const addr = p.address || p.userId || 'unknown';
+      if (!userMap[addr]) userMap[addr] = { addr, good:0, change:0, posts:0 };
+      userMap[addr].good   += (p.goodCount   || 0);
+      userMap[addr].change += (p.changeCount || 0);
+      userMap[addr].posts  += 1;
+    });
+
+    // total = good + change + posts でスコア化、降順ソート
+    const users = Object.values(userMap)
+      .map(u => ({ ...u, total: u.good + u.change + u.posts }))
+      .sort((a,b) => b.total - a.total)
+      .slice(0, 6);
+
+    const medals = ['🥇','🥈','🥉','4','5','6'];
+    const colors = ['#fbbf24','#94a3b8','#cd7c4e','var(--text2)','var(--text2)','var(--text2)'];
+    container.innerHTML = users.map((u, i) => {
+      const shortAddr = u.addr.length > 10 ? u.addr.slice(0,6)+'…'+u.addr.slice(-4) : u.addr;
+      return `<div class="fp-rank-item" style="align-items:flex-start;flex-direction:column;gap:4px;padding:10px 8px">
+        <div style="display:flex;align-items:center;gap:8px;width:100%">
+          <div class="fp-rank-num" style="color:${colors[i]}">${medals[i]}</div>
+          <div style="font-size:0.85rem;flex:1;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${shortAddr}</div>
+          <div class="fp-rank-val" style="font-size:0.7rem">${u.total} pt</div>
+        </div>
+        <div style="display:flex;gap:12px;font-size:0.68rem;color:var(--text2);padding-left:28px">
+          <span>👍 ${u.good}</span>
+          <span>🤝 ${u.change}</span>
+          <span>📝 ${u.posts}件</span>
+        </div>
       </div>`;
     }).join('');
   }).catch(() => { container.innerHTML = '<div class="fp-loading">⚠️ 読み込みエラー</div>'; });
