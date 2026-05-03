@@ -5506,6 +5506,13 @@ function getOfficialNFT(key) {
 
 function goTomainapp() {
   console.trace("🔥 goTomainapp 呼ばれた");
+  // ★ メンテナンス中はオーナー以外をブロック（ウォレット接続後なので正確に判定できる）
+  if (MAINTENANCE_MODE && !_isOwnerAccess()) {
+    walletScreen.style.display = "none";
+    const _ms = document.getElementById('maintenanceScreen');
+    if (_ms) { _ms.style.display = 'flex'; _startMaintenanceCountdown(); }
+    return;
+  }
   walletScreen.style.display = "none";
   mainApp.style.display = "block";
   document.getElementById("siteFooter").style.display = "block";
@@ -5540,15 +5547,9 @@ function _startMaintenanceCountdown() {
 }
 
 /* ======= ロゴ → ウォレット → メイン ======= */
+// ★ ロゴクリック時はウォレット画面を常に表示（メンテチェックはgoTomainapp内で行う）
 logoScreen.addEventListener("click", () => {
   logoScreen.style.display = "none";
-  // メンテナンスモード中かつオーナーでない場合 → メンテ画面
-  if (MAINTENANCE_MODE && !_isOwnerAccess()) {
-    const ms = document.getElementById('maintenanceScreen');
-    ms.style.display = 'flex';
-    _startMaintenanceCountdown();
-    return;
-  }
   walletScreen.style.display = "flex";
 });
 
