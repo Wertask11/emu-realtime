@@ -2981,6 +2981,22 @@ const logoScreen = document.getElementById("logoScreen");
 const walletScreen = document.getElementById("walletScreen");
 const mainApp = document.getElementById("mainApp");
 
+/* ═══════════════════════════════════════
+   オーナーアドレス・メンテナンス設定
+   ★ _fpDirectReturn より前に定義する必要があるためここに置く
+   MAINTENANCE_MODE = true  → 一般ユーザーはメンテ画面へ
+   MAINTENANCE_MODE = false → 通常営業
+═══════════════════════════════════════ */
+const SP_OWNER = "0xdcc687c05f130e57597a8525771299a4efb6edf7";
+const MAINTENANCE_MODE = true;
+const MAINTENANCE_END  = new Date('2026-05-20T00:00:00+09:00');
+function _isOwnerAccess() {
+  const saved = (localStorage.getItem('emuWallet') || '').toLowerCase();
+  if (saved && saved === SP_OWNER.toLowerCase()) return true;
+  if (new URLSearchParams(location.search).get('admin') === '1') return true;
+  return false;
+}
+
 // SchoolParkコンテンツから戻った場合のフラグ（currentUserId宣言前なのでフラグのみ）
 const _fpDirectReturn   = window.location.search.includes("direct=1") && !!localStorage.getItem("emuWallet");
 const _fpToSchoolpark   = window.location.search.includes("schoolpark=1");
@@ -3124,18 +3140,25 @@ let posts = [];
 // SchoolParkコンテンツから戻った場合：ロゴ/ウォレット画面をスキップしてメインへ
 if (_fpDirectReturn) {
   const _savedWallet = localStorage.getItem("emuWallet");
-  logoScreen.style.display   = "none";
-  walletScreen.style.display = "none";
-  mainApp.style.display      = "block";
-  const _footer = document.getElementById("siteFooter");
-  if (_footer) _footer.style.display = "block";
-  window.connectedAccount = _savedWallet;
-  currentUserId = _savedWallet;
-  const _walletBtn = document.getElementById("walletAddressButton");
-  if (_walletBtn) _walletBtn.textContent = _savedWallet.slice(0,6) + "..." + _savedWallet.slice(-4);
+  logoScreen.style.display = "none";
   window.history.replaceState(null, "", "/");
-  // ★ 常にSchoolParkマップを自動的に開く（同期）
-  if (typeof openSpMap === "function") openSpMap();
+
+  // ★ メンテナンスモード中はオーナー以外を弾く
+  if (MAINTENANCE_MODE && !_isOwnerAccess()) {
+    const _ms = document.getElementById('maintenanceScreen');
+    if (_ms) { _ms.style.display = 'flex'; _startMaintenanceCountdown(); }
+  } else {
+    walletScreen.style.display = "none";
+    mainApp.style.display      = "block";
+    const _footer = document.getElementById("siteFooter");
+    if (_footer) _footer.style.display = "block";
+    window.connectedAccount = _savedWallet;
+    currentUserId = _savedWallet;
+    const _walletBtn = document.getElementById("walletAddressButton");
+    if (_walletBtn) _walletBtn.textContent = _savedWallet.slice(0,6) + "..." + _savedWallet.slice(-4);
+    // ★ 常にSchoolParkマップを自動的に開く（同期）
+    if (typeof openSpMap === "function") openSpMap();
+  }
 }
 
 //goodした記事・changeした記事
@@ -5490,22 +5513,6 @@ function goTomainapp() {
   if (typeof openSpMap === "function") openSpMap();
 }
 
-/* ═══════════════════════════════════════
-   メンテナンス設定
-   MAINTENANCE_MODE = true  → 一般ユーザーはメンテ画面へ
-   MAINTENANCE_MODE = false → 通常営業
-═══════════════════════════════════════ */
-const MAINTENANCE_MODE = true;
-const MAINTENANCE_END  = new Date('2026-05-20T00:00:00+09:00');
-
-function _isOwnerAccess() {
-  // ① 保存済みウォレットがオーナーアドレスと一致
-  const saved = (localStorage.getItem('emuWallet') || '').toLowerCase();
-  if (saved && saved === SP_OWNER.toLowerCase()) return true;
-  // ② URLパラメータ ?admin=1 （緊急バイパス）
-  if (new URLSearchParams(location.search).get('admin') === '1') return true;
-  return false;
-}
 
 function _startMaintenanceCountdown() {
   function tick() {
@@ -7160,7 +7167,6 @@ function closeExplore() {
   document.getElementById("exploreOverlay").style.display = "none";
 }
 
-const SP_OWNER = "0xdcc687c05f130e57597a8525771299a4efb6edf7";
 function openSchoolPark() {
   // 4ゲート選択画面を廃止 → 直接SchoolParkマップを開く
   if (typeof openSpMap === "function") openSpMap();
