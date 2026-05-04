@@ -17,7 +17,9 @@ body.light {
 body {
   margin: 0; background: var(--bg-main); color: var(--text-main);
   font-family: system-ui, sans-serif;
+  overflow-y: auto;
 }
+html { overflow-y: auto; }
 header {
   padding: 16px; border-bottom: 1px solid var(--border);
   background: var(--bg-header); display: flex;
@@ -32,6 +34,37 @@ header h1 { margin: 0; font-size: 18px; }
 }
 .header-btn:hover { opacity: 0.85; }
 #container { padding: 24px; }
+
+/* 施設報告管理 */
+#reportsPanel { display:none; }
+.rp-tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+.rp-tab { cursor:pointer; padding:6px 14px; border-radius:20px; font-size:13px; border:1px solid var(--border); background:transparent; color:var(--text-sub); }
+.rp-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.rp-filter { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+.rp-chip { cursor:pointer; padding:4px 12px; border-radius:20px; font-size:12px; border:1px solid var(--border); background:transparent; color:var(--text-sub); }
+.rp-chip.active { border-color:var(--accent-green); color:var(--accent-green); background:rgba(78,201,176,0.1); }
+.rp-stats { display:flex; gap:10px; margin-bottom:16px; }
+.rp-stat { flex:1; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:10px; text-align:center; }
+.rp-stat-val { font-size:1.4rem; font-weight:700; color:var(--accent); }
+.rp-stat-lbl { font-size:11px; color:var(--text-sub); margin-top:2px; }
+.rp-card { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+.rp-card.resolved { opacity:.5; }
+.rp-meta { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:7px; }
+.rp-type { padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700; background:rgba(86,156,214,.2); color:var(--accent); border:1px solid rgba(86,156,214,.3); }
+.rp-status { padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700; }
+.rp-pending { background:rgba(249,115,22,.12); color:#f97316; border:1px solid rgba(249,115,22,.25); }
+.rp-done { background:rgba(78,201,176,.12); color:var(--accent-green); border:1px solid rgba(78,201,176,.25); }
+.rp-date { font-size:11px; color:var(--text-sub); }
+.rp-user { font-size:12px; color:var(--text-sub); margin-bottom:6px; }
+.rp-body { font-size:13px; line-height:1.65; margin-bottom:8px; white-space:pre-wrap; word-break:break-word; }
+.rp-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.rp-btn { padding:5px 12px; border-radius:7px; font-size:12px; font-weight:700; border:none; cursor:pointer; font-family:inherit; }
+.rp-btn-resolve { background:rgba(78,201,176,.2); color:var(--accent-green); border:1px solid rgba(78,201,176,.3); }
+.rp-btn-reopen { background:rgba(86,156,214,.15); color:var(--accent); border:1px solid rgba(86,156,214,.3); }
+.rp-btn-delete { background:rgba(239,68,68,.1); color:#ef4444; border:1px solid rgba(239,68,68,.3); }
+.rp-empty { text-align:center; padding:32px; color:var(--text-sub); font-size:14px; }
+.rp-refresh { cursor:pointer; padding:5px 12px; background:transparent; color:var(--accent); border:1px solid var(--border); border-radius:7px; font-size:12px; font-family:inherit; margin-bottom:12px; }
+.rp-owner-lock { text-align:center; padding:40px 20px; color:var(--text-sub); font-size:14px; line-height:1.8; }
 .section-title { margin-bottom: 16px; font-size: 16px; color: var(--text-sub); }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
 .card {
@@ -111,6 +144,7 @@ ul.sub-list li:hover { text-decoration: underline; }
     <div class="card" onclick="switchMode('net')">ネットリテラシー</div>
     <div class="card" onclick="switchMode('life')">ライフリテラシー</div>
     <div class="card" onclick="switchMode('blue')">ブルーファイル</div>
+    <div class="card" onclick="switchMode('reports')" style="border-color:var(--accent-green);color:var(--accent-green);">🚨 施設報告管理</div>
   </div>
 
   <div id="list"></div>
@@ -126,6 +160,33 @@ ul.sub-list li:hover { text-decoration: underline; }
     <h2 id="detailTitle"></h2>
     <div id="detailList"></div>
     <div id="detailBody"></div>
+  </div>
+
+  <!-- 施設報告管理パネル -->
+  <div id="reportsPanel">
+    <div id="rpOwnerLock" class="rp-owner-lock" style="display:none;">🔒 オーナーのみ閲覧できます</div>
+    <div id="rpMain">
+      <div class="rp-stats">
+        <div class="rp-stat"><div class="rp-stat-val" id="rpTotal">—</div><div class="rp-stat-lbl">総件数</div></div>
+        <div class="rp-stat"><div class="rp-stat-val" id="rpPending">—</div><div class="rp-stat-lbl">未対応</div></div>
+        <div class="rp-stat"><div class="rp-stat-val" id="rpResolved">—</div><div class="rp-stat-lbl">対応済み</div></div>
+      </div>
+      <div class="rp-tabs">
+        <span class="rp-tab active" onclick="rpSwitchFacility('all',this)">📋 全件</span>
+        <span class="rp-tab" onclick="rpSwitchFacility('hospital',this)">🏥 病院</span>
+        <span class="rp-tab" onclick="rpSwitchFacility('police',this)">🚔 警察署</span>
+        <span class="rp-tab" onclick="rpSwitchFacility('vigilante',this)">🛡️ 自警団</span>
+        <span class="rp-tab" onclick="rpSwitchFacility('gym',this)">💪 ジム</span>
+        <span class="rp-tab" onclick="rpSwitchFacility('fire',this)">🚒 消防署</span>
+      </div>
+      <div class="rp-filter">
+        <span class="rp-chip active" onclick="rpSetFilter('all',this)">すべて</span>
+        <span class="rp-chip" onclick="rpSetFilter('pending',this)">⏳ 未対応</span>
+        <span class="rp-chip" onclick="rpSetFilter('resolved',this)">✅ 対応済み</span>
+      </div>
+      <button class="rp-refresh" onclick="rpLoad()">↻ 更新</button>
+      <div id="rpList"><div class="rp-empty">読み込み中...</div></div>
+    </div>
   </div>
 
   <!-- お預かり箱（ユーザー送信用） -->
@@ -271,6 +332,30 @@ function toggleTheme() {
 function switchMode(mode) {
   currentMode = mode;
   currentBlueMain = "";
+
+  // 施設報告管理モード
+  var rp = document.getElementById('reportsPanel');
+  var cont = document.getElementById('container');
+  if(mode === 'reports'){
+    // 既存パネルを隠す
+    document.getElementById('list').style.display = 'none';
+    document.getElementById('sub').style.display = 'none';
+    document.getElementById('detail').style.display = 'none';
+    rp.style.display = 'block';
+    document.getElementById('headerTitle').textContent = 'Room1｜施設報告管理';
+    // オーナーチェック
+    if(!rpIsOwner()){
+      document.getElementById('rpOwnerLock').style.display = 'block';
+      document.getElementById('rpMain').style.display = 'none';
+    } else {
+      document.getElementById('rpOwnerLock').style.display = 'none';
+      document.getElementById('rpMain').style.display = 'block';
+      rpLoad();
+    }
+    return;
+  }
+  // 通常モード
+  rp.style.display = 'none';
   renderList();
 }
 
@@ -380,6 +465,118 @@ function backToSub() {
 }
 
 function escJs(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+// ══════════════════════════════════════
+// 施設報告管理
+// ══════════════════════════════════════
+var SP_OWNER = '0xdcc687c05f130e57597a8525771299a4efb6edf7';
+var rpFacility = 'all';
+var rpFilter = 'all';
+var RP_FACILITIES = {
+  hospital:  { label:'🏥 病院',   col:'hospital_inquiries',  nameKey:'name',     bodyKey:'content' },
+  police:    { label:'🚔 警察署', col:'police_reports',       nameKey:'reporter', bodyKey:'content' },
+  vigilante: { label:'🛡️ 自警団', col:'vigilante_reports',    nameKey:'reporter', bodyKey:'content' },
+  gym:       { label:'💪 ジム',   col:'gym_challenges',        nameKey:'name',     bodyKey:'description' },
+  fire:      { label:'🚒 消防署', col:'fire_emergencies',      nameKey:'reporter', bodyKey:'content' }
+};
+
+function rpGetDb()    { return window.parent && window.parent.db    ? window.parent.db    : (window.top && window.top.db    ? window.top.db    : null); }
+function rpGetFb()    { return window.parent && window.parent.fbLib ? window.parent.fbLib : (window.top && window.top.fbLib ? window.top.fbLib : null); }
+function rpGetWallet(){ return ((window.parent && window.parent.connectedAccount) || (window.top && window.top.connectedAccount) || '').toLowerCase(); }
+function rpIsOwner()  { return rpGetWallet() === SP_OWNER.toLowerCase(); }
+
+function rpSwitchFacility(f, el){
+  rpFacility = f;
+  document.querySelectorAll('.rp-tab').forEach(function(t){ t.classList.remove('active'); });
+  el.classList.add('active');
+  rpLoad();
+}
+function rpSetFilter(f, el){
+  rpFilter = f;
+  document.querySelectorAll('.rp-chip').forEach(function(c){ c.classList.remove('active'); });
+  el.classList.add('active');
+  rpLoad();
+}
+
+function rpFmtDate(ts){
+  if(!ts) return '';
+  var d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('ja-JP',{month:'numeric',day:'numeric'}) + ' ' +
+         d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+}
+
+function rpCardHtml(docId, data, fkey){
+  var f = RP_FACILITIES[fkey];
+  var isPending = (data.status||'pending') === 'pending';
+  var name = data[f.nameKey] || '匿名';
+  var body = (data[f.bodyKey]||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  var extra = (fkey==='gym' && data.challenge) ? '<span style="font-size:11px;color:#22d3ee;">['+data.challenge+']</span> ' : '';
+  var resolveBtn = isPending
+    ? '<button class="rp-btn rp-btn-resolve" onclick="rpUpdateStatus(\''+fkey+'\',\''+docId+'\',\'resolved\')">✅ 対応済にする</button>'
+    : '<button class="rp-btn rp-btn-reopen" onclick="rpUpdateStatus(\''+fkey+'\',\''+docId+'\',\'pending\')">↩ 未対応に戻す</button>';
+  return '<div class="rp-card'+(isPending?'':' resolved')+'" id="rpc-'+fkey+'-'+docId+'">'+
+    '<div class="rp-meta">'+
+      '<span class="rp-type">'+f.label+'</span>'+
+      '<span class="rp-status '+(isPending?'rp-pending':'rp-done')+'">'+(isPending?'⏳ 未対応':'✅ 対応済')+'</span>'+
+      '<span class="rp-date">'+rpFmtDate(data.timestamp)+'</span>'+
+    '</div>'+
+    '<div class="rp-user">👤 '+name+'</div>'+
+    '<div class="rp-body">'+extra+body+'</div>'+
+    '<div class="rp-actions">'+resolveBtn+
+      '<button class="rp-btn rp-btn-delete" onclick="rpDelete(\''+fkey+'\',\''+docId+'\')">🗑️ 削除</button>'+
+    '</div></div>';
+}
+
+async function rpLoad(){
+  var db = rpGetDb(); var fb = rpGetFb();
+  var el = document.getElementById('rpList');
+  if(!db||!fb){ el.innerHTML='<div class="rp-empty">❌ DB未接続（ウォレット接続後に再度開いてください）</div>'; return; }
+  el.innerHTML='<div class="rp-empty">⏳ 読み込み中...</div>';
+
+  var allDocs = [];
+  var keys = rpFacility === 'all' ? Object.keys(RP_FACILITIES) : [rpFacility];
+  for(var i=0; i<keys.length; i++){
+    var k = keys[i];
+    var cfg = RP_FACILITIES[k];
+    try{
+      var q = fb.query(fb.collection(db, cfg.col), fb.orderBy('timestamp','desc'), fb.limit(50));
+      var snap = await fb.getDocs(q);
+      snap.docs.forEach(function(d){ allDocs.push({id:d.id, data:d.data(), key:k}); });
+    }catch(e){ console.warn('rpLoad error '+k, e); }
+  }
+
+  if(rpFilter==='pending')  allDocs = allDocs.filter(function(r){ return (r.data.status||'pending')==='pending'; });
+  if(rpFilter==='resolved') allDocs = allDocs.filter(function(r){ return r.data.status==='resolved'; });
+  allDocs.sort(function(a,b){ return (b.data.timestamp?.seconds||0) - (a.data.timestamp?.seconds||0); });
+
+  var total = allDocs.length;
+  var pending = allDocs.filter(function(r){ return (r.data.status||'pending')==='pending'; }).length;
+  document.getElementById('rpTotal').textContent   = total;
+  document.getElementById('rpPending').textContent  = pending;
+  document.getElementById('rpResolved').textContent = total - pending;
+
+  if(allDocs.length===0){ el.innerHTML='<div class="rp-empty">📭 該当する報告はありません</div>'; return; }
+  el.innerHTML = allDocs.map(function(r){ return rpCardHtml(r.id, r.data, r.key); }).join('');
+}
+
+async function rpUpdateStatus(fkey, docId, newStatus){
+  var db = rpGetDb(); var fb = rpGetFb();
+  if(!db||!fb) return;
+  try{
+    await fb.updateDoc(fb.doc(db, RP_FACILITIES[fkey].col, docId), { status: newStatus });
+    rpLoad();
+  }catch(e){ alert('更新失敗: '+e.message); }
+}
+
+async function rpDelete(fkey, docId){
+  if(!confirm('この報告を削除しますか？')) return;
+  var db = rpGetDb(); var fb = rpGetFb();
+  if(!db||!fb) return;
+  try{
+    await fb.deleteDoc(fb.doc(db, RP_FACILITIES[fkey].col, docId));
+    rpLoad();
+  }catch(e){ alert('削除失敗: '+e.message); }
+}
 
 // ══════════════════════════════════════
 // お預かり箱（ユーザー送信）
