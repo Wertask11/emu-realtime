@@ -476,13 +476,16 @@ async function loadConvertInfo(){
   const pending = Math.floor(good/10) + Math.floor(change/20)*3;
   document.getElementById('pendingDisplay').textContent = pending + ' EMUER';
 
-  // 実EMUER残高
+  // 実EMUER残高（ethers不要のBigInt変換）
   try{
     const contract = t && t.emuerContract;
     if(contract){
       const bal = await contract.balanceOf(addr);
-      const balVal = Math.floor(parseFloat((t.ethers||window.ethers).utils.formatUnits(bal,18)));
+      const balVal = _formatEMUER(bal);
       document.getElementById('balanceDisplay').textContent = balVal + ' EMUER';
+    } else {
+      const cached = _getCachedRealEmuer(t, addr);
+      if(cached !== null) document.getElementById('balanceDisplay').textContent = cached + ' EMUER';
     }
   }catch(e){ document.getElementById('balanceDisplay').textContent = '—'; }
 
@@ -525,7 +528,7 @@ async function tryLoadBalance(addr){
     const t=getTop(); const contract=t&&t.emuerContract;
     if(contract){
       const bal=await contract.balanceOf(addr);
-      const v=Math.floor(parseFloat((t.ethers||window.ethers).utils.formatUnits(bal,18)));
+      const v=_formatEMUER(bal);
       document.getElementById('balanceDisplay').textContent=v+' EMUER';
     }
   }catch(e){}
@@ -638,7 +641,8 @@ async function loadBalance(){
       }
       const tsCnt = document.getElementById('balTotalSpent');
       const rsCnt = document.getElementById('balRestrictionCount');
-      if(tsCnt) tsCnt.textContent = (spData.totalSpent ?? 0).toLocaleString() + ' 回';
+      // visitCount = 利用回数（新フィールド）、なければtotalSpentをEMUER消費量として表示
+      if(tsCnt) tsCnt.textContent = (spData.visitCount ?? 0).toLocaleString() + ' 回';
       if(rsCnt) rsCnt.textContent = (spData.restrictionCount ?? 0).toLocaleString() + ' 回';
     } else {
       document.getElementById('balSpEmuer').textContent = '未取得';
@@ -654,18 +658,52 @@ async function loadBalance(){
   document.getElementById('balPending').textContent = pending.toLocaleString();
 
   // ── 実EMUER（オンチェーン） ──
+  document.getElementById('balRealEmuer').textContent = '取得中...';
   try{
     const contract = t && t.emuerContract;
     if(contract){
       const balBN = await contract.balanceOf(addr);
-      const realVal = Math.floor(parseFloat((t.ethers||window.ethers).utils.formatUnits(balBN,18)));
+      // ethers.js不要でBigInt変換（iframeではethersが未定義のため）
+      const realVal = _formatEMUER(balBN);
       document.getElementById('balRealEmuer').textContent = realVal.toLocaleString();
     } else {
-      document.getElementById('balRealEmuer').textContent = '—';
+      // コントラクト未接続 → 親のキャッシュ値を参照
+      const cached = _getCachedRealEmuer(t, addr);
+      document.getElementById('balRealEmuer').textContent = cached !== null ? cached.toLocaleString() : '—';
     }
   }catch(e){
-    document.getElementById('balRealEmuer').textContent = 'エラー';
+    console.warn('実EMUER取得失敗:', e);
+    // フォールバック: 親のDOM・変数からキャッシュ値を取得
+    const cached = _getCachedRealEmuer(t, addr);
+    document.getElementById('balRealEmuer').textContent = cached !== null ? cached.toLocaleString() : 'エラー';
   }
+}
+
+// ── BigNumber → EMUER数値変換（ethers不要） ──
+function _formatEMUER(balBN){
+  try{
+    // ethers BigNumber / BigInt 両対応
+    const wei = BigInt(balBN.toString());
+    return Number(wei / BigInt('1000000000000000000'));
+  }catch(e){
+    return Math.floor(Number(balBN.toString()) / 1e18);
+  }
+}
+
+// ── 親ウィンドウのキャッシュから実EMUER取得 ──
+function _getCachedRealEmuer(t, addr){
+  if(!t) return null;
+  // 方法1: 親のグローバル変数 totalEmuer（myWallet開いた時に設定）
+  if(typeof t.totalEmuer === 'number' && t.totalEmuer > 0) return t.totalEmuer;
+  // 方法2: 親のDOM要素 walletTotalEmuer（syncPendingEmuerで更新）
+  try{
+    const el = t.document.getElementById('walletTotalEmuer');
+    if(el && el.textContent && el.textContent !== '0' && el.textContent !== '--'){
+      const v = parseInt(el.textContent);
+      if(!isNaN(v)) return v;
+    }
+  }catch(e){}
+  return null;
 }
 
 // 初期化
