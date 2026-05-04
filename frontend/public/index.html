@@ -2772,7 +2772,7 @@ body.paypay-mode #pp-post-fab {
     <button class="spib" disabled title="ウォレット（準備中）" style="opacity:0.35;cursor:not-allowed;">💰</button>
     <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
     <button class="spib" disabled title="ロボット（準備中）" style="opacity:0.35;cursor:not-allowed;">🤖</button>
-    <button class="spib" onclick="closeEastBuilding('eastYakuyaOverlay','eastYakuyaFrame')" title="閉じる">⚙️</button>
+    <button class="spib" disabled title="設定（準備中）" style="opacity:0.35;cursor:not-allowed;">⚙️</button>
   </div>
   <iframe id="eastYakuyaFrame" src="" style="display:block;width:100%;height:calc(100vh - 44px);border:none;"></iframe>
 </div>
@@ -2781,7 +2781,7 @@ body.paypay-mode #pp-post-fab {
     <button class="spib" disabled title="ウォレット（準備中）" style="opacity:0.35;cursor:not-allowed;">💰</button>
     <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
     <button class="spib" disabled title="ロボット（準備中）" style="opacity:0.35;cursor:not-allowed;">🤖</button>
-    <button class="spib" onclick="closeEastBuilding('eastFruitsOverlay','eastFruitsFrame')" title="閉じる">⚙️</button>
+    <button class="spib" disabled title="設定（準備中）" style="opacity:0.35;cursor:not-allowed;">⚙️</button>
   </div>
   <iframe id="eastFruitsFrame" src="" style="display:block;width:100%;height:calc(100vh - 44px);border:none;"></iframe>
 </div>
@@ -2794,7 +2794,7 @@ body.paypay-mode #pp-post-fab {
     <button class="spib" disabled title="ウォレット（準備中）" style="opacity:0.35;cursor:not-allowed;">💰</button>
     <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
     <button class="spib" disabled title="ロボット（準備中）" style="opacity:0.35;cursor:not-allowed;">🤖</button>
-    <button class="spib" onclick="closeEastBuilding('eastMansionOverlay','eastMansionFrame')" title="閉じる">⚙️</button>
+    <button class="spib" disabled title="設定（準備中）" style="opacity:0.35;cursor:not-allowed;">⚙️</button>
   </div>
   <iframe id="eastMansionFrame" src="" style="display:block;width:100%;height:calc(100vh - 44px);border:none;"></iframe>
 </div>
@@ -2803,7 +2803,7 @@ body.paypay-mode #pp-post-fab {
     <button class="spib" disabled title="ウォレット（準備中）" style="opacity:0.35;cursor:not-allowed;">💰</button>
     <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
     <button class="spib" disabled title="ロボット（準備中）" style="opacity:0.35;cursor:not-allowed;">🤖</button>
-    <button class="spib" onclick="closeEastBuilding('eastCoffeeOverlay','eastCoffeeFrame')" title="閉じる">⚙️</button>
+    <button class="spib" disabled title="設定（準備中）" style="opacity:0.35;cursor:not-allowed;">⚙️</button>
   </div>
   <iframe id="eastCoffeeFrame" src="" style="display:block;width:100%;height:calc(100vh - 44px);border:none;"></iframe>
 </div>
@@ -2812,7 +2812,7 @@ body.paypay-mode #pp-post-fab {
     <button class="spib" disabled title="ウォレット（準備中）" style="opacity:0.35;cursor:not-allowed;">💰</button>
     <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
     <button class="spib" disabled title="ロボット（準備中）" style="opacity:0.35;cursor:not-allowed;">🤖</button>
-    <button class="spib" onclick="closeEastBuilding('eastHotelOverlay','eastHotelFrame')" title="閉じる">⚙️</button>
+    <button class="spib" disabled title="設定（準備中）" style="opacity:0.35;cursor:not-allowed;">⚙️</button>
   </div>
   <iframe id="eastHotelFrame" src="" style="display:block;width:100%;height:calc(100vh - 44px);border:none;"></iframe>
 </div>
@@ -2821,7 +2821,7 @@ body.paypay-mode #pp-post-fab {
     <button class="spib" disabled title="ウォレット（準備中）" style="opacity:0.35;cursor:not-allowed;">💰</button>
     <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
     <button class="spib" disabled title="ロボット（準備中）" style="opacity:0.35;cursor:not-allowed;">🤖</button>
-    <button class="spib" onclick="closeEastBuilding('eastHotel2Overlay','eastHotel2Frame')" title="閉じる">⚙️</button>
+    <button class="spib" disabled title="設定（準備中）" style="opacity:0.35;cursor:not-allowed;">⚙️</button>
   </div>
   <iframe id="eastHotel2Frame" src="" style="display:block;width:100%;height:calc(100vh - 44px);border:none;"></iframe>
 </div>
@@ -7795,6 +7795,10 @@ window.addEventListener("message", (e) => {
     });
     closeSpContent();
   }
+  // iframeからタクシーモーダルを開く
+  if (e.data.type === "openTaxi") {
+    openTaxi();
+  }
 });
 
 /* ── モバイル：サイドバードロワー開閉 ── */
@@ -8552,7 +8556,8 @@ function _spDrop() {
     if (d < nearDist) { nearDist = d; nearest = poi; }
   });
 
-  if (nearest && nearDist < iw * 0.11) {
+  // 距離制限なし: 最寄り建物へ向かう（制限があると掴んだ場所に戻るバグが発生するため）
+  if (nearest) {
     _spEnter(wId, nearest, iw, ih);
   } else {
     st.state = 'walking';
