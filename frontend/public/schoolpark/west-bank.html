@@ -125,7 +125,7 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 
 /* 月次配布 */
 .dist-card{background:linear-gradient(135deg,#071424,#0e1e34);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px;text-align:center}
-.dist-date{font-size:28px;font-weight:700;color:var(--gold2);font-family:'Playfair Display',serif}
+.dist-date{font-size:22px;font-weight:700;color:var(--gold2);font-family:'Zen Maru Gothic',sans-serif;letter-spacing:.04em;line-height:1.4}
 .dist-label{font-size:11px;color:var(--muted);margin-top:4px}
 .dist-btn{width:100%;padding:15px;border-radius:12px;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:'Zen Maru Gothic',sans-serif;margin-top:12px;transition:opacity .2s}
 .dist-btn.ready{background:linear-gradient(135deg,#006020,var(--green));color:#000}
@@ -341,16 +341,24 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 <div class="panel" id="panel-guide">
   <div class="s-title">📋 EMUERとは</div>
   <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;font-size:12px;color:var(--muted);line-height:1.8">
-    EMUERはSchoolPark / Emuのコミュニティトークン（ERC-20）です。Emuアプリへの投稿にgood・changeが集まるとEMUERに変換できます。NFT購入・SchoolPark内サービス利用に使えます。
+    EMUERはSchoolParkのコミュニティトークンです。Emuでの投稿にgood・changeが集まるとEMUERに変換できます。SchoolPark内サービス利用に使えます。
   </div>
-  <div class="s-title">📖 変換の手順</div>
+  <div class="s-title">📖 EMUERの集め方</div>
   <div class="guide-list">
-    <div class="guide-item"><div class="guide-num">1</div><div class="guide-text"><strong>Emuアプリで投稿する</strong><br>探索・学びの投稿を公開して、good・changeを集めよう</div></div>
-    <div class="guide-item"><div class="guide-num">2</div><div class="guide-text"><strong>ウォレットを接続する</strong><br>MetaMaskなどのウォレットをEmuアプリに接続してください</div></div>
+    <div class="guide-item"><div class="guide-num">1</div><div class="guide-text"><strong>ウォレットを接続する</strong><br>MetaMaskなどのウォレットをSchoolParkに接続してください</div></div>
+    <div class="guide-item"><div class="guide-num">2</div><div class="guide-text"><strong>Emuで投稿する</strong><br>探索・学びの投稿を公開して、good・changeを集めよう</div></div>
     <div class="guide-item"><div class="guide-num">3</div><div class="guide-text"><strong>変換タブで実行</strong><br>このページの「変換を実行」ボタンを押すとEMUERが付与されます</div></div>
     <div class="guide-item"><div class="guide-num">4</div><div class="guide-text"><strong>残高を確認</strong><br>変換後は残高タブで保有EMUERを確認できます</div></div>
   </div>
-  <div style="margin-top:14px;padding:12px 14px;background:rgba(212,160,23,.08);border:1px solid rgba(212,160,23,.2);border-radius:12px">
+  <div style="margin-top:10px;padding:12px 14px;background:rgba(0,200,255,.06);border:1px solid rgba(0,200,255,.15);border-radius:12px;margin-bottom:10px">
+    <div style="font-size:12px;color:var(--cyan);font-weight:700;margin-bottom:6px">💡 EMUERは投稿以外でも集まります</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.9">
+      ・Emuへの投稿に good / change が集まると変換可能<br>
+      ・毎月20日に SchoolPark 利用者へ配布（1,000 EMUER）<br>
+      ・特定の実績達成でボーナスEMUERが付与される場合があります
+    </div>
+  </div>
+  <div style="padding:12px 14px;background:rgba(212,160,23,.08);border:1px solid rgba(212,160,23,.2);border-radius:12px">
     <div style="font-size:12px;color:var(--gold);font-weight:700;margin-bottom:6px">⚠️ 変換条件</div>
     <div style="font-size:12px;color:var(--muted);line-height:1.8">
       <strong style="color:#fff">有料NFT保持者：</strong>毎日変換可能<br>
@@ -476,17 +484,12 @@ async function loadConvertInfo(){
   const pending = Math.floor(good/10) + Math.floor(change/20)*3;
   document.getElementById('pendingDisplay').textContent = pending + ' EMUER';
 
-  // 実EMUER残高（ethers不要のBigInt変換）
+  // 実EMUER残高（親のgetEmuerBalance経由）
   try{
-    const contract = t && t.emuerContract;
-    if(contract){
-      const bal = await contract.balanceOf(addr);
-      const balVal = _formatEMUER(bal);
-      document.getElementById('balanceDisplay').textContent = balVal + ' EMUER';
-    } else {
-      const cached = _getCachedRealEmuer(t, addr);
-      if(cached !== null) document.getElementById('balanceDisplay').textContent = cached + ' EMUER';
-    }
+    let balVal = null;
+    if(t && typeof t.getEmuerBalance==='function') balVal = await t.getEmuerBalance(addr);
+    if(balVal===null && t && typeof t.cachedEmuerBalance==='number') balVal = t.cachedEmuerBalance;
+    if(balVal !== null) document.getElementById('balanceDisplay').textContent = balVal + ' EMUER';
   }catch(e){ document.getElementById('balanceDisplay').textContent = '—'; }
 
   // 無料NFT・月曜制限
@@ -525,12 +528,11 @@ async function loadConvertInfo(){
 
 async function tryLoadBalance(addr){
   try{
-    const t=getTop(); const contract=t&&t.emuerContract;
-    if(contract){
-      const bal=await contract.balanceOf(addr);
-      const v=_formatEMUER(bal);
-      document.getElementById('balanceDisplay').textContent=v+' EMUER';
-    }
+    const t=getTop();
+    let v=null;
+    if(t && typeof t.getEmuerBalance==='function') v=await t.getEmuerBalance(addr);
+    if(v===null && t && typeof t.cachedEmuerBalance==='number') v=t.cachedEmuerBalance;
+    if(v!==null) document.getElementById('balanceDisplay').textContent=v+' EMUER';
   }catch(e){}
 }
 
@@ -657,53 +659,33 @@ async function loadBalance(){
   const pending = Math.floor(good/10) + Math.floor(change/20)*3;
   document.getElementById('balPending').textContent = pending.toLocaleString();
 
-  // ── 実EMUER（オンチェーン） ──
+  // ── 実EMUER（オンチェーン）: 親の getEmuerBalance() 経由で取得 ──
   document.getElementById('balRealEmuer').textContent = '取得中...';
   try{
-    const contract = t && t.emuerContract;
-    if(contract){
-      const balBN = await contract.balanceOf(addr);
-      // ethers.js不要でBigInt変換（iframeではethersが未定義のため）
-      const realVal = _formatEMUER(balBN);
-      document.getElementById('balRealEmuer').textContent = realVal.toLocaleString();
-    } else {
-      // コントラクト未接続 → 親のキャッシュ値を参照
-      const cached = _getCachedRealEmuer(t, addr);
-      document.getElementById('balRealEmuer').textContent = cached !== null ? cached.toLocaleString() : '—';
+    let realVal = null;
+    // 方法1: 親の専用関数 window.getEmuerBalance() を呼ぶ（最も確実）
+    if(t && typeof t.getEmuerBalance === 'function'){
+      realVal = await t.getEmuerBalance(addr);
     }
+    // 方法2: 親のキャッシュ変数
+    if(realVal === null && t && typeof t.cachedEmuerBalance === 'number'){
+      realVal = t.cachedEmuerBalance;
+    }
+    // 方法3: 親のDOM walletTotalEmuer
+    if(realVal === null){
+      try{
+        const el = t && t.document.getElementById('walletTotalEmuer');
+        if(el && el.textContent && el.textContent !== '0' && el.textContent !== '--'){
+          const v = parseInt(el.textContent);
+          if(!isNaN(v)) realVal = v;
+        }
+      }catch(e){}
+    }
+    document.getElementById('balRealEmuer').textContent = realVal !== null ? realVal.toLocaleString() : '—';
   }catch(e){
     console.warn('実EMUER取得失敗:', e);
-    // フォールバック: 親のDOM・変数からキャッシュ値を取得
-    const cached = _getCachedRealEmuer(t, addr);
-    document.getElementById('balRealEmuer').textContent = cached !== null ? cached.toLocaleString() : 'エラー';
+    document.getElementById('balRealEmuer').textContent = '—';
   }
-}
-
-// ── BigNumber → EMUER数値変換（ethers不要） ──
-function _formatEMUER(balBN){
-  try{
-    // ethers BigNumber / BigInt 両対応
-    const wei = BigInt(balBN.toString());
-    return Number(wei / BigInt('1000000000000000000'));
-  }catch(e){
-    return Math.floor(Number(balBN.toString()) / 1e18);
-  }
-}
-
-// ── 親ウィンドウのキャッシュから実EMUER取得 ──
-function _getCachedRealEmuer(t, addr){
-  if(!t) return null;
-  // 方法1: 親のグローバル変数 totalEmuer（myWallet開いた時に設定）
-  if(typeof t.totalEmuer === 'number' && t.totalEmuer > 0) return t.totalEmuer;
-  // 方法2: 親のDOM要素 walletTotalEmuer（syncPendingEmuerで更新）
-  try{
-    const el = t.document.getElementById('walletTotalEmuer');
-    if(el && el.textContent && el.textContent !== '0' && el.textContent !== '--'){
-      const v = parseInt(el.textContent);
-      if(!isNaN(v)) return v;
-    }
-  }catch(e){}
-  return null;
 }
 
 // 初期化

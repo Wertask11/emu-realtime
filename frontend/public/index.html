@@ -4297,6 +4297,23 @@ const EMUER_CONTRACT_ABI = [
 	}
 ];
 
+// ── 銀行iframe等から呼び出せる実EMUER残高取得関数 ──
+window.cachedEmuerBalance = null;
+window.getEmuerBalance = async function(address) {
+  try {
+    if (!emuerContract) return null;
+    const addr = address || window.connectedAccount;
+    if (!addr) return null;
+    const balBN = await emuerContract.balanceOf(addr);
+    const val = Math.floor(parseFloat(ethers.utils.formatUnits(balBN, 18)));
+    window.cachedEmuerBalance = val;
+    return val;
+  } catch(e) {
+    console.warn('getEmuerBalance error:', e);
+    return window.cachedEmuerBalance;
+  }
+};
+
 // NFT コントラクト情報
 const NFT_ADDRESS = "0x385e0cc1fb00ECdd9AA363Bd18a7fEC68d8fA07A"; // テストNFTコントラクトアドレス
 // 予約投稿NFT（取引所に出品する専用NFTのコントラクトアドレス）
@@ -5896,6 +5913,8 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
     // 本番用コントラクト（後でアドレスを入れてください）
 emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_CONTRACT_ABI, signer);
 jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
+    // 接続直後にEMUER残高をキャッシュ（銀行iframeから参照可能に）
+    window.getEmuerBalance(account).catch(()=>{});
 
     // ⑤ UI更新してメインへ
     localStorage.removeItem("userMode");
