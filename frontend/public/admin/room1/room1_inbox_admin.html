@@ -6,7 +6,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 * { box-sizing: border-box; }
-body { background:#0f0f0f; color:#d4d4d4; font-family:system-ui,sans-serif; margin:0; }
+body { background:#0f0f0f; color:#d4d4d4; font-family:system-ui,sans-serif; margin:0; overflow-y:auto; }
+
+/* 施設報告管理タブ */
+.fr-stats { display:flex; gap:10px; margin-bottom:16px; }
+.fr-stat { flex:1; background:#161616; border:1px solid #2a2a2a; border-radius:8px; padding:12px; text-align:center; }
+.fr-stat-val { font-size:1.4rem; font-weight:700; color:#4ec9b0; }
+.fr-stat-lbl { font-size:11px; color:#888; margin-top:2px; }
+.fr-facility-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+.fr-ftab { cursor:pointer; padding:5px 14px; border-radius:20px; font-size:13px; border:1px solid #2a2a2a; background:transparent; color:#888; }
+.fr-ftab.active { background:#4ec9b0; color:#0f0f0f; border-color:#4ec9b0; font-weight:bold; }
+.fr-filter { display:flex; gap:6px; margin-bottom:12px; }
+.fr-chip { cursor:pointer; padding:3px 12px; border-radius:20px; font-size:12px; border:1px solid #2a2a2a; background:transparent; color:#888; }
+.fr-chip.active { border-color:#4ec9b0; color:#4ec9b0; background:rgba(78,201,176,0.08); }
+.fr-refresh { cursor:pointer; padding:5px 14px; background:transparent; color:#4ec9b0; border:1px solid #2a2a2a; border-radius:6px; font-size:12px; font-family:inherit; margin-bottom:10px; }
+.fr-card { background:#161616; border:1px solid #2a2a2a; border-radius:8px; padding:12px 14px; margin-bottom:10px; }
+.fr-card.resolved { opacity:.5; }
+.fr-meta { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
+.fr-type { padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700; background:rgba(78,201,176,.15); color:#4ec9b0; border:1px solid rgba(78,201,176,.3); }
+.fr-badge { padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700; }
+.fr-pending { background:rgba(249,115,22,.1); color:#f97316; border:1px solid rgba(249,115,22,.25); }
+.fr-done { background:rgba(78,201,176,.1); color:#4ec9b0; border:1px solid rgba(78,201,176,.25); }
+.fr-date { font-size:11px; color:#666; }
+.fr-user { font-size:12px; color:#666; margin-bottom:6px; }
+.fr-body { font-size:13px; line-height:1.65; margin-bottom:8px; white-space:pre-wrap; word-break:break-word; }
+.fr-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.fr-btn { padding:5px 12px; border-radius:6px; font-size:12px; font-weight:bold; border:none; cursor:pointer; font-family:inherit; }
+.fr-btn-resolve { background:rgba(78,201,176,.2); color:#4ec9b0; border:1px solid rgba(78,201,176,.3) !important; }
+.fr-btn-reopen  { background:rgba(86,156,214,.15); color:#569cd6; border:1px solid rgba(86,156,214,.3) !important; }
+.fr-btn-delete  { background:rgba(244,71,71,.1); color:#f44747; border:1px solid rgba(244,71,71,.25) !important; }
+.fr-empty { text-align:center; padding:36px; color:#555; font-size:14px; }
 .container { max-width:960px; margin:auto; padding:24px; }
 h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2a; padding-bottom:16px; }
 
@@ -105,6 +134,7 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
     <button class="tab-btn" onclick="switchTab('fountain-board')">⛲ 掲示板投稿</button>
     <button class="tab-btn" onclick="switchTab('fountain-event')">🎉 イベント投稿</button>
     <button class="tab-btn" onclick="switchTab('dao-votes');loadDAOVotes()">🗳️ DAO投票</button>
+    <button class="tab-btn" onclick="switchTab('facility-reports');frLoad()" style="color:#f97316;">🚨 施設報告管理</button>
     <button class="tab-btn" onclick="deleteAllContents()" style="margin-left:auto;color:#f44747;border-bottom-color:transparent;">🗑️ コンテンツ全削除</button>
   </div>
 
@@ -290,6 +320,30 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
     </div>
   </div>
 
+  <!-- タブ: 施設報告管理 -->
+  <div id="tab-facility-reports" class="tab-content">
+    <div class="fr-stats">
+      <div class="fr-stat"><div class="fr-stat-val" id="frTotal">—</div><div class="fr-stat-lbl">総件数</div></div>
+      <div class="fr-stat"><div class="fr-stat-val" id="frPending">—</div><div class="fr-stat-lbl">未対応</div></div>
+      <div class="fr-stat"><div class="fr-stat-val" id="frResolved">—</div><div class="fr-stat-lbl">対応済み</div></div>
+    </div>
+    <div class="fr-facility-tabs">
+      <span class="fr-ftab active" onclick="frSwitchFacility('all',this)">📋 全件</span>
+      <span class="fr-ftab" onclick="frSwitchFacility('hospital',this)">🏥 病院</span>
+      <span class="fr-ftab" onclick="frSwitchFacility('police',this)">🚔 警察署</span>
+      <span class="fr-ftab" onclick="frSwitchFacility('vigilante',this)">🛡️ 自警団</span>
+      <span class="fr-ftab" onclick="frSwitchFacility('gym',this)">💪 ジム</span>
+      <span class="fr-ftab" onclick="frSwitchFacility('fire',this)">🚒 消防署</span>
+    </div>
+    <div class="fr-filter">
+      <span class="fr-chip active" onclick="frSetFilter('all',this)">すべて</span>
+      <span class="fr-chip" onclick="frSetFilter('pending',this)">⏳ 未対応</span>
+      <span class="fr-chip" onclick="frSetFilter('resolved',this)">✅ 対応済み</span>
+    </div>
+    <button class="fr-refresh" onclick="frLoad()">↻ 更新</button>
+    <div id="frList"><div class="fr-empty">読み込み中...</div></div>
+  </div>
+
 </div>
 
 <script>
@@ -314,7 +368,7 @@ var themeData = {
 };
 
 // ─── タブ ───
-const TAB_IDS = ['direct','inbox','fountain-board','fountain-event','dao-votes'];
+const TAB_IDS = ['direct','inbox','fountain-board','fountain-event','dao-votes','facility-reports'];
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(function(btn, i) {
     btn.classList.toggle('active', TAB_IDS[i] === tab);
@@ -985,6 +1039,120 @@ function daoRenderOptionBars(optMap, totalVotes, showVoters) {
     html += '</div>';
   });
   return html;
+}
+
+// ─── 施設報告管理 ────────────────────────────────────────────
+var FR_FACILITIES = {
+  hospital:  { label:'🏥 病院',   col:'hospital_inquiries',  nameKey:'name',     bodyKey:'content' },
+  police:    { label:'🚔 警察署', col:'police_reports',       nameKey:'reporter', bodyKey:'content' },
+  vigilante: { label:'🛡️ 自警団', col:'vigilante_reports',    nameKey:'reporter', bodyKey:'content' },
+  gym:       { label:'💪 ジム',   col:'gym_challenges',        nameKey:'name',     bodyKey:'description' },
+  fire:      { label:'🚒 消防署', col:'fire_emergencies',      nameKey:'reporter', bodyKey:'content' }
+};
+var frFacility = 'all';
+var frFilter   = 'all';
+
+function frSwitchFacility(f, el) {
+  frFacility = f;
+  document.querySelectorAll('.fr-ftab').forEach(function(t){ t.classList.remove('active'); });
+  el.classList.add('active');
+  frLoad();
+}
+function frSetFilter(f, el) {
+  frFilter = f;
+  document.querySelectorAll('.fr-chip').forEach(function(c){ c.classList.remove('active'); });
+  el.classList.add('active');
+  frLoad();
+}
+
+function frFmtDate(ts) {
+  if (!ts) return '';
+  var d = (ts && ts.toDate) ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('ja-JP',{month:'numeric',day:'numeric'}) + ' ' +
+         d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+}
+
+function frCardHtml(docId, data, fkey) {
+  var f = FR_FACILITIES[fkey];
+  var isPending = (data.status || 'pending') === 'pending';
+  var name = esc(data[f.nameKey] || '匿名');
+  var body = esc(data[f.bodyKey] || '').replace(/\n/g,'<br>');
+  var extra = (fkey === 'gym' && data.challenge) ? '<span style="font-size:11px;color:#22d3ee">['+esc(data.challenge)+'] </span>' : '';
+  var resolveBtn = isPending
+    ? '<button class="fr-btn fr-btn-resolve" onclick="frUpdateStatus(\''+fkey+'\',\''+docId+'\',\'resolved\')">✅ 対応済にする</button>'
+    : '<button class="fr-btn fr-btn-reopen"  onclick="frUpdateStatus(\''+fkey+'\',\''+docId+'\',\'pending\')">↩ 未対応に戻す</button>';
+  return '<div class="fr-card'+(isPending?'':' resolved')+'" id="frc-'+fkey+'-'+docId+'">' +
+    '<div class="fr-meta">' +
+      '<span class="fr-type">'+f.label+'</span>' +
+      '<span class="fr-badge '+(isPending?'fr-pending':'fr-done')+'">'+(isPending?'⏳ 未対応':'✅ 対応済')+'</span>' +
+      '<span class="fr-date">'+frFmtDate(data.timestamp)+'</span>' +
+    '</div>' +
+    '<div class="fr-user">👤 '+name+'</div>' +
+    '<div class="fr-body">'+extra+body+'</div>' +
+    '<div class="fr-actions">'+resolveBtn+
+      '<button class="fr-btn fr-btn-delete" onclick="frDelete(\''+fkey+'\',\''+docId+'\')">🗑️ 削除</button>' +
+    '</div></div>';
+}
+
+async function frLoad() {
+  var db = window.fpAdminDB;
+  var el = document.getElementById('frList');
+  if (!db) { el.innerHTML = '<div class="fr-empty">❌ Firebase未接続 — ページを再読込してください</div>'; return; }
+  el.innerHTML = '<div class="fr-empty">⏳ 読み込み中...</div>';
+
+  var allDocs = [];
+  var keys = (frFacility === 'all') ? Object.keys(FR_FACILITIES) : [frFacility];
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    var cfg = FR_FACILITIES[k];
+    try {
+      var snap = await db.collection(cfg.col).orderBy('timestamp','desc').limit(50).get();
+      snap.forEach(function(d){ allDocs.push({ id: d.id, data: d.data(), key: k }); });
+    } catch(e) {
+      // timestampフィールドなしでもフォールバック
+      try {
+        var snap2 = await db.collection(cfg.col).limit(50).get();
+        snap2.forEach(function(d){ allDocs.push({ id: d.id, data: d.data(), key: k }); });
+      } catch(e2) { console.warn('frLoad error ' + k, e2); }
+    }
+  }
+
+  if (frFilter === 'pending')  allDocs = allDocs.filter(function(r){ return (r.data.status||'pending') === 'pending'; });
+  if (frFilter === 'resolved') allDocs = allDocs.filter(function(r){ return r.data.status === 'resolved'; });
+
+  allDocs.sort(function(a, b){
+    var ta = a.data.timestamp && a.data.timestamp.seconds ? a.data.timestamp.seconds : 0;
+    var tb = b.data.timestamp && b.data.timestamp.seconds ? b.data.timestamp.seconds : 0;
+    return tb - ta;
+  });
+
+  var total = allDocs.length;
+  var pending = allDocs.filter(function(r){ return (r.data.status||'pending') === 'pending'; }).length;
+  document.getElementById('frTotal').textContent    = total;
+  document.getElementById('frPending').textContent   = pending;
+  document.getElementById('frResolved').textContent  = total - pending;
+
+  if (allDocs.length === 0) { el.innerHTML = '<div class="fr-empty">📭 該当する報告はありません</div>'; return; }
+  el.innerHTML = allDocs.map(function(r){ return frCardHtml(r.id, r.data, r.key); }).join('');
+}
+
+async function frUpdateStatus(fkey, docId, newStatus) {
+  var db = window.fpAdminDB;
+  if (!db) return;
+  try {
+    await db.collection(FR_FACILITIES[fkey].col).doc(docId).update({ status: newStatus });
+    frLoad();
+  } catch(e) { alert('更新失敗: ' + e.message); }
+}
+
+async function frDelete(fkey, docId) {
+  if (!confirm('この報告を削除しますか？')) return;
+  var db = window.fpAdminDB;
+  if (!db) return;
+  try {
+    await db.collection(FR_FACILITIES[fkey].col).doc(docId).delete();
+    frLoad();
+  } catch(e) { alert('削除失敗: ' + e.message); }
 }
 
 // ─── コンテンツ全削除 ───
