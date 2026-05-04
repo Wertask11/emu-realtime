@@ -156,6 +156,28 @@
   display:flex; flex-direction:column; justify-content:center;
   border-right:1px solid rgba(139,105,20,0.4); padding-right:16px; margin-right:18px; flex-shrink:0;
 }
+/* SpMap / East コンテンツ共通アイコンボタン */
+.sp-icon-btn-bar { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+.sp-icon-btn-bar .spib {
+  background:rgba(255,255,255,0.08); border:1px solid rgba(212,168,67,0.3);
+  border-radius:8px; padding:5px 8px; font-size:1rem; cursor:pointer; color:#fff;
+  transition:background 0.15s; line-height:1;
+}
+.sp-icon-btn-bar .spib:hover { background:rgba(212,168,67,0.22); }
+/* East コンテンツ オーバーレイ上部のアイコンバー */
+.east-icon-bar {
+  position:absolute; top:0; left:0; right:0; height:44px;
+  background:rgba(0,0,0,0.78); backdrop-filter:blur(6px);
+  display:flex; align-items:center; justify-content:flex-end;
+  padding:0 12px; gap:6px; z-index:1102;
+  border-bottom:1px solid rgba(255,255,255,0.1);
+}
+.east-icon-bar .spib {
+  background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.18);
+  border-radius:8px; padding:5px 9px; font-size:1.05rem; cursor:pointer;
+  color:#fff; transition:background 0.15s; line-height:1;
+}
+.east-icon-bar .spib:hover { background:rgba(255,255,255,0.22); }
 .spmap-brand-name {
   font-family:'Playfair Display',Georgia,serif; font-size:1.15rem; font-weight:800;
   color:#D4A843; letter-spacing:0.04em; line-height:1.1;
@@ -2232,6 +2254,12 @@ body.paypay-mode #pp-post-fab {
       <span id="emuerHudLabel">EMUER</span>
       <span id="emuerHudLow">⚠️残少</span>
     </div>
+    <div class="sp-icon-btn-bar">
+      <button class="spib" onclick="document.getElementById('myWalletButton').click()" title="ウォレット">💰</button>
+      <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
+      <button class="spib" onclick="openRoom2()" title="ロボット">🤖</button>
+      <button class="spib" onclick="closeSpMap()" title="設定">⚙️</button>
+    </div>
     <button class="spmap-ticket-btn" onclick="spMapLinkClick('ticket')">チケット購入</button>
     <button class="spmap-menu-btn" onclick="toggleSpMapMenu()" aria-label="メニュー">☰</button>
     <!-- ✕ボタン廃止: SchoolParkが常設メイン画面のため閉じるボタンは不要 -->
@@ -2739,34 +2767,78 @@ body.paypay-mode #pp-post-fab {
 
 <!-- ══ 東エリア 7棟 オーバーレイ ══ -->
 <div id="eastYakuyaOverlay" style="display:none;position:fixed;inset:0;z-index:1100;background:#15161e;">
-  <span onclick="closeEastBuilding('eastYakuyaOverlay','eastYakuyaFrame')" style="position:absolute;top:16px;right:20px;font-size:24px;cursor:pointer;z-index:1101;color:rgba(255,255,255,0.4);line-height:1;">✖</span>
-  <iframe id="eastYakuyaFrame" src="" style="width:100%;height:100%;border:none;"></iframe>
+  <div class="east-icon-bar">
+    <button class="spib" onclick="document.getElementById('myWalletButton').click()" title="ウォレット">💰</button>
+    <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
+    <button class="spib" onclick="openRoom2()" title="ロボット">🤖</button>
+    <button class="spib" onclick="closeEastBuilding('eastYakuyaOverlay','eastYakuyaFrame')" title="閉じる">⚙️</button>
+  </div>
+  <iframe id="eastYakuyaFrame" src="" style="position:absolute;top:44px;left:0;right:0;bottom:0;width:100%;border:none;"></iframe>
 </div>
 <div id="eastFruitsOverlay" style="display:none;position:fixed;inset:0;z-index:1100;background:#15161e;">
-  <span onclick="closeEastBuilding('eastFruitsOverlay','eastFruitsFrame')" style="position:absolute;top:16px;right:20px;font-size:24px;cursor:pointer;z-index:1101;color:rgba(255,255,255,0.4);line-height:1;">✖</span>
-  <iframe id="eastFruitsFrame" src="" style="width:100%;height:100%;border:none;"></iframe>
+  <div class="east-icon-bar">
+    <button class="spib" onclick="document.getElementById('myWalletButton').click()" title="ウォレット">💰</button>
+    <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
+    <button class="spib" onclick="openRoom2()" title="ロボット">🤖</button>
+    <button class="spib" onclick="closeEastBuilding('eastFruitsOverlay','eastFruitsFrame')" title="閉じる">⚙️</button>
+  </div>
+  <iframe id="eastFruitsFrame" src="" style="position:absolute;top:44px;left:0;right:0;bottom:0;width:100%;border:none;"></iframe>
 </div>
 <div id="eastHouseOverlay" style="display:none;position:fixed;inset:0;z-index:1100;background:#1A1C29;">
   <span onclick="closeEastBuilding('eastHouseOverlay','eastHouseFrame')" style="position:absolute;top:16px;right:20px;font-size:24px;cursor:pointer;z-index:1101;color:rgba(255,255,255,0.4);line-height:1;">✖</span>
   <iframe id="eastHouseFrame" src="" style="width:100%;height:100%;border:none;"></iframe>
 </div>
 <div id="eastMansionOverlay" style="display:none;position:fixed;inset:0;z-index:1100;background:#131521;">
-  <span onclick="closeEastBuilding('eastMansionOverlay','eastMansionFrame')" style="position:absolute;top:16px;right:20px;font-size:24px;cursor:pointer;z-index:1101;color:rgba(255,255,255,0.4);line-height:1;">✖</span>
-  <iframe id="eastMansionFrame" src="" style="width:100%;height:100%;border:none;"></iframe>
+  <div class="east-icon-bar">
+    <button class="spib" onclick="document.getElementById('myWalletButton').click()" title="ウォレット">💰</button>
+    <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
+    <button class="spib" onclick="openRoom2()" title="ロボット">🤖</button>
+    <button class="spib" onclick="closeEastBuilding('eastMansionOverlay','eastMansionFrame')" title="閉じる">⚙️</button>
+  </div>
+  <iframe id="eastMansionFrame" src="" style="position:absolute;top:44px;left:0;right:0;bottom:0;width:100%;border:none;"></iframe>
 </div>
 <div id="eastCoffeeOverlay" style="display:none;position:fixed;inset:0;z-index:1100;background:#1e293b;">
-  <span onclick="closeEastBuilding('eastCoffeeOverlay','eastCoffeeFrame')" style="position:absolute;top:16px;right:20px;font-size:24px;cursor:pointer;z-index:1101;color:rgba(255,255,255,0.4);line-height:1;">✖</span>
-  <iframe id="eastCoffeeFrame" src="" style="width:100%;height:100%;border:none;"></iframe>
+  <div class="east-icon-bar">
+    <button class="spib" onclick="document.getElementById('myWalletButton').click()" title="ウォレット">💰</button>
+    <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
+    <button class="spib" onclick="openRoom2()" title="ロボット">🤖</button>
+    <button class="spib" onclick="closeEastBuilding('eastCoffeeOverlay','eastCoffeeFrame')" title="閉じる">⚙️</button>
+  </div>
+  <iframe id="eastCoffeeFrame" src="" style="position:absolute;top:44px;left:0;right:0;bottom:0;width:100%;border:none;"></iframe>
 </div>
 <div id="eastHotelOverlay" style="display:none;position:fixed;inset:0;z-index:1100;background:#0f111a;">
-  <span onclick="closeEastBuilding('eastHotelOverlay','eastHotelFrame')" style="position:absolute;top:16px;right:20px;font-size:24px;cursor:pointer;z-index:1101;color:rgba(255,255,255,0.4);line-height:1;">✖</span>
-  <iframe id="eastHotelFrame" src="" style="width:100%;height:100%;border:none;"></iframe>
+  <div class="east-icon-bar">
+    <button class="spib" onclick="document.getElementById('myWalletButton').click()" title="ウォレット">💰</button>
+    <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
+    <button class="spib" onclick="openRoom2()" title="ロボット">🤖</button>
+    <button class="spib" onclick="closeEastBuilding('eastHotelOverlay','eastHotelFrame')" title="閉じる">⚙️</button>
+  </div>
+  <iframe id="eastHotelFrame" src="" style="position:absolute;top:44px;left:0;right:0;bottom:0;width:100%;border:none;"></iframe>
 </div>
 <div id="eastHotel2Overlay" style="display:none;position:fixed;inset:0;z-index:1100;background:#05070a;">
-  <span onclick="closeEastBuilding('eastHotel2Overlay','eastHotel2Frame')" style="position:absolute;top:16px;right:20px;font-size:24px;cursor:pointer;z-index:1101;color:rgba(255,255,255,0.4);line-height:1;">✖</span>
-  <iframe id="eastHotel2Frame" src="" style="width:100%;height:100%;border:none;"></iframe>
+  <div class="east-icon-bar">
+    <button class="spib" onclick="document.getElementById('myWalletButton').click()" title="ウォレット">💰</button>
+    <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
+    <button class="spib" onclick="openRoom2()" title="ロボット">🤖</button>
+    <button class="spib" onclick="closeEastBuilding('eastHotel2Overlay','eastHotel2Frame')" title="閉じる">⚙️</button>
+  </div>
+  <iframe id="eastHotel2Frame" src="" style="position:absolute;top:44px;left:0;right:0;bottom:0;width:100%;border:none;"></iframe>
 </div>
 
+
+<!-- タクシーモーダル -->
+<div id="taxiModal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.88);align-items:center;justify-content:center;">
+  <div style="background:#1a1d2e;border:1px solid #8B6914;border-radius:16px;padding:20px;width:92%;max-width:460px;max-height:80vh;overflow-y:auto;position:relative;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div style="font-size:1.05rem;font-weight:700;color:#D4A843;">🚕 タクシー</div>
+      <button onclick="closeTaxi()" style="background:none;border:none;color:#888;font-size:1.3rem;cursor:pointer;line-height:1;padding:2px 6px;">✕</button>
+    </div>
+    <div style="font-size:0.76rem;color:#888;margin-bottom:14px;padding:8px 10px;background:rgba(212,168,67,0.08);border-radius:8px;border:1px solid rgba(212,168,67,0.2);">
+      💎 1回 <strong style="color:#D4A843">3 EMUER</strong> で好きな場所へ瞬間移動できます
+    </div>
+    <div id="taxiDestList" style="display:flex;flex-direction:column;gap:3px;"></div>
+  </div>
+</div>
 
 <!-- フッター -->
 <div id="siteFooter" style="
@@ -3094,6 +3166,8 @@ const EMUER_RATE_CONFIG = {
   learn5: 10, // 博物館
   // 星空エリア（無料）
   star5: 0,   // 夜空の展望台
+  // タクシー
+  taxi_ride: 3,
 };
 
 // 制限期間（ミリ秒）
@@ -7496,13 +7570,13 @@ const SP_POIS = [
   { id:"guard5", name:"Fire Station 消防署",    icon:"🚒", zone:"guard", px:17, py:40, desc:"緊急対応・危機管理。コミュニティ緊急時の対応フローと安全確認",        status:"open", page:"/schoolpark/west-fire.html",     btnLabel:"🧯 確認しに行く" },
   { id:"guard6", name:"Bank 銀行",             icon:"🏦", zone:"guard", px:10, py:53, desc:"EMUERの変換・残高確認。good/changeポイントをEMUERトークンに変換する",   status:"open", page:"/schoolpark/west-bank.html",     btnLabel:"EMUER を下ろす" },
   // Life Market（東エリア：日常と稼ぎ）
-  { id:"earn1",  name:"Hotel ホテル",            icon:"🏨", zone:"earn",  px:80, py:25, desc:"長期滞在型学習コンテンツ。連続受講でスキルを深める",                 status:"open",   eastKey:"hotel"   },
-  { id:"earn2",  name:"Mansion マンション",      icon:"🏰", zone:"earn",  px:87, py:34, desc:"高度学習・プレミアムコンテンツ。NFT保有者向け限定エリア",           status:"open",   eastKey:"mansion" },
+  { id:"earn1",  name:"Hotel ホテル",            icon:"🏨", zone:"earn",  px:80, py:25, desc:"SchoolParkのオンラインホテル。現実になるようにがんばります！",                 status:"open",   eastKey:"hotel"   },
+  { id:"earn2",  name:"Mansion マンション",      icon:"🏰", zone:"earn",  px:87, py:34, desc:"SchoolParkのオンラインマンション。現実になるようにがんばります！",           status:"open",   eastKey:"mansion" },
   { id:"earn3",  name:"Shopping ショッピング",   icon:"🛍️", zone:"earn",  px:75, py:38, desc:"East Area Mall。SchoolParkオリジナルアイテムをEMUERで購入できるショッピングモール", status:"open", page:"/schoolpark/east-shopping.html" },
-  { id:"earn4",  name:"Greengrocer 八百屋",     icon:"🥦", zone:"earn",  px:83, py:44, desc:"日常知識・生活スキルコンテンツ。毎日使える実践的な情報",             status:"open",   eastKey:"yakuya"  },
+  { id:"earn4",  name:"Greengrocer 八百屋",     icon:"🥦", zone:"earn",  px:83, py:44, desc:"健康・栄養コンテンツ。体と心を整えるライフスタイル提案",             status:"open",   eastKey:"yakuya"  },
   { id:"earn5",  name:"Fruit Shop 果物屋",      icon:"🍎", zone:"earn",  px:81, py:55, desc:"健康・栄養コンテンツ。体と心を整えるライフスタイル提案",             status:"open",   eastKey:"fruits"  },
-  { id:"earn6",  name:"Coffee 珈琲",            icon:"☕", zone:"earn",  px:83, py:63, desc:"副業・収益化コンテンツ。スキルをお金に変える方法を学ぶ",             status:"open",   eastKey:"coffee"  },
-  { id:"earn7",  name:"Hotel ホテル（下）",      icon:"🏩", zone:"earn",  px:88, py:69, desc:"EMUERトークン・NFT収益運用コンテンツ",                              status:"open",   eastKey:"hotel2"  },
+  { id:"earn6",  name:"Coffee 珈琲",            icon:"☕", zone:"earn",  px:83, py:63, desc:"SchoolParkのオンラインコーヒーショップ。現実になるようにがんばります！",             status:"open",   eastKey:"coffee"  },
+  { id:"earn7",  name:"Hotel ホテル（下）",      icon:"🏩", zone:"earn",  px:88, py:69, desc:"SchoolParkのオンラインマンション。現実になるようにがんばります！",                              status:"open",   eastKey:"hotel2"  },
   // Frontier Gate（南エリア：冒険と救助）
   { id:"play1",  name:"Non-theater 映画館",     icon:"🎬", zone:"play",  px:68, py:73, desc:"青空文庫の名作文学を絵と映像で体験。没入シアターで走れメロス・羅生門・蜘蛛の糸を上映",  status:"open", page:"/schoolpark/south-cinema.html" },
   { id:"play2",  name:"Elevator エレベーター",   icon:"🛗", zone:"play",  px:74, py:79, desc:"のって・しらべて・たのしもう！世界のエレベーターとしくみを探検",    status:"open", page:"/schoolpark/south-elevator.html" },
@@ -7522,7 +7596,7 @@ const SP_POIS = [
   // 中央・健康
   { id:"plaza1", name:"Fountain 噴水広場",      icon:"⛲", zone:"plaza", px:50, py:38, desc:"SchoolParkの中心。コミュニティ交流広場。DAO投票・イベント開催スポット", status:"open", page:"/schoolpark/fountain.html" },
   // 暮らし
-  { id:"life1",  name:"House 家",               icon:"🏡", zone:"life",  px:84, py:51, desc:"暮らし・住まいコンテンツ。生活設計・ライフプランニング",               status:"open",   eastKey:"house"   },
+  { id:"life1",  name:"House 家",               icon:"🏡", zone:"life",  px:84, py:51, desc:"SchoolParkのオンライン不動産。現実になるようにがんばります！",               status:"open",   eastKey:"house"   },
 ];
 
 const GATE_NAMES = {
@@ -8826,6 +8900,85 @@ function closeEastBuilding(overlayId, frameId) {
   document.body.style.overflow = "";
   document.body.style.position = "";
   document.body.style.width = "";
+}
+
+/* ════════════════════════════════════════
+   タクシー機能（-3 EMUER / 回）
+   ════════════════════════════════════════ */
+function openTaxi() {
+  const modal = document.getElementById('taxiModal');
+  if (!modal) return;
+  const ZONE_LABELS = {
+    earn:  '🏙️ 東エリア（Life Market）',
+    guard: '🛡️ 西エリア（Guard District）',
+    play:  '🌊 南エリア（Frontier Gate）',
+    learn: '📚 北エリア（Creative Academy）',
+    plaza: '⛲ 中央（Fountain 噴水広場）',
+    life:  '🏡 暮らしエリア',
+    star:  '🌌 星空エリア',
+    dawn:  '🌅 夜明けの広場',
+  };
+  const zones = {};
+  SP_POIS.filter(p => p.status === 'open' && (p.page || p.eastKey || p.action)).forEach(p => {
+    (zones[p.zone] = zones[p.zone] || []).push(p);
+  });
+  let html = '';
+  Object.entries(zones).forEach(([zone, pois]) => {
+    html += `<div style="font-size:0.7rem;color:#8B6914;font-weight:700;margin:12px 0 5px;letter-spacing:0.04em">${ZONE_LABELS[zone]||zone}</div>`;
+    pois.forEach(p => {
+      html += `<button onclick="taxiGoTo('${p.id}')"
+        style="width:100%;text-align:left;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+        border-radius:8px;padding:9px 13px;cursor:pointer;color:#e0e0e0;font-size:0.82rem;
+        display:flex;align-items:center;gap:10px;transition:background 0.15s;"
+        onmouseover="this.style.background='rgba(212,168,67,0.12)'"
+        onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+        <span style="font-size:1.15rem;flex-shrink:0">${p.icon}</span>
+        <span>${p.name}</span>
+        <span style="margin-left:auto;font-size:0.7rem;color:#8B6914;flex-shrink:0">-3 💎</span>
+      </button>`;
+    });
+  });
+  document.getElementById('taxiDestList').innerHTML = html;
+  modal.style.display = 'flex';
+  modal.style.alignItems = 'center';
+  modal.style.justifyContent = 'center';
+}
+
+function closeTaxi() {
+  const modal = document.getElementById('taxiModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function taxiGoTo(poiId) {
+  gatedOpen('taxi_ride', () => {
+    closeTaxi();
+    // すべての東エリアオーバーレイを閉じる
+    ['eastHotelOverlay','eastHotel2Overlay','eastMansionOverlay',
+     'eastYakuyaOverlay','eastFruitsOverlay','eastCoffeeOverlay','eastHouseOverlay'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.style.display !== 'none') {
+        const frame = el.querySelector('iframe');
+        if (frame) frame.src = '';
+        el.style.display = 'none';
+      }
+    });
+    const poi = SP_POIS.find(p => p.id === poiId);
+    if (!poi) return;
+    if (poi.eastKey) {
+      // 東エリア施設
+      const spMap = document.getElementById('spMapOverlay');
+      if (spMap) spMap.style.display = 'none';
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      openEastBuilding(poi.eastKey);
+    } else if (poi.action) {
+      if (typeof window[poi.action] === 'function') window[poi.action]();
+    } else if (poi.page) {
+      openSpContent(poi.page);
+    }
+  });
 }
 function openRingoGame() {
   // 2026-04-18（水）23:59 JST まで有料ユーザー先行公開
