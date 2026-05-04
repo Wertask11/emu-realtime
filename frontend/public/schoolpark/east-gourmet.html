@@ -1,0 +1,1780 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchoolPark グルメエリア</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   BASE / TOKENS
+   ============================================================ */
+:root {
+  --bg:        #0f111a;
+  --bg2:       #151825;
+  --bg3:       #1c1f2e;
+  --bg4:       #242840;
+  --gold:      #D4A843;
+  --gold-dim:  #a07e2e;
+  --orange:    #E07C40;
+  --emerald:   #4CAF82;
+  --red:       #e05555;
+  --text:      #e8eaf0;
+  --text2:     #9ba3bc;
+  --text3:     #5c6278;
+  --border:    rgba(212,168,67,.18);
+  --border2:   rgba(255,255,255,.06);
+  --radius:    14px;
+  --radius-sm: 8px;
+  --shadow:    0 8px 32px rgba(0,0,0,.45);
+  --glow-gold: 0 0 20px rgba(212,168,67,.45);
+  --glow-btn:  0 0 28px rgba(212,168,67,.35);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  font-family: 'Inter', 'Noto Sans JP', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 4px; }
+
+/* ============================================================
+   PAGE SYSTEM
+   ============================================================ */
+.page {
+  position: absolute; inset: 0;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.page.active { display: flex; }
+
+/* ============================================================
+   NAV BAR
+   ============================================================ */
+.nav {
+  flex-shrink: 0;
+  display: flex; align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(15,17,26,.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border2);
+  z-index: 10;
+}
+.nav-brand {
+  display: flex; align-items: center; gap: 8px;
+  flex: 1;
+}
+.nav-logo {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, var(--gold), var(--orange));
+  border-radius: 8px;
+  display: grid; place-items: center;
+  font-weight: 800; font-size: 13px; color: #0f111a;
+}
+.nav-title {
+  font-size: 14px; font-weight: 700;
+  background: linear-gradient(90deg, var(--gold), var(--orange));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  letter-spacing: .5px;
+}
+.nav-subtitle { font-size: 10px; color: var(--text3); margin-top: 1px; }
+
+.nav-btn {
+  flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 5px 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text2);
+  font-size: 9px;
+  cursor: pointer;
+  transition: all .2s;
+  white-space: nowrap;
+}
+.nav-btn span:first-child { font-size: 15px; }
+.nav-btn:hover { background: var(--bg4); color: var(--gold); border-color: var(--border); }
+
+.nav-exit {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid rgba(224,85,85,.4);
+  border-radius: var(--radius-sm);
+  color: #e07070;
+  font-size: 11px; font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+}
+.nav-exit:hover { background: rgba(224,85,85,.12); border-color: var(--red); }
+
+/* ============================================================
+   FILTER TABS
+   ============================================================ */
+.filter-bar {
+  flex-shrink: 0;
+  display: flex; gap: 8px;
+  padding: 10px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border2);
+}
+.filter-bar::-webkit-scrollbar { display: none; }
+.filter-tab {
+  flex-shrink: 0;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  font-size: 12px; font-weight: 500;
+  cursor: pointer;
+  transition: all .2s;
+  white-space: nowrap;
+}
+.filter-tab:hover { border-color: var(--border); color: var(--gold); }
+.filter-tab.active {
+  background: linear-gradient(135deg, rgba(212,168,67,.18), rgba(224,124,64,.12));
+  border-color: var(--gold);
+  color: var(--gold);
+  font-weight: 600;
+}
+
+/* ============================================================
+   SCROLL CONTENT
+   ============================================================ */
+.scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 20px;
+  padding: 32px 24px;
+  background: linear-gradient(135deg, #1a1420 0%, #0f111a 50%, #0e1520 100%);
+  border: 1px solid var(--border);
+}
+.hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 60% 60% at 80% 50%, rgba(212,168,67,.12) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 60% at 10% 80%, rgba(224,124,64,.08) 0%, transparent 60%);
+  pointer-events: none;
+}
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px;
+  background: rgba(212,168,67,.12);
+  border: 1px solid rgba(212,168,67,.3);
+  border-radius: 999px;
+  font-size: 10px; font-weight: 600;
+  color: var(--gold);
+  margin-bottom: 12px;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+.hero-badge::before { content: '●'; font-size: 7px; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.hero h1 {
+  font-size: 26px; font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, #fff 0%, var(--gold) 60%, var(--orange) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero-sub {
+  font-size: 13px; color: var(--text2);
+  margin-bottom: 20px;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+.hero-stats {
+  display: flex; gap: 24px;
+}
+.hero-stat { display: flex; flex-direction: column; gap: 2px; }
+.hero-stat-num {
+  font-size: 22px; font-weight: 800;
+  color: var(--gold);
+}
+.hero-stat-label { font-size: 10px; color: var(--text3); font-weight: 500; }
+
+.hero-img {
+  position: absolute; right: 0; top: 0; bottom: 0;
+  width: 200px;
+  display: grid; place-items: center;
+  font-size: 80px;
+  opacity: .18;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ============================================================
+   FEATURED BANNER
+   ============================================================ */
+.section-label {
+  font-size: 11px; font-weight: 600;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-label::after {
+  content: '';
+  flex: 1; height: 1px;
+  background: linear-gradient(90deg, var(--border), transparent);
+}
+
+.featured-banner {
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 24px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform .25s, box-shadow .25s;
+  position: relative;
+}
+.featured-banner:hover { transform: translateY(-2px); box-shadow: var(--glow-gold); }
+
+.featured-inner {
+  display: flex; align-items: stretch; gap: 0;
+}
+.featured-img {
+  width: 120px; flex-shrink: 0;
+  background: linear-gradient(135deg, #2a1a0e, #1a1206);
+  display: grid; place-items: center;
+  font-size: 52px;
+}
+.featured-content {
+  flex: 1; padding: 16px;
+}
+.featured-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  background: rgba(212,168,67,.12);
+  border: 1px solid rgba(212,168,67,.25);
+  border-radius: 4px;
+  font-size: 9px; font-weight: 700; color: var(--gold);
+  text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: 6px;
+}
+.featured-name {
+  font-size: 16px; font-weight: 700;
+  margin-bottom: 4px;
+}
+.featured-shop { font-size: 11px; color: var(--text2); margin-bottom: 8px; }
+.featured-price-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.featured-price-emuer {
+  font-size: 18px; font-weight: 800;
+  color: var(--gold);
+}
+.featured-price-yen {
+  font-size: 12px; color: var(--text3);
+  text-decoration: line-through;
+}
+.featured-discount {
+  padding: 2px 7px;
+  background: rgba(224,124,64,.15);
+  border: 1px solid rgba(224,124,64,.3);
+  border-radius: 4px;
+  font-size: 10px; font-weight: 700; color: var(--orange);
+}
+
+/* ============================================================
+   SHOP CARDS
+   ============================================================ */
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.shop-card {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all .25s;
+}
+.shop-card:hover {
+  border-color: var(--border);
+  box-shadow: var(--glow-gold);
+  transform: translateY(-3px);
+}
+.shop-card-img {
+  height: 90px;
+  background: var(--bg3);
+  display: grid; place-items: center;
+  font-size: 44px;
+  position: relative;
+}
+.shop-genre-badge {
+  position: absolute; top: 8px; left: 8px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 9px; font-weight: 700;
+  background: rgba(15,17,26,.75);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  backdrop-filter: blur(4px);
+}
+.shop-card-body { padding: 10px 12px; }
+.shop-card-name {
+  font-size: 13px; font-weight: 700;
+  margin-bottom: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.shop-card-meta {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; color: var(--text2);
+  margin-bottom: 8px;
+}
+.stars { color: var(--gold); font-size: 10px; }
+.shop-card-price-row {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.shop-card-from { font-size: 9px; color: var(--text3); }
+.shop-card-emuer {
+  font-size: 13px; font-weight: 700;
+  color: var(--gold);
+}
+
+/* ============================================================
+   SHOP DETAIL PAGE
+   ============================================================ */
+.shop-header {
+  position: relative;
+  padding: 20px 16px 16px;
+  background: linear-gradient(180deg, var(--bg3) 0%, transparent 100%);
+  border-bottom: 1px solid var(--border2);
+}
+.back-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text2);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all .2s;
+  margin-bottom: 14px;
+}
+.back-btn:hover { background: var(--bg4); color: var(--text); }
+.shop-header-inner { display: flex; gap: 14px; align-items: center; }
+.shop-header-icon {
+  width: 60px; height: 60px; border-radius: 12px; flex-shrink: 0;
+  background: var(--bg4);
+  display: grid; place-items: center;
+  font-size: 30px;
+  border: 2px solid var(--border);
+}
+.shop-header-info { flex: 1; }
+.shop-header-name { font-size: 20px; font-weight: 800; margin-bottom: 3px; }
+.shop-header-genre {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  background: rgba(212,168,67,.1);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 10px; font-weight: 600; color: var(--gold);
+  margin-bottom: 6px;
+}
+.shop-header-detail { font-size: 11px; color: var(--text2); }
+
+.section-title-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 16px 0 10px;
+}
+.section-title-bar h3 {
+  font-size: 14px; font-weight: 700;
+  color: var(--text);
+}
+
+/* ============================================================
+   NFT MENU CARDS
+   ============================================================ */
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.nft-card {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all .3s;
+  position: relative;
+}
+.nft-card:hover {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px rgba(212,168,67,.3), var(--glow-gold);
+  transform: translateY(-2px);
+}
+.nft-card-img {
+  height: 110px;
+  background: var(--bg3);
+  display: grid; place-items: center;
+  font-size: 50px;
+  position: relative;
+  overflow: hidden;
+}
+.nft-card-img img {
+  width: 100%; height: 100%; object-fit: cover;
+  transition: transform .4s;
+}
+.nft-card:hover .nft-card-img img { transform: scale(1.05); }
+
+.nft-badge {
+  position: absolute; top: 8px; right: 8px;
+  padding: 2px 7px;
+  background: rgba(15,17,26,.8);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 8px; font-weight: 700; color: var(--gold);
+  backdrop-filter: blur(6px);
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+
+.nft-card-body { padding: 10px 12px 12px; }
+.nft-card-name {
+  font-size: 12px; font-weight: 700;
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+.nft-price-row {
+  display: flex; align-items: baseline; gap: 5px;
+  margin-bottom: 8px;
+}
+.nft-price-emuer {
+  font-size: 15px; font-weight: 800; color: var(--gold);
+}
+.nft-price-unit { font-size: 10px; color: var(--gold); font-weight: 600; }
+.nft-price-yen { font-size: 10px; color: var(--text3); text-decoration: line-through; }
+
+.btn-buy {
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: linear-gradient(135deg, var(--gold), #c49030, var(--orange));
+  color: #0f111a;
+  font-size: 11px; font-weight: 700;
+  cursor: pointer;
+  transition: all .2s;
+  letter-spacing: .3px;
+}
+.btn-buy:hover {
+  box-shadow: var(--glow-btn);
+  filter: brightness(1.1);
+}
+.btn-buy.owned {
+  background: linear-gradient(135deg, var(--emerald), #3a9468);
+  color: #fff;
+}
+.btn-buy.login-required {
+  background: var(--bg4);
+  color: var(--text2);
+  border: 1px solid var(--border2);
+}
+.btn-buy.login-required:hover {
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: none;
+  filter: none;
+}
+
+/* ============================================================
+   REVIEW
+   ============================================================ */
+.review-list { display: flex; flex-direction: column; gap: 10px; }
+.review-item {
+  padding: 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+}
+.review-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 5px;
+}
+.review-user { font-size: 12px; font-weight: 600; }
+.review-stars { font-size: 11px; }
+.review-date { font-size: 10px; color: var(--text3); margin-top: 1px; }
+.review-text { font-size: 12px; color: var(--text2); line-height: 1.5; margin-top: 5px; }
+.review-nft-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px;
+  background: rgba(212,168,67,.08);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 9px; color: var(--gold);
+  margin-top: 6px;
+}
+
+/* ============================================================
+   MY NFT PAGE
+   ============================================================ */
+.my-nft-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.my-nft-card {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: all .3s;
+  position: relative;
+}
+.my-nft-card:not(.used):hover {
+  border-color: var(--gold);
+  box-shadow: var(--glow-gold);
+}
+.my-nft-card.used { opacity: .45; filter: grayscale(.8); }
+
+.my-nft-img {
+  height: 100px;
+  background: var(--bg3);
+  display: grid; place-items: center;
+  font-size: 46px;
+  position: relative;
+  overflow: hidden;
+}
+.my-nft-img img { width:100%;height:100%;object-fit:cover; }
+.my-nft-used-overlay {
+  position: absolute; inset: 0;
+  display: none;
+  background: rgba(15,17,26,.7);
+  place-items: center;
+  font-size: 11px; font-weight: 700; color: #888;
+}
+.used .my-nft-used-overlay { display: grid; }
+
+.my-nft-body { padding: 10px 12px 12px; }
+.my-nft-name { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+.my-nft-shop { font-size: 10px; color: var(--text2); margin-bottom: 6px; }
+.my-nft-expiry {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px;
+  margin-bottom: 8px;
+}
+.expiry-ok { color: var(--emerald); }
+.expiry-soon { color: var(--orange); }
+
+.btn-qr {
+  width: 100%;
+  padding: 7px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--gold);
+  font-size: 11px; font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+}
+.btn-qr:hover { background: rgba(212,168,67,.08); }
+.my-nft-card.used .btn-qr { pointer-events: none; color: var(--text3); border-color: var(--border2); }
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.7);
+  backdrop-filter: blur(6px);
+  place-items: center;
+  padding: 20px;
+  animation: fadeIn .2s ease;
+}
+.modal-overlay.open { display: grid; }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+.modal {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  width: 100%; max-width: 360px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: scaleIn .25s cubic-bezier(.34,1.56,.64,1);
+  position: relative;
+}
+@keyframes scaleIn { from{transform:scale(.88);opacity:0} to{transform:scale(1);opacity:1} }
+
+.modal-header {
+  padding: 18px 20px 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-title { font-size: 16px; font-weight: 800; }
+.modal-close {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  display: grid; place-items: center;
+  cursor: pointer; color: var(--text2);
+  font-size: 14px;
+  transition: all .2s;
+}
+.modal-close:hover { background: var(--bg4); color: var(--text); }
+
+.modal-body { padding: 16px 20px 20px; }
+
+/* Steps */
+.step-indicator {
+  display: flex; gap: 6px; justify-content: center;
+  margin-bottom: 20px;
+}
+.step-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--bg4);
+  transition: all .3s;
+}
+.step-dot.active { background: var(--gold); box-shadow: 0 0 6px rgba(212,168,67,.6); }
+.step-dot.done { background: var(--emerald); }
+
+.modal-dish-img {
+  height: 140px; width: 100%;
+  border-radius: 10px; overflow: hidden;
+  background: var(--bg3);
+  display: grid; place-items: center;
+  font-size: 64px;
+  margin-bottom: 14px;
+  position: relative;
+}
+.modal-dish-img img { width:100%;height:100%;object-fit:cover; }
+
+.modal-dish-name { font-size: 16px; font-weight: 700; margin-bottom: 3px; }
+.modal-dish-shop { font-size: 12px; color: var(--text2); margin-bottom: 14px; }
+
+.price-display {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+}
+.price-label { font-size: 12px; color: var(--text2); }
+.price-value-emuer { font-size: 20px; font-weight: 800; color: var(--gold); }
+.price-value-yen { font-size: 11px; color: var(--text3); }
+
+/* Balance row */
+.balance-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+}
+.balance-label { font-size: 11px; color: var(--text2); }
+.balance-value { font-size: 14px; font-weight: 700; }
+.balance-ok { color: var(--emerald); }
+.balance-ng { color: var(--red); }
+
+.balance-error-msg {
+  display: none;
+  padding: 10px 14px;
+  background: rgba(224,85,85,.1);
+  border: 1px solid rgba(224,85,85,.3);
+  border-radius: var(--radius-sm);
+  font-size: 12px; color: var(--red);
+  margin-bottom: 10px;
+}
+.balance-error-msg.show { display: block; }
+
+.btn-confirm {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, var(--gold), #c49030, var(--orange));
+  color: #0f111a;
+  font-size: 13px; font-weight: 800;
+  cursor: pointer;
+  transition: all .2s;
+  margin-top: 14px;
+}
+.btn-confirm:hover { box-shadow: var(--glow-btn); filter: brightness(1.08); }
+.btn-confirm:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  filter: grayscale(.5);
+  box-shadow: none;
+}
+.btn-secondary {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text2);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+  margin-top: 8px;
+}
+.btn-secondary:hover { background: var(--bg3); color: var(--text); }
+
+/* Success */
+.success-icon {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--emerald), #3a9468);
+  display: grid; place-items: center;
+  font-size: 30px;
+  margin: 0 auto 14px;
+  box-shadow: 0 0 24px rgba(76,175,130,.5);
+  animation: popIn .4s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes popIn { from{transform:scale(0)} to{transform:scale(1)} }
+
+.success-title { font-size: 18px; font-weight: 800; text-align: center; margin-bottom: 5px; }
+.success-sub { font-size: 12px; color: var(--text2); text-align: center; margin-bottom: 18px; }
+
+/* NFT card flipper */
+.flip-wrapper {
+  perspective: 600px;
+  margin: 0 auto 16px;
+  width: 200px; height: 200px;
+  cursor: pointer;
+}
+.flip-inner {
+  width: 100%; height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform .6s cubic-bezier(.34,1.2,.64,1);
+}
+.flip-wrapper:hover .flip-inner,
+.flip-wrapper.flipped .flip-inner {
+  transform: rotateY(180deg);
+}
+.flip-face {
+  position: absolute; inset: 0;
+  backface-visibility: hidden;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1.5px solid var(--border);
+}
+.flip-face-back {
+  transform: rotateY(180deg);
+  background: var(--bg3);
+  display: grid; place-items: center;
+  font-size: 11px; color: var(--text2);
+  flex-direction: column;
+  gap: 6px;
+}
+.flip-face-front {
+  background: var(--bg3);
+  display: grid; place-items: center;
+  font-size: 72px;
+}
+.flip-face-front img { width:100%;height:100%;object-fit:cover; }
+.flip-hint {
+  font-size: 10px; color: var(--text3); text-align: center; margin-bottom: 14px;
+}
+
+/* QR placeholder */
+.qr-placeholder {
+  width: 120px; height: 120px;
+  margin: 0 auto 6px;
+}
+.qr-placeholder svg { width: 100%; height: 100%; }
+
+/* QR Modal */
+.qr-modal-img {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 16px 0;
+}
+.qr-modal-label { font-size: 11px; color: var(--text2); margin-top: 8px; }
+
+/* ============================================================
+   CONFETTI
+   ============================================================ */
+#confetti-canvas {
+  position: fixed; inset: 0; z-index: 200;
+  pointer-events: none;
+}
+
+/* ============================================================
+   WALLET BALANCE BADGE (nav area)
+   ============================================================ */
+.wallet-balance-badge {
+  font-size: 9px; color: var(--gold);
+  font-weight: 700;
+}
+
+/* ============================================================
+   BOTTOM NAV (My NFT)
+   ============================================================ */
+.bottom-tab-bar {
+  flex-shrink: 0;
+  display: flex;
+  border-top: 1px solid var(--border2);
+  background: var(--bg);
+}
+.bottom-tab {
+  flex: 1;
+  padding: 8px 0;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  cursor: pointer;
+  color: var(--text3);
+  font-size: 9px;
+  border: none; background: transparent;
+  transition: color .2s;
+}
+.bottom-tab span:first-child { font-size: 18px; }
+.bottom-tab.active { color: var(--gold); }
+.bottom-tab:hover { color: var(--text2); }
+.bottom-tab.active:hover { color: var(--gold); }
+
+/* ============================================================
+   MISC UTILITIES
+   ============================================================ */
+.divider {
+  height: 1px;
+  background: var(--border2);
+  margin: 16px 0;
+}
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text3);
+}
+.empty-state .empty-icon { font-size: 40px; margin-bottom: 10px; opacity: .4; }
+.empty-state p { font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     PAGE 1: TOP / HOME
+     ============================================================ -->
+<div class="page active" id="page-home">
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-brand">
+      <div class="nav-logo">SP</div>
+      <div>
+        <div class="nav-title">グルメエリア</div>
+        <div class="nav-subtitle">SchoolPark × EMUER</div>
+      </div>
+    </div>
+    <button class="nav-btn" onclick="postMsg('openSpWallet')">
+      <span>💰</span>
+      <span class="wallet-balance-badge" id="nav-balance">--</span>
+    </button>
+    <button class="nav-btn" onclick="postMsg('openTaxi')">
+      <span>🚕</span><span>タクシー</span>
+    </button>
+    <button class="nav-btn" onclick="postMsg('openSpRobot')">
+      <span>🤖</span><span>AI</span>
+    </button>
+    <button class="nav-btn" onclick="postMsg('openSpSettings')">
+      <span>⚙️</span><span>設定</span>
+    </button>
+    <button class="nav-exit" onclick="postMsg('spContentClose')">✕ EXIT</button>
+  </nav>
+
+  <!-- FILTER TABS -->
+  <div class="filter-bar">
+    <button class="filter-tab active" data-filter="all">すべて</button>
+    <button class="filter-tab" data-filter="lunch">🌿 ランチ</button>
+    <button class="filter-tab" data-filter="dinner">🍽️ ディナー</button>
+    <button class="filter-tab" data-filter="cafe">☕ カフェ</button>
+    <button class="filter-tab" data-filter="sweets">🍰 スイーツ</button>
+    <button class="filter-tab" data-filter="izakaya">🍶 居酒屋</button>
+  </div>
+
+  <!-- SCROLL AREA -->
+  <div class="scroll-area">
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-badge">🌟 Live Now</div>
+      <h1>グルメエリアへ<br>ようこそ</h1>
+      <p class="hero-sub">バーチャルで買って、リアルで食べる。<br>EMUER トークンで NFT メニューを手に入れよう。</p>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat-num">24</div>
+          <div class="hero-stat-label">提携店舗</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-num">312</div>
+          <div class="hero-stat-label">NFT メニュー</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-num">1,840</div>
+          <div class="hero-stat-label">総購入数</div>
+        </div>
+      </div>
+      <div class="hero-img">🍜</div>
+    </div>
+
+    <!-- FEATURED -->
+    <div class="section-label">✦ 本日のおすすめ NFT</div>
+    <div class="featured-banner" onclick="openShop(0)">
+      <div class="featured-inner">
+        <div class="featured-img">
+          <img src="https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=200&h=120&fit=crop" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentNode.innerHTML='🍜'">
+        </div>
+        <div class="featured-content">
+          <div class="featured-tag">🔥 Today's Pick</div>
+          <div class="featured-name">特製味噌ラーメン</div>
+          <div class="featured-shop">麺屋 黒帯 — 渋谷</div>
+          <div class="featured-price-row">
+            <div class="featured-price-emuer">85 EMUER</div>
+            <div class="featured-price-yen">¥1,200</div>
+            <div class="featured-discount">−30%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SHOP GRID -->
+    <div class="section-label">✦ 提携店舗</div>
+    <div class="shop-grid" id="shop-grid"></div>
+  </div>
+
+  <!-- BOTTOM TAB -->
+  <div class="bottom-tab-bar">
+    <button class="bottom-tab active" onclick="showPage('home')">
+      <span>🏠</span><span>ホーム</span>
+    </button>
+    <button class="bottom-tab" onclick="showPage('my-nft')">
+      <span>🎴</span><span>マイNFT</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE 2: SHOP DETAIL
+     ============================================================ -->
+<div class="page" id="page-shop">
+  <nav class="nav">
+    <div class="nav-brand">
+      <div class="nav-logo">SP</div>
+      <div>
+        <div class="nav-title" id="shop-nav-title">店舗詳細</div>
+        <div class="nav-subtitle">SchoolPark グルメ</div>
+      </div>
+    </div>
+    <button class="nav-btn" onclick="postMsg('openSpWallet')">
+      <span>💰</span>
+      <span class="wallet-balance-badge" id="nav-balance-shop">--</span>
+    </button>
+    <button class="nav-exit" onclick="postMsg('spContentClose')">✕ EXIT</button>
+  </nav>
+
+  <div class="scroll-area" id="shop-detail-content"></div>
+
+  <div class="bottom-tab-bar">
+    <button class="bottom-tab" onclick="showPage('home')">
+      <span>🏠</span><span>ホーム</span>
+    </button>
+    <button class="bottom-tab" onclick="showPage('my-nft')">
+      <span>🎴</span><span>マイNFT</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAGE 3: MY NFT
+     ============================================================ -->
+<div class="page" id="page-my-nft">
+  <nav class="nav">
+    <div class="nav-brand">
+      <div class="nav-logo">SP</div>
+      <div>
+        <div class="nav-title">マイ NFT</div>
+        <div class="nav-subtitle">購入済みメニュー</div>
+      </div>
+    </div>
+    <button class="nav-btn" onclick="postMsg('openSpWallet')">
+      <span>💰</span>
+      <span class="wallet-balance-badge" id="nav-balance-mynft">--</span>
+    </button>
+    <button class="nav-exit" onclick="postMsg('spContentClose')">✕ EXIT</button>
+  </nav>
+
+  <div class="scroll-area" id="my-nft-content">
+    <!-- filled by JS -->
+  </div>
+
+  <div class="bottom-tab-bar">
+    <button class="bottom-tab" onclick="showPage('home')">
+      <span>🏠</span><span>ホーム</span>
+    </button>
+    <button class="bottom-tab active" onclick="showPage('my-nft')">
+      <span>🎴</span><span>マイNFT</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: PURCHASE FLOW
+     ============================================================ -->
+<div class="modal-overlay" id="purchase-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title-text">NFT を購入する</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body">
+      <!-- filled by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: QR CODE
+     ============================================================ -->
+<div class="modal-overlay" id="qr-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">QR コードを表示</div>
+      <button class="modal-close" onclick="closeQRModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="qr-modal-img">
+        <div id="qr-display" style="width:160px;height:160px;background:white;border-radius:10px;padding:10px;display:grid;place-items:center;">
+          <!-- QR SVG injected here -->
+        </div>
+        <div class="qr-modal-label" id="qr-label">実店舗のスタッフにご提示ください</div>
+      </div>
+      <div style="padding:10px 0; text-align:center;">
+        <div id="qr-dish-name" style="font-size:14px;font-weight:700;margin-bottom:3px;"></div>
+        <div id="qr-shop-name" style="font-size:11px;color:var(--text2);margin-bottom:10px;"></div>
+        <div style="font-size:10px;color:var(--text3);">有効期限 <span id="qr-expiry" style="color:var(--orange);font-weight:600;"></span></div>
+      </div>
+      <button class="btn-confirm" onclick="closeQRModal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFETTI CANVAS -->
+<canvas id="confetti-canvas"></canvas>
+
+<script>
+/* ============================================================
+   DATA
+   ============================================================ */
+const SHOPS = [
+  {
+    id: 0, name: '麺屋 黒帯', icon: '🍜', genre: 'ランチ', filter: 'lunch',
+    address: '東京都渋谷区道玄坂1-2-3', hours: '11:00 – 22:00',
+    rating: 4.8, reviews_count: 234,
+    desc: '厳選した国産豚骨と丸鶏を12時間炊き込んだ濃厚スープが自慢。ブロックチェーンで産地証明された素材を使用。',
+    social: '@menaya_kurobelt',
+    minPrice: 85,
+    img: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=300&h=200&fit=crop',
+    menus: [
+      { id:'m0', name:'特製味噌ラーメン', price:1200, emuer:85, img:'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=300&h=200&fit=crop', emoji:'🍜' },
+      { id:'m1', name:'焦がしにんにく醤油ラーメン', price:1100, emuer:78, img:'https://images.unsplash.com/photo-1614179689702-355944cd0918?w=300&h=200&fit=crop', emoji:'🍝' },
+      { id:'m2', name:'特盛チャーシュー丼 セット', price:1600, emuer:112, img:'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=300&h=200&fit=crop', emoji:'🍱' },
+      { id:'m3', name:'餃子 6個', price:500, emuer:35, img:'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=300&h=200&fit=crop', emoji:'🥟' },
+    ],
+    reviews: [
+      { user:'0xABC...123', stars:5, date:'2026/04/28', text:'スープが最高！NFT で半額になって超お得でした。絶対リピします。', menu:'特製味噌ラーメン' },
+      { user:'crypto_yuki', stars:4, date:'2026/04/22', text:'チャーシューが柔らかくて美味しい。QRコードもすぐ読み取ってもらえた。', menu:'焦がしにんにく醤油ラーメン' },
+      { user:'web3_foodie', stars:5, date:'2026/04/18', text:'こんなサービス待ってた！NFT が実際の食事になるのが最高。', menu:'特盛チャーシュー丼 セット' },
+    ]
+  },
+  {
+    id: 1, name: 'Bistro GOLD', icon: '🥩', genre: 'ディナー', filter: 'dinner',
+    address: '東京都港区西麻布2-14-5', hours: '18:00 – 24:00',
+    rating: 4.9, reviews_count: 187,
+    desc: '赤坂の路地裏に佇むフレンチ×和牛ビストロ。NFTホルダー限定のワインペアリングも。',
+    social: '@bistro_gold_jp',
+    minPrice: 180,
+    img: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300&h=200&fit=crop',
+    menus: [
+      { id:'m4', name:'和牛サーロインステーキ 200g', price:5800, emuer:380, img:'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300&h=200&fit=crop', emoji:'🥩' },
+      { id:'m5', name:'フォアグラのソテー', price:3200, emuer:220, img:'https://images.unsplash.com/photo-1560717845-968823efbee1?w=300&h=200&fit=crop', emoji:'🍖' },
+      { id:'m6', name:'本日のシェフコース', price:8800, emuer:580, img:'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=300&h=200&fit=crop', emoji:'🍽️' },
+    ],
+    reviews: [
+      { user:'gourmet_eth', stars:5, date:'2026/05/01', text:'最高のビストロ体験。NFT コースは特別感があってVIPになった気分。', menu:'本日のシェフコース' },
+      { user:'0xFE9...bba', stars:5, date:'2026/04/25', text:'ステーキが口の中でとろける。NFT 価格でこのクオリティは信じられない。', menu:'和牛サーロインステーキ 200g' },
+    ]
+  },
+  {
+    id: 2, name: 'CAFÉ TERRA', icon: '☕', genre: 'カフェ', filter: 'cafe',
+    address: '東京都目黒区自由が丘1-10-8', hours: '09:00 – 20:00',
+    rating: 4.6, reviews_count: 412,
+    desc: '自由が丘の路面店。スペシャルティコーヒーとクラフトサンドを。NFTで予約席も取れます。',
+    social: '@cafe_terra_jp',
+    minPrice: 28,
+    img: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=300&h=200&fit=crop',
+    menus: [
+      { id:'m7', name:'シグネチャーラテ', price:700, emuer:48, img:'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=300&h=200&fit=crop', emoji:'☕' },
+      { id:'m8', name:'アボカドトーストセット', price:1200, emuer:82, img:'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=300&h=200&fit=crop', emoji:'🥑' },
+      { id:'m9', name:'特製アフォガート', price:900, emuer:62, img:'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=300&h=200&fit=crop', emoji:'🍦' },
+    ],
+    reviews: [
+      { user:'coffee_nft', stars:5, date:'2026/04/30', text:'コーヒーが絶品。NFTで買ったら特製ラテアートをサービスしてもらえた！', menu:'シグネチャーラテ' },
+    ]
+  },
+  {
+    id: 3, name: 'SAKURA 甘味処', icon: '🍡', genre: 'スイーツ', filter: 'sweets',
+    address: '東京都台東区浅草1-5-2', hours: '10:00 – 19:00',
+    rating: 4.7, reviews_count: 290,
+    desc: '浅草の老舗和菓子店がWeb3に参入。季節の上生菓子をNFTで。',
+    social: '@sakura_wagashi',
+    minPrice: 25,
+    img: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=300&h=200&fit=crop',
+    menus: [
+      { id:'m10', name:'季節の上生菓子 5点盛り', price:1800, emuer:125, img:'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=300&h=200&fit=crop', emoji:'🍡' },
+      { id:'m11', name:'抹茶パフェ', price:1100, emuer:76, img:'https://images.unsplash.com/photo-1553361371-9b22f78e8b1d?w=300&h=200&fit=crop', emoji:'🍵' },
+      { id:'m12', name:'わらび餅セット', price:800, emuer:55, img:'https://images.unsplash.com/photo-1582716401301-b2407dc7563d?w=300&h=200&fit=crop', emoji:'🍮' },
+    ],
+    reviews: [
+      { user:'wagashi_lover', stars:5, date:'2026/04/29', text:'和菓子のNFT化という発想が面白い！味も本格的で大満足。', menu:'季節の上生菓子 5点盛り' },
+    ]
+  },
+  {
+    id: 4, name: '炉端 NOTO', icon: '🍶', genre: '居酒屋', filter: 'izakaya',
+    address: '東京都新宿区歌舞伎町2-8-4', hours: '17:00 – 翌3:00',
+    rating: 4.5, reviews_count: 356,
+    desc: '能登の食材を直送。囲炉裏を囲んで飲む日本酒と肴。NFT保有者には限定地酒も。',
+    social: '@robata_noto',
+    minPrice: 55,
+    img: 'https://images.unsplash.com/photo-1580822184713-fc5400e7fe10?w=300&h=200&fit=crop',
+    menus: [
+      { id:'m13', name:'能登の海鮮盛り 4点', price:2800, emuer:195, img:'https://images.unsplash.com/photo-1580822184713-fc5400e7fe10?w=300&h=200&fit=crop', emoji:'🦐' },
+      { id:'m14', name:'炉端 焼き鳥 8本盛り', price:1600, emuer:110, img:'https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=300&h=200&fit=crop', emoji:'🍢' },
+      { id:'m15', name:'限定 地酒おまかせ 3種', price:2200, emuer:152, img:'https://images.unsplash.com/photo-1506377711776-dbdc2f3c20d9?w=300&h=200&fit=crop', emoji:'🍶' },
+    ],
+    reviews: [
+      { user:'sake_web3', stars:4, date:'2026/05/02', text:'居酒屋でNFT使えるの最高。地酒もラインナップが豊富で飲み応えあり！', menu:'限定 地酒おまかせ 3種' },
+    ]
+  },
+  {
+    id: 5, name: 'PIZZA BLOCK', icon: '🍕', genre: 'ランチ', filter: 'lunch',
+    address: '東京都渋谷区神宮前4-20-1', hours: '11:30 – 22:00',
+    rating: 4.4, reviews_count: 178,
+    desc: 'ナポリ職人直伝の石窯ピザ。トッピングをNFTでカスタマイズできる唯一の店。',
+    social: '@pizza_block_jp',
+    minPrice: 62,
+    img: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=300&h=200&fit=crop',
+    menus: [
+      { id:'m16', name:'マルゲリータ DOC', price:1400, emuer:96, img:'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=300&h=200&fit=crop', emoji:'🍕' },
+      { id:'m17', name:'トリュフきのこピザ', price:2200, emuer:152, img:'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300&h=200&fit=crop', emoji:'🍄' },
+      { id:'m18', name:'デザートカルツォーネ', price:1100, emuer:75, img:'https://images.unsplash.com/photo-1593560708920-61dd98c46a4e?w=300&h=200&fit=crop', emoji:'🥐' },
+    ],
+    reviews: [
+      { user:'0xPizza', stars:4, date:'2026/04/27', text:'生地がもちもちで最高。NFTトッピングカスタマイズが面白い体験！', menu:'マルゲリータ DOC' },
+    ]
+  },
+];
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let loggedIn = true; // simulate logged-in
+let emuerBalance = 120; // read from localStorage or use default
+
+function loadBalance() {
+  try {
+    const raw = localStorage.getItem('emuerData');
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (typeof d.balance === 'number') emuerBalance = d.balance;
+    }
+  } catch(e) {}
+}
+
+// Owned NFTs: array of { menuId, shopId, dishName, shopName, emoji, img, expiry, used }
+let ownedNFTs = [];
+function loadOwnedNFTs() {
+  try {
+    const raw = localStorage.getItem('gourmetNFTs');
+    if (raw) ownedNFTs = JSON.parse(raw);
+  } catch(e) {}
+}
+function saveOwnedNFTs() {
+  localStorage.setItem('gourmetNFTs', JSON.stringify(ownedNFTs));
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+loadBalance();
+loadOwnedNFTs();
+renderShopGrid();
+updateBalanceBadges();
+
+/* ============================================================
+   postMessage bridge
+   ============================================================ */
+function postMsg(type) {
+  window.top.postMessage({ type }, '*');
+}
+
+/* ============================================================
+   PAGE NAVIGATION
+   ============================================================ */
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+
+  if (name === 'my-nft') renderMyNFT();
+  updateBalanceBadges();
+}
+
+function openShop(shopId) {
+  const shop = SHOPS[shopId];
+  document.getElementById('shop-nav-title').textContent = shop.name;
+  document.getElementById('shop-detail-content').innerHTML = renderShopDetail(shop);
+  showPage('shop');
+}
+
+/* ============================================================
+   BALANCE BADGE
+   ============================================================ */
+function updateBalanceBadges() {
+  const txt = `${emuerBalance} E`;
+  ['nav-balance','nav-balance-shop','nav-balance-mynft'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  });
+}
+
+/* ============================================================
+   SHOP GRID (HOME)
+   ============================================================ */
+function getFilteredShops() {
+  const active = document.querySelector('.filter-tab.active');
+  const f = active ? active.dataset.filter : 'all';
+  if (f === 'all') return SHOPS;
+  return SHOPS.filter(s => s.filter === f);
+}
+
+function renderShopGrid() {
+  const grid = document.getElementById('shop-grid');
+  const shops = getFilteredShops();
+  if (shops.length === 0) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🍽️</div><p>このカテゴリの店舗はまだありません</p></div>`;
+    return;
+  }
+  grid.innerHTML = shops.map(s => `
+    <div class="shop-card" onclick="openShop(${s.id})">
+      <div class="shop-card-img">
+        <img src="${s.img}" alt="" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;" onerror="this.style.display='none'">
+        <span style="z-index:1;position:relative;font-size:40px;">${s.icon}</span>
+        <div class="shop-genre-badge">${s.genre}</div>
+      </div>
+      <div class="shop-card-body">
+        <div class="shop-card-name">${s.name}</div>
+        <div class="shop-card-meta">
+          <span class="stars">${renderStars(s.rating)}</span>
+          <span>${s.rating}</span>
+          <span style="color:var(--text3)">(${s.reviews_count})</span>
+        </div>
+        <div class="shop-card-price-row">
+          <span class="shop-card-from">FROM</span>
+          <span class="shop-card-emuer">${s.minPrice} EMUER</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderStars(rating) {
+  const full = Math.floor(rating);
+  const half = rating - full >= 0.5 ? 1 : 0;
+  return '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(5 - full - half);
+}
+
+// Filter tabs
+document.querySelectorAll('.filter-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    renderShopGrid();
+  });
+});
+
+/* ============================================================
+   SHOP DETAIL RENDER
+   ============================================================ */
+function renderShopDetail(shop) {
+  const menuCards = shop.menus.map(m => {
+    const owned = ownedNFTs.some(n => n.menuId === m.id);
+    let btnHtml;
+    if (!loggedIn) {
+      btnHtml = `<button class="btn-buy login-required" onclick="event.stopPropagation();openPurchaseModal(${shop.id},'${m.id}')">🔒 Googleでログイン</button>`;
+    } else if (owned) {
+      btnHtml = `<button class="btn-buy owned" onclick="event.stopPropagation();openQRFromMenu('${m.id}')">✓ 購入済み — QRを表示</button>`;
+    } else {
+      btnHtml = `<button class="btn-buy" onclick="event.stopPropagation();openPurchaseModal(${shop.id},'${m.id}')">NFTで購入する</button>`;
+    }
+    return `
+      <div class="nft-card">
+        <div class="nft-card-img">
+          <img src="${m.img}" alt="${m.name}" onerror="this.style.display='none';this.parentNode.querySelector('.emoji-fallback').style.display='block'">
+          <span class="emoji-fallback" style="display:none;font-size:50px;">${m.emoji}</span>
+          <div class="nft-badge">NFT</div>
+        </div>
+        <div class="nft-card-body">
+          <div class="nft-card-name">${m.name}</div>
+          <div class="nft-price-row">
+            <span class="nft-price-emuer">${m.emuer}</span>
+            <span class="nft-price-unit">EMUER</span>
+            <span class="nft-price-yen">¥${m.price.toLocaleString()}</span>
+          </div>
+          ${btnHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const reviewsHtml = shop.reviews.map(r => `
+    <div class="review-item">
+      <div class="review-header">
+        <span class="review-user">${r.user}</span>
+        <span class="review-stars">${'★'.repeat(r.stars)}${'☆'.repeat(5-r.stars)}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text3)">${r.date}</div>
+      <div class="review-text">${r.text}</div>
+      <div class="review-nft-tag">🎴 ${r.menu}</div>
+    </div>
+  `).join('');
+
+  return `
+    <div class="shop-header">
+      <button class="back-btn" onclick="showPage('home')">← 一覧に戻る</button>
+      <div class="shop-header-inner">
+        <div class="shop-header-icon">${shop.icon}</div>
+        <div class="shop-header-info">
+          <div class="shop-header-name">${shop.name}</div>
+          <div class="shop-header-genre">${shop.genre}</div>
+          <div class="shop-header-detail">📍 ${shop.address}</div>
+          <div class="shop-header-detail">🕐 ${shop.hours}</div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 16px 16px;">
+      <div class="divider"></div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:6px;">${shop.desc}</div>
+      <div style="font-size:11px;color:var(--text3);">SNS: ${shop.social}</div>
+
+      <div class="section-title-bar" style="margin-top:18px;">
+        <h3>🎴 NFT メニュー</h3>
+        <span style="font-size:11px;color:var(--text3)">${shop.menus.length} アイテム</span>
+      </div>
+      <div class="menu-grid">${menuCards}</div>
+
+      <div class="section-label">✦ レビュー (${shop.reviews.length})</div>
+      <div class="review-list">${reviewsHtml}</div>
+      <div style="height:20px;"></div>
+    </div>
+  `;
+}
+
+/* ============================================================
+   PURCHASE MODAL
+   ============================================================ */
+let currentShopId = null;
+let currentMenuId = null;
+let purchaseStep = 1;
+
+function openPurchaseModal(shopId, menuId) {
+  currentShopId = shopId;
+  currentMenuId = menuId;
+  purchaseStep = 1;
+  renderPurchaseStep();
+  document.getElementById('purchase-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('purchase-modal').classList.remove('open');
+  // refresh shop detail if open
+  if (document.getElementById('page-shop').classList.contains('active')) {
+    const shop = SHOPS[currentShopId];
+    document.getElementById('shop-detail-content').innerHTML = renderShopDetail(shop);
+  }
+}
+
+function renderPurchaseStep() {
+  const shop = SHOPS[currentShopId];
+  const menu = shop.menus.find(m => m.id === currentMenuId);
+  const modal = document.getElementById('purchase-modal');
+  const body = document.getElementById('modal-body');
+  const titleEl = document.getElementById('modal-title-text');
+
+  if (purchaseStep === 1) {
+    titleEl.textContent = 'メニューを確認';
+    body.innerHTML = `
+      ${stepIndicator(1)}
+      <div class="modal-dish-img">
+        <img src="${menu.img}" alt="${menu.name}" onerror="this.style.display='none';this.parentNode.querySelector('.ef').style.display='block'">
+        <span class="ef" style="display:none;font-size:64px;">${menu.emoji}</span>
+      </div>
+      <div class="modal-dish-name">${menu.name}</div>
+      <div class="modal-dish-shop">${shop.name}</div>
+      <div class="price-display">
+        <div>
+          <div class="price-label">NFT 価格</div>
+          <div class="price-value-yen">通常 ¥${menu.price.toLocaleString()}</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="price-value-emuer">${menu.emuer} EMUER</div>
+        </div>
+      </div>
+      <button class="btn-confirm" onclick="purchaseStep=2;renderPurchaseStep()">次へ — ウォレット確認</button>
+      <button class="btn-secondary" onclick="closeModal()">キャンセル</button>
+    `;
+  } else if (purchaseStep === 2) {
+    loadBalance();
+    const enough = emuerBalance >= menu.emuer;
+    const diff = menu.emuer - emuerBalance;
+    titleEl.textContent = 'ウォレット残高確認';
+    body.innerHTML = `
+      ${stepIndicator(2)}
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <div class="modal-dish-img" style="height:80px;width:80px;border-radius:10px;margin:0;font-size:36px;flex-shrink:0;">
+          <img src="${menu.img}" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:700;">${menu.name}</div>
+          <div style="font-size:11px;color:var(--text2);">${shop.name}</div>
+          <div style="font-size:16px;font-weight:800;color:var(--gold);margin-top:3px;">${menu.emuer} EMUER</div>
+        </div>
+      </div>
+      <div class="balance-row">
+        <span class="balance-label">💰 現在の残高</span>
+        <span class="balance-value ${enough ? 'balance-ok' : 'balance-ng'}">${emuerBalance} EMUER</span>
+      </div>
+      <div class="balance-row">
+        <span class="balance-label">支払い金額</span>
+        <span class="balance-value" style="color:var(--text);">− ${menu.emuer} EMUER</span>
+      </div>
+      <div class="balance-row">
+        <span class="balance-label">購入後の残高</span>
+        <span class="balance-value ${enough ? 'balance-ok' : 'balance-ng'}">${emuerBalance - menu.emuer} EMUER</span>
+      </div>
+      <div class="balance-error-msg ${enough ? '' : 'show'}">
+        ⚠️ 残高が足りません（あと <strong>${diff} EMUER</strong> 必要です）
+      </div>
+      <button class="btn-confirm" ${enough ? '' : 'disabled'} onclick="purchaseStep=3;renderPurchaseStep()">
+        ${menu.emuer} EMUER を支払って購入
+      </button>
+      <button class="btn-secondary" onclick="purchaseStep=1;renderPurchaseStep()">← 戻る</button>
+    `;
+  } else if (purchaseStep === 3) {
+    // Processing animation
+    titleEl.textContent = '処理中...';
+    body.innerHTML = `
+      ${stepIndicator(3)}
+      <div style="text-align:center;padding:40px 0;">
+        <div style="font-size:40px;animation:spin 1s linear infinite;display:inline-block;">⏳</div>
+        <div style="margin-top:14px;font-size:14px;color:var(--text2);">NFTを発行中です...</div>
+        <div style="margin-top:6px;font-size:11px;color:var(--text3);">ブロックチェーンに記録しています</div>
+      </div>
+    `;
+    setTimeout(() => {
+      // Commit purchase
+      const expiry = new Date();
+      expiry.setDate(expiry.getDate() + 30);
+      ownedNFTs.push({
+        menuId: menu.id,
+        shopId: shop.id,
+        dishName: menu.name,
+        shopName: shop.name,
+        emoji: menu.emoji,
+        img: menu.img,
+        expiry: expiry.toLocaleDateString('ja-JP'),
+        used: false
+      });
+      emuerBalance -= menu.emuer;
+      saveOwnedNFTs();
+      try {
+        const raw = localStorage.getItem('emuerData');
+        const d = raw ? JSON.parse(raw) : {};
+        d.balance = emuerBalance;
+        localStorage.setItem('emuerData', JSON.stringify(d));
+      } catch(e) {}
+      updateBalanceBadges();
+      purchaseStep = 4;
+      renderPurchaseStep();
+      launchConfetti();
+    }, 1800);
+  } else if (purchaseStep === 4) {
+    titleEl.textContent = '購入完了！';
+    const expiry = ownedNFTs.find(n => n.menuId === menu.id);
+    body.innerHTML = `
+      ${stepIndicator(4)}
+      <div class="success-icon">✓</div>
+      <div class="success-title">NFT を取得しました！</div>
+      <div class="success-sub">QRコードを実店舗のスタッフに提示してください</div>
+
+      <div class="flip-wrapper" id="flip-card" onclick="this.classList.toggle('flipped')">
+        <div class="flip-inner">
+          <div class="flip-face flip-face-front">
+            <img src="${menu.img}" alt="${menu.name}" onerror="this.style.display='none';this.nextSibling.style.display='block'">
+            <span style="display:none;font-size:72px;">${menu.emoji}</span>
+          </div>
+          <div class="flip-face flip-face-back">
+            <div>
+              <div class="qr-placeholder">${generateQRSVG(menu.id)}</div>
+              <div style="margin-top:6px;font-size:10px;color:var(--text2);text-align:center;">${menu.name}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="flip-hint">タップでQRコードを表示</div>
+
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1;padding:10px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;text-align:center;">
+          <div style="font-size:10px;color:var(--text3);">有効期限</div>
+          <div style="font-size:12px;font-weight:700;color:var(--orange);margin-top:2px;">${expiry ? expiry.expiry : '30日間'}</div>
+        </div>
+        <div style="flex:1;padding:10px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;text-align:center;">
+          <div style="font-size:10px;color:var(--text3);">残高</div>
+          <div style="font-size:12px;font-weight:700;color:var(--gold);margin-top:2px;">${emuerBalance} EMUER</div>
+        </div>
+      </div>
+
+      <button class="btn-confirm" style="margin-top:14px;" onclick="closeModal();showPage('my-nft')">マイNFTで確認する</button>
+      <button class="btn-secondary" onclick="closeModal()">閉じる</button>
+    `;
+  }
+}
+
+function stepIndicator(current) {
+  return `<div class="step-indicator">
+    ${[1,2,3,4].map(i => `<div class="step-dot ${i < current ? 'done' : i === current ? 'active' : ''}"></div>`).join('')}
+  </div>`;
+}
+
+/* ============================================================
+   QR MODAL
+   ============================================================ */
+function openQRFromMenu(menuId) {
+  const nft = ownedNFTs.find(n => n.menuId === menuId);
+  if (!nft) return;
+  showQRModal(nft);
+}
+
+function showQRModal(nft) {
+  document.getElementById('qr-display').innerHTML = generateQRSVG(nft.menuId);
+  document.getElementById('qr-dish-name').textContent = nft.dishName;
+  document.getElementById('qr-shop-name').textContent = nft.shopName;
+  document.getElementById('qr-expiry').textContent = nft.expiry;
+  document.getElementById('qr-modal').classList.add('open');
+}
+
+function closeQRModal() {
+  document.getElementById('qr-modal').classList.remove('open');
+}
+
+/* ============================================================
+   MY NFT PAGE
+   ============================================================ */
+function renderMyNFT() {
+  const container = document.getElementById('my-nft-content');
+  if (ownedNFTs.length === 0) {
+    container.innerHTML = `
+      <div style="padding:16px;">
+        <div class="section-label">✦ 所持 NFT (0)</div>
+        <div class="empty-state">
+          <div class="empty-icon">🎴</div>
+          <p>まだ NFT を購入していません。</p>
+          <p style="margin-top:8px;font-size:12px;color:var(--text3)">グルメエリアで好きなメニューを購入してみよう！</p>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const cardsHtml = ownedNFTs.map((nft, idx) => {
+    const expClass = nft.used ? '' : 'expiry-ok';
+    const btnHtml = nft.used
+      ? `<button class="btn-qr" disabled>使用済み</button>`
+      : `<button class="btn-qr" onclick="showQRModal(${JSON.stringify(nft).replace(/"/g,"'")})">📱 QRを表示</button>`;
+    return `
+      <div class="my-nft-card ${nft.used ? 'used' : ''}">
+        <div class="my-nft-img">
+          <img src="${nft.img}" alt="${nft.dishName}" onerror="this.style.display='none';this.nextSibling.style.display='block'">
+          <span style="display:none;font-size:46px;">${nft.emoji}</span>
+          <div class="my-nft-used-overlay">使用済み</div>
+        </div>
+        <div class="my-nft-body">
+          <div class="my-nft-name">${nft.dishName}</div>
+          <div class="my-nft-shop">${nft.shopName}</div>
+          <div class="my-nft-expiry">
+            <span style="font-size:11px;">⏰</span>
+            <span class="${expClass}">有効 ${nft.expiry}まで</span>
+          </div>
+          ${btnHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const usedCount = ownedNFTs.filter(n => n.used).length;
+  container.innerHTML = `
+    <div style="padding:16px;">
+      <div style="display:flex;gap:12px;margin-bottom:16px;">
+        <div style="flex:1;padding:12px;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;text-align:center;">
+          <div style="font-size:22px;font-weight:800;color:var(--gold);">${ownedNFTs.length}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px;">保有 NFT</div>
+        </div>
+        <div style="flex:1;padding:12px;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;text-align:center;">
+          <div style="font-size:22px;font-weight:800;color:var(--emerald);">${ownedNFTs.length - usedCount}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px;">未使用</div>
+        </div>
+        <div style="flex:1;padding:12px;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;text-align:center;">
+          <div style="font-size:22px;font-weight:800;color:var(--text3);">${usedCount}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px;">使用済み</div>
+        </div>
+      </div>
+      <div class="section-label">✦ 所持 NFT (${ownedNFTs.length})</div>
+      <div class="my-nft-grid">${cardsHtml}</div>
+    </div>
+  `;
+}
+
+/* ============================================================
+   QR CODE GENERATOR (simple SVG pattern)
+   ============================================================ */
+function generateQRSVG(seed) {
+  // Pseudo-random QR visual based on seed string
+  const s = String(seed);
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = ((hash << 5) - hash) + s.charCodeAt(i);
+  hash = Math.abs(hash);
+
+  const size = 21;
+  const cellSize = 5;
+  const total = size * cellSize;
+  let cells = '';
+
+  // Generate pseudo-random cell pattern
+  const rand = (n) => {
+    hash = ((hash * 1664525 + 1013904223) >>> 0);
+    return hash % n;
+  };
+
+  // Position detection patterns (corners)
+  const fixed = new Set();
+  [[0,0],[0,14],[14,0]].forEach(([r,c]) => {
+    for (let dr=0; dr<7; dr++) for (let dc=0; dc<7; dc++) {
+      const key = `${r+dr},${c+dc}`;
+      fixed.add(key);
+      const inBorder = dr===0||dr===6||dc===0||dc===6;
+      const inInner = dr>=2&&dr<=4&&dc>=2&&dc<=4;
+      if (inBorder || inInner) {
+        cells += `<rect x="${(c+dc)*cellSize}" y="${(r+dr)*cellSize}" width="${cellSize}" height="${cellSize}" fill="#000"/>`;
+      }
+    }
+  });
+
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (fixed.has(`${r},${c}`)) continue;
+      if (rand(2) === 0) {
+        cells += `<rect x="${c*cellSize}" y="${r*cellSize}" width="${cellSize}" height="${cellSize}" fill="#000"/>`;
+      }
+    }
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" width="${total}" height="${total}">
+    <rect width="${total}" height="${total}" fill="white"/>
+    ${cells}
+  </svg>`;
+}
+
+/* ============================================================
+   CONFETTI
+   ============================================================ */
+function launchConfetti() {
+  const canvas = document.getElementById('confetti-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const colors = ['#D4A843','#E07C40','#4CAF82','#ffffff','#e8eaf0','#f0c040'];
+  const particles = Array.from({length: 80}, () => ({
+    x: Math.random() * canvas.width,
+    y: -10,
+    w: Math.random() * 8 + 4,
+    h: Math.random() * 4 + 2,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    vy: Math.random() * 3 + 2,
+    vx: (Math.random() - .5) * 2,
+    rot: Math.random() * 360,
+    vrot: (Math.random() - .5) * 8,
+    opacity: 1
+  }));
+
+  let frame = 0;
+  function tick() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    frame++;
+    let alive = false;
+    particles.forEach(p => {
+      if (p.y > canvas.height + 20) return;
+      p.y += p.vy;
+      p.x += p.vx;
+      p.rot += p.vrot;
+      if (frame > 80) p.opacity -= .015;
+      p.opacity = Math.max(0, p.opacity);
+      ctx.save();
+      ctx.globalAlpha = p.opacity;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot * Math.PI / 180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx.restore();
+      if (p.opacity > 0) alive = true;
+    });
+    if (alive) requestAnimationFrame(tick);
+    else ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ============================================================
+   CSS spin keyframe (used in step 3)
+   ============================================================ */
+const styleTag = document.createElement('style');
+styleTag.textContent = `@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`;
+document.head.appendChild(styleTag);
+</script>
+</body>
+</html>

@@ -8078,6 +8078,10 @@ window.addEventListener("message", (e) => {
       }
     });
     closeSpContent();
+    // ナビリンクのアクティブ状態をパークマップに戻す
+    document.querySelectorAll('.spmap-nav-link').forEach(el => el.classList.remove('active'));
+    const mapLink = Array.from(document.querySelectorAll('.spmap-nav-link')).find(el => el.textContent.trim() === 'パークマップ');
+    if (mapLink) mapLink.classList.add('active');
   }
   // iframeからタクシーモーダルを開く
   if (e.data.type === "openTaxi") { openTaxi(); }
@@ -8585,17 +8589,7 @@ function spMapNavClick(type) {
     return;
   }
   if (type === 'gourmet') {
-    openSpModal('🍽️ グルメ', `
-      <div class="spmm-coming-soon">
-        <div class="spmm-cs-icon">🍽️</div>
-        <div style="font-size:0.92rem;color:#D4A843;font-weight:700;margin-bottom:8px">SchoolPark グルメ</div>
-        <div style="color:#777;font-size:0.80rem;line-height:1.75">
-          SchoolPark内のカフェ・レストラン・屋台などの<br>フードエリアを紹介するECサイトです。<br><br>
-          <span style="color:#D4A843;font-weight:700">5/20 GRAND OPEN 予定</span><br>
-          現在コンテンツを準備中です。お楽しみに！
-        </div>
-      </div>
-    `);
+    openSpContent('/schoolpark/east-gourmet.html');
     return;
   }
   if (type === 'shopping') {
