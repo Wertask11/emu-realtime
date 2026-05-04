@@ -8109,18 +8109,16 @@ function closeSpPanel(panelId) {
   const panel = document.getElementById(panelId);
   if (panel) {
     panel.classList.remove('open');
-    setTimeout(() => { if (!panel.classList.contains('open')) panel.style.display = ''; }, 360);
+    panel.style.display = 'none';
   }
   const anyOpen = ['spWalletPanel','spRobotPanel','spSettingsPanel'].some(id => {
+    if (id === panelId) return false;
     const p = document.getElementById(id);
-    return p && (p.classList.contains('open') || p.style.display === 'flex');
+    return p && p.classList.contains('open');
   });
   if (!anyOpen) {
     const bd = document.getElementById('spPanelBackdrop');
-    if (bd) {
-      bd.classList.remove('open');
-      setTimeout(() => { if (!bd.classList.contains('open')) bd.style.display = ''; }, 360);
-    }
+    if (bd) { bd.classList.remove('open'); bd.style.display = 'none'; }
   }
 }
 
@@ -8128,19 +8126,13 @@ function closeAllSpPanels(exceptId) {
   ['spWalletPanel','spRobotPanel','spSettingsPanel'].forEach(id => {
     if (id !== exceptId) {
       const p = document.getElementById(id);
-      if (p) {
-        p.classList.remove('open');
-        setTimeout(() => { if (!p.classList.contains('open')) p.style.display = ''; }, 360);
-      }
+      if (p) { p.classList.remove('open'); p.style.display = 'none'; }
     }
   });
   // 全パネルを閉じるとき（exceptId未指定）は背景も閉じる
   if (exceptId === undefined) {
     const bd = document.getElementById('spPanelBackdrop');
-    if (bd) {
-      bd.classList.remove('open');
-      setTimeout(() => { if (!bd.classList.contains('open')) bd.style.display = ''; }, 360);
-    }
+    if (bd) { bd.classList.remove('open'); bd.style.display = 'none'; }
   }
 }
 
