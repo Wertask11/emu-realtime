@@ -167,14 +167,14 @@
 /* ─── SpMap スライドインパネル共通 ─── */
 .sp-panel {
   position:fixed; top:0; right:0; width:380px; max-width:100vw; height:100vh;
-  z-index:1050; background:#0f111a; border-left:1px solid rgba(212,168,67,0.3);
-  overflow-y:auto; transform:translateX(100%); transition:transform 0.32s cubic-bezier(0.4,0,0.2,1);
-  display:flex; flex-direction:column;
+  z-index:10050; background:#0f111a; border-left:1px solid rgba(212,168,67,0.3);
+  overflow-y:auto; display:none; flex-direction:column;
+  transform:translateX(100%); transition:transform 0.32s cubic-bezier(0.4,0,0.2,1);
 }
 .sp-panel.open { transform:translateX(0); }
 .sp-panel-backdrop {
-  position:fixed; inset:0; z-index:1049; background:rgba(0,0,0,0.5);
-  opacity:0; pointer-events:none; transition:opacity 0.32s;
+  position:fixed; inset:0; z-index:10049; background:rgba(0,0,0,0.55);
+  display:none; opacity:0; pointer-events:none; transition:opacity 0.3s;
 }
 .sp-panel-backdrop.open { opacity:1; pointer-events:all; }
 .sp-panel-header {
@@ -8095,23 +8095,32 @@ function openSpPanel(panelId) {
   const panel = document.getElementById(panelId);
   const backdrop = document.getElementById('spPanelBackdrop');
   if (!panel) return;
-  panel.classList.add('open');
-  if (backdrop) backdrop.classList.add('open');
-  if (panelId === 'spWalletPanel') _refreshSpWalletPanel();
-  if (panelId === 'spSettingsPanel') _loadSpSettings();
+  // display:flex にしてから次フレームで .open を付けてスライドアニメを起動
+  panel.style.display = 'flex';
+  if (backdrop) { backdrop.style.display = 'block'; requestAnimationFrame(() => backdrop.classList.add('open')); }
+  requestAnimationFrame(() => {
+    panel.classList.add('open');
+  });
+  if (panelId === 'spWalletPanel') setTimeout(_refreshSpWalletPanel, 80);
+  if (panelId === 'spSettingsPanel') setTimeout(_loadSpSettings, 80);
 }
 
 function closeSpPanel(panelId) {
   const panel = document.getElementById(panelId);
-  if (panel) panel.classList.remove('open');
-  // 他に開いているパネルがなければ背景も閉じる
+  if (panel) {
+    panel.classList.remove('open');
+    setTimeout(() => { if (!panel.classList.contains('open')) panel.style.display = ''; }, 360);
+  }
   const anyOpen = ['spWalletPanel','spRobotPanel','spSettingsPanel'].some(id => {
     const p = document.getElementById(id);
-    return p && p.classList.contains('open');
+    return p && (p.classList.contains('open') || p.style.display === 'flex');
   });
   if (!anyOpen) {
     const bd = document.getElementById('spPanelBackdrop');
-    if (bd) bd.classList.remove('open');
+    if (bd) {
+      bd.classList.remove('open');
+      setTimeout(() => { if (!bd.classList.contains('open')) bd.style.display = ''; }, 360);
+    }
   }
 }
 
@@ -8119,9 +8128,20 @@ function closeAllSpPanels(exceptId) {
   ['spWalletPanel','spRobotPanel','spSettingsPanel'].forEach(id => {
     if (id !== exceptId) {
       const p = document.getElementById(id);
-      if (p) p.classList.remove('open');
+      if (p) {
+        p.classList.remove('open');
+        setTimeout(() => { if (!p.classList.contains('open')) p.style.display = ''; }, 360);
+      }
     }
   });
+  // 全パネルを閉じるとき（exceptId未指定）は背景も閉じる
+  if (exceptId === undefined) {
+    const bd = document.getElementById('spPanelBackdrop');
+    if (bd) {
+      bd.classList.remove('open');
+      setTimeout(() => { if (!bd.classList.contains('open')) bd.style.display = ''; }, 360);
+    }
+  }
 }
 
 /* ── 💰 ウォレットパネル ── */
