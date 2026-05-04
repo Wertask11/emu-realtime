@@ -5798,6 +5798,8 @@ async function gatedOpen(poiId, fn) {
     const userType = _getUserTypeForEmuer();
     data.balance = 0;
     data.restrictionUntil = now + EMUER_RESTRICTION_MS[userType];
+    data.restrictionCount = (data.restrictionCount || 0) + 1;
+    data.lastRestriction = now;
     _saveEmuerData(data);
     _updateEmuerHud(0);
     _showEmuerRestrictionOverlay(data.restrictionUntil);

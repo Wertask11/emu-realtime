@@ -255,6 +255,129 @@ airdropRouter.post("/batch/run", async (req, res) => {
 app.use("/airdrop", airdropRouter);
 
 // =====================
+// オーナー署名検証ユーティリティ
+// =====================
+const SP_OWNER_ADDRESS = (process.env.SP_OWNER_ADDRESS || "0xdcc687c05f130e57597a8525771299a4efb6edf7").toLowerCase();
+
+function verifyOwnerSignature({ address, action, timestamp, signature }) {
+  try {
+    const message = `SchoolPark Admin:${action}:${timestamp}`;
+    const recovered = ethers.utils.verifyMessage(message, signature);
+    return recovered.toLowerCase() === SP_OWNER_ADDRESS &&
+           recovered.toLowerCase() === address.toLowerCase() &&
+           Math.abs(Math.floor(Date.now() / 1000) - timestamp) < 300;
+  } catch (e) {
+    console.error("オーナー署名検証エラー:", e.message);
+    return false;
+  }
+}
+
+// =====================
+// 月次EMUER配布 API (毎月20日・オーナーのみ)
+// =====================
+async function runMonthlyDistribution(monthKey) {
+  if (!db || !emuerContract) { console.warn("⚠️ 月次配布スキップ: 未初期化"); return { error: "NOT_INITIALIZED" }; }
+  try {
+    // 配布対象: emuer_rate コレクションに記録のある全ウォレット
+    const snapshot = await db.collection("emuer_rate").get();
+    const addresses = snapshot.docs.map(d => d.id).filter(a => /^0x[0-9a-f]{40}$/i.test(a));
+    if (addresses.length === 0) { console.log("ℹ️ 月次配布: 対象ユーザーなし"); return { count: 0 }; }
+
+    const amounts = addresses.map(() => ethers.utils.parseUnits("1000", 18));
+    console.log(`📦 月次配布対象: ${addresses.length} 件`);
+
+    const gasOptions = { maxPriorityFeePerGas: ethers.utils.parseUnits("40","gwei"), maxFeePerGas: ethers.utils.parseUnits("100","gwei"), gasLimit: 800000 };
+    const tx = await emuerContract.addGoodBatch(addresses, amounts, gasOptions);
+    const receipt = await tx.wait();
+    console.log("✅ 月次配布TX確定:", receipt.transactionHash);
+
+    await db.collection("monthly_distributions").doc(monthKey).set({
+      status: "done", txHash: receipt.transactionHash,
+      count: addresses.length, distributedAt: new Date(), monthKey
+    });
+    return { success: true, txHash: receipt.transactionHash, count: addresses.length };
+  } catch (err) {
+    console.error("❌ 月次配布エラー:", err.message);
+    await db.collection("monthly_distributions").doc(monthKey).set({ status: "error", error: err.message, monthKey, distributedAt: new Date() });
+    return { error: err.message };
+  }
+}
+
+app.post("/monthly-distribute", async (req, res) => {
+  const { address, action, timestamp, signature } = req.body;
+  if (!verifyOwnerSignature({ address, action: "monthly-distribute", timestamp, signature }))
+    return res.status(403).json({ error: "UNAUTHORIZED" });
+
+  // 20日チェック（日本時間）
+  const jstNow = new Date(Date.now() + 9 * 3600000);
+  if (jstNow.getDate() !== 20)
+    return res.status(400).json({ error: "NOT_20TH", message: "配布は毎月20日のみ実行できます" });
+
+  const monthKey = `${jstNow.getFullYear()}-${String(jstNow.getMonth()+1).padStart(2,"0")}`;
+  if (db) {
+    const existing = await db.collection("monthly_distributions").doc(monthKey).get();
+    if (existing.exists && existing.data().status === "done")
+      return res.status(409).json({ error: "ALREADY_DISTRIBUTED", txHash: existing.data().txHash, count: existing.data().count });
+  }
+
+  res.json({ message: `${monthKey} の月次配布を開始します` });
+  runMonthlyDistribution(monthKey);
+});
+
+app.get("/monthly-distribute/status", async (req, res) => {
+  if (!db) return res.json({ distributions: [] });
+  try {
+    const snap = await db.collection("monthly_distributions").orderBy("distributedAt","desc").limit(6).get();
+    const distributions = snap.docs.map(d => d.data());
+    return res.json({ distributions });
+  } catch (e) { return res.json({ distributions: [] }); }
+});
+
+// =====================
+// 管理者: 制限回数ランキング
+// =====================
+app.get("/admin/restriction-stats", async (req, res) => {
+  const { address, action, timestamp, signature } = req.query;
+  if (!verifyOwnerSignature({ address, action: "restriction-stats", timestamp: parseInt(timestamp), signature }))
+    return res.status(403).json({ error: "UNAUTHORIZED" });
+  if (!db) return res.json({ stats: [] });
+  try {
+    const snap = await db.collection("emuer_rate").get();
+    const stats = snap.docs
+      .map(d => ({ address: d.id, ...d.data() }))
+      .filter(u => (u.restrictionCount || 0) > 0)
+      .sort((a, b) => (b.restrictionCount || 0) - (a.restrictionCount || 0))
+      .slice(0, 50);
+    return res.json({ stats });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
+// =====================
+// 管理者: ボーナス報酬手動送金
+// =====================
+app.post("/admin/send-reward", async (req, res) => {
+  const { address: ownerAddress, action, timestamp, signature, targetAddress, amount, reason } = req.body;
+  if (!verifyOwnerSignature({ address: ownerAddress, action: "send-reward", timestamp, signature }))
+    return res.status(403).json({ error: "UNAUTHORIZED" });
+  if (!emuerContract) return res.status(503).json({ error: "CONTRACT_NOT_INITIALIZED" });
+
+  try {
+    const amountWei = ethers.utils.parseUnits(String(amount), 18);
+    const gasOptions = { maxPriorityFeePerGas: ethers.utils.parseUnits("40","gwei"), maxFeePerGas: ethers.utils.parseUnits("100","gwei"), gasLimit: 200000 };
+    const tx = await emuerContract.addGoodBatch([targetAddress], [amountWei], gasOptions);
+    const receipt = await tx.wait();
+    console.log(`🎁 ボーナス送金: ${targetAddress} ← ${amount} EMUER | TX: ${receipt.transactionHash}`);
+    if (db) {
+      await db.collection("bonus_rewards").add({ targetAddress, amount: String(amount), reason: reason || "", txHash: receipt.transactionHash, sentAt: new Date(), ownerAddress });
+    }
+    return res.json({ success: true, txHash: receipt.transactionHash });
+  } catch (err) {
+    console.error("❌ ボーナス送金エラー:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// =====================
 // 秘密のとびら 報酬 API
 // =====================
 const SECRET_DOOR_AMOUNTS = { 1: 100, 2: 150, 3: 120, 4: 130, 5: 200 };
