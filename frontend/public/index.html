@@ -164,6 +164,86 @@
   transition:background 0.15s; line-height:1;
 }
 .sp-icon-btn-bar .spib:hover { background:rgba(212,168,67,0.22); }
+/* ─── SpMap スライドインパネル共通 ─── */
+.sp-panel {
+  position:fixed; top:0; right:0; width:380px; max-width:100vw; height:100vh;
+  z-index:1050; background:#0f111a; border-left:1px solid rgba(212,168,67,0.3);
+  overflow-y:auto; transform:translateX(100%); transition:transform 0.32s cubic-bezier(0.4,0,0.2,1);
+  display:flex; flex-direction:column;
+}
+.sp-panel.open { transform:translateX(0); }
+.sp-panel-backdrop {
+  position:fixed; inset:0; z-index:1049; background:rgba(0,0,0,0.5);
+  opacity:0; pointer-events:none; transition:opacity 0.32s;
+}
+.sp-panel-backdrop.open { opacity:1; pointer-events:all; }
+.sp-panel-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:18px 20px; border-bottom:1px solid rgba(212,168,67,0.2); flex-shrink:0;
+}
+.sp-panel-title { font-size:1rem; font-weight:700; color:#D4A843; }
+.sp-panel-close {
+  background:none; border:1px solid rgba(255,255,255,0.15); color:#aaa;
+  border-radius:6px; padding:4px 10px; cursor:pointer; font-size:0.85rem;
+}
+.sp-panel-close:hover { background:rgba(255,255,255,0.1); }
+.sp-panel-body { padding:20px; flex:1; }
+.sp-panel-section { margin-bottom:24px; }
+.sp-panel-section-title {
+  font-size:0.72rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase;
+  color:#8B6914; margin-bottom:12px; padding-bottom:6px; border-bottom:1px solid rgba(212,168,67,0.15);
+}
+.sp-wallet-balance {
+  text-align:center; background:rgba(212,168,67,0.07); border:1px solid rgba(212,168,67,0.25);
+  border-radius:14px; padding:20px; margin-bottom:20px;
+}
+.sp-wallet-balance-num { font-size:2.4rem; font-weight:900; color:#D4A843; line-height:1; }
+.sp-wallet-balance-label { font-size:0.72rem; color:#8B6914; margin-top:4px; letter-spacing:0.15em; }
+.sp-wallet-history-item {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.82rem;
+}
+.sp-wallet-history-item:last-child { border-bottom:none; }
+.sp-wallet-minus { color:#ef4444; font-weight:700; }
+.sp-wallet-plus  { color:#22c55e; font-weight:700; }
+.sp-panel-btn {
+  background:linear-gradient(135deg,#D4A843,#8B6914); border:none; color:#0f111a;
+  padding:10px 20px; border-radius:8px; font-weight:700; cursor:pointer; font-size:0.85rem;
+  width:100%; margin-top:8px;
+}
+.sp-panel-btn:hover { opacity:0.88; }
+.sp-panel-btn.secondary {
+  background:rgba(212,168,67,0.1); color:#D4A843; border:1px solid rgba(212,168,67,0.3);
+}
+.sp-setting-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.sp-setting-row:last-child { border-bottom:none; }
+.sp-setting-label { font-size:0.88rem; color:#e0e0e0; }
+.sp-setting-sub { font-size:0.73rem; color:#666; margin-top:2px; }
+.sp-toggle { position:relative; width:44px; height:24px; cursor:pointer; }
+.sp-toggle input { opacity:0; width:0; height:0; position:absolute; }
+.sp-toggle-slider {
+  position:absolute; inset:0; background:#333; border-radius:24px; transition:0.3s;
+}
+.sp-toggle-slider::before {
+  content:''; position:absolute; width:18px; height:18px; left:3px; bottom:3px;
+  background:#fff; border-radius:50%; transition:0.3s;
+}
+.sp-toggle input:checked + .sp-toggle-slider { background:#D4A843; }
+.sp-toggle input:checked + .sp-toggle-slider::before { transform:translateX(20px); }
+.sp-robot-status {
+  display:inline-block; padding:4px 12px; border-radius:99px; font-size:0.75rem;
+  font-weight:700; background:rgba(212,168,67,0.15); color:#D4A843; border:1px solid rgba(212,168,67,0.3);
+  margin-bottom:16px;
+}
+.sp-robot-cap {
+  display:flex; align-items:flex-start; gap:10px; padding:10px 0;
+  border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.84rem;
+}
+.sp-robot-cap:last-child { border-bottom:none; }
+.sp-robot-cap-icon { font-size:1rem; flex-shrink:0; margin-top:1px; }
 /* East コンテンツ オーバーレイ上部のアイコンバー（削除済み - 各コンテンツページ内に移動）*/
 .spmap-brand-name {
   font-family:'Playfair Display',Georgia,serif; font-size:1.15rem; font-weight:800;
@@ -2242,10 +2322,10 @@ body.paypay-mode #pp-post-fab {
       <span id="emuerHudLow">⚠️残少</span>
     </div>
     <div class="sp-icon-btn-bar">
-      <button class="spib" disabled title="ウォレット（準備中）" style="opacity:0.35;cursor:not-allowed;">💰</button>
+      <button class="spib" onclick="openSpPanel('spWalletPanel')" title="ウォレット">💰</button>
       <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
-      <button class="spib" disabled title="ロボット（準備中）" style="opacity:0.35;cursor:not-allowed;">🤖</button>
-      <button class="spib" disabled title="設定（準備中）" style="opacity:0.35;cursor:not-allowed;">⚙️</button>
+      <button class="spib" onclick="openSpPanel('spRobotPanel')" title="AIエージェント">🤖</button>
+      <button class="spib" onclick="openSpPanel('spSettingsPanel')" title="設定">⚙️</button>
     </div>
     <button class="spmap-ticket-btn" onclick="spMapLinkClick('ticket')">チケット購入</button>
     <button class="spmap-menu-btn" onclick="toggleSpMapMenu()" aria-label="メニュー">☰</button>
@@ -2774,6 +2854,254 @@ body.paypay-mode #pp-post-fab {
 </div>
 <div id="eastHotel2Overlay" style="display:none;position:fixed;inset:0;z-index:1100;background:#05070a;">
   <iframe id="eastHotel2Frame" src="" style="width:100%;height:100%;border:none;"></iframe>
+</div>
+
+<!-- ===== SpMap スライドインパネル ===== -->
+<div id="spPanelBackdrop" class="sp-panel-backdrop" onclick="closeAllSpPanels()"></div>
+
+<!-- 💰 ウォレットパネル -->
+<div id="spWalletPanel" class="sp-panel">
+  <div class="sp-panel-header">
+    <div class="sp-panel-title">💰 マイ EMUER ウォレット</div>
+    <button class="sp-panel-close" onclick="closeSpPanel('spWalletPanel')">✕ 閉じる</button>
+  </div>
+  <div class="sp-panel-body">
+    <!-- 残高 -->
+    <div class="sp-wallet-balance">
+      <div class="sp-wallet-balance-num" id="spWalletBalanceNum">---</div>
+      <div class="sp-wallet-balance-label">EMUER 残高</div>
+    </div>
+
+    <!-- ポイント変換 -->
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">🔄 ポイント → EMUER 変換</div>
+      <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:14px;font-size:0.84rem;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+          <span style="color:#aaa;">✅ Good ポイント</span>
+          <span id="spWalletGoodPts" style="color:#D4A843;font-weight:700;">0 pt</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:14px;">
+          <span style="color:#aaa;">🔄 Change ポイント</span>
+          <span id="spWalletChangePts" style="color:#D4A843;font-weight:700;">0 pt</span>
+        </div>
+        <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:12px;display:flex;justify-content:space-between;align-items:center;">
+          <span style="color:#aaa;font-size:0.8rem;">変換予定 EMUER</span>
+          <span id="spWalletPendingEMUER" style="color:#22c55e;font-weight:700;font-size:1.1rem;">0 EMUER</span>
+        </div>
+      </div>
+      <button class="sp-panel-btn" onclick="spWalletConvert()">変換する（毎週月曜日）</button>
+    </div>
+
+    <!-- 取引履歴 -->
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">📜 取引履歴（直近10件）</div>
+      <div id="spWalletHistoryList">
+        <div style="color:#555;font-size:0.82rem;text-align:center;padding:20px 0;">履歴なし</div>
+      </div>
+    </div>
+
+    <!-- ウォレットアドレス -->
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">🔑 ウォレットアドレス</div>
+      <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:12px;display:flex;align-items:center;gap:10px;">
+        <span id="spWalletAddr" style="font-size:0.78rem;color:#888;flex:1;word-break:break-all;">未接続</span>
+        <button onclick="spWalletCopyAddr()" style="background:rgba(212,168,67,0.15);border:1px solid rgba(212,168,67,0.3);color:#D4A843;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;flex-shrink:0;">コピー</button>
+      </div>
+    </div>
+
+    <!-- アラートしきい値 -->
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">🔔 残高アラート設定</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input type="number" id="spWalletAlertThreshold" min="0" max="10000" value="100"
+          style="background:#1a1d2e;border:1px solid rgba(212,168,67,0.3);color:#D4A843;padding:8px 12px;border-radius:8px;width:100px;font-size:0.9rem;outline:none;">
+        <span style="font-size:0.84rem;color:#aaa;">EMUER 以下でアラート</span>
+      </div>
+      <button class="sp-panel-btn secondary" onclick="spWalletSaveAlert()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🤖 AI エージェントパネル -->
+<div id="spRobotPanel" class="sp-panel">
+  <div class="sp-panel-header">
+    <div class="sp-panel-title">🤖 AI エージェント</div>
+    <button class="sp-panel-close" onclick="closeSpPanel('spRobotPanel')">✕ 閉じる</button>
+  </div>
+  <div class="sp-panel-body">
+    <div style="text-align:center;padding:24px 0 20px;border-bottom:1px solid rgba(212,168,67,0.15);margin-bottom:20px;">
+      <div style="font-size:3.5rem;margin-bottom:12px;">🤖</div>
+      <div class="sp-robot-status">開発中 — Coming Soon</div>
+      <div style="font-size:0.92rem;color:#D4A843;font-weight:700;margin-bottom:8px;">自律型 AI エージェント</div>
+      <div style="font-size:0.82rem;color:#777;line-height:1.7;">
+        あなたの「デジタル分身」ではなく、<br>
+        あなたの代わりに <strong style="color:#aaa;">自律的に動く</strong> AIです。<br>
+        指示を出せば、あとは全部やってくれる。
+      </div>
+    </div>
+
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">⚡ エージェント能力（予定）</div>
+      <div class="sp-robot-cap">
+        <div class="sp-robot-cap-icon">🗺️</div>
+        <div>
+          <div style="font-weight:600;color:#e0e0e0;">SchoolPark 自動巡回</div>
+          <div style="font-size:0.77rem;color:#666;margin-top:2px;">設定したルートを自動で巡回し、コンテンツを収集</div>
+        </div>
+      </div>
+      <div class="sp-robot-cap">
+        <div class="sp-robot-cap-icon">💎</div>
+        <div>
+          <div style="font-weight:600;color:#e0e0e0;">EMUER 自動管理</div>
+          <div style="font-size:0.77rem;color:#666;margin-top:2px;">残高監視・補充タイミングを自律判断</div>
+        </div>
+      </div>
+      <div class="sp-robot-cap">
+        <div class="sp-robot-cap-icon">📋</div>
+        <div>
+          <div style="font-weight:600;color:#e0e0e0;">タスク自動実行</div>
+          <div style="font-size:0.77rem;color:#666;margin-top:2px;">「明日の朝、投票しておいて」などの予約タスク</div>
+        </div>
+      </div>
+      <div class="sp-robot-cap">
+        <div class="sp-robot-cap-icon">🔍</div>
+        <div>
+          <div style="font-weight:600;color:#e0e0e0;">コンテンツ推薦</div>
+          <div style="font-size:0.77rem;color:#666;margin-top:2px;">あなたの行動パターンからおすすめを自動提案</div>
+        </div>
+      </div>
+      <div class="sp-robot-cap">
+        <div class="sp-robot-cap-icon">🔔</div>
+        <div>
+          <div style="font-weight:600;color:#e0e0e0;">アラート自律対応</div>
+          <div style="font-size:0.77rem;color:#666;margin-top:2px;">重要なイベントを検知して即時通知・行動</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">🗓️ 開発ロードマップ</div>
+      <div style="font-size:0.82rem;color:#666;line-height:2.2;">
+        <div><span style="color:#D4A843;font-weight:700;">Phase 1</span> — <span style="color:#aaa;">現在</span>: UI・基盤設計</div>
+        <div><span style="color:#555;">Phase 2</span> — EMUER管理エージェント</div>
+        <div><span style="color:#555;">Phase 3</span> — SchoolPark巡回エージェント</div>
+        <div><span style="color:#555;">Phase 4</span> — 完全自律エージェント</div>
+      </div>
+    </div>
+
+    <button class="sp-panel-btn" onclick="alert('開発中です。リリース時にお知らせします！')">🔔 リリース通知を受け取る</button>
+  </div>
+</div>
+
+<!-- ⚙️ 設定パネル -->
+<div id="spSettingsPanel" class="sp-panel">
+  <div class="sp-panel-header">
+    <div class="sp-panel-title">⚙️ SchoolPark 設定</div>
+    <button class="sp-panel-close" onclick="closeSpPanel('spSettingsPanel')">✕ 閉じる</button>
+  </div>
+  <div class="sp-panel-body">
+
+    <!-- 1. 通知設定 -->
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">🔔 通知設定</div>
+      <div class="sp-setting-row">
+        <div>
+          <div class="sp-setting-label">残高低下アラート</div>
+          <div class="sp-setting-sub">EMUER残高がしきい値を下回ったら通知</div>
+        </div>
+        <label class="sp-toggle">
+          <input type="checkbox" id="spSettingBalanceAlert" checked onchange="spSettingSave()">
+          <span class="sp-toggle-slider"></span>
+        </label>
+      </div>
+      <div class="sp-setting-row">
+        <div>
+          <div class="sp-setting-label">イベント通知</div>
+          <div class="sp-setting-sub">新イベント・キャンペーンのお知らせ</div>
+        </div>
+        <label class="sp-toggle">
+          <input type="checkbox" id="spSettingEventNotif" checked onchange="spSettingSave()">
+          <span class="sp-toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 2. マップ表示設定 -->
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">🗺️ マップ表示設定</div>
+      <div class="sp-setting-row">
+        <div>
+          <div class="sp-setting-label">POI名を表示</div>
+          <div class="sp-setting-sub">マップ上の施設名ラベル</div>
+        </div>
+        <label class="sp-toggle">
+          <input type="checkbox" id="spSettingPoiLabel" checked onchange="spSettingApplyMap()">
+          <span class="sp-toggle-slider"></span>
+        </label>
+      </div>
+      <div class="sp-setting-row">
+        <div>
+          <div class="sp-setting-label">デフォルトズーム</div>
+          <div class="sp-setting-sub" id="spSettingZoomLabel">標準（×1）</div>
+        </div>
+        <input type="range" id="spSettingZoom" min="1" max="3" step="0.5" value="1"
+          style="width:100px;accent-color:#D4A843;" oninput="spSettingApplyZoom(this.value)">
+      </div>
+    </div>
+
+    <!-- 3. 言語設定 -->
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">🌐 言語設定</div>
+      <div class="sp-setting-row">
+        <div>
+          <div class="sp-setting-label">表示言語</div>
+          <div class="sp-setting-sub">UI言語（一部のみ対応）</div>
+        </div>
+        <select id="spSettingLang" onchange="spSettingSave()"
+          style="background:#1a1d2e;border:1px solid rgba(212,168,67,0.3);color:#D4A843;padding:6px 10px;border-radius:6px;font-size:0.82rem;outline:none;">
+          <option value="ja">🇯🇵 日本語</option>
+          <option value="en">🇺🇸 English</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 4. プライバシー設定 -->
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">🔒 プライバシー設定</div>
+      <div class="sp-setting-row">
+        <div>
+          <div class="sp-setting-label">ウォレットアドレス匿名化</div>
+          <div class="sp-setting-sub">投稿などに表示されるアドレスを短縮表示</div>
+        </div>
+        <label class="sp-toggle">
+          <input type="checkbox" id="spSettingAnonymize" onchange="spSettingSave()">
+          <span class="sp-toggle-slider"></span>
+        </label>
+      </div>
+      <div class="sp-setting-row">
+        <div>
+          <div class="sp-setting-label">行動ログの記録</div>
+          <div class="sp-setting-sub">SchoolPark内の移動履歴を記録</div>
+        </div>
+        <label class="sp-toggle">
+          <input type="checkbox" id="spSettingActivityLog" checked onchange="spSettingSave()">
+          <span class="sp-toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 5. キャッシュクリア -->
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">🗑️ SchoolPark キャッシュ</div>
+      <div style="font-size:0.82rem;color:#666;margin-bottom:12px;line-height:1.6;">
+        ローカルに保存された SchoolPark のデータを削除します。<br>
+        EMUER残高・ウォレット情報は削除されません。
+      </div>
+      <button class="sp-panel-btn secondary" onclick="spSettingClearCache()">🗑️ キャッシュをクリア</button>
+    </div>
+
+    <button class="sp-panel-btn" onclick="spSettingSave();closeSpPanel('spSettingsPanel');">✅ 設定を保存して閉じる</button>
+  </div>
 </div>
 
 
@@ -5852,6 +6180,12 @@ async function gatedOpen(poiId, fn) {
   data.balance -= cost;
   data.totalSpent = (data.totalSpent || 0) + cost;
   data.visitCount = (data.visitCount || 0) + 1;
+  // 取引履歴に追記（最大10件）
+  const poi = SP_POIS ? SP_POIS.find(p => p.id === poiId) : null;
+  const histEntry = { time: Date.now(), type: 'spend', amount: -cost, label: poi ? poi.name.split(' ')[0] : poiId, balance: data.balance };
+  if (!data.history) data.history = [];
+  data.history.unshift(histEntry);
+  if (data.history.length > 10) data.history = data.history.slice(0, 10);
   _saveEmuerData(data);
   _updateEmuerHud(data.balance);
   _showEmuerChargeToast(poiId, cost, data.balance);
@@ -7746,10 +8080,203 @@ window.addEventListener("message", (e) => {
     closeSpContent();
   }
   // iframeからタクシーモーダルを開く
-  if (e.data.type === "openTaxi") {
-    openTaxi();
-  }
+  if (e.data.type === "openTaxi") { openTaxi(); }
+  // iframeからパネルを開く
+  if (e.data.type === "openSpWallet")   { openSpPanel('spWalletPanel'); }
+  if (e.data.type === "openSpRobot")    { openSpPanel('spRobotPanel'); }
+  if (e.data.type === "openSpSettings") { openSpPanel('spSettingsPanel'); }
 });
+
+/* ═══════════════════════════════════════════════════════
+   SpMap スライドインパネル（💰🤖⚙️）
+═══════════════════════════════════════════════════════ */
+function openSpPanel(panelId) {
+  closeAllSpPanels(panelId);
+  const panel = document.getElementById(panelId);
+  const backdrop = document.getElementById('spPanelBackdrop');
+  if (!panel) return;
+  panel.classList.add('open');
+  if (backdrop) backdrop.classList.add('open');
+  if (panelId === 'spWalletPanel') _refreshSpWalletPanel();
+  if (panelId === 'spSettingsPanel') _loadSpSettings();
+}
+
+function closeSpPanel(panelId) {
+  const panel = document.getElementById(panelId);
+  if (panel) panel.classList.remove('open');
+  // 他に開いているパネルがなければ背景も閉じる
+  const anyOpen = ['spWalletPanel','spRobotPanel','spSettingsPanel'].some(id => {
+    const p = document.getElementById(id);
+    return p && p.classList.contains('open');
+  });
+  if (!anyOpen) {
+    const bd = document.getElementById('spPanelBackdrop');
+    if (bd) bd.classList.remove('open');
+  }
+}
+
+function closeAllSpPanels(exceptId) {
+  ['spWalletPanel','spRobotPanel','spSettingsPanel'].forEach(id => {
+    if (id !== exceptId) {
+      const p = document.getElementById(id);
+      if (p) p.classList.remove('open');
+    }
+  });
+}
+
+/* ── 💰 ウォレットパネル ── */
+function _refreshSpWalletPanel() {
+  const data = _getEmuerData();
+  const balance = data ? data.balance : 0;
+
+  // 残高
+  const balEl = document.getElementById('spWalletBalanceNum');
+  if (balEl) balEl.textContent = balance.toLocaleString();
+
+  // ポイント
+  const goodEl = document.getElementById('spWalletGoodPts');
+  const changeEl = document.getElementById('spWalletChangePts');
+  const pendingEl = document.getElementById('spWalletPendingEMUER');
+  if (goodEl) goodEl.textContent = '---';
+  if (changeEl) changeEl.textContent = '---';
+  if (pendingEl) pendingEl.textContent = (typeof pendingEmuer !== 'undefined' ? pendingEmuer : 0) + ' EMUER';
+
+  // ウォレットアドレス
+  const addrEl = document.getElementById('spWalletAddr');
+  if (addrEl) {
+    const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
+    addrEl.textContent = addr || '未接続';
+  }
+
+  // アラートしきい値
+  const thr = document.getElementById('spWalletAlertThreshold');
+  if (thr) {
+    const saved = localStorage.getItem('spWalletAlertThreshold');
+    if (saved) thr.value = saved;
+  }
+
+  // 取引履歴
+  const histEl = document.getElementById('spWalletHistoryList');
+  if (histEl) {
+    const hist = (data && data.history) ? data.history : [];
+    if (hist.length === 0) {
+      histEl.innerHTML = '<div style="color:#555;font-size:0.82rem;text-align:center;padding:20px 0;">履歴なし</div>';
+    } else {
+      histEl.innerHTML = hist.map(h => {
+        const d = new Date(h.time);
+        const timeStr = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const isPlus = h.amount > 0;
+        const amtClass = isPlus ? 'sp-wallet-plus' : 'sp-wallet-minus';
+        const amtStr = (isPlus ? '+' : '') + h.amount;
+        return `<div class="sp-wallet-history-item">
+          <span style="color:#aaa;">${h.label || '—'}</span>
+          <span style="color:#555;font-size:0.75rem;">${timeStr}</span>
+          <span class="${amtClass}">${amtStr}</span>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Firebase からポイント同期（非同期）
+  if (window.connectedAccount && typeof syncPendingEmuer === 'function') {
+    syncPendingEmuer().then(() => {
+      if (goodEl) goodEl.textContent = typeof pendingEmuer !== 'undefined' ? pendingEmuer + ' pt' : '---';
+      if (changeEl) changeEl.textContent = '---';
+      if (pendingEl) pendingEl.textContent = (typeof pendingEmuer !== 'undefined' ? pendingEmuer : 0) + ' EMUER';
+    }).catch(()=>{});
+  } else {
+    const pending = typeof pendingEmuer !== 'undefined' ? pendingEmuer : 0;
+    if (goodEl)   goodEl.textContent   = pending + ' pt';
+    if (changeEl) changeEl.textContent = '0 pt';
+  }
+}
+
+function spWalletConvert() {
+  if (typeof updateConvertButton === 'function') updateConvertButton();
+  const convertBtn = document.querySelector('.convert-day-btn') || document.querySelector('[onclick*="convertToEmuer"]');
+  if (convertBtn && !convertBtn.disabled) {
+    convertBtn.click();
+    closeSpPanel('spWalletPanel');
+  } else {
+    alert('変換は毎週月曜日のみ可能です。');
+  }
+}
+
+function spWalletCopyAddr() {
+  const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
+  if (!addr) { alert('ウォレット未接続です'); return; }
+  navigator.clipboard.writeText(addr).then(() => {
+    const btn = document.querySelector('#spWalletPanel button[onclick="spWalletCopyAddr()"]');
+    if (btn) { const orig = btn.textContent; btn.textContent = '✓ コピー済'; setTimeout(() => btn.textContent = orig, 1500); }
+  }).catch(() => alert(addr));
+}
+
+function spWalletSaveAlert() {
+  const val = document.getElementById('spWalletAlertThreshold')?.value || '100';
+  localStorage.setItem('spWalletAlertThreshold', val);
+  const btn = document.querySelector('#spWalletPanel .sp-panel-btn.secondary');
+  if (btn) { const orig = btn.textContent; btn.textContent = '✓ 保存しました'; setTimeout(() => btn.textContent = orig, 1500); }
+}
+
+/* ── ⚙️ 設定パネル ── */
+function _loadSpSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('spSettings') || '{}');
+    const setChk = (id, def) => { const el = document.getElementById(id); if (el) el.checked = s[id] !== undefined ? s[id] : def; };
+    setChk('spSettingBalanceAlert', true);
+    setChk('spSettingEventNotif', true);
+    setChk('spSettingPoiLabel', true);
+    setChk('spSettingAnonymize', false);
+    setChk('spSettingActivityLog', true);
+    const langEl = document.getElementById('spSettingLang');
+    if (langEl && s.spSettingLang) langEl.value = s.spSettingLang;
+    const zoomEl = document.getElementById('spSettingZoom');
+    if (zoomEl && s.spSettingZoom) { zoomEl.value = s.spSettingZoom; spSettingApplyZoom(s.spSettingZoom, true); }
+  } catch(e) {}
+}
+
+function spSettingSave() {
+  const get = id => document.getElementById(id);
+  const s = {
+    spSettingBalanceAlert: get('spSettingBalanceAlert')?.checked ?? true,
+    spSettingEventNotif:   get('spSettingEventNotif')?.checked ?? true,
+    spSettingPoiLabel:     get('spSettingPoiLabel')?.checked ?? true,
+    spSettingAnonymize:    get('spSettingAnonymize')?.checked ?? false,
+    spSettingActivityLog:  get('spSettingActivityLog')?.checked ?? true,
+    spSettingLang:         get('spSettingLang')?.value || 'ja',
+    spSettingZoom:         get('spSettingZoom')?.value || '1',
+  };
+  localStorage.setItem('spSettings', JSON.stringify(s));
+}
+
+function spSettingApplyMap() {
+  spSettingSave();
+  const show = document.getElementById('spSettingPoiLabel')?.checked ?? true;
+  document.querySelectorAll('.sp-poi-label, .poi-label').forEach(el => {
+    el.style.display = show ? '' : 'none';
+  });
+}
+
+function spSettingApplyZoom(val, silent) {
+  const labels = { '1':'標準（×1）', '1.5':'中（×1.5）', '2':'大（×2）', '2.5':'特大（×2.5）', '3':'最大（×3）' };
+  const lb = document.getElementById('spSettingZoomLabel');
+  if (lb) lb.textContent = labels[String(val)] || `×${val}`;
+  if (!silent) spSettingSave();
+}
+
+function spSettingClearCache() {
+  if (!confirm('SchoolPark のキャッシュデータを削除しますか？\n（EMUER残高・ウォレット情報は保持されます）')) return;
+  const keep = ['emuWallet', 'pendingEmuer', 'spSettings', 'spWalletAlertThreshold'];
+  const emuerKey = typeof _EMUER_LS_KEY === 'function' ? _EMUER_LS_KEY() : null;
+  if (emuerKey) keep.push(emuerKey);
+  const allKeys = Object.keys(localStorage);
+  allKeys.forEach(k => {
+    if (!keep.includes(k) && (k.startsWith('sp') || k.startsWith('emu') || k.startsWith('school'))) {
+      localStorage.removeItem(k);
+    }
+  });
+  alert('キャッシュをクリアしました。');
+}
 
 /* ── モバイル：サイドバードロワー開閉 ── */
 function toggleSpMapMenu() {
