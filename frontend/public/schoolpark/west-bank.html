@@ -136,17 +136,22 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 .dist-hist-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px}
 .dist-hist-row:last-child{border-bottom:none}
 
-/* 管理者パネル */
-.admin-section{border:1px solid rgba(212,160,23,.3);border-radius:14px;padding:14px;margin-bottom:14px;background:rgba(212,160,23,.05)}
-.admin-title{font-size:13px;font-weight:700;color:var(--gold);margin-bottom:12px;display:flex;align-items:center;gap:6px}
-.stat-row{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:12px}
-.stat-addr{color:var(--cyan);font-family:monospace;font-size:11px}
-.stat-count{font-weight:700;color:var(--gold2)}
-.reward-form{display:flex;flex-direction:column;gap:8px}
-.reward-input{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;color:#fff;font-family:'Zen Maru Gothic',sans-serif;width:100%}
-.reward-input::placeholder{color:var(--muted)}
-.reward-btn{padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#8a6000,var(--gold2));color:#000;font-size:14px;font-weight:700;cursor:pointer;font-family:'Zen Maru Gothic',sans-serif}
-.reward-btn:hover{opacity:.85}
+/* ポイント表示カード */
+.point-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.point-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;text-align:center;position:relative;overflow:hidden}
+.point-card::before{content:'';position:absolute;top:-20px;right:-20px;width:60px;height:60px;border-radius:50%}
+.point-card.sp::before{background:radial-gradient(circle,rgba(212,160,23,.15),transparent 70%)}
+.point-card.real::before{background:radial-gradient(circle,rgba(0,200,255,.12),transparent 70%)}
+.point-card.good::before{background:radial-gradient(circle,rgba(0,230,118,.1),transparent 70%)}
+.point-card.change::before{background:radial-gradient(circle,rgba(168,85,247,.1),transparent 70%)}
+.point-icon{font-size:22px;margin-bottom:6px}
+.point-label{font-size:10px;color:var(--muted);margin-bottom:5px;letter-spacing:.05em}
+.point-val{font-size:24px;font-weight:700;line-height:1}
+.point-unit{font-size:10px;color:var(--muted);margin-top:3px}
+.point-sub{font-size:10px;color:var(--cyan);margin-top:4px}
+/* 制限バナー */
+.restrict-banner{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#ff6666;display:none}
+.restrict-banner.show{display:block}
 </style>
 </head>
 <body>
@@ -190,7 +195,6 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
   <div class="tab active" onclick="switchTab('convert')">💱 変換</div>
   <div class="tab" onclick="switchTab('balance')">💰 残高</div>
   <div class="tab" onclick="switchTab('monthly')">📅 月次配布</div>
-  <div class="tab" id="tabAdmin" style="display:none" onclick="switchTab('admin')">👑 管理者</div>
   <div class="tab" onclick="switchTab('guide')">📋 ガイド</div>
 </div>
 
@@ -260,37 +264,75 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 
 <!-- 残高パネル -->
 <div class="panel" id="panel-balance">
-  <div class="s-title">💰 口座残高</div>
-
-  <div class="balance-card">
-    <button class="refresh-btn" onclick="loadBalance()">↻ 更新</button>
-    <div class="balance-label">EMUER 保有残高</div>
-    <div><span class="balance-value" id="mainBalance">—</span><span class="balance-unit">EMUER</span></div>
-    <div class="balance-pending" id="mainPending">変換待ち: — EMUER</div>
-    <div class="balance-addr" id="mainAddr">ウォレット: 未接続</div>
+  <div class="s-title" style="justify-content:space-between">
+    <span>💰 残高・ポイント</span>
+    <button class="refresh-btn" style="position:static;margin:0" onclick="loadBalance()">↻ 更新</button>
   </div>
 
-  <div class="s-title">📊 変換レート</div>
+  <!-- ウォレットアドレス -->
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:11px;color:var(--muted)">
+    🔗 <span id="balAddr">ウォレット未接続</span>
+  </div>
+
+  <!-- 制限中バナー -->
+  <div class="restrict-banner" id="restrictBanner">
+    🚫 <strong>SchoolPark利用制限中</strong><br>
+    <span id="restrictUntilTxt">—</span> まで制限されています
+  </div>
+
+  <!-- 4枚カード -->
+  <div class="point-grid">
+    <!-- SchoolPark 仮想EMUER -->
+    <div class="point-card sp" style="grid-column:1/-1">
+      <div class="point-icon">💎</div>
+      <div class="point-label">SchoolPark EMUER（コンテンツ残高）</div>
+      <div class="point-val" id="balSpEmuer" style="color:var(--gold2)">—</div>
+      <div class="point-unit">SP EMUER</div>
+      <div class="point-sub" id="balSpSub">—</div>
+    </div>
+    <!-- 実EMUER -->
+    <div class="point-card real">
+      <div class="point-icon">🪙</div>
+      <div class="point-label">実EMUER残高（オンチェーン）</div>
+      <div class="point-val" id="balRealEmuer" style="color:var(--cyan)">—</div>
+      <div class="point-unit">EMUER</div>
+      <div class="point-sub">ERC-20 トークン</div>
+    </div>
+    <!-- 変換待ち -->
+    <div class="point-card">
+      <div class="point-icon">⏳</div>
+      <div class="point-label">変換待ち EMUER</div>
+      <div class="point-val" id="balPending" style="color:#f59e0b">—</div>
+      <div class="point-unit">EMUER（予定）</div>
+      <div class="point-sub">変換タブから変換可</div>
+    </div>
+    <!-- good -->
+    <div class="point-card good">
+      <div class="point-icon">👍</div>
+      <div class="point-label">good ポイント</div>
+      <div class="point-val" id="balGood" style="color:var(--green)">—</div>
+      <div class="point-unit">good</div>
+      <div class="point-sub">÷10 = EMUER</div>
+    </div>
+    <!-- change -->
+    <div class="point-card change">
+      <div class="point-icon">🔄</div>
+      <div class="point-label">change ポイント</div>
+      <div class="point-val" id="balChange" style="color:#a855f7">—</div>
+      <div class="point-unit">change</div>
+      <div class="point-sub">÷20×3 = EMUER</div>
+    </div>
+  </div>
+
+  <!-- 利用統計 -->
   <div class="rate-box">
     <div class="rate-row">
-      <div><div class="rate-from">👍 good × 10</div><div class="rate-note">10 good ごとに変換</div></div>
-      <span class="rate-arrow">→</span>
-      <div class="rate-to">1 EMUER</div>
+      <span style="font-size:12px;color:var(--muted)">累計コンテンツ利用回数</span>
+      <span style="font-size:14px;font-weight:700;color:#fff" id="balTotalSpent">— 回</span>
     </div>
     <div class="rate-row">
-      <div><div class="rate-from">🔄 change × 20</div><div class="rate-note">20 change ごとに変換</div></div>
-      <span class="rate-arrow">→</span>
-      <div class="rate-to">3 EMUER</div>
-    </div>
-    <div class="rate-row">
-      <div><div class="rate-from">🎁 初投稿ボーナス</div><div class="rate-note">初回投稿時に付与</div></div>
-      <span class="rate-arrow">→</span>
-      <div class="rate-to">30 EMUER</div>
-    </div>
-    <div class="rate-row">
-      <div><div class="rate-from">📅 ログインボーナス</div><div class="rate-note">毎日ログインで付与</div></div>
-      <span class="rate-arrow">→</span>
-      <div class="rate-to">0.5 EMUER</div>
+      <span style="font-size:12px;color:var(--muted)">利用制限を受けた回数</span>
+      <span style="font-size:14px;font-weight:700;color:var(--gold2)" id="balRestrictionCount">— 回</span>
     </div>
   </div>
 </div>
@@ -340,39 +382,16 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
   </div>
 </div>
 
-<!-- 管理者パネル -->
-<div class="panel" id="panel-admin">
-  <div class="admin-section">
-    <div class="admin-title">📊 利用制限ランキング（ヘビーユーザー）</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">制限回数が多い = コンテンツをたくさん利用してくれているユーザー</div>
-    <div id="restrictionStats">
-      <div style="font-size:12px;color:var(--muted)">「更新」を押して取得</div>
-    </div>
-    <button onclick="loadRestrictionStats()" style="margin-top:10px;padding:8px 14px;background:rgba(212,160,23,.2);border:1px solid var(--gold);color:var(--gold);border-radius:8px;cursor:pointer;font-size:12px">↻ 更新</button>
-  </div>
-
-  <div class="admin-section">
-    <div class="admin-title">🎁 ボーナスEMUER手動送金</div>
-    <div class="reward-form">
-      <input class="reward-input" id="rewardTarget" placeholder="送金先アドレス (0x...)" />
-      <input class="reward-input" id="rewardAmount" type="number" placeholder="送金量 (EMUER)" min="1" />
-      <input class="reward-input" id="rewardReason" placeholder="理由 (例: 利用制限5回達成)" />
-      <button class="reward-btn" onclick="sendBonusReward()">💸 送金する</button>
-      <div id="rewardResult" style="font-size:12px;text-align:center;min-height:18px"></div>
-    </div>
-  </div>
-</div>
 
 <script>
 // ========== タブ ==========
 function switchTab(name){
-  const tabNames = ['convert','balance','monthly','admin','guide'];
+  const tabNames = ['convert','balance','monthly','guide'];
   document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active', tabNames[i]===name)});
   document.querySelectorAll('.panel').forEach(p=>{p.classList.toggle('active',p.id==='panel-'+name)});
   if(name==='balance') loadBalance();
   if(name==='convert') loadConvertInfo();
   if(name==='monthly') loadMonthlyStatus();
-  if(name==='admin') loadRestrictionStats();
 }
 
 // ========== 親からの情報取得 ==========
@@ -555,37 +574,94 @@ async function executeConvert(){
 
 // ========== 残高タブ ==========
 async function loadBalance(){
-  const addr=getAccount();
-  const addrEl=document.getElementById('mainAddr');
-  const balEl=document.getElementById('mainBalance');
-  const pendEl=document.getElementById('mainPending');
+  const addr = getAccount();
+  const addrEl = document.getElementById('balAddr');
+  const restrictBanner = document.getElementById('restrictBanner');
+  const restrictUntilTxt = document.getElementById('restrictUntilTxt');
+
   if(!addr){
-    addrEl.textContent='ウォレット: 未接続';balEl.textContent='—';pendEl.textContent='変換待ち: — EMUER';return;
+    addrEl.textContent = 'ウォレット未接続';
+    ['balSpEmuer','balRealEmuer','balPending','balGood','balChange','balTotalSpent','balRestrictionCount'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.textContent='—';
+    });
+    return;
   }
-  addrEl.textContent='ウォレット: '+addr.slice(0,6)+'...'+addr.slice(-4);
-  const t=getTop();
+  addrEl.textContent = addr.slice(0,6)+'...'+addr.slice(-4);
+
+  const t = getTop();
+
+  // ── SchoolPark 仮想EMUER（localStorage / Firestore） ──
   try{
-    const contract=t&&t.emuerContract;
+    const lsKey = 'emuer_sp_' + addr.toLowerCase();
+    let spData = null;
+    // まず localStorage から
+    try{ spData = JSON.parse(localStorage.getItem(lsKey)||'null'); }catch(e){}
+    // Firestoreからも試みる
+    if(!spData && t && t.db && t.fbLib){
+      const snap = await t.fbLib.getDoc(t.fbLib.doc(t.db,'emuer_rate',addr.toLowerCase()));
+      if(snap.exists()) spData = snap.data();
+    }
+    if(spData){
+      const bal = spData.balance ?? 0;
+      document.getElementById('balSpEmuer').textContent = bal.toLocaleString();
+      // サブテキスト: 制限中 or 残高状態
+      const now = Date.now();
+      const sub = document.getElementById('balSpSub');
+      if(spData.restrictionUntil && now < spData.restrictionUntil){
+        const until = new Date(spData.restrictionUntil);
+        const hh = until.getHours().toString().padStart(2,'0');
+        const mm = until.getMinutes().toString().padStart(2,'0');
+        const d = until.getMonth()+1 + '/' + until.getDate() + ' ' + hh + ':' + mm;
+        if(sub) sub.textContent = '⚠️ 制限中 — ' + d + 'まで';
+        if(restrictBanner) restrictBanner.classList.add('show');
+        if(restrictUntilTxt) restrictUntilTxt.textContent = d;
+      } else {
+        if(sub) sub.textContent = bal > 200 ? '✅ 十分な残高' : bal > 0 ? '⚠️ 残高少' : '🚫 残高なし';
+        if(restrictBanner) restrictBanner.classList.remove('show');
+      }
+      const tsCnt = document.getElementById('balTotalSpent');
+      const rsCnt = document.getElementById('balRestrictionCount');
+      if(tsCnt) tsCnt.textContent = (spData.totalSpent ?? 0).toLocaleString() + ' 回';
+      if(rsCnt) rsCnt.textContent = (spData.restrictionCount ?? 0).toLocaleString() + ' 回';
+    } else {
+      document.getElementById('balSpEmuer').textContent = '未取得';
+      document.getElementById('balSpSub').textContent = 'SchoolParkに入ると自動生成';
+    }
+  }catch(e){ document.getElementById('balSpEmuer').textContent = 'エラー'; }
+
+  // ── 実EMUER（オンチェーン）+ good/change ──
+  try{
+    const contract = t && t.emuerContract;
     if(contract){
-      const bal=await contract.balanceOf(addr);
-      const v=Math.floor(parseFloat((t.ethers||window.ethers).utils.formatUnits(bal,18)));
-      balEl.textContent=v;
-      const userData=await contract.users(addr);
-      const good=parseInt(userData.good.toString());
-      const change=parseInt(userData.change.toString());
-      const pending=Math.floor(good/10)+Math.floor(change/20)*3;
-      pendEl.textContent='変換待ち: '+pending+' EMUER';
+      const [balBN, userData] = await Promise.all([
+        contract.balanceOf(addr),
+        contract.users(addr)
+      ]);
+      const realVal = Math.floor(parseFloat((t.ethers||window.ethers).utils.formatUnits(balBN,18)));
+      document.getElementById('balRealEmuer').textContent = realVal.toLocaleString();
+      const good = parseInt(userData.good.toString());
+      const change = parseInt(userData.change.toString());
+      const pending = Math.floor(good/10) + Math.floor(change/20)*3;
+      document.getElementById('balGood').textContent = good.toLocaleString();
+      document.getElementById('balChange').textContent = change.toLocaleString();
+      document.getElementById('balPending').textContent = pending.toLocaleString();
+    } else {
+      // コントラクト未接続 → pendingEmuerから概算
+      const pd = t && t.pendingEmuer != null ? t.pendingEmuer : 0;
+      document.getElementById('balPending').textContent = pd + ' (概算)';
+      document.getElementById('balRealEmuer').textContent = '—';
+      document.getElementById('balGood').textContent = '—';
+      document.getElementById('balChange').textContent = '—';
     }
   }catch(e){
-    const pd=t&&t.pendingEmuer!=null?t.pendingEmuer:0;
-    pendEl.textContent='変換待ち: '+pd+' EMUER (概算)';
+    document.getElementById('balRealEmuer').textContent = 'エラー';
   }
 }
 
 // 初期化
 loadConvertInfo();
 
-// ========== 月次配布 / 管理者 ==========
+// ========== 月次配布 ==========
 const SERVER = 'https://emu-realtime.onrender.com';
 const SP_OWNER = '0xdcc687c05f130e57597a8525771299a4efb6edf7';
 
@@ -596,8 +672,6 @@ function isOwner(){
 
 function initAdminUI(){
   if(isOwner()){
-    const tabAdmin = document.getElementById('tabAdmin');
-    if(tabAdmin) tabAdmin.style.display = '';
     const ownerArea = document.getElementById('distOwnerArea');
     if(ownerArea) ownerArea.style.display = 'block';
   }
@@ -700,66 +774,6 @@ async function triggerMonthlyDistribute(){
   }
 }
 
-// ========== 制限回数ランキング ==========
-async function loadRestrictionStats(){
-  const el = document.getElementById('restrictionStats');
-  if(!isOwner()){ el.innerHTML = '<div style="color:var(--muted);font-size:12px">オーナーのみ閲覧可</div>'; return; }
-  el.innerHTML = '<div style="color:var(--muted);font-size:12px">読み込み中...</div>';
-  try{
-    const { signature, timestamp, address } = await getOwnerSignature('restriction-stats');
-    const params = new URLSearchParams({ address, action:'restriction-stats', timestamp, signature });
-    const r = await fetch(`${SERVER}/admin/restriction-stats?${params}`);
-    const data = await r.json();
-    if(!r.ok){ el.innerHTML = `<div style="color:var(--red);font-size:12px">エラー: ${data.error}</div>`; return; }
-    if(!data.stats.length){ el.innerHTML = '<div style="color:var(--muted);font-size:12px">制限経験ユーザーなし</div>'; return; }
-    el.innerHTML = data.stats.slice(0,10).map((s,i)=>`
-      <div class="stat-row">
-        <span style="color:var(--muted);font-size:10px">${i+1}.</span>
-        <span class="stat-addr">${s.address.slice(0,6)}...${s.address.slice(-4)}</span>
-        <span class="stat-count">制限 ${s.restrictionCount||0}回</span>
-        <button onclick="fillRewardTarget('${s.address}')" style="padding:3px 8px;background:rgba(212,160,23,.2);border:1px solid var(--gold);color:var(--gold);border-radius:6px;cursor:pointer;font-size:10px">選択</button>
-      </div>`).join('');
-    // 統計表示後は管理者タブに移動
-  }catch(e){ el.innerHTML = `<div style="color:var(--red);font-size:12px">取得失敗: ${e.message}</div>`; }
-}
-
-function fillRewardTarget(addr){
-  const el = document.getElementById('rewardTarget');
-  if(el) el.value = addr;
-}
-
-// ========== ボーナス報酬送金 ==========
-async function sendBonusReward(){
-  const targetAddress = document.getElementById('rewardTarget').value.trim();
-  const amount = document.getElementById('rewardAmount').value.trim();
-  const reason = document.getElementById('rewardReason').value.trim();
-  const result = document.getElementById('rewardResult');
-
-  if(!targetAddress || !amount){ result.textContent = '⚠️ アドレスと金額を入力してください'; result.style.color = '#f59e0b'; return; }
-  if(!isOwner()){ result.textContent = '⚠️ オーナーのみ実行できます'; return; }
-
-  result.textContent = '⏳ 署名中...'; result.style.color = 'var(--muted)';
-  try{
-    const { signature, timestamp, address } = await getOwnerSignature('send-reward');
-    result.textContent = '🚀 送金中...';
-    const r = await fetch(`${SERVER}/admin/send-reward`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ address, action:'send-reward', timestamp, signature, targetAddress, amount: parseFloat(amount), reason })
-    });
-    const data = await r.json();
-    if(!r.ok){
-      result.textContent = '❌ エラー: '+(data.error||'不明');
-      result.style.color = 'var(--red)';
-    } else {
-      result.innerHTML = `✅ 送金完了！ <a href="https://polygonscan.com/tx/${data.txHash}" target="_blank" style="color:var(--cyan)">TX↗</a>`;
-      result.style.color = 'var(--green)';
-      document.getElementById('rewardTarget').value = '';
-      document.getElementById('rewardAmount').value = '';
-      document.getElementById('rewardReason').value = '';
-    }
-  }catch(e){ result.textContent = '❌ '+e.message; result.style.color = 'var(--red)'; }
-}
 </script>
 </body>
 </html>
