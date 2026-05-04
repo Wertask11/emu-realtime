@@ -177,6 +177,48 @@
   font-family:'Noto Sans JP',sans-serif; flex-shrink:0;
 }
 .spmap-ticket-btn:hover { background:#f0c050; }
+/* ── EMUER HUD ── */
+#emuerHud {
+  display:flex; align-items:center; gap:5px; background:rgba(212,168,67,0.12);
+  border:1px solid rgba(212,168,67,0.35); border-radius:6px;
+  padding:4px 10px; margin-left:8px; flex-shrink:0; cursor:default;
+  transition:background 0.2s;
+}
+#emuerHud:hover { background:rgba(212,168,67,0.22); }
+#emuerHudVal { font-size:0.82rem; font-weight:700; color:#D4A843; font-family:'Noto Sans JP',sans-serif; }
+#emuerHudLabel { font-size:0.68rem; color:#a07830; }
+#emuerHudLow { font-size:0.65rem; color:#ef4444; font-weight:700; display:none; }
+/* ── EMUER制限オーバーレイ ── */
+#emuerRestrictOverlay {
+  display:none; position:absolute; inset:0; z-index:1800;
+  background:rgba(10,6,2,0.93); flex-direction:column;
+  align-items:center; justify-content:center; text-align:center; gap:20px;
+}
+#emuerRestrictOverlay.active { display:flex; }
+.er-icon { font-size:3rem; animation:erFloat 2.5s ease-in-out infinite; }
+@keyframes erFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+.er-title { font-size:1.3rem; font-weight:700; color:#f0e8d8; font-family:'Playfair Display',serif; }
+.er-sub { font-size:0.85rem; color:#999; max-width:280px; line-height:1.6; }
+.er-timer-row { display:flex; gap:16px; margin:8px 0; }
+.er-timer-box { display:flex; flex-direction:column; align-items:center; gap:3px; }
+.er-timer-num { font-size:2rem; font-weight:700; color:#D4A843; font-family:'Playfair Display',serif; min-width:52px; }
+.er-timer-lbl { font-size:0.65rem; color:#888; letter-spacing:0.05em; }
+.er-refill { font-size:0.78rem; color:#6a9f60; background:rgba(74,130,74,0.12); border:1px solid rgba(74,130,74,0.3); border-radius:8px; padding:8px 16px; }
+.er-type-badge { font-size:0.7rem; padding:3px 10px; border-radius:20px; }
+/* ── EMUER消費トースト ── */
+.emuer-charge-toast {
+  position:fixed; top:80px; right:20px; z-index:9999;
+  background:#1a1208; border:1px solid rgba(212,168,67,0.4); border-radius:10px;
+  padding:10px 16px; font-size:0.82rem; color:#D4A843; font-weight:700;
+  pointer-events:none; animation:erToastIn 2s ease forwards;
+  box-shadow:0 4px 20px rgba(0,0,0,0.5);
+}
+@keyframes erToastIn {
+  0%{opacity:0;transform:translateX(20px)}
+  15%{opacity:1;transform:translateX(0)}
+  70%{opacity:1}
+  100%{opacity:0;transform:translateY(-10px)}
+}
 .spmap-close-x {
   background:none; border:1px solid rgba(255,255,255,0.2); color:#aaa; width:30px; height:30px;
   border-radius:50%; cursor:pointer; font-size:0.95rem; margin-left:10px; flex-shrink:0;
@@ -2184,6 +2226,12 @@ body.paypay-mode #pp-post-fab {
       <span class="spmap-nav-link" onclick="spMapNavClick('events')">イベント</span>
       <span class="spmap-nav-link" onclick="spMapNavClick('tutorial')">チュートリアル</span>
     </div>
+    <div id="emuerHud" title="SchoolPark EMUER残高">
+      <span style="font-size:0.8rem">💎</span>
+      <span id="emuerHudVal">---</span>
+      <span id="emuerHudLabel">EMUER</span>
+      <span id="emuerHudLow">⚠️残少</span>
+    </div>
     <button class="spmap-ticket-btn" onclick="spMapLinkClick('ticket')">チケット購入</button>
     <button class="spmap-menu-btn" onclick="toggleSpMapMenu()" aria-label="メニュー">☰</button>
     <!-- ✕ボタン廃止: SchoolParkが常設メイン画面のため閉じるボタンは不要 -->
@@ -2343,6 +2391,21 @@ body.paypay-mode #pp-post-fab {
       </div>
       <div class="spmm-body" id="spModalBody"></div>
     </div>
+  </div>
+
+  <!-- ── EMUER 利用制限オーバーレイ ── -->
+  <div id="emuerRestrictOverlay">
+    <div class="er-icon">🔒</div>
+    <div class="er-title">コンテンツ利用制限中</div>
+    <div class="er-sub">EMUERが不足しています。<br>制限解除後に <strong style="color:#D4A843">1,000 EMUER</strong> が補充されます。</div>
+    <div class="er-timer-row">
+      <div class="er-timer-box"><div class="er-timer-num" id="erTimerH">00</div><div class="er-timer-lbl">時間</div></div>
+      <div class="er-timer-box"><div class="er-timer-num" id="erTimerM">00</div><div class="er-timer-lbl">分</div></div>
+      <div class="er-timer-box"><div class="er-timer-num" id="erTimerS">00</div><div class="er-timer-lbl">秒</div></div>
+    </div>
+    <div class="er-refill">🎁 解除後 → 1,000 EMUER 自動補充</div>
+    <div id="erTypeBadge" class="er-type-badge" style="background:rgba(212,168,67,0.12);color:#D4A843;border:1px solid rgba(212,168,67,0.3)"></div>
+    <button style="margin-top:8px;padding:8px 20px;background:transparent;border:1px solid rgba(255,255,255,0.2);color:#888;border-radius:6px;cursor:pointer;font-size:0.8rem" onclick="document.getElementById('emuerRestrictOverlay').classList.remove('active')">マップに戻る</button>
   </div>
 
 </div>
@@ -2990,6 +3053,56 @@ const mainApp = document.getElementById("mainApp");
 const SP_OWNER = "0xdcc687c05f130e57597a8525771299a4efb6edf7";
 const MAINTENANCE_MODE = true;
 const MAINTENANCE_END  = new Date('2026-05-20T00:00:00+09:00');
+
+/* ═══════════════════════════════════════════════════════
+   EMUER レート設定
+   ★ キャンペーン・イベント時はここの数値を変えるだけでOK
+   ★ 0 = 無料（コスト不要）
+═══════════════════════════════════════════════════════ */
+const EMUER_RATE_CONFIG = {
+  // 中央エリア
+  plaza1: 5,
+  // 東エリア
+  earn1: 8,   // ホテル
+  earn2: 5,   // マンション
+  earn3: 20,  // ショッピング
+  earn4: 5,   // 八百屋
+  earn5: 5,   // 果物屋
+  earn6: 10,  // 珈琲
+  earn7: 8,   // ホテル（下）
+  life1: 5,   // 家
+  // 西エリア
+  guard1: 3,  // 病院
+  guard2: 3,  // 警察署
+  guard3: 3,  // 自警団
+  guard4: 5,  // ジム
+  guard5: 3,  // 消防署
+  guard6: 10, // 銀行
+  // 南エリア
+  play1: 20,  // 映画館
+  play2: 5,   // エレベーター
+  play3: 7,   // 駅舎
+  play4: 5,   // 交差点
+  play5: 5,   // 登山
+  play6: 5,   // 釣り
+  play7: 10,  // 駅舎（下）
+  // 北エリア
+  learn1: 10, // 図書館
+  learn2: 10, // 本屋
+  learn3: 10, // 美術館
+  learn4: 10, // 研究所
+  learn5: 10, // 博物館
+  // 星空エリア（無料）
+  star5: 0,   // 夜空の展望台
+};
+
+// 制限期間（ミリ秒）
+const EMUER_RESTRICTION_MS = {
+  free:    2 * 24 * 60 * 60 * 1000, // 2日
+  paid:    1 * 24 * 60 * 60 * 1000, // 1日
+  premium: 1 * 24 * 60 * 60 * 1000, // 1日（プレミアム）
+};
+const EMUER_INITIAL_AMOUNT = 1000;
 function _isOwnerAccess() {
   const saved = (localStorage.getItem('emuWallet') || '').toLowerCase();
   if (saved && saved === SP_OWNER.toLowerCase()) return true;
@@ -5546,6 +5659,160 @@ function _startMaintenanceCountdown() {
   setInterval(tick, 1000);
 }
 
+/* ═══════════════════════════════════════════════════════
+   EMUER レート管理
+═══════════════════════════════════════════════════════ */
+const _EMUER_LS_KEY = () => 'emuer_sp_' + ((window.connectedAccount || localStorage.getItem('emuWallet') || 'guest').toLowerCase());
+
+function _getEmuerData() {
+  try { return JSON.parse(localStorage.getItem(_EMUER_LS_KEY()) || 'null'); } catch(e) { return null; }
+}
+function _saveEmuerData(data) {
+  localStorage.setItem(_EMUER_LS_KEY(), JSON.stringify(data));
+  // Firestore にも同期（失敗しても体験を壊さない）
+  if (window.db && window.fbLib) {
+    const wallet = (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+    if (wallet) window.fbLib.setDoc(window.fbLib.doc(window.db, 'emuer_rate', wallet), data).catch(()=>{});
+  }
+}
+
+function _getUserTypeForEmuer() {
+  if (window.hasPaidNFT) return 'paid';
+  if (window.hasFreeNFT) return 'free';
+  return 'free';
+}
+
+async function _initEmuer() {
+  let data = _getEmuerData();
+  const now = Date.now();
+
+  // Firestoreからも試みて取得（localStorageが空の場合）
+  if (!data && window.db && window.fbLib) {
+    try {
+      const wallet = (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+      if (wallet) {
+        const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'emuer_rate', wallet));
+        if (snap.exists()) data = snap.data();
+      }
+    } catch(e) {}
+  }
+
+  if (!data) {
+    // 初回 → 1,000 EMUER付与
+    data = { balance: EMUER_INITIAL_AMOUNT, lastRefill: now, restrictionUntil: null, totalSpent: 0 };
+    _saveEmuerData(data);
+  } else if (data.restrictionUntil && now >= data.restrictionUntil) {
+    // 制限解除 → 1,000 EMUER再付与
+    data.balance = EMUER_INITIAL_AMOUNT;
+    data.restrictionUntil = null;
+    data.lastRefill = now;
+    _saveEmuerData(data);
+  }
+
+  _updateEmuerHud(data.balance);
+  return data;
+}
+
+function _updateEmuerHud(balance) {
+  const el = document.getElementById('emuerHudVal');
+  const low = document.getElementById('emuerHudLow');
+  if (!el) return;
+  el.textContent = balance.toLocaleString();
+  if (low) low.style.display = balance <= 100 ? 'inline' : 'none';
+  // 残高に応じて色変化
+  const hud = document.getElementById('emuerHud');
+  if (hud) {
+    if (balance <= 0) { hud.style.borderColor = 'rgba(239,68,68,0.5)'; hud.style.background = 'rgba(239,68,68,0.1)'; }
+    else if (balance <= 100) { hud.style.borderColor = 'rgba(234,179,8,0.5)'; hud.style.background = 'rgba(234,179,8,0.1)'; }
+    else { hud.style.borderColor = 'rgba(212,168,67,0.35)'; hud.style.background = 'rgba(212,168,67,0.12)'; }
+  }
+}
+
+let _erTimerInterval = null;
+function _showEmuerRestrictionOverlay(restrictionUntil) {
+  const overlay = document.getElementById('emuerRestrictOverlay');
+  if (!overlay) return;
+  overlay.classList.add('active');
+
+  const userType = _getUserTypeForEmuer();
+  const badge = document.getElementById('erTypeBadge');
+  if (badge) {
+    const labels = { free:'無料ユーザー ｜ 制限期間：2日間', paid:'有料ユーザー ｜ 制限期間：1日', premium:'プレミアムNFT ｜ 制限期間：1日' };
+    badge.textContent = labels[userType] || '';
+  }
+
+  if (_erTimerInterval) clearInterval(_erTimerInterval);
+  function erTick() {
+    const diff = restrictionUntil - Date.now();
+    if (diff <= 0) {
+      clearInterval(_erTimerInterval);
+      // 自動解除 → HUD更新してオーバーレイ閉じる
+      _initEmuer().then(data => {
+        _updateEmuerHud(data.balance);
+        overlay.classList.remove('active');
+      });
+      return;
+    }
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    const fmt = n => String(n).padStart(2,'0');
+    const eh = document.getElementById('erTimerH');
+    const em = document.getElementById('erTimerM');
+    const es = document.getElementById('erTimerS');
+    if (eh) eh.textContent = fmt(h);
+    if (em) em.textContent = fmt(m);
+    if (es) es.textContent = fmt(s);
+  }
+  erTick();
+  _erTimerInterval = setInterval(erTick, 1000);
+}
+
+function _showEmuerChargeToast(poiId, cost, remaining) {
+  const poi = SP_POIS.find(p => p.id === poiId);
+  const name = poi ? poi.name.split(' ')[0] : '';
+  const toast = document.createElement('div');
+  toast.className = 'emuer-charge-toast';
+  toast.innerHTML = `−${cost} EMUER <span style="font-size:0.72rem;color:#888;font-weight:400">残高 ${remaining.toLocaleString()}</span>`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2100);
+}
+
+async function gatedOpen(poiId, fn) {
+  const cost = EMUER_RATE_CONFIG[poiId] ?? 0;
+  if (cost === 0) { fn(); return; }
+
+  let data = _getEmuerData();
+  if (!data) data = await _initEmuer();
+
+  const now = Date.now();
+
+  // 制限中チェック
+  if (data.restrictionUntil && now < data.restrictionUntil) {
+    _showEmuerRestrictionOverlay(data.restrictionUntil);
+    return;
+  }
+
+  // 残高不足 → 制限開始
+  if (data.balance < cost) {
+    const userType = _getUserTypeForEmuer();
+    data.balance = 0;
+    data.restrictionUntil = now + EMUER_RESTRICTION_MS[userType];
+    _saveEmuerData(data);
+    _updateEmuerHud(0);
+    _showEmuerRestrictionOverlay(data.restrictionUntil);
+    return;
+  }
+
+  // 通常: 残高から引いてコンテンツ開放
+  data.balance -= cost;
+  data.totalSpent = (data.totalSpent || 0) + cost;
+  _saveEmuerData(data);
+  _updateEmuerHud(data.balance);
+  _showEmuerChargeToast(poiId, cost, data.balance);
+  fn();
+}
+
 /* ======= ロゴ → ウォレット → メイン ======= */
 // ★ ロゴクリック時はウォレット画面を常に表示（メンテチェックはgoTomainapp内で行う）
 logoScreen.addEventListener("click", () => {
@@ -7353,6 +7620,8 @@ function openSpMap(gate) {
   /* 混雑状況・天気を起動 */
   _spCrowdJoin();
   _spFetchWeather();
+  /* EMUER残高初期化・表示 */
+  _initEmuer();
   /* JS駆動アニメ起動 */
   requestAnimationFrame(() => _startSpLive());
 
@@ -7547,11 +7816,11 @@ function spMapSelectPoi(poiId) {
       : poi.action === "openExplore"
         ? `<button class="spmap-detail-go-btn" onclick="closeSpMap();setTimeout(()=>{const b=document.getElementById('exploreBtn');if(b)b.click();},150)">🔍 探索・遊びへ</button>`
       : poi.action === "openRoom2"
-        ? `<button class="spmap-detail-go-btn" onclick="closeSpMap();setTimeout(()=>openRoom2(),150)">🌌 星を見に行く</button>`
+        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>{closeSpMap();setTimeout(()=>openRoom2(),150)})">🌌 星を見に行く</button>`
       : poi.eastKey
-        ? `<button class="spmap-detail-go-btn" onclick="openEastBuilding('${poi.eastKey}')">🚪 遊びに行く</button>`
+        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openEastBuilding('${poi.eastKey}'))">🚪 遊びに行く${EMUER_RATE_CONFIG[poi.id] ? ` <span style="font-size:0.7rem;opacity:0.7">-${EMUER_RATE_CONFIG[poi.id]} 💎</span>` : ''}</button>`
         : poi.page
-          ? `<button class="spmap-detail-go-btn" onclick="openSpContent('${poi.page}')">🚪 遊びに行く</button>`
+          ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openSpContent('${poi.page}'))">🚪 遊びに行く${EMUER_RATE_CONFIG[poi.id] ? ` <span style="font-size:0.7rem;opacity:0.7">-${EMUER_RATE_CONFIG[poi.id]} 💎</span>` : ''}</button>`
           : `<div class="spmap-detail-badge">🕐 COMING SOON</div>`
     }
   `;
