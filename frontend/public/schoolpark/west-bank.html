@@ -417,109 +417,112 @@ function updatePlanBadge(){
   document.getElementById('planPaid').classList.toggle('active-plan', type==='paid');
 }
 
+// ========== Firestoreからgood/change取得 ==========
+async function fetchGoodChange(addr){
+  const t = getTop();
+  let good = 0, change = 0;
+  // Firestore posts コレクションから自分の投稿の合計を取得（親と同じロジック）
+  if(t && t.db && t.fbLib){
+    try{
+      const postsRef = t.fbLib.collection(t.db, 'posts');
+      const q = t.fbLib.query(postsRef, t.fbLib.where('address', '==', addr.toLowerCase()));
+      const snap = await t.fbLib.getDocs(q);
+      snap.forEach(doc => {
+        const d = doc.data();
+        good += (d.goodCount || 0);
+        change += (d.changeCount || 0);
+      });
+    }catch(e){ console.warn('Firestore good/change取得失敗:', e); }
+  }
+  return { good, change };
+}
+
 // ========== 変換情報読み込み ==========
 async function loadConvertInfo(){
   updatePlanBadge();
-  const t=getTop();
-  const addr=getAccount();
-  const statusEl=document.getElementById('convertStatus');
-  const btn=document.getElementById('mainConvertBtn');
-  const noteEl=document.getElementById('convertNote');
+  const t = getTop();
+  const addr = getAccount();
+  const statusEl = document.getElementById('convertStatus');
+  const btn = document.getElementById('mainConvertBtn');
+  const noteEl = document.getElementById('convertNote');
 
-  if(!addr){
-    statusEl.className='convert-status status-locked';
-    statusEl.textContent='🔒 ウォレット未接続 — Emuアプリでウォレットを接続してください';
-    btn.className='convert-btn disabled';
-    btn.textContent='🔒 ウォレット接続が必要です';
-    noteEl.textContent='';
+  const setLocked = (msg, btnMsg, note='') => {
+    statusEl.className='convert-status status-locked'; statusEl.textContent=msg;
+    btn.className='convert-btn disabled'; btn.textContent=btnMsg; noteEl.textContent=note;
     document.getElementById('goodCount').textContent='—';
     document.getElementById('changeCount').textContent='—';
     document.getElementById('pendingDisplay').textContent='— EMUER';
     document.getElementById('balanceDisplay').textContent='— EMUER';
+  };
+
+  if(!addr){ setLocked('🔒 ウォレット未接続 — Emuアプリでウォレットを接続してください','🔒 ウォレット接続が必要です'); return; }
+
+  const type = getUserType();
+  const isMonday = new Date().getDay() === 1;
+
+  if(type === 'guest'){
+    setLocked('🔒 NFTが必要です — SchoolParkのNFTを取得すると変換できます','🔒 NFT取得後に変換可能','公式NFTはEmuアプリの取引所から取得できます');
     return;
   }
 
-  const type=getUserType();
+  // good/change + 残高を先に表示
+  statusEl.className='convert-status status-warn';
+  statusEl.textContent='⏳ ポイントを確認しています...';
 
-  // 月曜チェック（無料NFT）
-  const isMonday = new Date().getDay()===1;
-  if(type==='guest'){
-    statusEl.className='convert-status status-locked';
-    statusEl.textContent='🔒 NFTが必要です — SchoolParkのNFTを取得すると変換できます';
-    btn.className='convert-btn disabled';
-    btn.textContent='🔒 NFT取得後に変換可能';
-    noteEl.textContent='公式NFTはEmuアプリの取引所から取得できます';
-    return;
-  }
-  if(type==='free'&&!isMonday){
+  // Firestoreからgood/change取得
+  const { good, change } = await fetchGoodChange(addr);
+  document.getElementById('goodCount').textContent = good;
+  document.getElementById('changeCount').textContent = change;
+  const pending = Math.floor(good/10) + Math.floor(change/20)*3;
+  document.getElementById('pendingDisplay').textContent = pending + ' EMUER';
+
+  // 実EMUER残高
+  try{
+    const contract = t && t.emuerContract;
+    if(contract){
+      const bal = await contract.balanceOf(addr);
+      const balVal = Math.floor(parseFloat((t.ethers||window.ethers).utils.formatUnits(bal,18)));
+      document.getElementById('balanceDisplay').textContent = balVal + ' EMUER';
+    }
+  }catch(e){ document.getElementById('balanceDisplay').textContent = '—'; }
+
+  // 無料NFT・月曜制限
+  if(type === 'free' && !isMonday){
     statusEl.className='convert-status status-warn';
     statusEl.textContent='📅 無料NFTは月曜日のみ変換可能です';
     btn.className='convert-btn disabled';
     btn.textContent='📅 月曜日に変換できます';
     noteEl.textContent='有料NFTにアップグレードすると毎日変換可能になります';
-    // 残高だけ表示
-    tryLoadBalance(addr);
     return;
   }
 
-  // 読み込み
-  statusEl.className='convert-status status-warn';
-  statusEl.textContent='⏳ ポイントを確認しています...';
-
-  try{
-    if(t && t.syncPendingEmuer){
-      await t.syncPendingEmuer();
-    }
-    // コントラクトから取得
-    const contract=t&&t.emuerContract;
-    if(contract){
-      const userData=await contract.users(addr);
-      const good=parseInt(userData.good.toString());
-      const change=parseInt(userData.change.toString());
-      document.getElementById('goodCount').textContent=good;
-      document.getElementById('changeCount').textContent=change;
-      const pending=Math.floor(good/10)+Math.floor(change/20)*3;
-      document.getElementById('pendingDisplay').textContent=pending+' EMUER';
-
-      const bal=await contract.balanceOf(addr);
-      const balVal=Math.floor(parseFloat((t.ethers||window.ethers).utils.formatUnits(bal,18)));
-      document.getElementById('balanceDisplay').textContent=balVal+' EMUER';
-
-      if(good===0&&change===0){
-        statusEl.className='convert-status status-warn';
-        statusEl.textContent='📭 変換可能なポイントがありません — Emuで投稿してgood・changeを集めよう！';
-        btn.className='convert-btn disabled';
-        btn.textContent='📭 ポイント不足';
-        noteEl.textContent='good 10pt または change 20pt から変換できます';
-      } else {
-        statusEl.className='convert-status status-ok';
-        statusEl.textContent='✅ 変換可能！ '+pending+' EMUERに変換できます';
-        btn.className='convert-btn active';
-        btn.textContent='🏦 '+pending+' EMUERに変換する';
-        noteEl.textContent='変換にはガス代（ETH）が少量必要です';
-      }
-    }
-  }catch(e){
-    // Firestoreからフォールバック
-    const pd=t&&t.pendingEmuer!=null?t.pendingEmuer:0;
-    document.getElementById('pendingDisplay').textContent=pd+' EMUER';
-    if(pd>0){
-      statusEl.className='convert-status status-ok';
-      statusEl.textContent='✅ 変換可能！ '+pd+' EMUERに変換できます';
-      btn.className='convert-btn active';
-      btn.textContent='🏦 '+pd+' EMUERに変換する';
-    } else {
-      statusEl.className='convert-status status-warn';
-      statusEl.textContent='📭 変換可能なポイントがありません';
-      btn.className='convert-btn disabled';
-      btn.textContent='📭 ポイント不足';
-    }
+  // ポイント閾値チェック
+  if(good < 10 && change < 20){
+    // ポイントはあるが変換閾値未満
+    const needGood = good > 0 ? `あと${10-good}good` : '';
+    const needChange = change > 0 ? `あと${20-change}change` : '';
+    const hint = [needGood, needChange].filter(Boolean).join(' / ');
+    statusEl.className='convert-status status-warn';
+    statusEl.textContent = good===0 && change===0
+      ? '📭 まだポイントがありません — Emuで投稿してgood・changeを集めよう！'
+      : `📭 変換閾値未満 — ${hint} で変換可能になります`;
+    btn.className='convert-btn disabled';
+    btn.textContent='📭 ポイント不足（good 10pt / change 20pt から変換可）';
+    noteEl.textContent='good 10pt = 1 EMUER、change 20pt = 3 EMUER';
+    return;
   }
+
+  // 変換可能
+  statusEl.className='convert-status status-ok';
+  statusEl.textContent='✅ 変換可能！ '+pending+' EMUERに変換できます';
+  btn.className='convert-btn active';
+  btn.textContent='🏦 '+pending+' EMUERに変換する';
+  noteEl.textContent='変換にはガス代（ETH）が少量必要です';
 }
 
 async function tryLoadBalance(addr){
   try{
-    const t=getTop();const contract=t&&t.emuerContract;
+    const t=getTop(); const contract=t&&t.emuerContract;
     if(contract){
       const bal=await contract.balanceOf(addr);
       const v=Math.floor(parseFloat((t.ethers||window.ethers).utils.formatUnits(bal,18)));
@@ -528,47 +531,61 @@ async function tryLoadBalance(addr){
   }catch(e){}
 }
 
-// ========== 変換実行（親の処理を呼ぶ） ==========
+// ========== 変換実行 ==========
 async function executeConvert(){
-  const btn=document.getElementById('mainConvertBtn');
-  if(btn.classList.contains('disabled')) return;
-  const t=getTop();
-  if(!t){alert('エラー: 親ウィンドウに接続できません');return;}
-  // 親の handleConversion を呼ぶ
-  if(typeof t.handleConversion==='function'){
-    btn.disabled=true;
-    btn.textContent='⏳ 処理中...';
-    try{
-      await t.handleConversion();
-      // 変換完了後に情報を再読み込み
-      setTimeout(()=>{
-        btn.disabled=false;
-        loadConvertInfo();
-      },1500);
-    }catch(e){
-      btn.disabled=false;
-      btn.textContent='🏦 変換を実行する';
-      alert('変換に失敗しました: '+e.message);
+  const btn = document.getElementById('mainConvertBtn');
+  if(btn.classList.contains('disabled') || btn.disabled) return;
+  const t = getTop();
+  const addr = getAccount();
+  if(!addr){ alert('ウォレット未接続'); return; }
+
+  const contract = t && t.emuerContract;
+  if(!contract){ alert('コントラクトに接続できません'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ 処理中...';
+
+  try{
+    // コントラクト上の確定good/changeを取得して変換
+    const userData = await contract.users(addr);
+    const scGood = Number(userData.good);
+    const scChange = Number(userData.change);
+
+    if(scGood === 0 && scChange === 0){
+      alert('コントラクト上にまだポイントが記録されていません。\nEmuアプリでポイントがオンチェーンに確定されるまでしばらくお待ちください。');
+      btn.disabled = false;
+      await loadConvertInfo();
+      return;
     }
-  } else {
-    // フォールバック: 直接実行
-    const addr=getAccount();
-    if(!addr){alert('ウォレット未接続');return;}
-    const contract=t.emuerContract;
-    if(!contract){alert('コントラクトに接続できません');return;}
-    btn.disabled=true;btn.textContent='⏳ 処理中...';
-    try{
-      const userData=await contract.users(addr);
-      if(Number(userData.good)===0&&Number(userData.change)===0){alert('変換に必要なポイントがありません');btn.disabled=false;btn.textContent='🏦 変換を実行する';return;}
-      if(Number(userData.good)>0){const tx1=await contract.convertGood(userData.good);await tx1.wait();}
-      if(Number(userData.change)>0){const tx2=await contract.convertChange(userData.change);await tx2.wait();}
-      alert('🎉 変換が完了しました！');
-      if(t.syncPendingEmuer) await t.syncPendingEmuer();
-      setTimeout(()=>{btn.disabled=false;loadConvertInfo();},500);
-    }catch(e){
-      console.error(e);btn.disabled=false;btn.textContent='🏦 変換を実行する';
-      alert('変換に失敗しました');
+
+    if(scGood > 0){
+      const tx1 = await contract.convertGood(userData.good);
+      btn.textContent = '⏳ good変換中...';
+      await tx1.wait();
     }
+    if(scChange > 0){
+      const tx2 = await contract.convertChange(userData.change);
+      btn.textContent = '⏳ change変換中...';
+      await tx2.wait();
+    }
+
+    alert('🎉 変換が完了しました！');
+
+    // 親の syncPendingEmuer があれば呼んで更新
+    if(t && typeof t.syncPendingEmuer === 'function'){
+      try{ await t.syncPendingEmuer(); }catch(e){}
+    }
+
+    setTimeout(async ()=>{
+      btn.disabled = false;
+      await loadConvertInfo();
+    }, 1000);
+
+  }catch(e){
+    console.error('変換エラー:', e);
+    btn.disabled = false;
+    alert('変換に失敗しました: ' + (e.message || e));
+    await loadConvertInfo();
   }
 }
 
@@ -629,29 +646,22 @@ async function loadBalance(){
     }
   }catch(e){ document.getElementById('balSpEmuer').textContent = 'エラー'; }
 
-  // ── 実EMUER（オンチェーン）+ good/change ──
+  // ── good/change（Firestoreから）──
+  const { good, change } = await fetchGoodChange(addr);
+  document.getElementById('balGood').textContent = good.toLocaleString();
+  document.getElementById('balChange').textContent = change.toLocaleString();
+  const pending = Math.floor(good/10) + Math.floor(change/20)*3;
+  document.getElementById('balPending').textContent = pending.toLocaleString();
+
+  // ── 実EMUER（オンチェーン） ──
   try{
     const contract = t && t.emuerContract;
     if(contract){
-      const [balBN, userData] = await Promise.all([
-        contract.balanceOf(addr),
-        contract.users(addr)
-      ]);
+      const balBN = await contract.balanceOf(addr);
       const realVal = Math.floor(parseFloat((t.ethers||window.ethers).utils.formatUnits(balBN,18)));
       document.getElementById('balRealEmuer').textContent = realVal.toLocaleString();
-      const good = parseInt(userData.good.toString());
-      const change = parseInt(userData.change.toString());
-      const pending = Math.floor(good/10) + Math.floor(change/20)*3;
-      document.getElementById('balGood').textContent = good.toLocaleString();
-      document.getElementById('balChange').textContent = change.toLocaleString();
-      document.getElementById('balPending').textContent = pending.toLocaleString();
     } else {
-      // コントラクト未接続 → pendingEmuerから概算
-      const pd = t && t.pendingEmuer != null ? t.pendingEmuer : 0;
-      document.getElementById('balPending').textContent = pd + ' (概算)';
       document.getElementById('balRealEmuer').textContent = '—';
-      document.getElementById('balGood').textContent = '—';
-      document.getElementById('balChange').textContent = '—';
     }
   }catch(e){
     document.getElementById('balRealEmuer').textContent = 'エラー';
