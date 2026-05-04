@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Room1 — 管理センター</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07080f;--bg2:#0d0f1a;--bg3:#111420;--border:rgba(139,92,246,0.18);
+  --accent:#7c3aed;--accent2:#a78bfa;--gold:#d4a017;--gold2:#f0c040;
+  --green:#22c55e;--red:#ef4444;--cyan:#22d3ee;--orange:#f97316;
+  --text:#e2e8f0;--muted:#64748b;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh}
+
+/* ヘッダー */
+.header{position:sticky;top:0;z-index:100;background:rgba(7,8,15,0.97);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);padding:0 14px;height:52px;display:flex;align-items:center;gap:10px}
+.back-btn{background:rgba(124,58,237,.25);border:1px solid rgba(124,58,237,.4);color:var(--accent2);padding:5px 12px;border-radius:8px;cursor:pointer;font-size:0.78rem;font-weight:700;font-family:inherit;white-space:nowrap}
+.back-btn:hover{background:rgba(124,58,237,.4)}
+.header-title{font-size:0.9rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:6px}
+.header-badge{background:var(--accent);color:#fff;font-size:0.58rem;font-weight:700;padding:2px 7px;border-radius:20px}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.owner-badge{background:rgba(212,160,23,.15);border:1px solid rgba(212,160,23,.35);color:var(--gold2);padding:3px 10px;border-radius:20px;font-size:0.68rem;font-weight:700;display:none}
+.owner-badge.show{display:block}
+
+/* ロック画面 */
+.lock-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;text-align:center;padding:20px}
+.lock-icon{font-size:4rem;margin-bottom:16px}
+.lock-title{font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:8px}
+.lock-sub{font-size:0.8rem;color:var(--muted);line-height:1.7}
+
+/* ヒーロー */
+.hero{background:linear-gradient(135deg,#07080f,#1a0a3d,#0f0f1f);padding:22px 16px 18px;text-align:center;border-bottom:1px solid var(--border)}
+.hero-icon{font-size:46px;margin-bottom:8px}
+.hero-title{font-size:1.2rem;font-weight:700;color:#fff;margin-bottom:4px}
+.hero-sub{font-size:0.75rem;color:var(--muted)}
+
+/* 統計 */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.stat-box{background:var(--bg2);padding:12px 8px;text-align:center}
+.stat-val{font-size:1.3rem;font-weight:700;color:var(--accent2)}
+.stat-lbl{font-size:0.6rem;color:var(--muted);margin-top:2px}
+
+/* タブ */
+.tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab-btn{flex:0 0 auto;padding:11px 14px;font-size:0.72rem;font-weight:700;color:var(--muted);cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;font-family:inherit;white-space:nowrap;transition:all .2s}
+.tab-btn.active{color:var(--accent2);border-bottom-color:var(--accent2);background:rgba(124,58,237,.07)}
+.tab-btn:hover:not(.active){color:var(--text);background:rgba(255,255,255,.03)}
+
+.main{max-width:720px;margin:0 auto;padding:16px 14px 60px}
+.panel{display:none}.panel.active{display:block}
+
+/* セクション */
+.sec{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px}
+.sec-title{font-size:0.78rem;font-weight:700;color:var(--accent2);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:6px}
+.sec-title-text{display:flex;align-items:center;gap:6px}
+
+/* フィルター */
+.filter-bar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.filter-chip{padding:4px 12px;border-radius:20px;font-size:0.68rem;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--muted);transition:all .15s}
+.filter-chip.active{background:rgba(124,58,237,.2);border-color:var(--accent2);color:var(--accent2)}
+
+/* レポートカード */
+.report-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.report-card.resolved{opacity:.55}
+.report-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:7px}
+.report-type{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700;background:rgba(124,58,237,.2);color:var(--accent2);border:1px solid rgba(124,58,237,.3)}
+.report-status-badge{padding:2px 8px;border-radius:20px;font-size:0.6rem;font-weight:700}
+.status-pending{background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.25)}
+.status-resolved{background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.25)}
+.report-date{font-size:0.62rem;color:var(--muted)}
+.report-body{font-size:0.78rem;line-height:1.65;margin-bottom:8px;white-space:pre-wrap;word-break:break-word}
+.report-user{font-size:0.65rem;color:var(--muted);margin-bottom:8px}
+.report-actions{display:flex;gap:6px;flex-wrap:wrap}
+.btn-resolve{padding:5px 12px;border-radius:8px;font-size:0.7rem;font-weight:700;border:none;background:rgba(34,197,94,.2);color:var(--green);border:1px solid rgba(34,197,94,.3);cursor:pointer;font-family:inherit;transition:opacity .2s}
+.btn-resolve:hover{opacity:.75}
+.btn-delete{padding:5px 12px;border-radius:8px;font-size:0.7rem;font-weight:700;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);color:var(--red);cursor:pointer;font-family:inherit;transition:opacity .2s}
+.btn-delete:hover{opacity:.75}
+.btn-reopen{padding:5px 12px;border-radius:8px;font-size:0.7rem;font-weight:700;border:1px solid rgba(124,58,237,.3);background:rgba(124,58,237,.1);color:var(--accent2);cursor:pointer;font-family:inherit}
+
+/* 空表示 */
+.empty-state{text-align:center;padding:32px;color:var(--muted);font-size:0.8rem}
+.empty-icon{font-size:2.5rem;margin-bottom:8px}
+
+/* 更新ボタン */
+.refresh-btn{padding:5px 12px;background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.3);color:var(--accent2);border-radius:8px;cursor:pointer;font-size:0.7rem;font-family:inherit;font-weight:700}
+.refresh-btn:hover{background:rgba(124,58,237,.3)}
+
+/* トースト */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 22px;border-radius:20px;font-size:0.78rem;font-weight:700;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+.toast.success{background:var(--green);color:#000}
+.toast.error{background:var(--red)}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <button class="back-btn" onclick="goBack()">← 戻る</button>
+  <div class="header-title">⚙️ <span>管理センター</span> <span class="header-badge">Room1</span></div>
+  <div class="header-right">
+    <span class="owner-badge" id="ownerBadge">👑 オーナー</span>
+  </div>
+</div>
+
+<!-- ロック画面（非オーナー用） -->
+<div class="lock-screen" id="lockScreen" style="display:none">
+  <div class="lock-icon">🔒</div>
+  <div class="lock-title">アクセス制限</div>
+  <div class="lock-sub">このページはSchoolParkオーナー専用です。<br>ウォレットを接続してからアクセスしてください。</div>
+</div>
+
+<!-- 管理コンテンツ -->
+<div id="adminContent" style="display:none">
+
+  <div class="hero">
+    <div class="hero-icon">⚙️</div>
+    <div class="hero-title">SchoolPark 管理センター</div>
+    <div class="hero-sub">西エリア各施設への問い合わせ・報告を一元管理</div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-val" id="statTotal">—</div><div class="stat-lbl">総件数</div></div>
+    <div class="stat-box"><div class="stat-val" id="statPending">—</div><div class="stat-lbl">未対応</div></div>
+    <div class="stat-box"><div class="stat-val" id="statResolved">—</div><div class="stat-lbl">対応済み</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('all',this)">📋 全件</button>
+    <button class="tab-btn" onclick="switchTab('hospital',this)">🏥 病院</button>
+    <button class="tab-btn" onclick="switchTab('police',this)">🚔 警察署</button>
+    <button class="tab-btn" onclick="switchTab('vigilante',this)">🛡️ 自警団</button>
+    <button class="tab-btn" onclick="switchTab('gym',this)">💪 ジム</button>
+    <button class="tab-btn" onclick="switchTab('fire',this)">🚒 消防署</button>
+  </div>
+
+  <div class="main">
+
+    <!-- 全件 -->
+    <div class="panel active" id="panel-all">
+      <div class="sec">
+        <div class="sec-title">
+          <span class="sec-title-text">📋 全施設レポート</span>
+          <button class="refresh-btn" onclick="loadAll()">↻ 更新</button>
+        </div>
+        <div class="filter-bar">
+          <span class="filter-chip active" onclick="setFilter('all',this)">すべて</span>
+          <span class="filter-chip" onclick="setFilter('pending',this)">⏳ 未対応</span>
+          <span class="filter-chip" onclick="setFilter('resolved',this)">✅ 対応済</span>
+        </div>
+        <div id="list-all"><div class="empty-state"><div class="empty-icon">📭</div>読み込み中...</div></div>
+      </div>
+    </div>
+
+    <!-- 病院 -->
+    <div class="panel" id="panel-hospital">
+      <div class="sec">
+        <div class="sec-title">
+          <span class="sec-title-text">🏥 病院への問い合わせ</span>
+          <button class="refresh-btn" onclick="loadFacility('hospital')">↻</button>
+        </div>
+        <div id="list-hospital"><div class="empty-state"><div class="empty-icon">📭</div>読み込み中...</div></div>
+      </div>
+    </div>
+
+    <!-- 警察署 -->
+    <div class="panel" id="panel-police">
+      <div class="sec">
+        <div class="sec-title">
+          <span class="sec-title-text">🚔 警察署への報告</span>
+          <button class="refresh-btn" onclick="loadFacility('police')">↻</button>
+        </div>
+        <div id="list-police"><div class="empty-state"><div class="empty-icon">📭</div>読み込み中...</div></div>
+      </div>
+    </div>
+
+    <!-- 自警団 -->
+    <div class="panel" id="panel-vigilante">
+      <div class="sec">
+        <div class="sec-title">
+          <span class="sec-title-text">🛡️ 自警団への報告</span>
+          <button class="refresh-btn" onclick="loadFacility('vigilante')">↻</button>
+        </div>
+        <div id="list-vigilante"><div class="empty-state"><div class="empty-icon">📭</div>読み込み中...</div></div>
+      </div>
+    </div>
+
+    <!-- ジム -->
+    <div class="panel" id="panel-gym">
+      <div class="sec">
+        <div class="sec-title">
+          <span class="sec-title-text">💪 ジム チャレンジ達成報告</span>
+          <button class="refresh-btn" onclick="loadFacility('gym')">↻</button>
+        </div>
+        <div id="list-gym"><div class="empty-state"><div class="empty-icon">📭</div>読み込み中...</div></div>
+      </div>
+    </div>
+
+    <!-- 消防署 -->
+    <div class="panel" id="panel-fire">
+      <div class="sec">
+        <div class="sec-title">
+          <span class="sec-title-text">🚒 消防署 緊急報告</span>
+          <button class="refresh-btn" onclick="loadFacility('fire')">↻</button>
+        </div>
+        <div id="list-fire"><div class="empty-state"><div class="empty-icon">📭</div>読み込み中...</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SP_OWNER_WALLET = '0xdcc687c05f130e57597a8525771299a4efb6edf7';
+
+// Firestore (Firebase v9 modular) を親から取得
+function getDb(){ return (window.top?.db) || (window.parent?.db) || null; }
+function getFbLib(){ return (window.top?.fbLib) || (window.parent?.fbLib) || null; }
+function getWallet(){
+  return ((window.top?.connectedAccount) || (window.parent?.connectedAccount) || '').toLowerCase();
+}
+function isOwner(){
+  return getWallet() === SP_OWNER_WALLET.toLowerCase();
+}
+
+function goBack(){ window.top.postMessage({type:'spContentClose'},'*'); }
+
+function showToast(msg, type=''){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' '+type : '');
+  setTimeout(()=>{ t.className='toast'; }, 3000);
+}
+
+// 施設設定
+const FACILITIES = {
+  hospital:  { label:'🏥 病院',   col:'hospital_inquiries',  nameKey:'name',     bodyKey:'content',  extraKeys:[] },
+  police:    { label:'🚔 警察署', col:'police_reports',       nameKey:'reporter', bodyKey:'content',  extraKeys:[] },
+  vigilante: { label:'🛡️ 自警団', col:'vigilante_reports',    nameKey:'reporter', bodyKey:'content',  extraKeys:[] },
+  gym:       { label:'💪 ジム',   col:'gym_challenges',        nameKey:'name',     bodyKey:'description', extraKeys:['challenge'] },
+  fire:      { label:'🚒 消防署', col:'fire_emergencies',      nameKey:'reporter', bodyKey:'content',  extraKeys:[] },
+};
+
+// フィルター状態
+let currentFilter = 'all';
+function setFilter(f, el){
+  currentFilter = f;
+  document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  loadAll();
+}
+
+// タブ切替
+function switchTab(id, btn){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='all') loadAll();
+  else loadFacility(id);
+}
+
+// 日付フォーマット
+function fmtDate(ts){
+  if(!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('ja-JP',{month:'numeric',day:'numeric'}) + ' ' +
+         d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+}
+
+// レポートカードHTML生成
+function cardHtml(docId, data, facilityKey){
+  const f = FACILITIES[facilityKey];
+  const isPending = (data.status||'pending') === 'pending';
+  const name = data[f.nameKey] || '匿名';
+  const body = data[f.bodyKey] || '';
+  const extra = f.extraKeys.map(k => data[k] ? `<span style="font-size:0.68rem;color:var(--cyan);">[${data[k]}]</span> ` : '').join('');
+  const dateStr = fmtDate(data.timestamp);
+  const resolveBtn = isPending
+    ? `<button class="btn-resolve" onclick="updateStatus('${facilityKey}','${docId}','resolved')">✅ 対応済にする</button>`
+    : `<button class="btn-reopen" onclick="updateStatus('${facilityKey}','${docId}','pending')">↩ 未対応に戻す</button>`;
+  return `
+    <div class="report-card ${isPending?'':'resolved'}" id="card-${facilityKey}-${docId}">
+      <div class="report-meta">
+        <span class="report-type">${f.label}</span>
+        <span class="report-status-badge ${isPending?'status-pending':'status-resolved'}">${isPending?'⏳ 未対応':'✅ 対応済'}</span>
+        <span class="report-date">${dateStr}</span>
+      </div>
+      <div class="report-user">👤 ${name}</div>
+      <div class="report-body">${extra}${body.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>
+      <div class="report-actions">
+        ${resolveBtn}
+        <button class="btn-delete" onclick="deleteReport('${facilityKey}','${docId}')">🗑️ 削除</button>
+      </div>
+    </div>`;
+}
+
+// 全件読み込み
+async function loadAll(){
+  const db = getDb(); const fb = getFbLib();
+  const el = document.getElementById('list-all');
+  if(!db||!fb){ el.innerHTML='<div class="empty-state"><div class="empty-icon">❌</div>DB未接続</div>'; return; }
+  el.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div>読み込み中...</div>';
+
+  let allDocs = [];
+  for(const [key, cfg] of Object.entries(FACILITIES)){
+    try{
+      let q = fb.query(fb.collection(db, cfg.col), fb.orderBy('timestamp','desc'), fb.limit(30));
+      const snap = await fb.getDocs(q);
+      snap.docs.forEach(d=>{ allDocs.push({id:d.id, data:d.data(), key}); });
+    }catch(e){}
+  }
+
+  // フィルター
+  if(currentFilter==='pending') allDocs = allDocs.filter(r=>(r.data.status||'pending')==='pending');
+  if(currentFilter==='resolved') allDocs = allDocs.filter(r=>r.data.status==='resolved');
+
+  // 時刻でソート
+  allDocs.sort((a,b)=>{
+    const ta = a.data.timestamp?.seconds||0;
+    const tb = b.data.timestamp?.seconds||0;
+    return tb-ta;
+  });
+
+  updateStats(allDocs);
+
+  if(allDocs.length===0){
+    el.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div>該当する報告はありません</div>';
+    return;
+  }
+  el.innerHTML = allDocs.map(r=>cardHtml(r.id, r.data, r.key)).join('');
+}
+
+// 施設別読み込み
+async function loadFacility(facilityKey){
+  const db = getDb(); const fb = getFbLib();
+  const cfg = FACILITIES[facilityKey];
+  const el = document.getElementById('list-'+facilityKey);
+  if(!db||!fb){ el.innerHTML='<div class="empty-state"><div class="empty-icon">❌</div>DB未接続</div>'; return; }
+  el.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div>読み込み中...</div>';
+  try{
+    const q = fb.query(fb.collection(db, cfg.col), fb.orderBy('timestamp','desc'), fb.limit(50));
+    const snap = await fb.getDocs(q);
+    if(snap.empty){ el.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div>報告はまだありません</div>'; return; }
+    el.innerHTML = snap.docs.map(d=>cardHtml(d.id, d.data(), facilityKey)).join('');
+  }catch(e){
+    el.innerHTML=`<div class="empty-state"><div class="empty-icon">❌</div>エラー: ${e.message}</div>`;
+  }
+}
+
+// ステータス変更
+async function updateStatus(facilityKey, docId, newStatus){
+  const db = getDb(); const fb = getFbLib();
+  if(!db||!fb) return;
+  const cfg = FACILITIES[facilityKey];
+  try{
+    await fb.updateDoc(fb.doc(db, cfg.col, docId), { status: newStatus });
+    showToast(newStatus==='resolved' ? '✅ 対応済にしました' : '↩ 未対応に戻しました', newStatus==='resolved'?'success':'');
+    // カードを更新（再読み込み）
+    const activePanel = document.querySelector('.panel.active');
+    if(activePanel && activePanel.id==='panel-all') loadAll();
+    else loadFacility(facilityKey);
+  }catch(e){ showToast('❌ 更新失敗: '+e.message,'error'); }
+}
+
+// 削除
+async function deleteReport(facilityKey, docId){
+  if(!confirm('この報告を削除しますか？')) return;
+  const db = getDb(); const fb = getFbLib();
+  if(!db||!fb) return;
+  const cfg = FACILITIES[facilityKey];
+  try{
+    await fb.deleteDoc(fb.doc(db, cfg.col, docId));
+    showToast('🗑️ 削除しました');
+    const card = document.getElementById('card-'+facilityKey+'-'+docId);
+    if(card) card.remove();
+  }catch(e){ showToast('❌ 削除失敗: '+e.message,'error'); }
+}
+
+// 統計更新
+function updateStats(allDocs){
+  const total = allDocs.length;
+  const pending = allDocs.filter(r=>(r.data.status||'pending')==='pending').length;
+  const resolved = total - pending;
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statPending').textContent = pending;
+  document.getElementById('statResolved').textContent = resolved;
+}
+
+// 初期化
+window.addEventListener('DOMContentLoaded', ()=>{
+  if(!isOwner()){
+    document.getElementById('lockScreen').style.display = 'flex';
+    return;
+  }
+  document.getElementById('adminContent').style.display = 'block';
+  document.getElementById('ownerBadge').classList.add('show');
+  loadAll();
+});
+</script>
+</body>
+</html>
