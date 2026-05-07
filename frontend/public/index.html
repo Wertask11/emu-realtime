@@ -6568,6 +6568,8 @@ async function gatedOpen(poiId, fn) {
 logoScreen.addEventListener("click", () => {
   logoScreen.style.display = "none";
   walletScreen.style.display = "flex";
+  // ロゴタップ数をFirebaseに記録（非ブロッキング）
+  spTrack('tap').catch(() => {});
 });
 
 // 利用規約チェックボックス制御
@@ -6594,6 +6596,64 @@ document.getElementById("agreeTerms").addEventListener("change", function() {
 // --- [1] グローバル定数の更新 ---
 const AMOY_CHAIN_ID = "0x13882"; // 80002
 const SEPOLIA_CHAIN_ID = "0xaa36a7"; // 11155111
+
+// ======= SchoolPark アクセス統計トラッカー (Firebase) =======
+// type: 'tap' | 'paid' | 'free'
+// address: ウォレットアドレス（tap の場合は不要）
+async function spTrack(type, address) {
+  try {
+    if (!window.db || !window.fbLib) return;
+    const { doc, setDoc, collection, addDoc, increment, getDoc } = window.fbLib;
+    const db = window.db;
+    const now = new Date();
+    const addr = address ? address.toLowerCase() : null;
+
+    // ① グローバルカウンター (sp_stats/global)
+    const globalRef = doc(db, 'sp_stats', 'global');
+    const globalUpdate = { updated_at: now };
+    if (type === 'tap')  globalUpdate.total_taps  = increment(1);
+    if (type === 'paid') globalUpdate.paid_count  = increment(1);
+    if (type === 'free') globalUpdate.free_count  = increment(1);
+    setDoc(globalRef, globalUpdate, { merge: true })
+      .catch(e => console.warn('[spTrack] global:', e));
+
+    // ② アドレス別ドキュメント（有料/無料パスのみ）
+    if (addr && (type === 'paid' || type === 'free')) {
+      const colName = type === 'paid' ? 'sp_paid_pass' : 'sp_free_pass';
+      const addrRef  = doc(db, colName, addr);
+      const snap     = await getDoc(addrRef);
+      let visitNum;
+
+      if (!snap.exists()) {
+        // 初回アクセス
+        visitNum = 1;
+        await setDoc(addrRef, {
+          address:     addr,
+          first_seen:  now,
+          last_seen:   now,
+          count:       1,
+        });
+      } else {
+        // 2回目以降
+        visitNum = (snap.data().count || 0) + 1;
+        await setDoc(addrRef, {
+          last_seen: now,
+          count:     increment(1),
+        }, { merge: true });
+      }
+
+      // ③ 個別ログ (sp_pass_logs)
+      addDoc(collection(db, 'sp_pass_logs'), {
+        type,
+        address:   addr,
+        timestamp: now,
+        visit_num: visitNum,
+      }).catch(e => console.warn('[spTrack] log:', e));
+    }
+  } catch (e) {
+    console.warn('[spTrack] error:', e);
+  }
+}
 
 // --- [2] 接続ボタン（connectWalletButton）の本番用 ---
 document.getElementById("connectWalletButton").addEventListener("click", async () => {
@@ -6663,6 +6723,8 @@ jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
 if (typeof updateConvertButton === "function") {
     updateConvertButton();
 }
+  // 有料パス入場をFirebaseに記録（非ブロッキング）
+  spTrack('paid', account).catch(() => {});
   // エアドロ画面をスキップしてそのままSchoolParkマップへ
   goTomainapp();
 
@@ -10756,6 +10818,8 @@ walletStatus.textContent = "接続成功: " + account;
 walletAddressButton.textContent =
   account.substring(0, 6) + "..." + account.slice(-4);
 
+  // 無料パス入場をFirebaseに記録（非ブロッキング）
+  spTrack('free', account).catch(() => {});
   // エアドロ画面をスキップしてそのままSchoolParkマップへ
   goTomainapp();
 };
