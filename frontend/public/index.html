@@ -8221,18 +8221,19 @@ function _refreshSpWalletPanel() {
       // 変換予定 EMUER
       const pending = typeof pendingEmuer !== 'undefined' ? pendingEmuer : 0;
       if (pendingEl) pendingEl.textContent = pending + ' EMUER';
-      // 残高表示を balance（balance + pending）形式に更新
+      // 残高表示を localBalance（blockchainBalance）形式に更新
+      // walletTotalEmuer = syncPendingEmuer内でセットされるブロックチェーン上の実EMUER
       const data2 = _getEmuerData();
       const bal2  = data2 ? data2.balance : 0;
-      if (balEl) balEl.textContent = bal2.toLocaleString() + '（' + (bal2 + pending).toLocaleString() + '）';
+      const blockchainBal = parseInt(document.getElementById('walletTotalEmuer')?.innerText || '0') || bal2;
+      if (balEl) balEl.textContent = bal2.toLocaleString() + '（' + blockchainBal.toLocaleString() + '）';
     }).catch(()=>{});
   } else {
     const pending = typeof pendingEmuer !== 'undefined' ? pendingEmuer : 0;
     if (goodEl)   goodEl.textContent   = (typeof totalgoodcount !== 'undefined' ? totalgoodcount : 0) + ' pt';
     if (changeEl) changeEl.textContent = (typeof totalchangecount !== 'undefined' ? totalchangecount : 0) + ' pt';
-    // 残高表示を balance（balance + pending）形式に
-    const bal2 = balance;
-    if (balEl) balEl.textContent = bal2.toLocaleString() + '（' + (bal2 + pending).toLocaleString() + '）';
+    // ブロックチェーン残高が取れない場合は localBalance のみ表示
+    if (balEl) balEl.textContent = balance.toLocaleString();
   }
 }
 
