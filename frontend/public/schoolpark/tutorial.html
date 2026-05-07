@@ -96,10 +96,30 @@ h1,h2,h3,h4 { line-height: 1.3; font-weight: 600; }
 .back-btn:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); text-decoration: none; }
 .mobile-nav-btn {
   display: none; background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 6px; padding: 6px 10px; color: var(--text-muted); cursor: pointer;
-  font-size: 16px; flex-shrink: 0;
-  /* margin-left:auto は sp-header-title の flex:1 で代替 */
+  border-radius: 6px; padding: 8px 12px; color: var(--text); cursor: pointer;
+  font-size: 18px; flex-shrink: 0; line-height: 1;
 }
+/* サイドバーモバイルヘッダー */
+.sidebar-mobile-header {
+  display: none;
+  align-items: center; gap: 10px;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0;
+  background: var(--bg); z-index: 10;
+}
+.sidebar-drag-handle {
+  width: 36px; height: 4px; border-radius: 2px;
+  background: var(--border); flex-shrink: 0;
+}
+.sidebar-mobile-title {
+  flex: 1; font-size: 14px; font-weight: 700; color: var(--gold);
+}
+.sidebar-close-btn {
+  background: none; border: none; color: var(--text-muted);
+  font-size: 16px; cursor: pointer; padding: 4px 6px; flex-shrink: 0;
+}
+.sidebar-close-btn:hover { color: var(--text); }
 
 /* =============================================
    Layout shell
@@ -121,7 +141,8 @@ h1,h2,h3,h4 { line-height: 1.3; font-weight: 600; }
 /* モバイル用サイドバー背景オーバーレイ */
 .sidebar-overlay {
   display: none; position: fixed; inset: 0;
-  background: rgba(0,0,0,0.5); z-index: 1390;
+  background: rgba(0,0,0,0.5); z-index: 1399;
+  touch-action: none;
 }
 .sidebar-overlay.active { display: block; }
 .sp-sidebar::-webkit-scrollbar { width: 4px; }
@@ -615,10 +636,15 @@ kbd {
 @media (max-width: 768px) {
   :root { --sidebar-w: 0px; }
   .sp-sidebar {
-    transform: translateX(-100%); width: 280px;
+    /* モバイル: ヘッダーの真下ではなく画面最上部から開始してコンテンツを全表示 */
+    top: 0; bottom: 0;
+    transform: translateX(-100%); width: 82vw; max-width: 300px;
     transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
-  .sp-sidebar.open { transform: translateX(0); width: 280px; }
+  .sp-sidebar.open { transform: translateX(0); }
+  .sidebar-mobile-header { display: flex; }
   .sp-main { margin-left: 0; }
   .sp-content { padding: 28px 20px 100px; }
   .mobile-nav-btn { display: flex; align-items: center; }
@@ -642,6 +668,8 @@ kbd {
      Header
 ============================================= -->
 <header class="sp-header">
+  <!-- モバイルでは先頭に表示（CSS order:-1 で対応） -->
+  <button class="mobile-nav-btn" onclick="toggleSidebar()">☰</button>
   <button class="back-btn" onclick="handleBack()">← 戻る</button>
   <div class="sp-header-divider"></div>
   <div class="sp-header-logo"><span>SchoolPark</span></div>
@@ -655,7 +683,6 @@ kbd {
     <img src="/assets/mascot.jpg" alt="冷蔵庫くん" class="sp-ai-btn-icon">
     冷蔵庫くんに聞く
   </button>
-  <button class="mobile-nav-btn" onclick="toggleSidebar()">☰</button>
 </header>
 
 <!-- ===== Sidebar Overlay (mobile) ===== -->
@@ -699,6 +726,13 @@ kbd {
 
   <!-- ===== Left Sidebar ===== -->
   <nav class="sp-sidebar" id="sp-sidebar">
+
+    <!-- モバイル用ヘッダー（閉じるボタン＆ドラッグインジケーター） -->
+    <div class="sidebar-mobile-header">
+      <div class="sidebar-drag-handle"></div>
+      <span class="sidebar-mobile-title">SchoolPark</span>
+      <button class="sidebar-close-btn" onclick="closeSidebar()">✕</button>
+    </div>
 
     <div class="nav-section" id="nav-started">
       <div class="nav-section-header" onclick="toggleSection('nav-started')">
@@ -1628,6 +1662,47 @@ function closeSidebar() {
   const overlay = document.getElementById('sidebarOverlay');
   if (overlay) overlay.classList.remove('active');
 }
+
+/* =============================================
+   サイドバー スワイプで閉じる（左スワイプ）
+============================================= */
+(function() {
+  const sidebar = document.getElementById('sp-sidebar');
+  let touchStartX = 0, touchStartY = 0, dragging = false;
+  const THRESHOLD = 60; // px
+
+  sidebar.addEventListener('touchstart', function(e) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    dragging = true;
+  }, { passive: true });
+
+  sidebar.addEventListener('touchmove', function(e) {
+    if (!dragging) return;
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = Math.abs(e.touches[0].clientY - touchStartY);
+    // 横スワイプが縦より大きい場合のみ処理
+    if (dy < Math.abs(dx) && dx < -20) {
+      const progress = Math.min(1, Math.abs(dx) / 200);
+      sidebar.style.transform = `translateX(${Math.min(0, dx)}px)`;
+      const overlay = document.getElementById('sidebarOverlay');
+      if (overlay) overlay.style.opacity = String(0.5 * (1 - progress));
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  sidebar.addEventListener('touchend', function(e) {
+    if (!dragging) return;
+    dragging = false;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    sidebar.style.transform = '';
+    const overlay = document.getElementById('sidebarOverlay');
+    if (overlay) overlay.style.opacity = '';
+    if (dx < -THRESHOLD) {
+      closeSidebar();
+    }
+  }, { passive: true });
+})();
 
 /* =============================================
    Section toggle (sidebar nav)
