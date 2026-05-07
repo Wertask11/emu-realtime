@@ -6663,10 +6663,21 @@ jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
 if (typeof updateConvertButton === "function") {
     updateConvertButton();
 }
-await showWalletSuccessModal(account);
+  // エアドロ画面をスキップしてそのままSchoolParkマップへ
+  goTomainapp();
 
   } catch (err) {
     console.error("❌ 接続エラー:", err);
+    // MetaMask TransportTimeoutError など接続失敗時のメッセージ
+    const _ws = document.getElementById("walletStatus");
+    if (_ws) {
+      const isTimeout = err && (err.message || "").toLowerCase().includes("timeout");
+      _ws.textContent = isTimeout
+        ? "⚠️ MetaMaskが応答していません。MetaMaskアイコンをクリックして起動してから再試行してください。"
+        : "❌ 接続に失敗しました。MetaMaskを確認して再試行してください。";
+      _ws.style.color = "#c0392b";
+      _ws.style.fontSize = "12px";
+    }
   }
 });
 
@@ -10742,7 +10753,9 @@ walletStatus.textContent = "接続成功: " + account;
 
 walletAddressButton.textContent =
   account.substring(0, 6) + "..." + account.slice(-4);
-await showWalletSuccessModal(account);
+
+  // エアドロ画面をスキップしてそのままSchoolParkマップへ
+  goTomainapp();
 };
 
   // 公式NFT最終判定
