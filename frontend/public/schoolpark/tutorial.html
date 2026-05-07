@@ -60,6 +60,7 @@ h1,h2,h3,h4 { line-height: 1.3; font-weight: 600; }
   background: rgba(15,17,26,0.96); backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; padding: 0 18px; gap: 12px; z-index: 1500;
+  overflow: hidden;
 }
 .sp-header-logo {
   display: flex; align-items: center; gap: 8px; flex-shrink: 0;
@@ -72,6 +73,7 @@ h1,h2,h3,h4 { line-height: 1.3; font-weight: 600; }
 }
 .sp-header-title {
   font-size: 14px; color: var(--text-muted); font-weight: 400;
+  flex: 1; /* 残りスペースを吸収して右寄せを実現 */
 }
 .sp-header-search {
   margin-left: auto; display: flex; align-items: center;
@@ -95,7 +97,8 @@ h1,h2,h3,h4 { line-height: 1.3; font-weight: 600; }
 .mobile-nav-btn {
   display: none; background: var(--bg3); border: 1px solid var(--border);
   border-radius: 6px; padding: 6px 10px; color: var(--text-muted); cursor: pointer;
-  font-size: 16px; margin-left: auto;
+  font-size: 16px; flex-shrink: 0;
+  /* margin-left:auto は sp-header-title の flex:1 で代替 */
 }
 
 /* =============================================
@@ -112,9 +115,15 @@ h1,h2,h3,h4 { line-height: 1.3; font-weight: 600; }
   position: fixed; top: var(--header-h); left: 0; bottom: 0;
   width: var(--sidebar-w); overflow-y: auto;
   border-right: 1px solid var(--border);
-  background: var(--bg); padding: 20px 0; z-index: 900;
+  background: var(--bg); padding: 20px 0; z-index: 1400;
   scrollbar-width: thin; scrollbar-color: var(--border) transparent;
 }
+/* モバイル用サイドバー背景オーバーレイ */
+.sidebar-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5); z-index: 1390;
+}
+.sidebar-overlay.active { display: block; }
 .sp-sidebar::-webkit-scrollbar { width: 4px; }
 .sp-sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
@@ -612,10 +621,14 @@ kbd {
   .sp-sidebar.open { transform: translateX(0); width: 280px; }
   .sp-main { margin-left: 0; }
   .sp-content { padding: 28px 20px 100px; }
-  .mobile-nav-btn { display: block; }
+  .mobile-nav-btn { display: flex; align-items: center; }
   .sp-header-search { display: none; }
   .doc-h1 { font-size: 1.5rem; }
-  .sp-ai-btn { font-size: 12px; padding: 5px 10px; }
+  /* モバイルではテキストを非表示にしてアイコンだけ表示 */
+  .sp-ai-btn { font-size: 0; padding: 5px 6px; gap: 0; min-width: unset; }
+  .sp-ai-btn-icon { width: 26px; height: 26px; }
+  .sp-header-divider { display: none; }
+  .sp-header-title { display: none; }
   .reizo-panel { width: calc(100vw - 20px); right: 10px; bottom: 70px; }
 }
   </style>
@@ -644,6 +657,9 @@ kbd {
   </button>
   <button class="mobile-nav-btn" onclick="toggleSidebar()">☰</button>
 </header>
+
+<!-- ===== Sidebar Overlay (mobile) ===== -->
+<div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
 
 <!-- ===== Search Modal ===== -->
 <div id="searchOverlay" class="search-overlay" onclick="closeSearchOverlay(event)">
@@ -1602,7 +1618,15 @@ function handleBack() {
    Sidebar toggle (mobile)
 ============================================= */
 function toggleSidebar() {
-  document.getElementById('sp-sidebar').classList.toggle('open');
+  const sidebar = document.getElementById('sp-sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  const isOpen = sidebar.classList.toggle('open');
+  if (overlay) overlay.classList.toggle('active', isOpen);
+}
+function closeSidebar() {
+  document.getElementById('sp-sidebar').classList.remove('open');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (overlay) overlay.classList.remove('active');
 }
 
 /* =============================================
@@ -1625,7 +1649,7 @@ function navClick(el, id) {
     window.scrollTo({ top: y, behavior: 'smooth' });
   }
   if (window.innerWidth <= 768) {
-    document.getElementById('sp-sidebar').classList.remove('open');
+    closeSidebar();
   }
 }
 
@@ -2032,7 +2056,7 @@ document.addEventListener('keydown', e => {
     openSearch();
   }
   if (e.key === 'Escape') {
-    document.getElementById('sp-sidebar').classList.remove('open');
+    closeSidebar();
     closeSearch();
   }
 });
