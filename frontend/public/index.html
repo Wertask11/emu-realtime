@@ -2201,403 +2201,436 @@ body.paypay-mode #pp-post-fab {
   </div>
 </div>
 
-<!-- ウォレット接続画面（入場ゲート） -->
+<!-- ウォレット接続画面（入場ゲート v2 / Claude Design） -->
 <style id="ws-styles">
-/* ===== walletScreen 入場ゲート ===== */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap');
+
+/* ===== walletScreen 入場ゲート v2 ===== */
 #walletScreen {
   position: relative;
-  background: linear-gradient(135deg, #f5f7ff 0%, #eef1ff 50%, #fdf8f0 100%);
+  font-family: "Hiragino Maru Gothic ProN", "Nunito", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  background:
+    radial-gradient(120% 90% at 85% 5%, #ffe9c9 0%, transparent 55%),
+    radial-gradient(100% 90% at 10% 95%, #ffd9c2 0%, transparent 60%),
+    radial-gradient(90% 80% at 50% 50%, #fff5e8 0%, transparent 70%),
+    linear-gradient(165deg, #fff6ec 0%, #fff0e0 45%, #fde6d3 100%);
   overflow: hidden;
 }
-/* Grid overlay */
-#ws-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(130,140,255,0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(130,140,255,0.07) 1px, transparent 1px);
-  background-size: 44px 44px;
-  animation: wsGridDrift 24s linear infinite;
+.ws-orb {
+  position: absolute; border-radius: 50%;
+  filter: blur(40px); pointer-events: none; will-change: transform;
+}
+.ws-orb-a {
+  width: 280px; height: 280px; left: -70px; top: -50px;
+  background: radial-gradient(circle, rgba(255,212,165,0.85) 0%, transparent 70%);
+  animation: wsDrift1 18s ease-in-out infinite;
+}
+.ws-orb-b {
+  width: 240px; height: 240px; right: -60px; top: 28%;
+  background: radial-gradient(circle, rgba(255,196,150,0.75) 0%, transparent 70%);
+  animation: wsDrift2 22s ease-in-out infinite;
+}
+.ws-orb-c {
+  width: 300px; height: 300px; left: 25%; bottom: -90px;
+  background: radial-gradient(circle, rgba(255,228,200,0.85) 0%, transparent 70%);
+  animation: wsDrift3 26s ease-in-out infinite;
+}
+@keyframes wsDrift1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(40px,30px)} }
+@keyframes wsDrift2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-30px,40px)} }
+@keyframes wsDrift3 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(30px,-30px)} }
+.ws-horizon {
+  position: absolute; left: 0; right: 0; top: 18%; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,200,140,0.5), transparent);
   pointer-events: none;
-  z-index: 1;
 }
-@keyframes wsGridDrift {
-  0%   { background-position: 0 0; }
-  100% { background-position: 44px 44px; }
+.ws-card-wrap {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px 16px; overflow-y: auto; z-index: 10;
 }
-/* Floating blobs */
-.ws-blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(70px);
-  opacity: 0.32;
-  pointer-events: none;
-  z-index: 1;
-}
-.ws-blob-1 { width: 340px; height: 340px; background: #c4b5fd; top: -110px; left: -90px; animation: wsBlob1 9s ease-in-out infinite; }
-.ws-blob-2 { width: 280px; height: 280px; background: #fde68a; bottom: -90px; right: -70px; animation: wsBlob2 11s ease-in-out infinite; }
-.ws-blob-3 { width: 220px; height: 220px; background: #bae6fd; top: 38%; left: 58%; animation: wsBlob3 7s ease-in-out infinite; }
-@keyframes wsBlob1 { 0%,100%{transform:translate(0,0)} 40%{transform:translate(18px,-14px)} 70%{transform:translate(-12px,10px)} }
-@keyframes wsBlob2 { 0%,100%{transform:translate(0,0)} 35%{transform:translate(-16px,12px)} 68%{transform:translate(14px,-10px)} }
-@keyframes wsBlob3 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(10px,-18px)} }
-/* Canvas */
-#ws-canvas { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
-/* Card */
+@media (min-width:600px) { .ws-card-wrap { padding: 32px; } }
 #ws-card {
+  width: 100%; max-width: 380px;
+  border-radius: 24px; padding: 26px;
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid rgba(255,255,255,0.9);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset,
+    0 30px 60px -20px rgba(60,40,120,0.18),
+    0 8px 24px -8px rgba(60,40,120,0.10);
   position: relative;
-  z-index: 10;
-  background: rgba(255,255,255,0.62);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
-  border: 1px solid rgba(255,255,255,0.85);
-  border-radius: 26px;
-  padding: 38px 36px 30px;
-  max-width: 420px;
-  width: 90%;
-  box-shadow: 0 8px 48px rgba(90,80,200,0.10), 0 1px 0 rgba(255,255,255,0.95) inset;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
-.ws-welcome {
-  font-size: 11px;
-  letter-spacing: 0.22em;
-  color: #9ba8d8;
-  text-transform: uppercase;
-  margin-bottom: 3px;
-  font-weight: 500;
+@media (min-width:600px) { #ws-card { padding: 34px; max-width: 400px; } }
+.ws-header { text-align: center; margin-bottom: 20px; }
+.ws-mascot-wrap { position: relative; width: 92px; height: 92px; margin: 0 auto 12px; }
+.ws-mascot-btn {
+  width: 92px; height: 92px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ffffff 0%, #fff1e6 60%, #ffe2cf 100%);
+  border: 1px solid rgba(255,170,140,0.45);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 24px -8px rgba(220,80,60,0.30), inset 0 1px 0 rgba(255,255,255,0.95);
+  overflow: hidden; cursor: pointer; padding: 0; position: relative;
+  animation: wsMascotIdle 3.6s ease-in-out infinite;
+  transition: transform 0.15s ease;
 }
-.ws-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: #1e1b4b;
-  margin-bottom: 22px;
-  letter-spacing: -0.01em;
+.ws-mascot-btn:hover { transform: scale(1.05); }
+.ws-mascot-btn img { width: 86%; height: 86%; object-fit: contain; mix-blend-mode: multiply; pointer-events: none; }
+.ws-mascot-hint {
+  position: absolute; top: -8px; right: -22px;
+  min-width: 38px; height: 28px; padding: 0 11px;
+  background: #fff; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 14px -4px rgba(60,40,120,0.25);
+  animation: wsHintBob 2.2s ease-in-out infinite;
+  pointer-events: none; z-index: 5;
 }
-/* Airdrop counter */
+.ws-mascot-hint::after {
+  content: ""; position: absolute; bottom: -4px; left: 8px;
+  width: 10px; height: 10px; background: #fff;
+  transform: rotate(45deg); border-radius: 2px;
+  box-shadow: 3px 3px 6px -2px rgba(60,40,120,0.18);
+}
+.ws-mascot-hint-dots {
+  font-size: 14px; font-weight: 800; color: #7c5fe6;
+  letter-spacing: 1px; line-height: 1;
+  animation: wsHintDots 1.4s ease-in-out infinite;
+}
+@keyframes wsHintBob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
+@keyframes wsHintDots { 0%,100%{opacity:0.55} 50%{opacity:1} }
+@keyframes wsMascotIdle {
+  0%,100%{transform:translateY(0) rotate(0deg)}
+  25%{transform:translateY(-3px) rotate(-2deg)}
+  75%{transform:translateY(-2px) rotate(2deg)}
+}
+.ws-welcome-label { font-size: 10px; letter-spacing: 0.22em; font-weight: 600; color: #9b8ec4; text-transform: uppercase; margin-bottom: 6px; }
+.ws-app-name { font-size: 28px; font-weight: 800; color: #1a1840; letter-spacing: -0.01em; line-height: 1.1; }
+
 #airdropCounter {
-  width: 100%;
-  background: linear-gradient(140deg, #12111e, #1e1a32);
-  border: 1px solid rgba(140,120,255,0.22);
-  border-radius: 18px;
-  padding: 16px 20px 14px;
-  margin-bottom: 18px;
-  box-shadow: 0 4px 22px rgba(0,0,0,0.18);
+  border-radius: 16px; padding: 14px 16px; text-align: center;
+  background: linear-gradient(180deg, #1d1a44 0%, #161237 100%);
+  color: #f0e6ff; margin-bottom: 16px;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 6px 18px -6px rgba(26,24,64,0.45);
+  position: relative; overflow: hidden;
 }
-.ws-live-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 9px;
+.ws-counter-shimmer {
+  position: absolute; top: -30px; right: -30px;
+  width: 90px; height: 90px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(229,201,138,0.18) 0%, transparent 70%);
+  pointer-events: none;
 }
+.ws-counter-top { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px; }
 .ws-live-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: #ef4444;
-  flex-shrink: 0;
-  animation: wsLivePulse 1.6s ease-in-out infinite;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #ff5470; display: inline-block; flex-shrink: 0;
+  animation: wsLivePulse 1.6s ease-out infinite;
 }
 @keyframes wsLivePulse {
-  0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.55); }
-  50%      { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+  0%  { box-shadow: 0 0 0 0 rgba(255,84,112,0.7); }
+  70% { box-shadow: 0 0 0 8px rgba(255,84,112,0); }
+  100%{ box-shadow: 0 0 0 0 rgba(255,84,112,0); }
 }
-.ws-live-label {
-  font-size: 10.5px;
-  color: #9e97c4;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.ws-count-row {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  margin-bottom: 3px;
-}
-.ws-count-num {
-  font-size: 38px;
-  font-weight: 700;
-  color: #fff;
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-.ws-count-total { font-size: 13px; color: #6b638c; }
-.ws-count-remaining {
-  font-size: 12px;
-  color: #fb923c;
-  margin-bottom: 11px;
-}
-.ws-count-remaining span { font-weight: 700; color: #f97316; }
-.ws-progress-bg {
-  background: rgba(255,255,255,0.07);
-  border-radius: 3px;
-  height: 4px;
-  overflow: hidden;
-}
-#progressBar {
-  height: 100%;
-  background: linear-gradient(90deg, #7c3aed, #f59e0b);
-  border-radius: 3px;
-  width: 0%;
-  transition: width 0.9s ease;
-}
-/* Buttons */
-.ws-btn-group {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
-  margin-bottom: 18px;
-}
+.ws-counter-label { font-size: 10px; letter-spacing: 0.18em; font-weight: 700; color: rgba(240,230,255,0.65); text-transform: uppercase; }
+.ws-counter-num-row { display: flex; align-items: baseline; justify-content: center; gap: 4px; }
+.ws-counter-num { font-size: 36px; font-weight: 800; color: #fff; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.ws-counter-unit { font-size: 14px; color: rgba(240,230,255,0.55); font-weight: 600; margin-left: 4px; }
+
+.ws-btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
 #connectWalletButton {
-  width: 100%;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, #1a1834, #2e2669);
-  color: #f0e2a8;
-  border: 1px solid rgba(240,226,168,0.28);
-  border-radius: 15px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: not-allowed;
-  letter-spacing: 0.01em;
-  transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.14);
-  opacity: 0.42;
+  width: 100%; height: 56px; border-radius: 999px; border: none;
+  background: linear-gradient(180deg, #25214f 0%, #1a1840 100%);
+  color: #e8d98a; font-family: inherit; font-weight: 700; font-size: 14px;
+  cursor: not-allowed; opacity: 0.45;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  position: relative; overflow: hidden;
+  box-shadow: 0 10px 24px -10px rgba(26,24,64,0.55), inset 0 1px 0 rgba(255,255,255,0.08);
+  letter-spacing: 0.01em; transition: transform .15s ease, box-shadow .15s ease;
 }
-#connectWalletButton:not([disabled]) {
-  cursor: pointer;
-  opacity: 1;
-}
+#connectWalletButton:not([disabled]) { cursor: pointer; opacity: 1; }
 #connectWalletButton:not([disabled]):hover {
-  background: linear-gradient(135deg, #252250, #3b328a);
-  border-color: rgba(240,226,168,0.5);
-  transform: translateY(-2px);
-  box-shadow: 0 7px 24px rgba(0,0,0,0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px -10px rgba(26,24,64,0.65), inset 0 1px 0 rgba(255,255,255,0.08);
 }
-#connectWalletButton:not([disabled]):active { transform: translateY(0); }
+.ws-btn-shimmer {
+  position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(232,217,138,0.18), transparent);
+  transform: skewX(-20deg);
+  animation: wsShimmer 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes wsShimmer { 0%{left:-60%} 60%,100%{left:120%} }
+.ws-free-wrap { position: relative; }
+.ws-free-badge {
+  position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+  font-size: 9.5px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #7c5fe6, #b794f6);
+  padding: 3px 8px; border-radius: 999px;
+  letter-spacing: 0.04em; white-space: nowrap;
+  box-shadow: 0 4px 10px -3px rgba(124,95,230,0.5);
+  pointer-events: none;
+}
 #freeNftButton {
-  width: 100%;
-  padding: 15px 20px;
-  background: rgba(255,255,255,0.75);
-  color: #3b2f82;
-  border: 1.5px solid rgba(160,140,255,0.45);
-  border-radius: 15px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: not-allowed;
-  letter-spacing: 0.01em;
-  transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
-  opacity: 0.42;
+  width: 100%; height: 56px; border-radius: 999px;
+  background: #ffffff; border: 1.5px solid #d8cffb;
+  color: #6c5ce7; font-family: inherit; font-weight: 700; font-size: 14px;
+  cursor: not-allowed; opacity: 0.45;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: all .15s ease;
+  box-shadow: 0 1px 0 rgba(255,255,255,1) inset;
 }
-#freeNftButton:not([disabled]) {
-  cursor: pointer;
-  opacity: 1;
-}
+#freeNftButton:not([disabled]) { cursor: pointer; opacity: 1; }
 #freeNftButton:not([disabled]):hover {
-  background: rgba(255,255,255,0.95);
-  border-color: rgba(120,90,255,0.65);
-  transform: translateY(-2px);
-  box-shadow: 0 5px 18px rgba(100,80,200,0.1);
+  box-shadow: 0 6px 18px -8px rgba(124,95,230,0.35);
+  transform: translateY(-1px);
 }
-#freeNftButton:not([disabled]):active { transform: translateY(0); }
-/* Terms */
-#termsAgreement {
-  width: 100%;
-  text-align: center;
-  margin-bottom: 2px;
+#termsAgreement { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; margin-bottom: 6px; }
+.ws-checkbox-vis {
+  width: 14px; height: 14px; min-width: 14px; margin-top: 1px;
+  border-radius: 4px; border: 1.5px solid rgba(155,142,196,0.55);
+  background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; flex-shrink: 0; transition: all .15s ease;
 }
-#termsAgreement label {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 7px;
-  cursor: pointer;
-}
-#agreeTerms {
-  margin-top: 1px;
-  width: 13px; height: 13px;
-  flex-shrink: 0;
-  accent-color: #7c5fe6;
-  cursor: pointer;
-}
-.ws-terms-text {
-  font-size: 10.5px;
-  color: rgba(80,80,130,0.6);
-  line-height: 1.7;
-  text-align: left;
-}
-.ws-terms-text a {
-  color: rgba(80,80,180,0.65);
-  text-decoration: none;
-}
+.ws-checkbox-vis.checked { background: #7c5fe6; border-color: #7c5fe6; }
+.ws-terms-text { font-size: 10.5px; color: rgba(26,24,64,0.55); line-height: 1.5; }
+.ws-terms-text a { color: #6c5ce7; text-decoration: none; font-weight: 600; }
 .ws-terms-text a:hover { text-decoration: underline; }
-.ws-terms-note {
-  display: block;
-  font-size: 9.5px;
-  color: rgba(100,100,130,0.4);
-  margin-top: 1px;
+.ws-terms-note { font-size: 9.5px; color: rgba(26,24,64,0.4); line-height: 1.5; padding-left: 22px; margin-bottom: 4px; }
+#walletStatus { font-size: 12px; color: #888; text-align: center; margin: 6px 0 0; min-height: 14px; }
+
+.ws-tut-overlay {
+  position: absolute; inset: 0;
+  background: rgba(20,15,40,0.35); backdrop-filter: blur(2px);
+  z-index: 20; display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 13%; animation: wsFadeIn .25s ease;
 }
-/* Status */
-#walletStatus {
-  font-size: 12px;
-  color: #888;
-  margin-top: 10px;
-  text-align: center;
-  min-height: 16px;
+.ws-tut-overlay.step-terms { background: transparent; backdrop-filter: none; pointer-events: none; }
+@keyframes wsFadeIn { from{opacity:0} to{opacity:1} }
+.ws-tut-bubble {
+  position: relative; background: #fff; border-radius: 20px;
+  padding: 18px 20px; max-width: 270px; width: 88%;
+  box-shadow: 0 20px 50px -10px rgba(20,15,40,0.45);
+  animation: wsBubbleIn .35s cubic-bezier(.2,1,.3,1);
+  font-size: 14px; line-height: 1.55; color: #1a1840; font-weight: 600;
+  pointer-events: auto;
 }
-/* Responsive */
-@media (max-width: 480px) {
-  #ws-card { padding: 28px 20px 24px; border-radius: 20px; }
-  .ws-title { font-size: 19px; }
-  .ws-count-num { font-size: 32px; }
-  #connectWalletButton, #freeNftButton { font-size: 14px; padding: 14px 16px; }
+.ws-tut-bubble::after {
+  content: ''; position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+  border-left: 10px solid transparent; border-right: 10px solid transparent;
+  border-bottom: 12px solid #fff;
 }
-@media (min-width: 1024px) {
-  #ws-card { padding: 44px 44px 34px; }
+@keyframes wsBubbleIn {
+  from{opacity:0;transform:translateY(-8px) scale(.96)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+.ws-tut-mascot-mini {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ffffff 0%, #fff1e6 60%, #ffe2cf 100%);
+  border: 1px solid rgba(255,170,140,0.45);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 8px; overflow: hidden;
+}
+.ws-tut-mascot-mini img { width: 88%; height: 88%; object-fit: contain; mix-blend-mode: multiply; }
+.ws-tut-msg { white-space: pre-line; }
+.ws-tut-tap { margin-top: 10px; font-size: 10.5px; color: #9b8ec4; font-weight: 600; letter-spacing: 0.04em; display: flex; align-items: center; gap: 6px; }
+.ws-tut-tap-dot { width: 6px; height: 6px; border-radius: 50%; background: #7c5fe6; animation: wsLivePulse 1.4s ease-out infinite; display: inline-block; }
+.ws-tut-yn { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.ws-tut-yn button { height: 40px; border-radius: 999px; border: 1.5px solid #d8cffb; background: #fff; color: #6c5ce7; font-weight: 700; font-size: 14px; font-family: inherit; cursor: pointer; transition: all .15s ease; }
+.ws-tut-yn button:hover { background: #f4f0ff; transform: translateY(-1px); }
+.ws-tut-yn button.ws-yes { background: linear-gradient(135deg,#7c5fe6,#b794f6); color:#fff; border-color: transparent; }
+.ws-tut-close { position: absolute; top: 8px; right: 10px; width: 22px; height: 22px; border: none; background: transparent; color: #9b8ec4; font-size: 16px; cursor: pointer; line-height: 1; }
+.ws-tut-highlight { position: relative; z-index: 30; animation: wsTutPulse 1.6s ease-in-out infinite; border-radius: 12px; }
+.ws-tut-highlight-terms { background: rgba(255,255,255,0.95); box-shadow: 0 0 0 2px #7c5fe6, 0 12px 30px -10px rgba(124,95,230,0.45); }
+@keyframes wsTutPulse {
+  0%,100%{box-shadow:0 0 0 2px #7c5fe6,0 0 0 0 rgba(124,95,230,0.4)}
+  50%{box-shadow:0 0 0 2px #7c5fe6,0 0 0 10px rgba(124,95,230,0)}
 }
 </style>
 
 <div id="walletScreen" style="display:none;justify-content:center;align-items:center;height:100vh;">
-  <!-- background layers -->
-  <canvas id="ws-canvas"></canvas>
-  <div id="ws-grid"></div>
-  <div class="ws-blob ws-blob-1"></div>
-  <div class="ws-blob ws-blob-2"></div>
-  <div class="ws-blob ws-blob-3"></div>
+  <div class="ws-orb ws-orb-a"></div>
+  <div class="ws-orb ws-orb-b"></div>
+  <div class="ws-orb ws-orb-c"></div>
+  <div class="ws-horizon"></div>
 
-  <!-- Main card -->
-  <div id="ws-card">
-    <div class="ws-welcome">Welcome to</div>
-    <div class="ws-title">🏫 SchoolPark</div>
-
-    <!-- 入場者数カウンター -->
-    <div id="airdropCounter">
-      <div class="ws-live-row">
-        <div class="ws-live-dot"></div>
-        <span class="ws-live-label">入場者数 · エアドロ参加状況</span>
+  <div class="ws-card-wrap">
+    <div id="ws-card">
+      <div class="ws-header">
+        <div class="ws-mascot-wrap">
+          <button class="ws-mascot-btn" id="wsMascotBtn" aria-label="冷蔵庫くんに話しかける" onclick="wsStartTutorial()">
+            <img src="/assets/mascot.jpg" alt="SchoolPark mascot">
+          </button>
+          <span id="wsMascotHint" class="ws-mascot-hint">
+            <span class="ws-mascot-hint-dots">・・・</span>
+          </span>
+        </div>
+        <div class="ws-welcome-label">Welcome to</div>
+        <div class="ws-app-name">SchoolPark</div>
       </div>
-      <div class="ws-count-row">
-        <span class="ws-count-num" id="connectedCount">--</span>
-        <span class="ws-count-total">/ 100 名</span>
-      </div>
-      <div class="ws-count-remaining">残り <span id="remainingCount">--</span> 枠</div>
-      <div class="ws-progress-bg">
-        <div id="progressBar"></div>
-      </div>
-    </div>
 
-    <!-- ボタングループ -->
-    <div class="ws-btn-group">
-      <button id="connectWalletButton" disabled>🎟️ 有料チケットで入場する</button>
-      <button id="freeNftButton" onclick="onFreeNftClick()" disabled>🎫 無料チケットで入場する</button>
-    </div>
+      <div id="airdropCounter">
+        <div class="ws-counter-shimmer"></div>
+        <div class="ws-counter-top">
+          <span class="ws-live-dot"></span>
+          <span class="ws-counter-label">入場者数</span>
+        </div>
+        <div class="ws-counter-num-row">
+          <span id="connectedCount" class="ws-counter-num">--</span>
+          <span class="ws-counter-unit">名</span>
+        </div>
+        <span id="remainingCount" style="display:none">--</span>
+        <div id="progressBar" style="display:none;width:0%"></div>
+      </div>
 
-    <!-- 利用規約（Apple風・半透明） -->
-    <div id="termsAgreement">
-      <label>
-        <input type="checkbox" id="agreeTerms">
-        <span class="ws-terms-text">
+      <div class="ws-btn-row">
+        <button id="connectWalletButton" disabled>
+          <span>🎟️</span><span>有料パス</span>
+          <span class="ws-btn-shimmer"></span>
+        </button>
+        <div class="ws-free-wrap">
+          <span class="ws-free-badge">初めての方はこちら</span>
+          <button id="freeNftButton" onclick="onFreeNftClick()" disabled>
+            <span>🎫</span><span>無料パス</span>
+          </button>
+        </div>
+      </div>
+
+      <input type="checkbox" id="agreeTerms" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;">
+      <div id="termsAgreement">
+        <button class="ws-checkbox-vis" id="wsCheckboxVis" role="checkbox" aria-checked="false" onclick="wsToggleAgreed()"></button>
+        <div class="ws-terms-text">
           <a href="/terms.html" target="_blank">利用規約</a> および
           <a href="/privacy.html" target="_blank">プライバシーポリシー</a> に同意する
-          <span class="ws-terms-note">※業務用デバイスでの利用は禁止されています</span>
-        </span>
-      </label>
-    </div>
+        </div>
+      </div>
+      <div class="ws-terms-note">※業務用デバイスでの利用は禁止されています</div>
 
-    <p id="walletStatus"></p>
+      <p id="walletStatus"></p>
+    </div>
+  </div>
+
+  <div id="wsTutOverlay" class="ws-tut-overlay" style="display:none;">
+    <div class="ws-tut-bubble" id="wsTutBubble" onclick="wsTutBubbleClick()">
+      <div class="ws-tut-mascot-mini"><img src="/assets/mascot.jpg" alt=""></div>
+      <div id="wsTutMsg" class="ws-tut-msg"></div>
+      <button class="ws-tut-close" onclick="event.stopPropagation();wsCloseTutorial()">&#215;</button>
+    </div>
   </div>
 </div>
 
 <script id="ws-gate-js">
 (function() {
-  // ===== Canvas パーティクル =====
-  function initWsParticles() {
-    const canvas = document.getElementById('ws-canvas');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let W, H, particles = [], raf;
+  var WS_TUT_LINES = [
+    "こんにちは！\n僕の名前は冷蔵庫くん。\nSchoolParkの案内役だよ！",
+    "まずは、利用規約と\nプライバシーポリシーを確認してね。",
+    "ありがとう！\nところでSchoolParkは\n初めて？",
+    "",
+    "また今度会おうね！\nバイバイ 👋"
+  ];
+  var wsTutStep = null;
+  var wsFirstTime = null;
 
-    function resize() {
-      W = canvas.width  = canvas.offsetWidth  || window.innerWidth;
-      H = canvas.height = canvas.offsetHeight || window.innerHeight;
-    }
-    function mkParticle() {
-      return {
-        x: Math.random() * W,
-        y: Math.random() * H + H * 0.1,
-        r: Math.random() * 2.2 + 0.6,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: -(Math.random() * 0.45 + 0.15),
-        alpha: Math.random() * 0.45 + 0.1,
-        life: Math.random() * 180 + 60,
-        age: 0
-      };
-    }
-    function init() {
-      resize();
-      particles = [];
-      for (let i = 0; i < 55; i++) { const p = mkParticle(); p.age = Math.floor(Math.random() * p.life); particles.push(p); }
-    }
-    function draw() {
-      ctx.clearRect(0, 0, W, H);
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        p.x += p.vx; p.y += p.vy; p.age++;
-        const fade = p.age < 30 ? p.age / 30 : p.age > p.life - 30 ? (p.life - p.age) / 30 : 1;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        const hue = 220 + Math.sin(p.x / W * Math.PI) * 40;
-        ctx.fillStyle = `hsla(${hue},70%,72%,${p.alpha * fade})`;
-        ctx.fill();
-        if (p.age >= p.life) { particles[i] = mkParticle(); particles[i].y = H + 5; }
-      }
-      raf = requestAnimationFrame(draw);
-    }
-    window.addEventListener('resize', () => { resize(); });
-    init(); draw();
-    // stop when hidden
-    const obs = new MutationObserver(() => {
-      const ws = document.getElementById('walletScreen');
-      if (ws && ws.style.display === 'none') { cancelAnimationFrame(raf); obs.disconnect(); }
-    });
-    const ws = document.getElementById('walletScreen');
-    if (ws) obs.observe(ws, { attributes: true, attributeFilter: ['style'] });
-  }
-
-  // ===== 入場者数（タップカウンター） =====
-  function incrementGateTap() {
-    const key = 'emu_gate_taps';
-    let n = parseInt(localStorage.getItem(key) || '0', 10) + 1;
-    localStorage.setItem(key, String(n));
+  function wsGetTapCount() { return parseInt(localStorage.getItem('emu_gate_taps') || '0', 10); }
+  function wsIncrementTap() {
+    var n = wsGetTapCount() + 1;
+    localStorage.setItem('emu_gate_taps', String(n));
     return n;
   }
-  function showGateTapCount() {
-    const key = 'emu_gate_taps';
-    const n = parseInt(localStorage.getItem(key) || '0', 10);
-    const countEl    = document.getElementById('connectedCount');
-    const remainEl   = document.getElementById('remainingCount');
-    const barEl      = document.getElementById('progressBar');
-    if (countEl)  countEl.textContent = n;
-    if (remainEl) {
-      const rem = Math.max(0, 100 - n);
-      remainEl.textContent = rem;
-      remainEl.style.color = rem <= 10 ? '#ef4444' : '#f97316';
-    }
-    if (barEl) barEl.style.width = Math.min(100, (n / 100) * 100) + '%';
+  function wsShowTapCount(n) {
+    var el = document.getElementById('connectedCount');
+    if (el) el.textContent = n;
   }
 
-  // ロゴクリックでカウント＆ウォレット画面表示時に初期化
-  const logoEl = document.getElementById('logoScreen');
-  if (logoEl) {
-    logoEl.addEventListener('click', function wsGateInit() {
-      incrementGateTap();
-      showGateTapCount();
-      initWsParticles();
-    }, { once: false });
+  window.wsStartTutorial = function() { wsTutStep = 0; wsRenderTut(); };
+  window.wsCloseTutorial = function() {
+    wsTutStep = null;
+    var ov = document.getElementById('wsTutOverlay');
+    if (ov) ov.style.display = 'none';
+    var hint = document.getElementById('wsMascotHint');
+    if (hint) hint.style.display = '';
+    var ta = document.getElementById('termsAgreement');
+    if (ta) { ta.classList.remove('ws-tut-highlight','ws-tut-highlight-terms'); }
+  };
+  window.wsTutBubbleClick = function() {
+    if (wsTutStep === 0) { wsTutStep = 1; wsRenderTut(); }
+    else if (wsTutStep === 3) { wsTutStep = 4; wsRenderTut(); }
+    else if (wsTutStep === 4) { wsCloseTutorial(); }
+  };
+  window.wsTutAnswer = function(first) {
+    wsFirstTime = first; wsTutStep = 3; wsRenderTut();
+  };
+
+  function wsRenderTut() {
+    var overlay = document.getElementById('wsTutOverlay');
+    var bubble  = document.getElementById('wsTutBubble');
+    var ta      = document.getElementById('termsAgreement');
+    if (!overlay || !bubble) return;
+    if (wsTutStep === null) { overlay.style.display = 'none'; return; }
+    overlay.style.display = 'flex';
+    var hint = document.getElementById('wsMascotHint');
+    if (hint) hint.style.display = 'none';
+    if (ta) ta.classList.remove('ws-tut-highlight','ws-tut-highlight-terms');
+
+    var html = '<div class="ws-tut-mascot-mini"><img src="/assets/mascot.jpg" alt=""></div>';
+    var tapHint = '<div class="ws-tut-tap"><span class="ws-tut-tap-dot"></span>タップして次へ</div>';
+    var closeBtn = '<button class="ws-tut-close" onclick="event.stopPropagation();wsCloseTutorial()">&#215;</button>';
+
+    if (wsTutStep === 0) {
+      overlay.className = 'ws-tut-overlay';
+      html += '<div class="ws-tut-msg">' + WS_TUT_LINES[0].replace(/\n/g,'<br>') + '</div>' + tapHint;
+    } else if (wsTutStep === 1) {
+      overlay.className = 'ws-tut-overlay step-terms';
+      if (ta) ta.classList.add('ws-tut-highlight','ws-tut-highlight-terms');
+      var agreed = document.getElementById('agreeTerms').checked;
+      html += '<div class="ws-tut-msg">' + WS_TUT_LINES[1].replace(/\n/g,'<br>') + '</div>';
+      html += '<div class="ws-tut-tap"><span class="ws-tut-tap-dot"></span>' + (agreed ? 'ありがとう！' : '下のチェックを入れてね') + '</div>';
+    } else if (wsTutStep === 2) {
+      overlay.className = 'ws-tut-overlay';
+      html += '<div class="ws-tut-msg">' + WS_TUT_LINES[2].replace(/\n/g,'<br>') + '</div>';
+      html += '<div class="ws-tut-yn"><button class="ws-yes" onclick="event.stopPropagation();wsTutAnswer(true)">はい</button>';
+      html += '<button onclick="event.stopPropagation();wsTutAnswer(false)">いいえ</button></div>';
+    } else if (wsTutStep === 3) {
+      overlay.className = 'ws-tut-overlay';
+      var msg = wsFirstTime ? "来てくれてありがとう！<br>無料パスを押して<br>無料チケットをもらおう！" : "いつもありがとう！<br>有料パスから進んでね！";
+      html += '<div class="ws-tut-msg">' + msg + '</div>' + tapHint;
+    } else if (wsTutStep === 4) {
+      overlay.className = 'ws-tut-overlay';
+      html += '<div class="ws-tut-msg">' + WS_TUT_LINES[4].replace(/\n/g,'<br>') + '</div>';
+      html += '<div class="ws-tut-tap"><span class="ws-tut-tap-dot"></span>タップして閉じる</div>';
+    }
+    html += closeBtn;
+    bubble.innerHTML = html;
   }
-  // 既にカウントがあれば即時反映（リロード時など）
-  showGateTapCount();
+
+  window.wsToggleAgreed = function() {
+    var cb  = document.getElementById('agreeTerms');
+    var vis = document.getElementById('wsCheckboxVis');
+    if (!cb || !vis) return;
+    cb.checked = !cb.checked;
+    vis.setAttribute('aria-checked', String(cb.checked));
+    if (cb.checked) {
+      vis.classList.add('checked');
+      vis.innerHTML = '<svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    } else {
+      vis.classList.remove('checked');
+      vis.innerHTML = '';
+    }
+    cb.dispatchEvent(new Event('change'));
+    if (wsTutStep === 1 && cb.checked) {
+      setTimeout(function() { wsTutStep = 2; wsRenderTut(); }, 500);
+    }
+  };
+
+  var logoEl = document.getElementById('logoScreen');
+  if (logoEl) {
+    logoEl.addEventListener('click', function() {
+      wsShowTapCount(wsIncrementTap());
+    });
+  }
+  wsShowTapCount(wsGetTapCount());
 })();
 </script>
-
 <!-- メイン画面 -->
 <div id="mainApp" style="display:none;">
 <header class="header" style="display: flex; align-items: center; padding: 0 20px; gap: 8px; flex-wrap: wrap;">
