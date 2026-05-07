@@ -2123,8 +2123,24 @@ body.paypay-mode #pp-post-fab {
 <body>
 
 <!-- ロゴ画面 -->
-<div id="logoScreen" style="display:flex;justify-content:center;align-items:center;height:100vh;background:#fff;cursor:pointer;">
+<style>
+@keyframes tapBlink {
+  0%,49.99%  { opacity: 1; }
+  50%,100%   { opacity: 0.18; }
+}
+.tap-to-start-text {
+  margin-top: 28px;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  color: #555;
+  font-family: 'Inter', sans-serif;
+  animation: tapBlink 2s infinite;
+  user-select: none;
+}
+</style>
+<div id="logoScreen" style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;background:#fff;cursor:pointer;">
   <img src="logo.jpg" alt="Emu Logo" style="max-width:300px;width:80%;height:auto;" />
+  <div class="tap-to-start-text">tap to the start</div>
 </div>
 
 <!-- メンテナンス画面 -->
@@ -7619,8 +7635,12 @@ async function syncPendingEmuer() {
 
     // --- 3. 合算して表示 (Firebase最新 + スマコン確定分) ---
     // ※ 運用方針によりますが、まずはFirebaseの総数を表示するのが「リアルタイム」感が出ます
-    const displayGood = fbGoodTotal; 
+    const displayGood = fbGoodTotal;
     const displayChange = fbChangeTotal;
+
+    // グローバルに保存（spWalletPanel でも参照できるように）
+    totalgoodcount = displayGood;
+    totalchangecount = displayChange;
 
     if (document.getElementById("walletGoodCount")) document.getElementById("walletGoodCount").innerText = displayGood;
     if (document.getElementById("walletChangeCount")) document.getElementById("walletChangeCount").innerText = displayChange;
@@ -8195,25 +8215,49 @@ function _refreshSpWalletPanel() {
   // Firebase からポイント同期（非同期）
   if (window.connectedAccount && typeof syncPendingEmuer === 'function') {
     syncPendingEmuer().then(() => {
-      if (goodEl) goodEl.textContent = typeof pendingEmuer !== 'undefined' ? pendingEmuer + ' pt' : '---';
-      if (changeEl) changeEl.textContent = '---';
-      if (pendingEl) pendingEl.textContent = (typeof pendingEmuer !== 'undefined' ? pendingEmuer : 0) + ' EMUER';
+      // Good / Change ポイントを totalgoodcount / totalchangecount から表示
+      if (goodEl)   goodEl.textContent   = (typeof totalgoodcount !== 'undefined' ? totalgoodcount : 0) + ' pt';
+      if (changeEl) changeEl.textContent = (typeof totalchangecount !== 'undefined' ? totalchangecount : 0) + ' pt';
+      // 変換予定 EMUER
+      const pending = typeof pendingEmuer !== 'undefined' ? pendingEmuer : 0;
+      if (pendingEl) pendingEl.textContent = pending + ' EMUER';
+      // 残高表示を balance（balance + pending）形式に更新
+      const data2 = _getEmuerData();
+      const bal2  = data2 ? data2.balance : 0;
+      if (balEl) balEl.textContent = bal2.toLocaleString() + '（' + (bal2 + pending).toLocaleString() + '）';
     }).catch(()=>{});
   } else {
     const pending = typeof pendingEmuer !== 'undefined' ? pendingEmuer : 0;
-    if (goodEl)   goodEl.textContent   = pending + ' pt';
-    if (changeEl) changeEl.textContent = '0 pt';
+    if (goodEl)   goodEl.textContent   = (typeof totalgoodcount !== 'undefined' ? totalgoodcount : 0) + ' pt';
+    if (changeEl) changeEl.textContent = (typeof totalchangecount !== 'undefined' ? totalchangecount : 0) + ' pt';
+    // 残高表示を balance（balance + pending）形式に
+    const bal2 = balance;
+    if (balEl) balEl.textContent = bal2.toLocaleString() + '（' + (bal2 + pending).toLocaleString() + '）';
   }
 }
 
 function spWalletConvert() {
-  if (typeof updateConvertButton === 'function') updateConvertButton();
-  const convertBtn = document.querySelector('.convert-day-btn') || document.querySelector('[onclick*="convertToEmuer"]');
-  if (convertBtn && !convertBtn.disabled) {
-    convertBtn.click();
+  // 有料NFTユーザーはいつでも変換可能
+  if (window.hasPaidNFT || isTestMode) {
     closeSpPanel('spWalletPanel');
+    if (typeof handleConversion === 'function') handleConversion();
+    return;
+  }
+  // 無料NFTユーザーは月曜日のみ
+  if (window.hasFreeNFT) {
+    if (new Date().getDay() === 1) {
+      closeSpPanel('spWalletPanel');
+      if (typeof handleConversion === 'function') handleConversion();
+    } else {
+      alert('無料ユーザーは毎週月曜日のみ変換できます。');
+    }
+    return;
+  }
+  // ウォレット未接続 or NFTなし
+  if (!window.connectedAccount) {
+    alert('ウォレットを接続してください。');
   } else {
-    alert('変換は毎週月曜日のみ可能です。');
+    alert('NFTが必要です。');
   }
 }
 
