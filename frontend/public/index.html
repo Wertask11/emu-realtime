@@ -2201,79 +2201,402 @@ body.paypay-mode #pp-post-fab {
   </div>
 </div>
 
-<!-- ウォレット接続画面 -->
-<div id="walletScreen"
-  style="display:none;justify-content:center;align-items:center;height:100vh;flex-direction:column;gap:20px;">
-
-  <h2>利用方法を選んでください！</h2>
-
-<!-- ★ リアルタイム接続者カウンター -->
-<div id="airdropCounter" style="
-  background: linear-gradient(135deg, #0f1f0f, #1a2e1a);
-  border: 1px solid #2a5c2a;
-  border-radius: 12px;
-  padding: 12px 24px;
+<!-- ウォレット接続画面（入場ゲート） -->
+<style id="ws-styles">
+/* ===== walletScreen 入場ゲート ===== */
+#walletScreen {
+  position: relative;
+  background: linear-gradient(135deg, #f5f7ff 0%, #eef1ff 50%, #fdf8f0 100%);
+  overflow: hidden;
+}
+/* Grid overlay */
+#ws-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(130,140,255,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(130,140,255,0.07) 1px, transparent 1px);
+  background-size: 44px 44px;
+  animation: wsGridDrift 24s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+@keyframes wsGridDrift {
+  0%   { background-position: 0 0; }
+  100% { background-position: 44px 44px; }
+}
+/* Floating blobs */
+.ws-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.32;
+  pointer-events: none;
+  z-index: 1;
+}
+.ws-blob-1 { width: 340px; height: 340px; background: #c4b5fd; top: -110px; left: -90px; animation: wsBlob1 9s ease-in-out infinite; }
+.ws-blob-2 { width: 280px; height: 280px; background: #fde68a; bottom: -90px; right: -70px; animation: wsBlob2 11s ease-in-out infinite; }
+.ws-blob-3 { width: 220px; height: 220px; background: #bae6fd; top: 38%; left: 58%; animation: wsBlob3 7s ease-in-out infinite; }
+@keyframes wsBlob1 { 0%,100%{transform:translate(0,0)} 40%{transform:translate(18px,-14px)} 70%{transform:translate(-12px,10px)} }
+@keyframes wsBlob2 { 0%,100%{transform:translate(0,0)} 35%{transform:translate(-16px,12px)} 68%{transform:translate(14px,-10px)} }
+@keyframes wsBlob3 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(10px,-18px)} }
+/* Canvas */
+#ws-canvas { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+/* Card */
+#ws-card {
+  position: relative;
+  z-index: 10;
+  background: rgba(255,255,255,0.62);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid rgba(255,255,255,0.85);
+  border-radius: 26px;
+  padding: 38px 36px 30px;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 8px 48px rgba(90,80,200,0.10), 0 1px 0 rgba(255,255,255,0.95) inset;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ws-welcome {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: #9ba8d8;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+  font-weight: 500;
+}
+.ws-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e1b4b;
+  margin-bottom: 22px;
+  letter-spacing: -0.01em;
+}
+/* Airdrop counter */
+#airdropCounter {
+  width: 100%;
+  background: linear-gradient(140deg, #12111e, #1e1a32);
+  border: 1px solid rgba(140,120,255,0.22);
+  border-radius: 18px;
+  padding: 16px 20px 14px;
+  margin-bottom: 18px;
+  box-shadow: 0 4px 22px rgba(0,0,0,0.18);
+}
+.ws-live-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 9px;
+}
+.ws-live-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+  animation: wsLivePulse 1.6s ease-in-out infinite;
+}
+@keyframes wsLivePulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.55); }
+  50%      { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+}
+.ws-live-label {
+  font-size: 10.5px;
+  color: #9e97c4;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.ws-count-row {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-bottom: 3px;
+}
+.ws-count-num {
+  font-size: 38px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.ws-count-total { font-size: 13px; color: #6b638c; }
+.ws-count-remaining {
+  font-size: 12px;
+  color: #fb923c;
+  margin-bottom: 11px;
+}
+.ws-count-remaining span { font-weight: 700; color: #f97316; }
+.ws-progress-bg {
+  background: rgba(255,255,255,0.07);
+  border-radius: 3px;
+  height: 4px;
+  overflow: hidden;
+}
+#progressBar {
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #f59e0b);
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.9s ease;
+}
+/* Buttons */
+.ws-btn-group {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin-bottom: 18px;
+}
+#connectWalletButton {
+  width: 100%;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #1a1834, #2e2669);
+  color: #f0e2a8;
+  border: 1px solid rgba(240,226,168,0.28);
+  border-radius: 15px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: not-allowed;
+  letter-spacing: 0.01em;
+  transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.14);
+  opacity: 0.42;
+}
+#connectWalletButton:not([disabled]) {
+  cursor: pointer;
+  opacity: 1;
+}
+#connectWalletButton:not([disabled]):hover {
+  background: linear-gradient(135deg, #252250, #3b328a);
+  border-color: rgba(240,226,168,0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 7px 24px rgba(0,0,0,0.2);
+}
+#connectWalletButton:not([disabled]):active { transform: translateY(0); }
+#freeNftButton {
+  width: 100%;
+  padding: 15px 20px;
+  background: rgba(255,255,255,0.75);
+  color: #3b2f82;
+  border: 1.5px solid rgba(160,140,255,0.45);
+  border-radius: 15px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: not-allowed;
+  letter-spacing: 0.01em;
+  transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
+  opacity: 0.42;
+}
+#freeNftButton:not([disabled]) {
+  cursor: pointer;
+  opacity: 1;
+}
+#freeNftButton:not([disabled]):hover {
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(120,90,255,0.65);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 18px rgba(100,80,200,0.1);
+}
+#freeNftButton:not([disabled]):active { transform: translateY(0); }
+/* Terms */
+#termsAgreement {
+  width: 100%;
   text-align: center;
-  margin-bottom: 8px;
-">
-  <div style="font-size: 12px; color: #7ec87e; margin-bottom: 4px; letter-spacing: 1px;">
-    🔴 LIVE · エアドロ参加状況
-  </div>
-  <div style="font-size: 28px; font-weight: bold; color: #fff;">
-    <span id="connectedCount">--</span>
-    <span style="font-size: 14px; color: #aaa;">/ 100 名</span>
-  </div>
-  <div style="font-size: 13px; color: #ff9966; margin-top: 4px;">
-    残り <span id="remainingCount" style="font-weight:bold; color:#ff6633;">--</span> 枠
-  </div>
-  <div style="background:#1a3a1a;border-radius:6px;height:6px;margin-top:8px;overflow:hidden;">
-    <div id="progressBar" style="height:100%;background:linear-gradient(90deg,#2ecc71,#f39c12);width:0%;transition:width 0.8s ease;border-radius:6px;"></div>
-  </div>
-</div>
+  margin-bottom: 2px;
+}
+#termsAgreement label {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 7px;
+  cursor: pointer;
+}
+#agreeTerms {
+  margin-top: 1px;
+  width: 13px; height: 13px;
+  flex-shrink: 0;
+  accent-color: #7c5fe6;
+  cursor: pointer;
+}
+.ws-terms-text {
+  font-size: 10.5px;
+  color: rgba(80,80,130,0.6);
+  line-height: 1.7;
+  text-align: left;
+}
+.ws-terms-text a {
+  color: rgba(80,80,180,0.65);
+  text-decoration: none;
+}
+.ws-terms-text a:hover { text-decoration: underline; }
+.ws-terms-note {
+  display: block;
+  font-size: 9.5px;
+  color: rgba(100,100,130,0.4);
+  margin-top: 1px;
+}
+/* Status */
+#walletStatus {
+  font-size: 12px;
+  color: #888;
+  margin-top: 10px;
+  text-align: center;
+  min-height: 16px;
+}
+/* Responsive */
+@media (max-width: 480px) {
+  #ws-card { padding: 28px 20px 24px; border-radius: 20px; }
+  .ws-title { font-size: 19px; }
+  .ws-count-num { font-size: 32px; }
+  #connectWalletButton, #freeNftButton { font-size: 14px; padding: 14px 16px; }
+}
+@media (min-width: 1024px) {
+  #ws-card { padding: 44px 44px 34px; }
+}
+</style>
 
-  <!-- ① 通常ウォレット接続（既存） -->
-<!-- 利用規約同意チェックボックス -->
-  <div id="termsAgreement" style="
-    background: #f9f9f9;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    max-width: 360px;
-    font-size: 13px;
-    line-height: 1.6;
-  ">
-    <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;">
-      <input type="checkbox" id="agreeTerms" style="margin-top:3px; width:16px; height:16px; flex-shrink:0;">
-      <span>
-        <a href="/terms.html" target="_blank" style="color:#007bff;">利用規約</a>
-        および
-        <a href="/privacy.html" target="_blank" style="color:#007bff;">プライバシーポリシー</a>
-        に同意する
-        <br>
-        <span style="font-size:11px; color:#888;">
-          ※業務用デバイスでの利用は禁止されています
+<div id="walletScreen" style="display:none;justify-content:center;align-items:center;height:100vh;">
+  <!-- background layers -->
+  <canvas id="ws-canvas"></canvas>
+  <div id="ws-grid"></div>
+  <div class="ws-blob ws-blob-1"></div>
+  <div class="ws-blob ws-blob-2"></div>
+  <div class="ws-blob ws-blob-3"></div>
+
+  <!-- Main card -->
+  <div id="ws-card">
+    <div class="ws-welcome">Welcome to</div>
+    <div class="ws-title">🏫 SchoolPark</div>
+
+    <!-- 入場者数カウンター -->
+    <div id="airdropCounter">
+      <div class="ws-live-row">
+        <div class="ws-live-dot"></div>
+        <span class="ws-live-label">入場者数 · エアドロ参加状況</span>
+      </div>
+      <div class="ws-count-row">
+        <span class="ws-count-num" id="connectedCount">--</span>
+        <span class="ws-count-total">/ 100 名</span>
+      </div>
+      <div class="ws-count-remaining">残り <span id="remainingCount">--</span> 枠</div>
+      <div class="ws-progress-bg">
+        <div id="progressBar"></div>
+      </div>
+    </div>
+
+    <!-- ボタングループ -->
+    <div class="ws-btn-group">
+      <button id="connectWalletButton" disabled>🎟️ 有料チケットで入場する</button>
+      <button id="freeNftButton" onclick="onFreeNftClick()" disabled>🎫 無料チケットで入場する</button>
+    </div>
+
+    <!-- 利用規約（Apple風・半透明） -->
+    <div id="termsAgreement">
+      <label>
+        <input type="checkbox" id="agreeTerms">
+        <span class="ws-terms-text">
+          <a href="/terms.html" target="_blank">利用規約</a> および
+          <a href="/privacy.html" target="_blank">プライバシーポリシー</a> に同意する
+          <span class="ws-terms-note">※業務用デバイスでの利用は禁止されています</span>
         </span>
-      </span>
-    </label>
+      </label>
+    </div>
+
+    <p id="walletStatus"></p>
   </div>
-
-  <button id="connectWalletButton"
-    style="padding:10px 20px;font-size:16px;cursor:pointer; opacity:0.4; cursor:not-allowed;"
-    disabled>
-    有料チケットでSchoolParkに入る
-  </button>
-
-  <!-- ② 無料チケット -->
-<button id="freeNftButton"
-  onclick="onFreeNftClick()"
-  style="padding:10px 20px;font-size:16px; opacity:0.4; cursor:not-allowed;"
-  disabled>
-  無料チケットを受け取ってSchoolParkに入る
-</button>
-
-  <p id="walletStatus" style="color:#555;"></p>
 </div>
+
+<script id="ws-gate-js">
+(function() {
+  // ===== Canvas パーティクル =====
+  function initWsParticles() {
+    const canvas = document.getElementById('ws-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let W, H, particles = [], raf;
+
+    function resize() {
+      W = canvas.width  = canvas.offsetWidth  || window.innerWidth;
+      H = canvas.height = canvas.offsetHeight || window.innerHeight;
+    }
+    function mkParticle() {
+      return {
+        x: Math.random() * W,
+        y: Math.random() * H + H * 0.1,
+        r: Math.random() * 2.2 + 0.6,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: -(Math.random() * 0.45 + 0.15),
+        alpha: Math.random() * 0.45 + 0.1,
+        life: Math.random() * 180 + 60,
+        age: 0
+      };
+    }
+    function init() {
+      resize();
+      particles = [];
+      for (let i = 0; i < 55; i++) { const p = mkParticle(); p.age = Math.floor(Math.random() * p.life); particles.push(p); }
+    }
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.age++;
+        const fade = p.age < 30 ? p.age / 30 : p.age > p.life - 30 ? (p.life - p.age) / 30 : 1;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        const hue = 220 + Math.sin(p.x / W * Math.PI) * 40;
+        ctx.fillStyle = `hsla(${hue},70%,72%,${p.alpha * fade})`;
+        ctx.fill();
+        if (p.age >= p.life) { particles[i] = mkParticle(); particles[i].y = H + 5; }
+      }
+      raf = requestAnimationFrame(draw);
+    }
+    window.addEventListener('resize', () => { resize(); });
+    init(); draw();
+    // stop when hidden
+    const obs = new MutationObserver(() => {
+      const ws = document.getElementById('walletScreen');
+      if (ws && ws.style.display === 'none') { cancelAnimationFrame(raf); obs.disconnect(); }
+    });
+    const ws = document.getElementById('walletScreen');
+    if (ws) obs.observe(ws, { attributes: true, attributeFilter: ['style'] });
+  }
+
+  // ===== 入場者数（タップカウンター） =====
+  function incrementGateTap() {
+    const key = 'emu_gate_taps';
+    let n = parseInt(localStorage.getItem(key) || '0', 10) + 1;
+    localStorage.setItem(key, String(n));
+    return n;
+  }
+  function showGateTapCount() {
+    const key = 'emu_gate_taps';
+    const n = parseInt(localStorage.getItem(key) || '0', 10);
+    const countEl    = document.getElementById('connectedCount');
+    const remainEl   = document.getElementById('remainingCount');
+    const barEl      = document.getElementById('progressBar');
+    if (countEl)  countEl.textContent = n;
+    if (remainEl) {
+      const rem = Math.max(0, 100 - n);
+      remainEl.textContent = rem;
+      remainEl.style.color = rem <= 10 ? '#ef4444' : '#f97316';
+    }
+    if (barEl) barEl.style.width = Math.min(100, (n / 100) * 100) + '%';
+  }
+
+  // ロゴクリックでカウント＆ウォレット画面表示時に初期化
+  const logoEl = document.getElementById('logoScreen');
+  if (logoEl) {
+    logoEl.addEventListener('click', function wsGateInit() {
+      incrementGateTap();
+      showGateTapCount();
+      initWsParticles();
+    }, { once: false });
+  }
+  // 既にカウントがあれば即時反映（リロード時など）
+  showGateTapCount();
+})();
+</script>
 
 <!-- メイン画面 -->
 <div id="mainApp" style="display:none;">
