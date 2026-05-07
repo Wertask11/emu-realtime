@@ -6611,28 +6611,31 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
 
     console.log("🦊 Wallet Connected:", account);
 
-    // ② ネットワークチェック（Polygonメインネット固定）
+    // ② ネットワークチェック（Polygonメインネット固定）※オーナーはスキップ
     const chainId = await window.ethereum.request({ method: "eth_chainId" });
     const POLYGON_MAINNET = "0x89"; // 137
+    const _isOwner = account.toLowerCase() === SP_OWNER.toLowerCase();
 
-    if (chainId !== POLYGON_MAINNET) {
+    if (!_isOwner && chainId !== POLYGON_MAINNET) {
       try {
         await window.ethereum.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: POLYGON_MAINNET }]
         });
       } catch (e) {
-        // ネットワークがMetaMaskに追加されていない場合は追加を促す（オプション）
         console.log("Polygonへの切り替えが必要です");
         alert("Polygonメインネットに切り替えてください。");
-        return; 
+        return;
       }
     }
 
-    // ③ 公式NFTチェックの実行
-    await window.checkHexaNFT();
-    await window.checkFreeNFT();
-    await window.checkScheduleNFT();
+    // ③ 公式NFTチェックの実行（失敗しても先へ進む）
+    await window.checkHexaNFT().catch(e => console.warn("checkHexaNFT:", e));
+    await window.checkFreeNFT().catch(e => console.warn("checkFreeNFT:", e));
+    await window.checkScheduleNFT().catch(e => console.warn("checkScheduleNFT:", e));
+
+    // オーナーは常にpaidNFT扱い
+    if (_isOwner) window.hasPaidNFT = true;
 
     window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT;
     console.log("🏫 本番NFT最終判定:", window.hasOfficialNFT);
