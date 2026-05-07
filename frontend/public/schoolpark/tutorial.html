@@ -169,7 +169,7 @@ h1,h2,h3,h4 { line-height: 1.3; font-weight: 600; }
 }
 .sp-content {
   flex: 1; min-width: 0; max-width: 720px;
-  padding: 44px 48px; overflow: hidden;
+  padding: 44px 48px 100px; overflow: hidden;
 }
 .sp-content > * + * { margin-top: 24px; }
 
@@ -440,6 +440,164 @@ kbd {
 .page-nav-arrow { font-size: 20px; color: var(--text-faint); flex-shrink: 0; }
 
 /* =============================================
+   冷蔵庫くん header button
+============================================= */
+.sp-ai-btn {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 14px; background: var(--gold-dim);
+  border: 1px solid var(--gold-border); border-radius: 20px;
+  color: var(--gold); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.sp-ai-btn:hover { background: rgba(212,168,67,0.22); }
+.sp-ai-btn-icon {
+  width: 22px; height: 22px; border-radius: 50%; object-fit: cover;
+}
+
+/* =============================================
+   Search Modal
+============================================= */
+.search-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  z-index: 2000; align-items: flex-start; justify-content: center;
+  padding-top: 80px;
+}
+.search-overlay.open { display: flex; }
+.search-modal {
+  width: min(640px, 90vw); background: var(--bg2);
+  border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+}
+.search-input-wrap {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.search-icon { font-size: 16px; flex-shrink: 0; }
+.search-input-wrap input {
+  flex: 1; background: none; border: none; outline: none;
+  color: var(--text); font-size: 15px;
+}
+.search-close-btn {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 16px; padding: 2px 6px;
+}
+.search-close-btn:hover { color: var(--text); }
+.search-results { max-height: 400px; overflow-y: auto; }
+.search-result-item {
+  padding: 12px 18px; cursor: pointer; border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.search-result-item:hover, .search-result-item.active { background: var(--bg3); }
+.search-result-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.search-result-ctx { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.search-result-ctx mark { background: var(--gold-dim); color: var(--gold); border-radius: 2px; }
+.search-no-result { padding: 20px 18px; color: var(--text-muted); font-size: 13px; text-align: center; }
+
+/* =============================================
+   冷蔵庫くん Chat Panel
+============================================= */
+.reizo-panel {
+  position: fixed; bottom: 80px; right: 24px;
+  width: 340px; max-height: 520px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 14px; box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  display: none; flex-direction: column; z-index: 1500;
+  overflow: hidden;
+}
+.reizo-panel.open { display: flex; }
+.reizo-header {
+  display: flex; align-items: center; gap: 9px;
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  background: var(--bg3);
+}
+.reizo-header-icon { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.reizo-header-title { flex: 1; font-size: 14px; font-weight: 700; color: var(--text); }
+.reizo-close-btn {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 16px; padding: 2px 6px;
+}
+.reizo-close-btn:hover { color: var(--text); }
+.reizo-messages {
+  flex: 1; overflow-y: auto; padding: 14px 12px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.reizo-msg { display: flex; align-items: flex-end; gap: 8px; }
+.reizo-msg-bot { flex-direction: row; }
+.reizo-msg-user { flex-direction: row-reverse; }
+.reizo-msg-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.reizo-msg-bubble {
+  max-width: 80%; padding: 9px 12px; border-radius: 12px;
+  font-size: 13px; line-height: 1.55; white-space: pre-wrap;
+}
+.reizo-msg-bot .reizo-msg-bubble {
+  background: var(--bg3); color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+.reizo-msg-user .reizo-msg-bubble {
+  background: var(--gold); color: #1a1200;
+  border-bottom-right-radius: 4px;
+}
+.reizo-typing span {
+  display: inline-block; width: 6px; height: 6px;
+  background: var(--text-muted); border-radius: 50%; margin: 0 2px;
+  animation: reizoTyping 1.2s infinite;
+}
+.reizo-typing span:nth-child(2) { animation-delay: 0.2s; }
+.reizo-typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes reizoTyping {
+  0%,60%,100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-4px); }
+}
+.reizo-input-area {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-top: 1px solid var(--border);
+  background: var(--bg3);
+}
+.reizo-input-area input {
+  flex: 1; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px; color: var(--text);
+  font-size: 13px; outline: none;
+}
+.reizo-input-area input:focus { border-color: var(--gold-border); }
+.reizo-send-btn {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--gold); border: none; color: #1a1200;
+  font-size: 16px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.reizo-send-btn:hover { background: var(--gold-light); }
+
+/* =============================================
+   Bottom Ask Bar
+============================================= */
+.bottom-ask-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--bg2); border-top: 1px solid var(--border);
+  padding: 10px 20px; z-index: 1200;
+}
+.bottom-ask-inner {
+  max-width: 720px; margin: 0 auto;
+  display: flex; align-items: center; gap: 10px;
+}
+.bottom-ask-avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.bottom-ask-inner input {
+  flex: 1; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 22px; padding: 9px 16px; color: var(--text);
+  font-size: 14px; outline: none;
+}
+.bottom-ask-inner input:focus { border-color: var(--gold-border); }
+.bottom-ask-send {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--gold); border: none; color: #1a1200;
+  font-size: 16px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s; flex-shrink: 0;
+}
+.bottom-ask-send:hover { background: var(--gold-light); }
+
+/* =============================================
    Mobile
 ============================================= */
 @media (max-width: 1100px) {
@@ -453,10 +611,12 @@ kbd {
   }
   .sp-sidebar.open { transform: translateX(0); width: 280px; }
   .sp-main { margin-left: 0; }
-  .sp-content { padding: 28px 20px; }
+  .sp-content { padding: 28px 20px 100px; }
   .mobile-nav-btn { display: block; }
   .sp-header-search { display: none; }
   .doc-h1 { font-size: 1.5rem; }
+  .sp-ai-btn { font-size: 12px; padding: 5px 10px; }
+  .reizo-panel { width: calc(100vw - 20px); right: 10px; bottom: 70px; }
 }
   </style>
 </head>
@@ -474,12 +634,47 @@ kbd {
   <div class="sp-header-logo"><span>SchoolPark</span></div>
   <div class="sp-header-divider"></div>
   <div class="sp-header-title"></div>
-  <div class="sp-header-search">
+  <div class="sp-header-search" onclick="openSearch()">
     <span>🔍 クイック検索...</span>
     <kbd>⌘K</kbd>
   </div>
+  <button class="sp-ai-btn" onclick="openReizoBot()">
+    <img src="/assets/mascot.jpg" alt="冷蔵庫くん" class="sp-ai-btn-icon">
+    冷蔵庫くんに聞く
+  </button>
   <button class="mobile-nav-btn" onclick="toggleSidebar()">☰</button>
 </header>
+
+<!-- ===== Search Modal ===== -->
+<div id="searchOverlay" class="search-overlay" onclick="closeSearchOverlay(event)">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <span class="search-icon">🔍</span>
+      <input id="searchInput" type="text" placeholder="検索..." autocomplete="off" oninput="doSearch(this.value)" onkeydown="searchKeydown(event)">
+      <button class="search-close-btn" onclick="closeSearch()">✕</button>
+    </div>
+    <div id="searchResults" class="search-results"></div>
+  </div>
+</div>
+
+<!-- ===== 冷蔵庫くん Chat Panel ===== -->
+<div id="reizoPanel" class="reizo-panel">
+  <div class="reizo-header">
+    <img src="/assets/mascot.jpg" alt="冷蔵庫くん" class="reizo-header-icon">
+    <span class="reizo-header-title">アシスタント</span>
+    <button class="reizo-close-btn" onclick="closeReizoBot()">✕</button>
+  </div>
+  <div class="reizo-messages" id="reizoMessages">
+    <div class="reizo-msg reizo-msg-bot">
+      <img src="/assets/mascot.jpg" alt="" class="reizo-msg-avatar">
+      <div class="reizo-msg-bubble">SchoolPark について何でも聞いてね！ログイン・使い方・EMUER など、何でも答えるよ🧊</div>
+    </div>
+  </div>
+  <div class="reizo-input-area">
+    <input id="reizoInput" type="text" placeholder="質問する..." onkeydown="reizoKeydown(event)">
+    <button class="reizo-send-btn" onclick="reizoSend()">↑</button>
+  </div>
+</div>
 
 <!-- =============================================
      Shell
@@ -502,6 +697,20 @@ kbd {
         </a>
         <a class="nav-item" href="#map" onclick="navClick(this,'map')">
           <span class="nav-item-icon">🗺️</span> マップの使い方
+        </a>
+      </div>
+    </div>
+
+    <div class="nav-section" id="nav-core">
+      <div class="nav-section-header" onclick="toggleSection('nav-core')">
+        コア概念 <span class="nav-section-chevron">▾</span>
+      </div>
+      <div class="nav-section-items">
+        <a class="nav-item" href="#core-how" onclick="navClick(this,'core-how')">
+          <span class="nav-item-icon">⚙️</span> SchoolParkの仕組み
+        </a>
+        <a class="nav-item" href="#core-extend" onclick="navClick(this,'core-extend')">
+          <span class="nav-item-icon">🔧</span> SchoolParkを拡張する
         </a>
       </div>
     </div>
@@ -854,8 +1063,8 @@ kbd {
           <tbody>
             <tr><td>💰</td><td>EMUERウォレット – 残高・履歴・ポイント変換</td></tr>
             <tr><td>🚕</td><td>タクシー – 3 EMUERで好きな施設に瞬間移動</td></tr>
-            <tr><td>🤖</td><td>AIエージェント – チャットで疑問を解決</td></tr>
-            <tr><td>⚙️</td><td>設定 – プロフィール・通知・テーマ変更</td></tr>
+            <tr><td>🤖</td><td>AIエージェント – あなたの代わりに 自律的に動く AIです。</td></tr>
+            <tr><td>⚙️</td><td>設定 – 通知・言語など各種設定</td></tr>
           </tbody>
         </table>
 
@@ -868,10 +1077,94 @@ kbd {
           <tbody>
             <tr><td>🔓 金色ピン</td><td>無料でアクセス可能な施設</td></tr>
             <tr><td>🔒 グレーピン</td><td>EMUER が必要な施設（クリックでコスト確認）</td></tr>
-            <tr><td>🌟 光るピン</td><td>新着・イベント開催中の施設</td></tr>
           </tbody>
         </table>
       </div><!-- /map -->
+
+      <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ CORE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+      <div id="section-core" class="doc-section">
+        <div class="breadcrumb">
+          <a href="#">SchoolPark</a>
+          <span class="breadcrumb-sep">/</span>
+          <span>コア概念</span>
+        </div>
+
+        <h1 id="core-how" class="doc-h1">SchoolPark の仕組み</h1>
+        <p class="doc-p">SchoolPark はブロックチェーン（Polygon）上の NFT を「入場証明」として使うプラットフォームです。サーバーサイドのアカウント管理なしに、ウォレットアドレスとNFT保有状況だけで認証・入場が完結します。</p>
+
+        <div class="callout tip">
+          <div class="callout-icon">⚙️</div>
+          <div class="callout-body">
+            <strong>NFT = 入場パス</strong>
+            有料 NFT または無料 NFT を MetaMask ウォレットに保有していることがログインの条件です。パスワードや個人情報の登録は不要です。
+          </div>
+        </div>
+
+        <div class="card-grid">
+          <div class="link-card">
+            <div class="link-card-icon">🔗</div>
+            <div class="link-card-title">Polygon ブロックチェーン</div>
+            <div class="link-card-desc">NFT の発行・認証に Polygon メインネットを使用。低手数料で高速なトランザクションを実現。</div>
+          </div>
+          <div class="link-card">
+            <div class="link-card-icon">🧊</div>
+            <div class="link-card-title">MetaMask 認証</div>
+            <div class="link-card-desc">MetaMask ウォレットへの署名でログイン。秘密鍵はローカルに保管され外部に漏れない仕組み。</div>
+          </div>
+          <div class="link-card">
+            <div class="link-card-icon">💎</div>
+            <div class="link-card-title">EMUER トークン（ERC-20）</div>
+            <div class="link-card-desc">施設解放や移動に使うトークン。コミュニティ活動で獲得でき、Polygon 上で流通する。</div>
+          </div>
+          <div class="link-card">
+            <div class="link-card-icon">🌐</div>
+            <div class="link-card-title">リアル × バーチャル連携</div>
+            <div class="link-card-desc">グルメエリアなど、NFT をリアル店舗の決済として使うフローで現実世界と繋がる。</div>
+          </div>
+        </div>
+
+        <h1 id="core-extend" class="doc-h1">SchoolPark を拡張する</h1>
+        <p class="doc-p">SchoolPark はコミュニティと共に成長するプラットフォームです。将来的には以下の拡張が予定されています。</p>
+
+        <div class="accordion" onclick="toggleAccordion(this)">
+          <div class="accordion-header">
+            <div class="accordion-header-left">
+              <span class="accordion-icon">🍽️</span>
+              <span>グルメエリア – リアル店舗との連携</span>
+            </div>
+            <span class="accordion-chevron">▶</span>
+          </div>
+          <div class="accordion-body">
+            提携レストランのメニューを NFT として EMUER で購入し、実店舗で QR コードを提示することで飲食できる新体験を提供します。バーチャルでの購買がリアルの消費行動に直結する仕組みです。
+          </div>
+        </div>
+
+        <div class="accordion" onclick="toggleAccordion(this)">
+          <div class="accordion-header">
+            <div class="accordion-header-left">
+              <span class="accordion-icon">🏗️</span>
+              <span>新エリア・新施設の追加</span>
+            </div>
+            <span class="accordion-chevron">▶</span>
+          </div>
+          <div class="accordion-body">
+            コミュニティの成長に応じて新エリアや施設が追加される予定です。DAO 的な意思決定によって、ユーザーが次のエリア開発に関与できる仕組みも検討中です。
+          </div>
+        </div>
+
+        <div class="accordion" onclick="toggleAccordion(this)">
+          <div class="accordion-header">
+            <div class="accordion-header-left">
+              <span class="accordion-icon">🤖</span>
+              <span>自律型 AI エージェントの高度化</span>
+            </div>
+            <span class="accordion-chevron">▶</span>
+          </div>
+          <div class="accordion-body">
+            現在の AI エージェントはユーザーの代わりに施設内タスクを自律的に実行できます。今後はより複雑なタスク（EMUER の最適運用・施設解放の自動化など）への対応を予定しています。
+          </div>
+        </div>
+      </div><!-- /core -->
 
       <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ EMUER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
       <div id="section-emuer" class="doc-section">
@@ -1144,51 +1437,19 @@ East Coffee         → <span class="string"> 3 EMUER</span>
 
       </div><!-- /faq -->
 
-      <!-- Page nav -->
-      <div class="page-nav">
-        <a href="#overview" class="page-nav-btn" onclick="return false" style="display:none;"></a>
-        <a href="https://code.claude.com/docs/ja/overview" target="_blank" class="page-nav-btn next" style="text-decoration:none;">
-          <div>
-            <div class="page-nav-label">参考</div>
-            <div class="page-nav-title">Claude Code Docs →</div>
-          </div>
-          <div class="page-nav-arrow">→</div>
-        </a>
-      </div>
-
     </article>
-
-    <!-- ===== Right TOC ===== -->
-    <aside class="sp-toc" id="sp-toc">
-      <div class="sp-toc-label">このページ</div>
-      <div id="toc-links">
-        <a href="#overview" class="active">概要</a>
-        <a href="#what-you-can-do">できること</a>
-        <a href="#quick-start">クイックスタート</a>
-        <hr class="sp-toc-divider">
-        <a href="#login">ログイン</a>
-        <a href="#login-steps">ログイン手順</a>
-        <hr class="sp-toc-divider">
-        <a href="#map">マップ</a>
-        <a href="#map-nav">ナビゲーション</a>
-        <hr class="sp-toc-divider">
-        <a href="#emuer-overview">EMUERとは</a>
-        <a href="#emuer-earn">獲得方法</a>
-        <a href="#emuer-spend">使い方</a>
-        <hr class="sp-toc-divider">
-        <a href="#area-east">イーストエリア</a>
-        <a href="#area-gourmet">グルメエリア</a>
-        <hr class="sp-toc-divider">
-        <a href="#community">コミュニティ</a>
-        <a href="#ai-agent">AIエージェント</a>
-        <hr class="sp-toc-divider">
-        <a href="#faq">FAQ</a>
-        <a href="#shortcuts">ショートカット</a>
-      </div>
-    </aside>
 
   </div><!-- /sp-main -->
 </div><!-- /sp-shell -->
+
+<!-- ===== Bottom Ask Bar ===== -->
+<div class="bottom-ask-bar">
+  <div class="bottom-ask-inner">
+    <img src="/assets/mascot.jpg" alt="冷蔵庫くん" class="bottom-ask-avatar">
+    <input id="bottomAskInput" type="text" placeholder="質問する..." onkeydown="bottomAskKeydown(event)">
+    <button class="bottom-ask-send" onclick="bottomAskSend()">↑</button>
+  </div>
+</div>
 
 <script>
 /* =============================================
@@ -1218,16 +1479,13 @@ function toggleSection(id) {
    Nav click → scroll to section
 ============================================= */
 function navClick(el, id) {
-  // Update active state
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
   el.classList.add('active');
-  // Scroll
   const target = document.getElementById(id);
   if (target) {
     const y = target.getBoundingClientRect().top + window.scrollY - 80;
     window.scrollTo({ top: y, behavior: 'smooth' });
   }
-  // Close mobile sidebar
   if (window.innerWidth <= 768) {
     document.getElementById('sp-sidebar').classList.remove('open');
   }
@@ -1271,40 +1529,216 @@ function copyCode(btn, codeId) {
 }
 
 /* =============================================
-   Scroll: progress bar + TOC active
+   Scroll: progress bar
 ============================================= */
 const headings = [];
 document.querySelectorAll('h1[id], h2[id]').forEach(h => headings.push(h));
 
 function onScroll() {
-  // Progress bar
   const total = document.documentElement.scrollHeight - window.innerHeight;
   const pct = total > 0 ? (window.scrollY / total) * 100 : 0;
   document.getElementById('progress-bar').style.width = pct + '%';
-
-  // TOC active
-  let current = null;
-  headings.forEach(h => {
-    if (window.scrollY + 100 >= h.offsetTop) current = h.id;
-  });
-  document.querySelectorAll('#toc-links a').forEach(a => {
-    const href = a.getAttribute('href').slice(1);
-    a.classList.toggle('active', href === current);
-  });
 }
 window.addEventListener('scroll', onScroll, { passive: true });
 
 /* =============================================
-   Keyboard shortcuts (⌘K search hint)
+   クイック検索
+============================================= */
+// インデックス: ページ内の全テキストノードを収集
+let searchIndex = [];
+function buildSearchIndex() {
+  searchIndex = [];
+  document.querySelectorAll('h1[id], h2[id]').forEach(h => {
+    const section = h.closest('[id^="section-"]') || h;
+    const allText = section ? section.innerText : h.innerText;
+    searchIndex.push({
+      id: h.id,
+      title: h.innerText.trim(),
+      ctx: allText.replace(/\s+/g, ' ').slice(0, 200)
+    });
+  });
+}
+
+function openSearch() {
+  if (!searchIndex.length) buildSearchIndex();
+  document.getElementById('searchOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('searchInput').focus(), 50);
+}
+function closeSearch() {
+  document.getElementById('searchOverlay').classList.remove('open');
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchResults').innerHTML = '';
+}
+function closeSearchOverlay(e) {
+  if (e.target === document.getElementById('searchOverlay')) closeSearch();
+}
+
+let searchActive = 0;
+function doSearch(q) {
+  const el = document.getElementById('searchResults');
+  q = q.trim();
+  if (!q) { el.innerHTML = ''; searchActive = 0; return; }
+  const hits = searchIndex.filter(item =>
+    item.title.includes(q) || item.ctx.includes(q)
+  ).slice(0, 10);
+  if (!hits.length) {
+    el.innerHTML = `<div class="search-no-result">「${q}」に一致する結果が見つかりませんでした</div>`;
+    return;
+  }
+  el.innerHTML = hits.map((h, i) => {
+    const esc = t => t.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const hi = t => esc(t).replace(new RegExp(esc(q),'gi'), m => `<mark>${m}</mark>`);
+    return `<div class="search-result-item${i===0?' active':''}" onclick="gotoResult('${h.id}')">
+      <div class="search-result-title">${hi(h.title)}</div>
+      <div class="search-result-ctx">${hi(h.ctx.slice(0,80))}…</div>
+    </div>`;
+  }).join('');
+  searchActive = 0;
+}
+
+function gotoResult(id) {
+  closeSearch();
+  const el = document.getElementById(id);
+  if (el) {
+    const y = el.getBoundingClientRect().top + window.scrollY - 80;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+  }
+}
+
+function searchKeydown(e) {
+  const items = document.querySelectorAll('.search-result-item');
+  if (e.key === 'ArrowDown') {
+    searchActive = Math.min(searchActive + 1, items.length - 1);
+  } else if (e.key === 'ArrowUp') {
+    searchActive = Math.max(searchActive - 1, 0);
+  } else if (e.key === 'Enter') {
+    const active = document.querySelector('.search-result-item.active');
+    if (active) active.click();
+    return;
+  } else if (e.key === 'Escape') {
+    closeSearch(); return;
+  }
+  items.forEach((el, i) => el.classList.toggle('active', i === searchActive));
+}
+
+/* =============================================
+   冷蔵庫くん チャット
+============================================= */
+const REIZO_KB = [
+  { k: ['ログイン','login','入場','パス'], a: 'ログインには MetaMask ウォレットが必要です。\n①サイトにアクセス → ②ロゴをクリック → ③有料パスまたは無料パスを選択 → ④MetaMask で承認\n\n初めての方は「無料パス」から始めてみてね🧊' },
+  { k: ['無料パス','無料nft','freenft','free nft'], a: '「無料パス」は初回利用者向けの入場 NFT です。\nMetaMask で接続 → NFT をクレーム → マップ画面に入場できます。一度取得すれば次回からスムーズに入れるよ！' },
+  { k: ['有料パス','有料nft','paidnft'], a: '「有料パス」は有料 NFT を持っているユーザー向けです。\nNFT 保有が確認されると自動的にマップ画面へ遷移します。' },
+  { k: ['metamask','メタマスク','ウォレット','wallet'], a: 'MetaMask はブラウザ拡張型の仮想通貨ウォレットです。\n①metamask.io/download からインストール\n②新しいウォレットを作成\n③リカバリーフレーズを安全に保管\nスマホ・タブレットは MetaMask アプリ内のブラウザからアクセスしてね🧊' },
+  { k: ['polygon','matic','pol','ガス代'], a: 'SchoolPark は Polygon ネットワークで動作します。\n・chainlist.org で「Polygon Mainnet」を MetaMask に追加\n・MATIC（POL）を少量（0.01程度）用意しておくとガス代に使えるよ！' },
+  { k: ['emuer','エミュアー','トークン','token'], a: 'EMUER（エミュアー）は SchoolPark 内で使えるデジタルトークンです。\n獲得方法: いいね(+1pt)・コメント(+2pt)・デイリーログイン(+5pt)\n毎週月曜日にポイントを EMUER に変換できるよ🧊' },
+  { k: ['ポイント','変換','獲得','稼ぐ'], a: 'ポイントは以下で貯まります：\n・いいね：+1pt\n・コメント：+2pt\n・デイリーログイン：+5pt\n\n毎週月曜日にウォレット(💰)の「変換」ボタンから EMUER に変換できます！' },
+  { k: ['施設','解放','unlock','locked'], a: '🔒 マークの施設は EMUER を支払って解放できます。\n一度解放した施設は再度払う必要なし！\nウォレット(💰)の履歴タブで消費記録を確認できます。' },
+  { k: ['タクシー','taxi','移動','瞬間移動'], a: 'タクシーは 3 EMUER でマップ内の任意の施設に瞬間移動できます🚕\nマップ上部の 🚕 ボタン、または施設内の 🚕 ボタンから利用できます。' },
+  { k: ['マップ','map','操作'], a: 'マップはスクロール・クリックで操作できます。\n施設アイコンをクリックするとコンテンツにアクセスできます。\nマップ右上のボタン群(💰🚕🤖⚙️)からウォレット・タクシー・AI・設定を開けます。' },
+  { k: ['ai','エージェント','agent','ロボット'], a: 'AIエージェントはあなたの代わりに自律的に動く AI です🤖\nマップ右上の 🤖 ボタン、または施設内から起動できます。\nショートカットキー「A」でも開けます！' },
+  { k: ['スマホ','スマートフォン','タブレット','mobile','スマートフォン'], a: 'スマホ・タブレットは MetaMask アプリ内のブラウザをご使用ください。\n①MetaMask アプリを開く → ②ブラウザ（閲覧）タブ → ③SchoolPark の URL を入力\nhttps://schoolpark-emu.vercel.app\n\nお気に入りに登録しておくと便利だよ🧊' },
+  { k: ['グルメ','gourmet','レストラン','食べる'], a: 'グルメエリアは近日公開予定です🍽️\n提携レストランの NFT メニューを EMUER で購入して実店舗で飲食できるようになるよ！お楽しみに。' },
+  { k: ['イーストエリア','east','ホテル','マンション'], a: 'イーストエリアには以下の施設があります：\n・Grand Oasis Hotel（10 EMUER）\n・Annex 2号店（8 EMUER）\n・East Coffee（3 EMUER）\n・East Mansion（5 EMUER）' },
+  { k: ['ショートカット','shortcut','キー'], a: 'よく使うショートカット：\nW：ウォレット　T：タクシー　A：AIエージェント　S：設定\nEsc：パネルを閉じる　Backspace：マップに戻る' },
+  { k: ['概要','とは','何','schoolpark','スクールパーク'], a: 'SchoolPark は現実世界とインターネットをつなぐ次世代コミュニティプラットフォームです🌐\nPC・タブレット・スマートフォンからアクセスできて、EMUER トークンで施設のアクセスやコミュニティ参加ができるよ！' },
+];
+
+function reizoAnswer(q) {
+  const lq = q.toLowerCase();
+  for (const item of REIZO_KB) {
+    if (item.k.some(k => lq.includes(k.toLowerCase()))) return item.a;
+  }
+  return '「' + q + '」についてはまだ詳しく分からないけど、左のメニューから該当するページを確認してみてね🧊\nもっと具体的に聞いてもらえると答えやすいよ！';
+}
+
+function openReizoBot() {
+  document.getElementById('reizoPanel').classList.add('open');
+  document.getElementById('reizoInput').focus();
+}
+function closeReizoBot() {
+  document.getElementById('reizoPanel').classList.remove('open');
+}
+
+function reizoAppendMsg(text, isUser) {
+  const msgs = document.getElementById('reizoMessages');
+  const div = document.createElement('div');
+  div.className = 'reizo-msg ' + (isUser ? 'reizo-msg-user' : 'reizo-msg-bot');
+  if (!isUser) {
+    const av = document.createElement('img');
+    av.src = '/assets/mascot.jpg'; av.alt = ''; av.className = 'reizo-msg-avatar';
+    div.appendChild(av);
+  }
+  const bubble = document.createElement('div');
+  bubble.className = 'reizo-msg-bubble';
+  bubble.textContent = text;
+  div.appendChild(bubble);
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function reizoShowTyping() {
+  const msgs = document.getElementById('reizoMessages');
+  const div = document.createElement('div');
+  div.className = 'reizo-msg reizo-msg-bot';
+  const av = document.createElement('img');
+  av.src = '/assets/mascot.jpg'; av.alt = ''; av.className = 'reizo-msg-avatar';
+  div.appendChild(av);
+  const bubble = document.createElement('div');
+  bubble.className = 'reizo-msg-bubble reizo-typing';
+  bubble.innerHTML = '<span></span><span></span><span></span>';
+  div.appendChild(bubble);
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function reizoSend() {
+  const input = document.getElementById('reizoInput');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  reizoAppendMsg(q, true);
+  const typing = reizoShowTyping();
+  setTimeout(() => {
+    typing.remove();
+    reizoAppendMsg(reizoAnswer(q), false);
+  }, 600 + Math.random() * 400);
+}
+function reizoKeydown(e) {
+  if (e.key === 'Enter') reizoSend();
+}
+
+function bottomAskSend() {
+  const input = document.getElementById('bottomAskInput');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  openReizoBot();
+  setTimeout(() => {
+    reizoAppendMsg(q, true);
+    const typing = reizoShowTyping();
+    setTimeout(() => {
+      typing.remove();
+      reizoAppendMsg(reizoAnswer(q), false);
+    }, 600 + Math.random() * 400);
+  }, 100);
+}
+function bottomAskKeydown(e) {
+  if (e.key === 'Enter') bottomAskSend();
+}
+
+/* =============================================
+   Keyboard shortcuts
 ============================================= */
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
     e.preventDefault();
-    // placeholder search UI
-    alert('検索機能は準備中です 🔍');
+    openSearch();
   }
   if (e.key === 'Escape') {
     document.getElementById('sp-sidebar').classList.remove('open');
+    closeSearch();
   }
 });
 </script>
