@@ -691,6 +691,24 @@
         list.prepend(card);
     }
 
+    // ── 訪問者数（Firebase） ──
+    (function() {
+        function tryLoad() {
+            if (!window.hotelDB || !window.hotelLib) { setTimeout(tryLoad, 600); return; }
+            const lib   = window.hotelLib;
+            const db    = window.hotelDB;
+            const since = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
+            lib.getDocs(lib.query(lib.collection(db,'sp_content_visits'), lib.where('contentId','==','hotel')))
+            .then(snap => {
+                let total = 0;
+                snap.forEach(d => { const v = d.data(); if (v.date >= since) total += (v.visits||0); });
+                const el = document.getElementById('stat-visitors');
+                if (el) el.textContent = total.toLocaleString();
+            }).catch(()=>{});
+        }
+        tryLoad();
+    })();
+
     // ── リアルタイム時計 ──
     (function _hotelClock() {
         const days = ['日','月','火','水','木','金','土'];
@@ -714,6 +732,17 @@
         tick();
         setInterval(tick, 1000);
     })();
+</script>
+
+<!-- Firebase（訪問者数集計用） -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    const cfg = { apiKey:"AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs", authDomain:"emusch-2a111.firebaseapp.com", projectId:"emusch-2a111", storageBucket:"emusch-2a111.firebasestorage.app", messagingSenderId:"795496371585", appId:"1:795496371585:web:51deec91b8a2152e4c8480" };
+    let app; try { app = initializeApp(cfg,"hotel"); } catch(e) { app = window._hotelApp; }
+    const db = getFirestore(app);
+    window.hotelDB  = db;
+    window.hotelLib = { collection, getDocs, query, where };
 </script>
 
 </body>

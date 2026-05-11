@@ -462,10 +462,10 @@
             </div>
         </div>
         <div class="header-right">
-            <div>☀️ 17°C</div>
+            <div id="yakuya-weather">☀️ --°C</div>
             <div style="text-align: right;">
-                <div class="header-time">09:01</div>
-                <div>2024/04/29(水)</div>
+                <div class="header-time" id="yakuya-clock-time">--:--</div>
+                <div id="yakuya-clock-date">----/--/--(--)</div>
             </div>
         </div>
     </header>
@@ -481,7 +481,7 @@
     <!-- 4つのデータ -->
     <div class="stats">
         <div class="stat-item">
-            <div class="stat-value">185</div>
+            <div class="stat-value" id="stat-visitors">--</div>
             <div class="stat-label">訪問者数</div>
         </div>
         <div class="stat-item">
@@ -812,6 +812,56 @@
             setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
         }
 
+        // ── リアルタイム時計 ──
+        (function() {
+            const days = ['日','月','火','水','木','金','土'];
+            function tick() {
+                const n = new Date();
+                const h  = String(n.getHours()).padStart(2,'0');
+                const m  = String(n.getMinutes()).padStart(2,'0');
+                const y  = n.getFullYear();
+                const mo = String(n.getMonth()+1).padStart(2,'0');
+                const d  = String(n.getDate()).padStart(2,'0');
+                const dw = days[n.getDay()];
+                const ct = document.getElementById('yakuya-clock-time');
+                const cd = document.getElementById('yakuya-clock-date');
+                const wt = document.getElementById('yakuya-weather');
+                if (ct) ct.textContent = `${h}:${m}`;
+                if (cd) cd.textContent = `${y}/${mo}/${d}(${dw})`;
+                if (wt) wt.textContent = (n.getHours()>=6&&n.getHours()<18?'☀️':'🌙') + ' --°C';
+            }
+            tick(); setInterval(tick, 1000);
+        })();
+
+        // ── 訪問者数（Firebase） ──
+        (function _loadVisitors() {
+            function tryLoad() {
+                if (!window.yakuyaDB || !window.yakuyaLib) { setTimeout(tryLoad, 600); return; }
+                const lib   = window.yakuyaLib;
+                const db    = window.yakuyaDB;
+                const since = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
+                lib.getDocs(lib.query(lib.collection(db,'sp_content_visits'), lib.where('contentId','==','yakuya')))
+                .then(snap => {
+                    let total = 0;
+                    snap.forEach(d => { const v = d.data(); if (v.date >= since) total += (v.visits||0); });
+                    const el = document.getElementById('stat-visitors');
+                    if (el) el.textContent = total.toLocaleString();
+                }).catch(()=>{});
+            }
+            tryLoad();
+        })();
+
+    </script>
+
+    <!-- Firebase（訪問者数集計用） -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        const cfg = { apiKey:"AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs", authDomain:"emusch-2a111.firebaseapp.com", projectId:"emusch-2a111", storageBucket:"emusch-2a111.firebasestorage.app", messagingSenderId:"795496371585", appId:"1:795496371585:web:51deec91b8a2152e4c8480" };
+        let app; try { app = initializeApp(cfg,"yakuya"); } catch(e) { app = window._yakuyaApp; }
+        const db = getFirestore(app);
+        window.yakuyaDB  = db;
+        window.yakuyaLib = { collection, getDocs, query, where };
     </script>
 </body>
 </html>

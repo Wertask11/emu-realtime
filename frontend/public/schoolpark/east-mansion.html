@@ -606,15 +606,10 @@
             const db    = window.mansionDB;
             const today = new Date().toISOString().slice(0, 10);
             const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-            lib.getDocs(
-                lib.query(
-                    lib.collection(db, 'sp_content_visits'),
-                    lib.where('contentId', '==', 'mansion'),
-                    lib.where('date', '>=', since)
-                )
-            ).then(snap => {
+            lib.getDocs(lib.query(lib.collection(db, 'sp_content_visits'), lib.where('contentId', '==', 'mansion')))
+            .then(snap => {
                 let total = 0;
-                snap.forEach(d => { total += (d.data().visits || 0); });
+                snap.forEach(d => { const v = d.data(); if (v.date >= since) total += (v.visits || 0); });
                 visitorCount = total;
                 document.getElementById('stat-visitors').innerText = total.toLocaleString();
             }).catch(() => {});

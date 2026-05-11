@@ -117,10 +117,9 @@
         .hero {
             position: relative;
             height: 320px;
-            background: linear-gradient(to bottom, #d97736, #9c3f59); 
-            background-image: 
-                radial-gradient(circle at 20% 50%, rgba(255,255,255,0.08) 0%, transparent 50%),
-                radial-gradient(circle at 80% 50%, rgba(0,0,0,0.2) 0%, transparent 50%);
+            background:
+                linear-gradient(to bottom, rgba(180,60,30,0.45), rgba(100,20,40,0.75)),
+                url('https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&q=80&w=1440') center/cover;
             display: flex;
             flex-direction: column;
             justify-content: flex-end;
@@ -461,10 +460,10 @@
             </div>
         </div>
         <div class="header-right">
-            <div>☀️ 18°C</div>
+            <div id="fruits-weather">☀️ --°C</div>
             <div style="text-align: right;">
-                <div class="header-time">10:15</div>
-                <div>2024/04/29(水)</div>
+                <div class="header-time" id="fruits-clock-time">--:--</div>
+                <div id="fruits-clock-date">----/--/--(--)</div>
             </div>
         </div>
     </header>
@@ -480,7 +479,7 @@
     <!-- 4つのデータ -->
     <div class="stats">
         <div class="stat-item">
-            <div class="stat-value">256</div>
+            <div class="stat-value" id="stat-visitors">--</div>
             <div class="stat-label">訪問者数</div>
         </div>
         <div class="stat-item">
@@ -811,6 +810,56 @@
             setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
         }
 
+        // ── リアルタイム時計 ──
+        (function() {
+            const days = ['日','月','火','水','木','金','土'];
+            function tick() {
+                const n = new Date();
+                const h  = String(n.getHours()).padStart(2,'0');
+                const m  = String(n.getMinutes()).padStart(2,'0');
+                const y  = n.getFullYear();
+                const mo = String(n.getMonth()+1).padStart(2,'0');
+                const d  = String(n.getDate()).padStart(2,'0');
+                const dw = days[n.getDay()];
+                const ct = document.getElementById('fruits-clock-time');
+                const cd = document.getElementById('fruits-clock-date');
+                const wt = document.getElementById('fruits-weather');
+                if (ct) ct.textContent = `${h}:${m}`;
+                if (cd) cd.textContent = `${y}/${mo}/${d}(${dw})`;
+                if (wt) wt.textContent = (n.getHours()>=6&&n.getHours()<18?'☀️':'🌙') + ' --°C';
+            }
+            tick(); setInterval(tick, 1000);
+        })();
+
+        // ── 訪問者数（Firebase） ──
+        (function _loadVisitors() {
+            function tryLoad() {
+                if (!window.fruitsDB || !window.fruitsLib) { setTimeout(tryLoad, 600); return; }
+                const lib   = window.fruitsLib;
+                const db    = window.fruitsDB;
+                const since = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
+                lib.getDocs(lib.query(lib.collection(db,'sp_content_visits'), lib.where('contentId','==','fruits')))
+                .then(snap => {
+                    let total = 0;
+                    snap.forEach(d => { const v = d.data(); if (v.date >= since) total += (v.visits||0); });
+                    const el = document.getElementById('stat-visitors');
+                    if (el) el.textContent = total.toLocaleString();
+                }).catch(()=>{});
+            }
+            tryLoad();
+        })();
+
+    </script>
+
+    <!-- Firebase（訪問者数集計用） -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        const cfg = { apiKey:"AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs", authDomain:"emusch-2a111.firebaseapp.com", projectId:"emusch-2a111", storageBucket:"emusch-2a111.firebasestorage.app", messagingSenderId:"795496371585", appId:"1:795496371585:web:51deec91b8a2152e4c8480" };
+        let app; try { app = initializeApp(cfg,"fruits"); } catch(e) { app = window._fruitsApp; }
+        const db = getFirestore(app);
+        window.fruitsDB  = db;
+        window.fruitsLib = { collection, getDocs, query, where };
     </script>
 </body>
 </html>

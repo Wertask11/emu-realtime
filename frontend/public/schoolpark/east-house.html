@@ -142,8 +142,8 @@
             </div>
         </div>
         <div class="header-right">
-            <i class="material-icons" style="font-size:16px; color:#FFC107;">wb_sunny</i> 17°C
-            <span style="margin-left:10px;">09:01 | 2026/04/29</span>
+            <span id="house-weather">☀️ --°C</span>
+            <span id="house-clock" style="margin-left:10px;">--:-- | ----/--/--</span>
         </div>
     </header>
 
@@ -157,7 +157,7 @@
 
     <!-- 統計バー -->
     <div class="stats-bar">
-        <div class="stat-item"><div class="stat-num">1,245</div><div class="stat-label">訪問者数</div></div>
+        <div class="stat-item"><div class="stat-num" id="stat-visitors">--</div><div class="stat-label">訪問者数</div></div>
         <div class="stat-item"><div class="stat-num" id="stat-count">5</div><div class="stat-label">取扱物件数</div></div>
         <div class="stat-item"><div class="stat-num" id="stat-meeting">0</div><div class="stat-label">進行中の商談</div></div>
         <div class="stat-item">
@@ -390,31 +390,78 @@
             document.getElementById('modal-video').pause();
         }
 
-        // --- 提案（ローカルファイル選択式） ---
+        // --- 提案（ローカルファイル選択式 + Firebase保存） ---
         function submitProposal(e) {
             e.preventDefault();
-            
-            // ファイルの取得と一時的なURL（Blob）の生成
-            const imgFile = document.getElementById('prop-img-file').files[0];
+
+            const imgFile   = document.getElementById('prop-img-file').files[0];
             const videoFile = document.getElementById('prop-video-file').files[0];
-            
-            const imgUrl = imgFile ? URL.createObjectURL(imgFile) : "";
-            const videoUrl = videoFile ? URL.createObjectURL(videoFile) : "";
+            const imgUrl    = imgFile   ? URL.createObjectURL(imgFile)   : "";
+            const videoUrl  = videoFile ? URL.createObjectURL(videoFile) : "";
 
             const newProp = {
                 id: Date.now(),
-                title: document.getElementById('prop-title').value,
-                price: parseInt(document.getElementById('prop-price').value),
-                layout: document.getElementById('prop-layout').value,
+                title:   document.getElementById('prop-title').value,
+                price:   parseInt(document.getElementById('prop-price').value),
+                layout:  document.getElementById('prop-layout').value,
                 concept: document.getElementById('prop-desc').value,
-                img: imgUrl || "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=400&q=80", // 画像がない場合はデフォルト
-                video: videoUrl
+                img:     imgUrl || "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=400&q=80",
+                video:   videoUrl
             };
-            
+
             properties.unshift(newProp);
             renderBoard();
+
+            // Firebase に保存（テキスト情報のみ・Blob URL は除く）
+            _saveProposalToFirebase({
+                title:   newProp.title,
+                price:   newProp.price,
+                layout:  newProp.layout,
+                concept: newProp.concept,
+                img:     imgFile ? null : null,
+                ts:      Date.now()
+            });
+
             e.target.reset();
             document.querySelectorAll('.tab')[0].click();
+        }
+
+        function _saveProposalToFirebase(data) {
+            function trySave() {
+                if (!window.houseDB || !window.houseLib) { setTimeout(trySave, 600); return; }
+                window.houseLib.addDoc(window.houseLib.collection(window.houseDB, 'sp_house_proposals'), data)
+                    .catch(() => {});
+            }
+            trySave();
+        }
+
+        function _loadProposalsFromFirebase() {
+            function tryLoad() {
+                if (!window.houseDB || !window.houseLib) { setTimeout(tryLoad, 600); return; }
+                const lib = window.houseLib;
+                const db  = window.houseDB;
+                lib.getDocs(lib.query(lib.collection(db, 'sp_house_proposals'), lib.orderBy('ts', 'desc'), lib.limit(50)))
+                .then(snap => {
+                    const fbProps = [];
+                    snap.forEach(d => {
+                        const v = d.data();
+                        fbProps.push({
+                            id:      d.id,
+                            title:   v.title   || "提案物件",
+                            price:   v.price   || 0,
+                            layout:  v.layout  || "詳細未定",
+                            concept: v.concept || "",
+                            img:     v.img     || "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=400&q=80",
+                            video:   ""
+                        });
+                    });
+                    // Firebase物件を先頭に追加（重複除去）
+                    const existingIds = new Set(properties.map(p => String(p.id)));
+                    fbProps.forEach(p => { if (!existingIds.has(String(p.id))) properties.unshift(p); });
+                    renderBoard();
+                }).catch(() => {});
+            }
+            tryLoad();
         }
 
         // --- 商談・購入システム ---
@@ -540,6 +587,56 @@
         // 初期化
         renderBoard();
         renderMeeting();
+        _loadProposalsFromFirebase();
+
+        // ── リアルタイム時計 ──
+        (function() {
+            const days = ['日','月','火','水','木','金','土'];
+            function tick() {
+                const n = new Date();
+                const h  = String(n.getHours()).padStart(2,'0');
+                const m  = String(n.getMinutes()).padStart(2,'0');
+                const y  = n.getFullYear();
+                const mo = String(n.getMonth()+1).padStart(2,'0');
+                const d  = String(n.getDate()).padStart(2,'0');
+                const dw = days[n.getDay()];
+                const clk = document.getElementById('house-clock');
+                const wth = document.getElementById('house-weather');
+                if (clk) clk.textContent = `${h}:${m} | ${y}/${mo}/${d}(${dw})`;
+                if (wth) wth.textContent = (n.getHours()>=6&&n.getHours()<18?'☀️':'🌙') + ' --°C';
+            }
+            tick(); setInterval(tick, 1000);
+        })();
+
+        // ── 訪問者数（Firebase） ──
+        (function() {
+            function tryLoad() {
+                if (!window.houseDB || !window.houseLib) { setTimeout(tryLoad, 600); return; }
+                const lib   = window.houseLib;
+                const db    = window.houseDB;
+                const since = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
+                lib.getDocs(lib.query(lib.collection(db,'sp_content_visits'), lib.where('contentId','==','house')))
+                .then(snap => {
+                    let total = 0;
+                    snap.forEach(d => { const v = d.data(); if (v.date >= since) total += (v.visits||0); });
+                    const el = document.getElementById('stat-visitors');
+                    if (el) el.textContent = total.toLocaleString();
+                }).catch(()=>{});
+            }
+            tryLoad();
+        })();
+
+    </script>
+
+    <!-- Firebase（提案保存・訪問者数集計用） -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, addDoc, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        const cfg = { apiKey:"AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs", authDomain:"emusch-2a111.firebaseapp.com", projectId:"emusch-2a111", storageBucket:"emusch-2a111.firebasestorage.app", messagingSenderId:"795496371585", appId:"1:795496371585:web:51deec91b8a2152e4c8480" };
+        let app; try { app = initializeApp(cfg,"house"); } catch(e) { app = window._houseApp; }
+        const db = getFirestore(app);
+        window.houseDB  = db;
+        window.houseLib = { collection, getDocs, addDoc, query, where, orderBy, limit };
     </script>
 </body>
 </html>
