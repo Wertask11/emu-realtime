@@ -778,9 +778,6 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
       <div id="fpEmuRankItems"><div class="fp-loading">⭐ 読み込み中…</div></div>
     </div>
 
-    <div style="text-align:center;padding:14px 0 0;color:var(--text2);font-size:0.7rem">
-      📊 コンテンツが増えると自動的に更新されます
-    </div>
   </div>
 
   <!-- 願いの泉 -->
@@ -909,7 +906,7 @@ function fpTab(id, btn) {
   const panel = document.getElementById("fp-panel-" + id);
   if (panel) panel.classList.add("active");
   if (btn) btn.classList.add("active");
-  if (id === "chat" && !fpChatInited) { fpInitChat(); fpChatInited = true; }
+  // チャットはページ読み込み時に初期化済み（fpWaitFirebase で実行）
 }
 
 // ─── トースト ─────────────────────────────────────────────
@@ -1983,6 +1980,8 @@ function fpWaitFirebase() {
     fpInitEvents();
     fpInitWishes();
     fpInitRankVisits();
+    // チャットをページ読み込み時に接続（タブを開く前からリアルタイム受信）
+    fpInitChat();
     // 一般投票バーのみ読み込む（DAO投票はボタン押下後）
     fpLoadVoteBars("vote1","fpVote1Bars","fpVote1Count",false);
     // 投票済みチェック（一般投票のみ）

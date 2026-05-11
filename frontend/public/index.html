@@ -6552,16 +6552,39 @@ function _showEmuerChargeToast(poiId, cost, remaining) {
   setTimeout(() => toast.remove(), 2100);
 }
 
+// ─── メンテナンス・オーナーバイパス ────────────────────────
+// コンソールで有効化: localStorage.setItem('sp_owner_bypass','1')
+// コンソールで解除:   localStorage.removeItem('sp_owner_bypass')
+function _spOwnerBypass() {
+  return localStorage.getItem('sp_owner_bypass') === '1';
+}
+// 利用制限をコンソールから解除できるヘルパー（手動実行用）
+window.spClearRestriction = function() {
+  const data = _getEmuerData();
+  if (!data) return;
+  delete data.restrictionUntil;
+  delete data.restrictionCount;
+  data.balance = 500; // 残高をリセット
+  _saveEmuerData(data);
+  _updateEmuerHud(data.balance);
+  const ov = document.getElementById('emuerRestrictionOverlay');
+  if (ov) ov.style.display = 'none';
+  console.log('✅ 利用制限を解除し残高を500EMUERにリセットしました');
+};
+
 async function gatedOpen(poiId, fn) {
   const cost = EMUER_RATE_CONFIG[poiId] ?? 0;
   if (cost === 0) { fn(); return; }
+
+  // メンテナンス・オーナーバイパスモード（EMUER消費・制限なし）
+  if (_spOwnerBypass()) { fn(); return; }
 
   let data = _getEmuerData();
   if (!data) data = await _initEmuer();
 
   const now = Date.now();
 
-  // 制限中チェック
+  // 制限中チェック（バイパスモードなら制限も無視）
   if (data.restrictionUntil && now < data.restrictionUntil) {
     _showEmuerRestrictionOverlay(data.restrictionUntil);
     return;
