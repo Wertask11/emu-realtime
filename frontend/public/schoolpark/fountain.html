@@ -222,7 +222,7 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 .fp-cal-day.today { background:rgba(249,115,22,0.18); color:var(--accent); font-weight:700; }
 .fp-cal-day.has-event::after {
   content:''; position:absolute; bottom:2px; left:50%; transform:translateX(-50%);
-  width:4px; height:4px; border-radius:50%; background:var(--accent);
+  width:4px; height:4px; border-radius:50%; background:var(--dot-color, var(--accent));
 }
 .fp-cal-day.selected { background:rgba(249,115,22,0.35); color:#fff; font-weight:700; }
 
@@ -1197,8 +1197,23 @@ function fpInitEvents() {
   const q   = lib.query(lib.collection(fpDB, "sp_fountain_events"), lib.orderBy("date","asc"));
   lib.onSnapshot(q, snap => {
     const events = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-    // カレンダー用イベント日付セットを更新
-    _fpCalEventDates = new Set(events.map(ev => ev.date).filter(Boolean));
+    // カレンダー用イベント日付マップを更新（日付 → カラー、dateStart〜dateEnd全日分）
+    _fpCalEventDates = {};
+    events.forEach(ev => {
+      const start = ev.dateStart || ev.date;
+      const end   = ev.dateEnd   || start;
+      const color = ev.color     || "#f97316";
+      if (!start) return;
+      let cur = new Date(start + "T00:00:00");
+      const endD = new Date((end || start) + "T00:00:00");
+      while (cur <= endD) {
+        const ds = cur.getFullYear() + "-" +
+          String(cur.getMonth()+1).padStart(2,"0") + "-" +
+          String(cur.getDate()).padStart(2,"0");
+        _fpCalEventDates[ds] = color;
+        cur.setDate(cur.getDate() + 1);
+      }
+    });
     fpBuildCalendar(_fpCalYear, _fpCalMonth);
     fpRenderEvents(events);
     document.getElementById("fpStatEvents").textContent = events.length;
@@ -1244,7 +1259,9 @@ function fpRenderEvents(events) {
     const tags = (ev.tags || []).map(t => `<span class="fp-event-tag">${_esc(t)}</span>`).join("");
     const pageAttr  = ev.page ? ` data-page="${_esc(ev.page)}"` : "";
     const feeAttr   = ev.fee  ? ` data-fee="${parseInt(ev.fee)}"` : "";
-    const dateAttr  = ev.date ? ` data-date="${_esc(ev.date)}"` : "";
+    const dsVal     = ev.dateStart || ev.date || "";
+    const deVal     = ev.dateEnd   || dsVal;
+    const dateAttr  = dsVal ? ` data-date="${_esc(dsVal)}" data-date-start="${_esc(dsVal)}" data-date-end="${_esc(deVal)}"` : "";
     const titleAttr = ` data-title="${_esc(ev.title||"イベント会場")}"`;
     const feeHtml   = ev.fee  ? `<div class="fp-event-fee">💎 入場料 ${ev.fee} EMUER</div>` : "";
     const goHint    = ev.page ? `<div class="fp-event-go-hint">▶ タップしてイベント会場へ</div>` : "";
@@ -1628,7 +1645,7 @@ function fpGoToEvent(card) {
 // ─── カレンダー ──────────────────────────────────────────────
 let _fpCalYear  = new Date().getFullYear();
 let _fpCalMonth = new Date().getMonth(); // 0-indexed
-let _fpCalEventDates = new Set();
+let _fpCalEventDates = {}; // { 'YYYY-MM-DD': '#colorhex' }
 let _fpCalSelected  = null;
 
 function fpBuildCalendar(year, month) {
@@ -1647,12 +1664,14 @@ function fpBuildCalendar(year, month) {
   // 空白マス
   for (let i = 0; i < first; i++) html += `<div class="fp-cal-day empty"></div>`;
   for (let d = 1; d <= days; d++) {
-    const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    const isToday = (d === today.getDate() && month === today.getMonth() && year === today.getFullYear());
-    const hasEv   = _fpCalEventDates.has(dateStr);
-    const isSel   = (_fpCalSelected === dateStr);
-    const cls     = ["fp-cal-day", isToday?"today":"", hasEv?"has-event":"", isSel?"selected":""].filter(Boolean).join(" ");
-    html += `<div class="${cls}" onclick="fpCalSelect('${dateStr}')">${d}</div>`;
+    const dateStr  = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const isToday  = (d === today.getDate() && month === today.getMonth() && year === today.getFullYear());
+    const dotColor = _fpCalEventDates[dateStr] || "";
+    const hasEv    = !!dotColor;
+    const isSel    = (_fpCalSelected === dateStr);
+    const cls      = ["fp-cal-day", isToday?"today":"", hasEv?"has-event":"", isSel?"selected":""].filter(Boolean).join(" ");
+    const dotStyle = dotColor ? ` style="--dot-color:${dotColor}"` : "";
+    html += `<div class="${cls}"${dotStyle} onclick="fpCalSelect('${dateStr}')">${d}</div>`;
   }
   grid.innerHTML = html;
 }
@@ -1674,11 +1693,13 @@ function fpCalSelect(dateStr) {
     _fpCalSelected = dateStr;
   }
   fpBuildCalendar(_fpCalYear, _fpCalMonth);
-  // イベントリストをフィルタリング
+  // イベントリストをフィルタリング（開始日〜終了日の範囲でマッチ）
   document.querySelectorAll("#fpEventList .fp-event-card").forEach(card => {
-    const ev = card.dataset.date || "";
     if (!_fpCalSelected) { card.style.display = ""; return; }
-    card.style.display = (ev === _fpCalSelected) ? "" : "none";
+    const start = card.dataset.dateStart || card.dataset.date || "";
+    const end   = card.dataset.dateEnd   || start;
+    if (!start) { card.style.display = ""; return; }
+    card.style.display = (_fpCalSelected >= start && _fpCalSelected <= end) ? "" : "none";
   });
 }
 

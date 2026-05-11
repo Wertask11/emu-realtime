@@ -304,12 +304,31 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
         <label>タグ（カンマ区切り）</label>
         <input type="text" id="fe-tags" placeholder="例：EMUER配布, DAO投票, 全員参加">
       </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div class="form-field">
+          <label>イベント開始日 *</label>
+          <input type="date" id="fe-date-start" style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;color-scheme:dark">
+        </div>
+        <div class="form-field">
+          <label>イベント終了日（同日は空欄可）</label>
+          <input type="date" id="fe-date-end" style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;color-scheme:dark">
+        </div>
+      </div>
       <div class="form-field" style="margin-bottom:14px">
-        <label>日付（ソート用 YYYY-MM-DD）</label>
-        <input type="date" id="fe-date" style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px">
+        <label>カレンダーカラー（7色）</label>
+        <div id="fe-color-tabs" style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;align-items:center">
+          <button type="button" class="fe-ctab" data-color="#ef4444" onclick="feSelectColor(this)" title="赤" style="width:26px;height:26px;border-radius:50%;border:3px solid transparent;background:#ef4444;cursor:pointer;transition:border-color 0.15s"></button>
+          <button type="button" class="fe-ctab" data-color="#f97316" onclick="feSelectColor(this)" title="オレンジ" style="width:26px;height:26px;border-radius:50%;border:3px solid transparent;background:#f97316;cursor:pointer;transition:border-color 0.15s"></button>
+          <button type="button" class="fe-ctab" data-color="#eab308" onclick="feSelectColor(this)" title="黄" style="width:26px;height:26px;border-radius:50%;border:3px solid transparent;background:#eab308;cursor:pointer;transition:border-color 0.15s"></button>
+          <button type="button" class="fe-ctab" data-color="#22c55e" onclick="feSelectColor(this)" title="緑" style="width:26px;height:26px;border-radius:50%;border:3px solid transparent;background:#22c55e;cursor:pointer;transition:border-color 0.15s"></button>
+          <button type="button" class="fe-ctab" data-color="#3b82f6" onclick="feSelectColor(this)" title="青" style="width:26px;height:26px;border-radius:50%;border:3px solid transparent;background:#3b82f6;cursor:pointer;transition:border-color 0.15s"></button>
+          <button type="button" class="fe-ctab" data-color="#6366f1" onclick="feSelectColor(this)" title="藍" style="width:26px;height:26px;border-radius:50%;border:3px solid transparent;background:#6366f1;cursor:pointer;transition:border-color 0.15s"></button>
+          <button type="button" class="fe-ctab" data-color="#a855f7" onclick="feSelectColor(this)" title="紫" style="width:26px;height:26px;border-radius:50%;border:3px solid transparent;background:#a855f7;cursor:pointer;transition:border-color 0.15s"></button>
+          <span id="fe-color-preview" style="font-size:12px;color:#888;margin-left:4px">未選択（デフォルト：オレンジ）</span>
+        </div>
       </div>
       <div class="form-actions">
-        <button class="btn-clear" onclick="document.getElementById('fe-title').value='';document.getElementById('fe-detail').value=''">クリア</button>
+        <button class="btn-clear" onclick="feClearEventForm()">クリア</button>
         <button class="btn-add" onclick="fpSubmitEvent()">🎉 イベントを追加</button>
       </div>
       <div class="toast" id="fe-toast"></div>
@@ -749,19 +768,57 @@ async function fpDeletePost(docId) {
 }
 
 // ─── Fountain イベント ─────────────────────────────────────
+var _feSelectedColor = '';
+
+function feSelectColor(btn) {
+  document.querySelectorAll('.fe-ctab').forEach(function(b) {
+    b.style.borderColor = 'transparent';
+  });
+  _feSelectedColor = btn.dataset.color;
+  btn.style.borderColor = '#fff';
+  var preview = document.getElementById('fe-color-preview');
+  if (preview) {
+    preview.textContent = '選択中：' + (btn.title || _feSelectedColor);
+    preview.style.color = _feSelectedColor;
+  }
+}
+
+function feClearEventForm() {
+  document.getElementById('fe-title').value      = '';
+  document.getElementById('fe-detail').value     = '';
+  document.getElementById('fe-tags').value       = '';
+  document.getElementById('fe-date-start').value = '';
+  document.getElementById('fe-date-end').value   = '';
+  _feSelectedColor = '';
+  document.querySelectorAll('.fe-ctab').forEach(function(b){ b.style.borderColor='transparent'; });
+  var preview = document.getElementById('fe-color-preview');
+  if (preview) { preview.textContent='未選択（デフォルト：オレンジ）'; preview.style.color='#888'; }
+}
+
 async function fpSubmitEvent() {
-  var title  = document.getElementById('fe-title').value.trim();
-  var detail = document.getElementById('fe-detail').value.trim();
-  var tagsRaw= document.getElementById('fe-tags').value.trim();
-  var date   = document.getElementById('fe-date').value;
+  var title     = document.getElementById('fe-title').value.trim();
+  var detail    = document.getElementById('fe-detail').value.trim();
+  var tagsRaw   = document.getElementById('fe-tags').value.trim();
+  var dateStart = document.getElementById('fe-date-start').value;
+  var dateEnd   = document.getElementById('fe-date-end').value;
+  var color     = _feSelectedColor || '#f97316'; // デフォルト：オレンジ
   if (!title || !detail) { fpShowToast('fe-toast','タイトルと詳細は必須です','error'); return; }
+  if (!dateStart)        { fpShowToast('fe-toast','イベント開始日を入力してください','error'); return; }
   if (!window.fpAdminDB) { fpShowToast('fe-toast','Firebase接続中…','error'); return; }
   var tags = tagsRaw ? tagsRaw.split(',').map(function(t){ return t.trim(); }).filter(Boolean) : [];
+  var payload = {
+    title:     title,
+    detail:    detail,
+    tags:      tags,
+    dateStart: dateStart,
+    dateEnd:   dateEnd || dateStart,
+    date:      dateStart, // 後方互換・orderBy用
+    color:     color,
+    ts:        Date.now()
+  };
   try {
-    await window.fpAdminDB.collection('sp_fountain_events').add({ title, detail, tags, date: date||'9999-12-31', ts: Date.now() });
-    document.getElementById('fe-title').value  = '';
-    document.getElementById('fe-detail').value = '';
-    document.getElementById('fe-tags').value   = '';
+    await window.fpAdminDB.collection('sp_fountain_events').add(payload);
+    feClearEventForm();
     fpShowToast('fe-toast','✅ イベントを追加しました！','success');
     fpLoadEvents();
   } catch(e) { fpShowToast('fe-toast','❌ '+e.message,'error'); }
