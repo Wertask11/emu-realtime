@@ -810,9 +810,12 @@
             setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
         }
 
-        // ── リアルタイム時計 ──
+        // ── リアルタイム時計 + 気温 ──
         (function() {
             const days = ['日','月','火','水','木','金','土'];
+            let _temp = '--';
+            fetch('https://api.open-meteo.com/v1/forecast?latitude=35.68&longitude=139.69&current=temperature_2m&timezone=Asia/Tokyo')
+                .then(r => r.json()).then(j => { _temp = Math.round(j.current.temperature_2m); }).catch(() => {});
             function tick() {
                 const n = new Date();
                 const h  = String(n.getHours()).padStart(2,'0');
@@ -826,7 +829,7 @@
                 const wt = document.getElementById('fruits-weather');
                 if (ct) ct.textContent = `${h}:${m}`;
                 if (cd) cd.textContent = `${y}/${mo}/${d}(${dw})`;
-                if (wt) wt.textContent = (n.getHours()>=6&&n.getHours()<18?'☀️':'🌙') + ' --°C';
+                if (wt) wt.textContent = (n.getHours()>=6&&n.getHours()<18?'☀️':'🌙') + ` ${_temp}°C`;
             }
             tick(); setInterval(tick, 1000);
         })();

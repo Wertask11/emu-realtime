@@ -117,10 +117,9 @@
         .hero {
             position: relative;
             height: 320px;
-            background: linear-gradient(to bottom, #4a7c59, #2d4a36);
-            background-image: 
-                radial-gradient(circle at 20% 50%, rgba(255,255,255,0.05) 0%, transparent 50%),
-                radial-gradient(circle at 80% 50%, rgba(0,0,0,0.2) 0%, transparent 50%);
+            background:
+                linear-gradient(to bottom, rgba(40,80,50,0.45), rgba(20,45,30,0.78)),
+                url('https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=1440') center/cover;
             display: flex;
             flex-direction: column;
             justify-content: flex-end;
@@ -812,9 +811,12 @@
             setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
         }
 
-        // ── リアルタイム時計 ──
+        // ── リアルタイム時計 + 気温 ──
         (function() {
             const days = ['日','月','火','水','木','金','土'];
+            let _temp = '--';
+            fetch('https://api.open-meteo.com/v1/forecast?latitude=35.68&longitude=139.69&current=temperature_2m&timezone=Asia/Tokyo')
+                .then(r => r.json()).then(j => { _temp = Math.round(j.current.temperature_2m); }).catch(() => {});
             function tick() {
                 const n = new Date();
                 const h  = String(n.getHours()).padStart(2,'0');
@@ -828,7 +830,7 @@
                 const wt = document.getElementById('yakuya-weather');
                 if (ct) ct.textContent = `${h}:${m}`;
                 if (cd) cd.textContent = `${y}/${mo}/${d}(${dw})`;
-                if (wt) wt.textContent = (n.getHours()>=6&&n.getHours()<18?'☀️':'🌙') + ' --°C';
+                if (wt) wt.textContent = (n.getHours()>=6&&n.getHours()<18?'☀️':'🌙') + ` ${_temp}°C`;
             }
             tick(); setInterval(tick, 1000);
         })();
