@@ -6475,6 +6475,15 @@ async function _initEmuer() {
     // 初回 → 1,000 EMUER付与
     data = { balance: EMUER_INITIAL_AMOUNT, lastRefill: now, restrictionUntil: null, totalSpent: 0 };
     _saveEmuerData(data);
+  } else if (MAINTENANCE_MODE && _isOwnerAccess() && data.restrictionUntil) {
+    // メンテナンスモード中のオーナー → 制限を即時解除・残高を復元
+    data.balance = EMUER_INITIAL_AMOUNT;
+    data.restrictionUntil = null;
+    data.lastRefill = now;
+    _saveEmuerData(data);
+    // 制限オーバーレイが出ていたら閉じる
+    const ov = document.getElementById('emuerRestrictOverlay');
+    if (ov) ov.classList.remove('active');
   } else if (data.restrictionUntil && now >= data.restrictionUntil) {
     // 制限解除 → 1,000 EMUER再付与
     data.balance = EMUER_INITIAL_AMOUNT;
@@ -6504,6 +6513,8 @@ function _updateEmuerHud(balance) {
 
 let _erTimerInterval = null;
 function _showEmuerRestrictionOverlay(restrictionUntil) {
+  // メンテナンスモード中のオーナーには制限オーバーレイを表示しない
+  if (MAINTENANCE_MODE && _isOwnerAccess()) return;
   const overlay = document.getElementById('emuerRestrictOverlay');
   if (!overlay) return;
   overlay.classList.add('active');
@@ -6552,39 +6563,19 @@ function _showEmuerChargeToast(poiId, cost, remaining) {
   setTimeout(() => toast.remove(), 2100);
 }
 
-// ─── メンテナンス・オーナーバイパス ────────────────────────
-// コンソールで有効化: localStorage.setItem('sp_owner_bypass','1')
-// コンソールで解除:   localStorage.removeItem('sp_owner_bypass')
-function _spOwnerBypass() {
-  return localStorage.getItem('sp_owner_bypass') === '1';
-}
-// 利用制限をコンソールから解除できるヘルパー（手動実行用）
-window.spClearRestriction = function() {
-  const data = _getEmuerData();
-  if (!data) return;
-  delete data.restrictionUntil;
-  delete data.restrictionCount;
-  data.balance = 500; // 残高をリセット
-  _saveEmuerData(data);
-  _updateEmuerHud(data.balance);
-  const ov = document.getElementById('emuerRestrictionOverlay');
-  if (ov) ov.style.display = 'none';
-  console.log('✅ 利用制限を解除し残高を500EMUERにリセットしました');
-};
-
 async function gatedOpen(poiId, fn) {
   const cost = EMUER_RATE_CONFIG[poiId] ?? 0;
   if (cost === 0) { fn(); return; }
 
-  // メンテナンス・オーナーバイパスモード（EMUER消費・制限なし）
-  if (_spOwnerBypass()) { fn(); return; }
+  // メンテナンスモード中はオーナーのEMUER消費・利用制限をすべてスキップ
+  if (MAINTENANCE_MODE && _isOwnerAccess()) { fn(); return; }
 
   let data = _getEmuerData();
   if (!data) data = await _initEmuer();
 
   const now = Date.now();
 
-  // 制限中チェック（バイパスモードなら制限も無視）
+  // 制限中チェック
   if (data.restrictionUntil && now < data.restrictionUntil) {
     _showEmuerRestrictionOverlay(data.restrictionUntil);
     return;
