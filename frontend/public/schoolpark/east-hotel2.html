@@ -197,6 +197,18 @@
         .vote-btn:hover { border-color: var(--accent-neon); }
         .voted { background: var(--accent-neon); color: black; font-weight: bold; }
 
+        /* チェックインアニメーション */
+        @keyframes annexParticle {
+            0%   { transform: translate(0,0) scale(1.2); opacity: 1; }
+            100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
+        }
+        @keyframes annexToast {
+            0%   { opacity: 0; transform: translateX(-50%) translateY(16px); }
+            12%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+            80%  { opacity: 1; }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+        }
+
     </style>
 </head>
 <body>
@@ -272,12 +284,58 @@
     function handleCheckin() {
         if(!isCheckedIn) {
             isCheckedIn = true;
-            document.getElementById('checkin-btn').innerText = "ENJOY YOUR STAY";
-            document.getElementById('checkin-btn').classList.add('active');
+            const btn = document.getElementById('checkin-btn');
+            btn.innerText = "ENJOY YOUR STAY";
+            btn.classList.add('active');
             document.getElementById('count-guest').innerText = "13";
             renderUI();
-            alert("チェックイン完了：スマートキーを発行しました。");
+            _annexCheckinAnim(btn);
         }
+    }
+
+    function _annexCheckinAnim(btn) {
+        const emojis = ['🛎️','⭐','✨','🌟','💫','🏨','🗝️','🍾','🥂','🎊','🔑'];
+        const rect = btn.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top  + rect.height / 2;
+        for (let i = 0; i < 18; i++) {
+            const p = document.createElement('div');
+            p.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+            const dx = (Math.random() - 0.5) * 260;
+            const dy = -(60 + Math.random() * 160);
+            p.style.cssText = [
+                'position:fixed',
+                `left:${cx}px`,
+                `top:${cy}px`,
+                `font-size:${1.1 + Math.random() * 1.1}rem`,
+                'pointer-events:none',
+                'z-index:9999',
+                `--dx:${dx}px`,
+                `--dy:${dy}px`,
+                'animation:annexParticle 1.4s ease-out forwards'
+            ].join(';');
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 1500);
+        }
+        const toast = document.createElement('div');
+        toast.textContent = '🗝️ チェックイン完了 — スマートキーを発行しました。ごゆっくりお過ごしください。';
+        toast.style.cssText = [
+            'position:fixed',
+            'bottom:40px',
+            'left:50%',
+            'transform:translateX(-50%)',
+            'background:var(--accent-neon)',
+            'color:#000',
+            'padding:14px 32px',
+            'border-radius:50px',
+            'font-weight:bold',
+            'font-size:0.88rem',
+            'white-space:nowrap',
+            'z-index:9999',
+            'animation:annexToast 3.5s ease-out forwards'
+        ].join(';');
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3600);
     }
 
     function switchTab(e, tabName) {

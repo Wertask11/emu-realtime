@@ -203,7 +203,7 @@
     <div class="tab-container">
         <div class="tab-item active" onclick="switchTab(this, 'menu')">📋 メニュー</div>
         <div class="tab-item" onclick="switchTab(this, 'tables')">🪑 テーブル</div>
-        <div class="tab-item" onclick="switchTab(this, 'ranking')">📈 商品ランク</div>
+        <div class="tab-item" onclick="switchTab(this, 'ranking')">📈 ランキング</div>
         <div class="tab-item" id="owner-btn" onclick="switchTab(this, 'owner')" style="background:rgba(251,191,36,0.1); color:var(--accent2); border-radius:8px 8px 0 0;">👑 オーナー経営</div>
     </div>
 
@@ -237,7 +237,7 @@
 
         <!-- パネル: 商品ランク (Reverted to Detailed Ranking) -->
         <div id="panel-ranking" class="panel">
-            <h3 style="margin-bottom:15px; border-left:4px solid var(--accent); padding-left:10px;">商品別売上ランキング (ABC分析)</h3>
+            <h3 style="margin-bottom:15px; border-left:4px solid var(--accent); padding-left:10px;">商品ランキング</h3>
             <div id="product-ranking-list"></div>
         </div>
 
@@ -307,6 +307,7 @@
             renderRanking();
             calculateFinances();
             _loadVisitorCount();
+            _loadPurchaseCounts();
         };
 
         // ── 時計 + 天気 ──
@@ -367,14 +368,14 @@
                     <div class="menu-info">
                         <div style="font-weight:bold; font-size:15px;">${item.name}</div>
                         <div class="price-tag">${item.price.toLocaleString()} <span style="font-size:10px">EMUER</span></div>
-                        <button class="btn-purchase" onclick="purchaseEffect(event, '${item.name}')">購入する</button>
+                        <button class="btn-purchase" onclick="purchaseEffect(event, '${item.name}', ${item.id})">購入する</button>
                     </div>
                 </div>
             `).join('');
         }
 
         // --- 楽しい購入演出 ---
-        function purchaseEffect(e, name) {
+        function purchaseEffect(e, name, itemId) {
             playCashSound();
             const particles = ['🪙', '☕', '✨', '🫘'];
             for (let i = 0; i < 15; i++) {
@@ -393,9 +394,38 @@
             const transEl = document.getElementById('total-transactions');
             transEl.innerText = transactionCount.toLocaleString();
             transEl.classList.remove('bump');
-            void transEl.offsetWidth; 
+            void transEl.offsetWidth;
             transEl.classList.add('bump');
             showToast(`『${name}』を購入しました。芳醇な香りをお楽しみください。`);
+            // Firebase に購入数を保存
+            _savePurchaseToFirebase(itemId, name);
+        }
+
+        function _savePurchaseToFirebase(itemId, name) {
+            function trySave() {
+                if (!window.coffeeDB || !window.coffeeLib) { setTimeout(trySave, 600); return; }
+                const lib = window.coffeeLib;
+                const ref = lib.doc(window.coffeeDB, 'sp_coffee_sales', String(itemId));
+                lib.setDoc(ref, { itemId, name, count: lib.increment(1) }, { merge: true }).catch(() => {});
+            }
+            trySave();
+        }
+
+        function _loadPurchaseCounts() {
+            function tryLoad() {
+                if (!window.coffeeDB || !window.coffeeLib) { setTimeout(tryLoad, 600); return; }
+                const lib = window.coffeeLib;
+                lib.getDocs(lib.collection(window.coffeeDB, 'sp_coffee_sales'))
+                .then(snap => {
+                    snap.forEach(d => {
+                        const data = d.data();
+                        const item = menuItems.find(m => String(m.id) === String(data.itemId));
+                        if (item) item.sales = data.count || 0;
+                    });
+                    renderRanking();
+                }).catch(() => {});
+            }
+            tryLoad();
         }
 
         function showToast(msg) {
@@ -486,7 +516,8 @@
 <script type="module">
 import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
-    getFirestore, collection, getDocs, query, where
+    getFirestore, collection, getDocs, query, where,
+    doc, setDoc, increment
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -501,7 +532,7 @@ const app = initializeApp(firebaseConfig, "coffee");
 const db  = getFirestore(app);
 
 window.coffeeDB  = db;
-window.coffeeLib = { collection, getDocs, query, where };
+window.coffeeLib = { collection, getDocs, query, where, doc, setDoc, increment };
 </script>
 
 </body>
