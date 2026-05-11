@@ -8574,6 +8574,20 @@ window.addEventListener("message", (e) => {
   if (e.data.type === "openSpWallet")   { openSpPanel('spWalletPanel'); }
   if (e.data.type === "openSpRobot")    { openSpPanel('spRobotPanel'); }
   if (e.data.type === "openSpSettings") { openSpPanel('spSettingsPanel'); }
+  // iframeからイベント会場へ移動（EMUER利用料支払い含む）
+  if (e.data.type === "spEventGo") {
+    const evPage = e.data.page;
+    const evFee  = parseInt(e.data.fee || 0);
+    const evTitle = e.data.title || "イベント会場";
+    if (!evPage) return;
+    if (evFee > 0) {
+      const poiKey = "__event__" + evPage.replace(/[^a-zA-Z0-9]/g,"_");
+      EMUER_RATE_CONFIG[poiKey] = evFee;
+      gatedOpen(poiKey, () => openSpContent(evPage));
+    } else {
+      openSpContent(evPage);
+    }
+  }
 });
 
 /* ═══════════════════════════════════════════════════════

@@ -194,15 +194,50 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 .fp-vote-type-dao     { background:rgba(251,191,36,0.08); color:#fbbf24; border:1px solid rgba(251,191,36,0.2); }
 
 /* ── Event ── */
+.fp-event-layout { display:flex; gap:14px; align-items:flex-start; }
+.fp-calendar-side { width:186px; flex-shrink:0; }
+.fp-event-list-side { flex:1; min-width:0; }
+@media(max-width:600px){
+  .fp-event-layout { flex-direction:column; }
+  .fp-calendar-side { width:100%; }
+}
+
+/* カレンダー */
+.fp-cal {
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:10px 8px; font-size:0.72rem;
+}
+.fp-cal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.fp-cal-title { font-weight:700; font-size:0.78rem; color:var(--accent2); }
+.fp-cal-nav { background:none; border:none; color:var(--text2); cursor:pointer; font-size:0.9rem; padding:2px 6px; border-radius:4px; }
+.fp-cal-nav:hover { background:rgba(255,255,255,0.07); }
+.fp-cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+.fp-cal-dow { text-align:center; color:var(--text2); font-size:0.62rem; padding:2px 0 4px; }
+.fp-cal-day {
+  text-align:center; padding:4px 2px; border-radius:4px; cursor:pointer;
+  transition:background 0.15s; position:relative;
+}
+.fp-cal-day:hover { background:rgba(255,255,255,0.07); }
+.fp-cal-day.empty { pointer-events:none; }
+.fp-cal-day.today { background:rgba(249,115,22,0.18); color:var(--accent); font-weight:700; }
+.fp-cal-day.has-event::after {
+  content:''; position:absolute; bottom:2px; left:50%; transform:translateX(-50%);
+  width:4px; height:4px; border-radius:50%; background:var(--accent);
+}
+.fp-cal-day.selected { background:rgba(249,115,22,0.35); color:#fff; font-weight:700; }
+
 .fp-event-card {
   background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
-  overflow:hidden; margin-bottom:11px; display:flex; transition:border-color 0.2s;
+  overflow:hidden; margin-bottom:11px; display:flex; transition:border-color 0.2s, transform 0.15s;
 }
-.fp-event-card:hover { border-color:rgba(255,255,255,0.15); }
+.fp-event-card[data-page] { cursor:pointer; }
+.fp-event-card[data-page]:hover { border-color:var(--accent); transform:translateY(-2px); }
 .fp-event-side { width:5px; flex-shrink:0; background:linear-gradient(var(--accent),var(--accent2)); }
 .fp-event-body { padding:13px 15px; flex:1; }
 .fp-event-name { font-size:0.86rem; font-weight:700; margin-bottom:5px; }
 .fp-event-info { font-size:0.71rem; color:var(--text2); margin-bottom:7px; line-height:1.65; }
+.fp-event-fee { font-size:0.68rem; color:#fbbf24; background:rgba(251,191,36,0.1); border:1px solid rgba(251,191,36,0.25); padding:2px 8px; border-radius:20px; display:inline-block; margin-bottom:6px; }
+.fp-event-go-hint { font-size:0.65rem; color:var(--accent); margin-top:4px; }
 .fp-event-tags { display:flex; gap:5px; flex-wrap:wrap; }
 .fp-event-tag  {
   background:rgba(249,115,22,0.1); border:1px solid rgba(249,115,22,0.2);
@@ -678,8 +713,27 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 
   <!-- イベント -->
   <div class="fp-panel" id="fp-panel-event">
-    <div class="fp-section-title" style="margin-bottom:16px">イベント情報</div>
-    <div id="fpEventList"><div class="fp-loading">🎉 読み込み中…</div></div>
+    <div class="fp-event-layout">
+      <!-- カレンダー（左） -->
+      <div class="fp-calendar-side">
+        <div class="fp-cal" id="fpCalBox">
+          <div class="fp-cal-header">
+            <button class="fp-cal-nav" onclick="fpCalPrev()">‹</button>
+            <div class="fp-cal-title" id="fpCalTitle">—</div>
+            <button class="fp-cal-nav" onclick="fpCalNext()">›</button>
+          </div>
+          <div class="fp-cal-grid" id="fpCalGrid"></div>
+        </div>
+        <div style="font-size:0.62rem;color:var(--text2);margin-top:7px;text-align:center;">
+          🟠 イベントあり ｜ 今日
+        </div>
+      </div>
+      <!-- イベントリスト（右） -->
+      <div class="fp-event-list-side">
+        <div class="fp-section-title" style="margin-bottom:12px">イベント情報</div>
+        <div id="fpEventList"><div class="fp-loading">🎉 読み込み中…</div></div>
+      </div>
+    </div>
   </div>
 
   <!-- ランキング -->
@@ -1143,6 +1197,9 @@ function fpInitEvents() {
   const q   = lib.query(lib.collection(fpDB, "sp_fountain_events"), lib.orderBy("date","asc"));
   lib.onSnapshot(q, snap => {
     const events = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    // カレンダー用イベント日付セットを更新
+    _fpCalEventDates = new Set(events.map(ev => ev.date).filter(Boolean));
+    fpBuildCalendar(_fpCalYear, _fpCalMonth);
     fpRenderEvents(events);
     document.getElementById("fpStatEvents").textContent = events.length;
   });
@@ -1185,12 +1242,20 @@ function fpRenderEvents(events) {
   }
   const evHtml = events.map(ev => {
     const tags = (ev.tags || []).map(t => `<span class="fp-event-tag">${_esc(t)}</span>`).join("");
-    return `<div class="fp-event-card">
+    const pageAttr  = ev.page ? ` data-page="${_esc(ev.page)}"` : "";
+    const feeAttr   = ev.fee  ? ` data-fee="${parseInt(ev.fee)}"` : "";
+    const dateAttr  = ev.date ? ` data-date="${_esc(ev.date)}"` : "";
+    const titleAttr = ` data-title="${_esc(ev.title||"イベント会場")}"`;
+    const feeHtml   = ev.fee  ? `<div class="fp-event-fee">💎 入場料 ${ev.fee} EMUER</div>` : "";
+    const goHint    = ev.page ? `<div class="fp-event-go-hint">▶ タップしてイベント会場へ</div>` : "";
+    return `<div class="fp-event-card"${pageAttr}${feeAttr}${dateAttr}${titleAttr} onclick="fpGoToEvent(this)">
       <div class="fp-event-side"></div>
       <div class="fp-event-body">
         <div class="fp-event-name">${_esc(ev.title||"")}</div>
         <div class="fp-event-info">${_esc(ev.detail||"").replace(/\n/g,"<br>")}</div>
+        ${feeHtml}
         ${tags ? `<div class="fp-event-tags">${tags}</div>` : ""}
+        ${goHint}
       </div>
     </div>`;
   }).join("");
@@ -1551,6 +1616,72 @@ async function fpCreateVote() {
   } catch(e) { fpToast("❌ エラー: " + e.message, "rgba(239,68,68,0.9)"); }
 }
 
+// ─── イベント会場へ移動 ──────────────────────────────────────
+function fpGoToEvent(card) {
+  const page  = card.dataset.page;
+  const fee   = parseInt(card.dataset.fee  || "0");
+  const title = card.dataset.title || "イベント会場";
+  if (!page) return;
+  window.top.postMessage({ type: "spEventGo", page, fee, title }, "*");
+}
+
+// ─── カレンダー ──────────────────────────────────────────────
+let _fpCalYear  = new Date().getFullYear();
+let _fpCalMonth = new Date().getMonth(); // 0-indexed
+let _fpCalEventDates = new Set();
+let _fpCalSelected  = null;
+
+function fpBuildCalendar(year, month) {
+  const title = document.getElementById("fpCalTitle");
+  const grid  = document.getElementById("fpCalGrid");
+  if (!title || !grid) return;
+  title.textContent = `${year}年 ${month+1}月`;
+
+  const today  = new Date();
+  const first  = new Date(year, month, 1).getDay(); // 0=Sun
+  const days   = new Date(year, month+1, 0).getDate();
+
+  const dows = ["日","月","火","水","木","金","土"];
+  let html = dows.map(d => `<div class="fp-cal-dow">${d}</div>`).join("");
+
+  // 空白マス
+  for (let i = 0; i < first; i++) html += `<div class="fp-cal-day empty"></div>`;
+  for (let d = 1; d <= days; d++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const isToday = (d === today.getDate() && month === today.getMonth() && year === today.getFullYear());
+    const hasEv   = _fpCalEventDates.has(dateStr);
+    const isSel   = (_fpCalSelected === dateStr);
+    const cls     = ["fp-cal-day", isToday?"today":"", hasEv?"has-event":"", isSel?"selected":""].filter(Boolean).join(" ");
+    html += `<div class="${cls}" onclick="fpCalSelect('${dateStr}')">${d}</div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function fpCalPrev() {
+  _fpCalMonth--;
+  if (_fpCalMonth < 0) { _fpCalMonth = 11; _fpCalYear--; }
+  fpBuildCalendar(_fpCalYear, _fpCalMonth);
+}
+function fpCalNext() {
+  _fpCalMonth++;
+  if (_fpCalMonth > 11) { _fpCalMonth = 0; _fpCalYear++; }
+  fpBuildCalendar(_fpCalYear, _fpCalMonth);
+}
+function fpCalSelect(dateStr) {
+  if (_fpCalSelected === dateStr) {
+    _fpCalSelected = null; // 解除
+  } else {
+    _fpCalSelected = dateStr;
+  }
+  fpBuildCalendar(_fpCalYear, _fpCalMonth);
+  // イベントリストをフィルタリング
+  document.querySelectorAll("#fpEventList .fp-event-card").forEach(card => {
+    const ev = card.dataset.date || "";
+    if (!_fpCalSelected) { card.style.display = ""; return; }
+    card.style.display = (ev === _fpCalSelected) ? "" : "none";
+  });
+}
+
 // ─── ダイナミックDAO投票をリアルタイム監視 ───────────────────
 // onSnapshot を使うことで管理画面や他ユーザーの作成・削除が即時反映される
 function fpInitDynamicDAOVotes() {
@@ -1589,6 +1720,10 @@ function fpInitDynamicDAOVotes() {
     snap.docs.forEach(d => {
       fpLoadVoteBars(`dyn_${d.id}`, `fpDynVoteBars_${d.id}`, `fpDynVoteCount_${d.id}`, true);
     });
+
+    // 進行中の投票数：一般投票1件（vote1固定）＋動的DAO投票件数
+    const elVotes = document.getElementById("fpStatVotes");
+    if (elVotes) elVotes.textContent = 1 + snap.docs.length;
   });
 }
 // 後方互換：既存の呼び出し箇所は fpInitDynamicDAOVotes に統一
