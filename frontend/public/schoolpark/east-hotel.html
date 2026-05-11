@@ -333,6 +333,31 @@
             margin-top: 10px;
             margin-bottom: 20px;
         }
+
+        /* ゾーンバッジ */
+        .hero-zone-badge {
+            display: inline-block;
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.75);
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 20px;
+            padding: 3px 10px;
+            margin-bottom: 8px;
+            letter-spacing: 0.04em;
+        }
+
+        /* チェックインアニメーション */
+        @keyframes hotelParticle {
+            0%   { transform: translate(0,0) scale(1.2); opacity: 1; }
+            100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
+        }
+        @keyframes hotelToast {
+            0%   { opacity: 0; transform: translateX(-50%) translateY(16px); }
+            12%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+            80%  { opacity: 1; }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+        }
     </style>
 </head>
 <body>
@@ -353,13 +378,14 @@
         </div>
         <div class="top-nav-right">
             <div class="weather-time">
-                <span>🌙 14°C</span>
-                <span style="text-align: right; line-height: 1.2;">21:45<br>2026/05/02(土)</span>
+                <span id="hotel-weather">🌙 --°C</span>
+                <span id="hotel-clock" style="text-align: right; line-height: 1.2;">--:--<br>----/--/--(--)</span>
             </div>
         </div>
     </header>
 
     <div class="hero-section">
+        <div class="hero-zone-badge">🏪 Life Market — 日常・宿泊</div>
         <div class="hero-title">Grand Oasis</div>
         <div class="hero-subtitle">至福のひとときを、あなたに。</div>
         <div class="hero-actions">
@@ -469,9 +495,54 @@
             this.innerText = "🛎️ 滞在中";
             this.classList.add('registered');
             renderContextualUI();
-            alert("チェックインが完了いたしました。ごゆっくりお過ごしください。");
+            _hotelCheckinAnim(this);
         }
     });
+
+    function _hotelCheckinAnim(btn) {
+        const emojis = ['🛎️','⭐','✨','🌟','💫','🏨','🗝️','🍾','🥂','🎊'];
+        const rect   = btn.getBoundingClientRect();
+        const cx     = rect.left + rect.width  / 2;
+        const cy     = rect.top  + rect.height / 2;
+        for (let i = 0; i < 14; i++) {
+            const p = document.createElement('div');
+            p.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+            const dx = (Math.random() - 0.5) * 200;
+            const dy = -(60 + Math.random() * 130);
+            p.style.cssText = [
+                'position:fixed',
+                `left:${cx}px`,
+                `top:${cy}px`,
+                `font-size:${1.2 + Math.random() * 0.9}rem`,
+                'pointer-events:none',
+                'z-index:9999',
+                `--dx:${dx}px`,
+                `--dy:${dy}px`,
+                'animation:hotelParticle 1.3s ease-out forwards'
+            ].join(';');
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 1400);
+        }
+        const toast = document.createElement('div');
+        toast.textContent = '🛎️ チェックインが完了いたしました。ごゆっくりお過ごしください。';
+        toast.style.cssText = [
+            'position:fixed',
+            'bottom:40px',
+            'left:50%',
+            'transform:translateX(-50%)',
+            'background:var(--accent-gold)',
+            'color:#0f111a',
+            'padding:12px 28px',
+            'border-radius:4px',
+            'font-weight:bold',
+            'font-size:0.9rem',
+            'white-space:nowrap',
+            'z-index:9999',
+            'animation:hotelToast 3.2s ease-out forwards'
+        ].join(';');
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3300);
+    }
 
     function renderContextualUI() {
         const postForm = document.getElementById('post-form-container');
@@ -619,6 +690,30 @@
             </div>`;
         list.prepend(card);
     }
+
+    // ── リアルタイム時計 ──
+    (function _hotelClock() {
+        const days = ['日','月','火','水','木','金','土'];
+        function tick() {
+            const n = new Date();
+            const h = String(n.getHours()).padStart(2,'0');
+            const m = String(n.getMinutes()).padStart(2,'0');
+            const y = n.getFullYear();
+            const mo = String(n.getMonth()+1).padStart(2,'0');
+            const d  = String(n.getDate()).padStart(2,'0');
+            const dw = days[n.getDay()];
+            const clk = document.getElementById('hotel-clock');
+            if (clk) clk.innerHTML = `${h}:${m}<br>${y}/${mo}/${d}(${dw})`;
+            const wth = document.getElementById('hotel-weather');
+            if (wth) {
+                const hr = n.getHours();
+                const icon = (hr >= 6 && hr < 18) ? '☀️' : '🌙';
+                wth.textContent = `${icon} --°C`;
+            }
+        }
+        tick();
+        setInterval(tick, 1000);
+    })();
 </script>
 
 </body>

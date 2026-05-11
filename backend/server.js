@@ -1132,6 +1132,24 @@ async function loadFountainHistory() {
 }
 loadFountainHistory();
 
+// Mansion 掲示板（Socket.io + Firestore永続化）
+const mansionPosts    = new Map();
+const MANSION_BOARD_COL = "sp_mansion_board";
+
+async function loadMansionBoard() {
+  if (!db) { console.warn("⚠️ Firestore未接続 - Mansion 掲示板ロードをスキップ"); return; }
+  try {
+    const snap = await db.collection(MANSION_BOARD_COL).orderBy("ts", "desc").limit(200).get();
+    const docs = [];
+    snap.forEach(d => docs.push({ postId: d.id, ...d.data() }));
+    docs.reverse().forEach(m => mansionPosts.set(m.postId, m));
+    console.log(`✅ Mansion 掲示板 ${mansionPosts.size}件 を復元しました`);
+  } catch(e) {
+    console.warn("⚠️ Mansion 掲示板の復元に失敗:", e.message);
+  }
+}
+loadMansionBoard();
+
 io.on("connection", (socket) => {
   console.log("接続:", socket.id);
   socket.emit("today topic", getTodayTopic());
@@ -1178,6 +1196,42 @@ io.on("connection", (socket) => {
             .catch(()=>{});
         }
       }).catch(()=>{});
+    }
+  });
+
+  // ★ Mansion 掲示板履歴を送信
+  socket.emit("mansion history", Array.from(mansionPosts.values()).slice(-50));
+
+  // ★ Mansion 参加
+  socket.on("join mansion", ({ wallet, name }) => {
+    socket.mansionWallet = wallet || "guest";
+    socket.mansionName   = name   || "住民";
+  });
+
+  // ★ Mansion 掲示板投稿
+  socket.on("mansion post", (data) => {
+    if (!data.text || String(data.text).trim().length === 0) return;
+    const postId = randomUUID();
+    const post = {
+      postId,
+      author: socket.mansionName || "住民",
+      wallet: socket.mansionWallet || "guest",
+      text: String(data.text).slice(0, 500),
+      tag:  String(data.tag  || "住民投稿").slice(0, 20),
+      ts:   Date.now()
+    };
+    mansionPosts.set(postId, post);
+    if (mansionPosts.size > 200) {
+      mansionPosts.delete(mansionPosts.keys().next().value);
+    }
+    io.emit("mansion post", post);
+    if (db) {
+      db.collection(MANSION_BOARD_COL).doc(postId).set(post).catch(e => {
+        console.warn("Mansion 投稿保存失敗:", e.message);
+      });
+      db.collection(MANSION_BOARD_COL).orderBy("ts","desc").offset(200).limit(50).get()
+        .then(old => { const b = db.batch(); old.forEach(d => b.delete(d.ref)); b.commit().catch(()=>{}); })
+        .catch(()=>{});
     }
   });
 

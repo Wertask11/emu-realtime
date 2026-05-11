@@ -113,7 +113,8 @@
         .hero-section {
             position: relative;
             height: 280px;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.7)), linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            background: linear-gradient(to bottom, rgba(0,0,0,0.15), rgba(0,0,0,0.72)),
+                        url('https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&q=80&w=1440') center/cover;
             background-size: cover;
             background-position: center;
             display: flex;
@@ -366,6 +367,57 @@
             background: var(--bg-secondary);
             border-radius: 8px;
         }
+
+        /* ゾーンバッジ */
+        .hero-zone-badge {
+            display: inline-block;
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.75);
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 20px;
+            padding: 3px 10px;
+            margin-bottom: 8px;
+            letter-spacing: 0.04em;
+        }
+
+        /* 住民登録アニメーション */
+        @keyframes mansionParticle {
+            0%   { transform: translate(0,0) scale(1.2); opacity: 1; }
+            100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
+        }
+        @keyframes mansionToast {
+            0%   { opacity: 0; transform: translateX(-50%) translateY(16px); }
+            12%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+            80%  { opacity: 1; }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+        }
+
+        /* 掲示板チャットスタイル */
+        .board-msg {
+            display: flex;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .board-msg:last-child { border-bottom: none; }
+        .board-avatar {
+            width: 36px; height: 36px; min-width: 36px;
+            background: var(--accent-orange);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 0.9rem;
+        }
+        .board-meta { font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px; }
+        .board-tag {
+            font-size: 0.72rem;
+            background: rgba(255,255,255,0.1);
+            color: var(--text-secondary);
+            padding: 1px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+        }
+        .board-loading { text-align:center; color: var(--text-secondary); padding: 30px; }
     </style>
 </head>
 <body>
@@ -386,13 +438,14 @@
         </div>
         <div class="top-nav-right">
             <div class="weather-time">
-                <span>☁️ 17°C</span>
-                <span style="text-align: right; line-height: 1.2;">09:01<br>2026/04/29(水)</span>
+                <span id="mansion-weather">☁️ --°C</span>
+                <span id="mansion-clock" style="text-align: right; line-height: 1.2;">--:--<br>----/--/--(--)</span>
             </div>
         </div>
     </header>
 
     <div class="hero-section">
+        <div class="hero-zone-badge">🏪 Life Market — 日常・住居</div>
         <div class="hero-title">🏢 Park Tower Minato パークタワー港</div>
         <div class="hero-subtitle">SchoolParkに住もう。</div>
         <div class="hero-actions">
@@ -476,14 +529,36 @@
     </main>
 </div>
 
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script>
+    // ── 基本状態 ──
     let isResident = false;
     let residentCount = 5;
-    let visitorCount = 218;
-    let votesCount = 2;
+    let visitorCount  = 0;
+    let votesCount    = 2;
 
+    // ── Socket.io ──
+    const mansionSocket = io('https://emu-realtime.onrender.com');
+
+    mansionSocket.on('connect', () => {
+        mansionSocket.emit('join mansion', { wallet: '', name: '住民' });
+    });
+
+    mansionSocket.on('mansion history', posts => {
+        const list = document.getElementById('board-list');
+        list.innerHTML = '';
+        posts.forEach(p => _appendBoardMsg(p, true));
+    });
+
+    mansionSocket.on('mansion post', post => {
+        _appendBoardMsg(post, false);
+    });
+
+    // ── DOM 準備後 ──
     document.addEventListener('DOMContentLoaded', () => {
-        updateStats();
+        _mansionClock();
+        _loadVisitorCount();
+        _updateStats();
         renderContextualUI();
 
         const tabs = document.querySelectorAll('.tab-item');
@@ -493,31 +568,128 @@
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 tab.classList.add('active');
                 document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
-                renderContextualUI(); // タブ切り替え時にも権限チェック
+                renderContextualUI();
             });
         });
     });
 
-    function updateStats() {
-        document.getElementById('stat-visitors').innerText = visitorCount;
+    // ── リアルタイム時計 ──
+    function _mansionClock() {
+        const days = ['日','月','火','水','木','金','土'];
+        function tick() {
+            const n = new Date();
+            const h  = String(n.getHours()).padStart(2,'0');
+            const m  = String(n.getMinutes()).padStart(2,'0');
+            const y  = n.getFullYear();
+            const mo = String(n.getMonth()+1).padStart(2,'0');
+            const d  = String(n.getDate()).padStart(2,'0');
+            const dw = days[n.getDay()];
+            const clk = document.getElementById('mansion-clock');
+            if (clk) clk.innerHTML = `${h}:${m}<br>${y}/${mo}/${d}(${dw})`;
+            const wth = document.getElementById('mansion-weather');
+            if (wth) {
+                const hr = n.getHours();
+                const icon = (hr >= 6 && hr < 18) ? '☀️' : '🌙';
+                wth.textContent = `${icon} --°C`;
+            }
+        }
+        tick();
+        setInterval(tick, 1000);
+    }
+
+    // ── 訪問者数（Firebase sp_content_visits） ──
+    function _loadVisitorCount() {
+        // Firebase module が window.mansionDB にセットされるまで待機
+        function tryLoad() {
+            if (!window.mansionDB || !window.mansionLib) { setTimeout(tryLoad, 600); return; }
+            const lib   = window.mansionLib;
+            const db    = window.mansionDB;
+            const today = new Date().toISOString().slice(0, 10);
+            const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+            lib.getDocs(
+                lib.query(
+                    lib.collection(db, 'sp_content_visits'),
+                    lib.where('contentId', '==', 'mansion'),
+                    lib.where('date', '>=', since)
+                )
+            ).then(snap => {
+                let total = 0;
+                snap.forEach(d => { total += (d.data().visits || 0); });
+                visitorCount = total;
+                document.getElementById('stat-visitors').innerText = total.toLocaleString();
+            }).catch(() => {});
+        }
+        tryLoad();
+    }
+
+    function _updateStats() {
+        document.getElementById('stat-visitors').innerText  = visitorCount;
         document.getElementById('stat-residents').innerText = residentCount;
         document.getElementById('stat-votes-count').innerText = votesCount;
     }
 
-    document.getElementById('btn-join').addEventListener('click', function() {
-        if (!isResident) {
-            isResident = true;
-            residentCount++;
-            updateStats();
-            this.innerText = "✅ 住民です";
-            this.classList.add('registered');
-            renderContextualUI();
-            alert("住民として登録されました！");
-        }
+    // ── 住民になるボタン ──
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('btn-join').addEventListener('click', function() {
+            if (!isResident) {
+                isResident = true;
+                residentCount++;
+                _updateStats();
+                this.innerText = "✅ 住民です";
+                this.classList.add('registered');
+                renderContextualUI();
+                _mansionJoinAnim(this);
+            }
+        });
     });
 
+    function _mansionJoinAnim(btn) {
+        const emojis = ['🏠','🏢','✨','🌟','💫','🎊','🗝️','🌿','⭐','🎉'];
+        const rect   = btn.getBoundingClientRect();
+        const cx     = rect.left + rect.width  / 2;
+        const cy     = rect.top  + rect.height / 2;
+        for (let i = 0; i < 16; i++) {
+            const p  = document.createElement('div');
+            p.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+            const dx = (Math.random() - 0.5) * 220;
+            const dy = -(70 + Math.random() * 140);
+            p.style.cssText = [
+                'position:fixed',
+                `left:${cx}px`,
+                `top:${cy}px`,
+                `font-size:${1.2 + Math.random() * 1}rem`,
+                'pointer-events:none',
+                'z-index:9999',
+                `--dx:${dx}px`,
+                `--dy:${dy}px`,
+                'animation:mansionParticle 1.4s ease-out forwards'
+            ].join(';');
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 1500);
+        }
+        const toast = document.createElement('div');
+        toast.textContent = '🏠 住民として登録されました！ようこそパークタワーへ。';
+        toast.style.cssText = [
+            'position:fixed',
+            'bottom:40px',
+            'left:50%',
+            'transform:translateX(-50%)',
+            'background:var(--accent-orange)',
+            'color:#fff',
+            'padding:12px 28px',
+            'border-radius:20px',
+            'font-weight:bold',
+            'font-size:0.9rem',
+            'white-space:nowrap',
+            'z-index:9999',
+            'animation:mansionToast 3.2s ease-out forwards'
+        ].join(';');
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3300);
+    }
+
+    // ── 掲示板UI制御 ──
     function renderContextualUI() {
-        // 掲示板フォームの制御
         const postForm = document.getElementById('post-form-container');
         if (isResident) {
             postForm.innerHTML = `
@@ -529,7 +701,6 @@
             postForm.innerHTML = `<div class="post-form locked"><p>🔒 掲示板への投稿は住民限定です。</p></div>`;
         }
 
-        // 住民投票エリアの制御
         const voteArea = document.getElementById('vote-main-area');
         if (isResident) {
             if (!document.getElementById('vote-creator-form')) {
@@ -558,35 +729,24 @@
         }
     }
 
-    // 案入力フィールドの追加
     function addOptionField() {
         const container = document.getElementById('dynamic-options');
         const count = container.querySelectorAll('input').length + 1;
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'opt-input';
-        input.placeholder = `案${String.fromCharCode(9311 + count)}`; // 案③以降
-        if(count > 10) input.placeholder = `案${count}`; 
+        input.placeholder = `案${String.fromCharCode(9311 + count)}`;
+        if (count > 10) input.placeholder = `案${count}`;
         container.appendChild(input);
     }
 
-    // 投票の作成
     function createNewVote() {
-        const title = document.getElementById('vote-title').value;
-        const options = Array.from(document.querySelectorAll('.opt-input'))
-                            .map(i => i.value)
-                            .filter(v => v.trim() !== "");
-
-        if (!title || options.length < 2) {
-            alert("議題と少なくとも2つの案を入力してください。");
-            return;
-        }
-
+        const title   = document.getElementById('vote-title').value;
+        const options = Array.from(document.querySelectorAll('.opt-input')).map(i => i.value).filter(v => v.trim() !== "");
+        if (!title || options.length < 2) { alert("議題と少なくとも2つの案を入力してください。"); return; }
         addVoteToUI(title, options);
         votesCount++;
-        updateStats();
-        
-        // フォームリセット
+        _updateStats();
         document.getElementById('vote-title').value = "";
         document.getElementById('dynamic-options').innerHTML = `
             <input type="text" class="opt-input" placeholder="案①">
@@ -602,71 +762,91 @@
         const container = document.getElementById('vote-list-container');
         const card = document.createElement('div');
         card.className = 'post-card';
-        
-        let optionsHtml = options.map(opt => `
-            <button class="vote-option-btn" onclick="castVote(this)">${opt}</button>
-        `).join('');
-
+        let optionsHtml = options.map(opt => `<button class="vote-option-btn" onclick="castVote(this)">${opt}</button>`).join('');
         card.innerHTML = `
             <div style="font-weight:bold; font-size:1.1rem; margin-bottom:10px;">議題：${title}</div>
-            <div class="vote-options-container">
-                ${optionsHtml}
-            </div>
-        `;
+            <div class="vote-options-container">${optionsHtml}</div>`;
         container.prepend(card);
     }
 
     function castVote(btn) {
-        const container = btn.closest('.vote-options-container');
-        const allBtns = container.querySelectorAll('.vote-option-btn');
-        
-        allBtns.forEach(b => {
-            b.disabled = true;
-            b.style.opacity = "0.5";
-            b.style.cursor = "default";
-        });
-
+        const allBtns = btn.closest('.vote-options-container').querySelectorAll('.vote-option-btn');
+        allBtns.forEach(b => { b.disabled = true; b.style.opacity = "0.5"; b.style.cursor = "default"; });
         btn.innerText = "✅ " + btn.innerText + " (投票済み)";
         btn.classList.add('voted');
         btn.style.opacity = "1";
         alert("投票が完了しました！");
     }
 
-    // 掲示板関連
+    // ── 掲示板投稿（Socket.io 経由） ──
     function submitPost() {
-        const text = document.getElementById('post-text').value;
+        const text = (document.getElementById('post-text').value || "").trim();
         if (!text) return;
-        addBoardItem("住民", text, "住民投稿");
+        mansionSocket.emit('mansion post', { text, tag: '住民投稿' });
         document.getElementById('post-text').value = "";
     }
 
     function submitRequest() {
-        const text = document.getElementById('request-text').value;
+        const text = (document.getElementById('request-text').value || "").trim();
         if (!text) return;
-        addBoardItem("ゲスト", text, "意見・要望");
+        mansionSocket.emit('mansion post', { text, tag: '意見・要望' });
         document.getElementById('request-text').value = "";
-        alert("ご意見ありがとうございます。掲示板に反映されました。");
+        const t = document.createElement('div');
+        t.textContent = '✅ ご意見ありがとうございます！';
+        t.style.cssText = 'position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:var(--accent-orange);color:#fff;padding:10px 24px;border-radius:20px;font-weight:bold;z-index:9999;animation:mansionToast 2.5s ease-out forwards';
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 2600);
     }
 
-    function addBoardItem(author, text, tag) {
+    // ── 掲示板メッセージ描画 ──
+    function _appendBoardMsg(post, append) {
         const list = document.getElementById('board-list');
-        const now = new Date();
-        const timeStr = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${now.getMinutes()}`;
-        const card = document.createElement('div');
-        card.className = 'post-card';
-        card.style.display = "flex";
-        card.style.justifyContent = "space-between";
-        card.style.alignItems = "center";
-        card.style.padding = "15px 20px";
+        if (!list) return;
+        const loadingEl = list.querySelector('.board-loading');
+        if (loadingEl) loadingEl.remove();
 
-        card.innerHTML = `
-            <div style="display:flex; align-items:center; gap:15px;">
-                <div class="post-avatar" style="background:${author === '住民' ? '#52c41a' : '#1890ff'}">${author[0]}</div>
-                <div><b>${author}</b> <span style="font-size:0.8rem; background:rgba(255,255,255,0.1); color:var(--text-secondary); padding:2px 6px; border-radius:4px; margin-left:10px;">${tag}</span><br>${text}</div>
-            </div>
-            <div class="post-date">${timeStr}</div>`;
-        list.prepend(card);
+        const n    = new Date(post.ts || Date.now());
+        const time = `${n.getMonth()+1}/${n.getDate()} ${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+        const author = post.author || '住民';
+        const color  = (post.tag === '意見・要望') ? '#1890ff' : '#52c41a';
+
+        const el = document.createElement('div');
+        el.className = 'board-msg';
+        el.innerHTML = `
+            <div class="board-avatar" style="background:${color}">${author[0]}</div>
+            <div style="flex:1">
+                <div><b>${author}</b><span class="board-tag">${post.tag || '住民投稿'}</span></div>
+                <div style="margin-top:4px;">${post.text}</div>
+                <div class="board-meta">${time}</div>
+            </div>`;
+        if (append) {
+            list.appendChild(el);
+        } else {
+            list.insertBefore(el, list.firstChild);
+        }
     }
+</script>
+
+<!-- Firebase module（訪問者数集計用） -->
+<script type="module">
+import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+    getFirestore, collection, getDocs, query, where
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
+    authDomain: "emusch-2a111.firebaseapp.com",
+    projectId: "emusch-2a111",
+    storageBucket: "emusch-2a111.firebasestorage.app",
+    messagingSenderId: "795496371585",
+    appId: "1:795496371585:web:51deec91b8a2152e4c8480"
+};
+const app = initializeApp(firebaseConfig, "mansion");
+const db  = getFirestore(app);
+
+window.mansionDB  = db;
+window.mansionLib = { collection, getDocs, query, where };
 </script>
 
 </body>
