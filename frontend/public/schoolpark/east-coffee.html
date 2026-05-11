@@ -397,7 +397,10 @@
             void transEl.offsetWidth;
             transEl.classList.add('bump');
             showToast(`『${name}』を購入しました。芳醇な香りをお楽しみください。`);
-            // Firebase に購入数を保存
+            // ローカルの sales を即時インクリメントしてランキング再描画
+            const item = menuItems.find(m => m.id === itemId);
+            if (item) { item.sales = (item.sales || 0) + 1; renderRanking(); }
+            // Firebase にも保存
             _savePurchaseToFirebase(itemId, name);
         }
 

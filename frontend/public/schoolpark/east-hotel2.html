@@ -53,6 +53,7 @@
         }
 
         .nav-left { display: flex; align-items: center; gap: 12px; }
+        .nav-right { flex-shrink: 0; font-size: 12px; color: #a0a5b5; display: flex; align-items: center; gap: 8px; }
         .app-brand { font-weight: 800; letter-spacing: 2px; color: var(--accent-neon); }
         .eib {
             background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
@@ -222,6 +223,10 @@
             <button class="eib" onclick="window.top.postMessage({type:'openTaxi'},'*')" title="タクシー">🚕</button>
             <button class="eib" onclick="window.top.postMessage({type:'openSpRobot'},'*')" title="AIエージェント">🤖</button>
             <button class="eib" onclick="window.top.postMessage({type:'openSpSettings'},'*')" title="設定">⚙️</button>
+        </div>
+        <div class="nav-right">
+            <span id="hotel2-weather">☀️ --°C</span>
+            <span id="hotel2-clock">--:-- | ----/--/--</span>
         </div>
     </nav>
 
@@ -452,6 +457,30 @@
         btn.classList.add('voted');
         btn.style.opacity = "1";
     }
+
+    // ── 時計 + 天気 ──
+    (function() {
+        const days = ['日','月','火','水','木','金','土'];
+        let _temp = '--';
+        fetch('https://api.open-meteo.com/v1/forecast?latitude=35.68&longitude=139.69&current=temperature_2m&timezone=Asia/Tokyo')
+            .then(r => r.json()).then(j => { _temp = Math.round(j.current.temperature_2m); }).catch(() => {});
+        function tick() {
+            const now = new Date();
+            const hh  = String(now.getHours()).padStart(2,'0');
+            const mm  = String(now.getMinutes()).padStart(2,'0');
+            const yy  = now.getFullYear();
+            const mo  = String(now.getMonth()+1).padStart(2,'0');
+            const dd  = String(now.getDate()).padStart(2,'0');
+            const day = days[now.getDay()];
+            const icons = ['❄️','❄️','❄️','🌸','🌸','☀️','☀️','☀️','☀️','🍂','🍂','❄️'];
+            const wEl = document.getElementById('hotel2-weather');
+            const cEl = document.getElementById('hotel2-clock');
+            if (wEl) wEl.textContent = `${icons[now.getMonth()]} ${_temp}°C`;
+            if (cEl) cEl.textContent = `${hh}:${mm} | ${yy}/${mo}/${dd}(${day})`;
+        }
+        tick();
+        setInterval(tick, 1000);
+    })();
 
     function addPost() {
         const text = document.getElementById('p-text').value;
