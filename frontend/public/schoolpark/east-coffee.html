@@ -56,8 +56,8 @@
 
         .hero {
             height: 260px; position: relative;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.1), var(--bg-dark)),
-                        url('https://images.unsplash.com/photo-1443675780476-6297a3f783af?q=80&w=2074&auto=format&fit=crop') center/cover;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.25), rgba(15,23,42,0.80)),
+                        url('https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=1440') center/cover;
             display: flex; align-items: flex-end; padding: 30px;
         }
         .hero-title { font-size: 26px; font-weight: bold; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
@@ -180,7 +180,10 @@
                 <button class="eib" onclick="window.top.postMessage({type:'openSpSettings'},'*')" title="設定">⚙️</button>
             </div>
         </div>
-        <div class="nav-right" id="clock-display">2026/04/30 13:00</div>
+        <div class="nav-right" style="display:flex; align-items:center; gap:8px;">
+            <span id="coffee-weather">☀️ --°C</span>
+            <span id="clock-display">--:-- | ----/--/--</span>
+        </div>
     </nav>
 
     <header class="hero">
@@ -191,7 +194,7 @@
     </header>
 
     <section class="stats-bar">
-        <div class="stat-item"><span class="stat-value">242</span><span class="stat-label">訪問数</span></div>
+        <div class="stat-item"><span class="stat-value" id="stat-visitors">--</span><span class="stat-label">訪問者数</span></div>
         <div class="stat-item"><span class="stat-value" id="total-transactions">1,408</span><span class="stat-label">取引数</span></div>
         <div class="stat-item"><span class="stat-value">58</span><span class="stat-label">常連客数</span></div>
         <div class="stat-item"><span class="stat-value">4.2k</span><span class="stat-label">いいね数</span></div>
@@ -303,12 +306,49 @@
             renderMenu();
             renderRanking();
             calculateFinances();
-            updateClock();
-            setInterval(updateClock, 1000);
+            _loadVisitorCount();
         };
 
-        function updateClock() {
-            document.getElementById('clock-display').innerText = new Date().toLocaleString('ja-JP');
+        // ── 時計 + 天気 ──
+        (function() {
+            const days = ['日','月','火','水','木','金','土'];
+            let _temp = '--';
+            fetch('https://api.open-meteo.com/v1/forecast?latitude=35.68&longitude=139.69&current=temperature_2m&timezone=Asia/Tokyo')
+                .then(r => r.json()).then(j => { _temp = Math.round(j.current.temperature_2m); }).catch(() => {});
+            function tick() {
+                const now = new Date();
+                const hh  = String(now.getHours()).padStart(2,'0');
+                const mm  = String(now.getMinutes()).padStart(2,'0');
+                const yy  = now.getFullYear();
+                const mo  = String(now.getMonth()+1).padStart(2,'0');
+                const dd  = String(now.getDate()).padStart(2,'0');
+                const day = days[now.getDay()];
+                const weatherIcons = ['❄️','❄️','❄️','🌸','🌸','☀️','☀️','☀️','☀️','🍂','🍂','❄️'];
+                const icon = weatherIcons[now.getMonth()];
+                const wEl = document.getElementById('coffee-weather');
+                const cEl = document.getElementById('clock-display');
+                if (wEl) wEl.textContent = `${icon} ${_temp}°C`;
+                if (cEl) cEl.textContent = `${hh}:${mm} | ${yy}/${mo}/${dd}(${day})`;
+            }
+            tick();
+            setInterval(tick, 1000);
+        })();
+
+        // ── 訪問者数（Firebase sp_content_visits） ──
+        function _loadVisitorCount() {
+            function tryLoad() {
+                if (!window.coffeeDB || !window.coffeeLib) { setTimeout(tryLoad, 600); return; }
+                const lib   = window.coffeeLib;
+                const db    = window.coffeeDB;
+                const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+                lib.getDocs(lib.query(lib.collection(db, 'sp_content_visits'), lib.where('contentId', '==', 'coffee')))
+                .then(snap => {
+                    let total = 0;
+                    snap.forEach(d => { const v = d.data(); if (v.date >= since) total += (v.visits || 0); });
+                    document.getElementById('stat-visitors').textContent = total.toLocaleString();
+                }).catch(() => {});
+            }
+            tryLoad();
         }
 
         function switchTab(el, tabId) {
@@ -441,5 +481,28 @@
             else alert("広場に戻ります。");
         }
     </script>
+
+<!-- Firebase module（訪問者数集計用） -->
+<script type="module">
+import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+    getFirestore, collection, getDocs, query, where
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
+    authDomain: "emusch-2a111.firebaseapp.com",
+    projectId: "emusch-2a111",
+    storageBucket: "emusch-2a111.firebasestorage.app",
+    messagingSenderId: "795496371585",
+    appId: "1:795496371585:web:51deec91b8a2152e4c8480"
+};
+const app = initializeApp(firebaseConfig, "coffee");
+const db  = getFirestore(app);
+
+window.coffeeDB  = db;
+window.coffeeLib = { collection, getDocs, query, where };
+</script>
+
 </body>
 </html>
