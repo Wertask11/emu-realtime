@@ -524,9 +524,11 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 <!-- ── Stats ── -->
 <div class="fp-stats">
   <div class="fp-stat"><div class="fp-stat-val" id="fpStatVisitors">—</div><div class="fp-stat-lbl">訪問者数</div></div>
-  <div class="fp-stat"><div class="fp-stat-val" id="fpStatPosts">—</div><div class="fp-stat-lbl">投稿数</div></div>
+  <div class="fp-stat"><div class="fp-stat-val" id="fpStatBoard">—</div><div class="fp-stat-lbl">掲示板</div></div>
+  <div class="fp-stat"><div class="fp-stat-val" id="fpStatWish">—</div><div class="fp-stat-lbl">泉</div></div>
+  <div class="fp-stat"><div class="fp-stat-val" id="fpStatChat">—</div><div class="fp-stat-lbl">チャット</div></div>
   <div class="fp-stat"><div class="fp-stat-val" id="fpStatVotes">3</div><div class="fp-stat-lbl">進行中の投票</div></div>
-  <div class="fp-stat"><div class="fp-stat-val" id="fpStatEvents">—</div><div class="fp-stat-lbl">イベント予定</div></div>
+  <div class="fp-stat"><div class="fp-stat-val" id="fpStatEvents">—</div><div class="fp-stat-lbl">イベント</div></div>
 </div>
 
 <!-- ── Tabs ── -->
@@ -1090,7 +1092,7 @@ function fpInitBoard() {
   lib.onSnapshot(q, snap => {
     const posts = snap.docs.map(d => ({ id:d.id, ...d.data() }));
     fpRenderBoard(posts);
-    document.getElementById("fpStatPosts").textContent = posts.length;
+    document.getElementById("fpStatBoard").textContent = posts.length;
   });
 }
 
@@ -1203,6 +1205,8 @@ function fpInitWishes() {
   lib.onSnapshot(q, snap => {
     const wishes = snap.docs.map(d => ({ id:d.id, ...d.data() }));
     fpRenderWishes(wishes);
+    const el = document.getElementById("fpStatWish");
+    if (el) el.textContent = wishes.length;
   });
 }
 
@@ -1251,15 +1255,22 @@ function fpInitChat() {
     msgs.innerHTML = `<div class="fp-loading">⚠️ 接続に失敗しました。リロードをお試しください。</div>`;
   });
 
+  let _fpChatCount = 0;
   fpSocket.on("fountain history", (history) => {
     msgs.innerHTML = "";
     history.forEach(m => fpAppendChatMsg(m, false));
     msgs.scrollTop = msgs.scrollHeight;
+    _fpChatCount = history.length;
+    const el = document.getElementById("fpStatChat");
+    if (el) el.textContent = _fpChatCount;
   });
 
   fpSocket.on("fountain message", (m) => {
     fpAppendChatMsg(m, m.wallet === fpWallet);
     msgs.scrollTop = msgs.scrollHeight;
+    _fpChatCount++;
+    const el = document.getElementById("fpStatChat");
+    if (el) el.textContent = _fpChatCount;
   });
 }
 
