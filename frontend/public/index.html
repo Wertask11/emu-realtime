@@ -8354,8 +8354,8 @@ const SP_POIS = [
   { id:"guard5", name:"Fire Station 消防署",    icon:"🚒", zone:"guard", px:17, py:40, desc:"緊急対応・危機管理。コミュニティ緊急時の対応フローと安全確認",        status:"open", page:"/schoolpark/west-fire.html",     btnLabel:"🧯 確認しに行く" },
   { id:"guard6", name:"Bank 銀行",             icon:"🏦", zone:"guard", px:10, py:53, desc:"EMUERの変換・残高確認。good/changeポイントをEMUERトークンに変換する",   status:"open", page:"/schoolpark/west-bank.html",     btnLabel:"EMUER を下ろす" },
   // Life Market（東エリア：日常と稼ぎ）
-  { id:"earn1",  name:"Hotel ホテル",            icon:"🏨", zone:"earn",  px:80, py:25, desc:"SchoolParkのオンラインホテル。現実になるようにがんばります！",                 status:"open",   eastKey:"hotel"   },
-  { id:"earn2",  name:"Mansion マンション",      icon:"🏰", zone:"earn",  px:87, py:34, desc:"SchoolParkのオンラインマンション。現実になるようにがんばります！",           status:"open",   eastKey:"mansion" },
+  { id:"earn1",  name:"Hotel ホテル",            icon:"🏨", zone:"earn",  px:80, py:25, desc:"SchoolParkのオンラインホテル。現実になるようにがんばります！",                 status:"open",   eastKey:"hotel",   sub:"日常・宿泊" },
+  { id:"earn2",  name:"Mansion マンション",      icon:"🏰", zone:"earn",  px:87, py:34, desc:"SchoolParkのオンラインマンション。現実になるようにがんばります！",           status:"open",   eastKey:"mansion", sub:"日常・住居" },
   { id:"earn3",  name:"Shopping ショッピング",   icon:"🛍️", zone:"earn",  px:75, py:38, desc:"East Area Mall。SchoolParkオリジナルアイテムをEMUERで購入できるショッピングモール", status:"open", page:"/schoolpark/east-shopping.html" },
   { id:"earn4",  name:"Greengrocer 八百屋",     icon:"🥦", zone:"earn",  px:83, py:44, desc:"健康・栄養コンテンツ。体と心を整えるライフスタイル提案",             status:"open",   eastKey:"yakuya"  },
   { id:"earn5",  name:"Fruit Shop 果物屋",      icon:"🍎", zone:"earn",  px:81, py:55, desc:"健康・栄養コンテンツ。体と心を整えるライフスタイル提案",             status:"open",   eastKey:"fruits"  },
@@ -8946,7 +8946,7 @@ function renderSpContentList(filter) {
       <span class="spmap-content-icon">${poi.icon}</span>
       <div class="spmap-content-info">
         <div class="spmap-content-name">${poi.name}</div>
-        <div class="spmap-content-zone" style="color:${zone.color||'#666'}">${zone.sub||zone.label||''}</div>
+        <div class="spmap-content-zone" style="color:${zone.color||'#666'}">${poi.sub||zone.sub||zone.label||''}</div>
       </div>
     </div>`;
   });
@@ -8980,7 +8980,7 @@ function spMapSelectPoi(poiId) {
     <div class="spmap-detail-icon">${poi.icon}</div>
     <div class="spmap-detail-name">${poi.name}</div>
     <div class="spmap-detail-zone" style="background:${color}22;color:${color};border-color:${color}55">
-      ${zone.label}${zone.sub ? " — " + zone.sub : ""}
+      ${zone.label}${(poi.sub || zone.sub) ? " — " + (poi.sub || zone.sub) : ""}
     </div>
     <div class="spmap-detail-desc">${poi.desc}</div>
     ${poi.action === "openEmu"
@@ -9937,6 +9937,8 @@ var EAST_BUILDINGS = {
 };
 function openEastBuilding(key) {
   var b = EAST_BUILDINGS[key]; if (!b) return;
+  // 訪問数を記録（ランキング集計用）
+  _spTrackVisit(b.src);
   // SchoolParkマップを閉じる
   var spMap = document.getElementById("spMapOverlay");
   if (spMap) spMap.style.display = "none";
