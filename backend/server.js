@@ -1113,14 +1113,30 @@ function getTodayTopic() {
 
 const messages = new Map();
 
-// Fountain チャット履歴（メモリ）
+// Fountain チャット履歴（メモリ + Firestore永続化）
 const fountainMessages = new Map();
+const FP_CHAT_COL = "sp_fountain_chat";
+
+// 起動時にFirestoreからチャット履歴を復元
+async function loadFountainHistory() {
+  if (!db) { console.warn("⚠️ Firestore未接続 - チャット履歴のロードをスキップ"); return; }
+  try {
+    const snap = await db.collection(FP_CHAT_COL).orderBy("timestamp", "desc").limit(100).get();
+    const docs = [];
+    snap.forEach(d => docs.push({ messageId: d.id, ...d.data() }));
+    docs.reverse().forEach(m => fountainMessages.set(m.messageId, m));
+    console.log(`✅ Fountain チャット履歴 ${fountainMessages.size}件 を復元しました`);
+  } catch(e) {
+    console.warn("⚠️ チャット履歴の復元に失敗:", e.message);
+  }
+}
+loadFountainHistory();
 
 io.on("connection", (socket) => {
   console.log("接続:", socket.id);
   socket.emit("today topic", getTodayTopic());
   socket.emit("room3 history", Array.from(messages.values()));
-  // Fountain チャット履歴を送信
+  // Fountain チャット履歴を送信（メモリから）
   socket.emit("fountain history", Array.from(fountainMessages.values()).slice(-100));
 
   socket.on("join room3", ({ wallet }) => { socket.wallet = wallet; });
@@ -1144,11 +1160,25 @@ io.on("connection", (socket) => {
       timestamp: Date.now()
     };
     fountainMessages.set(messageId, message);
-    // 100件を超えたら古いものを削除
+    // 100件を超えたら古いものをメモリから削除
     if (fountainMessages.size > 100) {
       fountainMessages.delete(fountainMessages.keys().next().value);
     }
     io.emit("fountain message", message);
+    // Firestoreに永続保存（再起動してもメッセージが消えないように）
+    if (db) {
+      db.collection(FP_CHAT_COL).doc(messageId).set(message).catch(e => {
+        console.warn("チャット保存失敗:", e.message);
+      });
+      // 古いメッセージ（200件超）を非同期で削除
+      db.collection(FP_CHAT_COL).orderBy("timestamp","asc").limit(1).get().then(snap => {
+        if (!snap.empty) {
+          db.collection(FP_CHAT_COL).orderBy("timestamp","desc").offset(150).limit(50).get()
+            .then(old => { const b = db.batch(); old.forEach(d => b.delete(d.ref)); b.commit().catch(()=>{}); })
+            .catch(()=>{});
+        }
+      }).catch(()=>{});
+    }
   });
 
   // ★ 議題の再リクエスト

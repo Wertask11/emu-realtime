@@ -8510,10 +8510,48 @@ function openSpMap(gate) {
 }
 
 // ── SchoolPark コンテンツ iframe オーバーレイ ─────────────────
+// コンテンツID マッピング（ランキング集計用）
+const _SP_CONTENT_ID_MAP = {
+  '/schoolpark/fountain.html':       'fountain',
+  '/schoolpark/north-library.html':  'library',
+  '/schoolpark/north-bookstore.html':'bookstore',
+  '/schoolpark/north-museum.html':   'museum',
+  '/schoolpark/north-history.html':  'history',
+  '/schoolpark/north-lab.html':      'lab',
+  '/schoolpark/south-cinema.html':   'cinema',
+  '/schoolpark/south-crossing.html': 'crossing',
+  '/schoolpark/south-station.html':  'station',
+  '/schoolpark/south-station2.html': 'station',
+  '/schoolpark/south-elevator.html': 'elevator',
+  '/schoolpark/south-mountain.html': 'mountain',
+  '/schoolpark/south-fishing.html':  'fishing',
+  '/schoolpark/west-bank.html':      'bank',
+  '/schoolpark/west-hospital.html':  'hospital',
+  '/schoolpark/west-police.html':    'police',
+  '/schoolpark/west-guard.html':     'guard',
+  '/schoolpark/west-gym.html':       'gym',
+  '/schoolpark/west-fire.html':      'fire',
+  '/schoolpark/east-shopping.html':  'shopping',
+};
+
+function _spTrackVisit(url) {
+  if (!window.db || !window.fbLib) return;
+  try {
+    const cid = _SP_CONTENT_ID_MAP[url.split('?')[0]];
+    if (!cid) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const ref = window.fbLib.doc(window.db, 'sp_content_visits', `${cid}_${today}`);
+    window.fbLib.setDoc(ref, { contentId: cid, date: today, visits: window.fbLib.increment(1) }, { merge: true }).catch(() => {});
+  } catch(e) {}
+}
+
 function openSpContent(url) {
   const wallet  = window.connectedAccount || localStorage.getItem("emuWallet") || "";
   const sep     = url.includes("?") ? "&" : "?";
   const fullUrl = wallet ? url + sep + "wallet=" + encodeURIComponent(wallet) : url;
+
+  // 訪問数をFirestoreに記録（ランキング集計用）
+  _spTrackVisit(url);
 
   // SchoolParkマップを一旦隠す（重複表示防止）
   const spMap = document.getElementById("spMapOverlay");

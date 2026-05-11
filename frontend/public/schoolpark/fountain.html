@@ -220,10 +220,12 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
 .fp-cal-day:hover { background:rgba(255,255,255,0.07); }
 .fp-cal-day.empty { pointer-events:none; }
 .fp-cal-day.today { background:rgba(249,115,22,0.18); color:var(--accent); font-weight:700; }
-.fp-cal-day.has-event::after {
-  content:''; position:absolute; bottom:2px; left:50%; transform:translateX(-50%);
-  width:4px; height:4px; border-radius:50%; background:var(--dot-color, var(--accent));
+.fp-cal-day.has-event::after { display:none; }
+.fp-cal-dots {
+  position:absolute; bottom:2px; left:50%; transform:translateX(-50%);
+  display:flex; gap:2px;
 }
+.fp-cal-dot { width:4px; height:4px; border-radius:50%; flex-shrink:0; }
 .fp-cal-day.selected { background:rgba(249,115,22,0.35); color:#fff; font-weight:700; }
 
 .fp-event-card {
@@ -285,6 +287,27 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
   font-weight:700; cursor:pointer; font-family:inherit; transition:transform 0.15s;
 }
 .fp-wish-send-btn:hover { transform:translateY(-1px); }
+.fp-wish-send-btn:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
+
+@keyframes fp-wish-float {
+  0%   { opacity:1; transform:translateY(0) scale(1); }
+  100% { opacity:0; transform:translateY(-100px) scale(0.5); }
+}
+@keyframes fp-wish-ripple {
+  0%   { transform:scale(0.8); opacity:0.8; }
+  100% { transform:scale(2.2); opacity:0; }
+}
+.fp-wish-particle {
+  position:fixed; pointer-events:none; z-index:9999;
+  font-size:1.4rem; animation:fp-wish-float 1.2s ease-out forwards;
+  will-change:transform,opacity;
+}
+.fp-wish-ripple {
+  position:fixed; pointer-events:none; z-index:9998;
+  width:40px; height:40px; border-radius:50%;
+  border:2px solid rgba(139,92,246,0.7);
+  animation:fp-wish-ripple 0.8s ease-out forwards;
+}
 .fp-wish-item {
   background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
   padding:13px 15px; margin-bottom:7px;
@@ -744,39 +767,9 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
       <button id="fpRankTabEmu" onclick="fpRankSwitch('emu')" style="flex:1;padding:7px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#888;font-size:0.75rem;cursor:pointer;font-family:inherit">⭐ Emuランキング</button>
     </div>
 
-    <!-- SchoolPark訪問ランキング -->
+    <!-- SchoolPark訪問ランキング（fpInitRankVisitsで動的レンダリング） -->
     <div id="fpRankListSP">
-      <div style="font-size:0.68rem;color:var(--text2);margin-bottom:10px">今週どのコンテンツに一番人が集まっているか</div>
-      <div class="fp-rank-item">
-        <div class="fp-rank-num" style="color:#fbbf24">🥇</div>
-        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">⛲</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">Fountain 噴水広場</div><div class="fp-rank-score">中央広場 · コミュニティ</div></div>
-        <div class="fp-rank-val" id="fpRankVisit1">—</div>
-      </div>
-      <div class="fp-rank-item">
-        <div class="fp-rank-num" style="color:#94a3b8">🥈</div>
-        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">📚</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">図書館・本屋</div><div class="fp-rank-score">学び · 北エリア</div></div>
-        <div class="fp-rank-val">—</div>
-      </div>
-      <div class="fp-rank-item">
-        <div class="fp-rank-num" style="color:#cd7c4e">🥉</div>
-        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">🎬</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">映画館</div><div class="fp-rank-score">エンタメ · 南エリア</div></div>
-        <div class="fp-rank-val">—</div>
-      </div>
-      <div class="fp-rank-item">
-        <div class="fp-rank-num" style="color:var(--text2)">4</div>
-        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">🏦</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">Bank 銀行</div><div class="fp-rank-score">EMUER変換 · 西エリア</div></div>
-        <div class="fp-rank-val">—</div>
-      </div>
-      <div class="fp-rank-item">
-        <div class="fp-rank-num" style="color:var(--text2)">5</div>
-        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">🏛️</div>
-        <div class="fp-rank-info"><div class="fp-rank-name">Museum 博物館</div><div class="fp-rank-score">投稿展示 · 北エリア</div></div>
-        <div class="fp-rank-val">—</div>
-      </div>
+      <div class="fp-loading">📊 集計中…</div>
     </div>
 
     <!-- Emu人気投稿ランキング -->
@@ -1210,7 +1203,8 @@ function fpInitEvents() {
         const ds = cur.getFullYear() + "-" +
           String(cur.getMonth()+1).padStart(2,"0") + "-" +
           String(cur.getDate()).padStart(2,"0");
-        _fpCalEventDates[ds] = color;
+        if (!_fpCalEventDates[ds]) _fpCalEventDates[ds] = [];
+        if (!_fpCalEventDates[ds].includes(color)) _fpCalEventDates[ds].push(color);
         cur.setDate(cur.getDate() + 1);
       }
     });
@@ -1265,8 +1259,9 @@ function fpRenderEvents(events) {
     const titleAttr = ` data-title="${_esc(ev.title||"イベント会場")}"`;
     const feeHtml   = ev.fee  ? `<div class="fp-event-fee">💎 入場料 ${ev.fee} EMUER</div>` : "";
     const goHint    = ev.page ? `<div class="fp-event-go-hint">▶ タップしてイベント会場へ</div>` : "";
+    const sideStyle = ev.color ? ` style="background:${ev.color}"` : "";
     return `<div class="fp-event-card"${pageAttr}${feeAttr}${dateAttr}${titleAttr} onclick="fpGoToEvent(this)">
-      <div class="fp-event-side"></div>
+      <div class="fp-event-side"${sideStyle}></div>
       <div class="fp-event-body">
         <div class="fp-event-name">${_esc(ev.title||"")}</div>
         <div class="fp-event-info">${_esc(ev.detail||"").replace(/\n/g,"<br>")}</div>
@@ -1309,16 +1304,49 @@ function fpRenderWishes(wishes) {
 
 async function fpSendWish() {
   const input = document.getElementById("fpWishInput");
+  const btn   = document.querySelector(".fp-wish-send-btn");
   const text  = input.value.trim();
   if (!text) return;
   if (!fpDB || !fpFBLib) { fpToast("⚠️ 接続中…","rgba(100,100,100,0.9)"); return; }
+  if (btn) { btn.textContent = "💫 投げ込み中…"; btn.disabled = true; }
   try {
     await fpFBLib.addDoc(fpFBLib.collection(fpDB,"sp_fountain_wishes"), {
       text, ts: Date.now()
     });
     input.value = "";
+    _fpWishParticles(btn);
     fpToast("💫 願いが泉に投げ込まれました","rgba(99,102,241,0.92)");
   } catch(e) { fpToast("❌ "+e.message,"rgba(239,68,68,0.9)"); }
+  finally { if (btn) { btn.textContent = "💫 願いを投げ込む"; btn.disabled = false; } }
+}
+
+function _fpWishParticles(btn) {
+  const rect = btn ? btn.getBoundingClientRect()
+                   : { left: window.innerWidth/2, top: window.innerHeight/2, width:0 };
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top;
+  const emojis = ["💫","✨","🌟","⭐","💛","🌙","🪄","🎇"];
+
+  // リップルエフェクト
+  const rip = document.createElement("div");
+  rip.className = "fp-wish-ripple";
+  rip.style.left = (cx - 20) + "px";
+  rip.style.top  = (cy - 20) + "px";
+  document.body.appendChild(rip);
+  setTimeout(() => rip.remove(), 900);
+
+  // パーティクル
+  for (let i = 0; i < 8; i++) {
+    const p = document.createElement("div");
+    p.className = "fp-wish-particle";
+    p.textContent = emojis[i % emojis.length];
+    p.style.left  = (cx + (Math.random() - 0.5) * 80) + "px";
+    p.style.top   = (cy - 10) + "px";
+    p.style.animationDelay    = (i * 0.07) + "s";
+    p.style.animationDuration = (1.0 + Math.random() * 0.5) + "s";
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 1800);
+  }
 }
 
 // ─── チャット（Socket.io） ────────────────────────────────
@@ -1421,19 +1449,71 @@ function _esc(s) {
 })();
 
 // ─── コンテンツ訪問ランキング ──────────────────────────────
+const FP_CONTENT_META = {
+  "fountain":  { name:"Fountain 噴水広場",      icon:"⛲", area:"中央広場 · コミュニティ" },
+  "library":   { name:"Library 図書館",         icon:"📚", area:"学び · 北エリア" },
+  "bookstore": { name:"Bookstore 本屋",         icon:"📖", area:"学び · 北エリア" },
+  "museum":    { name:"Art Museum 美術館",       icon:"🎨", area:"学び · 北エリア" },
+  "history":   { name:"Museum 博物館",           icon:"🏛️", area:"学び · 北エリア" },
+  "lab":       { name:"Lab 研究所",             icon:"🔬", area:"学び · 北エリア" },
+  "cinema":    { name:"映画館",                  icon:"🎬", area:"エンタメ · 南エリア" },
+  "bank":      { name:"Bank 銀行",              icon:"🏦", area:"EMUER変換 · 西エリア" },
+  "crossing":  { name:"Crossing 交差点",        icon:"🚦", area:"思考 · 南エリア" },
+  "station":   { name:"Station 駅舎",           icon:"🚉", area:"南エリア" },
+  "hospital":  { name:"Hospital 病院",          icon:"🏥", area:"西エリア" },
+  "police":    { name:"Police Station 警察署",  icon:"🚔", area:"西エリア" },
+  "guard":     { name:"Security Guard 自警団",  icon:"🛡️", area:"西エリア" },
+  "gym":       { name:"Gym ジム",               icon:"💪", area:"西エリア" },
+  "fire":      { name:"Fire Station 消防署",    icon:"🚒", area:"西エリア" },
+  "shopping":  { name:"Shopping",              icon:"🛍️", area:"東エリア" },
+};
+const FP_RANK_MEDALS = ["🥇","🥈","🥉","4","5","6","7","8"];
+const FP_RANK_COLORS = ["#fbbf24","#94a3b8","#cd7c4e","var(--text2)","var(--text2)","var(--text2)","var(--text2)","var(--text2)"];
+
 function fpInitRankVisits() {
-  // Fountainの今日の訪問者を sp_content_visits に記録
-  if (!fpDB || !fpFBLib) return;
-  const lib = fpFBLib;
-  const today = new Date().toISOString().slice(0,10);
-  const docRef = lib.doc(fpDB, "sp_content_visits", `fountain_${today}`);
-  lib.setDoc(docRef, { contentId:"fountain", date:today, visits: lib.increment(1) }, { merge:true })
-    .catch(()=>{});
-  // 今日の訪問数を表示
-  lib.getDoc(docRef).then(snap => {
-    const v = snap.exists() ? (snap.data().visits || 1) : 1;
-    const el = document.getElementById("fpRankVisit1");
-    if (el) el.textContent = v.toLocaleString() + " 訪問";
+  if (!fpDB || !fpFBLib) { setTimeout(fpInitRankVisits, 600); return; }
+  const lib   = fpFBLib;
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Fountain の今日の訪問を記録
+  lib.setDoc(
+    lib.doc(fpDB, "sp_content_visits", `fountain_${today}`),
+    { contentId:"fountain", date:today, visits: lib.increment(1) },
+    { merge:true }
+  ).catch(()=>{});
+
+  // 過去7日間の全コンテンツ訪問を集計
+  const since = new Date(); since.setDate(since.getDate() - 7);
+  const sinceStr = since.toISOString().slice(0, 10);
+
+  lib.getDocs(
+    lib.query(lib.collection(fpDB, "sp_content_visits"), lib.where("date",">=", sinceStr))
+  ).then(snap => {
+    const totals = {};
+    snap.forEach(d => {
+      const { contentId, visits } = d.data();
+      if (contentId) totals[contentId] = (totals[contentId]||0) + (visits||0);
+    });
+
+    const sorted = Object.entries(totals)
+      .sort((a,b) => b[1] - a[1])
+      .slice(0, 8);
+
+    const el = document.getElementById("fpRankListSP");
+    if (!el || sorted.length === 0) return;
+
+    const items = sorted.map(([cid, cnt], i) => {
+      const m = FP_CONTENT_META[cid] || { name:cid, icon:"📍", area:"" };
+      return `<div class="fp-rank-item">
+        <div class="fp-rank-num" style="color:${FP_RANK_COLORS[i]||"var(--text2)"}">${FP_RANK_MEDALS[i]||String(i+1)}</div>
+        <div style="font-size:1.4rem;width:34px;text-align:center;flex-shrink:0">${m.icon}</div>
+        <div class="fp-rank-info"><div class="fp-rank-name">${m.name}</div><div class="fp-rank-score">${m.area}</div></div>
+        <div class="fp-rank-val">${cnt.toLocaleString()} 訪問</div>
+      </div>`;
+    }).join("");
+
+    el.innerHTML = `<div style="font-size:0.68rem;color:var(--text2);margin-bottom:10px">今週どのコンテンツに一番人が集まっているか</div>` + items +
+      `<div style="text-align:center;padding:14px 0 0;color:var(--text2);font-size:0.7rem">📊 コンテンツが増えると自動的に更新されます</div>`;
   }).catch(()=>{});
 }
 
@@ -1645,7 +1725,7 @@ function fpGoToEvent(card) {
 // ─── カレンダー ──────────────────────────────────────────────
 let _fpCalYear  = new Date().getFullYear();
 let _fpCalMonth = new Date().getMonth(); // 0-indexed
-let _fpCalEventDates = {}; // { 'YYYY-MM-DD': '#colorhex' }
+let _fpCalEventDates = {}; // { 'YYYY-MM-DD': ['#color1','#color2',...] }
 let _fpCalSelected  = null;
 
 function fpBuildCalendar(year, month) {
@@ -1666,12 +1746,14 @@ function fpBuildCalendar(year, month) {
   for (let d = 1; d <= days; d++) {
     const dateStr  = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     const isToday  = (d === today.getDate() && month === today.getMonth() && year === today.getFullYear());
-    const dotColor = _fpCalEventDates[dateStr] || "";
-    const hasEv    = !!dotColor;
+    const colors   = _fpCalEventDates[dateStr] || [];
+    const hasEv    = colors.length > 0;
     const isSel    = (_fpCalSelected === dateStr);
     const cls      = ["fp-cal-day", isToday?"today":"", hasEv?"has-event":"", isSel?"selected":""].filter(Boolean).join(" ");
-    const dotStyle = dotColor ? ` style="--dot-color:${dotColor}"` : "";
-    html += `<div class="${cls}"${dotStyle} onclick="fpCalSelect('${dateStr}')">${d}</div>`;
+    const dotHtml  = hasEv
+      ? `<span class="fp-cal-dots">${colors.slice(0,3).map(c=>`<span class="fp-cal-dot" style="background:${c}"></span>`).join("")}</span>`
+      : "";
+    html += `<div class="${cls}" onclick="fpCalSelect('${dateStr}')">${d}${dotHtml}</div>`;
   }
   grid.innerHTML = html;
 }
