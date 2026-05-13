@@ -18,7 +18,10 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 .header{position:sticky;top:0;z-index:100;height:54px;background:rgba(15,23,42,0.97);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px}
 .back-btn{background:var(--accent);color:#000;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:0.8rem;font-weight:700;font-family:inherit;white-space:nowrap}
 .header-title{font-size:0.9rem;font-weight:700;display:flex;align-items:center;gap:6px}
-.header-clock{margin-left:auto;font-size:0.9rem;font-weight:700;color:var(--accent2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.header-clock{font-size:0.9rem;font-weight:700;color:var(--accent2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.hdr-nav{margin-left:auto;display:flex;align-items:center;gap:8px}
+.hdr-icon-btn{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:4px 9px;font-size:1.05rem;cursor:pointer;transition:background 0.15s;line-height:1}
+.hdr-icon-btn:hover{background:rgba(255,255,255,0.25)}
 
 /* ── Hero ── */
 .hero{background:linear-gradient(160deg,#0f172a 0%,#1e3a5f 50%,#0f172a 100%);padding:24px 16px 20px;text-align:center;position:relative;overflow:hidden}
@@ -93,7 +96,11 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 <div class="header">
   <button class="back-btn" onclick="goBack()">🚉 駅を出る</button>
   <div class="header-title">🚉 <span>Terminal Station</span></div>
-  <div class="header-clock" id="clock">--:--:--</div>
+  <div class="hdr-nav">
+    <button class="hdr-icon-btn" onclick="window.top.postMessage({type:'openSpWallet'},'*')" title="ウォレット">👛</button>
+    <button class="hdr-icon-btn" onclick="window.top.postMessage({type:'openTaxi'},'*')" title="タクシー">🚕</button>
+    <div class="header-clock" id="clock">--:--:--</div>
+  </div>
 </div>
 
 <div class="hero">
@@ -105,8 +112,6 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
     <span class="hero-tag">🗺️ 路線図</span>
     <span class="hero-tag">📋 発車情報</span>
     <span class="hero-tag">🏙️ 各エリアへ</span>
-    <span class="hero-tag">👛 駅売店</span>
-    <span class="hero-tag">🚕 タクシー乗り場</span>
   </div>
 </div>
 
@@ -262,7 +267,7 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
         <div style="font-size:2rem;margin-bottom:8px">🚇</div>
         <div style="font-size:0.85rem;font-weight:700;margin-bottom:6px;color:var(--blue)">地下ホーム（B1F）</div>
         <div style="font-size:0.75rem;color:var(--text2);line-height:1.7;margin-bottom:12px">ホームに降りる感覚をリアルに体験。<br>発車メロディ・列車の到着・アナウンスを楽しもう。</div>
-        <button onclick="goBack();setTimeout(()=>window.top.postMessage({type:'openStation2'},'*'),100)" style="background:var(--blue);color:#000;border:none;border-radius:8px;padding:10px 20px;font-size:0.8rem;font-weight:700;cursor:pointer;font-family:inherit">🚇 地下ホームへ行く</button>
+        <button onclick="window.top.postMessage({type:'spEventGo',page:'/schoolpark/south-station2.html',fee:0,title:'駅舎（下）'},'*')" style="background:var(--blue);color:#000;border:none;border-radius:8px;padding:10px 20px;font-size:0.8rem;font-weight:700;cursor:pointer;font-family:inherit">🚇 地下ホームへ行く</button>
       </div>
     </div>
   </div>
@@ -290,7 +295,7 @@ const LINES=[
   {dest:"西エリア（Guard District）",en:"West Area",track:"2",color:"#60a5fa"},
   {dest:"Emu Room2（星空）",en:"Emu Star Room",track:"1",color:"#fb923c"},
   {dest:"南 Frontier Gate",en:"South Gate",track:"2",color:"#fbbf24"},
-  {dest:"北エリア（予定）",en:"North Area",track:"1",color:"#a78bfa"},
+  {dest:"北エリア（Creative Academy）",en:"North Area",track:"1",color:"#a78bfa"},
   {dest:"東エリア（Life Market）",en:"East Area",track:"2",color:"#4ade80"},
 ];
 function buildBoard(){
