@@ -621,14 +621,81 @@ function setAnnounce(text, dotState){
   dot.className="announce-dot"+(dotState?" "+dotState:"");
 }
 
-// ── Web Speech API ──
+// ── 音声エンジン ──
+
+// 利用可能な中で最もナチュラルな日本語ボイスを選択
+let _bestVoice = null;
+function _pickBestVoice(){
+  const vs = window.speechSynthesis.getVoices();
+  if(!vs.length) return;
+  // 優先順位：Google日本語 > Nanami(Win11 Neural) > Haruka(Win) > Kyoko(Mac) > O-ren(Mac) > その他ja-JP
+  const checks = [
+    v => /Google.*日本語|Google.*Japanese/i.test(v.name) && v.lang.startsWith('ja'),
+    v => /Nanami/i.test(v.name)  && v.lang.startsWith('ja'),
+    v => /Haruka/i.test(v.name)  && v.lang.startsWith('ja'),
+    v => v.name === 'Kyoko',
+    v => v.name === 'O-ren',
+    v => v.lang === 'ja-JP',
+    v => v.lang.startsWith('ja'),
+  ];
+  for(const fn of checks){ const f=vs.find(fn); if(f){ _bestVoice=f; break; } }
+}
+if(window.speechSynthesis){
+  speechSynthesis.onvoiceschanged = _pickBestVoice;
+  _pickBestVoice();
+}
+
+// Utterance生成（isAnnounce=true → ゆっくり・高め = エレベーターアナウンス調）
+function _utter(text, isAnnounce=false){
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang    = 'ja-JP';
+  u.rate    = isAnnounce ? 0.74 : 0.83; // アナウンスはゆっくり
+  u.pitch   = isAnnounce ? 1.10 : 1.02; // 少し高め＝放送感
+  u.volume  = 1.0;
+  if(_bestVoice) u.voice = _bestVoice;
+  return u;
+}
+
+// ── チャイム（Web Audio API）── 到着時のみ鳴らす
+function _chime(onEnd){
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    // ソ→ド の2音チャイム
+    const notes = [
+      { hz:784,  t:0,    d:0.65 },   // G5
+      { hz:1046, t:0.32, d:0.75 },   // C6
+    ];
+    notes.forEach(({hz,t,d})=>{
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type='sine'; osc.frequency.value=hz;
+      const s=ctx.currentTime+t;
+      g.gain.setValueAtTime(0,s);
+      g.gain.linearRampToValueAtTime(0.20,s+0.03);
+      g.gain.exponentialRampToValueAtTime(0.001,s+d);
+      osc.start(s); osc.stop(s+d+0.05);
+    });
+    if(onEnd) setTimeout(onEnd, 1050);
+  } catch(e){ if(onEnd) onEnd(); }
+}
+
+// 通常の読み上げ（ドア閉まる など）
 function elevSpeak(text){
   if(!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(text);
-  u.lang="ja-JP"; u.rate=0.88; u.pitch=1.0;
-  // 少し待ってから読み上げ（Chrome対策）
-  setTimeout(()=>window.speechSynthesis.speak(u),100);
+  setTimeout(()=>window.speechSynthesis.speak(_utter(text, true)), 120);
+}
+
+// 到着アナウンス：チャイム♪ → "[floor]です。" → 間 → "ドアが開きます。"
+function elevArriveAnnounce(floorName){
+  if(!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  _chime(()=>{
+    const u1 = _utter(floorName+"です。", true);
+    const u2 = _utter("ドアが開きます。", true);
+    u1.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(u2), 350); };
+    setTimeout(()=>window.speechSynthesis.speak(u1), 80);
+  });
 }
 
 // ── エレベーターデータ ──
@@ -661,7 +728,7 @@ function goFloor(floor){
 
   // ① ドア閉まるアナウンス
   setAnnounce("ドアが閉まります。ご注意ください。","red");
-  elevSpeak("ドアが閉まります。ご注意ください。");
+  elevSpeak("ドアが閉まります。");
 
   setTimeout(()=>{
     // ② 移動開始
@@ -694,7 +761,7 @@ function goFloor(floor){
 
       const fn = FLOOR_NAMES[floor];
       setAnnounce(fn+" に到着しました。ドアが開きます。","");
-      elevSpeak(fn+" に到着しました。ドアが開きます。");
+      elevArriveAnnounce(fn);
       showToast(floor+" に とうちゃく！ "+(f?f.icon:""));
 
       // ④ ドア開き → ボタン再有効
@@ -730,8 +797,7 @@ function speakFact(idx, btn){
   }
   if(!window.speechSynthesis){ showToast("音声は非対応のブラウザです"); return; }
   window.speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(FACT_VOICES[idx]);
-  u.lang="ja-JP"; u.rate=0.88; u.pitch=1.0;
+  const u=_utter(FACT_VOICES[idx], false); // 解説は少し速め・自然なトーン
   btn.classList.add("speaking");
   btn.textContent="🔊 読み中…";
   _speakingBtn=btn;
