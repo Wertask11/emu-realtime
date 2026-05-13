@@ -31,7 +31,6 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 
 .section-title{font-size:14px;font-weight:700;color:var(--accent);margin:0 0 12px;letter-spacing:.05em;display:flex;align-items:center;gap:6px}
 
-/* ── 2カラムグリッド・縦長ポスターカード ── */
 .movies-grid{
   display:grid;
   grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
@@ -75,46 +74,62 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 
 /* ========== THEATER ========== */
 #theater{display:none;position:fixed;inset:0;background:#000;z-index:100;flex-direction:column}
-.theater-room{position:relative;height:100vh;overflow:hidden;background:#02000a}
+.theater-room{position:relative;flex:1;overflow:hidden;background:#02000a;display:flex;flex-direction:column}
 
-.ceiling{height:30px;background:linear-gradient(to bottom,#0a0015,#05000d);border-bottom:1px solid #1a0030}
+.ceiling{height:30px;background:linear-gradient(to bottom,#0a0015,#05000d);border-bottom:1px solid #1a0030;flex-shrink:0}
 .ceiling-lights{display:flex;gap:40px;justify-content:center;padding:8px;align-items:center}
 .ceiling-light{width:8px;height:8px;background:radial-gradient(circle,#ffd76040,transparent);border-radius:50%;box-shadow:0 0 12px #ffd760;animation:lightpulse 2s infinite alternate}
 @keyframes lightpulse{from{opacity:.4}to{opacity:.9}}
 
-.seats-area{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0 10px;position:relative}
+.seats-area{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0 6px;flex-shrink:0}
 .seat-row{display:flex;gap:4px}
-.seat{width:20px;height:16px;background:#1a0030;border-radius:4px 4px 0 0;border:1px solid #2a0045;position:relative}
-.seat.occupied::after{content:'';position:absolute;top:-8px;left:3px;width:14px;height:14px;background:#2a1040;border-radius:50% 50% 0 0}
+.seat{width:18px;height:14px;background:#1a0030;border-radius:4px 4px 0 0;border:1px solid #2a0045;position:relative}
+.seat.occupied::after{content:'';position:absolute;top:-7px;left:2px;width:14px;height:14px;background:#2a1040;border-radius:50% 50% 0 0}
 .aisle{height:4px;width:200px;background:linear-gradient(to right,transparent,rgba(155,48,255,.15),transparent);margin:2px 0}
 
-.screen-area{position:relative;margin:0 auto;width:calc(100% - 20px);max-width:400px}
+.screen-area{position:relative;margin:0 auto;width:calc(100% - 20px);max-width:460px;flex:1;display:flex;flex-direction:column;justify-content:center}
 .curtain-left,.curtain-right{position:absolute;top:0;width:50%;height:100%;z-index:10;transition:width 1.5s cubic-bezier(.4,0,.2,1)}
 .curtain-left{background:linear-gradient(to right,#3a0060,#1a0040);left:0;transform-origin:left;border-right:3px solid #5a0090}
 .curtain-right{background:linear-gradient(to left,#3a0060,#1a0040);right:0;transform-origin:right;border-left:3px solid #5a0090}
 .curtain-fold{position:absolute;top:0;bottom:0;width:8px;background:rgba(0,0,0,.3)}
 .curtain-left .curtain-fold{right:0}
 .curtain-right .curtain-fold{left:0}
-.screen-frame{background:#000;border:3px solid #333;border-radius:4px;overflow:hidden;aspect-ratio:16/9;position:relative}
+.screen-frame{background:#000;border:3px solid #333;border-radius:4px;overflow:hidden;position:relative}
 .screen-glow{position:absolute;inset:-15px;background:radial-gradient(ellipse at center,rgba(200,200,255,.08),transparent 70%);pointer-events:none;z-index:-1}
 
 .projector-beam{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);width:0;height:0;border-left:60px solid transparent;border-right:60px solid transparent;border-bottom:80px solid rgba(155,48,255,.04);pointer-events:none;z-index:5}
 
-.screen-scene{width:100%;height:100%;position:relative;overflow:hidden;display:flex;flex-direction:column}
-.scene-bg{position:absolute;inset:0;transition:background 1.5s}
-.scene-content{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:8px 10px 0}
-.scene-art{font-size:40px;margin-bottom:4px;filter:drop-shadow(0 2px 8px rgba(0,0,0,.8))}
-.scene-text{background:rgba(0,0,0,.75);color:#fff;font-size:11px;line-height:1.6;padding:6px 8px;border-radius:6px;text-align:center;width:100%;backdrop-filter:blur(4px)}
-.scene-chapter{font-size:9px;color:#ffd700;margin-bottom:2px;letter-spacing:.08em}
+.screen-scene{width:100%;position:relative;overflow:hidden;display:flex;flex-direction:column;min-height:200px}
+.scene-bg{position:absolute;inset:0;transition:background 1.8s}
+.scene-content{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:12px 14px 8px}
+.scene-art{font-size:52px;margin-bottom:6px;filter:drop-shadow(0 2px 12px rgba(0,0,0,.9));animation:artFloat 4s ease-in-out infinite}
+@keyframes artFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.scene-text-wrap{background:rgba(0,0,0,.8);padding:10px 12px;border-radius:8px;text-align:center;width:100%;backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.08)}
+.scene-chapter{font-size:10px;color:#ffd700;margin-bottom:4px;letter-spacing:.1em}
+.scene-text{color:#fff;font-size:12px;line-height:1.75}
 
-.progress-bar-wrap{height:3px;background:#111;width:100%}
+/* タイマーバー */
+.scene-timer-bar{height:2px;background:rgba(255,255,255,.1);width:100%;position:relative;overflow:hidden}
+.scene-timer-fill{height:100%;background:linear-gradient(to right,var(--accent),var(--gold));width:100%;transform-origin:left;animation:none}
+.scene-timer-fill.running{animation:timerDrain var(--scene-duration,20s) linear forwards}
+@keyframes timerDrain{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+
+.progress-bar-wrap{height:3px;background:#111;width:100%;flex-shrink:0}
 .progress-bar{height:100%;background:linear-gradient(to right,var(--accent),var(--gold));transition:width .5s linear}
 
-.controls{background:#05000d;padding:10px 16px;display:flex;align-items:center;gap:10px;border-top:1px solid #1a0030;flex-wrap:wrap}
+.controls{background:#05000d;padding:10px 16px;display:flex;align-items:center;gap:10px;border-top:1px solid #1a0030;flex-wrap:wrap;flex-shrink:0}
 .ctrl-btn{background:rgba(155,48,255,.2);border:1px solid var(--border);color:var(--text);padding:7px 14px;border-radius:20px;cursor:pointer;font-size:12px;transition:background .2s}
 .ctrl-btn:hover{background:rgba(155,48,255,.4)}
 .ctrl-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.ctrl-btn.hall-btn{background:rgba(80,80,80,.3);border-color:#555}
+.ctrl-btn.hall-btn:hover{background:rgba(80,80,80,.5)}
 .movie-playing-title{flex:1;font-size:12px;color:var(--muted);text-align:center}
+
+/* シーンナビ */
+.scene-nav{display:flex;gap:6px;align-items:center}
+.scene-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.2);transition:background .3s,transform .3s;cursor:pointer}
+.scene-dot.active{background:var(--accent);transform:scale(1.5)}
+.scene-dot.done{background:rgba(155,48,255,.5)}
 
 /* ========== LOADING ========== */
 #loading{display:none;position:fixed;inset:0;background:#000;z-index:200;flex-direction:column;align-items:center;justify-content:center;gap:16px}
@@ -130,7 +145,6 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 <body>
 <button class="close-btn" onclick="window.top.postMessage({type:'spContentClose'},'*')">✕ 映画館を出る</button>
 
-<!-- ローディング -->
 <div id="loading">
   <div class="loading-film">🎞️</div>
   <div class="loading-text">シアターの電気を消しています...</div>
@@ -148,105 +162,97 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
     <div class="np-badge">上映中</div>
     <div>
       <div class="np-title">青空文庫シアター 特別上映</div>
-      <div class="np-sub">著作権フリーの名作文学を、絵と文で体験する没入シアター</div>
+      <div class="np-sub">著作権フリーの名作文学を、絵と文で体験する没入シアター（各作品 約5分）</div>
     </div>
   </div>
 
   <div class="section-title">🎞️ 上映ラインナップ</div>
   <div class="movies-grid">
 
-    <!-- 上映中 1 -->
     <div class="movie-card" onclick="startMovie(0)">
       <div class="movie-poster" style="background:linear-gradient(160deg,#0a2040,#1a6090)">🏃</div>
       <div class="movie-info">
         <div class="movie-title">走れメロス</div>
         <div class="movie-author">太宰 治（1940）</div>
-        <div class="movie-desc">友の命を賭けた約束を果たすため、メロスは走り続ける。友情と信頼の物語。</div>
-        <div class="movie-meta"><span class="tag">友情</span><span class="tag">信頼</span><span class="tag">6シーン</span></div>
+        <div class="movie-desc">友の命を賭けた約束を果たすため、激流を越え山賊と戦い、メロスは走り続ける。友情と信頼の物語。</div>
+        <div class="movie-meta"><span class="tag">友情</span><span class="tag">信頼</span><span class="tag">15シーン</span><span class="tag">約5分</span></div>
         <button class="watch-btn" onclick="event.stopPropagation();startMovie(0)">▶ 映画を見る</button>
       </div>
     </div>
 
-    <!-- 上映中 2 -->
     <div class="movie-card" onclick="startMovie(1)">
       <div class="movie-poster" style="background:linear-gradient(160deg,#1a0a00,#402010)">🌧️</div>
       <div class="movie-info">
         <div class="movie-title">羅生門</div>
         <div class="movie-author">芥川 龍之介（1915）</div>
-        <div class="movie-desc">飢えと絶望の末、下人は羅生門の楼上で老婆と出会う。人間の本性を問う傑作。</div>
-        <div class="movie-meta"><span class="tag">人間の本性</span><span class="tag">5シーン</span></div>
+        <div class="movie-desc">仕事を失った下人は、羅生門の楼上で老婆と出会う。生きるために悪を行うとはどういうことか。人間の本性を問う傑作。</div>
+        <div class="movie-meta"><span class="tag">人間の本性</span><span class="tag">生存</span><span class="tag">15シーン</span><span class="tag">約5分</span></div>
         <button class="watch-btn" onclick="event.stopPropagation();startMovie(1)">▶ 映画を見る</button>
       </div>
     </div>
 
-    <!-- 上映中 3 -->
     <div class="movie-card" onclick="startMovie(2)">
       <div class="movie-poster" style="background:linear-gradient(160deg,#001a20,#003a50)">🕷️</div>
       <div class="movie-info">
         <div class="movie-title">蜘蛛の糸</div>
         <div class="movie-author">芥川 龍之介（1918）</div>
-        <div class="movie-desc">地獄に堕ちた盗賊カンダタに、お釈迦様は一本の蜘蛛の糸を垂らした。</div>
-        <div class="movie-meta"><span class="tag">生死</span><span class="tag">慈悲</span><span class="tag">5シーン</span></div>
+        <div class="movie-desc">地獄に堕ちた盗賊カンダタに、お釈迦様は一本の蜘蛛の糸を垂らした。独り助かろうとした心の末に待つものとは。</div>
+        <div class="movie-meta"><span class="tag">生死</span><span class="tag">慈悲</span><span class="tag">14シーン</span><span class="tag">約5分</span></div>
         <button class="watch-btn" onclick="event.stopPropagation();startMovie(2)">▶ 映画を見る</button>
       </div>
     </div>
 
-    <!-- 上映中 4 -->
     <div class="movie-card" onclick="startMovie(3)">
-      <div class="movie-poster" style="background:linear-gradient(160deg,#1a1000,#3a2500)">🐯</div>
+      <div class="movie-poster" style="background:linear-gradient(160deg,#1a0800,#3a1a00)">🐯</div>
       <div class="movie-info">
         <div class="movie-title">山月記</div>
         <div class="movie-author">中島 敦（1942）</div>
-        <div class="movie-desc">詩の才を信じ官吏を辞した李徴は、ある夜ついに虎に変わってしまった。自尊と羞恥が生んだ悲劇。</div>
-        <div class="movie-meta"><span class="tag">孤独</span><span class="tag">矜持</span><span class="tag">5シーン</span></div>
+        <div class="movie-desc">詩人を夢見て官を辞した李徴は、ある夜虎に変わってしまった。臆病な自尊心と尊大な羞恥心が生んだ悲劇。</div>
+        <div class="movie-meta"><span class="tag">孤独</span><span class="tag">矜持</span><span class="tag">15シーン</span><span class="tag">約5分</span></div>
         <button class="watch-btn" onclick="event.stopPropagation();startMovie(3)">▶ 映画を見る</button>
       </div>
     </div>
 
-    <!-- 上映中 5 -->
     <div class="movie-card" onclick="startMovie(4)">
       <div class="movie-poster" style="background:linear-gradient(160deg,#002010,#004030)">🍽️</div>
       <div class="movie-info">
         <div class="movie-title">注文の多い料理店</div>
         <div class="movie-author">宮沢 賢治（1924）</div>
-        <div class="movie-desc">深い山の中で見つけた西洋料理店。次々と現れる「注文」の意味を、二人の紳士は最後まで気づかなかった。</div>
-        <div class="movie-meta"><span class="tag">幻想</span><span class="tag">風刺</span><span class="tag">5シーン</span></div>
+        <div class="movie-desc">深い山の中の西洋料理店。次々と現れる奇妙な「注文」の正体に二人の紳士は最後まで気づかなかった。</div>
+        <div class="movie-meta"><span class="tag">幻想</span><span class="tag">風刺</span><span class="tag">15シーン</span><span class="tag">約5分</span></div>
         <button class="watch-btn" onclick="event.stopPropagation();startMovie(4)">▶ 映画を見る</button>
       </div>
     </div>
 
-    <!-- 上映中 6 -->
     <div class="movie-card" onclick="startMovie(5)">
       <div class="movie-poster" style="background:linear-gradient(160deg,#0d0d1a,#1a1040)">🌙</div>
       <div class="movie-info">
         <div class="movie-title">夢十夜 第一夜</div>
         <div class="movie-author">夏目 漱石（1908）</div>
-        <div class="movie-desc">「百年、私の傍で待っていてください」——死んだ女の言葉通り、男は百年間待ち続ける幻想的な一夜。</div>
-        <div class="movie-meta"><span class="tag">幻想</span><span class="tag">永遠</span><span class="tag">4シーン</span></div>
+        <div class="movie-desc">「百年、私の傍で待っていてください」——死んだ女の言葉通り、男は百年間待ち続ける。白い百合の花が咲くまで。</div>
+        <div class="movie-meta"><span class="tag">幻想</span><span class="tag">永遠</span><span class="tag">14シーン</span><span class="tag">約5分</span></div>
         <button class="watch-btn" onclick="event.stopPropagation();startMovie(5)">▶ 映画を見る</button>
       </div>
     </div>
 
-    <!-- 上映予定 7 (5/30〜) -->
     <div class="movie-card upcoming">
       <div class="movie-poster" style="background:linear-gradient(160deg,#001530,#002a55)">🚂</div>
       <div class="movie-info">
         <div class="movie-title">銀河鉄道の夜</div>
         <div class="movie-author">宮沢 賢治（1934）</div>
         <div class="movie-desc">ジョバンニとカンパネルラは、銀河を駆ける不思議な汽車に乗り込む。友情と死と宇宙の旅。</div>
-        <div class="movie-meta"><span class="tag upcoming-tag">5/30〜上映予定</span><span class="tag">幻想</span><span class="tag">6シーン</span></div>
+        <div class="movie-meta"><span class="tag upcoming-tag">5/30〜上映予定</span><span class="tag">幻想</span></div>
         <div class="coming-soon-badge">🎞️ 5/30〜 上映予定</div>
       </div>
     </div>
 
-    <!-- 上映予定 8 (5/30〜) -->
     <div class="movie-card upcoming">
       <div class="movie-poster" style="background:linear-gradient(160deg,#1a1500,#302800)">🌿</div>
       <div class="movie-info">
         <div class="movie-title">竹取物語</div>
         <div class="movie-author">作者不詳（平安時代）</div>
-        <div class="movie-desc">竹の中から生まれた輝く姫・かぐや姫。五人の求婚者に難題を課し、やがて月へ帰っていく日本最古の物語。</div>
-        <div class="movie-meta"><span class="tag upcoming-tag">5/30〜上映予定</span><span class="tag">古典</span><span class="tag">5シーン</span></div>
+        <div class="movie-desc">竹の中から生まれた輝く姫・かぐや姫。五人の求婚者に難題を課し、やがて月へと帰っていく日本最古の物語。</div>
+        <div class="movie-meta"><span class="tag upcoming-tag">5/30〜上映予定</span><span class="tag">古典</span></div>
         <div class="coming-soon-badge">🎞️ 5/30〜 上映予定</div>
       </div>
     </div>
@@ -255,7 +261,7 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 
   <div style="margin-top:24px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:14px">
     <div style="font-size:12px;color:var(--accent);font-weight:700;margin-bottom:8px">📚 青空文庫について</div>
-    <div style="font-size:12px;color:var(--muted);line-height:1.7">青空文庫は、著作権の消滅した作品（没後70年以上）を無料公開するデジタル図書館です。SchoolPark Cinemaでは、これら名作文学を独自の絵と映像で体験できます。</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.7">青空文庫は、著作権の消滅した作品（没後70年以上）を無料公開するデジタル図書館です。SchoolPark Cinemaでは、これら名作文学を独自の絵と文章で体験できます。</div>
   </div>
 </div>
 
@@ -264,6 +270,7 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
   <div class="theater-room">
     <div class="ceiling">
       <div class="ceiling-lights">
+        <div class="ceiling-light"></div><div class="ceiling-light"></div>
         <div class="ceiling-light"></div><div class="ceiling-light"></div>
         <div class="ceiling-light"></div><div class="ceiling-light"></div>
       </div>
@@ -284,85 +291,246 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
           <div class="scene-bg" id="sceneBg"></div>
           <div class="scene-content">
             <div class="scene-art" id="sceneArt">🎬</div>
-            <div class="scene-text">
+            <div class="scene-text-wrap">
               <div class="scene-chapter" id="sceneChapter"></div>
-              <div id="sceneText">上映開始をお待ちください</div>
+              <div class="scene-text" id="sceneText">上映開始をお待ちください</div>
             </div>
           </div>
         </div>
+        <div class="scene-timer-bar"><div class="scene-timer-fill" id="timerFill"></div></div>
         <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
       </div>
     </div>
   </div>
   <div class="controls">
     <button class="ctrl-btn" id="playPauseBtn" onclick="togglePlay()">⏸ 一時停止</button>
+    <button class="ctrl-btn" onclick="prevScene()">⏮</button>
     <div class="movie-playing-title" id="playingTitle">—</div>
+    <button class="ctrl-btn" onclick="nextScene()">⏭</button>
     <button class="ctrl-btn" id="soundBtn" onclick="toggleSound()">🔊 音声</button>
-    <button class="ctrl-btn" onclick="exitTheater()">← ロビーへ</button>
+    <button class="ctrl-btn hall-btn" onclick="exitTheater()">🏛️ ホールに戻る</button>
   </div>
 </div>
 
 <script>
-// ==================== MOVIE DATA ====================
+// ==================== MOVIE DATA (各15シーン・20秒/シーン ≒ 5分) ====================
 const MOVIES = [
+
+  // ── 走れメロス ──
   {
     title:"走れメロス", author:"太宰 治",
     scenes:[
-      {bg:"linear-gradient(135deg,#0a2040,#1a6090)",art:"🏘️",chapter:"第一幕 — 旅の始まり",text:"メロスは激怒した。村の牧人・メロスは妹の婚礼の品を買いに、はるばるシラクスの市にやって来た。"},
-      {bg:"linear-gradient(135deg,#200010,#500030)",art:"👑",chapter:"第二幕 — 暴君の王城",text:"「人を信じてはならぬ。」暴君ディオニスは言った。「どうせ人は裏切る」——メロスは王の前に立ち向かった。"},
-      {bg:"linear-gradient(135deg,#1a1000,#3a2800)",art:"⛓️",chapter:"第三幕 — 友の誓い",text:"「セリヌンティウスよ、俺を信じてくれ。三日後の日没までに必ず戻る。」石柱に縛られた友は静かに頷いた。"},
-      {bg:"linear-gradient(135deg,#001a30,#002a50)",art:"🌊",chapter:"第四幕 — 激流を越えて",text:"大雨が降り、川は氾濫していた。橋は流された。それでもメロスは水に飛び込んだ。泳いだ。泳ぎ続けた。"},
-      {bg:"linear-gradient(135deg,#2a1000,#6a3000)",art:"🌅",chapter:"第五幕 — 陽が沈む前に",text:"間に合わぬかもしれない。それでも走れ。友が待っている。信頼が待っている。メロスの足は止まらなかった。"},
-      {bg:"linear-gradient(135deg,#002800,#004a10)",art:"🤝",chapter:"第六幕 — 友情の証明",text:"「メロス、お前は遅かった。」涙をこらえ、二人は抱き合った。「人の心は信じられる」——暴君の心も揺れた。"},
+      {bg:"linear-gradient(135deg,#0d1a0a,#1a3010)",art:"🌾",chapter:"第一幕 — 牧人の村",
+       text:"メロスは激怒した。無知で純粋な牧人のメロスは、妹の婚礼の品を買いに、はるばるシラクスの市に出てきた。"},
+      {bg:"linear-gradient(135deg,#150010,#2a0020)",art:"🌆",chapter:"第二幕 — 不穏な都",
+       text:"シラクスの町は怪しく静まり返っていた。店には灯もなく、市民は目を伏せて歩く。「王が人を次々と処刑している」老爺はつぶやいた。"},
+      {bg:"linear-gradient(135deg,#1a0a00,#380000)",art:"🏰",chapter:"第三幕 — 王城へ",
+       text:"「暴君を殺してやる」——メロスは単身、王城に忍び込もうとした。しかし衛兵に捕えられ、引きずられて王の前に連れ出された。"},
+      {bg:"linear-gradient(135deg,#200010,#500030)",art:"👑",chapter:"第四幕 — 暴君ディオニス",
+       text:"「人を信じてはならぬ。どうせ人は裏切る。」冷たい目をしたディオニス王がメロスを見下ろした。「お前も死刑だ。」"},
+      {bg:"linear-gradient(135deg,#0a0808,#201510)",art:"⚔️",chapter:"第五幕 — 死刑の宣告",
+       text:"「殺すな！俺には婚礼を待つ妹がいる。三日間だけ猶予を。その間、友人を人質に置いていく。」メロスは力を振り絞って叫んだ。"},
+      {bg:"linear-gradient(135deg,#1a1000,#3a2800)",art:"⛓️",chapter:"第六幕 — 友の誓い",
+       text:"石柱に縛られた親友セリヌンティウス。「信じてくれるか」「ああ、信じる。お前は必ず帰ってくる」——二人は強く握手した。"},
+      {bg:"linear-gradient(135deg,#002800,#004a10)",art:"💒",chapter:"第七幕 — 妹の婚礼",
+       text:"村に帰り着いたメロスは、妹を祝福した。「お前の兄は正しい男だ。早く嫁いでくれ」——翌朝、穏やかな婚礼が執り行われた。"},
+      {bg:"linear-gradient(135deg,#000a20,#001530)",art:"🌩️",chapter:"第八幕 — 嵐の帰路",
+       text:"帰路。空が暗くなった。大雨が降り始めた。道はぬかるみ、足が重い。しかしメロスは歯を食いしばって走り続けた。"},
+      {bg:"linear-gradient(135deg,#001a30,#002a50)",art:"🌊",chapter:"第九幕 — 激流の川",
+       text:"橋が流されていた。轟々と濁流が渦巻く。メロスは迷わず飛び込んだ。岸壁を乗り越え、藪をかき分け、泳いで泳いで進んだ。"},
+      {bg:"linear-gradient(135deg,#0a0000,#200000)",art:"🗡️",chapter:"第十幕 — 山賊の罠",
+       text:"山道で山賊に取り囲まれた。「命が惜しければ立ち止まれ」——しかしメロスは突進した。血を流しながらも、ただ走り続けた。"},
+      {bg:"linear-gradient(135deg,#0d0d00,#252500)",art:"😔",chapter:"第十一幕 — 疲労と絶望",
+       text:"もう走れない。体は限界だった。「間に合わぬ。もう戻れない」——地面に倒れ込み、メロスは泣いた。信頼を裏切ることへの絶望。"},
+      {bg:"linear-gradient(135deg,#001510,#002a1a)",art:"💧",chapter:"第十二幕 — 泉の声",
+       text:"岩の間から湧き水が出ていた。飲むと力が戻ってきた。「そうだ、立て。友が待っている。信頼が待っている。走れ！走れ！」"},
+      {bg:"linear-gradient(135deg,#2a1000,#6a3000)",art:"🌅",chapter:"第十三幕 — 陽が傾く",
+       text:"太陽が西に傾いていた。間に合うか——メロスは死力を尽くして走った。風のように、嵐のように、ひたすらひたすら走った。"},
+      {bg:"linear-gradient(135deg,#150000,#300000)",art:"🪢",chapter:"第十四幕 — 磔柱の前",
+       text:"処刑場についたとき、セリヌンティウスはすでに磔柱の前に立っていた。「待て！処刑人！俺が来た！約束通り来た！」"},
+      {bg:"linear-gradient(135deg,#002800,#004a10)",art:"🤝",chapter:"第十五幕 — 友情の証明",
+       text:"二人は抱き合って泣いた。民衆は喝采を上げた。暴君ディオニスも立ち上がり「余も仲間に入れてくれ」と静かに言った。"},
     ]
   },
+
+  // ── 羅生門 ──
   {
     title:"羅生門", author:"芥川 龍之介",
     scenes:[
-      {bg:"linear-gradient(135deg,#100800,#281500)",art:"🌧️",chapter:"第一幕 — 荒廃の京",text:"ある日の暮れ方のことである。一人の下人が、羅生門の下で雨やみを待っていた。平安末期、都は荒れ果てていた。"},
-      {bg:"linear-gradient(135deg,#080808,#151015)",art:"🚪",chapter:"第二幕 — 楼上への階段",text:"下人は引き剥ぎか餓死かを選ばなければならない。重い足を引きずり、楼上へ続く階段を上り始めた。"},
-      {bg:"linear-gradient(135deg,#1a0000,#380000)",art:"🔥",chapter:"第三幕 — 老婆との対峙",text:"楼上には老婆がいた。死人の髪を一本一本抜いている。下人は恐怖と嫌悪に駆られた。「何をしている！」"},
-      {bg:"linear-gradient(135deg,#0a0010,#1a0030)",art:"💭",chapter:"第四幕 — 老婆の言い訳",text:"「この女は生前、蛇を干魚と偽って売っていた。生きるためには仕方がない——私もそれと同じことだ。」"},
-      {bg:"linear-gradient(135deg,#000000,#0a0008)",art:"🌃",chapter:"第五幕 — 闇の中へ",text:"下人は老婆の着物を剥ぎ取り、闇の中に消えた。そのあと、老婆がどうなったか、誰も知らない。"},
+      {bg:"linear-gradient(135deg,#0d0800,#1a1000)",art:"🌇",chapter:"第一幕 — 荒廃の京",
+       text:"ある日の暮れ方のことである。一人の下人が羅生門の下で雨やみを待っていた。平安末期、都には飢饉・辻風・火事が続き、荒れ果てていた。"},
+      {bg:"linear-gradient(135deg,#100800,#281500)",art:"🌧️",chapter:"第二幕 — 途方に暮れる",
+       text:"下人は今日、長年仕えた主人に暇を出された。仕事もない。行くところもない。引き剥ぎをするか、餓死するか——それだけだった。"},
+      {bg:"linear-gradient(135deg,#0a0505,#1a0a08)",art:"🦅",chapter:"第三幕 — 鴉の群れ",
+       text:"羅生門の上では、鴉の群れが高く輪を描いていた。夕焼けの空に黒い翼が舞う。門の楼上には死体が捨てられているという噂だった。"},
+      {bg:"linear-gradient(135deg,#050505,#151015)",art:"🚪",chapter:"第四幕 — 楼上への決意",
+       text:"「とにかく上へ行ってみよう」下人は重い足を引きずり、朽ちかけた階段を上り始めた。暗闇と腐臭が漂う楼上へ向かった。"},
+      {bg:"linear-gradient(135deg,#0f0800,#200f00)",art:"🪔",chapter:"第五幕 — 炎と影",
+       text:"楼上に小さな炎が揺れていた。死体ばかりの暗闇の中で、何者かが蠢いている。下人は身を潜めて息を呑み、目を凝らした。"},
+      {bg:"linear-gradient(135deg,#1a0000,#380000)",art:"👴",chapter:"第六幕 — 老婆の正体",
+       text:"炎の傍らに老婆がいた。やせ細った手で、死体の髪の毛を一本一本丁寧に抜き取っている。下人の全身に鳥肌が立った。"},
+      {bg:"linear-gradient(135deg,#200000,#450000)",art:"😡",chapter:"第七幕 — 「何をしている！」",
+       text:"下人は飛びかかった。「なぜ死人の髪を抜く！」老婆は転倒し、炎が大きく揺れた。ネコのような目で下人を見上げた。"},
+      {bg:"linear-gradient(135deg,#0a0010,#1a0030)",art:"👵",chapter:"第八幕 — 老婆の言い訳",
+       text:"「この女は生前、干した蛇を干魚と偽って売り歩いた。わしが髪を抜いて鬘を作るのも同じことじゃ。生きるためには仕方ない。」"},
+      {bg:"linear-gradient(135deg,#0d0005,#200010)",art:"💭",chapter:"第九幕 — 悪を肯定する論理",
+       text:"「生きるためには仕方ない」——その言葉が下人の中で何かを変えた。悪を肯定するこの理屈が、自分にも使えることに気づいた。"},
+      {bg:"linear-gradient(135deg,#050005,#120012)",art:"😈",chapter:"第十幕 — 悪心の芽生え",
+       text:"引き剥ぎか、餓死か——もはや迷いはなかった。下人の心から恐れは完全に消えた。かわりに、悪を行う勇気が満ちてきた。"},
+      {bg:"linear-gradient(135deg,#100000,#2a0000)",art:"👗",chapter:"第十一幕 — 着物を剥ぐ",
+       text:"下人は老婆の腕をつかんで叩き倒した。「俺が引き剥ぎをするのも、お前と同じことだ。仕方ないのだ。」着物を剥ぎ取った。"},
+      {bg:"linear-gradient(135deg,#000000,#0a0008)",art:"😱",chapter:"第十二幕 — 老婆の嘆き",
+       text:"老婆は転がったまま、ブルブルと手足を震わせた。「盗人め！」——しかし下人の耳にはもう届かなかった。彼はすでに去っていた。"},
+      {bg:"linear-gradient(135deg,#020002,#080010)",art:"⬛",chapter:"第十三幕 — 闇の中へ",
+       text:"下人は黒洞々たる夜の中へ飛び降りた。もはや後ろを振り返らない。雨はまだ降り続けている。行方を知る者は誰もいない。"},
+      {bg:"linear-gradient(135deg,#030003,#0a000a)",art:"🌃",chapter:"第十四幕 — 老婆の後",
+       text:"取り残された老婆は、しばらく死体の間で震えていた。やがて起き上がり、楼の端まで這っていって下を覗いた——何も見えなかった。"},
+      {bg:"linear-gradient(135deg,#000000,#050005)",art:"❓",chapter:"第十五幕 — 誰も知らない",
+       text:"下人の行方は、誰も知らない。生きたのか、死んだのか。人間の本性とは何か——物語は静かに幕を閉じる。答えは読者の胸の中にある。"},
     ]
   },
+
+  // ── 蜘蛛の糸 ──
   {
     title:"蜘蛛の糸", author:"芥川 龍之介",
     scenes:[
-      {bg:"linear-gradient(135deg,#001520,#002a40)",art:"☁️",chapter:"第一幕 — 極楽の朝",text:"ある朝、お釈迦様は極楽の蓮池のほとりを歩いていた。池の底にはるかな地獄が透けて見えた。"},
-      {bg:"linear-gradient(135deg,#1a0000,#300000)",art:"🔥",chapter:"第二幕 — 地獄の底",text:"地獄の底では無数の罪人が、真っ暗な血の池に沈んでいた。その中にカンダタという大泥棒がいた。"},
-      {bg:"linear-gradient(135deg,#000a20,#001a40)",art:"🕷️",chapter:"第三幕 — 一本の糸",text:"お釈迦様はカンダタが生前、蜘蛛を踏まずに逃がしてやったことを思い出した。細い銀の糸を垂らした。"},
-      {bg:"linear-gradient(135deg,#0a0a00,#201a00)",art:"🧗",chapter:"第四幕 — 登る罪人たち",text:"カンダタは懸命に登り始めた。しかし他の罪人たちも続々と糸につかまってきた。「離れろ！糸が切れる！」"},
-      {bg:"linear-gradient(135deg,#000000,#050510)",art:"✨",chapter:"第五幕 — 糸は切れた",text:"その瞬間、蜘蛛の糸はプツリと切れた。哀れカンダタは再び地獄の底へ。極楽の蓮池は静かに揺れていた。"},
+      {bg:"linear-gradient(135deg,#002030,#004050)",art:"🌸",chapter:"第一幕 — 極楽の朝",
+       text:"ある日の御事でございます。お釈迦様は極楽の蓮池のほとりを、独りでぶらぶらとお歩きになっていらっしゃいました。"},
+      {bg:"linear-gradient(135deg,#001525,#002a40)",art:"🪷",chapter:"第二幕 — 蓮の花の香り",
+       text:"蓮の花は玉のように白く、その真ん中にある金色の蕊からは、何とも言えない好い匂いが絶え間なく溢れています。朝の静けさでした。"},
+      {bg:"linear-gradient(135deg,#1a0000,#350000)",art:"🔥",chapter:"第三幕 — 地獄の底",
+       text:"池の底を透かして遥か下を見ると——地獄が見えました。血の池では無数の罪人が浮き沈みし、針の山では罪人が転がり落ちていました。"},
+      {bg:"linear-gradient(135deg,#200000,#3a0000)",art:"😈",chapter:"第四幕 — カンダタという男",
+       text:"その中に、カンダタという男がおりました。人を殺し、家を焼き、あらゆる悪事を尽くしてきた大泥棒。地獄でも特に悪名高い罪人です。"},
+      {bg:"linear-gradient(135deg,#001a00,#003000)",art:"🕷️",chapter:"第五幕 — 唯一の善行",
+       text:"お釈迦様はカンダタの過去をお思い出しになりました。かつて一度だけ、道端の小さな蜘蛛を踏まずに逃がしてやったことがありました。"},
+      {bg:"linear-gradient(135deg,#001020,#002040)",art:"✨",chapter:"第六幕 — 慈悲の一糸",
+       text:"「あの功徳で地獄から救い出してやろう」——お釈迦様は銀色に光る細い蜘蛛の糸を、地獄の底へ向けてするするとお垂らしになりました。"},
+      {bg:"linear-gradient(135deg,#100000,#280000)",art:"🌑",chapter:"第七幕 — 暗闇の光",
+       text:"血の池の底で浮き沈みしていたカンダタは、ふと頭の上を見上げました。闇の中から、一本の銀色の細い糸が降りてくるではありませんか。"},
+      {bg:"linear-gradient(135deg,#0d0500,#1a0a00)",art:"🧗",chapter:"第八幕 — 懸命に登る",
+       text:"「これに掴まれば地獄から抜け出せる！」カンダタは蜘蛛の糸を両手でしっかりと掴み、一生懸命によじ登り始めました。"},
+      {bg:"linear-gradient(135deg,#0a0800,#1a1400)",art:"👥",chapter:"第九幕 — 罪人の群れ",
+       text:"しかしふと下を見ると——いつの間にか無数の罪人たちが、糸を伝って蟻の行列のように下から登ってきているではありませんか！"},
+      {bg:"linear-gradient(135deg,#150000,#300000)",art:"😤",chapter:"第十幕 — 「下りろ！」",
+       text:"カンダタは叫びました。「これは俺の糸だ！お前たちに何の権利がある！下りろ、下りろ！」——その瞬間のことでございます。"},
+      {bg:"linear-gradient(135deg,#0a0000,#200000)",art:"💔",chapter:"第十一幕 — 糸が切れた",
+       text:"ぷつりと音がして、蜘蛛の糸は中程からふっと切れてしまいました。カンダタはまっさかさまに、ものすごい速さで落ちていきました。"},
+      {bg:"linear-gradient(135deg,#1a0000,#350000)",art:"🌋",chapter:"第十二幕 — 地獄へ逆戻り",
+       text:"哀れなカンダタは再び血の池の底に沈んでしまいました。後には銀色の蜘蛛の糸が、ただ短く切れているばかりでございます。"},
+      {bg:"linear-gradient(135deg,#001020,#001a2a)",art:"😢",chapter:"第十三幕 — お釈迦様の悲しみ",
+       text:"お釈迦様はカンダタが独り助かろうとした無慈悲な心に、深く悲しまれたのでしょう。再び地獄の景色をご覧になりました。"},
+      {bg:"linear-gradient(135deg,#002030,#004050)",art:"🌿",chapter:"第十四幕 — 静かな蓮池",
+       text:"しかし極楽の蓮の花は、少しもそんな事には頓着致しません。玉のような白い花は揺らいで、その真ん中の黄金の蕊から好い匂いが溢れていました。"},
     ]
   },
+
+  // ── 山月記 ──
   {
     title:"山月記", author:"中島 敦",
     scenes:[
-      {bg:"linear-gradient(135deg,#1a0800,#3a1a00)",art:"🌕",chapter:"第一幕 — 月夜の慟哭",text:"隴西の李徴は博学才穎、天才詩人を夢見て官を辞した。しかし名声は得られず、貧窮の中に狂気が芽生えた。"},
-      {bg:"linear-gradient(135deg,#0d0800,#2a1800)",art:"🐯",chapter:"第二幕 — 虎への変身",text:"ある夜明け、李徴は発狂して草むらに走り込み、気がついたとき彼は虎になっていた。人の心のまま、獣の姿で。"},
-      {bg:"linear-gradient(135deg,#001520,#002030)",art:"🌙",chapter:"第三幕 — 旧友との再会",text:"かつての友・袁傪は月夜の草むらから聞き覚えのある声を聞いた。「俺だ、李徴だ。虎の姿になってしまった」"},
-      {bg:"linear-gradient(135deg,#0a0500,#1a1000)",art:"📜",chapter:"第四幕 — 詩人の矜持",text:"「俺の詩を記録してくれ」李徴は吟じた。才能への自信と、臆病な自尊心が、人間に戻る機会を奪い続けた。"},
-      {bg:"linear-gradient(135deg,#050010,#100020)",art:"🌲",chapter:"第五幕 — 永遠の別れ",text:"「妻子への伝言を頼む。そして俺のことは忘れてくれ」——草むらの虎は、再び月夜の闇の中へ消えていった。"},
+      {bg:"linear-gradient(135deg,#0d0800,#1a1500)",art:"📚",chapter:"第一幕 — 天才詩人の夢",
+       text:"隴西の李徴は博学才穎にして、若くして科挙に合格した秀才であった。しかし官吏の地位を捨て、詩人として名声を得ようとした。"},
+      {bg:"linear-gradient(135deg,#150a00,#2a1800)",art:"✍️",chapter:"第二幕 — 詩作の日々",
+       text:"しかし詩集は世に認められず、清貧に甘んじた。妻子を養うため地方官吏に戻ったが、かつての同僚の下風に立つことは耐えがたかった。"},
+      {bg:"linear-gradient(135deg,#0a0500,#1a0a08)",art:"😔",chapter:"第三幕 — 矜持と屈辱",
+       text:"「俺の詩は凡俗のものとは違う」——しかし実際に人に見せる勇気はなかった。臆病な自尊心と、尊大な羞恥心——それが李徴の本質だった。"},
+      {bg:"linear-gradient(135deg,#0d0d00,#252500)",art:"🌕",chapter:"第四幕 — 狂気の予兆",
+       text:"月の明るい夜、李徴は発狂した。草むらへ走り込み、翌朝には姿が消えていた。虎になったという噂が流れたが、誰も真実は知らなかった。"},
+      {bg:"linear-gradient(135deg,#1a0800,#3a1a00)",art:"🐯",chapter:"第五幕 — 虎の身体",
+       text:"気がつくと、李徴は四本の足で立っていた。体に縞模様がある。爪が地を掴む感触——彼は虎になっていた。しかし心は人間のままだった。"},
+      {bg:"linear-gradient(135deg,#0a0800,#1a1500)",art:"🌙",chapter:"第六幕 — 人の心のまま獣",
+       text:"虎の本能が芽生えると、人の心は薄れた。しかし月夜になると人間の記憶が戻り、自分が何者であったかを思い出した。悲しみは深かった。"},
+      {bg:"linear-gradient(135deg,#001520,#002030)",art:"🌲",chapter:"第七幕 — 旧友の声",
+       text:"翌年、かつての友・袁傪が勅命を受けてこの道を通った。従者たちが「虎が出る」と恐れる中、草むらから知り合いの声が聞こえた。"},
+      {bg:"linear-gradient(135deg,#0d1010,#1a1a20)",art:"👁️",chapter:"第八幕 — 「俺だ、李徴だ」",
+       text:"「近寄るな。俺は人間ではない、虎だ。しかし元は君の友人の李徴だ」——袁傪は震えながら、草むらに向かって語りかけた。"},
+      {bg:"linear-gradient(135deg,#100800,#201500)",art:"🗣️",chapter:"第九幕 — 月夜の告白",
+       text:"「なぜこうなったのか、俺にもわからない。ただ、臆病な自尊心と尊大な羞恥心が人間を捨てさせたのかもしれない」李徴は語り続けた。"},
+      {bg:"linear-gradient(135deg,#0a0800,#181200)",art:"📜",chapter:"第十幕 — 詩の朗吟",
+       text:"「俺の詩を書き留めてくれ。百篇ある。これだけが俺の残したものだ」——李徴は草むらから吟じ始めた。月の光の中、詩が流れた。"},
+      {bg:"linear-gradient(135deg,#0d0d0d,#181818)",art:"💭",chapter:"第十一幕 — 詩への後悔",
+       text:"「詩を人に見せる勇気があれば、師を探す謙虚さがあれば——虎にならずに済んだかもしれない。しかし今更言っても遅い。」"},
+      {bg:"linear-gradient(135deg,#0a0500,#181000)",art:"👨‍👩‍👦",chapter:"第十二幕 — 妻子への伝言",
+       text:"「妻と子のことを頼む。俺がいなくなっても、少し楽に暮らせるよう便宜を図ってくれないか。それだけが心残りだ。」"},
+      {bg:"linear-gradient(135deg,#050808,#0a1010)",art:"🌌",chapter:"第十三幕 — 虎の本能",
+       text:"「もう長くは話せない。虎の習性が戻ってきた。理性の光が消えていく——俺がいなくなったあと、俺のことは忘れてくれ。」"},
+      {bg:"linear-gradient(135deg,#0d0500,#1a1000)",art:"🌒",chapter:"第十四幕 — 最後の頼み",
+       text:"「この先のある場所で、俺が虎として現れる。遠くから見ていてくれ。それが最後の別れだ。」——声は草むらに消えた。"},
+      {bg:"linear-gradient(135deg,#050010,#100020)",art:"🌿",chapter:"第十五幕 — 月夜の虎",
+       text:"草むらが揺れ、一匹の虎が踊り出た。月光の中でしばらく立ち止まり、やがて深い闇の中へ走り去った。袁傪は涙をこらえて見送った。"},
     ]
   },
+
+  // ── 注文の多い料理店 ──
   {
     title:"注文の多い料理店", author:"宮沢 賢治",
     scenes:[
-      {bg:"linear-gradient(135deg,#001a0a,#003020)",art:"🌲",chapter:"第一幕 — 山の中へ",text:"二人の若い紳士が、猟師を連れて深い山に入った。しかし犬は死に、道に迷い、空腹で歩き続けた。"},
-      {bg:"linear-gradient(135deg,#0a0800,#1a1500)",art:"🏠",chapter:"第二幕 — 西洋料理店",text:"「RESTAURANT WILDCAT HOUSE」突然現れた白い建物。「当軒は注文の多い料理店です」——二人は喜んで入った。"},
-      {bg:"linear-gradient(135deg,#100500,#250a00)",art:"📋",chapter:"第三幕 — 奇妙な注文",text:"「鉄砲と弾をここに置け」「クリームを体に塗れ」「塩を体に揉み込め」次々と増える不思議な注文に、二人は従い続けた。"},
-      {bg:"linear-gradient(135deg,#1a0000,#350000)",art:"😺",chapter:"第四幕 — 注文の正体",text:"最後の扉の鍵穴から、光る目が二つ見えた。「やあ、うまく入った。さあ料理しよう」——客が料理される店だったのだ。"},
-      {bg:"linear-gradient(135deg,#001a10,#003025)",art:"🌿",chapter:"第五幕 — 命からがら",text:"猟師たちに助けられ、二人はかろうじて山を出た。しかしくしゃくしゃになった顔は、東京に帰っても元に戻らなかった。"},
+      {bg:"linear-gradient(135deg,#001a0a,#003020)",art:"🎩",chapter:"第一幕 — 二人の紳士",
+       text:"二人の若い紳士が、猟師を連れてやまねこ軒の森へ狩猟にやって来ました。白熊のような犬を二匹連れ、すっかり西洋風の服装で。"},
+      {bg:"linear-gradient(135deg,#001505,#002a10)",art:"🌲",chapter:"第二幕 — 深い山へ",
+       text:"ところが、その山は実に奇妙な山で、木が非常に深く、道はどこを歩いても同じように見えました。だんだん心細くなってきました。"},
+      {bg:"linear-gradient(135deg,#050000,#100000)",art:"🐕",chapter:"第三幕 — 犬の死",
+       text:"山の奥に入ると、二匹の犬が突然目をぐるぐるさせてほうほうと吹いて、それから倒れて死んでしまいました。紳士たちは困りました。"},
+      {bg:"linear-gradient(135deg,#0a0500,#1a0a00)",art:"💨",chapter:"第四幕 — 寒風と空腹",
+       text:"吹雪が来てあたりは真っ白になりました。ひどく寒く、腹が減りました。「ことに腹が非常に空いてきました」——二人はつぶやきました。"},
+      {bg:"linear-gradient(135deg,#001510,#002a1a)",art:"🏠",chapter:"第五幕 — 西洋料理店の発見",
+       text:"すると突然、立派な一軒の西洋料理店が出て来ました。白い瀟洒な建物に金文字でこう書いてありました——"},
+      {bg:"linear-gradient(135deg,#002010,#003520)",art:"📋",chapter:"第六幕 — 看板の文字",
+       text:"「RESTAURANT WILDCAT HOUSE 西洋料理店 山猫軒」そして「当軒は注文の多い料理店でございます。どうかご承知ください。」"},
+      {bg:"linear-gradient(135deg,#0d0800,#201500)",art:"🚪",chapter:"第七幕 — 第一の扉",
+       text:"扉には「鉄砲と弾丸はここへ置いてください」とありました。「物騒なものを持ち込ませないんだな」——二人は素直に置きました。"},
+      {bg:"linear-gradient(135deg,#0a0500,#1a0a00)",art:"🧴",chapter:"第八幕 — 第二・第三の扉",
+       text:"「帽子と外套と靴はここへ」「クリームを体中に塗ってください」——高級な店ほど注文が多い、と二人は言いながら従いました。"},
+      {bg:"linear-gradient(135deg,#001a0a,#003020)",art:"🧂",chapter:"第九幕 — 第四の扉",
+       text:"「塩を体によく揉み込んでください」——「少し変だぞ」と一人が言いました。しかし「早く食事がしたい」と揉み込んでしまいました。"},
+      {bg:"linear-gradient(135deg,#050a00,#0a1500)",art:"🌿",chapter:"第十幕 — 次々と続く注文",
+       text:"「香水をつけてください」「頭に葱を載せてください」「レモン水を体に塗ってください」——次第におかしな注文が続いていきました。"},
+      {bg:"linear-gradient(135deg,#100a00,#201500)",art:"😰",chapter:"第十一幕 — 気づきはじめる",
+       text:"二人はようやく気づき始めました。外套を脱がせ、塩とクリームを塗らせ、香味野菜を準備させる——これは料理の下準備ではないか？"},
+      {bg:"linear-gradient(135deg,#1a0000,#300000)",art:"😱",chapter:"第十二幕 — 「食べられる！」",
+       text:"「これは、私たちが食べられるための注文だ！」二人の顔はくしゃくしゃになって泣き出しました。泣きながらも体が動かせませんでした。"},
+      {bg:"linear-gradient(135deg,#050005,#100010)",art:"👀",chapter:"第十三幕 — 光る目",
+       text:"扉の鍵穴から、青い目がキラキラと覗いていました。「早くいらっしゃい。塩も不足なし、柔らかさも申し分なし」——猫の声でした。"},
+      {bg:"linear-gradient(135deg,#001a10,#003020)",art:"🐾",chapter:"第十四幕 — 猟師に救われる",
+       text:"その時、二匹の犬がどこからか飛び込んできて、扉にぶつかりました。扉の向こうで叫び声がして、青い目は消えました。二人は外に出られました。"},
+      {bg:"linear-gradient(135deg,#0d0d0d,#181818)",art:"🏙️",chapter:"第十五幕 — 東京でも戻らない",
+       text:"二人は東京に帰りました。しかし、くしゃくしゃに縮んだ顔は、東京に帰っても、お湯に入っても、もとには戻りませんでした。"},
     ]
   },
+
+  // ── 夢十夜 第一夜 ──
   {
     title:"夢十夜 第一夜", author:"夏目 漱石",
     scenes:[
-      {bg:"linear-gradient(135deg,#05050f,#0d0d25)",art:"🌸",chapter:"第一幕 — 死の床",text:"こんな夢を見た。腕組みをして枕元に座っていると、女は静かな声でこう言った——「私はもうすぐ死ぬ」"},
-      {bg:"linear-gradient(135deg,#0a0a0a,#151520)",art:"🪨",chapter:"第二幕 — 大理石の墓",text:"真珠貝で掘った穴に女を葬った。そして大きな白い石を墓標にした。「百年、ここで待っていてください」"},
-      {bg:"linear-gradient(135deg,#00100a,#001a10)",art:"🌿",chapter:"第三幕 — 百年の夜",text:"男は墓の傍らに座り、百年待ち続けた。日が出て、日が沈んだ。星が輝き、また消えた。それでも待った。"},
-      {bg:"linear-gradient(135deg,#050a00,#0a1500)",art:"🌼",chapter:"第四幕 — 約束の花",text:"「もう来た」墓の下から茎が伸び、白い百合の花が開いた。花弁に唇をあてると、女の香りがした。百年は終わった。"},
+      {bg:"linear-gradient(135deg,#05050f,#0d0d25)",art:"🌙",chapter:"第一幕 — こんな夢を見た",
+       text:"こんな夢を見た。腕組みをして枕元に座っていると、仰向きに寝た女が、静かな声でこう言った。「私はもう死ぬ。」"},
+      {bg:"linear-gradient(135deg,#080810,#101020)",art:"👁️",chapter:"第二幕 — 女の目",
+       text:"女は黒い大きな瞳の中に、静かな光を保っていた。遠い空のどこかに女の命の根があって、それで絶えず眼の奥を照らしているように見えた。"},
+      {bg:"linear-gradient(135deg,#050510,#0d0d20)",art:"⭐",chapter:"第三幕 — 「本当に死ぬか」",
+       text:"「死ぬかもしれない」と男は言った。「ええ、死ぬ」と女は答えた。女の声は判然と聞こえた。外では夜の闇に星が一つ光っていた。"},
+      {bg:"linear-gradient(135deg,#000a08,#001510)",art:"🌸",chapter:"第四幕 — 百年の約束",
+       text:"「死んだら、必ずここへ来るから待っていてください。きっと来ます。百年経ったら来ます。」女は静かに、しかしはっきりと言った。"},
+      {bg:"linear-gradient(135deg,#030303,#0a0a0a)",art:"😶",chapter:"第五幕 — 女の死",
+       text:"「ではここで待っていよう」と男は言った。「ええ、待っていてくださいね」——そう言ったとき、女の黒い眼はただ静かになった。"},
+      {bg:"linear-gradient(135deg,#020210,#050520)",art:"🪨",chapter:"第六幕 — 大理石の墓",
+       text:"男は真珠貝で穴を掘って、女を葬った。柔らかい土の中に、暖かそうに横たえた。そして大きな白い四角な石を墓標として立てた。"},
+      {bg:"linear-gradient(135deg,#050508,#0a0a10)",art:"☀️",chapter:"第七幕 — 日が昇る",
+       text:"日が東から出た。そうして西に沈んだ。また次の日が東から出た。男は白い石の前にずっと座り、ただひたすら待ち続けた。"},
+      {bg:"linear-gradient(135deg,#000008,#000015)",art:"🌟",chapter:"第八幕 — 星が巡る",
+       text:"日が幾度も出て沈んだ。星が流れた。夜明けごとに銀色の露が降りた。雨が降り、虹が出た。男は石の前を離れなかった。"},
+      {bg:"linear-gradient(135deg,#050a00,#0a1500)",art:"🍂",chapter:"第九幕 — 季節が流れる",
+       text:"草が生え、草が枯れた。また草が生えた。木の葉が落ちて積もり、また新芽が出た。男はただそこに座り、女を待ち続けた。"},
+      {bg:"linear-gradient(135deg,#030308,#08080f)",art:"❄️",chapter:"第十幕 — 百年という時間",
+       text:"「百年はこうして待つのだな」——男はふと思った。これまで何年経ったのか。この静けさの中で、時間の感覚は溶けていた。"},
+      {bg:"linear-gradient(135deg,#000a05,#001510)",art:"🌱",chapter:"第十一幕 — 芽が出る",
+       text:"ある朝、墓の土から細い芽が二枚出た。男はそれを毎日眺めた。芽はすくすくと伸び、細い茎になり、小さな葉を広げた。"},
+      {bg:"linear-gradient(135deg,#001505,#002a10)",art:"🌿",chapter:"第十二幕 — 茎が伸びる",
+       text:"茎はどんどん伸びた。高く、まっすぐに。白い蕾が一つ、ゆっくりと膨らんでいった。男は息をひそめて見守った。"},
+      {bg:"linear-gradient(135deg,#002010,#004020)",art:"🌼",chapter:"第十三幕 — 百合の花",
+       text:"蕾はついにほころび、真っ白な百合の花が開いた。震えるように開いた花びら。その中心に黄金の蕊が揺れていた。"},
+      {bg:"linear-gradient(135deg,#001a0a,#003020)",art:"🌺",chapter:"第十四幕 — 「もう来た」",
+       text:"男は花弁にそっと唇をあてた。冷たい露が感じられた。そのとき男ははっきり知った——百年はすでに過ぎたのだと。「もう来た」"},
     ]
   },
 ];
@@ -374,6 +542,7 @@ let isPlaying = false;
 let sceneTimer = null;
 let soundEnabled = true;
 let audioCtx = null;
+const SCENE_DURATION = 20000; // 20秒/シーン → 約5分
 
 // ==================== SEATS ====================
 function buildSeats(){
@@ -432,6 +601,19 @@ function toggleSound(){
   document.getElementById('soundBtn').classList.toggle('active',soundEnabled);
 }
 
+// ==================== TIMER BAR ====================
+function resetTimerBar(){
+  const el=document.getElementById('timerFill');
+  el.style.animation='none';
+  el.classList.remove('running');
+  void el.offsetWidth;
+}
+function startTimerBar(){
+  const el=document.getElementById('timerFill');
+  el.style.setProperty('--scene-duration', (SCENE_DURATION/1000)+'s');
+  el.classList.add('running');
+}
+
 // ==================== THEATER ====================
 function startMovie(idx){
   currentMovie=idx;currentScene=0;isPlaying=true;
@@ -471,24 +653,40 @@ function showScene(idx){
   const pct=((idx+1)/scenes.length)*100;
   document.getElementById('progressBar').style.width=pct+'%';
   playSceneChime();
-  if(isPlaying) scheduleNext();
+  resetTimerBar();
+  if(isPlaying){startTimerBar();scheduleNext();}
 }
 
 function scheduleNext(){
   clearTimeout(sceneTimer);
-  sceneTimer=setTimeout(()=>{showScene(currentScene+1);},6000);
+  sceneTimer=setTimeout(()=>{showScene(currentScene+1);},SCENE_DURATION);
 }
 
 function togglePlay(){
   isPlaying=!isPlaying;
   const btn=document.getElementById('playPauseBtn');
-  if(isPlaying){btn.textContent='⏸ 一時停止';scheduleNext();}
-  else{btn.textContent='▶ 再生';clearTimeout(sceneTimer);}
+  if(isPlaying){
+    btn.textContent='⏸ 一時停止';
+    startTimerBar();
+    scheduleNext();
+  } else {
+    btn.textContent='▶ 再生';
+    clearTimeout(sceneTimer);
+    resetTimerBar();
+  }
+}
+
+function prevScene(){
+  if(currentScene>0){clearTimeout(sceneTimer);showScene(currentScene-1);}
+}
+function nextScene(){
+  clearTimeout(sceneTimer);showScene(currentScene+1);
 }
 
 function endMovie(){
   clearTimeout(sceneTimer);
   isPlaying=false;
+  resetTimerBar();
   document.getElementById('sceneArt').textContent='🎞️';
   document.getElementById('sceneChapter').textContent='— 完 —';
   document.getElementById('sceneText').textContent='ご鑑賞ありがとうございました。青空文庫でフルテキストをお読みいただけます。';
@@ -504,6 +702,7 @@ function endMovie(){
 
 function exitTheater(){
   clearTimeout(sceneTimer);
+  resetTimerBar();
   closeCurtains();
   setTimeout(()=>{
     document.getElementById('theater').style.display='none';
@@ -511,6 +710,11 @@ function exitTheater(){
     document.getElementById('progressBar').style.width='0%';
     document.getElementById('playPauseBtn').textContent='⏸ 一時停止';
     document.getElementById('playPauseBtn').onclick=togglePlay;
+    // 座席をリセット
+    ['row1','row2','row3'].forEach(id=>{
+      const r=document.getElementById(id);
+      if(r)r.innerHTML='';
+    });
   },800);
 }
 
