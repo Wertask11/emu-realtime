@@ -85,6 +85,18 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .ctrl-btn.route-line{border-color:rgba(96,165,250,0.4);color:#93c5fd}
 .ctrl-btn.route-suji{border-color:rgba(167,139,250,0.4);color:#c4b5fd}
 
+/* ── 切符なしガイドバー ── */
+.no-ticket-bar{background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.35);border-radius:10px;padding:12px 14px;margin:8px 14px;display:none;gap:12px;align-items:flex-start}
+.no-ticket-bar.show{display:flex}
+.ntb-icon{font-size:1.8rem;flex-shrink:0;line-height:1;margin-top:2px}
+.ntb-content{flex:1;min-width:0}
+.ntb-title{font-size:0.82rem;font-weight:700;color:var(--accent);margin-bottom:4px}
+.ntb-reason{font-size:0.72rem;color:#fca5a5;margin-bottom:5px;line-height:1.5}
+.ntb-how{font-size:0.72rem;color:var(--text2);line-height:1.5}
+.ntb-how strong{color:var(--accent2)}
+.ntb-btn{background:var(--accent);color:#000;border:none;border-radius:8px;padding:7px 14px;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;align-self:center}
+.ntb-btn:hover{background:var(--accent2)}
+
 /* ── 発車ドットバー ── */
 .melody-bar{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:10px;min-height:36px}
 .melody-label{font-size:0.7rem;color:var(--text2)}
@@ -216,6 +228,17 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 <div class="approach-bar" id="approachBar">
   <span style="font-size:1rem;animation:blink2 0.6s infinite">🔴</span>
   <span style="font-size:0.8rem;font-weight:700;color:#fca5a5">列車が参ります。黄色い線の内側にお下がりください。</span>
+</div>
+
+<!-- 切符なしガイド（切符未所持のまま列車が来たとき表示） -->
+<div class="no-ticket-bar" id="noTicketBar">
+  <div class="ntb-icon">🎫</div>
+  <div class="ntb-content">
+    <div class="ntb-title">切符がないと乗車できません</div>
+    <div class="ntb-reason">⚠️ 有効な切符を所持していないため、この列車には乗れません。</div>
+    <div class="ntb-how">👇 下の<strong>「切符売り場」</strong>でEMUERを使って切符を購入してください。<br>切符を買えば、次の列車からすぐに乗れます！</div>
+  </div>
+  <button class="ntb-btn" onclick="scrollToTicketBooth()">切符を買う →</button>
 </div>
 
 <div class="controls">
@@ -489,13 +512,22 @@ function arriveTrainAuto(entry){
       // ③ 入線完了後（2.9s）→ 接近バー消す＋ドア開きアナウンス
       setTimeout(()=>{
         ap.classList.remove("show");
-        // ④ ドア開きアナウンス → 終わってからボタン有効化
+        // ④ ドア開きアナウンス → 終わってから切符チェック → ボタン制御
         speakAndThen("ドアが開きます。",()=>{
           showToast("🚃 "+entry.dest+"行きが到着しました");
           trainAtPlatform=true;trainMoving=false;boardingEntry=entry;
           const btnBoard=document.getElementById("btnBoard");
-          btnBoard.disabled=false;btnBoard.classList.add("active");
-          document.getElementById("melodyStatus").textContent="🚃 ご乗車ください！（50秒後に発車）";
+          if(hasValidTicket()){
+            // 切符あり → 乗車ボタン有効
+            btnBoard.disabled=false;btnBoard.classList.add("active");
+            document.getElementById("melodyStatus").textContent="🚃 ご乗車ください！（50秒後に発車）";
+          }else{
+            // 切符なし → ボタン無効 + ガイド表示 + 音声案内
+            btnBoard.disabled=true;
+            document.getElementById("noTicketBar").classList.add("show");
+            document.getElementById("melodyStatus").textContent="🎫 切符を購入してご乗車ください（50秒後に発車）";
+            speakAndThen("乗車には切符が必要です。切符売り場でEMUERを使って購入してください。",null,true);
+          }
           clearTimeout(departTimer);
           departTimer=setTimeout(()=>{if(trainAtPlatform)departTrain(entry,false);},50000);
         },true);
@@ -510,6 +542,8 @@ function departTrain(entry,fromButton){
   trainAtPlatform=false;
   const btnBoard=document.getElementById("btnBoard");
   btnBoard.disabled=true;btnBoard.classList.remove("active");
+  // 切符なしバーを非表示
+  document.getElementById("noTicketBar").classList.remove("show");
   clearTimeout(departTimer);
   document.getElementById("melodyStatus").textContent="🎵 発車メロディ演奏中…";
 
@@ -557,6 +591,13 @@ function launchTrain(entry,fromButton){
 
 function boardTrain(){
   if(!trainAtPlatform||!boardingEntry)return;
+  if(!hasValidTicket()){
+    showToast("🎫 切符がありません。切符売り場で購入してください");
+    speak("乗車には切符が必要です。切符売り場でご購入ください。");
+    return;
+  }
+  useTicket();
+  updateTicketUI();
   departTrain(boardingEntry,true);
 }
 
@@ -635,6 +676,21 @@ function hasValidTicket(){
   return false;
 }
 
+// 切符を1回消費する
+function useTicket(){
+  if(!ticketState)return false;
+  if(ticketState.type==='single'){ticketState=null;return true;}
+  if(ticketState.type==='count'){
+    ticketState.count--;
+    if(ticketState.count<=0)ticketState=null;
+    return true;
+  }
+  if(ticketState.type==='pass12'||ticketState.type==='pass24'){
+    return Date.now()<ticketState.expiry;
+  }
+  return false;
+}
+
 function activateTicket(fee,label,type,count){
   const now=Date.now();
   if(type==='single')ticketState={type:'single',count:1};
@@ -644,6 +700,19 @@ function activateTicket(fee,label,type,count){
   updateTicketUI();
   showToast("🎫 "+label+"の切符を購入しました！");
   speak(label+"の切符をご購入いただきました。ありがとうございます。良い旅を！");
+  // 列車がすでにホームにいる場合 → ボタン有効化・ガイドバー非表示
+  if(trainAtPlatform){
+    const btnBoard=document.getElementById("btnBoard");
+    btnBoard.disabled=false;btnBoard.classList.add("active");
+    document.getElementById("noTicketBar").classList.remove("show");
+    document.getElementById("melodyStatus").textContent="🚃 切符を購入しました！ご乗車ください！";
+  }
+}
+
+// 切符売り場へスクロール
+function scrollToTicketBooth(){
+  const booth=document.querySelector('.ticket-booth');
+  if(booth)booth.scrollIntoView({behavior:'smooth',block:'center'});
 }
 
 function updateTicketUI(){
