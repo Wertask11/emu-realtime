@@ -8646,6 +8646,20 @@ window.addEventListener("message", (e) => {
       openSpContent(evPage);
     }
   }
+  // iframeからEMUER購入（切符売り場など）
+  if (e.data.type === "spPurchase") {
+    const fee   = parseInt(e.data.fee || 0);
+    const label = (e.data.label || "切符").replace(/[^a-zA-Z0-9぀-鿿]/g,"_");
+    if (fee <= 0) return;
+    const poiKey = "__ticket__" + label + "__" + fee;
+    EMUER_RATE_CONFIG[poiKey] = fee;
+    gatedOpen(poiKey, () => {
+      const frame = document.getElementById("spContentFrame");
+      if (frame && frame.contentWindow) {
+        frame.contentWindow.postMessage({type:"spPurchaseOk", fee: fee, label: e.data.label}, "*");
+      }
+    });
+  }
 });
 
 /* ═══════════════════════════════════════════════════════
