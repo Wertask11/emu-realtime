@@ -15,11 +15,13 @@
 }
 body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif;min-height:100vh;overflow-x:hidden}
 
+/* ── ヘッダー ── */
 .header{position:sticky;top:0;z-index:100;height:56px;background:var(--accent);display:flex;align-items:center;gap:10px;padding:0 14px;box-shadow:0 2px 8px rgba(2,132,199,0.3)}
 .back-btn{background:rgba(255,255,255,0.25);color:#fff;border:none;border-radius:10px;padding:6px 14px;cursor:pointer;font-size:0.85rem;font-weight:700;font-family:inherit;transition:opacity 0.15s}
 .back-btn:hover{opacity:0.85}
 .header-title{font-size:1rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px}
 
+/* ── ヒーロー ── */
 .hero{background:linear-gradient(180deg,#0284c7 0%,#0ea5e9 60%,#7dd3fc 100%);padding:24px 16px 20px;text-align:center;position:relative;overflow:hidden}
 .hero-cloud{position:absolute;font-size:3rem;opacity:0.15;animation:float 4s ease-in-out infinite}
 .hero-cloud:nth-child(1){left:5%;top:10%;animation-delay:0s}
@@ -29,7 +31,9 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 .hero-title{font-size:1.6rem;font-weight:700;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,0.2)}
 .hero-sub{font-size:0.85rem;color:rgba(255,255,255,0.85);margin-top:4px}
+.hero-badge{display:inline-block;background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:20px;padding:3px 14px;font-size:0.75rem;margin-top:10px}
 
+/* ── タブ ── */
 .tabs{display:flex;background:var(--bg2);border-bottom:3px solid var(--accent2);overflow-x:auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tab{flex:0 0 auto;padding:13px 18px;font-size:0.8rem;font-weight:700;color:var(--text2);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-3px;transition:all 0.2s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
@@ -37,8 +41,24 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .main{max-width:720px;margin:0 auto;padding:16px 14px 60px}
 .panel{display:none}.panel.active{display:block}
 
+/* ── セクション共通 ── */
 .sec{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:0 2px 8px rgba(2,132,199,0.06)}
 .sec-title{font-size:0.9rem;font-weight:700;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+
+/* ── アナウンスバー ── */
+.announce-bar{
+  background:linear-gradient(135deg,#1e3a5f,#0369a1);
+  color:#fff;border-radius:12px;padding:11px 14px;
+  font-size:0.82rem;font-weight:700;margin-top:12px;
+  display:flex;align-items:center;gap:10px;
+  min-height:46px;transition:background 0.5s;
+  box-shadow:0 3px 10px rgba(2,132,199,0.25);
+}
+.announce-dot{width:10px;height:10px;border-radius:50%;background:#4ade80;flex-shrink:0;transition:background 0.3s;animation:dotPulse 1.5s ease-in-out infinite}
+.announce-dot.red{background:#ef4444}
+.announce-dot.yellow{background:#fbbf24}
+@keyframes dotPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.55;transform:scale(0.8)}}
+#announceText{flex:1;line-height:1.4}
 
 /* ── バーチャルエレベーター ── */
 .elevator-wrap{display:flex;gap:12px;align-items:flex-end;justify-content:center;padding:8px 0}
@@ -46,21 +66,29 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .shaft-inner{height:320px;position:relative;background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);border-radius:6px;overflow:hidden}
 .floor-line{position:absolute;left:0;right:0;height:1px;background:#9ca3af;opacity:0.5}
 .floor-label{position:absolute;right:4px;font-size:0.55rem;color:#6b7280;font-weight:700}
-.elevator-car{position:absolute;left:4px;right:4px;height:56px;background:linear-gradient(135deg,#fbbf24,#f59e0b);border-radius:6px;border:2px solid #d97706;box-shadow:0 2px 8px rgba(245,158,11,0.4);transition:bottom 0.8s cubic-bezier(0.4,0,0.2,1);display:flex;align-items:center;justify-content:center;font-size:1.4rem}
-.elevator-car.moving{animation:shake 0.15s ease-in-out 4}
-@keyframes shake{0%,100%{transform:translateX(0)}50%{transform:translateX(2px)}}
+.elevator-car{
+  position:absolute;left:4px;right:4px;height:56px;
+  background:linear-gradient(135deg,#fbbf24,#f59e0b);
+  border-radius:6px;border:2px solid #d97706;
+  box-shadow:0 2px 8px rgba(245,158,11,0.4);
+  display:flex;align-items:center;justify-content:center;font-size:1.4rem;
+  will-change:bottom;
+}
+.elevator-car.moving{animation:carShake 0.25s ease-in-out infinite}
+@keyframes carShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-1.5px)}75%{transform:translateX(1.5px)}}
+
 .floor-panel{flex:1;max-width:200px}
 .floor-btn-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
 .floor-btn{padding:14px 8px;border-radius:12px;border:3px solid transparent;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.15s;text-align:center;box-shadow:0 3px 6px rgba(0,0,0,0.1)}
 .floor-btn:active{transform:scale(0.92);box-shadow:inset 0 2px 4px rgba(0,0,0,0.2)}
-.floor-btn.b1{background:#7dd3fc;border-color:#38bdf8;color:#0c4a6e}
+.floor-btn:disabled{opacity:0.45;cursor:not-allowed;transform:none!important}
 .floor-btn.f1{background:#86efac;border-color:#4ade80;color:#14532d}
 .floor-btn.f2{background:#fde68a;border-color:#fbbf24;color:#78350f}
 .floor-btn.f3{background:#fca5a5;border-color:#f87171;color:#7f1d1d}
 .floor-btn.f4{background:#c4b5fd;border-color:#a78bfa;color:#3b0764}
 .floor-btn.f5{background:#fdba74;border-color:#fb923c;color:#7c2d12}
 .floor-btn.roof{background:#e0e7ff;border-color:#818cf8;color:#1e1b4b}
-.floor-btn.active-floor{box-shadow:inset 0 2px 4px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.8)!important;opacity:0.8}
+.floor-btn.active-floor{box-shadow:inset 0 2px 4px rgba(0,0,0,0.25),0 0 0 3px rgba(255,255,255,0.8)!important;opacity:0.75}
 .current-floor{text-align:center;background:var(--bg3);border:2px solid var(--accent2);border-radius:10px;padding:8px;font-size:0.9rem;font-weight:700;color:var(--accent)}
 
 /* ── フロア説明 ── */
@@ -69,12 +97,27 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .floor-info-title{font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:4px}
 .floor-info-desc{font-size:0.78rem;color:var(--text2);line-height:1.7}
 
-/* ── エレベーター豆知識 ── */
-.fact-card{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
-.fact-icon{font-size:2rem;flex-shrink:0}
-.fact-title{font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:4px}
-.fact-body{font-size:0.75rem;color:var(--text2);line-height:1.7}
+/* ── 世界エレベーターfact ── */
+.fact-card{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.fact-card-inner{display:flex;gap:12px;align-items:flex-start}
+.fact-icon{font-size:2rem;flex-shrink:0;margin-top:2px}
+.fact-content{flex:1;min-width:0}
+.fact-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px;flex-wrap:wrap}
+.fact-meta{flex:1}
+.fact-title{font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:2px}
+.fact-body{font-size:0.75rem;color:var(--text2);line-height:1.8}
 .fact-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:0.62rem;font-weight:700;margin-bottom:4px}
+
+/* ── 音声ボタン ── */
+.sound-btn{background:rgba(255,255,255,0.95);border:2px solid var(--accent2);border-radius:10px;padding:5px 10px;font-size:0.72rem;cursor:pointer;font-family:inherit;font-weight:700;color:var(--accent);transition:all 0.2s;white-space:nowrap;flex-shrink:0;align-self:flex-start}
+.sound-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.sound-btn.speaking{background:var(--accent);color:#fff;border-color:var(--accent);animation:dotPulse 0.8s ease-in-out infinite}
+
+/* ── まめちしきグリッド ── */
+.trivia-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.trivia-tile{border-radius:var(--radius);padding:12px;text-align:center}
+.trivia-num{font-size:1.4rem;font-weight:700}
+.trivia-label{font-size:0.68rem;margin-top:3px}
 
 /* ── クイズ ── */
 .quiz-card{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px}
@@ -90,8 +133,19 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .quiz-result.ng{background:rgba(239,68,68,0.1);border:2px solid #f87171;color:#991b1b}
 .quiz-next{width:100%;margin-top:10px;padding:12px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-size:0.85rem;font-weight:700;cursor:pointer;font-family:inherit;display:none}
 .quiz-next.show{display:block}
-.quiz-score{text-align:center;padding:20px;font-size:1.1rem;font-weight:700;color:var(--accent);display:none}
+.quiz-score{padding:4px;display:none}
 .quiz-score.show{display:block}
+
+/* ── スコア演出カード ── */
+.score-card{border-radius:var(--radius);padding:22px 16px;text-align:center;margin-bottom:14px}
+.score-card.perfect{background:linear-gradient(135deg,#fef3c7,#fde68a);border:3px solid #f59e0b}
+.score-card.good{background:linear-gradient(135deg,#d1fae5,#a7f3d0);border:3px solid #34d399}
+.score-card.try{background:linear-gradient(135deg,#fee2e2,#fecaca);border:3px solid #f87171}
+.score-emoji{font-size:3.5rem;margin-bottom:10px;display:block}
+.score-title{font-size:1.3rem;font-weight:700;margin-bottom:8px}
+.score-count{font-size:1.05rem;margin-bottom:8px}
+.score-msg{font-size:0.82rem;opacity:0.85;line-height:1.6}
+.score-retry{width:100%;margin-top:16px;padding:13px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-size:0.88rem;font-weight:700;cursor:pointer;font-family:inherit}
 
 /* ── しくみ ── */
 .mechanism-step{background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
@@ -99,12 +153,18 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .mech-title{font-size:0.82rem;font-weight:700;margin-bottom:3px}
 .mech-desc{font-size:0.73rem;color:var(--text2);line-height:1.7}
 
+/* ── トースト ── */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:10px 20px;border-radius:20px;font-size:0.82rem;font-weight:700;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1}
 
-/* ── 音ボタン ── */
-.sound-btn{background:rgba(255,255,255,0.9);border:2px solid var(--accent2);border-radius:10px;padding:6px 10px;font-size:0.75rem;cursor:pointer;font-family:inherit;font-weight:700;color:var(--accent);transition:all 0.15s}
-.sound-btn:hover{background:var(--accent);color:#fff}
+/* ── コンフェッティ ── */
+.confetti-wrap{position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9000;overflow:hidden}
+.cp{position:absolute;top:-16px;border-radius:2px;animation:cpFall linear forwards}
+@keyframes cpFall{0%{transform:translateY(0) rotate(0deg);opacity:1}80%{opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}}
+
+/* ── スター演出 ── */
+.star-pop{position:fixed;pointer-events:none;z-index:9001;font-size:1.6rem;animation:starPop 1.8s ease-out forwards}
+@keyframes starPop{0%{transform:translateY(0) scale(0.5);opacity:1}60%{transform:translateY(-80px) scale(1.3);opacity:1}100%{transform:translateY(-180px) scale(1);opacity:0}}
 </style>
 </head>
 <body>
@@ -120,6 +180,7 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
   <div class="hero-icon">🛗</div>
   <div class="hero-title">エレベーター</div>
   <div class="hero-sub">のって・しらべて・たのしもう！</div>
+  <div class="hero-badge">🌟 わくわく・体験</div>
 </div>
 
 <div class="tabs">
@@ -141,7 +202,6 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
       <div class="elevator-wrap">
         <div class="elevator-shaft">
           <div class="shaft-inner" id="shaft">
-            <!-- Floor lines -->
             <div class="floor-line" style="bottom:266px"></div>
             <div class="floor-label" style="bottom:268px">RF</div>
             <div class="floor-line" style="bottom:213px"></div>
@@ -153,22 +213,27 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
             <div class="floor-line" style="bottom:54px"></div>
             <div class="floor-label" style="bottom:56px">2F</div>
             <div class="floor-label" style="bottom:4px">1F</div>
-            <!-- Elevator car -->
             <div class="elevator-car" id="elevatorCar" style="bottom:4px">🛗</div>
           </div>
         </div>
 
         <div class="floor-panel">
           <div class="floor-btn-grid">
-            <button class="floor-btn roof" onclick="goFloor('RF',266)">🏙️<br><small>屋上</small></button>
-            <button class="floor-btn f5" onclick="goFloor('5F',213)">🌌<br><small>5F</small></button>
-            <button class="floor-btn f4" onclick="goFloor('4F',160)">📚<br><small>4F</small></button>
-            <button class="floor-btn f3" onclick="goFloor('3F',107)">🎮<br><small>3F</small></button>
-            <button class="floor-btn f2" onclick="goFloor('2F',54)">🍰<br><small>2F</small></button>
-            <button class="floor-btn f1" onclick="goFloor('1F',4)">🏠<br><small>1F</small></button>
+            <button class="floor-btn roof" id="btn-RF" onclick="goFloor('RF')">🏙️<br><small>屋上</small></button>
+            <button class="floor-btn f5"   id="btn-5F" onclick="goFloor('5F')">🌌<br><small>5F</small></button>
+            <button class="floor-btn f4"   id="btn-4F" onclick="goFloor('4F')">📚<br><small>4F</small></button>
+            <button class="floor-btn f3"   id="btn-3F" onclick="goFloor('3F')">🎮<br><small>3F</small></button>
+            <button class="floor-btn f2"   id="btn-2F" onclick="goFloor('2F')">🍰<br><small>2F</small></button>
+            <button class="floor-btn f1 active-floor" id="btn-1F" onclick="goFloor('1F')">🏠<br><small>1F</small></button>
           </div>
           <div class="current-floor" id="currentFloor">📍 いま：1F</div>
         </div>
+      </div>
+
+      <!-- アナウンスバー -->
+      <div class="announce-bar" id="announceBar">
+        <div class="announce-dot" id="announceDot"></div>
+        <span id="announceText">📢 ドアが開いています。のってください。</span>
       </div>
     </div>
 
@@ -185,103 +250,152 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
     <div class="sec">
       <div class="sec-title">🌍 せかいいちのエレベーター</div>
 
+      <!-- 1: ランドマークタワー -->
       <div class="fact-card">
-        <div class="fact-icon">🗼</div>
-        <div>
-          <span class="fact-badge" style="background:#fde68a;color:#78350f">🇯🇵 にほん</span>
-          <div class="fact-title">ヨコハマランドマークタワー</div>
-          <div class="fact-body">
-            かいすう：<strong>70かい</strong><br>
-            エレベーターのはやさ：<strong>びょうそく12.5メートル</strong>（にほんいちのはやさ！）<br>
-            1かいから69かいまで、<strong>わずか40びょう</strong>でいけるよ！新幹線みたいにはやいね🚄
+        <div class="fact-card-inner">
+          <div class="fact-icon">🗼</div>
+          <div class="fact-content">
+            <div class="fact-header">
+              <div class="fact-meta">
+                <span class="fact-badge" style="background:#fde68a;color:#78350f">🇯🇵 にほん</span>
+                <div class="fact-title">ヨコハマランドマークタワー</div>
+              </div>
+              <button class="sound-btn" onclick="speakFact(0,this)">🔊 音声</button>
+            </div>
+            <div class="fact-body" id="fb0">
+              かいすう：<strong>70かい</strong><br>
+              エレベーターのはやさ：<strong>びょうそく12.5メートル</strong>（にほんいちのはやさ！）<br>
+              1かいから69かいまで、<strong>わずか40びょう</strong>でいけるよ！新幹線みたいにはやいね🚄
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- 2: ブルジュ・ハリファ -->
       <div class="fact-card">
-        <div class="fact-icon">🌃</div>
-        <div>
-          <span class="fact-badge" style="background:#bfdbfe;color:#1e3a8a">🇦🇪 ドバイ</span>
-          <div class="fact-title">ブルジュ・ハリファ（世界一たかいビル）</div>
-          <div class="fact-body">
-            たかさ：<strong>828メートル</strong>（世界一たかいビル！）<br>
-            エレベーターのかいすう：<strong>57きも</strong>はしってるよ<br>
-            いちばんたかいかいは<strong>148かい</strong>！くものうえまでのぼれそう☁️
+        <div class="fact-card-inner">
+          <div class="fact-icon">🌃</div>
+          <div class="fact-content">
+            <div class="fact-header">
+              <div class="fact-meta">
+                <span class="fact-badge" style="background:#bfdbfe;color:#1e3a8a">🇦🇪 ドバイ</span>
+                <div class="fact-title">ブルジュ・ハリファ（世界一たかいビル）</div>
+              </div>
+              <button class="sound-btn" onclick="speakFact(1,this)">🔊 音声</button>
+            </div>
+            <div class="fact-body" id="fb1">
+              たかさ：<strong>828メートル</strong>（世界一たかいビル！）<br>
+              エレベーターのかいすう：<strong>57きも</strong>はしってるよ<br>
+              いちばんたかいかいは<strong>148かい</strong>！くものうえまでのぼれそう☁️
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- 3: 広州CTF（世界最速） -->
       <div class="fact-card">
-        <div class="fact-icon">⚡</div>
-        <div>
-          <span class="fact-badge" style="background:#fca5a5;color:#7f1d1d">🇨🇳 ちゅうごく</span>
-          <div class="fact-title">世界一はやいエレベーター（上海タワー）</div>
-          <div class="fact-body">
-            はやさ：<strong>びょうそく18メートル</strong>（世界一はやい！）<br>
-            これは<strong>じかんそく64.8km</strong>と同じはやさだよ🏎️<br>
-            耳がキーンってなりそうだね！
+        <div class="fact-card-inner">
+          <div class="fact-icon">⚡</div>
+          <div class="fact-content">
+            <div class="fact-header">
+              <div class="fact-meta">
+                <span class="fact-badge" style="background:#fca5a5;color:#7f1d1d">🇨🇳 ちゅうごく</span>
+                <div class="fact-title">世界一はやいエレベーター（広州CTFセンター）</div>
+              </div>
+              <button class="sound-btn" onclick="speakFact(2,this)">🔊 音声</button>
+            </div>
+            <div class="fact-body" id="fb2">
+              はやさ：<strong>びょうそく20メートル</strong>（世界一はやい！）<br>
+              これは<strong>じかんそく72km</strong>と同じはやさだよ🏎️<br>
+              耳がキーンってなりそうだね！気圧が変わらないよう、特別な技術を使ってるよ！
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- 4: ハンメルシュワント -->
       <div class="fact-card">
-        <div class="fact-icon">🏔️</div>
-        <div>
-          <span class="fact-badge" style="background:#d1fae5;color:#064e3b">🇨🇭 スイス</span>
-          <div class="fact-title">ハンメルシュワント展望エレベーター</div>
-          <div class="fact-body">
-            山のがけを<strong>たてにまっすぐ</strong>のぼるエレベーター！<br>
-            たかさ：<strong>558メートルのがけっぷち</strong>をのぼるよ🧗<br>
-            窓からみえるけしきは、まるで空をとんでるみたい！
+        <div class="fact-card-inner">
+          <div class="fact-icon">🏔️</div>
+          <div class="fact-content">
+            <div class="fact-header">
+              <div class="fact-meta">
+                <span class="fact-badge" style="background:#d1fae5;color:#064e3b">🇨🇭 スイス</span>
+                <div class="fact-title">ハンメルシュワント展望エレベーター</div>
+              </div>
+              <button class="sound-btn" onclick="speakFact(3,this)">🔊 音声</button>
+            </div>
+            <div class="fact-body" id="fb3">
+              山のがけを<strong>たてにまっすぐ</strong>のぼる屋外エレベーター！<br>
+              たかさ：<strong>152メートル</strong>のがけをのぼるよ🧗（ヨーロッパ最大の屋外エレベーター！）<br>
+              窓からみえるけしきは、まるで空をとんでるみたい！
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- 5: エッフェル塔 -->
       <div class="fact-card">
-        <div class="fact-icon">🎠</div>
-        <div>
-          <span class="fact-badge" style="background:#e9d5ff;color:#3b0764">🇫🇷 フランス</span>
-          <div class="fact-title">エッフェル塔のエレベーター</div>
-          <div class="fact-body">
-            エッフェル塔のなかにある<strong>ナナメにうごく</strong>めずらしいエレベーター！<br>
-            1889年から100年以上うごいてるよ🗼（とても古いエレベーター！）<br>
-            ナナメに動くのはとてもめずらしくて、世界でもほとんどないよ！
+        <div class="fact-card-inner">
+          <div class="fact-icon">🎠</div>
+          <div class="fact-content">
+            <div class="fact-header">
+              <div class="fact-meta">
+                <span class="fact-badge" style="background:#e9d5ff;color:#3b0764">🇫🇷 フランス</span>
+                <div class="fact-title">エッフェル塔のエレベーター</div>
+              </div>
+              <button class="sound-btn" onclick="speakFact(4,this)">🔊 音声</button>
+            </div>
+            <div class="fact-body" id="fb4">
+              エッフェル塔のなかにある<strong>ナナメにうごく</strong>めずらしいエレベーター！<br>
+              1889年から100年以上うごいてるよ🗼（とても古いエレベーター！）<br>
+              ナナメに動くのはとてもめずらしくて、世界でもほとんどないよ！
+            </div>
           </div>
         </div>
       </div>
 
+      <!-- 6: マクデブルク -->
       <div class="fact-card">
-        <div class="fact-icon">🌊</div>
-        <div>
-          <span class="fact-badge" style="background:#bae6fd;color:#0c4a6e">🇩🇪 ドイツ</span>
-          <div class="fact-title">マクデブルク水のエレベーター</div>
-          <div class="fact-body">
-            なんと<strong>ふねをのせてうごく</strong>エレベーター！（本当はシップリフト）<br>
-            大きなふねが箱にはいって、<strong>34メートル上下</strong>に動くよ🚢<br>
-            まるでふねがエレベーターにのってるみたいでふしぎだね！
+        <div class="fact-card-inner">
+          <div class="fact-icon">🌊</div>
+          <div class="fact-content">
+            <div class="fact-header">
+              <div class="fact-meta">
+                <span class="fact-badge" style="background:#bae6fd;color:#0c4a6e">🇩🇪 ドイツ</span>
+                <div class="fact-title">マクデブルク水のエレベーター（シップリフト）</div>
+              </div>
+              <button class="sound-btn" onclick="speakFact(5,this)">🔊 音声</button>
+            </div>
+            <div class="fact-body" id="fb5">
+              なんと<strong>ふねをのせてうごく</strong>エレベーター！（シップリフト）<br>
+              大きなふねが箱にはいって、<strong>34メートル上下</strong>に動くよ🚢<br>
+              まるでふねがエレベーターにのってるみたいでふしぎだね！
+            </div>
           </div>
         </div>
       </div>
     </div>
 
+    <!-- まめちしき -->
     <div class="sec">
-      <div class="sec-title">📊 エレベーターのすごいかずじ</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:2px solid #93c5fd;border-radius:var(--radius);padding:12px;text-align:center">
-          <div style="font-size:1.6rem;font-weight:700;color:#1d4ed8">約100万き</div>
-          <div style="font-size:0.7rem;color:#1e3a8a;margin-top:3px">せかいのエレベーターの数</div>
+      <div class="sec-title">📊 エレベーターのまめちしき</div>
+      <div class="trivia-grid">
+        <div class="trivia-tile" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:2px solid #93c5fd">
+          <div class="trivia-num" style="color:#1d4ed8">約1400万台</div>
+          <div class="trivia-label" style="color:#1e3a8a">せかいのエレベーターの数</div>
         </div>
-        <div style="background:linear-gradient(135deg,#d1fae5,#a7f3d0);border:2px solid #6ee7b7;border-radius:var(--radius);padding:12px;text-align:center">
-          <div style="font-size:1.6rem;font-weight:700;color:#065f46">毎日30億人</div>
-          <div style="font-size:0.7rem;color:#064e3b;margin-top:3px">エレベーターにのる人数</div>
+        <div class="trivia-tile" style="background:linear-gradient(135deg,#d1fae5,#a7f3d0);border:2px solid #6ee7b7">
+          <div class="trivia-num" style="color:#065f46">毎日10億回</div>
+          <div class="trivia-label" style="color:#064e3b">エレベーターのりおり回数</div>
         </div>
-        <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #fbbf24;border-radius:var(--radius);padding:12px;text-align:center">
-          <div style="font-size:1.6rem;font-weight:700;color:#78350f">18m/秒</div>
-          <div style="font-size:0.7rem;color:#92400e;margin-top:3px">世界一はやいはやさ</div>
+        <div class="trivia-tile" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #fbbf24">
+          <div class="trivia-num" style="color:#78350f">20m/秒</div>
+          <div class="trivia-label" style="color:#92400e">世界一はやいはやさ</div>
         </div>
-        <div style="background:linear-gradient(135deg,#fce7f3,#fbcfe8);border:2px solid #f9a8d4;border-radius:var(--radius);padding:12px;text-align:center">
-          <div style="font-size:1.6rem;font-weight:700;color:#831843">1852年</div>
-          <div style="font-size:0.7rem;color:#831843;margin-top:3px">せかいで最初のエレベーター</div>
+        <div class="trivia-tile" style="background:linear-gradient(135deg,#fce7f3,#fbcfe8);border:2px solid #f9a8d4">
+          <div class="trivia-num" style="color:#831843">1852年</div>
+          <div class="trivia-label" style="color:#831843">せかいで最初のエレベーター</div>
         </div>
       </div>
     </div>
@@ -292,7 +406,7 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 
     <div class="sec">
       <div class="sec-title">⚙️ エレベーターはどうやってうごくの？</div>
-      <div class="alert" style="background:rgba(2,132,199,0.08);border:2px solid rgba(2,132,199,0.2);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;display:flex;gap:10px">
+      <div style="background:rgba(2,132,199,0.08);border:2px solid rgba(2,132,199,0.2);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;display:flex;gap:10px">
         <div style="font-size:1.1rem">💡</div>
         <div style="font-size:0.78rem;color:var(--text2);line-height:1.7">エレベーターは、大きなモーター（電気のちから）とロープ、それからオモリをつかって動くよ！むかしの「つるべ」（井戸のバケツ）とおなじしくみなんだ。</div>
       </div>
@@ -367,7 +481,7 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
           <div style="font-size:1.3rem;flex-shrink:0">🔦</div>
           <div>
             <div style="font-size:0.8rem;font-weight:700;margin-bottom:2px">停電しても安全</div>
-            <div style="font-size:0.71mn;color:var(--text2);line-height:1.5">停電のときは自動で一番近いかいにいって、ドアがひらくよ。なかにとじこめられないしくみがあるよ！</div>
+            <div style="font-size:0.71rem;color:var(--text2);line-height:1.5">停電のときは自動で一番近いかいにいって、ドアがひらくよ。なかにとじこめられないしくみがあるよ！</div>
           </div>
         </div>
         <div style="background:var(--bg3);border:2px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;gap:10px">
@@ -472,9 +586,7 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
   <div class="panel" id="tab-quiz">
     <div class="sec">
       <div class="sec-title">❓ エレベーター クイズ！</div>
-      <div id="quizContainer">
-        <!-- JS でかきかえる -->
-      </div>
+      <div id="quizContainer"></div>
       <div class="quiz-score" id="quizScore"></div>
     </div>
   </div>
@@ -484,8 +596,8 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Tabs ──
-function switchTab(id,btn){
+// ── タブ切り替え ──
+function switchTab(id, btn){
   document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
   document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
   document.getElementById("tab-"+id).classList.add("active");
@@ -493,51 +605,167 @@ function switchTab(id,btn){
   if(id==="quiz") initQuiz();
 }
 
-// ── Clock (simple) ──
-function showToast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),3000); }
+// ── トースト ──
+function showToast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer=setTimeout(()=>t.classList.remove("show"),3000);
+}
 
-// ── Elevator ──
+// ── アナウンスバー ──
+function setAnnounce(text, dotState){
+  document.getElementById("announceText").textContent="📢 "+text;
+  const dot=document.getElementById("announceDot");
+  dot.className="announce-dot"+(dotState?" "+dotState:"");
+}
+
+// ── Web Speech API ──
+function elevSpeak(text){
+  if(!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang="ja-JP"; u.rate=0.88; u.pitch=1.0;
+  // 少し待ってから読み上げ（Chrome対策）
+  setTimeout(()=>window.speechSynthesis.speak(u),100);
+}
+
+// ── エレベーターデータ ──
+const FLOOR_POS   = { "RF":266,"5F":213,"4F":160,"3F":107,"2F":54,"1F":4 };
+const FLOOR_ORDER = ["1F","2F","3F","4F","5F","RF"];
+const FLOOR_NAMES = { "RF":"屋上","5F":"5かい","4F":"4かい","3F":"3かい","2F":"2かい","1F":"1かい" };
 const FLOORS = {
-  "RF":{ icon:"🏙️", title:"屋上（ルーフトップ）", desc:"SchoolPark の屋上だよ！はれた日にはとおくまでみえるよ。🌤️ このかいからはSchoolParkのまちぜんたいがみわたせる！ここがいちばんうえのかいだよ。" },
-  "5F":{ icon:"🌌", title:"5F — Emu 星空ホール", desc:"Emu（エミュ）の星空ルームがあるかい！ここでは星座をみたりメンバーがつながる場所だよ✨ よぞらにうかぶほしがきれいだよ！" },
-  "4F":{ icon:"📚", title:"4F — がくしゅう・ラボ", desc:"べんきょうしたり、あたらしいことをまなぶかい！Web3・ブロックチェーンのことをたのしくまなべるよ📖 はかせになれるかな？🔬" },
-  "3F":{ icon:"🎮", title:"3F — あそび・たんけん", desc:"SchoolParkのたんけんゾーン！いろんなばしょをたんけんしてみよう🗺️ あたらしいはっけんがまってるよ！" },
+  "RF":{ icon:"🏙️", title:"屋上（ルーフトップ）",   desc:"SchoolPark の屋上だよ！はれた日にはとおくまでみえるよ。🌤️ このかいからはSchoolParkのまちぜんたいがみわたせる！ここがいちばんうえのかいだよ。" },
+  "5F":{ icon:"🌌", title:"5F — Emu 星空ホール",    desc:"Emu（エミュ）の星空ルームがあるかい！ここでは星座をみたりメンバーがつながる場所だよ✨ よぞらにうかぶほしがきれいだよ！" },
+  "4F":{ icon:"📚", title:"4F — がくしゅう・ラボ",  desc:"べんきょうしたり、あたらしいことをまなぶかい！Web3・ブロックチェーンのことをたのしくまなべるよ📖 はかせになれるかな？🔬" },
+  "3F":{ icon:"🎮", title:"3F — あそび・たんけん",  desc:"SchoolParkのたんけんゾーン！いろんなばしょをたんけんしてみよう🗺️ あたらしいはっけんがまってるよ！" },
   "2F":{ icon:"🍰", title:"2F — カフェ・にぎわいホール", desc:"みんなでかたりあうばしょ！おいしいものをたべながら（きもちで）、ともだちとはなそう☕🍰 コミュニティのひろばだよ！" },
   "1F":{ icon:"🏠", title:"1F — エントランスホール", desc:"SchoolPark エレベーターへようこそ！ここは 1かい（1F）。エントランスホールです。うえのボタンをおして、すきなかいへいってみてね！" }
 };
 let currentFloorKey = "1F";
+let isMoving = false;
 
-function goFloor(floor, bottomPx){
-  const car = document.getElementById("elevatorCar");
-  const prevBtn = document.querySelector(".floor-btn.active-floor");
-  if(prevBtn) prevBtn.classList.remove("active-floor");
+// ── エレベーター移動 ──
+function goFloor(floor){
+  if(isMoving || floor===currentFloorKey) return;
+  isMoving = true;
 
-  car.style.bottom = bottomPx + "px";
-  car.classList.add("moving");
-  setTimeout(()=>car.classList.remove("moving"), 800);
+  // ボタン無効化
+  document.querySelectorAll(".floor-btn").forEach(b=>b.disabled=true);
 
-  currentFloorKey = floor;
-  document.getElementById("currentFloor").textContent = "📍 いま：" + floor;
+  const fromIdx = FLOOR_ORDER.indexOf(currentFloorKey);
+  const toIdx   = FLOOR_ORDER.indexOf(floor);
+  const apart   = Math.abs(toIdx - fromIdx);
+  const moveSec = 1.8 + apart * 0.75; // フロア間距離に応じた動的速度
 
-  const f = FLOORS[floor];
-  if(f){
-    document.getElementById("floorIcon").textContent = f.icon;
-    document.getElementById("floorTitle").textContent = f.title;
-    document.getElementById("floorDesc").textContent = f.desc;
-  }
-  showToast(floor + " に とうちゃく！ " + (FLOORS[floor]?.icon||""));
+  // ① ドア閉まるアナウンス
+  setAnnounce("ドアが閉まります。ご注意ください。","red");
+  elevSpeak("ドアが閉まります。ご注意ください。");
+
+  setTimeout(()=>{
+    // ② 移動開始
+    const car = document.getElementById("elevatorCar");
+    car.style.transition = `bottom ${moveSec}s cubic-bezier(0.42,0,0.24,1)`;
+    car.style.bottom = FLOOR_POS[floor]+"px";
+    car.classList.add("moving");
+
+    const dir = toIdx > fromIdx ? "↑ 上昇中" : "↓ 下降中";
+    setAnnounce(dir+" — "+FLOOR_NAMES[floor]+" へ向かっています…","yellow");
+
+    setTimeout(()=>{
+      // ③ 到着
+      car.classList.remove("moving");
+      currentFloorKey = floor;
+
+      // アクティブボタン更新
+      document.querySelectorAll(".floor-btn").forEach(b=>b.classList.remove("active-floor"));
+      const ab = document.getElementById("btn-"+floor);
+      if(ab) ab.classList.add("active-floor");
+
+      document.getElementById("currentFloor").textContent = "📍 いま："+floor;
+
+      const f = FLOORS[floor];
+      if(f){
+        document.getElementById("floorIcon").textContent  = f.icon;
+        document.getElementById("floorTitle").textContent = f.title;
+        document.getElementById("floorDesc").textContent  = f.desc;
+      }
+
+      const fn = FLOOR_NAMES[floor];
+      setAnnounce(fn+" に到着しました。ドアが開きます。","");
+      elevSpeak(fn+" に到着しました。ドアが開きます。");
+      showToast(floor+" に とうちゃく！ "+(f?f.icon:""));
+
+      // ④ ドア開き → ボタン再有効
+      setTimeout(()=>{
+        document.querySelectorAll(".floor-btn").forEach(b=>b.disabled=false);
+        isMoving = false;
+        setAnnounce("ドアが開いています。おりる方はお先にどうぞ。");
+      }, 1500);
+
+    }, moveSec*1000+200);
+
+  }, 1300); // ドア閉まり待機
 }
 
-// ── Quiz ──
+// ── 音声解説テキスト ──
+const FACT_VOICES = [
+  "ヨコハマランドマークタワーのエレベーターは、70かいビルで、びょうそく12.5メートルのにほんいちはやいスピードを持っています。1かいから69かいまで、わずか40びょうでいけますよ！新幹線みたいにはやいですね！",
+  "ブルジュハリファは、たかさ828メートルの世界一たかいビルです。57本ものエレベーターがはしっていて、いちばんたかい148かいまでのぼれます。くものうえまでいけそうですね！",
+  "広州CTFファイナンスセンターのエレベーターは、びょうそく20メートルという世界一はやいスピードで動きます。じかんそく72キロメートルと同じはやさで、耳がキーンってなりそうですね！",
+  "スイスにあるハンメルシュワントエレベーターは、山のがけを152メートルたてにのぼる、ヨーロッパ最大の屋外エレベーターです。窓からみえるけしきは、まるで空をとんでいるみたいですよ！",
+  "エッフェル塔のエレベーターは、1889年からうごいていて、100年以上の歴史があります。ナナメにうごくめずらしいエレベーターで、世界でもほとんどないとてもめずらしいものです！",
+  "ドイツのマクデブルクシップリフトは、なんと大きなふねをのせて34メートル上下に動く、ふねのためのエレベーターです。まるでふねがエレベーターにのっているみたいで、ふしぎですね！"
+];
+
+let _speakingBtn = null;
+
+function speakFact(idx, btn){
+  if(_speakingBtn){
+    window.speechSynthesis.cancel();
+    _speakingBtn.classList.remove("speaking");
+    _speakingBtn.textContent="🔊 音声";
+    if(_speakingBtn===btn){ _speakingBtn=null; return; }
+  }
+  if(!window.speechSynthesis){ showToast("音声は非対応のブラウザです"); return; }
+  window.speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(FACT_VOICES[idx]);
+  u.lang="ja-JP"; u.rate=0.88; u.pitch=1.0;
+  btn.classList.add("speaking");
+  btn.textContent="🔊 読み中…";
+  _speakingBtn=btn;
+  u.onend=()=>{ btn.classList.remove("speaking"); btn.textContent="🔊 音声"; _speakingBtn=null; };
+  u.onerror=()=>{ btn.classList.remove("speaking"); btn.textContent="🔊 音声"; _speakingBtn=null; };
+  setTimeout(()=>window.speechSynthesis.speak(u),100);
+}
+
+// ── クイズデータ ──
 const QUIZ_DATA = [
-  { q:"エレベーターをはつめいしたのはなんねん？", opts:["1852年","1952年","1752年","2000年"], ans:0, hint:"よく150ねん以上まえのことだよ！" },
-  { q:"せかいで一番はやいエレベーターがある国はどこ？", opts:["日本","アメリカ","中国","ドバイ"], ans:2, hint:"上海タワーにあるよ！" },
-  { q:"エレベーターの中で「ひらく」ボタンはどんなきごう？", opts:["→ ←（やじるしが外むき）","← →（やじるしが内むき）","▲（さんかく）","○（まる）"], ans:0, hint:"ドアが広がるように、やじるしが外がわをさしてるよ！" },
-  { q:"エレベーターのかごをつるロープはふつうなんぼんある？", opts:["1〜2本","3〜4本","8〜20本","50本以上"], ans:2, hint:"あんぜんのためにたくさんつかってるんだよ！" },
-  { q:"乗るときと降りるとき、どちらが先？", opts:["乗るひとが先","降りるひとが先","おなじでいい","どちらでもいい"], ans:1, hint:"なかにいるひとをさきにだしてあげよう！" },
-  { q:"エレベーターがとまったとき、一番さいしょにすることは？", opts:["ドアをこじあける","🔔ボタンをおす","おおごえでさけぶ","てんじょうからにげる"], ans:1, hint:"あわてずに🔔ボタン！たすけがくるよ。" },
-  { q:"ヨコハマランドマークタワーのエレベーターで、1かいから69かいまで何びょうかかる？", opts:["10秒","40秒","2分","5分"], ans:1, hint:"にほんいちはやいエレベーターだよ！" },
-  { q:"エレベーターの中でやってはいけないことは？", opts:["静かにたつ","ドアのよこにたつ","とびはねる","「ひらく」ボタンをおす"], ans:2, hint:"センサーがはんのうしてとまることがあるよ！" },
+  { q:"エレベーターをはつめいしたのはなんねん？",
+    opts:["1852年","1952年","1752年","2000年"],
+    ans:0, hint:"よく150ねん以上まえのことだよ！アメリカのオーティスさんがはつめいしたよ。" },
+  { q:"せかいで一番はやいエレベーターがある国はどこ？",
+    opts:["日本","アメリカ","中国","ドバイ"],
+    ans:2, hint:"広州CTFファイナンスセンターにあるよ！びょうそく20メートルだよ！" },
+  { q:"エレベーターの中で「ひらく（ドアがひらく）」ボタンはどんなきごう？",
+    opts:["← →（やじるしが外むき）","→ ←（やじるしが内むき）","▲（さんかく）","○（まる）"],
+    ans:0, hint:"ドアがひらくとき外にひろがるから、← →（外むきやじるし）だよ！「とじる」は → ← ね！" },
+  { q:"エレベーターのかごをつるロープはふつうなんぼんある？",
+    opts:["1〜2本","3〜4本","8〜20本","50本以上"],
+    ans:2, hint:"あんぜんのためにたくさんつかってるんだよ！" },
+  { q:"乗るときと降りるとき、どちらが先？",
+    opts:["乗るひとが先","降りるひとが先","おなじでいい","どちらでもいい"],
+    ans:1, hint:"なかにいるひとをさきにだしてあげよう！マナーのきほんだよ。" },
+  { q:"エレベーターがとまったとき、一番さいしょにすることは？",
+    opts:["ドアをこじあける","🔔ボタンをおす","おおごえでさけぶ","てんじょうからにげる"],
+    ans:1, hint:"あわてずに🔔ボタン！たすけがくるよ。ドアをこじあけるのはきけん！" },
+  { q:"ヨコハマランドマークタワーのエレベーターで、1かいから69かいまで何びょうかかる？",
+    opts:["10秒","40秒","2分","5分"],
+    ans:1, hint:"にほんいちはやいエレベーターだよ！びょうそく12.5メートルで40びょうだよ！" },
+  { q:"エレベーターの中でやってはいけないことは？",
+    opts:["静かにたつ","ドアのよこにたつ","とびはねる","「ひらく」ボタンをおす"],
+    ans:2, hint:"センサーがはんのうしてとまることがあるよ！しずかにのろう！" },
 ];
 
 let quizIndex=0, quizScore=0, quizAnswered=false;
@@ -545,17 +773,14 @@ let quizIndex=0, quizScore=0, quizAnswered=false;
 function initQuiz(){
   quizIndex=0; quizScore=0; quizAnswered=false;
   document.getElementById("quizScore").classList.remove("show");
+  document.getElementById("quizScore").innerHTML="";
   renderQuiz();
 }
 
 function renderQuiz(){
   if(quizIndex>=QUIZ_DATA.length){
     document.getElementById("quizContainer").innerHTML="";
-    const sc=document.getElementById("quizScore");
-    const pct=Math.round(quizScore/QUIZ_DATA.length*100);
-    let msg = pct===100?"🏆 まんてん！エレベーターはかせ！":pct>=75?"⭐ すごい！よくしってるね！":pct>=50?"😊 なかなかいいね！もういちどちょうせんしよう！":"📚 もっとしらべてみよう！";
-    sc.innerHTML=`<div style="font-size:1.6rem;margin-bottom:8px">🎉</div><div>${QUIZ_DATA.length}もん中 <strong>${quizScore}もん</strong> せいかい！</div><div style="font-size:0.85rem;margin-top:8px;color:var(--text2)">${msg}</div><button onclick="initQuiz()" style="margin-top:14px;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:12px 24px;font-size:0.85rem;font-weight:700;cursor:pointer;font-family:inherit">もういちどチャレンジ！</button>`;
-    sc.classList.add("show");
+    showQuizScore();
     return;
   }
   const q=QUIZ_DATA[quizIndex]; quizAnswered=false;
@@ -582,10 +807,10 @@ function answerQuiz(chosen){
   const res=document.getElementById("quizResult");
   if(chosen===q.ans){
     quizScore++;
-    res.textContent="⭐ せいかい！" + q.hint;
+    res.textContent="⭐ せいかい！"+q.hint;
     res.className="quiz-result show ok";
   } else {
-    res.textContent="❌ ざんねん！こたえは「"+q.opts[q.ans]+"」だよ。" + q.hint;
+    res.textContent="❌ ざんねん！こたえは「"+q.opts[q.ans]+"」だよ。"+q.hint;
     res.className="quiz-result show ng";
   }
   document.getElementById("quizNextBtn").classList.add("show");
@@ -593,12 +818,76 @@ function answerQuiz(chosen){
 
 function nextQuiz(){ quizIndex++; renderQuiz(); }
 
-// ── Init ──
+// ── スコア演出 ──
+function showQuizScore(){
+  const total = QUIZ_DATA.length; // 8
+  const sc = document.getElementById("quizScore");
+
+  let cardClass, emoji, title, msg;
+  if(quizScore===total){
+    cardClass="perfect"; emoji="🎓🛗"; title="エレベーター博士！";
+    msg="すごい！全問正解だよ！きみはエレベーター博士に認定！🏆";
+    setTimeout(spawnConfetti, 300);
+  } else if(quizScore>=5){
+    cardClass="good"; emoji="👍⭐"; title="いいね！その調子！";
+    msg="もうちょっとで博士！もっとべんきょうしてもういちどチャレンジしよう！";
+    setTimeout(spawnStars, 300);
+  } else {
+    cardClass="try"; emoji="😅📚"; title="大変！もっと調べてみよう！";
+    msg="エレベーターのひみつを「せかいのすごいエレベーター」や「しくみ」タブで調べてからもういちどチャレンジしよう！";
+  }
+
+  sc.innerHTML=`
+    <div class="score-card ${cardClass}">
+      <span class="score-emoji">${emoji}</span>
+      <div class="score-title">${title}</div>
+      <div class="score-count">${total}もん中 <strong>${quizScore}もん</strong> せいかい！</div>
+      <div class="score-msg">${msg}</div>
+    </div>
+    <button class="score-retry" onclick="initQuiz()">もういちどチャレンジ！ 🔄</button>`;
+  sc.classList.add("show");
+}
+
+// ── コンフェッティ演出 ──
+function spawnConfetti(){
+  const wrap=document.createElement("div");
+  wrap.className="confetti-wrap";
+  document.body.appendChild(wrap);
+  const colors=["#fbbf24","#ef4444","#22c55e","#3b82f6","#a855f7","#f97316","#ec4899","#06b6d4"];
+  for(let i=0;i<70;i++){
+    const p=document.createElement("div");
+    p.className="cp";
+    const sz=6+Math.random()*10;
+    p.style.cssText=`left:${Math.random()*100}%;width:${sz}px;height:${sz}px;background:${colors[i%colors.length]};animation-duration:${2+Math.random()*2}s;animation-delay:${Math.random()*1.2}s`;
+    wrap.appendChild(p);
+  }
+  setTimeout(()=>wrap.remove(), 5000);
+}
+
+// ── スター演出 ──
+function spawnStars(){
+  const emojis=["⭐","🌟","✨","💫"];
+  const base=document.querySelector(".main");
+  for(let i=0;i<12;i++){
+    setTimeout(()=>{
+      const s=document.createElement("div");
+      s.className="star-pop";
+      s.textContent=emojis[i%emojis.length];
+      s.style.cssText=`left:${15+Math.random()*70}%;bottom:${30+Math.random()*40}%;animation-delay:${Math.random()*0.4}s`;
+      document.body.appendChild(s);
+      setTimeout(()=>s.remove(),2000);
+    }, i*120);
+  }
+}
+
+// ── 初期化 ──
 window.addEventListener("DOMContentLoaded",()=>{
   initQuiz();
+  // 1F ボタンをアクティブに
+  document.getElementById("btn-1F").classList.add("active-floor");
 });
 
-// ── Back ──
+// ── 戻るボタン ──
 function goBack(){ window.top.postMessage({type:"spContentClose"},"*"); }
 </script>
 </body>
