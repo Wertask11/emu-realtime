@@ -15,13 +15,15 @@
 }
 body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
 
-.header{position:sticky;top:0;z-index:100;height:54px;background:rgba(15,23,42,0.97);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px}
+.header{position:sticky;top:0;z-index:100;height:54px;background:rgba(15,23,42,0.97);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 14px}
+.header-left{display:flex;align-items:center;gap:10px}
 .back-btn{background:var(--accent);color:#000;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:0.8rem;font-weight:700;font-family:inherit;white-space:nowrap}
 .header-title{font-size:0.9rem;font-weight:700;display:flex;align-items:center;gap:6px}
-.header-clock{font-size:0.9rem;font-weight:700;color:var(--accent2);font-variant-numeric:tabular-nums;white-space:nowrap}
-.hdr-nav{margin-left:auto;display:flex;align-items:center;gap:8px}
-.hdr-icon-btn{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:4px 9px;font-size:1.05rem;cursor:pointer;transition:background 0.15s;line-height:1}
-.hdr-icon-btn:hover{background:rgba(255,255,255,0.25)}
+.header-icons{display:flex;gap:6px;align-items:center}
+.eib{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);border-radius:7px;padding:4px 8px;font-size:1rem;cursor:pointer;color:#fff;transition:background 0.15s;line-height:1}
+.eib:hover{background:rgba(255,255,255,0.22)}
+.header-right{display:flex;align-items:center;gap:12px;font-size:12px;color:#8f95b2;text-align:right}
+.header-clock{font-size:14px;font-weight:700;color:#fff;line-height:1.1;font-variant-numeric:tabular-nums}
 
 /* ── Hero ── */
 .hero{background:linear-gradient(160deg,#0f172a 0%,#1e3a5f 50%,#0f172a 100%);padding:24px 16px 20px;text-align:center;position:relative;overflow:hidden}
@@ -94,12 +96,22 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 </head>
 <body>
 <div class="header">
-  <button class="back-btn" onclick="goBack()">🚉 駅を出る</button>
-  <div class="header-title">🚉 <span>Terminal Station</span></div>
-  <div class="hdr-nav">
-    <button class="hdr-icon-btn" onclick="window.top.postMessage({type:'openSpWallet'},'*')" title="ウォレット">👛</button>
-    <button class="hdr-icon-btn" onclick="window.top.postMessage({type:'openTaxi'},'*')" title="タクシー">🚕</button>
-    <div class="header-clock" id="clock">--:--:--</div>
+  <div class="header-left">
+    <button class="back-btn" onclick="goBack()">🚉 駅を出る</button>
+    <div class="header-title">🚉 <span>Terminal Station</span></div>
+    <div class="header-icons">
+      <button class="eib" onclick="window.top.postMessage({type:'openSpWallet'},'*')" title="ウォレット">💰</button>
+      <button class="eib" onclick="window.top.postMessage({type:'openTaxi'},'*')" title="タクシー">🚕</button>
+      <button class="eib" onclick="window.top.postMessage({type:'openSpRobot'},'*')" title="AIエージェント">🤖</button>
+      <button class="eib" onclick="window.top.postMessage({type:'openSpSettings'},'*')" title="設定">⚙️</button>
+    </div>
+  </div>
+  <div class="header-right">
+    <div id="station-weather">☀️ --°C</div>
+    <div style="text-align:right">
+      <div class="header-clock" id="clock">--:--</div>
+      <div id="station-date" style="font-size:11px">----/--/--(--)</div>
+    </div>
   </div>
 </div>
 
@@ -279,13 +291,27 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 function switchTab(id,btn){ document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active")); document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active")); document.getElementById("tab-"+id).classList.add("active"); btn.classList.add("active"); }
 function showToast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),3000); }
 
-// ── Clock ──
+// ── Clock + 天気 ──
+const _days=["日","月","火","水","木","金","土"];
+let _stationTemp=null;
+(function _fetchWeather(){
+  fetch("https://api.open-meteo.com/v1/forecast?latitude=35.68&longitude=139.69&current=temperature_2m&timezone=Asia/Tokyo")
+    .then(r=>r.json()).then(d=>{ _stationTemp=Math.round(d.current.temperature_2m); })
+    .catch(()=>{});
+})();
 function updateClock(){
   const n=new Date();
-  const s=t=>String(t).padStart(2,"0");
-  const str=s(n.getHours())+":"+s(n.getMinutes())+":"+s(n.getSeconds());
-  document.getElementById("clock").textContent=str;
-  document.getElementById("boardTime").textContent=str.slice(0,5);
+  const p=t=>String(t).padStart(2,"0");
+  const timeStr=p(n.getHours())+":"+p(n.getMinutes());
+  const dateStr=n.getFullYear()+"/"+p(n.getMonth()+1)+"/"+p(n.getDate())+"("+_days[n.getDay()]+")";
+  const cl=document.getElementById("clock");
+  const dt=document.getElementById("station-date");
+  const wt=document.getElementById("station-weather");
+  const bt=document.getElementById("boardTime");
+  if(cl) cl.textContent=timeStr;
+  if(dt) dt.textContent=dateStr;
+  if(wt&&_stationTemp!==null) wt.textContent=(n.getHours()>=6&&n.getHours()<18?"☀️":"🌙")+" "+_stationTemp+"°C";
+  if(bt) bt.textContent=timeStr;
 }
 updateClock(); setInterval(updateClock,1000);
 
