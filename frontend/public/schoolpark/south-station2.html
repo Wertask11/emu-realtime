@@ -14,15 +14,20 @@
 }
 body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif;min-height:100vh;overflow-x:hidden}
 
-.header{position:sticky;top:0;z-index:200;height:52px;background:rgba(10,10,15,0.97);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14px}
+/* ── ヘッダー（八百屋と同パターン） ── */
+.header{position:sticky;top:0;z-index:200;height:52px;background:rgba(10,10,15,0.97);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 14px}
+.header-left{display:flex;align-items:center;gap:10px}
 .back-btn{background:rgba(251,191,36,0.2);color:var(--accent);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:5px 12px;cursor:pointer;font-size:0.8rem;font-weight:700;font-family:inherit;white-space:nowrap}
-.header-clock{margin-left:auto;font-size:1rem;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;letter-spacing:0.05em}
 .header-title{font-size:0.85rem;font-weight:700;color:var(--text2)}
+.header-icons{display:flex;gap:5px;align-items:center}
+.eib{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);border-radius:7px;padding:4px 8px;font-size:1rem;cursor:pointer;color:#fff;transition:background 0.15s;line-height:1}
+.eib:hover{background:rgba(255,255,255,0.22)}
+.header-right{display:flex;align-items:center;gap:10px;font-size:12px;color:#8f95b2;text-align:right}
+.header-clock{font-size:14px;font-weight:700;color:var(--accent);line-height:1.1;font-variant-numeric:tabular-nums}
 
-/* ── プラットフォーム ── */
+/* ── プラットフォームシーン ── */
 .platform-scene{position:relative;width:100%;height:280px;overflow:hidden;background:var(--bg);border-bottom:2px solid rgba(251,191,36,0.15)}
 
-/* 天井・蛍光灯 */
 .ceiling{position:absolute;top:0;left:0;right:0;height:30px;background:linear-gradient(180deg,#1a1a25,#0f0f1a)}
 .light{position:absolute;top:0;width:60px;height:8px;background:rgba(255,255,200,0.9);box-shadow:0 0 20px 6px rgba(255,255,180,0.3),0 0 40px 10px rgba(255,255,180,0.1);border-radius:0 0 4px 4px}
 .light:nth-child(1){left:8%}
@@ -30,19 +35,15 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .light:nth-child(3){left:52%}
 .light:nth-child(4){left:74%}
 
-/* 壁 */
 .wall{position:absolute;top:30px;left:0;right:0;height:130px;background:linear-gradient(180deg,#1e1e2e 0%,#161622 60%,#111120 100%)}
 .wall-tile{position:absolute;top:30px;left:0;right:0;height:80px;background-image:repeating-linear-gradient(90deg,rgba(255,255,255,0.03) 0,rgba(255,255,255,0.03) 1px,transparent 1px,transparent 40px),repeating-linear-gradient(0deg,rgba(255,255,255,0.03) 0,rgba(255,255,255,0.03) 1px,transparent 1px,transparent 20px)}
 
-/* サイン */
 .platform-sign{position:absolute;top:36px;left:50%;transform:translateX(-50%);background:var(--accent);color:#000;font-size:0.75rem;font-weight:700;padding:4px 16px;border-radius:4px;letter-spacing:0.1em;white-space:nowrap;z-index:10}
 
-/* ホーム床 */
 .platform-floor{position:absolute;bottom:0;left:0;right:0;height:80px;background:linear-gradient(180deg,#1c1c28 0%,#141420 100%)}
 .yellow-line{position:absolute;bottom:75px;left:0;right:0;height:4px;background:var(--accent);opacity:0.8;box-shadow:0 0 8px var(--accent)}
 .floor-tiles{position:absolute;bottom:0;left:0;right:0;height:75px;background-image:repeating-linear-gradient(90deg,rgba(255,255,255,0.04) 0,rgba(255,255,255,0.04) 1px,transparent 1px,transparent 60px)}
 
-/* 線路 */
 .rail-area{position:absolute;bottom:0;left:0;right:0;height:80px;background:linear-gradient(180deg,#0d0d14 0%,#08080f 100%)}
 .rail{position:absolute;bottom:18px;height:4px;background:linear-gradient(90deg,#4b5563,#9ca3af,#6b7280);box-shadow:0 0 4px rgba(156,163,175,0.3);border-radius:2px}
 .rail.left{left:20%;right:20%}
@@ -50,11 +51,25 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .sleeper-wrap{position:absolute;bottom:6px;left:18%;right:18%;height:18px;overflow:hidden}
 .sleeper{position:absolute;top:0;width:6px;height:18px;background:#3d2a1a;border-radius:1px}
 
-/* 電車 */
-.train{position:absolute;height:120px;bottom:80px;display:flex;transition:left 2s cubic-bezier(0.25,0.46,0.45,0.94),opacity 0.5s ease;z-index:20}
+/* ── 案内掲示板 ── */
+.info-board{position:absolute;top:32px;right:12px;background:#000;border:1px solid rgba(251,191,36,0.4);border-radius:4px;padding:4px 8px;z-index:30}
+.info-board-line{font-size:0.58rem;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1.6}
+
+/* ── 人シルエット（CSS描画） ── */
+.person-sil{position:absolute;bottom:80px;display:flex;flex-direction:column;align-items:center;gap:0;z-index:15;animation:sway 3s ease-in-out infinite}
+.person-sil:nth-child(2){animation-delay:0.9s}
+.person-sil:nth-child(3){animation-delay:1.7s}
+@keyframes sway{0%,100%{transform:rotate(0deg) translateY(0)}50%{transform:rotate(1deg) translateY(-1px)}}
+.sil-head{width:15px;height:15px;border-radius:50%;flex-shrink:0}
+.sil-torso{width:18px;height:24px;border-radius:5px 5px 3px 3px;flex-shrink:0;margin-top:2px}
+.sil-legs{display:flex;gap:3px;margin-top:2px}
+.sil-leg{width:6px;height:18px;border-radius:0 0 3px 3px;flex-shrink:0}
+
+/* ── 電車 ── */
+.train{position:absolute;height:120px;bottom:80px;display:flex;z-index:20}
 .train-car{width:200px;height:110px;border-radius:8px 8px 0 0;position:relative;display:flex;flex-direction:column;flex-shrink:0;border:2px solid rgba(255,255,255,0.1)}
 .train-top{height:22px;border-radius:6px 6px 0 0}
-.train-body{flex:1;display:flex;align-items:center;padding:4px;gap:3px;background:var(--trainColor,#1e3a5f)}
+.train-body{flex:1;display:flex;align-items:center;padding:4px;gap:3px}
 .train-window{flex:1;height:40px;background:rgba(180,230,255,0.15);border-radius:3px;border:1px solid rgba(180,230,255,0.2);position:relative;overflow:hidden}
 .train-window::after{content:"";position:absolute;top:4px;right:4px;bottom:4px;left:4px;background:rgba(200,240,255,0.06);border-radius:2px}
 .train-door{width:16px;height:100%;background:rgba(255,255,255,0.06);border-left:1px solid rgba(255,255,255,0.12);border-right:1px solid rgba(255,255,255,0.12)}
@@ -63,35 +78,29 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .train-wheel.l{left:20px}
 .train-wheel.r{right:20px}
 
-/* 人シルエット */
-.person{position:absolute;bottom:80px;font-size:1.3rem;opacity:0.6;animation:sway 3s ease-in-out infinite;z-index:15}
-@keyframes sway{0%,100%{transform:rotate(0deg)}50%{transform:rotate(1.5deg)}}
-.person:nth-child(2){animation-delay:0.8s}
-.person:nth-child(3){animation-delay:1.6s}
+/* ── 列車接近 ── */
+.approach-bar{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:10px 14px;margin:10px 14px;display:none}
+.approach-bar.show{display:flex;align-items:center;gap:8px;animation:abpulse 0.9s ease-in-out infinite}
+@keyframes abpulse{0%,100%{opacity:1}50%{opacity:0.65}}
+@keyframes blink2{0%,100%{opacity:1}50%{opacity:0}}
 
-/* 案内掲示 */
-.info-board{position:absolute;top:32px;right:12px;background:#000;border:1px solid rgba(251,191,36,0.4);border-radius:4px;padding:4px 8px;z-index:30}
-.info-board-line{font-size:0.58rem;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1.6}
-
-/* 列車接近 */
-.approach-bar{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:10px 14px;margin:10px 14px;display:none;animation:pulse 1s ease-in-out infinite}
-.approach-bar.show{display:flex;align-items:center;gap:8px}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.7}}
-
-/* コントロール */
+/* ── コントロール ── */
 .controls{padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;background:var(--bg2);border-bottom:1px solid var(--border)}
 .ctrl-btn{padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.15s;display:flex;align-items:center;gap:6px}
-.ctrl-btn:hover{border-color:var(--accent);color:var(--accent)}
+.ctrl-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
 .ctrl-btn.active{background:rgba(251,191,36,0.12);border-color:var(--accent);color:var(--accent)}
+.ctrl-btn:disabled{opacity:0.35;cursor:not-allowed}
+.ctrl-btn.board-btn{background:rgba(251,191,36,0.06);border-color:rgba(251,191,36,0.3);color:var(--accent)}
+.ctrl-btn.board-btn:hover:not(:disabled){background:rgba(251,191,36,0.15)}
 
-/* メロディ状態 */
+/* ── 発車ドットバー ── */
 .melody-bar{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:10px;min-height:36px}
 .melody-label{font-size:0.7rem;color:var(--text2)}
 .melody-dots{display:flex;gap:3px}
 .melody-dot{width:6px;height:6px;border-radius:50%;background:var(--text2);opacity:0.3;transition:all 0.1s}
 .melody-dot.active{background:var(--accent);opacity:1;transform:scale(1.3)}
 
-/* メイン情報 */
+/* ── メイン情報 ── */
 .main-info{max-width:720px;margin:0 auto;padding:12px 14px 60px}
 .sec{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
 .sec-title{font-size:0.8rem;font-weight:700;color:var(--accent2);margin-bottom:10px}
@@ -101,6 +110,7 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .ntc-dest{font-size:0.9rem;font-weight:700;margin-bottom:2px}
 .ntc-sub{font-size:0.68rem;color:var(--text2)}
 .ntc-countdown{font-size:0.75rem;font-weight:700;color:var(--green);background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.2);padding:4px 10px;border-radius:20px}
+.ntc-countdown.soon{color:var(--accent);background:rgba(251,191,36,0.1);border-color:rgba(251,191,36,0.3);animation:abpulse 0.9s ease-in-out infinite}
 .line-indicator{display:flex;gap:6px;margin-top:8px}
 .line-badge{padding:3px 10px;border-radius:20px;font-size:0.65rem;font-weight:700}
 
@@ -109,56 +119,87 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 </style>
 </head>
 <body>
+
+<!-- ヘッダー（八百屋と同パターン） -->
 <div class="header">
-  <button class="back-btn" onclick="goBack()">← 戻る</button>
-  <div class="header-title">🚇 B1F — 地下ホーム</div>
-  <div class="header-clock" id="clock">--:--:--</div>
+  <div class="header-left">
+    <button class="back-btn" onclick="goBack()">🌆 地上に出る</button>
+    <div class="header-title">🚇 B1F — 地下ホーム</div>
+    <div class="header-icons">
+      <button class="eib" onclick="window.top.postMessage({type:'openSpWallet'},'*')" title="ウォレット">💰</button>
+      <button class="eib" onclick="window.top.postMessage({type:'openTaxi'},'*')" title="タクシー">🚕</button>
+      <button class="eib" onclick="window.top.postMessage({type:'openSpRobot'},'*')" title="AIエージェント">🤖</button>
+      <button class="eib" onclick="window.top.postMessage({type:'openSpSettings'},'*')" title="設定">⚙️</button>
+    </div>
+  </div>
+  <div class="header-right">
+    <div id="station2-weather">☀️ --°C</div>
+    <div style="text-align:right">
+      <div class="header-clock" id="clock">--:--</div>
+      <div id="station2-date" style="font-size:11px;color:#8f95b2">----/--/--(--)</div>
+    </div>
+  </div>
 </div>
 
 <!-- プラットフォームシーン -->
 <div class="platform-scene" id="platformScene">
-  <!-- 天井 -->
   <div class="ceiling"></div>
   <div class="light"></div>
   <div class="light"></div>
   <div class="light"></div>
   <div class="light"></div>
 
-  <!-- 壁 -->
   <div class="wall"></div>
   <div class="wall-tile"></div>
 
-  <!-- 駅名サイン -->
   <div class="platform-sign" id="platformSign">SchoolPark Terminal — 1番線</div>
 
-  <!-- 掲示板 -->
   <div class="info-board">
-    <div class="info-board-line" id="boardLine1">次　東エリア</div>
+    <div class="info-board-line" id="boardLine1">次　東エリア行き</div>
     <div class="info-board-line" id="boardLine2">-- : --</div>
   </div>
 
-  <!-- 線路 -->
   <div class="rail-area">
     <div class="sleeper-wrap" id="sleeperWrap"></div>
     <div class="rail left"></div>
     <div class="rail right"></div>
   </div>
 
-  <!-- 黄色線・床 -->
   <div class="platform-floor"></div>
   <div class="yellow-line"></div>
   <div class="floor-tiles"></div>
 
-  <!-- 人シルエット -->
-  <div class="person" style="left:15%;z-index:16">🧍</div>
-  <div class="person" style="left:32%;z-index:16">🧍‍♀️</div>
-  <div class="person" style="left:65%;z-index:16">👦</div>
+  <!-- 人シルエット3人（CSS描画） -->
+  <div class="person-sil" style="left:12%">
+    <div class="sil-head" style="background:#94a3b8"></div>
+    <div class="sil-torso" style="background:#475569"></div>
+    <div class="sil-legs">
+      <div class="sil-leg" style="background:#334155"></div>
+      <div class="sil-leg" style="background:#334155"></div>
+    </div>
+  </div>
+  <div class="person-sil" style="left:33%">
+    <div class="sil-head" style="background:#a8b4c4"></div>
+    <div class="sil-torso" style="background:#4a6080"></div>
+    <div class="sil-legs">
+      <div class="sil-leg" style="background:#2d4060"></div>
+      <div class="sil-leg" style="background:#2d4060"></div>
+    </div>
+  </div>
+  <div class="person-sil" style="left:62%">
+    <div class="sil-head" style="background:#b0bcc8"></div>
+    <div class="sil-torso" style="background:#3d6050"></div>
+    <div class="sil-legs">
+      <div class="sil-leg" style="background:#2a4535"></div>
+      <div class="sil-leg" style="background:#2a4535"></div>
+    </div>
+  </div>
 
   <!-- 電車 -->
-  <div class="train" id="train" style="left:-420px;opacity:0">
-    <div class="train-car" style="--trainColor:#1e3a5f">
-      <div class="train-top" style="background:#1a3358"></div>
-      <div class="train-body">
+  <div class="train" id="train" style="left:-420px;opacity:0;transition:none">
+    <div class="train-car" id="trainCar1">
+      <div class="train-top" id="trainTop1" style="background:#1a3358"></div>
+      <div class="train-body" id="trainBody1" style="background:#1e3a5f">
         <div class="train-door"></div>
         <div class="train-window"></div>
         <div class="train-window"></div>
@@ -171,9 +212,9 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
       <div class="train-wheel l"></div>
       <div class="train-wheel r"></div>
     </div>
-    <div class="train-car" style="--trainColor:#1a3350">
-      <div class="train-top" style="background:#162e48"></div>
-      <div class="train-body">
+    <div class="train-car" id="trainCar2">
+      <div class="train-top" id="trainTop2" style="background:#162e48"></div>
+      <div class="train-body" id="trainBody2" style="background:#1a3350">
         <div class="train-window"></div>
         <div class="train-window"></div>
         <div class="train-door"></div>
@@ -196,21 +237,20 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 
 <!-- コントロール -->
 <div class="controls">
-  <button class="ctrl-btn" id="btnArrive" onclick="triggerTrain()">🚃 列車を呼ぶ</button>
-  <button class="ctrl-btn" id="btnMelody" onclick="toggleMelody()">🎵 発車メロディ</button>
-  <button class="ctrl-btn" id="btnAnnounce" onclick="announce()">📢 アナウンス</button>
+  <button class="ctrl-btn board-btn" id="btnStatus" onclick="announceStatus()">🔍 列車状況</button>
+  <button class="ctrl-btn" id="btnBoard" onclick="boardTrain()" disabled>🚃 電車に乗る</button>
+  <button class="ctrl-btn" id="btnAnnounce" onclick="randomAnnounce()">📢 アナウンス</button>
   <button class="ctrl-btn" onclick="toggleLine()">🔄 路線切替</button>
 </div>
 
-<!-- 発車メロディ状態 -->
+<!-- 発車ドットバー -->
 <div class="melody-bar" id="melodyBar">
-  <span class="melody-label">🎵 発車メロディ</span>
-  <div class="melody-dots" id="melodyDots">
+  <span class="melody-label" id="melodyStatus">⏳ 次の列車を待機中…</span>
+  <div class="melody-dots" id="melodyDots" style="margin-left:auto">
     <div class="melody-dot"></div><div class="melody-dot"></div><div class="melody-dot"></div>
     <div class="melody-dot"></div><div class="melody-dot"></div><div class="melody-dot"></div>
     <div class="melody-dot"></div><div class="melody-dot"></div>
   </div>
-  <span class="melody-label" id="melodyStatus" style="margin-left:auto">待機中</span>
 </div>
 
 <!-- 次の列車情報 -->
@@ -220,15 +260,15 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
     <div class="next-train-card">
       <div class="ntc-row">
         <div>
-          <div class="ntc-dest" id="ntcDest">東エリア（Life Market）行き</div>
-          <div class="ntc-sub">SP東西線 普通 | 4両編成</div>
+          <div class="ntc-dest" id="ntcDest">— 行き</div>
+          <div class="ntc-sub" id="ntcSub">SP路線 普通 | 4両編成</div>
         </div>
         <div class="ntc-time" id="ntcTime">--:--</div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div class="line-indicator">
-          <span class="line-badge" style="background:rgba(251,191,36,0.15);color:var(--accent);border:1px solid rgba(251,191,36,0.3)">1番線</span>
-          <span class="line-badge" style="background:rgba(74,222,128,0.1);color:#4ade80;border:1px solid rgba(74,222,128,0.2)">東行き</span>
+          <span class="line-badge" id="ntcTrack" style="background:rgba(251,191,36,0.15);color:var(--accent);border:1px solid rgba(251,191,36,0.3)">1番線</span>
+          <span class="line-badge" id="ntcBadge" style="background:rgba(74,222,128,0.1);color:#4ade80;border:1px solid rgba(74,222,128,0.2)">東行き</span>
         </div>
         <span class="ntc-countdown" id="ntcCountdown">— 分後</span>
       </div>
@@ -252,34 +292,11 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
   </div>
 
   <div class="sec">
-    <div class="sec-title">🎵 発車メロディについて</div>
-    <div style="display:flex;flex-direction:column;gap:6px">
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:10px">
-        <div style="font-size:1.1rem">🔔</div>
-        <div>
-          <div style="font-size:0.78rem;font-weight:700;margin-bottom:2px">1番線：「星空のターミナル」</div>
-          <div style="font-size:0.7rem;color:var(--text2);line-height:1.5">SchoolParkオリジナルメロディ。夜空に星が広がるイメージで作曲。</div>
-        </div>
-      </div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:10px">
-        <div style="font-size:1.1rem">🔔</div>
-        <div>
-          <div style="font-size:0.78rem;font-weight:700;margin-bottom:2px">2番線：「フロンティア」</div>
-          <div style="font-size:0.7rem;color:var(--text2);line-height:1.5">南エリア・冒険の世界へ向かう開放感をテーマにした曲。</div>
-        </div>
-      </div>
-      <div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:8px;padding:10px 12px;font-size:0.72rem;color:var(--text2);line-height:1.7">
-        ※「発車メロディ」ボタンを押すと、Web Audio APIでその場で生成したメロディが鳴ります。スマホは音量を上げてお楽しみください🎵
-      </div>
-    </div>
-  </div>
-
-  <div class="sec">
     <div class="sec-title">🚇 地下ホームの楽しみかた</div>
     <div style="display:flex;flex-direction:column;gap:6px">
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:10px"><div style="font-size:1.1rem">🚃</div><div style="font-size:0.75rem;line-height:1.6"><strong>「列車を呼ぶ」</strong>ボタン → 列車がホームに入線するアニメーション。列車接近アナウンスも流れるよ！</div></div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:10px"><div style="font-size:1.1rem">🎵</div><div style="font-size:0.75rem;line-height:1.6"><strong>「発車メロディ」</strong>ボタン → 駅メロが鳴り、ドアが閉まって電車が発車するよ！</div></div>
-      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:10px"><div style="font-size:1.1rem">📢</div><div style="font-size:0.75rem;line-height:1.6"><strong>「アナウンス」</strong>ボタン → 駅のアナウンス音声（Web Speech API）が流れるよ！</div></div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:10px"><div style="font-size:1.1rem">🔍</div><div style="font-size:0.75rem;line-height:1.6"><strong>「列車状況」</strong>ボタン → 次の列車の時刻と行き先をアナウンスするよ！</div></div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:10px"><div style="font-size:1.1rem">🚃</div><div style="font-size:0.75rem;line-height:1.6"><strong>「電車に乗る」</strong>ボタン → 列車が来た時だけ押せるよ！発車メロディが鳴って出発！</div></div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:10px"><div style="font-size:1.1rem">📢</div><div style="font-size:0.75rem;line-height:1.6"><strong>「アナウンス」</strong>ボタン → 駅のランダムアナウンスが流れるよ！</div></div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:10px"><div style="font-size:1.1rem">🔄</div><div style="font-size:0.75rem;line-height:1.6"><strong>「路線切替」</strong>ボタン → 1番線/2番線を切り替えると、電車の色や行き先が変わるよ！</div></div>
     </div>
   </div>
@@ -288,147 +305,302 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Clock ──
+// ── 天気 + 時計 ──
+const _DAYS = ["日","月","火","水","木","金","土"];
+let _temp2 = null;
+fetch("https://api.open-meteo.com/v1/forecast?latitude=35.68&longitude=139.69&current=temperature_2m&timezone=Asia/Tokyo")
+  .then(r=>r.json()).then(d=>{ _temp2 = Math.round(d.current.temperature_2m); })
+  .catch(()=>{});
+
 function updateClock(){
-  const n=new Date(); const s=t=>String(t).padStart(2,"0");
-  const str=s(n.getHours())+":"+s(n.getMinutes())+":"+s(n.getSeconds());
-  document.getElementById("clock").textContent=str;
-  const t2=new Date(n.getTime()+4*60000);
-  document.getElementById("ntcTime").textContent=s(t2.getHours())+":"+s(t2.getMinutes());
-  document.getElementById("boardLine2").textContent=s(t2.getHours())+":"+s(t2.getMinutes());
-  const diff=Math.round((t2-n)/60000);
-  document.getElementById("ntcCountdown").textContent=diff+"分後";
+  const n = new Date();
+  const p = t => String(t).padStart(2,"0");
+  const cl = document.getElementById("clock");
+  const dt = document.getElementById("station2-date");
+  const wt = document.getElementById("station2-weather");
+  if(cl) cl.textContent = p(n.getHours())+":"+p(n.getMinutes());
+  if(dt) dt.textContent = n.getFullYear()+"/"+p(n.getMonth()+1)+"/"+p(n.getDate())+"("+_DAYS[n.getDay()]+")";
+  if(wt && _temp2 !== null) wt.textContent = (n.getHours()>=6&&n.getHours()<18?"☀️":"🌙")+" "+_temp2+"°C";
 }
-updateClock(); setInterval(updateClock,1000);
+updateClock(); setInterval(updateClock, 1000);
 
-// ── Sleepers ──
-const sw=document.getElementById("sleeperWrap");
+// ── 枕木生成 ──
+const sw = document.getElementById("sleeperWrap");
 for(let i=0;i<18;i++){
-  const d=document.createElement("div");
-  d.className="sleeper"; d.style.left=(i*30+5)+"px"; sw.appendChild(d);
+  const d = document.createElement("div");
+  d.className = "sleeper"; d.style.left = (i*30+5)+"px"; sw.appendChild(d);
 }
 
-// ── Lines ──
-const LINES=[
-  {name:"1番線",dest:"東エリア（Life Market）行き",trainColor:"#1e3a5f",topColor:"#1a3358",badge:"東行き",badgeColor:"#4ade80",announce:"まもなく1番線に、東エリア行き普通列車が参ります。黄色い線の内側にお下がりください。"},
-  {name:"2番線",dest:"西エリア（Guard District）行き",trainColor:"#1a2e1a",topColor:"#162614",badge:"西行き",badgeColor:"#60a5fa",announce:"まもなく2番線に、西エリア行き普通列車が参ります。黄色い線の内側にお下がりください。"},
+// ── 時刻表（駅舎と同じロジック） ──
+const TIMETABLE = [
+  {dest:"東エリア（Life Market）",   track:"1番線", color:"#1e3a5f", top:"#1a3358", badge:"東行き",  badgeColor:"#4ade80"},
+  {dest:"西エリア（Guard District）",track:"2番線", color:"#163016", top:"#122512", badge:"西行き",  badgeColor:"#60a5fa"},
+  {dest:"Emu Room2（星空）",          track:"1番線", color:"#2a1a3e", top:"#221530", badge:"Emu行き", badgeColor:"#fb923c"},
+  {dest:"南 Frontier Gate",          track:"2番線", color:"#3d2000", top:"#2e1800", badge:"南行き",  badgeColor:"#fbbf24"},
+  {dest:"北エリア（Creative Academy）",track:"1番線",color:"#1a1a40",top:"#141430", badge:"北行き",  badgeColor:"#a78bfa"},
+  {dest:"東エリア（Life Market）",   track:"2番線", color:"#163016", top:"#122512", badge:"東行き",  badgeColor:"#4ade80"},
 ];
-let curLine=0;
+
+// 駅舎と同じ計算式: now + (i*4+2) 分
+function calcSchedule(){
+  const now = new Date();
+  return TIMETABLE.map((t,i)=>({
+    ...t,
+    time: new Date(now.getTime() + (i*4+2)*60000)
+  }));
+}
+
+// ── 路線切替 ──
+let curLineIdx = 0;
 function toggleLine(){
-  curLine=(curLine+1)%LINES.length;
-  const l=LINES[curLine];
-  document.getElementById("platformSign").textContent="SchoolPark Terminal — "+l.name;
-  document.getElementById("boardLine1").textContent="次　"+l.dest.slice(0,6);
-  document.getElementById("ntcDest").textContent=l.dest;
-  document.querySelector(".ntc-sub").textContent="SP路線 普通 | 4両編成";
-  document.querySelector(".line-badge:first-child").textContent=l.name;
-  document.querySelector(".line-badge:last-child").textContent=l.badge;
-  document.querySelector(".line-badge:last-child").style.color=l.badgeColor;
-  // train car color
-  document.querySelectorAll(".train-body").forEach(b=>b.style.background=l.trainColor);
-  document.querySelectorAll(".train-top").forEach(b=>b.style.background=l.topColor);
-  showToast("🔄 "+l.name+"に切り替えました");
+  curLineIdx = (curLineIdx+1) % TIMETABLE.length;
+  const l = TIMETABLE[curLineIdx];
+  document.getElementById("platformSign").textContent = "SchoolPark Terminal — " + l.track;
+  document.getElementById("boardLine1").textContent = "次　" + l.dest.slice(0,6)+"行き";
+  applyTrainColor(l);
+  showToast("🔄 " + l.track + "に切り替えました");
+}
+function applyTrainColor(l){
+  document.getElementById("trainBody1").style.background = l.color;
+  document.getElementById("trainBody2").style.background = l.color;
+  document.getElementById("trainTop1").style.background  = l.top;
+  document.getElementById("trainTop2").style.background  = l.top;
 }
 
-// ── Train ──
-let trainRunning=false;
-function triggerTrain(){
-  if(trainRunning)return;
-  trainRunning=true;
-  const btn=document.getElementById("btnArrive"); btn.classList.add("active");
-  const ap=document.getElementById("approachBar"); ap.classList.add("show");
-  // announce
-  speak(LINES[curLine].announce);
-  const train=document.getElementById("train");
-  train.style.opacity="1";
-  train.style.left="-420px";
+// ── 列車制御 ──
+let trainAtPlatform = false;
+let trainMoving     = false;
+let approachDone    = false;
+let departTimer     = null;
+
+function arriveTrainAuto(entry){
+  if(trainMoving) return;
+  trainMoving = true;
+  trainAtPlatform = false;
+
+  applyTrainColor(entry);
+
+  // 接近バー
+  const ap = document.getElementById("approachBar");
+  ap.classList.add("show");
+  speak(entry.track+"に、"+entry.dest+"行き普通列車が参ります。黄色い線の内側にお下がりください。");
+
+  // 電車入線アニメーション
+  const train = document.getElementById("train");
+  train.style.transition = "none";
+  train.style.left = "-420px";
+  train.style.opacity = "0";
   setTimeout(()=>{
-    train.style.transition="left 2.5s cubic-bezier(0.25,0.46,0.45,0.94),opacity 0.5s";
-    train.style.left="5%";
-  },800);
-  setTimeout(()=>{ ap.classList.remove("show"); },3500);
+    train.style.transition = "left 2.8s cubic-bezier(0.25,0.46,0.45,0.94), opacity 0.4s";
+    train.style.left = "5%";
+    train.style.opacity = "1";
+  }, 900);
+
   setTimeout(()=>{
-    speak("ドアが開きます。"); showToast("🚃 列車が到着しました");
-    btn.classList.remove("active"); trainRunning=false;
-  },3800);
+    ap.classList.remove("show");
+    speak("ドアが開きます。");
+    showToast("🚃 "+entry.dest+"行き列車が到着しました");
+
+    trainAtPlatform = true;
+    trainMoving = false;
+
+    // 「電車に乗る」ボタンを有効化
+    const btnBoard = document.getElementById("btnBoard");
+    btnBoard.disabled = false;
+    btnBoard.classList.add("active");
+
+    document.getElementById("melodyStatus").textContent = "🚃 ご乗車ください！（45秒後に発車）";
+
+    // 45秒後に自動発車
+    clearTimeout(departTimer);
+    departTimer = setTimeout(()=>{
+      if(trainAtPlatform) departTrain(entry, false);
+    }, 45000);
+
+  }, 3800);
 }
 
-// ── Melody ──
-let melodyPlaying=false;
-let melodyInterval=null;
+function departTrain(entry, fromButton){
+  if(!trainAtPlatform) return;
+  trainAtPlatform = false;
+
+  const btnBoard = document.getElementById("btnBoard");
+  btnBoard.disabled = true;
+  btnBoard.classList.remove("active");
+  clearTimeout(departTimer);
+
+  speak("ドアが閉まります。ご注意ください。");
+  document.getElementById("melodyStatus").textContent = "🎵 発車メロディ演奏中…";
+
+  // 発車メロディ
+  playMelody(()=>{
+    speak(entry.dest+"行き。まもなく発車いたします。ご注意ください。");
+    document.getElementById("melodyStatus").textContent = "⏳ 次の列車を待機中…";
+    setTimeout(()=>{
+      const train = document.getElementById("train");
+      train.style.transition = "left 2.2s cubic-bezier(0.55,0,1,0.45), opacity 0.8s";
+      train.style.left = "110%";
+      train.style.opacity = "0";
+      showToast("🚃 列車が発車しました！");
+      setTimeout(()=>{
+        train.style.transition = "none";
+        train.style.left = "-420px";
+      }, 2400);
+    }, 1200);
+  });
+}
+
+function boardTrain(){
+  if(!trainAtPlatform) return;
+  playBoardingChime();
+  showToast("🎉 電車に乗りました！良い旅を！");
+  setTimeout(()=> departTrain(lastArrivedEntry, true), 800);
+}
+
+// ── スケジュール監視 ──
+let lastArrivedEntry = TIMETABLE[0];
+let lastCheckMin = -1;
+let approachScheduled = false;
+
+function checkSchedule(){
+  const schedule = calcSchedule();
+  const next = schedule[0];
+  const p = t => String(t).padStart(2,"0");
+
+  // 次の列車表示更新
+  const secsAway = Math.round((next.time - new Date()) / 1000);
+  const minsAway = Math.ceil(secsAway / 60);
+  document.getElementById("ntcDest").textContent  = next.dest + "行き";
+  document.getElementById("ntcTime").textContent  = p(next.time.getHours())+":"+p(next.time.getMinutes());
+  document.getElementById("ntcTrack").textContent = next.track;
+  document.getElementById("ntcBadge").textContent = next.badge;
+  document.getElementById("ntcBadge").style.color  = next.badgeColor;
+  document.getElementById("boardLine1").textContent = "次　" + next.dest.slice(0,6);
+  document.getElementById("boardLine2").textContent = p(next.time.getHours())+":"+p(next.time.getMinutes());
+
+  const cdEl = document.getElementById("ntcCountdown");
+  if(secsAway <= 60){
+    cdEl.textContent = secsAway+"秒後";
+    cdEl.className = "ntc-countdown soon";
+  } else {
+    cdEl.textContent = minsAway+"分後";
+    cdEl.className = "ntc-countdown";
+  }
+
+  // 接近（30秒前）→ 自動入線
+  if(secsAway <= 30 && secsAway > 0 && !trainAtPlatform && !trainMoving && !approachScheduled){
+    approachScheduled = true;
+    lastArrivedEntry = next;
+    arriveTrainAuto(next);
+    // 次のスケジュールで approachScheduled をリセット
+    setTimeout(()=>{ approachScheduled = false; }, 5 * 60 * 1000);
+  }
+}
+setInterval(checkSchedule, 1000);
+
+// ── 列車状況アナウンス ──
+function announceStatus(){
+  const schedule = calcSchedule();
+  const p = t => String(t).padStart(2,"0");
+  const next = schedule[0];
+  const after = schedule[1];
+  const t1 = p(next.time.getHours())+":"+p(next.time.getMinutes());
+  const t2 = p(after.time.getHours())+":"+p(after.time.getMinutes());
+  const msg = `ただいまの列車の状況をお伝えします。次の列車は、${t1}発、${next.track}、${next.dest}行きです。その次は、${t2}発、${after.track}、${after.dest}行きです。`;
+  speak(msg);
+  showToast("📋 "+next.dest+"行き "+t1+"発");
+}
+
+// ── ランダムアナウンス ──
+let lastAnnounce = 0;
+function randomAnnounce(){
+  const now = Date.now();
+  if(now - lastAnnounce < 3000) return;
+  lastAnnounce = now;
+  const msgs = [
+    "SchoolParkターミナル駅をご利用いただきありがとうございます。足元に十分ご注意ください。",
+    "乗り換えのご案内です。ターミナル駅では、SP東西線・SP南北線にお乗り換えいただけます。",
+    "黄色い点字ブロックの内側でお待ちください。",
+    "お忘れ物のないようお確かめください。",
+    "本日もSchoolParkをご利用いただきありがとうございます。",
+  ];
+  const msg = msgs[Math.floor(Math.random()*msgs.length)];
+  speak(msg);
+  showToast("📢 "+msg.slice(0,28)+"…");
+}
+
+// ── 音声合成 ──
+let _bestVoice2 = null;
+function _pickVoice2(){
+  const vs = window.speechSynthesis.getVoices();
+  if(!vs.length) return;
+  const checks = [
+    v => /Google.*日本語|Google.*Japanese/i.test(v.name) && v.lang.startsWith('ja'),
+    v => /Nanami/i.test(v.name) && v.lang.startsWith('ja'),
+    v => /Haruka/i.test(v.name) && v.lang.startsWith('ja'),
+    v => v.name === 'Kyoko', v => v.name === 'O-ren',
+    v => v.lang === 'ja-JP', v => v.lang.startsWith('ja'),
+  ];
+  for(const fn of checks){ const f=vs.find(fn); if(f){ _bestVoice2=f; break; } }
+}
+if(window.speechSynthesis){ speechSynthesis.onvoiceschanged = _pickVoice2; _pickVoice2(); }
+
+function speak(text){
+  if(!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "ja-JP"; u.rate = 0.90; u.pitch = 1.08; u.volume = 0.85;
+  if(_bestVoice2) u.voice = _bestVoice2;
+  setTimeout(()=>window.speechSynthesis.speak(u), 100);
+}
+
+// ── 乗車チャイム ──
+function playBoardingChime(){
+  try{
+    const ctx = new(window.AudioContext||window.webkitAudioContext)();
+    [{hz:880,t:0,d:0.5},{hz:1046,t:0.25,d:0.5},{hz:1318,t:0.5,d:0.8}].forEach(({hz,t,d})=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type="sine"; o.frequency.value=hz;
+      const s=ctx.currentTime+t;
+      g.gain.setValueAtTime(0,s);
+      g.gain.linearRampToValueAtTime(0.18,s+0.03);
+      g.gain.exponentialRampToValueAtTime(0.001,s+d);
+      o.start(s); o.stop(s+d+0.05);
+    });
+  }catch(e){}
+}
+
+// ── 発車メロディ（Web Audio）──
 const MELODY=[
   [523,200],[659,200],[784,200],[1047,300],[784,100],[880,400],[784,500],
   [523,200],[659,200],[784,200],[698,300],[659,100],[587,300],[523,600]
 ];
-function toggleMelody(){
-  const btn=document.getElementById("btnMelody");
-  if(melodyPlaying){ stopMelody(); return; }
-  melodyPlaying=true; btn.classList.add("active");
-  document.getElementById("melodyStatus").textContent="演奏中...";
-  playMelody(()=>{
-    melodyPlaying=false; btn.classList.remove("active");
-    document.getElementById("melodyStatus").textContent="待機中";
-    stopMelodyDots();
-    // after melody: train departs
-    if(trainRunning===false){
-      speak("ドアが閉まります。ご注意ください。");
-      setTimeout(()=>{
-        const train=document.getElementById("train");
-        train.style.transition="left 2s cubic-bezier(0.55,0,1,0.45),opacity 0.8s";
-        train.style.left="110%";
-        train.style.opacity="0";
-        setTimeout(()=>{ train.style.left="-420px"; },2200);
-        showToast("🚃 列車が発車しました");
-      },1500);
-    }
-  });
-}
 let audioCtx=null;
-function getAudioCtx(){ if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)(); return audioCtx; }
+function getCtx(){ if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)(); return audioCtx; }
 function playMelody(cb){
-  const ctx=getAudioCtx(); let t=ctx.currentTime+0.1;
+  const ctx=getCtx(); let t=ctx.currentTime+0.1;
   const dots=document.querySelectorAll(".melody-dot"); let di=0;
-  MELODY.forEach(([freq,dur],i)=>{
-    const osc=ctx.createOscillator(); const gain=ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type="sine"; osc.frequency.value=freq;
-    gain.gain.setValueAtTime(0,t); gain.gain.linearRampToValueAtTime(0.15,t+0.02);
-    gain.gain.linearRampToValueAtTime(0,t+dur/1000-0.02);
-    osc.start(t); osc.stop(t+dur/1000);
-    const startT=t; setTimeout(()=>{ dots.forEach(d=>d.classList.remove("active")); dots[di%dots.length].classList.add("active"); di++; },Math.max(0,(startT-ctx.currentTime)*1000));
+  MELODY.forEach(([freq,dur])=>{
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type="sine"; o.frequency.value=freq;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.13,t+0.02);
+    g.gain.linearRampToValueAtTime(0,t+dur/1000-0.02);
+    o.start(t); o.stop(t+dur/1000);
+    const st=t; setTimeout(()=>{ dots.forEach(d=>d.classList.remove("active")); dots[di%dots.length].classList.add("active"); di++; },Math.max(0,(st-ctx.currentTime)*1000));
     t+=dur/1000;
   });
-  setTimeout(cb,(t-ctx.currentTime)*1000+100);
-}
-function stopMelody(){ melodyPlaying=false; document.getElementById("btnMelody").classList.remove("active"); document.getElementById("melodyStatus").textContent="待機中"; stopMelodyDots(); }
-function stopMelodyDots(){ document.querySelectorAll(".melody-dot").forEach(d=>d.classList.remove("active")); }
-
-// ── Announce ──
-let lastAnnounce=0;
-function announce(){
-  const now=Date.now(); if(now-lastAnnounce<3000) return;
-  lastAnnounce=now;
-  const msgs=[
-    "次の列車は"+LINES[curLine].dest+"です。まもなく"+LINES[curLine].name+"に参ります。",
-    "乗り換えのご案内をいたします。ターミナル駅舎では、SP東西線・SP南北線にお乗り換えいただけます。",
-    "SchoolParkターミナル駅をご利用いただきありがとうございます。まもなく発車いたします。",
-    "黄色い点字ブロックの内側でお待ちください。",
-  ];
-  const msg=msgs[Math.floor(Math.random()*msgs.length)];
-  speak(msg); showToast("📢 "+msg.slice(0,30)+"…");
-}
-function speak(text){
-  if(!window.speechSynthesis) return;
-  const u=new SpeechSynthesisUtterance(text);
-  u.lang="ja-JP"; u.rate=0.85; u.pitch=1.1; u.volume=0.8;
-  window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+  setTimeout(()=>{ document.querySelectorAll(".melody-dot").forEach(d=>d.classList.remove("active")); if(cb)cb(); },(t-ctx.currentTime)*1000+100);
 }
 
-function showToast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),4000); }
+// ── トースト ──
+function showToast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._timer); t._timer=setTimeout(()=>t.classList.remove("show"),4000); }
 
-// ── Init ──
+// ── 初期化 ──
 window.addEventListener("DOMContentLoaded",()=>{
-  setTimeout(()=>showToast("🚇 地下ホームへようこそ！ボタンを押して体験してね"),1000);
+  checkSchedule();
+  setTimeout(()=>showToast("🚇 地下ホームへようこそ！列車状況ボタンで確認しよう"),1000);
 });
 function goBack(){ window.top.postMessage({type:"spContentClose"},"*"); }
 </script>
