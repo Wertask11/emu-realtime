@@ -4,237 +4,460 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SchoolPark Museum — 博物館</title>
-<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
   --bg:#04060a;--surface:#070c14;--card:#0c1220;--border:#162030;
-  --accent:#7eb8e8;--gold:#d4a017;--amber:#f59e0b;--green:#00e676;
-  --text:#d8eaf8;--muted:#3a5870;
+  --accent:#7eb8e8;--gold:#d4a017;--text:#d8eaf8;--muted:#3a5870;
 }
 body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
-.close-btn{position:fixed;top:12px;right:14px;background:rgba(126,184,232,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px;z-index:9999}
+
+/* ===== 閉じるボタン ===== */
+.close-btn{position:fixed;top:12px;right:14px;background:rgba(126,184,232,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px;z-index:9999;font-family:inherit}
 .close-btn:hover{background:rgba(126,184,232,.35)}
 
-/* ========== MUSEUM SCENE ========== */
-.museum-scene{position:relative;height:200px;overflow:hidden;background:var(--bg);border-bottom:2px solid var(--border)}
-.ms-ceiling{position:absolute;top:0;left:0;right:0;height:24px;background:linear-gradient(to bottom,#0a1020,var(--bg));border-bottom:1px solid var(--border)}
-.ms-floor{position:absolute;bottom:0;left:0;right:0;height:36px;background:linear-gradient(to bottom,#080d18,#04060a);border-top:2px solid #162030}
-.ms-floor-tile{position:absolute;bottom:0;left:0;right:0;height:36px;background:repeating-linear-gradient(90deg,transparent,transparent 50px,rgba(30,80,140,.1) 50px,rgba(30,80,140,.1) 51px)}
-.ms-col{position:absolute;bottom:36px;width:16px;background:linear-gradient(to right,#0a1828,#1a3050,#0a1828);border:1px solid #1a3050}
-.ms-col::before{content:'';position:absolute;top:-8px;left:-4px;right:-4px;height:8px;background:#1e3a5a;border-radius:1px}
-.c1{left:20px;height:100px}.c2{left:55px;height:110px}.c3{right:55px;height:110px}.c4{right:20px;height:100px}
-.ceiling-spots{position:absolute;top:6px;left:0;right:0;display:flex;justify-content:space-around;padding:0 30px}
-.cs{width:6px;height:6px;border-radius:50%;background:rgba(200,230,255,.9);box-shadow:0 0 8px rgba(200,230,255,.6),0 0 20px rgba(150,200,255,.3)}
-.display-cases{position:absolute;bottom:36px;left:0;right:0;display:flex;justify-content:space-around;padding:0 16px;align-items:flex-end}
-.dc{width:70px;background:linear-gradient(to bottom,#0a1828,#071020);border:1px solid #1a3050;border-radius:4px 4px 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:border-color .2s}
-.dc:hover{border-color:var(--accent)}
-.dc1{height:80px}.dc2{height:95px}.dc3{height:80px}
-.dc-icon{font-size:28px;margin-bottom:4px}
-.dc-label{font-size:8px;color:var(--muted);text-align:center;padding:0 4px}
-.dc-base{width:80px;height:8px;background:linear-gradient(to bottom,#1e3a5a,#0a1828);border:1px solid #1a3050;border-top:none}
-.visitor{position:absolute;bottom:36px;font-size:18px;opacity:.5}
-.v1{animation:vWalk 10s linear infinite}.v2{animation:vWalk 14s linear infinite 4s}
-@keyframes vWalk{0%{left:-20px}100%{left:calc(100% + 20px)}}
+/* ===== ロビーシーン ===== */
+.lobby-scene{position:relative;height:160px;overflow:hidden;background:linear-gradient(to bottom,#06101a,#04060a);border-bottom:2px solid var(--border);display:flex;align-items:center;justify-content:center}
+.lobby-pillars{position:absolute;inset:0;display:flex;justify-content:space-around;align-items:flex-end;padding:0 6%}
+.pillar{width:16px;height:100px;background:linear-gradient(to right,#080f1a,#122030,#080f1a);border-radius:3px 3px 0 0;position:relative;flex-shrink:0}
+.pillar::before{content:'';position:absolute;top:-9px;left:-7px;right:-7px;height:9px;background:linear-gradient(to right,#080f1a,#122030,#080f1a);border-radius:3px}
+.pillar::after{content:'';position:absolute;bottom:0;left:-5px;right:-5px;height:5px;background:#122030}
+.lobby-center{position:relative;z-index:1;text-align:center}
+.lobby-emoji{font-size:38px;display:block;margin-bottom:4px;filter:drop-shadow(0 0 12px rgba(126,184,232,.4))}
+.lobby-title-text{font-size:22px;font-weight:700;color:#fff;letter-spacing:3px;text-shadow:0 0 16px rgba(126,184,232,.3)}
+.lobby-title-sub{font-size:11px;color:var(--muted);margin-top:2px;letter-spacing:1px}
+.lobby-glow{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:70%;height:50px;background:radial-gradient(ellipse at center,rgba(126,184,232,.07),transparent 70%);pointer-events:none}
 
-/* ========== コンテンツ ========== */
-.page{padding:16px}
-.tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto}
+/* ===== ヘッダー ===== */
+.museum-header{text-align:center;padding:16px 16px 10px}
+.museum-title{font-size:20px;font-weight:700;color:#fff;margin-bottom:3px}
+.museum-sub{font-size:12px;color:var(--muted)}
+
+/* ===== タブ ===== */
+.tabs{display:flex;gap:6px;margin:0 16px 16px;overflow-x:auto;padding-bottom:2px}
 .tab{padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:12px;white-space:nowrap;transition:all .2s}
 .tab.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
-.panel{display:none}.panel.active{display:block}
-.s-title{font-size:14px;font-weight:700;color:var(--accent);margin:0 0 12px;display:flex;align-items:center;gap:6px}
-.exhibit-list{display:flex;flex-direction:column;gap:12px}
-.exhibit{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;position:relative;cursor:pointer;transition:border-color .2s}
-.exhibit:hover{border-color:var(--accent)}
-.exhibit-num{position:absolute;top:10px;left:12px;width:24px;height:24px;background:var(--accent);color:#000;font-size:10px;font-weight:700;border-radius:50%;display:flex;align-items:center;justify-content:center}
-.exhibit-body{padding:12px 14px 12px 44px}
-.exhibit-title{font-size:13px;font-weight:700;color:#fff;line-height:1.4;margin-bottom:4px}
-.exhibit-author{font-size:10px;color:var(--accent);margin-bottom:6px}
-.exhibit-text{font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:8px}
-.exhibit-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
-.etag{font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(126,184,232,.12);color:var(--accent);border:1px solid rgba(126,184,232,.2)}
-.exhibit-footer{display:flex;gap:10px;font-size:11px;color:var(--muted)}
-.loading-indicator{text-align:center;padding:30px;color:var(--muted);font-size:13px}
-.hall-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-.hall-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;cursor:pointer;transition:border-color .2s}
-.hall-card:hover{border-color:var(--accent)}
-.hall-icon{font-size:26px;margin-bottom:6px}
-.hall-name{font-size:12px;font-weight:700;color:#fff;margin-bottom:3px}
-.hall-desc{font-size:10px;color:var(--muted)}
-#viewer{display:none;position:fixed;inset:0;background:rgba(4,6,10,.97);z-index:200;overflow-y:auto;padding:20px 16px 40px}
-.viewer-head{position:sticky;top:0;display:flex;justify-content:flex-end;padding-bottom:10px;background:rgba(4,6,10,.97)}
-.viewer-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;max-width:600px;margin:0 auto}
-.viewer-label{font-size:10px;color:var(--accent);letter-spacing:.1em;margin-bottom:6px}
-.viewer-title{font-family:'Playfair Display',serif;font-size:17px;color:#fff;line-height:1.5;margin-bottom:8px}
-.viewer-author{font-size:12px;color:var(--accent);margin-bottom:14px}
-.viewer-body{font-size:13px;color:var(--muted);line-height:1.9}
-.viewer-body p{margin-bottom:12px}
-.viewer-stats{display:flex;gap:14px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
-.vstat{font-size:12px;color:var(--muted)}
+
+/* ===== パネル ===== */
+.panel{display:none;padding:0 16px 32px}.panel.active{display:block}
+.section-title{font-size:14px;font-weight:700;color:var(--accent);margin:0 0 12px;display:flex;align-items:center;gap:6px}
+
+/* ===== ホールカード ===== */
+.hall-grid-wrap{display:flex;flex-direction:column;gap:14px}
+.hall-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:border-color .2s}
+.hall-card.clickable{cursor:pointer}
+.hall-card.clickable:hover{border-color:var(--accent)}
+.hall-header{padding:14px 16px 10px;display:flex;gap:12px;align-items:center}
+.hall-icon{font-size:28px}
+.hall-name{font-size:14px;font-weight:700;color:#fff;margin-bottom:2px}
+.hall-sub{font-size:11px;color:var(--muted)}
+
+/* ===== 展示物ストリップ ===== */
+.exhibit-strip{padding:0 16px 14px;display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;min-height:90px;align-items:center}
+.exhibit-mini{flex-shrink:0;width:82px}
+.exhibit-mini-thumb{width:82px;height:62px;border-radius:6px;border:1px solid var(--border);overflow:hidden;background:#060c14;margin-bottom:4px;display:flex;align-items:center;justify-content:center}
+.exhibit-mini-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.exhibit-mini-title{font-size:9px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+.hall-loading{font-size:12px;color:var(--muted);text-align:center;padding:12px}
+.hall-empty{font-size:12px;color:var(--muted);text-align:center;padding:12px}
+
+/* ===== 季節の博物館 ===== */
+.season-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px 16px}
+.season-item{background:rgba(126,184,232,.05);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+.season-icon{font-size:30px;margin-bottom:8px}
+.season-name{font-size:12px;font-weight:700;color:#fff;margin-bottom:8px;line-height:1.4}
+.season-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;background:rgba(212,160,23,.1);color:var(--gold);border:1px solid rgba(212,160,23,.25)}
+
+/* ===== 案内タブ ===== */
+.about-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.about-card h3{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:8px}
+.about-card p{font-size:13px;color:var(--muted);line-height:1.8}
+.guide-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;background:rgba(126,184,232,.12);border:1px solid rgba(126,184,232,.3);border-radius:10px;color:var(--accent);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px;transition:background .2s}
+.guide-btn:hover{background:rgba(126,184,232,.22)}
+
+/* ===== Hall Detail Overlay ===== */
+#hallDetail{display:none;position:fixed;inset:0;background:rgba(4,6,10,.97);z-index:10000;overflow-y:auto}
+.hall-detail-inner{padding:16px 16px 48px;max-width:600px;margin:0 auto}
+.hd-top{display:flex;align-items:center;gap:10px;margin-bottom:18px;padding-top:6px}
+.hd-title{font-size:18px;font-weight:700;color:#fff;flex:1}
+.hd-close{flex-shrink:0;background:rgba(126,184,232,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-family:inherit}
+.exhibit-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.exhibit-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:border-color .2s}
+.exhibit-card:hover{border-color:var(--accent)}
+.exhibit-thumb{width:100%;height:120px;overflow:hidden;background:#060c14;display:flex;align-items:center;justify-content:center}
+.exhibit-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.exhibit-info{padding:8px 10px}
+.exhibit-title{font-size:12px;font-weight:700;color:#fff;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exhibit-meta{font-size:10px;color:var(--muted)}
+.hd-empty{text-align:center;padding:48px;font-size:13px;color:var(--muted);grid-column:1/-1}
+.hd-grid-loading{text-align:center;padding:32px;font-size:13px;color:var(--muted);grid-column:1/-1}
+
+/* ===== Exhibit Viewer ===== */
+#exhibitViewer{display:none;position:fixed;inset:0;background:rgba(4,6,10,.97);z-index:10200;flex-direction:column;align-items:center;padding:16px 16px 40px;overflow-y:auto}
+.ev-close{align-self:flex-end;background:rgba(126,184,232,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-family:inherit;margin-bottom:12px}
+.ev-img-wrap{width:100%;max-width:340px;border:2px solid var(--border);border-radius:8px;overflow:hidden;background:#060c14;margin-bottom:14px}
+.ev-img-wrap img{width:100%;display:block}
+.ev-meta{text-align:center;max-width:340px}
+.ev-category{display:inline-block;margin-bottom:8px;padding:3px 12px;border-radius:20px;font-size:11px;background:rgba(126,184,232,.1);color:var(--accent);border:1px solid rgba(126,184,232,.2)}
+.ev-title{font-size:18px;font-weight:700;color:#fff;margin-bottom:8px}
+.ev-desc{font-size:13px;color:var(--muted);line-height:1.7}
+
+/* ===== Guide Modal ===== */
+#guideModal{display:none;position:fixed;inset:0;background:rgba(4,6,10,.97);z-index:10300;overflow-y:auto}
+.guide-inner{padding:16px 16px 48px;max-width:500px;margin:0 auto}
+.guide-inner h2{font-size:18px;font-weight:700;color:#fff;margin-bottom:18px;padding-top:6px}
+.guide-close-btn{float:right;background:rgba(126,184,232,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-family:inherit}
+.guide-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.guide-section h3{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:8px}
+.guide-section p{font-size:13px;color:var(--muted);line-height:1.8}
+.guide-section ul{font-size:13px;color:var(--muted);line-height:1.8;padding-left:1.2em}
+
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 </style>
 </head>
 <body>
-<button class="close-btn" onclick="window.top.postMessage({type:'spContentClose'},'*')">✕ 閉じる</button>
 
-<div class="museum-scene">
-  <div class="ms-ceiling"></div>
-  <div class="ms-floor"><div class="ms-floor-tile"></div></div>
-  <div class="ceiling-spots"><div class="cs"></div><div class="cs"></div><div class="cs"></div><div class="cs"></div></div>
-  <div class="ms-col c1"></div><div class="ms-col c2"></div><div class="ms-col c3"></div><div class="ms-col c4"></div>
-  <div class="display-cases">
-    <div><div class="dc dc1" onclick="switchTab('explore')"><div class="dc-icon">🔍</div><div class="dc-label">探索</div></div><div class="dc-base"></div></div>
-    <div><div class="dc dc2" onclick="switchTab('learn')"><div class="dc-icon">📖</div><div class="dc-label">学び</div></div><div class="dc-base"></div></div>
-    <div><div class="dc dc3" onclick="switchTab('recommend')"><div class="dc-icon">⭐</div><div class="dc-label">殿堂</div></div><div class="dc-base"></div></div>
+<button class="close-btn" id="globalCloseBtn" onclick="window.top.postMessage({type:'spContentClose'},'*')">✕ 博物館を出る</button>
+
+<!-- ロビーシーン -->
+<div class="lobby-scene">
+  <div class="lobby-pillars">
+    <div class="pillar"></div>
+    <div class="pillar"></div>
+    <div class="pillar"></div>
+    <div class="pillar"></div>
+    <div class="pillar"></div>
+    <div class="pillar"></div>
   </div>
-  <div class="visitor v1" style="left:-20px">🚶</div>
-  <div class="visitor v2" style="left:60px">🧑‍🎓</div>
+  <div class="lobby-center">
+    <span class="lobby-emoji">🏛️</span>
+    <div class="lobby-title-text">MUSEUM</div>
+    <div class="lobby-title-sub">SchoolPark</div>
+  </div>
+  <div class="lobby-glow"></div>
 </div>
 
-<div style="text-align:center;padding:14px 16px 10px">
-  <div style="font-family:'Playfair Display',serif;font-size:19px;color:#fff">SchoolPark Museum</div>
-  <div style="font-size:11px;color:var(--muted);margin-top:3px">コミュニティの記録と知恵を展示する博物館</div>
+<!-- ヘッダー -->
+<div class="museum-header">
+  <div class="museum-title">SchoolPark Museum</div>
+  <div class="museum-sub">寄ってらっしゃい・見てらっしゃい。SchoolParkの博物館！</div>
 </div>
 
-<div class="page">
-  <div class="tabs">
-    <div class="tab active" onclick="switchTab('explore')">🔍 探索ホール</div>
-    <div class="tab" onclick="switchTab('learn')">📖 学びホール</div>
-    <div class="tab" onclick="switchTab('recommend')">⭐ 殿堂</div>
-    <div class="tab" onclick="switchTab('about')">🏛️ 案内</div>
-  </div>
+<!-- タブ -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('halls')">🏛️ ホール</div>
+  <div class="tab" onclick="switchTab('about')">ℹ️ 案内</div>
+</div>
 
-  <div class="panel active" id="panel-explore">
-    <div class="s-title">🔍 探索ホール — Emuの「探索」投稿を展示</div>
-    <div class="exhibit-list" id="exploreList"><div class="loading-indicator">📡 展示物を読み込んでいます...</div></div>
-  </div>
+<!-- ========== ホール ========== -->
+<div class="panel active" id="panel-halls">
+  <div class="section-title">🏛️ 展示ホール</div>
+  <div class="hall-grid-wrap">
 
-  <div class="panel" id="panel-learn">
-    <div class="s-title">📖 学びホール — Emuの「学び」投稿を展示</div>
-    <div class="exhibit-list" id="learnList"><div class="loading-indicator">📡 展示物を読み込んでいます...</div></div>
-  </div>
-
-  <div class="panel" id="panel-recommend">
-    <div class="s-title">⭐ おすすめ殿堂 — good上位の名作投稿</div>
-    <div class="exhibit-list" id="recommendList"><div class="loading-indicator">📡 展示物を読み込んでいます...</div></div>
-  </div>
-
-  <div class="panel" id="panel-about">
-    <div class="s-title">🏛️ 博物館について</div>
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;font-size:13px;color:var(--muted);line-height:1.8">
-      SchoolPark Museumは、Emuコミュニティメンバーの投稿を「展示物」として展示する博物館です。探索・学びの記録がここに永久保存されます。あなたの投稿も、この博物館の展示物になるかもしれません。
+    <!-- SchoolPark博物館 -->
+    <div class="hall-card clickable" onclick="openHallDetail()">
+      <div class="hall-header">
+        <div class="hall-icon">🔍</div>
+        <div>
+          <div class="hall-name">SchoolPark博物館</div>
+          <div class="hall-sub">SchoolParkの記録・展示物 ▶ タップして全て見る</div>
+        </div>
+      </div>
+      <div class="exhibit-strip" id="spMuseumStrip">
+        <div class="hall-loading">読み込み中…</div>
+      </div>
     </div>
-    <div class="s-title">📋 3つのホール</div>
-    <div class="hall-grid">
-      <div class="hall-card" onclick="switchTab('explore')"><div class="hall-icon">🔍</div><div class="hall-name">探索ホール</div><div class="hall-desc">「探索」タグの投稿</div></div>
-      <div class="hall-card" onclick="switchTab('learn')"><div class="hall-icon">📖</div><div class="hall-name">学びホール</div><div class="hall-desc">「学び」タグの投稿</div></div>
-      <div class="hall-card" onclick="switchTab('recommend')"><div class="hall-icon">⭐</div><div class="hall-name">おすすめ殿堂</div><div class="hall-desc">good上位の名作</div></div>
-      <div class="hall-card" onclick="switchTab('about')"><div class="hall-icon">🏛️</div><div class="hall-name">館内案内</div><div class="hall-desc">博物館の使い方</div></div>
+
+    <!-- 季節の博物館 -->
+    <div class="hall-card">
+      <div class="hall-header">
+        <div class="hall-icon">📖</div>
+        <div>
+          <div class="hall-name">季節の博物館</div>
+          <div class="hall-sub">定期的にいろいろな博物館がOPEN！</div>
+        </div>
+      </div>
+      <div class="season-grid">
+        <div class="season-item">
+          <div class="season-icon">🦋</div>
+          <div class="season-name">昆虫博物館</div>
+          <div class="season-badge">Coming Soon</div>
+        </div>
+        <div class="season-item">
+          <div class="season-icon">🚗</div>
+          <div class="season-name">クラシックカー博物館</div>
+          <div class="season-badge">Coming Soon</div>
+        </div>
+      </div>
     </div>
-    <div style="padding:12px 14px;background:rgba(212,160,23,.08);border:1px solid rgba(212,160,23,.2);border-radius:12px">
-      <div style="font-size:12px;color:var(--gold);font-weight:700;margin-bottom:6px">💡 展示されるには</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.8">Emuアプリで「探索」または「学び」タグをつけて投稿すると、この博物館に展示されます。good・changeが多い投稿は「おすすめ殿堂」に選ばれます。</div>
+
+  </div>
+</div>
+
+<!-- ========== 案内 ========== -->
+<div class="panel" id="panel-about">
+  <div class="about-card">
+    <h3>🏛️ SchoolPark Museum とは</h3>
+    <p>SchoolPark Museumは、SchoolPark内の出来事や活動・行動を「展示物」として展示する博物館です。あなたのログも、この博物館の展示物になるかも…！季節の博物館では、定期的にいろいろな博物館がOPENします。</p>
+  </div>
+  <div class="about-card">
+    <h3>🎯 入館するには</h3>
+    <p>特に必要なものや用意するものはありません。大事なのは、行動と運なのです。</p>
+  </div>
+  <button class="guide-btn" onclick="openGuide()">📖 館内案内 — 博物館の使い方を見る</button>
+</div>
+
+<!-- ========== Hall Detail Overlay ========== -->
+<div id="hallDetail">
+  <div class="hall-detail-inner">
+    <div class="hd-top">
+      <div class="hd-title">🔍 SchoolPark博物館</div>
+      <button class="hd-close" onclick="closeHallDetail()">✕ 閉じる</button>
+    </div>
+    <div class="exhibit-grid" id="hdGrid">
+      <div class="hd-grid-loading">読み込み中…</div>
     </div>
   </div>
 </div>
 
-<div id="viewer">
-  <div class="viewer-head">
-    <button onclick="closeViewer()" style="background:rgba(126,184,232,.2);border:1px solid var(--border);color:var(--accent);padding:7px 16px;border-radius:20px;cursor:pointer;font-size:12px">✕ 閉じる</button>
+<!-- ========== Exhibit Viewer ========== -->
+<div id="exhibitViewer" style="display:flex">
+  <button class="ev-close" onclick="closeExhibitViewer()">✕ 閉じる</button>
+  <div class="ev-img-wrap" id="evImgWrap"></div>
+  <div class="ev-meta">
+    <div class="ev-category" id="evCategory"></div>
+    <div class="ev-title" id="evTitle"></div>
+    <div class="ev-desc" id="evDesc"></div>
   </div>
-  <div class="viewer-card" id="viewerCard"></div>
 </div>
 
+<!-- ========== Guide Modal ========== -->
+<div id="guideModal">
+  <div class="guide-inner">
+    <button class="guide-close-btn" onclick="closeGuide()">✕ 閉じる</button>
+    <h2>📖 館内案内</h2>
+
+    <div class="guide-section">
+      <h3>🔍 SchoolPark博物館</h3>
+      <p>SchoolParkの活動・出来事・記録が展示されます。SchoolPark運営が随時追加します。新しい展示物はリアルタイムで反映されます。</p>
+    </div>
+
+    <div class="guide-section">
+      <h3>📖 季節の博物館</h3>
+      <p>季節やテーマに合わせた博物館が順次オープンします。現在は昆虫博物館・クラシックカー博物館が準備中です。</p>
+    </div>
+
+    <div class="guide-section">
+      <h3>💡 展示物になるには</h3>
+      <ul>
+        <li>SchoolPark内での行動・活動が選ばれることがあります</li>
+        <li>事前の申請は不要です</li>
+        <li>大事なのは、行動と運なのです</li>
+      </ul>
+    </div>
+
+    <div class="guide-section">
+      <h3>🕐 開館情報</h3>
+      <p>開館時間: 24時間 / 365日<br>入館料: 無料<br>撮影: 可（SNS投稿歓迎）</p>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase Compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 <script>
-function switchTab(name){
-  document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',['explore','learn','recommend','about'][i]===name)});
-  document.querySelectorAll('.panel').forEach(p=>{p.classList.toggle('active',p.id==='panel-'+name)});
-  if(name==='explore') loadPosts('探索','exploreList');
-  else if(name==='learn') loadPosts('学び','learnList');
-  else if(name==='recommend') loadRecommend();
+// ========== Firebase ==========
+const MUSEUM_FB_CFG = {
+  apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
+  authDomain: "emusch-2a111.firebaseapp.com",
+  projectId: "emusch-2a111",
+  storageBucket: "emusch-2a111.firebasestorage.app",
+  messagingSenderId: "795496371585",
+  appId: "1:795496371585:web:51deec91b8a2152e4c8480"
+};
+
+let museumDb;
+try {
+  const app = firebase.apps.find(a => a.name === 'museum')
+    || firebase.initializeApp(MUSEUM_FB_CFG, 'museum');
+  museumDb = firebase.firestore(app);
+} catch(e) {
+  console.error('Museum Firebase init error:', e);
 }
-function getDb(){try{return window.top.db||null;}catch(e){return null;}}
-function getFbLib(){try{return window.top.fbLib||null;}catch(e){return null;}}
-function timeAgo(ts){if(!ts)return '';try{const d=ts.toDate?ts.toDate():new Date(ts);const diff=Math.floor((Date.now()-d.getTime())/1000);if(diff<60)return diff+'秒前';if(diff<3600)return Math.floor(diff/60)+'分前';if(diff<86400)return Math.floor(diff/3600)+'時間前';return Math.floor(diff/86400)+'日前';}catch(e){return '';}}
-function excerpt(body,n=80){if(!body)return '';const p=body.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();return p.length>n?p.slice(0,n)+'…':p;}
-let cache={};
-function buildCard(doc,num){
-  const d=doc.data();const tags=(d.tags||[]).slice(0,3);
-  return `<div class="exhibit" onclick="openViewer('${doc.id}')">
-    <div class="exhibit-num">${num}</div>
-    <div class="exhibit-body">
-      <div class="exhibit-title">${d.title||'無題'}</div>
-      <div class="exhibit-author">${(d.address||'匿名').slice(0,6)}… · ${timeAgo(d.createdAt)}</div>
-      <div class="exhibit-text">${excerpt(d.body||d.text)}</div>
-      <div class="exhibit-tags">${tags.map(t=>`<span class="etag">${t}</span>`).join('')}</div>
-      <div class="exhibit-footer"><span>👍 ${d.goodCount||0}</span><span>🔄 ${d.changeCount||0}</span></div>
-    </div></div>`;
+
+// ========== State ==========
+let exhibits = [];
+let unsubExhibits = null;
+
+// ========== Init ==========
+function init() {
+  document.getElementById('exhibitViewer').style.display = 'none';
+  initExhibits();
 }
-function empty(msg){return `<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">${msg}</div>`;}
-async function loadPosts(tag,listId){
-  const el=document.getElementById(listId);if(!el)return;
-  const db=getDb();const lib=getFbLib();
-  if(!db||!lib){el.innerHTML=buildSamples(tag);return;}
-  try{
-    const {collection,query,where,orderBy,limit,getDocs}=lib;
-    const q=query(collection(db,'posts'),where('tags','array-contains',tag),orderBy('createdAt','desc'),limit(12));
-    const snap=await getDocs(q);
-    if(snap.empty){el.innerHTML=empty('まだ展示物がありません。Emuで「'+tag+'」タグをつけて投稿しよう！');return;}
-    snap.docs.forEach(d=>{cache[d.id]=d.data();});
-    el.innerHTML=snap.docs.map((d,i)=>buildCard(d,i+1)).join('');
-  }catch(e){el.innerHTML=buildSamples(tag);}
+
+// ========== onSnapshot ==========
+function initExhibits() {
+  if (!museumDb) {
+    document.getElementById('spMuseumStrip').innerHTML =
+      '<div class="hall-loading">⚠ 接続エラー</div>';
+    return;
+  }
+  unsubExhibits = museumDb.collection('museum_sp_exhibits')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(function(snap) {
+      exhibits = [];
+      snap.forEach(function(d) { exhibits.push(Object.assign({ docId: d.id }, d.data())); });
+      renderStrip();
+      if (document.getElementById('hallDetail').style.display === 'block') {
+        renderHdGrid();
+      }
+    }, function(err) {
+      console.error('museum onSnapshot error:', err);
+      document.getElementById('spMuseumStrip').innerHTML =
+        '<div class="hall-loading">⚠ 読み込み失敗</div>';
+    });
 }
-async function loadRecommend(){
-  const el=document.getElementById('recommendList');if(!el)return;
-  const db=getDb();const lib=getFbLib();
-  if(!db||!lib){el.innerHTML=empty('データを読み込めませんでした');return;}
-  try{
-    const {collection,query,where,orderBy,limit,getDocs}=lib;
-    const q=query(collection(db,'posts'),where('goodCount','>=',5),orderBy('goodCount','desc'),limit(12));
-    const snap=await getDocs(q);
-    if(snap.empty){el.innerHTML=empty('good上位の投稿はまだありません。名作を目指して投稿しよう！');return;}
-    snap.docs.forEach(d=>{cache[d.id]=d.data();});
-    el.innerHTML=snap.docs.map((d,i)=>buildCard(d,i+1)).join('');
-  }catch(e){el.innerHTML=empty('読み込みエラーが発生しました');}
+
+// ========== Strip ==========
+function renderStrip() {
+  const strip = document.getElementById('spMuseumStrip');
+  if (!exhibits.length) {
+    strip.innerHTML = '<div class="hall-empty">まだ展示物がありません</div>';
+    return;
+  }
+  strip.innerHTML = exhibits.slice(0, 5).map(function(ex) {
+    const src = ex.imageData || ex.imageUrl || '';
+    const titleSafe = esc(ex.title || '展示物');
+    return '<div class="exhibit-mini">'
+      + '<div class="exhibit-mini-thumb">'
+      + (src
+          ? '<img src="' + src + '" alt="' + titleSafe + '" loading="lazy" onerror="imgFallback(this,\'' + titleSafe + '\')">'
+          : '<span style="font-size:22px">🏛️</span>')
+      + '</div>'
+      + '<div class="exhibit-mini-title">' + titleSafe + '</div>'
+      + '</div>';
+  }).join('');
 }
-const SAMPLES_DATA=[
-  {id:'s1',title:'Web3の世界への第一歩',addr:'0xAbcd',body:'ブロックチェーンとは何か。初めてMetaMaskを触ったあの日から、世界が変わって見えた。自分のウォレットを持った瞬間、何かが腑に落ちた。',tags:['探索','初心者'],good:14,change:5,ago:'2日前'},
-  {id:'s2',title:'DAO組織で働くということ',addr:'0xEf01',body:'従来の会社組織とDAOの違い。自律分散という概念が、私の働き方観を根本から変えた。上司の指示を待たず、自分の判断でコントリビュートする自由。',tags:['学び','DAO'],good:28,change:12,ago:'5日前'},
-  {id:'s3',title:'NFTアートを始めて気づいたこと',addr:'0x2345',body:'デジタルアートに所有権が生まれる。クリエイターエコノミーの新しい形を実感した記録。無限にコピーできるはずのデータが唯一のものになる逆説。',tags:['探索','NFT'],good:9,change:3,ago:'1週間前'},
-];
-function buildSamples(tag){
-  return SAMPLES_DATA.filter(s=>s.tags.some(t=>t===tag||tag==='')).map((s,i)=>`<div class="exhibit" onclick="openViewerDirect(${i})">
-    <div class="exhibit-num">${i+1}</div>
-    <div class="exhibit-body">
-      <div class="exhibit-title">${s.title}</div>
-      <div class="exhibit-author">${s.addr}… · ${s.ago}</div>
-      <div class="exhibit-text">${s.body}</div>
-      <div class="exhibit-tags">${s.tags.map(t=>`<span class="etag">${t}</span>`).join('')}</div>
-      <div class="exhibit-footer"><span>👍 ${s.good}</span><span>🔄 ${s.change}</span></div>
-    </div></div>`).join('')||empty('まだ展示物がありません');
+
+// ========== Hall Detail ==========
+function openHallDetail() {
+  document.getElementById('hallDetail').style.display = 'block';
+  document.getElementById('globalCloseBtn').style.display = 'none';
+  renderHdGrid();
 }
-function openViewerDirect(i){const s=SAMPLES_DATA[i];if(!s)return;showViewer(s.title,s.addr+'…',`<p>${s.body}</p>`,s.tags,s.good,s.change,s.ago);}
-async function openViewer(id){
-  let d=cache[id];
-  if(!d){const db=getDb();const lib=getFbLib();if(db&&lib){try{const {doc,getDoc}=lib;const snap=await getDoc(doc(db,'posts',id));if(snap.exists())d=snap.data();}catch(e){}}}
-  if(!d)return;
-  showViewer(d.title||'無題',(d.address||'匿名').slice(0,8)+'…',`<p>${(d.body||d.text||'').replace(/<[^>]+>/g,'').replace(/\n/g,'</p><p>')}</p>`,d.tags||[],d.goodCount||0,d.changeCount||0,timeAgo(d.createdAt));
+
+function closeHallDetail() {
+  document.getElementById('hallDetail').style.display = 'none';
+  if (document.getElementById('exhibitViewer').style.display === 'none' &&
+      document.getElementById('guideModal').style.display === 'none') {
+    document.getElementById('globalCloseBtn').style.display = '';
+  }
 }
-function showViewer(title,author,bodyHtml,tags,good,change,ago){
-  const tagHtml=(tags||[]).map(t=>`<span class="etag">${t}</span>`).join('');
-  document.getElementById('viewerCard').innerHTML=`
-    <div class="viewer-label">🏛️ EXHIBIT No.${String(Date.now()).slice(-4)}</div>
-    <div class="viewer-title">${title}</div>
-    <div class="viewer-author">${author} · ${ago}</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${tagHtml}</div>
-    <div class="viewer-body">${bodyHtml}</div>
-    <div class="viewer-stats"><span class="vstat">👍 good: <strong style="color:#fff">${good}</strong></span><span class="vstat">🔄 change: <strong style="color:#fff">${change}</strong></span></div>`;
-  document.getElementById('viewer').style.display='block';
-  document.getElementById('viewer').scrollTop=0;
+
+function renderHdGrid() {
+  const grid = document.getElementById('hdGrid');
+  if (!exhibits.length) {
+    grid.innerHTML = '<div class="hd-empty">まだ展示物がありません</div>';
+    return;
+  }
+  grid.innerHTML = exhibits.map(function(ex) {
+    const src = ex.imageData || ex.imageUrl || '';
+    const titleSafe = esc(ex.title || '展示物');
+    const dt = ex.createdAt ? new Date(ex.createdAt).toLocaleDateString('ja-JP') : '';
+    return '<div class="exhibit-card" onclick="openExhibitViewer(\'' + ex.docId + '\')">'
+      + '<div class="exhibit-thumb">'
+      + (src
+          ? '<img src="' + src + '" alt="' + titleSafe + '" loading="lazy" onerror="imgFallback(this,\'' + titleSafe + '\')">'
+          : '<span style="font-size:36px">🏛️</span>')
+      + '</div>'
+      + '<div class="exhibit-info">'
+      + '<div class="exhibit-title">' + titleSafe + '</div>'
+      + '<div class="exhibit-meta">' + esc(ex.category || '') + (dt ? ' · ' + dt : '') + '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
 }
-function closeViewer(){document.getElementById('viewer').style.display='none';}
-loadPosts('探索','exploreList');
+
+// ========== Exhibit Viewer ==========
+function openExhibitViewer(docId) {
+  const ex = exhibits.find(function(e) { return e.docId === docId; });
+  if (!ex) return;
+
+  const src = ex.imageData || ex.imageUrl || '';
+  const wrap = document.getElementById('evImgWrap');
+  if (src) {
+    wrap.style.display = '';
+    wrap.innerHTML = '<img src="' + src + '" alt="' + esc(ex.title || '') + '" style="width:100%;display:block" onerror="imgFallback(this,\'' + esc(ex.title || '') + '\')">';
+  } else {
+    wrap.style.display = 'none';
+  }
+
+  const catEl = document.getElementById('evCategory');
+  if (ex.category) { catEl.textContent = ex.category; catEl.style.display = ''; }
+  else { catEl.style.display = 'none'; }
+
+  document.getElementById('evTitle').textContent = ex.title || '展示物';
+  document.getElementById('evDesc').textContent = ex.desc || '';
+
+  document.getElementById('exhibitViewer').style.display = 'flex';
+  document.getElementById('globalCloseBtn').style.display = 'none';
+}
+
+function closeExhibitViewer() {
+  document.getElementById('exhibitViewer').style.display = 'none';
+  if (document.getElementById('hallDetail').style.display !== 'block' &&
+      document.getElementById('guideModal').style.display !== 'block') {
+    document.getElementById('globalCloseBtn').style.display = '';
+  }
+}
+
+// ========== Guide Modal ==========
+function openGuide() {
+  document.getElementById('guideModal').style.display = 'block';
+  document.getElementById('globalCloseBtn').style.display = 'none';
+}
+
+function closeGuide() {
+  document.getElementById('guideModal').style.display = 'none';
+  if (document.getElementById('hallDetail').style.display !== 'block' &&
+      document.getElementById('exhibitViewer').style.display !== 'block') {
+    document.getElementById('globalCloseBtn').style.display = '';
+  }
+}
+
+// ========== Tab ==========
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(function(t, i) {
+    t.classList.toggle('active', ['halls', 'about'][i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(function(p) {
+    p.classList.toggle('active', p.id === 'panel-' + name);
+  });
+}
+
+// ========== Utils ==========
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function imgFallback(el, title) {
+  el.style.display = 'none';
+  const d = document.createElement('div');
+  d.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;' +
+    'background:#060c14;font-size:11px;color:#3a5870;text-align:center;padding:6px;line-height:1.4';
+  d.textContent = title || '展示物';
+  el.parentElement.appendChild(d);
+}
+
+window.addEventListener('beforeunload', function() {
+  if (unsubExhibits) unsubExhibits();
+});
+
+init();
 </script>
 </body>
 </html>
