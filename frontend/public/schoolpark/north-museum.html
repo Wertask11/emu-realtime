@@ -3,768 +3,468 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SchoolPark Art Museum — 美術館</title>
-<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+<title>SchoolPark Museum — 博物館</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
   --bg:#050005;--wall:#0a000e;--card:#100015;--border:#1e0030;
-  --accent:#c084fc;--gold:#e9c46a;--spot:#fff8e0;
-  --text:#e8d8f8;--muted:#6a4a8a;
+  --accent:#c084fc;--gold:#e9c46a;--text:#e8d8f8;--muted:#6a4a8a;
 }
 body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh;overflow-x:hidden}
-.close-btn{position:fixed;top:12px;right:14px;background:rgba(192,132,252,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px;z-index:9999}
+
+/* ===== 閉じるボタン ===== */
+.close-btn{position:fixed;top:12px;right:14px;background:rgba(192,132,252,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px;z-index:9999;font-family:inherit}
 .close-btn:hover{background:rgba(192,132,252,.35)}
 
-/* ========== GALLERY SCENE ========== */
-.gallery-scene{position:relative;height:200px;overflow:hidden;background:var(--wall);border-bottom:2px solid var(--border)}
-.wall-top{position:absolute;top:0;left:0;right:0;height:16px;background:linear-gradient(to bottom,#0f000f,#0a000e);border-bottom:1px solid #200030}
-.wall-molding{position:absolute;top:16px;left:0;right:0;height:6px;background:linear-gradient(to bottom,#2a0040,#0a000e)}
-.floor{position:absolute;bottom:0;left:0;right:0;height:44px;background:linear-gradient(to bottom,#120018,#08000c);border-top:1px solid #200030}
-.floor-reflect{position:absolute;bottom:0;left:0;right:0;height:40px;background:repeating-linear-gradient(90deg,transparent,transparent 40px,rgba(80,0,100,.08) 40px,rgba(80,0,100,.08) 41px)}
-.spotlight{position:absolute;top:0;pointer-events:none}
-.spot-beam{width:0;height:0;border-left:30px solid transparent;border-right:30px solid transparent;border-top:120px solid rgba(255,248,220,.04);margin:0 auto}
-.spot-bulb{width:10px;height:10px;background:var(--spot);border-radius:50%;box-shadow:0 0 16px var(--spot),0 0 32px rgba(255,248,220,.4);margin:4px auto}
-.sp1{left:calc(16% - 30px)}.sp2{left:calc(38% - 30px)}.sp3{left:calc(62% - 30px)}.sp4{left:calc(84% - 30px)}
-.artworks-row{position:absolute;bottom:44px;left:0;right:0;display:flex;justify-content:space-around;align-items:flex-end;padding:0 16px}
-.artwork-frame{position:relative;cursor:pointer;transition:transform .2s}
-.artwork-frame:hover{transform:translateY(-4px)}
-.frame-outer{border:3px solid #8a6030;border-radius:2px;padding:3px;background:linear-gradient(135deg,#3a1a00,#6a3a10,#3a1a00)}
-.frame-inner{overflow:hidden;position:relative}
-.artwork-canvas{display:block}
-.artwork-label{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--muted);white-space:nowrap}
-.ambient{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);width:80%;height:60px;background:radial-gradient(ellipse at center,rgba(140,0,200,.08),transparent 70%);pointer-events:none}
+/* ===== ロビーシーン ===== */
+.lobby-scene{position:relative;height:160px;overflow:hidden;background:linear-gradient(to bottom,#08000f,#050005);border-bottom:2px solid var(--border);display:flex;align-items:center;justify-content:center}
+.lobby-pillars{position:absolute;inset:0;display:flex;justify-content:space-around;align-items:flex-end;padding:0 6%}
+.pillar{width:16px;height:100px;background:linear-gradient(to right,#150020,#220035,#150020);border-radius:3px 3px 0 0;position:relative;flex-shrink:0}
+.pillar::before{content:'';position:absolute;top:-9px;left:-7px;right:-7px;height:9px;background:linear-gradient(to right,#150020,#220035,#150020);border-radius:3px}
+.pillar::after{content:'';position:absolute;bottom:0;left:-5px;right:-5px;height:5px;background:#220035}
+.lobby-center{position:relative;z-index:1;text-align:center}
+.lobby-emoji{font-size:40px;display:block;margin-bottom:4px;filter:drop-shadow(0 0 12px rgba(192,132,252,.5))}
+.lobby-title-text{font-size:22px;font-weight:700;color:#fff;letter-spacing:3px;text-shadow:0 0 16px rgba(192,132,252,.4)}
+.lobby-title-sub{font-size:11px;color:var(--muted);margin-top:2px;letter-spacing:1px}
+.lobby-glow{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:70%;height:50px;background:radial-gradient(ellipse at center,rgba(192,132,252,.08),transparent 70%);pointer-events:none}
 
-/* ========== HEADER / TABS ========== */
-.gallery-header{text-align:center;padding:16px 16px 12px}
-.gallery-title{font-family:'Playfair Display',serif;font-size:20px;color:#fff;margin-bottom:3px}
-.gallery-sub{font-size:12px;color:var(--muted)}
+/* ===== ヘッダー ===== */
+.museum-header{text-align:center;padding:16px 16px 10px}
+.museum-title{font-size:20px;font-weight:700;color:#fff;margin-bottom:3px}
+.museum-sub{font-size:12px;color:var(--muted)}
+
+/* ===== タブ ===== */
 .tabs{display:flex;gap:6px;margin:0 16px 16px;overflow-x:auto;padding-bottom:2px}
 .tab{padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:12px;white-space:nowrap;transition:all .2s}
 .tab.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
+
+/* ===== パネル ===== */
 .panel{display:none;padding:0 16px 32px}.panel.active{display:block}
 .section-title{font-size:14px;font-weight:700;color:var(--accent);margin:0 0 12px;display:flex;align-items:center;gap:6px}
 
-/* ========== 人気の作品 ========== */
-.top-liked-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;margin-bottom:24px;-webkit-overflow-scrolling:touch}
-.top-liked-item{flex-shrink:0;width:88px;cursor:pointer;text-align:center}
-.top-liked-thumb{width:88px;height:68px;border-radius:6px;border:2px solid var(--border);overflow:hidden;margin-bottom:4px;background:#1a001a;transition:border-color .2s}
-.top-liked-item:hover .top-liked-thumb{border-color:var(--accent)}
-.top-liked-thumb img,.top-liked-thumb canvas{width:100%;height:100%;object-fit:cover;display:block}
-.top-liked-name{font-size:9px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.top-liked-cnt{font-size:10px;color:#ff6b8a}
+/* ===== ホールカード ===== */
+.hall-grid{display:flex;flex-direction:column;gap:14px}
+.hall-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:border-color .2s}
+.hall-card.clickable{cursor:pointer}
+.hall-card.clickable:hover{border-color:var(--accent)}
+.hall-header{padding:14px 16px 10px;display:flex;gap:12px;align-items:center}
+.hall-icon{font-size:28px}
+.hall-name{font-size:14px;font-weight:700;color:#fff;margin-bottom:2px}
+.hall-sub{font-size:11px;color:var(--muted)}
 
-/* ========== WING CARDS ========== */
-.wing-grid{display:flex;flex-direction:column;gap:14px}
-.wing-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;cursor:pointer;transition:border-color .2s}
-.wing-card:hover{border-color:var(--accent)}
-.wing-header{padding:14px 16px 10px;display:flex;gap:12px;align-items:center}
-.wing-icon{font-size:28px}
-.wing-name{font-size:14px;font-weight:700;color:#fff;margin-bottom:2px}
-.wing-sub{font-size:11px;color:var(--muted)}
-.wing-works{padding:0 16px 14px;display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch}
-.mini-work{flex-shrink:0;width:72px;text-align:center}
-.mini-canvas{width:72px;height:56px;border-radius:4px;border:1px solid var(--border);overflow:hidden;margin-bottom:3px;background:#1a001a}
-.mini-canvas img,.mini-canvas canvas{width:100%;height:100%;object-fit:cover;display:block}
-.mini-title{font-size:9px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mini-like{font-size:9px;color:#ff6b8a}
-.wing-empty{padding:16px;font-size:12px;color:var(--muted);text-align:center}
+/* ===== 展示物ストリップ ===== */
+.exhibit-strip{padding:0 16px 14px;display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;min-height:90px;align-items:center}
+.exhibit-mini{flex-shrink:0;width:82px}
+.exhibit-mini-thumb{width:82px;height:62px;border-radius:6px;border:1px solid var(--border);overflow:hidden;background:#1a001a;margin-bottom:4px}
+.exhibit-mini-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.exhibit-mini-title{font-size:9px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+.hall-loading{font-size:12px;color:var(--muted);text-align:center;padding:12px}
+.hall-empty{font-size:12px;color:var(--muted);text-align:center;padding:12px}
 
-/* ========== ROOM DETAIL ========== */
-#roomDetail{display:none;position:fixed;inset:0;background:rgba(5,0,5,.97);z-index:10000;overflow-y:auto}
-.room-detail-inner{padding:16px 16px 48px;max-width:600px;margin:0 auto}
-.room-detail-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:18px;padding-top:6px}
-.room-detail-title{font-family:'Playfair Display',serif;font-size:18px;color:#fff}
-.room-detail-sub{font-size:11px;color:var(--muted);margin-top:2px}
-.rd-close{flex-shrink:0;background:rgba(192,132,252,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;margin-left:auto}
-.upload-strip{display:flex;align-items:center;gap:8px;background:rgba(192,132,252,.12);border:1px solid rgba(192,132,252,.3);color:var(--accent);padding:10px 18px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;margin-bottom:18px;width:100%;justify-content:center}
-.upload-strip:hover{background:rgba(192,132,252,.22)}
-.works-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.work-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .2s}
-.work-card:hover{border-color:var(--accent)}
-.work-thumb{width:100%;height:120px;overflow:hidden;background:#1a001a;cursor:pointer}
-.work-thumb img,.work-thumb canvas{width:100%;height:100%;object-fit:cover;display:block}
-.work-info{padding:8px 10px}
-.work-title{font-size:12px;font-weight:700;color:#fff;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.work-artist{font-size:10px;color:var(--muted);margin-bottom:6px}
-.work-like-row{display:flex;align-items:center;justify-content:space-between}
-.like-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:3px 10px;border-radius:20px;cursor:pointer;font-size:11px;transition:all .2s;font-family:inherit}
-.like-btn.liked{border-color:#ff6b8a;color:#ff6b8a;background:rgba(255,107,138,.1)}
-.like-btn:hover{border-color:#ff6b8a;color:#ff6b8a}
+/* ===== 季節の博物館 ===== */
+.season-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px 16px}
+.season-item{background:rgba(192,132,252,.05);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+.season-icon{font-size:30px;margin-bottom:8px}
+.season-name{font-size:12px;font-weight:700;color:#fff;margin-bottom:8px;line-height:1.4}
+.season-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;background:rgba(234,196,106,.1);color:var(--gold);border:1px solid rgba(234,196,106,.25)}
 
-/* ========== UPLOAD MODAL ========== */
-#uploadModal{display:none;position:fixed;inset:0;background:rgba(5,0,5,.98);z-index:10100;overflow-y:auto}
-.upload-inner{padding:16px 16px 48px;max-width:480px;margin:0 auto}
-.upload-inner h3{font-size:16px;color:#fff;margin-bottom:18px;padding-top:6px}
-.upload-close{float:right;background:rgba(192,132,252,.2);border:1px solid var(--border);color:var(--accent);padding:5px 12px;border-radius:20px;cursor:pointer;font-size:12px;font-family:inherit}
-.upload-dropzone{width:100%;height:170px;border:2px dashed var(--border);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;margin-bottom:14px;background:#0a0010;cursor:pointer;overflow:hidden;position:relative;transition:border-color .2s}
-.upload-dropzone:hover{border-color:var(--accent)}
-.upload-dropzone img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-.upload-placeholder{font-size:13px;color:var(--muted);text-align:center;line-height:2}
-.upload-field{margin-bottom:12px}
-.upload-field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
-.upload-field input,.upload-field textarea{width:100%;background:#0a0010;border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:inherit;font-size:13px}
-.upload-field textarea{resize:vertical;height:68px}
-.upload-field input:focus,.upload-field textarea:focus{border-color:var(--accent);outline:none}
-.upload-submit{width:100%;background:var(--accent);color:#000;border:none;padding:13px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px}
-.upload-submit:hover{opacity:.85}
-.upload-submit:disabled{opacity:.4;cursor:not-allowed}
+/* ===== 案内タブ ===== */
+.about-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.about-card h3{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:8px}
+.about-card p{font-size:13px;color:var(--muted);line-height:1.8}
+.guide-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;background:rgba(192,132,252,.15);border:1px solid rgba(192,132,252,.3);border-radius:10px;color:var(--accent);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px;transition:background .2s}
+.guide-btn:hover{background:rgba(192,132,252,.25)}
 
-/* ========== VIEWER ========== */
-#viewer{display:none;position:fixed;inset:0;background:rgba(5,0,5,.97);z-index:10200;flex-direction:column;align-items:center;padding:16px 16px 40px;overflow-y:auto}
-.viewer-close{align-self:flex-end;background:rgba(192,132,252,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-family:inherit;margin-bottom:12px}
-.viewer-img-wrap{width:100%;max-width:340px;border:3px solid #8a6030;border-radius:4px;overflow:hidden;background:#1a001a;margin-bottom:14px}
-.viewer-img-wrap img,.viewer-img-wrap canvas{width:100%;display:block}
-.viewer-meta{text-align:center;max-width:340px}
-.viewer-title{font-family:'Playfair Display',serif;font-size:18px;color:#fff;margin-bottom:4px}
-.viewer-artist-name{font-size:12px;color:var(--accent);margin-bottom:8px}
-.viewer-desc{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:16px}
-.viewer-like-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:9px 28px;border-radius:20px;cursor:pointer;font-size:14px;transition:all .2s;font-family:inherit}
-.viewer-like-btn.liked{border-color:#ff6b8a;color:#ff6b8a;background:rgba(255,107,138,.1)}
-.viewer-like-btn:hover{border-color:#ff6b8a;color:#ff6b8a}
+/* ===== Hall Detail Overlay ===== */
+#hallDetail{display:none;position:fixed;inset:0;background:rgba(5,0,5,.97);z-index:10000;overflow-y:auto}
+.hall-detail-inner{padding:16px 16px 48px;max-width:600px;margin:0 auto}
+.hd-top{display:flex;align-items:center;gap:10px;margin-bottom:18px;padding-top:6px}
+.hd-title{font-size:18px;font-weight:700;color:#fff;flex:1}
+.hd-close{flex-shrink:0;background:rgba(192,132,252,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-family:inherit}
+.exhibit-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.exhibit-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:border-color .2s}
+.exhibit-card:hover{border-color:var(--accent)}
+.exhibit-thumb{width:100%;height:120px;overflow:hidden;background:#1a001a;display:flex;align-items:center;justify-content:center}
+.exhibit-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.exhibit-info{padding:8px 10px}
+.exhibit-title{font-size:12px;font-weight:700;color:#fff;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exhibit-meta{font-size:10px;color:var(--muted)}
+.hd-empty{text-align:center;padding:48px;font-size:13px;color:var(--muted);grid-column:1/-1}
+.hd-grid-loading{text-align:center;padding:32px;font-size:13px;color:var(--muted);grid-column:1/-1}
 
-/* ========== ARTIST ========== */
-.artist-list{display:flex;flex-direction:column;gap:10px}
-.artist-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;gap:12px;align-items:center}
-.artist-avatar{font-size:28px;flex-shrink:0}
-.artist-name{font-size:13px;font-weight:700;color:#fff;margin-bottom:3px}
-.artist-bio{font-size:11px;color:var(--muted);line-height:1.6}
-.artist-tag{display:inline-block;font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(192,132,252,.15);color:var(--accent);border:1px solid rgba(192,132,252,.2);margin-top:4px}
+/* ===== Exhibit Viewer ===== */
+#exhibitViewer{display:none;position:fixed;inset:0;background:rgba(5,0,5,.97);z-index:10200;flex-direction:column;align-items:center;padding:16px 16px 40px;overflow-y:auto}
+.ev-close{align-self:flex-end;background:rgba(192,132,252,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-family:inherit;margin-bottom:12px}
+.ev-img-wrap{width:100%;max-width:340px;border:3px solid var(--border);border-radius:8px;overflow:hidden;background:#1a001a;margin-bottom:14px}
+.ev-img-wrap img{width:100%;display:block}
+.ev-meta{text-align:center;max-width:340px}
+.ev-category{display:inline-block;margin-bottom:8px;padding:3px 12px;border-radius:20px;font-size:11px;background:rgba(192,132,252,.12);color:var(--accent);border:1px solid rgba(192,132,252,.2)}
+.ev-title{font-size:18px;font-weight:700;color:#fff;margin-bottom:8px}
+.ev-desc{font-size:13px;color:var(--muted);line-height:1.7}
+
+/* ===== Guide Modal ===== */
+#guideModal{display:none;position:fixed;inset:0;background:rgba(5,0,5,.97);z-index:10300;overflow-y:auto}
+.guide-inner{padding:16px 16px 48px;max-width:500px;margin:0 auto}
+.guide-inner h2{font-size:18px;font-weight:700;color:#fff;margin-bottom:18px;padding-top:6px}
+.guide-close-btn{float:right;background:rgba(192,132,252,.2);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-family:inherit}
+.guide-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.guide-section h3{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:8px}
+.guide-section p{font-size:13px;color:var(--muted);line-height:1.8}
+.guide-section ul{font-size:13px;color:var(--muted);line-height:1.8;padding-left:1.2em}
 
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 </style>
 </head>
 <body>
 
-<button class="close-btn" id="globalCloseBtn" onclick="window.top.postMessage({type:'spContentClose'},'*')">✕ 美術館を出る</button>
+<button class="close-btn" id="globalCloseBtn" onclick="window.top.postMessage({type:'spContentClose'},'*')">✕ 博物館を出る</button>
 
-<!-- ギャラリーシーン -->
-<div class="gallery-scene">
-  <div class="wall-top"></div>
-  <div class="wall-molding"></div>
-  <div class="floor"><div class="floor-reflect"></div></div>
-  <div class="spotlight sp1"><div class="spot-bulb"></div><div class="spot-beam"></div></div>
-  <div class="spotlight sp2"><div class="spot-bulb"></div><div class="spot-beam"></div></div>
-  <div class="spotlight sp3"><div class="spot-bulb"></div><div class="spot-beam"></div></div>
-  <div class="spotlight sp4"><div class="spot-bulb"></div><div class="spot-beam"></div></div>
-  <div class="artworks-row">
-    <div class="artwork-frame" onclick="openRoomDetail('schoolpark')">
-      <div class="frame-outer"><div class="frame-inner">
-        <canvas class="artwork-canvas" id="art0" width="60" height="75"></canvas>
-      </div></div>
-      <div class="artwork-label">個展</div>
-    </div>
-    <div class="artwork-frame" onclick="openRoomDetail('community')">
-      <div class="frame-outer"><div class="frame-inner">
-        <canvas class="artwork-canvas" id="art1" width="80" height="60"></canvas>
-      </div></div>
-      <div class="artwork-label">みんな</div>
-    </div>
-    <div class="artwork-frame" onclick="openRoomDetail('public')">
-      <div class="frame-outer"><div class="frame-inner">
-        <canvas class="artwork-canvas" id="art2" width="60" height="80"></canvas>
-      </div></div>
-      <div class="artwork-label">青空</div>
-    </div>
-    <div class="artwork-frame" onclick="openRoomDetail('schoolpark')">
-      <div class="frame-outer"><div class="frame-inner">
-        <canvas class="artwork-canvas" id="art3" width="75" height="60"></canvas>
-      </div></div>
-      <div class="artwork-label">SchoolPark</div>
-    </div>
+<!-- ロビーシーン -->
+<div class="lobby-scene">
+  <div class="lobby-pillars">
+    <div class="pillar"></div>
+    <div class="pillar"></div>
+    <div class="pillar"></div>
+    <div class="pillar"></div>
+    <div class="pillar"></div>
+    <div class="pillar"></div>
   </div>
-  <div class="ambient"></div>
+  <div class="lobby-center">
+    <span class="lobby-emoji">🏛️</span>
+    <div class="lobby-title-text">MUSEUM</div>
+    <div class="lobby-title-sub">SchoolPark</div>
+  </div>
+  <div class="lobby-glow"></div>
 </div>
 
 <!-- ヘッダー -->
-<div class="gallery-header">
-  <div class="gallery-title">SchoolPark Art Museum</div>
-  <div class="gallery-sub">みんなの美術館、SchoolParkの個展。お気に入りの作品を見つけましょう！</div>
+<div class="museum-header">
+  <div class="museum-title">SchoolPark Museum</div>
+  <div class="museum-sub">寄ってらっしゃい・見てらっしゃい。SchoolParkの博物館！</div>
 </div>
 
 <!-- タブ -->
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('wings')">🖼️ 展示室</div>
-  <div class="tab" onclick="switchTab('artists')">🎨 アーティスト</div>
-  <div class="tab" onclick="switchTab('about')">ℹ️ 美術館について</div>
+  <div class="tab active" onclick="switchTab('halls')">🏛️ ホール</div>
+  <div class="tab" onclick="switchTab('about')">ℹ️ 案内</div>
 </div>
 
-<!-- ========== 展示室 ========== -->
-<div class="panel active" id="panel-wings">
-  <div class="section-title">❤️ 人気の作品</div>
-  <div class="top-liked-row" id="topLikedRow"><div style="font-size:12px;color:var(--muted);padding:8px">読み込み中…</div></div>
+<!-- ========== ホール ========== -->
+<div class="panel active" id="panel-halls">
+  <div class="section-title">🏛️ 展示ホール</div>
+  <div class="hall-grid">
 
-  <div class="section-title">🏛️ 展示室</div>
-  <div class="wing-grid">
-
-    <div class="wing-card" onclick="openRoomDetail('community')">
-      <div class="wing-header">
-        <div class="wing-icon">👥</div>
-        <div class="wing-info">
-          <div class="wing-name">みんなの展示室</div>
-          <div class="wing-sub">誰でも作品を投稿できます</div>
+    <!-- SchoolPark博物館 -->
+    <div class="hall-card clickable" onclick="openHallDetail()">
+      <div class="hall-header">
+        <div class="hall-icon">🔍</div>
+        <div>
+          <div class="hall-name">SchoolPark博物館</div>
+          <div class="hall-sub">SchoolParkの記録・展示物 ▶ タップして全て見る</div>
         </div>
       </div>
-      <div class="wing-works" id="communityPreview"></div>
+      <div class="exhibit-strip" id="spMuseumStrip">
+        <div class="hall-loading">読み込み中…</div>
+      </div>
     </div>
 
-    <div class="wing-card" onclick="openRoomDetail('schoolpark')">
-      <div class="wing-header">
-        <div class="wing-icon">🎨</div>
-        <div class="wing-info">
-          <div class="wing-name">SchoolPark 個展</div>
-          <div class="wing-sub">SchoolParkの作品のみ</div>
+    <!-- 季節の博物館 -->
+    <div class="hall-card">
+      <div class="hall-header">
+        <div class="hall-icon">📖</div>
+        <div>
+          <div class="hall-name">季節の博物館</div>
+          <div class="hall-sub">定期的にいろいろな博物館がOPEN！</div>
         </div>
       </div>
-      <div class="wing-works" id="schoolparkPreview"></div>
-    </div>
-
-    <div class="wing-card" onclick="openRoomDetail('public')">
-      <div class="wing-header">
-        <div class="wing-icon">🌤️</div>
-        <div class="wing-info">
-          <div class="wing-name">青空美術館</div>
-          <div class="wing-sub">著作権が切れた名画・パブリックドメイン</div>
+      <div class="season-grid">
+        <div class="season-item">
+          <div class="season-icon">🦋</div>
+          <div class="season-name">昆虫博物館</div>
+          <div class="season-badge">Coming Soon</div>
+        </div>
+        <div class="season-item">
+          <div class="season-icon">🚗</div>
+          <div class="season-name">クラシックカー博物館</div>
+          <div class="season-badge">Coming Soon</div>
         </div>
       </div>
-      <div class="wing-works" id="publicPreview"></div>
     </div>
 
   </div>
 </div>
 
-<!-- ========== アーティスト ========== -->
-<div class="panel" id="panel-artists">
-  <div class="section-title">🎨 アーティスト</div>
-  <div class="artist-list">
-    <div class="artist-card">
-      <div class="artist-avatar">🎨</div>
-      <div>
-        <div class="artist-name">SchoolPark</div>
-        <div class="artist-bio">オリジナルやコラボ作品を中心に載せていきます。</div>
-        <div class="artist-tag">founder</div>
-      </div>
-    </div>
-    <div class="artist-card">
-      <div class="artist-avatar">🎭</div>
-      <div>
-        <div class="artist-name">Community Artists</div>
-        <div class="artist-bio">SchoolParkコミュニティメンバーが制作・投稿した作品を展示。</div>
-        <div class="artist-tag">コミュニティ</div>
-      </div>
-    </div>
-    <div class="artist-card">
-      <div class="artist-avatar">🤖</div>
-      <div>
-        <div class="artist-name">AI × Human Collaboration</div>
-        <div class="artist-bio">AIと人間が共同制作したジェネラティブアート。プロンプトとアルゴリズムが織りなす、唯一無二の作品群。</div>
-        <div class="artist-tag">AI Art</div><div class="artist-tag" style="margin-left:4px">Generative</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ========== 美術館について ========== -->
+<!-- ========== 案内 ========== -->
 <div class="panel" id="panel-about">
-  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px">
-    <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:8px">🏛️ SchoolPark Art Museum とは</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.8">デジタルと人が出会う新しいアート空間。Web3・DAO・コミュニティをテーマにした作品を展示し、訪れるたびに新しい発見がある美術館です。</div>
+  <div class="about-card">
+    <h3>🏛️ SchoolPark Museum とは</h3>
+    <p>SchoolPark Museumは、SchoolPark内の出来事や活動・行動を「展示物」として展示する博物館です。あなたのログも、この博物館の展示物になるかも…！季節の博物館では、定期的にいろいろな博物館がOPENします。</p>
   </div>
-  <div style="display:flex;flex-direction:column;gap:10px">
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px">
-      <div style="font-size:12px;color:var(--accent);font-weight:700;margin-bottom:6px">🗓️ 開館情報</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.8">開館時間: 24時間 / 365日<br>入館料: 10EMUER<br>撮影: 可（SNS投稿歓迎）</div>
+  <div class="about-card">
+    <h3>🎯 入館するには</h3>
+    <p>特に必要なものや用意するものはありません。大事なのは、行動と運なのです。</p>
+  </div>
+  <button class="guide-btn" onclick="openGuide()">📖 館内案内 — 博物館の使い方を見る</button>
+</div>
+
+<!-- ========== Hall Detail Overlay ========== -->
+<div id="hallDetail">
+  <div class="hall-detail-inner">
+    <div class="hd-top">
+      <div class="hd-title">🔍 SchoolPark博物館</div>
+      <button class="hd-close" onclick="closeHallDetail()">✕ 閉じる</button>
     </div>
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px">
-      <div style="font-size:12px;color:var(--accent);font-weight:700;margin-bottom:6px">🎨 作品投稿募集中</div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.8">みんなの美術館から、投稿してみよう！</div>
+    <div class="exhibit-grid" id="hdGrid">
+      <div class="hd-grid-loading">読み込み中…</div>
     </div>
   </div>
 </div>
 
-<!-- ========== 展示室詳細 ========== -->
-<div id="roomDetail">
-  <div class="room-detail-inner">
-    <div class="room-detail-top">
-      <div>
-        <div class="room-detail-title" id="rdTitle"></div>
-        <div class="room-detail-sub" id="rdSub"></div>
-      </div>
-      <button class="rd-close" onclick="closeRoomDetail()">✕ 閉じる</button>
-    </div>
-    <button class="upload-strip" id="rdUploadBtn" onclick="openUploadModal()" style="display:none">＋ 作品を投稿する</button>
-    <div class="works-grid" id="rdGrid"></div>
-    <div style="text-align:center;padding:24px;font-size:13px;color:var(--muted)" id="rdEmpty" style="display:none">まだ作品がありません。最初に投稿してみましょう！</div>
+<!-- ========== Exhibit Viewer ========== -->
+<div id="exhibitViewer" style="display:flex">
+  <button class="ev-close" onclick="closeExhibitViewer()">✕ 閉じる</button>
+  <div class="ev-img-wrap" id="evImgWrap"></div>
+  <div class="ev-meta">
+    <div class="ev-category" id="evCategory"></div>
+    <div class="ev-title" id="evTitle"></div>
+    <div class="ev-desc" id="evDesc"></div>
   </div>
 </div>
 
-<!-- ========== 投稿モーダル ========== -->
-<div id="uploadModal">
-  <div class="upload-inner">
-    <button class="upload-close" onclick="closeUploadModal()">✕ 閉じる</button>
-    <h3>🖼️ 作品を投稿する</h3>
-    <div class="upload-dropzone" id="uploadDropzone" onclick="document.getElementById('uploadFile').click()">
-      <div class="upload-placeholder" id="uploadPlaceholder">📁 タップして画像を選択<br><span style="font-size:11px;color:#4a2a6a">JPG・PNG・GIF・WebP対応</span></div>
+<!-- ========== Guide Modal ========== -->
+<div id="guideModal">
+  <div class="guide-inner">
+    <button class="guide-close-btn" onclick="closeGuide()">✕ 閉じる</button>
+    <h2>📖 館内案内</h2>
+
+    <div class="guide-section">
+      <h3>🔍 SchoolPark博物館</h3>
+      <p>SchoolParkの活動・出来事・記録が展示されます。SchoolPark運営が随時追加します。新しい展示物はリアルタイムで反映されます。</p>
     </div>
-    <input type="file" id="uploadFile" accept="image/*" style="display:none" onchange="onFileSelect(event)">
-    <div class="upload-field">
-      <label>タイトル（任意）</label>
-      <input type="text" id="uploadTitle" placeholder="例: 夕暮れの空">
+
+    <div class="guide-section">
+      <h3>📖 季節の博物館</h3>
+      <p>季節やテーマに合わせた博物館が順次オープンします。現在は昆虫博物館・クラシックカー博物館が準備中です。</p>
     </div>
-    <div class="upload-field">
-      <label>説明（任意）</label>
-      <textarea id="uploadDesc" placeholder="作品について一言"></textarea>
+
+    <div class="guide-section">
+      <h3>💡 展示物になるには</h3>
+      <ul>
+        <li>SchoolPark内での行動・活動が選ばれることがあります</li>
+        <li>事前の申請は不要です</li>
+        <li>大事なのは、行動と運なのです</li>
+      </ul>
     </div>
-    <div class="upload-field">
-      <label>名前 / ニックネーム（任意）</label>
-      <input type="text" id="uploadAuthor" placeholder="例: emu_user">
+
+    <div class="guide-section">
+      <h3>🕐 開館情報</h3>
+      <p>開館時間: 24時間 / 365日<br>入館料: 無料<br>撮影: 可（SNS投稿歓迎）</p>
     </div>
-    <button class="upload-submit" id="uploadSubmit" onclick="submitUpload()" disabled>投稿する</button>
   </div>
 </div>
 
-<!-- ========== 作品ビューア ========== -->
-<div id="viewer" style="display:flex">
-  <button class="viewer-close" onclick="closeViewer()">✕ 閉じる</button>
-  <div class="viewer-img-wrap" id="viewerImgWrap"></div>
-  <div class="viewer-meta">
-    <div class="viewer-title" id="viewerTitle"></div>
-    <div class="viewer-artist-name" id="viewerArtistName"></div>
-    <div class="viewer-desc" id="viewerDesc"></div>
-    <button class="viewer-like-btn" id="viewerLikeBtn" onclick="viewerToggleLike()">❤️ いいね <span id="viewerLikeCount">0</span></button>
-  </div>
-</div>
-
+<!-- Firebase Compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 <script>
-// ========== 生成アート ==========
-const GEN_ART = [
-  {title:'創世 #001', colors:['#4a0080','#8b00ff','#ff6b00','#ffd700'], type:'radial'},
-  {title:'連鎖 #001', colors:['#006080','#00c8ff','#004050','#00ffc8'], type:'grid'},
-  {title:'自由 #001', colors:['#002a00','#00c060','#006030','#80ff80'], type:'wave'},
-  {title:'未来 #001', colors:['#200040','#6000c0','#0040a0','#00c0ff'], type:'spiral'},
-  {title:'夜明け #002', colors:['#3a0020','#c00060','#ff8000','#ffd700'], type:'horizon'},
-  {title:'集い #003', colors:['#201000','#c06000','#ff9000','#ffe080'], type:'dots'},
-];
-
-function drawArt(canvas, idx) {
-  const art = GEN_ART[idx % GEN_ART.length];
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
-  const [c0, c1, c2, c3] = art.colors;
-  const type = art.type;
-  if (type === 'radial') {
-    const g = ctx.createRadialGradient(w/2,h/2,0,w/2,h/2,Math.max(w,h)/1.5);
-    g.addColorStop(0,c1); g.addColorStop(.5,c0); g.addColorStop(1,c2);
-    ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
-    for(let i=0;i<8;i++){
-      ctx.beginPath(); ctx.arc(w/2+Math.cos(i*.78)*w*.3,h/2+Math.sin(i*.78)*h*.3,w*.06,0,Math.PI*2);
-      ctx.fillStyle=c3+'80'; ctx.fill();
-    }
-  } else if (type === 'grid') {
-    ctx.fillStyle=c2; ctx.fillRect(0,0,w,h);
-    const sz=Math.floor(w/7);
-    for(let x=0;x<w;x+=sz) for(let y=0;y<h;y+=sz){
-      ctx.strokeStyle=c1+'60'; ctx.lineWidth=1; ctx.strokeRect(x,y,sz,sz);
-      if(Math.random()<.3){ctx.fillStyle=c0+'40'; ctx.fillRect(x+2,y+2,sz-4,sz-4);}
-    }
-    for(let i=0;i<6;i++){
-      ctx.beginPath(); ctx.moveTo(Math.random()*w,Math.random()*h); ctx.lineTo(Math.random()*w,Math.random()*h);
-      ctx.strokeStyle=c3; ctx.lineWidth=1.5; ctx.stroke();
-    }
-  } else if (type === 'wave') {
-    ctx.fillStyle=c0; ctx.fillRect(0,0,w,h);
-    for(let i=0;i<8;i++){
-      ctx.beginPath();
-      for(let x=0;x<=w;x+=4) ctx.lineTo(x, h/2+Math.sin((x/w+i/8)*Math.PI*3)*h*.3);
-      ctx.strokeStyle=i<4?c1:c3; ctx.globalAlpha=.4+i*.05; ctx.lineWidth=2; ctx.stroke(); ctx.globalAlpha=1;
-    }
-  } else if (type === 'spiral') {
-    ctx.fillStyle=c0; ctx.fillRect(0,0,w,h);
-    ctx.beginPath();
-    for(let t=0;t<80;t++){const r=t*Math.min(w,h)/180; ctx.lineTo(w/2+r*Math.cos(t*.4),h/2+r*Math.sin(t*.4));}
-    ctx.strokeStyle=c1; ctx.lineWidth=2; ctx.stroke();
-    ctx.beginPath();
-    for(let t=0;t<80;t++){const r=t*Math.min(w,h)/180; ctx.lineTo(w/2+r*Math.cos(t*.4+Math.PI),h/2+r*Math.sin(t*.4+Math.PI));}
-    ctx.strokeStyle=c3; ctx.lineWidth=1.5; ctx.stroke();
-  } else if (type === 'horizon') {
-    const g=ctx.createLinearGradient(0,0,0,h);
-    g.addColorStop(0,c0); g.addColorStop(.5,c1); g.addColorStop(.7,c2); g.addColorStop(1,c3);
-    ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
-    ctx.fillStyle=c3; ctx.fillRect(0,h*.7,w,h*.3);
-    ctx.beginPath(); ctx.ellipse(w/2,h*.7,w*.6,h*.15,0,0,Math.PI*2);
-    ctx.fillStyle=c2+'80'; ctx.fill();
-  } else if (type === 'dots') {
-    ctx.fillStyle=c0; ctx.fillRect(0,0,w,h);
-    for(let i=0;i<30;i++){
-      const x=Math.random()*w, y=Math.random()*h, r=3+Math.random()*8;
-      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
-      ctx.fillStyle=[c1,c2,c3][Math.floor(Math.random()*3)]+'cc'; ctx.fill();
-    }
-  }
-}
-
-// ========== パブリックドメイン作品 ==========
-// Special:FilePath 形式 — ハッシュ不要の安定URL、自動的に適切なサイズにリダイレクト
-const _fp = (file, w) =>
-  `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=${w}`;
-
-const PD_WORKS = [
-  {id:'pd_1', title:'星月夜', artist:'フィンセント・ファン・ゴッホ', year:'1889',
-   imageUrl: _fp('Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg', 400),
-   desc:'夜の空に渦巻く星々と月。ゴッホの代表作。'},
-  {id:'pd_2', title:'睡蓮（1906）', artist:'クロード・モネ', year:'1906',
-   imageUrl: _fp('Claude_Monet_-_Water_Lilies_-_1906,_Ryerson.jpg', 400),
-   desc:'印象派の巨匠モネが描いた睡蓮の池。'},
-  {id:'pd_3', title:'神奈川沖浪裏', artist:'葛飾北斎', year:'1831',
-   imageUrl: _fp('Great_Wave_off_Kanagawa2.jpg', 400),
-   desc:'世界で最も有名な浮世絵。富士山を背景に大波が迫る。'},
-  {id:'pd_4', title:'接吻', artist:'グスタフ・クリムト', year:'1907-08',
-   imageUrl: _fp('The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg', 400),
-   desc:'金箔を用いたクリムトの傑作。愛の象徴として世界中で親しまれる。'},
-  {id:'pd_5', title:'真珠の耳飾りの少女', artist:'ヨハネス・フェルメール', year:'1665頃',
-   imageUrl: _fp('1665_Girl_with_a_Pearl_Earring.jpg', 400),
-   desc:'「北のモナ・リザ」とも称されるフェルメールの名作。'},
-  {id:'pd_6', title:'ムーラン・ド・ラ・ギャレット', artist:'ピエール＝オーギュスト・ルノワール', year:'1876',
-   imageUrl: _fp('Auguste_Renoir_-_Dance_at_Le_Moulin_de_la_Galette_-_Google_Art_Project.jpg', 400),
-   desc:'パリの野外ダンス場での賑やかな雰囲気を描いた印象派の傑作。'},
-];
-
-// SchoolPark個展: デフォルト作品なし（管理画面から投稿されたもののみ表示）
-
-// ========== ストレージ ==========
-function getStoredWorks(key, defaults) {
-  try {
-    const s = localStorage.getItem(key);
-    const parsed = s ? JSON.parse(s) : null;
-    return Array.isArray(parsed) ? parsed : (defaults || []);
-  } catch { return defaults || []; }
-}
-function saveWorks(key, works) { localStorage.setItem(key, JSON.stringify(works)); }
-function getLikeCounts() { try { return JSON.parse(localStorage.getItem('museum_like_counts')) || {}; } catch { return {}; } }
-function getUserLiked() { try { return JSON.parse(localStorage.getItem('museum_user_liked')) || {}; } catch { return {}; } }
-function getLikeCount(id) { return getLikeCounts()[id] || 0; }
-function isLiked(id) { return !!getUserLiked()[id]; }
-function toggleLike(workId) {
-  const counts = getLikeCounts(), userLiked = getUserLiked();
-  if (userLiked[workId]) {
-    counts[workId] = Math.max(0, (counts[workId] || 0) - 1);
-    delete userLiked[workId];
-  } else {
-    counts[workId] = (counts[workId] || 0) + 1;
-    userLiked[workId] = true;
-  }
-  localStorage.setItem('museum_like_counts', JSON.stringify(counts));
-  localStorage.setItem('museum_user_liked', JSON.stringify(userLiked));
-  return counts[workId];
-}
-
-function getCommunityWorks() { return getStoredWorks('museum_community_works'); }
-function getSPWorks() { return getStoredWorks('museum_sp_works'); }
-
-function getAllWorks() {
-  const c = getCommunityWorks().map(w => ({...w, room:'community'}));
-  const s = getSPWorks().map(w => ({...w, room:'schoolpark'}));
-  const p = PD_WORKS.map(w => ({...w, room:'public'}));
-  return [...c, ...s, ...p]
-    .map(w => ({...w, likes: getLikeCount(w.id)}))
-    .sort((a, b) => b.likes - a.likes);
-}
-
-// ========== サムネイルHTML生成 ==========
-function thumbHTML(work, w, h) {
-  if (work.type === 'generated') {
-    return `<canvas width="${w}" height="${h}" data-artidx="${work.artIdx}" style="width:${w}px;height:${h}px;display:block"></canvas>`;
-  }
-  const src = work.imageData || work.imageUrl || '';
-  const alt = (work.title || '').replace(/"/g, '').replace(/'/g, '');
-  return `<img src="${src}" alt="${alt}" loading="lazy" referrerpolicy="no-referrer"
-    style="width:100%;height:100%;object-fit:cover;display:block"
-    onerror="imgFallback(this,'${alt}')">`;
-}
-
-function drawPending(container) {
-  container.querySelectorAll('canvas[data-artidx]').forEach(c => {
-    drawArt(c, parseInt(c.dataset.artidx));
-  });
-}
-
-// ========== 人気の作品 ==========
-function renderTopLiked() {
-  const row = document.getElementById('topLikedRow');
-  const all = getAllWorks();
-  const top = all.slice(0, 6);
-  if (top.length === 0) {
-    row.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px">まだいいね！された作品がありません</div>';
-    return;
-  }
-  row.innerHTML = top.map(work => {
-    const thumb = thumbHTML(work, 88, 68);
-    const name = work.title || '無題';
-    const likes = work.likes || 0;
-    return `<div class="top-liked-item" onclick="openSingleViewer('${work.id}','${work.room}')">
-      <div class="top-liked-thumb">${thumb}</div>
-      <div class="top-liked-name">${name}</div>
-      <div class="top-liked-cnt">❤️ ${likes}</div>
-    </div>`;
-  }).join('');
-  drawPending(row);
-}
-
-// ========== ルームプレビュー ==========
-function renderPreview(roomKey, containerId, works) {
-  const el = document.getElementById(containerId);
-  if (!works.length) {
-    el.innerHTML = '<div class="wing-empty">まだ作品がありません</div>';
-    return;
-  }
-  const preview = works.slice(0, 4);
-  el.innerHTML = preview.map(work => {
-    const thumb = thumbHTML(work, 72, 56);
-    const cnt = getLikeCount(work.id);
-    return `<div class="mini-work">
-      <div class="mini-canvas">${thumb}</div>
-      <div class="mini-title">${work.title||'無題'}</div>
-      <div class="mini-like">❤️ ${cnt}</div>
-    </div>`;
-  }).join('');
-  drawPending(el);
-}
-
-function renderAllPreviews() {
-  renderPreview('community', 'communityPreview', getCommunityWorks());
-  renderPreview('schoolpark', 'schoolparkPreview', getSPWorks());
-  renderPreview('public', 'publicPreview', PD_WORKS);
-}
-
-// ========== 展示室詳細 ==========
-let currentRoom = '';
-const ROOM_META = {
-  community: {title:'みんなの展示室', sub:'誰でも作品を投稿できます', upload:true},
-  schoolpark: {title:'SchoolPark 個展', sub:'SchoolParkの作品のみ', upload:false},
-  public: {title:'青空美術館', sub:'著作権が切れた名画・パブリックドメイン', upload:false},
+// ========== Firebase ==========
+const MUSEUM_FB_CFG = {
+  apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
+  authDomain: "emusch-2a111.firebaseapp.com",
+  projectId: "emusch-2a111",
+  storageBucket: "emusch-2a111.firebasestorage.app",
+  messagingSenderId: "795496371585",
+  appId: "1:795496371585:web:51deec91b8a2152e4c8480"
 };
 
-function openRoomDetail(room) {
-  currentRoom = room;
-  const meta = ROOM_META[room];
-  document.getElementById('rdTitle').textContent = meta.title;
-  document.getElementById('rdSub').textContent = meta.sub;
-  document.getElementById('rdUploadBtn').style.display = meta.upload ? 'flex' : 'none';
-  renderRoomGrid(room);
-  document.getElementById('roomDetail').style.display = 'block';
-  document.getElementById('globalCloseBtn').style.display = 'none';
+let museumDb;
+try {
+  const app = firebase.apps.find(a => a.name === 'museum')
+    || firebase.initializeApp(MUSEUM_FB_CFG, 'museum');
+  museumDb = firebase.firestore(app);
+} catch(e) {
+  console.error('Museum Firebase init error:', e);
 }
 
-function closeRoomDetail() {
-  document.getElementById('roomDetail').style.display = 'none';
-  document.getElementById('globalCloseBtn').style.display = '';
-  renderAllPreviews();
-  renderTopLiked();
+// ========== State ==========
+let exhibits = [];
+let unsubExhibits = null;
+let currentExhibitId = null;
+
+// ========== Init ==========
+function init() {
+  document.getElementById('exhibitViewer').style.display = 'none';
+  initExhibits();
 }
 
-function getWorksForRoom(room) {
-  if (room === 'community') return getCommunityWorks();
-  if (room === 'schoolpark') return getSPWorks();
-  if (room === 'public') return PD_WORKS;
-  return [];
-}
-
-function renderRoomGrid(room) {
-  const works = getWorksForRoom(room);
-  const grid = document.getElementById('rdGrid');
-  const empty = document.getElementById('rdEmpty');
-  if (!works.length) {
-    grid.innerHTML = '';
-    empty.style.display = 'block';
+// ========== onSnapshot ==========
+function initExhibits() {
+  if (!museumDb) {
+    document.getElementById('spMuseumStrip').innerHTML =
+      '<div class="hall-loading">⚠ 接続エラー</div>';
     return;
   }
-  empty.style.display = 'none';
-  grid.innerHTML = works.map(work => {
-    const thumb = thumbHTML(work, 160, 120);
-    const cnt = getLikeCount(work.id);
-    const liked = isLiked(work.id);
-    const artistLabel = work.artist || work.author || 'SchoolPark';
-    return `<div class="work-card">
-      <div class="work-thumb" onclick="openSingleViewer('${work.id}','${room}')">${thumb}</div>
-      <div class="work-info">
-        <div class="work-title">${work.title||'無題'}</div>
-        <div class="work-artist">${artistLabel}</div>
-        <div class="work-like-row">
-          <button class="like-btn ${liked?'liked':''}" data-workid="${work.id}" data-room="${room}" onclick="handleLike(this,event)">❤️ <span>${cnt}</span></button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-  drawPending(grid);
+  unsubExhibits = museumDb.collection('museum_sp_exhibits')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(function(snap) {
+      exhibits = [];
+      snap.forEach(function(d) { exhibits.push(Object.assign({ docId: d.id }, d.data())); });
+      renderStrip();
+      if (document.getElementById('hallDetail').style.display === 'block') {
+        renderHdGrid();
+      }
+    }, function(err) {
+      console.error('museum onSnapshot error:', err);
+      document.getElementById('spMuseumStrip').innerHTML =
+        '<div class="hall-loading">⚠ 読み込み失敗</div>';
+    });
 }
 
-function handleLike(btn, e) {
-  if (e) e.stopPropagation();
-  const workId = btn.dataset.workid;
-  const newCount = toggleLike(workId);
-  btn.classList.toggle('liked', isLiked(workId));
-  btn.querySelector('span').textContent = newCount;
-  renderTopLiked();
-}
-
-// ========== 投稿モーダル ==========
-let uploadImageData = null;
-
-function openUploadModal() {
-  uploadImageData = null;
-  document.getElementById('uploadFile').value = '';
-  document.getElementById('uploadTitle').value = '';
-  document.getElementById('uploadDesc').value = '';
-  document.getElementById('uploadAuthor').value = '';
-  document.getElementById('uploadSubmit').disabled = true;
-  const dz = document.getElementById('uploadDropzone');
-  // remove previous img preview
-  const prev = dz.querySelector('img');
-  if (prev) prev.remove();
-  document.getElementById('uploadPlaceholder').style.display = '';
-  document.getElementById('uploadModal').style.display = 'block';
-}
-
-function closeUploadModal() {
-  document.getElementById('uploadModal').style.display = 'none';
-}
-
-function onFileSelect(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    uploadImageData = e.target.result;
-    document.getElementById('uploadSubmit').disabled = false;
-    document.getElementById('uploadPlaceholder').style.display = 'none';
-    const dz = document.getElementById('uploadDropzone');
-    let img = dz.querySelector('img');
-    if (!img) { img = document.createElement('img'); dz.appendChild(img); }
-    img.src = uploadImageData;
-  };
-  reader.readAsDataURL(file);
-}
-
-function submitUpload() {
-  if (!uploadImageData) return;
-  const title = document.getElementById('uploadTitle').value.trim() || '無題';
-  const desc = document.getElementById('uploadDesc').value.trim();
-  const author = document.getElementById('uploadAuthor').value.trim() || '匿名';
-  const works = getCommunityWorks();
-  const newWork = {
-    id: 'c_' + Date.now(),
-    title, desc, author,
-    imageData: uploadImageData,
-    timestamp: Date.now(),
-  };
-  works.push(newWork);
-  saveWorks('museum_community_works', works);
-  closeUploadModal();
-  renderRoomGrid('community');
-  renderAllPreviews();
-  renderTopLiked();
-}
-
-// ========== ビューア ==========
-let currentViewerWork = null;
-
-function openSingleViewer(workId, room) {
-  const works = getWorksForRoom(room);
-  const work = works.find(w => w.id === workId);
-  if (!work) return;
-  openViewer(work);
-}
-
-function openViewer(work) {
-  currentViewerWork = work;
-  const wrap = document.getElementById('viewerImgWrap');
-  wrap.innerHTML = '';
-  if (work.type === 'generated') {
-    const c = document.createElement('canvas');
-    c.width = 320; c.height = 240;
-    c.style.cssText = 'width:100%;display:block';
-    wrap.appendChild(c);
-    drawArt(c, work.artIdx);
-  } else {
-    const img = document.createElement('img');
-    img.src = work.imageData || work.imageUrl || '';
-    img.alt = work.title || '';
-    img.style.cssText = 'width:100%;display:block';
-    wrap.appendChild(img);
+// ========== Strip (ホールカードのプレビュー) ==========
+function renderStrip() {
+  const strip = document.getElementById('spMuseumStrip');
+  if (!exhibits.length) {
+    strip.innerHTML = '<div class="hall-empty">まだ展示物がありません</div>';
+    return;
   }
-  document.getElementById('viewerTitle').textContent = work.title || '無題';
-  const artistLabel = work.artist || work.author || (work.room === 'schoolpark' ? 'SchoolPark' : '');
-  const yearLabel = work.year ? ` (${work.year})` : '';
-  document.getElementById('viewerArtistName').textContent = artistLabel + yearLabel;
-  document.getElementById('viewerDesc').textContent = work.desc || '';
-  const cnt = getLikeCount(work.id);
-  const liked = isLiked(work.id);
-  document.getElementById('viewerLikeCount').textContent = cnt;
-  const lb = document.getElementById('viewerLikeBtn');
-  lb.classList.toggle('liked', liked);
-  document.getElementById('viewer').style.display = 'flex';
-  document.getElementById('globalCloseBtn').style.display = 'none';
+  strip.innerHTML = exhibits.slice(0, 5).map(function(ex) {
+    const src = ex.imageData || ex.imageUrl || '';
+    const titleSafe = esc(ex.title || '展示物');
+    return '<div class="exhibit-mini">'
+      + '<div class="exhibit-mini-thumb">'
+      + (src
+          ? '<img src="' + src + '" alt="' + titleSafe + '" loading="lazy" onerror="imgFallback(this,\'' + titleSafe + '\')">'
+          : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px">🏛️</div>')
+      + '</div>'
+      + '<div class="exhibit-mini-title">' + titleSafe + '</div>'
+      + '</div>';
+  }).join('');
 }
 
-function closeViewer() {
-  document.getElementById('viewer').style.display = 'none';
-  // restore globalCloseBtn only if no other overlay open
-  if (document.getElementById('roomDetail').style.display === 'none' &&
-      document.getElementById('uploadModal').style.display === 'none') {
+// ========== Hall Detail ==========
+function openHallDetail() {
+  document.getElementById('hallDetail').style.display = 'block';
+  document.getElementById('globalCloseBtn').style.display = 'none';
+  renderHdGrid();
+}
+
+function closeHallDetail() {
+  document.getElementById('hallDetail').style.display = 'none';
+  if (document.getElementById('exhibitViewer').style.display === 'none' &&
+      document.getElementById('guideModal').style.display === 'none') {
     document.getElementById('globalCloseBtn').style.display = '';
   }
 }
 
-function viewerToggleLike() {
-  if (!currentViewerWork) return;
-  const newCount = toggleLike(currentViewerWork.id);
-  document.getElementById('viewerLikeCount').textContent = newCount;
-  const lb = document.getElementById('viewerLikeBtn');
-  lb.classList.toggle('liked', isLiked(currentViewerWork.id));
-  // update grid if open
-  const btn = document.querySelector(`.like-btn[data-workid="${currentViewerWork.id}"]`);
-  if (btn) {
-    btn.classList.toggle('liked', isLiked(currentViewerWork.id));
-    btn.querySelector('span').textContent = newCount;
+function renderHdGrid() {
+  const grid = document.getElementById('hdGrid');
+  if (!exhibits.length) {
+    grid.innerHTML = '<div class="hd-empty">まだ展示物がありません</div>';
+    return;
   }
-  renderTopLiked();
+  grid.innerHTML = exhibits.map(function(ex) {
+    const src = ex.imageData || ex.imageUrl || '';
+    const titleSafe = esc(ex.title || '展示物');
+    const dt = ex.createdAt ? new Date(ex.createdAt).toLocaleDateString('ja-JP') : '';
+    return '<div class="exhibit-card" onclick="openExhibitViewer(\'' + ex.docId + '\')">'
+      + '<div class="exhibit-thumb">'
+      + (src
+          ? '<img src="' + src + '" alt="' + titleSafe + '" loading="lazy" onerror="imgFallback(this,\'' + titleSafe + '\')">'
+          : '<div style="font-size:36px">🏛️</div>')
+      + '</div>'
+      + '<div class="exhibit-info">'
+      + '<div class="exhibit-title">' + titleSafe + '</div>'
+      + '<div class="exhibit-meta">' + esc(ex.category || '') + (dt ? ' · ' + dt : '') + '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
 }
 
-// ========== タブ ==========
+// ========== Exhibit Viewer ==========
+function openExhibitViewer(docId) {
+  const ex = exhibits.find(function(e) { return e.docId === docId; });
+  if (!ex) return;
+  currentExhibitId = docId;
+
+  const src = ex.imageData || ex.imageUrl || '';
+  const wrap = document.getElementById('evImgWrap');
+  if (src) {
+    wrap.style.display = '';
+    wrap.innerHTML = '<img src="' + src + '" alt="' + esc(ex.title || '') + '" style="width:100%;display:block" onerror="imgFallback(this,\'' + esc(ex.title || '') + '\')">';
+  } else {
+    wrap.style.display = 'none';
+  }
+
+  const catEl = document.getElementById('evCategory');
+  if (ex.category) {
+    catEl.textContent = ex.category;
+    catEl.style.display = '';
+  } else {
+    catEl.style.display = 'none';
+  }
+  document.getElementById('evTitle').textContent = ex.title || '展示物';
+  document.getElementById('evDesc').textContent = ex.desc || '';
+
+  document.getElementById('exhibitViewer').style.display = 'flex';
+  document.getElementById('globalCloseBtn').style.display = 'none';
+}
+
+function closeExhibitViewer() {
+  document.getElementById('exhibitViewer').style.display = 'none';
+  currentExhibitId = null;
+  if (document.getElementById('hallDetail').style.display !== 'block' &&
+      document.getElementById('guideModal').style.display !== 'block') {
+    document.getElementById('globalCloseBtn').style.display = '';
+  }
+}
+
+// ========== Guide Modal ==========
+function openGuide() {
+  document.getElementById('guideModal').style.display = 'block';
+  document.getElementById('globalCloseBtn').style.display = 'none';
+}
+
+function closeGuide() {
+  document.getElementById('guideModal').style.display = 'none';
+  if (document.getElementById('hallDetail').style.display !== 'block' &&
+      document.getElementById('exhibitViewer').style.display !== 'block') {
+    document.getElementById('globalCloseBtn').style.display = '';
+  }
+}
+
+// ========== Tab ==========
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t, i) => {
-    t.classList.toggle('active', ['wings','artists','about'][i] === name);
+  document.querySelectorAll('.tab').forEach(function(t, i) {
+    t.classList.toggle('active', ['halls', 'about'][i] === name);
   });
-  document.querySelectorAll('.panel').forEach(p => {
+  document.querySelectorAll('.panel').forEach(function(p) {
     p.classList.toggle('active', p.id === 'panel-' + name);
   });
 }
 
-// ========== 初期化 ==========
-function init() {
-  // ギャラリーシーンのcanvas
-  [0, 1, 2, 3].forEach(i => {
-    const c = document.getElementById('art' + i);
-    if (c) drawArt(c, i);
-  });
-  renderTopLiked();
-  renderAllPreviews();
-  // viewer を最初から flex にしてしまっているので非表示にリセット
-  document.getElementById('viewer').style.display = 'none';
+// ========== Utils ==========
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
-init();
 
-// ========== 画像読み込み失敗フォールバック ==========
 function imgFallback(el, title) {
   el.style.display = 'none';
   const d = document.createElement('div');
   d.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;' +
     'background:linear-gradient(135deg,#0a000e,#1a001a);font-size:11px;color:#6a4a8a;' +
     'text-align:center;padding:6px;line-height:1.4';
-  d.textContent = title || '作品';
+  d.textContent = title || '展示物';
   el.parentElement.appendChild(d);
 }
+
+window.addEventListener('beforeunload', function() {
+  if (unsubExhibits) unsubExhibits();
+});
+
+init();
 </script>
 </body>
 </html>

@@ -135,7 +135,7 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
     <button class="tab-btn" onclick="switchTab('fountain-event')">🎉 イベント投稿</button>
     <button class="tab-btn" onclick="switchTab('dao-votes');loadDAOVotes()">🗳️ DAO投票</button>
     <button class="tab-btn" onclick="switchTab('facility-reports');frLoad()" style="color:#f97316;">🚨 施設報告管理</button>
-    <button class="tab-btn" onclick="switchTab('museum-sp');mspLoad()">🎨 SchoolPark個展</button>
+    <button class="tab-btn" onclick="switchTab('museum-sp');mspLoad()">🏛️ 博物館展示管理</button>
     <button class="tab-btn" onclick="switchTab('lab-reports');labLoad()">🔬 研究レポート</button>
     <button class="tab-btn" onclick="deleteAllContents()" style="margin-left:auto;color:#f44747;border-bottom-color:transparent;">🗑️ コンテンツ全削除</button>
   </div>
@@ -365,39 +365,52 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
     <div id="frList"><div class="fr-empty">読み込み中...</div></div>
   </div>
 
-  <!-- タブ: SchoolPark個展 管理 -->
+  <!-- タブ: 博物館展示管理 -->
   <div id="tab-museum-sp" class="tab-content">
     <div class="direct-form">
-      <h2>🎨 SchoolPark個展 — 作品を追加</h2>
+      <h2>🏛️ SchoolPark博物館 — 展示物を追加</h2>
       <div style="margin-bottom:14px">
         <div class="form-field" style="margin-bottom:12px">
-          <label>作品画像 *</label>
+          <label>展示画像（任意）</label>
           <div id="mspDropzone" onclick="document.getElementById('mspFile').click()"
                style="width:100%;height:160px;border:2px dashed #333;border-radius:8px;background:#0f0f0f;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;transition:border-color .2s"
                ondragover="event.preventDefault()" ondrop="mspOnDrop(event)">
-            <div id="mspDzPlaceholder" style="font-size:13px;color:#666;text-align:center;line-height:2">📁 クリックまたはドロップして画像を選択<br><span style="font-size:11px">JPG・PNG・GIF・WebP対応</span></div>
+            <div id="mspDzPlaceholder" style="font-size:13px;color:#666;text-align:center;line-height:2">📁 クリックまたはドロップして画像を選択<br><span style="font-size:11px">JPG・PNG・GIF・WebP対応（任意）</span></div>
           </div>
           <input type="file" id="mspFile" accept="image/*" style="display:none" onchange="mspOnFileSelect(event)">
         </div>
-        <div class="form-grid" style="grid-template-columns:1fr 1fr">
+        <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
           <div class="form-field">
             <label>タイトル *</label>
-            <input type="text" id="mspTitle" placeholder="例: 創世 #004">
+            <input type="text" id="mspTitle" placeholder="例: 第1回SchoolPark祭">
+          </div>
+          <div class="form-field">
+            <label>カテゴリ</label>
+            <select id="mspCategory">
+              <option value="記録">記録</option>
+              <option value="イベント">イベント</option>
+              <option value="活動">活動</option>
+              <option value="お知らせ">お知らせ</option>
+              <option value="その他">その他</option>
+            </select>
           </div>
           <div class="form-field">
             <label>説明（任意）</label>
-            <input type="text" id="mspDesc" placeholder="作品のコンセプトなど">
+            <input type="text" id="mspDesc" placeholder="展示物の説明や背景">
           </div>
         </div>
       </div>
       <div class="form-actions">
         <button class="btn-clear" onclick="mspClear()">クリア</button>
-        <button class="btn-add" id="mspAddBtn" onclick="mspAddWork()" disabled>追加する</button>
+        <button class="btn-add" id="mspAddBtn" onclick="mspAddWork()">🏛️ 展示物を追加</button>
       </div>
       <div class="toast" id="mspToast"></div>
     </div>
 
-    <h2 style="font-size:15px;color:#4ec9b0;margin-bottom:14px">📋 登録済み作品</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="font-size:15px;color:#4ec9b0;margin:0">📋 登録済み展示物</h2>
+      <button class="btn-add" onclick="mspLoad()" style="padding:7px 16px;font-size:13px">🔄 更新</button>
+    </div>
     <div id="mspList"></div>
   </div>
 
@@ -468,35 +481,54 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
 #mspList .msp-desc{font-size:12px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #mspList .msp-del{background:rgba(244,71,71,.1);color:#f44747;border:1px solid rgba(244,71,71,.25);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;flex-shrink:0}
 #mspList .msp-del:hover{background:rgba(244,71,71,.2)}
-#mspList .msp-empty{text-align:center;color:#555;padding:36px;font-size:14px}
+#mspList .msp-empty{text-align:center;color:#555;padding:36px;font-size:14px;grid-column:1/-1}
 </style>
 
 <script>
-// ─── SchoolPark個展管理 (localStorage) ───
-var MSP_KEY = 'museum_sp_works';
-// デフォルト作品なし（管理画面から投稿されたもののみ表示）
+// ─── 博物館展示管理 (Firebase: museum_sp_exhibits) ───
+var MSP_COL = 'museum_sp_exhibits';
 var mspImageData = null;
-
-function mspGetWorks() {
-  try { var s=localStorage.getItem(MSP_KEY); return s?JSON.parse(s):[]; } catch{ return []; }
-}
-function mspSaveWorks(works) { localStorage.setItem(MSP_KEY, JSON.stringify(works)); }
+var mspUnsubscribe = null;
 
 function mspLoad() {
-  var works = mspGetWorks();
+  var db = window.fpAdminDB;
   var list = document.getElementById('mspList');
-  if (!works.length) { list.innerHTML = '<div class="msp-empty">まだ作品がありません</div>'; return; }
-  list.innerHTML = works.map(function(w) {
-    var src = w.imageData || w.imageUrl || '';
-    var thumbTag = src
-      ? '<img class="msp-thumb" src="'+src+'" alt="'+esc(w.title||'')+'">'
-      : '<div class="msp-thumb" style="display:flex;align-items:center;justify-content:center;font-size:11px;color:#666">[生成アート]</div>';
-    return '<div class="msp-item">'
-      + thumbTag
-      + '<div class="msp-info"><div class="msp-title">'+esc(w.title||'無題')+'</div><div class="msp-desc">'+esc(w.desc||'')+'</div></div>'
-      + '<button class="msp-del" onclick="mspDeleteWork(\''+w.id+'\')">🗑️ 削除</button>'
-      + '</div>';
-  }).join('');
+  if (!list) return;
+  if (!db) { setTimeout(mspLoad, 500); return; }
+
+  list.innerHTML = '<div class="msp-empty">読み込み中…</div>';
+
+  // 既存のリスナーを解除
+  if (mspUnsubscribe) { mspUnsubscribe(); mspUnsubscribe = null; }
+
+  mspUnsubscribe = db.collection(MSP_COL)
+    .orderBy('createdAt', 'desc')
+    .limit(50)
+    .onSnapshot(function(snap) {
+      if (snap.empty) {
+        list.innerHTML = '<div class="msp-empty">まだ展示物がありません</div>';
+        return;
+      }
+      list.innerHTML = snap.docs.map(function(d) {
+        var w = d.data();
+        var src = w.imageData || w.imageUrl || '';
+        var thumbTag = src
+          ? '<img class="msp-thumb" src="' + mspEsc(src) + '" alt="' + mspEsc(w.title||'') + '" onerror="this.style.display=\'none\'">'
+          : '<div class="msp-thumb" style="display:flex;align-items:center;justify-content:center;font-size:24px;background:#1a001a">🏛️</div>';
+        var cat = w.category ? '<span style="font-size:10px;color:#888;margin-right:4px">[' + mspEsc(w.category) + ']</span>' : '';
+        var dt = w.createdAt ? new Date(w.createdAt).toLocaleDateString('ja-JP') : '';
+        return '<div class="msp-item">'
+          + thumbTag
+          + '<div class="msp-info">'
+          + '<div class="msp-title">' + mspEsc(w.title||'無題') + '</div>'
+          + '<div class="msp-desc">' + cat + mspEsc(w.desc||'') + (dt ? ' <span style="color:#555;font-size:10px">· '+dt+'</span>' : '') + '</div>'
+          + '</div>'
+          + '<button class="msp-del" onclick="mspDeleteWork(\'' + d.id + '\')">🗑️ 削除</button>'
+          + '</div>';
+      }).join('');
+    }, function(err) {
+      list.innerHTML = '<div class="msp-empty">❌ 読み込み失敗: ' + err.message + '</div>';
+    });
 }
 
 function mspOnFileSelect(event) {
@@ -505,11 +537,11 @@ function mspOnFileSelect(event) {
   var reader = new FileReader();
   reader.onload = function(e) {
     mspImageData = e.target.result;
-    document.getElementById('mspAddBtn').disabled = false;
     var dz = document.getElementById('mspDropzone');
     var ph = document.getElementById('mspDzPlaceholder');
     ph.style.display = 'none';
-    var img = dz.querySelector('img') || document.createElement('img');
+    var img = dz.querySelector('img.msp-preview') || document.createElement('img');
+    img.className = 'msp-preview';
     img.src = mspImageData;
     img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain';
     dz.appendChild(img);
@@ -521,28 +553,47 @@ function mspOnDrop(event) {
   event.preventDefault();
   var file = event.dataTransfer.files[0];
   if (!file) return;
-  var fakeEvt = { target: { files: [file] } };
-  mspOnFileSelect(fakeEvt);
+  mspOnFileSelect({ target: { files: [file] } });
 }
 
-function mspAddWork() {
-  if (!mspImageData) return;
+async function mspAddWork() {
+  var db = window.fpAdminDB;
+  if (!db) { mspToast('❌ Firebase未接続', 'error'); return; }
   var title = document.getElementById('mspTitle').value.trim();
   if (!title) { mspToast('❌ タイトルは必須です', 'error'); return; }
-  var desc = document.getElementById('mspDesc').value.trim();
-  var works = mspGetWorks();
-  works.push({ id: 'sp_' + Date.now(), title: title, desc: desc, imageData: mspImageData, timestamp: Date.now() });
-  mspSaveWorks(works);
-  mspToast('✅ 作品を追加しました', 'success');
-  mspClear();
-  mspLoad();
+  var desc     = document.getElementById('mspDesc').value.trim();
+  var category = document.getElementById('mspCategory').value;
+  var btn = document.getElementById('mspAddBtn');
+  btn.disabled = true; btn.textContent = '追加中…';
+  try {
+    var payload = {
+      title: title,
+      desc: desc,
+      category: category,
+      createdAt: Date.now(),
+      source: 'admin'
+    };
+    if (mspImageData) payload.imageData = mspImageData;
+    await db.collection(MSP_COL).add(payload);
+    mspToast('✅ 展示物を追加しました（即時反映）', 'success');
+    mspClear();
+  } catch(e) {
+    mspToast('❌ 追加失敗: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '🏛️ 展示物を追加';
+  }
 }
 
-function mspDeleteWork(id) {
-  if (!confirm('この作品を削除しますか？')) return;
-  var works = mspGetWorks().filter(function(w) { return w.id !== id; });
-  mspSaveWorks(works);
-  mspLoad();
+async function mspDeleteWork(docId) {
+  if (!confirm('この展示物を削除しますか？')) return;
+  var db = window.fpAdminDB;
+  if (!db) return;
+  try {
+    await db.collection(MSP_COL).doc(docId).delete();
+    mspToast('✅ 削除しました', 'success');
+  } catch(e) {
+    mspToast('❌ 削除失敗: ' + e.message, 'error');
+  }
 }
 
 function mspClear() {
@@ -550,19 +601,24 @@ function mspClear() {
   document.getElementById('mspFile').value = '';
   document.getElementById('mspTitle').value = '';
   document.getElementById('mspDesc').value = '';
-  document.getElementById('mspAddBtn').disabled = true;
+  document.getElementById('mspCategory').value = '記録';
   var dz = document.getElementById('mspDropzone');
-  var img = dz.querySelector('img');
+  var img = dz.querySelector('img.msp-preview');
   if (img) img.remove();
   document.getElementById('mspDzPlaceholder').style.display = '';
 }
 
 function mspToast(msg, type) {
   var t = document.getElementById('mspToast');
+  if (!t) return;
   t.textContent = msg;
   t.className = 'toast ' + type;
   t.style.display = 'block';
-  setTimeout(function() { t.style.display = 'none'; }, 3000);
+  setTimeout(function() { t.style.display = 'none'; }, 3500);
+}
+
+function mspEsc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
 
