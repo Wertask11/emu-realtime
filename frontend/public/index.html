@@ -3088,13 +3088,13 @@ body.paypay-mode #pp-post-fab {
   <div id="emuerRestrictOverlay">
     <div class="er-icon">🔒</div>
     <div class="er-title">コンテンツ利用制限中</div>
-    <div class="er-sub">EMUERが不足しています。<br>制限解除後に <strong style="color:#D4A843">1,000 EMUER</strong> が補充されます。</div>
+    <div class="er-sub" id="erSubText">EMUERが不足しています。<br>制限解除後に EMUER が補充されます。</div>
     <div class="er-timer-row">
       <div class="er-timer-box"><div class="er-timer-num" id="erTimerH">00</div><div class="er-timer-lbl">時間</div></div>
       <div class="er-timer-box"><div class="er-timer-num" id="erTimerM">00</div><div class="er-timer-lbl">分</div></div>
       <div class="er-timer-box"><div class="er-timer-num" id="erTimerS">00</div><div class="er-timer-lbl">秒</div></div>
     </div>
-    <div class="er-refill">🎁 解除後 → 1,000 EMUER 自動補充</div>
+    <div class="er-refill" id="erRefillText">🎁 解除後 → EMUER 補充</div>
     <div id="erTypeBadge" class="er-type-badge" style="background:rgba(212,168,67,0.12);color:#D4A843;border:1px solid rgba(212,168,67,0.3)"></div>
     <button style="margin-top:8px;padding:8px 20px;background:transparent;border:1px solid rgba(255,255,255,0.2);color:#888;border-radius:6px;cursor:pointer;font-size:0.8rem" onclick="document.getElementById('emuerRestrictOverlay').classList.remove('active')">マップに戻る</button>
   </div>
@@ -4045,13 +4045,46 @@ const EMUER_RATE_CONFIG = {
   taxi_ride: 3,
 };
 
-// 制限期間（ミリ秒）
-const EMUER_RESTRICTION_MS = {
-  free:    2 * 24 * 60 * 60 * 1000, // 2日
-  paid:    1 * 24 * 60 * 60 * 1000, // 1日
-  premium: 1 * 24 * 60 * 60 * 1000, // 1日（プレミアム）
+/* ═══════════════════════════════════════════════════════
+   キャンペーンモード切り替え
+   ★ true  = キャンペーン中（中間制限なし）
+   ★ false = 通常モード（ステップ制制限）
+═══════════════════════════════════════════════════════ */
+const CAMPAIGN_MODE = false;
+
+/* ═══════════════════════════════════════════════════════
+   EMUER ステップ制利用制限設定
+   ★ 各ステップ: { balance: 補充EMUER量, restrictionMs: 制限時間(ms) }
+   ★ 最終ステップ解除後に 1,000 EMUER 実配布（サイクル完了報酬）
+   ★ CAMPAIGN_MODE = true にするとキャンペーン設定に切り替わる
+
+   通常モード
+     無料ユーザー: 300→1h / 300→1h / 300→1h / 100→5h（合計8h）
+     有料ユーザー: 500→1h / 500→3h              （合計4h）
+   キャンペーン中（中間制限なし）
+     無料ユーザー: 1000→5h
+     有料ユーザー: 1000→3h
+═══════════════════════════════════════════════════════ */
+const EMUER_STEPS_CONFIG = {
+  normal: {
+    free: [
+      { balance: 300, restrictionMs: 1 * 60 * 60 * 1000 },  // ステップ1
+      { balance: 300, restrictionMs: 1 * 60 * 60 * 1000 },  // ステップ2
+      { balance: 300, restrictionMs: 1 * 60 * 60 * 1000 },  // ステップ3
+      { balance: 100, restrictionMs: 5 * 60 * 60 * 1000 },  // ステップ4（最終）
+    ],
+    paid: [
+      { balance: 500, restrictionMs: 1 * 60 * 60 * 1000 },  // ステップ1
+      { balance: 500, restrictionMs: 3 * 60 * 60 * 1000 },  // ステップ2（最終）
+    ],
+  },
+  campaign: {
+    free: [{ balance: 1000, restrictionMs: 5 * 60 * 60 * 1000 }],  // 1000EMUER → 5時間
+    paid: [{ balance: 1000, restrictionMs: 3 * 60 * 60 * 1000 }],  // 1000EMUER → 3時間
+  },
 };
-const EMUER_INITIAL_AMOUNT = 1000;
+const EMUER_COMPLETION_REWARD = 1000; // 全ステップ完了後の実EMUER配布量
+const EMUER_INITIAL_AMOUNT = 1000; // 後方互換用（直接参照は非推奨）
 function _isOwnerAccess() {
   const saved = (localStorage.getItem('emuWallet') || '').toLowerCase();
   if (saved && saved === SP_OWNER.toLowerCase()) return true;
@@ -6648,6 +6681,51 @@ function _getUserTypeForEmuer() {
   return 'free';
 }
 
+// 現在のモード（通常 / キャンペーン）に対応したステップ配列を返す
+function _getEmuerSteps(userType) {
+  const mode = CAMPAIGN_MODE ? 'campaign' : 'normal';
+  const key  = userType === 'paid' ? 'paid' : 'free';
+  return EMUER_STEPS_CONFIG[mode][key];
+}
+
+// ステップインデックスに対応する補充残高（範囲外は先頭ステップ）
+function _getStepBalance(userType, stepIndex) {
+  const steps = _getEmuerSteps(userType);
+  return (steps[stepIndex] || steps[0]).balance;
+}
+
+// 全ステップ完了報酬を申請 → バックエンドへPOST
+async function _triggerEmuerCycleReward(completedSteps) {
+  const walletAddr = window.connectedAccount;
+  if (!walletAddr) { console.warn('_triggerEmuerCycleReward: ウォレット未接続'); return; }
+  try {
+    const res  = await fetch('https://emu-realtime.onrender.com/emuer-cycle/reward', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: walletAddr, completedSteps, amount: EMUER_COMPLETION_REWARD })
+    });
+    const json = await res.json();
+    if (json.success) {
+      console.log(`🎉 サイクル完了報酬 +${EMUER_COMPLETION_REWARD} EMUER 申請済み`);
+    } else if (json.error === 'ALREADY_REGISTERED') {
+      console.log('ℹ️ このサイクルの報酬は既に受け取り済みです');
+      return;
+    } else {
+      console.warn('サイクル報酬エラー:', json.error || json.message);
+      return;
+    }
+  } catch (e) {
+    console.error('サイクル報酬リクエストエラー:', e);
+    return;
+  }
+  // 完了トースト
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#0d4a8a,#1a2e6e);color:#fff;padding:13px 26px;border-radius:12px;font-size:14px;font-weight:bold;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.4);text-align:center;';
+  toast.innerHTML = `🎉 全制限クリア！<br><span style="font-size:12px;opacity:0.85">+${EMUER_COMPLETION_REWARD} EMUER 配布申請完了</span>`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 5000);
+}
+
 async function _initEmuer() {
   let data = _getEmuerData();
   const now = Date.now();
@@ -6664,23 +6742,44 @@ async function _initEmuer() {
   }
 
   if (!data) {
-    // 初回 → 1,000 EMUER付与
-    data = { balance: EMUER_INITIAL_AMOUNT, lastRefill: now, restrictionUntil: null, totalSpent: 0 };
+    // 初回 → ステップ0の残高で付与
+    const userType0 = _getUserTypeForEmuer();
+    const initBal   = _getStepBalance(userType0, 0);
+    data = { balance: initBal, lastRefill: now, restrictionUntil: null, totalSpent: 0, restrictionCount: 0 };
     _saveEmuerData(data);
   } else if (MAINTENANCE_MODE && _isOwnerAccess() && data.restrictionUntil) {
-    // メンテナンスモード中のオーナー → 制限を即時解除・残高を復元
-    data.balance = EMUER_INITIAL_AMOUNT;
+    // メンテナンスモード中のオーナー → 制限を即時解除・ステップ0残高で復元
+    const userType0 = _getUserTypeForEmuer();
+    data.balance         = _getStepBalance(userType0, 0);
     data.restrictionUntil = null;
-    data.lastRefill = now;
+    data.restrictionCount = 0;
+    data._cycleComplete   = false;
+    data._nextStepBalance = null;
+    data.lastRefill       = now;
     _saveEmuerData(data);
     // 制限オーバーレイが出ていたら閉じる
     const ov = document.getElementById('emuerRestrictOverlay');
     if (ov) ov.classList.remove('active');
   } else if (data.restrictionUntil && now >= data.restrictionUntil) {
-    // 制限解除 → 1,000 EMUER再付与
-    data.balance = EMUER_INITIAL_AMOUNT;
+    // 制限解除
+    const userType0 = _getUserTypeForEmuer();
+    const steps0    = _getEmuerSteps(userType0);
+    if (data._cycleComplete) {
+      // ── 全ステップ完了 → 実EMUER配布・サイクルリセット ──
+      _triggerEmuerCycleReward(data.restrictionCount).catch(() => {});
+      data.balance          = _getStepBalance(userType0, 0);
+      data.restrictionCount = 0;
+      data._cycleComplete   = false;
+      data._nextStepBalance = null;
+    } else {
+      // ── 中間ステップ → 次のステップ残高を補充 ──
+      data.balance          = data._nextStepBalance != null
+        ? data._nextStepBalance
+        : _getStepBalance(userType0, 0);
+      data._nextStepBalance = null;
+    }
     data.restrictionUntil = null;
-    data.lastRefill = now;
+    data.lastRefill       = now;
     _saveEmuerData(data);
   }
 
@@ -6711,11 +6810,51 @@ function _showEmuerRestrictionOverlay(restrictionUntil) {
   if (!overlay) return;
   overlay.classList.add('active');
 
-  const userType = _getUserTypeForEmuer();
+  const userType  = _getUserTypeForEmuer();
+  const steps     = _getEmuerSteps(userType);
+  const erData    = _getEmuerData();
+  // restrictionCount はすでにインクリメント後 → 完了したステップ数
+  const doneSteps = erData ? (erData.restrictionCount || 0) : 1;
+  const totalSteps = steps.length;
+  const isFinal   = erData ? !!erData._cycleComplete : false;
+  const typeLabel = userType === 'paid' ? '有料ユーザー' : '無料ユーザー';
+  const campLabel = CAMPAIGN_MODE ? ' ｜ キャンペーン中' : '';
+
+  // バッジ
   const badge = document.getElementById('erTypeBadge');
   if (badge) {
-    const labels = { free:'無料ユーザー ｜ 制限期間：2日間', paid:'有料ユーザー ｜ 制限期間：1日', premium:'プレミアムNFT ｜ 制限期間：1日' };
-    badge.textContent = labels[userType] || '';
+    badge.textContent = `${typeLabel} ｜ ステップ ${Math.min(doneSteps, totalSteps)} / ${totalSteps}${campLabel}`;
+  }
+
+  // 解除後補充量を計算
+  let nextBal;
+  if (isFinal) {
+    nextBal = null; // サイクル完了→実EMUER配布
+  } else {
+    const nextIdx = doneSteps; // インクリメント済みなので次のインデックスと一致
+    nextBal = nextIdx < steps.length ? steps[nextIdx].balance : null;
+  }
+
+  // サブテキスト更新
+  const subEl = document.getElementById('erSubText');
+  if (subEl) {
+    if (isFinal) {
+      subEl.innerHTML = `最終制限中です。<br>解除後に <strong style="color:#D4A843">1,000 EMUER</strong> が<strong style="color:#5faaff">実配布</strong>されます！`;
+    } else {
+      subEl.innerHTML = `EMUERが不足しています。<br>制限解除後に <strong style="color:#D4A843">${nextBal != null ? nextBal.toLocaleString() : '—'} EMUER</strong> が補充されます。`;
+    }
+  }
+
+  // リフィルテキスト更新
+  const refillEl = document.getElementById('erRefillText');
+  if (refillEl) {
+    if (isFinal) {
+      refillEl.textContent = `🎉 解除後 → ${EMUER_COMPLETION_REWARD.toLocaleString()} EMUER 実配布（サイクル完了！）`;
+      refillEl.style.color = '#5faaff';
+    } else {
+      refillEl.textContent = `🎁 解除後 → ${nextBal != null ? nextBal.toLocaleString() : '—'} EMUER 自動補充`;
+      refillEl.style.color = '';
+    }
   }
 
   if (_erTimerInterval) clearInterval(_erTimerInterval);
@@ -6773,13 +6912,23 @@ async function gatedOpen(poiId, fn) {
     return;
   }
 
-  // 残高不足 → 制限開始
+  // 残高不足 → ステップ制制限開始
   if (data.balance < cost) {
-    const userType = _getUserTypeForEmuer();
-    data.balance = 0;
-    data.restrictionUntil = now + EMUER_RESTRICTION_MS[userType];
-    data.restrictionCount = (data.restrictionCount || 0) + 1;
-    data.lastRestriction = now;
+    const userType   = _getUserTypeForEmuer();
+    const steps      = _getEmuerSteps(userType);
+    const stepIndex  = data.restrictionCount || 0;
+    // 範囲外の場合は最終ステップを適用
+    const curStep    = steps[Math.min(stepIndex, steps.length - 1)];
+    const nextIdx    = stepIndex + 1;
+    const isFinal    = nextIdx >= steps.length;
+
+    data.balance          = 0;
+    data.restrictionUntil = now + curStep.restrictionMs;
+    data.restrictionCount = stepIndex + 1;
+    data.lastRestriction  = now;
+    data._cycleComplete   = isFinal;
+    data._nextStepBalance = isFinal ? null : steps[nextIdx].balance;
+
     _saveEmuerData(data);
     _updateEmuerHud(0);
     _showEmuerRestrictionOverlay(data.restrictionUntil);
