@@ -219,13 +219,13 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
       <div class="plan-card featured" id="planCard-s500">
         <div class="plan-icon">📖</div>
         <div class="plan-name">ライト</div>
-        <div class="plan-price">¥500<span>/月</span></div>
+        <div class="plan-price">500<span> EMUER/月</span></div>
         <ul class="plan-features">
           <li>2作品まで閲覧可能</li>
           <li>目次・著者プロフィール</li>
         </ul>
-        <button class="plan-btn paid-btn" disabled onclick="selectPlanPreview('s500')">
-          近日公開<span class="coming-soon-badge">準備中</span>
+        <button class="plan-btn paid-btn" id="planBtn-s500" onclick="buyPlan('s500')">
+          EMUERで加入 <span style="font-size:9px;opacity:.8">500💎/月</span>
         </button>
       </div>
 
@@ -233,13 +233,13 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
       <div class="plan-card" id="planCard-s1000">
         <div class="plan-icon">📚</div>
         <div class="plan-name">スタンダード</div>
-        <div class="plan-price">¥1,000<span>/月</span></div>
+        <div class="plan-price">1,000<span> EMUER/月</span></div>
         <ul class="plan-features">
           <li>5作品まで閲覧可能</li>
           <li>目次・著者プロフィール</li>
         </ul>
-        <button class="plan-btn paid-btn" disabled onclick="selectPlanPreview('s1000')">
-          近日公開<span class="coming-soon-badge">準備中</span>
+        <button class="plan-btn paid-btn" id="planBtn-s1000" onclick="buyPlan('s1000')">
+          EMUERで加入 <span style="font-size:9px;opacity:.8">1,000💎/月</span>
         </button>
       </div>
 
@@ -248,15 +248,15 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
         <div class="plan-badge">プレミアム</div>
         <div class="plan-icon">👑</div>
         <div class="plan-name">プレミアム</div>
-        <div class="plan-price">¥5,000<span>/月</span></div>
+        <div class="plan-price">5,000<span> EMUER/月</span></div>
         <ul class="plan-features">
           <li>無制限・全作品読み放題</li>
           <li>新着コンテンツ先行</li>
           <li>限定閲覧あり</li>
           <li>著者Q&Aセッション</li>
         </ul>
-        <button class="plan-btn paid-btn" disabled onclick="selectPlanPreview('s5000')">
-          近日公開<span class="coming-soon-badge">準備中</span>
+        <button class="plan-btn paid-btn" id="planBtn-s5000" onclick="buyPlan('s5000')">
+          EMUERで加入 <span style="font-size:9px;opacity:.8">5,000💎/月</span>
         </button>
       </div>
 
@@ -429,30 +429,112 @@ function switchTab(name){
 }
 
 // ========== プランシステム ==========
-// 将来Stripe実装後に切り替わる。現在は 'free' 固定。
-let currentPlan = 'free'; // 'free' | 's500' | 's1000' | 's5000'
-
 const PLAN_INFO = {
-  free:  { label:'フリー',        color:'#4ade80', unlocked:0  }, // 立ち読みのみ
-  s500:  { label:'ライト ¥500',   color:'#60a5fa', unlocked:2  },
-  s1000: { label:'スタンダード ¥1,000', color:'#fb923c', unlocked:5  },
-  s5000: { label:'プレミアム ¥5,000',  color:'#d4a017', unlocked:99 },
+  free:  { label:'フリー',              color:'#4ade80', unlocked:0  },
+  s500:  { label:'ライト',              color:'#60a5fa', unlocked:2  },
+  s1000: { label:'スタンダード',        color:'#fb923c', unlocked:5  },
+  s5000: { label:'プレミアム',          color:'#d4a017', unlocked:99 },
 };
 
-// プラン変更（将来Stripe購入後に呼ばれる予定）
+const PLAN_PRICES = {
+  s500:  { fee:500,  label:'ライトプラン月額',        name:'ライト' },
+  s1000: { fee:1000, label:'スタンダードプラン月額',  name:'スタンダード' },
+  s5000: { fee:5000, label:'プレミアムプラン月額',    name:'プレミアム' },
+};
+
+const SUB_KEY = 'sp_lib_sub';
+let _pendingPlan = null;
+
+// localStorage からプランを復元（有効期限チェック付き）
+function loadStoredPlan(){
+  try{
+    const stored = JSON.parse(localStorage.getItem(SUB_KEY)||'null');
+    if(stored && stored.expiry > Date.now()) return stored.plan;
+  }catch(e){}
+  return 'free';
+}
+
+function storePlan(plan){
+  if(plan === 'free'){ localStorage.removeItem(SUB_KEY); return; }
+  const expiry = Date.now() + 30*24*60*60*1000; // 30日
+  localStorage.setItem(SUB_KEY, JSON.stringify({plan, expiry}));
+}
+
+function getPlanExpiry(){
+  try{
+    const stored = JSON.parse(localStorage.getItem(SUB_KEY)||'null');
+    if(stored && stored.expiry > Date.now()) return stored.expiry;
+  }catch(e){}
+  return null;
+}
+
+// EMUERでプランを購入
+function buyPlan(plan){
+  const info = PLAN_PRICES[plan];
+  if(!info) return;
+  _pendingPlan = plan;
+  window.top.postMessage({type:'spPurchase', fee: info.fee, label: info.label}, '*');
+}
+
+let currentPlan = loadStoredPlan();
+
+// プラン変更（購入完了後 or 初期ロード）
 function setPlan(plan){
   currentPlan = plan;
   renderContentFooters();
   updatePlanBanner();
   highlightPlanCard();
+  updatePlanButtons();
 }
 
-// プレビュー（ボタン押したときにコンテンツタブに反映して見せる）
+// フリープランプレビュー（コンテンツタブ確認用）
 function selectPlanPreview(plan){
-  // ボタンが disabled のため現在は呼ばれないが将来用に残す
-  setPlan(plan);
+  setPlan('free');
   switchTab('contents');
 }
+
+// プランボタンの状態更新
+function updatePlanButtons(){
+  const expiry = getPlanExpiry();
+  const expiryStr = expiry ? new Date(expiry).toLocaleDateString('ja-JP')+'まで' : '';
+
+  // フリーボタン
+  const freeBtn = document.getElementById('planBtn-free');
+  if(freeBtn){
+    if(currentPlan === 'free'){
+      freeBtn.textContent = '✅ 現在のプラン';
+      freeBtn.disabled = true;
+    } else {
+      freeBtn.textContent = '現在のプラン（フリー）';
+      freeBtn.disabled = true;
+    }
+  }
+
+  // 有料ボタン
+  ['s500','s1000','s5000'].forEach(p => {
+    const btn = document.getElementById('planBtn-'+p);
+    if(!btn) return;
+    if(p === currentPlan){
+      btn.innerHTML = `✅ 利用中<span class="coming-soon-badge">${expiryStr}</span>`;
+      btn.disabled = true;
+    } else {
+      const info = PLAN_PRICES[p];
+      btn.innerHTML = `EMUERで加入 <span style="font-size:9px;opacity:.8">${info.fee.toLocaleString()}💎/月</span>`;
+      btn.disabled = false;
+    }
+  });
+}
+
+// spPurchaseOk — 購入完了通知を受け取る
+window.addEventListener('message', e => {
+  if(e.data && e.data.type === 'spPurchaseOk' && _pendingPlan){
+    const plan = _pendingPlan;
+    _pendingPlan = null;
+    storePlan(plan);
+    setPlan(plan);
+    switchTab('contents');
+  }
+});
 
 function updatePlanBanner(){
   const info = PLAN_INFO[currentPlan];
@@ -584,6 +666,8 @@ function closeReader(){
 // 初期レンダリング
 renderContentFooters();
 updatePlanBanner();
+updatePlanButtons();
+highlightPlanCard();
 </script>
 </body>
 </html>
