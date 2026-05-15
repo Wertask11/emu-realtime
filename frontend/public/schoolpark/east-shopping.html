@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>East Mall | SchoolPark</title>
+<title>School Park Mall | SchoolPark</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Noto+Serif+JP:wght@300;400;500;700&family=Zen+Maru+Gothic:wght@400;500&display=swap" rel="stylesheet">
@@ -1179,7 +1179,7 @@ input, textarea, select { font-family: inherit; outline: none; }
   <!-- Header -->
   <header class="header">
     <button class="header-back" onclick="goBack()">戻る</button>
-    <div class="header-title">East Area Mall</div>
+    <div class="header-title">School Park Mall</div>
     <div class="header-right">
       <button class="cart-btn" id="cartBtn" onclick="switchTab('bag')">
         🛍
@@ -1192,10 +1192,9 @@ input, textarea, select { font-family: inherit; outline: none; }
   <!-- Hero -->
   <div class="hero" id="hero">
     <div class="hero-beam"></div>
-    <div class="hero-eyebrow">SchoolPark × Shopping</div>
-    <div class="hero-title"><span>East</span> Area Mall</div>
+    <div class="hero-title"><span>School Park</span> Mall</div>
     <div class="hero-divider"><div class="hero-divider-dot"></div></div>
-    <div class="hero-sale-pill">✦ Spring Sale — 最大 50% OFF</div>
+    <div class="hero-sale-pill">✦ Grand open Sale — 最大 50% OFF</div>
   </div>
 
   <!-- Order Form Banner -->
@@ -1220,11 +1219,12 @@ input, textarea, select { font-family: inherit; outline: none; }
   <div class="tab-panel active" id="panel-shops">
     <div class="category-scroll" id="catFilter">
       <button class="cat-btn active" data-cat="all" onclick="filterCat('all',this)">All</button>
-      <button class="cat-btn" data-cat="fashion" onclick="filterCat('fashion',this)">Fashion</button>
+      <button class="cat-btn" data-cat="kyozai" onclick="filterCat('kyozai',this)">教材</button>
+      <button class="cat-btn" data-cat="yugu" onclick="filterCat('yugu',this)">遊具</button>
       <button class="cat-btn" data-cat="zakka" onclick="filterCat('zakka',this)">雑貨</button>
-      <button class="cat-btn" data-cat="food" onclick="filterCat('food',this)">Food</button>
+      <button class="cat-btn" data-cat="fashion" onclick="filterCat('fashion',this)">Fashion</button>
       <button class="cat-btn" data-cat="digital" onclick="filterCat('digital',this)">Digital</button>
-      <button class="cat-btn" data-cat="art" onclick="filterCat('art',this)">Art</button>
+      <button class="cat-btn" data-cat="other" onclick="filterCat('other',this)">その他</button>
     </div>
     <div class="shop-grid" id="shopGrid"></div>
   </div>
@@ -1282,101 +1282,11 @@ input, textarea, select { font-family: inherit; outline: none; }
 /* ═══════════════════════
    DATA
 ═══════════════════════ */
-const SHOPS = [
-  { id:1, name:"スタイルラボ", category:"fashion", emoji:"🧥",
-    desc:"最新トレンドを厳選したセレクトショップ。",
-    rating:4.8, items:24, badge:"HOT",
-    products:[
-      { id:101, name:"ネオンジャケット", emoji:"🧥", price:3200, desc:"光沢のあるネオンカラー" },
-      { id:102, name:"ホログラムパンツ", emoji:"👖", price:2800, desc:"虹色に輝くパンツ" },
-      { id:103, name:"スターTシャツ", emoji:"⭐", price:1200, desc:"星柄のユニークTシャツ" },
-      { id:104, name:"クラウドスニーカー", emoji:"👟", price:4500, desc:"雲のように軽い履き心地" },
-    ]
-  },
-  { id:2, name:"バッグ工房", category:"zakka", emoji:"👜",
-    desc:"手仕事の温もりを感じる個性的なバッグ。",
-    rating:4.6, items:18, badge:"NEW",
-    products:[
-      { id:201, name:"ミニトートバッグ", emoji:"👜", price:2200, desc:"コンパクトで使いやすい" },
-      { id:202, name:"ショルダーポーチ", emoji:"👝", price:1800, desc:"肩掛けスタイル" },
-      { id:203, name:"キャンバスリュック", emoji:"🎒", price:3600, desc:"大容量でスタイリッシュ" },
-    ]
-  },
-  { id:3, name:"アートギャラリー", category:"art", emoji:"🎨",
-    desc:"SchoolParkアーティストの限定作品集。",
-    rating:4.9, items:8, badge:null,
-    products:[
-      { id:301, name:"デジタルポスター", emoji:"🖼", price:1500, desc:"限定デジタルアート" },
-      { id:302, name:"ネオンアクリル画", emoji:"🎨", price:8000, desc:"ネオンカラーの世界" },
-      { id:303, name:"アニメスケッチ", emoji:"✏️", price:2400, desc:"手描きアニメイラスト" },
-    ]
-  },
-  { id:4, name:"スイーツファクトリー", category:"food", emoji:"🍰",
-    desc:"バーチャルスイーツで特別な体験を。",
-    rating:4.7, items:15, badge:"SALE",
-    products:[
-      { id:401, name:"マジックケーキ", emoji:"🎂", price:800, desc:"食べると不思議な気分に" },
-      { id:402, name:"ネオンマカロン", emoji:"🟣", price:400, desc:"カラフルで可愛いマカロン" },
-      { id:403, name:"スターゼリー", emoji:"⭐", price:350, desc:"星形のキラキラゼリー" },
-      { id:404, name:"クリスタルクッキー", emoji:"🍪", price:600, desc:"宝石のようなクッキー" },
-    ]
-  },
-  { id:5, name:"テックショップ", category:"digital", emoji:"📱",
-    desc:"仮想ガジェット＆デジタルアイテムの専門店。",
-    rating:4.5, items:30, badge:"HOT",
-    products:[
-      { id:501, name:"ホログラムタブレット", emoji:"📱", price:12000, desc:"3Dホログラム表示対応" },
-      { id:502, name:"ネオンキーボード", emoji:"⌨️", price:5500, desc:"発光メカニカルキーボード" },
-      { id:503, name:"AIイヤフォン", emoji:"🎧", price:7800, desc:"AIが音楽を選んでくれる" },
-      { id:504, name:"スマートウォッチX", emoji:"⌚", price:9000, desc:"多機能スマートウォッチ" },
-    ]
-  },
-  { id:6, name:"アクセサリーズ", category:"zakka", emoji:"💎",
-    desc:"キラキラ輝くバーチャルジュエリー。",
-    rating:4.4, items:42, badge:"SALE",
-    products:[
-      { id:601, name:"スターピアス", emoji:"⭐", price:1200, desc:"星型の輝くピアス" },
-      { id:602, name:"ネオンリング", emoji:"💍", price:1800, desc:"夜光るネオンリング" },
-      { id:603, name:"クリスタルネックレス", emoji:"💎", price:2800, desc:"透明感のあるクリスタル" },
-    ]
-  },
-  { id:7, name:"フォトスタジオ", category:"art", emoji:"🖼",
-    desc:"仮想フォトアイテム・フレームの専門店。",
-    rating:4.6, items:12, badge:"NEW",
-    products:[
-      { id:701, name:"ネオンフォトフレーム", emoji:"🖼", price:1600, desc:"光るフォトフレーム" },
-      { id:702, name:"スターライトフィルター", emoji:"✨", price:900, desc:"写真をSFに変えるフィルター" },
-      { id:703, name:"ホログラムスタンプ", emoji:"🌟", price:700, desc:"特別なスタンプセット" },
-    ]
-  },
-  { id:8, name:"コスメストア", category:"zakka", emoji:"🧴",
-    desc:"バーチャルコスメティックブランドの旗艦店。",
-    rating:4.8, items:28, badge:"NEW",
-    products:[
-      { id:801, name:"オーロラリップ", emoji:"💄", price:1400, desc:"オーロラ色に輝くリップ" },
-      { id:802, name:"グリッターアイシャドウ", emoji:"✨", price:1900, desc:"きらきらグリッター" },
-      { id:803, name:"ネオンネイル", emoji:"💅", price:1100, desc:"蛍光色のネイル" },
-    ]
-  },
-];
+const SHOPS = [];
 
-const NEW_ITEMS = [
-  { id:901, name:"オーロラリップ", emoji:"💄", price:1400, shop:"コスメストア" },
-  { id:902, name:"AIイヤフォン", emoji:"🎧", price:7800, shop:"テックショップ" },
-  { id:903, name:"ネオンフォトフレーム", emoji:"🖼", price:1600, shop:"フォトスタジオ" },
-  { id:904, name:"キャンバスリュック", emoji:"🎒", price:3600, shop:"バッグ工房" },
-  { id:905, name:"ホログラムパンツ", emoji:"👖", price:2800, shop:"スタイルラボ" },
-  { id:906, name:"ネオンリング", emoji:"💍", price:1800, shop:"アクセサリーズ" },
-];
+const NEW_ITEMS = [];
 
-const SALE_ITEMS = [
-  { id:401, name:"マジックケーキ", emoji:"🎂", shop:"スイーツファクトリー", original:800, off:30 },
-  { id:601, name:"スターピアス", emoji:"⭐", shop:"アクセサリーズ", original:1200, off:40 },
-  { id:101, name:"ネオンジャケット", emoji:"🧥", shop:"スタイルラボ", original:3200, off:25 },
-  { id:301, name:"デジタルポスター", emoji:"🖼", shop:"アートギャラリー", original:1500, off:50 },
-  { id:503, name:"AIイヤフォン", emoji:"🎧", shop:"テックショップ", original:7800, off:20 },
-  { id:202, name:"ショルダーポーチ", emoji:"👝", shop:"バッグ工房", original:1800, off:35 },
-];
+const SALE_ITEMS = [];
 
 /* ═══════════════════════
    STATE
@@ -1458,7 +1368,17 @@ function switchTab(tab) {
 ═══════════════════════ */
 function renderShops() {
   const shops = currentFilter === 'all' ? SHOPS : SHOPS.filter(s => s.category === currentFilter);
-  document.getElementById('shopGrid').innerHTML = shops.map(shopCardHTML).join('');
+  const grid = document.getElementById('shopGrid');
+  if (shops.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text2);">
+        <div style="font-size:48px;margin-bottom:14px;opacity:0.5">🛒</div>
+        <div style="font-family:var(--font-serif);font-size:18px;font-style:italic;margin-bottom:6px">No shops yet</div>
+        <div style="font-family:var(--font-sans);font-size:11px;color:var(--text3);letter-spacing:0.06em">ショップが登録されていません</div>
+      </div>`;
+    return;
+  }
+  grid.innerHTML = shops.map(shopCardHTML).join('');
 }
 
 function shopCardHTML(s) {
@@ -1479,7 +1399,7 @@ function shopCardHTML(s) {
 }
 
 function catLabel(c) {
-  return {fashion:'Fashion',zakka:'雑貨',food:'Food',digital:'Digital',art:'Art'}[c] || c;
+  return {kyozai:'教材',yugu:'遊具',zakka:'雑貨',fashion:'Fashion',digital:'Digital',other:'その他'}[c] || c;
 }
 
 function filterCat(cat, btn) {
@@ -1526,7 +1446,13 @@ function closeModalOutside(e) {
    CAROUSELS
 ═══════════════════════ */
 function renderNewCarousel() {
-  document.getElementById('newCarousel').innerHTML = NEW_ITEMS.map(item => `
+  const wrap = document.getElementById('newCarousel');
+  if (NEW_ITEMS.length === 0) {
+    wrap.innerHTML = `
+      <div style="padding:40px 20px;color:var(--text3);font-family:var(--font-sans);font-size:11px;letter-spacing:0.08em">新着商品はまだありません</div>`;
+    return;
+  }
+  wrap.innerHTML = NEW_ITEMS.map(item => `
   <div class="carousel-card">
     <span class="carousel-card-emoji">${item.emoji}</span>
     <div class="carousel-card-name">${item.name}</div>
@@ -1538,7 +1464,13 @@ function renderNewCarousel() {
 }
 
 function renderSaleGrid() {
-  document.getElementById('saleGrid').innerHTML = SALE_ITEMS.map(item => {
+  const grid = document.getElementById('saleGrid');
+  if (SALE_ITEMS.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text3);font-family:var(--font-sans);font-size:11px;letter-spacing:0.08em">セール商品はまだありません</div>`;
+    return;
+  }
+  grid.innerHTML = SALE_ITEMS.map(item => {
     const sp = Math.floor(item.original * (1 - item.off/100));
     return `
     <div class="sale-card">
@@ -1722,14 +1654,14 @@ function renderOwnerPanel() {
   }
   container.innerHTML = `
     <div class="stats-row">
-      <div class="stat-box"><div class="stat-num">42</div><div class="stat-label">本日の注文</div></div>
-      <div class="stat-box"><div class="stat-num" style="color:var(--gold2)">128,400</div><div class="stat-label">EMUER 売上</div></div>
-      <div class="stat-box"><div class="stat-num" style="color:var(--new)">8</div><div class="stat-label">ショップ数</div></div>
+      <div class="stat-box"><div class="stat-num">0</div><div class="stat-label">本日の注文</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:var(--gold2)">0</div><div class="stat-label">EMUER 売上</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:var(--new)">${SHOPS.length}</div><div class="stat-label">ショップ数</div></div>
     </div>
     <div class="owner-section">
       <div class="owner-section-title">✦ Shop List</div>
       <div class="shop-manage-list">
-        ${SHOPS.map(s=>`
+        ${SHOPS.length === 0 ? `<div style="text-align:center;padding:24px 12px;color:var(--text3);font-family:var(--font-sans);font-size:11px;letter-spacing:0.06em">ショップが登録されていません</div>` : SHOPS.map(s=>`
         <div class="shop-manage-item">
           <span class="shop-manage-emoji">${s.emoji}</span>
           <div class="shop-manage-info">
@@ -1753,11 +1685,12 @@ function renderOwnerPanel() {
         <div class="form-group">
           <label class="form-label">Category</label>
           <select class="form-input" id="newShopCat">
-            <option value="fashion">Fashion</option>
+            <option value="kyozai">教材</option>
+            <option value="yugu">遊具</option>
             <option value="zakka">雑貨</option>
-            <option value="food">Food</option>
+            <option value="fashion">Fashion</option>
             <option value="digital">Digital</option>
-            <option value="art">Art</option>
+            <option value="other">その他</option>
           </select>
         </div>
         <div class="form-group">
