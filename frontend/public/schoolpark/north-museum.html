@@ -405,24 +405,28 @@ function drawArt(canvas, idx) {
 }
 
 // ========== パブリックドメイン作品 ==========
+// Special:FilePath 形式 — ハッシュ不要の安定URL、自動的に適切なサイズにリダイレクト
+const _fp = (file, w) =>
+  `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=${w}`;
+
 const PD_WORKS = [
   {id:'pd_1', title:'星月夜', artist:'フィンセント・ファン・ゴッホ', year:'1889',
-   imageUrl:'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/640px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg',
+   imageUrl: _fp('Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg', 400),
    desc:'夜の空に渦巻く星々と月。ゴッホの代表作。'},
   {id:'pd_2', title:'睡蓮（1906）', artist:'クロード・モネ', year:'1906',
-   imageUrl:'https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/Claude_Monet_-_Water_Lilies_-_1906%2C_Ryerson.jpg/640px-Claude_Monet_-_Water_Lilies_-_1906%2C_Ryerson.jpg',
+   imageUrl: _fp('Claude_Monet_-_Water_Lilies_-_1906,_Ryerson.jpg', 400),
    desc:'印象派の巨匠モネが描いた睡蓮の池。'},
   {id:'pd_3', title:'神奈川沖浪裏', artist:'葛飾北斎', year:'1831',
-   imageUrl:'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/Great_Wave_off_Kanagawa2.jpg/640px-Great_Wave_off_Kanagawa2.jpg',
+   imageUrl: _fp('Great_Wave_off_Kanagawa2.jpg', 400),
    desc:'世界で最も有名な浮世絵。富士山を背景に大波が迫る。'},
   {id:'pd_4', title:'接吻', artist:'グスタフ・クリムト', year:'1907-08',
-   imageUrl:'https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg/640px-The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg',
+   imageUrl: _fp('The_Kiss_-_Gustav_Klimt_-_Google_Cultural_Institute.jpg', 400),
    desc:'金箔を用いたクリムトの傑作。愛の象徴として世界中で親しまれる。'},
   {id:'pd_5', title:'真珠の耳飾りの少女', artist:'ヨハネス・フェルメール', year:'1665頃',
-   imageUrl:'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/1665_Girl_with_a_Pearl_Earring.jpg/640px-1665_Girl_with_a_Pearl_Earring.jpg',
+   imageUrl: _fp('1665_Girl_with_a_Pearl_Earring.jpg', 400),
    desc:'「北のモナ・リザ」とも称されるフェルメールの名作。'},
   {id:'pd_6', title:'ムーラン・ド・ラ・ギャレット', artist:'ピエール＝オーギュスト・ルノワール', year:'1876',
-   imageUrl:'https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Auguste_Renoir_-_Dance_at_Le_Moulin_de_la_Galette_-_Google_Art_Project.jpg/320px-Auguste_Renoir_-_Dance_at_Le_Moulin_de_la_Galette_-_Google_Art_Project.jpg',
+   imageUrl: _fp('Auguste_Renoir_-_Dance_at_Le_Moulin_de_la_Galette_-_Google_Art_Project.jpg', 400),
    desc:'パリの野外ダンス場での賑やかな雰囲気を描いた印象派の傑作。'},
 ];
 
@@ -473,7 +477,10 @@ function thumbHTML(work, w, h) {
     return `<canvas width="${w}" height="${h}" data-artidx="${work.artIdx}" style="width:${w}px;height:${h}px;display:block"></canvas>`;
   }
   const src = work.imageData || work.imageUrl || '';
-  return `<img src="${src}" alt="${(work.title||'').replace(/"/g,'')}" style="width:${w}px;height:${h}px;object-fit:cover">`;
+  const alt = (work.title || '').replace(/"/g, '').replace(/'/g, '');
+  return `<img src="${src}" alt="${alt}" loading="lazy" referrerpolicy="no-referrer"
+    style="width:100%;height:100%;object-fit:cover;display:block"
+    onerror="imgFallback(this,'${alt}')">`;
 }
 
 function drawPending(container) {
@@ -747,6 +754,17 @@ function init() {
   document.getElementById('viewer').style.display = 'none';
 }
 init();
+
+// ========== 画像読み込み失敗フォールバック ==========
+function imgFallback(el, title) {
+  el.style.display = 'none';
+  const d = document.createElement('div');
+  d.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;' +
+    'background:linear-gradient(135deg,#0a000e,#1a001a);font-size:11px;color:#6a4a8a;' +
+    'text-align:center;padding:6px;line-height:1.4';
+  d.textContent = title || '作品';
+  el.parentElement.appendChild(d);
+}
 </script>
 </body>
 </html>
