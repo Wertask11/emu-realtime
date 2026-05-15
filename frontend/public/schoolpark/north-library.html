@@ -274,14 +274,14 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:700;color:#fff">しもまゆさん対談 — 適応の作法</div>
         </div>
-        <button onclick="openReader(0)" style="flex-shrink:0;background:linear-gradient(135deg,#4a3000,var(--accent));color:#000;border:none;padding:5px 12px;border-radius:10px;font-size:11px;cursor:pointer;font-weight:700;font-family:inherit">立ち読み</button>
+        <button onclick="openReader(0,'free')" style="flex-shrink:0;background:linear-gradient(135deg,#4a3000,var(--accent));color:#000;border:none;padding:5px 12px;border-radius:10px;font-size:11px;cursor:pointer;font-weight:700;font-family:inherit">立ち読み</button>
       </div>
       <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center">
         <span style="font-size:20px">📖</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:700;color:#fff">及川直之さん対談 — 変化の技術</div>
         </div>
-        <button onclick="openReader(1)" style="flex-shrink:0;background:linear-gradient(135deg,#4a3000,var(--accent));color:#000;border:none;padding:5px 12px;border-radius:10px;font-size:11px;cursor:pointer;font-weight:700;font-family:inherit">立ち読み</button>
+        <button onclick="openReader(1,'free')" style="flex-shrink:0;background:linear-gradient(135deg,#4a3000,var(--accent));color:#000;border:none;padding:5px 12px;border-radius:10px;font-size:11px;cursor:pointer;font-weight:700;font-family:inherit">立ち読み</button>
       </div>
     </div>
   </div>
@@ -456,7 +456,7 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
     <div class="reader-title" id="readerTitle"></div>
     <div class="reader-author" id="readerAuthor"></div>
     <div class="reader-text" id="readerText"></div>
-    <div class="reader-cta">
+    <div class="reader-cta" id="readerCta">
       <div class="reader-cta-text">📖 続きはnoteで購入してお読みください</div>
       <button class="reader-cta-btn" id="readerNoteBtn">noteで全文を読む →</button>
     </div>
@@ -656,93 +656,194 @@ function highlightPlanCard(){
   });
 }
 
-// コンテンツフッター（価格・ボタン）をプランに応じてレンダリング
+// コンテンツフッター（プラン別4ボタン方式）
 function renderContentFooters(){
-  const unlocked = PLAN_INFO[currentPlan].unlocked;
-  for(let i=0;i<8;i++){
+  // 各プランの定義（maxIdx: そのプランで読める最大インデックス）
+  const PLAN_META = {
+    free:  { label:'📋 フリー',       maxIdx:99, mode:'free' }, // 全記事の目次+著者プロフのみ
+    s500:  { label:'📖 ライト',       maxIdx:1,  mode:'paid' }, // 2本まで全文
+    s1000: { label:'📚 スタンダード', maxIdx:4,  mode:'paid' }, // 5本まで全文
+    s5000: { label:'👑 プレミアム',   maxIdx:99, mode:'paid' }, // 全8本全文
+  };
+  const ORDER = ['free','s500','s1000','s5000'];
+
+  for(let i=0; i<8; i++){
     const footer = document.getElementById('cf'+i);
     const card   = document.getElementById('cc'+i);
     if(!footer || !card) continue;
 
-    const canRead = i < unlocked; // このコンテンツをプランで読めるか
-    const isPremium = currentPlan === 's5000';
-
-    // カードのロックアイコン更新
+    // カードの視覚状態（自分のプランで全文読めるかどうかで色分け）
     card.classList.remove('locked','unlocked','free-badge');
-    if(canRead){
-      card.classList.add('unlocked');
-    }else if(i===0){
-      card.classList.add('free-badge'); // 1作品目は常に立ち読みアイコン表示
-    }else{
-      card.classList.add('locked');
-    }
+    const myMaxIdx = PLAN_META[currentPlan].maxIdx;
+    if(currentPlan !== 'free' && i <= myMaxIdx) card.classList.add('unlocked');
+    else if(currentPlan === 'free') card.classList.add('free-badge');
+    else card.classList.add('locked');
 
-    // フッター内容を組み立てる
-    footer.innerHTML = '';
+    // 4つのプランボタンを組み立て
+    let html = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">';
+    for(const p of ORDER){
+      const meta  = PLAN_META[p];
+      const isMine     = currentPlan === p;
+      const inRange    = i <= meta.maxIdx;
+      const canPress   = isMine && inRange;
+      const overLimit  = isMine && !inRange; // 自分のプランだが本数超過
 
-    if(canRead || isPremium){
-      // 読めるプラン → プランタグ + 読むボタン
-      const planTag = currentPlan === 's5000' ? '👑 読み放題' : `📖 プランで閲覧可`;
-      const tagClass = {free:'free',s500:'s500',s1000:'s1000',s5000:'s5000'}[currentPlan];
-      footer.innerHTML = `
-        <span class="plan-tag ${tagClass}">${planTag}</span>
-        <button class="read-btn note" onclick="openReader(${i})">📖 立ち読み</button>
-        ${isPremium ? '<span style="font-size:10px;color:var(--accent)">✨ 限定コンテンツ含む</span>' : ''}
-      `;
-    }else if(i===0){
-      // 無料でも1作品目は立ち読みOK
-      footer.innerHTML = `
-        <span class="plan-tag free">🔓 立ち読みOK</span>
-        <button class="read-btn note" onclick="openReader(0)">📖 立ち読み</button>
-        <button class="read-btn note" onclick="openNoteUrl(${i})">→ noteで購入</button>
-      `;
-    }else{
-      // ロック状態 → プランアップ案内
-      const neededPlan = i < 2 ? 'ライト(¥500)' : i < 5 ? 'スタンダード(¥1,000)' : 'プレミアム(¥5,000)'; // 6〜8本目はプレミアムのみ
-      footer.innerHTML = `
-        <button class="read-btn locked" disabled>🔒 ${neededPlan}以上で閲覧可</button>
-        <button class="read-btn note" onclick="openNoteUrl(${i})">→ noteで購入</button>
-      `;
+      let st, lbl;
+      if(canPress){
+        // 自分のプランかつ読める → アクセント（押せる）
+        st  = 'background:linear-gradient(135deg,var(--accent),#b8860b);color:#000;cursor:pointer;border-color:var(--accent);font-weight:700;';
+        lbl = meta.label;
+      } else if(overLimit){
+        // 自分のプランだが上限超え → 赤ロック（押せない）
+        st  = 'background:rgba(248,113,113,.08);color:#f87171;cursor:not-allowed;border-color:rgba(248,113,113,.25);';
+        lbl = meta.label + ' 🔒';
+      } else {
+        // 他のプラン → グレーアウト（押せない）
+        st  = 'background:var(--card);color:var(--muted);cursor:not-allowed;opacity:.35;';
+        lbl = meta.label;
+      }
+
+      const click = canPress ? `onclick="openReader(${i},'${meta.mode}')"` : 'disabled';
+      html += `<button style="padding:4px 9px;border:1px solid var(--border);border-radius:8px;font-size:10px;font-family:inherit;${st}" ${click}>${lbl}</button>`;
     }
+    html += '</div>';
+    html += `<button class="read-btn note" onclick="openNoteUrl(${i})">→ noteで購入</button>`;
+    footer.innerHTML = html;
   }
 }
 
-// ========== 立ち読み ==========
-const PREVIEWS=[
+// ========== コンテンツデータ（全8本） ==========
+const CONTENTS = [
   {
-    title:'【対談】「自分のできること」の境界線を引く。変化の波に呑まれず、しなやかに生き抜くための「適応」の作法',
-    author:'しもまゆ（魅力を言語化するnote発信サポート）| ライフリテラシー',
-    text:`<p>── 今日はよろしくお願いします。まず「適応」というテーマを選んだ理由を教えてください。</p>
+    title: '【対談】「自分のできること」の境界線を引く。変化の波に呑まれず、しなやかに生き抜くための「適応」の作法',
+    author: 'しもまゆ（魅力を言語化するnote発信サポート）',
+    profile: 'note発信サポートとして活動。「柔軟さ」と「芯のなさ」の違いを言語化し、変化の時代を生き抜く適応の作法を発信し続けている。',
+    toc: ['① 「柔軟さ」と「芯のなさ」はどう違うのか', '② トラブルへの一次対応のつくり方', '③ 「できること」の境界線を示す勇気', '④ しなやかに生き抜くための実践ステップ'],
+    preview: `<p>── まず「適応」というテーマを選んだ理由を教えてください。</p>
 <p><span class="highlight">しもまゆ：</span>変化が激しい時代に「柔軟に対応できる人」と言われる一方で、それが「芯のなさ」と混同されていると感じているんです。</p>
 <p>── 「柔軟さ」と「芯のなさ」は、どこが違うんでしょうか。</p>
 <p><span class="highlight">しもまゆ：</span>私が思う柔軟さというのは、<span class="highlight">「やり方を変えられること」</span>なんです。でも芯のなさは「目的ごと変えてしまうこと」。本当に大事なものを守るために、方法は柔軟に変える。それがしなやかに生き抜く人の特徴だと思っています。</p>
-<p style="color:var(--muted);font-size:11px;margin-top:16px">※ 以下、続きはnoteで全文をお読みください</p>`
+<p style="color:var(--muted);font-size:11px;margin-top:16px">※ 続きはnoteで全文をお読みください</p>`
   },
   {
-    title:'【対談】「安定」という軸があるからこそ、人はどこまでも変わり続けられる。教育者・及川直之氏が語る、真の柔軟性と変化の技術。',
-    author:'及川直之（私立中高一貫校教員・地方Web3連携協会理事）| ライフリテラシー',
-    text:`<p>── 及川さんは教育者として、また地方Web3連携協会の理事として、常に変化の最前線にいらっしゃいますね。</p>
+    title: '【対談】「安定」という軸があるからこそ、人はどこまでも変わり続けられる。教育者・及川直之氏が語る、真の柔軟性と変化の技術。',
+    author: '及川直之（私立中高一貫校教員・地方Web3連携協会理事）',
+    profile: '私立中高一貫校教員として20年超のキャリアを持ち、地方Web3連携協会理事も務める。「安定」と「変化」のパラドックスを教育現場から語る実践者。',
+    toc: ['① 「予定通りにいかない」がない思考法', '② 時間基準の意思決定とは', '③ 経験を血肉にするアドリブ力', '④ 安定という土台の作り方'],
+    preview: `<p>── 及川さんは教育者として、また地方Web3連携協会の理事として、常に変化の最前線にいらっしゃいますね。</p>
 <p><span class="highlight">及川：</span>そうですね。でも実は「予定通りにいかなかったこと」が特にないんです（笑）。</p>
 <p>── え、本当ですか？それはどういう……</p>
 <p><span class="highlight">及川：</span>予定を「ゴールへの道筋」として細かく決めすぎないんです。<span class="highlight">大きな方向性だけ決めて、具体的な手段は状況に合わせて変える。</span>だから「予定が狂う」という感覚がそもそもない。</p>
-<p style="color:var(--muted);font-size:11px;margin-top:16px">※ 以下、続きはnoteで全文をお読みください</p>`
-  }
+<p style="color:var(--muted);font-size:11px;margin-top:16px">※ 続きはnoteで全文をお読みください</p>`
+  },
+  {
+    title: '【人生再起動】「予定通り」を捨てたら、生きるのが楽になった。芯のある柔軟さを手に入れる思考法',
+    author: 'ケンタ（30代・元ニート歴4年→フリーランス）',
+    profile: '30代。ニート歴4年を経て副業・フリーランスにチャレンジ中。「予定通り」に生きようとして追い詰められた実体験から、芯のある柔軟さの本質を語る。',
+    toc: ['① 「予定通り」に縛られて壊れたあの頃', '② 「捨てる」ことで手に入ったもの', '③ 芯とは何か——ぶれない自分の作り方', '④ 人生再起動のための実践思考法'],
+    preview: `<p>── ケンタさんは元ニート歴4年とのことですが、当時はどんな状態でしたか？</p>
+<p><span class="highlight">ケンタ：</span>「こうじゃなきゃいけない」に縛られてたんですよね。就職しなきゃ、計画通りに進まなきゃって。うまくいかないたびに自分を責めてたら、気づいたら動けなくなってました。</p>
+<p>── それをどうやって乗り越えたんですか？</p>
+<p><span class="highlight">ケンタ：</span><span class="highlight">「予定通り」を正解にするのをやめたんです。</span>ゴールは変えない、でも道は何本でもある。そう思った瞬間、すごく楽になりました。</p>
+<p style="color:var(--muted);font-size:11px;margin-top:16px">※ 続きはnoteで全文をお読みください</p>`
+  },
+  {
+    title: '『Emu』特別講義～BF・エネルギー～',
+    author: 'サクサク',
+    profile: 'Emu特別講義登壇者。BF（ブルーフレーム）とエネルギーの概念をEmuの設計思想から解説。独自の視点でEmuの世界観を深掘りする。',
+    toc: ['① BF（ブルーフレーム）とは何か', '② エネルギーの本質とその流れ', '③ Emu内でのBF・エネルギーの活用', '④ 自分のエネルギーを知る実践法'],
+    preview: `<p>── 今日は「BF・エネルギー」というテーマでお話を伺います。まずBFとは何ですか？</p>
+<p><span class="highlight">サクサク：</span>BFは「ブルーフレーム」の略で、Emuの世界観における「エネルギーの在り方」を示す概念です。炎の色が青いほど高温・高エネルギーなように、BFは<span class="highlight">最も純粋で強いエネルギー状態</span>を指しています。</p>
+<p>── そのBFが、日常とどうつながるんでしょうか？</p>
+<p><span class="highlight">サクサク：</span>エネルギーって、実は「状態」なんですよ。機嫌・集中・熱量——これ全部エネルギーの表れです。Emuはそれを可視化しようとしているプラットフォームなんです。</p>
+<p style="color:var(--muted);font-size:11px;margin-top:16px">※ 続きはnoteで全文をお読みください</p>`
+  },
+  {
+    title: '【理系脳的】ストレスは「不快・不安・緊張」の積集合。起業家が語る、心の因数分解とふて寝の技術。',
+    author: 'りさやりがい',
+    profile: '起業家・やりがいコーチ。理系的アプローチでストレスを「不快・不安・緊張」の3要素に因数分解し、心のメカニズムを科学的に解き明かす。',
+    toc: ['① ストレスを「積集合」で考える', '② 不快・不安・緊張の3要素の分解法', '③ 因数分解が教えてくれる対処の糸口', '④「ふて寝」を武器にする技術'],
+    preview: `<p>── 「ストレスは積集合」という表現が独特ですね。どういう意味ですか？</p>
+<p><span class="highlight">りさやりがい：</span>数学の集合論で言う「積集合」って、複数の集合が重なった部分ですよね。ストレスって、<span class="highlight">不快・不安・緊張の3つが重なったときに最大化する</span>んですよ。</p>
+<p>── それを分解すると、何が見えてくるんですか？</p>
+<p><span class="highlight">りさやりがい：</span>「今自分はどれが主因なのか」がわかります。不快なのか、不安なのか、緊張なのか。それが特定できれば、対処法が全然変わってきます。</p>
+<p style="color:var(--muted);font-size:11px;margin-top:16px">※ 続きはnoteで全文をお読みください</p>`
+  },
+  {
+    title: '【2026年最新版】資産形成の「勝ち筋」を掴む：新NISA時代の出口戦略と銘柄選びの極意',
+    author: 'SchoolPark',
+    profile: 'SchoolPark（合同会社DAO SchoolPark）。マネーリテラシー向上を目的に、資産形成・投資・金融の実践的知識を発信。',
+    toc: ['① 新NISAの出口戦略を設計する', '② 2026年の市場環境と銘柄の選び方', '③ 勝ち筋を掴む3つの原則', '④ 今すぐ始める投資ロードマップ'],
+    preview: `<p>新NISAが本格稼働し、「どう増やすか」より<span class="highlight">「どう出すか」</span>を考える時代が来ています。</p>
+<p>本記事では、2026年時点での最新の出口戦略と、銘柄選びの具体的な考え方を体系的に解説します。</p>
+<p>「老後資金として積み立ててきたはいいが、どのタイミングで、どう引き出せばいいのか」——その答えを明確にするのが本稿の目的です。</p>
+<p style="color:var(--muted);font-size:11px;margin-top:16px">※ 続きはnoteで全文をお読みください</p>`
+  },
+  {
+    title: '【マネーリテラシー講義】雪だるま式に資産を増やす「複利の魔法」と、2026年の活用戦略',
+    author: 'SchoolPark',
+    profile: 'SchoolPark（合同会社DAO SchoolPark）。マネーリテラシー向上を目的に、資産形成・投資・金融の実践的知識を発信。',
+    toc: ['① 複利とは何か——単利との違い', '② 雪だるま式資産形成の仕組み', '③ 時間を味方につける投資設計', '④ 2026年版・複利の活用戦略'],
+    preview: `<p>アインシュタインが「人類最大の発明」と呼んだとされる複利。その本質を理解している人は、日本ではまだ少数です。</p>
+<p><span class="highlight">複利の仕組みをゼロから解説し、2026年の投資環境に合わせた実践的な活用法</span>をお伝えします。</p>
+<p>「貯金しているのに全然増えない」と感じているなら、それは複利を活かせていないサインかもしれません。</p>
+<p style="color:var(--muted);font-size:11px;margin-top:16px">※ 続きはnoteで全文をお読みください</p>`
+  },
+  {
+    title: '【保存版】「お金の不安」が消えない本当の理由。日本人が今すぐ「金融リテラシー」をアップデートすべきこれだけの根拠',
+    author: 'SchoolPark',
+    profile: 'SchoolPark（合同会社DAO SchoolPark）。マネーリテラシー向上を目的に、資産形成・投資・金融の実践的知識を発信。',
+    toc: ['① 「お金の不安」の正体とは', '② 日本人の金融リテラシーの現状', '③ 不安が消えない構造的な理由', '④ 今すぐできる金融リテラシーのアップデート法'],
+    preview: `<p>収入があっても、貯金があっても、お金の不安が消えない——それはあなたの意志が弱いのではなく、<span class="highlight">「知らない」から不安なのです。</span></p>
+<p>本記事では、日本人がお金を怖れる構造的な理由と、今すぐ金融リテラシーをアップデートすべき根拠を徹底解説します。</p>
+<p>「投資は怖い」「お金の話は難しい」——そのバイアスを取り除くことが、本記事の最大の目的です。</p>
+<p style="color:var(--muted);font-size:11px;margin-top:16px">※ 続きはnoteで全文をお読みください</p>`
+  },
 ];
 
-function openReader(idx){
-  const p=PREVIEWS[idx];
-  if(!p)return;
-  document.getElementById('readerTitle').textContent=p.title;
-  document.getElementById('readerAuthor').textContent=p.author;
-  document.getElementById('readerText').innerHTML=p.text;
-  // 「noteで全文を読む」ボタンに記事URLをセット
-  const noteBtn=document.getElementById('readerNoteBtn');
-  if(noteBtn) noteBtn.onclick=()=>openNoteUrl(idx);
-  // グローバル閉じるボタンを非表示（リーダー専用ヘッダーに一本化）
-  document.getElementById('globalCloseBtn').style.display='none';
-  const r=document.getElementById('reader');
-  r.style.display='block';
-  r.scrollTop=0;
+function openReader(idx, mode){
+  // modeが未指定の場合は現在のプランから自動判定
+  if(mode === undefined) mode = currentPlan === 'free' ? 'free' : 'paid';
+  const p = CONTENTS[idx];
+  if(!p) return;
+
+  document.getElementById('readerTitle').textContent  = p.title;
+  document.getElementById('readerAuthor').textContent = p.author;
+
+  const readerCta = document.getElementById('readerCta');
+
+  if(mode === 'free'){
+    // フリーモード: 著者プロフィール + 目次のみ
+    document.getElementById('readerText').innerHTML = `
+      <div style="margin-bottom:18px">
+        <div style="font-size:12px;color:var(--accent);font-weight:700;margin-bottom:8px">👤 著者プロフィール</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.7;padding:10px 12px;background:rgba(212,160,23,.05);border:1px solid var(--border);border-radius:10px">${p.profile}</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--accent);font-weight:700;margin-bottom:8px">📋 目次</div>
+        <ol style="list-style:none;padding:0;display:flex;flex-direction:column;gap:6px">
+          ${p.toc.map(t=>`<li style="font-size:12px;color:var(--muted);padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px">${t}</li>`).join('')}
+        </ol>
+      </div>
+      <div style="margin-top:18px;padding:12px 14px;background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.2);border-radius:12px">
+        <div style="font-size:12px;color:#60a5fa;margin-bottom:8px">📖 全文を読むには「ライト」以上のプランが必要です</div>
+        <button onclick="closeReader();switchTab('plan')" style="background:rgba(96,165,250,.2);border:1px solid rgba(96,165,250,.3);color:#60a5fa;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:12px;font-family:inherit">プランを選ぶ →</button>
+      </div>`;
+    // フリーモードではnote CTAを非表示
+    if(readerCta) readerCta.style.display = 'none';
+
+  } else {
+    // 有料モード: プレビュー全文 + note購入CTA
+    document.getElementById('readerText').innerHTML = p.preview;
+    if(readerCta) readerCta.style.display = '';
+    const noteBtn = document.getElementById('readerNoteBtn');
+    if(noteBtn) noteBtn.onclick = () => openNoteUrl(idx);
+  }
+
+  document.getElementById('globalCloseBtn').style.display = 'none';
+  const r = document.getElementById('reader');
+  r.style.display = 'block';
+  r.scrollTop = 0;
 }
 
 function closeReader(){
