@@ -136,6 +136,7 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
     <button class="tab-btn" onclick="switchTab('dao-votes');loadDAOVotes()">🗳️ DAO投票</button>
     <button class="tab-btn" onclick="switchTab('facility-reports');frLoad()" style="color:#f97316;">🚨 施設報告管理</button>
     <button class="tab-btn" onclick="switchTab('museum-sp');mspLoad()">🎨 SchoolPark個展</button>
+    <button class="tab-btn" onclick="switchTab('lab-reports');labLoad()">🔬 研究レポート</button>
     <button class="tab-btn" onclick="deleteAllContents()" style="margin-left:auto;color:#f44747;border-bottom-color:transparent;">🗑️ コンテンツ全削除</button>
   </div>
 
@@ -400,6 +401,63 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
     <div id="mspList"></div>
   </div>
 
+  <!-- タブ: 研究レポート管理 -->
+  <div id="tab-lab-reports" class="tab-content">
+    <div class="direct-form">
+      <h2>🔬 研究レポートを投稿</h2>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="form-field">
+          <label>タイトル <span style="color:#f87171">*</span></label>
+          <input type="text" id="lab-title" placeholder="例：DAO型組織の教育効果">
+        </div>
+        <div class="form-field">
+          <label>タグ</label>
+          <select id="lab-tag">
+            <option value="DAO">DAO</option>
+            <option value="Tokenomics">Tokenomics</option>
+            <option value="教育">教育</option>
+            <option value="Web3">Web3</option>
+            <option value="コミュニティ">コミュニティ</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>ステータス</label>
+          <select id="lab-status">
+            <option value="active">🟢 公開</option>
+            <option value="draft">🟡 下書き</option>
+            <option value="completed">✅ 完了</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-top:0">
+        <div class="form-field">
+          <label>著者名</label>
+          <input type="text" id="lab-author" placeholder="例：SchoolPark 研究班" value="SchoolPark 研究班">
+        </div>
+        <div class="form-field">
+          <label>概要（1〜2文）</label>
+          <input type="text" id="lab-abstract" placeholder="このレポートの要点を簡潔に">
+        </div>
+      </div>
+      <div class="form-field" style="margin-top:14px">
+        <label>本文 <span style="color:#f87171">*</span><span style="font-size:11px;color:#666;margin-left:8px">Markdown対応（# 見出し / ## 小見出し / **太字**）</span></label>
+        <textarea id="lab-body" rows="10" placeholder="## はじめに&#10;&#10;ここに研究内容を記載します。&#10;&#10;## 結論&#10;&#10;**重要なポイント**をまとめます。"></textarea>
+      </div>
+      <div class="form-actions">
+        <button class="btn-clear" onclick="labClearForm()">クリア</button>
+        <button class="btn-add" id="labSubmitBtn" onclick="labSubmit()">🔬 レポートを投稿</button>
+      </div>
+      <div class="toast" id="lab-toast"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h2 style="font-size:15px;color:#4ec9b0;margin:0">📋 投稿済みレポート</h2>
+      <button class="btn-add" onclick="labLoad()" style="padding:7px 16px;font-size:13px">🔄 更新</button>
+    </div>
+    <div id="labList"><div class="loading">読み込み中…</div></div>
+  </div>
+
 </div>
 
 <style>
@@ -530,7 +588,7 @@ var themeData = {
 };
 
 // ─── タブ ───
-const TAB_IDS = ['direct','inbox','fountain-board','fountain-event','dao-votes','facility-reports','museum-sp'];
+const TAB_IDS = ['direct','inbox','fountain-board','fountain-event','dao-votes','facility-reports','museum-sp','lab-reports'];
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(function(btn, i) {
     btn.classList.toggle('active', TAB_IDS[i] === tab);
@@ -1353,6 +1411,194 @@ async function frDelete(fkey, docId) {
     await db.collection(FR_FACILITIES[fkey].col).doc(docId).delete();
     frLoad();
   } catch(e) { alert('削除失敗: ' + e.message); }
+}
+
+// ─── 研究レポート管理 ─────────────────────────────────────────
+var LAB_STATUS_LABELS = {
+  active:    '🟢 公開',
+  draft:     '🟡 下書き',
+  completed: '✅ 完了',
+  community: '💬 コミュニティ'
+};
+var LAB_STATUS_COLORS = {
+  active:    '#4ec9b0',
+  draft:     '#fbbf24',
+  completed: '#a78bfa',
+  community: '#f97316'
+};
+
+async function labLoad() {
+  var db = window.fpAdminDB;
+  var el = document.getElementById('labList');
+  if (!el) return;
+  if (!db) { el.innerHTML = '<div class="fr-empty">❌ Firebase未接続</div>'; return; }
+  el.innerHTML = '<div class="loading">⏳ 読み込み中…</div>';
+  try {
+    var snap = await db.collection('lab_reports').orderBy('createdAt','desc').limit(50).get();
+    if (snap.empty) { el.innerHTML = '<div class="fr-empty">📭 レポートがありません</div>'; return; }
+    var html = '';
+    snap.forEach(function(d) {
+      var r = d.data();
+      var status = r.status || 'active';
+      var color  = LAB_STATUS_COLORS[status] || '#4ec9b0';
+      var label  = LAB_STATUS_LABELS[status] || status;
+      var dt = r.createdAt ? new Date(r.createdAt).toLocaleString('ja-JP') : '';
+      var abstract = esc(r.abstract || '');
+      var bodyPreview = esc((r.body || '').replace(/[#*]/g,'').substring(0,80)) + ((r.body||'').length > 80 ? '…' : '');
+      html += '<div style="background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:14px;margin-bottom:10px">';
+      html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px">';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="font-weight:bold;font-size:14px;margin-bottom:4px">' + esc(r.title || '無題') + '</div>';
+      html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">';
+      html += '<span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:rgba(78,201,176,.12);color:#4ec9b0;border:1px solid rgba(78,201,176,.25)">' + esc(r.tag || '') + '</span>';
+      html += '<span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:rgba(0,0,0,.3);color:' + color + ';border:1px solid ' + color + '40">' + label + '</span>';
+      html += '<span style="font-size:11px;color:#666">✍️ ' + esc(r.author || '') + '</span>';
+      html += '<span style="font-size:11px;color:#555">' + dt + '</span>';
+      if (r.source) html += '<span style="font-size:11px;color:#555">[' + esc(r.source) + ']</span>';
+      html += '</div>';
+      if (abstract) html += '<div style="font-size:12px;color:#888;margin-bottom:4px">📄 ' + abstract + '</div>';
+      html += '<div style="font-size:12px;color:#555">' + bodyPreview + '</div>';
+      html += '</div>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">';
+      html += '<select onchange="labUpdateStatus(\''+d.id+'\',this.value)" style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:4px 8px;font-size:12px;font-family:inherit;cursor:pointer">';
+      ['active','draft','completed','community'].forEach(function(s) {
+        html += '<option value="'+s+'"'+(status===s?' selected':'')+'>'+LAB_STATUS_LABELS[s]+'</option>';
+      });
+      html += '</select>';
+      html += '<button onclick="labEditOpen(\''+d.id+'\')" style="background:rgba(78,201,176,.1);color:#4ec9b0;border:1px solid rgba(78,201,176,.25);border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer">✏️ 編集</button>';
+      html += '<button onclick="labDelete(\''+d.id+'\',\''+esc(r.title||'').replace(/'/g,"\\'")+'\')" style="background:rgba(244,71,71,.1);color:#f44747;border:1px solid rgba(244,71,71,.25);border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer">🗑️ 削除</button>';
+      html += '</div>';
+      html += '</div>';
+    });
+    el.innerHTML = html;
+  } catch(e) {
+    console.error('labLoad error:', e);
+    el.innerHTML = '<div class="fr-empty">❌ 読み込み失敗: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function labSubmit() {
+  var db = window.fpAdminDB;
+  if (!db) { labToast('❌ Firebase未接続', 'error'); return; }
+  var title    = document.getElementById('lab-title').value.trim();
+  var tag      = document.getElementById('lab-tag').value;
+  var status   = document.getElementById('lab-status').value;
+  var author   = document.getElementById('lab-author').value.trim() || 'SchoolPark 研究班';
+  var abstract = document.getElementById('lab-abstract').value.trim();
+  var body     = document.getElementById('lab-body').value.trim();
+  if (!title) { labToast('❌ タイトルは必須です', 'error'); return; }
+  if (!body)  { labToast('❌ 本文は必須です', 'error'); return; }
+  var btn = document.getElementById('labSubmitBtn');
+  btn.disabled = true; btn.textContent = '投稿中…';
+  try {
+    var reportId = 'admin_' + Date.now();
+    await db.collection('lab_reports').add({
+      reportId: reportId,
+      title: title,
+      tag: tag,
+      author: author,
+      abstract: abstract,
+      body: body,
+      status: status,
+      source: 'admin',
+      createdAt: Date.now()
+    });
+    labToast('✅ レポートを投稿しました（即時反映）', 'success');
+    labClearForm();
+    labLoad();
+  } catch(e) {
+    labToast('❌ 投稿失敗: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '🔬 レポートを投稿';
+  }
+}
+
+async function labUpdateStatus(docId, newStatus) {
+  var db = window.fpAdminDB;
+  if (!db) return;
+  try {
+    await db.collection('lab_reports').doc(docId).update({ status: newStatus });
+    labToast('✅ ステータスを更新しました', 'success');
+    labLoad();
+  } catch(e) { labToast('❌ ' + e.message, 'error'); }
+}
+
+async function labDelete(docId, title) {
+  if (!confirm('レポート「' + (title||docId) + '」を削除しますか？\nこの操作は取り消せません。')) return;
+  var db = window.fpAdminDB;
+  if (!db) return;
+  try {
+    await db.collection('lab_reports').doc(docId).delete();
+    labToast('✅ 削除しました', 'success');
+    labLoad();
+  } catch(e) { labToast('❌ ' + e.message, 'error'); }
+}
+
+function labEditOpen(docId) {
+  var db = window.fpAdminDB;
+  if (!db) return;
+  db.collection('lab_reports').doc(docId).get().then(function(d) {
+    if (!d.exists) return;
+    var r = d.data();
+    document.getElementById('lab-title').value    = r.title || '';
+    document.getElementById('lab-tag').value      = r.tag   || 'DAO';
+    document.getElementById('lab-status').value   = r.status || 'active';
+    document.getElementById('lab-author').value   = r.author || '';
+    document.getElementById('lab-abstract').value = r.abstract || '';
+    document.getElementById('lab-body').value     = r.body || '';
+    // 投稿ボタンを「更新」モードに切り替え
+    var btn = document.getElementById('labSubmitBtn');
+    btn.textContent = '🔄 レポートを更新';
+    btn.onclick = async function() {
+      var title    = document.getElementById('lab-title').value.trim();
+      var body     = document.getElementById('lab-body').value.trim();
+      if (!title || !body) { labToast('❌ タイトルと本文は必須です', 'error'); return; }
+      btn.disabled = true; btn.textContent = '更新中…';
+      try {
+        await db.collection('lab_reports').doc(docId).update({
+          title:    title,
+          tag:      document.getElementById('lab-tag').value,
+          status:   document.getElementById('lab-status').value,
+          author:   document.getElementById('lab-author').value.trim() || 'SchoolPark 研究班',
+          abstract: document.getElementById('lab-abstract').value.trim(),
+          body:     body
+        });
+        labToast('✅ レポートを更新しました', 'success');
+        labClearForm();
+        labLoad();
+      } catch(e) {
+        labToast('❌ ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔬 レポートを投稿';
+        btn.onclick = labSubmit;
+      }
+    };
+    // フォームまでスクロール
+    document.getElementById('lab-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    labToast('✏️ 編集モード: 「' + esc(r.title||'') + '」', 'success');
+  });
+}
+
+function labClearForm() {
+  document.getElementById('lab-title').value    = '';
+  document.getElementById('lab-tag').value      = 'DAO';
+  document.getElementById('lab-status').value   = 'active';
+  document.getElementById('lab-author').value   = 'SchoolPark 研究班';
+  document.getElementById('lab-abstract').value = '';
+  document.getElementById('lab-body').value     = '';
+  var btn = document.getElementById('labSubmitBtn');
+  if (btn) { btn.textContent = '🔬 レポートを投稿'; btn.onclick = labSubmit; btn.disabled = false; }
+}
+
+function labToast(msg, type) {
+  var el = document.getElementById('lab-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'toast ' + type;
+  el.style.display = 'block';
+  setTimeout(function() { el.style.display = 'none'; }, 3500);
 }
 
 // ─── コンテンツ全削除 ───
