@@ -219,13 +219,13 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
       <div class="plan-card featured" id="planCard-s500">
         <div class="plan-icon">📖</div>
         <div class="plan-name">ライト</div>
-        <div class="plan-price">500<span> EMUER/月</span></div>
+        <div class="plan-price">¥500<span>/月</span></div>
         <ul class="plan-features">
           <li>2作品まで閲覧可能</li>
           <li>目次・著者プロフィール</li>
         </ul>
         <button class="plan-btn paid-btn" id="planBtn-s500" onclick="buyPlan('s500')">
-          EMUERで加入 <span style="font-size:9px;opacity:.8">500💎/月</span>
+          Stripeで加入 <span style="font-size:9px;opacity:.8">¥500/月</span>
         </button>
       </div>
 
@@ -233,13 +233,13 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
       <div class="plan-card" id="planCard-s1000">
         <div class="plan-icon">📚</div>
         <div class="plan-name">スタンダード</div>
-        <div class="plan-price">1,000<span> EMUER/月</span></div>
+        <div class="plan-price">¥1,000<span>/月</span></div>
         <ul class="plan-features">
           <li>5作品まで閲覧可能</li>
           <li>目次・著者プロフィール</li>
         </ul>
         <button class="plan-btn paid-btn" id="planBtn-s1000" onclick="buyPlan('s1000')">
-          EMUERで加入 <span style="font-size:9px;opacity:.8">1,000💎/月</span>
+          Stripeで加入 <span style="font-size:9px;opacity:.8">¥1,000/月</span>
         </button>
       </div>
 
@@ -248,7 +248,7 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
         <div class="plan-badge">プレミアム</div>
         <div class="plan-icon">👑</div>
         <div class="plan-name">プレミアム</div>
-        <div class="plan-price">5,000<span> EMUER/月</span></div>
+        <div class="plan-price">¥5,000<span>/月</span></div>
         <ul class="plan-features">
           <li>無制限・全作品読み放題</li>
           <li>新着コンテンツ先行</li>
@@ -256,7 +256,7 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
           <li>著者Q&Aセッション</li>
         </ul>
         <button class="plan-btn paid-btn" id="planBtn-s5000" onclick="buyPlan('s5000')">
-          EMUERで加入 <span style="font-size:9px;opacity:.8">5,000💎/月</span>
+          Stripeで加入 <span style="font-size:9px;opacity:.8">¥5,000/月</span>
         </button>
       </div>
 
@@ -387,6 +387,26 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 
 </div><!-- /.page -->
 
+<!-- ─── Stripe決済モーダル ─── -->
+<div id="stripeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;align-items:flex-end;justify-content:center">
+  <div style="background:#1a0e00;border:1px solid #2e1e00;border-radius:24px 24px 0 0;padding:24px 20px 32px;width:100%;max-width:480px">
+    <div style="text-align:center;margin-bottom:14px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">サブスクリプション</div>
+      <div id="stripeModalTitle" style="font-size:18px;font-weight:700;color:#fff"></div>
+      <div id="stripeModalPrice" style="font-size:28px;font-weight:700;color:var(--accent);margin-top:4px"></div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:18px;line-height:1.7">
+      Stripeの安全な決済ページに移動してお支払いいただきます。<br>
+      月額プランはいつでもキャンセル可能です。
+    </div>
+    <button id="stripePayBtn" style="width:100%;padding:15px;background:linear-gradient(135deg,#635bff,#4a44cc);color:#fff;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px">
+      💳 Stripeで決済する
+    </button>
+    <div style="font-size:10px;color:var(--muted);text-align:center;margin-bottom:10px">🔒 SSL暗号化通信で安全に処理されます</div>
+    <button onclick="closeStripeModal()" style="width:100%;padding:10px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:12px;font-size:13px;cursor:pointer;font-family:inherit">キャンセル</button>
+  </div>
+</div>
+
 <!-- ─── 読書ビューア（固定オーバーレイ）─── -->
 <div id="reader">
   <!-- リーダー専用ヘッダー（✕ 戻るボタン 1つのみ） -->
@@ -399,7 +419,7 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
     <div class="reader-text" id="readerText"></div>
     <div class="reader-cta">
       <div class="reader-cta-text">📖 続きはnoteで購入してお読みください</div>
-      <button class="reader-cta-btn" onclick="window.open('https://note.com','_blank')">noteで全文を読む →</button>
+      <button class="reader-cta-btn" id="readerNoteBtn">noteで全文を読む →</button>
     </div>
   </div>
 </div>
@@ -436,14 +456,29 @@ const PLAN_INFO = {
   s5000: { label:'プレミアム',          color:'#d4a017', unlocked:99 },
 };
 
+// ========== note 記事URL（各記事のURLをここに入力してください） ==========
+const NOTE_URLS = [
+  '', // ① しもまゆさん記事
+  '', // ② 及川直之さん記事
+  '', // ③ ケンタさん記事
+  '', // ④ サクサクさん記事
+  '', // ⑤ りさやりがいさん記事
+];
+const NOTE_TOP = 'https://note.com/paberuuu11'; // URLが空の場合のフォールバック
+
+function openNoteUrl(idx){
+  const url = NOTE_URLS[idx] || NOTE_TOP;
+  window.open(url, '_blank');
+}
+
 const PLAN_PRICES = {
-  s500:  { fee:500,  label:'ライトプラン月額',        name:'ライト' },
-  s1000: { fee:1000, label:'スタンダードプラン月額',  name:'スタンダード' },
-  s5000: { fee:5000, label:'プレミアムプラン月額',    name:'プレミアム' },
+  // stripeUrl: StripeのPayment Linkを入力してください（例: https://buy.stripe.com/xxx）
+  s500:  { price:500,  name:'ライト',      stripeUrl:'' },
+  s1000: { price:1000, name:'スタンダード', stripeUrl:'' },
+  s5000: { price:5000, name:'プレミアム',   stripeUrl:'' },
 };
 
 const SUB_KEY = 'sp_lib_sub';
-let _pendingPlan = null;
 
 // localStorage からプランを復元（有効期限チェック付き）
 function loadStoredPlan(){
@@ -468,12 +503,30 @@ function getPlanExpiry(){
   return null;
 }
 
-// EMUERでプランを購入
+// Stripe決済モーダルを開く
 function buyPlan(plan){
   const info = PLAN_PRICES[plan];
   if(!info) return;
-  _pendingPlan = plan;
-  window.top.postMessage({type:'spPurchase', fee: info.fee, label: info.label}, '*');
+  document.getElementById('stripeModalTitle').textContent = `${info.name}プラン（月額）`;
+  document.getElementById('stripeModalPrice').textContent = `¥${info.price.toLocaleString()}/月`;
+  const payBtn = document.getElementById('stripePayBtn');
+  payBtn.onclick = () => {
+    if(info.stripeUrl){
+      window.open(info.stripeUrl, '_blank');
+    } else {
+      payBtn.innerHTML = '🚧 決済ページ準備中...';
+      payBtn.disabled = true;
+      setTimeout(() => {
+        payBtn.innerHTML = '💳 Stripeで決済する';
+        payBtn.disabled = false;
+      }, 2000);
+    }
+  };
+  document.getElementById('stripeModal').style.display = 'flex';
+}
+
+function closeStripeModal(){
+  document.getElementById('stripeModal').style.display = 'none';
 }
 
 let currentPlan = loadStoredPlan();
@@ -519,22 +572,12 @@ function updatePlanButtons(){
       btn.disabled = true;
     } else {
       const info = PLAN_PRICES[p];
-      btn.innerHTML = `EMUERで加入 <span style="font-size:9px;opacity:.8">${info.fee.toLocaleString()}💎/月</span>`;
+      btn.innerHTML = `Stripeで加入 <span style="font-size:9px;opacity:.8">¥${info.price.toLocaleString()}/月</span>`;
       btn.disabled = false;
     }
   });
 }
 
-// spPurchaseOk — 購入完了通知を受け取る
-window.addEventListener('message', e => {
-  if(e.data && e.data.type === 'spPurchaseOk' && _pendingPlan){
-    const plan = _pendingPlan;
-    _pendingPlan = null;
-    storePlan(plan);
-    setPlan(plan);
-    switchTab('contents');
-  }
-});
 
 function updatePlanBanner(){
   const info = PLAN_INFO[currentPlan];
@@ -609,14 +652,14 @@ function renderContentFooters(){
       footer.innerHTML = `
         <span class="plan-tag free">🔓 立ち読みOK</span>
         <button class="read-btn note" onclick="openReader(0)">📖 立ち読み</button>
-        <button class="read-btn note" onclick="window.open('https://note.com','_blank')">→ noteで購入</button>
+        <button class="read-btn note" onclick="openNoteUrl(${i})">→ noteで購入</button>
       `;
     }else{
       // ロック状態 → プランアップ案内
       const neededPlan = i < 2 ? 'ライト(¥500)' : i < 5 ? 'スタンダード(¥1,000)' : 'プレミアム(¥5,000)';
       footer.innerHTML = `
         <button class="read-btn locked" disabled>🔒 ${neededPlan}以上で閲覧可</button>
-        <button class="read-btn note" onclick="window.open('https://note.com','_blank')">→ noteで購入</button>
+        <button class="read-btn note" onclick="openNoteUrl(${i})">→ noteで購入</button>
       `;
     }
   }
@@ -650,6 +693,9 @@ function openReader(idx){
   document.getElementById('readerTitle').textContent=p.title;
   document.getElementById('readerAuthor').textContent=p.author;
   document.getElementById('readerText').innerHTML=p.text;
+  // 「noteで全文を読む」ボタンに記事URLをセット
+  const noteBtn=document.getElementById('readerNoteBtn');
+  if(noteBtn) noteBtn.onclick=()=>openNoteUrl(idx);
   // グローバル閉じるボタンを非表示（リーダー専用ヘッダーに一本化）
   document.getElementById('globalCloseBtn').style.display='none';
   const r=document.getElementById('reader');
