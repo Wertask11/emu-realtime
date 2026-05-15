@@ -2363,6 +2363,68 @@ body.paypay-mode #pp-post-fab {
   </div>
 </div>
 
+<!-- 先行公開ブロック画面（paid_users未登録ユーザー用） -->
+<div id="paidOnlyScreen" style="display:none;position:fixed;inset:0;z-index:2000;
+  background:linear-gradient(160deg,#0d1117 0%,#131a24 50%,#0a0f18 100%);
+  justify-content:center;align-items:center;flex-direction:column;
+  font-family:'Noto Sans JP','Hiragino Sans',sans-serif;padding:24px;">
+  <!-- 背景パーティクル -->
+  <div style="position:absolute;inset:0;overflow:hidden;pointer-events:none">
+    <div class="mt-star" style="top:10%;left:22%;animation-delay:0.5s"></div>
+    <div class="mt-star" style="top:32%;left:65%;animation-delay:1.8s"></div>
+    <div class="mt-star" style="top:60%;left:40%;animation-delay:0.3s"></div>
+    <div class="mt-star" style="top:80%;left:75%;animation-delay:2.1s"></div>
+    <div class="mt-star" style="top:50%;left:12%;animation-delay:1.0s"></div>
+  </div>
+  <!-- コンテンツ -->
+  <div style="position:relative;text-align:center;max-width:420px;width:100%">
+    <!-- アイコン -->
+    <div style="font-size:3.2rem;margin-bottom:18px;animation:mtIconFloat 3s ease-in-out infinite">🎟️</div>
+    <!-- ラベル -->
+    <div style="font-size:0.9rem;letter-spacing:0.35em;color:#D4A843;font-weight:700;
+      text-transform:uppercase;margin-bottom:10px;font-family:'Playfair Display',serif">
+      Early Access
+    </div>
+    <div style="font-size:1.45rem;font-weight:700;color:#f0e8d8;margin-bottom:8px;line-height:1.4">
+      現在は有料パスホルダー限定の<br>先行公開期間です
+    </div>
+    <div style="font-size:0.82rem;color:#6e8090;margin-bottom:24px;line-height:1.8">
+      ウォレットアドレスが有料パスとして<br>登録されていません。<br>
+      一般公開まで今しばらくお待ちください。
+    </div>
+    <!-- 開園日バッジ -->
+    <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.35);
+      border-radius:12px;padding:14px 24px;margin-bottom:14px;display:inline-block;width:100%;box-sizing:border-box;">
+      <div style="font-size:0.7rem;letter-spacing:0.2em;color:#D4A843;margin-bottom:5px">GRAND OPEN</div>
+      <div style="font-size:1.5rem;font-weight:700;color:#D4A843;font-family:'Playfair Display',serif;letter-spacing:0.04em">
+        2026年 5月20日（水）
+      </div>
+    </div>
+    <!-- Duo Soles バッジ -->
+    <div style="background:rgba(130,90,210,0.1);border:1px solid rgba(130,90,210,0.3);
+      border-radius:12px;padding:12px 20px;margin-bottom:24px;display:inline-block;width:100%;box-sizing:border-box;">
+      <div style="font-size:0.68rem;letter-spacing:0.15em;color:#a070f0;margin-bottom:4px">NEW PASS — 5/20 RELEASE</div>
+      <div style="font-size:1.05rem;font-weight:700;color:#c4a0ff;font-family:'Playfair Display',serif;">
+        🎫 第3弾有料パス &nbsp;Duo Soles
+      </div>
+    </div>
+    <!-- SNS -->
+    <div style="font-size:0.74rem;color:#4a6070;line-height:1.9;margin-bottom:18px">
+      最新情報は公式SNSでお知らせします<br>
+      <span style="color:#D4A843">@SchoolPark_DAO</span>
+    </div>
+    <!-- 戻るボタン -->
+    <button onclick="document.getElementById('paidOnlyScreen').style.display='none';document.getElementById('walletScreen').style.display='block';"
+      style="background:transparent;border:1px solid rgba(255,255,255,0.15);color:#6e8090;
+      font-size:0.8rem;padding:9px 28px;border-radius:8px;cursor:pointer;
+      font-family:'Noto Sans JP',sans-serif;letter-spacing:0.08em;transition:all 0.2s;"
+      onmouseover="this.style.borderColor='rgba(255,255,255,0.35)';this.style.color='#aaa'"
+      onmouseout="this.style.borderColor='rgba(255,255,255,0.15)';this.style.color='#6e8090'">
+      ← 戻る
+    </button>
+  </div>
+</div>
+
 <!-- ウォレット接続画面（入場ゲート v2 / Claude Design） -->
 <style id="ws-gate-styles">
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&display=swap');
@@ -6900,6 +6962,15 @@ jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
 if (typeof updateConvertButton === "function") {
     updateConvertButton();
 }
+  // ── paid_usersゲート（先行公開期間）──
+  const _isOwnerBypass = account.toLowerCase() === SP_OWNER.toLowerCase();
+  if (!_isOwnerBypass && !window._fromFirebasePaidUsers) {
+    const _ws2 = document.getElementById('walletScreen');
+    if (_ws2) _ws2.style.display = 'none';
+    const _pbs = document.getElementById('paidOnlyScreen');
+    if (_pbs) _pbs.style.display = 'flex';
+    return;
+  }
   // 有料パス入場をFirebaseに記録（非ブロッキング）
   spTrack('paid', account).catch(() => {});
   // エアドロ画面をスキップしてそのままSchoolParkマップへ
@@ -6934,6 +7005,7 @@ window.checkHexaNFT = async function () {
       const snap = await window.fbLib.getDoc(docRef);
       if (snap.exists()) {
         window.hasPaidNFT = true;
+        window._fromFirebasePaidUsers = true;
         console.log("✅ Firestore有料ユーザー確認済み:", window.connectedAccount);
         return;
       }
