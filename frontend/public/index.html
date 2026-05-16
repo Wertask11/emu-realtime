@@ -294,6 +294,90 @@
 .er-timer-lbl { font-size:0.65rem; color:#888; letter-spacing:0.05em; }
 .er-refill { font-size:0.78rem; color:#6a9f60; background:rgba(74,130,74,0.12); border:1px solid rgba(74,130,74,0.3); border-radius:8px; padding:8px 16px; }
 .er-type-badge { font-size:0.7rem; padding:3px 10px; border-radius:20px; }
+
+/* ── 冷蔵庫くん ナビボタン ── */
+.spmap-reizo-btn {
+  display:flex; align-items:center; gap:6px;
+  padding:5px 12px; background:rgba(212,168,67,0.1);
+  border:1px solid rgba(212,168,67,0.35); border-radius:20px;
+  color:#D4A843; font-size:0.75rem; font-weight:600;
+  cursor:pointer; transition:all 0.15s; white-space:nowrap;
+  flex-shrink:0; height:32px; margin-left:6px;
+}
+.spmap-reizo-btn:hover { background:rgba(212,168,67,0.2); }
+.spmap-reizo-btn img { width:20px; height:20px; border-radius:50%; object-fit:cover; }
+@media (max-width:768px) {
+  .spmap-reizo-btn span.reizo-label { display:none; }
+  .spmap-reizo-btn { padding:4px 6px; gap:0; margin-left:3px; }
+  .spmap-reizo-btn img { width:22px; height:22px; }
+}
+
+/* ── 冷蔵庫くん チャットパネル ── */
+.sp-reizo-panel {
+  position:fixed; bottom:80px; right:24px;
+  width:340px; max-height:520px;
+  background:#1a1208; border:1px solid rgba(212,168,67,0.25);
+  border-radius:14px; box-shadow:0 16px 48px rgba(0,0,0,0.6);
+  display:none; flex-direction:column; z-index:3000; overflow:hidden;
+}
+.sp-reizo-panel.open { display:flex; }
+.sp-reizo-header {
+  display:flex; align-items:center; gap:9px;
+  padding:12px 14px; border-bottom:1px solid rgba(212,168,67,0.2);
+  background:rgba(0,0,0,0.3);
+}
+.sp-reizo-header img { width:28px; height:28px; border-radius:50%; object-fit:cover; }
+.sp-reizo-header-title { flex:1; font-size:14px; font-weight:700; color:#D4A843; }
+.sp-reizo-close {
+  background:none; border:none; color:#888; cursor:pointer; font-size:16px; padding:2px 6px;
+}
+.sp-reizo-close:hover { color:#fff; }
+.sp-reizo-msgs {
+  flex:1; overflow-y:auto; padding:14px 12px;
+  display:flex; flex-direction:column; gap:12px;
+}
+.sp-reizo-msg { display:flex; align-items:flex-end; gap:8px; }
+.sp-reizo-msg-bot { flex-direction:row; }
+.sp-reizo-msg-user { flex-direction:row-reverse; }
+.sp-reizo-msg img { width:28px; height:28px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+.sp-reizo-bubble {
+  max-width:80%; padding:9px 12px; border-radius:12px;
+  font-size:13px; line-height:1.55; white-space:pre-wrap; color:#e8d8a0;
+}
+.sp-reizo-msg-bot  .sp-reizo-bubble { background:rgba(255,255,255,0.06); border-bottom-left-radius:4px; }
+.sp-reizo-msg-user .sp-reizo-bubble { background:rgba(212,168,67,0.18); color:#D4A843; border-bottom-right-radius:4px; }
+.sp-reizo-typing span {
+  display:inline-block; width:6px; height:6px;
+  background:#888; border-radius:50%; margin:0 2px;
+  animation:spReizoTyping 1.2s infinite;
+}
+.sp-reizo-typing span:nth-child(2) { animation-delay:0.2s; }
+.sp-reizo-typing span:nth-child(3) { animation-delay:0.4s; }
+@keyframes spReizoTyping {
+  0%,60%,100% { opacity:0.3; transform:translateY(0); }
+  30% { opacity:1; transform:translateY(-4px); }
+}
+.sp-reizo-input-area {
+  display:flex; align-items:center; gap:8px;
+  padding:10px 12px; border-top:1px solid rgba(212,168,67,0.2);
+  background:rgba(0,0,0,0.3);
+}
+.sp-reizo-input-area input {
+  flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(212,168,67,0.25);
+  border-radius:8px; padding:8px 12px; color:#e8d8a0; font-size:13px; outline:none;
+}
+.sp-reizo-input-area input:focus { border-color:rgba(212,168,67,0.6); }
+.sp-reizo-input-area input::placeholder { color:#666; }
+.sp-reizo-send {
+  width:32px; height:32px; border-radius:50%;
+  background:#D4A843; border:none; color:#1a0e04;
+  font-size:16px; font-weight:700; cursor:pointer; flex-shrink:0;
+}
+.sp-reizo-send:hover { background:#c9982d; }
+@media (max-width:480px) {
+  .sp-reizo-panel { width:calc(100vw - 20px); right:10px; bottom:70px; }
+}
+
 /* ── EMUER消費トースト ── */
 .emuer-charge-toast {
   position:fixed; top:80px; right:20px; z-index:9999;
@@ -2911,6 +2995,10 @@ body.paypay-mode #pp-post-fab {
       <span class="spmap-nav-link" onclick="spMapNavClick('events')">イベント</span>
       <span class="spmap-nav-link" onclick="spMapNavClick('tutorial')">チュートリアル</span>
     </div>
+    <button class="spmap-reizo-btn" onclick="spReizoOpen()" title="冷蔵庫くんに聞く">
+      <img src="/assets/mascot.jpg" alt="冷蔵庫くん">
+      <span class="reizo-label">冷蔵庫くんに聞く</span>
+    </button>
     <div id="emuerHud" title="SchoolPark EMUER残高">
       <span style="font-size:0.8rem">💎</span>
       <span id="emuerHudVal">---</span>
@@ -3099,6 +3187,25 @@ body.paypay-mode #pp-post-fab {
     <button style="margin-top:8px;padding:8px 20px;background:transparent;border:1px solid rgba(255,255,255,0.2);color:#888;border-radius:6px;cursor:pointer;font-size:0.8rem" onclick="document.getElementById('emuerRestrictOverlay').classList.remove('active')">マップに戻る</button>
   </div>
 
+</div>
+
+<!-- ── 冷蔵庫くん チャットパネル（SchoolParkマップ用） ── -->
+<div id="spReizoPanel" class="sp-reizo-panel">
+  <div class="sp-reizo-header">
+    <img src="/assets/mascot.jpg" alt="冷蔵庫くん">
+    <span class="sp-reizo-header-title">冷蔵庫くん</span>
+    <button class="sp-reizo-close" onclick="spReizoClose()">✕</button>
+  </div>
+  <div class="sp-reizo-msgs" id="spReizoMessages">
+    <div class="sp-reizo-msg sp-reizo-msg-bot">
+      <img src="/assets/mascot.jpg" alt="">
+      <div class="sp-reizo-bubble">こんにちは！SchoolPark についてなんでも聞いてね🧊</div>
+    </div>
+  </div>
+  <div class="sp-reizo-input-area">
+    <input id="spReizoInput" type="text" placeholder="質問する..." onkeydown="spReizoKeydown(event)">
+    <button class="sp-reizo-send" onclick="spReizoSend()">↑</button>
+  </div>
 </div>
 
 <!-- ── SchoolPark コンテンツ iframe オーバーレイ ── -->
@@ -6949,6 +7056,111 @@ async function gatedOpen(poiId, fn) {
   _updateEmuerHud(data.balance);
   _showEmuerChargeToast(poiId, cost, data.balance);
   fn();
+}
+
+/* ═══════════════════════════════════════════════════════
+   冷蔵庫くん（SchoolParkマップ用）
+═══════════════════════════════════════════════════════ */
+const SP_REIZO_KB = [
+  { k:['schoolpark','スクールパーク','とは','何','概要'],
+    a:'SchoolPark は現実世界とインターネットをつなぐ次世代コミュニティプラットフォームだよ🌐\nPC・タブレット・スマートフォンからアクセスできて、EMUER トークンで施設のアクセスやコミュニティ参加ができるよ🧊' },
+  { k:['ログイン','login','入り方','入場','始め方','アクセス'],
+    a:'SchoolPark への入場手順：\n① ロゴ画面をタップ\n② 利用規約にチェック\n③ 有料パス or 無料パスを選択\n④ MetaMask で承認 → マップ画面へ🧊\n\nスマホは MetaMask アプリ内ブラウザを使ってね！' },
+  { k:['無料パス','無料nft','free'],
+    a:'「無料パス」は初めての方向けの入場 NFT だよ🧊\nMetaMask を接続して無料 NFT をクレームするだけで入場できるよ。' },
+  { k:['有料パス','有料nft','paid'],
+    a:'「有料パス」は有料 NFT を保有しているユーザー向けだよ。\n有料パスはポイントをいつでも EMUER に変換できる特典もあるよ🧊' },
+  { k:['metamask','メタマスク','ウォレット','wallet'],
+    a:'MetaMask はブラウザ拡張型の仮想通貨ウォレットだよ。SchoolPark の入場に必要🧊\n\nPC: metamask.io からインストール\nスマホ: MetaMask アプリを使ってね' },
+  { k:['polygon','matic','pol','ガス代','ネットワーク'],
+    a:'SchoolPark は Polygon ネットワークで動作しているよ🧊\nchainlist.org で「Polygon Mainnet」を追加して使ってね。\nガス代は 0.01 MATIC 程度あれば十分！' },
+  { k:['emuer','エミュアー','トークン'],
+    a:'EMUER は SchoolPark 内で流通する ERC-20 トークンだよ🧊\n施設解放・タクシー移動などに使えて、\n①good/change数に応じて ②学習反映 ③ログインボーナス ④キャンペーン ⑤利用制限解除後\nなどで獲得できるよ！' },
+  { k:['獲得','稼ぐ','貯める','ポイント','稼ぎ方'],
+    a:'EMUER の獲得方法は5つだよ🧊\n① Emu での good・change 数に応じて\n② 北エリア学習コンテンツ反映\n③ ログインボーナス\n④ キャンペーン・イベント参加\n⑤ 利用制限解除後の自動配布' },
+  { k:['利用制限','制限','restriction'],
+    a:'利用制限は EMUER を使い切ると発動するよ🧊\n\n【無料ユーザー】 300→1h / 300→1h / 300→1h / 100→5h（計8h）\n【有料ユーザー】 500→1h / 500→3h（計4h）\n\n全ステップ完了後に 1,000 EMUER が実配布されるよ！' },
+  { k:['配布','1000','無料配布','20日','毎月'],
+    a:'利用制限の全ステップを完了すると 1,000 EMUER が自動配布されるよ🧊\n実配布日は毎月 20 日だよ。手続きは不要で自動的に届くよ！' },
+  { k:['タクシー','taxi','移動','瞬間移動'],
+    a:'タクシーは 3 EMUER でマップ内の好きな施設に瞬間移動できる機能だよ🚕\nマップ右上の 🚕 ボタン、またはキーボード「T」から使えるよ！' },
+  { k:['マップ','map','操作'],
+    a:'マップはクリック・スクロールで操作できるよ🧊\n施設アイコンをクリックするとコンテンツにアクセスできるよ。\n右上ボタン：💰ウォレット　🚕タクシー　🤖AIエージェント　⚙️設定' },
+  { k:['使い方','コスト','料金','施設','解放'],
+    a:'EMUER 施設コスト例🧊\n・ショッピング → 20 EMUER\n・映画館 → 20 EMUER\n・ホテル → 8-10 EMUER\n・カフェ → 5-6 EMUER\n・タクシー → 3 EMUER' },
+  { k:['ai','エージェント','ロボット'],
+    a:'AIエージェントはあなたの代わりに自律的に動く AI だよ🤖\nマップ右上の 🤖 ボタン、またはキーボード「A」から起動できるよ！' },
+  { k:['スマホ','スマートフォン','タブレット','mobile'],
+    a:'スマホ・タブレットは MetaMask アプリ内のブラウザを使ってね🧊\nノーマルの Chrome や Safari では使えないよ。' },
+  { k:['ショートカット','shortcut','キー','keyboard'],
+    a:'キーボードショートカット🧊\nW：ウォレット　T：タクシー　A：AIエージェント　S：設定\nEsc：パネルを閉じる　Backspace：マップに戻る' },
+  { k:['チュートリアル','tutorial','使い方','ガイド'],
+    a:'チュートリアルはナビの「チュートリアル」から開けるよ📖\nSchoolPark の楽しみ方・使い方をステップごとに紹介しているよ🧊' },
+  { k:['グルメ','gourmet','レストラン','食べる'],
+    a:'グルメエリアでは提携レストランのメニューを EMUER で購入して実店舗で飲食できるよ🍽️\nバーチャル × リアルをつなぐ SchoolPark の目玉エリア！' },
+  { k:['ショッピング','shopping','買い物'],
+    a:'ショッピングエリアでは EMUER を使ったリアル連携のショッピング体験ができるよ🛍️\nナビの「ショッピング」からアクセスしてね！' },
+];
+
+function spReizoAnswer(q) {
+  const lq = q.toLowerCase();
+  for (const item of SP_REIZO_KB) {
+    if (item.k.some(k => lq.includes(k.toLowerCase()))) return item.a;
+  }
+  return '「' + q + '」についてはまだ詳しく分からないけど、チュートリアルページで確認してみてね📖\nもっと具体的に聞いてもらえると答えやすいよ🧊';
+}
+
+function spReizoOpen() {
+  document.getElementById('spReizoPanel').classList.add('open');
+  document.getElementById('spReizoInput').focus();
+}
+function spReizoClose() {
+  document.getElementById('spReizoPanel').classList.remove('open');
+}
+function _spReizoAppendMsg(text, isUser) {
+  const msgs = document.getElementById('spReizoMessages');
+  const div = document.createElement('div');
+  div.className = 'sp-reizo-msg ' + (isUser ? 'sp-reizo-msg-user' : 'sp-reizo-msg-bot');
+  if (!isUser) {
+    const av = document.createElement('img');
+    av.src = '/assets/mascot.jpg'; av.alt = ''; div.appendChild(av);
+  }
+  const bubble = document.createElement('div');
+  bubble.className = 'sp-reizo-bubble';
+  bubble.textContent = text;
+  div.appendChild(bubble);
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+function _spReizoShowTyping() {
+  const msgs = document.getElementById('spReizoMessages');
+  const div = document.createElement('div');
+  div.className = 'sp-reizo-msg sp-reizo-msg-bot';
+  const av = document.createElement('img');
+  av.src = '/assets/mascot.jpg'; av.alt = ''; div.appendChild(av);
+  const bubble = document.createElement('div');
+  bubble.className = 'sp-reizo-bubble sp-reizo-typing';
+  bubble.innerHTML = '<span></span><span></span><span></span>';
+  div.appendChild(bubble);
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+function spReizoSend() {
+  const input = document.getElementById('spReizoInput');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  _spReizoAppendMsg(q, true);
+  const typing = _spReizoShowTyping();
+  setTimeout(() => {
+    typing.remove();
+    _spReizoAppendMsg(spReizoAnswer(q), false);
+  }, 600 + Math.random() * 400);
+}
+function spReizoKeydown(e) {
+  if (e.key === 'Enter') spReizoSend();
 }
 
 /* ======= ロゴ → ウォレット → メイン ======= */
