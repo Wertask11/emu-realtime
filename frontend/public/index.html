@@ -378,6 +378,80 @@
   .sp-reizo-panel { width:calc(100vw - 20px); right:10px; bottom:70px; }
 }
 
+/* ═══════════════════════════════════════════════════════
+   SchoolPark 初回チュートリアル演出（冷蔵庫くん）
+═══════════════════════════════════════════════════════ */
+#spTutOverlay {
+  position:fixed; inset:0; z-index:3500;
+  background:rgba(0,0,0,0.55);
+  display:none; cursor:pointer;
+}
+#spTutOverlay.active  { display:block; }
+#spTutOverlay.step-area { pointer-events:none; } /* エリア選択ステップはクリック透過 */
+
+#spTutMascot {
+  position:fixed; bottom:0; left:50%;
+  transform:translateX(-50%) translateY(120%);
+  z-index:3600; pointer-events:auto; cursor:pointer;
+  display:none; flex-direction:column; align-items:center; gap:0;
+  transition:transform 0.48s cubic-bezier(0.34,1.56,0.64,1);
+  width:min(360px,94vw); padding:0 12px 16px;
+}
+#spTutMascot.active { display:flex; }
+#spTutMascot.in     { transform:translateX(-50%) translateY(0); }
+
+.sp-tut-bubble {
+  background:#fff; color:#1a1208;
+  border-radius:18px; padding:18px 20px 14px;
+  box-shadow:0 10px 36px rgba(0,0,0,0.5);
+  width:100%; position:relative; box-sizing:border-box;
+  margin-bottom:6px;
+}
+.sp-tut-bubble::after {
+  content:''; position:absolute; bottom:-11px; left:38px;
+  border:11px solid transparent;
+  border-top-color:#fff; border-bottom:0;
+}
+.sp-tut-text {
+  font-size:13.5px; line-height:1.75;
+  font-family:'Noto Sans JP','Hiragino Sans',sans-serif;
+  white-space:pre-wrap; color:#1a1208;
+}
+.sp-tut-hint {
+  display:block; font-size:11px; color:#aaa;
+  text-align:right; margin-top:10px;
+  font-family:'Noto Sans JP',sans-serif;
+}
+.sp-tut-hint.gold { color:#D4A843; font-weight:700; }
+.sp-tut-progress {
+  font-size:10px; color:#ccc; text-align:center;
+  margin-bottom:4px; letter-spacing:0.05em;
+}
+.sp-tut-img-row {
+  display:flex; justify-content:flex-start;
+  padding-left:26px; width:100%;
+}
+.sp-tut-img-row img {
+  width:62px; height:62px; border-radius:50%; object-fit:cover;
+  border:3px solid #D4A843;
+  box-shadow:0 4px 18px rgba(0,0,0,0.55);
+  animation:spTutFloat 2.8s ease-in-out infinite;
+}
+@keyframes spTutFloat {
+  0%,100% { transform:translateY(0) rotate(-2deg); }
+  50%      { transform:translateY(-8px) rotate(2deg); }
+}
+
+/* ステップ2: エリアリストを overlay より前面に */
+.spmap-left.sp-tut-area-hl {
+  z-index:4000 !important; position:relative;
+  box-shadow:0 0 0 2px #D4A843, 0 0 28px rgba(212,168,67,0.4) !important;
+  border-radius:0 8px 8px 0;
+}
+@media (max-width:768px) {
+  .spmap-left.sp-tut-area-hl { z-index:4001 !important; border-radius:0 12px 12px 0; }
+}
+
 /* ── EMUER消費トースト ── */
 .emuer-charge-toast {
   position:fixed; top:80px; right:20px; z-index:9999;
@@ -3205,6 +3279,18 @@ body.paypay-mode #pp-post-fab {
   <div class="sp-reizo-input-area">
     <input id="spReizoInput" type="text" placeholder="質問する..." onkeydown="spReizoKeydown(event)">
     <button class="sp-reizo-send" onclick="spReizoSend()">↑</button>
+  </div>
+</div>
+
+<!-- ── SchoolPark 初回チュートリアル演出（冷蔵庫くん） ── -->
+<div id="spTutOverlay" onclick="_spTutNext()"></div>
+<div id="spTutMascot" onclick="_spTutNext()">
+  <div class="sp-tut-bubble">
+    <div class="sp-tut-text" id="spTutText"></div>
+    <span class="sp-tut-hint" id="spTutHint">タップして次へ</span>
+  </div>
+  <div class="sp-tut-img-row">
+    <img src="/assets/mascot.jpg" alt="冷蔵庫くん">
   </div>
 </div>
 
@@ -7163,6 +7249,110 @@ function spReizoKeydown(e) {
   if (e.key === 'Enter') spReizoSend();
 }
 
+/* ═══════════════════════════════════════════════════════
+   SchoolPark 初回チュートリアル演出（冷蔵庫くん）
+═══════════════════════════════════════════════════════ */
+const SP_TUT_KEY = 'sp_tut_v1';
+const SP_TUT_STEPS = [
+  { text: 'また会ったね！改めて、ようこそSchoolParkへ！\n学校より学べて・公園より楽しくて・会社より稼げる場所を。まずはオンラインで表したのがここだよ！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'この画面は、SchoolParkのマップ画面。中央エリア・東エリア・西エリア・南エリア・北エリアの５つのエリアで構成されてるんだ。\nまずは、エリアを選択してみよう！', hint: '← 左のエリアを選んでね', mode: 'area' },
+  { text: '知識を伝え合う場所、Emuに行く場合は左上のEmuからアクセスしてね！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'まだ品数は少ないけれど…現実でも使えるサービスと言ったらSchoolParkのショッピングとグルメ！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'SchoolParkの独自教材や遊具、デジタルコンテンツやコラボアイテムが表示・購入できるのがショッピングだよ！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'デジタルで買って、リアルで食べる。美味しいに楽しいを追加したのが、SchoolParkのグルメエリア！', hint: 'タップして次へ', mode: 'tap' },
+  { text: '両方まだ品数は少ないけれど、気にしておいてね！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'そうそう。定期的にイベントがあるから、ぜひ遊びに来て！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'まだいっぱい教えたいことがたくさんあるんだけど、しゃべりすぎって怒られるから…', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'わからないことがあれば、冷蔵庫くんに聞くから教えてね！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'SchoolPark、楽しんでね！バイバイ！', hint: 'タップして閉じる', mode: 'last' },
+];
+
+let _spTutIdx = 0;
+let _spTutRunning = false;
+
+function startSpTutorial() {
+  if (localStorage.getItem(SP_TUT_KEY) === '1') return;
+  _spTutIdx = 0;
+  _spTutRunning = true;
+  setTimeout(() => _spTutRender(true), 900);
+}
+
+function _spTutRender(enter) {
+  const step    = SP_TUT_STEPS[_spTutIdx];
+  const overlay = document.getElementById('spTutOverlay');
+  const mascot  = document.getElementById('spTutMascot');
+  const textEl  = document.getElementById('spTutText');
+  const hintEl  = document.getElementById('spTutHint');
+  const sidebar = document.querySelector('.spmap-left');
+  if (!overlay || !mascot || !textEl || !hintEl) return;
+
+  textEl.textContent = step.text;
+  hintEl.textContent = step.hint;
+  hintEl.className   = 'sp-tut-hint' + (step.mode === 'area' ? ' gold' : '');
+
+  if (step.mode === 'area') {
+    overlay.classList.add('step-area');
+    if (sidebar) sidebar.classList.add('sp-tut-area-hl');
+    // モバイル: サイドバードロワーを開く
+    if (window.innerWidth <= 768 && sidebar && !sidebar.classList.contains('spmap-left-open')) {
+      toggleSpMapMenu();
+    }
+  } else {
+    overlay.classList.remove('step-area');
+    if (sidebar) sidebar.classList.remove('sp-tut-area-hl');
+  }
+
+  overlay.classList.add('active');
+  mascot.classList.add('active');
+
+  if (enter) {
+    mascot.classList.remove('in');
+    requestAnimationFrame(() => requestAnimationFrame(() => mascot.classList.add('in')));
+  }
+}
+
+function _spTutNext() {
+  if (!_spTutRunning) return;
+  const step = SP_TUT_STEPS[_spTutIdx];
+  if (step.mode === 'area') return; // エリア選択ステップは area クリックでのみ進む
+  if (step.mode === 'last') { _spTutFinish(); return; }
+  _spTutIdx++;
+  const mascot = document.getElementById('spTutMascot');
+  mascot.classList.remove('in');
+  setTimeout(() => _spTutRender(true), 280);
+}
+
+// spMapFilter() から呼ばれる
+function _spTutOnAreaClick(zones) {
+  if (!_spTutRunning) return;
+  if (SP_TUT_STEPS[_spTutIdx]?.mode !== 'area') return;
+  if (zones === 'all') return; // 「すべて」は対象外
+  const sidebar = document.querySelector('.spmap-left');
+  if (sidebar) sidebar.classList.remove('sp-tut-area-hl');
+  // モバイル: ドロワーを閉じる
+  if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('spmap-left-open')) {
+    toggleSpMapMenu();
+  }
+  _spTutIdx++;
+  const mascot = document.getElementById('spTutMascot');
+  mascot.classList.remove('in');
+  setTimeout(() => _spTutRender(true), 280);
+}
+
+function _spTutFinish() {
+  _spTutRunning = false;
+  localStorage.setItem(SP_TUT_KEY, '1');
+  const overlay = document.getElementById('spTutOverlay');
+  const mascot  = document.getElementById('spTutMascot');
+  const sidebar = document.querySelector('.spmap-left');
+  mascot.classList.remove('in');
+  setTimeout(() => {
+    mascot.classList.remove('active');
+    overlay.classList.remove('active', 'step-area');
+    if (sidebar) sidebar.classList.remove('sp-tut-area-hl');
+  }, 450);
+}
+
 /* ======= ロゴ → ウォレット → メイン ======= */
 // ★ ロゴクリック時はウォレット画面を常に表示（メンテチェックはgoTomainapp内で行う）
 logoScreen.addEventListener("click", () => {
@@ -9084,6 +9274,9 @@ function openSpMap(gate) {
     vp.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
     vp.addEventListener("touchmove", e => e.stopPropagation(), { passive: true });
   }
+
+  // ★ 初回のみ冷蔵庫くんチュートリアル演出を開始
+  startSpTutorial();
 }
 
 // ── SchoolPark コンテンツ iframe オーバーレイ ─────────────────
@@ -9593,6 +9786,7 @@ function closeSpDetail() {
 }
 
 function spMapFilter(zones, el) {
+  _spTutOnAreaClick(zones); // チュートリアル ステップ2フック
   _spMapFilter = zones;
   document.querySelectorAll(".spmap-area-item").forEach(i => i.classList.remove("spa-active"));
   if (el) el.classList.add("spa-active");
