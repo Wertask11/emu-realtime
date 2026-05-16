@@ -7148,12 +7148,13 @@ async function gatedOpen(poiId, fn) {
     const nextIdx    = stepIndex + 1;
     const isFinal    = nextIdx >= steps.length;
 
-    data.balance          = 0;
-    data.restrictionUntil = now + curStep.restrictionMs;
-    data.restrictionCount = stepIndex + 1;
-    data.lastRestriction  = now;
-    data._cycleComplete   = isFinal;
-    data._nextStepBalance = isFinal ? null : steps[nextIdx].balance;
+    data.balance                = 0;
+    data.restrictionUntil       = now + curStep.restrictionMs;
+    data.restrictionCount       = stepIndex + 1;
+    data.lastRestriction        = now;
+    data._cycleComplete         = isFinal;
+    data._nextStepBalance       = isFinal ? null : steps[nextIdx].balance;
+    data.totalRestrictionCount  = (data.totalRestrictionCount || 0) + 1;
 
     _saveEmuerData(data);
     _updateEmuerHud(0);
