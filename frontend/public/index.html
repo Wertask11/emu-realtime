@@ -4431,11 +4431,44 @@ if (_fpDirectReturn) {
   logoScreen.style.display = "none";
   window.history.replaceState(null, "", "/");
 
-  // ★ メンテナンスモード中はオーナー以外を弾く
+  // ★ メンテナンスモード中：オーナー以外はpaid_users確認が必要
   if (MAINTENANCE_MODE && !_isOwnerAccess()) {
-    const _ms = document.getElementById('maintenanceScreen');
-    if (_ms) { _ms.style.display = 'flex'; _startMaintenanceCountdown(); }
+    // Firebase は <script type="module"> で非同期初期化されるためポーリングで待機
+    (async () => {
+      let _isPaid = false;
+      for (let _i = 0; _i < 15; _i++) {
+        if (window.db && window.fbLib) {
+          try {
+            const _snap = await window.fbLib.getDoc(
+              window.fbLib.doc(window.db, 'paid_users', _savedWallet.toLowerCase())
+            );
+            _isPaid = _snap.exists();
+          } catch(e) {}
+          break;
+        }
+        await new Promise(r => setTimeout(r, 300));
+      }
+      if (_isPaid) {
+        // paid_usersに登録済み → 通常復帰フロー
+        window.hasPaidNFT = true;
+        window._fromFirebasePaidUsers = true;
+        walletScreen.style.display = "none";
+        mainApp.style.display      = "block";
+        const _footer = document.getElementById("siteFooter");
+        if (_footer) _footer.style.display = "block";
+        window.connectedAccount = _savedWallet;
+        currentUserId = _savedWallet;
+        const _walletBtn = document.getElementById("walletAddressButton");
+        if (_walletBtn) _walletBtn.textContent = _savedWallet.slice(0,6) + "..." + _savedWallet.slice(-4);
+        if (typeof openSpMap === "function") openSpMap();
+      } else {
+        // 未登録 → メンテナンス画面
+        const _ms = document.getElementById('maintenanceScreen');
+        if (_ms) { _ms.style.display = 'flex'; _startMaintenanceCountdown(); }
+      }
+    })();
   } else {
+    // オーナー or メンテナンスOFF → 即時復帰
     walletScreen.style.display = "none";
     mainApp.style.display      = "block";
     const _footer = document.getElementById("siteFooter");
