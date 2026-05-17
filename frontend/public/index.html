@@ -7259,6 +7259,46 @@ function _closeTakoyakiStall() {
 }
 
 /* ═══════════════════════════════════════════════════════
+   かき氷屋台
+═══════════════════════════════════════════════════════ */
+function openKakigoriStall() {
+  if (document.getElementById('kakigoriStallModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'kakigoriStallModal';
+  modal.style.cssText = `
+    position:fixed;inset:0;background:rgba(10,6,18,.92);z-index:12000;
+    display:flex;align-items:center;justify-content:center;padding:12px;
+  `;
+  modal.innerHTML = `
+    <div style="width:100%;max-width:440px;max-height:92vh;overflow-y:auto;
+                border-radius:28px;overflow:hidden;position:relative;
+                box-shadow:0 30px 80px rgba(0,0,0,.7);">
+      <iframe src="/event/kakigori/index.html"
+        style="width:100%;border:none;display:block;min-height:640px;"
+        scrolling="yes" title="かき氷屋台">
+      </iframe>
+    </div>
+  `;
+  modal.addEventListener('click', e => { if (e.target === modal) _closeKakigoriStall(); });
+  function onMsg(e) {
+    if (e.data && e.data.type === 'closeKakigori') {
+      _closeKakigoriStall();
+      window.removeEventListener('message', onMsg);
+    }
+  }
+  window.addEventListener('message', onMsg);
+  modal._msgHandler = onMsg;
+  document.body.appendChild(modal);
+}
+function _closeKakigoriStall() {
+  const m = document.getElementById('kakigoriStallModal');
+  if (m) {
+    if (m._msgHandler) window.removeEventListener('message', m._msgHandler);
+    m.remove();
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
    唐揚げ屋台
 ═══════════════════════════════════════════════════════ */
 function openKaraageStall() {
@@ -9707,7 +9747,7 @@ const SP_POIS = [
   // 🎪 開園祭イベント会場（5/20〜5/25）
   { id:"event1", name:"たこ焼き屋台",        icon:"🐙", zone:"event", px:42, py:44, desc:"SchoolPark開園祭の屋台！香ばしいたこ焼きをどうぞ🐙", status:"open", eventOnly:true, action:"openTakoyakiStall", btnLabel:"🐙 屋台に行く" },
   { id:"event2", name:"唐揚げ屋台",          icon:"🍗", zone:"event", px:36, py:50, desc:"SchoolPark開園祭の屋台！ジューシーな唐揚げをどうぞ🍗", status:"open", eventOnly:true, action:"openKaraageStall", btnLabel:"🍗 屋台に行く" },
-  { id:"event3", name:"かき氷屋台",          icon:"🍧", zone:"event", px:44, py:55, desc:"SchoolPark開園祭の屋台！ひんやりかき氷で涼んでね🍧", status:"open", eventOnly:true, btnLabel:"🍧 屋台に行く" },
+  { id:"event3", name:"かき氷屋台",          icon:"🍧", zone:"event", px:44, py:55, desc:"SchoolPark開園祭の屋台！ひんやりかき氷で涼んでね🍧", status:"open", eventOnly:true, action:"openKakigoriStall", btnLabel:"🍧 屋台に行く" },
   { id:"event4", name:"金魚すくい",          icon:"🐟", zone:"event", px:56, py:44, desc:"SchoolPark開園祭！金魚すくいに挑戦してみよう🐟", status:"open", eventOnly:true, btnLabel:"🐟 挑戦する" },
   { id:"event5", name:"ヨーヨー釣り",        icon:"🎈", zone:"event", px:62, py:50, desc:"SchoolPark開園祭！ヨーヨー釣りで遊ぼう🎈", status:"open", eventOnly:true, btnLabel:"🎈 遊ぶ" },
   { id:"event6", name:"射的",               icon:"🎯", zone:"event", px:58, py:56, desc:"SchoolPark開園祭！射的で腕前を試そう🎯", status:"open", eventOnly:true, btnLabel:"🎯 狙う" },
@@ -10359,6 +10399,8 @@ function spMapSelectPoi(poiId) {
         ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>{closeSpMap();setTimeout(()=>openRoom2(),150)})">🌌 星を見に行く</button>`
       : poi.action === "openTakoyakiStall"
         ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openTakoyakiStall())">${poi.btnLabel||'🐙 屋台に行く'}</button>`
+      : poi.action === "openKakigoriStall"
+        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKakigoriStall())">${poi.btnLabel||'🍧 屋台に行く'}</button>`
       : poi.action === "openKaraageStall"
         ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKaraageStall())">${poi.btnLabel||'🍗 屋台に行く'}</button>`
       : poi.action === "openKaiensaiMarche"

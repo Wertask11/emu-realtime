@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>かき氷屋台 — SchoolPark 開園祭</title>
+<style>
+  :root {
+    --orange:    #ff6b35;
+    --blue:      #2a6fdb;
+    --blue-deep: #1a4ea5;
+    --ice-blue:  #b5e3ff;
+    --cream:     #fdf6e3;
+    --ink:       #2a1820;
+    --night:     #1a0f1f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; background: #0c0814;
+    font-family: "Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic UI","Yu Gothic","Noto Sans JP","Meiryo",system-ui,sans-serif;
+    color: var(--ink); -webkit-font-smoothing: antialiased; }
+  body { display: grid; place-items: center; padding: 24px 12px; }
+
+  /* ===== モーダル ===== */
+  .modal {
+    width: 100%; max-width: 420px;
+    background: var(--cream);
+    border-radius: 28px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 6px 20px rgba(42,111,219,.2);
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(42,111,219,.18);
+  }
+  .modal-top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px 10px;
+    background: linear-gradient(180deg, #f0f6ff, var(--cream));
+    border-bottom: 1px dashed rgba(42,111,219,.3);
+  }
+  .modal-title {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 800; font-size: 14px; letter-spacing: .04em; color: var(--ink);
+  }
+  .badge {
+    background: var(--orange); color: var(--cream); border-radius: 999px;
+    padding: 3px 8px; font-size: 10px; font-weight: 800;
+  }
+  .close-btn {
+    width: 30px; height: 30px; border-radius: 50%; border: 0;
+    background: rgba(42,24,32,.06); color: var(--ink); cursor: pointer;
+    display: grid; place-items: center; font-size: 16px;
+  }
+  .close-btn:hover { background: rgba(42,24,32,.12); }
+
+  /* ===== ステージ ===== */
+  .stage {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    background: #1a0f1f;
+    overflow: hidden;
+    touch-action: manipulation;
+  }
+  .stage svg { display: block; width: 100%; height: 100%; }
+
+  /* 氷の結晶チラチラ */
+  @keyframes iceFall {
+    0%   { transform: translateY(-10px) rotate(0deg); opacity: 0; }
+    20%  { opacity: 1; }
+    100% { transform: translateY(50px) rotate(180deg); opacity: 0; }
+  }
+  .ice-flake {
+    transform-origin: center;
+    animation: iceFall 4s ease-in infinite;
+  }
+  .f-1 { animation-delay: 0s; }
+  .f-2 { animation-delay: .6s; }
+  .f-3 { animation-delay: 1.4s; }
+  .f-4 { animation-delay: 2.2s; }
+  .f-5 { animation-delay: 3s; }
+
+  /* 削り機のクランクがゆっくり回る */
+  @keyframes crank {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  .crank-arm {
+    transform-origin: 0 0;
+    animation: crank 6s linear infinite;
+  }
+
+  /* 提灯の揺れ */
+  @keyframes lanternSway {
+    0%, 100% { transform: rotate(-2deg); }
+    50%      { transform: rotate(2deg); }
+  }
+  .sway { transform-origin: top center; animation: lanternSway 4s ease-in-out infinite; }
+  .sway-b { animation-duration: 5.2s; animation-delay: -1s; }
+
+  /* 月のグロー */
+  @keyframes moonPulse {
+    0%, 100% { opacity: .55; }
+    50%      { opacity: .8; }
+  }
+  .moonglow { animation: moonPulse 5s ease-in-out infinite; transform-origin: center; }
+
+  /* 看板光 */
+  @keyframes signGlow {
+    0%, 100% { opacity: .35; }
+    50%      { opacity: .55; }
+  }
+  .sign-glow { animation: signGlow 3.5s ease-in-out infinite; }
+
+  /* 星 */
+  @keyframes twinkle {
+    0%, 100% { opacity: .3; }
+    50%      { opacity: 1; }
+  }
+  .twinkle { animation: twinkle 2.2s ease-in-out infinite; }
+  .twinkle:nth-child(odd) { animation-duration: 3.1s; animation-delay: -1s; }
+
+  /* 蛍（蛍光の光が流れる） */
+  @keyframes fireflyFloat {
+    0%   { transform: translate(0, 0); opacity: 0; }
+    20%  { opacity: 1; }
+    50%  { transform: translate(20px, -16px); opacity: .9; }
+    80%  { opacity: .7; }
+    100% { transform: translate(40px, 0); opacity: 0; }
+  }
+  .firefly {
+    transform-origin: center;
+    animation: fireflyFloat 6s ease-in-out infinite;
+  }
+  .firefly-1 { animation-delay: 0s; }
+  .firefly-2 { animation-delay: 2s; }
+  .firefly-3 { animation-delay: 4s; }
+
+  /* 店員の呼吸 */
+  @keyframes breathe {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-1.5px); }
+  }
+  .chef { transform-origin: center; animation: breathe 3.6s ease-in-out infinite; }
+
+  /* 髪が風で揺れる */
+  @keyframes hairSway {
+    0%, 100% { transform: rotate(0deg); }
+    50%      { transform: rotate(2deg); }
+  }
+  .hair { transform-origin: 0 0; animation: hairSway 4s ease-in-out infinite; }
+
+  /* ===== 吹き出し ===== */
+  .speech {
+    position: absolute;
+    top: 36%; left: 12%;
+    background: var(--cream);
+    border: 2.5px solid var(--ink);
+    border-radius: 16px;
+    padding: 8px 12px 9px;
+    font-size: 13px; font-weight: 800; color: var(--ink);
+    box-shadow: 3px 4px 0 rgba(42,24,32,.18);
+    white-space: nowrap;
+    transform-origin: bottom right;
+    animation: popIn .5s cubic-bezier(.34,1.56,.64,1) .3s both, wiggle 4s ease-in-out 1s infinite;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .speech::before {
+    content: "";
+    position: absolute;
+    bottom: -10px; right: 18px;
+    width: 0; height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 12px solid var(--ink);
+  }
+  .speech::after {
+    content: "";
+    position: absolute;
+    bottom: -6px; right: 21px;
+    width: 0; height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 9px solid var(--cream);
+  }
+  @keyframes popIn {
+    0%   { transform: scale(.3) rotate(-8deg); opacity: 0; }
+    70%  { transform: scale(1.06) rotate(2deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+  @keyframes wiggle {
+    0%, 70%, 100% { transform: rotate(0); }
+    78%   { transform: rotate(-2deg); }
+    86%   { transform: rotate(2deg); }
+    94%   { transform: rotate(-1deg); }
+  }
+
+  /* ===== メニュー ===== */
+  .menu {
+    padding: 14px 12px 18px;
+    background: var(--cream);
+  }
+  .menu-head {
+    display: flex; align-items: center; gap: 8px;
+    margin: 0 4px 10px;
+  }
+  .menu-head h2 {
+    margin: 0; font-size: 13px; font-weight: 800; color: var(--ink);
+    letter-spacing: .06em;
+  }
+  .menu-head .rule {
+    flex: 1; height: 2px;
+    background-image: linear-gradient(90deg, var(--blue) 0 6px, transparent 6px 12px);
+    background-size: 12px 100%;
+    opacity: .4;
+  }
+  .menu-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .menu-card {
+    background: #fff;
+    border: 2px solid var(--ink);
+    border-radius: 14px;
+    padding: 10px 8px 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: transform .15s ease, box-shadow .15s ease;
+    box-shadow: 2px 3px 0 var(--ink);
+    position: relative;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .menu-card:hover { transform: translate(-1px, -1px); box-shadow: 3px 4px 0 var(--ink); }
+  .menu-card:active { transform: translate(2px, 3px); box-shadow: 0 0 0 var(--ink); }
+  .menu-card svg { width: 64px; height: 60px; display: block; margin: 0 auto; }
+  .menu-card .name {
+    font-size: 13px; font-weight: 800; color: var(--ink); margin-top: 4px;
+  }
+  .menu-card .price {
+    font-size: 11px; color: var(--blue); font-weight: 800; letter-spacing: .04em;
+    margin-top: 2px;
+  }
+  .menu-card .tag {
+    position: absolute; top: -8px; right: -6px;
+    background: var(--blue); color: var(--cream);
+    border: 2px solid var(--ink); border-radius: 999px;
+    font-size: 9px; font-weight: 800; padding: 2px 7px;
+    transform: rotate(8deg);
+  }
+
+  /* ===== 調理オーバーレイ ===== */
+  .cook-overlay {
+    position: absolute; inset: 0;
+    background: rgba(10, 6, 18, .92);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 18px;
+    opacity: 0; pointer-events: none;
+    transition: opacity .3s ease;
+    z-index: 10;
+  }
+  .cook-overlay.show { opacity: 1; pointer-events: auto; }
+  .cook-card {
+    width: 100%;
+    background: linear-gradient(180deg, #182640, #0c1424);
+    border: 2px solid var(--blue);
+    border-radius: 20px;
+    padding: 18px 16px 14px;
+    box-shadow: 0 0 0 4px rgba(42,111,219,.18), 0 14px 30px rgba(0,0,0,.5);
+    color: var(--cream);
+    text-align: center;
+  }
+  .cook-title {
+    font-size: 13px; font-weight: 800; letter-spacing: .12em;
+    color: var(--ice-blue); margin-bottom: 8px;
+  }
+  .cook-stage {
+    aspect-ratio: 1 / .8;
+    width: 100%;
+    background: radial-gradient(ellipse at center, #2a4870 0%, #0c1424 80%);
+    border-radius: 14px;
+    position: relative;
+    overflow: hidden;
+    border: 1px dashed rgba(181,227,255,.35);
+  }
+  .cook-stage svg { width: 100%; height: 100%; display: block; }
+  .cook-step {
+    font-size: 12px; color: var(--cream); opacity: .8; margin-top: 10px;
+    letter-spacing: .04em;
+    min-height: 16px;
+  }
+  .progress {
+    margin-top: 10px;
+    height: 6px;
+    background: rgba(42,111,219,.2);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--blue), var(--ice-blue));
+    border-radius: 999px;
+    transition: width .35s ease;
+  }
+  .cook-actions {
+    display: flex; gap: 10px; justify-content: center; margin-top: 14px;
+  }
+  .btn {
+    border: 0; padding: 10px 20px; border-radius: 999px;
+    background: var(--blue); color: var(--cream);
+    font-weight: 800; font-size: 13px; letter-spacing: .08em; cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 4px 0 var(--blue-deep);
+    transition: transform .1s ease, box-shadow .1s ease;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 5px 0 var(--blue-deep); }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--blue-deep); }
+  .btn.ghost {
+    background: transparent; color: var(--cream);
+    box-shadow: inset 0 0 0 2px rgba(253,246,227,.4);
+  }
+  .btn.ghost:hover { background: rgba(253,246,227,.08); box-shadow: inset 0 0 0 2px rgba(253,246,227,.6); }
+
+  /* 調理アニメ */
+  @keyframes blockDescend {
+    0%   { transform: translateY(0); }
+    100% { transform: translateY(30px); }
+  }
+  @keyframes shaveSpin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(720deg); }
+  }
+  @keyframes flakeFly {
+    0%   { transform: translate(0, 0) scale(0); opacity: 0; }
+    30%  { opacity: 1; transform: translate(var(--fx,-20px), -8px) scale(1); }
+    100% { transform: translate(var(--fx2,-30px), 60px) scale(.6); opacity: 0; }
+  }
+  @keyframes moundGrow {
+    0%   { transform: scale(.2) translateY(20px); opacity: 0; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  @keyframes syrupPour {
+    0%   { transform: translateY(-20px) scaleY(0); opacity: 0; }
+    20%  { opacity: 1; }
+    100% { transform: translateY(0) scaleY(1); opacity: 1; }
+  }
+  @keyframes syrupSpread {
+    0%   { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes bottleTilt {
+    0%, 100% { transform: rotate(0deg); }
+    40%, 80% { transform: rotate(-40deg); }
+  }
+  @keyframes sprinkle {
+    0%   { transform: translateY(-12px) scale(.4); opacity: 0; }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+  @keyframes bounce {
+    0% { transform: scale(.3) translateY(20px); opacity: 0; }
+    70% { transform: scale(1.15) translateY(0); opacity: 1; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  @keyframes coolBreath {
+    0%, 100% { opacity: .3; transform: translateY(0) scaleX(1); }
+    50%      { opacity: .7; transform: translateY(-4px) scaleX(1.05); }
+  }
+
+  @media (max-height: 740px) {
+    body { align-items: start; padding-top: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="modal" id="modal">
+  <div class="modal-top">
+    <div class="modal-title">
+      <span class="badge">開園祭</span>
+      <span>🍧 かき氷屋台</span>
+    </div>
+    <button class="close-btn" id="closeBtn" aria-label="閉じる">✕</button>
+  </div>
+
+  <div class="stage" id="stage">
+    <svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0"   stop-color="#2a1b3d"/>
+          <stop offset=".35" stop-color="#5d2b4a"/>
+          <stop offset=".7"  stop-color="#c8506a"/>
+          <stop offset=".9"  stop-color="#ff8a5c"/>
+          <stop offset="1"   stop-color="#ffb784"/>
+        </linearGradient>
+        <radialGradient id="moonglow" cx=".5" cy=".5" r=".5">
+          <stop offset="0" stop-color="#fff3d6" stop-opacity=".55"/>
+          <stop offset="1" stop-color="#fff3d6" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#3a2236"/>
+          <stop offset="1" stop-color="#1a0f1f"/>
+        </linearGradient>
+        <!-- 青テント -->
+        <linearGradient id="bluestripe" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#3a82e8"/>
+          <stop offset="1" stop-color="#1f56ba"/>
+        </linearGradient>
+        <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#a86a3a"/>
+          <stop offset="1" stop-color="#6b3d1f"/>
+        </linearGradient>
+        <radialGradient id="lantern" cx=".5" cy=".45" r=".55">
+          <stop offset="0"   stop-color="#fff1c2"/>
+          <stop offset=".55" stop-color="#ffb255"/>
+          <stop offset="1"   stop-color="#d54822"/>
+        </radialGradient>
+        <radialGradient id="signlight" cx=".5" cy=".5" r=".55">
+          <stop offset="0" stop-color="#fff6d4"/>
+          <stop offset="1" stop-color="#f3d27a"/>
+        </radialGradient>
+        <radialGradient id="skin" cx=".5" cy=".4" r=".7">
+          <stop offset="0" stop-color="#ffe2c8"/>
+          <stop offset="1" stop-color="#e8b691"/>
+        </radialGradient>
+        <linearGradient id="happi" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#3a82e8"/>
+          <stop offset="1" stop-color="#1f56ba"/>
+        </linearGradient>
+        <!-- 氷ブロック -->
+        <linearGradient id="iceblock" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#e6f4ff"/>
+          <stop offset=".5" stop-color="#b5e3ff"/>
+          <stop offset="1" stop-color="#7ec0e8"/>
+        </linearGradient>
+        <linearGradient id="machine" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#e84a3a"/>
+          <stop offset="1" stop-color="#9a2018"/>
+        </linearGradient>
+        <linearGradient id="glasscup" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#e8f4ff" stop-opacity=".95"/>
+          <stop offset="1" stop-color="#b5d8f0" stop-opacity=".75"/>
+        </linearGradient>
+        <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="5"/>
+        </filter>
+        <filter id="grain" x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="9"/>
+          <feColorMatrix values="0 0 0 0 1  0 0 0 0 .95  0 0 0 0 .85  0 0 0 .08 0"/>
+          <feComposite in2="SourceGraphic" operator="in"/>
+        </filter>
+
+        <!-- 雪の結晶 -->
+        <g id="snowflake">
+          <line x1="0" y1="-4" x2="0" y2="4" stroke="#fff" stroke-width=".8"/>
+          <line x1="-4" y1="0" x2="4" y2="0" stroke="#fff" stroke-width=".8"/>
+          <line x1="-3" y1="-3" x2="3" y2="3" stroke="#fff" stroke-width=".6"/>
+          <line x1="-3" y1="3" x2="3" y2="-3" stroke="#fff" stroke-width=".6"/>
+        </g>
+
+        <g id="chochin">
+          <line x1="0" y1="-60" x2="0" y2="-44" stroke="#2a1820" stroke-width="2"/>
+          <rect x="-28" y="-44" width="56" height="6" rx="2" fill="#1f1018"/>
+          <ellipse cx="0" cy="0" rx="32" ry="40" fill="url(#lantern)"/>
+          <path d="M-32 -8 q32 10 64 0" stroke="#a8331a" stroke-width="1.5" fill="none" opacity=".55"/>
+          <path d="M-32 8 q32 10 64 0" stroke="#a8331a" stroke-width="1.5" fill="none" opacity=".55"/>
+          <path d="M-32 22 q32 10 64 0" stroke="#a8331a" stroke-width="1.5" fill="none" opacity=".55"/>
+          <rect x="-22" y="36" width="44" height="6" rx="2" fill="#1f1018"/>
+          <line x1="-10" y1="42" x2="-10" y2="52" stroke="#2a1820" stroke-width="1.5"/>
+          <line x1="10"  y1="42" x2="10"  y2="52" stroke="#2a1820" stroke-width="1.5"/>
+          <line x1="0"   y1="42" x2="0"   y2="56" stroke="#2a1820" stroke-width="1.5"/>
+        </g>
+      </defs>
+
+      <!-- 空 -->
+      <rect width="600" height="600" fill="url(#sky)"/>
+      <g class="moonglow"><circle cx="120" cy="110" r="160" fill="url(#moonglow)"/></g>
+      <circle cx="120" cy="110" r="32" fill="#fff7df"/>
+
+      <!-- 星 -->
+      <g fill="#fff">
+        <circle class="twinkle" cx="40"  cy="40"  r="1.4"/>
+        <circle class="twinkle" cx="220" cy="36"  r="1.2"/>
+        <circle class="twinkle" cx="330" cy="72"  r="1.6"/>
+        <circle class="twinkle" cx="430" cy="46"  r="1.3"/>
+        <circle class="twinkle" cx="500" cy="92"  r="1.6"/>
+        <circle class="twinkle" cx="560" cy="44"  r="1.2"/>
+        <circle class="twinkle" cx="380" cy="150" r="1.2"/>
+        <circle class="twinkle" cx="60"  cy="190" r="1.2"/>
+        <circle class="twinkle" cx="270" cy="130" r="1.1"/>
+      </g>
+      <g fill="#ffe8a8">
+        <path class="twinkle" d="M260 80 l1 4 4 1 -4 1 -1 4 -1 -4 -4 -1 4 -1z"/>
+        <path class="twinkle" d="M480 160 l1 4 4 1 -4 1 -1 4 -1 -4 -4 -1 4 -1z"/>
+      </g>
+
+      <!-- 蛍（光の点が漂う） -->
+      <g>
+        <circle class="firefly firefly-1" cx="320" cy="380" r="2.5" fill="#fff48a" opacity="0">
+          <animate attributeName="opacity" values=".3;1;.3" dur="1.5s" repeatCount="indefinite"/>
+        </circle>
+        <circle class="firefly firefly-2" cx="180" cy="420" r="2"   fill="#fff48a" opacity="0">
+          <animate attributeName="opacity" values=".3;1;.3" dur="1.5s" repeatCount="indefinite"/>
+        </circle>
+        <circle class="firefly firefly-3" cx="450" cy="400" r="2.2" fill="#fff48a" opacity="0">
+          <animate attributeName="opacity" values=".3;1;.3" dur="1.5s" repeatCount="indefinite"/>
+        </circle>
+      </g>
+
+      <!-- 提灯紐 -->
+      <g>
+        <line x1="0" y1="130" x2="600" y2="92" stroke="#1f1018" stroke-width="2"/>
+        <g class="sway" transform="translate(60 132)"><use href="#chochin" transform="scale(.4)"/></g>
+        <g class="sway sway-b" transform="translate(540 100)"><use href="#chochin" transform="scale(.4)"/></g>
+      </g>
+
+      <!-- 遠景シルエット -->
+      <g fill="#2a1830" opacity=".75">
+        <path d="M0 360 L80 360 L100 335 L180 335 L200 360 L260 360 L260 410 L0 410 Z"/>
+        <path d="M380 360 L440 360 L460 330 L540 330 L560 360 L600 360 L600 410 L380 410 Z"/>
+      </g>
+      <g fill="#ffd17a">
+        <rect x="120" y="345" width="5" height="6"/>
+        <rect x="145" y="345" width="5" height="6"/>
+        <rect x="470" y="343" width="5" height="6"/>
+        <rect x="495" y="343" width="5" height="6"/>
+      </g>
+
+      <!-- 地面 -->
+      <rect x="0" y="400" width="600" height="200" fill="url(#ground)"/>
+      <ellipse cx="300" cy="520" rx="380" ry="50" fill="#ff6b35" opacity=".08"/>
+
+      <!-- ===== 屋台 ===== -->
+      <g transform="translate(300 320)">
+        <rect x="-220" y="0" width="12" height="260" fill="url(#wood)"/>
+        <rect x="208"  y="0" width="12" height="260" fill="url(#wood)"/>
+        <rect x="-228" y="-8" width="456" height="16" rx="3" fill="#5a3018"/>
+
+        <!-- テント（青＋クリーム） -->
+        <path d="M-228 -8 L228 -8 L228 -80 Q0 -126 -228 -80 Z" fill="#fdf6e3"/>
+        <g>
+          <path d="M-190 -8 L-158 -8 L-158 -88 Q-174 -92 -190 -86 Z" fill="url(#bluestripe)"/>
+          <path d="M-118 -8 L-86 -8 L-86 -100 Q-102 -104 -118 -102 Z" fill="url(#bluestripe)"/>
+          <path d="M-46 -8 L-14 -8 L-14 -114 Q-30 -116 -46 -114 Z" fill="url(#bluestripe)"/>
+          <path d="M30 -8 L62 -8 L62 -116 Q46 -116 30 -114 Z" fill="url(#bluestripe)"/>
+          <path d="M102 -8 L134 -8 L134 -104 Q118 -104 102 -102 Z" fill="url(#bluestripe)"/>
+          <path d="M174 -8 L206 -8 L206 -88 Q190 -92 174 -86 Z" fill="url(#bluestripe)"/>
+        </g>
+
+        <!-- フリンジ -->
+        <path d="M-228 -8 q12 18 24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 z" fill="#1f56ba" opacity=".95"/>
+
+        <!-- 看板（氷の暖簾風） -->
+        <g transform="translate(0 -56)">
+          <ellipse class="sign-glow" cx="0" cy="0" rx="140" ry="50" fill="url(#signlight)" filter="url(#soft)"/>
+          <rect x="-130" y="-30" width="260" height="60" rx="8" fill="#fdf6e3" stroke="#3a1d0a" stroke-width="3"/>
+          <rect x="-125" y="-25" width="250" height="50" rx="5" fill="none" stroke="#2a6fdb" stroke-width="2"/>
+
+          <!-- 「氷」の旗風アイコン -->
+          <g transform="translate(-92 0)">
+            <!-- 旗ベース -->
+            <rect x="-22" y="-22" width="44" height="44" rx="4" fill="#fdf6e3" stroke="#2a6fdb" stroke-width="2.5"/>
+            <!-- 氷の字（手書きの「氷」風） -->
+            <g stroke="#2a6fdb" stroke-width="3.5" stroke-linecap="round" fill="none">
+              <line x1="-2" y1="-17" x2="2" y2="-13"/>
+              <line x1="-12" y1="-8" x2="12" y2="-8"/>
+              <line x1="0" y1="-8" x2="0" y2="14"/>
+              <line x1="0" y1="-2" x2="-9" y2="6"/>
+              <line x1="0" y1="-2" x2="9"  y2="6"/>
+              <line x1="0" y1="6"  x2="-7" y2="14"/>
+              <line x1="0" y1="6"  x2="7"  y2="14"/>
+            </g>
+            <!-- 旗の波形下端 -->
+            <path d="M-22 22 q4 4 8 0 t8 0 t8 0 t8 0 t8 0 q2 0 4 2" fill="#fdf6e3" stroke="#2a6fdb" stroke-width="2.5"/>
+          </g>
+
+          <text x="35" y="13" font-family="'Hiragino Maru Gothic ProN','Hiragino Sans','Yu Gothic UI','Yu Gothic','Noto Sans JP','Noto Sans CJK JP','Meiryo',sans-serif" font-weight="900" font-size="36" fill="#3a1d0a" text-anchor="middle" letter-spacing="1">かき氷</text>
+        </g>
+
+        <!-- 屋台内の提灯 -->
+        <g class="sway" transform="translate(-170 35)"><use href="#chochin" transform="scale(.5)"/></g>
+        <g class="sway sway-b" transform="translate(170 35)"><use href="#chochin" transform="scale(.5)"/></g>
+
+        <!-- 奥の影 -->
+        <rect x="-210" y="14" width="420" height="76" fill="#1a0d20" opacity=".55"/>
+
+        <!-- 屋台内に降る氷の結晶（涼しげ演出） -->
+        <g>
+          <g class="ice-flake f-1" transform="translate(-150 20)"><use href="#snowflake"/></g>
+          <g class="ice-flake f-2" transform="translate(-80 25)"><use href="#snowflake"/></g>
+          <g class="ice-flake f-3" transform="translate(50 22)"><use href="#snowflake"/></g>
+          <g class="ice-flake f-4" transform="translate(120 28)"><use href="#snowflake"/></g>
+          <g class="ice-flake f-5" transform="translate(180 24)"><use href="#snowflake"/></g>
+        </g>
+
+        <!-- ===== 店員さん（お姉さん） ===== -->
+        <g class="chef" transform="translate(50 30)">
+          <!-- 髪（後ろ） -->
+          <g class="hair">
+            <path d="M-24 -14 q0 -22 22 -26 q22 -4 28 14 q4 16 -2 26 q-10 -6 -22 -2 q-12 -4 -22 -6 q-4 0 -4 -6 z" fill="#3a1d0a"/>
+          </g>
+
+          <!-- 肩・法被 -->
+          <path d="M-52 60 q-2 -22 14 -32 q12 -8 22 -8 q14 0 26 8 q14 10 14 32 z" fill="url(#happi)" stroke="#1a3870" stroke-width="2"/>
+          <!-- 法被の縁取り（白いライン） -->
+          <path d="M-32 30 L-32 60" stroke="#fdf6e3" stroke-width="3" stroke-linecap="round"/>
+          <path d="M32  30 L32  60" stroke="#fdf6e3" stroke-width="3" stroke-linecap="round"/>
+          <!-- 法被の柄（白い波紋） -->
+          <g stroke="#fdf6e3" stroke-width="1.2" fill="none" opacity=".7">
+            <path d="M-16 44 q4 -3 8 0 q4 3 8 0 q4 -3 8 0"/>
+            <path d="M-16 50 q4 -3 8 0 q4 3 8 0 q4 -3 8 0"/>
+          </g>
+
+          <!-- 首 -->
+          <rect x="-7" y="20" width="14" height="14" fill="url(#skin)" stroke="#3a1d0a" stroke-width="1"/>
+
+          <!-- 顔 -->
+          <ellipse cx="0" cy="0" rx="22" ry="24" fill="url(#skin)" stroke="#3a1d0a" stroke-width="2"/>
+
+          <!-- 耳 -->
+          <ellipse cx="-22" cy="2" rx="3" ry="5" fill="url(#skin)" stroke="#3a1d0a" stroke-width="1.5"/>
+          <ellipse cx="22"  cy="2" rx="3" ry="5" fill="url(#skin)" stroke="#3a1d0a" stroke-width="1.5"/>
+
+          <!-- 前髪 -->
+          <path d="M-22 -16 q4 -10 14 -10 q4 -2 8 0 q6 -4 14 0 q6 6 8 14 q-12 -4 -22 -2 q-14 -2 -22 -2 z" fill="#3a1d0a"/>
+          <!-- ぴょんとはねる毛束 -->
+          <path d="M-2 -22 q4 -8 6 -4 q-2 4 -6 4z" fill="#3a1d0a"/>
+
+          <!-- 手ぬぐい（鉢巻き、青地に白い水玉） -->
+          <path d="M-22 -8 q22 -6 44 0 q-4 6 -10 8 q-12 -2 -24 0 q-6 -2 -10 -8 z" fill="url(#happi)" stroke="#1a3870" stroke-width="1.8"/>
+          <circle cx="-14" cy="-6" r="1.4" fill="#fdf6e3"/>
+          <circle cx="-2"  cy="-8" r="1.4" fill="#fdf6e3"/>
+          <circle cx="12"  cy="-6" r="1.4" fill="#fdf6e3"/>
+          <circle cx="-8"  cy="-2" r="1.1" fill="#fdf6e3"/>
+          <circle cx="6"   cy="-2" r="1.1" fill="#fdf6e3"/>
+          <!-- 手ぬぐいの結び（横にちょこんと） -->
+          <path d="M22 -6 q6 -2 10 2 q-2 6 -10 4 z" fill="url(#happi)" stroke="#1a3870" stroke-width="1.5"/>
+          <line x1="30" y1="-4" x2="36" y2="0" stroke="#1a3870" stroke-width="1.5" stroke-linecap="round"/>
+
+          <!-- 目（ぱっちり open） -->
+          <ellipse cx="-9" cy="3" rx="2.5" ry="3" fill="#fdf6e3" stroke="#3a1d0a" stroke-width="1.5"/>
+          <ellipse cx="9"  cy="3" rx="2.5" ry="3" fill="#fdf6e3" stroke="#3a1d0a" stroke-width="1.5"/>
+          <ellipse cx="-9" cy="3.5" rx="1.6" ry="2" fill="#3a1d0a"/>
+          <ellipse cx="9"  cy="3.5" rx="1.6" ry="2" fill="#3a1d0a"/>
+          <circle cx="-8" cy="2.2" r=".7" fill="#fdf6e3"/>
+          <circle cx="10" cy="2.2" r=".7" fill="#fdf6e3"/>
+          <!-- まゆ（細く） -->
+          <path d="M-13 -3 q4 -2 8 0" stroke="#3a1d0a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+          <path d="M5  -3 q4 -2 8 0" stroke="#3a1d0a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+
+          <!-- 鼻 -->
+          <path d="M-1 8 q1 3 3 3 q1 0 1 -1" stroke="#a87248" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+          <!-- 口（控えめな笑顔） -->
+          <path d="M-5 14 q5 4 10 0" stroke="#3a1d0a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <!-- 頬（薄ピンク） -->
+          <ellipse cx="-14" cy="8" rx="4" ry="2.5" fill="#ffabb8" opacity=".7"/>
+          <ellipse cx="14"  cy="8" rx="4" ry="2.5" fill="#ffabb8" opacity=".7"/>
+
+          <!-- 右腕（クランクハンドル側） -->
+          <path d="M-40 45 q-18 8 -22 22 q4 8 18 4 q14 -4 18 -16 z" fill="url(#happi)" stroke="#1a3870" stroke-width="2"/>
+          <!-- 手 -->
+          <circle cx="-58" cy="68" r="6" fill="url(#skin)" stroke="#3a1d0a" stroke-width="1.5"/>
+        </g>
+
+        <!-- カウンター -->
+        <rect x="-210" y="90" width="420" height="20" fill="#8a4a22"/>
+        <rect x="-210" y="110" width="420" height="150" fill="url(#wood)"/>
+        <g stroke="#3a1d0a" stroke-width="1" opacity=".25" fill="none">
+          <path d="M-200 130 q160 6 410 0"/>
+          <path d="M-200 170 q140 -8 410 0"/>
+          <path d="M-200 210 q200 8 410 0"/>
+        </g>
+        <rect x="-210" y="90" width="420" height="3" fill="#d29464" opacity=".7"/>
+
+        <!-- ===== かき氷機 ===== -->
+        <g transform="translate(-100 25)">
+          <!-- 影 -->
+          <ellipse cx="0" cy="92" rx="62" ry="6" fill="#000" opacity=".4"/>
+          <!-- 機械本体（赤） -->
+          <rect x="-30" y="-2" width="60" height="40" rx="6" fill="url(#machine)" stroke="#4a0e0a" stroke-width="2"/>
+          <!-- 機械上部のクラウン -->
+          <rect x="-26" y="-12" width="52" height="14" rx="3" fill="url(#machine)" stroke="#4a0e0a" stroke-width="2"/>
+          <!-- ロゴ風プレート -->
+          <rect x="-18" y="2" width="36" height="14" rx="2" fill="#fdf6e3"/>
+          <text x="0" y="13" text-anchor="middle" font-size="9" font-weight="900" fill="#c8302a">氷</text>
+          <!-- スイッチ/ボタン -->
+          <circle cx="-22" cy="26" r="3" fill="#3a1d0a"/>
+          <circle cx="-22" cy="26" r="1.5" fill="#ffd054"/>
+          <circle cx="22"  cy="26" r="3" fill="#3a1d0a"/>
+          <!-- 上に乗っている氷ブロック -->
+          <g transform="translate(0 -18)">
+            <rect x="-16" y="-22" width="32" height="14" rx="2" fill="url(#iceblock)" stroke="#5a90b8" stroke-width="1.5"/>
+            <!-- ハイライト -->
+            <line x1="-12" y1="-20" x2="-2" y2="-20" stroke="#fff" stroke-width="1.5" opacity=".8"/>
+            <line x1="-14" y1="-15" x2="-8" y2="-15" stroke="#fff" stroke-width="1" opacity=".6"/>
+            <!-- クランプ（氷を掴む金具） -->
+            <rect x="-14" y="-28" width="28" height="8" rx="2" fill="#9a8a78" stroke="#3a1d0a" stroke-width="1.5"/>
+            <line x1="-14" y1="-26" x2="14" y2="-26" stroke="#3a1d0a" stroke-width="1"/>
+            <!-- ネジ -->
+            <circle cx="0" cy="-32" r="3" fill="#9a8a78" stroke="#3a1d0a" stroke-width="1"/>
+            <line x1="-2" y1="-32" x2="2" y2="-32" stroke="#3a1d0a" stroke-width="1.2"/>
+            <line x1="0" y1="-34" x2="0" y2="-30" stroke="#3a1d0a" stroke-width="1.2"/>
+          </g>
+          <!-- ハンドル/クランク -->
+          <g transform="translate(36 18)">
+            <circle cx="0" cy="0" r="4" fill="#3a1d0a"/>
+            <g class="crank-arm">
+              <rect x="0" y="-1.5" width="14" height="3" fill="#5a3018"/>
+              <circle cx="14" cy="0" r="3" fill="#a87040" stroke="#3a1d0a" stroke-width="1"/>
+            </g>
+          </g>
+          <!-- 出口（下） -->
+          <rect x="-22" y="36" width="44" height="6" rx="2" fill="#4a0e0a"/>
+
+          <!-- 完成したかき氷（カウンターに置いてある演出用） -->
+          <g transform="translate(0 56)">
+            <!-- ガラス器（脚付き） -->
+            <path d="M-22 -8 q22 4 44 0 q-4 18 -22 20 q-18 -2 -22 -20 z" fill="url(#glasscup)" stroke="#5a90b8" stroke-width="1.5"/>
+            <rect x="-3" y="12" width="6" height="6" fill="#9bc3dc" opacity=".7"/>
+            <ellipse cx="0" cy="20" rx="14" ry="3" fill="#5a90b8" opacity=".5"/>
+            <!-- 氷の山 -->
+            <path d="M-22 -8 q-4 -18 8 -28 q6 -10 14 -8 q12 -4 20 4 q8 12 4 24 q4 6 -2 8 q-22 4 -44 0 z" fill="#ffffff"/>
+            <!-- 影の谷 -->
+            <path d="M-18 -10 q-2 -10 6 -16 q4 4 -2 12 q-2 4 -4 4z" fill="#d9eaf5" opacity=".7"/>
+            <path d="M10 -16 q4 -6 10 -2 q-2 6 -6 8 z" fill="#d9eaf5" opacity=".7"/>
+            <!-- いちごシロップ（屋台展示用） -->
+            <path d="M-18 -18 q14 -10 26 -6 q4 6 -2 8 q-6 -2 -10 4 q-8 -2 -14 -6z" fill="#e8336a" opacity=".75"/>
+            <path d="M-10 -26 q6 -6 14 -2 q2 4 -2 6 q-6 0 -12 -4z" fill="#e8336a" opacity=".55"/>
+          </g>
+        </g>
+
+        <!-- 涼しい空気の流れ（白い線） -->
+        <g opacity=".4">
+          <path d="M-160 -10 q40 -8 80 0" stroke="#b5e3ff" stroke-width="1.2" fill="none">
+            <animate attributeName="opacity" values=".2;.7;.2" dur="3s" repeatCount="indefinite"/>
+          </path>
+          <path d="M-160 0 q40 -6 80 4" stroke="#b5e3ff" stroke-width="1" fill="none">
+            <animate attributeName="opacity" values=".3;.6;.3" dur="3.5s" repeatCount="indefinite"/>
+          </path>
+        </g>
+
+        <!-- ===== もう一杯の見本：別バリアント ===== -->
+        <g transform="translate(150 105)">
+          <!-- ガラス器 -->
+          <path d="M-22 -8 q22 4 44 0 q-4 18 -22 20 q-18 -2 -22 -20 z" fill="url(#glasscup)" stroke="#5a90b8" stroke-width="1.5"/>
+          <rect x="-3" y="12" width="6" height="6" fill="#9bc3dc" opacity=".7"/>
+          <ellipse cx="0" cy="20" rx="14" ry="3" fill="#5a90b8" opacity=".5"/>
+          <!-- 氷の山 -->
+          <path d="M-22 -8 q-4 -18 8 -28 q6 -10 14 -8 q12 -4 20 4 q8 12 4 24 q4 6 -2 8 q-22 4 -44 0 z" fill="#ffffff"/>
+          <!-- 影 -->
+          <path d="M-18 -10 q-2 -10 6 -16 q4 4 -2 12 q-2 4 -4 4z" fill="#d9eaf5" opacity=".7"/>
+          <path d="M10 -16 q4 -6 10 -2 q-2 6 -6 8 z" fill="#d9eaf5" opacity=".7"/>
+          <!-- ブルーハワイ -->
+          <path d="M-18 -18 q14 -10 26 -6 q4 6 -2 8 q-6 -2 -10 4 q-8 -2 -14 -6z" fill="#2a6fdb" opacity=".75"/>
+          <path d="M-10 -26 q6 -6 14 -2 q2 4 -2 6 q-6 0 -12 -4z" fill="#2a6fdb" opacity=".55"/>
+          <!-- スプーン -->
+          <g transform="translate(20 -22) rotate(20)">
+            <rect x="0" y="0" width="3" height="20" fill="#ddd"/>
+            <ellipse cx="1.5" cy="0" rx="4" ry="3" fill="#ddd"/>
+          </g>
+        </g>
+
+        <!-- ボトル類（シロップボトル） -->
+        <g transform="translate(-200 75)">
+          <!-- いちごボトル -->
+          <rect x="-9" y="0" width="18" height="32" rx="3" fill="#e8336a"/>
+          <rect x="-9" y="0" width="18" height="6" rx="3" fill="#fdf6e3"/>
+          <rect x="-6" y="10" width="12" height="14" fill="#fdf6e3" opacity=".9"/>
+          <text x="0" y="20" text-anchor="middle" font-size="6" font-weight="900" fill="#e8336a">苺</text>
+        </g>
+        <g transform="translate(-174 65)">
+          <!-- 抹茶ボトル -->
+          <rect x="-9" y="0" width="18" height="36" rx="3" fill="#3a8a3a"/>
+          <rect x="-9" y="0" width="18" height="6" rx="3" fill="#fdf6e3"/>
+          <rect x="-6" y="10" width="12" height="16" fill="#fdf6e3" opacity=".9"/>
+          <text x="0" y="22" text-anchor="middle" font-size="6" font-weight="900" fill="#3a8a3a">抹茶</text>
+        </g>
+        <g transform="translate(195 75)">
+          <!-- ブルーハワイ -->
+          <rect x="-9" y="0" width="18" height="32" rx="3" fill="#2a6fdb"/>
+          <rect x="-9" y="0" width="18" height="6" rx="3" fill="#fdf6e3"/>
+          <rect x="-6" y="10" width="12" height="14" fill="#fdf6e3" opacity=".9"/>
+          <text x="0" y="20" text-anchor="middle" font-size="5" font-weight="900" fill="#2a6fdb">BLUE</text>
+        </g>
+      </g>
+
+      <ellipse cx="300" cy="580" rx="280" ry="18" fill="#ff6b35" opacity=".12" filter="url(#soft)"/>
+      <rect width="600" height="600" fill="white" filter="url(#grain)" opacity=".06"/>
+    </svg>
+
+    <div class="speech" id="speech">ひんやり、いかが〜？</div>
+
+    <div class="cook-overlay" id="cookOverlay">
+      <div class="cook-card">
+        <div class="cook-title" id="cookTitle">削ってます…</div>
+        <div class="cook-stage" id="cookStage"></div>
+        <div class="cook-step" id="cookStep">氷をセット中…</div>
+        <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+        <div class="cook-actions" id="cookActions" style="display:none;">
+          <button class="btn ghost" id="btnAgain">もう一杯</button>
+          <button class="btn" id="btnDone">ありがとう！</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="menu">
+    <div class="menu-head">
+      <h2>本日のおしながき</h2>
+      <div class="rule"></div>
+    </div>
+    <div class="menu-grid" id="menuGrid"></div>
+  </div>
+</div>
+
+<script src="kakigori-app.js"></script>
+<script>
+  document.getElementById('closeBtn').addEventListener('click', function() {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'closeKakigori' }, '*');
+    }
+  });
+</script>
+</body>
+</html>
