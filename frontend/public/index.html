@@ -7142,7 +7142,7 @@ function _showEmuerRestrictionOverlay(restrictionUntil) {
 }
 
 function _showEmuerChargeToast(poiId, cost, remaining) {
-  const poi = SP_POIS.find(p => p.id === poiId);
+  const poi = _findPoi(poiId);
   const name = poi ? poi.name.split(' ')[0] : '';
   const toast = document.createElement('div');
   toast.className = 'emuer-charge-toast';
@@ -7198,7 +7198,7 @@ async function gatedOpen(poiId, fn) {
   data.totalSpent = (data.totalSpent || 0) + cost;
   data.visitCount = (data.visitCount || 0) + 1;
   // 取引履歴に追記（最大10件）
-  const poi = SP_POIS ? SP_POIS.find(p => p.id === poiId) : null;
+  const poi = SP_POIS ? _findPoi(poiId) : null;
   const histEntry = { time: Date.now(), type: 'spend', amount: -cost, label: poi ? poi.name.split(' ')[0] : poiId, balance: data.balance };
   if (!data.history) data.history = [];
   data.history.unshift(histEntry);
@@ -7279,7 +7279,42 @@ function openKaiensaiMarche() {
    開園祭スタンプラリー
    ★ room1からPOIを登録後、下記にPOI IDを追加
 ═══════════════════════════════════════════════════════ */
-const KAIENSAI_STAMP_POIS = ['event1','event2','event3','event4','event5','event6','event7'];
+// 基本スタンプスポット（hardcoded）+ Firestore追加分は動的マージ
+const KAIENSAI_STAMP_POIS_BASE = ['event1','event2','event3','event4','event5','event6','event7'];
+let   KAIENSAI_STAMP_POIS      = [...KAIENSAI_STAMP_POIS_BASE];
+
+// Firestoreから追加イベントスポットを取得してマップに反映
+let _dynamicEventPois = [];
+async function _loadFirestoreEventSpots() {
+  if (!window.db || !window.fbLib) return;
+  if (!_isKaiensaiVisible()) return;
+  try {
+    const snap = await window.fbLib.getDocs(window.fbLib.collection(window.db, 'sp_event_spots_2026'));
+    _dynamicEventPois = [];
+    snap.forEach(d => {
+      const s = d.data();
+      _dynamicEventPois.push({
+        id: 'fs_' + d.id,
+        name: s.name || '屋台',
+        icon: s.icon || '📍',
+        zone: 'event',
+        px: s.px || 50,
+        py: s.py || 50,
+        desc: s.desc || '',
+        status: s.status || 'open',
+        eventOnly: true,
+        btnLabel: s.btnLabel || s.name || '入る',
+      });
+    });
+    // スタンプリストを更新（hardcoded + Firestore）
+    KAIENSAI_STAMP_POIS = [
+      ...KAIENSAI_STAMP_POIS_BASE,
+      ..._dynamicEventPois.map(p => p.id),
+    ];
+    renderSpMapPois();
+    renderSpContentList(_spMapFilter || 'all');
+  } catch(e) { console.warn('Firestore event spots load error:', e); }
+}
 const KAIENSAI_LS_KEY   = 'sp_stamp_2026';
 const KAIENSAI_BADGE_ID = '開園祭の申し子';
 
@@ -9650,6 +9685,7 @@ function openSpMap(gate) {
   _spMapFilter = "all";
   renderSpMapPois();
   renderSpContentList("all");
+  _loadFirestoreEventSpots();
   /* デフォルトズーム同期適用 */
   _applySpMapZoom();
   /* 混雑状況・天気を起動 */
@@ -10074,6 +10110,11 @@ function closeSpMap() {
   _spCrowdLeave(); /* Firestoreからセッション削除 */
 }
 
+/* hardcoded + Firestore動的POIを合わせて検索 */
+function _findPoi(poiId) {
+  return _findPoi(poiId) || _dynamicEventPois.find(p => p.id === poiId) || null;
+}
+
 /* ゾーン配列 or 'all' でPOIをフィルタ */
 function _spZoneMatch(poi, filter) {
   if (!filter || filter === "all") return true;
@@ -10086,7 +10127,7 @@ function renderSpMapPois(filter) {
   if (!container) return;
   const activeFilter = filter || _spMapFilter || "all";
   container.innerHTML = "";
-  SP_POIS.forEach(poi => {
+  [...SP_POIS, ..._dynamicEventPois].forEach(poi => {
     if (poi.eventOnly && !_isKaiensaiVisible()) return;
     if (!_spZoneMatch(poi, activeFilter)) return;
     const zone = SP_ZONES[poi.zone] || {};
@@ -10108,7 +10149,7 @@ function renderSpMapPois(filter) {
 function renderSpContentList(filter) {
   const list = document.getElementById("spContentList");
   if (!list) return;
-  const pois = SP_POIS.filter(p => _spZoneMatch(p, filter) && (!p.eventOnly || _isKaiensaiVisible()));
+  const pois = [...SP_POIS, ..._dynamicEventPois].filter(p => _spZoneMatch(p, filter) && (!p.eventOnly || _isKaiensaiVisible()));
   if (pois.length === 0) { list.innerHTML = ''; return; }
 
   /* エリアごとにグループ化して表示 */
@@ -10146,7 +10187,7 @@ function spMapSelectPoiFromList(poiId) {
 }
 
 function spMapSelectPoi(poiId) {
-  const poi = SP_POIS.find(p => p.id === poiId);
+  const poi = _findPoi(poiId);
   if (!poi) return;
   const zone = SP_ZONES[poi.zone] || {};
   const color = zone.color || "#aaa";
@@ -11196,7 +11237,7 @@ function closeTaxi() {
 function taxiGoTo(poiId) {
   // タクシー料金（3 EMUER）を先に徴収
   gatedOpen('taxi_ride', () => {
-    const poi = SP_POIS.find(p => p.id === poiId);
+    const poi = _findPoi(poiId);
     if (!poi) return;
     // コンテンツ利用料も徴収（0EMUERのPOIはそのまま通過）
     gatedOpen(poi.id, () => {

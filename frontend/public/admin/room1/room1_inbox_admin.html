@@ -137,6 +137,7 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
     <button class="tab-btn" onclick="switchTab('facility-reports');frLoad()" style="color:#f97316;">🚨 施設報告管理</button>
     <button class="tab-btn" onclick="switchTab('museum-sp');mspLoad()">🏛️ 博物館展示管理</button>
     <button class="tab-btn" onclick="switchTab('lab-reports');labLoad()">🔬 研究レポート</button>
+    <button class="tab-btn" onclick="switchTab('kaiensai');kaiensaiLoad()" style="color:#ff6b35;">🎪 開園祭</button>
     <button class="tab-btn" onclick="deleteAllContents()" style="margin-left:auto;color:#f44747;border-bottom-color:transparent;">🗑️ コンテンツ全削除</button>
   </div>
 
@@ -644,7 +645,7 @@ var themeData = {
 };
 
 // ─── タブ ───
-const TAB_IDS = ['direct','inbox','fountain-board','fountain-event','dao-votes','facility-reports','museum-sp','lab-reports'];
+const TAB_IDS = ['direct','inbox','fountain-board','fountain-event','dao-votes','facility-reports','museum-sp','lab-reports','kaiensai'];
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(function(btn, i) {
     btn.classList.toggle('active', TAB_IDS[i] === tab);
@@ -656,6 +657,7 @@ function switchTab(tab) {
   if (tab === 'inbox') loadInbox();
   if (tab === 'fountain-board')  fpLoadBoardPosts();
   if (tab === 'fountain-event')  fpLoadEvents();
+  if (tab === 'kaiensai')        kaiensaiLoad();
 }
 
 // ─── 直接追加フォーム ───
@@ -1672,6 +1674,210 @@ async function deleteAllContents() {
   } catch (err) {
     alert('❌ エラー: ' + err.message);
   }
+}
+</script>
+
+<!-- ── 開園祭タブ ── -->
+<div id="tab-kaiensai" class="tab-content">
+  <div class="direct-form">
+    <h2 style="color:#ff6b35;">🎪 開園祭イベント管理（5/20〜5/25）</h2>
+
+    <!-- ① スポット登録フォーム -->
+    <div style="background:#161616;border:1px solid rgba(255,107,53,.3);border-radius:10px;padding:18px;margin-bottom:20px;">
+      <h3 style="font-size:14px;color:#ff6b35;margin-bottom:14px;">📍 イベントスポット登録</h3>
+      <div class="form-grid" style="grid-template-columns:80px 1fr 1fr;">
+        <div class="form-field">
+          <label>アイコン</label>
+          <input type="text" id="kai-icon" placeholder="🎪" maxlength="4" style="text-align:center;font-size:1.3rem;">
+        </div>
+        <div class="form-field">
+          <label>スポット名 <span style="color:#f87171">*</span></label>
+          <input type="text" id="kai-name" placeholder="たこ焼き屋台">
+        </div>
+        <div class="form-field">
+          <label>ボタンラベル</label>
+          <input type="text" id="kai-btn" placeholder="🐙 屋台に行く">
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:10px;">
+        <label>説明文</label>
+        <input type="text" id="kai-desc" placeholder="SchoolPark開園祭の屋台！香ばしいたこ焼きをどうぞ🐙">
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px;">
+        <div class="form-field">
+          <label>マップX位置（0〜100）</label>
+          <input type="number" id="kai-px" placeholder="50" min="0" max="100">
+        </div>
+        <div class="form-field">
+          <label>マップY位置（0〜100）</label>
+          <input type="number" id="kai-py" placeholder="50" min="0" max="100">
+        </div>
+      </div>
+      <button class="submit-btn" onclick="kaiensaiAddSpot()" style="background:#ff6b35;border-color:#ff6b35;">＋ スポットを登録する</button>
+    </div>
+
+    <!-- ② 登録済みスポット一覧 -->
+    <div style="background:#161616;border:1px solid #2a2a2a;border-radius:10px;padding:18px;margin-bottom:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h3 style="font-size:14px;color:#4ec9b0;margin:0;">📋 登録済みスポット一覧</h3>
+        <button class="fr-refresh" onclick="kaiensaiLoadSpots()">↻ 更新</button>
+      </div>
+      <div id="kai-spot-list"><div style="color:#555;text-align:center;padding:24px;">読み込み中...</div></div>
+    </div>
+
+    <!-- ③ スタンプラリー完了者 -->
+    <div style="background:#161616;border:1px solid #2a2a2a;border-radius:10px;padding:18px;margin-bottom:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h3 style="font-size:14px;color:#4ec9b0;margin:0;">🎫 スタンプラリー完了者</h3>
+        <button class="fr-refresh" onclick="kaiensaiLoadStamps()">↻ 更新</button>
+      </div>
+      <div id="kai-stamp-list"><div style="color:#555;text-align:center;padding:24px;">読み込み中...</div></div>
+    </div>
+
+    <!-- ④ マルシェDLリンク設定 -->
+    <div style="background:#161616;border:1px solid #2a2a2a;border-radius:10px;padding:18px;margin-bottom:20px;">
+      <h3 style="font-size:14px;color:#4ec9b0;margin-bottom:14px;">🛍️ マルシェ ダウンロードリンク設定</h3>
+      <div class="form-field">
+        <label>🧊 冷蔵庫くんのお面 URL</label>
+        <input type="text" id="kai-omen-url" placeholder="https://drive.google.com/...">
+      </div>
+      <div class="form-field" style="margin-bottom:14px;">
+        <label>🏷 デジタルステッカー URL</label>
+        <input type="text" id="kai-sticker-url" placeholder="https://drive.google.com/...">
+      </div>
+      <button class="submit-btn" onclick="kaiensaiSaveConfig()">💾 保存する</button>
+    </div>
+
+    <!-- ⑤ イベント情報 -->
+    <div style="background:#161616;border:1px solid #2a2a2a;border-radius:10px;padding:18px;">
+      <h3 style="font-size:14px;color:#4ec9b0;margin-bottom:10px;">📅 イベント情報</h3>
+      <div style="font-size:13px;color:#888;line-height:2;">
+        期間：2026年5月20日（水）〜 5月25日（月）<br>
+        会場：中央エリア / 🎪 イベント会場（eventゾーン）<br>
+        スタンプ数：登録スポット数に応じて自動更新<br>
+        コンプリート報酬：称号バッジ「🎪 開園祭の申し子」＋ 1,000実EMUER<br>
+        EMUER送金：イベント終了後 手動（addgoodバッジから）
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 開園祭管理 ──
+var KAI_COL   = 'sp_event_spots_2026';
+var KAI_STAMP = 'sp_stamp_2026';
+var KAI_CFG   = 'sp_event_config';
+
+function kaiensaiLoad() {
+  kaiensaiLoadSpots();
+  kaiensaiLoadStamps();
+  kaiensaiLoadConfig();
+}
+
+function kaiensaiLoadSpots() {
+  var db = window.fpAdminDB;
+  var el = document.getElementById('kai-spot-list');
+  if (!el) return;
+  if (!db) { setTimeout(kaiensaiLoadSpots, 500); return; }
+  el.innerHTML = '<div style="color:#555;text-align:center;padding:24px;">読み込み中...</div>';
+  db.collection(KAI_COL).orderBy('createdAt','asc').get().then(function(snap) {
+    if (snap.empty) { el.innerHTML = '<div style="color:#555;text-align:center;padding:24px;">スポット未登録</div>'; return; }
+    var html = '';
+    snap.forEach(function(d) {
+      var s = d.data();
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #2a2a2a;">' +
+        '<span style="font-size:1.4rem;width:32px;text-align:center;">' + (s.icon||'📍') + '</span>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:14px;font-weight:700;color:#d4d4d4;">' + (s.name||'—') + '</div>' +
+          '<div style="font-size:12px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (s.desc||'') + '</div>' +
+          '<div style="font-size:11px;color:#555;">X:' + (s.px||0) + ' Y:' + (s.py||0) + ' | ' + (s.btnLabel||'') + '</div>' +
+        '</div>' +
+        '<button onclick="kaiensaiDeleteSpot(\'' + d.id + '\')" class="msp-del">🗑 削除</button>' +
+      '</div>';
+    });
+    el.innerHTML = html;
+  }).catch(function(e) { el.innerHTML = '<div style="color:#f44747;padding:12px;">取得エラー: ' + e.message + '</div>'; });
+}
+
+function kaiensaiLoadStamps() {
+  var db = window.fpAdminDB;
+  var el = document.getElementById('kai-stamp-list');
+  if (!el) return;
+  if (!db) { setTimeout(kaiensaiLoadStamps, 500); return; }
+  el.innerHTML = '<div style="color:#555;text-align:center;padding:24px;">読み込み中...</div>';
+  db.collection(KAI_STAMP).get().then(function(snap) {
+    var completed = [];
+    snap.forEach(function(d) { if (d.data()._completed) completed.push({ wallet: d.id, at: d.data()._completedAt }); });
+    if (completed.length === 0) { el.innerHTML = '<div style="color:#555;text-align:center;padding:24px;">まだコンプリート者なし</div>'; return; }
+    var html = '<div style="font-size:12px;color:#4ec9b0;margin-bottom:8px;">合計 ' + completed.length + ' 名</div>';
+    completed.forEach(function(c) {
+      html += '<div style="padding:8px 0;border-bottom:1px solid #2a2a2a;font-size:13px;">' +
+        '<span style="color:#ff6b35;font-weight:700;">🎪 コンプリート</span> ' +
+        '<span style="color:#d4d4d4;word-break:break-all;">' + c.wallet + '</span>' +
+        (c.at ? '<span style="color:#555;margin-left:8px;">' + new Date(c.at).toLocaleDateString('ja-JP') + '</span>' : '') +
+      '</div>';
+    });
+    el.innerHTML = html;
+  }).catch(function(e) { el.innerHTML = '<div style="color:#f44747;padding:12px;">取得エラー: ' + e.message + '</div>'; });
+}
+
+function kaiensaiLoadConfig() {
+  var db = window.fpAdminDB;
+  if (!db) { setTimeout(kaiensaiLoadConfig, 500); return; }
+  db.collection(KAI_CFG).doc('kaiensai_2026').get().then(function(snap) {
+    if (!snap.exists) return;
+    var d = snap.data();
+    var oi = document.getElementById('kai-omen-url');
+    var si = document.getElementById('kai-sticker-url');
+    if (oi && d.omenUrl)    oi.value = d.omenUrl;
+    if (si && d.stickerUrl) si.value = d.stickerUrl;
+  }).catch(function(e) {});
+}
+
+function kaiensaiAddSpot() {
+  var db = window.fpAdminDB;
+  if (!db) { alert('Firebase未接続'); return; }
+  var name = document.getElementById('kai-name').value.trim();
+  if (!name) { alert('スポット名を入力してください'); return; }
+  var data = {
+    icon:      document.getElementById('kai-icon').value.trim() || '📍',
+    name:      name,
+    desc:      document.getElementById('kai-desc').value.trim(),
+    btnLabel:  document.getElementById('kai-btn').value.trim() || name,
+    px:        parseInt(document.getElementById('kai-px').value) || 50,
+    py:        parseInt(document.getElementById('kai-py').value) || 50,
+    zone:      'event',
+    status:    'open',
+    eventOnly: true,
+    createdAt: Date.now()
+  };
+  db.collection(KAI_COL).add(data).then(function() {
+    alert('✅ スポットを登録しました');
+    ['kai-icon','kai-name','kai-desc','kai-btn','kai-px','kai-py'].forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.value = '';
+    });
+    kaiensaiLoadSpots();
+  }).catch(function(e) { alert('❌ 登録エラー: ' + e.message); });
+}
+
+function kaiensaiDeleteSpot(docId) {
+  if (!confirm('このスポットを削除しますか？')) return;
+  var db = window.fpAdminDB;
+  if (!db) { alert('Firebase未接続'); return; }
+  db.collection(KAI_COL).doc(docId).delete().then(function() {
+    alert('🗑️ 削除しました');
+    kaiensaiLoadSpots();
+  }).catch(function(e) { alert('❌ 削除エラー: ' + e.message); });
+}
+
+function kaiensaiSaveConfig() {
+  var db = window.fpAdminDB;
+  if (!db) { alert('Firebase未接続'); return; }
+  var omenUrl    = (document.getElementById('kai-omen-url')?.value || '').trim();
+  var stickerUrl = (document.getElementById('kai-sticker-url')?.value || '').trim();
+  db.collection(KAI_CFG).doc('kaiensai_2026').set({ omenUrl: omenUrl, stickerUrl: stickerUrl }, { merge: true })
+    .then(function() { alert('✅ 保存しました'); })
+    .catch(function(e) { alert('❌ 保存エラー: ' + e.message); });
 }
 </script>
 
