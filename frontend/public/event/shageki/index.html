@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>射的 — SchoolPark 開園祭</title>
+<style>
+:root {
+  --red:    #d42020;
+  --cream:  #fdf6e3;
+  --ink:    #2a1820;
+  --wood-l: #c8894a;
+  --wood-d: #7a4420;
+  --gold:   #e8a820;
+  --dark:   #0c0814;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--dark);
+  font-family: "Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic UI","Noto Sans JP","Meiryo",system-ui,sans-serif;
+  color: var(--ink); -webkit-font-smoothing: antialiased;
+}
+body { display: block; }
+
+/* ===== modal ===== */
+.modal {
+  width: 100%; max-width: 420px; margin: 0 auto;
+  background: var(--cream);
+  border-radius: 28px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 6px 20px rgba(212,32,32,.15);
+  overflow: hidden;
+  border: 1px solid rgba(212,32,32,.3);
+}
+.modal-top {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 18px 10px;
+  background:linear-gradient(180deg,#fff5f5,var(--cream));
+  border-bottom:1px dashed rgba(212,32,32,.35);
+}
+.modal-title { display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; letter-spacing:.04em; }
+.badge { background:var(--red); color:var(--cream); border-radius:999px; padding:3px 8px; font-size:10px; font-weight:800; }
+.close-btn {
+  width:30px; height:30px; border-radius:50%; border:0;
+  background:rgba(42,24,32,.06); color:var(--ink); cursor:pointer;
+  display:grid; place-items:center; font-size:16px;
+}
+.close-btn:hover { background:rgba(42,24,32,.12); }
+
+/* ===== stage ===== */
+.stage {
+  position:relative; aspect-ratio:4/3;
+  background:#180a10; overflow:hidden; touch-action:manipulation;
+}
+.stage svg { display:block; width:100%; height:100%; }
+
+/* ===== speech ===== */
+.speech {
+  position:absolute; top:30%; left:6%;
+  background:var(--cream); border:2.5px solid var(--ink);
+  border-radius:16px; padding:8px 12px 9px;
+  font-size:12px; font-weight:800; color:var(--ink);
+  box-shadow:3px 4px 0 rgba(42,24,32,.18);
+  white-space:nowrap; transform-origin:bottom right; z-index:3; pointer-events:none;
+  animation: popIn .5s cubic-bezier(.34,1.56,.64,1) .4s both, wiggle 4s ease-in-out 1.2s infinite;
+}
+.speech::before {
+  content:""; position:absolute; bottom:-10px; right:18px;
+  border-left:10px solid transparent; border-right:10px solid transparent;
+  border-top:12px solid var(--ink);
+}
+.speech::after {
+  content:""; position:absolute; bottom:-6px; right:21px;
+  border-left:7px solid transparent; border-right:7px solid transparent;
+  border-top:9px solid var(--cream);
+}
+
+/* ===== game overlay ===== */
+.game-overlay {
+  position:absolute; inset:0; background:rgba(10,4,16,.93);
+  backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:10px; padding:12px;
+  opacity:0; pointer-events:none; transition:opacity .3s ease; z-index:10;
+}
+.game-overlay.show { opacity:1; pointer-events:auto; }
+
+.game-card {
+  width:100%;
+  background:linear-gradient(180deg,#1e0808,#0e0406);
+  border:2px solid rgba(212,32,32,.45);
+  border-radius:20px; padding:12px 12px 10px;
+  box-shadow:0 0 0 4px rgba(212,32,32,.1), 0 14px 30px rgba(0,0,0,.5);
+  color:var(--cream); text-align:center;
+}
+.game-title { font-size:13px; font-weight:800; letter-spacing:.1em; color:#ff8888; margin-bottom:8px; }
+
+.range-wrap {
+  position:relative; width:100%; aspect-ratio:1/.62;
+  border-radius:14px; overflow:hidden;
+  border:2px solid rgba(212,32,32,.4);
+  cursor:crosshair;
+}
+#gameCanvas { display:block; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+
+/* HUD */
+.hud { display:flex; justify-content:space-between; align-items:center; margin-top:7px; gap:6px; }
+.hud-block { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.hud-label { font-size:10px; opacity:.6; letter-spacing:.06em; }
+.hud-val   { font-size:15px; font-weight:800; }
+.ammo-wrap { flex:1; }
+.ammo-label { font-size:10px; opacity:.6; text-align:left; margin-bottom:3px; }
+.ammo-pips { display:flex; gap:3px; flex-wrap:wrap; }
+.ammo-pip {
+  width:10px; height:10px; border-radius:50%;
+  background:#e84040; box-shadow:0 0 4px #e84040;
+  transition:all .15s;
+}
+.ammo-pip.used { background:rgba(255,255,255,.12); box-shadow:none; }
+.game-msg { font-size:12px; opacity:.7; margin-top:5px; min-height:16px; letter-spacing:.04em; }
+.game-actions { display:flex; gap:10px; justify-content:center; margin-top:8px; }
+
+.btn {
+  border:0; padding:10px 20px; border-radius:999px;
+  background:var(--red); color:var(--cream);
+  font-weight:800; font-size:13px; letter-spacing:.08em; cursor:pointer;
+  font-family:inherit; box-shadow:0 4px 0 #800000;
+  transition:transform .1s, box-shadow .1s;
+}
+.btn:hover  { transform:translateY(-1px); box-shadow:0 5px 0 #800000; }
+.btn:active { transform:translateY(3px);  box-shadow:0 1px 0 #800000; }
+.btn.ghost  { background:transparent; color:var(--cream); box-shadow:inset 0 0 0 2px rgba(253,246,227,.35); }
+.btn.ghost:hover { background:rgba(253,246,227,.08); }
+
+/* result */
+.result-screen { display:none; flex-direction:column; align-items:center; gap:10px; width:100%; text-align:center; }
+.result-screen.show { display:flex; }
+.result-title { font-size:20px; font-weight:800; color:#ffe270; }
+.result-sub   { font-size:13px; opacity:.7; }
+.result-prizes { font-size:30px; min-height:38px; margin:2px 0; }
+.result-score { font-size:28px; font-weight:800; color:#ff9999; }
+.result-rank  { font-size:13px; color:#ffdd88; font-weight:800; }
+
+/* ===== play panel ===== */
+.play-panel { padding:10px 12px 14px; background:var(--cream); }
+.play-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.play-head h2 { margin:0; font-size:13px; font-weight:800; letter-spacing:.06em; }
+.play-head .rule {
+  flex:1; height:2px;
+  background-image:linear-gradient(90deg,var(--red) 0 6px,transparent 6px 12px);
+  background-size:12px 100%; opacity:.35;
+}
+.gun-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.gun-card {
+  background:#fff; border:2px solid var(--ink);
+  border-radius:14px; padding:7px 8px 6px;
+  cursor:pointer; text-align:center;
+  transition:transform .15s, box-shadow .15s;
+  box-shadow:2px 3px 0 var(--ink); position:relative;
+  user-select:none; -webkit-tap-highlight-color:transparent;
+}
+.gun-card:hover  { transform:translate(-1px,-1px); box-shadow:3px 4px 0 var(--ink); }
+.gun-card:active { transform:translate(2px,3px);   box-shadow:0 0 0 var(--ink); }
+.gun-card .gc-icon { font-size:26px; line-height:1; margin-bottom:2px; }
+.gun-card .gc-name { font-size:12px; font-weight:800; color:var(--ink); }
+.gun-card .gc-desc { font-size:10px; color:#888; margin-top:1px; }
+.gun-card .gc-tag {
+  position:absolute; top:-8px; right:-6px;
+  background:var(--red); color:var(--cream);
+  border:2px solid var(--ink); border-radius:999px;
+  font-size:9px; font-weight:800; padding:2px 7px; transform:rotate(8deg);
+}
+
+/* ===== animations ===== */
+@keyframes lanternSway {
+  0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}
+}
+.sway   { transform-origin:top center; animation:lanternSway 4s ease-in-out infinite; }
+.sway-b { animation-duration:5.2s; animation-delay:-1s; }
+@keyframes moonPulse { 0%,100%{opacity:.5}50%{opacity:.8} }
+.moonglow { animation:moonPulse 5s ease-in-out infinite; transform-origin:center; }
+@keyframes twinkle { 0%,100%{opacity:.3}50%{opacity:1} }
+.twinkle { animation:twinkle 2.2s ease-in-out infinite; }
+.twinkle:nth-child(odd) { animation-duration:3.1s; animation-delay:-1.2s; }
+@keyframes breathe { 0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5px)} }
+.chef { transform-origin:center; animation:breathe 3.5s ease-in-out infinite; }
+@keyframes popIn {
+  0%{transform:scale(.3) rotate(-8deg);opacity:0}70%{transform:scale(1.06) rotate(2deg);opacity:1}100%{transform:scale(1) rotate(0);opacity:1}
+}
+@keyframes wiggle {
+  0%,70%,100%{transform:rotate(0)}78%{transform:rotate(-2deg)}86%{transform:rotate(2deg)}94%{transform:rotate(-1deg)}
+}
+@keyframes signGlow { 0%,100%{opacity:.3}50%{opacity:.55} }
+.sign-glow { animation:signGlow 3.5s ease-in-out infinite; }
+@keyframes lanternPulse { 0%,100%{opacity:.85}50%{opacity:1} }
+.lp { animation:lanternPulse 1.8s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<div class="modal" id="modal">
+
+  <div class="modal-top">
+    <div class="modal-title">
+      <span class="badge">開園祭</span>
+      <span>🎯 射的</span>
+    </div>
+    <button class="close-btn" id="closeBtn" aria-label="閉じる">✕</button>
+  </div>
+
+  <!-- ===== 屋台ステージ SVG ===== -->
+  <div class="stage" id="stage">
+
+    <!-- アイドル吹き出し -->
+    <div class="speech" id="speech">「狙いを定めて！」</div>
+
+    <svg viewBox="0 0 600 450" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0"   stop-color="#0e0618"/>
+          <stop offset=".35" stop-color="#2a0e38"/>
+          <stop offset=".65" stop-color="#7a2848"/>
+          <stop offset=".88" stop-color="#c84830"/>
+          <stop offset="1"   stop-color="#e87840"/>
+        </linearGradient>
+        <radialGradient id="mg" cx=".5" cy=".5" r=".5">
+          <stop offset="0" stop-color="#fff3d6" stop-opacity=".5"/>
+          <stop offset="1" stop-color="#fff3d6" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#2e1830"/>
+          <stop offset="1" stop-color="#160a1a"/>
+        </linearGradient>
+        <linearGradient id="woodl" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#c8894a"/>
+          <stop offset="1" stop-color="#7a4420"/>
+        </linearGradient>
+        <linearGradient id="woodd" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#8a5428"/>
+          <stop offset="1" stop-color="#4a2a10"/>
+        </linearGradient>
+        <linearGradient id="tentR" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#e82020"/>
+          <stop offset="1" stop-color="#9a0a0a"/>
+        </linearGradient>
+        <radialGradient id="lanternR" cx=".5" cy=".45" r=".55">
+          <stop offset="0" stop-color="#fff1c2"/>
+          <stop offset=".5" stop-color="#ff8844"/>
+          <stop offset="1" stop-color="#c52020"/>
+        </radialGradient>
+        <radialGradient id="lanternY" cx=".5" cy=".45" r=".55">
+          <stop offset="0" stop-color="#fffff0"/>
+          <stop offset=".5" stop-color="#ffdd44"/>
+          <stop offset="1" stop-color="#c87000"/>
+        </radialGradient>
+        <radialGradient id="signlight" cx=".5" cy=".5" r=".55">
+          <stop offset="0" stop-color="#fffde0"/>
+          <stop offset="1" stop-color="#ffcc30"/>
+        </radialGradient>
+        <radialGradient id="skin" cx=".5" cy=".4" r=".7">
+          <stop offset="0" stop-color="#ffe2c8"/>
+          <stop offset="1" stop-color="#e8b691"/>
+        </radialGradient>
+        <radialGradient id="shelfBack" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#1e0a0a"/>
+          <stop offset="1" stop-color="#2e1010"/>
+        </radialGradient>
+        <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="6"/>
+        </filter>
+        <filter id="softS" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="3"/>
+        </filter>
+        <!-- 提灯定義 -->
+        <g id="chRed">
+          <line x1="0" y1="-52" x2="0" y2="-40" stroke="#2a1820" stroke-width="1.8"/>
+          <rect x="-22" y="-40" width="44" height="5" rx="2" fill="#1a0a10"/>
+          <ellipse cx="0" cy="0" rx="25" ry="33" fill="url(#lanternR)"/>
+          <path d="M-25 -6 q25 8 50 0" stroke="#801010" stroke-width="1.5" fill="none" opacity=".6"/>
+          <path d="M-25  6 q25 8 50 0" stroke="#801010" stroke-width="1.5" fill="none" opacity=".6"/>
+          <path d="M-25 18 q25 8 50 0" stroke="#801010" stroke-width="1.5" fill="none" opacity=".6"/>
+          <rect x="-18" y="30" width="36" height="5" rx="2" fill="#1a0a10"/>
+        </g>
+        <g id="chYel">
+          <line x1="0" y1="-52" x2="0" y2="-40" stroke="#2a1820" stroke-width="1.8"/>
+          <rect x="-22" y="-40" width="44" height="5" rx="2" fill="#1a1000"/>
+          <ellipse cx="0" cy="0" rx="25" ry="33" fill="url(#lanternY)"/>
+          <path d="M-25 -6 q25 8 50 0" stroke="#886600" stroke-width="1.5" fill="none" opacity=".6"/>
+          <path d="M-25  6 q25 8 50 0" stroke="#886600" stroke-width="1.5" fill="none" opacity=".6"/>
+          <path d="M-25 18 q25 8 50 0" stroke="#886600" stroke-width="1.5" fill="none" opacity=".6"/>
+          <rect x="-18" y="30" width="36" height="5" rx="2" fill="#1a1000"/>
+        </g>
+      </defs>
+
+      <!-- 夜空 -->
+      <rect width="600" height="450" fill="url(#sky)"/>
+      <g class="moonglow"><circle cx="520" cy="70" r="120" fill="url(#mg)"/></g>
+      <circle cx="520" cy="70" r="26" fill="#fff8df"/>
+
+      <!-- 星 -->
+      <g fill="#fff">
+        <circle class="twinkle" cx="45"  cy="28" r="1.4"/>
+        <circle class="twinkle" cx="160" cy="20" r="1.2"/>
+        <circle class="twinkle" cx="290" cy="40" r="1.5"/>
+        <circle class="twinkle" cx="380" cy="22" r="1.3"/>
+        <circle class="twinkle" cx="455" cy="130" r="1.2"/>
+        <circle class="twinkle" cx="560" cy="28" r="1.5"/>
+        <circle class="twinkle" cx="80"  cy="100" r="1.1"/>
+      </g>
+      <g fill="#ffe8a8">
+        <path class="twinkle" d="M210 55 l1 4 4 1 -4 1 -1 4 -1 -4 -4 -1 4 -1z"/>
+        <path class="twinkle" d="M320 32 l1 4 4 1 -4 1 -1 4 -1 -4 -4 -1 4 -1z"/>
+      </g>
+
+      <!-- 遠景 建物シルエット -->
+      <g fill="#1e0a28" opacity=".8">
+        <path d="M0 290 L60 290 L80 265 L160 265 L180 290 L240 290 L240 320 L0 320Z"/>
+        <path d="M360 280 L420 280 L445 255 L530 255 L555 280 L600 280 L600 320 L360 320Z"/>
+      </g>
+      <g fill="#ffd07a">
+        <rect x="100" y="272" width="5" height="5"/>
+        <rect x="125" y="272" width="5" height="5"/>
+        <rect x="470" y="261" width="5" height="5"/>
+        <rect x="495" y="261" width="5" height="5"/>
+      </g>
+
+      <!-- 地面 -->
+      <rect x="0" y="318" width="600" height="132" fill="url(#ground)"/>
+
+      <!-- 提灯ロープ -->
+      <path d="M0 105 Q300 85 600 78" stroke="#1a0a12" stroke-width="2" fill="none"/>
+      <g class="sway lp"   transform="translate(58 107)"><use href="#chRed" transform="scale(.38)"/></g>
+      <g class="sway-b lp" transform="translate(170 97)"><use href="#chYel" transform="scale(.38)"/></g>
+      <g class="sway lp"   transform="translate(290 91)"><use href="#chRed" transform="scale(.38)"/></g>
+      <g class="sway-b lp" transform="translate(418 85)"><use href="#chYel" transform="scale(.38)"/></g>
+      <g class="sway lp"   transform="translate(540 82)"><use href="#chRed" transform="scale(.38)"/></g>
+
+      <!-- =================== 屋台本体 =================== -->
+      <g transform="translate(300 240)">
+
+        <!-- 支柱 -->
+        <rect x="-228" y="0"  width="14" height="200" fill="url(#woodl)"/>
+        <rect x="214"  y="0"  width="14" height="200" fill="url(#woodl)"/>
+        <!-- 横桁 -->
+        <rect x="-240" y="-5" width="480" height="16" rx="3" fill="#5a3508"/>
+
+        <!-- テント（赤白縞） -->
+        <path d="M-240 -5 L240 -5 L240 -80 Q0 -125 -240 -80 Z" fill="#fdf6e3"/>
+        <!-- 赤縞 -->
+        <path d="M-200 -5 L-166 -5 L-166 -90 Q-183 -94 -200 -87Z" fill="url(#tentR)"/>
+        <path d="M-126 -5 L-92  -5 L-92  -104 Q-109 -108 -126 -104Z" fill="url(#tentR)"/>
+        <path d="M-52  -5 L-18  -5 L-18  -118 Q-35  -121  -52 -118Z" fill="url(#tentR)"/>
+        <path d="M22   -5 L56   -5 L56   -119 Q39   -121  22  -118Z" fill="url(#tentR)"/>
+        <path d="M96   -5 L130  -5 L130  -106 Q113  -109  96  -104Z" fill="url(#tentR)"/>
+        <path d="M170  -5 L204  -5 L204  -91  Q187  -95   170 -88Z"  fill="url(#tentR)"/>
+        <!-- フリンジ -->
+        <path d="M-240 -5 q12 18 24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 z" fill="#9a0808" opacity=".85"/>
+
+        <!-- 看板 -->
+        <g transform="translate(0 -55)">
+          <ellipse class="sign-glow" cx="0" cy="0" rx="145" ry="44" fill="url(#signlight)" filter="url(#soft)"/>
+          <rect x="-132" y="-26" width="264" height="52" rx="8" fill="#fdf6e3" stroke="#3a1d0a" stroke-width="3"/>
+          <rect x="-127" y="-21" width="254" height="42" rx="5" fill="none" stroke="#d42020" stroke-width="2"/>
+          <!-- 的アイコン -->
+          <g transform="translate(-88 2)">
+            <circle cx="0" cy="0" r="16" fill="#e82020"/>
+            <circle cx="0" cy="0" r="11" fill="#fff"/>
+            <circle cx="0" cy="0" r="6"  fill="#e82020"/>
+            <circle cx="0" cy="0" r="2.5" fill="#fff"/>
+          </g>
+          <!-- テキスト -->
+          <text x="10" y="6" text-anchor="middle" font-family="Hiragino Maru Gothic ProN,sans-serif" font-size="22" font-weight="800" fill="#2a1820" letter-spacing="3">射　的</text>
+          <!-- 的アイコン右 -->
+          <g transform="translate(88 2)">
+            <circle cx="0" cy="0" r="16" fill="#e82020"/>
+            <circle cx="0" cy="0" r="11" fill="#fff"/>
+            <circle cx="0" cy="0" r="6"  fill="#e82020"/>
+            <circle cx="0" cy="0" r="2.5" fill="#fff"/>
+          </g>
+        </g>
+
+        <!-- カウンター台 -->
+        <rect x="-228" y="70" width="456" height="18" rx="4" fill="#9a5830"/>
+        <rect x="-228" y="62" width="456" height="14" rx="3" fill="#c8894a"/>
+
+        <!-- =================== 的棚 =================== -->
+        <!-- 棚背景 -->
+        <rect x="-208" y="-2" width="416" height="68" rx="4" fill="#1a0808"/>
+        <!-- 棚板1段目（上） -->
+        <rect x="-215" y="20" width="430" height="8" rx="2" fill="#7a4020"/>
+        <rect x="-215" y="22" width="430" height="3" fill="#9a5430" opacity=".7"/>
+        <!-- 棚板2段目（下） -->
+        <rect x="-215" y="55" width="430" height="8" rx="2" fill="#7a4020"/>
+        <rect x="-215" y="57" width="430" height="3" fill="#9a5430" opacity=".7"/>
+
+        <!-- 上段の景品（缶・人形・菓子） -->
+        <!-- 缶1（赤コーラ風） -->
+        <g transform="translate(-158 10)">
+          <rect x="-10" y="-18" width="20" height="30" rx="4" fill="#cc2020"/>
+          <rect x="-10" y="-20" width="20" height="5"  rx="2" fill="#888"/>
+          <rect x="-10" y="10"  width="20" height="5"  rx="2" fill="#888"/>
+          <text x="0" y="-3" text-anchor="middle" font-size="8" fill="white" font-weight="800">Cola</text>
+          <line x1="-7" y1="0" x2="7" y2="0" stroke="white" stroke-width="1.5" opacity=".6"/>
+        </g>
+        <!-- ぬいぐるみ（熊） -->
+        <g transform="translate(-90 -2)">
+          <ellipse cx="0" cy="4"  rx="14" ry="16" fill="#b8885a"/>
+          <circle  cx="0" cy="-12" r="11" fill="#b8885a"/>
+          <circle  cx="-7" cy="-17" r="5"  fill="#a07848"/>
+          <circle  cx="7"  cy="-17" r="5"  fill="#a07848"/>
+          <ellipse cx="0"  cy="-9"  rx="6" ry="4" fill="#d8b88a"/>
+          <circle  cx="-3" cy="-14" r="1.5" fill="#2a1820"/>
+          <circle  cx="3"  cy="-14" r="1.5" fill="#2a1820"/>
+          <circle  cx="0"  cy="-11" r="1"   fill="#2a1820"/>
+          <ellipse cx="0"  cy="-2"  rx="8" ry="6" fill="#d8b88a"/>
+        </g>
+        <!-- 箱菓子（青） -->
+        <g transform="translate(-18 10)">
+          <rect x="-13" y="-18" width="26" height="28" rx="3" fill="#2060c8"/>
+          <rect x="-13" y="-18" width="26" height="10" rx="2" fill="#1844a0"/>
+          <text x="0" y="-9" text-anchor="middle" font-size="7" fill="white" font-weight="800">★おか</text>
+          <text x="0" y="2"  text-anchor="middle" font-size="7" fill="#ffe870">し</text>
+        </g>
+        <!-- ロケット風玩具（緑） -->
+        <g transform="translate(50 5)">
+          <ellipse cx="0" cy="-10" rx="8" ry="13" fill="#28a830"/>
+          <polygon points="0,-24 -6,-10 6,-10" fill="#1a8020"/>
+          <rect x="-8" y="2" width="16" height="8" rx="2" fill="#1a8020"/>
+          <polygon points="-10,10 -14,18 -8,10" fill="#28a830"/>
+          <polygon points="10,10 14,18 8,10"  fill="#28a830"/>
+          <circle cx="0" cy="-8" r="3" fill="#b8f0c0" opacity=".7"/>
+        </g>
+        <!-- 缶2（黄色ジュース風） -->
+        <g transform="translate(115 10)">
+          <rect x="-10" y="-18" width="20" height="30" rx="4" fill="#e8c820"/>
+          <rect x="-10" y="-20" width="20" height="5"  rx="2" fill="#888"/>
+          <rect x="-10" y="10"  width="20" height="5"  rx="2" fill="#888"/>
+          <text x="0" y="-4" text-anchor="middle" font-size="7" fill="#2a1820" font-weight="800">Juice</text>
+          <circle cx="0" cy="4" r="5" fill="#c8a010" opacity=".5"/>
+        </g>
+        <!-- ぬいぐるみ（猫） -->
+        <g transform="translate(175 -2)">
+          <ellipse cx="0" cy="4"  rx="13" ry="15" fill="#f0d0b0"/>
+          <circle  cx="0" cy="-12" r="10" fill="#f0d0b0"/>
+          <polygon points="-10,-18 -6,-10 -14,-10" fill="#f0d0b0"/>
+          <polygon points="10,-18 6,-10 14,-10"  fill="#f0d0b0"/>
+          <ellipse cx="0" cy="-9"  rx="5" ry="3.5" fill="#ffb8c8"/>
+          <circle  cx="-3" cy="-13" r="1.5" fill="#3a2830"/>
+          <circle  cx="3"  cy="-13" r="1.5" fill="#3a2830"/>
+          <path d="M-4 -10 Q0 -8 4 -10" stroke="#b08080" stroke-width="1" fill="none"/>
+          <line x1="-12" y1="-10" x2="-5" y2="-9" stroke="#c0a080" stroke-width="1"/>
+          <line x1="12"  y1="-10" x2="5"  y2="-9" stroke="#c0a080" stroke-width="1"/>
+        </g>
+
+        <!-- 下段の的（的4枚） -->
+        <!-- 的は id を振って JS から参照 -->
+        <g id="svgTarget0" transform="translate(-162 38)">
+          <rect x="-16" y="-14" width="32" height="28" rx="3" fill="#e82020"/>
+          <circle cx="0" cy="0" r="11" fill="#fff"/>
+          <circle cx="0" cy="0" r="6"  fill="#e82020"/>
+          <circle cx="0" cy="0" r="2"  fill="#fff"/>
+        </g>
+        <g id="svgTarget1" transform="translate(-54 38)">
+          <rect x="-16" y="-14" width="32" height="28" rx="3" fill="#2060c8"/>
+          <circle cx="0" cy="0" r="11" fill="#fff"/>
+          <circle cx="0" cy="0" r="6"  fill="#2060c8"/>
+          <circle cx="0" cy="0" r="2"  fill="#fff"/>
+        </g>
+        <g id="svgTarget2" transform="translate(54 38)">
+          <rect x="-16" y="-14" width="32" height="28" rx="3" fill="#28a820"/>
+          <circle cx="0" cy="0" r="11" fill="#fff"/>
+          <circle cx="0" cy="0" r="6"  fill="#28a820"/>
+          <circle cx="0" cy="0" r="2"  fill="#fff"/>
+        </g>
+        <g id="svgTarget3" transform="translate(162 38)">
+          <rect x="-16" y="-14" width="32" height="28" rx="3" fill="#e88020"/>
+          <circle cx="0" cy="0" r="11" fill="#fff"/>
+          <circle cx="0" cy="0" r="6"  fill="#e88020"/>
+          <circle cx="0" cy="0" r="2"  fill="#fff"/>
+        </g>
+
+      </g><!-- /屋台本体 -->
+
+      <!-- =================== おじさん（店主） =================== -->
+      <g class="chef" transform="translate(128 335)">
+        <!-- 体（はっぴ・紺地赤帯） -->
+        <rect x="-18" y="-55" width="36" height="55" rx="8" fill="#1a3060"/>
+        <!-- 帯 -->
+        <rect x="-20" y="-20" width="40" height="8" rx="2" fill="#c82020"/>
+        <!-- 腕（左）銃を構える -->
+        <rect x="-34" y="-55" width="10" height="26" rx="5" fill="#1a3060" transform="rotate(-35,-29,-42)"/>
+        <!-- 腕（右） -->
+        <rect x="24"  y="-55" width="10" height="20" rx="5" fill="#1a3060" transform="rotate(20,29,-45)"/>
+        <!-- 頭 -->
+        <circle cx="0" cy="-72" r="18" fill="url(#skin)"/>
+        <!-- 鉢巻き -->
+        <rect x="-19" y="-84" width="38" height="10" rx="3" fill="#c82020"/>
+        <text x="0" y="-77" text-anchor="middle" font-size="7" fill="white" font-weight="800">射的</text>
+        <!-- 顔 -->
+        <circle cx="-5" cy="-73" r="2"   fill="#2a1820"/>
+        <circle cx="5"  cy="-73" r="2"   fill="#2a1820"/>
+        <path d="M-5 -66 Q0 -63 5 -66" stroke="#2a1820" stroke-width="1.5" fill="none"/>
+        <!-- コルク銃（左手で構える） -->
+        <g transform="translate(-38 -58) rotate(-20)">
+          <rect x="-3" y="-3"  width="28" height="6" rx="2" fill="#7a4420"/>
+          <rect x="-3" y="-6"  width="12" height="3" rx="1" fill="#5a3010"/>
+          <rect x="4"  y="0"   width="4"  height="10" rx="1" fill="#5a3010"/>
+        </g>
+        <!-- 足 -->
+        <rect x="-12" y="0" width="10" height="18" rx="4" fill="#1a3060"/>
+        <rect x="2"   y="0" width="10" height="18" rx="4" fill="#1a3060"/>
+        <rect x="-14" y="14" width="13" height="6" rx="2" fill="#1a1a50"/>
+        <rect x="1"   y="14" width="13" height="6" rx="2" fill="#1a1a50"/>
+      </g>
+
+    </svg><!-- /SVG -->
+
+    <!-- ゲームオーバーレイ -->
+    <div class="game-overlay" id="gameOverlay">
+      <div class="game-card" id="gameCard">
+        <div class="game-title">🎯 射 的</div>
+        <div class="range-wrap" id="rangeWrap">
+          <canvas id="gameCanvas"></canvas>
+        </div>
+        <div class="hud">
+          <div class="hud-block">
+            <span class="hud-label">スコア</span>
+            <span class="hud-val" id="hudScore">0</span>
+          </div>
+          <div class="ammo-wrap">
+            <div class="ammo-label">残弾</div>
+            <div class="ammo-pips" id="ammoPips"></div>
+          </div>
+          <div class="hud-block">
+            <span class="hud-label">倒した</span>
+            <span class="hud-val" id="hudHit">0</span>
+          </div>
+        </div>
+        <div class="game-msg" id="gameMsg">的を狙って撃て！</div>
+        <div class="game-actions" id="gameActions" style="display:none">
+          <!-- ゲーム中は非表示 -->
+        </div>
+      </div>
+      <!-- リザルト -->
+      <div class="game-card result-screen" id="resultScreen">
+        <div class="result-title" id="resultTitle">ゲーム終了！</div>
+        <div class="result-prizes" id="resultPrizes">🎯</div>
+        <div class="result-score" id="resultScore">0pt</div>
+        <div class="result-rank"  id="resultRank"></div>
+        <div class="result-sub"  id="resultSub"></div>
+        <div class="game-actions" style="display:flex;margin-top:8px">
+          <button class="btn ghost" id="btnClose2">とじる</button>
+          <button class="btn" id="btnRetry">もう一回</button>
+        </div>
+      </div>
+    </div><!-- /gameOverlay -->
+
+  </div><!-- /stage -->
+
+  <!-- ===== 銃選択パネル ===== -->
+  <div class="play-panel" id="playPanel">
+    <div class="play-head">
+      <h2>🔫 銃を選ぼう</h2>
+      <div class="rule"></div>
+    </div>
+    <div class="gun-grid" id="gunGrid"></div>
+  </div>
+
+</div><!-- /modal -->
+
+<script src="shageki-app.js"></script>
+</body>
+</html>
