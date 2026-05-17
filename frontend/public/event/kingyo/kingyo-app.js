@@ -127,10 +127,11 @@ function startGame(ticket) {
   const count = ticket.extraFish ? 14 : 10;
   spawnFish(count, ticket.fishSpeed);
 
-  // canvas セットアップ
+  // canvas セットアップ（canvasが確定してからsetupInputを呼ぶ）
   canvas = document.getElementById('gameCanvas');
   ctx    = canvas.getContext('2d');
   resizeCanvas();
+  setupInput(); // ← canvas確定後にここで登録
 
   // タイマー
   clearInterval(timerInterval);
@@ -518,7 +519,12 @@ function updatePoiBar() {
 }
 
 // ===== マウス / タッチ入力 =====
+// ※ startGame() 内でcanvas確定後に呼ぶ
 function setupInput() {
+  // 重複登録防止（もう一回ボタンでstartGameが再呼ばれる場合）
+  if (canvas._inputBound) return;
+  canvas._inputBound = true;
+
   function getPos(e) {
     const rect = canvas.getBoundingClientRect();
     let cx, cy;
@@ -540,7 +546,6 @@ function setupInput() {
     e.preventDefault();
     const p = getPos(e);
     poiPos = p;
-    // 近くの魚を怖がらせる
     fish.forEach(f => {
       const dx = f.x - p.x, dy = f.y - p.y;
       if (Math.sqrt(dx*dx + dy*dy) < 0.18) f.scaredTimer = 30;
@@ -755,7 +760,7 @@ function bindButtons() {
 document.addEventListener('DOMContentLoaded', () => {
   renderTickets();
   bindButtons();
-  setupInput();
+  // setupInput() はstartGame()内でcanvas確定後に呼ぶため、ここでは不要
   window.addEventListener('resize', () => { if (canvas) resizeCanvas(); });
 
   // 吹き出しローテーション（待機中）
