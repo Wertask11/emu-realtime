@@ -949,6 +949,31 @@ app.get('/api/user/name/:address', async (req, res) => {
   }
 });
 
+// ── ランキング用サーバーキャッシュ（5分TTL） ──
+const _rankingCache = {
+  postsSnap: null,
+  names:     null,
+  fetchedAt: 0,
+};
+const RANKING_CACHE_TTL = 5 * 60 * 1000; // 5分
+
+async function _getRankingSource() {
+  const now = Date.now();
+  if (_rankingCache.postsSnap && now - _rankingCache.fetchedAt < RANKING_CACHE_TTL) {
+    console.log('📊 RankingCache HIT');
+    return { postsSnap: _rankingCache.postsSnap, names: _rankingCache.names };
+  }
+  console.log('📊 RankingCache MISS — Firestore読み取り');
+  const [postsSnap, names] = await Promise.all([
+    db.collection('posts').get(),
+    fetchAllDisplayNames(),
+  ]);
+  _rankingCache.postsSnap = postsSnap;
+  _rankingCache.names     = names;
+  _rankingCache.fetchedAt = now;
+  return { postsSnap, names };
+}
+
 // ── ユーザー名テーブルを一括取得（ランキング用内部関数） ──
 async function fetchAllDisplayNames() {
   if (!db) return {};
@@ -983,14 +1008,8 @@ app.get('/api/ranking', async (req, res) => {
     const type  = req.query.type  || 'good_post';
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
 
-    // ユーザー名テーブルを並列取得
-    const namesPromise = fetchAllDisplayNames();
-
-    // ── posts コレクションを全件取得（インデックス不要・JS側でソート） ──
-    // where + orderBy の複合クエリを使わずに全件取得してJS集計する
-    // → Firestoreインデックスエラーを完全回避
-    const postsSnap = await db.collection('posts').get();
-    const names = await namesPromise;
+    // キャッシュから posts + names を取得（5分TTLで Firestore 読み取りを抑制）
+    const { postsSnap, names } = await _getRankingSource();
 
     let items = [];
 

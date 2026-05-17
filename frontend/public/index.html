@@ -12869,24 +12869,32 @@ function openMarketplace() {
 }
 
 // Firebaseからデータをリアルタイムで読み込む
+let _realtimeUnsub = null; // リスナー重複防止用
 function startRealtimeUpdate() {
+  // 既存リスナーがあれば先に解除（重複登録を防ぐ）
+  if (_realtimeUnsub) {
+    _realtimeUnsub();
+    _realtimeUnsub = null;
+  }
+
   console.log("📡 リアルタイム更新を開始します...");
-  
+
   const q = window.fbLib.query(
-    window.fbLib.collection(window.db, "posts"), 
-    window.fbLib.orderBy("createdAt", "desc") // 新しい順に並べる
+    window.fbLib.collection(window.db, "posts"),
+    window.fbLib.orderBy("createdAt", "desc"),
+    window.fbLib.limit(50) // 読み取り数を最新50件に制限
   );
 
   // Firebaseのデータが更新されるたびに、この中身が自動で実行される
-  window.fbLib.onSnapshot(q, (snapshot) => {
+  _realtimeUnsub = window.fbLib.onSnapshot(q, (snapshot) => {
     const firebasePosts = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
-    
+
     // 既存の描画関数を呼び出して画面を更新！
     if (typeof renderPosts === "function") {
-      renderPosts(firebasePosts); 
+      renderPosts(firebasePosts);
       console.log("🔄 画面を最新の投稿に更新しました:", firebasePosts.length, "件");
     }
   });
