@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ヨーヨー釣り — SchoolPark 開園祭</title>
+<style>
+:root {
+  --yellow:    #f5c600;
+  --orange:    #f07020;
+  --cream:     #fdf6e3;
+  --ink:       #2a1820;
+  --water:     #2888c8;
+  --water-d:   #0d4070;
+  --wood-l:    #c8894a;
+  --wood-d:    #7a4420;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: #0c0814;
+  font-family: "Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic UI","Noto Sans JP","Meiryo",system-ui,sans-serif;
+  color: var(--ink); -webkit-font-smoothing: antialiased;
+}
+body { display: block; }
+
+/* ===== modal ===== */
+.modal {
+  width: 100%; max-width: 420px; margin: 0 auto;
+  background: var(--cream);
+  border-radius: 28px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 6px 20px rgba(245,198,0,.15);
+  overflow: hidden;
+  border: 1px solid rgba(245,198,0,.3);
+}
+.modal-top {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 18px 10px;
+  background:linear-gradient(180deg,#fffbee,var(--cream));
+  border-bottom:1px dashed rgba(245,198,0,.45);
+}
+.modal-title { display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; letter-spacing:.04em; }
+.badge { background:var(--orange); color:var(--cream); border-radius:999px; padding:3px 8px; font-size:10px; font-weight:800; }
+.close-btn {
+  width:30px; height:30px; border-radius:50%; border:0;
+  background:rgba(42,24,32,.06); color:var(--ink); cursor:pointer;
+  display:grid; place-items:center; font-size:16px;
+}
+.close-btn:hover { background:rgba(42,24,32,.12); }
+
+/* ===== stage ===== */
+.stage {
+  position:relative; aspect-ratio:4/3;
+  background:#1a0f1f; overflow:hidden; touch-action:manipulation;
+}
+.stage svg { display:block; width:100%; height:100%; }
+
+/* ===== speech ===== */
+.speech {
+  position:absolute; top:32%; left:8%;
+  background:var(--cream); border:2.5px solid var(--ink);
+  border-radius:16px; padding:8px 12px 9px;
+  font-size:13px; font-weight:800; color:var(--ink);
+  box-shadow:3px 4px 0 rgba(42,24,32,.18);
+  white-space:nowrap; transform-origin:bottom right; z-index:3; pointer-events:none;
+  animation: popIn .5s cubic-bezier(.34,1.56,.64,1) .3s both, wiggle 4s ease-in-out 1s infinite;
+}
+.speech::before {
+  content:""; position:absolute; bottom:-10px; right:18px;
+  border-left:10px solid transparent; border-right:10px solid transparent;
+  border-top:12px solid var(--ink);
+}
+.speech::after {
+  content:""; position:absolute; bottom:-6px; right:21px;
+  border-left:7px solid transparent; border-right:7px solid transparent;
+  border-top:9px solid var(--cream);
+}
+
+/* ===== game overlay ===== */
+.game-overlay {
+  position:absolute; inset:0; background:rgba(10,6,18,.94);
+  backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:10px; padding:12px;
+  opacity:0; pointer-events:none; transition:opacity .3s ease; z-index:10;
+}
+.game-overlay.show { opacity:1; pointer-events:auto; }
+.game-card {
+  width:100%;
+  background:linear-gradient(180deg,#1c2a10,#0e1808);
+  border:2px solid rgba(120,200,60,.45);
+  border-radius:20px; padding:12px 12px 10px;
+  box-shadow:0 0 0 4px rgba(120,200,60,.1), 0 14px 30px rgba(0,0,0,.5);
+  color:var(--cream); text-align:center;
+}
+.game-title { font-size:13px; font-weight:800; letter-spacing:.1em; color:#aaee66; margin-bottom:8px; }
+.basin-wrap {
+  position:relative; width:100%; aspect-ratio:1/.72;
+  border-radius:14px; overflow:hidden;
+  border:2px solid rgba(40,136,200,.5);
+  cursor: none;
+}
+#gameCanvas { display:block; width:100%; height:100%; touch-action:none; }
+
+/* HUD */
+.hud { display:flex; justify-content:space-between; align-items:center; margin-top:7px; gap:6px; }
+.hud-block { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.hud-label { font-size:10px; opacity:.6; letter-spacing:.06em; }
+.hud-val   { font-size:15px; font-weight:800; }
+.hook-wrap { flex:1; }
+.hook-label { font-size:10px; opacity:.6; text-align:left; margin-bottom:3px; }
+.hook-track { height:7px; background:rgba(255,255,255,.1); border-radius:999px; overflow:hidden; }
+.hook-bar {
+  height:100%; width:100%;
+  background:linear-gradient(90deg,#f5c600,#fff380);
+  border-radius:999px; transition:width .2s ease;
+}
+.game-msg { font-size:12px; opacity:.7; margin-top:5px; min-height:16px; letter-spacing:.04em; }
+.game-actions { display:flex; gap:10px; justify-content:center; margin-top:8px; }
+
+.btn {
+  border:0; padding:10px 20px; border-radius:999px;
+  background:var(--orange); color:var(--cream);
+  font-weight:800; font-size:13px; letter-spacing:.08em; cursor:pointer;
+  font-family:inherit; box-shadow:0 4px 0 #a03800;
+  transition:transform .1s, box-shadow .1s;
+}
+.btn:hover  { transform:translateY(-1px); box-shadow:0 5px 0 #a03800; }
+.btn:active { transform:translateY(3px);  box-shadow:0 1px 0 #a03800; }
+.btn.ghost  { background:transparent; color:var(--cream); box-shadow:inset 0 0 0 2px rgba(253,246,227,.35); }
+.btn.ghost:hover { background:rgba(253,246,227,.08); }
+
+/* result */
+.result-screen { display:none; flex-direction:column; align-items:center; gap:10px; width:100%; text-align:center; }
+.result-screen.show { display:flex; }
+.result-title { font-size:20px; font-weight:800; color:#ffe270; }
+.result-sub   { font-size:13px; opacity:.7; }
+.result-yoyos { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin:4px 0; font-size:28px; }
+.result-score { font-size:28px; font-weight:800; color:#aaee66; }
+
+/* ===== play panel ===== */
+.play-panel { padding:10px 12px 14px; background:var(--cream); }
+.play-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.play-head h2 { margin:0; font-size:13px; font-weight:800; letter-spacing:.06em; }
+.play-head .rule {
+  flex:1; height:2px;
+  background-image:linear-gradient(90deg,var(--yellow) 0 6px,transparent 6px 12px);
+  background-size:12px 100%; opacity:.4;
+}
+.hook-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.hook-card {
+  background:#fff; border:2px solid var(--ink);
+  border-radius:14px; padding:7px 8px 6px;
+  cursor:pointer; text-align:center;
+  transition:transform .15s, box-shadow .15s;
+  box-shadow:2px 3px 0 var(--ink); position:relative;
+  user-select:none; -webkit-tap-highlight-color:transparent;
+}
+.hook-card:hover  { transform:translate(-1px,-1px); box-shadow:3px 4px 0 var(--ink); }
+.hook-card:active { transform:translate(2px,3px);   box-shadow:0 0 0 var(--ink); }
+.hook-card .hc-icon { font-size:26px; line-height:1; margin-bottom:2px; }
+.hook-card .hc-name { font-size:12px; font-weight:800; color:var(--ink); }
+.hook-card .hc-desc { font-size:10px; color:#888; margin-top:1px; }
+.hook-card .hc-tag {
+  position:absolute; top:-8px; right:-6px;
+  background:var(--orange); color:var(--cream);
+  border:2px solid var(--ink); border-radius:999px;
+  font-size:9px; font-weight:800; padding:2px 7px; transform:rotate(8deg);
+}
+
+/* animations */
+@keyframes lanternSway {
+  0%,100% { transform:rotate(-2deg); } 50% { transform:rotate(2deg); }
+}
+.sway   { transform-origin:top center; animation:lanternSway 4s ease-in-out infinite; }
+.sway-b { animation-duration:5.2s; animation-delay:-1s; }
+@keyframes moonPulse { 0%,100%{opacity:.55}50%{opacity:.8} }
+.moonglow { animation:moonPulse 5s ease-in-out infinite; transform-origin:center; }
+@keyframes twinkle { 0%,100%{opacity:.3}50%{opacity:1} }
+.twinkle { animation:twinkle 2.2s ease-in-out infinite; }
+.twinkle:nth-child(odd) { animation-duration:3.1s; animation-delay:-1s; }
+@keyframes fireflyFloat {
+  0%{transform:translate(0,0);opacity:0}20%{opacity:1}50%{transform:translate(18px,-14px);opacity:.9}80%{opacity:.7}100%{transform:translate(36px,0);opacity:0}
+}
+.ff{animation:fireflyFloat 6s ease-in-out infinite;}
+.ff1{animation-delay:0s}.ff2{animation-delay:2s}.ff3{animation-delay:4s}
+@keyframes breathe { 0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5px)} }
+.chef { transform-origin:center; animation:breathe 3.5s ease-in-out infinite; }
+@keyframes yoyoBob {
+  0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}
+}
+@keyframes popIn {
+  0%{transform:scale(.3) rotate(-8deg);opacity:0}70%{transform:scale(1.06) rotate(2deg);opacity:1}100%{transform:scale(1) rotate(0);opacity:1}
+}
+@keyframes wiggle {
+  0%,70%,100%{transform:rotate(0)}78%{transform:rotate(-2deg)}86%{transform:rotate(2deg)}94%{transform:rotate(-1deg)}
+}
+@keyframes signGlow { 0%,100%{opacity:.35}50%{opacity:.55} }
+.sign-glow { animation:signGlow 3.5s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<div class="modal" id="modal">
+
+  <div class="modal-top">
+    <div class="modal-title">
+      <span class="badge">開園祭</span>
+      <span>🎈 ヨーヨー釣り</span>
+    </div>
+    <button class="close-btn" id="closeBtn" aria-label="閉じる">✕</button>
+  </div>
+
+  <!-- ===== 屋台ステージ SVG ===== -->
+  <div class="stage" id="stage">
+    <svg viewBox="0 0 600 450" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0"   stop-color="#1a0d2e"/>
+          <stop offset=".3"  stop-color="#3a1a50"/>
+          <stop offset=".65" stop-color="#9a3858"/>
+          <stop offset=".88" stop-color="#e86040"/>
+          <stop offset="1"   stop-color="#ffaa60"/>
+        </linearGradient>
+        <radialGradient id="moonglow" cx=".5" cy=".5" r=".5">
+          <stop offset="0" stop-color="#fff3d6" stop-opacity=".55"/>
+          <stop offset="1" stop-color="#fff3d6" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#3a2236"/><stop offset="1" stop-color="#1a0f1f"/>
+        </linearGradient>
+        <linearGradient id="woodl" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#c8894a"/><stop offset="1" stop-color="#7a4420"/>
+        </linearGradient>
+        <linearGradient id="woodc" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#a86a3a"/><stop offset="1" stop-color="#6b3d1f"/>
+        </linearGradient>
+        <linearGradient id="tentY" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#f5d020"/><stop offset="1" stop-color="#c89000"/>
+        </linearGradient>
+        <radialGradient id="lanternG" cx=".5" cy=".45" r=".55">
+          <stop offset="0" stop-color="#fff1c2"/><stop offset=".55" stop-color="#ffb255"/><stop offset="1" stop-color="#d54822"/>
+        </radialGradient>
+        <radialGradient id="signlight" cx=".5" cy=".5" r=".55">
+          <stop offset="0" stop-color="#fffde0"/><stop offset="1" stop-color="#ffe060"/>
+        </radialGradient>
+        <radialGradient id="skin" cx=".5" cy=".4" r=".7">
+          <stop offset="0" stop-color="#ffe2c8"/><stop offset="1" stop-color="#e8b691"/>
+        </radialGradient>
+        <linearGradient id="happiY" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#f5d020"/><stop offset="1" stop-color="#c89000"/>
+        </linearGradient>
+        <radialGradient id="waterG" cx=".5" cy=".5" r=".6">
+          <stop offset="0" stop-color="#50b0e8"/><stop offset=".6" stop-color="#2888c8"/><stop offset="1" stop-color="#0d4070"/>
+        </radialGradient>
+        <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="5"/></filter>
+        <filter id="grain" x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7"/>
+          <feColorMatrix values="0 0 0 0 1  0 0 0 0 .9  0 0 0 0 .8  0 0 0 .07 0"/>
+          <feComposite in2="SourceGraphic" operator="in"/>
+        </filter>
+        <g id="chochin">
+          <line x1="0" y1="-60" x2="0" y2="-44" stroke="#2a1820" stroke-width="2"/>
+          <rect x="-28" y="-44" width="56" height="6" rx="2" fill="#1f1018"/>
+          <ellipse cx="0" cy="0" rx="32" ry="40" fill="url(#lanternG)"/>
+          <path d="M-32 -8 q32 10 64 0" stroke="#a8331a" stroke-width="1.5" fill="none" opacity=".55"/>
+          <path d="M-32  8 q32 10 64 0" stroke="#a8331a" stroke-width="1.5" fill="none" opacity=".55"/>
+          <path d="M-32 22 q32 10 64 0" stroke="#a8331a" stroke-width="1.5" fill="none" opacity=".55"/>
+          <rect x="-22" y="36" width="44" height="6" rx="2" fill="#1f1018"/>
+          <line x1="-10" y1="42" x2="-10" y2="52" stroke="#2a1820" stroke-width="1.5"/>
+          <line x1="10"  y1="42" x2="10"  y2="52" stroke="#2a1820" stroke-width="1.5"/>
+          <line x1="0"   y1="42" x2="0"   y2="56" stroke="#2a1820" stroke-width="1.5"/>
+        </g>
+      </defs>
+
+      <!-- 空 -->
+      <rect width="600" height="450" fill="url(#sky)"/>
+      <g class="moonglow"><circle cx="90" cy="80" r="130" fill="url(#moonglow)"/></g>
+      <circle cx="90" cy="80" r="28" fill="#fff8df"/>
+
+      <!-- 星 -->
+      <g fill="#fff">
+        <circle class="twinkle" cx="50"  cy="35" r="1.4"/>
+        <circle class="twinkle" cx="210" cy="25" r="1.2"/>
+        <circle class="twinkle" cx="320" cy="55" r="1.5"/>
+        <circle class="twinkle" cx="420" cy="35" r="1.3"/>
+        <circle class="twinkle" cx="510" cy="70" r="1.5"/>
+        <circle class="twinkle" cx="560" cy="32" r="1.2"/>
+        <circle class="twinkle" cx="370" cy="115" r="1.1"/>
+      </g>
+      <g fill="#ffe8a8">
+        <path class="twinkle" d="M250 60 l1 4 4 1 -4 1 -1 4 -1 -4 -4 -1 4 -1z"/>
+        <path class="twinkle" d="M470 120 l1 4 4 1 -4 1 -1 4 -1 -4 -4 -1 4 -1z"/>
+      </g>
+
+      <!-- 蛍 -->
+      <circle class="ff ff1" cx="310" cy="290" r="2.5" fill="#fff48a"><animate attributeName="opacity" values=".3;1;.3" dur="1.5s" repeatCount="indefinite"/></circle>
+      <circle class="ff ff2" cx="175" cy="320" r="2"   fill="#fff48a"><animate attributeName="opacity" values=".3;1;.3" dur="1.5s" repeatCount="indefinite"/></circle>
+      <circle class="ff ff3" cx="445" cy="305" r="2.2" fill="#fff48a"><animate attributeName="opacity" values=".3;1;.3" dur="1.5s" repeatCount="indefinite"/></circle>
+
+      <!-- 提灯ロープ -->
+      <line x1="0" y1="100" x2="600" y2="70" stroke="#1f1018" stroke-width="2"/>
+      <g class="sway"   transform="translate(55 102)"><use href="#chochin" transform="scale(.4)"/></g>
+      <g class="sway-b" transform="translate(530 76)"><use href="#chochin"  transform="scale(.4)"/></g>
+
+      <!-- 遠景 -->
+      <g fill="#2a1830" opacity=".75">
+        <path d="M0 280 L75 280 L95 258 L175 258 L195 280 L255 280 L255 315 L0 315 Z"/>
+        <path d="M375 280 L435 280 L455 252 L535 252 L555 280 L600 280 L600 315 L375 315 Z"/>
+      </g>
+      <g fill="#ffd17a">
+        <rect x="115" y="266" width="5" height="5"/>
+        <rect x="140" y="266" width="5" height="5"/>
+        <rect x="465" y="263" width="5" height="5"/>
+        <rect x="490" y="263" width="5" height="5"/>
+      </g>
+
+      <!-- 地面 -->
+      <rect x="0" y="312" width="600" height="138" fill="url(#ground)"/>
+
+      <!-- ===== 屋台 ===== -->
+      <g transform="translate(300 245)">
+        <rect x="-222" y="0" width="12" height="196" fill="url(#woodl)"/>
+        <rect x="210"  y="0" width="12" height="196" fill="url(#woodl)"/>
+        <rect x="-230" y="-8" width="460" height="16" rx="3" fill="#6a5010"/>
+
+        <!-- テント（黄色白縞） -->
+        <path d="M-230 -8 L230 -8 L230 -75 Q0 -115 -230 -75 Z" fill="#fdf6e3"/>
+        <g>
+          <path d="M-192 -8 L-160 -8 L-160 -82 Q-176 -86 -192 -80 Z" fill="url(#tentY)"/>
+          <path d="M-120 -8 L-88 -8 L-88 -94 Q-104 -97 -120 -95 Z" fill="url(#tentY)"/>
+          <path d="M-48  -8 L-16 -8 L-16 -107 Q-32 -109 -48 -107 Z" fill="url(#tentY)"/>
+          <path d="M28   -8 L60  -8 L60  -109 Q44  -109 28  -107 Z" fill="url(#tentY)"/>
+          <path d="M100  -8 L132 -8 L132 -96 Q116 -97 100 -95 Z"  fill="url(#tentY)"/>
+          <path d="M172  -8 L204 -8 L204 -82 Q188 -86  172 -80 Z"  fill="url(#tentY)"/>
+        </g>
+        <!-- フリンジ -->
+        <path d="M-230 -8 q12 16 24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 z" fill="#c89000" opacity=".9"/>
+
+        <!-- 看板 -->
+        <g transform="translate(0 -50)">
+          <ellipse class="sign-glow" cx="0" cy="0" rx="140" ry="46" fill="url(#signlight)" filter="url(#soft)"/>
+          <rect x="-128" y="-28" width="256" height="56" rx="8" fill="#fdf6e3" stroke="#3a1d0a" stroke-width="3"/>
+          <rect x="-123" y="-23" width="246" height="46" rx="5" fill="none" stroke="#c89000" stroke-width="2"/>
+          <!-- ヨーヨーアイコン（看板左） -->
+          <g transform="translate(-82 2)">
+            <circle cx="0" cy="-10" r="10" fill="#e84050" opacity=".9"/>
+            <line x1="0" y1="0" x2="0" y2="16" stroke="#555" stroke-width="2"/>
+            <circle cx="0" cy="-10" r="4" fill="rgba(255,255,255,.35)"/>
+          </g>
+          <text x="30" y="10"
+            font-family="'Hiragino Maru Gothic ProN','Hiragino Sans','Yu Gothic UI','Noto Sans JP','Meiryo',sans-serif"
+            font-weight="900" font-size="30" fill="#3a1d0a" text-anchor="middle" letter-spacing="2">ヨーヨー釣り</text>
+        </g>
+
+        <!-- 屋台内提灯 -->
+        <g class="sway"   transform="translate(-168 32)"><use href="#chochin" transform="scale(.5)"/></g>
+        <g class="sway-b" transform="translate(168  32)"><use href="#chochin" transform="scale(.5)"/></g>
+
+        <!-- 奥の影 -->
+        <rect x="-212" y="14" width="424" height="68" fill="#1a0d20" opacity=".5"/>
+
+        <!-- ===== ヨーヨーが浮かぶ水桶 ===== -->
+        <g transform="translate(-50 42)">
+          <!-- 桶の影 -->
+          <ellipse cx="0" cy="72" rx="110" ry="10" fill="#000" opacity=".3"/>
+          <!-- 桶外側 -->
+          <ellipse cx="0" cy="0"  rx="106" ry="20" fill="#3a80b0"/>
+          <rect x="-106" y="0" width="212" height="54" fill="#4898c8"/>
+          <ellipse cx="0" cy="54" rx="106" ry="20" fill="#2a6090"/>
+          <!-- 桶の縁（白いライン） -->
+          <ellipse cx="0" cy="0" rx="106" ry="20" fill="none" stroke="#b0d8f0" stroke-width="2" opacity=".5"/>
+          <!-- 水面 -->
+          <ellipse cx="0" cy="4" rx="100" ry="17" fill="url(#waterG)" opacity=".95"/>
+          <!-- 水面反射 -->
+          <path d="M-60 2 q30 -5 60 0 q30 5 40 0" stroke="#fff" stroke-width=".8" fill="none" opacity=".18"/>
+          <ellipse cx="0" cy="4" rx="100" ry="17" fill="none" stroke="#80c8f0" stroke-width="1" opacity=".3"/>
+          <!-- 水面揺れアニメ -->
+          <ellipse cx="-25" cy="3" rx="14" ry="4" fill="none" stroke="#80c8f0" stroke-width=".8" opacity=".35">
+            <animate attributeName="rx" values="9;16;9" dur="2.8s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values=".35;.1;.35" dur="2.8s" repeatCount="indefinite"/>
+          </ellipse>
+          <ellipse cx="35" cy="6" rx="11" ry="3" fill="none" stroke="#80c8f0" stroke-width=".8" opacity=".3">
+            <animate attributeName="rx" values="7;14;7" dur="3.3s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values=".3;.08;.3" dur="3.3s" repeatCount="indefinite"/>
+          </ellipse>
+
+          <!-- ヨーヨー（赤・青・黄・緑） -->
+          <g class="sway" style="transform-origin:center top" transform="translate(-55 -28)">
+            <line x1="0" y1="28" x2="0" y2="48" stroke="#555" stroke-width="1.5"/>
+            <ellipse cx="0" cy="18" rx="12" ry="12" fill="#e84050"/>
+            <ellipse cx="0" cy="18" rx="5" ry="5" fill="rgba(255,255,255,.35)"/>
+          </g>
+          <g class="sway-b" style="transform-origin:center top" transform="translate(-15 -32)">
+            <line x1="0" y1="32" x2="0" y2="50" stroke="#555" stroke-width="1.5"/>
+            <ellipse cx="0" cy="18" rx="13" ry="13" fill="#2060e8"/>
+            <ellipse cx="0" cy="18" rx="5" ry="5" fill="rgba(255,255,255,.35)"/>
+          </g>
+          <g class="sway" style="transform-origin:center top;animation-delay:-.5s" transform="translate(30 -30)">
+            <line x1="0" y1="30" x2="0" y2="48" stroke="#555" stroke-width="1.5"/>
+            <ellipse cx="0" cy="18" rx="11" ry="11" fill="#f5c600"/>
+            <ellipse cx="0" cy="18" rx="4" ry="4" fill="rgba(255,255,255,.35)"/>
+          </g>
+          <g class="sway-b" style="transform-origin:center top;animation-delay:-1.2s" transform="translate(68 -26)">
+            <line x1="0" y1="26" x2="0" y2="44" stroke="#555" stroke-width="1.5"/>
+            <ellipse cx="0" cy="16" rx="10" ry="10" fill="#28a050"/>
+            <ellipse cx="0" cy="16" rx="4" ry="4" fill="rgba(255,255,255,.35)"/>
+          </g>
+        </g>
+
+        <!-- ===== おじちゃん店員 ===== -->
+        <g class="chef" transform="translate(112 26)">
+          <!-- 法被（黄色） -->
+          <path d="M-46 56 q-2 -20 12 -30 q10 -8 20 -8 q12 0 22 8 q12 10 12 30 z" fill="url(#happiY)" stroke="#7a5000" stroke-width="2"/>
+          <path d="M-26 28 L-26 56" stroke="#fdf6e3" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M26  28 L26  56" stroke="#fdf6e3" stroke-width="2.5" stroke-linecap="round"/>
+          <g stroke="#fdf6e3" stroke-width="1.2" fill="none" opacity=".65">
+            <path d="M-12 40 q4 -3 8 0 q4 3 8 0 q4 -3 8 0"/>
+            <path d="M-12 48 q4 -3 8 0 q4 3 8 0 q4 -3 8 0"/>
+          </g>
+          <!-- 首 -->
+          <rect x="-7" y="18" width="14" height="13" fill="url(#skin)" stroke="#3a1d0a" stroke-width="1"/>
+          <!-- 顔 -->
+          <ellipse cx="0" cy="-2" rx="22" ry="23" fill="url(#skin)" stroke="#3a1d0a" stroke-width="2"/>
+          <!-- 耳 -->
+          <ellipse cx="-22" cy="0" rx="3" ry="5" fill="url(#skin)" stroke="#3a1d0a" stroke-width="1.5"/>
+          <ellipse cx="22"  cy="0" rx="3" ry="5" fill="url(#skin)" stroke="#3a1d0a" stroke-width="1.5"/>
+          <!-- 髪 -->
+          <path d="M-21 -16 q2 -13 10 -15 q5 -2 9 0 q5 -2 11 2 q6 6 7 13 q-9 -3 -19 -2 q-11 -1 -18 2 z" fill="#3a1d0a"/>
+          <!-- 手ぬぐい（黄色） -->
+          <path d="M-21 -5 q21 -6 42 0 q-3 6 -9 8 q-12 -2 -24 0 q-6 -2 -9 -8 z" fill="#f5d020" stroke="#7a5000" stroke-width="1.8"/>
+          <g fill="#fdf6e3" opacity=".7">
+            <circle cx="-11" cy="-3" r="1.4"/>
+            <circle cx="0"   cy="-5" r="1.4"/>
+            <circle cx="11"  cy="-3" r="1.4"/>
+          </g>
+          <!-- 手ぬぐい結び -->
+          <path d="M21 -3 q6 -2 9 2 q-2 5 -9 4 z" fill="#f5d020" stroke="#7a5000" stroke-width="1.5"/>
+          <line x1="28" y1="-1" x2="33" y2="3" stroke="#7a5000" stroke-width="1.5" stroke-linecap="round"/>
+          <!-- 目（にこにこ笑顔） -->
+          <path d="M-11 4 q3 -4 6 0" stroke="#3a1d0a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <path d="M5   4 q3 -4 6 0" stroke="#3a1d0a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <!-- 眉 -->
+          <path d="M-14 -1 q4 -3 8 -1" stroke="#3a1d0a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <path d="M6   -1 q4 -3 8 -1" stroke="#3a1d0a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <!-- 鼻 -->
+          <path d="M-2 9 q1 3 4 3 q1 0 1 -1" stroke="#a87248" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+          <!-- 口（笑顔） -->
+          <path d="M-7 15 q7 6 14 0" stroke="#3a1d0a" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <!-- 頬 -->
+          <ellipse cx="-14" cy="9" rx="4.5" ry="3" fill="#ffabb8" opacity=".6"/>
+          <ellipse cx="14"  cy="9" rx="4.5" ry="3" fill="#ffabb8" opacity=".6"/>
+          <!-- ホックを持つ手 -->
+          <path d="M-40 42 q-16 8 -20 20 q4 7 16 4 q12 -4 16 -14 z" fill="url(#happiY)" stroke="#7a5000" stroke-width="2"/>
+          <circle cx="-56" cy="62" r="5.5" fill="url(#skin)" stroke="#3a1d0a" stroke-width="1.5"/>
+          <!-- ホック（金属製） -->
+          <g transform="translate(-62 66) rotate(-30)">
+            <rect x="0" y="0" width="2.5" height="22" fill="#8a7050"/>
+            <path d="M1.25 22 q0 8 5 8 q5 0 5 -5" fill="none" stroke="#c8a840" stroke-width="2.5" stroke-linecap="round"/>
+          </g>
+        </g>
+
+        <!-- カウンター -->
+        <rect x="-212" y="82" width="424" height="18" fill="#8a4a22"/>
+        <rect x="-212" y="100" width="424" height="100" fill="url(#woodc)"/>
+        <g stroke="#3a1d0a" stroke-width="1" opacity=".2" fill="none">
+          <path d="M-202 120 q160 5 410 0"/>
+          <path d="M-202 155 q140 -6 410 0"/>
+        </g>
+        <rect x="-212" y="82" width="424" height="3" fill="#d29464" opacity=".7"/>
+
+        <!-- 展示ヨーヨー（棚） -->
+        <g transform="translate(165 38)">
+          <line x1="0" y1="0" x2="0" y2="18" stroke="#666" stroke-width="1.5"/>
+          <circle cx="0" cy="-10" r="10" fill="#e84050"/>
+          <circle cx="0" cy="-10" r="4" fill="rgba(255,255,255,.3)"/>
+        </g>
+        <g transform="translate(188 32)">
+          <line x1="0" y1="0" x2="0" y2="16" stroke="#666" stroke-width="1.5"/>
+          <circle cx="0" cy="-9" r="9" fill="#2060e8"/>
+          <circle cx="0" cy="-9" r="3.5" fill="rgba(255,255,255,.3)"/>
+        </g>
+      </g>
+
+      <ellipse cx="300" cy="438" rx="270" ry="12" fill="#f5c600" opacity=".08" filter="url(#soft)"/>
+      <rect width="600" height="450" fill="white" filter="url(#grain)" opacity=".055"/>
+    </svg>
+
+    <!-- 吹き出し -->
+    <div class="speech" id="speech">ヨーヨー釣り、やってみる？🎈</div>
+
+    <!-- ゲームオーバーレイ -->
+    <div class="game-overlay" id="gameOverlay">
+      <div class="game-card" id="gameCard">
+        <div class="game-title" id="gameTitle">🎈 ヨーヨーを釣ろう！</div>
+        <div class="basin-wrap">
+          <canvas id="gameCanvas"></canvas>
+        </div>
+        <div class="hud">
+          <div class="hud-block">
+            <span class="hud-label">のこり時間</span>
+            <span class="hud-val" id="timerVal">60</span>
+          </div>
+          <div class="hook-wrap">
+            <div class="hook-label">ホックの強さ</div>
+            <div class="hook-track"><div class="hook-bar" id="hookBar"></div></div>
+          </div>
+          <div class="hud-block">
+            <span class="hud-label">つれた</span>
+            <span class="hud-val" id="caughtVal">0個</span>
+          </div>
+        </div>
+        <div class="game-msg" id="gameMsg">ヨーヨーの紐をタップして釣ろう！</div>
+        <div class="game-actions" style="display:none" id="gameActions">
+          <button class="btn ghost" id="btnAgain">もう一回</button>
+          <button class="btn" id="btnDone">おしまい</button>
+        </div>
+      </div>
+      <div class="result-screen" id="resultScreen">
+        <div class="result-title" id="resultTitle">🎉 おしまい！</div>
+        <div class="result-sub"  id="resultSub">釣れたヨーヨー</div>
+        <div class="result-yoyos" id="resultYoyoList"></div>
+        <div class="result-score" id="resultScore">0点</div>
+        <div style="display:flex;gap:10px;margin-top:4px;">
+          <button class="btn ghost" id="btnResultAgain">もう一回</button>
+          <button class="btn"       id="btnResultClose">閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- プレイパネル -->
+  <div class="play-panel">
+    <div class="play-head">
+      <h2>ホックを選んでね</h2>
+      <div class="rule"></div>
+    </div>
+    <div class="hook-grid" id="hookGrid"></div>
+  </div>
+</div>
+
+<script src="yoyo-app.js"></script>
+<script>
+  document.getElementById('closeBtn').addEventListener('click', function() {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'closeYoyo' }, '*');
+    }
+  });
+</script>
+</body>
+</html>
