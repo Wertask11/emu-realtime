@@ -1734,7 +1734,31 @@ async function deleteAllContents() {
       <div id="kai-stamp-list"><div style="color:#555;text-align:center;padding:24px;">読み込み中...</div></div>
     </div>
 
-    <!-- ④ マルシェDLリンク設定 -->
+    <!-- ④ アナリティクス -->
+    <div style="background:#161616;border:1px solid #2a2a2a;border-radius:10px;padding:18px;margin-bottom:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h3 style="font-size:14px;color:#4ec9b0;margin:0;">📊 利用データ（8月リアルイベント参考）</h3>
+        <button class="fr-refresh" onclick="kaiensaiLoadAnalytics()">↻ 更新</button>
+      </div>
+      <div id="kai-analytics-summary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+        <div class="fr-stat"><div class="fr-stat-val" id="kai-total-visits">—</div><div class="fr-stat-lbl">総訪問数</div></div>
+        <div class="fr-stat"><div class="fr-stat-val" id="kai-unique-users">—</div><div class="fr-stat-lbl">ユニーク訪問者</div></div>
+        <div class="fr-stat"><div class="fr-stat-val" id="kai-top-spot">—</div><div class="fr-stat-lbl">人気No.1スポット</div></div>
+      </div>
+      <div style="font-size:12px;color:#555;margin-bottom:8px;">スポット別訪問数ランキング</div>
+      <div id="kai-analytics-list"><div style="color:#555;text-align:center;padding:16px;">読み込み中...</div></div>
+    </div>
+
+    <!-- ⑤ 意見・要望 -->
+    <div style="background:#161616;border:1px solid #2a2a2a;border-radius:10px;padding:18px;margin-bottom:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h3 style="font-size:14px;color:#4ec9b0;margin:0;">💬 意見・要望一覧</h3>
+        <button class="fr-refresh" onclick="kaiensaiLoadFeedback()">↻ 更新</button>
+      </div>
+      <div id="kai-feedback-list"><div style="color:#555;text-align:center;padding:16px;">読み込み中...</div></div>
+    </div>
+
+    <!-- ⑥ マルシェDLリンク設定 -->
     <div style="background:#161616;border:1px solid #2a2a2a;border-radius:10px;padding:18px;margin-bottom:20px;">
       <h3 style="font-size:14px;color:#4ec9b0;margin-bottom:14px;">🛍️ マルシェ ダウンロードリンク設定</h3>
       <div class="form-field">
@@ -1768,10 +1792,92 @@ var KAI_COL   = 'sp_event_spots_2026';
 var KAI_STAMP = 'sp_stamp_2026';
 var KAI_CFG   = 'sp_event_config';
 
+var KAI_ANALYTICS = 'sp_event_analytics_2026';
+var KAI_FEEDBACK  = 'sp_event_feedback_2026';
+
 function kaiensaiLoad() {
   kaiensaiLoadSpots();
   kaiensaiLoadStamps();
+  kaiensaiLoadAnalytics();
+  kaiensaiLoadFeedback();
   kaiensaiLoadConfig();
+}
+
+function kaiensaiLoadAnalytics() {
+  var db = window.fpAdminDB;
+  var listEl = document.getElementById('kai-analytics-list');
+  if (!listEl) return;
+  if (!db) { setTimeout(kaiensaiLoadAnalytics, 500); return; }
+  listEl.innerHTML = '<div style="color:#555;text-align:center;padding:16px;">読み込み中...</div>';
+  db.collection(KAI_ANALYTICS).get().then(function(snap) {
+    if (snap.empty) { listEl.innerHTML = '<div style="color:#555;text-align:center;padding:16px;">データなし</div>'; return; }
+    var rows = [];
+    var totalVisits = 0;
+    var allWallets = new Set();
+    snap.forEach(function(d) {
+      var s = d.data();
+      var uniqueCount = s.uniqueWallets ? s.uniqueWallets.length : 0;
+      rows.push({ name: s.name || d.id, visits: s.visits || 0, unique: uniqueCount });
+      totalVisits += (s.visits || 0);
+      if (s.uniqueWallets) s.uniqueWallets.forEach(function(w) { allWallets.add(w); });
+    });
+    rows.sort(function(a, b) { return b.visits - a.visits; });
+    var tv = document.getElementById('kai-total-visits');
+    var uu = document.getElementById('kai-unique-users');
+    var ts = document.getElementById('kai-top-spot');
+    if (tv) tv.textContent = totalVisits;
+    if (uu) uu.textContent = allWallets.size;
+    if (ts) ts.textContent = rows.length > 0 ? rows[0].name.replace(/[A-Za-z\s]+/,'').trim() || rows[0].name : '—';
+    var maxV = rows.length > 0 ? rows[0].visits : 1;
+    var html = rows.map(function(r, i) {
+      var pct = maxV > 0 ? Math.round(r.visits / maxV * 100) : 0;
+      var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1) + '.';
+      return '<div style="margin-bottom:10px;">' +
+        '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px;">' +
+          '<span>' + medal + ' ' + r.name + '</span>' +
+          '<span style="color:#4ec9b0;">' + r.visits + '回 / ' + r.unique + '人</span>' +
+        '</div>' +
+        '<div style="background:#2a2a2a;border-radius:99px;height:6px;overflow:hidden;">' +
+          '<div style="background:#ff6b35;height:6px;width:' + pct + '%;border-radius:99px;transition:.3s;"></div>' +
+        '</div></div>';
+    }).join('');
+    listEl.innerHTML = html;
+  }).catch(function(e) { listEl.innerHTML = '<div style="color:#f44747;padding:12px;">取得エラー: ' + e.message + '</div>'; });
+}
+
+function kaiensaiLoadFeedback() {
+  var db = window.fpAdminDB;
+  var el = document.getElementById('kai-feedback-list');
+  if (!el) return;
+  if (!db) { setTimeout(kaiensaiLoadFeedback, 500); return; }
+  el.innerHTML = '<div style="color:#555;text-align:center;padding:16px;">読み込み中...</div>';
+  db.collection(KAI_FEEDBACK).orderBy('createdAt','desc').limit(50).get().then(function(snap) {
+    if (snap.empty) { el.innerHTML = '<div style="color:#555;text-align:center;padding:16px;">意見・要望なし</div>'; return; }
+    var html = '';
+    snap.forEach(function(d) {
+      var s = d.data();
+      var dt = s.createdAt ? new Date(s.createdAt).toLocaleDateString('ja-JP') : '';
+      html += '<div style="padding:10px 0;border-bottom:1px solid #2a2a2a;">' +
+        '<div style="font-size:13px;color:#d4d4d4;margin-bottom:4px;">' + (s.comment || '') + '</div>' +
+        '<div style="font-size:11px;color:#555;">' + (s.wallet ? s.wallet.slice(0,10)+'…' : 'anonymous') + ' · ' + dt + '</div>' +
+      '</div>';
+    });
+    el.innerHTML = html;
+  }).catch(function(e) {
+    // orderByが使えない場合はフォールバック
+    db.collection(KAI_FEEDBACK).get().then(function(snap2) {
+      if (snap2.empty) { el.innerHTML = '<div style="color:#555;text-align:center;padding:16px;">意見・要望なし</div>'; return; }
+      var html = '';
+      snap2.forEach(function(d) {
+        var s = d.data();
+        html += '<div style="padding:10px 0;border-bottom:1px solid #2a2a2a;">' +
+          '<div style="font-size:13px;color:#d4d4d4;margin-bottom:4px;">' + (s.comment || '') + '</div>' +
+          '<div style="font-size:11px;color:#555;">' + (s.wallet ? s.wallet.slice(0,10)+'…' : 'anonymous') + '</div>' +
+        '</div>';
+      });
+      el.innerHTML = html;
+    }).catch(function() { el.innerHTML = '<div style="color:#f44747;padding:12px;">取得エラー</div>'; });
+  });
 }
 
 function kaiensaiLoadSpots() {

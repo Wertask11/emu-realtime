@@ -466,9 +466,9 @@
   70%{opacity:1}
   100%{opacity:0;transform:translateY(-10px)}
 }
-@keyframes kaiensaiBannerSlide {
-  0%{background-position:0% 50%} 100%{background-position:200% 50%}
-}
+/* 開園祭バナー：SchoolPark表示中のみ表示 */
+#kaiensaiBanner { display:none !important; }
+body.spmap-open #kaiensaiBanner { display:flex !important; }
 @keyframes fadeInUp {
   from{opacity:0;transform:translate(-50%,10px)} to{opacity:1;transform:translate(-50%,0)}
 }
@@ -7208,6 +7208,7 @@ async function gatedOpen(poiId, fn) {
   _showEmuerChargeToast(poiId, cost, data.balance);
   fn();
   _recordKaiensaiStamp(poiId).catch(() => {});
+  _recordEventAnalytics(poiId).catch(() => {});
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -7323,6 +7324,23 @@ function _getKaiensaiStamps() {
 }
 function _saveKaiensaiStamps(data) {
   localStorage.setItem(KAIENSAI_LS_KEY, JSON.stringify(data));
+}
+
+async function _recordEventAnalytics(poiId) {
+  if (!_isKaiensaiVisible()) return;
+  const wallet = (window.connectedAccount || '').toLowerCase();
+  const poi    = _findPoi(poiId);
+  if (!poi || !window.db || !window.fbLib) return;
+  try {
+    const ref = window.fbLib.doc(window.db, 'sp_event_analytics_2026', poiId);
+    await window.fbLib.setDoc(ref, {
+      poiId,
+      name:        poi.name,
+      visits:      window.fbLib.increment(1),
+      uniqueWallets: wallet ? window.fbLib.arrayUnion(wallet) : window.fbLib.arrayUnion(),
+      lastVisit:   Date.now(),
+    }, { merge: true }).catch(() => {});
+  } catch(e) {}
 }
 
 async function _recordKaiensaiStamp(poiId) {
@@ -7710,20 +7728,24 @@ function _showKaiensaiBanner() {
   const banner = document.createElement('div');
   banner.id = 'kaiensaiBanner';
   banner.style.cssText = `
-    position:fixed;top:56px;left:0;right:0;z-index:800;
-    background:linear-gradient(90deg,#ff6b35,#f7931e,#ff6b35);
-    background-size:200% 100%;animation:kaiensaiBannerSlide 3s linear infinite;
+    position:fixed;top:58px;left:0;right:0;z-index:1100;
+    background:linear-gradient(90deg,#ff6b35,#f7931e);
     color:#fff;font-size:13px;font-weight:bold;
-    padding:7px 16px;text-align:center;cursor:pointer;
+    padding:6px 16px;
     display:flex;align-items:center;justify-content:center;gap:8px;
-    box-shadow:0 2px 8px rgba(0,0,0,.2);
+    box-shadow:0 2px 6px rgba(0,0,0,.25);
   `;
   banner.innerHTML = `
-    <span>🎪</span>
-    <span>SchoolPark 開園祭 開催中！5/20〜5/25</span>
-    <span style="font-size:11px;opacity:.85;border:1px solid rgba(255,255,255,.6);border-radius:99px;padding:1px 8px;">詳細</span>
+    <span style="cursor:pointer;flex:1;display:flex;align-items:center;justify-content:center;gap:8px;"
+          onclick="_showKaiensaiDetailModal()">
+      <span>🎪</span>
+      <span>SchoolPark 開園祭 開催中！5/20〜5/25</span>
+      <span style="font-size:11px;opacity:.85;border:1px solid rgba(255,255,255,.6);border-radius:99px;padding:1px 8px;">詳細</span>
+    </span>
+    <button onclick="document.getElementById('kaiensaiBanner').style.display='none';"
+            style="background:none;border:none;color:rgba(255,255,255,.7);font-size:16px;
+                   cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;">✕</button>
   `;
-  banner.addEventListener('click', _showKaiensaiDetailModal);
   document.body.appendChild(banner);
 }
 
@@ -7761,6 +7783,18 @@ function _showKaiensaiDetailModal() {
           🛍 SchoolParkマルシェ（デジタルグッズ販売）
         </div>
       </div>
+      <!-- フィードバックフォーム -->
+      <div style="background:#f9f9f9;border-radius:12px;padding:14px;margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:bold;color:#333;margin-bottom:8px;">💬 ご意見・ご要望</div>
+        <textarea id="kaiensaiFeedbackText" placeholder="開園祭についてのご感想・ご意見をお聞かせください（任意）"
+          style="width:100%;border:1px solid #ddd;border-radius:8px;padding:8px;font-size:12px;
+                 height:72px;resize:none;font-family:inherit;box-sizing:border-box;"></textarea>
+        <button onclick="_submitKaiensaiFeedback(this)" style="
+          width:100%;margin-top:8px;background:#f0f0f0;color:#555;
+          border:none;border-radius:99px;padding:8px;font-size:12px;cursor:pointer;">
+          送信する
+        </button>
+      </div>
       <button onclick="this.closest('div[style]').remove()" style="
         width:100%;background:linear-gradient(135deg,#ff6b35,#f7931e);color:#fff;
         border:none;border-radius:99px;padding:12px;font-size:14px;
@@ -7770,6 +7804,26 @@ function _showKaiensaiDetailModal() {
   `;
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
+}
+
+async function _submitKaiensaiFeedback(btn) {
+  const text = document.getElementById('kaiensaiFeedbackText')?.value.trim();
+  if (!text) { alert('コメントを入力してください'); return; }
+  if (!window.db || !window.fbLib) { alert('送信できませんでした'); return; }
+  btn.disabled = true; btn.textContent = '送信中...';
+  const wallet = (window.connectedAccount || 'anonymous').toLowerCase();
+  try {
+    await window.fbLib.addDoc(
+      window.fbLib.collection(window.db, 'sp_event_feedback_2026'),
+      { wallet, comment: text, createdAt: Date.now() }
+    );
+    btn.textContent = '✅ 送信しました';
+    const ta = document.getElementById('kaiensaiFeedbackText');
+    if (ta) ta.value = '';
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '送信する';
+    alert('送信に失敗しました');
+  }
 }
 
 /* ======= ロゴ → ウォレット → メイン ======= */
