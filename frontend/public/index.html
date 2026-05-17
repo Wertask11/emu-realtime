@@ -472,6 +472,9 @@
 @keyframes fadeInUp {
   from{opacity:0;transform:translate(-50%,10px)} to{opacity:1;transform:translate(-50%,0)}
 }
+@keyframes kaiensaiDotPulse {
+  0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.5);opacity:.6}
+}
 .spmap-close-x {
   background:none; border:1px solid rgba(255,255,255,0.2); color:#aaa; width:30px; height:30px;
   border-radius:50%; cursor:pointer; font-size:0.95rem; margin-left:10px; flex-shrink:0;
@@ -3169,6 +3172,14 @@ body.paypay-mode #pp-post-fab {
           </div>
           <span class="spmap-area-count">5</span>
         </div>
+        <div class="spmap-area-item" id="kaiensaiAreaItem" onclick="spMapFilter(['event'],this)" style="display:none;">
+          <span class="spmap-area-dot" style="background:#ff6b35;animation:kaiensaiDotPulse 1.2s infinite;"></span>
+          <div class="spmap-area-names">
+            <span class="spmap-area-main">🎪 イベント会場</span>
+            <span class="spmap-area-sub">5/20〜5/25 開園祭</span>
+          </div>
+          <span class="spmap-area-count" style="background:#ff6b35;color:#fff;border-radius:99px;padding:1px 7px;font-size:10px;">NEW</span>
+        </div>
       </div>
 
       <!-- コンテンツ一覧（エリア選択後に動的表示） -->
@@ -4252,6 +4263,10 @@ const EMUER_RATE_CONFIG = {
 function _isKaiensaiPeriod() {
   const now = new Date();
   return now >= new Date('2026-05-20T00:00:00') && now <= new Date('2026-05-25T23:59:59');
+}
+// オーナーはプレビュー可能、一般ユーザーは5/20から
+function _isKaiensaiVisible() {
+  return _isKaiensaiPeriod() || _isOwnerAccess();
 }
 const CAMPAIGN_MODE = _isKaiensaiPeriod();
 
@@ -7196,13 +7211,75 @@ async function gatedOpen(poiId, fn) {
 }
 
 /* ═══════════════════════════════════════════════════════
+   開園祭マルシェ（デジタルグッズ配布）
+═══════════════════════════════════════════════════════ */
+function openKaiensaiMarche() {
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;
+    display:flex;align-items:center;justify-content:center;
+  `;
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:20px;padding:28px 20px;max-width:340px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.3);">
+      <div style="font-size:22px;text-align:center;margin-bottom:6px;">🛍️</div>
+      <div style="font-size:17px;font-weight:bold;color:#ff6b35;text-align:center;margin-bottom:4px;">SchoolParkマルシェ</div>
+      <div style="font-size:11px;color:#aaa;text-align:center;margin-bottom:18px;">開園祭限定デジタルグッズ</div>
+
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="border:1px solid #ffe0cc;border-radius:12px;padding:14px;background:#fff8f5;">
+          <div style="font-size:13px;font-weight:bold;color:#333;margin-bottom:6px;">🧊 冷蔵庫くんのお面</div>
+          <div style="font-size:11px;color:#666;margin-bottom:10px;">冷蔵庫くんのお面をダウンロード！プリントして開園祭を楽しもう</div>
+          <a id="marcheOmenDL" href="#" target="_blank" style="
+            display:block;text-align:center;background:linear-gradient(135deg,#ff6b35,#f7931e);
+            color:#fff;border-radius:99px;padding:8px;font-size:12px;font-weight:bold;
+            text-decoration:none;
+          ">⬇ お面をダウンロード</a>
+        </div>
+
+        <div style="border:1px solid #ffe0cc;border-radius:12px;padding:14px;background:#fff8f5;">
+          <div style="font-size:13px;font-weight:bold;color:#333;margin-bottom:6px;">🏷 デジタルステッカー（3種）</div>
+          <div style="font-size:11px;color:#666;margin-bottom:10px;">
+            SchoolParkロゴ（新）・SchoolParkロゴ（旧）・開園祭限定デザインA
+          </div>
+          <a id="marcheStickerDL" href="#" target="_blank" style="
+            display:block;text-align:center;background:linear-gradient(135deg,#ff6b35,#f7931e);
+            color:#fff;border-radius:99px;padding:8px;font-size:12px;font-weight:bold;
+            text-decoration:none;
+          ">⬇ ステッカーをダウンロード</a>
+        </div>
+      </div>
+
+      <div style="font-size:10px;color:#bbb;text-align:center;margin-top:14px;">
+        ※ダウンロードリンクは開園祭期間中のみ有効です
+      </div>
+      <button onclick="this.closest('div[style]').remove()" style="
+        width:100%;margin-top:14px;background:#f0f0f0;color:#666;
+        border:none;border-radius:99px;padding:10px;font-size:13px;cursor:pointer;
+      ">閉じる</button>
+    </div>
+  `;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+
+  // Firestoreからダウンロードリンクを取得
+  if (window.db && window.fbLib) {
+    window.fbLib.getDoc(window.fbLib.doc(window.db, 'sp_event_config', 'kaiensai_2026'))
+      .then(snap => {
+        if (!snap.exists()) return;
+        const d = snap.data();
+        const omenEl   = document.getElementById('marcheOmenDL');
+        const stickerEl = document.getElementById('marcheStickerDL');
+        if (omenEl && d.omenUrl)    omenEl.href    = d.omenUrl;
+        if (stickerEl && d.stickerUrl) stickerEl.href = d.stickerUrl;
+      }).catch(() => {});
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
    開園祭スタンプラリー
    ★ room1からPOIを登録後、下記にPOI IDを追加
 ═══════════════════════════════════════════════════════ */
-const KAIENSAI_STAMP_POIS = [
-  // room1でイベントPOI登録後、ここにIDを追記する
-  // 例: 'poi_takoyaki', 'poi_karaage', ...
-];
+const KAIENSAI_STAMP_POIS = ['event1','event2','event3','event4','event5','event6','event7'];
 const KAIENSAI_LS_KEY   = 'sp_stamp_2026';
 const KAIENSAI_BADGE_ID = '開園祭の申し子';
 
@@ -7533,7 +7610,7 @@ let _kaiensaiTutIdx = 0;
 let _kaiensaiTutRunning = false;
 
 function startKaiensaiNotice() {
-  if (!_isKaiensaiPeriod()) return;
+  if (!_isKaiensaiVisible()) return;
   if (localStorage.getItem(KAIENSAI_TUT_KEY) === '1') return;
   // 通常チュートリアルが実行中なら終了後に起動
   if (_spTutRunning) {
@@ -7592,7 +7669,7 @@ function _kaiensaiTutFinish() {
    開園祭 イベントバナー
 ═══════════════════════════════════════════════════════ */
 function _showKaiensaiBanner() {
-  if (!_isKaiensaiPeriod()) return;
+  if (!_isKaiensaiVisible()) return;
   if (document.getElementById('kaiensaiBanner')) return;
 
   const banner = document.createElement('div');
@@ -9405,6 +9482,7 @@ const SP_ZONES = {
   plaza: { label:"💪 健康・運動・交流",      sub:"",           color:"#f59e0b" },
   life:  { label:"🏠 暮らしの広場",        sub:"",           color:"#f97316" },
   dawn:  { label:"🌅 Dawn Plaza",         sub:"夜明けの広場", color:"#fb923c" },
+  event: { label:"🎪 開園祭イベント",       sub:"5/20〜5/25",  color:"#ff6b35" },
 };
 
 /* POI positions: px/py = % of spmap-inner(960x960px=画像1:1) に基づく正確な建物位置 */
@@ -9448,6 +9526,14 @@ const SP_POIS = [
   { id:"star5",  name:"Night Sky 夜空の展望台",      icon:"🌌", zone:"star", px:93, py:79, desc:"星空の駅に併設された展望台。満天の星空と夜の宇宙を、Emuの仲間とともに眺める場所", status:"open", action:"openRoom2" },
   // 中央・健康
   { id:"plaza1", name:"Fountain 噴水広場",      icon:"⛲", zone:"plaza", px:50, py:38, desc:"SchoolParkの中心。コミュニティ交流広場。DAO投票・イベント開催スポット", status:"open", page:"/schoolpark/fountain.html" },
+  // 🎪 開園祭イベント会場（5/20〜5/25）
+  { id:"event1", name:"たこ焼き屋台",        icon:"🐙", zone:"event", px:42, py:44, desc:"SchoolPark開園祭の屋台！香ばしいたこ焼きをどうぞ🐙", status:"open", eventOnly:true, btnLabel:"🐙 屋台に行く" },
+  { id:"event2", name:"唐揚げ屋台",          icon:"🍗", zone:"event", px:36, py:50, desc:"SchoolPark開園祭の屋台！ジューシーな唐揚げをどうぞ🍗", status:"open", eventOnly:true, btnLabel:"🍗 屋台に行く" },
+  { id:"event3", name:"かき氷屋台",          icon:"🍧", zone:"event", px:44, py:55, desc:"SchoolPark開園祭の屋台！ひんやりかき氷で涼んでね🍧", status:"open", eventOnly:true, btnLabel:"🍧 屋台に行く" },
+  { id:"event4", name:"金魚すくい",          icon:"🐟", zone:"event", px:56, py:44, desc:"SchoolPark開園祭！金魚すくいに挑戦してみよう🐟", status:"open", eventOnly:true, btnLabel:"🐟 挑戦する" },
+  { id:"event5", name:"ヨーヨー釣り",        icon:"🎈", zone:"event", px:62, py:50, desc:"SchoolPark開園祭！ヨーヨー釣りで遊ぼう🎈", status:"open", eventOnly:true, btnLabel:"🎈 遊ぶ" },
+  { id:"event6", name:"射的",               icon:"🎯", zone:"event", px:58, py:56, desc:"SchoolPark開園祭！射的で腕前を試そう🎯", status:"open", eventOnly:true, btnLabel:"🎯 狙う" },
+  { id:"event7", name:"SchoolParkマルシェ",  icon:"🛍️", zone:"event", px:50, py:48, desc:"SchoolPark開園祭の限定マルシェ！デジタルステッカーと冷蔵庫くんのお面をゲットしよう🛍️", status:"open", eventOnly:true, action:"openKaiensaiMarche", btnLabel:"🛍️ マルシェに行く" },
   // 暮らし
   { id:"life1",  name:"House 家",               icon:"🏡", zone:"life",  px:84, py:51, desc:"SchoolParkのオンライン不動産。現実になるようにがんばります！",               status:"open",   eastKey:"house"   },
 ];
@@ -9593,7 +9679,11 @@ function openSpMap(gate) {
 
   // ★ 初回のみ冷蔵庫くんチュートリアル演出を開始
   startSpTutorial();
-  // ★ 開園祭イベント演出（期間中のみ）
+  // ★ 開園祭イベント演出（期間中・オーナープレビュー）
+  if (_isKaiensaiVisible()) {
+    const evItem = document.getElementById('kaiensaiAreaItem');
+    if (evItem) evItem.style.display = '';
+  }
   _showKaiensaiBanner();
   startKaiensaiNotice();
 }
@@ -9997,6 +10087,7 @@ function renderSpMapPois(filter) {
   const activeFilter = filter || _spMapFilter || "all";
   container.innerHTML = "";
   SP_POIS.forEach(poi => {
+    if (poi.eventOnly && !_isKaiensaiVisible()) return;
     if (!_spZoneMatch(poi, activeFilter)) return;
     const zone = SP_ZONES[poi.zone] || {};
     const color = zone.color || "#fff";
@@ -10017,7 +10108,7 @@ function renderSpMapPois(filter) {
 function renderSpContentList(filter) {
   const list = document.getElementById("spContentList");
   if (!list) return;
-  const pois = SP_POIS.filter(p => _spZoneMatch(p, filter));
+  const pois = SP_POIS.filter(p => _spZoneMatch(p, filter) && (!p.eventOnly || _isKaiensaiVisible()));
   if (pois.length === 0) { list.innerHTML = ''; return; }
 
   /* エリアごとにグループ化して表示 */
