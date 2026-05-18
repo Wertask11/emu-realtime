@@ -3698,6 +3698,8 @@ body.paypay-mode #pp-post-fab {
       <div class="sp-wallet-balance-num" id="spWalletBalanceNum">---</div>
       <div class="sp-wallet-balance-label">EMUER 残高</div>
     </div>
+    <!-- パスタイプバッジ -->
+    <div id="spWalletPassType" style="text-align:center;margin:-4px 0 16px;"></div>
 
     <!-- ポイント変換 -->
     <div class="sp-panel-section">
@@ -12313,6 +12315,20 @@ function _refreshSpWalletPanel() {
   const balEl = document.getElementById('spWalletBalanceNum');
   if (balEl) balEl.textContent = balance.toLocaleString();
 
+  // パスタイプバッジ
+  const passEl = document.getElementById('spWalletPassType');
+  if (passEl) {
+    const isPaid = !!(window.hasPaidNFT || window._fromFirebasePaidUsers);
+    const isFree = !!(window.hasFreeNFT && !isPaid);
+    if (isPaid) {
+      passEl.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(212,168,67,0.15);border:1px solid rgba(212,168,67,0.4);color:#D4A843;padding:5px 16px;border-radius:20px;font-size:0.8rem;font-weight:700;letter-spacing:0.05em;">🎫 有料パス</span>';
+    } else if (isFree) {
+      passEl.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.35);color:#60a5fa;padding:5px 16px;border-radius:20px;font-size:0.8rem;font-weight:700;letter-spacing:0.05em;">🎟️ 無料パス</span>';
+    } else {
+      passEl.innerHTML = '';
+    }
+  }
+
   // ポイント
   const goodEl = document.getElementById('spWalletGoodPts');
   const changeEl = document.getElementById('spWalletChangePts');
@@ -12370,7 +12386,7 @@ function _refreshSpWalletPanel() {
       // walletTotalEmuer = syncPendingEmuer内でセットされるブロックチェーン上の実EMUER
       const data2 = _getEmuerData();
       const bal2  = data2 ? data2.balance : 0;
-      const blockchainBal = parseInt(document.getElementById('walletTotalEmuer')?.innerText || '0') || bal2;
+      const blockchainBal = parseInt(document.getElementById('walletTotalEmuer')?.innerText || '0');
       if (balEl) balEl.textContent = bal2.toLocaleString() + '（' + blockchainBal.toLocaleString() + '）';
     }).catch(()=>{});
   } else {
