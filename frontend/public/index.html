@@ -4074,7 +4074,85 @@ body.paypay-mode #pp-post-fab {
       </div>
     </div>
 
-    <!-- 5. チュートリアル設定 -->
+    <!-- 5. キーボード設定 -->
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">⌨️ キーボード設定</div>
+      <div style="font-size:0.73rem;color:#666;margin-bottom:10px;line-height:1.55;">
+        キー <kbd style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:1px 6px;font-size:0.72rem;color:#ccc;">1</kbd>〜<kbd style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:1px 6px;font-size:0.72rem;color:#ccc;">4</kbd> に好きな機能を割り当てられます
+      </div>
+      <style>
+        .sp-ck-row { display:flex;align-items:center;gap:8px;margin-bottom:7px; }
+        .sp-ck-label {
+          display:flex;align-items:center;gap:6px;
+          font-size:0.78rem;font-weight:700;color:#aaa;flex-shrink:0;width:52px;
+        }
+        .sp-ck-key {
+          background:rgba(212,168,67,.12);border:1px solid rgba(212,168,67,.35);
+          border-radius:7px;padding:2px 9px;font-size:0.75rem;font-weight:800;
+          color:#D4A843;font-family:'SF Mono',monospace;letter-spacing:.05em;
+        }
+        .sp-ck-select {
+          flex:1;background:#1a1d2e;border:1px solid rgba(255,255,255,.1);
+          border-radius:8px;color:#ccc;padding:6px 8px;font-size:0.78rem;outline:none;
+          transition:border-color .2s;
+        }
+        .sp-ck-select:focus { border-color:rgba(212,168,67,.5); }
+      </style>
+      <div class="sp-ck-row">
+        <div class="sp-ck-label"><span class="sp-ck-key">1</span></div>
+        <select id="spCustomKey1" class="sp-ck-select" onchange="spSettingSave()">
+          <option value="none">（なし）</option>
+          <option value="agents">🤖 SchoolPark agents</option>
+          <option value="wallet">💰 ウォレット</option>
+          <option value="taxi">🚕 タクシー</option>
+          <option value="settings">⚙️ 設定</option>
+          <option value="tutorial">📖 チュートリアル</option>
+          <option value="reizo">🧊 冷蔵庫くんに聞く</option>
+          <option value="emu">🌐 Emu へ戻る</option>
+        </select>
+      </div>
+      <div class="sp-ck-row">
+        <div class="sp-ck-label"><span class="sp-ck-key">2</span></div>
+        <select id="spCustomKey2" class="sp-ck-select" onchange="spSettingSave()">
+          <option value="none">（なし）</option>
+          <option value="agents">🤖 SchoolPark agents</option>
+          <option value="wallet">💰 ウォレット</option>
+          <option value="taxi">🚕 タクシー</option>
+          <option value="settings">⚙️ 設定</option>
+          <option value="tutorial">📖 チュートリアル</option>
+          <option value="reizo">🧊 冷蔵庫くんに聞く</option>
+          <option value="emu">🌐 Emu へ戻る</option>
+        </select>
+      </div>
+      <div class="sp-ck-row">
+        <div class="sp-ck-label"><span class="sp-ck-key">3</span></div>
+        <select id="spCustomKey3" class="sp-ck-select" onchange="spSettingSave()">
+          <option value="none">（なし）</option>
+          <option value="agents">🤖 SchoolPark agents</option>
+          <option value="wallet">💰 ウォレット</option>
+          <option value="taxi">🚕 タクシー</option>
+          <option value="settings">⚙️ 設定</option>
+          <option value="tutorial">📖 チュートリアル</option>
+          <option value="reizo">🧊 冷蔵庫くんに聞く</option>
+          <option value="emu">🌐 Emu へ戻る</option>
+        </select>
+      </div>
+      <div class="sp-ck-row">
+        <div class="sp-ck-label"><span class="sp-ck-key">4</span></div>
+        <select id="spCustomKey4" class="sp-ck-select" onchange="spSettingSave()">
+          <option value="none">（なし）</option>
+          <option value="agents">🤖 SchoolPark agents</option>
+          <option value="wallet">💰 ウォレット</option>
+          <option value="taxi">🚕 タクシー</option>
+          <option value="settings">⚙️ 設定</option>
+          <option value="tutorial">📖 チュートリアル</option>
+          <option value="reizo">🧊 冷蔵庫くんに聞く</option>
+          <option value="emu">🌐 Emu へ戻る</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 6. チュートリアル設定 -->
     <div class="sp-panel-section">
       <div class="sp-panel-section-title">🎓 チュートリアル設定</div>
       <div class="sp-setting-row">
@@ -9864,8 +9942,31 @@ function _spTutFinish() {
       case 't': openTaxi?.();                   break;
       case 'a': openSpPanel('spRobotPanel');     break;
       case 's': openSpPanel('spSettingsPanel'); break;
+      case '1': _execCustomKey(1); break;
+      case '2': _execCustomKey(2); break;
+      case '3': _execCustomKey(3); break;
+      case '4': _execCustomKey(4); break;
     }
   });
+
+  /* ── カスタムキー実行 ── */
+  function _spRunAction(action) {
+    switch (action) {
+      case 'agents':   openSpPanel('spRobotPanel');    break;
+      case 'wallet':   openSpPanel('spWalletPanel');   break;
+      case 'taxi':     openTaxi?.();                   break;
+      case 'settings': openSpPanel('spSettingsPanel'); break;
+      case 'tutorial': openSpContent('/schoolpark/tutorial.html'); break;
+      case 'reizo':    spReizoOpen?.();                break;
+      case 'emu':      closeSpMap?.();                 break;
+    }
+  }
+  function _execCustomKey(n) {
+    const s = JSON.parse(localStorage.getItem('spSettings') || '{}');
+    const action = s['spCustomKey' + n] || 'none';
+    if (action === 'none') return;
+    _spRunAction(action);
+  }
 
   /* ── Aora シーケンス（A→o→r→a でagentsパネルを召喚） ── */
   let _aoraBuffer = '';
@@ -12338,6 +12439,11 @@ function _loadSpSettings() {
     if (zoomEl && s.spSettingZoom) { zoomEl.value = s.spSettingZoom; spSettingApplyZoom(s.spSettingZoom, true); }
     const tutEl = document.getElementById('spSettingTutorialMode');
     if (tutEl) tutEl.value = s.spSettingTutorialMode || 'always';
+    // カスタムキー
+    [1,2,3,4].forEach(n => {
+      const el = document.getElementById('spCustomKey' + n);
+      if (el) el.value = s['spCustomKey' + n] || 'none';
+    });
   } catch(e) {}
 }
 
@@ -12352,6 +12458,10 @@ function spSettingSave() {
     spSettingLang:          get('spSettingLang')?.value || 'ja',
     spSettingZoom:          get('spSettingZoom')?.value || '1',
     spSettingTutorialMode:  get('spSettingTutorialMode')?.value || 'always',
+    spCustomKey1: get('spCustomKey1')?.value || 'none',
+    spCustomKey2: get('spCustomKey2')?.value || 'none',
+    spCustomKey3: get('spCustomKey3')?.value || 'none',
+    spCustomKey4: get('spCustomKey4')?.value || 'none',
   };
   localStorage.setItem('spSettings', JSON.stringify(s));
 }
