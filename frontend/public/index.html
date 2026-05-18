@@ -7303,6 +7303,16 @@ async function _initEmuer() {
     } catch(e) {}
   }
 
+  // ── v2 マイグレーション: 旧初期残高 300 → 1000 に更新 ──
+  // 条件: balance=300 かつ一度も制限なし・支出なし（初期状態のまま）
+  if (data && data.balance === 300 && !data.restrictionUntil
+      && (data.totalSpent || 0) === 0 && (data.restrictionCount || 0) === 0
+      && !data._migrated_v2) {
+    data.balance = 1000;
+    data._migrated_v2 = true;
+    _saveEmuerData(data);
+  }
+
   if (!data) {
     // 初回 → 1000 EMUER から開始（ステップサイクルは最初の制限後から）
     const userType0 = _getUserTypeForEmuer();
@@ -9941,8 +9951,17 @@ function _spTutFinish() {
    ★ キーボードショートカット・コマンドバーは有料パス限定
 ═══════════════════════════════════════════════════════ */
 
-/** 有料パスユーザー判定 */
+/**
+ * 有料パスユーザー判定
+ * ★ spPassType（入場時に確実にセット）を最優先ソースとする
+ *    window.hasPaidNFT は「NFT所持状況」であって「入場パス種別」ではないため
+ *    free 入場後に paid NFT チェックで上書きされてしまう問題を防ぐ
+ */
 function _spIsPaidUser() {
+  const _ls = localStorage.getItem('spPassType');
+  if (_ls === 'paid') return true;
+  if (_ls === 'free') return false;
+  // spPassType 未設定（旧セッション互換）
   return !!(window.hasPaidNFT || window._fromFirebasePaidUsers);
 }
 
@@ -12372,12 +12391,13 @@ function _refreshSpWalletPanel() {
   const balEl = document.getElementById('spWalletBalanceNum');
   if (balEl) balEl.textContent = balance.toLocaleString();
 
-  // パスタイプバッジ（window フラグ優先、なければ localStorage フォールバック）
+  // パスタイプバッジ（spPassType を真のソースとして使用）
   const passEl = document.getElementById('spWalletPassType');
   if (passEl) {
-    const _lsPass = localStorage.getItem('spPassType'); // 'paid' / 'free' / null
-    const isPaid = !!(window.hasPaidNFT || window._fromFirebasePaidUsers || _lsPass === 'paid');
-    const isFree = !!(window.hasFreeNFT || _lsPass === 'free') && !isPaid;
+    const _passType = localStorage.getItem('spPassType'); // 'paid' / 'free' / null
+    // spPassType が明示的にセットされていればそれを使う
+    const isPaid = _passType === 'paid' || (!_passType && !!(window.hasPaidNFT || window._fromFirebasePaidUsers));
+    const isFree = _passType === 'free' || (!_passType && !!(window.hasFreeNFT) && !isPaid);
     if (isPaid) {
       passEl.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(212,168,67,0.15);border:1px solid rgba(212,168,67,0.4);color:#D4A843;padding:5px 16px;border-radius:20px;font-size:0.8rem;font-weight:700;letter-spacing:0.05em;">🎫 有料パス</span>';
     } else if (isFree) {
@@ -12518,9 +12538,8 @@ function _loadSpSettings() {
       const el = document.getElementById('spCustomKey' + n);
       if (el) el.value = s['spCustomKey' + n] || 'none';
     });
-    // キーボード設定：無料パスはグレーアウト
-    const _lsPass = localStorage.getItem('spPassType');
-    const _isPaidUser = !!(window.hasPaidNFT || window._fromFirebasePaidUsers || _lsPass === 'paid');
+    // キーボード設定：無料パスはグレーアウト（spPassType を真のソースとして使用）
+    const _isPaidUser = _spIsPaidUser();
     const kbSection = document.getElementById('spKeyboardSettingSection');
     const kbPaidOnly = document.getElementById('spKeyboardPaidOnly');
     if (kbSection) {
