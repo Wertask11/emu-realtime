@@ -3764,6 +3764,20 @@ body.paypay-mode #pp-post-fab {
       </div>
     </div>
 
+    <!-- ══════ Phase 4a: タスク自動実行エージェント ══════ -->
+    <div class="sp-panel-section" id="taskAgentSection">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <div class="sp-panel-section-title" style="margin-bottom:0;">📋 タスク自動実行</div>
+        <div style="font-size:0.6rem;font-weight:800;letter-spacing:.1em;padding:2px 8px;border-radius:999px;
+                    color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);">
+          稼働中
+        </div>
+      </div>
+      <div id="taskAgentBody">
+        <div style="text-align:center;padding:18px 0;color:#555;font-size:0.8rem;">読み込み中…</div>
+      </div>
+    </div>
+
     <!-- ══════ Phase 3: 自動巡回エージェント ══════ -->
     <div class="sp-panel-section" id="patrolAgentSection">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -3850,7 +3864,7 @@ body.paypay-mode #pp-post-fab {
       </div>
 
       <div class="agents-cap">
-        <div class="agents-cap-badge soon">PLANNED</div>
+        <div class="agents-cap-badge active">稼働中</div>
         <div class="agents-cap-icon">📋</div>
         <div>
           <div class="agents-cap-name">タスク自動実行</div>
@@ -3901,9 +3915,9 @@ body.paypay-mode #pp-post-fab {
             <div style="font-size:0.73rem;color:#666;margin-top:1px;">SchoolPark 自動巡回エージェント</div>
           </div>
           <div style="position:relative;">
-            <div style="position:absolute;left:-16px;top:4px;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.2);"></div>
-            <div style="font-size:0.78rem;font-weight:600;color:#555;">Phase 4</div>
-            <div style="font-size:0.73rem;color:#444;margin-top:1px;">完全自律エージェント — 目標は「あなた」</div>
+            <div style="position:absolute;left:-16px;top:4px;width:10px;height:10px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.5);"></div>
+            <div style="font-size:0.78rem;font-weight:800;color:#4ade80;">Phase 4 — ✅ 稼働中</div>
+            <div style="font-size:0.73rem;color:#666;margin-top:1px;">完全自律エージェント — 目標は「あなた」</div>
           </div>
         </div>
       </div>
@@ -7709,6 +7723,419 @@ function openKaiensaiMarche() {
   `;
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
+}
+
+/* ═══════════════════════════════════════════════════════
+   SchoolPark agents — Phase 4a: タスク自動実行
+═══════════════════════════════════════════════════════ */
+
+const _TASK_LS_KEY = () =>
+  'sp_agent_tasks_' + ((window.connectedAccount || localStorage.getItem('emuWallet') || 'guest').toLowerCase());
+
+const TASK_TYPES = {
+  patrol:            { icon:'🗺️', label:'自動巡回',     color:'#94a3b8' },
+  check_balance:     { icon:'💎', label:'残高チェック',  color:'#D4A843' },
+  reminder:          { icon:'🔔', label:'リマインダー',  color:'#c084fc' },
+  restriction_watch: { icon:'⏳', label:'制限解除監視',  color:'#eab308' },
+};
+
+/* ---------- ストレージ ---------- */
+function _getTasks() {
+  try { return JSON.parse(localStorage.getItem(_TASK_LS_KEY()) || '[]'); } catch { return []; }
+}
+function _saveTasks(tasks) {
+  localStorage.setItem(_TASK_LS_KEY(), JSON.stringify(tasks));
+}
+function _addTask(task) {
+  const tasks = _getTasks();
+  task.id = 'task_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+  task.createdAt = Date.now();
+  task.status = 'pending';
+  tasks.push(task);
+  _saveTasks(tasks);
+  return task;
+}
+function _cancelTask(taskId) {
+  const tasks = _getTasks().map(t => t.id === taskId ? { ...t, status:'cancelled' } : t);
+  _saveTasks(tasks);
+}
+
+/* ---------- タスクランナー（30秒ごとにチェック）---------- */
+let _taskRunnerTimer = null;
+
+function _startTaskRunner() {
+  if (_taskRunnerTimer) return;
+  _taskRunnerTimer = setInterval(_checkAndFireTasks, 30000);
+  _checkAndFireTasks(); // 即時チェック
+}
+function _stopTaskRunner() {
+  if (_taskRunnerTimer) { clearInterval(_taskRunnerTimer); _taskRunnerTimer = null; }
+}
+
+async function _checkAndFireTasks() {
+  const tasks = _getTasks();
+  const now = Date.now();
+  let changed = false;
+
+  for (const task of tasks) {
+    if (task.status !== 'pending') continue;
+    let shouldFire = false;
+
+    if (task.trigger.type === 'datetime') {
+      shouldFire = now >= task.trigger.value;
+    } else if (task.trigger.type === 'delay') {
+      shouldFire = now >= task.createdAt + task.trigger.value;
+    } else if (task.trigger.type === 'restriction_lifted') {
+      const d = _getEmuerData();
+      shouldFire = !d?.restrictionUntil || now >= d.restrictionUntil;
+    } else if (task.trigger.type === 'balance_below') {
+      const d = _getEmuerData();
+      shouldFire = (d?.balance ?? 0) <= task.trigger.value;
+    }
+
+    if (shouldFire) {
+      task.status  = 'fired';
+      task.firedAt = now;
+      changed = true;
+      await _fireTask(task);
+    }
+  }
+  if (changed) {
+    _saveTasks(tasks);
+    _renderTaskAgent(); // UIを更新
+  }
+}
+
+async function _fireTask(task) {
+  // ブラウザ通知
+  const typeInfo = TASK_TYPES[task.type] || TASK_TYPES.reminder;
+  _sendAgentNotification(
+    `${typeInfo.icon} ${task.payload.label || typeInfo.label}`,
+    task.payload.message || 'タスクが実行されました'
+  );
+
+  // アクション実行
+  if (task.type === 'patrol' && task.payload.patrolPreset) {
+    // パネルが開いていれば巡回開始
+    const panel = document.getElementById('spRobotPanel');
+    if (panel?.classList.contains('open')) {
+      _selectPatrolPreset(task.payload.patrolPreset);
+      setTimeout(_startPatrol, 300);
+    }
+  } else if (task.type === 'check_balance') {
+    const d = _getEmuerData();
+    const bal = d?.balance ?? 0;
+    _sendAgentNotification('💎 残高チェック完了', `現在の残高: ${bal.toLocaleString()} 💎`);
+  }
+}
+
+function _sendAgentNotification(title, body) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try { new Notification(title, { body, icon: '/assets/mascot.jpg' }); } catch {}
+  }
+  // パネル内トースト
+  _showAgentToast(`${title}\n${body}`);
+}
+
+function _showAgentToast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = `
+    position:fixed;bottom:80px;left:50%;transform:translateX(-50%) scale(.95);
+    background:linear-gradient(135deg,#1a2040,#0e1828);
+    border:1px solid rgba(212,168,67,.35);
+    color:#fff;padding:12px 20px;border-radius:14px;
+    font-size:12px;font-weight:700;z-index:19000;
+    box-shadow:0 6px 24px rgba(0,0,0,.5);text-align:center;
+    max-width:280px;line-height:1.5;white-space:pre-line;
+    animation:taskToastIn .3s cubic-bezier(.34,1.56,.64,1) forwards;
+  `;
+  t.textContent = msg;
+  // アニメーションCSS（一度だけ追加）
+  if (!document.getElementById('taskToastStyle')) {
+    const s = document.createElement('style');
+    s.id = 'taskToastStyle';
+    s.textContent = `
+      @keyframes taskToastIn {
+        from{opacity:0;transform:translateX(-50%) scale(.85) translateY(10px)}
+        to{opacity:1;transform:translateX(-50%) scale(1) translateY(0)}
+      }`;
+    document.head.appendChild(s);
+  }
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(() => t.remove(), 400); }, 3500);
+}
+
+/* ---------- 通知権限リクエスト ---------- */
+async function _requestNotificationPermission() {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  const result = await Notification.requestPermission();
+  return result === 'granted';
+}
+
+/* ---------- メインUI ---------- */
+function _initTaskAgent() {
+  _startTaskRunner();
+  _renderTaskAgent();
+}
+
+function _renderTaskAgent() {
+  const body = document.getElementById('taskAgentBody');
+  if (!body) return;
+
+  const tasks   = _getTasks();
+  const pending = tasks.filter(t => t.status === 'pending');
+  const recent  = tasks.filter(t => t.status === 'fired').slice(-3).reverse();
+  const notifOk = 'Notification' in window && Notification.permission === 'granted';
+
+  // 通知権限バナー
+  const notifBanner = notifOk ? '' : `
+    <div style="background:rgba(212,168,67,.08);border:1px solid rgba(212,168,67,.2);
+                border-radius:12px;padding:10px 12px;margin-bottom:10px;
+                display:flex;align-items:center;gap:10px;">
+      <span style="font-size:1.1rem;">🔔</span>
+      <div style="flex:1;font-size:0.75rem;color:#aaa;">通知を許可するとタスク発火時にお知らせします</div>
+      <button onclick="_requestNotificationPermission().then(ok=>{if(ok)_renderTaskAgent();})"
+        style="padding:5px 10px;border-radius:999px;border:0;background:#D4A843;
+               color:#000;font-size:0.7rem;font-weight:800;cursor:pointer;font-family:inherit;">
+        許可
+      </button>
+    </div>`;
+
+  // クイック追加ボタン群
+  const quickHtml = `
+    <div style="font-size:0.68rem;color:#555;margin-bottom:7px;letter-spacing:.05em;">⚡ クイック追加</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:12px;">
+      <button onclick="_quickAddTask('restriction_watch')"
+        style="padding:9px 8px;border-radius:11px;border:1.5px solid rgba(234,179,8,.25);
+               background:rgba(234,179,8,.07);color:#eab308;font-size:0.72rem;font-weight:700;
+               cursor:pointer;font-family:inherit;text-align:left;line-height:1.4;">
+        ⏳ 制限解除後に<br><span style="opacity:.7;font-size:0.65rem;">巡回を自動実行</span>
+      </button>
+      <button onclick="_quickAddTask('balance_check_low')"
+        style="padding:9px 8px;border-radius:11px;border:1.5px solid rgba(212,168,67,.25);
+               background:rgba(212,168,67,.07);color:#D4A843;font-size:0.72rem;font-weight:700;
+               cursor:pointer;font-family:inherit;text-align:left;line-height:1.4;">
+        💎 残高100以下で<br><span style="opacity:.7;font-size:0.65rem;">アラート通知</span>
+      </button>
+      <button onclick="_quickAddTask('remind_30min')"
+        style="padding:9px 8px;border-radius:11px;border:1.5px solid rgba(192,132,252,.25);
+               background:rgba(192,132,252,.07);color:#c084fc;font-size:0.72rem;font-weight:700;
+               cursor:pointer;font-family:inherit;text-align:left;line-height:1.4;">
+        🔔 30分後に<br><span style="opacity:.7;font-size:0.65rem;">リマインダー通知</span>
+      </button>
+      <button onclick="_showTaskCustomForm()"
+        style="padding:9px 8px;border-radius:11px;border:1.5px solid rgba(255,255,255,.1);
+               background:rgba(255,255,255,.04);color:#888;font-size:0.72rem;font-weight:700;
+               cursor:pointer;font-family:inherit;text-align:left;line-height:1.4;">
+        ✏️ カスタム<br><span style="opacity:.7;font-size:0.65rem;">タスクを作成</span>
+      </button>
+    </div>
+    <div id="taskCustomForm" style="display:none;margin-bottom:12px;"></div>
+  `;
+
+  // 実行待ちタスクリスト
+  const pendingHtml = pending.length === 0
+    ? `<div style="color:#444;font-size:0.75rem;padding:6px 0;">実行待ちのタスクはありません</div>`
+    : pending.map(t => _buildTaskCard(t)).join('');
+
+  // 実行ログ
+  const recentHtml = recent.length === 0 ? '' : `
+    <div style="font-size:0.68rem;color:#555;margin-top:10px;margin-bottom:6px;letter-spacing:.05em;">✅ 実行済み（直近）</div>
+    ${recent.map(t => _buildTaskCard(t, true)).join('')}
+  `;
+
+  body.innerHTML = `
+    ${notifBanner}
+    ${quickHtml}
+    <div style="font-size:0.68rem;color:#555;margin-bottom:6px;letter-spacing:.05em;">
+      📋 実行待ち <span style="color:#D4A843;font-weight:800;">${pending.length}</span>件
+    </div>
+    <div id="pendingTaskList">${pendingHtml}</div>
+    <div id="recentTaskList">${recentHtml}</div>
+  `;
+}
+
+function _buildTaskCard(task, done = false) {
+  const typeInfo = TASK_TYPES[task.type] || TASK_TYPES.reminder;
+  const now      = Date.now();
+
+  let triggerText = '';
+  if (task.trigger.type === 'datetime') {
+    const dt = new Date(task.trigger.value);
+    triggerText = `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')} に実行`;
+  } else if (task.trigger.type === 'delay') {
+    const remaining = (task.createdAt + task.trigger.value) - now;
+    triggerText = done
+      ? '実行済み'
+      : remaining > 0
+        ? `あと ${_fmtDuration(remaining)}`
+        : '間もなく実行';
+  } else if (task.trigger.type === 'restriction_lifted') {
+    triggerText = done ? '実行済み' : '制限解除後に実行';
+  } else if (task.trigger.type === 'balance_below') {
+    triggerText = done ? '実行済み' : `残高 ${task.trigger.value}💎 以下で実行`;
+  }
+
+  const col = done ? '#555' : typeInfo.color;
+  return `
+    <div style="display:flex;align-items:flex-start;gap:9px;padding:9px 10px;
+                border-radius:12px;background:rgba(255,255,255,.03);
+                border:1px solid rgba(255,255,255,${done ? '.04' : '.07'});margin-bottom:7px;">
+      <span style="font-size:1rem;">${typeInfo.icon}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:0.77rem;font-weight:700;color:${done ? '#666' : '#ddd'};
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          ${task.payload.label || typeInfo.label}
+        </div>
+        <div style="font-size:0.68rem;color:#555;margin-top:2px;">${triggerText}</div>
+      </div>
+      ${!done ? `<button onclick="_cancelTask('${task.id}');_renderTaskAgent();"
+        style="padding:3px 8px;border-radius:999px;border:1px solid rgba(239,68,68,.3);
+               background:transparent;color:#f87171;font-size:0.65rem;
+               cursor:pointer;font-family:inherit;flex-shrink:0;">取消</button>` : ''}
+    </div>`;
+}
+
+function _fmtDuration(ms) {
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (h > 0) return `${h}時間${m}分`;
+  return `${m}分`;
+}
+
+/* ---------- クイックタスク追加 ---------- */
+function _quickAddTask(preset) {
+  const now = Date.now();
+  let task;
+  switch (preset) {
+    case 'restriction_watch':
+      task = {
+        type: 'patrol',
+        trigger: { type:'restriction_lifted' },
+        payload: { label:'制限解除後 → 開園祭巡回', message:'制限が解除されました！自動巡回を開始します。', patrolPreset:'event' },
+      };
+      break;
+    case 'balance_check_low':
+      task = {
+        type: 'check_balance',
+        trigger: { type:'balance_below', value:100 },
+        payload: { label:'残高低下アラート', message:'EMUERが100以下になりました。' },
+      };
+      break;
+    case 'remind_30min':
+      task = {
+        type: 'reminder',
+        trigger: { type:'delay', value: 30 * 60 * 1000 },
+        payload: { label:'30分後リマインダー', message:'SchoolPark agents からのリマインドです！' },
+      };
+      break;
+  }
+  if (task) {
+    _addTask(task);
+    _showAgentToast(`✅ タスク登録完了\n${task.payload.label}`);
+    _renderTaskAgent();
+  }
+}
+
+/* ---------- カスタムフォーム ---------- */
+function _showTaskCustomForm() {
+  const form = document.getElementById('taskCustomForm');
+  if (!form) return;
+  const visible = form.style.display !== 'none';
+  if (visible) { form.style.display = 'none'; return; }
+
+  form.style.display = 'block';
+  form.innerHTML = `
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);
+                border-radius:14px;padding:12px 14px;">
+      <div style="font-size:0.72rem;font-weight:700;color:#ccc;margin-bottom:10px;">✏️ カスタムタスク</div>
+
+      <div style="margin-bottom:8px;">
+        <div style="font-size:0.67rem;color:#666;margin-bottom:4px;">タスクの種類</div>
+        <select id="ctType" style="width:100%;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,.1);
+                                   background:#1a1a2e;color:#ddd;font-size:0.77rem;font-family:inherit;">
+          <option value="reminder">🔔 リマインダー</option>
+          <option value="patrol">🗺️ 自動巡回</option>
+          <option value="check_balance">💎 残高チェック</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:8px;">
+        <div style="font-size:0.67rem;color:#666;margin-bottom:4px;">実行タイミング</div>
+        <select id="ctTrigger" onchange="_updateCtTriggerDetail()"
+          style="width:100%;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,.1);
+                 background:#1a1a2e;color:#ddd;font-size:0.77rem;font-family:inherit;">
+          <option value="delay_30">30分後</option>
+          <option value="delay_60">1時間後</option>
+          <option value="delay_180">3時間後</option>
+          <option value="datetime">日時指定</option>
+          <option value="restriction_lifted">制限解除後</option>
+        </select>
+      </div>
+
+      <div id="ctDatetimeWrap" style="display:none;margin-bottom:8px;">
+        <div style="font-size:0.67rem;color:#666;margin-bottom:4px;">日時</div>
+        <input type="datetime-local" id="ctDatetime"
+          style="width:100%;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,.1);
+                 background:#1a1a2e;color:#ddd;font-size:0.77rem;font-family:inherit;box-sizing:border-box;">
+      </div>
+
+      <div style="margin-bottom:10px;">
+        <div style="font-size:0.67rem;color:#666;margin-bottom:4px;">メモ（任意）</div>
+        <input type="text" id="ctMemo" placeholder="例: 投票を忘れずに！"
+          style="width:100%;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,.1);
+                 background:#1a1a2e;color:#ddd;font-size:0.77rem;font-family:inherit;box-sizing:border-box;">
+      </div>
+
+      <button onclick="_submitCustomTask()"
+        style="width:100%;padding:9px;border-radius:10px;border:0;
+               background:linear-gradient(135deg,#D4A843,#c8921a);color:#000;
+               font-weight:800;font-size:0.8rem;cursor:pointer;font-family:inherit;">
+        ＋ タスクを登録
+      </button>
+    </div>
+  `;
+}
+
+function _updateCtTriggerDetail() {
+  const sel  = document.getElementById('ctTrigger')?.value;
+  const wrap = document.getElementById('ctDatetimeWrap');
+  if (wrap) wrap.style.display = sel === 'datetime' ? 'block' : 'none';
+}
+
+function _submitCustomTask() {
+  const type    = document.getElementById('ctType')?.value || 'reminder';
+  const trig    = document.getElementById('ctTrigger')?.value || 'delay_30';
+  const memo    = document.getElementById('ctMemo')?.value?.trim() || '';
+  const typeInfo = TASK_TYPES[type] || TASK_TYPES.reminder;
+
+  let trigger;
+  if      (trig === 'delay_30')          trigger = { type:'delay', value: 30*60*1000 };
+  else if (trig === 'delay_60')          trigger = { type:'delay', value: 60*60*1000 };
+  else if (trig === 'delay_180')         trigger = { type:'delay', value: 180*60*1000 };
+  else if (trig === 'restriction_lifted') trigger = { type:'restriction_lifted' };
+  else if (trig === 'datetime') {
+    const dt = document.getElementById('ctDatetime')?.value;
+    if (!dt) { _showAgentToast('⚠️ 日時を指定してください'); return; }
+    trigger = { type:'datetime', value: new Date(dt).getTime() };
+  }
+
+  const task = {
+    type,
+    trigger,
+    payload: {
+      label:   memo || typeInfo.label,
+      message: memo || `${typeInfo.label}を実行しました`,
+      patrolPreset: type === 'patrol' ? 'event' : undefined,
+    },
+  };
+
+  _addTask(task);
+  _showAgentToast(`✅ タスク登録完了\n${task.payload.label}`);
+  const form = document.getElementById('taskCustomForm');
+  if (form) form.style.display = 'none';
+  _renderTaskAgent();
 }
 
 /* ═══════════════════════════════════════════════════════
