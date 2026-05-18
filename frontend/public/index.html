@@ -3764,6 +3764,21 @@ body.paypay-mode #pp-post-fab {
       </div>
     </div>
 
+    <!-- ══════ Phase 2: EMUER エージェントダッシュボード ══════ -->
+    <div class="sp-panel-section" id="emuerAgentSection">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <div class="sp-panel-section-title" style="margin-bottom:0;">💎 EMUER Agent</div>
+        <div style="font-size:0.6rem;font-weight:800;letter-spacing:.1em;padding:2px 8px;border-radius:999px;
+                    color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);">
+          稼働中
+        </div>
+      </div>
+      <!-- JS で _renderEmuerAgent() が中身を書き込む -->
+      <div id="emuerAgentBody">
+        <div style="text-align:center;padding:18px 0;color:#555;font-size:0.8rem;">読み込み中…</div>
+      </div>
+    </div>
+
     <!-- 能力カード -->
     <div class="sp-panel-section">
       <div class="sp-panel-section-title">⚡ エージェント能力</div>
@@ -3789,8 +3804,8 @@ body.paypay-mode #pp-post-fab {
         .agents-cap-badge.soon {
           color:#888;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
         }
-        .agents-cap-badge.wip {
-          color:#D4A843;background:rgba(212,168,67,.12);border:1px solid rgba(212,168,67,.3);
+        .agents-cap-badge.active {
+          color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);
         }
         .agents-cap-icon {
           font-size:1.6rem;line-height:1;flex-shrink:0;
@@ -3812,7 +3827,7 @@ body.paypay-mode #pp-post-fab {
       </div>
 
       <div class="agents-cap">
-        <div class="agents-cap-badge soon">PLANNED</div>
+        <div class="agents-cap-badge active">稼働中</div>
         <div class="agents-cap-icon">💎</div>
         <div>
           <div class="agents-cap-name">EMUER 自動管理</div>
@@ -3862,9 +3877,9 @@ body.paypay-mode #pp-post-fab {
             <div style="font-size:0.73rem;color:#777;margin-top:1px;">UI設計・基盤構築・能力定義</div>
           </div>
           <div style="position:relative;">
-            <div style="position:absolute;left:-16px;top:4px;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.2);"></div>
-            <div style="font-size:0.78rem;font-weight:600;color:#555;">Phase 2</div>
-            <div style="font-size:0.73rem;color:#444;margin-top:1px;">EMUER 管理エージェント</div>
+            <div style="position:absolute;left:-16px;top:4px;width:10px;height:10px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.5);"></div>
+            <div style="font-size:0.78rem;font-weight:800;color:#4ade80;">Phase 2 — ✅ 稼働中</div>
+            <div style="font-size:0.73rem;color:#666;margin-top:1px;">EMUER 自動管理エージェント</div>
           </div>
           <div style="position:relative;">
             <div style="position:absolute;left:-16px;top:4px;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.2);"></div>
@@ -7683,6 +7698,222 @@ function openKaiensaiMarche() {
 }
 
 /* ═══════════════════════════════════════════════════════
+   SchoolPark agents — Phase 2: EMUER 自動管理
+═══════════════════════════════════════════════════════ */
+let _emuerAgentTimer = null;
+
+function _stopEmuerAgent() {
+  if (_emuerAgentTimer) { clearInterval(_emuerAgentTimer); _emuerAgentTimer = null; }
+}
+
+async function _startEmuerAgent() {
+  _stopEmuerAgent();
+  await _renderEmuerAgent();
+  // 制限中は1秒おき、通常時は15秒おきに更新
+  _emuerAgentTimer = setInterval(async () => {
+    const d = _getEmuerData();
+    const interval = (d && d.restrictionUntil && Date.now() < d.restrictionUntil) ? 1000 : 15000;
+    // 実行周期を動的調整（制限中→1秒、通常→15秒）
+    await _renderEmuerAgent();
+    // タイマー自体はそのまま（1秒固定で回し、内部でレンダリング内容を変える）
+  }, 1000);
+}
+
+async function _renderEmuerAgent() {
+  const body = document.getElementById('emuerAgentBody');
+  if (!body) return;
+
+  let data = _getEmuerData();
+  if (!data) data = await _initEmuer();
+  if (!data) {
+    body.innerHTML = `<div style="text-align:center;padding:16px;color:#555;font-size:0.8rem;">
+      EMUERデータを読み込めません。SchoolParkマップを一度開いてください。</div>`;
+    return;
+  }
+
+  const now          = Date.now();
+  const balance      = data.balance ?? 0;
+  const totalSpent   = data.totalSpent ?? 0;
+  const visitCount   = data.visitCount ?? 0;
+  const restricted   = !!(data.restrictionUntil && now < data.restrictionUntil);
+  const userType     = _getUserTypeForEmuer();
+  const steps        = _getEmuerSteps(userType);
+  const stepDone     = data.restrictionCount ?? 0;
+  const isFinal      = !!data._cycleComplete;
+  const history      = data.history || [];
+
+  // ── 残高バー計算 ──
+  const maxBal = steps[0].balance; // 初期補充量をMAXとして使用
+  const balPct = Math.min(100, Math.round((balance / maxBal) * 100));
+  const barColor = balance <= 0 ? '#ef4444' : balance <= maxBal * 0.3 ? '#eab308' : '#4ade80';
+
+  // ── 残高で訪問できるスポット数 ──
+  const costs = Object.values(EMUER_RATE_CONFIG).filter(c => c > 0);
+  const minCost = Math.min(...costs);
+  const avgCost = Math.round(costs.reduce((a,b) => a+b, 0) / costs.length);
+  const accessibleMin  = balance > 0 ? Math.floor(balance / minCost) : 0;
+  const accessibleAvg  = balance > 0 ? Math.floor(balance / avgCost) : 0;
+
+  // ── カウントダウン ──
+  function fmtCountdown(ms) {
+    if (ms <= 0) return '00:00:00';
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+  const remainMs = restricted ? data.restrictionUntil - now : 0;
+
+  // ── 次の補充量 ──
+  let nextRefillBal = null;
+  if (isFinal) {
+    nextRefillBal = EMUER_COMPLETION_REWARD; // 実EMUER配布
+  } else if (restricted) {
+    const nextIdx = stepDone < steps.length ? stepDone : steps.length - 1;
+    nextRefillBal = data._nextStepBalance ?? steps[Math.min(nextIdx, steps.length - 1)].balance;
+  }
+
+  // ── スマートアドバイス ──
+  let advice = '', adviceColor = '#888';
+  if (restricted && isFinal) {
+    advice = `🎉 最終制限中！解除後に ${EMUER_COMPLETION_REWARD.toLocaleString()} EMUER 実配布。あと少し！`;
+    adviceColor = '#5faaff';
+  } else if (restricted) {
+    advice = `⏳ 制限解除まで待機中。解除後 ${nextRefillBal?.toLocaleString() ?? '—'} EMUER 自動補充。`;
+    adviceColor = '#eab308';
+  } else if (balance <= 0) {
+    advice = `⚠️ 残高0。次のスポット訪問で制限が始まります。`;
+    adviceColor = '#ef4444';
+  } else if (balance <= maxBal * 0.2) {
+    advice = `⚠️ 残高少。最安スポット（${minCost}💎）を中心に巡回推奨。`;
+    adviceColor = '#eab308';
+  } else if (balance >= maxBal * 0.8) {
+    advice = `✅ 残高十分。今がアクティブに動くチャンス！`;
+    adviceColor = '#4ade80';
+  } else {
+    advice = `💡 あと約 ${accessibleAvg} スポット巡回可能（平均コスト計算）。`;
+    adviceColor = '#aaa';
+  }
+
+  // ── 消費履歴HTML ──
+  const histHtml = history.length === 0
+    ? `<div style="color:#555;font-size:0.75rem;padding:6px 0;">まだ消費履歴がありません</div>`
+    : history.slice(0, 5).map(h => {
+        const dt  = new Date(h.time);
+        const hm  = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+        const col = h.amount < 0 ? '#ef4444' : '#4ade80';
+        const sign = h.amount < 0 ? '' : '+';
+        return `
+          <div style="display:flex;justify-content:space-between;align-items:center;
+                      padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);">
+            <div>
+              <span style="font-size:0.75rem;color:#ccc;">${h.label || '—'}</span>
+              <span style="font-size:0.68rem;color:#555;margin-left:6px;">${hm}</span>
+            </div>
+            <div style="font-size:0.78rem;font-weight:700;color:${col};">
+              ${sign}${h.amount} 💎
+            </div>
+          </div>`;
+      }).join('');
+
+  // ── ステップ進捗バー ──
+  const totalSteps = steps.length;
+  const stepHtml = Array.from({length: totalSteps}, (_,i) => {
+    const done = i < stepDone;
+    const cur  = i === stepDone && restricted;
+    const col  = done ? '#4ade80' : cur ? '#eab308' : 'rgba(255,255,255,.1)';
+    return `<div style="flex:1;height:4px;border-radius:999px;background:${col};transition:background .3s;"></div>`;
+  }).join('');
+
+  body.innerHTML = `
+    <style>
+      .ea-card {
+        background:rgba(255,255,255,.03);
+        border:1px solid rgba(255,255,255,.07);
+        border-radius:14px;padding:12px 14px;margin-bottom:10px;
+      }
+      .ea-label { font-size:0.7rem;color:#555;letter-spacing:.06em;margin-bottom:4px; }
+      .ea-val   { font-size:1.25rem;font-weight:800;color:#e0e0e0; }
+      .ea-sub   { font-size:0.72rem;color:#666;margin-top:2px; }
+    </style>
+
+    <!-- 残高カード -->
+    <div class="ea-card" style="border-color:${restricted ? 'rgba(234,179,8,.25)' : 'rgba(74,222,128,.2)'};">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="ea-label">現在残高</div>
+          <div class="ea-val">${balance.toLocaleString()} <span style="font-size:0.85rem;color:#D4A843;">💎</span></div>
+          <div class="ea-sub">合計消費 ${totalSpent.toLocaleString()} 💎 ／ ${visitCount} スポット訪問</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="ea-label">状態</div>
+          <div style="font-size:0.78rem;font-weight:800;color:${restricted ? '#eab308' : '#4ade80'};">
+            ${restricted ? (isFinal ? '🔴 最終制限中' : '🟡 制限中') : '🟢 稼働中'}
+          </div>
+        </div>
+      </div>
+      <!-- 残高バー -->
+      <div style="margin-top:10px;">
+        <div style="display:flex;justify-content:space-between;font-size:0.67rem;color:#555;margin-bottom:3px;">
+          <span>残高</span><span>${balPct}%</span>
+        </div>
+        <div style="height:6px;background:rgba(255,255,255,.07);border-radius:999px;overflow:hidden;">
+          <div style="height:100%;width:${balPct}%;background:${barColor};border-radius:999px;transition:width .4s ease;"></div>
+        </div>
+      </div>
+      <!-- ステップバー -->
+      <div style="margin-top:8px;">
+        <div style="font-size:0.67rem;color:#555;margin-bottom:3px;">ステップ進捗 ${Math.min(stepDone,totalSteps)} / ${totalSteps}</div>
+        <div style="display:flex;gap:3px;">${stepHtml}</div>
+      </div>
+    </div>
+
+    <!-- 制限中カウントダウン OR 予測 -->
+    ${restricted ? `
+    <div class="ea-card" style="border-color:rgba(234,179,8,.2);text-align:center;">
+      <div class="ea-label" style="text-align:center;">⏳ 制限解除まで</div>
+      <div style="font-size:1.6rem;font-weight:800;color:#eab308;letter-spacing:.1em;font-variant-numeric:tabular-nums;" id="emuerCountdown">
+        ${fmtCountdown(remainMs)}
+      </div>
+      <div style="font-size:0.75rem;color:#666;margin-top:4px;">
+        解除後 → <strong style="color:${isFinal ? '#5faaff' : '#D4A843'};">
+          ${isFinal ? `${EMUER_COMPLETION_REWARD.toLocaleString()} EMUER 実配布🎉` : `${nextRefillBal?.toLocaleString() ?? '—'} EMUER 補充`}
+        </strong>
+      </div>
+    </div>` : `
+    <div class="ea-card">
+      <div class="ea-label">🎯 巡回予測（エージェント判断）</div>
+      <div style="display:flex;gap:12px;margin-top:4px;">
+        <div style="flex:1;text-align:center;padding:8px;background:rgba(212,168,67,.07);border-radius:10px;">
+          <div style="font-size:1.1rem;font-weight:800;color:#D4A843;">${accessibleAvg}</div>
+          <div style="font-size:0.67rem;color:#666;">スポット<br>（平均コスト）</div>
+        </div>
+        <div style="flex:1;text-align:center;padding:8px;background:rgba(74,222,128,.07);border-radius:10px;">
+          <div style="font-size:1.1rem;font-weight:800;color:#4ade80;">${accessibleMin}</div>
+          <div style="font-size:0.67rem;color:#666;">スポット<br>（最安コスト）</div>
+        </div>
+        <div style="flex:1;text-align:center;padding:8px;background:rgba(255,255,255,.04);border-radius:10px;">
+          <div style="font-size:1.1rem;font-weight:800;color:#aaa;">${avgCost}</div>
+          <div style="font-size:0.67rem;color:#666;">💎 平均<br>コスト</div>
+        </div>
+      </div>
+    </div>`}
+
+    <!-- スマートアドバイス -->
+    <div class="ea-card" style="background:rgba(212,168,67,.04);border-color:rgba(212,168,67,.12);">
+      <div class="ea-label">🤖 エージェント判断</div>
+      <div style="font-size:0.8rem;color:${adviceColor};line-height:1.6;margin-top:2px;">${advice}</div>
+    </div>
+
+    <!-- 消費履歴 -->
+    <div class="ea-card">
+      <div class="ea-label">📋 直近の消費履歴</div>
+      <div style="margin-top:4px;">${histHtml}</div>
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════
    開園祭スタンプラリー
    ★ room1からPOIを登録後、下記にPOI IDを追加
 ═══════════════════════════════════════════════════════ */
@@ -10340,9 +10571,11 @@ function openSpPanel(panelId) {
   });
   if (panelId === 'spWalletPanel') setTimeout(_refreshSpWalletPanel, 80);
   if (panelId === 'spSettingsPanel') setTimeout(_loadSpSettings, 80);
+  if (panelId === 'spRobotPanel') setTimeout(_startEmuerAgent, 80);
 }
 
 function closeSpPanel(panelId) {
+  if (panelId === 'spRobotPanel') _stopEmuerAgent();
   const panel = document.getElementById(panelId);
   if (panel) {
     panel.classList.remove('open');
