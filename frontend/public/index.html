@@ -7154,8 +7154,8 @@ function getOfficialNFT(key) {
 
 function goTomainapp() {
   console.trace("🔥 goTomainapp 呼ばれた");
-  // ★ メンテナンス中はオーナー・paid_users以外をブロック
-  if (MAINTENANCE_MODE && !_isOwnerAccess() && !window._fromFirebasePaidUsers) {
+  // ★ メンテナンス中はオーナー以外をブロック
+  if (MAINTENANCE_MODE && !_isOwnerAccess()) {
     walletScreen.style.display = "none";
     const _ms = document.getElementById('maintenanceScreen');
     if (_ms) { _ms.style.display = 'flex'; _startMaintenanceCountdown(); }
@@ -10322,13 +10322,13 @@ jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
 if (typeof updateConvertButton === "function") {
     updateConvertButton();
 }
-  // ── paid_usersゲート（MAINTENANCE_MODE中のみ有効）──
+  // ── メンテナンスゲート（オーナーのみ通過）──
   const _isOwnerBypass = account.toLowerCase() === SP_OWNER.toLowerCase();
-  if (MAINTENANCE_MODE && !_isOwnerBypass && !window._fromFirebasePaidUsers) {
+  if (MAINTENANCE_MODE && !_isOwnerBypass) {
     const _ws2 = document.getElementById('walletScreen');
     if (_ws2) _ws2.style.display = 'none';
-    const _pbs = document.getElementById('paidOnlyScreen');
-    if (_pbs) _pbs.style.display = 'flex';
+    const _ms2 = document.getElementById('maintenanceScreen');
+    if (_ms2) { _ms2.style.display = 'flex'; _startMaintenanceCountdown(); }
     return;
   }
   // 有料パス入場をFirebaseに記録（非ブロッキング）
