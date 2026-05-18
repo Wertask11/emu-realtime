@@ -142,6 +142,51 @@
   #spComingOverlay .spc-right { flex-direction:row; flex-wrap:wrap; min-width:unset; }
   #spComingOverlay .spc-card { flex:1; min-width:130px; }
 }
+/* ── SchoolPark ローディングオーバーレイ ── */
+#spLoadingOverlay {
+  display:none; position:fixed; inset:0; z-index:9999;
+  background:linear-gradient(135deg,#1c0e04 0%,#2e1b07 100%);
+  flex-direction:column; align-items:center; justify-content:center;
+  gap:20px; transition:opacity 0.5s ease;
+}
+#spLoadingOverlay .sp-load-mascot {
+  width:110px; height:110px; border-radius:50%; object-fit:cover;
+  border:3px solid #8B6914; box-shadow:0 0 20px rgba(139,105,20,0.5);
+  animation:spMascotBounce 1.2s ease-in-out infinite;
+}
+@keyframes spMascotBounce {
+  0%,100% { transform:translateY(0); }
+  50%      { transform:translateY(-12px); }
+}
+#spLoadingOverlay .sp-load-msg {
+  color:#f5e6b0; font-size:1.1rem; font-weight:600;
+  font-family:'Noto Sans JP','Hiragino Sans',sans-serif;
+  letter-spacing:0.05em;
+}
+#spLoadingOverlay .sp-load-dots {
+  display:flex; gap:8px;
+}
+#spLoadingOverlay .sp-load-dots span {
+  width:10px; height:10px; border-radius:50%; background:#8B6914;
+  animation:spDotPulse 1.2s ease-in-out infinite;
+}
+#spLoadingOverlay .sp-load-dots span:nth-child(2) { animation-delay:0.2s; }
+#spLoadingOverlay .sp-load-dots span:nth-child(3) { animation-delay:0.4s; }
+@keyframes spDotPulse {
+  0%,80%,100% { transform:scale(0.7); opacity:0.5; }
+  40%          { transform:scale(1.2); opacity:1; }
+}
+#spLoadingOverlay .sp-load-ready {
+  display:none; color:#4cda64; font-size:1.05rem; font-weight:700;
+  font-family:'Noto Sans JP','Hiragino Sans',sans-serif;
+  letter-spacing:0.04em; text-align:center;
+  animation:spReadyFadeIn 0.5s ease;
+}
+@keyframes spReadyFadeIn {
+  from { opacity:0; transform:scale(0.9); }
+  to   { opacity:1; transform:scale(1); }
+}
+
 /* ── SchoolPark マップ（USJスタイル） ── */
 #spMapOverlay {
   display:none; position:fixed; inset:0; z-index:1002; flex-direction:column;
@@ -4208,6 +4253,15 @@ body.paypay-mode #pp-post-fab {
   <span style="font-size:11px;">© 2026 LLC.DAO School Park</span>
 </div>
 
+<!-- ▼ SchoolPark ローディングオーバーレイ -->
+<div id="spLoadingOverlay">
+  <img src="/assets/mascot.jpg" class="sp-load-mascot" alt="冷蔵庫くん">
+  <div class="sp-load-msg" id="spLoadingMsg">読み込み中...</div>
+  <div class="sp-load-dots" id="spLoadingDots">
+    <span></span><span></span><span></span>
+  </div>
+  <div class="sp-load-ready" id="spLoadingReady">✅ SchoolParkのメイン画面<br>準備が完了しました！</div>
+</div>
 
 <!-- ▼ PayPayモード専用ヘッダー -->
 <div id="pp-header">
@@ -7154,11 +7208,51 @@ function goTomainapp() {
   const _resolvedPassType = window.hasPaidNFT ? 'paid' : 'free';
   localStorage.setItem('spPassType', _resolvedPassType);
 
+  // ── ローディングオーバーレイ表示 ──
+  _showSpLoadingOverlay();
+
   walletScreen.style.display = "none";
   mainApp.style.display = "block";
   document.getElementById("siteFooter").style.display = "block";
   // ★ ログイン後はSchoolParkマップを同期的に開く（フラッシュ防止）
   if (typeof openSpMap === "function") openSpMap();
+
+  // マップ描画が落ち着いたら「準備完了」→フェードアウト
+  setTimeout(() => _hideSpLoadingOverlay(), 1400);
+}
+
+function _showSpLoadingOverlay() {
+  const ov = document.getElementById('spLoadingOverlay');
+  if (!ov) return;
+  ov.style.opacity = '1';
+  ov.style.display = 'flex';
+  const msgEl  = document.getElementById('spLoadingMsg');
+  const dotsEl = document.getElementById('spLoadingDots');
+  const readyEl = document.getElementById('spLoadingReady');
+  if (msgEl)   { msgEl.style.display   = ''; msgEl.textContent = '読み込み中...'; }
+  if (dotsEl)  { dotsEl.style.display  = ''; }
+  if (readyEl) { readyEl.style.display = 'none'; }
+}
+
+function _hideSpLoadingOverlay() {
+  const ov = document.getElementById('spLoadingOverlay');
+  if (!ov) return;
+  const msgEl   = document.getElementById('spLoadingMsg');
+  const dotsEl  = document.getElementById('spLoadingDots');
+  const readyEl = document.getElementById('spLoadingReady');
+  // ① 「読み込み中」→「準備完了」に切り替え
+  if (msgEl)   msgEl.style.display  = 'none';
+  if (dotsEl)  dotsEl.style.display = 'none';
+  if (readyEl) readyEl.style.display = '';
+  // ② 1.5秒後にフェードアウト → 非表示
+  setTimeout(() => {
+    ov.style.transition = 'opacity 0.6s ease';
+    ov.style.opacity = '0';
+    setTimeout(() => {
+      ov.style.display = 'none';
+      ov.style.opacity = '1';
+    }, 650);
+  }, 1500);
 }
 
 
