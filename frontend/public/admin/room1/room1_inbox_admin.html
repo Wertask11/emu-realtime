@@ -210,13 +210,36 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
         <label>本文 *</label>
         <textarea id="fb-body" rows="6" placeholder="掲示板の投稿内容を入力..."></textarea>
       </div>
+      <!-- 画像セクション -->
+      <div class="form-field" style="margin-bottom:6px">
+        <label>画像（任意）— ファイルまたはURLのどちらか一方を入力</label>
+      </div>
+      <!-- ファイルアップロード -->
+      <div style="margin-bottom:8px">
+        <label style="
+          display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+          background:#1e1e1e;border:1px dashed #444;border-radius:6px;
+          padding:9px 16px;font-size:13px;color:#4ec9b0;
+          transition:border-color .2s;
+        " id="fb-file-label">
+          📁 ファイルを選択してアップロード
+          <input type="file" id="fb-file" accept="image/*" style="display:none" onchange="fbOnFileChange(this)">
+        </label>
+        <span id="fb-file-name" style="font-size:12px;color:#666;margin-left:10px"></span>
+      </div>
+      <!-- プレビュー -->
+      <div id="fb-img-preview" style="display:none;margin-bottom:10px">
+        <img id="fb-img-preview-img" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid #333" src="" alt="プレビュー">
+        <button onclick="fbClearFile()" style="display:block;margin-top:6px;background:none;border:1px solid #f44747;color:#f44747;border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer">✕ 削除</button>
+      </div>
+      <!-- URL入力（代替） -->
       <div class="form-field" style="margin-bottom:14px">
-        <label>画像URL（任意）</label>
-        <input type="url" id="fb-img" placeholder="https://...">
+        <label style="color:#666;font-size:11px">— または画像URLを直接入力 —</label>
+        <input type="url" id="fb-img" placeholder="https://..." oninput="fbOnUrlChange(this)">
       </div>
       <div class="form-actions">
-        <button class="btn-clear" onclick="document.getElementById('fb-body').value=''">クリア</button>
-        <button class="btn-add" onclick="fpSubmitBoard()">⛲ 掲示板に投稿</button>
+        <button class="btn-clear" onclick="fbClearAll()">クリア</button>
+        <button class="btn-add" id="fb-submit-btn" onclick="fpSubmitBoard()">⛲ 掲示板に投稿</button>
       </div>
       <div class="toast" id="fb-toast"></div>
     </div>
@@ -988,16 +1011,82 @@ function esc(s) {
 }
 
 // ─── Fountain 掲示板 ───────────────────────────────────────
+
+// ファイル選択時のプレビュー表示
+function fbOnFileChange(input) {
+  var file = input.files && input.files[0];
+  if (!file) { fbClearFile(); return; }
+  document.getElementById('fb-file-name').textContent = file.name;
+  document.getElementById('fb-img').value = '';          // URLを無効化
+  document.getElementById('fb-img').disabled = true;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('fb-img-preview-img').src = e.target.result;
+    document.getElementById('fb-img-preview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+// URL入力時はファイル選択をリセット
+function fbOnUrlChange(input) {
+  if (input.value.trim()) {
+    fbClearFile(true);
+  }
+}
+
+function fbClearFile(keepUrlEnabled) {
+  var fileInput = document.getElementById('fb-file');
+  if (fileInput) fileInput.value = '';
+  document.getElementById('fb-file-name').textContent = '';
+  document.getElementById('fb-img-preview').style.display = 'none';
+  document.getElementById('fb-img-preview-img').src = '';
+  if (!keepUrlEnabled) {
+    document.getElementById('fb-img').disabled = false;
+  }
+}
+
+function fbClearAll() {
+  document.getElementById('fb-body').value = '';
+  document.getElementById('fb-img').value  = '';
+  document.getElementById('fb-img').disabled = false;
+  fbClearFile();
+}
+
 async function fpSubmitBoard() {
   var author = document.getElementById('fb-author').value.trim() || 'SchoolPark 運営';
   var body   = document.getElementById('fb-body').value.trim();
-  var img    = document.getElementById('fb-img').value.trim();
+  var urlImg = document.getElementById('fb-img').value.trim();
+  var fileInput = document.getElementById('fb-file');
+  var file = fileInput && fileInput.files && fileInput.files[0];
+
   if (!body) { fpShowToast('fb-toast','本文を入力してください','error'); return; }
   if (!window.fpAdminDB) { fpShowToast('fb-toast','Firebase接続中…','error'); return; }
+
+  var imgUrl = urlImg || null;
+
+  // ファイルが選択されていればStorageにアップロード
+  if (file) {
+    if (!window.fpAdminStorage) { fpShowToast('fb-toast','Firebase Storage 未接続です','error'); return; }
+    var btn = document.getElementById('fb-submit-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ アップロード中…';
+    fpShowToast('fb-toast','画像をアップロード中…','success');
+    try {
+      var ext = file.name.split('.').pop() || 'jpg';
+      var path = 'fountain_board/' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext;
+      var storageRef = window.fpAdminStorage.ref(path);
+      var snapshot = await storageRef.put(file);
+      imgUrl = await snapshot.ref.getDownloadURL();
+    } catch(e) {
+      btn.disabled = false; btn.textContent = '⛲ 掲示板に投稿';
+      fpShowToast('fb-toast','❌ アップロード失敗: '+e.message,'error'); return;
+    }
+    btn.disabled = false; btn.textContent = '⛲ 掲示板に投稿';
+  }
+
   try {
-    await window.fpAdminDB.collection('sp_fountain_board').add({ author, body, img: img||null, ts: Date.now() });
-    document.getElementById('fb-body').value = '';
-    document.getElementById('fb-img').value  = '';
+    await window.fpAdminDB.collection('sp_fountain_board').add({ author, body, img: imgUrl, ts: Date.now() });
+    fbClearAll();
     fpShowToast('fb-toast','✅ 掲示板に投稿しました！','success');
     fpLoadBoardPosts();
   } catch(e) { fpShowToast('fb-toast','❌ '+e.message,'error'); }
@@ -1012,10 +1101,14 @@ function fpLoadBoardPosts() {
       el.innerHTML = snap.docs.map(function(d) {
         var data = d.data();
         var dt = data.ts ? new Date(data.ts).toLocaleString('ja-JP') : '';
+        var imgHtml = data.img
+          ? '<img src="'+esc(data.img)+'" style="max-width:100%;max-height:180px;object-fit:cover;border-radius:6px;margin-top:8px;display:block">'
+          : '';
         return '<div style="background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:12px;margin-bottom:8px">' +
           '<div style="font-size:11px;color:#666;margin-bottom:6px">' + (data.author||'') + ' · ' + dt +
           ' <button onclick="fpDeletePost(\''+d.id+'\')" style="float:right;background:none;border:none;color:#f44747;cursor:pointer;font-size:11px">削除</button></div>' +
           '<div style="font-size:13px;white-space:pre-wrap">' + esc(data.body||'') + '</div>' +
+          imgHtml +
           '</div>';
       }).join('');
     });
@@ -1990,6 +2083,7 @@ function kaiensaiSaveConfig() {
 <!-- Firebase Compat SDK for admin panel -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
 <script>
 (function() {
   var cfg = {
@@ -2003,11 +2097,14 @@ function kaiensaiSaveConfig() {
   // 既存のFirebaseアプリがあれば使い回す
   try {
     var app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg);
-    window.fpAdminDB = firebase.firestore(app);
+    window.fpAdminDB      = firebase.firestore(app);
+    window.fpAdminStorage = firebase.storage(app);
   } catch(e) {
     try {
       firebase.initializeApp(cfg, 'admin');
-      window.fpAdminDB = firebase.firestore(firebase.app('admin'));
+      var adminApp = firebase.app('admin');
+      window.fpAdminDB      = firebase.firestore(adminApp);
+      window.fpAdminStorage = firebase.storage(adminApp);
     } catch(e2) { console.error('Firebase init error:', e2); }
   }
 })();
