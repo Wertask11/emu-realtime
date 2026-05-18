@@ -253,6 +253,19 @@
   font-size:0.48rem; font-weight:700; color:#8B6914; letter-spacing:0.18em; text-transform:uppercase;
 }
 .spmap-nav-links { display:flex; flex:1; overflow:hidden; }
+/* コマンドバー */
+.spmap-cmd-wrap { display:flex; align-items:center; margin:0 6px; flex-shrink:0; }
+.spmap-cmd-input {
+  background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
+  border-radius:20px; padding:4px 12px; font-size:0.73rem; color:#ccc;
+  width:110px; outline:none; transition:all .25s; font-family:inherit;
+}
+.spmap-cmd-input:focus {
+  border-color:rgba(212,168,67,.55); width:160px;
+  background:rgba(212,168,67,.06); color:#e8d08a;
+}
+.spmap-cmd-input::placeholder { color:#555; }
+@media (max-width:600px) { .spmap-cmd-wrap { display:none; } }
 .spmap-nav-link {
   padding:0 13px; height:58px; display:flex; align-items:center; font-size:0.78rem;
   color:#bbb; cursor:pointer; border-bottom:3px solid transparent;
@@ -3077,6 +3090,15 @@ body.paypay-mode #pp-post-fab {
       <span class="spmap-nav-link" onclick="spMapNavClick('shopping')">ショッピング</span>
       <span class="spmap-nav-link" onclick="spMapNavClick('events')">イベント</span>
       <span class="spmap-nav-link" onclick="spMapNavClick('tutorial')">チュートリアル</span>
+      <span class="spmap-nav-link" onclick="spMapNavClick('agents')" style="color:#D4A843;">🤖 agents</span>
+    </div>
+    <!-- コマンドバー（/ で起動） -->
+    <div class="spmap-cmd-wrap">
+      <input id="spmapCmd" class="spmap-cmd-input" type="text"
+             placeholder="/ コマンド…"
+             onkeydown="spMapCmdKeydown(event)"
+             onfocus="this.placeholder='agents / tutorial / wallet…'"
+             onblur="this.placeholder='/ コマンド…'">
     </div>
     <button class="spmap-reizo-btn" onclick="spReizoOpen()" title="冷蔵庫くんに聞く">
       <img src="/assets/mascot.jpg" alt="冷蔵庫くん">
@@ -4052,7 +4074,28 @@ body.paypay-mode #pp-post-fab {
       </div>
     </div>
 
-    <!-- 5. キャッシュクリア -->
+    <!-- 5. チュートリアル設定 -->
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">🎓 チュートリアル設定</div>
+      <div class="sp-setting-row">
+        <div>
+          <div class="sp-setting-label">冷蔵庫くんチュートリアル</div>
+          <div class="sp-setting-sub">SchoolParkマップを開いたときの表示タイミング</div>
+        </div>
+        <select id="spSettingTutorialMode" onchange="spSettingSave()"
+          style="background:#1a1d2e;border:1px solid rgba(212,168,67,0.3);color:#D4A843;
+                 padding:6px 10px;border-radius:6px;font-size:0.8rem;outline:none;max-width:130px;">
+          <option value="always">ログイン後毎回</option>
+          <option value="once">初回のみ</option>
+        </select>
+      </div>
+      <button class="sp-panel-btn secondary" onclick="spSettingReplayTutorial()"
+              style="margin-top:6px;font-size:0.78rem;padding:6px 12px;">
+        🔄 今すぐチュートリアルを再表示
+      </button>
+    </div>
+
+    <!-- 6. キャッシュクリア -->
     <div class="sp-panel-section">
       <div class="sp-panel-section-title">🗑️ SchoolPark キャッシュ</div>
       <div style="font-size:0.82rem;color:#666;margin-bottom:12px;line-height:1.6;">
@@ -9591,8 +9634,20 @@ const SP_REIZO_KB = [
     a:'マップはクリック・スクロールで操作できるよ🧊\n施設アイコンをクリックするとコンテンツにアクセスできるよ。\n右上ボタン：💰ウォレット　🚕タクシー　🤖SchoolPark agents　⚙️設定' },
   { k:['使い方','コスト','料金','施設','解放'],
     a:'EMUER 施設コスト例🧊\n・ショッピング → 20 EMUER\n・映画館 → 20 EMUER\n・ホテル → 8-10 EMUER\n・カフェ → 5-6 EMUER\n・タクシー → 3 EMUER' },
-  { k:['ai','エージェント','ロボット'],
-    a:'SchoolPark agents はあなたの代わりに自律的に動く AI だよ🤖\nマップ右上の 🤖 ボタン、またはキーボード「A」から起動できるよ！' },
+  { k:['ai','エージェント','ロボット','agents','schoolpark agents'],
+    a:'SchoolPark agents はあなたの代わりに自律的に動く AI だよ🤖\n\n✅ 稼働中の5つの能力：\n💎 EMUER自動管理 — 残高・制限をリアルタイム監視\n🗺️ 自動巡回 — 7種のルートでマップを自動巡回\n📋 タスク自動実行 — 条件付きタスクを予約実行\n🔍 コンテンツ推薦 — 行動パターンからおすすめ提案\n🔔 アラート自律対応 — 残高低下・制限解除などを自律検知\n\n起動：右上の 🤖 ボタン / ナビの「agents」/ キー「A」/ コマンド「/agents」' },
+  { k:['emuer管理','残高監視','phase2'],
+    a:'EMUER自動管理（Phase 2）は SchoolPark agents の基本機能だよ🧊\n残高バー・ステップ進捗・制限カウントダウン・スマートアドバイスをリアルタイム表示するよ。\nagentsパネルの「💎 EMUER Agent」セクションで確認できるよ！' },
+  { k:['自動巡回','巡回','patrol','phase3'],
+    a:'自動巡回（Phase 3）は7種のルートでマップを自動巡回するよ🗺️\n🎪開園祭 / 📚学ぶ / 💰稼ぐ / 🛡️守る / 🎮遊ぶ / ⚡節約 / 🗺️全域\nEMUER残高で訪問可否を判定して、リアルタイムでマップに反映するよ！' },
+  { k:['タスク','task','予約','自動実行','phase4'],
+    a:'タスク自動実行（Phase 4a）は条件付きタスクを予約実行するよ📋\nトリガーの種類：\n⏰ 日時指定 / ⏳ 遅延実行 / 🔓 制限解除後 / 💸 残高低下時\nプリセット3種（制限解除監視・残高チェック・30分後通知）もあるよ！' },
+  { k:['推薦','おすすめ','recommend','コンテンツ推薦','phase4b'],
+    a:'コンテンツ推薦（Phase 4b）は行動パターン・残高・時間帯を分析しておすすめスポットを提案するよ🔍\n✨ メイン推薦×3件\n🔮 ディスカバリー（いつもと違うゾーン）\n⚡ 節約おすすめ（コスト3以下）\nカードをタップすると直接移動できるよ！' },
+  { k:['アラート','alert','通知','監視','phase4c'],
+    a:'アラート自律対応（Phase 4c）は重要な変化を自動検知して通知・行動するよ🔔\n監視タイプ：💸残高低下 / 🔓制限解除 / ⏳制限まじか / 🎪開園祭開始 / 💎残高回復\n15秒ごとに自動チェックして、ブラウザ通知＋自動巡回や推薦更新も実行するよ！' },
+  { k:['aora','aoraコマンド','キーコマンド'],
+    a:'「Aora」はSchoolPark agentsを召喚するキーシーケンスだよ🤖✨\nキーボードで A→o→r→a と順に入力するとagentsパネルが開くよ！\n（入力欄でのタイプは反応しないよ）' },
   { k:['スマホ','スマートフォン','タブレット','mobile'],
     a:'スマホ・タブレットは MetaMask アプリ内のブラウザを使ってね🧊\nノーマルの Chrome や Safari では使えないよ。' },
   { k:['ショートカット','shortcut','キー','keyboard'],
@@ -9680,7 +9735,7 @@ const SP_TUT_STEPS = [
   { text: '両方まだ品数は少ないけれど、気にしておいてね！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'そうそう。定期的にイベントがあるから、ぜひ遊びに来て！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'あ、そうだ！「SchoolPark agents」って知ってる？\nEMUERの残高を監視したり、マップを自動で巡回したり、タスクを予約実行したりしてくれる頼もしいやつなんだ！', hint: 'タップして次へ', mode: 'tap' },
-  { text: 'コンテンツのおすすめまでやってくれるんだよ！\n右下の 🤖 ボタン（または画面上部の「A」キー）から「SchoolPark agents」が開けるよ！\nぜひ使ってみてね！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'コンテンツのおすすめまでやってくれるんだよ！\n右上の 🤖 ボタン（またはキー「A」やコマンド「/agents」）から「SchoolPark agents」が開けるよ！\nぜひ使ってみてね！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'まだいっぱい教えたいことがたくさんあるんだけど、しゃべりすぎって怒られるから…', hint: 'タップして次へ', mode: 'tap' },
   { text: 'わからないことがあれば、冷蔵庫くんに聞くから教えてね！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'SchoolPark、楽しんでね！バイバイ！', hint: 'タップして閉じる', mode: 'last' },
@@ -9689,8 +9744,12 @@ const SP_TUT_STEPS = [
 let _spTutIdx = 0;
 let _spTutRunning = false;
 
+function _spTutMode() {
+  try { return JSON.parse(localStorage.getItem('spSettings') || '{}').spSettingTutorialMode || 'always'; } catch { return 'always'; }
+}
 function startSpTutorial() {
-  if (localStorage.getItem(SP_TUT_KEY) === '1') return;
+  // 「初回のみ」設定で既に表示済みならスキップ
+  if (_spTutMode() === 'once' && localStorage.getItem(SP_TUT_KEY) === '1') return;
   _spTutIdx = 0;
   _spTutRunning = true;
   setTimeout(() => _spTutRender(true), 900);
@@ -9760,7 +9819,8 @@ function _spTutOnAreaClick(zones) {
 
 function _spTutFinish() {
   _spTutRunning = false;
-  localStorage.setItem(SP_TUT_KEY, '1');
+  // 「初回のみ」モードのときだけフラグを保存
+  if (_spTutMode() === 'once') localStorage.setItem(SP_TUT_KEY, '1');
   const overlay = document.getElementById('spTutOverlay');
   const mascot  = document.getElementById('spTutMascot');
   const sidebar = document.querySelector('.spmap-left');
@@ -9771,6 +9831,58 @@ function _spTutFinish() {
     if (sidebar) sidebar.classList.remove('sp-tut-area-hl');
   }, 450);
 }
+
+/* ═══════════════════════════════════════════════════════
+   SchoolPark キーボードショートカット + Aoraシーケンス
+═══════════════════════════════════════════════════════ */
+(function () {
+  /* ── 単発ショートカット（W / T / A / S / Esc / Backspace） ── */
+  document.addEventListener('keydown', function (e) {
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    const isInput = tag === 'input' || tag === 'textarea' || tag === 'select';
+
+    /* Esc / Backspace はどこでも有効 */
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.sp-panel.open').forEach(p => p.classList.remove('open'));
+      document.querySelectorAll('.sp-panel-backdrop').forEach(b => b.remove());
+      return;
+    }
+    if (e.key === 'Backspace' && !isInput) {
+      /* マップが開いていて、パネルが全て閉じているときはマップを閉じる */
+      const anyOpen = document.querySelector('.sp-panel.open');
+      if (!anyOpen) closeSpMap?.();
+      return;
+    }
+
+    /* 入力欄にフォーカス中は単発ショートカット無効 */
+    if (isInput) return;
+    /* 修飾キー付き（Ctrl / Alt / Meta）は無視 */
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+    switch (e.key.toLowerCase()) {
+      case 'w': openSpPanel('spWalletPanel');    break;
+      case 't': openTaxi?.();                   break;
+      case 'a': openSpPanel('spRobotPanel');     break;
+      case 's': openSpPanel('spSettingsPanel'); break;
+    }
+  });
+
+  /* ── Aora シーケンス（A→o→r→a でagentsパネルを召喚） ── */
+  let _aoraBuffer = '';
+  document.addEventListener('keydown', function (e) {
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+      _aoraBuffer = ''; return;
+    }
+    if (e.key.length !== 1) { _aoraBuffer = ''; return; }
+    _aoraBuffer = (_aoraBuffer + e.key.toLowerCase()).slice(-4);
+    if (_aoraBuffer === 'aora') {
+      openSpPanel('spRobotPanel');
+      _showAgentToast('🤖 Aora — SchoolPark agents 起動！');
+      _aoraBuffer = '';
+    }
+  });
+})();
 
 /* ═══════════════════════════════════════════════════════
    開園祭 冷蔵庫くん告知演出
@@ -12224,6 +12336,8 @@ function _loadSpSettings() {
     if (langEl && s.spSettingLang) langEl.value = s.spSettingLang;
     const zoomEl = document.getElementById('spSettingZoom');
     if (zoomEl && s.spSettingZoom) { zoomEl.value = s.spSettingZoom; spSettingApplyZoom(s.spSettingZoom, true); }
+    const tutEl = document.getElementById('spSettingTutorialMode');
+    if (tutEl) tutEl.value = s.spSettingTutorialMode || 'always';
   } catch(e) {}
 }
 
@@ -12235,10 +12349,17 @@ function spSettingSave() {
     spSettingPoiLabel:     get('spSettingPoiLabel')?.checked ?? true,
     spSettingAnonymize:    get('spSettingAnonymize')?.checked ?? false,
     spSettingActivityLog:  get('spSettingActivityLog')?.checked ?? true,
-    spSettingLang:         get('spSettingLang')?.value || 'ja',
-    spSettingZoom:         get('spSettingZoom')?.value || '1',
+    spSettingLang:          get('spSettingLang')?.value || 'ja',
+    spSettingZoom:          get('spSettingZoom')?.value || '1',
+    spSettingTutorialMode:  get('spSettingTutorialMode')?.value || 'always',
   };
   localStorage.setItem('spSettings', JSON.stringify(s));
+}
+
+function spSettingReplayTutorial() {
+  closeSpPanel('spSettingsPanel');
+  localStorage.removeItem(SP_TUT_KEY);
+  setTimeout(() => { _spTutIdx = 0; _spTutRunning = true; _spTutRender(true); }, 300);
 }
 
 function spSettingApplyMap() {
@@ -12619,6 +12740,35 @@ function spMapNavClick(type) {
   if (type === 'tutorial') {
     openSpContent('/schoolpark/tutorial.html');
     return;
+  }
+  if (type === 'agents') {
+    openSpPanel('spRobotPanel');
+    return;
+  }
+}
+
+/* ── コマンドバー Enter ── */
+function spMapCmdKeydown(e) {
+  if (e.key !== 'Enter') return;
+  const raw = e.target.value.trim().toLowerCase().replace(/\s+/g, '');
+  e.target.value = '';
+  e.target.blur();
+  if (!raw) return;
+  const cmd = raw.replace(/^\//, ''); // 先頭スラッシュ除去
+  if (['agents','schoolparkagents','agent'].includes(cmd)) {
+    openSpPanel('spRobotPanel');
+  } else if (['tutorial','チュートリアル'].includes(cmd)) {
+    openSpContent('/schoolpark/tutorial.html');
+  } else if (['wallet','ウォレット','w'].includes(cmd)) {
+    openSpPanel('spWalletPanel');
+  } else if (['settings','設定','s'].includes(cmd)) {
+    openSpPanel('spSettingsPanel');
+  } else if (['taxi','タクシー','t'].includes(cmd)) {
+    openTaxi();
+  } else if (['map','マップ'].includes(cmd)) {
+    closeSpModal();
+  } else {
+    _showAgentToast(`❓ コマンド「${raw}」は不明です\nヒント: agents / tutorial / wallet / settings / taxi`);
   }
 }
 
