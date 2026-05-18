@@ -3764,6 +3764,20 @@ body.paypay-mode #pp-post-fab {
       </div>
     </div>
 
+    <!-- ══════ Phase 4c: アラート自律対応エージェント ══════ -->
+    <div class="sp-panel-section" id="alertAgentSection">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <div class="sp-panel-section-title" style="margin-bottom:0;">🔔 アラート自律対応</div>
+        <div style="font-size:0.6rem;font-weight:800;letter-spacing:.1em;padding:2px 8px;border-radius:999px;
+                    color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);">
+          稼働中
+        </div>
+      </div>
+      <div id="alertAgentBody">
+        <div style="text-align:center;padding:18px 0;color:#555;font-size:0.8rem;">初期化中…</div>
+      </div>
+    </div>
+
     <!-- ══════ Phase 4b: コンテンツ推薦エージェント ══════ -->
     <div class="sp-panel-section" id="recommendAgentSection">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -3896,11 +3910,11 @@ body.paypay-mode #pp-post-fab {
       </div>
 
       <div class="agents-cap">
-        <div class="agents-cap-badge soon">PLANNED</div>
+        <div class="agents-cap-badge active">稼働中</div>
         <div class="agents-cap-icon">🔔</div>
         <div>
           <div class="agents-cap-name">アラート自律対応</div>
-          <div class="agents-cap-desc">重要なイベントを検知して即時通知・行動</div>
+          <div class="agents-cap-desc">残高低下・制限解除などを検知して即時通知・自律行動</div>
         </div>
       </div>
     </div>
@@ -7740,6 +7754,437 @@ function openKaiensaiMarche() {
 }
 
 /* ═══════════════════════════════════════════════════════
+   SchoolPark agents — Phase 4c: アラート自律対応
+═══════════════════════════════════════════════════════ */
+
+const _ALERT_LS_KEY  = () => 'sp_agent_alerts_'  + ((window.connectedAccount || localStorage.getItem('emuWallet') || 'guest').toLowerCase());
+const _ALERTLOG_KEY  = () => 'sp_agent_alertlog_' + ((window.connectedAccount || localStorage.getItem('emuWallet') || 'guest').toLowerCase());
+
+/* ── アラートタイプ定義 ── */
+const ALERT_TYPES = {
+  balance_low:       { icon:'💸', label:'残高低下',       color:'#ef4444', desc:'残高がしきい値以下になったとき' },
+  restriction_lifted:{ icon:'🔓', label:'制限解除',       color:'#4ade80', desc:'EMUER制限が解除されたとき' },
+  restriction_soon:  { icon:'⏳', label:'制限まじか',      color:'#eab308', desc:'制限解除まで30分以内のとき' },
+  kaiensai_active:   { icon:'🎪', label:'開園祭開始',     color:'#f97316', desc:'開園祭イベント期間に入ったとき' },
+  balance_recovered: { icon:'💎', label:'残高回復',       color:'#D4A843', desc:'EMUER補充が完了したとき' },
+};
+
+/* ── アクションタイプ定義 ── */
+const ALERT_ACTIONS = {
+  notify:           { label:'通知のみ',        icon:'🔔' },
+  notify_recommend: { label:'通知 + 推薦更新', icon:'🔍' },
+  notify_patrol:    { label:'通知 + 自動巡回', icon:'🗺️' },
+};
+
+/* ── ストレージ ── */
+function _getAlerts()       { try { return JSON.parse(localStorage.getItem(_ALERT_LS_KEY()) || '[]'); } catch { return []; } }
+function _saveAlerts(arr)   { localStorage.setItem(_ALERT_LS_KEY(), JSON.stringify(arr)); }
+function _getAlertLog()     { try { return JSON.parse(localStorage.getItem(_ALERTLOG_KEY()) || '[]'); } catch { return []; } }
+function _saveAlertLog(arr) { localStorage.setItem(_ALERTLOG_KEY(), JSON.stringify(arr.slice(0, 20))); }
+
+function _addAlert(alert) {
+  const alerts = _getAlerts();
+  alerts.push({ id: Date.now().toString(36), createdAt: Date.now(), active: true, firedAt: null, ...alert });
+  _saveAlerts(alerts);
+}
+function _removeAlert(id) {
+  _saveAlerts(_getAlerts().filter(a => a.id !== id));
+}
+function _toggleAlert(id) {
+  const alerts = _getAlerts();
+  const a = alerts.find(a => a.id === id);
+  if (a) a.active = !a.active;
+  _saveAlerts(alerts);
+}
+
+/* ── 前回状態（チェック差分用） ── */
+let _alertPrevBalance         = null;
+let _alertPrevRestrictionUntil = null;
+let _alertCheckerTimer        = null;
+let _alertLastCheckTs         = 0;
+
+/* ── アラートチェッカー ── */
+function _startAlertChecker() {
+  if (_alertCheckerTimer) clearInterval(_alertCheckerTimer);
+  _alertPrevBalance = null;
+  _alertPrevRestrictionUntil = null;
+  _alertCheckerTimer = setInterval(_checkAlerts, 15000);
+  _checkAlerts(); // 即時1回
+}
+function _stopAlertChecker() {
+  if (_alertCheckerTimer) { clearInterval(_alertCheckerTimer); _alertCheckerTimer = null; }
+}
+
+async function _checkAlerts() {
+  _alertLastCheckTs = Date.now();
+  const data    = _getEmuerData();
+  if (!data) return;
+  const balance = data.balance || 0;
+  const rUntil  = data.restrictionUntil || 0;
+  const now     = Date.now();
+  const alerts  = _getAlerts();
+  let changed   = false;
+
+  for (const alert of alerts) {
+    if (!alert.active) continue;
+    // クールダウン: 前回発火から10分以内はスキップ
+    const cooldown = alert.params?.cooldownMs || 10 * 60 * 1000;
+    if (alert.firedAt && (now - alert.firedAt) < cooldown) continue;
+
+    let shouldFire = false;
+    let fireMsg    = '';
+
+    switch (alert.type) {
+      case 'balance_low': {
+        const threshold = alert.params?.threshold || 100;
+        if (balance <= threshold) {
+          shouldFire = true;
+          fireMsg = `残高 ${balance}💎 がしきい値 ${threshold}💎 以下になりました`;
+        }
+        break;
+      }
+      case 'restriction_lifted': {
+        // 前回は制限中、今回は解除 → 差分で検知
+        if (_alertPrevRestrictionUntil !== null
+            && _alertPrevRestrictionUntil > 0
+            && now >= _alertPrevRestrictionUntil) {
+          shouldFire = true;
+          fireMsg = 'EMUER制限が解除されました！今すぐ行動できます';
+        }
+        break;
+      }
+      case 'restriction_soon': {
+        const remaining = rUntil - now;
+        if (rUntil > now && remaining <= 30 * 60 * 1000) {
+          shouldFire = true;
+          const min = Math.ceil(remaining / 60000);
+          fireMsg = `制限解除まであと ${min} 分です`;
+        }
+        break;
+      }
+      case 'kaiensai_active': {
+        if (_isKaiensaiPeriod()) {
+          // 今日まだ通知していなければ発火
+          if (!alert.firedAt || (now - alert.firedAt) > 12 * 60 * 60 * 1000) {
+            shouldFire = true;
+            fireMsg = '🎪 SchoolPark開園祭が開催中です！イベント会場へGO';
+          }
+        }
+        break;
+      }
+      case 'balance_recovered': {
+        // 前回より残高が増えた（補充検知）
+        if (_alertPrevBalance !== null && balance > _alertPrevBalance) {
+          shouldFire = true;
+          fireMsg = `残高が ${_alertPrevBalance}💎 → ${balance}💎 に回復しました`;
+        }
+        break;
+      }
+    }
+
+    if (shouldFire) {
+      alert.firedAt = now;
+      changed = true;
+      await _fireAlert(alert, fireMsg);
+    }
+  }
+
+  // 前回状態を更新
+  _alertPrevBalance          = balance;
+  _alertPrevRestrictionUntil = rUntil;
+
+  if (changed) { _saveAlerts(alerts); _renderAlertAgent(); }
+  else {
+    // チェック時刻だけ更新（UIの「最終チェック」表示用）
+    const body = document.getElementById('alertAgentBody');
+    const tsEl = body?.querySelector('[data-alert-ts]');
+    if (tsEl) tsEl.textContent = _alertFmtAgo(now);
+  }
+}
+
+/* ── 発火処理 ── */
+async function _fireAlert(alert, message) {
+  const typeInfo   = ALERT_TYPES[alert.type]   || ALERT_TYPES.balance_low;
+  const actionInfo = ALERT_ACTIONS[alert.action] || ALERT_ACTIONS.notify;
+  const title      = `${typeInfo.icon} ${typeInfo.label}`;
+
+  // ① ブラウザ通知
+  _sendAgentNotification(title, message);
+  // ② エージェントトースト
+  _showAgentToast(`${title} — ${message}`);
+
+  // ③ 自律アクション
+  if (alert.action === 'notify_recommend') {
+    setTimeout(_renderRecommendAgent, 800);
+  } else if (alert.action === 'notify_patrol') {
+    const presetId = alert.params?.patrolPreset || 'event';
+    setTimeout(() => _startPatrolPreset(presetId), 1000);
+  }
+
+  // ④ 発火ログ追記
+  const log = _getAlertLog();
+  log.unshift({ alertId: alert.id, type: alert.type, label: typeInfo.label,
+                icon: typeInfo.icon, firedAt: Date.now(), message });
+  _saveAlertLog(log);
+}
+
+/* ── ユーティリティ ── */
+function _alertFmtAgo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 5)  return 'たった今';
+  if (s < 60) return `${s}秒前`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}分前`;
+  return `${Math.floor(m / 60)}時間前`;
+}
+
+/* ── プリセット追加 ── */
+function _alertQuickAdd(type) {
+  const presets = {
+    balance_low:       { type:'balance_low',        action:'notify_recommend', params:{ threshold:100 } },
+    restriction_lifted:{ type:'restriction_lifted',  action:'notify_patrol',   params:{} },
+    kaiensai_active:   { type:'kaiensai_active',     action:'notify',          params:{} },
+  };
+  const preset = presets[type];
+  if (!preset) return;
+  const existing = _getAlerts().find(a => a.type === type);
+  if (existing) { _showAgentToast('⚠️ 同じ種類のアラートが既に存在します'); return; }
+  _addAlert(preset);
+  _renderAlertAgent();
+  _showAgentToast(`✅ ${ALERT_TYPES[type]?.label} アラートを追加しました`);
+}
+
+/* ── カスタム追加フォーム ── */
+function _showAlertCustomForm() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:99999;
+    display:flex;align-items:center;justify-content:center;padding:20px;
+  `;
+  overlay.innerHTML = `
+    <div style="background:#1a1a1a;border:1px solid rgba(255,255,255,.12);border-radius:20px;
+                padding:22px;width:100%;max-width:340px;">
+      <div style="font-weight:800;font-size:1rem;color:#e0e0e0;margin-bottom:16px;">
+        🔔 カスタムアラート追加
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.75rem;color:#888;display:block;margin-bottom:5px;">監視タイプ</label>
+        <select id="caType" style="width:100%;padding:9px 10px;border-radius:10px;
+                                   border:1px solid rgba(255,255,255,.1);background:#111;
+                                   color:#e0e0e0;font-size:0.82rem;">
+          ${Object.entries(ALERT_TYPES).map(([k,v]) =>
+            `<option value="${k}">${v.icon} ${v.label} — ${v.desc}</option>`
+          ).join('')}
+        </select>
+      </div>
+
+      <div style="margin-bottom:12px;" id="caThresholdWrap">
+        <label style="font-size:0.75rem;color:#888;display:block;margin-bottom:5px;">
+          残高しきい値 (💎)
+        </label>
+        <input id="caThreshold" type="number" min="1" max="9999" value="100"
+               style="width:100%;padding:9px 10px;border-radius:10px;
+                      border:1px solid rgba(255,255,255,.1);background:#111;
+                      color:#e0e0e0;font-size:0.82rem;box-sizing:border-box;">
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="font-size:0.75rem;color:#888;display:block;margin-bottom:5px;">発火後のアクション</label>
+        <select id="caAction" style="width:100%;padding:9px 10px;border-radius:10px;
+                                     border:1px solid rgba(255,255,255,.1);background:#111;
+                                     color:#e0e0e0;font-size:0.82rem;">
+          ${Object.entries(ALERT_ACTIONS).map(([k,v]) =>
+            `<option value="${k}">${v.icon} ${v.label}</option>`
+          ).join('')}
+        </select>
+      </div>
+
+      <div style="display:flex;gap:8px;">
+        <button onclick="_submitCustomAlert(this)"
+                style="flex:1;padding:10px;border-radius:12px;border:none;
+                       background:#D4A843;color:#000;font-weight:800;font-size:0.85rem;cursor:pointer;">
+          ✅ 追加
+        </button>
+        <button onclick="this.closest('div[style*=fixed]').remove()"
+                style="flex:1;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.1);
+                       background:transparent;color:#888;font-size:0.85rem;cursor:pointer;">
+          キャンセル
+        </button>
+      </div>
+    </div>
+  `;
+
+  // typeセレクト変更でしきい値フィールド表示切替
+  overlay.querySelector('#caType').addEventListener('change', function() {
+    overlay.querySelector('#caThresholdWrap').style.display =
+      this.value === 'balance_low' ? '' : 'none';
+  });
+  // 初期非表示判定
+  const initType = overlay.querySelector('#caType').value;
+  if (initType !== 'balance_low') overlay.querySelector('#caThresholdWrap').style.display = 'none';
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+function _submitCustomAlert(btn) {
+  const overlay   = btn.closest('div[style*=fixed]');
+  const type      = overlay.querySelector('#caType').value;
+  const action    = overlay.querySelector('#caAction').value;
+  const threshold = parseInt(overlay.querySelector('#caThreshold')?.value || '100', 10);
+  const params    = type === 'balance_low' ? { threshold } : {};
+
+  const existing = _getAlerts().find(a => a.type === type);
+  if (existing) { _showAgentToast('⚠️ 同じ種類のアラートが既に存在します'); return; }
+
+  _addAlert({ type, action, params });
+  overlay.remove();
+  _renderAlertAgent();
+  _showAgentToast(`✅ ${ALERT_TYPES[type]?.label} アラートを追加しました`);
+}
+
+/* ── メインUI描画 ── */
+function _initAlertAgent() {
+  _startAlertChecker();
+  _renderAlertAgent();
+}
+
+function _renderAlertAgent() {
+  const el = document.getElementById('alertAgentBody');
+  if (!el) return;
+
+  const alerts  = _getAlerts();
+  const log     = _getAlertLog();
+  const active  = alerts.filter(a => a.active);
+  const paused  = alerts.filter(a => !a.active);
+  const now     = Date.now();
+  const secAgo  = Math.floor((now - _alertLastCheckTs) / 1000);
+  const checkLbl = _alertLastCheckTs ? _alertFmtAgo(_alertLastCheckTs) : 'まもなく';
+
+  const _alertCard = (a) => {
+    const t = ALERT_TYPES[a.type]  || { icon:'❓', label:'不明', color:'#888' };
+    const ac = ALERT_ACTIONS[a.action] || ALERT_ACTIONS.notify;
+    const param = a.type === 'balance_low' ? ` < ${a.params?.threshold || 100}💎` : '';
+    const firedTxt = a.firedAt ? `最終発火: ${_alertFmtAgo(a.firedAt)}` : '未発火';
+    return `
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 11px;
+                  border-radius:11px;margin-bottom:6px;
+                  background:rgba(255,255,255,.04);border:1px solid ${a.active?'rgba(255,255,255,.08)':'rgba(255,255,255,.04)'};
+                  opacity:${a.active?1:.5};">
+        <div style="font-size:1.3rem;line-height:1;flex-shrink:0;margin-top:2px;">${t.icon}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:0.8rem;color:${t.color};">
+            ${t.label}${param}
+          </div>
+          <div style="font-size:0.69rem;color:#666;margin-top:1px;">
+            ${ac.icon} ${ac.label} &nbsp;·&nbsp; ${firedTxt}
+          </div>
+        </div>
+        <div style="display:flex;gap:5px;flex-shrink:0;">
+          <button onclick="_toggleAlert('${a.id}');_renderAlertAgent();"
+                  title="${a.active?'一時停止':'再開'}"
+                  style="padding:3px 7px;border-radius:7px;border:1px solid rgba(255,255,255,.1);
+                         background:${a.active?'rgba(74,222,128,.1)':'rgba(255,255,255,.05)'};
+                         color:${a.active?'#4ade80':'#666'};font-size:0.7rem;cursor:pointer;">
+            ${a.active?'⏸':'▶'}
+          </button>
+          <button onclick="_removeAlert('${a.id}');_renderAlertAgent();"
+                  title="削除"
+                  style="padding:3px 7px;border-radius:7px;border:1px solid rgba(255,255,255,.1);
+                         background:rgba(239,68,68,.08);color:#ef4444;
+                         font-size:0.7rem;cursor:pointer;">✕</button>
+        </div>
+      </div>`;
+  };
+
+  const _logItem = (entry) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;
+                border-bottom:1px solid rgba(255,255,255,.04);font-size:0.72rem;">
+      <span style="font-size:1rem;">${entry.icon}</span>
+      <div style="flex:1;min-width:0;">
+        <span style="color:#bbb;font-weight:600;">${entry.label}</span>
+        <span style="color:#555;margin-left:6px;font-size:0.67rem;">${entry.message || ''}</span>
+      </div>
+      <span style="color:#555;flex-shrink:0;">${_alertFmtAgo(entry.firedAt)}</span>
+    </div>`;
+
+  // プリセットで未追加のものだけ表示
+  const existingTypes = new Set(alerts.map(a => a.type));
+  const presets = [
+    { type:'balance_low',        label:'残高低下',  icon:'💸' },
+    { type:'restriction_lifted', label:'制限解除',  icon:'🔓' },
+    { type:'kaiensai_active',    label:'開園祭',    icon:'🎪' },
+  ].filter(p => !existingTypes.has(p.type));
+
+  el.innerHTML = `
+    <!-- ステータスバー -->
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:7px 11px;border-radius:10px;margin-bottom:10px;
+                background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);
+                font-size:0.7rem;color:#666;">
+      <span>🟢 監視中 &nbsp;·&nbsp; ${active.length}件稼働 / 計${alerts.length}件</span>
+      <span>最終チェック: <span data-alert-ts style="color:#555;">${checkLbl}</span></span>
+    </div>
+
+    <!-- アクティブなアラート -->
+    ${alerts.length > 0
+      ? alerts.map(a => _alertCard(a)).join('')
+      : `<div style="text-align:center;padding:14px 0;color:#555;font-size:0.75rem;">
+           アラートがまだありません。<br>下のプリセットから追加してください。
+         </div>`
+    }
+
+    <!-- プリセット追加 -->
+    ${presets.length > 0 ? `
+      <div style="margin-top:8px;margin-bottom:8px;">
+        <div style="font-size:0.65rem;font-weight:700;color:#555;letter-spacing:.1em;margin-bottom:6px;">
+          ⚡ プリセット追加
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${presets.map(p => `
+            <button onclick="_alertQuickAdd('${p.type}')"
+                    style="padding:5px 10px;border-radius:20px;border:1px solid rgba(255,255,255,.1);
+                           background:rgba(255,255,255,.04);color:#aaa;font-size:0.72rem;cursor:pointer;
+                           transition:all .2s;"
+                    onmouseover="this.style.background='rgba(212,168,67,.1)';this.style.borderColor='rgba(212,168,67,.3)';this.style.color='#D4A843';"
+                    onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.borderColor='rgba(255,255,255,.1)';this.style.color='#aaa';">
+              ${p.icon} ${p.label}
+            </button>
+          `).join('')}
+          <button onclick="_showAlertCustomForm()"
+                  style="padding:5px 10px;border-radius:20px;border:1px dashed rgba(255,255,255,.15);
+                         background:transparent;color:#666;font-size:0.72rem;cursor:pointer;
+                         transition:all .2s;"
+                  onmouseover="this.style.borderColor='rgba(255,255,255,.3)';this.style.color='#aaa';"
+                  onmouseout="this.style.borderColor='rgba(255,255,255,.15)';this.style.color='#666';">
+            ＋ カスタム
+          </button>
+        </div>
+      </div>
+    ` : `
+      <div style="text-align:center;padding:6px 0;font-size:0.7rem;color:#555;">
+        全プリセット追加済み &nbsp;·&nbsp;
+        <span onclick="_showAlertCustomForm()" style="color:#D4A843;cursor:pointer;text-decoration:underline;">
+          カスタム追加
+        </span>
+      </div>
+    `}
+
+    <!-- 発火ログ -->
+    ${log.length > 0 ? `
+      <div style="margin-top:8px;padding:10px 11px;border-radius:11px;
+                  background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);">
+        <div style="font-size:0.65rem;font-weight:700;color:#555;letter-spacing:.1em;margin-bottom:6px;">
+          📋 発火ログ（直近${Math.min(log.length,5)}件）
+        </div>
+        ${log.slice(0,5).map(e => _logItem(e)).join('')}
+      </div>
+    ` : ''}
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════
    SchoolPark agents — Phase 4b: コンテンツ推薦エージェント
 ═══════════════════════════════════════════════════════ */
 
@@ -8736,10 +9181,13 @@ let _emuerAgentTimer = null;
 function _stopEmuerAgent() {
   if (_emuerAgentTimer) { clearInterval(_emuerAgentTimer); _emuerAgentTimer = null; }
   _stopPatrolAgent();
+  _stopTaskRunner();
+  _stopAlertChecker();
 }
 
 async function _startEmuerAgent() {
   _stopEmuerAgent();
+  _initAlertAgent();
   _initTaskAgent();
   _initRecommendAgent();
   _initPatrolSection();
