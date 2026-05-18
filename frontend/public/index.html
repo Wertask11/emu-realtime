@@ -10489,19 +10489,48 @@ function _showKaiensaiDetailModal() {
           <strong style="color:#ff6b35;">報酬：</strong>称号バッジ「🎪 開園祭の申し子」＋ 1,000実EMUER
         </div>
         <!-- スタンプグリッド -->
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">
-          ${KAIENSAI_STAMP_POIS_BASE.map(pid => {
+        <style>
+          @keyframes ksStampDrop {
+            0%   { transform:scale(2.2) rotate(-20deg); opacity:0; }
+            55%  { transform:scale(0.88) rotate(-13deg); opacity:1; }
+            75%  { transform:scale(1.06) rotate(-14deg); opacity:1; }
+            100% { transform:scale(1) rotate(-15deg); opacity:1; }
+          }
+          @keyframes ksStampShake {
+            0%,100% { transform:translateX(0); }
+            25%     { transform:translateX(-2px); }
+            75%     { transform:translateX(2px); }
+          }
+        </style>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;" id="ksStampGrid">
+          ${KAIENSAI_STAMP_POIS_BASE.map((pid, idx) => {
             const stampPoi = (typeof SP_POIS !== 'undefined' ? SP_POIS : []).find(p => p.id === pid) || {};
             const stamped  = !!stamps[pid];
-            return `<div style="
-              background:${stamped ? 'linear-gradient(135deg,#fff3ee,#ffe4d4)' : '#f5f5f5'};
-              border:2px solid ${stamped ? '#ff6b35' : '#ddd'};
-              border-radius:12px;padding:8px 4px;text-align:center;
-              transition:.2s;
+            return `<div class="ks-stamp-cell" data-stamped="${stamped?1:0}" data-idx="${idx}" style="
+              background:${stamped ? '#fff8f3' : '#f5f5f5'};
+              border:1.5px solid ${stamped ? '#ffb38a' : '#e0e0e0'};
+              border-radius:12px;padding:8px 4px 6px;text-align:center;
+              position:relative;overflow:hidden;
             ">
-              <div style="font-size:22px;${stamped ? '' : 'filter:grayscale(1);opacity:0.35;'}">${stampPoi.icon||'🎪'}</div>
-              <div style="font-size:9px;color:${stamped ? '#ff6b35' : '#aaa'};margin-top:2px;font-weight:${stamped?'bold':'normal'};line-height:1.2;">${stampPoi.name||pid}</div>
-              ${stamped ? '<div style="font-size:10px;margin-top:2px;">✅</div>' : '<div style="font-size:10px;margin-top:2px;color:#ccc;">－</div>'}
+              <!-- スタンプ印 (取得済み) -->
+              ${stamped ? `<div class="ks-stamp-ink" style="
+                position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                pointer-events:none;opacity:0;
+              ">
+                <div style="
+                  width:52px;height:52px;border-radius:50%;
+                  border:3px solid rgba(255,107,53,0.75);
+                  background:rgba(255,107,53,0.1);
+                  display:flex;align-items:center;justify-content:center;
+                  transform:rotate(-15deg);
+                  box-shadow:0 0 0 1.5px rgba(255,107,53,0.3);
+                ">
+                  <span style="font-size:22px;">${stampPoi.icon||'🎪'}</span>
+                </div>
+              </div>` : ''}
+              <!-- アイコン (未取得のみ前面表示) -->
+              <div style="font-size:20px;${stamped ? 'opacity:0;' : 'filter:grayscale(1);opacity:0.3;'}">${stampPoi.icon||'🎪'}</div>
+              <div style="font-size:9px;color:${stamped ? '#ff6b35' : '#bbb'};margin-top:2px;font-weight:${stamped?'bold':'normal'};line-height:1.2;">${stampPoi.name||pid}</div>
             </div>`;
           }).join('')}
         </div>
@@ -10531,6 +10560,19 @@ function _showKaiensaiDetailModal() {
   `;
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
+
+  // 取得済みスタンプを順番にドスンと押す演出
+  const stampedCells = modal.querySelectorAll('.ks-stamp-cell[data-stamped="1"]');
+  stampedCells.forEach((cell, i) => {
+    const ink = cell.querySelector('.ks-stamp-ink');
+    if (!ink) return;
+    setTimeout(() => {
+      ink.style.opacity = '1';
+      ink.style.animation = 'ksStampDrop .38s cubic-bezier(0.34,1.1,0.64,1) both';
+      // セル自体も少し揺らす（押した衝撃）
+      cell.style.animation = 'ksStampShake .18s ease .22s both';
+    }, 300 + i * 130);
+  });
 }
 
 async function _submitKaiensaiFeedback(btn) {
