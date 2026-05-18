@@ -3097,7 +3097,7 @@ body.paypay-mode #pp-post-fab {
       <input id="spmapCmd" class="spmap-cmd-input" type="text"
              placeholder="/ コマンド…"
              onkeydown="spMapCmdKeydown(event)"
-             onfocus="this.placeholder='agents / tutorial / wallet…'"
+             onfocus="if(_spIsPaidUser()){this.placeholder='agents / tutorial / wallet…';}else{this.blur();_showAgentToast('🎫 コマンドバーは有料パス限定です');}"
              onblur="this.placeholder='/ コマンド…'">
     </div>
     <button class="spmap-reizo-btn" onclick="spReizoOpen()" title="冷蔵庫くんに聞く">
@@ -9709,7 +9709,7 @@ const SP_REIZO_KB = [
   { k:['配布','1000','無料配布','20日','毎月'],
     a:'利用制限の全ステップを完了すると 1,000 EMUER が自動配布されるよ🧊\n実配布日は毎月 20 日だよ。手続きは不要で自動的に届くよ！' },
   { k:['タクシー','taxi','移動','瞬間移動'],
-    a:'タクシーは 3 EMUER でマップ内の好きな施設に瞬間移動できる機能だよ🚕\nマップ右上の 🚕 ボタン、またはキーボード「T」から使えるよ！' },
+    a:'タクシーは 3 EMUER でマップ内の好きな施設に瞬間移動できる機能だよ🚕\nマップ右上の 🚕 ボタンから使えるよ！\n（キーボード「T」は🎫有料パス限定だよ）' },
   { k:['マップ','map','操作'],
     a:'マップはクリック・スクロールで操作できるよ🧊\n施設アイコンをクリックするとコンテンツにアクセスできるよ。\n右上ボタン：💰ウォレット　🚕タクシー　🤖SchoolPark agents　⚙️設定' },
   { k:['使い方','コスト','料金','施設','解放'],
@@ -9727,11 +9727,11 @@ const SP_REIZO_KB = [
   { k:['アラート','alert','通知','監視','phase4c'],
     a:'アラート自律対応（Phase 4c）は重要な変化を自動検知して通知・行動するよ🔔\n監視タイプ：💸残高低下 / 🔓制限解除 / ⏳制限まじか / 🎪開園祭開始 / 💎残高回復\n15秒ごとに自動チェックして、ブラウザ通知＋自動巡回や推薦更新も実行するよ！' },
   { k:['aora','aoraコマンド','キーコマンド'],
-    a:'「Aora」はSchoolPark agentsを召喚するキーシーケンスだよ🤖✨\nキーボードで A→o→r→a と順に入力するとagentsパネルが開くよ！\n（入力欄でのタイプは反応しないよ）' },
+    a:'「Aora」はSchoolPark agentsを召喚するキーシーケンスだよ🤖✨\nキーボードで A→o→r→a と順に入力するとagentsパネルが開くよ！\n（入力欄でのタイプは反応しないよ）\n\n🎫 有料パス限定の機能だよ！' },
   { k:['スマホ','スマートフォン','タブレット','mobile'],
     a:'スマホ・タブレットは MetaMask アプリ内のブラウザを使ってね🧊\nノーマルの Chrome や Safari では使えないよ。' },
-  { k:['ショートカット','shortcut','キー','keyboard'],
-    a:'キーボードショートカット🧊\nW：ウォレット　T：タクシー　A：SchoolPark agents　S：設定\nEsc：パネルを閉じる　Backspace：マップに戻る' },
+  { k:['ショートカット','shortcut','キー','keyboard','コマンドバー','コマンド'],
+    a:'キーボードショートカット🧊\n\n🎫 有料パス限定：\nW：ウォレット　T：タクシー　A：SchoolPark agents　S：設定\n1〜4：カスタムキー\nAora（A→o→r→a）：SchoolPark agents を召喚\n/ コマンドバー：/agents /wallet /taxi /settings /tutorial /map\n\n✅ 全員利用可：\nEsc：パネルを閉じる　Backspace：マップに戻る' },
   { k:['チュートリアル','tutorial','使い方','ガイド'],
     a:'チュートリアルはナビの「チュートリアル」から開けるよ📖\nSchoolPark の楽しみ方・使い方をステップごとに紹介しているよ🧊' },
   { k:['グルメ','gourmet','レストラン','食べる'],
@@ -9914,21 +9914,27 @@ function _spTutFinish() {
 
 /* ═══════════════════════════════════════════════════════
    SchoolPark キーボードショートカット + Aoraシーケンス
+   ★ キーボードショートカット・コマンドバーは有料パス限定
 ═══════════════════════════════════════════════════════ */
+
+/** 有料パスユーザー判定 */
+function _spIsPaidUser() {
+  return !!(window.hasPaidNFT || window._fromFirebasePaidUsers);
+}
+
 (function () {
   /* ── 単発ショートカット（W / T / A / S / Esc / Backspace） ── */
   document.addEventListener('keydown', function (e) {
     const tag = document.activeElement?.tagName?.toLowerCase();
     const isInput = tag === 'input' || tag === 'textarea' || tag === 'select';
 
-    /* Esc / Backspace はどこでも有効 */
+    /* Esc / Backspace は全員有効（ナビゲーション基本操作） */
     if (e.key === 'Escape') {
       document.querySelectorAll('.sp-panel.open').forEach(p => p.classList.remove('open'));
       document.querySelectorAll('.sp-panel-backdrop').forEach(b => b.remove());
       return;
     }
     if (e.key === 'Backspace' && !isInput) {
-      /* マップが開いていて、パネルが全て閉じているときはマップを閉じる */
       const anyOpen = document.querySelector('.sp-panel.open');
       if (!anyOpen) closeSpMap?.();
       return;
@@ -9938,6 +9944,15 @@ function _spTutFinish() {
     if (isInput) return;
     /* 修飾キー付き（Ctrl / Alt / Meta）は無視 */
     if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+    /* ★ 有料パス限定（W / T / A / S / 1〜4） */
+    if (!_spIsPaidUser()) {
+      const paid_keys = ['w','t','a','s','1','2','3','4'];
+      if (paid_keys.includes(e.key.toLowerCase())) {
+        _showAgentToast('🎫 キーボードショートカットは有料パス限定です');
+      }
+      return;
+    }
 
     switch (e.key.toLowerCase()) {
       case 'w': openSpPanel('spWalletPanel');    break;
@@ -9970,7 +9985,7 @@ function _spTutFinish() {
     _spRunAction(action);
   }
 
-  /* ── Aora シーケンス（A→o→r→a でagentsパネルを召喚） ── */
+  /* ── Aora シーケンス（A→o→r→a でagentsパネルを召喚）── 有料パス限定 */
   let _aoraBuffer = '';
   document.addEventListener('keydown', function (e) {
     const tag = document.activeElement?.tagName?.toLowerCase();
@@ -9980,9 +9995,13 @@ function _spTutFinish() {
     if (e.key.length !== 1) { _aoraBuffer = ''; return; }
     _aoraBuffer = (_aoraBuffer + e.key.toLowerCase()).slice(-4);
     if (_aoraBuffer === 'aora') {
+      _aoraBuffer = '';
+      if (!_spIsPaidUser()) {
+        _showAgentToast('🎫 Aora シーケンスは有料パス限定です');
+        return;
+      }
       openSpPanel('spRobotPanel');
       _showAgentToast('🤖 Aora — SchoolPark agents 起動！');
-      _aoraBuffer = '';
     }
   });
 })();
@@ -12880,6 +12899,11 @@ function spMapCmdKeydown(e) {
   e.target.value = '';
   e.target.blur();
   if (!raw) return;
+  /* ★ コマンドバーは有料パス限定 */
+  if (!_spIsPaidUser()) {
+    _showAgentToast('🎫 コマンドバーは有料パス限定です');
+    return;
+  }
   const cmd = raw.replace(/^\//, ''); // 先頭スラッシュ除去
   if (['agents','schoolparkagents','agent'].includes(cmd)) {
     openSpPanel('spRobotPanel');
@@ -15549,14 +15573,69 @@ window.fbLib = {
 
   <!-- TUTORIAL BODY -->
   <div class="w-tutorial-body" id="w-tutorial-body">
-    <div style="text-align:center;padding:12px 0 24px">
-      <div style="font-size:3rem;margin-bottom:14px">📖</div>
-      <div style="font-size:0.95rem;color:#D4A843;font-weight:700;margin-bottom:10px;font-family:'Noto Sans JP',sans-serif">SchoolPark チュートリアル</div>
-      <div style="color:var(--w-muted);font-size:0.82rem;line-height:1.85;font-family:'Noto Sans JP',sans-serif">
-        SchoolParkの楽しみ方・使い方を<br>ステップごとに紹介するガイドです。<br><br>
-        <span style="color:#D4A843;font-weight:700">近日公開予定</span><br>
-        現在コンテンツを準備中です。<br>お楽しみに！
+    <div style="font-family:'Noto Sans JP',sans-serif;padding:0 0 8px;">
+
+      <!-- ヘッダー -->
+      <div style="text-align:center;padding:16px 0 20px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:18px;">
+        <div style="font-size:2rem;margin-bottom:8px;">📖</div>
+        <div style="font-size:0.93rem;color:#D4A843;font-weight:700;letter-spacing:0.04em;">SchoolPark チュートリアル</div>
+        <div style="color:var(--w-muted);font-size:0.78rem;margin-top:6px;line-height:1.7;">
+          使い方を確認できます
+        </div>
       </div>
+
+      <!-- ボタン群 -->
+      <div style="display:flex;flex-direction:column;gap:10px;padding:0 4px 20px;">
+        <!-- チュートリアルを再生 -->
+        <button onclick="toggleContactPanel();setTimeout(()=>{startSpTutorial?.()},300);"
+          style="display:flex;align-items:center;gap:12px;background:rgba(212,168,67,0.14);border:1px solid rgba(212,168,67,0.4);color:#D4A843;padding:14px 16px;border-radius:12px;cursor:pointer;width:100%;text-align:left;font-family:'Noto Sans JP',sans-serif;font-size:0.88rem;font-weight:700;transition:background 0.2s;"
+          onmouseover="this.style.background='rgba(212,168,67,0.24)'" onmouseout="this.style.background='rgba(212,168,67,0.14)'">
+          <span style="font-size:1.5rem;">▶️</span>
+          <div>
+            <div>チュートリアルをもう一度みる</div>
+            <div style="font-size:0.74rem;font-weight:400;color:#a07830;margin-top:2px;">入場後のガイドを最初から再生</div>
+          </div>
+        </button>
+
+        <!-- チュートリアルページを開く -->
+        <button onclick="toggleContactPanel();setTimeout(()=>{openSpContent?.('/schoolpark/tutorial.html')},300);"
+          style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:#ccc;padding:14px 16px;border-radius:12px;cursor:pointer;width:100%;text-align:left;font-family:'Noto Sans JP',sans-serif;font-size:0.88rem;font-weight:700;transition:background 0.2s;"
+          onmouseover="this.style.background='rgba(255,255,255,0.09)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+          <span style="font-size:1.5rem;">📄</span>
+          <div>
+            <div>チュートリアルページを開く</div>
+            <div style="font-size:0.74rem;font-weight:400;color:#888;margin-top:2px;">詳細な使い方・機能一覧を確認</div>
+          </div>
+        </button>
+      </div>
+
+      <!-- クイックガイド -->
+      <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:16px;">
+        <div style="font-size:0.78rem;color:#888;font-weight:700;letter-spacing:0.08em;margin-bottom:12px;padding:0 4px;">⚡ クイックガイド</div>
+        <div style="display:flex;flex-direction:column;gap:7px;padding:0 4px;">
+          <div style="display:flex;align-items:flex-start;gap:10px;font-size:0.8rem;">
+            <span style="color:#D4A843;flex-shrink:0;width:20px;text-align:center;">①</span>
+            <span style="color:#bbb;line-height:1.6;">ロゴ画面 → <strong style="color:#D4A843">有料パス</strong> or <strong style="color:#60a5fa">無料パス</strong> を選択 → マップへ</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:10px;font-size:0.8rem;">
+            <span style="color:#D4A843;flex-shrink:0;width:20px;text-align:center;">②</span>
+            <span style="color:#bbb;line-height:1.6;">マップ上のエリア・施設をタップして探索</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:10px;font-size:0.8rem;">
+            <span style="color:#D4A843;flex-shrink:0;width:20px;text-align:center;">③</span>
+            <span style="color:#bbb;line-height:1.6;"><strong style="color:#D4A843">💎 EMUER</strong> を貯めて制限解除・施設利用</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:10px;font-size:0.8rem;">
+            <span style="color:#D4A843;flex-shrink:0;width:20px;text-align:center;">④</span>
+            <span style="color:#bbb;line-height:1.6;"><strong style="color:#D4A843">🤖 agents</strong>（右上ボタン）でAIに活動をサポートさせる</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:10px;font-size:0.8rem;">
+            <span style="color:#D4A843;flex-shrink:0;width:20px;text-align:center;">⑤</span>
+            <span style="color:#bbb;line-height:1.6;"><strong>🚕 タクシー</strong>（3 EMUER）で好きな施設に瞬間移動</span>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
