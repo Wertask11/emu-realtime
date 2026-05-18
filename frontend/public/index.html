@@ -3764,6 +3764,20 @@ body.paypay-mode #pp-post-fab {
       </div>
     </div>
 
+    <!-- ══════ Phase 4b: コンテンツ推薦エージェント ══════ -->
+    <div class="sp-panel-section" id="recommendAgentSection">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <div class="sp-panel-section-title" style="margin-bottom:0;">🔍 コンテンツ推薦</div>
+        <div style="font-size:0.6rem;font-weight:800;letter-spacing:.1em;padding:2px 8px;border-radius:999px;
+                    color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);">
+          稼働中
+        </div>
+      </div>
+      <div id="recommendAgentBody">
+        <div style="text-align:center;padding:18px 0;color:#555;font-size:0.8rem;">分析中…</div>
+      </div>
+    </div>
+
     <!-- ══════ Phase 4a: タスク自動実行エージェント ══════ -->
     <div class="sp-panel-section" id="taskAgentSection">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -3873,11 +3887,11 @@ body.paypay-mode #pp-post-fab {
       </div>
 
       <div class="agents-cap">
-        <div class="agents-cap-badge soon">PLANNED</div>
+        <div class="agents-cap-badge active">稼働中</div>
         <div class="agents-cap-icon">🔍</div>
         <div>
           <div class="agents-cap-name">コンテンツ推薦</div>
-          <div class="agents-cap-desc">あなたの行動パターンからおすすめを自動提案</div>
+          <div class="agents-cap-desc">行動パターン・残高・時間帯からおすすめを自動提案</div>
         </div>
       </div>
 
@@ -7726,6 +7740,192 @@ function openKaiensaiMarche() {
 }
 
 /* ═══════════════════════════════════════════════════════
+   SchoolPark agents — Phase 4b: コンテンツ推薦エージェント
+═══════════════════════════════════════════════════════ */
+
+/* ── ゾーン表示名マッピング ── */
+function _zoneLabel(zone) {
+  const m = { learn:'学び', guard:'守り', earn:'稼ぎ', play:'遊び',
+              event:'イベント', plaza:'広場', star:'星空', life:'暮らし' };
+  return m[zone] || zone;
+}
+
+/* ── ゾーンカラーマッピング ── */
+const _ZONE_COLORS = {
+  learn:'#60a5fa', guard:'#4ade80', earn:'#D4A843',
+  play:'#c084fc',  event:'#f97316', plaza:'#94a3b8',
+  star:'#e879f9',  life:'#fb923c'
+};
+
+/* ── メインレンダリング ── */
+function _initRecommendAgent() {
+  _renderRecommendAgent();
+}
+
+function _renderRecommendAgent() {
+  const el = document.getElementById('recommendAgentBody');
+  if (!el) return;
+
+  const data    = _getEmuerData();
+  const balance = data ? (data.balance || 0) : 0;
+  const history = data ? (data.history  || []) : [];
+
+  /* ─ 1. 行動分析: ゾーン親和性スコア ─ */
+  const zoneScore  = {};
+  const visitedIds = new Set();
+
+  history.forEach(h => {
+    if (h.type !== 'spend') return;
+    const matched = SP_POIS.find(p => {
+      const first = p.name.split(' ')[0];
+      return h.label === first || h.label === p.id;
+    });
+    if (matched) {
+      zoneScore[matched.zone] = (zoneScore[matched.zone] || 0) + 1;
+      visitedIds.add(matched.id);
+    }
+  });
+
+  const totalVisits = Object.values(zoneScore).reduce((a, b) => a + b, 0);
+  const sortedZones = Object.entries(zoneScore).sort((a, b) => b[1] - a[1]);
+  const topZone     = sortedZones[0]?.[0] || null;
+
+  /* ─ 2. 時間帯ヒント ─ */
+  const hour = new Date().getHours();
+  let timeZone, timeHint;
+  if      (hour >= 6  && hour < 12) { timeZone = 'learn'; timeHint = '朝は学び時間 ☀️'; }
+  else if (hour >= 12 && hour < 17) { timeZone = 'earn';  timeHint = '昼は活動時間 💼'; }
+  else if (hour >= 17 && hour < 21) { timeZone = 'play';  timeHint = '夕方は娯楽時間 🎮'; }
+  else                               { timeZone = 'guard'; timeHint = '夜は守りを固める 🌙'; }
+
+  /* ─ 3. POIスコアリング ─ */
+  const openPois = SP_POIS.filter(p => p.status === 'open' && !p.eventOnly);
+
+  const scored = openPois.map(p => {
+    const cost      = EMUER_RATE_CONFIG[p.id] ?? 0;
+    const canAfford = balance >= cost;
+    let score = 0;
+    const reasons = [];
+
+    if (topZone && p.zone === topZone && totalVisits > 0) {
+      score += 30;
+      reasons.push(`よく訪れる${_zoneLabel(p.zone)}ゾーン`);
+    }
+    if (p.zone === timeZone) {
+      score += 20;
+      reasons.push(timeHint);
+    }
+    if (!visitedIds.has(p.id)) {
+      score += 15;
+      reasons.push('まだ訪れていない場所');
+    }
+    if (canAfford) { score += 10; } else { score -= 50; }
+    if (cost <= 5 && cost > 0) score += 5;
+    if (cost === 0) score += 8;
+
+    return {
+      poi: p, cost, canAfford, score,
+      reason: reasons[0] || '探索してみよう'
+    };
+  });
+
+  /* ─ 4. 推薦リスト生成 ─ */
+  const affordable = scored.filter(s => s.canAfford).sort((a, b) => b.score - a.score);
+
+  // メイン推薦（上位3件）
+  const main = affordable.slice(0, 3);
+
+  // ディスカバリー（普段と違うゾーン）
+  const discovery = affordable.find(s =>
+    topZone && s.poi.zone !== topZone && !main.includes(s)
+  ) || null;
+
+  // 節約おすすめ（コスト≤3、重複除外）
+  const usedIds = new Set([...main.map(s => s.poi.id), discovery?.poi.id]);
+  const freeRec = affordable.find(s => s.cost <= 3 && !usedIds.has(s.poi.id)) || null;
+
+  /* ─ 5. HTML生成ヘルパー ─ */
+  const _poiAction = s => {
+    if (s.poi.action) return `${s.poi.action}()`;
+    if (s.poi.page)   return `window.open('${s.poi.page}','_blank')`;
+    return '';
+  };
+
+  const _card = (s, highlight = '') => `
+    <div onclick="closeSpPanel('spRobotPanel');setTimeout(()=>gatedOpen('${s.poi.id}',()=>{${_poiAction(s)}}),300);"
+         style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;
+                background:rgba(255,255,255,.04);border:1px solid ${highlight||'rgba(255,255,255,.07)'};
+                cursor:pointer;transition:background .2s,border-color .2s;margin-bottom:6px;"
+         onmouseover="this.style.background='rgba(212,168,67,.08)';this.style.borderColor='rgba(212,168,67,.25)';"
+         onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.borderColor='${highlight||'rgba(255,255,255,.07)'}';">
+      <div style="font-size:1.45rem;width:36px;text-align:center;flex-shrink:0;">${s.poi.icon}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:0.82rem;color:#e0e0e0;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          ${s.poi.name.includes(' ') ? s.poi.name.split(' ').slice(1).join(' ') : s.poi.name}
+        </div>
+        <div style="font-size:0.7rem;color:#888;margin-top:2px;">${s.reason}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:0.75rem;font-weight:700;
+                    color:${s.cost===0?'#4ade80':'#D4A843'};">
+          ${s.cost===0?'無料':s.cost+'💎'}
+        </div>
+        <div style="font-size:0.62rem;color:#555;margin-top:2px;">→ 移動</div>
+      </div>
+    </div>`;
+
+  /* ─ 6. 分析ヘッダー ─ */
+  const analysisHtml = totalVisits > 0
+    ? `<span style="color:${_ZONE_COLORS[topZone]||'#aaa'};">
+         ${_zoneLabel(topZone)}ゾーン好み (${sortedZones[0]?.[1]}回)
+       </span> &nbsp;·&nbsp; ${timeHint}`
+    : `<span style="color:#666;">訪問履歴なし — 時間帯で提案</span> &nbsp;·&nbsp; ${timeHint}`;
+
+  /* ─ 7. 描画 ─ */
+  el.innerHTML = `
+    <div style="font-size:0.71rem;color:#666;line-height:1.65;padding:8px 12px;margin-bottom:10px;
+                border-radius:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);">
+      🧠 ${analysisHtml}
+    </div>
+
+    ${main.length > 0
+      ? main.map(s => _card(s)).join('')
+      : `<div style="text-align:center;padding:14px 0;color:#555;font-size:0.75rem;">残高不足で提案できません 💸</div>`
+    }
+
+    ${discovery ? `
+      <div style="margin-top:6px;padding:9px 12px;border-radius:11px;
+                  background:rgba(192,132,252,.07);border:1px solid rgba(192,132,252,.22);">
+        <div style="font-size:0.63rem;font-weight:800;color:#c084fc;letter-spacing:.1em;margin-bottom:5px;">
+          🔮 ディスカバリー — いつもと違うゾーンへ
+        </div>
+        ${_card(discovery, 'rgba(192,132,252,.2)')}
+      </div>
+    ` : ''}
+
+    ${freeRec ? `
+      <div style="margin-top:6px;padding:9px 12px;border-radius:11px;
+                  background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.18);">
+        <div style="font-size:0.63rem;font-weight:800;color:#4ade80;letter-spacing:.1em;margin-bottom:5px;">
+          ⚡ 節約おすすめ (${freeRec.cost===0?'無料':freeRec.cost+'💎'})
+        </div>
+        ${_card(freeRec, 'rgba(74,222,128,.18)')}
+      </div>
+    ` : ''}
+
+    <button onclick="_renderRecommendAgent()"
+            style="width:100%;margin-top:10px;padding:8px;border-radius:10px;
+                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);
+                   color:#777;font-size:0.74rem;cursor:pointer;transition:all .2s;"
+            onmouseover="this.style.background='rgba(255,255,255,.09)';this.style.color='#ccc';"
+            onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.color='#777';">
+      🔄 再分析する
+    </button>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════
    SchoolPark agents — Phase 4a: タスク自動実行
 ═══════════════════════════════════════════════════════ */
 
@@ -8540,6 +8740,8 @@ function _stopEmuerAgent() {
 
 async function _startEmuerAgent() {
   _stopEmuerAgent();
+  _initTaskAgent();
+  _initRecommendAgent();
   _initPatrolSection();
   await _renderEmuerAgent();
   // 制限中は1秒おき、通常時は15秒おきに更新
