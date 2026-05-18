@@ -3764,6 +3764,20 @@ body.paypay-mode #pp-post-fab {
       </div>
     </div>
 
+    <!-- ══════ Phase 3: 自動巡回エージェント ══════ -->
+    <div class="sp-panel-section" id="patrolAgentSection">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <div class="sp-panel-section-title" style="margin-bottom:0;">🗺️ 自動巡回</div>
+        <div style="font-size:0.6rem;font-weight:800;letter-spacing:.1em;padding:2px 8px;border-radius:999px;
+                    color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);">
+          稼働中
+        </div>
+      </div>
+      <div id="patrolAgentBody">
+        <div style="text-align:center;padding:18px 0;color:#555;font-size:0.8rem;">読み込み中…</div>
+      </div>
+    </div>
+
     <!-- ══════ Phase 2: EMUER エージェントダッシュボード ══════ -->
     <div class="sp-panel-section" id="emuerAgentSection">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -3818,7 +3832,7 @@ body.paypay-mode #pp-post-fab {
       </style>
 
       <div class="agents-cap">
-        <div class="agents-cap-badge soon">PLANNED</div>
+        <div class="agents-cap-badge active">稼働中</div>
         <div class="agents-cap-icon">🗺️</div>
         <div>
           <div class="agents-cap-name">SchoolPark 自動巡回</div>
@@ -3882,9 +3896,9 @@ body.paypay-mode #pp-post-fab {
             <div style="font-size:0.73rem;color:#666;margin-top:1px;">EMUER 自動管理エージェント</div>
           </div>
           <div style="position:relative;">
-            <div style="position:absolute;left:-16px;top:4px;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.2);"></div>
-            <div style="font-size:0.78rem;font-weight:600;color:#555;">Phase 3</div>
-            <div style="font-size:0.73rem;color:#444;margin-top:1px;">SchoolPark 巡回エージェント</div>
+            <div style="position:absolute;left:-16px;top:4px;width:10px;height:10px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.5);"></div>
+            <div style="font-size:0.78rem;font-weight:800;color:#4ade80;">Phase 3 — ✅ 稼働中</div>
+            <div style="font-size:0.73rem;color:#666;margin-top:1px;">SchoolPark 自動巡回エージェント</div>
           </div>
           <div style="position:relative;">
             <div style="position:absolute;left:-16px;top:4px;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.2);"></div>
@@ -7698,16 +7712,408 @@ function openKaiensaiMarche() {
 }
 
 /* ═══════════════════════════════════════════════════════
+   SchoolPark agents — Phase 3: 自動巡回
+═══════════════════════════════════════════════════════ */
+
+/* ---------- プリセットルート定義 ---------- */
+const PATROL_PRESETS = [
+  {
+    id: 'event', label: '🎪 開園祭', color: '#f97316',
+    pois: ['event1','event2','event3','event4','event5','event6','event7'],
+  },
+  {
+    id: 'learn', label: '📚 学ぶ', color: '#60a5fa',
+    pois: ['learn1','learn2','learn3','learn4','learn5'],
+  },
+  {
+    id: 'earn',  label: '💰 稼ぐ', color: '#D4A843',
+    pois: ['earn1','earn2','earn3','earn4','earn5','earn6','earn7'],
+  },
+  {
+    id: 'guard', label: '🛡️ 守る', color: '#4ade80',
+    pois: ['guard1','guard2','guard3','guard4','guard5','guard6'],
+  },
+  {
+    id: 'play',  label: '🎮 遊ぶ', color: '#c084fc',
+    pois: ['play1','play2','play3','play4','play5','play6','play7'],
+  },
+  {
+    id: 'free',  label: '⚡ 節約', color: '#34d399',
+    pois: null, // 起動時に動的生成（cost <= 3 のPOI）
+  },
+  {
+    id: 'all',   label: '🗺️ 全域', color: '#94a3b8',
+    pois: null, // 起動時に動的生成（open全POI）
+  },
+];
+
+/* ---------- 巡回ステート ---------- */
+const _patrol = {
+  state:      'idle',   // 'idle' | 'running' | 'paused' | 'done'
+  presetId:   null,
+  route:      [],       // POI idの配列
+  idx:        0,
+  log:        [],       // { poiId, name, icon, cost, canGo, restricted }
+  timer:      null,
+  color:      '#94a3b8',
+};
+
+/* ---------- 初期化 ---------- */
+function _initPatrolSection() {
+  _renderPatrolIdle();
+}
+
+function _resolvePatrolPois(preset) {
+  if (preset.pois) return preset.pois;
+  const allOpen = SP_POIS.filter(p => p.status === 'open');
+  if (preset.id === 'free') {
+    return allOpen
+      .filter(p => (EMUER_RATE_CONFIG[p.id] ?? 0) <= 3)
+      .map(p => p.id);
+  }
+  // 'all'
+  return allOpen.map(p => p.id);
+}
+
+/* ---------- ルート選択画面 ---------- */
+function _renderPatrolIdle(selectedId) {
+  const body = document.getElementById('patrolAgentBody');
+  if (!body) return;
+
+  const btnHtml = PATROL_PRESETS.map(p => `
+    <button onclick="_selectPatrolPreset('${p.id}')"
+      style="
+        padding:6px 10px;border-radius:999px;border:1.5px solid ${p.id === selectedId ? p.color : 'rgba(255,255,255,.1)'};
+        background:${p.id === selectedId ? p.color + '22' : 'transparent'};
+        color:${p.id === selectedId ? p.color : '#aaa'};
+        font-size:0.72rem;font-weight:700;cursor:pointer;
+        transition:all .15s;font-family:inherit;
+      ">${p.label}</button>
+  `).join('');
+
+  body.innerHTML = `
+    <div style="font-size:0.7rem;color:#555;margin-bottom:8px;letter-spacing:.05em;">ルートを選択</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">${btnHtml}</div>
+    <div id="patrolRoutePreview" style="min-height:28px;"></div>
+  `;
+
+  if (selectedId) _renderPatrolPreview(selectedId);
+}
+
+function _selectPatrolPreset(presetId) {
+  const preset = PATROL_PRESETS.find(p => p.id === presetId);
+  if (!preset) return;
+  _patrol.presetId = presetId;
+  _patrol.color    = preset.color;
+  _patrol.route    = _resolvePatrolPois(preset);
+  _patrol.idx      = 0;
+  _patrol.log      = [];
+  _patrol.state    = 'idle';
+  _renderPatrolIdle(presetId);
+}
+
+function _renderPatrolPreview(presetId) {
+  const preview = document.getElementById('patrolRoutePreview');
+  if (!preview || !_patrol.route.length) return;
+  const names = _patrol.route.map(id => {
+    const poi = _findPoi(id);
+    return poi ? `${poi.icon} ${poi.name.split(' ')[0]}` : id;
+  });
+  preview.innerHTML = `
+    <div style="font-size:0.7rem;color:#555;margin-bottom:6px;">${_patrol.route.length}スポット</div>
+    <div style="font-size:0.72rem;color:#888;line-height:1.8;">${names.join(' → ')}</div>
+    <button onclick="_startPatrol()"
+      style="margin-top:12px;width:100%;padding:10px;border-radius:12px;border:0;
+             background:${_patrol.color};color:#fff;font-weight:800;font-size:0.85rem;
+             cursor:pointer;font-family:inherit;box-shadow:0 3px 0 rgba(0,0,0,.3);
+             transition:transform .1s;"
+      onmousedown="this.style.transform='translateY(2px)'"
+      onmouseup="this.style.transform=''"
+    >▶ 巡回開始</button>
+  `;
+}
+
+/* ---------- 巡回開始 ---------- */
+function _startPatrol() {
+  if (!_patrol.route.length) return;
+  if (_patrol.state === 'done') {
+    // リセット
+    _patrol.idx = 0;
+    _patrol.log = [];
+  }
+  _patrol.state = 'running';
+  _renderPatrolRunning();
+  _scheduleNextPatrolStep(0);
+}
+
+function _pausePatrol() {
+  if (_patrol.timer) { clearTimeout(_patrol.timer); _patrol.timer = null; }
+  _patrol.state = 'paused';
+  _renderPatrolRunning();
+}
+
+function _resumePatrol() {
+  _patrol.state = 'running';
+  _renderPatrolRunning();
+  _scheduleNextPatrolStep(400);
+}
+
+function _stopPatrolAgent() {
+  if (_patrol.timer) { clearTimeout(_patrol.timer); _patrol.timer = null; }
+  _patrol.state = 'idle';
+  // マップハイライトを解除
+  document.querySelectorAll('.spmap-poi-marker').forEach(m => m.classList.remove('spm-active','patrol-scan'));
+}
+
+function _scheduleNextPatrolStep(delay) {
+  if (_patrol.timer) clearTimeout(_patrol.timer);
+  _patrol.timer = setTimeout(_patrolStep, delay ?? 1000);
+}
+
+/* ---------- 1ステップ実行 ---------- */
+async function _patrolStep() {
+  if (_patrol.state !== 'running') return;
+  if (_patrol.idx >= _patrol.route.length) {
+    _patrol.state = 'done';
+    _renderPatrolDone();
+    document.querySelectorAll('.spmap-poi-marker').forEach(m => m.classList.remove('spm-active','patrol-scan'));
+    return;
+  }
+
+  const poiId  = _patrol.route[_patrol.idx];
+  const poi    = _findPoi(poiId);
+  if (!poi) { _patrol.idx++; _scheduleNextPatrolStep(200); return; }
+
+  const cost       = EMUER_RATE_CONFIG[poiId] ?? 0;
+  const emuerData  = _getEmuerData();
+  const balance    = emuerData?.balance ?? 0;
+  const restricted = !!(emuerData?.restrictionUntil && Date.now() < emuerData.restrictionUntil);
+  const canGo      = cost === 0 || (!restricted && balance >= cost);
+
+  // ログに追加
+  _patrol.log.unshift({ poiId, name: poi.name, icon: poi.icon, cost, canGo, restricted });
+
+  // マップのPOIをハイライト（SchoolParkマップが開いていれば）
+  document.querySelectorAll('.spmap-poi-marker').forEach(m => m.classList.remove('spm-active','patrol-scan'));
+  const markerEl = document.querySelector(`[data-poi="${poiId}"]`);
+  if (markerEl) {
+    markerEl.classList.add('spm-active');
+    markerEl.scrollIntoView?.({ behavior:'smooth', block:'nearest' });
+  }
+
+  _patrol.idx++;
+  _renderPatrolRunning();
+  _scheduleNextPatrolStep(900);
+}
+
+/* ---------- 巡回中UI ---------- */
+function _renderPatrolRunning() {
+  const body = document.getElementById('patrolAgentBody');
+  if (!body) return;
+
+  const total     = _patrol.route.length;
+  const done      = _patrol.idx;
+  const pct       = total > 0 ? Math.round((done / total) * 100) : 0;
+  const isRunning = _patrol.state === 'running';
+  const isPaused  = _patrol.state === 'paused';
+  const curPoiId  = _patrol.route[_patrol.idx];
+  const curPoi    = curPoiId ? _findPoi(curPoiId) : null;
+
+  // 進捗ドット（最大12個）
+  const dotMax  = Math.min(total, 12);
+  const dotStep = total > 12 ? Math.ceil(total / 12) : 1;
+  let dots = '';
+  for (let i = 0; i < dotMax; i++) {
+    const realIdx = i * dotStep;
+    const filled  = realIdx < done;
+    const current = realIdx === done || (i === dotMax - 1 && done >= total);
+    const col     = filled ? _patrol.color : current && isRunning ? _patrol.color + '99' : 'rgba(255,255,255,.1)';
+    dots += `<div style="flex:1;max-width:18px;height:6px;border-radius:999px;background:${col};
+                         transition:background .3s;${current && isRunning ? 'animation:patrolDotPulse 1s ease-in-out infinite;' : ''}"></div>`;
+  }
+
+  // ログHTML（最新5件）
+  const logHtml = _patrol.log.slice(0, 5).map((entry, idx) => {
+    const isCur  = idx === 0 && isRunning;
+    const icon   = entry.canGo ? '✅' : '🔴';
+    const label  = entry.canGo ? '行ける' : (entry.restricted ? '制限中' : '残高不足');
+    const costTx = entry.cost > 0 ? `${entry.cost}💎` : '無料';
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;
+                  border-bottom:1px solid rgba(255,255,255,.04);
+                  opacity:${idx === 0 ? 1 : 0.6 - idx*0.08};">
+        <span style="font-size:0.9rem;">${isCur ? '📡' : icon}</span>
+        <span style="font-size:0.8rem;color:#ddd;flex:1;">${entry.icon} ${entry.name.split(' ')[0]}</span>
+        <span style="font-size:0.7rem;color:#666;">${costTx}</span>
+        <span style="font-size:0.68rem;font-weight:700;color:${entry.canGo ? '#4ade80' : '#ef4444'};">${isCur ? 'スキャン中…' : label}</span>
+      </div>`;
+  }).join('');
+
+  body.innerHTML = `
+    <style>
+      @keyframes patrolDotPulse {
+        0%,100%{opacity:.5;transform:scaleX(.8)}50%{opacity:1;transform:scaleX(1)}
+      }
+    </style>
+
+    <!-- 進捗 -->
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);
+                border-radius:14px;padding:12px 14px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:0.72rem;color:#888;">
+          ${isRunning ? `📡 スキャン中 — ${curPoi ? curPoi.icon + ' ' + curPoi.name.split(' ')[0] : ''}` :
+            isPaused  ? '⏸ 一時停止中' : ''}
+        </div>
+        <div style="font-size:0.72rem;color:${_patrol.color};font-weight:700;">${done} / ${total}</div>
+      </div>
+      <!-- ドット -->
+      <div style="display:flex;gap:3px;margin-bottom:8px;">${dots}</div>
+      <!-- バー -->
+      <div style="height:4px;background:rgba(255,255,255,.07);border-radius:999px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${_patrol.color};border-radius:999px;transition:width .6s ease;"></div>
+      </div>
+    </div>
+
+    <!-- コントロールボタン -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      ${isRunning
+        ? `<button onclick="_pausePatrol()"
+             style="flex:1;padding:8px;border-radius:10px;border:1.5px solid rgba(255,255,255,.15);
+                    background:rgba(255,255,255,.05);color:#ccc;font-weight:700;font-size:0.78rem;
+                    cursor:pointer;font-family:inherit;">⏸ 一時停止</button>`
+        : `<button onclick="_resumePatrol()"
+             style="flex:1;padding:8px;border-radius:10px;border:0;
+                    background:${_patrol.color};color:#fff;font-weight:800;font-size:0.78rem;
+                    cursor:pointer;font-family:inherit;">▶ 再開</button>`
+      }
+      <button onclick="_stopPatrolAgent();_renderPatrolIdle('${_patrol.presetId}');"
+        style="padding:8px 14px;border-radius:10px;border:1.5px solid rgba(239,68,68,.3);
+               background:rgba(239,68,68,.07);color:#f87171;font-weight:700;font-size:0.78rem;
+               cursor:pointer;font-family:inherit;">■ 停止</button>
+    </div>
+
+    <!-- ライブログ -->
+    <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);
+                border-radius:12px;padding:10px 12px;">
+      <div style="font-size:0.68rem;color:#555;margin-bottom:6px;letter-spacing:.06em;">📋 スキャンログ</div>
+      ${logHtml || '<div style="color:#444;font-size:0.75rem;">スキャン開始待ち…</div>'}
+    </div>
+  `;
+}
+
+/* ---------- 巡回完了レポート ---------- */
+function _renderPatrolDone() {
+  const body = document.getElementById('patrolAgentBody');
+  if (!body) return;
+
+  const log      = _patrol.log;
+  const canList  = log.filter(e => e.canGo);
+  const cantList = log.filter(e => !e.canGo);
+  const totalCost = canList.reduce((s,e) => s + e.cost, 0);
+  const emuerData = _getEmuerData();
+  const balance   = emuerData?.balance ?? 0;
+  const shortfall = cantList.reduce((s,e) => s + e.cost, 0);
+
+  const canHtml = canList.map(e => `
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 0;
+                border-bottom:1px solid rgba(255,255,255,.04);">
+      <span style="font-size:0.85rem;">${e.icon}</span>
+      <span style="font-size:0.77rem;color:#ccc;flex:1;">${e.name.split(' ')[0]}</span>
+      <span style="font-size:0.72rem;color:#D4A843;">${e.cost > 0 ? e.cost+'💎' : '無料'}</span>
+      <span style="font-size:0.7rem;color:#4ade80;">✅</span>
+    </div>`).join('');
+
+  const cantHtml = cantList.map(e => `
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 0;
+                border-bottom:1px solid rgba(255,255,255,.04);">
+      <span style="font-size:0.85rem;">${e.icon}</span>
+      <span style="font-size:0.77rem;color:#888;flex:1;">${e.name.split(' ')[0]}</span>
+      <span style="font-size:0.72rem;color:#D4A843;">${e.cost > 0 ? e.cost+'💎' : '無料'}</span>
+      <span style="font-size:0.7rem;color:#ef4444;">🔴</span>
+    </div>`).join('');
+
+  body.innerHTML = `
+    <!-- 完了バナー -->
+    <div style="text-align:center;padding:14px 0 10px;
+                border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:12px;">
+      <div style="font-size:1.8rem;margin-bottom:4px;">🗺️</div>
+      <div style="font-size:0.95rem;font-weight:800;color:#fff;">巡回完了！</div>
+      <div style="font-size:0.75rem;color:#666;margin-top:2px;">${log.length}スポットをスキャン</div>
+    </div>
+
+    <!-- サマリカード -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+      <div style="text-align:center;padding:10px;background:rgba(74,222,128,.07);
+                  border:1px solid rgba(74,222,128,.18);border-radius:12px;">
+        <div style="font-size:1.3rem;font-weight:800;color:#4ade80;">${canList.length}</div>
+        <div style="font-size:0.68rem;color:#666;">行けるスポット</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:rgba(239,68,68,.07);
+                  border:1px solid rgba(239,68,68,.18);border-radius:12px;">
+        <div style="font-size:1.3rem;font-weight:800;color:#f87171;">${cantList.length}</div>
+        <div style="font-size:0.68rem;color:#666;">残高不足</div>
+      </div>
+    </div>
+
+    <!-- エージェント判断 -->
+    <div style="background:rgba(212,168,67,.04);border:1px solid rgba(212,168,67,.12);
+                border-radius:12px;padding:10px 12px;margin-bottom:12px;">
+      <div style="font-size:0.68rem;color:#555;margin-bottom:4px;">🤖 エージェント判断</div>
+      <div style="font-size:0.78rem;color:#aaa;line-height:1.6;">
+        ${cantList.length === 0
+          ? `✅ 現在の残高で全スポットに訪問可能です！`
+          : shortfall > balance
+            ? `⚠️ 残高不足が ${cantList.length} 件。あと <strong style="color:#D4A843">${(shortfall - balance).toLocaleString()} 💎</strong> 追加で全スポット訪問可能。`
+            : `💡 残高はありますが制限中のスポットが ${cantList.filter(e=>e.restricted).length} 件あります。制限解除後に再巡回を推奨。`
+        }
+      </div>
+    </div>
+
+    <!-- 行けるリスト -->
+    ${canList.length > 0 ? `
+    <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);
+                border-radius:12px;padding:10px 12px;margin-bottom:8px;">
+      <div style="font-size:0.68rem;color:#555;margin-bottom:6px;">✅ 訪問可能 — 合計 ${totalCost}💎</div>
+      ${canHtml}
+    </div>` : ''}
+
+    <!-- 行けないリスト -->
+    ${cantList.length > 0 ? `
+    <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);
+                border-radius:12px;padding:10px 12px;margin-bottom:8px;">
+      <div style="font-size:0.68rem;color:#555;margin-bottom:6px;">🔴 残高不足・制限中 — 不足 ${shortfall}💎</div>
+      ${cantHtml}
+    </div>` : ''}
+
+    <!-- 再巡回ボタン -->
+    <button onclick="_selectPatrolPreset('${_patrol.presetId}');_startPatrol();"
+      style="width:100%;padding:10px;border-radius:12px;border:1.5px solid ${_patrol.color};
+             background:${_patrol.color}22;color:${_patrol.color};font-weight:800;
+             font-size:0.82rem;cursor:pointer;font-family:inherit;margin-bottom:6px;">
+      🔄 同じルートを再巡回
+    </button>
+    <button onclick="_stopPatrolAgent();_renderPatrolIdle();"
+      style="width:100%;padding:8px;border-radius:12px;border:1.5px solid rgba(255,255,255,.1);
+             background:transparent;color:#888;font-weight:700;
+             font-size:0.78rem;cursor:pointer;font-family:inherit;">
+      ← ルート選択に戻る
+    </button>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════
    SchoolPark agents — Phase 2: EMUER 自動管理
 ═══════════════════════════════════════════════════════ */
 let _emuerAgentTimer = null;
 
 function _stopEmuerAgent() {
   if (_emuerAgentTimer) { clearInterval(_emuerAgentTimer); _emuerAgentTimer = null; }
+  _stopPatrolAgent();
 }
 
 async function _startEmuerAgent() {
   _stopEmuerAgent();
+  _initPatrolSection();
   await _renderEmuerAgent();
   // 制限中は1秒おき、通常時は15秒おきに更新
   _emuerAgentTimer = setInterval(async () => {
