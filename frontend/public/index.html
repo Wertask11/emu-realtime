@@ -265,7 +265,8 @@
   background:rgba(212,168,67,.06); color:#e8d08a;
 }
 .spmap-cmd-input::placeholder { color:#555; }
-@media (max-width:600px) { .spmap-cmd-wrap { display:none; } }
+/* コマンドバーはタブレット・スマホでは非表示（タッチ端末は不要） */
+@media (max-width:1024px) { .spmap-cmd-wrap { display:none !important; } }
 .spmap-nav-link {
   padding:0 13px; height:58px; display:flex; align-items:center; font-size:0.78rem;
   color:#bbb; cursor:pointer; border-bottom:3px solid transparent;
@@ -1030,12 +1031,14 @@ body.spmap-open #kaiensaiBanner { display:flex !important; }
   .spmap-nav::-webkit-scrollbar { display: none; }
 
   /* CSS orderで並び替え:
-     1:SchoolPark  2:EMUER  3:アイコン群  4:ナビリンク  5:☰ */
-  .spmap-brand      { order:1; flex-shrink:0; border-right:1px solid rgba(139,105,20,0.3); padding:0 10px; margin-right:0; }
-  #emuerHud         { order:2; flex-shrink:0; margin-left:0; padding:3px 8px; }
-  .sp-icon-btn-bar  { order:3; flex-shrink:0; padding:0 4px; gap:3px; }
-  .spmap-nav-links  { order:4; flex:none; overflow:visible; }
-  .spmap-menu-btn   { order:5; flex-shrink:0; margin-left:2px; }
+     1:SchoolPark  2:EMUER  3:アイコン群  4:ナビリンク  5:冷蔵庫  6:☰ */
+  .spmap-brand        { order:1; flex-shrink:0; border-right:1px solid rgba(139,105,20,0.3); padding:0 10px; margin-right:0; }
+  #emuerHud           { order:2; flex-shrink:0; margin-left:0; padding:3px 8px; }
+  .sp-icon-btn-bar    { order:3; flex-shrink:0; padding:0 4px; gap:3px; }
+  .spmap-nav-links    { order:4; flex:none; overflow:visible; }
+  .spmap-reizo-btn    { order:5; flex-shrink:0; }
+  .spmap-menu-btn     { order:6; flex-shrink:0; margin-left:2px; }
+  .spmap-cmd-wrap     { order:7; display:none !important; }
 
   /* ブランドのサブ文字は非表示 */
   .spmap-brand-sub  { display:none; }
@@ -4077,10 +4080,14 @@ body.paypay-mode #pp-post-fab {
     </div>
 
     <!-- 5. キーボード設定 -->
-    <div class="sp-panel-section">
+    <div class="sp-panel-section" id="spKeyboardSettingSection">
       <div class="sp-panel-section-title">⌨️ キーボード設定</div>
       <div style="font-size:0.73rem;color:#666;margin-bottom:10px;line-height:1.55;">
         キー <kbd style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:1px 6px;font-size:0.72rem;color:#ccc;">1</kbd>〜<kbd style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:1px 6px;font-size:0.72rem;color:#ccc;">4</kbd> に好きな機能を割り当てられます
+      </div>
+      <!-- 有料パス限定バナー（無料パス時に表示） -->
+      <div id="spKeyboardPaidOnly" style="display:none;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;text-align:center;font-size:0.78rem;color:#666;margin-bottom:10px;">
+        🎫 キーボード設定は<strong style="color:#D4A843;">有料パス</strong>限定の機能です
       </div>
       <style>
         .sp-ck-row { display:flex;align-items:center;gap:8px;margin-bottom:7px; }
@@ -7204,14 +7211,27 @@ const _EMUER_LS_KEY = () => 'emuer_sp_' + ((window.connectedAccount || localStor
 function _getEmuerData() {
   try { return JSON.parse(localStorage.getItem(_EMUER_LS_KEY()) || 'null'); } catch(e) { return null; }
 }
+/* ── Firestore書き込みデバウンス（Firebase無料枠節約）
+   同じデータを30秒以内に何度も書かない ── */
+let _fsWriteTimer = null;
+let _fsPendingData = null;
+function _flushEmuerToFirestore() {
+  if (!_fsPendingData) return;
+  if (!window.db || !window.fbLib) return;
+  const wallet = (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+  if (!wallet) return;
+  window.fbLib.setDoc(window.fbLib.doc(window.db, 'emuer_rate', wallet), _fsPendingData).catch(()=>{});
+  _fsPendingData = null;
+}
 function _saveEmuerData(data) {
   localStorage.setItem(_EMUER_LS_KEY(), JSON.stringify(data));
-  // Firestore にも同期（失敗しても体験を壊さない）
-  if (window.db && window.fbLib) {
-    const wallet = (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
-    if (wallet) window.fbLib.setDoc(window.fbLib.doc(window.db, 'emuer_rate', wallet), data).catch(()=>{});
-  }
+  // Firestore にも同期 — 30秒デバウンス（Firebase無料枠節約）
+  _fsPendingData = data;
+  if (_fsWriteTimer) clearTimeout(_fsWriteTimer);
+  _fsWriteTimer = setTimeout(_flushEmuerToFirestore, 30_000);
 }
+// ページ離脱前に即時フラッシュ
+window.addEventListener('beforeunload', _flushEmuerToFirestore);
 
 function _getUserTypeForEmuer() {
   if (window.hasPaidNFT) return 'paid';
@@ -7268,11 +7288,15 @@ async function _initEmuer() {
   let data = _getEmuerData();
   const now = Date.now();
 
-  // Firestoreからも試みて取得（localStorageが空の場合）
-  if (!data && window.db && window.fbLib) {
+  // Firestoreからも試みて取得（localStorageが空の場合 & 5分キャッシュ制限）
+  const _FS_CACHE_KEY = '_fsEmuerReadAt_' + ((window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase());
+  const _lastRead = parseInt(localStorage.getItem(_FS_CACHE_KEY) || '0');
+  const _canRead = !data && (now - _lastRead > 5 * 60 * 1000); // 5分に1回まで
+  if (_canRead && window.db && window.fbLib) {
     try {
       const wallet = (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
       if (wallet) {
+        localStorage.setItem(_FS_CACHE_KEY, String(now)); // タイムスタンプ更新
         const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'emuer_rate', wallet));
         if (snap.exists()) data = snap.data();
       }
@@ -7280,9 +7304,9 @@ async function _initEmuer() {
   }
 
   if (!data) {
-    // 初回 → ステップ0の残高で付与
+    // 初回 → 1000 EMUER から開始（ステップサイクルは最初の制限後から）
     const userType0 = _getUserTypeForEmuer();
-    const initBal   = _getStepBalance(userType0, 0);
+    const initBal   = 1000; // 有料・無料ともに初期1000 EMUER
     data = { balance: initBal, lastRefill: now, restrictionUntil: null, totalSpent: 0, restrictionCount: 0 };
     _saveEmuerData(data);
   } else if (MAINTENANCE_MODE && _isOwnerAccess() && data.restrictionUntil) {
@@ -10354,6 +10378,8 @@ if (typeof updateConvertButton === "function") {
   }
   // 有料パス入場をFirebaseに記録（非ブロッキング）
   spTrack('paid', account).catch(() => {});
+  // パスタイプをlocalStorageに保存（おさいふバッジ用）
+  localStorage.setItem('spPassType', 'paid');
   // エアドロ画面をスキップしてそのままSchoolParkマップへ
   goTomainapp();
 
@@ -10378,12 +10404,24 @@ window.checkHexaNFT = async function () {
   if (!window.connectedAccount) return;
 
   // ★ まずFirestoreのpaid_usersを優先チェック（HEXA譲渡不可NFT対応）
-  if (window.db && window.fbLib) {
+  // ── 24時間キャッシュで Firebase 無料枠節約 ──
+  const _paidCacheKey = '_paidUsersCache_' + (window.connectedAccount || '').toLowerCase();
+  const _paidCache = JSON.parse(localStorage.getItem(_paidCacheKey) || 'null');
+  const _paidCacheValid = _paidCache && (Date.now() - _paidCache.ts < 24 * 60 * 60 * 1000);
+  if (_paidCacheValid) {
+    if (_paidCache.isPaid) {
+      window.hasPaidNFT = true;
+      window._fromFirebasePaidUsers = true;
+      console.log("✅ paid_users キャッシュ利用:", window.connectedAccount);
+      return;
+    }
+  } else if (window.db && window.fbLib) {
     try {
       const docRef = window.fbLib.doc(
         window.db, "paid_users", window.connectedAccount.toLowerCase()
       );
       const snap = await window.fbLib.getDoc(docRef);
+      localStorage.setItem(_paidCacheKey, JSON.stringify({ isPaid: snap.exists(), ts: Date.now() }));
       if (snap.exists()) {
         window.hasPaidNFT = true;
         window._fromFirebasePaidUsers = true;
@@ -12334,11 +12372,12 @@ function _refreshSpWalletPanel() {
   const balEl = document.getElementById('spWalletBalanceNum');
   if (balEl) balEl.textContent = balance.toLocaleString();
 
-  // パスタイプバッジ
+  // パスタイプバッジ（window フラグ優先、なければ localStorage フォールバック）
   const passEl = document.getElementById('spWalletPassType');
   if (passEl) {
-    const isPaid = !!(window.hasPaidNFT || window._fromFirebasePaidUsers);
-    const isFree = !!(window.hasFreeNFT && !isPaid);
+    const _lsPass = localStorage.getItem('spPassType'); // 'paid' / 'free' / null
+    const isPaid = !!(window.hasPaidNFT || window._fromFirebasePaidUsers || _lsPass === 'paid');
+    const isFree = !!(window.hasFreeNFT || _lsPass === 'free') && !isPaid;
     if (isPaid) {
       passEl.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(212,168,67,0.15);border:1px solid rgba(212,168,67,0.4);color:#D4A843;padding:5px 16px;border-radius:20px;font-size:0.8rem;font-weight:700;letter-spacing:0.05em;">🎫 有料パス</span>';
     } else if (isFree) {
@@ -12479,6 +12518,26 @@ function _loadSpSettings() {
       const el = document.getElementById('spCustomKey' + n);
       if (el) el.value = s['spCustomKey' + n] || 'none';
     });
+    // キーボード設定：無料パスはグレーアウト
+    const _lsPass = localStorage.getItem('spPassType');
+    const _isPaidUser = !!(window.hasPaidNFT || window._fromFirebasePaidUsers || _lsPass === 'paid');
+    const kbSection = document.getElementById('spKeyboardSettingSection');
+    const kbPaidOnly = document.getElementById('spKeyboardPaidOnly');
+    if (kbSection) {
+      const rows = kbSection.querySelectorAll('.sp-ck-row');
+      const selects = kbSection.querySelectorAll('.sp-ck-select');
+      if (!_isPaidUser) {
+        kbSection.style.opacity = '0.45';
+        kbSection.style.pointerEvents = 'none';
+        if (kbPaidOnly) kbPaidOnly.style.display = '';
+        selects.forEach(el => el.disabled = true);
+      } else {
+        kbSection.style.opacity = '';
+        kbSection.style.pointerEvents = '';
+        if (kbPaidOnly) kbPaidOnly.style.display = 'none';
+        selects.forEach(el => el.disabled = false);
+      }
+    }
   } catch(e) {}
 }
 
@@ -14642,6 +14701,8 @@ walletAddressButton.textContent =
 
   // 無料パス入場をFirebaseに記録（非ブロッキング）
   spTrack('free', account).catch(() => {});
+  // パスタイプをlocalStorageに保存（おさいふバッジ用）
+  localStorage.setItem('spPassType', 'free');
   // エアドロ画面をスキップしてそのままSchoolParkマップへ
   goTomainapp();
 };
@@ -15586,25 +15647,14 @@ window.fbLib = {
 
       <!-- ボタン群 -->
       <div style="display:flex;flex-direction:column;gap:10px;padding:0 4px 20px;">
-        <!-- チュートリアルを再生 -->
-        <button onclick="toggleContactPanel();setTimeout(()=>{startSpTutorial?.()},300);"
+        <!-- チュートリアルページを開く（ログイン前後どちらでも動作） -->
+        <button onclick="(function(){toggleContactPanel();var inMap=document.body.classList.contains('spmap-open');setTimeout(function(){if(inMap&&typeof openSpContent==='function'){openSpContent('/schoolpark/tutorial.html');}else{window.open('/schoolpark/tutorial.html','_blank');}},300);})();"
           style="display:flex;align-items:center;gap:12px;background:rgba(212,168,67,0.14);border:1px solid rgba(212,168,67,0.4);color:#D4A843;padding:14px 16px;border-radius:12px;cursor:pointer;width:100%;text-align:left;font-family:'Noto Sans JP',sans-serif;font-size:0.88rem;font-weight:700;transition:background 0.2s;"
           onmouseover="this.style.background='rgba(212,168,67,0.24)'" onmouseout="this.style.background='rgba(212,168,67,0.14)'">
-          <span style="font-size:1.5rem;">▶️</span>
-          <div>
-            <div>チュートリアルをもう一度みる</div>
-            <div style="font-size:0.74rem;font-weight:400;color:#a07830;margin-top:2px;">入場後のガイドを最初から再生</div>
-          </div>
-        </button>
-
-        <!-- チュートリアルページを開く -->
-        <button onclick="toggleContactPanel();setTimeout(()=>{openSpContent?.('/schoolpark/tutorial.html')},300);"
-          style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:#ccc;padding:14px 16px;border-radius:12px;cursor:pointer;width:100%;text-align:left;font-family:'Noto Sans JP',sans-serif;font-size:0.88rem;font-weight:700;transition:background 0.2s;"
-          onmouseover="this.style.background='rgba(255,255,255,0.09)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
           <span style="font-size:1.5rem;">📄</span>
           <div>
             <div>チュートリアルページを開く</div>
-            <div style="font-size:0.74rem;font-weight:400;color:#888;margin-top:2px;">詳細な使い方・機能一覧を確認</div>
+            <div style="font-size:0.74rem;font-weight:400;color:#a07830;margin-top:2px;">詳細な使い方・機能一覧を確認（マップ外でも利用可）</div>
           </div>
         </button>
       </div>
