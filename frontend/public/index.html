@@ -7224,6 +7224,8 @@ function goTomainapp() {
 function _showSpLoadingOverlay() {
   const ov = document.getElementById('spLoadingOverlay');
   if (!ov) return;
+  // すでに表示中ならリセットしない（ボタン押下時に既に表示済みの場合）
+  if (ov.style.display === 'flex') return;
   ov.style.opacity = '1';
   ov.style.display = 'flex';
   const msgEl  = document.getElementById('spLoadingMsg');
@@ -7232,6 +7234,15 @@ function _showSpLoadingOverlay() {
   if (msgEl)   { msgEl.style.display   = ''; msgEl.textContent = '読み込み中...'; }
   if (dotsEl)  { dotsEl.style.display  = ''; }
   if (readyEl) { readyEl.style.display = 'none'; }
+}
+
+// エラーや中断時にローディングをキャンセルして非表示
+function _cancelSpLoadingOverlay() {
+  const ov = document.getElementById('spLoadingOverlay');
+  if (!ov) return;
+  ov.style.transition = 'none';
+  ov.style.display = 'none';
+  ov.style.opacity = '1';
 }
 
 function _hideSpLoadingOverlay() {
@@ -10398,7 +10409,11 @@ async function spTrack(type, address) {
 
 // --- [2] 接続ボタン（connectWalletButton）の本番用 ---
 document.getElementById("connectWalletButton").addEventListener("click", async () => {
+  // ★ ボタンを押した瞬間にローディング表示
+  _showSpLoadingOverlay();
+
   if (typeof window.ethereum === "undefined") {
+    _cancelSpLoadingOverlay();
     alert("MetaMaskがインストールされていません。");
     return;
   }
@@ -10425,6 +10440,7 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
         });
       } catch (e) {
         console.log("Polygonへの切り替えが必要です");
+        _cancelSpLoadingOverlay();
         alert("Polygonメインネットに切り替えてください。");
         return;
       }
@@ -10481,6 +10497,7 @@ if (typeof updateConvertButton === "function") {
 
   } catch (err) {
     console.error("❌ 接続エラー:", err);
+    _cancelSpLoadingOverlay();
     // MetaMask TransportTimeoutError など接続失敗時のメッセージ
     const _ws = document.getElementById("walletStatus");
     if (_ws) {
@@ -14730,7 +14747,11 @@ window.checkFreeNFT = async function () {
 };
 
 window.onFreeNftClick = async function () {
+  // ★ ボタンを押した瞬間にローディング表示
+  _showSpLoadingOverlay();
+
   if (!window.ethereum) {
+    _cancelSpLoadingOverlay();
     alert("MetaMaskをインストールしてください");
     return;
   }
@@ -14753,7 +14774,7 @@ window.onFreeNftClick = async function () {
 
   if (!hasNFT) {
     const ok = confirm("無料NFTを受け取りますか？");
-    if (!ok) return;
+    if (!ok) { _cancelSpLoadingOverlay(); return; }
 
     // ③ claim 実行（already claimed はOK）
     await window.claimFreeNFT();
@@ -14764,6 +14785,7 @@ window.onFreeNftClick = async function () {
 
   // ⑤ 最終判定
   if (!window.hasFreeNFT) {
+    _cancelSpLoadingOverlay();
     alert("無料NFTを取得できませんでした");
     return;
   }
