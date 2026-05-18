@@ -4580,6 +4580,14 @@ const EMUER_RATE_CONFIG = {
   star5: 0,   // 夜空の展望台
   // タクシー
   taxi_ride: 3,
+  // 開園祭イベント屋台（各10 EMUER）
+  event1: 10, // たこ焼き
+  event2: 10, // 唐揚げ
+  event3: 10, // かき氷
+  event4: 10, // 金魚すくい
+  event5: 10, // ヨーヨー釣り
+  event6: 10, // 射的
+  event7: 10, // SchoolParkマルシェ
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -9739,7 +9747,7 @@ async function _recordKaiensaiStamp(poiId) {
   const total     = KAIENSAI_STAMP_POIS.length;
 
   // スタンプ取得トースト
-  _showKaiensaiStampToast(collected, total);
+  _showKaiensaiStampToast(poiId, collected, total);
 
   // 全コンプリート
   if (collected >= total && total > 0) {
@@ -9747,18 +9755,87 @@ async function _recordKaiensaiStamp(poiId) {
   }
 }
 
-function _showKaiensaiStampToast(collected, total) {
-  const toast = document.createElement('div');
-  toast.style.cssText = `
-    position:fixed;bottom:120px;left:50%;transform:translateX(-50%);
-    background:linear-gradient(135deg,#ff6b35,#f7931e);color:#fff;
-    padding:12px 20px;border-radius:12px;font-size:14px;font-weight:bold;
-    z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2);
-    animation:fadeInUp .3s ease;pointer-events:none;text-align:center;
+function _showKaiensaiStampToast(poiId, collected, total) {
+  // POI情報を取得
+  const allPois = (typeof SP_POIS !== 'undefined') ? SP_POIS : [];
+  const poi = allPois.find(p => p.id === poiId) || {};
+  const icon = poi.icon || '🎪';
+  const name = poi.name || '屋台';
+
+  // 既存のスタンプ演出を削除
+  const existing = document.getElementById('kaiensaiStampAnim');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'kaiensaiStampAnim';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:10001;
+    display:flex;align-items:center;justify-content:center;
+    pointer-events:none;
   `;
-  toast.innerHTML = `🎪 スタンプ取得！ ${collected} / ${total}`;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+  overlay.innerHTML = `
+    <div id="kaiensaiStampCard" style="
+      background:rgba(255,255,255,0.97);
+      border-radius:24px;padding:28px 32px;text-align:center;
+      box-shadow:0 8px 40px rgba(0,0,0,0.3);
+      min-width:200px;position:relative;overflow:hidden;
+      animation:kaiensaiCardIn .25s cubic-bezier(0.34,1.56,0.64,1) both;
+    ">
+      <!-- スタンプ印 -->
+      <div id="kaiensaiStampInk" style="
+        position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+        pointer-events:none;opacity:0;
+        animation:kaiensaiInkIn .18s ease .4s both;
+      ">
+        <div style="
+          width:130px;height:130px;border-radius:50%;
+          border:6px solid rgba(255,107,53,0.6);
+          background:rgba(255,107,53,0.08);
+          display:flex;align-items:center;justify-content:center;
+          transform:rotate(-15deg);
+        ">
+          <span style="font-size:11px;font-weight:900;color:rgba(255,107,53,0.5);letter-spacing:2px;text-transform:uppercase;">STAMPED</span>
+        </div>
+      </div>
+      <!-- POIアイコン -->
+      <div style="font-size:44px;margin-bottom:4px;position:relative;z-index:1;">${icon}</div>
+      <!-- POI名 -->
+      <div style="font-size:14px;font-weight:bold;color:#333;margin-bottom:8px;position:relative;z-index:1;">${name}</div>
+      <!-- スタンプ取得テキスト -->
+      <div style="
+        font-size:16px;font-weight:900;
+        background:linear-gradient(135deg,#ff6b35,#f7931e);
+        -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+        background-clip:text;
+        margin-bottom:10px;position:relative;z-index:1;
+      ">🎫 スタンプゲット！</div>
+      <!-- 進捗 -->
+      <div style="font-size:12px;color:#888;position:relative;z-index:1;">
+        ${collected} / ${total} スタンプ達成
+      </div>
+      <!-- プログレスバー -->
+      <div style="margin-top:8px;background:#f0f0f0;border-radius:8px;overflow:hidden;height:6px;position:relative;z-index:1;">
+        <div style="background:linear-gradient(90deg,#ff6b35,#f7931e);height:100%;width:${total>0?Math.round(collected/total*100):0}%;border-radius:8px;transition:.4s;"></div>
+      </div>
+    </div>
+    <style>
+      @keyframes kaiensaiCardIn {
+        from { opacity:0; transform:scale(0.7) translateY(20px); }
+        to   { opacity:1; transform:scale(1) translateY(0); }
+      }
+      @keyframes kaiensaiInkIn {
+        0%   { opacity:0; transform:scale(2); }
+        60%  { opacity:1; transform:scale(0.9); }
+        100% { opacity:1; transform:scale(1); }
+      }
+    </style>
+  `;
+  document.body.appendChild(overlay);
+  setTimeout(() => {
+    overlay.style.transition = 'opacity .4s ease';
+    overlay.style.opacity = '0';
+    setTimeout(() => overlay.remove(), 400);
+  }, 2200);
 }
 
 async function _completeKaiensaiStampRally(wallet, stamps) {
@@ -10389,9 +10466,10 @@ function _showKaiensaiBanner() {
 }
 
 function _showKaiensaiDetailModal() {
-  const collected = Object.keys(_getKaiensaiStamps()).filter(k => KAIENSAI_STAMP_POIS.includes(k)).length;
+  const stamps   = _getKaiensaiStamps();
+  const collected = Object.keys(stamps).filter(k => KAIENSAI_STAMP_POIS.includes(k)).length;
   const total     = KAIENSAI_STAMP_POIS.length;
-  const isCompleted = _getKaiensaiStamps()._completed;
+  const isCompleted = stamps._completed;
 
   const modal = document.createElement('div');
   modal.id = 'kaiensaiDetailModal';
@@ -10405,23 +10483,32 @@ function _showKaiensaiDetailModal() {
       <div style="font-size:17px;font-weight:bold;color:#ff6b35;text-align:center;margin-bottom:4px;">SchoolPark 開園祭</div>
       <div style="font-size:11px;color:#aaa;text-align:center;margin-bottom:16px;">2026年 5/20（水）〜 5/25（月）</div>
       <div style="background:#fff8f5;border-radius:12px;padding:14px;margin-bottom:14px;">
-        <div style="font-size:13px;font-weight:bold;color:#333;margin-bottom:8px;">🎫 スタンプラリー</div>
-        <div style="font-size:12px;color:#666;line-height:1.6;">
-          イベントエリアの全スポットを訪問してスタンプをコンプリートしよう！<br>
-          <strong>報酬：</strong>称号バッジ「🎪 開園祭の申し子」＋ 1,000実EMUER
+        <div style="font-size:13px;font-weight:bold;color:#333;margin-bottom:4px;">🎫 スタンプラリー</div>
+        <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5;">
+          全スポットを制覇してコンプリートしよう！<br>
+          <strong style="color:#ff6b35;">報酬：</strong>称号バッジ「🎪 開園祭の申し子」＋ 1,000実EMUER
         </div>
-        <div style="margin-top:10px;background:#f0f0f0;border-radius:8px;overflow:hidden;">
+        <!-- スタンプグリッド -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">
+          ${KAIENSAI_STAMP_POIS_BASE.map(pid => {
+            const stampPoi = (typeof SP_POIS !== 'undefined' ? SP_POIS : []).find(p => p.id === pid) || {};
+            const stamped  = !!stamps[pid];
+            return `<div style="
+              background:${stamped ? 'linear-gradient(135deg,#fff3ee,#ffe4d4)' : '#f5f5f5'};
+              border:2px solid ${stamped ? '#ff6b35' : '#ddd'};
+              border-radius:12px;padding:8px 4px;text-align:center;
+              transition:.2s;
+            ">
+              <div style="font-size:22px;${stamped ? '' : 'filter:grayscale(1);opacity:0.35;'}">${stampPoi.icon||'🎪'}</div>
+              <div style="font-size:9px;color:${stamped ? '#ff6b35' : '#aaa'};margin-top:2px;font-weight:${stamped?'bold':'normal'};line-height:1.2;">${stampPoi.name||pid}</div>
+              ${stamped ? '<div style="font-size:10px;margin-top:2px;">✅</div>' : '<div style="font-size:10px;margin-top:2px;color:#ccc;">－</div>'}
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="background:#f0f0f0;border-radius:8px;overflow:hidden;">
           <div style="background:linear-gradient(90deg,#ff6b35,#f7931e);height:8px;width:${total > 0 ? Math.round(collected/total*100) : 0}%;transition:.3s;border-radius:8px;"></div>
         </div>
         <div style="font-size:11px;color:#aaa;margin-top:4px;text-align:right;">${collected} / ${total} スタンプ${isCompleted ? ' ✅ コンプリート済み！' : ''}</div>
-      </div>
-      <div style="background:#fff8f5;border-radius:12px;padding:14px;margin-bottom:16px;">
-        <div style="font-size:13px;font-weight:bold;color:#333;margin-bottom:8px;">🏪 屋台・SchoolParkマルシェ</div>
-        <div style="font-size:12px;color:#666;line-height:1.8;">
-          🍡 たこ焼き ／ 🍗 唐揚げ ／ 🍧 かき氷<br>
-          🐟 金魚すくい ／ 🎈 ヨーヨー釣り ／ 🎯 射的<br>
-          🛍 SchoolParkマルシェ（デジタルグッズ販売）
-        </div>
       </div>
       <!-- フィードバックフォーム -->
       <div style="background:#f9f9f9;border-radius:12px;padding:14px;margin-bottom:14px;">
@@ -12983,19 +13070,19 @@ function spMapSelectPoi(poiId) {
       : poi.action === "openRoom2"
         ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>{closeSpMap();setTimeout(()=>openRoom2(),150)})">🌌 星を見に行く</button>`
       : poi.action === "openTakoyakiStall"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openTakoyakiStall())">${poi.btnLabel||'🐙 屋台に行く'}</button>`
+        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openTakoyakiStall())">${poi.btnLabel||'🐙 屋台に行く'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
       : poi.action === "openShagekiStall"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openShagekiStall())">${poi.btnLabel||'🎯 狙う'}</button>`
+        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openShagekiStall())">${poi.btnLabel||'🎯 狙う'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
       : poi.action === "openYoyoStall"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openYoyoStall())">${poi.btnLabel||'🎈 遊ぶ'}</button>`
+        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openYoyoStall())">${poi.btnLabel||'🎈 遊ぶ'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
       : poi.action === "openKingyoStall"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKingyoStall())">${poi.btnLabel||'🐟 挑戦する'}</button>`
+        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKingyoStall())">${poi.btnLabel||'🐟 挑戦する'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
       : poi.action === "openKakigoriStall"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKakigoriStall())">${poi.btnLabel||'🍧 屋台に行く'}</button>`
+        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKakigoriStall())">${poi.btnLabel||'🍧 屋台に行く'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
       : poi.action === "openKaraageStall"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKaraageStall())">${poi.btnLabel||'🍗 屋台に行く'}</button>`
+        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKaraageStall())">${poi.btnLabel||'🍗 屋台に行く'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
       : poi.action === "openKaiensaiMarche"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKaiensaiMarche())">${poi.btnLabel||'🛍️ マルシェに行く'}</button>`
+        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKaiensaiMarche())">${poi.btnLabel||'🛍️ マルシェに行く'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
       : poi.eastKey
         ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openEastBuilding('${poi.eastKey}'))">${poi.btnLabel||'🚪 遊びに行く'}${EMUER_RATE_CONFIG[poi.id] ? ` <span style="font-size:0.7rem;opacity:0.7">-${EMUER_RATE_CONFIG[poi.id]} 💎</span>` : ''}</button>`
         : poi.page
