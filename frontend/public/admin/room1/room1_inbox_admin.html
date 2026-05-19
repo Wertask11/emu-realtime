@@ -375,6 +375,32 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
       </div>
       <div id="dao-votes-container" style="color:#888;font-size:13px">読み込み中…</div>
 
+      <!-- 💰 手動EMUER送金パネル -->
+      <div style="margin-top:32px;background:#161616;border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:20px">
+        <div style="font-size:14px;font-weight:bold;color:#fbbf24;margin-bottom:16px">💰 手動EMUER送金</div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:12px;color:#888">送り先ウォレットアドレス <span style="color:#f87171">*</span></label>
+            <input type="text" id="manual-emuer-wallet" placeholder="0x..."
+              style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:monospace;outline:none;transition:border-color 0.2s;width:100%"
+              onfocus="this.style.borderColor='#fbbf24'" onblur="this.style.borderColor='#333'">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:12px;color:#888">EMUER数 <span style="color:#f87171">*</span></label>
+            <input type="number" id="manual-emuer-amount" min="1" max="100000" placeholder="例: 100"
+              style="background:#0f0f0f;color:#fbbf24;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s;width:130px"
+              onfocus="this.style.borderColor='#fbbf24'" onblur="this.style.borderColor='#333'">
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button onclick="manualEmuerSend()"
+            style="background:rgba(251,191,36,0.2);color:#fbbf24;border:1px solid rgba(251,191,36,0.5);border-radius:6px;padding:9px 22px;font-size:13px;font-weight:bold;cursor:pointer">
+            💰 EMUERを送金する
+          </button>
+          <span style="font-size:11px;color:#666">MetaMask で確認後に送金されます</span>
+        </div>
+      </div>
+
       <!-- 🏅 貢献証セクション -->
       <div style="margin-top:36px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #2a2a2a">
@@ -1776,6 +1802,22 @@ function initKokenShoAdmin() {
   });
 }
 
+// 手動EMUER送金（アドレス直接指定）
+async function manualEmuerSend() {
+  var wallet = (document.getElementById('manual-emuer-wallet').value || '').trim();
+  var amount = parseFloat(document.getElementById('manual-emuer-amount').value);
+  if (!wallet || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) {
+    alert('❌ 有効なウォレットアドレス（0x...42文字）を入力してください');
+    return;
+  }
+  if (isNaN(amount) || amount <= 0) {
+    alert('❌ 有効なEMUER数を入力してください');
+    return;
+  }
+  // 共通送金処理を呼び出す（docId=null で Firestore更新なし）
+  await kokenShoDistribute(null, wallet, amount);
+}
+
 // EMUER配布（MetaMask → EMUER転送 → Firestore記録）
 var KOKEN_EMUER_ADDRESS = '0x4418d5250Dae4b1125ADFCD5C0779B1412E4a964';
 var KOKEN_EMUER_ABI = [
@@ -1860,9 +1902,9 @@ async function kokenShoDistribute(docId, wallet, defaultAmount) {
 
     await tx.wait();
 
-    // Step 5: Firestore更新
+    // Step 5: Firestore更新（貢献証経由の場合のみ）
     var db = window.fpAdminDB;
-    if (db) {
+    if (db && docId) {
       await db.collection('sp_koken_sho').doc(docId).update({
         status: 'approved',
         txHash: tx.hash,
