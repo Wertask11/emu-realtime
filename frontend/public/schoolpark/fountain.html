@@ -583,7 +583,7 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
   <div class="fp-stat"><div class="fp-stat-val" id="fpStatBoard">—</div><div class="fp-stat-lbl">掲示板</div></div>
   <div class="fp-stat"><div class="fp-stat-val" id="fpStatWish">—</div><div class="fp-stat-lbl">泉</div></div>
   <div class="fp-stat"><div class="fp-stat-val" id="fpStatChat">—</div><div class="fp-stat-lbl">チャット</div></div>
-  <div class="fp-stat"><div class="fp-stat-val" id="fpStatVotes">3</div><div class="fp-stat-lbl">進行中の投票</div></div>
+  <div class="fp-stat"><div class="fp-stat-val" id="fpStatVotes">—</div><div class="fp-stat-lbl">進行中の投票</div></div>
   <div class="fp-stat"><div class="fp-stat-val" id="fpStatEvents">—</div><div class="fp-stat-lbl">イベント</div></div>
 </div>
 
@@ -1663,6 +1663,14 @@ function fpGoToEvent(card) {
   window.top.postMessage({ type: "spEventGo", page, fee, title }, "*");
 }
 
+// ─── 投票数カウント管理（一般＋DAO合算） ─────────────────────
+let _fpGenVoteCount = 0;
+let _fpDaoVoteCount = 0;
+function _fpUpdateVoteStat() {
+  const el = document.getElementById("fpStatVotes");
+  if (el) el.textContent = _fpGenVoteCount + _fpDaoVoteCount;
+}
+
 // ─── カレンダー ──────────────────────────────────────────────
 let _fpCalYear  = new Date().getFullYear();
 let _fpCalMonth = new Date().getMonth(); // 0-indexed
@@ -1776,6 +1784,9 @@ function fpInitDynamicGeneralVotes() {
         });
       }
     });
+    // 進行中の一般投票数を更新
+    _fpGenVoteCount = snap.docs.length;
+    _fpUpdateVoteStat();
   });
 }
 
@@ -1837,9 +1848,9 @@ function fpInitDynamicDAOVotes() {
       fpLoadVoteBars(`dyn_${d.id}`, `fpDynVoteBars_${d.id}`, `fpDynVoteCount_${d.id}`, true);
     });
 
-    // 進行中の投票数：一般投票1件（vote1固定）＋動的DAO投票件数
-    const elVotes = document.getElementById("fpStatVotes");
-    if (elVotes) elVotes.textContent = 1 + snap.docs.length;
+    // 進行中のDAO投票数を更新
+    _fpDaoVoteCount = snap.docs.length;
+    _fpUpdateVoteStat();
   });
 }
 // 後方互換：既存の呼び出し箇所は fpInitDynamicDAOVotes に統一
