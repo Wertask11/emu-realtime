@@ -186,6 +186,30 @@
   from { opacity:0; transform:scale(0.9); }
   to   { opacity:1; transform:scale(1); }
 }
+#spLoadingOverlay .sp-load-speech {
+  position:relative; max-width:280px; background:rgba(255,255,255,0.1);
+  border:1px solid rgba(139,105,20,0.5); border-radius:14px;
+  padding:11px 16px; font-size:0.82rem; color:#f5e6b0; line-height:1.65;
+  font-family:'Noto Sans JP','Hiragino Sans',sans-serif;
+  animation:spSpeechPop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  text-align:center; letter-spacing:0.02em;
+}
+#spLoadingOverlay .sp-load-speech::before {
+  content:''; position:absolute; top:-10px; left:50%; transform:translateX(-50%);
+  border:5px solid transparent; border-bottom-color:rgba(139,105,20,0.5);
+}
+#spLoadingOverlay .sp-load-tap-hint {
+  font-size:0.65rem; color:rgba(245,230,176,0.45); margin-top:-6px;
+  font-family:'Noto Sans JP','Hiragino Sans',sans-serif; letter-spacing:0.05em;
+  animation:spHintBlink 2s ease-in-out infinite;
+}
+@keyframes spSpeechPop {
+  from { opacity:0; transform:scale(0.8) translateY(6px); }
+  to   { opacity:1; transform:scale(1) translateY(0); }
+}
+@keyframes spHintBlink {
+  0%,100% { opacity:0.45; } 50% { opacity:0.9; }
+}
 
 /* ── SchoolPark マップ（USJスタイル） ── */
 #spMapOverlay {
@@ -4261,13 +4285,15 @@ body.paypay-mode #pp-post-fab {
 </div>
 
 <!-- ▼ SchoolPark ローディングオーバーレイ -->
-<div id="spLoadingOverlay">
+<div id="spLoadingOverlay" onclick="_spLoadingTalk()" style="cursor:pointer">
   <img src="/assets/mascot.jpg" class="sp-load-mascot" alt="冷蔵庫くん">
+  <div id="spLoadingSpeech" class="sp-load-speech" style="display:none"></div>
   <div class="sp-load-msg" id="spLoadingMsg">読み込み中...</div>
   <div class="sp-load-dots" id="spLoadingDots">
     <span></span><span></span><span></span>
   </div>
   <div class="sp-load-ready" id="spLoadingReady">✅ SchoolParkのメイン画面<br>準備が完了しました！</div>
+  <div class="sp-load-tap-hint" id="spLoadingTapHint">タップして話しかけよう 👆</div>
 </div>
 
 <!-- ▼ PayPayモード専用ヘッダー -->
@@ -7236,6 +7262,56 @@ function goTomainapp() {
   setTimeout(() => _hideSpLoadingOverlay(), 1400);
 }
 
+// ─── 冷蔵庫くんのセリフ（ローディング中タップで表示） ───────────
+const _SP_REIZO_LOADING_LINES = [
+  "ここは⛲ 噴水広場！SchoolParkの中心地だよ！投票や掲示板もここから！",
+  "📚 図書館には学校では教えてくれない情報がいっぱいあるよ！ぜひ立ち寄ってみてね！",
+  "🛍️ ショッピングエリアにはオリジナル教材やデジタルコンテンツがあるよ！",
+  "🏦 銀行でEMUERの残高確認や変換ができるよ！使いすぎに注意してね〜",
+  "🎮 SchoolParkで活動するとEMUERが稼げるんだ！会社より稼げる場所を目指してるよ！",
+  "🔬 研究所ではDAO・Tokenomics・教育に関するレポートが読めるよ！",
+  "🖼️ 美術館にはみんなの作品が展示されてるよ！あなたも出展できるかも！",
+  "👑 DAO投票に参加すれば、SchoolParkの運営に関わる意思決定に参加できるよ！",
+  "📱 Emuアプリも使ってみてね！Room1で学び、Room2で星空を楽しもう！",
+  "⛲ 噴水に願いを投げ込むと…？ちょっと神秘的な体験ができるかも！",
+  "🎣 南エリアには釣りや登山もあるよ！冒険好きにはたまらないはず！",
+  "💪 ジムではスキルアップ・習慣化のサポートが受けられるんだ！",
+  "🚔 警察署でコミュニティガイドラインを確認しておこう！みんなで楽しい場所を作ろう！",
+  "☕ カフェでひと休みもできるよ！SchoolParkはくつろぎの場所でもあるんだ！",
+  "📜 貢献証を出せば、実EMUERがもらえるチャンス！どんどん活動してね！",
+  "🌟 「学校より学べて、公園より楽しくて、会社より稼げる」それがSchoolParkだよ！",
+  "🤖 右上の🤖ボタンを押すと、AIエージェントに相談できるよ！",
+  "💰 財布アイコンからEMUER残高を確認できるよ！大切に使ってね！",
+  "🏨 東エリアにはホテルやマンションもあるよ！SchoolParkはまるで小さな街みたいでしょ？",
+  "🎬 映画館では映像コンテンツが楽しめるよ！エンタメも充実してるんだ！",
+];
+let _spLoadingTalkIdx = 0;
+let _spLoadingTalkTimer = null;
+
+function _spLoadingTalk() {
+  const el = document.getElementById('spLoadingSpeech');
+  const hintEl = document.getElementById('spLoadingTapHint');
+  if (!el) return;
+  // ヒントを非表示
+  if (hintEl) hintEl.style.display = 'none';
+  // セリフをシャッフル的に次へ
+  const lines = _SP_REIZO_LOADING_LINES;
+  const line = lines[_spLoadingTalkIdx % lines.length];
+  _spLoadingTalkIdx++;
+  // アニメーションリセット
+  el.style.animation = 'none';
+  el.offsetHeight; // reflow
+  el.style.animation = '';
+  el.textContent = line;
+  el.style.display = '';
+  // 5秒後に自動消去
+  clearTimeout(_spLoadingTalkTimer);
+  _spLoadingTalkTimer = setTimeout(() => {
+    el.style.display = 'none';
+    if (hintEl) hintEl.style.display = '';
+  }, 5000);
+}
+
 function _showSpLoadingOverlay() {
   const ov = document.getElementById('spLoadingOverlay');
   if (!ov) return;
@@ -7246,9 +7322,15 @@ function _showSpLoadingOverlay() {
   const msgEl  = document.getElementById('spLoadingMsg');
   const dotsEl = document.getElementById('spLoadingDots');
   const readyEl = document.getElementById('spLoadingReady');
-  if (msgEl)   { msgEl.style.display   = ''; msgEl.textContent = '読み込み中...'; }
-  if (dotsEl)  { dotsEl.style.display  = ''; }
-  if (readyEl) { readyEl.style.display = 'none'; }
+  const speechEl = document.getElementById('spLoadingSpeech');
+  const hintEl = document.getElementById('spLoadingTapHint');
+  if (msgEl)    { msgEl.style.display   = ''; msgEl.textContent = '読み込み中...'; }
+  if (dotsEl)   { dotsEl.style.display  = ''; }
+  if (readyEl)  { readyEl.style.display = 'none'; }
+  if (speechEl) { speechEl.style.display = 'none'; }
+  if (hintEl)   { hintEl.style.display = ''; }
+  // 最初の一言は自動で表示
+  setTimeout(_spLoadingTalk, 600);
 }
 
 // エラーや中断時にローディングをキャンセルして非表示
@@ -7263,13 +7345,18 @@ function _cancelSpLoadingOverlay() {
 function _hideSpLoadingOverlay() {
   const ov = document.getElementById('spLoadingOverlay');
   if (!ov) return;
-  const msgEl   = document.getElementById('spLoadingMsg');
-  const dotsEl  = document.getElementById('spLoadingDots');
-  const readyEl = document.getElementById('spLoadingReady');
+  const msgEl    = document.getElementById('spLoadingMsg');
+  const dotsEl   = document.getElementById('spLoadingDots');
+  const readyEl  = document.getElementById('spLoadingReady');
+  const speechEl = document.getElementById('spLoadingSpeech');
+  const hintEl   = document.getElementById('spLoadingTapHint');
+  clearTimeout(_spLoadingTalkTimer);
   // ① 「読み込み中」→「準備完了」に切り替え
-  if (msgEl)   msgEl.style.display  = 'none';
-  if (dotsEl)  dotsEl.style.display = 'none';
-  if (readyEl) readyEl.style.display = '';
+  if (msgEl)    msgEl.style.display    = 'none';
+  if (dotsEl)   dotsEl.style.display   = 'none';
+  if (speechEl) speechEl.style.display = 'none';
+  if (hintEl)   hintEl.style.display   = 'none';
+  if (readyEl)  readyEl.style.display  = '';
   // ② 1.5秒後にフェードアウト → 非表示
   setTimeout(() => {
     ov.style.transition = 'opacity 0.6s ease';

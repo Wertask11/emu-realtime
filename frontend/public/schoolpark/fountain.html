@@ -1020,6 +1020,7 @@ function fpUnlockDAOVote() {
 // ─── 投票（一般）— ウォレット不要、デバイスIDで管理 ──────
 async function fpVoteGeneral(voteId, option, btn) {
   if (!fpDB || !fpFBLib) { fpToast("⚠️ 接続中です…", "rgba(100,100,100,0.9)"); return; }
+  if (!confirm(`「${option}」に投票しますか？\n\n⚠️ 1回のみ・取り消し不可です。`)) return;
   const voterKey = fpGetVoterKey();
   const lib = fpFBLib;
   try {
@@ -1040,6 +1041,7 @@ async function fpVoteGeneral(voteId, option, btn) {
 async function fpVoteDAO(voteId, option, btn) {
   if (!fpHasNFT) { fpToast("🔒 Emu有料ユーザーのみ参加できます", "rgba(249,115,22,0.9)"); return; }
   if (!fpWallet || !fpDB || !fpFBLib) { fpToast("⚠️ 接続中です…", "rgba(100,100,100,0.9)"); return; }
+  if (!confirm(`「${option}」にDAO投票しますか？\n\n👑 NFT保有者の1票です。\n⚠️ 1回のみ・取り消し不可です。`)) return;
   const lib = fpFBLib;
   try {
     const ref = lib.doc(fpDB, "sp_fountain_dao_votes", `${voteId}_${fpWallet.toLowerCase()}`);
@@ -1049,9 +1051,13 @@ async function fpVoteDAO(voteId, option, btn) {
     btn.classList.add("dao-voted");
     const container = btn.closest(".fp-vote-card");
     container.querySelectorAll(".fp-vote-choice-btn").forEach(b => b.disabled = true);
+    // dyn_ 系のIDはlocalStorageに記録
+    if (voteId.startsWith("dyn_")) {
+      localStorage.setItem(`fp_dao_voted_${voteId}`, option);
+    }
     fpToast("👑 DAO投票完了！ +20 EMUER", "rgba(251,191,36,0.92)");
-    const barsId  = voteId === "vote2" ? "fpVote2Bars" : "fpVote3Bars";
-    const countId = voteId === "vote2" ? "fpVote2Count" : "fpVote3Count";
+    const barsId  = voteId === "vote2" ? "fpVote2Bars" : voteId.startsWith("dyn_") ? `fpDynVoteBars_${voteId.slice(4)}` : "fpVote3Bars";
+    const countId = voteId === "vote2" ? "fpVote2Count" : voteId.startsWith("dyn_") ? `fpDynVoteCount_${voteId.slice(4)}` : "fpVote3Count";
     fpLoadVoteBars(voteId, barsId, countId, true);
   } catch(e) { fpToast("❌ エラー: " + e.message, "rgba(239,68,68,0.9)"); }
 }
@@ -1803,6 +1809,7 @@ function fpInitDynamicGeneralVotes() {
 
 async function fpVoteGeneralDynamic(topicId, option, btn) {
   if (!fpDB || !fpFBLib) { fpToast("⚠️ 接続中です…", "rgba(100,100,100,0.9)"); return; }
+  if (!confirm(`「${option}」に投票しますか？\n\n⚠️ 1回のみ・取り消し不可です。`)) return;
   const voteId = `gen_${topicId}`;
   const voterKey = fpGetVoterKey();
   const lib = fpFBLib;
@@ -1840,7 +1847,7 @@ function fpInitDynamicDAOVotes() {
       const daysLeft = deadlineMs !== null ? Math.max(0, Math.ceil((deadlineMs - Date.now()) / 86400000)) : null;
       const isActive = daysLeft === null || daysLeft > 0;
       const btns = (v.options || []).map(opt =>
-        `<button class="fp-vote-choice-btn" onclick="fpVoteDAO('dyn_${v.id}','${_esc(opt)}',this)" ${fpHasNFT ? "" : "disabled"}>
+        `<button class="fp-vote-choice-btn" onclick="fpVoteDAO('dyn_${v.id}','${_esc(opt)}',this)">
           ${_esc(opt)}
         </button>`
       ).join("");
@@ -1859,9 +1866,18 @@ function fpInitDynamicDAOVotes() {
       </div>`;
     }).join("");
 
-    // バーを読み込む
+    // バーを読み込む＋投票済み確認
     snap.docs.forEach(d => {
       fpLoadVoteBars(`dyn_${d.id}`, `fpDynVoteBars_${d.id}`, `fpDynVoteCount_${d.id}`, true);
+      // 投票済みなら disable（localStorage経由）
+      const voted = fpWallet ? localStorage.getItem(`fp_dao_voted_dyn_${d.id}`) : null;
+      if (voted) {
+        const btnsEl = document.getElementById(`fpDynVoteBtns_${d.id}`);
+        if (btnsEl) btnsEl.querySelectorAll(".fp-vote-choice-btn").forEach(b => {
+          b.disabled = true;
+          if (b.textContent.trim() === voted) b.classList.add("dao-voted");
+        });
+      }
     });
 
     // 進行中のDAO投票数を更新
