@@ -1784,29 +1784,83 @@ var KOKEN_EMUER_ABI = [
 ];
 
 async function kokenShoDistribute(docId, wallet, defaultAmount) {
-  if (!wallet || wallet === '不明') { fpShowToast('dao-toast', '❌ ウォレットアドレスが不明です', 'error'); return; }
-  var inputStr = prompt('配布するEMUER数を入力してください\n宛先: ' + wallet.slice(0,8) + '…' + wallet.slice(-4) + '\nデフォルト: ' + (defaultAmount || 0), defaultAmount || 0);
+  if (!wallet || wallet === '不明') { alert('❌ ウォレットアドレスが不明です'); return; }
+
+  // ethers.js 読み込み確認
+  if (typeof ethers === 'undefined') {
+    alert('❌ ethers.js が読み込まれていません。\nページをリロードして再試行してください。\n\nコンソールでエラーを確認してください。');
+    return;
+  }
+
+  var inputStr = prompt(
+    '📜 EMUER配布\n\n宛先: ' + wallet + '\n\n配布するEMUER数を入力してください（デフォルト: ' + (defaultAmount || 0) + '）',
+    defaultAmount || 0
+  );
   if (inputStr === null) return;
   var sendAmount = parseFloat(inputStr);
-  if (isNaN(sendAmount) || sendAmount <= 0) { fpShowToast('dao-toast', '❌ 有効なEMUER数を入力してください', 'error'); return; }
-  if (!window.ethereum) { fpShowToast('dao-toast', '❌ MetaMaskが見つかりません。インストールして接続してください', 'error'); return; }
+  if (isNaN(sendAmount) || sendAmount <= 0) { alert('❌ 有効なEMUER数を入力してください'); return; }
+
+  // MetaMask確認
+  if (!window.ethereum) {
+    alert('❌ MetaMaskが見つかりません。\nブラウザにMetaMask拡張機能をインストールしてください。');
+    return;
+  }
+
   try {
-    fpShowToast('dao-toast', '⏳ MetaMask確認中…', 'success');
+    // Step 1: MetaMask接続
+    fpShowToast('dao-toast', '⏳ MetaMask接続中…', 'success');
     var provider = new ethers.providers.Web3Provider(window.ethereum);
-    await provider.send('eth_requestAccounts', []);
-    var signer = provider.getSigner();
-    // Polygonネットワーク確認
+    var accounts = await provider.send('eth_requestAccounts', []);
+    if (!accounts || accounts.length === 0) { alert('❌ MetaMaskの接続が拒否されました'); return; }
+
+    // Step 2: ネットワーク確認
     var network = await provider.getNetwork();
     if (network.chainId !== 137) {
-      fpShowToast('dao-toast', '⚠️ Polygonネットワーク（chainId: 137）に切り替えてください', 'error');
+      var switchOk = confirm(
+        '⚠️ 現在のネットワーク: chainId=' + network.chainId + '\n\nPolygon（chainId: 137）に切り替える必要があります。\nMetaMaskでPolygonネットワークに切り替えてから再試行してください。\n\n自動で切り替えを試みますか？'
+      );
+      if (switchOk) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x89' }]
+          });
+          // 切り替え後、providerを再初期化
+          provider = new ethers.providers.Web3Provider(window.ethereum);
+        } catch(switchErr) {
+          alert('❌ ネットワーク切り替え失敗。MetaMaskで手動でPolygonに切り替えてください。\n\nエラー: ' + (switchErr.message || switchErr));
+          return;
+        }
+      } else { return; }
+    }
+
+    // Step 3: 残高確認
+    var signer = provider.getSigner();
+    var contract = new ethers.Contract(KOKEN_EMUER_ADDRESS, KOKEN_EMUER_ABI, signer);
+    var myAddress = await signer.getAddress();
+    var balBN = await contract.balanceOf(myAddress);
+    var bal = parseFloat(ethers.utils.formatUnits(balBN, 18));
+    if (bal < sendAmount) {
+      alert('❌ EMUER残高不足\n\n残高: ' + bal.toFixed(2) + ' EMUER\n送金希望: ' + sendAmount + ' EMUER');
       return;
     }
-    var contract = new ethers.Contract(KOKEN_EMUER_ADDRESS, KOKEN_EMUER_ABI, signer);
+
+    // Step 4: 送金
+    var confirmed = confirm(
+      '✅ 送金確認\n\n宛先: ' + wallet + '\n金額: ' + sendAmount + ' EMUER\n\nMetaMaskで確認してください。'
+    );
+    if (!confirmed) return;
+
+    fpShowToast('dao-toast', '⏳ MetaMaskでトランザクションを確認してください…', 'success');
     var amountWei = ethers.utils.parseUnits(String(sendAmount), 18);
-    fpShowToast('dao-toast', '⏳ トランザクション送信中…', 'success');
     var tx = await contract.transfer(wallet, amountWei);
-    fpShowToast('dao-toast', '⏳ 承認待ち… TX: ' + tx.hash.slice(0,12) + '…', 'success');
+
+    fpShowToast('dao-toast', '⏳ TX送信済み。承認待ち… ' + tx.hash.slice(0,14) + '…', 'success');
+    alert('✅ トランザクション送信済み！\n\nTX Hash: ' + tx.hash + '\n\nPolygonScanで確認中…承認まで数十秒かかります。');
+
     await tx.wait();
+
+    // Step 5: Firestore更新
     var db = window.fpAdminDB;
     if (db) {
       await db.collection('sp_koken_sho').doc(docId).update({
@@ -1816,9 +1870,15 @@ async function kokenShoDistribute(docId, wallet, defaultAmount) {
         distributedAmount: sendAmount
       });
     }
-    fpShowToast('dao-toast', '✅ ' + sendAmount + ' EMUER を ' + wallet.slice(0,6) + '… に送金しました！', 'success');
+
+    fpShowToast('dao-toast', '✅ ' + sendAmount + ' EMUER を ' + wallet.slice(0,6) + '… に送金完了！', 'success');
+    alert('🎉 送金完了！\n\n' + sendAmount + ' EMUER を\n' + wallet + '\nに送金しました。\n\nTX: ' + tx.hash + '\nhttps://polygonscan.com/tx/' + tx.hash);
+
   } catch(e) {
-    fpShowToast('dao-toast', '❌ 送金失敗: ' + (e.reason || e.message || String(e)), 'error');
+    var msg = e.reason || e.data?.message || e.message || String(e);
+    console.error('EMUER distribution error:', e);
+    fpShowToast('dao-toast', '❌ 送金失敗: ' + msg, 'error');
+    alert('❌ 送金失敗\n\n' + msg + '\n\nコンソールに詳細が表示されています。');
   }
 }
 
@@ -2646,7 +2706,7 @@ function kaiensaiSaveConfig() {
 </script>
 
 <!-- ethers.js for EMUER distribution -->
-<script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js" type="application/javascript"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
 
 <!-- Firebase Compat SDK for admin panel -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
