@@ -1836,7 +1836,9 @@ function fpInitDynamicDAOVotes() {
 
     container.innerHTML = snap.docs.map(d => {
       const v = { id: d.id, ...d.data() };
-      const daysLeft = Math.max(0, Math.ceil((v.deadline - Date.now()) / 86400000));
+      const deadlineMs = v.deadline ? new Date(v.deadline).getTime() : null;
+      const daysLeft = deadlineMs !== null ? Math.max(0, Math.ceil((deadlineMs - Date.now()) / 86400000)) : null;
+      const isActive = daysLeft === null || daysLeft > 0;
       const btns = (v.options || []).map(opt =>
         `<button class="fp-vote-choice-btn" onclick="fpVoteDAO('dyn_${v.id}','${_esc(opt)}',this)" ${fpHasNFT ? "" : "disabled"}>
           ${_esc(opt)}
@@ -1845,14 +1847,14 @@ function fpInitDynamicDAOVotes() {
       return `<div class="fp-vote-card" style="margin-top:12px">
         <div class="fp-vote-header">
           <div class="fp-vote-title">${_esc(v.title)}</div>
-          <span class="fp-vote-status ${daysLeft > 0 ? 'dao' : 'closed'}">${daysLeft > 0 ? '👑 DAO投票' : '⏸ 終了'}</span>
+          <span class="fp-vote-status ${isActive ? 'dao' : 'closed'}">${isActive ? '👑 DAO投票' : '⏸ 終了'}</span>
         </div>
         ${v.desc ? `<div class="fp-vote-desc">${_esc(v.desc)}</div>` : ""}
         <div id="fpDynVoteBars_${v.id}"></div>
         <div class="fp-vote-btn-row" id="fpDynVoteBtns_${v.id}">${btns}</div>
         <div class="fp-vote-meta">
           <span id="fpDynVoteCount_${v.id}">👥 集計中…</span>
-          <span>⏰ 残り${daysLeft}日</span>
+          <span>⏰ ${daysLeft !== null ? '残り' + daysLeft + '日' : '期限なし'}</span>
         </div>
       </div>`;
     }).join("");
