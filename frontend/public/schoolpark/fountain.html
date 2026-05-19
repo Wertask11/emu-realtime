@@ -624,25 +624,8 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
       <span class="fp-vote-type-label fp-vote-type-general">🟢 一般投票</span>
     </div>
 
-    <div class="fp-vote-card" id="fpVoteCard1">
-      <div class="fp-vote-header">
-        <div class="fp-vote-title">次に開放してほしいエリアは？</div>
-        <span class="fp-vote-status active">● 投票中</span>
-      </div>
-      <div class="fp-vote-desc">SchoolParkの次コンテンツリリースを住民投票で決定します。1デバイス1票。</div>
-      <div id="fpVote1Bars"></div>
-      <div class="fp-vote-btn-row" id="fpVote1Btns">
-        <button class="fp-vote-choice-btn" onclick="fpVoteGeneral('vote1','本屋・図書館',this)">📚 本屋・図書館</button>
-        <button class="fp-vote-choice-btn" onclick="fpVoteGeneral('vote1','映画館',this)">🎬 映画館</button>
-        <button class="fp-vote-choice-btn" onclick="fpVoteGeneral('vote1','病院',this)">🏥 病院</button>
-        <button class="fp-vote-choice-btn" onclick="fpVoteGeneral('vote1','ショッピング',this)">🛍️ ショッピング</button>
-      </div>
-      <div class="fp-vote-meta" id="fpVote1Meta">
-        <span id="fpVote1Count">👥 集計中…</span>
-        <span>⏰ 残り3日</span>
-        <span>🗝️ 1デバイス1票</span>
-      </div>
-    </div>
+    <!-- 動的一般投票（管理画面から追加） -->
+    <div id="fpDynamicGeneralVotes"><div class="fp-loading">📊 読み込み中…</div></div>
 
     <!-- 🏛️ SchoolPark 運営参加 CTA -->
     <div class="fp-governance-cta" id="fpGovernanceCTA">
@@ -666,43 +649,6 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
         <span class="fp-vote-type-label fp-vote-type-dao">🏛️ SchoolParkの運営に参加する！</span>
       </div>
       <div id="fpNftStatus" style="margin-bottom:10px"></div>
-
-      <div class="fp-vote-card" id="fpVoteCard2">
-        <div class="fp-vote-header">
-          <div class="fp-vote-title">SchoolParkの入場制限ポリシーを決める</div>
-          <span class="fp-vote-status dao">👑 DAO投票</span>
-        </div>
-        <div class="fp-vote-desc">Emu有料ユーザーのみが参加できるDAO投票。開園期終了後の入場方針を決定します。</div>
-        <div id="fpVote2Bars"></div>
-        <div class="fp-vote-btn-row" id="fpVote2Btns">
-          <button class="fp-vote-choice-btn" onclick="fpVoteDAO('vote2','完全無料継続',this)" disabled>🆓 完全無料継続</button>
-          <button class="fp-vote-choice-btn" onclick="fpVoteDAO('vote2','NFT保有で追加特典',this)" disabled>🎁 NFT追加特典</button>
-          <button class="fp-vote-choice-btn" onclick="fpVoteDAO('vote2','EMUER入場料導入',this)" disabled>💰 EMUER入場料</button>
-        </div>
-        <div class="fp-vote-meta" id="fpVote2Meta">
-          <span id="fpVote2Count">👥 集計中…</span>
-          <span>⏰ 残り7日</span>
-          <span>🔐 Emu有料ユーザー限定</span>
-        </div>
-      </div>
-
-      <div class="fp-vote-card">
-        <div class="fp-vote-header">
-          <div class="fp-vote-title">広場イベントの開催頻度</div>
-          <span class="fp-vote-status dao">👑 DAO投票</span>
-        </div>
-        <div class="fp-vote-desc">コミュニティイベントのペースをDAO投票で決定します。</div>
-        <div id="fpVote3Bars"></div>
-        <div class="fp-vote-btn-row" id="fpVote3Btns">
-          <button class="fp-vote-choice-btn" onclick="fpVoteDAO('vote3','週1回',this)" disabled>📅 週1回</button>
-          <button class="fp-vote-choice-btn" onclick="fpVoteDAO('vote3','月2回',this)" disabled>📅 月2回</button>
-          <button class="fp-vote-choice-btn" onclick="fpVoteDAO('vote3','月1回',this)" disabled>📅 月1回</button>
-        </div>
-        <div class="fp-vote-meta" id="fpVote3Meta">
-          <span id="fpVote3Count">👥 集計中…</span>
-          <span>⏰ 残り7日</span>
-        </div>
-      </div>
 
       <!-- ダイナミック DAO投票（Firestoreから読み込み） -->
       <div id="fpDynamicDAOVotes"></div>
@@ -1780,6 +1726,78 @@ function fpCalSelect(dateStr) {
   });
 }
 
+// ─── ダイナミック一般投票をリアルタイム監視 ─────────────────
+function fpInitDynamicGeneralVotes() {
+  if (!fpDB || !fpFBLib) { setTimeout(fpInitDynamicGeneralVotes, 400); return; }
+  const lib = fpFBLib;
+  const q = lib.query(lib.collection(fpDB, "sp_general_votes_dynamic"), lib.orderBy("ts","desc"));
+  lib.onSnapshot(q, snap => {
+    const container = document.getElementById("fpDynamicGeneralVotes");
+    if (!container) return;
+    if (snap.empty) {
+      container.innerHTML = '<div class="fp-loading" style="color:var(--text2);font-size:0.78rem">現在募集中の議題はありません</div>';
+      return;
+    }
+    container.innerHTML = snap.docs.map(d => {
+      const v = { id: d.id, ...d.data() };
+      const now = Date.now();
+      const isActive = !v.deadline || v.deadline > now;
+      const daysLeft = v.deadline ? Math.max(0, Math.ceil((v.deadline - now) / 86400000)) : null;
+      const btns = (v.options || []).map(opt =>
+        `<button class="fp-vote-choice-btn" onclick="fpVoteGeneralDynamic('${v.id}','${_esc(opt)}',this)">
+          ${_esc(opt)}
+        </button>`
+      ).join("");
+      return `<div class="fp-vote-card" data-genid="${v.id}">
+        <div class="fp-vote-header">
+          <div class="fp-vote-title">${_esc(v.title)}</div>
+          <span class="fp-vote-status ${isActive ? 'active' : 'closed'}">${isActive ? '● 投票中' : '⏸ 終了'}</span>
+        </div>
+        ${v.desc ? `<div class="fp-vote-desc">${_esc(v.desc)}</div>` : ""}
+        <div id="fpGenVoteBars_${v.id}"></div>
+        <div class="fp-vote-btn-row" id="fpGenVoteBtns_${v.id}">${isActive ? btns : '<span style="font-size:0.78rem;color:var(--text2)">投票は終了しました</span>'}</div>
+        <div class="fp-vote-meta">
+          <span id="fpGenVoteCount_${v.id}">👥 集計中…</span>
+          ${daysLeft !== null ? `<span>⏰ 残り${daysLeft}日</span>` : ''}
+          <span>🗝️ 1デバイス1票</span>
+        </div>
+      </div>`;
+    }).join("");
+    // 各議題の投票バーを読み込み
+    snap.docs.forEach(d => {
+      fpLoadVoteBars(`gen_${d.id}`, `fpGenVoteBars_${d.id}`, `fpGenVoteCount_${d.id}`, false);
+      // 投票済みなら disable
+      const voted = localStorage.getItem(`fp_voted_gen_${d.id}`);
+      if (voted) {
+        const btnsEl = document.getElementById(`fpGenVoteBtns_${d.id}`);
+        if (btnsEl) btnsEl.querySelectorAll(".fp-vote-choice-btn").forEach(b => {
+          b.disabled = true;
+          if (b.textContent.trim() === voted) b.classList.add("voted");
+        });
+      }
+    });
+  });
+}
+
+async function fpVoteGeneralDynamic(topicId, option, btn) {
+  if (!fpDB || !fpFBLib) { fpToast("⚠️ 接続中です…", "rgba(100,100,100,0.9)"); return; }
+  const voteId = `gen_${topicId}`;
+  const voterKey = fpGetVoterKey();
+  const lib = fpFBLib;
+  try {
+    const ref = lib.doc(fpDB, "sp_fountain_votes", `${voteId}_${voterKey}`);
+    const snap = await lib.getDoc(ref);
+    if (snap.exists()) { fpToast("✅ 既に投票済みです", "rgba(99,102,241,0.9)"); return; }
+    await lib.setDoc(ref, { voteId, option, voterKey, wallet: fpWallet || "anonymous", ts: Date.now() });
+    btn.classList.add("voted");
+    const btnsEl = document.getElementById(`fpGenVoteBtns_${topicId}`);
+    if (btnsEl) btnsEl.querySelectorAll(".fp-vote-choice-btn").forEach(b => b.disabled = true);
+    localStorage.setItem(`fp_voted_gen_${topicId}`, option);
+    fpToast("✅ 投票しました！", "rgba(34,197,94,0.92)");
+    fpLoadVoteBars(voteId, `fpGenVoteBars_${topicId}`, `fpGenVoteCount_${topicId}`, false);
+  } catch(e) { fpToast("❌ エラー: " + e.message, "rgba(239,68,68,0.9)"); }
+}
+
 // ─── ダイナミックDAO投票をリアルタイム監視 ───────────────────
 // onSnapshot を使うことで管理画面や他ユーザーの作成・削除が即時反映される
 function fpInitDynamicDAOVotes() {
@@ -2034,6 +2052,7 @@ window.fpFBLib = { collection, addDoc, getDocs, query, orderBy, onSnapshot, doc,
 
 // ページ読み込み完了後すぐにリアルタイム監視を開始（参加前でも議題一覧を表示 & 管理画面の作成が即反映）
 fpInitDynamicDAOVotes();
+fpInitDynamicGeneralVotes();
 // 権限チェックも即時実行（onAuthStateChanged 発火前にウォレットで判定できる場合もあるため）
 fpCheckDAOCreator();
 </script>

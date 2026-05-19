@@ -133,7 +133,7 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
     <button class="tab-btn" onclick="switchTab('inbox')">📮 お預かり箱 <span id="inbox-count" style="color:#666;"></span></button>
     <button class="tab-btn" onclick="switchTab('fountain-board')">⛲ 掲示板投稿</button>
     <button class="tab-btn" onclick="switchTab('fountain-event')">🎉 イベント投稿</button>
-    <button class="tab-btn" onclick="switchTab('dao-votes');loadDAOVotes()">🗳️ DAO投票</button>
+    <button class="tab-btn" onclick="switchTab('dao-votes');loadGeneralVotes()">🗳️ DAO投票</button>
     <button class="tab-btn" onclick="switchTab('facility-reports');frLoad()" style="color:#f97316;">🚨 施設報告管理</button>
     <button class="tab-btn" onclick="switchTab('museum-sp');mspLoad()">🏛️ 博物館展示管理</button>
     <button class="tab-btn" onclick="switchTab('lab-reports');labLoad()">🔬 研究レポート</button>
@@ -251,66 +251,121 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
 
   <!-- タブ5: DAO投票データ -->
   <div id="tab-dao-votes" class="tab-content">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h2 style="font-size:15px;color:#4ec9b0;margin:0">🗳️ DAO投票データ</h2>
-      <button class="btn-add" onclick="loadDAOVotes()" style="padding:7px 16px;font-size:13px">🔄 再読み込み</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <h2 style="font-size:15px;color:#4ec9b0;margin:0">🗳️ 投票管理</h2>
+      <button class="btn-add" onclick="loadGeneralVotes();loadDAOVotes();" style="padding:7px 16px;font-size:13px">🔄 再読み込み</button>
     </div>
 
-    <!-- DAO議題作成フォーム -->
-    <div style="background:#161616;border:1px solid rgba(167,139,250,0.3);border-radius:10px;padding:22px;margin-bottom:28px">
-      <div style="font-size:14px;font-weight:bold;color:#a78bfa;margin-bottom:18px;display:flex;align-items:center;gap:8px">
-        📝 新しいDAO議題を作成
-        <span style="font-size:11px;background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:2px 8px;">👑 運営専用</span>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <label style="font-size:12px;color:#888">議題タイトル <span style="color:#f87171">*</span></label>
-          <input type="text" id="dao-new-title" maxlength="60" placeholder="例：新エリアの名前を決める"
-            style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s"
-            onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <label style="font-size:12px;color:#888">期限（任意）</label>
-          <input type="datetime-local" id="dao-new-deadline"
-            style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s;color-scheme:dark"
-            onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'">
-        </div>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
-        <label style="font-size:12px;color:#888">説明（任意）</label>
-        <textarea id="dao-new-desc" maxlength="200" rows="2" placeholder="議題の背景・詳細を記載..."
-          style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;resize:vertical;transition:border-color 0.2s"
-          onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'"></textarea>
-      </div>
-
-      <div style="margin-bottom:14px">
-        <label style="font-size:12px;color:#888;display:block;margin-bottom:8px">選択肢（最低2つ・最大6つ） <span style="color:#f87171">*</span></label>
-        <div id="dao-new-options-list" style="display:flex;flex-direction:column;gap:8px">
-          <input type="text" class="dao-admin-opt" maxlength="40" placeholder="選択肢 1"
-            style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s"
-            onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'">
-          <input type="text" class="dao-admin-opt" maxlength="40" placeholder="選択肢 2"
-            style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s"
-            onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'">
-        </div>
-        <button onclick="daoAdminAddOption()" style="margin-top:8px;background:rgba(167,139,250,0.1);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer">
-          ＋ 選択肢を追加
-        </button>
-      </div>
-
-      <div style="display:flex;justify-content:flex-end">
-        <button onclick="daoAdminCreateTopic()"
-          style="background:#a78bfa;color:#0f0f0f;border:none;border-radius:6px;padding:10px 24px;font-size:14px;font-weight:bold;cursor:pointer;transition:opacity 0.2s"
-          onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
-          🗳️ 議題を作成・公開
-        </button>
-      </div>
+    <!-- サブタブ -->
+    <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid #2a2a2a">
+      <button id="vote-subtab-general" onclick="switchVoteSubtab('general')"
+        style="padding:8px 18px;background:transparent;border:none;border-bottom:2px solid #4ec9b0;color:#4ec9b0;font-size:13px;font-weight:bold;cursor:pointer;margin-bottom:-2px">🟢 一般投票</button>
+      <button id="vote-subtab-dao" onclick="switchVoteSubtab('dao')"
+        style="padding:8px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:#888;font-size:13px;cursor:pointer;margin-bottom:-2px">🏛️ DAO投票</button>
+      <button id="vote-subtab-results" onclick="switchVoteSubtab('results')"
+        style="padding:8px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:#888;font-size:13px;cursor:pointer;margin-bottom:-2px">📊 投票結果</button>
     </div>
 
-    <!-- 既存の投票データ一覧 -->
-    <div id="dao-votes-container" style="color:#888;font-size:13px">読み込み中…</div>
+    <!-- ④ 一般投票サブタブ -->
+    <div id="vote-section-general">
+      <div style="background:#161616;border:1px solid rgba(78,201,176,0.3);border-radius:10px;padding:22px;margin-bottom:24px">
+        <div style="font-size:14px;font-weight:bold;color:#4ec9b0;margin-bottom:18px">📝 新しい一般投票議題を作成</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:12px;color:#888">議題タイトル <span style="color:#f87171">*</span></label>
+            <input type="text" id="gen-new-title" maxlength="60" placeholder="例：次に開放してほしいエリアは？"
+              style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s"
+              onfocus="this.style.borderColor='#4ec9b0'" onblur="this.style.borderColor='#333'">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:12px;color:#888">期限（任意）</label>
+            <input type="datetime-local" id="gen-new-deadline"
+              style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s;color-scheme:dark"
+              onfocus="this.style.borderColor='#4ec9b0'" onblur="this.style.borderColor='#333'">
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+          <label style="font-size:12px;color:#888">説明（任意）</label>
+          <textarea id="gen-new-desc" maxlength="200" rows="2" placeholder="議題の背景・詳細を記載..."
+            style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;resize:vertical;transition:border-color 0.2s"
+            onfocus="this.style.borderColor='#4ec9b0'" onblur="this.style.borderColor='#333'"></textarea>
+        </div>
+        <div style="margin-bottom:14px">
+          <label style="font-size:12px;color:#888;display:block;margin-bottom:8px">選択肢（最低2つ・最大6つ） <span style="color:#f87171">*</span></label>
+          <div id="gen-new-options-list" style="display:flex;flex-direction:column;gap:8px">
+            <input type="text" class="gen-admin-opt" maxlength="40" placeholder="選択肢 1"
+              style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s"
+              onfocus="this.style.borderColor='#4ec9b0'" onblur="this.style.borderColor='#333'">
+            <input type="text" class="gen-admin-opt" maxlength="40" placeholder="選択肢 2"
+              style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s"
+              onfocus="this.style.borderColor='#4ec9b0'" onblur="this.style.borderColor='#333'">
+          </div>
+          <button onclick="genAdminAddOption()" style="margin-top:8px;background:rgba(78,201,176,0.1);color:#4ec9b0;border:1px solid rgba(78,201,176,0.3);border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer">＋ 選択肢を追加</button>
+        </div>
+        <div style="display:flex;justify-content:flex-end">
+          <button onclick="genAdminCreateTopic()"
+            style="background:#4ec9b0;color:#0f0f0f;border:none;border-radius:6px;padding:10px 24px;font-size:14px;font-weight:bold;cursor:pointer">
+            🟢 一般議題を作成・公開
+          </button>
+        </div>
+      </div>
+      <div id="gen-votes-container" style="color:#888;font-size:13px">読み込み中…</div>
+    </div>
+
+    <!-- DAO投票サブタブ -->
+    <div id="vote-section-dao" style="display:none">
+      <div style="background:#161616;border:1px solid rgba(167,139,250,0.3);border-radius:10px;padding:22px;margin-bottom:28px">
+        <div style="font-size:14px;font-weight:bold;color:#a78bfa;margin-bottom:18px;display:flex;align-items:center;gap:8px">
+          📝 新しいDAO議題を作成
+          <span style="font-size:11px;background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:2px 8px;">👑 運営専用</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:12px;color:#888">議題タイトル <span style="color:#f87171">*</span></label>
+            <input type="text" id="dao-new-title" maxlength="60" placeholder="例：新エリアの名前を決める"
+              style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s"
+              onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="font-size:12px;color:#888">期限（任意）</label>
+            <input type="datetime-local" id="dao-new-deadline"
+              style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s;color-scheme:dark"
+              onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'">
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+          <label style="font-size:12px;color:#888">説明（任意）</label>
+          <textarea id="dao-new-desc" maxlength="200" rows="2" placeholder="議題の背景・詳細を記載..."
+            style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;resize:vertical;transition:border-color 0.2s"
+            onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'"></textarea>
+        </div>
+        <div style="margin-bottom:14px">
+          <label style="font-size:12px;color:#888;display:block;margin-bottom:8px">選択肢（最低2つ・最大6つ） <span style="color:#f87171">*</span></label>
+          <div id="dao-new-options-list" style="display:flex;flex-direction:column;gap:8px">
+            <input type="text" class="dao-admin-opt" maxlength="40" placeholder="選択肢 1"
+              style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s"
+              onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'">
+            <input type="text" class="dao-admin-opt" maxlength="40" placeholder="選択肢 2"
+              style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s"
+              onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'">
+          </div>
+          <button onclick="daoAdminAddOption()" style="margin-top:8px;background:rgba(167,139,250,0.1);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer">＋ 選択肢を追加</button>
+        </div>
+        <div style="display:flex;justify-content:flex-end">
+          <button onclick="daoAdminCreateTopic()"
+            style="background:#a78bfa;color:#0f0f0f;border:none;border-radius:6px;padding:10px 24px;font-size:14px;font-weight:bold;cursor:pointer">
+            🏛️ DAO議題を作成・公開
+          </button>
+        </div>
+      </div>
+      <div id="dao-votes-container" style="color:#888;font-size:13px">読み込み中…</div>
+    </div>
+
+    <!-- ⑤ 投票結果サブタブ -->
+    <div id="vote-section-results" style="display:none">
+      <div id="vote-results-container" style="color:#888;font-size:13px">結果タブをクリックすると読み込みます</div>
+    </div>
+
     <div class="toast" id="dao-toast" style="margin-top:12px"></div>
   </div>
 
@@ -1210,6 +1265,83 @@ function fpShowToast(id, msg, type) {
 }
 
 // ─── DAO投票データ ────────────────────────────────────────
+// ─── サブタブ切り替え ──────────────────────────────────────
+function switchVoteSubtab(tab) {
+  ['general','dao','results'].forEach(function(t) {
+    var sec = document.getElementById('vote-section-' + t);
+    var btn = document.getElementById('vote-subtab-' + t);
+    if (!sec || !btn) return;
+    var isActive = t === tab;
+    sec.style.display = isActive ? '' : 'none';
+    btn.style.borderBottomColor = isActive ? (t==='general'?'#4ec9b0':t==='dao'?'#a78bfa':'#fbbf24') : 'transparent';
+    btn.style.color = isActive ? (t==='general'?'#4ec9b0':t==='dao'?'#a78bfa':'#fbbf24') : '#888';
+    btn.style.fontWeight = isActive ? 'bold' : 'normal';
+  });
+  if (tab === 'general') loadGeneralVotes();
+  if (tab === 'dao')     loadDAOVotes();
+  if (tab === 'results') loadVoteResults();
+}
+
+// ─── 一般投票データ読み込み ③ ────────────────────────────
+async function loadGeneralVotes() {
+  var container = document.getElementById('gen-votes-container');
+  if (!container) return;
+  if (!window.fpAdminDB) { container.innerHTML = '<div class="loading">🔗 Firebase接続中…</div>'; setTimeout(loadGeneralVotes, 600); return; }
+  container.innerHTML = '<div class="loading">📊 読み込み中…</div>';
+  try {
+    var db = window.fpAdminDB;
+    // 一般投票票データ
+    var generalSnap = await db.collection('sp_fountain_votes').get();
+    var generalMap = {};
+    generalSnap.forEach(function(d) {
+      var data = d.data(); var vid = data.voteId || 'unknown'; var opt = data.option || '?';
+      if (!generalMap[vid]) generalMap[vid] = {};
+      if (!generalMap[vid][opt]) generalMap[vid][opt] = [];
+      generalMap[vid][opt].push({ docId: d.id, wallet: data.wallet||'anonymous', ts: data.ts||0 });
+    });
+    // 動的一般議題
+    var genTopicsSnap = await db.collection('sp_general_votes_dynamic').orderBy('ts','desc').limit(20).get();
+    var genTopics = [];
+    genTopicsSnap.forEach(function(d) { genTopics.push({ id: d.id, ...d.data() }); });
+
+    var html = '';
+    // 動的一般議題
+    html += '<div style="font-size:13px;font-weight:bold;color:#4ec9b0;border-bottom:1px solid #2a2a2a;padding-bottom:8px;margin-bottom:12px">🟢 一般投票 議題一覧（sp_general_votes_dynamic）</div>';
+    if (genTopics.length === 0) {
+      html += '<div style="color:#555;font-size:13px;margin-bottom:16px">議題なし — 上のフォームから作成してください</div>';
+    } else {
+      genTopics.forEach(function(topic) {
+        var voteId = 'gen_' + topic.id;
+        var optMap = generalMap[voteId] || {};
+        var total = Object.values(optMap).reduce(function(s,v){return s+v.length;},0);
+        var deadline = topic.deadline ? new Date(topic.deadline).toLocaleString('ja-JP') : '期限なし';
+        html += '<div style="background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:16px;margin-bottom:12px">';
+        html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">';
+        html += '<div style="flex:1;min-width:0"><div style="font-weight:bold;font-size:14px;margin-bottom:3px;color:#4ec9b0">' + esc(topic.title||'（タイトルなし）') + '</div>';
+        html += '<div style="font-size:11px;color:#666">作成: ' + new Date(topic.ts||0).toLocaleString('ja-JP') + ' / 期限: ' + deadline + '</div></div>';
+        html += '<div style="display:flex;gap:6px;flex-shrink:0">';
+        html += '<div style="background:#1e1e1e;border:1px solid #333;border-radius:6px;padding:4px 10px;font-size:13px;font-weight:bold;color:#4ec9b0;white-space:nowrap">👥 ' + total + '票</div>';
+        html += '<button onclick="deleteGeneralTopic(\'' + topic.id + '\',\'' + esc(topic.title||'').replace(/'/g,"\\'") + '\')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:bold;cursor:pointer">🗑️ 削除</button>';
+        html += '</div></div>';
+        html += Object.keys(optMap).length > 0 ? daoRenderOptionBars(optMap, total, false) : '<div style="font-size:12px;color:#555">まだ投票なし</div>';
+        html += '</div>';
+      });
+    }
+    // gen_ でない一般投票（旧固定議題の残票）
+    var oldVoteIds = Object.keys(generalMap).filter(function(v){ return !v.startsWith('gen_'); });
+    if (oldVoteIds.length > 0) {
+      html += '<div style="font-size:13px;font-weight:bold;color:#888;border-bottom:1px solid #2a2a2a;padding-bottom:8px;margin:16px 0 12px">📦 旧固定議題データ（sp_fountain_votes）</div>';
+      oldVoteIds.sort().forEach(function(vid) {
+        var optMap = generalMap[vid]; var total = Object.values(optMap).reduce(function(s,v){return s+v.length;},0);
+        html += daoRenderVoteCard(vid, optMap, total, false, 'sp_fountain_votes');
+      });
+    }
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<div class="empty-state">❌ 読み込み失敗: ' + esc(e.message) + '</div>';
+  }
+}
+
 async function loadDAOVotes() {
   var container = document.getElementById('dao-votes-container');
   if (!container) return;
@@ -1223,28 +1355,14 @@ async function loadDAOVotes() {
   try {
     var db = window.fpAdminDB;
 
-    // ── 一般投票 (sp_fountain_votes) ──
-    var generalSnap = await db.collection('sp_fountain_votes').get();
-    var generalMap = {}; // { voteId: { option: [{wallet, ts}] } }
-    generalSnap.forEach(function(d) {
-      var data = d.data();
-      var vid = data.voteId || 'unknown';
-      var opt = data.option || '?';
-      if (!generalMap[vid]) generalMap[vid] = {};
-      if (!generalMap[vid][opt]) generalMap[vid][opt] = [];
-      generalMap[vid][opt].push({ wallet: data.wallet || 'anonymous', ts: data.ts || 0 });
-    });
-
     // ── DAO投票 (sp_fountain_dao_votes) ──
     var daoSnap = await db.collection('sp_fountain_dao_votes').get();
-    var daoMap = {}; // { voteId: { option: [{wallet, ts}] } }
+    var daoMap = {};
     daoSnap.forEach(function(d) {
-      var data = d.data();
-      var vid = data.voteId || 'unknown';
-      var opt = data.option || '?';
+      var data = d.data(); var vid = data.voteId || 'unknown'; var opt = data.option || '?';
       if (!daoMap[vid]) daoMap[vid] = {};
       if (!daoMap[vid][opt]) daoMap[vid][opt] = [];
-      daoMap[vid][opt].push({ wallet: data.wallet || '?', ts: data.ts || 0 });
+      daoMap[vid][opt].push({ docId: d.id, wallet: data.wallet || '?', ts: data.ts || 0 });
     });
 
     // ── 動的DAO議題 (sp_dao_votes_dynamic) ──
@@ -1252,44 +1370,12 @@ async function loadDAOVotes() {
     var dynTopics = [];
     dynSnap.forEach(function(d) { dynTopics.push({ id: d.id, ...d.data() }); });
 
-    // ── 描画 ──
     var html = '';
 
-    // 一般投票セクション
-    html += '<div style="margin-bottom:28px">';
-    html += '<div style="font-size:14px;font-weight:bold;color:#4ec9b0;border-bottom:1px solid #2a2a2a;padding-bottom:8px;margin-bottom:12px">🟢 一般投票（sp_fountain_votes）</div>';
-    var generalVoteIds = Object.keys(generalMap);
-    if (generalVoteIds.length === 0) {
-      html += '<div style="color:#555;font-size:13px">投票データなし</div>';
-    } else {
-      generalVoteIds.sort().forEach(function(vid) {
-        var optMap = generalMap[vid];
-        var totalVotes = Object.values(optMap).reduce(function(s,v){ return s+v.length; }, 0);
-        html += daoRenderVoteCard(vid, optMap, totalVotes, false);
-      });
-    }
-    html += '</div>';
-
-    // DAO投票（固定）セクション
-    html += '<div style="margin-bottom:28px">';
-    html += '<div style="font-size:14px;font-weight:bold;color:#fbbf24;border-bottom:1px solid #2a2a2a;padding-bottom:8px;margin-bottom:12px">👑 DAO投票 固定議題（sp_fountain_dao_votes）</div>';
-    var fixedVoteIds = Object.keys(daoMap).filter(function(v){ return !v.startsWith('dyn_'); });
-    if (fixedVoteIds.length === 0) {
-      html += '<div style="color:#555;font-size:13px">投票データなし</div>';
-    } else {
-      fixedVoteIds.sort().forEach(function(vid) {
-        var optMap = daoMap[vid];
-        var totalVotes = Object.values(optMap).reduce(function(s,v){ return s+v.length; }, 0);
-        html += daoRenderVoteCard(vid, optMap, totalVotes, true);
-      });
-    }
-    html += '</div>';
-
-    // DAO投票（動的議題）セクション
-    html += '<div style="margin-bottom:28px">';
-    html += '<div style="font-size:14px;font-weight:bold;color:#a78bfa;border-bottom:1px solid #2a2a2a;padding-bottom:8px;margin-bottom:12px">🏛️ DAO投票 動的議題（sp_dao_votes_dynamic）</div>';
+    // DAO投票（動的議題）
+    html += '<div style="font-size:13px;font-weight:bold;color:#a78bfa;border-bottom:1px solid #2a2a2a;padding-bottom:8px;margin-bottom:12px">🏛️ DAO投票 動的議題（sp_dao_votes_dynamic）</div>';
     if (dynTopics.length === 0) {
-      html += '<div style="color:#555;font-size:13px">議題なし</div>';
+      html += '<div style="color:#555;font-size:13px;margin-bottom:16px">議題なし</div>';
     } else {
       dynTopics.forEach(function(topic) {
         var dynVoteId = 'dyn_' + topic.id;
@@ -1299,24 +1385,26 @@ async function loadDAOVotes() {
         var createdAt = topic.ts ? new Date(topic.ts).toLocaleString('ja-JP') : '';
         html += '<div style="background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:16px;margin-bottom:12px">';
         html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">';
-        html += '<div style="flex:1;min-width:0">';
-        html += '<div style="font-weight:bold;font-size:14px;margin-bottom:3px">' + esc(topic.title || '（タイトルなし）') + '</div>';
-        html += '<div style="font-size:11px;color:#666">作成: ' + createdAt + ' / 期限: ' + deadline + ' / 提案者: ' + esc((topic.creator||'').substring(0,10)+'…') + '</div>';
-        html += '</div>';
-        html += '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0">';
+        html += '<div style="flex:1;min-width:0"><div style="font-weight:bold;font-size:14px;margin-bottom:3px">' + esc(topic.title || '（タイトルなし）') + '</div>';
+        html += '<div style="font-size:11px;color:#666">作成: ' + createdAt + ' / 期限: ' + deadline + ' / 提案者: ' + esc((topic.creator||'').substring(0,10)+'…') + '</div></div>';
+        html += '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0">';
         html += '<div style="background:#1e1e1e;border:1px solid #333;border-radius:6px;padding:4px 10px;font-size:13px;font-weight:bold;color:#a78bfa;white-space:nowrap">👥 ' + totalVotes + '票</div>';
-        html += '<button onclick="daoDeleteTopic(\'' + topic.id + '\',\'' + esc(topic.title||'').replace(/'/g,"\\'") + '\')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap;transition:background 0.15s" onmouseover="this.style.background=\'rgba(239,68,68,0.22)\'" onmouseout="this.style.background=\'rgba(239,68,68,0.12)\'">🗑️ 削除</button>';
-        html += '</div>';
-        html += '</div>';
-        if (Object.keys(optMap).length > 0) {
-          html += daoRenderOptionBars(optMap, totalVotes, true);
-        } else {
-          html += '<div style="font-size:12px;color:#555">まだ投票なし</div>';
-        }
+        html += '<button onclick="daoDeleteTopic(\'' + topic.id + '\',\'' + esc(topic.title||'').replace(/'/g,"\\'") + '\')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:bold;cursor:pointer">🗑️ 削除</button>';
+        html += '</div></div>';
+        html += Object.keys(optMap).length > 0 ? daoRenderOptionBars(optMap, totalVotes, true) : '<div style="font-size:12px;color:#555">まだ投票なし</div>';
         html += '</div>';
       });
     }
-    html += '</div>';
+
+    // DAO固定議題残票
+    var fixedVoteIds = Object.keys(daoMap).filter(function(v){ return !v.startsWith('dyn_'); });
+    if (fixedVoteIds.length > 0) {
+      html += '<div style="font-size:13px;font-weight:bold;color:#888;border-bottom:1px solid #2a2a2a;padding-bottom:8px;margin:16px 0 12px">📦 旧固定DAO議題データ（sp_fountain_dao_votes）</div>';
+      fixedVoteIds.sort().forEach(function(vid) {
+        var optMap = daoMap[vid]; var total = Object.values(optMap).reduce(function(s,v){return s+v.length;},0);
+        html += daoRenderVoteCard(vid, optMap, total, true, 'sp_fountain_dao_votes');
+      });
+    }
 
     container.innerHTML = html;
 
@@ -1324,6 +1412,183 @@ async function loadDAOVotes() {
     console.error('loadDAOVotes error:', e);
     container.innerHTML = '<div class="empty-state">❌ 読み込みに失敗しました<br><small>' + esc(e.message) + '</small></div>';
   }
+}
+
+// ─── ④ 一般議題作成 ─────────────────────────────────────
+function genAdminAddOption() {
+  var list = document.getElementById('gen-new-options-list');
+  if (!list) return;
+  var count = list.querySelectorAll('.gen-admin-opt').length;
+  if (count >= 6) { fpShowToast('dao-toast', '⚠️ 選択肢は最大6つです', 'error'); return; }
+  var inp = document.createElement('input');
+  inp.type = 'text'; inp.className = 'gen-admin-opt'; inp.maxLength = 40;
+  inp.placeholder = '選択肢 ' + (count + 1);
+  inp.style.cssText = 'background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;width:100%';
+  list.appendChild(inp);
+}
+
+async function genAdminCreateTopic() {
+  var db = window.fpAdminDB;
+  if (!db) { fpShowToast('dao-toast', '🔗 Firebase未接続です', 'error'); return; }
+  var title    = (document.getElementById('gen-new-title').value || '').trim();
+  var desc     = (document.getElementById('gen-new-desc').value  || '').trim();
+  var deadline = document.getElementById('gen-new-deadline').value;
+  var optEls   = document.querySelectorAll('#gen-new-options-list .gen-admin-opt');
+  var options  = Array.from(optEls).map(function(el){ return el.value.trim(); }).filter(Boolean);
+  if (!title)              { fpShowToast('dao-toast', '⚠️ タイトルを入力してください', 'error'); return; }
+  if (options.length < 2)  { fpShowToast('dao-toast', '⚠️ 選択肢を2つ以上入力してください', 'error'); return; }
+  try {
+    var docRef = await db.collection('sp_general_votes_dynamic').add({
+      title, desc: desc||'', options, creator: 'admin_room1',
+      ts: Date.now(), deadline: deadline ? new Date(deadline).valueOf() : null
+    });
+    fpShowToast('dao-toast', '✅ 一般議題「' + title + '」を作成しました', 'success');
+    document.getElementById('gen-new-title').value = '';
+    document.getElementById('gen-new-desc').value  = '';
+    document.getElementById('gen-new-deadline').value = '';
+    var list = document.getElementById('gen-new-options-list');
+    if (list) list.innerHTML = [1,2].map(function(n){
+      return '<input type="text" class="gen-admin-opt" maxlength="40" placeholder="選択肢 '+n+'" style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none">';
+    }).join('');
+    loadGeneralVotes();
+  } catch(e) { fpShowToast('dao-toast', '❌ 作成に失敗しました: ' + e.message, 'error'); }
+}
+
+// ─── ③ 一般議題削除 ─────────────────────────────────────
+async function deleteGeneralTopic(docId, title) {
+  if (!confirm('議題「' + (title||docId) + '」を削除しますか？\n投票データは sp_fountain_votes に残ります。')) return;
+  var db = window.fpAdminDB;
+  if (!db) { fpShowToast('dao-toast', '🔗 Firebase未接続です', 'error'); return; }
+  try {
+    await db.collection('sp_general_votes_dynamic').doc(docId).delete();
+    fpShowToast('dao-toast', '✅ 議題「' + (title||docId) + '」を削除しました', 'success');
+    loadGeneralVotes();
+  } catch(e) { fpShowToast('dao-toast', '❌ 削除に失敗しました: ' + e.message, 'error'); }
+}
+
+// ─── ⑤ 投票結果表示（Chart.js） ─────────────────────────
+async function loadVoteResults() {
+  var container = document.getElementById('vote-results-container');
+  if (!container || !window.fpAdminDB) return;
+  container.innerHTML = '<div class="loading">📊 集計中…</div>';
+
+  try {
+    var db = window.fpAdminDB;
+
+    // 全投票データ取得
+    var [genSnap, daoSnap, genTopicsSnap, daoTopicsSnap] = await Promise.all([
+      db.collection('sp_fountain_votes').get(),
+      db.collection('sp_fountain_dao_votes').get(),
+      db.collection('sp_general_votes_dynamic').orderBy('ts','desc').limit(20).get(),
+      db.collection('sp_dao_votes_dynamic').orderBy('ts','desc').limit(20).get()
+    ]);
+
+    // 集計
+    var genMap = {}, daoMap = {};
+    genSnap.forEach(function(d){ var data=d.data(); var vid=data.voteId||'?'; var opt=data.option||'?'; if(!genMap[vid])genMap[vid]={}; genMap[vid][opt]=(genMap[vid][opt]||0)+1; });
+    daoSnap.forEach(function(d){ var data=d.data(); var vid=data.voteId||'?'; var opt=data.option||'?'; if(!daoMap[vid])daoMap[vid]={}; daoMap[vid][opt]=(daoMap[vid][opt]||0)+1; });
+
+    var genTopics = []; genTopicsSnap.forEach(function(d){ genTopics.push({id:d.id,...d.data()}); });
+    var daoTopics = []; daoTopicsSnap.forEach(function(d){ daoTopics.push({id:d.id,...d.data()}); });
+
+    var html = '';
+
+    // ── 一般投票結果
+    html += '<div style="font-size:14px;font-weight:bold;color:#4ec9b0;border-bottom:1px solid #2a2a2a;padding-bottom:8px;margin-bottom:20px">🟢 一般投票 — 結果</div>';
+    if (genTopics.length === 0) {
+      html += '<div style="color:#555;font-size:13px;margin-bottom:24px">議題なし</div>';
+    } else {
+      genTopics.forEach(function(topic, i) {
+        var voteId = 'gen_' + topic.id;
+        var counts = genMap[voteId] || {};
+        var total = Object.values(counts).reduce(function(a,b){return a+b;},0);
+        html += renderResultCard(topic.title, topic.desc, counts, total, '#4ec9b0', 'gen_chart_'+i, topic.deadline);
+      });
+    }
+
+    // ── DAO投票結果
+    html += '<div style="font-size:14px;font-weight:bold;color:#a78bfa;border-bottom:1px solid #2a2a2a;padding-bottom:8px;margin:28px 0 20px">🏛️ DAO投票 — 結果</div>';
+    if (daoTopics.length === 0) {
+      html += '<div style="color:#555;font-size:13px">議題なし</div>';
+    } else {
+      daoTopics.forEach(function(topic, i) {
+        var voteId = 'dyn_' + topic.id;
+        var counts = daoMap[voteId] || {};
+        var total = Object.values(counts).reduce(function(a,b){return a+b;},0);
+        html += renderResultCard(topic.title, topic.desc, counts, total, '#a78bfa', 'dao_chart_'+i, topic.deadline);
+      });
+    }
+
+    container.innerHTML = html;
+
+    // Chart.js が読み込まれているか確認してグラフ描画
+    if (typeof Chart === 'undefined') {
+      var script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+      script.onload = function() { renderAllCharts(genTopics, daoTopics, genMap, daoMap); };
+      document.head.appendChild(script);
+    } else {
+      renderAllCharts(genTopics, daoTopics, genMap, daoMap);
+    }
+
+  } catch(e) {
+    container.innerHTML = '<div class="empty-state">❌ 読み込み失敗: ' + esc(e.message) + '</div>';
+  }
+}
+
+function renderResultCard(title, desc, counts, total, color, chartId, deadline) {
+  var now = Date.now();
+  var statusLabel = deadline ? (deadline > now ? '● 投票中' : '⏸ 終了') : '● 投票中';
+  var deadlineStr = deadline ? new Date(deadline).toLocaleString('ja-JP') : 'なし';
+  var html = '<div style="background:#161616;border:1px solid #2a2a2a;border-radius:12px;padding:20px;margin-bottom:20px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">';
+  html += '<div><div style="font-size:15px;font-weight:bold;margin-bottom:3px">' + esc(title||'（タイトルなし）') + '</div>';
+  if (desc) html += '<div style="font-size:11px;color:#666;margin-bottom:4px">' + esc(desc) + '</div>';
+  html += '<div style="font-size:11px;color:#555">⏰ 期限: ' + deadlineStr + '</div></div>';
+  html += '<div style="font-size:13px;font-weight:bold;color:' + color + ';white-space:nowrap">👥 ' + total + '票</div></div>';
+
+  if (total === 0) {
+    html += '<div style="font-size:13px;color:#555;text-align:center;padding:16px">まだ投票なし</div>';
+  } else {
+    // バーグラフ
+    html += '<div style="margin-bottom:16px">';
+    var sortedOpts = Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; });
+    sortedOpts.forEach(function(opt) {
+      var cnt = counts[opt]; var pct = Math.round(cnt/total*100);
+      html += '<div style="margin-bottom:8px">';
+      html += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>' + esc(opt) + '</span><span style="color:#888">' + cnt + '票 (' + pct + '%)</span></div>';
+      html += '<div style="background:#0f0f0f;border-radius:4px;height:8px;overflow:hidden"><div style="background:' + color + ';height:100%;width:' + pct + '%;border-radius:4px;transition:.4s"></div></div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    // 円グラフ (canvas)
+    html += '<div style="display:flex;justify-content:center"><canvas id="' + chartId + '" width="200" height="200" style="max-width:200px"></canvas></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderAllCharts(genTopics, daoTopics, genMap, daoMap) {
+  var PALETTE = ['#4ec9b0','#a78bfa','#fbbf24','#f87171','#38bdf8','#fb923c','#34d399'];
+  function drawChart(canvasId, counts) {
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    var labels = Object.keys(counts);
+    var data   = labels.map(function(k){ return counts[k]; });
+    new Chart(canvas, {
+      type: 'doughnut',
+      data: { labels: labels, datasets: [{ data: data, backgroundColor: PALETTE.slice(0, labels.length), borderWidth: 2, borderColor: '#161616' }] },
+      options: { plugins: { legend: { labels: { color: '#d4d4d4', font: { size: 11 } } } }, cutout: '55%' }
+    });
+  }
+  genTopics.forEach(function(topic, i) {
+    var counts = genMap['gen_'+topic.id] || {};
+    if (Object.keys(counts).length > 0) drawChart('gen_chart_'+i, counts);
+  });
+  daoTopics.forEach(function(topic, i) {
+    var counts = daoMap['dyn_'+topic.id] || {};
+    if (Object.keys(counts).length > 0) drawChart('dao_chart_'+i, counts);
+  });
 }
 
 // ─── DAO議題作成（管理者専用） ────────────────────────────
@@ -1403,16 +1668,36 @@ async function daoDeleteTopic(docId, title) {
   }
 }
 
-function daoRenderVoteCard(voteId, optMap, totalVotes, isDAO) {
+function daoRenderVoteCard(voteId, optMap, totalVotes, isDAO, collection) {
   var color = isDAO ? '#fbbf24' : '#4ec9b0';
   var html = '<div style="background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:16px;margin-bottom:12px">';
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px">';
   html += '<div style="font-weight:bold;font-size:14px;color:' + color + '">' + esc(voteId) + '</div>';
-  html += '<div style="background:#1e1e1e;border:1px solid #333;border-radius:6px;padding:4px 10px;font-size:13px;font-weight:bold;color:' + color + '">👥 ' + totalVotes + '票</div>';
-  html += '</div>';
+  html += '<div style="display:flex;gap:6px;align-items:center">';
+  html += '<div style="background:#1e1e1e;border:1px solid #333;border-radius:6px;padding:4px 10px;font-size:13px;font-weight:bold;color:' + color + ';white-space:nowrap">👥 ' + totalVotes + '票</div>';
+  if (collection) {
+    var safeId = esc(voteId).replace(/'/g,"\\'");
+    html += '<button onclick="deleteVoteData(\'' + safeId + '\',\'' + (collection||'') + '\')" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap">🗑️ 票削除</button>';
+  }
+  html += '</div></div>';
   html += daoRenderOptionBars(optMap, totalVotes, isDAO);
   html += '</div>';
   return html;
+}
+
+// ─── ③ 投票データ（票）の一括削除 ────────────────────────
+async function deleteVoteData(voteId, collection) {
+  if (!confirm('「' + voteId + '」の投票データを全件削除しますか？\nこの操作は元に戻せません。')) return;
+  var db = window.fpAdminDB;
+  if (!db) { fpShowToast('dao-toast', '🔗 Firebase未接続です', 'error'); return; }
+  try {
+    var snap = await db.collection(collection).where('voteId','==',voteId).get();
+    var batch = db.batch();
+    snap.docs.forEach(function(d) { batch.delete(d.ref); });
+    await batch.commit();
+    fpShowToast('dao-toast', '✅ ' + snap.size + '件の投票データを削除しました', 'success');
+    loadGeneralVotes(); loadDAOVotes();
+  } catch(e) { fpShowToast('dao-toast', '❌ 削除失敗: ' + e.message, 'error'); }
 }
 
 function daoRenderOptionBars(optMap, totalVotes, showVoters) {
