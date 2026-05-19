@@ -397,7 +397,14 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
             style="background:rgba(251,191,36,0.2);color:#fbbf24;border:1px solid rgba(251,191,36,0.5);border-radius:6px;padding:9px 22px;font-size:13px;font-weight:bold;cursor:pointer">
             💰 EMUERを送金する
           </button>
-          <span style="font-size:11px;color:#666">MetaMask で確認後に送金されます</span>
+          <button onclick="refreshSenderAddress()"
+            style="background:transparent;color:#888;border:1px solid #333;border-radius:6px;padding:9px 14px;font-size:12px;cursor:pointer">
+            🔄 送信元を確認
+          </button>
+        </div>
+        <div style="margin-top:10px;padding:9px 12px;background:#0f0f0f;border-radius:6px;border:1px solid #2a2a2a;font-size:12px">
+          <span style="color:#666">送信元（MetaMask現在のアカウント）：</span>
+          <span id="sender-address-display" style="color:#fbbf24;font-family:monospace">未接続 — 「送信元を確認」を押してください</span>
         </div>
       </div>
 
@@ -1800,6 +1807,27 @@ function initKokenShoAdmin() {
     var container = document.getElementById('koken-sho-container');
     if (container) container.innerHTML = '<div style="color:#f87171;font-size:13px">❌ 読み込みエラー: ' + e.message + '</div>';
   });
+}
+
+// 送信元アドレスを表示
+async function refreshSenderAddress() {
+  var el = document.getElementById('sender-address-display');
+  if (!el) return;
+  if (typeof ethers === 'undefined' || !window.ethereum) {
+    el.textContent = '❌ MetaMask未接続';
+    el.style.color = '#f87171';
+    return;
+  }
+  try {
+    var provider = new ethers.providers.Web3Provider(window.ethereum);
+    var accounts = await provider.send('eth_requestAccounts', []);
+    var addr = accounts[0] || '';
+    el.textContent = addr || '取得失敗';
+    el.style.color = '#fbbf24';
+  } catch(e) {
+    el.textContent = '❌ 取得失敗: ' + (e.message || e);
+    el.style.color = '#f87171';
+  }
 }
 
 // 手動EMUER送金（アドレス直接指定）
