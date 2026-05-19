@@ -1565,8 +1565,7 @@ async function fpJoinGovernance() {
     }
     // 管理者チェック（ウォレット確定後に実行）
     fpCheckDAOCreator();
-    // 動的DAO投票をリアルタイム監視開始（onSnapshot）
-    fpInitDynamicDAOVotes();
+    // ※ fpInitDynamicDAOVotes はページロード時に既に起動済み（重複呼び出し不要）
   } else {
     fpToast("🔒 Emu有料ユーザー・NFT保有者のみ参加できます", "rgba(239,68,68,0.9)");
     if (btn) { btn.textContent = "🔑 参加資格を確認する"; btn.disabled = false; }
@@ -1823,8 +1822,11 @@ async function fpVoteGeneralDynamic(topicId, option, btn) {
 
 // ─── ダイナミックDAO投票をリアルタイム監視 ───────────────────
 // onSnapshot を使うことで管理画面や他ユーザーの作成・削除が即時反映される
+let _fpDAOVoteListenerActive = false;
 function fpInitDynamicDAOVotes() {
+  if (_fpDAOVoteListenerActive) return; // 重複リスナー防止
   if (!fpDB || !fpFBLib) { setTimeout(fpInitDynamicDAOVotes, 400); return; }
+  _fpDAOVoteListenerActive = true;
   const lib = fpFBLib;
   const q = lib.query(lib.collection(fpDB, "sp_dao_votes_dynamic"), lib.orderBy("ts","desc"));
   lib.onSnapshot(q, snap => {
@@ -2221,7 +2223,7 @@ async function fpSubmitKokenSho() {
 <script type="module">
 import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
-  getFirestore, collection, addDoc, getDocs, query, orderBy,
+  initializeFirestore, collection, addDoc, getDocs, query, orderBy,
   onSnapshot, doc, updateDoc, setDoc, where, getDoc, increment, deleteDoc, limit
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -2237,7 +2239,8 @@ const firebaseConfig = {
 };
 
 const app  = initializeApp(firebaseConfig);
-const db   = getFirestore(app);
+// experimentalAutoDetectLongPolling: QUICプロトコルエラーを回避し、onSnapshotの安定性を向上
+const db   = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
 const auth = getAuth(app);
 
 // Firebase Auth で現在のサインイン状態を監視
