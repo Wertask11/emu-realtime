@@ -1809,25 +1809,45 @@ function initKokenShoAdmin() {
   });
 }
 
-// 送信元アドレスを表示
+// 送信元アドレスを表示（eth_accounts: ポップアップなし・現在選択中のアカウントを返す）
 async function refreshSenderAddress() {
   var el = document.getElementById('sender-address-display');
   if (!el) return;
-  if (typeof ethers === 'undefined' || !window.ethereum) {
-    el.textContent = '❌ MetaMask未接続';
+  if (!window.ethereum) {
+    el.textContent = '❌ MetaMask未インストール';
     el.style.color = '#f87171';
     return;
   }
   try {
-    var provider = new ethers.providers.Web3Provider(window.ethereum);
-    var accounts = await provider.send('eth_requestAccounts', []);
-    var addr = accounts[0] || '';
-    el.textContent = addr || '取得失敗';
-    el.style.color = '#fbbf24';
+    var accounts = await window.ethereum.request({ method: 'eth_accounts' });
+    if (!accounts || accounts.length === 0) {
+      // まだ一度も接続していない場合のみ接続要求
+      accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    }
+    _updateSenderDisplay(accounts[0] || null);
   } catch(e) {
     el.textContent = '❌ 取得失敗: ' + (e.message || e);
     el.style.color = '#f87171';
   }
+}
+
+function _updateSenderDisplay(addr) {
+  var el = document.getElementById('sender-address-display');
+  if (!el) return;
+  if (addr) {
+    el.textContent = addr;
+    el.style.color = '#fbbf24';
+  } else {
+    el.textContent = '未接続';
+    el.style.color = '#888';
+  }
+}
+
+// MetaMaskのアカウント切り替えを自動検知
+if (window.ethereum) {
+  window.ethereum.on('accountsChanged', function(accounts) {
+    _updateSenderDisplay(accounts && accounts[0] ? accounts[0] : null);
+  });
 }
 
 // 手動EMUER送金（アドレス直接指定）
