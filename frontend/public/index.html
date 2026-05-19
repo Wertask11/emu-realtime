@@ -10506,13 +10506,15 @@ function _showKaiensaiDetailModal() {
           ${KAIENSAI_STAMP_POIS_BASE.map((pid, idx) => {
             const stampPoi = (typeof SP_POIS !== 'undefined' ? SP_POIS : []).find(p => p.id === pid) || {};
             const stamped  = !!stamps[pid];
+            // 全セルを最初はグレー（未押し状態）で表示。アニメーション時にオレンジに変わる
             return `<div class="ks-stamp-cell" data-stamped="${stamped?1:0}" data-idx="${idx}" style="
-              background:${stamped ? '#fff8f3' : '#f5f5f5'};
-              border:1.5px solid ${stamped ? '#ffb38a' : '#e0e0e0'};
+              background:#f5f5f5;
+              border:1.5px solid #e0e0e0;
               border-radius:12px;padding:8px 4px 6px;text-align:center;
               position:relative;overflow:hidden;
+              transition:background .25s,border-color .25s;
             ">
-              <!-- スタンプ印 (取得済み) -->
+              <!-- スタンプ印オーバーレイ（取得済みセルのみ存在。最初は非表示） -->
               ${stamped ? `<div class="ks-stamp-ink" style="
                 position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
                 pointer-events:none;opacity:0;
@@ -10528,9 +10530,9 @@ function _showKaiensaiDetailModal() {
                   <span style="font-size:22px;">${stampPoi.icon||'🎪'}</span>
                 </div>
               </div>` : ''}
-              <!-- アイコン (未取得のみ前面表示) -->
-              <div style="font-size:20px;${stamped ? 'opacity:0;' : 'filter:grayscale(1);opacity:0.3;'}">${stampPoi.icon||'🎪'}</div>
-              <div style="font-size:9px;color:${stamped ? '#ff6b35' : '#bbb'};margin-top:2px;font-weight:${stamped?'bold':'normal'};line-height:1.2;">${stampPoi.name||pid}</div>
+              <!-- アイコン（全セル最初はグレー） -->
+              <div class="ks-icon" style="font-size:20px;filter:grayscale(1);opacity:0.3;transition:opacity .25s,filter .25s;">${stampPoi.icon||'🎪'}</div>
+              <div class="ks-name" style="font-size:9px;color:#bbb;margin-top:2px;line-height:1.2;transition:color .25s;">${stampPoi.name||pid}</div>
             </div>`;
           }).join('')}
         </div>
@@ -10562,13 +10564,21 @@ function _showKaiensaiDetailModal() {
   document.body.appendChild(modal);
 
   // 取得済みスタンプを順番にドスンと押す演出
-  // バナーが完全に開いた後（600ms）から、1個ずつ2秒間隔で押す
+  // バナーが完全に開いた後（3秒）から、1個ずつ2秒間隔で押す
   const stampedCells = modal.querySelectorAll('.ks-stamp-cell[data-stamped="1"]');
   stampedCells.forEach((cell, i) => {
-    const ink = cell.querySelector('.ks-stamp-ink');
+    const ink  = cell.querySelector('.ks-stamp-ink');
+    const icon = cell.querySelector('.ks-icon');
+    const name = cell.querySelector('.ks-name');
     if (!ink) return;
     setTimeout(() => {
-      ink.style.opacity = '1';
+      // セルの見た目をオレンジに切り替え（アニメーションと同時）
+      cell.style.background    = '#fff8f3';
+      cell.style.borderColor   = '#ffb38a';
+      if (icon) { icon.style.opacity = '0'; icon.style.filter = 'none'; }
+      if (name) { name.style.color = '#ff6b35'; name.style.fontWeight = 'bold'; }
+      // スタンプ印を押す
+      ink.style.opacity   = '1';
       ink.style.animation = 'ksStampDrop .38s cubic-bezier(0.34,1.1,0.64,1) both';
       // セル自体も少し揺らす（押した衝撃）
       cell.style.animation = 'ksStampShake .18s ease .22s both';
