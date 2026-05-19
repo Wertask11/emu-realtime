@@ -343,6 +343,13 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
             style="background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;resize:vertical;transition:border-color 0.2s"
             onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#333'"></textarea>
         </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+          <label style="font-size:12px;color:#888">💰 EMUER配布数（貢献証提出者への報酬）</label>
+          <input type="number" id="dao-new-emuer" min="0" max="100000" placeholder="例：100（0または空欄は配布なし）"
+            style="background:#0f0f0f;color:#fbbf24;border:1px solid #333;border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;transition:border-color 0.2s;width:100%"
+            onfocus="this.style.borderColor='#fbbf24'" onblur="this.style.borderColor='#333'">
+          <span style="font-size:11px;color:#666">※ 実際の送金は下の「貢献証一覧」から手動で行います</span>
+        </div>
         <div style="margin-bottom:14px">
           <label style="font-size:12px;color:#888;display:block;margin-bottom:8px">選択肢（最低2つ・制限なし） <span style="color:#f87171">*</span></label>
           <div id="dao-new-options-list" style="display:flex;flex-direction:column;gap:8px">
@@ -367,6 +374,24 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
         </div>
       </div>
       <div id="dao-votes-container" style="color:#888;font-size:13px">読み込み中…</div>
+
+      <!-- 🏅 貢献証セクション -->
+      <div style="margin-top:36px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #2a2a2a">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:15px;font-weight:bold;color:#fbbf24">🏅 貢献証一覧</span>
+            <span id="koken-sho-count" style="font-size:11px;background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:2px 8px"></span>
+          </div>
+          <span style="font-size:11px;color:#888">ユーザーから提出された貢献証 — 確認後にEMUERを配布</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <button onclick="kokenShoSetFilter('all')"      id="ksf-all"      style="padding:4px 14px;border-radius:20px;font-size:12px;cursor:pointer;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.4);font-weight:bold">全て</button>
+          <button onclick="kokenShoSetFilter('pending')"  id="ksf-pending"  style="padding:4px 14px;border-radius:20px;font-size:12px;cursor:pointer;background:transparent;color:#888;border:1px solid #333">⏳ 未審査</button>
+          <button onclick="kokenShoSetFilter('approved')" id="ksf-approved" style="padding:4px 14px;border-radius:20px;font-size:12px;cursor:pointer;background:transparent;color:#888;border:1px solid #333">✅ 承認済み</button>
+          <button onclick="kokenShoSetFilter('rejected')" id="ksf-rejected" style="padding:4px 14px;border-radius:20px;font-size:12px;cursor:pointer;background:transparent;color:#888;border:1px solid #333">❌ 却下済み</button>
+        </div>
+        <div id="koken-sho-container" style="color:#888;font-size:13px">DAO投票タブを開くと読み込みます</div>
+      </div>
     </div>
 
     <!-- ⑤ 投票結果サブタブ -->
@@ -1286,7 +1311,7 @@ function switchVoteSubtab(tab) {
     btn.style.fontWeight = isActive ? 'bold' : 'normal';
   });
   if (tab === 'general') loadGeneralVotes();
-  if (tab === 'dao')     loadDAOVotes();
+  if (tab === 'dao')     { loadDAOVotes(); initKokenShoAdmin(); }
   if (tab === 'results') loadVoteResults();
 }
 
@@ -1643,6 +1668,180 @@ function renderAllCharts(genTopics, daoTopics, genMap, daoMap) {
   });
 }
 
+// ─── 貢献証（sp_koken_sho）管理 ──────────────────────────
+var _kokenShoInited = false;
+var _kokenShoFilter = 'all';
+var _kokenShoAllData = [];
+
+function kokenShoSetFilter(f) {
+  _kokenShoFilter = f;
+  ['all','pending','approved','rejected'].forEach(function(v) {
+    var btn = document.getElementById('ksf-' + v);
+    if (!btn) return;
+    if (v === f) {
+      btn.style.background = 'rgba(251,191,36,0.15)';
+      btn.style.color = '#fbbf24';
+      btn.style.borderColor = 'rgba(251,191,36,0.4)';
+      btn.style.fontWeight = 'bold';
+    } else {
+      btn.style.background = 'transparent';
+      btn.style.color = '#888';
+      btn.style.borderColor = '#333';
+      btn.style.fontWeight = 'normal';
+    }
+  });
+  kokenShoRenderList();
+}
+
+function kokenShoRenderList() {
+  var container = document.getElementById('koken-sho-container');
+  if (!container) return;
+  var list = _kokenShoFilter === 'all'
+    ? _kokenShoAllData
+    : _kokenShoAllData.filter(function(k) { return k.status === _kokenShoFilter; });
+
+  var countEl = document.getElementById('koken-sho-count');
+  if (countEl) {
+    var pending = _kokenShoAllData.filter(function(k){ return k.status === 'pending'; }).length;
+    countEl.textContent = pending > 0 ? '⚠️ 未審査 ' + pending + '件' : _kokenShoAllData.length + '件';
+  }
+
+  if (list.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:28px;color:#555">該当する貢献証はありません</div>';
+    return;
+  }
+
+  container.innerHTML = list.map(function(k) {
+    var statusColor = k.status === 'approved' ? '#4ec9b0' : k.status === 'rejected' ? '#f87171' : '#fbbf24';
+    var statusLabel = k.status === 'approved' ? '✅ 承認済み' : k.status === 'rejected' ? '❌ 却下' : '⏳ 未審査';
+    var mediaHtml = '';
+    if (k.mediaUrl) {
+      if (k.mediaType === 'video') {
+        mediaHtml = '<video src="' + esc(k.mediaUrl) + '" controls style="max-width:100%;border-radius:6px;margin-top:8px;max-height:200px"></video>';
+      } else {
+        mediaHtml = '<a href="' + esc(k.mediaUrl) + '" target="_blank"><img src="' + esc(k.mediaUrl) + '" style="max-width:100%;border-radius:6px;margin-top:8px;max-height:200px;object-fit:cover;display:block"></a>';
+      }
+    }
+    var actionBtns = '';
+    if (k.status === 'pending') {
+      actionBtns = '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
+        '<button onclick="kokenShoDistribute(\'' + k._id + '\',\'' + esc(k.wallet) + '\',' + (k.emuerAmount || 0) + ')" style="background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.4);border-radius:6px;padding:7px 16px;font-size:12px;font-weight:bold;cursor:pointer">💰 EMUER配布</button>' +
+        '<button onclick="kokenShoReject(\'' + k._id + '\')" style="background:rgba(244,71,71,0.1);color:#f87171;border:1px solid rgba(244,71,71,0.25);border-radius:6px;padding:7px 14px;font-size:12px;cursor:pointer">❌ 却下</button>' +
+        '<button onclick="kokenShoDelete(\'' + k._id + '\')" style="background:transparent;color:#555;border:1px solid #333;border-radius:6px;padding:7px 14px;font-size:12px;cursor:pointer">🗑 削除</button>' +
+        '</div>';
+    } else if (k.status === 'approved') {
+      actionBtns = '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
+        (k.txHash ? '<a href="https://polygonscan.com/tx/' + esc(k.txHash) + '" target="_blank" style="font-size:11px;color:#4ec9b0;border:1px solid rgba(78,201,176,0.3);border-radius:6px;padding:6px 14px;text-decoration:none">🔗 TX確認</a>' : '') +
+        '<button onclick="kokenShoDelete(\'' + k._id + '\')" style="background:transparent;color:#555;border:1px solid #333;border-radius:6px;padding:7px 14px;font-size:12px;cursor:pointer">🗑 削除</button>' +
+        '</div>';
+    }
+
+    return '<div style="background:#161616;border:1px solid ' + (k.status === 'pending' ? 'rgba(251,191,36,0.2)' : '#2a2a2a') + ';border-radius:10px;padding:16px;margin-bottom:12px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:12px">' +
+        '<div style="min-width:0">' +
+          '<div style="font-size:13px;font-weight:bold;color:#d4d4d4;margin-bottom:4px;word-break:break-word">📌 ' + esc(k.topicTitle || '（議題なし）') + '</div>' +
+          '<div style="font-size:11px;color:#888;margin-bottom:2px">👛 ' + esc(k.wallet || '不明') + '</div>' +
+          '<div style="font-size:11px;color:#666">🕐 ' + new Date(k.createdAt).toLocaleString('ja-JP') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">' +
+          '<span style="font-size:11px;font-weight:bold;color:' + statusColor + ';border:1px solid ' + statusColor + ';border-radius:20px;padding:2px 10px;white-space:nowrap">' + statusLabel + '</span>' +
+          (k.emuerAmount ? '<span style="font-size:12px;color:#fbbf24;white-space:nowrap">💰 ' + k.emuerAmount + ' EMUER</span>' : '') +
+          (k.distributedAmount ? '<span style="font-size:11px;color:#4ec9b0">✅ ' + k.distributedAmount + ' EMUER 送金済み</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div style="font-size:13px;color:#d4d4d4;line-height:1.7;white-space:pre-wrap;word-break:break-word">' + esc(k.description || '') + '</div>' +
+      mediaHtml +
+      actionBtns +
+    '</div>';
+  }).join('');
+}
+
+function initKokenShoAdmin() {
+  if (_kokenShoInited) return;
+  _kokenShoInited = true;
+  var db = window.fpAdminDB;
+  if (!db) { setTimeout(function(){ _kokenShoInited = false; initKokenShoAdmin(); }, 600); return; }
+
+  var container = document.getElementById('koken-sho-container');
+  if (container) container.innerHTML = '<div style="color:#666;font-size:13px">読み込み中…</div>';
+
+  db.collection('sp_koken_sho').orderBy('createdAt', 'desc').onSnapshot(function(snap) {
+    _kokenShoAllData = snap.docs.map(function(d) {
+      return Object.assign({ _id: d.id }, d.data());
+    });
+    kokenShoRenderList();
+  }, function(e) {
+    var container = document.getElementById('koken-sho-container');
+    if (container) container.innerHTML = '<div style="color:#f87171;font-size:13px">❌ 読み込みエラー: ' + e.message + '</div>';
+  });
+}
+
+// EMUER配布（MetaMask → EMUER転送 → Firestore記録）
+var KOKEN_EMUER_ADDRESS = '0x4418d5250Dae4b1125ADFCD5C0779B1412E4a964';
+var KOKEN_EMUER_ABI = [
+  {"inputs":[{"internalType":"address","name":"to","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"transfer","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}
+];
+
+async function kokenShoDistribute(docId, wallet, defaultAmount) {
+  if (!wallet || wallet === '不明') { fpShowToast('dao-toast', '❌ ウォレットアドレスが不明です', 'error'); return; }
+  var inputStr = prompt('配布するEMUER数を入力してください\n宛先: ' + wallet.slice(0,8) + '…' + wallet.slice(-4) + '\nデフォルト: ' + (defaultAmount || 0), defaultAmount || 0);
+  if (inputStr === null) return;
+  var sendAmount = parseFloat(inputStr);
+  if (isNaN(sendAmount) || sendAmount <= 0) { fpShowToast('dao-toast', '❌ 有効なEMUER数を入力してください', 'error'); return; }
+  if (!window.ethereum) { fpShowToast('dao-toast', '❌ MetaMaskが見つかりません。インストールして接続してください', 'error'); return; }
+  try {
+    fpShowToast('dao-toast', '⏳ MetaMask確認中…', 'success');
+    var provider = new ethers.providers.Web3Provider(window.ethereum);
+    await provider.send('eth_requestAccounts', []);
+    var signer = provider.getSigner();
+    // Polygonネットワーク確認
+    var network = await provider.getNetwork();
+    if (network.chainId !== 137) {
+      fpShowToast('dao-toast', '⚠️ Polygonネットワーク（chainId: 137）に切り替えてください', 'error');
+      return;
+    }
+    var contract = new ethers.Contract(KOKEN_EMUER_ADDRESS, KOKEN_EMUER_ABI, signer);
+    var amountWei = ethers.utils.parseUnits(String(sendAmount), 18);
+    fpShowToast('dao-toast', '⏳ トランザクション送信中…', 'success');
+    var tx = await contract.transfer(wallet, amountWei);
+    fpShowToast('dao-toast', '⏳ 承認待ち… TX: ' + tx.hash.slice(0,12) + '…', 'success');
+    await tx.wait();
+    var db = window.fpAdminDB;
+    if (db) {
+      await db.collection('sp_koken_sho').doc(docId).update({
+        status: 'approved',
+        txHash: tx.hash,
+        distributedAt: Date.now(),
+        distributedAmount: sendAmount
+      });
+    }
+    fpShowToast('dao-toast', '✅ ' + sendAmount + ' EMUER を ' + wallet.slice(0,6) + '… に送金しました！', 'success');
+  } catch(e) {
+    fpShowToast('dao-toast', '❌ 送金失敗: ' + (e.reason || e.message || String(e)), 'error');
+  }
+}
+
+async function kokenShoReject(docId) {
+  if (!confirm('この貢献証を却下しますか？')) return;
+  var db = window.fpAdminDB;
+  if (!db) return;
+  try {
+    await db.collection('sp_koken_sho').doc(docId).update({ status: 'rejected' });
+    fpShowToast('dao-toast', '❌ 却下しました', 'success');
+  } catch(e) { fpShowToast('dao-toast', '❌ エラー: ' + e.message, 'error'); }
+}
+
+async function kokenShoDelete(docId) {
+  if (!confirm('この貢献証を完全に削除しますか？この操作は取り消せません。')) return;
+  var db = window.fpAdminDB;
+  if (!db) return;
+  try {
+    await db.collection('sp_koken_sho').doc(docId).delete();
+    fpShowToast('dao-toast', '🗑 削除しました', 'success');
+  } catch(e) { fpShowToast('dao-toast', '❌ エラー: ' + e.message, 'error'); }
+}
+
 // ─── DAO議題作成（管理者専用） ────────────────────────────
 function daoAdminAddOption() {
   var list = document.getElementById('dao-new-options-list');
@@ -1690,31 +1889,34 @@ async function daoAdminCreateTopic() {
   var db = window.fpAdminDB;
   if (!db) { fpShowToast('dao-toast', '🔗 Firebase未接続です', 'error'); return; }
 
-  var title    = (document.getElementById('dao-new-title').value || '').trim();
-  var desc     = (document.getElementById('dao-new-desc').value  || '').trim();
-  var deadline = document.getElementById('dao-new-deadline').value;
-  var optEls   = document.querySelectorAll('#dao-new-options-list .dao-admin-opt');
-  var options  = Array.from(optEls).map(function(el){ return el.value.trim(); }).filter(Boolean);
+  var title      = (document.getElementById('dao-new-title').value || '').trim();
+  var desc       = (document.getElementById('dao-new-desc').value  || '').trim();
+  var deadline   = document.getElementById('dao-new-deadline').value;
+  var emuerAmount = parseInt(document.getElementById('dao-new-emuer').value) || 0;
+  var optEls     = document.querySelectorAll('#dao-new-options-list .dao-admin-opt');
+  var options    = Array.from(optEls).map(function(el){ return el.value.trim(); }).filter(Boolean);
 
   if (!title)           { fpShowToast('dao-toast', '⚠️ タイトルを入力してください', 'error'); return; }
   if (options.length < 2) { fpShowToast('dao-toast', '⚠️ 選択肢を2つ以上入力してください', 'error'); return; }
 
   var data = {
-    title:    title,
-    desc:     desc || '',
-    options:  options,
-    creator:  'admin_room1',
-    ts:       Date.now(),
-    deadline: deadline ? new Date(deadline).toISOString() : null
+    title:       title,
+    desc:        desc || '',
+    options:     options,
+    emuerAmount: emuerAmount,
+    creator:     'admin_room1',
+    ts:          Date.now(),
+    deadline:    deadline ? new Date(deadline).toISOString() : null
   };
 
   try {
     var docRef = await db.collection('sp_dao_votes_dynamic').add(data);
     fpShowToast('dao-toast', '✅ 議題「' + title + '」を作成しました（ID: ' + docRef.id + '）', 'success');
     // フォームリセット
-    document.getElementById('dao-new-title').value = '';
-    document.getElementById('dao-new-desc').value  = '';
+    document.getElementById('dao-new-title').value   = '';
+    document.getElementById('dao-new-desc').value    = '';
     document.getElementById('dao-new-deadline').value = '';
+    document.getElementById('dao-new-emuer').value   = '';
     var list = document.getElementById('dao-new-options-list');
     if (list) {
       list.innerHTML = [1,2].map(function(n){
@@ -2442,6 +2644,9 @@ function kaiensaiSaveConfig() {
     .catch(function(e) { alert('❌ 保存エラー: ' + e.message); });
 }
 </script>
+
+<!-- ethers.js for EMUER distribution -->
+<script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js" type="application/javascript"></script>
 
 <!-- Firebase Compat SDK for admin panel -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>

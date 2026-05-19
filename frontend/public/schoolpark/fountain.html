@@ -653,6 +653,18 @@ body { background:var(--bg); color:var(--text); font-family:'Zen Maru Gothic','M
       <!-- ダイナミック DAO投票（Firestoreから読み込み） -->
       <div id="fpDynamicDAOVotes"></div>
 
+      <!-- 🏅 貢献証セクション -->
+      <div id="fpKokenShoSection" style="margin-top:20px">
+        <div style="height:1px;background:rgba(251,191,36,0.15);margin-bottom:16px"></div>
+        <button onclick="fpOpenKokenShoModal()"
+          style="width:100%;background:linear-gradient(135deg,rgba(251,191,36,0.12),rgba(251,191,36,0.06));border:1px solid rgba(251,191,36,0.35);border-radius:10px;color:#fbbf24;font-size:0.84rem;font-weight:bold;padding:13px;cursor:pointer;font-family:inherit;transition:all 0.2s"
+          onmouseover="this.style.background='linear-gradient(135deg,rgba(251,191,36,0.22),rgba(251,191,36,0.12))'"
+          onmouseout="this.style.background='linear-gradient(135deg,rgba(251,191,36,0.12),rgba(251,191,36,0.06))'">
+          📜 貢献証を出す！
+        </button>
+        <div style="font-size:0.67rem;color:var(--text2);text-align:center;margin-top:7px">SchoolParkへの貢献・活動を証明して実EMUERを受け取ろう</div>
+      </div>
+
       <!-- 👑 議題作成フォーム（管理者のみ表示） -->
       <div id="fpDAOCreateSection" class="fp-vote-card" style="display:none;margin-top:18px;border-color:rgba(251,191,36,0.3)">
         <div class="fp-dao-create-head">
@@ -2025,7 +2037,185 @@ function fpWaitFirebase() {
 }
 fpWaitFirebase();
 // 一般投票済みチェックはfpWaitFirebase内で処理
+
+// ─── 貢献証（sp_koken_sho） ──────────────────────────────
+let _kokenTopics = [];
+let _kokenFile   = null;
+let _kokenFileUrl = null;
+
+function fpKokenToast(msg, isError) {
+  const t = document.getElementById('koken-toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.style.background = isError ? 'rgba(244,71,71,0.15)' : 'rgba(251,191,36,0.12)';
+  t.style.border = isError ? '1px solid rgba(244,71,71,0.3)' : '1px solid rgba(251,191,36,0.3)';
+  t.style.color  = isError ? '#f87171' : '#fbbf24';
+  t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 4000);
+}
+
+function fpOpenKokenShoModal() {
+  if (!fpHasNFT) { fpToast("🔒 Emu有料ユーザーのみ貢献証を提出できます", "rgba(239,68,68,0.9)"); return; }
+  if (!fpWallet) { fpToast("⚠️ ウォレット接続が必要です", "rgba(249,115,22,0.9)"); return; }
+  _kokenFile = null; _kokenFileUrl = null;
+  document.getElementById('fpKokenDesc').value = '';
+  document.getElementById('fpKokenMediaPreview').innerHTML = '';
+  document.getElementById('fpKokenShoModal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  fpLoadKokenTopics();
+}
+
+function fpCloseKokenShoModal() {
+  document.getElementById('fpKokenShoModal').style.display = 'none';
+  document.body.style.overflow = '';
+  _kokenFile = null; _kokenFileUrl = null;
+}
+
+async function fpLoadKokenTopics() {
+  const sel = document.getElementById('fpKokenTopicSelect');
+  if (!sel || !fpDB || !fpFBLib) return;
+  try {
+    const snap = await fpFBLib.getDocs(
+      fpFBLib.query(fpFBLib.collection(fpDB, 'sp_dao_votes_dynamic'), fpFBLib.orderBy('ts','desc'))
+    );
+    _kokenTopics = snap.docs.map(d => ({ id: d.id, title: d.data().title, emuerAmount: d.data().emuerAmount || 0 }));
+    sel.innerHTML = '<option value="">— 議題を選択（または自由記述）—</option>' +
+      _kokenTopics.map(t =>
+        `<option value="${t.id}">${_esc(t.title)}${t.emuerAmount ? ' 💰' + t.emuerAmount + 'EMUER' : ''}</option>`
+      ).join('') +
+      '<option value="other">その他（自由活動）</option>';
+  } catch(e) {
+    if (sel) sel.innerHTML = '<option value="other">その他（自由活動）</option>';
+  }
+}
+
+function fpKokenOnFileChange(input) {
+  const file = input.files[0];
+  if (!file) return;
+  _kokenFile    = file;
+  _kokenFileUrl = null;
+  const isVideo = file.type.startsWith('video/');
+  const objUrl  = URL.createObjectURL(file);
+  document.getElementById('fpKokenMediaPreview').innerHTML = isVideo
+    ? `<video src="${objUrl}" controls style="max-width:100%;border-radius:8px;margin-bottom:6px;max-height:160px"></video><div style="font-size:0.7rem;color:var(--text2)">${_esc(file.name)}</div>`
+    : `<img src="${objUrl}" style="max-width:100%;border-radius:8px;margin-bottom:6px;max-height:160px;object-fit:cover;display:block"><div style="font-size:0.7rem;color:var(--text2)">${_esc(file.name)}</div>`;
+}
+
+function fpKokenUseUrl() {
+  const url = prompt('画像または動画のURLを入力してください:');
+  if (!url || !url.trim()) return;
+  _kokenFileUrl = url.trim();
+  _kokenFile    = null;
+  const isVideo = /\.(mp4|webm|mov)/i.test(_kokenFileUrl);
+  document.getElementById('fpKokenMediaPreview').innerHTML = isVideo
+    ? `<video src="${_esc(_kokenFileUrl)}" controls style="max-width:100%;border-radius:8px;margin-bottom:6px;max-height:160px"></video>`
+    : `<img src="${_esc(_kokenFileUrl)}" style="max-width:100%;border-radius:8px;margin-bottom:6px;max-height:160px;object-fit:cover;display:block">`;
+}
+
+async function fpSubmitKokenSho() {
+  if (!fpHasNFT || !fpWallet) { fpKokenToast('🔒 接続確認が必要です', true); return; }
+  if (!fpDB || !fpFBLib) { fpKokenToast('⚠️ Firebase接続中…', true); return; }
+
+  const desc = (document.getElementById('fpKokenDesc').value || '').trim();
+  if (!desc) { fpKokenToast('⚠️ 活動内容を入力してください', true); return; }
+
+  const topicId = document.getElementById('fpKokenTopicSelect').value;
+  const topicData = _kokenTopics.find(t => t.id === topicId);
+  const topicTitle = topicId === 'other' ? 'その他（自由活動）'
+    : topicData ? topicData.title : '（議題未選択）';
+  const emuerAmount = topicData ? topicData.emuerAmount : 0;
+
+  const btn = document.getElementById('fpKokenSubmitBtn');
+  btn.disabled = true; btn.textContent = '⏳ 送信中…';
+
+  let mediaUrl  = _kokenFileUrl || null;
+  let mediaType = null;
+
+  // Firebase Storage へアップロード
+  if (_kokenFile && window.fpStorage && window.fpStorageLib) {
+    try {
+      const lib = window.fpStorageLib;
+      const ext  = _kokenFile.name.split('.').pop() || 'bin';
+      const path = `koken_sho/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const sRef  = lib.ref(window.fpStorage, path);
+      const snap  = await lib.uploadBytes(sRef, _kokenFile);
+      mediaUrl  = await lib.getDownloadURL(snap.ref);
+      mediaType = _kokenFile.type.startsWith('video/') ? 'video' : 'image';
+    } catch(e) {
+      console.warn('Storage upload failed:', e);
+    }
+  } else if (_kokenFileUrl) {
+    mediaType = /\.(mp4|webm|mov)/i.test(_kokenFileUrl) ? 'video' : 'image';
+  }
+
+  try {
+    await fpFBLib.addDoc(fpFBLib.collection(fpDB, 'sp_koken_sho'), {
+      topicId:    topicId   || null,
+      topicTitle: topicTitle,
+      wallet:     fpWallet,
+      description: desc,
+      mediaUrl:   mediaUrl,
+      mediaType:  mediaType,
+      createdAt:  Date.now(),
+      status:     'pending',
+      emuerAmount: emuerAmount
+    });
+    fpToast("📜 貢献証を提出しました！管理者確認後にEMUERが配布されます", "rgba(251,191,36,0.92)");
+    fpCloseKokenShoModal();
+  } catch(e) {
+    fpKokenToast('❌ エラー: ' + e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '📜 貢献証を提出する';
+  }
+}
 </script>
+
+<!-- 🏅 貢献証モーダル -->
+<div id="fpKokenShoModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9000;overflow-y:auto;padding:20px 16px">
+  <div style="max-width:480px;margin:36px auto 60px;background:#1a1a1a;border:1px solid rgba(251,191,36,0.3);border-radius:16px;padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div style="font-size:1rem;font-weight:bold;color:#fbbf24">📜 貢献証を出す</div>
+      <button onclick="fpCloseKokenShoModal()" style="background:transparent;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="font-size:0.74rem;color:var(--text2);margin-bottom:18px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.15);border-radius:8px;padding:11px;line-height:1.7">
+      🏛️ SchoolParkに対して行った活動・貢献の証拠を提出してください。<br>
+      管理者が確認後、実EMUERをウォレットに配布します。
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:0.72rem;color:var(--text2);display:block;margin-bottom:7px">対象の議題 <span style="color:#f87171">*</span></label>
+      <select id="fpKokenTopicSelect"
+        style="width:100%;background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:8px;padding:9px 12px;font-size:0.8rem;font-family:inherit;outline:none;box-sizing:border-box">
+        <option value="">読み込み中…</option>
+      </select>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:0.72rem;color:var(--text2);display:block;margin-bottom:7px">活動内容・貢献の説明 <span style="color:#f87171">*</span></label>
+      <textarea id="fpKokenDesc" maxlength="500" rows="5"
+        placeholder="どのような活動・貢献をしたか、具体的に記載してください&#10;&#10;例：Twitter/Xで「SchoolPark 5/20 開園！」と投稿してリポスト10件獲得しました。..."
+        style="width:100%;background:#0f0f0f;color:#d4d4d4;border:1px solid #333;border-radius:8px;padding:9px 12px;font-size:0.8rem;font-family:inherit;outline:none;resize:vertical;box-sizing:border-box;line-height:1.65"></textarea>
+    </div>
+    <div style="margin-bottom:18px">
+      <label style="font-size:0.72rem;color:var(--text2);display:block;margin-bottom:7px">証拠画像・動画・スクリーンショット（任意）</label>
+      <div id="fpKokenMediaPreview" style="margin-bottom:8px"></div>
+      <input type="file" id="fpKokenFile" accept="image/*,video/*" style="display:none" onchange="fpKokenOnFileChange(this)">
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('fpKokenFile').click()"
+          style="flex:1;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;color:var(--text2);padding:9px;font-size:0.76rem;cursor:pointer;font-family:inherit">
+          📁 ファイルを選択
+        </button>
+        <button onclick="fpKokenUseUrl()"
+          style="flex:1;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;color:var(--text2);padding:9px;font-size:0.76rem;cursor:pointer;font-family:inherit">
+          🔗 URLを入力
+        </button>
+      </div>
+    </div>
+    <button id="fpKokenSubmitBtn" onclick="fpSubmitKokenSho()"
+      style="width:100%;background:linear-gradient(135deg,rgba(251,191,36,0.25),rgba(251,191,36,0.12));border:1px solid rgba(251,191,36,0.5);border-radius:10px;color:#fbbf24;font-size:0.87rem;font-weight:bold;padding:13px;cursor:pointer;font-family:inherit">
+      📜 貢献証を提出する
+    </button>
+    <div id="koken-toast" style="display:none;margin-top:10px;padding:9px 12px;border-radius:8px;font-size:0.78rem;text-align:center"></div>
+  </div>
+</div>
 
 <!-- Firebase module -->
 <script type="module">
@@ -2035,6 +2225,7 @@ import {
   onSnapshot, doc, updateDoc, setDoc, where, getDoc, increment, deleteDoc, limit
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getStorage, ref as fsStorageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
@@ -2060,6 +2251,8 @@ onAuthStateChanged(auth, user => {
 
 window.fpDB    = db;
 window.fpFBLib = { collection, addDoc, getDocs, query, orderBy, onSnapshot, doc, updateDoc, setDoc, where, getDoc, increment, deleteDoc, limit };
+window.fpStorage    = getStorage(app);
+window.fpStorageLib = { ref: fsStorageRef, uploadBytes, getDownloadURL };
 
 // ページ読み込み完了後すぐにリアルタイム監視を開始（参加前でも議題一覧を表示 & 管理画面の作成が即反映）
 fpInitDynamicDAOVotes();
