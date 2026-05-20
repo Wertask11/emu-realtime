@@ -667,7 +667,31 @@ function randomAnnounce(){
 }
 
 // ── 切符システム ──
-let ticketState=null; // {type:'single'|'count'|'pass12'|'pass24', count:N, expiry:ms}
+const TICKET_LS_KEY = 'sp_station2_ticket';
+
+// localStorage から復元
+function _loadTicketState(){
+  try{
+    const raw=localStorage.getItem(TICKET_LS_KEY);
+    if(!raw)return null;
+    const s=JSON.parse(raw);
+    // 有効期限切れのpassは破棄
+    if((s.type==='pass12'||s.type==='pass24')&&Date.now()>=s.expiry)return null;
+    // 残回数0以下のcountは破棄
+    if((s.type==='single'||s.type==='count')&&s.count<=0)return null;
+    return s;
+  }catch(e){return null;}
+}
+
+// localStorage に保存
+function _saveTicketState(s){
+  try{
+    if(s===null){localStorage.removeItem(TICKET_LS_KEY);}
+    else{localStorage.setItem(TICKET_LS_KEY,JSON.stringify(s));}
+  }catch(e){}
+}
+
+let ticketState=_loadTicketState(); // 起動時にlocalStorageから復元
 
 function hasValidTicket(){
   if(!ticketState)return false;
@@ -679,10 +703,11 @@ function hasValidTicket(){
 // 切符を1回消費する
 function useTicket(){
   if(!ticketState)return false;
-  if(ticketState.type==='single'){ticketState=null;return true;}
+  if(ticketState.type==='single'){ticketState=null;_saveTicketState(null);return true;}
   if(ticketState.type==='count'){
     ticketState.count--;
-    if(ticketState.count<=0)ticketState=null;
+    if(ticketState.count<=0){ticketState=null;_saveTicketState(null);}
+    else{_saveTicketState(ticketState);}
     return true;
   }
   if(ticketState.type==='pass12'||ticketState.type==='pass24'){
@@ -697,6 +722,7 @@ function activateTicket(fee,label,type,count){
   else if(type==='count')ticketState={type:'count',count:count};
   else if(type==='pass12')ticketState={type:'pass12',expiry:now+12*3600*1000};
   else if(type==='pass24')ticketState={type:'pass24',expiry:now+24*3600*1000};
+  _saveTicketState(ticketState); // ← localStorageに保存
   updateTicketUI();
   showToast("🎫 "+label+"の切符を購入しました！");
   speak(label+"の切符をご購入いただきました。ありがとうございます。良い旅を！");
@@ -788,7 +814,19 @@ function showToast(msg){const t=document.getElementById("toast");t.textContent=m
 // ── 初期化 ──
 window.addEventListener("DOMContentLoaded",()=>{
   checkSchedule();
-  setTimeout(()=>showToast("🚇 地下ホームへようこそ！切符売り場で切符を購入しよう"),1000);
+  updateTicketUI(); // 保存済み切符をUIに反映
+  if(hasValidTicket()){
+    let msg="🎫 切符あり：";
+    if(ticketState.type==='count')msg+="残り"+ticketState.count+"回";
+    else if(ticketState.type==='single')msg+="1回乗車券";
+    else if(ticketState.type==='pass12'||ticketState.type==='pass24'){
+      const rem=Math.ceil((ticketState.expiry-Date.now())/60000);
+      msg+="乗り放題 残り"+rem+"分";
+    }
+    setTimeout(()=>showToast(msg),1000);
+  }else{
+    setTimeout(()=>showToast("🚇 地下ホームへようこそ！切符売り場で切符を購入しよう"),1000);
+  }
 });
 
 function goBack(){window.top.postMessage({type:"spContentClose"},"*");}
