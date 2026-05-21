@@ -1503,6 +1503,7 @@ function addToCart(id, name, emoji, price, shop) {
   if (ex) ex.qty++; else cart.push({id,name,emoji,price,shop,qty:1});
   saveCart(); updateCartBadge(); bounceCart();
   showToast(`${name} をバッグに追加しました`, 'success');
+  window.top.postMessage({ type:'spActivityLog', logType:'shop', icon:'🛍️', title:'ショッピングモールでカートに追加', detail: `${emoji}${name}（${price.toLocaleString()} EMUER）` }, '*');
   if (currentTab === 'bag') renderBag();
 }
 
@@ -1590,9 +1591,11 @@ function purchase() {
   /* [MIGRATE] 購入処理: console.log → Firestore sp_shopping_orders に addDoc */
   const order = { items:[...cart], total:cart.reduce((s,i)=>s+i.price*i.qty,0), timestamp:new Date().toISOString() };
   console.log('[MIGRATE] Order:', order);
+  const _purchaseTotal = order.total;
   cart = []; saveCart(); updateCartBadge(); renderBag();
   launchPetals();
   showToast('✦ ご購入ありがとうございます', 'success');
+  window.top.postMessage({ type:'spActivityLog', logType:'shop', icon:'🧾', title:'ショッピングモールで購入しました', detail: `合計 ${_purchaseTotal.toLocaleString()} EMUER` }, '*');
 }
 
 /* ═══════════════════════
