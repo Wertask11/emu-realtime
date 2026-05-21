@@ -321,6 +321,68 @@
 .spmap-brand-sub {
   font-size:0.48rem; font-weight:700; color:#8B6914; letter-spacing:0.18em; text-transform:uppercase;
 }
+/* お知らせブランドボタン */
+.spmap-brand-btn {
+  background:none; border:none; padding:0; cursor:pointer; text-align:left;
+  display:flex; flex-direction:column; position:relative;
+  border-radius:4px; transition:opacity 0.15s;
+}
+.spmap-brand-btn:hover .spmap-brand-name { color:#FFD166; }
+/* 未読バッジ */
+.sp-notif-badge {
+  position:absolute; top:-5px; right:-12px;
+  background:#ef4444; color:#fff; border-radius:50%;
+  min-width:16px; height:16px; font-size:9px; font-weight:800;
+  display:none; align-items:center; justify-content:center;
+  line-height:1; padding:0 3px;
+  border:2px solid #0a0c14; pointer-events:none;
+}
+/* お知らせパネル */
+#spNotifPanel {
+  position:absolute; top:100%; left:0; width:360px; max-width:95vw;
+  max-height:calc(100vh - 120px); z-index:10100;
+  background:#0f111a; border:1px solid rgba(212,168,67,0.35);
+  border-top:none; border-radius:0 0 12px 12px;
+  overflow-y:auto; display:none; flex-direction:column;
+  box-shadow:4px 12px 40px rgba(0,0,0,0.8);
+}
+.spn-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 14px 10px; border-bottom:1px solid rgba(255,255,255,0.07);
+  position:sticky; top:0; background:#0f111a; z-index:1;
+}
+.spn-header-title { font-size:0.88rem; font-weight:700; color:#D4A843; }
+.spn-actions { display:flex; gap:8px; align-items:center; }
+.spn-read-all { font-size:0.72rem; color:#888; cursor:pointer; padding:2px 8px; border-radius:10px; border:1px solid #333; background:none; }
+.spn-read-all:hover { color:#D4A843; border-color:#D4A843; }
+.spn-close { background:none; border:none; color:#666; cursor:pointer; font-size:1rem; padding:2px 6px; }
+.spn-close:hover { color:#d4d4d4; }
+.spn-item {
+  padding:11px 14px; border-bottom:1px solid rgba(255,255,255,0.05);
+  display:flex; gap:10px; align-items:flex-start;
+  transition:background 0.15s; position:relative; cursor:default;
+}
+.spn-item:hover { background:rgba(255,255,255,0.03); }
+.spn-item.unread { background:rgba(212,168,67,0.06); }
+.spn-item.unread::before {
+  content:''; position:absolute; left:0; top:10px; bottom:10px;
+  width:3px; background:#D4A843; border-radius:0 2px 2px 0;
+}
+.spn-icon { font-size:1.3rem; line-height:1; flex-shrink:0; margin-top:2px; }
+.spn-content { flex:1; min-width:0; }
+.spn-title { font-size:0.82rem; font-weight:600; color:#d4d4d4; margin-bottom:2px; line-height:1.4; }
+.spn-body { font-size:0.75rem; color:#888; line-height:1.5; margin-bottom:5px; }
+.spn-footer { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.spn-time { font-size:0.68rem; color:#555; }
+.spn-goto-btn {
+  font-size:0.7rem; padding:3px 10px; border-radius:20px;
+  background:rgba(212,168,67,0.15); color:#D4A843;
+  border:1px solid rgba(212,168,67,0.3); cursor:pointer;
+  transition:background 0.15s; white-space:nowrap;
+}
+.spn-goto-btn:hover { background:rgba(212,168,67,0.28); }
+.spn-empty { text-align:center; padding:36px 16px; color:#555; font-size:0.82rem; }
+.spn-loading { text-align:center; padding:24px; color:#666; font-size:0.82rem; }
 .spmap-nav-links { display:flex; flex:1; overflow:hidden; }
 /* コマンドバー */
 .spmap-cmd-wrap { display:flex; align-items:center; margin:0 6px; flex-shrink:0; }
@@ -3136,9 +3198,23 @@ body.paypay-mode #pp-post-fab {
 
   <!-- Top Navigation -->
   <nav class="spmap-nav">
-    <div class="spmap-brand">
-      <div class="spmap-brand-name">SchoolPark</div>
-      <div class="spmap-brand-sub">Interactive Park Map</div>
+    <div class="spmap-brand" style="position:relative;">
+      <button class="spmap-brand-btn" onclick="toggleSpNotifPanel()" title="お知らせを確認">
+        <div class="spmap-brand-name">SchoolPark</div>
+        <div class="spmap-brand-sub">Interactive Park Map</div>
+        <span class="sp-notif-badge" id="spNotifBadge"></span>
+      </button>
+      <!-- お知らせパネル -->
+      <div id="spNotifPanel" style="display:none;flex-direction:column;">
+        <div class="spn-header">
+          <span class="spn-header-title">🔔 お知らせ</span>
+          <div class="spn-actions">
+            <button class="spn-read-all" onclick="spMarkAllRead()">すべて既読</button>
+            <button class="spn-close" onclick="closeSpNotifPanel()">✕</button>
+          </div>
+        </div>
+        <div id="spNotifList"><div class="spn-loading">読み込み中…</div></div>
+      </div>
     </div>
     <div class="spmap-nav-links">
       <span class="spmap-nav-link" onclick="closeSpMap()">Emu</span>
@@ -17150,6 +17226,177 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ロゴにタップ切り替えを設定（既にonclickで設定済みのため追記不要）
   // ※ヘッダーのlogoタグに onclick="toggleDesignMode(); return false;" を付けた
+});
+
+// ════════════════════════════════════════
+// SchoolPark お知らせシステム
+// ════════════════════════════════════════
+const _SP_NOTIF_API = 'https://emu-realtime.onrender.com';
+let _spNotifData    = [];
+let _spNotifLoaded  = false;
+
+function _spNotifAddress() {
+  return (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+}
+
+function _spNotifTimeAgo(isoStr) {
+  if (!isoStr) return '';
+  const diff = Date.now() - new Date(isoStr).getTime();
+  if (diff < 60000)    return 'たった今';
+  if (diff < 3600000)  return Math.floor(diff / 60000) + '分前';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + '時間前';
+  return Math.floor(diff / 86400000) + '日前';
+}
+
+async function loadSpNotifications() {
+  const address = _spNotifAddress();
+  const url = `${_SP_NOTIF_API}/api/sp/notifications?limit=20${address ? '&address=' + encodeURIComponent(address) : ''}`;
+  try {
+    const r = await fetch(url);
+    const data = await r.json();
+    _spNotifData   = Array.isArray(data) ? data : [];
+    _spNotifLoaded = true;
+    _renderSpNotifBadge();
+  } catch (e) {
+    _spNotifData   = [];
+    _spNotifLoaded = true;
+  }
+}
+
+function _renderSpNotifBadge() {
+  const badge = document.getElementById('spNotifBadge');
+  if (!badge) return;
+  const unread = _spNotifData.filter(n => !n.isRead).length;
+  if (unread > 0) {
+    badge.textContent  = unread > 9 ? '9+' : String(unread);
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function _renderSpNotifList() {
+  const container = document.getElementById('spNotifList');
+  if (!container) return;
+  if (!_spNotifLoaded) {
+    container.innerHTML = '<div class="spn-loading">📨 読み込み中…</div>';
+    return;
+  }
+  if (!_spNotifData.length) {
+    container.innerHTML = '<div class="spn-empty">📭 お知らせはありません</div>';
+    return;
+  }
+  container.innerHTML = _spNotifData.map((n, i) => {
+    const gotoBtn = n.link
+      ? `<button class="spn-goto-btn" onclick="spNotifGoto(${i})">見に行く →</button>`
+      : '';
+    return `<div class="spn-item ${n.isRead ? '' : 'unread'}" id="spni-${n.id}">
+      <div class="spn-icon">${n.icon || '📢'}</div>
+      <div class="spn-content">
+        <div class="spn-title">${n.title}</div>
+        ${n.body ? `<div class="spn-body">${n.body}</div>` : ''}
+        <div class="spn-footer">
+          <span class="spn-time">${_spNotifTimeAgo(n.createdAt)}</span>
+          ${gotoBtn}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleSpNotifPanel() {
+  const panel = document.getElementById('spNotifPanel');
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none' && panel.style.display !== '';
+  if (isOpen) {
+    panel.style.display = 'none';
+  } else {
+    panel.style.display = 'flex';
+    if (!_spNotifLoaded) {
+      _renderSpNotifList(); // ローディング表示
+      loadSpNotifications().then(_renderSpNotifList);
+    } else {
+      _renderSpNotifList();
+    }
+  }
+}
+
+function closeSpNotifPanel() {
+  const panel = document.getElementById('spNotifPanel');
+  if (panel) panel.style.display = 'none';
+}
+
+// パネル外クリックで閉じる
+document.addEventListener('click', e => {
+  const panel = document.getElementById('spNotifPanel');
+  if (!panel || panel.style.display === 'none') return;
+  const brand = document.querySelector('.spmap-brand');
+  if (brand && !brand.contains(e.target)) closeSpNotifPanel();
+});
+
+async function spMarkRead(notifId) {
+  const address = _spNotifAddress();
+  const n = _spNotifData.find(x => x.id === notifId);
+  if (!n || n.isRead) return;
+  n.isRead = true;
+  _renderSpNotifBadge();
+  _renderSpNotifList();
+  if (!address) return;
+  try {
+    await fetch(`${_SP_NOTIF_API}/api/sp/notifications/${notifId}/read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address })
+    });
+  } catch (e) {}
+}
+
+async function spMarkAllRead() {
+  _spNotifData.forEach(n => { n.isRead = true; });
+  _renderSpNotifBadge();
+  _renderSpNotifList();
+  const address = _spNotifAddress();
+  if (!address) return;
+  try {
+    await fetch(`${_SP_NOTIF_API}/api/sp/notifications/read-all`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address })
+    });
+  } catch (e) {}
+}
+
+function spNotifGoto(idx) {
+  const n = _spNotifData[idx];
+  if (!n || !n.link) return;
+  spMarkRead(n.id);
+  closeSpNotifPanel();
+  // POIを検索してEMUER消費込みでナビ
+  const poi = (window.SP_POIS || []).find(p => p.page === n.link);
+  if (poi && typeof gatedOpen === 'function') {
+    gatedOpen(poi.id, () => openSpContent(n.link));
+  } else if (typeof openSpContent === 'function') {
+    openSpContent(n.link);
+  } else {
+    window.open(n.link, '_blank');
+  }
+}
+
+// SchoolParkマップを開いたときにバッジをロード（DOMContentLoadedで関数パッチ）
+document.addEventListener('DOMContentLoaded', () => {
+  const _orig = typeof openSpMap === 'function' ? openSpMap : null;
+  if (_orig) {
+    // グローバルスコープの openSpMap をラップ
+    window._openSpMapPatched = true;
+    const _patchedOpenSpMap = function(gate) {
+      _orig(gate);
+      if (!_spNotifLoaded) loadSpNotifications();
+    };
+    // openSpMap は function declaration なのでグローバルに上書き
+    try { window.openSpMap = _patchedOpenSpMap; } catch(e) {}
+  }
+  // 初回ロード（バッジをすぐ表示するため少し遅延）
+  setTimeout(loadSpNotifications, 3000);
 });
 
 </script>

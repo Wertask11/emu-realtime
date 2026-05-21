@@ -788,7 +788,16 @@ app.post("/api/room1/direct-add", async (req, res) => {
     };
 
     const docRef = await db.collection(ROOM1_CONTENTS_COL).add(newItem);
+    _room1Cache.data = null; // キャッシュ無効化
     console.log(`✅ Direct add: ${newItem.title} (${docRef.id})`);
+    // 自動お知らせ追加
+    _spAddNotification({
+      title: `📚 学習コンテンツが追加されました`,
+      body: `「${newItem.title}」が学習ルームに追加されました。`,
+      link: "/schoolpark/north-library.html",
+      contentType: "room1",
+      icon: "📚"
+    });
     res.json({ success: true, item: { id: docRef.id, ...newItem } });
 
   } catch (err) {
@@ -872,8 +881,16 @@ app.post("/api/room1/approve/:id", async (req, res) => {
 
     await db.collection(ROOM1_CONTENTS_COL).add(newItem);
     await db.collection(ROOM1_SUBMISSIONS_COL).doc(req.params.id).update({ status: "done" });
-
+    _room1Cache.data = null; // キャッシュ無効化
     console.log(`✅ Approved & added to contents: ${newItem.title}`);
+    // 自動お知らせ追加
+    _spAddNotification({
+      title: `📚 学習コンテンツが追加されました`,
+      body: `「${newItem.title}」が学習ルームに追加されました。`,
+      link: "/schoolpark/north-library.html",
+      contentType: "room1",
+      icon: "📚"
+    });
     res.json({ success: true });
 
   } catch (err) {
@@ -1274,6 +1291,117 @@ io.on("connection", (socket) => {
     io.emit("room3 message", message);
   });
 });
+
+// =====================
+// SchoolPark お知らせ API
+// =====================
+const SP_NOTIFICATIONS_COL = "sp_notifications";
+
+// GET /api/sp/notifications?limit=20&address=0x...
+app.get("/api/sp/notifications", async (req, res) => {
+  if (!db) return res.json([]);
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+    const address = (req.query.address || "").toLowerCase();
+    const snap = await db.collection(SP_NOTIFICATIONS_COL)
+      .orderBy("createdAt", "desc")
+      .limit(limit)
+      .get();
+    const items = snap.docs.map(doc => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        title: d.title || "",
+        body: d.body || "",
+        link: d.link || "",
+        contentType: d.contentType || "general",
+        icon: d.icon || "📢",
+        createdAt: d.createdAt?.toDate?.()?.toISOString() || d.createdAt || new Date().toISOString(),
+        isRead: address ? (d.readBy || []).includes(address) : false
+      };
+    });
+    return res.json(items);
+  } catch (err) {
+    console.error("sp/notifications get error:", err.message);
+    return res.json([]);
+  }
+});
+
+// POST /api/sp/notifications （管理者専用）
+app.post("/api/sp/notifications", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Firestore未接続" });
+  const { title, body, link, contentType, icon } = req.body;
+  if (!title) return res.status(400).json({ error: "title is required" });
+  try {
+    const ref = await db.collection(SP_NOTIFICATIONS_COL).add({
+      title,
+      body: body || "",
+      link: link || "",
+      contentType: contentType || "general",
+      icon: icon || "📢",
+      readBy: [],
+      createdAt: new Date()
+    });
+    console.log(`✅ SP通知追加: ${ref.id} "${title}"`);
+    return res.json({ success: true, id: ref.id });
+  } catch (err) {
+    console.error("sp/notifications post error:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/sp/notifications/read-all （全既読）
+app.post("/api/sp/notifications/read-all", async (req, res) => {
+  const address = (req.body.address || "").toLowerCase();
+  if (!address || !db) return res.json({ success: true });
+  try {
+    const admin = require("firebase-admin");
+    const snap = await db.collection(SP_NOTIFICATIONS_COL)
+      .orderBy("createdAt", "desc").limit(50).get();
+    const batch = db.batch();
+    snap.docs.forEach(doc => {
+      if (!(doc.data().readBy || []).includes(address)) {
+        batch.update(doc.ref, { readBy: admin.firestore.FieldValue.arrayUnion(address) });
+      }
+    });
+    await batch.commit();
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("sp/notifications read-all error:", err.message);
+    return res.json({ success: true });
+  }
+});
+
+// POST /api/sp/notifications/:id/read （1件既読）
+app.post("/api/sp/notifications/:id/read", async (req, res) => {
+  const address = (req.body.address || "").toLowerCase();
+  if (!address || !db) return res.json({ success: true });
+  try {
+    const admin = require("firebase-admin");
+    await db.collection(SP_NOTIFICATIONS_COL).doc(req.params.id).update({
+      readBy: admin.firestore.FieldValue.arrayUnion(address)
+    });
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("sp/notifications read error:", err.message);
+    return res.json({ success: true }); // 非クリティカル
+  }
+});
+
+// 内部ヘルパー: お知らせ自動追加
+async function _spAddNotification({ title, body, link, contentType, icon }) {
+  if (!db) return;
+  try {
+    await db.collection(SP_NOTIFICATIONS_COL).add({
+      title, body: body || "", link: link || "",
+      contentType: contentType || "general", icon: icon || "📢",
+      readBy: [], createdAt: new Date()
+    });
+    console.log(`📢 SP自動通知: "${title}"`);
+  } catch (e) {
+    console.warn("SP通知追加失敗:", e.message);
+  }
+}
 
 // =====================
 // Start server

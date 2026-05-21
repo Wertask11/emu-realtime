@@ -138,6 +138,7 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
     <button class="tab-btn" onclick="switchTab('museum-sp');mspLoad()">🏛️ 博物館展示管理</button>
     <button class="tab-btn" onclick="switchTab('lab-reports');labLoad()">🔬 研究レポート</button>
     <button class="tab-btn" onclick="switchTab('kaiensai');kaiensaiLoad()" style="color:#ff6b35;">🎪 開園祭</button>
+    <button class="tab-btn" onclick="switchTab('notifications');notifLoad()" style="color:#f59e0b;">🔔 お知らせ</button>
     <button class="tab-btn" onclick="deleteAllContents()" style="margin-left:auto;color:#f44747;border-bottom-color:transparent;">🗑️ コンテンツ全削除</button>
   </div>
 
@@ -789,7 +790,7 @@ var themeData = {
 };
 
 // ─── タブ ───
-const TAB_IDS = ['direct','inbox','fountain-board','fountain-event','dao-votes','facility-reports','museum-sp','lab-reports','kaiensai'];
+const TAB_IDS = ['direct','inbox','fountain-board','fountain-event','dao-votes','facility-reports','museum-sp','lab-reports','kaiensai','notifications'];
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(function(btn, i) {
     btn.classList.toggle('active', TAB_IDS[i] === tab);
@@ -2481,6 +2482,155 @@ async function deleteAllContents() {
     }
   } catch (err) {
     alert('❌ エラー: ' + err.message);
+  }
+}
+</script>
+
+<!-- ── お知らせタブ ── -->
+<div id="tab-notifications" class="tab-content">
+  <div class="direct-form">
+    <h2 style="color:#f59e0b;">🔔 お知らせを送信</h2>
+    <div class="form-field" style="margin-bottom:14px">
+      <label>タイトル *</label>
+      <input type="text" id="notif-title" placeholder="例：図書館に新しい推薦図書が追加されました">
+    </div>
+    <div class="form-field" style="margin-bottom:14px">
+      <label>本文（任意）</label>
+      <textarea id="notif-body" rows="3" placeholder="詳細を入力…（省略可）"></textarea>
+    </div>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr 80px; margin-bottom:14px">
+      <div class="form-field">
+        <label>リンク先URL（任意）</label>
+        <select id="notif-link-select" onchange="notifOnLinkSelect(this.value)">
+          <option value="">— リンクなし —</option>
+          <option value="/schoolpark/north-library.html">📚 図書館</option>
+          <option value="/schoolpark/north-bookstore.html">📖 本屋（推薦図書）</option>
+          <option value="/schoolpark/north-museum.html">🎨 美術館</option>
+          <option value="/schoolpark/north-lab.html">🔬 研究所</option>
+          <option value="/schoolpark/north-history.html">🏛️ 博物館</option>
+          <option value="/schoolpark/fountain.html">⛲ 噴水広場</option>
+          <option value="/schoolpark/east-shopping.html">🛍️ ショッピング</option>
+          <option value="custom">✏️ 直接入力…</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>カスタムURL</label>
+        <input type="text" id="notif-link" placeholder="/schoolpark/..." style="display:none">
+        <input type="text" id="notif-link-display" placeholder="上で選択すると自動入力" disabled>
+      </div>
+      <div class="form-field">
+        <label>アイコン</label>
+        <input type="text" id="notif-icon" value="📢" maxlength="4" style="text-align:center;font-size:1.2rem;">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-add" onclick="notifSend()" id="notif-send-btn" style="background:#f59e0b;">🔔 お知らせを送信</button>
+    </div>
+    <div class="toast" id="notif-toast"></div>
+  </div>
+
+  <!-- 送信済み一覧 -->
+  <div style="margin-top:20px">
+    <h2 style="font-size:14px;color:#f59e0b;margin-bottom:12px;">📋 送信済みお知らせ一覧</h2>
+    <div id="notif-list" style="color:#888;font-size:13px">読み込み中…</div>
+  </div>
+</div>
+
+<script>
+var NOTIF_API_BASE = 'https://emu-realtime.onrender.com';
+
+function notifOnLinkSelect(val) {
+  var customInput    = document.getElementById('notif-link');
+  var displayInput   = document.getElementById('notif-link-display');
+  if (val === 'custom') {
+    customInput.style.display = '';
+    displayInput.style.display = 'none';
+    customInput.focus();
+  } else {
+    customInput.style.display = 'none';
+    displayInput.style.display = '';
+    displayInput.value = val || '';
+  }
+}
+
+function notifGetLink() {
+  var sel = document.getElementById('notif-link-select').value;
+  if (sel === 'custom') return document.getElementById('notif-link').value.trim();
+  return sel;
+}
+
+function notifShowToast(msg, type) {
+  var t = document.getElementById('notif-toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.className = 'toast ' + (type || 'success');
+  t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 4000);
+}
+
+async function notifSend() {
+  var title = (document.getElementById('notif-title').value || '').trim();
+  var body  = (document.getElementById('notif-body').value  || '').trim();
+  var link  = notifGetLink();
+  var icon  = (document.getElementById('notif-icon').value  || '📢').trim();
+
+  if (!title) { notifShowToast('タイトルを入力してください', 'error'); return; }
+
+  var btn = document.getElementById('notif-send-btn');
+  btn.disabled = true;
+  btn.textContent = '送信中…';
+
+  try {
+    var res = await fetch(NOTIF_API_BASE + '/api/sp/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, body, link, icon, contentType: 'manual' })
+    });
+    var data = await res.json();
+    if (data.success) {
+      notifShowToast('✅ お知らせを送信しました！', 'success');
+      document.getElementById('notif-title').value = '';
+      document.getElementById('notif-body').value  = '';
+      document.getElementById('notif-icon').value  = '📢';
+      document.getElementById('notif-link-select').value = '';
+      notifOnLinkSelect('');
+      setTimeout(notifLoad, 600);
+    } else {
+      notifShowToast('❌ エラー: ' + (data.error || '送信失敗'), 'error');
+    }
+  } catch (e) {
+    notifShowToast('❌ 通信エラー: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔔 お知らせを送信';
+  }
+}
+
+async function notifLoad() {
+  var list = document.getElementById('notif-list');
+  if (!list) return;
+  list.innerHTML = '<div class="loading">読み込み中…</div>';
+  try {
+    var res  = await fetch(NOTIF_API_BASE + '/api/sp/notifications?limit=30');
+    var items = await res.json();
+    if (!items.length) {
+      list.innerHTML = '<div class="empty-state">📭 お知らせはありません</div>';
+      return;
+    }
+    list.innerHTML = items.map(n => {
+      var dt = n.createdAt ? new Date(n.createdAt).toLocaleString('ja-JP') : '—';
+      return `<div style="background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:12px 14px;margin-bottom:10px;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+          <span style="font-size:1.2rem">${n.icon || '📢'}</span>
+          <span style="font-size:13px;font-weight:600;color:#d4d4d4;flex:1">${n.title}</span>
+          <span style="font-size:11px;color:#555">${dt}</span>
+        </div>
+        ${n.body ? `<div style="font-size:12px;color:#888;margin-bottom:4px">${n.body}</div>` : ''}
+        ${n.link ? `<div style="font-size:11px;color:#4ec9b0">🔗 ${n.link}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = '<div class="empty-state" style="color:#f44747">⚠️ 読み込みエラー: ' + e.message + '</div>';
   }
 }
 </script>
