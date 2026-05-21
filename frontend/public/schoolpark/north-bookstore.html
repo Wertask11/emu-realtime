@@ -85,6 +85,33 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 .pop-tag{display:inline-block;background:linear-gradient(135deg,#8b3000,var(--accent));color:#000;font-size:9px;font-weight:700;padding:2px 10px;border-radius:10px;margin-left:6px}
 .new-tag{background:linear-gradient(135deg,#006030,#00c060);color:#fff}
 
+/* ── 推薦図書カード ── */
+.suisen-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:12px;transition:border-color .2s}
+.suisen-card:hover{border-color:var(--accent)}
+.suisen-inner{display:flex;gap:12px;padding:12px}
+.suisen-img-wrap{width:88px;flex-shrink:0;border-radius:8px;overflow:hidden;background:#1a1000;border:1px solid var(--border)}
+.suisen-img-wrap img{width:100%;display:block;aspect-ratio:3/4;object-fit:cover}
+.suisen-img-placeholder{width:100%;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;font-size:28px;background:linear-gradient(135deg,#1a0e00,#2e1e00)}
+.suisen-info{flex:1;min-width:0}
+.suisen-title{font-size:13px;font-weight:700;color:#fff;line-height:1.45;margin-bottom:6px}
+.suisen-tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+.suisen-tag-theme{font-size:10px;padding:2px 9px;border-radius:10px;font-weight:700;background:rgba(255,157,58,.18);color:var(--accent);border:1px solid rgba(255,157,58,.35)}
+.suisen-tag-genre{font-size:10px;padding:2px 9px;border-radius:10px;background:rgba(255,255,255,.06);color:var(--muted);border:1px solid var(--border)}
+.suisen-author{font-size:11px;color:var(--muted);margin-bottom:8px}
+.suisen-detail-btn{padding:6px 14px;border-radius:16px;font-size:11px;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#4a2800,var(--accent));color:#000;border:none;font-family:inherit;transition:opacity .2s}
+.suisen-detail-btn:hover{opacity:.85}
+
+/* ── 画像ビューアオーバーレイ ── */
+#imgViewer{display:none;position:fixed;inset:0;background:rgba(0,0,0,.96);z-index:20000;overflow-y:auto;padding:0 0 40px}
+.imgv-header{position:sticky;top:0;background:rgba(6,4,0,.97);border-bottom:1px solid var(--border);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;z-index:10}
+.imgv-back{background:rgba(255,157,58,.2);border:1px solid var(--border);color:var(--accent);padding:7px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit}
+.imgv-back:hover{background:rgba(255,157,58,.35)}
+.imgv-title{font-size:12px;color:var(--text);font-weight:700;flex:1;text-align:center;padding:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imgv-body{padding:12px 12px 20px;max-width:700px;margin:0 auto}
+.imgv-full-img{width:100%;border-radius:10px;display:block;border:1px solid var(--border)}
+.imgv-tags{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.imgv-note-btn{display:block;width:100%;margin-top:14px;padding:12px;background:linear-gradient(135deg,#4a2800,var(--accent));color:#000;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center}
+
 /* Coming Soon */
 .coming-soon-card{background:var(--card);border:2px dashed var(--border);border-radius:16px;padding:32px 20px;text-align:center}
 
@@ -165,59 +192,9 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 
   <!-- ── 推薦図書 ── -->
   <div class="panel" id="panel-recommend">
-    <div class="section-title">📚 店長おすすめセレクション</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">SchoolParkの4つのリテラシーテーマに沿って、店長が厳選した参考書籍。</div>
-    <div class="book-detail-list">
-
-      <div class="book-detail">
-        <div class="book-detail-inner">
-          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#002020,#004040)">💰</div></div>
-          <div class="book-info">
-            <div class="book-title">お金の大学<span class="pop-tag">マネー</span></div>
-            <div class="book-author">両@リベ大学長</div>
-            <div class="book-desc">貯める・稼ぐ・増やす・守る・使う。5つの力を身につけるための入門書。</div>
-          </div>
-        </div>
-        <div class="book-actions"><span style="font-size:10px;color:var(--muted)">一般書籍</span><button class="preview-btn" onclick="window.open('https://amzn.to/','_blank')">詳細を見る</button></div>
-      </div>
-
-      <div class="book-detail">
-        <div class="book-detail-inner">
-          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#001830,#002a50)">🌐</div></div>
-          <div class="book-info">
-            <div class="book-title">NFTの教科書<span class="pop-tag">ネット</span></div>
-            <div class="book-author">天野 彬 (編著)</div>
-            <div class="book-desc">NFT・Web3の基礎から応用まで。デジタル経済の新常識を網羅。</div>
-          </div>
-        </div>
-        <div class="book-actions"><span style="font-size:10px;color:var(--muted)">一般書籍</span><button class="preview-btn" onclick="window.open('https://amzn.to/','_blank')">詳細を見る</button></div>
-      </div>
-
-      <div class="book-detail">
-        <div class="book-detail-inner">
-          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#1a1000,#3a2800)">🌿</div></div>
-          <div class="book-info">
-            <div class="book-title">嫌われる勇気<span class="pop-tag">ライフ</span></div>
-            <div class="book-author">岸見 一郎 / 古賀 史健</div>
-            <div class="book-desc">アドラー心理学を対話形式で学ぶ。自分らしく生きるための思考法。</div>
-          </div>
-        </div>
-        <div class="book-actions"><span style="font-size:10px;color:var(--muted)">一般書籍</span><button class="preview-btn" onclick="window.open('https://amzn.to/','_blank')">詳細を見る</button></div>
-      </div>
-
-      <div class="book-detail">
-        <div class="book-detail-inner">
-          <div class="book-cover-block"><div class="book-cover-art" style="background:linear-gradient(135deg,#200020,#400040)">🤝</div></div>
-          <div class="book-info">
-            <div class="book-title">人を動かす<span class="pop-tag">ヒューマン</span></div>
-            <div class="book-author">D・カーネギー</div>
-            <div class="book-desc">人間関係の本質を説いた不朽の名作。コミュニケーションの基礎書。</div>
-          </div>
-        </div>
-        <div class="book-actions"><span style="font-size:10px;color:var(--muted)">一般書籍</span><button class="preview-btn" onclick="window.open('https://amzn.to/','_blank')">詳細を見る</button></div>
-      </div>
-
-    </div>
+    <div class="section-title">📚 推薦図書セレクション</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.7">SchoolParkが厳選した「等身大の学び」。noteで読める本音コンテンツ。</div>
+    <div id="suisenList"><!-- JS描画 --></div>
   </div>
 
   <!-- ── 試し読みコーナー ── -->
@@ -225,6 +202,20 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
     <div class="section-title">☕ 試し読みコーナー</div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px;font-size:12px;color:var(--muted);line-height:1.7">ゆっくり座って、気になる本を試し読みしてみてください。SchoolParkオリジナル作品の冒頭を無料でお読みいただけます。</div>
     <div style="display:flex;flex-direction:column;gap:10px" id="cornerList"></div>
+  </div>
+</div>
+
+<!-- ── 推薦図書 画像ビューア ── -->
+<div id="imgViewer">
+  <div class="imgv-header">
+    <button class="imgv-back" onclick="closeImgViewer()">← 戻る</button>
+    <div class="imgv-title" id="imgvTitle"></div>
+    <div style="width:72px"></div>
+  </div>
+  <div class="imgv-body">
+    <div class="imgv-tags" id="imgvTags"></div>
+    <img class="imgv-full-img" id="imgvImg" src="" alt="">
+    <button class="imgv-note-btn" id="imgvNoteBtn" style="display:none">📝 noteで読む →</button>
   </div>
 </div>
 
@@ -471,6 +462,117 @@ function closeModal(){
   // グローバル閉じるボタンを復元
   document.getElementById('globalCloseBtn').style.display = '';
 }
+
+// ========== 推薦図書データ ==========
+const SUISEN_BOOKS = [
+  {
+    title: 'しんどい共働きの解決策は。#家事のみかた',
+    author: 'amota',
+    theme: 'ライフリテラシー',
+    genre: '家事・仕事・育児バランス',
+    img: '/schoolpark/suisen_01.jpg',
+    noteUrl: '',
+    desc: '「ママだから」と諦めない。家事のこだわりを捨て、便利家電と「死ななきゃOK」思考で余白を作る実践記。'
+  },
+  {
+    title: '読書感想文「億までの人、億からの人」を読んで気づいた、習慣化の力',
+    author: 'amota',
+    theme: 'マネーリテラシー',
+    genre: '読書感想・習慣化・投資マインド',
+    img: '/schoolpark/suisen_02.jpg',
+    noteUrl: '',
+    desc: '脳のリソースは有限だからこそ「ルーティン」が武器になる。億からの人が実践する習慣化の本質。'
+  },
+  {
+    title: '「体験格差」問題。足し算より引き算で質を高めたい。',
+    author: 'amota',
+    theme: 'ライフリテラシー',
+    genre: '子育て・体験設計・取捨選択',
+    img: '/schoolpark/suisen_03.jpg',
+    noteUrl: '',
+    desc: '限られたリソースをどこに使うか。不要なものを引き算し、一極集中で子どもの体験価値を高める考え方。'
+  },
+  {
+    title: '最近、子供の家庭学習について、悩んでいます',
+    author: 'amota',
+    theme: 'ライフリテラシー',
+    genre: '教育・家庭学習・知的好奇心',
+    img: '/schoolpark/suisen_04.jpg',
+    noteUrl: '',
+    desc: '「ワクワク」と「基礎力」どっちも大切。公文式の成功体験と現代教育の価値観の間で揺れるリアルな葛藤。'
+  },
+  {
+    title: '娘の口癖に「なにー？」があります。',
+    author: 'amota',
+    theme: 'ライフリテラシー',
+    genre: '親子コミュニケーション',
+    img: '/schoolpark/suisen_05.jpg',
+    noteUrl: '',
+    desc: '「聞けない」のではなく「聞ける状態を作れていない」だけ。伝える側の工夫が変える親子のコミュニケーション。'
+  },
+];
+
+// ========== 推薦図書レンダリング ==========
+function renderSuisen(){
+  const list = document.getElementById('suisenList');
+  if(!list) return;
+  list.innerHTML = SUISEN_BOOKS.map((b, i) => `
+    <div class="suisen-card">
+      <div class="suisen-inner">
+        <div class="suisen-img-wrap">
+          <img src="${b.img}" alt="${b.title}"
+            onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+            style="display:block">
+          <div class="suisen-img-placeholder" style="display:none">📄</div>
+        </div>
+        <div class="suisen-info">
+          <div class="suisen-title">${b.title}</div>
+          <div class="suisen-tags">
+            <span class="suisen-tag-theme">${b.theme}</span>
+            <span class="suisen-tag-genre">${b.genre}</span>
+          </div>
+          <div class="suisen-author">✍️ ${b.author}</div>
+          <button class="suisen-detail-btn" onclick="openImgViewer(${i})">🔍 詳細を見る</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ========== 画像ビューア ==========
+function openImgViewer(idx){
+  const b = SUISEN_BOOKS[idx];
+  if(!b) return;
+  document.getElementById('imgvTitle').textContent = b.title;
+  document.getElementById('imgvImg').src = b.img;
+  document.getElementById('imgvImg').alt = b.title;
+  const tags = document.getElementById('imgvTags');
+  tags.innerHTML = `<span class="suisen-tag-theme">${b.theme}</span><span class="suisen-tag-genre">${b.genre}</span><span style="font-size:10px;color:var(--muted);align-self:center">✍️ ${b.author}</span>`;
+  const noteBtn = document.getElementById('imgvNoteBtn');
+  if(b.noteUrl){
+    noteBtn.style.display = 'block';
+    noteBtn.onclick = () => window.open(b.noteUrl, '_blank');
+  } else {
+    noteBtn.style.display = 'none';
+  }
+  document.getElementById('globalCloseBtn').style.display = 'none';
+  const v = document.getElementById('imgViewer');
+  v.style.display = 'block';
+  v.scrollTop = 0;
+}
+
+function closeImgViewer(){
+  document.getElementById('imgViewer').style.display = 'none';
+  document.getElementById('globalCloseBtn').style.display = '';
+}
+
+// 推薦図書タブ切替時にレンダリング
+const _origSwitchTab = window.switchTab;
+window.switchTab = function(name){
+  _origSwitchTab(name);
+  if(name === 'recommend') renderSuisen();
+};
+renderSuisen(); // 初回レンダリング
 </script>
 </body>
 </html>
