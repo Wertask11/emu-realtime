@@ -736,24 +736,17 @@ const ROOM1_SUBMISSIONS_COL = "room1_submissions";
 
 // ── コンテンツ一覧取得 ──
 app.get("/api/room1/contents", async (req, res) => {
+  if (!db) return res.json([]);
   try {
-    if (!db) return res.json([]);
-    const snapshot = await db
-      .collection(ROOM1_CONTENTS_COL)
-      .orderBy("createdAt", "asc")
-      .get();
-    const contents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // orderBy は Firestore インデックスが必要なため使わず JS ソートにする
+    const snapshot = await db.collection(ROOM1_CONTENTS_COL).get();
+    const contents = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
     res.json(contents);
   } catch (err) {
-    console.error("contents get error:", err);
-    // orderByでインデックスエラーが出た場合はorderByなしで再試行
-    try {
-      const snapshot2 = await db.collection(ROOM1_CONTENTS_COL).get();
-      const contents2 = snapshot2.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      res.json(contents2);
-    } catch (err2) {
-      res.status(500).json([]);
-    }
+    console.error("room1/contents get error:", err.code, err.message);
+    res.status(500).json({ error: err.message, code: err.code || "UNKNOWN" });
   }
 });
 
