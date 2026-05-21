@@ -17231,9 +17231,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // ════════════════════════════════════════
 // SchoolPark お知らせシステム
 // ════════════════════════════════════════
-const _SP_NOTIF_API = 'https://emu-realtime.onrender.com';
-let _spNotifData    = [];
-let _spNotifLoaded  = false;
+const _SP_NOTIF_API  = 'https://emu-realtime.onrender.com';
+let _spNotifData     = [];
+let _spNotifLoaded   = false;
+let _spNotifPollTimer = null;
 
 function _spNotifAddress() {
   return (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
@@ -17248,19 +17249,31 @@ function _spNotifTimeAgo(isoStr) {
   return Math.floor(diff / 86400000) + '日前';
 }
 
+// サーバーから最新データを取得してバッジを更新
 async function loadSpNotifications() {
   const address = _spNotifAddress();
   const url = `${_SP_NOTIF_API}/api/sp/notifications?limit=20${address ? '&address=' + encodeURIComponent(address) : ''}`;
   try {
-    const r = await fetch(url);
+    const r    = await fetch(url);
     const data = await r.json();
     _spNotifData   = Array.isArray(data) ? data : [];
     _spNotifLoaded = true;
     _renderSpNotifBadge();
   } catch (e) {
-    _spNotifData   = [];
-    _spNotifLoaded = true;
+    // 通信失敗時はキャッシュをそのまま使う
+    if (!_spNotifLoaded) { _spNotifData = []; _spNotifLoaded = true; }
   }
+}
+
+// 60秒ごとにバッジをリフレッシュ（管理者が送信後すぐ反映）
+function _startSpNotifPoll() {
+  if (_spNotifPollTimer) return;
+  _spNotifPollTimer = setInterval(async () => {
+    await loadSpNotifications();
+    // パネルが開いていれば中身も再描画
+    const panel = document.getElementById('spNotifPanel');
+    if (panel && panel.style.display !== 'none') _renderSpNotifList();
+  }, 60 * 1000);
 }
 
 function _renderSpNotifBadge() {
@@ -17268,7 +17281,7 @@ function _renderSpNotifBadge() {
   if (!badge) return;
   const unread = _spNotifData.filter(n => !n.isRead).length;
   if (unread > 0) {
-    badge.textContent  = unread > 9 ? '9+' : String(unread);
+    badge.textContent   = unread > 9 ? '9+' : String(unread);
     badge.style.display = 'flex';
   } else {
     badge.style.display = 'none';
@@ -17304,21 +17317,19 @@ function _renderSpNotifList() {
   }).join('');
 }
 
+// パネルを開くたびに必ず最新データを取得
 function toggleSpNotifPanel() {
   const panel = document.getElementById('spNotifPanel');
   if (!panel) return;
   const isOpen = panel.style.display !== 'none' && panel.style.display !== '';
   if (isOpen) {
     panel.style.display = 'none';
-  } else {
-    panel.style.display = 'flex';
-    if (!_spNotifLoaded) {
-      _renderSpNotifList(); // ローディング表示
-      loadSpNotifications().then(_renderSpNotifList);
-    } else {
-      _renderSpNotifList();
-    }
+    return;
   }
+  panel.style.display = 'flex';
+  // まず現状を表示してから最新を取得
+  _renderSpNotifList();
+  loadSpNotifications().then(_renderSpNotifList);
 }
 
 function closeSpNotifPanel() {
@@ -17382,21 +17393,13 @@ function spNotifGoto(idx) {
   }
 }
 
-// SchoolParkマップを開いたときにバッジをロード（DOMContentLoadedで関数パッチ）
+// ページロード時に初回取得 + 60秒ポーリング開始
 document.addEventListener('DOMContentLoaded', () => {
-  const _orig = typeof openSpMap === 'function' ? openSpMap : null;
-  if (_orig) {
-    // グローバルスコープの openSpMap をラップ
-    window._openSpMapPatched = true;
-    const _patchedOpenSpMap = function(gate) {
-      _orig(gate);
-      if (!_spNotifLoaded) loadSpNotifications();
-    };
-    // openSpMap は function declaration なのでグローバルに上書き
-    try { window.openSpMap = _patchedOpenSpMap; } catch(e) {}
-  }
-  // 初回ロード（バッジをすぐ表示するため少し遅延）
-  setTimeout(loadSpNotifications, 3000);
+  // 2秒後に初回ロード（サーバーのコールドスタートを避けるため少し遅延）
+  setTimeout(() => {
+    loadSpNotifications();
+    _startSpNotifPoll();
+  }, 2000);
 });
 
 </script>
