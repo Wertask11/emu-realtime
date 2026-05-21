@@ -563,8 +563,8 @@ async function publishScheduledPosts() {
   }
 }
 
-// 毎分チェック
-cron.schedule("* * * * *", () => publishScheduledPosts(), { timezone: "Asia/Tokyo" });
+// 5分ごとチェック（毎分→5分に変更でFirestore読み取りを 1/5 に削減）
+cron.schedule("*/5 * * * *", () => publishScheduledPosts(), { timezone: "Asia/Tokyo" });
 
 // 予約投稿 作成
 app.post("/api/scheduled-posts", async (req, res) => {
@@ -734,18 +734,30 @@ app.post("/api/contact", async (req, res) => {
 const ROOM1_CONTENTS_COL   = "room1_contents";
 const ROOM1_SUBMISSIONS_COL = "room1_submissions";
 
+// ── room1コンテンツ キャッシュ（10分TTL） ──
+const _room1Cache = { data: null, fetchedAt: 0 };
+const ROOM1_CACHE_TTL = 10 * 60 * 1000; // 10分
+
 // ── コンテンツ一覧取得 ──
 app.get("/api/room1/contents", async (req, res) => {
   if (!db) return res.json([]);
+  const now = Date.now();
+  // キャッシュHITならFirestoreを読まずに返す
+  if (_room1Cache.data && now - _room1Cache.fetchedAt < ROOM1_CACHE_TTL) {
+    return res.json(_room1Cache.data);
+  }
   try {
-    // orderBy は Firestore インデックスが必要なため使わず JS ソートにする
     const snapshot = await db.collection(ROOM1_CONTENTS_COL).get();
     const contents = snapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+    _room1Cache.data = contents;
+    _room1Cache.fetchedAt = now;
     res.json(contents);
   } catch (err) {
     console.error("room1/contents get error:", err.code, err.message);
+    // キャッシュが残っていれば古いデータで応答
+    if (_room1Cache.data) return res.json(_room1Cache.data);
     res.status(500).json({ error: err.message, code: err.code || "UNKNOWN" });
   }
 });
@@ -958,7 +970,7 @@ async function _getRankingSource() {
   }
   console.log('📊 RankingCache MISS — Firestore読み取り');
   const [postsSnap, names] = await Promise.all([
-    db.collection('posts').get(),
+    db.collection('posts').limit(500).get(),
     fetchAllDisplayNames(),
   ]);
   _rankingCache.postsSnap = postsSnap;

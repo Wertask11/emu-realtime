@@ -1496,48 +1496,31 @@ function fpRankSwitch(mode) {
 
 function fpLoadEmuRanking() {
   const container = document.getElementById('fpEmuRankItems');
-  if (!container || !fpDB || !fpFBLib) return;
+  if (!container) return;
   container.innerHTML = '<div class="fp-loading">⭐ 読み込み中…</div>';
-  const lib = fpFBLib;
-  // 全投稿を取得してユーザーごとに集計（good・change・投稿数）
-  lib.getDocs(lib.collection(fpDB, 'posts')).then(snap => {
-    if (snap.empty) { container.innerHTML = '<div class="fp-loading">投稿がありません</div>'; return; }
-
-    // ユーザーごとに集計
-    const userMap = {};
-    snap.docs.forEach(d => {
-      const p = d.data();
-      const addr = p.address || p.userId || 'unknown';
-      if (!userMap[addr]) userMap[addr] = { addr, good:0, change:0, posts:0 };
-      userMap[addr].good   += (p.goodCount   || 0);
-      userMap[addr].change += (p.changeCount || 0);
-      userMap[addr].posts  += 1;
-    });
-
-    // total = good + change + posts でスコア化、降順ソート
-    const users = Object.values(userMap)
-      .map(u => ({ ...u, total: u.good + u.change + u.posts }))
-      .sort((a,b) => b.total - a.total)
-      .slice(0, 6);
-
-    const medals = ['🥇','🥈','🥉','4','5','6'];
-    const colors = ['#fbbf24','#94a3b8','#cd7c4e','var(--text2)','var(--text2)','var(--text2)'];
-    container.innerHTML = users.map((u, i) => {
-      const shortAddr = u.addr.length > 10 ? u.addr.slice(0,6)+'…'+u.addr.slice(-4) : u.addr;
-      return `<div class="fp-rank-item" style="align-items:flex-start;flex-direction:column;gap:4px;padding:10px 8px">
-        <div style="display:flex;align-items:center;gap:8px;width:100%">
-          <div class="fp-rank-num" style="color:${colors[i]}">${medals[i]}</div>
-          <div style="font-size:0.85rem;flex:1;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${shortAddr}</div>
-          <div class="fp-rank-val" style="font-size:0.7rem">${u.total} pt</div>
-        </div>
-        <div style="display:flex;gap:12px;font-size:0.68rem;color:var(--text2);padding-left:28px">
-          <span>👍 ${u.good}</span>
-          <span>🤝 ${u.change}</span>
-          <span>📝 ${u.posts}件</span>
-        </div>
-      </div>`;
-    }).join('');
-  }).catch(() => { container.innerHTML = '<div class="fp-loading">⚠️ 読み込みエラー</div>'; });
+  // バックエンドAPIを使用（Firestoreを直接読まない＝クォータ節約）
+  fetch(FP_SOCKET_URL + '/api/ranking?type=total_post&limit=6')
+    .then(r => r.json())
+    .then(items => {
+      if (!items || !items.length) {
+        container.innerHTML = '<div class="fp-loading">投稿がありません</div>';
+        return;
+      }
+      const medals = ['🥇','🥈','🥉','4','5','6'];
+      const colors = ['#fbbf24','#94a3b8','#cd7c4e','var(--text2)','var(--text2)','var(--text2)'];
+      container.innerHTML = items.map((u, i) => {
+        const label = u.displayName || (u.address ? u.address.slice(0,6)+'…'+u.address.slice(-4) : '匿名');
+        return `<div class="fp-rank-item" style="align-items:flex-start;flex-direction:column;gap:4px;padding:10px 8px">
+          <div style="display:flex;align-items:center;gap:8px;width:100%">
+            <div class="fp-rank-num" style="color:${colors[i]}">${medals[i]}</div>
+            <div style="font-size:0.85rem;flex:1;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</div>
+            <div class="fp-rank-val" style="font-size:0.7rem">${u.score} pt</div>
+          </div>
+          <div style="font-size:0.68rem;color:var(--text2);padding-left:28px">${u.scoreLabel || ''}</div>
+        </div>`;
+      }).join('');
+    })
+    .catch(() => { container.innerHTML = '<div class="fp-loading">⚠️ 読み込みエラー</div>'; });
 }
 
 // ─── 運営参加ゲート ───────────────────────────────────────
