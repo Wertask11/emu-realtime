@@ -7779,9 +7779,22 @@ function _showEmuerChargeToast(poiId, cost, remaining) {
   setTimeout(() => toast.remove(), 2100);
 }
 
+// POI名から日本語部分だけ抽出（"Fountain 噴水広場" → "噴水広場"）
+function _spPoiShortName(poi) {
+  if (!poi) return '';
+  const m = poi.name.match(/[　-鿿぀-ヿ][^\x00-\x7F\s]*/);
+  return m ? m[0] : poi.name;
+}
+
 async function gatedOpen(poiId, fn) {
   const cost = EMUER_RATE_CONFIG[poiId] ?? 0;
-  if (cost === 0) { fn(); return; }
+  if (cost === 0) {
+    fn();
+    // 無料施設の訪問もログに記録
+    const _poi0 = SP_POIS ? _findPoi(poiId) : null;
+    _spLogAdd({ type:'visit', icon: _poi0?.icon || '🚪', title: (_poi0 ? _spPoiShortName(_poi0) : poiId) + ' に入りました', detail: '' });
+    return;
+  }
 
   // メンテナンスモード中はオーナーのEMUER消費・利用制限をすべてスキップ
   if (MAINTENANCE_MODE && _isOwnerAccess()) { fn(); return; }
@@ -7838,7 +7851,7 @@ async function gatedOpen(poiId, fn) {
   _recordKaiensaiStamp(poiId).catch(() => {});
   _recordEventAnalytics(poiId).catch(() => {});
   // 施設訪問ログ
-  _spLogAdd({ type:'visit', icon: poi?.icon || '🚪', title: (poi ? poi.name : poiId) + ' に入りました', detail: cost > 0 ? `-${cost} EMUER` : '' });
+  _spLogAdd({ type:'visit', icon: poi?.icon || '🚪', title: (poi ? _spPoiShortName(poi) : poiId) + ' に入りました', detail: cost > 0 ? `-${cost} EMUER` : '' });
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -11949,6 +11962,7 @@ async function attachReactionHandlers(postElement) {
         savePending();
         if (myWalletPage.style.display === "block") renderWallet();
 
+        _spLogAdd({ type:'good', icon:'👍', title:'Good を送りました', detail: `「${(postData.title||'').slice(0,20)}」` });
         console.log("✅ Firebase: Good記録完了");
       } catch (e) {
         console.error("Firebase Good Error:", e);
@@ -11987,6 +12001,7 @@ async function attachReactionHandlers(postElement) {
         savePending();
         if (myWalletPage.style.display === "block") renderWallet();
 
+        _spLogAdd({ type:'change', icon:'🤝', title:'Change を送りました', detail: `「${(postData.title||'').slice(0,20)}」` });
         console.log("✅ Firebase: Change記録完了");
       } catch (e) {
         console.error("Firebase Change Error:", e);
@@ -12206,6 +12221,7 @@ const editingId = localStorage.getItem("editingPostId");
       postData.goodCount = 0;
       postData.changeCount = 0;
       await window.fbLib.addDoc(window.fbLib.collection(window.db, "posts"), postData);
+      _spLogAdd({ type:'post', icon:'📝', title:'Emu に投稿しました', detail: (postTitleInput.value||postData.title||'').slice(0,25) });
       console.log("✅ 新規投稿を作成しました");
     }
 
@@ -14564,6 +14580,7 @@ document.getElementById('postBtn').addEventListener('click', ()=>{
     replyTo: replyTarget
   });
 
+  _spLogAdd({ type:'chat', icon:'💬', title:'討論ルームでチャットしました', detail: text.length > 25 ? text.slice(0, 25) + '…' : text });
 
   // 🔽 ここに全部入れる
   replyTarget = null;

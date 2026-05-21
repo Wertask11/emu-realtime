@@ -1033,6 +1033,7 @@ async function fpVoteGeneral(voteId, option, btn) {
     // ローカルにも記録
     localStorage.setItem(`fp_voted_${voteId}`, option);
     fpToast("✅ 投票しました！", "rgba(34,197,94,0.92)");
+    window.top.postMessage({ type:'spActivityLog', logType:'vote', icon:'🗳️', title:'一般投票に参加しました', detail: `「${option}」に投票` }, '*');
     fpLoadVoteBars(voteId, "fpVote1Bars", "fpVote1Count", false);
   } catch(e) { fpToast("❌ エラー: " + e.message, "rgba(239,68,68,0.9)"); }
 }
@@ -1056,6 +1057,7 @@ async function fpVoteDAO(voteId, option, btn) {
       localStorage.setItem(`fp_dao_voted_${voteId}`, option);
     }
     fpToast("👑 DAO投票完了！ +20 EMUER", "rgba(251,191,36,0.92)");
+    window.top.postMessage({ type:'spActivityLog', logType:'vote', icon:'👑', title:'DAO投票に参加しました', detail: `「${option}」に投票` }, '*');
     const barsId  = voteId === "vote2" ? "fpVote2Bars" : voteId.startsWith("dyn_") ? `fpDynVoteBars_${voteId.slice(4)}` : "fpVote3Bars";
     const countId = voteId === "vote2" ? "fpVote2Count" : voteId.startsWith("dyn_") ? `fpDynVoteCount_${voteId.slice(4)}` : "fpVote3Count";
     fpLoadVoteBars(voteId, barsId, countId, true);
@@ -1398,6 +1400,7 @@ function fpSendChat() {
   const text  = input.value.trim();
   if (!text || !fpSocket || !fpSocket.connected) return;
   fpSocket.emit("fountain message", { text });
+  window.top.postMessage({ type:'spActivityLog', logType:'chat', icon:'💬', title:'噴水広場でチャットしました', detail: text.length > 25 ? text.slice(0,25)+'…' : text }, '*');
   input.value = "";
 }
 
@@ -1658,6 +1661,7 @@ async function fpCreateVote() {
     document.getElementById("fpNewVoteDesc").value  = "";
     document.querySelectorAll("#fpNewVoteOptionsList .fp-dao-option-input").forEach((inp,i) => inp.value = "");
     fpToast("🗳️ 議題を公開しました！", "rgba(34,197,94,0.92)");
+    window.top.postMessage({ type:'spActivityLog', logType:'vote', icon:'📢', title:'DAO議題を作成しました', detail: title.slice(0,25) }, '*');
     // onSnapshot が自動で一覧を更新するため手動リロード不要
   } catch(e) { fpToast("❌ エラー: " + e.message, "rgba(239,68,68,0.9)"); }
 }
@@ -1814,6 +1818,7 @@ async function fpVoteGeneralDynamic(topicId, option, btn) {
     if (btnsEl) btnsEl.querySelectorAll(".fp-vote-choice-btn").forEach(b => b.disabled = true);
     localStorage.setItem(`fp_voted_gen_${topicId}`, option);
     fpToast("✅ 投票しました！", "rgba(34,197,94,0.92)");
+    window.top.postMessage({ type:'spActivityLog', logType:'vote', icon:'🗳️', title:'一般投票に参加しました', detail: `「${option}」に投票` }, '*');
     fpLoadVoteBars(voteId, `fpGenVoteBars_${topicId}`, `fpGenVoteCount_${topicId}`, false);
   } catch(e) { fpToast("❌ エラー: " + e.message, "rgba(239,68,68,0.9)"); }
 }
@@ -1899,6 +1904,7 @@ async function fpLike(postId, btn) {
     const s = btn.querySelector("span");
     s.textContent = parseInt(s.textContent||"0") + 1;
     btn.style.color = "#f87171";
+    window.top.postMessage({ type:'spActivityLog', logType:'like', icon:'❤️', title:'掲示板にいいねしました', detail: '' }, '*');
   } catch(e) {}
 }
 
@@ -1965,6 +1971,7 @@ async function fpSendComment(postId) {
     await fpFBLib.updateDoc(fpFBLib.doc(fpDB, "sp_fountain_board", postId), {
       commentCount: fpFBLib.increment(1)
     });
+    window.top.postMessage({ type:'spActivityLog', logType:'comment', icon:'💭', title:'噴水広場にコメントしました', detail: text.length > 25 ? text.slice(0,25)+'…' : text }, '*');
     if (input) input.value = "";
   } catch(e) { fpToast("❌ "+e.message, "rgba(239,68,68,0.9)"); }
 }
