@@ -1275,6 +1275,14 @@ async function fpSendWish() {
     input.value = "";
     _fpWishParticles(btn);
     fpToast("💫 願いが泉に投げ込まれました","rgba(99,102,241,0.92)");
+    // 親フレームにログ通知
+    try {
+      window.top.postMessage({
+        type: 'spActivityLog', logType: 'wish', icon: '💫',
+        title: '願いを投げ込みました',
+        detail: text.length > 30 ? text.slice(0, 30) + '…' : text
+      }, '*');
+    } catch(_) {}
   } catch(e) { fpToast("❌ "+e.message,"rgba(239,68,68,0.9)"); }
   finally { if (btn) { btn.textContent = "💫 願いを投げ込む"; btn.disabled = false; } }
 }

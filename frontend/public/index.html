@@ -384,8 +384,31 @@
   transition:background 0.15s; white-space:nowrap;
 }
 .spn-goto-btn:hover { background:rgba(212,168,67,0.28); }
-.spn-empty { text-align:center; padding:36px 16px; color:#555; font-size:0.82rem; }
-.spn-loading { text-align:center; padding:24px; color:#666; font-size:0.82rem; }
+.spn-empty { text-align:center; padding:28px 16px; color:#555; font-size:0.82rem; }
+.spn-loading { text-align:center; padding:18px; color:#666; font-size:0.82rem; }
+/* セクション仕切り */
+.spn-section-label {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:7px 14px 5px; font-size:0.7rem; font-weight:700;
+  color:#555; letter-spacing:0.08em; text-transform:uppercase;
+  border-top:1px solid rgba(255,255,255,0.06);
+  background:rgba(255,255,255,0.02); position:sticky; top:0;
+  backdrop-filter:blur(4px);
+}
+.spn-section-label:first-of-type { border-top:none; }
+.spn-section-log { color:#4ec9b0; border-top:2px solid rgba(78,201,176,0.2); margin-top:2px; }
+/* ログ既読ボタン */
+.spn-log-clear {
+  font-size:0.67rem; padding:2px 8px; border-radius:10px;
+  background:rgba(78,201,176,0.1); color:#4ec9b0;
+  border:1px solid rgba(78,201,176,0.25); cursor:pointer;
+  transition:background 0.15s; text-transform:none; letter-spacing:0;
+}
+.spn-log-clear:hover { background:rgba(78,201,176,0.22); }
+/* ログアイテム（お知らせより少し薄め） */
+.spn-item.log-item { opacity:0.9; }
+.spn-item.log-item.unread { background:rgba(78,201,176,0.05); }
+.spn-item.log-item.unread::before { background:#4ec9b0; }
 .spmap-nav-links { display:flex; flex:1; overflow:hidden; }
 /* コマンドバー */
 .spmap-cmd-wrap { display:flex; align-items:center; margin:0 6px; flex-shrink:0; }
@@ -3207,16 +3230,26 @@ body.paypay-mode #pp-post-fab {
         <div class="spmap-brand-sub">Interactive Park Map</div>
         <span class="sp-notif-badge" id="spNotifBadge"></span>
       </button>
-      <!-- お知らせパネル -->
+      <!-- お知らせ＆ログパネル -->
       <div id="spNotifPanel" style="display:none;flex-direction:column;">
         <div class="spn-header">
           <span class="spn-header-title">🔔 お知らせ</span>
           <div class="spn-actions">
-            <button class="spn-read-all" onclick="spMarkAllRead()">すべて既読</button>
+            <button class="spn-read-all" onclick="spMarkAllReadAll()">すべて既読</button>
             <button class="spn-close" onclick="closeSpNotifPanel()">✕</button>
           </div>
         </div>
+        <!-- ① お知らせセクション -->
+        <div class="spn-section-label">📣 お知らせ</div>
         <div id="spNotifList"><div class="spn-loading">読み込み中…</div></div>
+        <!-- ② ログセクション（設定でON時のみ表示） -->
+        <div id="spLogSection">
+          <div class="spn-section-label spn-section-log">
+            📋 ログ
+            <button class="spn-log-clear" onclick="spLogMarkAllRead()">既読にする</button>
+          </div>
+          <div id="spLogList"><div class="spn-loading">読み込み中…</div></div>
+        </div>
       </div>
     </div>
     <div class="spmap-nav-links">
@@ -4207,6 +4240,16 @@ body.paypay-mode #pp-post-fab {
         </div>
         <label class="sp-toggle">
           <input type="checkbox" id="spSettingActivityLog" checked onchange="spSettingSave()">
+          <span class="sp-toggle-slider"></span>
+        </label>
+      </div>
+      <div class="sp-setting-row">
+        <div>
+          <div class="sp-setting-label">ログをお知らせに表示</div>
+          <div class="sp-setting-sub">お知らせボタン内にログ一覧を表示・バッジに未読ログ数を加算</div>
+        </div>
+        <label class="sp-toggle">
+          <input type="checkbox" id="spSettingShowLog" checked onchange="spSettingSave();_spApplyLogVisibility()">
           <span class="sp-toggle-slider"></span>
         </label>
       </div>
@@ -7794,6 +7837,8 @@ async function gatedOpen(poiId, fn) {
   fn();
   _recordKaiensaiStamp(poiId).catch(() => {});
   _recordEventAnalytics(poiId).catch(() => {});
+  // 施設訪問ログ
+  _spLogAdd({ type:'visit', icon: poi?.icon || '🚪', title: (poi ? poi.name : poiId) + ' に入りました', detail: cost > 0 ? `-${cost} EMUER` : '' });
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -12853,6 +12898,10 @@ window.addEventListener("message", (e) => {
   if (e.data.type === "openSpWallet")   { openSpPanel('spWalletPanel'); }
   if (e.data.type === "openSpRobot")    { openSpPanel('spRobotPanel'); }
   if (e.data.type === "openSpSettings") { openSpPanel('spSettingsPanel'); }
+  // iframeからアクティビティログを追加
+  if (e.data.type === "spActivityLog") {
+    _spLogAdd({ type: e.data.logType || 'action', icon: e.data.icon || '📌', title: e.data.title || 'アクション', detail: e.data.detail || '' });
+  }
   // iframeからイベント会場へ移動（EMUER利用料支払い含む）
   if (e.data.type === "spEventGo") {
     const evPage = e.data.page;
@@ -13079,6 +13128,7 @@ function _loadSpSettings() {
     setChk('spSettingPoiLabel', true);
     setChk('spSettingAnonymize', false);
     setChk('spSettingActivityLog', true);
+    setChk('spSettingShowLog', true);
     const langEl = document.getElementById('spSettingLang');
     if (langEl && s.spSettingLang) langEl.value = s.spSettingLang;
     const zoomEl = document.getElementById('spSettingZoom');
@@ -13120,6 +13170,7 @@ function spSettingSave() {
     spSettingPoiLabel:     get('spSettingPoiLabel')?.checked ?? true,
     spSettingAnonymize:    get('spSettingAnonymize')?.checked ?? false,
     spSettingActivityLog:  get('spSettingActivityLog')?.checked ?? true,
+    spSettingShowLog:      get('spSettingShowLog')?.checked ?? true,
     spSettingLang:          get('spSettingLang')?.value || 'ja',
     spSettingZoom:          get('spSettingZoom')?.value || '1',
     spSettingTutorialMode:  get('spSettingTutorialMode')?.value || 'always',
@@ -17231,9 +17282,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // ※ヘッダーのlogoタグに onclick="toggleDesignMode(); return false;" を付けた
 });
 
-// ════════════════════════════════════════
-// SchoolPark お知らせシステム
-// ════════════════════════════════════════
+// ════════════════════════════════════════════════
+// SchoolPark お知らせ＆ログシステム
+// ════════════════════════════════════════════════
+
+// ──────── 共通ユーティリティ ────────
 const _SP_NOTIF_API  = 'https://emu-realtime.onrender.com';
 let _spNotifData     = [];
 let _spNotifLoaded   = false;
@@ -17242,17 +17295,86 @@ let _spNotifPollTimer = null;
 function _spNotifAddress() {
   return (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
 }
-
-function _spNotifTimeAgo(isoStr) {
-  if (!isoStr) return '';
-  const diff = Date.now() - new Date(isoStr).getTime();
+function _spNotifTimeAgo(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - (typeof ts === 'number' ? ts : new Date(ts).getTime());
   if (diff < 60000)    return 'たった今';
   if (diff < 3600000)  return Math.floor(diff / 60000) + '分前';
   if (diff < 86400000) return Math.floor(diff / 3600000) + '時間前';
   return Math.floor(diff / 86400000) + '日前';
 }
+function _spShowLogEnabled() {
+  try { return JSON.parse(localStorage.getItem('spSettings') || '{}').spSettingShowLog !== false; }
+  catch { return true; }
+}
+function _spActivityLogEnabled() {
+  try { return JSON.parse(localStorage.getItem('spSettings') || '{}').spSettingActivityLog !== false; }
+  catch { return true; }
+}
 
-// サーバーから最新データを取得してバッジを更新
+// ──────── ①  アクティビティログ（localStorage） ────────
+const _SP_LOG_KEY = 'sp_activity_log';
+const _SP_LOG_MAX = 100;
+
+function _spLogGet() {
+  try { return JSON.parse(localStorage.getItem(_SP_LOG_KEY) || '[]'); } catch { return []; }
+}
+function _spLogSave(logs) {
+  try { localStorage.setItem(_SP_LOG_KEY, JSON.stringify(logs)); } catch {}
+}
+function _spLogAdd(entry) {
+  if (!_spActivityLogEnabled()) return;
+  const logs = _spLogGet();
+  logs.unshift({ id: Date.now() + '_' + Math.random().toString(36).slice(2,6), isRead: false, timestamp: Date.now(), ...entry });
+  if (logs.length > _SP_LOG_MAX) logs.length = _SP_LOG_MAX;
+  _spLogSave(logs);
+  _renderSpNotifBadge();
+  // パネルが開いていれば即時反映
+  const panel = document.getElementById('spNotifPanel');
+  if (panel && panel.style.display !== 'none') _renderSpLogList();
+}
+function _spLogUnreadCount() {
+  return _spLogGet().filter(l => !l.isRead).length;
+}
+function spLogMarkAllRead() {
+  const logs = _spLogGet().map(l => ({ ...l, isRead: true }));
+  _spLogSave(logs);
+  _renderSpNotifBadge();
+  _renderSpLogList();
+}
+function _renderSpLogList() {
+  const sec  = document.getElementById('spLogSection');
+  const list = document.getElementById('spLogList');
+  if (!sec || !list) return;
+  const show = _spShowLogEnabled();
+  sec.style.display = show ? '' : 'none';
+  if (!show) return;
+  const logs = _spLogGet();
+  if (!logs.length) {
+    list.innerHTML = '<div class="spn-empty">📭 ログはありません</div>';
+    return;
+  }
+  list.innerHTML = logs.slice(0, 50).map((l, i) => `
+    <div class="spn-item log-item ${l.isRead ? '' : 'unread'}" onclick="_spLogMarkOne(${i})">
+      <div class="spn-icon">${l.icon || '📌'}</div>
+      <div class="spn-content">
+        <div class="spn-title">${l.title}</div>
+        ${l.detail ? `<div class="spn-body">${l.detail}</div>` : ''}
+        <div class="spn-footer"><span class="spn-time">${_spNotifTimeAgo(l.timestamp)}</span></div>
+      </div>
+    </div>`).join('');
+}
+function _spLogMarkOne(idx) {
+  const logs = _spLogGet();
+  if (logs[idx]) { logs[idx].isRead = true; _spLogSave(logs); _renderSpNotifBadge(); _renderSpLogList(); }
+}
+// ログセクションの表示/非表示を設定変更時に即時反映
+function _spApplyLogVisibility() {
+  _renderSpLogList();
+  _renderSpNotifBadge();
+}
+
+// ──────── ②  お知らせ（Firestore API） ────────
 async function loadSpNotifications() {
   const address = _spNotifAddress();
   const url = `${_SP_NOTIF_API}/api/sp/notifications?limit=20${address ? '&address=' + encodeURIComponent(address) : ''}`;
@@ -17262,35 +17384,35 @@ async function loadSpNotifications() {
     _spNotifData   = Array.isArray(data) ? data : [];
     _spNotifLoaded = true;
     _renderSpNotifBadge();
-  } catch (e) {
-    // 通信失敗時はキャッシュをそのまま使う
+  } catch {
     if (!_spNotifLoaded) { _spNotifData = []; _spNotifLoaded = true; }
   }
 }
-
-// 60秒ごとにバッジをリフレッシュ（管理者が送信後すぐ反映）
 function _startSpNotifPoll() {
   if (_spNotifPollTimer) return;
   _spNotifPollTimer = setInterval(async () => {
     await loadSpNotifications();
-    // パネルが開いていれば中身も再描画
     const panel = document.getElementById('spNotifPanel');
     if (panel && panel.style.display !== 'none') _renderSpNotifList();
   }, 60 * 1000);
 }
 
+// ──────── ③  バッジ（通知＋ログを合算） ────────
 function _renderSpNotifBadge() {
   const badge = document.getElementById('spNotifBadge');
   if (!badge) return;
-  const unread = _spNotifData.filter(n => !n.isRead).length;
-  if (unread > 0) {
-    badge.textContent   = unread > 9 ? '9+' : String(unread);
+  const unreadNotif = _spNotifData.filter(n => !n.isRead).length;
+  const unreadLog   = _spShowLogEnabled() ? _spLogUnreadCount() : 0;
+  const total = unreadNotif + unreadLog;
+  if (total > 0) {
+    badge.textContent   = total > 99 ? '99+' : String(total);
     badge.style.display = 'flex';
   } else {
     badge.style.display = 'none';
   }
 }
 
+// ──────── ④  お知らせ一覧レンダリング ────────
 function _renderSpNotifList() {
   const container = document.getElementById('spNotifList');
   if (!container) return;
@@ -17320,26 +17442,21 @@ function _renderSpNotifList() {
   }).join('');
 }
 
-// パネルを開くたびに必ず最新データを取得
+// ──────── ⑤  パネル開閉 ────────
 function toggleSpNotifPanel() {
   const panel = document.getElementById('spNotifPanel');
   if (!panel) return;
   const isOpen = panel.style.display !== 'none' && panel.style.display !== '';
-  if (isOpen) {
-    panel.style.display = 'none';
-    return;
-  }
+  if (isOpen) { panel.style.display = 'none'; return; }
   panel.style.display = 'flex';
-  // まず現状を表示してから最新を取得
   _renderSpNotifList();
+  _renderSpLogList();
   loadSpNotifications().then(_renderSpNotifList);
 }
-
 function closeSpNotifPanel() {
   const panel = document.getElementById('spNotifPanel');
   if (panel) panel.style.display = 'none';
 }
-
 // パネル外クリックで閉じる
 document.addEventListener('click', e => {
   const panel = document.getElementById('spNotifPanel');
@@ -17348,44 +17465,43 @@ document.addEventListener('click', e => {
   if (brand && !brand.contains(e.target)) closeSpNotifPanel();
 });
 
+// ──────── ⑥  既読操作 ────────
 async function spMarkRead(notifId) {
   const address = _spNotifAddress();
   const n = _spNotifData.find(x => x.id === notifId);
   if (!n || n.isRead) return;
   n.isRead = true;
-  _renderSpNotifBadge();
-  _renderSpNotifList();
+  _renderSpNotifBadge(); _renderSpNotifList();
   if (!address) return;
   try {
     await fetch(`${_SP_NOTIF_API}/api/sp/notifications/${notifId}/read`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address })
     });
-  } catch (e) {}
+  } catch {}
 }
-
 async function spMarkAllRead() {
   _spNotifData.forEach(n => { n.isRead = true; });
-  _renderSpNotifBadge();
-  _renderSpNotifList();
+  _renderSpNotifBadge(); _renderSpNotifList();
   const address = _spNotifAddress();
   if (!address) return;
   try {
     await fetch(`${_SP_NOTIF_API}/api/sp/notifications/read-all`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address })
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address })
     });
-  } catch (e) {}
+  } catch {}
+}
+// お知らせ＋ログ まとめて既読
+async function spMarkAllReadAll() {
+  await spMarkAllRead();
+  spLogMarkAllRead();
 }
 
+// ──────── ⑦  施設ナビ ────────
 function spNotifGoto(idx) {
   const n = _spNotifData[idx];
   if (!n || !n.link) return;
   spMarkRead(n.id);
   closeSpNotifPanel();
-  // POIを検索してEMUER消費込みでナビ
   const poi = (window.SP_POIS || []).find(p => p.page === n.link);
   if (poi && typeof gatedOpen === 'function') {
     gatedOpen(poi.id, () => openSpContent(n.link));
@@ -17396,12 +17512,12 @@ function spNotifGoto(idx) {
   }
 }
 
-// ページロード時に初回取得 + 60秒ポーリング開始
+// ──────── ⑧  初期化 ────────
 document.addEventListener('DOMContentLoaded', () => {
-  // 2秒後に初回ロード（サーバーのコールドスタートを避けるため少し遅延）
   setTimeout(() => {
     loadSpNotifications();
     _startSpNotifPoll();
+    _renderSpNotifBadge(); // ログの未読分もすぐ反映
   }, 2000);
 });
 
