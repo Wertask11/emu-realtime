@@ -1165,8 +1165,8 @@ body.spmap-open #kaiensaiBanner { display:flex !important; }
   /* Infobar 非表示 */
   .spmap-infobar { display:none; }
 
-  /* 検索バーをマップ上部→下部に移動（幅も調整） */
-  .spmap-search { top:auto; bottom:14px; width:calc(100% - 110px); left:8px; transform:none; }
+  /* 検索バー：上部中央・幅調整 */
+  .spmap-search { top:12px; left:50%; transform:translateX(-50%); width:calc(100% - 110px); max-width:280px; }
 
   /* 詳細パネル */
   .spmap-detail {
@@ -4754,16 +4754,25 @@ function _isKaiensaiVisible() {
 }
 let CAMPAIGN_MODE = _isKaiensaiPeriod();
 
-async function _loadKaiensaiActiveFlag() {
+// onSnapshotでリアルタイム購読：room1管理画面でトグルした瞬間に全クライアントへ即時反映される
+let _spEventConfigUnsub = null;
+function _loadKaiensaiActiveFlag() {
+  if (_spEventConfigUnsub) return; // 既に購読中なら再購読しない
   if (!window.db || !window.fbLib) { setTimeout(_loadKaiensaiActiveFlag, 800); return; }
   try {
-    const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'sp_event_config', 'kaiensai_2026'));
-    _spEventActiveFlag = !!(snap.exists() && snap.data().eventActive);
+    _spEventConfigUnsub = window.fbLib.onSnapshot(
+      window.fbLib.doc(window.db, 'sp_event_config', 'kaiensai_2026'),
+      (snap) => {
+        _spEventActiveFlag = !!(snap.exists() && snap.data().eventActive);
+        CAMPAIGN_MODE = _isKaiensaiPeriod();
+        _applyKaiensaiVisibility();
+      },
+      (err) => { console.warn('開園祭設定の購読エラー:', err); }
+    );
   } catch (e) {
-    _spEventActiveFlag = false;
+    console.warn('開園祭設定の購読開始エラー:', e);
+    setTimeout(_loadKaiensaiActiveFlag, 1500);
   }
-  CAMPAIGN_MODE = _isKaiensaiPeriod();
-  _applyKaiensaiVisibility();
 }
 
 function _applyKaiensaiVisibility() {
