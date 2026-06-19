@@ -2638,7 +2638,19 @@ async function notifLoad() {
 <!-- ── 開園祭タブ ── -->
 <div id="tab-kaiensai" class="tab-content">
   <div class="direct-form">
-    <h2 style="color:#ff6b35;">🎪 開園祭イベント管理（5/20〜5/25）</h2>
+    <h2 style="color:#ff6b35;">🎪 開園祭イベント管理</h2>
+
+    <!-- ⓪ 公開トグル -->
+    <div style="background:#161616;border:1px solid rgba(255,107,53,.5);border-radius:10px;padding:18px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:14px;">
+      <div>
+        <h3 style="font-size:14px;color:#ff6b35;margin:0 0 4px;">🚪 イベント会場の公開</h3>
+        <div style="font-size:12px;color:#888;">OFFの間はSchoolPark側のイベント会場・屋台が全ユーザーに非表示になります。次回イベント開催時にONにしてください。</div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;flex-shrink:0;cursor:pointer;">
+        <input type="checkbox" id="kai-active-toggle" onchange="kaiensaiToggleActive()" style="width:20px;height:20px;cursor:pointer;">
+        <span id="kai-active-label" style="font-size:13px;font-weight:700;color:#888;">非公開</span>
+      </label>
+    </div>
 
     <!-- ① スポット登録フォーム -->
     <div style="background:#161616;border:1px solid rgba(255,107,53,.3);border-radius:10px;padding:18px;margin-bottom:20px;">
@@ -2734,7 +2746,7 @@ async function notifLoad() {
     <div style="background:#161616;border:1px solid #2a2a2a;border-radius:10px;padding:18px;">
       <h3 style="font-size:14px;color:#4ec9b0;margin-bottom:10px;">📅 イベント情報</h3>
       <div style="font-size:13px;color:#888;line-height:2;">
-        期間：2026年5月20日（水）〜 5月25日（月）<br>
+        期間：上の「イベント会場の公開」トグルで管理（日付固定ではなく手動切替）<br>
         会場：中央エリア / 🎪 イベント会場（eventゾーン）<br>
         スタンプ数：登録スポット数に応じて自動更新<br>
         コンプリート報酬：称号バッジ「🎪 開園祭の申し子」＋ 1,000実EMUER<br>
@@ -2889,13 +2901,35 @@ function kaiensaiLoadConfig() {
   var db = window.fpAdminDB;
   if (!db) { setTimeout(kaiensaiLoadConfig, 500); return; }
   db.collection(KAI_CFG).doc('kaiensai_2026').get().then(function(snap) {
-    if (!snap.exists) return;
-    var d = snap.data();
+    var d = snap.exists ? snap.data() : {};
     var oi = document.getElementById('kai-omen-url');
     var si = document.getElementById('kai-sticker-url');
     if (oi && d.omenUrl)    oi.value = d.omenUrl;
     if (si && d.stickerUrl) si.value = d.stickerUrl;
+    var toggle = document.getElementById('kai-active-toggle');
+    if (toggle) {
+      toggle.checked = !!d.eventActive;
+      kaiensaiUpdateActiveLabel(toggle.checked);
+    }
   }).catch(function(e) {});
+}
+
+function kaiensaiUpdateActiveLabel(active) {
+  var label = document.getElementById('kai-active-label');
+  if (!label) return;
+  label.textContent = active ? '公開中' : '非公開';
+  label.style.color = active ? '#4ade80' : '#888';
+}
+
+function kaiensaiToggleActive() {
+  var db = window.fpAdminDB;
+  if (!db) { alert('Firebase未接続'); return; }
+  var toggle = document.getElementById('kai-active-toggle');
+  var active = !!toggle.checked;
+  kaiensaiUpdateActiveLabel(active);
+  db.collection(KAI_CFG).doc('kaiensai_2026').set({ eventActive: active }, { merge: true })
+    .then(function() { /* 即時保存（アラートなしで静かに反映） */ })
+    .catch(function(e) { alert('❌ 公開設定の保存に失敗: ' + e.message); toggle.checked = !active; kaiensaiUpdateActiveLabel(!active); });
 }
 
 function kaiensaiAddSpot() {
