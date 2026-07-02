@@ -139,7 +139,6 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
     <button class="tab-btn" onclick="switchTab('vigilante',this)">🛡️ 自警団</button>
     <button class="tab-btn" onclick="switchTab('gym',this)">💪 ジム</button>
     <button class="tab-btn" onclick="switchTab('fire',this)">🚒 消防署</button>
-    <button class="tab-btn" style="color:#ff6b35;" onclick="switchTab('event',this)">🎪 開園祭</button>
   </div>
 
   <div class="main">
@@ -215,87 +214,6 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
       </div>
     </div>
 
-    <!-- 開園祭 -->
-    <div class="panel" id="panel-event">
-      <div class="sec">
-        <div class="sec-title">
-          <span class="sec-title-text">🎪 開園祭イベント管理</span>
-          <button class="refresh-btn" onclick="loadEventPanel()">↻ 更新</button>
-        </div>
-
-        <!-- ① イベントスポット登録 -->
-        <div style="background:var(--bg3);border:1px solid rgba(255,107,53,.3);border-radius:10px;padding:14px;margin-bottom:12px;">
-          <div style="font-size:0.75rem;font-weight:700;color:#ff6b35;margin-bottom:12px;">📍 イベントスポット登録</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-            <div>
-              <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">アイコン（絵文字）</label>
-              <input id="evIcon" type="text" placeholder="🎪" maxlength="4" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:1.1rem;font-family:inherit;text-align:center;">
-            </div>
-            <div>
-              <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">スポット名</label>
-              <input id="evName" type="text" placeholder="たこ焼き屋台" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:0.75rem;font-family:inherit;">
-            </div>
-          </div>
-          <div style="margin-bottom:8px;">
-            <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">説明文</label>
-            <input id="evDesc" type="text" placeholder="開園祭の屋台！" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:0.75rem;font-family:inherit;">
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
-            <div>
-              <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">ボタンラベル</label>
-              <input id="evBtn" type="text" placeholder="屋台に行く" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:0.72rem;font-family:inherit;">
-            </div>
-            <div>
-              <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">位置X（0〜100）</label>
-              <input id="evPx" type="number" placeholder="50" min="0" max="100" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:0.75rem;font-family:inherit;">
-            </div>
-            <div>
-              <label style="font-size:0.68rem;color:var(--muted);display:block;margin-bottom:3px;">位置Y（0〜100）</label>
-              <input id="evPy" type="number" placeholder="50" min="0" max="100" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:0.75rem;font-family:inherit;">
-            </div>
-          </div>
-          <button onclick="addEventSpot()" style="width:100%;background:#ff6b35;color:#fff;border:none;border-radius:8px;padding:9px;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;">＋ スポットを登録する</button>
-        </div>
-
-        <!-- ② 登録済みスポット一覧 -->
-        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;">
-          <div style="font-size:0.75rem;font-weight:700;color:var(--accent2);margin-bottom:10px;">📋 登録済みスポット一覧</div>
-          <div id="eventSpotList"><div class="empty-state"><div class="empty-icon">📭</div>読み込み中...</div></div>
-        </div>
-
-        <!-- ③ スタンプラリー完了者 -->
-        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;">
-          <div style="font-size:0.75rem;font-weight:700;color:var(--accent2);margin-bottom:10px;">🎫 スタンプラリー完了者</div>
-          <div id="stampCompleteList"><div class="empty-state"><div class="empty-icon">📭</div>読み込み中...</div></div>
-        </div>
-
-        <!-- ④ マルシェDLリンク設定 -->
-        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;">
-          <div style="font-size:0.75rem;font-weight:700;color:var(--accent2);margin-bottom:10px;">🛍️ マルシェ ダウンロードリンク設定</div>
-          <div style="margin-bottom:8px;">
-            <label style="font-size:0.7rem;color:var(--muted);display:block;margin-bottom:4px;">🧊 冷蔵庫くんのお面 URL</label>
-            <input id="omenUrlInput" type="text" placeholder="https://..." style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:0.75rem;font-family:inherit;">
-          </div>
-          <div style="margin-bottom:10px;">
-            <label style="font-size:0.7rem;color:var(--muted);display:block;margin-bottom:4px;">🏷 デジタルステッカー URL</label>
-            <input id="stickerUrlInput" type="text" placeholder="https://..." style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:0.75rem;font-family:inherit;">
-          </div>
-          <button onclick="saveEventConfig()" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;">💾 保存する</button>
-        </div>
-
-        <!-- ⑤ イベント情報 -->
-        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;">
-          <div style="font-size:0.75rem;font-weight:700;color:var(--accent2);margin-bottom:8px;">📅 イベント情報</div>
-          <div style="font-size:0.72rem;color:var(--muted);line-height:1.9;">
-            期間：2026年5月20日（水）〜 5月25日（月）<br>
-            会場：中央エリア / イベント会場（eventゾーン）<br>
-            コンプリート報酬：称号バッジ「🎪 開園祭の申し子」＋ 1,000実EMUER<br>
-            EMUER送金：イベント終了後 手動（addgoodバッジから）
-          </div>
-        </div>
-      </div>
-    </div>
-
   </div>
 </div>
 
@@ -348,118 +266,7 @@ function switchTab(id, btn){
   document.getElementById('panel-'+id).classList.add('active');
   btn.classList.add('active');
   if(id==='all') loadAll();
-  else if(id==='event') loadEventPanel();
   else loadFacility(id);
-}
-
-async function loadEventPanel(){
-  const db = getDb(); const fb = getFbLib();
-  if(!db || !fb){
-    document.getElementById('eventSpotList').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div>Firebase未接続</div>';
-    document.getElementById('stampCompleteList').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div>Firebase未接続</div>';
-    return;
-  }
-  loadEventSpotList();
-  loadStampCompleteList();
-
-  // 現在のDLリンクを取得してinputに表示
-  try {
-    const cfgSnap = await fb.getDoc(fb.doc(db,'sp_event_config','kaiensai_2026'));
-    if(cfgSnap.exists()){
-      const d = cfgSnap.data();
-      const oi = document.getElementById('omenUrlInput');
-      const si = document.getElementById('stickerUrlInput');
-      if(oi && d.omenUrl) oi.value = d.omenUrl;
-      if(si && d.stickerUrl) si.value = d.stickerUrl;
-    }
-  } catch(e){}
-}
-
-async function loadEventSpotList(){
-  const db = getDb(); const fb = getFbLib();
-  const el = document.getElementById('eventSpotList');
-  if(!db || !fb){ el.innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div>Firebase未接続</div>'; return; }
-  el.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div>読み込み中...</div>';
-  try {
-    const snap = await fb.getDocs(fb.collection(db,'sp_event_spots_2026'));
-    if(snap.empty){ el.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div>スポット未登録</div>'; return; }
-    const rows = [];
-    snap.forEach(d=>{
-      const s = d.data();
-      rows.push(`
-        <div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border);">
-          <span style="font-size:1.3rem;width:28px;text-align:center;">${s.icon||'📍'}</span>
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:0.75rem;font-weight:700;color:var(--text);">${s.name||'—'}</div>
-            <div style="font-size:0.65rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.desc||''}</div>
-            <div style="font-size:0.62rem;color:var(--muted);">X:${s.px} Y:${s.py} | ${s.btnLabel||''}</div>
-          </div>
-          <button onclick="deleteEventSpot('${d.id}')" style="background:#7f1d1d;border:none;color:#fca5a5;border-radius:6px;padding:4px 8px;font-size:0.65rem;cursor:pointer;white-space:nowrap;">🗑 削除</button>
-        </div>`);
-    });
-    el.innerHTML = rows.join('');
-  } catch(e){ el.innerHTML='<div class="empty-state"><div class="empty-icon">❌</div>取得エラー</div>'; }
-}
-
-async function loadStampCompleteList(){
-  const db = getDb(); const fb = getFbLib();
-  const listEl = document.getElementById('stampCompleteList');
-  listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div>読み込み中...</div>';
-  try {
-    const snap = await fb.getDocs(fb.collection(db,'sp_stamp_2026'));
-    const completed = [];
-    snap.forEach(d=>{ if(d.data()._completed) completed.push({ wallet:d.id, at:d.data()._completedAt }); });
-    if(completed.length===0){ listEl.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div>まだコンプリート者なし</div>'; return; }
-    listEl.innerHTML = completed.map(c=>`
-      <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:0.72rem;">
-        <span style="color:#ff6b35;font-weight:700;">🎪 コンプリート</span>
-        <span style="color:var(--text);margin-left:8px;word-break:break-all;">${c.wallet}</span>
-        <span style="color:var(--muted);margin-left:8px;">${c.at ? new Date(c.at).toLocaleDateString('ja-JP') : ''}</span>
-      </div>`).join('');
-  } catch(e){ listEl.innerHTML='<div class="empty-state"><div class="empty-icon">❌</div>取得エラー</div>'; }
-}
-
-async function addEventSpot(){
-  const db = getDb(); const fb = getFbLib();
-  if(!db || !fb){ showToast('Firebase未接続'); return; }
-  const icon     = document.getElementById('evIcon').value.trim();
-  const name     = document.getElementById('evName').value.trim();
-  const desc     = document.getElementById('evDesc').value.trim();
-  const btnLabel = document.getElementById('evBtn').value.trim();
-  const px       = parseInt(document.getElementById('evPx').value) || 50;
-  const py       = parseInt(document.getElementById('evPy').value) || 50;
-  if(!name){ showToast('スポット名を入力してください'); return; }
-  try {
-    await fb.addDoc(fb.collection(db,'sp_event_spots_2026'), {
-      icon: icon||'📍', name, desc, btnLabel: btnLabel||name, px, py,
-      status:'open', zone:'event', eventOnly:true, createdAt: Date.now()
-    });
-    showToast('✅ スポットを登録しました');
-    ['evIcon','evName','evDesc','evBtn','evPx','evPy'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-    loadEventSpotList();
-  } catch(e){ showToast('❌ 登録エラー: '+e.message); }
-}
-
-async function deleteEventSpot(docId){
-  const db = getDb(); const fb = getFbLib();
-  if(!db || !fb){ showToast('Firebase未接続'); return; }
-  if(!confirm('このスポットを削除しますか？')) return;
-  try {
-    await fb.deleteDoc(fb.doc(db,'sp_event_spots_2026',docId));
-    showToast('🗑️ 削除しました');
-    loadEventSpotList();
-  } catch(e){ showToast('❌ 削除エラー: '+e.message); }
-}
-
-async function saveEventConfig(){
-  const db = getDb(); const fb = getFbLib();
-  if(!db || !fb){ showToast('Firebase未接続'); return; }
-  const omenUrl    = document.getElementById('omenUrlInput')?.value.trim();
-  const stickerUrl = document.getElementById('stickerUrlInput')?.value.trim();
-  try {
-    await fb.setDoc(fb.doc(db,'sp_event_config','kaiensai_2026'), { omenUrl, stickerUrl }, { merge:true });
-    showToast('✅ 保存しました');
-  } catch(e){ showToast('❌ 保存エラー: '+e.message); }
 }
 
 // 日付フォーマット

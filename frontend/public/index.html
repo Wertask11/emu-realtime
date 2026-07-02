@@ -644,15 +644,7 @@
   70%{opacity:1}
   100%{opacity:0;transform:translateY(-10px)}
 }
-/* 開園祭バナー：SchoolPark表示中のみ表示 */
-#kaiensaiBanner { display:none !important; }
-body.spmap-open #kaiensaiBanner { display:flex !important; }
-@keyframes fadeInUp {
-  from{opacity:0;transform:translate(-50%,10px)} to{opacity:1;transform:translate(-50%,0)}
-}
-@keyframes kaiensaiDotPulse {
-  0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.5);opacity:.6}
-}
+
 .spmap-close-x {
   background:none; border:1px solid rgba(255,255,255,0.2); color:#aaa; width:30px; height:30px;
   border-radius:50%; cursor:pointer; font-size:0.95rem; margin-left:10px; flex-shrink:0;
@@ -3366,14 +3358,7 @@ body.paypay-mode #pp-post-fab {
           </div>
           <span class="spmap-area-count">5</span>
         </div>
-        <div class="spmap-area-item" id="kaiensaiAreaItem" onclick="spMapFilter(['event'],this)" style="display:none;">
-          <span class="spmap-area-dot" style="background:#ff6b35;animation:kaiensaiDotPulse 1.2s infinite;"></span>
-          <div class="spmap-area-names">
-            <span class="spmap-area-main">🎪 イベント会場</span>
-            <span class="spmap-area-sub">開催中のイベント</span>
-          </div>
-          <span class="spmap-area-count" style="background:#ff6b35;color:#fff;border-radius:99px;padding:1px 7px;font-size:10px;">NEW</span>
-        </div>
+
       </div>
 
       <!-- コンテンツ一覧（エリア選択後に動的表示） -->
@@ -3493,8 +3478,8 @@ body.paypay-mode #pp-post-fab {
 </div>
 
 <!-- ── SchoolPark 初回チュートリアル演出（冷蔵庫くん） ── -->
-<div id="spTutOverlay" onclick="_kaiensaiTutRunning ? _kaiensaiTutNext() : _spTutNext()"></div>
-<div id="spTutMascot" onclick="_kaiensaiTutRunning ? _kaiensaiTutNext() : _spTutNext()">
+<div id="spTutOverlay" onclick="_spTutNext()"></div>
+<div id="spTutMascot" onclick="_spTutNext()">
   <div class="sp-tut-bubble">
     <div class="sp-tut-text" id="spTutText"></div>
     <span class="sp-tut-hint" id="spTutHint">タップして次へ</span>
@@ -4730,78 +4715,18 @@ const EMUER_RATE_CONFIG = {
   star5: 0,   // 夜空の展望台
   // タクシー
   taxi_ride: 3,
-  // 開園祭イベント屋台（各10 EMUER）
-  event1: 10, // たこ焼き
-  event2: 10, // 唐揚げ
-  event3: 10, // かき氷
-  event4: 10, // 金魚すくい
-  event5: 10, // ヨーヨー釣り
-  event6: 10, // 射的
-  event7: 10, // SchoolParkマルシェ
+
 };
 
-/* ═══════════════════════════════════════════════════════
-   キャンペーンモード切り替え（開園祭イベント公開状態）
-   ★ room1管理画面「🎪 開園祭」タブのトグルで sp_event_config/kaiensai_2026.eventActive を切替
-   ★ 日付ハードコードではなくFirestoreフラグで管理（PC/スマホで表示がズレる問題を回避）
-═══════════════════════════════════════════════════════ */
-let _spEventActiveFlag = false;
-function _isKaiensaiPeriod() {
-  return _spEventActiveFlag;
-}
-function _isKaiensaiVisible() {
-  return _isKaiensaiPeriod();
-}
-let CAMPAIGN_MODE = _isKaiensaiPeriod();
-
-// onSnapshotでリアルタイム購読：room1管理画面でトグルした瞬間に全クライアントへ即時反映される
-let _spEventConfigUnsub = null;
-function _loadKaiensaiActiveFlag() {
-  if (_spEventConfigUnsub) return; // 既に購読中なら再購読しない
-  if (!window.db || !window.fbLib) { setTimeout(_loadKaiensaiActiveFlag, 800); return; }
-  try {
-    _spEventConfigUnsub = window.fbLib.onSnapshot(
-      window.fbLib.doc(window.db, 'sp_event_config', 'kaiensai_2026'),
-      (snap) => {
-        _spEventActiveFlag = !!(snap.exists() && snap.data().eventActive);
-        CAMPAIGN_MODE = _isKaiensaiPeriod();
-        _applyKaiensaiVisibility();
-      },
-      (err) => { console.warn('開園祭設定の購読エラー:', err); }
-    );
-  } catch (e) {
-    console.warn('開園祭設定の購読開始エラー:', e);
-    setTimeout(_loadKaiensaiActiveFlag, 1500);
-  }
-}
-
-function _applyKaiensaiVisibility() {
-  const evItem = document.getElementById('kaiensaiAreaItem');
-  if (evItem) evItem.style.display = _isKaiensaiVisible() ? '' : 'none';
-  if (_isKaiensaiVisible()) {
-    _loadFirestoreEventSpots();
-    _showKaiensaiBanner();
-  } else {
-    const banner = document.getElementById('kaiensaiBanner');
-    if (banner) banner.remove();
-    _dynamicEventPois = [];
-  }
-  if (typeof renderSpMapPois === 'function') renderSpMapPois();
-  if (typeof renderSpContentList === 'function') renderSpContentList(_spMapFilter || 'all');
-}
 
 /* ═══════════════════════════════════════════════════════
    EMUER ステップ制利用制限設定
    ★ 各ステップ: { balance: 補充EMUER量, restrictionMs: 制限時間(ms) }
    ★ 最終ステップ解除後に 1,000 EMUER 実配布（サイクル完了報酬）
-   ★ CAMPAIGN_MODE = true にするとキャンペーン設定に切り替わる
 
    通常モード
      無料ユーザー: 300→1h / 300→1h / 300→1h / 100→5h（合計8h）
      有料ユーザー: 500→1h / 500→3h              （合計4h）
-   キャンペーン中（中間制限なし）
-     無料ユーザー: 1000→5h
-     有料ユーザー: 1000→3h
 ═══════════════════════════════════════════════════════ */
 const EMUER_STEPS_CONFIG = {
   normal: {
@@ -4815,10 +4740,6 @@ const EMUER_STEPS_CONFIG = {
       { balance: 500, restrictionMs: 1 * 60 * 60 * 1000 },  // ステップ1
       { balance: 500, restrictionMs: 3 * 60 * 60 * 1000 },  // ステップ2（最終）
     ],
-  },
-  campaign: {
-    free: [{ balance: 1000, restrictionMs: 5 * 60 * 60 * 1000 }],  // 1000EMUER → 5時間
-    paid: [{ balance: 1000, restrictionMs: 3 * 60 * 60 * 1000 }],  // 1000EMUER → 3時間
   },
 };
 const EMUER_COMPLETION_REWARD = 1000; // 全ステップ完了後の実EMUER配布量
@@ -4930,12 +4851,6 @@ const BADGE_DEFINITIONS = {
     style: 'background:linear-gradient(135deg,#1abc9c,#16a085);color:#fff;',
     description: 'Change活動ランキング1位'
   },
-  開園祭の申し子: {
-    id: '開園祭の申し子',
-    label: '🎪 開園祭の申し子',
-    style: 'background:linear-gradient(135deg,#ff6b35,#f7931e);color:#fff;',
-    description: 'SchoolPark開園祭スタンプラリーコンプリート'
-  }
 };
 
 // ランキング種別→1位バッジの対応
@@ -7589,11 +7504,9 @@ function _getUserTypeForEmuer() {
   return 'free';
 }
 
-// 現在のモード（通常 / キャンペーン）に対応したステップ配列を返す
 function _getEmuerSteps(userType) {
-  const mode = CAMPAIGN_MODE ? 'campaign' : 'normal';
-  const key  = userType === 'paid' ? 'paid' : 'free';
-  return EMUER_STEPS_CONFIG[mode][key];
+  const key = userType === 'paid' ? 'paid' : 'free';
+  return EMUER_STEPS_CONFIG.normal[key];
 }
 
 // ステップインデックスに対応する補充残高（範囲外は先頭ステップ）
@@ -7740,12 +7653,11 @@ function _showEmuerRestrictionOverlay(restrictionUntil) {
   const totalSteps = steps.length;
   const isFinal   = erData ? !!erData._cycleComplete : false;
   const typeLabel = userType === 'paid' ? '有料ユーザー' : '無料ユーザー';
-  const campLabel = CAMPAIGN_MODE ? ' ｜ キャンペーン中' : '';
 
   // バッジ
   const badge = document.getElementById('erTypeBadge');
   if (badge) {
-    badge.textContent = `${typeLabel} ｜ ステップ ${Math.min(doneSteps, totalSteps)} / ${totalSteps}${campLabel}`;
+    badge.textContent = `${typeLabel} ｜ ステップ ${Math.min(doneSteps, totalSteps)} / ${totalSteps}`;
   }
 
   // 解除後補充量を計算
@@ -8139,143 +8051,6 @@ function _closeKaraageStall() {
 }
 
 /* ═══════════════════════════════════════════════════════
-   開園祭マルシェ（デジタルグッズ配布）
-═══════════════════════════════════════════════════════ */
-function openKaiensaiMarche() {
-  if (document.getElementById('kaiensaiMarcheModal')) return;
-
-  // ダウンロードアイテム定義
-  const MARCHE_ITEMS = [
-    {
-      category: '🏷 デジタルステッカー',
-      items: [
-        {
-          id:   'sticker-a',
-          name: '開園祭限定デザインA（縦型）',
-          desc: 'お神輿＆冷蔵庫くん 祭りバージョン',
-          file: '/assets/marche/sticker-kaiensai-a.png',
-          thumb: '/assets/marche/sticker-kaiensai-a.png',
-          dlName: 'SchoolPark_sticker_kaiensai_A.png',
-        },
-        {
-          id:   'sticker-b',
-          name: '開園祭限定デザインB（正方形）',
-          desc: 'シンプル正方形バージョン',
-          file: '/assets/marche/sticker-kaiensai-b.png',
-          thumb: '/assets/marche/sticker-kaiensai-b.png',
-          dlName: 'SchoolPark_sticker_kaiensai_B.png',
-        },
-        {
-          id:   'logo-new',
-          name: 'SchoolPark 新ロゴ',
-          desc: '宇宙・星座デザインの新ロゴ',
-          file: '/assets/marche/logo-schoolpark-new.png',
-          thumb: '/assets/marche/logo-schoolpark-new.png',
-          dlName: 'SchoolPark_logo_new.png',
-        },
-      ],
-    },
-    {
-      category: '🧊 プリントグッズ',
-      items: [
-        {
-          id:   'omen',
-          name: '冷蔵庫くんのお面',
-          desc: '印刷して開園祭を楽しもう！',
-          file: '/assets/marche/omen-reizoko.png',
-          thumb: '/assets/marche/omen-reizoko.png',
-          dlName: 'SchoolPark_omen_reizoko.png',
-        },
-      ],
-    },
-  ];
-
-  // カード HTML 生成
-  function buildItemCard(item) {
-    return `
-      <div style="
-        display:flex;align-items:center;gap:12px;
-        border:1.5px solid #ffe0cc;border-radius:14px;
-        padding:10px 12px;background:#fff8f5;
-      ">
-        <img src="${item.thumb}" alt="${item.name}"
-          style="width:60px;height:60px;object-fit:cover;border-radius:8px;
-                 border:1px solid #ffd0b0;flex-shrink:0;background:#f5f5f5;"
-          onerror="this.style.display='none'">
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:12px;font-weight:bold;color:#333;margin-bottom:2px;
-                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name}</div>
-          <div style="font-size:10px;color:#999;margin-bottom:6px;">${item.desc}</div>
-          <a href="${item.file}" download="${item.dlName}"
-            style="display:inline-block;background:linear-gradient(135deg,#ff6b35,#f7931e);
-              color:#fff;border-radius:99px;padding:5px 14px;font-size:11px;font-weight:bold;
-              text-decoration:none;">
-            ⬇ ダウンロード
-          </a>
-        </div>
-      </div>
-    `;
-  }
-
-  const sectionsHtml = MARCHE_ITEMS.map(sec => `
-    <div style="margin-bottom:14px;">
-      <div style="font-size:12px;font-weight:bold;color:#ff6b35;margin-bottom:8px;
-                  padding-left:4px;border-left:3px solid #ff6b35;">
-        ${sec.category}
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        ${sec.items.map(buildItemCard).join('')}
-      </div>
-    </div>
-  `).join('');
-
-  const modal = document.createElement('div');
-  modal.id = 'kaiensaiMarcheModal';
-  modal.style.cssText = `
-    position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:10000;
-    display:flex;align-items:center;justify-content:center;padding:16px;
-  `;
-  modal.innerHTML = `
-    <div style="
-      background:#fff;border-radius:22px;
-      width:100%;max-width:360px;max-height:88vh;overflow-y:auto;
-      box-shadow:0 12px 48px rgba(0,0,0,.35);
-      font-family:'Hiragino Maru Gothic ProN','Hiragino Sans','Yu Gothic UI',sans-serif;
-    ">
-      <!-- ヘッダー -->
-      <div style="
-        background:linear-gradient(135deg,#ff6b35,#f7931e);
-        border-radius:22px 22px 0 0;padding:18px 20px 14px;
-        display:flex;align-items:center;justify-content:space-between;
-      ">
-        <div>
-          <div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:.04em;">
-            🛍️ SchoolParkマルシェ
-          </div>
-          <div style="font-size:11px;color:rgba(255,255,255,.85);margin-top:2px;">
-            開園祭 2026 限定デジタルグッズ
-          </div>
-        </div>
-        <button onclick="document.getElementById('kaiensaiMarcheModal').remove();"
-          style="background:rgba(255,255,255,.25);border:none;border-radius:50%;
-                 width:30px;height:30px;color:#fff;font-size:16px;cursor:pointer;
-                 display:grid;place-items:center;">✕</button>
-      </div>
-
-      <!-- コンテンツ -->
-      <div style="padding:16px 16px 20px;">
-        ${sectionsHtml}
-        <div style="font-size:10px;color:#bbb;text-align:center;margin-top:4px;">
-          ※ 画像は個人利用の範囲でご使用ください
-        </div>
-      </div>
-    </div>
-  `;
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-  document.body.appendChild(modal);
-}
-
-/* ═══════════════════════════════════════════════════════
    SchoolPark agents — Phase 4c: アラート自律対応
 ═══════════════════════════════════════════════════════ */
 
@@ -8287,7 +8062,6 @@ const ALERT_TYPES = {
   balance_low:       { icon:'💸', label:'残高低下',       color:'#ef4444', desc:'残高がしきい値以下になったとき' },
   restriction_lifted:{ icon:'🔓', label:'制限解除',       color:'#4ade80', desc:'EMUER制限が解除されたとき' },
   restriction_soon:  { icon:'⏳', label:'制限まじか',      color:'#eab308', desc:'制限解除まで30分以内のとき' },
-  kaiensai_active:   { icon:'🎪', label:'開園祭開始',     color:'#f97316', desc:'開園祭イベント期間に入ったとき' },
   balance_recovered: { icon:'💎', label:'残高回復',       color:'#D4A843', desc:'EMUER補充が完了したとき' },
 };
 
@@ -8384,16 +8158,6 @@ async function _checkAlerts() {
         }
         break;
       }
-      case 'kaiensai_active': {
-        if (_isKaiensaiPeriod()) {
-          // 今日まだ通知していなければ発火
-          if (!alert.firedAt || (now - alert.firedAt) > 12 * 60 * 60 * 1000) {
-            shouldFire = true;
-            fireMsg = '🎪 SchoolPark開園祭が開催中です！イベント会場へGO';
-          }
-        }
-        break;
-      }
       case 'balance_recovered': {
         // 前回より残高が増えた（補充検知）
         if (_alertPrevBalance !== null && balance > _alertPrevBalance) {
@@ -8465,7 +8229,6 @@ function _alertQuickAdd(type) {
   const presets = {
     balance_low:       { type:'balance_low',        action:'notify_recommend', params:{ threshold:100 } },
     restriction_lifted:{ type:'restriction_lifted',  action:'notify_patrol',   params:{} },
-    kaiensai_active:   { type:'kaiensai_active',     action:'notify',          params:{} },
   };
   const preset = presets[type];
   if (!preset) return;
@@ -8636,7 +8399,6 @@ function _renderAlertAgent() {
   const presets = [
     { type:'balance_low',        label:'残高低下',  icon:'💸' },
     { type:'restriction_lifted', label:'制限解除',  icon:'🔓' },
-    { type:'kaiensai_active',    label:'開園祭',    icon:'🎪' },
   ].filter(p => !existingTypes.has(p.type));
 
   el.innerHTML = `
@@ -8766,7 +8528,7 @@ function _renderRecommendAgent() {
   else                               { timeZone = 'guard'; timeHint = '夜は守りを固める 🌙'; }
 
   /* ─ 3. POIスコアリング ─ */
-  const openPois = SP_POIS.filter(p => p.status === 'open' && !p.eventOnly);
+  const openPois = SP_POIS.filter(p => p.status === 'open');
 
   const scored = openPois.map(p => {
     const cost      = EMUER_RATE_CONFIG[p.id] ?? 0;
@@ -9180,7 +8942,7 @@ function _quickAddTask(preset) {
       task = {
         type: 'patrol',
         trigger: { type:'restriction_lifted' },
-        payload: { label:'制限解除後 → 開園祭巡回', message:'制限が解除されました！自動巡回を開始します。', patrolPreset:'event' },
+        payload: { label:'制限解除後 → 自動巡回', message:'制限が解除されました！自動巡回を開始します。', patrolPreset:'learn' },
       };
       break;
     case 'balance_check_low':
@@ -9294,7 +9056,7 @@ function _submitCustomTask() {
     payload: {
       label:   memo || typeInfo.label,
       message: memo || `${typeInfo.label}を実行しました`,
-      patrolPreset: type === 'patrol' ? 'event' : undefined,
+      patrolPreset: type === 'patrol' ? 'learn' : undefined,
     },
   };
 
@@ -9311,10 +9073,6 @@ function _submitCustomTask() {
 
 /* ---------- プリセットルート定義 ---------- */
 const PATROL_PRESETS = [
-  {
-    id: 'event', label: '🎪 開園祭', color: '#f97316',
-    pois: ['event1','event2','event3','event4','event5','event6','event7'],
-  },
   {
     id: 'learn', label: '📚 学ぶ', color: '#60a5fa',
     pois: ['learn1','learn2','learn3','learn4','learn5'],
@@ -9919,241 +9677,6 @@ async function _renderEmuerAgent() {
 }
 
 /* ═══════════════════════════════════════════════════════
-   開園祭スタンプラリー
-   ★ room1からPOIを登録後、下記にPOI IDを追加
-═══════════════════════════════════════════════════════ */
-// 基本スタンプスポット（hardcoded）+ Firestore追加分は動的マージ
-const KAIENSAI_STAMP_POIS_BASE = ['event1','event2','event3','event4','event5','event6','event7'];
-let   KAIENSAI_STAMP_POIS      = [...KAIENSAI_STAMP_POIS_BASE];
-
-// Firestoreから追加イベントスポットを取得してマップに反映
-let _dynamicEventPois = [];
-async function _loadFirestoreEventSpots() {
-  if (!window.db || !window.fbLib) return;
-  if (!_isKaiensaiVisible()) return;
-  try {
-    const snap = await window.fbLib.getDocs(window.fbLib.collection(window.db, 'sp_event_spots_2026'));
-    _dynamicEventPois = [];
-    snap.forEach(d => {
-      const s = d.data();
-      _dynamicEventPois.push({
-        id: 'fs_' + d.id,
-        name: s.name || '屋台',
-        icon: s.icon || '📍',
-        zone: 'event',
-        px: s.px || 50,
-        py: s.py || 50,
-        desc: s.desc || '',
-        status: s.status || 'open',
-        eventOnly: true,
-        btnLabel: s.btnLabel || s.name || '入る',
-      });
-    });
-    // スタンプリストを更新（hardcoded + Firestore）
-    KAIENSAI_STAMP_POIS = [
-      ...KAIENSAI_STAMP_POIS_BASE,
-      ..._dynamicEventPois.map(p => p.id),
-    ];
-    renderSpMapPois();
-    renderSpContentList(_spMapFilter || 'all');
-  } catch(e) { console.warn('Firestore event spots load error:', e); }
-}
-const KAIENSAI_LS_KEY   = 'sp_stamp_2026';
-const KAIENSAI_BADGE_ID = '開園祭の申し子';
-
-function _getKaiensaiStamps() {
-  try { return JSON.parse(localStorage.getItem(KAIENSAI_LS_KEY) || '{}'); } catch { return {}; }
-}
-function _saveKaiensaiStamps(data) {
-  localStorage.setItem(KAIENSAI_LS_KEY, JSON.stringify(data));
-}
-
-async function _recordEventAnalytics(poiId) {
-  if (!_isKaiensaiVisible()) return;
-  const wallet = (window.connectedAccount || '').toLowerCase();
-  const poi    = _findPoi(poiId);
-  if (!poi || !window.db || !window.fbLib) return;
-  try {
-    const ref = window.fbLib.doc(window.db, 'sp_event_analytics_2026', poiId);
-    await window.fbLib.setDoc(ref, {
-      poiId,
-      name:        poi.name,
-      visits:      window.fbLib.increment(1),
-      uniqueWallets: wallet ? window.fbLib.arrayUnion(wallet) : window.fbLib.arrayUnion(),
-      lastVisit:   Date.now(),
-    }, { merge: true }).catch(() => {});
-  } catch(e) {}
-}
-
-async function _recordKaiensaiStamp(poiId) {
-  if (!_isKaiensaiVisible()) return; // オーナーはプレビュー可、一般は5/20から
-  if (!KAIENSAI_STAMP_POIS.includes(poiId)) return;
-
-  const wallet = (window.connectedAccount || '').toLowerCase();
-  const stamps = _getKaiensaiStamps();
-  if (stamps[poiId]) return; // 取得済み
-
-  stamps[poiId] = Date.now();
-  _saveKaiensaiStamps(stamps);
-
-  // Firestoreに同期
-  if (wallet && window.db && window.fbLib) {
-    await window.fbLib.setDoc(
-      window.fbLib.doc(window.db, 'sp_stamp_2026', wallet),
-      stamps, { merge: true }
-    ).catch(() => {});
-  }
-
-  const collected = Object.keys(stamps).filter(k => KAIENSAI_STAMP_POIS.includes(k)).length;
-  const total     = KAIENSAI_STAMP_POIS.length;
-
-  // スタンプ取得トースト
-  _showKaiensaiStampToast(poiId, collected, total);
-
-  // 全コンプリート
-  if (collected >= total && total > 0) {
-    await _completeKaiensaiStampRally(wallet, stamps);
-  }
-}
-
-function _showKaiensaiStampToast(poiId, collected, total) {
-  // POI情報を取得
-  const allPois = (typeof SP_POIS !== 'undefined') ? SP_POIS : [];
-  const poi = allPois.find(p => p.id === poiId) || {};
-  const icon = poi.icon || '🎪';
-  const name = poi.name || '屋台';
-
-  // 既存のスタンプ演出を削除
-  const existing = document.getElementById('kaiensaiStampAnim');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'kaiensaiStampAnim';
-  overlay.style.cssText = `
-    position:fixed;inset:0;z-index:10001;
-    display:flex;align-items:center;justify-content:center;
-    pointer-events:none;
-  `;
-  overlay.innerHTML = `
-    <div id="kaiensaiStampCard" style="
-      background:rgba(255,255,255,0.97);
-      border-radius:24px;padding:28px 32px;text-align:center;
-      box-shadow:0 8px 40px rgba(0,0,0,0.3);
-      min-width:200px;position:relative;overflow:hidden;
-      animation:kaiensaiCardIn .25s cubic-bezier(0.34,1.56,0.64,1) both;
-    ">
-      <!-- スタンプ印 -->
-      <div id="kaiensaiStampInk" style="
-        position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-        pointer-events:none;opacity:0;
-        animation:kaiensaiInkIn .18s ease .4s both;
-      ">
-        <div style="
-          width:130px;height:130px;border-radius:50%;
-          border:6px solid rgba(255,107,53,0.6);
-          background:rgba(255,107,53,0.08);
-          display:flex;align-items:center;justify-content:center;
-          transform:rotate(-15deg);
-        ">
-          <span style="font-size:11px;font-weight:900;color:rgba(255,107,53,0.5);letter-spacing:2px;text-transform:uppercase;">STAMPED</span>
-        </div>
-      </div>
-      <!-- POIアイコン -->
-      <div style="font-size:44px;margin-bottom:4px;position:relative;z-index:1;">${icon}</div>
-      <!-- POI名 -->
-      <div style="font-size:14px;font-weight:bold;color:#333;margin-bottom:8px;position:relative;z-index:1;">${name}</div>
-      <!-- スタンプ取得テキスト -->
-      <div style="
-        font-size:16px;font-weight:900;
-        background:linear-gradient(135deg,#ff6b35,#f7931e);
-        -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-        background-clip:text;
-        margin-bottom:10px;position:relative;z-index:1;
-      ">🎫 スタンプゲット！</div>
-      <!-- 進捗 -->
-      <div style="font-size:12px;color:#888;position:relative;z-index:1;">
-        ${collected} / ${total} スタンプ達成
-      </div>
-      <!-- プログレスバー -->
-      <div style="margin-top:8px;background:#f0f0f0;border-radius:8px;overflow:hidden;height:6px;position:relative;z-index:1;">
-        <div style="background:linear-gradient(90deg,#ff6b35,#f7931e);height:100%;width:${total>0?Math.round(collected/total*100):0}%;border-radius:8px;transition:.4s;"></div>
-      </div>
-    </div>
-    <style>
-      @keyframes kaiensaiCardIn {
-        from { opacity:0; transform:scale(0.7) translateY(20px); }
-        to   { opacity:1; transform:scale(1) translateY(0); }
-      }
-      @keyframes kaiensaiInkIn {
-        0%   { opacity:0; transform:scale(2); }
-        60%  { opacity:1; transform:scale(0.9); }
-        100% { opacity:1; transform:scale(1); }
-      }
-    </style>
-  `;
-  document.body.appendChild(overlay);
-  setTimeout(() => {
-    overlay.style.transition = 'opacity .4s ease';
-    overlay.style.opacity = '0';
-    setTimeout(() => overlay.remove(), 400);
-  }, 2200);
-}
-
-async function _completeKaiensaiStampRally(wallet, stamps) {
-  // コンプリートフラグ確認（二重付与防止）
-  if (stamps._completed) return;
-  stamps._completed = true;
-  _saveKaiensaiStamps(stamps);
-
-  // Firestoreにコンプリートフラグ保存
-  if (wallet && window.db && window.fbLib) {
-    await window.fbLib.setDoc(
-      window.fbLib.doc(window.db, 'sp_stamp_2026', wallet),
-      { _completed: true, _completedAt: Date.now() }, { merge: true }
-    ).catch(() => {});
-
-    // event_badges にバッジ付与
-    const badgeRef = window.fbLib.doc(window.db, 'event_badges', wallet);
-    const badgeSnap = await window.fbLib.getDoc(badgeRef).catch(() => null);
-    const existing = (badgeSnap && badgeSnap.exists()) ? (badgeSnap.data().badges || []) : [];
-    if (!existing.includes(KAIENSAI_BADGE_ID)) {
-      await window.fbLib.setDoc(badgeRef,
-        { badges: [...existing, KAIENSAI_BADGE_ID] }
-      ).catch(() => {});
-    }
-  }
-
-  // コンプリートモーダル表示
-  _showKaiensaiCompleteModal();
-}
-
-function _showKaiensaiCompleteModal() {
-  const modal = document.createElement('div');
-  modal.id = 'kaiensaiCompleteModal';
-  modal.style.cssText = `
-    position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;
-    display:flex;align-items:center;justify-content:center;
-  `;
-  modal.innerHTML = `
-    <div style="background:#fff;border-radius:20px;padding:32px 24px;max-width:320px;width:90%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3);">
-      <div style="font-size:48px;margin-bottom:12px;">🎪🎉</div>
-      <div style="font-size:18px;font-weight:bold;color:#ff6b35;margin-bottom:8px;">スタンプラリー コンプリート！</div>
-      <div style="font-size:13px;color:#666;margin-bottom:16px;">
-        全スポットを制覇したよ！<br>
-        称号バッジ <strong>🎪 開園祭の申し子</strong> を獲得！<br>
-        <span style="font-size:11px;color:#aaa;">1,000実EMUERはイベント後に送金されます</span>
-      </div>
-      <button onclick="var m=document.getElementById('kaiensaiCompleteModal');if(m)m.remove();" style="
-        background:linear-gradient(135deg,#ff6b35,#f7931e);color:#fff;
-        border:none;border-radius:99px;padding:10px 28px;font-size:14px;
-        font-weight:bold;cursor:pointer;
-      ">やったー！</button>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
-
-/* ═══════════════════════════════════════════════════════
    冷蔵庫くん（SchoolParkマップ用）
 ═══════════════════════════════════════════════════════ */
 const SP_REIZO_KB = [
@@ -10628,245 +10151,7 @@ function _spIsPaidUser() {
   });
 })();
 
-/* ═══════════════════════════════════════════════════════
-   開園祭 冷蔵庫くん告知演出
-═══════════════════════════════════════════════════════ */
-const KAIENSAI_TUT_KEY = 'sp_event_kaiensai_2026';
-const KAIENSAI_TUT_STEPS = [
-  { text: '開園祭が始まったよ！🎪\n5/20〜5/25の限定イベントだよ！\nSchoolParkにはじめての開園祭、楽しんでいってね！', hint: 'タップして次へ', mode: 'tap' },
-  { text: 'スタンプラリーに参加しよう！🎫\nイベントエリアの屋台や出店を全部まわると…\n称号バッジ「🎪 開園祭の申し子」がもらえるよ！', hint: 'タップして次へ', mode: 'tap' },
-  { text: 'SchoolParkマルシェでは、デジタルステッカーや\n冷蔵庫くんのお面も手に入るよ！🧊\nさあ、開園祭を楽しんで！', hint: 'タップして閉じる', mode: 'last' },
-];
-let _kaiensaiTutIdx = 0;
-let _kaiensaiTutRunning = false;
 
-function startKaiensaiNotice() {
-  if (!_isKaiensaiVisible()) return;
-  if (localStorage.getItem(KAIENSAI_TUT_KEY) === '1') return;
-  // 通常チュートリアルが実行中なら終了後に起動
-  if (_spTutRunning) {
-    setTimeout(startKaiensaiNotice, 500);
-    return;
-  }
-  _kaiensaiTutIdx = 0;
-  _kaiensaiTutRunning = true;
-  setTimeout(() => _kaiensaiTutRender(true), 900);
-}
-
-function _kaiensaiTutRender(enter) {
-  const step    = KAIENSAI_TUT_STEPS[_kaiensaiTutIdx];
-  const overlay = document.getElementById('spTutOverlay');
-  const mascot  = document.getElementById('spTutMascot');
-  const textEl  = document.getElementById('spTutText');
-  const hintEl  = document.getElementById('spTutHint');
-  if (!overlay || !mascot || !textEl || !hintEl) return;
-
-  textEl.textContent = step.text;
-  hintEl.textContent = step.hint;
-  hintEl.className   = 'sp-tut-hint';
-  overlay.classList.remove('step-area');
-  overlay.classList.add('active');
-  mascot.classList.add('active');
-
-  if (enter) {
-    mascot.classList.remove('in');
-    requestAnimationFrame(() => requestAnimationFrame(() => mascot.classList.add('in')));
-  }
-}
-
-function _kaiensaiTutNext() {
-  if (!_kaiensaiTutRunning) return;
-  const step = KAIENSAI_TUT_STEPS[_kaiensaiTutIdx];
-  if (step.mode === 'last') { _kaiensaiTutFinish(); return; }
-  _kaiensaiTutIdx++;
-  const mascot = document.getElementById('spTutMascot');
-  mascot.classList.remove('in');
-  setTimeout(() => _kaiensaiTutRender(true), 280);
-}
-
-function _kaiensaiTutFinish() {
-  _kaiensaiTutRunning = false;
-  localStorage.setItem(KAIENSAI_TUT_KEY, '1');
-  const overlay = document.getElementById('spTutOverlay');
-  const mascot  = document.getElementById('spTutMascot');
-  mascot.classList.remove('in');
-  setTimeout(() => {
-    mascot.classList.remove('active');
-    overlay.classList.remove('active', 'step-area');
-  }, 450);
-}
-
-/* ═══════════════════════════════════════════════════════
-   開園祭 イベントバナー
-═══════════════════════════════════════════════════════ */
-function _showKaiensaiBanner() {
-  if (!_isKaiensaiVisible()) return;
-  if (document.getElementById('kaiensaiBanner')) return;
-
-  const banner = document.createElement('div');
-  banner.id = 'kaiensaiBanner';
-  banner.style.cssText = `
-    position:fixed;top:58px;left:0;right:0;z-index:1100;
-    background:linear-gradient(90deg,#ff6b35,#f7931e);
-    color:#fff;font-size:13px;font-weight:bold;
-    padding:6px 16px;
-    display:flex;align-items:center;justify-content:center;gap:8px;
-    box-shadow:0 2px 6px rgba(0,0,0,.25);
-  `;
-  banner.innerHTML = `
-    <span style="cursor:pointer;flex:1;display:flex;align-items:center;justify-content:center;gap:8px;"
-          onclick="_showKaiensaiDetailModal()">
-      <span>🎪</span>
-      <span>SchoolPark 開園祭 開催中！5/20〜5/25</span>
-      <span style="font-size:11px;opacity:.85;border:1px solid rgba(255,255,255,.6);border-radius:99px;padding:1px 8px;">詳細</span>
-    </span>
-    <button onclick="var b=document.getElementById('kaiensaiBanner');if(b)b.remove();"
-            style="background:none;border:none;color:rgba(255,255,255,.7);font-size:16px;
-                   cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;">✕</button>
-  `;
-  document.body.appendChild(banner);
-}
-
-function _showKaiensaiDetailModal() {
-  const stamps   = _getKaiensaiStamps();
-  const collected = Object.keys(stamps).filter(k => KAIENSAI_STAMP_POIS.includes(k)).length;
-  const total     = KAIENSAI_STAMP_POIS.length;
-  const isCompleted = stamps._completed;
-
-  const modal = document.createElement('div');
-  modal.id = 'kaiensaiDetailModal';
-  modal.style.cssText = `
-    position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;
-    display:flex;align-items:center;justify-content:center;
-  `;
-  modal.innerHTML = `
-    <div style="background:#fff;border-radius:20px;padding:28px 20px;max-width:340px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.3);">
-      <div style="font-size:22px;text-align:center;margin-bottom:4px;">🎪</div>
-      <div style="font-size:17px;font-weight:bold;color:#ff6b35;text-align:center;margin-bottom:4px;">SchoolPark 開園祭</div>
-      <div style="font-size:11px;color:#aaa;text-align:center;margin-bottom:16px;">2026年 5/20（水）〜 5/25（月）</div>
-      <div style="background:#fff8f5;border-radius:12px;padding:14px;margin-bottom:14px;">
-        <div style="font-size:13px;font-weight:bold;color:#333;margin-bottom:4px;">🎫 スタンプラリー</div>
-        <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5;">
-          全スポットを制覇してコンプリートしよう！<br>
-          <strong style="color:#ff6b35;">報酬：</strong>称号バッジ「🎪 開園祭の申し子」＋ 1,000実EMUER
-        </div>
-        <!-- スタンプグリッド -->
-        <style>
-          @keyframes ksStampDrop {
-            0%   { transform:scale(2.2) rotate(-20deg); opacity:0; }
-            55%  { transform:scale(0.88) rotate(-13deg); opacity:1; }
-            75%  { transform:scale(1.06) rotate(-14deg); opacity:1; }
-            100% { transform:scale(1) rotate(-15deg); opacity:1; }
-          }
-          @keyframes ksStampShake {
-            0%,100% { transform:translateX(0); }
-            25%     { transform:translateX(-2px); }
-            75%     { transform:translateX(2px); }
-          }
-        </style>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;" id="ksStampGrid">
-          ${KAIENSAI_STAMP_POIS_BASE.map((pid, idx) => {
-            const stampPoi = (typeof SP_POIS !== 'undefined' ? SP_POIS : []).find(p => p.id === pid) || {};
-            const stamped  = !!stamps[pid];
-            // 全セルを最初はグレー（未押し状態）で表示。アニメーション時にオレンジに変わる
-            return `<div class="ks-stamp-cell" data-stamped="${stamped?1:0}" data-idx="${idx}" style="
-              background:#f5f5f5;
-              border:1.5px solid #e0e0e0;
-              border-radius:12px;padding:8px 4px 6px;text-align:center;
-              position:relative;overflow:hidden;
-              transition:background .25s,border-color .25s;
-            ">
-              <!-- スタンプ印オーバーレイ（取得済みセルのみ存在。最初は非表示） -->
-              ${stamped ? `<div class="ks-stamp-ink" style="
-                position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-                pointer-events:none;opacity:0;
-              ">
-                <div style="
-                  width:52px;height:52px;border-radius:50%;
-                  border:3px solid rgba(255,107,53,0.75);
-                  background:rgba(255,107,53,0.1);
-                  display:flex;align-items:center;justify-content:center;
-                  transform:rotate(-15deg);
-                  box-shadow:0 0 0 1.5px rgba(255,107,53,0.3);
-                ">
-                  <span style="font-size:22px;">${stampPoi.icon||'🎪'}</span>
-                </div>
-              </div>` : ''}
-              <!-- アイコン（全セル最初はグレー） -->
-              <div class="ks-icon" style="font-size:20px;filter:grayscale(1);opacity:0.3;transition:opacity .25s,filter .25s;">${stampPoi.icon||'🎪'}</div>
-              <div class="ks-name" style="font-size:9px;color:#bbb;margin-top:2px;line-height:1.2;transition:color .25s;">${stampPoi.name||pid}</div>
-            </div>`;
-          }).join('')}
-        </div>
-        <div style="background:#f0f0f0;border-radius:8px;overflow:hidden;">
-          <div style="background:linear-gradient(90deg,#ff6b35,#f7931e);height:8px;width:${total > 0 ? Math.round(collected/total*100) : 0}%;transition:.3s;border-radius:8px;"></div>
-        </div>
-        <div style="font-size:11px;color:#aaa;margin-top:4px;text-align:right;">${collected} / ${total} スタンプ${isCompleted ? ' ✅ コンプリート済み！' : ''}</div>
-      </div>
-      <!-- フィードバックフォーム -->
-      <div style="background:#f9f9f9;border-radius:12px;padding:14px;margin-bottom:14px;">
-        <div style="font-size:13px;font-weight:bold;color:#333;margin-bottom:8px;">💬 ご意見・ご要望</div>
-        <textarea id="kaiensaiFeedbackText" placeholder="開園祭についてのご感想・ご意見をお聞かせください（任意）"
-          style="width:100%;border:1px solid #ddd;border-radius:8px;padding:8px;font-size:12px;
-                 height:72px;resize:none;font-family:inherit;box-sizing:border-box;"></textarea>
-        <button onclick="_submitKaiensaiFeedback(this)" style="
-          width:100%;margin-top:8px;background:#f0f0f0;color:#555;
-          border:none;border-radius:99px;padding:8px;font-size:12px;cursor:pointer;">
-          送信する
-        </button>
-      </div>
-      <button onclick="var m=document.getElementById('kaiensaiDetailModal');if(m)m.remove();" style="
-        width:100%;background:linear-gradient(135deg,#ff6b35,#f7931e);color:#fff;
-        border:none;border-radius:99px;padding:12px;font-size:14px;
-        font-weight:bold;cursor:pointer;
-      ">閉じる</button>
-    </div>
-  `;
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-  document.body.appendChild(modal);
-
-  // 取得済みスタンプを順番にドスンと押す演出
-  // バナーが完全に開いた後（3秒）から、1個ずつ2秒間隔で押す
-  const stampedCells = modal.querySelectorAll('.ks-stamp-cell[data-stamped="1"]');
-  stampedCells.forEach((cell, i) => {
-    const ink  = cell.querySelector('.ks-stamp-ink');
-    const icon = cell.querySelector('.ks-icon');
-    const name = cell.querySelector('.ks-name');
-    if (!ink) return;
-    setTimeout(() => {
-      // セルの見た目をオレンジに切り替え（アニメーションと同時）
-      cell.style.background    = '#fff8f3';
-      cell.style.borderColor   = '#ffb38a';
-      if (icon) { icon.style.opacity = '0'; icon.style.filter = 'none'; }
-      if (name) { name.style.color = '#ff6b35'; name.style.fontWeight = 'bold'; }
-      // スタンプ印を押す
-      ink.style.opacity   = '1';
-      ink.style.animation = 'ksStampDrop .38s cubic-bezier(0.34,1.1,0.64,1) both';
-      // セル自体も少し揺らす（押した衝撃）
-      cell.style.animation = 'ksStampShake .18s ease .22s both';
-    }, 3000 + i * 2000);
-  });
-}
-
-async function _submitKaiensaiFeedback(btn) {
-  const text = document.getElementById('kaiensaiFeedbackText')?.value.trim();
-  if (!text) { alert('コメントを入力してください'); return; }
-  if (!window.db || !window.fbLib) { alert('送信できませんでした'); return; }
-  btn.disabled = true; btn.textContent = '送信中...';
-  const wallet = (window.connectedAccount || 'anonymous').toLowerCase();
-  try {
-    await window.fbLib.addDoc(
-      window.fbLib.collection(window.db, 'sp_event_feedback_2026'),
-      { wallet, comment: text, createdAt: Date.now() }
-    );
-    btn.textContent = '✅ 送信しました';
-    const ta = document.getElementById('kaiensaiFeedbackText');
-    if (ta) ta.value = '';
-  } catch(e) {
-    btn.disabled = false; btn.textContent = '送信する';
-    alert('送信に失敗しました');
-  }
-}
 
 /* ======= ロゴ → ウォレット → メイン ======= */
 // ★ ロゴクリック時はウォレット画面を常に表示（メンテチェックはgoTomainapp内で行う）
@@ -11628,14 +10913,6 @@ async function getUserBadges(address) {
       if (data.badges) badges.push(...data.badges);
     }
 
-    // イベントバッジ（開園祭など）
-    const evSnap = await window.fbLib.getDoc(
-      window.fbLib.doc(window.db, 'event_badges', addr)
-    );
-    if (evSnap.exists()) {
-      const data = evSnap.data();
-      if (data.badges) badges.push(...data.badges);
-    }
   } catch(e) {
     console.error('バッジ取得エラー:', e);
   }
@@ -12635,7 +11912,7 @@ const SP_ZONES = {
   plaza: { label:"💪 健康・運動・交流",      sub:"",           color:"#f59e0b" },
   life:  { label:"🏠 暮らしの広場",        sub:"",           color:"#f97316" },
   dawn:  { label:"🌅 Dawn Plaza",         sub:"夜明けの広場", color:"#fb923c" },
-  event: { label:"🎪 開園祭イベント",       sub:"5/20〜5/25",  color:"#ff6b35" },
+
 };
 
 /* POI positions: px/py = % of spmap-inner(960x960px=画像1:1) に基づく正確な建物位置 */
@@ -12653,7 +11930,7 @@ const SP_POIS = [
   { id:"guard4", name:"Gym ジム",               icon:"💪", zone:"guard", px:14, py:64, desc:"スキルアップ・習慣化トレーニング。Web3プレイヤーとして成長する",      status:"open", page:"/schoolpark/west-gym.html",      btnLabel:"💪 鍛えに行く" },
   { id:"guard5", name:"Fire Station 消防署",    icon:"🚒", zone:"guard", px:17, py:40, desc:"緊急対応・危機管理。コミュニティ緊急時の対応フローと安全確認",        status:"open", page:"/schoolpark/west-fire.html",     btnLabel:"🧯 確認しに行く" },
   { id:"guard6", name:"Bank 銀行",             icon:"🏦", zone:"guard", px:10, py:53, desc:"EMUERの変換・残高確認。good/changeポイントをEMUERトークンに変換する",   status:"open", page:"/schoolpark/west-bank.html",     btnLabel:"EMUER を下ろす" },
-  { id:"guard7", name:"Eukalansa ユーカランサ", icon:"🤍", zone:"guard", px:20, py:70, desc:"伝える。そして支える。いじめ・DV・性被害・悩み相談のための専用スペース。準備中です",  status:"coming" },
+
   // Life Market（東エリア：日常と稼ぎ）
   { id:"earn1",  name:"Hotel ホテル",            icon:"🏨", zone:"earn",  px:80, py:25, desc:"SchoolParkのオンラインホテル。現実になるようにがんばります！",                 status:"open",   eastKey:"hotel",   sub:"日常・宿泊" },
   { id:"earn2",  name:"Mansion マンション",      icon:"🏰", zone:"earn",  px:87, py:34, desc:"SchoolParkのオンラインマンション。現実になるようにがんばります！",           status:"open",   eastKey:"mansion", sub:"日常・住居" },
@@ -12680,14 +11957,6 @@ const SP_POIS = [
   { id:"star5",  name:"Night Sky 夜空の展望台",      icon:"🌌", zone:"star", px:93, py:79, desc:"星空の駅に併設された展望台。満天の星空と夜の宇宙を、Emuの仲間とともに眺める場所", status:"open", action:"openRoom2" },
   // 中央・健康
   { id:"plaza1", name:"Fountain 噴水広場",      icon:"⛲", zone:"plaza", px:50, py:38, desc:"SchoolParkの中心。コミュニティ交流広場。DAO投票・イベント開催スポット", status:"open", page:"/schoolpark/fountain.html" },
-  // 🎪 開園祭イベント会場（5/20〜5/25）
-  { id:"event1", name:"たこ焼き屋台",        icon:"🐙", zone:"event", px:42, py:44, desc:"SchoolPark開園祭の屋台！香ばしいたこ焼きをどうぞ🐙", status:"open", eventOnly:true, action:"openTakoyakiStall", btnLabel:"🐙 屋台に行く" },
-  { id:"event2", name:"唐揚げ屋台",          icon:"🍗", zone:"event", px:36, py:50, desc:"SchoolPark開園祭の屋台！ジューシーな唐揚げをどうぞ🍗", status:"open", eventOnly:true, action:"openKaraageStall", btnLabel:"🍗 屋台に行く" },
-  { id:"event3", name:"かき氷屋台",          icon:"🍧", zone:"event", px:44, py:55, desc:"SchoolPark開園祭の屋台！ひんやりかき氷で涼んでね🍧", status:"open", eventOnly:true, action:"openKakigoriStall", btnLabel:"🍧 屋台に行く" },
-  { id:"event4", name:"金魚すくい",          icon:"🐟", zone:"event", px:56, py:44, desc:"SchoolPark開園祭！金魚すくいに挑戦してみよう🐟", status:"open", eventOnly:true, action:"openKingyoStall", btnLabel:"🐟 挑戦する" },
-  { id:"event5", name:"ヨーヨー釣り",        icon:"🎈", zone:"event", px:62, py:50, desc:"SchoolPark開園祭！ヨーヨー釣りで遊ぼう🎈", status:"open", eventOnly:true, action:"openYoyoStall", btnLabel:"🎈 遊ぶ" },
-  { id:"event6", name:"射的",               icon:"🎯", zone:"event", px:58, py:56, desc:"SchoolPark開園祭！射的で腕前を試そう🎯", status:"open", eventOnly:true, action:"openShagekiStall", btnLabel:"🎯 狙う" },
-  { id:"event7", name:"SchoolParkマルシェ",  icon:"🛍️", zone:"event", px:50, py:48, desc:"SchoolPark開園祭の限定マルシェ！デジタルステッカーと冷蔵庫くんのお面をゲットしよう🛍️", status:"open", eventOnly:true, action:"openKaiensaiMarche", btnLabel:"🛍️ マルシェに行く" },
   // 暮らし
   { id:"life1",  name:"House 家",               icon:"🏡", zone:"life",  px:84, py:51, desc:"SchoolParkのオンライン不動産。現実になるようにがんばります！",               status:"open",   eastKey:"house"   },
 ];
@@ -12833,9 +12102,6 @@ function openSpMap(gate) {
 
   // ★ 初回のみ冷蔵庫くんチュートリアル演出を開始
   startSpTutorial();
-  // ★ 開園祭イベント公開状態をFirestoreから取得して反映（PC/スマホ共通）
-  _loadKaiensaiActiveFlag();
-  startKaiensaiNotice();
 }
 
 // ── SchoolPark コンテンツ iframe オーバーレイ ─────────────────
@@ -13285,9 +12551,9 @@ function closeSpMap() {
   _spCrowdLeave(); /* Firestoreからセッション削除 */
 }
 
-/* hardcoded + Firestore動的POIを合わせて検索 */
+/* POIを検索 */
 function _findPoi(poiId) {
-  return SP_POIS.find(p => p.id === poiId) || _dynamicEventPois.find(p => p.id === poiId) || null;
+  return SP_POIS.find(p => p.id === poiId) || null;
 }
 
 /* ゾーン配列 or 'all' でPOIをフィルタ */
@@ -13302,8 +12568,7 @@ function renderSpMapPois(filter) {
   if (!container) return;
   const activeFilter = filter || _spMapFilter || "all";
   container.innerHTML = "";
-  [...SP_POIS, ..._dynamicEventPois].forEach(poi => {
-    if (poi.eventOnly && !_isKaiensaiVisible()) return;
+  SP_POIS.forEach(poi => {
     if (!_spZoneMatch(poi, activeFilter)) return;
     const zone = SP_ZONES[poi.zone] || {};
     const color = zone.color || "#fff";
@@ -13324,7 +12589,7 @@ function renderSpMapPois(filter) {
 function renderSpContentList(filter) {
   const list = document.getElementById("spContentList");
   if (!list) return;
-  const pois = [...SP_POIS, ..._dynamicEventPois].filter(p => _spZoneMatch(p, filter) && (!p.eventOnly || _isKaiensaiVisible()));
+  const pois = SP_POIS.filter(p => _spZoneMatch(p, filter));
   if (pois.length === 0) { list.innerHTML = ''; return; }
 
   /* エリアごとにグループ化して表示 */
