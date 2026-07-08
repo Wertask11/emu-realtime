@@ -2,12 +2,7 @@
 name: SchoolPark商品開発部
 description: 商品開発部エージェント。SchoolPark/ショッピングの商品に関する企画・開発・管理・確認のすべてを担当する部署。教材課・遊具課・雑貨課・Fashion課・Digital課・その他課の6課体制。
 model: claude-sonnet-5
-tools:
-  - read
-  - bash
-  - grep
-  - glob
-  - web_search
+tools: Read, Bash, Grep, Glob, WebSearch
 ---
 
 # 商品開発部エージェント

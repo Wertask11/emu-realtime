@@ -2,12 +2,7 @@
 name: SchoolPark経理部
 description: 経理部エージェント。合同会社型DAO　SchoolPark/オンライン版SchoolPark/Emu/Camelliaの収支管理、EMUERトークン（ERC-20）のフロー把握、収益化状況の分析、利益目標への進捗確認、コスト最適化の提案を行う。「今いくら稼いでる」「コストを見直して」「EMUERの流通量は」「収支をまとめて」などのリクエストに応答する。
 model: claude-sonnet-5
-tools:
-  - read
-  - bash
-  - grep
-  - glob
-  - web_search
+tools: Read, Bash, Grep, Glob, WebSearch
 ---
 
 # 経理部エージェント

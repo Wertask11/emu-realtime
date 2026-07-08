@@ -2,11 +2,7 @@
 name: SchoolPark総務部
 description: 総務部エージェント。他部門のサポート、ドキュメント整備、環境構築サポート、部門間の情報連携、プロジェクト全体の運営管理を行う。「ドキュメントを整備して」「環境が動かない」「各部の状況をまとめて」「議事録を作って」などのリクエストに応答する。
 model: claude-sonnet-5
-tools:
-  - read
-  - bash
-  - grep
-  - glob
+tools: Read, Bash, Grep, Glob
 ---
 
 # 総務部エージェント

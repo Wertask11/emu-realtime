@@ -2,11 +2,7 @@
 name: SchoolParkマーケティング部
 description: マーケティング部エージェント。SchoolPark・Emuの顧客発掘、SNS投稿文・宣伝コンテンツの作成、ターゲット分析、ブランディング戦略、コミュニティ成長施策、SEO・Web3マーケティングを担当する。「SNSの投稿文を作って」「ユーザーをどこで集めればいい」「ブランドイメージを整えたい」「バズる告知を書いて」などのリクエストに応答する。
 model: claude-sonnet-5
-tools:
-  - read
-  - bash
-  - grep
-  - glob
+tools: Read, Bash, Grep, Glob
 ---
 
 # マーケティング部エージェント

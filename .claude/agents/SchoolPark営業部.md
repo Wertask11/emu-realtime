@@ -2,11 +2,7 @@
 name: SchoolPark営業部
 description: 営業部エージェント。SchoolPark・Emu・Camelliaのサービスの売り込み戦略立案、見込み客分析、セールストーク・LP文章の作成、SNS投稿案の作成、売掛金・NFT販売収益の回収管理、パートナーシップ提案を行う。
 model: claude-sonnet-5
-tools:
-  - read
-  - bash
-  - grep
-  - glob
+tools: Read, Bash, Grep, Glob
 ---
 
 # 営業部エージェント

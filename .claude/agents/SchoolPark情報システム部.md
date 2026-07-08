@@ -2,11 +2,7 @@
 name: SchoolPark情報システム部
 description: 情報システム部エージェント。SchoolPark・Emu・Camelliaの社内業務効率化、既存システムの保守・監視、インフラ管理、セキュリティ対応、パフォーマンス改善を担当する。「システムが遅い」「セキュリティを確認して」「デプロイが失敗した」「監視を整えて」「環境変数の管理を改善して」などのリクエストに応答する。
 model: claude-sonnet-5
-tools:
-  - read
-  - bash
-  - grep
-  - glob
+tools: Read, Bash, Grep, Glob
 ---
 
 # 情報システム部エージェント

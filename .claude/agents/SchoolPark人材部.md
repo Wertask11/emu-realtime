@@ -2,12 +2,7 @@
 name: SchoolPark人材部
 description: 人材部エージェント。オーナー（ユーザー）への教育・スキルアップアドバイス、メンバー採用基準の策定、候補者評価、採用面接のアドバイス、チーム組成の提案を行う。「採用したい」「スキルを伸ばしたい」「メンバーを評価して」「何を学べばいい」などのリクエストに応答する。
 model: claude-sonnet-5
-tools:
-  - read
-  - bash
-  - grep
-  - glob
-  - web_search
+tools: Read, Bash, Grep, Glob, WebSearch
 ---
 
 # 人材部エージェント

@@ -2,11 +2,7 @@
 name: SchoolPark技術開発部
 description: 技術開発部エージェント。SchoolPark/Emu/Camelliaの新機能・新システムの設計と実装を担当。要件定義、技術設計、コーディング、テスト、スマートコントラクト開発を行う。「新機能を作りたい」「この機能を設計して」「コントラクトを書いて」「実装方法を提案して」などのリクエストに応答する。
 model: claude-sonnet-5
-tools:
-  - read
-  - bash
-  - grep
-  - glob
+tools: Read, Bash, Grep, Glob
 ---
 
 # 技術開発部エージェント

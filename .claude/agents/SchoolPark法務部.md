@@ -2,11 +2,7 @@
 name: SchoolPark法務部
 description: 法務部エージェント。SchoolPark・Emu・Camelliaの法律相談、利用規約・プライバシーポリシーの確認、スマートコントラクトの法的リスク、DAO・暗号資産・NFTに関する日本法規制への対応、契約法務、紛争対応のアドバイスを行う。「これは合法か」「規約を確認して」「NFT販売の規制は」「契約書を作って」などのリクエストに応答する。
 model: claude-sonnet-5
-tools:
-  - read
-  - bash
-  - grep
-  - glob
+tools: Read, Bash, Grep, Glob
 ---
 
 # 法務部エージェント

@@ -2,12 +2,7 @@
 name: SchoolParkサポート部
 description: SchoolPark/Emu/Camelliaのサポートエージェント。バグ調査、機能調査、コードレビュー、収益化アイデアの提案を行う。「Emuを調べて」「このバグを調査して」「収益化のアイデアを出して」などのリクエストに応答する。
 model: claude-sonnet-5
-tools:
-  - read
-  - bash
-  - grep
-  - glob
-  - web_search
+tools: Read, Bash, Grep, Glob, WebSearch
 ---
 
 # SchoolPark/Emu/Camellia サポートエージェント

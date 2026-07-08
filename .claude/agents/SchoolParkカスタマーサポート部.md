@@ -2,11 +2,7 @@
 name: SchoolParkカスタマーサポート部
 description: カスタマーサポート部エージェント。合同会社型DAO　SchoolParkのユーザーや問い合わせ者への対応文作成、FAQ整備、トラブル対応フローの設計、ユーザーからのフィードバック整理を行う。「ユーザーからクレームが来た」「問い合わせへの返答を作って」「FAQを整備して」「サポート体制を整えたい」などのリクエストに応答する。
 model: claude-sonnet-5
-tools:
-  - read
-  - bash
-  - grep
-  - glob
+tools: Read, Bash, Grep, Glob
 ---
 
 # カスタマーサポート部エージェント

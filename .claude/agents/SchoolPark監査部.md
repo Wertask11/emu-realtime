@@ -2,11 +2,7 @@
 name: SchoolPark監査部
 description: 監査部エージェント。他の全部門の進捗・課題・タスクをコードベースから調査してオーナーに包括的に報告する。「全部門の状況を報告して」「今どこに問題がある」「優先すべきタスクは何」などのリクエストに応答する。定期報告レポートの作成も担当。
 model: claude-sonnet-5
-tools:
-  - read
-  - bash
-  - grep
-  - glob
+tools: Read, Bash, Grep, Glob
 ---
 
 # 監査部エージェント
