@@ -125,15 +125,6 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
 </head>
 
 <body>
-<!-- ── 入室ロック（管理者キーをサーバーで照合するまで全画面を覆う）── -->
-<div id="admin-lock" style="position:fixed;inset:0;background:#14161a;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:#e5e7eb;font-family:system-ui,sans-serif;text-align:center;padding:20px;">
-  <div style="font-size:44px;">🔒</div>
-  <div style="font-size:17px;font-weight:600;">Room1 管理画面</div>
-  <div style="font-size:13px;color:#9ca3af;">入室には管理者キーが必要です</div>
-  <input id="admin-lock-input" type="password" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="current-password" placeholder="管理者キー" onkeydown="if(event.key==='Enter')adminUnlock()" style="padding:12px 14px;font-size:16px;border-radius:8px;border:1px solid #374151;background:#1f2937;color:#e5e7eb;width:min(320px,80vw);text-align:center;">
-  <button onclick="adminUnlock()" style="padding:12px 28px;font-size:15px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer;">入室</button>
-  <div id="admin-lock-msg" style="font-size:12.5px;color:#f87171;min-height:1em;max-width:min(360px,85vw);line-height:1.6;"></div>
-</div>
 <div class="container">
   <h1>📚 Room1 管理画面</h1>
 
@@ -779,68 +770,6 @@ function mspEsc(s) {
 <script>
 var API_BASE = 'https://emu-realtime.onrender.com';
 
-// ── 管理者キー（x-admin-key）──
-// 初回の管理操作時に入力を求め、タブを閉じるまで sessionStorage に保持する
-function getAdminKey() {
-  var key = sessionStorage.getItem('sp_admin_key');
-  if (!key) {
-    key = (prompt('管理者キーを入力してください') || '').trim();
-    if (key) sessionStorage.setItem('sp_admin_key', key);
-  }
-  return key || '';
-}
-
-async function adminFetch(url, options) {
-  options = options || {};
-  options.headers = options.headers || {};
-  options.headers['x-admin-key'] = getAdminKey();
-  var res = await fetch(url, options);
-  if (res.status === 403) {
-    sessionStorage.removeItem('sp_admin_key');
-    alert('管理者キーが正しくありません。もう一度操作するとキーを再入力できます。');
-  }
-  return res;
-}
-
-// ── 入室ゲート: サーバーでキーを照合できるまでロック画面を外さない ──
-async function adminUnlock() {
-  var msg = document.getElementById('admin-lock-msg');
-  var input = document.getElementById('admin-lock-input');
-  var key = ((input && input.value) || sessionStorage.getItem('sp_admin_key') || '').trim();
-  if (!key) { if (msg) msg.textContent = 'キーを入力してください'; return; }
-  if (!/^[\x21-\x7e]+$/.test(key)) {
-    if (msg) msg.textContent = 'キーに全角文字やスペースが含まれています。半角英数記号のみで入力してください。';
-    return;
-  }
-  if (msg) { msg.style.color = '#9ca3af'; msg.textContent = '確認中…'; }
-  try {
-    var res = await fetch(API_BASE + '/api/admin/verify', { headers: { 'x-admin-key': key } });
-    if (res.ok) {
-      sessionStorage.setItem('sp_admin_key', key);
-      var lock = document.getElementById('admin-lock');
-      if (lock) lock.remove();
-      return;
-    }
-    if (msg) msg.style.color = '#f87171';
-    if (res.status === 403) {
-      sessionStorage.removeItem('sp_admin_key');
-      if (msg) msg.textContent = 'キーが正しくありません。Renderに設定したADMIN_SECRET_KEYと同じ値か確認してください。';
-    } else if (res.status === 503) {
-      if (msg) msg.textContent = 'サーバーにADMIN_SECRET_KEYが設定されていません。Renderの emu-realtime（Web Service）の Environment で設定・保存されているか確認してください。';
-    } else if (res.status === 404) {
-      if (msg) msg.textContent = 'サーバーの更新がまだ反映されていません（デプロイ中）。数分待ってからページを再読み込みしてください。';
-    } else {
-      if (msg) msg.textContent = 'サーバーエラー（HTTP ' + res.status + '）。少し待ってからもう一度お試しください。';
-    }
-  } catch (e) {
-    if (msg) { msg.style.color = '#f87171'; msg.textContent = 'サーバーに接続できません。サーバーの起動待ち（最大1分程度）の可能性があります。少し待って再試行してください。'; }
-  }
-}
-// 保存済みキーがあればページ表示時に自動照合（なければ入力待ち）
-document.addEventListener('DOMContentLoaded', function() {
-  if (sessionStorage.getItem('sp_admin_key')) adminUnlock();
-});
-
 var themeData = {
   money: { subs: ['増やし方','育て方','守り方','使い方','付き合い方','稼ぎ方','見極め方','回し方'] },
   net:   { subs: ['SNSとの付き合い方','炎上・トラブル対策','詐欺・フェイクの見抜き方','個人情報・セキュリティ','AIとの付き合い方','発信と責任','ネットの法律・ルール'] },
@@ -942,7 +871,7 @@ async function submitDirect() {
   btn.textContent = '追加中...';
 
   try {
-    var res = await adminFetch(API_BASE + '/api/room1/direct-add', {
+    var res = await fetch(API_BASE + '/api/room1/direct-add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -996,7 +925,7 @@ var inboxItems = [];
 function loadInbox() {
   document.getElementById('inbox-list').innerHTML = '<div class="loading">📮 読み込み中...</div>';
 
-  adminFetch(API_BASE + '/api/room1/submissions')
+  fetch(API_BASE + '/api/room1/submissions')
     .then(function(res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
@@ -1143,7 +1072,7 @@ async function approveItem(idx) {
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '処理中...'; }
 
   try {
-    var res = await adminFetch(API_BASE + '/api/room1/approve/' + encodeURIComponent(docId), {
+    var res = await fetch(API_BASE + '/api/room1/approve/' + encodeURIComponent(docId), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ summary: summary, body: body, note: note, noteUrl: noteUrl })
@@ -1177,7 +1106,7 @@ async function rejectItem(idx) {
   var docId = item.id;
 
   try {
-    var res = await adminFetch(API_BASE + '/api/room1/reject/' + encodeURIComponent(docId), {
+    var res = await fetch(API_BASE + '/api/room1/reject/' + encodeURIComponent(docId), {
       method: 'POST'
     });
     var result = await res.json();
@@ -2542,7 +2471,7 @@ function labToast(msg, type) {
 async function deleteAllContents() {
   if (!confirm('room1の学習コンテンツをすべて削除します。\nこの操作は取り消せません。本当に実行しますか？')) return;
   try {
-    var res = await adminFetch(API_BASE + '/api/room1/contents/all', { method: 'DELETE' });
+    var res = await fetch(API_BASE + '/api/room1/contents/all', { method: 'DELETE' });
     var result = await res.json();
     if (result.success) {
       alert('✅ ' + result.deleted + '件のコンテンツを削除しました。');
@@ -2650,7 +2579,7 @@ async function notifSend() {
   btn.textContent = '送信中…';
 
   try {
-    var res = await adminFetch(NOTIF_API_BASE + '/api/sp/notifications', {
+    var res = await fetch(NOTIF_API_BASE + '/api/sp/notifications', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, body, link, icon, contentType: 'manual' })
