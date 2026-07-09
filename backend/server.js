@@ -245,7 +245,9 @@ airdropRouter.get("/status/:address", async (req, res) => {
   }
 });
 
-airdropRouter.post("/batch/run", requireAdminKey, async (req, res) => {
+airdropRouter.post("/batch/run", async (req, res) => {
+  const adminKey = req.headers["x-admin-key"];
+  if (adminKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: "UNAUTHORIZED" });
   res.json({ message: "バッチを開始します" });
   runAirdropBatch();
 });
@@ -256,22 +258,6 @@ app.use("/airdrop", airdropRouter);
 // オーナー署名検証ユーティリティ
 // =====================
 const SP_OWNER_ADDRESS = (process.env.SP_OWNER_ADDRESS || "0xdcc687c05f130e57597a8525771299a4efb6edf7").toLowerCase();
-
-// 管理者キー検証ミドルウェア（ADMIN_SECRET_KEY 未設定時は全リクエスト拒否）
-// 環境変数の前後の空白・改行はコピペ事故とみなして無視する
-function requireAdminKey(req, res, next) {
-  const secret = (process.env.ADMIN_SECRET_KEY || "").trim();
-  if (!secret) {
-    return res.status(503).json({ error: "ADMIN_KEY_NOT_CONFIGURED" });
-  }
-  if ((req.headers["x-admin-key"] || "").trim() !== secret) {
-    return res.status(403).json({ error: "UNAUTHORIZED" });
-  }
-  next();
-}
-
-// 管理画面の入室チェック用（キーが正しいかだけを返す）
-app.get("/api/admin/verify", requireAdminKey, (req, res) => res.json({ ok: true }));
 
 function verifyOwnerSignature({ address, action, timestamp, signature }) {
   try {
@@ -491,7 +477,9 @@ secretDoorRouter.post("/reward", async (req, res) => {
   }
 });
 
-secretDoorRouter.post("/batch/run", requireAdminKey, async (req, res) => {
+secretDoorRouter.post("/batch/run", async (req, res) => {
+  const adminKey = req.headers["x-admin-key"];
+  if (adminKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: "UNAUTHORIZED" });
   res.json({ message: "秘密のとびらバッチを開始します" });
   runSecretDoorBatch();
 });
@@ -775,7 +763,7 @@ app.get("/api/room1/contents", async (req, res) => {
 });
 
 // ── 直接追加（管理者のみ）──
-app.post("/api/room1/direct-add", requireAdminKey, async (req, res) => {
+app.post("/api/room1/direct-add", async (req, res) => {
   try {
     const { theme, subTheme, subSubTheme, summary, body, note, noteUrl } = req.body;
 
@@ -841,7 +829,7 @@ app.post("/api/room1/submit", async (req, res) => {
 });
 
 // ── お預かり箱：一覧取得（pendingのみ）──
-app.get("/api/room1/submissions", requireAdminKey, async (req, res) => {
+app.get("/api/room1/submissions", async (req, res) => {
   try {
     if (!db) return res.json([]);
 
@@ -869,7 +857,7 @@ app.get("/api/room1/submissions", requireAdminKey, async (req, res) => {
 });
 
 // ── お預かり箱：昇華（承認）──
-app.post("/api/room1/approve/:id", requireAdminKey, async (req, res) => {
+app.post("/api/room1/approve/:id", async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
 
@@ -912,7 +900,7 @@ app.post("/api/room1/approve/:id", requireAdminKey, async (req, res) => {
 });
 
 // ── お預かり箱：見送り ──
-app.post("/api/room1/reject/:id", requireAdminKey, async (req, res) => {
+app.post("/api/room1/reject/:id", async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     await db.collection(ROOM1_SUBMISSIONS_COL).doc(req.params.id).update({ status: "rejected" });
@@ -925,7 +913,7 @@ app.post("/api/room1/reject/:id", requireAdminKey, async (req, res) => {
 });
 
 // ── コンテンツ全削除（管理者のみ）──
-app.delete("/api/room1/contents/all", requireAdminKey, async (req, res) => {
+app.delete("/api/room1/contents/all", async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const snapshot = await db.collection(ROOM1_CONTENTS_COL).get();
@@ -1340,7 +1328,7 @@ app.get("/api/sp/notifications", async (req, res) => {
 });
 
 // POST /api/sp/notifications （管理者専用）
-app.post("/api/sp/notifications", requireAdminKey, async (req, res) => {
+app.post("/api/sp/notifications", async (req, res) => {
   if (!db) return res.status(500).json({ error: "Firestore未接続" });
   const { title, body, link, contentType, icon } = req.body;
   if (!title) return res.status(400).json({ error: "title is required" });
