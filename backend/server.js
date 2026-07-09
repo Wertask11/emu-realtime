@@ -258,9 +258,13 @@ app.use("/airdrop", airdropRouter);
 const SP_OWNER_ADDRESS = (process.env.SP_OWNER_ADDRESS || "0xdcc687c05f130e57597a8525771299a4efb6edf7").toLowerCase();
 
 // 管理者キー検証ミドルウェア（ADMIN_SECRET_KEY 未設定時は全リクエスト拒否）
+// 環境変数の前後の空白・改行はコピペ事故とみなして無視する
 function requireAdminKey(req, res, next) {
-  const secret = process.env.ADMIN_SECRET_KEY;
-  if (!secret || req.headers["x-admin-key"] !== secret) {
+  const secret = (process.env.ADMIN_SECRET_KEY || "").trim();
+  if (!secret) {
+    return res.status(503).json({ error: "ADMIN_KEY_NOT_CONFIGURED" });
+  }
+  if ((req.headers["x-admin-key"] || "").trim() !== secret) {
     return res.status(403).json({ error: "UNAUTHORIZED" });
   }
   next();
