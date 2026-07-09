@@ -126,12 +126,13 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
 
 <body>
 <!-- ── 入室ロック（管理者キーをサーバーで照合するまで全画面を覆う）── -->
-<div id="admin-lock" style="position:fixed;inset:0;background:#14161a;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;color:#e5e7eb;font-family:system-ui,sans-serif;text-align:center;padding:20px;">
+<div id="admin-lock" style="position:fixed;inset:0;background:#14161a;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:#e5e7eb;font-family:system-ui,sans-serif;text-align:center;padding:20px;">
   <div style="font-size:44px;">🔒</div>
   <div style="font-size:17px;font-weight:600;">Room1 管理画面</div>
   <div style="font-size:13px;color:#9ca3af;">入室には管理者キーが必要です</div>
-  <button onclick="adminUnlock()" style="padding:12px 28px;font-size:15px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer;">キーを入力して入室</button>
-  <div id="admin-lock-msg" style="font-size:12px;color:#f87171;min-height:1em;"></div>
+  <input id="admin-lock-input" type="password" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="current-password" placeholder="管理者キー" onkeydown="if(event.key==='Enter')adminUnlock()" style="padding:12px 14px;font-size:16px;border-radius:8px;border:1px solid #374151;background:#1f2937;color:#e5e7eb;width:min(320px,80vw);text-align:center;">
+  <button onclick="adminUnlock()" style="padding:12px 28px;font-size:15px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer;">入室</button>
+  <div id="admin-lock-msg" style="font-size:12.5px;color:#f87171;min-height:1em;max-width:min(360px,85vw);line-height:1.6;"></div>
 </div>
 <div class="container">
   <h1>📚 Room1 管理画面</h1>
@@ -804,23 +805,39 @@ async function adminFetch(url, options) {
 // ── 入室ゲート: サーバーでキーを照合できるまでロック画面を外さない ──
 async function adminUnlock() {
   var msg = document.getElementById('admin-lock-msg');
+  var input = document.getElementById('admin-lock-input');
+  var key = ((input && input.value) || sessionStorage.getItem('sp_admin_key') || '').trim();
+  if (!key) { if (msg) msg.textContent = 'キーを入力してください'; return; }
+  if (!/^[\x21-\x7e]+$/.test(key)) {
+    if (msg) msg.textContent = 'キーに全角文字やスペースが含まれています。半角英数記号のみで入力してください。';
+    return;
+  }
+  if (msg) { msg.style.color = '#9ca3af'; msg.textContent = '確認中…'; }
   try {
-    var key = getAdminKey();
-    if (!key) { if (msg) msg.textContent = 'キーが入力されていません'; return; }
     var res = await fetch(API_BASE + '/api/admin/verify', { headers: { 'x-admin-key': key } });
     if (res.ok) {
+      sessionStorage.setItem('sp_admin_key', key);
       var lock = document.getElementById('admin-lock');
       if (lock) lock.remove();
-    } else {
+      return;
+    }
+    if (msg) msg.style.color = '#f87171';
+    if (res.status === 403) {
       sessionStorage.removeItem('sp_admin_key');
-      if (msg) msg.textContent = 'キーが正しくありません。もう一度お試しください。';
+      if (msg) msg.textContent = 'キーが正しくありません。Renderに設定したADMIN_SECRET_KEYと同じ値か確認してください。';
+    } else if (res.status === 404) {
+      if (msg) msg.textContent = 'サーバーの更新がまだ反映されていません（デプロイ中）。数分待ってからページを再読み込みしてください。';
+    } else {
+      if (msg) msg.textContent = 'サーバーエラー（HTTP ' + res.status + '）。少し待ってからもう一度お試しください。';
     }
   } catch (e) {
-    if (msg) msg.textContent = 'サーバーに接続できません: ' + e.message;
+    if (msg) { msg.style.color = '#f87171'; msg.textContent = 'サーバーに接続できません。サーバーの起動待ち（最大1分程度）の可能性があります。少し待って再試行してください。'; }
   }
 }
-// ページを開いたら即キー入力を要求（保存済みキーがあれば自動照合）
-document.addEventListener('DOMContentLoaded', adminUnlock);
+// 保存済みキーがあればページ表示時に自動照合（なければ入力待ち）
+document.addEventListener('DOMContentLoaded', function() {
+  if (sessionStorage.getItem('sp_admin_key')) adminUnlock();
+});
 
 var themeData = {
   money: { subs: ['増やし方','育て方','守り方','使い方','付き合い方','稼ぎ方','見極め方','回し方'] },
