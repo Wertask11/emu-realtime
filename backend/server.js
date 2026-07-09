@@ -266,6 +266,9 @@ function requireAdminKey(req, res, next) {
   next();
 }
 
+// 管理画面の入室チェック用（キーが正しいかだけを返す）
+app.get("/api/admin/verify", requireAdminKey, (req, res) => res.json({ ok: true }));
+
 function verifyOwnerSignature({ address, action, timestamp, signature }) {
   try {
     const message = `SchoolPark Admin:${action}:${timestamp}`;
@@ -834,7 +837,7 @@ app.post("/api/room1/submit", async (req, res) => {
 });
 
 // ── お預かり箱：一覧取得（pendingのみ）──
-app.get("/api/room1/submissions", async (req, res) => {
+app.get("/api/room1/submissions", requireAdminKey, async (req, res) => {
   try {
     if (!db) return res.json([]);
 

@@ -125,6 +125,14 @@ h1 { font-size:20px; color:#fff; margin:0 0 28px; border-bottom:1px solid #2a2a2
 </head>
 
 <body>
+<!-- ── 入室ロック（管理者キーをサーバーで照合するまで全画面を覆う）── -->
+<div id="admin-lock" style="position:fixed;inset:0;background:#14161a;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;color:#e5e7eb;font-family:system-ui,sans-serif;text-align:center;padding:20px;">
+  <div style="font-size:44px;">🔒</div>
+  <div style="font-size:17px;font-weight:600;">Room1 管理画面</div>
+  <div style="font-size:13px;color:#9ca3af;">入室には管理者キーが必要です</div>
+  <button onclick="adminUnlock()" style="padding:12px 28px;font-size:15px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer;">キーを入力して入室</button>
+  <div id="admin-lock-msg" style="font-size:12px;color:#f87171;min-height:1em;"></div>
+</div>
 <div class="container">
   <h1>📚 Room1 管理画面</h1>
 
@@ -793,6 +801,27 @@ async function adminFetch(url, options) {
   return res;
 }
 
+// ── 入室ゲート: サーバーでキーを照合できるまでロック画面を外さない ──
+async function adminUnlock() {
+  var msg = document.getElementById('admin-lock-msg');
+  try {
+    var key = getAdminKey();
+    if (!key) { if (msg) msg.textContent = 'キーが入力されていません'; return; }
+    var res = await fetch(API_BASE + '/api/admin/verify', { headers: { 'x-admin-key': key } });
+    if (res.ok) {
+      var lock = document.getElementById('admin-lock');
+      if (lock) lock.remove();
+    } else {
+      sessionStorage.removeItem('sp_admin_key');
+      if (msg) msg.textContent = 'キーが正しくありません。もう一度お試しください。';
+    }
+  } catch (e) {
+    if (msg) msg.textContent = 'サーバーに接続できません: ' + e.message;
+  }
+}
+// ページを開いたら即キー入力を要求（保存済みキーがあれば自動照合）
+document.addEventListener('DOMContentLoaded', adminUnlock);
+
 var themeData = {
   money: { subs: ['増やし方','育て方','守り方','使い方','付き合い方','稼ぎ方','見極め方','回し方'] },
   net:   { subs: ['SNSとの付き合い方','炎上・トラブル対策','詐欺・フェイクの見抜き方','個人情報・セキュリティ','AIとの付き合い方','発信と責任','ネットの法律・ルール'] },
@@ -948,7 +977,7 @@ var inboxItems = [];
 function loadInbox() {
   document.getElementById('inbox-list').innerHTML = '<div class="loading">📮 読み込み中...</div>';
 
-  fetch(API_BASE + '/api/room1/submissions')
+  adminFetch(API_BASE + '/api/room1/submissions')
     .then(function(res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
