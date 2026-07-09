@@ -825,6 +825,8 @@ async function adminUnlock() {
     if (res.status === 403) {
       sessionStorage.removeItem('sp_admin_key');
       if (msg) msg.textContent = 'キーが正しくありません。Renderに設定したADMIN_SECRET_KEYと同じ値か確認してください。';
+    } else if (res.status === 503) {
+      if (msg) msg.textContent = 'サーバーにADMIN_SECRET_KEYが設定されていません。Renderの emu-realtime（Web Service）の Environment で設定・保存されているか確認してください。';
     } else if (res.status === 404) {
       if (msg) msg.textContent = 'サーバーの更新がまだ反映されていません（デプロイ中）。数分待ってからページを再読み込みしてください。';
     } else {
