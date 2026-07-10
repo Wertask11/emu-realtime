@@ -228,6 +228,96 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 /* ── BGM切替ボタン ── */
 .bgm-btn{background:rgba(255,255,255,0.95);border:2px solid var(--accent2);border-radius:20px;padding:6px 14px;font-size:0.72rem;cursor:pointer;font-family:inherit;font-weight:700;color:var(--accent);margin-top:10px;transition:all 0.2s}
 .bgm-btn.on{background:var(--accent);color:#fff}
+
+/* ── 車内⇔俯瞰 表示切り替え ── */
+.view-stage{display:flex;flex-direction:column;align-items:center}
+.view-toggle{display:flex;gap:6px;margin-bottom:8px;justify-content:center}
+.view-btn{padding:7px 12px;border-radius:20px;border:2px solid var(--accent2);background:#fff;color:var(--accent);font-size:0.68rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s;white-space:nowrap}
+.view-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* ── 車内ビュー（エレベーターの中） ── */
+.interior-box{
+  width:100px;height:328px;border-radius:8px;position:relative;overflow:hidden;
+  background:linear-gradient(180deg,#9ca3af 0%,#6b7280 55%,#4b5563 100%);
+  border:2px solid #374151;box-shadow:inset 0 0 24px rgba(0,0,0,0.45);
+}
+.interior-ceiling{position:absolute;top:0;left:0;right:0;height:26px;background:linear-gradient(180deg,#f3f4f6,#9ca3af);display:flex;align-items:center;justify-content:center;z-index:2}
+.interior-light{width:60%;height:7px;border-radius:6px;background:#fff7d6;box-shadow:0 0 12px 4px rgba(255,247,214,0.9);transition:opacity 0.2s}
+.interior-light.flicker{animation:lightFlicker 0.15s steps(2) infinite}
+@keyframes lightFlicker{0%,100%{opacity:1}50%{opacity:0.25}}
+.interior-digital{
+  position:absolute;top:32px;left:50%;transform:translateX(-50%);z-index:3;
+  background:#111;border:2px solid #374151;border-radius:6px;padding:2px 10px;
+  font-family:'Courier New',monospace;font-weight:700;font-size:0.95rem;
+  color:#ff6b1a;text-shadow:0 0 6px rgba(255,107,26,0.8);
+}
+.interior-doorframe{position:absolute;top:58px;left:8px;right:8px;bottom:14px;background:#1f2937;border-radius:4px;overflow:hidden;display:flex;z-index:1}
+.interior-scene{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2rem;background:linear-gradient(180deg,#7dd3fc,#38bdf8);z-index:0}
+.interior-door{flex:1;background:linear-gradient(180deg,#d1d5db,#9ca3af);position:relative;z-index:1;transition:transform 0.7s cubic-bezier(0.6,0,0.4,1)}
+.interior-door::before{content:"";position:absolute;top:12%;bottom:12%;width:2px;background:rgba(0,0,0,0.2)}
+.interior-door.left{border-right:2px solid #374151}
+.interior-door.left::before{right:5px}
+.interior-door.right{border-left:2px solid #374151}
+.interior-door.right::before{left:5px}
+.interior-door.open.left{transform:translateX(-101%)}
+.interior-door.open.right{transform:translateX(101%)}
+.interior-floorline{position:absolute;left:8px;right:8px;bottom:0;height:14px;background:linear-gradient(180deg,#4b5563,#1f2937);z-index:1}
+.interior-box.shaking,.elevator-shaft.shaking{animation:interiorShake 0.3s ease-in-out infinite}
+.interior-box.fire-alert{box-shadow:inset 0 0 30px rgba(239,68,68,0.6)}
+@keyframes interiorShake{0%,100%{transform:translate(0,0) rotate(0)}25%{transform:translate(-4px,2px) rotate(-0.5deg)}75%{transform:translate(4px,-2px) rotate(0.5deg)}}
+.interior-alert-flash{position:absolute;inset:0;background:rgba(239,68,68,0.4);opacity:0;pointer-events:none;z-index:4}
+.interior-alert-flash.on{animation:alertFlash 0.6s steps(1) infinite}
+@keyframes alertFlash{0%,100%{opacity:0}50%{opacity:1}}
+
+/* ── 非常通報ボタン ── */
+.emergency-call-btn{
+  width:100%;margin-top:8px;padding:10px;border-radius:12px;border:2px solid #dc2626;
+  background:linear-gradient(135deg,#fee2e2,#fecaca);color:#7f1d1d;font-weight:700;font-size:0.76rem;
+  cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.15s;
+}
+.emergency-call-btn:hover{background:linear-gradient(135deg,#fca5a5,#f87171);color:#fff}
+.emergency-call-btn:active{transform:scale(0.97)}
+
+/* ── 緊急事態オーバーレイ（地震・火事） ── */
+.emergency-overlay{
+  position:fixed;inset:0;background:rgba(40,5,5,0.92);z-index:9600;
+  display:flex;align-items:center;justify-content:center;padding:20px;
+  opacity:0;pointer-events:none;transition:opacity 0.3s;
+}
+.emergency-overlay.show{opacity:1;pointer-events:auto}
+.emergency-box{
+  background:linear-gradient(160deg,#7f1d1d,#450a0a);border:2px solid #fbbf24;border-radius:20px;
+  padding:24px 20px;max-width:420px;text-align:center;color:#fef2f2;
+  box-shadow:0 0 40px rgba(220,38,38,0.5);
+}
+.emergency-box h3{font-size:1.1rem;margin-bottom:10px;color:#fef08a}
+.emergency-box p{font-size:0.8rem;line-height:1.8;margin-bottom:10px;color:#fee2e2;text-align:left}
+.emergency-actions{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.emergency-btn{padding:11px 18px;border-radius:12px;border:none;font-weight:700;font-family:inherit;cursor:pointer;font-size:0.82rem}
+.emergency-btn.primary{background:#fbbf24;color:#450a0a}
+.emergency-btn.secondary{background:rgba(255,255,255,0.15);color:#fff;border:2px solid rgba(255,255,255,0.35)}
+
+/* ── 非常通報の通話モーダル ── */
+.call-overlay{
+  position:fixed;inset:0;background:rgba(5,10,20,0.9);z-index:9700;
+  display:flex;align-items:center;justify-content:center;padding:16px;
+  opacity:0;pointer-events:none;transition:opacity 0.3s;
+}
+.call-overlay.show{opacity:1;pointer-events:auto}
+.call-box{
+  background:var(--bg2);border-radius:20px;padding:18px;max-width:420px;width:100%;
+  max-height:85vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.4);
+}
+.call-header{display:flex;align-items:center;gap:8px;padding-bottom:10px;border-bottom:2px solid var(--border);margin-bottom:10px;font-weight:700;color:var(--accent);font-size:0.85rem}
+.call-status-dot{width:9px;height:9px;border-radius:50%;background:#22c55e;animation:dotPulse 1.2s ease-in-out infinite;flex-shrink:0}
+.call-transcript{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px;margin-bottom:10px;max-height:260px}
+.call-bubble{max-width:80%;padding:9px 12px;border-radius:14px;font-size:0.78rem;line-height:1.6}
+.call-bubble.op{align-self:flex-start;background:var(--bg3);border:2px solid var(--border);color:var(--text);border-bottom-left-radius:4px}
+.call-bubble.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.call-choices{display:flex;flex-direction:column;gap:6px}
+.call-choice-btn{padding:10px 12px;border-radius:12px;border:2px solid var(--border);background:var(--bg3);cursor:pointer;font-size:0.78rem;font-weight:700;color:var(--text);font-family:inherit;text-align:left;transition:all 0.15s}
+.call-choice-btn:hover{border-color:var(--accent2);background:rgba(2,132,199,0.05)}
+.call-end-btn{margin-top:10px;padding:11px;border-radius:12px;border:none;background:#64748b;color:#fff;font-weight:700;font-family:inherit;cursor:pointer;font-size:0.8rem}
 </style>
 </head>
 <body>
@@ -264,20 +354,37 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
       <p style="font-size:0.78rem;color:var(--text2);margin-bottom:14px;line-height:1.7">ボタンをおすと、エレベーターがそのかいへうごくよ！どのかいにいってみたい？🎉</p>
 
       <div class="elevator-wrap">
-        <div class="elevator-shaft">
-          <div class="shaft-inner" id="shaft">
-            <div class="floor-line" style="bottom:266px"></div>
-            <div class="floor-label" style="bottom:268px">RF</div>
-            <div class="floor-line" style="bottom:213px"></div>
-            <div class="floor-label" style="bottom:215px">5F</div>
-            <div class="floor-line" style="bottom:160px"></div>
-            <div class="floor-label" style="bottom:162px">4F</div>
-            <div class="floor-line" style="bottom:107px"></div>
-            <div class="floor-label" style="bottom:109px">3F</div>
-            <div class="floor-line" style="bottom:54px"></div>
-            <div class="floor-label" style="bottom:56px">2F</div>
-            <div class="floor-label" style="bottom:4px">1F</div>
-            <div class="elevator-car" id="elevatorCar" style="bottom:4px">🛗</div>
+        <div class="view-stage">
+          <div class="view-toggle">
+            <button class="view-btn active" id="viewBtnOverview" onclick="setViewMode('overview')">🔭 そとから</button>
+            <button class="view-btn" id="viewBtnInterior" onclick="setViewMode('interior')">🚪 中から</button>
+          </div>
+          <div class="elevator-shaft" id="overviewView">
+            <div class="shaft-inner" id="shaft">
+              <div class="floor-line" style="bottom:266px"></div>
+              <div class="floor-label" style="bottom:268px">RF</div>
+              <div class="floor-line" style="bottom:213px"></div>
+              <div class="floor-label" style="bottom:215px">5F</div>
+              <div class="floor-line" style="bottom:160px"></div>
+              <div class="floor-label" style="bottom:162px">4F</div>
+              <div class="floor-line" style="bottom:107px"></div>
+              <div class="floor-label" style="bottom:109px">3F</div>
+              <div class="floor-line" style="bottom:54px"></div>
+              <div class="floor-label" style="bottom:56px">2F</div>
+              <div class="floor-label" style="bottom:4px">1F</div>
+              <div class="elevator-car" id="elevatorCar" style="bottom:4px">🛗</div>
+            </div>
+          </div>
+          <div class="interior-box" id="interiorView" style="display:none">
+            <div class="interior-alert-flash" id="interiorAlertFlash"></div>
+            <div class="interior-ceiling"><div class="interior-light" id="interiorLight"></div></div>
+            <div class="interior-digital" id="interiorDigital">1</div>
+            <div class="interior-doorframe">
+              <div class="interior-scene" id="interiorScene">🏠</div>
+              <div class="interior-door left" id="intDoorL"></div>
+              <div class="interior-door right" id="intDoorR"></div>
+            </div>
+            <div class="interior-floorline"></div>
           </div>
         </div>
 
@@ -303,6 +410,7 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
           <div class="current-floor" id="currentFloor">📍 いま：1F</div>
           <div class="capacity-plate">⚖️ 定員10名・積載630kg以下</div>
           <button class="bgm-btn" id="bgmBtn" onclick="toggleBgm()">🎵 エレベーター音楽：OFF</button>
+          <button class="emergency-call-btn" id="emergencyCallBtn" onclick="openEmergencyCall()">🔔 非常通報ボタン</button>
         </div>
       </div>
 
@@ -791,6 +899,26 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
   </div>
 </div>
 
+<div class="emergency-overlay" id="emergencyOverlay">
+  <div class="emergency-box">
+    <h3 id="emergencyTitle">🚨 緊急停止</h3>
+    <p id="emergencyDesc"></p>
+    <div class="emergency-actions">
+      <button class="emergency-btn primary" onclick="openEmergencyCall()">🔔 非常ボタンで係員をよぶ</button>
+      <button class="emergency-btn secondary" onclick="resumeOperation()">▶ うんてんを再開する</button>
+    </div>
+  </div>
+</div>
+
+<div class="call-overlay" id="callOverlay">
+  <div class="call-box">
+    <div class="call-header"><span class="call-status-dot"></span> SchoolPark管理室 につながっています</div>
+    <div class="call-transcript" id="callTranscript"></div>
+    <div class="call-choices" id="callChoices"></div>
+    <button class="call-end-btn" onclick="endCall()">📴 通話をおわる</button>
+  </div>
+</div>
+
 <script>
 // ── タブ切り替え ──
 function switchTab(id, btn){
@@ -848,6 +976,21 @@ function _utter(text, isAnnounce=false){
   u.rate    = isAnnounce ? 0.92 : 0.92; // アナウンス・解説ともに統一
   u.pitch   = isAnnounce ? 1.08 : 1.02; // 少し高め＝放送感
   u.volume  = 1.0;
+  if(_bestVoice) u.voice = _bestVoice;
+  return u;
+}
+
+// 管理室オペレーターの声（少し低め・落ち着いたトーン）
+function _operatorUtter(text){
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ja-JP'; u.rate = 0.95; u.pitch = 0.8; u.volume = 1.0;
+  if(_bestVoice) u.voice = _bestVoice;
+  return u;
+}
+// 呼んでいる本人の声（少し高め・元気なトーン）
+function _callerUtter(text){
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ja-JP'; u.rate = 1.02; u.pitch = 1.25; u.volume = 1.0;
   if(_bestVoice) u.voice = _bestVoice;
   return u;
 }
@@ -917,25 +1060,56 @@ function playDoorSound(closing){
   }catch(e){}
 }
 
-// ── モーターハム音（移動中ずっと鳴る低音） ──
-let _humCtx=null, _humOsc=null, _humGain=null;
-function startMotorHum(durationSec){
+// ── 緊急アラーム音（地震・火災） ──
+function playEarthquakeAlarm(){
   try{
-    _humCtx = new (window.AudioContext||window.webkitAudioContext)();
-    _humOsc = _humCtx.createOscillator();
-    _humGain = _humCtx.createGain();
-    const lfo = _humCtx.createOscillator(), lfoGain=_humCtx.createGain();
-    lfo.frequency.value=5.5; lfoGain.gain.value=3;
-    lfo.connect(lfoGain); lfoGain.connect(_humOsc.frequency);
-    _humOsc.type='sawtooth'; _humOsc.frequency.value=62;
-    _humOsc.connect(_humGain); _humGain.connect(_humCtx.destination);
-    const s=_humCtx.currentTime;
-    _humGain.gain.setValueAtTime(0,s);
-    _humGain.gain.linearRampToValueAtTime(0.045,s+0.3);
-    _humGain.gain.setValueAtTime(0.045,s+Math.max(durationSec-0.3,0.3));
-    _humGain.gain.linearRampToValueAtTime(0,s+durationSec);
-    _humOsc.start(s); lfo.start(s);
-    _humOsc.stop(s+durationSec+0.05); lfo.stop(s+durationSec+0.05);
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const notes=[880,660,880,660];
+    notes.forEach((hz,i)=>{
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type='square'; osc.frequency.value=hz;
+      const s=ctx.currentTime+i*0.28;
+      g.gain.setValueAtTime(0,s);
+      g.gain.linearRampToValueAtTime(0.09,s+0.03);
+      g.gain.exponentialRampToValueAtTime(0.001,s+0.25);
+      osc.start(s); osc.stop(s+0.27);
+    });
+  }catch(e){}
+}
+function playFireAlarm(){
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    for(let i=0;i<3;i++){
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type='sawtooth';
+      const s=ctx.currentTime+i*0.42;
+      osc.frequency.setValueAtTime(1200,s);
+      osc.frequency.linearRampToValueAtTime(700,s+0.2);
+      g.gain.setValueAtTime(0.001,s);
+      g.gain.linearRampToValueAtTime(0.07,s+0.05);
+      g.gain.exponentialRampToValueAtTime(0.001,s+0.38);
+      osc.start(s); osc.stop(s+0.4);
+    }
+  }catch(e){}
+}
+function playRingTone(){
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    for(let i=0;i<2;i++){
+      [480,620].forEach(hz=>{
+        const osc=ctx.createOscillator(), g=ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.type='sine'; osc.frequency.value=hz;
+        const s=ctx.currentTime+i*0.9;
+        g.gain.setValueAtTime(0,s);
+        g.gain.linearRampToValueAtTime(0.05,s+0.05);
+        g.gain.setValueAtTime(0.05,s+0.35);
+        g.gain.exponentialRampToValueAtTime(0.001,s+0.42);
+        osc.start(s); osc.stop(s+0.45);
+      });
+    }
   }catch(e){}
 }
 
@@ -1010,11 +1184,16 @@ const FLOORS = {
 };
 let currentFloorKey = "1F";
 let isMoving = false;
+let viewMode = "overview";
+let activeEmergencyType = null; // null | 'earthquake' | 'fire'
+let recentEmergency = false;
 const DIGITAL_LABEL = { "RF":"R","5F":"5","4F":"4","3F":"3","2F":"2","1F":"1" };
 
-// ── デジタル階数表示を更新 ──
+// ── デジタル階数表示を更新（俯瞰・車内の両方に反映） ──
 function setDigital(floorKey){
-  document.getElementById("digitalNum").textContent = DIGITAL_LABEL[floorKey] || floorKey;
+  const label = DIGITAL_LABEL[floorKey] || floorKey;
+  document.getElementById("digitalNum").textContent = label;
+  document.getElementById("interiorDigital").textContent = label;
 }
 function setArrows(dirUp){
   const up=document.getElementById("arrowUp"), down=document.getElementById("arrowDown");
@@ -1022,6 +1201,22 @@ function setArrows(dirUp){
   down.classList.toggle("lit-down", dirUp===false);
 }
 function clearArrows(){ setArrows(null); }
+
+// ── 車内のドア開閉 ──
+function setDoorsVisual(state){
+  const l=document.getElementById("intDoorL"), r=document.getElementById("intDoorR");
+  if(state==="open"){ l.classList.add("open"); r.classList.add("open"); }
+  else { l.classList.remove("open"); r.classList.remove("open"); }
+}
+
+// ── 俯瞰／車内 表示切り替え ──
+function setViewMode(mode){
+  viewMode = mode;
+  document.getElementById("viewBtnOverview").classList.toggle("active", mode==="overview");
+  document.getElementById("viewBtnInterior").classList.toggle("active", mode==="interior");
+  document.getElementById("overviewView").style.display = mode==="overview" ? "" : "none";
+  document.getElementById("interiorView").style.display  = mode==="interior" ? "" : "none";
+}
 
 // ── エレベーター移動 ──
 function goFloor(floor){
@@ -1036,33 +1231,48 @@ function goFloor(floor){
   const toIdx   = FLOOR_ORDER.indexOf(floor);
   const apart   = Math.abs(toIdx - fromIdx);
   const dirUp   = toIdx > fromIdx;
-  const moveSec = 1.8 + apart * 0.75; // フロア間距離に応じた動的速度
+  const dirSign = dirUp ? 1 : -1;
+
+  // 緊急事態の判定（低確率・連続では起きないようクールダウンあり）
+  let emergency = null;
+  if(!recentEmergency && Math.random() < 0.16){
+    emergency = Math.random() < 0.5 ? "earthquake" : "fire";
+  }
+  recentEmergency = !!emergency;
+
+  // 緊急時は「最寄りのつぎのかい」に短時間で緊急停止する
+  const targetFloor = emergency ? FLOOR_ORDER[fromIdx + dirSign] : floor;
+  const targetIdx    = FLOOR_ORDER.indexOf(targetFloor);
+  const targetApart  = Math.abs(targetIdx - fromIdx);
+  const moveSec = emergency ? 1.1 : (1.8 + apart * 0.75); // フロア間距離に応じた動的速度
 
   // ① ドア閉まるアナウンス＋効果音
   setAnnounce("ドアが閉まります。ご注意ください。","red");
   elevSpeak("ドアが閉まります。");
   playDoorSound(true);
+  setDoorsVisual("shut");
 
   setTimeout(()=>{
     // ② 移動開始
     const car = document.getElementById("elevatorCar");
     car.classList.remove("arrived");
     car.style.transition = `bottom ${moveSec}s cubic-bezier(0.42,0,0.24,1)`;
-    car.style.bottom = FLOOR_POS[floor]+"px";
+    car.style.bottom = FLOOR_POS[targetFloor]+"px";
     car.classList.add("moving");
-    startMotorHum(moveSec);
     setArrows(dirUp);
 
     // デジタル表示：通過するかいごとに数字を切り替える
-    const dirSign = dirUp ? 1 : -1;
-    for(let i=1;i<=apart;i++){
+    for(let i=1;i<=targetApart;i++){
       setTimeout(()=>{
         setDigital(FLOOR_ORDER[fromIdx + i*dirSign]);
-      }, (moveSec*1000/apart)*i);
+      }, (moveSec*1000/targetApart)*i);
     }
 
     const dir = dirUp ? "↑ 上昇中" : "↓ 下降中";
-    setAnnounce(dir+" — "+FLOOR_NAMES[floor]+" へ向かっています…","yellow");
+    setAnnounce(dir+" — "+(emergency?"緊急停止にそなえています…":FLOOR_NAMES[floor]+" へ向かっています…"),"yellow");
+
+    if(emergency==="earthquake") setTimeout(triggerEarthquakeEffect, moveSec*400);
+    if(emergency==="fire") setTimeout(triggerFireEffect, moveSec*400);
 
     setTimeout(()=>{
       // ③ 到着
@@ -1070,38 +1280,163 @@ function goFloor(floor){
       car.classList.add("arrived");
       clearArrows();
       playDoorSound(false);
-      currentFloorKey = floor;
+      setDoorsVisual("open");
+      currentFloorKey = targetFloor;
 
       // アクティブボタン更新
       document.querySelectorAll(".floor-btn").forEach(b=>b.classList.remove("active-floor"));
-      const ab = document.getElementById("btn-"+floor);
+      const ab = document.getElementById("btn-"+targetFloor);
       if(ab) ab.classList.add("active-floor");
 
-      document.getElementById("currentFloor").textContent = "📍 いま："+floor;
+      document.getElementById("currentFloor").textContent = "📍 いま："+targetFloor;
 
-      const f = FLOORS[floor];
+      const f = FLOORS[targetFloor];
       if(f){
         document.getElementById("floorIcon").textContent  = f.icon;
         document.getElementById("floorTitle").textContent = f.title;
         document.getElementById("floorDesc").textContent  = f.desc;
+        document.getElementById("interiorScene").textContent = f.icon;
       }
+      markVisited(targetFloor);
 
-      const fn = FLOOR_NAMES[floor];
-      setAnnounce(fn+" に到着しました。ドアが開きます。","");
-      elevArriveAnnounce(fn);
-      showToast(floor+" に とうちゃく！ "+(f?f.icon:""));
-      markVisited(floor);
+      if(emergency){
+        showEmergencyOverlay(emergency, targetFloor);
+        // ボタンは「うんてんを再開する」が押されるまで無効のまま
+      } else {
+        const fn = FLOOR_NAMES[targetFloor];
+        setAnnounce(fn+" に到着しました。ドアが開きます。","");
+        elevArriveAnnounce(fn);
+        showToast(targetFloor+" に とうちゃく！ "+(f?f.icon:""));
 
-      // ④ ドア開き → ボタン再有効
-      setTimeout(()=>{
-        document.querySelectorAll(".floor-btn").forEach(b=>b.disabled=false);
-        isMoving = false;
-        setAnnounce("ドアが開いています。おりる方はお先にどうぞ。");
-      }, 1500);
+        // ④ ドア開き → ボタン再有効
+        setTimeout(()=>{
+          document.querySelectorAll(".floor-btn").forEach(b=>b.disabled=false);
+          isMoving = false;
+          setAnnounce("ドアが開いています。おりる方はお先にどうぞ。");
+        }, 1500);
+      }
 
     }, moveSec*1000+200);
 
   }, 1300); // ドア閉まり待機
+}
+
+// ── 緊急事態エフェクト：地震 ──
+function triggerEarthquakeEffect(){
+  document.getElementById("interiorView").classList.add("shaking");
+  document.getElementById("overviewView").classList.add("shaking");
+  playEarthquakeAlarm();
+  setAnnounce("🚨 緊急地震速報！大きな揺れに警戒してください。","red");
+  elevSpeak("緊急地震速報です。大きな揺れに警戒してください。");
+}
+// ── 緊急事態エフェクト：火事 ──
+function triggerFireEffect(){
+  document.getElementById("interiorView").classList.add("fire-alert");
+  document.getElementById("interiorAlertFlash").classList.add("on");
+  document.getElementById("interiorLight").classList.add("flicker");
+  playFireAlarm();
+  setAnnounce("🔥 火災報知器が作動しました。","red");
+  elevSpeak("火災報知器が作動しました。");
+}
+
+// ── 緊急停止オーバーレイ ──
+function showEmergencyOverlay(type, floor){
+  activeEmergencyType = type;
+  const fn = FLOOR_NAMES[floor];
+  const title = document.getElementById("emergencyTitle");
+  const desc  = document.getElementById("emergencyDesc");
+  if(type==="earthquake"){
+    title.textContent = "🚨 緊急停止：地震を検知しました";
+    desc.innerHTML = `大きな揺れを感知したため、エレベーターは最寄りの<strong>${fn}</strong>に自動で停止し、ドアが開きました。これはエレベーターの安全なしくみです。<br>あわてず、エレベーターは使わずに、かいだんでひなんしましょう。`;
+  } else {
+    title.textContent = "🔥 緊急停止：火災報知器が作動しました";
+    desc.innerHTML = `火災の可能性があるため、エレベーターは最寄りの<strong>${fn}</strong>に自動で停止し、ドアが開きました。<br>火事のときはエレベーターを使わず、かいだんでひなんするのがルールです。`;
+  }
+  document.getElementById("emergencyOverlay").classList.add("show");
+}
+function resumeOperation(){
+  document.getElementById("emergencyOverlay").classList.remove("show");
+  document.getElementById("interiorView").classList.remove("shaking","fire-alert");
+  document.getElementById("overviewView").classList.remove("shaking");
+  document.getElementById("interiorAlertFlash").classList.remove("on");
+  document.getElementById("interiorLight").classList.remove("flicker");
+  activeEmergencyType = null;
+  document.querySelectorAll(".floor-btn").forEach(b=>b.disabled=false);
+  isMoving = false;
+  setAnnounce("うんてんを再開しました。ドアが開いています。");
+}
+
+// ── 非常通報：管理室との会話（音声つき） ──
+const CALL_REASONS = [
+  { label:"とじこめられちゃった…", op:"だいじょうぶですよ。今、係員が向かっています。安心して待っていてくださいね。" },
+  { label:"ボタンをまちがえておしちゃった", op:"そうでしたか、大丈夫ですよ！気をつけて使ってくださいね。" },
+  { label:"ちょっとこわい…", op:"こわかったですね。エレベーターはとても安全に作られています。もう少しで到着しますから、安心してくださいね。" },
+  { label:"だいじょうぶです、テストでおしてみました", op:"教えてくれてありがとう！何かあったら、いつでもこのボタンを押してくださいね。" },
+];
+const CALL_REASONS_EMERGENCY = [
+  { label:"ちょっとこわい…", op:"こわかったですね。今、係員が向かっていますので、ドアの近くで安心して待っていてください。" },
+  { label:"だいじょうぶです", op:"よかったです！念のため、係員が確認に向かいます。もう少しだけお待ちくださいね。" },
+];
+
+function openEmergencyCall(){
+  document.getElementById("callOverlay").classList.add("show");
+  document.getElementById("callTranscript").innerHTML = "";
+  document.getElementById("callChoices").innerHTML = "";
+  playRingTone();
+  setTimeout(()=>{
+    let greeting;
+    if(activeEmergencyType==="earthquake"){
+      greeting = "はい、SchoolPark管理室です。地震を確認しております。係員が向かっていますので、少々お待ちください。";
+    } else if(activeEmergencyType==="fire"){
+      greeting = "はい、SchoolPark管理室です。火災報知器の作動を確認しております。係員が向かっていますので、少々お待ちください。";
+    } else {
+      greeting = "はい、SchoolPark管理室です。どうしましたか？";
+    }
+    addCallBubble("op", greeting);
+    speakOperator(greeting);
+    renderCallChoices();
+  }, 1400);
+}
+function addCallBubble(who, text){
+  const t = document.getElementById("callTranscript");
+  const b = document.createElement("div");
+  b.className = "call-bubble "+(who==="op"?"op":"me");
+  b.textContent = text;
+  t.appendChild(b);
+  t.scrollTop = t.scrollHeight;
+}
+function speakOperator(text){
+  if(!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  setTimeout(()=>window.speechSynthesis.speak(_operatorUtter(text)), 80);
+}
+function speakCaller(text){
+  if(!window.speechSynthesis) return;
+  setTimeout(()=>window.speechSynthesis.speak(_callerUtter(text)), 60);
+}
+function renderCallChoices(){
+  const reasons = activeEmergencyType ? CALL_REASONS_EMERGENCY : CALL_REASONS;
+  document.getElementById("callChoices").innerHTML =
+    reasons.map((r,i)=>`<button class="call-choice-btn" onclick="chooseCallOption(${i})">${r.label}</button>`).join("");
+}
+function chooseCallOption(idx){
+  const reasons = activeEmergencyType ? CALL_REASONS_EMERGENCY : CALL_REASONS;
+  const r = reasons[idx];
+  document.getElementById("callChoices").innerHTML = "";
+  addCallBubble("me", r.label);
+  speakCaller(r.label);
+  setTimeout(()=>{
+    addCallBubble("op", r.op);
+    speakOperator(r.op);
+    setTimeout(()=>{
+      document.getElementById("callChoices").innerHTML =
+        `<button class="call-choice-btn" onclick="renderCallChoices()">💬 べつのことをはなす</button>`;
+    }, 600);
+  }, 1300);
+}
+function endCall(){
+  if(window.speechSynthesis) window.speechSynthesis.cancel();
+  document.getElementById("callOverlay").classList.remove("show");
 }
 
 // ── バッジコレクション（localStorage永続化） ──
@@ -1360,6 +1695,7 @@ window.addEventListener("DOMContentLoaded",()=>{
   // 1F ボタンをアクティブに
   document.getElementById("btn-1F").classList.add("active-floor");
   setDigital("1F");
+  setDoorsVisual("open");
   // 最初に立っている1Fはすでに「たんけんずみ」として記録
   const visited = loadBadges();
   if(!visited.includes("1F")){ visited.push("1F"); saveBadges(visited); }
