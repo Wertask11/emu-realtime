@@ -165,6 +165,69 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 /* ── スター演出 ── */
 .star-pop{position:fixed;pointer-events:none;z-index:9001;font-size:1.6rem;animation:starPop 1.8s ease-out forwards}
 @keyframes starPop{0%{transform:translateY(0) scale(0.5);opacity:1}60%{transform:translateY(-80px) scale(1.3);opacity:1}100%{transform:translateY(-180px) scale(1);opacity:0}}
+
+/* ── デジタル階数表示・方向灯（リアル演出） ── */
+.panel-realism{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.digital-display{
+  background:#1a1a1a;border:3px solid #444;border-radius:8px;
+  padding:6px 10px;flex:1;display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,0.6);
+}
+.digital-num{
+  font-family:'Courier New',monospace;font-weight:700;font-size:1.6rem;
+  color:#ff6b1a;text-shadow:0 0 8px rgba(255,107,26,0.8);letter-spacing:1px;
+  min-width:34px;text-align:center;
+}
+.digital-arrows{display:flex;flex-direction:column;gap:2px}
+.dig-arrow{font-size:0.85rem;color:#3a2a1a;line-height:1;transition:color 0.2s,text-shadow 0.2s}
+.dig-arrow.lit-up{color:#4ade80;text-shadow:0 0 6px rgba(74,222,128,0.9)}
+.dig-arrow.lit-down{color:#f87171;text-shadow:0 0 6px rgba(248,113,113,0.9)}
+.capacity-plate{
+  background:#e5e7eb;border:1px solid #9ca3af;border-radius:6px;
+  padding:4px 8px;font-size:0.6rem;color:#4b5563;text-align:center;
+  font-weight:700;letter-spacing:0.5px;margin-top:8px;
+}
+
+/* ── バッジコレクション ── */
+.badge-tray{display:flex;gap:6px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+.badge-item{
+  width:34px;height:34px;border-radius:50%;background:var(--bg3);
+  border:2px solid var(--border);display:flex;align-items:center;justify-content:center;
+  font-size:1rem;opacity:0.35;filter:grayscale(1);transition:all 0.35s;
+}
+.badge-item.earned{opacity:1;filter:none;background:linear-gradient(135deg,#fef3c7,#fde68a);border-color:#f59e0b;transform:scale(1.08);box-shadow:0 2px 6px rgba(245,158,11,0.4)}
+.badge-progress{text-align:center;font-size:0.7rem;color:var(--text2);margin-top:6px;font-weight:700}
+
+/* ── car の到着バウンド ── */
+.elevator-car.arrived{animation:carBounce 0.5s ease-out}
+@keyframes carBounce{0%{transform:translateY(0)}30%{transform:translateY(-5px)}60%{transform:translateY(2px)}100%{transform:translateY(0)}}
+
+/* ── ひみつのB1ボタン ── */
+.floor-btn.secret{
+  background:linear-gradient(135deg,#1e293b,#0f172a);border-color:#475569;color:#facc15;
+  grid-column:span 2;animation:secretGlow 2s ease-in-out infinite;
+}
+@keyframes secretGlow{0%,100%{box-shadow:0 3px 6px rgba(0,0,0,0.1)}50%{box-shadow:0 0 14px rgba(250,204,21,0.6)}}
+
+/* ── ひみつフロア演出 ── */
+.secret-overlay{
+  position:fixed;inset:0;background:rgba(5,10,20,0.94);z-index:9500;
+  display:flex;align-items:center;justify-content:center;padding:20px;
+  opacity:0;pointer-events:none;transition:opacity 0.4s;
+}
+.secret-overlay.show{opacity:1;pointer-events:auto}
+.secret-box{
+  background:linear-gradient(160deg,#1e293b,#0f172a);border:2px solid #facc15;border-radius:20px;
+  padding:26px 22px;max-width:420px;text-align:center;color:#fef3c7;
+  box-shadow:0 0 40px rgba(250,204,21,0.35);
+}
+.secret-box h3{font-size:1.2rem;margin-bottom:10px;color:#facc15}
+.secret-box p{font-size:0.82rem;line-height:1.8;margin-bottom:8px;color:#e2e8f0;text-align:left}
+.secret-close{margin-top:14px;padding:11px 24px;border-radius:12px;border:none;background:#facc15;color:#1e293b;font-weight:700;font-family:inherit;cursor:pointer}
+
+/* ── BGM切替ボタン ── */
+.bgm-btn{background:rgba(255,255,255,0.95);border:2px solid var(--accent2);border-radius:20px;padding:6px 14px;font-size:0.72rem;cursor:pointer;font-family:inherit;font-weight:700;color:var(--accent);margin-top:10px;transition:all 0.2s}
+.bgm-btn.on{background:var(--accent);color:#fff}
 </style>
 </head>
 <body>
@@ -188,6 +251,7 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
   <button class="tab" onclick="switchTab('facts',this)">🌍 せかいのすごいエレベーター</button>
   <button class="tab" onclick="switchTab('how',this)">⚙️ しくみ</button>
   <button class="tab" onclick="switchTab('rules',this)">📋 マナー</button>
+  <button class="tab" onclick="switchTab('adult',this)">🧓 おとなの豆知識</button>
   <button class="tab" onclick="switchTab('quiz',this)">❓ クイズ</button>
 </div>
 
@@ -218,6 +282,15 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
         </div>
 
         <div class="floor-panel">
+          <div class="panel-realism">
+            <div class="digital-display">
+              <span class="digital-num" id="digitalNum">1</span>
+              <div class="digital-arrows">
+                <span class="dig-arrow" id="arrowUp">▲</span>
+                <span class="dig-arrow" id="arrowDown">▼</span>
+              </div>
+            </div>
+          </div>
           <div class="floor-btn-grid">
             <button class="floor-btn roof" id="btn-RF" onclick="goFloor('RF')">🏙️<br><small>屋上</small></button>
             <button class="floor-btn f5"   id="btn-5F" onclick="goFloor('5F')">🌌<br><small>5F</small></button>
@@ -225,8 +298,11 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
             <button class="floor-btn f3"   id="btn-3F" onclick="goFloor('3F')">🎮<br><small>3F</small></button>
             <button class="floor-btn f2"   id="btn-2F" onclick="goFloor('2F')">🍰<br><small>2F</small></button>
             <button class="floor-btn f1 active-floor" id="btn-1F" onclick="goFloor('1F')">🏠<br><small>1F</small></button>
+            <button class="floor-btn secret" id="btn-B1" onclick="revealSecretFloor()" style="display:none">🔒<br><small>B1 ひみつ</small></button>
           </div>
           <div class="current-floor" id="currentFloor">📍 いま：1F</div>
+          <div class="capacity-plate">⚖️ 定員10名・積載630kg以下</div>
+          <button class="bgm-btn" id="bgmBtn" onclick="toggleBgm()">🎵 エレベーター音楽：OFF</button>
         </div>
       </div>
 
@@ -241,6 +317,13 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
       <div class="floor-info-icon" id="floorIcon">🏠</div>
       <div class="floor-info-title" id="floorTitle">1F — エントランスホール</div>
       <div class="floor-info-desc" id="floorDesc">SchoolPark エレベーターへようこそ！ここは 1かい（1F）。エントランスホールです。うえのボタンをおして、すきなかいへいってみてね！</div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🎖️ たんけんバッジ コレクション</div>
+      <p style="font-size:0.75rem;color:var(--text2);margin-bottom:4px;line-height:1.6">ぜんぶのかいをおとずれてバッジをあつめよう！ぜんぶあつめると、ひみつのかいがあらわれるよ…！🔒</p>
+      <div class="badge-tray" id="badgeTray"></div>
+      <div class="badge-progress" id="badgeProgress">0 / 6 かい たんけんずみ</div>
     </div>
   </div>
 
@@ -582,6 +665,109 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
     </div>
   </div>
 
+  <!-- おとなの豆知識タブ -->
+  <div class="panel" id="tab-adult">
+    <div class="sec">
+      <div class="sec-title">🧓 おとなも「へぇ」となる豆知識</div>
+      <p style="font-size:0.78rem;color:var(--text2);margin-bottom:14px;line-height:1.7">子どもと一緒にのぞきに来たパパ・ママ・おじいちゃん・おばあちゃんへ。実は奥が深いエレベーターの世界、少しだけ大人向けに🍵</p>
+
+      <div class="fact-card">
+        <div class="fact-card-inner">
+          <div class="fact-icon">👗</div>
+          <div class="fact-content">
+            <div class="fact-header">
+              <div class="fact-meta">
+                <span class="fact-badge" style="background:#fbcfe8;color:#831843">🇯🇵 昭和〜平成</span>
+                <div class="fact-title">「エレベーターガール」という文化</div>
+              </div>
+              <button class="sound-btn" onclick="speakAdultFact(0,this)">🔊 音声</button>
+            </div>
+            <div class="fact-body" id="afb0">
+              かつて日本の百貨店には、専用の制服を着て「上へまいります」と美しいお辞儀とともに案内する「エレベーターガール」がいました。<br>
+              全自動化がすすんだ今もごく一部の百貨店に残っていて、<strong>接客のプロフェッショナル</strong>として今も現役です。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fact-card">
+        <div class="fact-card-inner">
+          <div class="fact-icon">🎪</div>
+          <div class="fact-content">
+            <div class="fact-header">
+              <div class="fact-meta">
+                <span class="fact-badge" style="background:#fed7aa;color:#7c2d12">🇺🇸 1854年</span>
+                <div class="fact-title">ロープを切っても落ちない！伝説の公開実験</div>
+              </div>
+              <button class="sound-btn" onclick="speakAdultFact(1,this)">🔊 音声</button>
+            </div>
+            <div class="fact-body" id="afb1">
+              発明家オーティスは、ニューヨーク万博の会場で<strong>自ら乗ったエレベーターのロープを斧で切断</strong>するという大胆なデモを敢行。安全装置のおかげでかごは落下せず、観客は騒然となりました。<br>
+              このパフォーマンスが「エレベーターは安全」という信頼を一気に広め、高層ビル時代の幕開けにつながったといわれています。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fact-card">
+        <div class="fact-card-inner">
+          <div class="fact-icon">⏳</div>
+          <div class="fact-content">
+            <div class="fact-header">
+              <div class="fact-meta">
+                <span class="fact-badge" style="background:#ddd6fe;color:#4c1d95">📊 統計</span>
+                <div class="fact-title">一生のうち、意外と長い「エレベーター時間」</div>
+              </div>
+              <button class="sound-btn" onclick="speakAdultFact(2,this)">🔊 音声</button>
+            </div>
+            <div class="fact-body" id="afb2">
+              都市部で働く人は、通勤・通学もあわせると<strong>一生でのべ数日間ぶん</strong>をエレベーターの中で過ごすとも言われています。<br>
+              ちりも積もれば…ですね。次に乗るとき、ちょっとだけその「積み重ね」を意識してみてください😄
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fact-card">
+        <div class="fact-card-inner">
+          <div class="fact-icon">🔋</div>
+          <div class="fact-content">
+            <div class="fact-header">
+              <div class="fact-meta">
+                <span class="fact-badge" style="background:#bbf7d0;color:#14532d">🌱 最新技術</span>
+                <div class="fact-title">エレベーターもハイブリッドカーだった</div>
+              </div>
+              <button class="sound-btn" onclick="speakAdultFact(3,this)">🔊 音声</button>
+            </div>
+            <div class="fact-body" id="afb3">
+              最新のエレベーターには<strong>回生ブレーキ</strong>という仕組みがあり、満員のかごが下りるときに発生するエネルギーを電気として回収し、ビル内で再利用しています。<br>
+              まさにハイブリッドカーと同じ発想。省エネの縁の下の力持ちです。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fact-card">
+        <div class="fact-card-inner">
+          <div class="fact-icon">😶</div>
+          <div class="fact-content">
+            <div class="fact-header">
+              <div class="fact-meta">
+                <span class="fact-badge" style="background:#e0e7ff;color:#312e81">🧠 心理学</span>
+                <div class="fact-title">なぜ、みんな階数表示ばかり見つめるのか</div>
+              </div>
+              <button class="sound-btn" onclick="speakAdultFact(4,this)">🔊 音声</button>
+            </div>
+            <div class="fact-body" id="afb4">
+              知らない人と密室に閉じ込められると、人は無意識に<strong>視線をそらせる対象</strong>を探すといわれています。階数表示はその「ちょうどいい逃げ場」なのだとか。<br>
+              世界共通の現象で、これはこれで人間らしくて面白いですよね。
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- クイズタブ -->
   <div class="panel" id="tab-quiz">
     <div class="sec">
@@ -594,6 +780,16 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="secret-overlay" id="secretOverlay">
+  <div class="secret-box">
+    <h3>🔓 ひみつの地下 B1 — 機械室</h3>
+    <p>ぜんぶのかいをせいはした きみだけが はいれる、エレベーターの「うらがわ」だよ！🎉</p>
+    <p>じつは、エレベーターをうごかす<strong>大きなモーターとコンピューター</strong>は、この機械室にあることが多いんだ。まいにちしずかに、みんなをはこぶために働いてくれているよ。</p>
+    <p style="color:#facc15">🏅 「エレベーターはかせ」しょうをおくります！これからもたくさんのかいをたんけんしてね。</p>
+    <button class="secret-close" onclick="closeSecretFloor()">とびらをしめる ▶</button>
+  </div>
+</div>
 
 <script>
 // ── タブ切り替え ──
@@ -679,6 +875,108 @@ function _chime(onEnd){
   } catch(e){ if(onEnd) onEnd(); }
 }
 
+// ── ボタン押下ビープ ──
+function playButtonBeep(){
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const osc=ctx.createOscillator(), g=ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type='square'; osc.frequency.value=1046;
+    const s=ctx.currentTime;
+    g.gain.setValueAtTime(0.12,s);
+    g.gain.exponentialRampToValueAtTime(0.001,s+0.09);
+    osc.start(s); osc.stop(s+0.1);
+  }catch(e){}
+}
+
+// ── ドア開閉スイッシュ音 ──
+function playDoorSound(closing){
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const osc=ctx.createOscillator(), g=ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type='sine';
+    const s=ctx.currentTime;
+    if(closing){ osc.frequency.setValueAtTime(360,s); osc.frequency.exponentialRampToValueAtTime(180,s+0.35); }
+    else{ osc.frequency.setValueAtTime(180,s); osc.frequency.exponentialRampToValueAtTime(360,s+0.35); }
+    g.gain.setValueAtTime(0.001,s);
+    g.gain.linearRampToValueAtTime(0.09,s+0.08);
+    g.gain.exponentialRampToValueAtTime(0.001,s+0.4);
+    osc.start(s); osc.stop(s+0.42);
+    // 到着の「コトン」というかすかなクランク音
+    if(closing){
+      const g2=ctx.createGain(), osc2=ctx.createOscillator();
+      osc2.connect(g2); g2.connect(ctx.destination);
+      osc2.type='triangle'; osc2.frequency.value=90;
+      const s2=s+0.36;
+      g2.gain.setValueAtTime(0.001,s2);
+      g2.gain.linearRampToValueAtTime(0.15,s2+0.02);
+      g2.gain.exponentialRampToValueAtTime(0.001,s2+0.18);
+      osc2.start(s2); osc2.stop(s2+0.2);
+    }
+  }catch(e){}
+}
+
+// ── モーターハム音（移動中ずっと鳴る低音） ──
+let _humCtx=null, _humOsc=null, _humGain=null;
+function startMotorHum(durationSec){
+  try{
+    _humCtx = new (window.AudioContext||window.webkitAudioContext)();
+    _humOsc = _humCtx.createOscillator();
+    _humGain = _humCtx.createGain();
+    const lfo = _humCtx.createOscillator(), lfoGain=_humCtx.createGain();
+    lfo.frequency.value=5.5; lfoGain.gain.value=3;
+    lfo.connect(lfoGain); lfoGain.connect(_humOsc.frequency);
+    _humOsc.type='sawtooth'; _humOsc.frequency.value=62;
+    _humOsc.connect(_humGain); _humGain.connect(_humCtx.destination);
+    const s=_humCtx.currentTime;
+    _humGain.gain.setValueAtTime(0,s);
+    _humGain.gain.linearRampToValueAtTime(0.045,s+0.3);
+    _humGain.gain.setValueAtTime(0.045,s+Math.max(durationSec-0.3,0.3));
+    _humGain.gain.linearRampToValueAtTime(0,s+durationSec);
+    _humOsc.start(s); lfo.start(s);
+    _humOsc.stop(s+durationSec+0.05); lfo.stop(s+durationSec+0.05);
+  }catch(e){}
+}
+
+// ── BGM（エレベーター音楽）── のんびりループするアルペジオ ──
+let _bgmCtx=null, _bgmTimer=null, _bgmOn=false;
+function toggleBgm(){
+  _bgmOn = !_bgmOn;
+  const btn=document.getElementById("bgmBtn");
+  if(_bgmOn){
+    btn.textContent="🎵 エレベーター音楽：ON";
+    btn.classList.add("on");
+    _startBgmLoop();
+  } else {
+    btn.textContent="🎵 エレベーター音楽：OFF";
+    btn.classList.remove("on");
+    clearTimeout(_bgmTimer);
+  }
+}
+function _startBgmLoop(){
+  if(!_bgmOn) return;
+  try{
+    if(!_bgmCtx) _bgmCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const notes=[523.25,659.25,783.99,659.25,523.25,392.00];
+    let i=0;
+    const play=()=>{
+      if(!_bgmOn) return;
+      const osc=_bgmCtx.createOscillator(), g=_bgmCtx.createGain();
+      osc.connect(g); g.connect(_bgmCtx.destination);
+      osc.type='sine'; osc.frequency.value=notes[i%notes.length];
+      const s=_bgmCtx.currentTime;
+      g.gain.setValueAtTime(0,s);
+      g.gain.linearRampToValueAtTime(0.05,s+0.1);
+      g.gain.exponentialRampToValueAtTime(0.001,s+0.7);
+      osc.start(s); osc.stop(s+0.75);
+      i++;
+      _bgmTimer=setTimeout(play,650);
+    };
+    play();
+  }catch(e){}
+}
+
 // 通常の読み上げ（ドア閉まる など）
 function elevSpeak(text){
   if(!window.speechSynthesis) return;
@@ -712,11 +1010,24 @@ const FLOORS = {
 };
 let currentFloorKey = "1F";
 let isMoving = false;
+const DIGITAL_LABEL = { "RF":"R","5F":"5","4F":"4","3F":"3","2F":"2","1F":"1" };
+
+// ── デジタル階数表示を更新 ──
+function setDigital(floorKey){
+  document.getElementById("digitalNum").textContent = DIGITAL_LABEL[floorKey] || floorKey;
+}
+function setArrows(dirUp){
+  const up=document.getElementById("arrowUp"), down=document.getElementById("arrowDown");
+  up.classList.toggle("lit-up", dirUp===true);
+  down.classList.toggle("lit-down", dirUp===false);
+}
+function clearArrows(){ setArrows(null); }
 
 // ── エレベーター移動 ──
 function goFloor(floor){
   if(isMoving || floor===currentFloorKey) return;
   isMoving = true;
+  playButtonBeep();
 
   // ボタン無効化
   document.querySelectorAll(".floor-btn").forEach(b=>b.disabled=true);
@@ -724,25 +1035,41 @@ function goFloor(floor){
   const fromIdx = FLOOR_ORDER.indexOf(currentFloorKey);
   const toIdx   = FLOOR_ORDER.indexOf(floor);
   const apart   = Math.abs(toIdx - fromIdx);
+  const dirUp   = toIdx > fromIdx;
   const moveSec = 1.8 + apart * 0.75; // フロア間距離に応じた動的速度
 
-  // ① ドア閉まるアナウンス
+  // ① ドア閉まるアナウンス＋効果音
   setAnnounce("ドアが閉まります。ご注意ください。","red");
   elevSpeak("ドアが閉まります。");
+  playDoorSound(true);
 
   setTimeout(()=>{
     // ② 移動開始
     const car = document.getElementById("elevatorCar");
+    car.classList.remove("arrived");
     car.style.transition = `bottom ${moveSec}s cubic-bezier(0.42,0,0.24,1)`;
     car.style.bottom = FLOOR_POS[floor]+"px";
     car.classList.add("moving");
+    startMotorHum(moveSec);
+    setArrows(dirUp);
 
-    const dir = toIdx > fromIdx ? "↑ 上昇中" : "↓ 下降中";
+    // デジタル表示：通過するかいごとに数字を切り替える
+    const dirSign = dirUp ? 1 : -1;
+    for(let i=1;i<=apart;i++){
+      setTimeout(()=>{
+        setDigital(FLOOR_ORDER[fromIdx + i*dirSign]);
+      }, (moveSec*1000/apart)*i);
+    }
+
+    const dir = dirUp ? "↑ 上昇中" : "↓ 下降中";
     setAnnounce(dir+" — "+FLOOR_NAMES[floor]+" へ向かっています…","yellow");
 
     setTimeout(()=>{
       // ③ 到着
       car.classList.remove("moving");
+      car.classList.add("arrived");
+      clearArrows();
+      playDoorSound(false);
       currentFloorKey = floor;
 
       // アクティブボタン更新
@@ -763,6 +1090,7 @@ function goFloor(floor){
       setAnnounce(fn+" に到着しました。ドアが開きます。","");
       elevArriveAnnounce(fn);
       showToast(floor+" に とうちゃく！ "+(f?f.icon:""));
+      markVisited(floor);
 
       // ④ ドア開き → ボタン再有効
       setTimeout(()=>{
@@ -774,6 +1102,59 @@ function goFloor(floor){
     }, moveSec*1000+200);
 
   }, 1300); // ドア閉まり待機
+}
+
+// ── バッジコレクション（localStorage永続化） ──
+const BADGE_KEY = "sp_elev_badges";
+const SECRET_KEY = "sp_elev_secret_unlocked";
+
+function loadBadges(){
+  try{ return JSON.parse(localStorage.getItem(BADGE_KEY)) || []; }catch(e){ return []; }
+}
+function saveBadges(arr){
+  try{ localStorage.setItem(BADGE_KEY, JSON.stringify(arr)); }catch(e){}
+}
+function renderBadgeTray(){
+  const visited = loadBadges();
+  const tray = document.getElementById("badgeTray");
+  tray.innerHTML = FLOOR_ORDER.map(fk=>{
+    const earned = visited.includes(fk);
+    return `<div class="badge-item${earned?" earned":""}" title="${FLOOR_NAMES[fk]}">${FLOORS[fk].icon}</div>`;
+  }).join("");
+  document.getElementById("badgeProgress").textContent = `${visited.length} / ${FLOOR_ORDER.length} かい たんけんずみ`;
+
+  if(localStorage.getItem(SECRET_KEY)==="1"){
+    document.getElementById("btn-B1").style.display = "";
+  }
+}
+function markVisited(floor){
+  const visited = loadBadges();
+  if(!visited.includes(floor)){
+    visited.push(floor);
+    saveBadges(visited);
+    renderBadgeTray();
+    if(visited.length===FLOOR_ORDER.length && localStorage.getItem(SECRET_KEY)!=="1"){
+      localStorage.setItem(SECRET_KEY,"1");
+      document.getElementById("btn-B1").style.display = "";
+      setTimeout(()=>{
+        showToast("🏅 全階制覇バッジGET！B1がひらいたよ！");
+        spawnConfetti();
+      }, 800);
+    }
+  } else {
+    renderBadgeTray();
+  }
+}
+
+// ── ひみつのB1フロア ──
+function revealSecretFloor(){
+  if(localStorage.getItem(SECRET_KEY)!=="1") return;
+  document.getElementById("secretOverlay").classList.add("show");
+  _chime();
+  spawnStars();
+}
+function closeSecretFloor(){
+  document.getElementById("secretOverlay").classList.remove("show");
 }
 
 // ── 音声解説テキスト ──
@@ -798,6 +1179,33 @@ function speakFact(idx, btn){
   if(!window.speechSynthesis){ showToast("音声は非対応のブラウザです"); return; }
   window.speechSynthesis.cancel();
   const u=_utter(FACT_VOICES[idx], false); // 解説は少し速め・自然なトーン
+  btn.classList.add("speaking");
+  btn.textContent="🔊 読み中…";
+  _speakingBtn=btn;
+  u.onend=()=>{ btn.classList.remove("speaking"); btn.textContent="🔊 音声"; _speakingBtn=null; };
+  u.onerror=()=>{ btn.classList.remove("speaking"); btn.textContent="🔊 音声"; _speakingBtn=null; };
+  setTimeout(()=>window.speechSynthesis.speak(u),100);
+}
+
+// ── おとなの豆知識：音声解説テキスト ──
+const ADULT_FACT_VOICES = [
+  "かつて日本の百貨店には、専用の制服を着て、上へまいりますと美しいお辞儀とともに案内するエレベーターガールがいました。全自動化がすすんだ今も、ごく一部の百貨店に残っていて、接客のプロフェッショナルとして今も現役です。",
+  "発明家オーティスは、ニューヨーク万博の会場で、自ら乗ったエレベーターのロープを斧で切断するという大胆なデモを行いました。安全装置のおかげでかごは落下せず、観客は騒然となりました。このパフォーマンスが、エレベーターは安全だという信頼を一気に広めたと言われています。",
+  "都市部で働く人は、通勤・通学もあわせると、一生でのべ数日間ぶんをエレベーターの中で過ごすとも言われています。ちりも積もれば、ですね。",
+  "最新のエレベーターには回生ブレーキという仕組みがあり、満員のかごが下りるときに発生するエネルギーを電気として回収し、ビル内で再利用しています。まさにハイブリッドカーと同じ発想です。",
+  "知らない人と密室に閉じ込められると、人は無意識に視線をそらせる対象を探すと言われています。階数表示は、そのちょうどいい逃げ場なのだとか。世界共通の現象で、これはこれで人間らしくて面白いですよね。"
+];
+
+function speakAdultFact(idx, btn){
+  if(_speakingBtn){
+    window.speechSynthesis.cancel();
+    _speakingBtn.classList.remove("speaking");
+    _speakingBtn.textContent="🔊 音声";
+    if(_speakingBtn===btn){ _speakingBtn=null; return; }
+  }
+  if(!window.speechSynthesis){ showToast("音声は非対応のブラウザです"); return; }
+  window.speechSynthesis.cancel();
+  const u=_utter(ADULT_FACT_VOICES[idx], false);
   btn.classList.add("speaking");
   btn.textContent="🔊 読み中…";
   _speakingBtn=btn;
@@ -951,6 +1359,11 @@ window.addEventListener("DOMContentLoaded",()=>{
   initQuiz();
   // 1F ボタンをアクティブに
   document.getElementById("btn-1F").classList.add("active-floor");
+  setDigital("1F");
+  // 最初に立っている1Fはすでに「たんけんずみ」として記録
+  const visited = loadBadges();
+  if(!visited.includes("1F")){ visited.push("1F"); saveBadges(visited); }
+  renderBadgeTray();
 });
 
 // ── 戻るボタン ──
