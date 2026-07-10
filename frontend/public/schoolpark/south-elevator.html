@@ -235,35 +235,50 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .view-btn{padding:7px 12px;border-radius:20px;border:2px solid var(--accent2);background:#fff;color:var(--accent);font-size:0.68rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s;white-space:nowrap}
 .view-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
-/* ── 車内ビュー（エレベーターの中） ── */
+/* ── 車内ビュー（エレベーターの中：本物の箱に乗っている見た目） ── */
+.elevator-wrap.interior-mode{flex-direction:column;align-items:stretch}
+.elevator-wrap.interior-mode .view-stage{width:100%}
+.elevator-wrap.interior-mode .floor-panel{max-width:100%;width:100%}
 .interior-box{
-  width:100px;height:328px;border-radius:8px;position:relative;overflow:hidden;
-  background:linear-gradient(180deg,#9ca3af 0%,#6b7280 55%,#4b5563 100%);
-  border:2px solid #374151;box-shadow:inset 0 0 24px rgba(0,0,0,0.45);
+  width:100%;height:260px;border-radius:14px;position:relative;overflow:hidden;
+  background:linear-gradient(180deg,#8b93a1 0%,#6b7280 14%,#5b6472 86%,#454c57 100%);
+  border:3px solid #2d3339;box-shadow:inset 0 0 40px rgba(0,0,0,0.5);
+  display:grid;grid-template-columns:16% 68% 16%;grid-template-rows:30px 1fr 18px;
 }
-.interior-ceiling{position:absolute;top:0;left:0;right:0;height:26px;background:linear-gradient(180deg,#f3f4f6,#9ca3af);display:flex;align-items:center;justify-content:center;z-index:2}
-.interior-light{width:60%;height:7px;border-radius:6px;background:#fff7d6;box-shadow:0 0 12px 4px rgba(255,247,214,0.9);transition:opacity 0.2s}
+.interior-ceiling{grid-column:1/4;grid-row:1;background:linear-gradient(180deg,#e5e7eb,#9ca3af);display:flex;align-items:center;justify-content:center;gap:34%;z-index:2}
+.interior-light{width:20%;height:8px;border-radius:6px;background:#fff7d6;box-shadow:0 0 14px 5px rgba(255,247,214,0.9);transition:opacity 0.2s}
 .interior-light.flicker{animation:lightFlicker 0.15s steps(2) infinite}
 @keyframes lightFlicker{0%,100%{opacity:1}50%{opacity:0.25}}
 .interior-digital{
-  position:absolute;top:32px;left:50%;transform:translateX(-50%);z-index:3;
-  background:#111;border:2px solid #374151;border-radius:6px;padding:2px 10px;
-  font-family:'Courier New',monospace;font-weight:700;font-size:0.95rem;
+  position:absolute;top:5px;left:50%;transform:translateX(-50%);z-index:5;
+  background:#111;border:2px solid #374151;border-radius:6px;padding:2px 12px;
+  font-family:'Courier New',monospace;font-weight:700;font-size:1rem;
   color:#ff6b1a;text-shadow:0 0 6px rgba(255,107,26,0.8);
 }
-.interior-doorframe{position:absolute;top:58px;left:8px;right:8px;bottom:14px;background:#1f2937;border-radius:4px;overflow:hidden;display:flex;z-index:1}
-.interior-scene{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2rem;background:linear-gradient(180deg,#7dd3fc,#38bdf8);z-index:0}
-.interior-door{flex:1;background:linear-gradient(180deg,#d1d5db,#9ca3af);position:relative;z-index:1;transition:transform 0.7s cubic-bezier(0.6,0,0.4,1)}
-.interior-door::before{content:"";position:absolute;top:12%;bottom:12%;width:2px;background:rgba(0,0,0,0.2)}
+.interior-wall{grid-row:2;position:relative;background:linear-gradient(90deg,rgba(0,0,0,0.2),rgba(0,0,0,0) 40%)}
+.interior-wall-left{grid-column:1}
+.interior-wall-right{grid-column:3;background:linear-gradient(270deg,rgba(0,0,0,0.2),rgba(0,0,0,0) 40%)}
+.interior-handrail{position:absolute;left:14%;right:14%;top:58%;height:5px;border-radius:3px;background:linear-gradient(180deg,#e5e7eb,#9ca3af);box-shadow:0 1px 3px rgba(0,0,0,0.4)}
+.interior-handrail::before,.interior-handrail::after{content:"";position:absolute;top:100%;width:4px;height:16px;background:#8b93a1}
+.interior-handrail::before{left:8%}
+.interior-handrail::after{right:8%}
+.interior-mirror{position:absolute;left:20%;right:20%;top:12%;bottom:32%;border-radius:4px;background:linear-gradient(160deg,rgba(255,255,255,0.35),rgba(255,255,255,0.05) 60%);border:1px solid rgba(255,255,255,0.25)}
+.interior-doorframe{grid-column:2;grid-row:2;position:relative;background:#1f2937;overflow:hidden;display:flex;z-index:1}
+.interior-scene{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;z-index:0;transition:background 0.4s}
+.scene-icon{font-size:2.6rem}
+.scene-label{font-size:0.66rem;font-weight:700;color:rgba(15,23,42,0.75);background:rgba(255,255,255,0.8);padding:3px 10px;border-radius:10px;max-width:88%;text-align:center;line-height:1.3}
+.interior-door{flex:1;background:linear-gradient(180deg,#d1d5db,#9ca3af);position:relative;z-index:1;transition:transform 0.7s cubic-bezier(0.6,0,0.4,1);box-shadow:inset 0 0 12px rgba(0,0,0,0.15)}
+.interior-door::before{content:"";position:absolute;top:8%;bottom:8%;width:3px;background:rgba(0,0,0,0.2)}
+.interior-door::after{content:"";position:absolute;left:10%;right:10%;top:20%;height:2px;background:rgba(0,0,0,0.1)}
 .interior-door.left{border-right:2px solid #374151}
-.interior-door.left::before{right:5px}
+.interior-door.left::before{right:6px}
 .interior-door.right{border-left:2px solid #374151}
-.interior-door.right::before{left:5px}
+.interior-door.right::before{left:6px}
 .interior-door.open.left{transform:translateX(-101%)}
 .interior-door.open.right{transform:translateX(101%)}
-.interior-floorline{position:absolute;left:8px;right:8px;bottom:0;height:14px;background:linear-gradient(180deg,#4b5563,#1f2937);z-index:1}
+.interior-floor{grid-column:1/4;grid-row:3;background:linear-gradient(180deg,#5b6472,#20242b)}
 .interior-box.shaking,.elevator-shaft.shaking{animation:interiorShake 0.3s ease-in-out infinite}
-.interior-box.fire-alert{box-shadow:inset 0 0 30px rgba(239,68,68,0.6)}
+.interior-box.fire-alert{box-shadow:inset 0 0 40px rgba(239,68,68,0.65)}
 @keyframes interiorShake{0%,100%{transform:translate(0,0) rotate(0)}25%{transform:translate(-4px,2px) rotate(-0.5deg)}75%{transform:translate(4px,-2px) rotate(0.5deg)}}
 .interior-alert-flash{position:absolute;inset:0;background:rgba(239,68,68,0.4);opacity:0;pointer-events:none;z-index:4}
 .interior-alert-flash.on{animation:alertFlash 0.6s steps(1) infinite}
@@ -353,7 +368,7 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
       <div class="sec-title">🛗 SchoolPark エレベーター</div>
       <p style="font-size:0.78rem;color:var(--text2);margin-bottom:14px;line-height:1.7">ボタンをおすと、エレベーターがそのかいへうごくよ！どのかいにいってみたい？🎉</p>
 
-      <div class="elevator-wrap">
+      <div class="elevator-wrap" id="elevatorWrap">
         <div class="view-stage">
           <div class="view-toggle">
             <button class="view-btn active" id="viewBtnOverview" onclick="setViewMode('overview')">🔭 そとから</button>
@@ -377,14 +392,27 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
           </div>
           <div class="interior-box" id="interiorView" style="display:none">
             <div class="interior-alert-flash" id="interiorAlertFlash"></div>
-            <div class="interior-ceiling"><div class="interior-light" id="interiorLight"></div></div>
-            <div class="interior-digital" id="interiorDigital">1</div>
+            <div class="interior-ceiling">
+              <div class="interior-light"></div>
+              <div class="interior-light"></div>
+            </div>
+            <div class="interior-wall interior-wall-left">
+              <div class="interior-handrail"></div>
+            </div>
             <div class="interior-doorframe">
-              <div class="interior-scene" id="interiorScene">🏠</div>
+              <div class="interior-scene" id="interiorScene">
+                <div class="scene-icon" id="sceneIcon">🏠</div>
+                <div class="scene-label" id="sceneLabel">1F — エントランスホール</div>
+              </div>
               <div class="interior-door left" id="intDoorL"></div>
               <div class="interior-door right" id="intDoorR"></div>
             </div>
-            <div class="interior-floorline"></div>
+            <div class="interior-wall interior-wall-right">
+              <div class="interior-handrail"></div>
+              <div class="interior-mirror"></div>
+            </div>
+            <div class="interior-digital" id="interiorDigital">1</div>
+            <div class="interior-floor"></div>
           </div>
         </div>
 
@@ -1182,6 +1210,15 @@ const FLOORS = {
   "2F":{ icon:"🍰", title:"2F — カフェ・にぎわいホール", desc:"みんなでかたりあうばしょ！おいしいものをたべながら（きもちで）、ともだちとはなそう☕🍰 コミュニティのひろばだよ！" },
   "1F":{ icon:"🏠", title:"1F — エントランスホール", desc:"SchoolPark エレベーターへようこそ！ここは 1かい（1F）。エントランスホールです。うえのボタンをおして、すきなかいへいってみてね！" }
 };
+// 車内ビューでドアが開いたときに見える「かいのけしき」の背景色（各かいのテーマカラー）
+const FLOOR_THEME = {
+  "RF":"linear-gradient(180deg,#e0e7ff,#c7d2fe)",
+  "5F":"linear-gradient(180deg,#fed7aa,#fdba74)",
+  "4F":"linear-gradient(180deg,#ddd6fe,#c4b5fd)",
+  "3F":"linear-gradient(180deg,#fecaca,#fca5a5)",
+  "2F":"linear-gradient(180deg,#fef08a,#fde68a)",
+  "1F":"linear-gradient(180deg,#bbf7d0,#86efac)"
+};
 let currentFloorKey = "1F";
 let isMoving = false;
 let viewMode = "overview";
@@ -1216,6 +1253,7 @@ function setViewMode(mode){
   document.getElementById("viewBtnInterior").classList.toggle("active", mode==="interior");
   document.getElementById("overviewView").style.display = mode==="overview" ? "" : "none";
   document.getElementById("interiorView").style.display  = mode==="interior" ? "" : "none";
+  document.getElementById("elevatorWrap").classList.toggle("interior-mode", mode==="interior");
 }
 
 // ── エレベーター移動 ──
@@ -1295,7 +1333,9 @@ function goFloor(floor){
         document.getElementById("floorIcon").textContent  = f.icon;
         document.getElementById("floorTitle").textContent = f.title;
         document.getElementById("floorDesc").textContent  = f.desc;
-        document.getElementById("interiorScene").textContent = f.icon;
+        document.getElementById("sceneIcon").textContent = f.icon;
+        document.getElementById("sceneLabel").textContent = f.title;
+        document.getElementById("interiorScene").style.background = FLOOR_THEME[targetFloor] || "";
       }
       markVisited(targetFloor);
 
@@ -1333,7 +1373,7 @@ function triggerEarthquakeEffect(){
 function triggerFireEffect(){
   document.getElementById("interiorView").classList.add("fire-alert");
   document.getElementById("interiorAlertFlash").classList.add("on");
-  document.getElementById("interiorLight").classList.add("flicker");
+  document.querySelectorAll(".interior-light").forEach(l=>l.classList.add("flicker"));
   playFireAlarm();
   setAnnounce("🔥 火災報知器が作動しました。","red");
   elevSpeak("火災報知器が作動しました。");
@@ -1359,24 +1399,71 @@ function resumeOperation(){
   document.getElementById("interiorView").classList.remove("shaking","fire-alert");
   document.getElementById("overviewView").classList.remove("shaking");
   document.getElementById("interiorAlertFlash").classList.remove("on");
-  document.getElementById("interiorLight").classList.remove("flicker");
+  document.querySelectorAll(".interior-light").forEach(l=>l.classList.remove("flicker"));
   activeEmergencyType = null;
   document.querySelectorAll(".floor-btn").forEach(b=>b.disabled=false);
   isMoving = false;
   setAnnounce("うんてんを再開しました。ドアが開いています。");
 }
 
-// ── 非常通報：管理室との会話（音声つき） ──
-const CALL_REASONS = [
-  { label:"とじこめられちゃった…", op:"だいじょうぶですよ。今、係員が向かっています。安心して待っていてくださいね。" },
-  { label:"ボタンをまちがえておしちゃった", op:"そうでしたか、大丈夫ですよ！気をつけて使ってくださいね。" },
-  { label:"ちょっとこわい…", op:"こわかったですね。エレベーターはとても安全に作られています。もう少しで到着しますから、安心してくださいね。" },
-  { label:"だいじょうぶです、テストでおしてみました", op:"教えてくれてありがとう！何かあったら、いつでもこのボタンを押してくださいね。" },
+// ── 非常通報：管理室との会話（音声つき・何ターンもつづく） ──
+// トピックを選ぶ→係員が答える→気持ちをつたえる→係員がもう一言→べつの話題も選べる
+const CALL_TOPICS = [
+  { label:"とじこめられちゃった…",
+    op:"だいじょうぶですよ。今、係員が向かっています。ケガはしていませんか？",
+    reactions:[
+      { label:"😊 ケガはありません", op:"よかったです！もうすぐ着きますので、ドアの近くに座って待っていてくださいね。" },
+      { label:"😢 ちょっとこわい", op:"だいじょうぶ、ひとりじゃないですよ。わたしたちがちゃんと見ていますからね。深呼吸してみましょう、すぅー、はぁー。" },
+    ]
+  },
+  { label:"ボタンをまちがえておしちゃった",
+    op:"そうでしたか、大丈夫ですよ！だれでもまちがえることはあります。",
+    reactions:[
+      { label:"😊 ありがとう！", op:"どういたしまして！気をつけて使ってくださいね。" },
+      { label:"😅 ごめんなさい", op:"あやまらなくて大丈夫ですよ。次から気をつけてくれたらうれしいです！" },
+    ]
+  },
+  { label:"ちょっとこわい…",
+    op:"こわかったですね。エレベーターはとても安全に作られていますよ。",
+    reactions:[
+      { label:"😊 すこし安心した", op:"よかったです！もうすぐ到着しますからね。" },
+      { label:"😢 まだこわい", op:"手すりをぎゅっと持ってみてください。わたしたちがずっと見ていますから、安心してくださいね。" },
+    ]
+  },
+  { label:"エレベーターがゆれた気がする",
+    op:"教えてくれてありがとうございます。念のため、点検を行いますね。",
+    reactions:[
+      { label:"😊 わかりました", op:"ありがとうございます。何かあれば、またこのボタンを押してくださいね。" },
+      { label:"😟 すこし心配です", op:"心配になりますよね。エレベーターには何重もの安全装置がついていますので、安心してくださいね。" },
+    ]
+  },
+  { label:"ひとりで乗るのがはじめて",
+    op:"がんばりましたね！エレベーターはとても安全な乗り物ですよ。",
+    reactions:[
+      { label:"😊 がんばる！", op:"その調子です！何かあれば、いつでもこのボタンを押してくださいね。" },
+      { label:"😳 ちょっと緊張する", op:"緊張しますよね、はじめてですもんね。わたしたちがちゃんと見守っていますよ。" },
+    ]
+  },
+  { label:"だいじょうぶです、テストでおしてみました",
+    op:"教えてくれてありがとう！押してみたくなる気持ち、わかりますよ。",
+    reactions:[
+      { label:"😊 えへへ", op:"ふふ、正直に教えてくれてうれしいです。何かあったら、いつでも押してくださいね。" },
+      { label:"🙏 次から気をつける", op:"ありがとう！本当に困ったときのために、大切に使ってくださいね。" },
+    ]
+  },
 ];
-const CALL_REASONS_EMERGENCY = [
-  { label:"ちょっとこわい…", op:"こわかったですね。今、係員が向かっていますので、ドアの近くで安心して待っていてください。" },
-  { label:"だいじょうぶです", op:"よかったです！念のため、係員が確認に向かいます。もう少しだけお待ちくださいね。" },
-];
+// 緊急停止（地震・火事）ちゅうに押した場合は、係員が話をリードする専用の会話
+const CALL_EMERGENCY_FLOW = {
+  followUp: "けがはしていませんか？",
+  firstReactions:[
+    { label:"けがはありません", op:"よかったです。係員がもうすぐ到着しますので、ドアの近くで安全に待っていてくださいね。" },
+    { label:"すこしこわいです", op:"だいじょうぶですよ。ひとりじゃありません。わたしたちがちゃんと見ていますからね。" },
+  ],
+  secondReactions:[
+    { label:"はやくきてほしいです", op:"もうすぐです。あと少しだけ、落ち着いて待っていてくださいね。深呼吸してみましょう、すぅー、はぁー。" },
+    { label:"わかりました、まちます", op:"えらいですね。もうすぐ係員が到着しますので、安心して待っていてください。" },
+  ],
+};
 
 function openEmergencyCall(){
   document.getElementById("callOverlay").classList.add("show");
@@ -1384,17 +1471,23 @@ function openEmergencyCall(){
   document.getElementById("callChoices").innerHTML = "";
   playRingTone();
   setTimeout(()=>{
-    let greeting;
-    if(activeEmergencyType==="earthquake"){
-      greeting = "はい、SchoolPark管理室です。地震を確認しております。係員が向かっていますので、少々お待ちください。";
-    } else if(activeEmergencyType==="fire"){
-      greeting = "はい、SchoolPark管理室です。火災報知器の作動を確認しております。係員が向かっていますので、少々お待ちください。";
+    if(activeEmergencyType){
+      const greeting = activeEmergencyType==="earthquake"
+        ? "はい、SchoolPark管理室です。地震を確認しております。係員が向かっていますので、少々お待ちください。"
+        : "はい、SchoolPark管理室です。火災報知器の作動を確認しております。係員が向かっていますので、少々お待ちください。";
+      addCallBubble("op", greeting);
+      speakOperator(greeting);
+      setTimeout(()=>{
+        addCallBubble("op", CALL_EMERGENCY_FLOW.followUp);
+        speakOperator(CALL_EMERGENCY_FLOW.followUp);
+        renderReactionButtons(CALL_EMERGENCY_FLOW.firstReactions, chooseEmergencyFirstReaction);
+      }, 1600);
     } else {
-      greeting = "はい、SchoolPark管理室です。どうしましたか？";
+      const greeting = "はい、SchoolPark管理室です。どうしましたか？";
+      addCallBubble("op", greeting);
+      speakOperator(greeting);
+      renderTopicButtons();
     }
-    addCallBubble("op", greeting);
-    speakOperator(greeting);
-    renderCallChoices();
   }, 1400);
 }
 function addCallBubble(who, text){
@@ -1414,14 +1507,32 @@ function speakCaller(text){
   if(!window.speechSynthesis) return;
   setTimeout(()=>window.speechSynthesis.speak(_callerUtter(text)), 60);
 }
-function renderCallChoices(){
-  const reasons = activeEmergencyType ? CALL_REASONS_EMERGENCY : CALL_REASONS;
-  document.getElementById("callChoices").innerHTML =
-    reasons.map((r,i)=>`<button class="call-choice-btn" onclick="chooseCallOption(${i})">${r.label}</button>`).join("");
+
+// ── 通常の通話：話題えらび ──
+function renderTopicButtons(){
+  const box = document.getElementById("callChoices");
+  box.innerHTML = "";
+  CALL_TOPICS.forEach(topic=>{
+    const btn = document.createElement("button");
+    btn.className = "call-choice-btn";
+    btn.textContent = topic.label;
+    btn.onclick = ()=>chooseTopic(topic);
+    box.appendChild(btn);
+  });
 }
-function chooseCallOption(idx){
-  const reasons = activeEmergencyType ? CALL_REASONS_EMERGENCY : CALL_REASONS;
-  const r = reasons[idx];
+function chooseTopic(topic){
+  document.getElementById("callChoices").innerHTML = "";
+  addCallBubble("me", topic.label);
+  speakCaller(topic.label);
+  setTimeout(()=>{
+    addCallBubble("op", topic.op);
+    speakOperator(topic.op);
+    setTimeout(()=>{
+      renderReactionButtons(topic.reactions, (r)=>chooseTopicReaction(r));
+    }, 700);
+  }, 1300);
+}
+function chooseTopicReaction(r){
   document.getElementById("callChoices").innerHTML = "";
   addCallBubble("me", r.label);
   speakCaller(r.label);
@@ -1429,11 +1540,52 @@ function chooseCallOption(idx){
     addCallBubble("op", r.op);
     speakOperator(r.op);
     setTimeout(()=>{
-      document.getElementById("callChoices").innerHTML =
-        `<button class="call-choice-btn" onclick="renderCallChoices()">💬 べつのことをはなす</button>`;
-    }, 600);
+      const box = document.getElementById("callChoices");
+      box.innerHTML = "";
+      const btn = document.createElement("button");
+      btn.className = "call-choice-btn";
+      btn.textContent = "💬 べつのことをはなす";
+      btn.onclick = renderTopicButtons;
+      box.appendChild(btn);
+    }, 700);
   }, 1300);
 }
+function renderReactionButtons(reactions, onPick){
+  const box = document.getElementById("callChoices");
+  box.innerHTML = "";
+  reactions.forEach(r=>{
+    const btn = document.createElement("button");
+    btn.className = "call-choice-btn";
+    btn.textContent = r.label;
+    btn.onclick = ()=>onPick(r);
+    box.appendChild(btn);
+  });
+}
+
+// ── 緊急停止中の通話：係員が話をリードする2段階の会話 ──
+function chooseEmergencyFirstReaction(r){
+  document.getElementById("callChoices").innerHTML = "";
+  addCallBubble("me", r.label);
+  speakCaller(r.label);
+  setTimeout(()=>{
+    addCallBubble("op", r.op);
+    speakOperator(r.op);
+    setTimeout(()=>{
+      renderReactionButtons(CALL_EMERGENCY_FLOW.secondReactions, chooseEmergencySecondReaction);
+    }, 700);
+  }, 1300);
+}
+function chooseEmergencySecondReaction(r){
+  document.getElementById("callChoices").innerHTML = "";
+  addCallBubble("me", r.label);
+  speakCaller(r.label);
+  setTimeout(()=>{
+    addCallBubble("op", r.op);
+    speakOperator(r.op);
+    // これで会話は終了。「通話をおわる」ボタンで閉じる。
+  }, 1300);
+}
+
 function endCall(){
   if(window.speechSynthesis) window.speechSynthesis.cancel();
   document.getElementById("callOverlay").classList.remove("show");
@@ -1696,6 +1848,7 @@ window.addEventListener("DOMContentLoaded",()=>{
   document.getElementById("btn-1F").classList.add("active-floor");
   setDigital("1F");
   setDoorsVisual("open");
+  document.getElementById("interiorScene").style.background = FLOOR_THEME["1F"];
   // 最初に立っている1Fはすでに「たんけんずみ」として記録
   const visited = loadBadges();
   if(!visited.includes("1F")){ visited.push("1F"); saveBadges(visited); }
