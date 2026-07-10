@@ -59,6 +59,7 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .announce-dot.yellow{background:#fbbf24}
 @keyframes dotPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.55;transform:scale(0.8)}}
 #announceText{flex:1;line-height:1.4}
+.announce-en{display:block;font-size:0.7rem;font-weight:600;opacity:0.82;margin-top:2px}
 
 /* ── バーチャルエレベーター ── */
 .elevator-wrap{display:flex;gap:12px;align-items:flex-end;justify-content:center;padding:8px 0}
@@ -270,9 +271,20 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .interior-handrail::after{right:8%}
 .interior-mirror{position:absolute;left:20%;right:20%;top:12%;bottom:32%;border-radius:4px;background:linear-gradient(160deg,rgba(255,255,255,0.35),rgba(255,255,255,0.05) 60%);border:1px solid rgba(255,255,255,0.25)}
 .interior-doorframe{grid-column:2;grid-row:2;position:relative;background:#1f2937;overflow:hidden;display:flex;z-index:1}
-.interior-scene{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;z-index:0;transition:background 0.4s}
-.scene-icon{font-size:2.6rem}
-.scene-label{font-size:0.66rem;font-weight:700;color:rgba(15,23,42,0.75);background:rgba(255,255,255,0.8);padding:3px 10px;border-radius:10px;max-width:88%;text-align:center;line-height:1.3}
+.interior-scene{position:absolute;inset:0;overflow:hidden;z-index:0;transition:background 0.4s}
+.scene-content{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.scene-icon{font-size:2.6rem;display:inline-block;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.15))}
+@keyframes scenePop{0%{transform:scale(0.25) rotate(-10deg);opacity:0}55%{transform:scale(1.2) rotate(4deg);opacity:1}75%{transform:scale(0.94) rotate(-2deg)}100%{transform:scale(1) rotate(0deg);opacity:1}}
+.scene-icon.pop{animation:scenePop 0.7s cubic-bezier(0.34,1.56,0.64,1)}
+.scene-label{font-size:0.66rem;font-weight:700;color:rgba(15,23,42,0.75);background:rgba(255,255,255,0.85);padding:3px 10px;border-radius:10px;max-width:88%;text-align:center;line-height:1.3}
+@keyframes sceneLabelIn{0%{transform:translateY(10px);opacity:0}100%{transform:translateY(0);opacity:1}}
+.scene-label.pop{animation:sceneLabelIn 0.5s ease-out 0.2s both}
+.scene-decor{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1}
+.scene-decor span{position:absolute;bottom:-10%;font-size:1rem;opacity:0;animation:sceneFloat linear forwards}
+@keyframes sceneFloat{0%{transform:translateY(0) translateX(0) rotate(0deg);opacity:0}12%{opacity:0.85}85%{opacity:0.6}100%{transform:translateY(-230%) translateX(var(--dx,10px)) rotate(200deg);opacity:0}}
+.scene-flash{position:absolute;inset:0;background:radial-gradient(circle,rgba(255,255,255,0.95),rgba(255,255,255,0) 62%);opacity:0;pointer-events:none;z-index:3}
+@keyframes sceneFlashBurst{0%{opacity:0.95;transform:scale(0.25)}100%{opacity:0;transform:scale(1.7)}}
+.scene-flash.burst{animation:sceneFlashBurst 0.7s ease-out}
 .interior-door{flex:1;background:linear-gradient(180deg,#d1d5db,#9ca3af);position:relative;z-index:1;transition:transform 1.6s cubic-bezier(0.6,0,0.4,1);box-shadow:inset 0 0 12px rgba(0,0,0,0.15)}
 .interior-door::before{content:"";position:absolute;top:8%;bottom:8%;width:3px;background:rgba(0,0,0,0.2)}
 .interior-door::after{content:"";position:absolute;left:10%;right:10%;top:20%;height:2px;background:rgba(0,0,0,0.1)}
@@ -407,8 +419,12 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
             </div>
             <div class="interior-doorframe">
               <div class="interior-scene" id="interiorScene">
-                <div class="scene-icon" id="sceneIcon">🏠</div>
-                <div class="scene-label" id="sceneLabel">1F — エントランスホール</div>
+                <div class="scene-flash" id="sceneFlash"></div>
+                <div class="scene-decor" id="sceneDecor"></div>
+                <div class="scene-content">
+                  <div class="scene-icon" id="sceneIcon">🏠</div>
+                  <div class="scene-label" id="sceneLabel">1F — エントランスホール</div>
+                </div>
               </div>
               <div class="interior-door left" id="intDoorL"></div>
               <div class="interior-door right" id="intDoorR"></div>
@@ -451,7 +467,7 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
       <!-- アナウンスバー -->
       <div class="announce-bar" id="announceBar">
         <div class="announce-dot" id="announceDot"></div>
-        <span id="announceText">📢 ドアが開いています。のってください。</span>
+        <span id="announceText">📢 ドアが開いています。のってください。<span class="announce-en">🌐 Doors are open. Please step in.</span></span>
       </div>
     </div>
 
@@ -972,9 +988,10 @@ function showToast(msg){
   t._timer=setTimeout(()=>t.classList.remove("show"),3000);
 }
 
-// ── アナウンスバー ──
-function setAnnounce(text, dotState){
-  document.getElementById("announceText").textContent="📢 "+text;
+// ── アナウンスバー（日本語＋英語の2行表示） ──
+function setAnnounce(text, dotState, textEN){
+  document.getElementById("announceText").innerHTML =
+    "📢 "+text+(textEN ? `<span class="announce-en">🌐 ${textEN}</span>` : "");
   const dot=document.getElementById("announceDot");
   dot.className="announce-dot"+(dotState?" "+dotState:"");
 }
@@ -998,9 +1015,24 @@ function _pickBestVoice(){
   ];
   for(const fn of checks){ const f=vs.find(fn); if(f){ _bestVoice=f; break; } }
 }
+// 英語アナウンス用の自然なボイスを選択
+let _bestVoiceEN = null;
+function _pickBestVoiceEN(){
+  const vs = window.speechSynthesis.getVoices();
+  if(!vs.length) return;
+  const checks = [
+    v => /Google US English/i.test(v.name),
+    v => /Samantha/i.test(v.name),
+    v => /Aria|Jenny|Guy/i.test(v.name) && v.lang.startsWith('en'),
+    v => v.lang === 'en-US',
+    v => v.lang.startsWith('en'),
+  ];
+  for(const fn of checks){ const f=vs.find(fn); if(f){ _bestVoiceEN=f; break; } }
+}
 if(window.speechSynthesis){
-  speechSynthesis.onvoiceschanged = _pickBestVoice;
+  speechSynthesis.onvoiceschanged = ()=>{ _pickBestVoice(); _pickBestVoiceEN(); };
   _pickBestVoice();
+  _pickBestVoiceEN();
 }
 
 // スマホ・タブレット（特にMetaMaskアプリ内ブラウザなど）は「ユーザー操作の直後に同期的に
@@ -1027,6 +1059,16 @@ function _utter(text, isAnnounce=false){
   u.pitch   = isAnnounce ? 1.08 : 1.02; // 少し高め＝放送感
   u.volume  = 1.0;
   if(_bestVoice) u.voice = _bestVoice;
+  return u;
+}
+// 英語アナウンス用（日本語のあとに続けて流す）
+function _utterEN(text, isAnnounce=false){
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang    = 'en-US';
+  u.rate    = 0.95;
+  u.pitch   = isAnnounce ? 1.05 : 1.0;
+  u.volume  = 1.0;
+  if(_bestVoiceEN) u.voice = _bestVoiceEN;
   return u;
 }
 
@@ -1108,6 +1150,52 @@ function playDoorSound(closing){
       osc2.start(s2); osc2.stop(s2+0.2);
     }
   }catch(e){}
+}
+
+// ── ドアが開いたしゅんかんの「キラキラ」演出音（わくわく感を出す） ──
+function playRevealChime(){
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const notes = [659.25, 783.99, 987.77, 1318.51]; // E5-G5-B5-E6 きらきらアルペジオ
+    notes.forEach((hz,i)=>{
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type='triangle'; osc.frequency.value=hz;
+      const s=ctx.currentTime+i*0.09;
+      g.gain.setValueAtTime(0,s);
+      g.gain.linearRampToValueAtTime(0.1,s+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001,s+0.35);
+      osc.start(s); osc.stop(s+0.37);
+    });
+  }catch(e){}
+}
+
+// ── ドアが開いたときの「わくわく演出」：アイコンがポップ、かざりが舞い、光がはじける ──
+function playSceneReveal(floorKey){
+  const scene = document.getElementById("interiorScene");
+  if(!scene) return;
+
+  const flash = document.getElementById("sceneFlash");
+  flash.classList.remove("burst"); void flash.offsetWidth; flash.classList.add("burst");
+
+  const icon = document.getElementById("sceneIcon"), label = document.getElementById("sceneLabel");
+  icon.classList.remove("pop"); void icon.offsetWidth; icon.classList.add("pop");
+  label.classList.remove("pop"); void label.offsetWidth; label.classList.add("pop");
+
+  const decor = document.getElementById("sceneDecor");
+  decor.innerHTML = "";
+  const emojis = FLOOR_DECOR[floorKey] || ["✨"];
+  for(let i=0;i<10;i++){
+    const s = document.createElement("span");
+    s.textContent = emojis[i%emojis.length];
+    s.style.left = (4+Math.random()*88)+"%";
+    s.style.setProperty("--dx", (Math.random()*50-25)+"px");
+    s.style.animationDuration = (2.2+Math.random()*1.4)+"s";
+    s.style.animationDelay = (Math.random()*0.5)+"s";
+    s.style.fontSize = (0.85+Math.random()*0.9)+"rem";
+    decor.appendChild(s);
+  }
+  playRevealChime();
 }
 
 // ── 緊急アラーム音（地震・火災） ──
@@ -1201,21 +1289,31 @@ function _startBgmLoop(){
   }catch(e){}
 }
 
-// 通常の読み上げ（ドア閉まる など）
-function elevSpeak(text){
+// 通常の読み上げ（ドア閉まる など）。textENをわたすと日本語のあとに英語もつづけて流す
+function elevSpeak(text, textEN){
   if(!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  setTimeout(()=>window.speechSynthesis.speak(_utter(text, true)), 120);
+  setTimeout(()=>{
+    const u = _utter(text, true);
+    if(textEN){
+      u.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(_utterEN(textEN, true)), 250); };
+    }
+    window.speechSynthesis.speak(u);
+  }, 120);
 }
 
-// 到着アナウンス：チャイム♪ → "[floor]です。" → 間 → "ドアが開きます。"
-function elevArriveAnnounce(floorName){
+// 到着アナウンス：チャイム♪ → "[floor]です。" → "ドアが開きます。" → "床の段差にご注意ください。" → 英語アナウンス
+function elevArriveAnnounce(floorName, floorNameEN){
   if(!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   _chime(()=>{
     const u1 = _utter(floorName+"です。", true);
     const u2 = _utter("ドアが開きます。", true);
+    const u3 = _utter("足元の床の段差にご注意ください。", true);
+    const u4 = floorNameEN ? _utterEN("Arriving at "+floorNameEN+". The doors are opening. Please mind the step.", true) : null;
     u1.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(u2), 350); };
+    u2.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(u3), 300); };
+    if(u4){ u3.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(u4), 400); }; }
     setTimeout(()=>window.speechSynthesis.speak(u1), 80);
   });
 }
@@ -1224,6 +1322,7 @@ function elevArriveAnnounce(floorName){
 const FLOOR_POS   = { "RF":266,"5F":213,"4F":160,"3F":107,"2F":54,"1F":4 };
 const FLOOR_ORDER = ["1F","2F","3F","4F","5F","RF"];
 const FLOOR_NAMES = { "RF":"屋上","5F":"5かい","4F":"4かい","3F":"3かい","2F":"2かい","1F":"1かい" };
+const FLOOR_NAMES_EN = { "RF":"the Rooftop","5F":"the 5th floor","4F":"the 4th floor","3F":"the 3rd floor","2F":"the 2nd floor","1F":"the 1st floor" };
 const FLOORS = {
   "RF":{ icon:"🏙️", title:"屋上（ルーフトップ）",   desc:"SchoolPark の屋上だよ！はれた日にはとおくまでみえるよ。🌤️ このかいからはSchoolParkのまちぜんたいがみわたせる！ここがいちばんうえのかいだよ。" },
   "5F":{ icon:"🌌", title:"5F — Emu 星空ホール",    desc:"Emu（エミュ）の星空ルームがあるかい！ここでは星座をみたりメンバーがつながる場所だよ✨ よぞらにうかぶほしがきれいだよ！" },
@@ -1240,6 +1339,15 @@ const FLOOR_THEME = {
   "3F":"linear-gradient(180deg,#fecaca,#fca5a5)",
   "2F":"linear-gradient(180deg,#fef08a,#fde68a)",
   "1F":"linear-gradient(180deg,#bbf7d0,#86efac)"
+};
+// ドアが開いたときに舞う、かいごとのかざりデコレーション
+const FLOOR_DECOR = {
+  "RF":["☁️","🌤️","🕊️","✨"],
+  "5F":["⭐","✨","🌙","💫"],
+  "4F":["📖","✏️","💡","✨"],
+  "3F":["🎮","🕹️","⭐","✨"],
+  "2F":["🍰","☕","✨","🎀"],
+  "1F":["🌿","🏡","✨","🌸"],
 };
 let currentFloorKey = "1F";
 let isMoving = false;
@@ -1307,8 +1415,8 @@ function goFloor(floor){
   const moveSec = emergency ? 1.1 : (1.8 + apart * 0.75); // フロア間距離に応じた動的速度
 
   // ① ドア閉まるアナウンス＋効果音
-  setAnnounce("ドアが閉まります。ご注意ください。","red");
-  elevSpeak("ドアが閉まります。");
+  setAnnounce("ドアが閉まります。ご注意ください。","red","The doors are closing.");
+  elevSpeak("ドアが閉まります。", "The doors are closing.");
   playDoorSound(true);
   setDoorsVisual("shut");
 
@@ -1329,7 +1437,8 @@ function goFloor(floor){
     }
 
     const dir = dirUp ? "↑ 上昇中" : "↓ 下降中";
-    setAnnounce(dir+" — "+(emergency?"緊急停止にそなえています…":FLOOR_NAMES[floor]+" へ向かっています…"),"yellow");
+    const dirEN = dirUp ? "Going up." : "Going down.";
+    setAnnounce(dir+" — "+(emergency?"緊急停止にそなえています…":FLOOR_NAMES[floor]+" へ向かっています…"),"yellow", emergency?"Preparing for an emergency stop.":dirEN);
 
     if(emergency==="earthquake") setTimeout(triggerEarthquakeEffect, moveSec*400);
     if(emergency==="fire") setTimeout(triggerFireEffect, moveSec*400);
@@ -1366,15 +1475,17 @@ function goFloor(floor){
         // ボタンは「うんてんを再開する」が押されるまで無効のまま
       } else {
         const fn = FLOOR_NAMES[targetFloor];
-        setAnnounce(fn+" に到着しました。ドアが開きます。","");
-        elevArriveAnnounce(fn);
+        const fnEN = FLOOR_NAMES_EN[targetFloor];
+        setAnnounce(fn+" に到着しました。ドアが開きます。","","Arriving at "+fnEN+".");
+        elevArriveAnnounce(fn, fnEN);
         showToast(targetFloor+" に とうちゃく！ "+(f?f.icon:""));
+        playSceneReveal(targetFloor);
 
         // ④ ドア開き → ボタン再有効
         setTimeout(()=>{
           document.querySelectorAll(".floor-btn").forEach(b=>b.disabled=false);
           isMoving = false;
-          setAnnounce("ドアが開いています。おりる方はお先にどうぞ。");
+          setAnnounce("ドアが開いています。おりる方はお先にどうぞ。","","Doors are open. Please watch your step.");
         }, 1800);
       }
 
@@ -1388,8 +1499,8 @@ function triggerEarthquakeEffect(){
   document.getElementById("interiorView").classList.add("shaking");
   document.getElementById("overviewView").classList.add("shaking");
   playEarthquakeAlarm();
-  setAnnounce("🚨 緊急地震速報！大きな揺れに警戒してください。","red");
-  elevSpeak("緊急地震速報です。大きな揺れに警戒してください。");
+  setAnnounce("🚨 緊急地震速報！大きな揺れに警戒してください。","red","Earthquake warning. Please brace for strong shaking.");
+  elevSpeak("緊急地震速報です。大きな揺れに警戒してください。", "Earthquake warning. Please brace for strong shaking.");
 }
 // ── 緊急事態エフェクト：火事 ──
 function triggerFireEffect(){
@@ -1397,8 +1508,8 @@ function triggerFireEffect(){
   document.getElementById("interiorAlertFlash").classList.add("on");
   document.querySelectorAll(".interior-light").forEach(l=>l.classList.add("flicker"));
   playFireAlarm();
-  setAnnounce("🔥 火災報知器が作動しました。","red");
-  elevSpeak("火災報知器が作動しました。");
+  setAnnounce("🔥 火災報知器が作動しました。","red","A fire alarm has been triggered.");
+  elevSpeak("火災報知器が作動しました。", "A fire alarm has been triggered.");
 }
 
 // ── 緊急停止オーバーレイ ──
@@ -1425,7 +1536,7 @@ function resumeOperation(){
   activeEmergencyType = null;
   document.querySelectorAll(".floor-btn").forEach(b=>b.disabled=false);
   isMoving = false;
-  setAnnounce("うんてんを再開しました。ドアが開いています。");
+  setAnnounce("うんてんを再開しました。ドアが開いています。","","Service has resumed. Doors are open.");
 }
 
 // ── 非常通報：管理室との会話（音声つき・何ターンもつづく） ──
