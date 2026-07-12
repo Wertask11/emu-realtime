@@ -236,21 +236,44 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .view-btn{padding:7px 12px;border-radius:20px;border:2px solid var(--accent2);background:#fff;color:var(--accent);font-size:0.68rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s;white-space:nowrap}
 .view-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
-/* ── 車内ビュー（エレベーターの中：本物の箱に乗っている見た目） ── */
-.elevator-wrap.interior-mode{flex-direction:column;align-items:stretch;gap:0}
-.elevator-wrap.interior-mode .view-stage{width:100%}
-.elevator-wrap.interior-mode .interior-box{border-radius:14px 14px 0 0;border-bottom:none}
+/* ── 車内ビュー（エレベーターの中：とびら大きめ＋右がわに本物の操作パネル） ── */
+.elevator-wrap.interior-mode{align-items:stretch;gap:8px}
+.elevator-wrap.interior-mode .view-stage{flex:1;min-width:0;width:auto}
 .elevator-wrap.interior-mode .floor-panel{
-  max-width:100%;width:100%;
-  background:linear-gradient(180deg,#5b6472,#3d434c);
-  border:3px solid #2d3339;border-top:none;border-radius:0 0 14px 14px;
-  padding:14px 12px 16px;box-shadow:inset 0 0 20px rgba(0,0,0,0.3);
+  width:88px;max-width:88px;flex-shrink:0;
+  background:linear-gradient(180deg,#7d8592,#454c57);
+  border:3px solid #2d3339;border-radius:14px;
+  padding:10px 6px;display:flex;flex-direction:column;align-items:center;gap:8px;
+  overflow-y:auto;box-shadow:inset 0 0 16px rgba(0,0,0,0.35);
 }
+.elevator-wrap.interior-mode .panel-realism{margin-bottom:0;width:100%}
+.elevator-wrap.interior-mode .digital-display{padding:4px 2px;width:100%}
+.elevator-wrap.interior-mode .digital-num{font-size:1rem;min-width:16px}
+.elevator-wrap.interior-mode .digital-arrows{transform:scale(0.85)}
+.elevator-wrap.interior-mode .current-floor,
+.elevator-wrap.interior-mode .capacity-plate,
+.elevator-wrap.interior-mode .bgm-btn{display:none}
+.elevator-wrap.interior-mode .floor-btn-grid{display:flex;flex-direction:column;gap:6px;margin-bottom:0;width:100%;align-items:center}
+.elevator-wrap.interior-mode .floor-btn{
+  width:38px;height:38px;padding:0;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;position:relative;
+  box-shadow:0 2px 4px rgba(0,0,0,0.25);transition:transform 0.15s,box-shadow 0.15s;
+}
+.elevator-wrap.interior-mode .floor-btn *{display:none}
+.elevator-wrap.interior-mode .floor-btn::after{content:attr(data-num);font-size:0.8rem;font-weight:700;color:inherit}
+.elevator-wrap.interior-mode .floor-btn.secret{grid-column:auto;width:38px;height:38px;animation:none;box-shadow:0 0 8px rgba(250,204,21,0.6)}
+.elevator-wrap.interior-mode .floor-btn.secret::after{content:"🔒";font-size:0.9rem}
+.elevator-wrap.interior-mode .emergency-call-btn{
+  width:38px;height:38px;padding:0;border-radius:50%;margin-top:2px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:1.1rem;
+}
+.elevator-wrap.interior-mode .emergency-call-btn .ecb-label{display:none}
+.elevator-wrap.interior-mode .emergency-call-btn::after{content:"📞"}
 .interior-box{
-  width:100%;height:260px;border-radius:14px;position:relative;overflow:hidden;
+  width:100%;height:400px;max-width:440px;margin:0 auto;border-radius:14px;position:relative;overflow:hidden;
   background:linear-gradient(180deg,#8b93a1 0%,#6b7280 14%,#5b6472 86%,#454c57 100%);
   border:3px solid #2d3339;box-shadow:inset 0 0 40px rgba(0,0,0,0.5);
-  display:grid;grid-template-columns:16% 68% 16%;grid-template-rows:30px 1fr 18px;
+  display:grid;grid-template-columns:8% 84% 8%;grid-template-rows:32px 1fr 20px;
 }
 .interior-ceiling{grid-column:1/4;grid-row:1;background:linear-gradient(180deg,#e5e7eb,#9ca3af);display:flex;align-items:center;justify-content:center;gap:34%;z-index:2}
 .interior-light{width:20%;height:8px;border-radius:6px;background:#fff7d6;box-shadow:0 0 14px 5px rgba(255,247,214,0.9);transition:opacity 0.2s}
@@ -273,10 +296,10 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .interior-doorframe{grid-column:2;grid-row:2;position:relative;background:#1f2937;overflow:hidden;display:flex;z-index:1}
 .interior-scene{position:absolute;inset:0;overflow:hidden;z-index:0;transition:background 0.4s}
 .scene-content{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
-.scene-icon{font-size:2.6rem;display:inline-block;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.15))}
+.scene-icon{font-size:3.4rem;display:inline-block;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.15))}
 @keyframes scenePop{0%{transform:scale(0.25) rotate(-10deg);opacity:0}55%{transform:scale(1.2) rotate(4deg);opacity:1}75%{transform:scale(0.94) rotate(-2deg)}100%{transform:scale(1) rotate(0deg);opacity:1}}
 .scene-icon.pop{animation:scenePop 0.7s cubic-bezier(0.34,1.56,0.64,1)}
-.scene-label{font-size:0.66rem;font-weight:700;color:rgba(15,23,42,0.75);background:rgba(255,255,255,0.85);padding:3px 10px;border-radius:10px;max-width:88%;text-align:center;line-height:1.3}
+.scene-label{font-size:0.78rem;font-weight:700;color:rgba(15,23,42,0.75);background:rgba(255,255,255,0.85);padding:4px 12px;border-radius:10px;max-width:88%;text-align:center;line-height:1.3}
 @keyframes sceneLabelIn{0%{transform:translateY(10px);opacity:0}100%{transform:translateY(0);opacity:1}}
 .scene-label.pop{animation:sceneLabelIn 0.5s ease-out 0.2s both}
 .scene-decor{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1}
@@ -347,6 +370,7 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
 .call-bubble{max-width:80%;padding:9px 12px;border-radius:14px;font-size:0.78rem;line-height:1.6}
 .call-bubble.op{align-self:flex-start;background:var(--bg3);border:2px solid var(--border);color:var(--text);border-bottom-left-radius:4px}
 .call-bubble.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.call-bubble-en{display:block;font-size:0.68rem;opacity:0.8;margin-top:4px;font-weight:600}
 .call-choices{display:flex;flex-direction:column;gap:6px}
 .call-choice-btn{padding:10px 12px;border-radius:12px;border:2px solid var(--border);background:var(--bg3);cursor:pointer;font-size:0.78rem;font-weight:700;color:var(--text);font-family:inherit;text-align:left;transition:all 0.15s}
 .call-choice-btn:hover{border-color:var(--accent2);background:rgba(2,132,199,0.05)}
@@ -449,18 +473,18 @@ body{background:var(--bg);color:var(--text);font-family:'Kosugi Maru',sans-serif
             </div>
           </div>
           <div class="floor-btn-grid">
-            <button class="floor-btn roof" id="btn-RF" onclick="goFloor('RF')">🏙️<br><small>屋上</small></button>
-            <button class="floor-btn f5"   id="btn-5F" onclick="goFloor('5F')">🌌<br><small>5F</small></button>
-            <button class="floor-btn f4"   id="btn-4F" onclick="goFloor('4F')">📚<br><small>4F</small></button>
-            <button class="floor-btn f3"   id="btn-3F" onclick="goFloor('3F')">🎮<br><small>3F</small></button>
-            <button class="floor-btn f2"   id="btn-2F" onclick="goFloor('2F')">🍰<br><small>2F</small></button>
-            <button class="floor-btn f1 active-floor" id="btn-1F" onclick="goFloor('1F')">🏠<br><small>1F</small></button>
-            <button class="floor-btn secret" id="btn-B1" onclick="revealSecretFloor()" style="display:none">🔒<br><small>B1 ひみつ</small></button>
+            <button class="floor-btn roof" id="btn-RF" data-num="R"  aria-label="屋上" onclick="goFloor('RF')"><span class="fb-icon">🏙️</span><br><span class="fb-label"><small>屋上</small></span></button>
+            <button class="floor-btn f5"   id="btn-5F" data-num="5"  aria-label="5階" onclick="goFloor('5F')"><span class="fb-icon">🌌</span><br><span class="fb-label"><small>5F</small></span></button>
+            <button class="floor-btn f4"   id="btn-4F" data-num="4"  aria-label="4階" onclick="goFloor('4F')"><span class="fb-icon">📚</span><br><span class="fb-label"><small>4F</small></span></button>
+            <button class="floor-btn f3"   id="btn-3F" data-num="3"  aria-label="3階" onclick="goFloor('3F')"><span class="fb-icon">🎮</span><br><span class="fb-label"><small>3F</small></span></button>
+            <button class="floor-btn f2"   id="btn-2F" data-num="2"  aria-label="2階" onclick="goFloor('2F')"><span class="fb-icon">🍰</span><br><span class="fb-label"><small>2F</small></span></button>
+            <button class="floor-btn f1 active-floor" id="btn-1F" data-num="1" aria-label="1階" onclick="goFloor('1F')"><span class="fb-icon">🏠</span><br><span class="fb-label"><small>1F</small></span></button>
+            <button class="floor-btn secret" id="btn-B1" data-num="B1" aria-label="ひみつのB1" onclick="revealSecretFloor()" style="display:none"><span class="fb-icon">🔒</span><br><span class="fb-label"><small>B1 ひみつ</small></span></button>
           </div>
           <div class="current-floor" id="currentFloor">📍 いま：1F</div>
           <div class="capacity-plate">⚖️ 定員10名・積載630kg以下</div>
           <button class="bgm-btn" id="bgmBtn" onclick="toggleBgm()">🎵 エレベーター音楽：OFF</button>
-          <button class="emergency-call-btn" id="emergencyCallBtn" onclick="openEmergencyCall()">🔔 非常通報ボタン</button>
+          <button class="emergency-call-btn" id="emergencyCallBtn" aria-label="非常通報ボタン" onclick="openEmergencyCall()"><span class="ecb-label">🔔 非常通報ボタン</span></button>
         </div>
       </div>
 
@@ -1020,11 +1044,17 @@ let _bestVoiceEN = null;
 function _pickBestVoiceEN(){
   const vs = window.speechSynthesis.getVoices();
   if(!vs.length) return;
+  // なめらかでネイティブに近い女性の声を優先的に選ぶ
   const checks = [
+    v => /Aria/i.test(v.name)  && /Natural|Online/i.test(v.name),
+    v => /Jenny/i.test(v.name) && /Natural|Online/i.test(v.name),
     v => /Google US English/i.test(v.name),
     v => /Samantha/i.test(v.name),
-    v => /Aria|Jenny|Guy/i.test(v.name) && v.lang.startsWith('en'),
+    v => /Ava|Allison|Susan/i.test(v.name),
+    v => /Zira/i.test(v.name),
+    v => /Female/i.test(v.name) && v.lang.startsWith('en'),
     v => v.lang === 'en-US',
+    v => v.lang === 'en-GB',
     v => v.lang.startsWith('en'),
   ];
   for(const fn of checks){ const f=vs.find(fn); if(f){ _bestVoiceEN=f; break; } }
@@ -1065,8 +1095,8 @@ function _utter(text, isAnnounce=false){
 function _utterEN(text, isAnnounce=false){
   const u = new SpeechSynthesisUtterance(text);
   u.lang    = 'en-US';
-  u.rate    = 0.95;
-  u.pitch   = isAnnounce ? 1.05 : 1.0;
+  u.rate    = 0.93; // リスニング練習も兼ねるので、なめらかだが少しゆっくりめ
+  u.pitch   = 1.0;  // 自然なトーン（不自然に高くしない）
   u.volume  = 1.0;
   if(_bestVoiceEN) u.voice = _bestVoiceEN;
   return u;
@@ -1079,11 +1109,23 @@ function _operatorUtter(text){
   if(_bestVoice) u.voice = _bestVoice;
   return u;
 }
+function _operatorUtterEN(text){
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US'; u.rate = 0.92; u.pitch = 0.92; u.volume = 1.0;
+  if(_bestVoiceEN) u.voice = _bestVoiceEN;
+  return u;
+}
 // 呼んでいる本人の声（少し高め・元気なトーン）
 function _callerUtter(text){
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'ja-JP'; u.rate = 1.02; u.pitch = 1.25; u.volume = 1.0;
   if(_bestVoice) u.voice = _bestVoice;
+  return u;
+}
+function _callerUtterEN(text){
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US'; u.rate = 0.97; u.pitch = 1.08; u.volume = 1.0;
+  if(_bestVoiceEN) u.voice = _bestVoiceEN;
   return u;
 }
 
@@ -1302,14 +1344,14 @@ function elevSpeak(text, textEN){
   }, 120);
 }
 
-// 到着アナウンス：チャイム♪ → "[floor]です。" → "ドアが開きます。" → "床の段差にご注意ください。" → 英語アナウンス
+// 到着アナウンス：チャイム♪ → "[floor]です。" → "ドアが開きます。" → "床段差にご注意ください。" → 英語アナウンス
 function elevArriveAnnounce(floorName, floorNameEN){
   if(!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   _chime(()=>{
     const u1 = _utter(floorName+"です。", true);
     const u2 = _utter("ドアが開きます。", true);
-    const u3 = _utter("足元の床の段差にご注意ください。", true);
+    const u3 = _utter("足元の床段差にご注意ください。", true);
     const u4 = floorNameEN ? _utterEN("Arriving at "+floorNameEN+". The doors are opening. Please mind the step.", true) : null;
     u1.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(u2), 350); };
     u2.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(u3), 300); };
@@ -1539,66 +1581,127 @@ function resumeOperation(){
   setAnnounce("うんてんを再開しました。ドアが開いています。","","Service has resumed. Doors are open.");
 }
 
-// ── 非常通報：管理室との会話（音声つき・何ターンもつづく） ──
+// ── 非常通報：管理室との会話（音声つき・日本語→英語の交互で何ターンもつづく） ──
 // トピックを選ぶ→係員が答える→気持ちをつたえる→係員がもう一言→べつの話題も選べる
 const CALL_TOPICS = [
-  { label:"とじこめられちゃった…",
+  { label:"とじこめられちゃった…", labelEN:"I'm trapped...",
     op:"だいじょうぶですよ。今、係員が向かっています。ケガはしていませんか？",
+    opEN:"It's okay. Staff are on their way to you now. Are you hurt?",
     reactions:[
-      { label:"😊 ケガはありません", op:"よかったです！もうすぐ着きますので、ドアの近くに座って待っていてくださいね。" },
-      { label:"😢 ちょっとこわい", op:"だいじょうぶ、ひとりじゃないですよ。わたしたちがちゃんと見ていますからね。深呼吸してみましょう、すぅー、はぁー。" },
+      { label:"😊 ケガはありません", labelEN:"😊 I'm not hurt",
+        op:"よかったです！もうすぐ着きますので、ドアの近くに座って待っていてくださいね。",
+        opEN:"That's a relief! They'll be there soon, so please sit near the door and wait." },
+      { label:"😢 ちょっとこわい", labelEN:"😢 I'm a little scared",
+        op:"だいじょうぶ、ひとりじゃないですよ。わたしたちがちゃんと見ていますからね。深呼吸してみましょう、すぅー、はぁー。",
+        opEN:"It's okay, you're not alone. We're watching over you carefully. Let's take a deep breath together, in... and out." },
     ]
   },
-  { label:"ボタンをまちがえておしちゃった",
+  { label:"ボタンをまちがえておしちゃった", labelEN:"I pressed the wrong button",
     op:"そうでしたか、大丈夫ですよ！だれでもまちがえることはあります。",
+    opEN:"I see, that's totally fine! Everyone makes mistakes sometimes.",
     reactions:[
-      { label:"😊 ありがとう！", op:"どういたしまして！気をつけて使ってくださいね。" },
-      { label:"😅 ごめんなさい", op:"あやまらなくて大丈夫ですよ。次から気をつけてくれたらうれしいです！" },
+      { label:"😊 ありがとう！", labelEN:"😊 Thank you!",
+        op:"どういたしまして！気をつけて使ってくださいね。",
+        opEN:"You're welcome! Just be a little careful next time." },
+      { label:"😅 ごめんなさい", labelEN:"😅 I'm sorry",
+        op:"あやまらなくて大丈夫ですよ。次から気をつけてくれたらうれしいです！",
+        opEN:"No need to apologize. I'd just be happy if you're a bit more careful next time!" },
     ]
   },
-  { label:"ちょっとこわい…",
+  { label:"ちょっとこわい…", labelEN:"I'm a little scared...",
     op:"こわかったですね。エレベーターはとても安全に作られていますよ。",
+    opEN:"That must have been scary. Elevators are built to be very safe, you know.",
     reactions:[
-      { label:"😊 すこし安心した", op:"よかったです！もうすぐ到着しますからね。" },
-      { label:"😢 まだこわい", op:"手すりをぎゅっと持ってみてください。わたしたちがずっと見ていますから、安心してくださいね。" },
+      { label:"😊 すこし安心した", labelEN:"😊 I feel a bit better",
+        op:"よかったです！もうすぐ到着しますからね。",
+        opEN:"I'm glad to hear that! You'll arrive very soon." },
+      { label:"😢 まだこわい", labelEN:"😢 I'm still scared",
+        op:"手すりをぎゅっと持ってみてください。わたしたちがずっと見ていますから、安心してくださいね。",
+        opEN:"Try holding the handrail tightly. We're watching over you the whole time, so please don't worry." },
     ]
   },
-  { label:"エレベーターがゆれた気がする",
+  { label:"エレベーターがゆれた気がする", labelEN:"I think the elevator shook",
     op:"教えてくれてありがとうございます。念のため、点検を行いますね。",
+    opEN:"Thank you for letting us know. We'll run a check just to be safe.",
     reactions:[
-      { label:"😊 わかりました", op:"ありがとうございます。何かあれば、またこのボタンを押してくださいね。" },
-      { label:"😟 すこし心配です", op:"心配になりますよね。エレベーターには何重もの安全装置がついていますので、安心してくださいね。" },
+      { label:"😊 わかりました", labelEN:"😊 Okay, understood",
+        op:"ありがとうございます。何かあれば、またこのボタンを押してくださいね。",
+        opEN:"Thank you. If anything else happens, please press this button again." },
+      { label:"😟 すこし心配です", labelEN:"😟 I'm a little worried",
+        op:"心配になりますよね。エレベーターには何重もの安全装置がついていますので、安心してくださいね。",
+        opEN:"It's natural to feel worried. This elevator has many layers of safety devices, so please rest assured." },
     ]
   },
-  { label:"ひとりで乗るのがはじめて",
+  { label:"ひとりで乗るのがはじめて", labelEN:"It's my first time riding alone",
     op:"がんばりましたね！エレベーターはとても安全な乗り物ですよ。",
+    opEN:"Well done, that's brave! Elevators are a very safe way to travel.",
     reactions:[
-      { label:"😊 がんばる！", op:"その調子です！何かあれば、いつでもこのボタンを押してくださいね。" },
-      { label:"😳 ちょっと緊張する", op:"緊張しますよね、はじめてですもんね。わたしたちがちゃんと見守っていますよ。" },
+      { label:"😊 がんばる！", labelEN:"😊 I'll do my best!",
+        op:"その調子です！何かあれば、いつでもこのボタンを押してくださいね。",
+        opEN:"That's the spirit! If you ever need help, just press this button anytime." },
+      { label:"😳 ちょっと緊張する", labelEN:"😳 I'm a little nervous",
+        op:"緊張しますよね、はじめてですもんね。わたしたちがちゃんと見守っていますよ。",
+        opEN:"It's natural to feel nervous, since it's your first time. We're watching over you closely." },
     ]
   },
-  { label:"だいじょうぶです、テストでおしてみました",
+  { label:"だいじょうぶです、テストでおしてみました", labelEN:"I'm okay, I was just testing the button",
     op:"教えてくれてありがとう！押してみたくなる気持ち、わかりますよ。",
+    opEN:"Thanks for telling me! I understand the urge to try pressing it.",
     reactions:[
-      { label:"😊 えへへ", op:"ふふ、正直に教えてくれてうれしいです。何かあったら、いつでも押してくださいね。" },
-      { label:"🙏 次から気をつける", op:"ありがとう！本当に困ったときのために、大切に使ってくださいね。" },
+      { label:"😊 えへへ", labelEN:"😊 Hehe",
+        op:"ふふ、正直に教えてくれてうれしいです。何かあったら、いつでも押してくださいね。",
+        opEN:"Ha ha, I'm glad you were honest with me. Feel free to press it anytime you really need help." },
+      { label:"🙏 次から気をつける", labelEN:"🙏 I'll be careful next time",
+        op:"ありがとう！本当に困ったときのために、大切に使ってくださいね。",
+        opEN:"Thank you! Please save it for when you really need it." },
     ]
   },
 ];
 // 緊急停止（地震・火事）ちゅうに押した場合は、係員が話をリードする専用の会話
 const CALL_EMERGENCY_FLOW = {
-  followUp: "けがはしていませんか？",
+  followUp:"けがはしていませんか？", followUpEN:"Are you hurt?",
   firstReactions:[
-    { label:"けがはありません", op:"よかったです。係員がもうすぐ到着しますので、ドアの近くで安全に待っていてくださいね。" },
-    { label:"すこしこわいです", op:"だいじょうぶですよ。ひとりじゃありません。わたしたちがちゃんと見ていますからね。" },
-  ],
-  secondReactions:[
-    { label:"はやくきてほしいです", op:"もうすぐです。あと少しだけ、落ち着いて待っていてくださいね。深呼吸してみましょう、すぅー、はぁー。" },
-    { label:"わかりました、まちます", op:"えらいですね。もうすぐ係員が到着しますので、安心して待っていてください。" },
+    { label:"けがはありません", labelEN:"I'm not hurt",
+      op:"よかったです。係員がもうすぐ到着しますので、ドアの近くで安全に待っていてくださいね。",
+      opEN:"That's a relief. Staff will arrive shortly, so please wait safely near the door.",
+      secondReactions:[
+        { label:"はやくきてほしいです", labelEN:"I want them to hurry",
+          op:"もうすぐです。あと少しだけ、落ち着いて待っていてくださいね。深呼吸してみましょう、すぅー、はぁー。",
+          opEN:"They're almost there. Just a little longer, please stay calm and wait. Let's take a deep breath together, in... and out." },
+        { label:"わかりました、まちます", labelEN:"Okay, I'll wait",
+          op:"えらいですね。もうすぐ係員が到着しますので、安心して待っていてください。",
+          opEN:"Well done. Staff will arrive very soon, so please wait with peace of mind." },
+      ]
+    },
+    { label:"すこしこわいです", labelEN:"I'm a little scared",
+      op:"だいじょうぶですよ。ひとりじゃありません。わたしたちがちゃんと見ていますからね。",
+      opEN:"It's okay. You're not alone. We're watching over you carefully.",
+      secondReactions:[
+        { label:"はやくきてほしいです", labelEN:"I want them to hurry",
+          op:"もうすぐ到着しますよ。すこしだけ、いっしょに深呼吸しましょうね、すぅー、はぁー。",
+          opEN:"They'll be there very soon. Let's take a deep breath together for a moment, in... and out." },
+        { label:"わかりました、まちます", labelEN:"Okay, I'll wait",
+          op:"えらいですね、その調子です。もうすこしだけ待っていてくださいね。",
+          opEN:"Well done, that's the spirit. Please wait just a little longer." },
+      ]
+    },
+    { label:"けがをしました", labelEN:"I got hurt",
+      op:"教えてくれてありがとう。むりに動かないで、そのままの姿勢でじっとしていてくださいね。すぐに対応できる係員を向かわせます。",
+      opEN:"Thank you for telling me. Please don't force yourself to move, just stay still in the same position. I'm sending staff who can help you right away.",
+      secondReactions:[
+        { label:"いたいです…", labelEN:"It hurts...",
+          op:"つらいですね、よくがまんしていますね。もう少しで係員が到着します。動かずに待っていてくださいね。",
+          opEN:"That must be painful, you're being very brave. Staff will arrive very soon. Please stay still and wait." },
+        { label:"だいじょうぶ、がまんできます", labelEN:"I'm okay, I can manage",
+          op:"えらいですね。無理はしないでくださいね。係員がすぐに向かっていますから、もう少しだけ待っていてください。",
+          opEN:"You're very brave. But please don't push yourself. Staff are on their way right now, so just wait a little longer." },
+      ]
+    },
   ],
 };
 
 function openEmergencyCall(){
+  if(window.speechSynthesis) window.speechSynthesis.cancel();
   document.getElementById("callOverlay").classList.add("show");
   document.getElementById("callTranscript").innerHTML = "";
   document.getElementById("callChoices").innerHTML = "";
@@ -1608,37 +1711,49 @@ function openEmergencyCall(){
       const greeting = activeEmergencyType==="earthquake"
         ? "はい、SchoolPark管理室です。地震を確認しております。係員が向かっていますので、少々お待ちください。"
         : "はい、SchoolPark管理室です。火災報知器の作動を確認しております。係員が向かっていますので、少々お待ちください。";
-      addCallBubble("op", greeting);
-      speakOperator(greeting);
+      const greetingEN = activeEmergencyType==="earthquake"
+        ? "Hello, this is the SchoolPark control room. We've confirmed the earthquake. Staff are on their way, so please wait a moment."
+        : "Hello, this is the SchoolPark control room. We've confirmed the fire alarm. Staff are on their way, so please wait a moment.";
+      addCallBubble("op", greeting, greetingEN);
+      speakOperator(greeting, greetingEN);
       setTimeout(()=>{
-        addCallBubble("op", CALL_EMERGENCY_FLOW.followUp);
-        speakOperator(CALL_EMERGENCY_FLOW.followUp);
+        addCallBubble("op", CALL_EMERGENCY_FLOW.followUp, CALL_EMERGENCY_FLOW.followUpEN);
+        speakOperator(CALL_EMERGENCY_FLOW.followUp, CALL_EMERGENCY_FLOW.followUpEN);
         renderReactionButtons(CALL_EMERGENCY_FLOW.firstReactions, chooseEmergencyFirstReaction);
-      }, 1600);
+      }, 1000);
     } else {
       const greeting = "はい、SchoolPark管理室です。どうしましたか？";
-      addCallBubble("op", greeting);
-      speakOperator(greeting);
+      const greetingEN = "Hello, this is the SchoolPark control room. How can I help you?";
+      addCallBubble("op", greeting, greetingEN);
+      speakOperator(greeting, greetingEN);
       renderTopicButtons();
     }
   }, 1400);
 }
-function addCallBubble(who, text){
+function addCallBubble(who, textJP, textEN){
   const t = document.getElementById("callTranscript");
   const b = document.createElement("div");
   b.className = "call-bubble "+(who==="op"?"op":"me");
-  b.textContent = text;
+  b.innerHTML = textJP + (textEN ? `<span class="call-bubble-en">🌐 ${textEN}</span>` : "");
   t.appendChild(b);
   t.scrollTop = t.scrollHeight;
 }
-function speakOperator(text){
+// 日本語のあとに英語をつづけて話す（キャンセルせず自然に順番待ちさせる）
+function speakOperator(textJP, textEN){
   if(!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  setTimeout(()=>window.speechSynthesis.speak(_operatorUtter(text)), 80);
+  setTimeout(()=>{
+    const u = _operatorUtter(textJP);
+    if(textEN){ u.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(_operatorUtterEN(textEN)), 300); }; }
+    window.speechSynthesis.speak(u);
+  }, 80);
 }
-function speakCaller(text){
+function speakCaller(textJP, textEN){
   if(!window.speechSynthesis) return;
-  setTimeout(()=>window.speechSynthesis.speak(_callerUtter(text)), 60);
+  setTimeout(()=>{
+    const u = _callerUtter(textJP);
+    if(textEN){ u.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(_callerUtterEN(textEN)), 300); }; }
+    window.speechSynthesis.speak(u);
+  }, 60);
 }
 
 // ── 通常の通話：話題えらび ──
@@ -1655,23 +1770,23 @@ function renderTopicButtons(){
 }
 function chooseTopic(topic){
   document.getElementById("callChoices").innerHTML = "";
-  addCallBubble("me", topic.label);
-  speakCaller(topic.label);
+  addCallBubble("me", topic.label, topic.labelEN);
+  speakCaller(topic.label, topic.labelEN);
   setTimeout(()=>{
-    addCallBubble("op", topic.op);
-    speakOperator(topic.op);
+    addCallBubble("op", topic.op, topic.opEN);
+    speakOperator(topic.op, topic.opEN);
     setTimeout(()=>{
       renderReactionButtons(topic.reactions, (r)=>chooseTopicReaction(r));
-    }, 700);
-  }, 1300);
+    }, 900);
+  }, 1000);
 }
 function chooseTopicReaction(r){
   document.getElementById("callChoices").innerHTML = "";
-  addCallBubble("me", r.label);
-  speakCaller(r.label);
+  addCallBubble("me", r.label, r.labelEN);
+  speakCaller(r.label, r.labelEN);
   setTimeout(()=>{
-    addCallBubble("op", r.op);
-    speakOperator(r.op);
+    addCallBubble("op", r.op, r.opEN);
+    speakOperator(r.op, r.opEN);
     setTimeout(()=>{
       const box = document.getElementById("callChoices");
       box.innerHTML = "";
@@ -1680,8 +1795,8 @@ function chooseTopicReaction(r){
       btn.textContent = "💬 べつのことをはなす";
       btn.onclick = renderTopicButtons;
       box.appendChild(btn);
-    }, 700);
-  }, 1300);
+    }, 900);
+  }, 1000);
 }
 function renderReactionButtons(reactions, onPick){
   const box = document.getElementById("callChoices");
@@ -1695,28 +1810,28 @@ function renderReactionButtons(reactions, onPick){
   });
 }
 
-// ── 緊急停止中の通話：係員が話をリードする2段階の会話 ──
+// ── 緊急停止中の通話：係員が話をリードする2段階の会話（けがの有無で分岐） ──
 function chooseEmergencyFirstReaction(r){
   document.getElementById("callChoices").innerHTML = "";
-  addCallBubble("me", r.label);
-  speakCaller(r.label);
+  addCallBubble("me", r.label, r.labelEN);
+  speakCaller(r.label, r.labelEN);
   setTimeout(()=>{
-    addCallBubble("op", r.op);
-    speakOperator(r.op);
+    addCallBubble("op", r.op, r.opEN);
+    speakOperator(r.op, r.opEN);
     setTimeout(()=>{
-      renderReactionButtons(CALL_EMERGENCY_FLOW.secondReactions, chooseEmergencySecondReaction);
-    }, 700);
-  }, 1300);
+      renderReactionButtons(r.secondReactions, chooseEmergencySecondReaction);
+    }, 900);
+  }, 1000);
 }
 function chooseEmergencySecondReaction(r){
   document.getElementById("callChoices").innerHTML = "";
-  addCallBubble("me", r.label);
-  speakCaller(r.label);
+  addCallBubble("me", r.label, r.labelEN);
+  speakCaller(r.label, r.labelEN);
   setTimeout(()=>{
-    addCallBubble("op", r.op);
-    speakOperator(r.op);
+    addCallBubble("op", r.op, r.opEN);
+    speakOperator(r.op, r.opEN);
     // これで会話は終了。「通話をおわる」ボタンで閉じる。
-  }, 1300);
+  }, 1000);
 }
 
 function endCall(){
