@@ -1027,8 +1027,9 @@ let _bestVoice = null;
 function _pickBestVoice(){
   const vs = window.speechSynthesis.getVoices();
   if(!vs.length) return;
-  // 優先順位：Google日本語 > Nanami(Win11 Neural) > Haruka(Win) > Kyoko(Mac) > O-ren(Mac) > その他ja-JP
+  // 優先順位：Natural/Neural系 > Google日本語 > Nanami(Win11 Neural) > Haruka(Win) > Kyoko(Mac) > O-ren(Mac) > その他ja-JP
   const checks = [
+    v => v.lang.startsWith('ja') && /Natural|Neural|Online/i.test(v.name),
     v => /Google.*日本語|Google.*Japanese/i.test(v.name) && v.lang.startsWith('ja'),
     v => /Nanami/i.test(v.name)  && v.lang.startsWith('ja'),
     v => /Haruka/i.test(v.name)  && v.lang.startsWith('ja'),
@@ -1085,8 +1086,8 @@ document.addEventListener('click', _unlockSpeech, { once:true });
 function _utter(text, isAnnounce=false){
   const u = new SpeechSynthesisUtterance(text);
   u.lang    = 'ja-JP';
-  u.rate    = isAnnounce ? 0.92 : 0.92; // アナウンス・解説ともに統一
-  u.pitch   = isAnnounce ? 1.08 : 1.02; // 少し高め＝放送感
+  u.rate    = 0.98; // 自然な会話のはやさ（不自然にゆっくりにしない）
+  u.pitch   = 1.0;  // 声のピッチを人工的に上げず、地声に近いトーンで機械音っぽさを減らす
   u.volume  = 1.0;
   if(_bestVoice) u.voice = _bestVoice;
   return u;
@@ -1105,7 +1106,7 @@ function _utterEN(text, isAnnounce=false){
 // 管理室オペレーターの声（少し低め・落ち着いたトーン）
 function _operatorUtter(text){
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'ja-JP'; u.rate = 0.95; u.pitch = 0.8; u.volume = 1.0;
+  u.lang = 'ja-JP'; u.rate = 0.97; u.pitch = 0.92; u.volume = 1.0;
   if(_bestVoice) u.voice = _bestVoice;
   return u;
 }
@@ -1118,7 +1119,7 @@ function _operatorUtterEN(text){
 // 呼んでいる本人の声（少し高め・元気なトーン）
 function _callerUtter(text){
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'ja-JP'; u.rate = 1.02; u.pitch = 1.25; u.volume = 1.0;
+  u.lang = 'ja-JP'; u.rate = 1.0; u.pitch = 1.13; u.volume = 1.0;
   if(_bestVoice) u.voice = _bestVoice;
   return u;
 }
@@ -1363,7 +1364,7 @@ function elevArriveAnnounce(floorName, floorNameEN){
 // ── エレベーターデータ ──
 const FLOOR_POS   = { "RF":266,"5F":213,"4F":160,"3F":107,"2F":54,"1F":4 };
 const FLOOR_ORDER = ["1F","2F","3F","4F","5F","RF"];
-const FLOOR_NAMES = { "RF":"屋上","5F":"5かい","4F":"4かい","3F":"3かい","2F":"2かい","1F":"1かい" };
+const FLOOR_NAMES = { "RF":"屋上","5F":"ごかい","4F":"よんかい","3F":"さんがい","2F":"にかい","1F":"いっかい" };
 const FLOOR_NAMES_EN = { "RF":"the Rooftop","5F":"the 5th floor","4F":"the 4th floor","3F":"the 3rd floor","2F":"the 2nd floor","1F":"the 1st floor" };
 const FLOORS = {
   "RF":{ icon:"🏙️", title:"屋上（ルーフトップ）",   desc:"SchoolPark の屋上だよ！はれた日にはとおくまでみえるよ。🌤️ このかいからはSchoolParkのまちぜんたいがみわたせる！ここがいちばんうえのかいだよ。" },
@@ -1739,19 +1740,30 @@ function addCallBubble(who, textJP, textEN){
   t.scrollTop = t.scrollHeight;
 }
 // 日本語のあとに英語をつづけて話す（キャンセルせず自然に順番待ちさせる）
+// 絵文字（😊やにこにこマークなど）は読み上げると不自然なので、音声にわたす前に取りのぞく
+function stripEmoji(text){
+  return text
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}️]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 function speakOperator(textJP, textEN){
   if(!window.speechSynthesis) return;
+  const jp = stripEmoji(textJP), en = textEN ? stripEmoji(textEN) : textEN;
+  if(!jp) return;
   setTimeout(()=>{
-    const u = _operatorUtter(textJP);
-    if(textEN){ u.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(_operatorUtterEN(textEN)), 300); }; }
+    const u = _operatorUtter(jp);
+    if(en){ u.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(_operatorUtterEN(en)), 300); }; }
     window.speechSynthesis.speak(u);
   }, 80);
 }
 function speakCaller(textJP, textEN){
   if(!window.speechSynthesis) return;
+  const jp = stripEmoji(textJP), en = textEN ? stripEmoji(textEN) : textEN;
+  if(!jp) return;
   setTimeout(()=>{
-    const u = _callerUtter(textJP);
-    if(textEN){ u.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(_callerUtterEN(textEN)), 300); }; }
+    const u = _callerUtter(jp);
+    if(en){ u.onend = ()=>{ setTimeout(()=>window.speechSynthesis.speak(_callerUtterEN(en)), 300); }; }
     window.speechSynthesis.speak(u);
   }, 60);
 }
