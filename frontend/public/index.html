@@ -537,6 +537,20 @@
   font-size:12px; font-weight:700; cursor:pointer; width:100%;
 }
 .sp-reizo-contact-btn:hover { opacity:0.85; }
+.sp-reizo-quick-wrap { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+.sp-reizo-quick-btn {
+  display:block; padding:8px 12px; text-align:left;
+  background:rgba(212,168,67,0.1); border:1px solid rgba(212,168,67,0.3);
+  color:#e8d8a0; border-radius:10px;
+  font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;
+}
+.sp-reizo-quick-btn:hover { background:rgba(212,168,67,0.2); }
+.sp-reizo-rec-card {
+  display:flex; align-items:center; gap:8px; padding:7px 9px; margin-top:6px;
+  background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08);
+  border-radius:10px; cursor:pointer;
+}
+.sp-reizo-rec-card:hover { background:rgba(212,168,67,0.1); border-color:rgba(212,168,67,0.3); }
 .sp-reizo-typing span {
   display:inline-block; width:6px; height:6px;
   background:#888; border-radius:50%; margin:0 2px;
@@ -3478,19 +3492,14 @@ body.paypay-mode #pp-post-fab {
     <button class="sp-reizo-close" onclick="spReizoClose()">✕</button>
   </div>
   <div class="sp-reizo-msgs" id="spReizoMessages">
-    <div class="sp-reizo-maint">
-      <div class="sp-reizo-maint-icon">🔧</div>
-      <div class="sp-reizo-maint-title">メンテナンス中</div>
-      <div class="sp-reizo-maint-body">
-        冷蔵庫くんは今、SchoolPark agents（EMUER管理・自動巡回・タスク実行・おすすめ・アラート）と統合して、会話でなんでもお願いできる新しいアシスタントに生まれ変わる準備をしています。<br><br>
-        もうすこしだけ、あたたかく待っててね🧊
-      </div>
-      <div class="sp-reizo-maint-badge" id="spReizoMaintBadge"></div>
+    <div class="sp-reizo-msg sp-reizo-msg-bot">
+      <img src="/assets/mascot.jpg" alt="">
+      <div class="sp-reizo-bubble">こんにちは！SchoolParkについてなんでも聞いてね🧊<br><br>「残高教えて」「おすすめある？」「巡回して」「リマインドして」「アラート設定して」も言ってくれたら、ぼくが代わりに動くよ！</div>
     </div>
   </div>
   <div class="sp-reizo-input-area">
-    <input id="spReizoInput" type="text" placeholder="準備中です…" disabled>
-    <button class="sp-reizo-send" disabled style="opacity:0.35;cursor:not-allowed">↑</button>
+    <input id="spReizoInput" type="text" placeholder="質問する..." onkeydown="spReizoKeydown(event)">
+    <button class="sp-reizo-send" onclick="spReizoSend()">↑</button>
   </div>
 </div>
 
@@ -7373,7 +7382,7 @@ const _SP_REIZO_LOADING_LINES = [
   "☕ カフェでひと休みもできるよ！SchoolParkはくつろぎの場所でもあるんだ！",
   "📜 貢献証を出せば、実EMUERがもらえるチャンス！どんどん活動してね！",
   "🌟 「学校より学べて、公園より楽しくて、会社より稼げる」それがSchoolParkだよ！",
-  "🤖 冷蔵庫くんはSchoolPark agentsと統合中！新しい会話アシスタント、もうすこし待っててね🧊",
+  "🤖 冷蔵庫くんに「残高教えて」「おすすめある？」「巡回して」って話しかけると、SchoolPark agentsの機能を代わりにやってくれるよ！",
   "💰 財布アイコンからEMUER残高を確認できるよ！大切に使ってね！",
   "🏨 東エリアにはホテルやマンションもあるよ！SchoolParkはまるで小さな街みたいでしょ？",
   "🎬 映画館では映像コンテンツが楽しめるよ！エンタメも充実してるんだ！",
@@ -9248,6 +9257,7 @@ async function _patrolStep() {
     _patrol.state = 'done';
     _renderPatrolDone();
     document.querySelectorAll('.spmap-poi-marker').forEach(m => m.classList.remove('spm-active','patrol-scan'));
+    if (typeof _reizoNotifyPatrolDone === 'function') _reizoNotifyPatrolDone();
     return;
   }
 
@@ -9821,7 +9831,7 @@ const SP_REIZO_KB = [
 
   // ── SchoolPark agents
   { k:['schoolpark agents','agents','エージェント','agentsとは','自動化','ai機能'],
-    a:'SchoolPark agentsは、わたし（冷蔵庫くん）と統合されて生まれ変わり中だよ🧊🤖\n\n✅ 統合される5つの能力：\n💎 EMUER自動管理 / 🗺️ 自動巡回 / 📋 タスク自動実行\n🔍 コンテンツ推薦 / 🔔 アラート自律対応\n\n今はメンテナンス中。公開されたら、わたしに話しかけるだけでぜんぶお願いできるようになるよ！🎫有料パスの方は会話AI版が優先で使えるようになる予定だよ。' },
+    a:'SchoolPark agentsは、わたし（冷蔵庫くん）に統合ずみだよ🧊🤖\n\n✅ 話しかけるだけで使える5つの能力：\n💎「残高教えて」→ EMUER自動管理\n🗺️「巡回して」→ 自動巡回\n📋「リマインドして」→ タスク自動実行\n🔍「おすすめある？」→ コンテンツ推薦\n🔔「アラート設定して」→ アラート自律対応\n\n試してみてね！' },
 
   // ── キーボード・ショートカット
   { k:['ショートカット','shortcut','キーボード','keyboard','コマンドバー','コマンド','/agents','/wallet','/taxi'],
@@ -9881,16 +9891,16 @@ function spReizoAnswer(q) {
   return best ? best.a : null; // nullのときは呼び出し元でフォールバック処理
 }
 
+let _reizoAgentsStarted = false;
 function spReizoOpen() {
   document.getElementById('spReizoPanel').classList.add('open');
-  _spReizoUpdateMaintBadge();
-}
-function _spReizoUpdateMaintBadge() {
-  const badge = document.getElementById('spReizoMaintBadge');
-  if (!badge) return;
-  badge.textContent = _spIsPaidUser()
-    ? '🎫 有料パス特典：公開時はClaude搭載の会話AI版を優先してご利用いただけます'
-    : '💡 有料パスなら、公開時にClaude搭載の会話AI版が使えるようになります';
+  // 旧SchoolPark agentsのバックグラウンド機能（アラート監視・タスク実行）を初回だけ起動
+  // ※ 冷蔵庫くんを閉じても動き続ける（自律対応のため）
+  if (!_reizoAgentsStarted) {
+    _reizoAgentsStarted = true;
+    try { _startAlertChecker(); } catch (e) {}
+    try { _startTaskRunner(); } catch (e) {}
+  }
 }
 function spReizoClose() {
   document.getElementById('spReizoPanel').classList.remove('open');
@@ -9925,6 +9935,35 @@ function _spReizoShowTyping() {
   msgs.scrollTop = msgs.scrollHeight;
   return div;
 }
+// 冷蔵庫くんの発言としてHTML（お知らせカードやボタン）を表示する
+function _spReizoAppendRich(html) {
+  const msgs = document.getElementById('spReizoMessages');
+  const div = document.createElement('div');
+  div.className = 'sp-reizo-msg sp-reizo-msg-bot';
+  const av = document.createElement('img');
+  av.src = '/assets/mascot.jpg'; av.alt = ''; div.appendChild(av);
+  const bubble = document.createElement('div');
+  bubble.className = 'sp-reizo-bubble';
+  bubble.innerHTML = html;
+  div.appendChild(bubble);
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+// クイックリプライ（選択肢ボタン）をメッセージ内に追加
+function _spReizoQuickReplies(options) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sp-reizo-quick-wrap';
+  options.forEach(o => {
+    const btn = document.createElement('button');
+    btn.className = 'sp-reizo-quick-btn';
+    btn.textContent = o.label;
+    btn.onclick = () => { wrap.remove(); o.onClick(); };
+    wrap.appendChild(btn);
+  });
+  return wrap;
+}
+
 function spReizoSend() {
   const input = document.getElementById('spReizoInput');
   const q = input.value.trim();
@@ -9932,12 +9971,17 @@ function spReizoSend() {
   input.value = '';
   _spReizoAppendMsg(q, true);
   const typing = _spReizoShowTyping();
-  setTimeout(() => {
+  setTimeout(async () => {
     typing.remove();
+    // 既存FAQ（SP_REIZO_KB）を優先。ヒットしなかった場合のみagentsスキルにフォールバック
     const ans = spReizoAnswer(q);
     if (ans !== null) {
       _spReizoAppendMsg(ans, false);
-    } else {
+      return;
+    }
+    const skill = _matchReizoSkill(q);
+    if (skill) { await skill.handler(); return; }
+    {
       // わからない場合：謝罪 + 問い合わせボタン
       const msgDiv = _spReizoAppendMsg('ごめんね、「' + q + '」についてはうまく答えられなかったよ😢\n問い合わせフォームから運営に直接聞いてみてね！', false);
       const btn = document.createElement('button');
@@ -9950,6 +9994,161 @@ function spReizoSend() {
 }
 function spReizoKeydown(e) {
   if (e.key === 'Enter') spReizoSend();
+}
+
+/* ═══════════════════════════════════════════════════════
+   冷蔵庫くん統合スキル（旧SchoolPark agentsの5機能）
+   LLM不使用・キーワード一致で実データ/実処理を呼び出す
+═══════════════════════════════════════════════════════ */
+const REIZO_SKILLS = [
+  { id: 'emuer',     keywords: ['残高', 'ざんだか', 'emuer', 'エミュア', '財布', '補充', '制限'], handler: () => _reizoSkillEmuer() },
+  { id: 'recommend', keywords: ['おすすめ', 'なにする', '何する', 'どこいく', 'どこ行く', '提案', 'ひまつぶし'], handler: () => _reizoSkillRecommend() },
+  { id: 'patrol',    keywords: ['巡回', 'パトロール', 'まわって', '案内して'], handler: () => _reizoSkillPatrol() },
+  { id: 'task',      keywords: ['リマインド', '予約して', 'あとで教えて', 'タスク', '思い出させて'], handler: () => _reizoSkillTask() },
+  { id: 'alert',     keywords: ['アラート', '通知して', '知らせて', '監視して'], handler: () => _reizoSkillAlert() },
+];
+function _matchReizoSkill(q) {
+  const lq = q.toLowerCase();
+  for (const s of REIZO_SKILLS) {
+    if (s.keywords.some(k => lq.includes(k.toLowerCase()))) return s;
+  }
+  return null;
+}
+
+/* ── 💎 EMUER自動管理 ── */
+async function _reizoSkillEmuer() {
+  let data = _getEmuerData();
+  if (!data && typeof _initEmuer === 'function') data = await _initEmuer();
+  if (!data) {
+    _spReizoAppendMsg('EMUERデータがまだ読み込めていないみたい。SchoolParkマップを一度開いてからもう一回聞いてね🧊', false);
+    return;
+  }
+  const balance    = data.balance ?? 0;
+  const restricted = !!(data.restrictionUntil && Date.now() < data.restrictionUntil);
+  let msg = `💎 いまの残高は ${balance} EMUER だよ！`;
+  if (restricted) {
+    const remain = data.restrictionUntil - Date.now();
+    const h = Math.floor(remain / 3600000), m = Math.floor((remain % 3600000) / 60000);
+    msg += `\n⏳ いまは利用制限中：あと約${h > 0 ? h + '時間' : ''}${m}分で解除されるよ`;
+  } else {
+    const costs = Object.values(EMUER_RATE_CONFIG).filter(c => c > 0);
+    const avgCost = costs.length ? Math.round(costs.reduce((a, b) => a + b, 0) / costs.length) : 1;
+    const accessible = Math.floor(balance / avgCost);
+    msg += `\nこのペースなら、平均的な施設に約${accessible}か所は行けそうだよ！`;
+  }
+  _spReizoAppendMsg(msg, false);
+}
+
+/* ── 🔍 コンテンツ推薦 ── */
+async function _reizoSkillRecommend() {
+  let data = _getEmuerData();
+  if (!data && typeof _initEmuer === 'function') data = await _initEmuer();
+  const balance = data ? (data.balance || 0) : 0;
+  const history = data ? (data.history || []) : [];
+
+  const zoneScore = {};
+  history.forEach(h => {
+    if (h.type !== 'spend') return;
+    const matched = SP_POIS.find(p => {
+      const first = p.name.split(' ')[0];
+      return h.label === first || h.label === p.id;
+    });
+    if (matched) zoneScore[matched.zone] = (zoneScore[matched.zone] || 0) + 1;
+  });
+  const topZone = Object.entries(zoneScore).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+
+  const hour = new Date().getHours();
+  let timeZone;
+  if      (hour >= 6  && hour < 12) timeZone = 'learn';
+  else if (hour >= 12 && hour < 17) timeZone = 'earn';
+  else if (hour >= 17 && hour < 21) timeZone = 'play';
+  else                               timeZone = 'guard';
+
+  const scored = SP_POIS.filter(p => p.status === 'open').map(p => {
+    const cost = EMUER_RATE_CONFIG[p.id] ?? 0;
+    const canAfford = balance >= cost;
+    let score = 0;
+    if (topZone && p.zone === topZone) score += 30;
+    if (p.zone === timeZone) score += 20;
+    if (canAfford) score += 10; else score -= 50;
+    if (cost === 0) score += 8;
+    return { poi: p, cost, canAfford, score };
+  }).filter(s => s.canAfford).sort((a, b) => b.score - a.score);
+
+  const top = scored.slice(0, 2);
+  if (top.length === 0) {
+    _spReizoAppendMsg('うーん、いまの残高だと行けそうな場所が見つからなかったよ💦 EMUERが貯まったらまた聞いてね', false);
+    return;
+  }
+  const cardsHtml = top.map(s => `
+    <div class="sp-reizo-rec-card" onclick="spReizoClose();setTimeout(()=>gatedOpen('${s.poi.id}',()=>{${s.poi.action ? s.poi.action + '()' : (s.poi.page ? `window.open('${s.poi.page}','_blank')` : '')}}),300);">
+      <div style="font-size:1.3rem;">${s.poi.icon}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:12px;color:#e0e0e0;">${s.poi.name}</div>
+        <div style="font-size:11px;color:${s.cost === 0 ? '#4ade80' : '#D4A843'};">${s.cost === 0 ? '無料' : s.cost + '💎'}</div>
+      </div>
+    </div>`).join('');
+  _spReizoAppendRich(`🔍 いまのきみにおすすめはこれ！タップすると移動するよ${cardsHtml}`);
+}
+
+/* ── 🗺️ 自動巡回 ── */
+async function _reizoSkillPatrol() {
+  const div = _spReizoAppendMsg('どのゾーンを巡回する？', false);
+  const bubble = div.querySelector('.sp-reizo-bubble');
+  bubble.appendChild(_spReizoQuickReplies(PATROL_PRESETS.map(p => ({
+    label: p.label,
+    onClick: () => {
+      _selectPatrolPreset(p.id);
+      _startPatrol();
+      _spReizoAppendMsg(`🗺️ ${p.label}ゾーンの巡回をはじめたよ！終わったら教えるね`, false);
+    }
+  }))));
+}
+// 巡回が完了したら _patrolStep() から呼ばれる（下のフックを参照）
+function _reizoNotifyPatrolDone() {
+  if (!_patrol.log.length) return;
+  const canGoCount = _patrol.log.filter(l => l.canGo).length;
+  _spReizoAppendMsg(`🗺️ 巡回おわったよ！${_patrol.log.length}か所まわって、${canGoCount}か所は今すぐ行けそうだったよ✨`, false);
+}
+
+/* ── 📋 タスク自動実行 ── */
+async function _reizoSkillTask() {
+  const div = _spReizoAppendMsg('どんなタスクを予約する？', false);
+  const bubble = div.querySelector('.sp-reizo-bubble');
+  bubble.appendChild(_spReizoQuickReplies([
+    { label: '⏰ 30分後にリマインド', onClick: () => {
+      _addTask({ type: 'reminder', trigger: { type: 'delay', value: 30 * 60 * 1000 }, payload: { label: '30分後リマインダー', message: '冷蔵庫くんからのリマインドだよ🧊' } });
+      _spReizoAppendMsg('⏰ 30分後にリマインドするね！', false);
+    }},
+    { label: '⏳ 制限が解けたら教えて', onClick: () => {
+      _addTask({ type: 'restriction_watch', trigger: { type: 'restriction_lifted', value: 0 }, payload: { label: '制限解除', message: '利用制限が解除されたよ！' } });
+      _spReizoAppendMsg('⏳ 制限が解けたら知らせるね！', false);
+    }},
+    { label: '💎 残高が減ったら教えて', onClick: () => {
+      const data = _getEmuerData();
+      const th = Math.max(50, Math.round((data?.balance || 200) * 0.2));
+      _addTask({ type: 'check_balance', trigger: { type: 'balance_below', value: th }, payload: { label: '残高チェック', message: `残高が${th}EMUERを下回ったよ` } });
+      _spReizoAppendMsg(`💎 残高が${th} EMUERを下回ったら教えるね！`, false);
+    }},
+  ]));
+}
+
+/* ── 🔔 アラート自律対応 ── */
+async function _reizoSkillAlert() {
+  const div = _spReizoAppendMsg('どんなときに知らせてほしい？', false);
+  const bubble = div.querySelector('.sp-reizo-bubble');
+  bubble.appendChild(_spReizoQuickReplies([
+    { label: '💸 残高が低くなったら', onClick: () => {
+      if (_getAlerts().find(a => a.type === 'balance_low')) { _spReizoAppendMsg('もう設定済みだよ！', false); return; }
+      _addAlert({ type: 'balance_low', action: 'notify', params: { threshold: 100 } });
+      _spReizoAppendMsg('💸 残高が100EMUER以下になったら知らせるね！', false);
+    }},
+    { label: '🔓 制限が解除されたら', onClick: () => {
+      if (_getAlerts().find(a => a.type === 'restriction_lifted')) { _spReizoAppendMsg('もう設定済みだよ！', false); return; }
+      _addAlert({ type: 'restriction_lifted', action: 'notify', params: {} });
+      _spReizoAppendMsg('🔓 制限が解除されたらすぐ知らせるね！', false);
+    }},
+  ]));
 }
 // 冷蔵庫くんから問い合わせパネルを開く
 function _openReizoContactForm() {
@@ -9972,8 +10171,8 @@ const SP_TUT_STEPS = [
   { text: 'デジタルで買って、リアルで食べる。美味しいに楽しいを追加したのが、SchoolParkのグルメエリア！', hint: 'タップして次へ', mode: 'tap' },
   { text: '両方まだ品数は少ないけれど、気にしておいてね！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'そうそう。定期的にイベントがあるから、ぜひ遊びに来て！', hint: 'タップして次へ', mode: 'tap' },
-  { text: 'あ、そうだ！実はぼく、今「SchoolPark agents」と合体してパワーアップ中なんだ！\nEMUERの残高監視やマップの自動巡回、タスクの予約実行まで、ぜんぶできるようになる予定！', hint: 'タップして次へ', mode: 'tap' },
-  { text: 'コンテンツのおすすめも、ぼくに話しかけるだけでやってくれるようになるよ！\n今はまだメンテナンス中だけど、公開されたら教えるね！\nぜひ楽しみにしてて！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'あ、そうだ！実はぼく「SchoolPark agents」と合体してパワーアップしたんだ！\n「残高教えて」って話しかければEMUERの残高監視、「巡回して」でマップの自動巡回もできるよ！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'コンテンツのおすすめも「おすすめある？」って聞くだけ！\nリマインドやアラートの予約も話しかけて設定できるよ！\nぜひ試してみてね！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'まだいっぱい教えたいことがたくさんあるんだけど、しゃべりすぎって怒られるから…', hint: 'タップして次へ', mode: 'tap' },
   { text: 'わからないことがあれば、冷蔵庫くんに聞くから教えてね！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'SchoolPark、楽しんでね！バイバイ！', hint: 'タップして閉じる', mode: 'last' },
