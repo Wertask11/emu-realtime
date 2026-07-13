@@ -497,8 +497,21 @@
   padding:12px 14px; border-bottom:1px solid rgba(212,168,67,0.2);
   background:rgba(0,0,0,0.3);
 }
-.sp-reizo-header img { width:28px; height:28px; border-radius:50%; object-fit:cover; }
-.sp-reizo-header-title { flex:1; font-size:14px; font-weight:700; color:#D4A843; }
+.sp-reizo-header img { width:28px; height:28px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+.sp-reizo-header-title { font-size:14px; font-weight:700; color:#D4A843; }
+.sp-reizo-header-sub { font-size:10px; color:#8a7550; margin-top:1px; }
+.sp-reizo-maint { text-align:center; padding:22px 10px 8px; }
+.sp-reizo-maint-icon { font-size:2.4rem; margin-bottom:10px; filter:drop-shadow(0 0 10px rgba(212,168,67,.4)); }
+.sp-reizo-maint-title {
+  display:inline-block; font-size:0.68rem; font-weight:800; letter-spacing:.14em;
+  color:#D4A843; border:1px solid rgba(212,168,67,.4); border-radius:999px;
+  padding:3px 12px; margin-bottom:12px; background:rgba(212,168,67,.08);
+}
+.sp-reizo-maint-body { font-size:12.5px; line-height:1.7; color:#c9b998; margin-bottom:14px; }
+.sp-reizo-maint-badge {
+  font-size:11px; line-height:1.6; color:#e8d8a0; background:rgba(212,168,67,.1);
+  border:1px solid rgba(212,168,67,.25); border-radius:10px; padding:9px 11px;
+}
 .sp-reizo-close {
   background:none; border:none; color:#888; cursor:pointer; font-size:16px; padding:2px 6px;
 }
@@ -3274,7 +3287,6 @@ body.paypay-mode #pp-post-fab {
     <div class="sp-icon-btn-bar">
       <button class="spib" onclick="openSpPanel('spWalletPanel')" title="ウォレット">💰</button>
       <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
-      <button class="spib" onclick="openSpPanel('spRobotPanel')" title="SchoolPark agents">🤖</button>
       <button class="spib" onclick="openSpPanel('spSettingsPanel')" title="設定">⚙️</button>
     </div>
     <button class="spmap-ticket-btn" onclick="spMapLinkClick('ticket')">チケット購入</button>
@@ -3459,18 +3471,26 @@ body.paypay-mode #pp-post-fab {
 <div id="spReizoPanel" class="sp-reizo-panel">
   <div class="sp-reizo-header">
     <img src="/assets/mascot.jpg" alt="冷蔵庫くん">
-    <span class="sp-reizo-header-title">冷蔵庫くん</span>
+    <div style="flex:1;min-width:0">
+      <div class="sp-reizo-header-title">冷蔵庫くん</div>
+      <div class="sp-reizo-header-sub">🤖 SchoolPark agents 統合版</div>
+    </div>
     <button class="sp-reizo-close" onclick="spReizoClose()">✕</button>
   </div>
   <div class="sp-reizo-msgs" id="spReizoMessages">
-    <div class="sp-reizo-msg sp-reizo-msg-bot">
-      <img src="/assets/mascot.jpg" alt="">
-      <div class="sp-reizo-bubble">こんにちは！SchoolPark についてなんでも聞いてね🧊</div>
+    <div class="sp-reizo-maint">
+      <div class="sp-reizo-maint-icon">🔧</div>
+      <div class="sp-reizo-maint-title">メンテナンス中</div>
+      <div class="sp-reizo-maint-body">
+        冷蔵庫くんは今、SchoolPark agents（EMUER管理・自動巡回・タスク実行・おすすめ・アラート）と統合して、会話でなんでもお願いできる新しいアシスタントに生まれ変わる準備をしています。<br><br>
+        もうすこしだけ、あたたかく待っててね🧊
+      </div>
+      <div class="sp-reizo-maint-badge" id="spReizoMaintBadge"></div>
     </div>
   </div>
   <div class="sp-reizo-input-area">
-    <input id="spReizoInput" type="text" placeholder="質問する..." onkeydown="spReizoKeydown(event)">
-    <button class="sp-reizo-send" onclick="spReizoSend()">↑</button>
+    <input id="spReizoInput" type="text" placeholder="準備中です…" disabled>
+    <button class="sp-reizo-send" disabled style="opacity:0.35;cursor:not-allowed">↑</button>
   </div>
 </div>
 
@@ -3903,8 +3923,10 @@ body.paypay-mode #pp-post-fab {
   </div>
 </div>
 
-<!-- 🤖 SchoolPark agents パネル -->
-<div id="spRobotPanel" class="sp-panel">
+<!-- 🤖 SchoolPark agents パネル（冷蔵庫くんに統合済み・openSpPanel()がspReizoOpen()へリダイレクトするため到達不能。
+     中の各エージェント機能（EMUER監視・巡回・タスク実行・推薦・アラート）のロジックは新冷蔵庫くん実装時に再利用予定のため保持。
+     新冷蔵庫くんのLLM化が完了したらこのパネルごと削除してよい。 -->
+<div id="spRobotPanel" class="sp-panel" style="display:none !important">
   <div class="sp-panel-header">
     <div class="sp-panel-title">🤖 SchoolPark agents</div>
     <button class="sp-panel-close" onclick="closeSpPanel('spRobotPanel')">✕ 閉じる</button>
@@ -7351,7 +7373,7 @@ const _SP_REIZO_LOADING_LINES = [
   "☕ カフェでひと休みもできるよ！SchoolParkはくつろぎの場所でもあるんだ！",
   "📜 貢献証を出せば、実EMUERがもらえるチャンス！どんどん活動してね！",
   "🌟 「学校より学べて、公園より楽しくて、会社より稼げる」それがSchoolParkだよ！",
-  "🤖 右上の🤖ボタンを押すと、AIエージェントに相談できるよ！",
+  "🤖 冷蔵庫くんはSchoolPark agentsと統合中！新しい会話アシスタント、もうすこし待っててね🧊",
   "💰 財布アイコンからEMUER残高を確認できるよ！大切に使ってね！",
   "🏨 東エリアにはホテルやマンションもあるよ！SchoolParkはまるで小さな街みたいでしょ？",
   "🎬 映画館では映像コンテンツが楽しめるよ！エンタメも充実してるんだ！",
@@ -9799,7 +9821,7 @@ const SP_REIZO_KB = [
 
   // ── SchoolPark agents
   { k:['schoolpark agents','agents','エージェント','agentsとは','自動化','ai機能'],
-    a:'SchoolPark agents はあなたの代わりに自律的に動く AI だよ🤖\n\n✅ 5つの能力：\n💎 EMUER自動管理 / 🗺️ 自動巡回 / 📋 タスク自動実行\n🔍 コンテンツ推薦 / 🔔 アラート自律対応\n\n起動：右上🤖ボタン / コマンド「/agents」' },
+    a:'SchoolPark agentsは、わたし（冷蔵庫くん）と統合されて生まれ変わり中だよ🧊🤖\n\n✅ 統合される5つの能力：\n💎 EMUER自動管理 / 🗺️ 自動巡回 / 📋 タスク自動実行\n🔍 コンテンツ推薦 / 🔔 アラート自律対応\n\n今はメンテナンス中。公開されたら、わたしに話しかけるだけでぜんぶお願いできるようになるよ！🎫有料パスの方は会話AI版が優先で使えるようになる予定だよ。' },
 
   // ── キーボード・ショートカット
   { k:['ショートカット','shortcut','キーボード','keyboard','コマンドバー','コマンド','/agents','/wallet','/taxi'],
@@ -9861,7 +9883,14 @@ function spReizoAnswer(q) {
 
 function spReizoOpen() {
   document.getElementById('spReizoPanel').classList.add('open');
-  document.getElementById('spReizoInput').focus();
+  _spReizoUpdateMaintBadge();
+}
+function _spReizoUpdateMaintBadge() {
+  const badge = document.getElementById('spReizoMaintBadge');
+  if (!badge) return;
+  badge.textContent = _spIsPaidUser()
+    ? '🎫 有料パス特典：公開時はClaude搭載の会話AI版を優先してご利用いただけます'
+    : '💡 有料パスなら、公開時にClaude搭載の会話AI版が使えるようになります';
 }
 function spReizoClose() {
   document.getElementById('spReizoPanel').classList.remove('open');
@@ -9943,8 +9972,8 @@ const SP_TUT_STEPS = [
   { text: 'デジタルで買って、リアルで食べる。美味しいに楽しいを追加したのが、SchoolParkのグルメエリア！', hint: 'タップして次へ', mode: 'tap' },
   { text: '両方まだ品数は少ないけれど、気にしておいてね！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'そうそう。定期的にイベントがあるから、ぜひ遊びに来て！', hint: 'タップして次へ', mode: 'tap' },
-  { text: 'あ、そうだ！「SchoolPark agents」って知ってる？\nEMUERの残高を監視したり、マップを自動で巡回したり、タスクを予約実行したりしてくれる頼もしいやつなんだ！', hint: 'タップして次へ', mode: 'tap' },
-  { text: 'コンテンツのおすすめまでやってくれるんだよ！\n右上の 🤖 ボタン（またはキー「A」やコマンド「/agents」）から「SchoolPark agents」が開けるよ！\nぜひ使ってみてね！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'あ、そうだ！実はぼく、今「SchoolPark agents」と合体してパワーアップ中なんだ！\nEMUERの残高監視やマップの自動巡回、タスクの予約実行まで、ぜんぶできるようになる予定！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'コンテンツのおすすめも、ぼくに話しかけるだけでやってくれるようになるよ！\n今はまだメンテナンス中だけど、公開されたら教えるね！\nぜひ楽しみにしてて！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'まだいっぱい教えたいことがたくさんあるんだけど、しゃべりすぎって怒られるから…', hint: 'タップして次へ', mode: 'tap' },
   { text: 'わからないことがあれば、冷蔵庫くんに聞くから教えてね！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'SchoolPark、楽しんでね！バイバイ！', hint: 'タップして閉じる', mode: 'last' },
@@ -12224,6 +12253,8 @@ window.addEventListener("message", (e) => {
    SpMap スライドインパネル（💰🤖⚙️）
 ═══════════════════════════════════════════════════════ */
 function openSpPanel(panelId) {
+  // SchoolPark agents は冷蔵庫くんに統合済み。旧パネルを開こうとしたら統合後の入口へリダイレクト
+  if (panelId === 'spRobotPanel') { spReizoOpen(); return; }
   closeAllSpPanels(panelId);
   const panel = document.getElementById(panelId);
   const backdrop = document.getElementById('spPanelBackdrop');
