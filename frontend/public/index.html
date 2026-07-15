@@ -16181,6 +16181,23 @@ setTimeout(() => {
   const label = document.getElementById('emu-contact-label');
   if (label) label.style.display = 'none';
 }, 4000);
+
+// ══════════════════════════
+// URLパラメータで問い合わせパネルを自動オープン
+// 例: ?contact=investor → パネルを開き「投資家・提携」を選択してフォームまで進める
+// ══════════════════════════
+(function autoOpenContactFromUrl() {
+  const type = new URLSearchParams(location.search).get('contact');
+  if (!type || !FORMS[type]) return;
+  setTimeout(() => {
+    toggleContactPanel();
+    const btn = document.querySelector('.w-cat-btn[data-type="' + type + '"]');
+    if (btn) {
+      selectCategory(btn);
+      nextStep();
+    }
+  }, 400);
+})();
 </script>
 <script>
 (function() {
