@@ -327,7 +327,21 @@
   display:flex; flex-direction:column; position:relative;
   border-radius:4px; transition:opacity 0.15s;
 }
-.spmap-brand-btn:hover .spmap-brand-name { color:#FFD166; }
+.spmap-brand-btn:hover { opacity:0.85; }
+/* CHES ブランドメニュー（ホームページの探検しようと同デザイン） */
+.ches-menu {
+  position:absolute; top:calc(100% + 10px); left:0; z-index:500;
+  display:none; flex-direction:column; min-width:180px;
+  background:rgba(0,0,0,0.95); border:1px solid rgba(255,255,255,0.22);
+}
+.ches-menu.open { display:flex; }
+.ches-menu-item {
+  padding:14px 20px; font-family:'JetBrains Mono','Noto Sans JP',monospace; font-size:0.78rem;
+  letter-spacing:0.08em; background:none; border:none; border-bottom:1px solid rgba(255,255,255,0.12);
+  text-align:left; cursor:pointer; transition:background 0.2s;
+}
+.ches-menu-item:last-child { border-bottom:none; }
+.ches-menu-item:hover { background:rgba(255,255,255,0.08); }
 /* 未読バッジ — border-radius:50% は横に伸びるので固定値 */
 .sp-notif-badge {
   position:absolute; top:-5px; right:-12px;
@@ -3224,11 +3238,18 @@ body.paypay-mode #pp-post-fab {
   <!-- Top Navigation -->
   <nav class="spmap-nav">
     <div class="spmap-brand" style="position:relative;">
-      <button class="spmap-brand-btn" onclick="toggleSpNotifPanel()" title="お知らせを確認">
-        <div class="spmap-brand-name">SchoolPark</div>
-        <div class="spmap-brand-sub">Interactive Park Map</div>
+      <button class="spmap-brand-btn" onclick="toggleChesMenu(event)" title="CHESメニュー">
+        <div class="spmap-brand-name"><span style="color:#e0576f;">C</span><span style="color:#a0d8ef;">H</span><span style="color:#f08300;">E</span><span style="color:#d0e2be;">S</span></div>
+        <div class="spmap-brand-sub">合同会社型DAO SchoolPark</div>
         <span class="sp-notif-badge" id="spNotifBadge"></span>
       </button>
+      <!-- CHES ブランドメニュー（ホームページの「探検しよう」と同じ構成） -->
+      <div id="chesMenu" class="ches-menu">
+        <button class="ches-menu-item" style="color:#e0576f;" onclick="chesMenuGo('camellia')">Camellia</button>
+        <button class="ches-menu-item" style="color:#a0d8ef;" onclick="chesMenuGo('heartoo')">Heartoo</button>
+        <button class="ches-menu-item" style="color:#f08300;" onclick="chesMenuGo('emu')">Emu</button>
+        <button class="ches-menu-item" style="color:#d0e2be;" onclick="chesMenuGo('schoolpark')">SchoolPark</button>
+      </div>
       <!-- お知らせ＆ログパネル -->
       <div id="spNotifPanel" style="display:none;flex-direction:column;">
         <div class="spn-header">
@@ -3252,11 +3273,8 @@ body.paypay-mode #pp-post-fab {
       </div>
     </div>
     <div class="spmap-nav-links">
-      <span class="spmap-nav-link" onclick="closeSpMap()">Emu</span>
       <span class="spmap-nav-link" onclick="spMapNavClick('gourmet')">グルメ</span>
       <span class="spmap-nav-link" onclick="spMapNavClick('shopping')">ショッピング</span>
-      <span class="spmap-nav-link" onclick="spMapNavClick('events')">イベント</span>
-      <span class="spmap-nav-link" onclick="spMapNavClick('tutorial')">チュートリアル</span>
     </div>
     <!-- コマンドバー（/ で起動） -->
     <div class="spmap-cmd-wrap">
@@ -3315,7 +3333,7 @@ body.paypay-mode #pp-post-fab {
           <div class="spmap-area-names">
             <span class="spmap-area-main">すべて</span>
           </div>
-          <span class="spmap-area-count" id="spCntAll">28</span>
+          <span class="spmap-area-count" id="spCntAll">29</span>
         </div>
         <div class="spmap-area-item" onclick="spMapFilter(['plaza'],this)">
           <span class="spmap-area-dot" style="background:#f59e0b"></span>
@@ -3347,7 +3365,7 @@ body.paypay-mode #pp-post-fab {
             <span class="spmap-area-main">南エリア</span>
             <span class="spmap-area-sub">遊び・自然</span>
           </div>
-          <span class="spmap-area-count">7</span>
+          <span class="spmap-area-count">8</span>
         </div>
         <div class="spmap-area-item" onclick="spMapFilter(['learn'],this)">
           <span class="spmap-area-dot" style="background:#3b82f6"></span>
@@ -4682,6 +4700,7 @@ const EMUER_RATE_CONFIG = {
   play5: 5,   // 登山
   play6: 5,   // 釣り
   play7: 10,  // 駅舎（下）
+  play8: 0,   // アミューズメント（入場無料・各ゲームは個別条件）
   // 北エリア
   learn1: 10, // 図書館
   learn2: 10, // 本屋
@@ -9784,13 +9803,9 @@ const SP_REIZO_KB = [
   { k:['ショートカット','shortcut','キーボード','keyboard','コマンドバー','コマンド','/agents','/wallet'],
     a:'キーボードショートカット🧊\n\n🎫 有料パス限定：\nW：ウォレット　A：agents　S：設定\n1〜4：カスタムキー　/ ：コマンドバー\n\n✅ 全員利用可：\nEsc：パネルを閉じる　Backspace：マップに戻る' },
 
-  // ── チュートリアル
-  { k:['チュートリアル','tutorial','ガイド','入門','使い方ガイド'],
-    a:'チュートリアルはナビの「チュートリアル」から開けるよ📖\nSchoolParkの楽しみ方・EMUER解説・エリア案内・理念などをステップごとに紹介してるよ🧊' },
-
   // ── エリア
   { k:['エリア','北エリア','南エリア','西エリア','東エリア','中央エリア','エリア一覧'],
-    a:'SchoolParkには5つのエリアがあるよ🗺️\n🏫 北エリア：図書館・本屋・博物館・歴史館・ラボ（学習系）\n🎬 南エリア：映画館・交差点・駅・エレベーター・山・釣り場\n🏦 西エリア：銀行・病院・警察・守衛室・ジム・消防署\n🛍️ 東エリア：ショッピング・マンション・ホテル・役所・農園\n🏛️ 中央エリア：噴水広場' },
+    a:'SchoolParkには5つのエリアがあるよ🗺️\n🏫 北エリア：図書館・本屋・博物館・歴史館・ラボ（学習系）\n🎬 南エリア：映画館・交差点・駅・エレベーター・山・釣り場・🎪アミューズメント\n🏦 西エリア：銀行・病院・警察・守衛室・ジム・消防署\n🛍️ 東エリア：ショッピング・マンション・ホテル・役所・農園\n🏛️ 中央エリア：噴水広場' },
 
   // ── スマホ・タブレット
   { k:['スマホ','スマートフォン','タブレット','mobile','iphone','android','モバイル'],
@@ -9813,8 +9828,28 @@ const SP_REIZO_KB = [
     a:'問い合わせは左下のサポートフォームから送れるよ📩\n「お問い合わせ」タブで内容を入力して送信してね！\n運営チームが確認して2〜3営業日以内に返答するよ🧊' },
 
   // ── Emu（外部サービス）
-  { k:['emuとは','emuって','emuアプリ','emu app'],
-    a:'Emu は SchoolPark に関連した「知識を伝え合う」プラットフォームだよ🌱\nEmu での good・change 数が EMUER 獲得に影響するよ！\n左上の「Emu」ボタンからアクセスできるよ。' },
+  { k:['emuとは','emuって','emuアプリ','emu app','emuに行く','emuへ行く'],
+    a:'Emu は CHES の一員で「知識を伝え合う」プラットフォームだよ🌱\nEmu での good・change 数が EMUER 獲得に影響するよ！\n左上の「CHES」をタップ → Emu を選ぶとアクセスできるよ。' },
+
+  // ── CHES（4ブランドの世界）
+  { k:['ches','チェス','4ブランド','ブランド','世界観','camellia heartoo'],
+    a:'CHES（チェス）は Camellia・Heartoo・Emu・SchoolPark の4つで創る一つの世界だよ🧊\n\n🌸 Camellia — 女性ウェルネス/ウェルビーイング\n💍 Heartoo — スマート結婚指輪「♡を貴女に」\n🌐 Emu — 知識を伝え合う分散型SNS\n🏞️ SchoolPark — 最高に楽しい心躍る場所（ここ！）\n\n左上の「CHES」をタップすると各ブランドに移動できるよ！\n共通トークンがEMUER。Emuで集めて、Camelliaで育てて、Heartooで支払い、SchoolParkで使う！' },
+
+  // ── Camellia
+  { k:['camellia','カメリア','椿','女性ウェルネス','ウェルビーイング'],
+    a:'Camellia（カメリア）は CHES の女性ウェルネス/ウェルビーイングブランドだよ🌸\n「もう一度、自分を好きになる」がテーマ。\n美・健康・こころ・性・学びお金・つながりの6領域から女性の人生を支えるよ。\n\n左上の「CHES」→ Camellia からアクセスしてね！' },
+
+  // ── Heartoo
+  { k:['heartoo','ハートゥー','指輪','結婚指輪','リング','スマートリング'],
+    a:'Heartoo（ハートゥー）は CHES のスマート結婚指輪ブランドだよ💍\n「♡を貴女に」— 空中にハートを描いてフリックで放つと、相手に光のハートが届くんだ！\nNFCでSchoolPark入場とEMUER決済にも使える予定だよ。\n\n左上の「CHES」→ Heartoo で製品紹介・先行購入相談ができるよ！' },
+
+  // ── アミューズメント
+  { k:['アミューズメント','amusement','イベント','ゲーム','遊び場','秘密のとびら','echo field','エコーフィールド','林檎の方程式','隕石研究所','遊ぶ'],
+    a:'遊ぶなら南エリアの🎪アミューズメントへ！\n\n♟️ ECHO FIELD — 戦略・思考ゲーム\n🔒 秘密のとびら — 謎解き×EMUER報酬\n🍎 林檎の方程式 — 思考実験・論理パズル\n☄️ 隕石研究所 — 宇宙・科学コンテンツ\n\nマップの南エリアで🎪アイコンをタップしてね！' },
+
+  // ── お知らせ・ログ
+  { k:['お知らせ','おしらせ','ログ','通知','ニュース'],
+    a:'お知らせとログは、左上の「CHES」をタップ → SchoolPark を選ぶと確認できるよ🔔\n未読があるとCHESロゴに赤いバッジが付くよ！' },
 
   // ── DAO・合同会社
   { k:['dao','合同会社','法人','運営会社','だれが運営','組織'],
@@ -9953,7 +9988,14 @@ const REIZO_SKILLS = [
   { id: 'patrol',    keywords: ['巡回', 'パトロール', 'まわって', '案内して'], handler: () => _reizoSkillPatrol() },
   { id: 'task',      keywords: ['リマインド', '予約して', 'あとで教えて', 'タスク', '思い出させて'], handler: () => _reizoSkillTask() },
   { id: 'alert',     keywords: ['アラート', '通知して', '知らせて', '監視して'], handler: () => _reizoSkillAlert() },
+  { id: 'tutorial',  keywords: ['チュートリアル', 'tutorial', 'ガイド', '入門', '使い方'], handler: () => _reizoSkillTutorial() },
 ];
+
+/* ── 📖 チュートリアル（冷蔵庫くんに統合済み） ── */
+function _reizoSkillTutorial() {
+  _spReizoAppendMsg('チュートリアルはぼくに統合されたよ🧊\nわからないことは、そのままぼくに聞いてくれたら答えるよ！\n詳しいガイドページも開いておくね📖', false);
+  setTimeout(() => { spReizoClose(); openSpContent('/schoolpark/tutorial.html'); }, 1200);
+}
 function _matchReizoSkill(q) {
   const lq = q.toLowerCase();
   for (const s of REIZO_SKILLS) {
@@ -10108,20 +10150,20 @@ function _openReizoContactForm() {
 /* ═══════════════════════════════════════════════════════
    SchoolPark 初回チュートリアル演出（冷蔵庫くん）
 ═══════════════════════════════════════════════════════ */
-const SP_TUT_KEY = 'sp_tut_v1';
+const SP_TUT_KEY = 'sp_tut_v2';
 const SP_TUT_STEPS = [
   { text: 'また会ったね！改めて、ようこそSchoolParkへ！\n学校より学べて・公園より楽しくて・会社より稼げる場所を。まずはオンラインで表したのがここだよ！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'この画面は、SchoolParkのマップ画面。中央エリア・東エリア・西エリア・南エリア・北エリアの５つのエリアで構成されてるんだ。\nまずは、エリアを選択してみよう！', hint: '← 左のエリアを選んでね', mode: 'area' },
-  { text: '知識を伝え合う場所、Emuに行く場合は左上のEmuからアクセスしてね！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'ぼくたちは今、「CHES（チェス）」っていう一つの世界の中にいるんだ！\nCamellia・Heartoo・Emu・SchoolPark、4つのブランドで一つの世界。それがCHES！', hint: 'タップして次へ', mode: 'tap' },
+  { text: '左上のCHESをタップすると、4つのブランドに移動できるよ！\n🌸Camelliaは女性ウェルネス、💍Heartooはスマート結婚指輪、🌐Emuは知識を伝え合うSNS、そしてここがSchoolPark！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'CHESメニューのSchoolParkを押すと、お知らせやログも確認できるからチェックしてみてね！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'まだ品数は少ないけれど…現実でも使えるサービスと言ったらSchoolParkのショッピングとグルメ！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'SchoolParkの独自教材や遊具、デジタルコンテンツやコラボアイテムが表示・購入できるのがショッピングだよ！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'デジタルで買って、リアルで食べる。美味しいに楽しいを追加したのが、SchoolParkのグルメエリア！', hint: 'タップして次へ', mode: 'tap' },
-  { text: '両方まだ品数は少ないけれど、気にしておいてね！', hint: 'タップして次へ', mode: 'tap' },
-  { text: 'そうそう。定期的にイベントがあるから、ぜひ遊びに来て！', hint: 'タップして次へ', mode: 'tap' },
+  { text: '遊びたくなったら南エリアの🎪アミューズメントへ！\nECHO FIELD・秘密のとびら・林檎の方程式・隕石研究所がここで遊べるよ！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'あ、そうだ！実はぼく「SchoolPark agents」と合体してパワーアップしたんだ！\n「残高教えて」って話しかければEMUERの残高監視、「巡回して」でマップの自動巡回もできるよ！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'コンテンツのおすすめも「おすすめある？」って聞くだけ！\nリマインドやアラートの予約も話しかけて設定できるよ！\nぜひ試してみてね！', hint: 'タップして次へ', mode: 'tap' },
-  { text: 'まだいっぱい教えたいことがたくさんあるんだけど、しゃべりすぎって怒られるから…', hint: 'タップして次へ', mode: 'tap' },
-  { text: 'わからないことがあれば、冷蔵庫くんに聞くから教えてね！', hint: 'タップして次へ', mode: 'tap' },
+  { text: 'チュートリアルもぼくに統合されたから、困ったことがあったら、いつでもぼく（冷蔵庫くん）に聞いてね！それが一番はやい！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'SchoolPark、楽しんでね！バイバイ！', hint: 'タップして閉じる', mode: 'last' },
 ];
 
@@ -12093,6 +12135,7 @@ const SP_POIS = [
   { id:"play5",  name:"Mountain Climbing 登山", icon:"⛰️", zone:"play",  px:37, py:84, desc:"のぼって・しらべて・たのしもう！せかいのすごいやまとのぼりかた",    status:"open", page:"/schoolpark/south-mountain.html" },
   { id:"play6",  name:"Fishing 釣り",           icon:"🎣", zone:"play",  px:42, py:89, desc:"つって・しらべて・たのしもう！せかいのすごいさかなとつりかた",       status:"open", page:"/schoolpark/south-fishing.html" },
   { id:"play7",  name:"Terminal Station 駅舎（下）",icon:"🚇", zone:"play",  px:57, py:88, desc:"南エリア中央の交通ハブ。各方面への乗り換えポイント", sub:"冒険・旅立ち",        status:"open", page:"/schoolpark/south-station2.html" },
+  { id:"play8",  name:"Amusement アミューズメント", icon:"🎪", zone:"play",  px:63, py:83, desc:"南エリアの遊びの拠点。ECHO FIELD・秘密のとびら・林檎の方程式・隕石研究所がここで遊べる！", status:"open", action:"openSpAmusement", sub:"冒険・遊び", btnLabel:"🎪 遊びに行く" },
   // 交通・インフラ（ゲート）
   /* Gate A — Dawn Plaza 削除済み */
   { id:"star2",  name:"Frontier Gate 前線の砦",      icon:"🏰", zone:"star", px:50, py:94, desc:"Gate B — 南エリアの正面玄関。新コンテンツ準備中",           status:"coming" },
@@ -12798,6 +12841,8 @@ function spMapSelectPoi(poiId) {
         ? `<button class="spmap-detail-go-btn" onclick="closeSpMap();setTimeout(()=>{const b=document.getElementById('exploreBtn');if(b)b.click();},150)">🔍 探索・遊びへ</button>`
       : poi.action === "openRoom2"
         ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>{closeSpMap();setTimeout(()=>openRoom2(),150)})">🌌 星を見に行く</button>`
+      : poi.action === "openSpAmusement"
+        ? `<button class="spmap-detail-go-btn" onclick="openSpAmusement()">${poi.btnLabel||'🎪 遊びに行く'}</button>`
       : poi.action === "openTakoyakiStall"
         ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openTakoyakiStall())">${poi.btnLabel||'🐙 屋台に行く'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
       : poi.action === "openShagekiStall"
@@ -12996,32 +13041,33 @@ function spMapNavClick(type) {
     openSpContent('/schoolpark/east-shopping.html');
     return;
   }
-  if (type === 'events') {
-    const evItems = [
-      { icon:'♟️', label:'ECHO FIELD', color:'rgba(74,158,255,0.18)', border:'rgba(74,158,255,0.45)', desc:'戦略・思考ゲーム。AIと対戦しながら判断力を鍛えよう。', fn:'openEchoFieldDirect()' },
-      { icon:'🔒', label:'秘密のとびら', color:'rgba(255,215,0,0.1)', border:'rgba(255,215,0,0.4)', desc:'謎を解いて扉を開けるとEMUER報酬が手に入る。探索とアドベンチャーが融合。', fn:'openSecretDoor()' },
-      { icon:'🍎', label:'林檎の方程式', color:'rgba(184,48,40,0.18)', border:'rgba(184,48,40,0.45)', desc:'思考実験・論理パズル。哲学と数式の境界を遊ぶ先行公開コンテンツ。', fn:'openRingoGame()' },
-      { icon:'☄️', label:'隕石研究所', color:'rgba(0,180,130,0.2)', border:'rgba(0,220,170,0.5)', desc:'隕石・宇宙・地球の謎を探究する研究所。科学コンテンツでEmuの世界が広がる。', fn:'openMeteoriteLab()' },
-    ];
-    openSpModal('🎪 イベント・コンテンツ', evItems.map(it => `
-      <div style="background:${it.color};border:1px solid ${it.border};border-radius:12px;padding:16px;cursor:pointer;transition:opacity .15s"
-        onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'"
-        onclick="closeSpModal();setTimeout(()=>{ ${it.fn} },80)">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-          <span style="font-size:1.8rem">${it.icon}</span>
-          <div>
-            <div style="font-size:0.9rem;font-weight:700;color:#e8e8f0">${it.label}</div>
-          </div>
-        </div>
-        <div style="font-size:0.76rem;color:#aaa;line-height:1.6">${it.desc}</div>
-        <div style="margin-top:10px;text-align:right;font-size:0.72rem;color:${it.border.replace('0.45','0.9').replace('0.4','0.9').replace('0.5','0.9')}">▶ 開く</div>
-      </div>`).join(''));
-    return;
-  }
   if (type === 'tutorial') {
     openSpContent('/schoolpark/tutorial.html');
     return;
   }
+}
+
+/* ── 南エリア アミューズメント（旧イベントボタンの中身） ── */
+function openSpAmusement() {
+  const evItems = [
+    { icon:'♟️', label:'ECHO FIELD', color:'rgba(74,158,255,0.18)', border:'rgba(74,158,255,0.45)', desc:'戦略・思考ゲーム。AIと対戦しながら判断力を鍛えよう。', fn:'openEchoFieldDirect()' },
+    { icon:'🔒', label:'秘密のとびら', color:'rgba(255,215,0,0.1)', border:'rgba(255,215,0,0.4)', desc:'謎を解いて扉を開けるとEMUER報酬が手に入る。探索とアドベンチャーが融合。', fn:'openSecretDoor()' },
+    { icon:'🍎', label:'林檎の方程式', color:'rgba(184,48,40,0.18)', border:'rgba(184,48,40,0.45)', desc:'思考実験・論理パズル。哲学と数式の境界を遊ぶ先行公開コンテンツ。', fn:'openRingoGame()' },
+    { icon:'☄️', label:'隕石研究所', color:'rgba(0,180,130,0.2)', border:'rgba(0,220,170,0.5)', desc:'隕石・宇宙・地球の謎を探究する研究所。科学コンテンツでEmuの世界が広がる。', fn:'openMeteoriteLab()' },
+  ];
+  openSpModal('🎪 アミューズメント', evItems.map(it => `
+    <div style="background:${it.color};border:1px solid ${it.border};border-radius:12px;padding:16px;cursor:pointer;transition:opacity .15s"
+      onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'"
+      onclick="closeSpModal();setTimeout(()=>{ ${it.fn} },80)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <span style="font-size:1.8rem">${it.icon}</span>
+        <div>
+          <div style="font-size:0.9rem;font-weight:700;color:#e8e8f0">${it.label}</div>
+        </div>
+      </div>
+      <div style="font-size:0.76rem;color:#aaa;line-height:1.6">${it.desc}</div>
+      <div style="margin-top:10px;text-align:right;font-size:0.72rem;color:${it.border.replace('0.45','0.9').replace('0.4','0.9').replace('0.5','0.9')}">▶ 開く</div>
+    </div>`).join(''));
 }
 
 /* ── コマンドバー Enter ── */
@@ -16769,6 +16815,42 @@ document.addEventListener('click', e => {
   if (!panel || panel.style.display === 'none') return;
   const brand = document.querySelector('.spmap-brand');
   if (brand && !brand.contains(e.target)) closeSpNotifPanel();
+});
+
+/* ──────── CHES ブランドメニュー ──────── */
+function toggleChesMenu(e) {
+  if (e) e.stopPropagation();
+  closeSpNotifPanel();
+  const menu = document.getElementById('chesMenu');
+  if (menu) menu.classList.toggle('open');
+}
+function closeChesMenu() {
+  const menu = document.getElementById('chesMenu');
+  if (menu) menu.classList.remove('open');
+}
+function chesMenuGo(brand) {
+  closeChesMenu();
+  switch (brand) {
+    case 'camellia':
+      window.open('https://school-park-homepage.vercel.app/Camellia.html', '_blank', 'noopener');
+      break;
+    case 'heartoo':
+      window.open('https://school-park-homepage.vercel.app/Heartoo.html', '_blank', 'noopener');
+      break;
+    case 'emu':
+      closeSpMap();
+      break;
+    case 'schoolpark':
+      toggleSpNotifPanel();
+      break;
+  }
+}
+// メニュー外クリックで閉じる
+document.addEventListener('click', e => {
+  const menu = document.getElementById('chesMenu');
+  if (!menu || !menu.classList.contains('open')) return;
+  const brand = document.querySelector('.spmap-brand');
+  if (brand && !brand.contains(e.target)) closeChesMenu();
 });
 
 // ──────── ⑥  既読操作 ────────
