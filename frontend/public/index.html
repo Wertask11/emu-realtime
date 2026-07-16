@@ -441,7 +441,7 @@
 #emuerHud {
   display:flex; align-items:center; gap:5px; background:rgba(212,168,67,0.12);
   border:1px solid rgba(212,168,67,0.35); border-radius:6px;
-  padding:4px 10px; margin-left:8px; flex-shrink:0; cursor:default;
+  padding:4px 10px; margin-left:8px; flex-shrink:0; cursor:pointer;
   transition:background 0.2s;
 }
 #emuerHud:hover { background:rgba(212,168,67,0.22); }
@@ -897,16 +897,6 @@
   object-fit:fill; display:block;   /* ← contain→fill で内部コンテナにぴったり合わせる */
   user-select:none; pointer-events:none;
 }
-/* Search (fixed over canvas) */
-.spmap-search { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:30; width:260px; }
-.spmap-search input {
-  width:100%; padding:8px 14px 8px 34px; background:rgba(0,0,0,0.72);
-  border:1px solid rgba(212,168,67,0.4); border-radius:20px; color:#ddd;
-  font-size:0.8rem; font-family:'Noto Sans JP',sans-serif; outline:none;
-  backdrop-filter:blur(8px); box-sizing:border-box;
-}
-.spmap-search input::placeholder { color:#666; }
-.spmap-search-icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); font-size:0.8rem; pointer-events:none; }
 /* Gate Labels (inside inner, absolute % of inner) */
 .spmap-gate-tag {
   position:absolute; text-align:center;
@@ -915,14 +905,6 @@
   text-shadow:0 1px 3px rgba(255,240,180,0.9), 0 0 8px rgba(255,240,180,0.6);
   transform:translateX(-50%);
 }
-/* Zoom (fixed) */
-.spmap-zoom { position:absolute; bottom:14px; right:14px; z-index:30; display:flex; flex-direction:column; gap:3px; }
-.spmap-zoom button {
-  width:30px; height:30px; background:rgba(14,10,4,0.85); border:1px solid rgba(212,168,67,0.35);
-  color:#D4A843; border-radius:4px; cursor:pointer; font-size:1rem; font-weight:700;
-  display:flex; align-items:center; justify-content:center;
-}
-.spmap-zoom button:hover { background:rgba(212,168,67,0.15); }
 /* POI Markers (inside inner) */
 #spPOIContainer { position:absolute; inset:0; pointer-events:none; z-index:15; }
 .spmap-poi-marker {
@@ -1181,9 +1163,6 @@
 
   /* Infobar 非表示 */
   .spmap-infobar { display:none; }
-
-  /* 検索バー：上部中央・幅調整 */
-  .spmap-search { top:12px; left:50%; transform:translateX(-50%); width:calc(100% - 110px); max-width:280px; }
 
   /* 詳細パネル */
   .spmap-detail {
@@ -3274,7 +3253,6 @@ body.paypay-mode #pp-post-fab {
     </div>
     <div class="spmap-nav-links">
       <span class="spmap-nav-link" onclick="closeSpMap()">Emu</span>
-      <span class="spmap-nav-link active" onclick="spMapNavClick('map')">パークマップ</span>
       <span class="spmap-nav-link" onclick="spMapNavClick('gourmet')">グルメ</span>
       <span class="spmap-nav-link" onclick="spMapNavClick('shopping')">ショッピング</span>
       <span class="spmap-nav-link" onclick="spMapNavClick('events')">イベント</span>
@@ -3292,15 +3270,13 @@ body.paypay-mode #pp-post-fab {
       <img src="/assets/mascot.jpg" alt="冷蔵庫くん">
       <span class="reizo-label">冷蔵庫くんに聞く</span>
     </button>
-    <div id="emuerHud" title="SchoolPark EMUER残高">
+    <div id="emuerHud" title="タップでウォレットを開く" onclick="openSpPanel('spWalletPanel')" style="cursor:pointer;">
       <span style="font-size:0.8rem">💎</span>
       <span id="emuerHudVal">---</span>
       <span id="emuerHudLabel">EMUER</span>
       <span id="emuerHudLow">⚠️残少</span>
     </div>
     <div class="sp-icon-btn-bar">
-      <button class="spib" onclick="openSpPanel('spWalletPanel')" title="ウォレット">💰</button>
-      <button class="spib" onclick="openTaxi()" title="タクシー">🚕</button>
       <button class="spib" onclick="openSpPanel('spSettingsPanel')" title="設定">⚙️</button>
     </div>
     <button class="spmap-ticket-btn" onclick="spMapLinkClick('ticket')">チケット購入</button>
@@ -3409,15 +3385,6 @@ body.paypay-mode #pp-post-fab {
     <div class="spmap-canvas" id="spMapCanvas">
 
       <!-- Fixed UI (スクロールに追従しない) -->
-      <div class="spmap-search">
-        <span class="spmap-search-icon">🔍</span>
-        <input type="text" id="spMapSearchInput" placeholder="スポット名・エリアで検索" oninput="spMapSearch(this.value)" />
-      </div>
-      <div class="spmap-zoom">
-        <button onclick="spMapZoomIn()" title="拡大">＋</button>
-        <button onclick="spMapZoomOut()" title="縮小">－</button>
-        <button onclick="spMapZoomReset()" title="全体表示">⌂</button>
-      </div>
       <div class="spmap-detail" id="spDetailPanel">
         <button class="spmap-detail-close" onclick="closeSpDetail()">✕</button>
         <div id="spDetailContent"></div>
@@ -4304,7 +4271,6 @@ body.paypay-mode #pp-post-fab {
           <option value="none">（なし）</option>
           <option value="agents">🤖 SchoolPark agents</option>
           <option value="wallet">💰 ウォレット</option>
-          <option value="taxi">🚕 タクシー</option>
           <option value="settings">⚙️ 設定</option>
           <option value="tutorial">📖 チュートリアル</option>
           <option value="reizo">🧊 冷蔵庫くんに聞く</option>
@@ -4317,7 +4283,6 @@ body.paypay-mode #pp-post-fab {
           <option value="none">（なし）</option>
           <option value="agents">🤖 SchoolPark agents</option>
           <option value="wallet">💰 ウォレット</option>
-          <option value="taxi">🚕 タクシー</option>
           <option value="settings">⚙️ 設定</option>
           <option value="tutorial">📖 チュートリアル</option>
           <option value="reizo">🧊 冷蔵庫くんに聞く</option>
@@ -4330,7 +4295,6 @@ body.paypay-mode #pp-post-fab {
           <option value="none">（なし）</option>
           <option value="agents">🤖 SchoolPark agents</option>
           <option value="wallet">💰 ウォレット</option>
-          <option value="taxi">🚕 タクシー</option>
           <option value="settings">⚙️ 設定</option>
           <option value="tutorial">📖 チュートリアル</option>
           <option value="reizo">🧊 冷蔵庫くんに聞く</option>
@@ -4343,7 +4307,6 @@ body.paypay-mode #pp-post-fab {
           <option value="none">（なし）</option>
           <option value="agents">🤖 SchoolPark agents</option>
           <option value="wallet">💰 ウォレット</option>
-          <option value="taxi">🚕 タクシー</option>
           <option value="settings">⚙️ 設定</option>
           <option value="tutorial">📖 チュートリアル</option>
           <option value="reizo">🧊 冷蔵庫くんに聞く</option>
@@ -4387,20 +4350,6 @@ body.paypay-mode #pp-post-fab {
   </div>
 </div>
 
-
-<!-- タクシーモーダル -->
-<div id="taxiModal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.88);align-items:center;justify-content:center;">
-  <div style="background:#1a1d2e;border:1px solid #8B6914;border-radius:16px;padding:20px;width:92%;max-width:460px;max-height:80vh;overflow-y:auto;position:relative;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <div style="font-size:1.05rem;font-weight:700;color:#D4A843;">🚕 タクシー</div>
-      <button onclick="closeTaxi()" style="background:none;border:none;color:#888;font-size:1.3rem;cursor:pointer;line-height:1;padding:2px 6px;">✕</button>
-    </div>
-    <div style="font-size:0.76rem;color:#888;margin-bottom:14px;padding:8px 10px;background:rgba(212,168,67,0.08);border-radius:8px;border:1px solid rgba(212,168,67,0.2);">
-      💎 1回 <strong style="color:#D4A843">3 EMUER</strong> でご利用いただけます！
-    </div>
-    <div id="taxiDestList" style="display:flex;flex-direction:column;gap:3px;"></div>
-  </div>
-</div>
 
 <!-- フッター -->
 <div id="siteFooter" style="
@@ -4741,8 +4690,6 @@ const EMUER_RATE_CONFIG = {
   learn5: 10, // 博物館
   // 星空エリア（無料）
   star5: 0,   // 夜空の展望台
-  // タクシー
-  taxi_ride: 3,
 
 };
 
@@ -9733,7 +9680,7 @@ const SP_REIZO_KB = [
        'emuerはどうやって使う','emuerをどう使う','emuerで何を買える','emuerはどこで使える',
        'emuerをどこで使う','emuerで何が買える','emuerの使い道','emuerを使って',
        'emuerの活用','emuerで遊ぶ','emuerで施設','emuerで入れる'],
-    a:'EMUER の主な使い道🧊\n\n🏛️ 施設アクセス（各エリアの建物に入る）\n・映画館・図書館・ショッピング など\n🚕 タクシー（3 EMUER で瞬間移動）\n🍽️ グルメ（リアル飲食に使える）\n🛍️ ショッピング（リアル連携の商品購入）\n\n施設ごとのコストはマップ上で確認できるよ！' },
+    a:'EMUER の主な使い道🧊\n\n🏛️ 施設アクセス（各エリアの建物に入る）\n・映画館・図書館・ショッピング など\n🍽️ グルメ（リアル飲食に使える）\n🛍️ ショッピング（リアル連携の商品購入）\n\n施設ごとのコストはマップ上で確認できるよ！' },
 
   // ── EMUER × 稼ぐ・増やす・獲得
   { k:['emuerを稼ぐ','emuerを貯める','emuerを増やす','emuerの獲得','emuer獲得',
@@ -9744,14 +9691,14 @@ const SP_REIZO_KB = [
   // ── EMUER × 残高確認
   { k:['emuerの残高','emuer残高','残高の確認','残高はどこ','残高を見る',
        'emuerはいくら','残高確認方法','emuerはどこで確認','残高の見方'],
-    a:'EMUER残高はおさいふ画面で確認できるよ🧊\n\n開き方：\n・ナビの 💰 ボタン\n・キーボード「W」（有料パスのみ）\n\n表示内容：\n・EMUER 残高（SchoolPark内の操作残高）\n・実EMUER（ブロックチェーン上の本物の残高）\n・パスの種別（有料 / 無料）' },
+    a:'EMUER残高はおさいふ画面で確認できるよ🧊\n\n開き方：\n・上部の 💎EMUER残高 をタップ\n・キーボード「W」（有料パスのみ）\n\n表示内容：\n・EMUER 残高（SchoolPark内の操作残高）\n・実EMUER（ブロックチェーン上の本物の残高）\n・パスの種別（有料 / 無料）' },
 
   // ── 有料パス vs 無料パスの比較（「有料パス(4点)」より「有料と無料の違い(11点)」が勝つ）
   { k:['有料と無料の違い','無料と有料の違い','有料パスと無料パスの違い',
        '無料パスと有料パスの違い','パスの違い','有料パスのメリット',
        '有料パスにすると','有料パスにしたら','どっちのパスがいい',
        '無料パスでもできる','有料にする意味','有料パスは何が違う'],
-    a:'有料パスと無料パスの違い🧊\n\n✅ 両方できること：\n・SchoolParkマップの閲覧・施設アクセス\n・EMUER の獲得・使用\n・タクシー利用（ボタン操作）\n\n🎫 有料パス限定：\n・ポイントをいつでも EMUER に変換可\n・キーボードショートカット（W/T/A/S/1〜4）\n・コマンドバー（/commands）' },
+    a:'有料パスと無料パスの違い🧊\n\n✅ 両方できること：\n・SchoolParkマップの閲覧・施設アクセス\n・EMUER の獲得・使用\n\n🎫 有料パス限定：\n・ポイントをいつでも EMUER に変換可\n・キーボードショートカット（W/A/S/1〜4）\n・コマンドバー（/commands）' },
 
   // ── 制限中の対処法（「制限(2点)」より「制限かかったら(9点)」が勝つ）
   { k:['制限かかったら','制限がかかった','制限になったら','制限されたら',
@@ -9799,7 +9746,7 @@ const SP_REIZO_KB = [
 
   // ── EMUER 全般
   { k:['emuer','エミュアー','emuerとは','emuerって','emuトークン'],
-    a:'EMUER は SchoolPark 内で流通する ERC-20 トークンだよ🧊\n施設解放・タクシー移動などに使えるよ。\n\n主な獲得方法：\n① Emu での good/change 数に応じて\n② 学習コンテンツ反映・ログインボーナス\n③ 利用制限解除後に 1,000 EMUER 自動配布' },
+    a:'EMUER は SchoolPark 内で流通する ERC-20 トークンだよ🧊\n施設解放などに使えるよ。\n\n主な獲得方法：\n① Emu での good/change 数に応じて\n② 学習コンテンツ反映・ログインボーナス\n③ 利用制限解除後に 1,000 EMUER 自動配布' },
 
   // ── 利用制限
   { k:['利用制限','restriction','emuer制限','残高なくなった','使い切った','制限中','制限解除','制限'],
@@ -9817,25 +9764,25 @@ const SP_REIZO_KB = [
   { k:['polygon','matic','pol','ガス代','ネットワーク','ポリゴン'],
     a:'SchoolPark は Polygon ネットワークで動作しているよ🧊\nchainlist.org で「Polygon Mainnet」を追加してね。\nガス代は 0.01 MATIC 程度あれば十分！' },
 
-  // ── タクシー
+  // ── タクシー（廃止）
   { k:['タクシー','taxi','瞬間移動','テレポート','施設間移動'],
-    a:'タクシーは 3 EMUER でマップ内の好きな施設に瞬間移動できる機能だよ🚕\nマップ右上の 🚕 ボタンから使えるよ！\n（キーボード「T」は🎫有料パス限定だよ）' },
+    a:'タクシー機能は終了したよ🧊\nマップをドラッグ・ピンチ操作で移動して、施設アイコンをタップしてアクセスしてね！' },
 
   // ── マップ操作
   { k:['マップ操作','マップの見方','マップを動かす','map操作','マップをスクロール'],
-    a:'マップはクリック・ドラッグ・スクロール（ピンチ）で操作できるよ🧊\n施設アイコンをタップするとコンテンツにアクセスできるよ。\n右上ボタン：💰ウォレット　🚕タクシー　🤖agents　⚙️設定\nBackspace でマップに戻れるよ。' },
+    a:'マップはクリック・ドラッグ・スクロール（ピンチ）で操作できるよ🧊\n施設アイコンをタップするとコンテンツにアクセスできるよ。\n上部の💎EMUER残高をタップするとウォレットが開くよ。右上ボタン：⚙️設定\nBackspace でマップに戻れるよ。' },
 
   // ── 施設コスト・料金
   { k:['コスト','料金','施設の値段','何emuer','施設にかかる','いくら'],
-    a:'EMUER 施設コスト例🧊\n・ショッピング → 20 EMUER\n・映画館 → 20 EMUER\n・ホテル → 8〜10 EMUER\n・図書館 → 5〜8 EMUER\n・タクシー → 3 EMUER\n\n施設アイコンにカーソルを当てると確認できるよ！' },
+    a:'EMUER 施設コスト例🧊\n・ショッピング → 20 EMUER\n・映画館 → 20 EMUER\n・ホテル → 8〜10 EMUER\n・図書館 → 5〜8 EMUER\n\n施設アイコンにカーソルを当てると確認できるよ！' },
 
   // ── SchoolPark agents
   { k:['schoolpark agents','agents','エージェント','agentsとは','自動化','ai機能'],
     a:'SchoolPark agentsは、わたし（冷蔵庫くん）に統合ずみだよ🧊🤖\n\n✅ 話しかけるだけで使える5つの能力：\n💎「残高教えて」→ EMUER自動管理\n🗺️「巡回して」→ 自動巡回\n📋「リマインドして」→ タスク自動実行\n🔍「おすすめある？」→ コンテンツ推薦\n🔔「アラート設定して」→ アラート自律対応\n\n試してみてね！' },
 
   // ── キーボード・ショートカット
-  { k:['ショートカット','shortcut','キーボード','keyboard','コマンドバー','コマンド','/agents','/wallet','/taxi'],
-    a:'キーボードショートカット🧊\n\n🎫 有料パス限定：\nW：ウォレット　T：タクシー　A：agents　S：設定\n1〜4：カスタムキー　/ ：コマンドバー\n\n✅ 全員利用可：\nEsc：パネルを閉じる　Backspace：マップに戻る' },
+  { k:['ショートカット','shortcut','キーボード','keyboard','コマンドバー','コマンド','/agents','/wallet'],
+    a:'キーボードショートカット🧊\n\n🎫 有料パス限定：\nW：ウォレット　A：agents　S：設定\n1〜4：カスタムキー　/ ：コマンドバー\n\n✅ 全員利用可：\nEsc：パネルを閉じる　Backspace：マップに戻る' },
 
   // ── チュートリアル
   { k:['チュートリアル','tutorial','ガイド','入門','使い方ガイド'],
@@ -9859,7 +9806,7 @@ const SP_REIZO_KB = [
 
   // ── おさいふ
   { k:['おさいふ','ウォレット画面','おさいふの見方'],
-    a:'おさいふ（ウォレット）はナビの💰ボタンで開けるよ🧊\n表示内容：\n・EMUER 残高（SchoolPark内の残高）\n・実EMUER（ブロックチェーン上の本物の残高）\n・有料パス / 無料パスの種別\n・EMUER変換（有料パスのみ）' },
+    a:'おさいふ（ウォレット）は上部の💎EMUER残高をタップすると開けるよ🧊\n表示内容：\n・EMUER 残高（SchoolPark内の残高）\n・実EMUER（ブロックチェーン上の本物の残高）\n・有料パス / 無料パスの種別\n・EMUER変換（有料パスのみ）' },
 
   // ── 問い合わせ・サポート
   { k:['問い合わせ','お問い合わせ','contact','サポート','連絡','不具合','バグ','困った'],
@@ -10313,7 +10260,7 @@ function _spIsPaidUser() {
 
     /* ★ 有料パス限定（W / T / A / S / 1〜4） */
     if (!_spIsPaidUser()) {
-      const paid_keys = ['w','t','a','s','1','2','3','4'];
+      const paid_keys = ['w','a','s','1','2','3','4'];
       if (paid_keys.includes(e.key.toLowerCase())) {
         _showAgentToast('🎫 キーボードショートカットは有料パス限定です');
       }
@@ -10322,7 +10269,6 @@ function _spIsPaidUser() {
 
     switch (e.key.toLowerCase()) {
       case 'w': openSpPanel('spWalletPanel');    break;
-      case 't': openTaxi?.();                   break;
       case 'a': openSpPanel('spRobotPanel');     break;
       case 's': openSpPanel('spSettingsPanel'); break;
       case '1': _execCustomKey(1); break;
@@ -10337,7 +10283,6 @@ function _spIsPaidUser() {
     switch (action) {
       case 'agents':   openSpPanel('spRobotPanel');    break;
       case 'wallet':   openSpPanel('spWalletPanel');   break;
-      case 'taxi':     openTaxi?.();                   break;
       case 'settings': openSpPanel('spSettingsPanel'); break;
       case 'tutorial': openSpContent('/schoolpark/tutorial.html'); break;
       case 'reizo':    spReizoOpen?.();                break;
@@ -12403,13 +12348,9 @@ window.addEventListener("message", (e) => {
       }
     });
     closeSpContent();
-    // ナビリンクのアクティブ状態をパークマップに戻す
+    // ナビリンクのアクティブ状態をリセット
     document.querySelectorAll('.spmap-nav-link').forEach(el => el.classList.remove('active'));
-    const mapLink = Array.from(document.querySelectorAll('.spmap-nav-link')).find(el => el.textContent.trim() === 'パークマップ');
-    if (mapLink) mapLink.classList.add('active');
   }
-  // iframeからタクシーモーダルを開く
-  if (e.data.type === "openTaxi") { openTaxi(); }
   // iframeからパネルを開く
   if (e.data.type === "openSpWallet")   { openSpPanel('spWalletPanel'); }
   if (e.data.type === "openSpRobot")    { openSpPanel('spRobotPanel'); }
@@ -12898,9 +12839,6 @@ function spMapFilter(zones, el) {
   _spMapFilter = zones;
   document.querySelectorAll(".spmap-area-item").forEach(i => i.classList.remove("spa-active"));
   if (el) el.classList.add("spa-active");
-  /* 検索をクリア */
-  const searchInput = document.getElementById('spMapSearchInput');
-  if (searchInput) searchInput.value = '';
   closeSpDetail();
   renderSpMapPois(zones);
   renderSpContentList(zones);
@@ -13107,12 +13045,10 @@ function spMapCmdKeydown(e) {
     openSpPanel('spWalletPanel');
   } else if (['settings','設定','s'].includes(cmd)) {
     openSpPanel('spSettingsPanel');
-  } else if (['taxi','タクシー','t'].includes(cmd)) {
-    openTaxi();
   } else if (['map','マップ'].includes(cmd)) {
     closeSpModal();
   } else {
-    _showAgentToast(`❓ コマンド「${raw}」は不明です\nヒント: agents / tutorial / wallet / settings / taxi`);
+    _showAgentToast(`❓ コマンド「${raw}」は不明です\nヒント: agents / tutorial / wallet / settings`);
   }
 }
 
@@ -13189,86 +13125,6 @@ function spEvSwitch(tag) {
   });
 }
 
-/* 検索ワードのハイライト */
-function _spHl(text, q) {
-  if (!q) return text;
-  const idx = text.toLowerCase().indexOf(q.toLowerCase());
-  if (idx < 0) return text;
-  return text.slice(0, idx) +
-    `<mark style="background:rgba(212,168,67,0.35);color:#D4A843;border-radius:2px;padding:0 1px">${text.slice(idx, idx+q.length)}</mark>` +
-    text.slice(idx + q.length);
-}
-
-function spMapSearch(val) {
-  const q = (val || '').trim();
-  const ql = q.toLowerCase();
-
-  /* ① マップ上のPOIマーカーを絞り込み表示 */
-  const container = document.getElementById("spPOIContainer");
-  if (container) {
-    container.querySelectorAll(".spmap-poi-marker").forEach(m => {
-      const poi = SP_POIS.find(p => p.id === m.getAttribute("data-poi"));
-      if (!poi) return;
-      const match = !ql ||
-        poi.name.toLowerCase().includes(ql) ||
-        poi.desc.toLowerCase().includes(ql) ||
-        (SP_ZONES[poi.zone]?.label||'').toLowerCase().includes(ql);
-      m.style.opacity = match ? "1" : "0.1";
-      m.style.pointerEvents = match ? "all" : "none";
-      m.style.transform = match && ql ? "translate(-50%,-50%) scale(1.4)" : "";
-    });
-  }
-
-  /* ② 入力なし → コンテンツ一覧を元に戻す */
-  if (!ql) {
-    renderSpContentList(_spMapFilter);
-    return;
-  }
-
-  /* ③ 一致するPOIをサイドバーに表示（ハイライト付き） */
-  const matched = SP_POIS.filter(p =>
-    p.name.toLowerCase().includes(ql) ||
-    p.desc.toLowerCase().includes(ql) ||
-    (SP_ZONES[p.zone]?.label||'').toLowerCase().includes(ql)
-  );
-
-  const list = document.getElementById("spContentList");
-  if (list) {
-    if (matched.length === 0) {
-      list.innerHTML = `<div class="spmap-content-sep" style="color:#ef4444">「${q}」に該当なし</div>`;
-    } else {
-      let html = `<div class="spmap-content-sep">🔍 「${q}」— ${matched.length}件</div>`;
-      matched.forEach(poi => {
-        const zone = SP_ZONES[poi.zone] || {};
-        html += `<div class="spmap-content-item" id="spcitem-${poi.id}" onclick="spMapSelectPoiFromList('${poi.id}')">
-          <span class="spmap-content-icon">${poi.icon}</span>
-          <div class="spmap-content-info">
-            <div class="spmap-content-name">${_spHl(poi.name, q)}</div>
-            <div class="spmap-content-zone" style="color:${zone.color||'#666'}">${_spHl(zone.sub||zone.label||'', q)}</div>
-          </div>
-        </div>`;
-      });
-      list.innerHTML = html;
-    }
-  }
-
-  /* ④ 1件のみ → 自動で詳細パネル表示 */
-  if (matched.length === 1) spMapSelectPoi(matched[0].id);
-  else closeSpDetail();
-}
-
-function spMapZoomIn() {
-  _spMapZoomLevel = Math.min(2.5, _spMapZoomLevel + 0.25);
-  _applySpMapZoom();
-}
-function spMapZoomOut() {
-  _spMapZoomLevel = Math.max(0.5, _spMapZoomLevel - 0.25);
-  _applySpMapZoom();
-}
-function spMapZoomReset() {
-  _spMapZoomLevel = 1;
-  _applySpMapZoom();
-}
 function _applySpMapZoom() {
   const inner = document.getElementById("spMapInner");
   if (inner) {
@@ -13874,88 +13730,6 @@ function closeEastBuilding(overlayId, frameId) {
   document.body.style.width = "";
 }
 
-/* ════════════════════════════════════════
-   タクシー機能（-3 EMUER / 回）
-   ════════════════════════════════════════ */
-function openTaxi() {
-  const modal = document.getElementById('taxiModal');
-  if (!modal) return;
-  const ZONE_LABELS = {
-    earn:  '🏙️ 東エリア（Life Market）',
-    guard: '🛡️ 西エリア（Guard District）',
-    play:  '🌊 南エリア（Frontier Gate）',
-    learn: '📚 北エリア（Creative Academy）',
-    plaza: '⛲ 中央（Fountain 噴水広場）',
-    life:  '🏡 暮らしエリア',
-    star:  '🌌 星空エリア',
-    dawn:  '🌅 夜明けの広場',
-  };
-  const zones = {};
-  SP_POIS.filter(p => p.status === 'open' && (p.page || p.eastKey || p.action)).forEach(p => {
-    (zones[p.zone] = zones[p.zone] || []).push(p);
-  });
-  let html = '';
-  Object.entries(zones).forEach(([zone, pois]) => {
-    html += `<div style="font-size:0.7rem;color:#8B6914;font-weight:700;margin:12px 0 5px;letter-spacing:0.04em">${ZONE_LABELS[zone]||zone}</div>`;
-    pois.forEach(p => {
-      html += `<button onclick="taxiGoTo('${p.id}')"
-        style="width:100%;text-align:left;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
-        border-radius:8px;padding:9px 13px;cursor:pointer;color:#e0e0e0;font-size:0.82rem;
-        display:flex;align-items:center;gap:10px;transition:background 0.15s;"
-        onmouseover="this.style.background='rgba(212,168,67,0.12)'"
-        onmouseout="this.style.background='rgba(255,255,255,0.04)'">
-        <span style="font-size:1.15rem;flex-shrink:0">${p.icon}</span>
-        <span>${p.name}</span>
-        <span style="margin-left:auto;font-size:0.7rem;color:#8B6914;flex-shrink:0">-3 💎</span>
-      </button>`;
-    });
-  });
-  document.getElementById('taxiDestList').innerHTML = html;
-  modal.style.display = 'flex';
-  modal.style.alignItems = 'center';
-  modal.style.justifyContent = 'center';
-}
-
-function closeTaxi() {
-  const modal = document.getElementById('taxiModal');
-  if (modal) modal.style.display = 'none';
-}
-
-function taxiGoTo(poiId) {
-  // タクシー料金（3 EMUER）を先に徴収
-  gatedOpen('taxi_ride', () => {
-    const poi = _findPoi(poiId);
-    if (!poi) return;
-    // コンテンツ利用料も徴収（0EMUERのPOIはそのまま通過）
-    gatedOpen(poi.id, () => {
-      closeTaxi();
-      // すべての東エリアオーバーレイを閉じる
-      ['eastHotelOverlay','eastHotel2Overlay','eastMansionOverlay',
-       'eastYakuyaOverlay','eastFruitsOverlay','eastCoffeeOverlay','eastHouseOverlay'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el && el.style.display !== 'none') {
-          const frame = el.querySelector('iframe');
-          if (frame) frame.src = '';
-          el.style.display = 'none';
-        }
-      });
-      if (poi.eastKey) {
-        // 東エリア施設
-        const spMap = document.getElementById('spMapOverlay');
-        if (spMap) spMap.style.display = 'none';
-        document.documentElement.style.overflow = 'hidden';
-        document.body.style.overflow = 'hidden';
-        document.body.style.position = 'fixed';
-        document.body.style.width = '100%';
-        openEastBuilding(poi.eastKey);
-      } else if (poi.action) {
-        if (typeof window[poi.action] === 'function') window[poi.action]();
-      } else if (poi.page) {
-        openSpContent(poi.page);
-      }
-    });
-  });
-}
 function openRingoGame() {
   // 2026-04-18（水）23:59 JST まで有料ユーザー先行公開
   var earlyAccessDeadline = new Date('2026-04-18T23:59:59+09:00');
@@ -15821,7 +15595,7 @@ window.fbLib = {
           </div>
           <div style="display:flex;align-items:flex-start;gap:10px;font-size:0.8rem;">
             <span style="color:#D4A843;flex-shrink:0;width:20px;text-align:center;">⑤</span>
-            <span style="color:#bbb;line-height:1.6;"><strong>🚕 タクシー</strong>（3 EMUER）で好きな施設に瞬間移動</span>
+            <span style="color:#bbb;line-height:1.6;">上部の<strong style="color:#D4A843">💎 EMUER残高</strong>をタップするとウォレットが開く</span>
           </div>
         </div>
       </div>
