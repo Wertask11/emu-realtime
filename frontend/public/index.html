@@ -460,7 +460,6 @@
 }
 #emuerHud:hover { background:rgba(212,168,67,0.22); }
 #emuerHudVal { font-size:0.82rem; font-weight:700; color:#D4A843; font-family:'Noto Sans JP',sans-serif; }
-#emuerHudLabel { font-size:0.68rem; color:#a07830; }
 #emuerHudLow { font-size:0.65rem; color:#ef4444; font-weight:700; display:none; }
 /* ── EMUER制限オーバーレイ ── */
 #emuerRestrictOverlay {
@@ -1145,14 +1144,14 @@
   .spmap-nav::-webkit-scrollbar { display:none; }
 
   /* CSS orderで並び替え:
-     1:SchoolPark  2:EMUER  3:アイコン群  4:ナビリンク  5:冷蔵庫  6:☰ */
-  .spmap-brand        { order:1; flex-shrink:0; flex-grow:0; border-right:1px solid rgba(139,105,20,0.3); padding:0 10px; margin-right:0; }
-  #emuerHud           { order:2; flex-shrink:0; flex-grow:0; margin-left:0; padding:3px 8px; }
-  .sp-icon-btn-bar    { order:3; flex-shrink:0; flex-grow:0; padding:0 4px; gap:3px; }
+     1:☰  2:冷蔵庫くん  3:CHES  4:EMUER残高  5:ナビリンク(グルメ/ショッピング)  6:設定 */
+  .spmap-menu-btn     { order:1; flex-shrink:0; flex-grow:0; margin-left:0; margin-right:2px; display:flex; align-items:center; }
+  .spmap-reizo-btn    { order:2; flex-shrink:0; flex-grow:0; }
+  .spmap-brand        { order:3; flex-shrink:0; flex-grow:0; border-right:1px solid rgba(139,105,20,0.3); padding:0 10px; margin-right:0; }
+  #emuerHud           { order:4; flex-shrink:0; flex-grow:0; margin-left:0; padding:3px 8px; }
   /* nav-links: min-width:max-content で全リンク幅を確保、親のscrollで表示 */
-  .spmap-nav-links    { order:4; flex:none; min-width:max-content; overflow:hidden; display:flex; }
-  .spmap-reizo-btn    { order:5; flex-shrink:0; flex-grow:0; }
-  .spmap-menu-btn     { order:6; flex-shrink:0; flex-grow:0; margin-left:2px; }
+  .spmap-nav-links    { order:5; flex:none; min-width:max-content; overflow:hidden; display:flex; }
+  .sp-icon-btn-bar    { order:6; flex-shrink:0; flex-grow:0; padding:0 4px; gap:3px; }
   .spmap-cmd-wrap     { order:7; display:none !important; }
 
   /* ブランド */
@@ -1212,7 +1211,6 @@
 
   /* EMUER文字も少し小さく */
   #emuerHudVal  { font-size:0.75rem; }
-  #emuerHudLabel { font-size:0.62rem; }
 }
 
 /* ステップ */
@@ -3296,7 +3294,6 @@ body.paypay-mode #pp-post-fab {
     <div id="emuerHud" title="タップでウォレットを開く" onclick="openSpPanel('spWalletPanel')" style="cursor:pointer;">
       <span style="font-size:0.8rem">💎</span>
       <span id="emuerHudVal">---</span>
-      <span id="emuerHudLabel">EMUER</span>
       <span id="emuerHudLow">⚠️残少</span>
     </div>
     <div class="sp-icon-btn-bar">
@@ -16827,11 +16824,27 @@ function toggleChesMenu(e) {
   if (e) e.stopPropagation();
   closeSpNotifPanel();
   const menu = document.getElementById('chesMenu');
-  if (menu) menu.classList.toggle('open');
+  if (!menu) return;
+  const willOpen = !menu.classList.contains('open');
+  menu.classList.toggle('open');
+  // モバイル（fixed配置）ではCHESボタン直下に位置を合わせる
+  if (willOpen && window.matchMedia('(max-width:900px)').matches) {
+    const brandBtn = document.querySelector('.spmap-brand-btn');
+    if (brandBtn) {
+      const r = brandBtn.getBoundingClientRect();
+      // 画面右端をはみ出さないようクランプ
+      const menuW = menu.offsetWidth || 170;
+      const left = Math.max(4, Math.min(r.left, window.innerWidth - menuW - 4));
+      menu.style.left = left + 'px';
+    }
+  } else {
+    // デスクトップ（absolute配置）ではインライン位置指定をクリア
+    menu.style.left = '';
+  }
 }
 function closeChesMenu() {
   const menu = document.getElementById('chesMenu');
-  if (menu) menu.classList.remove('open');
+  if (menu) { menu.classList.remove('open'); menu.style.left = ''; }
 }
 function chesMenuGo(brand) {
   closeChesMenu();
