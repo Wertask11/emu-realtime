@@ -1226,14 +1226,12 @@ textarea { width:100%; height:60px; margin-top:10px; resize:none; }
 .nextBtn {position: absolute;bottom:-20px;right:20px;z-index: 10;}
 .reply-quote {font-size: 0.75em;opacity: 0.6;border-left: 3px solid #aaa;padding-left: 6px;margin-bottom: 4px;cursor: pointer;}
 .reply-quote:hover {opacity: 1;background: rgba(0,0,0,0.05);}
-body.guest .free-only,body.guest .paid-only {display: none;}
 body.free .paid-only {display: none;}
 
 /*　投稿バッジ　*/
 .badge {font-size: 11px;padding: 2px 6px;border-radius: 6px;margin-left: 6px;vertical-align: middle;font-weight: bold;}
 .badge-paid {background: #e6ffe6;color: #1e8e3e;}
 .badge-free {background: #e6f0ff;color: #1a73e8;}
-.badge-guest {background: #f0f0f0;color: #666;}
 
 /*推し共*/
 .emu-custom-slot {
@@ -3593,7 +3591,7 @@ body.paypay-mode #pp-post-fab {
 
 <button class="action-good free-only paid-only">👍</button>
 <button class="action-change free-only paid-only">👍</button>
-<button class="action-post guest-only free-only paid-only">投稿</button>
+<button class="action-post free-only paid-only">投稿</button>
 
 
     <!-- 右サイドバー -->
@@ -4618,18 +4616,9 @@ function startAirdropCounter() {
 startAirdropCounter();
 document.addEventListener("DOMContentLoaded", async () => {
   const walletAddressButton = document.getElementById("walletAddressButton");
-  const userMode = localStorage.getItem("userMode"); // ★ゲストかどうかを確認
   const auth = localStorage.getItem("emu_auth");
 
-  // 1. まずゲスト判定を先に行う
-  if (userMode === "guest" && walletAddressButton) {
-    console.log("👤 Guestモード表示を適用します");
-    walletAddressButton.textContent = "👤 ゲスト利用中";
-    walletAddressButton.style.color = "#aaa";
-    return; // ゲストならここで処理終了（ウォレット復元は不要）
-  }
-
-  // 2. ゲストじゃない場合のみ、今までのウォレット復元処理をする
+  // ウォレット復元処理
   if (!auth) return;
   const parsed = JSON.parse(auth);
   if (!window.ethereum) return;
@@ -10356,8 +10345,7 @@ logoScreen.addEventListener("click", () => {
 document.getElementById("agreeTerms").addEventListener("change", function() {
   const buttons = [
     document.getElementById("connectWalletButton"),
-    document.getElementById("freeNftButton"),
-    document.getElementById("guestButton")
+    document.getElementById("freeNftButton")
   ];
   buttons.forEach(btn => {
     if (!btn) return; // 存在しないボタンはスキップ
@@ -11016,12 +11004,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const userType = getCurrentUserType();
     console.log("👤 userType:", userType);
 
-    // ゲストは完全禁止
-    if (userType === "guest") {
-      alert("ゲストは取引所を利用できません");
-      return;
-    }
-
     // 無料は週1（月曜）
     if (userType === "free" && !canUseExchange()) {
       alert("無料ユーザーは週1回（毎週月曜日のみ）ご利用いただけます。");
@@ -11045,11 +11027,6 @@ function getPosterId() {
     return window.connectedAccount.toLowerCase();
   }
 
-  // ゲスト
-  if (window.emuAuth?.type === "guest") {
-    return "guest:" + window.emuAuth.guestId;
-  }
-
   // それ以外（ありえないが保険）
   return "unknown";
 }
@@ -11060,14 +11037,6 @@ function getAuthorInfo() {
     return {
       authorId: window.connectedAccount.toLowerCase(),
       userType: "wallet" // paid or free
-    };
-  }
-
-  // ゲスト
-  if (window.emuAuth?.type === "guest") {
-    return {
-      authorId: "guest:" + window.emuAuth.guestId,
-      userType: "guest"
     };
   }
 
@@ -11114,8 +11083,7 @@ function getUserTypeBadge(type, address) {
   let badge = '';
   switch (type) {
     case 'paid':  badge = `<span class="badge badge-paid">有料利用者</span>`; break;
-    case 'free':  badge = `<span class="badge badge-free">無料利用者</span>`; break;
-    default:      badge = `<span class="badge badge-guest">ゲスト利用者</span>`;
+    default:      badge = `<span class="badge badge-free">無料利用者</span>`;
   }
 
   if (address) {
@@ -11206,13 +11174,6 @@ document.querySelectorAll(".theme-specific-button").forEach(btn => {
 
 /* ======= 下書き ======= */
 saveDraftButton.addEventListener("click", function () {
-  const userType = getCurrentUserType();
-
-  if (userType === "guest") {
-    alert("ゲストは下書き機能を利用できません");
-    return;
-  }
-
   if (isFreeOnlyUser()) {
     alert("この機能は有料NFTユーザー限定です");
     return;
@@ -11437,8 +11398,6 @@ async function attachReactionHandlers(postElement) {
   const goodButton = postElement.querySelector(".good-button");
   if (goodButton) {
     goodButton.addEventListener("click", async () => {
-      const type = getCurrentUserType();
-      if (type === "guest") return showUpgradeModal("guestToWallet");
       if (!myAddr) return alert("ウォレットを接続してください");
 
       // 【不正防止1】自分の投稿には押せない
@@ -11478,8 +11437,6 @@ async function attachReactionHandlers(postElement) {
   const changeButton = postElement.querySelector(".change-button");
   if (changeButton) {
     changeButton.addEventListener("click", async () => {
-      const type = getCurrentUserType();
-      if (type === "guest") return showUpgradeModal("guestToWallet");
       if (!myAddr) return alert("ウォレットを接続してください");
 
       // 【不正防止1】自分の投稿には押せない
@@ -11580,19 +11537,18 @@ ${getUserTypeBadge(post.userType, post.address)}
 
 function normalizeUserType(rawType) {
   if (rawType === "paidNFT") return "paid";
-  if (rawType === "freeNFT") return "free";
-  return "guest";
+  return "free";
 }
 
 function createPostData({ title, body, tags }) {
-  const auth = window.emuAuth || { type: "guest" };
+  const auth = window.emuAuth || { type: "freeNFT" };
 
   return {
     id: Date.now(),
     title,
     body,
     tags,
-    userId: auth.address || auth.guestId || "guest",
+    userId: auth.address || "unknown",
     userType: normalizeUserType(auth.type),
     createdAt: new Date().toISOString()
   };
@@ -11923,20 +11879,20 @@ function updateConvertButton() {
   const day = now.getDay(); 
   
   // window.hasPaidNFT や window.hasFreeNFT は接続コードの中で判定されているはず
-  let userType = "guest";
+  let userType = "none";
   if (window.hasPaidNFT) {
     userType = "paidNFT";
   } else if (window.hasFreeNFT) {
     userType = "freeNFT";
   } else if (window.connectedAccount) {
     // ウォレットは繋がっているがNFTがない状態（必要なら）
-    userType = "walletUser"; 
+    userType = "walletUser";
   }
 
   console.log("--- 変換ボタンの状態チェック ---");
   console.log("判定された種別:", userType);
 
-  // 1. 【ゲスト】チェック（アドレスすら無い場合）
+  // 1. 【ウォレット未接続】チェック（アドレスすら無い場合）
   if (!window.connectedAccount && !isTestMode) {
     lockButton(convertBtn, "ウォレットを接続してください");
     return;
@@ -11989,16 +11945,16 @@ function unlockButton(btn, text) {
 /* ======= 3. 変換実行処理（一括処理） ======= */
 async function handleConversion() {
   // --- 判定ロジックを updateConvertButton と同じものに修正 ---
-  let userType = "guest";
+  let userType = "none";
   if (window.hasPaidNFT) {
     userType = "paidNFT";
   } else if (window.hasFreeNFT) {
     userType = "freeNFT";
   }
 
-  // ゲストを弾く
-  if (userType === "guest" && !isTestMode) {
-    alert("ゲストユーザーは変換機能を利用できません。");
+  // NFT非保有ユーザーを弾く
+  if (userType === "none" && !isTestMode) {
+    alert("変換機能を利用するにはNFT（無料 / 有料パス）が必要です。");
     return;
   }
 
@@ -12069,10 +12025,6 @@ let replyTarget = null;
 // Explore / Room 制御
 // =====================
 document.getElementById("exploreBtn").onclick = () => {
-  if (getCurrentUserType() === "guest") {
-    showUpgradeModal("guestToWallet"); 
-    return;
-  }
   document.getElementById("exploreOverlay").style.display = "flex";
 };
 
@@ -13645,17 +13597,11 @@ function _scheduleFw() {
 
 
 function getCurrentUserType() {
-  // 1. ゲスト判定
-  if (localStorage.getItem("userMode") === "guest") return "guest";
-
-  // 2. 有料NFT判定（window.checkHexaNFT の結果を使う）
+  // 1. 有料NFT判定（window.checkHexaNFT の結果を使う）
   if (window.hasPaidNFT) return "paid";
 
-  // 3. 無料NFT判定（もしあれば）
-  if (window.hasFreeNFT) return "free";
-
-  // 4. 何も持っていなければデフォルトで free (または guest)
-  return "guest"; 
+  // 2. それ以外はすべて無料ユーザー（ウォレット接続が前提）
+  return "free";
 }
 
 
@@ -14287,15 +14233,12 @@ async function filterNewPosts() {
 // ✅ ボタンのイベント登録
 document.getElementById("filterTrendBtn")?.addEventListener("click", filterTrendPosts);
 document.getElementById("filterNewBtn")?.addEventListener("click", () => {
-  const type = getCurrentUserType();
-  if (type === "guest") return showUpgradeModal("guestToWallet");
   filterNewPosts();
 });
 
 // 👍 Goodボタン
 document.getElementById("filterGoodBtn")?.addEventListener("click", () => {
   const userType = getCurrentUserType();
-  if (userType === "guest") return showUpgradeModal("guestToWallet");
   if (userType === "free") return showUpgradeModal("freeToPaid");
   filterHighGoodPosts();
 });
@@ -14303,7 +14246,6 @@ document.getElementById("filterGoodBtn")?.addEventListener("click", () => {
 // 🤝 Changeボタン
 document.getElementById("filterChangeBtn")?.addEventListener("click", () => {
   const userType = getCurrentUserType();
-  if (userType === "guest") return showUpgradeModal("guestToWallet");
   if (userType === "free") return showUpgradeModal("freeToPaid");
   filterHighChangePosts();
 });
@@ -14386,9 +14328,6 @@ async function filterHighChangePosts() {
 const recommendBtn = document.getElementById("filterRecommendBtn");
 if (recommendBtn) {
   recommendBtn.addEventListener("click", () => {
-    const type = getCurrentUserType();
-    if (type === "guest") return showUpgradeModal("guestToWallet");
-
     console.log("✅ おすすめボタンが押されました");
     filterRecommendedPosts(); // Firebaseから取得する関数を呼ぶ
   });
@@ -14401,7 +14340,6 @@ if (searchInput) {
   searchInput.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     const userType = getCurrentUserType();
-    if (userType === "guest") return showUpgradeModal("guestToWallet");
     if (userType === "free") return showUpgradeModal("freeToPaid");
 
     executeSearch(searchInput.value.trim());
@@ -14461,9 +14399,6 @@ async function executeSearch(keyword) {
 // 左側マイライブラリーボタン
 // 👍 自分がGoodした記事を取得
 async function getMyGoodPosts() {
-  const type = getCurrentUserType();
-  if (type === "guest") return showUpgradeModal("guestToWallet");
-
   const myAddr = window.connectedAccount?.toLowerCase();
   if (!myAddr) return alert("ウォレットを接続してください");
 
@@ -14498,9 +14433,6 @@ async function getMyGoodPosts() {
 
 // 🤝 自分がChangeした記事を取得
 async function getMyChangePosts() {
-  const type = getCurrentUserType();
-  if (type === "guest") return showUpgradeModal("guestToWallet");
-
   const myAddr = window.connectedAccount?.toLowerCase();
   if (!myAddr) return alert("ウォレットを接続してください");
 
@@ -14745,8 +14677,7 @@ window.addEventListener("load", restoreAuth);
 
 function resolveUserType() {
   if (window.hasPaidNFT) return "paid";
-  if (window.hasFreeNFT) return "free";
-  return "guest";
+  return "free";
 }
 
 window.userType = resolveUserType();
@@ -14754,16 +14685,6 @@ window.userType = resolveUserType();
 
 //アクセス管理
 const ACCESS = {
-  guest: {
-    view: true,
-    good: false,
-	change: false,
-    comment: false,
-    post: true,
-    room1: false,
-    room2: true,
-	room3: false
-  },
   free: {
     view: true,
     good: true,
@@ -14791,7 +14712,7 @@ function can(action) {
 }
 
 function applyAccessControl() {
-  document.body.classList.remove("guest", "free", "paid");
+  document.body.classList.remove("free", "paid");
   document.body.classList.add(window.userType);
 
   toggle(".btn-post", can("post"));
@@ -14821,13 +14742,6 @@ function onPost() {
 
 function goToRoom(room) {
 
-  // ✅ ゲストは探索不可
-  if (isGuestUser()) {
-    alert("ゲストは探索機能（ルーム）を利用できません");
-    console.log("🚫 guest blocked:", room);
-    return;
-  }
-
   // 既存のアクセス制御
   if (!can(room)) {
     alert("このルームは利用できません");
@@ -14842,7 +14756,6 @@ function canConvert() {
 
   if (window.userType === "paid") return true;
   if (window.userType === "free") return checkWeeklyLimit("convert");
-  if (window.userType === "guest") return checkWeeklyLimit("convert");
 
   return false;
 }
@@ -14852,79 +14765,8 @@ function canExchange() {
 
   if (window.userType === "paid") return true;
   if (window.userType === "free") return checkWeeklyLimit("exchange");
-  if (window.userType === "guest") return checkMonthlyLimit("exchange");
 
   return false;
-}
-
-function isGuestUser() {
-  return !window.currentUserId;
-}
-
-function applyGuestRestrictions() {
-  if (!isGuestUser()) return;
-
-  console.log("⚪ ゲスト制限を適用");
-
-  /* ===== 探索ボタン（room1,2,3） ===== */
-  document.querySelectorAll(".explore-button").forEach(btn => {
-    btn.disabled = true;
-    btn.classList.add("disabled");
-    btn.title = "ゲストは探索機能を利用できません";
-  });
-
-  /* ===== 下書き ===== */
-  const draftBtn = document.getElementById("draftButton");
-  if (draftBtn) {
-    draftBtn.disabled = true;
-    draftBtn.classList.add("disabled");
-  }
-
-  /* ===== 検索 ===== */
-  const searchInput = document.getElementById("searchInput");
-  const searchBtn = document.getElementById("searchButton");
-
-  if (searchInput) {
-    searchInput.disabled = true;
-    searchInput.placeholder = "ゲストは検索機能を利用できません";
-  }
-  if (searchBtn) {
-    searchBtn.disabled = true;
-  }
-}
-
-//ゲスト（guest）ログイン処理
-window.onGuestClick = function () {
-  console.log("👤 Guest Login");
-
-  window.emuAuth = {
-    type: "guest",
-    guestId: crypto.randomUUID(),
-    createdAt: Date.now()
-  };
-
-  // ★ これを追加：メイン画面が「あ、ゲストだ」と一目でわかるフラグ
-  localStorage.setItem("userMode", "guest"); 
-  localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
-
-  window.hasFreeNFT = false;
-  window.hasPaidNFT = false;
-  window.hasOfficialNFT = false;
-
-  applyGuestRestrictions();
-
-  console.log("🏫 Guest → メイン画面へ");
-  goTomainapp();
-};
-
-
-function blockGuest(featureName) {
-  const userType = getCurrentUserType();
-  if (userType === "guest") {
-    alert(`ゲストは${featureName}を利用できません`);
-    return true; // ← ブロックした
-  }
-  return false; // ← 通してOK
 }
 
 function isFreeOnlyUser() {
@@ -14968,7 +14810,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   uploadLabel.innerText = "🔒 読み込み中...";
 
   const applyGuestLock = () => {
-    uploadLabel.innerText = "🔒 ゲスト利用不可";
+    uploadLabel.innerText = "🔒 ウォレット未接続";
     customSlot.onclick = () => showUpgradeModal("guestToWallet");
   };
 
@@ -15076,10 +14918,6 @@ const intervalId = setInterval(async () => {
 
 // ログボ実行関数
 async function handleLoginBonus() {
-if (getCurrentUserType() === "guest") {
-    showUpgradeModal("guestToWallet");
-    return;
-  }
   const btn = document.getElementById("loginBonusBtn");
   try {
     btn.disabled = true;
