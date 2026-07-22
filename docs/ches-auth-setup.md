@@ -49,30 +49,37 @@ Firebase コンソール（プロジェクト `emusch-2a111`）:
    - 例: `https://schoolpark-emu.vercel.app/`
 4. スコープ `profile openid email` を有効化（email を使う場合はメール取得申請が必要）。
 
-### 2-2. バックエンド環境変数（Vercel など）
+### 2-2. バックエンド環境変数（**Render**）
 
-`backend/server.js` の `/api/auth/line` が使用:
+`backend/server.js`（＝**Render** にデプロイ）の `POST /api/auth/line` が使用します。
+フロント（Vercel）とバックエンド（Render）は別オリジンのため、フロントは既定で
+`https://emu-realtime.onrender.com/api/auth/line` を呼びます。よって変数は **Render の
+Environment に設定**してください（Vercel ではありません）:
 
-| 変数 | 値 |
+| 変数（Render） | 値 |
 |---|---|
 | `LINE_CHANNEL_ID` | LINE Login チャネルの Channel ID |
 | `LINE_CHANNEL_SECRET` | 同 Channel Secret（**フロントに置かない**） |
+
+> ※ `FIREBASE_SERVICE_ACCOUNT`（custom token 発行に必須）は既に Render に設定済み。
 
 ### 2-3. フロント設定（Channel ID / コールバックURL）
 
 `frontend/public/index.html` の CHES レイヤーは以下の優先順で設定を読みます:
 
-1. `window.CHES_CONFIG`（`index.html` 内に定義すれば固定化できる）
+1. `window.CHES_CONFIG`（`index.html` 内に**既にオーナー記入欄を用意済み**）
 2. `localStorage`（`CHES_LINE_CHANNEL_ID` / `CHES_LINE_REDIRECT_URI`）— 検証に便利
-3. 既定値（`lineRedirectUri` = `location.origin + "/"`、`lineTokenEndpoint` = `/api/auth/line`）
+3. 既定値（`lineRedirectUri` = `location.origin + "/"`、`lineTokenEndpoint` =
+   `https://emu-realtime.onrender.com/api/auth/line`）
 
-本番固定するなら、`</head>` などに次を追加:
+**本番手順はシンプル**：`index.html` 内の「CHES ログイン設定（オーナー記入欄）」コメント直下の
+`window.CHES_CONFIG` の `lineChannelId` に Channel ID を入れるだけ（Channel ID は公開値でOK）。
 
 ```html
 <script>
   window.CHES_CONFIG = {
-    lineChannelId: "＜あなたのChannel ID＞",
-    lineRedirectUri: "https://schoolpark-emu.vercel.app/"
+    lineChannelId: "＜あなたのChannel ID＞",   // ← ここだけ埋める
+    lineRedirectUri: location.origin + "/"     // 通常このままでOK（本番= https://schoolpark-emu.vercel.app/ ）
   };
 </script>
 ```
