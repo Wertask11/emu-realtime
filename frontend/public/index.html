@@ -3107,7 +3107,7 @@ body.paypay-mode #pp-post-fab {
       <div class="ches-consent-divider"></div>
       <div class="ches-consent">
         ログインまたは登録することで、<br>
-        <a href="/terms.html" target="_blank">利用規約</a>・<a href="/privacy.html" target="_blank">プライバシーポリシー</a>に同意したものとみなします。
+        <a href="/terms.html" onclick="openLegal('terms');return false;">利用規約</a>・<a href="/privacy.html" onclick="openLegal('privacy');return false;">プライバシーポリシー</a>に同意したものとみなします。
       </div>
 
       <p id="walletStatus"></p>
@@ -16835,10 +16835,72 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
+<!-- 利用規約 / プライバシーポリシー ポップアップ -->
+<div id="chesLegalModal" class="ches-legal-modal" style="display:none;">
+  <div class="ches-legal-backdrop" onclick="closeLegal()"></div>
+  <div class="ches-legal-sheet">
+    <div class="ches-legal-head">
+      <span id="chesLegalTitle">利用規約</span>
+      <button type="button" class="ches-legal-close" onclick="closeLegal()" aria-label="閉じる">✕</button>
+    </div>
+    <iframe id="chesLegalFrame" title="規約" src="about:blank"></iframe>
+  </div>
+</div>
+<style>
+.ches-legal-modal { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.ches-legal-backdrop { position: absolute; inset: 0; background: rgba(20,15,40,0.5); backdrop-filter: blur(2px); }
+.ches-legal-sheet {
+  position: relative; z-index: 1; width: 100%; max-width: 560px; height: 85vh; max-height: 85vh;
+  background: #fff; border-radius: 18px; overflow: hidden;
+  display: flex; flex-direction: column; box-shadow: 0 24px 60px -20px rgba(0,0,0,0.5);
+  animation: chesLegalIn .2s ease;
+}
+@keyframes chesLegalIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+.ches-legal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid #eee; flex-shrink: 0;
+  font-family: 'Noto Sans JP', sans-serif; font-weight: 700; font-size: 15px; color: #1a1840;
+}
+.ches-legal-close {
+  background: #f2f2f5; border: none; width: 30px; height: 30px; border-radius: 50%;
+  cursor: pointer; font-size: 14px; color: #666; line-height: 1;
+  display: flex; align-items: center; justify-content: center; transition: background .15s;
+}
+.ches-legal-close:hover { background: #e6e6ea; }
+#chesLegalFrame { flex: 1; width: 100%; border: none; background: #fff; }
+</style>
+
 <!-- ============================================================
      CHES Identity レイヤー（LINE / Google 認証 → CHESアカウント/
      ウォレット/Membership 自動生成 → SchoolPark 入園）
      ============================================================ -->
+<script>
+  window.openLegal = function (kind) {
+    var modal = document.getElementById('chesLegalModal');
+    var frame = document.getElementById('chesLegalFrame');
+    var title = document.getElementById('chesLegalTitle');
+    if (!modal || !frame) return;
+    frame.src = kind === 'privacy' ? '/privacy.html' : '/terms.html';
+    if (title) title.textContent = kind === 'privacy' ? 'プライバシーポリシー' : '利用規約';
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  };
+  window.closeLegal = function () {
+    var modal = document.getElementById('chesLegalModal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    var frame = document.getElementById('chesLegalFrame');
+    if (frame) frame.src = 'about:blank';
+    document.body.style.overflow = '';
+  };
+  // Esc で閉じる
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      var modal = document.getElementById('chesLegalModal');
+      if (modal && modal.style.display === 'flex') window.closeLegal();
+    }
+  });
+</script>
 <script>
 (function () {
   "use strict";
