@@ -2947,6 +2947,33 @@ body.paypay-mode #pp-post-fab {
   box-shadow: 0 6px 18px -8px rgba(124,95,230,0.35);
   transform: translateY(-1px);
 }
+/* ===== CHES Identity ボタン（LINE / Google） ===== */
+.ches-btn-col { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+.ches-btn {
+  width: 100%; height: 54px; border-radius: 999px; border: none;
+  font-family: inherit; font-weight: 700; font-size: 15px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  cursor: not-allowed; opacity: 0.45; transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+}
+.ches-btn:not([disabled]) { cursor: pointer; opacity: 1; }
+.ches-btn:not([disabled]):hover { transform: translateY(-1px); }
+.ches-btn-ico { display: inline-flex; align-items: center; justify-content: center; }
+.ches-btn-line { background: #06C755; color: #fff; box-shadow: 0 10px 22px -10px rgba(6,199,85,0.6); }
+.ches-btn-line .ches-btn-ico { color: #fff; }
+.ches-btn-line:not([disabled]):hover { box-shadow: 0 14px 28px -10px rgba(6,199,85,0.7); }
+.ches-btn-google { background: #fff; color: #3c4043; border: 1.5px solid #dadce0; box-shadow: 0 4px 14px -8px rgba(60,64,67,0.35); }
+.ches-btn-google:not([disabled]):hover { box-shadow: 0 8px 20px -8px rgba(60,64,67,0.4); background: #f8f9fb; }
+
+/* ===== その他の方法（MetaMask 有料パス） ===== */
+.ches-advanced { margin-top: 12px; text-align: center; }
+.ches-adv-toggle {
+  background: transparent; border: none; cursor: pointer;
+  font-family: inherit; font-size: 11px; font-weight: 600;
+  color: rgba(26,24,64,0.5); letter-spacing: 0.03em; padding: 4px 8px;
+}
+.ches-adv-toggle:hover { color: rgba(26,24,64,0.8); }
+.ches-adv-panel { margin-top: 10px; }
+
 #termsAgreement { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; margin-bottom: 6px; }
 .ws-checkbox-vis {
   width: 14px; height: 14px; min-width: 14px; margin-top: 1px;
@@ -3046,17 +3073,19 @@ body.paypay-mode #pp-post-fab {
         <div id="progressBar" style="display:none;width:0%"></div>
       </div>
 
-      <div class="ws-btn-row">
-        <button id="connectWalletButton" disabled>
-          <span>🎟️</span><span>有料パス</span>
-          <span class="ws-btn-shimmer"></span>
+      <div class="ches-btn-col">
+        <button id="chesLineButton" class="ches-btn ches-btn-line" onclick="window.CHES && window.CHES.startLine()" disabled>
+          <span class="ches-btn-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 2C6.48 2 2 5.69 2 10.24c0 4.08 3.55 7.5 8.35 8.14.32.07.77.21.88.49.1.25.06.64.03.9l-.14.85c-.04.25-.2.98.86.54 1.06-.45 5.7-3.36 7.78-5.75C21.28 14 22 12.2 22 10.24 22 5.69 17.52 2 12 2Z"/></svg>
+          </span>
+          <span>LINEではじめる</span>
         </button>
-        <div class="ws-free-wrap">
-          <span class="ws-free-badge">初めての方はこちら</span>
-          <button id="freeNftButton" onclick="onFreeNftClick()" disabled>
-            <span>🎫</span><span>無料パス</span>
-          </button>
-        </div>
+        <button id="chesGoogleButton" class="ches-btn ches-btn-google" onclick="window.CHES && window.CHES.startGoogle()" disabled>
+          <span class="ches-btn-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M23.06 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h6.2a5.3 5.3 0 0 1-2.3 3.48v2.89h3.72c2.18-2.01 3.44-4.97 3.44-8.38Z"/><path fill="#34A853" d="M12 24c3.12 0 5.73-1.03 7.64-2.8l-3.72-2.89c-1.03.69-2.35 1.1-3.92 1.1-3.01 0-5.56-2.03-6.47-4.77H1.68v2.98A11.99 11.99 0 0 0 12 24Z"/><path fill="#FBBC05" d="M5.53 14.64a7.2 7.2 0 0 1 0-4.6V7.06H1.68a12 12 0 0 0 0 10.56l3.85-2.98Z"/><path fill="#EA4335" d="M12 4.75c1.7 0 3.22.58 4.42 1.72l3.3-3.3C17.72 1.24 15.11 0 12 0 7.31 0 3.26 2.69 1.68 6.56l3.85 2.98C6.44 6.79 8.99 4.75 12 4.75Z"/></svg>
+          </span>
+          <span>Googleではじめる</span>
+        </button>
       </div>
 
       <input type="checkbox" id="agreeTerms" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;">
@@ -3068,6 +3097,16 @@ body.paypay-mode #pp-post-fab {
         </div>
       </div>
       <div class="ws-terms-note">※業務用デバイスでの利用は禁止されています</div>
+
+      <div class="ches-advanced">
+        <button type="button" id="chesAdvancedToggle" class="ches-adv-toggle" onclick="wsToggleAdvanced()">その他の方法で入る ▾</button>
+        <div id="chesAdvancedPanel" class="ches-adv-panel" style="display:none;">
+          <button id="connectWalletButton" disabled>
+            <span>🎟️</span><span>ウォレットで接続（有料パス）</span>
+            <span class="ws-btn-shimmer"></span>
+          </button>
+        </div>
+      </div>
 
       <p id="walletStatus"></p>
     </div>
@@ -3183,6 +3222,16 @@ body.paypay-mode #pp-post-fab {
     if (wsTutStep === 1 && cb.checked) {
       setTimeout(function() { wsTutStep = 2; wsRenderTut(); }, 500);
     }
+  };
+
+  // 「その他の方法で入る」（MetaMask 有料パス）の開閉
+  window.wsToggleAdvanced = function() {
+    var panel = document.getElementById('chesAdvancedPanel');
+    var toggle = document.getElementById('chesAdvancedToggle');
+    if (!panel) return;
+    var open = panel.style.display === 'none' || !panel.style.display;
+    panel.style.display = open ? 'block' : 'none';
+    if (toggle) toggle.textContent = open ? 'その他の方法を閉じる ▴' : 'その他の方法で入る ▾';
   };
 
   var logoEl = document.getElementById('logoScreen');
@@ -4621,6 +4670,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ウォレット復元処理
   if (!auth) return;
   const parsed = JSON.parse(auth);
+  // CHES（LINE / Google）セッションは CHES Identity レイヤーが復元するのでスキップ
+  if (parsed.type === "chesFree" || localStorage.getItem("ches_uid")) return;
   if (!window.ethereum) return;
 
   const provider = new ethers.providers.Web3Provider(window.ethereum);
@@ -10344,8 +10395,9 @@ logoScreen.addEventListener("click", () => {
 // 利用規約チェックボックス制御
 document.getElementById("agreeTerms").addEventListener("change", function() {
   const buttons = [
-    document.getElementById("connectWalletButton"),
-    document.getElementById("freeNftButton")
+    document.getElementById("chesLineButton"),
+    document.getElementById("chesGoogleButton"),
+    document.getElementById("connectWalletButton")
   ];
   buttons.forEach(btn => {
     if (!btn) return; // 存在しないボタンはスキップ
@@ -15317,8 +15369,12 @@ import {
     doc, updateDoc, setDoc, deleteDoc, increment, where,
     arrayUnion, getDoc
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-  // 認証機能（MetaMaskログイン等で使用）も本番用に準備
-  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  // 認証機能（CHES Identity：LINE / Google ログイン、MetaMask等で使用）
+  import {
+    getAuth, signInAnonymously,
+    GoogleAuthProvider, signInWithPopup, signInWithCustomToken,
+    onAuthStateChanged, signOut, setPersistence, browserLocalPersistence
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
   // 【本番用】Firebase設定
   const firebaseConfig = {
@@ -15345,6 +15401,16 @@ window.fbLib = {
     arrayUnion, getDoc,
     signInAnonymously
   };
+
+  // CHES Identity（LINE / Google）用の Auth 窓口
+  window.fbAuth = {
+    GoogleAuthProvider, signInWithPopup, signInWithCustomToken,
+    onAuthStateChanged, signOut, setPersistence, browserLocalPersistence
+  };
+  // セッションをローカル永続化（再訪時に自動サインイン）
+  setPersistence(auth, browserLocalPersistence).catch(() => {});
+  // CHES レイヤーに準備完了を通知
+  window.dispatchEvent(new Event("ches-firebase-ready"));
 
   console.log("🚀 Production Firebase (EmuSch) is Ready!");
 </script>
@@ -16778,6 +16844,295 @@ document.addEventListener('DOMContentLoaded', () => {
     ">閉じる</button>
   </div>
 </div>
+
+<!-- ============================================================
+     CHES Identity レイヤー（LINE / Google 認証 → CHESアカウント/
+     ウォレット/Membership 自動生成 → SchoolPark 入園）
+     ============================================================ -->
+<script>
+(function () {
+  "use strict";
+
+  // ───── 設定（本番の値を入れてください。localStorage で上書きも可） ─────
+  var CHES = {};
+  CHES.config = {
+    // LINE Login チャネルの Channel ID（公開値・フロントに置いてOK）
+    // 例: "1660000000"。未設定なら LINE ボタンは案内を出して停止します。
+    lineChannelId: (window.CHES_CONFIG && window.CHES_CONFIG.lineChannelId)
+      || localStorage.getItem("CHES_LINE_CHANNEL_ID") || "",
+    // LINE のコールバック URL（LINE Developers に登録した URL と完全一致させる）
+    lineRedirectUri: (window.CHES_CONFIG && window.CHES_CONFIG.lineRedirectUri)
+      || localStorage.getItem("CHES_LINE_REDIRECT_URI") || (location.origin + "/"),
+    // LINE トークン交換を行うバックエンドのエンドポイント（同一オリジン想定）
+    lineTokenEndpoint: (window.CHES_CONFIG && window.CHES_CONFIG.lineTokenEndpoint) || "/api/auth/line"
+  };
+
+  // ───── ユーティリティ ─────
+  function statusMsg(text, isError) {
+    var el = document.getElementById("walletStatus");
+    if (!el) return;
+    el.textContent = text || "";
+    el.style.color = isError ? "#c0392b" : "#888";
+    el.style.fontSize = "12px";
+  }
+  function showLoading() { if (typeof _showSpLoadingOverlay === "function") _showSpLoadingOverlay(); }
+  function cancelLoading() { if (typeof _cancelSpLoadingOverlay === "function") _cancelSpLoadingOverlay(); }
+
+  // Firebase の準備を待つ
+  function whenFirebaseReady(cb) {
+    if (window.auth && window.fbAuth && window.db && window.fbLib) return cb();
+    window.addEventListener("ches-firebase-ready", function () { cb(); }, { once: true });
+    // 保険（イベントを取りこぼした場合）
+    var tries = 0;
+    var t = setInterval(function () {
+      if (window.auth && window.fbAuth && window.db && window.fbLib) { clearInterval(t); cb(); }
+      else if (++tries > 40) clearInterval(t);
+    }, 250);
+  }
+
+  // ───── CHESウォレット（アドレスのみ・決定論的生成／秘密鍵なし） ─────
+  CHES.deriveWalletAddress = function (uid) {
+    var seed = "ches-wallet:v1:" + uid;
+    var hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(seed));
+    return ethers.utils.getAddress("0x" + hash.slice(-40));
+  };
+
+  // ───── CHESアカウント検索 → なければ自動作成（+ウォレット+無料Membership） ─────
+  CHES.findOrCreateAccount = async function (user, provider) {
+    var db = window.db, fb = window.fbLib;
+    var uid = user.uid;
+    var walletAddress = CHES.deriveWalletAddress(uid);
+    var ref = fb.doc(db, "ches_accounts", uid);
+    var snap = await fb.getDoc(ref);
+    var now = Date.now();
+
+    if (snap.exists()) {
+      var data = snap.data();
+      // 最終ログイン更新（非ブロッキング）
+      fb.setDoc(ref, { lastLogin: now }, { merge: true }).catch(function () {});
+      return {
+        uid: uid,
+        walletAddress: data.walletAddress || walletAddress,
+        displayName: data.displayName || user.displayName || "",
+        membership: data.membership || { tier: "free", offchain: true, issuedAt: now },
+        provider: data.provider || provider,
+        isNew: false
+      };
+    }
+
+    // 新規：CHESアカウント + ウォレット + 無料Membership（オフチェーン）
+    var account = {
+      uid: uid,
+      provider: provider,
+      providerUid: (user.providerData && user.providerData[0] && user.providerData[0].uid) || uid,
+      displayName: user.displayName || "",
+      email: user.email || "",
+      photoURL: user.photoURL || "",
+      walletAddress: walletAddress,
+      membership: { tier: "free", offchain: true, issuedAt: now },
+      createdAt: now,
+      lastLogin: now
+    };
+    await fb.setDoc(ref, account);
+    // ウォレット逆引き（アドレス→アカウント）
+    fb.setDoc(fb.doc(db, "ches_wallets", walletAddress), {
+      address: walletAddress, uid: uid, type: "address-only", provider: provider, createdAt: now
+    }).catch(function () {});
+
+    return {
+      uid: uid, walletAddress: walletAddress,
+      displayName: account.displayName, membership: account.membership,
+      provider: provider, isNew: true
+    };
+  };
+
+  // ───── SchoolPark へ入園（既存グローバルにアドレスを流し込む） ─────
+  CHES.enterSchoolPark = function (account, provider) {
+    var addr = account.walletAddress;
+    window.connectedAccount = addr;
+    window.currentUserId = addr;
+    try { currentUserId = addr; } catch (e) { /* グローバル束縛が無い場合は無視 */ }
+
+    localStorage.setItem("emuWallet", addr);
+    localStorage.setItem("ches_uid", account.uid);
+    if (account.displayName) localStorage.setItem("ches_name", account.displayName);
+
+    window.emuAuth = { type: "chesFree", address: addr, provider: provider, chesUid: account.uid };
+    localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
+
+    // 無料Membership = free ティア（有料NFTは持たない）
+    window.hasPaidNFT = false;
+    window.hasFreeNFT = false;
+    window.hasOfficialNFT = false;
+    window.userType = "free";
+    localStorage.setItem("spPassType", "free");
+    localStorage.removeItem("userMode");
+
+    var btn = document.getElementById("walletAddressButton");
+    if (btn) {
+      btn.textContent = account.displayName
+        ? account.displayName
+        : (addr.substring(0, 6) + "..." + addr.slice(-4));
+    }
+
+    window._chesEntered = true;
+    if (typeof spTrack === "function") spTrack("free", addr).catch(function () {});
+    if (typeof goTomainapp === "function") goTomainapp();
+  };
+
+  // 認証成功 → 共通フロー（アカウント検索/作成 → 入園）
+  async function completeCommonFlow(user, provider) {
+    try {
+      var account = await CHES.findOrCreateAccount(user, provider);
+      CHES.enterSchoolPark(account, provider);
+    } catch (e) {
+      console.error("[CHES] 共通フロー失敗:", e);
+      cancelLoading();
+      statusMsg("入園処理に失敗しました。時間をおいて再度お試しください。", true);
+      window._chesBusy = false;
+    }
+  }
+
+  // ───── Google ではじめる（Firebase Auth ネイティブ） ─────
+  CHES.startGoogle = function () {
+    if (!document.getElementById("agreeTerms") || !document.getElementById("agreeTerms").checked) {
+      statusMsg("利用規約・プライバシーポリシーへの同意が必要です。", true);
+      return;
+    }
+    window._chesBusy = true;
+    showLoading();
+    whenFirebaseReady(async function () {
+      try {
+        var provider = new window.fbAuth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
+        var result = await window.fbAuth.signInWithPopup(window.auth, provider);
+        await completeCommonFlow(result.user, "google");
+      } catch (e) {
+        console.error("[CHES] Google 認証エラー:", e);
+        cancelLoading();
+        window._chesBusy = false;
+        if (e && e.code === "auth/popup-closed-by-user") {
+          statusMsg("");
+        } else if (e && e.code === "auth/operation-not-allowed") {
+          statusMsg("Google ログインが Firebase で未有効です（コンソール設定が必要）。", true);
+        } else {
+          statusMsg("Google ログインに失敗しました。", true);
+        }
+      }
+    });
+  };
+
+  // ───── LINE ではじめる（認可コードフロー → バックエンドで custom token 発行） ─────
+  CHES.startLine = function () {
+    if (!document.getElementById("agreeTerms") || !document.getElementById("agreeTerms").checked) {
+      statusMsg("利用規約・プライバシーポリシーへの同意が必要です。", true);
+      return;
+    }
+    if (!CHES.config.lineChannelId) {
+      statusMsg("LINE ログインは準備中です（Channel ID 未設定）。", true);
+      console.warn("[CHES] lineChannelId が未設定です。CHES.config を設定してください。");
+      return;
+    }
+    var state = (ethers.utils.hexlify(ethers.utils.randomBytes(16)) || String(Date.now())).replace(/^0x/, "");
+    sessionStorage.setItem("ches_line_state", state);
+    var url = "https://access.line.me/oauth2/v2.1/authorize"
+      + "?response_type=code"
+      + "&client_id=" + encodeURIComponent(CHES.config.lineChannelId)
+      + "&redirect_uri=" + encodeURIComponent(CHES.config.lineRedirectUri)
+      + "&state=" + encodeURIComponent(state)
+      + "&scope=" + encodeURIComponent("profile openid email");
+    window.location.href = url;
+  };
+
+  // LINE コールバック（?code=&state=）をページ読み込み時に検出して完了させる
+  CHES.handleLineCallback = function () {
+    var params = new URLSearchParams(location.search);
+    var code = params.get("code");
+    var state = params.get("state");
+    if (!code || !state) return false;
+    var saved = sessionStorage.getItem("ches_line_state");
+    if (!saved || saved !== state) return false; // 自分が開始した LINE フローでなければ無視
+
+    window._chesBusy = true;
+    sessionStorage.removeItem("ches_line_state");
+    // URL からパラメータを消す（履歴を汚さない）
+    try { window.history.replaceState(null, "", location.origin + location.pathname); } catch (e) {}
+    var logo = document.getElementById("logoScreen"); if (logo) logo.style.display = "none";
+    var ws = document.getElementById("walletScreen"); if (ws) ws.style.display = "none";
+    showLoading();
+
+    whenFirebaseReady(async function () {
+      try {
+        var res = await fetch(CHES.config.lineTokenEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: code, redirectUri: CHES.config.lineRedirectUri })
+        });
+        if (!res.ok) throw new Error("token endpoint " + res.status);
+        var out = await res.json();
+        if (!out.firebaseToken) throw new Error("no firebaseToken");
+        var cred = await window.fbAuth.signInWithCustomToken(window.auth, out.firebaseToken);
+        await completeCommonFlow(cred.user, "line");
+      } catch (e) {
+        console.error("[CHES] LINE 認証エラー:", e);
+        cancelLoading();
+        window._chesBusy = false;
+        if (ws) ws.style.display = "flex";
+        statusMsg("LINE ログインに失敗しました。もう一度お試しください。", true);
+      }
+    });
+    return true;
+  };
+
+  // ───── 再訪時の自動サインイン（認証済みセッションの復元） ─────
+  CHES.setupAutoResume = function () {
+    whenFirebaseReady(function () {
+      window.fbAuth.onAuthStateChanged(window.auth, async function (user) {
+        if (!user) return;
+        if (window._chesEntered || window._chesBusy) return;
+        if (!localStorage.getItem("ches_uid")) return; // CHES 経由で入ったことがある人のみ自動復元
+        var savedAuth = localStorage.getItem("emu_auth");
+        if (savedAuth) {
+          try { if (JSON.parse(savedAuth).type !== "chesFree") return; } catch (e) {}
+        }
+        window._chesBusy = true;
+        var logo = document.getElementById("logoScreen"); if (logo) logo.style.display = "none";
+        var ws = document.getElementById("walletScreen"); if (ws) ws.style.display = "none";
+        showLoading();
+        var provider = "line";
+        try { provider = JSON.parse(savedAuth).provider || "line"; } catch (e) {}
+        await completeCommonFlow(user, provider);
+      });
+    });
+  };
+
+  // ───── ログアウト（CHES セッション破棄） ─────
+  CHES.logout = function () {
+    localStorage.removeItem("ches_uid");
+    localStorage.removeItem("ches_name");
+    localStorage.removeItem("emu_auth");
+    localStorage.removeItem("emuWallet");
+    localStorage.removeItem("spPassType");
+    whenFirebaseReady(function () {
+      window.fbAuth.signOut(window.auth).finally(function () { location.reload(); });
+    });
+  };
+
+  window.CHES = CHES;
+
+  // 起動：LINE コールバックを優先処理。無ければ自動サインインを準備。
+  function boot() {
+    if (!CHES.handleLineCallback()) {
+      CHES.setupAutoResume();
+    }
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+})();
+</script>
 </body>
 </html>
 

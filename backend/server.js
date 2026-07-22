@@ -1404,6 +1404,82 @@ async function _spAddNotification({ title, body, link, contentType, icon }) {
 }
 
 // =====================
+// CHES Identity: LINE ログイン（認可コード → Firebase custom token）
+// 必要な環境変数:
+//   LINE_CHANNEL_ID     … LINE Login チャネルの Channel ID
+//   LINE_CHANNEL_SECRET … 同 Channel Secret（サーバー限定・絶対に公開しない）
+// =====================
+app.post("/api/auth/line", async (req, res) => {
+  const { code, redirectUri } = req.body || {};
+  const CHANNEL_ID = process.env.LINE_CHANNEL_ID;
+  const CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET;
+
+  if (!code || !redirectUri) {
+    return res.status(400).json({ error: "code / redirectUri が必要です" });
+  }
+  if (!CHANNEL_ID || !CHANNEL_SECRET) {
+    console.warn("⚠️ LINE_CHANNEL_ID / LINE_CHANNEL_SECRET 未設定");
+    return res.status(500).json({ error: "LINE ログインはサーバー未設定です" });
+  }
+
+  try {
+    // 1. 認可コード → アクセストークン / IDトークン
+    const tokenRes = await fetch("https://api.line.me/oauth2/v2.1/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectUri,
+        client_id: CHANNEL_ID,
+        client_secret: CHANNEL_SECRET
+      }).toString()
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenRes.ok || !tokenData.id_token) {
+      console.warn("LINE token error:", tokenData);
+      return res.status(401).json({ error: "LINE 認証に失敗しました", detail: tokenData.error_description || tokenData.error });
+    }
+
+    // 2. IDトークンを検証してユーザー情報を取得（sub / name / picture / email）
+    const verifyRes = await fetch("https://api.line.me/oauth2/v2.1/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        id_token: tokenData.id_token,
+        client_id: CHANNEL_ID
+      }).toString()
+    });
+    const profile = await verifyRes.json();
+    if (!verifyRes.ok || !profile.sub) {
+      console.warn("LINE verify error:", profile);
+      return res.status(401).json({ error: "LINE IDトークン検証に失敗しました" });
+    }
+
+    // 3. Firebase custom token を発行（uid = line:<LINEユーザーID>）
+    const admin = require("firebase-admin");
+    const uid = "line:" + profile.sub;
+    const firebaseToken = await admin.auth().createCustomToken(uid, {
+      provider: "line",
+      name: profile.name || "",
+      picture: profile.picture || ""
+    });
+
+    return res.json({
+      firebaseToken,
+      profile: {
+        name: profile.name || "",
+        picture: profile.picture || "",
+        email: profile.email || ""
+      }
+    });
+  } catch (e) {
+    console.error("❌ /api/auth/line 失敗:", e);
+    return res.status(500).json({ error: "サーバーエラー" });
+  }
+});
+
+// =====================
 // Start server
 // =====================
 const PORT = process.env.PORT || 3000;
