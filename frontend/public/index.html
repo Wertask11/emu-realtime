@@ -2899,6 +2899,12 @@ body.paypay-mode #pp-post-fab {
 .ws-counter-num { font-size: 36px; font-weight: 800; color: #fff; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .ws-counter-unit { font-size: 14px; color: rgba(240,230,255,0.55); font-weight: 600; margin-left: 4px; }
 
+/* CHES 4ブランド入場者数 */
+.ches-count-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 10px; }
+.ches-count-col { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.ches-count-name { font-size: 9.5px; font-weight: 800; letter-spacing: 0.01em; white-space: nowrap; line-height: 1; }
+.ches-count-num { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+
 .ws-btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
 #connectWalletButton {
   width: 100%; height: 56px; border-radius: 999px; border: none;
@@ -3071,12 +3077,24 @@ body.paypay-mode #pp-post-fab {
           <span class="ws-live-dot"></span>
           <span class="ws-counter-label">入場者数</span>
         </div>
-        <div class="ws-counter-num-row">
-          <span id="connectedCount" class="ws-counter-num">--</span>
-          <span class="ws-counter-unit">名</span>
+        <div class="ches-count-row">
+          <div class="ches-count-col">
+            <span class="ches-count-name" style="color:#e0576f;">Camellia</span>
+            <span class="ches-count-num" id="countCamellia">0</span>
+          </div>
+          <div class="ches-count-col">
+            <span class="ches-count-name" style="color:#a0d8ef;">Heartoo</span>
+            <span class="ches-count-num" id="countHeartoo">0</span>
+          </div>
+          <div class="ches-count-col">
+            <span class="ches-count-name" style="color:#f08300;">Emu</span>
+            <span class="ches-count-num" id="countEmu">--</span>
+          </div>
+          <div class="ches-count-col">
+            <span class="ches-count-name" style="color:#d0e2be;">SchoolPark</span>
+            <span class="ches-count-num" id="connectedCount">--</span>
+          </div>
         </div>
-        <span id="remainingCount" style="display:none">--</span>
-        <div id="progressBar" style="display:none;width:0%"></div>
       </div>
 
       <div class="ches-btn-col">
@@ -4643,9 +4661,14 @@ function startAirdropCounter() {
   }
   const globalRef = window.fbLib.doc(window.db, "sp_stats", "global");
   window.fbLib.onSnapshot(globalRef, (snap) => {
-    const count = (snap.exists() && snap.data().entrants) ? snap.data().entrants : 0;
-    const countEl = document.getElementById("connectedCount");
-    if (countEl) countEl.textContent = count;
+    const data = snap.exists() ? snap.data() : {};
+    // SchoolPark = ログインしてメイン画面に行ったユニーク人数（entrants）
+    const spEl = document.getElementById("connectedCount");
+    if (spEl) spEl.textContent = data.entrants || 0;
+    // Emu = ログインしてEmu（SNS）に行ったユニーク人数（emu_entrants）
+    const emuEl = document.getElementById("countEmu");
+    if (emuEl) emuEl.textContent = data.emu_entrants || 0;
+    // Camellia / Heartoo は未ローンチのため常に 0
   });
 }
 startAirdropCounter();
@@ -12720,6 +12743,30 @@ function closeSpMap() {
   _stopSpLive();
   if (_fwTimer) { clearTimeout(_fwTimer); _fwTimer = null; }
   _spCrowdLeave(); /* Firestoreからセッション削除 */
+  spTrackEmu(); /* マップを閉じてEmu（SNS）へ入った＝Emu入場としてユニークカウント */
+}
+
+/* Emu（SNS）へ入ったユニーク人数をカウント（アドレス単位・重複なし・0スタート） */
+async function spTrackEmu() {
+  try {
+    if (!window.db || !window.fbLib) return;
+    const addr = (window.connectedAccount || window.currentUserId || localStorage.getItem('emuWallet') || '').toLowerCase();
+    if (!addr) return;
+    const lsKey = 'sp_emu_tracked_' + addr;
+    if (localStorage.getItem(lsKey)) return; /* 同一端末・同一アドレスは再読み込みしない */
+    const { doc, setDoc, getDoc, increment } = window.fbLib;
+    const db = window.db;
+    const ref = doc(db, 'sp_emu_entrants', addr);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      await setDoc(ref, { address: addr, first_seen: new Date() });
+      setDoc(doc(db, 'sp_stats', 'global'), { emu_entrants: increment(1) }, { merge: true })
+        .catch(e => console.warn('[spTrackEmu] global:', e));
+    }
+    localStorage.setItem(lsKey, '1');
+  } catch (e) {
+    console.warn('[spTrackEmu] error:', e);
+  }
 }
 
 /* POIを検索 */
