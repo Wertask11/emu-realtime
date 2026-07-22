@@ -3234,13 +3234,8 @@ body.paypay-mode #pp-post-fab {
     if (toggle) toggle.textContent = open ? 'その他の方法を閉じる ▴' : 'その他の方法で入る ▾';
   };
 
-  var logoEl = document.getElementById('logoScreen');
-  if (logoEl) {
-    logoEl.addEventListener('click', function() {
-      wsShowTapCount(wsIncrementTap());
-    });
-  }
-  wsShowTapCount(wsGetTapCount());
+  // 入場者数は Firestore のユニーク入場者カウンター（startAirdropCounter）で表示するため、
+  // ここではローカルのタップ数を connectedCount に表示しない。
 })();
 </script>
 <!-- メイン画面 -->
@@ -4640,26 +4635,17 @@ function evolveBadge() {
 
 </script>
 <script>
-	// ★ リアルタイム接続者カウンター
+	// ★ リアルタイム入場者数カウンター（ユニークなアカウント数・重複なし・0スタート）
 function startAirdropCounter() {
   if (!window.fbLib || !window.db) {
     setTimeout(startAirdropCounter, 500);
     return;
   }
-  const colRef = window.fbLib.collection(window.db, "airdrop_registrations");
-  window.fbLib.onSnapshot(colRef, (snapshot) => {
-    const count = snapshot.size;
-    const remaining = Math.max(0, 100 - count);
-    const pct = Math.min(100, (count / 100) * 100);
+  const globalRef = window.fbLib.doc(window.db, "sp_stats", "global");
+  window.fbLib.onSnapshot(globalRef, (snap) => {
+    const count = (snap.exists() && snap.data().entrants) ? snap.data().entrants : 0;
     const countEl = document.getElementById("connectedCount");
-    const remainEl = document.getElementById("remainingCount");
-    const barEl = document.getElementById("progressBar");
     if (countEl) countEl.textContent = count;
-    if (remainEl) {
-      remainEl.textContent = remaining;
-      remainEl.style.color = remaining <= 10 ? "#ff3333" : "#ff6633";
-    }
-    if (barEl) barEl.style.width = pct + "%";
   });
 }
 startAirdropCounter();
@@ -10417,6 +10403,17 @@ async function spTrack(type, address) {
     if (type === 'free') globalUpdate.free_count  = increment(1);
     setDoc(globalRef, globalUpdate, { merge: true })
       .catch(e => console.warn('[spTrack] global:', e));
+
+    // ①-2 ユニーク入場者カウント（アドレス単位・重複なし・0スタート）
+    if (addr && (type === 'paid' || type === 'free')) {
+      const entrantRef = doc(db, 'sp_entrants', addr);
+      const entrantSnap = await getDoc(entrantRef);
+      if (!entrantSnap.exists()) {
+        await setDoc(entrantRef, { address: addr, first_seen: now });
+        setDoc(globalRef, { entrants: increment(1) }, { merge: true })
+          .catch(e => console.warn('[spTrack] entrants:', e));
+      }
+    }
 
     // ② アドレス別ドキュメント（有料/無料パスのみ）
     if (addr && (type === 'paid' || type === 'free')) {
