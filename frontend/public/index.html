@@ -2974,6 +2974,12 @@ body.paypay-mode #pp-post-fab {
 .ches-adv-toggle:hover { color: rgba(26,24,64,0.8); }
 .ches-adv-panel { margin-top: 10px; }
 
+/* ===== みなし同意（チェックボックス廃止） ===== */
+.ches-consent-divider { height: 1px; background: rgba(26,24,64,0.12); margin: 16px 2px 12px; }
+.ches-consent { font-size: 10.5px; line-height: 1.7; color: rgba(26,24,64,0.5); text-align: center; }
+.ches-consent a { color: #6c5ce7; text-decoration: none; font-weight: 600; }
+.ches-consent a:hover { text-decoration: underline; }
+
 #termsAgreement { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; margin-bottom: 6px; }
 .ws-checkbox-vis {
   width: 14px; height: 14px; min-width: 14px; margin-top: 1px;
@@ -3074,13 +3080,13 @@ body.paypay-mode #pp-post-fab {
       </div>
 
       <div class="ches-btn-col">
-        <button id="chesLineButton" class="ches-btn ches-btn-line" onclick="window.CHES && window.CHES.startLine()" disabled>
+        <button id="chesLineButton" class="ches-btn ches-btn-line" onclick="window.CHES && window.CHES.startLine()">
           <span class="ches-btn-ico" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 2C6.48 2 2 5.69 2 10.24c0 4.08 3.55 7.5 8.35 8.14.32.07.77.21.88.49.1.25.06.64.03.9l-.14.85c-.04.25-.2.98.86.54 1.06-.45 5.7-3.36 7.78-5.75C21.28 14 22 12.2 22 10.24 22 5.69 17.52 2 12 2Z"/></svg>
           </span>
           <span>LINEではじめる</span>
         </button>
-        <button id="chesGoogleButton" class="ches-btn ches-btn-google" onclick="window.CHES && window.CHES.startGoogle()" disabled>
+        <button id="chesGoogleButton" class="ches-btn ches-btn-google" onclick="window.CHES && window.CHES.startGoogle()">
           <span class="ches-btn-ico" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M23.06 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h6.2a5.3 5.3 0 0 1-2.3 3.48v2.89h3.72c2.18-2.01 3.44-4.97 3.44-8.38Z"/><path fill="#34A853" d="M12 24c3.12 0 5.73-1.03 7.64-2.8l-3.72-2.89c-1.03.69-2.35 1.1-3.92 1.1-3.01 0-5.56-2.03-6.47-4.77H1.68v2.98A11.99 11.99 0 0 0 12 24Z"/><path fill="#FBBC05" d="M5.53 14.64a7.2 7.2 0 0 1 0-4.6V7.06H1.68a12 12 0 0 0 0 10.56l3.85-2.98Z"/><path fill="#EA4335" d="M12 4.75c1.7 0 3.22.58 4.42 1.72l3.3-3.3C17.72 1.24 15.11 0 12 0 7.31 0 3.26 2.69 1.68 6.56l3.85 2.98C6.44 6.79 8.99 4.75 12 4.75Z"/></svg>
           </span>
@@ -3088,20 +3094,17 @@ body.paypay-mode #pp-post-fab {
         </button>
       </div>
 
-      <input type="checkbox" id="agreeTerms" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;">
-      <div id="termsAgreement">
-        <button class="ws-checkbox-vis" id="wsCheckboxVis" role="checkbox" aria-checked="false" onclick="wsToggleAgreed()"></button>
-        <div class="ws-terms-text">
-          <a href="/terms.html" target="_blank">利用規約</a> および
-          <a href="/privacy.html" target="_blank">プライバシーポリシー</a> に同意する
-        </div>
+      <div class="ches-consent-divider"></div>
+      <div class="ches-consent">
+        ログインまたは登録することで、<br>
+        <a href="/terms.html" target="_blank">利用規約</a>・<a href="/privacy.html" target="_blank">プライバシーポリシー</a>に同意したものとみなします。
       </div>
       <div class="ws-terms-note">※業務用デバイスでの利用は禁止されています</div>
 
       <div class="ches-advanced">
         <button type="button" id="chesAdvancedToggle" class="ches-adv-toggle" onclick="wsToggleAdvanced()">その他の方法で入る ▾</button>
         <div id="chesAdvancedPanel" class="ches-adv-panel" style="display:none;">
-          <button id="connectWalletButton" disabled>
+          <button id="connectWalletButton">
             <span>🎟️</span><span>ウォレットで接続（有料パス）</span>
             <span class="ws-btn-shimmer"></span>
           </button>
@@ -3125,7 +3128,7 @@ body.paypay-mode #pp-post-fab {
 (function() {
   var WS_TUT_LINES = [
     "こんにちは！\n僕の名前は冷蔵庫くん。\nSchoolParkの案内役だよ！",
-    "まずは、利用規約と\nプライバシーポリシーを確認してね。",
+    "SchoolParkは\nLINEかGoogleで\nすぐにはじめられるよ！",
     "ありがとう！\nところでSchoolParkは\n初めて？",
     "",
     "また今度会おうね！\nバイバイ 👋"
@@ -3156,6 +3159,7 @@ body.paypay-mode #pp-post-fab {
   };
   window.wsTutBubbleClick = function() {
     if (wsTutStep === 0) { wsTutStep = 1; wsRenderTut(); }
+    else if (wsTutStep === 1) { wsTutStep = 2; wsRenderTut(); }
     else if (wsTutStep === 3) { wsTutStep = 4; wsRenderTut(); }
     else if (wsTutStep === 4) { wsCloseTutorial(); }
   };
@@ -3182,11 +3186,8 @@ body.paypay-mode #pp-post-fab {
       overlay.className = 'ws-tut-overlay';
       html += '<div class="ws-tut-msg">' + WS_TUT_LINES[0].replace(/\n/g,'<br>') + '</div>' + tapHint;
     } else if (wsTutStep === 1) {
-      overlay.className = 'ws-tut-overlay step-terms';
-      if (ta) ta.classList.add('ws-tut-highlight','ws-tut-highlight-terms');
-      var agreed = document.getElementById('agreeTerms').checked;
-      html += '<div class="ws-tut-msg">' + WS_TUT_LINES[1].replace(/\n/g,'<br>') + '</div>';
-      html += '<div class="ws-tut-tap"><span class="ws-tut-tap-dot"></span>' + (agreed ? 'ありがとう！' : '下のチェックを入れてね') + '</div>';
+      overlay.className = 'ws-tut-overlay';
+      html += '<div class="ws-tut-msg">' + WS_TUT_LINES[1].replace(/\n/g,'<br>') + '</div>' + tapHint;
     } else if (wsTutStep === 2) {
       overlay.className = 'ws-tut-overlay';
       html += '<div class="ws-tut-msg">' + WS_TUT_LINES[2].replace(/\n/g,'<br>') + '</div>';
@@ -3194,7 +3195,7 @@ body.paypay-mode #pp-post-fab {
       html += '<button onclick="event.stopPropagation();wsTutAnswer(false)">いいえ</button></div>';
     } else if (wsTutStep === 3) {
       overlay.className = 'ws-tut-overlay';
-      var msg = wsFirstTime ? "来てくれてありがとう！<br>無料パスを押して<br>無料チケットをもらおう！" : "いつもありがとう！<br>有料パスから進んでね！";
+      var msg = wsFirstTime ? "来てくれてありがとう！<br>LINEかGoogleで<br>すぐにはじめられるよ！" : "いつもありがとう！<br>LINEかGoogleで<br>ログインしてね！";
       html += '<div class="ws-tut-msg">' + msg + '</div>' + tapHint;
     } else if (wsTutStep === 4) {
       overlay.className = 'ws-tut-overlay';
@@ -10392,26 +10393,7 @@ logoScreen.addEventListener("click", () => {
   spTrack('tap').catch(() => {});
 });
 
-// 利用規約チェックボックス制御
-document.getElementById("agreeTerms").addEventListener("change", function() {
-  const buttons = [
-    document.getElementById("chesLineButton"),
-    document.getElementById("chesGoogleButton"),
-    document.getElementById("connectWalletButton")
-  ];
-  buttons.forEach(btn => {
-    if (!btn) return; // 存在しないボタンはスキップ
-    if (this.checked) {
-      btn.disabled = false;
-      btn.style.opacity = "1";
-      btn.style.cursor = "pointer";
-    } else {
-      btn.disabled = true;
-      btn.style.opacity = "0.4";
-      btn.style.cursor = "not-allowed";
-    }
-  });
-});
+// 規約チェックボックスは廃止（ログイン/登録＝みなし同意）。ボタンは常時有効。
 
 // --- [1] グローバル定数の更新 ---
 const AMOY_CHAIN_ID = "0x13882"; // 80002
@@ -16995,10 +16977,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ───── Google ではじめる（Firebase Auth ネイティブ） ─────
   CHES.startGoogle = function () {
-    if (!document.getElementById("agreeTerms") || !document.getElementById("agreeTerms").checked) {
-      statusMsg("利用規約・プライバシーポリシーへの同意が必要です。", true);
-      return;
-    }
     window._chesBusy = true;
     showLoading();
     whenFirebaseReady(async function () {
@@ -17024,10 +17002,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ───── LINE ではじめる（認可コードフロー → バックエンドで custom token 発行） ─────
   CHES.startLine = function () {
-    if (!document.getElementById("agreeTerms") || !document.getElementById("agreeTerms").checked) {
-      statusMsg("利用規約・プライバシーポリシーへの同意が必要です。", true);
-      return;
-    }
     if (!CHES.config.lineChannelId) {
       statusMsg("LINE ログインは準備中です（Channel ID 未設定）。", true);
       console.warn("[CHES] lineChannelId が未設定です。CHES.config を設定してください。");
