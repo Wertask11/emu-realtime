@@ -4416,6 +4416,16 @@ body.paypay-mode #pp-post-fab {
       <button class="sp-panel-btn secondary" onclick="spSettingClearCache()">🗑️ キャッシュをクリア</button>
     </div>
 
+    <!-- 7. アカウント -->
+    <div class="sp-panel-section">
+      <div class="sp-panel-section-title">👤 アカウント</div>
+      <div style="font-size:0.82rem;color:#666;margin-bottom:12px;line-height:1.6;">
+        ログアウトすると入場ゲートに戻り、別のアカウント（LINE / Google など）で入り直せます。
+      </div>
+      <button class="sp-panel-btn secondary" onclick="spLogout()"
+              style="border-color:rgba(224,87,111,0.5);color:#e0576f;">🚪 ログアウト</button>
+    </div>
+
     <button class="sp-panel-btn" onclick="spSettingSave();closeSpPanel('spSettingsPanel');">✅ 設定を保存して閉じる</button>
   </div>
 </div>
@@ -4794,21 +4804,16 @@ const _fpToSchoolpark   = window.location.search.includes("schoolpark=1");
 const walletStatus = document.getElementById("walletStatus");
 const walletAddressButton = document.getElementById("walletAddressButton");
 
-// アカウント名（ヘッダー右上）をタップでログアウト → ゲートに戻る／別アカウントで入り直せる
+// ログアウト（設定パネルの「👤 アカウント」から呼ばれる）→ ゲートに戻る／別アカウントで入り直せる
 window.spLogout = function () {
   var loggedIn = !!(window.connectedAccount || localStorage.getItem('ches_uid') || localStorage.getItem('emu_auth'));
-  if (!loggedIn) return; // 未ログイン時は何もしない
+  if (!loggedIn) { alert('現在ログインしていません。'); return; }
   if (!window.confirm('ログアウトしますか？')) return;
   if (window.CHES && typeof window.CHES.logout === 'function') { window.CHES.logout(); return; }
   // フォールバック（CHES未定義時）
   ['ches_uid','ches_name','emu_auth','emuWallet','spPassType','userMode'].forEach(function (k) { localStorage.removeItem(k); });
   location.reload();
 };
-if (walletAddressButton) {
-  walletAddressButton.title = 'タップでログアウト';
-  walletAddressButton.style.cursor = 'pointer';
-  walletAddressButton.addEventListener('click', window.spLogout);
-}
 
 //テーマ・ライブラリーUI
 const themeButton = document.getElementById('themeButton');
