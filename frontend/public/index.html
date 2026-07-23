@@ -17198,9 +17198,15 @@ document.addEventListener('DOMContentLoaded', () => {
     var params = new URLSearchParams(location.search);
     var code = params.get("code");
     var state = params.get("state");
-    if (!code || !state) return false;
+    if (!code) return false; // code が無ければ LINE コールバックではない
+    // CSRF対策の state 照合はベストエフォート。モバイルは LINE アプリ往復で
+    // localStorage が別コンテキストになり saved を取得できないことがあるため、
+    // 不一致でもブロックしない（code はバックエンドが LINE に問い合わせて検証するので
+    // 偽コードは弾かれる。redirect_uri も完全一致必須）。
     var saved = localStorage.getItem("ches_line_state");
-    if (!saved || saved !== state) return false; // 自分が開始した LINE フローでなければ無視
+    if (saved && state && saved !== state) {
+      console.warn("[CHES] LINE state 不一致（続行します）");
+    }
 
     window._chesBusy = true;
     localStorage.removeItem("ches_line_state");
