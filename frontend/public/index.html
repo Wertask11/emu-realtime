@@ -15408,7 +15408,7 @@ import {
   // 認証機能（CHES Identity：LINE / Google ログイン、MetaMask等で使用）
   import {
     getAuth, signInAnonymously,
-    GoogleAuthProvider, signInWithPopup, signInWithCustomToken,
+    GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithCustomToken,
     onAuthStateChanged, signOut, setPersistence, browserLocalPersistence
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
@@ -15440,7 +15440,7 @@ window.fbLib = {
 
   // CHES Identity（LINE / Google）用の Auth 窓口
   window.fbAuth = {
-    GoogleAuthProvider, signInWithPopup, signInWithCustomToken,
+    GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithCustomToken,
     onAuthStateChanged, signOut, setPersistence, browserLocalPersistence
   };
   // セッションをローカル永続化（再訪時に自動サインイン）
@@ -17120,27 +17120,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // モバイル判定（ポップアップは新規タブ扱いで戻れないことが多いためリダイレクト方式にする）
+  CHES._isMobile = function () {
+    return /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|BlackBerry|Opera Mini/i.test(navigator.userAgent || "");
+  };
+  // Google リダイレクト方式へ切替（ページ全体が遷移する）
+  function startGoogleRedirect(provider) {
+    localStorage.setItem("ches_google_redirect", "1");
+    return window.fbAuth.signInWithRedirect(window.auth, provider);
+  }
+
   // ───── Google ではじめる（Firebase Auth ネイティブ） ─────
   CHES.startGoogle = function () {
     window._chesBusy = true;
     showLoading();
     whenFirebaseReady(async function () {
+      var provider = new window.fbAuth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+
+      // モバイルは最初からリダイレクト方式（ポップアップが弾かれ、戻ってこられない）
+      if (CHES._isMobile()) {
+        try { await startGoogleRedirect(provider); return; }
+        catch (e) {
+          console.error("[CHES] Google redirect 失敗:", e);
+          localStorage.removeItem("ches_google_redirect");
+          cancelLoading(); window._chesBusy = false;
+          statusMsg("Google ログインに失敗しました。", true);
+        }
+        return;
+      }
+
+      // PC はポップアップ。ブロック/未対応時はリダイレクトにフォールバック
       try {
-        var provider = new window.fbAuth.GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: "select_account" });
         var result = await window.fbAuth.signInWithPopup(window.auth, provider);
         await completeCommonFlow(result.user, "google");
       } catch (e) {
-        console.error("[CHES] Google 認証エラー:", e);
-        cancelLoading();
-        window._chesBusy = false;
+        console.error("[CHES] Google popup 認証エラー:", e);
         if (e && e.code === "auth/popup-closed-by-user") {
-          statusMsg("");
-        } else if (e && e.code === "auth/operation-not-allowed") {
-          statusMsg("Google ログインが Firebase で未有効です（コンソール設定が必要）。", true);
-        } else {
-          statusMsg("Google ログインに失敗しました。", true);
+          cancelLoading(); window._chesBusy = false; statusMsg(""); return;
         }
+        if (e && e.code === "auth/operation-not-allowed") {
+          cancelLoading(); window._chesBusy = false;
+          statusMsg("Google ログインが Firebase で未有効です（コンソール設定が必要）。", true); return;
+        }
+        // ポップアップがブロック/失敗 → リダイレクトで再試行
+        if (e && (e.code === "auth/popup-blocked" || e.code === "auth/cancelled-popup-request" || e.code === "auth/web-storage-unsupported")) {
+          try { await startGoogleRedirect(provider); return; } catch (e2) { localStorage.removeItem("ches_google_redirect"); }
+        }
+        cancelLoading(); window._chesBusy = false;
+        statusMsg("Google ログインに失敗しました。", true);
       }
     });
   };
@@ -17153,7 +17181,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     var state = (ethers.utils.hexlify(ethers.utils.randomBytes(16)) || String(Date.now())).replace(/^0x/, "");
-    sessionStorage.setItem("ches_line_state", state);
+    // localStorage を使う（モバイルは LINE アプリ往復で sessionStorage が失われ、
+    // コールバックの state 照合に失敗して 1 回目が弾かれることがあるため）
+    localStorage.setItem("ches_line_state", state);
     var url = "https://access.line.me/oauth2/v2.1/authorize"
       + "?response_type=code"
       + "&client_id=" + encodeURIComponent(CHES.config.lineChannelId)
@@ -17169,11 +17199,11 @@ document.addEventListener('DOMContentLoaded', () => {
     var code = params.get("code");
     var state = params.get("state");
     if (!code || !state) return false;
-    var saved = sessionStorage.getItem("ches_line_state");
+    var saved = localStorage.getItem("ches_line_state");
     if (!saved || saved !== state) return false; // 自分が開始した LINE フローでなければ無視
 
     window._chesBusy = true;
-    sessionStorage.removeItem("ches_line_state");
+    localStorage.removeItem("ches_line_state");
     // URL からパラメータを消す（履歴を汚さない）
     try { window.history.replaceState(null, "", location.origin + location.pathname); } catch (e) {}
     var logo = document.getElementById("logoScreen"); if (logo) logo.style.display = "none";
@@ -17225,6 +17255,33 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
+  // ───── Google リダイレクトの戻りを処理（モバイル：ページ遷移から復帰） ─────
+  CHES.handleGoogleRedirect = function () {
+    localStorage.removeItem("ches_google_redirect");
+    window._chesBusy = true;
+    var logo = document.getElementById("logoScreen"); if (logo) logo.style.display = "none";
+    var ws = document.getElementById("walletScreen"); if (ws) ws.style.display = "none";
+    showLoading();
+    whenFirebaseReady(async function () {
+      try {
+        var result = await window.fbAuth.getRedirectResult(window.auth);
+        if (result && result.user) {
+          await completeCommonFlow(result.user, "google");
+          return;
+        }
+        // 結果が取れなかった（キャンセル/ストレージ制限等）→ ゲート表示 + 念のため自動復元
+        cancelLoading(); window._chesBusy = false;
+        if (ws) ws.style.display = "flex";
+        CHES.setupAutoResume();
+      } catch (e) {
+        console.error("[CHES] Google redirect result エラー:", e);
+        cancelLoading(); window._chesBusy = false;
+        if (ws) ws.style.display = "flex";
+        statusMsg("Google ログインに失敗しました。もう一度お試しください。", true);
+      }
+    });
+  };
+
   // ───── ログアウト（CHES セッション破棄） ─────
   CHES.logout = function () {
     localStorage.removeItem("ches_uid");
@@ -17239,11 +17296,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.CHES = CHES;
 
-  // 起動：LINE コールバックを優先処理。無ければ自動サインインを準備。
+  // 起動：LINEコールバック → Googleリダイレクト戻り → 自動サインイン の順で処理。
   function boot() {
-    if (!CHES.handleLineCallback()) {
-      CHES.setupAutoResume();
+    if (CHES.handleLineCallback()) return;                 // LINE（?code=&state=）
+    if (localStorage.getItem("ches_google_redirect")) {    // Google リダイレクトの戻り
+      CHES.handleGoogleRedirect();
+      return;
     }
+    CHES.setupAutoResume();                                // 再訪時の自動サインイン
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
