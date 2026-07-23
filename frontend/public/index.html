@@ -13,6 +13,22 @@
   gtag('config', 'G-QPQX7LM82Z');
 </script>
 
+<script>
+  /* LINE / Google の認証から戻った直後は、ロゴ画面を出さず最初からローディングを
+     表示する（boot() 実行までの一瞬ロゴが見えるフラッシュを防ぐ）。
+     判定はできるだけ早く（描画前に）行うため head に置く。 */
+  (function () {
+    try {
+      var isLineCb = /[?&]code=/.test(location.search || "");
+      var isGoogleRedirect = false;
+      try { isGoogleRedirect = !!localStorage.getItem("ches_google_redirect"); } catch (e) {}
+      if (isLineCb || isGoogleRedirect) {
+        document.documentElement.classList.add("ches-resuming");
+      }
+    } catch (e) {}
+  })();
+</script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
@@ -2492,6 +2508,9 @@ body.paypay-mode #pp-post-fab {
 
 <!-- ロゴ画面 -->
 <style>
+/* 認証（LINE/Google）から戻った直後：ロゴを出さず最初からローディングを表示（フラッシュ防止） */
+html.ches-resuming #logoScreen { display: none; }
+html.ches-resuming #spLoadingOverlay { display: flex; }
 /* ── 宇宙ロゴ画面 ── */
 #logoScreen {
   display: flex;
