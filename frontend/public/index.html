@@ -4794,6 +4794,22 @@ const _fpToSchoolpark   = window.location.search.includes("schoolpark=1");
 const walletStatus = document.getElementById("walletStatus");
 const walletAddressButton = document.getElementById("walletAddressButton");
 
+// アカウント名（ヘッダー右上）をタップでログアウト → ゲートに戻る／別アカウントで入り直せる
+window.spLogout = function () {
+  var loggedIn = !!(window.connectedAccount || localStorage.getItem('ches_uid') || localStorage.getItem('emu_auth'));
+  if (!loggedIn) return; // 未ログイン時は何もしない
+  if (!window.confirm('ログアウトしますか？')) return;
+  if (window.CHES && typeof window.CHES.logout === 'function') { window.CHES.logout(); return; }
+  // フォールバック（CHES未定義時）
+  ['ches_uid','ches_name','emu_auth','emuWallet','spPassType','userMode'].forEach(function (k) { localStorage.removeItem(k); });
+  location.reload();
+};
+if (walletAddressButton) {
+  walletAddressButton.title = 'タップでログアウト';
+  walletAddressButton.style.cursor = 'pointer';
+  walletAddressButton.addEventListener('click', window.spLogout);
+}
+
 //テーマ・ライブラリーUI
 const themeButton = document.getElementById('themeButton');
 const themeSubButtons = document.getElementById('themeSubButtons');
