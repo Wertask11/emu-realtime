@@ -355,6 +355,20 @@
   padding:14px 20px; font-family:'JetBrains Mono','Noto Sans JP',monospace; font-size:0.78rem;
   letter-spacing:0.08em; background:none; border:none; border-bottom:1px solid rgba(255,255,255,0.12);
   text-align:left; cursor:pointer; transition:background 0.2s;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+}
+/* 各ブランド名の横に出す入場者数バッジ */
+.ches-menu-count {
+  font-size:0.72rem; font-weight:700; color:#fff; letter-spacing:0;
+  background:rgba(255,255,255,0.14); border-radius:8px;
+  min-width:20px; height:18px; padding:0 6px;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-variant-numeric:tabular-nums; flex-shrink:0;
+}
+/* スマホではゲートの入場者数カウンターを隠し、CHESメニュー内の数字で見せる
+   （PCは画面が広いのでゲートのカウンターをそのまま表示） */
+@media (max-width: 600px) {
+  #airdropCounter { display: none; }
 }
 .ches-menu-item:last-child { border-bottom:none; }
 .ches-menu-item:hover { background:rgba(255,255,255,0.08); }
@@ -3317,10 +3331,10 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       </button>
       <!-- CHES ブランドメニュー（ホームページの「探検しよう」と同じ構成） -->
       <div id="chesMenu" class="ches-menu">
-        <button class="ches-menu-item" style="color:#e0576f;" onclick="chesMenuGo('camellia')">Camellia</button>
-        <button class="ches-menu-item" style="color:#a0d8ef;" onclick="chesMenuGo('heartoo')">Heartoo</button>
-        <button class="ches-menu-item" style="color:#f08300;" onclick="chesMenuGo('emu')">Emu</button>
-        <button class="ches-menu-item" style="color:#d0e2be;" onclick="chesMenuGo('schoolpark')">SchoolPark</button>
+        <button class="ches-menu-item" style="color:#e0576f;" onclick="chesMenuGo('camellia')"><span>Camellia</span><span class="ches-menu-count" id="menuCountCamellia">0</span></button>
+        <button class="ches-menu-item" style="color:#a0d8ef;" onclick="chesMenuGo('heartoo')"><span>Heartoo</span><span class="ches-menu-count" id="menuCountHeartoo">0</span></button>
+        <button class="ches-menu-item" style="color:#f08300;" onclick="chesMenuGo('emu')"><span>Emu</span><span class="ches-menu-count" id="menuCountEmu">--</span></button>
+        <button class="ches-menu-item" style="color:#d0e2be;" onclick="chesMenuGo('schoolpark')"><span>SchoolPark</span><span class="ches-menu-count" id="menuCountSchoolPark">--</span></button>
       </div>
       <!-- お知らせ＆ログパネル -->
       <div id="spNotifPanel" style="display:none;flex-direction:column;">
@@ -4681,13 +4695,16 @@ function startAirdropCounter() {
   const globalRef = window.fbLib.doc(window.db, "sp_stats", "global");
   window.fbLib.onSnapshot(globalRef, (snap) => {
     const data = snap.exists() ? snap.data() : {};
-    // SchoolPark = ログインしてメイン画面に行ったユニーク人数（entrants）
-    const spEl = document.getElementById("connectedCount");
-    if (spEl) spEl.textContent = data.entrants || 0;
-    // Emu = ログインしてEmu（SNS）に行ったユニーク人数（emu_entrants）
-    const emuEl = document.getElementById("countEmu");
-    if (emuEl) emuEl.textContent = data.emu_entrants || 0;
-    // Camellia / Heartoo は未ローンチのため常に 0
+    const sp  = data.entrants || 0;       // SchoolPark = ログインしてメイン画面に行ったユニーク人数
+    const emu = data.emu_entrants || 0;   // Emu = ログインしてEmu(SNS)に行ったユニーク人数
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    // ゲートの4ブランドカウンター（PC表示・スマホは非表示）
+    set("connectedCount", sp);
+    set("countEmu", emu);
+    // CHESメニュー内（各ブランド名の横・主にスマホ用）
+    set("menuCountSchoolPark", sp);
+    set("menuCountEmu", emu);
+    // Camellia / Heartoo は未ローンチのため常に 0（HTMLの初期値のまま）
   });
 }
 startAirdropCounter();
