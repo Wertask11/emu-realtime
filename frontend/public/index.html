@@ -3279,6 +3279,94 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   // ここではローカルのタップ数を connectedCount に表示しない。
 })();
 </script>
+<!-- ============================================================
+     CHES ハブ画面（ログイン後の「メイン画面」：4ブランド選択）
+     ============================================================ -->
+<style>
+#chesHubScreen {
+  position: fixed; inset: 0; z-index: 900;
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  background: linear-gradient(160deg, #17142e 0%, #221a3d 55%, #2a1c33 100%);
+  padding: 24px 16px; overflow-y: auto;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+.ches-hub-inner { width: 100%; max-width: 720px; }
+.ches-hub-head { text-align: center; margin-bottom: 28px; }
+.ches-hub-logo {
+  font-family: 'JetBrains Mono','Noto Sans JP',monospace;
+  font-size: 40px; font-weight: 800; letter-spacing: 0.14em; line-height: 1;
+}
+.ches-hub-sub { margin-top: 10px; font-size: 11px; letter-spacing: 0.2em; color: rgba(240,230,255,0.55); }
+.ches-hub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ches-hub-btn {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
+  padding: 18px 16px 16px; min-height: 104px; border-radius: 16px; cursor: pointer;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);
+  text-align: left; font-family: inherit;
+  transition: transform .15s ease, background .15s ease;
+}
+.ches-hub-btn:hover { transform: translateY(-2px); background: rgba(255,255,255,0.09); }
+.ches-hub-name { font-size: 17px; font-weight: 800; letter-spacing: 0.02em; }
+.ches-hub-desc { font-size: 11px; color: rgba(240,230,255,0.55); line-height: 1.5; }
+.ches-hub-count {
+  position: absolute; top: 12px; right: 12px;
+  font-size: 11px; font-weight: 700; color: #fff;
+  background: rgba(255,255,255,0.14); border-radius: 8px;
+  min-width: 22px; height: 19px; padding: 0 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+/* 各ブランド画面から「メイン画面に戻る」ボタン */
+.ches-hub-back {
+  background: rgba(20,16,45,0.92); color: #f0e6ff;
+  border: 1px solid rgba(255,255,255,0.2); border-radius: 999px;
+  padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer;
+  font-family: 'Noto Sans JP', sans-serif; white-space: nowrap;
+}
+.ches-hub-back:hover { background: rgba(40,32,80,0.95); }
+/* マップ(z-index:1002)より上に出す。Emu・SchoolPark どちらでも使う共通の戻るボタン */
+#chesHubBack { position: fixed; left: 12px; bottom: 12px; z-index: 1500; display: none; }
+@media (max-width: 420px) {
+  .ches-hub-grid { grid-template-columns: 1fr; }
+  .ches-hub-logo { font-size: 34px; }
+  .ches-hub-btn { min-height: 88px; padding: 14px 14px 12px; }
+}
+</style>
+<div id="chesHubScreen">
+  <div class="ches-hub-inner">
+    <div class="ches-hub-head">
+      <div class="ches-hub-logo">
+        <span style="color:#e0576f;">C</span><span style="color:#a0d8ef;">H</span><span style="color:#f08300;">E</span><span style="color:#d0e2be;">S</span>
+      </div>
+      <div class="ches-hub-sub">WHERE TO GO ?</div>
+    </div>
+    <div class="ches-hub-grid">
+      <button type="button" class="ches-hub-btn" onclick="chesHubGo('camellia')">
+        <span class="ches-hub-name" style="color:#e0576f;">Camellia</span>
+        <span class="ches-hub-desc">女性ウェルネス</span>
+        <span class="ches-hub-count" id="hubCountCamellia">0</span>
+      </button>
+      <button type="button" class="ches-hub-btn" onclick="chesHubGo('heartoo')">
+        <span class="ches-hub-name" style="color:#a0d8ef;">Heartoo</span>
+        <span class="ches-hub-desc">スマート結婚指輪</span>
+        <span class="ches-hub-count" id="hubCountHeartoo">0</span>
+      </button>
+      <button type="button" class="ches-hub-btn" onclick="chesHubGo('emu')">
+        <span class="ches-hub-name" style="color:#f08300;">Emu</span>
+        <span class="ches-hub-desc">知識を伝え合うSNS</span>
+        <span class="ches-hub-count" id="hubCountEmu">0</span>
+      </button>
+      <button type="button" class="ches-hub-btn" onclick="chesHubGo('schoolpark')">
+        <span class="ches-hub-name" style="color:#d0e2be;">SchoolPark</span>
+        <span class="ches-hub-desc">体験とコンテンツの街</span>
+        <span class="ches-hub-count" id="hubCountSchoolPark">0</span>
+      </button>
+    </div>
+  </div>
+</div>
+<!-- Emu / SchoolPark から「メイン画面に戻る」共通ボタン -->
+<button type="button" id="chesHubBack" class="ches-hub-back" onclick="chesHubShow()">← メイン画面に戻る</button>
+
 <!-- メイン画面 -->
 <div id="mainApp" style="display:none;">
 <header class="header" style="display: flex; align-items: center; padding: 0 20px; gap: 8px; flex-wrap: wrap;">
@@ -4694,17 +4782,30 @@ function startAirdropCounter() {
   }
   const globalRef = window.fbLib.doc(window.db, "sp_stats", "global");
   window.fbLib.onSnapshot(globalRef, (snap) => {
-    const data = snap.exists() ? snap.data() : {};
-    const sp  = data.entrants || 0;       // SchoolPark = ログインしてメイン画面に行ったユニーク人数
-    const emu = data.emu_entrants || 0;   // Emu = ログインしてEmu(SNS)に行ったユニーク人数
+    const d = snap.exists() ? snap.data() : {};
+    // 各ブランドを選んだユニーク人数（ハブ/CHESメニューでの選択時に spTrackBrand が加算）
+    const n = {
+      camellia:   d.camellia_entrants   || 0,
+      heartoo:    d.heartoo_entrants    || 0,
+      emu:        d.emu_entrants        || 0,
+      schoolpark: d.schoolpark_entrants || 0
+    };
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    // ゲートの4ブランドカウンター（PC表示・スマホは非表示）
-    set("connectedCount", sp);
-    set("countEmu", emu);
-    // CHESメニュー内（各ブランド名の横・主にスマホ用）
-    set("menuCountSchoolPark", sp);
-    set("menuCountEmu", emu);
-    // Camellia / Heartoo は未ローンチのため常に 0（HTMLの初期値のまま）
+    // ① ゲートの4ブランドカウンター（PC表示・スマホは非表示）
+    set("countCamellia", n.camellia);
+    set("countHeartoo",  n.heartoo);
+    set("countEmu",      n.emu);
+    set("connectedCount", n.schoolpark);
+    // ② CHESメニュー内（各ブランド名の横）
+    set("menuCountCamellia",   n.camellia);
+    set("menuCountHeartoo",    n.heartoo);
+    set("menuCountEmu",        n.emu);
+    set("menuCountSchoolPark", n.schoolpark);
+    // ③ ハブ画面（メイン画面）の各ボタン
+    set("hubCountCamellia",   n.camellia);
+    set("hubCountHeartoo",    n.heartoo);
+    set("hubCountEmu",        n.emu);
+    set("hubCountSchoolPark", n.schoolpark);
   });
 }
 startAirdropCounter();
@@ -12790,29 +12891,74 @@ function closeSpMap() {
   _stopSpLive();
   if (_fwTimer) { clearTimeout(_fwTimer); _fwTimer = null; }
   _spCrowdLeave(); /* Firestoreからセッション削除 */
-  spTrackEmu(); /* マップを閉じてEmu（SNS）へ入った＝Emu入場としてユニークカウント */
+  /* ※Emuのカウントはここではしない（「ハブに戻る」時も通るため誤カウントになる）。
+       ハブのEmuボタン / CHESメニューのEmu で明示的にカウントする。 */
 }
 
-/* Emu（SNS）へ入ったユニーク人数をカウント（アドレス単位・重複なし・0スタート） */
-async function spTrackEmu() {
+/* ブランド別のユニーク入場者カウント（アドレス単位・重複なし・0スタート）
+   brand: 'camellia' | 'heartoo' | 'emu' | 'schoolpark'
+   → sp_stats/global.{brand}_entrants を初回のみ +1 */
+async function spTrackBrand(brand) {
   try {
-    if (!window.db || !window.fbLib) return;
+    if (!brand || !window.db || !window.fbLib) return;
     const addr = (window.connectedAccount || window.currentUserId || localStorage.getItem('emuWallet') || '').toLowerCase();
     if (!addr) return;
-    const lsKey = 'sp_emu_tracked_' + addr;
-    if (localStorage.getItem(lsKey)) return; /* 同一端末・同一アドレスは再読み込みしない */
+    const lsKey = 'sp_brand_tracked_' + brand + '_' + addr;
+    if (localStorage.getItem(lsKey)) return; /* 同一端末・同一アドレスは再問い合わせしない */
     const { doc, setDoc, getDoc, increment } = window.fbLib;
     const db = window.db;
-    const ref = doc(db, 'sp_emu_entrants', addr);
+    const ref = doc(db, 'sp_brand_entrants', brand + '_' + addr);
     const snap = await getDoc(ref);
     if (!snap.exists()) {
-      await setDoc(ref, { address: addr, first_seen: new Date() });
-      setDoc(doc(db, 'sp_stats', 'global'), { emu_entrants: increment(1) }, { merge: true })
-        .catch(e => console.warn('[spTrackEmu] global:', e));
+      await setDoc(ref, { brand: brand, address: addr, first_seen: new Date() });
+      const patch = {};
+      patch[brand + '_entrants'] = increment(1);
+      setDoc(doc(db, 'sp_stats', 'global'), patch, { merge: true })
+        .catch(e => console.warn('[spTrackBrand] global:', e));
     }
     localStorage.setItem(lsKey, '1');
   } catch (e) {
-    console.warn('[spTrackEmu] error:', e);
+    console.warn('[spTrackBrand] error:', e);
+  }
+}
+
+/* ───── CHES ハブ画面（ログイン後の「メイン画面」） ───── */
+function chesHubShow() {
+  try { closeSpMap(); } catch (e) {}
+  ['logoScreen', 'walletScreen', 'mainApp'].forEach(function (id) {
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  const footer = document.getElementById('siteFooter'); if (footer) footer.style.display = 'none';
+  const back = document.getElementById('chesHubBack'); if (back) back.style.display = 'none';
+  const hub = document.getElementById('chesHubScreen'); if (hub) hub.style.display = 'flex';
+}
+
+/* ハブの4ボタン：カウント+1 → それぞれの行き先へ */
+function chesHubGo(brand) {
+  spTrackBrand(brand); /* 非ブロッキングで即時カウント */
+  const hub = document.getElementById('chesHubScreen');
+  const back = document.getElementById('chesHubBack');
+  switch (brand) {
+    case 'camellia':
+      location.href = 'https://school-park-homepage.vercel.app/Camellia.html';
+      break;
+    case 'heartoo':
+      location.href = 'https://school-park-homepage.vercel.app/Heartoo.html';
+      break;
+    case 'emu': {
+      /* Emu（SNS）：マップは開かず、メイン画面（フィード）を表示 */
+      if (hub) hub.style.display = 'none';
+      const app = document.getElementById('mainApp'); if (app) app.style.display = 'block';
+      const f = document.getElementById('siteFooter'); if (f) f.style.display = 'block';
+      try { closeSpMap(); } catch (e) {}
+      if (back) back.style.display = 'block';
+      break;
+    }
+    case 'schoolpark':
+      if (hub) hub.style.display = 'none';
+      if (back) back.style.display = 'block';
+      if (typeof goTomainapp === 'function') goTomainapp();
+      break;
   }
 }
 
@@ -16828,17 +16974,14 @@ function closeChesMenu() {
 function chesMenuGo(brand) {
   closeChesMenu();
   switch (brand) {
+    // ハブ画面と同じ挙動・同じカウント計上に統一
     case 'camellia':
-      window.open('https://school-park-homepage.vercel.app/Camellia.html', '_blank', 'noopener');
-      break;
     case 'heartoo':
-      window.open('https://school-park-homepage.vercel.app/Heartoo.html', '_blank', 'noopener');
-      break;
     case 'emu':
-      closeSpMap();
+      chesHubGo(brand);
       break;
     case 'schoolpark':
-      toggleSpNotifPanel();
+      toggleSpNotifPanel(); /* SchoolPark内ではお知らせパネル（従来どおり） */
       break;
   }
 }
@@ -17145,7 +17288,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // 入園したら resuming クラスは不要（以降の画面に影響しないよう除去）
     try { document.documentElement.classList.remove("ches-resuming"); } catch (e) {}
     if (typeof spTrack === "function") spTrack("free", addr).catch(function () {});
-    if (typeof goTomainapp === "function") goTomainapp();
+    // ログイン後は CHES ハブ（メイン画面）へ。SchoolParkマップはハブで
+    // SchoolPark を選んだときに開く。
+    if (typeof chesHubShow === "function") {
+      chesHubShow();
+      if (typeof _hideSpLoadingOverlay === "function") _hideSpLoadingOverlay();
+    } else if (typeof goTomainapp === "function") {
+      goTomainapp();
+    }
   };
 
   // 認証成功 → 共通フロー（アカウント検索/作成 → 入園）
