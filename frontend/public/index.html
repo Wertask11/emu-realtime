@@ -3370,6 +3370,25 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 .ches-hub-back:hover { background: rgba(32,28,48,0.95); }
 /* マップ(z-index:1002)より上に出す。Emu・SchoolPark どちらでも使う共通の戻るボタン */
 #chesHubBack { position: fixed; left: 12px; bottom: 12px; z-index: 1500; display: none; }
+
+/* ===== Camellia / Heartoo をアプリ内に表示するフレーム =====
+   外部サイトへ同一タブ遷移すると、そのサイトのロゴから自サイトのトップへ
+   飛んでしまい戻れなくなるため、iframeで内包し自前の戻るバーを上に置く。 */
+#chesBrandFrame {
+  position: fixed; inset: 0; z-index: 1600; display: none;
+  flex-direction: column; background: #100e18;
+}
+.cbf-bar {
+  flex: none; display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px; background: #100e18;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+}
+.cbf-title {
+  font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 600;
+  letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#cbfFrame { flex: 1; width: 100%; border: 0; background: #fff; }
 </style>
 <div id="chesHubScreen">
   <div class="hub-bg"></div>
@@ -3449,6 +3468,17 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     <div class="hub-foot">学校より学べて、公園より楽しめて、会社より稼げる場所。</div>
   </div>
 </div>
+<!-- Camellia / Heartoo をアプリ内に表示するフレーム（自前の戻るバー付き） -->
+<div id="chesBrandFrame">
+  <div class="cbf-bar">
+    <button type="button" class="ches-hub-back" onclick="chesBrandFrameClose()">← メイン画面に戻る</button>
+    <span class="cbf-title" id="cbfTitle"></span>
+  </div>
+  <iframe id="cbfFrame" src="about:blank" title="ブランドページ"
+          referrerpolicy="no-referrer-when-downgrade"
+          allow="clipboard-write; payment"></iframe>
+</div>
+
 <!-- Emu / SchoolPark から「メイン画面に戻る」共通ボタン -->
 <button type="button" id="chesHubBack" class="ches-hub-back" onclick="chesHubShow()">← メイン画面に戻る</button>
 
@@ -13062,11 +13092,45 @@ function chesHubShow() {
   });
   const footer = document.getElementById('siteFooter'); if (footer) footer.style.display = 'none';
   const back = document.getElementById('chesHubBack'); if (back) back.style.display = 'none';
+  const bf = document.getElementById('chesBrandFrame');
+  if (bf && bf.style.display !== 'none') {
+    bf.style.display = 'none';
+    const fr = document.getElementById('cbfFrame'); if (fr) fr.src = 'about:blank';
+  }
   const greet = document.getElementById('hubGreeting');
   if (greet) greet.textContent = CHES_HUB_GREETINGS[Math.floor(Math.random() * CHES_HUB_GREETINGS.length)];
   chesHubSyncHeader();
   try { if (typeof _renderSpNotifBadge === 'function') _renderSpNotifBadge(); } catch (e) {}
   const hub = document.getElementById('chesHubScreen'); if (hub) hub.style.display = 'block';
+}
+
+/* Camellia / Heartoo の表示先（外部サイトだがアプリ内フレームで開く） */
+const CHES_BRAND_PAGES = {
+  camellia: { url: 'https://school-park-homepage.vercel.app/Camellia.html', name: 'Camellia', color: '#e0576f' },
+  heartoo:  { url: 'https://school-park-homepage.vercel.app/Heartoo.html',  name: 'Heartoo',  color: '#a0d8ef' }
+};
+
+/* 外部ブランドページをアプリ内フレームで開く。
+   同一タブ遷移だと移動先サイトのロゴから相手のトップへ飛んでしまい戻れないため。 */
+function chesBrandFrameOpen(brand) {
+  const conf = CHES_BRAND_PAGES[brand];
+  if (!conf) return;
+  const wrap  = document.getElementById('chesBrandFrame');
+  const frame = document.getElementById('cbfFrame');
+  const title = document.getElementById('cbfTitle');
+  if (title) { title.textContent = conf.name; title.style.color = conf.color; }
+  if (frame) frame.src = conf.url;
+  const hub  = document.getElementById('chesHubScreen'); if (hub) hub.style.display = 'none';
+  const back = document.getElementById('chesHubBack');   if (back) back.style.display = 'none';
+  if (wrap) wrap.style.display = 'flex';
+}
+
+function chesBrandFrameClose() {
+  const wrap  = document.getElementById('chesBrandFrame');
+  const frame = document.getElementById('cbfFrame');
+  if (wrap) wrap.style.display = 'none';
+  if (frame) frame.src = 'about:blank'; /* 読み込みを止めて解放 */
+  chesHubShow();
 }
 
 /* ハブの4ボタン：カウント+1 → それぞれの行き先へ */
@@ -13076,10 +13140,8 @@ function chesHubGo(brand) {
   const back = document.getElementById('chesHubBack');
   switch (brand) {
     case 'camellia':
-      location.href = 'https://school-park-homepage.vercel.app/Camellia.html';
-      break;
     case 'heartoo':
-      location.href = 'https://school-park-homepage.vercel.app/Heartoo.html';
+      chesBrandFrameOpen(brand);
       break;
     case 'emu': {
       /* Emu（SNS）：マップは開かず、メイン画面（フィード）を表示 */
