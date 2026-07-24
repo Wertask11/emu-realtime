@@ -31,6 +31,8 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- CHESハブ画面（デザイン案）用フォント -->
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Shippori+Mincho:wght@500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     /* 基本スタイル */
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f5f6f7; color: #333; }
@@ -3283,85 +3285,168 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
      CHES ハブ画面（ログイン後の「メイン画面」：4ブランド選択）
      ============================================================ -->
 <style>
+/* ===== CHESハブ画面（デザイン案「タウン・ゲート」準拠） ===== */
+@keyframes chesFadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+@keyframes chesPulse  { 0%,100% { opacity:.55; } 50% { opacity:1; } }
 #chesHubScreen {
-  position: fixed; inset: 0; z-index: 900;
-  display: none; flex-direction: column; align-items: center; justify-content: center;
-  background: linear-gradient(160deg, #17142e 0%, #221a3d 55%, #2a1c33 100%);
-  padding: 24px 16px; overflow-y: auto;
-  font-family: 'Noto Sans JP', sans-serif;
+  position: fixed; inset: 0; z-index: 900; display: none; overflow-y: auto;
+  background: #100e18;
+  font-family: 'Zen Kaku Gothic New','Noto Sans JP',sans-serif;
 }
-.ches-hub-inner { width: 100%; max-width: 720px; }
-.ches-hub-head { text-align: center; margin-bottom: 28px; }
-.ches-hub-logo {
-  font-family: 'JetBrains Mono','Noto Sans JP',monospace;
-  font-size: 40px; font-weight: 800; letter-spacing: 0.14em; line-height: 1;
+#chesHubScreen .hub-bg, #chesHubScreen .hub-grain { position: absolute; inset: 0; pointer-events: none; }
+#chesHubScreen .hub-bg {
+  background: radial-gradient(70% 45% at 50% 6%, rgba(240,131,0,.10), transparent 60%),
+              linear-gradient(180deg,#151328 0%,#0d0c16 55%,#0a0910 100%);
 }
-.ches-hub-sub { margin-top: 10px; font-size: 11px; letter-spacing: 0.2em; color: rgba(240,230,255,0.55); }
-.ches-hub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.ches-hub-btn {
-  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
-  padding: 18px 16px 16px; min-height: 104px; border-radius: 16px; cursor: pointer;
-  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);
-  text-align: left; font-family: inherit;
-  transition: transform .15s ease, background .15s ease;
+#chesHubScreen .hub-grain {
+  opacity: .045; mix-blend-mode: overlay;
+  background-image: repeating-conic-gradient(#fff 0 25%, transparent 0 50%);
+  background-size: 34px 34px;
 }
-.ches-hub-btn:hover { transform: translateY(-2px); background: rgba(255,255,255,0.09); }
-.ches-hub-name { font-size: 17px; font-weight: 800; letter-spacing: 0.02em; }
-.ches-hub-desc { font-size: 11px; color: rgba(240,230,255,0.55); line-height: 1.5; }
-.ches-hub-count {
-  position: absolute; top: 12px; right: 12px;
-  font-size: 11px; font-weight: 700; color: #fff;
-  background: rgba(255,255,255,0.14); border-radius: 8px;
-  min-width: 22px; height: 19px; padding: 0 7px;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-variant-numeric: tabular-nums;
+.hub-wrap {
+  position: relative; max-width: 460px; margin: 0 auto; min-height: 100vh;
+  display: flex; flex-direction: column; padding: 28px 22px 32px; box-sizing: border-box;
 }
+/* ヘッダー */
+.hub-head { display: flex; align-items: center; justify-content: space-between; }
+.hub-user { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.hub-avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex: none;
+  background: linear-gradient(135deg,#e0576f,#a0d8ef);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #100e18; font-family: 'Shippori Mincho',serif;
+}
+.hub-uname { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.hub-uname b { font-size: 13px; color: #f1efe9; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-uname i { font-size: 10.5px; color: #d0e2be; letter-spacing: .03em; font-style: normal; }
+.hub-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+.hub-icon {
+  position: relative; width: 32px; height: 32px; border-radius: 50%; padding: 0;
+  background: rgba(255,255,255,.06); border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.hub-icon:hover { background: rgba(255,255,255,.1); }
+.hub-dot {
+  position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%;
+  background: #e0576f; box-shadow: 0 0 0 2px #100e18; display: none;
+}
+/* ロゴ */
+.hub-logo-block { text-align: center; margin-top: clamp(28px,8vh,64px); animation: chesFadeUp .6s ease both; }
+.hub-mark { font-family: 'Cormorant Garamond',serif; font-size: clamp(40px,10vw,56px); font-weight: 600; letter-spacing: .16em; line-height: 1; }
+.hub-greet { margin-top: 11px; font-family: 'Shippori Mincho',serif; font-size: 14px; color: #c9c7c0; letter-spacing: .05em; }
+/* 4ブランドカード */
+.hub-grid { margin-top: clamp(24px,6vh,44px); display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.hub-card {
+  --bc: rgba(255,255,255,.4);
+  position: relative; overflow: hidden; border-radius: 20px; padding: 20px 16px;
+  min-height: 150px; cursor: pointer; text-align: left; font-family: inherit;
+  background: linear-gradient(160deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+  border: 1px solid rgba(255,255,255,.08);
+  display: flex; flex-direction: column; justify-content: space-between;
+  animation: chesFadeUp .5s ease both;
+  transition: transform .15s ease, border-color .15s ease;
+}
+.hub-card:hover { transform: translateY(-2px); border-color: var(--bc); }
+.hub-glow { position: absolute; top: -30px; right: -30px; width: 90px; height: 90px; border-radius: 50%; opacity: .16; filter: blur(8px); }
+.hub-cname { display: block; font-family: 'Cormorant Garamond',serif; font-size: 21px; font-weight: 600; line-height: 1.1; }
+.hub-ctag  { display: block; font-size: 11px; color: #a7a59d; margin-top: 6px; line-height: 1.45; }
+.hub-cfoot { position: relative; margin-top: 14px; }
+.hub-live  { display: flex; align-items: center; gap: 6px; }
+.hub-live i { width: 5px; height: 5px; border-radius: 50%; animation: chesPulse 2s ease-in-out infinite; flex: none; }
+.hub-live b { font-size: 13px; font-weight: 600; color: #f1efe9; font-variant-numeric: tabular-nums; }
+.hub-live u { font-size: 9.5px; color: #77756c; text-decoration: none; }
+.hub-soon {
+  display: inline-block; font-size: 9px; letter-spacing: .08em; color: #9c9a90;
+  border: 1px solid rgba(255,255,255,.2); border-radius: 20px; padding: 3px 9px;
+}
+.hub-foot { text-align: center; font-size: 10px; color: #5c5a53; letter-spacing: .02em; line-height: 1.5; padding-top: 24px; }
 /* 各ブランド画面から「メイン画面に戻る」ボタン */
 .ches-hub-back {
-  background: rgba(20,16,45,0.92); color: #f0e6ff;
+  background: rgba(16,14,24,0.92); color: #f1efe9;
   border: 1px solid rgba(255,255,255,0.2); border-radius: 999px;
   padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer;
-  font-family: 'Noto Sans JP', sans-serif; white-space: nowrap;
+  font-family: 'Zen Kaku Gothic New','Noto Sans JP',sans-serif; white-space: nowrap;
 }
-.ches-hub-back:hover { background: rgba(40,32,80,0.95); }
+.ches-hub-back:hover { background: rgba(32,28,48,0.95); }
 /* マップ(z-index:1002)より上に出す。Emu・SchoolPark どちらでも使う共通の戻るボタン */
 #chesHubBack { position: fixed; left: 12px; bottom: 12px; z-index: 1500; display: none; }
-@media (max-width: 420px) {
-  .ches-hub-grid { grid-template-columns: 1fr; }
-  .ches-hub-logo { font-size: 34px; }
-  .ches-hub-btn { min-height: 88px; padding: 14px 14px 12px; }
-}
 </style>
 <div id="chesHubScreen">
-  <div class="ches-hub-inner">
-    <div class="ches-hub-head">
-      <div class="ches-hub-logo">
+  <div class="hub-bg"></div>
+  <div class="hub-grain"></div>
+  <div class="hub-wrap">
+    <!-- ヘッダー：アカウント / 通知 / 設定 -->
+    <div class="hub-head">
+      <div class="hub-user">
+        <div class="hub-avatar" id="hubAvatar">・</div>
+        <div class="hub-uname">
+          <b id="hubUserName">ゲスト</b>
+          <i><span id="hubEmuer">0</span> EMUER</i>
+        </div>
+      </div>
+      <div class="hub-actions">
+        <button type="button" class="hub-icon" onclick="chesHubOpenNotif()" aria-label="お知らせ">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="#cfcdc5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.7 21a2 2 0 0 1-3.4 0" stroke="#cfcdc5" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span class="hub-dot" id="hubNotifDot"></span>
+        </button>
+        <button type="button" class="hub-icon" onclick="chesHubOpenSettings()" aria-label="設定">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#cfcdc5" stroke-width="1.6"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.13.36.4.66.75.83.28.14.6.2.94.17H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="#cfcdc5" stroke-width="1.4"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ロゴ + 挨拶 -->
+    <div class="hub-logo-block">
+      <div class="hub-mark">
         <span style="color:#e0576f;">C</span><span style="color:#a0d8ef;">H</span><span style="color:#f08300;">E</span><span style="color:#d0e2be;">S</span>
       </div>
-      <div class="ches-hub-sub">WHERE TO GO ?</div>
+      <div class="hub-greet" id="hubGreeting">こんにちは、どこに行く？</div>
     </div>
-    <div class="ches-hub-grid">
-      <button type="button" class="ches-hub-btn" onclick="chesHubGo('camellia')">
-        <span class="ches-hub-name" style="color:#e0576f;">Camellia</span>
-        <span class="ches-hub-desc">女性ウェルネス</span>
-        <span class="ches-hub-count" id="hubCountCamellia">0</span>
+
+    <!-- 4ブランド（2x2） -->
+    <div class="hub-grid">
+      <button type="button" class="hub-card" style="--bc:#e0576f;" onclick="chesHubGo('camellia')">
+        <span class="hub-glow" style="background:#e0576f;"></span>
+        <span style="position:relative;">
+          <span class="hub-cname" style="color:#e0576f;">Camellia</span>
+          <span class="hub-ctag">もう一度、自分を好きになる。</span>
+        </span>
+        <span class="hub-cfoot"><span class="hub-soon">準備中</span></span>
       </button>
-      <button type="button" class="ches-hub-btn" onclick="chesHubGo('heartoo')">
-        <span class="ches-hub-name" style="color:#a0d8ef;">Heartoo</span>
-        <span class="ches-hub-desc">スマート結婚指輪</span>
-        <span class="ches-hub-count" id="hubCountHeartoo">0</span>
+      <button type="button" class="hub-card" style="--bc:#a0d8ef;" onclick="chesHubGo('heartoo')">
+        <span class="hub-glow" style="background:#a0d8ef;"></span>
+        <span style="position:relative;">
+          <span class="hub-cname" style="color:#a0d8ef;">Heartoo</span>
+          <span class="hub-ctag">♡を貴女に。</span>
+        </span>
+        <span class="hub-cfoot">
+          <span class="hub-live"><i style="background:#a0d8ef;"></i><b id="hubCountHeartoo">0</b><u>入場</u></span>
+        </span>
       </button>
-      <button type="button" class="ches-hub-btn" onclick="chesHubGo('emu')">
-        <span class="ches-hub-name" style="color:#f08300;">Emu</span>
-        <span class="ches-hub-desc">知識を伝え合うSNS</span>
-        <span class="ches-hub-count" id="hubCountEmu">0</span>
+      <button type="button" class="hub-card" style="--bc:#f08300;" onclick="chesHubGo('emu')">
+        <span class="hub-glow" style="background:#f08300;"></span>
+        <span style="position:relative;">
+          <span class="hub-cname" style="color:#f08300;">Emu</span>
+          <span class="hub-ctag">知識を伝え合うSNS。</span>
+        </span>
+        <span class="hub-cfoot">
+          <span class="hub-live"><i style="background:#f08300;"></i><b id="hubCountEmu">0</b><u>入場</u></span>
+        </span>
       </button>
-      <button type="button" class="ches-hub-btn" onclick="chesHubGo('schoolpark')">
-        <span class="ches-hub-name" style="color:#d0e2be;">SchoolPark</span>
-        <span class="ches-hub-desc">体験とコンテンツの街</span>
-        <span class="ches-hub-count" id="hubCountSchoolPark">0</span>
+      <button type="button" class="hub-card" style="--bc:#d0e2be;" onclick="chesHubGo('schoolpark')">
+        <span class="hub-glow" style="background:#d0e2be;"></span>
+        <span style="position:relative;">
+          <span class="hub-cname" style="color:#d0e2be;">SchoolPark</span>
+          <span class="hub-ctag">体験とコンテンツの街。</span>
+        </span>
+        <span class="hub-cfoot">
+          <span class="hub-live"><i style="background:#d0e2be;"></i><b id="hubCountSchoolPark">0</b><u>入場</u></span>
+        </span>
       </button>
     </div>
+
+    <div style="flex:1;"></div>
+    <div class="hub-foot">学校より学べて、公園より楽しめて、会社より稼げる場所。</div>
   </div>
 </div>
 <!-- Emu / SchoolPark から「メイン画面に戻る」共通ボタン -->
@@ -12923,6 +13008,53 @@ async function spTrackBrand(brand) {
 }
 
 /* ───── CHES ハブ画面（ログイン後の「メイン画面」） ───── */
+const CHES_HUB_GREETINGS = [
+  'こんにちは、どこに行く？',
+  'おかえりなさい、今日はどこへ？',
+  'ようこそ、街を選んでください。',
+  'さあ、今日の行き先は？',
+  'どの街から始めますか？'
+];
+
+/* ヘッダー（名前・アバター・EMUER残高）を実データで更新 */
+function chesHubSyncHeader() {
+  const name = localStorage.getItem('ches_name') || '';
+  const addr = localStorage.getItem('emuWallet') || '';
+  const nameEl = document.getElementById('hubUserName');
+  if (nameEl) nameEl.textContent = name || (addr ? addr.substring(0, 6) + '…' + addr.slice(-4) : 'ゲスト');
+  const av = document.getElementById('hubAvatar');
+  if (av) {
+    const src = (name || addr.replace(/^0x/, '') || '・').trim();
+    av.textContent = src.charAt(0).toUpperCase();
+  }
+  const em = document.getElementById('hubEmuer');
+  if (em) {
+    let v = 0;
+    try {
+      v = (typeof pendingEmuer === 'number' ? pendingEmuer
+           : parseInt(localStorage.getItem('pendingEmuer'), 10)) || 0;
+    } catch (e) { v = 0; }
+    em.textContent = v.toLocaleString();
+  }
+}
+
+/* お知らせ・設定パネルはマップ内にあるため、ハブからでも開けるよう body 直下へ移す（初回のみ） */
+function _chesHubLiftPanel(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const overlay = document.getElementById('spMapOverlay');
+  if (overlay && overlay.contains(el)) document.body.appendChild(el);
+  return el;
+}
+function chesHubOpenNotif() {
+  _chesHubLiftPanel('spNotifPanel');
+  if (typeof toggleSpNotifPanel === 'function') toggleSpNotifPanel();
+}
+function chesHubOpenSettings() {
+  _chesHubLiftPanel('spSettingsPanel');
+  if (typeof openSpPanel === 'function') openSpPanel('spSettingsPanel');
+}
+
 function chesHubShow() {
   try { closeSpMap(); } catch (e) {}
   ['logoScreen', 'walletScreen', 'mainApp'].forEach(function (id) {
@@ -12930,7 +13062,11 @@ function chesHubShow() {
   });
   const footer = document.getElementById('siteFooter'); if (footer) footer.style.display = 'none';
   const back = document.getElementById('chesHubBack'); if (back) back.style.display = 'none';
-  const hub = document.getElementById('chesHubScreen'); if (hub) hub.style.display = 'flex';
+  const greet = document.getElementById('hubGreeting');
+  if (greet) greet.textContent = CHES_HUB_GREETINGS[Math.floor(Math.random() * CHES_HUB_GREETINGS.length)];
+  chesHubSyncHeader();
+  try { if (typeof _renderSpNotifBadge === 'function') _renderSpNotifBadge(); } catch (e) {}
+  const hub = document.getElementById('chesHubScreen'); if (hub) hub.style.display = 'block';
 }
 
 /* ハブの4ボタン：カウント+1 → それぞれの行き先へ */
@@ -16879,10 +17015,13 @@ function _startSpNotifPoll() {
 // ──────── ③  バッジ（通知＋ログを合算） ────────
 function _renderSpNotifBadge() {
   const badge = document.getElementById('spNotifBadge');
-  if (!badge) return;
   const unreadNotif = _spNotifData.filter(n => !n.isRead).length;
   const unreadLog   = _spShowLogEnabled() ? _spLogUnreadCount() : 0;
   const total = unreadNotif + unreadLog;
+  // CHESハブ画面の通知ドット（数字は出さず有無だけ示す）
+  const hubDot = document.getElementById('hubNotifDot');
+  if (hubDot) hubDot.style.display = total > 0 ? 'block' : 'none';
+  if (!badge) return;
   if (total > 0) {
     badge.textContent   = total > 99 ? '99+' : String(total);
     badge.style.display = 'flex';
