@@ -2364,6 +2364,9 @@ body.paypay-mode .container {
   }
   /* デスクトップでは切り替えボタンも非表示 */
   #designToggleBtn { display: none !important; }
+  /* PCでは左上「Emu」ロゴを非表示（PayPay支払いUIはPCでは無効なため）。
+     モバイル/タブレットでは支払いUIへの入口として残す。 */
+  #mainApp > .header > #logo { display: none !important; }
 }
 
 /* ═══════════════════════════════════════════════
@@ -2589,6 +2592,16 @@ body.paypay-mode #pp-post-fab {
   transition:width .3s ease;
 }
 .eth-reward-note { margin:0; color:#777; font-size:12px; line-height:1.6; }
+.eth-loginbonus {
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:12px; border-radius:12px; background:#fff8f1; border:1px solid #ffe2c6;
+}
+.eth-lb-copy { display:grid; gap:2px; min-width:0; }
+.eth-lb-copy strong { font-size:13px; }
+.eth-lb-copy span { color:#9c5100; font-size:11px; }
+.eth-loginbonus .eth-btn { white-space:nowrap; }
+.eth-loginbonus.claimed { background:#f4f4f4; border-color:#e5e5e5; }
+.eth-loginbonus.claimed .eth-lb-copy span { color:#999; }
 .eth-section { margin-top:22px; }
 .eth-section-head {
   display:flex; align-items:flex-end; justify-content:space-between;
@@ -3645,17 +3658,11 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <!-- メイン画面 -->
 <div id="mainApp" style="display:none;">
 <header class="header" style="display: flex; align-items: center; padding: 0 20px; gap: 8px; flex-wrap: wrap;">
+  <!-- Emuロゴ：PCでは非表示（下部CSS）。モバイル/タブレットではPayPay支払いUIへの入口として残す -->
   <a id="logo" class="logo" href="#" style="margin-right: 10px; cursor: pointer;" onclick="toggleDesignMode(); return false;">Emu</a>
 
-  <div id="login-bonus-mini-container" style="display: flex; align-items: center; gap: 8px; background: #f0f8ff; border: 1px solid #007bff; border-radius: 20px; padding: 4px 12px;">
-    <span id="bonus-status-text" style="font-size: 13px; font-weight: bold; color: #007bff;">🎁 0.5 EMUER</span>
-    <button id="loginBonusBtn" style="background: #007bff; color: white; border: none; border-radius: 15px; padding: 3px 10px; font-size: 11px; cursor: pointer;">受取</button>
-    <span id="next-bonus-time" style="font-size: 10px; color: #007bff; margin-left: 5px;"></span>
-  </div>
-
-  <button id="buyNftBtn" onclick="openMarketplace()" style="background: linear-gradient(135deg, #ff7f83 0%, #fecfef 100%); color: #fff; border: none; border-radius: 20px; padding: 6px 15px; font-size: 12px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-left: 8px;">
-    🛒 公式NFTを購入
-  </button>
+  <!-- ログインボーナスpill・公式NFTボタンは廃止。
+       ログボは「今日のEmu」報酬カードに統合（オフチェーン化）。 -->
 
   <div style="flex-grow: 1;"></div>
 
@@ -3721,6 +3728,13 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
           <span id="emuTodayProgress"></span>
         </div>
         <p class="eth-reward-note" id="emuNextRewardNote">100 Emuerで特別体験と交換できます。</p>
+        <div class="eth-loginbonus" id="emuLoginBonusRow">
+          <div class="eth-lb-copy">
+            <strong>今日のログインボーナス</strong>
+            <span id="emuLoginBonusNote">毎日ログインで +0.5 Emuer</span>
+          </div>
+          <button type="button" class="eth-btn primary" id="emuLoginBonusBtn" onclick="claimEmuLoginBonus()">+0.5 受取</button>
+        </div>
         <button type="button" class="eth-btn" onclick="toggleEmuUses(true)">使い道を見る</button>
       </aside>
     </div>
@@ -5495,7 +5509,7 @@ let editMode = null;
 // 予定 Emuer（変換前の合計 Emuer 単位）と累計 Emuer（保有）
 let totalgoodcount = 0;
 let totalchangecount = 0;
-let pendingEmuer = parseInt(localStorage.getItem("pendingEmuer")) || 0;
+let pendingEmuer = parseFloat(localStorage.getItem("pendingEmuer")) || 0; // 小数(ログボ0.5等)も保持
 let currentUserId = null;
 let posts = [];
 
@@ -13630,6 +13644,62 @@ async function updateEmuTodayHome() {
   if (starTitle) starTitle.textContent = 'あと' + untilStar + '回の投稿行動で、新しい星';
   if (starText) starText.textContent = '投稿・学び・議論で残した価値が、Room2の星空につながります。';
   _emuLoadRecommendedPost();
+  updateEmuLoginBonusUI();
+}
+
+/* ═══════════════════════════════════════
+   ログインボーナス（オフチェーン・1日1回・+0.5 Emuer）
+   CHESログインユーザー(署名不可)でも受け取れるよう pendingEmuer に加算する。
+═══════════════════════════════════════ */
+const EMU_LOGIN_BONUS_AMOUNT = 0.5;
+function _emuLbKey() {
+  const a = (window.connectedAccount || localStorage.getItem('emuWallet') || 'guest').toLowerCase();
+  return 'emu_loginbonus_last_' + a;
+}
+function _emuTodayStr() {
+  // ローカル日付(YYYY-MM-DD)。日付が変わればまた受け取れる。
+  const d = new Date();
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+}
+function emuLoginBonusClaimedToday() {
+  return localStorage.getItem(_emuLbKey()) === _emuTodayStr();
+}
+function updateEmuLoginBonusUI() {
+  const row = document.getElementById('emuLoginBonusRow');
+  const btn = document.getElementById('emuLoginBonusBtn');
+  const note = document.getElementById('emuLoginBonusNote');
+  if (!btn) return;
+  if (emuLoginBonusClaimedToday()) {
+    btn.textContent = '受取済み';
+    btn.disabled = true;
+    if (row) row.classList.add('claimed');
+    if (note) note.textContent = 'また明日、受け取れます。';
+  } else {
+    btn.textContent = '+' + EMU_LOGIN_BONUS_AMOUNT + ' 受取';
+    btn.disabled = false;
+    if (row) row.classList.remove('claimed');
+    if (note) note.textContent = '毎日ログインで +' + EMU_LOGIN_BONUS_AMOUNT + ' Emuer';
+  }
+}
+function claimEmuLoginBonus() {
+  if (emuLoginBonusClaimedToday()) { updateEmuLoginBonusUI(); return; }
+  pendingEmuer = (Number(pendingEmuer) || 0) + EMU_LOGIN_BONUS_AMOUNT;
+  try { savePending(); } catch (e) {}
+  localStorage.setItem(_emuLbKey(), _emuTodayStr());
+  // 各所の残高表示を更新
+  try { if (typeof ppUpdateBalance === 'function') ppUpdateBalance(); } catch (e) {}
+  try { if (myWalletPage && myWalletPage.style.display === 'block') renderWallet(); } catch (e) {}
+  updateEmuLoginBonusUI();
+  // 報酬カードの残高progressを更新
+  try { updateEmuTodayHome(); } catch (e) {}
+  // トースト
+  try {
+    const t = document.createElement('div');
+    t.textContent = '🎁 ログインボーナス +' + EMU_LOGIN_BONUS_AMOUNT + ' Emuer';
+    t.style.cssText = 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);background:#f08300;color:#fff;padding:10px 18px;border-radius:999px;font-weight:bold;z-index:3000;box-shadow:0 4px 14px rgba(0,0,0,.2);font-size:13px;';
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 2200);
+  } catch (e) {}
 }
 
 function _emuValueEvent(title, detail) {
@@ -15995,31 +16065,17 @@ const intervalId = setInterval(async () => {
 });
 
 
-// ログボ実行関数
-async function handleLoginBonus() {
-  const btn = document.getElementById("loginBonusBtn");
-  try {
-    btn.disabled = true;
-    btn.textContent = "通信中...";
-
-    const tx = await emuerContract.loginBonus();
-    await tx.wait();
-
-    alert("🎉 0.5 EMUER を獲得しました！");
-    
-    // ✅ 受取直後にカウントダウンを即時更新！
-    updateBonusCountdown();
-
-  } catch (err) {
-      // エラー処理...
-      updateBonusCountdown(); // エラー時も状態を確認
-  }
+// ログボ実行関数（オフチェーンに統一：PayPayショートカット等の既存導線もこれを呼ぶ）
+function handleLoginBonus() {
+  claimEmuLoginBonus();
 }
 
-// ボタンにイベントを紐付け
-document.getElementById("loginBonusBtn").addEventListener("click", handleLoginBonus);
+// ※旧ヘッダーの受取ボタン(#loginBonusBtn)は廃止したためイベント紐付けは行わない
 
 async function checkNextBonusTime() {
+  // 旧ヘッダーのログボpillは廃止済み。対象要素が無ければ何もしない
+  if (!document.getElementById("next-bonus-time") || !document.getElementById("loginBonusBtn")) return;
+  if (!window.connectedAccount || !emuerContract) return;
   const userInfo = await emuerContract.users(window.connectedAccount);
   const lastLogin = userInfo.lastLogin.toNumber(); // unix timestamp
   
@@ -16050,6 +16106,8 @@ async function updateBonusCountdown() {
     const nextTimeSpan = document.getElementById("next-bonus-time");
     const statusText = document.getElementById("bonus-status-text");
 
+    // 旧ヘッダーのログボpillは廃止済み。対象要素が無ければ何もしない（オフチェーン版に移行）
+    if (!bonusBtn || !nextTimeSpan || !statusText) return;
     if (!window.connectedAccount || !emuerContract) return;
 
     try {
