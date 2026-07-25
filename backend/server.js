@@ -486,9 +486,96 @@ secretDoorRouter.post("/batch/run", async (req, res) => {
 
 app.use("/secret-door", secretDoorRouter);
 
+// =====================
+// Emu「知識を探しています」EMUER懸賞
+// 採用済みの募集・回答と一致する申請だけを検証して配布する
+// =====================
+async function runKnowledgeBountyBatch() {
+  if (!db || !emuerContract) {
+    console.warn("⚠️ Firestore または emuerContract が未初期化。知識懸賞バッチをスキップ。");
+    return;
+  }
+  console.log("🚀 知識懸賞バッチ開始:", new Date().toISOString());
+  try {
+    const snapshot = await db.collection("emuer_bounty_claims")
+      .where("status", "==", "pending")
+      .limit(50)
+      .get();
+    if (snapshot.empty) return;
+
+    const valid = [];
+    for (const claimDoc of snapshot.docs) {
+      const claim = claimDoc.data();
+      const requestDoc = await db.collection("knowledge_requests").doc(String(claim.requestId || "")).get();
+      if (!requestDoc.exists) {
+        await claimDoc.ref.update({ status:"rejected", errorMessage:"REQUEST_NOT_FOUND", processedAt:new Date() });
+        continue;
+      }
+      const request = requestDoc.data();
+      const amount = Math.floor(Number(claim.amount));
+      const recipient = String(claim.recipient || "").toLowerCase();
+      const matches = request.status === "awarded"
+        && request.settlementStatus === "pending_distribution"
+        && String(request.acceptedAnswerAuthor || "").toLowerCase() === recipient
+        && Number(request.bounty) === amount
+        && ethers.utils.isAddress(recipient)
+        && amount >= 0
+        && amount <= 10000;
+      if (!matches) {
+        await claimDoc.ref.update({ status:"rejected", errorMessage:"CLAIM_MISMATCH", processedAt:new Date() });
+        continue;
+      }
+      if (amount === 0) {
+        await claimDoc.ref.update({ status:"done", txHash:null, processedAt:new Date() });
+        await requestDoc.ref.update({ settlementStatus:"done", settledAt:new Date() });
+        continue;
+      }
+      valid.push({ claimDoc, requestDoc, recipient, amount });
+    }
+    if (!valid.length) return;
+
+    const processing = db.batch();
+    valid.forEach(item => processing.update(item.claimDoc.ref, { status:"processing" }));
+    await processing.commit();
+
+    const tx = await emuerContract.addGoodBatch(
+      valid.map(item => item.recipient),
+      valid.map(item => ethers.utils.parseUnits(String(item.amount), 18)),
+      {
+        maxPriorityFeePerGas: ethers.utils.parseUnits("40", "gwei"),
+        maxFeePerGas: ethers.utils.parseUnits("100", "gwei"),
+        gasLimit: 500000
+      }
+    );
+    const receipt = await tx.wait();
+    const done = db.batch();
+    valid.forEach(item => {
+      done.update(item.claimDoc.ref, {
+        status:"done", txHash:receipt.transactionHash, processedAt:new Date()
+      });
+      done.update(item.requestDoc.ref, {
+        settlementStatus:"done", bountyTxHash:receipt.transactionHash, settledAt:new Date()
+      });
+    });
+    await done.commit();
+    console.log(`🎉 知識懸賞配布完了: ${valid.length} 件`);
+  } catch (error) {
+    console.error("❌ 知識懸賞バッチエラー:", error);
+    try {
+      const stuck = await db.collection("emuer_bounty_claims").where("status", "==", "processing").get();
+      const rollback = db.batch();
+      stuck.docs.forEach(doc => rollback.update(doc.ref, { status:"pending", errorMessage:error.message }));
+      await rollback.commit();
+    } catch (rollbackError) {
+      console.error("❌ 知識懸賞ロールバック失敗:", rollbackError);
+    }
+  }
+}
+
 cron.schedule("0 2 * * *", () => { console.log("⏰ 定期エアドロバッチ起動"); runAirdropBatch(); }, { timezone: "Asia/Tokyo" });
 cron.schedule("0 3 15 4 *", () => { console.log("🏁 最終エアドロバッチ起動"); runAirdropBatch(); }, { timezone: "Asia/Tokyo" });
 cron.schedule("30 2 * * *", () => { console.log("⏰ 秘密のとびらバッチ起動"); runSecretDoorBatch(); }, { timezone: "Asia/Tokyo" });
+cron.schedule("0 * * * *", () => { console.log("⏰ 知識懸賞バッチ起動"); runKnowledgeBountyBatch(); }, { timezone: "Asia/Tokyo" });
 
 // =====================
 // 予約投稿 システム
