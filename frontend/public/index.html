@@ -3878,7 +3878,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <div id="postFeed">
         <div class="placeholder-content">
           <h2>ようこそEmuへ！</h2>
-          <p>さあ、貴女だけの物語を紡ごう。</p>
+          <p>さあ、物語を紡ごう。</p>
         </div>
       </div>
     </main>
@@ -15535,12 +15535,21 @@ function startRealtimeUpdate() {
 }
 
 // ページ読み込み時に実行を開始
-// ※ window.db が初期化されるのを少し待つために setTimeout を使うと安全です
-setTimeout(() => {
-  if (window.db && window.fbLib) {
-    startRealtimeUpdate();
-  }
-}, 1000);
+// ※ window.db / window.fbLib の初期化タイミングは一定しないため、
+//   準備できるまでリトライする（1回きりの setTimeout だと初期化が遅れた場合に
+//   リスナーが登録されず、投稿が永久に表示されない不具合になる）。
+(function _bootRealtimeUpdate() {
+  let _tries = 0;
+  const _timer = setInterval(() => {
+    if (window.db && window.fbLib) {
+      clearInterval(_timer);
+      startRealtimeUpdate();
+    } else if (++_tries > 100) { // 最大 ~20秒（200ms×100）で諦める
+      clearInterval(_timer);
+      console.warn("⚠️ Firebase未初期化のためリアルタイム更新を開始できませんでした");
+    }
+  }, 200);
+})();
 
 // ★ 予約投稿の自動公開に対応するため3分ごとにリフレッシュ
 setInterval(() => {
