@@ -530,7 +530,12 @@ async function runKnowledgeBountyBatch() {
         await requestDoc.ref.update({ settlementStatus:"done", settledAt:new Date() });
         continue;
       }
-      valid.push({ claimDoc, requestDoc, recipient, amount });
+      // 受取先が CHES（LINE/Google）の秘密鍵を持たない address-only ウォレットか判定。
+      // CHESは実EMUERを送っても本人が動かせず永久ロックになるため、オフチェーン台帳へ計上する。
+      const chesWalletDoc = await db.collection("ches_wallets").doc(recipient).get();
+      const isChes = chesWalletDoc.exists && chesWalletDoc.data().type === "address-only";
+      const chesUid = isChes ? (chesWalletDoc.data().uid || null) : null;
+      valid.push({ claimDoc, requestDoc, recipient, amount, isChes, chesUid });
     }
     if (!valid.length) return;
 
@@ -538,27 +543,66 @@ async function runKnowledgeBountyBatch() {
     valid.forEach(item => processing.update(item.claimDoc.ref, { status:"processing" }));
     await processing.commit();
 
-    const tx = await emuerContract.addGoodBatch(
-      valid.map(item => item.recipient),
-      valid.map(item => ethers.utils.parseUnits(String(item.amount), 18)),
-      {
-        maxPriorityFeePerGas: ethers.utils.parseUnits("40", "gwei"),
-        maxFeePerGas: ethers.utils.parseUnits("100", "gwei"),
-        gasLimit: 500000
-      }
-    );
-    const receipt = await tx.wait();
-    const done = db.batch();
-    valid.forEach(item => {
-      done.update(item.claimDoc.ref, {
-        status:"done", txHash:receipt.transactionHash, processedAt:new Date()
+    const offchainItems = valid.filter(i => i.isChes);
+    const onchainItems  = valid.filter(i => !i.isChes);
+
+    // ── ① CHESユーザー：オフチェーンEMUER台帳へ durable に計上 ──
+    // emuer_offchain/{address}.balance に加算（source of truth）。
+    // 将来CHESウォレット本開発時に、この balance を実EMUERとして送って精算する。
+    // 台帳は初期化せず積み上げるのみ。監査用に emuer_offchain_ledger も追記。
+    if (offchainItems.length) {
+      const offBatch = db.batch();
+      const FieldValue = admin.firestore.FieldValue;
+      offchainItems.forEach(item => {
+        const balRef = db.collection("emuer_offchain").doc(item.recipient);
+        offBatch.set(balRef, {
+          address: item.recipient,
+          uid: item.chesUid,
+          balance: FieldValue.increment(item.amount),
+          settledOnchain: FieldValue.increment(0), // 実EMUER精算済み額（将来用）
+          updatedAt: new Date()
+        }, { merge: true });
+        const ledgerRef = db.collection("emuer_offchain_ledger").doc();
+        offBatch.set(ledgerRef, {
+          address: item.recipient, uid: item.chesUid, amount: item.amount,
+          reason: "knowledge_bounty", requestId: item.requestDoc.id, claimId: item.claimDoc.id,
+          createdAt: new Date()
+        });
+        offBatch.update(item.claimDoc.ref, {
+          status: "done", settlement: "offchain", txHash: null, processedAt: new Date()
+        });
+        offBatch.update(item.requestDoc.ref, {
+          settlementStatus: "done", settlement: "offchain", settledAt: new Date()
+        });
       });
-      done.update(item.requestDoc.ref, {
-        settlementStatus:"done", bountyTxHash:receipt.transactionHash, settledAt:new Date()
+      await offBatch.commit();
+      console.log(`💠 知識懸賞オフチェーン計上: ${offchainItems.length} 件（emuer_offchain）`);
+    }
+
+    // ── ② MetaMask等の実ウォレット：オンチェーンで実EMUERを配布 ──
+    if (onchainItems.length) {
+      const tx = await emuerContract.addGoodBatch(
+        onchainItems.map(item => item.recipient),
+        onchainItems.map(item => ethers.utils.parseUnits(String(item.amount), 18)),
+        {
+          maxPriorityFeePerGas: ethers.utils.parseUnits("40", "gwei"),
+          maxFeePerGas: ethers.utils.parseUnits("100", "gwei"),
+          gasLimit: 500000
+        }
+      );
+      const receipt = await tx.wait();
+      const done = db.batch();
+      onchainItems.forEach(item => {
+        done.update(item.claimDoc.ref, {
+          status:"done", settlement:"onchain", txHash:receipt.transactionHash, processedAt:new Date()
+        });
+        done.update(item.requestDoc.ref, {
+          settlementStatus:"done", settlement:"onchain", bountyTxHash:receipt.transactionHash, settledAt:new Date()
+        });
       });
-    });
-    await done.commit();
-    console.log(`🎉 知識懸賞配布完了: ${valid.length} 件`);
+      await done.commit();
+      console.log(`🎉 知識懸賞オンチェーン配布完了: ${onchainItems.length} 件`);
+    }
   } catch (error) {
     console.error("❌ 知識懸賞バッチエラー:", error);
     try {

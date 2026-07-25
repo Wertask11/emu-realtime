@@ -14153,14 +14153,24 @@ function _emuCurrentTopic() {
 }
 
 async function _emuReadTokenBalance() {
-  const fallback = Math.max(0, Number(pendingEmuer) || 0);
-  if (!window.connectedAccount || !emuerContract || !window.ethers) return fallback;
-  try {
-    const balance = await emuerContract.balanceOf(window.connectedAccount);
-    return Math.floor(parseFloat(ethers.utils.formatUnits(balance, 18)));
-  } catch (e) {
-    return fallback;
+  const localPart = Math.max(0, Number(pendingEmuer) || 0);
+  // MetaMask等の実ウォレット：オンチェーン残高（懸賞も実EMUERで反映済み）
+  if (window.connectedAccount && emuerContract && window.ethers) {
+    try {
+      const balance = await emuerContract.balanceOf(window.connectedAccount);
+      return Math.floor(parseFloat(ethers.utils.formatUnits(balance, 18)));
+    } catch (e) { /* 失敗時は下のオフチェーン計算にフォールバック */ }
   }
+  // CHESユーザー：ローカル(Good/Change/ログボ) + durableなオフチェーン台帳(懸賞等)
+  let offchain = 0;
+  try {
+    const addr = (localStorage.getItem('emuWallet') || '').toLowerCase();
+    if (addr && window.db && window.fbLib) {
+      const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'emuer_offchain', addr));
+      if (snap.exists()) offchain = Math.max(0, Number(snap.data().balance) || 0);
+    }
+  } catch (e) { /* 読めなければローカル分のみ */ }
+  return localPart + offchain;
 }
 
 async function _emuLoadRecommendedPost() {
