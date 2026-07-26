@@ -1,0 +1,37 @@
+rules_version = '2';
+
+// ============================================================
+// Firestore セキュリティルール
+// ------------------------------------------------------------
+// 方針: 実EMUERになる durable 残高台帳（emuer_offchain / emuer_offchain_ledger）
+//       だけをクライアント書き込み不可にし、それ以外の全コレクションは
+//       現状の挙動（読み書き許可）を維持する。
+//
+// 仕組み: 単一セグメント変数 {coll} で「トップレベルのコレクション名」を取得し、
+//         条件で台帳だけを除外する。全コレクションを列挙しないため、
+//         アプリの他ページ（room1/2・各施設ページ等）の書き込みは壊れない。
+//         ※ サーバー(Firebase Admin SDK)はルールを常にバイパスするため、
+//           バッチ処理は引き続き台帳へ書き込める。
+//
+// 注意: Firestoreルールは複数マッチを OR 評価するため、
+//       「全許可catch-all + 個別deny」は機能しない。必ず条件式で除外する。
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /{coll}/{doc=**} {
+
+      // 読み取り:
+      //   監査ログ emuer_offchain_ledger はクライアントに見せない。
+      //   それ以外（残高台帳 emuer_offchain の表示を含む）は許可。
+      allow read: if coll != "emuer_offchain_ledger";
+
+      // 書き込み(create/update/delete):
+      //   実EMUERになる台帳はクライアント書き込み不可（サーバー admin SDK のみ）。
+      //   それ以外は現状維持で許可。
+      allow write: if coll != "emuer_offchain"
+                   && coll != "emuer_offchain_ledger";
+    }
+  }
+}
