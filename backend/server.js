@@ -1689,6 +1689,422 @@ app.post("/api/auth/line", async (req, res) => {
   }
 });
 
+// ════════════════════════════════════════
+// 一日シェア (Ichinichi Share) API ── Firestore永続化版
+// 「わたしの一日が、誰かの学びになる。」
+// コレクション:
+//   ichinichi_days   … doc id = `${address}__${date}`（ユーザー×日付でユニーク）
+//                      items[] を埋め込み保存、learning / visibility 等
+//   ichinichi_goods  … doc id = `${dayId}_${address}`（Good重複防止）
+//   ichinichi_reports… doc id = `${dayId}_${address}`（通報重複防止）
+//   ichinichi_adopts … 自動id。誰かに予定を取り入れられた回数（役に立った人）集計用
+// ════════════════════════════════════════
+
+const ICHI_DAYS_COL    = "ichinichi_days";
+const ICHI_GOODS_COL   = "ichinichi_goods";
+const ICHI_REPORTS_COL = "ichinichi_reports";
+const ICHI_ADOPTS_COL  = "ichinichi_adopts";
+
+const ICHI_CATEGORIES = ["生活", "学び", "仕事", "健康", "暮らし", "子育て"];
+const ichiToday = () => new Date().toISOString().slice(0, 10);
+const ichiNow = () => new Date().toISOString();
+const ichiDayId = (address, date) => `${address}__${date}`;
+// 「過去ロック」判定。サーバーはUTC・クライアントはローカルTZで日付を作るため、
+// 1日の猶予を持たせてタイムゾーン差(最大±14h)による誤ブロックを防ぐ。
+const ichiIsPastLocked = (date) => {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return date < d.toISOString().slice(0, 10);
+};
+
+// address を統一的に取得（Emu流: body/query の address を小文字化）
+function ichiIdentity(req) {
+  const address = String(req.body?.address || req.query?.address || "").toLowerCase().trim();
+  const userName = String(req.body?.userName || req.query?.userName || "").trim().slice(0, 30) || "わたし";
+  return { address, userName };
+}
+
+// 予定アイテムを正規化（保存用）
+function ichiNormalizeItems(rawItems) {
+  if (!Array.isArray(rawItems)) return [];
+  return rawItems
+    .filter((it) => it && String(it.title || "").trim())
+    .map((it) => ({
+      id: String(it.id || randomUUID()),
+      time: String(it.time || "").slice(0, 5),
+      title: String(it.title || "").trim().slice(0, 100),
+      note: String(it.note || "").trim().slice(0, 200),
+      category: ICHI_CATEGORIES.includes(it.category) ? it.category : "生活",
+      done: Boolean(it.done),
+      sourceItemId: it.sourceItemId ? String(it.sourceItemId) : null,
+      sourceUserId: it.sourceUserId ? String(it.sourceUserId) : null,
+    }))
+    .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+}
+
+// day ドキュメントを取得（無ければ null）
+async function ichiGetDay(address, date) {
+  const doc = await db.collection(ICHI_DAYS_COL).doc(ichiDayId(address, date)).get();
+  if (!doc.exists) return null;
+  const d = doc.data();
+  return {
+    id: doc.id,
+    userId: d.address,
+    userName: d.userName || "わたし",
+    date: d.date,
+    learning: d.learning || "",
+    visibility: d.visibility || "private",
+    sharedAt: d.sharedAt || null,
+    items: Array.isArray(d.items) ? d.items : [],
+  };
+}
+
+// day ドキュメントを取得（無ければ作成して返す生データ）
+async function ichiEnsureDay(address, userName, date) {
+  const ref = db.collection(ICHI_DAYS_COL).doc(ichiDayId(address, date));
+  const snap = await ref.get();
+  if (snap.exists) {
+    // 名前が変わっていたら更新
+    if (userName && snap.data().userName !== userName) {
+      await ref.set({ userName }, { merge: true });
+    }
+    return ref;
+  }
+  const ts = ichiNow();
+  await ref.set({
+    address, userName: userName || "わたし", date,
+    items: [], learning: "", visibility: "private", sharedAt: null,
+    createdAt: ts, updatedAt: ts,
+  });
+  return ref;
+}
+
+// ── 単日の取得 ──
+app.get("/api/ichinichi/day", async (req, res) => {
+  try {
+    if (!db) return res.json({ day: null });
+    const { address } = ichiIdentity(req);
+    if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
+    const date = String(req.query.date || ichiToday());
+    return res.json({ day: await ichiGetDay(address, date) });
+  } catch (err) {
+    console.error("ichinichi/day error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── みんなの一日（公開フィード） ──
+app.get("/api/ichinichi/feed", async (req, res) => {
+  try {
+    if (!db) return res.json({ posts: [] });
+    const { address } = ichiIdentity(req);
+    const category = String(req.query.category || "すべて");
+
+    // visibility の等値フィルタ＋新しい順の並べ替えは複合indexが必要になるため、
+    // 公開日を多めに取得してJS側で共有日時ソート（ランキングと同じ方針）。
+    // ※ limit なしのDocument-id順(=address__date)で切ると特定アドレスに偏るため多めに読む
+    const snap = await db.collection(ICHI_DAYS_COL)
+      .where("visibility", "==", "public")
+      .limit(500).get();
+
+    let days = snap.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        userId: d.address,
+        userName: d.userName || "わたし",
+        date: d.date,
+        learning: d.learning || "",
+        visibility: "public",
+        sharedAt: d.sharedAt || null,
+        items: Array.isArray(d.items) ? d.items : [],
+      };
+    });
+    // 学びと予定がある公開日のみ
+    days = days.filter((day) => day.learning.trim() && day.items.length);
+    // 新しい共有順
+    days.sort((a, b) => (b.sharedAt || b.date || "").localeCompare(a.sharedAt || a.date || ""));
+    days = days.slice(0, 40);
+
+    const ids = days.map((day) => day.id);
+    // Good 集計
+    const goodCountMap = {};
+    const mineSet = new Set();
+    if (ids.length) {
+      // chunk (Firestore in は最大30件)
+      for (let i = 0; i < ids.length; i += 30) {
+        const chunk = ids.slice(i, i + 30);
+        const gsnap = await db.collection(ICHI_GOODS_COL).where("dayId", "in", chunk).get();
+        gsnap.docs.forEach((g) => {
+          const gd = g.data();
+          goodCountMap[gd.dayId] = (goodCountMap[gd.dayId] || 0) + 1;
+          if (address && gd.address === address) mineSet.add(gd.dayId);
+        });
+      }
+    }
+
+    const posts = days
+      .map((day) => ({
+        ...day,
+        goodCount: goodCountMap[day.id] || 0,
+        gooded: mineSet.has(day.id),
+      }))
+      .filter((post) => category === "すべて" || post.items.some((it) => it.category === category));
+
+    return res.json({ posts });
+  } catch (err) {
+    console.error("ichinichi/feed error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── わたしの記録（履歴＋統計） ──
+app.get("/api/ichinichi/history", async (req, res) => {
+  try {
+    if (!db) return res.json({ history: [], stats: { streak: 0, learningCount: 0, usefulCount: 0, completionRate: 0 } });
+    const { address } = ichiIdentity(req);
+    if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
+
+    const snap = await db.collection(ICHI_DAYS_COL).where("address", "==", address).get();
+    let history = snap.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id, userId: d.address, userName: d.userName || "わたし", date: d.date,
+        learning: d.learning || "", visibility: d.visibility || "private",
+        sharedAt: d.sharedAt || null, items: Array.isArray(d.items) ? d.items : [],
+      };
+    });
+    history.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    history = history.slice(0, 90);
+
+    // 連続日数: 公開かつ学び・予定がある日を新しい順に連続カウント
+    const sharedDates = history
+      .filter((day) => day.visibility === "public" && day.learning.trim() && day.items.length)
+      .map((day) => day.date).sort().reverse();
+    let streak = 0;
+    if (sharedDates.length) {
+      const cursor = new Date(`${sharedDates[0]}T00:00:00Z`);
+      for (const value of sharedDates) {
+        if (value !== cursor.toISOString().slice(0, 10)) break;
+        streak += 1;
+        cursor.setUTCDate(cursor.getUTCDate() - 1);
+      }
+    }
+
+    const allItems = history.flatMap((day) => day.items);
+    const doneCount = allItems.filter((it) => it.done).length;
+
+    // 役に立った人: 自分の予定を取り入れられた件数
+    let usefulCount = 0;
+    try {
+      const adoptSnap = await db.collection(ICHI_ADOPTS_COL).where("sourceUserId", "==", address).get();
+      usefulCount = adoptSnap.size;
+    } catch (_) { usefulCount = 0; }
+
+    return res.json({
+      history,
+      stats: {
+        streak,
+        learningCount: history.filter((day) => day.learning.trim()).length,
+        usefulCount,
+        completionRate: allItems.length ? Math.round((doneCount / allItems.length) * 100) : 0,
+      },
+    });
+  } catch (err) {
+    console.error("ichinichi/history error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 時間割の保存 ──
+app.post("/api/ichinichi/save", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+    const { address, userName } = ichiIdentity(req);
+    if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
+    const date = String(req.body.date || ichiToday());
+    if (ichiIsPastLocked(date)) return res.status(400).json({ error: "過去の時間割は編集できません" });
+
+    const ref = await ichiEnsureDay(address, userName, date);
+    const items = ichiNormalizeItems(req.body.items);
+    await ref.set({ items, updatedAt: ichiNow() }, { merge: true });
+    return res.json({ day: await ichiGetDay(address, date) });
+  } catch (err) {
+    console.error("ichinichi/save error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 共有（公開/非公開の確定＋学び保存） ──
+app.post("/api/ichinichi/share", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+    const { address, userName } = ichiIdentity(req);
+    if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
+    const date = String(req.body.date || ichiToday());
+    const learning = String(req.body.learning || "").trim().slice(0, 500);
+    const visibility = req.body.visibility === "public" ? "public" : "private";
+    if (visibility === "public" && !learning) {
+      return res.status(400).json({ error: "今日の学びを書いてください" });
+    }
+    const ref = await ichiEnsureDay(address, userName, date);
+    await ref.set({
+      learning, visibility,
+      sharedAt: visibility === "public" ? ichiNow() : null,
+      updatedAt: ichiNow(),
+    }, { merge: true });
+    return res.json({ day: await ichiGetDay(address, date) });
+  } catch (err) {
+    console.error("ichinichi/share error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 過去の学びに追記 ──
+app.post("/api/ichinichi/append-learning", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+    const { address, userName } = ichiIdentity(req);
+    if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
+    const date = String(req.body.date || ichiToday());
+    const addition = String(req.body.learning || "").trim().slice(0, 500);
+    if (!addition) return res.status(400).json({ error: "追記内容を入力してください" });
+
+    const ref = await ichiEnsureDay(address, userName, date);
+    const current = (await ref.get()).data().learning || "";
+    const next = (current ? `${current}\n\n追記：${addition}` : addition).slice(0, 1500);
+    await ref.set({ learning: next, updatedAt: ichiNow() }, { merge: true });
+    return res.json({ day: await ichiGetDay(address, date) });
+  } catch (err) {
+    console.error("ichinichi/append-learning error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 前日の時間割をコピー ──
+app.post("/api/ichinichi/copy-previous", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+    const { address, userName } = ichiIdentity(req);
+    if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
+    const date = String(req.body.date || ichiToday());
+    if (ichiIsPastLocked(date)) return res.status(400).json({ error: "過去の時間割は編集できません" });
+
+    const prev = new Date(`${date}T00:00:00Z`);
+    prev.setUTCDate(prev.getUTCDate() - 1);
+    const previous = await ichiGetDay(address, prev.toISOString().slice(0, 10));
+    if (!previous || !previous.items.length) {
+      return res.status(400).json({ error: "前日の時間割がありません" });
+    }
+    const ref = await ichiEnsureDay(address, userName, date);
+    const items = previous.items.map((it) => ({
+      id: randomUUID(), time: it.time, title: it.title, note: it.note, category: it.category,
+      done: false, sourceItemId: it.id, sourceUserId: address,
+    }));
+    await ref.set({ items, updatedAt: ichiNow() }, { merge: true });
+    return res.json({ day: await ichiGetDay(address, date) });
+  } catch (err) {
+    console.error("ichinichi/copy-previous error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── みんなの予定を自分の今日に取り入れる ──
+app.post("/api/ichinichi/adopt", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+    const { address, userName } = ichiIdentity(req);
+    if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
+    const sourceDayId = String(req.body.dayId || "");
+    const itemId = String(req.body.itemId || "");
+    const date = String(req.body.date || ichiToday());
+
+    const srcDoc = await db.collection(ICHI_DAYS_COL).doc(sourceDayId).get();
+    if (!srcDoc.exists) return res.status(404).json({ error: "予定が見つかりません" });
+    const srcData = srcDoc.data();
+    if (srcData.visibility !== "public") return res.status(403).json({ error: "公開されていない予定です" });
+    const srcItem = (srcData.items || []).find((it) => it.id === itemId);
+    if (!srcItem) return res.status(404).json({ error: "予定が見つかりません" });
+    if (srcData.address === address) return res.status(400).json({ error: "自分の予定は取り入れられません" });
+
+    const ref = await ichiEnsureDay(address, userName, date);
+    const current = (await ref.get()).data().items || [];
+    const newItem = {
+      id: randomUUID(), time: srcItem.time, title: srcItem.title, note: srcItem.note,
+      category: srcItem.category, done: false, sourceItemId: srcItem.id, sourceUserId: srcData.address,
+    };
+    const items = [...current, newItem].sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+    await ref.set({ items, updatedAt: ichiNow() }, { merge: true });
+
+    // 「役に立った人」集計用（同一元アイテム×取り入れ者で重複防止）
+    await db.collection(ICHI_ADOPTS_COL).doc(`${srcItem.id}__${address}`).set({
+      sourceUserId: srcData.address, byUserId: address,
+      sourceItemId: srcItem.id, sourceDayId, createdAt: ichiNow(),
+    }, { merge: true });
+
+    return res.json({ day: await ichiGetDay(address, date) });
+  } catch (err) {
+    console.error("ichinichi/adopt error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Good を送る ──
+app.post("/api/ichinichi/good", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+    const { address } = ichiIdentity(req);
+    if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
+    const dayId = String(req.body.dayId || "");
+    if (!dayId) return res.status(400).json({ error: "対象が不正です" });
+    await db.collection(ICHI_GOODS_COL).doc(`${dayId}__${address}`).set({
+      dayId, address, createdAt: ichiNow(),
+    }, { merge: true });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("ichinichi/good error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 通報 ──
+app.post("/api/ichinichi/report", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+    const { address } = ichiIdentity(req);
+    if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
+    const dayId = String(req.body.dayId || "");
+    const reason = String(req.body.reason || "不適切な内容").trim().slice(0, 300);
+    if (!dayId) return res.status(400).json({ error: "対象が不正です" });
+    await db.collection(ICHI_REPORTS_COL).doc(`${dayId}__${address}`).set({
+      dayId, reporterId: address, reason, createdAt: ichiNow(),
+    }, { merge: true });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("ichinichi/report error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 記録の削除（本人のみ） ──
+app.post("/api/ichinichi/delete-day", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+    const { address } = ichiIdentity(req);
+    if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
+    const dayId = String(req.body.dayId || "");
+    const doc = await db.collection(ICHI_DAYS_COL).doc(dayId).get();
+    if (!doc.exists || doc.data().address !== address) {
+      return res.status(404).json({ error: "削除できる記録が見つかりません" });
+    }
+    await db.collection(ICHI_DAYS_COL).doc(dayId).delete();
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("ichinichi/delete-day error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // =====================
 // Start server
 // =====================
