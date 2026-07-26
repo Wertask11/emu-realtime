@@ -4401,7 +4401,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <div style="font-weight:bold;font-size:15px;color:#f08300;">一律 10 EMUER</div>
     </div>
     <div class="emu-field"><label for="emuRequestDeadline">回答期限</label><input id="emuRequestDeadline" type="date"></div>
-    <p style="font-size:11px;color:#777;line-height:1.6;">懸賞は一律10 EMUER。採用時に回答者へ配布されます。募集作成だけではEMUERは消費されません。</p>
+    <p style="font-size:11px;color:#777;line-height:1.6;">懸賞は一律10 EMUER。採用時に<b>あなたの残高から</b>回答者へ渡されます（10 EMUER以上の残高が必要）。募集作成だけでは消費されません。</p>
     <div class="emu-sheet-actions"><button class="eth-btn" type="button" onclick="closeEmuSheet('emuRequestSheet')">やめる</button><button class="eth-btn primary" id="emuRequestSubmit" type="button">募集を公開する</button></div>
   </div>
 </div>
@@ -13910,6 +13910,18 @@ document.getElementById("emuRequestSubmit")?.addEventListener("click", async fun
     return alert("探している知識、状況、回答期限を入力してください。");
   }
   if (!window.db || !window.fbLib) return alert("データベースに接続できません。");
+  // 懸賞は「あなたの残高」から回答者へ支払われる（無資金配布を防止）。10 EMUER以上必要。
+  const _reqAddr = _emuAddress();
+  if (!_reqAddr) return alert("ウォレットを接続してください。");
+  try {
+    const _bsnap = await window.fbLib.getDoc(window.fbLib.doc(window.db, "emuer_offchain", _reqAddr));
+    const _bal = _bsnap.exists() ? (Number(_bsnap.data().balance) || 0) : 0;
+    if (_bal < bounty) {
+      return alert("懸賞の支払いに " + bounty + " EMUER 以上の残高が必要です（現在: " + _bal + " EMUER）。\nGood・Change・ログインなどで貯めてから募集してください。");
+    }
+  } catch (e) {
+    return alert("残高を確認できませんでした。時間をおいて再試行してください。");
+  }
   this.disabled = true;
   this.textContent = "公開しています...";
   try {
@@ -14085,7 +14097,7 @@ async function openKnowledgeAnswers(request) {
 }
 
 async function acceptKnowledgeAnswer(request, answer, button) {
-  if (!confirm("この知識を採用し、EMUER懸賞の配布申請へ進みますか？")) return;
+  if (!confirm("この知識を採用しますか？\nあなたの残高から10 EMUERが回答者へ渡されます。")) return;
   button.disabled = true;
   try {
     await window.fbLib.updateDoc(window.fbLib.doc(window.db, "knowledge_answers", answer.id), {

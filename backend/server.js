@@ -491,8 +491,8 @@ app.use("/secret-door", secretDoorRouter);
 // 採用済みの募集・回答と一致する申請だけを検証して配布する
 // =====================
 async function runKnowledgeBountyBatch() {
-  if (!db || !emuerContract) {
-    console.warn("⚠️ Firestore または emuerContract が未初期化。知識懸賞バッチをスキップ。");
+  if (!db) {
+    console.warn("⚠️ Firestore未初期化。知識懸賞バッチをスキップ。");
     return;
   }
   console.log("🚀 知識懸賞バッチ開始:", new Date().toISOString());
@@ -531,12 +531,28 @@ async function runKnowledgeBountyBatch() {
         await requestDoc.ref.update({ settlementStatus:"done", settledAt:new Date() });
         continue;
       }
-      // 受取先が CHES（LINE/Google）の秘密鍵を持たない address-only ウォレットか判定。
-      // CHESは実EMUERを送っても本人が動かせず永久ロックになるため、オフチェーン台帳へ計上する。
-      const chesWalletDoc = await db.collection("ches_wallets").doc(recipient).get();
-      const isChes = chesWalletDoc.exists && chesWalletDoc.data().type === "address-only";
-      const chesUid = isChes ? (chesWalletDoc.data().uid || null) : null;
-      valid.push({ claimDoc, requestDoc, recipient, amount, isChes, chesUid });
+      // 回答者(受取人)のCHES判定（uid記録用）。実EMUERは送らずオフチェーン台帳へ計上。
+      const answererWalletDoc = await db.collection("ches_wallets").doc(recipient).get();
+      const answererUid = (answererWalletDoc.exists && answererWalletDoc.data().type === "address-only")
+        ? (answererWalletDoc.data().uid || null) : null;
+
+      // ── エスクロー相当：募集者(request.author)の残高から支払う（無からの生成を排除）──
+      // 懸賞は「募集者→回答者」の純粋な移転にする。募集者がオフチェーン残高>=懸賞額を
+      // 持っていなければ配布しない。これにより不正な自作自演でもEMUER総量は増えない。
+      const requesterAddr = String(request.author || "").toLowerCase();
+      if (!requesterAddr || requesterAddr === recipient) {
+        await claimDoc.ref.update({ status:"rejected", errorMessage:"INVALID_REQUESTER", processedAt:new Date() });
+        continue;
+      }
+      const requesterLedger = await db.collection("emuer_offchain").doc(requesterAddr).get();
+      const requesterBalance = requesterLedger.exists ? (Number(requesterLedger.data().balance) || 0) : 0;
+      if (requesterBalance < amount) {
+        // 募集者が懸賞分を持っていない → 配布不可（無資金配布の防止）
+        await claimDoc.ref.update({ status:"rejected", errorMessage:"INSUFFICIENT_FUNDS", processedAt:new Date() });
+        await requestDoc.ref.update({ settlementStatus:"insufficient_funds", settledAt:new Date() });
+        continue;
+      }
+      valid.push({ claimDoc, requestDoc, recipient, amount, answererUid, requesterAddr });
     }
     if (!valid.length) return;
 
@@ -544,69 +560,37 @@ async function runKnowledgeBountyBatch() {
     valid.forEach(item => processing.update(item.claimDoc.ref, { status:"processing" }));
     await processing.commit();
 
-    const offchainItems = valid.filter(i => i.isChes);
-    const onchainItems  = valid.filter(i => !i.isChes);
-
-    // ── ① CHESユーザー：オフチェーンEMUER台帳へ durable に計上 ──
-    // emuer_offchain/{address}.balance に加算（source of truth）。
-    // 将来CHESウォレット本開発時に、この balance を実EMUERとして送って精算する。
-    // 台帳は初期化せず積み上げるのみ。監査用に emuer_offchain_ledger も追記。
-    if (offchainItems.length) {
-      const offBatch = db.batch();
-      const FieldValue = admin.firestore.FieldValue;
-      offchainItems.forEach(item => {
-        const balRef = db.collection("emuer_offchain").doc(item.recipient);
-        // 懸賞はイベント式に積み上げ（bountyBalance）。総額 balance にも即時反映。
-        // reaction/login 成分は runOffchainEmuerReconcile が別途 set する。
-        offBatch.set(balRef, {
-          address: item.recipient,
-          uid: item.chesUid,
-          bountyBalance: FieldValue.increment(item.amount),
-          balance: FieldValue.increment(item.amount),
-          settledOnchain: FieldValue.increment(0), // 実EMUER精算済み額（将来用）
-          updatedAt: new Date()
-        }, { merge: true });
-        const ledgerRef = db.collection("emuer_offchain_ledger").doc();
-        offBatch.set(ledgerRef, {
-          address: item.recipient, uid: item.chesUid, amount: item.amount,
-          reason: "knowledge_bounty", requestId: item.requestDoc.id, claimId: item.claimDoc.id,
-          createdAt: new Date()
-        });
-        offBatch.update(item.claimDoc.ref, {
-          status: "done", settlement: "offchain", txHash: null, processedAt: new Date()
-        });
-        offBatch.update(item.requestDoc.ref, {
-          settlementStatus: "done", settlement: "offchain", settledAt: new Date()
-        });
+    // ── 懸賞の確定：募集者から差し引き、回答者へ加算（差引ゼロ・オフチェーン移転）──
+    // 総EMUER量は不変。将来CHESウォレット本開発時に emuer_offchain.balance を実EMUERで精算。
+    const settle = db.batch();
+    const FieldValue = admin.firestore.FieldValue;
+    valid.forEach(item => {
+      // 募集者（支払い元）: balance を減らし、支払い累計 spentBounty を積む
+      settle.set(db.collection("emuer_offchain").doc(item.requesterAddr), {
+        address: item.requesterAddr,
+        balance: FieldValue.increment(-item.amount),
+        spentBounty: FieldValue.increment(item.amount),
+        updatedAt: new Date()
+      }, { merge: true });
+      // 回答者（受取人）: bountyBalance と balance を加算
+      settle.set(db.collection("emuer_offchain").doc(item.recipient), {
+        address: item.recipient,
+        uid: item.answererUid,
+        bountyBalance: FieldValue.increment(item.amount),
+        balance: FieldValue.increment(item.amount),
+        updatedAt: new Date()
+      }, { merge: true });
+      // 監査ログ（移転）
+      settle.set(db.collection("emuer_offchain_ledger").doc(), {
+        from: item.requesterAddr, to: item.recipient, amount: item.amount,
+        reason: "knowledge_bounty", requestId: item.requestDoc.id, claimId: item.claimDoc.id,
+        createdAt: new Date()
       });
-      await offBatch.commit();
-      console.log(`💠 知識懸賞オフチェーン計上: ${offchainItems.length} 件（emuer_offchain）`);
-    }
-
-    // ── ② MetaMask等の実ウォレット：オンチェーンで実EMUERを配布 ──
-    if (onchainItems.length) {
-      const tx = await emuerContract.addGoodBatch(
-        onchainItems.map(item => item.recipient),
-        onchainItems.map(item => ethers.utils.parseUnits(String(item.amount), 18)),
-        {
-          maxPriorityFeePerGas: ethers.utils.parseUnits("40", "gwei"),
-          maxFeePerGas: ethers.utils.parseUnits("100", "gwei"),
-          gasLimit: 500000
-        }
-      );
-      const receipt = await tx.wait();
-      const done = db.batch();
-      onchainItems.forEach(item => {
-        done.update(item.claimDoc.ref, {
-          status:"done", settlement:"onchain", txHash:receipt.transactionHash, processedAt:new Date()
-        });
-        done.update(item.requestDoc.ref, {
-          settlementStatus:"done", settlement:"onchain", bountyTxHash:receipt.transactionHash, settledAt:new Date()
-        });
-      });
-      await done.commit();
-      console.log(`🎉 知識懸賞オンチェーン配布完了: ${onchainItems.length} 件`);
-    }
+      settle.update(item.claimDoc.ref, { status:"done", settlement:"offchain_transfer", processedAt:new Date() });
+      settle.update(item.requestDoc.ref, { settlementStatus:"done", settlement:"offchain_transfer", settledAt:new Date() });
+    });
+    await settle.commit();
+    console.log(`💠 知識懸賞（募集者→回答者の移転）完了: ${valid.length} 件`);
   } catch (error) {
     console.error("❌ 知識懸賞バッチエラー:", error);
     try {
@@ -684,9 +668,11 @@ async function runOffchainEmuerReconcile() {
       const balRef = db.collection("emuer_offchain").doc(addr);
       const existing = await balRef.get();
       const ex = existing.exists ? existing.data() : {};
-      const bountyBalance = Number(ex.bountyBalance) || 0;
+      const bountyBalance = Number(ex.bountyBalance) || 0;   // 懸賞で受け取った累計
+      const spentBounty = Number(ex.spentBounty) || 0;       // 募集者として支払った累計
       const loginBalance = (Number(ex.loginBalance) || 0) + loginInc;
-      const balance = bountyBalance + reactionBalance + loginBalance;
+      // 利用可能残高 = 受取(懸賞+評価+ログボ) - 支払い(懸賞)
+      const balance = bountyBalance + reactionBalance + loginBalance - spentBounty;
 
       await balRef.set({
         address: addr,
