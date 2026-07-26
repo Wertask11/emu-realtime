@@ -509,17 +509,19 @@ function onTodayClick(e) {
   switch (act) {
     case "toggleAdd":
       S.draft = { time: "", title: "", note: "", category: "生活", done: false };
-      S.editingIndex = null; S.showAdd = !S.showAdd; render(); break;
-    case "openAdd": S.showAdd = true; render(); break;
+      S.editingIndex = null; S.showAdd = !S.showAdd; render();
+      if (S.showAdd) scrollToAddForm(); break;
+    case "openAdd": S.showAdd = true; render(); scrollToAddForm(); break;
     case "cancelAdd": S.showAdd = false; render(); break;
     case "saveDraft": saveDraft(); break;
     case "edit":
-      S.draft = { ...S.schedule[i] }; S.editingIndex = i; S.showAdd = true; render(); break;
+      S.draft = { ...S.schedule[i] }; S.editingIndex = i; S.showAdd = true; render(); scrollToAddForm(); break;
     case "del":
       persist(S.schedule.filter((_, x) => x !== i), "予定を削除しました"); break;
     case "toggle": {
       const next = S.schedule.map((x, idx) => idx === i ? { ...x, done: !x.done } : x);
       S.schedule = next;
+      render(); // 押した瞬間に反映（サーバー応答を待たず体感を改善）
       persist(next, "完了状態を更新しました"); break;
     }
     case "copyPrev": copyPrevious(); break;
@@ -528,6 +530,16 @@ function onTodayClick(e) {
     case "share": shareDay(); break;
     case "append": appendLearning(); break;
   }
+}
+
+// 予定の追加/編集フォームを開いたら、その位置までスクロールして入力欄にフォーカス
+function scrollToAddForm() {
+  requestAnimationFrame(() => {
+    const form = $main.querySelector(".add-form");
+    if (form) form.scrollIntoView({ behavior: "smooth", block: "center" });
+    const titleInput = $main.querySelector('[data-draft="title"]');
+    if (titleInput) titleInput.focus({ preventScroll: true });
+  });
 }
 
 function renderExplore() {
