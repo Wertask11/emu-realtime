@@ -514,13 +514,14 @@ async function runKnowledgeBountyBatch() {
       const request = requestDoc.data();
       const amount = Math.floor(Number(claim.amount));
       const recipient = String(claim.recipient || "").toLowerCase();
+      // 懸賞は一律10 EMUERに固定。クライアント値は偽装可能なため、
+      // サーバー側で「10ちょうど」以外は配布しない（不正な高額配布の上限を強制）。
       const matches = request.status === "awarded"
         && request.settlementStatus === "pending_distribution"
         && String(request.acceptedAnswerAuthor || "").toLowerCase() === recipient
         && Number(request.bounty) === amount
         && ethers.utils.isAddress(recipient)
-        && amount >= 0
-        && amount <= 10000;
+        && amount === 10;
       if (!matches) {
         await claimDoc.ref.update({ status:"rejected", errorMessage:"CLAIM_MISMATCH", processedAt:new Date() });
         continue;

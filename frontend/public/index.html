@@ -4397,9 +4397,11 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     </div>
     <div class="emu-field"><label for="emuRequestQuestion">何について知識を探していますか</label><input id="emuRequestQuestion" maxlength="120" placeholder="例：初めてイベントを主催するとき、参加者の緊張をほぐした方法"></div>
     <div class="emu-field"><label for="emuRequestContext">困っている状況・知りたい条件</label><textarea id="emuRequestContext" maxlength="1000" placeholder="人数、場所、すでに試したことなど"></textarea></div>
-    <div class="emu-field"><label for="emuRequestBounty">採用した知識へのEMUER懸賞</label><input id="emuRequestBounty" type="number" min="0" max="10000" step="1" value="50"></div>
+    <div class="emu-field"><label>採用した知識へのEMUER懸賞</label>
+      <div style="font-weight:bold;font-size:15px;color:#f08300;">一律 10 EMUER</div>
+    </div>
     <div class="emu-field"><label for="emuRequestDeadline">回答期限</label><input id="emuRequestDeadline" type="date"></div>
-    <p style="font-size:11px;color:#777;line-height:1.6;">懸賞は採用時に配布申請へ進みます。募集作成だけではEMUERは消費されません。</p>
+    <p style="font-size:11px;color:#777;line-height:1.6;">懸賞は一律10 EMUER。採用時に回答者へ配布されます。募集作成だけではEMUERは消費されません。</p>
     <div class="emu-sheet-actions"><button class="eth-btn" type="button" onclick="closeEmuSheet('emuRequestSheet')">やめる</button><button class="eth-btn primary" id="emuRequestSubmit" type="button">募集を公開する</button></div>
   </div>
 </div>
@@ -13895,19 +13897,18 @@ function openKnowledgeRequestComposer() {
   document.getElementById("emuRequestDeadline").value = deadline.toISOString().slice(0,10);
   document.getElementById("emuRequestQuestion").value = "";
   document.getElementById("emuRequestContext").value = "";
-  document.getElementById("emuRequestBounty").value = "50";
+  // 懸賞は一律10で固定のため入力欄なし
   openEmuSheet("emuRequestSheet");
 }
 
 document.getElementById("emuRequestSubmit")?.addEventListener("click", async function() {
   const question = document.getElementById("emuRequestQuestion").value.trim();
   const context = document.getElementById("emuRequestContext").value.trim();
-  const bounty = Math.max(0, Math.floor(Number(document.getElementById("emuRequestBounty").value) || 0));
+  const bounty = 10; // 懸賞は一律10 EMUERに固定（不正配布の上限を抑える。サーバー側でも上限10を強制）
   const deadline = document.getElementById("emuRequestDeadline").value;
   if (question.length < 8 || context.length < 10 || !deadline) {
     return alert("探している知識、状況、回答期限を入力してください。");
   }
-  if (bounty > 10000) return alert("懸賞は10,000 EMUER以下にしてください。");
   if (!window.db || !window.fbLib) return alert("データベースに接続できません。");
   this.disabled = true;
   this.textContent = "公開しています...";
