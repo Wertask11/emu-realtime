@@ -555,9 +555,12 @@ async function runKnowledgeBountyBatch() {
       const FieldValue = admin.firestore.FieldValue;
       offchainItems.forEach(item => {
         const balRef = db.collection("emuer_offchain").doc(item.recipient);
+        // 懸賞はイベント式に積み上げ（bountyBalance）。総額 balance にも即時反映。
+        // reaction/login 成分は runOffchainEmuerReconcile が別途 set する。
         offBatch.set(balRef, {
           address: item.recipient,
           uid: item.chesUid,
+          bountyBalance: FieldValue.increment(item.amount),
           balance: FieldValue.increment(item.amount),
           settledOnchain: FieldValue.increment(0), // 実EMUER精算済み額（将来用）
           updatedAt: new Date()
@@ -620,6 +623,95 @@ cron.schedule("0 2 * * *", () => { console.log("⏰ 定期エアドロバッチ�
 cron.schedule("0 3 15 4 *", () => { console.log("🏁 最終エアドロバッチ起動"); runAirdropBatch(); }, { timezone: "Asia/Tokyo" });
 cron.schedule("30 2 * * *", () => { console.log("⏰ 秘密のとびらバッチ起動"); runSecretDoorBatch(); }, { timezone: "Asia/Tokyo" });
 cron.schedule("0 * * * *", () => { console.log("⏰ 知識懸賞バッチ起動"); runKnowledgeBountyBatch(); }, { timezone: "Asia/Tokyo" });
+
+// =====================
+// オフチェーンEMUER台帳の照合バッチ（CHESユーザーのGood/Change・ログインボーナス）
+// 検証可能なFirestoreデータから毎回“再計算”するため、localStorage改ざんでは水増しできない。
+// これが将来「実EMUER」で精算する durable な source of truth。
+//   balance = bountyBalance(懸賞・イベント式) + reactionBalance(評価された分) + loginBalance(ログボ)
+// 付与ルール（確定）:
+//   ・Good/Change = 評価された投稿者が得る: floor(受Good/10) + floor(受Change/20)×3
+//   ・ログインボーナス = その日ログインしていれば 1日1回 +0.5（サーバー権威）
+// =====================
+function _jstDateStr(d) {
+  // Asia/Tokyo の YYYY-MM-DD
+  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return jst.getUTCFullYear() + "-" + (jst.getUTCMonth() + 1) + "-" + jst.getUTCDate();
+}
+const EMU_LOGIN_BONUS = 0.5;
+
+async function runOffchainEmuerReconcile() {
+  if (!db) {
+    console.warn("⚠️ Firestore未初期化。オフチェーン台帳照合をスキップ。");
+    return;
+  }
+  console.log("🚀 オフチェーンEMUER台帳照合開始:", new Date().toISOString());
+  try {
+    const FieldValue = admin.firestore.FieldValue;
+    const todayJst = _jstDateStr(new Date());
+    // CHESアカウント（LINE/Google）を対象に処理。件数が増えたらページングを追加。
+    const accountsSnap = await db.collection("ches_accounts").limit(500).get();
+    let processed = 0;
+
+    for (const accDoc of accountsSnap.docs) {
+      const acc = accDoc.data();
+      const addr = String(acc.walletAddress || "").toLowerCase();
+      if (!addr) continue;
+
+      // ── ① 評価された分（投稿者が得る）: 自分の投稿が受けたGood/Changeを集計 ──
+      let sumGood = 0, sumChange = 0;
+      const postsSnap = await db.collection("posts").where("address", "==", addr).get();
+      postsSnap.forEach(p => {
+        const d = p.data();
+        sumGood += Number(d.goodCount) || 0;
+        sumChange += Number(d.changeCount) || 0;
+      });
+      const reactionBalance = Math.floor(sumGood / 10) + Math.floor(sumChange / 20) * 3;
+
+      // ── ② ログインボーナス: 今日ログイン済み かつ 今日未付与なら +0.5 ──
+      let loginInc = 0;
+      const lastLoginMs = acc.lastLogin && acc.lastLogin.toMillis ? acc.lastLogin.toMillis()
+                        : (typeof acc.lastLogin === "number" ? acc.lastLogin : 0);
+      if (lastLoginMs) {
+        const loggedInToday = _jstDateStr(new Date(lastLoginMs)) === todayJst;
+        if (loggedInToday && acc.lastLoginBonusDate !== todayJst) {
+          loginInc = EMU_LOGIN_BONUS;
+        }
+      }
+
+      // ── 台帳を更新（bountyBalanceは懸賞バッチがイベント式に積む。ここでは触らず読むだけ）──
+      const balRef = db.collection("emuer_offchain").doc(addr);
+      const existing = await balRef.get();
+      const ex = existing.exists ? existing.data() : {};
+      const bountyBalance = Number(ex.bountyBalance) || 0;
+      const loginBalance = (Number(ex.loginBalance) || 0) + loginInc;
+      const balance = bountyBalance + reactionBalance + loginBalance;
+
+      await balRef.set({
+        address: addr,
+        uid: acc.uid || accDoc.id,
+        reactionBalance,
+        loginBalance,
+        balance,
+        settledOnchain: Number(ex.settledOnchain) || 0,
+        updatedAt: new Date()
+      }, { merge: true });
+
+      if (loginInc > 0) {
+        await accDoc.ref.update({ lastLoginBonusDate: todayJst });
+        await db.collection("emuer_offchain_ledger").add({
+          address: addr, uid: acc.uid || accDoc.id, amount: loginInc,
+          reason: "login_bonus", date: todayJst, createdAt: new Date()
+        });
+      }
+      processed++;
+    }
+    console.log(`✅ オフチェーンEMUER台帳照合完了: ${processed} アカウント`);
+  } catch (error) {
+    console.error("❌ オフチェーンEMUER台帳照合エラー:", error);
+  }
+}
+cron.schedule("15 * * * *", () => { console.log("⏰ オフチェーンEMUER台帳照合起動"); runOffchainEmuerReconcile(); }, { timezone: "Asia/Tokyo" });
 
 // =====================
 // 予約投稿 システム

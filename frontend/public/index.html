@@ -14161,16 +14161,17 @@ async function _emuReadTokenBalance() {
       return Math.floor(parseFloat(ethers.utils.formatUnits(balance, 18)));
     } catch (e) { /* 失敗時は下のオフチェーン計算にフォールバック */ }
   }
-  // CHESユーザー：ローカル(Good/Change/ログボ) + durableなオフチェーン台帳(懸賞等)
-  let offchain = 0;
+  // CHESユーザー：durableなオフチェーン台帳(サーバー権威=懸賞+評価+ログボ)を正とする。
+  // 台帳はサーバーの照合バッチが検証可能なデータから再計算するため水増し不可。
+  // まだ台帳が無い過渡期のユーザーはローカル(pendingEmuer)にフォールバック。
   try {
     const addr = (localStorage.getItem('emuWallet') || '').toLowerCase();
     if (addr && window.db && window.fbLib) {
       const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'emuer_offchain', addr));
-      if (snap.exists()) offchain = Math.max(0, Number(snap.data().balance) || 0);
+      if (snap.exists()) return Math.max(0, Number(snap.data().balance) || 0);
     }
-  } catch (e) { /* 読めなければローカル分のみ */ }
-  return localPart + offchain;
+  } catch (e) { /* 読めなければローカル分にフォールバック */ }
+  return localPart;
 }
 
 async function _emuLoadRecommendedPost() {
