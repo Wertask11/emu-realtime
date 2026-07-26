@@ -2728,6 +2728,21 @@ body.emu-profile-open > #mainApp > .container { display:none; }
 body.emu-profile-open > #mainApp > #emuTodayHome { display:block; }
 body.emu-profile-open #emuTodayDashboard { display:none; }
 body.emu-profile-open #emuValueProfile { display:grid; }
+/* 一日シェア（今日のEmu内タブ。iframeで ichinichi.html を表示） */
+#emuIchinichiPage { display:none; }
+body.emu-ichinichi-open > #mainApp > .container { display:none; }
+body.emu-ichinichi-open > #mainApp > #emuTodayHome { display:block; }
+body.emu-ichinichi-open #emuTodayDashboard,
+body.emu-ichinichi-open #emuValueProfile,
+body.emu-ichinichi-open #emuRequestsPage { display:none; }
+body.emu-ichinichi-open #emuIchinichiPage { display:block; }
+body.emu-ichinichi-open .header-right .search-bar,
+body.emu-ichinichi-open #openPostFormButton { display:none !important; }
+#emuIchinichiPage iframe {
+  width:100%; height:calc(100vh - 150px); min-height:560px;
+  border:0; border-radius:16px; background:#fffaf3;
+  box-shadow:0 5px 18px rgba(0,0,0,.04);
+}
 /* メイン画面に戻るボタン（ヘッダー左上） */
 #emuHomeBtn {
   display:inline-flex; align-items:center; flex:none;
@@ -3756,6 +3771,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     </div>
     <div class="eth-tabs" role="navigation" aria-label="Emu画面">
       <button type="button" class="eth-tab active" id="emuTodayTab" onclick="showEmuToday()">今日のEmu</button>
+      <button type="button" class="eth-tab" id="emuIchinichiTab" onclick="showEmuIchinichi()">一日シェア</button>
       <button type="button" class="eth-tab" id="emuFeedTab" onclick="showEmuFeed()">知識を読む</button>
       <button type="button" class="eth-tab" id="emuRequestsTab" onclick="showEmuRequests()">知識を探す</button>
       <button type="button" class="eth-tab" id="emuProfileTab" onclick="showEmuValueProfile()">価値プロフィール</button>
@@ -3775,6 +3791,13 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
               <span id="emuTodayStepText">誰かの体験から生まれた知識を1つ受け取る</span>
             </div>
             <button type="button" class="eth-btn primary" onclick="showEmuFeed()">読みに行く</button>
+          </div>
+          <div class="eth-task">
+            <div class="eth-task-copy">
+              <strong>今日の一日シェア</strong>
+              <span>時間割を決めて、今日の学びをひとつ残す</span>
+            </div>
+            <button type="button" class="eth-btn" onclick="showEmuIchinichi()">開く</button>
           </div>
           <div class="eth-task">
             <div class="eth-task-copy">
@@ -3913,6 +3936,10 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <div class="eth-card emu-request-empty">募集を読み込んでいます...</div>
     </div>
   </section>
+
+  <div id="emuIchinichiPage">
+    <iframe id="emuIchinichiFrame" title="一日シェア" loading="lazy"></iframe>
+  </div>
 </section>
 
 
@@ -3923,7 +3950,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <ul>
           <!-- 「メイン画面に戻る」はヘッダー左上(#emuHomeBtn)へ移動 -->
 <li>
-  <button class="nav-button" id="ichinichiNavBtn" onclick="location.href='/ichinichi.html'">📅 一日シェア</button>
+  <button class="nav-button" id="ichinichiNavBtn" onclick="showEmuIchinichi()">📅 一日シェア</button>
 </li>
 <li>
   <button class="nav-button" id="exploreBtn">探索する</button>
@@ -13838,7 +13865,7 @@ function chesBrandFrameClose() {
    今日のEmu — 画面切替・実データ反映
 ═══════════════════════════════════════ */
 function _setEmuHomeTab(activeId) {
-  ['emuTodayTab','emuFeedTab','emuRequestsTab','emuProfileTab'].forEach(function(id) {
+  ['emuTodayTab','emuIchinichiTab','emuFeedTab','emuRequestsTab','emuProfileTab'].forEach(function(id) {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('active', id === activeId);
   });
@@ -13857,15 +13884,25 @@ function _emuEnsureAppVisible() {
 function showEmuToday() {
   _emuEnsureAppVisible();
   document.body.classList.add('emu-today-open');
-  document.body.classList.remove('emu-profile-open','emu-requests-open');
+  document.body.classList.remove('emu-profile-open','emu-requests-open','emu-ichinichi-open');
   _setEmuHomeTab('emuTodayTab');
   updateEmuTodayHome();
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
-function showEmuFeed(mode) {
+function showEmuIchinichi() {
   _emuEnsureAppVisible();
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open');
+  document.body.classList.add('emu-ichinichi-open');
+  _setEmuHomeTab('emuIchinichiTab');
+  const frame = document.getElementById('emuIchinichiFrame');
+  if (frame && !frame.getAttribute('src')) frame.src = '/ichinichi.html?embed=1';
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+function showEmuFeed(mode) {
+  _emuEnsureAppVisible();
+  document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-ichinichi-open');
   _setEmuHomeTab('emuFeedTab');
   if (mode === 'recommended' && typeof filterRecommendedPosts === 'function') {
     filterRecommendedPosts();
@@ -13877,7 +13914,7 @@ function showEmuFeed(mode) {
 
 function showEmuValueProfile() {
   _emuEnsureAppVisible();
-  document.body.classList.remove('emu-today-open','emu-requests-open');
+  document.body.classList.remove('emu-today-open','emu-requests-open','emu-ichinichi-open');
   document.body.classList.add('emu-profile-open');
   _setEmuHomeTab('emuProfileTab');
   loadEmuValueProfile();
@@ -13886,7 +13923,7 @@ function showEmuValueProfile() {
 
 function showEmuRequests() {
   _emuEnsureAppVisible();
-  document.body.classList.remove('emu-today-open','emu-profile-open');
+  document.body.classList.remove('emu-today-open','emu-profile-open','emu-ichinichi-open');
   document.body.classList.add('emu-requests-open');
   _setEmuHomeTab('emuRequestsTab');
   loadKnowledgeRequests();

@@ -166,7 +166,7 @@ footer { max-width: 1180px; margin: auto; padding: 28px 24px 40px; display: flex
       <button data-tab="explore">みんなの一日</button>
       <button data-tab="mine">わたしの記録</button>
     </nav>
-    <a class="home-link" href="index.html">← Emuに戻る</a>
+    <a class="home-link" id="homeLink" href="index.html">← Emuに戻る</a>
     <div class="profile"><span id="profileInitial">私</span><div><b id="profileName">わたし</b><small id="profileVis">非公開</small></div></div>
   </header>
   <main id="main"></main>
@@ -182,7 +182,15 @@ const CATEGORY_COLOR = {
   "健康": "#55a978", "暮らし": "#3e8f9d", "子育て": "#d75c81",
 };
 const CATEGORIES = Object.keys(CATEGORY_COLOR);
-const ADDRESS = (window.connectedAccount || localStorage.getItem("emuWallet") || "").toLowerCase().trim();
+// Emu本体の「今日のEmu」内にiframe埋め込みされている場合を判定
+const EMBED = new URLSearchParams(location.search).get("embed") === "1" || window.parent !== window;
+// 同一オリジンなら親フレーム(index.html)の接続アカウントも参照できる
+function _parentWin() { try { return (window.parent !== window) ? window.parent : null; } catch (e) { return null; } }
+const ADDRESS = (
+  window.connectedAccount ||
+  (_parentWin() && _parentWin().connectedAccount) ||
+  localStorage.getItem("emuWallet") || ""
+).toLowerCase().trim();
 const USERNAME = (localStorage.getItem("ches_name") || "").trim() || "わたし";
 
 const todayStr = () => {
@@ -594,6 +602,23 @@ $main.addEventListener("click", (e) => {
 document.getElementById("brandBtn").addEventListener("click", () => selectTab("today"));
 document.querySelectorAll("nav button").forEach((b) =>
   b.addEventListener("click", () => selectTab(b.dataset.tab)));
+
+// ── Emu本体との行き来（埋め込み時） ─────────────────────────────
+function goBackToEmu() {
+  const p = _parentWin();
+  if (p && typeof p.showEmuToday === "function") { p.showEmuToday(); return; }
+  window.top.location.href = "index.html";
+}
+if (EMBED) {
+  const hl = document.getElementById("homeLink");
+  if (hl) { hl.textContent = "← 今日のEmu"; hl.href = "#"; }
+  // 埋め込み中は index.html への直接遷移／戻るリンクを親の画面遷移に置き換える
+  // （iframe内でEmuを二重に開くのを防ぐ）
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest('#homeLink, a[href="index.html"]');
+    if (a) { e.preventDefault(); goBackToEmu(); }
+  });
+}
 
 if (ADDRESS) {
   loadHistory(true);   // ミニ統計の初期値
