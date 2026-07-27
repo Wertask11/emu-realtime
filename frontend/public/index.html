@@ -19104,14 +19104,26 @@ document.addEventListener('DOMContentLoaded', () => {
   function cancelLoading() { if (typeof _cancelSpLoadingOverlay === "function") _cancelSpLoadingOverlay(); }
 
   // Firebase の準備を待つ
-  function whenFirebaseReady(cb) {
-    if (window.auth && window.fbAuth && window.db && window.fbLib) return cb();
-    window.addEventListener("ches-firebase-ready", function () { cb(); }, { once: true });
+  function whenFirebaseReady(cb, onTimeout) {
+    var finished = false;
+    var t = null;
+    function runOnce() {
+      if (finished) return;
+      finished = true;
+      if (t) clearInterval(t);
+      cb();
+    }
+    if (window.auth && window.fbAuth && window.db && window.fbLib) return runOnce();
+    window.addEventListener("ches-firebase-ready", runOnce, { once: true });
     // 保険（イベントを取りこぼした場合）
     var tries = 0;
-    var t = setInterval(function () {
-      if (window.auth && window.fbAuth && window.db && window.fbLib) { clearInterval(t); cb(); }
-      else if (++tries > 40) clearInterval(t);
+    t = setInterval(function () {
+      if (window.auth && window.fbAuth && window.db && window.fbLib) runOnce();
+      else if (++tries > 40) {
+        finished = true;
+        clearInterval(t);
+        if (typeof onTimeout === "function") onTimeout();
+      }
     }, 250);
   }
 
@@ -19211,6 +19223,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window._chesEntered = true;
+    window._chesBusy = false;
     // 入園したら resuming クラスは不要（以降の画面に影響しないよう除去）
     try { document.documentElement.classList.remove("ches-resuming"); } catch (e) {}
     if (typeof spTrack === "function") spTrack("free", addr).catch(function () {});
@@ -19224,16 +19237,49 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  function restoreLoginScreen(message) {
+    cancelLoading();
+    window._chesBusy = false;
+    try { document.documentElement.classList.remove("ches-resuming"); } catch (e) {}
+    var hub = document.getElementById("chesHubScreen"); if (hub) hub.style.display = "none";
+    var app = document.getElementById("mainApp"); if (app) app.style.display = "none";
+    var logo = document.getElementById("logoScreen"); if (logo) logo.style.display = "none";
+    var ws = document.getElementById("walletScreen"); if (ws) ws.style.display = "flex";
+    statusMsg(message || "ログイン情報を確認できませんでした。もう一度お試しください。", true);
+  }
+
+  function cachedAccountFor(user) {
+    var uid = localStorage.getItem("ches_uid") || "";
+    var wallet = localStorage.getItem("emuWallet") || "";
+    if (!user || uid !== user.uid || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) return null;
+    return {
+      uid: uid,
+      walletAddress: wallet,
+      displayName: localStorage.getItem("ches_name") || user.displayName || "",
+      membership: { tier: "free", offchain: true },
+      isNew: false
+    };
+  }
+
   // 認証成功 → 共通フロー（アカウント検索/作成 → 入園）
   async function completeCommonFlow(user, provider, profileOverride) {
     try {
-      var account = await CHES.findOrCreateAccount(user, provider, profileOverride);
+      var account = await Promise.race([
+        CHES.findOrCreateAccount(user, provider, profileOverride),
+        new Promise(function (_, reject) {
+          setTimeout(function () { reject(new Error("account lookup timeout")); }, 12000);
+        })
+      ]);
       CHES.enterSchoolPark(account, provider);
     } catch (e) {
       console.error("[CHES] 共通フロー失敗:", e);
-      cancelLoading();
-      statusMsg("入園処理に失敗しました。時間をおいて再度お試しください。", true);
-      window._chesBusy = false;
+      var cached = cachedAccountFor(user);
+      if (cached) {
+        console.warn("[CHES] アカウント取得失敗のため保存済みセッションで復帰します");
+        CHES.enterSchoolPark(cached, provider);
+        return;
+      }
+      restoreLoginScreen("ログイン情報の取得に失敗しました。もう一度お試しください。");
     }
   }
 
@@ -19352,11 +19398,10 @@ document.addEventListener('DOMContentLoaded', () => {
         await completeCommonFlow(cred.user, "line", out.profile);
       } catch (e) {
         console.error("[CHES] LINE 認証エラー:", e);
-        cancelLoading();
-        window._chesBusy = false;
-        if (ws) ws.style.display = "flex";
-        statusMsg("LINE ログインに失敗しました。もう一度お試しください。", true);
+        restoreLoginScreen("LINE ログインに失敗しました。もう一度お試しください。");
       }
+    }, function () {
+      restoreLoginScreen("ログインの準備に時間がかかっています。もう一度お試しください。");
     });
     return true;
   };
@@ -19398,15 +19443,14 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
         // 結果が取れなかった（キャンセル/ストレージ制限等）→ ゲート表示 + 念のため自動復元
-        cancelLoading(); window._chesBusy = false;
-        if (ws) ws.style.display = "flex";
+        restoreLoginScreen();
         CHES.setupAutoResume();
       } catch (e) {
         console.error("[CHES] Google redirect result エラー:", e);
-        cancelLoading(); window._chesBusy = false;
-        if (ws) ws.style.display = "flex";
-        statusMsg("Google ログインに失敗しました。もう一度お試しください。", true);
+        restoreLoginScreen("Google ログインに失敗しました。もう一度お試しください。");
       }
+    }, function () {
+      restoreLoginScreen("ログインの準備に時間がかかっています。もう一度お試しください。");
     });
   };
 
@@ -19433,6 +19477,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     CHES.setupAutoResume();                                // 再訪時の自動サインイン
   }
+  // 認証処理の例外や通信停止が重なっても、全画面非表示のまま残さない最終ガード。
+  setTimeout(function () {
+    if (!window._chesBusy && !document.documentElement.classList.contains("ches-resuming")) return;
+    var ids = ["logoScreen", "walletScreen", "mainApp", "chesHubScreen", "maintenanceScreen"];
+    var hasVisibleScreen = ids.some(function (id) {
+      var el = document.getElementById(id);
+      return el && window.getComputedStyle(el).display !== "none";
+    });
+    if (!hasVisibleScreen) restoreLoginScreen("ログイン処理が完了しませんでした。もう一度お試しください。");
+  }, 18000);
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
   } else {
