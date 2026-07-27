@@ -13749,6 +13749,10 @@ function closeSpMap() {
   _stopSpLive();
   if (_fwTimer) { clearTimeout(_fwTimer); _fwTimer = null; }
   _spCrowdLeave(); /* Firestoreからセッション削除 */
+  /* 冷蔵庫くん（SchoolPark専用UI）はマップを離れたら必ず閉じる。
+     開いたまま「今日のEmu」等へ移動するとEmu画面に残ってしまうため。 */
+  try { spReizoClose(); } catch (e) {}
+  try { _cancelSpLoadingOverlay(); } catch (e) {}
   /* ※Emuのカウントはここではしない（「ハブに戻る」時も通るため誤カウントになる）。
        ハブのEmuボタン / CHESメニューのEmu で明示的にカウントする。 */
 }
