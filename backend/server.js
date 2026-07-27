@@ -701,6 +701,99 @@ async function runOffchainEmuerReconcile() {
 cron.schedule("15 * * * *", () => { console.log("⏰ オフチェーンEMUER台帳照合起動"); runOffchainEmuerReconcile(); }, { timezone: "Asia/Tokyo" });
 
 // =====================
+// ログインボーナス（アカウント単位・1日1回・サーバー権威）
+// localStorage判定だと端末ごとに受け取れてしまうため、ches_accounts.lastLoginBonusDate で
+// アカウント単位の受取済みを管理し、emuer_offchain 台帳（サーバー専用書き込み）に加算する。
+// 付与額・計算式は runOffchainEmuerReconcile と同一（毎時バッチとも整合／二重付与しない）。
+// =====================
+async function _findChesAccountByAddress(addr) {
+  const snap = await db.collection("ches_accounts").where("walletAddress", "==", addr).limit(1).get();
+  return snap.empty ? null : snap.docs[0];
+}
+
+// ── 受取状況の確認 ──
+app.get("/api/emuer/login-bonus/status", async (req, res) => {
+  try {
+    if (!db) return res.json({ claimedToday: false });
+    const address = String(req.query.address || "").toLowerCase().trim();
+    if (!address) return res.json({ claimedToday: false });
+    const todayJst = _jstDateStr(new Date());
+    const accDoc = await _findChesAccountByAddress(address);
+    const claimedToday = !!(accDoc && accDoc.data().lastLoginBonusDate === todayJst);
+    return res.json({ claimedToday, date: todayJst });
+  } catch (err) {
+    console.error("login-bonus/status error:", err.message);
+    return res.json({ claimedToday: false });
+  }
+});
+
+// ── 受取（1日1回・アカウント単位） ──
+app.post("/api/emuer/login-bonus", async (req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+    const address = String(req.body.address || "").toLowerCase().trim();
+    if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
+
+    const todayJst = _jstDateStr(new Date());
+    const accDoc = await _findChesAccountByAddress(address);
+    if (!accDoc) return res.status(404).json({ error: "アカウントが見つかりません" });
+    const accRef = accDoc.ref;
+    const uid = accDoc.data().uid || accDoc.id;
+
+    // 評価された分（毎時バッチと同一計算）をトランザクション外で先に集計
+    let sumGood = 0, sumChange = 0;
+    const postsSnap = await db.collection("posts").where("address", "==", address).get();
+    postsSnap.forEach((p) => {
+      const d = p.data();
+      sumGood += Number(d.goodCount) || 0;
+      sumChange += Number(d.changeCount) || 0;
+    });
+    const reactionBalance = Math.floor(sumGood / 10) + Math.floor(sumChange / 20) * 3;
+
+    const balRef = db.collection("emuer_offchain").doc(address);
+
+    // アカウント単位の受取済みチェックと加算を原子的に実施（複数端末の同時押下でも二重付与しない）
+    const result = await db.runTransaction(async (tx) => {
+      const acc = await tx.get(accRef);
+      const already = acc.exists && acc.data().lastLoginBonusDate === todayJst;
+      const balDoc = await tx.get(balRef);
+      const ex = balDoc.exists ? balDoc.data() : {};
+      const bountyBalance = Number(ex.bountyBalance) || 0;
+      const spentBounty = Number(ex.spentBounty) || 0;
+      if (already) {
+        return { alreadyClaimed: true, balance: Number(ex.balance) || 0 };
+      }
+      const loginBalance = (Number(ex.loginBalance) || 0) + EMU_LOGIN_BONUS;
+      const balance = bountyBalance + reactionBalance + loginBalance - spentBounty;
+      tx.set(accRef, { lastLoginBonusDate: todayJst }, { merge: true });
+      tx.set(balRef, {
+        address, uid, reactionBalance, loginBalance, balance, updatedAt: new Date(),
+      }, { merge: true });
+      return { alreadyClaimed: false, balance };
+    });
+
+    if (!result.alreadyClaimed) {
+      await db.collection("emuer_offchain_ledger").add({
+        address, uid, amount: EMU_LOGIN_BONUS,
+        reason: "login_bonus", date: todayJst, createdAt: new Date(),
+      });
+    }
+
+    return res.json({
+      ok: true,
+      claimed: !result.alreadyClaimed,
+      alreadyClaimed: result.alreadyClaimed,
+      amount: EMU_LOGIN_BONUS,
+      balance: result.balance,
+      date: todayJst,
+    });
+  } catch (err) {
+    console.error("login-bonus error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =====================
 // 予約投稿 システム
 // =====================
 const SCHEDULE_NFT_ADDRESS = process.env.SCHEDULE_NFT_ADDRESS || "";
