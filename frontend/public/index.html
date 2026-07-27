@@ -13267,6 +13267,25 @@ const socket = io("https://emu-realtime.onrender.com");
 const walletAddress = localStorage.getItem("emuWallet");
 let room3CurrentStep = 1;
 let replyTarget = null;
+let room3TopicOverride = '';
+let room3ContributionMode = 'opinion';
+const ROOM3_CONTRIBUTION_MODES = {
+  opinion:{ label:'意見', prefix:'【意見】', placeholder:'あなたの考えと、その理由を書いてください' },
+  experience:{ label:'体験を共有', prefix:'【体験共有】', placeholder:'実際に経験したことと、そこから感じたことを書いてください' },
+  perspective:{ label:'別の視点', prefix:'【別の視点】', placeholder:'まだ出ていない立場や見方を書いてください' },
+  question:{ label:'問いを深める', prefix:'【問い】', placeholder:'議論を深めるために、参加者へ聞きたいことを書いてください' }
+};
+function setRoom3ContributionMode(mode) {
+  room3ContributionMode = ROOM3_CONTRIBUTION_MODES[mode] ? mode : 'opinion';
+  const config = ROOM3_CONTRIBUTION_MODES[room3ContributionMode];
+  const input = document.getElementById('userInput');
+  const info = document.getElementById('replyInfo');
+  if (input) input.placeholder = config.placeholder;
+  if (info && !replyTarget) {
+    info.style.display = 'block';
+    info.textContent = '発言モード：' + config.label;
+  }
+}
 
 // =====================
 // Explore / Room 制御
@@ -14186,9 +14205,11 @@ window.addEventListener('message', function(event) {
     if (event.data.type === 'emu-discussion-open') {
       const selectedTopic = String(event.data.topic || '').trim();
       if (selectedTopic) {
+        room3TopicOverride = selectedTopic;
         const topicElement = document.getElementById('topic');
         if (topicElement) topicElement.textContent = selectedTopic;
       }
+      setRoom3ContributionMode(event.data.mode || 'opinion');
       openRoom3();
     }
     return;
@@ -14196,9 +14217,7 @@ window.addEventListener('message', function(event) {
   if (event.source === playFrame?.contentWindow && event.data.type === 'emu-play-open') {
     const actions = {
       echo:openEchoFieldDirect,
-      secret:openSecretDoor,
-      ringo:openRingoGame,
-      meteorite:openMeteoriteLab
+      ringo:openRingoGame
     };
     const action = actions[event.data.play];
     if (action) action();
@@ -15922,7 +15941,7 @@ function openRoom3() {
   if (socket && socket.connected) {
     socket.emit("join room3", { wallet: walletAddress });
     // ★ 開くたびに議題を再リクエスト
-    socket.emit("request topic");
+    if (!room3TopicOverride) socket.emit("request topic");
   }
 
   // ★ フォールバック：socket未接続時も議題を表示
@@ -15958,6 +15977,7 @@ function room3ShowStep(step){
   document.getElementById('step1').style.display = step === 1 ? 'block' : 'none';
   document.getElementById('step2').style.display = step === 2 ? 'block' : 'none';
   document.getElementById('step3').style.display = step === 3 ? 'block' : 'none';
+  if (step === 3) setRoom3ContributionMode(room3ContributionMode);
 }
 
 function room3NextStep(){
@@ -15971,12 +15991,17 @@ function closePopup(){
   overlay.style.display = 'none';
   document.getElementById('userInput').value = '';
   document.getElementById('discussion').innerHTML = '';
+  replyTarget = null;
+  room3TopicOverride = '';
+  setRoom3ContributionMode('opinion');
 }
 
 document.getElementById('postBtn').addEventListener('click', ()=>{
   const input = document.getElementById('userInput');
-  const text = input.value.trim();
-  if(!text) return;
+  const rawText = input.value.trim();
+  if(!rawText) return;
+  const config = ROOM3_CONTRIBUTION_MODES[room3ContributionMode] || ROOM3_CONTRIBUTION_MODES.opinion;
+  const text = config.prefix + ' ' + rawText;
 
   console.log("送信:", { text, replyTarget });
 
@@ -15989,17 +16014,17 @@ document.getElementById('postBtn').addEventListener('click', ()=>{
 
   // 🔽 ここに全部入れる
   replyTarget = null;
-  document.getElementById("replyInfo").style.display = "none";
-  input.placeholder = "ここに意見を書こう";
   input.value = '';
+  setRoom3ContributionMode(room3ContributionMode);
 });
 
 socket.on("today topic", (topic) => {
-  document.getElementById("topic").textContent = topic;
+  const activeTopic = room3TopicOverride || topic;
+  document.getElementById("topic").textContent = activeTopic;
   const todayTopic = document.getElementById("emuTodayTopic");
   const discussionTitle = document.getElementById("emuDiscussionCardTitle");
-  if (todayTopic) todayTopic.textContent = topic;
-  if (discussionTitle) discussionTitle.textContent = topic;
+  if (todayTopic) todayTopic.textContent = activeTopic;
+  if (discussionTitle) discussionTitle.textContent = activeTopic;
 });
 
 function scrollToMessage(messageId) {

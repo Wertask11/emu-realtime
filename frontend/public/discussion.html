@@ -27,9 +27,9 @@
 </main>
 <script>
 const ORIGIN=location.origin,send=message=>parent.postMessage(message,ORIGIN),status=document.getElementById('status');
-document.querySelector('[data-join]').onclick=()=>send({type:'emu-discussion-open',topic:document.getElementById('featuredTopic').textContent});
+document.querySelector('[data-join]').onclick=()=>send({type:'emu-discussion-open',topic:document.getElementById('featuredTopic').textContent,mode:'opinion'});
 document.querySelectorAll('[data-topic]').forEach(button=>button.onclick=()=>{document.getElementById('featuredTopic').textContent=button.dataset.topic;status.textContent='議題を選択しました。「議論に参加する」から参加できます。';status.style.display='block';window.scrollTo({top:0,behavior:'smooth'})});
-document.querySelectorAll('[data-lens]').forEach(button=>button.onclick=()=>{status.textContent='「'+button.dataset.lens+'」として発言するモードです。議論に参加すると入力できます。';status.style.display='block'});
+document.querySelectorAll('[data-lens]').forEach(button=>button.onclick=()=>send({type:'emu-discussion-open',topic:document.getElementById('featuredTopic').textContent,mode:button.dataset.lens==='体験を共有'?'experience':button.dataset.lens==='別の視点'?'perspective':'question'}));
 window.addEventListener('message',event=>{if(event.origin!==ORIGIN||event.source!==parent)return;if(event.data?.type==='emu-discussion-topic'&&event.data.topic)document.getElementById('featuredTopic').textContent=event.data.topic});
 send({type:'emu-discussion-ready'});
 </script>
