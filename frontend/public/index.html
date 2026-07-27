@@ -13843,6 +13843,11 @@ function chesHubShow() {
     bf.style.display = 'none';
     const fr = document.getElementById('cbfFrame'); if (fr) fr.src = 'about:blank';
   }
+  // ウォレット等の全画面オーバーレイが残っているとハブ(z-index:900)より前面(z-index:3000)に
+  // 被さって真っ白になるため確実に閉じる。
+  ['myWalletPage','spContentOverlay'].forEach(function (id) {
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
   const greet = document.getElementById('hubGreeting');
   if (greet) greet.textContent = CHES_HUB_GREETINGS[Math.floor(Math.random() * CHES_HUB_GREETINGS.length)];
   chesHubSyncHeader();
@@ -13888,6 +13893,17 @@ function _setEmuHomeTab(activeId) {
   });
 }
 
+// Emu内(#mainApp)は position:static(z-index無し)のため、全画面オーバーレイが残っていると
+// その上に被さって「真っ白」になる。Emuを開く時点で残存オーバーレイを確実に閉じる。
+function _emuCloseFullscreenOverlays() {
+  ['logoScreen','walletScreen','myWalletPage','chesBrandFrame','spContentOverlay'].forEach(function(id){
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  // ウォレット表示で main-content を display:none にしているので、Emu表示前に復帰させる
+  const mc = document.querySelector('.main-content'); if (mc) mc.style.display = '';
+  try { _cancelSpLoadingOverlay(); } catch (e) {}
+}
+
 function _emuEnsureAppVisible() {
   const hub = document.getElementById('chesHubScreen');
   const app = document.getElementById('mainApp');
@@ -13896,6 +13912,7 @@ function _emuEnsureAppVisible() {
   if (app) app.style.display = 'block';
   if (footer) footer.style.display = 'block';
   try { closeSpMap(); } catch (e) {}
+  _emuCloseFullscreenOverlays();
 }
 
 function showEmuToday() {
