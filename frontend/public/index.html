@@ -14152,11 +14152,24 @@ function _emuEnsureAppVisible() {
   if (hub) hub.style.display = 'none';
   if (app) app.style.display = 'block';
   if (footer) footer.style.display = 'block';
-  // SchoolParkマップだけを旧3カラムから退避し、空フィードと旧サイドバーは永久に隠す。
+  // 旧3カラム(.container)は空フィードと旧サイドバーなので隠す。
+  // ただし .container の中には SchoolPark の全画面オーバーレイが同居しているため、
+  // マップだけでなく「すべて」を先に外へ退避する。
+  // （マップだけ退避すると、施設表示・冷蔵庫くん・探索・お知らせ等が
+  //   display:none の中に取り残され、SchoolParkが操作不能になる）
+  // いずれも position:fixed なので #mainApp 直下へ移しても表示位置は変わらない。
   const legacy = app && app.querySelector(':scope > .container');
-  const map = document.getElementById('spMapOverlay');
-  if (legacy && map && legacy.contains(map)) app.appendChild(map);
-  if (legacy) legacy.style.display = 'none';
+  if (legacy) {
+    [
+      'spMapOverlay', 'spContentOverlay', 'spReizoPanel', 'spComingOverlay',
+      'exploreOverlay', 'spNotifPanel', 'spMapModal', 'spTutOverlay',
+      'emuerRestrictOverlay'
+    ].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el && legacy.contains(el)) app.appendChild(el);
+    });
+    legacy.style.display = 'none';
+  }
   try { closeSpMap(); } catch (e) {}
   _emuCloseFullscreenOverlays();
 }
