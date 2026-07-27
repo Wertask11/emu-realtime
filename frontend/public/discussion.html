@@ -13,14 +13,9 @@
   <header class="intro"><div><div class="eyebrow">THINK TOGETHER</div><h1>開催中の議論</h1><p>正しさを競わず、体験を持ち寄って考えを深める場所。</p></div><span class="live">● LIVE</span></header>
   <section class="feature">
     <div class="meta"><span class="badge">意見募集中</span><small>今日の問い・リアルタイム議論</small></div>
-    <h2 id="featuredTopic">AIに任せること、自分で考え続けたいこと</h2>
+    <h2 id="featuredTopic">今日の議題を読み込んでいます…</h2>
     <p>便利さが増えるほど、私たちは何を手放し、何を守るべきでしょうか。結論を急がず、実際の経験から考えます。</p>
-    <div class="actions"><button class="button primary" data-join>議論に参加する</button><button class="button" data-lens="体験を共有">体験を共有</button><button class="button" data-lens="別の視点">別の視点</button><button class="button" data-lens="問いを深める">問いを深める</button></div>
-  </section>
-  <section class="topics" aria-label="その他の議論">
-    <button class="topic" data-topic="学校でAIをどこまで使っていい？"><span class="badge">整理中</span><strong>学校でAIをどこまで使っていい？</strong><small>学びと自分で考える力について</small></button>
-    <button class="topic" data-topic="地域のつながりをどう取り戻す？"><span class="badge">意見募集中</span><strong>地域のつながりをどう取り戻す？</strong><small>身近な体験から考える</small></button>
-    <button class="topic" data-topic="働く時間は短いほどよい？"><span class="badge">結論作成中</span><strong>働く時間は短いほどよい？</strong><small>終了後は「みんなの結論」へ</small></button>
+    <div class="actions"><button class="button primary" data-join disabled>議論に参加する</button><button class="button" data-lens="体験を共有" disabled>体験を共有</button><button class="button" data-lens="別の視点" disabled>別の視点</button><button class="button" data-lens="問いを深める" disabled>問いを深める</button></div>
   </section>
   <p class="note">終了した議論は「みんなの結論」として残り、知識を読むへ届けられます。</p>
   <div class="status" id="status" role="status"></div>
@@ -28,9 +23,8 @@
 <script>
 const ORIGIN=location.origin,send=message=>parent.postMessage(message,ORIGIN),status=document.getElementById('status');
 document.querySelector('[data-join]').onclick=()=>send({type:'emu-discussion-open',topic:document.getElementById('featuredTopic').textContent,mode:'opinion'});
-document.querySelectorAll('[data-topic]').forEach(button=>button.onclick=()=>{document.getElementById('featuredTopic').textContent=button.dataset.topic;status.textContent='議題を選択しました。「議論に参加する」から参加できます。';status.style.display='block';window.scrollTo({top:0,behavior:'smooth'})});
 document.querySelectorAll('[data-lens]').forEach(button=>button.onclick=()=>send({type:'emu-discussion-open',topic:document.getElementById('featuredTopic').textContent,mode:button.dataset.lens==='体験を共有'?'experience':button.dataset.lens==='別の視点'?'perspective':'question'}));
-window.addEventListener('message',event=>{if(event.origin!==ORIGIN||event.source!==parent)return;if(event.data?.type==='emu-discussion-topic'&&event.data.topic)document.getElementById('featuredTopic').textContent=event.data.topic});
+window.addEventListener('message',event=>{if(event.origin!==ORIGIN||event.source!==parent)return;if(event.data?.type==='emu-discussion-topic'&&event.data.topic){document.getElementById('featuredTopic').textContent=event.data.topic;document.querySelectorAll('.actions button').forEach(button=>button.disabled=false)}});
 send({type:'emu-discussion-ready'});
 </script>
 </body>
