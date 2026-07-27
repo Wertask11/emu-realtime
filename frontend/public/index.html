@@ -4396,31 +4396,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 
     <!-- メイン -->
     <main class="main-content">
-      <div class="kw-topbar">
-        <nav class="kw-tabs" aria-label="Emuの機能">
-          <button type="button" onclick="showEmuToday()"><span>☀</span>今日のEmu</button>
-          <button type="button" class="active"><span>▤</span>知識を読む</button>
-          <button type="button" onclick="if(typeof openPostForm==='function')openPostForm()"><span>＋</span>知識を届ける</button>
-          <button type="button" onclick="showEmuRequests()"><span>⌕</span>知識を探す</button>
-          <button type="button" onclick="var b=document.getElementById('libraryButton');if(b)b.click()"><span>●</span>自分</button>
-        </nav>
-        <div class="kw-search">
-          <span>⌕</span>
-          <input id="kwSearch" type="search" placeholder="悩み・体験・タグから探す" aria-label="知識を検索" oninput="kwApplySearch(this.value)">
-        </div>
-        <div class="kw-filters" aria-label="表示順">
-          <button type="button" class="active" onclick="kwFilter(this,'recommend')">おすすめ</button>
-          <button type="button" onclick="kwFilter(this,'new')">新着</button>
-          <button type="button" onclick="kwFilter(this,'good')">役に立った</button>
-          <button type="button" onclick="kwFilter(this,'change')">改善された</button>
-        </div>
-      </div>
-      <div id="postFeed">
-        <div class="placeholder-content">
-          <h2>ようこそEmuへ！</h2>
-          <p>さあ、物語を紡ごう。</p>
-        </div>
-      </div>
+      <!-- 知識を読むの表示内容・処理は削除済み（空） -->
+      <div id="postFeed"></div>
     </main>
 
 <button class="action-good free-only paid-only">👍</button>
@@ -14705,11 +14682,17 @@ function chesHubGo(brand) {
       showEmuToday();
       break;
     }
-    case 'schoolpark':
+    case 'schoolpark': {
       if (hub) hub.style.display = 'none';
       /* 戻る導線はマップ上部ナビの「← メイン画面」 */
-      if (typeof goTomainapp === 'function') goTomainapp();
+      /* SchoolPark は Emu の共通メイン遷移を経由せず、マップを直接表示する。 */
+      const main = document.getElementById('mainApp');
+      if (main) main.style.display = 'block';
+      const footer = document.getElementById('siteFooter');
+      if (footer) footer.style.display = 'block';
+      if (typeof openSpMap === 'function') openSpMap();
       break;
+    }
   }
 }
 
