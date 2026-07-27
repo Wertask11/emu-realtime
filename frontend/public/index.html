@@ -2609,17 +2609,8 @@ body.paypay-mode #pp-post-fab {
 }
 .eth-section-head h3 { margin:0 0 3px; font-size:18px; }
 .eth-section-head p { margin:0; color:#777; font-size:12px; }
-.eth-now-grid {
-  display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px;
-}
-.eth-now-card { display:grid; gap:10px; align-content:start; min-height:205px; }
-.eth-now-icon {
-  width:39px; height:39px; display:grid; place-items:center;
-  border-radius:50%; background:#fff2e5; font-size:19px;
-}
-.eth-now-card h3 { margin:0; font-size:16px; line-height:1.55; }
-.eth-now-card p { margin:0; color:#777; font-size:12px; line-height:1.6; }
-.eth-now-card .eth-btn { margin-top:auto; width:max-content; }
+
+
 .eth-uses { display:none; margin-top:14px; }
 .eth-use-row {
   display:flex; justify-content:space-between; align-items:center;
@@ -2814,9 +2805,8 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
 @media (max-width:850px) {
   #emuTodayHome { padding:16px 12px 28px; }
   .eth-hero, .eth-profile { grid-template-columns:1fr; }
-  .eth-now-grid { grid-template-columns:1fr; }
+  
   .emu-request-grid { grid-template-columns:1fr; }
-  .eth-now-card { min-height:auto; }
 }
 @media (max-width:520px) {
   .eth-title { font-size:22px; }
@@ -2840,8 +2830,7 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   .eth-tab { flex:0 0 auto; min-height:44px; padding:10px 16px; scroll-snap-align:start; }
   .eth-hero { grid-template-columns:minmax(0,1fr) minmax(245px,.62fr); gap:14px; }
   .eth-card { padding:18px; }
-  .eth-now-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .eth-now-card:last-child { grid-column:1/-1; }
+  
   .eth-btn { min-height:42px; }
   #emuIchinichiPage iframe,
   #emuKnowledgePage iframe,
@@ -2861,10 +2850,10 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   #emuTodayHome { padding:16px 12px max(34px,env(safe-area-inset-bottom)); }
   #emu-contact-btn { width:48px; height:48px; left:12px; bottom:max(12px,env(safe-area-inset-bottom)); font-size:19px; }
   #emu-contact-label { display:none; }
-  .eth-topbar { display:block; margin-bottom:14px; }
-  .eth-title { font-size:22px; }
-  .eth-subtitle { font-size:12px; line-height:1.6; }
-  .eth-tabs { margin-top:14px; margin-left:-12px; width:calc(100% + 24px); padding-inline:12px; }
+  /* スマホでは「今日のEmu」の見出し＋説明を出さず、その分タブを最上部に上げる */
+  .eth-topbar { display:block; margin-bottom:10px; }
+  .eth-topbar > div:first-child { display:none; }
+  .eth-tabs { margin-top:0; margin-left:-12px; width:calc(100% + 24px); padding-inline:12px; }
   .eth-tab { min-height:42px; padding:9px 14px; font-size:13px; }
   .eth-hero,.eth-profile { grid-template-columns:1fr; }
   .eth-card { padding:16px; border-radius:14px; }
@@ -2874,12 +2863,7 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   .eth-task .eth-btn { width:100%; }
   .eth-loginbonus { align-items:stretch; flex-direction:column; }
   .eth-loginbonus .eth-btn { width:100%; }
-  .eth-now-grid {
-    display:flex; overflow-x:auto; gap:12px; margin-right:-12px; padding:2px 12px 10px 0;
-    scroll-snap-type:x mandatory; scrollbar-width:none;
-  }
-  .eth-now-grid::-webkit-scrollbar { display:none; }
-  .eth-now-card,.eth-now-card:last-child { flex:0 0 min(82vw,330px); min-height:220px; scroll-snap-align:start; }
+  
   .eth-section-head { align-items:stretch; }
   .eth-section-head > .eth-btn { width:100%; }
   .emu-request-grid { grid-template-columns:1fr; }
@@ -2889,8 +2873,9 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   #emuKnowledgePage iframe,
   #emuDiscussionPage iframe,
   #emuPlayPage iframe {
-    width:calc(100% + 24px); margin-left:-12px; height:calc(100dvh - 165px);
-    min-height:610px; border-radius:0; box-shadow:none;
+    /* 見出しを省いた分だけ表示領域を広げる（ヘッダー54＋タブ約60＋余白） */
+    width:calc(100% + 24px); margin-left:-12px; height:calc(100dvh - 128px);
+    min-height:480px; border-radius:0; box-shadow:none;
   }
 }
 /* ③ タップ時に画面が青くなるのを防止（スマホ全体のタップハイライト無効化） */
@@ -4037,37 +4022,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       </aside>
     </div>
 
-    <section class="eth-section">
-      <div class="eth-section-head">
-        <div>
-          <h3>いまのEmu</h3>
-          <p>学び・議論・遊びを、今日の入口にまとめました。</p>
-        </div>
-      </div>
-      <div class="eth-now-grid">
-        <article class="eth-card eth-now-card">
-          <div class="eth-now-icon" aria-hidden="true">📚</div>
-          <span class="eth-badge">おすすめの学び</span>
-          <h3 id="emuRecommendedTitle">おすすめの知識を探しています</h3>
-          <p id="emuRecommendedSummary">Emuに投稿された経験・失敗・本・出会いから選びます。</p>
-          <button type="button" class="eth-btn" onclick="showEmuFeed('recommended')">読む</button>
-        </article>
-        <article class="eth-card eth-now-card">
-          <div class="eth-now-icon" aria-hidden="true">💬</div>
-          <span class="eth-badge">開催中の議論</span>
-          <h3 id="emuDiscussionCardTitle">今日の問いを読み込み中...</h3>
-          <p>勝ち負けではなく、より良い着地点を一緒に探します。</p>
-          <button type="button" class="eth-btn" onclick="openRoom(3)">議論を見る</button>
-        </article>
-        <article class="eth-card eth-now-card">
-          <div class="eth-now-icon" aria-hidden="true">🌟</div>
-          <span class="eth-badge">星空</span>
-          <h3 id="emuStarProgressTitle">行動が星になります</h3>
-          <p id="emuStarProgressText">投稿・学び・議論で残した価値が、星空につながります。</p>
-          <button type="button" class="eth-btn" onclick="openRoom(2)">星空を見る</button>
-        </article>
-      </div>
-    </section>
+    <!-- 「いまのEmu」セクションは削除（全デバイス） -->
 
     <section class="eth-card eth-uses" id="emuUsesPanel">
       <div class="eth-section-head">
@@ -14611,6 +14566,8 @@ async function _emuReadTokenBalance() {
 
 async function _emuLoadRecommendedPost() {
   if (!window.db || !window.fbLib) return;
+  // 「いまのEmu」削除により表示先が無いため、無駄なFirestore読み取りをしない
+  if (!document.getElementById('emuRecommendedTitle')) return;
   try {
     const q = window.fbLib.query(
       window.fbLib.collection(window.db, 'posts'),
