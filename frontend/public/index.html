@@ -231,9 +231,11 @@
 
 /* ── SchoolPark マップ（USJスタイル） ── */
 #spMapOverlay {
-  display:none; position:fixed; inset:0; z-index:1002; flex-direction:column;
+  display:none; position:fixed; inset:0; z-index:1400; flex-direction:column;
   background:#1a1208; font-family:'Noto Sans JP','Hiragino Sans',sans-serif;
 }
+body.spmap-open { overflow:hidden; }
+body.spmap-open #mainApp > .header { display:none !important; }
 /* Top Nav */
 .spmap-nav {
   display:flex; align-items:center; background:linear-gradient(135deg,#1c0e04 0%,#2e1b07 100%);
@@ -731,7 +733,7 @@
 }
 .spmap-infobar strong { color:#D4A843; }
 /* Main */
-.spmap-main { display:flex; flex:1; overflow:hidden; }
+.spmap-main { display:flex; flex:1; min-width:0; min-height:0; overflow:hidden; position:relative; }
 /* Sidebar */
 .spmap-left {
   width:230px; flex-shrink:0;
@@ -13512,7 +13514,7 @@ function openSpMap(gate) {
   document.body.classList.add('spmap-open'); /* 問い合わせボタン非表示 */
   const gateEl = document.getElementById("spMapGateLabel");
   if (gateEl) gateEl.textContent = GATE_NAMES[_currentGate] || "";
-  _spMapZoomLevel = window.innerWidth <= 1024 ? 0.5 : 0.75; /* スマホは一段階小さく表示 */
+  _spMapZoomLevel = window.innerWidth <= 1024 ? 1 : 0.75;
   _spMapFilter = "all";
   renderSpMapPois();
   renderSpContentList("all");
@@ -13528,11 +13530,7 @@ function openSpMap(gate) {
 
   // スクロール中央揃え（レイアウトサイズ基準で中央に合わせる）
   requestAnimationFrame(() => {
-    const vp = document.getElementById("spMapVP");
-    const inner = document.getElementById("spMapInner");
-    if (!vp || !inner) return;
-    vp.scrollLeft = Math.max(0, (inner.offsetWidth  - vp.clientWidth)  / 2);
-    vp.scrollTop  = Math.max(0, (inner.offsetHeight - vp.clientHeight) / 2);
+    _centerSpMapViewport();
   });
 
   // マップ内ホイールがメイン画面にバブルしないよう1回だけ設定
@@ -13541,6 +13539,14 @@ function openSpMap(gate) {
     vp._scrollBound = true;
     vp.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
     vp.addEventListener("touchmove", e => e.stopPropagation(), { passive: true });
+  }
+  if (!window._spMapResizeBound) {
+    window._spMapResizeBound = true;
+    window.addEventListener('resize', () => {
+      if (document.getElementById('spMapOverlay')?.style.display !== 'flex') return;
+      _applySpMapZoom();
+      _centerSpMapViewport();
+    });
   }
 
   // ★ 初回のみ冷蔵庫くんチュートリアル演出を開始
@@ -13956,6 +13962,9 @@ function spSettingApplyZoom(val, silent) {
   const labels = { '1':'標準（×1）', '1.5':'中（×1.5）', '2':'大（×2）', '2.5':'特大（×2.5）', '3':'最大（×3）' };
   const lb = document.getElementById('spSettingZoomLabel');
   if (lb) lb.textContent = labels[String(val)] || `×${val}`;
+  _spMapZoomLevel = Math.max(1, Math.min(3, Number(val) || 1));
+  _applySpMapZoom();
+  _centerSpMapViewport();
   if (!silent) spSettingSave();
 }
 
@@ -14162,7 +14171,7 @@ function _emuEnsureAppVisible() {
   if (legacy) {
     [
       'spMapOverlay', 'spContentOverlay', 'spReizoPanel', 'spComingOverlay',
-      'exploreOverlay', 'spNotifPanel', 'spMapModal', 'spTutOverlay',
+      'exploreOverlay', 'spNotifPanel', 'spMapModal', 'spTutOverlay', 'spTutMascot',
       'emuerRestrictOverlay'
     ].forEach(function (id) {
       const el = document.getElementById(id);
@@ -15345,10 +15354,31 @@ function spEvSwitch(tag) {
 
 function _applySpMapZoom() {
   const inner = document.getElementById("spMapInner");
-  if (inner) {
-    inner.style.transform = `scale(${_spMapZoomLevel})`;
-    inner.style.transformOrigin = "center center";  /* center で常に中央表示 */
+  const vp = document.getElementById("spMapVP");
+  if (!inner) return;
+  if (window.innerWidth <= 1024 && vp) {
+    /* 見た目だけでなくスクロール領域も同じ寸法にして、空白と位置ずれを防ぐ。 */
+    const baseSize = Math.max(vp.clientWidth, vp.clientHeight, 320);
+    const size = Math.round(baseSize * _spMapZoomLevel);
+    inner.style.width = `${size}px`;
+    inner.style.height = `${size}px`;
+    inner.style.transform = 'none';
+    inner.style.margin = '0 auto';
+    return;
   }
+  inner.style.width = '960px';
+  inner.style.height = '960px';
+  inner.style.margin = 'auto';
+  inner.style.transform = `scale(${_spMapZoomLevel})`;
+  inner.style.transformOrigin = "center center";
+}
+
+function _centerSpMapViewport() {
+  const vp = document.getElementById('spMapVP');
+  const inner = document.getElementById('spMapInner');
+  if (!vp || !inner) return;
+  vp.scrollLeft = Math.max(0, (inner.scrollWidth - vp.clientWidth) / 2);
+  vp.scrollTop = Math.max(0, (inner.scrollHeight - vp.clientHeight) / 2);
 }
 
 /* ════════════════════════════════════════════════════
