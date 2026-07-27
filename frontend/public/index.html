@@ -2743,6 +2743,21 @@ body.emu-ichinichi-open #openPostFormButton { display:none !important; }
   border:0; border-radius:16px; background:#fffaf3;
   box-shadow:0 5px 18px rgba(0,0,0,.04);
 }
+/* 知識を読む（固定Emuナビの下に専用ページをiframe表示） */
+#emuKnowledgePage { display:none; }
+body.emu-knowledge-open > #mainApp > .container { display:none; }
+body.emu-knowledge-open > #mainApp > #emuTodayHome { display:block; }
+body.emu-knowledge-open #emuTodayDashboard,
+body.emu-knowledge-open #emuValueProfile,
+body.emu-knowledge-open #emuRequestsPage,
+body.emu-knowledge-open #emuIchinichiPage { display:none; }
+body.emu-knowledge-open #emuKnowledgePage { display:block; }
+body.emu-knowledge-open .header-right .search-bar,
+body.emu-knowledge-open #openPostFormButton { display:none !important; }
+#emuKnowledgePage iframe {
+  width:100%; height:calc(100vh - 150px); min-height:620px;
+  border:0; background:#f8f6f2; display:block;
+}
 /* メイン画面に戻るボタン（ヘッダー左上） */
 #emuHomeBtn {
   display:inline-flex; align-items:center; flex:none;
@@ -4028,6 +4043,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 
   <div id="emuIchinichiPage">
     <iframe id="emuIchinichiFrame" title="一日シェア" loading="lazy"></iframe>
+  </div>
+  <div id="emuKnowledgePage">
+    <iframe id="emuKnowledgeFrame" title="知識を読む" loading="lazy"></iframe>
   </div>
 </section>
 
@@ -12784,6 +12802,10 @@ postForm.addEventListener("submit", async function (e) {
         alert("画像の処理に失敗しました（" + imgErr.message + "）。\n画像なしで投稿を続けます。");
       }
     }
+    // 新しい「知識を読む」iframeの投稿フォームから渡された圧縮済み画像
+    if (!postImageUrl && postForm._knowledgeImageDataUrl) {
+      postImageUrl = postForm._knowledgeImageDataUrl;
+    }
 
     const postData = {
       title: title,
@@ -12856,6 +12878,7 @@ const editingId = localStorage.getItem("editingPostId");
     const _imgPreview = document.getElementById('postImagePreview');
     if (_imgInput) _imgInput.value = '';
     if (_imgPreview) { _imgPreview.src = ''; _imgPreview.style.display = 'none'; }
+    postForm._knowledgeImageDataUrl = '';
     
     // ✅ 正しい関数名で閉じる
     closePostForm();
@@ -14022,7 +14045,7 @@ function _emuEnsureAppVisible() {
 function showEmuToday() {
   _emuEnsureAppVisible();
   document.body.classList.add('emu-today-open');
-  document.body.classList.remove('emu-profile-open','emu-requests-open','emu-ichinichi-open');
+  document.body.classList.remove('emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open');
   _setEmuHomeTab('emuTodayTab');
   updateEmuTodayHome();
   window.scrollTo({ top:0, behavior:'smooth' });
@@ -14030,7 +14053,7 @@ function showEmuToday() {
 
 function showEmuIchinichi() {
   _emuEnsureAppVisible();
-  document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open');
+  document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-knowledge-open');
   document.body.classList.add('emu-ichinichi-open');
   _setEmuHomeTab('emuIchinichiTab');
   const frame = document.getElementById('emuIchinichiFrame');
@@ -14041,19 +14064,18 @@ function showEmuIchinichi() {
 function showEmuFeed(mode) {
   _emuEnsureAppVisible();
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-ichinichi-open');
-  document.body.classList.add('kw-only'); /* 知識を読むは新デザインのみ表示（旧ナビ/右SB/検索・投稿を出さない） */
+  document.body.classList.remove('kw-only');
+  document.body.classList.add('emu-knowledge-open');
   _setEmuHomeTab('emuFeedTab');
-  if (mode === 'recommended' && typeof filterRecommendedPosts === 'function') {
-    filterRecommendedPosts();
-  } else if (typeof refreshAllPosts === 'function') {
-    refreshAllPosts();
-  }
+  const frame = document.getElementById('emuKnowledgeFrame');
+  if (frame && !frame.getAttribute('src')) frame.src = '/knowledge.html';
+  if (frame && frame.contentWindow) frame.contentWindow.postMessage({ type:'emu-knowledge-filter', mode:mode || 'recommended' }, '*');
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
 function showEmuValueProfile() {
   _emuEnsureAppVisible();
-  document.body.classList.remove('emu-today-open','emu-requests-open','emu-ichinichi-open');
+  document.body.classList.remove('emu-today-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open');
   document.body.classList.add('emu-profile-open');
   _setEmuHomeTab('emuProfileTab');
   loadEmuValueProfile();
@@ -14062,7 +14084,7 @@ function showEmuValueProfile() {
 
 function showEmuRequests() {
   _emuEnsureAppVisible();
-  document.body.classList.remove('emu-today-open','emu-profile-open','emu-ichinichi-open');
+  document.body.classList.remove('emu-today-open','emu-profile-open','emu-ichinichi-open','emu-knowledge-open');
   document.body.classList.add('emu-requests-open');
   _setEmuHomeTab('emuRequestsTab');
   loadKnowledgeRequests();
@@ -19307,6 +19329,92 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     bindEmuFeedReveal();
   }
+})();
+</script>
+<script>
+/* 新しい「知識を読む」iframeと、既存Firebase投稿処理をつなぐ */
+(function () {
+  function knowledgeFrame() {
+    return document.getElementById('emuKnowledgeFrame');
+  }
+  function plainKnowledgePost(docSnap) {
+    const data = docSnap.data ? docSnap.data() : docSnap;
+    const created = data.createdAt && typeof data.createdAt.toDate === 'function'
+      ? data.createdAt.toDate().toISOString()
+      : (data.createdAt || '');
+    return {
+      id: docSnap.id || data.id,
+      title: data.title || '', body: data.body || '', tags: data.tags || '',
+      address: data.address || '', displayName: data.displayName || '',
+      userType: data.userType || 'free', imageUrl: data.imageUrl || '',
+      goodCount: Number(data.goodCount) || 0, changeCount: Number(data.changeCount) || 0,
+      acceptedChangeCount: Number(data.acceptedChangeCount) || 0,
+      goodUsers: Array.isArray(data.goodUsers) ? data.goodUsers : [],
+      changeUsers: Array.isArray(data.changeUsers) ? data.changeUsers : [],
+      createdAt: created
+    };
+  }
+  async function syncKnowledgeFrame() {
+    const frame = knowledgeFrame();
+    if (!frame || !frame.contentWindow || !window.db || !window.fbLib) return;
+    try {
+      const q = window.fbLib.query(
+        window.fbLib.collection(window.db, 'posts'),
+        window.fbLib.orderBy('createdAt', 'desc')
+      );
+      const snap = await window.fbLib.getDocs(q);
+      const rows = [];
+      snap.forEach(function (docSnap) { rows.push(plainKnowledgePost(docSnap)); });
+      frame.contentWindow.postMessage({
+        type:'emu-knowledge-posts', posts:rows,
+        account:String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase(),
+        emuer:Number(window.cachedEmuerBalance || pendingEmuer || 0)
+      }, '*');
+    } catch (error) {
+      console.error('知識iframe同期失敗:', error);
+      frame.contentWindow.postMessage({ type:'emu-knowledge-error' }, '*');
+    }
+  }
+  window.syncKnowledgeFrame = syncKnowledgeFrame;
+
+  window.addEventListener('message', async function (event) {
+    const frame = knowledgeFrame();
+    if (!frame || event.source !== frame.contentWindow || !event.data) return;
+    const message = event.data;
+    if (message.type === 'emu-knowledge-ready' || message.type === 'emu-knowledge-refresh') {
+      syncKnowledgeFrame();
+      return;
+    }
+    if (message.type === 'emu-knowledge-publish' || message.type === 'emu-knowledge-draft') {
+      const payload = message.payload || {};
+      postTitleInput.value = String(payload.title || '').slice(0, 160);
+      postBodyInput.value = String(payload.body || '').slice(0, 5000);
+      postTagsInput.value = String(payload.tags || '').slice(0, 500);
+      postTitleInput.disabled = false;
+      postForm._knowledgeImageDataUrl = String(payload.imageUrl || '');
+      if (message.type === 'emu-knowledge-draft') {
+        saveDraftButton.click();
+        frame.contentWindow.postMessage({ type:'emu-knowledge-saved', kind:'draft' }, '*');
+      } else {
+        postForm.requestSubmit();
+        frame.contentWindow.postMessage({ type:'emu-knowledge-saved', kind:'publish' }, '*');
+        setTimeout(syncKnowledgeFrame, 1200);
+      }
+      return;
+    }
+    if (message.type === 'emu-knowledge-react' && message.postId && window.db && window.fbLib) {
+      try {
+        const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'posts', message.postId));
+        if (!snap.exists()) return;
+        const holder = createPostElementFromData({ id:snap.id, ...snap.data() });
+        holder.style.display = 'none';
+        document.body.appendChild(holder);
+        const selector = message.action === 'change' ? '.change-button' : '.good-button';
+        holder.querySelector(selector)?.click();
+        setTimeout(function(){ holder.remove(); }, 60000);
+      } catch (error) { console.error('知識リアクション起動失敗:', error); }
+    }
+  });
 })();
 </script>
 </body>
