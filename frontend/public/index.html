@@ -2838,6 +2838,32 @@ html, body { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 #postFeed .post .kw-actions .change-button:hover:not(:disabled), #postFeed .post .kw-actions .change-button.reacted { border-color: #86c4ab; color: #247a5a; background: #eaf7f1; }
 #postFeed .post .kw-actions button:disabled { opacity: .7; cursor: default; }
 .kw-note { margin-top: 10px; font-size: 10px; color: #9b958c; line-height: 1.7; }
+
+/* ===== 知識を読む(kw-only)：この画面だけ旧要素を出さず新デザインのみ全幅表示。 =====
+   旧要素(左ナビ/右サイドバー/上部の検索・投稿)は起動・SchoolPark・PayPayから参照されDOM削除は不可のため、
+   この画面では出さない(←メイン画面は残す)。スマホ/タブレット/PCでレイアウトを崩さない。 */
+body.kw-only .header-right .search-bar,
+body.kw-only #openPostFormButton { display: none !important; }
+/* 左サイドバー：中にSchoolParkのfixedオーバーレイが同居しているのでaside自体は消さず(0幅化)、ナビだけ出さない */
+body.kw-only .left-sidebar { width: 0 !important; min-width: 0 !important; height: 0 !important; padding: 0 !important; margin: 0 !important; border: 0 !important; overflow: hidden !important; }
+body.kw-only .left-sidebar .nav-button,
+body.kw-only #emu-custom-slot { display: none !important; }
+/* 右サイドバー(フィルタ/ランキング)は出さない(DOMは残すのでkwFilterのclick配線は有効) */
+body.kw-only .right-sidebar { display: none !important; }
+body.kw-only { overflow-x: hidden; }
+body.kw-only .container { display: block !important; padding: 0 !important; gap: 0 !important; background: #f7f5f1; min-height: 100vh; overflow-x: hidden; }
+body.kw-only .main-content { width: 100%; max-width: 900px; margin: 0 auto; border: 0; box-shadow: none; background: transparent; padding: 14px 16px 90px; min-height: auto; border-radius: 0; }
+body.kw-only .kw-topbar { position: sticky; top: 0; z-index: 30; background: rgba(247,245,241,.96); backdrop-filter: blur(10px); padding: 8px 0 0; margin: 0 0 12px; }
+@media (max-width: 900px) { body.kw-only .main-content { max-width: 100%; } }
+@media (max-width: 640px) {
+  body.kw-only .main-content { padding: 10px 12px 90px; }
+  #postFeed .post { padding: 16px; border-radius: 14px; }
+  #postFeed .post .kw-actions { grid-template-columns: 1fr; }
+  #postFeed .post .kw-title { font-size: 17px; }
+  .kw-impact { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .kw-impact-stats { gap: 18px; }
+  .kw-tabs button { font-size: 11px; padding: 9px 9px; }
+}
 </style>
 </head>
 <body>
@@ -13933,6 +13959,7 @@ function chesHubOpenSettings() {
 
 function chesHubShow() {
   try { closeSpMap(); } catch (e) {}
+  document.body.classList.remove('kw-only');
   ['logoScreen', 'walletScreen', 'mainApp'].forEach(function (id) {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
@@ -14012,6 +14039,7 @@ function _emuEnsureAppVisible() {
   if (footer) footer.style.display = 'block';
   try { closeSpMap(); } catch (e) {}
   _emuCloseFullscreenOverlays();
+  document.body.classList.remove('kw-only'); /* 知識を読む以外では通常表示に戻す */
 }
 
 function showEmuToday() {
@@ -14036,6 +14064,7 @@ function showEmuIchinichi() {
 function showEmuFeed(mode) {
   _emuEnsureAppVisible();
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-ichinichi-open');
+  document.body.classList.add('kw-only'); /* 知識を読むは新デザインのみ表示（旧ナビ/右SB/検索・投稿を出さない） */
   _setEmuHomeTab('emuFeedTab');
   if (mode === 'recommended' && typeof filterRecommendedPosts === 'function') {
     filterRecommendedPosts();
