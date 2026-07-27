@@ -1,37 +1,106 @@
 rules_version = '2';
 
-// ============================================================
-// Firestore セキュリティルール
-// ------------------------------------------------------------
-// 方針: 実EMUERになる durable 残高台帳（emuer_offchain / emuer_offchain_ledger）
-//       だけをクライアント書き込み不可にし、それ以外の全コレクションは
-//       現状の挙動（読み書き許可）を維持する。
-//
-// 仕組み: 単一セグメント変数 {coll} で「トップレベルのコレクション名」を取得し、
-//         条件で台帳だけを除外する。全コレクションを列挙しないため、
-//         アプリの他ページ（room1/2・各施設ページ等）の書き込みは壊れない。
-//         ※ サーバー(Firebase Admin SDK)はルールを常にバイパスするため、
-//           バッチ処理は引き続き台帳へ書き込める。
-//
-// 注意: Firestoreルールは複数マッチを OR 評価するため、
-//       「全許可catch-all + 個別deny」は機能しない。必ず条件式で除外する。
-// ============================================================
-
+// EMUER の計算根拠（posts / ches_accounts）と非公開下書きを、
+// クライアントから任意に改ざんできないように保護する。
+// Firebase Admin SDK を使うサーバー処理は、従来どおりルールをバイパスする。
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
 
-    match /{coll}/{doc=**} {
+    function accountPath() {
+      return /databases/$(database)/documents/ches_accounts/$(request.auth.uid);
+    }
 
-      // 読み取り:
-      //   監査ログ emuer_offchain_ledger はクライアントに見せない。
-      //   それ以外（残高台帳 emuer_offchain の表示を含む）は許可。
-      allow read: if coll != "emuer_offchain_ledger";
+    function hasAccount() {
+      return signedIn() && exists(accountPath());
+    }
 
-      // 書き込み(create/update/delete):
-      //   実EMUERになる台帳はクライアント書き込み不可（サーバー admin SDK のみ）。
-      //   それ以外は現状維持で許可。
-      allow write: if coll != "emuer_offchain"
-                   && coll != "emuer_offchain_ledger";
+    function wallet() {
+      return get(accountPath()).data.walletAddress;
+    }
+
+    function isMyWallet(value) {
+      return hasAccount()
+        && value is string
+        && wallet() is string
+        && value.lower() == wallet().lower();
+    }
+
+    function changedOnly(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    match /emuer_offchain/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /emuer_offchain_ledger/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /ches_accounts/{uid} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.walletAddress is string
+        && !request.resource.data.keys().hasAny(['lastLoginBonusDate']);
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && changedOnly(['lastLogin', 'displayName', 'email', 'photoURL']);
+      allow delete: if false;
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+
+      allow create: if isMyWallet(request.resource.data.address)
+        && request.resource.data.get('goodCount', 0) == 0
+        && request.resource.data.get('changeCount', 0) == 0
+        && request.resource.data.get('goodUsers', []).size() == 0
+        && request.resource.data.get('changeUsers', []).size() == 0;
+
+      // 投稿者本人による本文編集。反応数・反応者一覧・投稿者は変更不可。
+      allow update: if isMyWallet(resource.data.address) && changedOnly([
+        'title', 'body', 'tags', 'userType', 'userId', 'updatedAt', 'imageUrl',
+        'displayName', 'acceptedChangeCount', 'lastChangedAt'
+      ])
+      // Good は、認証ユーザー自身のウォレットを1件追加し、件数を1増やす場合だけ許可。
+      || (hasAccount()
+        && !isMyWallet(resource.data.address)
+        && changedOnly(['goodCount', 'goodUsers'])
+        && request.resource.data.get('goodCount', 0) == resource.data.get('goodCount', 0) + 1
+        && request.resource.data.get('goodUsers', []).size() == resource.data.get('goodUsers', []).size() + 1
+        && request.resource.data.get('goodUsers', []).hasAll(resource.data.get('goodUsers', []))
+        && wallet().lower() in request.resource.data.get('goodUsers', [])
+        && !(wallet().lower() in resource.data.get('goodUsers', [])))
+      // Change も同じく、1ユーザーにつき1件だけ許可。
+      || (hasAccount()
+        && !isMyWallet(resource.data.address)
+        && changedOnly(['changeCount', 'changeUsers'])
+        && request.resource.data.get('changeCount', 0) == resource.data.get('changeCount', 0) + 1
+        && request.resource.data.get('changeUsers', []).size() == resource.data.get('changeUsers', []).size() + 1
+        && request.resource.data.get('changeUsers', []).hasAll(resource.data.get('changeUsers', []))
+        && wallet().lower() in request.resource.data.get('changeUsers', [])
+        && !(wallet().lower() in resource.data.get('changeUsers', [])));
+
+      allow delete: if isMyWallet(resource.data.address);
+    }
+
+    match /knowledge_drafts/{draftId} {
+      allow create: if isMyWallet(request.resource.data.owner);
+      allow read, update, delete: if isMyWallet(resource.data.owner);
+    }
+
+    // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
+    match /{coll}/{document=**} {
+      allow read, write: if coll != 'emuer_offchain'
+        && coll != 'emuer_offchain_ledger'
+        && coll != 'ches_accounts'
+        && coll != 'posts'
+        && coll != 'knowledge_drafts';
     }
   }
 }

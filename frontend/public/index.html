@@ -14132,6 +14132,11 @@ function _emuEnsureAppVisible() {
   if (hub) hub.style.display = 'none';
   if (app) app.style.display = 'block';
   if (footer) footer.style.display = 'block';
+  // SchoolParkマップだけを旧3カラムから退避し、空フィードと旧サイドバーは永久に隠す。
+  const legacy = app && app.querySelector(':scope > .container');
+  const map = document.getElementById('spMapOverlay');
+  if (legacy && map && legacy.contains(map)) app.appendChild(map);
+  if (legacy) legacy.style.display = 'none';
   try { closeSpMap(); } catch (e) {}
   _emuCloseFullscreenOverlays();
 }
@@ -19750,6 +19755,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       const payload = message.payload || {};
+      // iframeの投稿フォームは常に新規投稿。旧UIの編集状態を持ち越さない。
+      editingPostId = null;
+      editMode = null;
       postTitleInput.value = String(payload.title || '').slice(0, 160);
       postBodyInput.value = String(payload.body || '').slice(0, 5000);
       postTagsInput.value = String(payload.tags || '').slice(0, 500);
@@ -19822,6 +19830,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const selector = message.action === 'change' ? '.change-button' : '.good-button';
         const reactionButton = holder.querySelector(selector);
         if (!reactionButton) throw new Error('反応ボタンを準備できませんでした。');
+        if (reactionButton.disabled) {
+          holder.remove();
+          knowledgeReactionHolders.delete(message.postId);
+          sendKnowledge({ type:'emu-knowledge-reaction-result', postId:message.postId, action:message.action, ok:false, error:message.action === 'change' ? 'すでにChange済みです。' : 'すでにGood済みです。' });
+          return;
+        }
         reactionButton.click();
       } catch (error) {
         console.error('知識リアクション起動失敗:', error);
