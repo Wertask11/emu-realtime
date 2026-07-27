@@ -2770,6 +2770,32 @@ body.emu-knowledge-open #openPostFormButton { display:none !important; }
   width:100%; height:calc(100vh - 150px); min-height:620px;
   border:0; border-radius:16px; background:#f8f6f2; display:block;
 }
+/* 開催中の議論・今日の遊び（固定Emuナビの下にiframe表示） */
+#emuDiscussionPage,#emuPlayPage { display:none; }
+body.emu-discussion-open > #mainApp > .container,
+body.emu-play-open > #mainApp > .container { display:none; }
+body.emu-discussion-open > #mainApp > #emuTodayHome,
+body.emu-play-open > #mainApp > #emuTodayHome { display:block; }
+body.emu-discussion-open #emuTodayDashboard,
+body.emu-discussion-open #emuValueProfile,
+body.emu-discussion-open #emuRequestsPage,
+body.emu-discussion-open #emuIchinichiPage,
+body.emu-discussion-open #emuKnowledgePage,
+body.emu-play-open #emuTodayDashboard,
+body.emu-play-open #emuValueProfile,
+body.emu-play-open #emuRequestsPage,
+body.emu-play-open #emuIchinichiPage,
+body.emu-play-open #emuKnowledgePage { display:none; }
+body.emu-discussion-open #emuDiscussionPage,
+body.emu-play-open #emuPlayPage { display:block; }
+#emuDiscussionPage iframe,#emuPlayPage iframe {
+  width:100%; height:calc(100vh - 150px); min-height:620px;
+  border:0; border-radius:16px; background:#faf7f2; display:block;
+}
+body.emu-discussion-open .header-right .search-bar,
+body.emu-discussion-open #openPostFormButton,
+body.emu-play-open .header-right .search-bar,
+body.emu-play-open #openPostFormButton { display:none !important; }
 /* メイン画面に戻るボタン（ヘッダー左上） */
 #emuHomeBtn {
   display:inline-flex; align-items:center; flex:none;
@@ -3891,6 +3917,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <button type="button" class="eth-tab" id="emuFeedTab" onclick="showEmuFeed()">知識を読む</button>
       <button type="button" class="eth-tab" id="emuRequestsTab" onclick="showEmuRequests()">知識を探す</button>
       <button type="button" class="eth-tab" id="emuProfileTab" onclick="showEmuValueProfile()">価値プロフィール</button>
+      <button type="button" class="eth-tab" id="emuDiscussionTab" onclick="showEmuDiscussion()">議論</button>
+      <button type="button" class="eth-tab" id="emuPlayTab" onclick="showEmuPlay()">遊び</button>
     </div>
   </div>
 
@@ -4058,6 +4086,12 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </div>
   <div id="emuKnowledgePage">
     <iframe id="emuKnowledgeFrame" title="知識を読む" loading="lazy"></iframe>
+  </div>
+  <div id="emuDiscussionPage">
+    <iframe id="emuDiscussionFrame" title="開催中の議論" loading="lazy"></iframe>
+  </div>
+  <div id="emuPlayPage">
+    <iframe id="emuPlayFrame" title="今日の遊び" loading="lazy"></iframe>
   </div>
 </section>
 
@@ -14042,7 +14076,7 @@ function chesBrandFrameClose() {
    今日のEmu — 画面切替・実データ反映
 ═══════════════════════════════════════ */
 function _setEmuHomeTab(activeId) {
-  ['emuTodayTab','emuIchinichiTab','emuFeedTab','emuRequestsTab','emuProfileTab'].forEach(function(id) {
+  ['emuTodayTab','emuIchinichiTab','emuFeedTab','emuRequestsTab','emuProfileTab','emuDiscussionTab','emuPlayTab'].forEach(function(id) {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('active', id === activeId);
   });
@@ -14074,7 +14108,7 @@ function _emuEnsureAppVisible() {
 function showEmuToday() {
   _emuEnsureAppVisible();
   document.body.classList.add('emu-today-open');
-  document.body.classList.remove('emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open');
+  document.body.classList.remove('emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open','emu-discussion-open','emu-play-open');
   _setEmuHomeTab('emuTodayTab');
   updateEmuTodayHome();
   window.scrollTo({ top:0, behavior:'smooth' });
@@ -14082,7 +14116,7 @@ function showEmuToday() {
 
 function showEmuIchinichi() {
   _emuEnsureAppVisible();
-  document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-knowledge-open');
+  document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-knowledge-open','emu-discussion-open','emu-play-open');
   document.body.classList.add('emu-ichinichi-open');
   _setEmuHomeTab('emuIchinichiTab');
   const frame = document.getElementById('emuIchinichiFrame');
@@ -14092,7 +14126,7 @@ function showEmuIchinichi() {
 
 function showEmuFeed(mode) {
   _emuEnsureAppVisible();
-  document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-ichinichi-open');
+  document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-discussion-open','emu-play-open');
   document.body.classList.remove('kw-only');
   document.body.classList.add('emu-knowledge-open');
   _setEmuHomeTab('emuFeedTab');
@@ -14104,7 +14138,7 @@ function showEmuFeed(mode) {
 
 function showEmuValueProfile() {
   _emuEnsureAppVisible();
-  document.body.classList.remove('emu-today-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open');
+  document.body.classList.remove('emu-today-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open','emu-discussion-open','emu-play-open');
   document.body.classList.add('emu-profile-open');
   _setEmuHomeTab('emuProfileTab');
   loadEmuValueProfile();
@@ -14113,12 +14147,63 @@ function showEmuValueProfile() {
 
 function showEmuRequests() {
   _emuEnsureAppVisible();
-  document.body.classList.remove('emu-today-open','emu-profile-open','emu-ichinichi-open','emu-knowledge-open');
+  document.body.classList.remove('emu-today-open','emu-profile-open','emu-ichinichi-open','emu-knowledge-open','emu-discussion-open','emu-play-open');
   document.body.classList.add('emu-requests-open');
   _setEmuHomeTab('emuRequestsTab');
   loadKnowledgeRequests();
   window.scrollTo({ top:0, behavior:'smooth' });
 }
+
+function showEmuDiscussion() {
+  _emuEnsureAppVisible();
+  document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open','emu-play-open');
+  document.body.classList.add('emu-discussion-open');
+  _setEmuHomeTab('emuDiscussionTab');
+  const frame = document.getElementById('emuDiscussionFrame');
+  if (frame && !frame.getAttribute('src')) frame.src = '/discussion.html';
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+function showEmuPlay() {
+  _emuEnsureAppVisible();
+  document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open','emu-discussion-open');
+  document.body.classList.add('emu-play-open');
+  _setEmuHomeTab('emuPlayTab');
+  const frame = document.getElementById('emuPlayFrame');
+  if (frame && !frame.getAttribute('src')) frame.src = '/play.html';
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+window.addEventListener('message', function(event) {
+  if (event.origin !== window.location.origin || !event.data) return;
+  const discussionFrame = document.getElementById('emuDiscussionFrame');
+  const playFrame = document.getElementById('emuPlayFrame');
+  if (event.source === discussionFrame?.contentWindow) {
+    if (event.data.type === 'emu-discussion-ready') {
+      const currentTopic = document.getElementById('topic')?.textContent || document.getElementById('emuTodayTopic')?.textContent || '';
+      if (currentTopic) discussionFrame.contentWindow.postMessage({ type:'emu-discussion-topic', topic:currentTopic }, window.location.origin);
+    }
+    if (event.data.type === 'emu-discussion-open') {
+      const selectedTopic = String(event.data.topic || '').trim();
+      if (selectedTopic) {
+        const topicElement = document.getElementById('topic');
+        if (topicElement) topicElement.textContent = selectedTopic;
+      }
+      openRoom3();
+    }
+    return;
+  }
+  if (event.source === playFrame?.contentWindow && event.data.type === 'emu-play-open') {
+    const actions = {
+      echo:openEchoFieldDirect,
+      secret:openSecretDoor,
+      ringo:openRingoGame,
+      meteorite:openMeteoriteLab
+    };
+    const action = actions[event.data.play];
+    if (action) action();
+  }
+});
 
 function openKnowledgeRequestComposer() {
   if (!_emuAddress()) return alert("ウォレットを接続してください。");
@@ -15701,9 +15786,9 @@ function openRoom(roomId) {
   } else if (roomId === 2) {
     openRoom2();
   } else if (roomId === 3) {
-    openRoom3();
+    showEmuDiscussion();
   } else if (roomId === 4) {
-    openRoom4();
+    showEmuPlay();
   }
 }
 
