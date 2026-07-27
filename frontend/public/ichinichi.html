@@ -7,6 +7,8 @@
 <meta name="description" content="わたしの一日が、誰かの学びになる。時間割を決め、学びを残し、みんなの一日から学ぶ。">
 <style>
 * { box-sizing: border-box; }
+*, *::before, *::after { -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; }
 html, body { max-width: 100%; overflow-x: hidden; }
 :root {
   --orange: #ef7a2c;
@@ -131,7 +133,13 @@ footer { max-width: 1180px; margin: auto; padding: 28px 24px 40px; display: flex
   .topbar { height: auto; padding: 12px 16px 0; flex-wrap: wrap; }.brand { width: auto; }.brand small { display: none; }
   .home-link { margin-left: auto; }
   nav { width: 100%; height: 40px; justify-content: space-between; order: 3; }nav button { flex: 1; white-space: nowrap; }
-  main { padding: 20px 13px 60px; }
+  main { padding: 20px 13px max(60px, env(safe-area-inset-bottom)); }
+  /* タップ領域を確保（完了チェックは見た目23pxのまま、当たり判定だけ拡大） */
+  .check { width: 26px; height: 26px; position: relative; }
+  .check::before { content: ""; position: absolute; inset: -11px; }
+  .inline-actions button { min-height: 40px; padding: 6px 4px; font-size: 11px; }
+  .visibility button, .share, .primary { min-height: 46px; }
+  .date-tools input { min-height: 42px; }
   .hero { min-height: 0; padding: 28px 24px 24px; display: grid; grid-template-columns: 1fr; gap: 22px; align-items: start; }
   .hero h1 { font-size: 30px; line-height: 1.45; margin-bottom: 16px; overflow-wrap: normal; letter-spacing: 0; }
   .hero h1 span { white-space: normal; }
@@ -142,7 +150,7 @@ footer { max-width: 1180px; margin: auto; padding: 28px 24px 40px; display: flex
   .ring strong { font-size: 23px; }
   .day-progress > span { max-width: 70px; line-height: 1.5; }
   .date-tools { align-items: stretch; flex-wrap: wrap; }.date-tools label { width: 100%; }.date-tools button, .past-note { margin-left: 0; }
-  .panel-head { padding: 18px 16px; }.panel-head p { display: none; }.timeline { padding: 8px 12px; }.schedule-item { grid-template-columns: 45px 23px 1fr; gap: 7px; }.content-grid { margin-top: 14px; gap: 14px; }
+  .panel-head { padding: 18px 16px; }.panel-head p { display: none; }.timeline { padding: 8px 12px; }.schedule-item { grid-template-columns: 45px 26px 1fr; gap: 8px; }.content-grid { margin-top: 14px; gap: 14px; }
   .people-grid, .record-summary { grid-template-columns: 1fr; }
   .page-title { padding: 28px 4px 24px; }
   .page-title h1 { font-size: clamp(27px, 8vw, 34px); line-height: 1.5; word-break: auto-phrase; }
