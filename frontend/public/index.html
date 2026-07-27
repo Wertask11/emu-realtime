@@ -14310,8 +14310,12 @@ const _EMU_LB_API = 'https://emu-realtime.onrender.com';
 // 受取済み判定はサーバー（アカウント単位）が正。null=未取得。
 // localStorage判定だと端末ごとに受け取れてしまう（=二重取得）ため、サーバーに一本化。
 let _emuLbClaimedToday = null;
+let _emuLbClaimedElsewhere = false; // サーバーでは受取済みだが、この端末では受け取っていない
 function _emuLbAddr() {
   return (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+}
+function _emuLbUid() {
+  return (localStorage.getItem('ches_uid') || '').trim();
 }
 function _emuTodayStr() {
   const d = new Date();
@@ -14326,12 +14330,16 @@ function emuLoginBonusClaimedToday() {
 // サーバー（アカウント単位）から受取状況を取得してUIへ反映
 async function refreshEmuLoginBonusStatus() {
   const addr = _emuLbAddr();
-  if (!addr) { updateEmuLoginBonusUI(); return; }
+  const uid = _emuLbUid();
+  if (!addr && !uid) { updateEmuLoginBonusUI(); return; }
   try {
-    const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus/status?address=' + encodeURIComponent(addr));
+    const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus/status?address=' + encodeURIComponent(addr) + '&uid=' + encodeURIComponent(uid));
     const j = await r.json();
     if (r.ok) {
       _emuLbClaimedToday = !!j.claimedToday;
+      // サーバーは受取済みだが、この端末のキャッシュに今日の受取記録が無い＝別端末で受取
+      _emuLbClaimedElsewhere = _emuLbClaimedToday &&
+        localStorage.getItem(_emuLbCacheKey()) !== _emuTodayStr();
       if (_emuLbClaimedToday) localStorage.setItem(_emuLbCacheKey(), _emuTodayStr());
     }
   } catch (e) { /* オフライン時はローカルキャッシュのまま */ }
@@ -14346,7 +14354,9 @@ function updateEmuLoginBonusUI() {
     btn.textContent = '受取済み';
     btn.disabled = true;
     if (row) row.classList.add('claimed');
-    if (note) note.textContent = 'また明日、受け取れます。';
+    if (note) note.textContent = _emuLbClaimedElsewhere
+      ? '別の端末で受取済みです。また明日どうぞ。'
+      : 'また明日、受け取れます。';
   } else {
     btn.textContent = '+' + EMU_LOGIN_BONUS_AMOUNT + ' 受取';
     btn.disabled = false;
@@ -14354,16 +14364,26 @@ function updateEmuLoginBonusUI() {
     if (note) note.textContent = '毎日ログインで +' + EMU_LOGIN_BONUS_AMOUNT + ' Emuer';
   }
 }
+function _emuLbToast(text) {
+  try {
+    const t = document.createElement('div');
+    t.textContent = text;
+    t.style.cssText = 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);background:#f08300;color:#fff;padding:10px 18px;border-radius:999px;font-weight:bold;z-index:3000;box-shadow:0 4px 14px rgba(0,0,0,.2);font-size:13px;max-width:90vw;text-align:center;';
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 2600);
+  } catch (e) {}
+}
 async function claimEmuLoginBonus() {
   const addr = _emuLbAddr();
-  if (!addr) { alert('ウォレットを接続してください'); return; }
+  const uid = _emuLbUid();
+  if (!addr && !uid) { alert('ウォレットを接続してください'); return; }
   if (emuLoginBonusClaimedToday()) { updateEmuLoginBonusUI(); return; }
   const btn = document.getElementById('emuLoginBonusBtn');
   if (btn) btn.disabled = true; // 二重送信防止
   try {
     const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ address: addr })
+      body: JSON.stringify({ address: addr, uid: uid })
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || '受け取りに失敗しました');
@@ -14375,12 +14395,11 @@ async function claimEmuLoginBonus() {
     try { if (typeof ppUpdateBalance === 'function') ppUpdateBalance(); } catch (e) {}
     try { if (myWalletPage && myWalletPage.style.display === 'block') renderWallet(); } catch (e) {}
     try { updateEmuTodayHome(); } catch (e) {}
-    if (!j.alreadyClaimed) {
-      const t = document.createElement('div');
-      t.textContent = '🎁 ログインボーナス +' + EMU_LOGIN_BONUS_AMOUNT + ' Emuer';
-      t.style.cssText = 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);background:#f08300;color:#fff;padding:10px 18px;border-radius:999px;font-weight:bold;z-index:3000;box-shadow:0 4px 14px rgba(0,0,0,.2);font-size:13px;';
-      document.body.appendChild(t);
-      setTimeout(function () { t.remove(); }, 2200);
+    if (j.alreadyClaimed) {
+      // 別の端末で受け取り済み（アカウント単位で1日1回）
+      _emuLbToast('本日は別の端末で受け取り済みです🧊');
+    } else {
+      _emuLbToast('🎁 ログインボーナス +' + EMU_LOGIN_BONUS_AMOUNT + ' Emuer');
     }
   } catch (e) {
     if (btn) btn.disabled = false;

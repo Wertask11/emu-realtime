@@ -706,21 +706,39 @@ cron.schedule("15 * * * *", () => { console.log("⏰ オフチェーンEMUER台�
 // アカウント単位の受取済みを管理し、emuer_offchain 台帳（サーバー専用書き込み）に加算する。
 // 付与額・計算式は runOffchainEmuerReconcile と同一（毎時バッチとも整合／二重付与しない）。
 // =====================
-async function _findChesAccountByAddress(addr) {
-  const snap = await db.collection("ches_accounts").where("walletAddress", "==", addr).limit(1).get();
-  return snap.empty ? null : snap.docs[0];
+// ches_accounts の特定。ドキュメントID = uid が最も確実。
+// walletAddress は ethers.getAddress() のチェックサム(大文字小文字混在)で保存されているため、
+// アドレス検索は「渡された形」と「チェックサム化した形」の両方を試す。
+async function _findChesAccount(uid, addr) {
+  if (uid) {
+    const d = await db.collection("ches_accounts").doc(String(uid)).get();
+    if (d.exists) return d;
+  }
+  if (addr) {
+    let snap = await db.collection("ches_accounts").where("walletAddress", "==", addr).limit(1).get();
+    if (!snap.empty) return snap.docs[0];
+    try {
+      const checksummed = ethers.utils.getAddress(addr);
+      if (checksummed !== addr) {
+        snap = await db.collection("ches_accounts").where("walletAddress", "==", checksummed).limit(1).get();
+        if (!snap.empty) return snap.docs[0];
+      }
+    } catch (e) { /* 無効なアドレス形式 */ }
+  }
+  return null;
 }
 
 // ── 受取状況の確認 ──
 app.get("/api/emuer/login-bonus/status", async (req, res) => {
   try {
     if (!db) return res.json({ claimedToday: false });
-    const address = String(req.query.address || "").toLowerCase().trim();
-    if (!address) return res.json({ claimedToday: false });
+    const uid = String(req.query.uid || "").trim();
+    const address = String(req.query.address || "").trim();
+    if (!uid && !address) return res.json({ claimedToday: false });
     const todayJst = _jstDateStr(new Date());
-    const accDoc = await _findChesAccountByAddress(address);
+    const accDoc = await _findChesAccount(uid, address);
     const claimedToday = !!(accDoc && accDoc.data().lastLoginBonusDate === todayJst);
-    return res.json({ claimedToday, date: todayJst });
+    return res.json({ claimedToday, found: !!accDoc, date: todayJst });
   } catch (err) {
     console.error("login-bonus/status error:", err.message);
     return res.json({ claimedToday: false });
@@ -732,17 +750,22 @@ app.post("/api/emuer/login-bonus", async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const address = String(req.body.address || "").toLowerCase().trim();
-    if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
+    const reqUid = String(req.body.uid || "").trim();
+    if (!address && !reqUid) return res.status(400).json({ error: "ウォレットが必要です" });
 
     const todayJst = _jstDateStr(new Date());
-    const accDoc = await _findChesAccountByAddress(address);
+    const accDoc = await _findChesAccount(reqUid, address);
     if (!accDoc) return res.status(404).json({ error: "アカウントが見つかりません" });
     const accRef = accDoc.ref;
     const uid = accDoc.data().uid || accDoc.id;
+    // オフチェーン台帳のドキュメントIDは小文字アドレス（毎時バッチと統一）。
+    // アドレス未指定時はアカウントの walletAddress から復元。
+    const ledgerAddr = address || String(accDoc.data().walletAddress || "").toLowerCase();
+    if (!ledgerAddr) return res.status(400).json({ error: "ウォレットが必要です" });
 
     // 評価された分（毎時バッチと同一計算）をトランザクション外で先に集計
     let sumGood = 0, sumChange = 0;
-    const postsSnap = await db.collection("posts").where("address", "==", address).get();
+    const postsSnap = await db.collection("posts").where("address", "==", ledgerAddr).get();
     postsSnap.forEach((p) => {
       const d = p.data();
       sumGood += Number(d.goodCount) || 0;
@@ -750,7 +773,7 @@ app.post("/api/emuer/login-bonus", async (req, res) => {
     });
     const reactionBalance = Math.floor(sumGood / 10) + Math.floor(sumChange / 20) * 3;
 
-    const balRef = db.collection("emuer_offchain").doc(address);
+    const balRef = db.collection("emuer_offchain").doc(ledgerAddr);
 
     // アカウント単位の受取済みチェックと加算を原子的に実施（複数端末の同時押下でも二重付与しない）
     const result = await db.runTransaction(async (tx) => {
@@ -767,14 +790,14 @@ app.post("/api/emuer/login-bonus", async (req, res) => {
       const balance = bountyBalance + reactionBalance + loginBalance - spentBounty;
       tx.set(accRef, { lastLoginBonusDate: todayJst }, { merge: true });
       tx.set(balRef, {
-        address, uid, reactionBalance, loginBalance, balance, updatedAt: new Date(),
+        address: ledgerAddr, uid, reactionBalance, loginBalance, balance, updatedAt: new Date(),
       }, { merge: true });
       return { alreadyClaimed: false, balance };
     });
 
     if (!result.alreadyClaimed) {
       await db.collection("emuer_offchain_ledger").add({
-        address, uid, amount: EMU_LOGIN_BONUS,
+        address: ledgerAddr, uid, amount: EMU_LOGIN_BONUS,
         reason: "login_bonus", date: todayJst, createdAt: new Date(),
       });
     }
