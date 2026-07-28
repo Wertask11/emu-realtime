@@ -1006,7 +1006,7 @@ async function fpLoadVoteBars(voteId, barsElId, countElId, isDAO) {
 function fpInitBoard() {
   if (!fpDB || !fpFBLib) { setTimeout(fpInitBoard, 500); return; }
   const lib = fpFBLib;
-  const q   = lib.query(lib.collection(fpDB, "sp_fountain_board"), lib.orderBy("ts","desc"));
+  const q   = lib.query(lib.collection(fpDB, "sp_fountain_board"), lib.orderBy("ts","desc"), lib.limit(50));
   lib.onSnapshot(q, snap => {
     const posts = snap.docs.map(d => ({ id:d.id, ...d.data() }));
     fpRenderBoard(posts);
@@ -1058,7 +1058,7 @@ function fpRenderBoard(posts) {
 function fpInitEvents() {
   if (!fpDB || !fpFBLib) { setTimeout(fpInitEvents, 500); return; }
   const lib = fpFBLib;
-  const q   = lib.query(lib.collection(fpDB, "sp_fountain_events"), lib.orderBy("date","asc"));
+  const q   = lib.query(lib.collection(fpDB, "sp_fountain_events"), lib.orderBy("date","asc"), lib.limit(100));
   lib.onSnapshot(q, snap => {
     const events = snap.docs.map(d => ({ id:d.id, ...d.data() }));
     // カレンダー用イベント日付マップを更新（日付 → カラー、dateStart〜dateEnd全日分）
@@ -1149,7 +1149,7 @@ function fpRenderEvents(events) {
 function fpInitWishes() {
   if (!fpDB || !fpFBLib) { setTimeout(fpInitWishes, 500); return; }
   const lib = fpFBLib;
-  const q   = lib.query(lib.collection(fpDB, "sp_fountain_wishes"), lib.orderBy("ts","desc"));
+  const q   = lib.query(lib.collection(fpDB, "sp_fountain_wishes"), lib.orderBy("ts","desc"), lib.limit(50));
   lib.onSnapshot(q, snap => {
     const wishes = snap.docs.map(d => ({ id:d.id, ...d.data() }));
     fpRenderWishes(wishes);
@@ -1660,7 +1660,7 @@ function fpCalSelect(dateStr) {
 function fpInitDynamicGeneralVotes() {
   if (!fpDB || !fpFBLib) { setTimeout(fpInitDynamicGeneralVotes, 400); return; }
   const lib = fpFBLib;
-  const q = lib.query(lib.collection(fpDB, "sp_general_votes_dynamic"), lib.orderBy("ts","desc"));
+  const q = lib.query(lib.collection(fpDB, "sp_general_votes_dynamic"), lib.orderBy("ts","desc"), lib.limit(50));
   lib.onSnapshot(q, snap => {
     const container = document.getElementById("fpDynamicGeneralVotes");
     if (!container) return;
@@ -1741,7 +1741,7 @@ function fpInitDynamicDAOVotes() {
   if (!fpDB || !fpFBLib) { setTimeout(fpInitDynamicDAOVotes, 400); return; }
   _fpDAOVoteListenerActive = true;
   const lib = fpFBLib;
-  const q = lib.query(lib.collection(fpDB, "sp_dao_votes_dynamic"), lib.orderBy("ts","desc"));
+  const q = lib.query(lib.collection(fpDB, "sp_dao_votes_dynamic"), lib.orderBy("ts","desc"), lib.limit(50));
   lib.onSnapshot(q, snap => {
     const container = document.getElementById("fpDynamicDAOVotes");
     if (!container) return;
@@ -1819,6 +1819,7 @@ async function fpLike(postId, btn) {
 }
 
 // ─── 掲示板 コメント ──────────────────────────────────────
+const _fpCommentUnsubs = new Map();
 async function fpToggleComments(postId, btn) {
   const sec = document.getElementById(`fp-comments-${postId}`);
   if (!sec) return;
@@ -1829,17 +1830,21 @@ async function fpToggleComments(postId, btn) {
   } else {
     sec.style.display = "none";
     btn.style.color = "";
+    const unsub = _fpCommentUnsubs.get(postId);
+    if (unsub) unsub();
+    _fpCommentUnsubs.delete(postId);
   }
 }
 
 async function fpLoadComments(postId) {
   const list = document.getElementById(`fp-comments-list-${postId}`);
   if (!list || !fpDB || !fpFBLib) return;
+  if (_fpCommentUnsubs.has(postId)) return;
   list.innerHTML = `<div class="fp-comment-empty">💬 読み込み中…</div>`;
   const lib = fpFBLib;
   // where のみ使用（orderByとの複合インデックス不要）。クライアント側でts昇順ソート
-  const q = lib.query(lib.collection(fpDB, "sp_fountain_comments"), lib.where("postId","==",postId));
-  lib.onSnapshot(q,
+  const q = lib.query(lib.collection(fpDB, "sp_fountain_comments"), lib.where("postId","==",postId), lib.limit(100));
+  const unsub = lib.onSnapshot(q,
     snap => {
       if (snap.empty) {
         list.innerHTML = `<div class="fp-comment-empty">まだコメントはありません。最初のコメントをどうぞ！</div>`;
@@ -1865,6 +1870,7 @@ async function fpLoadComments(postId) {
       list.innerHTML = `<div class="fp-comment-empty" style="color:#f87171">⚠️ 読み込みエラー: ${err.message}</div>`;
     }
   );
+  _fpCommentUnsubs.set(postId, unsub);
 }
 
 async function fpSendComment(postId) {
@@ -1970,7 +1976,7 @@ async function fpLoadKokenTopics() {
   if (!sel || !fpDB || !fpFBLib) return;
   try {
     const snap = await fpFBLib.getDocs(
-      fpFBLib.query(fpFBLib.collection(fpDB, 'sp_dao_votes_dynamic'), fpFBLib.orderBy('ts','desc'))
+      fpFBLib.query(fpFBLib.collection(fpDB, 'sp_dao_votes_dynamic'), fpFBLib.orderBy('ts','desc'), fpFBLib.limit(50))
     );
     _kokenTopics = snap.docs.map(d => ({ id: d.id, title: d.data().title, emuerAmount: d.data().emuerAmount || 0 }));
     sel.innerHTML = '<option value="">— 議題を選択（または自由記述）—</option>' +

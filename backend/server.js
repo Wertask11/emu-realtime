@@ -636,6 +636,21 @@ async function runOffchainEmuerReconcile() {
     const todayJst = _jstDateStr(new Date());
     // CHESアカウント（LINE/Google）を対象に処理。件数が増えたらページングを追加。
     const accountsSnap = await db.collection("ches_accounts").limit(500).get();
+    // 投稿はアカウントごとに問い合わせず、一度だけ取得してメモリ上で集計する。
+    // 旧実装は最大500本の個別クエリを毎時発行し、空結果にも読み取り料金が発生していた。
+    const postsSnap = await db.collection("posts")
+      .select("address", "goodCount", "changeCount")
+      .get();
+    const reactionsByAddress = new Map();
+    postsSnap.forEach((postDoc) => {
+      const post = postDoc.data();
+      const postAddress = String(post.address || "").toLowerCase();
+      if (!postAddress) return;
+      const totals = reactionsByAddress.get(postAddress) || { good: 0, change: 0 };
+      totals.good += Number(post.goodCount) || 0;
+      totals.change += Number(post.changeCount) || 0;
+      reactionsByAddress.set(postAddress, totals);
+    });
     let processed = 0;
 
     for (const accDoc of accountsSnap.docs) {
@@ -644,13 +659,9 @@ async function runOffchainEmuerReconcile() {
       if (!addr) continue;
 
       // ── ① 評価された分（投稿者が得る）: 自分の投稿が受けたGood/Changeを集計 ──
-      let sumGood = 0, sumChange = 0;
-      const postsSnap = await db.collection("posts").where("address", "==", addr).get();
-      postsSnap.forEach(p => {
-        const d = p.data();
-        sumGood += Number(d.goodCount) || 0;
-        sumChange += Number(d.changeCount) || 0;
-      });
+      const reactionTotals = reactionsByAddress.get(addr) || { good: 0, change: 0 };
+      const sumGood = reactionTotals.good;
+      const sumChange = reactionTotals.change;
       const reactionBalance = Math.floor(sumGood / 10) + Math.floor(sumChange / 20) * 3;
 
       // ── ② ログインボーナス: 今日ログイン済み かつ 今日未付与なら +0.5 ──
@@ -674,15 +685,23 @@ async function runOffchainEmuerReconcile() {
       // 利用可能残高 = 受取(懸賞+評価+ログボ) - 支払い(懸賞)
       const balance = bountyBalance + reactionBalance + loginBalance - spentBounty;
 
-      await balRef.set({
-        address: addr,
-        uid: acc.uid || accDoc.id,
-        reactionBalance,
-        loginBalance,
-        balance,
-        settledOnchain: Number(ex.settledOnchain) || 0,
-        updatedAt: new Date()
-      }, { merge: true });
+      const nextUid = acc.uid || accDoc.id;
+      const balanceChanged = !existing.exists
+        || Number(ex.reactionBalance) !== reactionBalance
+        || Number(ex.loginBalance) !== loginBalance
+        || Number(ex.balance) !== balance
+        || String(ex.uid || "") !== String(nextUid);
+      if (balanceChanged) {
+        await balRef.set({
+          address: addr,
+          uid: nextUid,
+          reactionBalance,
+          loginBalance,
+          balance,
+          settledOnchain: Number(ex.settledOnchain) || 0,
+          updatedAt: new Date()
+        }, { merge: true });
+      }
 
       if (loginInc > 0) {
         await accDoc.ref.update({ lastLoginBonusDate: todayJst });
@@ -698,13 +717,14 @@ async function runOffchainEmuerReconcile() {
     console.error("❌ オフチェーンEMUER台帳照合エラー:", error);
   }
 }
-cron.schedule("15 * * * *", () => { console.log("⏰ オフチェーンEMUER台帳照合起動"); runOffchainEmuerReconcile(); }, { timezone: "Asia/Tokyo" });
+// ログインボーナスはAPIで即時処理される。反応残高は6時間ごとに一括照合する。
+cron.schedule("15 */6 * * *", () => { console.log("⏰ オフチェーンEMUER台帳照合起動"); runOffchainEmuerReconcile(); }, { timezone: "Asia/Tokyo" });
 
 // =====================
 // ログインボーナス（アカウント単位・1日1回・サーバー権威）
 // localStorage判定だと端末ごとに受け取れてしまうため、ches_accounts.lastLoginBonusDate で
 // アカウント単位の受取済みを管理し、emuer_offchain 台帳（サーバー専用書き込み）に加算する。
-// 付与額・計算式は runOffchainEmuerReconcile と同一（毎時バッチとも整合／二重付与しない）。
+// 付与額・計算式は runOffchainEmuerReconcile と同一（定期照合とも整合／二重付与しない）。
 // =====================
 // ches_accounts の特定。ドキュメントID = uid が最も確実。
 // walletAddress は ethers.getAddress() のチェックサム(大文字小文字混在)で保存されているため、
@@ -845,6 +865,7 @@ async function publishScheduledPosts() {
     const now = new Date();
     const snap = await db.collection(SCHEDULED_POSTS_COL)
       .where("status", "==", "scheduled")
+      .limit(100)
       .get();
 
     const due = snap.docs.filter(d => {
@@ -1297,13 +1318,13 @@ app.get('/api/user/name/:address', async (req, res) => {
   }
 });
 
-// ── ランキング用サーバーキャッシュ（5分TTL） ──
+// ── ランキング用サーバーキャッシュ（1時間TTL） ──
 const _rankingCache = {
   postsSnap: null,
   names:     null,
   fetchedAt: 0,
 };
-const RANKING_CACHE_TTL = 5 * 60 * 1000; // 5分
+const RANKING_CACHE_TTL = 60 * 60 * 1000; // 1時間
 
 async function _getRankingSource() {
   const now = Date.now();
@@ -1356,7 +1377,7 @@ app.get('/api/ranking', async (req, res) => {
     const type  = req.query.type  || 'good_post';
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
 
-    // キャッシュから posts + names を取得（5分TTLで Firestore 読み取りを抑制）
+    // キャッシュから posts + names を取得（1時間TTLで Firestore読み取りを抑制）
     const { postsSnap, names } = await _getRankingSource();
 
     let items = [];
@@ -1921,7 +1942,7 @@ app.get("/api/ichinichi/feed", async (req, res) => {
     // ※ limit なしのDocument-id順(=address__date)で切ると特定アドレスに偏るため多めに読む
     const snap = await db.collection(ICHI_DAYS_COL)
       .where("visibility", "==", "public")
-      .limit(500).get();
+      .limit(100).get();
 
     let days = snap.docs.map((doc) => {
       const d = doc.data();

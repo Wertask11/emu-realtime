@@ -12919,7 +12919,7 @@ const editingId = editingPostId;
       const myAddr = window.connectedAccount.toLowerCase();
       const postsRef = window.fbLib.collection(window.db, "posts");
       const myPostsQ = window.fbLib.query(
-        postsRef, window.fbLib.where("address", "==", myAddr)
+        postsRef, window.fbLib.where("address", "==", myAddr), window.fbLib.limit(1)
       );
       const myPostsSnap = await window.fbLib.getDocs(myPostsQ);
       if (myPostsSnap.empty) {
@@ -13101,7 +13101,7 @@ async function syncPendingEmuer() {
     // --- 1. Firebaseから「自分の投稿」のGood/Change合計を計算 ---
     const postsRef = window.fbLib.collection(window.db, "posts");
     // 投稿者(address)が自分であるものを検索
-    const q = window.fbLib.query(postsRef, window.fbLib.where("address", "==", myAddr));
+    const q = window.fbLib.query(postsRef, window.fbLib.where("address", "==", myAddr), window.fbLib.limit(200));
     const querySnapshot = await window.fbLib.getDocs(q);
 
     let fbGoodTotal = 0;
@@ -13428,28 +13428,54 @@ function selectSpGate(gate) {
 
 /* ── 混雑状況（Firestore アクティブセッション数で判定） ── */
 let _spSessionId = null;
-let _spCrowdUnsub = null;
+let _spCrowdHb = null;
 const _SP_CROWD_COL = 'sp_active_users';
+
+async function _spRefreshCrowd() {
+  if (!window.db || !window.fbLib) return;
+  try {
+    const cutoff = Date.now() - 10 * 60 * 1000;
+    const q = window.fbLib.query(
+      window.fbLib.collection(window.db, _SP_CROWD_COL),
+      window.fbLib.where('ts', '>=', cutoff),
+      window.fbLib.limit(100)
+    );
+    const snap = await window.fbLib.getDocs(q);
+    _spUpdateCrowd(snap.size);
+  } catch (error) {
+    console.warn('混雑状況の取得に失敗:', error.message);
+  }
+}
 
 async function _spCrowdJoin() {
   if (!window.db || !window.fbLib) return;
-  _spSessionId = _spSessionId || Math.random().toString(36).slice(2);
+  if (!_spSessionId) {
+    const account = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+    if (account) {
+      _spSessionId = `wallet_${account}`;
+    } else {
+      let clientId = localStorage.getItem('spCrowdClientId');
+      if (!clientId) {
+        clientId = Math.random().toString(36).slice(2);
+        localStorage.setItem('spCrowdClientId', clientId);
+      }
+      _spSessionId = `client_${clientId}`;
+    }
+  }
   const ref = window.fbLib.doc(window.db, _SP_CROWD_COL, _spSessionId);
+  // マップ再表示時にタイマーを重複させない。
+  if (_spCrowdHb) clearInterval(_spCrowdHb);
   await window.fbLib.setDoc(ref, { ts: Date.now() });
-  /* 10分ごとにタイムスタンプを更新（タブ放置対策） */
-  _spCrowdHb = setInterval(() => window.fbLib.setDoc(ref, { ts: Date.now() }), 600000);
-
-  /* アクティブ数リッスン（10分以内を「在席」と見なす） */
-  const colRef = window.fbLib.collection(window.db, _SP_CROWD_COL);
-  _spCrowdUnsub = window.fbLib.onSnapshot(colRef, snap => {
-    const cutoff = Date.now() - 10 * 60 * 1000;
-    const active = snap.docs.filter(d => (d.data().ts || 0) > cutoff).length;
-    _spUpdateCrowd(active);
-  });
+  await _spRefreshCrowd();
+  /* 全件リアルタイム監視は行わず、10分ごとの在席更新時だけ期限付きで取得する。 */
+  _spCrowdHb = setInterval(async () => {
+    await window.fbLib.setDoc(ref, { ts: Date.now() });
+    await _spRefreshCrowd();
+  }, 600000);
 }
 async function _spCrowdLeave() {
   clearInterval(_spCrowdHb);
-  if (_spCrowdUnsub) { _spCrowdUnsub(); _spCrowdUnsub = null; }
+  _spCrowdHb = null;
   if (window.db && window.fbLib && _spSessionId) {
     window.fbLib.deleteDoc(
       window.fbLib.doc(window.db, _SP_CROWD_COL, _spSessionId)
@@ -14782,7 +14808,10 @@ async function loadEmuValueProfile() {
   }
   try {
     // 旧投稿にはチェックサム形式のアドレスもあるため、大小文字を無視して集計する
-    const snap = await window.fbLib.getDocs(window.fbLib.collection(window.db, 'posts'));
+    const snap = await window.fbLib.getDocs(window.fbLib.query(
+      window.fbLib.collection(window.db, 'posts'),
+      window.fbLib.limit(200)
+    ));
     let helpful = 0;
     let changed = 0;
     let acceptedChanges = 0;
@@ -14814,7 +14843,8 @@ async function loadEmuValueProfile() {
     try {
       const changeQ = window.fbLib.query(
         window.fbLib.collection(window.db, 'post_changes'),
-        window.fbLib.where('fromAddress', '==', address)
+        window.fbLib.where('fromAddress', '==', address),
+        window.fbLib.limit(100)
       );
       const changeSnap = await window.fbLib.getDocs(changeQ);
       changeSnap.forEach(function(doc) { changesGiven.push(doc.data()); });
@@ -14831,7 +14861,8 @@ async function loadEmuValueProfile() {
     try {
       const learnedQ = window.fbLib.query(
         window.fbLib.collection(window.db, 'posts'),
-        window.fbLib.where('goodUsers', 'array-contains', address)
+        window.fbLib.where('goodUsers', 'array-contains', address),
+        window.fbLib.limit(100)
       );
       const learnedSnap = await window.fbLib.getDocs(learnedQ);
       learnedSnap.forEach(function(doc) {
@@ -14848,7 +14879,8 @@ async function loadEmuValueProfile() {
     try {
       const answerQ = window.fbLib.query(
         window.fbLib.collection(window.db, 'knowledge_answers'),
-        window.fbLib.where('answerAuthor', '==', address)
+        window.fbLib.where('answerAuthor', '==', address),
+        window.fbLib.limit(100)
       );
       const answerSnap = await window.fbLib.getDocs(answerQ);
       answerSnap.forEach(function(doc) { deliveredKnowledge.push(doc.data()); });
@@ -16362,7 +16394,7 @@ async function filterTrendPosts() {
   try {
     const postsRef = window.fbLib.collection(window.db, "posts");
     // まずは最新順に全取得し、プログラム側でタグ判定（確実な方法）
-    const q = window.fbLib.query(postsRef, window.fbLib.orderBy("createdAt", "desc"));
+    const q = window.fbLib.query(postsRef, window.fbLib.orderBy("createdAt", "desc"), window.fbLib.limit(100));
     const querySnapshot = await window.fbLib.getDocs(q);
 
     postFeed.innerHTML = `<h2>🔥 トレンド: ${currentTheme}</h2>`;
@@ -16408,9 +16440,10 @@ async function filterRecommendedPosts() {
     const postsRef = window.fbLib.collection(window.db, "posts");
     // recommended が true のものだけを、新しい順に取得
     const q = window.fbLib.query(
-      postsRef, 
+      postsRef,
       window.fbLib.where("recommended", "==", true),
-      window.fbLib.orderBy("createdAt", "desc")
+      window.fbLib.orderBy("createdAt", "desc"),
+      window.fbLib.limit(100)
     );
     const querySnapshot = await window.fbLib.getDocs(q);
 
@@ -16455,7 +16488,7 @@ async function filterNewPosts() {
   try {
     const postsRef = window.fbLib.collection(window.db, "posts");
     // まずは最新順に全取得
-    const q = window.fbLib.query(postsRef, window.fbLib.orderBy("createdAt", "desc"));
+    const q = window.fbLib.query(postsRef, window.fbLib.orderBy("createdAt", "desc"), window.fbLib.limit(100));
     const querySnapshot = await window.fbLib.getDocs(q);
 
     postFeed.innerHTML = "<h2>✨ 新規投稿 (24時間以内)</h2>";
@@ -16538,7 +16571,8 @@ async function filterHighGoodPosts() {
     const q = window.fbLib.query(
       postsRef,
       window.fbLib.where("goodCount", ">=", 100),
-      window.fbLib.orderBy("goodCount", "desc")
+      window.fbLib.orderBy("goodCount", "desc"),
+      window.fbLib.limit(100)
     );
     const querySnapshot = await window.fbLib.getDocs(q);
 
@@ -16570,7 +16604,8 @@ async function filterHighChangePosts() {
     const q = window.fbLib.query(
       postsRef,
       window.fbLib.where("changeCount", ">=", 100),
-      window.fbLib.orderBy("changeCount", "desc")
+      window.fbLib.orderBy("changeCount", "desc"),
+      window.fbLib.limit(100)
     );
     const querySnapshot = await window.fbLib.getDocs(q);
 
@@ -16624,7 +16659,8 @@ async function executeSearch(keyword) {
     // ★ タグが文字列で保存されているので全件取得して部分一致で検索
     const q = window.fbLib.query(
       postsRef,
-      window.fbLib.orderBy("createdAt", "desc")
+      window.fbLib.orderBy("createdAt", "desc"),
+      window.fbLib.limit(100)
     );
     const querySnapshot = await window.fbLib.getDocs(q);
 
@@ -16676,7 +16712,7 @@ async function getMyGoodPosts() {
   try {
     const postsRef = window.fbLib.collection(window.db, "posts");
     // goodUsers リストの中に自分のアドレスが含まれるものを検索
-    const q = window.fbLib.query(postsRef, window.fbLib.where("goodUsers", "array-contains", myAddr));
+    const q = window.fbLib.query(postsRef, window.fbLib.where("goodUsers", "array-contains", myAddr), window.fbLib.limit(100));
     const querySnapshot = await window.fbLib.getDocs(q);
 
     area.innerHTML = "<h2>👍 Goodした記事</h2>";
@@ -16710,7 +16746,7 @@ async function getMyChangePosts() {
   try {
     const postsRef = window.fbLib.collection(window.db, "posts");
     // changeUsers リストの中に自分のアドレスが含まれるものを検索
-    const q = window.fbLib.query(postsRef, window.fbLib.where("changeUsers", "array-contains", myAddr));
+    const q = window.fbLib.query(postsRef, window.fbLib.where("changeUsers", "array-contains", myAddr), window.fbLib.limit(100));
     const querySnapshot = await window.fbLib.getDocs(q);
 
     area.innerHTML = "<h2>🤝 Changeした記事</h2>";
@@ -17285,57 +17321,14 @@ function openMarketplace() {
   }
 }
 
-// Firebaseからデータをリアルタイムで読み込む
-let _realtimeUnsub = null; // リスナー重複防止用
-function startRealtimeUpdate() {
-  // 既存リスナーがあれば先に解除（重複登録を防ぐ）
-  if (_realtimeUnsub) {
-    _realtimeUnsub();
-    _realtimeUnsub = null;
-  }
+// 旧 #postFeed は非表示になったため、50件の常時購読は開始しない。
+// 新しい知識iframeは表示時・投稿/反応時に必要な件数だけ同期する。
 
-  console.log("📡 リアルタイム更新を開始します...");
-
-  const q = window.fbLib.query(
-    window.fbLib.collection(window.db, "posts"),
-    window.fbLib.orderBy("createdAt", "desc"),
-    window.fbLib.limit(50) // 読み取り数を最新50件に制限
-  );
-
-  // Firebaseのデータが更新されるたびに、この中身が自動で実行される
-  _realtimeUnsub = window.fbLib.onSnapshot(q, (snapshot) => {
-    const firebasePosts = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    // 既存の描画関数を呼び出して画面を更新！
-    if (typeof renderPosts === "function") {
-      renderPosts(firebasePosts);
-      console.log("🔄 画面を最新の投稿に更新しました:", firebasePosts.length, "件");
-    }
-  });
-}
-
-// ページ読み込み時に実行を開始
-// ※ window.db / window.fbLib の初期化タイミングは一定しないため、
-//   準備できるまでリトライする（1回きりの setTimeout だと初期化が遅れた場合に
-//   リスナーが登録されず、投稿が永久に表示されない不具合になる）。
-(function _bootRealtimeUpdate() {
-  let _tries = 0;
-  const _timer = setInterval(() => {
-    if (window.db && window.fbLib) {
-      clearInterval(_timer);
-      startRealtimeUpdate();
-    } else if (++_tries > 100) { // 最大 ~20秒（200ms×100）で諦める
-      clearInterval(_timer);
-      console.warn("⚠️ Firebase未初期化のためリアルタイム更新を開始できませんでした");
-    }
-  }, 200);
-})();
-
-// ★ 予約投稿の自動公開に対応するため3分ごとにリフレッシュ
+// 予約投稿の反映確認は「知識を読む」を実際に表示しているタブだけで行う。
 setInterval(() => {
+  if (document.hidden || !document.body.classList.contains('emu-knowledge-open')) return;
+  const frame = document.getElementById('emuKnowledgeFrame');
+  if (!frame || frame.dataset.ready !== 'true') return;
   refreshAllPosts();
 }, 3 * 60 * 1000);
 
@@ -18310,7 +18303,8 @@ row.appendChild(medal);
     //    JS側で新着順ソート
     var q = window.fbLib.query(
       window.fbLib.collection(window.db, 'posts'),
-      window.fbLib.where('address', '==', address)
+      window.fbLib.where('address', '==', address),
+      window.fbLib.limit(100)
     );
  
     window.fbLib.getDocs(q)
@@ -19766,7 +19760,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!account) throw new Error('ウォレットを接続してください。');
       const q = window.fbLib.query(
         window.fbLib.collection(window.db, 'posts'),
-        window.fbLib.where('address', '==', account)
+        window.fbLib.where('address', '==', account),
+        window.fbLib.limit(100)
       );
       const snap = await window.fbLib.getDocs(q);
       const posts = [];
