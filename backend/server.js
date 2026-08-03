@@ -2242,6 +2242,223 @@ app.post("/api/ichinichi/delete-day", async (req, res) => {
   }
 });
 
+// ════════════════════════════════════════
+// Camellia API ── 自作DB（Firestoreではない）＋ CHES認証の相乗り
+// ----------------------------------------
+// 認証: クライアントは Firebase(CHES) の IDトークンを送る。
+//       サーバーで検証 → uid → ches_accounts の walletAddress を引き当てる。
+//       これで Emu/SchoolPark と同一アカウントとして扱える。
+// 保存: backend/camellia-db.js（外部DBサービス不使用）。
+//       保存先は環境変数 CAMELLIA_DATA_DIR で差し替える。
+// ════════════════════════════════════════
+const { getCamelliaDB } = require("./camellia-db");
+const camelliaDB = getCamelliaDB();
+
+const CAM_USERS    = () => camelliaDB.table("camellia_users");
+const CAM_GARDEN   = () => camelliaDB.table("camellia_garden");
+const CAM_CONTENTS = () => camelliaDB.table("camellia_contents");
+const CAM_ACTIVITY = () => camelliaDB.table("camellia_activity");
+
+/** Firebase IDトークン → { uid, wallet, name }。未認証なら null */
+async function camelliaIdentity(req) {
+  const header = String(req.headers.authorization || "");
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  if (!token) return null;
+  try {
+    const admin = require("firebase-admin");
+    const decoded = await admin.auth().verifyIdToken(token);
+    const uid = decoded.uid;
+    let wallet = "", name = "";
+    if (db) {
+      const snap = await db.collection("ches_accounts").doc(uid).get();
+      if (snap.exists) {
+        const d = snap.data();
+        wallet = String(d.walletAddress || "").toLowerCase();
+        name = d.displayName || "";
+      }
+    }
+    return { uid, wallet, name };
+  } catch (e) {
+    console.warn("Camellia 認証失敗:", e.message);
+    return null;
+  }
+}
+
+/** 認証必須ルート用 */
+async function camelliaRequireUser(req, res) {
+  const me = await camelliaIdentity(req);
+  if (!me) { res.status(401).json({ error: "ログインが必要です" }); return null; }
+  return me;
+}
+
+/** 管理者(オーナー)判定。SchoolParkと同じオーナーアドレスを使う */
+async function camelliaRequireOwner(req, res) {
+  const me = await camelliaRequireUser(req, res);
+  if (!me) return null;
+  if (!me.wallet || me.wallet !== SP_OWNER_ADDRESS) {
+    res.status(403).json({ error: "管理者専用です" });
+    return null;
+  }
+  return me;
+}
+
+// ── 自分の情報（初回アクセス時に作成） ──
+app.get("/api/camellia/me", async (req, res) => {
+  try {
+    const me = await camelliaRequireUser(req, res); if (!me) return;
+    const users = CAM_USERS();
+    let user = users.findOne({ uid: me.uid });
+    if (!user) {
+      user = await users.insert({
+        uid: me.uid, wallet: me.wallet, nickname: me.name || "",
+        interests: [], onboarded: false,
+      });
+    }
+    const garden = CAM_GARDEN().findOne({ uid: me.uid })
+      || await CAM_GARDEN().insert({ uid: me.uid, slots: [], loginDates: [], contentDates: [] });
+    return res.json({ user, garden, isOwner: me.wallet === SP_OWNER_ADDRESS });
+  } catch (e) {
+    console.error("camellia/me error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── プロフィール更新（ニックネーム・興味・オンボーディング完了） ──
+app.post("/api/camellia/me", async (req, res) => {
+  try {
+    const me = await camelliaRequireUser(req, res); if (!me) return;
+    const users = CAM_USERS();
+    const user = users.findOne({ uid: me.uid });
+    if (!user) return res.status(404).json({ error: "ユーザーが見つかりません" });
+    const patch = {};
+    if (req.body.nickname !== undefined) patch.nickname = String(req.body.nickname).slice(0, 40);
+    if (Array.isArray(req.body.interests)) patch.interests = req.body.interests.map(String).slice(0, 12);
+    if (req.body.onboarded !== undefined) patch.onboarded = !!req.body.onboarded;
+    return res.json({ user: await users.update(user.id, patch) });
+  } catch (e) {
+    console.error("camellia/me update error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── ガーデン（椿の育成状態）の保存 ──
+app.post("/api/camellia/garden", async (req, res) => {
+  try {
+    const me = await camelliaRequireUser(req, res); if (!me) return;
+    const garden = CAM_GARDEN();
+    const current = garden.findOne({ uid: me.uid });
+    const patch = {};
+    if (Array.isArray(req.body.slots)) patch.slots = req.body.slots.slice(0, 24);
+    if (Array.isArray(req.body.loginDates)) patch.loginDates = req.body.loginDates.slice(-400);
+    if (Array.isArray(req.body.contentDates)) patch.contentDates = req.body.contentDates.slice(-400);
+    const saved = current
+      ? await garden.update(current.id, patch)
+      : await garden.insert(Object.assign({ uid: me.uid, slots: [], loginDates: [], contentDates: [] }, patch));
+    return res.json({ garden: saved });
+  } catch (e) {
+    console.error("camellia/garden error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── 記事一覧（一般は公開済みのみ） ──
+app.get("/api/camellia/contents", async (req, res) => {
+  try {
+    const me = await camelliaIdentity(req);
+    const isOwner = !!(me && me.wallet && me.wallet === SP_OWNER_ADDRESS);
+    const where = isOwner ? null : { published: true };
+    const items = CAM_CONTENTS().find(where, { sort: "order" });
+    return res.json({ items, isOwner });
+  } catch (e) {
+    console.error("camellia/contents error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── 閲覧記録（成長判定の材料） ──
+app.post("/api/camellia/activity", async (req, res) => {
+  try {
+    const me = await camelliaRequireUser(req, res); if (!me) return;
+    const contentId = String(req.body.contentId || "");
+    if (!contentId) return res.status(400).json({ error: "contentId が必要です" });
+    await CAM_ACTIVITY().insert({ uid: me.uid, contentId, type: String(req.body.type || "read") });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("camellia/activity error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── 管理: 記事の作成 / 更新 / 削除（オーナー限定） ──
+app.post("/api/camellia/admin/contents", async (req, res) => {
+  try {
+    if (!await camelliaRequireOwner(req, res)) return;
+    const b = req.body || {};
+    if (!String(b.title || "").trim()) return res.status(400).json({ error: "タイトルは必須です" });
+    const item = await CAM_CONTENTS().insert({
+      title: String(b.title).trim().slice(0, 160),
+      teaser: String(b.teaser || "").trim().slice(0, 200),
+      body: String(b.body || "").trim().slice(0, 20000),
+      category: String(b.category || "beauty"),
+      order: Number(b.order) || 0,
+      published: !!b.published,
+    });
+    return res.json({ item });
+  } catch (e) {
+    console.error("camellia/admin create error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/camellia/admin/contents/:id", async (req, res) => {
+  try {
+    if (!await camelliaRequireOwner(req, res)) return;
+    const b = req.body || {};
+    const patch = {};
+    ["title", "teaser", "body", "category"].forEach((k) => {
+      if (b[k] !== undefined) patch[k] = String(b[k]).trim();
+    });
+    if (b.order !== undefined) patch.order = Number(b.order) || 0;
+    if (b.published !== undefined) patch.published = !!b.published;
+    const item = await CAM_CONTENTS().update(req.params.id, patch);
+    if (!item) return res.status(404).json({ error: "記事が見つかりません" });
+    return res.json({ item });
+  } catch (e) {
+    console.error("camellia/admin update error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/camellia/admin/contents/:id", async (req, res) => {
+  try {
+    if (!await camelliaRequireOwner(req, res)) return;
+    const ok = await CAM_CONTENTS().remove(req.params.id);
+    if (!ok) return res.status(404).json({ error: "記事が見つかりません" });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("camellia/admin delete error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── 管理: 状態確認（保存先・件数） ──
+app.get("/api/camellia/admin/stats", async (req, res) => {
+  try {
+    if (!await camelliaRequireOwner(req, res)) return;
+    CAM_USERS(); CAM_GARDEN(); CAM_CONTENTS(); CAM_ACTIVITY();
+    return res.json({
+      stats: camelliaDB.stats(),
+      users: CAM_USERS().count(),
+      contents: CAM_CONTENTS().count(),
+      published: CAM_CONTENTS().count({ published: true }),
+      activity: CAM_ACTIVITY().count(),
+    });
+  } catch (e) {
+    console.error("camellia/admin stats error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // =====================
 // Start server
 // =====================
