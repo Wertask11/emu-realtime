@@ -1,146 +1,148 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Camellia — 管理画面</title>
+<title>Camellia — 管理センター</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box}
-*,*::before,*::after{-webkit-tap-highlight-color:transparent}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{-webkit-text-size-adjust:100%}
-:root{--rose:#B0555E;--rose-d:#7C4A50;--line:rgba(176,85,94,.18);--paper:#FDF8F7;--ink:#2E2426;--muted:#8B7B7D}
-html,body{margin:0;min-height:100%;background:var(--paper);color:var(--ink);font-family:"Noto Sans JP","Yu Gothic",sans-serif}
-button,input,textarea,select{font:inherit}
-button{cursor:pointer}
-.bar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px;padding:12px 18px;background:rgba(253,248,247,.96);border-bottom:1px solid var(--line);backdrop-filter:blur(10px)}
-.bar h1{margin:0;font-size:16px;font-weight:700;letter-spacing:.06em}
-.badge{font-size:11px;padding:3px 9px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--rose-d)}
-.bar .right{margin-left:auto;display:flex;gap:8px;align-items:center}
-.btn{border:1px solid var(--line);background:#fff;color:var(--rose-d);border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;min-height:42px}
-.btn.primary{background:var(--rose);border-color:var(--rose);color:#fff}
-.btn.danger{color:#b3261e;border-color:#f0c6c2}
-.wrap{max-width:1080px;margin:0 auto;padding:20px 18px max(60px,env(safe-area-inset-bottom))}
-.gate{max-width:460px;margin:60px auto;text-align:center;background:#fff;border:1px solid var(--line);border-radius:18px;padding:40px 28px}
-.gate h2{margin:0 0 12px;font-size:20px}
-.gate p{color:var(--muted);font-size:13px;line-height:1.9;margin:0 0 22px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px}
-.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}
-.stat b{display:block;font-size:22px;color:var(--rose-d)}
-.stat span{font-size:11px;color:var(--muted)}
-.stat small{display:block;font-size:10px;color:var(--muted);margin-top:6px;word-break:break-all}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
-.toolbar select,.toolbar input{border:1px solid var(--line);background:#fff;border-radius:9px;padding:9px 11px;min-height:42px}
-.toolbar input{flex:1;min-width:180px}
-.list{display:grid;gap:10px}
-.row{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center}
-.row h3{margin:0 0 4px;font-size:15px;font-weight:600}
-.row p{margin:0;font-size:12px;color:var(--muted)}
-.meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:7px}
-.tag{font-size:10px;padding:2px 8px;border-radius:999px;background:#FBEFF0;color:var(--rose-d)}
-.tag.off{background:#eee;color:#888}
-.acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.acts .btn{padding:7px 11px;font-size:12px;min-height:38px}
-.empty{text-align:center;color:var(--muted);padding:50px 20px;background:#fff;border:1px dashed var(--line);border-radius:12px}
-.overlay{position:fixed;inset:0;background:rgba(46,36,38,.5);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:14px;z-index:30}
-.overlay.open{display:flex}
-.modal{width:min(680px,100%);max-height:calc(100dvh - 28px);overflow:auto;background:#fff;border-radius:18px;padding:24px}
-.modal h2{margin:0 0 18px;font-size:18px}
-.field{display:grid;gap:6px;margin-bottom:14px}
-.field label{font-size:12px;font-weight:700;color:var(--rose-d)}
-.field input,.field textarea,.field select{border:1px solid var(--line);background:#FDFCFC;border-radius:10px;padding:12px;font-size:16px;outline:0;width:100%}
-.field textarea{min-height:200px;resize:vertical;line-height:1.8}
-.field .hint{font-size:11px;color:var(--muted)}
-.check{display:flex;align-items:center;gap:8px;font-size:13px}
-.check input{width:20px;height:20px}
-.modal-acts{display:grid;grid-template-columns:1fr 1.4fr;gap:10px;margin-top:20px}
-.modal-acts .btn{min-height:48px}
-.ops{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
-.ops b{font-size:14px}
-.ops p{margin:4px 0 0;font-size:12px;color:var(--muted)}
-.ops-acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2E2426;color:#fff;border-radius:999px;padding:12px 22px;font-size:13px;z-index:40;display:none;max-width:90vw;text-align:center}
+:root{
+  --bg:#0f0a0c;--bg2:#181013;--bg3:#1f151a;--border:rgba(224,87,111,0.18);
+  --rose:#e0576f;--rose2:#f2909f;--gold:#d4a017;--gold2:#f0c040;
+  --green:#22c55e;--red:#ef4444;--cyan:#22d3ee;
+  --text:#f0e6e8;--muted:#8b7a7e;
+}
+body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-serif;min-height:100vh}
+
+/* ヘッダー */
+.header{position:sticky;top:0;z-index:100;background:rgba(15,10,12,0.97);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);padding:0 14px;height:52px;display:flex;align-items:center;gap:10px}
+.back-btn{background:rgba(224,87,111,.22);border:1px solid rgba(224,87,111,.4);color:var(--rose2);padding:5px 12px;border-radius:8px;cursor:pointer;font-size:0.78rem;font-weight:700;font-family:inherit;white-space:nowrap}
+.back-btn:hover{background:rgba(224,87,111,.36)}
+.header-title{font-size:0.9rem;font-weight:700;color:#fff;display:flex;align-items:center;gap:6px}
+.header-badge{background:var(--rose);color:#fff;font-size:0.58rem;font-weight:700;padding:2px 7px;border-radius:20px}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.owner-badge{background:rgba(212,160,23,.15);border:1px solid rgba(212,160,23,.35);color:var(--gold2);padding:3px 10px;border-radius:20px;font-size:0.68rem;font-weight:700;display:none}
+.owner-badge.show{display:block}
+
+/* ロック画面 */
+.lock-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;text-align:center;padding:20px}
+.lock-icon{font-size:4rem;margin-bottom:16px}
+.lock-title{font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:8px}
+.lock-sub{font-size:0.8rem;color:var(--muted);line-height:1.7}
+
+/* ヒーロー */
+.hero{background:linear-gradient(135deg,#0f0a0c,#3d0a1c,#1f0f16);padding:22px 16px 18px;text-align:center;border-bottom:1px solid var(--border)}
+.hero-icon{font-size:46px;margin-bottom:8px}
+.hero-title{font-size:1.2rem;font-weight:700;color:#fff;margin-bottom:4px}
+.hero-sub{font-size:0.75rem;color:var(--muted)}
+
+/* 統計 */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px;padding:14px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 8px;text-align:center}
+.stat-num{font-size:1.3rem;font-weight:700;color:var(--rose2)}
+.stat-label{font-size:0.6rem;color:var(--muted);margin-top:3px}
+
+/* タブ */
+.tabs{display:flex;gap:6px;padding:0 14px 12px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;background:var(--bg2);border:1px solid var(--border);color:var(--muted);padding:9px 14px;border-radius:20px;cursor:pointer;font-size:0.74rem;font-weight:700;font-family:inherit;white-space:nowrap;min-height:40px}
+.tab.active{background:var(--rose);border-color:var(--rose);color:#fff}
+
+/* 一覧 */
+.section{padding:0 14px 30px}
+.toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.toolbar input,.toolbar select{flex:1;min-width:150px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:10px 12px;font-family:inherit;font-size:16px;min-height:42px;outline:none}
+.toolbar input:focus,.toolbar select:focus{border-color:var(--rose)}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
+.card-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+.card-title{font-size:0.9rem;font-weight:700;color:#fff;line-height:1.5;flex:1}
+.card-body{font-size:0.76rem;color:var(--muted);line-height:1.75;white-space:pre-wrap;word-break:break-word}
+.card-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.pill{font-size:0.6rem;padding:3px 9px;border-radius:20px;background:rgba(224,87,111,.14);color:var(--rose2);font-weight:700}
+.pill.gray{background:rgba(255,255,255,.06);color:var(--muted)}
+.pill.green{background:rgba(34,197,94,.14);color:#4ade80}
+.pill.gold{background:rgba(212,160,23,.14);color:var(--gold2)}
+.kv{display:grid;grid-template-columns:104px 1fr;gap:4px 10px;font-size:0.72rem;margin-top:8px}
+.kv dt{color:var(--muted)}
+.kv dd{color:var(--text);word-break:break-all}
+.empty-state{text-align:center;padding:50px 20px;color:var(--muted)}
+.empty-icon{font-size:2.4rem;margin-bottom:10px}
+.raw{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:11px;margin-top:9px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.66rem;color:#c9b8bc;white-space:pre-wrap;word-break:break-all;max-height:240px;overflow:auto;display:none}
+.raw.show{display:block}
+.link-btn{background:none;border:none;color:var(--rose2);font-size:0.66rem;font-weight:700;cursor:pointer;font-family:inherit;padding:4px 0;text-decoration:underline}
+
+/* トースト */
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#2a1a1e;border:1px solid var(--border);color:#fff;padding:12px 20px;border-radius:22px;font-size:0.76rem;z-index:200;display:none;max-width:90vw;text-align:center}
 .toast.show{display:block}
-@media(max-width:640px){
-  .wrap{padding:16px 12px max(60px,env(safe-area-inset-bottom))}
-  .ops{display:block}
-  .ops-acts{margin:12px 0 0;display:grid;grid-template-columns:1fr}
-  .row{grid-template-columns:1fr}
-  .acts{justify-content:flex-start}
-  .modal-acts{grid-template-columns:1fr}
-  .bar h1{font-size:14px}
+
+@media(max-width:520px){
+  .kv{grid-template-columns:1fr;gap:2px}
+  .kv dt{margin-top:6px}
+  .stats{grid-template-columns:repeat(2,1fr)}
 }
 </style>
 </head>
 <body>
-<div class="bar">
-  <h1>🌸 Camellia 管理</h1>
-  <span class="badge" id="dbBadge">自作DB</span>
-  <div class="right">
-    <button class="btn" id="btnReload" hidden>再読み込み</button>
-    <button class="btn primary" id="btnNew" hidden>＋ 新規記事</button>
+
+<div class="header">
+  <button class="back-btn" onclick="goBack()">← 戻る</button>
+  <div class="header-title">🌸 Camellia <span class="header-badge">管理</span></div>
+  <div class="header-right">
+    <span class="owner-badge" id="ownerBadge">👑 オーナー</span>
   </div>
 </div>
 
-<div class="wrap" id="opsWrap" hidden>
-  <div class="ops">
-    <div>
-      <b>データ管理</b>
-      <p>保存先のファイルを直接見られない環境でも、ここから操作できます。</p>
-    </div>
-    <div class="ops-acts">
-      <button class="btn" id="btnSeed">記事を初期投入</button>
-      <button class="btn" id="btnExport">バックアップを保存</button>
-      <button class="btn" id="btnImport">バックアップから復元</button>
-      <input type="file" id="importFile" accept="application/json" hidden>
-    </div>
-  </div>
+<!-- 確認中／ロック画面（オーナー以外） -->
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-icon" id="lockIcon">⏳</div>
+  <div class="lock-title" id="lockTitle">確認しています…</div>
+  <div class="lock-sub" id="lockSub">ログイン状態を確認しています。</div>
 </div>
 
-<div class="wrap">
-  <div class="gate" id="gate">
-    <h2>管理者のみ</h2>
-    <p id="gateMsg">ログイン状態を確認しています…</p>
-    <a class="btn primary" href="/index.html" style="text-decoration:none;display:inline-block;line-height:24px;">Emuでログインする</a>
+<!-- 管理コンテンツ -->
+<div id="adminContent" style="display:none">
+  <div class="hero">
+    <div class="hero-icon">🌸</div>
+    <div class="hero-title">Camellia データベース</div>
+    <div class="hero-sub">Firestore の中身をそのまま表示しています</div>
   </div>
 
-  <div id="admin" hidden>
-    <div class="stats" id="stats"></div>
+  <div class="stats" id="stats"></div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="section">
     <div class="toolbar">
-      <select id="filterCat"><option value="">すべてのカテゴリ</option></select>
-      <select id="filterPub">
-        <option value="">公開・非公開すべて</option>
-        <option value="1">公開のみ</option>
-        <option value="0">非公開のみ</option>
+      <input type="search" id="q" placeholder="キーワードで絞り込む">
+      <select id="sortBy">
+        <option value="-updatedAt">更新が新しい順</option>
+        <option value="-createdAt">作成が新しい順</option>
+        <option value="order">並び順</option>
       </select>
-      <input id="q" type="search" placeholder="タイトル・本文で検索">
     </div>
-    <div class="list" id="list"></div>
+    <div id="list"></div>
   </div>
 </div>
 
-<div class="overlay" id="editor">
-  <form class="modal" id="editorForm">
-    <h2 id="editorTitle">記事を追加</h2>
-    <div class="field"><label for="fTitle">タイトル</label><input id="fTitle" required maxlength="160"></div>
-    <div class="field"><label for="fTeaser">ひとこと紹介</label><input id="fTeaser" maxlength="200"><span class="hint">一覧に表示される短い説明</span></div>
-    <div class="field"><label for="fCategory">カテゴリ</label><select id="fCategory"></select></div>
-    <div class="field"><label for="fBody">本文</label><textarea id="fBody" required maxlength="20000"></textarea></div>
-    <div class="field"><label for="fOrder">並び順</label><input id="fOrder" type="number" value="0"><span class="hint">小さいほど上に表示</span></div>
-    <div class="field"><label class="check"><input type="checkbox" id="fPublished" checked> 公開する</label></div>
-    <div class="modal-acts">
-      <button type="button" class="btn" id="btnCancel">やめる</button>
-      <button type="submit" class="btn primary" id="btnSave">保存する</button>
-    </div>
-  </form>
-</div>
-
-<div class="toast" id="toast" role="status"></div>
+<div class="toast" id="toast"></div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+/* ══════════════════════════════════════════════
+   Camellia 管理センター
+   - 認証は room1.html と同一方式（接続ウォレットがオーナーか見るだけ）
+   - room1 と違い、URLを直接開いても動くようにしている:
+       ウォレット … 親アプリ → 無ければ localStorage(emuWallet)
+       Firestore  … 親アプリ → 無ければ自前で初期化
+   - Firestore の中身を見るためのビューア（閲覧専用）
+   ══════════════════════════════════════════════ */
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, collection, getDocs, query, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-// Emu(index.html)と同じCHESプロジェクト。認証を相乗りさせるため設定を揃える。
+const SP_OWNER_WALLET = '0xdcc687c05f130e57597a8525771299a4efb6edf7';
+
+/* Emu本体と同じCHESプロジェクト */
 const firebaseConfig = {
   apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
   authDomain: "schoolpark-emu.vercel.app",
@@ -149,217 +151,235 @@ const firebaseConfig = {
   messagingSenderId: "795496371585",
   appId: "1:795496371585:web:51deec91b8a2152e4c8480"
 };
-const API = "https://emu-realtime.onrender.com";
-const CATEGORIES = [
-  ["beauty", "美・セルフケア"], ["body", "からだ・健康"], ["mind", "こころ・メンタル"],
-  ["intimacy", "性・ウェルネス"], ["growth", "学び・お金"], ["connect", "つながり・回復"]
+
+/* 単体で開かれたとき用に自前で初期化する（親があればそちらを優先） */
+let _ownDb = null;
+function ownDb(){
+  if(!_ownDb){
+    const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+    _ownDb = getFirestore(app);
+  }
+  return _ownDb;
+}
+function parentDb(){
+  try{ return (window.top?.db) || (window.parent?.db) || null; }catch(e){ return null; }
+}
+function parentFbLib(){
+  try{ return (window.top?.fbLib) || (window.parent?.fbLib) || null; }catch(e){ return null; }
+}
+
+function getWallet(){
+  let w = '';
+  try{ w = (window.top?.connectedAccount) || (window.parent?.connectedAccount) || ''; }catch(e){}
+  if(!w){ try{ w = localStorage.getItem('emuWallet') || ''; }catch(e){} }
+  return String(w).toLowerCase();
+}
+function isOwner(){
+  return getWallet() === SP_OWNER_WALLET.toLowerCase();
+}
+/* iframe内なら親を閉じる。単体で開いていればEmuへ戻る。 */
+function goBack(){
+  if(window.top !== window){ window.top.postMessage({type:'spContentClose'},'*'); return; }
+  location.href = '/index.html';
+}
+window.goBack = goBack;
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show';
+  setTimeout(()=>{ t.className='toast'; }, 3000);
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* 表示するコレクション。Camelliaのデータはすべてここに入る。 */
+const COLLECTIONS = [
+  { id:'camellia_contents', label:'記事',     icon:'📄' },
+  { id:'camellia_users',    label:'ユーザー', icon:'👤' },
+  { id:'camellia_garden',   label:'ガーデン', icon:'🌱' },
+  { id:'camellia_activity', label:'閲覧記録', icon:'👀' },
 ];
 
-const auth = getAuth(initializeApp(firebaseConfig));
-let idToken = "";
-let items = [];
-let editingId = null;
+let currentCol = COLLECTIONS[0].id;
+let cache = {};   // コレクションID -> ドキュメント配列
 
-const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-
-function toast(msg) {
-  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
-  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2600);
+/* 日時を読みやすく（FirestoreのTimestampにも対応） */
+function fmtDate(v){
+  if(!v) return '';
+  try{
+    const d = v.toDate ? v.toDate() : new Date(v);
+    if(isNaN(d.getTime())) return String(v);
+    return new Intl.DateTimeFormat('ja-JP',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(d);
+  }catch(e){ return String(v); }
 }
 
-async function api(path, options) {
-  const opt = Object.assign({ headers: {} }, options || {});
-  opt.headers = Object.assign({ "content-type": "application/json", authorization: "Bearer " + idToken }, opt.headers);
-  const res = await fetch(API + path, opt);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "通信に失敗しました");
-  return data;
-}
-
-function fillCategorySelects() {
-  $("#fCategory").innerHTML = CATEGORIES.map(([id, name]) => `<option value="${id}">${name}</option>`).join("");
-  $("#filterCat").innerHTML = '<option value="">すべてのカテゴリ</option>'
-    + CATEGORIES.map(([id, name]) => `<option value="${id}">${name}</option>`).join("");
-}
-
-function renderStats(s) {
-  $("#stats").innerHTML = `
-    <div class="stat"><b>${s.contents}</b><span>記事</span></div>
-    <div class="stat"><b>${s.published}</b><span>公開中</span></div>
-    <div class="stat"><b>${s.users}</b><span>ユーザー</span></div>
-    <div class="stat"><b>${s.activity}</b><span>閲覧記録</span></div>
-    <div class="stat"><b>—</b><span>保存先</span><small>${esc(s.stats.dir)}</small></div>`;
-}
-
-function visible() {
-  const cat = $("#filterCat").value, pub = $("#filterPub").value;
-  const q = $("#q").value.trim().toLowerCase();
-  return items.filter((it) => {
-    if (cat && it.category !== cat) return false;
-    if (pub === "1" && !it.published) return false;
-    if (pub === "0" && it.published) return false;
-    if (q && !((it.title || "") + (it.body || "") + (it.teaser || "")).toLowerCase().includes(q)) return false;
-    return true;
-  });
-}
-
-function renderList() {
-  const list = visible();
-  if (!list.length) {
-    $("#list").innerHTML = '<div class="empty">該当する記事がありません。</div>';
-    return;
+async function fetchCollection(colId){
+  // 親アプリのFirebaseがあれば使い、無ければ自前のものを使う
+  const pdb = parentDb(), fb = parentFbLib();
+  if(pdb && fb){
+    const snap = await fb.getDocs(fb.query(fb.collection(pdb, colId), fb.limit(300)));
+    const rows = [];
+    snap.forEach(d => rows.push({ id:d.id, ...d.data() }));
+    return rows;
   }
-  const catName = (id) => (CATEGORIES.find((c) => c[0] === id) || [, id])[1];
-  $("#list").innerHTML = list.map((it) => `
-    <article class="row">
-      <div>
-        <h3>${esc(it.title)}</h3>
-        <p>${esc(it.teaser || "（紹介文なし）")}</p>
-        <div class="meta">
-          <span class="tag">${esc(catName(it.category))}</span>
-          <span class="tag ${it.published ? "" : "off"}">${it.published ? "公開中" : "非公開"}</span>
-          <span class="tag off">順 ${it.order ?? 0}</span>
-        </div>
-      </div>
-      <div class="acts">
-        <button class="btn" data-edit="${esc(it.id)}">編集</button>
-        <button class="btn" data-toggle="${esc(it.id)}">${it.published ? "非公開に" : "公開する"}</button>
-        <button class="btn danger" data-del="${esc(it.id)}">削除</button>
-      </div>
-    </article>`).join("");
+  const snap = await getDocs(query(collection(ownDb(), colId), limit(300)));
+  const rows = [];
+  snap.forEach(d => rows.push({ id:d.id, ...d.data() }));
+  return rows;
 }
 
-async function load() {
-  const [c, s] = await Promise.all([api("/api/camellia/contents"), api("/api/camellia/admin/stats")]);
-  items = c.items || [];
-  renderStats(s);
+async function loadAll(){
+  document.getElementById('list').innerHTML =
+    '<div class="empty-state"><div class="empty-icon">⏳</div>読み込み中...</div>';
+  for(const c of COLLECTIONS){
+    try{ cache[c.id] = await fetchCollection(c.id); }
+    catch(e){ cache[c.id] = []; }
+  }
+  renderStats();
+  renderTabs();
   renderList();
 }
 
-function openEditor(item) {
-  editingId = item ? item.id : null;
-  $("#editorTitle").textContent = item ? "記事を編集" : "記事を追加";
-  $("#fTitle").value = item ? item.title || "" : "";
-  $("#fTeaser").value = item ? item.teaser || "" : "";
-  $("#fCategory").value = item ? item.category || "beauty" : "beauty";
-  $("#fBody").value = item ? item.body || "" : "";
-  $("#fOrder").value = item ? (item.order ?? 0) : 0;
-  $("#fPublished").checked = item ? !!item.published : true;
-  $("#editor").classList.add("open");
+function renderStats(){
+  const contents = cache['camellia_contents'] || [];
+  const published = contents.filter(r => r.published).length;
+  const html = [
+    { n: contents.length, l:'記事' },
+    { n: published,       l:'公開中' },
+    { n: (cache['camellia_users']||[]).length,    l:'ユーザー' },
+    { n: (cache['camellia_activity']||[]).length, l:'閲覧記録' },
+  ].map(s => `<div class="stat"><div class="stat-num">${s.n}</div><div class="stat-label">${s.l}</div></div>`).join('');
+  document.getElementById('stats').innerHTML = html;
 }
-function closeEditor() { $("#editor").classList.remove("open"); editingId = null; }
 
-$("#editorForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const payload = {
-    title: $("#fTitle").value.trim(), teaser: $("#fTeaser").value.trim(),
-    category: $("#fCategory").value, body: $("#fBody").value.trim(),
-    order: Number($("#fOrder").value) || 0, published: $("#fPublished").checked
-  };
-  $("#btnSave").disabled = true;
-  try {
-    if (editingId) await api("/api/camellia/admin/contents/" + editingId, { method: "PUT", body: JSON.stringify(payload) });
-    else await api("/api/camellia/admin/contents", { method: "POST", body: JSON.stringify(payload) });
-    closeEditor(); await load(); toast(editingId ? "記事を更新しました" : "記事を追加しました");
-  } catch (err) { toast(err.message); }
-  finally { $("#btnSave").disabled = false; }
-});
+function renderTabs(){
+  document.getElementById('tabs').innerHTML = COLLECTIONS.map(c =>
+    `<button class="tab ${c.id===currentCol?'active':''}" data-col="${c.id}">${c.icon} ${c.label} (${(cache[c.id]||[]).length})</button>`
+  ).join('');
+  document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+    currentCol = b.dataset.col; renderTabs(); renderList();
+  });
+}
 
-$("#list").addEventListener("click", async (e) => {
-  const btn = e.target.closest("button[data-edit],button[data-del],button[data-toggle]");
-  if (!btn) return;
-  const id = btn.dataset.edit || btn.dataset.del || btn.dataset.toggle;
-  const item = items.find((x) => x.id === id);
-  if (!item) return;
-  if (btn.dataset.edit) return openEditor(item);
-  if (btn.dataset.toggle) {
-    try {
-      await api("/api/camellia/admin/contents/" + id, { method: "PUT", body: JSON.stringify({ published: !item.published }) });
-      await load(); toast(item.published ? "非公開にしました" : "公開しました");
-    } catch (err) { toast(err.message); }
+/* 記事は読みやすく、それ以外は主要項目＋生データで表示 */
+function renderRow(row){
+  const raw = `<div class="raw" id="raw-${esc(row.id)}">${esc(JSON.stringify(row, null, 2))}</div>
+    <button class="link-btn" data-raw="${esc(row.id)}">生データを表示 / 隠す</button>`;
+
+  if(currentCol === 'camellia_contents'){
+    return `<div class="card">
+      <div class="card-head"><div class="card-title">${esc(row.title || '(タイトルなし)')}</div></div>
+      <div class="card-body">${esc(String(row.body || '').slice(0, 220))}${String(row.body||'').length>220?'…':''}</div>
+      <div class="card-meta">
+        <span class="pill">${esc(row.categoryTitle || row.category || '未分類')}</span>
+        <span class="pill ${row.published ? 'green' : 'gray'}">${row.published ? '公開中' : '非公開'}</span>
+        <span class="pill gray">順 ${row.order ?? 0}</span>
+        <span class="pill gray">${esc(fmtDate(row.updatedAt || row.createdAt))}</span>
+      </div>
+      ${raw}</div>`;
+  }
+
+  if(currentCol === 'camellia_users'){
+    return `<div class="card">
+      <div class="card-head"><div class="card-title">${esc(row.nickname || '(名前未設定)')}</div>
+        <span class="pill ${row.onboarded ? 'green':'gray'}">${row.onboarded ? '登録済み':'途中'}</span></div>
+      <dl class="kv">
+        <dt>ウォレット</dt><dd>${esc(row.wallet || '-')}</dd>
+        <dt>興味</dt><dd>${esc((row.interests||[]).join('、') || '-')}</dd>
+        <dt>登録日</dt><dd>${esc(fmtDate(row.createdAt))}</dd>
+      </dl>
+      ${raw}</div>`;
+  }
+
+  if(currentCol === 'camellia_garden'){
+    const slots = row.slots || [];
+    return `<div class="card">
+      <div class="card-head"><div class="card-title">${esc(row.wallet || row.uid || row.id)}</div></div>
+      <dl class="kv">
+        <dt>植えた数</dt><dd>${slots.length}</dd>
+        <dt>成長段階</dt><dd>${esc(slots.map(s => 'stage' + (s && s.stage !== undefined ? s.stage : '?')).join('、') || '-')}</dd>
+        <dt>ログイン日数</dt><dd>${(row.loginDates||[]).length}</dd>
+        <dt>閲覧日数</dt><dd>${(row.contentDates||[]).length}</dd>
+      </dl>
+      ${raw}</div>`;
+  }
+
+  return `<div class="card">
+    <div class="card-head"><div class="card-title">${esc(row.contentId || row.id)}</div>
+      <span class="pill gray">${esc(fmtDate(row.createdAt))}</span></div>
+    <dl class="kv"><dt>ウォレット</dt><dd>${esc(row.wallet || row.uid || '-')}</dd>
+      <dt>種類</dt><dd>${esc(row.type || '-')}</dd></dl>
+    ${raw}</div>`;
+}
+
+function renderList(){
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const sortKey = document.getElementById('sortBy').value;
+  let rows = (cache[currentCol] || []).slice();
+
+  if(q) rows = rows.filter(r => JSON.stringify(r).toLowerCase().includes(q));
+
+  const key = sortKey.replace(/^-/, '');
+  const desc = sortKey.startsWith('-');
+  rows.sort((a,b) => {
+    const x = a[key], y = b[key];
+    const xv = x && x.toDate ? x.toDate().getTime() : (x ?? 0);
+    const yv = y && y.toDate ? y.toDate().getTime() : (y ?? 0);
+    if(xv === yv) return 0;
+    return (xv > yv ? 1 : -1) * (desc ? -1 : 1);
+  });
+
+  const el = document.getElementById('list');
+  if(!rows.length){
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div>データがありません</div>';
     return;
   }
-  if (!confirm(`「${item.title}」を削除しますか？この操作は取り消せません。`)) return;
-  try { await api("/api/camellia/admin/contents/" + id, { method: "DELETE" }); await load(); toast("削除しました"); }
-  catch (err) { toast(err.message); }
-});
+  el.innerHTML = rows.map(renderRow).join('');
+  el.querySelectorAll('[data-raw]').forEach(b => b.onclick = () => {
+    document.getElementById('raw-' + b.dataset.raw)?.classList.toggle('show');
+  });
+}
 
-// ── データ管理（シェルが使えない環境でも操作できるようにする） ──
-$("#btnSeed").addEventListener("click", async () => {
-  if (!confirm("camellia-app.html に元から入っている記事をDBへ取り込みます。\n同じタイトルの記事は追加されないため、何度実行しても重複しません。")) return;
-  $("#btnSeed").disabled = true;
-  try {
-    const r = await api("/api/camellia/admin/seed", { method: "POST" });
-    await load();
-    toast(`取り込み完了：追加 ${r.added}件 / 既存 ${r.skipped}件（合計 ${r.total}件）`);
-  } catch (e) { toast(e.message); }
-  finally { $("#btnSeed").disabled = false; }
-});
+document.getElementById('q').addEventListener('input', renderList);
+document.getElementById('sortBy').addEventListener('change', renderList);
 
-$("#btnExport").addEventListener("click", async () => {
-  $("#btnExport").disabled = true;
-  try {
-    const dump = await api("/api/camellia/admin/export");
-    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `camellia-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    toast("バックアップを保存しました");
-  } catch (e) { toast(e.message); }
-  finally { $("#btnExport").disabled = false; }
-});
+// 初期化（room1 と同じ流れ）
+// ※ module は defer 相当で DOMContentLoaded 後に走ることがあるため、
+//    既にDOMが出来ていればその場で実行する。
+function start(){
+  document.getElementById('lockScreen').style.display = 'none';
+  document.getElementById('adminContent').style.display = 'block';
+  document.getElementById('ownerBadge').classList.add('show');
+  loadAll().catch(e => {
+    document.getElementById('list').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">❌</div>読み込みに失敗しました<br>' + esc(e.message) + '</div>';
+  });
+}
 
-$("#btnImport").addEventListener("click", () => $("#importFile").click());
-$("#importFile").addEventListener("change", async (e) => {
-  const file = e.target.files && e.target.files[0];
-  e.target.value = "";
-  if (!file) return;
-  if (!confirm(`「${file.name}」から復元します。\n既にあるデータは上書きせず、無いものだけ追加します。`)) return;
-  try {
-    const dump = JSON.parse(await file.text());
-    const r = await api("/api/camellia/admin/import", { method: "POST", body: JSON.stringify(dump) });
-    await load();
-    const added = Object.values(r.report).reduce((n, x) => n + x.added, 0);
-    toast(`復元しました：${added}件を追加`);
-  } catch (err) { toast("復元に失敗しました：" + err.message); }
-});
+/* ウォレットは「親アプリの接続完了」や「ストレージの復元」を待つ必要があるため、
+   すぐ判定せず、見つかるまで短時間だけ再確認する（約3秒）。
+   これをしないと、開くのが少し早いだけでロック画面のまま固まる。 */
+function showLocked(){
+  document.getElementById('lockScreen').style.display = 'flex';
+  document.getElementById('lockIcon').textContent = '🔒';
+  document.getElementById('lockTitle').textContent = 'オーナー専用ページです';
+  document.getElementById('lockSub').innerHTML =
+    'この画面はCamelliaの管理者のみが閲覧できます。<br>Emuにオーナーのウォレットでログインしてから開いてください。';
+}
 
-$("#btnNew").addEventListener("click", () => openEditor(null));
-$("#btnCancel").addEventListener("click", closeEditor);
-$("#btnReload").addEventListener("click", () => load().then(() => toast("最新にしました")).catch((e) => toast(e.message)));
-["filterCat", "filterPub", "q"].forEach((id) => $("#" + id).addEventListener("input", renderList));
-$("#editor").addEventListener("mousedown", (e) => { if (e.target === $("#editor")) closeEditor(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeEditor(); });
-
-fillCategorySelects();
-
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    $("#gateMsg").textContent = "Emuにログインしてから、もう一度お越しください。";
-    return;
-  }
-  try {
-    idToken = await user.getIdToken();
-    // 管理APIが200を返せばオーナー。403なら管理者ではない。
-    const s = await api("/api/camellia/admin/stats");
-    $("#gate").hidden = true;
-    $("#admin").hidden = false;
-    $("#opsWrap").hidden = false;
-    $("#btnNew").hidden = false;
-    $("#btnReload").hidden = false;
-    renderStats(s);
-    const c = await api("/api/camellia/contents");
-    items = c.items || [];
-    renderList();
-  } catch (err) {
-    $("#gateMsg").textContent = err.message.includes("管理者")
-      ? "このアカウントには管理権限がありません。"
-      : "確認に失敗しました：" + err.message;
-  }
-});
+function init(){
+  if(isOwner()){ start(); return; }
+  let tries = 0;
+  const timer = setInterval(()=>{
+    if(isOwner()){ clearInterval(timer); start(); return; }
+    if(++tries >= 30){          // 100ms × 30 = 約3秒
+      clearInterval(timer);
+      showLocked();
+    }
+  }, 100);
+}
+if(document.readyState === 'loading') window.addEventListener('DOMContentLoaded', init);
+else init();
 </script>
 </body>
 </html>
