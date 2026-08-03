@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Camellia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Shippori+Mincho:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:#F9E9E6;font-family:'Shippori Mincho','Hiragino Mincho ProN',serif;color:#4A2430;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+a{color:#B0555E}
+a:hover{color:#4A2430}
+input::placeholder{color:#B79399}
+input,select,textarea,button{font-family:inherit}
+.serif-en{font-family:'Cormorant Garamond',serif}
+.card{background:#FFF6F2;border-radius:12px;box-shadow:0 20px 50px -28px rgba(74,36,48,0.3);}
+.btn-primary{font-family:inherit;background:#B0555E;color:#FFF6F2;border:none;font-size:14px;letter-spacing:0.12em;padding:14px;border-radius:999px;cursor:pointer;transition:background .3s ease;}
+.btn-primary:hover{background:#93444C;}
+.btn-sns{font-family:inherit;display:flex;align-items:center;justify-content:center;gap:10px;background:#FFFFFF;color:#4A2430;border:1px solid rgba(176,85,94,0.3);font-size:13.5px;letter-spacing:0.04em;padding:12px;border-radius:8px;cursor:pointer;}
+.btn-sns:hover{background:#FFF0EE;}
+.btn-ghost-pill{font-family:inherit;background:transparent;border:1px solid rgba(176,85,94,0.4);color:#7C4A50;font-size:13px;padding:12px;border-radius:999px;cursor:pointer;}
+.btn-ghost-pill:hover{background:rgba(176,85,94,0.08);}
+.field{font-family:inherit;font-size:14px;padding:13px 16px;border-radius:8px;border:1px solid rgba(176,85,94,0.35);background:#FFFFFF;color:#4A2430;width:100%;}
+.err-box{background:#FBE4E4;color:#93444C;font-size:12.5px;padding:10px 14px;border-radius:6px;letter-spacing:0.02em;}
+.overlay{position:fixed;inset:0;background:rgba(74,36,48,0.45);display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;z-index:50;}
+.toast{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:#4A2430;color:#FFF6F2;font-size:11.5px;letter-spacing:0.04em;padding:6px 14px;border-radius:999px;white-space:nowrap;box-shadow:0 8px 18px -8px rgba(74,36,48,0.5);z-index:2;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function(){
+'use strict';
+
+var FLOWER_SPECIES = [
+  { id: 'gerbera', name: 'ガーベラ', desc: '明るく元気な印象', color: '#E8927C', accent: '#C46B54', plus: false },
+  { id: 'carnation', name: 'カーネーション', desc: 'やさしく上品な印象', color: '#D98B93', accent: '#B0555E', plus: false },
+  { id: 'marigold', name: 'マリーゴールド', desc: '温かみのある黄金色', color: '#D9A94C', accent: '#B0873A', plus: false },
+  { id: 'sunflower', name: 'ひまわり', desc: '力強く前向きな印象', color: '#E0B93F', accent: '#B8912A', plus: true },
+  { id: 'rose', name: 'バラ', desc: '気品ある深紅', color: '#8B2E3A', accent: '#5E1E28', plus: true }
+];
+var STAGE_LABELS = ['種', '芽', '葉', '花が咲いた'];
+var STAGE_EMOJI = ['🌰', '🌱', '🪴', '🌸'];
+
+var CATEGORY_DEFS = [
+  { id: 'beauty', num: '1', title: '美・セルフケア', desc: 'スキンケア・コスメ・髪・見た目の自分らしさ',
+    items: [
+      { id: 'b1', title: '自分に合うスキンケアの選び方', teaser: '肌質を知ることから始める', body: '肌は季節や体調で日々変わります。今日の自分の肌に触れて、乾燥や揺らぎに気づくことから、スキンケアは始まります。高価なものより、続けられるものを選びましょう。' },
+      { id: 'b2', title: '崩れない・楽になるベースメイクのコツ', teaser: '薄づきでも心地よく', body: '忙しい朝でも、少しの工夫で肌は心地よく見せられます。厚塗りより、素肌を活かす薄づきのケアが、長時間の快適さにつながります。' },
+      { id: 'b3', title: '髪と地肌をいたわる週末ケア', teaser: '週に一度のご褒美時間', body: '髪は毎日酷使されています。週末の10分、地肌をやさしくマッサージするだけで、翌週の自分がすこし軽くなります。' }
+    ] },
+  { id: 'body', num: '2', title: 'からだ・健康', desc: '体調・生理／PMS・睡眠・運動・フェムケア',
+    items: [
+      { id: 'bd1', title: '生理周期と上手につきあう', teaser: '自分のリズムを知る', body: '生理周期を記録すると、体調の波が「見える化」されます。がんばりすぎる日と、休んでいい日を、自分で選べるようになります。' },
+      { id: 'bd2', title: 'PMSのサインを知る', teaser: '不調は気のせいじゃない', body: 'イライラや眠気は、あなたの意志が弱いからではありません。ホルモンの変化として理解するだけで、少し自分にやさしくなれます。' },
+      { id: 'bd3', title: '眠りの質を上げる夜の習慣', teaser: '寝る前30分の過ごし方', body: '画面を置いて、深呼吸を3回。眠る前の小さな儀式が、翌朝の目覚めを変えていきます。' }
+    ] },
+  { id: 'mind', num: '3', title: 'こころ・メンタル', desc: '気持ちの浮き沈み・自己肯定感・ストレス',
+    items: [
+      { id: 'm1', title: '気分の波を書き出してみる', teaser: 'ジャーナリングの第一歩', body: '頭の中だけで抱えていると、感情は膨らみます。紙に書き出すだけで、気持ちと少し距離を置いて眺められるようになります。' },
+      { id: 'm2', title: '小さな自己肯定感の育て方', teaser: '「できたこと」に目を向ける', body: '大きな成果でなくていい。今日できた小さなことを3つ、声に出してみましょう。自己肯定感は、積み重ねでゆっくり育ちます。' },
+      { id: 'm3', title: 'ストレスと距離を置く呼吸法', teaser: '1分でできるリセット', body: '4秒吸って、7秒止めて、8秒かけて吐く。たった1分の呼吸で、張りつめた気持ちがゆるみます。' }
+    ] },
+  { id: 'intimacy', num: '4', title: '性・ウェルネス', desc: '体と性の知識・パートナーとの関係・境界線',
+    items: [
+      { id: 'i1', title: 'からだと性について知っておきたいこと', teaser: '正しい知識は自分を守る', body: '自分のからだのことを知るのは、恥ずかしいことではありません。正しい知識が、あなた自身を守る力になります。' },
+      { id: 'i2', title: 'パートナーと心地よい関係を築く', teaser: '対話を大切にする', body: '言わなくてもわかってもらえる、は思い込みかもしれません。心地よさは、小さな対話の積み重ねでつくられます。' },
+      { id: 'i3', title: '自分の境界線を大切にする', teaser: 'NOと言っていい', body: '嫌なことに「NO」と言うのは、わがままではありません。境界線を持つことは、自分と相手、両方を大切にすることです。' }
+    ] },
+  { id: 'growth', num: '5', title: '学び・お金', desc: 'キャリア・収入・副業・お金の知識・将来設計',
+    items: [
+      { id: 'g1', title: 'キャリアの棚卸しをしてみる', teaser: 'できることを書き出す', body: 'これまでの経験を振り返ると、意外な強みが見つかります。転職や副業を考える前に、まず自分の棚卸しから。' },
+      { id: 'g2', title: '収入の柱を増やすという選択肢', teaser: '一つに頼らない安心感', body: '会社員としての収入だけでなく、小さな副収入があるだけで、心の余裕が変わります。無理のない範囲から始めてみましょう。' },
+      { id: 'g3', title: '将来のためのお金の基本', teaser: '難しく考えすぎない', body: '貯蓄・保険・投資、すべてを一気に理解しなくて大丈夫。まずは毎月の収支を把握することから始めましょう。' }
+    ] },
+  { id: 'community', num: '6', title: 'つながり・回復', desc: '安心して話せる仲間・つらい経験からの回復',
+    items: [
+      { id: 'c1', title: '安心して話せる仲間を見つける', teaser: '比べない場所へ', body: '同じ想いを持つ人と話すだけで、気持ちは軽くなります。ここでは、誰かと比べる必要はありません。' },
+      { id: 'c2', title: 'つらい経験と向き合う小さな一歩', teaser: '無理をしないペースで', body: '傷ついた経験は、なかったことにしなくていい。自分のペースで、少しずつ向き合っていきましょう。' },
+      { id: 'c3', title: '頼ることは弱さじゃない', teaser: '一人で抱え込まなくていい', body: '誰かに頼ることは、弱さの証ではありません。助けを求められることも、ひとつの強さです。' }
+    ] }
+];
+
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function computeStreak(dates) {
+  var streak = 0, cursor = new Date();
+  for (;;) {
+    var dStr = cursor.toISOString().slice(0, 10);
+    if (dates.indexOf(dStr) !== -1) { streak++; cursor.setDate(cursor.getDate() - 1); }
+    else break;
+  }
+  return streak;
+}
+function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+var defaultGarden = { slots: [null, null, null], purchased: false, loginDates: [], contentDates: [], giftedHistory: [] };
+var state = {
+  screen: 'login',
+  user: null,
+  selectedInterests: [],
+  loginError: '', registerError: '',
+  activeCategoryId: null, activeItemId: null,
+  gardenView: 'plant',
+  garden: JSON.parse(JSON.stringify(defaultGarden)),
+  plantingModal: null,
+  renamingIndex: null,
+  actionToast: null,
+  plusModalOpen: false,
+  _pendingNickname: '',
+  _pendingRename: null
+};
+
+function loadState() {
+  try {
+    var rawUser = localStorage.getItem('camellia_user');
+    if (rawUser) { state.user = JSON.parse(rawUser); state.screen = 'home'; }
+  } catch (e) {}
+  try {
+    var rawGarden = localStorage.getItem('camellia_garden');
+    if (rawGarden) {
+      var parsed = JSON.parse(rawGarden);
+      var validIds = FLOWER_SPECIES.map(function(sp){ return sp.id; });
+      var slots = (parsed.slots || [null,null,null]).map(function(seed){
+        if (!seed) return null;
+        var stage = typeof seed.stage === 'number' ? seed.stage : 0;
+        var speciesId = validIds.indexOf(seed.speciesId) !== -1 ? seed.speciesId : FLOWER_SPECIES[0].id;
+        return Object.assign({}, seed, { stage: stage, speciesId: speciesId });
+      });
+      state.garden = {
+        slots: slots,
+        purchased: !!parsed.purchased,
+        loginDates: parsed.loginDates || [],
+        contentDates: parsed.contentDates || [],
+        giftedHistory: parsed.giftedHistory || []
+      };
+    }
+  } catch (e) {}
+}
+
+function saveGarden(garden) {
+  state.garden = garden;
+  try { localStorage.setItem('camellia_garden', JSON.stringify(garden)); } catch (e) {}
+}
+function saveUser(user) {
+  state.user = user;
+  try { localStorage.setItem('camellia_user', JSON.stringify(user)); } catch (e) {}
+}
+
+function advanceGrowth(garden) {
+  var loginStreak = computeStreak(garden.loginDates);
+  var totalLoginDays = garden.loginDates.length;
+  var hasContent = garden.contentDates.length > 0;
+  var slots = garden.slots.map(function(seed) {
+    if (!seed || seed.stage >= 3) return seed;
+    var stage = seed.stage;
+    if (stage === 0 && loginStreak >= 2 && hasContent) stage = 1;
+    if (stage === 1 && totalLoginDays >= 7 && hasContent) stage = 2;
+    if (stage === 2 && loginStreak >= 3 && hasContent) stage = 3;
+    return stage !== seed.stage ? Object.assign({}, seed, { stage: stage }) : seed;
+  });
+  return Object.assign({}, garden, { slots: slots });
+}
+function recordLogin() {
+  var today = todayStr();
+  if (state.garden.loginDates.indexOf(today) !== -1) return;
+  saveGarden(advanceGrowth(Object.assign({}, state.garden, { loginDates: state.garden.loginDates.concat([today]) })));
+}
+function recordContentActivity() {
+  var today = todayStr();
+  var contentDates = state.garden.contentDates.indexOf(today) !== -1 ? state.garden.contentDates : state.garden.contentDates.concat([today]);
+  saveGarden(advanceGrowth(Object.assign({}, state.garden, { contentDates: contentDates })));
+}
+
+// ══════════════════════════
+// ACTIONS (exposed on window.App for inline onclick handlers)
+// ══════════════════════════
+var App = {};
+
+App.goLogin = function(e) { if (e) e.preventDefault(); state.loginError=''; state.registerError=''; state.screen='login'; render(); };
+App.goRegister = function(e) { if (e) e.preventDefault(); state.loginError=''; state.registerError=''; state.screen='register'; render(); };
+
+App.submitLogin = function(e) {
+  e.preventDefault();
+  try {
+    var raw = localStorage.getItem('camellia_user');
+    if (!raw) { state.loginError = 'アカウントが見つかりません。新規登録してください。'; render(); return; }
+    state.user = JSON.parse(raw);
+    state.loginError = '';
+    state.screen = 'home';
+    render();
+    recordLogin();
+  } catch (err) {
+    state.loginError = 'アカウントが見つかりません。新規登録してください。';
+    render();
+  }
+};
+
+App.submitRegister = function(e) {
+  e.preventDefault();
+  var pw = document.getElementById('reg-password').value;
+  var cpw = document.getElementById('reg-confirm').value;
+  var email = document.getElementById('reg-email').value;
+  if (!pw) { state.registerError = 'パスワードを入力してください。'; render(); return; }
+  if (pw !== cpw) { state.registerError = 'パスワードが一致しません。'; render(); return; }
+  state._pendingEmail = email;
+  state._pendingNickname = '';
+  state.selectedInterests = [];
+  state.registerError = '';
+  state.screen = 'onboarding';
+  render();
+};
+
+App.snsLogin = function(provider) {
+  try {
+    var raw = localStorage.getItem('camellia_user');
+    if (raw) { state.user = JSON.parse(raw); state.screen = 'home'; render(); recordLogin(); return; }
+  } catch (e) {}
+  state._pendingEmail = provider + '-user@example.com';
+  state._pendingNickname = '';
+  state.selectedInterests = [];
+  state.screen = 'onboarding';
+  render();
+};
+
+App.toggleInterest = function(id) {
+  var idx = state.selectedInterests.indexOf(id);
+  if (idx === -1) state.selectedInterests.push(id); else state.selectedInterests.splice(idx, 1);
+  render();
+};
+
+App.submitOnboarding = function(e) {
+  e.preventDefault();
+  var nickname = document.getElementById('onb-nickname').value;
+  var user = {
+    email: state._pendingEmail || '',
+    nickname: nickname || 'ゲスト',
+    interests: state.selectedInterests,
+    subscription: false,
+    createdAt: new Date().toISOString()
+  };
+  saveUser(user);
+  state.screen = 'home';
+  render();
+  recordLogin();
+};
+
+App.logout = function() { state.screen = 'login'; render(); };
+
+App.resetAllData = function(e) {
+  if (e) e.preventDefault();
+  try { localStorage.removeItem('camellia_user'); } catch (err) {}
+  try { localStorage.removeItem('camellia_garden'); } catch (err) {}
+  state.screen = 'login'; state.user = null; state.selectedInterests = [];
+  state.loginError = ''; state.registerError = '';
+  state.activeCategoryId = null; state.activeItemId = null; state.gardenView = 'plant';
+  state.garden = JSON.parse(JSON.stringify(defaultGarden));
+  state.plantingModal = null; state.renamingIndex = null; state.actionToast = null; state.plusModalOpen = false;
+  render();
+};
+
+App.openCategory = function(id) { state.screen = 'service-list'; state.activeCategoryId = id; render(); };
+App.openItem = function(id) { state.screen = 'service-detail'; state.activeItemId = id; render(); recordContentActivity(); };
+App.backToHome = function() { state.screen = 'home'; state.activeCategoryId = null; state.activeItemId = null; render(); };
+App.backToList = function() { state.screen = 'service-list'; state.activeItemId = null; render(); };
+
+App.openGarden = function() { state.screen = 'garden'; render(); };
+App.showPlantView = function() { state.gardenView = 'plant'; render(); };
+App.showLogView = function() { state.gardenView = 'log'; render(); };
+
+App.purchaseSlot = function() {
+  var garden = Object.assign({}, state.garden, { purchased: true, slots: state.garden.slots.slice() });
+  while (garden.slots.length < 5) garden.slots.push(null);
+  saveGarden(garden);
+  render();
+};
+
+App.openPlantModal = function(index) { state.plantingModal = { index: index, speciesId: null, name: '' }; render(); };
+App.closePlantModal = function() { state.plantingModal = null; render(); };
+App.selectSpecies = function(speciesId) {
+  var species = FLOWER_SPECIES.filter(function(sp){return sp.id===speciesId;})[0];
+  var isSubscribed = !!(state.user && state.user.subscription);
+  if (species.plus && !isSubscribed) return;
+  state.plantingModal.speciesId = speciesId;
+  render();
+};
+App.confirmPlant = function() {
+  var modal = state.plantingModal;
+  if (!modal || !modal.speciesId) return;
+  var name = document.getElementById('plant-name-input') ? document.getElementById('plant-name-input').value : '';
+  var slots = state.garden.slots.slice();
+  slots[modal.index] = { id: 'seed-' + Date.now(), stage: 0, gifted: false, speciesId: modal.speciesId, name: name && name.trim() ? name.trim() : null };
+  saveGarden(Object.assign({}, state.garden, { slots: slots }));
+  state.plantingModal = null;
+  render();
+};
+
+App.startRename = function(index) { state.renamingIndex = index; state._pendingRename = null; render(); setTimeout(function(){ var el = document.getElementById('rename-input'); if (el) el.focus(); }, 0); };
+App.confirmRename = function(index) {
+  var el = document.getElementById('rename-input');
+  var value = el ? el.value.trim() : '';
+  var slots = state.garden.slots.slice();
+  var seed = slots[index];
+  if (seed && value) { slots[index] = Object.assign({}, seed, { name: value }); saveGarden(Object.assign({}, state.garden, { slots: slots })); }
+  state.renamingIndex = null;
+  state._pendingRename = null;
+  render();
+};
+
+App.water = function(i) { showActionToast(i, '💧', '水をあげました'); };
+App.fertilize = function(i) { showActionToast(i, '🌱', '肥料をあげました'); };
+function showActionToast(index, emoji, text) {
+  state.actionToast = { index: index, emoji: emoji, text: text };
+  render();
+  setTimeout(function() {
+    if (state.actionToast && state.actionToast.index === index) { state.actionToast = null; render(); }
+  }, 2400);
+}
+
+App.giftSeed = function(index) {
+  var slots = state.garden.slots.slice();
+  var seed = slots[index];
+  var species = FLOWER_SPECIES.filter(function(sp){return sp.id===(seed&&seed.speciesId);})[0] || FLOWER_SPECIES[0];
+  var name = (seed && seed.name) || (species.name + 'の鉢');
+  slots[index] = null;
+  var giftedHistory = state.garden.giftedHistory.concat([{ date: todayStr(), name: name }]);
+  saveGarden(Object.assign({}, state.garden, { slots: slots, giftedHistory: giftedHistory }));
+  render();
+};
+
+App.openPlusModal = function() { state.plusModalOpen = true; render(); };
+App.closePlusModal = function() { state.plusModalOpen = false; render(); };
+App.subscribePlus = function() {
+  var user = Object.assign({}, state.user || {}, { subscription: true });
+  saveUser(user);
+  state.plusModalOpen = false;
+  render();
+};
+
+window.App = App;
+
+// ══════════════════════════
+// RENDER: SCREENS
+// ══════════════════════════
+function renderLogin() {
+  return '\
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;">\
+    <div class="card" style="width:100%;max-width:400px;padding:clamp(32px,6vw,48px);display:flex;flex-direction:column;gap:22px;">\
+      <div style="text-align:center;display:flex;flex-direction:column;gap:6px;">\
+        <span class="serif-en" style="font-size:26px;font-weight:500;letter-spacing:0.06em;">Camellia</span>\
+        <span style="font-size:13px;letter-spacing:0.08em;color:#7C4A50;">おかえりなさい</span>\
+      </div>\
+      ' + (state.loginError ? '<div class="err-box">'+esc(state.loginError)+'</div>' : '') + '\
+      <form onsubmit="App.submitLogin(event)" style="display:flex;flex-direction:column;gap:14px;">\
+        <input type="email" required placeholder="メールアドレス" class="field">\
+        <input type="password" required placeholder="パスワード" class="field">\
+        <button type="submit" class="btn-primary" style="margin-top:6px;">ログイン</button>\
+      </form>\
+      <div style="display:flex;align-items:center;gap:12px;">\
+        <span style="flex:1;height:1px;background:rgba(176,85,94,0.25);"></span>\
+        <span style="font-size:11px;letter-spacing:0.1em;color:#B79399;">または</span>\
+        <span style="flex:1;height:1px;background:rgba(176,85,94,0.25);"></span>\
+      </div>\
+      <div style="display:flex;flex-direction:column;gap:10px;">\
+        <button class="btn-sns" onclick="App.snsLogin(\'google\')">Googleで続ける</button>\
+        <button class="btn-sns" onclick="App.snsLogin(\'line\')">LINEで続ける</button>\
+      </div>\
+      <div style="text-align:center;font-size:12.5px;color:#7C4A50;">アカウントをお持ちでない方は <a href="#" onclick="App.goRegister(event)">新規登録</a></div>\
+      <div style="text-align:center;"><a href="#" onclick="App.resetAllData(event)" style="font-size:11px;color:#B79399;">テストデータを全て削除する</a></div>\
+    </div>\
+  </div>';
+}
+
+function renderRegister() {
+  return '\
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;">\
+    <div class="card" style="width:100%;max-width:400px;padding:clamp(32px,6vw,48px);display:flex;flex-direction:column;gap:22px;">\
+      <div style="text-align:center;display:flex;flex-direction:column;gap:6px;">\
+        <span class="serif-en" style="font-size:26px;font-weight:500;letter-spacing:0.06em;">Camellia</span>\
+        <span style="font-size:13px;letter-spacing:0.08em;color:#7C4A50;">アカウントを作成</span>\
+      </div>\
+      ' + (state.registerError ? '<div class="err-box">'+esc(state.registerError)+'</div>' : '') + '\
+      <form onsubmit="App.submitRegister(event)" style="display:flex;flex-direction:column;gap:14px;">\
+        <input id="reg-email" type="email" required placeholder="メールアドレス" class="field">\
+        <input id="reg-password" type="password" required placeholder="パスワード" class="field">\
+        <input id="reg-confirm" type="password" required placeholder="パスワード（確認）" class="field">\
+        <button type="submit" class="btn-primary" style="margin-top:6px;">次へ</button>\
+      </form>\
+      <div style="display:flex;align-items:center;gap:12px;">\
+        <span style="flex:1;height:1px;background:rgba(176,85,94,0.25);"></span>\
+        <span style="font-size:11px;letter-spacing:0.1em;color:#B79399;">または</span>\
+        <span style="flex:1;height:1px;background:rgba(176,85,94,0.25);"></span>\
+      </div>\
+      <div style="display:flex;flex-direction:column;gap:10px;">\
+        <button class="btn-sns" onclick="App.snsLogin(\'google\')">Googleで登録</button>\
+        <button class="btn-sns" onclick="App.snsLogin(\'line\')">LINEで登録</button>\
+      </div>\
+      <div style="text-align:center;font-size:12.5px;color:#7C4A50;">すでにアカウントをお持ちの方は <a href="#" onclick="App.goLogin(event)">ログイン</a></div>\
+    </div>\
+  </div>';
+}
+
+function renderOnboarding() {
+  var cats = CATEGORY_DEFS.map(function(c) {
+    var selected = state.selectedInterests.indexOf(c.id) !== -1;
+    return '<div onclick="App.toggleInterest(\''+c.id+'\')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:8px;box-sizing:border-box;border:'+(selected?'1px solid #B0555E':'1px solid rgba(176,85,94,0.25)')+';background:'+(selected?'#FBE4E4':'#FFFFFF')+';color:'+(selected?'#4A2430':'#7C4A50')+';">\
+      <span style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:\'Cormorant Garamond\',serif;font-size:13px;flex-shrink:0;background:'+(selected?'#B0555E':'#FFF6F2')+';color:'+(selected?'#FFF6F2':'#B0555E')+';border:'+(selected?'none':'1px solid #B0555E')+';">'+c.num+'</span>\
+      <span style="font-size:12.5px;letter-spacing:0.04em;">'+esc(c.title)+'</span>\
+    </div>';
+  }).join('');
+  return '\
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;">\
+    <div class="card" style="width:100%;max-width:480px;padding:clamp(32px,6vw,48px);display:flex;flex-direction:column;gap:24px;">\
+      <div style="text-align:center;display:flex;flex-direction:column;gap:8px;">\
+        <span class="serif-en" style="font-size:22px;letter-spacing:0.06em;color:#B0555E;">Welcome</span>\
+        <h1 style="margin:0;font-size:21px;font-weight:600;letter-spacing:0.06em;">あなたについて教えてください</h1>\
+      </div>\
+      <form onsubmit="App.submitOnboarding(event)" style="display:flex;flex-direction:column;gap:20px;">\
+        <div style="display:flex;flex-direction:column;gap:8px;">\
+          <label style="font-size:12.5px;letter-spacing:0.08em;color:#7C4A50;">ニックネーム</label>\
+          <input id="onb-nickname" type="text" required placeholder="例：さくら" value="'+esc(state._pendingNickname||'')+'" class="field">\
+        </div>\
+        <div style="display:flex;flex-direction:column;gap:10px;">\
+          <label style="font-size:12.5px;letter-spacing:0.08em;color:#7C4A50;">興味のあるカテゴリ（複数選択可）</label>\
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">' + cats + '</div>\
+        </div>\
+        <button type="submit" class="btn-primary">はじめる</button>\
+      </form>\
+    </div>\
+  </div>';
+}
+
+function renderHome() {
+  var user = state.user || { nickname: 'ゲスト', interests: [] };
+  var isSubscribed = !!(state.user && state.user.subscription);
+  var plusStyle = 'font-family:inherit;border:1px solid #C9A84C;background:'+(isSubscribed?'#C9A84C':'transparent')+';color:'+(isSubscribed?'#4A2430':'#B0873A')+';font-size:12.5px;letter-spacing:0.06em;padding:8px 18px;border-radius:999px;cursor:pointer;';
+  var cards = CATEGORY_DEFS.map(function(c) {
+    var selected = (user.interests || []).indexOf(c.id) !== -1;
+    return '<div onclick="App.openCategory(\''+c.id+'\')" style="cursor:pointer;background:#FFFFFF;border:1px solid rgba(176,85,94,0.18);border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:12px;">\
+      <div style="display:flex;align-items:center;justify-content:space-between;">\
+        <span style="width:38px;height:38px;border-radius:50%;background:#FFF6F2;border:1px solid #B0555E;color:#B0555E;display:flex;align-items:center;justify-content:center;font-family:\'Cormorant Garamond\',serif;font-size:15px;">'+c.num+'</span>\
+        '+(selected?'<span style="font-size:10.5px;letter-spacing:0.08em;color:#B0555E;background:#FBE4E4;padding:4px 10px;border-radius:999px;">おすすめ</span>':'')+'\
+      </div>\
+      <h3 style="margin:0;font-size:17px;font-weight:600;letter-spacing:0.06em;">'+esc(c.title)+'</h3>\
+      <p style="margin:0;font-size:12.5px;line-height:1.8;color:#7C4A50;">'+esc(c.desc)+'</p>\
+    </div>';
+  }).join('');
+  return '\
+  <div>\
+    <header style="max-width:1100px;margin:0 auto;padding:clamp(20px,4vw,32px) clamp(20px,5vw,40px);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">\
+      <span class="serif-en" style="font-size:22px;font-weight:500;letter-spacing:0.06em;">Camellia</span>\
+      <div style="display:flex;align-items:center;gap:10px;">\
+        <button onclick="App.openPlusModal()" style="'+plusStyle+'">'+(isSubscribed?'Camellia+ 会員':'Camellia+')+'</button>\
+        <button onclick="App.openGarden()" style="font-family:inherit;background:#B0555E;border:1px solid #B0555E;color:#FFF6F2;font-size:12.5px;letter-spacing:0.1em;padding:8px 18px;border-radius:999px;cursor:pointer;">育てる</button>\
+        <button onclick="App.logout()" style="font-family:inherit;background:transparent;border:1px solid rgba(176,85,94,0.4);color:#7C4A50;font-size:12.5px;letter-spacing:0.1em;padding:8px 18px;border-radius:999px;cursor:pointer;">ログアウト</button>\
+      </div>\
+    </header>\
+    <section style="max-width:1100px;margin:0 auto;padding:0 clamp(20px,5vw,40px) clamp(32px,5vw,48px);">\
+      <div class="card" style="padding:clamp(28px,4vw,44px);display:flex;flex-direction:column;gap:8px;">\
+        <span class="serif-en" style="font-style:italic;font-size:14px;color:#B0555E;">Welcome back</span>\
+        <h1 style="margin:0;font-size:clamp(22px,3vw,30px);font-weight:600;letter-spacing:0.05em;">おかえりなさい、'+esc(user.nickname)+'さん</h1>\
+        <p style="margin:0;font-size:13.5px;color:#7C4A50;letter-spacing:0.02em;">もう一度、自分を好きになる。今日はどこから始めますか？</p>\
+      </div>\
+    </section>\
+    <section style="max-width:1100px;margin:0 auto;padding:0 clamp(20px,5vw,40px) clamp(60px,8vw,100px);">\
+      <h2 style="margin:0 0 18px;font-size:15px;font-weight:600;letter-spacing:0.12em;">Camelliaで、できること。</h2>\
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">'+cards+'</div>\
+    </section>\
+  </div>';
+}
+
+function renderServiceList() {
+  var cat = CATEGORY_DEFS.filter(function(c){return c.id===state.activeCategoryId;})[0] || CATEGORY_DEFS[0];
+  var items = cat.items.map(function(it) {
+    return '<div onclick="App.openItem(\''+it.id+'\')" style="cursor:pointer;background:#FFFFFF;border:1px solid rgba(176,85,94,0.18);border-radius:10px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;">\
+      <div style="display:flex;flex-direction:column;gap:4px;">\
+        <h3 style="margin:0;font-size:15px;font-weight:600;letter-spacing:0.04em;">'+esc(it.title)+'</h3>\
+        <p style="margin:0;font-size:12px;color:#7C4A50;">'+esc(it.teaser)+'</p>\
+      </div>\
+      <span style="color:#B0555E;font-size:15px;flex-shrink:0;">›</span>\
+    </div>';
+  }).join('');
+  return '\
+  <div>\
+    <header style="max-width:900px;margin:0 auto;padding:clamp(20px,4vw,32px) clamp(20px,5vw,40px);display:flex;align-items:center;gap:16px;">\
+      <button onclick="App.backToHome()" style="font-family:inherit;background:transparent;border:none;color:#7C4A50;font-size:13px;letter-spacing:0.06em;cursor:pointer;">← ホームへ</button>\
+    </header>\
+    <section style="max-width:900px;margin:0 auto;padding:0 clamp(20px,5vw,40px) clamp(60px,8vw,100px);">\
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:28px;">\
+        <span style="width:46px;height:46px;border-radius:50%;background:#FFF6F2;border:1px solid #B0555E;color:#B0555E;display:flex;align-items:center;justify-content:center;font-family:\'Cormorant Garamond\',serif;font-size:17px;">'+cat.num+'</span>\
+        <div><h1 style="margin:0;font-size:clamp(20px,3vw,26px);font-weight:600;letter-spacing:0.06em;">'+esc(cat.title)+'</h1>\
+        <p style="margin:4px 0 0;font-size:12.5px;color:#7C4A50;">'+esc(cat.desc)+'</p></div>\
+      </div>\
+      <div style="display:flex;flex-direction:column;gap:12px;">'+items+'</div>\
+    </section>\
+  </div>';
+}
+
+function renderServiceDetail() {
+  var cat = CATEGORY_DEFS.filter(function(c){return c.id===state.activeCategoryId;})[0] || CATEGORY_DEFS[0];
+  var item = cat.items.filter(function(it){return it.id===state.activeItemId;})[0] || cat.items[0];
+  return '\
+  <div>\
+    <header style="max-width:760px;margin:0 auto;padding:clamp(20px,4vw,32px) clamp(20px,5vw,40px);display:flex;align-items:center;gap:16px;">\
+      <button onclick="App.backToList()" style="font-family:inherit;background:transparent;border:none;color:#7C4A50;font-size:13px;letter-spacing:0.06em;cursor:pointer;">← '+esc(cat.title)+'へ戻る</button>\
+    </header>\
+    <section style="max-width:760px;margin:0 auto;padding:0 clamp(20px,5vw,40px) clamp(60px,8vw,100px);">\
+      <span class="serif-en" style="font-size:13px;letter-spacing:0.2em;color:#B0555E;text-transform:uppercase;">'+esc(cat.title)+'</span>\
+      <h1 style="margin:12px 0 24px;font-size:clamp(22px,3.4vw,32px);font-weight:600;letter-spacing:0.06em;line-height:1.6;">'+esc(item.title)+'</h1>\
+      <p style="margin:0;font-size:15px;line-height:2.1;letter-spacing:0.03em;color:#5E4247;">'+esc(item.body)+'</p>\
+    </section>\
+  </div>';
+}
+
+function renderGardenSlots() {
+  var capacity = state.garden.purchased ? 5 : 3;
+  var html = '';
+  for (var i = 0; i < 5; i++) {
+    if (i >= capacity) {
+      html += '<div style="position:relative;background:#FFFFFF;border:1px solid rgba(176,85,94,0.18);border-radius:14px;padding:24px 18px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;">\
+        <div style="width:64px;height:64px;border-radius:50%;border:1px dashed rgba(176,85,94,0.4);display:flex;align-items:center;justify-content:center;color:#B79399;font-size:20px;">🔒</div>\
+        <p style="margin:0;font-size:12px;color:#7C4A50;line-height:1.7;">追加のスロットは<br>課金で開放できます</p>\
+        <button onclick="App.purchaseSlot()" style="font-family:inherit;background:#B0555E;color:#FFF6F2;border:none;font-size:12px;letter-spacing:0.06em;padding:9px 16px;border-radius:999px;cursor:pointer;">課金して開放（デモ）</button>\
+      </div>';
+      continue;
+    }
+    var seed = state.garden.slots[i];
+    if (!seed) {
+      html += '<div style="position:relative;background:#FFFFFF;border:1px solid rgba(176,85,94,0.18);border-radius:14px;padding:24px 18px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;">\
+        <div style="width:64px;height:64px;border-radius:50%;border:1px dashed #B0555E;display:flex;align-items:center;justify-content:center;color:#B0555E;font-size:26px;">＋</div>\
+        <p style="margin:0;font-size:12.5px;color:#7C4A50;">新しい種を植える</p>\
+        <button onclick="App.openPlantModal('+i+')" style="font-family:inherit;background:transparent;color:#B0555E;border:1px solid #B0555E;font-size:12px;letter-spacing:0.06em;padding:9px 16px;border-radius:999px;cursor:pointer;">種をまく</button>\
+      </div>';
+      continue;
+    }
+    var species = FLOWER_SPECIES.filter(function(sp){return sp.id===seed.speciesId;})[0] || FLOWER_SPECIES[0];
+    var stageIdx = Math.min(seed.stage, 3);
+    var size = 40 + stageIdx * 17;
+    var isBloomed = seed.stage >= 3;
+    var bloomColor = isBloomed ? species.color : (stageIdx === 0 ? '#D9A9A9' : stageIdx === 1 ? '#C98A8E' : '#B0555E');
+    var toast = state.actionToast && state.actionToast.index === i ? state.actionToast : null;
+    var isRenaming = state.renamingIndex === i;
+    var name = seed.name || (species.name + 'の鉢');
+    var dots = '';
+    for (var d = 0; d < 3; d++) {
+      dots += '<span style="width:8px;height:8px;border-radius:50%;background:'+(d<stageIdx?'#B0555E':'rgba(176,85,94,0.2)')+';"></span>';
+    }
+    html += '<div style="position:relative;background:#FFFFFF;border:1px solid rgba(176,85,94,0.18);border-radius:14px;padding:24px 18px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;">' +
+      (toast ? '<div class="toast">'+toast.emoji+' '+esc(toast.text)+'</div>' : '') +
+      '<div style="font-size:30px;line-height:1;">'+STAGE_EMOJI[stageIdx]+'</div>' +
+      '<div style="width:'+size+'px;height:'+size+'px;border-radius:50%;background:'+bloomColor+';border:'+(isBloomed?'2px solid '+species.accent:'none')+';box-shadow:'+(isBloomed?'0 0 0 6px rgba(201,168,76,0.15)':'none')+';transition:all .3s ease;"></div>' +
+      (isRenaming
+        ? '<input id="rename-input" type="text" value="'+esc(state._pendingRename!=null?state._pendingRename:name)+'" onblur="App.confirmRename('+i+')" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" placeholder="鉢の名前" style="font-family:inherit;font-size:13px;text-align:center;padding:6px 10px;border-radius:6px;border:1px solid #B0555E;width:100%;box-sizing:border-box;">'
+        : '<div onclick="App.startRename('+i+')" style="cursor:pointer;display:flex;align-items:center;gap:6px;"><span style="font-size:14px;font-weight:600;letter-spacing:0.04em;">'+esc(name)+'</span><span style="font-size:11px;color:#B79399;">✎</span></div>') +
+      '<span style="font-size:11px;letter-spacing:0.06em;color:#B0555E;display:flex;align-items:center;gap:4px;"><span>'+esc(species.name)+'</span><span>・</span><span>'+STAGE_LABELS[stageIdx]+'</span></span>' +
+      '<div style="display:flex;gap:6px;">'+dots+'</div>' +
+      (isBloomed ? '<button onclick="App.giftSeed('+i+')" style="font-family:inherit;background:#C9A84C;color:#4A2430;border:none;font-size:12.5px;letter-spacing:0.06em;padding:10px 18px;border-radius:999px;cursor:pointer;font-weight:600;">🎁 花を受け取る</button>'
+        : '<div style="display:flex;gap:8px;"><button onclick="App.water('+i+')" style="font-family:inherit;background:#B0555E;color:#FFF6F2;border:none;font-size:12px;letter-spacing:0.04em;padding:9px 14px;border-radius:999px;cursor:pointer;">💧 水をあげる</button><button onclick="App.fertilize('+i+')" style="font-family:inherit;background:transparent;color:#B0555E;border:1px solid #B0555E;font-size:12px;letter-spacing:0.04em;padding:9px 14px;border-radius:999px;cursor:pointer;">🌱 肥料をあげる</button></div>') +
+      '</div>';
+  }
+  return html;
+}
+
+function renderGardenPlantView() {
+  var giftedHistory = state.garden.giftedHistory;
+  var historyHtml = giftedHistory.length ? '\
+    <div style="margin-top:40px;">\
+      <h2 style="margin:0 0 14px;font-size:14px;font-weight:600;letter-spacing:0.1em;">これまでに咲かせた花</h2>\
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">' +
+      giftedHistory.map(function(g) {
+        return '<div style="display:flex;align-items:center;gap:8px;background:#FFF6F2;border-radius:999px;padding:8px 16px;"><span style="width:10px;height:10px;border-radius:50%;background:#C9A84C;"></span><span style="font-size:12px;color:#7C4A50;">'+esc(g.name||'名もなき花')+'（'+g.date+'）</span></div>';
+      }).join('') +
+      '</div></div>' : '';
+  return '\
+  <section style="max-width:1000px;margin:0 auto;padding:0 clamp(20px,5vw,40px) clamp(60px,8vw,100px);">\
+    <div style="text-align:center;margin-bottom:20px;">\
+      <span class="serif-en" style="font-style:italic;font-size:14px;color:#B0555E;">Grow Yourself</span>\
+      <h1 style="margin:6px 0 0;font-size:clamp(20px,3vw,26px);font-weight:600;letter-spacing:0.06em;">Camelliaでの行動が、花になる。</h1>\
+    </div>\
+    <div style="max-width:620px;margin:0 auto 32px;background:#FFF6F2;border-radius:12px;padding:20px 24px;text-align:center;">\
+      <p style="margin:0;font-size:12.5px;line-height:2;color:#7C4A50;letter-spacing:0.02em;">Camelliaを通して貴女が一歩ずつ成長するたびに、貴女が蒔いた種も少しずつ育っていきます。種→芽→葉→花が咲く、の4段階。花が咲いたら、実物を貴女にプレゼントします。無理せず、自分のペースで育ててみてください。</p>\
+    </div>\
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:18px;">' + renderGardenSlots() + '</div>' +
+    historyHtml +
+    renderPlantingModal() +
+  '</section>';
+}
+
+function renderPlantingModal() {
+  if (!state.plantingModal) return '';
+  var modal = state.plantingModal;
+  var isSubscribed = !!(state.user && state.user.subscription);
+  var options = FLOWER_SPECIES.map(function(sp) {
+    var selected = modal.speciesId === sp.id;
+    var locked = sp.plus && !isSubscribed;
+    return '<div onclick="'+(locked?'':'App.selectSpecies(\''+sp.id+'\')')+'" style="cursor:'+(locked?'not-allowed':'pointer')+';display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;border:'+(selected?'1px solid #B0555E':'1px solid rgba(176,85,94,0.2)')+';background:'+(selected?'#FBE4E4':(locked?'#FBF7F1':'#FFFFFF'))+';opacity:'+(locked?0.7:1)+';">\
+      <span style="width:32px;height:32px;border-radius:50%;background:'+sp.color+';border:2px solid '+sp.accent+';flex-shrink:0;opacity:'+(locked?0.45:1)+';"></span>\
+      <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;flex:1;">\
+        <span style="font-size:13.5px;font-weight:600;">'+esc(sp.name)+'</span>\
+        <span style="font-size:11px;color:#7C4A50;">'+(locked?'Camellia+限定':esc(sp.desc))+'</span>\
+      </div>\
+      '+(locked?'<span style="font-size:15px;color:#B79399;">🔒</span>':'')+'\
+    </div>';
+  }).join('');
+  var canConfirm = !!modal.speciesId;
+  return '\
+  <div class="overlay">\
+    <div style="width:100%;max-width:420px;background:#FFFFFF;border-radius:14px;padding:clamp(24px,5vw,36px);display:flex;flex-direction:column;gap:20px;">\
+      <div><h2 style="margin:0;font-size:18px;font-weight:600;letter-spacing:0.06em;">どの種を植えますか？</h2>\
+      <p style="margin:6px 0 0;font-size:12px;color:#7C4A50;line-height:1.7;">一度決めた種類はあとから変更できません。育てたい花をじっくり選んでください。育った花は実物をプレゼントします。</p></div>\
+      <div style="display:flex;flex-direction:column;gap:10px;">'+options+'</div>\
+      '+(isSubscribed?'<div style="text-align:center;"><span style="font-size:11px;color:#7C4A50;">Camellia+ 会員です</span></div>':'')+'\
+      <div style="display:flex;flex-direction:column;gap:8px;">\
+        <label style="font-size:12px;letter-spacing:0.06em;color:#7C4A50;">鉢の名前（あとから変更できます）</label>\
+        <input id="plant-name-input" type="text" placeholder="例：わたしの椿" value="'+esc(modal.name||'')+'" class="field" style="padding:12px 14px;">\
+      </div>\
+      <div style="display:flex;gap:10px;">\
+        <button onclick="App.closePlantModal()" class="btn-ghost-pill" style="flex:1;">キャンセル</button>\
+        <button onclick="App.confirmPlant()" style="flex:1;font-family:inherit;border:none;font-size:13px;padding:12px;border-radius:999px;cursor:'+(canConfirm?'pointer':'not-allowed')+';background:'+(canConfirm?'#B0555E':'rgba(176,85,94,0.3)')+';color:#FFF6F2;">この種を植える</button>\
+      </div>\
+    </div>\
+  </div>';
+}
+
+function renderGardenLogView() {
+  var totalActions = state.garden.contentDates.length;
+  var bloomedCount = state.garden.giftedHistory.length;
+  var streakDays = computeStreak(state.garden.loginDates);
+  var calDays = '';
+  for (var i = 30; i >= 0; i--) {
+    var d = new Date(); d.setDate(d.getDate() - i);
+    var dStr = d.toISOString().slice(0, 10);
+    var loggedIn = state.garden.loginDates.indexOf(dStr) !== -1;
+    var didContent = state.garden.contentDates.indexOf(dStr) !== -1;
+    var bg = didContent ? '#B0555E' : (loggedIn ? '#EFC9C4' : 'rgba(176,85,94,0.12)');
+    calDays += '<div style="width:100%;aspect-ratio:1;border-radius:4px;background:'+bg+';" title="'+dStr+'"></div>';
+  }
+  return '\
+  <section style="max-width:1000px;margin:0 auto;padding:0 clamp(20px,5vw,40px) clamp(60px,8vw,100px);">\
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:32px;">\
+      <div style="background:#FFF6F2;border-radius:12px;padding:22px;text-align:center;"><span class="serif-en" style="font-size:32px;color:#B0555E;">'+totalActions+'</span><p style="margin:6px 0 0;font-size:12px;color:#7C4A50;letter-spacing:0.06em;">総アクション数</p></div>\
+      <div style="background:#FFF6F2;border-radius:12px;padding:22px;text-align:center;"><span class="serif-en" style="font-size:32px;color:#B0555E;">'+streakDays+'</span><p style="margin:6px 0 0;font-size:12px;color:#7C4A50;letter-spacing:0.06em;">連続記録日数</p></div>\
+      <div style="background:#FFF6F2;border-radius:12px;padding:22px;text-align:center;"><span class="serif-en" style="font-size:32px;color:#B0555E;">'+bloomedCount+'</span><p style="margin:6px 0 0;font-size:12px;color:#7C4A50;letter-spacing:0.06em;">咲かせた花</p></div>\
+    </div>\
+    <h2 style="margin:0 0 14px;font-size:14px;font-weight:600;letter-spacing:0.1em;">直近31日間の記録</h2>\
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(24px,1fr));gap:6px;max-width:560px;">'+calDays+'</div>\
+  </section>';
+}
+
+function renderGarden() {
+  var plantTabStyle = 'font-family:inherit;border:none;font-size:12px;letter-spacing:0.06em;padding:8px 16px;border-radius:999px;cursor:pointer;background:'+(state.gardenView==='plant'?'#B0555E':'transparent')+';color:'+(state.gardenView==='plant'?'#FFF6F2':'#7C4A50')+';';
+  var logTabStyle = 'font-family:inherit;border:none;font-size:12px;letter-spacing:0.06em;padding:8px 16px;border-radius:999px;cursor:pointer;background:'+(state.gardenView==='log'?'#B0555E':'transparent')+';color:'+(state.gardenView==='log'?'#FFF6F2':'#7C4A50')+';';
+  return '\
+  <div>\
+    <header style="max-width:1000px;margin:0 auto;padding:clamp(20px,4vw,32px) clamp(20px,5vw,40px);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">\
+      <button onclick="App.backToHome()" style="font-family:inherit;background:transparent;border:none;color:#7C4A50;font-size:13px;letter-spacing:0.06em;cursor:pointer;">← ホームへ</button>\
+      <div style="display:flex;background:#FFF6F2;border-radius:999px;padding:4px;">\
+        <button onclick="App.showPlantView()" style="'+plantTabStyle+'">植物ビュー</button>\
+        <button onclick="App.showLogView()" style="'+logTabStyle+'">数値・記録</button>\
+      </div>\
+    </header>\
+    ' + (state.gardenView === 'plant' ? renderGardenPlantView() : renderGardenLogView()) + '\
+  </div>';
+}
+
+function renderPlusModal() {
+  if (!state.plusModalOpen) return '';
+  var isSubscribed = !!(state.user && state.user.subscription);
+  var body = isSubscribed ? '\
+    <div style="background:#FBE4E4;border-radius:10px;padding:16px;text-align:center;"><p style="margin:0;font-size:13px;color:#7C4A50;line-height:1.8;">すでにCamellia+会員です。ひまわり・バラの種が選べます。</p></div>\
+    <button onclick="App.closePlusModal()" class="btn-ghost-pill">閉じる</button>' : '\
+    <div style="display:flex;flex-direction:column;gap:10px;">\
+      <div style="display:flex;align-items:flex-start;gap:10px;"><span style="color:#C9A84C;font-size:14px;">✓</span><span style="font-size:13px;color:#5E4247;line-height:1.8;">育てる限定の種「ひまわり」「バラ」が選択可能に</span></div>\
+      <div style="display:flex;align-items:flex-start;gap:10px;"><span style="color:#C9A84C;font-size:14px;">✓</span><span style="font-size:13px;color:#5E4247;line-height:1.8;">育てるスロットの追加課金開放と併用可能</span></div>\
+    </div>\
+    <div style="background:#FFF6F2;border-radius:12px;padding:18px 20px;display:flex;align-items:baseline;justify-content:space-between;"><span style="font-size:13px;color:#7C4A50;letter-spacing:0.04em;">月額プラン</span><span class="serif-en" style="font-size:24px;display:flex;align-items:baseline;gap:4px;"><span>¥500</span><span style="font-size:12px;color:#7C4A50;">/ 月</span></span></div>\
+    <div style="display:flex;gap:10px;">\
+      <button onclick="App.closePlusModal()" class="btn-ghost-pill" style="flex:1;">キャンセル</button>\
+      <button onclick="App.subscribePlus()" style="flex:1;font-family:inherit;background:#C9A84C;border:none;color:#4A2430;font-size:13px;font-weight:600;padding:12px;border-radius:999px;cursor:pointer;">Camellia+に加入（デモ）</button>\
+    </div>';
+  return '\
+  <div class="overlay" style="z-index:60;">\
+    <div style="width:100%;max-width:420px;background:#FFFFFF;border-radius:14px;padding:clamp(28px,5vw,40px);display:flex;flex-direction:column;gap:22px;">\
+      <div style="text-align:center;display:flex;flex-direction:column;gap:8px;"><span class="serif-en" style="font-size:20px;color:#C9A84C;letter-spacing:0.1em;">Camellia +</span><h2 style="margin:0;font-size:18px;font-weight:600;letter-spacing:0.04em;">できることを、もっと広げる</h2></div>\
+      ' + body + '\
+    </div>\
+  </div>';
+}
+
+// ══════════════════════════
+// MASTER RENDER
+// ══════════════════════════
+function render() {
+  // preserve in-progress text field values across re-renders triggered by
+  // other actions on the same screen (e.g. toggling a category while typing)
+  var nickEl = document.getElementById('onb-nickname');
+  if (nickEl) state._pendingNickname = nickEl.value;
+  var plantNameEl = document.getElementById('plant-name-input');
+  if (plantNameEl && state.plantingModal) state.plantingModal.name = plantNameEl.value;
+  var renameEl = document.getElementById('rename-input');
+  if (renameEl && state.renamingIndex !== null) state._pendingRename = renameEl.value;
+
+  var screenHtml;
+  switch (state.screen) {
+    case 'login': screenHtml = renderLogin(); break;
+    case 'register': screenHtml = renderRegister(); break;
+    case 'onboarding': screenHtml = renderOnboarding(); break;
+    case 'home': screenHtml = renderHome(); break;
+    case 'service-list': screenHtml = renderServiceList(); break;
+    case 'service-detail': screenHtml = renderServiceDetail(); break;
+    case 'garden': screenHtml = renderGarden(); break;
+    default: screenHtml = renderLogin();
+  }
+  document.getElementById('app').innerHTML =
+    '<div style="font-family:\'Shippori Mincho\',\'Hiragino Mincho ProN\',serif;color:#4A2430;background:#F9E9E6;min-height:100vh;box-sizing:border-box;">' +
+    screenHtml + renderPlusModal() +
+    '</div>';
+}
+
+loadState();
+render();
+if (state.user) recordLogin();
+})();
+</script>
+</body>
+</html>
