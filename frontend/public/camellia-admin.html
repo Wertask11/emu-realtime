@@ -54,10 +54,16 @@ button{cursor:pointer}
 .check input{width:20px;height:20px}
 .modal-acts{display:grid;grid-template-columns:1fr 1.4fr;gap:10px;margin-top:20px}
 .modal-acts .btn{min-height:48px}
+.ops{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
+.ops b{font-size:14px}
+.ops p{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.ops-acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2E2426;color:#fff;border-radius:999px;padding:12px 22px;font-size:13px;z-index:40;display:none;max-width:90vw;text-align:center}
 .toast.show{display:block}
 @media(max-width:640px){
   .wrap{padding:16px 12px max(60px,env(safe-area-inset-bottom))}
+  .ops{display:block}
+  .ops-acts{margin:12px 0 0;display:grid;grid-template-columns:1fr}
   .row{grid-template-columns:1fr}
   .acts{justify-content:flex-start}
   .modal-acts{grid-template-columns:1fr}
@@ -72,6 +78,21 @@ button{cursor:pointer}
   <div class="right">
     <button class="btn" id="btnReload" hidden>再読み込み</button>
     <button class="btn primary" id="btnNew" hidden>＋ 新規記事</button>
+  </div>
+</div>
+
+<div class="wrap" id="opsWrap" hidden>
+  <div class="ops">
+    <div>
+      <b>データ管理</b>
+      <p>保存先のファイルを直接見られない環境でも、ここから操作できます。</p>
+    </div>
+    <div class="ops-acts">
+      <button class="btn" id="btnSeed">記事を初期投入</button>
+      <button class="btn" id="btnExport">バックアップを保存</button>
+      <button class="btn" id="btnImport">バックアップから復元</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+    </div>
   </div>
 </div>
 
@@ -264,6 +285,48 @@ $("#list").addEventListener("click", async (e) => {
   catch (err) { toast(err.message); }
 });
 
+// ── データ管理（シェルが使えない環境でも操作できるようにする） ──
+$("#btnSeed").addEventListener("click", async () => {
+  if (!confirm("camellia-app.html に元から入っている記事をDBへ取り込みます。\n同じタイトルの記事は追加されないため、何度実行しても重複しません。")) return;
+  $("#btnSeed").disabled = true;
+  try {
+    const r = await api("/api/camellia/admin/seed", { method: "POST" });
+    await load();
+    toast(`取り込み完了：追加 ${r.added}件 / 既存 ${r.skipped}件（合計 ${r.total}件）`);
+  } catch (e) { toast(e.message); }
+  finally { $("#btnSeed").disabled = false; }
+});
+
+$("#btnExport").addEventListener("click", async () => {
+  $("#btnExport").disabled = true;
+  try {
+    const dump = await api("/api/camellia/admin/export");
+    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `camellia-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast("バックアップを保存しました");
+  } catch (e) { toast(e.message); }
+  finally { $("#btnExport").disabled = false; }
+});
+
+$("#btnImport").addEventListener("click", () => $("#importFile").click());
+$("#importFile").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  if (!confirm(`「${file.name}」から復元します。\n既にあるデータは上書きせず、無いものだけ追加します。`)) return;
+  try {
+    const dump = JSON.parse(await file.text());
+    const r = await api("/api/camellia/admin/import", { method: "POST", body: JSON.stringify(dump) });
+    await load();
+    const added = Object.values(r.report).reduce((n, x) => n + x.added, 0);
+    toast(`復元しました：${added}件を追加`);
+  } catch (err) { toast("復元に失敗しました：" + err.message); }
+});
+
 $("#btnNew").addEventListener("click", () => openEditor(null));
 $("#btnCancel").addEventListener("click", closeEditor);
 $("#btnReload").addEventListener("click", () => load().then(() => toast("最新にしました")).catch((e) => toast(e.message)));
@@ -284,6 +347,7 @@ onAuthStateChanged(auth, async (user) => {
     const s = await api("/api/camellia/admin/stats");
     $("#gate").hidden = true;
     $("#admin").hidden = false;
+    $("#opsWrap").hidden = false;
     $("#btnNew").hidden = false;
     $("#btnReload").hidden = false;
     renderStats(s);

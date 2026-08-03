@@ -2459,6 +2459,77 @@ app.get("/api/camellia/admin/stats", async (req, res) => {
   }
 });
 
+// ── 管理: 記事の初期投入（camellia-app.html のベタ書き記事を取り込む） ──
+// Renderのシェルは有料機能のため、seedスクリプトを管理画面から実行できるようにする。
+// 同名タイトルはスキップするので、何度押しても重複しない。
+app.post("/api/camellia/admin/seed", async (req, res) => {
+  try {
+    if (!await camelliaRequireOwner(req, res)) return;
+    const { importLegacyContents } = require("./camellia-seed");
+    const result = await importLegacyContents(camelliaDB);
+    return res.json(result);
+  } catch (e) {
+    console.error("camellia/admin seed error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── 管理: 全データの書き出し（バックアップ・中身の確認用） ──
+// 保存先のJSONを直接見られない環境でも、ここから丸ごと取得できる。
+app.get("/api/camellia/admin/export", async (req, res) => {
+  try {
+    if (!await camelliaRequireOwner(req, res)) return;
+    const dump = {
+      exportedAt: new Date().toISOString(),
+      dir: camelliaDB.stats().dir,
+      tables: {
+        camellia_contents: CAM_CONTENTS().all(),
+        camellia_users: CAM_USERS().all(),
+        camellia_garden: CAM_GARDEN().all(),
+        camellia_activity: CAM_ACTIVITY().all(),
+      },
+    };
+    res.setHeader("Content-Disposition",
+      `attachment; filename="camellia-backup-${new Date().toISOString().slice(0, 10)}.json"`);
+    return res.json(dump);
+  } catch (e) {
+    console.error("camellia/admin export error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── 管理: 書き出したデータの復元（取り込み） ──
+// 保存先を移し替えるときや、消えてしまったときに使う。
+// 既存idはスキップし、上書きはしない（誤操作でデータを失わないため）。
+app.post("/api/camellia/admin/import", async (req, res) => {
+  try {
+    if (!await camelliaRequireOwner(req, res)) return;
+    const tables = (req.body && req.body.tables) || {};
+    const allowed = {
+      camellia_contents: CAM_CONTENTS, camellia_users: CAM_USERS,
+      camellia_garden: CAM_GARDEN, camellia_activity: CAM_ACTIVITY,
+    };
+    const report = {};
+    for (const [name, getTable] of Object.entries(allowed)) {
+      const rows = Array.isArray(tables[name]) ? tables[name] : [];
+      const t = getTable();
+      let added = 0, skipped = 0;
+      for (const row of rows) {
+        if (!row || !row.id) { skipped++; continue; }
+        if (t.findById(row.id)) { skipped++; continue; }
+        await t.insert(row);
+        added++;
+      }
+      report[name] = { added, skipped };
+    }
+    await camelliaDB.flushed();
+    return res.json({ ok: true, report });
+  } catch (e) {
+    console.error("camellia/admin import error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // =====================
 // Start server
 // =====================

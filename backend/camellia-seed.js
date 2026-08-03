@@ -35,8 +35,12 @@ function extractCategoryDefs() {
   return eval(literal); // eslint-disable-line no-eval
 }
 
-async function main() {
-  const db = getCamelliaDB();
+/**
+ * 記事を取り込む本体。CLIからもAPI(管理画面)からも呼べるよう関数として公開する。
+ * 同名タイトルはスキップするため、何度実行しても重複しない。
+ */
+async function importLegacyContents(dbInstance) {
+  const db = dbInstance || getCamelliaDB();
   const contents = db.table("camellia_contents");
   const defs = extractCategoryDefs();
 
@@ -60,13 +64,32 @@ async function main() {
   }
   await db.flushed();
 
-  console.log("🌸 Camellia 記事の取り込み完了");
-  console.log("   追加:", added, "件 / スキップ(既存):", skipped, "件");
-  console.log("   保存先:", db.stats().dir);
-  console.log("   合計:", contents.count(), "件（公開:", contents.count({ published: true }), "件）");
-  const byCat = {};
-  contents.all().forEach((r) => { byCat[r.categoryTitle || r.category] = (byCat[r.categoryTitle || r.category] || 0) + 1; });
-  console.log("   カテゴリ別:", JSON.stringify(byCat, null, 0));
+  const byCategory = {};
+  contents.all().forEach((r) => {
+    const key = r.categoryTitle || r.category;
+    byCategory[key] = (byCategory[key] || 0) + 1;
+  });
+
+  return {
+    added, skipped,
+    total: contents.count(),
+    published: contents.count({ published: true }),
+    dir: db.stats().dir,
+    byCategory,
+  };
 }
 
-main().catch((e) => { console.error("❌ 取り込み失敗:", e); process.exit(1); });
+module.exports = { importLegacyContents, extractCategoryDefs };
+
+// CLIとして直接実行されたときだけ動かす（requireされたときは実行しない）
+if (require.main === module) {
+  importLegacyContents()
+    .then((r) => {
+      console.log("🌸 Camellia 記事の取り込み完了");
+      console.log("   追加:", r.added, "件 / スキップ(既存):", r.skipped, "件");
+      console.log("   保存先:", r.dir);
+      console.log("   合計:", r.total, "件（公開:", r.published, "件）");
+      console.log("   カテゴリ別:", JSON.stringify(r.byCategory));
+    })
+    .catch((e) => { console.error("❌ 取り込み失敗:", e); process.exit(1); });
+}
