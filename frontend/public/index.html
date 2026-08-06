@@ -2689,6 +2689,36 @@ body.paypay-mode #pp-post-fab {
   gap:18px; margin-top:18px;
 }
 .eth-profile-summary { display:grid; gap:14px; align-content:start; }
+
+/* ── 価値プロフィール内のウォレット（旧マイウォレットの内容をここへ集約） ── */
+.eth-profile-main { display:grid; gap:18px; align-content:start; min-width:0; }
+.eth-wallet-card { display:grid; gap:14px; }
+.eth-wallet-badges { display:flex; flex-wrap:wrap; gap:7px; }
+.eth-wallet-badges:empty { display:none; }
+.eth-wallet-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  background:#fff2e5; border:1px solid #f3d3ae; color:#9c5100;
+  border-radius:999px; padding:4px 11px; font-size:11px; font-weight:700;
+}
+.eth-wallet-badge.empty { background:#f5f5f5; border-color:#e9e9e9; color:#999; font-weight:400; }
+.eth-wallet-balance {
+  background:linear-gradient(135deg,#fff7ef,#fff2e5);
+  border:1px solid #f3d3ae; border-radius:14px; padding:18px 20px;
+}
+.eth-wallet-label { color:#9c5100; font-size:11px; font-weight:800; letter-spacing:.06em; }
+.eth-wallet-amount { display:flex; align-items:baseline; gap:7px; margin-top:6px; }
+.eth-wallet-amount strong { font-size:40px; line-height:1.1; color:#25211d; }
+.eth-wallet-amount span { color:#9c5100; font-size:14px; font-weight:700; }
+.eth-wallet-pending { margin:9px 0 0; color:#8a7f74; font-size:11.5px; line-height:1.7; }
+.eth-wallet-pending b { color:#b85f00; }
+.eth-wallet-actions { display:flex; gap:9px; flex-wrap:wrap; }
+.eth-wallet-actions .eth-btn { flex:1; min-width:140px; min-height:44px; }
+@media (max-width:700px) {
+  .eth-wallet-amount strong { font-size:32px; }
+  .eth-wallet-balance { padding:15px 16px; }
+  .eth-wallet-actions .eth-btn { flex:1 1 100%; }
+}
+
 .eth-profile-summary h2 { margin:0; font-size:20px; }
 .eth-profile-summary > p { margin:0; color:#777; font-size:12px; line-height:1.7; }
 .eth-metric-list { display:grid; }
@@ -4125,12 +4155,32 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <div class="eth-metric"><span>学びへ昇華</span><strong id="emuElevatedCount">記録なし</strong></div>
       </div>
     </aside>
-    <div class="eth-card">
-      <div class="eth-section-head">
-        <div><h3>残った価値</h3><p>投稿数ではなく、他者への影響を表示します。</p></div>
-      </div>
-      <div class="eth-timeline" id="emuValueTimeline">
-        <div class="eth-loading">あなたの投稿と反応を読み込んでいます...</div>
+    <div class="eth-profile-main">
+      <!-- ウォレット（旧マイウォレットの内容を、モーダルではなくこの画面に常時表示する）
+           左が「渡した価値（実績）」、ここが「受け取った対価（残高）」で対になる。 -->
+      <section class="eth-card eth-wallet-card">
+        <div class="eth-section-head">
+          <div><h3>ウォレット</h3><p>渡した価値が、Emuerとして返ってきます。</p></div>
+        </div>
+        <div class="eth-wallet-badges" id="emuWalletBadges"></div>
+        <div class="eth-wallet-balance">
+          <span class="eth-wallet-label">使えるEmuer</span>
+          <div class="eth-wallet-amount"><strong id="emuWalletBalance">0</strong><span>Emuer</span></div>
+          <p class="eth-wallet-pending">未確定 <b id="emuWalletPending">0</b> Emuer（変換すると使えるようになります）</p>
+        </div>
+        <div class="eth-wallet-actions">
+          <button type="button" class="eth-btn primary" onclick="emuWalletConvert()">Emuerに変換</button>
+          <button type="button" class="eth-btn" onclick="emuWalletExchange()">取引所を見る</button>
+        </div>
+      </section>
+
+      <div class="eth-card">
+        <div class="eth-section-head">
+          <div><h3>残った価値</h3><p>投稿数ではなく、他者への影響を表示します。</p></div>
+        </div>
+        <div class="eth-timeline" id="emuValueTimeline">
+          <div class="eth-loading">あなたの投稿と反応を読み込んでいます...</div>
+        </div>
       </div>
     </div>
   </section>
@@ -14959,7 +15009,62 @@ function _emuValueEvent(title, detail) {
   return row;
 }
 
+/* ══════════════════════════════════════════
+   価値プロフィール内のウォレット
+   旧マイウォレット(全画面モーダル)の内容を、この画面に常時表示する。
+   残高は既存の _emuReadTokenBalance() を使うため読み取りは増やさない。
+   変換・取引所は既存ボタンをそのまま呼ぶので挙動は変わらない。
+══════════════════════════════════════════ */
+async function loadEmuWalletCard() {
+  const balanceEl = document.getElementById('emuWalletBalance');
+  if (!balanceEl) return;
+  const pendingEl = document.getElementById('emuWalletPending');
+  const badgesEl  = document.getElementById('emuWalletBadges');
+
+  // 残高（今日のEmuと同じ取得経路）
+  try {
+    const balance = await _emuReadTokenBalance();
+    balanceEl.textContent = Number(balance || 0).toLocaleString('ja-JP');
+  } catch (e) { balanceEl.textContent = '0'; }
+
+  // 未確定分
+  if (pendingEl) {
+    const p = Number(pendingEmuer) || 0;
+    pendingEl.textContent = (Math.round(p * 10) / 10).toLocaleString('ja-JP');
+  }
+
+  // 称号バッジ
+  if (badgesEl) {
+    const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
+    if (!addr) { badgesEl.innerHTML = ''; return; }
+    try {
+      const badges = await getUserBadges(addr);
+      if (!badges || !badges.length) {
+        badgesEl.innerHTML = '<span class="eth-wallet-badge empty">称号はまだありません</span>';
+      } else {
+        badgesEl.innerHTML = badges.map(function (id) {
+          const def = (typeof BADGE_DEFINITIONS !== 'undefined' && BADGE_DEFINITIONS[id]) || null;
+          return '<span class="eth-wallet-badge">' + escapeHtml(def ? def.label : id) + '</span>';
+        }).join('');
+      }
+    } catch (e) { badgesEl.innerHTML = ''; }
+  }
+}
+
+/* 変換・取引所は既存の処理をそのまま使う（挙動を変えないため） */
+function emuWalletConvert() {
+  const btn = document.getElementById('convertButton');
+  if (btn) btn.click();
+  else alert('変換機能を利用できません。');
+}
+function emuWalletExchange() {
+  const btn = document.getElementById('exchangeBtn');
+  if (btn) btn.click();
+  else alert('取引所を利用できません。');
+}
+
 async function loadEmuValueProfile() {
+  loadEmuWalletCard();   // ウォレット表示も同時に更新
   const timeline = document.getElementById('emuValueTimeline');
   if (!timeline) return;
   timeline.innerHTML = '<div class="eth-loading">あなたの投稿と反応を読み込んでいます...</div>';
