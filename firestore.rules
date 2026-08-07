@@ -53,6 +53,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /ches_wallets/{address} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && address.lower() == wallet().lower();
+      allow read, update, delete: if false;
+    }
+
     match /posts/{postId} {
       allow read: if true;
 
@@ -65,8 +72,11 @@ service cloud.firestore {
       // 投稿者本人による本文編集。反応数・反応者一覧・投稿者は変更不可。
       allow update: if isMyWallet(resource.data.address) && changedOnly([
         'title', 'body', 'tags', 'userType', 'userId', 'updatedAt', 'imageUrl',
-        'displayName', 'acceptedChangeCount', 'lastChangedAt'
+        'displayName'
       ])
+      || (isMyWallet(resource.data.address)
+        && changedOnly(['acceptedChangeCount', 'lastChangedAt'])
+        && request.resource.data.get('acceptedChangeCount', 0) == resource.data.get('acceptedChangeCount', 0) + 1)
       // Good は、認証ユーザー自身のウォレットを1件追加し、件数を1増やす場合だけ許可。
       || (hasAccount()
         && !isMyWallet(resource.data.address)
@@ -94,13 +104,150 @@ service cloud.firestore {
       allow read, update, delete: if isMyWallet(resource.data.owner);
     }
 
+    match /post_good_impacts/{impactId} {
+      allow read: if signedIn();
+      allow create: if isMyWallet(request.resource.data.fromAddress)
+        && request.resource.data.postId is string;
+      allow update, delete: if false;
+    }
+
+    match /post_changes/{changeId} {
+      allow read: if signedIn();
+      allow create: if isMyWallet(request.resource.data.fromAddress)
+        && request.resource.data.postId is string
+        && request.resource.data.get('accepted', false) == false;
+      allow update: if signedIn()
+        && get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.address.lower() == wallet().lower()
+        && resource.data.status == 'pending'
+        && changedOnly(['status', 'acceptedAt', 'acceptedBy'])
+        && request.resource.data.status == 'accepted';
+      allow delete: if false;
+    }
+
+    match /knowledge_requests/{requestId} {
+      allow read: if signedIn();
+      allow create: if isMyWallet(request.resource.data.author)
+        && request.resource.data.status == 'open'
+        && request.resource.data.answerCount == 0
+        && request.resource.data.settlementStatus == 'uncommitted';
+      allow update: if signedIn() && (
+        (isMyWallet(resource.data.author) && changedOnly([
+          'status', 'acceptedAnswerId', 'acceptedAnswerAuthor', 'awardedAt', 'settlementStatus'
+        ])
+          && request.resource.data.status == 'awarded'
+          && request.resource.data.settlementStatus == 'pending_distribution'
+          && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.requestId == requestId
+          && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.answerAuthor == request.resource.data.acceptedAnswerAuthor)
+        || (changedOnly(['answerCount'])
+          && request.resource.data.answerCount == resource.data.answerCount + 1)
+      );
+      allow delete: if isMyWallet(resource.data.author) && resource.data.status == 'open';
+    }
+
+    match /knowledge_answers/{answerId} {
+      allow read: if signedIn();
+      allow create: if isMyWallet(request.resource.data.answerAuthor)
+        && request.resource.data.status == 'submitted'
+        && get(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.author == request.resource.data.requestAuthor;
+      allow update: if signedIn()
+        && isMyWallet(get(/databases/$(database)/documents/knowledge_requests/$(resource.data.requestId)).data.author)
+        && changedOnly(['status', 'acceptedAt'])
+        && request.resource.data.status == 'accepted';
+      allow delete: if false;
+    }
+
+    match /emuer_bounty_claims/{claimId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && isMyWallet(request.resource.data.requestAuthor)
+        && request.resource.data.status == 'pending'
+        && getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.status == 'awarded'
+        && getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.settlementStatus == 'pending_distribution'
+        && request.resource.data.requestAuthor == getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.author
+        && request.resource.data.recipient == getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.acceptedAnswerAuthor
+        && request.resource.data.amount == getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.bounty;
+      allow update, delete: if false;
+    }
+
+    match /ichinichi_days/{document=**} {
+      allow read, write: if false;
+    }
+    match /ichinichi_goods/{document=**} {
+      allow read, write: if false;
+    }
+    match /ichinichi_reports/{document=**} {
+      allow read, write: if false;
+    }
+    match /ichinichi_adopts/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /scheduled_posts/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /sp_notifications/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /room1_contents/{document=**} {
+      allow read, write: if false;
+    }
+    match /room1_submissions/{document=**} {
+      allow read, write: if false;
+    }
+    match /contact_submissions/{document=**} {
+      allow read, write: if false;
+    }
+    match /user_profiles/{address} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /emuer_rate/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /airdrop_registrations/{document=**} {
+      allow read, write: if false;
+    }
+    match /secret_door_rewards/{document=**} {
+      allow read, write: if false;
+    }
+    match /monthly_distributions/{document=**} {
+      allow read, write: if false;
+    }
+    match /bonus_rewards/{document=**} {
+      allow read, write: if false;
+    }
+
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
     match /{coll}/{document=**} {
       allow read, write: if coll != 'emuer_offchain'
         && coll != 'emuer_offchain_ledger'
         && coll != 'ches_accounts'
+        && coll != 'ches_wallets'
         && coll != 'posts'
-        && coll != 'knowledge_drafts';
+        && coll != 'knowledge_drafts'
+        && coll != 'post_good_impacts'
+        && coll != 'post_changes'
+        && coll != 'knowledge_requests'
+        && coll != 'knowledge_answers'
+        && coll != 'emuer_bounty_claims'
+        && coll != 'ichinichi_days'
+        && coll != 'ichinichi_goods'
+        && coll != 'ichinichi_reports'
+        && coll != 'ichinichi_adopts'
+        && coll != 'scheduled_posts'
+        && coll != 'sp_notifications'
+        && coll != 'room1_contents'
+        && coll != 'room1_submissions'
+        && coll != 'contact_submissions'
+        && coll != 'user_profiles'
+        && coll != 'emuer_rate'
+        && coll != 'airdrop_registrations'
+        && coll != 'secret_door_rewards'
+        && coll != 'monthly_distributions'
+        && coll != 'bonus_rewards';
     }
   }
 }

@@ -14,6 +14,7 @@ const cron = require("node-cron");
 // App / Server
 // =====================
 const app = express();
+app.set("trust proxy", 1);
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -28,6 +29,11 @@ const io = new Server(server, {
 // Middleware
 // =====================
 app.use(cors());
+app.use((req, res, next) => {
+  const contentLength = Number(req.headers["content-length"] || 0);
+  if (contentLength > 8 * 1024 * 1024) return res.status(413).json({ error: "PAYLOAD_TOO_LARGE" });
+  next();
+});
 app.use(express.json({ limit: '10mb' }));
 app.use(
   express.static(
@@ -39,6 +45,7 @@ app.use(
 // Firebase Admin 初期化
 // =====================
 let db = null;
+let firebaseAdmin = null;
 const initFirestore = () => {
   try {
     const admin = require("firebase-admin");
@@ -49,6 +56,7 @@ const initFirestore = () => {
         storageBucket: "emusch-2a111.firebasestorage.app"
       });
     }
+    firebaseAdmin = admin;
     db = admin.firestore();
     console.log("✅ Firestore + Storage 初期化完了");
   } catch (e) {
@@ -56,6 +64,65 @@ const initFirestore = () => {
   }
 };
 initFirestore();
+
+function requireAdmin(req, res, next) {
+  const expected = process.env.ADMIN_SECRET_KEY;
+  if (!expected || req.headers["x-admin-key"] !== expected) return res.status(403).json({ error: "UNAUTHORIZED" });
+  next();
+}
+
+const identityAccountCache = new Map();
+const IDENTITY_CACHE_MS = 5 * 60 * 1000;
+async function requireFirebaseUser(req, res, next) {
+  try {
+    if (!firebaseAdmin || !db) return res.status(503).json({ error: "AUTH_UNAVAILABLE" });
+    const header = String(req.headers.authorization || "");
+    if (!header.startsWith("Bearer ")) return res.status(401).json({ error: "AUTH_REQUIRED" });
+    const decoded = await firebaseAdmin.auth().verifyIdToken(header.slice(7));
+    const cached = identityAccountCache.get(decoded.uid);
+    let accountData = cached && cached.expiresAt > Date.now() ? cached.data : null;
+    if (!accountData) {
+      const account = await db.collection("ches_accounts").doc(decoded.uid).get();
+      if (!account.exists) return res.status(403).json({ error: "ACCOUNT_NOT_FOUND" });
+      accountData = account.data();
+      identityAccountCache.set(decoded.uid, { data: accountData, expiresAt: Date.now() + IDENTITY_CACHE_MS });
+    }
+    const walletAddress = String(accountData.walletAddress || "").toLowerCase();
+    if (!walletAddress) return res.status(403).json({ error: "WALLET_NOT_FOUND" });
+    req.identity = { uid: decoded.uid, walletAddress, account: accountData };
+    next();
+  } catch (_) {
+    return res.status(401).json({ error: "INVALID_AUTH_TOKEN" });
+  }
+}
+
+function requireOwnAddress(req, res, next) {
+  const claimed = String(req.body?.address || req.query?.address || "").toLowerCase().trim();
+  if (claimed && claimed !== req.identity.walletAddress) return res.status(403).json({ error: "ADDRESS_MISMATCH" });
+  req.body = req.body || {};
+  req.body.address = req.identity.walletAddress;
+  next();
+}
+
+const rateBuckets = new Map();
+function rateLimit({ windowMs, max, key }) {
+  return (req, res, next) => {
+    const bucketKey = `${key}:${req.identity?.uid || req.ip || "unknown"}`;
+    const now = Date.now();
+    if (rateBuckets.size > 5000) {
+      for (const [storedKey, stored] of rateBuckets) if (stored.resetAt <= now) rateBuckets.delete(storedKey);
+    }
+    let bucket = rateBuckets.get(bucketKey);
+    if (!bucket || bucket.resetAt <= now) bucket = { count: 0, resetAt: now + windowMs };
+    bucket.count += 1;
+    rateBuckets.set(bucketKey, bucket);
+    if (bucket.count > max) return res.status(429).json({ error: "RATE_LIMITED", retryAfterMs: bucket.resetAt - now });
+    next();
+  };
+}
+
+const uploadRateLimit = rateLimit({ windowMs: 60_000, max: 10, key: "upload" });
+const publicFormRateLimit = rateLimit({ windowMs: 10 * 60_000, max: 5, key: "form" });
 
 // =====================
 // Ethers / コントラクト設定（Dプラン）
@@ -175,12 +242,13 @@ async function runAirdropBatch() {
 // =====================
 // 画像アップロード API
 // =====================
-app.post("/upload/image", async (req, res) => {
+app.post("/upload/image", requireFirebaseUser, requireOwnAddress, uploadRateLimit, async (req, res) => {
   const { base64, mimeType, filename } = req.body;
   if (!base64 || !mimeType || !filename) return res.status(400).json({ error: "MISSING_PARAMS" });
 
   const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
   if (!allowedTypes.includes(mimeType)) return res.status(400).json({ error: "INVALID_TYPE" });
+  if (typeof base64 !== "string" || base64.length > 7_000_000) return res.status(413).json({ error: "IMAGE_TOO_LARGE" });
 
   try {
     const admin = require("firebase-admin");
@@ -188,6 +256,14 @@ app.post("/upload/image", async (req, res) => {
     const safeName = filename.replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const destPath = `posts/${Date.now()}_${safeName}`;
     const buffer = Buffer.from(base64, "base64");
+    if (!buffer.length || buffer.length > 5 * 1024 * 1024) return res.status(413).json({ error: "IMAGE_TOO_LARGE" });
+    const signatures = {
+      "image/jpeg": buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff,
+      "image/png": buffer.length > 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a])),
+      "image/gif": buffer.length > 6 && ["GIF87a", "GIF89a"].includes(buffer.subarray(0, 6).toString("ascii")),
+      "image/webp": buffer.length > 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP"
+    };
+    if (!signatures[mimeType]) return res.status(400).json({ error: "INVALID_IMAGE_DATA" });
     const file = bucket.file(destPath);
 
     await file.save(buffer, { contentType: mimeType });
@@ -444,7 +520,12 @@ async function runSecretDoorBatch() {
 
 const secretDoorRouter = express.Router();
 
-secretDoorRouter.post("/reward", async (req, res) => {
+secretDoorRouter.post("/reward", (_req, res) => {
+  return res.status(410).json({ error: "FEATURE_REMOVED" });
+});
+
+// Legacy handler retained under a non-public path for migration reference only.
+secretDoorRouter.post("/reward-disabled", requireAdmin, async (req, res) => {
   const { address, doorId } = req.body;
   if (!address || !doorId) return res.status(400).json({ error: "MISSING_PARAMS" });
 
@@ -606,7 +687,7 @@ async function runKnowledgeBountyBatch() {
 
 cron.schedule("0 2 * * *", () => { console.log("⏰ 定期エアドロバッチ起動"); runAirdropBatch(); }, { timezone: "Asia/Tokyo" });
 cron.schedule("0 3 15 4 *", () => { console.log("🏁 最終エアドロバッチ起動"); runAirdropBatch(); }, { timezone: "Asia/Tokyo" });
-cron.schedule("30 2 * * *", () => { console.log("⏰ 秘密のとびらバッチ起動"); runSecretDoorBatch(); }, { timezone: "Asia/Tokyo" });
+// 「秘密のとびら」は廃止済みのため自動報酬バッチも停止。
 cron.schedule("0 * * * *", () => { console.log("⏰ 知識懸賞バッチ起動"); runKnowledgeBountyBatch(); }, { timezone: "Asia/Tokyo" });
 
 // =====================
@@ -749,10 +830,10 @@ async function _findChesAccount(uid, addr) {
 }
 
 // ── 受取状況の確認 ──
-app.get("/api/emuer/login-bonus/status", async (req, res) => {
+app.get("/api/emuer/login-bonus/status", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.json({ claimedToday: false });
-    const uid = String(req.query.uid || "").trim();
+    const uid = req.identity.uid;
     const address = String(req.query.address || "").trim();
     if (!uid && !address) return res.json({ claimedToday: false });
     const todayJst = _jstDateStr(new Date());
@@ -766,11 +847,11 @@ app.get("/api/emuer/login-bonus/status", async (req, res) => {
 });
 
 // ── 受取（1日1回・アカウント単位） ──
-app.post("/api/emuer/login-bonus", async (req, res) => {
+app.post("/api/emuer/login-bonus", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const address = String(req.body.address || "").toLowerCase().trim();
-    const reqUid = String(req.body.uid || "").trim();
+    const reqUid = req.identity.uid;
     if (!address && !reqUid) return res.status(400).json({ error: "ウォレットが必要です" });
 
     const todayJst = _jstDateStr(new Date());
@@ -914,7 +995,7 @@ async function publishScheduledPosts() {
 cron.schedule("*/5 * * * *", () => publishScheduledPosts(), { timezone: "Asia/Tokyo" });
 
 // 予約投稿 作成
-app.post("/api/scheduled-posts", async (req, res) => {
+app.post("/api/scheduled-posts", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   const { address, title, body, tags, scheduledAt, userId, userType } = req.body;
   if (!address || !title || !body || !scheduledAt) {
     return res.status(400).json({ error: "MISSING_PARAMS" });
@@ -953,7 +1034,7 @@ app.post("/api/scheduled-posts", async (req, res) => {
 });
 
 // 予約投稿 一覧取得
-app.get("/api/scheduled-posts", async (req, res) => {
+app.get("/api/scheduled-posts", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   const address = (req.query.address || "").toLowerCase();
   if (!address) return res.status(400).json({ error: "MISSING_ADDRESS" });
   if (!db) return res.json([]);
@@ -977,7 +1058,7 @@ app.get("/api/scheduled-posts", async (req, res) => {
 });
 
 // 予約投稿 キャンセル
-app.delete("/api/scheduled-posts/:id", async (req, res) => {
+app.delete("/api/scheduled-posts/:id", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   const { address } = req.body;
   if (!db) return res.status(500).json({ error: "Firestore未接続" });
   try {
@@ -1002,7 +1083,7 @@ app.delete("/api/scheduled-posts/:id", async (req, res) => {
 // ════════════════════════════════════════
 // お問い合わせ API（復元）
 // ════════════════════════════════════════
-app.post("/api/contact", async (req, res) => {
+app.post("/api/contact", publicFormRateLimit, async (req, res) => {
   const { type, name, email, company, message, scale, source } = req.body;
 
   if (!name || !email || !message) {
@@ -1110,7 +1191,7 @@ app.get("/api/room1/contents", async (req, res) => {
 });
 
 // ── 直接追加（管理者のみ）──
-app.post("/api/room1/direct-add", async (req, res) => {
+app.post("/api/room1/direct-add", requireAdmin, async (req, res) => {
   try {
     const { theme, subTheme, subSubTheme, summary, body, note, noteUrl } = req.body;
 
@@ -1154,7 +1235,7 @@ app.post("/api/room1/direct-add", async (req, res) => {
 });
 
 // ── お預かり箱：送信 ──
-app.post("/api/room1/submit", async (req, res) => {
+app.post("/api/room1/submit", publicFormRateLimit, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
 
@@ -1176,7 +1257,7 @@ app.post("/api/room1/submit", async (req, res) => {
 });
 
 // ── お預かり箱：一覧取得（pendingのみ）──
-app.get("/api/room1/submissions", async (req, res) => {
+app.get("/api/room1/submissions", requireAdmin, async (req, res) => {
   try {
     if (!db) return res.json([]);
 
@@ -1204,7 +1285,7 @@ app.get("/api/room1/submissions", async (req, res) => {
 });
 
 // ── お預かり箱：昇華（承認）──
-app.post("/api/room1/approve/:id", async (req, res) => {
+app.post("/api/room1/approve/:id", requireAdmin, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
 
@@ -1247,7 +1328,7 @@ app.post("/api/room1/approve/:id", async (req, res) => {
 });
 
 // ── お預かり箱：見送り ──
-app.post("/api/room1/reject/:id", async (req, res) => {
+app.post("/api/room1/reject/:id", requireAdmin, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     await db.collection(ROOM1_SUBMISSIONS_COL).doc(req.params.id).update({ status: "rejected" });
@@ -1260,7 +1341,7 @@ app.post("/api/room1/reject/:id", async (req, res) => {
 });
 
 // ── コンテンツ全削除（管理者のみ）──
-app.delete("/api/room1/contents/all", async (req, res) => {
+app.delete("/api/room1/contents/all", requireAdmin, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const snapshot = await db.collection(ROOM1_CONTENTS_COL).get();
@@ -1281,7 +1362,7 @@ app.delete("/api/room1/contents/all", async (req, res) => {
 // ════════════════════════════════════════════════════════
 
 // ── ユーザー名の保存 ──
-app.post('/api/user/setname', async (req, res) => {
+app.post('/api/user/setname', requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     const address     = (req.body.address     || '').toLowerCase().trim();
     const displayName = (req.body.displayName || '').trim().slice(0, 30);
@@ -1675,7 +1756,7 @@ app.get("/api/sp/notifications", async (req, res) => {
 });
 
 // POST /api/sp/notifications （管理者専用）
-app.post("/api/sp/notifications", async (req, res) => {
+app.post("/api/sp/notifications", requireAdmin, async (req, res) => {
   if (!db) return res.status(500).json({ error: "Firestore未接続" });
   const { title, body, link, contentType, icon } = req.body;
   if (!title) return res.status(400).json({ error: "title is required" });
@@ -1698,7 +1779,7 @@ app.post("/api/sp/notifications", async (req, res) => {
 });
 
 // POST /api/sp/notifications/read-all （全既読）
-app.post("/api/sp/notifications/read-all", async (req, res) => {
+app.post("/api/sp/notifications/read-all", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   const address = (req.body.address || "").toLowerCase();
   if (!address || !db) return res.json({ success: true });
   try {
@@ -1720,7 +1801,7 @@ app.post("/api/sp/notifications/read-all", async (req, res) => {
 });
 
 // POST /api/sp/notifications/:id/read （1件既読）
-app.post("/api/sp/notifications/:id/read", async (req, res) => {
+app.post("/api/sp/notifications/:id/read", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   const address = (req.body.address || "").toLowerCase();
   if (!address || !db) return res.json({ success: true });
   try {
@@ -1917,7 +1998,7 @@ async function ichiEnsureDay(address, userName, date) {
 }
 
 // ── 単日の取得 ──
-app.get("/api/ichinichi/day", async (req, res) => {
+app.get("/api/ichinichi/day", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.json({ day: null });
     const { address } = ichiIdentity(req);
@@ -1931,7 +2012,7 @@ app.get("/api/ichinichi/day", async (req, res) => {
 });
 
 // ── みんなの一日（公開フィード） ──
-app.get("/api/ichinichi/feed", async (req, res) => {
+app.get("/api/ichinichi/feed", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.json({ posts: [] });
     const { address } = ichiIdentity(req);
@@ -1941,10 +2022,10 @@ app.get("/api/ichinichi/feed", async (req, res) => {
     // 公開日を多めに取得してJS側で共有日時ソート（ランキングと同じ方針）。
     // ※ limit なしのDocument-id順(=address__date)で切ると特定アドレスに偏るため多めに読む
     const snap = await db.collection(ICHI_DAYS_COL)
-      .where("visibility", "==", "public")
-      .limit(100).get();
+      .orderBy("sharedAt", "desc")
+      .limit(300).get();
 
-    let days = snap.docs.map((doc) => {
+    let days = snap.docs.filter((doc) => doc.data().visibility === "public").map((doc) => {
       const d = doc.data();
       return {
         id: doc.id,
@@ -1996,13 +2077,18 @@ app.get("/api/ichinichi/feed", async (req, res) => {
 });
 
 // ── わたしの記録（履歴＋統計） ──
-app.get("/api/ichinichi/history", async (req, res) => {
+app.get("/api/ichinichi/history", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.json({ history: [], stats: { streak: 0, learningCount: 0, usefulCount: 0, completionRate: 0 } });
     const { address } = ichiIdentity(req);
     if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
 
-    const snap = await db.collection(ICHI_DAYS_COL).where("address", "==", address).get();
+    const dayPrefix = `${address}__`;
+    const snap = await db.collection(ICHI_DAYS_COL)
+      .orderBy(firebaseAdmin.firestore.FieldPath.documentId(), "desc")
+      .startAt(`${dayPrefix}\uf8ff`)
+      .endAt(dayPrefix)
+      .limit(90).get();
     let history = snap.docs.map((doc) => {
       const d = doc.data();
       return {
@@ -2012,7 +2098,6 @@ app.get("/api/ichinichi/history", async (req, res) => {
       };
     });
     history.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-    history = history.slice(0, 90);
 
     // 連続日数: 公開かつ学び・予定がある日を新しい順に連続カウント
     const sharedDates = history
@@ -2054,7 +2139,7 @@ app.get("/api/ichinichi/history", async (req, res) => {
 });
 
 // ── 時間割の保存 ──
-app.post("/api/ichinichi/save", async (req, res) => {
+app.post("/api/ichinichi/save", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const { address, userName } = ichiIdentity(req);
@@ -2073,7 +2158,7 @@ app.post("/api/ichinichi/save", async (req, res) => {
 });
 
 // ── 共有（公開/非公開の確定＋学び保存） ──
-app.post("/api/ichinichi/share", async (req, res) => {
+app.post("/api/ichinichi/share", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const { address, userName } = ichiIdentity(req);
@@ -2098,7 +2183,7 @@ app.post("/api/ichinichi/share", async (req, res) => {
 });
 
 // ── 過去の学びに追記 ──
-app.post("/api/ichinichi/append-learning", async (req, res) => {
+app.post("/api/ichinichi/append-learning", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const { address, userName } = ichiIdentity(req);
@@ -2119,7 +2204,7 @@ app.post("/api/ichinichi/append-learning", async (req, res) => {
 });
 
 // ── 前日の時間割をコピー ──
-app.post("/api/ichinichi/copy-previous", async (req, res) => {
+app.post("/api/ichinichi/copy-previous", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const { address, userName } = ichiIdentity(req);
@@ -2147,7 +2232,7 @@ app.post("/api/ichinichi/copy-previous", async (req, res) => {
 });
 
 // ── みんなの予定を自分の今日に取り入れる ──
-app.post("/api/ichinichi/adopt", async (req, res) => {
+app.post("/api/ichinichi/adopt", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const { address, userName } = ichiIdentity(req);
@@ -2187,7 +2272,7 @@ app.post("/api/ichinichi/adopt", async (req, res) => {
 });
 
 // ── Good を送る ──
-app.post("/api/ichinichi/good", async (req, res) => {
+app.post("/api/ichinichi/good", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const { address } = ichiIdentity(req);
@@ -2205,7 +2290,7 @@ app.post("/api/ichinichi/good", async (req, res) => {
 });
 
 // ── 通報 ──
-app.post("/api/ichinichi/report", async (req, res) => {
+app.post("/api/ichinichi/report", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const { address } = ichiIdentity(req);
@@ -2224,7 +2309,7 @@ app.post("/api/ichinichi/report", async (req, res) => {
 });
 
 // ── 記録の削除（本人のみ） ──
-app.post("/api/ichinichi/delete-day", async (req, res) => {
+app.post("/api/ichinichi/delete-day", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const { address } = ichiIdentity(req);

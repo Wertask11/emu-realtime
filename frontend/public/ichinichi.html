@@ -239,7 +239,7 @@ function notify(msg) {
 // ── API ─────────────────────────────
 async function apiGet(path) {
   const url = `${API_BASE}${path}${path.includes("?") ? "&" : "?"}address=${encodeURIComponent(ADDRESS)}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { headers: await authHeaders(false) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "読み込みに失敗しました");
   return data;
@@ -247,12 +247,25 @@ async function apiGet(path) {
 async function apiPost(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: await authHeaders(true),
     body: JSON.stringify({ address: ADDRESS, userName: USERNAME, ...body }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "処理に失敗しました");
   return data;
+}
+
+async function authHeaders(json) {
+  const parentAuth = _parentWin() && _parentWin().auth;
+  const auth = parentAuth || window.auth;
+  let user = auth && auth.currentUser;
+  for (let i = 0; !user && auth && i < 50; i += 1) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    user = auth.currentUser;
+  }
+  if (!user) throw new Error("ログイン情報を確認できません。再ログインしてください。");
+  const token = await user.getIdToken();
+  return Object.assign(json ? { "content-type": "application/json" } : {}, { Authorization: `Bearer ${token}` });
 }
 
 // ── データ読み込み ─────────────────────────────

@@ -5971,6 +5971,17 @@ let totalgoodcount = 0;
 let totalchangecount = 0;
 let pendingEmuer = parseFloat(localStorage.getItem("pendingEmuer")) || 0; // 小数(ログボ0.5等)も保持
 let currentUserId = null;
+
+async function emuAuthHeaders(json) {
+  let user = window.auth && window.auth.currentUser;
+  for (let i = 0; !user && window.auth && i < 50; i += 1) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    user = window.auth.currentUser;
+  }
+  if (!user) throw new Error('ログイン情報を確認できません。再ログインしてください。');
+  const token = await user.getIdToken();
+  return Object.assign(json ? { 'Content-Type': 'application/json' } : {}, { Authorization: `Bearer ${token}` });
+}
 let posts = [];
 
 // SchoolParkコンテンツから戻った場合：ロゴ/ウォレット画面をスキップしてメインへ
@@ -12337,7 +12348,7 @@ if (schedulePostButton) {
       const userType = getCurrentUserType();
       const res = await fetch("https://emu-realtime.onrender.com/api/scheduled-posts", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await emuAuthHeaders(true),
         body: JSON.stringify({
           address: window.connectedAccount,
           title, body, tags,
@@ -12399,7 +12410,8 @@ if (scheduledPostsBtn) {
 
     try {
       const res = await fetch(
-        `https://emu-realtime.onrender.com/api/scheduled-posts?address=${encodeURIComponent(window.connectedAccount)}`
+        `https://emu-realtime.onrender.com/api/scheduled-posts?address=${encodeURIComponent(window.connectedAccount)}`,
+        { headers: await emuAuthHeaders(false) }
       );
       const items = await res.json();
 
@@ -12426,7 +12438,7 @@ if (scheduledPostsBtn) {
               `https://emu-realtime.onrender.com/api/scheduled-posts/${this.dataset.id}`,
               {
                 method: "DELETE",
-                headers: { "Content-Type": "application/json" },
+                headers: await emuAuthHeaders(true),
                 body: JSON.stringify({ address: window.connectedAccount })
               }
             );
@@ -12648,12 +12660,14 @@ async function openPostChangeHistory(postData) {
           if (!confirm("この提案を採用し、変更履歴として残しますか？")) return;
           accept.disabled = true;
           try {
-            await window.fbLib.updateDoc(window.fbLib.doc(window.db, "post_changes", change.id), {
+            const batch = window.fbLib.writeBatch(window.db);
+            batch.update(window.fbLib.doc(window.db, "post_changes", change.id), {
               status:"accepted", acceptedAt:new Date(), acceptedBy:_emuAddress()
             });
-            await window.fbLib.updateDoc(window.fbLib.doc(window.db, "posts", postData.id), {
+            batch.update(window.fbLib.doc(window.db, "posts", postData.id), {
               acceptedChangeCount:window.fbLib.increment(1), lastChangedAt:new Date()
             });
+            await batch.commit();
             _spLogAdd({ type:"change", icon:"✅", title:"Changeを採用しました", detail:(postData.title || "").slice(0,25) });
             await openPostChangeHistory(postData);
           } catch (error) {
@@ -12707,7 +12721,9 @@ async function attachReactionHandlers(postElement) {
       openGoodReasonSheet(postElement, postData, async ({ reasons, note }) => {
       try {
         const postRef = window.fbLib.doc(window.db, "posts", postId);
-        await window.fbLib.addDoc(window.fbLib.collection(window.db, "post_good_impacts"), {
+        const impactRef = window.fbLib.doc(window.fbLib.collection(window.db, "post_good_impacts"));
+        const batch = window.fbLib.writeBatch(window.db);
+        batch.set(impactRef, {
           postId,
           postTitle:postData.title || "",
           postAuthor:String(postData.address || "").toLowerCase(),
@@ -12716,10 +12732,11 @@ async function attachReactionHandlers(postElement) {
           note,
           createdAt:new Date()
         });
-        await window.fbLib.updateDoc(postRef, {
+        batch.update(postRef, {
           goodCount: window.fbLib.increment(1),
           goodUsers: window.fbLib.arrayUnion(myAddr)
         });
+        await batch.commit();
 
         // ※Goodを「押した人」への加算は廃止（確定ルール=評価された投稿者が得る）。
         //   EMUERはサーバーの照合バッチが durable台帳(emuer_offchain)へ計上する。
@@ -12772,7 +12789,9 @@ async function attachReactionHandlers(postElement) {
       try {
         const postRef = window.fbLib.doc(window.db, "posts", postId);
         // Changeの中身を保存。数字だけの反応にせず、投稿者が改善に使える形で残す
-        await window.fbLib.addDoc(window.fbLib.collection(window.db, "post_changes"), {
+        const changeRef = window.fbLib.doc(window.fbLib.collection(window.db, "post_changes"));
+        const batch = window.fbLib.writeBatch(window.db);
+        batch.set(changeRef, {
           postId,
           postTitle: postData.title || "",
           postAuthor: (postData.address || "").toLowerCase(),
@@ -12784,10 +12803,11 @@ async function attachReactionHandlers(postElement) {
           status: "pending",
           createdAt: new Date()
         });
-        await window.fbLib.updateDoc(postRef, {
+        batch.update(postRef, {
           changeCount: window.fbLib.increment(1),
           changeUsers: window.fbLib.arrayUnion(myAddr)
         });
+        await batch.commit();
 
         // ※Changeを「押した人」への加算は廃止（確定ルール=評価された投稿者が得る）。
         //   EMUERはサーバーの照合バッチが durable台帳(emuer_offchain)へ計上する。
@@ -13217,7 +13237,7 @@ async function syncPendingEmuer() {
     // --- 1. Firebaseから「自分の投稿」のGood/Change合計を計算 ---
     const postsRef = window.fbLib.collection(window.db, "posts");
     // 投稿者(address)が自分であるものを検索
-    const q = window.fbLib.query(postsRef, window.fbLib.where("address", "==", myAddr), window.fbLib.limit(200));
+    const q = window.fbLib.query(postsRef, window.fbLib.where("address", "==", myAddr));
     const querySnapshot = await window.fbLib.getDocs(q);
 
     let fbGoodTotal = 0;
@@ -14665,7 +14685,9 @@ document.getElementById("emuAnswerSubmit")?.addEventListener("click", async func
   }
   this.disabled = true;
   try {
-    await window.fbLib.addDoc(window.fbLib.collection(window.db, "knowledge_answers"), {
+    const answerRef = window.fbLib.doc(window.fbLib.collection(window.db, "knowledge_answers"));
+    const batch = window.fbLib.writeBatch(window.db);
+    batch.set(answerRef, {
       requestId:_emuAnswerContext.id,
       requestAuthor:String(_emuAnswerContext.author || "").toLowerCase(),
       answerAuthor:_emuAddress(),
@@ -14673,9 +14695,10 @@ document.getElementById("emuAnswerSubmit")?.addEventListener("click", async func
       status:"submitted",
       createdAt:new Date()
     });
-    await window.fbLib.updateDoc(window.fbLib.doc(window.db, "knowledge_requests", _emuAnswerContext.id), {
+    batch.update(window.fbLib.doc(window.db, "knowledge_requests", _emuAnswerContext.id), {
       answerCount:window.fbLib.increment(1)
     });
+    await batch.commit();
     closeEmuSheet("emuAnswerSheet");
     alert("知識を届けました。募集者が採用すると、価値プロフィールと懸賞履歴に残ります。");
     await loadKnowledgeRequests();
@@ -14739,17 +14762,19 @@ async function acceptKnowledgeAnswer(request, answer, button) {
   if (!confirm("この知識を採用しますか？\nあなたの残高から10 EMUERが回答者へ渡されます。")) return;
   button.disabled = true;
   try {
-    await window.fbLib.updateDoc(window.fbLib.doc(window.db, "knowledge_answers", answer.id), {
+    const batch = window.fbLib.writeBatch(window.db);
+    batch.update(window.fbLib.doc(window.db, "knowledge_answers", answer.id), {
       status:"accepted", acceptedAt:new Date()
     });
-    await window.fbLib.updateDoc(window.fbLib.doc(window.db, "knowledge_requests", request.id), {
+    batch.update(window.fbLib.doc(window.db, "knowledge_requests", request.id), {
       status:"awarded",
       acceptedAnswerId:answer.id,
       acceptedAnswerAuthor:answer.answerAuthor,
       awardedAt:new Date(),
       settlementStatus:"pending_distribution"
     });
-    await window.fbLib.addDoc(window.fbLib.collection(window.db, "emuer_bounty_claims"), {
+    const claimRef = window.fbLib.doc(window.fbLib.collection(window.db, "emuer_bounty_claims"));
+    batch.set(claimRef, {
       requestId:request.id,
       requestAuthor:request.author,
       recipient:answer.answerAuthor,
@@ -14757,6 +14782,7 @@ async function acceptKnowledgeAnswer(request, answer, button) {
       status:"pending",
       createdAt:new Date()
     });
+    await batch.commit();
     alert("知識を採用しました。EMUER懸賞は配布申請として記録されました。");
     closeEmuSheet("emuHistorySheet");
     await loadKnowledgeRequests();
@@ -14917,7 +14943,7 @@ async function refreshEmuLoginBonusStatus() {
   const uid = _emuLbUid();
   if (!addr && !uid) { updateEmuLoginBonusUI(); return; }
   try {
-    const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus/status?address=' + encodeURIComponent(addr) + '&uid=' + encodeURIComponent(uid));
+    const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus/status?address=' + encodeURIComponent(addr) + '&uid=' + encodeURIComponent(uid), { headers: await emuAuthHeaders(false) });
     const j = await r.json();
     if (r.ok) {
       _emuLbClaimedToday = !!j.claimedToday;
@@ -14966,7 +14992,7 @@ async function claimEmuLoginBonus() {
   if (btn) btn.disabled = true; // 二重送信防止
   try {
     const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
+      method: 'POST', headers: await emuAuthHeaders(true),
       body: JSON.stringify({ address: addr, uid: uid })
     });
     const j = await r.json();
@@ -15078,7 +15104,7 @@ async function loadEmuValueProfile() {
     // 旧投稿にはチェックサム形式のアドレスもあるため、大小文字を無視して集計する
     const snap = await window.fbLib.getDocs(window.fbLib.query(
       window.fbLib.collection(window.db, 'posts'),
-      window.fbLib.limit(200)
+      window.fbLib.where('address', '==', address)
     ));
     let helpful = 0;
     let changed = 0;
@@ -15087,7 +15113,6 @@ async function loadEmuValueProfile() {
     const valuePosts = [];
     snap.forEach(function(doc) {
       const p = doc.data();
-      if (String(p.address || '').toLowerCase() !== address) return;
       const good = Number(p.goodCount) || 0;
       const change = Number(p.changeCount) || 0;
       helpful += good;
@@ -17860,7 +17885,7 @@ function closeBadgePanel() {
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
     getFirestore, collection, addDoc, getDocs, query, orderBy, limit, startAfter, onSnapshot,
-    doc, updateDoc, setDoc, deleteDoc, increment, where,
+    doc, updateDoc, setDoc, deleteDoc, increment, where, writeBatch,
     arrayUnion, getDoc
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   // 認証機能（CHES Identity：LINE / Google ログイン、MetaMask等で使用）
@@ -17894,7 +17919,7 @@ import {
   window.auth = auth;
 window.fbLib = {
     collection, addDoc, getDocs, query, orderBy, limit, startAfter, onSnapshot,
-    doc, updateDoc, setDoc, deleteDoc, increment, where,
+    doc, updateDoc, setDoc, deleteDoc, increment, where, writeBatch,
     arrayUnion, getDoc,
     signInAnonymously
   };
@@ -18349,25 +18374,19 @@ function submitContact() {
   const doSubmit = async () => {
     try {
       // Firestore に保存（window.fbLib が利用可能な場合）
-      if (window.fbLib && window.db) {
-        await window.fbLib.addDoc(
-          window.fbLib.collection(window.db, 'contact_submissions'),
-          payload
-        );
-        console.log('✅ Saved to Firestore');
-      }
-
-      // Render バックエンドへ送信（任意）
-      // await fetch('https://emu-realtime.onrender.com/api/contact', {
-      //   method: 'POST',
-      //   headers: {'Content-Type':'application/json'},
-      //   body: JSON.stringify(payload)
-      // });
-
+      const response = await fetch('https://emu-realtime.onrender.com/api/contact', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || '送信に失敗しました');
+      showSuccess();
     } catch (e) {
       console.error('送信エラー:', e);
-    } finally {
-      showSuccess();
+      alert('送信できませんでした。時間をおいて再度お試しください。');
+      nextBtn.disabled = false;
+      nextBtn.textContent = '送信する';
     }
   };
 
@@ -18674,7 +18693,7 @@ row.appendChild(medal);
   // ══════════════════════════════════════════
   // Room2 名前設定 → Firestoreに保存
   // ══════════════════════════════════════════
-  window.addEventListener('message', function(event) {
+  window.addEventListener('message', async function(event) {
     if (!event.data || !event.data.type) return;
 
     // 秘密のとびら：戻る
@@ -18720,7 +18739,7 @@ row.appendChild(medal);
       }
       fetch('https://emu-realtime.onrender.com/secret-door/reward', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await emuAuthHeaders(true),
         body: JSON.stringify({ address: walletAddr, doorId: doorId, amount: amount })
       })
       .then(function(r) { return r.json(); })
@@ -18759,7 +18778,7 @@ row.appendChild(medal);
  
       fetch(RANK_API + '/api/user/setname', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await emuAuthHeaders(true),
         body: JSON.stringify({ address: address.toLowerCase(), displayName: name })
       })
       .then(function(r) { return r.json(); })
@@ -19283,7 +19302,7 @@ async function spMarkRead(notifId) {
   if (!address) return;
   try {
     await fetch(`${_SP_NOTIF_API}/api/sp/notifications/${notifId}/read`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address })
+      method: 'POST', headers: await emuAuthHeaders(true), body: JSON.stringify({ address })
     });
   } catch {}
 }
@@ -19294,7 +19313,7 @@ async function spMarkAllRead() {
   if (!address) return;
   try {
     await fetch(`${_SP_NOTIF_API}/api/sp/notifications/read-all`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address })
+      method: 'POST', headers: await emuAuthHeaders(true), body: JSON.stringify({ address })
     });
   } catch {}
 }
@@ -19995,7 +20014,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return knowledgeScheduleCache.count;
     }
     try {
-      const response = await fetch('https://emu-realtime.onrender.com/api/scheduled-posts?address=' + encodeURIComponent(account));
+      const response = await fetch('https://emu-realtime.onrender.com/api/scheduled-posts?address=' + encodeURIComponent(account), { headers: await emuAuthHeaders(false) });
       const items = await response.json();
       const count = Array.isArray(items) ? items.length : 0;
       knowledgeScheduleCache = { account, count, fetchedAt:Date.now() };
@@ -20152,7 +20171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       try {
-        const response = await fetch('https://emu-realtime.onrender.com/api/scheduled-posts', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ address:window.connectedAccount, title:payload.title, body:payload.body, tags:payload.tags, scheduledAt:new Date(payload.scheduledAt).toISOString(), userId:currentUserId||window.connectedAccount, userType:getCurrentUserType() }) });
+        const response = await fetch('https://emu-realtime.onrender.com/api/scheduled-posts', { method:'POST', headers:await emuAuthHeaders(true), body:JSON.stringify({ address:window.connectedAccount, title:payload.title, body:payload.body, tags:payload.tags, scheduledAt:new Date(payload.scheduledAt).toISOString(), userId:currentUserId||window.connectedAccount, userType:getCurrentUserType() }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || '予約に失敗しました。');
         knowledgeScheduleCache.fetchedAt = 0;

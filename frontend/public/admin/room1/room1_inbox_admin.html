@@ -769,6 +769,14 @@ function mspEsc(s) {
 
 <script>
 var API_BASE = 'https://emu-realtime.onrender.com';
+function adminApiHeaders(json) {
+  var key = sessionStorage.getItem('emu_admin_api_key');
+  if (!key) {
+    key = window.prompt('管理者APIキーを入力してください') || '';
+    if (key) sessionStorage.setItem('emu_admin_api_key', key);
+  }
+  return Object.assign(json ? { 'Content-Type': 'application/json' } : {}, { 'x-admin-key': key });
+}
 
 var themeData = {
   money: { subs: ['増やし方','育て方','守り方','使い方','付き合い方','稼ぎ方','見極め方','回し方'] },
@@ -873,7 +881,7 @@ async function submitDirect() {
   try {
     var res = await fetch(API_BASE + '/api/room1/direct-add', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminApiHeaders(true),
       body: JSON.stringify({
         theme: theme,
         subTheme: sub,
@@ -925,7 +933,7 @@ var inboxItems = [];
 function loadInbox() {
   document.getElementById('inbox-list').innerHTML = '<div class="loading">📮 読み込み中...</div>';
 
-  fetch(API_BASE + '/api/room1/submissions')
+  fetch(API_BASE + '/api/room1/submissions', { headers: adminApiHeaders(false) })
     .then(function(res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
@@ -1074,7 +1082,7 @@ async function approveItem(idx) {
   try {
     var res = await fetch(API_BASE + '/api/room1/approve/' + encodeURIComponent(docId), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminApiHeaders(true),
       body: JSON.stringify({ summary: summary, body: body, note: note, noteUrl: noteUrl })
     });
 
@@ -1107,7 +1115,8 @@ async function rejectItem(idx) {
 
   try {
     var res = await fetch(API_BASE + '/api/room1/reject/' + encodeURIComponent(docId), {
-      method: 'POST'
+      method: 'POST',
+      headers: adminApiHeaders(false)
     });
     var result = await res.json();
 
@@ -2471,7 +2480,7 @@ function labToast(msg, type) {
 async function deleteAllContents() {
   if (!confirm('room1の学習コンテンツをすべて削除します。\nこの操作は取り消せません。本当に実行しますか？')) return;
   try {
-    var res = await fetch(API_BASE + '/api/room1/contents/all', { method: 'DELETE' });
+    var res = await fetch(API_BASE + '/api/room1/contents/all', { method: 'DELETE', headers: adminApiHeaders(false) });
     var result = await res.json();
     if (result.success) {
       alert('✅ ' + result.deleted + '件のコンテンツを削除しました。');
@@ -2581,7 +2590,7 @@ async function notifSend() {
   try {
     var res = await fetch(NOTIF_API_BASE + '/api/sp/notifications', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminApiHeaders(true),
       body: JSON.stringify({ title, body, link, icon, contentType: 'manual' })
     });
     var data = await res.json();
