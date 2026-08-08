@@ -5972,11 +5972,28 @@ let totalchangecount = 0;
 let pendingEmuer = parseFloat(localStorage.getItem("pendingEmuer")) || 0; // 小数(ログボ0.5等)も保持
 let currentUserId = null;
 
+// ウォレット（MetaMask等）ログインで Firebase セッションが無い場合に、署名でセッションを張り直す。
+// 旧セッション（この仕組みの導入前にログインした端末）や、入場時に署名を断った場合の復帰用。
+async function _emuEnsureWalletSession() {
+  let type = '';
+  try { type = (JSON.parse(localStorage.getItem('emu_auth') || '{}') || {}).type || ''; } catch (e) {}
+  if (type === 'chesFree') return null; // LINE / Google はこの経路では復帰しない
+  const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
+  if (!addr || !window.ethereum) return null;
+  if (!window.CHES || typeof window.CHES.signInWithWallet !== 'function') return null;
+  return window.CHES.signInWithWallet(addr);
+}
+
 async function emuAuthHeaders(json) {
   let user = window.auth && window.auth.currentUser;
   for (let i = 0; !user && window.auth && i < 50; i += 1) {
     await new Promise(resolve => setTimeout(resolve, 100));
     user = window.auth.currentUser;
+  }
+  if (!user) {
+    // セッション復元を待っても居なければ、ウォレットログインとして復帰を試みる
+    try { await _emuEnsureWalletSession(); } catch (e) { console.warn('wallet session:', e && (e.message || e)); }
+    user = window.auth && window.auth.currentUser;
   }
   if (!user) throw new Error('ログイン情報を確認できません。再ログインしてください。');
   const token = await user.getIdToken();
@@ -11590,6 +11607,29 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
       }
     }
 
+    // ②-2 Firebase セッションを確立（LINE / Google と同じ土台）
+    // 署名でウォレット所有を証明し、CHESアカウントを用意する。
+    // これが無いと Emu のサーバーAPI（ログインボーナス等）と Firestore への書き込みが
+    // 「ログイン情報を確認できません」で弾かれる。署名を断られても入場自体は続行する。
+    window.emuAuth = { type: "wallet", address: account, provider: "metamask" };
+    localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
+    try {
+      const _walletSession = await window.CHES.signInWithWallet(account);
+      window.emuAuth.chesUid = _walletSession.uid;
+      localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
+    } catch (e) {
+      console.warn("[CHES] ウォレットのFirebaseセッション確立に失敗:", e && (e.message || e));
+      const _rejected = e && (e.code === 4001 || /reject|denied/i.test(String(e.message || "")));
+      const _wsEl = document.getElementById("walletStatus");
+      if (_wsEl) {
+        _wsEl.textContent = _rejected
+          ? "署名をキャンセルしたため、ログインボーナスなど一部の機能は使えません。"
+          : "ログイン確認に失敗したため、ログインボーナスなど一部の機能は使えません。";
+        _wsEl.style.color = "#a06000";
+        _wsEl.style.fontSize = "12px";
+      }
+    }
+
     // ③ 公式NFTチェックの実行（失敗しても先へ進む）
     await window.checkHexaNFT().catch(e => console.warn("checkHexaNFT:", e));
     await window.checkFreeNFT().catch(e => console.warn("checkFreeNFT:", e));
@@ -14856,25 +14896,93 @@ function _emuCurrentTopic() {
   return topics[(new Date().getDate() - 1) % topics.length];
 }
 
+// CHES（LINE/Google）のウォレットは秘密鍵の無い「アドレスのみ」＝オンチェーン残高は常に0。
+// MetaMask等の実ウォレットはオンチェーン残高が正。ここで両者を取り違えると、
+// 実ウォレットなのにオフチェーン台帳の数字（ログボ0.5など）を残高として出してしまう。
+function _emuIsChesWallet() {
+  try {
+    const a = JSON.parse(localStorage.getItem('emu_auth') || 'null');
+    return !!(a && a.type === 'chesFree');
+  } catch (e) { return false; }
+}
+
+const _EMU_ONCHAIN_BAL_KEY = 'emu_onchain_bal_';
+// Polygonの読み取り専用RPC（フォールバック用）。
+// 旧来の https://polygon-rpc.com は API キー必須になり 401 を返すため使わない。
+const _EMU_POLYGON_RPCS = [
+  'https://polygon-bor-rpc.publicnode.com',
+  'https://polygon.drpc.org',
+  'https://1rpc.io/matic'
+];
+
+function _emuCacheOnchainBalance(addr, val) {
+  try { localStorage.setItem(_EMU_ONCHAIN_BAL_KEY + String(addr).toLowerCase(), String(val)); } catch (e) {}
+  return val;
+}
+
+// 実ウォレットのオンチェーンEMUER残高。
+// emuerContract は「接続ボタンを押したセッション」でしか作られないため、再読み込み後などは
+// 未初期化になる。その場合は Polygon の公開RPCで読み取り専用コントラクトをその場で作る。
+// （window.ethereum は別チェーンに切り替わっている可能性があるので読み取りには使わない）
+async function _emuOnchainBalance(addr) {
+  if (!addr || !window.ethers) return null;
+  const readBalance = async (contract) => {
+    const balance = await contract.balanceOf(addr);
+    return Math.floor(parseFloat(ethers.utils.formatUnits(balance, 18)));
+  };
+
+  // ① 接続済みウォレットのコントラクト（Polygonであることは接続時に確認済み）
+  if (typeof emuerContract !== 'undefined' && emuerContract) {
+    try {
+      return _emuCacheOnchainBalance(addr, await readBalance(emuerContract));
+    } catch (e) {
+      console.warn('オンチェーンEMUER残高(ウォレット経由)の取得に失敗:', e && (e.message || e));
+    }
+  }
+
+  // ② 公開RPC（再読み込み直後などコントラクト未初期化のとき）
+  for (const url of _EMU_POLYGON_RPCS) {
+    try {
+      const provider = new ethers.providers.StaticJsonRpcProvider(url, { name: 'matic', chainId: 137 });
+      const contract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_CONTRACT_ABI, provider);
+      return _emuCacheOnchainBalance(addr, await readBalance(contract));
+    } catch (e) { /* 次のRPCを試す */ }
+  }
+  console.warn('オンチェーンEMUER残高を取得できませんでした（RPCすべて失敗）');
+  return null;
+}
+
+// オフチェーン台帳（サーバー権威：懸賞＋評価＋ログインボーナス − 支払い）。
+// クライアントからは読み取り専用（firestore.rules で write 禁止）。
+async function _emuOffchainBalance(addr) {
+  try {
+    const key = String(addr || '').toLowerCase();
+    if (!key || !window.db || !window.fbLib) return null;
+    const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'emuer_offchain', key));
+    if (!snap.exists()) return null;
+    return Math.max(0, Number(snap.data().balance) || 0);
+  } catch (e) { return null; }
+}
+
 async function _emuReadTokenBalance() {
   const localPart = Math.max(0, Number(pendingEmuer) || 0);
-  // MetaMask等の実ウォレット：オンチェーン残高（懸賞も実EMUERで反映済み）
-  if (window.connectedAccount && emuerContract && window.ethers) {
-    try {
-      const balance = await emuerContract.balanceOf(window.connectedAccount);
-      return Math.floor(parseFloat(ethers.utils.formatUnits(balance, 18)));
-    } catch (e) { /* 失敗時は下のオフチェーン計算にフォールバック */ }
+  const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
+
+  // MetaMask等の実ウォレット：オンチェーン残高が正（懸賞も実EMUERで反映済み）
+  if (addr && !_emuIsChesWallet()) {
+    const onchain = await _emuOnchainBalance(addr);
+    if (onchain !== null) return onchain;
+    // RPCが一時的に読めないときは、最後に読めた実残高を表示する。
+    // ここでオフチェーン台帳に落ちると、無関係な数字を「残高」として出してしまうため。
+    const cached = parseFloat(localStorage.getItem(_EMU_ONCHAIN_BAL_KEY + addr.toLowerCase()));
+    if (!isNaN(cached)) return cached;
   }
+
   // CHESユーザー：durableなオフチェーン台帳(サーバー権威=懸賞+評価+ログボ)を正とする。
   // 台帳はサーバーの照合バッチが検証可能なデータから再計算するため水増し不可。
   // まだ台帳が無い過渡期のユーザーはローカル(pendingEmuer)にフォールバック。
-  try {
-    const addr = (localStorage.getItem('emuWallet') || '').toLowerCase();
-    if (addr && window.db && window.fbLib) {
-      const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'emuer_offchain', addr));
-      if (snap.exists()) return Math.max(0, Number(snap.data().balance) || 0);
-    }
-  } catch (e) { /* 読めなければローカル分にフォールバック */ }
+  const ledger = await _emuOffchainBalance(addr);
+  if (ledger !== null) return ledger;
   return localPart;
 }
 
@@ -15032,6 +15140,7 @@ async function claimEmuLoginBonus() {
     try { if (typeof ppUpdateBalance === 'function') ppUpdateBalance(); } catch (e) {}
     try { if (myWalletPage && myWalletPage.style.display === 'block') renderWallet(); } catch (e) {}
     try { updateEmuTodayHome(); } catch (e) {}
+    try { if (typeof loadEmuWalletCard === 'function') loadEmuWalletCard(); } catch (e) {}
     if (j.alreadyClaimed) {
       // 別の端末で受け取り済み（アカウント単位で1日1回）
       _emuLbToast('本日は別の端末で受け取り済みです🧊');
@@ -15080,9 +15189,15 @@ async function loadEmuWalletCard() {
     balanceEl.textContent = Number(balance || 0).toLocaleString('ja-JP');
   } catch (e) { balanceEl.textContent = '0'; }
 
-  // 未確定分
+  // 未確定分（まだオンチェーンに変換されていない分）
+  // 実ウォレットは残高＝オンチェーンなので、評価分・ログインボーナス・懸賞は
+  // サーバーのオフチェーン台帳が正。台帳が無ければローカルの pendingEmuer。
   if (pendingEl) {
-    const p = Number(pendingEmuer) || 0;
+    let p = Number(pendingEmuer) || 0;
+    if (!_emuIsChesWallet()) {
+      const ledger = await _emuOffchainBalance(window.connectedAccount || localStorage.getItem('emuWallet') || '');
+      if (ledger !== null) p = ledger;
+    }
     pendingEl.textContent = (Math.round(p * 10) / 10).toLocaleString('ja-JP');
   }
 
@@ -19489,7 +19604,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // LINE トークン交換を行うバックエンドのエンドポイント。
     // フロント(Vercel)とバックエンド(Render)は別オリジンのため、既定で Render を指す。
     lineTokenEndpoint: (window.CHES_CONFIG && window.CHES_CONFIG.lineTokenEndpoint)
-      || "https://emu-realtime.onrender.com/api/auth/line"
+      || "https://emu-realtime.onrender.com/api/auth/line",
+    // ウォレット（MetaMask等）ログインの署名検証エンドポイント（LINEと同じバックエンド）
+    walletAuthEndpoint: (window.CHES_CONFIG && window.CHES_CONFIG.walletAuthEndpoint)
+      || "https://emu-realtime.onrender.com/api/auth/wallet"
   };
 
   // ───── ユーティリティ ─────
@@ -19525,6 +19643,27 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof onTimeout === "function") onTimeout();
       }
     }, 250);
+  }
+
+  // Firebase の認証状態が確定するまで待つ（起動直後は currentUser が null のため）
+  function whenAuthStateResolved() {
+    return new Promise(function (resolve) {
+      if (!window.auth || !window.fbAuth) return resolve(null);
+      if (window.auth.currentUser) return resolve(window.auth.currentUser);
+      var settled = false;
+      var unsub = window.fbAuth.onAuthStateChanged(window.auth, function (user) {
+        if (settled) return;
+        settled = true;
+        try { unsub(); } catch (e) {}
+        resolve(user || null);
+      });
+      setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        try { unsub(); } catch (e) {}
+        resolve(window.auth.currentUser || null);
+      }, 3000);
+    });
   }
 
   // ───── CHESウォレット（アドレスのみ・決定論的生成／秘密鍵なし） ─────
@@ -19635,6 +19774,53 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (typeof goTomainapp === "function") {
       goTomainapp();
     }
+  };
+
+  // ───── ウォレット（MetaMask等）で Firebase セッションを確立 ─────
+  // LINE / Google と同じ土台（Firebaseユーザー + ches_accounts）をウォレットにも用意する。
+  // これが無いと requireFirebaseUser を通るAPI（ログインボーナス等）と Firestore ルールで
+  // 「ログイン情報を確認できません。再ログインしてください。」になる。
+  // 所有証明は personal_sign（ガス不要の署名）。サーバーが発行した1回限りの nonce に署名する。
+  CHES.signInWithWallet = function (address) {
+    return new Promise(function (resolve, reject) {
+      if (!address) { reject(new Error("NO_ADDRESS")); return; }
+      if (!window.ethereum) { reject(new Error("NO_WALLET")); return; }
+      whenFirebaseReady(async function () {
+        try {
+          var addr = ethers.utils.getAddress(address);
+          var uid = "wallet:" + addr.toLowerCase();
+          // 同じウォレットのセッションが既にあるなら署名を求めない
+          // （currentUser は起動直後 null のことがあるので、状態が確定するまで待つ）
+          var current = await whenAuthStateResolved();
+          if (current && current.uid === uid) {
+            localStorage.setItem("ches_uid", uid);
+            resolve({ uid: uid, address: addr, reused: true });
+            return;
+          }
+          var base = CHES.config.walletAuthEndpoint;
+          var nonceRes = await fetch(base + "/nonce?address=" + encodeURIComponent(addr));
+          var nonceData = await nonceRes.json();
+          if (!nonceRes.ok || !nonceData.message) throw new Error(nonceData.error || "nonce error");
+
+          var signature = await window.ethereum.request({
+            method: "personal_sign",
+            params: [nonceData.message, addr]
+          });
+
+          var res = await fetch(base, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ address: addr, nonce: nonceData.nonce, signature: signature })
+          });
+          var data = await res.json();
+          if (!res.ok || !data.firebaseToken) throw new Error(data.error || "wallet auth failed");
+
+          await window.fbAuth.signInWithCustomToken(window.auth, data.firebaseToken);
+          localStorage.setItem("ches_uid", data.uid);
+          resolve(data);
+        } catch (e) { reject(e); }
+      }, function () { reject(new Error("FIREBASE_NOT_READY")); });
+    });
   };
 
   function restoreLoginScreen(message) {
