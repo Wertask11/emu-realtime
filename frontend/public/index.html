@@ -2667,6 +2667,9 @@ body.paypay-mode #pp-post-fab {
 .eth-loginbonus .eth-btn { white-space:nowrap; }
 .eth-loginbonus.claimed { background:#f4f4f4; border-color:#e5e5e5; }
 .eth-loginbonus.claimed .eth-lb-copy span { color:#999; }
+/* ログインボーナス等のオフチェーン分（実EMUERとは別枠で表示する） */
+.eth-lb-copy span.eth-lb-offchain { color:#6b4a12; font-weight:700; }
+.eth-loginbonus.claimed .eth-lb-copy span.eth-lb-offchain { color:#777; }
 .eth-section { margin-top:22px; }
 .eth-section-head {
   display:flex; align-items:flex-end; justify-content:space-between;
@@ -4110,6 +4113,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
           <div class="eth-lb-copy">
             <strong>今日のログインボーナス</strong>
             <span id="emuLoginBonusNote">毎日ログインで +0.5 Emuer</span>
+            <span id="emuOffchainNote" class="eth-lb-offchain" style="display:none;"></span>
           </div>
           <button type="button" class="eth-btn primary" id="emuLoginBonusBtn" onclick="claimEmuLoginBonus()">+0.5 受取</button>
         </div>
@@ -5984,13 +5988,23 @@ async function _emuEnsureWalletSession() {
   return window.CHES.signInWithWallet(addr);
 }
 
-async function emuAuthHeaders(json) {
+// options.interactive === false のときは署名ダイアログを出さない。
+// 画面表示のたびに走る取得系（ログインボーナスの受取状況など）で、ユーザーが押してもいないのに
+// MetaMask の署名ダイアログが出てしまうのを防ぐ。
+async function emuAuthHeaders(json, options) {
+  const interactive = !(options && options.interactive === false);
   let user = window.auth && window.auth.currentUser;
-  for (let i = 0; !user && window.auth && i < 50; i += 1) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    user = window.auth.currentUser;
+  if (!user && window.CHES && typeof window.CHES.whenAuthStateResolved === 'function') {
+    // セッション復元は onAuthStateChanged で待つ（100ms×50回のポーリングは、
+    // タブが非アクティブだとタイマーが間引かれて数十秒かかることがある）
+    user = await window.CHES.whenAuthStateResolved();
+  } else if (!user) {
+    for (let i = 0; !user && window.auth && i < 50; i += 1) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      user = window.auth.currentUser;
+    }
   }
-  if (!user) {
+  if (!user && interactive) {
     // セッション復元を待っても居なければ、ウォレットログインとして復帰を試みる
     try { await _emuEnsureWalletSession(); } catch (e) { console.warn('wallet session:', e && (e.message || e)); }
     user = window.auth && window.auth.currentUser;
@@ -14378,14 +14392,13 @@ function chesHubSyncHeader() {
     const src = (name || addr.replace(/^0x/, '') || '・').trim();
     av.textContent = src.charAt(0).toUpperCase();
   }
+  // 残高は Emu の表示と同じ取得経路（実ウォレット=オンチェーン / CHES=オフチェーン台帳）。
+  // ローカルの pendingEmuer は「変換予定のポイント」であって残高ではないため使わない。
   const em = document.getElementById('hubEmuer');
-  if (em) {
-    let v = 0;
-    try {
-      v = (typeof pendingEmuer === 'number' ? pendingEmuer
-           : parseInt(localStorage.getItem('pendingEmuer'), 10)) || 0;
-    } catch (e) { v = 0; }
-    em.textContent = v.toLocaleString();
+  if (em && typeof _emuReadTokenBalance === 'function') {
+    _emuReadTokenBalance()
+      .then(function (v) { em.textContent = (Number(v) || 0).toLocaleString('ja-JP'); })
+      .catch(function () {});
   }
 }
 
@@ -14954,13 +14967,32 @@ async function _emuOnchainBalance(addr) {
 
 // オフチェーン台帳（サーバー権威：懸賞＋評価＋ログインボーナス − 支払い）。
 // クライアントからは読み取り専用（firestore.rules で write 禁止）。
-async function _emuOffchainBalance(addr) {
+// 同じ画面の再描画で何度もFirestoreを読まないよう、短時間キャッシュする。
+// ログインボーナス受取APIの戻り値でも更新するため、受け取った瞬間に画面へ反映できる。
+const _EMU_OFFCHAIN_TTL_MS = 30 * 1000;
+let _emuOffchainCache = { addr: '', balance: null, at: 0 };
+
+function _emuSetOffchainBalance(addr, balance) {
+  const key = String(addr || '').toLowerCase();
+  if (!key || balance === null || isNaN(Number(balance))) return;
+  _emuOffchainCache = { addr: key, balance: Math.max(0, Number(balance)), at: Date.now() };
+}
+
+async function _emuOffchainBalance(addr, options) {
+  const key = String(addr || '').toLowerCase();
+  if (!key) return null;
+  const allowCache = !(options && options.fresh);
+  if (allowCache && _emuOffchainCache.addr === key && _emuOffchainCache.balance !== null
+      && Date.now() - _emuOffchainCache.at < _EMU_OFFCHAIN_TTL_MS) {
+    return _emuOffchainCache.balance;
+  }
   try {
-    const key = String(addr || '').toLowerCase();
-    if (!key || !window.db || !window.fbLib) return null;
+    if (!window.db || !window.fbLib) return null;
     const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'emuer_offchain', key));
     if (!snap.exists()) return null;
-    return Math.max(0, Number(snap.data().balance) || 0);
+    const balance = Math.max(0, Number(snap.data().balance) || 0);
+    _emuSetOffchainBalance(key, balance);
+    return balance;
   } catch (e) { return null; }
 }
 
@@ -15036,6 +15068,11 @@ async function updateEmuTodayHome() {
   if (remainEl) remainEl.textContent = remaining.toLocaleString('ja-JP');
   if (progressEl) progressEl.style.width = progress + '%';
 
+  // ログインボーナスはオフチェーン台帳に入るため、実ウォレットでは上の残高（オンチェーン）
+  // には現れない。受け取った分が見えるようにオフチェーン分を別途表示する。
+  _emuOffchainBalance(window.connectedAccount || localStorage.getItem('emuWallet') || '')
+    .then(updateEmuOffchainNote);
+
   const postRemainder = parseInt(localStorage.getItem('room2_postCount') || '0', 10) || 0;
   const untilStar = postRemainder === 0 ? 10 : 10 - postRemainder;
   const starTitle = document.getElementById('emuStarProgressTitle');
@@ -15048,7 +15085,8 @@ async function updateEmuTodayHome() {
 
 /* ═══════════════════════════════════════
    ログインボーナス（オフチェーン・1日1回・+0.5 Emuer）
-   CHESログインユーザー(署名不可)でも受け取れるよう pendingEmuer に加算する。
+   受取済み判定も加算もサーバー（emuer_offchain 台帳）が権威。
+   実ウォレットの残高はオンチェーンなので、ここで増えるのはオフチェーン分。
 ═══════════════════════════════════════ */
 const EMU_LOGIN_BONUS_AMOUNT = 0.5;
 const _EMU_LB_API = 'https://emu-realtime.onrender.com';
@@ -15062,9 +15100,20 @@ function _emuLbAddr() {
 function _emuLbUid() {
   return (localStorage.getItem('ches_uid') || '').trim();
 }
+// 受取日はサーバー（Asia/Tokyo）が正。端末のローカル日付で作ると、
+// 海外・時計ずれ・日付境界でサーバーとキャッシュがずれて誤判定になる。
 function _emuTodayStr() {
-  const d = new Date();
-  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return jst.getUTCFullYear() + '-' + (jst.getUTCMonth() + 1) + '-' + jst.getUTCDate();
+}
+// オフチェーン分（ログインボーナス・評価・懸賞）の表示。実EMUERとは別枠。
+function updateEmuOffchainNote(balance) {
+  const el = document.getElementById('emuOffchainNote');
+  if (!el) return;
+  const val = Number(balance);
+  if (balance === null || isNaN(val) || val <= 0) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = '';
+  el.textContent = 'オフチェーン分 ' + (Math.round(val * 10) / 10).toLocaleString('ja-JP') + ' Emuer（ログボ・評価・懸賞）';
 }
 function _emuLbCacheKey() { return 'emu_loginbonus_last_' + _emuLbAddr(); }
 // サーバー状態が正。未取得(null)のときだけローカルキャッシュ（オフライン用）にフォールバック。
@@ -15078,7 +15127,8 @@ async function refreshEmuLoginBonusStatus() {
   const uid = _emuLbUid();
   if (!addr && !uid) { updateEmuLoginBonusUI(); return; }
   try {
-    const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus/status?address=' + encodeURIComponent(addr) + '&uid=' + encodeURIComponent(uid), { headers: await emuAuthHeaders(false) });
+    // 状況確認は画面表示のたびに走るため、署名ダイアログは出さない（受取ボタンを押した時だけ）
+    const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus/status?address=' + encodeURIComponent(addr) + '&uid=' + encodeURIComponent(uid), { headers: await emuAuthHeaders(false, { interactive: false }) });
     const j = await r.json();
     if (r.ok) {
       _emuLbClaimedToday = !!j.claimedToday;
@@ -15100,7 +15150,7 @@ function updateEmuLoginBonusUI() {
     btn.disabled = true;
     if (row) row.classList.add('claimed');
     if (note) note.textContent = _emuLbClaimedElsewhere
-      ? '別の端末で受取済みです。また明日どうぞ。'
+      ? '本日分は受取済みです（別の端末または自動付与）。また明日どうぞ。'
       : 'また明日、受け取れます。';
   } else {
     btn.textContent = '+' + EMU_LOGIN_BONUS_AMOUNT + ' 受取';
@@ -15132,18 +15182,24 @@ async function claimEmuLoginBonus() {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || '受け取りに失敗しました');
-    // 受取済み(別端末含む)は必ず受取済み表示に統一（=二重取得を防ぐ）
+    // 受取済み(別端末・自動付与含む)は必ず受取済み表示に統一（=二重取得を防ぐ）
     _emuLbClaimedToday = true;
     localStorage.setItem(_emuLbCacheKey(), _emuTodayStr());
     updateEmuLoginBonusUI();
-    // 残高はサーバー(オフチェーン台帳)が正。表示を更新。
+    // 残高はサーバー(オフチェーン台帳)が正。戻り値をそのまま反映して即座に表示を更新する
+    // （Firestoreを読み直さないので、押した瞬間に数字が動く）。
+    if (typeof j.balance === 'number') {
+      _emuSetOffchainBalance(addr, j.balance);
+      updateEmuOffchainNote(j.balance);
+    }
     try { if (typeof ppUpdateBalance === 'function') ppUpdateBalance(); } catch (e) {}
     try { if (myWalletPage && myWalletPage.style.display === 'block') renderWallet(); } catch (e) {}
     try { updateEmuTodayHome(); } catch (e) {}
     try { if (typeof loadEmuWalletCard === 'function') loadEmuWalletCard(); } catch (e) {}
+    try { if (typeof chesHubSyncHeader === 'function') chesHubSyncHeader(); } catch (e) {}
     if (j.alreadyClaimed) {
-      // 別の端末で受け取り済み（アカウント単位で1日1回）
-      _emuLbToast('本日は別の端末で受け取り済みです🧊');
+      // 本日分は受取済み（別端末での受取、または定期バッチによる自動付与）
+      _emuLbToast('本日はすでに受け取り済みです🧊');
     } else {
       _emuLbToast('🎁 ログインボーナス +' + EMU_LOGIN_BONUS_AMOUNT + ' Emuer');
     }
@@ -19645,24 +19701,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 250);
   }
 
-  // Firebase の認証状態が確定するまで待つ（起動直後は currentUser が null のため）
+  // Firebase の初期化と認証状態の確定を待つ（起動直後は currentUser が null のため）。
+  // 初期化待ちは whenFirebaseReady（イベント駆動）に任せる。タイマーのポーリングだけだと、
+  // タブが非アクティブのときに間引かれて待ち時間が数十秒に伸びる。
   function whenAuthStateResolved() {
     return new Promise(function (resolve) {
-      if (!window.auth || !window.fbAuth) return resolve(null);
-      if (window.auth.currentUser) return resolve(window.auth.currentUser);
-      var settled = false;
-      var unsub = window.fbAuth.onAuthStateChanged(window.auth, function (user) {
-        if (settled) return;
-        settled = true;
-        try { unsub(); } catch (e) {}
-        resolve(user || null);
-      });
-      setTimeout(function () {
-        if (settled) return;
-        settled = true;
-        try { unsub(); } catch (e) {}
-        resolve(window.auth.currentUser || null);
-      }, 3000);
+      whenFirebaseReady(function () {
+        if (window.auth.currentUser) return resolve(window.auth.currentUser);
+        var settled = false;
+        var unsub = window.fbAuth.onAuthStateChanged(window.auth, function (user) {
+          if (settled) return;
+          settled = true;
+          try { unsub(); } catch (e) {}
+          resolve(user || null);
+        });
+        setTimeout(function () {
+          if (settled) return;
+          settled = true;
+          try { unsub(); } catch (e) {}
+          resolve(window.auth.currentUser || null);
+        }, 3000);
+      }, function () { resolve(null); });
     });
   }
 
@@ -20051,6 +20110,9 @@ document.addEventListener('DOMContentLoaded', () => {
       window.fbAuth.signOut(window.auth).finally(function () { location.reload(); });
     });
   };
+
+  // 認証状態の待機は Emu 側（emuAuthHeaders）からも使う
+  CHES.whenAuthStateResolved = whenAuthStateResolved;
 
   window.CHES = CHES;
 
