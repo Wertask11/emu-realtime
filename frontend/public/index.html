@@ -8429,6 +8429,33 @@ function goTomainapp() {
   setTimeout(() => _hideSpLoadingOverlay(), 1400);
 }
 
+// ウォレット（MetaMask）ログイン後の着地点。
+// LINE / Google（CHES.enterSchoolPark）と同じく CHESハブ（メイン画面）を表示する。
+// SchoolParkマップはハブで SchoolPark を選んだときに開く。
+function goToChesHub() {
+  // ★ メンテナンス中はオーナー以外をブロック
+  if (MAINTENANCE_MODE && !_isOwnerAccess()) {
+    walletScreen.style.display = "none";
+    const _ms = document.getElementById('maintenanceScreen');
+    if (_ms) { _ms.style.display = 'flex'; _startMaintenanceCountdown(); }
+    return;
+  }
+  // ── パスタイプを実際のNFT保有状況から確定する（goTomainapp と同じ判定）──
+  localStorage.setItem('spPassType', window.hasPaidNFT ? 'paid' : 'free');
+
+  // CHES 側の自動サインイン（setupAutoResume）がログイン済み画面を上書きしないようにする
+  window._chesEntered = true;
+  window._chesBusy = false;
+
+  if (typeof chesHubShow === "function") {
+    chesHubShow();
+    _hideSpLoadingOverlay();
+  } else {
+    // ハブが読み込まれていない旧状態へのフォールバック
+    goTomainapp();
+  }
+}
+
 // ─── 冷蔵庫くんのセリフ（ローディング中タップで表示） ───────────
 const _SP_REIZO_LOADING_LINES = [
   "ここは⛲ 噴水広場！SchoolParkの中心地だよ！投票や掲示板もここから！",
@@ -11608,9 +11635,9 @@ if (typeof updateConvertButton === "function") {
   }
   // 有料パス入場をFirebaseに記録（非ブロッキング）
   spTrack('paid', account).catch(() => {});
-  // ★ spPassType はgoTomainapp()内でNFT実態から確定する
-  // エアドロ画面をスキップしてそのままSchoolParkマップへ
-  goTomainapp();
+  // ★ spPassType はgoToChesHub()内でNFT実態から確定する
+  // LINE / Google ログインと同じく、まず CHESハブ（メイン画面）へ
+  goToChesHub();
 
   } catch (err) {
     console.error("❌ 接続エラー:", err);
@@ -17213,9 +17240,9 @@ walletAddressButton.textContent =
 
   // 無料パス入場をFirebaseに記録（非ブロッキング）
   spTrack('free', account).catch(() => {});
-  // ★ spPassType はgoTomainapp()内でNFT実態から確定する
-  // エアドロ画面をスキップしてそのままSchoolParkマップへ
-  goTomainapp();
+  // ★ spPassType はgoToChesHub()内でNFT実態から確定する
+  // LINE / Google ログインと同じく、まず CHESハブ（メイン画面）へ
+  goToChesHub();
 };
 
   // 公式NFT最終判定
