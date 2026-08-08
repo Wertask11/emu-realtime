@@ -129,7 +129,8 @@ const publicFormRateLimit = rateLimit({ windowMs: 10 * 60_000, max: 5, key: "for
 // =====================
 const OPERATOR_PRIVATE_KEY = process.env.OPERATOR_PRIVATE_KEY;
 const EMUER_CONTRACT_ADDRESS = process.env.EMUER_CONTRACT_ADDRESS || "0x4418d5250Dae4b1125ADFCD5C0779B1412E4a964";
-const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL || "https://polygon-rpc.com";
+// 旧既定の https://polygon-rpc.com は API キー必須になり 401 を返すため、公開RPCへ変更。
+const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com";
 const CAMPAIGN_ID = "EmuRelease2026";
 const CAMPAIGN_DEADLINE = new Date("2026-04-14T23:59:59+09:00");
 
@@ -1903,6 +1904,116 @@ app.post("/api/auth/line", async (req, res) => {
     });
   } catch (e) {
     console.error("❌ /api/auth/line 失敗:", e);
+    return res.status(500).json({ error: "サーバーエラー" });
+  }
+});
+
+// ════════════════════════════════════════
+// ウォレット（MetaMask等）ログイン → Firebase セッション発行
+//   LINE / Google と同じく「Firebaseユーザー + ches_accounts」を用意する。
+//   これが無いと requireFirebaseUser を通るAPI（ログインボーナス等）と
+//   Firestoreルール（投稿・Good等）がウォレットログインでは一切使えない。
+//   所有証明は personal_sign（EIP-191）の署名で行う。
+//   ① GET  /api/auth/wallet/nonce?address=0x… → 署名対象メッセージを発行
+//   ② POST /api/auth/wallet {address, nonce, signature} → custom token を返す
+// ════════════════════════════════════════
+const WALLET_NONCE_TTL_MS = 5 * 60 * 1000;
+const walletNonces = new Map(); // nonce → { address, message, expiresAt }
+
+function _purgeWalletNonces() {
+  const now = Date.now();
+  for (const [key, value] of walletNonces) if (value.expiresAt <= now) walletNonces.delete(key);
+}
+
+app.get("/api/auth/wallet/nonce", (req, res) => {
+  let address;
+  try {
+    address = ethers.utils.getAddress(String(req.query.address || "").trim());
+  } catch (e) {
+    return res.status(400).json({ error: "INVALID_ADDRESS" });
+  }
+  _purgeWalletNonces();
+  if (walletNonces.size > 5000) return res.status(503).json({ error: "BUSY" });
+
+  const nonce = randomUUID();
+  const issuedAt = new Date().toISOString();
+  const message = [
+    "SchoolPark / Emu にログインします。",
+    "このメッセージへの署名でウォレットの所有を確認します（手数料はかかりません）。",
+    "",
+    "address: " + address,
+    "nonce: " + nonce,
+    "issuedAt: " + issuedAt
+  ].join("\n");
+
+  walletNonces.set(nonce, { address, message, expiresAt: Date.now() + WALLET_NONCE_TTL_MS });
+  return res.json({ nonce, message, issuedAt, expiresInMs: WALLET_NONCE_TTL_MS });
+});
+
+app.post("/api/auth/wallet", async (req, res) => {
+  try {
+    const { address, nonce, signature } = req.body || {};
+    if (!address || !nonce || !signature) return res.status(400).json({ error: "MISSING_PARAMS" });
+
+    _purgeWalletNonces();
+    const issued = walletNonces.get(String(nonce));
+    // nonce は 1回限り。検証の成否にかかわらず即座に破棄して再利用（リプレイ）を防ぐ。
+    walletNonces.delete(String(nonce));
+    if (!issued) return res.status(401).json({ error: "NONCE_EXPIRED" });
+
+    let checksummed;
+    try {
+      checksummed = ethers.utils.getAddress(String(address).trim());
+    } catch (e) {
+      return res.status(400).json({ error: "INVALID_ADDRESS" });
+    }
+    if (checksummed !== issued.address) return res.status(401).json({ error: "ADDRESS_MISMATCH" });
+
+    let recovered;
+    try {
+      recovered = ethers.utils.verifyMessage(issued.message, String(signature));
+    } catch (e) {
+      return res.status(401).json({ error: "INVALID_SIGNATURE" });
+    }
+    if (recovered !== checksummed) return res.status(401).json({ error: "INVALID_SIGNATURE" });
+
+    if (!firebaseAdmin || !db) return res.status(503).json({ error: "AUTH_UNAVAILABLE" });
+
+    // ches_accounts を用意（uid = wallet:<小文字アドレス>）。
+    // walletAddress は署名で所有を確認済みの実アドレス（CHESの導出アドレスではない）。
+    const uid = "wallet:" + checksummed.toLowerCase();
+    const ref = db.collection("ches_accounts").doc(uid);
+    const snap = await ref.get();
+    const now = Date.now();
+    if (!snap.exists) {
+      await ref.set({
+        uid,
+        provider: "wallet",
+        providerUid: checksummed,
+        displayName: "",
+        email: "",
+        photoURL: "",
+        walletAddress: checksummed,
+        membership: { tier: "free", offchain: true, issuedAt: now },
+        createdAt: now,
+        lastLogin: now
+      });
+      await db.collection("ches_wallets").doc(checksummed).set({
+        address: checksummed, uid, type: "self-custody", provider: "wallet", createdAt: now
+      }, { merge: true });
+    } else {
+      await ref.set({ lastLogin: now }, { merge: true });
+    }
+    // requireFirebaseUser のキャッシュに古い内容が残らないようにする
+    identityAccountCache.delete(uid);
+
+    const firebaseToken = await firebaseAdmin.auth().createCustomToken(uid, {
+      provider: "wallet",
+      address: checksummed
+    });
+    return res.json({ firebaseToken, uid, address: checksummed });
+  } catch (e) {
+    console.error("❌ /api/auth/wallet 失敗:", e);
     return res.status(500).json({ error: "サーバーエラー" });
   }
 });
