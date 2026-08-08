@@ -2648,6 +2648,7 @@ body.paypay-mode #pp-post-fab {
   color:#9c5100; font-size:11px; font-weight:bold;
 }
 .eth-balance { display:flex; gap:6px; align-items:baseline; }
+.eth-balance-hint { margin:4px 0 0; color:#8a7f74; font-size:11px; line-height:1.6; }
 .eth-balance strong { font-size:34px; }
 .eth-balance span { color:#777; }
 .eth-progress-head { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:#777; }
@@ -2713,7 +2714,7 @@ body.paypay-mode #pp-post-fab {
 .eth-wallet-amount strong { font-size:40px; line-height:1.1; color:#25211d; }
 .eth-wallet-amount span { color:#9c5100; font-size:14px; font-weight:700; }
 .eth-wallet-pending { margin:9px 0 0; color:#8a7f74; font-size:11.5px; line-height:1.7; }
-.eth-wallet-pending b { color:#b85f00; }
+.eth-wallet-pending b { color:#b85f00; overflow-wrap:anywhere; }
 .eth-wallet-actions { display:flex; gap:9px; flex-wrap:wrap; }
 .eth-wallet-actions .eth-btn { flex:1; min-width:140px; min-height:44px; }
 @media (max-width:700px) {
@@ -4040,7 +4041,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   <div class="eth-topbar">
     <div>
       <h1 class="eth-title">今日のEmu</h1>
-      <p class="eth-subtitle">体験から得た知識を、誰かの次の体験へ。</p>
+      <p class="eth-subtitle">あなたの熱に、ついてこられる場所。</p>
     </div>
     <div class="eth-tabs" role="navigation" aria-label="Emu画面">
       <button type="button" class="eth-tab active" id="emuTodayTab" onclick="showEmuToday()">今日のEmu</button>
@@ -4101,6 +4102,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <aside class="eth-card eth-reward">
         <span class="eth-badge">現在の報酬</span>
         <div class="eth-balance"><strong id="emuTodayBalance">0</strong><span>Emuer</span></div>
+        <p class="eth-balance-hint" id="emuBalanceHint" style="display:none;">（　）内は、まだ実EMUERに換えていない分</p>
         <div class="eth-progress-head">
           <span id="emuNextRewardLabel">次の体験まで</span>
           <span><b id="emuNextRewardRemaining">100</b> Emuer</span>
@@ -4170,7 +4172,14 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <div class="eth-wallet-balance">
           <span class="eth-wallet-label">使えるEmuer</span>
           <div class="eth-wallet-amount"><strong id="emuWalletBalance">0</strong><span>Emuer</span></div>
-          <p class="eth-wallet-pending">未確定 <b id="emuWalletPending">0</b> Emuer（変換すると使えるようになります）</p>
+          <p class="eth-wallet-pending">（　）内の <b id="emuWalletPending">0</b> Emuer は、まだ実EMUERに換えていない分です。</p>
+          <p class="eth-wallet-pending" id="emuWalletConvertNote">
+            実EMUERに換えるにはウォレットが必要です。ガス代（送金手数料）はご自身の負担になります。<br>
+            実EMUERは運営のアドレス <b id="emuDistributorAddr"></b> から届きます。
+          </p>
+          <p class="eth-wallet-pending" id="emuChesAddrNote" style="display:none;">
+            あなたのCHESアドレス：<b id="emuChesAddr"></b>
+          </p>
         </div>
         <div class="eth-wallet-actions">
           <button type="button" class="eth-btn primary" onclick="emuWalletConvert()">Emuerに変換</button>
@@ -14395,9 +14404,9 @@ function chesHubSyncHeader() {
   // 残高は Emu の表示と同じ取得経路（実ウォレット=オンチェーン / CHES=オフチェーン台帳）。
   // ローカルの pendingEmuer は「変換予定のポイント」であって残高ではないため使わない。
   const em = document.getElementById('hubEmuer');
-  if (em && typeof _emuReadTokenBalance === 'function') {
-    _emuReadTokenBalance()
-      .then(function (v) { em.textContent = (Number(v) || 0).toLocaleString('ja-JP'); })
+  if (em && typeof _emuReadBalancePair === 'function') {
+    _emuReadBalancePair()
+      .then(function (pair) { em.textContent = _emuFormatBalancePair(pair); })
       .catch(function () {});
   }
 }
@@ -14996,6 +15005,38 @@ async function _emuOffchainBalance(addr, options) {
   } catch (e) { return null; }
 }
 
+// 実EMUERの配布元（運営アドレス）。ユーザーへの説明用に表示する。
+const EMUER_DISTRIBUTOR_ADDRESS = '0x1C156b6a8CaA6772430edA2cBB0d20CF41B9CFE4';
+
+/* 表示用の残高ペア
+   real        … 実EMUER（変換済み・チェーン上にある分）
+   unconverted … まだ実EMUERに換えていない分（サーバー台帳：ログボ・評価・懸賞）
+   実EMUERに換えるにはウォレットが必要（ガス代はユーザー負担）なので、
+   CHES（LINE/Google）ログインの人は real が常に 0 になる。 */
+async function _emuReadBalancePair() {
+  const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
+  const isChes = _emuIsChesWallet();
+  let real = 0;
+  if (addr && !isChes) {
+    const onchain = await _emuOnchainBalance(addr);
+    if (onchain !== null) real = onchain;
+    else {
+      const cached = parseFloat(localStorage.getItem(_EMU_ONCHAIN_BAL_KEY + addr.toLowerCase()));
+      real = isNaN(cached) ? 0 : cached;
+    }
+  }
+  let unconverted = await _emuOffchainBalance(addr);
+  if (unconverted === null) unconverted = Math.max(0, Number(pendingEmuer) || 0);
+  return { real: real, unconverted: unconverted, isChes: isChes };
+}
+
+/* 「220（50）」形式。かっこ内はまだ実EMUERに換えていない分。0 のときは省略。 */
+function _emuFormatBalancePair(pair) {
+  const real = Math.floor(Number(pair && pair.real) || 0).toLocaleString('ja-JP');
+  const un = Math.round((Number(pair && pair.unconverted) || 0) * 10) / 10;
+  return un > 0 ? real + '（' + un.toLocaleString('ja-JP') + '）' : real;
+}
+
 async function _emuReadTokenBalance() {
   const localPart = Math.max(0, Number(pendingEmuer) || 0);
   const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
@@ -15057,21 +15098,23 @@ async function updateEmuTodayHome() {
     ? savedName + 'さん、今日はどこから始める？'
     : 'こんにちは。今日は、どこから始める？';
 
-  const balance = await _emuReadTokenBalance();
+  // 「220（50）」＝ 実EMUER 220 と、まだ換えていない分 50
+  const pair = await _emuReadBalancePair();
+  const balance = pair.real + pair.unconverted;
   const target = balance < 100 ? 100 : Math.ceil((balance + 1) / 50) * 50;
   const remaining = Math.max(0, target - balance);
   const progress = target > 0 ? Math.min(100, Math.round((balance / target) * 100)) : 0;
   const balanceEl = document.getElementById('emuTodayBalance');
   const remainEl = document.getElementById('emuNextRewardRemaining');
   const progressEl = document.getElementById('emuTodayProgress');
-  if (balanceEl) balanceEl.textContent = balance.toLocaleString('ja-JP');
+  if (balanceEl) balanceEl.textContent = _emuFormatBalancePair(pair);
   if (remainEl) remainEl.textContent = remaining.toLocaleString('ja-JP');
   if (progressEl) progressEl.style.width = progress + '%';
+  const hintEl = document.getElementById('emuBalanceHint');
+  if (hintEl) hintEl.style.display = pair.unconverted > 0 ? '' : 'none';
 
-  // ログインボーナスはオフチェーン台帳に入るため、実ウォレットでは上の残高（オンチェーン）
-  // には現れない。受け取った分が見えるようにオフチェーン分を別途表示する。
-  _emuOffchainBalance(window.connectedAccount || localStorage.getItem('emuWallet') || '')
-    .then(updateEmuOffchainNote);
+  // ログインボーナスは「まだ換えていない分」に入る。受け取った分がすぐ見えるようにする。
+  updateEmuOffchainNote(pair.unconverted);
 
   const postRemainder = parseInt(localStorage.getItem('room2_postCount') || '0', 10) || 0;
   const untilStar = postRemainder === 0 ? 10 : 10 - postRemainder;
@@ -15106,14 +15149,14 @@ function _emuTodayStr() {
   const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
   return jst.getUTCFullYear() + '-' + (jst.getUTCMonth() + 1) + '-' + jst.getUTCDate();
 }
-// オフチェーン分（ログインボーナス・評価・懸賞）の表示。実EMUERとは別枠。
+// まだ実EMUERに換えていない分（ログインボーナス・評価・懸賞）の表示。
 function updateEmuOffchainNote(balance) {
   const el = document.getElementById('emuOffchainNote');
   if (!el) return;
   const val = Number(balance);
   if (balance === null || isNaN(val) || val <= 0) { el.style.display = 'none'; el.textContent = ''; return; }
   el.style.display = '';
-  el.textContent = 'オフチェーン分 ' + (Math.round(val * 10) / 10).toLocaleString('ja-JP') + ' Emuer（ログボ・評価・懸賞）';
+  el.textContent = 'まだ換えていない分：' + (Math.round(val * 10) / 10).toLocaleString('ja-JP') + ' Emuer';
 }
 function _emuLbCacheKey() { return 'emu_loginbonus_last_' + _emuLbAddr(); }
 // サーバー状態が正。未取得(null)のときだけローカルキャッシュ（オフライン用）にフォールバック。
@@ -15239,22 +15282,24 @@ async function loadEmuWalletCard() {
   const pendingEl = document.getElementById('emuWalletPending');
   const badgesEl  = document.getElementById('emuWalletBadges');
 
-  // 残高（今日のEmuと同じ取得経路）
+  // 残高（今日のEmuと同じ取得経路）「220（50）」形式
   try {
-    const balance = await _emuReadTokenBalance();
-    balanceEl.textContent = Number(balance || 0).toLocaleString('ja-JP');
+    const pair = await _emuReadBalancePair();
+    balanceEl.textContent = _emuFormatBalancePair(pair);
+    if (pendingEl) pendingEl.textContent = (Math.round(pair.unconverted * 10) / 10).toLocaleString('ja-JP');
+    const pendingRow = pendingEl && pendingEl.parentElement;
+    if (pendingRow) pendingRow.style.display = pair.unconverted > 0 ? '' : 'none';
   } catch (e) { balanceEl.textContent = '0'; }
 
-  // 未確定分（まだオンチェーンに変換されていない分）
-  // 実ウォレットは残高＝オンチェーンなので、評価分・ログインボーナス・懸賞は
-  // サーバーのオフチェーン台帳が正。台帳が無ければローカルの pendingEmuer。
-  if (pendingEl) {
-    let p = Number(pendingEmuer) || 0;
-    if (!_emuIsChesWallet()) {
-      const ledger = await _emuOffchainBalance(window.connectedAccount || localStorage.getItem('emuWallet') || '');
-      if (ledger !== null) p = ledger;
-    }
-    pendingEl.textContent = (Math.round(p * 10) / 10).toLocaleString('ja-JP');
+  // 実EMUERの配布元アドレス（説明用）と、CHESアドレスの表示
+  const distEl = document.getElementById('emuDistributorAddr');
+  if (distEl) distEl.textContent = EMUER_DISTRIBUTOR_ADDRESS;
+  const chesAddr = localStorage.getItem('ches_address') || '';
+  const chesRow = document.getElementById('emuChesAddrNote');
+  const chesEl = document.getElementById('emuChesAddr');
+  if (chesRow && chesEl) {
+    if (chesAddr) { chesEl.textContent = chesAddr; chesRow.style.display = ''; }
+    else { chesRow.style.display = 'none'; }
   }
 
   // 称号バッジ
@@ -19758,6 +19803,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return {
         uid: uid,
         walletAddress: data.walletAddress || walletAddress,
+        // LINE / Google は walletAddress がそのままCHESアドレス
+        chesAddress: data.chesAddress || data.walletAddress || walletAddress,
         displayName: data.displayName || pName,
         membership: data.membership || { tier: "free", offchain: true, issuedAt: now },
         provider: data.provider || provider,
@@ -19774,6 +19821,7 @@ document.addEventListener('DOMContentLoaded', () => {
       email: pEmail,
       photoURL: pPhoto,
       walletAddress: walletAddress,
+      chesAddress: walletAddress, // LINE / Google はCHESアドレス＝walletAddress
       membership: { tier: "free", offchain: true, issuedAt: now },
       createdAt: now,
       lastLogin: now
@@ -19785,7 +19833,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }).catch(function () {});
 
     return {
-      uid: uid, walletAddress: walletAddress,
+      uid: uid, walletAddress: walletAddress, chesAddress: walletAddress,
       displayName: account.displayName, membership: account.membership,
       provider: provider, isNew: true
     };
@@ -19800,6 +19848,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     localStorage.setItem("emuWallet", addr);
     localStorage.setItem("ches_uid", account.uid);
+    // CHESアドレスは全ログイン方法（LINE / Google / ウォレット）で紐づけて保持する
+    localStorage.setItem("ches_address", account.chesAddress || addr);
     if (account.displayName) localStorage.setItem("ches_name", account.displayName);
 
     window.emuAuth = { type: "chesFree", address: addr, provider: provider, chesUid: account.uid };
@@ -19853,6 +19903,7 @@ document.addEventListener('DOMContentLoaded', () => {
           var current = await whenAuthStateResolved();
           if (current && current.uid === uid) {
             localStorage.setItem("ches_uid", uid);
+            localStorage.setItem("ches_address", CHES.deriveWalletAddress(uid));
             resolve({ uid: uid, address: addr, reused: true });
             return;
           }
@@ -19876,6 +19927,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           await window.fbAuth.signInWithCustomToken(window.auth, data.firebaseToken);
           localStorage.setItem("ches_uid", data.uid);
+          // ウォレットログインにもCHESアドレスを紐づける（LINE / Google と同じ扱い）
+          if (data.chesAddress) localStorage.setItem("ches_address", data.chesAddress);
           resolve(data);
         } catch (e) { reject(e); }
       }, function () { reject(new Error("FIREBASE_NOT_READY")); });
@@ -20103,6 +20156,7 @@ document.addEventListener('DOMContentLoaded', () => {
   CHES.logout = function () {
     localStorage.removeItem("ches_uid");
     localStorage.removeItem("ches_name");
+    localStorage.removeItem("ches_address");
     localStorage.removeItem("emu_auth");
     localStorage.removeItem("emuWallet");
     localStorage.removeItem("spPassType");

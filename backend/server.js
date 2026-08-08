@@ -645,7 +645,9 @@ async function runKnowledgeBountyBatch() {
     // ── 懸賞の確定：募集者から差し引き、回答者へ加算（差引ゼロ・オフチェーン移転）──
     // 総EMUER量は不変。将来CHESウォレット本開発時に emuer_offchain.balance を実EMUERで精算。
     const settle = db.batch();
-    const FieldValue = admin.firestore.FieldValue;
+    // admin はこのスコープに存在しない（各所でローカル require されているだけ）。
+    // ここで admin を参照すると ReferenceError でバッチ全体が落ちる。
+    const FieldValue = firebaseAdmin.firestore.FieldValue;
     valid.forEach(item => {
       // 募集者（支払い元）: balance を減らし、支払い累計 spentBounty を積む
       settle.set(db.collection("emuer_offchain").doc(item.requesterAddr), {
@@ -698,7 +700,9 @@ cron.schedule("0 * * * *", () => { console.log("⏰ 知識懸賞バッチ起動"
 //   balance = bountyBalance(懸賞・イベント式) + reactionBalance(評価された分) + loginBalance(ログボ)
 // 付与ルール（確定）:
 //   ・Good/Change = 評価された投稿者が得る: floor(受Good/10) + floor(受Change/20)×3
-//   ・ログインボーナス = その日ログインしていれば 1日1回 +0.5（サーバー権威）
+//   ・ログインボーナス = ユーザーが受取ボタンを押したときだけ +0.5（/api/emuer/login-bonus）
+//     このバッチでは自動付与しない。ログインしただけで勝手に受取済みになると、
+//     受取ボタンが機能していないように見えるため。loginBalance は読むだけで加算しない。
 // =====================
 function _jstDateStr(d) {
   // Asia/Tokyo の YYYY-MM-DD
@@ -714,9 +718,10 @@ async function runOffchainEmuerReconcile() {
   }
   console.log("🚀 オフチェーンEMUER台帳照合開始:", new Date().toISOString());
   try {
-    const FieldValue = admin.firestore.FieldValue;
-    const todayJst = _jstDateStr(new Date());
-    // CHESアカウント（LINE/Google）を対象に処理。件数が増えたらページングを追加。
+    // 以前ここに `const FieldValue = admin.firestore.FieldValue;` があったが、
+    // このスコープに admin は存在せず ReferenceError でバッチ全体が毎回失敗していた。
+    // このバッチは FieldValue を使わないので削除する（懸賞バッチ側は firebaseAdmin を使用）。
+    // CHESアカウント（LINE/Google/ウォレット）を対象に処理。件数が増えたらページングを追加。
     const accountsSnap = await db.collection("ches_accounts").limit(500).get();
     // 投稿はアカウントごとに問い合わせず、一度だけ取得してメモリ上で集計する。
     // 旧実装は最大500本の個別クエリを毎時発行し、空結果にも読み取り料金が発生していた。
@@ -746,16 +751,8 @@ async function runOffchainEmuerReconcile() {
       const sumChange = reactionTotals.change;
       const reactionBalance = Math.floor(sumGood / 10) + Math.floor(sumChange / 20) * 3;
 
-      // ── ② ログインボーナス: 今日ログイン済み かつ 今日未付与なら +0.5 ──
-      let loginInc = 0;
-      const lastLoginMs = acc.lastLogin && acc.lastLogin.toMillis ? acc.lastLogin.toMillis()
-                        : (typeof acc.lastLogin === "number" ? acc.lastLogin : 0);
-      if (lastLoginMs) {
-        const loggedInToday = _jstDateStr(new Date(lastLoginMs)) === todayJst;
-        if (loggedInToday && acc.lastLoginBonusDate !== todayJst) {
-          loginInc = EMU_LOGIN_BONUS;
-        }
-      }
+      // ── ② ログインボーナスは受取ボタン（/api/emuer/login-bonus）でのみ付与する ──
+      // ここで自動付与すると、ユーザーが押す前に「受取済み」になってしまう。
 
       // ── 台帳を更新（bountyBalanceは懸賞バッチがイベント式に積む。ここでは触らず読むだけ）──
       const balRef = db.collection("emuer_offchain").doc(addr);
@@ -763,7 +760,7 @@ async function runOffchainEmuerReconcile() {
       const ex = existing.exists ? existing.data() : {};
       const bountyBalance = Number(ex.bountyBalance) || 0;   // 懸賞で受け取った累計
       const spentBounty = Number(ex.spentBounty) || 0;       // 募集者として支払った累計
-      const loginBalance = (Number(ex.loginBalance) || 0) + loginInc;
+      const loginBalance = Number(ex.loginBalance) || 0;     // 受取APIが積む（ここでは加算しない）
       // 利用可能残高 = 受取(懸賞+評価+ログボ) - 支払い(懸賞)
       const balance = bountyBalance + reactionBalance + loginBalance - spentBounty;
 
@@ -785,13 +782,6 @@ async function runOffchainEmuerReconcile() {
         }, { merge: true });
       }
 
-      if (loginInc > 0) {
-        await accDoc.ref.update({ lastLoginBonusDate: todayJst });
-        await db.collection("emuer_offchain_ledger").add({
-          address: addr, uid: acc.uid || accDoc.id, amount: loginInc,
-          reason: "login_bonus", date: todayJst, createdAt: new Date()
-        });
-      }
       processed++;
     }
     console.log(`✅ オフチェーンEMUER台帳照合完了: ${processed} アカウント`);
@@ -1920,6 +1910,15 @@ app.post("/api/auth/line", async (req, res) => {
 const WALLET_NONCE_TTL_MS = 5 * 60 * 1000;
 const walletNonces = new Map(); // nonce → { address, message, expiresAt }
 
+// CHESアドレス（アドレスのみ・決定論的生成／秘密鍵なし）。
+// LINE / Google はこれがそのまま walletAddress になる。ウォレットログインでも
+// 同じ規則で発行して紐づけ、どのログイン方法でもCHESアドレスを持つようにする。
+// フロント側 CHES.deriveWalletAddress と同一の計算式（変更する場合は両方を直すこと）。
+function _deriveChesAddress(uid) {
+  const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes("ches-wallet:v1:" + uid));
+  return ethers.utils.getAddress("0x" + hash.slice(-40));
+}
+
 function _purgeWalletNonces() {
   const now = Date.now();
   for (const [key, value] of walletNonces) if (value.expiresAt <= now) walletNonces.delete(key);
@@ -1982,6 +1981,7 @@ app.post("/api/auth/wallet", async (req, res) => {
     // ches_accounts を用意（uid = wallet:<小文字アドレス>）。
     // walletAddress は署名で所有を確認済みの実アドレス（CHESの導出アドレスではない）。
     const uid = "wallet:" + checksummed.toLowerCase();
+    const chesAddress = _deriveChesAddress(uid);
     const ref = db.collection("ches_accounts").doc(uid);
     const snap = await ref.get();
     const now = Date.now();
@@ -1994,6 +1994,7 @@ app.post("/api/auth/wallet", async (req, res) => {
         email: "",
         photoURL: "",
         walletAddress: checksummed,
+        chesAddress,
         membership: { tier: "free", offchain: true, issuedAt: now },
         createdAt: now,
         lastLogin: now
@@ -2002,8 +2003,15 @@ app.post("/api/auth/wallet", async (req, res) => {
         address: checksummed, uid, type: "self-custody", provider: "wallet", createdAt: now
       }, { merge: true });
     } else {
-      await ref.set({ lastLogin: now }, { merge: true });
+      // 既存アカウントに chesAddress が無ければ補完する（この仕組みより前に作られた分）
+      const patch = { lastLogin: now };
+      if (!snap.data().chesAddress) patch.chesAddress = chesAddress;
+      await ref.set(patch, { merge: true });
     }
+    // CHESアドレスの逆引き（アドレス→アカウント）。ウォレットログインでも紐づけておく。
+    await db.collection("ches_wallets").doc(chesAddress).set({
+      address: chesAddress, uid, type: "address-only", provider: "wallet", createdAt: now
+    }, { merge: true });
     // requireFirebaseUser のキャッシュに古い内容が残らないようにする
     identityAccountCache.delete(uid);
 
@@ -2011,7 +2019,7 @@ app.post("/api/auth/wallet", async (req, res) => {
       provider: "wallet",
       address: checksummed
     });
-    return res.json({ firebaseToken, uid, address: checksummed });
+    return res.json({ firebaseToken, uid, address: checksummed, chesAddress });
   } catch (e) {
     console.error("❌ /api/auth/wallet 失敗:", e);
     return res.status(500).json({ error: "サーバーエラー" });
