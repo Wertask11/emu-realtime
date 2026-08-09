@@ -45,6 +45,8 @@ main { max-width: 1180px; margin: auto; padding: 44px 24px 80px; }
 .eyebrow { margin: 0 0 10px; text-transform: uppercase; font-size: 11px; letter-spacing: .16em; font-weight: 800; }
 .hero h1 { font-family: serif; font-size: clamp(32px, 4vw, 48px); margin: 0 0 18px; letter-spacing: .03em; line-height: 1.35; }
 .hero h1 span { display: block; white-space: nowrap; }
+/* 日本語・中国語は1行に収まる前提だが、他の言語は文が長く1行に入らないため折り返す */
+html:not([lang^="ja"]):not([lang^="zh"]) .hero h1 span { white-space: normal; }
 .hero p:last-child { font-size: 14px; line-height: 1.9; opacity: .92; margin: 0; }
 .day-progress { display: flex; flex-direction: column; align-items: center; gap: 9px; min-width: 150px; }
 .ring { --progress: 20%; width: 114px; height: 114px; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle, #ed7b2d 0 61%, transparent 62%), conic-gradient(white var(--progress), #ffffff3d 0); }
@@ -166,21 +168,23 @@ footer { max-width: 1180px; margin: auto; padding: 28px 24px 40px; display: flex
 <div class="app-shell">
   <div id="toast" class="toast" role="status" style="display:none"></div>
   <header class="topbar">
-    <button class="brand" id="brandBtn" aria-label="一日シェア ホーム">
-      <span class="brand-mark">日</span><span><b>一日シェア</b><small>わたしの一日が、誰かの学びになる。</small></span>
+    <button class="brand" id="brandBtn" aria-label="一日シェア ホーム" data-i18n-aria="i.brandAria">
+      <span class="brand-mark">日</span><span><b data-i18n="i.brand">一日シェア</b><small data-i18n="i.brandSub">わたしの一日が、誰かの学びになる。</small></span>
     </button>
-    <nav aria-label="メインメニュー">
-      <button data-tab="today">今日の一日</button>
-      <button data-tab="explore">みんなの一日</button>
-      <button data-tab="mine">わたしの記録</button>
+    <nav aria-label="メインメニュー" data-i18n-aria="i.menuAria">
+      <button data-tab="today" data-i18n="i.tab.today">今日の一日</button>
+      <button data-tab="explore" data-i18n="i.tab.explore">みんなの一日</button>
+      <button data-tab="mine" data-i18n="i.tab.mine">わたしの記録</button>
     </nav>
-    <a class="home-link" id="homeLink" href="index.html">← Emuに戻る</a>
+    <a class="home-link" id="homeLink" href="index.html" data-i18n="i.backToEmu">← Emuに戻る</a>
     <div class="profile"><span id="profileInitial">私</span><div><b id="profileName">わたし</b><small id="profileVis">非公開</small></div></div>
   </header>
   <main id="main"></main>
-  <footer><b>Emu</b><span>学ぶことは、生きること。</span><small>一日シェア</small></footer>
+  <footer><b>Emu</b><span data-i18n="i.footerTagline">学ぶことは、生きること。</span><small data-i18n="i.brand">一日シェア</small></footer>
 </div>
 
+<script src="/emu-i18n.js"></script>
+<script src="/emu-i18n-pages.js"></script>
 <script>
 "use strict";
 // ── Emu 連携設定 ─────────────────────────────
@@ -190,6 +194,8 @@ const CATEGORY_COLOR = {
   "健康": "#55a978", "暮らし": "#3e8f9d", "子育て": "#d75c81",
 };
 const CATEGORIES = Object.keys(CATEGORY_COLOR);
+// 保存する値は日本語のまま（既存データの絞り込み・集計を壊さないため）、表示だけ訳す
+const catLabel = (name) => (name === "すべて" ? emuT("i.cat.all") : emuT("i.cat." + name));
 // Emu本体の「今日のEmu」内にiframe埋め込みされている場合を判定
 const EMBED = new URLSearchParams(location.search).get("embed") === "1" || window.parent !== window;
 // 同一オリジンなら親フレーム(index.html)の接続アカウントも参照できる
@@ -199,7 +205,9 @@ const ADDRESS = (
   (_parentWin() && _parentWin().connectedAccount) ||
   localStorage.getItem("emuWallet") || ""
 ).toLowerCase().trim();
-const USERNAME = (localStorage.getItem("ches_name") || "").trim() || "わたし";
+// 表示名。未設定のときの既定値は言語で変わるため、読み込み時に固定せず都度求める
+const USER_NAME_SET = (localStorage.getItem("ches_name") || "").trim();
+const userName = () => USER_NAME_SET || emuT("i.me");
 
 const todayStr = () => {
   const d = new Date();
@@ -241,17 +249,17 @@ async function apiGet(path) {
   const url = `${API_BASE}${path}${path.includes("?") ? "&" : "?"}address=${encodeURIComponent(ADDRESS)}`;
   const res = await fetch(url, { headers: await authHeaders(false) });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "読み込みに失敗しました");
+  if (!res.ok) throw new Error(data.error || emuT("i.msg.loadFailed"));
   return data;
 }
 async function apiPost(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: await authHeaders(true),
-    body: JSON.stringify({ address: ADDRESS, userName: USERNAME, ...body }),
+    body: JSON.stringify({ address: ADDRESS, userName: userName(), ...body }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "処理に失敗しました");
+  if (!res.ok) throw new Error(data.error || emuT("i.msg.actionFailed"));
   return data;
 }
 
@@ -303,13 +311,13 @@ async function persist(items, msg) {
   try {
     const { day } = await apiPost("/api/ichinichi/save", { date: S.selectedDate, items });
     if (day) S.schedule = day.items;
-    notify(msg || "時間割を保存しました");
+    notify(msg || emuT("i.msg.saved"));
   } catch (e) { notify(e.message); }
   finally { S.saving = false; render(); }
 }
 async function saveDraft() {
   const d = S.draft;
-  if (!d.time || !d.title.trim()) return notify("時間と予定の名前を入力してください");
+  if (!d.time || !d.title.trim()) return notify(emuT("i.msg.needTimeTitle"));
   let next;
   if (S.editingIndex === null) next = [...S.schedule, d];
   else next = S.schedule.map((it, i) => i === S.editingIndex ? d : it);
@@ -317,43 +325,43 @@ async function saveDraft() {
   const isNew = S.editingIndex === null;
   S.showAdd = false; S.editingIndex = null;
   S.draft = { time: "", title: "", note: "", category: "生活", done: false };
-  await persist(next, isNew ? "予定を追加しました" : "予定を変更しました");
+  await persist(next, isNew ? emuT("i.msg.added") : emuT("i.msg.updated"));
 }
 async function shareDay() {
-  if (!S.schedule.length) return notify("予定を1件以上追加してください");
-  if (!S.learning.trim()) return notify("今日の学びを書いてください");
+  if (!S.schedule.length) return notify(emuT("i.msg.needPlan"));
+  if (!S.learning.trim()) return notify(emuT("i.msg.needLearning"));
   S.saving = true; render();
   try {
     const { day } = await apiPost("/api/ichinichi/share", {
       date: S.selectedDate, learning: S.learning, visibility: S.visibility,
     });
     if (day) S.visibility = day.visibility;
-    notify(S.visibility === "public" ? "Emuのみんなに共有しました" : "非公開で保存しました");
+    notify(S.visibility === "public" ? emuT("i.msg.sharedPublic") : emuT("i.msg.savedPrivate"));
     loadHistory(true);
   } catch (e) { notify(e.message); }
   finally { S.saving = false; render(); }
 }
 async function appendLearning() {
-  const addition = window.prompt("過去の学びに追記する内容");
+  const addition = window.prompt(emuT("i.msg.appendPrompt"));
   if (!addition || !addition.trim()) return;
   try {
     const { day } = await apiPost("/api/ichinichi/append-learning", { date: S.selectedDate, learning: addition });
     if (day) S.learning = day.learning;
-    notify("学びを追記しました"); render();
+    notify(emuT("i.msg.appended")); render();
   } catch (e) { notify(e.message); }
 }
 async function copyPrevious() {
-  if (S.schedule.length && !window.confirm("現在の時間割を前日の内容で置き換えますか？")) return;
+  if (S.schedule.length && !window.confirm(emuT("i.msg.copyConfirm"))) return;
   try {
     const { day } = await apiPost("/api/ichinichi/copy-previous", { date: S.selectedDate });
     if (day) S.schedule = day.items;
-    notify("前日の時間割をコピーしました"); render();
+    notify(emuT("i.msg.copied")); render();
   } catch (e) { notify(e.message); }
 }
 async function adopt(dayId, itemId) {
   try {
     await apiPost("/api/ichinichi/adopt", { date: todayStr(), dayId, itemId });
-    notify("今日の時間割に取り入れました");
+    notify(emuT("i.msg.adopted"));
   } catch (e) { notify(e.message); }
 }
 async function good(post) {
@@ -361,21 +369,21 @@ async function good(post) {
   try {
     await apiPost("/api/ichinichi/good", { dayId: post.id });
     post.gooded = true; post.goodCount += 1;
-    notify("Goodを送りました"); render();
+    notify(emuT("i.msg.goodSent")); render();
   } catch (e) { notify(e.message); }
 }
 async function report(post) {
-  const reason = window.prompt("通報理由を入力してください");
+  const reason = window.prompt(emuT("i.msg.reportPrompt"));
   if (!reason || !reason.trim()) return;
-  try { await apiPost("/api/ichinichi/report", { dayId: post.id, reason }); notify("通報を受け付けました"); }
+  try { await apiPost("/api/ichinichi/report", { dayId: post.id, reason }); notify(emuT("i.msg.reported")); }
   catch (e) { notify(e.message); }
 }
 async function deleteDay(day) {
-  if (!window.confirm(`${day.date}の予定と学びを削除しますか？`)) return;
+  if (!window.confirm(emuT("i.msg.deleteConfirm", { date: day.date }))) return;
   try {
     await apiPost("/api/ichinichi/delete-day", { dayId: day.id });
     S.history = S.history.filter((h) => h.id !== day.id);
-    notify("記録を削除しました"); render();
+    notify(emuT("i.msg.recordDeleted")); render();
     loadHistory(true);
   } catch (e) { notify(e.message); }
 }
@@ -402,9 +410,9 @@ function render() {
   // ヘッダー状態
   document.querySelectorAll("nav button").forEach((b) =>
     b.classList.toggle("active", b.dataset.tab === S.tab));
-  document.getElementById("profileName").textContent = USERNAME;
-  document.getElementById("profileInitial").textContent = USERNAME.slice(0, 1);
-  document.getElementById("profileVis").textContent = S.visibility === "public" ? "公開中" : "非公開";
+  document.getElementById("profileName").textContent = userName();
+  document.getElementById("profileInitial").textContent = userName().slice(0, 1);
+  document.getElementById("profileVis").textContent = S.visibility === "public" ? emuT("i.public") : emuT("i.private");
 
   if (S.tab === "today") renderToday();
   else if (S.tab === "explore") renderExplore();
@@ -415,10 +423,9 @@ function renderGate() {
   $main.innerHTML = `
     <div class="gate">
       <div class="brand-mark">日</div>
-      <h2>一日シェアへようこそ</h2>
-      <p>この機能は Emu にログイン（ウォレット接続）したうえでご利用いただけます。<br>
-      Emu のトップからログインして、もう一度お越しください。</p>
-      <a href="index.html">Emu にログインする</a>
+      <h2>${esc(emuT("i.gate.title"))}</h2>
+      <p>${esc(emuT("i.gate.text"))}</p>
+      <a href="index.html">${esc(emuT("i.gate.action"))}</a>
     </div>`;
   document.querySelectorAll("nav button").forEach((b) => b.classList.remove("active"));
 }
@@ -431,71 +438,71 @@ function renderToday() {
   const yearEnd = `${new Date().getFullYear()}-12-31`;
   const completed = S.schedule.filter((it) => it.done).length;
   const progress = S.schedule.length ? (completed / S.schedule.length) * 100 : 0;
-  const dateLabel = new Intl.DateTimeFormat("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })
+  const dateLabel = new Intl.DateTimeFormat(emuLocaleTag(), { year: "numeric", month: "long", day: "numeric", weekday: "long" })
     .format(new Date(`${S.selectedDate}T12:00:00`));
 
   const timelineHtml = S.loading
-    ? `<div class="empty-state"><h3>読み込み中…</h3></div>`
+    ? `<div class="empty-state"><h3>${esc(emuT("i.loading"))}</h3></div>`
     : S.schedule.length === 0
-      ? `<div class="empty-state"><span>＋</span><h3>まだ予定はありません</h3><p>あなたの一日を作ってみましょう。</p>${canEdit ? `<button class="primary" data-act="openAdd">最初の予定を追加する</button>` : ""}</div>`
+      ? `<div class="empty-state"><span>＋</span><h3>${esc(emuT("i.today.emptyTitle"))}</h3><p>${esc(emuT("i.today.emptyText"))}</p>${canEdit ? `<button class="primary" data-act="openAdd">${esc(emuT("i.today.emptyAction"))}</button>` : ""}</div>`
       : S.schedule.map((it, i) => `
         <article class="schedule-item ${it.done ? "done" : ""}">
           <time>${esc(it.time)}</time>
-          <button class="check" data-act="toggle" data-i="${i}" ${isToday ? "" : "disabled"} aria-label="${esc(it.title)}を完了">${it.done ? "✓" : ""}</button>
+          <button class="check" data-act="toggle" data-i="${i}" ${isToday ? "" : "disabled"} aria-label="${esc(emuT("i.today.completeAria", { title: it.title }))}">${it.done ? "✓" : ""}</button>
           <div class="item-body">
-            <div><h3>${esc(it.title)}</h3><span style="background:${CATEGORY_COLOR[it.category]}18;color:${CATEGORY_COLOR[it.category]}">${esc(it.category)}</span></div>
-            <p>${esc(it.note || "意識することは未入力です。")}</p>
-            ${canEdit ? `<div class="inline-actions"><button data-act="edit" data-i="${i}">編集</button><button data-act="del" data-i="${i}">削除</button></div>` : ""}
+            <div><h3>${esc(it.title)}</h3><span style="background:${CATEGORY_COLOR[it.category]}18;color:${CATEGORY_COLOR[it.category]}">${esc(catLabel(it.category))}</span></div>
+            <p>${esc(it.note || emuT("i.today.noNote"))}</p>
+            ${canEdit ? `<div class="inline-actions"><button data-act="edit" data-i="${i}">${esc(emuT("i.today.edit"))}</button><button data-act="del" data-i="${i}">${esc(emuT("i.today.delete"))}</button></div>` : ""}
           </div>
         </article>`).join("");
 
   const addFormHtml = (S.showAdd && canEdit) ? `
     <div class="add-form">
-      <label>時間<input type="time" data-draft="time" value="${esc(S.draft.time)}"></label>
-      <label class="grow">すること<input data-draft="title" placeholder="予定の名前" value="${esc(S.draft.title)}"></label>
-      <label>種類<select data-draft="category">${CATEGORIES.map((n) => `<option ${n === S.draft.category ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-      <label class="full">意識すること<input data-draft="note" placeholder="この時間に大切にしたいこと" value="${esc(S.draft.note)}"></label>
-      <div class="form-actions"><button data-act="cancelAdd">やめる</button><button class="primary" data-act="saveDraft" ${S.saving ? "disabled" : ""}>${S.editingIndex === null ? "追加する" : "変更する"}</button></div>
+      <label>${esc(emuT("i.form.time"))}<input type="time" data-draft="time" value="${esc(S.draft.time)}"></label>
+      <label class="grow">${esc(emuT("i.form.what"))}<input data-draft="title" placeholder="${esc(emuT("i.form.whatPlaceholder"))}" value="${esc(S.draft.title)}"></label>
+      <label>${esc(emuT("i.form.kind"))}<select data-draft="category">${CATEGORIES.map((n) => `<option value="${esc(n)}" ${n === S.draft.category ? "selected" : ""}>${esc(catLabel(n))}</option>`).join("")}</select></label>
+      <label class="full">${esc(emuT("i.form.note"))}<input data-draft="note" placeholder="${esc(emuT("i.form.notePlaceholder"))}" value="${esc(S.draft.note)}"></label>
+      <div class="form-actions"><button data-act="cancelAdd">${esc(emuT("i.form.cancel"))}</button><button class="primary" data-act="saveDraft" ${S.saving ? "disabled" : ""}>${esc(S.editingIndex === null ? emuT("i.form.add") : emuT("i.form.update"))}</button></div>
     </div>` : "";
 
   const learningHtml = `
     <section class="learning-card">
-      <p class="eyebrow">${isToday ? "今日の一日シェア" : isFuture ? "この日に向けて" : "この日の学び"}</p>
-      <h2>${isFuture ? "当日になったら<br>学びを残そう。" : "今日の学びを<br>ひとつ残そう。"}</h2>
-      <p>うまくできたことも、失敗したことも、誰かの役に立つ学びです。</p>
-      <textarea data-learning ${isToday ? "" : "disabled"} placeholder="今日、気づいたことや意識したことを書く" maxlength="500">${esc(S.learning)}</textarea>
+      <p class="eyebrow">${esc(isToday ? emuT("i.learn.eyebrowToday") : isFuture ? emuT("i.learn.eyebrowFuture") : emuT("i.learn.eyebrowPast"))}</p>
+      <h2>${isFuture ? emuT("i.learn.titleFuture") : emuT("i.learn.title")}</h2>
+      <p>${esc(emuT("i.learn.text"))}</p>
+      <textarea data-learning ${isToday ? "" : "disabled"} placeholder="${esc(emuT("i.learn.placeholder"))}" maxlength="500">${esc(S.learning)}</textarea>
       <div class="counter"><span id="learnCount">${S.learning.length}</span>/500</div>
       ${isToday ? `
-        <div class="visibility"><button class="${S.visibility === "private" ? "selected" : ""}" data-act="visPrivate">非公開</button><button class="${S.visibility === "public" ? "selected" : ""}" data-act="visPublic">Emu全体</button></div>
-        <button class="share" data-act="share" ${S.saving ? "disabled" : ""}>${S.visibility === "public" ? "みんなに共有する" : "非公開で保存する"}</button>
-      ` : isPast ? `<button class="share" data-act="append">学びを追記する</button>`
-        : `<small class="future-learning">学びの記入・共有は当日からできます</small>`}
+        <div class="visibility"><button class="${S.visibility === "private" ? "selected" : ""}" data-act="visPrivate">${esc(emuT("i.learn.visPrivate"))}</button><button class="${S.visibility === "public" ? "selected" : ""}" data-act="visPublic">${esc(emuT("i.learn.visPublic"))}</button></div>
+        <button class="share" data-act="share" ${S.saving ? "disabled" : ""}>${esc(S.visibility === "public" ? emuT("i.learn.sharePublic") : emuT("i.learn.sharePrivate"))}</button>
+      ` : isPast ? `<button class="share" data-act="append">${esc(emuT("i.learn.append"))}</button>`
+        : `<small class="future-learning">${esc(emuT("i.learn.futureNote"))}</small>`}
     </section>`;
 
   $main.innerHTML = `
     <section class="hero">
-      <div><p class="eyebrow">${esc(dateLabel)}</p><h1><span>今日は、</span><span>どんな一日にする？</span></h1>
-      <p>自分で時間を決め、意識したことを残す。<br>あなたの普通の一日が、誰かにとっての新しい学びになります。</p></div>
-      <div class="day-progress"><div class="ring" style="--progress:${progress}%"><strong>${completed}<small>/${S.schedule.length}</small></strong></div><span>今日できたこと</span></div>
+      <div><p class="eyebrow">${esc(dateLabel)}</p><h1><span>${esc(emuT("i.today.heroLine1"))}</span><span>${esc(emuT("i.today.heroLine2"))}</span></h1>
+      <p>${esc(emuT("i.today.heroText"))}</p></div>
+      <div class="day-progress"><div class="ring" style="--progress:${progress}%"><strong>${completed}<small>/${S.schedule.length}</small></strong></div><span>${esc(emuT("i.today.doneLabel"))}</span></div>
     </section>
     <div class="date-tools">
-      <label>表示する日<input type="date" max="${yearEnd}" value="${S.selectedDate}" data-act="date"></label>
-      ${canEdit ? `<button data-act="copyPrev">前日の時間割をコピー</button>` : ""}
-      ${isPast ? `<span class="past-note">過去の時間割は閲覧のみです</span>` : ""}
-      ${isFuture ? `<span class="past-note">未来の時間割を準備できます</span>` : ""}
+      <label>${esc(emuT("i.today.dateLabel"))}<input type="date" max="${yearEnd}" value="${S.selectedDate}" data-act="date"></label>
+      ${canEdit ? `<button data-act="copyPrev">${esc(emuT("i.today.copyPrev"))}</button>` : ""}
+      ${isPast ? `<span class="past-note">${esc(emuT("i.today.pastNote"))}</span>` : ""}
+      ${isFuture ? `<span class="past-note">${esc(emuT("i.today.futureNote"))}</span>` : ""}
     </div>
     <div class="content-grid">
       <section class="panel schedule-panel">
         <div class="panel-head">
-          <div><span class="section-icon">時</span><div><h2>${isToday ? "今日" : esc(dateLabel)}の時間割</h2><p>${isPast ? "予定の編集はできません。" : "当日までは何度でも編集できます。"}</p></div></div>
-          ${canEdit ? `<button class="primary" data-act="toggleAdd">＋ 予定を追加</button>` : ""}
+          <div><span class="section-icon">時</span><div><h2>${esc(isToday ? emuT("i.today.scheduleToday") : emuT("i.today.scheduleOf", { date: dateLabel }))}</h2><p>${esc(isPast ? emuT("i.today.scheduleHintPast") : emuT("i.today.scheduleHint"))}</p></div></div>
+          ${canEdit ? `<button class="primary" data-act="toggleAdd">${esc(emuT("i.today.addPlan"))}</button>` : ""}
         </div>
         ${addFormHtml}
         <div class="timeline">${timelineHtml}</div>
       </section>
       <aside>
         ${learningHtml}
-        <section class="mini-stats"><div><strong>${S.stats.streak}</strong><span>続けた日</span></div><div><strong>${S.stats.learningCount}</strong><span>残した学び</span></div><div><strong>${S.stats.usefulCount}</strong><span>役に立った人</span></div></section>
+        <section class="mini-stats"><div><strong>${S.stats.streak}</strong><span>${esc(emuT("i.stats.streak"))}</span></div><div><strong>${S.stats.learningCount}</strong><span>${esc(emuT("i.stats.learning"))}</span></div><div><strong>${S.stats.usefulCount}</strong><span>${esc(emuT("i.stats.useful"))}</span></div></section>
       </aside>
     </div>`;
 
@@ -538,12 +545,12 @@ function onTodayClick(e) {
     case "edit":
       S.draft = { ...S.schedule[i] }; S.editingIndex = i; S.showAdd = true; render(); scrollToAddForm(); break;
     case "del":
-      persist(S.schedule.filter((_, x) => x !== i), "予定を削除しました"); break;
+      persist(S.schedule.filter((_, x) => x !== i), emuT("i.msg.deleted")); break;
     case "toggle": {
       const next = S.schedule.map((x, idx) => idx === i ? { ...x, done: !x.done } : x);
       S.schedule = next;
       render(); // 押した瞬間に反映（サーバー応答を待たず体感を改善）
-      persist(next, "完了状態を更新しました"); break;
+      persist(next, emuT("i.msg.toggled")); break;
     }
     case "copyPrev": copyPrevious(); break;
     case "visPrivate": S.visibility = "private"; render(); break;
@@ -566,20 +573,20 @@ function scrollToAddForm() {
 function renderExplore() {
   const filters = ["すべて", ...CATEGORIES];
   const cards = S.posts.length === 0 && !S.loading
-    ? `<div class="empty-state empty-wide"><span>日</span><h3>まだ共有された一日はありません</h3><p>公開された一日がここに表示されます。</p></div>`
+    ? `<div class="empty-state empty-wide"><span>日</span><h3>${esc(emuT("i.explore.emptyTitle"))}</h3><p>${esc(emuT("i.explore.emptyText"))}</p></div>`
     : S.posts.map((post, pi) => `
       <article class="person-card">
-        <div class="person-head"><span>${esc(post.userName.slice(0, 1))}</span><div><b>${esc(post.userName)}さんの一日</b><small>${esc(post.date)}</small></div><button data-act="report" data-pi="${pi}" aria-label="通報">•••</button></div>
-        <h2>${esc(post.learning.split("\n")[0] || "今日の学び")}</h2>
-        <div class="person-timeline">${post.items.map((it) => `<div class="shared-item"><p><i>時</i>${esc(it.time)} ${esc(it.title)}</p><button data-act="adopt" data-day="${esc(post.id)}" data-item="${esc(it.id)}">＋ 取り入れる</button></div>`).join("")}</div>
+        <div class="person-head"><span>${esc(post.userName.slice(0, 1))}</span><div><b>${esc(emuT("i.explore.someonesDay", { name: post.userName }))}</b><small>${esc(post.date)}</small></div><button data-act="report" data-pi="${pi}" aria-label="${esc(emuT("i.explore.reportAria"))}">•••</button></div>
+        <h2>${esc(post.learning.split("\n")[0] || emuT("i.explore.defaultLearning"))}</h2>
+        <div class="person-timeline">${post.items.map((it) => `<div class="shared-item"><p><i>時</i>${esc(it.time)} ${esc(it.title)}</p><button data-act="adopt" data-day="${esc(post.id)}" data-item="${esc(it.id)}">${esc(emuT("i.explore.adopt"))}</button></div>`).join("")}</div>
         <blockquote>“ ${esc(post.learning)} ”</blockquote>
-        <div class="card-actions"><button class="${post.gooded ? "gooded" : ""}" data-act="good" data-pi="${pi}">♡ Good <b>${post.goodCount}</b></button><button data-act="report" data-pi="${pi}">通報する</button></div>
+        <div class="card-actions"><button class="${post.gooded ? "gooded" : ""}" data-act="good" data-pi="${pi}">♡ Good <b>${post.goodCount}</b></button><button data-act="report" data-pi="${pi}">${esc(emuT("i.explore.report"))}</button></div>
       </article>`).join("");
 
   $main.innerHTML = `
     <section class="explore-page">
-      <div class="page-title"><p class="eyebrow">みんなの一日シェア</p><h1>一日の過ごし方から、学んでみる。</h1><p>気になる予定だけを、自分の今日へ取り入れられます。</p></div>
-      <div class="filter-row">${filters.map((n) => `<button class="${S.filter === n ? "selected" : ""}" data-filter="${n}">${n}</button>`).join("")}</div>
+      <div class="page-title"><p class="eyebrow">${esc(emuT("i.explore.eyebrow"))}</p><h1>${esc(emuT("i.explore.title"))}</h1><p>${esc(emuT("i.explore.text"))}</p></div>
+      <div class="filter-row">${filters.map((n) => `<button class="${S.filter === n ? "selected" : ""}" data-filter="${esc(n)}">${esc(catLabel(n))}</button>`).join("")}</div>
       <div class="people-grid">${cards}</div>
     </section>`;
 
@@ -598,20 +605,20 @@ function onExploreClick(e) {
 
 function renderMine() {
   const items = S.history.length === 0
-    ? `<div class="empty-state"><span>記</span><h3>記録はまだありません</h3><p>時間割と今日の学びを残すと、ここに積み重なります。</p></div>`
+    ? `<div class="empty-state"><span>記</span><h3>${esc(emuT("i.mine.emptyTitle"))}</h3><p>${esc(emuT("i.mine.emptyText"))}</p></div>`
     : S.history.map((day, di) => `
-      <article><span>${esc(day.date)}</span><p>${esc(day.learning || "学びはまだありません")}（予定 ${day.items.length}件）</p>
-      <div class="history-actions"><button data-act="view" data-di="${di}">見る</button><button data-act="del" data-di="${di}">削除</button></div></article>`).join("");
+      <article><span>${esc(day.date)}</span><p>${esc(day.learning || emuT("i.mine.noLearning"))}${esc(emuT("i.mine.planCount", { n: day.items.length }))}</p>
+      <div class="history-actions"><button data-act="view" data-di="${di}">${esc(emuT("i.mine.view"))}</button><button data-act="del" data-di="${di}">${esc(emuT("i.mine.delete"))}</button></div></article>`).join("");
 
   $main.innerHTML = `
     <section class="records-page">
-      <div class="page-title"><p class="eyebrow">わたしの記録</p><h1>毎日は、ちゃんと積み重なっている。</h1></div>
+      <div class="page-title"><p class="eyebrow">${esc(emuT("i.mine.eyebrow"))}</p><h1>${esc(emuT("i.mine.title"))}</h1></div>
       <div class="record-summary">
-        <div><span>連続</span><strong>${S.stats.streak}<small>日</small></strong><p>予定＋学びの共有で記録</p></div>
-        <div><span>達成率</span><strong>${S.stats.completionRate}<small>%</small></strong><p>完了した予定の割合</p></div>
-        <div><span>役に立った人</span><strong>${S.stats.usefulCount}<small>人</small></strong><p>予定を取り入れられた人数</p></div>
+        <div><span>${esc(emuT("i.mine.streak"))}</span><strong>${S.stats.streak}<small>${esc(emuT("i.mine.streakUnit"))}</small></strong><p>${esc(emuT("i.mine.streakNote"))}</p></div>
+        <div><span>${esc(emuT("i.mine.rate"))}</span><strong>${S.stats.completionRate}<small>%</small></strong><p>${esc(emuT("i.mine.rateNote"))}</p></div>
+        <div><span>${esc(emuT("i.mine.useful"))}</span><strong>${S.stats.usefulCount}<small>${esc(emuT("i.mine.usefulUnit"))}</small></strong><p>${esc(emuT("i.mine.usefulNote"))}</p></div>
       </div>
-      <div class="history"><h2>これまでの一日シェア</h2>${items}</div>
+      <div class="history"><h2>${esc(emuT("i.mine.historyTitle"))}</h2>${items}</div>
     </section>`;
 }
 
@@ -642,9 +649,12 @@ function goBackToEmu() {
   if (p && typeof p.showEmuToday === "function") { p.showEmuToday(); return; }
   window.top.location.href = "index.html";
 }
+// 言語切替（Emu本体のセレクタから postMessage で届く）→ 現在のタブを描き直す
+window.onEmuLangChange = () => { applyEmuI18n(); render(); };
+
 if (EMBED) {
   const hl = document.getElementById("homeLink");
-  if (hl) { hl.textContent = "← 今日のEmu"; hl.href = "#"; }
+  if (hl) { hl.setAttribute("data-i18n", "i.backToEmuToday"); hl.textContent = emuT("i.backToEmuToday"); hl.href = "#"; }
   // 埋め込み中は index.html への直接遷移／戻るリンクを親の画面遷移に置き換える
   // （iframe内でEmuを二重に開くのを防ぐ）
   document.addEventListener("click", (e) => {

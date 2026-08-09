@@ -14,21 +14,29 @@
 </head>
 <body>
 <main class="page">
-  <header class="intro"><div><div class="eyebrow">THINK TOGETHER</div><h1>開催中の議論</h1><p>正しさを競わず、体験を持ち寄って考えを深める場所。</p></div><span class="live">● LIVE</span></header>
+  <header class="intro"><div><div class="eyebrow">THINK TOGETHER</div><h1 data-i18n="d.title">開催中の議論</h1><p data-i18n="d.lead">正しさを競わず、体験を持ち寄って考えを深める場所。</p></div><span class="live">● LIVE</span></header>
   <section class="feature">
-    <div class="meta"><span class="badge">意見募集中</span><small>今日の問い・リアルタイム議論</small></div>
-    <h2 id="featuredTopic">今日の議題を読み込んでいます…</h2>
-    <p>便利さが増えるほど、私たちは何を手放し、何を守るべきでしょうか。結論を急がず、実際の経験から考えます。</p>
-    <div class="actions"><button class="button primary" data-join disabled>議論に参加する</button><button class="button" data-lens="体験を共有" disabled>体験を共有</button><button class="button" data-lens="別の視点" disabled>別の視点</button><button class="button" data-lens="問いを深める" disabled>問いを深める</button></div>
+    <div class="meta"><span class="badge" data-i18n="d.badge">意見募集中</span><small data-i18n="d.meta">今日の問い・リアルタイム議論</small></div>
+    <!-- お題は日本語の原文を data-topic に保持し、表示だけ訳す（親へ返す値は原文のまま） -->
+    <h2 id="featuredTopic" data-i18n="d.loadingTopic">今日の議題を読み込んでいます…</h2>
+    <p data-i18n="d.body">便利さが増えるほど、私たちは何を手放し、何を守るべきでしょうか。結論を急がず、実際の経験から考えます。</p>
+    <div class="actions"><button class="button primary" data-join disabled data-i18n="d.join">議論に参加する</button><button class="button" data-lens="experience" disabled data-i18n="d.lens.experience">体験を共有</button><button class="button" data-lens="perspective" disabled data-i18n="d.lens.perspective">別の視点</button><button class="button" data-lens="question" disabled data-i18n="d.lens.question">問いを深める</button></div>
   </section>
-  <p class="note">終了した議論は「みんなの結論」として残り、知識を読むへ届けられます。</p>
+  <p class="note" data-i18n="d.note">終了した議論は「みんなの結論」として残り、知識を読むへ届けられます。</p>
   <div class="status" id="status" role="status"></div>
 </main>
+<script src="/emu-i18n.js"></script>
+<script src="/emu-i18n-pages.js"></script>
 <script>
 const ORIGIN=location.origin,send=message=>parent.postMessage(message,ORIGIN),status=document.getElementById('status');
-document.querySelector('[data-join]').onclick=()=>send({type:'emu-discussion-open',topic:document.getElementById('featuredTopic').textContent,mode:'opinion'});
-document.querySelectorAll('[data-lens]').forEach(button=>button.onclick=()=>send({type:'emu-discussion-open',topic:document.getElementById('featuredTopic').textContent,mode:button.dataset.lens==='体験を共有'?'experience':button.dataset.lens==='別の視点'?'perspective':'question'}));
-window.addEventListener('message',event=>{if(event.origin!==ORIGIN||event.source!==parent)return;if(event.data?.type==='emu-discussion-topic'&&event.data.topic){document.getElementById('featuredTopic').textContent=event.data.topic;document.querySelectorAll('.actions button').forEach(button=>button.disabled=false)}});
+const topicEl=document.getElementById('featuredTopic');
+// 親へ渡すお題は日本語の原文（部屋のお題として使われるため）。画面表示だけ選択言語にする。
+const rawTopic=()=>topicEl.dataset.topic||topicEl.textContent;
+function paintTopic(){if(topicEl.dataset.topic)topicEl.textContent=window.emuTopic?emuTopic(topicEl.dataset.topic):topicEl.dataset.topic}
+window.onEmuLangChange=paintTopic;
+document.querySelector('[data-join]').onclick=()=>send({type:'emu-discussion-open',topic:rawTopic(),mode:'opinion'});
+document.querySelectorAll('[data-lens]').forEach(button=>button.onclick=()=>send({type:'emu-discussion-open',topic:rawTopic(),mode:button.dataset.lens}));
+window.addEventListener('message',event=>{if(event.origin!==ORIGIN||event.source!==parent)return;if(event.data?.type==='emu-discussion-topic'&&event.data.topic){topicEl.dataset.topic=event.data.topic;topicEl.removeAttribute('data-i18n');paintTopic();document.querySelectorAll('.actions button').forEach(button=>button.disabled=false)}});
 send({type:'emu-discussion-ready'});
 </script>
 </body>

@@ -672,6 +672,10 @@
     }
   };
 
+  // 議論のお題。バックエンド(server.js)の topics 配列と同じ並び。
+  // お題は socket 経由で日本語の文字列として届くため、日本語をキーに引いて訳す。
+  var EMU_TOPICS = { ja: [] };
+
   var STORAGE_KEY = "emu_lang";
   var current = "ja";
 
@@ -704,6 +708,32 @@
       });
     }
     return text;
+  }
+
+  // 別ファイル（emu-i18n-pages.js）から辞書を追加する。
+  // Emu本体・各サブページで同じ辞書を共有し、キーの重複を避けるため名前空間を分ける。
+  function emuRegisterI18n(extra) {
+    if (!extra) return;
+    Object.keys(extra).forEach(function (lang) {
+      if (!EMU_I18N[lang]) EMU_I18N[lang] = {};
+      Object.keys(extra[lang]).forEach(function (key) { EMU_I18N[lang][key] = extra[lang][key]; });
+    });
+    applyEmuI18n();
+  }
+
+  function emuRegisterTopics(topics) {
+    if (!topics) return;
+    Object.keys(topics).forEach(function (lang) { EMU_TOPICS[lang] = topics[lang]; });
+  }
+
+  // 議論のお題を訳す。一覧に無いお題（手動設定など）は原文のまま返す。
+  function emuTopic(text) {
+    var raw = String(text == null ? "" : text).trim();
+    if (!raw || !EMU_TOPICS.ja || !EMU_TOPICS.ja.length) return raw;
+    var index = EMU_TOPICS.ja.indexOf(raw);
+    if (index < 0) return raw;
+    var list = EMU_TOPICS[current] || EMU_TOPICS.ja;
+    return list[index] || raw;
   }
 
   function emuLocaleTag() {
@@ -751,7 +781,31 @@
       if (typeof window.renderKnowledgeRequests === "function" &&
           document.body.classList.contains("emu-requests-open")) window.renderKnowledgeRequests();
     } catch (e) {}
+    // 各ページ（一日シェア等）が自前の再描画を登録できるフック
+    try { if (typeof window.onEmuLangChange === "function") window.onEmuLangChange(current); } catch (e) {}
+    // iframeで開いているサブページにも言語を伝える
+    broadcastLangToFrames(current);
   }
+
+  // 同一オリジンなので localStorage は共有される。初回表示はそれで揃うが、
+  // 切り替え時は開いている iframe へ即時反映するために postMessage する。
+  function broadcastLangToFrames(code) {
+    try {
+      document.querySelectorAll("iframe").forEach(function (frame) {
+        try {
+          if (frame.contentWindow) {
+            frame.contentWindow.postMessage({ type: "emu-lang", lang: code }, location.origin);
+          }
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
+  window.addEventListener("message", function (event) {
+    if (event.origin !== location.origin || !event.data) return;
+    if (event.data.type !== "emu-lang") return;
+    if (event.data.lang && event.data.lang !== current) setEmuLang(event.data.lang);
+  });
 
   function initEmuI18n() {
     var saved = null;
@@ -774,11 +828,14 @@
 
   window.EMU_LANGS = EMU_LANGS;
   window.emuT = emuT;
+  window.emuTopic = emuTopic;
   window.emuLocaleTag = emuLocaleTag;
   window.getEmuLang = getEmuLang;
   window.setEmuLang = setEmuLang;
   window.applyEmuI18n = applyEmuI18n;
   window.initEmuI18n = initEmuI18n;
+  window.emuRegisterI18n = emuRegisterI18n;
+  window.emuRegisterTopics = emuRegisterTopics;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initEmuI18n);

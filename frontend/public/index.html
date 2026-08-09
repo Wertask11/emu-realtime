@@ -5625,8 +5625,10 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 <!-- Emuの多言語辞書（日本語/English/中文/한국어/Bahasa Indonesia）。
-     emuT() / applyEmuI18n() / setEmuLang() を提供する。 -->
+     emuT() / applyEmuI18n() / setEmuLang() を提供する。
+     -pages はサブページ（一日シェア等）の辞書と議論のお題。お題の訳は本体でも使う。 -->
 <script src="/emu-i18n.js"></script>
+<script src="/emu-i18n-pages.js"></script>
 <script src="/actionschema.js"></script>
 <script src="/actionhub.js"></script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -14621,7 +14623,10 @@ window.addEventListener('message', function(event) {
   const playFrame = document.getElementById('emuPlayFrame');
   if (event.source === discussionFrame?.contentWindow) {
     if (event.data.type === 'emu-discussion-ready') {
-      const currentTopic = document.getElementById('topic')?.textContent || document.getElementById('emuTodayTopic')?.textContent || '';
+      // 渡すのは日本語の原文。翻訳は受け取った側が表示時に行う。
+      const currentTopic = document.getElementById('topic')?.textContent
+        || document.getElementById('emuTodayTopic')?.dataset.topic
+        || document.getElementById('emuTodayTopic')?.textContent || '';
       if (currentTopic && !currentTopic.includes('読み込み')) discussionFrame.contentWindow.postMessage({ type:'emu-discussion-topic', topic:currentTopic }, window.location.origin);
     }
     if (event.data.type === 'emu-discussion-open') {
@@ -15103,9 +15108,17 @@ async function _emuLoadRecommendedPost() {
 async function updateEmuTodayHome() {
   const date = document.getElementById('emuTodayDate');
   if (date) date.textContent = _emuFormatToday();
+  // お題は日本語の原文を data-topic に保持し、表示だけ選択言語にする。
+  // （議論ルームへ渡す値は原文のままにしておく必要があるため）
   const topic = _emuCurrentTopic();
+  // お題がまだ届いていないとき（#topic が読み込み中の文言のまま）は、その言語の読み込み表示にする
+  const topicPending = !topic || topic.indexOf('読み込') >= 0;
   ['emuTodayTopic','emuDiscussionCardTitle'].forEach(function(id) {
-    const el = document.getElementById(id); if (el) el.textContent = topic;
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (topicPending) { delete el.dataset.topic; el.textContent = emuT('today.discussion.loading'); return; }
+    el.dataset.topic = topic;
+    el.textContent = typeof emuTopic === 'function' ? emuTopic(topic) : topic;
   });
 
   const savedName = localStorage.getItem('ches_name');
