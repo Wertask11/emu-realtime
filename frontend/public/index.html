@@ -20730,12 +20730,6 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadKnowledgePanel(kind) {
     const account = _emuAddress();
     try {
-      if (kind === 'ranking') {
-        const response = await fetch('https://emu-realtime.onrender.com/api/ranking?type=total_post&limit=20');
-        if (!response.ok) throw new Error('ランキングを取得できませんでした。');
-        sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:await response.json() });
-        return;
-      }
       if (!account) throw new Error('ウォレットを接続してください。');
       const q = window.fbLib.query(
         window.fbLib.collection(window.db, 'posts'),
@@ -20748,7 +20742,7 @@ document.addEventListener('DOMContentLoaded', () => {
       posts.sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:{ posts, drafts:await readKnowledgeDrafts(account) } });
     } catch (error) {
-      sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:kind === 'ranking' ? [] : { posts:[], drafts:[] } });
+      sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:{ posts:[], drafts:[] } });
       sendKnowledge({ type:'emu-knowledge-error', error:error.message || 'データを取得できませんでした。' });
     }
   }
