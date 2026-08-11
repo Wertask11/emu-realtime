@@ -5812,7 +5812,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       window.connectedAccount = accounts[0];
       localStorage.setItem("emuWallet", accounts[0]); // 復元時も保存
       if (walletAddressButton) {
-        walletAddressButton.textContent = window.connectedAccount.substring(0, 6) + "..." + window.connectedAccount.slice(-4);
+        window.emuSetWalletLabel(window.emuShortAddr(window.connectedAccount));
       }
     }
   } catch (e) {
@@ -6140,7 +6140,7 @@ if (_fpDirectReturn) {
         window.connectedAccount = _savedWallet;
         currentUserId = _savedWallet;
         const _walletBtn = document.getElementById("walletAddressButton");
-        if (_walletBtn) _walletBtn.textContent = _savedWallet.slice(0,6) + "..." + _savedWallet.slice(-4);
+        if (_walletBtn) emuSetWalletLabel(emuShortAddr(_savedWallet));
         if (typeof openSpMap === "function") openSpMap();
       } else {
         // 未登録 → メンテナンス画面
@@ -6157,7 +6157,7 @@ if (_fpDirectReturn) {
     window.connectedAccount = _savedWallet;
     currentUserId = _savedWallet;
     const _walletBtn = document.getElementById("walletAddressButton");
-    if (_walletBtn) _walletBtn.textContent = _savedWallet.slice(0,6) + "..." + _savedWallet.slice(-4);
+    if (_walletBtn) emuSetWalletLabel(emuShortAddr(_savedWallet));
     // ★ 常にSchoolParkマップを自動的に開く（同期）
     if (typeof openSpMap === "function") openSpMap();
   }
@@ -11760,7 +11760,7 @@ jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
     localStorage.removeItem("userMode");
     const walletAddressButton = document.getElementById("walletAddressButton");
     if (walletAddressButton) {
-      walletAddressButton.textContent = account.substring(0, 6) + "..." + account.slice(-4);
+      emuSetWalletLabel(emuShortAddr(account));
     }
     
 	if (typeof updateBonusCountdown === "function") {
@@ -15371,6 +15371,31 @@ function _emuValueEvent(title, detail) {
   return row;
 }
 
+/* ヘッダーのウォレット表示。
+   この要素は data-i18n="header.walletDisconnected" を持つため、
+   接続後に textContent だけ書き換えても、言語を切り替えると
+   applyEmuI18n() が「ウォレット未接続」に戻してしまう。
+   接続中は data-i18n を外し、切断時に戻すことで表示を保つ。 */
+function emuSetWalletLabel(text) {
+  const btn = document.getElementById('walletAddressButton');
+  if (!btn) return;
+  if (text) {
+    btn.dataset.i18nDisconnected = btn.dataset.i18nDisconnected || btn.getAttribute('data-i18n') || 'header.walletDisconnected';
+    btn.removeAttribute('data-i18n');
+    btn.textContent = text;
+  } else {
+    btn.setAttribute('data-i18n', btn.dataset.i18nDisconnected || 'header.walletDisconnected');
+    btn.textContent = (typeof emuT === 'function') ? emuT(btn.getAttribute('data-i18n')) : 'ウォレット未接続';
+  }
+}
+function emuShortAddr(addr) {
+  const a = String(addr || '');
+  return a.length > 10 ? a.slice(0, 6) + '...' + a.slice(-4) : a;
+}
+/* 別の <script> ブロックからも呼べるように公開する（関数宣言はブロックを越えない） */
+window.emuSetWalletLabel = emuSetWalletLabel;
+window.emuShortAddr = emuShortAddr;
+
 /* ══════════════════════════════════════════
    価値プロフィール内のウォレット
    旧マイウォレット(全画面モーダル)の内容を、この画面に常時表示する。
@@ -17768,8 +17793,7 @@ jpycContract = new ethers.Contract(
 
 walletStatus.textContent = "接続成功: " + account;
 
-walletAddressButton.textContent =
-  account.substring(0, 6) + "..." + account.slice(-4);
+emuSetWalletLabel(emuShortAddr(account));
 
   // 無料パス入場をFirebaseに記録（非ブロッキング）
   spTrack('free', account).catch(() => {});
