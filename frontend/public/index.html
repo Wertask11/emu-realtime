@@ -2701,6 +2701,58 @@ body.paypay-mode #pp-post-fab {
 }
 .eth-profile-summary { display:grid; gap:14px; align-content:start; }
 
+/* ── 取引所（新デザイン）。旧マイウォレット画面を開かず、この中で完結させる ── */
+.exch-balance {
+  display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
+  background:linear-gradient(135deg,#fff7ef,#fff2e5);
+  border:1px solid #f3d3ae; border-radius:12px; padding:14px 16px; margin-bottom:14px;
+}
+.exch-balance span { color:#9c5100; font-size:11px; font-weight:800; letter-spacing:.06em; }
+.exch-balance strong { font-size:26px; color:#25211d; }
+.exch-balance small { color:#8a7f74; font-size:11px; }
+.exch-notice {
+  background:#fff4f4; border:1px solid #f0c6c2; color:#a33c30;
+  border-radius:10px; padding:12px 14px; font-size:12.5px; line-height:1.8; margin-bottom:14px;
+}
+.exch-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:12px; }
+.exch-card {
+  background:#fff; border:1px solid #e8dfd5; border-radius:14px; padding:14px;
+  display:grid; gap:9px; align-content:start;
+}
+.exch-thumb {
+  width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:10px;
+  background:#faf7f2; display:block;
+}
+.exch-thumb-empty { display:grid; place-items:center; color:#c4bcb2; font-size:26px; }
+.exch-name { margin:0; font-size:14px; font-weight:700; line-height:1.5; color:#25211d; }
+.exch-tag {
+  justify-self:start; font-size:10px; font-weight:800; padding:3px 9px; border-radius:999px;
+  background:#fff0dc; color:#8a4600;
+}
+.exch-price { display:grid; gap:3px; font-size:12px; color:#77716a; }
+.exch-price b { color:#25211d; font-size:14px; }
+.exch-actions { display:grid; gap:7px; margin-top:2px; }
+.exch-actions button {
+  border:1px solid #e8dfd5; background:#fff; color:#514b45; border-radius:9px;
+  padding:10px; font-size:12.5px; font-weight:800; cursor:pointer; min-height:44px; font-family:inherit;
+}
+.exch-actions button.primary { background:#f08300; border-color:#f08300; color:#fff; }
+.exch-actions button:disabled { opacity:.55; cursor:not-allowed; }
+.exch-empty, .exch-loading {
+  grid-column:1/-1; text-align:center; color:#a49c93; font-size:12.5px; padding:36px 14px;
+  border:1px dashed #e8dfd5; border-radius:12px;
+}
+@media (max-width:620px) {
+  .exch-grid { grid-template-columns:1fr 1fr; gap:10px; }
+  .exch-card { padding:11px; }
+  .exch-name { font-size:13px; }
+  .exch-balance strong { font-size:22px; }
+}
+@media (max-width:380px) {
+  .exch-grid { grid-template-columns:1fr; }
+}
+
+
 /* ── 価値プロフィール内のウォレット（旧マイウォレットの内容をここへ集約） ── */
 .eth-profile-main { display:grid; gap:18px; align-content:start; min-width:0; }
 .eth-wallet-card { display:grid; gap:14px; }
@@ -4652,7 +4704,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </div>
 
   <div class="wallet-action-buttons">
-    <button id="convertButton">変換</button>
+    <!-- 変換は価値プロフィールの「Emuerに変換」に一本化。ここでは表示しないが、
+         変換処理(handleConversion)がこのボタンを状態管理に使うためDOMには残す。 -->
+    <button id="convertButton" hidden aria-hidden="true">変換</button>
     <button id="exchangeBtn">取引所</button>
   </div>
 
@@ -4711,6 +4765,24 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <button class="emu-sheet-close" type="button" onclick="closeEmuSheet('emuMyReactionsSheet')">×</button>
     </div>
     <div id="emuMyReactionsList"></div>
+  </div>
+</div>
+
+<!-- 取引所（新デザイン）。
+     従来は旧マイウォレット画面を丸ごと開いていたため、見た目が旧レイアウトに戻り、
+     さらにウォレット未接続だと provider / emuerContract が未定義で例外になっていた。 -->
+<div class="emu-sheet" id="emuExchangeSheet" role="dialog" aria-modal="true" aria-labelledby="emuExchangeTitle">
+  <div class="emu-sheet-card">
+    <div class="emu-sheet-head">
+      <div>
+        <h2 id="emuExchangeTitle" data-i18n="exchange.title">取引所</h2>
+        <p id="emuExchangeSubtitle" data-i18n="exchange.desc">集めたEmuerを、NFTと交換できます。</p>
+      </div>
+      <button class="emu-sheet-close" type="button" onclick="closeEmuSheet('emuExchangeSheet')">×</button>
+    </div>
+    <div class="exch-balance" id="emuExchangeBalance"></div>
+    <div class="exch-notice" id="emuExchangeNotice" hidden></div>
+    <div class="exch-grid" id="emuExchangeList"></div>
   </div>
 </div>
 
@@ -15373,23 +15445,176 @@ function emuWalletConvert() {
   }
   btn.click();
 }
-function emuWalletExchange() {
-  const btn = document.getElementById('exchangeBtn');
-  if (!btn) { alert(emuT('wallet.exchangeUnavailable')); return; }
-  /* 取引所の中身(nftExchangeSection)は myWalletPage の中にあるため、
-     ウォレット画面を開かずに押すと処理は走るのに何も表示されない。
-     正規の導線(myWalletButton)でウォレットを開いてから実行する。 */
-  const walletBtn = document.getElementById('myWalletButton');
-  if (walletBtn) {
-    walletBtn.click();
-    setTimeout(function () {
-      const section = document.getElementById('nftExchangeSection');
-      if (section) section.style.display = 'block';
-      btn.click();
-    }, 300);
+/* ══════════════════════════════════════════
+   取引所（新デザイン）
+   旧実装は myWalletPage を丸ごと開いていたため見た目が旧レイアウトに戻り、
+   さらに provider / emuerContract がウォレット接続時にしか作られないため、
+   CHESログイン(Google/LINE)のユーザーでは未定義参照で例外になっていた。
+   ここでは読み取り専用RPCで一覧を出し、購入時だけウォレットを要求する。
+══════════════════════════════════════════ */
+function _emuReadOnlyEmuerContract() {
+  const rpcs = (typeof _EMU_POLYGON_RPCS !== 'undefined' && _EMU_POLYGON_RPCS) || [];
+  for (const url of rpcs) {
+    try {
+      const ro = new ethers.providers.StaticJsonRpcProvider(url, { name: 'matic', chainId: 137 });
+      return new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_CONTRACT_ABI, ro);
+    } catch (e) { /* 次のRPCへ */ }
+  }
+  return null;
+}
+
+async function emuWalletExchange() {
+  openEmuSheet('emuExchangeSheet');
+  const listEl = document.getElementById('emuExchangeList');
+  const balEl = document.getElementById('emuExchangeBalance');
+  const noticeEl = document.getElementById('emuExchangeNotice');
+  listEl.innerHTML = '<div class="exch-loading">' + escapeHtml(emuT('exchange.loading')) + '</div>';
+  noticeEl.hidden = true;
+
+  // 残高（価値プロフィールと同じ取得経路）
+  try {
+    const balance = await _emuReadTokenBalance();
+    balEl.innerHTML = '<span>' + escapeHtml(emuT('wallet.label')) + '</span>'
+      + '<strong>' + Number(balance || 0).toLocaleString('ja-JP') + '</strong>'
+      + '<small>' + escapeHtml(emuT('unit.emuer')) + '</small>';
+  } catch (e) { balEl.innerHTML = ''; }
+
+  // 無料ユーザーの利用制限（従来と同じ条件）
+  if (typeof getCurrentUserType === 'function' && getCurrentUserType() === 'free'
+      && typeof canUseExchange === 'function' && !canUseExchange()) {
+    noticeEl.hidden = false;
+    noticeEl.textContent = emuT('exchange.freeLimit');
+  }
+
+  // 一覧は読み取り専用RPCで取得。ウォレット未接続でも中身を見られる。
+  const readContract = (typeof emuerContract !== 'undefined' && emuerContract)
+    ? emuerContract : _emuReadOnlyEmuerContract();
+  if (!readContract) {
+    listEl.innerHTML = '<div class="exch-empty">' + escapeHtml(emuT('exchange.unavailable')) + '</div>';
     return;
   }
-  btn.click();
+
+  try {
+    let nftContract = null;
+    try {
+      const nftAddr = await readContract.emuNFT();
+      nftContract = new ethers.Contract(nftAddr,
+        ['function tokenURI(uint256 tokenId) view returns (string)'], readContract.provider);
+    } catch (e) { /* メタデータなしでも価格は出せる */ }
+
+    const cards = [];
+    for (let i = 1; i <= 20; i++) {
+      let info;
+      try { info = await readContract.listedNFTs(i); } catch (e) { continue; }
+      if (!info || !info.available) continue;
+      let metadata = {};
+      if (nftContract) {
+        try {
+          const uri = await nftContract.tokenURI(String(i));
+          const normalized = normalizeTokenURI(uri);
+          if (normalized && normalized.startsWith('http')) {
+            const controller = new AbortController();
+            const timer = setTimeout(function () { controller.abort(); }, 8000);
+            const res = await fetch(normalized, { signal: controller.signal });
+            clearTimeout(timer);
+            const text = await res.text();
+            if (text.trim().startsWith('{')) metadata = JSON.parse(text);
+          }
+        } catch (e) { /* 画像・名前なしで表示する */ }
+      }
+      cards.push(_emuExchangeCard(String(i), metadata, info.emuerPrice, info.jpycPrice));
+    }
+
+    if (!cards.length) {
+      listEl.innerHTML = '<div class="exch-empty">' + escapeHtml(emuT('exchange.empty')) + '</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    cards.forEach(function (c) { listEl.appendChild(c); });
+  } catch (error) {
+    console.error('取引所の読み込みに失敗:', error);
+    listEl.innerHTML = '<div class="exch-empty">' + escapeHtml(emuT('exchange.error')) + '</div>';
+  }
+}
+
+function _emuExchangeCard(tokenId, metadata, emuerPrice, jpycPrice) {
+  const card = document.createElement('div');
+  card.className = 'exch-card';
+  card.id = 'exch-nft-' + tokenId;
+
+  const img = normalizeTokenURI(metadata && metadata.image ? metadata.image : '');
+  if (img) {
+    const el = document.createElement('img');
+    el.className = 'exch-thumb';
+    el.loading = 'lazy';
+    el.alt = '';
+    el.src = img;
+    card.appendChild(el);
+  } else {
+    const ph = document.createElement('div');
+    ph.className = 'exch-thumb exch-thumb-empty';
+    ph.textContent = '🖼';
+    card.appendChild(ph);
+  }
+
+  const name = document.createElement('h3');
+  name.className = 'exch-name';
+  name.textContent = (metadata && metadata.name) ? metadata.name : ('NFT #' + tokenId);
+  card.appendChild(name);
+
+  const fmt = function (v) {
+    try { return Number(ethers.utils.formatUnits(v, 18)).toLocaleString('ja-JP'); }
+    catch (e) { return '—'; }
+  };
+  const price = document.createElement('div');
+  price.className = 'exch-price';
+  const hasEmuer = emuerPrice && !emuerPrice.isZero();
+  const hasJpyc = jpycPrice && !jpycPrice.isZero();
+  price.innerHTML =
+    (hasEmuer ? '<div>Emuer <b>' + fmt(emuerPrice) + '</b></div>' : '')
+    + (hasJpyc ? '<div>JPYC <b>' + fmt(jpycPrice) + '</b></div>' : '');
+  card.appendChild(price);
+
+  const actions = document.createElement('div');
+  actions.className = 'exch-actions';
+  if (hasEmuer) actions.appendChild(_emuExchangeBuyBtn(tokenId, false, emuT('exchange.buyEmuer'), true));
+  if (hasJpyc) actions.appendChild(_emuExchangeBuyBtn(tokenId, true, emuT('exchange.buyJpyc'), false));
+  card.appendChild(actions);
+  return card;
+}
+
+function _emuExchangeBuyBtn(tokenId, useJpyc, label, primary) {
+  const btn = document.createElement('button');
+  btn.textContent = label;
+  if (primary) btn.className = 'primary';
+  btn.onclick = async function () {
+    // 購入は署名が必要。ウォレット未接続なら理由を伝えて止める。
+    if (typeof emuerContract === 'undefined' || !emuerContract) {
+      alert(emuT('exchange.needWallet'));
+      return;
+    }
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = emuT('exchange.processing');
+    try {
+      const tx = await emuerContract.buyNFT(tokenId, useJpyc, POLYGON_GAS_OPTION);
+      await tx.wait();
+      const el = document.getElementById('exch-nft-' + tokenId);
+      if (el) el.remove();
+      const room2Frame = document.getElementById('room2Frame');
+      if (room2Frame && room2Frame.contentWindow) {
+        room2Frame.contentWindow.postMessage({ type: 'NFT_PURCHASE' }, '*');
+      }
+      alert(emuT('exchange.success'));
+      if (typeof window.checkScheduleNFT === 'function') await window.checkScheduleNFT();
+    } catch (err) {
+      console.error('NFT交換エラー:', err);
+      alert(emuT('exchange.failed'));
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  };
+  return btn;
 }
 
 async function loadEmuValueProfile() {
