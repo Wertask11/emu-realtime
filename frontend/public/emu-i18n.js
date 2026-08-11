@@ -124,6 +124,8 @@
       "wallet.exchange": "取引所を見る",
       "wallet.noBadges": "称号はまだありません",
       "wallet.convertUnavailable": "変換機能を利用できません。",
+  "wallet.convertLocked": "いまは変換できません。無料パスは毎週月曜日のみ、パスがない場合は変換をご利用いただけません。",
+  "dsc.disconnected": "接続が切れています。ページを再読み込みしてから、もう一度お試しください。",
       "wallet.exchangeUnavailable": "取引所を利用できません。",
 
       "value.title": "残った価値",
@@ -253,6 +255,8 @@
       "wallet.exchange": "Open the exchange",
       "wallet.noBadges": "No titles yet",
       "wallet.convertUnavailable": "Conversion is not available.",
+  "wallet.convertLocked": "Conversion is not available right now. Free passes can convert on Mondays only; without a pass, conversion is unavailable.",
+  "dsc.disconnected": "You are disconnected. Please reload the page and try again.",
       "wallet.exchangeUnavailable": "The exchange is not available.",
 
       "value.title": "Value that remains",
@@ -382,6 +386,8 @@
       "wallet.exchange": "查看交易所",
       "wallet.noBadges": "还没有称号",
       "wallet.convertUnavailable": "无法使用兑换功能。",
+  "wallet.convertLocked": "目前无法兑换。免费通行证仅限每周一兑换；没有通行证则无法兑换。",
+  "dsc.disconnected": "连接已断开。请重新载入页面后再试。",
       "wallet.exchangeUnavailable": "无法使用交易所。",
 
       "value.title": "留下的价值",
@@ -511,6 +517,8 @@
       "wallet.exchange": "거래소 보기",
       "wallet.noBadges": "아직 칭호가 없습니다",
       "wallet.convertUnavailable": "변환 기능을 사용할 수 없습니다.",
+  "wallet.convertLocked": "지금은 변환할 수 없습니다. 무료 패스는 매주 월요일에만 가능하며, 패스가 없으면 변환할 수 없습니다.",
+  "dsc.disconnected": "연결이 끊어졌습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.",
       "wallet.exchangeUnavailable": "거래소를 사용할 수 없습니다.",
 
       "value.title": "남은 가치",
@@ -640,6 +648,8 @@
       "wallet.exchange": "Lihat bursa",
       "wallet.noBadges": "Belum ada gelar",
       "wallet.convertUnavailable": "Fitur penukaran tidak tersedia.",
+  "wallet.convertLocked": "Penukaran belum bisa dilakukan. Pass gratis hanya bisa menukar pada hari Senin; tanpa pass, penukaran tidak tersedia.",
+  "dsc.disconnected": "Koneksi terputus. Muat ulang halaman lalu coba lagi.",
       "wallet.exchangeUnavailable": "Bursa tidak tersedia.",
 
       "value.title": "Nilai yang tersisa",

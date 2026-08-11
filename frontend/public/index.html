@@ -15360,13 +15360,36 @@ async function loadEmuWalletCard() {
 /* 変換・取引所は既存の処理をそのまま使う（挙動を変えないため） */
 function emuWalletConvert() {
   const btn = document.getElementById('convertButton');
-  if (btn) btn.click();
-  else alert(emuT('wallet.convertUnavailable'));
+  if (!btn) { alert(emuT('wallet.convertUnavailable')); return; }
+  /* 変換可否は曜日とパス種別で決まり、updateConvertButton() が onclick を
+     付け外しする。この関数はマイウォレットを開いたときにしか呼ばれないため、
+     価値プロフィールから押すとボタンの状態が古いままになる。先に最新化する。 */
+  try { if (typeof updateConvertButton === 'function') updateConvertButton(); } catch (e) {}
+  /* ロック中(onclick が外れている)は click() しても何も起きず、
+     ユーザーには故障に見える。理由を伝えて止める。 */
+  if (btn.disabled || typeof btn.onclick !== 'function') {
+    alert(emuT('wallet.convertLocked'));
+    return;
+  }
+  btn.click();
 }
 function emuWalletExchange() {
   const btn = document.getElementById('exchangeBtn');
-  if (btn) btn.click();
-  else alert(emuT('wallet.exchangeUnavailable'));
+  if (!btn) { alert(emuT('wallet.exchangeUnavailable')); return; }
+  /* 取引所の中身(nftExchangeSection)は myWalletPage の中にあるため、
+     ウォレット画面を開かずに押すと処理は走るのに何も表示されない。
+     正規の導線(myWalletButton)でウォレットを開いてから実行する。 */
+  const walletBtn = document.getElementById('myWalletButton');
+  if (walletBtn) {
+    walletBtn.click();
+    setTimeout(function () {
+      const section = document.getElementById('nftExchangeSection');
+      if (section) section.style.display = 'block';
+      btn.click();
+    }, 300);
+    return;
+  }
+  btn.click();
 }
 
 async function loadEmuValueProfile() {
@@ -15389,6 +15412,7 @@ async function loadEmuValueProfile() {
     let helpful = 0;
     let changed = 0;
     let acceptedChanges = 0;
+    let elevatedPosts = 0;   // 改善を採り入れて育った自分の投稿の数（学びへ昇華）
     const helped = new Set();
     const valuePosts = [];
     snap.forEach(function(doc) {
@@ -15397,7 +15421,9 @@ async function loadEmuValueProfile() {
       const change = Number(p.changeCount) || 0;
       helpful += good;
       changed += change;
-      acceptedChanges += Number(p.acceptedChangeCount) || 0;
+      const acceptedOnPost = Number(p.acceptedChangeCount) || 0;
+      acceptedChanges += acceptedOnPost;
+      if (acceptedOnPost > 0) elevatedPosts += 1;
       (Array.isArray(p.goodUsers) ? p.goodUsers : []).forEach(function(a) {
         if (a) helped.add(String(a).toLowerCase());
       });
@@ -15411,6 +15437,16 @@ async function loadEmuValueProfile() {
     if (changedEl) changedEl.textContent = emuT('unit.times', { n: changed });
     const acceptedEl = document.getElementById('emuAcceptedChangeCount');
     if (acceptedEl) acceptedEl.textContent = emuT('unit.items', { n: acceptedChanges });
+
+    /* 学びへ昇華：これまで表示先だけあって一度も更新されず、常に「記録なし」のままだった。
+       「誰かの改善を採り入れて実際に育った自分の知識」の数として集計する。
+       （acceptedChangeCount が1件以上ついた自分の投稿＝改善を反映した投稿） */
+    const elevatedEl = document.getElementById('emuElevatedCount');
+    if (elevatedEl) {
+      elevatedEl.textContent = elevatedPosts > 0
+        ? emuT('unit.items', { n: elevatedPosts })
+        : emuT('profile.noRecord');
+    }
 
     let changesGiven = [];
     try {
@@ -16719,6 +16755,14 @@ document.getElementById('postBtn').addEventListener('click', ()=>{
   if(!rawText) return;
   const config = ROOM3_CONTRIBUTION_MODES[room3ContributionMode] || ROOM3_CONTRIBUTION_MODES.opinion;
   const text = config.prefix + ' ' + rawText;
+
+  /* 接続が切れているときに emit すると、送信は失われるのに画面上は
+     成功したように見え、入力内容まで消えてしまう。送らずに知らせる。 */
+  if (!socket || !socket.connected) {
+    const info = document.getElementById('replyInfo');
+    if (info) { info.style.display = 'block'; info.textContent = emuT('dsc.disconnected'); }
+    return;   // 入力内容は消さずに残す
+  }
 
   console.log("送信:", { text, replyTarget });
 
