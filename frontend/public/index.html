@@ -14638,7 +14638,7 @@ function showEmuFeed(mode) {
   document.body.classList.add('emu-knowledge-open');
   _setEmuHomeTab('emuFeedTab');
   const frame = document.getElementById('emuKnowledgeFrame');
-  const filterMode = mode || 'recommended';
+  const filterMode = mode || 'new'; // 知識を読むの既定は「新着」
   if (frame) frame.dataset.pendingFilter = filterMode;
   if (frame && !frame.getAttribute('src')) frame.src = '/knowledge.html';
   if (frame && frame.contentWindow && frame.dataset.ready === 'true') {
@@ -17298,7 +17298,7 @@ async function refreshAllPosts() {
 
 
 // 今月のテーマ
-let currentTheme = "はじまり";//今月のテーマ
+let currentTheme = "夏休み";//今月のテーマ
 
 // トレンド用
 async function filterTrendPosts() {
@@ -20691,6 +20691,29 @@ document.addEventListener('DOMContentLoaded', () => {
       return count;
     } catch (_) { return 0; }
   }
+  /* 自分がGoodした投稿の総数。表示中の一覧(20件ずつ)に依存せず、Firestoreから直接数える。 */
+  let knowledgeHelpedCache = null;
+  async function countMyGoodPosts(account, force) {
+    if (!account || !window.db || !window.fbLib) return 0;
+    if (!force && knowledgeHelpedCache && knowledgeHelpedCache.account === account) {
+      return knowledgeHelpedCache.count;
+    }
+    try {
+      const q = window.fbLib.query(
+        window.fbLib.collection(window.db, 'posts'),
+        window.fbLib.where('goodUsers', 'array-contains', account),
+        window.fbLib.limit(500)
+      );
+      const snap = await window.fbLib.getDocs(q);
+      knowledgeHelpedCache = { account, count:snap.size };
+      return snap.size;
+    } catch (e) {
+      console.warn('役に立った数の集計に失敗:', e && e.message);
+      return knowledgeHelpedCache && knowledgeHelpedCache.account === account
+        ? knowledgeHelpedCache.count : 0;
+    }
+  }
+
   async function syncKnowledgeFrame(options) {
     options = options || {};
     if (knowledgeSyncing) return knowledgeSyncing;
@@ -20714,8 +20737,9 @@ document.addEventListener('DOMContentLoaded', () => {
       sendKnowledge({
         type:'emu-knowledge-posts', posts:rows, append:!!options.append, hasMore:knowledgeHasMore,
         account,
-        monthlyTheme:String(typeof currentTheme === 'string' ? currentTheme : 'はじまり'),
+        monthlyTheme:String(typeof currentTheme === 'string' ? currentTheme : '夏休み'),
         drafts, scheduledCount:await scheduledKnowledgeCount(account),
+        helpedCount:await countMyGoodPosts(account, !options.append),
         canDraft:typeof isFreeOnlyUser === 'function' ? !isFreeOnlyUser() : false,
         canSchedule:!!window.hasScheduleNFT
       });
@@ -20769,7 +20793,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (message.type === 'emu-knowledge-ready' || message.type === 'emu-knowledge-refresh') {
       if (message.type === 'emu-knowledge-ready') {
         frame.dataset.ready = 'true';
-        sendKnowledge({ type:'emu-knowledge-filter', mode:frame.dataset.pendingFilter || 'recommended' });
+        sendKnowledge({ type:'emu-knowledge-filter', mode:frame.dataset.pendingFilter || 'new' });
       }
       syncKnowledgeFrame({ append:false });
       return;
