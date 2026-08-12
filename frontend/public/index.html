@@ -3585,6 +3585,25 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 .ches-btn-line:not([disabled]):hover { box-shadow: 0 14px 28px -10px rgba(6,199,85,0.7); }
 .ches-btn-google { background: #fff; color: #3c4043; border: 1.5px solid #dadce0; box-shadow: 0 4px 14px -8px rgba(60,64,67,0.35); }
 .ches-btn-google:not([disabled]):hover { box-shadow: 0 8px 20px -8px rgba(60,64,67,0.4); background: #f8f9fb; }
+.ches-btn-email { background: #1a1840; color: #fff; box-shadow: 0 10px 22px -10px rgba(26,24,64,0.6); }
+.ches-btn-email:not([disabled]):hover { box-shadow: 0 14px 28px -10px rgba(26,24,64,0.7); }
+
+/* メールログインの入力欄（ボタンを押すと開く） */
+.ches-email-form { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 2px; }
+.ches-email-form input {
+  width: 100%; height: 48px; border-radius: 12px; padding: 0 14px;
+  border: 1.5px solid #dadce0; font-family: inherit; color: #1a1840;
+  background: #fff; box-sizing: border-box;
+  /* 16px 未満だと iOS Safari が focus 時にページごと拡大するため下げない */
+  font-size: 16px;
+}
+.ches-email-form input:focus { outline: none; border-color: #1a1840; }
+.ches-email-form button {
+  height: 46px; border-radius: 999px; border: none; cursor: pointer;
+  background: #f08300; color: #fff; font-family: inherit; font-weight: 700; font-size: 14px;
+}
+.ches-email-form button:disabled { opacity: 0.5; cursor: default; }
+.ches-email-note { margin: 2px 0 0; font-size: 11px; line-height: 1.6; color: rgba(26,24,64,0.55); text-align: center; }
 
 /* ===== その他の方法（MetaMask 有料パス） ===== */
 .ches-advanced { margin-top: 12px; text-align: center; }
@@ -3725,6 +3744,18 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
           </span>
           <span>Googleではじめる</span>
         </button>
+        <button id="chesEmailButton" class="ches-btn ches-btn-email" onclick="wsToggleEmailForm()">
+          <span class="ches-btn-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4.24-8 4.76-8-4.76V6l8 4.76L20 6v2.24Z"/></svg>
+          </span>
+          <span>メールではじめる</span>
+        </button>
+        <div id="chesEmailForm" class="ches-email-form" style="display:none;">
+          <input id="chesEmailInput" type="email" inputmode="email" autocomplete="email"
+                 placeholder="you@example.com" aria-label="メールアドレス">
+          <button type="button" id="chesEmailSend" onclick="wsSendEmailLink()">ログイン用リンクを送る</button>
+          <p class="ches-email-note">パスワードはありません。届いたメールのリンクを開くとログインできます。</p>
+        </div>
       </div>
 
       <div class="ches-advanced">
@@ -3740,7 +3771,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <div class="ches-consent-divider"></div>
       <div class="ches-consent">
         ログインまたは登録することで、<br>
-        <a href="/terms.html" onclick="openLegal('terms');return false;">利用規約</a>・<a href="/privacy.html" onclick="openLegal('privacy');return false;">プライバシーポリシー</a>に同意したものとみなします。
+        <a href="/terms.html" onclick="openLegal('terms');return false;">利用規約</a>・<a href="/privacy.html" onclick="openLegal('privacy');return false;">プライバシーポリシー</a>に同意したものとみなします。<br>
+        <a href="/guarantee.html">Emu 有料会員について</a>・<a href="/tokushoho.html">特定商取引法に基づく表記</a>
       </div>
 
       <p id="walletStatus"></p>
@@ -3866,6 +3898,41 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     panel.style.display = open ? 'block' : 'none';
     if (toggle) toggle.textContent = open ? 'その他の方法を閉じる ▴' : 'その他の方法で入る ▾';
   };
+
+  // ───── メールではじめる ─────
+  window.wsToggleEmailForm = function() {
+    var form = document.getElementById('chesEmailForm');
+    if (!form) return;
+    var open = form.style.display === 'none' || !form.style.display;
+    form.style.display = open ? 'flex' : 'none';
+    if (open) { var i = document.getElementById('chesEmailInput'); if (i) i.focus(); }
+  };
+
+  window.wsSendEmailLink = function() {
+    var input = document.getElementById('chesEmailInput');
+    var btn = document.getElementById('chesEmailSend');
+    if (!input || !window.CHES || typeof window.CHES.startEmail !== 'function') return;
+    // 送信中は押せないようにする（同じアドレスへ何通も送らせない）
+    if (btn) { btn.disabled = true; btn.textContent = '送信中...'; }
+    window.CHES.startEmail(input.value).then(function(sent) {
+      if (!btn) return;
+      if (sent) {
+        btn.textContent = 'メールを送信しました';
+        input.disabled = true;
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'ログイン用リンクを送る';
+      }
+    });
+  };
+
+  // 入力欄で Enter を押しても送れるようにする
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    if (!e.target || e.target.id !== 'chesEmailInput') return;
+    e.preventDefault();
+    window.wsSendEmailLink();
+  });
 
   // 入場者数は Firestore のユニーク入場者カウンター（startAirdropCounter）で表示するため、
   // ここではローカルのタップ数を connectedCount に表示しない。
@@ -18476,7 +18543,8 @@ import {
   import {
     getAuth, signInAnonymously,
     GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithCustomToken,
-    onAuthStateChanged, signOut, setPersistence, browserLocalPersistence
+    onAuthStateChanged, signOut, setPersistence, browserLocalPersistence,
+    sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
   // 【本番用】Firebase設定
@@ -18511,7 +18579,9 @@ window.fbLib = {
   // CHES Identity（LINE / Google）用の Auth 窓口
   window.fbAuth = {
     GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithCustomToken,
-    onAuthStateChanged, signOut, setPersistence, browserLocalPersistence
+    onAuthStateChanged, signOut, setPersistence, browserLocalPersistence,
+    // メールのマジックリンク（パスワードを持たせない）
+    sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink
   };
   // セッションをローカル永続化（再訪時に自動サインイン）
   setPersistence(auth, browserLocalPersistence).catch(() => {});
@@ -20375,6 +20445,77 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
+  // ───── メールではじめる（マジックリンク：パスワードを持たせない） ─────
+  // 送信したアドレスは localStorage に控える。リンクを別タブで開いても
+  // 本人であることを確かめられるようにするため（Firebase の推奨手順）。
+  var EMAIL_KEY = "ches_email_for_signin";
+
+  function isValidEmail(v) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
+  }
+
+  CHES.startEmail = function (email) {
+    var addr = String(email || "").trim();
+    if (!isValidEmail(addr)) {
+      statusMsg("メールアドレスの形式が正しくありません。", true);
+      return Promise.resolve(false);
+    }
+    return new Promise(function (resolve) {
+      whenFirebaseReady(async function () {
+        try {
+          await window.fbAuth.sendSignInLinkToEmail(window.auth, addr, {
+            url: location.origin + "/?emailSignIn=1",
+            handleCodeInApp: true
+          });
+          localStorage.setItem(EMAIL_KEY, addr);
+          statusMsg("ログイン用のリンクを " + addr + " に送りました。メールを開いてください。");
+          resolve(true);
+        } catch (e) {
+          console.error("[CHES] メールリンク送信失敗:", e);
+          var msg = "メールを送信できませんでした。";
+          if (e && e.code === "auth/invalid-email") msg = "メールアドレスの形式が正しくありません。";
+          if (e && e.code === "auth/operation-not-allowed") {
+            msg = "メールログインが Firebase で未有効です（コンソール設定が必要）。";
+          }
+          if (e && e.code === "auth/unauthorized-continue-uri") {
+            msg = "このドメインが Firebase の承認済みドメインに未登録です。";
+          }
+          statusMsg(msg, true);
+          resolve(false);
+        }
+      }, function () { statusMsg("接続に失敗しました。", true); resolve(false); });
+    });
+  };
+
+  /* メール内リンクから戻ってきたときの受け口。
+     Google / LINE と同じ completeCommonFlow に合流させるので、
+     アカウント作成・ウォレット発行・入園の扱いは完全に共通になる。 */
+  CHES._resumeEmailSignIn = function () {
+    whenFirebaseReady(async function () {
+      try {
+        if (!window.fbAuth.isSignInWithEmailLink(window.auth, location.href)) return;
+        var stored = localStorage.getItem(EMAIL_KEY) || "";
+        // 別端末でリンクを開いた場合は控えが無いので、その場で聞き直す
+        if (!stored) stored = window.prompt("確認のため、ログインに使ったメールアドレスを入力してください") || "";
+        if (!isValidEmail(stored)) { statusMsg("メールアドレスを確認できませんでした。", true); return; }
+
+        window._chesBusy = true;
+        showLoading();
+        var result = await window.fbAuth.signInWithEmailLink(window.auth, stored, location.href);
+        localStorage.removeItem(EMAIL_KEY);
+        // 使い終わったリンクを履歴から消す（再読み込みで二重に走らせない）
+        try { history.replaceState({}, "", location.origin + "/"); } catch (e) {}
+        await completeCommonFlow(result.user, "email", { email: stored });
+      } catch (e) {
+        console.error("[CHES] メールリンク認証失敗:", e);
+        cancelLoading(); window._chesBusy = false;
+        var msg = "ログインリンクを確認できませんでした。もう一度お試しください。";
+        if (e && e.code === "auth/invalid-action-code") msg = "このリンクは既に使用済みか、期限が切れています。";
+        statusMsg(msg, true);
+      }
+    });
+  };
+
   // ───── LINE ではじめる（認可コードフロー → バックエンドで custom token 発行） ─────
   CHES.startLine = function () {
     if (!CHES.config.lineChannelId) {
@@ -20514,6 +20655,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // 起動：LINEコールバック → Googleリダイレクト戻り → 自動サインイン の順で処理。
   function boot() {
     if (CHES.handleLineCallback()) return;                 // LINE（?code=&state=）
+    // メールのマジックリンクで戻ってきた場合（URLに oobCode が付く）
+    if (/[?&](oobCode|emailSignIn)=/.test(location.search)) {
+      CHES._resumeEmailSignIn();
+      return;
+    }
     if (localStorage.getItem("ches_google_redirect")) {    // Google リダイレクトの戻り
       CHES.handleGoogleRedirect();
       return;

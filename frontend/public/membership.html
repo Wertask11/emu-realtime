@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Emu 会員 | 語り合える一人</title>
+<style>
+:root{
+  --ink:#1a1840; --muted:#6f6a86; --line:#e6e2dc; --bg:#faf8f5; --card:#fff;
+  --accent:#f08300; --ok:#1f8a4c; --warn:#c0392b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  line-height:1.75;-webkit-text-size-adjust:100%;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+.wrap{max-width:720px;margin:0 auto;padding:24px 18px 80px}
+header.top{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+header.top a{color:var(--muted);text-decoration:none;font-size:13px}
+h1{font-size:22px;margin:0 0 4px}
+.lead{color:var(--muted);font-size:13px;margin:0 0 24px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:16px}
+.card h2{font-size:15px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.card h2 .ico{width:22px;text-align:center;flex:none;color:var(--muted)}
+.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.row:last-child{border-bottom:none}
+.row .k{color:var(--muted);flex:none}
+.row .v{text-align:right;word-break:break-word}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;min-height:50px;border-radius:999px;border:none;cursor:pointer;
+  font-family:inherit;font-weight:700;font-size:15px;background:var(--accent);color:#fff;margin-top:12px}
+.btn.sub{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+.btn.danger{background:#fff;color:var(--warn);border:1.5px solid #f0c8c2}
+.btn:disabled{opacity:.5;cursor:default}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}
+.pill.on{background:#e7f5ec;color:var(--ok)} .pill.off{background:#f2efeb;color:var(--muted)}
+.pill.warn{background:#fdecea;color:var(--warn)}
+label{display:block;font-size:12px;color:var(--muted);margin:12px 0 4px}
+input,select,textarea{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:12px;
+  font-family:inherit;font-size:16px;color:var(--ink);background:#fff}
+textarea{min-height:100px;resize:vertical}
+.note{font-size:12px;color:var(--muted);margin:10px 0 0}
+.err{color:var(--warn);font-size:13px;margin-top:10px}
+.ok{color:var(--ok);font-size:13px;margin-top:10px}
+.hide{display:none!important}
+.gate{text-align:center;padding:60px 20px;color:var(--muted)}
+ul.cond{margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--muted)}
+ul.cond li{margin:4px 0}
+.stat{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.stat b{display:block;font-size:20px}
+.stat div{flex:1;min-width:88px;background:#f7f5f1;border-radius:12px;padding:10px;text-align:center;font-size:11px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top"><a href="/">← Emu へもどる</a></header>
+  <h1>Emu 会員</h1>
+  <p class="lead">月額10,000円・30日間の「語り合える一人」保証つき</p>
+
+  <div id="gate" class="gate">読み込んでいます…</div>
+
+  <main id="main" class="hide">
+
+    <!-- 会員状態 -->
+    <section class="card">
+      <h2><span class="ico">◈</span>ご契約</h2>
+      <div class="row"><span class="k">状態</span><span class="v" id="subStatus">—</span></div>
+      <div class="row"><span class="k">料金</span><span class="v">月額 10,000円（税込）</span></div>
+      <div class="row"><span class="k">次回更新日</span><span class="v" id="periodEnd">—</span></div>
+      <div class="row"><span class="k">保証期間</span><span class="v" id="guaranteeEnd">—</span></div>
+      <button class="btn" id="subscribeBtn">入会して支払う（10,000円）</button>
+      <button class="btn sub hide" id="portalBtn">支払い方法の変更・解約</button>
+      <p class="note">解約手数料はかかりません。次回決済日の前までに解約すれば翌月の請求は発生しません。</p>
+      <p class="err hide" id="subErr"></p>
+    </section>
+
+    <!-- 本人確認 -->
+    <section class="card">
+      <h2><span class="ico">☑</span>本人確認 <span id="kycPill" class="pill off">未提出</span></h2>
+      <p class="note" id="kycMsg">安全に対話していただくため、本人確認をお願いしています。</p>
+      <div id="kycForm">
+        <label for="docType">書類の種類</label>
+        <select id="docType">
+          <option value="driver_license">運転免許証</option>
+          <option value="passport">パスポート</option>
+          <option value="mynumber_card">マイナンバーカード（表面のみ）</option>
+          <option value="residence_card">在留カード</option>
+        </select>
+        <label for="frontFile">おもて面の画像</label>
+        <input type="file" id="frontFile" accept="image/jpeg,image/png,image/webp">
+        <label for="backFile">うら面の画像（ある場合）</label>
+        <input type="file" id="backFile" accept="image/jpeg,image/png,image/webp">
+        <button class="btn" id="kycSubmit">本人確認を提出する</button>
+        <p class="note">
+          マイナンバーカードは<strong>おもて面のみ</strong>を送ってください。個人番号（マイナンバー）が写った面は送らないでください。<br>
+          画像は非公開の保管領域に置き、確認が終わり次第すぐに削除します。確認結果だけを記録し、書類そのものは保管しません。
+        </p>
+        <p class="err hide" id="kycErr"></p>
+        <p class="ok hide" id="kycOk"></p>
+      </div>
+    </section>
+
+    <!-- 対話 -->
+    <section class="card">
+      <h2><span class="ico">◇</span>対話</h2>
+      <div class="stat">
+        <div><b id="stOffered">0</b>提示された機会</div>
+        <div><b id="stHeld">0</b>参加した回数</div>
+        <div><b id="stAgain">0</b>また話したい</div>
+      </div>
+      <label for="slots">対話できる日時（1行に1つ。毎週3枠以上の登録が保証の条件です）</label>
+      <textarea id="slots" placeholder="例）&#10;毎週火曜 21:00-22:00&#10;毎週木曜 21:00-22:00&#10;毎週土曜 10:00-11:00"></textarea>
+      <button class="btn sub" id="slotsSave">対話できる日時を保存</button>
+      <p class="ok hide" id="slotsOk"></p>
+      <div id="sessionList"></div>
+    </section>
+
+    <!-- 返金 -->
+    <section class="card">
+      <h2><span class="ico">↩</span>「語り合える一人」保証</h2>
+      <p class="note">
+        30日間で最低4回の対話機会をお届けします。3回以上参加しても「また話したい」と思える相手に
+        一人も出会えなかった場合、初月料金10,000円を全額返金します。
+      </p>
+      <ul class="cond">
+        <li>初回入会者であること</li>
+        <li>登録後30日以内にプロフィールを完成していること</li>
+        <li>興味・関心テーマを2つ以上登録していること</li>
+        <li>毎週3枠以上、対話可能日時を登録していること</li>
+        <li>Emuから提案された対話に3回以上参加していること</li>
+        <li>対話後の評価に回答していること</li>
+        <li>「また話したい」と評価した相手が一人もいないこと</li>
+        <li>無断欠席や重大な規約違反がないこと</li>
+      </ul>
+      <div class="row" style="margin-top:12px"><span class="k">申請できる期間</span><span class="v" id="refundWindow">—</span></div>
+      <div class="row"><span class="k">申請の状態</span><span class="v" id="refundState">未申請</span></div>
+
+      <div id="refundForm" class="hide">
+        <label for="refundReason">差し支えなければ、合わなかった理由を教えてください</label>
+        <textarea id="refundReason" placeholder="どこが期待と違ったかを書いていただけると、Emuの改善に使わせていただきます。"></textarea>
+        <label><input type="checkbox" id="wantsFounderCall" style="width:auto;margin-right:8px">返金の前に、創業者と一度話してみたい</label>
+        <button class="btn danger" id="refundSubmit">返金保証を申請する</button>
+      </div>
+      <p class="note" id="refundNote"></p>
+      <p class="err hide" id="refundErr"></p>
+      <p class="ok hide" id="refundOk"></p>
+    </section>
+
+    <p class="note" style="text-align:center">
+      <a href="/tokushoho.html">特定商取引法に基づく表記</a>
+      <a href="/terms.html">利用規約</a>
+      <a href="/privacy.html">プライバシーポリシー</a>
+    </p>
+  </main>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+const API = "https://emu-realtime.onrender.com";
+const app = initializeApp({
+  apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
+  authDomain: "schoolpark-emu.vercel.app",
+  projectId: "emusch-2a111",
+  storageBucket: "emusch-2a111.firebasestorage.app",
+  messagingSenderId: "795496371585",
+  appId: "1:795496371585:web:51deec91b8a2152e4c8480"
+});
+const auth = getAuth(app);
+
+const $ = s => document.querySelector(s);
+const fmt = iso => iso ? new Date(iso).toLocaleDateString("ja-JP", { year:"numeric", month:"long", day:"numeric" }) : "—";
+function show(el, on){ el.classList.toggle("hide", !on); }
+function msg(el, text, isErr){ el.textContent = text; show(el, !!text); }
+
+let idToken = null;
+
+async function api(path, options) {
+  const res = await fetch(API + path, {
+    method: (options && options.method) || "GET",
+    headers: Object.assign(
+      { "Authorization": "Bearer " + idToken },
+      (options && options.body) ? { "Content-Type": "application/json" } : {}
+    ),
+    body: options && options.body ? JSON.stringify(options.body) : undefined
+  });
+  let data = {};
+  try { data = await res.json(); } catch (_) {}
+  if (!res.ok) throw Object.assign(new Error(data.error || ("HTTP " + res.status)), { code: data.error, status: res.status });
+  return data;
+}
+
+/* サーバーのエラーコードを、利用者が次に何をすればよいか分かる日本語にする。 */
+const ERRORS = {
+  ALREADY_SUBSCRIBED: "すでに有効なご契約があります。",
+  BILLING_UNAVAILABLE: "決済の準備が整っていません。時間をおいてお試しください。",
+  PRICE_NOT_CONFIGURED: "料金プランが未設定です。運営にお問い合わせください。",
+  NO_SUBSCRIPTION: "ご契約が見つかりません。",
+  WINDOW_NOT_OPEN: "返金の申請期間はまだ始まっていません。",
+  WINDOW_CLOSED: "返金の申請期間が終了しています。",
+  ALREADY_REQUESTED: "すでに申請を受け付けています。",
+  ALREADY_APPROVED: "本人確認はすでに完了しています。",
+  ALREADY_PENDING: "本人確認を確認中です。結果をお待ちください。",
+  IMAGE_TOO_LARGE: "画像が大きすぎます（1枚5MBまで）。",
+  INVALID_IMAGE_DATA: "画像として読み取れませんでした。別の画像をお試しください。",
+  INVALID_MIME: "JPEG・PNG・WebP のいずれかの画像を選んでください。",
+  MISSING_IMAGE: "おもて面の画像を選んでください。",
+  RATE_LIMITED: "操作が続いています。しばらく待ってからお試しください。"
+};
+const human = e => ERRORS[e && e.code] || "処理できませんでした。時間をおいてお試しください。";
+
+// ───────── 契約状態 ─────────
+async function loadBilling() {
+  const s = await api("/api/billing/status");
+  const labels = { none:"未加入", active:"有効", past_due:"支払い確認中", canceled:"解約済み", incomplete:"手続き中", trialing:"有効" };
+  $("#subStatus").textContent = labels[s.status] || s.status;
+  $("#periodEnd").textContent = s.cancelAtPeriodEnd
+    ? fmt(s.currentPeriodEnd) + "（この日で終了）"
+    : fmt(s.currentPeriodEnd);
+  const active = s.status === "active" || s.status === "trialing";
+  show($("#subscribeBtn"), !active);
+  show($("#portalBtn"), active);
+
+  if (s.guarantee) {
+    $("#guaranteeEnd").textContent = fmt(s.guarantee.endsAt) + " まで";
+    $("#refundWindow").textContent = fmt(s.guarantee.refundOpensAt) + " 〜 " + fmt(s.guarantee.refundClosesAt);
+    show($("#refundForm"), s.guarantee.refundOpenNow && !s.refundStatus);
+    if (!s.guarantee.refundOpenNow && !s.refundStatus) {
+      $("#refundNote").textContent = "申請できるのは入会31日目からの7日間です。";
+    }
+  } else {
+    $("#guaranteeEnd").textContent = "ご入会後に開始します";
+    $("#refundWindow").textContent = "—";
+  }
+  const rs = { pending:"確認中", refunded:"返金済み", rejected:"却下" };
+  if (s.refundStatus) $("#refundState").textContent = rs[s.refundStatus] || s.refundStatus;
+  return s;
+}
+
+$("#subscribeBtn").onclick = async () => {
+  const btn = $("#subscribeBtn");
+  btn.disabled = true; msg($("#subErr"), "");
+  try {
+    const r = await api("/api/billing/checkout", { method:"POST", body:{} });
+    location.href = r.url;                       // Stripe の決済ページへ
+  } catch (e) {
+    msg($("#subErr"), human(e)); btn.disabled = false;
+  }
+};
+
+$("#portalBtn").onclick = async () => {
+  const btn = $("#portalBtn");
+  btn.disabled = true; msg($("#subErr"), "");
+  try {
+    const r = await api("/api/billing/portal", { method:"POST", body:{} });
+    location.href = r.url;
+  } catch (e) {
+    msg($("#subErr"), human(e)); btn.disabled = false;
+  }
+};
+
+// ───────── 本人確認 ─────────
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1]);
+    r.onerror = () => reject(new Error("read failed"));
+    r.readAsDataURL(file);
+  });
+}
+
+async function loadKyc() {
+  const s = await api("/api/kyc/status");
+  const pill = $("#kycPill");
+  const map = {
+    none:["未提出","off"], pending:["確認中","off"], approved:["確認済み","on"],
+    rejected:["再提出が必要","warn"], expired:["期限切れ","warn"]
+  };
+  const [label, cls] = map[s.status] || ["未提出","off"];
+  pill.textContent = label; pill.className = "pill " + cls;
+  if (s.status === "approved") {
+    $("#kycForm").classList.add("hide");
+    $("#kycMsg").textContent = "本人確認は完了しています。ご提出いただいた書類は削除済みです。";
+  } else if (s.status === "pending") {
+    $("#kycForm").classList.add("hide");
+    $("#kycMsg").textContent = "確認中です。結果が出るまでお待ちください。";
+  } else if (s.status === "rejected") {
+    $("#kycMsg").textContent = "確認できませんでした" + (s.rejectReason ? "（" + s.rejectReason + "）" : "") + "。もう一度ご提出ください。";
+  }
+}
+
+$("#kycSubmit").onclick = async () => {
+  const btn = $("#kycSubmit");
+  msg($("#kycErr"), ""); msg($("#kycOk"), "");
+  const front = $("#frontFile").files[0];
+  const back = $("#backFile").files[0];
+  if (!front) return msg($("#kycErr"), "おもて面の画像を選んでください。");
+  if (back && back.type !== front.type) {
+    return msg($("#kycErr"), "おもて面とうら面は同じ形式の画像を選んでください。");
+  }
+  btn.disabled = true; btn.textContent = "送信中…";
+  try {
+    await api("/api/kyc/submit", { method:"POST", body:{
+      docType: $("#docType").value,
+      mimeType: front.type,
+      front: await fileToBase64(front),
+      back: back ? await fileToBase64(back) : ""
+    }});
+    msg($("#kycOk"), "提出しました。確認をお待ちください。");
+    await loadKyc();
+  } catch (e) {
+    msg($("#kycErr"), human(e));
+  } finally {
+    btn.disabled = false; btn.textContent = "本人確認を提出する";
+  }
+};
+
+// ───────── 対話 ─────────
+async function loadDialogue() {
+  const d = await api("/api/dialogue/my");
+  $("#stOffered").textContent = d.summary.offered;
+  $("#stHeld").textContent = d.summary.held;
+  $("#stAgain").textContent = d.summary.wantsAgain;
+  $("#slots").value = (d.slots || []).join("\n");
+
+  const outcomes = {
+    scheduled:"予定", held:"実施済み", member_no_show:"欠席",
+    member_canceled:"キャンセル", canceled_by_emu:"Emu都合で中止", no_partner:"相手を用意できず"
+  };
+  const list = $("#sessionList");
+  list.innerHTML = d.sessions.length
+    ? d.sessions.map(s => {
+        const when = s.scheduledAt ? new Date(s.scheduledAt).toLocaleString("ja-JP") : "日時未定";
+        // 実施済みで未評価のものだけ、その場で評価できるようにする
+        const rate = (s.outcome === "held" && s.wantsAgain === null)
+          ? '<div style="margin-top:6px"><button class="btn sub" style="min-height:38px;font-size:13px" data-rate="' + s.id + '" data-v="1">また話したい</button>'
+            + '<button class="btn sub" style="min-height:38px;font-size:13px" data-rate="' + s.id + '" data-v="0">今回は合わなかった</button></div>'
+          : (s.wantsAgain === true ? '<span class="pill on">また話したい</span>'
+            : s.wantsAgain === false ? '<span class="pill off">合わなかった</span>' : "");
+        return '<div class="row"><span class="k">' + when + '</span><span class="v">'
+          + (outcomes[s.outcome] || s.outcome) + rate + '</span></div>';
+      }).join("")
+    : '<p class="note">まだ対話の予定はありません。対話できる日時を登録すると、Emuから対話をご提案します。</p>';
+
+  list.querySelectorAll("[data-rate]").forEach(b => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await api("/api/dialogue/" + b.dataset.rate + "/rate", {
+          method:"POST", body:{ wantsAgain: b.dataset.v === "1" }
+        });
+        await loadDialogue();
+      } catch (e) { b.disabled = false; alert(human(e)); }
+    };
+  });
+}
+
+$("#slotsSave").onclick = async () => {
+  const btn = $("#slotsSave");
+  btn.disabled = true; msg($("#slotsOk"), "");
+  try {
+    const slots = $("#slots").value.split("\n").map(s => s.trim()).filter(Boolean);
+    const r = await api("/api/dialogue/slots", { method:"POST", body:{ slots } });
+    msg($("#slotsOk"), r.count + "件の日時を保存しました。" + (r.count < 3 ? "保証の条件は毎週3枠以上です。" : ""));
+    await loadDialogue();
+  } catch (e) {
+    alert(human(e));
+  } finally { btn.disabled = false; }
+};
+
+// ───────── 返金申請 ─────────
+$("#refundSubmit").onclick = async () => {
+  if (!confirm("返金保証を申請します。よろしいですか？\n申請後は運営が内容を確認し、結果をご連絡します。")) return;
+  const btn = $("#refundSubmit");
+  btn.disabled = true; msg($("#refundErr"), "");
+  try {
+    const d = await api("/api/dialogue/my");
+    await api("/api/billing/refund/request", { method:"POST", body:{
+      reason: $("#refundReason").value,
+      survey: {
+        sessionsJoined: d.summary.held,
+        themesRegistered: 0,
+        slotsRegistered: d.summary.slotCount >= 3,
+        profileCompleted: true,
+        ratedAfterSessions: d.summary.rated >= d.summary.held,
+        wantsFounderCall: $("#wantsFounderCall").checked
+      }
+    }});
+    msg($("#refundOk"), "申請を受け付けました。確認のうえご連絡します。");
+    show($("#refundForm"), false);
+    await loadBilling();
+  } catch (e) {
+    msg($("#refundErr"), human(e)); btn.disabled = false;
+  }
+};
+
+// ───────── 起動 ─────────
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    $("#gate").innerHTML = 'ご利用にはログインが必要です。<br><br><a href="/">Emu にログインする →</a>';
+    return;
+  }
+  try {
+    idToken = await user.getIdToken();
+    await Promise.all([loadBilling(), loadKyc(), loadDialogue()]);
+    $("#gate").classList.add("hide");
+    $("#main").classList.remove("hide");
+  } catch (e) {
+    console.error(e);
+    $("#gate").textContent = "読み込みに失敗しました。時間をおいて再度お試しください。";
+  }
+});
+</script>
+</body>
+</html>

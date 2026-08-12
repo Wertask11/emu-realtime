@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Emu 会員管理</title>
+<style>
+:root{--ink:#1a1840;--muted:#6f6a86;--line:#e6e2dc;--bg:#faf8f5;--card:#fff;--accent:#f08300;--ok:#1f8a4c;--warn:#c0392b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;line-height:1.7}
+.wrap{max-width:1000px;margin:0 auto;padding:24px 18px 80px}
+h1{font-size:20px;margin:0 0 4px}
+.lead{color:var(--muted);font-size:12px;margin:0 0 20px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.tabs button{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:8px 16px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--muted)}
+.tabs button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+.card h3{font-size:14px;margin:0 0 8px}
+.meta{font-size:12px;color:var(--muted);word-break:break-all}
+.row{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+button.act{border:none;border-radius:999px;padding:10px 18px;cursor:pointer;font-family:inherit;font-weight:700;font-size:13px}
+button.ok{background:var(--ok);color:#fff} button.no{background:#fff;color:var(--warn);border:1.5px solid #f0c8c2}
+button.neutral{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+button:disabled{opacity:.5;cursor:default}
+input,select,textarea{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px;font-family:inherit;font-size:14px;margin-top:6px}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 10px;border-radius:999px;background:#f2efeb;color:var(--muted)}
+.pill.on{background:#e7f5ec;color:var(--ok)} .pill.warn{background:#fdecea;color:var(--warn)}
+.gate{text-align:center;padding:70px 20px;color:var(--muted)}
+.hide{display:none!important}
+.empty{color:var(--muted);font-size:13px;padding:20px;text-align:center}
+.warnbox{background:#fdecea;border:1px solid #f0c8c2;border-radius:10px;padding:12px;font-size:12px;color:#8a2b20;margin-bottom:16px}
+img.doc{max-width:100%;border-radius:8px;border:1px solid var(--line);margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Emu 会員管理</h1>
+  <p class="lead">オーナー専用。返金の承認と本人確認の判定は取り消せません。</p>
+
+  <div id="gate" class="gate">確認しています…</div>
+
+  <main id="main" class="hide">
+    <div class="warnbox">
+      本人確認書類の閲覧は監査ログに記録されます。判定すると画像は即座に削除され、結果だけが残ります。
+    </div>
+
+    <div class="tabs">
+      <button data-tab="refunds" class="active">返金申請</button>
+      <button data-tab="kyc">本人確認</button>
+      <button data-tab="dialogue">対話記録</button>
+    </div>
+
+    <section id="tab-refunds"></section>
+    <section id="tab-kyc" class="hide"></section>
+    <section id="tab-dialogue" class="hide"></section>
+  </main>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+const API = "https://emu-realtime.onrender.com";
+const app = initializeApp({
+  apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
+  authDomain: "schoolpark-emu.vercel.app",
+  projectId: "emusch-2a111",
+  storageBucket: "emusch-2a111.firebasestorage.app",
+  messagingSenderId: "795496371585",
+  appId: "1:795496371585:web:51deec91b8a2152e4c8480"
+});
+const auth = getAuth(app);
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const fmt = iso => iso ? new Date(iso).toLocaleString("ja-JP") : "—";
+let idToken = null;
+
+async function api(path, options) {
+  const res = await fetch(API + path, {
+    method: (options && options.method) || "GET",
+    headers: Object.assign({ "Authorization": "Bearer " + idToken },
+      (options && options.body) ? { "Content-Type": "application/json" } : {}),
+    body: options && options.body ? JSON.stringify(options.body) : undefined
+  });
+  let data = {};
+  try { data = await res.json(); } catch (_) {}
+  if (!res.ok) throw Object.assign(new Error(data.error || ("HTTP " + res.status)), { code: data.error, status: res.status });
+  return data;
+}
+
+// ───────── 返金申請 ─────────
+async function renderRefunds() {
+  const el = $("#tab-refunds");
+  el.innerHTML = '<p class="empty">読み込み中…</p>';
+  try {
+    const { items } = await api("/api/billing/admin/refunds?status=pending");
+    if (!items.length) return el.innerHTML = '<p class="empty">未処理の返金申請はありません。</p>';
+    el.innerHTML = items.map(r => {
+      const s = r.survey || {};
+      return '<div class="card" data-id="' + esc(r.id) + '">'
+        + '<h3>' + esc(r.email || r.uid) + '</h3>'
+        + '<p class="meta">uid: ' + esc(r.uid) + '｜申請日 ' + fmt(r.requestedAt) + '</p>'
+        + '<div class="row"><span>参加した対話</span><span>' + (s.sessionsJoined || 0) + ' 回</span></div>'
+        + '<div class="row"><span>対話可能枠 3つ以上</span><span>' + (s.slotsRegistered ? "あり" : "なし") + '</span></div>'
+        + '<div class="row"><span>評価に回答済み</span><span>' + (s.ratedAfterSessions ? "はい" : "いいえ") + '</span></div>'
+        + '<div class="row"><span>創業者と話したい</span><span>' + (s.wantsFounderCall ? "希望あり" : "—") + '</span></div>'
+        + (r.reason ? '<p class="meta" style="margin-top:8px">理由: ' + esc(r.reason) + '</p>' : "")
+        + '<p class="meta" style="margin-top:8px">承認すると Stripe から初月分 10,000円が返金されます（取り消せません）。</p>'
+        + '<textarea data-note placeholder="判断のメモ（記録に残ります）"></textarea>'
+        + '<div class="actions"><button class="act neutral" data-summary>対話記録を見る</button>'
+        + '<button class="act ok" data-approve>承認して返金する</button>'
+        + '<button class="act no" data-reject>却下</button></div>'
+        + '<div data-detail></div></div>';
+    }).join("");
+
+    el.querySelectorAll(".card").forEach(card => {
+      const id = card.dataset.id;
+      const note = () => card.querySelector("[data-note]").value;
+      const uid = card.querySelector(".meta").textContent.split("uid: ")[1].split("｜")[0];
+
+      card.querySelector("[data-summary]").onclick = async (e) => {
+        e.target.disabled = true;
+        try {
+          const r = await api("/api/dialogue/admin/summary/" + encodeURIComponent(uid));
+          const s = r.summary;
+          card.querySelector("[data-detail]").innerHTML =
+            '<div class="card" style="margin-top:10px">'
+            + '<div class="row"><span>提示した機会</span><span>' + s.offered + '</span></div>'
+            + '<div class="row"><span>実施</span><span>' + s.held + '</span></div>'
+            + '<div class="row"><span>また話したい</span><span>' + s.wantsAgain + '</span></div>'
+            + '<div class="row"><span>Emu側都合の不成立</span><span>' + s.emuFault + '</span></div>'
+            + '<div class="row"><span>本人都合の欠席</span><span>' + s.memberFault + '</span></div>'
+            + '<div class="row"><span>登録された対話可能枠</span><span>' + s.slotCount + '</span></div>'
+            + '<div class="row"><span><strong>返金条件を満たすか</strong></span><span>'
+            + (s.meetsRefundConditions ? '<span class="pill on">満たす</span>' : '<span class="pill warn">満たさない</span>')
+            + '</span></div></div>';
+        } catch (err) { alert("取得できませんでした: " + err.message); }
+        e.target.disabled = false;
+      };
+
+      card.querySelector("[data-approve]").onclick = async (e) => {
+        if (!confirm("返金を実行します。取り消せません。よろしいですか？")) return;
+        e.target.disabled = true;
+        try {
+          const r = await api("/api/billing/admin/refunds/" + id + "/decide",
+            { method:"POST", body:{ decision:"approve", adminNote: note() } });
+          alert("返金しました（" + r.amount + "円）");
+          renderRefunds();
+        } catch (err) { alert("返金に失敗しました: " + (err.code || err.message)); e.target.disabled = false; }
+      };
+
+      card.querySelector("[data-reject]").onclick = async (e) => {
+        if (!confirm("この申請を却下します。よろしいですか？")) return;
+        e.target.disabled = true;
+        try {
+          await api("/api/billing/admin/refunds/" + id + "/decide",
+            { method:"POST", body:{ decision:"reject", adminNote: note() } });
+          renderRefunds();
+        } catch (err) { alert("失敗しました: " + (err.code || err.message)); e.target.disabled = false; }
+      };
+    });
+  } catch (e) {
+    el.innerHTML = '<p class="empty">読み込みに失敗しました（' + esc(e.code || e.message) + '）</p>';
+  }
+}
+
+// ───────── 本人確認 ─────────
+async function renderKyc() {
+  const el = $("#tab-kyc");
+  el.innerHTML = '<p class="empty">読み込み中…</p>';
+  try {
+    const { items } = await api("/api/kyc/admin/list?status=pending");
+    if (!items.length) return el.innerHTML = '<p class="empty">確認待ちの本人確認はありません。</p>';
+    const docNames = { driver_license:"運転免許証", passport:"パスポート", mynumber_card:"マイナンバーカード", residence_card:"在留カード" };
+    el.innerHTML = items.map(k =>
+      '<div class="card" data-uid="' + esc(k.uid) + '">'
+      + '<h3>' + esc(docNames[k.docType] || k.docType) + '</h3>'
+      + '<p class="meta">uid: ' + esc(k.uid) + '｜提出 ' + fmt(k.submittedAt) + '｜画像 ' + k.imageCount + '枚</p>'
+      + '<div class="actions"><button class="act neutral" data-view>書類を表示（5分間）</button></div>'
+      + '<div data-images></div>'
+      + '<input data-reason placeholder="却下する場合の理由（本人に表示されます）">'
+      + '<div class="actions"><button class="act ok" data-approve>承認</button>'
+      + '<button class="act no" data-reject>却下</button></div></div>'
+    ).join("");
+
+    el.querySelectorAll(".card").forEach(card => {
+      const uid = card.dataset.uid;
+      card.querySelector("[data-view]").onclick = async (e) => {
+        e.target.disabled = true;
+        try {
+          const r = await api("/api/kyc/admin/" + encodeURIComponent(uid) + "/view");
+          card.querySelector("[data-images]").innerHTML =
+            r.urls.map(u => '<img class="doc" src="' + esc(u) + '" alt="本人確認書類">').join("");
+        } catch (err) { alert("表示できませんでした: " + (err.code || err.message)); e.target.disabled = false; }
+      };
+      const decide = async (decision, btn) => {
+        const reason = card.querySelector("[data-reason]").value;
+        if (decision === "reject" && !reason.trim()) return alert("却下の理由を入力してください。");
+        if (!confirm(decision === "approve" ? "承認します。画像は削除されます。" : "却下します。画像は削除されます。")) return;
+        btn.disabled = true;
+        try {
+          await api("/api/kyc/admin/" + encodeURIComponent(uid) + "/decide",
+            { method:"POST", body:{ decision, rejectReason: reason } });
+          renderKyc();
+        } catch (err) { alert("失敗しました: " + (err.code || err.message)); btn.disabled = false; }
+      };
+      card.querySelector("[data-approve]").onclick = e => decide("approve", e.target);
+      card.querySelector("[data-reject]").onclick = e => decide("reject", e.target);
+    });
+  } catch (e) {
+    el.innerHTML = '<p class="empty">読み込みに失敗しました（' + esc(e.code || e.message) + '）</p>';
+  }
+}
+
+// ───────── 対話記録 ─────────
+async function renderDialogue() {
+  const el = $("#tab-dialogue");
+  el.innerHTML = '<p class="empty">読み込み中…</p>';
+  try {
+    const { items } = await api("/api/dialogue/admin/list");
+    const outcomes = { scheduled:"予定", held:"実施済み", member_no_show:"本人欠席",
+      member_canceled:"本人キャンセル", canceled_by_emu:"Emu都合で中止", no_partner:"相手を用意できず" };
+    el.innerHTML =
+      '<div class="card"><h3>対話機会を提示する</h3>'
+      + '<input id="offerUid" placeholder="会員の uid">'
+      + '<input id="offerAt" type="datetime-local">'
+      + '<div class="actions"><button class="act ok" id="offerBtn">この日時で提示する</button></div></div>'
+      + (items.length ? items.map(s =>
+          '<div class="card" data-id="' + esc(s.id) + '">'
+          + '<p class="meta">uid: ' + esc(s.uid) + '｜' + fmt(s.scheduledAt) + '</p>'
+          + '<div class="row"><span>結果</span><span>' + esc(outcomes[s.outcome] || s.outcome) + '</span></div>'
+          + '<div class="row"><span>また話したい</span><span>'
+          + (s.wantsAgain === true ? '<span class="pill on">はい</span>'
+             : s.wantsAgain === false ? '<span class="pill">いいえ</span>' : "未回答") + '</span></div>'
+          + '<select data-outcome>' + Object.entries(outcomes).map(([k,v]) =>
+              '<option value="' + k + '"' + (k === s.outcome ? " selected" : "") + '>' + v + '</option>').join("")
+          + '</select><div class="actions"><button class="act neutral" data-record>結果を記録</button></div></div>'
+        ).join("") : '<p class="empty">対話記録はまだありません。</p>');
+
+    const offerBtn = $("#offerBtn");
+    if (offerBtn) offerBtn.onclick = async () => {
+      const uid = $("#offerUid").value.trim();
+      const at = $("#offerAt").value;
+      if (!uid || !at) return alert("uid と日時を入力してください。");
+      offerBtn.disabled = true;
+      try {
+        await api("/api/dialogue/admin/offer", { method:"POST", body:{ uid, scheduledAt: new Date(at).toISOString() } });
+        renderDialogue();
+      } catch (e) { alert("失敗しました: " + (e.code || e.message)); offerBtn.disabled = false; }
+    };
+
+    el.querySelectorAll("[data-record]").forEach(btn => {
+      btn.onclick = async () => {
+        const card = btn.closest(".card");
+        btn.disabled = true;
+        try {
+          await api("/api/dialogue/admin/" + card.dataset.id + "/record",
+            { method:"POST", body:{ outcome: card.querySelector("[data-outcome]").value } });
+          renderDialogue();
+        } catch (e) { alert("失敗しました: " + (e.code || e.message)); btn.disabled = false; }
+      };
+    });
+  } catch (e) {
+    el.innerHTML = '<p class="empty">読み込みに失敗しました（' + esc(e.code || e.message) + '）</p>';
+  }
+}
+
+document.querySelectorAll(".tabs button").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
+    ["refunds","kyc","dialogue"].forEach(t =>
+      document.getElementById("tab-" + t).classList.toggle("hide", t !== b.dataset.tab));
+    ({ refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue })[b.dataset.tab]();
+  };
+});
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    $("#gate").innerHTML = 'ログインが必要です。<br><br><a href="/">Emu にログインする →</a>';
+    return;
+  }
+  idToken = await user.getIdToken();
+  try {
+    // オーナー以外はサーバーが 403 を返す。画面側でも入口で弾く。
+    await api("/api/billing/admin/refunds?status=pending");
+    $("#gate").classList.add("hide");
+    $("#main").classList.remove("hide");
+    renderRefunds();
+  } catch (e) {
+    $("#gate").textContent = e.code === "OWNER_ONLY"
+      ? "この画面はオーナー専用です。"
+      : "読み込みに失敗しました（" + (e.code || e.message) + "）";
+  }
+});
+</script>
+</body>
+</html>

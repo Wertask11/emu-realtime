@@ -37,6 +37,44 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ───────── 有料会員（月額10,000円） ─────────
+    // 金額・会員状態・返金・本人確認は、すべてサーバー(Admin SDK)だけが書き込む。
+    // クライアントから書けると、課金せずに会員になったり返金状態を偽装できてしまう。
+
+    // 自分の契約状態だけ読める。書き込みは Stripe Webhook 経由のサーバーのみ。
+    match /subscriptions/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Stripe イベントの冪等性記録。クライアントからは一切触らせない。
+    match /billing_events/{document=**} {
+      allow read, write: if false;
+    }
+
+    // 返金申請。申請も承認もサーバー経由のみ（金額をサーバーが決めるため）。
+    match /refund_requests/{document=**} {
+      allow read, write: if false;
+    }
+
+    // 本人確認。書類の所在や判定結果をクライアントから読めないようにする。
+    match /kyc_submissions/{document=**} {
+      allow read, write: if false;
+    }
+
+    // 対話記録と対話可能枠。保証の判定根拠なので、本人でも直接は書き換えられない。
+    match /dialogue_sessions/{document=**} {
+      allow read, write: if false;
+    }
+    match /dialogue_slots/{document=**} {
+      allow read, write: if false;
+    }
+
+    // 監査ログ。改ざん・削除を防ぐためクライアントからは完全に遮断する。
+    match /admin_audit_logs/{document=**} {
+      allow read, write: if false;
+    }
+
     match /emuer_offchain_ledger/{document=**} {
       allow read, write: if false;
     }
@@ -247,7 +285,14 @@ service cloud.firestore {
         && coll != 'airdrop_registrations'
         && coll != 'secret_door_rewards'
         && coll != 'monthly_distributions'
-        && coll != 'bonus_rewards';
+        && coll != 'bonus_rewards'
+        && coll != 'subscriptions'
+        && coll != 'billing_events'
+        && coll != 'refund_requests'
+        && coll != 'kyc_submissions'
+        && coll != 'dialogue_sessions'
+        && coll != 'dialogue_slots'
+        && coll != 'admin_audit_logs';
     }
   }
 }

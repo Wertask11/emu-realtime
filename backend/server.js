@@ -34,7 +34,13 @@ app.use((req, res, next) => {
   if (contentLength > 8 * 1024 * 1024) return res.status(413).json({ error: "PAYLOAD_TOO_LARGE" });
   next();
 });
-app.use(express.json({ limit: '10mb' }));
+// Stripe Webhook は署名検証に生のボディが必要なため、JSON パーサーを通さない。
+const STRIPE_WEBHOOK_PATH = "/api/billing/webhook";
+const jsonParser = express.json({ limit: '10mb' });
+app.use((req, res, next) => {
+  if (req.path === STRIPE_WEBHOOK_PATH) return next();
+  return jsonParser(req, res, next);
+});
 app.use(
   express.static(
     path.join(__dirname, "..", "frontend", "public")
@@ -104,6 +110,17 @@ function requireOwnAddress(req, res, next) {
   next();
 }
 
+/* 管理操作（返金の承認・本人確認の閲覧など）はオーナーのウォレットに限定する。
+   共有シークレット(x-admin-key)と違い、ブラウザの管理画面から
+   ログイン済みユーザーとして本人性を確かめられる。 */
+function requireOwner(req, res, next) {
+  requireFirebaseUser(req, res, () => {
+    const owner = String(process.env.SP_OWNER_ADDRESS || "0xdcc687c05f130e57597a8525771299a4efb6edf7").toLowerCase();
+    if (req.identity.walletAddress !== owner) return res.status(403).json({ error: "OWNER_ONLY" });
+    next();
+  });
+}
+
 const rateBuckets = new Map();
 function rateLimit({ windowMs, max, key }) {
   return (req, res, next) => {
@@ -123,6 +140,26 @@ function rateLimit({ windowMs, max, key }) {
 
 const uploadRateLimit = rateLimit({ windowMs: 60_000, max: 10, key: "upload" });
 const publicFormRateLimit = rateLimit({ windowMs: 10 * 60_000, max: 5, key: "form" });
+
+// =====================
+// 有料会員（月額10,000円）: 課金 / 返金 / 本人確認 / 対話記録
+// =====================
+const membershipDeps = { db, firebaseAdmin, requireFirebaseUser, requireOwner, rateLimit };
+const billing = require("./billing").createBillingRouter({ ...membershipDeps, webhookPath: STRIPE_WEBHOOK_PATH });
+const kyc = require("./kyc").createKycRouter(membershipDeps);
+const dialogue = require("./dialogue").createDialogueRouter(membershipDeps);
+
+// Webhook は生ボディで受ける（JSON パーサーは上で迂回済み）
+app.post(STRIPE_WEBHOOK_PATH, billing.webhookHandler, billing.handleWebhook);
+app.use("/api/billing", billing.router);
+app.use("/api/kyc", kyc.router);
+app.use("/api/dialogue", dialogue.router);
+
+// 未処理のまま保持期限(30日)を過ぎた本人確認書類を毎日破棄する。
+cron.schedule("30 4 * * *", () => {
+  console.log("⏰ 本人確認書類の保持期限チェック");
+  kyc.purgeExpiredDocuments();
+}, { timezone: "Asia/Tokyo" });
 
 // =====================
 // Ethers / コントラクト設定（Dプラン）
