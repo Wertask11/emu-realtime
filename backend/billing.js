@@ -295,20 +295,13 @@ function createBillingRouter(deps) {
       const sub = await readSubscription(reqData.uid);
       if (!sub || !sub.stripeSubscriptionId) return res.status(400).json({ error: "NO_STRIPE_SUBSCRIPTION" });
 
-      const invoices = await stripe.invoices.list({
-        subscription: sub.stripeSubscriptionId, limit: 100
-      });
-      const paid = invoices.data
-        .filter(inv => inv.status === "paid" && inv.charge)
-        .sort((a, b) => a.created - b.created);
-      if (!paid.length) return res.status(400).json({ error: "NO_PAID_INVOICE" });
+      const target = await findFirstPaymentToRefund(sub.stripeSubscriptionId);
+      if (!target) return res.status(400).json({ error: "NO_PAID_INVOICE" });
 
-      const firstCharge = paid[0].charge;
-      const refund = await stripe.refunds.create({
-        charge: firstCharge,
+      const refund = await stripe.refunds.create(Object.assign({
         reason: "requested_by_customer",
         metadata: { uid: reqData.uid, refundRequestId: id }
-      }, { idempotencyKey: `refund_${id}` });
+      }, target), { idempotencyKey: `refund_${id}` });
 
       await ref.update({
         status: "refunded",
@@ -329,6 +322,38 @@ function createBillingRouter(deps) {
       return res.status(500).json({ error: "REFUND_FAILED", message: e.message });
     }
   });
+
+  /* 初月分の支払いを特定して、返金の宛先を返す。
+     Invoice.charge は 2026-07-29 の API では廃止されており、支払いは
+     Invoice.payments（InvoicePayment のリスト）から辿る。
+     PaymentIntent と Charge のどちらで返ってくるかは決済の作られ方で変わるため、
+     両方に対応する。返すのは refunds.create にそのまま渡せる形。 */
+  async function findFirstPaymentToRefund(subscriptionId) {
+    const invoices = await stripe.invoices.list({ subscription: subscriptionId, limit: 100 });
+    const paid = invoices.data
+      .filter(inv => inv.status === "paid")
+      .sort((a, b) => a.created - b.created);
+
+    for (const inv of paid) {
+      // expand しないと payments が付かない場合があるので、無ければ取り直す
+      let payments = inv.payments && inv.payments.data;
+      if (!payments || !payments.length) {
+        const listed = await stripe.invoicePayments.list({ invoice: inv.id, limit: 10 });
+        payments = listed.data;
+      }
+      for (const p of payments || []) {
+        if (p.status !== "paid") continue;
+        const pay = p.payment || {};
+        const pi = typeof pay.payment_intent === "string" ? pay.payment_intent
+          : (pay.payment_intent && pay.payment_intent.id);
+        if (pi) return { payment_intent: pi };
+        const ch = typeof pay.charge === "string" ? pay.charge
+          : (pay.charge && pay.charge.id);
+        if (ch) return { charge: ch };
+      }
+    }
+    return null;
+  }
 
   // ───────── Webhook ─────────
   /* Stripe の署名検証には生のボディが必要。server.js 側で JSON パーサーを迂回させている。 */
@@ -396,8 +421,10 @@ function createBillingRouter(deps) {
     }
 
     if (event.type === "invoice.payment_failed") {
-      const uid = obj.subscription_details && obj.subscription_details.metadata
-        ? obj.subscription_details.metadata.uid : null;
+      // 2026-07-29 の API で subscription_details は invoice.parent の下へ移動した。
+      // 古い形の請求書が届いても拾えるよう、両方を見る。
+      const details = (obj.parent && obj.parent.subscription_details) || obj.subscription_details;
+      const uid = details && details.metadata ? details.metadata.uid : null;
       if (uid) await subRef(uid).set({ status: "past_due", updatedAt: new Date() }, { merge: true });
       return;
     }
@@ -408,6 +435,14 @@ function createBillingRouter(deps) {
     }
   }
 
+  /* 次回更新日。2026-07-29 の API で current_period_end は Subscription から
+     SubscriptionItem へ移動した。古い形でも読めるよう両方を見る。 */
+  function periodEndOf(subscription) {
+    const item = subscription.items && subscription.items.data && subscription.items.data[0];
+    const unix = (item && item.current_period_end) || subscription.current_period_end;
+    return unix ? new Date(unix * 1000) : null;
+  }
+
   async function upsertSubscription(uid, subscription, opts) {
     const patch = {
       uid,
@@ -415,7 +450,7 @@ function createBillingRouter(deps) {
       stripeCustomerId: typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id,
       status: subscription.status,
       cancelAtPeriodEnd: !!subscription.cancel_at_period_end,
-      currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : null,
+      currentPeriodEnd: periodEndOf(subscription),
       updatedAt: new Date()
     };
     // 保証期間の起点は最初の入会日。再入会で上書きすると保証が延びてしまうので、
