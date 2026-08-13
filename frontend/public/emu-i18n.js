@@ -46,7 +46,7 @@
 
       "today.greeting": "こんにちは。今日は、どこから始める？",
       "today.greetingName": "{name}さん、今日はどこから始める？",
-      "today.hint": "迷ったら、一番上の「今日の一歩」だけで大丈夫。",
+      "today.hint": "迷ったら、「今日の一歩」だけで大丈夫。",
       "today.step.title": "今日の一歩",
       "today.step.text": "誰かの体験から生まれた知識を1つ受け取る",
       "today.step.action": "読みに行く",
@@ -190,7 +190,7 @@
 
       "today.greeting": "Hello. Where would you like to start today?",
       "today.greetingName": "{name}, where would you like to start today?",
-      "today.hint": "Not sure? Just do the first item, \"Today's step\".",
+      "today.hint": "Not sure? Just do \"Today's step\".",
       "today.step.title": "Today's step",
       "today.step.text": "Receive one piece of knowledge born from someone's experience",
       "today.step.action": "Go read",
@@ -334,7 +334,7 @@
 
       "today.greeting": "你好。今天想从哪里开始？",
       "today.greetingName": "{name}，今天想从哪里开始？",
-      "today.hint": "拿不定主意的话，只做最上面的「今天的一步」就好。",
+      "today.hint": "拿不定主意的话，只做「今天的一步」就好。",
       "today.step.title": "今天的一步",
       "today.step.text": "接收一条源自他人经验的知识",
       "today.step.action": "去阅读",
@@ -478,7 +478,7 @@
 
       "today.greeting": "안녕하세요. 오늘은 어디부터 시작할까요?",
       "today.greetingName": "{name}님, 오늘은 어디부터 시작할까요?",
-      "today.hint": "망설여진다면 맨 위의 「오늘의 한 걸음」만으로 충분합니다.",
+      "today.hint": "망설여진다면 「오늘의 한 걸음」만으로 충분합니다.",
       "today.step.title": "오늘의 한 걸음",
       "today.step.text": "누군가의 경험에서 태어난 지식을 하나 받아보기",
       "today.step.action": "읽으러 가기",
@@ -622,7 +622,7 @@
 
       "today.greeting": "Halo. Mau mulai dari mana hari ini?",
       "today.greetingName": "{name}, mau mulai dari mana hari ini?",
-      "today.hint": "Kalau bingung, cukup kerjakan yang paling atas: \"Langkah hari ini\".",
+      "today.hint": "Kalau bingung, cukup kerjakan \"Langkah hari ini\".",
       "today.step.title": "Langkah hari ini",
       "today.step.text": "Terima satu pengetahuan yang lahir dari pengalaman orang lain",
       "today.step.action": "Baca sekarang",

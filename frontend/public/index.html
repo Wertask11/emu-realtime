@@ -4186,7 +4186,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <div class="eth-card eth-welcome">
         <div class="eth-eyebrow" id="emuTodayDate"></div>
         <h2 id="emuTodayGreeting">こんにちは。今日は、どこから始める？</h2>
-        <p data-i18n="today.hint">迷ったら、一番上の「今日の一歩」だけで大丈夫。</p>
+        <p data-i18n="today.hint">迷ったら、「今日の一歩」だけで大丈夫。</p>
         <div class="eth-task-list">
           <div class="eth-task">
             <div class="eth-task-copy">
@@ -14004,6 +14004,8 @@ async function _spFetchWeather() {
 }
 
 function openSpMap(gate) {
+  /* SchoolParkのマップを開いた時点で計上する（ハブのボタン以外の経路も拾う） */
+  if (typeof spTrackBrand === 'function') spTrackBrand('schoolpark');
   _currentGate = gate || _currentGate;
   const overlay = document.getElementById("spMapOverlay");
   overlay.style.display = "flex";
@@ -14681,6 +14683,10 @@ function _emuEnsureAppVisible() {
 }
 
 function showEmuToday() {
+  /* Emuに入ったら計上する。以前はハブのボタンだけで数えていたため、
+     タブ操作やセッション復帰で入った人が数に入らなかった。
+     重複はFirestoreのドキュメント有無で防いでいるので、経路を増やしても増えすぎない。 */
+  if (typeof spTrackBrand === 'function') spTrackBrand('emu');
   _emuEnsureAppVisible();
   document.body.classList.add('emu-today-open');
   document.body.classList.remove('emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open','emu-discussion-open','emu-play-open');
@@ -19934,7 +19940,10 @@ function chesMenuGo(brand) {
       chesHubGo(brand);
       break;
     case 'schoolpark':
-      toggleSpNotifPanel(); /* SchoolPark内ではお知らせパネル（従来どおり） */
+      /* SchoolPark内でメニューから選んだ場合。表示はお知らせパネルのままだが、
+         入場者としては計上する（ハブ経由と数え方をそろえる）。 */
+      if (typeof spTrackBrand === 'function') spTrackBrand('schoolpark');
+      toggleSpNotifPanel();
       break;
   }
 }
@@ -20646,6 +20655,23 @@ document.addEventListener('DOMContentLoaded', () => {
       window.fbAuth.signOut(window.auth).finally(function () { location.reload(); });
     });
   };
+
+  /* 別のタブでログインが完了したとき、このタブを取り残さない。
+
+     メールのリンクは、メールアプリやメール画面が「別のタブ」で開く。
+     ログインはそちらのタブで完了するが、元のタブはログイン画面のまま止まっていた。
+     原因は setupAutoResume の `ches_uid` チェックで、認証状態の変化が
+     元のタブに届く時点ではまだ ches_uid が書かれておらず（書くのは
+     enterSchoolPark で、Firestore読み取りの後）、そこで抜けて二度と入場しなかった。
+
+     localStorage は同一ブラウザのタブ間で共有され、他タブの書き込みは
+     storage イベントで届く。ches_uid が入った時点で読み込み直せば、
+     起動時の通常フロー（setupAutoResume）がそのまま入場まで進める。 */
+  window.addEventListener("storage", function (e) {
+    if (e.key !== "ches_uid" || !e.newValue) return;
+    if (window._chesEntered || window._chesBusy) return;
+    location.reload();
+  });
 
   // 認証状態の待機は Emu 側（emuAuthHeaders）からも使う
   CHES.whenAuthStateResolved = whenAuthStateResolved;
