@@ -1252,7 +1252,9 @@ body.spmap-open #mainApp > .header { display:none !important; }
 .section { display:none; margin-bottom:20px; position: relative; }
 h2 { margin-top:0; }
 textarea { width:100%; height:60px; margin-top:10px; resize:none; }
-#discussion {margin-top:15px;background:#f0f0f0;border-radius:5px;padding:10px;max-height:200px;overflow-y:auto;display: flex;flex-direction: column;gap: 8px;}
+/* 旧デザインの名残。max-height:200px が新レイアウトの .dsc-list より強く効いていて、
+   画面をいくら広げても発言一覧が200pxのまま縮んでいた。高さは .dsc-list に任せる。 */
+#discussion {margin-top:0;background:transparent;border-radius:5px;padding:10px;overflow-y:auto;display: flex;flex-direction: column;gap: 8px;}
 .message {padding: 8px 12px;border-radius: 10px;max-width: 70%;font-size: 0.95em;}
 .message.you {align-self: flex-end;background: #d1e7ff;}
 .message.other {align-self: flex-start;background: #eee;}
@@ -2529,7 +2531,17 @@ body.paypay-mode #pp-post-fab {
    議論ルーム（新デザイン）
    発言の「種類」を色とアイコンで区別し、議論の偏りが見えるようにする
 ═══════════════════════════════════════ */
-#room3Container .dsc-shell{display:flex;flex-direction:column;gap:12px;max-height:min(86vh,900px);width:min(760px,94vw);background:#fff;border-radius:18px;padding:18px;box-sizing:border-box;overflow:hidden;font-family:'Noto Sans JP',sans-serif;color:#25211d}
+/* 議論ルームの外枠。
+   共通の .popup は「高さ90% + padding 30px + 自前のスクロール」を持っていて、
+   その中でさらに .dsc-shell が高さを制限していたため、スクロール領域が二重になり
+   発言一覧が min-height の 140px まで潰れていた。
+   ここでは .popup を素の入れ物に戻し、高さは .dsc-shell が受け持つ。 */
+#room3Overlay .popup{
+  width:min(880px,96vw); max-width:none; height:min(92vh,980px);
+  padding:0; overflow:hidden; background:transparent; box-shadow:none; border-radius:0;
+  display:flex; font-size:1rem;
+}
+#room3Container .dsc-shell{display:flex;flex-direction:column;gap:12px;height:100%;max-height:none;width:100%;background:#fff;border-radius:18px;padding:18px;box-sizing:border-box;overflow:hidden;font-family:'Noto Sans JP',sans-serif;color:#25211d}
 .dsc-head{display:flex;align-items:flex-start;gap:12px}
 .dsc-head-main{flex:1;min-width:0}
 .dsc-eyebrow{display:inline-block;color:#f08300;font-size:11px;font-weight:800;letter-spacing:.12em}
@@ -2550,7 +2562,13 @@ body.paypay-mode #pp-post-fab {
 .dsc-filters::-webkit-scrollbar{display:none}
 .dsc-chip{flex:0 0 auto;border:1px solid #e8dfd5;background:#fff;color:#77716a;border-radius:999px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;min-height:38px;font-family:inherit}
 .dsc-chip.active{background:#25211d;border-color:#25211d;color:#fff}
-.dsc-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:9px;padding:4px 2px;min-height:140px}
+/* flexの子がスクロールするには min-height:0 が要る。
+   140px を指定していたせいで縮みも伸びもせず、狭いまま固定されていた。 */
+.dsc-list{flex:1 1 auto;overflow-y:auto;display:flex;flex-direction:column;gap:9px;padding:4px 2px;min-height:0}
+/* ヘッダー・進め方・フィルター・入力欄は縮ませない（一覧だけが伸び縮みする） */
+#room3Container .dsc-head,#room3Container .dsc-guide,
+#room3Container .dsc-balance,#room3Container .dsc-filters,
+#room3Container .dsc-composer,#room3Container .dsc-conclude{flex:0 0 auto}
 .dsc-msg{border:1px solid #e8dfd5;border-left-width:4px;border-radius:12px;padding:11px 13px;background:#fff}
 .dsc-msg.you{background:#fffaf3}
 .dsc-msg-head{display:flex;align-items:center;gap:7px;margin-bottom:6px}
@@ -2594,6 +2612,8 @@ body.paypay-mode #pp-post-fab {
 .dsc-conclude-note{margin:8px 0 0;font-size:12px}
 .dsc-empty{text-align:center;color:#a49c93;font-size:12.5px;padding:26px 10px}
 @media(max-width:620px){
+  /* スマホは全画面。外枠(.popup)も画面いっぱいにしないと中身が縮む */
+  #room3Overlay .popup{width:100vw;height:100dvh}
   #room3Container .dsc-shell{width:100vw;max-height:100dvh;height:100dvh;border-radius:0;padding:12px 12px max(12px,env(safe-area-inset-bottom))}
   .dsc-topic{font-size:16px}
   .dsc-post{flex:1}
@@ -11824,22 +11844,64 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
 
     console.log("🦊 Wallet Connected:", account);
 
-    // ② ネットワークチェック（Polygonメインネット固定）※オーナーはスキップ
+    /* ② ネットワークチェック（Polygonメインネット固定）
+
+       以前はオーナーだけこの確認を飛ばしていた。しかしコントラクトが
+       置かれているのは Polygon だけなので、別のチェーンに繋がっていると
+       balanceOf も users も空(0x)を返し、CALL_EXCEPTION が延々と出ていた。
+       残高もNFT判定も変換も、全部そこで壊れる。
+       オーナーであっても確認はする。ただし切り替えを断った場合は
+       （検証などの意図があるかもしれないので）入場自体は止めない。 */
     const chainId = await window.ethereum.request({ method: "eth_chainId" });
     const POLYGON_MAINNET = "0x89"; // 137
     const _isOwner = account.toLowerCase() === SP_OWNER.toLowerCase();
+    window._emuWrongNetwork = false;
 
-    if (!_isOwner && chainId !== POLYGON_MAINNET) {
+    if (chainId !== POLYGON_MAINNET) {
+      let switched = false;
       try {
         await window.ethereum.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: POLYGON_MAINNET }]
         });
+        switched = true;
       } catch (e) {
-        console.log("Polygonへの切り替えが必要です");
-        _cancelSpLoadingOverlay();
-        alert("Polygonメインネットに切り替えてください。");
-        return;
+        // 4902 = ウォレットにPolygonが未登録。登録してから再度切り替える。
+        if (e && e.code === 4902) {
+          try {
+            await window.ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: POLYGON_MAINNET,
+                chainName: "Polygon Mainnet",
+                nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
+                rpcUrls: ["https://polygon-bor-rpc.publicnode.com"],
+                blockExplorerUrls: ["https://polygonscan.com"]
+              }]
+            });
+            switched = true;
+          } catch (addErr) { console.warn("Polygonの追加に失敗:", addErr && addErr.message); }
+        } else {
+          console.warn("Polygonへの切り替えに失敗:", e && e.message);
+        }
+      }
+
+      if (!switched) {
+        const nowChain = await window.ethereum.request({ method: "eth_chainId" }).catch(() => null);
+        switched = nowChain === POLYGON_MAINNET;
+      }
+      if (!switched) {
+        window._emuWrongNetwork = true;
+        if (!_isOwner) {
+          _cancelSpLoadingOverlay();
+          alert("Polygonメインネットに切り替えてください。");
+          return;
+        }
+        // オーナーは続行できるが、何が起きるかは伝える
+        console.warn("⚠️ Polygon以外に接続中。コントラクトの読み取りはすべて失敗します。");
+        alert("Polygon 以外のネットワークに接続されています。\n\n"
+            + "このまま進めますが、EMUER残高・NFT判定・変換はすべて失敗します。\n"
+            + "正しく使うにはウォレットを Polygon に切り替えてください。");
       }
     }
 
@@ -13754,7 +13816,12 @@ async function handleConversion() {
     } else if (code === "NETWORK_ERROR" || text.includes("network") || text.includes("underlying network changed")) {
       msg = "ネットワークが違うようです。ウォレットの接続先を Polygon に切り替えてから、もう一度お試しください。";
     } else if (code === "CALL_EXCEPTION" || text.includes("call revert") || text.includes("execution reverted")) {
-      msg = "コントラクト側で処理が拒否されました。変換できる分がまだ反映されていない可能性があります。時間をおいてお試しください。";
+      /* data="0x"（空の応答）は「そのアドレスにコントラクトが無い」状態。
+         ほぼ確実に接続チェーンが違う。revert とは原因が別なので分けて伝える。 */
+      const emptyReturn = window._emuWrongNetwork || /data="0x"/.test(String(err && err.message));
+      msg = emptyReturn
+        ? "ウォレットが Polygon 以外のネットワークに接続されています。\n\nPolygon メインネットに切り替えてから、もう一度お試しください。"
+        : "コントラクト側で処理が拒否されました。変換できる分がまだ反映されていない可能性があります。時間をおいてお試しください。";
     }
     alert(msg);
   } finally {
