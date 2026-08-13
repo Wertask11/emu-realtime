@@ -80,6 +80,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 議論から生まれた「みんなの結論」。誰でも読めるが、書けるのは
+    // 自分名義で新規に残すときだけ。他人の結論の書き換え・削除はできない。
+    match /discussion_conclusions/{id} {
+      allow read: if true;
+      allow create: if isMyWallet(request.resource.data.author)
+        && request.resource.data.conclusion is string
+        && request.resource.data.conclusion.size() > 0
+        && request.resource.data.conclusion.size() <= 600;
+      allow update, delete: if false;
+    }
+
     match /emuer_offchain_ledger/{document=**} {
       allow read, write: if false;
     }
@@ -298,7 +309,8 @@ service cloud.firestore {
         && coll != 'dialogue_sessions'
         && coll != 'dialogue_slots'
         && coll != 'admin_audit_logs'
-        && coll != 'emu_feedback';
+        && coll != 'emu_feedback'
+        && coll != 'discussion_conclusions';
     }
   }
 }

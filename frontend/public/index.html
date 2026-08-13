@@ -2580,6 +2580,18 @@ body.paypay-mode #pp-post-fab {
 .dsc-composer-actions{display:flex;gap:8px;align-items:center}
 .dsc-cancel-reply{border:1px solid #e8dfd5;background:#fff;color:#77716a;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;min-height:44px}
 .dsc-post{margin-left:auto;border:0;background:#f08300;color:#fff;border-radius:10px;padding:11px 22px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;min-height:44px}
+/* 議論を「みんなの結論」として残すフォーム */
+.dsc-conclude{border:1px solid #d9d2ea;background:#f8f6fd;border-radius:14px;padding:16px;margin-top:12px}
+.dsc-conclude strong{display:block;font-size:14px;color:#3d3566}
+.dsc-conclude p{margin:6px 0 10px;font-size:12px;color:#77716a;line-height:1.7}
+.dsc-conclude textarea{width:100%;border:1.5px solid #e8dfd5;border-radius:10px;padding:11px;font-family:inherit;font-size:16px;color:#25211d;resize:vertical;box-sizing:border-box;background:#fff}
+.dsc-conclude textarea:focus{outline:none;border-color:#8a7fd0}
+.dsc-conclude-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+.dsc-conclude-actions button{border-radius:9px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;min-height:42px}
+#dscConcludeCancel{border:1px solid #e8dfd5;background:#fff;color:#77716a}
+#dscConcludeSave{border:0;background:#6b5fb5;color:#fff}
+#dscConcludeSave:disabled{opacity:.5;cursor:default}
+.dsc-conclude-note{margin:8px 0 0;font-size:12px}
 .dsc-empty{text-align:center;color:#a49c93;font-size:12.5px;padding:26px 10px}
 @media(max-width:620px){
   #room3Container .dsc-shell{width:100vw;max-height:100dvh;height:100dvh;border-radius:0;padding:12px 12px max(12px,env(safe-area-inset-bottom))}
@@ -2758,6 +2770,14 @@ body.paypay-mode #pp-post-fab {
 .eth-wallet-card { display:grid; gap:14px; }
 .eth-wallet-badges { display:flex; flex-wrap:wrap; gap:7px; }
 .eth-wallet-badges:empty { display:none; }
+
+/* 準備中のブランド。押せなくはしないが、入れないことが見て分かるようにする */
+.brand-closed { opacity: .45; filter: grayscale(.6); position: relative; }
+.brand-closed::after {
+  content: "準備中"; position: absolute; top: 8px; right: 8px;
+  background: rgba(26,24,64,.82); color: #fff; font-size: 10px; font-weight: 800;
+  padding: 3px 9px; border-radius: 999px; letter-spacing: .04em; pointer-events: none;
+}
 
 /* 会員種別の表示と、有料会員への導線 */
 .emu-membership { display:grid; gap:10px; }
@@ -5040,8 +5060,22 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <textarea id="userInput" autocomplete="off" rows="3"></textarea>
         <div class="dsc-composer-actions">
           <button type="button" class="dsc-cancel-reply" id="dscCancelReply" style="display:none;">返信をやめる</button>
+          <button type="button" class="dsc-cancel-reply" id="dscConclude">この議論をまとめる</button>
           <button id="postBtn" class="dsc-post">発言する</button>
         </div>
+      </div>
+
+      <!-- 議論を「みんなの結論」として残す -->
+      <div class="dsc-conclude" id="dscConcludeForm" style="display:none;">
+        <strong>みんなの結論として残す</strong>
+        <p>この議論で見えたことを、ひとことでまとめてください。知識を読むへ届き、あとから誰でも読めるようになります。</p>
+        <textarea id="dscConclusion" rows="3" maxlength="600"
+          placeholder="例）便利さは時間を返してくれるが、迷う時間まで奪うと、選んだ実感が残らない。"></textarea>
+        <div class="dsc-conclude-actions">
+          <button type="button" id="dscConcludeCancel">やめる</button>
+          <button type="button" id="dscConcludeSave">結論を残す</button>
+        </div>
+        <p class="dsc-conclude-note" id="dscConcludeNote"></p>
       </div>
     </div>
     <!-- 旧Step構成の互換用（room3ShowStepが参照） -->
@@ -14063,6 +14097,11 @@ async function _spFetchWeather() {
 }
 
 function openSpMap(gate) {
+  /* ハブのボタン以外からも開けるので、入口そのものでメンテナンスを見る */
+  if (typeof isBrandUnderMaintenance === 'function' && isBrandUnderMaintenance('schoolpark')) {
+    alert('SchoolPark はただいま準備中です。\n\n再開までもうしばらくお待ちください。\nEmu は通常どおりご利用いただけます。');
+    return;
+  }
   /* SchoolParkのマップを開いた時点で計上する（ハブのボタン以外の経路も拾う） */
   if (typeof spTrackBrand === 'function') spTrackBrand('schoolpark');
   _currentGate = gate || _currentGate;
@@ -14674,6 +14713,10 @@ const CHES_BRAND_PAGES = {
 function chesBrandFrameOpen(brand) {
   const conf = CHES_BRAND_PAGES[brand];
   if (!conf) return;
+  if (typeof isBrandUnderMaintenance === 'function' && isBrandUnderMaintenance(brand)) {
+    alert(conf.name + ' はただいま準備中です。\n\n再開までもうしばらくお待ちください。\nEmu は通常どおりご利用いただけます。');
+    return;
+  }
   const wrap  = document.getElementById('chesBrandFrame');
   const frame = document.getElementById('cbfFrame');
   const title = document.getElementById('cbfTitle');
@@ -14843,6 +14886,43 @@ window.addEventListener('message', function(event) {
       setRoom3ContributionMode(event.data.mode || 'opinion');
       openRoom3();
     }
+    return;
+  }
+  /* 遊んだ記録を「一日シェア」か「知識を届ける」へ流す。
+     iframe 側は認証つきの通信を持たないので、親がここで引き受ける。 */
+  if (event.source === playFrame?.contentWindow && event.data.type === 'emu-play-record') {
+    (async () => {
+      const text = String(event.data.text || '').trim().slice(0, 500);
+      const reply = (ok, message) => playFrame.contentWindow.postMessage(
+        { type:'emu-play-record-result', ok, message }, window.location.origin);
+      if (!text) return reply(false, '記録したいことを書いてください。');
+      try {
+        if (event.data.target === 'ichinichi') {
+          // 今日の一日シェアの「学び」に追記する（既存APIをそのまま使う）
+          const headers = await emuAuthHeaders(true);
+          const res = await fetch('https://emu-realtime.onrender.com/api/ichinichi/append-learning', {
+            method:'POST', headers,
+            body: JSON.stringify({ learning: '遊びから：' + text })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || '記録できませんでした');
+          reply(true, '一日シェアに記録しました。');
+        } else {
+          // 知識の投稿フォームを開き、本文を入れた状態で渡す
+          reply(true, '知識の投稿フォームを開きます。');
+          showEmuFeed('new');
+          setTimeout(() => {
+            const frame = document.getElementById('emuKnowledgeFrame');
+            if (frame && frame.contentWindow) {
+              frame.contentWindow.postMessage({ type:'emu-knowledge-prefill', body: text }, window.location.origin);
+            }
+          }, 400);
+        }
+      } catch (e) {
+        console.warn('遊びの記録:', e && e.message);
+        reply(false, (e && e.message) || '記録できませんでした。');
+      }
+    })();
     return;
   }
   if (event.source === playFrame?.contentWindow && event.data.type === 'emu-play-open') {
@@ -15967,8 +16047,49 @@ async function loadEmuValueProfile() {
   }
 }
 
+/* ═══════════════════════════════════════════════════════
+   ブランド単位のメンテナンス
+
+   Emu だけを開けておき、Camellia / Heartoo / SchoolPark は
+   オーナー以外が入れないようにする。
+   判定はウォレットアドレスのみで行う。既存の _isOwnerAccess() は
+   URLに ?admin=1 を付けるだけで通ってしまうため、ここでは使わない。
+   ═══════════════════════════════════════════════════════ */
+const BRAND_MAINTENANCE = {
+  camellia:   true,
+  heartoo:    true,
+  schoolpark: true,
+  emu:        false   // Emu は通常営業
+};
+const BRAND_LABELS = { camellia:'Camellia', heartoo:'Heartoo', schoolpark:'SchoolPark', emu:'Emu' };
+
+function _isBrandOwner() {
+  const addr = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+  return !!addr && addr === SP_OWNER.toLowerCase();
+}
+function isBrandUnderMaintenance(brand) {
+  return !!BRAND_MAINTENANCE[brand] && !_isBrandOwner();
+}
+/* 入れないことを、押す前に分かるようにする（押してから断られるのは体験が悪い） */
+function paintBrandMaintenance() {
+  Object.keys(BRAND_MAINTENANCE).forEach(function (brand) {
+    const closed = isBrandUnderMaintenance(brand);
+    document.querySelectorAll('[onclick*="chesHubGo(\'' + brand + '\')"], [onclick*="chesMenuGo(\'' + brand + '\')"]')
+      .forEach(function (el) {
+        el.classList.toggle('brand-closed', closed);
+        if (closed) el.setAttribute('title', BRAND_LABELS[brand] + ' はただいま準備中です');
+        else el.removeAttribute('title');
+      });
+  });
+}
+document.addEventListener('DOMContentLoaded', paintBrandMaintenance);
+
 /* ハブの4ボタン：カウント+1 → それぞれの行き先へ */
 function chesHubGo(brand) {
+  if (isBrandUnderMaintenance(brand)) {
+    alert(BRAND_LABELS[brand] + ' はただいま準備中です。\n\n再開までもうしばらくお待ちください。\nEmu は通常どおりご利用いただけます。');
+    return;
+  }
   spTrackBrand(brand); /* 非ブロッキングで即時カウント */
   const hub = document.getElementById('chesHubScreen');
   switch (brand) {
@@ -17217,6 +17338,74 @@ socket.on("today topic", (topic) => {
   const discussionFrame = document.getElementById('emuDiscussionFrame');
   if (discussionFrame?.contentWindow) discussionFrame.contentWindow.postMessage({ type:'emu-discussion-topic', topic:activeTopic }, window.location.origin);
 });
+
+/* ══════════════════════════════════════════
+   議論を「みんなの結論」として残す
+
+   これまで discussion.html の説明文だけが「終了した議論は
+   みんなの結論として残り、知識を読むへ届けられます」と書いていて、
+   実際にそうする処理がどこにも無かった。ここで作る。
+
+   保存先: Firestore の discussion_conclusions
+   表示先: 知識を読む（knowledge.html）の一覧に、結論カードとして混ぜる
+══════════════════════════════════════════ */
+(function () {
+  const openBtn   = document.getElementById('dscConclude');
+  const form      = document.getElementById('dscConcludeForm');
+  const textarea  = document.getElementById('dscConclusion');
+  const saveBtn   = document.getElementById('dscConcludeSave');
+  const cancelBtn = document.getElementById('dscConcludeCancel');
+  const note      = document.getElementById('dscConcludeNote');
+  if (!openBtn || !form) return;
+
+  openBtn.onclick = function () {
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'block') textarea.focus();
+  };
+  cancelBtn.onclick = function () { form.style.display = 'none'; note.textContent = ''; };
+
+  saveBtn.onclick = async function () {
+    const conclusion = (textarea.value || '').trim();
+    if (!conclusion) { note.style.color = '#c0392b'; note.textContent = '結論を書いてください。'; return; }
+
+    const addr = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+    if (!addr) { note.style.color = '#c0392b'; note.textContent = 'ログインが必要です。'; return; }
+    if (!window.db || !window.fbLib) { note.style.color = '#c0392b'; note.textContent = 'いま保存できません。'; return; }
+
+    const topicText = (document.getElementById('topic') || {}).textContent || '';
+    // 参加者はこの議論の発言者から数える（誰の議論だったかを残すため）
+    const speakers = new Set();
+    document.querySelectorAll('#discussion .message').forEach(function (el) {
+      const who = el.dataset.address || el.dataset.author;
+      if (who) speakers.add(String(who).toLowerCase());
+    });
+    const messageCount = document.querySelectorAll('#discussion .message').length;
+
+    saveBtn.disabled = true; saveBtn.textContent = '保存中…';
+    try {
+      await window.fbLib.addDoc(window.fbLib.collection(window.db, 'discussion_conclusions'), {
+        topic: topicText,
+        conclusion: conclusion.slice(0, 600),
+        author: addr,
+        authorName: localStorage.getItem('ches_name') || '',
+        participants: Array.from(speakers).slice(0, 50),
+        participantCount: speakers.size,
+        messageCount: messageCount,
+        createdAt: new Date()
+      });
+      note.style.color = '#1f8a4c';
+      note.textContent = '結論を残しました。「知識を読む」から読めます。';
+      textarea.value = '';
+      setTimeout(function () { form.style.display = 'none'; note.textContent = ''; }, 2200);
+    } catch (e) {
+      console.error('結論の保存に失敗:', e);
+      note.style.color = '#c0392b';
+      note.textContent = '保存できませんでした。時間をおいてお試しください。';
+    } finally {
+      saveBtn.disabled = false; saveBtn.textContent = '結論を残す';
+    }
+  };
+})();
 
 function scrollToMessage(messageId) {
   const target = document.querySelector(
@@ -20041,6 +20230,10 @@ function chesMenuGo(brand) {
       chesHubGo(brand);
       break;
     case 'schoolpark':
+      if (isBrandUnderMaintenance('schoolpark')) {
+        alert('SchoolPark はただいま準備中です。\n\n再開までもうしばらくお待ちください。\nEmu は通常どおりご利用いただけます。');
+        break;
+      }
       /* SchoolPark内でメニューから選んだ場合。表示はお知らせパネルのままだが、
          入場者としては計上する（ハブ経由と数え方をそろえる）。 */
       if (typeof spTrackBrand === 'function') spTrackBrand('schoolpark');
@@ -21145,6 +21338,36 @@ async function sendEmuFeedback() {
     }
   }
 
+  /* 議論から生まれた「みんなの結論」。知識を読むへ届けるための読み取り。 */
+  async function readDiscussionConclusions() {
+    if (!window.db || !window.fbLib) return [];
+    try {
+      const q = window.fbLib.query(
+        window.fbLib.collection(window.db, 'discussion_conclusions'),
+        window.fbLib.orderBy('createdAt', 'desc'),
+        window.fbLib.limit(12)
+      );
+      const snap = await window.fbLib.getDocs(q);
+      const rows = [];
+      snap.forEach(d => {
+        const v = d.data();
+        rows.push({
+          id: d.id,
+          topic: v.topic || '',
+          conclusion: v.conclusion || '',
+          authorName: v.authorName || '',
+          participantCount: Number(v.participantCount) || 0,
+          messageCount: Number(v.messageCount) || 0,
+          createdAt: v.createdAt && v.createdAt.toDate ? v.createdAt.toDate().getTime() : null
+        });
+      });
+      return rows;
+    } catch (e) {
+      console.warn('みんなの結論の取得に失敗:', e && e.message);
+      return [];
+    }
+  }
+
   async function syncKnowledgeFrame(options) {
     options = options || {};
     if (knowledgeSyncing) return knowledgeSyncing;
@@ -21171,6 +21394,8 @@ async function sendEmuFeedback() {
         monthlyTheme:String(typeof currentTheme === 'string' ? currentTheme : '夏休み'),
         drafts, scheduledCount:await scheduledKnowledgeCount(account),
         helpedCount:await countMyGoodPosts(account, !options.append),
+        // 議論から生まれた「みんなの結論」。1ページ目にだけ添える。
+        conclusions: options.append ? [] : await readDiscussionConclusions(),
         canDraft:typeof isFreeOnlyUser === 'function' ? !isFreeOnlyUser() : false,
         canSchedule:!!window.hasScheduleNFT
       });
