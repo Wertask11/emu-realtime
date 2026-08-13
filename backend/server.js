@@ -148,12 +148,14 @@ const membershipDeps = { db, firebaseAdmin, requireFirebaseUser, requireOwner, r
 const billing = require("./billing").createBillingRouter({ ...membershipDeps, webhookPath: STRIPE_WEBHOOK_PATH });
 const kyc = require("./kyc").createKycRouter(membershipDeps);
 const dialogue = require("./dialogue").createDialogueRouter(membershipDeps);
+const feedback = require("./feedback").createFeedbackRouter(membershipDeps);
 
 // Webhook は生ボディで受ける（JSON パーサーは上で迂回済み）
 app.post(STRIPE_WEBHOOK_PATH, billing.webhookHandler, billing.handleWebhook);
 app.use("/api/billing", billing.router);
 app.use("/api/kyc", kyc.router);
 app.use("/api/dialogue", dialogue.router);
+app.use("/api/feedback", feedback.router);
 
 // 未処理のまま保持期限(30日)を過ぎた本人確認書類を毎日破棄する。
 cron.schedule("30 4 * * *", () => {

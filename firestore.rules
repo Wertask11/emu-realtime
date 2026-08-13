@@ -75,6 +75,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // フィードバック。投稿も閲覧もサーバー経由のみ（他人の意見を読めないようにする）。
+    match /emu_feedback/{document=**} {
+      allow read, write: if false;
+    }
+
     match /emuer_offchain_ledger/{document=**} {
       allow read, write: if false;
     }
@@ -292,7 +297,8 @@ service cloud.firestore {
         && coll != 'kyc_submissions'
         && coll != 'dialogue_sessions'
         && coll != 'dialogue_slots'
-        && coll != 'admin_audit_logs';
+        && coll != 'admin_audit_logs'
+        && coll != 'emu_feedback';
     }
   }
 }

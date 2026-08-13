@@ -139,6 +139,7 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
     <button class="tab-btn" onclick="switchTab('vigilante',this)">🛡️ 自警団</button>
     <button class="tab-btn" onclick="switchTab('gym',this)">💪 ジム</button>
     <button class="tab-btn" onclick="switchTab('fire',this)">🚒 消防署</button>
+    <button class="tab-btn" onclick="switchTab('feedback',this)">✎ Emuの声</button>
   </div>
 
   <div class="main">
@@ -210,7 +211,18 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
           <span class="sec-title-text">🚒 消防署 緊急報告</span>
           <button class="refresh-btn" onclick="loadFacility('fire')">↻</button>
         </div>
-        <div id="list-fire"><div class="empty-state"><div class="empty-icon">📭</div>読み込み中...</div></div>
+        <div id="list-fire"><div class="empty-state"><div class="empty-icon">📭</div>
+    <!-- Emuのフィードバック -->
+    <div class="panel" id="panel-feedback">
+      <div class="sec">
+        <div class="sec-title">
+          <span class="sec-title-text">✎ Emu に届いた声</span>
+          <button class="refresh-btn" onclick="loadFeedback()">↻ 更新</button>
+        </div>
+        <div id="list-feedback"><div class="empty-state"><div class="empty-icon">📭</div>読み込み中...</div></div>
+      </div>
+    </div>
+読み込み中...</div></div>
       </div>
     </div>
 
@@ -266,8 +278,70 @@ function switchTab(id, btn){
   document.getElementById('panel-'+id).classList.add('active');
   btn.classList.add('active');
   if(id==='all') loadAll();
+  else if(id==='feedback') loadFeedback();
   else loadFacility(id);
 }
+
+/* Emu から届いたフィードバック。
+   Firestore を直接読まず、オーナー限定のAPI越しに取る。
+   この画面は index.html の iframe の中で動くので、親のFirebaseセッションを借りる。 */
+const FEEDBACK_API = 'https://emu-realtime.onrender.com/api/feedback';
+const FEEDBACK_CATS = {
+  confusing:'わかりにくい', bug:'動かない', request:'こうしてほしい', good:'よかった', other:'その他'
+};
+async function feedbackHeaders(){
+  const auth = (window.top && window.top.auth) || (window.parent && window.parent.auth);
+  const user = auth && auth.currentUser;
+  if(!user) throw new Error('ログインが必要です');
+  return { Authorization: 'Bearer ' + (await user.getIdToken()), 'Content-Type':'application/json' };
+}
+async function loadFeedback(){
+  const el = document.getElementById('list-feedback');
+  el.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div>読み込み中...</div>';
+  try{
+    const res = await fetch(FEEDBACK_API + '/admin/list', { headers: await feedbackHeaders() });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error || ('HTTP '+res.status));
+    if(!data.items.length){
+      el.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div>まだ届いていません</div>';
+      return;
+    }
+    // 施設レポートと同じカード様式に揃える（見た目が混ざらないように）
+    el.innerHTML = data.items.map(f=>{
+      const who  = f.displayName || f.email || (f.uid||'').slice(0,10);
+      const when = f.createdAt ? new Date(f.createdAt).toLocaleString('ja-JP') : '';
+      const done = f.status === 'done';
+      return '<div class="report-card '+(done?'resolved':'')+'">'
+        + '<div class="report-meta">'
+        +   '<span class="report-type">✎ '+esc(FEEDBACK_CATS[f.category]||f.category)+'</span>'
+        +   '<span class="report-status-badge '+(done?'status-resolved':'status-pending')+'">'
+        +     (done?'✅ 対応済':'⏳ 未読')+'</span>'
+        +   '<span class="report-date">'+esc(when)+'</span>'
+        + '</div>'
+        + '<div class="report-user">👤 '+esc(who)+(f.page?'　<span style="opacity:.6">'+esc(f.page)+'</span>':'')+'</div>'
+        + '<div class="report-body">'+esc(f.body).replace(/\n/g,'<br>')+'</div>'
+        + '<div class="report-actions">'
+        +   (done ? '' : '<button class="btn-resolve" data-done="'+esc(f.id)+'">✅ 対応済にする</button>')
+        + '</div>'
+        + '</div>';
+    }).join('');
+    el.querySelectorAll('[data-done]').forEach(b=>{
+      b.onclick = async ()=>{
+        b.disabled = true;
+        try{
+          await fetch(FEEDBACK_API + '/admin/' + b.dataset.done + '/status', {
+            method:'POST', headers: await feedbackHeaders(), body: JSON.stringify({ status:'done' })
+          });
+          loadFeedback();
+        }catch(e){ alert('更新できませんでした: '+e.message); b.disabled=false; }
+      };
+    });
+  }catch(e){
+    el.innerHTML='<div class="empty-state"><div class="empty-icon">❌</div>'
+      + (e.message==='OWNER_ONLY' ? 'オーナーのみ閲覧できます' : esc(e.message)) + '</div>';
+  }
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // 日付フォーマット
 function fmtDate(ts){

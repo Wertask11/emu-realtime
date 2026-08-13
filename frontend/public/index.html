@@ -2758,6 +2758,25 @@ body.paypay-mode #pp-post-fab {
 .eth-wallet-card { display:grid; gap:14px; }
 .eth-wallet-badges { display:flex; flex-wrap:wrap; gap:7px; }
 .eth-wallet-badges:empty { display:none; }
+
+/* 会員種別の表示と、有料会員への導線 */
+.emu-membership { display:grid; gap:10px; }
+.emu-membership-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.emu-membership-pill {
+  flex:none; font-size:12px; font-weight:800; letter-spacing:.02em;
+  padding:5px 13px; border-radius:999px; background:#f2efeb; color:#6f6a86;
+}
+.emu-membership-pill.is-paid { background:#fff3e0; color:#c26a00; }
+.emu-membership-pill.is-free { background:#eef3ee; color:#4a7a5a; }
+.emu-membership-desc { font-size:12px; color:#8b8698; line-height:1.6; }
+/* 広告的になりすぎないよう、押しつけがましい配色は避けて枠線のカードにする */
+.emu-membership-cta {
+  display:block; text-decoration:none; border:1px solid #f0dcc0; background:#fffaf3;
+  border-radius:12px; padding:11px 14px; transition:background .15s ease, border-color .15s ease;
+}
+.emu-membership-cta:hover { background:#fff5e8; border-color:#e8c99a; }
+.emu-membership-cta-main { display:block; font-size:13px; font-weight:700; color:#c26a00; }
+.emu-membership-cta-sub  { display:block; font-size:11px; color:#9a8f80; margin-top:2px; line-height:1.5; }
 .eth-wallet-badge {
   display:inline-flex; align-items:center; gap:5px;
   background:#fff2e5; border:1px solid #f3d3ae; color:#9c5100;
@@ -4198,7 +4217,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
           <div class="eth-task">
             <div class="eth-task-copy">
               <strong data-i18n="today.ichinichi.title">今日の一日シェア</strong>
-              <span data-i18n="today.ichinichi.text">時間割を決めて、今日の学びをひとつ残す</span>
+              <span data-i18n="today.ichinichi.text">時間割を決めて、今日を有意義に</span>
             </div>
             <button type="button" class="eth-btn" onclick="showEmuIchinichi()" data-i18n="today.ichinichi.action">開く</button>
           </div>
@@ -4220,7 +4239,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
           <div class="eth-task">
             <div class="eth-task-copy">
               <strong data-i18n="today.request.title">知識を探している人</strong>
-              <span id="emuTodayRequestText" data-i18n="today.request.text">あなたの経験を必要としている募集を探す</span>
+              <span id="emuTodayRequestText" data-i18n="today.request.text">あなたの経験を必要としている人を探す</span>
             </div>
             <button type="button" class="eth-btn" onclick="showEmuRequests()" data-i18n="today.request.action">募集を見る</button>
           </div>
@@ -4260,14 +4279,10 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       </div>
       <div class="eth-use-row">
         <div class="eth-use-copy"><strong data-i18n="uses.special.title">特別な体験</strong><span data-i18n="uses.special.text">相談・イベント・限定企画への参加</span></div>
-        <span class="eth-badge" data-i18n="uses.special.badge">100 Emuer〜</span>
+        <button type="button" class="eth-btn" onclick="document.getElementById('exchangeBtn').click()" data-i18n="uses.special.badge">みてみる</button>
       </div>
       <div class="eth-use-row">
-        <div class="eth-use-copy"><strong data-i18n="uses.nft.title">限定体験NFT</strong><span data-i18n="uses.nft.text">参加権や、行動・経験の証</span></div>
-        <button type="button" class="eth-btn" onclick="document.getElementById('exchangeBtn').click()" data-i18n="uses.exchange">取引所を見る</button>
-      </div>
-      <div class="eth-use-row">
-        <div class="eth-use-copy"><strong data-i18n="uses.sp.title">SchoolPark内の利用</strong><span data-i18n="uses.sp.text">施設・遊び・サービスの利用へ</span></div>
+        <div class="eth-use-copy"><strong data-i18n="uses.sp.title">SchoolParkで利用</strong><span data-i18n="uses.sp.text">施設・遊び・サービスの利用へ</span></div>
         <button type="button" class="eth-btn" onclick="chesHubGo('schoolpark')" data-i18n="uses.spAction">SchoolParkへ</button>
       </div>
     </section>
@@ -4296,6 +4311,19 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <div class="eth-section-head">
           <div><h3 data-i18n="wallet.title">ウォレット</h3><p data-i18n="wallet.desc">渡した価値が、Emuerとして返ってきます。</p></div>
         </div>
+
+        <!-- 会員種別と、有料会員への導線。JSが emuRenderMembership() で中身を入れる。 -->
+        <div class="emu-membership" id="emuMembershipBox">
+          <div class="emu-membership-row">
+            <span class="emu-membership-pill" id="emuMembershipPill">確認中…</span>
+            <span class="emu-membership-desc" id="emuMembershipDesc"></span>
+          </div>
+          <a class="emu-membership-cta" id="emuMembershipCta" href="/guarantee.html" hidden>
+            <span class="emu-membership-cta-main">Emu 有料会員になる</span>
+            <span class="emu-membership-cta-sub">月額10,000円・30日間の「語り合える一人」保証つき</span>
+          </a>
+        </div>
+
         <div class="eth-wallet-badges" id="emuWalletBadges"></div>
         <div class="eth-wallet-balance">
           <span class="eth-wallet-label" data-i18n="wallet.label">使えるEmuer</span>
@@ -5608,11 +5636,13 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   border-top: 1px solid #eee;
   margin-top: 20px;
 ">
-  <a href="javascript:void(0)" onclick="openSpContent('/terms.html')" style="color:#aaa; margin: 0 8px; cursor:pointer;">利用規約</a>
+  <!-- 専用モーダル(openLegal)で開く。openSpContent はSchoolParkの施設用ビューアで、
+       閉じてもEmuに戻れないうえ、特商法は存在しないパスを指していて404だった。 -->
+  <a href="javascript:void(0)" onclick="openLegal('terms')" style="color:#aaa; margin: 0 8px; cursor:pointer;">利用規約</a>
   ｜
-  <a href="javascript:void(0)" onclick="openSpContent('/legal/tokusho.html')" style="color:#aaa; margin: 0 8px; cursor:pointer;">特定商取引法に基づく表記</a>
+  <a href="javascript:void(0)" onclick="openLegal('tokusho')" style="color:#aaa; margin: 0 8px; cursor:pointer;">特定商取引法に基づく表記</a>
   ｜
-  <a href="javascript:void(0)" onclick="openSpContent('/privacy.html')" style="color:#aaa; margin: 0 8px; cursor:pointer;">プライバシーポリシー</a>
+  <a href="javascript:void(0)" onclick="openLegal('privacy')" style="color:#aaa; margin: 0 8px; cursor:pointer;">プライバシーポリシー</a>
   <br>
   <span style="font-size:11px;">© 2026 LLC.DAO School Park</span>
 </div>
@@ -13629,9 +13659,24 @@ async function handleConversion() {
     alert("ウォレットを接続してください");
     return;
   }
-  
+
+  /* emuerContract は MetaMask 接続時（Web3Provider + signer）にしか作られない。
+     メール / Google / LINE で入った CHES ユーザーはアドレスだけを持ち秘密鍵が無いため、
+     ここに来ると emuerContract が undefined のまま例外になり、
+     原因の分からない「変換に失敗しました」だけが出ていた。
+     何が足りないのかを先に伝える。 */
+  if (typeof emuerContract === "undefined" || !emuerContract) {
+    alert(
+      "実EMUERへの変換にはウォレットの接続が必要です。\n\n" +
+      "メール・Google・LINE でログインした場合、Emu内で使えるEmuerは貯まりますが、" +
+      "ブロックチェーン上の実EMUERへ換えるには署名できるウォレット（MetaMask等）が要ります。\n\n" +
+      "ログイン画面の「その他の方法で入る」からウォレットで接続し直してください。"
+    );
+    return;
+  }
+
   await syncPendingEmuer();
-  
+
   // (以下、既存の try-catch 処理はそのまま)
   const btn = document.getElementById("convertButton"); // 変数名を合わせる
   try {
@@ -13662,8 +13707,22 @@ async function handleConversion() {
     alert("🎉 変換が完了しました！");
     await syncPendingEmuer();
   } catch (err) {
-    console.error(err);
-    alert("変換に失敗しました");
+    console.error("EMUER変換エラー:", err);
+    /* 「失敗しました」だけでは利用者が次に何をすればよいか分からないので、
+       よくある原因を切り分けて伝える。 */
+    let msg = "変換に失敗しました。";
+    const code = err && (err.code || err.reason || "");
+    const text = String(err && (err.message || err)).toLowerCase();
+    if (code === 4001 || code === "ACTION_REJECTED") {
+      msg = "ウォレットで署名がキャンセルされました。";
+    } else if (text.includes("insufficient funds")) {
+      msg = "ガス代（MATIC）が足りません。ウォレットにMATICを用意してから、もう一度お試しください。";
+    } else if (code === "NETWORK_ERROR" || text.includes("network") || text.includes("underlying network changed")) {
+      msg = "ネットワークが違うようです。ウォレットの接続先を Polygon に切り替えてから、もう一度お試しください。";
+    } else if (code === "CALL_EXCEPTION" || text.includes("call revert") || text.includes("execution reverted")) {
+      msg = "コントラクト側で処理が拒否されました。変換できる分がまだ反映されていない可能性があります。時間をおいてお試しください。";
+    }
+    alert(msg);
   } finally {
     updateConvertButton();
   }
@@ -15475,7 +15534,49 @@ window.emuShortAddr = emuShortAddr;
    残高は既存の _emuReadTokenBalance() を使うため読み取りは増やさない。
    変換・取引所は既存ボタンをそのまま呼ぶので挙動は変わらない。
 ══════════════════════════════════════════ */
+/* 会員種別（無料 / 有料）を表示し、無料の人にだけ有料会員への導線を出す。
+   自分がどちらなのか分からない、という状態をなくすのが目的。
+   Stripe の契約状態はサーバーが正なので、そちらが取れたら上書きする。 */
+async function emuRenderMembership() {
+  const pill = document.getElementById('emuMembershipPill');
+  const desc = document.getElementById('emuMembershipDesc');
+  const cta  = document.getElementById('emuMembershipCta');
+  if (!pill || !desc || !cta) return;
+
+  function paint(kind, label, text, showCta) {
+    pill.textContent = label;
+    pill.className = 'emu-membership-pill ' + kind;
+    desc.textContent = text;
+    cta.hidden = !showCta;
+  }
+
+  // まずは手元の判定で即座に出す（通信を待たせない）
+  if (window.hasPaidNFT) {
+    paint('is-paid', '有料パス', 'いつでも実EMUERへの変換ができます。', false);
+  } else {
+    paint('is-free', '無料ユーザー', '実EMUERへの変換は毎週月曜日のみです。', true);
+  }
+
+  // Stripe の有料会員かどうかをサーバーに確認して上書きする
+  try {
+    // interactive:false … 未ログイン時にウォレット接続を促さない（表示のためだけの問い合わせなので）
+    const headers = typeof emuAuthHeaders === 'function'
+      ? await emuAuthHeaders(false, { interactive: false }) : null;
+    if (!headers) return;
+    const res = await fetch('https://emu-realtime.onrender.com/api/billing/status', { headers });
+    if (!res.ok) return;
+    const s = await res.json();
+    if (s.status === 'active' || s.status === 'trialing') {
+      paint('is-paid', 'Emu 有料会員', '月額10,000円のプランをご利用中です。', false);
+    } else if (s.status === 'past_due') {
+      paint('is-free', 'お支払い確認中', 'カードのお支払いを確認できていません。', false);
+      cta.hidden = false;
+    }
+  } catch (_) { /* 取れなければ手元の判定のままにする */ }
+}
+
 async function loadEmuWalletCard() {
+  emuRenderMembership();
   const balanceEl = document.getElementById('emuWalletBalance');
   if (!balanceEl) return;
   const pendingEl = document.getElementById('emuWalletPending');
@@ -20025,13 +20126,144 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
+<!-- フィードバック（Emu画面の右下に小さく常駐。押したときだけ開く） -->
+<button type="button" id="emuFeedbackFab" onclick="openEmuFeedback()" title="気づいたことを送る">
+  <span aria-hidden="true">✎</span><span class="efb-fab-text">ひとこと</span>
+</button>
+<div id="emuFeedbackSheet" class="efb-sheet" style="display:none;">
+  <div class="efb-backdrop" onclick="closeEmuFeedback()"></div>
+  <div class="efb-panel">
+    <div class="efb-head">
+      <div>
+        <strong>気づいたことを教えてください</strong>
+        <p>使いにくいところ、直してほしいところ、良かったところ。ひとことで大丈夫です。</p>
+      </div>
+      <button type="button" class="efb-close" onclick="closeEmuFeedback()" aria-label="閉じる">✕</button>
+    </div>
+    <div class="efb-cats" id="efbCats">
+      <button type="button" data-cat="confusing" class="active">わかりにくい</button>
+      <button type="button" data-cat="bug">動かない</button>
+      <button type="button" data-cat="request">こうしてほしい</button>
+      <button type="button" data-cat="good">よかった</button>
+      <button type="button" data-cat="other">その他</button>
+    </div>
+    <textarea id="efbBody" rows="5" maxlength="2000" placeholder="例）知識を読むの並び順が分かりにくかった"></textarea>
+    <p class="efb-note" id="efbNote">送っていただいた内容は運営だけが読みます。ほかの利用者には表示されません。</p>
+    <button type="button" class="efb-send" id="efbSend" onclick="sendEmuFeedback()">送る</button>
+  </div>
+</div>
+<style>
+#emuFeedbackFab {
+  position: fixed; right: 16px; bottom: 16px; z-index: 1400;
+  display: none; align-items: center; gap: 6px;
+  background: #fff; color: #6f6a86; border: 1px solid #e6e2dc;
+  border-radius: 999px; padding: 9px 15px; cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 700;
+  box-shadow: 0 6px 18px -8px rgba(26,24,64,.35);
+  transition: color .15s, border-color .15s, transform .15s;
+}
+/* Emuの画面にいるときだけ出す。SchoolParkやハブでは邪魔になるので出さない。 */
+body.emu-today-open #emuFeedbackFab, body.emu-knowledge-open #emuFeedbackFab,
+body.emu-profile-open #emuFeedbackFab, body.emu-requests-open #emuFeedbackFab,
+body.emu-ichinichi-open #emuFeedbackFab, body.emu-discussion-open #emuFeedbackFab,
+body.emu-play-open #emuFeedbackFab { display: inline-flex; }
+#emuFeedbackFab:hover { color: #1a1840; border-color: #cfc9c0; transform: translateY(-1px); }
+@media (max-width: 640px) {
+  #emuFeedbackFab { right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); padding: 8px 12px; }
+  .efb-fab-text { display: none; }
+}
+.efb-sheet { position: fixed; inset: 0; z-index: 3200; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.efb-backdrop { position: absolute; inset: 0; background: rgba(20,15,40,.5); }
+.efb-panel {
+  position: relative; z-index: 1; width: 100%; max-width: 460px; background: #fff;
+  border-radius: 18px; padding: 20px; box-shadow: 0 24px 60px -20px rgba(0,0,0,.5);
+  font-family: 'Noto Sans JP', sans-serif; color: #1a1840;
+}
+.efb-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
+.efb-head strong { font-size: 15px; }
+.efb-head p { margin: 4px 0 0; font-size: 12px; color: #8b8698; line-height: 1.6; }
+.efb-close { background: #f2f2f5; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; color: #666; flex: none; }
+.efb-cats { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 10px; }
+.efb-cats button {
+  background: #f4f2ef; border: none; border-radius: 999px; padding: 7px 13px;
+  font-family: inherit; font-size: 12px; font-weight: 600; color: #6f6a86; cursor: pointer;
+}
+.efb-cats button.active { background: #1a1840; color: #fff; }
+#efbBody {
+  width: 100%; border: 1.5px solid #e6e2dc; border-radius: 12px; padding: 12px;
+  font-family: inherit; font-size: 16px; color: #1a1840; resize: vertical; box-sizing: border-box;
+}
+#efbBody:focus { outline: none; border-color: #1a1840; }
+.efb-note { font-size: 11px; color: #8b8698; margin: 8px 0 0; line-height: 1.6; }
+.efb-send {
+  width: 100%; margin-top: 12px; min-height: 46px; border: none; border-radius: 999px;
+  background: #f08300; color: #fff; font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.efb-send:disabled { opacity: .5; cursor: default; }
+</style>
+<script>
+/* フィードバックの送信。広告のように前に出しすぎず、Emuの画面にいるときだけ
+   右下に小さく置く。押さなければ何も起こらない。 */
+let _efbCat = 'confusing';
+function openEmuFeedback() {
+  const sheet = document.getElementById('emuFeedbackSheet');
+  if (!sheet) return;
+  sheet.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => { const t = document.getElementById('efbBody'); if (t) t.focus(); }, 50);
+}
+function closeEmuFeedback() {
+  const sheet = document.getElementById('emuFeedbackSheet');
+  if (!sheet) return;
+  sheet.style.display = 'none';
+  document.body.style.overflow = '';
+}
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('#efbCats button');
+  if (!btn) return;
+  _efbCat = btn.dataset.cat;
+  document.querySelectorAll('#efbCats button').forEach(b => b.classList.toggle('active', b === btn));
+});
+async function sendEmuFeedback() {
+  const body = (document.getElementById('efbBody') || {}).value || '';
+  const note = document.getElementById('efbNote');
+  const send = document.getElementById('efbSend');
+  if (!body.trim()) { note.textContent = '内容を入力してください。'; return; }
+  send.disabled = true; send.textContent = '送信中…';
+  try {
+    const headers = await emuAuthHeaders(true);
+    const res = await fetch('https://emu-realtime.onrender.com/api/feedback', {
+      method: 'POST', headers,
+      body: JSON.stringify({ category: _efbCat, body: body, page: location.hash || location.pathname })
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'failed');
+    note.textContent = 'ありがとうございます。受け取りました。';
+    document.getElementById('efbBody').value = '';
+    send.textContent = '送信しました';
+    setTimeout(closeEmuFeedback, 1200);
+  } catch (err) {
+    console.warn('feedback:', err && err.message);
+    note.textContent = err && err.message === 'RATE_LIMITED'
+      ? '短時間に送りすぎです。しばらくしてからお試しください。'
+      : '送信できませんでした。時間をおいてお試しください。';
+    send.disabled = false; send.textContent = '送る';
+  }
+}
+</script>
+
 <!-- 利用規約 / プライバシーポリシー ポップアップ -->
 <div id="chesLegalModal" class="ches-legal-modal" style="display:none;">
   <div class="ches-legal-backdrop" onclick="closeLegal()"></div>
   <div class="ches-legal-sheet">
     <div class="ches-legal-head">
       <span id="chesLegalTitle">利用規約</span>
-      <button type="button" class="ches-legal-close" onclick="closeLegal()" aria-label="閉じる">✕</button>
+      <button type="button" class="ches-legal-back" onclick="closeLegal()">← Emuに戻る</button>
+    </div>
+    <!-- 3つの書類を行き来できるようにする（閉じて開き直さなくてよい） -->
+    <div class="ches-legal-tabs">
+      <button type="button" data-legal="terms"   onclick="openLegal('terms')">利用規約</button>
+      <button type="button" data-legal="tokusho" onclick="openLegal('tokusho')">特定商取引法</button>
+      <button type="button" data-legal="privacy" onclick="openLegal('privacy')">プライバシー</button>
     </div>
     <iframe id="chesLegalFrame" title="規約" src="about:blank"></iframe>
   </div>
@@ -20039,8 +20271,9 @@ document.addEventListener('DOMContentLoaded', () => {
 <style>
 .ches-legal-modal { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .ches-legal-backdrop { position: absolute; inset: 0; background: rgba(20,15,40,0.5); backdrop-filter: blur(2px); }
+/* 読みやすさ優先で横幅と高さを広げる（規約は本文が長い） */
 .ches-legal-sheet {
-  position: relative; z-index: 1; width: 100%; max-width: 560px; height: 85vh; max-height: 85vh;
+  position: relative; z-index: 1; width: 100%; max-width: 780px; height: 90vh; max-height: 90vh;
   background: #fff; border-radius: 18px; overflow: hidden;
   display: flex; flex-direction: column; box-shadow: 0 24px 60px -20px rgba(0,0,0,0.5);
   animation: chesLegalIn .2s ease;
@@ -20051,6 +20284,25 @@ document.addEventListener('DOMContentLoaded', () => {
   padding: 14px 18px; border-bottom: 1px solid #eee; flex-shrink: 0;
   font-family: 'Noto Sans JP', sans-serif; font-weight: 700; font-size: 15px; color: #1a1840;
 }
+/* ✕だけだと「どこへ戻るのか」が伝わらないので、行き先を書いたボタンにする */
+.ches-legal-back {
+  background: #1a1840; border: none; color: #fff; border-radius: 999px;
+  padding: 8px 16px; font-family: inherit; font-size: 13px; font-weight: 700;
+  cursor: pointer; white-space: nowrap; transition: opacity .15s;
+}
+.ches-legal-back:hover { opacity: .85; }
+/* 書類を行き来するタブ */
+.ches-legal-tabs {
+  display: flex; gap: 6px; padding: 10px 18px; border-bottom: 1px solid #eee;
+  flex-shrink: 0; overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+.ches-legal-tabs::-webkit-scrollbar { display: none; }
+.ches-legal-tabs button {
+  flex: 0 0 auto; background: #f4f2ef; border: none; border-radius: 999px;
+  padding: 7px 14px; font-family: inherit; font-size: 12px; font-weight: 600;
+  color: #6f6a86; cursor: pointer; transition: background .15s, color .15s;
+}
+.ches-legal-tabs button:hover { background: #ebe7e2; color: #1a1840; }
 .ches-legal-close {
   background: #f2f2f5; border: none; width: 30px; height: 30px; border-radius: 50%;
   cursor: pointer; font-size: 14px; color: #666; line-height: 1;
@@ -20065,13 +20317,20 @@ document.addEventListener('DOMContentLoaded', () => {
      ウォレット/Membership 自動生成 → SchoolPark 入園）
      ============================================================ -->
 <script>
+  var LEGAL_PAGES = {
+    terms:    { src: '/terms.html',      title: '利用規約' },
+    privacy:  { src: '/privacy.html',    title: 'プライバシーポリシー' },
+    tokusho:  { src: '/tokushoho.html',  title: '特定商取引法に基づく表記' },
+    guarantee:{ src: '/guarantee.html',  title: '「語り合える一人」保証' }
+  };
   window.openLegal = function (kind) {
     var modal = document.getElementById('chesLegalModal');
     var frame = document.getElementById('chesLegalFrame');
     var title = document.getElementById('chesLegalTitle');
     if (!modal || !frame) return;
-    frame.src = kind === 'privacy' ? '/privacy.html' : '/terms.html';
-    if (title) title.textContent = kind === 'privacy' ? 'プライバシーポリシー' : '利用規約';
+    var conf = LEGAL_PAGES[kind] || LEGAL_PAGES.terms;
+    frame.src = conf.src;
+    if (title) title.textContent = conf.title;
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
   };
