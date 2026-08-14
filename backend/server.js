@@ -1024,6 +1024,57 @@ async function publishScheduledPosts() {
 // 5分ごとチェック（毎分→5分に変更でFirestore読み取りを 1/5 に削減）
 cron.schedule("*/5 * * * *", () => publishScheduledPosts(), { timezone: "Asia/Tokyo" });
 
+// =====================
+// 立てられた議論の日次リセット
+// 議論はその日限り。翌日には消して、毎日まっさらな状態から始める。
+// 「みんなの結論」(discussion_conclusions) は残す ── 知識として読まれるものなので消さない。
+// =====================
+const DISCUSSION_ROOMS_COL = "discussion_rooms";
+
+/* 日本時間の今日0時を Date で返す。
+   既存の _jstDateStr はゼロ埋めしない（2026-8-9 のような形）ため
+   文字列比較では 8-9 > 8-10 になってしまう。日付の境目は Date で扱う。 */
+function _jstMidnight(base) {
+  const now = base || new Date();
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const ms = Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate(), 0, 0, 0);
+  return new Date(ms - 9 * 60 * 60 * 1000); // JST 0時 = UTC 前日15時
+}
+
+async function purgeOldDiscussionRooms() {
+  if (!db) return { deleted: 0 };
+  const cutoff = _jstMidnight();
+  let deleted = 0;
+  try {
+    // 一度に消しすぎないよう、500件ずつ回す（batch の上限）
+    for (let pass = 0; pass < 20; pass++) {
+      const snap = await db.collection(DISCUSSION_ROOMS_COL)
+        .where("lastActiveAt", "<", cutoff)
+        .limit(500).get();
+      if (snap.empty) break;
+      const batch = db.batch();
+      snap.docs.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+      deleted += snap.size;
+      if (snap.size < 500) break;
+    }
+    if (deleted) console.log(`🗑 前日までの議論を削除: ${deleted}件`);
+    return { deleted };
+  } catch (err) {
+    console.error("議論の日次リセットに失敗:", err.message);
+    return { deleted, error: err.message };
+  }
+}
+
+// 毎日 0:05（日本時間）にリセット
+cron.schedule("5 0 * * *", () => {
+  console.log("⏰ 議論の日次リセット");
+  purgeOldDiscussionRooms();
+}, { timezone: "Asia/Tokyo" });
+
+// 再起動直後にも一度流す（停止中に日付をまたいでいた場合の取りこぼしを防ぐ）
+setTimeout(() => purgeOldDiscussionRooms(), 30_000);
+
 // 予約投稿 作成
 app.post("/api/scheduled-posts", requireFirebaseUser, requireOwnAddress, async (req, res) => {
   const { address, title, body, tags, scheduledAt, userId, userType } = req.body;

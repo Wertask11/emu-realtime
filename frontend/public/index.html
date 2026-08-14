@@ -14967,6 +14967,15 @@ async function saveDiscussionRoom(topic, genre) {
   }
 }
 
+/* 日本時間の今日0時。議論はその日限りなので、この時刻より前のものは出さない。
+   サーバー側の日次リセット(purgeOldDiscussionRooms)が走る前や、
+   サーバーが止まっていた場合でも、画面には当日分だけが並ぶようにする。 */
+function _jstMidnightMs() {
+  const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const ms = Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate(), 0, 0, 0);
+  return ms - 9 * 60 * 60 * 1000;
+}
+
 async function readDiscussionRooms() {
   if (!window.db || !window.fbLib) return [];
   try {
@@ -14976,9 +14985,12 @@ async function readDiscussionRooms() {
       window.fbLib.limit(60)
     );
     const snap = await window.fbLib.getDocs(q);
+    const cutoff = _jstMidnightMs();
     const rows = [];
     snap.forEach(d => {
       const v = d.data();
+      const active = v.lastActiveAt && v.lastActiveAt.toDate ? v.lastActiveAt.toDate().getTime() : 0;
+      if (active < cutoff) return; // 前日以前のものは表示しない
       rows.push({
         id: d.id,
         topic: v.topic || '',
