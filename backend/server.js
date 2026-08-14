@@ -2241,11 +2241,13 @@ app.get("/api/ichinichi/history", requireFirebaseUser, requireOwnAddress, async 
     const { address } = ichiIdentity(req);
     if (!address) return res.status(400).json({ error: "ウォレットが必要です" });
 
-    const dayPrefix = `${address}__`;
+    /* \u30c9\u30ad\u30e5\u30e1\u30f3\u30c8ID\u306e\u524d\u65b9\u4e00\u81f4\u3067\u5f15\u3044\u3066\u3044\u305f\u304c\u3001__name__ \u306b\u5bfe\u3059\u308b startAt/endAt \u306f
+       \u5024\u304c\u6b63\u3057\u3044\u30c9\u30ad\u30e5\u30e1\u30f3\u30c8ID\u3067\u3042\u308b\u5fc5\u8981\u304c\u3042\u308a\u3001\u756a\u5175\u306b\u4f7f\u3063\u3066\u3044\u305f \uf8ff \u304c
+       \u5f3e\u304b\u308c\u3066 INVALID_ARGUMENT \u306b\u306a\u3063\u3066\u3044\u305f\uff08500\u306e\u539f\u56e0\uff09\u3002
+       \u5404\u30c9\u30ad\u30e5\u30e1\u30f3\u30c8\u306f address \u30d5\u30a3\u30fc\u30eb\u30c9\u3092\u6301\u3063\u3066\u3044\u308b\u306e\u3067\u3001\u305d\u3061\u3089\u3067\u5f15\u304f\u3002
+       \u4e26\u3079\u66ff\u3048\u306f\u76f4\u5f8c\u306b\u65e5\u4ed8\u3067\u884c\u3063\u3066\u3044\u308b\u305f\u3081\u3001\u8907\u5408\u30a4\u30f3\u30c7\u30c3\u30af\u30b9\u3082\u8981\u3089\u306a\u3044\u3002 */
     const snap = await db.collection(ICHI_DAYS_COL)
-      .orderBy(firebaseAdmin.firestore.FieldPath.documentId(), "desc")
-      .startAt(`${dayPrefix}\uf8ff`)
-      .endAt(dayPrefix)
+      .where("address", "==", address)
       .limit(90).get();
     let history = snap.docs.map((doc) => {
       const d = doc.data();

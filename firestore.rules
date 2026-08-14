@@ -268,12 +268,17 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
-    match /emuer_rate/{document=**} {
+    // EMUERの表示用キャッシュ（localStorageの写し）。ドキュメントIDは本人のウォレット。
+    // 残高の正は emuer_offchain（サーバー専用）なので、ここは本人が自分の分だけ書ければよい。
+    match /emuer_rate/{wallet} {
+      allow read: if true;
+      allow write: if isMyWallet(wallet);
+    }
+    // エアドロ登録。GENESISバッジの表示でクライアントが読むため、読み取りは開ける。
+    // （登録はサーバーの /airdrop/register が行うので書き込みは閉じたまま）
+    match /airdrop_registrations/{document=**} {
       allow read: if true;
       allow write: if false;
-    }
-    match /airdrop_registrations/{document=**} {
-      allow read, write: if false;
     }
     match /secret_door_rewards/{document=**} {
       allow read, write: if false;
