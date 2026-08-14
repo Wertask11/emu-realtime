@@ -4375,7 +4375,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         </div>
         <div class="eth-wallet-actions">
           <button type="button" class="eth-btn primary" onclick="emuWalletConvert()" data-i18n="wallet.convert">Emuerに変換</button>
-          <button type="button" class="eth-btn" onclick="emuWalletExchange()" data-i18n="wallet.exchange">取引所を見る</button>
+          <button type="button" class="eth-btn" onclick="emuWalletExchange()" data-i18n="wallet.exchange">みてみる</button>
         </div>
       </section>
 
@@ -13839,6 +13839,10 @@ const walletAddress = localStorage.getItem("emuWallet");
 let room3CurrentStep = 1;
 let replyTarget = null;
 let room3TopicOverride = '';
+/* サーバーが配る「今日の議題」。ユーザーが自分で立てた議題(room3TopicOverride)で
+   上書きされないよう別に持つ。これを分けないと、一度自分で議題を立てたあとに
+   議論画面を開き直したとき、前回の議題が「今日の議題」として出てしまう。 */
+let room3DailyTopic = '';
 let room3ContributionMode = 'opinion';
 /* 発言の「種類」。見た目を変えるだけでなく、
    ・種類ごとに色分けして一覧で区別できる
@@ -14931,17 +14935,85 @@ function showEmuPlay() {
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
+/* ══════════════════════════════════════════
+   立てられた議論の保存と一覧
+
+   これまで議題は socket の部屋名にしかならず、どこにも残らなかった。
+   そのため「ほかの人が立てた議論に入る」ことができなかった。
+   Firestore に置いて、一覧・検索・ジャンル絞り込みができるようにする。
+══════════════════════════════════════════ */
+const DISCUSSION_ROOMS_COL = 'discussion_rooms';
+const DISCUSSION_GENRES = ['work','study','life','society','culture','other'];
+
+async function saveDiscussionRoom(topic, genre) {
+  const addr = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+  if (!addr || !window.db || !window.fbLib) return;
+  const clean = String(topic || '').trim().slice(0, 120);
+  if (!clean) return;
+  try {
+    // 同じ議題を何度も立てても増えないよう、議題からIDを作って上書きする
+    const id = 'r_' + Array.from(clean).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0).toString(36)
+      + '_' + clean.length;
+    await window.fbLib.setDoc(window.fbLib.doc(window.db, DISCUSSION_ROOMS_COL, id), {
+      topic: clean,
+      genre: DISCUSSION_GENRES.includes(genre) ? genre : 'other',
+      author: addr,
+      authorName: localStorage.getItem('ches_name') || '',
+      createdAt: new Date(),
+      lastActiveAt: new Date()
+    }, { merge: true });
+  } catch (e) {
+    console.warn('議論の保存に失敗:', e && e.message);
+  }
+}
+
+async function readDiscussionRooms() {
+  if (!window.db || !window.fbLib) return [];
+  try {
+    const q = window.fbLib.query(
+      window.fbLib.collection(window.db, DISCUSSION_ROOMS_COL),
+      window.fbLib.orderBy('lastActiveAt', 'desc'),
+      window.fbLib.limit(60)
+    );
+    const snap = await window.fbLib.getDocs(q);
+    const rows = [];
+    snap.forEach(d => {
+      const v = d.data();
+      rows.push({
+        id: d.id,
+        topic: v.topic || '',
+        genre: v.genre || 'other',
+        authorName: v.authorName || '',
+        createdAt: v.createdAt && v.createdAt.toDate ? v.createdAt.toDate().getTime() : null
+      });
+    });
+    return rows;
+  } catch (e) {
+    console.warn('議論一覧の取得に失敗:', e && e.message);
+    return [];
+  }
+}
+
 window.addEventListener('message', function(event) {
   if (event.origin !== window.location.origin || !event.data) return;
   const discussionFrame = document.getElementById('emuDiscussionFrame');
   const playFrame = document.getElementById('emuPlayFrame');
   if (event.source === discussionFrame?.contentWindow) {
     if (event.data.type === 'emu-discussion-ready') {
-      // 渡すのは日本語の原文。翻訳は受け取った側が表示時に行う。
-      const currentTopic = document.getElementById('topic')?.textContent
+      /* 渡すのは「今日の議題」。#topic は部屋の表示用で、自分で立てた議題が
+         残っていることがあるため参照しない。翻訳は受け取った側が表示時に行う。 */
+      const currentTopic = room3DailyTopic
         || document.getElementById('emuTodayTopic')?.dataset.topic
         || document.getElementById('emuTodayTopic')?.textContent || '';
       if (currentTopic && !currentTopic.includes('読み込み')) discussionFrame.contentWindow.postMessage({ type:'emu-discussion-topic', topic:currentTopic }, window.location.origin);
+    }
+    /* 立てられた議論の一覧を返す。誰でも入れるように公開で読む。 */
+    if (event.data.type === 'emu-discussion-rooms-request') {
+      (async () => {
+        const rooms = await readDiscussionRooms();
+        discussionFrame.contentWindow.postMessage({ type:'emu-discussion-rooms', rooms }, window.location.origin);
+      })();
+      return;
     }
     if (event.data.type === 'emu-discussion-open') {
       const selectedTopic = String(event.data.topic || '').trim();
@@ -14949,6 +15021,8 @@ window.addEventListener('message', function(event) {
         room3TopicOverride = selectedTopic;
         const topicElement = document.getElementById('topic');
         if (topicElement) topicElement.textContent = selectedTopic;
+        // 自分で立てた議題だけ保存する（一覧から入った場合は保存済み）
+        if (event.data.save) saveDiscussionRoom(selectedTopic, event.data.genre);
       }
       setRoom3ContributionMode(event.data.mode || 'opinion');
       openRoom3();
@@ -15809,24 +15883,51 @@ function _emuReadOnlyEmuerContract() {
   return null;
 }
 
+/* 取引所（みてみる）。
+
+   これまでの実装は、1件ずつ順番に await していた:
+     20回 × ( listedNFTs の RPC → tokenURI の RPC → メタデータ取得(最大8秒) )
+   出品が少なくても常に20回まわるうえ、1件でもメタデータ取得が詰まると
+   そのぶん丸ごと待たされるため、「押しても開かない・遅い」状態になっていた。
+   さらに連打すると同じ処理が重なって走り、一覧を奪い合っていた。
+
+   ここでは
+     ・一覧の取得を並列にする
+     ・残高の取得を一覧の待ちに含めない
+     ・メタデータのタイムアウトを短くし、失敗しても価格だけ出す
+     ・多重実行を1本に抑える
+   の4点で作り直す。 */
+let _emuExchangeRunId = 0;
+
 async function emuWalletExchange() {
   openEmuSheet('emuExchangeSheet');
   const listEl = document.getElementById('emuExchangeList');
   const balEl = document.getElementById('emuExchangeBalance');
   const noticeEl = document.getElementById('emuExchangeNotice');
-  listEl.innerHTML = '<div class="exch-loading">' + escapeHtml(emuT('exchange.loading')) + '</div>';
-  noticeEl.hidden = true;
+  if (!listEl) return;
 
-  // 残高（価値プロフィールと同じ取得経路）
-  try {
-    const balance = await _emuReadTokenBalance();
-    balEl.innerHTML = '<span>' + escapeHtml(emuT('wallet.label')) + '</span>'
-      + '<strong>' + Number(balance || 0).toLocaleString('ja-JP') + '</strong>'
-      + '<small>' + escapeHtml(emuT('unit.emuer')) + '</small>';
-  } catch (e) { balEl.innerHTML = ''; }
+  // 連打対策。あとから始まった実行だけが描画する。
+  const runId = ++_emuExchangeRunId;
+  const isStale = () => runId !== _emuExchangeRunId;
+
+  listEl.innerHTML = '<div class="exch-loading">' + escapeHtml(emuT('exchange.loading')) + '</div>';
+  if (noticeEl) noticeEl.hidden = true;
+
+  // 残高は一覧と並行して出す（ここで待たない）
+  if (balEl) {
+    balEl.innerHTML = '';
+    _emuReadTokenBalance()
+      .then(function (balance) {
+        if (isStale()) return;
+        balEl.innerHTML = '<span>' + escapeHtml(emuT('wallet.label')) + '</span>'
+          + '<strong>' + Number(balance || 0).toLocaleString('ja-JP') + '</strong>'
+          + '<small>' + escapeHtml(emuT('unit.emuer')) + '</small>';
+      })
+      .catch(function () { if (!isStale()) balEl.innerHTML = ''; });
+  }
 
   // 無料ユーザーの利用制限（従来と同じ条件）
-  if (typeof getCurrentUserType === 'function' && getCurrentUserType() === 'free'
+  if (noticeEl && typeof getCurrentUserType === 'function' && getCurrentUserType() === 'free'
       && typeof canUseExchange === 'function' && !canUseExchange()) {
     noticeEl.hidden = false;
     noticeEl.textContent = emuT('exchange.freeLimit');
@@ -15841,45 +15942,66 @@ async function emuWalletExchange() {
   }
 
   try {
+    // 出品情報は並列に取る。1件の失敗が全体を止めないよう個別に握りつぶす。
+    const MAX_ITEMS = 20;
+    const listings = await Promise.all(
+      Array.from({ length: MAX_ITEMS }, function (_, k) {
+        return readContract.listedNFTs(k + 1).catch(function () { return null; });
+      })
+    );
+    if (isStale()) return;
+
+    const available = [];
+    listings.forEach(function (info, k) {
+      if (info && info.available) available.push({ id: String(k + 1), info: info });
+    });
+
+    if (!available.length) {
+      listEl.innerHTML = '<div class="exch-empty">' + escapeHtml(emuT('exchange.empty')) + '</div>';
+      return;
+    }
+
+    // 価格だけで先に描画する。メタデータ（名前・画像）は後から差し替える。
+    listEl.innerHTML = '';
+    const cardById = {};
+    available.forEach(function (item) {
+      const card = _emuExchangeCard(item.id, {}, item.info.emuerPrice, item.info.jpycPrice);
+      cardById[item.id] = card;
+      listEl.appendChild(card);
+    });
+
+    // メタデータは並列＋短いタイムアウト。取れなかったものは価格表示のまま残す。
     let nftContract = null;
     try {
       const nftAddr = await readContract.emuNFT();
       nftContract = new ethers.Contract(nftAddr,
         ['function tokenURI(uint256 tokenId) view returns (string)'], readContract.provider);
     } catch (e) { /* メタデータなしでも価格は出せる */ }
+    if (!nftContract || isStale()) return;
 
-    const cards = [];
-    for (let i = 1; i <= 20; i++) {
-      let info;
-      try { info = await readContract.listedNFTs(i); } catch (e) { continue; }
-      if (!info || !info.available) continue;
-      let metadata = {};
-      if (nftContract) {
-        try {
-          const uri = await nftContract.tokenURI(String(i));
-          const normalized = normalizeTokenURI(uri);
-          if (normalized && normalized.startsWith('http')) {
-            const controller = new AbortController();
-            const timer = setTimeout(function () { controller.abort(); }, 8000);
-            const res = await fetch(normalized, { signal: controller.signal });
-            clearTimeout(timer);
-            const text = await res.text();
-            if (text.trim().startsWith('{')) metadata = JSON.parse(text);
-          }
-        } catch (e) { /* 画像・名前なしで表示する */ }
-      }
-      cards.push(_emuExchangeCard(String(i), metadata, info.emuerPrice, info.jpycPrice));
-    }
-
-    if (!cards.length) {
-      listEl.innerHTML = '<div class="exch-empty">' + escapeHtml(emuT('exchange.empty')) + '</div>';
-      return;
-    }
-    listEl.innerHTML = '';
-    cards.forEach(function (c) { listEl.appendChild(c); });
+    await Promise.all(available.map(async function (item) {
+      try {
+        const uri = await nftContract.tokenURI(item.id);
+        const normalized = normalizeTokenURI(uri);
+        if (!normalized || !normalized.startsWith('http')) return;
+        const controller = new AbortController();
+        const timer = setTimeout(function () { controller.abort(); }, 4000);
+        const res = await fetch(normalized, { signal: controller.signal });
+        clearTimeout(timer);
+        const text = await res.text();
+        if (!text.trim().startsWith('{')) return;
+        const metadata = JSON.parse(text);
+        if (isStale()) return;
+        const fresh = _emuExchangeCard(item.id, metadata, item.info.emuerPrice, item.info.jpycPrice);
+        const old = cardById[item.id];
+        if (old && old.parentNode) old.parentNode.replaceChild(fresh, old);
+      } catch (e) { /* 名前・画像なしのまま残す */ }
+    }));
   } catch (error) {
     console.error('取引所の読み込みに失敗:', error);
-    listEl.innerHTML = '<div class="exch-empty">' + escapeHtml(emuT('exchange.error')) + '</div>';
+    if (!isStale()) {
+      listEl.innerHTML = '<div class="exch-empty">' + escapeHtml(emuT('exchange.error')) + '</div>';
+    }
   }
 }
 
@@ -17358,6 +17480,10 @@ function closePopup(){
   document.getElementById('discussion').innerHTML = '';
   replyTarget = null;
   room3TopicOverride = '';
+  /* 見出しも「今日の議題」に戻す。ここを残すと、次に開いたとき
+     前回自分で立てた議題が居座ってしまう。 */
+  const topicEl = document.getElementById('topic');
+  if (topicEl) topicEl.textContent = room3DailyTopic || '';
   setRoom3ContributionMode('opinion');
 }
 
@@ -17396,14 +17522,17 @@ document.getElementById('postBtn').addEventListener('click', ()=>{
 });
 
 socket.on("today topic", (topic) => {
+  // 「今日の議題」はそのまま保持する（自分で立てた議題で汚さない）
+  room3DailyTopic = topic || '';
+  // 部屋の見出しだけは、いま入っている議論（自分で立てたものがあればそれ）を出す
   const activeTopic = room3TopicOverride || topic;
   document.getElementById("topic").textContent = activeTopic;
   const todayTopic = document.getElementById("emuTodayTopic");
   const discussionTitle = document.getElementById("emuDiscussionCardTitle");
-  if (todayTopic) todayTopic.textContent = activeTopic;
-  if (discussionTitle) discussionTitle.textContent = activeTopic;
+  if (todayTopic) todayTopic.textContent = room3DailyTopic;
+  if (discussionTitle) discussionTitle.textContent = room3DailyTopic;
   const discussionFrame = document.getElementById('emuDiscussionFrame');
-  if (discussionFrame?.contentWindow) discussionFrame.contentWindow.postMessage({ type:'emu-discussion-topic', topic:activeTopic }, window.location.origin);
+  if (discussionFrame?.contentWindow) discussionFrame.contentWindow.postMessage({ type:'emu-discussion-topic', topic:room3DailyTopic }, window.location.origin);
 });
 
 /* ══════════════════════════════════════════
@@ -17646,6 +17775,21 @@ function closePopup() {
   if (popup) popup.style.display = "block";
   if (closeBtn) closeBtn.style.display = "none";
   document.body.classList.remove('room2-open'); // 問い合わせボタン復元
+
+  /* 議論の後片付け。
+     closePopup は同名の関数が2つあり、後から定義されたこちらが実際に使われる。
+     以前は前者にだけ後片付けを書いていたため一度も実行されず、
+     自分で立てた議題が残り続けて、次に議論画面を開いたときに
+     それが「今日の議題」として表示されていた。 */
+  const input = document.getElementById('userInput');
+  if (input) input.value = '';
+  const list = document.getElementById('discussion');
+  if (list) list.innerHTML = '';
+  replyTarget = null;
+  room3TopicOverride = '';
+  const topicEl = document.getElementById('topic');
+  if (topicEl) topicEl.textContent = room3DailyTopic || '';
+  if (typeof setRoom3ContributionMode === 'function') setRoom3ContributionMode('opinion');
 }
 
 function handleDiscussion() {

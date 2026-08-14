@@ -80,6 +80,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 立てられた議論。誰でも一覧を読めて、参加できる。
+    // 作成・更新は自分名義のときだけ（同じ議題は同じIDに集約されるため update も許す）。
+    match /discussion_rooms/{id} {
+      allow read: if true;
+      allow create, update: if isMyWallet(request.resource.data.author)
+        && request.resource.data.topic is string
+        && request.resource.data.topic.size() > 0
+        && request.resource.data.topic.size() <= 120;
+      allow delete: if false;
+    }
+
     // 議論から生まれた「みんなの結論」。誰でも読めるが、書けるのは
     // 自分名義で新規に残すときだけ。他人の結論の書き換え・削除はできない。
     match /discussion_conclusions/{id} {
@@ -310,7 +321,8 @@ service cloud.firestore {
         && coll != 'dialogue_slots'
         && coll != 'admin_audit_logs'
         && coll != 'emu_feedback'
-        && coll != 'discussion_conclusions';
+        && coll != 'discussion_conclusions'
+        && coll != 'discussion_rooms';
     }
   }
 }
