@@ -89,7 +89,11 @@ ul.cond li{margin:4px 0}
       <div class="row"><span class="k">料金</span><span class="v">月額 10,000円（税込）</span></div>
       <div class="row"><span class="k">次回更新日</span><span class="v" id="periodEnd">—</span></div>
       <div class="row"><span class="k">保証期間</span><span class="v" id="guaranteeEnd">—</span></div>
-      <button class="btn" id="subscribeBtn">入会して支払う（10,000円）</button>
+      <label id="adultRow" style="display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--ink);margin-top:14px">
+        <input type="checkbox" id="adultCheck" style="width:auto;margin-top:3px;flex:none">
+        <span>18歳以上です（未成年の方は法定代理人の同意が必要です）</span>
+      </label>
+      <button class="btn" id="subscribeBtn" disabled>入会して支払う（10,000円）</button>
       <button class="btn sub hide" id="portalBtn">支払い方法の変更・解約</button>
       <p class="note">解約手数料はかかりません。次回決済日の前までに解約すれば翌月の請求は発生しません。</p>
       <p class="err hide" id="subErr"></p>
@@ -122,28 +126,13 @@ ul.cond li{margin:4px 0}
 
     <!-- 本人確認 -->
     <section class="card">
-      <h2><span class="ico">☑</span>本人確認 <span id="kycPill" class="pill off">未提出</span></h2>
-      <p class="note" id="kycMsg">安全に対話していただくため、本人確認をお願いしています。</p>
-      <div id="kycForm">
-        <label for="docType">書類の種類</label>
-        <select id="docType">
-          <option value="driver_license">運転免許証</option>
-          <option value="passport">パスポート</option>
-          <option value="mynumber_card">マイナンバーカード（表面のみ）</option>
-          <option value="residence_card">在留カード</option>
-        </select>
-        <label for="frontFile">おもて面の画像</label>
-        <input type="file" id="frontFile" accept="image/jpeg,image/png,image/webp">
-        <label for="backFile">うら面の画像（ある場合）</label>
-        <input type="file" id="backFile" accept="image/jpeg,image/png,image/webp">
-        <button class="btn" id="kycSubmit">本人確認を提出する</button>
-        <p class="note">
-          マイナンバーカードは<strong>おもて面のみ</strong>を送ってください。個人番号（マイナンバー）が写った面は送らないでください。<br>
-          画像は非公開の保管領域に置き、確認が終わり次第すぐに削除します。確認結果だけを記録し、書類そのものは保管しません。
-        </p>
-        <p class="err hide" id="kycErr"></p>
-        <p class="ok hide" id="kycOk"></p>
-      </div>
+      <h2><span class="ico">☑</span>本人確認 <span id="kycPill" class="pill off">未確認</span></h2>
+      <p class="note" id="kycMsg">
+        Emu では本人確認書類の画像をお預かりしません。最初の対話のときに、
+        創業者が画面越しに確認します。記録するのは「確認した日付」だけです。
+      </p>
+      <div class="row"><span class="k">確認の方法</span><span class="v" id="kycMethod">最初の対話で確認</span></div>
+      <div class="row"><span class="k">確認日</span><span class="v" id="kycDate">—</span></div>
     </section>
 
     <!-- 対話 -->
@@ -248,12 +237,7 @@ const ERRORS = {
   WINDOW_NOT_OPEN: "返金の申請期間はまだ始まっていません。",
   WINDOW_CLOSED: "返金の申請期間が終了しています。",
   ALREADY_REQUESTED: "すでに申請を受け付けています。",
-  ALREADY_APPROVED: "本人確認はすでに完了しています。",
-  ALREADY_PENDING: "本人確認を確認中です。結果をお待ちください。",
-  IMAGE_TOO_LARGE: "画像が大きすぎます（1枚5MBまで）。",
-  INVALID_IMAGE_DATA: "画像として読み取れませんでした。別の画像をお試しください。",
-  INVALID_MIME: "JPEG・PNG・WebP のいずれかの画像を選んでください。",
-  MISSING_IMAGE: "おもて面の画像を選んでください。",
+  AGE_NOT_CONFIRMED: "18歳以上であることをご確認ください。",
   RATE_LIMITED: "操作が続いています。しばらく待ってからお試しください。",
   NAME_REQUIRED: "呼ばれたい名前を入力してください。",
   BIO_TOO_SHORT: "話したいことを20文字以上で書いてください。",
@@ -291,10 +275,17 @@ async function loadBilling() {
   return s;
 }
 
+document.addEventListener("change", e => {
+  if (e.target && e.target.id === "adultCheck") syncSubscribeButton();
+});
+
 $("#subscribeBtn").onclick = async () => {
   const btn = $("#subscribeBtn");
+  if (!$("#adultCheck").checked) { msg($("#subErr"), "18歳以上であることをご確認ください。"); return; }
   btn.disabled = true; msg($("#subErr"), "");
   try {
+    // 決済に進む前に、18歳以上であることの申告を記録する
+    await api("/api/kyc/declare-age", { method:"POST", body:{ adult:true } });
     const r = await api("/api/billing/checkout", { method:"POST", body:{} });
     location.href = r.url;                       // Stripe の決済ページへ
   } catch (e) {
@@ -314,60 +305,35 @@ $("#portalBtn").onclick = async () => {
 };
 
 // ───────── 本人確認 ─────────
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(",")[1]);
-    r.onerror = () => reject(new Error("read failed"));
-    r.readAsDataURL(file);
-  });
-}
-
+/* 書類は預からない。表示するのは「確認済みかどうか」と日付だけ。 */
 async function loadKyc() {
   const s = await api("/api/kyc/status");
   const pill = $("#kycPill");
-  const map = {
-    none:["未提出","off"], pending:["確認中","off"], approved:["確認済み","on"],
-    rejected:["再提出が必要","warn"], expired:["期限切れ","warn"]
-  };
-  const [label, cls] = map[s.status] || ["未提出","off"];
-  pill.textContent = label; pill.className = "pill " + cls;
-  if (s.status === "approved") {
-    $("#kycForm").classList.add("hide");
-    $("#kycMsg").textContent = "本人確認は完了しています。ご提出いただいた書類は削除済みです。";
-  } else if (s.status === "pending") {
-    $("#kycForm").classList.add("hide");
-    $("#kycMsg").textContent = "確認中です。結果が出るまでお待ちください。";
-  } else if (s.status === "rejected") {
-    $("#kycMsg").textContent = "確認できませんでした" + (s.rejectReason ? "（" + s.rejectReason + "）" : "") + "。もう一度ご提出ください。";
+  const verified = s.status === "verified";
+  pill.textContent = verified ? "確認済み" : "未確認";
+  pill.className = "pill " + (verified ? "on" : "off");
+  $("#kycMethod").textContent = s.methodLabel || "最初の対話で確認";
+  $("#kycDate").textContent = s.verifiedAt
+    ? new Date(s.verifiedAt).toLocaleDateString("ja-JP") : "—";
+  if (!verified) {
+    $("#kycMsg").textContent =
+      "Emu では本人確認書類の画像をお預かりしません。最初の対話のときに、"
+      + "創業者が画面越しに確認します。記録するのは「確認した日付」だけです。";
+  } else {
+    $("#kycMsg").textContent = "本人確認は完了しています。書類の画像は保存していません。";
   }
+  // 18歳以上の申告が済んでいれば、チェックを入れた状態にする
+  const chk = $("#adultCheck");
+  if (chk && s.adultDeclared) { chk.checked = true; chk.disabled = true; }
+  syncSubscribeButton();
 }
 
-$("#kycSubmit").onclick = async () => {
-  const btn = $("#kycSubmit");
-  msg($("#kycErr"), ""); msg($("#kycOk"), "");
-  const front = $("#frontFile").files[0];
-  const back = $("#backFile").files[0];
-  if (!front) return msg($("#kycErr"), "おもて面の画像を選んでください。");
-  if (back && back.type !== front.type) {
-    return msg($("#kycErr"), "おもて面とうら面は同じ形式の画像を選んでください。");
-  }
-  btn.disabled = true; btn.textContent = "送信中…";
-  try {
-    await api("/api/kyc/submit", { method:"POST", body:{
-      docType: $("#docType").value,
-      mimeType: front.type,
-      front: await fileToBase64(front),
-      back: back ? await fileToBase64(back) : ""
-    }});
-    msg($("#kycOk"), "提出しました。確認をお待ちください。");
-    await loadKyc();
-  } catch (e) {
-    msg($("#kycErr"), human(e));
-  } finally {
-    btn.disabled = false; btn.textContent = "本人確認を提出する";
-  }
-};
+/* 18歳以上のチェックが入るまで入会ボタンを押せないようにする */
+function syncSubscribeButton() {
+  const chk = $("#adultCheck"), btn = $("#subscribeBtn");
+  if (!chk || !btn) return;
+  btn.disabled = !chk.checked;
+}
 
 // ───────── プロフィール ─────────
 const THEME_LABELS = {

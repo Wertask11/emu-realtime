@@ -31,7 +31,6 @@ input,select,textarea{width:100%;border:1.5px solid var(--line);border-radius:10
 .hide{display:none!important}
 .empty{color:var(--muted);font-size:13px;padding:20px;text-align:center}
 .warnbox{background:#fdecea;border:1px solid #f0c8c2;border-radius:10px;padding:12px;font-size:12px;color:#8a2b20;margin-bottom:16px}
-img.doc{max-width:100%;border-radius:8px;border:1px solid var(--line);margin-top:8px}
 </style>
 </head>
 <body>
@@ -43,7 +42,7 @@ img.doc{max-width:100%;border-radius:8px;border:1px solid var(--line);margin-top
 
   <main id="main" class="hide">
     <div class="warnbox">
-      本人確認書類の閲覧は監査ログに記録されます。判定すると画像は即座に削除され、結果だけが残ります。
+      返金の承認は取り消せません。本人確認は書類を預からず、対話で確認した事実だけを記録します。
     </div>
 
     <div class="tabs">
@@ -169,47 +168,70 @@ async function renderRefunds() {
 }
 
 // ───────── 本人確認 ─────────
+/* 書類の画像は預からない。対話で確認できたら、ここで確認済みにする。
+   残るのは「いつ・どの方法で確認したか」だけ。 */
 async function renderKyc() {
   const el = $("#tab-kyc");
   el.innerHTML = '<p class="empty">読み込み中…</p>';
   try {
-    const { items } = await api("/api/kyc/admin/list?status=pending");
-    if (!items.length) return el.innerHTML = '<p class="empty">確認待ちの本人確認はありません。</p>';
-    const docNames = { driver_license:"運転免許証", passport:"パスポート", mynumber_card:"マイナンバーカード", residence_card:"在留カード" };
-    el.innerHTML = items.map(k =>
-      '<div class="card" data-uid="' + esc(k.uid) + '">'
-      + '<h3>' + esc(docNames[k.docType] || k.docType) + '</h3>'
-      + '<p class="meta">uid: ' + esc(k.uid) + '｜提出 ' + fmt(k.submittedAt) + '｜画像 ' + k.imageCount + '枚</p>'
-      + '<div class="actions"><button class="act neutral" data-view>書類を表示（5分間）</button></div>'
-      + '<div data-images></div>'
-      + '<input data-reason placeholder="却下する場合の理由（本人に表示されます）">'
-      + '<div class="actions"><button class="act ok" data-approve>承認</button>'
-      + '<button class="act no" data-reject>却下</button></div></div>'
-    ).join("");
+    const { items, methodLabels } = await api("/api/kyc/admin/list?status=all");
+    if (!items.length) return el.innerHTML = '<p class="empty">まだ会員がいません。</p>';
 
-    el.querySelectorAll(".card").forEach(card => {
-      const uid = card.dataset.uid;
-      card.querySelector("[data-view]").onclick = async (e) => {
-        e.target.disabled = true;
+    el.innerHTML =
+      '<div class="warnbox" style="background:#eef3ee;border-color:#cfe0d2;color:#2f5d3f">'
+      + 'Emu は本人確認書類の画像を預かりません。最初の対話で顔を見て確認し、その事実だけを記録します。'
+      + '</div>'
+      + items.map(k => {
+        const verified = k.status === "verified";
+        return '<div class="card" data-uid="' + esc(k.uid) + '">'
+          + '<h3>' + (verified ? '確認済み' : '未確認') + '</h3>'
+          + '<p class="meta">uid: ' + esc(k.uid) + '</p>'
+          + '<div class="row"><span>18歳以上の申告</span><span>'
+          + (k.adultDeclared
+              ? '<span class="pill on">あり</span> ' + esc(fmt(k.adultDeclaredAt))
+              : '<span class="pill warn">なし</span>') + '</span></div>'
+          + '<div class="row"><span>確認の方法</span><span>' + esc(k.methodLabel || '—') + '</span></div>'
+          + '<div class="row"><span>確認日</span><span>' + esc(k.verifiedAt ? fmt(k.verifiedAt) : '—') + '</span></div>'
+          + (k.note ? '<p class="meta" style="margin-top:6px">メモ: ' + esc(k.note) + '</p>' : '')
+          + (verified
+            ? '<div class="actions"><button class="act no" data-unverify>確認を取り消す</button></div>'
+            : '<select data-method>'
+              + Object.entries(methodLabels || { dialogue:'対話で確認' })
+                  .map(([k2,v]) => '<option value="' + k2 + '">' + v + '</option>').join('')
+              + '</select>'
+              + '<input data-note placeholder="メモ（任意・記録に残ります）">'
+              + '<div class="actions"><button class="act ok" data-verify>確認済みにする</button></div>')
+          + '</div>';
+      }).join("");
+
+    el.querySelectorAll("[data-verify]").forEach(b => {
+      b.onclick = async () => {
+        const card = b.closest(".card");
+        b.disabled = true;
         try {
-          const r = await api("/api/kyc/admin/" + encodeURIComponent(uid) + "/view");
-          card.querySelector("[data-images]").innerHTML =
-            r.urls.map(u => '<img class="doc" src="' + esc(u) + '" alt="本人確認書類">').join("");
-        } catch (err) { alert("表示できませんでした: " + (err.code || err.message)); e.target.disabled = false; }
-      };
-      const decide = async (decision, btn) => {
-        const reason = card.querySelector("[data-reason]").value;
-        if (decision === "reject" && !reason.trim()) return alert("却下の理由を入力してください。");
-        if (!confirm(decision === "approve" ? "承認します。画像は削除されます。" : "却下します。画像は削除されます。")) return;
-        btn.disabled = true;
-        try {
-          await api("/api/kyc/admin/" + encodeURIComponent(uid) + "/decide",
-            { method:"POST", body:{ decision, rejectReason: reason } });
+          await api("/api/kyc/admin/" + encodeURIComponent(card.dataset.uid) + "/verify", {
+            method:"POST",
+            body:{
+              verified:true,
+              method: card.querySelector("[data-method]").value,
+              note: card.querySelector("[data-note]").value
+            }
+          });
           renderKyc();
-        } catch (err) { alert("失敗しました: " + (err.code || err.message)); btn.disabled = false; }
+        } catch (e) { alert("失敗しました: " + (e.code || e.message)); b.disabled = false; }
       };
-      card.querySelector("[data-approve]").onclick = e => decide("approve", e.target);
-      card.querySelector("[data-reject]").onclick = e => decide("reject", e.target);
+    });
+    el.querySelectorAll("[data-unverify]").forEach(b => {
+      b.onclick = async () => {
+        if (!confirm("この会員の確認を取り消します。よろしいですか？")) return;
+        const card = b.closest(".card");
+        b.disabled = true;
+        try {
+          await api("/api/kyc/admin/" + encodeURIComponent(card.dataset.uid) + "/verify",
+            { method:"POST", body:{ verified:false } });
+          renderKyc();
+        } catch (e) { alert("失敗しました: " + (e.code || e.message)); b.disabled = false; }
+      };
     });
   } catch (e) {
     el.innerHTML = '<p class="empty">読み込みに失敗しました（' + esc(e.code || e.message) + '）</p>';
