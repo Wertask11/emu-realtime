@@ -2479,6 +2479,9 @@ body.spmap-open #emu-contact-label {
   display: none !important;
 }
 /* Room2（探索・遊び）表示中：問い合わせボタンを非表示 */
+/* 議論ルーム表示中。ルーム内に×があるので、重なる浮きボタンは引っ込める */
+body.room3-open #emu-contact-btn,
+body.room3-open .emu-page-close,
 body.room2-open #emu-contact-btn,
 body.room2-open #emu-contact-label {
   display: none !important;
@@ -2536,6 +2539,10 @@ body.paypay-mode #pp-post-fab {
    その中でさらに .dsc-shell が高さを制限していたため、スクロール領域が二重になり
    発言一覧が min-height の 140px まで潰れていた。
    ここでは .popup を素の入れ物に戻し、高さは .dsc-shell が受け持つ。 */
+/* ルームはヘッダー（sticky・z-index 1200）より前に出す。
+   以前は 1100 だったため上から69pxがヘッダーに隠れ、議題が読めず、
+   スクロール位置によって見え方が変わっていた。 */
+#room3Overlay{ z-index:1400; }
 #room3Overlay .popup{
   width:min(880px,96vw); max-width:none; height:min(92vh,980px);
   padding:0; overflow:hidden; background:transparent; box-shadow:none; border-radius:0;
@@ -2984,7 +2991,10 @@ body.emu-knowledge-open #openPostFormButton { display:none !important; }
    右上は iframe 側の「● LIVE」やバッジと重なるため、左下に置く。
    右下は「ひとこと」ボタンが居るので避ける。 */
 .emu-page-close {
-  position:fixed; left:12px; bottom:calc(12px + env(safe-area-inset-bottom)); z-index:1300;
+  position:fixed; left:12px; z-index:1300;
+  /* 左下には問い合わせボタン（56px・z-index 9990）が居る。
+     同じ位置に置いていたため下敷きになって押せなかったので、その真上に積む。 */
+  bottom:calc(24px + 56px + 12px + env(safe-area-inset-bottom));
   display:inline-flex; align-items:center; gap:6px;
   min-height:38px; padding:0 15px; border-radius:999px;
   border:1px solid #e6e2dc; background:#fff; color:#6f6a86;
@@ -3078,6 +3088,8 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   #walletAddressButton { max-width:138px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #emuTodayHome { padding:16px 12px max(34px,env(safe-area-inset-bottom)); }
   #emu-contact-btn { width:48px; height:48px; left:12px; bottom:max(12px,env(safe-area-inset-bottom)); font-size:19px; }
+  /* 問い合わせボタンが小さくなる分、閉じるボタンの高さも合わせる */
+  .emu-page-close { bottom:calc(48px + 10px + max(12px,env(safe-area-inset-bottom))); }
   #emu-contact-label { display:none; }
   /* スマホでは「今日のEmu」の見出し＋説明を出さず、その分タブを最上部に上げる */
   .eth-topbar { display:block; margin-bottom:10px; }
@@ -4376,6 +4388,13 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
             <span class="emu-membership-cta-main">Emu 有料会員になる</span>
             <span class="emu-membership-cta-sub">月額10,000円・30日間の「語り合える一人」保証つき</span>
           </a>
+          <!-- 会員ページ。プロフィール・興味テーマ・対話の予定・解約はすべてここ。
+               入会CTAは有料会員になると消えるため、以前は会員がここへ来られなかった。 -->
+          <a class="emu-membership-cta" id="emuMemberPageCta" href="/membership.html"
+             onclick="openLegal('membership');return false;" hidden>
+            <span class="emu-membership-cta-main">会員ページを開く</span>
+            <span class="emu-membership-cta-sub">プロフィール・興味のあるテーマ・対話の予定・解約はこちら</span>
+          </a>
         </div>
 
         <div class="eth-wallet-badges" id="emuWalletBadges"></div>
@@ -5038,7 +5057,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 </div>
 
 <!-- Room3ポップアップ -->
-<div id="room3Overlay" class="overlay" style="z-index:1100;">
+<!-- 重なり順は CSS 側（#room3Overlay{z-index:1400}）で指定する。
+     ここに style で書くと CSS より強く、ヘッダー(1200)の下に潜って議題が読めなくなる。 -->
+<div id="room3Overlay" class="overlay">
 
 	<span
   id="room2CloseBtn"
@@ -15838,11 +15859,16 @@ async function emuRenderMembership() {
   const cta  = document.getElementById('emuMembershipCta');
   if (!pill || !desc || !cta) return;
 
-  function paint(kind, label, text, showCta) {
+  const memberCta = document.getElementById('emuMemberPageCta');
+
+  /* showCta … 未入会の人へ見せる入会の案内
+     isMember … 会員ページ（プロフィール等）へのリンクを見せるか */
+  function paint(kind, label, text, showCta, isMember) {
     pill.textContent = label;
     pill.className = 'emu-membership-pill ' + kind;
     desc.textContent = text;
     cta.hidden = !showCta;
+    if (memberCta) memberCta.hidden = !isMember;
   }
 
   // まずは手元の判定で即座に出す（通信を待たせない）
@@ -15858,13 +15884,19 @@ async function emuRenderMembership() {
     const headers = typeof emuAuthHeaders === 'function'
       ? await emuAuthHeaders(false, { interactive: false }) : null;
     if (!headers) return;
+
+    /* ログインしていれば、会員ページ（プロフィール・興味テーマ・対話の予定・解約）へ
+       行けるようにしておく。会員かどうかの判定を待たずに出すのは、
+       ここが唯一の入口だから。会員でない人にはページ側で入会の案内が出る。 */
+    if (memberCta) memberCta.hidden = false;
+
     const res = await fetch('https://emu-realtime.onrender.com/api/billing/status', { headers });
     if (!res.ok) return;
     const s = await res.json();
     if (s.status === 'active' || s.status === 'trialing') {
-      paint('is-paid', 'Emu 有料会員', '月額10,000円のプランをご利用中です。', false);
+      paint('is-paid', 'Emu 有料会員', '月額10,000円のプランをご利用中です。', false, true);
     } else if (s.status === 'past_due') {
-      paint('is-free', 'お支払い確認中', 'カードのお支払いを確認できていません。', false);
+      paint('is-free', 'お支払い確認中', 'カードのお支払いを確認できていません。', false, true);
       cta.hidden = false;
     }
   } catch (_) { /* 取れなければ手元の判定のままにする */ }
@@ -17483,7 +17515,14 @@ function closeSecretDoor() {
   iframe.src = "";
 }
 
+/* ルームを開いている間の、背面ページのスクロール位置。
+   ルームは画面全体を覆うので、背面が動くと閉じたときに別の場所へ出てしまう。
+   ②⑤ 「×を押したらメイン画面に戻ってしまう」の原因がこれ。 */
+let room3BackScrollY = 0;
+
 function openRoom3() {
+  room3BackScrollY = window.scrollY || 0;
+  document.body.classList.add('room3-open');   // 浮きボタンを隠す
   overlay.style.display = "flex";
   room3ShowStep(1);
 
@@ -17852,6 +17891,11 @@ function closePopup() {
   if (popup) popup.style.display = "";
   if (closeBtn) closeBtn.style.display = "none";
   document.body.classList.remove('room2-open'); // 問い合わせボタン復元
+  document.body.classList.remove('room3-open');
+
+  /* 開いたときの位置へ戻す。これをしないと、ルームの中でスクロールした結果、
+     閉じたときにページの下のほう（＝メイン画面に見える場所）へ出てしまう。 */
+  window.scrollTo(0, room3BackScrollY);
 
   /* 議論の後片付け。
      closePopup は同名の関数が2つあり、後から定義されたこちらが実際に使われる。
@@ -20802,7 +20846,9 @@ async function sendEmuFeedback() {
     terms:    { src: '/terms.html',      title: '利用規約' },
     privacy:  { src: '/privacy.html',    title: 'プライバシーポリシー' },
     tokusho:  { src: '/tokushoho.html',  title: '特定商取引法に基づく表記' },
-    guarantee:{ src: '/guarantee.html',  title: '「語り合える一人」保証' }
+    guarantee:{ src: '/guarantee.html',  title: '「語り合える一人」保証' },
+    // 会員ページ。プロフィール・興味テーマ・対話の予定・解約はここで行う
+    membership:{ src: '/membership.html', title: 'Emu 会員ページ' }
   };
   window.openLegal = function (kind) {
     var modal = document.getElementById('chesLegalModal');
