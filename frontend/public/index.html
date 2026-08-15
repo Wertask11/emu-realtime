@@ -255,9 +255,13 @@ body.spmap-open #mainApp > .header { display:none !important; }
 .sp-icon-btn-bar .spib:hover { background:rgba(212,168,67,0.22); }
 /* ─── SpMap スライドインパネル共通 ─── */
 .sp-panel {
-  position:fixed; top:0; right:0; width:380px; max-width:100vw; height:100vh;
+  position:fixed; top:0; right:0; width:380px; max-width:100vw;
+  /* 100vh はスマホのブラウザ下部バーを勘定に入れないため、
+     パネルの一番下（＝「設定を保存して閉じる」）がバーの裏に隠れていた。
+     dvh は表示中のバーの分だけ縮むので、最後まで見える。 */
+  height:100vh; height:100dvh;
   z-index:10050; background:#0f111a; border-left:1px solid rgba(212,168,67,0.3);
-  overflow-y:auto; display:none; flex-direction:column;
+  overflow-y:auto; overscroll-behavior:contain; display:none; flex-direction:column;
   transform:translateX(100%); transition:transform 0.32s cubic-bezier(0.4,0,0.2,1);
 }
 .sp-panel.open { transform:translateX(0); }
@@ -276,7 +280,8 @@ body.spmap-open #mainApp > .header { display:none !important; }
   border-radius:6px; padding:4px 10px; cursor:pointer; font-size:0.85rem;
 }
 .sp-panel-close:hover { background:rgba(255,255,255,0.1); }
-.sp-panel-body { padding:20px; flex:1; }
+/* 下の余白は、端末のホームバー（iPhone等）の分も足す */
+.sp-panel-body { padding:20px; padding-bottom:calc(20px + env(safe-area-inset-bottom)); flex:1; }
 .sp-panel-section { margin-bottom:24px; }
 .sp-panel-section-title {
   font-size:0.72rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase;
@@ -4151,7 +4156,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         </div>
       </div>
       <div class="hub-actions">
-        <button type="button" class="hub-icon" onclick="chesHubOpenNotif()" aria-label="お知らせ">
+        <button type="button" class="hub-icon" id="chesHubNotifBtn" onclick="chesHubOpenNotif()" aria-label="お知らせ">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="#cfcdc5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.7 21a2 2 0 0 1-3.4 0" stroke="#cfcdc5" stroke-width="1.6" stroke-linecap="round"/></svg>
           <span class="hub-dot" id="hubNotifDot"></span>
         </button>
@@ -16610,7 +16615,7 @@ function spMapLinkClick(type) {
       <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px 16px;font-size:0.78rem;color:#888;line-height:1.8">
         <div>📛 名称：合同会社型DAO SchoolPark</div>
         <div>📍 運営：合同会社型DAO SchoolPark</div>
-        <div>📅 開園予定：2025年5月20日</div>
+        <div>📅 開園日：2025年5月20日</div>
         <div>🔗 ブロックチェーン：Ethereum / Polygon</div>
         <div>🎓 コンセプト：学校より学べて公園より楽しめて会社より稼げる場所を</div>
       </div>
@@ -16618,14 +16623,18 @@ function spMapLinkClick(type) {
   }
   else if (type === 'faq') {
     const faqs = [
-      { q:'SchoolParkとは何ですか？', a:'学びと成長のための分散型コミュニティプラットフォームです。合同会社型DAOとして運営され、NFT保有者が自律的に参加・貢献できる環境を提供します。' },
-      { q:'HEXA NFTを持つと何ができますか？', a:'プレミアムコンテンツ（図書館・研究所・美術館など）へのアクセス、DAO投票への参加権、限定イベントへの参加資格が得られます。また将来的にはEMUERトークンの配布対象にもなります。' },
-      { q:'NFTはどこで購入できますか？', a:'HEXAマーケットプレイス（日本円・クレカ対応）またはOpenSea（仮想通貨対応）で購入できます。左下の「チケットストア」からアクセスできます。' },
-      { q:'EMUERトークンとは何ですか？', a:'SchoolParkのコミュニティトークン（ERC-20）です。参加・貢献度に応じて配布され、将来的にはDAO内での投票権・意思決定権として機能します。詳細は開園後公開予定です。' },
-      { q:'開園日はいつですか？', a:'2025年5月20日に正式開園予定です。現在はプレオープン期間として、マップやコンテンツの最終調整を行っています。' },
-      { q:'どんなコンテンツがありますか？', a:'北エリア（図書館・美術館・研究所）、東エリア（ショッピング・カフェ・ホテル）、西エリア（病院・警察署・ジム）、南エリア（映画館・登山・釣り）、中央エリア（噴水広場）の計28スポットが用意されています。開園後に順次公開します。' },
-      { q:'Emuアプリとの違いは何ですか？', a:'EmuはSchoolParkを含むdAppプラットフォーム全体です。SchoolParkはEmu内のコンテンツエリアの一つであり、学び・成長をテーマにした仮想都市型コミュニティです。' },
-      { q:'お問い合わせはどこでできますか？', a:'左下の「お問い合わせ」からフォームをご利用ください。2〜3営業日以内にご返答いたします。' },
+      { q:'CHESとは何ですか？', a:'合同会社型DAO SchoolParkが運営する、4つのブランドの総称です。Camellia（花と暮らし）、Heartoo（こころ）、Emu（知識を分かち合う場）、SchoolPark（仮想都市）が並んでいます。ログイン後のメイン画面から、どこへでも行き来できます。' },
+      { q:'SchoolParkとは何ですか？', a:'CHESのなかの仮想都市です。マップ上の施設を訪ねながら、学んだり遊んだり買い物をしたりできます。合同会社型DAOとして運営しています。' },
+      { q:'Emuとは何ですか？', a:'CHESのなかの、知識を分かち合う場です。知識の投稿、一日シェア、議論、遊びなどがあります。SchoolParkとは別のブランドで、どちらも同じアカウントで使えます。' },
+      { q:'利用するのにウォレットや暗号資産は必要ですか？', a:'必要ありません。LINE・Google・メールアドレスのいずれかで入場でき、あなた専用のCHESアドレスが自動で作られます。MetaMaskなどのウォレットをお持ちの方は、入場画面の「その他の方法で入る」からご利用いただけます。' },
+      { q:'ログインにパスワードはありますか？', a:'ありません。メールを選んだ場合は、届いたリンクを開くとログインできます。リンクは送信したときと同じブラウザで開いてください。' },
+      { q:'EMUERトークンとは何ですか？', a:'CHESのコミュニティトークン（Polygon上のERC-20）です。知識への反応や学習、ログインボーナスなどで貯まります。詳しくは冷蔵庫くんのチュートリアルをご覧ください。' },
+      { q:'Emuの有料会員（月額10,000円）とは何ですか？', a:'Emuをより深く使うための月額プランです。30日間の「語り合える一人」保証が付いています。入場画面の下部、またはEmuの価値プロフィール内「会員ページを開く」からご確認いただけます。' },
+      { q:'有料会員の解約や返金はできますか？', a:'解約はいつでも会員ページから行えます。返金については「語り合える一人」保証のページに条件を記載しています。ご不明な点は下記のお問い合わせからご連絡ください。' },
+      { q:'NFT（有料パス）はどこで購入できますか？', a:'HEXAマーケットプレイス（日本円・クレジットカード対応）またはOpenSea（暗号資産対応）で購入できます。ナビの「チケット購入」からアクセスできます。' },
+      { q:'どんなコンテンツがありますか？', a:'中央エリア（噴水広場）、東エリア（生活・商業）、西エリア（安全・公共）、南エリア（余暇）、北エリア（学び）に加え、グルメ・ショッピングの各エリアがあります。' },
+      { q:'不具合を見つけたときはどうすればいいですか？', a:'左下のサポートボタンから「不具合の報告」を選んでお知らせください。お使いの端末とブラウザ、どの画面で起きたかを書いていただけると助かります。' },
+      { q:'お問い合わせはどこでできますか？', a:'左下のサポートボタンからフォームをご利用ください。2〜3営業日以内にご返答いたします。' },
     ];
     openSpModal('❓ よくあるご質問', faqs.map(f => `
       <div class="spmm-faq-item">
@@ -16641,10 +16650,13 @@ function spMapLinkClick(type) {
         <select class="spmm-form-select" id="spmm-type">
           <option value="">選択してください</option>
           <option value="general">💬 一般的なご質問</option>
+          <option value="account">🔑 アカウント・ログイン</option>
+          <option value="bug">🐛 不具合の報告</option>
+          <option value="membership">🎫 有料会員・お支払い・返金</option>
           <option value="event">🎪 イベント申込</option>
           <option value="media">📰 取材・メディア</option>
           <option value="investor">💰 投資家・提携</option>
-          <option value="nft">🎫 NFT・購入に関して</option>
+          <option value="nft">🖼️ NFT・購入に関して</option>
         </select>
       </div>
       <div class="spmm-form-group">
@@ -19274,6 +19286,15 @@ window.fbLib = {
         <button class="w-cat-btn" data-type="general" onclick="selectCategory(this)">
           <span class="w-cat-icon">💬</span>一般的なご質問
         </button>
+        <button class="w-cat-btn" data-type="account" onclick="selectCategory(this)">
+          <span class="w-cat-icon">🔑</span>アカウント・ログイン
+        </button>
+        <button class="w-cat-btn" data-type="bug" onclick="selectCategory(this)">
+          <span class="w-cat-icon">🐛</span>不具合の報告
+        </button>
+        <button class="w-cat-btn" data-type="membership" onclick="selectCategory(this)">
+          <span class="w-cat-icon">🎫</span>有料会員・お支払い
+        </button>
         <button class="w-cat-btn" data-type="event" onclick="selectCategory(this)">
           <span class="w-cat-icon">🎪</span>イベント申込
         </button>
@@ -19394,6 +19415,44 @@ const FORMS = {
       { id:'message', label:'お問い合わせ内容', type:'textarea', placeholder:'ご質問・ご意見をご記入ください', required: true },
     ]
   },
+  account: {
+    label: '🔑 アカウント・ログイン',
+    fields: [
+      { id:'email', label:'ご連絡先メールアドレス', type:'email', placeholder:'hello@example.com', required: true },
+      {
+        id:'login_method', label:'ふだんの入り方', type:'select',
+        options:['','LINE','Google','メールアドレス','ウォレット（MetaMask など）','まだ入れていない']
+      },
+      { id:'message', label:'お困りの内容', type:'textarea',
+        placeholder:'例）メールのリンクを開いてもログインできない', required: true },
+    ]
+  },
+  bug: {
+    label: '🐛 不具合の報告',
+    fields: [
+      { id:'email', label:'ご連絡先メールアドレス', type:'email', placeholder:'hello@example.com', required: true },
+      {
+        id:'place', label:'どの画面で起きましたか', type:'select',
+        options:['','Emu（知識・議論・遊びなど）','SchoolPark のマップ・施設','Camellia','Heartoo','ログイン・入場画面','その他・わからない']
+      },
+      { id:'device', label:'ご利用の端末とブラウザ', type:'text',
+        placeholder:'例）iPhone / Safari、Android / Chrome、Windows / Edge', required: false },
+      { id:'message', label:'起きたこと', type:'textarea',
+        placeholder:'何をしたときに、どうなったかを書いてください。うまく書けなくても構いません', required: true },
+    ]
+  },
+  membership: {
+    label: '🎫 有料会員・お支払い',
+    fields: [
+      { id:'name', label:'お名前', type:'text', placeholder:'山田 太郎', required: true },
+      { id:'email', label:'ご登録のメールアドレス', type:'email', placeholder:'hello@example.com', required: true },
+      {
+        id:'topic', label:'ご用件', type:'select',
+        options:['','入会について知りたい','お支払いができない・確認したい','解約したい','返金・「語り合える一人」保証について','その他']
+      },
+      { id:'message', label:'ご相談内容', type:'textarea', placeholder:'ご記入ください', required: true },
+    ]
+  },
   event: {
     label: '🎪 イベント申込',
     fields: [
@@ -19417,6 +19476,15 @@ const FORMS = {
       { id:'name', label:'担当者名', type:'text', placeholder:'山田 太郎', required: true },
       { id:'email', label:'メールアドレス', type:'email', placeholder:'press@example.com', required: true },
       { id:'message', label:'取材・掲載内容', type:'textarea', placeholder:'取材の趣旨・掲載媒体・希望日程など', required: true },
+    ]
+  },
+  nft: {
+    label: '🖼️ NFT・購入に関して',
+    fields: [
+      { id:'name', label:'お名前', type:'text', placeholder:'山田 太郎', required: true },
+      { id:'email', label:'メールアドレス', type:'email', placeholder:'hello@example.com', required: true },
+      { id:'message', label:'ご質問内容', type:'textarea',
+        placeholder:'購入方法・受け取り・表示されないなど', required: true },
     ]
   },
   investor: {
@@ -20517,12 +20585,17 @@ function closeSpNotifPanel() {
   const panel = document.getElementById('spNotifPanel');
   if (panel) panel.style.display = 'none';
 }
-// パネル外クリックで閉じる
+/* パネルの外側をクリックしたら閉じる。
+   以前は .spmap-brand の中かどうかだけで判定していた。
+   CHESハブのベルは .spmap-brand の外にあるため、開いた直後に
+   同じクリックがここへ届いて即座に閉じ、一度も開けなかった。
+   また _chesHubLiftPanel でパネルを body へ移すと、パネル自身の中の
+   クリック（既読・閉じるなど）も「外側」と見なされていた。 */
 document.addEventListener('click', e => {
   const panel = document.getElementById('spNotifPanel');
-  if (!panel || panel.style.display === 'none') return;
-  const brand = document.querySelector('.spmap-brand');
-  if (brand && !brand.contains(e.target)) closeSpNotifPanel();
+  if (!panel || panel.style.display === 'none' || panel.style.display === '') return;
+  if (e.target.closest('#spNotifPanel, .spmap-brand, #chesHubNotifBtn')) return;
+  closeSpNotifPanel();
 });
 
 /* ──────── CHES ブランドメニュー ──────── */
