@@ -2980,13 +2980,16 @@ body.emu-knowledge-open #openPostFormButton { display:none !important; }
 }
 /* 開催中の議論・今日の遊び（固定Emuナビの下にiframe表示） */
 #emuDiscussionPage,#emuPlayPage { display:none; position:relative; }
-/* 議論・遊びを閉じて「今日のEmu」へ戻る */
+/* 議論・遊びを閉じて「今日のEmu」へ戻る。
+   右上は iframe 側の「● LIVE」やバッジと重なるため、左下に置く。
+   右下は「ひとこと」ボタンが居るので避ける。 */
 .emu-page-close {
-  position:absolute; top:10px; right:10px; z-index:5;
-  width:38px; height:38px; border-radius:50%;
+  position:fixed; left:12px; bottom:calc(12px + env(safe-area-inset-bottom)); z-index:1300;
+  display:inline-flex; align-items:center; gap:6px;
+  min-height:38px; padding:0 15px; border-radius:999px;
   border:1px solid #e6e2dc; background:#fff; color:#6f6a86;
-  font-size:16px; line-height:1; cursor:pointer;
-  box-shadow:0 4px 14px -6px rgba(26,24,64,.4);
+  font-family:inherit; font-size:12px; font-weight:700; line-height:1; cursor:pointer;
+  box-shadow:0 6px 18px -8px rgba(26,24,64,.4);
 }
 .emu-page-close:hover { color:#1a1840; border-color:#cfc9c0; }
 body.emu-discussion-open > #mainApp > .container,
@@ -4424,11 +4427,11 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   <div id="emuDiscussionPage">
     <!-- 議論から今日のEmuへ戻る。上の「← メイン画面」はハブまで戻ってしまうため、
          Emu内で一段だけ戻れる導線を用意する。 -->
-    <button type="button" class="emu-page-close" onclick="showEmuToday()" aria-label="議論を閉じる" title="議論を閉じる">✕</button>
+    <button type="button" class="emu-page-close" onclick="showEmuToday()" aria-label="議論を閉じる">✕ 閉じる</button>
     <iframe id="emuDiscussionFrame" title="開催中の議論" loading="lazy"></iframe>
   </div>
   <div id="emuPlayPage">
-    <button type="button" class="emu-page-close" onclick="showEmuToday()" aria-label="遊びを閉じる" title="遊びを閉じる">✕</button>
+    <button type="button" class="emu-page-close" onclick="showEmuToday()" aria-label="遊びを閉じる">✕ 閉じる</button>
     <iframe id="emuPlayFrame" title="今日の遊び" loading="lazy"></iframe>
   </div>
 </section>
@@ -11858,7 +11861,10 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
        ディープリンクで「MetaMaskアプリ内のブラウザ」に同じURLを開き直してもらう。
        これでSafariやChromeから入った人もウォレットで入場できる。 */
     if (_emuIsMobile()) {
-      const target = location.host + location.pathname + location.search;
+      /* MetaMask のディープリンクは scheme を除いたURLを受け取る。
+         末尾スラッシュやクエリが付くと解決に失敗して「ページがありません」になるため、
+         ホスト＋パスだけにして末尾のスラッシュも落とす。 */
+      const target = (location.host + location.pathname).replace(/\/+$/, "");
       const deepLink = "https://metamask.app.link/dapp/" + target;
       if (confirm(
         "ウォレットで入るには MetaMask アプリが必要です。\n\n" +
@@ -17828,7 +17834,10 @@ function closePopup() {
     iframe.src = "";
   }
 
-  if (popup) popup.style.display = "block";
+  /* インラインで block を入れると、議論ルームの CSS（#room3Overlay .popup は flex）を
+     上書きしてしまい、次に議論を開いたときにレイアウトが崩れる。
+     指定を消して、CSS 側に戻す。 */
+  if (popup) popup.style.display = "";
   if (closeBtn) closeBtn.style.display = "none";
   document.body.classList.remove('room2-open'); // 問い合わせボタン復元
 
