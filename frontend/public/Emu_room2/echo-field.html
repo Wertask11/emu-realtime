@@ -130,6 +130,58 @@
     .cell.mv    { background:rgba(74,158,255,0.12); border-color:rgba(74,158,255,0.5); animation:pb 1s ease-in-out infinite; }
     .cell.atk   { background:rgba(239,68,68,0.12);  border-color:rgba(239,68,68,0.5);  animation:pr 1s ease-in-out infinite; }
     .cell.pl    { background:rgba(34,197,94,0.12);  border-color:rgba(34,197,94,0.5);  animation:pg 1s ease-in-out infinite; }
+    /* 残響：直前の一手が残した光。踏むと効果を選べる */
+    .cell.echo::after{ content:''; position:absolute; inset:3px; border-radius:6px;
+      border:1px dashed rgba(168,85,247,0.75); pointer-events:none; animation:echoPulse 1.4s ease-in-out infinite; }
+    .cell.echo-c::after{ border-color:rgba(239,68,68,0.55); }
+    @keyframes echoPulse{ 0%,100%{opacity:.35;transform:scale(.94)} 50%{opacity:1;transform:scale(1)} }
+    /* 共鳴ポイント：ここに駒を置いてターンを終えるとエネルギーが入る */
+    .cell.reso::before{ content:'◈'; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+      font-size:20px; color:rgba(56,189,248,0.35); pointer-events:none; }
+    /* 収縮した外周 */
+    .cell.unstable{ background:repeating-linear-gradient(45deg,rgba(239,68,68,.10) 0 6px,transparent 6px 12px); }
+    .cell.reso-t { outline:2px solid rgba(56,189,248,.8); outline-offset:-2px; }
+
+    /* ECHO効果の選択 */
+    #echoPicker{ position:fixed; inset:0; z-index:80; display:flex; align-items:center; justify-content:center;
+      background:rgba(4,8,20,.72); padding:16px; }
+    #echoPicker .box{ background:#0f172a; border:1px solid rgba(168,85,247,.45); border-radius:16px;
+      padding:18px; max-width:400px; width:100%; }
+    #echoPicker h3{ margin:0 0 4px; font-size:15px; color:#c4b5fd; }
+    #echoPicker p.sub{ margin:0 0 12px; font-size:11px; color:#94a3b8; line-height:1.7; }
+    #echoPicker .opt{ display:flex; gap:10px; align-items:center; width:100%; text-align:left;
+      background:#1e293b; border:1px solid rgba(148,163,184,.25); border-radius:11px;
+      padding:11px 13px; margin-bottom:7px; cursor:pointer; color:#e2e8f0; font-family:inherit; }
+    #echoPicker .opt:hover{ border-color:#a855f7; background:#25324a; }
+    #echoPicker .opt .ic{ font-size:17px; width:22px; text-align:center; color:#c4b5fd; }
+    #echoPicker .opt b{ display:block; font-size:13px; }
+    #echoPicker .opt small{ color:#94a3b8; font-size:10.5px; }
+
+    /* ECHO CHAIN の表示 */
+    #echoChainToast{ position:fixed; left:50%; top:22%; transform:translate(-50%,-50%) scale(.8);
+      z-index:85; font-weight:900; font-size:26px; color:#c4b5fd; text-shadow:0 0 18px rgba(168,85,247,.9);
+      opacity:0; pointer-events:none; transition:opacity .18s, transform .18s; letter-spacing:.04em; }
+    #echoChainToast.on{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+
+    /* 共鳴・状態パネル */
+    #echoPanel{ margin-top:8px; background:rgba(15,23,42,.72); border:1px solid rgba(148,163,184,.2);
+      border-radius:12px; padding:9px 11px; font-size:11px; color:#cbd5e1; }
+    #echoPanel .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px; }
+    #echoPanel .tag{ background:rgba(56,189,248,.14); border:1px solid rgba(56,189,248,.35);
+      color:#7dd3fc; border-radius:999px; padding:2px 9px; font-weight:700; }
+    #echoPanel .tag.warn{ background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.4); color:#fca5a5; }
+    #echoPanel button{ background:#1e293b; border:1px solid rgba(148,163,184,.3); color:#e2e8f0;
+      border-radius:8px; padding:5px 10px; font-size:11px; cursor:pointer; font-family:inherit; }
+    #echoPanel button:disabled{ opacity:.4; cursor:default; }
+    #echoPanel button.on{ border-color:#38bdf8; background:#123049; }
+
+    /* 王の能力選択 */
+    #kingSelect .opt{ display:block; width:100%; text-align:left; background:#1e293b;
+      border:1px solid rgba(148,163,184,.25); border-radius:12px; padding:12px 14px; margin-bottom:8px;
+      cursor:pointer; color:#e2e8f0; font-family:inherit; }
+    #kingSelect .opt:hover{ border-color:#4a9eff; }
+    #kingSelect .opt b{ display:block; font-size:14px; margin-bottom:2px; }
+    #kingSelect .opt small{ color:#94a3b8; font-size:11px; line-height:1.6; }
     @keyframes pb { 0%,100%{box-shadow:0 0 4px rgba(74,158,255,0.3)} 50%{box-shadow:0 0 10px rgba(74,158,255,0.6)} }
     @keyframes pr { 0%,100%{box-shadow:0 0 4px rgba(239,68,68,0.3)}  50%{box-shadow:0 0 10px rgba(239,68,68,0.6)} }
     @keyframes pg { 0%,100%{box-shadow:0 0 4px rgba(34,197,94,0.3)}  50%{box-shadow:0 0 10px rgba(34,197,94,0.6)} }
@@ -282,6 +334,25 @@
 </div>
 
 <!-- ===== Game / Placement Screen ===== -->
+<!-- 王の能力を選ぶ画面。ここでプレイヤーの戦い方が決まる -->
+<div id="kingSelect" class="screen hidden">
+  <h2 style="font-size:17px;margin:0 0 6px;color:#e2e8f0">王の力を選ぶ</h2>
+  <p style="font-size:11.5px;color:#94a3b8;line-height:1.7;margin:0 0 14px">
+    駒の数は変わりません。選んだ力が、あなたの戦い方になります。
+  </p>
+  <div id="kingOptions"></div>
+</div>
+
+<!-- ECHO効果の選択 -->
+<div id="echoPicker" class="hidden">
+  <div class="box">
+    <h3>◈ ECHO 発動</h3>
+    <p class="sub">直前の一手が残した残響を踏みました。効果を1つ選んでください。</p>
+    <div id="echoOptions"></div>
+  </div>
+</div>
+<div id="echoChainToast"></div>
+
 <div id="gameScreen" class="screen hidden">
 
   <!-- Placement Panel -->
@@ -298,6 +369,8 @@
   <div id="boardWrap">
     <div id="board"></div>
     <div id="phaseLabel">駒を選んでボードに配置してください</div>
+    <!-- 共鳴・ECHO・盤の状態 -->
+    <div id="echoPanel" class="hidden"></div>
   </div>
 
   <!-- Battle Log -->
@@ -323,8 +396,27 @@
   同種：ブースト込み比較、同→相打ち<br>
   👑vs👑：攻撃側が勝つ<br>
   <h4 style="margin-top:6px">勝利</h4>
-  👑王を取る or 🏯を占領<br>
-  60手超：駒数多い方が勝ち
+  👑王を取る（即勝利）<br>
+  🏯本拠地はシールド2。侵入で1つ削り、押し戻される<br>
+  シールド0で再侵入されると敗北<br>
+  40手超：駒数多い方が勝ち
+  <h4 style="margin-top:6px">◈ ECHO（残響）</h4>
+  動いた・攻撃した元のマスに残響が残る<br>
+  次に味方がそこへ入ると効果を1つ選べる<br>
+  移動＋1／攻撃＋1／攻撃後に退避／残響を連鎖<br>
+  連鎖するほど音が重なる
+  <h4 style="margin-top:6px">1ターン2アクション</h4>
+  同じ駒は1ターンに1回だけ（移動＋1は例外）
+  <h4 style="margin-top:6px">◈ 共鳴ポイント</h4>
+  中央付近に毎試合3つ。駒を置いてターンを終えるとエネルギー獲得<br>
+  1:追加移動／2:駒を戻す／3:位置交換／4:相手の拠点停止
+  <h4 style="margin-top:6px">王の力</h4>
+  開始時に1つ選ぶ。疾風／守護／反響／召還
+  <h4 style="margin-top:6px">終盤の収縮</h4>
+  残り10手：外周が不安定（拠点ブースト無効）<br>
+  残り6手：外周に駒を残したまま終われない
+  <h4 style="margin-top:6px">オーバーエコー</h4>
+  駒が3体以上少ないとき1回だけ。駒が戻る代わりに相手へ共鳴+2
 </div>
 
 <!-- ===== Game Over Modal ===== -->
@@ -352,6 +444,33 @@ const INIT_PIECES = [KING, FANG, FANG, FOOT, FOOT, FOOT, CASTLE, FORT, FORT];
 // BEATS[a] = b means piece 'a' beats piece 'b'
 const BEATS = { [FANG]:FOOT, [FOOT]:KING, [KING]:FANG };
 
+/* ── 新ECHO FIELD ────────────────────────────────
+   前の一手がマスに「残響」として残り、次の一手がそれを踏むと強くなる。
+   これがゲーム名の由来であり、中心の面白さ。 */
+const MAX_TURN = 40;                 // 60手→40手。終盤を濃くする
+const SHRINK_UNSTABLE = 10;          // 残り10手：外周が不安定（拠点ブースト無効）
+const SHRINK_FORBID   = 6;           // 残り6手：外周に駒を置いたまま終われない
+const ACTIONS_PER_TURN = 2;          // 1ターンに2アクション
+const RESONANCE_COUNT = 3;           // 共鳴ポイントの数
+const ECHO_EFFECTS = {
+  step:  { label:'移動＋1',     icon:'⇢', desc:'もう1マス動けます' },
+  power: { label:'攻撃＋1',     icon:'⚔', desc:'次の攻撃で相性負けしなくなります' },
+  back:  { label:'攻撃後に退避', icon:'↩', desc:'攻撃したあと元のマスへ戻ります' },
+  chain: { label:'残響を連鎖',   icon:'≋', desc:'隣接する味方のマスにも残響を作ります' }
+};
+const KING_POWERS = {
+  gale:   { name:'疾風の王', desc:'1試合に2回、アクションを消費せずに動けます' },
+  guard:  { name:'守護の王', desc:'王の隣にいる味方は、最初の1回だけ攻撃を無効化します' },
+  echo:   { name:'反響の王', desc:'ECHOを使うと、隣接する味方にも残響が生まれます' },
+  summon: { name:'召還の王', desc:'手駒を相手陣の手前まで配置できます' }
+};
+const RESONANCE_ABILITIES = {
+  move:   { cost:1, label:'追加移動',   desc:'味方1体を1マス動かす' },
+  revive: { cost:2, label:'駒を戻す',   desc:'取られた駒1体を手駒に戻す' },
+  swap:   { cost:3, label:'位置を交換', desc:'自分の駒2体の位置を入れ替える' },
+  jam:    { cost:4, label:'拠点を停止', desc:'相手の拠点ブーストを1ターン止める' }
+};
+
 /* ===================================================
    State
 =================================================== */
@@ -371,6 +490,26 @@ let savedLayout = null;
 let selCell = null;
 let vMoves = [], vAttacks = [], vPlaces = [];
 let selHandIdx = null;
+
+/* ── 新ECHO FIELD の状態 ── */
+let pieceSeq = 0;                    // 駒の識別子。座標だと移動後に追えない
+let echoes = [];                     // 残響 [{r,c,owner,bornTurn}]
+let resonance = [];                  // 共鳴ポイント [{r,c}]
+let pEnergy = 0, cEnergy = 0;        // 共鳴エネルギー
+let pKingPower = 'gale', cKingPower = 'guard';
+let pGaleLeft = 2, cGaleLeft = 2;
+let pGuardUsed = new Set(), cGuardUsed = new Set();
+let pShield = 2, cShield = 2;        // 本拠地シールド
+let pJammed = 0, cJammed = 0;        // 拠点ブースト停止の残りターン
+let actionsLeft = ACTIONS_PER_TURN;
+let actedIds = new Set();            // このターン行動済みの駒
+let pOverEchoUsed = false, cOverEchoUsed = false;
+let echoChain = 0;                   // 連鎖数（演出）
+let keyMoves = [];                   // 決定的だった手
+let pendingEcho = null;              // ECHO効果の選択待ち
+let selResonance = null;             // 選択中の共鳴能力
+let vResonance = [];                 // 共鳴能力の対象マス
+let resonanceSwapFirst = null;
 
 /* ===================================================
    Stars
@@ -417,8 +556,27 @@ function toggleRulesPanel() {
 /* ===================================================
    Game Init
 =================================================== */
+/* 駒には識別子を持たせる。座標で管理すると移動後に追えず、
+   「同じ駒は1ターンに1回」の判定ができない。 */
+function mkPiece(type, owner) {
+  return { type, owner, id: ++pieceSeq };
+}
+
 function initGameState() {
   board = Array(7).fill(null).map(() => Array(7).fill(null));
+  pieceSeq = 0;
+  echoes = []; resonance = [];
+  pEnergy = 0; cEnergy = 0;
+  pGaleLeft = 2; cGaleLeft = 2;
+  pGuardUsed = new Set(); cGuardUsed = new Set();
+  pShield = 2; cShield = 2;
+  pJammed = 0; cJammed = 0;
+  actionsLeft = ACTIONS_PER_TURN;
+  actedIds = new Set();
+  pOverEchoUsed = false; cOverEchoUsed = false;
+  echoChain = 0; keyMoves = [];
+  pendingEcho = null; selResonance = null;
+  vResonance = []; resonanceSwapFirst = null;
   pFortCap = 0; cFortCap = 0;
   pHand = []; cHand = [];
   curTurn = PLAYER; turnCount = 0;
@@ -449,6 +607,9 @@ function buildBoardUI() {
    Placement Phase
 =================================================== */
 function startFreePlacement() {
+  showKingSelect(_startFreePlacement);
+}
+function _startFreePlacement() {
   initGameState();
   buildBoardUI();
   showScreen('gameScreen');
@@ -465,10 +626,14 @@ function startFreePlacement() {
 
 function startWithSaved() {
   if (!savedLayout) return;
+  showKingSelect(_startWithSaved);
+}
+function _startWithSaved() {
+  if (!savedLayout) return;
   initGameState();
   buildBoardUI();
   savedLayout.forEach(({ r, c, type }) => {
-    board[r][c] = { type, owner: PLAYER };
+    board[r][c] = mkPiece(type, PLAYER);
     const i = toPlace.indexOf(type);
     if (i >= 0) toPlace.splice(i, 1);
   });
@@ -535,7 +700,7 @@ function onCellClickPlacement(r, c) {
 
   if (!selPlacePiece || cell) return;
 
-  board[r][c] = { type: selPlacePiece, owner: PLAYER };
+  board[r][c] = mkPiece(selPlacePiece, PLAYER);
   const i = toPlace.indexOf(selPlacePiece);
   toPlace.splice(i, 1);
   selPlacePiece = null;
@@ -566,15 +731,18 @@ function finishPlacement() {
 }
 
 function _startGamePhase() {
+  placeResonance();
   phase = 'game';
   curTurn = PLAYER;
   document.getElementById('placementPanel').style.display = 'none';
   document.getElementById('battleLog').style.display = 'block';
   document.getElementById('handArea').classList.remove('hidden');
   document.getElementById('rulesBtn').style.display = 'block';
-  document.getElementById('phaseLabel').textContent = 'あなたのターン：駒を選んでください';
+  document.getElementById('phaseLabel').textContent =
+    'あなたのターン：' + ACTIONS_PER_TURN + 'アクション使えます';
   renderBoard();
   updateStatus();
+  renderEchoPanel();   // 開始直後から共鳴・残手数・シールドを見せる
   setTurnLabel('あなたのターン', '#4a9eff');
 }
 
@@ -587,7 +755,7 @@ function cpuAutoPlace() {
   const remaining = [...INIT_PIECES];
   for (const { r, c, type } of layout) {
     if (!board[r][c]) {
-      board[r][c] = { type, owner: CPU };
+      board[r][c] = mkPiece(type, CPU);
       const i = remaining.indexOf(type);
       if (i>=0) remaining.splice(i,1);
     } else {
@@ -596,7 +764,7 @@ function cpuAutoPlace() {
       for (let tr = 0; tr < 4 && !placed; tr++)
         for (let tc = 0; tc < 7 && !placed; tc++)
           if (!board[tr][tc]) {
-            board[tr][tc] = { type, owner: CPU };
+            board[tr][tc] = mkPiece(type, CPU);
             placed = true;
           }
     }
@@ -616,7 +784,13 @@ function renderCell(r, c) {
   const el = getCellEl(r, c);
   const p = board[r][c];
 
-  el.classList.remove('sel','mv','atk','pl');
+  el.classList.remove('sel','mv','atk','pl','echo','echo-c','reso','unstable','reso-t');
+  if (isResonance(r,c)) el.classList.add('reso');
+  if (isUnstable(r,c))  el.classList.add('unstable');
+  const myEcho = echoAt(r,c,PLAYER), foeEcho = echoAt(r,c,CPU);
+  if (myEcho)  el.classList.add('echo');
+  if (foeEcho) el.classList.add('echo-c');
+  if (vResonance.some(m=>m.r===r&&m.c===c)) el.classList.add('reso-t');
   if (selCell?.r===r && selCell?.c===c) el.classList.add('sel');
   if (vMoves.some(m=>m.r===r&&m.c===c))   el.classList.add('mv');
   if (vAttacks.some(m=>m.r===r&&m.c===c)) el.classList.add('atk');
@@ -634,6 +808,231 @@ function renderCell(r, c) {
   }
 }
 
+/* ═══════════════════════════════════════
+   UI：ECHO効果の選択
+═══════════════════════════════════════ */
+function openEchoPicker() {
+  const box = document.getElementById('echoOptions');
+  box.innerHTML = '';
+  Object.entries(ECHO_EFFECTS).forEach(([kind, e]) => {
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.innerHTML = '<span class="ic">'+e.icon+'</span><span><b>'+e.label+'</b><small>'+e.desc+'</small></span>';
+    b.onclick = () => chooseEcho(kind);
+    box.appendChild(b);
+  });
+  document.getElementById('echoPicker').classList.remove('hidden');
+}
+
+function chooseEcho(kind) {
+  document.getElementById('echoPicker').classList.add('hidden');
+  if (!pendingEcho) return;
+  const { r, c, pieceId } = pendingEcho;
+  pendingEcho = null;
+  const piece = board[r][c];
+  applyEchoEffect(kind, r, c, piece);
+  recordKeyMove(PLAYER, 'ECHO '+ECHO_EFFECTS[kind].label, r, c);
+  spendAction(pieceId);
+}
+
+/* 連鎖したときの表示。重なるほど気持ちよくする。 */
+function showEchoChain(n) {
+  if (n < 2) return;
+  const el = document.getElementById('echoChainToast');
+  el.textContent = 'ECHO CHAIN ×' + n;
+  el.classList.add('on');
+  playEchoTone(n);
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>el.classList.remove('on'), 900);
+}
+
+/* ECHOを重ねるほど音が高くなる。連鎖が音楽になるのがこのゲームの個性。 */
+let _audioCtx = null;
+function playEchoTone(n) {
+  try {
+    _audioCtx = _audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    const t = _audioCtx.currentTime;
+    const osc = _audioCtx.createOscillator(), gain = _audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 392 * Math.pow(2, Math.min(n-1, 6) / 12); // 半音ずつ上がる
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.12, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    osc.connect(gain).connect(_audioCtx.destination);
+    osc.start(t); osc.stop(t + 0.5);
+  } catch (e) { /* 音が出せない環境でも進行に影響させない */ }
+}
+
+/* ═══════════════════════════════════════
+   UI：共鳴エネルギーと盤の状態
+═══════════════════════════════════════ */
+function renderEchoPanel() {
+  const el = document.getElementById('echoPanel');
+  if (!el) return;
+  if (phase !== 'game') { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+
+  const left = turnsLeft();
+  const shrink = left <= SHRINK_UNSTABLE;
+  const kp = KING_POWERS[pKingPower];
+
+  let html = '<div class="row">';
+  html += '<span class="tag">残 ' + actionsLeft + ' アクション</span>';
+  html += '<span class="tag">共鳴 ' + pEnergy + '</span>';
+  html += '<span class="tag">🏯 シールド ' + pShield + '</span>';
+  html += '<span class="tag' + (shrink?' warn':'') + '">あと ' + left + ' 手</span>';
+  html += '<span class="tag">' + kp.name + '</span>';
+  html += '</div>';
+
+  html += '<div class="row">';
+  Object.entries(RESONANCE_ABILITIES).forEach(([k, a]) => {
+    const ok = pEnergy >= a.cost && curTurn===PLAYER && !gameOver;
+    html += '<button data-reso="' + k + '"' + (ok?'':' disabled')
+         + (selResonance===k?' class="on"':'') + ' title="' + a.desc + '">'
+         + a.label + ' <b>' + a.cost + '</b></button>';
+  });
+  const oe = canOverEcho(PLAYER);
+  html += '<button data-overecho' + (oe?'':' disabled') + ' title="駒が3体以上少ないときに使える逆転手。相手に共鳴+2">'
+       + 'オーバーエコー</button>';
+  html += '</div>';
+
+  if (shrink) {
+    html += '<div style="color:#fca5a5;font-size:10.5px;line-height:1.6">'
+         + '外周が崩れています。拠点ブーストが効きません。'
+         + (outerForbidden() ? '残り' + SHRINK_FORBID + '手を切ったため、外周に駒を残したままターンを終えられません。' : '')
+         + '</div>';
+  }
+  el.innerHTML = html;
+
+  el.querySelectorAll('[data-reso]').forEach(b=>{
+    b.onclick = ()=>startResonance(b.dataset.reso);
+  });
+  const ob = el.querySelector('[data-overecho]');
+  if (ob) ob.onclick = useOverEcho;
+}
+
+/* ═══════════════════════════════════════
+   共鳴能力
+═══════════════════════════════════════ */
+function startResonance(kind) {
+  if (curTurn!==PLAYER || gameOver) return;
+  const a = RESONANCE_ABILITIES[kind];
+  if (!a || pEnergy < a.cost) return;
+
+  if (selResonance === kind) { cancelResonance(); return; }
+  clearSel();
+  selResonance = kind;
+  resonanceSwapFirst = null;
+  vResonance = [];
+
+  if (kind === 'revive') {
+    // 手駒に戻す：即時
+    if (!cHand.length) { addLog('戻せる駒がありません', 'tie'); cancelResonance(); return; }
+    pEnergy -= a.cost;
+    const back = cHand.splice(0,1)[0];
+    pHand.push(back);
+    addLog('共鳴：'+EMOJI[back]+'を手駒に戻した', 'win');
+    cancelResonance(); renderHandArea(); updateStatus(); renderEchoPanel();
+    return;
+  }
+  if (kind === 'jam') {
+    pEnergy -= a.cost;
+    cJammed = 2;
+    addLog('共鳴：相手の拠点ブーストを停止', 'win');
+    cancelResonance(); renderBoard(); renderEchoPanel();
+    return;
+  }
+  // move / swap は対象を選ばせる
+  for (let r=0;r<7;r++) for (let c=0;c<7;c++) {
+    const p = board[r][c];
+    if (p && p.owner===PLAYER && !FIXED.has(p.type)) vResonance.push({r,c});
+  }
+  document.getElementById('phaseLabel').textContent =
+    kind==='move' ? '共鳴：動かす駒を選んでください' : '共鳴：入れ替える駒を2つ選んでください';
+  renderBoard(); renderEchoPanel();
+}
+
+function cancelResonance() {
+  selResonance = null; vResonance = []; resonanceSwapFirst = null;
+  renderBoard(); renderEchoPanel();
+}
+
+/* 共鳴能力のクリック処理。true を返したらそのクリックは消費済み。 */
+function handleResonanceClick(r, c) {
+  if (!selResonance) return false;
+  const a = RESONANCE_ABILITIES[selResonance];
+  const p = board[r][c];
+
+  if (selResonance === 'move') {
+    if (vResonance.some(m=>m.r===r&&m.c===c)) {
+      // 選んだ駒の周囲1マス（空き）へ動かす
+      const dests = [[-1,0],[1,0],[0,-1],[0,1]]
+        .map(([dr,dc])=>({r:r+dr,c:c+dc}))
+        .filter(({r:nr,c:nc})=>inBounds(nr,nc)&&!board[nr][nc]);
+      if (!dests.length) { addLog('動かせる先がありません','tie'); return true; }
+      vResonance = dests;
+      resonanceSwapFirst = {r,c};
+      document.getElementById('phaseLabel').textContent = '共鳴：移動先を選んでください';
+      renderBoard();
+      return true;
+    }
+    if (resonanceSwapFirst && vResonance.some(m=>m.r===r&&m.c===c)) return true;
+    if (resonanceSwapFirst) {
+      const f = resonanceSwapFirst;
+      board[r][c] = board[f.r][f.c]; board[f.r][f.c] = null;
+      pEnergy -= a.cost;
+      addLog('共鳴：追加移動', 'win');
+      cancelResonance(); renderBoard(); updateStatus(); renderEchoPanel();
+      return true;
+    }
+    return true;
+  }
+
+  if (selResonance === 'swap') {
+    if (!p || p.owner!==PLAYER || FIXED.has(p.type)) return true;
+    if (!resonanceSwapFirst) {
+      resonanceSwapFirst = {r,c};
+      document.getElementById('phaseLabel').textContent = '共鳴：もう1体を選んでください';
+      return true;
+    }
+    const f = resonanceSwapFirst;
+    if (f.r===r && f.c===c) { resonanceSwapFirst=null; return true; }
+    const tmp = board[f.r][f.c];
+    board[f.r][f.c] = board[r][c];
+    board[r][c] = tmp;
+    pEnergy -= a.cost;
+    addLog('共鳴：位置を交換', 'win');
+    cancelResonance(); renderBoard(); updateStatus(); renderEchoPanel();
+    return true;
+  }
+  return false;
+}
+
+/* ═══════════════════════════════════════
+   UI：王の能力を選ぶ
+═══════════════════════════════════════ */
+let _afterKingSelect = null;
+function showKingSelect(next) {
+  _afterKingSelect = next;
+  const box = document.getElementById('kingOptions');
+  box.innerHTML = '';
+  Object.entries(KING_POWERS).forEach(([k, v]) => {
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.innerHTML = '<b>'+v.name+'</b><small>'+v.desc+'</small>';
+    b.onclick = () => {
+      pKingPower = k;
+      // CPUは別の力を選ぶ（同じ戦い方にならないように）
+      const others = Object.keys(KING_POWERS).filter(x=>x!==k);
+      cKingPower = others[Math.floor(Math.random()*others.length)];
+      document.getElementById('kingSelect').classList.add('hidden');
+      if (_afterKingSelect) _afterKingSelect();
+    };
+    box.appendChild(b);
+  });
+  showScreen('kingSelect');
+}
+
 function getCellEl(r, c) {
   return document.querySelector(`[data-r="${r}"][data-c="${c}"]`);
 }
@@ -645,6 +1044,8 @@ function onCellClick(r, c) {
   if (gameOver) return;
   if (phase === 'placement') { onCellClickPlacement(r, c); return; }
   if (curTurn !== PLAYER) return;
+  if (pendingEcho) return;                      // ECHOの選択中は盤を触らせない
+  if (handleResonanceClick(r, c)) return;       // 共鳴能力の対象選択
 
   const p = board[r][c];
 
@@ -660,8 +1061,15 @@ function onCellClick(r, c) {
   if (vMoves.some(m=>m.r===r&&m.c===c)) { movePiece(selCell.r,selCell.c,r,c); return; }
   // Attack
   if (vAttacks.some(m=>m.r===r&&m.c===c)) { attackPiece(selCell.r,selCell.c,r,c); return; }
-  // Select own movable piece
-  if (p && p.owner===PLAYER && !FIXED.has(p.type)) { selectCell(r,c); return; }
+  // Select own movable piece（このターンに動いた駒は選べない）
+  if (p && p.owner===PLAYER && !FIXED.has(p.type)) {
+    if (actedIds.has(p.id)) {
+      document.getElementById('phaseLabel').textContent = 'この駒はこのターンすでに動きました';
+      return;
+    }
+    selectCell(r,c);
+    return;
+  }
 
   clearSel();
 }
@@ -669,10 +1077,31 @@ function onCellClick(r, c) {
 function selectCell(r, c) {
   clearSel();
   selCell = {r,c};
-  const all = getReach(r, c, PLAYER);
+  const piece = board[r][c];
+  let all = getReach(r, c, PLAYER);
+  // ECHOの「移動＋1」を得ている駒は、届く範囲がもう1マス広がる
+  if (piece && piece.echoStep) all = extendReach(r, c, all, PLAYER);
   vMoves   = all.filter(m => !board[m.r][m.c]);
   vAttacks = all.filter(m => board[m.r][m.c]?.owner === CPU);
   renderBoard();
+}
+
+/* 「移動＋1」用に、届く空きマスの隣も候補に加える */
+function extendReach(r, c, base, owner) {
+  const out = base.slice();
+  const seen = new Set(base.map(m=>m.r+','+m.c));
+  base.forEach(({r:br,c:bc})=>{
+    if (board[br][bc]) return;
+    [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,dc])=>{
+      const nr=br+dr, nc=bc+dc;
+      const key=nr+','+nc;
+      if (!inBounds(nr,nc) || seen.has(key)) return;
+      if (nr===r && nc===c) return;
+      if (board[nr][nc] && board[nr][nc].owner===owner) return;
+      seen.add(key); out.push({r:nr,c:nc});
+    });
+  });
+  return out;
 }
 
 function clearSel() {
@@ -742,6 +1171,9 @@ function footReach(r, c, owner, forts, boosted) {
 }
 
 function isFootBoosted(r, c, owner) {
+  // 不安定なマスと、共鳴能力で妨害されている間はブーストが効かない
+  if (typeof isUnstable === 'function' && isUnstable(r,c)) return false;
+  if (owner===PLAYER ? pJammed>0 : cJammed>0) return false;
   return [[-1,0],[1,0],[0,-1],[0,1]].some(([dr,dc])=>{
     const nr=r+dr, nc=c+dc;
     return inBounds(nr,nc) && board[nr][nc]?.type===FORT && board[nr][nc]?.owner===owner;
@@ -750,14 +1182,95 @@ function isFootBoosted(r, c, owner) {
 
 function inBounds(r, c) { return r>=0&&r<7&&c>=0&&c<7; }
 
+/* ═══════════════════════════════════════
+   ECHO（残響）
+   駒が動いた・攻撃した「元のマス」に残響が残り、
+   次の自分のターンまで有効。別の味方がそこへ入ると効果を選べる。
+═══════════════════════════════════════ */
+function addEcho(r, c, owner) {
+  if (!inBounds(r,c)) return;
+  echoes = echoes.filter(e => !(e.r===r && e.c===c));
+  echoes.push({ r, c, owner, bornTurn: turnCount });
+}
+function echoAt(r, c, owner) {
+  return echoes.find(e => e.r===r && e.c===c && e.owner===owner) || null;
+}
+/* 残響は1巡で消える。自分の番が回ってきた時点で、
+   前々回に置いたものを取り除く。 */
+function expireEchoes(owner) {
+  echoes = echoes.filter(e => e.owner !== owner || (turnCount - e.bornTurn) < 2);
+}
+function consumeEcho(r, c, owner) {
+  echoes = echoes.filter(e => !(e.r===r && e.c===c && e.owner===owner));
+}
+
+/* ═══════════════════════════════════════
+   共鳴ポイント
+   毎試合ランダムに中央付近へ3つ。ターン終了時に駒を置いていると
+   エネルギーが1つ入る。守って待つだけでは勝ちにくくするための仕掛け。
+═══════════════════════════════════════ */
+function placeResonance() {
+  const candidates = [];
+  for (let r=2; r<=4; r++) for (let c=1; c<=5; c++) candidates.push({r,c});
+  resonance = [];
+  while (resonance.length < RESONANCE_COUNT && candidates.length) {
+    const i = Math.floor(Math.random()*candidates.length);
+    resonance.push(candidates.splice(i,1)[0]);
+  }
+}
+function isResonance(r, c) { return resonance.some(p => p.r===r && p.c===c); }
+
+function collectResonance(owner) {
+  let got = 0;
+  resonance.forEach(p => { if (board[p.r][p.c]?.owner === owner) got++; });
+  if (!got) return 0;
+  if (owner===PLAYER) pEnergy += got; else cEnergy += got;
+  addLog((owner===PLAYER?'':'CPU: ')+'共鳴エネルギー +'+got, owner===PLAYER?'win':'loss');
+  return got;
+}
+
+/* ═══════════════════════════════════════
+   フィールド収縮
+   終盤は外周が不安定になり、最後は外周に留まれない。
+   自然に中央で決着がつくようにする。
+═══════════════════════════════════════ */
+function turnsLeft() { return Math.max(0, MAX_TURN - turnCount); }
+function isOuterRing(r, c) { return r===0 || r===6 || c===0 || c===6; }
+function isUnstable(r, c) { return turnsLeft() <= SHRINK_UNSTABLE && isOuterRing(r,c); }
+function outerForbidden() { return turnsLeft() <= SHRINK_FORBID; }
+
 /* ===================================================
    Move & Attack
 =================================================== */
 function movePiece(fr,fc,tr,tc) {
-  board[tr][tc] = board[fr][fc];
+  const p = board[fr][fc];
+  const owner = p.owner;
+  board[tr][tc] = p;
   board[fr][fc] = null;
+
+  // 動いた元のマスに残響を置く。これが次の一手の足がかりになる。
+  addEcho(fr, fc, owner);
+
+  // 移動先に自分の残響があれば、その駒が効果を得る
+  const echo = echoAt(tr, tc, owner);
+  if (echo) {
+    consumeEcho(tr, tc, owner);
+    echoChain++;
+    showEchoChain(echoChain);
+    if (owner === PLAYER) {
+      // 選ばせる（アクションは消費済みなので、選択後に手番処理へ進む）
+      pendingEcho = { r:tr, c:tc, pieceId:p.id };
+      clearSel();
+      renderBoard();
+      openEchoPicker();
+      return;
+    }
+    applyEchoEffect(cpuPickEcho(), tr, tc, p);
+  }
+
+  recordKeyMove(owner, EMOJI[p.type]+'が移動', tr, tc);
   clearSel();
-  endTurn();
+  spendAction(p.id);
 }
 
 function attackPiece(fr,fc,tr,tc) {
@@ -765,6 +1278,33 @@ function attackPiece(fr,fc,tr,tc) {
   const def = board[tr][tc];
   atk.revealed = true;
   def.revealed = true;
+
+  // 守護の王：王の隣にいる味方は最初の1回だけ攻撃を無効化する
+  if (isGuarded(tr, tc, def)) {
+    markGuardUsed(def);
+    addLog(EMOJI[def.type]+'は王に守られた！', def.owner===PLAYER?'win':'loss');
+    addEcho(fr, fc, atk.owner);
+    clearSel();
+    spendAction(atk.id);
+    return;
+  }
+
+  // 本拠地は即敗北ではなく、シールドを削って押し戻す
+  if (def.type===CASTLE) {
+    const shield = def.owner===PLAYER ? pShield : cShield;
+    if (shield > 0) {
+      if (def.owner===PLAYER) pShield--; else cShield--;
+      addLog('本拠地のシールドを1つ破壊！（残り'+(def.owner===PLAYER?pShield:cShield)+'）',
+             atk.owner===PLAYER?'win':'loss');
+      recordKeyMove(atk.owner, '本拠地のシールドを破壊', tr, tc);
+      addEcho(fr, fc, atk.owner);   // 押し戻されるが残響は残る
+      clearSel();
+      spendAction(atk.id);
+      return;
+    }
+    endGame(atk.owner, 'シールドを失った本拠地を占領しました！');
+    return;
+  }
 
   const res = resolveCombat(atk, def, fr,fc,tr,tc);
   const aOwner = atk.owner, dOwner = def.owner;
@@ -789,8 +1329,100 @@ function attackPiece(fr,fc,tr,tc) {
   if (!findPiece(KING, dOwner)) { endGame(aOwner, `${aOwner===PLAYER?'あなたが':'CPUが'}王を取りました！`); return; }
   if (!findPiece(KING, aOwner)) { endGame(dOwner, `${dOwner===PLAYER?'あなたが':'CPUが'}王を取りました！`); return; }
 
+  // 攻撃した元のマスに残響
+  addEcho(fr, fc, aOwner);
+  // 「攻撃後に退避」を選んでいれば元のマスへ戻る
+  if (atk.echoBack && board[tr][tc] === atk) {
+    board[fr][fc] = atk; board[tr][tc] = null;
+    atk.echoBack = false;
+    addLog(EMOJI[atk.type]+'は元の位置へ退避', aOwner===PLAYER?'win':'loss');
+  }
+  atk.echoPower = false;
+  recordKeyMove(aOwner, EMOJI[atk.type]+'の攻撃', tr, tc);
+
   clearSel();
-  endTurn();
+  spendAction(atk.id);
+}
+
+/* ═══════════════════════════════════════
+   守護の王
+═══════════════════════════════════════ */
+function isGuarded(r, c, piece) {
+  if (!piece || FIXED.has(piece.type) || piece.type===KING) return false;
+  const power = piece.owner===PLAYER ? pKingPower : cKingPower;
+  if (power !== 'guard') return false;
+  const used = piece.owner===PLAYER ? pGuardUsed : cGuardUsed;
+  if (used.has(piece.id)) return false;
+  const king = findPiece(KING, piece.owner);
+  if (!king) return false;
+  return Math.abs(king.r-r) <= 1 && Math.abs(king.c-c) <= 1;
+}
+function markGuardUsed(piece) {
+  (piece.owner===PLAYER ? pGuardUsed : cGuardUsed).add(piece.id);
+}
+
+/* ═══════════════════════════════════════
+   ECHO の効果
+═══════════════════════════════════════ */
+function applyEchoEffect(kind, r, c, piece) {
+  if (!kind || !piece) return;
+  const owner = piece.owner;
+  if (kind === 'step')  { piece.echoStep = true;  actedIds.delete(piece.id); }
+  if (kind === 'power') { piece.echoPower = true; }
+  if (kind === 'back')  { piece.echoBack  = true; }
+  if (kind === 'chain') {
+    [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,dc])=>{
+      const nr=r+dr, nc=c+dc;
+      if (inBounds(nr,nc) && board[nr][nc]?.owner===owner) addEcho(nr,nc,owner);
+    });
+  }
+  // 反響の王：隣接する味方のマスにも残響が生まれる
+  const power = owner===PLAYER ? pKingPower : cKingPower;
+  if (power === 'echo') {
+    [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,dc])=>{
+      const nr=r+dr, nc=c+dc;
+      if (inBounds(nr,nc) && board[nr][nc]?.owner===owner) addEcho(nr,nc,owner);
+    });
+  }
+  addLog((owner===PLAYER?'':'CPU: ')+'ECHO '+ECHO_EFFECTS[kind].label, owner===PLAYER?'win':'loss');
+}
+
+function cpuPickEcho() {
+  // 王が近いなら攻撃寄り、そうでなければ機動力を伸ばす
+  const pKing = findPiece(KING, PLAYER);
+  return pKing ? 'power' : 'step';
+}
+
+/* ═══════════════════════════════════════
+   オーバーエコー
+   盤上の駒が3体以上少ないときだけ使える逆転手。
+   代償として相手にエネルギーが2つ渡るので、一方的な救済にはならない。
+═══════════════════════════════════════ */
+function canOverEcho(owner) {
+  const used = owner===PLAYER ? pOverEchoUsed : cOverEchoUsed;
+  if (used || gameOver || phase!=='game') return false;
+  // 盤上の駒が相手より3体以上少ないときだけ。手駒の有無は条件に入れない
+  // （戻す駒が無ければ歩を1つ補うため、ここで弾くと発動できなくなる）。
+  const mine = countBoard(owner);
+  const theirs = countBoard(owner===PLAYER ? CPU : PLAYER);
+  return (theirs - mine) >= 3;
+}
+function countBoard(owner) {
+  let n=0;
+  for (let r=0;r<7;r++) for (let c=0;c<7;c++) if (board[r][c]?.owner===owner) n++;
+  return n;
+}
+function useOverEcho() {
+  const owner = PLAYER;
+  if (!canOverEcho(owner)) return;
+  // 取られた駒＝相手の手駒にある自分の駒。無ければ歩を1つ戻す。
+  pOverEchoUsed = true;
+  const back = cHand.length ? cHand.splice(0,1)[0] : FOOT;
+  pHand.push(back);
+  cEnergy += 2;
+  addLog('オーバーエコー！'+EMOJI[back]+'が戻り、相手に共鳴+2', 'tie');
+  recordKeyMove(owner, 'オーバーエコー', -1, -1);
+  renderHandArea(); updateStatus(); renderEchoPanel();
 }
 
 function resolveCombat(atk, def, ar,ac,dr,dc) {
@@ -821,18 +1453,28 @@ function onHandPieceClick(idx) {
   clearSel();
   selHandIdx = idx;
   vPlaces = [];
-  for (let r=0;r<7;r++) for (let c=0;c<7;c++) if (!board[r][c]) vPlaces.push({r,c});
+  // 召還の王は前方まで置ける。通常は自陣側（下3列）に限る。
+  const limit = pKingPower==='summon' ? 1 : 4;
+  for (let r=0;r<7;r++) for (let c=0;c<7;c++) {
+    if (board[r][c]) continue;
+    if (r < limit) continue;               // 相手陣side へは置けない
+    if (outerForbidden() && isOuterRing(r,c)) continue;
+    vPlaces.push({r,c});
+  }
   renderBoard();
   renderHandArea();
 }
 
 function placeHandPiece(r, c) {
   const type = pHand[selHandIdx];
-  board[r][c] = { type, owner: PLAYER };
+  const piece = mkPiece(type, PLAYER);
+  board[r][c] = piece;
   pHand.splice(selHandIdx, 1);
   addLog(`${EMOJI[type]}を配置`, '');
+  addEcho(r, c, PLAYER);
+  recordKeyMove(PLAYER, EMOJI[type]+'を配置', r, c);
   clearSel();
-  endTurn();
+  spendAction(piece.id);
 }
 
 function renderHandArea() {
@@ -855,27 +1497,95 @@ function renderHandArea() {
 /* ===================================================
    Turn Management
 =================================================== */
-function endTurn() {
-  turnCount++;
-  if (turnCount >= 60) {
-    const pc = countPieces(PLAYER), cc = countPieces(CPU);
-    if (pc>cc) endGame(PLAYER,`60手制限。あなた${pc}枚 vs CPU${cc}枚`);
-    else if (cc>pc) endGame(CPU,`60手制限。CPU${cc}枚 vs あなた${pc}枚`);
-    else endGame(null,'60手制限。引き分け！');
+/* 1アクション消費する。まだ残っていれば手番は続く。
+   同じ駒は原則1ターンに1回（ECHOの「移動＋1」だけ例外）。 */
+function spendAction(pieceId) {
+  if (gameOver) return;
+  if (pieceId != null) actedIds.add(pieceId);
+  actionsLeft--;
+  renderBoard(); renderHandArea(); updateStatus(); renderEchoPanel();
+  if (actionsLeft > 0 && hasAnyAction(curTurn)) {
+    if (curTurn===PLAYER) {
+      document.getElementById('phaseLabel').textContent =
+        'あと'+actionsLeft+'アクション：別の駒を動かせます';
+    } else {
+      setTimeout(cpuTurn, 420);
+    }
     return;
   }
+  endTurn();
+}
+
+/* まだ動かせる駒が残っているか（残アクションを無駄にしないため） */
+function hasAnyAction(owner) {
+  for (let r=0;r<7;r++) for (let c=0;c<7;c++) {
+    const p = board[r][c];
+    if (!p || p.owner!==owner || FIXED.has(p.type)) continue;
+    if (actedIds.has(p.id)) continue;
+    if (getReach(r,c,owner).length) return true;
+  }
+  return (owner===PLAYER ? pHand : cHand).length > 0;
+}
+
+function endTurn() {
+  // ターン終了時に共鳴ポイントを占有していればエネルギーが入る
+  collectResonance(curTurn);
+
+  // 残り6手を切ったら、外周に駒を置いたままでは終われない
+  if (outerForbidden() && hasPieceOnOuter(curTurn)) {
+    addLog('外周は崩れています。中央へ移動してください', 'tie');
+    if (curTurn===PLAYER) {
+      actionsLeft = 1;
+      document.getElementById('phaseLabel').textContent =
+        '外周の駒を中央へ動かしてください（盤が崩れています）';
+      renderBoard(); updateStatus();
+      return;
+    }
+  }
+
+  turnCount++;
+  if (turnCount >= MAX_TURN) {
+    const pc = countPieces(PLAYER), cc = countPieces(CPU);
+    if (pc>cc) endGame(PLAYER,`${MAX_TURN}手制限。あなた${pc}枚 vs CPU${cc}枚`);
+    else if (cc>pc) endGame(CPU,`${MAX_TURN}手制限。CPU${cc}枚 vs あなた${pc}枚`);
+    else endGame(null,`${MAX_TURN}手制限。引き分け！`);
+    return;
+  }
+
   curTurn = curTurn===PLAYER ? CPU : PLAYER;
+  actionsLeft = ACTIONS_PER_TURN;
+  actedIds = new Set();
+  echoChain = 0;
+  expireEchoes(curTurn);
+  if (curTurn===PLAYER && pJammed>0) pJammed--;
+  if (curTurn===CPU && cJammed>0) cJammed--;
   renderBoard();
   renderHandArea();
   updateStatus();
+  renderEchoPanel();
   if (curTurn===PLAYER) {
     setTurnLabel('あなたのターン','#4a9eff');
-    document.getElementById('phaseLabel').textContent = 'あなたのターン：駒を選んでください';
+    document.getElementById('phaseLabel').textContent =
+      'あなたのターン：'+ACTIONS_PER_TURN+'アクション使えます';
   } else {
     setTurnLabel('CPUのターン','#ef4444');
     document.getElementById('phaseLabel').textContent = 'CPUが考えています…';
     setTimeout(cpuTurn, 600);
   }
+}
+
+function hasPieceOnOuter(owner) {
+  for (let r=0;r<7;r++) for (let c=0;c<7;c++) {
+    const p = board[r][c];
+    if (p && p.owner===owner && !FIXED.has(p.type) && isOuterRing(r,c)) return true;
+  }
+  return false;
+}
+
+/* 対局後に振り返る「決定的だった手」。多くなりすぎないよう終盤側を残す。 */
+function recordKeyMove(owner, text, r, c) {
+  keyMoves.push({ owner, text, r, c, turn: turnCount });
+  if (keyMoves.length > 40) keyMoves.shift();
 }
 
 function countPieces(owner) {
@@ -908,6 +1618,8 @@ function updateStatus() {
 =================================================== */
 function cpuTurn() {
   if (gameOver) return;
+  // 共鳴エネルギーが貯まっていれば使う（貯め込ませない）
+  cpuUseResonance();
   const actions = gatherCpuActions();
   if (!actions.length) { endTurn(); return; }
   actions.sort((a,b)=>b.pri-a.pri);
@@ -916,10 +1628,28 @@ function cpuTurn() {
   else if (best.kind==='move') movePiece(best.fr,best.fc,best.tr,best.tc);
   else if (best.kind==='place') {
     const type = cHand[best.idx];
-    board[best.tr][best.tc] = { type, owner: CPU };
+    const piece = mkPiece(type, CPU);
+    board[best.tr][best.tc] = piece;
     cHand.splice(best.idx, 1);
     addLog(`CPU: ${EMOJI[type]}を配置`, '');
-    endTurn();
+    addEcho(best.tr, best.tc, CPU);
+    spendAction(piece.id);
+  }
+}
+
+/* CPUの共鳴：安いものから使う。人間側と同じ土俵に立たせる。 */
+function cpuUseResonance() {
+  if (cEnergy >= RESONANCE_ABILITIES.jam.cost && pFortCap >= 0) {
+    cEnergy -= RESONANCE_ABILITIES.jam.cost; pJammed = 2;
+    addLog('CPU: 共鳴で拠点ブーストを停止', 'loss');
+    return;
+  }
+  if (cEnergy >= RESONANCE_ABILITIES.revive.cost && pHand.length) {
+    cEnergy -= RESONANCE_ABILITIES.revive.cost;
+    const back = pHand.splice(0,1)[0];
+    cHand.push(back);
+    addLog('CPU: 共鳴で'+EMOJI[back]+'を戻した', 'loss');
+    renderHandArea();
   }
 }
 
@@ -931,6 +1661,7 @@ function gatherCpuActions() {
   for (let r=0;r<7;r++) for (let c=0;c<7;c++) {
     const p = board[r][c];
     if (!p||p.owner!==CPU||FIXED.has(p.type)) continue;
+    if (actedIds.has(p.id)) continue;      // 同じ駒は1ターンに1回
     const reach = getReach(r,c,CPU);
     for (const {r:tr,c:tc} of reach) {
       const t = board[tr][tc];
@@ -942,6 +1673,10 @@ function gatherCpuActions() {
           const d1 = Math.abs(tr-pKing.r)+Math.abs(tc-pKing.c);
           if (d1<d0) pri += 3;
         }
+        if (isResonance(tr,tc)) pri += 6;              // 共鳴ポイントを取りに行く
+        if (echoAt(tr,tc,CPU))  pri += 4;              // 自分の残響を踏むと強くなる
+        if (isUnstable(tr,tc))  pri -= 5;              // 崩れる外周は避ける
+        if (outerForbidden() && isOuterRing(tr,tc)) pri -= 20;
         acts.push({kind:'move',fr:r,fc:c,tr,tc,pri});
       } else if (t.owner===PLAYER) {
         // attack
@@ -985,7 +1720,15 @@ function endGame(winner, reason) {
   } else {
     title.textContent='敗北…'; title.className='loss';
   }
-  msg.textContent = reason;
+  // 決着に効いた終盤の3手を振り返る
+  const last3 = keyMoves.slice(-3).reverse();
+  const replay = last3.length
+    ? '<div style="margin-top:12px;text-align:left;font-size:11px;color:#94a3b8;line-height:1.9">'
+      + '<b style="color:#c4b5fd">決定的だった3手</b><br>'
+      + last3.map((m,i)=>(i+1)+'. '+(m.owner===PLAYER?'あなた':'CPU')+'：'+m.text).join('<br>')
+      + '</div>'
+    : '';
+  msg.innerHTML = reason + replay;
   document.getElementById('modal').classList.remove('hidden');
 }
 
