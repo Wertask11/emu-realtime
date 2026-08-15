@@ -2979,7 +2979,16 @@ body.emu-knowledge-open #openPostFormButton { display:none !important; }
   border:0; border-radius:16px; background:#f8f6f2; display:block;
 }
 /* 開催中の議論・今日の遊び（固定Emuナビの下にiframe表示） */
-#emuDiscussionPage,#emuPlayPage { display:none; }
+#emuDiscussionPage,#emuPlayPage { display:none; position:relative; }
+/* 議論・遊びを閉じて「今日のEmu」へ戻る */
+.emu-page-close {
+  position:absolute; top:10px; right:10px; z-index:5;
+  width:38px; height:38px; border-radius:50%;
+  border:1px solid #e6e2dc; background:#fff; color:#6f6a86;
+  font-size:16px; line-height:1; cursor:pointer;
+  box-shadow:0 4px 14px -6px rgba(26,24,64,.4);
+}
+.emu-page-close:hover { color:#1a1840; border-color:#cfc9c0; }
 body.emu-discussion-open > #mainApp > .container,
 body.emu-play-open > #mainApp > .container { display:none; }
 body.emu-discussion-open > #mainApp > #emuTodayHome,
@@ -4358,7 +4367,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
             <span class="emu-membership-pill" id="emuMembershipPill">確認中…</span>
             <span class="emu-membership-desc" id="emuMembershipDesc"></span>
           </div>
-          <a class="emu-membership-cta" id="emuMembershipCta" href="/guarantee.html" hidden>
+          <!-- ページ遷移だと戻れなくなるので、閉じられるモーダルで開く -->
+          <a class="emu-membership-cta" id="emuMembershipCta" href="/guarantee.html"
+             onclick="openLegal('guarantee');return false;" hidden>
             <span class="emu-membership-cta-main">Emu 有料会員になる</span>
             <span class="emu-membership-cta-sub">月額10,000円・30日間の「語り合える一人」保証つき</span>
           </a>
@@ -4411,9 +4422,13 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     <iframe id="emuKnowledgeFrame" title="知識を読む" loading="lazy"></iframe>
   </div>
   <div id="emuDiscussionPage">
+    <!-- 議論から今日のEmuへ戻る。上の「← メイン画面」はハブまで戻ってしまうため、
+         Emu内で一段だけ戻れる導線を用意する。 -->
+    <button type="button" class="emu-page-close" onclick="showEmuToday()" aria-label="議論を閉じる" title="議論を閉じる">✕</button>
     <iframe id="emuDiscussionFrame" title="開催中の議論" loading="lazy"></iframe>
   </div>
   <div id="emuPlayPage">
+    <button type="button" class="emu-page-close" onclick="showEmuToday()" aria-label="遊びを閉じる" title="遊びを閉じる">✕</button>
     <iframe id="emuPlayFrame" title="今日の遊び" loading="lazy"></iframe>
   </div>
 </section>
@@ -5046,7 +5061,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
           <span class="dsc-eyebrow">開催中の議論</span>
           <h2 id="topic" class="dsc-topic">議題を読み込んでいます…</h2>
         </div>
-        <button class="dsc-close closeBtn" onclick="closePopup()" aria-label="閉じる">✕</button>
+        <!-- closeBtn は position:absolute で、ヘッダーの外へ飛んで押しづらかった。
+             .dsc-close だけにしてヘッダー内に固定する。 -->
+        <button class="dsc-close" onclick="closePopup()" aria-label="議論を閉じる" title="議論を閉じる">✕</button>
       </header>
 
       <!-- 進め方（折りたたみ。旧Step1・Step2の内容をここに集約） -->
@@ -11824,6 +11841,12 @@ async function spTrack(type, address) {
   }
 }
 
+/* スマホ判定。CHESレイヤーの _isMobile と同じ条件だが、
+   あちらは即時関数の内側にあり、ここからは呼べないため別に持つ。 */
+function _emuIsMobile() {
+  return /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|BlackBerry|Opera Mini/i.test(navigator.userAgent || "");
+}
+
 // --- [2] 接続ボタン（connectWalletButton）の本番用 ---
 document.getElementById("connectWalletButton").addEventListener("click", async () => {
   // ★ ボタンを押した瞬間にローディング表示
@@ -11831,7 +11854,28 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
 
   if (typeof window.ethereum === "undefined") {
     _cancelSpLoadingOverlay();
-    alert("MetaMaskがインストールされていません。");
+    /* スマホの通常ブラウザには window.ethereum が無い。MetaMaskはアプリなので、
+       ディープリンクで「MetaMaskアプリ内のブラウザ」に同じURLを開き直してもらう。
+       これでSafariやChromeから入った人もウォレットで入場できる。 */
+    if (_emuIsMobile()) {
+      const target = location.host + location.pathname + location.search;
+      const deepLink = "https://metamask.app.link/dapp/" + target;
+      if (confirm(
+        "ウォレットで入るには MetaMask アプリが必要です。\n\n" +
+        "「OK」を押すと MetaMask アプリでこのページを開き直します。\n" +
+        "（アプリが入っていない場合はインストール画面が開きます）"
+      )) {
+        location.href = deepLink;
+      }
+      return;
+    }
+    if (confirm(
+      "MetaMask が見つかりません。\n\n" +
+      "「OK」を押すと MetaMask の配布ページを開きます。\n" +
+      "インストール後、このページに戻ってもう一度お試しください。"
+    )) {
+      window.open("https://metamask.io/download/", "_blank", "noopener");
+    }
     return;
   }
 
