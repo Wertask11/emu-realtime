@@ -164,7 +164,57 @@
       "req.desc": "まだ答えがない困りごとに、経験から得た知識を届け合う場所です。",
       "req.new": "＋ 知識を募集する",
       "req.loading": "募集を読み込んでいます...",
-      "req.loadError": "募集を読み込めません。"
+      "req.loadError": "募集を読み込めません。",
+
+      /* SchoolPark ホーム（CHESハブ / マップ） */
+      "hub.greet": "こんにちは、どこに行く？",
+      "hub.notif": "お知らせ",
+      "hub.settings": "設定",
+      "hub.soon": "準備中",
+      "hub.enter": "入場",
+      "hub.foot": "学校より学べて、公園より楽しめて、会社より稼げる場所。",
+      "hub.tag.camellia": "もう一度、自分を好きになる。",
+      "hub.tag.heartoo": "♡を貴女に。",
+      "hub.tag.emu": "知識を伝え合うSNS。",
+      "hub.tag.schoolpark": "体験とコンテンツの街。",
+      "hub.back": "← メイン画面に戻る",
+      "sp.nav.home": "← メイン画面",
+      "sp.nav.org": "合同会社型DAO SchoolPark",
+      "sp.nav.gourmet": "グルメ",
+      "sp.nav.shopping": "ショッピング",
+      "sp.nav.cmd": "/ コマンド…",
+      "sp.nav.reizo": "冷蔵庫くんに聞く",
+      "sp.nav.ticket": "チケット購入",
+      "sp.nav.menu": "メニュー",
+      "sp.nav.settings": "設定",
+      "sp.info.hours": "本日の営業時間",
+      "sp.info.crowd": "混雑状況",
+      "sp.info.loading": "取得中…",
+      "sp.info.weather": "天気",
+      "sp.side.title": "PARK MAP",
+      "sp.side.pick": "エリアを選択してください",
+      "sp.side.close": "閉じる",
+      "sp.area.all": "すべて",
+      "sp.area.center": "中央エリア",
+      "sp.area.center.sub": "健康・運動・交流",
+      "sp.area.east": "東エリア",
+      "sp.area.east.sub": "生活・住居、商業・経済",
+      "sp.area.west": "西エリア",
+      "sp.area.west.sub": "安全・公共",
+      "sp.area.south": "南エリア",
+      "sp.area.south.sub": "遊び・自然",
+      "sp.area.north": "北エリア",
+      "sp.area.north.sub": "学び・文化",
+      "sp.links.title": "LINKS",
+      "sp.links.ticket": "チケットストア",
+      "sp.links.company": "企業情報",
+      "sp.links.faq": "よくあるご質問",
+      "sp.links.contact": "お問い合わせ",
+      "sp.notif.title": "お知らせ",
+      "sp.notif.readAll": "すべて既読",
+      "sp.notif.log": "ログ",
+      "sp.notif.logRead": "既読にする",
+      "sp.notif.loading": "読み込み中…"
     },
 
     en: {
@@ -306,7 +356,57 @@
       "req.desc": "A place to share experience-based knowledge for problems that have no answer yet.",
       "req.new": "＋ Request knowledge",
       "req.loading": "Loading requests...",
-      "req.loadError": "Could not load requests."
+      "req.loadError": "Could not load requests.",
+
+      /* SchoolPark ホーム（CHESハブ / マップ） */
+      "hub.greet": "Hello. Where would you like to go?",
+      "hub.notif": "Notifications",
+      "hub.settings": "Settings",
+      "hub.soon": "Coming soon",
+      "hub.enter": "here",
+      "hub.foot": "A place to learn more than school, enjoy more than a park, and earn more than a job.",
+      "hub.tag.camellia": "Learn to like yourself again.",
+      "hub.tag.heartoo": "A ♡ for you.",
+      "hub.tag.emu": "An SNS for sharing what you know.",
+      "hub.tag.schoolpark": "A town of experiences and content.",
+      "hub.back": "← Back to main screen",
+      "sp.nav.home": "← Main screen",
+      "sp.nav.org": "LLC-type DAO SchoolPark",
+      "sp.nav.gourmet": "Food",
+      "sp.nav.shopping": "Shopping",
+      "sp.nav.cmd": "/ command…",
+      "sp.nav.reizo": "Ask Reizo-kun",
+      "sp.nav.ticket": "Buy a ticket",
+      "sp.nav.menu": "Menu",
+      "sp.nav.settings": "Settings",
+      "sp.info.hours": "Open today",
+      "sp.info.crowd": "How busy",
+      "sp.info.loading": "Loading…",
+      "sp.info.weather": "Weather",
+      "sp.side.title": "PARK MAP",
+      "sp.side.pick": "Choose an area",
+      "sp.side.close": "Close",
+      "sp.area.all": "All",
+      "sp.area.center": "Central",
+      "sp.area.center.sub": "Health, exercise, meeting people",
+      "sp.area.east": "East",
+      "sp.area.east.sub": "Daily life and housing, commerce",
+      "sp.area.west": "West",
+      "sp.area.west.sub": "Safety and public services",
+      "sp.area.south": "South",
+      "sp.area.south.sub": "Play and nature",
+      "sp.area.north": "North",
+      "sp.area.north.sub": "Learning and culture",
+      "sp.links.title": "LINKS",
+      "sp.links.ticket": "Ticket store",
+      "sp.links.company": "About us",
+      "sp.links.faq": "FAQ",
+      "sp.links.contact": "Contact us",
+      "sp.notif.title": "Notifications",
+      "sp.notif.readAll": "Mark all read",
+      "sp.notif.log": "Log",
+      "sp.notif.logRead": "Mark as read",
+      "sp.notif.loading": "Loading…"
     },
 
     zh: {
@@ -448,7 +548,57 @@
       "req.desc": "在这里，为还没有答案的困扰，互相送上来自经验的知识。",
       "req.new": "＋ 征集知识",
       "req.loading": "正在加载征集...",
-      "req.loadError": "无法加载征集。"
+      "req.loadError": "无法加载征集。",
+
+      /* SchoolPark ホーム（CHESハブ / マップ） */
+      "hub.greet": "你好，想去哪里？",
+      "hub.notif": "通知",
+      "hub.settings": "设置",
+      "hub.soon": "筹备中",
+      "hub.enter": "人在线",
+      "hub.foot": "比学校更能学，比公园更好玩，比公司更能赚的地方。",
+      "hub.tag.camellia": "重新喜欢上自己。",
+      "hub.tag.heartoo": "把♡送给你。",
+      "hub.tag.emu": "分享知识的社群。",
+      "hub.tag.schoolpark": "体验与内容之城。",
+      "hub.back": "← 返回主页面",
+      "sp.nav.home": "← 主页面",
+      "sp.nav.org": "合同会社型DAO SchoolPark",
+      "sp.nav.gourmet": "美食",
+      "sp.nav.shopping": "购物",
+      "sp.nav.cmd": "/ 指令…",
+      "sp.nav.reizo": "问问冰箱君",
+      "sp.nav.ticket": "购买门票",
+      "sp.nav.menu": "菜单",
+      "sp.nav.settings": "设置",
+      "sp.info.hours": "今日营业时间",
+      "sp.info.crowd": "拥挤程度",
+      "sp.info.loading": "获取中…",
+      "sp.info.weather": "天气",
+      "sp.side.title": "PARK MAP",
+      "sp.side.pick": "请选择区域",
+      "sp.side.close": "关闭",
+      "sp.area.all": "全部",
+      "sp.area.center": "中央区",
+      "sp.area.center.sub": "健康・运动・交流",
+      "sp.area.east": "东区",
+      "sp.area.east.sub": "生活・居住、商业・经济",
+      "sp.area.west": "西区",
+      "sp.area.west.sub": "安全・公共",
+      "sp.area.south": "南区",
+      "sp.area.south.sub": "游玩・自然",
+      "sp.area.north": "北区",
+      "sp.area.north.sub": "学习・文化",
+      "sp.links.title": "LINKS",
+      "sp.links.ticket": "门票商店",
+      "sp.links.company": "公司信息",
+      "sp.links.faq": "常见问题",
+      "sp.links.contact": "联系我们",
+      "sp.notif.title": "通知",
+      "sp.notif.readAll": "全部标为已读",
+      "sp.notif.log": "记录",
+      "sp.notif.logRead": "标为已读",
+      "sp.notif.loading": "加载中…"
     },
 
     ko: {
@@ -590,7 +740,57 @@
       "req.desc": "아직 답이 없는 고민에, 경험에서 얻은 지식을 서로 전하는 곳입니다.",
       "req.new": "＋ 지식 요청하기",
       "req.loading": "요청을 불러오는 중...",
-      "req.loadError": "요청을 불러올 수 없습니다."
+      "req.loadError": "요청을 불러올 수 없습니다.",
+
+      /* SchoolPark ホーム（CHESハブ / マップ） */
+      "hub.greet": "안녕하세요, 어디로 갈까요?",
+      "hub.notif": "알림",
+      "hub.settings": "설정",
+      "hub.soon": "준비 중",
+      "hub.enter": "명 입장",
+      "hub.foot": "학교보다 배우고, 공원보다 즐겁고, 회사보다 벌 수 있는 곳.",
+      "hub.tag.camellia": "다시 한번, 나를 좋아하게.",
+      "hub.tag.heartoo": "♡를 당신에게.",
+      "hub.tag.emu": "지식을 나누는 SNS.",
+      "hub.tag.schoolpark": "경험과 콘텐츠의 도시.",
+      "hub.back": "← 메인 화면으로",
+      "sp.nav.home": "← 메인 화면",
+      "sp.nav.org": "합동회사형 DAO SchoolPark",
+      "sp.nav.gourmet": "맛집",
+      "sp.nav.shopping": "쇼핑",
+      "sp.nav.cmd": "/ 명령어…",
+      "sp.nav.reizo": "냉장고군에게 묻기",
+      "sp.nav.ticket": "티켓 구매",
+      "sp.nav.menu": "메뉴",
+      "sp.nav.settings": "설정",
+      "sp.info.hours": "오늘 운영 시간",
+      "sp.info.crowd": "혼잡도",
+      "sp.info.loading": "불러오는 중…",
+      "sp.info.weather": "날씨",
+      "sp.side.title": "PARK MAP",
+      "sp.side.pick": "구역을 선택하세요",
+      "sp.side.close": "닫기",
+      "sp.area.all": "전체",
+      "sp.area.center": "중앙 구역",
+      "sp.area.center.sub": "건강・운동・교류",
+      "sp.area.east": "동쪽 구역",
+      "sp.area.east.sub": "생활・주거, 상업・경제",
+      "sp.area.west": "서쪽 구역",
+      "sp.area.west.sub": "안전・공공",
+      "sp.area.south": "남쪽 구역",
+      "sp.area.south.sub": "놀이・자연",
+      "sp.area.north": "북쪽 구역",
+      "sp.area.north.sub": "배움・문화",
+      "sp.links.title": "LINKS",
+      "sp.links.ticket": "티켓 스토어",
+      "sp.links.company": "회사 정보",
+      "sp.links.faq": "자주 묻는 질문",
+      "sp.links.contact": "문의하기",
+      "sp.notif.title": "알림",
+      "sp.notif.readAll": "모두 읽음",
+      "sp.notif.log": "기록",
+      "sp.notif.logRead": "읽음 처리",
+      "sp.notif.loading": "불러오는 중…"
     },
 
   };
@@ -681,6 +881,26 @@
     });
   }
 
+  /* 画面上にある言語切替をすべて拾って、選択肢と現在値を揃える。
+     Emu だけでなく CHESハブ・SchoolPark にも置いたため、
+     id ひとつ決め打ちでは足りなくなった。 */
+  var LANG_SELECT_IDS = ["emuLangSelect", "chesHubLangSelect", "spMapLangSelect"];
+  function syncLangSelects(code) {
+    LANG_SELECT_IDS.forEach(function (id) {
+      var select = document.getElementById(id);
+      if (!select) return;
+      if (!select.options.length) {
+        EMU_LANGS.forEach(function (lang) {
+          var option = document.createElement("option");
+          option.value = lang.code;
+          option.textContent = lang.label;
+          select.appendChild(option);
+        });
+      }
+      if (select.value !== code) select.value = code;
+    });
+  }
+
   function getEmuLang() { return current; }
 
   function setEmuLang(code) {
@@ -688,8 +908,7 @@
     current = code;
     try { localStorage.setItem(STORAGE_KEY, code); } catch (e) {}
     document.documentElement.setAttribute("lang", emuLocaleTag());
-    var select = document.getElementById("emuLangSelect");
-    if (select && select.value !== code) select.value = code;
+    syncLangSelects(code);
     applyEmuI18n();
     // 動的に描画している箇所を作り直す（存在する画面だけ）
     ["updateEmuTodayHome", "updateEmuLoginBonusUI", "loadEmuWalletCard"].forEach(function (fn) {
@@ -734,16 +953,7 @@
     try { saved = localStorage.getItem(STORAGE_KEY); } catch (e) {}
     current = supported(saved) ? saved : detectLang();
 
-    var select = document.getElementById("emuLangSelect");
-    if (select && !select.options.length) {
-      EMU_LANGS.forEach(function (lang) {
-        var option = document.createElement("option");
-        option.value = lang.code;
-        option.textContent = lang.label;
-        select.appendChild(option);
-      });
-    }
-    if (select) select.value = current;
+    syncLangSelects(current);
     document.documentElement.setAttribute("lang", emuLocaleTag());
     applyEmuI18n();
   }
