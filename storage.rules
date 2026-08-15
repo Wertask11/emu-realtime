@@ -1,0 +1,36 @@
+rules_version = '2';
+
+/* ══════════════════════════════════════════════════════════════
+   Firebase Storage のセキュリティルール
+
+   このプロジェクトでは、クライアントから Storage を直接読み書きしない。
+   アップロードは全てバックエンドの API（Admin SDK）を通す。
+   Admin SDK はこのルールをバイパスするので、ここは「クライアントを止める」
+   ためだけに存在する。
+
+   とくに /kyc/ は本人確認書類の置き場所。パスは kyc/{uid}/... なので、
+   ルールが緩いとログイン済みの第三者が他人の書類を読めてしまう。
+   ここは誰にも開けない。閲覧はサーバーが発行する5分間の署名付きURLだけ。
+   ══════════════════════════════════════════════════════════════ */
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // 本人確認書類。クライアントからは読み書きとも一切不可。
+    // 運営の閲覧は backend/kyc.js が発行する署名付きURL経由のみ。
+    match /kyc/{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // 投稿画像。表示のため公開読み取り。
+    // アップロードは /upload/image（Admin SDK）が行うので書き込みは閉じる。
+    match /posts/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // 上記以外は既定で拒否。新しい用途を足すときは、ここに明示的に追加する。
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
