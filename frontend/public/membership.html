@@ -48,6 +48,27 @@ ul.cond{margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--muted)}
 ul.cond li{margin:4px 0}
 .stat{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .stat b{display:block;font-size:20px}
+.themes{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
+.themes button{border:1.5px solid var(--line);background:#fff;color:var(--muted);border-radius:999px;
+  padding:8px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;min-height:40px}
+.themes button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.cond{list-style:none;padding:0;margin:8px 0 0}
+.cond li{display:flex;gap:9px;align-items:flex-start;font-size:13px;padding:6px 0;color:var(--muted)}
+.cond li .mark{flex:none;width:20px;font-weight:800}
+.cond li.ok{color:var(--ok)} .cond li.ok .mark::before{content:"✓"}
+.cond li.ng .mark::before{content:"—"}
+.venue{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.venue button{flex:1;min-width:130px;min-height:44px;border-radius:12px;border:1.5px solid var(--line);
+  background:#fff;color:var(--ink);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.venue button.on{border-color:var(--accent);background:#fff8f0;color:#c26a00}
+.session{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:8px;background:#fff}
+.session .when{font-size:13px;font-weight:700}
+.session .meta{font-size:12px;color:var(--muted);margin-top:3px}
+.session .join{display:inline-block;margin-top:8px;background:var(--accent);color:#fff;
+  text-decoration:none;border-radius:999px;padding:9px 16px;font-size:13px;font-weight:700}
+.session .rate{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+.session .rate button{flex:1;min-width:120px;min-height:40px;border-radius:999px;border:1.5px solid var(--line);
+  background:#fff;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .stat div{flex:1;min-width:88px;background:#f7f5f1;border-radius:12px;padding:10px;text-align:center;font-size:11px;color:var(--muted)}
 </style>
 </head>
@@ -72,6 +93,31 @@ ul.cond li{margin:4px 0}
       <button class="btn sub hide" id="portalBtn">支払い方法の変更・解約</button>
       <p class="note">解約手数料はかかりません。次回決済日の前までに解約すれば翌月の請求は発生しません。</p>
       <p class="err hide" id="subErr"></p>
+    </section>
+
+    <!-- プロフィールと興味・関心テーマ -->
+    <section class="card" id="profileSection">
+      <h2><span class="ico">◐</span>プロフィール <span id="profilePill" class="pill off">未完成</span></h2>
+      <p class="note">
+        対話の相手を選ぶための材料になります。「語り合える一人」保証の条件にも含まれます。
+      </p>
+      <label for="pfName">呼ばれたい名前</label>
+      <input id="pfName" maxlength="40" placeholder="例）あさか">
+      <label for="pfBio">どんなことを話したいか（20文字以上）</label>
+      <textarea id="pfBio" maxlength="600"
+        placeholder="例）映画を観たあとの「なぜ心が動いたのか」を言葉にしたいです。結論より、引っかかりを話したい。"></textarea>
+      <label>興味・関心テーマ（2つ以上）</label>
+      <div class="themes" id="pfThemes"></div>
+      <label for="pfStyle">対話での過ごし方</label>
+      <select id="pfStyle">
+        <option value="both">聞くのも話すのも half-half</option>
+        <option value="listen">まずは聞きたい</option>
+        <option value="talk">話したいことがある</option>
+      </select>
+      <label><input type="checkbox" id="pfZoom" style="width:auto;margin-right:8px">Zoomでの対話も希望する</label>
+      <button class="btn" id="pfSave">プロフィールを保存</button>
+      <p class="err hide" id="pfErr"></p>
+      <p class="ok hide" id="pfOk"></p>
     </section>
 
     <!-- 本人確認 -->
@@ -132,6 +178,8 @@ ul.cond li{margin:4px 0}
         <li>「また話したい」と評価した相手が一人もいないこと</li>
         <li>無断欠席や重大な規約違反がないこと</li>
       </ul>
+      <!-- いま自分が条件を満たしているかを、その場で見せる -->
+      <ul class="cond" id="condList"></ul>
       <div class="row" style="margin-top:12px"><span class="k">申請できる期間</span><span class="v" id="refundWindow">—</span></div>
       <div class="row"><span class="k">申請の状態</span><span class="v" id="refundState">未申請</span></div>
 
@@ -206,7 +254,12 @@ const ERRORS = {
   INVALID_IMAGE_DATA: "画像として読み取れませんでした。別の画像をお試しください。",
   INVALID_MIME: "JPEG・PNG・WebP のいずれかの画像を選んでください。",
   MISSING_IMAGE: "おもて面の画像を選んでください。",
-  RATE_LIMITED: "操作が続いています。しばらく待ってからお試しください。"
+  RATE_LIMITED: "操作が続いています。しばらく待ってからお試しください。",
+  NAME_REQUIRED: "呼ばれたい名前を入力してください。",
+  BIO_TOO_SHORT: "話したいことを20文字以上で書いてください。",
+  THEMES_TOO_FEW: "興味・関心テーマを2つ以上選んでください。",
+  INVALID_VENUE: "対話の場を選び直してください。",
+  ALREADY_DONE: "この対話はすでに終了しています。"
 };
 const human = e => ERRORS[e && e.code] || "処理できませんでした。時間をおいてお試しください。";
 
@@ -316,6 +369,64 @@ $("#kycSubmit").onclick = async () => {
   }
 };
 
+// ───────── プロフィール ─────────
+const THEME_LABELS = {
+  movie:"映画", book:"本", learning:"学び", work:"仕事", tech:"技術", art:"芸術",
+  society:"社会", philosophy:"哲学", money:"お金", health:"健康", family:"家族",
+  game:"ゲーム", music:"音楽", travel:"旅", other:"その他"
+};
+let pfThemes = [];
+
+async function loadProfile() {
+  const r = await api("/api/dialogue/profile");
+  const p = r.profile || {};
+  $("#pfName").value = p.displayName || "";
+  $("#pfBio").value = p.bio || "";
+  $("#pfStyle").value = p.talkStyle || "both";
+  $("#pfZoom").checked = !!p.zoomPreferred;
+  pfThemes = p.themes || [];
+  renderThemes(r.themeOptions || Object.keys(THEME_LABELS));
+  const pill = $("#profilePill");
+  pill.textContent = r.complete ? "完成" : "未完成";
+  pill.className = "pill " + (r.complete ? "on" : "off");
+}
+
+function renderThemes(options) {
+  const box = $("#pfThemes");
+  box.innerHTML = options.map(t =>
+    '<button type="button" data-theme="' + t + '" class="' + (pfThemes.includes(t) ? "on" : "") + '">'
+    + (THEME_LABELS[t] || t) + '</button>'
+  ).join("");
+  box.querySelectorAll("[data-theme]").forEach(b => {
+    b.onclick = () => {
+      const t = b.dataset.theme;
+      if (pfThemes.includes(t)) pfThemes = pfThemes.filter(x => x !== t);
+      else if (pfThemes.length < 8) pfThemes.push(t);
+      renderThemes(options);
+    };
+  });
+}
+
+$("#pfSave").onclick = async () => {
+  const btn = $("#pfSave");
+  msg($("#pfErr"), ""); msg($("#pfOk"), "");
+  btn.disabled = true; btn.textContent = "保存中…";
+  try {
+    const r = await api("/api/dialogue/profile", { method:"POST", body:{
+      displayName: $("#pfName").value,
+      bio: $("#pfBio").value,
+      themes: pfThemes,
+      talkStyle: $("#pfStyle").value,
+      zoomPreferred: $("#pfZoom").checked
+    }});
+    msg($("#pfOk"), r.complete ? "保存しました。プロフィールは完成しています。" : "保存しました。");
+    await loadProfile();
+    await loadDialogue();
+  } catch (e) {
+    msg($("#pfErr"), human(e));
+  } finally { btn.disabled = false; btn.textContent = "プロフィールを保存"; }
+};
+
 // ───────── 対話 ─────────
 async function loadDialogue() {
   const d = await api("/api/dialogue/my");
@@ -332,14 +443,37 @@ async function loadDialogue() {
   list.innerHTML = d.sessions.length
     ? d.sessions.map(s => {
         const when = s.scheduledAt ? new Date(s.scheduledAt).toLocaleString("ja-JP") : "日時未定";
+        const isZoom = s.venue === "zoom";
+        let html = '<div class="session">'
+          + '<div class="when">' + when + '</div>'
+          + '<div class="meta">' + (outcomes[s.outcome] || s.outcome)
+          + '　/　' + (isZoom ? "Zoom" : "Emu内で対話") + '</div>';
+
+        // 予定のものには参加導線と、場の希望を出す
+        if (s.outcome === "scheduled") {
+          if (isZoom && s.meetingUrl) {
+            html += '<a class="join" href="' + s.meetingUrl + '" target="_blank" rel="noopener">Zoomに参加する</a>';
+          } else {
+            html += '<a class="join" href="/?emuDiscussion=1">Emuで対話する</a>';
+          }
+          html += '<div class="venue">'
+            + '<button data-venue="emu"  data-id="' + s.id + '"' + (!isZoom?' class="on"':'') + '>Emu内で話す</button>'
+            + '<button data-venue="zoom" data-id="' + s.id + '"' + (isZoom?' class="on"':'') + '>Zoomを希望する</button>'
+            + '</div>';
+        }
+
         // 実施済みで未評価のものだけ、その場で評価できるようにする
-        const rate = (s.outcome === "held" && s.wantsAgain === null)
-          ? '<div style="margin-top:6px"><button class="btn sub" style="min-height:38px;font-size:13px" data-rate="' + s.id + '" data-v="1">また話したい</button>'
-            + '<button class="btn sub" style="min-height:38px;font-size:13px" data-rate="' + s.id + '" data-v="0">今回は合わなかった</button></div>'
-          : (s.wantsAgain === true ? '<span class="pill on">また話したい</span>'
-            : s.wantsAgain === false ? '<span class="pill off">合わなかった</span>' : "");
-        return '<div class="row"><span class="k">' + when + '</span><span class="v">'
-          + (outcomes[s.outcome] || s.outcome) + rate + '</span></div>';
+        if (s.outcome === "held" && s.wantsAgain === null) {
+          html += '<div class="rate">'
+            + '<button data-rate="' + s.id + '" data-v="1">また話したい</button>'
+            + '<button data-rate="' + s.id + '" data-v="0">今回は合わなかった</button></div>';
+        } else if (s.wantsAgain === true) {
+          html += '<div style="margin-top:8px"><span class="pill on">また話したい</span>'
+            + (s.ownerWantsAgain === true ? ' <span class="pill on">相手も同じ</span>' : '') + '</div>';
+        } else if (s.wantsAgain === false) {
+          html += '<div style="margin-top:8px"><span class="pill off">合わなかった</span></div>';
+        }
+        return html + '</div>';
       }).join("")
     : '<p class="note">まだ対話の予定はありません。対話できる日時を登録すると、Emuから対話をご提案します。</p>';
 
@@ -354,6 +488,41 @@ async function loadDialogue() {
       } catch (e) { b.disabled = false; alert(human(e)); }
     };
   });
+  list.querySelectorAll("[data-venue]").forEach(b => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await api("/api/dialogue/" + b.dataset.id + "/venue-request", {
+          method:"POST", body:{ venue: b.dataset.venue }
+        });
+        alert(b.dataset.venue === "zoom"
+          ? "Zoomを希望として伝えました。URLが用意されるとここに表示されます。"
+          : "Emu内での対話を希望として伝えました。");
+        await loadDialogue();
+      } catch (e) { b.disabled = false; alert(human(e)); }
+    };
+  });
+
+  renderConditions(d.summary);
+}
+
+/* 返金条件を、いま満たしているかで見せる。
+   申請してから「条件を満たしていません」と言われるのを避ける。 */
+function renderConditions(sum) {
+  const el = $("#condList");
+  if (!el || !sum || !sum.conditions) return;
+  const c = sum.conditions;
+  const rows = [
+    [c.profileComplete, "プロフィールを完成させる"],
+    [c.themes,          "興味・関心テーマを2つ以上登録する"],
+    [c.slots,           "対話できる日時を3枠以上登録する"],
+    [c.joined,          "提案された対話に3回以上参加する（現在 " + sum.held + " 回）"],
+    [c.rated,           "対話後の評価に回答する"],
+    [c.noWantAgain,     "「また話したい」と思える相手が一人もいない"]
+  ];
+  el.innerHTML = rows.map(([ok, text]) =>
+    '<li class="' + (ok ? "ok" : "ng") + '"><span class="mark"></span><span>' + text + '</span></li>'
+  ).join("");
 }
 
 $("#slotsSave").onclick = async () => {
@@ -403,7 +572,7 @@ onAuthStateChanged(auth, async (user) => {
   }
   try {
     idToken = await user.getIdToken();
-    await Promise.all([loadBilling(), loadKyc(), loadDialogue()]);
+    await Promise.all([loadBilling(), loadKyc(), loadProfile(), loadDialogue()]);
     $("#gate").classList.add("hide");
     $("#main").classList.remove("hide");
   } catch (e) {

@@ -50,11 +50,13 @@ img.doc{max-width:100%;border-radius:8px;border:1px solid var(--line);margin-top
       <button data-tab="refunds" class="active">返金申請</button>
       <button data-tab="kyc">本人確認</button>
       <button data-tab="dialogue">対話記録</button>
+      <button data-tab="metrics">指標</button>
     </div>
 
     <section id="tab-refunds"></section>
     <section id="tab-kyc" class="hide"></section>
     <section id="tab-dialogue" class="hide"></section>
+    <section id="tab-metrics" class="hide"></section>
   </main>
 </div>
 
@@ -226,31 +228,67 @@ async function renderDialogue() {
       '<div class="card"><h3>対話機会を提示する</h3>'
       + '<input id="offerUid" placeholder="会員の uid">'
       + '<input id="offerAt" type="datetime-local">'
+      + '<select id="offerVenue"><option value="emu">Emu内で対話する</option>'
+      + '<option value="zoom">Zoomで対話する</option></select>'
+      + '<input id="offerUrl" placeholder="ZoomのURL（Zoomのときだけ）">'
       + '<div class="actions"><button class="act ok" id="offerBtn">この日時で提示する</button></div></div>'
-      + (items.length ? items.map(s =>
-          '<div class="card" data-id="' + esc(s.id) + '">'
+      + (items.length ? items.map(s => {
+          const venueLabel = s.venue === "zoom" ? "Zoom" : "Emu内";
+          const req = s.venueRequest && s.venueRequest !== s.venue
+            ? '<span class="pill warn">' + (s.venueRequest === "zoom" ? "Zoom希望" : "Emu希望") + '</span>' : "";
+          const ownerRated = typeof s.ownerWantsAgain === "boolean";
+          const mutual = s.wantsAgain === true && s.ownerWantsAgain === true;
+          return '<div class="card" data-id="' + esc(s.id) + '">'
           + '<p class="meta">uid: ' + esc(s.uid) + '｜' + fmt(s.scheduledAt) + '</p>'
+          + '<div class="row"><span>場</span><span>' + venueLabel + ' ' + req
+          + (s.meetingUrl ? ' <a href="' + esc(s.meetingUrl) + '" target="_blank" rel="noopener" style="color:#7dd3fc">URL</a>' : '')
+          + '</span></div>'
           + '<div class="row"><span>結果</span><span>' + esc(outcomes[s.outcome] || s.outcome) + '</span></div>'
-          + '<div class="row"><span>また話したい</span><span>'
-          + (s.wantsAgain === true ? '<span class="pill on">はい</span>'
-             : s.wantsAgain === false ? '<span class="pill">いいえ</span>' : "未回答") + '</span></div>'
+          + '<div class="row"><span>会員の評価</span><span>'
+          + (s.wantsAgain === true ? '<span class="pill on">また話したい</span>'
+             : s.wantsAgain === false ? '<span class="pill">合わなかった</span>' : "未回答") + '</span></div>'
+          + '<div class="row"><span>あなたの評価</span><span>'
+          + (ownerRated ? (s.ownerWantsAgain ? '<span class="pill on">また話したい</span>' : '<span class="pill">合わなかった</span>')
+             : '<span class="pill warn">未回答</span>') + '</span></div>'
+          + (mutual ? '<div class="row"><span><strong>相互マッチ</strong></span><span><span class="pill on">成立</span></span></div>' : '')
+          + (s.outcome === "held" && !ownerRated
+              ? '<div class="actions"><button class="act ok" data-orate="1">また話したい</button>'
+                + '<button class="act no" data-orate="0">合わなかった</button></div>' : '')
           + '<select data-outcome>' + Object.entries(outcomes).map(([k,v]) =>
               '<option value="' + k + '"' + (k === s.outcome ? " selected" : "") + '>' + v + '</option>').join("")
-          + '</select><div class="actions"><button class="act neutral" data-record>結果を記録</button></div></div>'
-        ).join("") : '<p class="empty">対話記録はまだありません。</p>');
+          + '</select><div class="actions"><button class="act neutral" data-record>結果を記録</button></div></div>';
+        }).join("") : '<p class="empty">対話記録はまだありません。</p>');
 
     const offerBtn = $("#offerBtn");
     if (offerBtn) offerBtn.onclick = async () => {
       const uid = $("#offerUid").value.trim();
       const at = $("#offerAt").value;
+      const venue = $("#offerVenue").value;
+      const meetingUrl = $("#offerUrl").value.trim();
       if (!uid || !at) return alert("uid と日時を入力してください。");
+      if (venue === "zoom" && !/^https:\/\//.test(meetingUrl)) {
+        return alert("Zoomを選んだ場合は https:// から始まるURLを入れてください。");
+      }
       offerBtn.disabled = true;
       try {
-        await api("/api/dialogue/admin/offer", { method:"POST", body:{ uid, scheduledAt: new Date(at).toISOString() } });
+        await api("/api/dialogue/admin/offer", { method:"POST", body:{
+          uid, scheduledAt: new Date(at).toISOString(), venue, meetingUrl
+        }});
         renderDialogue();
       } catch (e) { alert("失敗しました: " + (e.code || e.message)); offerBtn.disabled = false; }
     };
 
+    el.querySelectorAll("[data-orate]").forEach(btn => {
+      btn.onclick = async () => {
+        const card = btn.closest(".card");
+        btn.disabled = true;
+        try {
+          await api("/api/dialogue/admin/" + card.dataset.id + "/rate",
+            { method:"POST", body:{ wantsAgain: btn.dataset.orate === "1" } });
+          renderDialogue();
+        } catch (e) { alert("失敗しました: " + (e.code || e.message)); btn.disabled = false; }
+      };
+    });
     el.querySelectorAll("[data-record]").forEach(btn => {
       btn.onclick = async () => {
         const card = btn.closest(".card");
@@ -267,12 +305,45 @@ async function renderDialogue() {
   }
 }
 
+/* ブリーフ §24 の指標。最重要は「相互にまた話したいが成立した割合」。
+   成約率より先にここを見る。 */
+async function renderMetrics() {
+  const el = $("#tab-metrics");
+  el.innerHTML = '<p class="empty">読み込み中…</p>';
+  try {
+    const m = await api("/api/dialogue/admin/metrics");
+    const pct = v => v === null ? "—" : v + "%";
+    el.innerHTML =
+      '<div class="card"><h3>相互マッチ</h3>'
+      + '<p class="meta">ブリーフの最重要指標。片方だけの「また話したい」は数えません。</p>'
+      + '<div class="row"><span><strong>相互マッチ率</strong></span><span><strong>' + pct(m.mutualRate) + '</strong></span></div>'
+      + '<div class="row"><span>双方が評価した対話</span><span>' + m.bothRated + ' 件</span></div>'
+      + '<div class="row"><span>うち相互に「また話したい」</span><span>' + m.mutual + ' 件</span></div>'
+      + '</div>'
+      + '<div class="card"><h3>継続relationshipの広がり</h3>'
+      + '<div class="row"><span>継続相手が一人以上いる会員の割合</span><span><strong>' + pct(m.continuingRate) + '</strong></span></div>'
+      + '<div class="row"><span>会員数</span><span>' + m.members + ' 人</span></div>'
+      + '<div class="row"><span>うち相互マッチあり</span><span>' + m.membersWithMutual + ' 人</span></div>'
+      + '</div>'
+      + '<div class="card"><h3>内訳</h3>'
+      + '<div class="row"><span>実施した対話</span><span>' + m.held + ' 件</span></div>'
+      + '<div class="row"><span>会員が「また話したい」</span><span>' + m.memberYes + ' 件</span></div>'
+      + '<div class="row"><span>あなたが「また話したい」</span><span>' + m.ownerYes + ' 件</span></div>'
+      + '</div>'
+      + (m.bothRated === 0
+        ? '<p class="empty">まだ双方の評価がそろった対話がありません。対話記録タブで、実施済みの対話にあなたの評価を入れてください。</p>'
+        : '');
+  } catch (e) {
+    el.innerHTML = '<p class="empty">読み込みに失敗しました（' + esc(e.code || e.message) + '）</p>';
+  }
+}
+
 document.querySelectorAll(".tabs button").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
-    ["refunds","kyc","dialogue"].forEach(t =>
+    ["refunds","kyc","dialogue","metrics"].forEach(t =>
       document.getElementById("tab-" + t).classList.toggle("hide", t !== b.dataset.tab));
-    ({ refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue })[b.dataset.tab]();
+    ({ refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics })[b.dataset.tab]();
   };
 });
 

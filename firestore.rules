@@ -70,6 +70,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 会員プロフィール（自己紹介・興味テーマ）。
+    // 返金条件の判定材料なので、クライアントから直接書き換えられないようにする。
+    // 読み書きはサーバー（/api/dialogue/profile）経由のみ。
+    match /member_profiles/{document=**} {
+      allow read, write: if false;
+    }
+
     // 監査ログ。改ざん・削除を防ぐためクライアントからは完全に遮断する。
     match /admin_audit_logs/{document=**} {
       allow read, write: if false;
@@ -327,7 +334,8 @@ service cloud.firestore {
         && coll != 'admin_audit_logs'
         && coll != 'emu_feedback'
         && coll != 'discussion_conclusions'
-        && coll != 'discussion_rooms';
+        && coll != 'discussion_rooms'
+        && coll != 'member_profiles';
     }
   }
 }

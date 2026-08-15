@@ -1,17 +1,37 @@
 "use strict";
 
 /**
- * 本人確認（書類アップロード → オーナーが目視承認）と、保証判定のための対話記録。
+ * 本人確認（書類アップロード → オーナーが目視承認）。
  *
- * 個人情報の扱い（要配慮性が高いので設計として固定する）:
- *  - 書類画像は非公開バケットに置く。makePublic は絶対にしない。
- *  - オーナーの閲覧は都度発行する短時間の署名付きURLのみ。URLは監査ログに残す。
- *  - 承認・却下が決まった時点で画像を削除し、結果だけを残す。
- *  - 氏名・生年月日そのものは保存しない。「確認済み」という事実だけ残す。
- *  - 未処理のまま放置された書類も、保持期限を過ぎたら削除する。
+ * 扱うのは運転免許証やパスポートの画像で、漏れたときの被害が最も大きい種類の
+ * 個人情報にあたる。そのため「取らない・持たない・見せない・残さない」を
+ * 設計として固定する。運用でカバーする前提にはしない。
+ *
+ * ── 取らない ──
+ *  - 氏名・生年月日・個人番号を保存しない。残すのは「確認済み」という事実だけ。
+ *  - マイナンバーカードは表面のみ（個人番号が写る面は受け取らない）。
+ *
+ * ── 持たない ──
+ *  - 判定した時点で画像を削除する。承認・却下どちらでも消す。
+ *  - 未処理のまま30日を過ぎたものも消す（日次バッチ）。
+ *  - 削除に失敗したら Firestore の記録を消さずに残し、次のバッチで再試行する。
+ *    ここで記録だけ消すと、追跡できない画像がバケットに残り続ける。
+ *
+ * ── 見せない ──
+ *  - Storage は storage.rules でクライアントから完全に遮断（/kyc/** は read,write false）。
+ *    Admin SDK だけが触れる。
+ *  - 保存パスに推測できないトークンを混ぜる。万一ルールが緩んでも、
+ *    uid を知っているだけでは辿り着けないようにする。
+ *  - 閲覧はオーナーだけ。都度3分だけ有効な署名付きURLを発行する。
+ *  - 誰がいつ誰の書類を見たかを監査ログに残す。
+ *
+ * ── 残さない ──
+ *  - Firestore 側の kyc_submissions もクライアントからは読めない（firestore.rules）。
+ *  - 監査ログにも画像URLそのものは書かない。
  */
 
 const express = require("express");
+const crypto = require("crypto");
 
 const KYC_COL = "kyc_submissions";
 const DIALOGUE_COL = "dialogue_sessions";
@@ -19,7 +39,7 @@ const AUDIT_COL = "admin_audit_logs";
 
 const KYC_PREFIX = "kyc";                       // Storage 上の保存先
 const KYC_RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 未処理書類の保持上限: 30日
-const VIEW_URL_TTL_MS = 5 * 60 * 1000;          // 署名付きURLの有効期間: 5分
+const VIEW_URL_TTL_MS = 3 * 60 * 1000;          // 署名付きURLの有効期間: 3分（見るのに十分で、漏れたときの窓を狭くする）
 
 const ALLOWED_DOC_TYPES = ["driver_license", "passport", "mynumber_card", "residence_card"];
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp"];
@@ -58,12 +78,22 @@ function createKycRouter(deps) {
     return false;
   }
 
+  /* 消せたパスと消せなかったパスを分けて返す。
+     呼び出し側は「消せなかったものだけ」を記録に残し、次のバッチで再試行する。
+     ここで全部消えた前提にすると、追跡できない画像がバケットに残る。 */
   async function deleteStoredDocs(paths) {
+    const remaining = [];
     for (const p of paths) {
       if (!p) continue;
-      try { await bucket().file(p).delete(); }
-      catch (e) { if (e.code !== 404) console.warn("KYC画像の削除に失敗:", p, e.message); }
+      try {
+        await bucket().file(p).delete();
+      } catch (e) {
+        if (e.code === 404) continue;          // 既に無い＝目的は達成
+        console.error("KYC画像の削除に失敗（再試行対象）:", p, e.message);
+        remaining.push(p);
+      }
     }
+    return remaining;
   }
 
   // ───────── 提出 ─────────
@@ -97,9 +127,12 @@ function createKycRouter(deps) {
       }
 
       const stamp = Date.now();
+      // パスに推測できない文字列を混ぜる。Storageのルールで既に塞いでいるが、
+      // 万一ルールが緩んでも uid だけでは辿り着けないようにしておく。
+      const token = crypto.randomBytes(16).toString("hex");
       const stored = [];
       for (const f of files) {
-        const destPath = `${KYC_PREFIX}/${uid}/${stamp}_${f.label}`;
+        const destPath = `${KYC_PREFIX}/${uid}/${token}_${stamp}_${f.label}`;
         // 非公開のまま保存する（makePublic を呼ばない）
         await bucket().file(destPath).save(f.buffer, {
           contentType: mimeType,
@@ -206,15 +239,18 @@ function createKycRouter(deps) {
         return res.status(409).json({ error: "ALREADY_DECIDED", status: snap.data().status });
       }
 
-      await deleteStoredDocs(snap.data().storagePaths || []);
+      const remaining = await deleteStoredDocs(snap.data().storagePaths || []);
       await ref.update({
         status: decision === "approve" ? "approved" : "rejected",
         rejectReason: decision === "reject" ? rejectReason : null,
         decidedAt: new Date(),
         decidedBy: req.identity.uid,
-        storagePaths: [],
-        imagesDeletedAt: new Date()
+        // 消せなかったものだけ残す。空になるまで日次バッチが再試行する。
+        storagePaths: remaining,
+        imagesDeletedAt: remaining.length ? null : new Date(),
+        deletePending: remaining.length > 0
       });
+      if (remaining.length) console.error("KYC: 未削除の画像が残っています", targetUid, remaining.length + "件");
       await audit(req.identity.uid, `kyc_${decision}`, targetUid, { rejectReason: rejectReason || null });
       return res.json({ ok: true, status: decision === "approve" ? "approved" : "rejected" });
     } catch (e) {
@@ -225,26 +261,51 @@ function createKycRouter(deps) {
 
   /* 未処理のまま保持期限を過ぎた書類を消す。定期実行から呼ぶ。 */
   async function purgeExpiredDocuments() {
-    if (!db || !firebaseAdmin) return { deleted: 0 };
+    if (!db || !firebaseAdmin) return { deleted: 0, retried: 0 };
+    let deleted = 0, retried = 0;
+
+    // ① 未処理のまま保持期限を過ぎたもの
     try {
       const snap = await db.collection(KYC_COL)
         .where("status", "==", "pending")
         .where("expiresAt", "<=", new Date())
         .limit(200).get();
-      let deleted = 0;
       for (const doc of snap.docs) {
-        await deleteStoredDocs(doc.data().storagePaths || []);
+        const remaining = await deleteStoredDocs(doc.data().storagePaths || []);
         await doc.ref.update({
-          status: "expired", storagePaths: [], imagesDeletedAt: new Date()
+          status: "expired",
+          storagePaths: remaining,
+          imagesDeletedAt: remaining.length ? null : new Date(),
+          deletePending: remaining.length > 0
         });
-        deleted++;
+        if (!remaining.length) deleted++;
       }
-      if (deleted) console.log(`🗑 期限切れの本人確認書類を削除: ${deleted}件`);
-      return { deleted };
     } catch (e) {
-      console.warn("KYC 期限切れ削除に失敗:", e.message);
-      return { deleted: 0, error: e.message };
+      console.error("KYC 期限切れ削除に失敗:", e.message);
     }
+
+    // ② 判定済みだが消し残しているもの（前回の削除が失敗した分）を再試行
+    try {
+      const stuck = await db.collection(KYC_COL)
+        .where("deletePending", "==", true)
+        .limit(200).get();
+      for (const doc of stuck.docs) {
+        const remaining = await deleteStoredDocs(doc.data().storagePaths || []);
+        await doc.ref.update({
+          storagePaths: remaining,
+          imagesDeletedAt: remaining.length ? null : new Date(),
+          deletePending: remaining.length > 0
+        });
+        if (!remaining.length) retried++;
+      }
+    } catch (e) {
+      console.error("KYC 消し残しの再試行に失敗:", e.message);
+    }
+
+    if (deleted || retried) {
+      console.log(`🗑 本人確認書類: 期限切れ${deleted}件を削除 / 消し残し${retried}件を回収`);
+    }
+    return { deleted, retried };
   }
 
   return { router, purgeExpiredDocuments, DIALOGUE_COL };
