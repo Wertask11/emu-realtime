@@ -91,10 +91,13 @@ service cloud.firestore {
     // 作成・更新は自分名義のときだけ（同じ議題は同じIDに集約されるため update も許す）。
     match /discussion_rooms/{id} {
       allow read: if true;
-      allow create, update: if isMyWallet(request.resource.data.author)
+      allow create: if isMyWallet(request.resource.data.author)
         && request.resource.data.topic is string
         && request.resource.data.topic.size() > 0
         && request.resource.data.topic.size() <= 120;
+      // 他の人が同じ議題に入ったときは、最終利用日時だけ更新できる。
+      // 議題・ジャンル・作成者は書き換えられない（作成者が乗っ取られないように）。
+      allow update: if hasAccount() && changedOnly(['lastActiveAt']);
       allow delete: if false;
     }
 

@@ -6081,11 +6081,13 @@ const EMUER_STEPS_CONFIG = {
 };
 const EMUER_COMPLETION_REWARD = 1000; // 全ステップ完了後の実EMUER配布量
 const EMUER_INITIAL_AMOUNT = 1000; // 後方互換用（直接参照は非推奨）
+/* メンテナンス中でも入れるかの判定。
+   以前は URL に ?admin=1 を付けるだけで誰でも通れた。
+   メンテナンスは「まだ見せたくないものを隠す」ためのものなので、
+   URLだけで解除できると意味がない。ウォレットアドレスだけで判定する。 */
 function _isOwnerAccess() {
-  const saved = (localStorage.getItem('emuWallet') || '').toLowerCase();
-  if (saved && saved === SP_OWNER.toLowerCase()) return true;
-  if (new URLSearchParams(location.search).get('admin') === '1') return true;
-  return false;
+  const saved = (localStorage.getItem('emuWallet') || window.connectedAccount || '').toLowerCase();
+  return !!saved && saved === SP_OWNER.toLowerCase();
 }
 
 // SchoolParkコンテンツから戻った場合のフラグ（currentUserId宣言前なのでフラグのみ）
@@ -15004,14 +15006,26 @@ async function saveDiscussionRoom(topic, genre) {
     // 同じ議題を何度も立てても増えないよう、議題からIDを作って上書きする
     const id = 'r_' + Array.from(clean).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0).toString(36)
       + '_' + clean.length;
-    await window.fbLib.setDoc(window.fbLib.doc(window.db, DISCUSSION_ROOMS_COL, id), {
-      topic: clean,
-      genre: DISCUSSION_GENRES.includes(genre) ? genre : 'other',
-      author: addr,
-      authorName: localStorage.getItem('ches_name') || '',
-      createdAt: new Date(),
-      lastActiveAt: new Date()
-    }, { merge: true });
+    /* 同じ議題は1つにまとめるが、最初に立てた人を残す。
+       毎回 author を上書きすると、あとから同じ議題を立てた人が
+       作成者として表示されてしまう。 */
+    const ref = window.fbLib.doc(window.db, DISCUSSION_ROOMS_COL, id);
+    const existing = await window.fbLib.getDoc(ref);
+    if (existing.exists()) {
+      /* 既にある議題：更新するのは最終利用日時だけ。
+         他人が立てた議題に入っても、作成者・議題・ジャンルは変わらない。
+         （Firestoreルールもこの1項目しか許可していない） */
+      await window.fbLib.updateDoc(ref, { lastActiveAt: new Date() });
+    } else {
+      await window.fbLib.setDoc(ref, {
+        topic: clean,
+        genre: DISCUSSION_GENRES.includes(genre) ? genre : 'other',
+        author: addr,
+        authorName: localStorage.getItem('ches_name') || '',
+        createdAt: new Date(),
+        lastActiveAt: new Date()
+      });
+    }
   } catch (e) {
     console.warn('議論の保存に失敗:', e && e.message);
   }
@@ -15111,15 +15125,13 @@ window.addEventListener('message', function(event) {
           if (!res.ok) throw new Error(data.error || '記録できませんでした');
           reply(true, '一日シェアに記録しました。');
         } else {
-          // 知識の投稿フォームを開き、本文を入れた状態で渡す
+          /* 知識の投稿フォームを開き、本文を入れた状態で渡す。
+             以前は400ms待って送っていたが、iframeの読み込みが遅い環境では
+             まだ受け口が用意されておらず、本文が消えていた。
+             iframe から届く emu-knowledge-ready を待ってから送る。 */
           reply(true, '知識の投稿フォームを開きます。');
           showEmuFeed('new');
-          setTimeout(() => {
-            const frame = document.getElementById('emuKnowledgeFrame');
-            if (frame && frame.contentWindow) {
-              frame.contentWindow.postMessage({ type:'emu-knowledge-prefill', body: text }, window.location.origin);
-            }
-          }, 400);
+          if (window.emuKnowledgePrefill) window.emuKnowledgePrefill(text);
         }
       } catch (e) {
         console.warn('遊びの記録:', e && e.message);
@@ -21484,6 +21496,8 @@ async function sendEmuFeedback() {
   let knowledgeLastDoc = null;
   let knowledgeHasMore = true;
   let knowledgeSyncing = null;
+  /* 遊びから渡された、投稿フォームに入れる本文。iframeの準備ができるまで持っておく。 */
+  let knowledgePrefillText = '';
   let knowledgeScheduleCache = { account:'', count:0, fetchedAt:0 };
   const knowledgeReactionHolders = new Map();
 
@@ -21599,14 +21613,27 @@ async function sendEmuFeedback() {
       return knowledgeHelpedCache.count;
     }
     try {
-      const q = window.fbLib.query(
-        window.fbLib.collection(window.db, 'posts'),
-        window.fbLib.where('goodUsers', 'array-contains', account),
-        window.fbLib.limit(500)
-      );
-      const snap = await window.fbLib.getDocs(q);
-      knowledgeHelpedCache = { account, count:snap.size };
-      return snap.size;
+      /* 500件で頭打ちにならないよう、ページングして数え切る。
+         Firestore に件数だけ返すAPIが無いので、
+         ドキュメントIDだけ辿って必要最小限の読み取りにする。 */
+      const PAGE = 300, MAX_PAGES = 20;   // 上限6000件。これを超えたら「6000+」と出す
+      let total = 0, cursor = null, capped = false;
+      for (let i = 0; i < MAX_PAGES; i++) {
+        const parts = [
+          window.fbLib.collection(window.db, 'posts'),
+          window.fbLib.where('goodUsers', 'array-contains', account),
+          window.fbLib.orderBy('__name__'),
+          window.fbLib.limit(PAGE)
+        ];
+        if (cursor) parts.splice(3, 0, window.fbLib.startAfter(cursor));
+        const snap = await window.fbLib.getDocs(window.fbLib.query(...parts));
+        total += snap.size;
+        if (snap.size < PAGE) { cursor = null; break; }
+        cursor = snap.docs[snap.docs.length - 1];
+        if (i === MAX_PAGES - 1) capped = true;
+      }
+      knowledgeHelpedCache = { account, count: total, capped };
+      return capped ? total + '+' : total;
     } catch (e) {
       console.warn('役に立った数の集計に失敗:', e && e.message);
       return knowledgeHelpedCache && knowledgeHelpedCache.account === account
@@ -21643,6 +21670,25 @@ async function sendEmuFeedback() {
       return [];
     }
   }
+
+  /* 遊びから渡された本文を、知識の投稿フォームへ届ける。
+     iframe の準備ができる前に送ると捨てられるので、
+     渡す文章を持っておき、準備できた時点で流す。 */
+  function flushKnowledgePrefill() {
+    if (!knowledgePrefillText) return;
+    const frame = knowledgeFrame();
+    if (!frame || !frame.contentWindow || frame.dataset.ready !== 'true') return;
+    frame.contentWindow.postMessage(
+      { type:'emu-knowledge-prefill', body: knowledgePrefillText }, window.location.origin);
+    knowledgePrefillText = '';
+  }
+
+  /* 遊びの画面から呼ばれる。このブロックは即時関数の中なので、
+     他の script ブロックから触れるように window に出しておく。 */
+  window.emuKnowledgePrefill = function (text) {
+    knowledgePrefillText = String(text || '');
+    flushKnowledgePrefill();   // 既に準備できていれば、そのまま渡す
+  };
 
   async function syncKnowledgeFrame(options) {
     options = options || {};
@@ -21726,6 +21772,7 @@ async function sendEmuFeedback() {
       if (message.type === 'emu-knowledge-ready') {
         frame.dataset.ready = 'true';
         sendKnowledge({ type:'emu-knowledge-filter', mode:frame.dataset.pendingFilter || 'new' });
+        flushKnowledgePrefill();   // 準備ができたので、待たせていた本文を渡す
       }
       syncKnowledgeFrame({ append:false });
       return;
