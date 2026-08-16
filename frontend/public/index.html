@@ -52,7 +52,12 @@
            LINE / Google の自動復帰が動く場合も同じ。どちらでもロゴは出さない。 */
         var hasWallet = false;
         try { hasWallet = !!localStorage.getItem("emuWallet"); } catch (e) {}
-        if (hasSession || hasWallet) document.documentElement.classList.add("ches-resuming");
+        if (hasSession || hasWallet) {
+          document.documentElement.classList.add("ches-resuming");
+          /* 旧レイアウト（3カラム）を最初から描かせない。
+             描いてから消すと、切り替わるまでの一瞬だけ古い画面が見える。 */
+          document.documentElement.classList.add("ches-billing-return");
+        }
       }
       if (isLineCb || isGoogleRedirect) {
         document.documentElement.classList.add("ches-resuming");
@@ -3301,6 +3306,9 @@ html, body { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 <style>
 /* 認証（LINE/Google）から戻った直後：ロゴを出さず最初からローディングを表示（フラッシュ防止） */
 html.ches-resuming #logoScreen { display: none; }
+/* 決済・解約から戻ってきた直後。旧レイアウトを一度も描かせない。
+   着地が終わったら JS 側でこのクラスを外す。 */
+html.ches-billing-return #mainApp > .container { display: none !important; }
 html.ches-resuming #spLoadingOverlay { display: flex; }
 /* ── 宇宙ロゴ画面 ── */
 #logoScreen {
@@ -6537,12 +6545,14 @@ function _landAfterDirectReturn() {
     } catch (e) {}
     var home = document.getElementById("emuTodayHome");
     var ok = home && getComputedStyle(home).display !== "none";
+    // 開けたら、旧レイアウトを抑えていた印を外す（以降は通常どおり）
+    if (ok) { try { document.documentElement.classList.remove("ches-billing-return"); } catch (e) {} }
     if (!ok && tries < 12) setTimeout(open, 300);
   };
+  open();                                   // まず即時に開く
   if (document.readyState === "loading") {
+    // 早すぎて開けなかった場合の保険
     document.addEventListener("DOMContentLoaded", open);
-  } else {
-    open();
   }
 }
 
