@@ -22,7 +22,10 @@
       var isLineCb = /[?&]code=/.test(location.search || "");
       var isGoogleRedirect = false;
       try { isGoogleRedirect = !!localStorage.getItem("ches_google_redirect"); } catch (e) {}
-      if (isLineCb || isGoogleRedirect) {
+      /* Stripe の決済・解約から戻ってきたときも、ログイン済みのまま復帰させる。
+         ここでロゴ画面を出すと、支払いのあとに最初からやり直しに見えてしまう。 */
+      var isBillingReturn = /[?&]billing=/.test(location.search || "");
+      if (isLineCb || isGoogleRedirect || isBillingReturn) {
         document.documentElement.classList.add("ches-resuming");
       }
     } catch (e) {}
@@ -34,6 +37,26 @@
   <!-- CHESハブ画面（デザイン案）用フォント -->
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Shippori+Mincho:wght@500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
+/* アカウントメニュー。右上のアドレス表示から開く */
+.emu-account-wrap { position:relative; display:inline-block; }
+.emu-account-menu {
+  position:absolute; top:calc(100% + 8px); right:0; z-index:1500;
+  min-width:230px; background:#fff; border:1px solid #e6e2dc; border-radius:14px;
+  box-shadow:0 14px 40px -12px rgba(26,24,64,.35); padding:8px;
+  display:none; flex-direction:column; gap:2px;
+}
+.emu-account-menu.open { display:flex; }
+.emu-account-head { padding:9px 12px 11px; border-bottom:1px solid #f0ede8; margin-bottom:6px; }
+.emu-account-head b { display:block; font-size:13px; color:#1a1840; }
+.emu-account-head small { display:block; font-size:11px; color:#8b8698; margin-top:2px; }
+.emu-account-menu button {
+  text-align:left; background:none; border:0; border-radius:9px; cursor:pointer;
+  padding:11px 12px; font-family:inherit; font-size:13px; color:#1a1840; min-height:42px;
+}
+.emu-account-menu button:hover { background:#faf8f5; }
+.emu-account-menu button.danger { color:#c0392b; }
+.emu-account-sep { height:1px; background:#f0ede8; margin:6px 4px; }
+
     /* 基本スタイル */
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f5f6f7; color: #333; }
     .header { display:flex; justify-content:space-between; align-items:center; background:#fff; padding:10px 20px; border-bottom:1px solid #ddd; }
@@ -3091,6 +3114,7 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   #mainApp > .header > #logo { display:none !important; }
   #mainApp > .header .header-right { min-width:0; margin-left:auto; }
   #walletAddressButton { max-width:138px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .emu-account-menu { right:0; min-width:210px; }
   #emuTodayHome { padding:16px 12px max(34px,env(safe-area-inset-bottom)); }
   #emu-contact-btn { width:48px; height:48px; left:12px; bottom:max(12px,env(safe-area-inset-bottom)); font-size:19px; }
   /* 問い合わせボタンが小さくなる分、閉じるボタンの高さも合わせる */
@@ -4270,7 +4294,24 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   <div class="header-right" style="display: flex; align-items: center; gap: 8px;">
     <input type="search" class="search-bar" placeholder="検索..." data-i18n-placeholder="header.searchPlaceholder" style="padding:6px 10px; border:1px solid #ccc; border-radius:4px; width: 120px;">
     <button id="openPostFormButton" class="post-button" data-i18n="header.post">投稿</button>
-    <button id="walletAddressButton" class="wallet-button" data-i18n="header.walletDisconnected">ウォレット未接続</button>
+    <div class="emu-account-wrap">
+      <button id="walletAddressButton" class="wallet-button" data-i18n="header.walletDisconnected"
+              onclick="toggleAccountMenu(event)" aria-haspopup="true" aria-expanded="false">ウォレット未接続</button>
+      <!-- アカウントメニュー。プラン・プロフィール・対話の予定・ログイン方法・ログアウト -->
+      <div id="emuAccountMenu" class="emu-account-menu" role="menu">
+        <div class="emu-account-head">
+          <b id="emuAccountName">ゲスト</b>
+          <small id="emuAccountAddr"></small>
+        </div>
+        <button type="button" role="menuitem" onclick="accountGo('plan')">プラン・お支払い</button>
+        <button type="button" role="menuitem" onclick="accountGo('profile')">プロフィール</button>
+        <button type="button" role="menuitem" onclick="accountGo('themes')">興味のあるテーマ</button>
+        <button type="button" role="menuitem" onclick="accountGo('sessions')">対話の予定</button>
+        <div class="emu-account-sep"></div>
+        <button type="button" role="menuitem" onclick="accountGo('login')">ログイン方法</button>
+        <button type="button" role="menuitem" class="danger" onclick="accountGo('logout')">ログアウト</button>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -4407,6 +4448,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <!-- 会員種別と、有料会員への導線。JSが emuRenderMembership() で中身を入れる。 -->
         <div class="emu-membership" id="emuMembershipBox">
           <div class="emu-membership-row">
+            <!-- 公式パス（NFT）とサブスクのプランは別物。片方が消えないよう2つに分ける -->
+            <span class="emu-membership-pill" id="emuPassPill" hidden></span>
             <span class="emu-membership-pill" id="emuMembershipPill">確認中…</span>
             <span class="emu-membership-desc" id="emuMembershipDesc"></span>
           </div>
@@ -15864,6 +15907,58 @@ function emuSetWalletLabel(text) {
     btn.textContent = (typeof emuT === 'function') ? emuT(btn.getAttribute('data-i18n')) : 'ウォレット未接続';
   }
 }
+/* ───────── アカウントメニュー（ヘッダー右上） ─────────
+   プラン・プロフィール・対話の予定はすべて会員ページの中にあるので、
+   該当の場所を開くよう会員ページへ「どこを見たいか」を伝える。 */
+function toggleAccountMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('emuAccountMenu');
+  const btn = document.getElementById('walletAddressButton');
+  if (!menu) return;
+  const willOpen = !menu.classList.contains('open');
+  menu.classList.toggle('open', willOpen);
+  if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  if (willOpen) {
+    const name = localStorage.getItem('ches_name') || '';
+    const addr = (window.connectedAccount || localStorage.getItem('emuWallet') || '');
+    const n = document.getElementById('emuAccountName');
+    const a = document.getElementById('emuAccountAddr');
+    if (n) n.textContent = name || 'Emuer';
+    if (a) a.textContent = addr ? emuShortAddr(addr) : '';
+  }
+}
+function closeAccountMenu() {
+  const menu = document.getElementById('emuAccountMenu');
+  if (menu) menu.classList.remove('open');
+  const btn = document.getElementById('walletAddressButton');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+document.addEventListener('click', function (e) {
+  if (e.target.closest && e.target.closest('.emu-account-wrap')) return;
+  closeAccountMenu();
+});
+
+function accountGo(what) {
+  closeAccountMenu();
+  if (what === 'logout') {
+    if (typeof window.spLogout === 'function') window.spLogout();
+    return;
+  }
+  if (what === 'login') {
+    // ログイン方法の変更は入り直しが必要。誤操作しないよう確認する
+    if (window.confirm('別の方法（LINE / Google / メール / ウォレット）で入り直しますか？\n一度ログアウトします。')) {
+      if (typeof window.spLogout === 'function') window.spLogout();
+    }
+    return;
+  }
+  // 会員ページの該当箇所へ。#plan などのハッシュで場所を伝える
+  if (typeof openLegal === 'function') {
+    openLegal('membership');
+    const frame = document.getElementById('chesLegalFrame');
+    if (frame) frame.src = '/membership.html#' + what;
+  }
+}
+
 function emuShortAddr(addr) {
   const a = String(addr || '');
   return a.length > 10 ? a.slice(0, 6) + '...' + a.slice(-4) : a;
@@ -15887,6 +15982,8 @@ async function emuRenderMembership() {
   const cta  = document.getElementById('emuMemberPageCta');   // 入り口は1本に統合済み
   if (!pill || !desc || !cta) return;
 
+  const passPill = document.getElementById('emuPassPill');
+
   /* 入り口は「プランをアップグレードする」の1本だけ。
      未入会でも会員でも同じ会員ページへ行くので、出し分けはしない。 */
   function paint(kind, label, text) {
@@ -15894,12 +15991,22 @@ async function emuRenderMembership() {
     pill.className = 'emu-membership-pill ' + kind;
     desc.textContent = text;
   }
+  /* 公式パス（NFT）のバッジ。サブスクのプランとは別枠で、両方持てる。 */
+  function paintPass(has) {
+    if (!passPill) return;
+    passPill.hidden = !has;
+    if (has) {
+      passPill.textContent = '公式パス';
+      passPill.className = 'emu-membership-pill is-paid';
+    }
+  }
 
   // まずは手元の判定で即座に出す（通信を待たせない）
+  paintPass(!!window.hasPaidNFT);
   if (window.hasPaidNFT) {
-    paint('is-paid', '有料パス', 'いつでも実EMUERへの変換ができます。');
+    paint('is-free', 'プラン未加入', 'いつでも実EMUERへの変換ができます。');
   } else {
-    paint('is-free', '無料ユーザー', '実EMUERへの変換は毎週月曜日のみです。');
+    paint('is-free', 'プラン未加入', '実EMUERへの変換は毎週月曜日のみです。');
   }
 
   // Stripe の有料会員かどうかをサーバーに確認して上書きする
@@ -15916,9 +16023,9 @@ async function emuRenderMembership() {
     if (!res.ok) return;
     const s = await res.json();
     if (s.status === 'active' || s.status === 'trialing') {
-      paint('is-paid', 'Emu 有料会員', s.planLabel
-        ? s.planLabel + '（月額' + Number(s.planAmount).toLocaleString('ja-JP') + '円）をご利用中です。'
-        : '月額10,000円のプランをご利用中です。');
+      // バッジにはプラン名をそのまま出す（Emu light / Emu plus / Emu pro）
+      paint('is-paid', s.planLabel || 'Emu pro',
+        '月額' + Number(s.planAmount).toLocaleString('ja-JP') + '円のプランをご利用中です。');
     } else if (s.status === 'past_due') {
       paint('is-free', 'お支払い確認中', 'カードのお支払いを確認できていません。');
     }
@@ -21173,6 +21280,18 @@ async function sendEmuFeedback() {
     // 入園したら resuming クラスは不要（以降の画面に影響しないよう除去）
     try { document.documentElement.classList.remove("ches-resuming"); } catch (e) {}
     if (typeof spTrack === "function") spTrack("free", addr).catch(function () {});
+    /* Stripe の決済・解約から戻ってきたときは、支払った直後の画面に戻す。
+       ハブに落とすと「最初からやり直し」に見えるため。 */
+    if (/[?&]billing=/.test(location.search || "")) {
+      try {
+        if (typeof chesHubGo === "function") chesHubGo("emu");
+        if (typeof showEmuValueProfile === "function") showEmuValueProfile();
+        // 履歴に ?billing= を残さない（再読み込みで毎回ここへ来てしまうため）
+        history.replaceState(null, "", location.pathname);
+      } catch (e) {}
+      window._chesEntered = true;
+      return;
+    }
     // ログイン後は CHES ハブ（メイン画面）へ。SchoolParkマップはハブで
     // SchoolPark を選んだときに開く。
     if (typeof chesHubShow === "function") {

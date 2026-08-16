@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>EMUERにようこそ | 語り合える一人</title>
+<title>Emuerにようこそ | 語り合える一人</title>
 <style>
 :root{
   --ink:#1a1840; --muted:#6f6a86; --line:#e6e2dc; --bg:#faf8f5; --card:#fff;
@@ -74,30 +74,33 @@ ul.cond li{margin:4px 0}
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><a href="/">← Emu へもどる</a></header>
-  <h1>EMUERにようこそ</h1>
-  <p class="lead">月額10,000円・30日間の「語り合える一人」保証つき</p>
+  <!-- 戻る導線はモーダル側の「← Emuに戻る」に一本化する -->
+  <!-- Emuer は「Emuを使う人」の呼び名。トークンの EMUER とは別物なので大文字にしない -->
+  <h1>Emuerにようこそ</h1>
+  <p class="lead">プランを選んで、Emuでの過ごし方を決められます</p>
 
   <div id="gate" class="gate">読み込んでいます…</div>
 
   <main id="main" class="hide">
 
     <!-- 会員状態 -->
-    <section class="card">
+    <section class="card" id="sec-plan">
       <h2><span class="ico">◈</span>プラン</h2>
       <div class="row"><span class="k">状態</span><span class="v" id="subStatus">—</span></div>
       <div class="row"><span class="k">料金</span><span class="v" id="planPrice">—</span></div>
       <div class="row"><span class="k">次回更新日</span><span class="v" id="periodEnd">—</span></div>
-      <div class="row"><span class="k">保証期間</span><span class="v" id="guaranteeEnd">—</span></div>
+      <div class="row hide" id="guaranteeRow"><span class="k">保証期間</span><span class="v" id="guaranteeEnd">—</span></div>
       <!-- プラン選択。金額は必ずサーバーから受け取る（画面に直書きしない） -->
       <div id="planPick" class="hide" style="margin-top:16px">
         <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:8px">プランを選ぶ</div>
         <div id="planList" style="display:grid;gap:8px"></div>
       </div>
-      <label id="adultRow" style="display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--ink);margin-top:14px">
-        <input type="checkbox" id="adultCheck" style="width:auto;margin-top:3px;flex:none">
+      <label id="adultRow" style="display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--ink);margin-top:14px;cursor:pointer;padding:10px;margin-left:-10px;margin-right:-10px;border-radius:10px">
+        <input type="checkbox" id="adultCheck" style="width:18px;height:18px;margin-top:2px;flex:none;cursor:pointer">
         <span>18歳以上です（未成年の方は法定代理人の同意が必要です）</span>
       </label>
+      <!-- 申告済みのときはこちらを出す。押せないチェックボックスを残さない -->
+      <p id="adultDone" class="note hide" style="margin-top:14px;color:var(--ok)">✓ 18歳以上であることを確認済みです。</p>
       <!-- 文言と金額は syncSubscribeButton が選んだプランに合わせて入れ替える -->
       <button class="btn" id="subscribeBtn" disabled>プランを選んでください</button>
       <button class="btn sub hide" id="portalBtn">支払い方法の変更・解約</button>
@@ -106,7 +109,7 @@ ul.cond li{margin:4px 0}
     </section>
 
     <!-- プロフィールと興味・関心テーマ -->
-    <section class="card" id="profileSection">
+    <section class="card" id="sec-profile">
       <h2><span class="ico">◐</span>プロフィール <span id="profilePill" class="pill off">未完成</span></h2>
       <p class="note">
         対話の相手を選ぶための材料になります。「語り合える一人」保証の条件にも含まれます。
@@ -142,7 +145,7 @@ ul.cond li{margin:4px 0}
     </section>
 
     <!-- 対話 -->
-    <section class="card">
+    <section class="card" id="sec-sessions">
       <h2><span class="ico">◇</span>対話</h2>
       <div class="stat">
         <div><b id="stOffered">0</b>提示された機会</div>
@@ -286,16 +289,25 @@ async function loadBilling() {
     renderPlans(s.plans, s.plan);
   }
 
-  if (s.guarantee) {
+  /* 保証がつくのは Emu pro だけ。ほかのプランでは保証の行も申請欄も出さない。
+     出してしまうと、約束していない返金を約束したことになる。 */
+  show($("#guaranteeRow"), !!s.guaranteed);
+  if (s.guarantee && s.guaranteed) {
     $("#guaranteeEnd").textContent = fmt(s.guarantee.endsAt) + " まで";
     $("#refundWindow").textContent = fmt(s.guarantee.refundOpensAt) + " 〜 " + fmt(s.guarantee.refundClosesAt);
     show($("#refundForm"), s.guarantee.refundOpenNow && !s.refundStatus);
     if (!s.guarantee.refundOpenNow && !s.refundStatus) {
       $("#refundNote").textContent = "申請できるのは入会31日目からの7日間です。";
     }
-  } else {
+  } else if (s.guaranteed) {
     $("#guaranteeEnd").textContent = "ご入会後に開始します";
     $("#refundWindow").textContent = "—";
+  } else {
+    // pro 以外のプランでは保証と返金の案内自体を隠す
+    show($("#refundForm"), false);
+    $("#refundWindow").textContent = "—";
+    if ($("#refundNote")) $("#refundNote").textContent =
+      "「語り合える一人」保証は Emu pro（月額10,000円）のみが対象です。";
   }
   const rs = { pending:"確認中", refunded:"返金済み", rejected:"却下" };
   if (s.refundStatus) $("#refundState").textContent = rs[s.refundStatus] || s.refundStatus;
@@ -385,9 +397,19 @@ async function loadKyc() {
   } else {
     $("#kycMsg").textContent = "本人確認は完了しています。書類の画像は保存していません。";
   }
-  // 18歳以上の申告が済んでいれば、チェックを入れた状態にする
+  /* 18歳以上の申告が済んでいる場合。
+     以前はチェックを入れて disabled にしていたが、押せない箱が残るため
+     「壊れている」ように見えていた。行ごと差し替えて済みだと分かるようにする。 */
   const chk = $("#adultCheck");
-  if (chk && s.adultDeclared) { chk.checked = true; chk.disabled = true; }
+  if (chk && s.adultDeclared) {
+    chk.checked = true;
+    const row = $("#adultRow");
+    if (row) {
+      row.style.display = "none";
+      const done = $("#adultDone");
+      if (done) done.classList.remove("hide");
+    }
+  }
   syncSubscribeButton();
 }
 
@@ -599,6 +621,22 @@ $("#refundSubmit").onclick = async () => {
   }
 };
 
+/* アカウントメニューから「プロフィール」などを選んだとき、
+   その場所まで運ぶ。URL の #plan / #profile / #themes / #sessions を見る。 */
+function scrollToSection() {
+  const want = (location.hash || "").replace("#", "");
+  if (!want) return;
+  const map = { plan:"sec-plan", profile:"sec-profile", themes:"sec-profile", sessions:"sec-sessions" };
+  const el = document.getElementById(map[want] || want);
+  if (!el) return;
+  el.scrollIntoView({ behavior:"smooth", block:"start" });
+  // どこを開いたのかが分かるよう、少しだけ枠を光らせる
+  el.style.transition = "box-shadow .4s";
+  el.style.boxShadow = "0 0 0 2px var(--accent)";
+  setTimeout(() => { el.style.boxShadow = ""; }, 1600);
+  if (want === "themes") { const t = document.getElementById("pfThemes"); if (t) t.scrollIntoView({ behavior:"smooth", block:"center" }); }
+}
+
 // ───────── 起動 ─────────
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
@@ -610,6 +648,7 @@ onAuthStateChanged(auth, async (user) => {
     await Promise.all([loadBilling(), loadKyc(), loadProfile(), loadDialogue()]);
     $("#gate").classList.add("hide");
     $("#main").classList.remove("hide");
+    scrollToSection();
   } catch (e) {
     console.error(e);
     $("#gate").textContent = "読み込みに失敗しました。時間をおいて再度お試しください。";
