@@ -42,7 +42,10 @@
            ロゴを飛ばしてしまい、ログイン画面から始まったように見える。
            読み取ったらすぐ URL から外す。 */
         try {
-          window.__chesBillingReturn = location.search.match(/[?&]billing=([^&]*)/)[1];
+          var _bv = location.search.match(/[?&]billing=([^&]*)/)[1];
+          window.__chesBillingReturn = _bv;
+          // タブ内で確実に持ち回すため sessionStorage にも置く
+          sessionStorage.setItem("ches_billing_return", _bv);
           window.history.replaceState(null, "", location.pathname + location.hash);
         } catch (e) {}
         /* ウォレットが保存されていれば、下の直接復帰が Emu まで連れて行く。
@@ -6253,7 +6256,10 @@ function _isOwnerAccess() {
 const _fpDirectReturn   = window.location.search.includes("direct=1") && !!localStorage.getItem("emuWallet");
 /* Stripe の決済・解約から戻ってきたか。
    URL の billing= は早い段階で外しているので、そこで控えた値を見る。 */
-const _billingReturn    = !!window.__chesBillingReturn && !!localStorage.getItem("emuWallet");
+const _billingReturn    = (function () {
+  try { return !!sessionStorage.getItem("ches_billing_return") && !!localStorage.getItem("emuWallet"); }
+  catch (e) { return false; }
+})();
 const _fpToSchoolpark   = window.location.search.includes("schoolpark=1");
 
 //ウォレット表示・状態
@@ -6502,21 +6508,42 @@ if (_fpDirectReturn || _billingReturn) {
    Stripe の決済・解約から戻ったときは Emu の価値プロフィール
    （支払いの結果がその場で見える場所）。 */
 function _landAfterDirectReturn() {
-  if (window.__chesBillingReturn) {
-    window.__chesBillingReturn = null;
-    try { document.documentElement.classList.remove("ches-resuming"); } catch (e) {}
-    if (typeof _hideSpLoadingOverlay === "function") _hideSpLoadingOverlay();
-    /* このあとに走る初期化が「今日のEmu」に戻してしまうことがあるので、
-       少し遅らせてもう一度開く。 */
-    var _open = function () {
-      if (typeof showEmuValueProfile === "function") showEmuValueProfile();
-      else if (typeof showEmuToday === "function") showEmuToday();
-    };
-    _open();
-    [300, 800, 1500, 2500, 4000].forEach(function (ms) { setTimeout(_open, ms); });
+  var billing = null;
+  try { billing = sessionStorage.getItem("ches_billing_return"); } catch (e) {}
+  if (!billing) {
+    if (typeof openSpMap === "function") openSpMap();
     return;
   }
-  if (typeof openSpMap === "function") openSpMap();
+  try { sessionStorage.removeItem("ches_billing_return"); } catch (e) {}
+  window.__chesBillingReturn = null;
+  try { document.documentElement.classList.remove("ches-resuming"); } catch (e) {}
+  /* この時点ではまだ初期化されていない変数を参照して例外を投げることがある。
+     ここで止まると、以降の着地処理が丸ごと走らなくなる。 */
+  try { if (typeof _hideSpLoadingOverlay === "function") _hideSpLoadingOverlay(); } catch (e) {}
+
+  /* 支払いの結果が見える場所（価値プロフィール）を開く。
+     showEmuValueProfile は旧レイアウト(.container)を隠して新しい画面に切り替える。
+     このあとに走る初期化が戻してしまうことがあるので、
+     開けているか確かめながら数回やり直す。 */
+  /* この関数はページの途中（script ブロックの実行中）で呼ばれる。
+     「今日のEmu」や価値プロフィールの要素は、まだこの下にあって存在しない。
+     そのまま触ると何も起きず、旧レイアウトのまま残る。DOM が揃うまで待つ。 */
+  var tries = 0;
+  var open = function () {
+    tries++;
+    try {
+      if (typeof showEmuValueProfile === "function") showEmuValueProfile();
+      else if (typeof showEmuToday === "function") showEmuToday();
+    } catch (e) {}
+    var home = document.getElementById("emuTodayHome");
+    var ok = home && getComputedStyle(home).display !== "none";
+    if (!ok && tries < 12) setTimeout(open, 300);
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", open);
+  } else {
+    open();
+  }
 }
 
 //goodした記事・changeした記事
@@ -21544,10 +21571,18 @@ async function sendEmuFeedback() {
     if (typeof spTrack === "function") spTrack("free", addr).catch(function () {});
     /* Stripe の決済・解約から戻ってきたときは、支払った直後の画面に戻す。
        ハブに落とすと「最初からやり直し」に見えるため。 */
-    if (window.__chesBillingReturn) {
+    var _bill = null;
+    try { _bill = sessionStorage.getItem("ches_billing_return"); } catch (e) {}
+    if (_bill) {
+      try { sessionStorage.removeItem("ches_billing_return"); } catch (e) {}
       try {
-        if (typeof chesHubGo === "function") chesHubGo("emu");
-        if (typeof showEmuValueProfile === "function") showEmuValueProfile();
+        if (typeof _landAfterDirectReturn === "function") {
+          // 着地の手順はひとつにまとめる（二重に書くとずれる）
+          try { sessionStorage.setItem("ches_billing_return", _bill); } catch (e) {}
+          _landAfterDirectReturn();
+        } else if (typeof showEmuValueProfile === "function") {
+          showEmuValueProfile();
+        }
       } catch (e) {}
       // 読み込み中の覆いを外す。ここを飛ばすと画面が覆われたままになる
       if (typeof _hideSpLoadingOverlay === "function") _hideSpLoadingOverlay();
