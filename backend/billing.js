@@ -86,6 +86,14 @@ function createBillingRouter(deps) {
     return { start, guaranteeEnd, refundOpen, refundClose };
   }
 
+  /* 日時を ISO 文字列にする。Firestore の Timestamp と素の Date が混ざるため。 */
+  function _isoOf(v) {
+    if (!v) return null;
+    if (typeof v.toDate === "function") return v.toDate().toISOString();
+    if (v instanceof Date) return v.toISOString();
+    return null;
+  }
+
   function subRef(uid) { return db.collection(SUBSCRIPTIONS_COL).doc(uid); }
 
   async function readSubscription(uid) {
@@ -169,6 +177,36 @@ function createBillingRouter(deps) {
         return res.json({ ok: true, status: "none", plans,
                           planAmount: PLAN_AMOUNT_JPY });
       }
+
+      /* Stripe を正として読み直す。
+         Webhook は届くまでに間があり、届かないこともある（サーバーが眠っていた等）。
+         Firestore の写しだけを見ていると、解約したのに「有効」のままに見えてしまう。
+         ここで実物を1件読んで、写しも直しておく。 */
+      if (stripe && sub.stripeSubscriptionId) {
+        try {
+          const live = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
+          const fresh = {
+            status: live.status,
+            cancelAtPeriodEnd: !!live.cancel_at_period_end,
+            currentPeriodEnd: periodEndOf(live)
+          };
+          const metaPlan = live.metadata && live.metadata.plan;
+          if (metaPlan && PLANS[metaPlan]) fresh.plan = metaPlan;
+          // 中身が変わっていたときだけ書き戻す（毎回書くと無駄な更新が増える）
+          const changed = sub.status !== fresh.status
+            || !!sub.cancelAtPeriodEnd !== fresh.cancelAtPeriodEnd
+            || (fresh.plan && sub.plan !== fresh.plan);
+          Object.assign(sub, fresh);
+          if (changed) {
+            await subRef(req.identity.uid).set(
+              Object.assign({ updatedAt: new Date() }, fresh), { merge: true });
+          }
+        } catch (e) {
+          // 読めなければ写しのまま返す。表示が止まるよりはよい
+          console.warn("subscription 再取得に失敗:", e.message);
+        }
+      }
+
       const currentPlan = sub.plan || sub.pendingPlan || null;
       const win = guaranteeWindow(sub.firstSubscribedAt);
       const now = Date.now();
@@ -181,7 +219,8 @@ function createBillingRouter(deps) {
         // 保証は本会員にだけ付く
         guaranteed: currentPlan === GUARANTEED_PLAN,
         planAmount: currentPlan && PLANS[currentPlan] ? PLANS[currentPlan].amount : PLAN_AMOUNT_JPY,
-        currentPeriodEnd: sub.currentPeriodEnd ? sub.currentPeriodEnd.toDate().toISOString() : null,
+        // Firestore から読むと Timestamp、Stripe から読み直すと Date になる。どちらでも通す
+        currentPeriodEnd: _isoOf(sub.currentPeriodEnd),
         cancelAtPeriodEnd: !!sub.cancelAtPeriodEnd,
         firstSubscribedAt: win ? win.start.toISOString() : null,
         guarantee: win ? {
