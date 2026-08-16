@@ -27,8 +27,17 @@
          やり直しに見せないため）。未ログインならロゴから始めるのが正しい。 */
       var isBillingReturn = /[?&]billing=/.test(location.search || "");
       if (isBillingReturn) {
+        /* 自動復帰が動くのは LINE / Google（emu_auth.type が chesFree）のときだけ。
+           ウォレットでログインしている人はこの経路を通らないので、
+           ロゴを隠すと何も出ないまま取り残される。 */
         var hasSession = false;
-        try { hasSession = !!localStorage.getItem("ches_uid"); } catch (e) {}
+        try {
+          var _sess = localStorage.getItem("ches_uid");
+          var _auth = localStorage.getItem("emu_auth");
+          var _type = "";
+          try { _type = (JSON.parse(_auth || "{}") || {}).type || ""; } catch (e2) {}
+          hasSession = !!_sess && (!_auth || _type === "chesFree");
+        } catch (e) {}
         /* この印は一度きり。URL に残すと、次に開いたときや再読み込みのたびに
            ロゴを飛ばしてしまい、ログイン画面から始まったように見える。
            読み取ったらすぐ URL から外す。 */
@@ -36,7 +45,24 @@
           window.__chesBillingReturn = location.search.match(/[?&]billing=([^&]*)/)[1];
           window.history.replaceState(null, "", location.pathname + location.hash);
         } catch (e) {}
-        if (hasSession) document.documentElement.classList.add("ches-resuming");
+        if (hasSession) {
+          document.documentElement.classList.add("ches-resuming");
+          /* 保険。復帰が進まなくても、ログイン画面ではなくロゴに戻す。
+             ここで何も出ないと、最終ガードがログイン画面へ落としてしまう。 */
+          setTimeout(function () {
+            try {
+              var ids = ["mainApp", "chesHubScreen", "walletScreen", "maintenanceScreen"];
+              var visible = ids.some(function (id) {
+                var el = document.getElementById(id);
+                return el && window.getComputedStyle(el).display !== "none";
+              });
+              if (visible) return;
+              document.documentElement.classList.remove("ches-resuming");
+              var logo = document.getElementById("logoScreen");
+              if (logo) logo.style.display = "";
+            } catch (e) {}
+          }, 6000);
+        }
       }
       if (isLineCb || isGoogleRedirect) {
         document.documentElement.classList.add("ches-resuming");
