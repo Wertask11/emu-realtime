@@ -37,6 +37,50 @@
   <!-- CHESハブ画面（デザイン案）用フォント -->
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Shippori+Mincho:wght@500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
+/* 名前と写真の編集シート */
+.emu-me-sheet {
+  position:fixed; inset:0; z-index:10200; background:rgba(20,18,32,.5);
+  display:none; align-items:center; justify-content:center; padding:18px;
+}
+.emu-me-sheet.open { display:flex; }
+.emu-me-card {
+  background:#fff; border-radius:18px; padding:20px; width:min(420px,100%);
+  max-height:90dvh; overflow-y:auto;
+  font-family:'Noto Sans JP',sans-serif; color:#1a1840;
+}
+.emu-me-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.emu-me-head b { font-size:16px; }
+.emu-me-close {
+  width:36px; height:36px; border-radius:50%; border:1px solid #e6e2dc;
+  background:#fff; color:#6f6a86; cursor:pointer; font-size:15px; line-height:1;
+}
+.emu-me-avatar-row { display:flex; gap:14px; align-items:center; margin-bottom:16px; }
+.emu-me-avatar {
+  width:76px; height:76px; border-radius:50%; flex:none;
+  background:#f2efeb center/cover no-repeat; border:1px solid #e6e2dc;
+  display:flex; align-items:center; justify-content:center; color:#a9a3b8; font-size:24px;
+}
+.emu-me-avatar-btns { display:flex; flex-direction:column; gap:8px; }
+.emu-me-file, .emu-me-clear {
+  border:1.5px solid #e6e2dc; background:#fff; color:#1a1840; border-radius:999px;
+  padding:9px 16px; font-size:13px; font-weight:700; cursor:pointer;
+  font-family:inherit; min-height:40px; display:inline-flex; align-items:center; justify-content:center;
+}
+.emu-me-clear { color:#c0392b; }
+.emu-me-label { display:block; font-size:12px; color:#6f6a86; margin:12px 0 4px; }
+#emuMeName {
+  width:100%; border:1.5px solid #e6e2dc; border-radius:10px; padding:12px;
+  font-family:inherit; font-size:16px; color:#1a1840; background:#fff;
+}
+.emu-me-note { font-size:12px; color:#8b8698; line-height:1.7; margin:10px 0 0; }
+.emu-me-save {
+  width:100%; min-height:50px; border-radius:999px; border:0; cursor:pointer;
+  background:#f08300; color:#fff; font-family:inherit; font-weight:700; font-size:15px; margin-top:14px;
+}
+.emu-me-save:disabled { opacity:.5; cursor:default; }
+.emu-me-msg { font-size:13px; margin:10px 0 0; min-height:18px; }
+.emu-me-msg.ok { color:#1f8a4c; } .emu-me-msg.err { color:#c0392b; }
+
 /* アカウントメニュー。右上のアドレス表示から開く */
 .emu-account-wrap { position:relative; display:inline-block; }
 .emu-account-menu {
@@ -4303,6 +4347,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
           <b id="emuAccountName">ゲスト</b>
           <small id="emuAccountAddr"></small>
         </div>
+        <button type="button" role="menuitem" onclick="accountGo('me')">名前と写真</button>
         <button type="button" role="menuitem" onclick="accountGo('plan')">プラン・お支払い</button>
         <button type="button" role="menuitem" onclick="accountGo('profile')">プロフィール</button>
         <button type="button" role="menuitem" onclick="accountGo('themes')">興味のあるテーマ</button>
@@ -4458,7 +4503,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
           <a class="emu-membership-cta" id="emuMemberPageCta" href="/membership.html"
              onclick="openLegal('membership');return false;" hidden>
             <span class="emu-membership-cta-main">プランをアップグレードする</span>
-            <span class="emu-membership-cta-sub">プロフィール・興味のあるテーマ・対話の予定・解約もこちら</span>
           </a>
         </div>
 
@@ -15938,8 +15982,131 @@ document.addEventListener('click', function (e) {
   closeAccountMenu();
 });
 
+/* ───────── 名前と写真 ─────────
+   画像は Firebase Storage を使えないため（Blazeプランが必要）、
+   ブラウザ側で 256px の JPEG に縮めてから文字列として保存する。
+   縮めずに送るとFirestoreの1MB制限に当たるので、ここは省略できない。 */
+const ME_MAX_PX = 256;
+
+function shrinkImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('READ_FAILED'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('DECODE_FAILED'));
+      img.onload = () => {
+        // 正方形に切り出してから縮める（丸く表示するため）
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = ME_MAX_PX;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, ME_MAX_PX, ME_MAX_PX);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+let meAvatar = null;        // 編集中の画像（null なら変更なし、'' なら削除）
+
+function paintMeAvatar(dataUrl) {
+  const box = document.getElementById('emuMeAvatar');
+  if (!box) return;
+  if (dataUrl) { box.style.backgroundImage = 'url(' + dataUrl + ')'; box.textContent = ''; }
+  else { box.style.backgroundImage = ''; box.textContent = '👤'; }
+}
+
+async function openMeSheet() {
+  const sheet = document.getElementById('emuMeSheet');
+  if (!sheet) return;
+  meAvatar = null;
+  document.getElementById('emuMeMsg').textContent = '';
+  document.getElementById('emuMeName').value = localStorage.getItem('ches_name') || '';
+  paintMeAvatar(localStorage.getItem('ches_avatar') || '');
+  sheet.classList.add('open');
+  // 保存済みの内容をサーバーから取り直す（別の端末で変えた場合に備える）
+  const addr = (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+  if (!addr) return;
+  try {
+    const r = await fetch('https://emu-realtime.onrender.com/api/user/name/' + addr);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.displayName) document.getElementById('emuMeName').value = d.displayName;
+    if (d.avatar) { paintMeAvatar(d.avatar); try { localStorage.setItem('ches_avatar', d.avatar); } catch (e) {} }
+  } catch (e) { /* 取れなければ手元の値のまま */ }
+}
+function closeMeSheet() {
+  const sheet = document.getElementById('emuMeSheet');
+  if (sheet) sheet.classList.remove('open');
+}
+
+document.addEventListener('change', async (e) => {
+  if (!e.target || e.target.id !== 'emuMeFile') return;
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const msg = document.getElementById('emuMeMsg');
+  try {
+    meAvatar = await shrinkImage(file);
+    paintMeAvatar(meAvatar);
+    msg.textContent = ''; msg.className = 'emu-me-msg';
+  } catch (err) {
+    msg.textContent = 'この画像は読み込めませんでした。別の画像でお試しください。';
+    msg.className = 'emu-me-msg err';
+  }
+  e.target.value = '';
+});
+
+document.addEventListener('click', async (e) => {
+  if (e.target && e.target.id === 'emuMeClear') {
+    meAvatar = '';
+    paintMeAvatar('');
+    return;
+  }
+  if (!e.target || e.target.id !== 'emuMeSave') return;
+  const btn = e.target;
+  const msg = document.getElementById('emuMeMsg');
+  const name = document.getElementById('emuMeName').value.trim();
+  if (!name) { msg.textContent = 'ニックネームを入れてください。'; msg.className = 'emu-me-msg err'; return; }
+  const addr = (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+  if (!addr) { msg.textContent = 'ログインしてからお試しください。'; msg.className = 'emu-me-msg err'; return; }
+  btn.disabled = true; msg.textContent = '保存しています…'; msg.className = 'emu-me-msg';
+  try {
+    const headers = typeof emuAuthHeaders === 'function' ? await emuAuthHeaders(true) : null;
+    const body = { address: addr, displayName: name };
+    if (meAvatar !== null) body.avatar = meAvatar;
+    const r = await fetch('https://emu-realtime.onrender.com/api/user/setname', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, headers || {}),
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.error === 'AVATAR_TOO_LARGE' ? '画像が大きすぎます。別の画像でお試しください。'
+                    : d.error === 'AVATAR_FORMAT' ? '対応していない画像です。'
+                    : '保存できませんでした。');
+    }
+    try {
+      localStorage.setItem('ches_name', name);
+      if (meAvatar === '') localStorage.removeItem('ches_avatar');
+      else if (meAvatar) localStorage.setItem('ches_avatar', meAvatar);
+    } catch (err) {}
+    msg.textContent = '保存しました。'; msg.className = 'emu-me-msg ok';
+    // 表示中の名前を更新する
+    try { if (typeof updateEmuTodayHome === 'function') updateEmuTodayHome(); } catch (err) {}
+    setTimeout(closeMeSheet, 700);
+  } catch (err) {
+    msg.textContent = err.message || '保存できませんでした。';
+    msg.className = 'emu-me-msg err';
+  } finally { btn.disabled = false; }
+});
+
 function accountGo(what) {
   closeAccountMenu();
+  if (what === 'me') { openMeSheet(); return; }
   if (what === 'logout') {
     if (typeof window.spLogout === 'function') window.spLogout();
     return;
@@ -16032,6 +16199,15 @@ async function emuRenderMembership() {
     if (cta) cta.hidden = false;
   } catch (_) { /* 取れなければ手元の判定のままにする */ }
 }
+
+/* 解約や決済の直後は、Stripe からの Webhook が届くまで少し間がある。
+   一度読んで終わりだと古い表示のまま固まって見えるので、数回だけ追いかける。 */
+function emuWatchMembership() {
+  [1500, 4000, 8000, 15000].forEach(function (ms) {
+    setTimeout(function () { try { emuRenderMembership(); } catch (e) {} }, ms);
+  });
+}
+if (/[?&]billing=/.test(location.search || "")) emuWatchMembership();
 
 async function loadEmuWalletCard() {
   emuRenderMembership();
@@ -19356,6 +19532,32 @@ window.fbLib = {
 
   console.log("🚀 Production Firebase (EmuSch) is Ready!");
 </script>
+<!-- 名前と写真の編集。Firebase Storage は使えないので、
+     画像はブラウザ側で小さくしてから文字列として保存する。 -->
+<div id="emuMeSheet" class="emu-me-sheet" role="dialog" aria-modal="true" aria-labelledby="emuMeTitle">
+  <div class="emu-me-card">
+    <div class="emu-me-head">
+      <b id="emuMeTitle">名前と写真</b>
+      <button type="button" class="emu-me-close" onclick="closeMeSheet()" aria-label="閉じる">✕</button>
+    </div>
+    <div class="emu-me-avatar-row">
+      <div class="emu-me-avatar" id="emuMeAvatar"></div>
+      <div class="emu-me-avatar-btns">
+        <label class="emu-me-file">
+          写真を選ぶ
+          <input type="file" id="emuMeFile" accept="image/*" hidden>
+        </label>
+        <button type="button" class="emu-me-clear" id="emuMeClear">写真を消す</button>
+      </div>
+    </div>
+    <label class="emu-me-label" for="emuMeName">ニックネーム</label>
+    <input id="emuMeName" maxlength="30" placeholder="例）あさか">
+    <p class="emu-me-note">Emuの画面や、議論での表示名に使われます。あとからいつでも変えられます。</p>
+    <button type="button" class="emu-me-save" id="emuMeSave">保存する</button>
+    <p class="emu-me-msg" id="emuMeMsg"></p>
+  </div>
+</div>
+
 <!-- FLOATING BUTTON -->
 <button id="emu-contact-btn" onclick="toggleContactPanel()" title="お問い合わせ">
   <div class="btn-ripple"></div>

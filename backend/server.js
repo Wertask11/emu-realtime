@@ -1453,11 +1453,24 @@ app.post('/api/user/setname', requireFirebaseUser, requireOwnAddress, async (req
     }
     if (!db) return res.status(500).json({ error: 'Firestore未接続' });
 
-    await db.collection('user_profiles').doc(address).set({
-      address,
-      displayName,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    /* プロフィール画像。Firebase Storage は使えない（Blazeプランが必要）ため、
+       ブラウザ側で小さく縮めた画像をそのまま文字列として持つ。
+       Firestore の1ドキュメントは1MBまでなので、余裕をみて200KBで打ち切る。 */
+    const patch = { address, displayName, updatedAt: new Date().toISOString() };
+    if (typeof req.body.avatar === 'string') {
+      const avatar = req.body.avatar;
+      if (avatar === '') {
+        patch.avatar = null;                       // 削除
+      } else if (!/^data:image\/(png|jpeg|webp);base64,/.test(avatar)) {
+        return res.status(400).json({ error: 'AVATAR_FORMAT' });
+      } else if (avatar.length > 200000) {
+        return res.status(413).json({ error: 'AVATAR_TOO_LARGE' });
+      } else {
+        patch.avatar = avatar;
+      }
+    }
+
+    await db.collection('user_profiles').doc(address).set(patch, { merge: true });
 
     console.log('✅ DisplayName set:', address, '->', displayName);
     res.json({ success: true });
@@ -1473,8 +1486,9 @@ app.get('/api/user/name/:address', async (req, res) => {
     if (!db) return res.json({ displayName: null });
     const docId = req.params.address.toLowerCase();
     const doc = await db.collection('user_profiles').doc(docId).get();
-    if (!doc.exists) return res.json({ displayName: null });
-    res.json({ displayName: doc.data().displayName || null });
+    if (!doc.exists) return res.json({ displayName: null, avatar: null });
+    const d = doc.data();
+    res.json({ displayName: d.displayName || null, avatar: d.avatar || null });
   } catch (err) {
     res.status(500).json({ displayName: null });
   }

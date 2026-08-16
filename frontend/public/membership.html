@@ -88,7 +88,7 @@ ul.cond li{margin:4px 0}
       <h2><span class="ico">◈</span>プラン</h2>
       <div class="row"><span class="k">状態</span><span class="v" id="subStatus">—</span></div>
       <div class="row"><span class="k">料金</span><span class="v" id="planPrice">—</span></div>
-      <div class="row"><span class="k">次回更新日</span><span class="v" id="periodEnd">—</span></div>
+      <div class="row"><span class="k" id="periodKey">次回更新日</span><span class="v" id="periodEnd">—</span></div>
       <div class="row hide" id="guaranteeRow"><span class="k">保証期間</span><span class="v" id="guaranteeEnd">—</span></div>
       <!-- プラン選択。金額は必ずサーバーから受け取る（画面に直書きしない） -->
       <div id="planPick" class="hide" style="margin-top:16px">
@@ -134,7 +134,7 @@ ul.cond li{margin:4px 0}
     </section>
 
     <!-- 本人確認 -->
-    <section class="card">
+    <section class="card" id="sec-kyc">
       <h2><span class="ico">☑</span>本人確認 <span id="kycPill" class="pill off">未確認</span></h2>
       <p class="note" id="kycMsg">
         Emu では本人確認書類の画像をお預かりしません。最初の対話のときに、
@@ -160,7 +160,7 @@ ul.cond li{margin:4px 0}
     </section>
 
     <!-- 返金 -->
-    <section class="card">
+    <section class="card" id="sec-guarantee">
       <h2><span class="ico">↩</span>「語り合える一人」保証</h2>
       <p class="note">
         30日間で最低4回の対話機会をお届けします。3回以上参加しても「また話したい」と思える相手に
@@ -271,9 +271,17 @@ function gotoExternal(url) {
 async function loadBilling() {
   const s = await api("/api/billing/status");
   const labels = { none:"未加入", active:"有効", past_due:"支払い確認中", canceled:"解約済み", incomplete:"手続き中", trialing:"有効" };
-  $("#subStatus").textContent = labels[s.status] || s.status;
-  $("#periodEnd").textContent = s.cancelAtPeriodEnd
-    ? fmt(s.currentPeriodEnd) + "（この日で終了）"
+  /* 解約の申し込みが済んでいる場合。Stripe 上の状態は期間末まで active のままなので、
+     「有効」とだけ出すと解約できたのか分からない。ここで言い切る。 */
+  const endingSoon = s.cancelAtPeriodEnd && (s.status === "active" || s.status === "trialing");
+  $("#subStatus").textContent = endingSoon ? "解約済み（期間終了まで利用できます）"
+                                           : (labels[s.status] || s.status);
+  $("#subStatus").style.color = endingSoon ? "var(--warn)" : "";
+  // 行の見出しも「次回更新日」から「終了日」に変える
+  const endKey = $("#periodKey");
+  if (endKey) endKey.textContent = endingSoon ? "終了日" : "次回更新日";
+  $("#periodEnd").textContent = endingSoon
+    ? fmt(s.currentPeriodEnd) + " まで"
     : fmt(s.currentPeriodEnd);
   const active = s.status === "active" || s.status === "trialing";
   show($("#subscribeBtn"), !active);
@@ -623,18 +631,38 @@ $("#refundSubmit").onclick = async () => {
 
 /* アカウントメニューから「プロフィール」などを選んだとき、
    その場所まで運ぶ。URL の #plan / #profile / #themes / #sessions を見る。 */
+/* アカウントメニューから来たときは、その用件に必要なところだけ出す。
+   全部を一枚に並べると、何をしに来たのか分からなくなるため。
+   ハッシュが無いとき（直接開いたとき）は今までどおり全部出す。 */
+const SECTION_SETS = {
+  plan:     ["sec-plan", "sec-guarantee"],
+  profile:  ["sec-profile", "sec-kyc"],
+  themes:   ["sec-profile"],
+  sessions: ["sec-sessions"]
+};
+const SECTION_TITLES = {
+  plan: "プラン・お支払い", profile: "プロフィール",
+  themes: "興味のあるテーマ", sessions: "対話の予定"
+};
+
 function scrollToSection() {
   const want = (location.hash || "").replace("#", "");
-  if (!want) return;
-  const map = { plan:"sec-plan", profile:"sec-profile", themes:"sec-profile", sessions:"sec-sessions" };
-  const el = document.getElementById(map[want] || want);
-  if (!el) return;
-  el.scrollIntoView({ behavior:"smooth", block:"start" });
-  // どこを開いたのかが分かるよう、少しだけ枠を光らせる
-  el.style.transition = "box-shadow .4s";
-  el.style.boxShadow = "0 0 0 2px var(--accent)";
-  setTimeout(() => { el.style.boxShadow = ""; }, 1600);
-  if (want === "themes") { const t = document.getElementById("pfThemes"); if (t) t.scrollIntoView({ behavior:"smooth", block:"center" }); }
+  const set = SECTION_SETS[want];
+  if (!set) return;                       // 直接開いたときは全部出す
+
+  document.querySelectorAll("main#main > section.card").forEach(sec => {
+    sec.classList.toggle("hide", set.indexOf(sec.id) < 0);
+  });
+  // 見出しも用件に合わせる
+  const h1 = document.querySelector("h1");
+  const lead = document.querySelector(".lead");
+  if (h1) h1.textContent = SECTION_TITLES[want] || h1.textContent;
+  if (lead) lead.classList.add("hide");
+
+  if (want === "themes") {
+    const t = document.getElementById("pfThemes");
+    if (t) setTimeout(() => t.scrollIntoView({ behavior:"smooth", block:"center" }), 120);
+  }
 }
 
 // ───────── 起動 ─────────
