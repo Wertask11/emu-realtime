@@ -693,16 +693,8 @@ function openStarMode() {
 
 /* 星空へ直接来たとき（?star=1）は、入口の選択画面を出さずにそのまま見せる。
    選ぶ先が星空しかないのに一枚挟むと、余計な一手間になる。 */
-(function () {
-  var go = function () {
-    try {
-      if (/[?&]star=1/.test(location.search || '')) openStarMode();
-    } catch (e) {}
-  };
-  // この時点ではまだ入口の要素が無いことがあるので、DOM が揃ってから消す
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
-  else go();
-})();
+/* 入口の選択画面は最初から出していないので、ここで消す必要はない。
+   ECHO FIELD から戻ったときだけ JS が表示する。 */
 
 function openEchoField() {
   document.getElementById('room2ModeSelect').style.display = 'none';
