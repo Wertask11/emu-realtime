@@ -16,15 +16,15 @@ const express = require("express");
    クライアントから渡ってくるのはキー（light/standard/member）だけにする。
    金額を客側に決めさせない。 */
 const PLANS = {
-  light:    { key: "light",    amount: 500,   envPrice: "STRIPE_PRICE_LIGHT",    label: "ライト" },
-  standard: { key: "standard", amount: 3000,  envPrice: "STRIPE_PRICE_STANDARD", label: "スタンダード" },
-  member:   { key: "member",   amount: 10000, envPrice: "STRIPE_PRICE_MEMBER",   label: "Emu本会員" }
+  light:    { key: "light",    amount: 500,   envPrice: "STRIPE_PRICE_LIGHT", label: "Emu light" },
+  plus:     { key: "plus",     amount: 3000,  envPrice: "STRIPE_PRICE_PLUS",  label: "Emu plus" },
+  pro:      { key: "pro",      amount: 10000, envPrice: "STRIPE_PRICE_PRO",   label: "Emu pro" }
 };
-const DEFAULT_PLAN = "member";
+const DEFAULT_PLAN = "pro";
 
-// 「語り合える一人」保証は本会員（月額10,000円）にだけ付く
-const GUARANTEED_PLAN = "member";
-const PLAN_AMOUNT_JPY = PLANS.member.amount;   // 既存の呼び出し互換のため残す
+// 「語り合える一人」保証は Emu pro（月額10,000円）にだけ付く
+const GUARANTEED_PLAN = "pro";
+const PLAN_AMOUNT_JPY = PLANS.pro.amount;   // 既存の呼び出し互換のため残す
 
 // 返金額はサーバー側が Stripe の支払い記録から決める。クライアントの申告は使わない。
 const GUARANTEE_DAYS = 30;              // 保証期間
@@ -50,7 +50,7 @@ function createBillingRouter(deps) {
     if (!plan) return "";
     const id = process.env[plan.envPrice] || "";
     if (id) return id;
-    if (planKey === "member") return process.env.STRIPE_PRICE_ID || "";
+    if (planKey === "pro") return process.env.STRIPE_PRICE_ID || "";
     return "";
   }
   function availablePlans() {
@@ -223,7 +223,7 @@ function createBillingRouter(deps) {
       const sub = await readSubscription(uid);
       if (!sub || !sub.firstSubscribedAt) return res.status(404).json({ error: "NO_SUBSCRIPTION" });
 
-      /* 「語り合える一人」保証は本会員（月額10,000円）の約束。
+      /* 「語り合える一人」保証は Emu pro（月額10,000円）の約束。
          下位プランでこの返金を受けられると、規約に書いていない返金になってしまう。 */
       if ((sub.plan || DEFAULT_PLAN) !== GUARANTEED_PLAN) {
         return res.status(400).json({ error: "PLAN_NOT_GUARANTEED", plan: sub.plan || null });
