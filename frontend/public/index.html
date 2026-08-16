@@ -45,24 +45,11 @@
           window.__chesBillingReturn = location.search.match(/[?&]billing=([^&]*)/)[1];
           window.history.replaceState(null, "", location.pathname + location.hash);
         } catch (e) {}
-        if (hasSession) {
-          document.documentElement.classList.add("ches-resuming");
-          /* 保険。復帰が進まなくても、ログイン画面ではなくロゴに戻す。
-             ここで何も出ないと、最終ガードがログイン画面へ落としてしまう。 */
-          setTimeout(function () {
-            try {
-              var ids = ["mainApp", "chesHubScreen", "walletScreen", "maintenanceScreen"];
-              var visible = ids.some(function (id) {
-                var el = document.getElementById(id);
-                return el && window.getComputedStyle(el).display !== "none";
-              });
-              if (visible) return;
-              document.documentElement.classList.remove("ches-resuming");
-              var logo = document.getElementById("logoScreen");
-              if (logo) logo.style.display = "";
-            } catch (e) {}
-          }, 6000);
-        }
+        /* ウォレットが保存されていれば、下の直接復帰が Emu まで連れて行く。
+           LINE / Google の自動復帰が動く場合も同じ。どちらでもロゴは出さない。 */
+        var hasWallet = false;
+        try { hasWallet = !!localStorage.getItem("emuWallet"); } catch (e) {}
+        if (hasSession || hasWallet) document.documentElement.classList.add("ches-resuming");
       }
       if (isLineCb || isGoogleRedirect) {
         document.documentElement.classList.add("ches-resuming");
@@ -6264,6 +6251,9 @@ function _isOwnerAccess() {
 
 // SchoolParkコンテンツから戻った場合のフラグ（currentUserId宣言前なのでフラグのみ）
 const _fpDirectReturn   = window.location.search.includes("direct=1") && !!localStorage.getItem("emuWallet");
+/* Stripe の決済・解約から戻ってきたか。
+   URL の billing= は早い段階で外しているので、そこで控えた値を見る。 */
+const _billingReturn    = !!window.__chesBillingReturn && !!localStorage.getItem("emuWallet");
 const _fpToSchoolpark   = window.location.search.includes("schoolpark=1");
 
 //ウォレット表示・状態
@@ -6452,7 +6442,7 @@ async function emuAuthHeaders(json, options) {
 let posts = [];
 
 // SchoolParkコンテンツから戻った場合：ロゴ/ウォレット画面をスキップしてメインへ
-if (_fpDirectReturn) {
+if (_fpDirectReturn || _billingReturn) {
   const _savedWallet = localStorage.getItem("emuWallet");
   logoScreen.style.display = "none";
   window.history.replaceState(null, "", "/");
@@ -6486,7 +6476,7 @@ if (_fpDirectReturn) {
         currentUserId = _savedWallet;
         const _walletBtn = document.getElementById("walletAddressButton");
         if (_walletBtn) emuSetWalletLabel(emuShortAddr(_savedWallet));
-        if (typeof openSpMap === "function") openSpMap();
+        _landAfterDirectReturn();
       } else {
         // 未登録 → メンテナンス画面
         const _ms = document.getElementById('maintenanceScreen');
@@ -6503,9 +6493,30 @@ if (_fpDirectReturn) {
     currentUserId = _savedWallet;
     const _walletBtn = document.getElementById("walletAddressButton");
     if (_walletBtn) emuSetWalletLabel(emuShortAddr(_savedWallet));
-    // ★ 常にSchoolParkマップを自動的に開く（同期）
-    if (typeof openSpMap === "function") openSpMap();
+    _landAfterDirectReturn();
   }
+}
+
+/* 直接復帰したあと、どこに着地するか。
+   SchoolPark の施設から戻ったときはマップ。
+   Stripe の決済・解約から戻ったときは Emu の価値プロフィール
+   （支払いの結果がその場で見える場所）。 */
+function _landAfterDirectReturn() {
+  if (window.__chesBillingReturn) {
+    window.__chesBillingReturn = null;
+    try { document.documentElement.classList.remove("ches-resuming"); } catch (e) {}
+    if (typeof _hideSpLoadingOverlay === "function") _hideSpLoadingOverlay();
+    /* このあとに走る初期化が「今日のEmu」に戻してしまうことがあるので、
+       少し遅らせてもう一度開く。 */
+    var _open = function () {
+      if (typeof showEmuValueProfile === "function") showEmuValueProfile();
+      else if (typeof showEmuToday === "function") showEmuToday();
+    };
+    _open();
+    [300, 800, 1500, 2500, 4000].forEach(function (ms) { setTimeout(_open, ms); });
+    return;
+  }
+  if (typeof openSpMap === "function") openSpMap();
 }
 
 //goodした記事・changeした記事
