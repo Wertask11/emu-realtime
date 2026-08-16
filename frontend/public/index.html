@@ -2587,7 +2587,6 @@ body.spmap-open #emu-contact-label {
 /* Room2（探索・遊び）表示中：問い合わせボタンを非表示 */
 /* 議論ルーム表示中。ルーム内に×があるので、重なる浮きボタンは引っ込める */
 body.room3-open #emu-contact-btn,
-body.room3-open .emu-page-close,
 body.room2-open #emu-contact-btn,
 body.room2-open #emu-contact-label {
   display: none !important;
@@ -3096,7 +3095,11 @@ body.emu-knowledge-open #openPostFormButton { display:none !important; }
 /* 議論・遊びを閉じて「今日のEmu」へ戻る。
    右上は iframe 側の「● LIVE」やバッジと重なるため、左下に置く。
    右下は「ひとこと」ボタンが居るので避ける。 */
-.emu-page-close {
+/* 一覧（議論・遊び）では出さない。議論のルームに入って、
+   そこから閉じるときにだけ使う。最初から出ていると
+   何を閉じるボタンなのか分からない。 */
+.emu-page-close { display:none; }
+body.room3-open .emu-page-close {
   position:fixed; left:12px; z-index:1300;
   /* 左下には問い合わせボタン（56px・z-index 9990）が居る。
      同じ位置に置いていたため下敷きになって押せなかったので、その真上に積む。 */
@@ -3108,6 +3111,20 @@ body.emu-knowledge-open #openPostFormButton { display:none !important; }
   box-shadow:0 6px 18px -8px rgba(26,24,64,.4);
 }
 .emu-page-close:hover { color:#1a1840; border-color:#cfc9c0; }
+/* 遊び（ECHO FIELD など）を閉じるボタン。全画面の上に出るので、
+   背景がどんな色でも読めるように塗りをつける。 */
+#room2CloseBtn {
+  position:absolute; top:14px; right:14px; z-index:1001; display:none;
+  align-items:center; gap:6px; min-height:40px; padding:0 16px;
+  border-radius:999px; border:1px solid rgba(255,255,255,.35);
+  background:rgba(16,14,24,.86); color:#f1efe9;
+  font-family:'Noto Sans JP',sans-serif; font-size:13px; font-weight:700;
+  line-height:1; cursor:pointer;
+}
+#room2CloseBtn:hover { background:rgba(40,36,58,.95); border-color:rgba(255,255,255,.6); }
+@media (max-width:600px) {
+  #room2CloseBtn { top:10px; right:10px; padding:0 13px; font-size:12px; min-height:38px; }
+}
 body.emu-discussion-open > #mainApp > .container,
 body.emu-play-open > #mainApp > .container { display:none; }
 body.emu-discussion-open > #mainApp > #emuTodayHome,
@@ -4589,11 +4606,12 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   <div id="emuDiscussionPage">
     <!-- 議論から今日のEmuへ戻る。上の「← メイン画面」はハブまで戻ってしまうため、
          Emu内で一段だけ戻れる導線を用意する。 -->
-    <button type="button" class="emu-page-close" onclick="showEmuToday()" aria-label="議論を閉じる">✕ 閉じる</button>
+    <!-- 閉じる導線は、議論のルーム内ヘッダーにある×に一本化した。
+         一覧に浮きボタンを出すと何を閉じるのか分からず、ルーム内では入力欄に重なる。 -->
     <iframe id="emuDiscussionFrame" title="開催中の議論" loading="lazy"></iframe>
   </div>
   <div id="emuPlayPage">
-    <button type="button" class="emu-page-close" onclick="showEmuToday()" aria-label="遊びを閉じる">✕ 閉じる</button>
+    <!-- 遊びを閉じるのは、ゲーム画面右上の「✕ 遊びを閉じる」に一本化 -->
     <iframe id="emuPlayFrame" title="今日の遊び" loading="lazy"></iframe>
   </div>
 </section>
@@ -5210,19 +5228,13 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
      ここに style で書くと CSS より強く、ヘッダー(1200)の下に潜って議題が読めなくなる。 -->
 <div id="room3Overlay" class="overlay">
 
-	<span
-  id="room2CloseBtn"
-  onclick="closePopup()"
-  style="
-    position:absolute;
-    top:16px;
-    right:20px;
-    font-size:24px;
-    cursor:pointer;
-    z-index:1001;
-    display:none;
-  "
->✖</span>
+  <!-- ✖ だけだと何を閉じるのか分からないので、文字を添えて押せる範囲も広げる -->
+  <button
+    type="button"
+    id="room2CloseBtn"
+    onclick="closePopup()"
+    aria-label="遊びを閉じる"
+  >✕ 遊びを閉じる</button>
 
 
   <!-- room3 のUI（新デザイン） -->
@@ -14056,7 +14068,7 @@ async function handleConversion() {
 
     // 2. good も change も 0 ならここで止める！
     if (Number(userData.good) === 0 && Number(userData.change) === 0) {
-      alert("変換に必要なgood・change数がありません！");
+      alert("変換に必要なEMUERが溜まっていません！");
       btn.disabled = false;
       btn.textContent = "変換を実行";
       return; 
@@ -15217,8 +15229,18 @@ function showEmuPlay() {
 const DISCUSSION_ROOMS_COL = 'discussion_rooms';
 const DISCUSSION_GENRES = ['work','study','life','society','culture','other'];
 
+/* Firestore のルールが照合するアドレス。
+   ルールは ches_accounts/{uid}.walletAddress と突き合わせるので、
+   ログイン時に控えた ches_address がそれにあたる。
+   無い場合だけ、手元のウォレットにたどる。 */
+function _emuRuleWallet() {
+  const ches = localStorage.getItem('ches_address') || '';
+  if (ches) return ches.toLowerCase();
+  return String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+}
+
 async function saveDiscussionRoom(topic, genre) {
-  const addr = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+  const addr = _emuRuleWallet();
   if (!addr || !window.db || !window.fbLib) return;
   const clean = String(topic || '').trim().slice(0, 120);
   if (!clean) return;
@@ -15247,7 +15269,13 @@ async function saveDiscussionRoom(topic, genre) {
       });
     }
   } catch (e) {
-    console.warn('議論の保存に失敗:', e && e.message);
+    /* 黙って失敗すると「立てたのに残らない」と見えるだけで原因が分からない。
+       画面にも出して、何が起きたか伝わるようにする。 */
+    console.warn('議論の保存に失敗:', e && e.code, e && e.message);
+    const why = (e && e.code === 'permission-denied')
+      ? '保存の権限がありませんでした。ログインし直してからお試しください。'
+      : '議論を保存できませんでした。通信を確かめてもう一度お試しください。';
+    try { alert(why); } catch (e2) {}
   }
 }
 
@@ -15285,7 +15313,7 @@ async function readDiscussionRooms() {
     });
     return rows;
   } catch (e) {
-    console.warn('議論一覧の取得に失敗:', e && e.message);
+    console.warn('議論一覧の取得に失敗:', e && e.code, e && e.message);
     return [];
   }
 }
@@ -17904,7 +17932,7 @@ function openEchoFieldDirect() {
   if (popup) popup.style.display = "none";
   iframe.style.display = "block";
   iframe.src = "/Emu_room2/echo-field.html";
-  closeBtn.style.display = "block";
+  closeBtn.style.display = "inline-flex";
 }
 
 function openSecretDoor() {
@@ -18260,7 +18288,7 @@ function openRoom2() {
   iframe.style.display = "block";
   iframe.src = "/Emu_room2/index.html";
 
-  closeBtn.style.display = "block";
+  closeBtn.style.display = "inline-flex";
   document.body.classList.add('room2-open'); // 問い合わせボタン非表示
 
   // ★ room2が読み込まれたら、少し待ってから累積分を一括送信（初期化完了を待つため500ms遅延）
