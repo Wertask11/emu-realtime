@@ -2585,6 +2585,9 @@ body.spmap-open #emu-contact-label {
   display: none !important;
 }
 /* Room2（探索・遊び）表示中：問い合わせボタンを非表示 */
+/* 星空を見ているあいだは「ひとこと」を出さない。
+   夜空の上に浮くと目立ちすぎるうえ、星と重なって押し間違える。 */
+body.emu-sky-open #emuFeedbackFab { display:none !important; }
 /* 議論ルーム表示中。ルーム内に×があるので、重なる浮きボタンは引っ込める */
 body.room3-open #emu-contact-btn,
 body.room2-open #emu-contact-btn,
@@ -17955,6 +17958,8 @@ function openEchoFieldDirect() {
   if (popup) popup.style.display = "none";
   iframe.style.display = "block";
   iframe.src = "/Emu_room2/echo-field.html";
+  if (closeBtn) closeBtn.textContent = "✕ 遊びを閉じる";
+  document.body.classList.remove('emu-sky-open');
   closeBtn.style.display = "inline-flex";
 }
 
@@ -18299,6 +18304,68 @@ localStorage.setItem("emu:lastAction", JSON.stringify(action));
 let room2PendingPosts = 0;
 let room2PendingStreak = null; // { level, projectId }
 
+/* 星空に出す数を、価値プロフィールと同じ元データから数える。
+   固定値をやめ、その人の実際の行動を映す。
+   ・知識星  … 誰かの役に立った回数 ÷ 10（10回でひとつ）
+   ・体験星  … 体験チケット（NFT）と交換した回数
+   ・議論星  … 議論を続けて語った日数
+   ・学び星  … 受け取った学び（Goodを押した知識）の数
+   ・改善星  … 自分の改善が採用された数 */
+async function _emuSendStarCounts(frame) {
+  const send = function (counts) {
+    try {
+      if (frame && frame.contentWindow) {
+        frame.contentWindow.postMessage({ type: 'EMU_STAR_COUNTS', counts: counts }, window.location.origin);
+      }
+    } catch (e) {}
+  };
+  const address = (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+  if (!address || !window.db || !window.fbLib) { send(null); return; }
+
+  const counts = { post: 0, nft: 0, discussion: 0, learning: 0, change: 0 };
+  try {
+    // 自分の投稿が受け取った Good の合計（＝誰かの役に立った回数）
+    const mine = await window.fbLib.getDocs(window.fbLib.query(
+      window.fbLib.collection(window.db, 'posts'),
+      window.fbLib.where('address', '==', address),
+      window.fbLib.limit(200)));
+    let helpful = 0;
+    mine.forEach(function (d) { helpful += Number(d.data().good || 0); });
+    counts.post = Math.floor(helpful / 10);
+
+    // 受け取った学び（自分が Good を押した知識）
+    const learned = await window.fbLib.getDocs(window.fbLib.query(
+      window.fbLib.collection(window.db, 'posts'),
+      window.fbLib.where('goodUsers', 'array-contains', address),
+      window.fbLib.limit(200)));
+    counts.learning = learned.size;
+
+    // 自分が出した改善のうち、採用されたもの
+    const changes = await window.fbLib.getDocs(window.fbLib.query(
+      window.fbLib.collection(window.db, 'post_changes'),
+      window.fbLib.where('fromAddress', '==', address),
+      window.fbLib.limit(200)));
+    changes.forEach(function (d) { if (d.data().status === 'accepted') counts.change += 1; });
+  } catch (e) {
+    console.warn('星の数の集計に失敗:', e && e.message);
+  }
+
+  // 議論を続けて語った日数（端末に残している記録）
+  try {
+    const st = JSON.parse(localStorage.getItem('room3_discussion') || '{}');
+    counts.discussion = Number(st.streak || 0);
+  } catch (e) {}
+
+  /* 体験星。交換した回数の記録はまだ持っていないため、
+     交換のたびに増やしている端末側の数を使う。
+     記録をサーバーに残すようにしたら、ここを差し替える。 */
+  try {
+    counts.nft = Number(localStorage.getItem('emu_exchange_count') || 0);
+  } catch (e) {}
+
+  send(counts);
+}
+
 function openRoom2() {
   const overlay = document.getElementById("room3Overlay");
   const iframe = document.getElementById("room2Frame");
@@ -18309,7 +18376,18 @@ function openRoom2() {
   if (popup) popup.style.display = "none";
 
   iframe.style.display = "block";
-  iframe.src = "/Emu_room2/index.html";
+  // ?star=1 … 入口の選択画面を出さず、そのまま星空を見せる
+  iframe.src = "/Emu_room2/index.html?star=1";
+  // 星の数は価値プロフィールと同じ実データを使う。読めたら送る。
+  iframe.addEventListener('load', function once() {
+    iframe.removeEventListener('load', once);
+    // 入口の選択画面を出さずに星空を見せる（クエリは配信側に落とされることがある）
+    try { iframe.contentWindow.postMessage({ type: 'EMU_OPEN_STAR' }, '*'); } catch (e) {}
+    _emuSendStarCounts(iframe);
+  });
+  // 閉じるボタンの文言は開いた中身に合わせる（ECHO FIELD と共用のため）
+  if (closeBtn) closeBtn.textContent = "✕ 星空を閉じる";
+  document.body.classList.add('emu-sky-open');
 
   closeBtn.style.display = "inline-flex";
   document.body.classList.add('room2-open'); // 問い合わせボタン非表示
@@ -18353,6 +18431,7 @@ function closePopup() {
   if (popup) popup.style.display = "";
   if (closeBtn) closeBtn.style.display = "none";
   document.body.classList.remove('room2-open'); // 問い合わせボタン復元
+  document.body.classList.remove('emu-sky-open');
   document.body.classList.remove('room3-open');
 
   /* 開いたときの位置へ戻す。これをしないと、ルームの中でスクロールした結果、

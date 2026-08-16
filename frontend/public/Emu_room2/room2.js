@@ -53,8 +53,11 @@ function resize() {
    User Name Management
 ========================== */
 function loadUserName() {
-  const savedName = localStorage.getItem(USER_NAME_KEY);
-  userNameDisplay.textContent = savedName ? `🌟 ${savedName}` : "🌟 Tap to set name";
+  /* 新Emuのプロフィール名（ches_name）を正とする。
+     星空だけ別の名前を持つと、同じ人が2つの名前で表示されてしまう。 */
+  const chesName = localStorage.getItem('ches_name');
+  const savedName = chesName || localStorage.getItem(USER_NAME_KEY);
+  userNameDisplay.textContent = savedName ? `🌟 ${savedName}` : "🌟 名前を設定する";
 }
 
 function askUserName() {
@@ -112,6 +115,50 @@ window.addEventListener("beforeunload", saveState);
    初期履歴データ注入（初回のみ）
    Firebaseの実績: 投稿44件・NFT交換7回・3日連続1回・学びコンテンツ2回
 ========================== */
+/* 親（新Emu）が数えた実データで、星を並べ直す。
+   これまでは 2026年時点の実績を書き込んだ固定値で、
+   誰がログインしても同じ14個が出ていた。
+   種類ごとの見た目は今までのものを引き継ぐ。 */
+const STAR_LOOK = {
+  post:       { power: 10, baseColor: '#ffffff', baseRadius: 3 },
+  nft:        { power: 50, baseColor: '#4da3ff', baseRadius: 7 },
+  discussion: { power: 20, baseColor: '#ffd166', baseRadius: 5 },
+  learning:   { power: 30, baseColor: '#ff6b6b', baseRadius: 5 },
+  change:     { power: 30, baseColor: '#c084fc', baseRadius: 5 }
+};
+
+function applyRealStarCounts(counts) {
+  if (!counts) return;
+  const now = performance.now();
+  const w = canvas.width  || window.innerWidth;
+  const h = canvas.height || window.innerHeight;
+
+  stars.length = 0;
+  links.length = 0;
+  postCount = 0;
+
+  let n = 0;
+  Object.keys(STAR_LOOK).forEach(function (type) {
+    const look = STAR_LOOK[type];
+    const num = Math.max(0, Number(counts[type] || 0));
+    for (let i = 0; i < num; i++) {
+      const star = createStar(Object.assign({ type: type }, look, {
+        x: 80 + Math.random() * Math.max(1, w - 160),
+        y: 80 + Math.random() * Math.max(1, h - 160)
+      }));
+      n++;
+      star.birthAt   = now - 2000 - n * 120;
+      star.createdAt = star.birthAt;
+      stars.push(star);
+    }
+  });
+
+  // 実データで並べ直したので、固定値の流し込みは二度と走らせない
+  try { localStorage.setItem('room2_history_seeded_v1', '1'); } catch (e) {}
+  try { saveState(); } catch (e) {}
+  try { updateStarList(); } catch (e) {}
+}
+
 function seedHistoryStars() {
   const KEY = "room2_history_seeded_v1";
   if (localStorage.getItem(KEY)) return; // 既に実行済み
@@ -591,10 +638,15 @@ function updateStarList() {
 
   let html = `<div style="text-align:left;font-family:sans-serif;font-size:12px;">`;
   html += `<strong style="color:#c8d8ff;border-bottom:1px solid rgba(140,170,255,0.25);display:block;margin-bottom:5px;padding-bottom:3px;font-size:12px;">🌌 あなたの星座記録</strong>`;
-  if (counts.post)       html += `<div style="color:#e8eeff;">⚪ 投稿星 <span style="float:right;color:#aabbdd;">${counts.post}</span></div>`;
-  if (counts.nft)        html += `<div style="color:#e8eeff;">🔵 NFT星 <span style="float:right;color:#4da3ff;">${counts.nft}</span></div>`;
-  if (counts.discussion) html += `<div style="color:#e8eeff;">🟡 連続星 <span style="float:right;color:#ffd166;">${counts.discussion}</span></div>`;
+  /* 新Emuの行動に合わせた呼び名。
+     post→知識星（誰かの役に立った）／nft→体験星（体験チケットと交換した）
+     discussion→議論星（続けて語った）／learning→学び星（受け取った学び）
+     change→改善星（誰かの知識を良くした） */
+  if (counts.post)       html += `<div style="color:#e8eeff;">⚪ 知識星 <span style="float:right;color:#aabbdd;">${counts.post}</span></div>`;
+  if (counts.nft)        html += `<div style="color:#e8eeff;">🔵 体験星 <span style="float:right;color:#4da3ff;">${counts.nft}</span></div>`;
+  if (counts.discussion) html += `<div style="color:#e8eeff;">🟡 議論星 <span style="float:right;color:#ffd166;">${counts.discussion}</span></div>`;
   if (counts.learning)   html += `<div style="color:#e8eeff;">🔴 学び星 <span style="float:right;color:#ff6b6b;">${counts.learning}</span></div>`;
+  if (counts.change)     html += `<div style="color:#e8eeff;">🟣 改善星 <span style="float:right;color:#c084fc;">${counts.change}</span></div>`;
   html += `<div style="border-top:1px solid rgba(140,170,255,0.2);margin-top:5px;padding-top:4px;color:#ffd166;">✨ 合計 <span style="float:right;">${stars.length}</span></div>`;
   if (postCount > 0) {
     html += `<div style="color:#667799;font-size:10px;margin-top:3px;">次の白星まで: ${remaining}投稿</div>`;
@@ -615,10 +667,12 @@ function shareToX() {
 
   const red    = counts.learning || 0;
   let parts = [];
-  if (white > 0)  parts.push(`⚪ 投稿星×${white}`);
-  if (blue > 0)   parts.push(`🔵 NFT星×${blue}`);
-  if (yellow > 0) parts.push(`🟡 連続星×${yellow}`);
+  if (white > 0)  parts.push(`⚪ 知識星×${white}`);
+  if (blue > 0)   parts.push(`🔵 体験星×${blue}`);
+  if (yellow > 0) parts.push(`🟡 議論星×${yellow}`);
   if (red > 0)    parts.push(`🔴 学び星×${red}`);
+  const purple = counts.change || 0;
+  if (purple > 0) parts.push(`🟣 改善星×${purple}`);
 
   const body = parts.length > 0
     ? `私の星座記録：${parts.join(' / ')}（合計${total}個）`
@@ -636,6 +690,19 @@ function openStarMode() {
   document.getElementById('echoFieldFrame').style.display = 'none';
   document.getElementById('echoFieldFrame').src = '';
 }
+
+/* 星空へ直接来たとき（?star=1）は、入口の選択画面を出さずにそのまま見せる。
+   選ぶ先が星空しかないのに一枚挟むと、余計な一手間になる。 */
+(function () {
+  var go = function () {
+    try {
+      if (/[?&]star=1/.test(location.search || '')) openStarMode();
+    } catch (e) {}
+  };
+  // この時点ではまだ入口の要素が無いことがあるので、DOM が揃ってから消す
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
+  else go();
+})();
 
 function openEchoField() {
   document.getElementById('room2ModeSelect').style.display = 'none';
@@ -668,6 +735,16 @@ window.addEventListener('message', (event) => {
       break;
     case "NFT_PURCHASE":
       spawnNFTStar();
+      break;
+    case "EMU_OPEN_STAR":
+      /* 親から「星空を開いて」と言われたとき。
+         URLのクエリは配信サーバーに落とされることがあるので、
+         こちらの合図を正とする。 */
+      try { openStarMode(); } catch (e) {}
+      break;
+    case "EMU_STAR_COUNTS":
+      /* 親（新Emu）が数えた実データ。固定値の代わりにこれを映す。 */
+      applyRealStarCounts(action.counts);
       break;
     case "STREAK_3DAY":
       handleDiscussionStreak(action.projectId || "default");
