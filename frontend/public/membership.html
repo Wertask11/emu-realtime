@@ -86,14 +86,20 @@ ul.cond li{margin:4px 0}
     <section class="card">
       <h2><span class="ico">◈</span>ご契約</h2>
       <div class="row"><span class="k">状態</span><span class="v" id="subStatus">—</span></div>
-      <div class="row"><span class="k">料金</span><span class="v">月額 10,000円（税込）</span></div>
+      <div class="row"><span class="k">料金</span><span class="v" id="planPrice">—</span></div>
       <div class="row"><span class="k">次回更新日</span><span class="v" id="periodEnd">—</span></div>
       <div class="row"><span class="k">保証期間</span><span class="v" id="guaranteeEnd">—</span></div>
+      <!-- プラン選択。金額は必ずサーバーから受け取る（画面に直書きしない） -->
+      <div id="planPick" class="hide" style="margin-top:16px">
+        <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:8px">プランを選ぶ</div>
+        <div id="planList" style="display:grid;gap:8px"></div>
+      </div>
       <label id="adultRow" style="display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--ink);margin-top:14px">
         <input type="checkbox" id="adultCheck" style="width:auto;margin-top:3px;flex:none">
         <span>18歳以上です（未成年の方は法定代理人の同意が必要です）</span>
       </label>
-      <button class="btn" id="subscribeBtn" disabled>入会して支払う（10,000円）</button>
+      <!-- 文言と金額は syncSubscribeButton が選んだプランに合わせて入れ替える -->
+      <button class="btn" id="subscribeBtn" disabled>プランを選んでください</button>
       <button class="btn sub hide" id="portalBtn">支払い方法の変更・解約</button>
       <p class="note">解約手数料はかかりません。次回決済日の前までに解約すれば翌月の請求は発生しません。</p>
       <p class="err hide" id="subErr"></p>
@@ -259,6 +265,16 @@ async function loadBilling() {
   show($("#subscribeBtn"), !active);
   show($("#portalBtn"), active);
 
+  if (active) {
+    // 契約中はプランを選び直せない（変更は「支払い方法の変更・解約」から）
+    show($("#planPick"), false);
+    $("#planPrice").textContent = s.planLabel
+      ? s.planLabel + "　月額 " + Number(s.planAmount).toLocaleString("ja-JP") + "円（税込）"
+      : "月額 " + Number(s.planAmount).toLocaleString("ja-JP") + "円（税込）";
+  } else {
+    renderPlans(s.plans, s.plan);
+  }
+
   if (s.guarantee) {
     $("#guaranteeEnd").textContent = fmt(s.guarantee.endsAt) + " まで";
     $("#refundWindow").textContent = fmt(s.guarantee.refundOpensAt) + " 〜 " + fmt(s.guarantee.refundClosesAt);
@@ -275,18 +291,53 @@ async function loadBilling() {
   return s;
 }
 
+/* いま選んでいるプラン。サーバーが返した一覧の中からしか選べない。 */
+let selectedPlan = null;
+let planCatalog = [];
+
+function renderPlans(plans, current) {
+  planCatalog = Array.isArray(plans) ? plans : [];
+  const box = $("#planList");
+  if (!planCatalog.length) { show($("#planPick"), false); return; }
+  show($("#planPick"), true);
+  // 高い順に並べる。本会員を上に見せたいため
+  const sorted = planCatalog.slice().sort((a, b) => b.amount - a.amount);
+  if (!selectedPlan) selectedPlan = current || (sorted[0] && sorted[0].key);
+  box.innerHTML = sorted.map(p => {
+    const on = p.key === selectedPlan;
+    return '<label style="display:flex;gap:10px;align-items:flex-start;border:1.5px solid ' +
+      (on ? 'var(--accent)' : 'var(--line)') + ';border-radius:12px;padding:12px 14px;cursor:pointer">' +
+      '<input type="radio" name="plan" value="' + p.key + '"' + (on ? ' checked' : '') +
+      ' style="width:auto;margin-top:3px;flex:none">' +
+      '<span><b>' + p.label + '</b>　月額 ' + p.amount.toLocaleString("ja-JP") + '円（税込）' +
+      (p.guaranteed ? '<br><small style="color:var(--muted)">30日間の「語り合える一人」保証つき</small>' : '') +
+      '</span></label>';
+  }).join("");
+  syncSubscribeButton();
+}
+
+function currentPlan() {
+  return planCatalog.find(p => p.key === selectedPlan) || null;
+}
+
 document.addEventListener("change", e => {
   if (e.target && e.target.id === "adultCheck") syncSubscribeButton();
+  if (e.target && e.target.name === "plan") {
+    selectedPlan = e.target.value;
+    renderPlans(planCatalog, selectedPlan);
+  }
 });
 
 $("#subscribeBtn").onclick = async () => {
   const btn = $("#subscribeBtn");
   if (!$("#adultCheck").checked) { msg($("#subErr"), "18歳以上であることをご確認ください。"); return; }
+  if (!selectedPlan) { msg($("#subErr"), "プランを選んでください。"); return; }
   btn.disabled = true; msg($("#subErr"), "");
   try {
     // 決済に進む前に、18歳以上であることの申告を記録する
     await api("/api/kyc/declare-age", { method:"POST", body:{ adult:true } });
-    const r = await api("/api/billing/checkout", { method:"POST", body:{} });
+    // 渡すのはプランのキーだけ。金額はサーバーが決める
+    const r = await api("/api/billing/checkout", { method:"POST", body:{ plan: selectedPlan } });
     location.href = r.url;                       // Stripe の決済ページへ
   } catch (e) {
     msg($("#subErr"), human(e)); btn.disabled = false;
@@ -332,7 +383,13 @@ async function loadKyc() {
 function syncSubscribeButton() {
   const chk = $("#adultCheck"), btn = $("#subscribeBtn");
   if (!chk || !btn) return;
-  btn.disabled = !chk.checked;
+  const plan = typeof currentPlan === "function" ? currentPlan() : null;
+  // プランが選ばれていて、かつ18歳以上の確認が入っているときだけ押せる
+  btn.disabled = !chk.checked || !plan;
+  // 金額は選んだプランのものを出す（画面に固定の数字を書かない）
+  btn.textContent = plan
+    ? "入会して支払う（" + plan.amount.toLocaleString("ja-JP") + "円）"
+    : "プランを選んでください";
 }
 
 // ───────── プロフィール ─────────

@@ -12,8 +12,21 @@
 
 const express = require("express");
 
-const PLAN_AMOUNT_JPY = 10000;          // 月額（確定）
-// 返金額は常に初月料金の全額。金額はサーバー側で決め、クライアントの申告は使わない。
+/* 月額プランは3つ。金額とStripeのPrice IDはサーバー側だけが持ち、
+   クライアントから渡ってくるのはキー（light/standard/member）だけにする。
+   金額を客側に決めさせない。 */
+const PLANS = {
+  light:    { key: "light",    amount: 500,   envPrice: "STRIPE_PRICE_LIGHT",    label: "ライト" },
+  standard: { key: "standard", amount: 3000,  envPrice: "STRIPE_PRICE_STANDARD", label: "スタンダード" },
+  member:   { key: "member",   amount: 10000, envPrice: "STRIPE_PRICE_MEMBER",   label: "Emu本会員" }
+};
+const DEFAULT_PLAN = "member";
+
+// 「語り合える一人」保証は本会員（月額10,000円）にだけ付く
+const GUARANTEED_PLAN = "member";
+const PLAN_AMOUNT_JPY = PLANS.member.amount;   // 既存の呼び出し互換のため残す
+
+// 返金額はサーバー側が Stripe の支払い記録から決める。クライアントの申告は使わない。
 const GUARANTEE_DAYS = 30;              // 保証期間
 const REFUND_WINDOW_OPEN_DAY = 31;      // 入会31日目から
 const REFUND_WINDOW_DAYS = 7;           // 7日間
@@ -29,7 +42,20 @@ function createBillingRouter(deps) {
   const { db, requireFirebaseUser, requireOwner, rateLimit, webhookPath } = deps;
 
   const secretKey = process.env.STRIPE_SECRET_KEY || "";
-  const priceId = process.env.STRIPE_PRICE_ID || "";
+
+  /* 各プランの Price ID。環境変数が無いプランは「売っていない」扱いにする。
+     STRIPE_PRICE_ID は本会員の旧名。移行のあいだは拾えるようにしておく。 */
+  function priceIdOf(planKey) {
+    const plan = PLANS[planKey];
+    if (!plan) return "";
+    const id = process.env[plan.envPrice] || "";
+    if (id) return id;
+    if (planKey === "member") return process.env.STRIPE_PRICE_ID || "";
+    return "";
+  }
+  function availablePlans() {
+    return Object.keys(PLANS).filter(function (k) { return !!priceIdOf(k); });
+  }
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
   const siteOrigin = process.env.PUBLIC_SITE_ORIGIN || "https://schoolpark-emu.vercel.app";
 
@@ -81,7 +107,13 @@ function createBillingRouter(deps) {
   router.post("/checkout", requireStripe, requireFirebaseUser, checkoutRateLimit, async (req, res) => {
     try {
       const { uid, walletAddress, account } = req.identity;
-      if (!priceId) return res.status(503).json({ error: "PRICE_NOT_CONFIGURED" });
+
+      /* 受け取るのはプランのキーだけ。金額やPrice IDを客側から受けない。
+         知らないキーが来たら弾く（存在しない安いプランを作られないように）。 */
+      const planKey = String(req.body && req.body.plan || DEFAULT_PLAN);
+      if (!PLANS[planKey]) return res.status(400).json({ error: "UNKNOWN_PLAN" });
+      const priceId = priceIdOf(planKey);
+      if (!priceId) return res.status(503).json({ error: "PRICE_NOT_CONFIGURED", plan: planKey });
 
       const existing = await readSubscription(uid);
       if (existing && existing.status === "active") {
@@ -101,6 +133,8 @@ function createBillingRouter(deps) {
           stripeCustomerId: customerId, status: "none", createdAt: new Date()
         }, { merge: true });
       }
+      // 決済に進んだプランを控えておく（Webhook が来る前でも画面に出せる）
+      await subRef(uid).set({ pendingPlan: planKey }, { merge: true });
 
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",
@@ -108,7 +142,8 @@ function createBillingRouter(deps) {
         line_items: [{ price: priceId, quantity: 1 }],
         // 冪等性の担保と、Webhook 側で uid を引くためのひも付け
         client_reference_id: uid,
-        subscription_data: { metadata: { uid, walletAddress } },
+        // どのプランで契約したかは Stripe 側にも残す（Webhook と返金の判定で使う）
+        subscription_data: { metadata: { uid, walletAddress, plan: planKey } },
         success_url: `${siteOrigin}/?billing=success`,
         cancel_url: `${siteOrigin}/?billing=cancel`,
         locale: "ja"
@@ -126,15 +161,26 @@ function createBillingRouter(deps) {
     try {
       if (!db) return res.status(503).json({ error: "BILLING_UNAVAILABLE" });
       const sub = await readSubscription(req.identity.uid);
+      const plans = availablePlans().map(function (k) {
+        return { key: k, amount: PLANS[k].amount, label: PLANS[k].label,
+                 guaranteed: k === GUARANTEED_PLAN };
+      });
       if (!sub) {
-        return res.json({ ok: true, status: "none", planAmount: PLAN_AMOUNT_JPY });
+        return res.json({ ok: true, status: "none", plans,
+                          planAmount: PLAN_AMOUNT_JPY });
       }
+      const currentPlan = sub.plan || sub.pendingPlan || null;
       const win = guaranteeWindow(sub.firstSubscribedAt);
       const now = Date.now();
       return res.json({
         ok: true,
         status: sub.status || "none",
-        planAmount: PLAN_AMOUNT_JPY,
+        plans,
+        plan: currentPlan,
+        planLabel: currentPlan && PLANS[currentPlan] ? PLANS[currentPlan].label : null,
+        // 保証は本会員にだけ付く
+        guaranteed: currentPlan === GUARANTEED_PLAN,
+        planAmount: currentPlan && PLANS[currentPlan] ? PLANS[currentPlan].amount : PLAN_AMOUNT_JPY,
         currentPeriodEnd: sub.currentPeriodEnd ? sub.currentPeriodEnd.toDate().toISOString() : null,
         cancelAtPeriodEnd: !!sub.cancelAtPeriodEnd,
         firstSubscribedAt: win ? win.start.toISOString() : null,
@@ -176,6 +222,12 @@ function createBillingRouter(deps) {
       const { uid, walletAddress } = req.identity;
       const sub = await readSubscription(uid);
       if (!sub || !sub.firstSubscribedAt) return res.status(404).json({ error: "NO_SUBSCRIPTION" });
+
+      /* 「語り合える一人」保証は本会員（月額10,000円）の約束。
+         下位プランでこの返金を受けられると、規約に書いていない返金になってしまう。 */
+      if ((sub.plan || DEFAULT_PLAN) !== GUARANTEED_PLAN) {
+        return res.status(400).json({ error: "PLAN_NOT_GUARANTEED", plan: sub.plan || null });
+      }
 
       // 一人につき初回入会時の1回限り
       if (sub.refundStatus && sub.refundStatus !== "rejected") {
@@ -453,6 +505,17 @@ function createBillingRouter(deps) {
       currentPeriodEnd: periodEndOf(subscription),
       updatedAt: new Date()
     };
+    /* 契約したプラン。Stripe 側の metadata が正で、無ければ Price ID から引き当てる。
+       ここを Firestore に写しておかないと、返金の可否も画面の表示もプラン別にできない。 */
+    const metaPlan = subscription.metadata && subscription.metadata.plan;
+    if (metaPlan && PLANS[metaPlan]) {
+      patch.plan = metaPlan;
+    } else {
+      const item = subscription.items && subscription.items.data && subscription.items.data[0];
+      const pid = item && item.price && item.price.id;
+      const hit = pid && Object.keys(PLANS).find(function (k) { return priceIdOf(k) === pid; });
+      if (hit) patch.plan = hit;
+    }
     // 保証期間の起点は最初の入会日。再入会で上書きすると保証が延びてしまうので、
     // 既に記録がある場合は触らない。
     const existing = await subRef(uid).get();
