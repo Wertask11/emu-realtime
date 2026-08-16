@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Emu 会員 | 語り合える一人</title>
+<title>EMUERにようこそ | 語り合える一人</title>
 <style>
 :root{
   --ink:#1a1840; --muted:#6f6a86; --line:#e6e2dc; --bg:#faf8f5; --card:#fff;
@@ -75,7 +75,7 @@ ul.cond li{margin:4px 0}
 <body>
 <div class="wrap">
   <header class="top"><a href="/">← Emu へもどる</a></header>
-  <h1>Emu 会員</h1>
+  <h1>EMUERにようこそ</h1>
   <p class="lead">月額10,000円・30日間の「語り合える一人」保証つき</p>
 
   <div id="gate" class="gate">読み込んでいます…</div>
@@ -84,7 +84,7 @@ ul.cond li{margin:4px 0}
 
     <!-- 会員状態 -->
     <section class="card">
-      <h2><span class="ico">◈</span>ご契約</h2>
+      <h2><span class="ico">◈</span>プラン</h2>
       <div class="row"><span class="k">状態</span><span class="v" id="subStatus">—</span></div>
       <div class="row"><span class="k">料金</span><span class="v" id="planPrice">—</span></div>
       <div class="row"><span class="k">次回更新日</span><span class="v" id="periodEnd">—</span></div>
@@ -253,6 +253,17 @@ const ERRORS = {
 };
 const human = e => ERRORS[e && e.code] || "処理できませんでした。時間をおいてお試しください。";
 
+/* Stripe の決済ページと顧客ポータルは iframe の中では動かない
+   （"Stripe Checkout is not able to run in an iFrame" で止まる）。
+   会員ページはアプリ内のモーダル（iframe）で開くため、一番外の窓ごと移動させる。
+   同一オリジンなので window.top は触れる。 */
+function gotoExternal(url) {
+  try {
+    if (window.top && window.top !== window.self) { window.top.location.href = url; return; }
+  } catch (e) { /* 触れなければ下の手段に落とす */ }
+  location.href = url;
+}
+
 // ───────── 契約状態 ─────────
 async function loadBilling() {
   const s = await api("/api/billing/status");
@@ -332,15 +343,16 @@ $("#subscribeBtn").onclick = async () => {
   const btn = $("#subscribeBtn");
   if (!$("#adultCheck").checked) { msg($("#subErr"), "18歳以上であることをご確認ください。"); return; }
   if (!selectedPlan) { msg($("#subErr"), "プランを選んでください。"); return; }
-  btn.disabled = true; msg($("#subErr"), "");
+  // 決済ページが開くまで数秒かかることがある。無反応に見えないよう文言を変える
+  btn.disabled = true; btn.textContent = "決済ページを開いています…"; msg($("#subErr"), "");
   try {
     // 決済に進む前に、18歳以上であることの申告を記録する
     await api("/api/kyc/declare-age", { method:"POST", body:{ adult:true } });
     // 渡すのはプランのキーだけ。金額はサーバーが決める
     const r = await api("/api/billing/checkout", { method:"POST", body:{ plan: selectedPlan } });
-    location.href = r.url;                       // Stripe の決済ページへ
+    gotoExternal(r.url);                         // Stripe の決済ページへ
   } catch (e) {
-    msg($("#subErr"), human(e)); btn.disabled = false;
+    msg($("#subErr"), human(e)); btn.disabled = false; syncSubscribeButton();
   }
 };
 
@@ -349,7 +361,7 @@ $("#portalBtn").onclick = async () => {
   btn.disabled = true; msg($("#subErr"), "");
   try {
     const r = await api("/api/billing/portal", { method:"POST", body:{} });
-    location.href = r.url;
+    gotoExternal(r.url);
   } catch (e) {
     msg($("#subErr"), human(e)); btn.disabled = false;
   }
@@ -388,7 +400,7 @@ function syncSubscribeButton() {
   btn.disabled = !chk.checked || !plan;
   // 金額は選んだプランのものを出す（画面に固定の数字を書かない）
   btn.textContent = plan
-    ? "入会して支払う（" + plan.amount.toLocaleString("ja-JP") + "円）"
+    ? "プランをアップグレードする（" + plan.amount.toLocaleString("ja-JP") + "円）"
     : "プランを選んでください";
 }
 

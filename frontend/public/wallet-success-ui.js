@@ -55,7 +55,7 @@ const AIRDROP_AMOUNT_DISPLAY = 100;
         <p class="ws-title">ウォレット接続完了！</p>
         <p class="ws-address" id="wsAddressText">0x...</p>
         <div class="ws-balance-card" id="wsBalanceCard">
-          <p class="ws-balance-label">現在のEmuer残高</p>
+          <p class="ws-balance-label">現在のEMUER残高</p>
           <p class="ws-balance-amount" id="wsBalanceAmount">---</p>
           <p class="ws-balance-unit">EMUER</p>
         </div>
@@ -85,7 +85,7 @@ async function showWalletSuccessModal(account) {
   addrEl.textContent = account.substring(0, 6) + "..." + account.slice(-4);
   overlay.classList.add("active");
 
-  // ① 現在のEmuer残高を即取得
+  // ① 現在のEMUER残高を即取得
   try {
     // ★ provider を毎回新しく作る（既存のglobal providerが古い場合の対策）
     const _provider = new ethers.providers.Web3Provider(window.ethereum);
@@ -109,7 +109,7 @@ async function showWalletSuccessModal(account) {
       amountEl.classList.add("updating");
       amountEl.textContent = newBal % 1 === 0 ? newBal.toFixed(0) : newBal.toFixed(4);
       setTimeout(() => amountEl.classList.remove("updating"), 500);
-      statusEl.textContent = "Emuerを受け取りました！";
+      statusEl.textContent = "EMUERを受け取りました！";
       statusEl.className = "ws-status received";
     });
   } catch (err) {
