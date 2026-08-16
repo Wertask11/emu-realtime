@@ -96,6 +96,8 @@
       "uses.spAction": "SchoolParkへ",
 
       "profile.title": "あなたが渡した価値",
+      "profile.star": "星空を見る",
+      "profile.starTitle": "あなたの星空を見る",
       "profile.desc": "日常の記録ではなく、誰かへ届き、改善され、学びになった価値だけを残します。",
       "profile.helpedPeople": "役に立った人",
       "profile.helpfulCount": "役に立った回数",
@@ -288,6 +290,8 @@
       "uses.spAction": "Go to SchoolPark",
 
       "profile.title": "The value you gave",
+      "profile.star": "See your night sky",
+      "profile.starTitle": "See your night sky",
       "profile.desc": "Not a diary — only value that reached someone, was improved, and became learning.",
       "profile.helpedPeople": "People helped",
       "profile.helpfulCount": "Times it helped",
@@ -480,6 +484,8 @@
       "uses.spAction": "前往 SchoolPark",
 
       "profile.title": "你交付的价值",
+      "profile.star": "查看星空",
+      "profile.starTitle": "查看你的星空",
       "profile.desc": "这里不是日常记录，只留下抵达他人、被改进并成为学习的价值。",
       "profile.helpedPeople": "帮助过的人",
       "profile.helpfulCount": "帮上忙的次数",
@@ -672,6 +678,8 @@
       "uses.spAction": "SchoolPark로",
 
       "profile.title": "당신이 건넨 가치",
+      "profile.star": "별하늘 보기",
+      "profile.starTitle": "당신의 별하늘 보기",
       "profile.desc": "일상의 기록이 아니라, 누군가에게 닿고 개선되어 배움이 된 가치만 남깁니다.",
       "profile.helpedPeople": "도움을 준 사람",
       "profile.helpfulCount": "도움이 된 횟수",
