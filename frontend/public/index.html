@@ -22,10 +22,23 @@
       var isLineCb = /[?&]code=/.test(location.search || "");
       var isGoogleRedirect = false;
       try { isGoogleRedirect = !!localStorage.getItem("ches_google_redirect"); } catch (e) {}
-      /* Stripe の決済・解約から戻ってきたときも、ログイン済みのまま復帰させる。
-         ここでロゴ画面を出すと、支払いのあとに最初からやり直しに見えてしまう。 */
+      /* Stripe の決済・解約から戻ってきたとき。
+         ログイン済みならロゴを飛ばして復帰させる（支払い後に最初から
+         やり直しに見せないため）。未ログインならロゴから始めるのが正しい。 */
       var isBillingReturn = /[?&]billing=/.test(location.search || "");
-      if (isLineCb || isGoogleRedirect || isBillingReturn) {
+      if (isBillingReturn) {
+        var hasSession = false;
+        try { hasSession = !!localStorage.getItem("ches_uid"); } catch (e) {}
+        /* この印は一度きり。URL に残すと、次に開いたときや再読み込みのたびに
+           ロゴを飛ばしてしまい、ログイン画面から始まったように見える。
+           読み取ったらすぐ URL から外す。 */
+        try {
+          window.__chesBillingReturn = location.search.match(/[?&]billing=([^&]*)/)[1];
+          window.history.replaceState(null, "", location.pathname + location.hash);
+        } catch (e) {}
+        if (hasSession) document.documentElement.classList.add("ches-resuming");
+      }
+      if (isLineCb || isGoogleRedirect) {
         document.documentElement.classList.add("ches-resuming");
       }
     } catch (e) {}
@@ -16207,7 +16220,7 @@ function emuWatchMembership() {
     setTimeout(function () { try { emuRenderMembership(); } catch (e) {} }, ms);
   });
 }
-if (/[?&]billing=/.test(location.search || "")) emuWatchMembership();
+if (window.__chesBillingReturn) emuWatchMembership();
 
 async function loadEmuWalletCard() {
   emuRenderMembership();
@@ -21484,13 +21497,15 @@ async function sendEmuFeedback() {
     if (typeof spTrack === "function") spTrack("free", addr).catch(function () {});
     /* Stripe の決済・解約から戻ってきたときは、支払った直後の画面に戻す。
        ハブに落とすと「最初からやり直し」に見えるため。 */
-    if (/[?&]billing=/.test(location.search || "")) {
+    if (window.__chesBillingReturn) {
       try {
         if (typeof chesHubGo === "function") chesHubGo("emu");
         if (typeof showEmuValueProfile === "function") showEmuValueProfile();
-        // 履歴に ?billing= を残さない（再読み込みで毎回ここへ来てしまうため）
-        history.replaceState(null, "", location.pathname);
       } catch (e) {}
+      // 読み込み中の覆いを外す。ここを飛ばすと画面が覆われたままになる
+      if (typeof _hideSpLoadingOverlay === "function") _hideSpLoadingOverlay();
+      try { document.documentElement.classList.remove("ches-resuming"); } catch (e) {}
+      window.__chesBillingReturn = null;
       window._chesEntered = true;
       return;
     }
@@ -21557,6 +21572,8 @@ async function sendEmuFeedback() {
   function restoreLoginScreen(message) {
     cancelLoading();
     window._chesBusy = false;
+    // 復帰できなかったので、決済戻りの印は捨てる（次の読み込みに持ち越さない）
+    window.__chesBillingReturn = null;
     try { document.documentElement.classList.remove("ches-resuming"); } catch (e) {}
     var hub = document.getElementById("chesHubScreen"); if (hub) hub.style.display = "none";
     var app = document.getElementById("mainApp"); if (app) app.style.display = "none";
