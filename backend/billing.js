@@ -185,10 +185,12 @@ function createBillingRouter(deps) {
       if (stripe && sub.stripeSubscriptionId) {
         try {
           const live = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
+          const cancel = cancellationOf(live);
           const fresh = {
             status: live.status,
-            cancelAtPeriodEnd: !!live.cancel_at_period_end,
-            currentPeriodEnd: periodEndOf(live)
+            cancelAtPeriodEnd: cancel.pending,
+            // 解約予定があるなら、その日が「終わる日」
+            currentPeriodEnd: cancel.at || periodEndOf(live)
           };
           const metaPlan = live.metadata && live.metadata.plan;
           if (metaPlan && PLANS[metaPlan]) fresh.plan = metaPlan;
@@ -528,6 +530,19 @@ function createBillingRouter(deps) {
 
   /* 次回更新日。2026-07-29 の API で current_period_end は Subscription から
      SubscriptionItem へ移動した。古い形でも読めるよう両方を見る。 */
+  /* 解約の申し込みが済んでいるか。
+     cancel_at_period_end は非推奨になり、いまは解約予定の日時が cancel_at に入る。
+     片方だけを見ていると、カスタマーポータルで解約しても「有効」のままに見える。
+     両方を見て、終わる日も返す。 */
+  function cancellationOf(subscription) {
+    const atUnix = subscription.cancel_at || null;
+    const flagged = !!subscription.cancel_at_period_end;
+    const at = atUnix ? new Date(atUnix * 1000) : null;
+    // 過去の日付は「もう終わった」ので予定とは扱わない
+    const pending = flagged || (at && at.getTime() > Date.now());
+    return { pending: !!pending, at: at };
+  }
+
   function periodEndOf(subscription) {
     const item = subscription.items && subscription.items.data && subscription.items.data[0];
     const unix = (item && item.current_period_end) || subscription.current_period_end;
@@ -540,8 +555,8 @@ function createBillingRouter(deps) {
       stripeSubscriptionId: subscription.id,
       stripeCustomerId: typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id,
       status: subscription.status,
-      cancelAtPeriodEnd: !!subscription.cancel_at_period_end,
-      currentPeriodEnd: periodEndOf(subscription),
+      cancelAtPeriodEnd: cancellationOf(subscription).pending,
+      currentPeriodEnd: cancellationOf(subscription).at || periodEndOf(subscription),
       updatedAt: new Date()
     };
     /* 契約したプラン。Stripe 側の metadata が正で、無ければ Price ID から引き当てる。

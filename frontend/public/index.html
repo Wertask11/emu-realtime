@@ -16178,13 +16178,14 @@ async function emuRenderMembership() {
     }
   }
 
-  // まずは手元の判定で即座に出す（通信を待たせない）
+  /* 公式パス（NFT）は手元で分かるので先に出す。
+     プランはサーバーに聞かないと分からないので、答えが来るまで断定しない。
+     ここで「未加入」と出すと、解約手続き中の人（期間内はまだ会員）にも
+     一瞬そう見えてしまう。 */
   paintPass(!!window.hasPaidNFT);
-  if (window.hasPaidNFT) {
-    paint('is-free', 'プラン未加入', 'いつでも実EMUERへの変換ができます。');
-  } else {
-    paint('is-free', 'プラン未加入', '実EMUERへの変換は毎週月曜日のみです。');
-  }
+  paint('is-free', '確認中…', window.hasPaidNFT
+    ? 'いつでも実EMUERへの変換ができます。'
+    : '実EMUERへの変換は毎週月曜日のみです。');
 
   // Stripe の有料会員かどうかをサーバーに確認して上書きする
   try {
@@ -16200,11 +16201,23 @@ async function emuRenderMembership() {
     if (!res.ok) return;
     const s = await res.json();
     if (s.status === 'active' || s.status === 'trialing') {
-      // バッジにはプラン名をそのまま出す（Emu light / Emu plus / Emu pro）
+      /* バッジにはプラン名をそのまま出す（Emu light / Emu plus / Emu pro）。
+         解約手続き中でも、期間の終わりまでは会員なのでプラン名を出す。
+         ここを「未加入」にすると、まだ使える人に使えないと伝えてしまう。 */
+      const ending = s.cancelAtPeriodEnd;
+      const until = s.currentPeriodEnd
+        ? new Date(s.currentPeriodEnd).toLocaleDateString('ja-JP') : null;
       paint('is-paid', s.planLabel || 'Emu pro',
-        '月額' + Number(s.planAmount).toLocaleString('ja-JP') + '円のプランをご利用中です。');
+        ending
+          ? (until ? until + ' まで利用できます（解約済み）。' : '解約済みです。期間の終わりまで利用できます。')
+          : '月額' + Number(s.planAmount).toLocaleString('ja-JP') + '円のプランをご利用中です。');
     } else if (s.status === 'past_due') {
       paint('is-free', 'お支払い確認中', 'カードのお支払いを確認できていません。');
+    } else {
+      // ここで初めて「入っていない」と言い切れる
+      paint('is-free', 'プラン未加入', window.hasPaidNFT
+        ? 'いつでも実EMUERへの変換ができます。'
+        : '実EMUERへの変換は毎週月曜日のみです。');
     }
     if (cta) cta.hidden = false;
   } catch (_) { /* 取れなければ手元の判定のままにする */ }
