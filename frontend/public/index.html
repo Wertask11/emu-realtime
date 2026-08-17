@@ -22206,6 +22206,7 @@ async function sendEmuFeedback() {
   let knowledgeLastDoc = null;
   let knowledgeHasMore = true;
   let knowledgeSyncing = null;
+  let knowledgeSyncPending = null;   // 同期中に来た「先頭から読み直して」をまとめる
   /* 遊びから渡された、投稿フォームに入れる本文。iframeの準備ができるまで持っておく。 */
   let knowledgePrefillText = '';
   let knowledgeScheduleCache = { account:'', count:0, fetchedAt:0 };
@@ -22400,10 +22401,26 @@ async function sendEmuFeedback() {
     flushKnowledgePrefill();   // 既に準備できていれば、そのまま渡す
   };
 
+  /* 投稿したのに一覧に出ない、の原因はここだった。
+     読み込み中に「先頭から読み直して」と頼まれたとき、走っている問い合わせを
+     そのまま返していた。その問い合わせは依頼より前に始まっているので、
+     たったいま保存した投稿は入っていない。
+     いまは、走っているものを待ってから、あらためて読み直す。 */
   async function syncKnowledgeFrame(options) {
     options = options || {};
-    if (knowledgeSyncing) return knowledgeSyncing;
-    knowledgeSyncing = (async () => {
+    if (!knowledgeSyncing) return runKnowledgeSync(options);
+    // 「続きを読む」は重ねても意味がないので、走っているものに任せる
+    if (options.append) return knowledgeSyncing;
+    // すでに読み直しを待たせてあるなら、それにまとめる
+    if (knowledgeSyncPending) return knowledgeSyncPending;
+    knowledgeSyncPending = knowledgeSyncing
+      .catch(() => {})
+      .then(() => { knowledgeSyncPending = null; return runKnowledgeSync({ append:false }); });
+    return knowledgeSyncPending;
+  }
+
+  function runKnowledgeSync(options) {
+    const run = (async () => {
       sendKnowledge({ type:'emu-knowledge-loading', append:!!options.append });
       if (!await waitForKnowledgeFirebase()) throw new Error('投稿データの準備に時間がかかっています。');
       const account = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
@@ -22434,8 +22451,11 @@ async function sendEmuFeedback() {
     })().catch(error => {
       console.error('知識iframe同期失敗:', error);
       sendKnowledge({ type:'emu-knowledge-error', error:error.message || '投稿を読み込めませんでした。' });
-    }).finally(() => { knowledgeSyncing = null; });
-    return knowledgeSyncing;
+    /* 自分が登録したものだけ消す。あとから始まった同期の登録を
+       消してしまうと、そちらが素通しになってまた同じ不具合が出る。 */
+    }).finally(() => { if (knowledgeSyncing === run) knowledgeSyncing = null; });
+    knowledgeSyncing = run;
+    return run;
   }
   window.syncKnowledgeFrame = syncKnowledgeFrame;
 
