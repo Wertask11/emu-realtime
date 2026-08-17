@@ -611,6 +611,16 @@ app.use("/secret-door", secretDoorRouter);
 // Emu「知識を探しています」EMUER懸賞
 // 採用済みの募集・回答と一致する申請だけを検証して配布する
 // =====================
+
+/* いま募集を作るときの懸賞額。画面（index.html の bounty）と必ず揃える。 */
+const KNOWLEDGE_BOUNTY = 3;
+
+/* 配布を認める額。3 は現行、10 は 2026-08-17 より前に作られた募集の分。
+   古い募集がまだ採用されていないうちに 3 だけを認めると、
+   回答者に懸賞が渡らないまま弾かれてしまうため、当面は両方を通す。
+   古い募集がすべて片付いたら 10 を外してよい。 */
+const KNOWLEDGE_BOUNTY_ALLOWED = [KNOWLEDGE_BOUNTY, 10];
+
 async function runKnowledgeBountyBatch() {
   if (!db) {
     console.warn("⚠️ Firestore未初期化。知識懸賞バッチをスキップ。");
@@ -635,14 +645,14 @@ async function runKnowledgeBountyBatch() {
       const request = requestDoc.data();
       const amount = Math.floor(Number(claim.amount));
       const recipient = String(claim.recipient || "").toLowerCase();
-      // 懸賞は一律10 EMUERに固定。クライアント値は偽装可能なため、
-      // サーバー側で「10ちょうど」以外は配布しない（不正な高額配布の上限を強制）。
+      // 懸賞は一律3 EMUERに固定。クライアント値は偽装可能なため、
+      // サーバー側で決められた額ちょうど以外は配布しない（不正な高額配布を防ぐ）。
       const matches = request.status === "awarded"
         && request.settlementStatus === "pending_distribution"
         && String(request.acceptedAnswerAuthor || "").toLowerCase() === recipient
         && Number(request.bounty) === amount
         && ethers.utils.isAddress(recipient)
-        && amount === 10;
+        && KNOWLEDGE_BOUNTY_ALLOWED.includes(amount);
       if (!matches) {
         await claimDoc.ref.update({ status:"rejected", errorMessage:"CLAIM_MISMATCH", processedAt:new Date() });
         continue;
