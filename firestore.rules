@@ -21,11 +21,25 @@ service cloud.firestore {
       return get(accountPath()).data.walletAddress;
     }
 
+    /* CHESアドレス。LINE / Google / メールでは walletAddress と同じものになるが、
+       ウォレット（MetaMask）でログインした人だけは別物になる。
+       walletAddress ＝ 署名で確認した実際のウォレット、
+       chesAddress   ＝ uid から決まる CHES 内の住所。 */
+    function chesAddress() {
+      return get(accountPath()).data.chesAddress;
+    }
+
+    /* 本人かどうか。実際のウォレットと CHESアドレスの
+       どちらの名義でも本人と認める。
+       片方しか見ていないと、ウォレットでログインした人が
+       CHESアドレス名義で書いたときに弾かれてしまう（議論が立てられなかった原因）。 */
     function isMyWallet(value) {
       return hasAccount()
         && value is string
-        && wallet() is string
-        && value.lower() == wallet().lower();
+        && (
+          (wallet() is string && value.lower() == wallet().lower())
+          || (chesAddress() is string && value.lower() == chesAddress().lower())
+        );
     }
 
     function changedOnly(fields) {
