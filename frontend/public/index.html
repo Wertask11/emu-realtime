@@ -15634,7 +15634,10 @@ async function openKnowledgeAnswers(request) {
 }
 
 async function acceptKnowledgeAnswer(request, answer, button) {
-  if (!confirm("この知識を採用しますか？\nあなたの残高から10 EMUERが回答者へ渡されます。")) return;
+  // 金額はその募集に記録された懸賞を出す。ここを固定値にすると、
+  // 額を変えたときに古い数字が残る（実際に10のまま残っていた）。
+  const _bounty = Number(request.bounty) || 0;
+  if (!confirm("この知識を採用しますか？\nあなたの残高から" + _bounty + " EMUERが回答者へ渡されます。")) return;
   button.disabled = true;
   try {
     const batch = window.fbLib.writeBatch(window.db);
@@ -15658,7 +15661,9 @@ async function acceptKnowledgeAnswer(request, answer, button) {
       createdAt:new Date()
     });
     await batch.commit();
-    alert("知識を採用しました。EMUER懸賞は配布申請として記録されました。");
+    /* 「配布申請として記録されました」だと、採用した人が何か申請するように読めた。
+       実際はサーバーが毎時0分に自動で配る。待ち時間を伝えるほうが親切。 */
+    alert("知識を採用しました。\n懸賞の" + _bounty + " EMUERは、1時間以内に回答者へ届きます。手続きは必要ありません。");
     closeEmuSheet("emuHistorySheet");
     await loadKnowledgeRequests();
   } catch (error) {
