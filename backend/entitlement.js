@@ -145,57 +145,73 @@ function createEntitlement(deps) {
   }
 
   /**
-   * Founding Emuer への付与を配る。施行のときに1回だけ実行する。
+   * 施行のときに1回だけ実行する、最初の付与。
    *
-   * cutoff より前に作られたアカウントに、light を months か月ぶん渡す。
+   *   公式パス（NFT）を持っている人 … plus
+   *   オーナー                      … pro（Emuを盛り上げるために全部使えるようにする）
+   *   それ以外                      … 何も配らない（無料の人のまま）
+   *
+   * 公式パスの持ち主は Firestore の paid_users（小文字のウォレットアドレスが鍵）で見る。
    * すでに付与があるアカウントには触らない（二度実行しても増えない）。
    *
-   * dryRun のときは書き込まず、対象の人数だけ数える。
-   * 「何人に配ることになるのか」を先に見てから実行できるようにするため。
+   * dryRun のときは書き込まず、人数だけ数える。
+   * 「誰に何人配ることになるのか」を先に見てから実行できるようにするため。
    */
-  async function grantFounding(opts) {
+  async function grantInitial(opts) {
     const o = opts || {};
-    const cutoff = o.cutoff instanceof Date ? o.cutoff : new Date(o.cutoff);
-    if (isNaN(cutoff.getTime())) throw new Error("BAD_CUTOFF");
     const months = Number(o.months) > 0 ? Number(o.months) : 6;
-    const plan = PLAN_RANK[o.plan] === undefined ? "light" : o.plan;
-    const label = String(o.grantedBy || "founding");
+    const label = String(o.grantedBy || "initial");
     const dryRun = o.dryRun !== false;   // 既定は空打ち。うっかり配らないように
+    const owner = String(o.ownerAddress || process.env.SP_OWNER_ADDRESS || "").toLowerCase();
     if (!db) throw new Error("NO_DB");
 
-    const expiresAt = addMonths(cutoff, months);
+    const startsAt = new Date();
+    const expiresAt = addMonths(startsAt, months);
     const accounts = await db.collection("ches_accounts").limit(2000).get();
 
-    let target = 0, granted = 0, skipped = 0;
+    const result = { plusTarget: 0, proTarget: 0, granted: 0, skipped: 0, noPass: 0 };
     for (const doc of accounts.docs) {
-      const createdAt = _toDate((doc.data() || {}).createdAt);
-      if (!createdAt || createdAt.getTime() >= cutoff.getTime()) continue;   // 施行後の人は対象外
-      target += 1;
+      const addr = String((doc.data() || {}).walletAddress || "").toLowerCase();
+      if (!addr) { result.noPass += 1; continue; }
+
+      let plan = null;
+      if (owner && addr === owner) {
+        plan = "pro";                       // オーナーは全部使えるようにする
+      } else {
+        const pass = await db.collection("paid_users").doc(addr).get();
+        if (pass.exists) plan = "plus";     // 公式パス保有者
+      }
+      if (!plan) { result.noPass += 1; continue; }
+
+      if (plan === "pro") result.proTarget += 1; else result.plusTarget += 1;
+
       const ref = db.collection(GRANTS_COL).doc(doc.id);
       const exists = await ref.get();
-      if (exists.exists) { skipped += 1; continue; }                          // すでに配ってある
+      if (exists.exists) { result.skipped += 1; continue; }   // すでに配ってある
       if (!dryRun) {
         await ref.set({
-          uid: doc.id, plan, source: "founding",
-          startsAt: new Date(), expiresAt,
+          uid: doc.id, plan,
+          source: plan === "pro" ? "owner" : "official-pass",
+          walletAddress: addr,
+          startsAt,
+          // オーナーの分は期限を切らない
+          expiresAt: plan === "pro" ? null : expiresAt,
           grantedBy: label, createdAt: new Date()
         });
         forget(doc.id);
       }
-      granted += 1;
+      result.granted += 1;
     }
     return {
-      dryRun, plan, months,
-      cutoff: cutoff.toISOString(),
+      dryRun, months,
+      startsAt: startsAt.toISOString(),
       expiresAt: expiresAt.toISOString(),
       scanned: accounts.size,
-      target,                 // 対象になる人数
-      granted,                // 実際に配った（空打ちなら配る予定の）人数
-      skipped                 // すでに付与があって触らなかった人数
+      ...result
     };
   }
 
-  return { getEntitlement, requirePlan, forget, atLeast, grantFounding, PLAN_RANK, GRANTS_COL };
+  return { getEntitlement, requirePlan, forget, atLeast, grantInitial, PLAN_RANK, GRANTS_COL };
 }
 
 module.exports = { createEntitlement, PLAN_RANK };

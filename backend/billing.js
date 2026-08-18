@@ -462,19 +462,17 @@ function createBillingRouter(deps) {
     }
   });
 
-  /* Founding Emuer への付与を配る。施行のときに1回だけ使う。
+  /* 施行のときの最初の付与。公式パス保有者に plus、オーナーに pro を渡す。
      既定は空打ち（dryRun）で、何人に配ることになるのかを先に見られる。
      実際に配るときだけ { dryRun: false } を送る。 */
   router.post("/admin/founding/grant", requireOwner, async (req, res) => {
     try {
-      if (!entitlement || typeof entitlement.grantFounding !== "function") {
+      if (!entitlement || typeof entitlement.grantInitial !== "function") {
         return res.status(503).json({ error: "ENTITLEMENT_UNAVAILABLE" });
       }
       const body = req.body || {};
-      const result = await entitlement.grantFounding({
-        cutoff: body.cutoff || new Date(),
+      const result = await entitlement.grantInitial({
         months: body.months,
-        plan: body.plan,
         grantedBy: body.grantedBy,
         dryRun: body.dryRun !== false
       });
