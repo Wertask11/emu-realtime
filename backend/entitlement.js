@@ -27,6 +27,22 @@ const CACHE_MS = 60 * 1000;   // Firestore の読み取りを減らす。60秒�
 // 付与の置き場。運営（サーバー）だけが書ける。
 const GRANTS_COL = "entitlements";
 
+/* 制限が始まる日（日本時間 2026-09-01 0:00）。
+   規約 第10条により 8/17 に掲示済み（効力発生日の15日前）。
+   この日までは、これまでどおり全員が全部使える。
+   画面側の EMU_ENFORCE_FROM と必ず同じ日にすること。 */
+const ENFORCE_FROM = Date.parse("2026-08-31T15:00:00Z");
+function enforcing() { return Date.now() >= ENFORCE_FROM; }
+
+/* 各段の上限。数える単位は暦月ではなく請求期間（契約開始日から次回更新日の前日まで）。
+   無料の人には請求期間がないので、その場合だけ暦月で数える。 */
+const LIMITS = {
+  guest: { post: 0,  request: 0,  answer: 0,  ichinichi: 0,  discussion: 0, library: 0 },
+  light: { post: 2,  request: 1,  answer: 5,  ichinichi: 7,  discussion: 0, library: 30 },
+  plus:  { post: 30, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000 },
+  pro:   { post: 30, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000 }
+};
+
 function createEntitlement(deps) {
   const db = deps && deps.db;
   const cache = new Map();
@@ -118,6 +134,8 @@ function createEntitlement(deps) {
   /**
    * この段以上でないと通さない。requireFirebaseUser の後ろに置く。
    * 通ったときは req.entitlement に判定結果を入れる。
+   *
+   * 施行日（9/1）より前は誰も止めない。掲示した約束どおりにするため。
    */
   function requirePlan(min) {
     const need = PLAN_RANK[min] === undefined ? "light" : min;
@@ -127,7 +145,7 @@ function createEntitlement(deps) {
         const account = req.identity && req.identity.account;
         const ent = await getEntitlement(uid, account);
         req.entitlement = ent;
-        if (!atLeast(ent.plan, need)) {
+        if (enforcing() && !atLeast(ent.plan, need)) {
           return res.status(403).json({ error: "PLAN_REQUIRED", required: need, current: ent.plan });
         }
         next();
@@ -136,6 +154,86 @@ function createEntitlement(deps) {
         return res.status(500).json({ error: "ENTITLEMENT_FAILED" });
       }
     };
+  }
+
+  /* 上限を数える期間。契約している人は請求期間、していない人は暦月。
+     暦月にすると月末に入会した人が翌日に上限が復活してしまうため、
+     契約がある人は必ず請求期間で数える。 */
+  async function usageWindow(uid) {
+    const now = new Date();
+    if (db) {
+      try {
+        const snap = await db.collection("subscriptions").doc(uid).get();
+        if (snap.exists) {
+          const end = _toDate((snap.data() || {}).currentPeriodEnd);
+          if (end && end.getTime() > now.getTime()) {
+            const start = addMonths(end, -1);
+            return { key: "p" + start.toISOString().slice(0, 10), start, end };
+          }
+        }
+      } catch (e) {}
+    }
+    // 契約がなければ暦月（日本時間）
+    const jst = new Date(now.getTime() + 9 * 3600 * 1000);
+    const key = "m" + jst.toISOString().slice(0, 7);
+    const start = new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), 1) - 9 * 3600 * 1000);
+    return { key, start, end: addMonths(start, 1) };
+  }
+
+  function limitOf(plan, kind) {
+    const row = LIMITS[plan] || LIMITS.guest;
+    return row[kind] === undefined ? 0 : row[kind];
+  }
+
+  /**
+   * 上限を1つ使う。使えたら true、上限に達していたら false。
+   * 施行日より前は何も数えず、必ず通す。
+   */
+  async function consume(uid, kind, opts) {
+    const o = opts || {};
+    if (!enforcing() && !o.force) return { ok: true, enforcing: false };
+    const ent = await getEntitlement(uid, o.account);
+    const limit = limitOf(ent.plan, kind);
+    if (limit <= 0) return { ok: false, plan: ent.plan, limit: 0, used: 0 };
+    if (!db) return { ok: true, plan: ent.plan, limit, used: 0 };
+
+    const win = await usageWindow(uid);
+    const ref = db.collection("plan_usage").doc(uid + "_" + win.key);
+    let used = 0;
+    try {
+      const snap = await ref.get();
+      used = snap.exists ? Number((snap.data() || {})[kind]) || 0 : 0;
+    } catch (e) {}
+    if (used >= limit) return { ok: false, plan: ent.plan, limit, used, resetsAt: win.end.toISOString() };
+
+    if (!o.dryRun) {
+      try {
+        const inc = {};
+        inc[kind] = used + 1;
+        await ref.set({ uid, windowKey: win.key, windowEndsAt: win.end, updatedAt: new Date(), ...inc }, { merge: true });
+      } catch (e) {
+        console.warn("上限の記録に失敗:", e.message);
+      }
+    }
+    return { ok: true, plan: ent.plan, limit, used: used + 1, resetsAt: win.end.toISOString() };
+  }
+
+  /** いまの使用状況をまとめて返す（画面に出す用）。 */
+  async function usageOf(uid, accountData) {
+    const ent = await getEntitlement(uid, accountData);
+    const win = await usageWindow(uid);
+    let data = {};
+    if (db) {
+      try {
+        const snap = await db.collection("plan_usage").doc(uid + "_" + win.key).get();
+        if (snap.exists) data = snap.data() || {};
+      } catch (e) {}
+    }
+    const out = { plan: ent.plan, enforcing: enforcing(), resetsAt: win.end.toISOString(), items: {} };
+    Object.keys(LIMITS.plus).forEach(function (kind) {
+      out.items[kind] = { used: Number(data[kind]) || 0, limit: limitOf(ent.plan, kind) };
+    });
+    return out;
   }
 
   function addMonths(date, months) {
@@ -189,15 +287,17 @@ function createEntitlement(deps) {
       const exists = await ref.get();
       if (exists.exists) { result.skipped += 1; continue; }   // すでに配ってある
       if (!dryRun) {
-        await ref.set({
+        const rec = {
           uid: doc.id, plan,
           source: plan === "pro" ? "owner" : "official-pass",
           walletAddress: addr,
           startsAt,
-          // オーナーの分は期限を切らない
-          expiresAt: plan === "pro" ? null : expiresAt,
           grantedBy: label, createdAt: new Date()
-        });
+        };
+        /* オーナーの分は期限を切らない。null を入れるのではなく項目ごと持たせない。
+           Firestore ルールで「無ければ期限なし」と読ませるため。 */
+        if (plan !== "pro") rec.expiresAt = expiresAt;
+        await ref.set(rec);
         forget(doc.id);
       }
       result.granted += 1;
@@ -211,7 +311,7 @@ function createEntitlement(deps) {
     };
   }
 
-  return { getEntitlement, requirePlan, forget, atLeast, grantInitial, PLAN_RANK, GRANTS_COL };
+  return { getEntitlement, requirePlan, forget, atLeast, grantInitial, consume, usageOf, usageWindow, limitOf, enforcing, PLAN_RANK, LIMITS, GRANTS_COL, ENFORCE_FROM };
 }
 
-module.exports = { createEntitlement, PLAN_RANK };
+module.exports = { createEntitlement, PLAN_RANK, LIMITS, ENFORCE_FROM };

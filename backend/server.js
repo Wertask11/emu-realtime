@@ -2388,6 +2388,20 @@ app.post("/api/ichinichi/save", requireFirebaseUser, requireOwnAddress, async (r
     const date = String(req.body.date || ichiToday());
     if (ichiIsPastLocked(date)) return res.status(400).json({ error: "過去の時間割は編集できません" });
 
+    /* 一日シェアの記録できる日数はプランごとに上限がある（9/1から）。
+       すでにその日を作ってある場合は数えない。同じ日を何度直しても
+       1日ぶんとして数えるため。 */
+    const existingDay = await ichiGetDay(address, date);
+    if (!existingDay) {
+      const room = await entitlement.consume(req.identity.uid, "ichinichi", { account: req.identity.account });
+      if (!room.ok) {
+        return res.status(403).json({
+          error: "PLAN_LIMIT", kind: "ichinichi",
+          plan: room.plan, limit: room.limit, used: room.used, resetsAt: room.resetsAt || null
+        });
+      }
+    }
+
     const ref = await ichiEnsureDay(address, userName, date);
     const items = ichiNormalizeItems(req.body.items);
     await ref.set({ items, updatedAt: ichiNow() }, { merge: true });

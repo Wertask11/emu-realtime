@@ -462,6 +462,18 @@ function createBillingRouter(deps) {
     }
   });
 
+  /* いま何をどれだけ使ったか。画面に「あと◯件」と出すために使う。 */
+  router.get("/usage", requireFirebaseUser, async (req, res) => {
+    try {
+      if (!entitlement) return res.status(503).json({ error: "ENTITLEMENT_UNAVAILABLE" });
+      const usage = await entitlement.usageOf(req.identity.uid, req.identity.account);
+      return res.json({ ok: true, ...usage });
+    } catch (e) {
+      console.error("usage error:", e.message);
+      return res.status(500).json({ error: "USAGE_FAILED" });
+    }
+  });
+
   /* 施行のときの最初の付与。公式パス保有者に plus、オーナーに pro を渡す。
      既定は空打ち（dryRun）で、何人に配ることになるのかを先に見られる。
      実際に配るときだけ { dryRun: false } を送る。 */

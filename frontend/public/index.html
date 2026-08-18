@@ -19267,10 +19267,25 @@ function emuPlan() {
   return window.emuEntitlement || 'guest';
 }
 function emuHasPlan(min) {
+  // 施行日（9/1）までは誰も止めない。掲示した約束どおりにする。
+  if (typeof emuEnforcing === 'function' && !emuEnforcing()) return true;
   return (EMU_PLAN_RANK[emuPlan()] || 0) >= (EMU_PLAN_RANK[min] || 0);
 }
 window.emuPlan = emuPlan;
 window.emuHasPlan = emuHasPlan;
+
+/* 使えないときの案内。断るだけでなく、どうすれば使えるかを必ず伝える。 */
+function emuNeedPlan(min, what) {
+  var label = { light: 'Emu light（月額500円）', plus: 'Emu plus（月額3,000円）', pro: 'Emu pro（月額10,000円）' }[min] || 'Emu light';
+  var msg = (what ? what + 'は、' : '') + label + '以上でご利用いただけます。\n\n'
+    + '9月1日から、無料のままでは読むことが中心の「見学」になりました。\n'
+    + 'プランのご案内を開きますか？';
+  if (confirm(msg)) {
+    try { if (typeof accountGo === 'function') accountGo('plan'); } catch (e) {}
+  }
+  return false;
+}
+window.emuNeedPlan = emuNeedPlan;
 
 function isMonday() {
   const today = new Date();

@@ -46,6 +46,61 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
 
+    // ───────── 利用資格（プランごとの制限） ─────────
+    // 規約 第10条により 2026-08-17 に掲示済み。効力は日本時間 2026-09-01 0:00 から。
+    // それまでは、これまでどおり全員が全部書ける。
+    function enforceFrom() {
+      return timestamp.date(2026, 8, 31) + duration.value(15, 'h');   // JST 9/1 0:00
+    }
+    function enforcing() {
+      return request.time >= enforceFrom();
+    }
+
+    function rankOf(p) {
+      return p == 'pro' ? 3 : (p == 'plus' ? 2 : (p == 'light' ? 1 : 0));
+    }
+
+    // 付与（公式パス保有者・オーナーなど）。期限切れは数えない。
+    function grantPath() {
+      return /databases/$(database)/documents/entitlements/$(request.auth.uid);
+    }
+    /* 期限は「無ければ期限なし」と読む。既定値に request.time を置くことで、
+       expiresAt を持たない付与（オーナー）は必ず生きていると判定される。 */
+    function grantRank() {
+      return signedIn() && exists(grantPath())
+        && get(grantPath()).data.get('expiresAt', request.time) >= request.time
+        ? rankOf(get(grantPath()).data.get('plan', 'guest')) : 0;
+    }
+
+    // 契約（Stripe）。支払い再試行中も会員のまま。
+    function subPath() {
+      return /databases/$(database)/documents/subscriptions/$(request.auth.uid);
+    }
+    function subRank() {
+      return signedIn() && exists(subPath())
+        && get(subPath()).data.get('status', '') in ['active', 'trialing', 'past_due']
+        ? rankOf(get(subPath()).data.get('plan', 'guest')) : 0;
+    }
+
+    // 契約と付与のうち、上の段を採る
+    function myRank() {
+      return grantRank() > subRank() ? grantRank() : subRank();
+    }
+
+    /* この段以上で書けるか。施行日より前は誰も止めない。
+       止めるのはサーバーだけでなくここでもやる。投稿や議論は
+       サーバーを通らずクライアントから直接書いているため、
+       ここを開けたままだと画面のボタンを隠すだけになってしまう。 */
+    function canWriteAs(minRank) {
+      return !enforcing() || myRank() >= minRank;
+    }
+
+    /* プランごとの使用回数。サーバーだけが書く。 */
+    match /plan_usage/{docId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     match /emuer_offchain/{document=**} {
       allow read: if true;
       allow write: if false;
@@ -114,7 +169,9 @@ service cloud.firestore {
     // 作成・更新は自分名義のときだけ（同じ議題は同じIDに集約されるため update も許す）。
     match /discussion_rooms/{id} {
       allow read: if true;
+      // 議論を立てるのは plus 以上（9/1から）。参加・発言は light 以上。
       allow create: if isMyWallet(request.resource.data.author)
+        && canWriteAs(2)
         && request.resource.data.topic is string
         && request.resource.data.topic.size() > 0
         && request.resource.data.topic.size() <= 120;
@@ -161,7 +218,9 @@ service cloud.firestore {
     match /posts/{postId} {
       allow read: if true;
 
+      // 知識を届けるのは light 以上（9/1から）
       allow create: if isMyWallet(request.resource.data.address)
+        && canWriteAs(1)
         && request.resource.data.get('goodCount', 0) == 0
         && request.resource.data.get('changeCount', 0) == 0
         && request.resource.data.get('goodUsers', []).size() == 0
@@ -224,7 +283,9 @@ service cloud.firestore {
 
     match /knowledge_requests/{requestId} {
       allow read: if signedIn();
+      // 知識を募集するのは light 以上（9/1から）
       allow create: if isMyWallet(request.resource.data.author)
+        && canWriteAs(1)
         && request.resource.data.status == 'open'
         && request.resource.data.answerCount == 0
         && request.resource.data.settlementStatus == 'uncommitted';
@@ -244,7 +305,9 @@ service cloud.firestore {
 
     match /knowledge_answers/{answerId} {
       allow read: if signedIn();
+      // 募集へ答えるのは light 以上（9/1から）
       allow create: if isMyWallet(request.resource.data.answerAuthor)
+        && canWriteAs(1)
         && request.resource.data.status == 'submitted'
         && get(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.author == request.resource.data.requestAuthor;
       allow update: if signedIn()
