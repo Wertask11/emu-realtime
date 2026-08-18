@@ -751,6 +751,25 @@ cron.schedule("0 3 15 4 *", () => { console.log("🏁 最終エアドロバッ�
 // 「秘密のとびら」は廃止済みのため自動報酬バッチも停止。
 cron.schedule("0 * * * *", () => { console.log("⏰ 知識懸賞バッチ起動"); runKnowledgeBountyBatch(); }, { timezone: "Asia/Tokyo" });
 
+/* 受領コメントの期限を毎朝見る。規約で7営業日以内と約束しているので、
+   返し忘れに気づける形にしておく。ログに出れば Render の画面で拾える。 */
+cron.schedule("0 9 * * *", async () => {
+  try {
+    const d = await review.dueSoon();
+    if (d.overdue > 0) {
+      console.error("🔴 受領コメント: 期限を過ぎているものが " + d.overdue + " 件あります（500円の割引が必要になります）");
+    }
+    if (d.dueIn2Days > 0) {
+      console.warn("🟠 受領コメント: あと2日以内が " + d.dueIn2Days + " 件");
+    }
+    if (d.overdue === 0 && d.dueIn2Days === 0 && d.pending > 0) {
+      console.log("受領コメント: 未返信 " + d.pending + " 件（期限に余裕あり）");
+    }
+  } catch (e) {
+    console.error("受領コメントの期限確認に失敗:", e.message);
+  }
+}, { timezone: "Asia/Tokyo" });
+
 // =====================
 // オフチェーンEMUER台帳の照合バッチ（CHESユーザーのGood/Change・ログインボーナス）
 // 検証可能なFirestoreデータから毎回“再計算”するため、localStorage改ざんでは水増しできない。

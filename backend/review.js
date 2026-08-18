@@ -42,6 +42,9 @@ function dueDateFrom(start, days) {
 function createReviewRouter(deps) {
   const { db, requireFirebaseUser, requireOwner, entitlement } = deps;
   const router = express.Router();
+  // 割引を実際に渡すために使う。未設定なら記録だけ残す。
+  const stripe = process.env.STRIPE_SECRET_KEY
+    ? require("stripe")(process.env.STRIPE_SECRET_KEY) : null;
 
   function _iso(v) {
     if (!v) return null;
@@ -215,24 +218,83 @@ function createReviewRouter(deps) {
     }
   });
 
-  /* 遅れた分の割引を渡したことを記録する。 */
+  /* 遅れた分の割引を実際に渡す。
+     規約で「7営業日を過ぎたら翌月の light 料金相当（500円）を割り引く」と
+     約束しているので、手作業に頼らずここで Stripe に反映する。
+
+     顧客の残高に -500円 を積む（customer balance）。
+     次回の請求書から自動で差し引かれる。クーポンと違い、
+     プランや期間に関係なく確実に1回だけ効く。 */
   router.post("/admin/:id/compensate", requireOwner, async (req, res) => {
     try {
       const ref = db.collection(COL).doc(String(req.params.id));
       const snap = await ref.get();
       if (!snap.exists) return res.status(404).json({ error: "NOT_FOUND" });
+      const v = snap.data() || {};
+      if (v.lateCompensated) return res.status(409).json({ error: "ALREADY_COMPENSATED" });
+
+      let applied = false, note = "", customerId = null;
+      try {
+        const sub = await db.collection("subscriptions").doc(String(v.uid)).get();
+        customerId = sub.exists ? (sub.data() || {}).stripeCustomerId : null;
+      } catch (e) {}
+
+      if (stripe && customerId) {
+        /* 同じ件で二重に渡さないよう、申請IDを冪等キーにする。
+           途中で失敗して押し直しても、割引は1回だけになる。 */
+        await stripe.customers.createBalanceTransaction(customerId, {
+          amount: -500, currency: "jpy",
+          description: "受領コメントの遅延に対する割引（1件）",
+          metadata: { reviewId: String(req.params.id), uid: String(v.uid) }
+        }, { idempotencyKey: "review-comp-" + String(req.params.id) });
+        applied = true;
+        note = "Stripe の顧客残高に 500円 を積みました。次回の請求から差し引かれます。";
+      } else {
+        note = stripe
+          ? "この方の Stripe 顧客が見つからないため、自動では割り引けませんでした。"
+          : "Stripe が未設定のため、自動では割り引けませんでした。";
+      }
+
       await ref.set({
         lateCompensated: true,
         compensatedAt: new Date(),
-        compensationNote: String((req.body || {}).note || "翌月の light 料金相当（500円）を割引")
+        compensationApplied: applied,
+        compensationNote: String((req.body || {}).note || note)
       }, { merge: true });
-      return res.json({ ok: true });
+      return res.json({ ok: true, applied, note });
     } catch (e) {
-      return res.status(500).json({ error: "COMPENSATE_FAILED" });
+      console.error("compensate error:", e.message);
+      return res.status(500).json({ error: "COMPENSATE_FAILED", message: e.message });
     }
   });
 
-  return { router, dueDateFrom, CAPACITY, BUSINESS_DAYS };
+  /* 期限が近い依頼を数える。毎日これを見て、返し忘れに気づけるようにする。
+     管理画面を開かないと分からない状態だと、7営業日の約束を落とす。 */
+  async function dueSoon() {
+    if (!db) return { pending: 0, dueIn2Days: 0, overdue: 0, items: [] };
+    const snap = await db.collection(COL).where("status", "==", "pending").limit(200).get();
+    const now = Date.now();
+    const soon = now + 2 * 24 * 3600 * 1000;
+    const items = [];
+    let overdue = 0, dueIn2Days = 0;
+    snap.forEach(d => {
+      const v = d.data() || {};
+      const due = v.dueAt && typeof v.dueAt.toDate === "function" ? v.dueAt.toDate() : v.dueAt;
+      const t = due ? new Date(due).getTime() : null;
+      if (t === null) return;
+      if (t < now) { overdue += 1; items.push({ id: d.id, uid: v.uid, dueAt: _iso(v.dueAt), overdue: true }); }
+      else if (t < soon) { dueIn2Days += 1; items.push({ id: d.id, uid: v.uid, dueAt: _iso(v.dueAt), overdue: false }); }
+    });
+    return { pending: snap.size, dueIn2Days, overdue, items };
+  }
+
+  /* オーナーが自分で見るための窓口。管理画面のバッジに使う。 */
+  router.get("/admin/due", requireOwner, async (req, res) => {
+    try { return res.json({ ok: true, ...(await dueSoon()) }); }
+    catch (e) { return res.status(500).json({ error: "DUE_FAILED" }); }
+  });
+
+  return { router, dueDateFrom, dueSoon, CAPACITY, BUSINESS_DAYS };
 }
 
 module.exports = { createReviewRouter, dueDateFrom, CAPACITY, BUSINESS_DAYS };

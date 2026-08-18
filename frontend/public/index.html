@@ -22597,9 +22597,16 @@ async function sendEmuFeedback() {
       return readLocalKnowledgeDrafts();
     }
   }
+  /* いま持っている下書きの数。ルールがこの数を見て上限を判断する。
+     月でリセットしないので、回数の記録とは別の書類で持つ。 */
+  function _emuCountsRef() {
+    return window.fbLib.doc(window.db, 'plan_counts', localStorage.getItem('ches_uid') || '');
+  }
+
   async function createKnowledgeDraft(account, payload) {
     /* マイライブラリーの上限（9/1から）。light は30件、plus 以上は1,000件。
-       「無制限」にしないのは、荒らしや自動投稿で膨らむのを防ぐため。 */
+       「無制限」にしないのは、荒らしや自動投稿で膨らむのを防ぐため。
+       実際に止めるのは Firestore のルール。ここは先に知らせるためのもの。 */
     const cap = emuHasPlan('plus') ? 1000 : 30;
     try {
       const now = await readKnowledgeDrafts(account);
@@ -22614,7 +22621,12 @@ async function sendEmuFeedback() {
     const draft = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString() };
     if (account && window.db && window.fbLib) {
       try {
-        const ref = await window.fbLib.addDoc(window.fbLib.collection(window.db, 'knowledge_drafts'), { ...draft, owner:account, createdAt:new Date() });
+        // 下書きと、持っている数の記録を同じ一括処理で書く
+        const ref = window.fbLib.doc(window.fbLib.collection(window.db, 'knowledge_drafts'));
+        const batch = window.fbLib.writeBatch(window.db);
+        batch.set(ref, { ...draft, owner:account, createdAt:new Date() });
+        batch.set(_emuCountsRef(), { drafts: window.fbLib.increment(1), updatedAt: new Date() }, { merge:true });
+        await batch.commit();
         return { id:ref.id, ...draft, owner:account };
       } catch (error) { console.warn('クラウド下書き保存失敗。端末へ保存します:', error); }
     }
@@ -22625,7 +22637,14 @@ async function sendEmuFeedback() {
   }
   async function deleteKnowledgeDraft(account, draftId) {
     if (account && window.db && window.fbLib && !/^\d+$/.test(String(draftId))) {
-      try { await window.fbLib.deleteDoc(window.fbLib.doc(window.db, 'knowledge_drafts', String(draftId))); return; }
+      try {
+        // 消すときは、持っている数も1つ減らす。減らさないと枠が空かない。
+        const batch = window.fbLib.writeBatch(window.db);
+        batch.delete(window.fbLib.doc(window.db, 'knowledge_drafts', String(draftId)));
+        batch.set(_emuCountsRef(), { drafts: window.fbLib.increment(-1), updatedAt: new Date() }, { merge:true });
+        await batch.commit();
+        return;
+      }
       catch (error) { console.warn('クラウド下書き削除失敗:', error); throw error; }
     }
     writeLocalKnowledgeDrafts(readLocalKnowledgeDrafts().filter(item => String(item.id) !== String(draftId)));

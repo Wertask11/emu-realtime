@@ -147,6 +147,47 @@ service cloud.firestore {
             && getAfter(usagePath()).data.get(kind, 0) <= limitFor(kind));
     }
 
+    /* ───────── いま持っている数（マイライブラリー） ─────────
+       回数と違って、これは月でリセットしない「いまの総数」。
+       増やしたら減らせるので、別の書類で持つ。 */
+    function countsPath() {
+      return /databases/$(database)/documents/plan_counts/$(request.auth.uid);
+    }
+    function draftsBefore() {
+      return exists(countsPath()) ? get(countsPath()).data.get('drafts', 0) : 0;
+    }
+    function libraryLimit() {
+      return planName() == 'guest' ? 0 : (planName() == 'light' ? 30 : 1000);
+    }
+    /* 作れるか。ちょうど1増えていて、上限以内であること。 */
+    function hasLibraryRoom() {
+      return !enforcing()
+        || (libraryLimit() > 0
+            && getAfter(countsPath()).data.get('drafts', 0) == draftsBefore() + 1
+            && getAfter(countsPath()).data.get('drafts', 0) <= libraryLimit());
+    }
+    /* 消すときは、ちょうど1減っていること。減らさずに消せると、
+       消しても枠が空かず、使う人が損をする。 */
+    function libraryDecremented() {
+      return !enforcing()
+        || getAfter(countsPath()).data.get('drafts', 0) == draftsBefore() - 1;
+    }
+
+    match /plan_counts/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.get('drafts', 0) is int
+        && request.resource.data.get('drafts', 0) >= 0
+        && request.resource.data.get('drafts', 0) <= 1;
+      allow update: if signedIn() && request.auth.uid == uid
+        && changedOnly(['drafts', 'updatedAt'])
+        && request.resource.data.get('drafts', 0) is int
+        && request.resource.data.get('drafts', 0) >= 0
+        && request.resource.data.get('drafts', 0) >= resource.data.get('drafts', 0) - 1
+        && request.resource.data.get('drafts', 0) <= resource.data.get('drafts', 0) + 1;
+      allow delete: if false;
+    }
+
     /* 回数が正しい形かを確かめる。負の数を入れて上限を回避されないようにする。 */
     function usageSane(d) {
       return d.get('post', 0) is int && d.get('post', 0) >= 0
@@ -335,9 +376,14 @@ service cloud.firestore {
     }
 
     match /knowledge_drafts/{draftId} {
-      // 下書きを残すのは light 以上（9/1から）
-      allow create: if isMyWallet(request.resource.data.owner) && canWriteAs(1);
-      allow read, update, delete: if isMyWallet(resource.data.owner);
+      /* 下書きを残すのは light 以上（9/1から）。
+         件数の上限（light 30 / plus 1,000）も、ここで確かめる。
+         画面だけで数えていたときは、画面を通さなければ何件でも作れた。 */
+      allow create: if isMyWallet(request.resource.data.owner)
+        && canWriteAs(1) && hasLibraryRoom();
+      allow read, update: if isMyWallet(resource.data.owner);
+      // 消すときは、持っている数の記録も1つ減らしてもらう
+      allow delete: if isMyWallet(resource.data.owner) && libraryDecremented();
     }
 
     match /post_good_impacts/{impactId} {

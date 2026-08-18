@@ -569,6 +569,18 @@ onAuthStateChanged(auth, async (user) => {
     $("#gate").classList.add("hide");
     $("#main").classList.remove("hide");
     renderMembers();   // 最初に開くのは会員一覧
+
+    /* 受領コメントの期限は、管理画面を開かないと気づけないと約束を落とす。
+       タブに件数を出して、中を見る前に分かるようにする。 */
+    try {
+      const due = await api("/api/review/admin/due");
+      const tab = document.querySelector('.tabs button[data-tab="review"]');
+      if (tab && (due.overdue > 0 || due.dueIn2Days > 0)) {
+        tab.textContent = "受領コメント " + (due.overdue > 0 ? "🔴" + due.overdue : "🟠" + due.dueIn2Days);
+        tab.style.borderColor = due.overdue > 0 ? "#c0392b" : "#f08300";
+        tab.style.color = due.overdue > 0 ? "#c0392b" : "#b45309";
+      }
+    } catch (e) { /* 取れなくても管理画面は使える */ }
   } catch (e) {
     $("#gate").textContent = e.code === "OWNER_ONLY"
       ? "この画面はオーナー専用です。"

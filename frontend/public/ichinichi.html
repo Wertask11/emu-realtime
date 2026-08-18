@@ -298,9 +298,12 @@ async function loadFeed() {
 async function loadHistory(silent) {
   if (!silent) { S.loading = true; render(); }
   try {
-    const { history, stats } = await apiGet("/api/ichinichi/history");
+    const { history, stats, hiddenNote } = await apiGet("/api/ichinichi/history");
     S.history = history || [];
     S.stats = stats || S.stats;
+    /* 30日より前の記録は light では見えない。
+       黙って消えたように見せないよう、何日ぶん隠れているかを伝える。 */
+    S.hiddenNote = hiddenNote || null;
   } catch (e) { if (!silent) notify(e.message); }
   finally { if (!silent) { S.loading = false; } render(); }
 }
@@ -618,7 +621,9 @@ function renderMine() {
         <div><span>${esc(emuT("i.mine.rate"))}</span><strong>${S.stats.completionRate}<small>%</small></strong><p>${esc(emuT("i.mine.rateNote"))}</p></div>
         <div><span>${esc(emuT("i.mine.useful"))}</span><strong>${S.stats.usefulCount}<small>${esc(emuT("i.mine.usefulUnit"))}</small></strong><p>${esc(emuT("i.mine.usefulNote"))}</p></div>
       </div>
-      <div class="history"><h2>${esc(emuT("i.mine.historyTitle"))}</h2>${items}</div>
+      <div class="history"><h2>${esc(emuT("i.mine.historyTitle"))}</h2>${items}
+        ${S.hiddenNote ? `<p style="margin-top:14px;padding:12px 14px;border:1px solid #e6e2dc;border-radius:10px;background:#fff;color:#6f6a86;font-size:13px;line-height:1.7;">${esc(S.hiddenNote)}</p>` : ""}
+      </div>
     </section>`;
 }
 
