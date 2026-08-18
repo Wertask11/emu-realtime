@@ -462,6 +462,136 @@ function createBillingRouter(deps) {
     }
   });
 
+  /* プランを変える。解約して入り直さずに上の段へ行けるようにする。
+
+     いままでは checkout が「契約中は 409」で弾いていたため、
+     上げるには一度解約するしかなかった。商品階段の設計と噛み合っていない。
+
+     日割りはその場で請求する（always_invoice）。次回請求書に足すだけだと
+     「上がった実感」がないため。更新日（billing_cycle_anchor）は変えない。
+     変えると「更新日が動いた」という別の混乱が起きる。
+
+     pro へ初めて上がったときの保証の起点は、Webhook 側（upsertSubscription）で
+     guaranteeStartsAt に記録される。ここでは触らない。 */
+  router.post("/change-plan", requireStripe, requireFirebaseUser, checkoutRateLimit, async (req, res) => {
+    try {
+      const uid = req.identity.uid;
+      const next = String((req.body || {}).plan || "");
+      if (!PLANS[next]) return res.status(400).json({ error: "BAD_PLAN" });
+
+      const sub = await readSubscription(uid);
+      if (!sub || !sub.stripeSubscriptionId) return res.status(404).json({ error: "NO_SUBSCRIPTION" });
+      if (!["active", "trialing", "past_due"].includes(String(sub.status))) {
+        return res.status(409).json({ error: "NOT_ACTIVE", status: sub.status || null });
+      }
+      if (sub.plan === next) return res.status(409).json({ error: "SAME_PLAN", plan: next });
+
+      const price = priceIdOf(next);
+      if (!price) return res.status(503).json({ error: "PRICE_NOT_CONFIGURED", plan: next });
+
+      const current = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
+      const item = current.items && current.items.data && current.items.data[0];
+      if (!item) return res.status(500).json({ error: "NO_SUBSCRIPTION_ITEM" });
+
+      const updated = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+        items: [{ id: item.id, price: price }],
+        proration_behavior: "always_invoice",
+        metadata: { ...(current.metadata || {}), plan: next, uid: uid }
+      });
+
+      // 画面をすぐ正しくするため、Webhook を待たずに写しを更新する
+      await upsertSubscription(uid, updated, {});
+      return res.json({ ok: true, plan: next, planLabel: PLANS[next].label });
+    } catch (e) {
+      console.error("change-plan error:", e.message);
+      return res.status(500).json({ error: "CHANGE_FAILED", message: e.message });
+    }
+  });
+
+  /* 見学中の遊びの回数を1つ使う。サーバーで数えるのは、
+     端末に置くとブラウザを変えるだけで回避できてしまうため。 */
+  router.post("/play-ticket", requireFirebaseUser, async (req, res) => {
+    try {
+      if (!entitlement) return res.json({ ok: true });
+      const ent = await entitlement.getEntitlement(req.identity.uid, req.identity.account);
+      if (entitlement.atLeast(ent.plan, "light")) return res.json({ ok: true, unlimited: true });
+      const room = await entitlement.consume(req.identity.uid, "guestPlay", { account: req.identity.account });
+      if (!room.ok) return res.status(403).json({ ok: false, ...room });
+      return res.json({ ok: true, used: room.used, limit: room.limit });
+    } catch (e) {
+      return res.json({ ok: true });   // 数えられないときは遊ばせる。締め出さない
+    }
+  });
+
+  /* 月次の「学びの軌跡」（Emu plus 以上）。
+     「今月あなたは、18個の知識を受け取り、7人へ経験を届け、3つの考えを改善しました。」
+
+     新しいデータは持たない。価値プロフィールと同じ元データから数える。
+     存在しない分析結果は作らない。実際に取れる数字だけを出す。 */
+  router.get("/journey", requireFirebaseUser, async (req, res) => {
+    try {
+      if (!db || !entitlement) return res.status(503).json({ error: "UNAVAILABLE" });
+      const uid = req.identity.uid;
+      const address = String(req.identity.walletAddress || "").toLowerCase();
+      const ent = await entitlement.getEntitlement(uid, req.identity.account);
+      if (entitlement.enforcing() && !entitlement.atLeast(ent.plan, "plus")) {
+        return res.status(403).json({ error: "PLAN_REQUIRED", required: "plus", current: ent.plan });
+      }
+
+      const win = await entitlement.usageWindow(uid);
+      const since = win.start;
+
+      const j = { received: 0, deliveredTo: 0, improved: 0, posted: 0, helpful: 0, answered: 0 };
+
+      // 受け取った学び：自分が「役に立った」を押した知識の数
+      try {
+        const got = await db.collection("posts")
+          .where("goodUsers", "array-contains", address).limit(500).get();
+        j.received = got.size;
+      } catch (e) {}
+
+      // 届けた相手の数（重複なし）と、自分の投稿・改善が育った数
+      try {
+        const mine = await db.collection("posts").where("address", "==", address).limit(500).get();
+        const people = new Set();
+        mine.forEach(d => {
+          const p = d.data() || {};
+          j.posted += 1;
+          j.helpful += Number(p.goodCount) || 0;
+          if ((Number(p.acceptedChangeCount) || 0) > 0) j.improved += 1;
+          (Array.isArray(p.goodUsers) ? p.goodUsers : []).forEach(a => { if (a) people.add(String(a).toLowerCase()); });
+        });
+        j.deliveredTo = people.size;
+      } catch (e) {}
+
+      // 誰かの募集に答えた数
+      try {
+        const ans = await db.collection("knowledge_answers")
+          .where("answerAuthor", "==", address).limit(500).get();
+        j.answered = ans.size;
+      } catch (e) {}
+
+      /* 読み上げる一文。数がゼロの項目は入れない。
+         中身のない文を作らないため。 */
+      const parts = [];
+      if (j.received > 0)    parts.push(j.received + "個の知識を受け取り");
+      if (j.deliveredTo > 0) parts.push(j.deliveredTo + "人へ経験を届け");
+      if (j.improved > 0)    parts.push(j.improved + "つの考えを改善しました");
+      const sentence = parts.length
+        ? "あなたは、" + parts.join("、") + (j.improved > 0 ? "" : "ました") + "。"
+        : "まだ記録がありません。ひとつ書いてみることから始まります。";
+
+      return res.json({
+        ok: true, plan: ent.plan,
+        since: since.toISOString(), until: win.end.toISOString(),
+        counts: j, sentence
+      });
+    } catch (e) {
+      console.error("journey error:", e.message);
+      return res.status(500).json({ error: "JOURNEY_FAILED" });
+    }
+  });
+
   /* いま何をどれだけ使ったか。画面に「あと◯件」と出すために使う。 */
   router.get("/usage", requireFirebaseUser, async (req, res) => {
     try {

@@ -155,6 +155,8 @@ const billing = require("./billing").createBillingRouter({ ...membershipDeps, we
 const kyc = require("./kyc").createKycRouter(membershipDeps);
 const dialogue = require("./dialogue").createDialogueRouter(membershipDeps);
 const feedback = require("./feedback").createFeedbackRouter(membershipDeps);
+// 運営の受領コメント（light 以上）。light の存在理由そのもの。
+const review = require("./review").createReviewRouter(membershipDeps);
 
 // Webhook は生ボディで受ける（JSON パーサーは上で迂回済み）
 app.post(STRIPE_WEBHOOK_PATH, billing.webhookHandler, billing.handleWebhook);
@@ -162,6 +164,7 @@ app.use("/api/billing", billing.router);
 app.use("/api/kyc", kyc.router);
 app.use("/api/dialogue", dialogue.router);
 app.use("/api/feedback", feedback.router);
+app.use("/api/review", review.router);
 
 // 未処理のまま保持期限(30日)を過ぎた本人確認書類を毎日破棄する。
 cron.schedule("30 4 * * *", () => {
@@ -1820,7 +1823,24 @@ io.on("connection", (socket) => {
     socket.emit("today topic", getTodayTopic());
   });
 
-  socket.on("room3 message", (data) => {
+  socket.on("room3 message", async (data) => {
+    /* 議論への発言は light 以上（9/1から）。
+       ここは Socket.io なので uid を持っておらず、アドレスから引き直す。
+       ここを開けたままだと、掲示した「議論への発言はできなくなる」が守れない。 */
+    try {
+      const ent = await entitlement.getEntitlementByAddress(socket.wallet);
+      if (entitlement.enforcing() && !entitlement.atLeast(ent.plan, "light")) {
+        socket.emit("room3 denied", {
+          error: "PLAN_REQUIRED", required: "light", current: ent.plan,
+          message: "議論への発言は Emu light（月額500円）以上でご利用いただけます。"
+        });
+        return;
+      }
+    } catch (e) {
+      console.error("議論の資格判定に失敗:", e.message);
+      return;   // 判定できないときは通さない（開けっぱなしにしない）
+    }
+
     const messageId = randomUUID();
     const message = {
       id: socket.id, wallet: socket.wallet, messageId,

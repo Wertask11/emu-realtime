@@ -15446,6 +15446,25 @@ window.addEventListener('message', function(event) {
     return;
   }
   if (event.source === playFrame?.contentWindow && event.data.type === 'emu-play-open') {
+    /* 遊びの出し分け（9/1から）。
+       見学は林檎の方程式だけ・回数限定。light 以上は両方遊べる。
+       回数はサーバーで数える。端末で数えると、ブラウザを変えれば回避できてしまう。 */
+    if (!emuHasPlan('light')) {
+      if (event.data.play === 'echo') {
+        return emuNeedPlan('light', 'ECHO FIELD');
+      }
+      // 見学でも林檎の方程式は遊べる。ただし回数に上限がある。
+      (async function () {
+        const room = await _emuTryGuestPlay();
+        if (!room.ok) {
+          alert('見学中に遊べる回数の上限に達しました。\n\n'
+            + 'Emu light（月額500円）以上で、制限なく遊べます。');
+          return;
+        }
+        openRingoGame();
+      })();
+      return;
+    }
     const actions = {
       echo:openEchoFieldDirect,
       ringo:openRingoGame
@@ -15456,6 +15475,8 @@ window.addEventListener('message', function(event) {
 });
 
 function openKnowledgeRequestComposer() {
+  // 知識を募集するのは light 以上（9/1から）
+  if (!emuHasPlan('light')) return emuNeedPlan('light', '知識の募集');
   if (!_emuAddress()) return alert("ウォレットを接続してください。");
   const deadline = new Date();
   deadline.setDate(deadline.getDate() + 7);
@@ -19273,6 +19294,22 @@ function emuHasPlan(min) {
 }
 window.emuPlan = emuPlan;
 window.emuHasPlan = emuHasPlan;
+
+/* 見学中の遊びの回数をサーバーで数える。
+   端末に置くと、ブラウザを変えたりデータを消したりで回避できてしまう。 */
+async function _emuTryGuestPlay() {
+  try {
+    const headers = await emuAuthHeaders(true);
+    const res = await fetch('https://emu-realtime.onrender.com/api/billing/play-ticket', {
+      method: 'POST', headers: headers
+    });
+    if (res.status === 403) return { ok: false };
+    if (!res.ok) return { ok: true };     // 数えられないときは遊ばせる（締め出さない）
+    return await res.json();
+  } catch (e) {
+    return { ok: true };                   // 通信できないときも遊ばせる
+  }
+}
 
 /* 使えないときの案内。断るだけでなく、どうすれば使えるかを必ず伝える。 */
 function emuNeedPlan(min, what) {

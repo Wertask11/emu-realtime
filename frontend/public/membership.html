@@ -288,14 +288,21 @@ async function loadBilling() {
   show($("#portalBtn"), active);
 
   if (active) {
-    // 契約中はプランを選び直せない（変更は「支払い方法の変更・解約」から）
-    show($("#planPick"), false);
+    /* 契約中でも上の段へは移れる。以前は「一度解約して入り直す」しかなく、
+       商品階段の設計と噛み合っていなかった。
+       下げる・同じ段は出さない（解約は「支払い方法の変更・解約」から）。 */
+    const rank = { light: 1, plus: 2, pro: 3 };
+    const now = rank[s.plan] || 0;
+    const upper = (s.plans || []).filter(p => (rank[p.key] || 0) > now);
+    show($("#planPick"), upper.length > 0);
+    if (upper.length) renderPlans(upper, null, true);
     $("#planPrice").textContent = s.planLabel
       ? s.planLabel + "　月額 " + Number(s.planAmount).toLocaleString("ja-JP") + "円（税込）"
       : "月額 " + Number(s.planAmount).toLocaleString("ja-JP") + "円（税込）";
   } else {
     renderPlans(s.plans, s.plan);
   }
+  window._emuActivePlan = active ? s.plan : null;
 
   /* 保証がつくのは Emu pro だけ。ほかのプランでは保証の行も申請欄も出さない。
      出してしまうと、約束していない返金を約束したことになる。 */
@@ -326,11 +333,15 @@ async function loadBilling() {
 let selectedPlan = null;
 let planCatalog = [];
 
-function renderPlans(plans, current) {
+function renderPlans(plans, current, isUpgrade) {
   planCatalog = Array.isArray(plans) ? plans : [];
   const box = $("#planList");
   if (!planCatalog.length) { show($("#planPick"), false); return; }
   show($("#planPick"), true);
+  // 契約中に上の段だけを見せているときは、見出しも変える
+  const head = document.querySelector('#planPick > div');
+  if (head) head.textContent = isUpgrade ? "上のプランへ移る" : "プランを選ぶ";
+  if (isUpgrade) selectedPlan = null;
   // 高い順に並べる。本会員を上に見せたいため
   const sorted = planCatalog.slice().sort((a, b) => b.amount - a.amount);
   if (!selectedPlan) selectedPlan = current || (sorted[0] && sorted[0].key);
@@ -368,6 +379,23 @@ $("#subscribeBtn").onclick = async () => {
   try {
     // 決済に進む前に、18歳以上であることの申告を記録する
     await api("/api/kyc/declare-age", { method:"POST", body:{ adult:true } });
+
+    /* すでに契約している人は、解約せずにそのまま上の段へ移る。
+       日割りの差額はその場で請求される。更新日は変わらない。 */
+    if (window._emuActivePlan) {
+      const label = (planCatalog.find(p => p.key === selectedPlan) || {}).label || selectedPlan;
+      if (!confirm(label + " へ移りますか？\n\n"
+        + "差額はその場でお支払いいただきます。次回の更新日は変わりません。")) {
+        btn.disabled = false; syncSubscribeButton(); return;
+      }
+      btn.textContent = "プランを変更しています…";
+      await api("/api/billing/change-plan", { method:"POST", body:{ plan: selectedPlan } });
+      msg($("#subErr"), "");
+      alert(label + " に変わりました。");
+      location.reload();
+      return;
+    }
+
     // 渡すのはプランのキーだけ。金額はサーバーが決める
     const r = await api("/api/billing/checkout", { method:"POST", body:{ plan: selectedPlan } });
     gotoExternal(r.url);                         // Stripe の決済ページへ

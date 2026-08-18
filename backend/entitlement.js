@@ -37,10 +37,10 @@ function enforcing() { return Date.now() >= ENFORCE_FROM; }
 /* 各段の上限。数える単位は暦月ではなく請求期間（契約開始日から次回更新日の前日まで）。
    無料の人には請求期間がないので、その場合だけ暦月で数える。 */
 const LIMITS = {
-  guest: { post: 0,  request: 0,  answer: 0,  ichinichi: 0,  discussion: 0, library: 0 },
-  light: { post: 2,  request: 1,  answer: 5,  ichinichi: 7,  discussion: 0, library: 30 },
-  plus:  { post: 30, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000 },
-  pro:   { post: 30, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000 }
+  guest: { post: 0,  request: 0,  answer: 0,  ichinichi: 0,  discussion: 0, library: 0,    guestPlay: 3 },
+  light: { post: 2,  request: 1,  answer: 5,  ichinichi: 7,  discussion: 0, library: 30,   guestPlay: 9999 },
+  plus:  { post: 30, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000, guestPlay: 9999 },
+  pro:   { post: 30, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000, guestPlay: 9999 }
 };
 
 function createEntitlement(deps) {
@@ -126,6 +126,34 @@ function createEntitlement(deps) {
 
   /* 契約が変わったときに呼ぶ。次の問い合わせで最新を読み直す。 */
   function forget(uid) { if (uid) cache.delete(uid); }
+
+  /* ウォレットアドレスから資格を引く。
+     Socket.io（議論の発言）は uid を持たずアドレスしか分からないため、
+     ここで uid に読み替えてから判定する。 */
+  const addrCache = new Map();
+  async function getEntitlementByAddress(address) {
+    const addr = String(address || "").toLowerCase();
+    if (!addr || !db) return { plan: "guest", source: "none" };
+
+    const hit = addrCache.get(addr);
+    let uid = hit && hit.expiresAt > Date.now() ? hit.uid : null;
+    if (!uid) {
+      try {
+        const w = await db.collection("ches_wallets").doc(addr).get();
+        if (w.exists) uid = (w.data() || {}).uid || null;
+        if (!uid) {
+          // ches_wallets はチェックサム表記で入っていることがあるので、こちらでも引く
+          const q = await db.collection("ches_accounts").where("walletAddress", "==", addr).limit(1).get();
+          if (!q.empty) uid = q.docs[0].id;
+        }
+      } catch (e) {
+        console.warn("利用資格: アドレスからの引き当てに失敗:", e.message);
+      }
+      if (uid) addrCache.set(addr, { uid, expiresAt: Date.now() + 10 * 60 * 1000 });
+    }
+    if (!uid) return { plan: "guest", source: "none" };
+    return getEntitlement(uid);
+  }
 
   function atLeast(plan, min) {
     return (PLAN_RANK[plan] || 0) >= (PLAN_RANK[min] || 0);
@@ -311,7 +339,7 @@ function createEntitlement(deps) {
     };
   }
 
-  return { getEntitlement, requirePlan, forget, atLeast, grantInitial, consume, usageOf, usageWindow, limitOf, enforcing, PLAN_RANK, LIMITS, GRANTS_COL, ENFORCE_FROM };
+  return { getEntitlement, getEntitlementByAddress, requirePlan, forget, atLeast, grantInitial, consume, usageOf, usageWindow, limitOf, enforcing, PLAN_RANK, LIMITS, GRANTS_COL, ENFORCE_FROM };
 }
 
 module.exports = { createEntitlement, PLAN_RANK, LIMITS, ENFORCE_FROM };
