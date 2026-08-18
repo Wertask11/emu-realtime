@@ -16333,6 +16333,16 @@ async function emuRenderMembership() {
     const res = await fetch('https://emu-realtime.onrender.com/api/billing/status', { headers });
     if (!res.ok) return;
     const s = await res.json();
+
+    /* いま何ができるか。契約が無くても Founding Emuer なら light が入る。
+       機能の出し分けは s.plan ではなく、必ずこちらを見る。 */
+    window.emuEntitlement = s.entitlement || 'guest';
+    window.emuEntitlementSource = s.entitlementSource || 'none';
+    window.emuFoundingUntil = s.foundingUntil || null;
+    try {
+      window.dispatchEvent(new CustomEvent('emu-entitlement', { detail: { plan: window.emuEntitlement } }));
+    } catch (e) {}
+
     if (s.status === 'active' || s.status === 'trialing') {
       /* バッジにはプラン名をそのまま出す（Emu light / Emu plus / Emu pro）。
          解約手続き中でも、期間の終わりまでは会員なのでプラン名を出す。
@@ -19214,6 +19224,22 @@ function canExchange() {
 function isFreeOnlyUser() {
   return window.hasFreeNFT && !window.hasPaidNFT;
 }
+
+/* 利用資格。いま何ができるかを、ここ1か所で判定する。
+   NFTの所有を見る isFreeOnlyUser とは別物。あちらは公式パスの話で、
+   こちらは月額プラン（と Founding Emuer への付与）の話。
+
+   emuHasPlan('plus') … plus 以上ならtrue。pro も通る。
+   まだ取れていないあいだは guest 扱いにする（黙って開けてしまわない）。 */
+var EMU_PLAN_RANK = { guest: 0, light: 1, plus: 2, pro: 3 };
+function emuPlan() {
+  return window.emuEntitlement || 'guest';
+}
+function emuHasPlan(min) {
+  return (EMU_PLAN_RANK[emuPlan()] || 0) >= (EMU_PLAN_RANK[min] || 0);
+}
+window.emuPlan = emuPlan;
+window.emuHasPlan = emuHasPlan;
 
 function isMonday() {
   const today = new Date();

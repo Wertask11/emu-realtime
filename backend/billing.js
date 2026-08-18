@@ -39,7 +39,7 @@ const AUDIT_COL = "admin_audit_logs";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function createBillingRouter(deps) {
-  const { db, requireFirebaseUser, requireOwner, rateLimit, webhookPath } = deps;
+  const { db, requireFirebaseUser, requireOwner, rateLimit, webhookPath, entitlement } = deps;
 
   const secretKey = process.env.STRIPE_SECRET_KEY || "";
 
@@ -227,6 +227,13 @@ function createBillingRouter(deps) {
       const currentPlan = sub.plan || sub.pendingPlan || null;
       // 保証の起点は pro になった日。light や plus に入った日ではない。
       const win = guaranteeWindow(guaranteeStartOf(sub));
+
+      /* いま何ができるか。契約だけでなく Founding Emuer の付与も含む。
+         画面はこれを見て機能を出し分ける（プラン名だけでは付与分が拾えない）。 */
+      let ent = null;
+      if (entitlement) {
+        try { ent = await entitlement.getEntitlement(req.identity.uid, req.identity.account); } catch (e) {}
+      }
       const now = Date.now();
       return res.json({
         ok: true,
@@ -234,6 +241,11 @@ function createBillingRouter(deps) {
         plans,
         plan: currentPlan,
         planLabel: currentPlan && PLANS[currentPlan] ? PLANS[currentPlan].label : null,
+        /* いま使える段。契約が無くても Founding Emuer なら light が入る。
+           画面で機能を出し分けるときは plan ではなくこちらを見る。 */
+        entitlement: ent ? ent.plan : (currentPlan || "guest"),
+        entitlementSource: ent ? ent.source : (currentPlan ? "stripe" : "none"),
+        foundingUntil: ent ? ent.foundingUntil : null,
         // 保証は本会員にだけ付く
         guaranteed: currentPlan === GUARANTEED_PLAN,
         planAmount: currentPlan && PLANS[currentPlan] ? PLANS[currentPlan].amount : PLAN_AMOUNT_JPY,
@@ -704,6 +716,10 @@ function createBillingRouter(deps) {
     }
 
     await subRef(uid).set(patch, { merge: true });
+
+    /* 利用資格の控えを捨てる。ここを忘れると、解約したりプランを変えたりしても
+       しばらく前の資格のまま通ってしまう。 */
+    if (entitlement && typeof entitlement.forget === "function") entitlement.forget(uid);
   }
 
   return { router, webhookPath, webhookHandler, handleWebhook, guaranteeWindow, PLAN_AMOUNT_JPY };

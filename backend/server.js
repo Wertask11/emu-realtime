@@ -144,7 +144,13 @@ const publicFormRateLimit = rateLimit({ windowMs: 10 * 60_000, max: 5, key: "for
 // =====================
 // 有料会員（月額10,000円）: 課金 / 返金 / 本人確認 / 対話記録
 // =====================
-const membershipDeps = { db, firebaseAdmin, requireFirebaseUser, requireOwner, rateLimit };
+/* 利用資格。「この人はいま何ができるか」をここ1か所で決める。
+   契約（Stripe）と付与（Founding Emuer）の両方を見る。
+   判定するだけで、まだ何も止めていない。止める場所は requirePlan を足したところだけ。 */
+const entitlement = require("./entitlement").createEntitlement({ db });
+const requirePlan = entitlement.requirePlan;
+
+const membershipDeps = { db, firebaseAdmin, requireFirebaseUser, requireOwner, rateLimit, entitlement, requirePlan };
 const billing = require("./billing").createBillingRouter({ ...membershipDeps, webhookPath: STRIPE_WEBHOOK_PATH });
 const kyc = require("./kyc").createKycRouter(membershipDeps);
 const dialogue = require("./dialogue").createDialogueRouter(membershipDeps);
