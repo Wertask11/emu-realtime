@@ -4449,6 +4449,22 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </div>
 
   <div id="emuTodayDashboard">
+    <!-- 規約 第10条の掲示。効力発生日の14日前までに出す必要がある。
+         掲示 2026-08-17 ／ 効力 2026-09-01。9/1になったら自動で消える。 -->
+    <div id="emuChangeNotice" class="eth-card" hidden style="border:2px solid #f08300;background:#fff8f0;margin-bottom:16px;">
+      <strong style="color:#b45309;display:block;margin-bottom:6px;">
+        9月1日から、ご利用範囲が変わります
+      </strong>
+      <p style="margin:0 0 8px;line-height:1.7;">
+        <strong>8月31日までは、これまでどおりすべて無料で使えます。</strong><br>
+        9月1日からは、無料のままだと「見学」になり、知識の投稿・募集・回答、議論への発言、
+        一日シェアの記録ができなくなります（読むのは無料のままです）。
+        続けて使うには Emu light（月額500円）以上が必要になります。
+        公式パスをお持ちの方には、Emu plus 相当を無償でお渡しします。
+      </p>
+      <a href="/terms.html" onclick="openLegal('terms');return false;"
+         style="color:#b45309;font-weight:700;text-decoration:underline;">くわしく見る</a>
+    </div>
     <div class="eth-hero">
       <div class="eth-card eth-welcome">
         <div class="eth-eyebrow" id="emuTodayDate"></div>
@@ -15165,11 +15181,26 @@ function _emuEnsureAppVisible() {
   _emuCloseFullscreenOverlays();
 }
 
+/* 制限が始まる日（日本時間 2026-09-01 0:00）。
+   ここより前は、これまでどおり全員が全部使える。
+   画面の判定とサーバーの判定で、必ず同じ日を見ること。 */
+var EMU_ENFORCE_FROM = Date.parse('2026-08-31T15:00:00Z');   // JST 9/1 0:00
+function emuEnforcing() { return Date.now() >= EMU_ENFORCE_FROM; }
+window.emuEnforcing = emuEnforcing;
+
+/* 規約 第10条の掲示。効力発生日まで出し、9/1になったら自動で消す。 */
+function _emuShowChangeNotice() {
+  var el = document.getElementById('emuChangeNotice');
+  if (!el) return;
+  el.hidden = emuEnforcing();
+}
+
 function showEmuToday() {
   /* Emuに入ったら計上する。以前はハブのボタンだけで数えていたため、
      タブ操作やセッション復帰で入った人が数に入らなかった。
      重複はFirestoreのドキュメント有無で防いでいるので、経路を増やしても増えすぎない。 */
   if (typeof spTrackBrand === 'function') spTrackBrand('emu');
+  _emuShowChangeNotice();
   _emuEnsureAppVisible();
   document.body.classList.add('emu-today-open');
   document.body.classList.remove('emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open','emu-discussion-open','emu-play-open');
