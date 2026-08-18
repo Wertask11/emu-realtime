@@ -336,6 +336,101 @@ function createBillingRouter(deps) {
   });
 
   // ───────── 管理（オーナーのみ） ─────────
+
+  /* 会員の一覧。誰が light / plus / pro なのかを見るための画面用。
+     いままで一覧する手段がなく、「いま誰がどのプランか」をオーナーが
+     確認できなかった。
+
+     あわせて、次のプランへ声をかける目安になる数も返す。
+     人数が少ないうちは、階段は機能ではなく「誰に声をかけるか」で決まるため、
+     その判断材料をここに集める。数の元は価値プロフィールと同じ。 */
+  router.get("/admin/members", requireOwner, async (req, res) => {
+    try {
+      const snap = await db.collection(SUBSCRIPTIONS_COL).limit(300).get();
+
+      // 会員ごとに、名前と住所（投稿の集計に使う）を引く
+      const rows = [];
+      for (const doc of snap.docs) {
+        const v = doc.data() || {};
+        const uid = doc.id;
+        let name = "", address = "", email = v.email || "";
+        try {
+          const acc = await db.collection("ches_accounts").doc(uid).get();
+          if (acc.exists) {
+            const a = acc.data() || {};
+            name = a.displayName || "";
+            email = email || a.email || "";
+            address = String(a.walletAddress || a.chesAddress || "").toLowerCase();
+          }
+        } catch (e) {}
+
+        /* 声をかける目安。§22 の移行シグナルのうち、いまのデータで数えられるもの。
+           ・posts        … 届けた知識の数
+           ・elevated     … 他の人の改善を採り入れて育った投稿（考えが変わった記録）
+           ・asked        … 自分から知識を募集した数（自分から問いを出した）
+           ・answered     … 誰かの募集に答えた数（人に届けた） */
+        const signals = { posts: 0, elevated: 0, asked: 0, answered: 0, helpful: 0 };
+        if (address) {
+          try {
+            const ps = await db.collection("posts").where("address", "==", address).limit(300).get();
+            ps.forEach(d => {
+              const p = d.data() || {};
+              signals.posts += 1;
+              signals.helpful += Number(p.goodCount) || 0;
+              if ((Number(p.acceptedChangeCount) || 0) > 0) signals.elevated += 1;
+            });
+          } catch (e) {}
+          try {
+            const rq = await db.collection("knowledge_requests").where("author", "==", address).limit(100).get();
+            signals.asked = rq.size;
+          } catch (e) {}
+          try {
+            const an = await db.collection("knowledge_answers").where("answerAuthor", "==", address).limit(100).get();
+            signals.answered = an.size;
+          } catch (e) {}
+        }
+
+        const plan = v.plan && PLANS[v.plan] ? v.plan : null;
+        rows.push({
+          uid, name, email, address,
+          plan,
+          planLabel: plan ? PLANS[plan].label : "（不明）",
+          amount: plan ? PLANS[plan].amount : null,
+          status: v.status || "unknown",
+          cancelAtPeriodEnd: !!v.cancelAtPeriodEnd,
+          currentPeriodEnd: _isoOf(v.currentPeriodEnd),
+          firstSubscribedAt: _isoOf(v.firstSubscribedAt),
+          signals
+        });
+      }
+
+      // 上の段から並べ、同じ段では新しい人を先に
+      const order = { pro: 0, plus: 1, light: 2 };
+      rows.sort((a, b) => {
+        const oa = order[a.plan] === undefined ? 9 : order[a.plan];
+        const ob = order[b.plan] === undefined ? 9 : order[b.plan];
+        if (oa !== ob) return oa - ob;
+        return String(b.firstSubscribedAt || "").localeCompare(String(a.firstSubscribedAt || ""));
+      });
+
+      const active = rows.filter(r => r.status === "active" || r.status === "trialing");
+      const countOf = k => active.filter(r => r.plan === k).length;
+      const summary = {
+        total: rows.length,
+        active: active.length,
+        light: countOf("light"),
+        plus: countOf("plus"),
+        pro: countOf("pro"),
+        mrr: active.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+      };
+
+      return res.json({ ok: true, items: rows, summary });
+    } catch (e) {
+      console.error("admin members error:", e.message);
+      return res.status(500).json({ error: "LIST_FAILED" });
+    }
+  });
+
   router.get("/admin/refunds", requireOwner, async (req, res) => {
     try {
       const status = String(req.query.status || "pending");

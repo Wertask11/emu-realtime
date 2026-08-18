@@ -46,13 +46,15 @@ input,select,textarea{width:100%;border:1.5px solid var(--line);border-radius:10
     </div>
 
     <div class="tabs">
-      <button data-tab="refunds" class="active">返金申請</button>
+      <button data-tab="members" class="active">会員一覧</button>
+      <button data-tab="refunds">返金申請</button>
       <button data-tab="kyc">本人確認</button>
       <button data-tab="dialogue">対話記録</button>
       <button data-tab="metrics">指標</button>
     </div>
 
-    <section id="tab-refunds"></section>
+    <section id="tab-members"></section>
+    <section id="tab-refunds" class="hide"></section>
     <section id="tab-kyc" class="hide"></section>
     <section id="tab-dialogue" class="hide"></section>
     <section id="tab-metrics" class="hide"></section>
@@ -89,6 +91,74 @@ async function api(path, options) {
   try { data = await res.json(); } catch (_) {}
   if (!res.ok) throw Object.assign(new Error(data.error || ("HTTP " + res.status)), { code: data.error, status: res.status });
   return data;
+}
+
+/* ───────── 会員一覧 ─────────
+   誰が light / plus / pro なのかを見る。これまで一覧する手段がなかった。
+   人数が少ないうちは、次の段へ上がるかどうかは「誰に声をかけるか」で決まる。
+   その判断材料として、声をかける目安になる数も並べる。 */
+const PLAN_STYLE = {
+  pro:   { color:"#b45309", bg:"#fef3c7" },
+  plus:  { color:"#3730a3", bg:"#e0e7ff" },
+  light: { color:"#166534", bg:"#dcfce7" }
+};
+const STATUS_LABEL = {
+  active:"利用中", trialing:"お試し中", past_due:"支払い遅延",
+  canceled:"解約済み", unpaid:"未払い", incomplete:"手続き途中"
+};
+
+async function renderMembers() {
+  const el = $("#tab-members");
+  el.innerHTML = '<p class="empty">読み込み中…</p>';
+  try {
+    const { items, summary } = await api("/api/billing/admin/members");
+
+    const head = '<div class="card"><h3>いまの会員</h3>'
+      + '<div class="row"><span>Emu light</span><span>' + summary.light + ' 人</span></div>'
+      + '<div class="row"><span>Emu plus</span><span>' + summary.plus + ' 人</span></div>'
+      + '<div class="row"><span>Emu pro</span><span>' + summary.pro + ' 人</span></div>'
+      + '<div class="row"><span>利用中の合計</span><span>' + summary.active + ' 人</span></div>'
+      + '<div class="row"><span>月あたりの売上</span><span>' + Number(summary.mrr || 0).toLocaleString("ja-JP") + ' 円</span></div>'
+      + '</div>';
+
+    if (!items.length) {
+      el.innerHTML = head + '<p class="empty">まだ会員がいません。</p>';
+      return;
+    }
+
+    const cards = items.map(function (m) {
+      const st = PLAN_STYLE[m.plan] || { color:"#555", bg:"#eee" };
+      const s = m.signals || {};
+      /* 声をかける目安。§22 の移行シグナルのうち、いま数えられるもの。
+         「学びへ昇華」は人の意見で自分の考えが変わった記録なので、いちばん強い合図。 */
+      const marks = [];
+      if (s.elevated > 0) marks.push('考えが変わった ' + s.elevated);
+      if (s.asked > 0)    marks.push('自分から募集した ' + s.asked);
+      if (s.answered > 0) marks.push('人に届けた ' + s.answered);
+      const strong = (s.elevated > 0) || (s.asked > 0 && s.answered > 0);
+
+      return '<div class="card">'
+        + '<div class="row"><span><b>' + esc(m.name || "（名前なし）") + '</b></span>'
+        + '<span style="color:' + st.color + ';background:' + st.bg + ';padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;">'
+        + esc(m.planLabel) + '</span></div>'
+        + '<div class="row"><span>状態</span><span>' + esc(STATUS_LABEL[m.status] || m.status)
+        + (m.cancelAtPeriodEnd ? '（期間終了で終わり）' : '') + '</span></div>'
+        + '<div class="row"><span>入会</span><span>' + fmt(m.firstSubscribedAt) + '</span></div>'
+        + '<div class="row"><span>次の更新</span><span>' + fmt(m.currentPeriodEnd) + '</span></div>'
+        + '<div class="row"><span>届けた知識</span><span>' + (s.posts || 0) + ' 件（役に立った ' + (s.helpful || 0) + ' 回）</span></div>'
+        + '<div class="row"><span>次の段への合図</span><span>'
+        + (marks.length ? esc(marks.join(' / ')) : 'まだなし') + '</span></div>'
+        + (strong && m.plan !== 'pro'
+            ? '<p class="hint" style="color:#b45309;font-weight:700;">声をかける頃合いです。</p>'
+            : '')
+        + '<p class="hint" style="font-size:11px;color:#999;">uid: ' + esc(m.uid) + '</p>'
+        + '</div>';
+    }).join("");
+
+    el.innerHTML = head + cards;
+  } catch (e) {
+    el.innerHTML = '<p class="empty">会員一覧を読み込めませんでした（' + esc(e.message) + '）</p>';
+  }
 }
 
 // ───────── 返金申請 ─────────
@@ -363,9 +433,9 @@ async function renderMetrics() {
 document.querySelectorAll(".tabs button").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
-    ["refunds","kyc","dialogue","metrics"].forEach(t =>
+    ["members","refunds","kyc","dialogue","metrics"].forEach(t =>
       document.getElementById("tab-" + t).classList.toggle("hide", t !== b.dataset.tab));
-    ({ refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics })[b.dataset.tab]();
+    ({ members: renderMembers, refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics })[b.dataset.tab]();
   };
 });
 
@@ -380,7 +450,7 @@ onAuthStateChanged(auth, async (user) => {
     await api("/api/billing/admin/refunds?status=pending");
     $("#gate").classList.add("hide");
     $("#main").classList.remove("hide");
-    renderRefunds();
+    renderMembers();   // 最初に開くのは会員一覧
   } catch (e) {
     $("#gate").textContent = e.code === "OWNER_ONLY"
       ? "この画面はオーナー専用です。"
