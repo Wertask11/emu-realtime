@@ -4614,6 +4614,34 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         </div>
       </section>
 
+      <!-- 月次の学びの軌跡（Emu plus 以上）。plus の目玉。
+           新しいデータは持たず、価値プロフィールと同じ元データから数える。 -->
+      <div class="eth-card" id="emuJourneyCard" hidden>
+        <div class="eth-section-head">
+          <div><h3>今月の学びの軌跡</h3><p>やったことは、消えずに積み上がっています。</p></div>
+        </div>
+        <p id="emuJourneySentence" style="font-size:17px;line-height:1.9;color:#221f3a;margin:8px 0 0;">
+          読み込んでいます…
+        </p>
+        <p id="emuJourneyRange" class="eth-reward-note" style="margin-top:10px;"></p>
+      </div>
+
+      <!-- 運営の受領コメント（Emu light 以上）。light の核。
+           他の会員が反応するかは運だが、運営が応えることは約束できる。 -->
+      <div class="eth-card" id="emuReviewCard" hidden>
+        <div class="eth-section-head">
+          <div><h3>運営に受け取ってもらう</h3>
+            <p>出した経験に、必ず応えが返ります。7営業日以内に、運営が受領コメントをお返しします。</p></div>
+        </div>
+        <div id="emuReviewBody">
+          <p class="eth-loading">読み込んでいます…</p>
+        </div>
+        <p class="eth-reward-note" style="margin-top:10px;">
+          受領コメントは、投稿を受け取ったことと着眼点をお伝えするものです。
+          内容の正しさや成果を保証するものではなく、専門的な助言でもありません。
+        </p>
+      </div>
+
       <div class="eth-card">
         <div class="eth-section-head">
           <div><h3 data-i18n="value.title">残った価値</h3><p data-i18n="value.desc">投稿数ではなく、他者への影響を表示します。</p></div>
@@ -16716,7 +16744,128 @@ function _emuExchangeBuyBtn(tokenId, useJpyc, label, primary) {
   return btn;
 }
 
+/* 今月の学びの軌跡（Emu plus 以上）。
+   数はサーバーが数える。存在しない分析結果は作らない。 */
+async function _emuLoadJourney() {
+  const card = document.getElementById('emuJourneyCard');
+  if (!card) return;
+  if (!emuHasPlan('plus')) { card.hidden = true; return; }
+  try {
+    const res = await fetch('https://emu-realtime.onrender.com/api/billing/journey',
+      { headers: await emuAuthHeaders(true) });
+    if (!res.ok) { card.hidden = true; return; }
+    const j = await res.json();
+    card.hidden = false;
+    document.getElementById('emuJourneySentence').textContent = j.sentence || '';
+    const f = s => s ? new Date(s).toLocaleDateString('ja-JP') : '';
+    document.getElementById('emuJourneyRange').textContent =
+      f(j.since) + ' 〜 ' + f(j.until) + ' の記録です。';
+  } catch (e) { card.hidden = true; }
+}
+
+/* 運営の受領コメント（Emu light 以上）。
+   希望制なので、自分で「この投稿を見てほしい」と指定してもらう。 */
+async function _emuLoadReview() {
+  const card = document.getElementById('emuReviewCard');
+  const body = document.getElementById('emuReviewBody');
+  if (!card || !body) return;
+  if (!emuHasPlan('light')) { card.hidden = true; return; }
+  try {
+    const res = await fetch('https://emu-realtime.onrender.com/api/review/status',
+      { headers: await emuAuthHeaders(true) });
+    if (!res.ok) { card.hidden = true; return; }
+    const s = await res.json();
+    card.hidden = false;
+    const f = x => x ? new Date(x).toLocaleDateString('ja-JP') : '';
+
+    // すでに依頼している
+    if (s.request) {
+      const r = s.request;
+      if (r.status === 'answered') {
+        body.innerHTML = '<p style="font-weight:700;margin:0 0 8px;">運営からの受領コメント</p>'
+          + '<p style="line-height:1.9;white-space:pre-wrap;margin:0 0 8px;">' + _emuEsc(r.comment || '') + '</p>'
+          + '<p class="eth-reward-note">' + f(r.answeredAt) + ' に受け取りました。'
+          + '次の依頼は ' + f(s.resetsAt) + ' から行えます。</p>';
+      } else {
+        body.innerHTML = '<p style="margin:0 0 6px;">運営が確認しています。</p>'
+          + '<p class="eth-reward-note">' + f(r.dueAt) + ' までにお返しします。</p>';
+      }
+      return;
+    }
+
+    // まだ受付枠があるか
+    if (!s.accepting) {
+      body.innerHTML = '<p style="margin:0;">受付は上限（' + s.capacity + '名）に達しました。'
+        + '再開したらお知らせします。</p>';
+      return;
+    }
+
+    // 自分の投稿から選んでもらう
+    const addr = _emuAddress();
+    let mine = [];
+    try {
+      const snap = await window.fbLib.getDocs(window.fbLib.query(
+        window.fbLib.collection(window.db, 'posts'),
+        window.fbLib.where('address', '==', addr),
+        window.fbLib.limit(20)));
+      snap.forEach(d => mine.push({ id: d.id, title: (d.data() || {}).title || '（無題）' }));
+    } catch (e) {}
+
+    if (!mine.length) {
+      body.innerHTML = '<p style="margin:0;">まず、知識をひとつ届けてみてください。'
+        + 'そのあとで、運営に受け取ってもらう投稿を選べます。</p>';
+      return;
+    }
+    body.innerHTML = '<p style="margin:0 0 8px;">今回、運営に受け取ってもらう投稿をひとつ選んでください。</p>'
+      + '<select id="emuReviewPick" class="eth-lang" style="width:100%;margin-bottom:10px;">'
+      + mine.map(p => '<option value="' + _emuEsc(p.id) + '">' + _emuEsc(p.title) + '</option>').join('')
+      + '</select>'
+      + '<button type="button" class="eth-btn primary" id="emuReviewSend">運営に受け取ってもらう</button>'
+      + '<p class="eth-reward-note" style="margin-top:8px;">1回だけ選べます。次は ' + f(s.resetsAt) + ' からです。</p>';
+
+    document.getElementById('emuReviewSend').onclick = async function () {
+      const btn = this;
+      btn.disabled = true; btn.textContent = '送っています…';
+      try {
+        const r = await fetch('https://emu-realtime.onrender.com/api/review/request', {
+          method: 'POST',
+          headers: Object.assign({ 'Content-Type': 'application/json' }, await emuAuthHeaders(true)),
+          body: JSON.stringify({ postId: document.getElementById('emuReviewPick').value })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || '送れませんでした');
+        alert('運営がお受け取りしました。\n' + f(d.dueAt) + ' までに受領コメントをお返しします。');
+        _emuLoadReview();
+      } catch (e) {
+        alert('送れませんでした（' + e.message + '）');
+        btn.disabled = false; btn.textContent = '運営に受け取ってもらう';
+      }
+    };
+  } catch (e) { card.hidden = true; }
+}
+
+function _emuEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
 async function loadEmuValueProfile() {
+  // plus の目玉と light の核。価値プロフィールを開いたときに一緒に読む。
+  _emuLoadJourney();
+  _emuLoadReview();
+
+  /* 価値プロフィールの詳しさ（9/1から）。
+     light までは「どれだけ届いたか」の基本だけ。
+     plus 以上は改善の内訳まで見える。数え方は同じで、見せる範囲だけを分ける。 */
+  try {
+    const detailed = emuHasPlan('plus');
+    ['emuAcceptedChangeCount', 'emuChangeGivenCount', 'emuChangeAcceptedCount', 'emuElevatedCount']
+      .forEach(function (id) {
+        const el = document.getElementById(id);
+        const row = el && el.closest ? el.closest('.eth-metric') : null;
+        if (row) row.hidden = !detailed;
+      });
+  } catch (e) {}
   loadEmuWalletCard();   // ウォレット表示も同時に更新
   const timeline = document.getElementById('emuValueTimeline');
   if (!timeline) return;
@@ -22376,6 +22525,19 @@ async function sendEmuFeedback() {
     }
   }
   async function createKnowledgeDraft(account, payload) {
+    /* マイライブラリーの上限（9/1から）。light は30件、plus 以上は1,000件。
+       「無制限」にしないのは、荒らしや自動投稿で膨らむのを防ぐため。 */
+    const cap = emuHasPlan('plus') ? 1000 : 30;
+    try {
+      const now = await readKnowledgeDrafts(account);
+      if (Array.isArray(now) && now.length >= cap) {
+        const e = new Error('LIBRARY_FULL');
+        e.cap = cap;
+        throw e;
+      }
+    } catch (e) {
+      if (e && e.message === 'LIBRARY_FULL') throw e;
+    }
     const draft = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString() };
     if (account && window.db && window.fbLib) {
       try {
@@ -22535,7 +22697,13 @@ async function sendEmuFeedback() {
       const account = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
       if (!options.append) { knowledgeLastDoc = null; knowledgeHasMore = true; }
       if (!knowledgeHasMore && options.append) return;
+      /* 見学の人には、運営が選んだ知識だけを見せる（9/1から）。
+         全部読めてしまうと「見学」ではなくなり、light に進む理由が薄くなる。
+         読むこと自体は無料のままなので、閲覧を止めるのではなく範囲を絞る。 */
       const constraints = [window.fbLib.orderBy('createdAt', 'desc')];
+      if (!emuHasPlan('light')) {
+        constraints.unshift(window.fbLib.where('recommended', '==', true));
+      }
       if (knowledgeLastDoc && options.append) constraints.push(window.fbLib.startAfter(knowledgeLastDoc));
       constraints.push(window.fbLib.limit(KNOWLEDGE_PAGE_SIZE + 1));
       const q = window.fbLib.query(window.fbLib.collection(window.db, 'posts'), ...constraints);
