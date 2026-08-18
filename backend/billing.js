@@ -86,6 +86,21 @@ function createBillingRouter(deps) {
     return { start, guaranteeEnd, refundOpen, refundClose };
   }
 
+  /* 「語り合える一人」保証の起点。
+     firstSubscribedAt は「初めてお金を払った日」で、light や plus で入会した日も入る。
+     これを保証の起点にすると、あとから pro に上がった人の保証が
+     light に入った日から数えられ、pro になった時点で返金申請の窓が
+     閉じていることになる。そこで保証の起点は guaranteeStartsAt に分けた。
+
+     guaranteeStartsAt が無い会員は、この仕組みより前からの pro なので、
+     これまでどおり firstSubscribedAt を起点にする（保証期間を変えない）。 */
+  function guaranteeStartOf(sub) {
+    if (!sub) return null;
+    if (sub.guaranteeStartsAt) return sub.guaranteeStartsAt;
+    if (sub.plan && sub.plan !== GUARANTEED_PLAN) return null;
+    return sub.firstSubscribedAt || null;
+  }
+
   /* 日時を ISO 文字列にする。Firestore の Timestamp と素の Date が混ざるため。 */
   function _isoOf(v) {
     if (!v) return null;
@@ -210,7 +225,8 @@ function createBillingRouter(deps) {
       }
 
       const currentPlan = sub.plan || sub.pendingPlan || null;
-      const win = guaranteeWindow(sub.firstSubscribedAt);
+      // 保証の起点は pro になった日。light や plus に入った日ではない。
+      const win = guaranteeWindow(guaranteeStartOf(sub));
       const now = Date.now();
       return res.json({
         ok: true,
@@ -262,7 +278,7 @@ function createBillingRouter(deps) {
       if (!db) return res.status(503).json({ error: "BILLING_UNAVAILABLE" });
       const { uid, walletAddress } = req.identity;
       const sub = await readSubscription(uid);
-      if (!sub || !sub.firstSubscribedAt) return res.status(404).json({ error: "NO_SUBSCRIPTION" });
+      if (!sub) return res.status(404).json({ error: "NO_SUBSCRIPTION" });
 
       /* 「語り合える一人」保証は Emu pro（月額10,000円）の約束。
          下位プランでこの返金を受けられると、規約に書いていない返金になってしまう。 */
@@ -270,13 +286,16 @@ function createBillingRouter(deps) {
         return res.status(400).json({ error: "PLAN_NOT_GUARANTEED", plan: sub.plan || null });
       }
 
+      // 保証の起点は pro になった日。light や plus に入った日から数えない。
+      if (!guaranteeStartOf(sub)) return res.status(404).json({ error: "NO_SUBSCRIPTION" });
+
       // 一人につき初回入会時の1回限り
       if (sub.refundStatus && sub.refundStatus !== "rejected") {
         return res.status(409).json({ error: "ALREADY_REQUESTED", refundStatus: sub.refundStatus });
       }
 
-      // 申請期間: 入会31日目から7日間
-      const win = guaranteeWindow(sub.firstSubscribedAt);
+      // 申請期間: pro になった日から31日目、そこから7日間
+      const win = guaranteeWindow(guaranteeStartOf(sub));
       const now = Date.now();
       if (now < win.refundOpen.getTime()) {
         return res.status(400).json({ error: "WINDOW_NOT_OPEN", opensAt: win.refundOpen.toISOString() });
@@ -665,12 +684,25 @@ function createBillingRouter(deps) {
       const hit = pid && Object.keys(PLANS).find(function (k) { return priceIdOf(k) === pid; });
       if (hit) patch.plan = hit;
     }
-    // 保証期間の起点は最初の入会日。再入会で上書きすると保証が延びてしまうので、
-    // 既に記録がある場合は触らない。
     const existing = await subRef(uid).get();
-    if (opts.first && (!existing.exists || !existing.data().firstSubscribedAt)) {
+    const before = existing.exists ? existing.data() : {};
+
+    // 初めてお金を払った日。プランを問わず1回だけ記録する（会員歴の目安）。
+    if (opts.first && !before.firstSubscribedAt) {
       patch.firstSubscribedAt = new Date();
     }
+
+    /* 「語り合える一人」保証の起点。pro になった時にだけ記録する。
+       opts.first は新規の Checkout を通ったときにしか渡らないため、
+       light や plus から pro へ変更した場合（subscription.update）でも
+       確実に記録されるよう、ここでは opts.first を条件にしない。
+
+       再入会や上下の行き来で保証が何度も始まらないよう、
+       一度記録したら二度と上書きしない。 */
+    if (patch.plan === GUARANTEED_PLAN && !before.guaranteeStartsAt) {
+      patch.guaranteeStartsAt = new Date();
+    }
+
     await subRef(uid).set(patch, { merge: true });
   }
 
