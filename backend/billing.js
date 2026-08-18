@@ -545,14 +545,18 @@ function createBillingRouter(deps) {
 
       // 受け取った学び：自分が「役に立った」を押した知識の数
       try {
+        /* 期間で絞る。絞らないと『今月18個』と出しながら累計を見せてしまう。
+           Good を押した日は記録していないため、投稿の作成日で近似する。 */
         const got = await db.collection("posts")
-          .where("goodUsers", "array-contains", address).limit(500).get();
+          .where("goodUsers", "array-contains", address)
+          .where("createdAt", ">=", since).limit(500).get();
         j.received = got.size;
       } catch (e) {}
 
       // 届けた相手の数（重複なし）と、自分の投稿・改善が育った数
       try {
-        const mine = await db.collection("posts").where("address", "==", address).limit(500).get();
+        const mine = await db.collection("posts").where("address", "==", address)
+          .where("createdAt", ">=", since).limit(500).get();
         const people = new Set();
         mine.forEach(d => {
           const p = d.data() || {};
@@ -567,7 +571,8 @@ function createBillingRouter(deps) {
       // 誰かの募集に答えた数
       try {
         const ans = await db.collection("knowledge_answers")
-          .where("answerAuthor", "==", address).limit(500).get();
+          .where("answerAuthor", "==", address)
+          .where("createdAt", ">=", since).limit(500).get();
         j.answered = ans.size;
       } catch (e) {}
 

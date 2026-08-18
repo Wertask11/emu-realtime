@@ -227,23 +227,36 @@ function createEntitlement(deps) {
 
     const win = await usageWindow(uid);
     const ref = db.collection("plan_usage").doc(uid + "_" + win.key);
-    let used = 0;
-    try {
-      const snap = await ref.get();
-      used = snap.exists ? Number((snap.data() || {})[kind]) || 0 : 0;
-    } catch (e) {}
-    if (used >= limit) return { ok: false, plan: ent.plan, limit, used, resetsAt: win.end.toISOString() };
 
-    if (!o.dryRun) {
-      try {
-        const inc = {};
-        inc[kind] = used + 1;
-        await ref.set({ uid, windowKey: win.key, windowEndsAt: win.end, updatedAt: new Date(), ...inc }, { merge: true });
-      } catch (e) {
-        console.warn("上限の記録に失敗:", e.message);
-      }
+    if (o.dryRun) {
+      let used = 0;
+      try { const s = await ref.get(); used = s.exists ? Number((s.data() || {})[kind]) || 0 : 0; } catch (e) {}
+      return { ok: used < limit, plan: ent.plan, limit, used, resetsAt: win.end.toISOString() };
     }
-    return { ok: true, plan: ent.plan, limit, used: used + 1, resetsAt: win.end.toISOString() };
+
+    /* 読んでから書くと、同時に押されたときに回数が失われて上限を超えられる。
+       読み取りと書き込みをひとつの取引にまとめて、必ず1ずつ進むようにする。 */
+    try {
+      const used = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        const now = snap.exists ? Number((snap.data() || {})[kind]) || 0 : 0;
+        if (now >= limit) return null;                 // 上限に達している
+        const patch = { uid, windowKey: win.key, windowEndsAt: win.end, updatedAt: new Date() };
+        patch[kind] = now + 1;
+        tx.set(ref, patch, { merge: true });
+        return now + 1;
+      });
+      if (used === null) {
+        let cur = limit;
+        try { const s = await ref.get(); cur = s.exists ? Number((s.data() || {})[kind]) || 0 : 0; } catch (e) {}
+        return { ok: false, plan: ent.plan, limit, used: cur, resetsAt: win.end.toISOString() };
+      }
+      return { ok: true, plan: ent.plan, limit, used, resetsAt: win.end.toISOString() };
+    } catch (e) {
+      console.warn("上限の記録に失敗:", e.message);
+      // 数えられないときは止めない。数えられないことを理由に締め出さない。
+      return { ok: true, plan: ent.plan, limit, used: 0, resetsAt: win.end.toISOString() };
+    }
   }
 
   /** いまの使用状況をまとめて返す（画面に出す用）。 */

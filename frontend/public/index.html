@@ -13835,7 +13835,12 @@ const editingId = editingPostId;
       postData.createdAt = new Date();
       postData.goodCount = 0;
       postData.changeCount = 0;
-      await window.fbLib.addDoc(window.fbLib.collection(window.db, "posts"), postData);
+      /* 投稿と、回数の記録を同じ一括処理で書く。
+         別々に書くと、片方だけ通ってしまう余地が残る。 */
+      const _postBatch = window.fbLib.writeBatch(window.db);
+      _postBatch.set(window.fbLib.doc(window.fbLib.collection(window.db, "posts")), postData);
+      _emuAddUsage(_postBatch, 'post');
+      await _postBatch.commit();
       _spLogAdd({ type:'post', icon:'📝', title:'Emu に投稿しました', detail: (postTitleInput.value||postData.title||'').slice(0,25) });
       console.log("✅ 新規投稿を作成しました");
     }
@@ -15571,7 +15576,9 @@ document.getElementById("emuRequestSubmit")?.addEventListener("click", async fun
   this.disabled = true;
   this.textContent = "公開しています...";
   try {
-    await window.fbLib.addDoc(window.fbLib.collection(window.db, "knowledge_requests"), {
+    // 募集と、回数の記録を同じ一括処理で書く
+    const _reqBatch = window.fbLib.writeBatch(window.db);
+    _reqBatch.set(window.fbLib.doc(window.fbLib.collection(window.db, "knowledge_requests")), {
       question, context, bounty,
       deadline:new Date(deadline + "T23:59:59"),
       author:_emuAddress(),
@@ -15580,6 +15587,8 @@ document.getElementById("emuRequestSubmit")?.addEventListener("click", async fun
       settlementStatus:"uncommitted",
       createdAt:new Date()
     });
+    _emuAddUsage(_reqBatch, 'request');
+    await _reqBatch.commit();
     closeEmuSheet("emuRequestSheet");
     _spLogAdd({ type:"post", icon:"🔎", title:"知識を募集しました", detail:question.slice(0,25) });
     await loadKnowledgeRequests();
@@ -15685,6 +15694,7 @@ document.getElementById("emuAnswerSubmit")?.addEventListener("click", async func
     batch.update(window.fbLib.doc(window.db, "knowledge_requests", _emuAnswerContext.id), {
       answerCount:window.fbLib.increment(1)
     });
+    _emuAddUsage(batch, 'answer');   // 回数の記録も同じ一括処理で
     await batch.commit();
     closeEmuSheet("emuAnswerSheet");
     alert("知識を届けました。募集者が採用すると、価値プロフィールと懸賞履歴に残ります。");
@@ -19481,6 +19491,31 @@ function emuHasPlan(min) {
 }
 window.emuPlan = emuPlan;
 window.emuHasPlan = emuHasPlan;
+
+/* 回数の記録。投稿・募集・回答と同じ一括処理で1つ増やす。
+
+   Firestoreのルールは、増えたあとの値が上限以内かを getAfter で見る。
+   ここで増やさずに書こうとすると、ルール側で弾かれる。
+   段の判定だけでは「light は月2件」を守れず、画面を通さずに書けば
+   何件でも作れてしまうため、書き込みと同じ処理の中で数える。
+
+   期間の名前はルール側と必ず同じにすること（日本時間の暦月）。 */
+function _emuUsageDocId() {
+  const jst = new Date(Date.now() + 9 * 3600 * 1000);
+  return (localStorage.getItem('ches_uid') || '') + '_r_m' + jst.getUTCFullYear() + '-' + (jst.getUTCMonth() + 1);
+}
+function _emuUsageRef() {
+  return window.fbLib.doc(window.db, 'plan_usage', _emuUsageDocId());
+}
+/* 一括処理に「この種類を1つ使った」を足す。 */
+function _emuAddUsage(batch, kind) {
+  try {
+    batch.set(_emuUsageRef(), {
+      [kind]: window.fbLib.increment ? window.fbLib.increment(1) : 1,
+      updatedAt: new Date()
+    }, { merge: true });
+  } catch (e) { console.warn('回数の記録に失敗:', e && e.message); }
+}
 
 /* 見学中の遊びの回数をサーバーで数える。
    端末に置くと、ブラウザを変えたりデータを消したりで回避できてしまう。 */

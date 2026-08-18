@@ -2497,7 +2497,8 @@ app.post("/api/ichinichi/append-learning", requireFirebaseUser, requireOwnAddres
 });
 
 // ── 前日の時間割をコピー ──
-app.post("/api/ichinichi/copy-previous", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+// 前日の時間割コピーは plus 以上（9/1から）
+app.post("/api/ichinichi/copy-previous", requireFirebaseUser, requirePlan("plus"), requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const { address, userName } = ichiIdentity(req);
@@ -2525,7 +2526,8 @@ app.post("/api/ichinichi/copy-previous", requireFirebaseUser, requireOwnAddress,
 });
 
 // ── みんなの予定を自分の今日に取り入れる ──
-app.post("/api/ichinichi/adopt", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+// 他人の公開予定を取り入れるのは plus 以上（9/1から）
+app.post("/api/ichinichi/adopt", requireFirebaseUser, requirePlan("plus"), requireOwnAddress, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const { address, userName } = ichiIdentity(req);
