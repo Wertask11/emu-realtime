@@ -121,12 +121,23 @@ async function renderMembers() {
       + '<div class="row"><span>月あたりの売上</span><span>' + Number(summary.mrr || 0).toLocaleString("ja-JP") + ' 円</span></div>'
       + '</div>';
 
-    if (!items.length) {
-      el.innerHTML = head + '<p class="empty">まだ会員がいません。</p>';
-      return;
-    }
+    /* 施行時の付与。公式パス保有者に plus、オーナーに pro を渡す。
+       先に空打ちで人数を見てから配れるようにしている。
 
-    const cards = items.map(function (m) {
+       会員がゼロでも必ず出す。付与の対象は「契約している人」ではなく
+       「公式パスを持っている人」なので、有料会員がいなくても配る相手はいる。 */
+    const grant = '<div class="card" style="border:2px solid #f08300;background:#fff8f0;">'
+      + '<h3 style="color:#b45309;">最初の付与（9月1日の制限に備える）</h3>'
+      + '<p class="hint">公式パス（NFT）をお持ちの方に Emu plus を6か月、オーナーに Emu pro を期限なしで渡します。'
+      + 'それ以外の方には何も渡しません（無料のまま）。二度押しても増えません。</p>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">'
+      + '<button id="grantDry" class="btn">まず人数を数える（配らない）</button>'
+      + '<button id="grantRun" class="btn" style="background:#b45309;color:#fff;">実際に配る</button>'
+      + '</div><p id="grantOut" class="hint" style="margin-top:10px;"></p></div>';
+
+    const cards = !items.length
+      ? '<p class="empty">まだ有料会員はいません。</p>'
+      : items.map(function (m) {
       const st = PLAN_STYLE[m.plan] || { color:"#555", bg:"#eee" };
       const s = m.signals || {};
       /* 声をかける目安。§22 の移行シグナルのうち、いま数えられるもの。
@@ -155,7 +166,34 @@ async function renderMembers() {
         + '</div>';
     }).join("");
 
-    el.innerHTML = head + cards;
+    el.innerHTML = head + grant + cards;
+
+    async function runGrant(dryRun) {
+      const out = $("#grantOut");
+      out.textContent = dryRun ? "数えています…" : "配っています…";
+      try {
+        const r = await api("/api/billing/admin/founding/grant", {
+          method: "POST", body: { dryRun: dryRun, months: 6, grantedBy: "initial-2026-09" }
+        });
+        out.innerHTML = (dryRun ? "<b>数えただけです（まだ配っていません）</b><br>" : "<b>配りました</b><br>")
+          + "見たアカウント " + r.scanned + " 件<br>"
+          + "Emu plus を渡す（公式パス保有者）: <b>" + r.plusTarget + " 人</b><br>"
+          + "Emu pro を渡す（オーナー）: <b>" + r.proTarget + " 人</b><br>"
+          + (dryRun ? "配る予定" : "配った") + ": <b>" + r.granted + " 件</b>　"
+          + "すでに配ってあった: " + r.skipped + " 件<br>"
+          + "公式パスなし（何も渡さない）: " + r.noPass + " 人<br>"
+          + "plus の期限: " + fmt(r.expiresAt);
+        if (!dryRun) renderMembers();
+      } catch (e) {
+        out.textContent = "失敗しました（" + e.message + "）";
+      }
+    }
+    $("#grantDry").onclick = () => runGrant(true);
+    $("#grantRun").onclick = () => {
+      if (!confirm("実際に配ります。\n\n公式パス保有者に Emu plus（6か月）、オーナーに Emu pro（期限なし）。\n"
+        + "先に「まず人数を数える」で確認しましたか？")) return;
+      runGrant(false);
+    };
   } catch (e) {
     el.innerHTML = '<p class="empty">会員一覧を読み込めませんでした（' + esc(e.message) + '）</p>';
   }
