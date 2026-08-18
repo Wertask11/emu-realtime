@@ -14036,13 +14036,22 @@ function updateConvertButton() {
     return;
   }
 
-  // 2. 【有料NFT】はいつでもOK
+  /* 2. 【月額プラン】light 以上はいつでも変換できる。
+     ここを見ていなかったため、月3,000円を払っている plus 会員でも
+     NFTを持っていないと「NFTが必要です」で止まっていた。
+     公式パス（NFT）は引き続き有効なので、どちらかを満たせばよい。 */
+  if (typeof emuHasPlan === "function" && emuHasPlan("light")) {
+    unlockButton(convertBtn, "変換を実行");
+    return;
+  }
+
+  // 3. 【有料NFT（公式パス）】はいつでもOK
   if (userType === "paidNFT" || isTestMode) {
     unlockButton(convertBtn, "変換を実行");
     return;
   }
 
-  // 3. 【無料NFT】は月曜日のみ
+  // 4. 【無料NFT】は月曜日のみ
   if (userType === "freeNFT") {
     if (day === 1) {
       unlockButton(convertBtn, "変換を実行");
@@ -14052,8 +14061,8 @@ function updateConvertButton() {
     return;
   }
 
-  // それ以外（NFTを持っていないウォレットユーザーなど）
-  lockButton(convertBtn, "NFTが必要です");
+  // それ以外（プランも公式パスも無い人）
+  lockButton(convertBtn, "Emu light 以上で使えます");
 }
 
 
@@ -14097,7 +14106,10 @@ async function handleConversion() {
   }
 
   // 無料ユーザーの月曜チェック
-  if (userType === "freeNFT" && new Date().getDay() !== 1 && !isTestMode) {
+  /* 月曜だけの制限は、プランに入っていない無料NFTの人にだけかける。
+     light 以上の会員はいつでも変換できる。 */
+  const _hasPlan = typeof emuHasPlan === "function" && emuHasPlan("light");
+  if (!_hasPlan && userType === "freeNFT" && new Date().getDay() !== 1 && !isTestMode) {
     alert("無料ユーザーは月曜日のみ変換可能です。");
     return;
   }
@@ -16728,6 +16740,12 @@ function _emuExchangeBuyBtn(tokenId, useJpyc, label, primary) {
       await tx.wait();
       const el = document.getElementById('exch-nft-' + tokenId);
       if (el) el.remove();
+      /* 体験星の数。星空はこの数を読んで星を出しているが、
+         これまでどこでも増やしておらず、交換しても永久に0のままだった。 */
+      try {
+        const n = Number(localStorage.getItem('emu_exchange_count') || 0) + 1;
+        localStorage.setItem('emu_exchange_count', String(n));
+      } catch (e) {}
       const room2Frame = document.getElementById('room2Frame');
       if (room2Frame && room2Frame.contentWindow) {
         room2Frame.contentWindow.postMessage({ type: 'NFT_PURCHASE' }, '*');
