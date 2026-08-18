@@ -47,6 +47,7 @@ input,select,textarea{width:100%;border:1.5px solid var(--line);border-radius:10
 
     <div class="tabs">
       <button data-tab="members" class="active">会員一覧</button>
+      <button data-tab="review">受領コメント</button>
       <button data-tab="refunds">返金申請</button>
       <button data-tab="kyc">本人確認</button>
       <button data-tab="dialogue">対話記録</button>
@@ -54,6 +55,7 @@ input,select,textarea{width:100%;border:1.5px solid var(--line);border-radius:10
     </div>
 
     <section id="tab-members"></section>
+    <section id="tab-review" class="hide"></section>
     <section id="tab-refunds" class="hide"></section>
     <section id="tab-kyc" class="hide"></section>
     <section id="tab-dialogue" class="hide"></section>
@@ -196,6 +198,81 @@ async function renderMembers() {
     };
   } catch (e) {
     el.innerHTML = '<p class="empty">会員一覧を読み込めませんでした（' + esc(e.message) + '）</p>';
+  }
+}
+
+/* ───────── 受領コメント ─────────
+   light の核。規約で「指定日から7営業日以内に1回返す」と約束している。
+   期限を過ぎたら翌月500円の割引になるので、期限が近い順に並べる。 */
+async function renderReview() {
+  const el = $("#tab-review");
+  el.innerHTML = '<p class="empty">読み込み中…</p>';
+  try {
+    const { items, capacity } = await api("/api/review/admin/list?status=all");
+    const pending = items.filter(i => i.status === "pending");
+    const overdue = pending.filter(i => i.overdue);
+    const owed = items.filter(i => i.late && !i.lateCompensated);
+
+    const head = '<div class="card"><h3>いまの状況</h3>'
+      + '<div class="row"><span>返すのを待っている</span><span><b>' + pending.length + '</b> 件</span></div>'
+      + '<div class="row"><span style="color:#c0392b;">期限を過ぎている</span>'
+      + '<span style="color:#c0392b;"><b>' + overdue.length + '</b> 件</span></div>'
+      + '<div class="row"><span>500円の割引が未処理</span><span><b>' + owed.length + '</b> 件</span></div>'
+      + '<div class="row"><span>受付枠</span><span>' + items.length + ' / ' + capacity + '</span></div>'
+      + '</div>';
+
+    if (!items.length) {
+      el.innerHTML = head + '<p class="empty">まだ依頼はありません。</p>';
+      return;
+    }
+
+    el.innerHTML = head + items.map(function (r) {
+      const late = r.overdue;
+      const done = r.status === "answered";
+      return '<div class="card"' + (late ? ' style="border-color:#c0392b;"' : '') + '>'
+        + '<div class="row"><span><b>' + (done ? "返信済み" : "未返信") + '</b></span>'
+        + '<span' + (late ? ' style="color:#c0392b;font-weight:700;"' : '') + '>期限 ' + fmt(r.dueAt)
+        + (late ? '（過ぎています）' : '') + '</span></div>'
+        + '<div class="row"><span>依頼日</span><span>' + fmt(r.requestedAt) + '</span></div>'
+        + '<div class="row"><span>投稿</span><span style="font-size:12px;">' + esc(r.postId) + '</span></div>'
+        + (done
+          ? '<p class="hint" style="white-space:pre-wrap;">' + esc(r.comment || "") + '</p>'
+            + '<div class="row"><span>返信日</span><span>' + fmt(r.answeredAt) + '</span></div>'
+            + (r.late && !r.lateCompensated
+                ? '<p class="hint" style="color:#c0392b;font-weight:700;">'
+                  + '期限を過ぎて返しました。翌月500円の割引が必要です。</p>'
+                  + '<button class="btn" data-comp="' + esc(r.id) + '">割引を渡したと記録する</button>'
+                : (r.lateCompensated ? '<p class="hint">割引を渡しました。</p>' : ''))
+          : '<textarea data-cmt="' + esc(r.id) + '" rows="4" placeholder="例）あなたの経験を受け取りました。特に「〇〇」という部分は、同じ状況にいる人が考えるきっかけになりそうです。"></textarea>'
+            + '<button class="btn primary" data-ans="' + esc(r.id) + '">この内容で返す</button>')
+        + '<p class="hint" style="font-size:11px;color:#999;">uid: ' + esc(r.uid) + '</p>'
+        + '</div>';
+    }).join("");
+
+    el.querySelectorAll("[data-ans]").forEach(function (b) {
+      b.onclick = async function () {
+        const id = b.dataset.ans;
+        const box = el.querySelector('[data-cmt="' + id + '"]');
+        const comment = (box && box.value || "").trim();
+        if (comment.length < 10) { alert("10文字以上でお願いします。"); return; }
+        b.disabled = true; b.textContent = "送っています…";
+        try {
+          const r = await api("/api/review/admin/" + id + "/answer", { method:"POST", body:{ comment } });
+          if (r.late) alert("返しました。ただし期限を過ぎています。翌月500円の割引が必要です。");
+          renderReview();
+        } catch (e) { alert("失敗しました（" + e.message + "）"); b.disabled = false; b.textContent = "この内容で返す"; }
+      };
+    });
+    el.querySelectorAll("[data-comp]").forEach(function (b) {
+      b.onclick = async function () {
+        if (!confirm("翌月500円の割引を渡したものとして記録します。\nStripe 側の処理はご自身で行ってください。")) return;
+        b.disabled = true;
+        try { await api("/api/review/admin/" + b.dataset.comp + "/compensate", { method:"POST", body:{} }); renderReview(); }
+        catch (e) { alert("失敗しました（" + e.message + "）"); b.disabled = false; }
+      };
+    });
+  } catch (e) {
+    el.innerHTML = '<p class="empty">読み込めませんでした（' + esc(e.message) + '）</p>';
   }
 }
 
@@ -471,9 +548,9 @@ async function renderMetrics() {
 document.querySelectorAll(".tabs button").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
-    ["members","refunds","kyc","dialogue","metrics"].forEach(t =>
+    ["members","review","refunds","kyc","dialogue","metrics"].forEach(t =>
       document.getElementById("tab-" + t).classList.toggle("hide", t !== b.dataset.tab));
-    ({ members: renderMembers, refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics })[b.dataset.tab]();
+    ({ members: renderMembers, review: renderReview, refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics })[b.dataset.tab]();
   };
 });
 

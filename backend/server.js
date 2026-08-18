@@ -2360,6 +2360,18 @@ app.get("/api/ichinichi/history", requireFirebaseUser, requireOwnAddress, async 
     });
     history.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
+    /* 見られる期間の制限（9/1から）。Emu light は過去30日分まで。
+       消してはいない。プランを上げると再び見えるようにするため、
+       記録そのものは残したまま、返す範囲だけを絞る（保持期間は1年）。 */
+    const ent = await entitlement.getEntitlement(req.identity.uid, req.identity.account);
+    let hiddenOlder = 0;
+    if (entitlement.enforcing() && !entitlement.atLeast(ent.plan, "plus")) {
+      const limitDate = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      const before = history.length;
+      history = history.filter((d) => (d.date || "") >= limitDate);
+      hiddenOlder = before - history.length;
+    }
+
     // 連続日数: 公開かつ学び・予定がある日を新しい順に連続カウント
     const sharedDates = history
       .filter((day) => day.visibility === "public" && day.learning.trim() && day.items.length)
@@ -2386,6 +2398,12 @@ app.get("/api/ichinichi/history", requireFirebaseUser, requireOwnAddress, async 
 
     return res.json({
       history,
+      /* 見えていない古い記録があることを伝える。黙って消えたように見せない。
+         プランを上げれば再び見える。 */
+      hiddenOlder,
+      hiddenNote: hiddenOlder > 0
+        ? "30日より前の記録が " + hiddenOlder + " 日ぶんあります。Emu plus 以上で、また見られるようになります。"
+        : null,
       stats: {
         streak,
         learningCount: history.filter((day) => day.learning.trim()).length,
