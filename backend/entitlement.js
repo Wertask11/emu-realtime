@@ -273,9 +273,16 @@ function createEntitlement(deps) {
   /**
    * 施行のときに1回だけ実行する、最初の付与。
    *
-   *   公式パス（NFT）を持っている人 … plus
-   *   オーナー                      … pro（Emuを盛り上げるために全部使えるようにする）
-   *   それ以外                      … 何も配らない（無料の人のまま）
+   *   オーナー                        … pro（Emuを盛り上げるために全部使えるようにする。期限なし）
+   *   公式パス（NFT）を持っている人   … plus を6か月
+   *   施行日より前からいる人（それ以外）… light を6か月
+   *   施行日より後に来た人             … 何も配らない（見学から始まる）
+   *
+   * 重なる場合は上の段を採る（公式パスを優先）。
+   *
+   * 施行日前からいる人に light を渡すのは、制限を入れた翌日に
+   * 「昨日まで書けたものが書けない」を起こさないため。
+   * 宣伝で来てくれた人も、この期間内なら守られる。
    *
    * 公式パスの持ち主は Firestore の paid_users（小文字のウォレットアドレスが鍵）で見る。
    * すでに付与があるアカウントには触らない（二度実行しても増えない）。
@@ -295,21 +302,32 @@ function createEntitlement(deps) {
     const expiresAt = addMonths(startsAt, months);
     const accounts = await db.collection("ches_accounts").limit(2000).get();
 
-    const result = { plusTarget: 0, proTarget: 0, granted: 0, skipped: 0, noPass: 0 };
+    /* 「施行日より前からいる人」の基準。既定はいま。
+       宣伝の終わりに合わせて実行すれば、来てくれた人まで含められる。 */
+    const cutoff = o.cutoff ? new Date(o.cutoff) : new Date();
+
+    const result = { proTarget: 0, plusTarget: 0, lightTarget: 0, granted: 0, skipped: 0, tooNew: 0 };
     for (const doc of accounts.docs) {
-      const addr = String((doc.data() || {}).walletAddress || "").toLowerCase();
-      if (!addr) { result.noPass += 1; continue; }
+      const data = doc.data() || {};
+      const addr = String(data.walletAddress || "").toLowerCase();
 
       let plan = null;
-      if (owner && addr === owner) {
-        plan = "pro";                       // オーナーは全部使えるようにする
-      } else {
+      if (owner && addr && addr === owner) {
+        plan = "pro";                              // オーナーは全部使えるようにする
+      } else if (addr) {
         const pass = await db.collection("paid_users").doc(addr).get();
-        if (pass.exists) plan = "plus";     // 公式パス保有者
+        if (pass.exists) plan = "plus";            // 公式パス保有者（重なったらこちらが優先）
       }
-      if (!plan) { result.noPass += 1; continue; }
+      if (!plan) {
+        // 施行日より前からいる人には light を渡す
+        const createdAt = _toDate(data.createdAt);
+        if (createdAt && createdAt.getTime() < cutoff.getTime()) plan = "light";
+      }
+      if (!plan) { result.tooNew += 1; continue; }   // 施行日より後に来た人
 
-      if (plan === "pro") result.proTarget += 1; else result.plusTarget += 1;
+      if (plan === "pro") result.proTarget += 1;
+      else if (plan === "plus") result.plusTarget += 1;
+      else result.lightTarget += 1;
 
       const ref = db.collection(GRANTS_COL).doc(doc.id);
       const exists = await ref.get();
@@ -317,7 +335,7 @@ function createEntitlement(deps) {
       if (!dryRun) {
         const rec = {
           uid: doc.id, plan,
-          source: plan === "pro" ? "owner" : "official-pass",
+          source: plan === "pro" ? "owner" : (plan === "plus" ? "official-pass" : "founding"),
           walletAddress: addr,
           startsAt,
           grantedBy: label, createdAt: new Date()
@@ -332,6 +350,7 @@ function createEntitlement(deps) {
     }
     return {
       dryRun, months,
+      cutoff: cutoff.toISOString(),
       startsAt: startsAt.toISOString(),
       expiresAt: expiresAt.toISOString(),
       scanned: accounts.size,

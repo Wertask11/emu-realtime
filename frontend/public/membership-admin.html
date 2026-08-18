@@ -130,8 +130,9 @@ async function renderMembers() {
        「公式パスを持っている人」なので、有料会員がいなくても配る相手はいる。 */
     const grant = '<div class="card" style="border:2px solid #f08300;background:#fff8f0;">'
       + '<h3 style="color:#b45309;">最初の付与（9月1日の制限に備える）</h3>'
-      + '<p class="hint">公式パス（NFT）をお持ちの方に Emu plus を6か月、オーナーに Emu pro を期限なしで渡します。'
-      + 'それ以外の方には何も渡しません（無料のまま）。二度押しても増えません。</p>'
+      + '<p class="hint">オーナーに Emu pro（期限なし）、公式パス（NFT）をお持ちの方に Emu plus を6か月、'
+      + 'それ以外の既存の方に Emu light を6か月お渡しします。<b>重なる場合は公式パスを優先します。</b><br>'
+      + '実行した時点より後に登録した方には渡しません。二度押しても増えません。</p>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">'
       + '<button id="grantDry" class="btn">まず人数を数える（配らない）</button>'
       + '<button id="grantRun" class="btn" style="background:#b45309;color:#fff;">実際に配る</button>'
@@ -179,12 +180,13 @@ async function renderMembers() {
         });
         out.innerHTML = (dryRun ? "<b>数えただけです（まだ配っていません）</b><br>" : "<b>配りました</b><br>")
           + "見たアカウント " + r.scanned + " 件<br>"
-          + "Emu plus を渡す（公式パス保有者）: <b>" + r.plusTarget + " 人</b><br>"
-          + "Emu pro を渡す（オーナー）: <b>" + r.proTarget + " 人</b><br>"
+          + "Emu pro（オーナー）: <b>" + r.proTarget + " 人</b><br>"
+          + "Emu plus（公式パス保有者）: <b>" + r.plusTarget + " 人</b><br>"
+          + "Emu light（それ以外の既存の方）: <b>" + r.lightTarget + " 人</b><br>"
           + (dryRun ? "配る予定" : "配った") + ": <b>" + r.granted + " 件</b>　"
           + "すでに配ってあった: " + r.skipped + " 件<br>"
-          + "公式パスなし（何も渡さない）: " + r.noPass + " 人<br>"
-          + "plus の期限: " + fmt(r.expiresAt);
+          + "対象外（実行時点より後に登録）: " + r.tooNew + " 人<br>"
+          + "light と plus の期限: " + fmt(r.expiresAt);
         if (!dryRun) renderMembers();
       } catch (e) {
         out.textContent = "失敗しました（" + e.message + "）";
@@ -192,7 +194,8 @@ async function renderMembers() {
     }
     $("#grantDry").onclick = () => runGrant(true);
     $("#grantRun").onclick = () => {
-      if (!confirm("実際に配ります。\n\n公式パス保有者に Emu plus（6か月）、オーナーに Emu pro（期限なし）。\n"
+      if (!confirm("実際に配ります。\n\nオーナーに pro（期限なし）、公式パス保有者に plus（6か月）、"
+        + "それ以外の既存の方に light（6か月）。重なる場合は公式パスを優先します。\n"
         + "先に「まず人数を数える」で確認しましたか？")) return;
       runGrant(false);
     };
