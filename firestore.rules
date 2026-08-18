@@ -61,6 +61,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* 利用資格の付与（Founding Emuer など）。
+       決済を通さずに使える段を渡すレコードなので、
+       クライアントから書けると誰でも上の段を名乗れてしまう。
+       書けるのはサーバー（Admin SDK）だけ。自分の分だけ読める。 */
+    match /entitlements/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     // Stripe イベントの冪等性記録。クライアントからは一切触らせない。
     match /billing_events/{document=**} {
       allow read, write: if false;

@@ -462,6 +462,29 @@ function createBillingRouter(deps) {
     }
   });
 
+  /* Founding Emuer への付与を配る。施行のときに1回だけ使う。
+     既定は空打ち（dryRun）で、何人に配ることになるのかを先に見られる。
+     実際に配るときだけ { dryRun: false } を送る。 */
+  router.post("/admin/founding/grant", requireOwner, async (req, res) => {
+    try {
+      if (!entitlement || typeof entitlement.grantFounding !== "function") {
+        return res.status(503).json({ error: "ENTITLEMENT_UNAVAILABLE" });
+      }
+      const body = req.body || {};
+      const result = await entitlement.grantFounding({
+        cutoff: body.cutoff || new Date(),
+        months: body.months,
+        plan: body.plan,
+        grantedBy: body.grantedBy,
+        dryRun: body.dryRun !== false
+      });
+      return res.json({ ok: true, ...result });
+    } catch (e) {
+      console.error("founding grant error:", e.message);
+      return res.status(400).json({ error: e.message || "GRANT_FAILED" });
+    }
+  });
+
   router.get("/admin/refunds", requireOwner, async (req, res) => {
     try {
       const status = String(req.query.status || "pending");

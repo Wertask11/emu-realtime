@@ -24,31 +24,12 @@ const LIVE_STATUS = new Set(["active", "trialing", "past_due"]);
 
 const CACHE_MS = 60 * 1000;   // Firestore の読み取りを減らす。60秒で十分。
 
+// 付与の置き場。運営（サーバー）だけが書ける。
+const GRANTS_COL = "entitlements";
+
 function createEntitlement(deps) {
   const db = deps && deps.db;
   const cache = new Map();
-
-  /* Founding Emuer の設定。
-     EMU_FOUNDING_CUTOFF … この日時より前に作られたアカウントが対象（ISO文字列）
-     EMU_FOUNDING_MONTHS … 何か月ただで渡すか（既定 6）
-     EMU_FOUNDING_PLAN   … 渡す段（既定 light）
-     CUTOFF が無いあいだは Founding は誰にも付かない。 */
-  function foundingConfig() {
-    const raw = String(process.env.EMU_FOUNDING_CUTOFF || "").trim();
-    if (!raw) return null;
-    const cutoff = new Date(raw);
-    if (isNaN(cutoff.getTime())) {
-      console.warn("⚠️ EMU_FOUNDING_CUTOFF が日時として読めません:", raw);
-      return null;
-    }
-    const months = Number(process.env.EMU_FOUNDING_MONTHS || 6);
-    const plan = String(process.env.EMU_FOUNDING_PLAN || "light");
-    return {
-      cutoff,
-      months: months > 0 ? months : 6,
-      plan: PLAN_RANK[plan] === undefined ? "light" : plan
-    };
-  }
 
   function _toDate(v) {
     if (!v) return null;
@@ -59,22 +40,29 @@ function createEntitlement(deps) {
     return null;
   }
 
-  function addMonths(date, months) {
-    const d = new Date(date.getTime());
-    d.setMonth(d.getMonth() + months);
-    return d;
-  }
+  /* 付与のほう。entitlements/{uid} を読む。
 
-  /* 付与のほう。Founding Emuer なら、いつまで何が使えるかを返す。 */
-  function foundingOf(accountData) {
-    const conf = foundingConfig();
-    if (!conf || !accountData) return null;
-    const createdAt = _toDate(accountData.createdAt);
-    if (!createdAt) return null;
-    if (createdAt.getTime() >= conf.cutoff.getTime()) return null;   // 施行後に来た人は対象外
-    const until = addMonths(conf.cutoff, conf.months);
-    if (Date.now() >= until.getTime()) return null;                  // 期間が終わっている
-    return { plan: conf.plan, until };
+     以前は ches_accounts.createdAt から毎回その場で判定していたが、やめた。
+     基準日を変えたときやデータが揺れたときに、誰にいつ何を渡したのかを
+     追えなくなるため。付与は施行のときに1件ずつ書き、以後はそれを読むだけにする。
+     このレコードは運営（サーバー）しか書けない。 */
+  async function grantOf(uid) {
+    if (!db || !uid) return null;
+    try {
+      const snap = await db.collection(GRANTS_COL).doc(uid).get();
+      if (!snap.exists) return null;
+      const v = snap.data() || {};
+      if (PLAN_RANK[v.plan] === undefined) return null;
+      const starts = _toDate(v.startsAt);
+      const expires = _toDate(v.expiresAt);
+      const now = Date.now();
+      if (starts && now < starts.getTime()) return null;   // まだ始まっていない
+      if (expires && now >= expires.getTime()) return null; // もう終わっている
+      return { plan: v.plan, source: v.source || "grant", until: expires };
+    } catch (e) {
+      console.warn("利用資格: 付与を読めませんでした:", e.message);
+      return null;
+    }
   }
 
   /**
@@ -103,25 +91,18 @@ function createEntitlement(deps) {
       }
     }
 
-    let account = accountData || null;
-    if (!account && db) {
-      try {
-        const acc = await db.collection("ches_accounts").doc(uid).get();
-        if (acc.exists) account = acc.data();
-      } catch (e) {}
-    }
-    const founding = foundingOf(account);
+    const granted = await grantOf(uid);
 
     // 契約と付与のうち、上の段のほうを採る
     let plan = "guest", source = "none";
     if (paid) { plan = paid; source = "stripe"; }
-    if (founding && PLAN_RANK[founding.plan] > PLAN_RANK[plan]) { plan = founding.plan; source = "founding"; }
+    if (granted && PLAN_RANK[granted.plan] > PLAN_RANK[plan]) { plan = granted.plan; source = granted.source; }
 
     const value = {
       plan,
       source,
       status,
-      foundingUntil: founding ? founding.until.toISOString() : null
+      foundingUntil: granted && granted.until ? granted.until.toISOString() : null
     };
     cache.set(uid, { value, expiresAt: Date.now() + CACHE_MS });
     return value;
@@ -157,7 +138,64 @@ function createEntitlement(deps) {
     };
   }
 
-  return { getEntitlement, requirePlan, forget, atLeast, PLAN_RANK };
+  function addMonths(date, months) {
+    const d = new Date(date.getTime());
+    d.setMonth(d.getMonth() + months);
+    return d;
+  }
+
+  /**
+   * Founding Emuer への付与を配る。施行のときに1回だけ実行する。
+   *
+   * cutoff より前に作られたアカウントに、light を months か月ぶん渡す。
+   * すでに付与があるアカウントには触らない（二度実行しても増えない）。
+   *
+   * dryRun のときは書き込まず、対象の人数だけ数える。
+   * 「何人に配ることになるのか」を先に見てから実行できるようにするため。
+   */
+  async function grantFounding(opts) {
+    const o = opts || {};
+    const cutoff = o.cutoff instanceof Date ? o.cutoff : new Date(o.cutoff);
+    if (isNaN(cutoff.getTime())) throw new Error("BAD_CUTOFF");
+    const months = Number(o.months) > 0 ? Number(o.months) : 6;
+    const plan = PLAN_RANK[o.plan] === undefined ? "light" : o.plan;
+    const label = String(o.grantedBy || "founding");
+    const dryRun = o.dryRun !== false;   // 既定は空打ち。うっかり配らないように
+    if (!db) throw new Error("NO_DB");
+
+    const expiresAt = addMonths(cutoff, months);
+    const accounts = await db.collection("ches_accounts").limit(2000).get();
+
+    let target = 0, granted = 0, skipped = 0;
+    for (const doc of accounts.docs) {
+      const createdAt = _toDate((doc.data() || {}).createdAt);
+      if (!createdAt || createdAt.getTime() >= cutoff.getTime()) continue;   // 施行後の人は対象外
+      target += 1;
+      const ref = db.collection(GRANTS_COL).doc(doc.id);
+      const exists = await ref.get();
+      if (exists.exists) { skipped += 1; continue; }                          // すでに配ってある
+      if (!dryRun) {
+        await ref.set({
+          uid: doc.id, plan, source: "founding",
+          startsAt: new Date(), expiresAt,
+          grantedBy: label, createdAt: new Date()
+        });
+        forget(doc.id);
+      }
+      granted += 1;
+    }
+    return {
+      dryRun, plan, months,
+      cutoff: cutoff.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      scanned: accounts.size,
+      target,                 // 対象になる人数
+      granted,                // 実際に配った（空打ちなら配る予定の）人数
+      skipped                 // すでに付与があって触らなかった人数
+    };
+  }
+
+  return { getEntitlement, requirePlan, forget, atLeast, grantFounding, PLAN_RANK, GRANTS_COL };
 }
 
 module.exports = { createEntitlement, PLAN_RANK };
