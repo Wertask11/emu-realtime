@@ -129,26 +129,45 @@ service cloud.firestore {
       return /databases/$(database)/documents/plan_usage/$(request.auth.uid + '_r_' + usageKey());
     }
 
-    /* 書いたあとの回数が上限以内か。
-       施行日より前は数えない（掲示した約束どおり）。 */
+    /* 書く前の回数。記録がまだ無ければ0。 */
+    function usedBefore(kind) {
+      return exists(usagePath()) ? get(usagePath()).data.get(kind, 0) : 0;
+    }
+
+    /* 書いたあとの回数が「ちょうど1つ増えていて」「上限以内」か。
+       施行日より前は数えない（掲示した約束どおり）。
+
+       上限以内かだけを見ていたときは、記録を増やさずに投稿すれば
+       0 <= 2 で何度でも通ってしまった。
+       ちょうど1増えることまで確かめないと、上限を守れない。 */
     function hasRoom(kind) {
       return !enforcing()
         || (limitFor(kind) > 0
+            && getAfter(usagePath()).data.get(kind, 0) == usedBefore(kind) + 1
             && getAfter(usagePath()).data.get(kind, 0) <= limitFor(kind));
     }
 
+    /* 回数が正しい形かを確かめる。負の数を入れて上限を回避されないようにする。 */
+    function usageSane(d) {
+      return d.get('post', 0) is int && d.get('post', 0) >= 0
+        && d.get('request', 0) is int && d.get('request', 0) >= 0
+        && d.get('answer', 0) is int && d.get('answer', 0) >= 0;
+    }
+
     /* 使用回数の記録。本人だけが、自分の分を1つずつ増やせる。
-       減らすことも、まとめて増やすこともできない。 */
+       減らすことも、まとめて増やすことも、負の数を入れることもできない。 */
     match /plan_usage/{docId} {
       allow read: if signedIn();
       allow create: if signedIn()
         && docId == request.auth.uid + '_r_' + usageKey()
+        && usageSane(request.resource.data)
         && request.resource.data.get('post', 0) <= 1
         && request.resource.data.get('request', 0) <= 1
         && request.resource.data.get('answer', 0) <= 1;
       allow update: if signedIn()
         && docId == request.auth.uid + '_r_' + usageKey()
         && changedOnly(['post', 'request', 'answer', 'updatedAt'])
+        && usageSane(request.resource.data)
         && request.resource.data.get('post', 0) >= resource.data.get('post', 0)
         && request.resource.data.get('post', 0) <= resource.data.get('post', 0) + 1
         && request.resource.data.get('request', 0) >= resource.data.get('request', 0)

@@ -541,17 +541,24 @@ function createBillingRouter(deps) {
       const win = await entitlement.usageWindow(uid);
       const since = win.start;
 
-      const j = { received: 0, deliveredTo: 0, improved: 0, posted: 0, helpful: 0, answered: 0 };
+      /* 今月ぶんとして数えられるのは「今月つくったもの」だけ。
+         反応した日を記録していないので、そこは累計として扱う。 */
+      const j = { deliveredTo: 0, improved: 0, posted: 0, helpful: 0, answered: 0, receivedTotal: 0, error: false };
 
-      // 受け取った学び：自分が「役に立った」を押した知識の数
+      /* 受け取った学び。
+         「役に立った」を押した日は記録していないため、今月ぶんだけを
+         正確に数えることができない。近い数を出して「今月」と言うと、
+         plus の主力なのに数字が合っていないことになる。
+         そこで、ここは累計として数え、文面でも累計だと言い切る。 */
       try {
-        /* 期間で絞る。絞らないと『今月18個』と出しながら累計を見せてしまう。
-           Good を押した日は記録していないため、投稿の作成日で近似する。 */
         const got = await db.collection("posts")
-          .where("goodUsers", "array-contains", address)
-          .where("createdAt", ">=", since).limit(500).get();
-        j.received = got.size;
-      } catch (e) {}
+          .where("goodUsers", "array-contains", address).limit(500).get();
+        j.receivedTotal = got.size;
+      } catch (e) {
+        // 握りつぶすと本番で全部0になっていても気づけない
+        console.error("学びの軌跡: 受け取った学びを数えられません:", e.message);
+        j.error = true;
+      }
 
       // 届けた相手の数（重複なし）と、自分の投稿・改善が育った数
       try {
@@ -566,25 +573,37 @@ function createBillingRouter(deps) {
           (Array.isArray(p.goodUsers) ? p.goodUsers : []).forEach(a => { if (a) people.add(String(a).toLowerCase()); });
         });
         j.deliveredTo = people.size;
-      } catch (e) {}
+      } catch (e) {
+        console.error("学びの軌跡: 自分の投稿を数えられません:", e.message);
+        j.error = true;
+      }
 
-      // 誰かの募集に答えた数
+      // 誰かの募集に答えた数（今月つくったもの）
       try {
         const ans = await db.collection("knowledge_answers")
           .where("answerAuthor", "==", address)
           .where("createdAt", ">=", since).limit(500).get();
         j.answered = ans.size;
-      } catch (e) {}
+      } catch (e) {
+        console.error("学びの軌跡: 募集への回答を数えられません:", e.message);
+        j.error = true;
+      }
 
-      /* 読み上げる一文。数がゼロの項目は入れない。
-         中身のない文を作らないため。 */
+      /* 読み上げる一文。
+         今月ぶんとして言えるのは「今月つくったもの」だけ。
+         受け取った学びは押した日を持っていないので、別の一文で累計として出す。
+         数がゼロの項目は入れない（中身のない文を作らない）。 */
       const parts = [];
-      if (j.received > 0)    parts.push(j.received + "個の知識を受け取り");
-      if (j.deliveredTo > 0) parts.push(j.deliveredTo + "人へ経験を届け");
+      if (j.posted > 0)      parts.push(j.posted + "つの知識を届け");
+      if (j.deliveredTo > 0) parts.push(j.deliveredTo + "人の役に立ち");
+      if (j.answered > 0)    parts.push(j.answered + "件の募集に答えました");
       if (j.improved > 0)    parts.push(j.improved + "つの考えを改善しました");
-      const sentence = parts.length
-        ? "あなたは、" + parts.join("、") + (j.improved > 0 ? "" : "ました") + "。"
-        : "まだ記録がありません。ひとつ書いてみることから始まります。";
+      let sentence = parts.length
+        ? "今月あなたは、" + parts.join("、") + (/ました$/.test(parts[parts.length - 1]) ? "" : "ました") + "。"
+        : "今月はまだ記録がありません。ひとつ書いてみることから始まります。";
+      if (j.receivedTotal > 0) {
+        sentence += "\nこれまでに受け取った学びは " + j.receivedTotal + " 件です。";
+      }
 
       return res.json({
         ok: true, plan: ent.plan,
@@ -621,6 +640,9 @@ function createBillingRouter(deps) {
       const result = await entitlement.grantInitial({
         months: body.months,
         grantedBy: body.grantedBy,
+        /* 「いつまでに登録した人か」の基準。渡さなければ制限が始まる日（9/1）になる。
+           実行した時刻を基準にすると、いつ押したかで対象が変わってしまう。 */
+        cutoff: body.cutoff,
         dryRun: body.dryRun !== false
       });
       return res.json({ ok: true, ...result });

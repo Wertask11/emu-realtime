@@ -315,9 +315,12 @@ function createEntitlement(deps) {
     const expiresAt = addMonths(startsAt, months);
     const accounts = await db.collection("ches_accounts").limit(2000).get();
 
-    /* 「施行日より前からいる人」の基準。既定はいま。
-       宣伝の終わりに合わせて実行すれば、来てくれた人まで含められる。 */
-    const cutoff = o.cutoff ? new Date(o.cutoff) : new Date();
+    /* 「施行日より前からいる人」の基準。
+       既定は制限が始まる日（9/1）。実行した時刻を基準にすると、
+       いつ押したかで対象が変わってしまい、誰が Founding なのかが
+       運営の操作タイミング次第になる。決めた日を基準にする。 */
+    const cutoff = o.cutoff ? new Date(o.cutoff) : new Date(ENFORCE_FROM);
+    if (isNaN(cutoff.getTime())) throw new Error("BAD_CUTOFF");
 
     const result = { proTarget: 0, plusTarget: 0, lightTarget: 0, granted: 0, skipped: 0, tooNew: 0 };
     for (const doc of accounts.docs) {

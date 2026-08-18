@@ -189,6 +189,26 @@ test("二度配っても増えない", async () => {
   assert.strictEqual(again.skipped, 1);
 });
 
+test("付与の基準日は、渡さなければ制限の開始日になる", async () => {
+  const { ENFORCE_FROM } = require("./entitlement");
+  const before = ENFORCE_FROM - 10 * DAY;   // 制限開始より前に登録
+  const after = ENFORCE_FROM + 10 * DAY;    // 制限開始より後に登録
+  const db = makeDb({
+    ches_accounts: {
+      old: { walletAddress: "0xaaa", createdAt: before },
+      neo: { walletAddress: "0xbbb", createdAt: after }
+    },
+    paid_users: {}
+  });
+  const e = createEntitlement({ db });
+  // 実行した時刻ではなく、決めた日（制限の開始日）が基準になること
+  const r = await at("2026-10-15T12:00:00+09:00", () =>
+    e.grantInitial({ months: 6, dryRun: true }));
+  assert.strictEqual(r.lightTarget, 1, "制限開始より前の人だけが対象");
+  assert.strictEqual(r.tooNew, 1, "あとから来た人は、いつ実行しても対象外");
+  assert.strictEqual(r.cutoff, new Date(ENFORCE_FROM).toISOString());
+});
+
 test("空打ちでは書き込まない", async () => {
   const now = Date.now();
   const db = makeDb({

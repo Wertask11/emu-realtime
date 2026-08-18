@@ -1,0 +1,56 @@
+{
+  "//": [
+    "複合インデックス。2つ以上の条件で絞る問い合わせには、これが要る。",
+    "無いと Firestore は失敗を返し、学びの軌跡や一覧が空になる。",
+    "firebase deploy --only firestore:indexes で反映する。",
+    "コンソールから作る場合は、失敗時のログに出るリンクからでもよい。"
+  ],
+  "indexes": [
+    {
+      "//": "学びの軌跡：今月つくった自分の投稿",
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "address", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "学びの軌跡：今月答えた募集",
+      "collectionGroup": "knowledge_answers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "answerAuthor", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "知識を読む：新着順",
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "recommended", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "会員一覧の合図：自分が出した改善",
+      "collectionGroup": "post_changes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fromAddress", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "受領コメント：自分の今期の依頼",
+      "collectionGroup": "review_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "windowKey", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
