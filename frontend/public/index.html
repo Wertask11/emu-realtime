@@ -4532,6 +4532,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <button type="button" role="menuitem" onclick="accountGo('profile')">プロフィール</button>
         <button type="button" role="menuitem" onclick="accountGo('themes')">興味のあるテーマ</button>
         <button type="button" role="menuitem" onclick="accountGo('sessions')">対話の予定</button>
+        <!-- 気づいたことを送る口。スマホでは画面に浮かぶボタンが知識の本文に
+             かぶっていたので、こちらへ移した。 -->
+        <button type="button" role="menuitem" onclick="accountGo('feedback')">ひとこと</button>
         <div class="emu-account-sep"></div>
         <button type="button" role="menuitem" onclick="accountGo('login')">ログイン方法</button>
         <button type="button" role="menuitem" class="danger" onclick="accountGo('logout')">ログアウト</button>
@@ -6680,6 +6683,36 @@ function emuWriteErrorMessage(e) {
    ここでルールと同じ場所を読み、判定も書き込む値も一本化する。 */
 var _emuIdentity = null;
 
+/* ches_accounts/{uid} を本人の分だけ作る。
+   アドレスの決め方は CHES.deriveWalletAddress と同じにする。
+   ここを別の決め方にすると、端末ごとに違う名義ができてしまう。 */
+async function _emuCreateAccountDoc(user) {
+  try {
+    const derive = window.CHES && window.CHES.deriveWalletAddress;
+    if (typeof derive !== 'function') return null;
+    const addr = derive(user.uid);
+    const now = Date.now();
+    const ref = window.fbLib.doc(window.db, 'ches_accounts', user.uid);
+    await window.fbLib.setDoc(ref, {
+      uid: user.uid,
+      provider: (user.providerData && user.providerData[0] && user.providerData[0].providerId) || 'unknown',
+      displayName: user.displayName || '',
+      email: user.email || '',
+      photoURL: user.photoURL || '',
+      walletAddress: addr,
+      chesAddress: addr,
+      membership: { tier: 'free', offchain: true, issuedAt: now },
+      createdAt: now,
+      lastLogin: now
+    });
+    console.warn('アカウントの記録が無かったので作りました:', user.uid);
+    return await window.fbLib.getDoc(ref);
+  } catch (e) {
+    console.warn('アカウントの記録を作れませんでした:', e && (e.message || e));
+    return null;
+  }
+}
+
 async function emuMyIdentity() {
   const user = await emuEnsureSignedIn();
   if (!user || !window.db || !window.fbLib) return null;
@@ -6691,8 +6724,15 @@ async function emuMyIdentity() {
     console.warn('自分のアカウントを読めませんでした:', e && (e.message || e));
     return null;
   }
-  // ルールの hasAccount() と同じ条件。無ければ書き込みはどのみち通らない。
-  if (!snap.exists()) return null;
+  /* ルールの hasAccount() と同じ条件。これが無いと、Good も Change も投稿も、
+     何を書いても permission-denied になる。
+     ウォレットで入り直したときなど、Firebaseのセッションだけ先にできて
+     この記録が無い状態がありうるので、その場で作って復旧する。
+     （ルールも「本人のuidに限り作成してよい」と認めている） */
+  if (!snap.exists()) {
+    snap = await _emuCreateAccountDoc(user);
+    if (!snap) return null;
+  }
   const d = snap.data() || {};
   const wallet = String(d.walletAddress || '').toLowerCase();
   const ches = String(d.chesAddress || d.walletAddress || '').toLowerCase();
@@ -6723,6 +6763,80 @@ async function emuMyIdentity() {
 
 // 描画中など、待てない場所から使う。まだ読めていなければ null。
 function emuIdentityNow() { return _emuIdentity; }
+
+/* ───── 保存を拒否されたとき、どの条件で弾かれたのかをその場で調べる ─────
+
+   Firestore は「permission-denied」としか返さないので、
+   ルールのどの条件で落ちたのかは、同じ判定をこちらでやり直すしかない。
+   これが無いと「保存できませんでした」の一言だけが残り、
+   原因の見当をつけては外す、を繰り返すことになる。 */
+async function emuWhyDenied(kind, postId) {
+  const listField = kind === 'change' ? 'changeUsers' : 'goodUsers';
+  const label = kind === 'change' ? '改善案' : '「役に立った」';
+
+  const user = window.auth && window.auth.currentUser;
+  if (!user) {
+    return { message: 'ログインの状態が切れていました。\n\n一度ページを開き直して、もう一度お試しください。' };
+  }
+
+  // 本人情報を読み直す。古いまま判断すると同じ間違いを繰り返す。
+  _emuIdentity = null;
+  const me = await emuMyIdentity();
+  if (!me) {
+    return { message: 'アカウントの情報を読めませんでした。\n\n一度ログアウトして入り直すと直ることがあります。' };
+  }
+
+  let post;
+  try {
+    const s = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'posts', postId));
+    if (!s.exists()) return { message: 'この知識は削除されたようです。' };
+    post = s.data() || {};
+  } catch (e) {
+    return { message: emuWriteErrorMessage(e) };
+  }
+
+  // ルール: !isMyWallet(resource.data.address)
+  if (emuIsMine(post.address, me)) {
+    return { message: '自分の投稿に' + label + 'は送れません。' };
+  }
+  // ルール: !(wallet() in resource.data[listField])
+  if (emuListHasMe(post[listField], me)) {
+    return { message: 'すでに' + label + 'を送っています。' };
+  }
+
+  /* ここまで全部通るなら、送った時点で使っていた名義が違っていたということ。
+     emuMyIdentity() が正しい名義に直したので、一度だけやり直す。 */
+  return { retry: true };
+}
+
+/* 反応（Good / Change）を保存する。拒否されたら理由を調べ、
+   直せるものは直して一度だけやり直す。
+   最後まで駄目なら、原因が分かる言葉と手がかりを付けて投げ返す。 */
+async function emuSaveReaction(kind, postId, write) {
+  try {
+    await write();
+    return;
+  } catch (e) {
+    if (!e || e.code !== 'permission-denied') throw e;
+    console.warn('保存を拒否されました。理由を調べます:', kind, postId);
+    const found = await emuWhyDenied(kind, postId);
+    if (found.retry) {
+      try {
+        await write();
+        console.log('名義を直してやり直したら保存できました。');
+        return;
+      } catch (e2) {
+        const me = emuIdentityNow();
+        const hint = me ? '（ログイン: ' + me.uid.slice(0, 12) + '… / 名義: ' + me.wallet.slice(0, 10) + '…）' : '';
+        e2.emuMessage = 'まだ保存できませんでした。\n\n'
+          + 'お手数ですが、この文をそのままお知らせください。\n' + hint;
+        throw e2;
+      }
+    }
+    e.emuMessage = found.message;
+    throw e;
+  }
+}
 
 // 表示用。まだ本人が確定していないときは、これまでどおり画面の値で代用する。
 function emuAliasesNow() {
@@ -13675,7 +13789,10 @@ async function attachReactionHandlers(postElement) {
       }
 
       openGoodReasonSheet(postElement, postData, async ({ reasons, note }) => {
-      try {
+      /* やり直せるように、書き込みを関数にしておく。
+         名義は毎回その時点の本人から取る（途中で直ることがあるため）。 */
+      const writeGood = async () => {
+        const mine = emuIdentityNow() || me;
         const postRef = window.fbLib.doc(window.db, "posts", postId);
         const impactRef = window.fbLib.doc(window.fbLib.collection(window.db, "post_good_impacts"));
         const batch = window.fbLib.writeBatch(window.db);
@@ -13684,16 +13801,19 @@ async function attachReactionHandlers(postElement) {
           postTitle:postData.title || "",
           postAuthor:String(postData.address || "").toLowerCase(),
           // ルールは goodUsers に walletAddress が入ることを求めるので、名義をそろえる
-          fromAddress:me.wallet,
+          fromAddress:mine.wallet,
           reasons,
           note,
           createdAt:new Date()
         });
         batch.update(postRef, {
           goodCount: window.fbLib.increment(1),
-          goodUsers: window.fbLib.arrayUnion(me.wallet)
+          goodUsers: window.fbLib.arrayUnion(mine.wallet)
         });
         await batch.commit();
+      };
+      try {
+        await emuSaveReaction('good', postId, writeGood);
 
         // ※Goodを「押した人」への加算は廃止（確定ルール=評価された投稿者が得る）。
         //   EMUERはサーバーの照合バッチが durable台帳(emuer_offchain)へ計上する。
@@ -13702,7 +13822,7 @@ async function attachReactionHandlers(postElement) {
         _spLogAdd({ type:'good', icon:'👍', title:'Good を送りました', detail: `「${(postData.title||'').slice(0,20)}」` });
         postData.goodCount = (Number(postData.goodCount) || 0) + 1;
         if (!Array.isArray(postData.goodUsers)) postData.goodUsers = [];
-        postData.goodUsers.push(me.wallet);
+        postData.goodUsers.push((emuIdentityNow() || me).wallet);
         const countEl = goodButton.querySelector('.good-count');
         const impactEl = postElement.querySelector('.post-helpful-count');
         const noteEl = postElement.querySelector('.post-value-note');
@@ -13714,7 +13834,7 @@ async function attachReactionHandlers(postElement) {
         console.log("✅ Firebase: Good記録完了");
       } catch (e) {
         console.error("Firebase Good Error:", e);
-        const _msg = emuWriteErrorMessage(e);
+        const _msg = e && e.emuMessage ? e.emuMessage : emuWriteErrorMessage(e);
         alert(_msg);
         window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"good", ok:false, error:_msg } }));
         throw e;
@@ -13748,7 +13868,9 @@ async function attachReactionHandlers(postElement) {
       }
 
       openChangeProposalSheet(postElement, postData, async ({ target, reason, proposal }) => {
-      try {
+      // Good と同じく、やり直せるように書き込みを関数にしておく
+      const writeChange = async () => {
+        const mine = emuIdentityNow() || me;
         const postRef = window.fbLib.doc(window.db, "posts", postId);
         // Changeの中身を保存。数字だけの反応にせず、投稿者が改善に使える形で残す
         const changeRef = window.fbLib.doc(window.fbLib.collection(window.db, "post_changes"));
@@ -13758,7 +13880,7 @@ async function attachReactionHandlers(postElement) {
           postTitle: postData.title || "",
           postAuthor: (postData.address || "").toLowerCase(),
           // ルールは changeUsers に walletAddress が入ることを求めるので、名義をそろえる
-          fromAddress: me.wallet,
+          fromAddress: mine.wallet,
           target,
           reason,
           proposal,
@@ -13768,9 +13890,12 @@ async function attachReactionHandlers(postElement) {
         });
         batch.update(postRef, {
           changeCount: window.fbLib.increment(1),
-          changeUsers: window.fbLib.arrayUnion(me.wallet)
+          changeUsers: window.fbLib.arrayUnion(mine.wallet)
         });
         await batch.commit();
+      };
+      try {
+        await emuSaveReaction('change', postId, writeChange);
 
         // ※Changeを「押した人」への加算は廃止（確定ルール=評価された投稿者が得る）。
         //   EMUERはサーバーの照合バッチが durable台帳(emuer_offchain)へ計上する。
@@ -13779,7 +13904,7 @@ async function attachReactionHandlers(postElement) {
         _spLogAdd({ type:'change', icon:'🤝', title:'Change を送りました', detail: `「${(postData.title||'').slice(0,20)}」` });
         postData.changeCount = (Number(postData.changeCount) || 0) + 1;
         if (!Array.isArray(postData.changeUsers)) postData.changeUsers = [];
-        postData.changeUsers.push(me.wallet);
+        postData.changeUsers.push((emuIdentityNow() || me).wallet);
         const countEl = changeButton.querySelector('.change-count');
         const impactEl = postElement.querySelector('.post-change-count');
         const noteEl = postElement.querySelector('.post-value-note');
@@ -13791,7 +13916,7 @@ async function attachReactionHandlers(postElement) {
         console.log("✅ Firebase: Change記録完了");
       } catch (e) {
         console.error("Firebase Change Error:", e);
-        const _msg = emuWriteErrorMessage(e);
+        const _msg = e && e.emuMessage ? e.emuMessage : emuWriteErrorMessage(e);
         alert(_msg);
         window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"change", ok:false, error:_msg } }));
         throw e;
@@ -15547,6 +15672,27 @@ function showEmuIchinichi() {
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
+/* スマホで、知識のiframeを画面にぴったり収める。
+
+   CSSは高さを calc(100dvh - 128px) と決め打ちしているが、
+   実際にiframeより上にあるもの（ヘッダー＋タブ）は端末によって
+   それより高く、その差のぶんだけiframeが画面の下へはみ出す。
+   はみ出すとページ全体が少しスクロールし、iframeの中で右下に
+   固定した「＋知識を届ける」が画面の外へ出てしまう。
+   決め打ちをやめて、実際の位置から測って収める。 */
+function emuFitKnowledgeFrame() {
+  const fr = document.getElementById('emuKnowledgeFrame');
+  if (!fr) return;
+  if (window.innerWidth > 760) { fr.style.height = ''; return; }  // パソコン・タブレットは触らない
+  if (!fr.offsetParent) return;                                   // 表示されていないと測れない
+  let top = 0;
+  for (let el = fr; el; el = el.offsetParent) top += el.offsetTop;
+  const height = Math.max(360, Math.round(window.innerHeight - top - 8));
+  fr.style.height = height + 'px';
+}
+window.addEventListener('resize', emuFitKnowledgeFrame);
+window.addEventListener('orientationchange', function () { setTimeout(emuFitKnowledgeFrame, 200); });
+
 function showEmuFeed(mode) {
   // 「今日のEmu」を通らずに直接ここへ来ることがあるので、本人の確定はここでも行う
   _emuHealSession();
@@ -15562,6 +15708,9 @@ function showEmuFeed(mode) {
     frame.contentWindow.postMessage({ type:'emu-knowledge-filter', mode:filterMode }, window.location.origin);
   }
   window.scrollTo({ top:0, behavior:'smooth' });
+  // 表示が確定してから測る（隠れている間は高さが取れない）
+  requestAnimationFrame(emuFitKnowledgeFrame);
+  setTimeout(emuFitKnowledgeFrame, 300);
 }
 
 function showEmuValueProfile() {
@@ -16646,6 +16795,11 @@ document.addEventListener('click', async (e) => {
 function accountGo(what) {
   closeAccountMenu();
   if (what === 'me') { openMeSheet(); return; }
+  // ひとこと（気づいたことを送る）。会員ページではなくその場で開く
+  if (what === 'feedback') {
+    if (typeof openEmuFeedback === 'function') openEmuFeedback();
+    return;
+  }
   if (what === 'logout') {
     if (typeof window.spLogout === 'function') window.spLogout();
     return;
@@ -21931,6 +22085,15 @@ body.emu-profile-open #emuFeedbackFab, body.emu-requests-open #emuFeedbackFab,
 body.emu-ichinichi-open #emuFeedbackFab, body.emu-discussion-open #emuFeedbackFab,
 body.emu-play-open #emuFeedbackFab { display: inline-flex; }
 #emuFeedbackFab:hover { color: #1a1840; border-color: #cfc9c0; transform: translateY(-1px); }
+/* スマホでは浮かぶボタンを出さない。知識の本文にかぶるうえ、
+   「＋知識を届ける」と右下で場所を取り合っていた。
+   入り口は右上のアカウントメニュー（対話の予定の下）へ移した。 */
+@media (max-width: 760px) {
+  body.emu-today-open #emuFeedbackFab, body.emu-knowledge-open #emuFeedbackFab,
+  body.emu-profile-open #emuFeedbackFab, body.emu-requests-open #emuFeedbackFab,
+  body.emu-ichinichi-open #emuFeedbackFab, body.emu-discussion-open #emuFeedbackFab,
+  body.emu-play-open #emuFeedbackFab { display: none; }
+}
 @media (max-width: 640px) {
   #emuFeedbackFab { right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); padding: 8px 12px; }
   .efb-fab-text { display: none; }
