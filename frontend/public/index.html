@@ -6666,6 +6666,84 @@ function emuWriteErrorMessage(e) {
   return '保存できませんでした。時間をおいて、もう一度お試しください。';
 }
 
+/* ───── 「自分」が誰かを、Firestoreのルールと同じ場所から取る ─────
+
+   これまで画面は window.connectedAccount（ログイン時に入れた値。古い値が
+   localStorage に残ることもある）だけを「自分」として扱っていた。
+   一方ルールは ches_accounts/{uid} の walletAddress と chesAddress を見ていて、
+   しかも「どちらの名義でも本人」と認める（isMyWallet）。
+
+   この2つがずれると、画面上はボタンが押せるのに書き込みだけ弾かれ、
+   利用者には「保存できませんでした」としか見えない。
+   パソコンで書いた知識にスマホで「役に立った」を押すと失敗したのはこれ。
+
+   ここでルールと同じ場所を読み、判定も書き込む値も一本化する。 */
+var _emuIdentity = null;
+
+async function emuMyIdentity() {
+  const user = await emuEnsureSignedIn();
+  if (!user || !window.db || !window.fbLib) return null;
+  if (_emuIdentity && _emuIdentity.uid === user.uid) return _emuIdentity;
+  let snap;
+  try {
+    snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', user.uid));
+  } catch (e) {
+    console.warn('自分のアカウントを読めませんでした:', e && (e.message || e));
+    return null;
+  }
+  // ルールの hasAccount() と同じ条件。無ければ書き込みはどのみち通らない。
+  if (!snap.exists()) return null;
+  const d = snap.data() || {};
+  const wallet = String(d.walletAddress || '').toLowerCase();
+  const ches = String(d.chesAddress || d.walletAddress || '').toLowerCase();
+  if (!wallet) return null;
+  _emuIdentity = {
+    uid: user.uid,
+    wallet: wallet,
+    ches: ches,
+    // ルールの isMyWallet と同じく、どちらの名義でも自分と見なす
+    aliases: (ches && ches !== wallet) ? [wallet, ches] : [wallet]
+  };
+  /* 画面が持っている「自分」が本人のどちらの名義でもないときは、ここで直す。
+     window.connectedAccount は40か所以上で「自分」として使われているので、
+     元を直さないと、保存の失敗だけでなく数え違いも別の場所で起き続ける。
+     （前の端末のアドレスが localStorage に残ったまま、
+       別のアカウントでログインした場合に起きる）
+     本人の名義のどちらかであれば、そのまま触らない。 */
+  const shown = (window.connectedAccount || '').toLowerCase();
+  if (shown !== wallet && _emuIdentity.aliases.indexOf(shown) === -1) {
+    console.warn('画面のアドレスが本人と違ったので直しました:', shown || '(なし)', '→', wallet);
+    window.connectedAccount = wallet;
+    try { window.currentUserId = wallet; } catch (e) {}
+    try { localStorage.setItem('emuWallet', wallet); } catch (e) {}
+    if (ches) { try { localStorage.setItem('ches_address', ches); } catch (e) {} }
+  }
+  return _emuIdentity;
+}
+
+// 描画中など、待てない場所から使う。まだ読めていなければ null。
+function emuIdentityNow() { return _emuIdentity; }
+
+// 表示用。まだ本人が確定していないときは、これまでどおり画面の値で代用する。
+function emuAliasesNow() {
+  const id = emuIdentityNow();
+  if (id) return id.aliases;
+  const fallback = (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+  return fallback ? [fallback] : [];
+}
+
+function emuIsMine(address, id) {
+  const a = String(address || '').toLowerCase();
+  const list = id ? id.aliases : emuAliasesNow();
+  return !!a && list.indexOf(a) !== -1;
+}
+
+function emuListHasMe(list, id) {
+  if (!Array.isArray(list)) return false;
+  const mine = id ? id.aliases : emuAliasesNow();
+  return list.some(v => mine.indexOf(String(v || '').toLowerCase()) !== -1);
+}
+
 async function emuAuthHeaders(json, options) {
   const interactive = !(options && options.interactive === false);
   let user = window.auth && window.auth.currentUser;
@@ -13567,8 +13645,9 @@ async function attachReactionHandlers(postElement) {
   const postId = postElement.dataset.id; 
   const postData = postElement.postData; // 投稿データ
   
-  // 今のアドレス（小文字にして比較しやすくする）
-  const myAddr = window.connectedAccount ? window.connectedAccount.toLowerCase() : null;
+  /* 「自分」は押された時点で emuMyIdentity() から取る。
+     ここで画面の値を control 変数に控えると、開いたまま放置して
+     ログインし直した場合に古い名義のまま書き込んでしまう。 */
 
   // 👍 Goodボタンの処理
   const goodButton = postElement.querySelector(".good-button");
@@ -13578,23 +13657,20 @@ async function attachReactionHandlers(postElement) {
         alert(message);
         window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"good", ok:false, error:message } }));
       };
-      if (!myAddr) return rejectGood("ウォレットを接続してください");
-
-      /* Firestore へ書く前に、ログインが生きているか確かめる。
-         画面は「ログイン済み」に見えていても、セッションだけ切れていることがある。
-         そのまま書きにいくと permission-denied になり、
-         利用者には理由の分からない失敗として見える。 */
-      if (!await emuEnsureSignedIn()) {
+      /* 「自分」はルールと同じ場所から取る。画面の値を使うと、
+         端末やログイン方法によって食い違い、書き込みだけ弾かれる。 */
+      const me = await emuMyIdentity();
+      if (!me) {
         return rejectGood("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");
       }
 
-      // 【不正防止1】自分の投稿には押せない
-      if (postData.address && postData.address.toLowerCase() === myAddr) {
+      // 【不正防止1】自分の投稿には押せない（別名義で書いた投稿も自分と見なす）
+      if (emuIsMine(postData.address, me)) {
         return rejectGood("自分の投稿にGoodは押せません！");
       }
 
       // 【不正防止2】1回しか押せない（Firebaseから届いたリストを確認）
-      if (postData.goodUsers && postData.goodUsers.includes(myAddr)) {
+      if (emuListHasMe(postData.goodUsers, me)) {
         return rejectGood("すでにGood済みです！");
       }
 
@@ -13607,14 +13683,15 @@ async function attachReactionHandlers(postElement) {
           postId,
           postTitle:postData.title || "",
           postAuthor:String(postData.address || "").toLowerCase(),
-          fromAddress:myAddr,
+          // ルールは goodUsers に walletAddress が入ることを求めるので、名義をそろえる
+          fromAddress:me.wallet,
           reasons,
           note,
           createdAt:new Date()
         });
         batch.update(postRef, {
           goodCount: window.fbLib.increment(1),
-          goodUsers: window.fbLib.arrayUnion(myAddr)
+          goodUsers: window.fbLib.arrayUnion(me.wallet)
         });
         await batch.commit();
 
@@ -13625,7 +13702,7 @@ async function attachReactionHandlers(postElement) {
         _spLogAdd({ type:'good', icon:'👍', title:'Good を送りました', detail: `「${(postData.title||'').slice(0,20)}」` });
         postData.goodCount = (Number(postData.goodCount) || 0) + 1;
         if (!Array.isArray(postData.goodUsers)) postData.goodUsers = [];
-        postData.goodUsers.push(myAddr);
+        postData.goodUsers.push(me.wallet);
         const countEl = goodButton.querySelector('.good-count');
         const impactEl = postElement.querySelector('.post-helpful-count');
         const noteEl = postElement.querySelector('.post-value-note');
@@ -13637,8 +13714,9 @@ async function attachReactionHandlers(postElement) {
         console.log("✅ Firebase: Good記録完了");
       } catch (e) {
         console.error("Firebase Good Error:", e);
-        alert("Goodを保存できませんでした。");
-        window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"good", ok:false, error:e.message || "Goodを保存できませんでした。" } }));
+        const _msg = emuWriteErrorMessage(e);
+        alert(_msg);
+        window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"good", ok:false, error:_msg } }));
         throw e;
       }
       });
@@ -13653,20 +13731,19 @@ async function attachReactionHandlers(postElement) {
         alert(message);
         window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"change", ok:false, error:message } }));
       };
-      if (!myAddr) return rejectChange("ウォレットを接続してください");
-
-      // Good と同じく、書く前にログインが生きているか確かめる
-      if (!await emuEnsureSignedIn()) {
+      // Good と同じく、「自分」はルールと同じ場所から取る
+      const me = await emuMyIdentity();
+      if (!me) {
         return rejectChange("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");
       }
 
-      // 【不正防止1】自分の投稿には押せない
-      if (postData.address && postData.address.toLowerCase() === myAddr) {
+      // 【不正防止1】自分の投稿には押せない（別名義で書いた投稿も自分と見なす）
+      if (emuIsMine(postData.address, me)) {
         return rejectChange("自分の投稿にChangeは押せません！");
       }
 
       // 【不正防止2】1回しか押せない
-      if (postData.changeUsers && postData.changeUsers.includes(myAddr)) {
+      if (emuListHasMe(postData.changeUsers, me)) {
         return rejectChange("すでにChange済みです！");
       }
 
@@ -13680,7 +13757,8 @@ async function attachReactionHandlers(postElement) {
           postId,
           postTitle: postData.title || "",
           postAuthor: (postData.address || "").toLowerCase(),
-          fromAddress: myAddr,
+          // ルールは changeUsers に walletAddress が入ることを求めるので、名義をそろえる
+          fromAddress: me.wallet,
           target,
           reason,
           proposal,
@@ -13690,7 +13768,7 @@ async function attachReactionHandlers(postElement) {
         });
         batch.update(postRef, {
           changeCount: window.fbLib.increment(1),
-          changeUsers: window.fbLib.arrayUnion(myAddr)
+          changeUsers: window.fbLib.arrayUnion(me.wallet)
         });
         await batch.commit();
 
@@ -13701,7 +13779,7 @@ async function attachReactionHandlers(postElement) {
         _spLogAdd({ type:'change', icon:'🤝', title:'Change を送りました', detail: `「${(postData.title||'').slice(0,20)}」` });
         postData.changeCount = (Number(postData.changeCount) || 0) + 1;
         if (!Array.isArray(postData.changeUsers)) postData.changeUsers = [];
-        postData.changeUsers.push(myAddr);
+        postData.changeUsers.push(me.wallet);
         const countEl = changeButton.querySelector('.change-count');
         const impactEl = postElement.querySelector('.post-change-count');
         const noteEl = postElement.querySelector('.post-value-note');
@@ -13740,10 +13818,14 @@ const _kwPaid = normalizeUserType(post.userType) === "paid";
 const _kwAddrLc = (post.address || "").toLowerCase();
 const _kwName = post.displayName || (typeof shortAddr === "function" ? shortAddr(_kwAddrLc) : _kwAddrLc) || "匿名";
 const _kwAvatarChar = (String(_kwName).trim().charAt(0) || "？");
-const _kwMy = window.connectedAccount ? window.connectedAccount.toLowerCase() : (localStorage.getItem("emuWallet") || "").toLowerCase();
-const _kwMine = _kwAddrLc && _kwAddrLc === _kwMy;
-const _kwGooded = Array.isArray(post.goodUsers) && _kwMy && post.goodUsers.includes(_kwMy);
-const _kwChanged = Array.isArray(post.changeUsers) && _kwMy && post.changeUsers.includes(_kwMy);
+/* 自分の名義は1つとは限らない（walletAddress と chesAddress）。
+   1つだけで見ると、自分の投稿なのにボタンが押せる状態で出てしまい、
+   押した先でルールに弾かれて「保存できませんでした」になる。 */
+const _kwAliases = emuAliasesNow();
+const _kwMy = _kwAliases[0] || "";
+const _kwMine = !!_kwAddrLc && _kwAliases.indexOf(_kwAddrLc) !== -1;
+const _kwGooded = emuListHasMe(post.goodUsers, null);
+const _kwChanged = emuListHasMe(post.changeUsers, null);
 const _kwAccepted = post.acceptedChangeCount || 0;
 const _kwTags = String(post.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
 let _kwDate = "";
@@ -15432,7 +15514,11 @@ function _emuHealSession() {
   _emuSessionChecked = true;
   if (typeof emuEnsureSignedIn !== 'function') return;
   emuEnsureSignedIn({ interactive: false }).then(function (user) {
-    if (!user) console.warn('Emu: ログインの状態を復元できませんでした。書き込み時に再確認します。');
+    if (!user) { console.warn('Emu: ログインの状態を復元できませんでした。書き込み時に再確認します。'); return; }
+    /* 「自分」を先に確定させておく。知識カードを描くときは待てないので、
+       ここで読んでおかないと、自分の投稿なのに「役に立った」が
+       押せる状態で出てしまう（押した先でルールに弾かれる）。 */
+    if (typeof emuMyIdentity === 'function') emuMyIdentity().catch(function () {});
   }).catch(function () {});
 }
 
@@ -15462,6 +15548,8 @@ function showEmuIchinichi() {
 }
 
 function showEmuFeed(mode) {
+  // 「今日のEmu」を通らずに直接ここへ来ることがあるので、本人の確定はここでも行う
+  _emuHealSession();
   _emuEnsureAppVisible();
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-discussion-open','emu-play-open');
   document.body.classList.add('emu-knowledge-open');
