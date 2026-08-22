@@ -6737,6 +6737,20 @@ async function emuMyIdentity() {
   const wallet = String(d.walletAddress || '').toLowerCase();
   const ches = String(d.chesAddress || d.walletAddress || '').toLowerCase();
   if (!wallet) return null;
+  /* 古いアカウントには chesAddress の欄が無い。ルールはこの欄を見るので、
+     欠けたままだと Good も Change も投稿も全部拒否される。ここで埋めておく。 */
+  if (!d.chesAddress && window.CHES && typeof window.CHES.deriveWalletAddress === 'function') {
+    try {
+      await window.fbLib.setDoc(
+        window.fbLib.doc(window.db, 'ches_accounts', user.uid),
+        { chesAddress: window.CHES.deriveWalletAddress(user.uid), lastLogin: Date.now() },
+        { merge: true }
+      );
+      console.warn('chesAddress が無かったので補いました:', user.uid);
+    } catch (e) {
+      console.warn('chesAddress を補えませんでした:', e && (e.message || e));
+    }
+  }
   _emuIdentity = {
     uid: user.uid,
     wallet: wallet,
@@ -15683,12 +15697,27 @@ function showEmuIchinichi() {
 function emuFitKnowledgeFrame() {
   const fr = document.getElementById('emuKnowledgeFrame');
   if (!fr) return;
-  if (window.innerWidth > 760) { fr.style.height = ''; return; }  // パソコン・タブレットは触らない
+  if (window.innerWidth > 760) {                                  // パソコン・タブレットは触らない
+    fr.style.height = ''; fr.style.width = ''; fr.style.marginLeft = '';
+    return;
+  }
   if (!fr.offsetParent) return;                                   // 表示されていないと測れない
+  /* 画面の下ぴったりまで伸ばす。すき間を空けると、iframeの中で
+     bottom:24px に置いた「＋」の高さが、画面に固定されている
+     お問い合わせボタン（bottom:24px）とその分だけずれてしまう。 */
   let top = 0;
   for (let el = fr; el; el = el.offsetParent) top += el.offsetTop;
-  const height = Math.max(360, Math.round(window.innerHeight - top - 8));
+  const height = Math.max(360, Math.round(window.innerHeight - top));
   fr.style.height = height + 'px';
+
+  /* 横も画面の端ぴったりに合わせる。iframeの右端が画面より内側にあると、
+     中の「＋」を right:12px に置いても、画面の端からは12pxにならず、
+     左下のお問い合わせボタン（left:12px）と左右で揃わない。
+     すでに合っていれば何も変わらない（繰り返し呼んでもずれない）。 */
+  const marginLeft = parseFloat(window.getComputedStyle(fr).marginLeft) || 0;
+  const left = fr.getBoundingClientRect().left;
+  fr.style.marginLeft = Math.round(marginLeft - left) + 'px';
+  fr.style.width = window.innerWidth + 'px';
 }
 window.addEventListener('resize', emuFitKnowledgeFrame);
 window.addEventListener('orientationchange', function () { setTimeout(emuFitKnowledgeFrame, 200); });

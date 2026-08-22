@@ -17,16 +17,24 @@ service cloud.firestore {
       return signedIn() && exists(accountPath());
     }
 
+    /* ここは必ず get('...', '') で読む。素で .walletAddress と書くと、
+       そのフィールドが無いアカウントでは参照そのものがエラーになり、
+       ルール全体が「拒否」になる。何を書いても保存できない状態になる。 */
     function wallet() {
-      return get(accountPath()).data.walletAddress;
+      return get(accountPath()).data.get('walletAddress', '');
     }
 
     /* CHESアドレス。LINE / Google / メールでは walletAddress と同じものになるが、
        ウォレット（MetaMask）でログインした人だけは別物になる。
        walletAddress ＝ 署名で確認した実際のウォレット、
-       chesAddress   ＝ uid から決まる CHES 内の住所。 */
+       chesAddress   ＝ uid から決まる CHES 内の住所。
+
+       このフィールドは後から足したもので、それ以前に作られたアカウントには無い。
+       サーバー側の補完はウォレットでログインしたときだけ動くため、
+       LINE / Google / メールで作った古いアカウントには無いままだった。
+       素で参照していたせいで、そういう人は Good も Change も投稿もできなかった。 */
     function chesAddress() {
-      return get(accountPath()).data.chesAddress;
+      return get(accountPath()).data.get('chesAddress', '');
     }
 
     /* 本人かどうか。実際のウォレットと CHESアドレスの
@@ -35,10 +43,10 @@ service cloud.firestore {
        CHESアドレス名義で書いたときに弾かれてしまう（議論が立てられなかった原因）。 */
     function isMyWallet(value) {
       return hasAccount()
-        && value is string
+        && value is string && value.size() > 0
         && (
-          (wallet() is string && value.lower() == wallet().lower())
-          || (chesAddress() is string && value.lower() == chesAddress().lower())
+          (wallet() is string && wallet().size() > 0 && value.lower() == wallet().lower())
+          || (chesAddress() is string && chesAddress().size() > 0 && value.lower() == chesAddress().lower())
         );
     }
 
@@ -287,7 +295,7 @@ service cloud.firestore {
     match /discussion_rooms/{id} {
       allow read: if true;
       // 議論を立てるのは plus 以上（9/1から）。参加・発言は light 以上。
-      allow create: if isMyWallet(request.resource.data.author)
+      allow create: if isMyWallet(request.resource.data.get('author', ''))
         && canWriteAs(2)
         && request.resource.data.topic is string
         && request.resource.data.topic.size() > 0
@@ -303,7 +311,7 @@ service cloud.firestore {
     match /discussion_conclusions/{id} {
       allow read: if true;
       // 結論を残すのは light 以上（9/1から）
-      allow create: if isMyWallet(request.resource.data.author)
+      allow create: if isMyWallet(request.resource.data.get('author', ''))
         && canWriteAs(1)
         && request.resource.data.conclusion is string
         && request.resource.data.conclusion.size() > 0
@@ -321,9 +329,17 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.resource.data.walletAddress is string
         && !request.resource.data.keys().hasAny(['lastLoginBonusDate']);
+      /* chesAddress の補完だけは本人に許す。古いアカウントにはこの欄が無く、
+         サーバーの補完はウォレットでログインしたときしか動かないため、
+         LINE / Google / メールの人は欠けたままだった。
+         書き換えではなく、無いところへ入れるときだけ通す。 */
       allow update: if signedIn()
         && request.auth.uid == uid
-        && changedOnly(['lastLogin', 'displayName', 'email', 'photoURL']);
+        && (changedOnly(['lastLogin', 'displayName', 'email', 'photoURL'])
+            || (changedOnly(['chesAddress', 'lastLogin'])
+                && resource.data.get('chesAddress', '') == ''
+                && request.resource.data.get('chesAddress', '') is string
+                && request.resource.data.get('chesAddress', '').size() > 0));
       allow delete: if false;
     }
 
@@ -338,7 +354,7 @@ service cloud.firestore {
       allow read: if true;
 
       // 知識を届けるのは light 以上（9/1から）
-      allow create: if isMyWallet(request.resource.data.address)
+      allow create: if isMyWallet(request.resource.data.get('address', ''))
         && canWriteAs(1) && hasRoom('post')
         && request.resource.data.get('goodCount', 0) == 0
         && request.resource.data.get('changeCount', 0) == 0
@@ -346,16 +362,16 @@ service cloud.firestore {
         && request.resource.data.get('changeUsers', []).size() == 0;
 
       // 投稿者本人による本文編集。反応数・反応者一覧・投稿者は変更不可。
-      allow update: if isMyWallet(resource.data.address) && changedOnly([
+      allow update: if isMyWallet(resource.data.get('address', '')) && changedOnly([
         'title', 'body', 'tags', 'userType', 'userId', 'updatedAt', 'imageUrl',
         'displayName'
       ])
-      || (isMyWallet(resource.data.address)
+      || (isMyWallet(resource.data.get('address', ''))
         && changedOnly(['acceptedChangeCount', 'lastChangedAt'])
         && request.resource.data.get('acceptedChangeCount', 0) == resource.data.get('acceptedChangeCount', 0) + 1)
       // Good は、認証ユーザー自身のウォレットを1件追加し、件数を1増やす場合だけ許可。
       || (hasAccount() && canWriteAs(1)
-        && !isMyWallet(resource.data.address)
+        && !isMyWallet(resource.data.get('address', ''))
         && changedOnly(['goodCount', 'goodUsers'])
         && request.resource.data.get('goodCount', 0) == resource.data.get('goodCount', 0) + 1
         && request.resource.data.get('goodUsers', []).size() == resource.data.get('goodUsers', []).size() + 1
@@ -364,7 +380,7 @@ service cloud.firestore {
         && !(wallet().lower() in resource.data.get('goodUsers', [])))
       // Change も同じく、1ユーザーにつき1件だけ許可。
       || (hasAccount() && canWriteAs(1)
-        && !isMyWallet(resource.data.address)
+        && !isMyWallet(resource.data.get('address', ''))
         && changedOnly(['changeCount', 'changeUsers'])
         && request.resource.data.get('changeCount', 0) == resource.data.get('changeCount', 0) + 1
         && request.resource.data.get('changeUsers', []).size() == resource.data.get('changeUsers', []).size() + 1
@@ -372,35 +388,37 @@ service cloud.firestore {
         && wallet().lower() in request.resource.data.get('changeUsers', [])
         && !(wallet().lower() in resource.data.get('changeUsers', [])));
 
-      allow delete: if isMyWallet(resource.data.address);
+      allow delete: if isMyWallet(resource.data.get('address', ''));
     }
 
     match /knowledge_drafts/{draftId} {
       /* 下書きを残すのは light 以上（9/1から）。
          件数の上限（light 30 / plus 1,000）も、ここで確かめる。
          画面だけで数えていたときは、画面を通さなければ何件でも作れた。 */
-      allow create: if isMyWallet(request.resource.data.owner)
+      allow create: if isMyWallet(request.resource.data.get('owner', ''))
         && canWriteAs(1) && hasLibraryRoom();
-      allow read, update: if isMyWallet(resource.data.owner);
+      allow read, update: if isMyWallet(resource.data.get('owner', ''));
       // 消すときは、持っている数の記録も1つ減らしてもらう
-      allow delete: if isMyWallet(resource.data.owner) && libraryDecremented();
+      allow delete: if isMyWallet(resource.data.get('owner', '')) && libraryDecremented();
     }
 
     match /post_good_impacts/{impactId} {
       allow read: if signedIn();
-      allow create: if isMyWallet(request.resource.data.fromAddress)
+      allow create: if isMyWallet(request.resource.data.get('fromAddress', ''))
         && request.resource.data.postId is string;
       allow update, delete: if false;
     }
 
     match /post_changes/{changeId} {
       allow read: if signedIn();
-      allow create: if isMyWallet(request.resource.data.fromAddress)
+      allow create: if isMyWallet(request.resource.data.get('fromAddress', ''))
         && request.resource.data.postId is string
         && request.resource.data.get('accepted', false) == false;
+      // ここも素で参照しない。address や status が無い古い記録でエラーにならないように。
       allow update: if signedIn()
-        && get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.address.lower() == wallet().lower()
-        && resource.data.status == 'pending'
+        && wallet().size() > 0
+        && get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.get('address', '').lower() == wallet().lower()
+        && resource.data.get('status', '') == 'pending'
         && changedOnly(['status', 'acceptedAt', 'acceptedBy'])
         && request.resource.data.status == 'accepted';
       allow delete: if false;
@@ -409,13 +427,13 @@ service cloud.firestore {
     match /knowledge_requests/{requestId} {
       allow read: if signedIn();
       // 知識を募集するのは light 以上（9/1から）
-      allow create: if isMyWallet(request.resource.data.author)
+      allow create: if isMyWallet(request.resource.data.get('author', ''))
         && canWriteAs(1) && hasRoom('request')
         && request.resource.data.status == 'open'
         && request.resource.data.answerCount == 0
         && request.resource.data.settlementStatus == 'uncommitted';
       allow update: if signedIn() && (
-        (isMyWallet(resource.data.author) && changedOnly([
+        (isMyWallet(resource.data.get('author', '')) && changedOnly([
           'status', 'acceptedAnswerId', 'acceptedAnswerAuthor', 'awardedAt', 'settlementStatus'
         ])
           && request.resource.data.status == 'awarded'
@@ -425,13 +443,13 @@ service cloud.firestore {
         || (changedOnly(['answerCount'])
           && request.resource.data.answerCount == resource.data.answerCount + 1)
       );
-      allow delete: if isMyWallet(resource.data.author) && resource.data.status == 'open';
+      allow delete: if isMyWallet(resource.data.get('author', '')) && resource.data.status == 'open';
     }
 
     match /knowledge_answers/{answerId} {
       allow read: if signedIn();
       // 募集へ答えるのは light 以上（9/1から）
-      allow create: if isMyWallet(request.resource.data.answerAuthor)
+      allow create: if isMyWallet(request.resource.data.get('answerAuthor', ''))
         && canWriteAs(1) && hasRoom('answer')
         && request.resource.data.status == 'submitted'
         && get(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.author == request.resource.data.requestAuthor;
@@ -445,7 +463,7 @@ service cloud.firestore {
     match /emuer_bounty_claims/{claimId} {
       allow read: if signedIn();
       allow create: if signedIn()
-        && isMyWallet(request.resource.data.requestAuthor)
+        && isMyWallet(request.resource.data.get('requestAuthor', ''))
         && request.resource.data.status == 'pending'
         && getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.status == 'awarded'
         && getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.settlementStatus == 'pending_distribution'
