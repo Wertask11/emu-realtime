@@ -6623,6 +6623,49 @@ async function _emuEnsureWalletSession() {
 // options.interactive === false のときは署名ダイアログを出さない。
 // 画面表示のたびに走る取得系（ログインボーナスの受取状況など）で、ユーザーが押してもいないのに
 // MetaMask の署名ダイアログが出てしまうのを防ぐ。
+/* Firestore へ直接書く前に、Firebase のログインが生きているか確かめる。
+
+   読むのは誰でもできる（allow read: if true）が、書き込みは request.auth が要る。
+   画面は localStorage の emuWallet を見て「ログイン済み」に見せているため、
+   セッションだけ切れていると、本人には入っているように見えて書き込みだけ失敗する。
+   端末を変えたときやしばらく空けたときに起きる。
+
+   サーバーへの通信（emuAuthHeaders）は元から待っていたが、
+   Good・Change・投稿など Firestore へ直接書く処理は通っていなかった。 */
+async function emuEnsureSignedIn(options) {
+  const interactive = !(options && options.interactive === false);
+  let user = window.auth && window.auth.currentUser;
+  if (!user && window.CHES && typeof window.CHES.whenAuthStateResolved === 'function') {
+    user = await window.CHES.whenAuthStateResolved();
+  } else if (!user) {
+    for (let i = 0; !user && window.auth && i < 50; i += 1) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      user = window.auth.currentUser;
+    }
+  }
+  if (!user && interactive) {
+    // 復元できなければ、ウォレットでの再ログインを試みる
+    try { await _emuEnsureWalletSession(); } catch (e) { console.warn('wallet session:', e && (e.message || e)); }
+    user = window.auth && window.auth.currentUser;
+  }
+  return user || null;
+}
+
+/* 書き込みが失敗したときに、原因が分かる言葉で伝える。
+   「保存できませんでした」だけでは、利用者は何をすればよいか分からない。 */
+function emuWriteErrorMessage(e) {
+  const code = e && (e.code || '');
+  if (code === 'permission-denied') {
+    return 'いまの状態では保存できませんでした。\n\n'
+      + 'ログインの状態が切れている可能性があります。\n'
+      + '一度ページを開き直して、もう一度お試しください。';
+  }
+  if (code === 'unavailable' || code === 'deadline-exceeded') {
+    return '通信が届きませんでした。電波の良いところで、もう一度お試しください。';
+  }
+  return '保存できませんでした。時間をおいて、もう一度お試しください。';
+}
+
 async function emuAuthHeaders(json, options) {
   const interactive = !(options && options.interactive === false);
   let user = window.auth && window.auth.currentUser;
@@ -13537,6 +13580,14 @@ async function attachReactionHandlers(postElement) {
       };
       if (!myAddr) return rejectGood("ウォレットを接続してください");
 
+      /* Firestore へ書く前に、ログインが生きているか確かめる。
+         画面は「ログイン済み」に見えていても、セッションだけ切れていることがある。
+         そのまま書きにいくと permission-denied になり、
+         利用者には理由の分からない失敗として見える。 */
+      if (!await emuEnsureSignedIn()) {
+        return rejectGood("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");
+      }
+
       // 【不正防止1】自分の投稿には押せない
       if (postData.address && postData.address.toLowerCase() === myAddr) {
         return rejectGood("自分の投稿にGoodは押せません！");
@@ -13604,6 +13655,11 @@ async function attachReactionHandlers(postElement) {
       };
       if (!myAddr) return rejectChange("ウォレットを接続してください");
 
+      // Good と同じく、書く前にログインが生きているか確かめる
+      if (!await emuEnsureSignedIn()) {
+        return rejectChange("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");
+      }
+
       // 【不正防止1】自分の投稿には押せない
       if (postData.address && postData.address.toLowerCase() === myAddr) {
         return rejectChange("自分の投稿にChangeは押せません！");
@@ -13657,8 +13713,9 @@ async function attachReactionHandlers(postElement) {
         console.log("✅ Firebase: Change記録完了");
       } catch (e) {
         console.error("Firebase Change Error:", e);
-        alert("Changeを保存できませんでした。");
-        window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"change", ok:false, error:e.message || "Changeを保存できませんでした。" } }));
+        const _msg = emuWriteErrorMessage(e);
+        alert(_msg);
+        window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"change", ok:false, error:_msg } }));
         throw e;
       }
       });
@@ -13816,6 +13873,15 @@ postForm.addEventListener("submit", async function (e) {
   if (!title || !body) {
     alert("タイトルと本文は必須です！");
     finishKnowledgeRequest(false, "タイトルと本文は必須です。");
+    return;
+  }
+
+  /* Firestore へ書く前にログインを確かめる。
+     画面は「ログイン済み」に見えていても、セッションだけ切れていることがある。 */
+  if (!await emuEnsureSignedIn()) {
+    const _m = "ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。";
+    alert(_m);
+    finishKnowledgeRequest(false, _m);
     return;
   }
 
@@ -15350,11 +15416,32 @@ function _emuShowChangeNotice() {
   el.hidden = emuEnforcing();
 }
 
+/* Emuに入ったときに、Firebase のログインを一度だけ静かに確かめて直す。
+
+   画面は localStorage の emuWallet を見て「ログイン済み」に見せているが、
+   Firebase のセッションはそれとは別に切れることがある。
+   切れていると、読むのは通るのに書き込みだけ permission-denied で落ちる。
+   端末を変えたときやしばらく空けたときに起きる。
+
+   ここで署名ダイアログは出さない（interactive:false）。
+   押してもいないのに MetaMask が立ち上がるのを避けるため。
+   直せなかった場合は、書き込みの直前でもう一度試す。 */
+var _emuSessionChecked = false;
+function _emuHealSession() {
+  if (_emuSessionChecked) return;
+  _emuSessionChecked = true;
+  if (typeof emuEnsureSignedIn !== 'function') return;
+  emuEnsureSignedIn({ interactive: false }).then(function (user) {
+    if (!user) console.warn('Emu: ログインの状態を復元できませんでした。書き込み時に再確認します。');
+  }).catch(function () {});
+}
+
 function showEmuToday() {
   /* Emuに入ったら計上する。以前はハブのボタンだけで数えていたため、
      タブ操作やセッション復帰で入った人が数に入らなかった。
      重複はFirestoreのドキュメント有無で防いでいるので、経路を増やしても増えすぎない。 */
   if (typeof spTrackBrand === 'function') spTrackBrand('emu');
+  _emuHealSession();
   _emuShowChangeNotice();
   _emuEnsureAppVisible();
   document.body.classList.add('emu-today-open');
@@ -15651,6 +15738,9 @@ document.getElementById("emuRequestSubmit")?.addEventListener("click", async fun
     return alert("探している知識、状況、回答期限を入力してください。");
   }
   if (!window.db || !window.fbLib) return alert("データベースに接続できません。");
+  if (!await emuEnsureSignedIn()) {
+    return alert("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");
+  }
   // 懸賞は「あなたの残高」から回答者へ支払われる（無資金配布を防止）。3 EMUER以上必要。
   const _reqAddr = _emuAddress();
   if (!_reqAddr) return alert("ウォレットを接続してください。");
@@ -15769,6 +15859,9 @@ document.getElementById("emuAnswerSubmit")?.addEventListener("click", async func
   if (experience.length < 10 || knowledge.length < 10 || limits.length < 3) {
     return alert("体験、得た知識、使える条件を入力してください。");
   }
+  if (!await emuEnsureSignedIn()) {
+    return alert("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");
+  }
   this.disabled = true;
   try {
     const answerRef = window.fbLib.doc(window.fbLib.collection(window.db, "knowledge_answers"));
@@ -15850,6 +15943,9 @@ async function acceptKnowledgeAnswer(request, answer, button) {
   // 額を変えたときに古い数字が残る（実際に10のまま残っていた）。
   const _bounty = Number(request.bounty) || 0;
   if (!confirm("この知識を採用しますか？\nあなたの残高から" + _bounty + " EMUERが回答者へ渡されます。")) return;
+  if (!await emuEnsureSignedIn()) {
+    return alert("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");
+  }
   button.disabled = true;
   try {
     const batch = window.fbLib.writeBatch(window.db);
