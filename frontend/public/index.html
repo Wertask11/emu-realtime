@@ -6739,17 +6739,9 @@ async function emuMyIdentity() {
   if (!wallet) return null;
   /* 古いアカウントには chesAddress の欄が無い。ルールはこの欄を見るので、
      欠けたままだと Good も Change も投稿も全部拒否される。ここで埋めておく。 */
-  if (!d.chesAddress && window.CHES && typeof window.CHES.deriveWalletAddress === 'function') {
-    try {
-      await window.fbLib.setDoc(
-        window.fbLib.doc(window.db, 'ches_accounts', user.uid),
-        { chesAddress: window.CHES.deriveWalletAddress(user.uid), lastLogin: Date.now() },
-        { merge: true }
-      );
-      console.warn('chesAddress が無かったので補いました:', user.uid);
-    } catch (e) {
-      console.warn('chesAddress を補えませんでした:', e && (e.message || e));
-    }
+  if (!d.chesAddress && window.CHES && typeof window.CHES.ensureChesIdentity === 'function') {
+    try { await window.CHES.ensureChesIdentity(user.uid, d.walletAddress, d.provider, d); }
+    catch (e) { console.warn('chesAddress を補えませんでした:', e && (e.message || e)); }
   }
   _emuIdentity = {
     uid: user.uid,
@@ -22413,6 +22405,70 @@ async function sendEmuFeedback() {
     return ethers.utils.getAddress("0x" + hash.slice(-40));
   };
 
+  /* ───── CHESアドレスを必ず用意して、アカウントに紐づける ─────
+
+     ログイン方法（LINE / Google / メール / ウォレット）に関わらず、
+     すべてのアカウントが CHESアドレスを1つ持つ状態にする。
+
+     アドレスは uid から決まる（deriveWalletAddress）。
+     同じ uid なら何度計算しても同じ値になり、違う uid なら違う値になるので、
+     ひとつのアカウントに1つ、という関係が自動的に保たれる。
+
+     重複しないことは ches_wallets が担っている。
+     あそこは「作る」しか許しておらず、書き換えも削除もできない。
+     すでにある宛先へ作ろうとすると Firestore が必ず断るため、
+     他人のアドレスを横取りすることはできない。
+
+     ※ 今後 CHESパスポートを入れるときは、アドレスの決め方が
+       ここ（deriveWalletAddress）から passport のものへ変わる。
+       呼び出し側は触らなくて済むよう、決め方はこの1か所に閉じてある。 */
+  CHES.ensureChesIdentity = async function (uid, walletAddress, provider, knownData) {
+    var db = window.db, fb = window.fbLib;
+    var chesAddress = CHES.deriveWalletAddress(uid);
+    var now = Date.now();
+
+    /* ches_accounts に欄が無ければ入れる（後から足した欄なので、古い分は空）。
+       ログインは12秒で打ち切られるので、すでに中身が分かっているときは
+       読み直さない（knownData）。 */
+    try {
+      var data = knownData;
+      if (!data) {
+        var snap = await fb.getDoc(fb.doc(db, "ches_accounts", uid));
+        data = snap.exists() ? snap.data() : null;
+      }
+      if (data && !data.chesAddress) {
+        await fb.setDoc(fb.doc(db, "ches_accounts", uid),
+          { chesAddress: chesAddress, lastLogin: now }, { merge: true });
+        console.warn("[CHES] chesAddress が無かったので入れました:", uid);
+      }
+    } catch (e) {
+      console.warn("[CHES] chesAddress を入れられませんでした:", e && (e.message || e));
+    }
+
+    // 逆引き（アドレス → アカウント）。自分の名義ぶんだけ登録する。
+    var names = [chesAddress];
+    if (walletAddress && walletAddress.toLowerCase() !== chesAddress.toLowerCase()) {
+      names.push(walletAddress);
+    }
+    for (var i = 0; i < names.length; i++) {
+      var addr = names[i];
+      try {
+        await fb.setDoc(fb.doc(db, "ches_wallets", addr), {
+          address: addr, uid: uid, type: "address-only",
+          provider: provider || "unknown", createdAt: now
+        });
+      } catch (e) {
+        /* すでに登録済みなら断られる。それが正しい（重複させない仕組み）。
+           自分の分がすでに入っているだけなので、そのまま進む。 */
+        var code = e && e.code;
+        if (code !== "permission-denied") {
+          console.warn("[CHES] 逆引きを作れませんでした:", addr, code || (e && e.message));
+        }
+      }
+    }
+    return chesAddress;
+  };
+
   // ───── CHESアカウント検索 → なければ自動作成（+ウォレット+無料Membership） ─────
   CHES.findOrCreateAccount = async function (user, provider, profileOverride) {
     var db = window.db, fb = window.fbLib;
@@ -22436,11 +22492,15 @@ async function sendEmuFeedback() {
       if (!data.email && pEmail)       patch.email = pEmail;
       if (!data.photoURL && pPhoto)    patch.photoURL = pPhoto;
       fb.setDoc(ref, patch, { merge: true }).catch(function () {});
+      /* 前からあるアカウントにも CHESアドレスを用意する。
+         この欄は後から足したもので、古い分は空のままだった。
+         空だと Firestore のルールが本人と認められず、
+         Good も Change も投稿も、何も保存できない状態になる。 */
+      var _ches = await CHES.ensureChesIdentity(uid, data.walletAddress || walletAddress, data.provider || provider, data);
       return {
         uid: uid,
         walletAddress: data.walletAddress || walletAddress,
-        // LINE / Google は walletAddress がそのままCHESアドレス
-        chesAddress: data.chesAddress || data.walletAddress || walletAddress,
+        chesAddress: data.chesAddress || _ches,
         displayName: data.displayName || pName,
         membership: data.membership || { tier: "free", offchain: true, issuedAt: now },
         provider: data.provider || provider,
@@ -22457,19 +22517,18 @@ async function sendEmuFeedback() {
       email: pEmail,
       photoURL: pPhoto,
       walletAddress: walletAddress,
-      chesAddress: walletAddress, // LINE / Google はCHESアドレス＝walletAddress
+      // CHESアドレスは uid から決める。ログイン方法が変わっても同じ決め方。
+      chesAddress: CHES.deriveWalletAddress(uid),
       membership: { tier: "free", offchain: true, issuedAt: now },
       createdAt: now,
       lastLogin: now
     };
     await fb.setDoc(ref, account);
-    // ウォレット逆引き（アドレス→アカウント）
-    fb.setDoc(fb.doc(db, "ches_wallets", walletAddress), {
-      address: walletAddress, uid: uid, type: "address-only", provider: provider, createdAt: now
-    }).catch(function () {});
+    // 逆引き（アドレス→アカウント）。重複しないことはここで担保される。
+    var _chesNew = await CHES.ensureChesIdentity(uid, walletAddress, provider, account);
 
     return {
-      uid: uid, walletAddress: walletAddress, chesAddress: walletAddress,
+      uid: uid, walletAddress: walletAddress, chesAddress: _chesNew,
       displayName: account.displayName, membership: account.membership,
       provider: provider, isNew: true
     };

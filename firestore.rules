@@ -343,11 +343,28 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    /* アドレス → アカウント の逆引き。ここが「重複させない」仕組みそのもの。
+
+       作成しか許さず、書き換えも削除も禁止しているため、
+       ひとつのアドレスは一度しか登録できない。
+       すでにある宛先への create は Firestore 側で必ず失敗するので、
+       他人のアドレスを横取りすることはできない。
+
+       登録できるのは自分の2つの名義だけ。
+       walletAddress（ウォレットで入った人の実アドレス）と
+       chesAddress（uid から決まる CHES 内の住所）。
+       以前は walletAddress しか許しておらず、
+       ウォレットで入った人の chesAddress を画面から登録できなかった。 */
     match /ches_wallets/{address} {
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
-        && address.lower() == wallet().lower();
-      allow read, update, delete: if false;
+        && (
+          (wallet().size() > 0 && address.lower() == wallet().lower())
+          || (chesAddress().size() > 0 && address.lower() == chesAddress().lower())
+        );
+      // 自分の分だけは読める（登録済みかどうかを確かめるため）
+      allow read: if signedIn() && resource.data.get('uid', '') == request.auth.uid;
+      allow update, delete: if false;
     }
 
     match /posts/{postId} {
