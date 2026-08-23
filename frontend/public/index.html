@@ -4813,248 +4813,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
             <button class="nav-button" id="emuTodayNavBtn" onclick="showEmuToday()">今日のEmu</button>
           </li>
 
-<!-- SchoolParkオーバーレイ（旧4ゲート選択 → 削除済み。openSchoolPark()はopenSpMap()に直結） -->
-
-<!-- SchoolPark マップ（オーナー専用） -->
-<div id="spMapOverlay">
-
-  <!-- Top Navigation -->
-  <nav class="spmap-nav">
-    <button class="spmap-home-btn" onclick="chesHubShow()" title="メイン画面（CHESハブ）に戻る" data-i18n="sp.nav.home">← メイン画面</button>
-    <div class="spmap-brand" style="position:relative;">
-      <button class="spmap-brand-btn" onclick="toggleChesMenu(event)" title="CHESメニュー">
-        <div class="spmap-brand-name"><span style="color:#e0576f;">C</span><span style="color:#a0d8ef;">H</span><span style="color:#f08300;">E</span><span style="color:#d0e2be;">S</span></div>
-        <div class="spmap-brand-sub" data-i18n="sp.nav.org">合同会社型DAO SchoolPark</div>
-        <span class="sp-notif-badge" id="spNotifBadge"></span>
-      </button>
-      <!-- CHES ブランドメニュー（ホームページの「探検しよう」と同じ構成） -->
-      <div id="chesMenu" class="ches-menu">
-        <button class="ches-menu-item" style="color:#e0576f;" onclick="chesMenuGo('camellia')"><span>Camellia</span><span class="ches-menu-count" id="menuCountCamellia">0</span></button>
-        <button class="ches-menu-item" style="color:#a0d8ef;" onclick="chesMenuGo('heartoo')"><span>Heartoo</span><span class="ches-menu-count" id="menuCountHeartoo">0</span></button>
-        <button class="ches-menu-item" style="color:#f08300;" onclick="chesMenuGo('emu')"><span>Emu</span><span class="ches-menu-count" id="menuCountEmu">--</span></button>
-        <button class="ches-menu-item" style="color:#d0e2be;" onclick="chesMenuGo('schoolpark')"><span>SchoolPark</span><span class="ches-menu-count" id="menuCountSchoolPark">--</span></button>
-      </div>
-      <!-- お知らせ＆ログパネル -->
-      <div id="spNotifPanel" style="display:none;flex-direction:column;">
-        <div class="spn-header">
-          <span class="spn-header-title">🔔 <span data-i18n="sp.notif.title">お知らせ</span></span>
-          <div class="spn-actions">
-            <button class="spn-read-all" onclick="spMarkAllReadAll()" data-i18n="sp.notif.readAll">すべて既読</button>
-            <button class="spn-close" onclick="closeSpNotifPanel()">✕</button>
-          </div>
-        </div>
-        <!-- ① お知らせセクション -->
-        <div class="spn-section-label">📣 お知らせ</div>
-        <div id="spNotifList"><div class="spn-loading">読み込み中…</div></div>
-        <!-- ② ログセクション（設定でON時のみ表示） -->
-        <div id="spLogSection">
-          <div class="spn-section-label spn-section-log">
-            📋 <span data-i18n="sp.notif.log">ログ</span>
-            <button class="spn-log-clear" onclick="spLogMarkAllRead()" data-i18n="sp.notif.logRead">既読にする</button>
-          </div>
-          <div id="spLogList"><div class="spn-loading">読み込み中…</div></div>
-        </div>
-      </div>
-    </div>
-    <div class="spmap-nav-links">
-      <span class="spmap-nav-link" onclick="spMapNavClick('gourmet')" data-i18n="sp.nav.gourmet">グルメ</span>
-      <span class="spmap-nav-link" onclick="spMapNavClick('shopping')" data-i18n="sp.nav.shopping">ショッピング</span>
-    </div>
-    <!-- コマンドバー（/ で起動） -->
-    <div class="spmap-cmd-wrap">
-      <input id="spmapCmd" class="spmap-cmd-input" type="text"
-             placeholder="/ コマンド…" data-i18n-placeholder="sp.nav.cmd"
-             onkeydown="spMapCmdKeydown(event)"
-             onfocus="if(_spIsPaidUser()){this.placeholder='agents / tutorial / wallet…';}else{this.blur();_showAgentToast('🎫 コマンドバーは有料パス限定です');}"
-             onblur="this.placeholder='/ コマンド…'">
-    </div>
-    <button class="spmap-reizo-btn" onclick="spReizoOpen()" title="冷蔵庫くんに聞く">
-      <img src="/assets/mascot.jpg" alt="冷蔵庫くん">
-      <span class="reizo-label" data-i18n="sp.nav.reizo">冷蔵庫くんに聞く</span>
-    </button>
-    <div id="emuerHud" title="タップでウォレットを開く" onclick="openSpPanel('spWalletPanel')" style="cursor:pointer;">
-      <span style="font-size:0.8rem">💎</span>
-      <span id="emuerHudVal">---</span>
-      <span id="emuerHudLow">⚠️残少</span>
-    </div>
-    <div class="sp-icon-btn-bar">
-      <button class="spib" onclick="openSpPanel('spSettingsPanel')" title="設定" data-i18n-title="sp.nav.settings">⚙️</button>
-    </div>
-    <button class="spmap-ticket-btn" onclick="spMapLinkClick('ticket')" data-i18n="sp.nav.ticket">チケット購入</button>
-    <button class="spmap-menu-btn" onclick="toggleSpMapMenu()" aria-label="メニュー" data-i18n-aria="sp.nav.menu">☰</button>
-    <!-- ✕ボタン廃止: SchoolParkが常設メイン画面のため閉じるボタンは不要 -->
-  </nav>
-
-  <!-- Info Bar -->
-  <div class="spmap-infobar">
-    <span>🕐 <span data-i18n="sp.info.hours">本日の営業時間</span>：<strong>9:00〜21:00</strong></span>
-    <span id="spInfoCrowd">👥 <span data-i18n="sp.info.crowd">混雑状況</span>：<strong data-i18n="sp.info.loading">取得中…</strong></span>
-    <span id="spInfoWeather">🌤️ 天気(fuk)：<strong>—</strong> <span id="spInfoWeatherKan" style="margin-left:8px">(kan)：<strong>—</strong></span> <span id="spInfoWeatherOsk" style="margin-left:8px">(osk)：<strong>—</strong></span></span>
-    <span id="spMapGateLabel" style="margin-left:auto;font-size:0.72rem;color:#D4A843;font-family:'Playfair Display',serif;"></span>
-  </div>
-
-  <!-- Main Body -->
-  <div class="spmap-main">
-
-    <!-- ドロワー背景（スマホ用） -->
-    <div id="spMapMenuBackdrop" onclick="toggleSpMapMenu()"></div>
-
-    <!-- Left Sidebar -->
-    <aside class="spmap-left">
-      <div class="spmap-left-header">
-        <div>
-          <div class="spmap-left-title" data-i18n="sp.side.title">PARK MAP</div>
-          <div class="spmap-left-sub" id="spAreaSubLabel" data-i18n="sp.side.pick">エリアを選択してください</div>
-        </div>
-        <button class="spmap-left-close" onclick="toggleSpMapMenu()" aria-label="閉じる" data-i18n-aria="sp.side.close">✕</button>
-      </div>
-
-      <!-- エリア選択リスト（タブなし・6項目） -->
-      <div class="spmap-area-list" id="spAreaList">
-        <div class="spmap-area-item spa-active" onclick="spMapFilter('all',this)">
-          <span class="spmap-area-dot" style="background:#aaa"></span>
-          <div class="spmap-area-names">
-            <span class="spmap-area-main" data-i18n="sp.area.all">すべて</span>
-          </div>
-          <span class="spmap-area-count" id="spCntAll">29</span>
-        </div>
-        <div class="spmap-area-item" onclick="spMapFilter(['plaza'],this)">
-          <span class="spmap-area-dot" style="background:#f59e0b"></span>
-          <div class="spmap-area-names">
-            <span class="spmap-area-main" data-i18n="sp.area.center">中央エリア</span>
-            <span class="spmap-area-sub" data-i18n="sp.area.center.sub">健康・運動・交流</span>
-          </div>
-          <span class="spmap-area-count">1</span>
-        </div>
-        <div class="spmap-area-item" onclick="spMapFilter(['earn','life'],this)">
-          <span class="spmap-area-dot" style="background:#eab308"></span>
-          <div class="spmap-area-names">
-            <span class="spmap-area-main" data-i18n="sp.area.east">東エリア</span>
-            <span class="spmap-area-sub" data-i18n="sp.area.east.sub">生活・住居、商業・経済</span>
-          </div>
-          <span class="spmap-area-count">8</span>
-        </div>
-        <div class="spmap-area-item" onclick="spMapFilter(['guard'],this)">
-          <span class="spmap-area-dot" style="background:#ef4444"></span>
-          <div class="spmap-area-names">
-            <span class="spmap-area-main" data-i18n="sp.area.west">西エリア</span>
-            <span class="spmap-area-sub" data-i18n="sp.area.west.sub">安全・公共</span>
-          </div>
-          <span class="spmap-area-count">6</span>
-        </div>
-        <div class="spmap-area-item" onclick="spMapFilter(['play'],this)">
-          <span class="spmap-area-dot" style="background:#22c55e"></span>
-          <div class="spmap-area-names">
-            <span class="spmap-area-main" data-i18n="sp.area.south">南エリア</span>
-            <span class="spmap-area-sub" data-i18n="sp.area.south.sub">遊び・自然</span>
-          </div>
-          <span class="spmap-area-count">8</span>
-        </div>
-        <div class="spmap-area-item" onclick="spMapFilter(['learn'],this)">
-          <span class="spmap-area-dot" style="background:#3b82f6"></span>
-          <div class="spmap-area-names">
-            <span class="spmap-area-main" data-i18n="sp.area.north">北エリア</span>
-            <span class="spmap-area-sub" data-i18n="sp.area.north.sub">学び・文化</span>
-          </div>
-          <span class="spmap-area-count">5</span>
-        </div>
-
-      </div>
-
-      <!-- コンテンツ一覧（エリア選択後に動的表示） -->
-      <div class="spmap-content-list" id="spContentList"></div>
-
-      <!-- フッターリンク -->
-      <!-- 言語切替。上部ナビは項目が多く横スクロールになるため、ここに置く -->
-      <div class="spmap-legend">
-        <div class="spmap-legend-ttl">LANGUAGE</div>
-        <select id="spMapLangSelect" class="spmap-lang spmap-lang-side" onchange="setEmuLang(this.value)"
-                aria-label="Language" data-i18n-title="lang.label"></select>
-      </div>
-      <div class="spmap-legend">
-        <div class="spmap-legend-ttl" data-i18n="sp.links.title">LINKS</div>
-        <div class="spmap-legend-link" onclick="spMapLinkClick('ticket')">
-          <span class="spmap-legend-link-icon">🎫</span><span data-i18n="sp.links.ticket">チケットストア</span>
-        </div>
-        <div class="spmap-legend-link" onclick="spMapLinkClick('company')">
-          <span class="spmap-legend-link-icon">🏢</span><span data-i18n="sp.links.company">企業情報</span>
-        </div>
-        <div class="spmap-legend-link" onclick="spMapLinkClick('faq')">
-          <span class="spmap-legend-link-icon">❓</span><span data-i18n="sp.links.faq">よくあるご質問</span>
-        </div>
-        <div class="spmap-legend-link" onclick="spMapLinkClick('contact')">
-          <span class="spmap-legend-link-icon">📩</span><span data-i18n="sp.links.contact">お問い合わせ</span>
-        </div>
-      </div>
-    </aside>
-
-    <!-- Map Canvas -->
-    <div class="spmap-canvas" id="spMapCanvas">
-
-      <!-- Fixed UI (スクロールに追従しない) -->
-      <div class="spmap-detail" id="spDetailPanel">
-        <button class="spmap-detail-close" onclick="closeSpDetail()">✕</button>
-        <div id="spDetailContent"></div>
-      </div>
-
-      <!-- Scrollable Viewport -->
-      <div class="spmap-scroll-vp" id="spMapVP">
-
-        <!-- Inner container (960×960px = image 1:1) -->
-        <div class="spmap-inner" id="spMapInner">
-
-          <!-- Map Image -->
-          <img src="images/schoolpark-map.png" class="spmap-bg-img" id="spMapBgImg" alt="SchoolPark Map" />
-
-          <!-- CSS animations (train / car) -->
-          <div class="spmap-anim-wrap">
-            <div class="sp-train-car">🚂</div>
-            <div class="sp-car-car">🚗</div>
-          </div>
-          <!-- JS駆動: 人10人・動物3匹・飛行機 (_renderSpLive()で生成) -->
-
-          <!-- POI Markers (JSで生成) -->
-          <div id="spPOIContainer"></div>
-
-          <!-- Gate Labels (inside inner = % of image) -->
-          <div class="spmap-gate-tag" style="left:21%;top:88%">↑ DAWN PLAZA<br>夜明けの広場</div>
-          <div class="spmap-gate-tag" style="left:50%;top:93%">↑ FRONTIER GATE<br>南エリア：冒険と救助</div>
-          <div class="spmap-gate-tag" style="left:88%;top:88%">↑ STARRY SKY STATION<br>星空の駅</div>
-
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ── SchoolPark マップ内モーダル（チケット/企業情報/FAQ/お問い合わせ/グルメ/ショッピング/イベント） ── -->
-  <div id="spMapModal" onclick="if(event.target===this)closeSpModal()">
-    <div class="spmm-box">
-      <div class="spmm-head">
-        <div class="spmm-title" id="spModalTitle">チケットストア</div>
-        <button class="spmm-close" onclick="closeSpModal()">✕</button>
-      </div>
-      <div class="spmm-body" id="spModalBody"></div>
-    </div>
-  </div>
-
-  <!-- ── EMUER 利用制限オーバーレイ ── -->
-  <div id="emuerRestrictOverlay">
-    <div class="er-icon">🔒</div>
-    <div class="er-title">コンテンツ利用制限中</div>
-    <div class="er-sub" id="erSubText">EMUERが不足しています。<br>制限解除後に EMUER が補充されます。</div>
-    <div class="er-timer-row">
-      <div class="er-timer-box"><div class="er-timer-num" id="erTimerH">00</div><div class="er-timer-lbl">時間</div></div>
-      <div class="er-timer-box"><div class="er-timer-num" id="erTimerM">00</div><div class="er-timer-lbl">分</div></div>
-      <div class="er-timer-box"><div class="er-timer-num" id="erTimerS">00</div><div class="er-timer-lbl">秒</div></div>
-    </div>
-    <div class="er-refill" id="erRefillText">🎁 解除後 → EMUER 補充</div>
-    <div id="erTypeBadge" class="er-type-badge" style="background:rgba(212,168,67,0.12);color:#D4A843;border:1px solid rgba(212,168,67,0.3)"></div>
-    <button style="margin-top:8px;padding:8px 20px;background:transparent;border:1px solid rgba(255,255,255,0.2);color:#888;border-radius:6px;cursor:pointer;font-size:0.8rem" onclick="document.getElementById('emuerRestrictOverlay').classList.remove('active')">マップに戻る</button>
-  </div>
-
-</div>
-
 <!-- ── 冷蔵庫くん チャットパネル（SchoolParkマップ用） ── -->
 <div id="spReizoPanel" class="sp-reizo-panel">
   <div class="sp-reizo-header">
@@ -5077,64 +4835,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </div>
 </div>
 
-<!-- ── SchoolPark 初回チュートリアル演出（冷蔵庫くん） ── -->
-<div id="spTutOverlay" onclick="_spTutNext()"></div>
-<div id="spTutMascot" onclick="_spTutNext()">
-  <div class="sp-tut-bubble">
-    <div class="sp-tut-text" id="spTutText"></div>
-    <span class="sp-tut-hint" id="spTutHint">タップして次へ</span>
-  </div>
-  <div class="sp-tut-img-row">
-    <img src="/assets/mascot.jpg" alt="冷蔵庫くん">
-  </div>
-</div>
-
-<!-- ── SchoolPark コンテンツ iframe オーバーレイ ── -->
-<div id="spContentOverlay" style="
-  display:none; position:fixed; inset:0; z-index:1600;
-  background:#1a1a2e; flex-direction:column;
-">
-  <iframe id="spContentFrame" src="" style="width:100%; height:100%; border:none; display:block;"></iframe>
-</div>
-
-<!-- SchoolPark COMING SOON（一般ユーザー用） -->
-<div id="spComingOverlay" onclick="closeSpComing(event)">
-  <div class="spc-popup" onclick="event.stopPropagation()">
-    <button class="spc-close" onclick="closeSpComing()">✕</button>
-    <div class="spc-left">
-      <div class="spc-coming">COMING 5/20</div>
-      <div class="spc-title">代表者が今この瞬間に<br>想う<br>「理想の場所」</div>
-      <div class="spc-desc">
-        学校より学べて、公園より楽しくて、会社より稼げる場所——SchoolPark<br>
-        代表者が現時点で思い描く答えを、Emu内でコンテンツとしてリリース。<br>
-        探索するボタンの上に追加されます。
-      </div>
-      <div class="spc-badge"><span>🕐</span><span>2026年5月20日 Emu内にて公開予定</span></div>
-    </div>
-    <div class="spc-right">
-      <div class="spc-card"><div class="spc-card-icon">💻</div><div><div class="spc-card-label">パソコン</div><div class="spc-card-sub">フル対応</div></div></div>
-      <div class="spc-card"><div class="spc-card-icon">📱</div><div><div class="spc-card-label">スマートフォン</div><div class="spc-card-sub">フル対応</div></div></div>
-      <div class="spc-card"><div class="spc-card-icon">⬛</div><div><div class="spc-card-label">タブレット</div><div class="spc-card-sub">フル対応 — どのデバイスからでも快適に</div></div></div>
-    </div>
-  </div>
-</div>
-
-<!-- 探索オーバーレイ -->
-<div id="exploreOverlay" class="overlay">
-  <div class="popup">
-    <span class="closeBtn" onclick="closeExplore()">✖</span>
-
-    <h2 style="color:#333; text-shadow: 0 1px 4px rgba(255,255,255,0.8);">探索</h2>
-    <div class="rooms-container">
-      <div class="room" onclick="openRoom(1)">学び</div>
-      <div class="room" onclick="openRoom(2)">遊び</div>
-      <div class="room" onclick="openRoom(3)">交流</div>
-      <div class="room" onclick="openRoom(4)">イベント</div>
-    </div>
-  </div>
-</div>
-
-          <li><button id="refreshAllPosts" class="nav-button">知識を読む</button></li>
+<li><button id="refreshAllPosts" class="nav-button">知識を読む</button></li>
           <li>
             <button id="themeButton" class="nav-button">テーマ</button>
             <div id="themeSubButtons" class="sub-nav hidden">
@@ -6034,10 +5735,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
           <option value="once">初回のみ</option>
         </select>
       </div>
-      <button class="sp-panel-btn secondary" onclick="spSettingReplayTutorial()"
-              style="margin-top:6px;font-size:0.78rem;padding:6px 12px;">
-        🔄 今すぐチュートリアルを再表示
-      </button>
     </div>
 
     <!-- 6. キャッシュクリア -->
@@ -6075,7 +5772,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   border-top: 1px solid #eee;
   margin-top: 20px;
 ">
-  <!-- 専用モーダル(openLegal)で開く。openSpContent はSchoolParkの施設用ビューアで、
+  <!-- 専用モーダル(openLegal)で開く。以前はSchoolParkの施設用ビューアで開いていたが、
        閉じてもEmuに戻れないうえ、特商法は存在しないパスを指していて404だった。 -->
   <a href="javascript:void(0)" onclick="openLegal('terms')" style="color:#aaa; margin: 0 8px; cursor:pointer;">利用規約</a>
   ｜
@@ -6952,7 +6649,6 @@ function _landAfterDirectReturn() {
   var billing = null;
   try { billing = sessionStorage.getItem("ches_billing_return"); } catch (e) {}
   if (!billing) {
-    if (typeof openSpMap === "function") openSpMap();
     return;
   }
   try { sessionStorage.removeItem("ches_billing_return"); } catch (e) {}
@@ -9371,7 +9067,6 @@ function goTomainapp() {
   mainApp.style.display = "block";
   document.getElementById("siteFooter").style.display = "block";
   // ★ ログイン後はSchoolParkマップを同期的に開く（フラッシュ防止）
-  if (typeof openSpMap === "function") openSpMap();
 
   // マップ描画が落ち着いたら「準備完了」→フェードアウト
   setTimeout(() => _hideSpLoadingOverlay(), 1400);
@@ -9786,15 +9481,6 @@ function _showEmuerRestrictionOverlay(restrictionUntil) {
   _erTimerInterval = setInterval(erTick, 1000);
 }
 
-function _showEmuerChargeToast(poiId, cost, remaining) {
-  const poi = _findPoi(poiId);
-  const name = poi ? poi.name.split(' ')[0] : '';
-  const toast = document.createElement('div');
-  toast.className = 'emuer-charge-toast';
-  toast.innerHTML = `−${cost} EMUER <span style="font-size:0.72rem;color:#888;font-weight:400">残高 ${remaining.toLocaleString()}</span>`;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2100);
-}
 
 // POI名から日本語部分だけ抽出（"Fountain 噴水広場" → "噴水広場"）
 function _spPoiShortName(poi) {
@@ -9803,73 +9489,6 @@ function _spPoiShortName(poi) {
   return m ? m[0] : poi.name;
 }
 
-async function gatedOpen(poiId, fn) {
-  const cost = EMUER_RATE_CONFIG[poiId] ?? 0;
-  if (cost === 0) {
-    fn();
-    // 無料施設の訪問もログに記録
-    const _poi0 = SP_POIS ? _findPoi(poiId) : null;
-    _spLogAdd({ type:'visit', icon: _poi0?.icon || '🚪', title: (_poi0 ? _spPoiShortName(_poi0) : poiId) + ' に入りました', detail: '' });
-    return;
-  }
-
-  // メンテナンスモード中はオーナーのEMUER消費・利用制限をすべてスキップ
-  if (MAINTENANCE_MODE && _isOwnerAccess()) { fn(); return; }
-
-  let data = _getEmuerData();
-  if (!data) data = await _initEmuer();
-
-  const now = Date.now();
-
-  // 制限中チェック
-  if (data.restrictionUntil && now < data.restrictionUntil) {
-    _showEmuerRestrictionOverlay(data.restrictionUntil);
-    return;
-  }
-
-  // 残高不足 → ステップ制制限開始
-  if (data.balance < cost) {
-    const userType   = _getUserTypeForEmuer();
-    const steps      = _getEmuerSteps(userType);
-    const stepIndex  = data.restrictionCount || 0;
-    // 範囲外の場合は最終ステップを適用
-    const curStep    = steps[Math.min(stepIndex, steps.length - 1)];
-    const nextIdx    = stepIndex + 1;
-    const isFinal    = nextIdx >= steps.length;
-
-    data.balance                = 0;
-    data.restrictionUntil       = now + curStep.restrictionMs;
-    data.restrictionCount       = stepIndex + 1;
-    data.lastRestriction        = now;
-    data._cycleComplete         = isFinal;
-    data._nextStepBalance       = isFinal ? null : steps[nextIdx].balance;
-    data.totalRestrictionCount  = (data.totalRestrictionCount || 0) + 1;
-
-    _saveEmuerData(data);
-    _updateEmuerHud(0);
-    _showEmuerRestrictionOverlay(data.restrictionUntil);
-    return;
-  }
-
-  // 通常: 残高から引いてコンテンツ開放
-  data.balance -= cost;
-  data.totalSpent = (data.totalSpent || 0) + cost;
-  data.visitCount = (data.visitCount || 0) + 1;
-  // 取引履歴に追記（最大10件）
-  const poi = SP_POIS ? _findPoi(poiId) : null;
-  const histEntry = { time: Date.now(), type: 'spend', amount: -cost, label: poi ? poi.name.split(' ')[0] : poiId, balance: data.balance };
-  if (!data.history) data.history = [];
-  data.history.unshift(histEntry);
-  if (data.history.length > 10) data.history = data.history.slice(0, 10);
-  _saveEmuerData(data);
-  _updateEmuerHud(data.balance);
-  _showEmuerChargeToast(poiId, cost, data.balance);
-  fn();
-  _recordKaiensaiStamp(poiId).catch(() => {});
-  _recordEventAnalytics(poiId).catch(() => {});
-  // 施設訪問ログ
-  _spLogAdd({ type:'visit', icon: poi?.icon || '🚪', title: (poi ? _spPoiShortName(poi) : poiId) + ' に入りました', detail: cost > 0 ? `-${cost} EMUER` : '' });
-}
 
 /* ═══════════════════════════════════════════════════════
    🐙 たこ焼き屋台（iframeモーダル）
@@ -10137,7 +9756,6 @@ const ALERT_TYPES = {
 const ALERT_ACTIONS = {
   notify:           { label:'通知のみ',        icon:'🔔' },
   notify_recommend: { label:'通知 + 推薦更新', icon:'🔍' },
-  notify_patrol:    { label:'通知 + 自動巡回', icon:'🗺️' },
 };
 
 /* ── ストレージ ── */
@@ -10269,10 +9887,7 @@ async function _fireAlert(alert, message) {
 
   // ③ 自律アクション
   if (alert.action === 'notify_recommend') {
-    setTimeout(_renderRecommendAgent, 800);
   } else if (alert.action === 'notify_patrol') {
-    const presetId = alert.params?.patrolPreset || 'event';
-    setTimeout(() => _startPatrolPreset(presetId), 1000);
   }
 
   // ④ 発火ログ追記
@@ -10296,7 +9911,6 @@ function _alertFmtAgo(ts) {
 function _alertQuickAdd(type) {
   const presets = {
     balance_low:       { type:'balance_low',        action:'notify_recommend', params:{ threshold:100 } },
-    restriction_lifted:{ type:'restriction_lifted',  action:'notify_patrol',   params:{} },
   };
   const preset = presets[type];
   if (!preset) return;
@@ -10555,172 +10169,7 @@ const _ZONE_COLORS = {
 };
 
 /* ── メインレンダリング ── */
-function _initRecommendAgent() {
-  _renderRecommendAgent();
-}
 
-function _renderRecommendAgent() {
-  const el = document.getElementById('recommendAgentBody');
-  if (!el) return;
-
-  const data    = _getEmuerData();
-  const balance = data ? (data.balance || 0) : 0;
-  const history = data ? (data.history  || []) : [];
-
-  /* ─ 1. 行動分析: ゾーン親和性スコア ─ */
-  const zoneScore  = {};
-  const visitedIds = new Set();
-
-  history.forEach(h => {
-    if (h.type !== 'spend') return;
-    const matched = SP_POIS.find(p => {
-      const first = p.name.split(' ')[0];
-      return h.label === first || h.label === p.id;
-    });
-    if (matched) {
-      zoneScore[matched.zone] = (zoneScore[matched.zone] || 0) + 1;
-      visitedIds.add(matched.id);
-    }
-  });
-
-  const totalVisits = Object.values(zoneScore).reduce((a, b) => a + b, 0);
-  const sortedZones = Object.entries(zoneScore).sort((a, b) => b[1] - a[1]);
-  const topZone     = sortedZones[0]?.[0] || null;
-
-  /* ─ 2. 時間帯ヒント ─ */
-  const hour = new Date().getHours();
-  let timeZone, timeHint;
-  if      (hour >= 6  && hour < 12) { timeZone = 'learn'; timeHint = '朝は学び時間 ☀️'; }
-  else if (hour >= 12 && hour < 17) { timeZone = 'earn';  timeHint = '昼は活動時間 💼'; }
-  else if (hour >= 17 && hour < 21) { timeZone = 'play';  timeHint = '夕方は娯楽時間 🎮'; }
-  else                               { timeZone = 'guard'; timeHint = '夜は守りを固める 🌙'; }
-
-  /* ─ 3. POIスコアリング ─ */
-  const openPois = SP_POIS.filter(p => p.status === 'open');
-
-  const scored = openPois.map(p => {
-    const cost      = EMUER_RATE_CONFIG[p.id] ?? 0;
-    const canAfford = balance >= cost;
-    let score = 0;
-    const reasons = [];
-
-    if (topZone && p.zone === topZone && totalVisits > 0) {
-      score += 30;
-      reasons.push(`よく訪れる${_zoneLabel(p.zone)}ゾーン`);
-    }
-    if (p.zone === timeZone) {
-      score += 20;
-      reasons.push(timeHint);
-    }
-    if (!visitedIds.has(p.id)) {
-      score += 15;
-      reasons.push('まだ訪れていない場所');
-    }
-    if (canAfford) { score += 10; } else { score -= 50; }
-    if (cost <= 5 && cost > 0) score += 5;
-    if (cost === 0) score += 8;
-
-    return {
-      poi: p, cost, canAfford, score,
-      reason: reasons[0] || '探索してみよう'
-    };
-  });
-
-  /* ─ 4. 推薦リスト生成 ─ */
-  const affordable = scored.filter(s => s.canAfford).sort((a, b) => b.score - a.score);
-
-  // メイン推薦（上位3件）
-  const main = affordable.slice(0, 3);
-
-  // ディスカバリー（普段と違うゾーン）
-  const discovery = affordable.find(s =>
-    topZone && s.poi.zone !== topZone && !main.includes(s)
-  ) || null;
-
-  // 節約おすすめ（コスト≤3、重複除外）
-  const usedIds = new Set([...main.map(s => s.poi.id), discovery?.poi.id]);
-  const freeRec = affordable.find(s => s.cost <= 3 && !usedIds.has(s.poi.id)) || null;
-
-  /* ─ 5. HTML生成ヘルパー ─ */
-  const _poiAction = s => {
-    if (s.poi.action) return `${s.poi.action}()`;
-    if (s.poi.page)   return `openSpContent('${s.poi.page}')`; // アプリ内表示（window.openはモバイルでブロックされる）
-    return '';
-  };
-
-  const _card = (s, highlight = '') => `
-    <div onclick="closeSpPanel('spRobotPanel');setTimeout(()=>gatedOpen('${s.poi.id}',()=>{${_poiAction(s)}}),300);"
-         style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;
-                background:rgba(255,255,255,.04);border:1px solid ${highlight||'rgba(255,255,255,.07)'};
-                cursor:pointer;transition:background .2s,border-color .2s;margin-bottom:6px;"
-         onmouseover="this.style.background='rgba(212,168,67,.08)';this.style.borderColor='rgba(212,168,67,.25)';"
-         onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.borderColor='${highlight||'rgba(255,255,255,.07)'}';">
-      <div style="font-size:1.45rem;width:36px;text-align:center;flex-shrink:0;">${s.poi.icon}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-weight:700;font-size:0.82rem;color:#e0e0e0;
-                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-          ${s.poi.name.includes(' ') ? s.poi.name.split(' ').slice(1).join(' ') : s.poi.name}
-        </div>
-        <div style="font-size:0.7rem;color:#888;margin-top:2px;">${s.reason}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0;">
-        <div style="font-size:0.75rem;font-weight:700;
-                    color:${s.cost===0?'#4ade80':'#D4A843'};">
-          ${s.cost===0?'無料':s.cost+'💎'}
-        </div>
-        <div style="font-size:0.62rem;color:#555;margin-top:2px;">→ 移動</div>
-      </div>
-    </div>`;
-
-  /* ─ 6. 分析ヘッダー ─ */
-  const analysisHtml = totalVisits > 0
-    ? `<span style="color:${_ZONE_COLORS[topZone]||'#aaa'};">
-         ${_zoneLabel(topZone)}ゾーン好み (${sortedZones[0]?.[1]}回)
-       </span> &nbsp;·&nbsp; ${timeHint}`
-    : `<span style="color:#666;">訪問履歴なし — 時間帯で提案</span> &nbsp;·&nbsp; ${timeHint}`;
-
-  /* ─ 7. 描画 ─ */
-  el.innerHTML = `
-    <div style="font-size:0.71rem;color:#666;line-height:1.65;padding:8px 12px;margin-bottom:10px;
-                border-radius:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);">
-      🧠 ${analysisHtml}
-    </div>
-
-    ${main.length > 0
-      ? main.map(s => _card(s)).join('')
-      : `<div style="text-align:center;padding:14px 0;color:#555;font-size:0.75rem;">残高不足で提案できません 💸</div>`
-    }
-
-    ${discovery ? `
-      <div style="margin-top:6px;padding:9px 12px;border-radius:11px;
-                  background:rgba(192,132,252,.07);border:1px solid rgba(192,132,252,.22);">
-        <div style="font-size:0.63rem;font-weight:800;color:#c084fc;letter-spacing:.1em;margin-bottom:5px;">
-          🔮 ディスカバリー — いつもと違うゾーンへ
-        </div>
-        ${_card(discovery, 'rgba(192,132,252,.2)')}
-      </div>
-    ` : ''}
-
-    ${freeRec ? `
-      <div style="margin-top:6px;padding:9px 12px;border-radius:11px;
-                  background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.18);">
-        <div style="font-size:0.63rem;font-weight:800;color:#4ade80;letter-spacing:.1em;margin-bottom:5px;">
-          ⚡ 節約おすすめ (${freeRec.cost===0?'無料':freeRec.cost+'💎'})
-        </div>
-        ${_card(freeRec, 'rgba(74,222,128,.18)')}
-      </div>
-    ` : ''}
-
-    <button onclick="_renderRecommendAgent()"
-            style="width:100%;margin-top:10px;padding:8px;border-radius:10px;
-                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);
-                   color:#777;font-size:0.74rem;cursor:pointer;transition:all .2s;"
-            onmouseover="this.style.background='rgba(255,255,255,.09)';this.style.color='#ccc';"
-            onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.color='#777';">
-      🔄 再分析する
-    </button>
-  `;
-}
 
 /* ═══════════════════════════════════════════════════════
    SchoolPark agents — Phase 4a: タスク自動実行
@@ -10816,8 +10265,6 @@ async function _fireTask(task) {
     // パネルが開いていれば巡回開始
     const panel = document.getElementById('spRobotPanel');
     if (panel?.classList.contains('open')) {
-      _selectPatrolPreset(task.payload.patrolPreset);
-      setTimeout(_startPatrol, 300);
     }
   } else if (task.type === 'check_balance') {
     const d = _getEmuerData();
@@ -11168,359 +10615,25 @@ const PATROL_PRESETS = [
 ];
 
 /* ---------- 巡回ステート ---------- */
-const _patrol = {
-  state:      'idle',   // 'idle' | 'running' | 'paused' | 'done'
-  presetId:   null,
-  route:      [],       // POI idの配列
-  idx:        0,
-  log:        [],       // { poiId, name, icon, cost, canGo, restricted }
-  timer:      null,
-  color:      '#94a3b8',
-};
 
 /* ---------- 初期化 ---------- */
-function _initPatrolSection() {
-  _renderPatrolIdle();
-}
 
-function _resolvePatrolPois(preset) {
-  if (preset.pois) return preset.pois;
-  const allOpen = SP_POIS.filter(p => p.status === 'open');
-  if (preset.id === 'free') {
-    return allOpen
-      .filter(p => (EMUER_RATE_CONFIG[p.id] ?? 0) <= 3)
-      .map(p => p.id);
-  }
-  // 'all'
-  return allOpen.map(p => p.id);
-}
 
 /* ---------- ルート選択画面 ---------- */
-function _renderPatrolIdle(selectedId) {
-  const body = document.getElementById('patrolAgentBody');
-  if (!body) return;
 
-  const btnHtml = PATROL_PRESETS.map(p => `
-    <button onclick="_selectPatrolPreset('${p.id}')"
-      style="
-        padding:6px 10px;border-radius:999px;border:1.5px solid ${p.id === selectedId ? p.color : 'rgba(255,255,255,.1)'};
-        background:${p.id === selectedId ? p.color + '22' : 'transparent'};
-        color:${p.id === selectedId ? p.color : '#aaa'};
-        font-size:0.72rem;font-weight:700;cursor:pointer;
-        transition:all .15s;font-family:inherit;
-      ">${p.label}</button>
-  `).join('');
 
-  body.innerHTML = `
-    <div style="font-size:0.7rem;color:#555;margin-bottom:8px;letter-spacing:.05em;">ルートを選択</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">${btnHtml}</div>
-    <div id="patrolRoutePreview" style="min-height:28px;"></div>
-  `;
-
-  if (selectedId) _renderPatrolPreview(selectedId);
-}
-
-function _selectPatrolPreset(presetId) {
-  const preset = PATROL_PRESETS.find(p => p.id === presetId);
-  if (!preset) return;
-  _patrol.presetId = presetId;
-  _patrol.color    = preset.color;
-  _patrol.route    = _resolvePatrolPois(preset);
-  _patrol.idx      = 0;
-  _patrol.log      = [];
-  _patrol.state    = 'idle';
-  _renderPatrolIdle(presetId);
-}
-
-function _renderPatrolPreview(presetId) {
-  const preview = document.getElementById('patrolRoutePreview');
-  if (!preview || !_patrol.route.length) return;
-  const names = _patrol.route.map(id => {
-    const poi = _findPoi(id);
-    return poi ? `${poi.icon} ${poi.name.split(' ')[0]}` : id;
-  });
-  preview.innerHTML = `
-    <div style="font-size:0.7rem;color:#555;margin-bottom:6px;">${_patrol.route.length}スポット</div>
-    <div style="font-size:0.72rem;color:#888;line-height:1.8;">${names.join(' → ')}</div>
-    <button onclick="_startPatrol()"
-      style="margin-top:12px;width:100%;padding:10px;border-radius:12px;border:0;
-             background:${_patrol.color};color:#fff;font-weight:800;font-size:0.85rem;
-             cursor:pointer;font-family:inherit;box-shadow:0 3px 0 rgba(0,0,0,.3);
-             transition:transform .1s;"
-      onmousedown="this.style.transform='translateY(2px)'"
-      onmouseup="this.style.transform=''"
-    >▶ 巡回開始</button>
-  `;
-}
 
 /* ---------- 巡回開始 ---------- */
-function _startPatrol() {
-  if (!_patrol.route.length) return;
-  if (_patrol.state === 'done') {
-    // リセット
-    _patrol.idx = 0;
-    _patrol.log = [];
-  }
-  _patrol.state = 'running';
-  _renderPatrolRunning();
-  _scheduleNextPatrolStep(0);
-}
 
-function _pausePatrol() {
-  if (_patrol.timer) { clearTimeout(_patrol.timer); _patrol.timer = null; }
-  _patrol.state = 'paused';
-  _renderPatrolRunning();
-}
 
-function _resumePatrol() {
-  _patrol.state = 'running';
-  _renderPatrolRunning();
-  _scheduleNextPatrolStep(400);
-}
 
-function _stopPatrolAgent() {
-  if (_patrol.timer) { clearTimeout(_patrol.timer); _patrol.timer = null; }
-  _patrol.state = 'idle';
-  // マップハイライトを解除
-  document.querySelectorAll('.spmap-poi-marker').forEach(m => m.classList.remove('spm-active','patrol-scan'));
-}
 
-function _scheduleNextPatrolStep(delay) {
-  if (_patrol.timer) clearTimeout(_patrol.timer);
-  _patrol.timer = setTimeout(_patrolStep, delay ?? 1000);
-}
 
 /* ---------- 1ステップ実行 ---------- */
-async function _patrolStep() {
-  if (_patrol.state !== 'running') return;
-  if (_patrol.idx >= _patrol.route.length) {
-    _patrol.state = 'done';
-    _renderPatrolDone();
-    document.querySelectorAll('.spmap-poi-marker').forEach(m => m.classList.remove('spm-active','patrol-scan'));
-    if (typeof _reizoNotifyPatrolDone === 'function') _reizoNotifyPatrolDone();
-    return;
-  }
-
-  const poiId  = _patrol.route[_patrol.idx];
-  const poi    = _findPoi(poiId);
-  if (!poi) { _patrol.idx++; _scheduleNextPatrolStep(200); return; }
-
-  const cost       = EMUER_RATE_CONFIG[poiId] ?? 0;
-  const emuerData  = _getEmuerData();
-  const balance    = emuerData?.balance ?? 0;
-  const restricted = !!(emuerData?.restrictionUntil && Date.now() < emuerData.restrictionUntil);
-  const canGo      = cost === 0 || (!restricted && balance >= cost);
-
-  // ログに追加
-  _patrol.log.unshift({ poiId, name: poi.name, icon: poi.icon, cost, canGo, restricted });
-
-  // マップのPOIをハイライト（SchoolParkマップが開いていれば）
-  document.querySelectorAll('.spmap-poi-marker').forEach(m => m.classList.remove('spm-active','patrol-scan'));
-  const markerEl = document.querySelector(`[data-poi="${poiId}"]`);
-  if (markerEl) {
-    markerEl.classList.add('spm-active');
-    markerEl.scrollIntoView?.({ behavior:'smooth', block:'nearest' });
-  }
-
-  _patrol.idx++;
-  _renderPatrolRunning();
-  _scheduleNextPatrolStep(900);
-}
 
 /* ---------- 巡回中UI ---------- */
-function _renderPatrolRunning() {
-  const body = document.getElementById('patrolAgentBody');
-  if (!body) return;
-
-  const total     = _patrol.route.length;
-  const done      = _patrol.idx;
-  const pct       = total > 0 ? Math.round((done / total) * 100) : 0;
-  const isRunning = _patrol.state === 'running';
-  const isPaused  = _patrol.state === 'paused';
-  const curPoiId  = _patrol.route[_patrol.idx];
-  const curPoi    = curPoiId ? _findPoi(curPoiId) : null;
-
-  // 進捗ドット（最大12個）
-  const dotMax  = Math.min(total, 12);
-  const dotStep = total > 12 ? Math.ceil(total / 12) : 1;
-  let dots = '';
-  for (let i = 0; i < dotMax; i++) {
-    const realIdx = i * dotStep;
-    const filled  = realIdx < done;
-    const current = realIdx === done || (i === dotMax - 1 && done >= total);
-    const col     = filled ? _patrol.color : current && isRunning ? _patrol.color + '99' : 'rgba(255,255,255,.1)';
-    dots += `<div style="flex:1;max-width:18px;height:6px;border-radius:999px;background:${col};
-                         transition:background .3s;${current && isRunning ? 'animation:patrolDotPulse 1s ease-in-out infinite;' : ''}"></div>`;
-  }
-
-  // ログHTML（最新5件）
-  const logHtml = _patrol.log.slice(0, 5).map((entry, idx) => {
-    const isCur  = idx === 0 && isRunning;
-    const icon   = entry.canGo ? '✅' : '🔴';
-    const label  = entry.canGo ? '行ける' : (entry.restricted ? '制限中' : '残高不足');
-    const costTx = entry.cost > 0 ? `${entry.cost}💎` : '無料';
-    return `
-      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;
-                  border-bottom:1px solid rgba(255,255,255,.04);
-                  opacity:${idx === 0 ? 1 : 0.6 - idx*0.08};">
-        <span style="font-size:0.9rem;">${isCur ? '📡' : icon}</span>
-        <span style="font-size:0.8rem;color:#ddd;flex:1;">${entry.icon} ${entry.name.split(' ')[0]}</span>
-        <span style="font-size:0.7rem;color:#666;">${costTx}</span>
-        <span style="font-size:0.68rem;font-weight:700;color:${entry.canGo ? '#4ade80' : '#ef4444'};">${isCur ? 'スキャン中…' : label}</span>
-      </div>`;
-  }).join('');
-
-  body.innerHTML = `
-    <style>
-      @keyframes patrolDotPulse {
-        0%,100%{opacity:.5;transform:scaleX(.8)}50%{opacity:1;transform:scaleX(1)}
-      }
-    </style>
-
-    <!-- 進捗 -->
-    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);
-                border-radius:14px;padding:12px 14px;margin-bottom:8px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="font-size:0.72rem;color:#888;">
-          ${isRunning ? `📡 スキャン中 — ${curPoi ? curPoi.icon + ' ' + curPoi.name.split(' ')[0] : ''}` :
-            isPaused  ? '⏸ 一時停止中' : ''}
-        </div>
-        <div style="font-size:0.72rem;color:${_patrol.color};font-weight:700;">${done} / ${total}</div>
-      </div>
-      <!-- ドット -->
-      <div style="display:flex;gap:3px;margin-bottom:8px;">${dots}</div>
-      <!-- バー -->
-      <div style="height:4px;background:rgba(255,255,255,.07);border-radius:999px;overflow:hidden;">
-        <div style="height:100%;width:${pct}%;background:${_patrol.color};border-radius:999px;transition:width .6s ease;"></div>
-      </div>
-    </div>
-
-    <!-- コントロールボタン -->
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      ${isRunning
-        ? `<button onclick="_pausePatrol()"
-             style="flex:1;padding:8px;border-radius:10px;border:1.5px solid rgba(255,255,255,.15);
-                    background:rgba(255,255,255,.05);color:#ccc;font-weight:700;font-size:0.78rem;
-                    cursor:pointer;font-family:inherit;">⏸ 一時停止</button>`
-        : `<button onclick="_resumePatrol()"
-             style="flex:1;padding:8px;border-radius:10px;border:0;
-                    background:${_patrol.color};color:#fff;font-weight:800;font-size:0.78rem;
-                    cursor:pointer;font-family:inherit;">▶ 再開</button>`
-      }
-      <button onclick="_stopPatrolAgent();_renderPatrolIdle('${_patrol.presetId}');"
-        style="padding:8px 14px;border-radius:10px;border:1.5px solid rgba(239,68,68,.3);
-               background:rgba(239,68,68,.07);color:#f87171;font-weight:700;font-size:0.78rem;
-               cursor:pointer;font-family:inherit;">■ 停止</button>
-    </div>
-
-    <!-- ライブログ -->
-    <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);
-                border-radius:12px;padding:10px 12px;">
-      <div style="font-size:0.68rem;color:#555;margin-bottom:6px;letter-spacing:.06em;">📋 スキャンログ</div>
-      ${logHtml || '<div style="color:#444;font-size:0.75rem;">スキャン開始待ち…</div>'}
-    </div>
-  `;
-}
 
 /* ---------- 巡回完了レポート ---------- */
-function _renderPatrolDone() {
-  const body = document.getElementById('patrolAgentBody');
-  if (!body) return;
-
-  const log      = _patrol.log;
-  const canList  = log.filter(e => e.canGo);
-  const cantList = log.filter(e => !e.canGo);
-  const totalCost = canList.reduce((s,e) => s + e.cost, 0);
-  const emuerData = _getEmuerData();
-  const balance   = emuerData?.balance ?? 0;
-  const shortfall = cantList.reduce((s,e) => s + e.cost, 0);
-
-  const canHtml = canList.map(e => `
-    <div style="display:flex;align-items:center;gap:6px;padding:4px 0;
-                border-bottom:1px solid rgba(255,255,255,.04);">
-      <span style="font-size:0.85rem;">${e.icon}</span>
-      <span style="font-size:0.77rem;color:#ccc;flex:1;">${e.name.split(' ')[0]}</span>
-      <span style="font-size:0.72rem;color:#D4A843;">${e.cost > 0 ? e.cost+'💎' : '無料'}</span>
-      <span style="font-size:0.7rem;color:#4ade80;">✅</span>
-    </div>`).join('');
-
-  const cantHtml = cantList.map(e => `
-    <div style="display:flex;align-items:center;gap:6px;padding:4px 0;
-                border-bottom:1px solid rgba(255,255,255,.04);">
-      <span style="font-size:0.85rem;">${e.icon}</span>
-      <span style="font-size:0.77rem;color:#888;flex:1;">${e.name.split(' ')[0]}</span>
-      <span style="font-size:0.72rem;color:#D4A843;">${e.cost > 0 ? e.cost+'💎' : '無料'}</span>
-      <span style="font-size:0.7rem;color:#ef4444;">🔴</span>
-    </div>`).join('');
-
-  body.innerHTML = `
-    <!-- 完了バナー -->
-    <div style="text-align:center;padding:14px 0 10px;
-                border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:12px;">
-      <div style="font-size:1.8rem;margin-bottom:4px;">🗺️</div>
-      <div style="font-size:0.95rem;font-weight:800;color:#fff;">巡回完了！</div>
-      <div style="font-size:0.75rem;color:#666;margin-top:2px;">${log.length}スポットをスキャン</div>
-    </div>
-
-    <!-- サマリカード -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-      <div style="text-align:center;padding:10px;background:rgba(74,222,128,.07);
-                  border:1px solid rgba(74,222,128,.18);border-radius:12px;">
-        <div style="font-size:1.3rem;font-weight:800;color:#4ade80;">${canList.length}</div>
-        <div style="font-size:0.68rem;color:#666;">行けるスポット</div>
-      </div>
-      <div style="text-align:center;padding:10px;background:rgba(239,68,68,.07);
-                  border:1px solid rgba(239,68,68,.18);border-radius:12px;">
-        <div style="font-size:1.3rem;font-weight:800;color:#f87171;">${cantList.length}</div>
-        <div style="font-size:0.68rem;color:#666;">残高不足</div>
-      </div>
-    </div>
-
-    <!-- エージェント判断 -->
-    <div style="background:rgba(212,168,67,.04);border:1px solid rgba(212,168,67,.12);
-                border-radius:12px;padding:10px 12px;margin-bottom:12px;">
-      <div style="font-size:0.68rem;color:#555;margin-bottom:4px;">🤖 エージェント判断</div>
-      <div style="font-size:0.78rem;color:#aaa;line-height:1.6;">
-        ${cantList.length === 0
-          ? `✅ 現在の残高で全スポットに訪問可能です！`
-          : shortfall > balance
-            ? `⚠️ 残高不足が ${cantList.length} 件。あと <strong style="color:#D4A843">${(shortfall - balance).toLocaleString()} 💎</strong> 追加で全スポット訪問可能。`
-            : `💡 残高はありますが制限中のスポットが ${cantList.filter(e=>e.restricted).length} 件あります。制限解除後に再巡回を推奨。`
-        }
-      </div>
-    </div>
-
-    <!-- 行けるリスト -->
-    ${canList.length > 0 ? `
-    <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);
-                border-radius:12px;padding:10px 12px;margin-bottom:8px;">
-      <div style="font-size:0.68rem;color:#555;margin-bottom:6px;">✅ 訪問可能 — 合計 ${totalCost}💎</div>
-      ${canHtml}
-    </div>` : ''}
-
-    <!-- 行けないリスト -->
-    ${cantList.length > 0 ? `
-    <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);
-                border-radius:12px;padding:10px 12px;margin-bottom:8px;">
-      <div style="font-size:0.68rem;color:#555;margin-bottom:6px;">🔴 残高不足・制限中 — 不足 ${shortfall}💎</div>
-      ${cantHtml}
-    </div>` : ''}
-
-    <!-- 再巡回ボタン -->
-    <button onclick="_selectPatrolPreset('${_patrol.presetId}');_startPatrol();"
-      style="width:100%;padding:10px;border-radius:12px;border:1.5px solid ${_patrol.color};
-             background:${_patrol.color}22;color:${_patrol.color};font-weight:800;
-             font-size:0.82rem;cursor:pointer;font-family:inherit;margin-bottom:6px;">
-      🔄 同じルートを再巡回
-    </button>
-    <button onclick="_stopPatrolAgent();_renderPatrolIdle();"
-      style="width:100%;padding:8px;border-radius:12px;border:1.5px solid rgba(255,255,255,.1);
-             background:transparent;color:#888;font-weight:700;
-             font-size:0.78rem;cursor:pointer;font-family:inherit;">
-      ← ルート選択に戻る
-    </button>
-  `;
-}
 
 /* ═══════════════════════════════════════════════════════
    SchoolPark agents — Phase 2: EMUER 自動管理
@@ -11529,7 +10642,6 @@ let _emuerAgentTimer = null;
 
 function _stopEmuerAgent() {
   if (_emuerAgentTimer) { clearInterval(_emuerAgentTimer); _emuerAgentTimer = null; }
-  _stopPatrolAgent();
   _stopTaskRunner();
   _stopAlertChecker();
 }
@@ -11538,8 +10650,6 @@ async function _startEmuerAgent() {
   _stopEmuerAgent();
   _initAlertAgent();
   _initTaskAgent();
-  _initRecommendAgent();
-  _initPatrolSection();
   await _renderEmuerAgent();
   // 制限中は1秒おき、通常時は15秒おきに更新
   _emuerAgentTimer = setInterval(async () => {
@@ -12058,18 +11168,11 @@ function spReizoKeydown(e) {
 ═══════════════════════════════════════════════════════ */
 const REIZO_SKILLS = [
   { id: 'emuer',     keywords: ['残高', 'ざんだか', 'emuer', 'エミュア', '財布', '補充', '制限'], handler: () => _reizoSkillEmuer() },
-  { id: 'recommend', keywords: ['おすすめ', 'なにする', '何する', 'どこいく', 'どこ行く', '提案', 'ひまつぶし'], handler: () => _reizoSkillRecommend() },
-  { id: 'patrol',    keywords: ['巡回', 'パトロール', 'まわって', '案内して'], handler: () => _reizoSkillPatrol() },
   { id: 'task',      keywords: ['リマインド', '予約して', 'あとで教えて', 'タスク', '思い出させて'], handler: () => _reizoSkillTask() },
   { id: 'alert',     keywords: ['アラート', '通知して', '知らせて', '監視して'], handler: () => _reizoSkillAlert() },
-  { id: 'tutorial',  keywords: ['チュートリアル', 'tutorial', 'ガイド', '入門', '使い方'], handler: () => _reizoSkillTutorial() },
 ];
 
 /* ── 📖 チュートリアル（冷蔵庫くんに統合済み） ── */
-function _reizoSkillTutorial() {
-  _spReizoAppendMsg('チュートリアルはぼくに統合されたよ🧊\nわからないことは、そのままぼくに聞いてくれたら答えるよ！\n詳しいガイドページも開いておくね📖', false);
-  setTimeout(() => { spReizoClose(); openSpContent('/schoolpark/tutorial.html'); }, 1200);
-}
 function _matchReizoSkill(q) {
   const lq = q.toLowerCase();
   for (const s of REIZO_SKILLS) {
@@ -12103,76 +11206,9 @@ async function _reizoSkillEmuer() {
 }
 
 /* ── 🔍 コンテンツ推薦 ── */
-async function _reizoSkillRecommend() {
-  let data = _getEmuerData();
-  if (!data && typeof _initEmuer === 'function') data = await _initEmuer();
-  const balance = data ? (data.balance || 0) : 0;
-  const history = data ? (data.history || []) : [];
-
-  const zoneScore = {};
-  history.forEach(h => {
-    if (h.type !== 'spend') return;
-    const matched = SP_POIS.find(p => {
-      const first = p.name.split(' ')[0];
-      return h.label === first || h.label === p.id;
-    });
-    if (matched) zoneScore[matched.zone] = (zoneScore[matched.zone] || 0) + 1;
-  });
-  const topZone = Object.entries(zoneScore).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-
-  const hour = new Date().getHours();
-  let timeZone;
-  if      (hour >= 6  && hour < 12) timeZone = 'learn';
-  else if (hour >= 12 && hour < 17) timeZone = 'earn';
-  else if (hour >= 17 && hour < 21) timeZone = 'play';
-  else                               timeZone = 'guard';
-
-  const scored = SP_POIS.filter(p => p.status === 'open').map(p => {
-    const cost = EMUER_RATE_CONFIG[p.id] ?? 0;
-    const canAfford = balance >= cost;
-    let score = 0;
-    if (topZone && p.zone === topZone) score += 30;
-    if (p.zone === timeZone) score += 20;
-    if (canAfford) score += 10; else score -= 50;
-    if (cost === 0) score += 8;
-    return { poi: p, cost, canAfford, score };
-  }).filter(s => s.canAfford).sort((a, b) => b.score - a.score);
-
-  const top = scored.slice(0, 2);
-  if (top.length === 0) {
-    _spReizoAppendMsg('うーん、いまの残高だと行けそうな場所が見つからなかったよ💦 EMUERが貯まったらまた聞いてね', false);
-    return;
-  }
-  const cardsHtml = top.map(s => `
-    <div class="sp-reizo-rec-card" onclick="spReizoClose();setTimeout(()=>gatedOpen('${s.poi.id}',()=>{${s.poi.action ? s.poi.action + '()' : (s.poi.page ? `openSpContent('${s.poi.page}')` : '')}}),300);">
-      <div style="font-size:1.3rem;">${s.poi.icon}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-weight:700;font-size:12px;color:#e0e0e0;">${s.poi.name}</div>
-        <div style="font-size:11px;color:${s.cost === 0 ? '#4ade80' : '#D4A843'};">${s.cost === 0 ? '無料' : s.cost + '💎'}</div>
-      </div>
-    </div>`).join('');
-  _spReizoAppendRich(`🔍 いまのきみにおすすめはこれ！タップすると移動するよ${cardsHtml}`);
-}
 
 /* ── 🗺️ 自動巡回 ── */
-async function _reizoSkillPatrol() {
-  const div = _spReizoAppendMsg('どのゾーンを巡回する？', false);
-  const bubble = div.querySelector('.sp-reizo-bubble');
-  bubble.appendChild(_spReizoQuickReplies(PATROL_PRESETS.map(p => ({
-    label: p.label,
-    onClick: () => {
-      _selectPatrolPreset(p.id);
-      _startPatrol();
-      _spReizoAppendMsg(`🗺️ ${p.label}ゾーンの巡回をはじめたよ！終わったら教えるね`, false);
-    }
-  }))));
-}
 // 巡回が完了したら _patrolStep() から呼ばれる（下のフックを参照）
-function _reizoNotifyPatrolDone() {
-  if (!_patrol.log.length) return;
-  const canGoCount = _patrol.log.filter(l => l.canGo).length;
-  _spReizoAppendMsg(`🗺️ 巡回おわったよ！${_patrol.log.length}か所まわって、${canGoCount}か所は今すぐ行けそうだったよ✨`, false);
-}
 
 /* ── 📋 タスク自動実行 ── */
 async function _reizoSkillTask() {
@@ -12244,93 +11280,10 @@ const SP_TUT_STEPS = [
 let _spTutIdx = 0;
 let _spTutRunning = false;
 
-function _spTutMode() {
-  try { return JSON.parse(localStorage.getItem('spSettings') || '{}').spSettingTutorialMode || 'always'; } catch { return 'always'; }
-}
-function startSpTutorial() {
-  // 「初回のみ」設定で既に表示済みならスキップ
-  if (_spTutMode() === 'once' && localStorage.getItem(SP_TUT_KEY) === '1') return;
-  _spTutIdx = 0;
-  _spTutRunning = true;
-  setTimeout(() => _spTutRender(true), 900);
-}
 
-function _spTutRender(enter) {
-  const step    = SP_TUT_STEPS[_spTutIdx];
-  const overlay = document.getElementById('spTutOverlay');
-  const mascot  = document.getElementById('spTutMascot');
-  const textEl  = document.getElementById('spTutText');
-  const hintEl  = document.getElementById('spTutHint');
-  const sidebar = document.querySelector('.spmap-left');
-  if (!overlay || !mascot || !textEl || !hintEl) return;
 
-  textEl.textContent = step.text;
-  hintEl.textContent = step.hint;
-  hintEl.className   = 'sp-tut-hint' + (step.mode === 'area' ? ' gold' : '');
 
-  if (step.mode === 'area') {
-    overlay.classList.add('step-area');
-    if (sidebar) sidebar.classList.add('sp-tut-area-hl');
-    // モバイル: サイドバードロワーを開く
-    if (window.innerWidth <= 768 && sidebar && !sidebar.classList.contains('spmap-left-open')) {
-      toggleSpMapMenu();
-    }
-  } else {
-    overlay.classList.remove('step-area');
-    if (sidebar) sidebar.classList.remove('sp-tut-area-hl');
-  }
 
-  overlay.classList.add('active');
-  mascot.classList.add('active');
-
-  if (enter) {
-    mascot.classList.remove('in');
-    requestAnimationFrame(() => requestAnimationFrame(() => mascot.classList.add('in')));
-  }
-}
-
-function _spTutNext() {
-  if (!_spTutRunning) return;
-  const step = SP_TUT_STEPS[_spTutIdx];
-  if (step.mode === 'area') return; // エリア選択ステップは area クリックでのみ進む
-  if (step.mode === 'last') { _spTutFinish(); return; }
-  _spTutIdx++;
-  const mascot = document.getElementById('spTutMascot');
-  mascot.classList.remove('in');
-  setTimeout(() => _spTutRender(true), 280);
-}
-
-// spMapFilter() から呼ばれる
-function _spTutOnAreaClick(zones) {
-  if (!_spTutRunning) return;
-  if (SP_TUT_STEPS[_spTutIdx]?.mode !== 'area') return;
-  if (zones === 'all') return; // 「すべて」は対象外
-  const sidebar = document.querySelector('.spmap-left');
-  if (sidebar) sidebar.classList.remove('sp-tut-area-hl');
-  // モバイル: ドロワーを閉じる
-  if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('spmap-left-open')) {
-    toggleSpMapMenu();
-  }
-  _spTutIdx++;
-  const mascot = document.getElementById('spTutMascot');
-  mascot.classList.remove('in');
-  setTimeout(() => _spTutRender(true), 280);
-}
-
-function _spTutFinish() {
-  _spTutRunning = false;
-  // 「初回のみ」モードのときだけフラグを保存
-  if (_spTutMode() === 'once') localStorage.setItem(SP_TUT_KEY, '1');
-  const overlay = document.getElementById('spTutOverlay');
-  const mascot  = document.getElementById('spTutMascot');
-  const sidebar = document.querySelector('.spmap-left');
-  mascot.classList.remove('in');
-  setTimeout(() => {
-    mascot.classList.remove('active');
-    overlay.classList.remove('active', 'step-area');
-    if (sidebar) sidebar.classList.remove('sp-tut-area-hl');
-  }, 450);
-}
 
 /* ═══════════════════════════════════════════════════════
    SchoolPark キーボードショートカット
@@ -12365,7 +11318,6 @@ function _spIsPaidUser() {
     }
     if (e.key === 'Backspace' && !isInput) {
       const anyOpen = document.querySelector('.sp-panel.open');
-      if (!anyOpen) closeSpMap?.();
       return;
     }
 
@@ -12400,9 +11352,8 @@ function _spIsPaidUser() {
       case 'agents':   openSpPanel('spRobotPanel');    break;
       case 'wallet':   openSpPanel('spWalletPanel');   break;
       case 'settings': openSpPanel('spSettingsPanel'); break;
-      case 'tutorial': openSpContent('/schoolpark/tutorial.html'); break;
       case 'reizo':    spReizoOpen?.();                break;
-      case 'emu':      closeSpMap?.();                 break;
+      case 'emu':      break;
     }
   }
   function _execCustomKey(n) {
@@ -14720,85 +13671,14 @@ function room3ApplyFilter() {
 // =====================
 // Explore / Room 制御
 // =====================
-document.getElementById("exploreBtn").onclick = () => {
-  document.getElementById("exploreOverlay").style.display = "flex";
-};
 
 
-function closeExplore() {
-  document.getElementById("exploreOverlay").style.display = "none";
-}
 
-function openSchoolPark() {
-  // 4ゲート選択画面を廃止 → 直接SchoolParkマップを開く
-  if (typeof openSpMap === "function") openSpMap();
-}
 function closeSchoolPark() { /* no-op: 4ゲートオーバーレイ廃止済み */ }
-function closeSpComing(e) {
-  if (!e || e.target === document.getElementById("spComingOverlay")) {
-    document.getElementById("spComingOverlay").style.display = "none";
-  }
-}
 
 /* ── SchoolPark マップ ─────────────────────────────── */
-const SP_ZONES = {
-  learn: { label:"📚 Creative Academy", sub:"学びと創造", color:"#3b82f6" },
-  guard: { label:"🏥 Care Station",      sub:"安全と心身", color:"#ef4444" },
-  earn:  { label:"🏪 Life Market",        sub:"日常と稼ぎ", color:"#eab308" },
-  play:  { label:"🌿 Frontier Gate",      sub:"冒険と救助", color:"#22c55e" },
-  star:  { label:"⭐ 交通・インフラ",      sub:"",           color:"#a855f7" },
-  plaza: { label:"💪 健康・運動・交流",      sub:"",           color:"#f59e0b" },
-  life:  { label:"🏠 暮らしの広場",        sub:"",           color:"#f97316" },
-  dawn:  { label:"🌅 Dawn Plaza",         sub:"夜明けの広場", color:"#fb923c" },
-
-};
 
 /* POI positions: px/py = % of spmap-inner(960x960px=画像1:1) に基づく正確な建物位置 */
-const SP_POIS = [
-  // Creative Academy（北エリア：学びと創造）
-  { id:"learn1", name:"Library 図書館",        icon:"📚", zone:"learn", px:29, py:24, desc:"学校では教えてくれない情報満載！SchoolPark図書館",  status:"open", page:"/schoolpark/north-library.html", btnLabel:"📚 図書館に入る" },
-  { id:"learn2", name:"Bookstore 本屋",         icon:"📖", zone:"learn", px:40, py:14, desc:"SchoolParkオリジナル教材・学習コンテンツ・推薦著書など幅広くお取り扱いしてます。", status:"open", page:"/schoolpark/north-bookstore.html", btnLabel:"📖 本屋に入る" },
-  { id:"learn3", name:"Art Museum 美術館",      icon:"🎨", zone:"learn", px:62, py:10, desc:"みんなの美術館、SchoolParkの個展。お気に入りの作品を見つけましょう！",  status:"open", page:"/schoolpark/north-museum.html", btnLabel:"🎨 美術館に入る" },
-  { id:"learn4", name:"Lab 研究所",             icon:"🔬", zone:"learn", px:67, py:22, desc:"DAO・Tokenomics・教育の研究レポート4本、実験ログターミナル、☄️隕石研究所に切替可能",   status:"open", page:"/schoolpark/north-lab.html", btnLabel:"🔬 研究する" },
-  { id:"learn5", name:"Museum 博物館",          icon:"🏛️", zone:"learn", px:50, py:18, desc:"寄ってらっしゃい・見てらっしゃい。SchoolParkの博物館！",                              status:"open", page:"/schoolpark/north-history.html", btnLabel:"🏛️ 博物館に入る" },
-  // Care Station（西エリア：安全と心身）
-  { id:"guard1", name:"Hospital 病院",          icon:"🏥", zone:"guard", px:13, py:35, desc:"ユーザーサポート・トラブル対応。困ったときの相談窓口",                status:"open", page:"/schoolpark/west-hospital.html", btnLabel:"🏥 治しに行く" },
-  { id:"guard2", name:"Police Station 警察署",  icon:"🚔", zone:"guard", px:21, py:47, desc:"SchoolPark自治・ルール管理。コミュニティガイドライン",                status:"open", page:"/schoolpark/west-police.html",  btnLabel:"🚓 相談しに行く" },
-  { id:"guard3", name:"Security Guard 自警団",  icon:"🛡️", zone:"guard", px:24, py:56, desc:"セキュリティ・安全管理。不正アクセス対策・ウォレット保護ガイド",    status:"open", page:"/schoolpark/west-guard.html",    btnLabel:"自警団に入る" },
-  { id:"guard4", name:"Gym ジム",               icon:"💪", zone:"guard", px:14, py:64, desc:"スキルアップ・習慣化トレーニング。Web3プレイヤーとして成長する",      status:"open", page:"/schoolpark/west-gym.html",      btnLabel:"💪 鍛えに行く" },
-  { id:"guard5", name:"Fire Station 消防署",    icon:"🚒", zone:"guard", px:17, py:40, desc:"緊急対応・危機管理。コミュニティ緊急時の対応フローと安全確認",        status:"open", page:"/schoolpark/west-fire.html",     btnLabel:"🧯 確認しに行く" },
-  { id:"guard6", name:"Bank 銀行",             icon:"🏦", zone:"guard", px:10, py:53, desc:"EMUERの変換・残高確認。good/changeポイントをEMUERトークンに変換する",   status:"open", page:"/schoolpark/west-bank.html",     btnLabel:"EMUER を下ろす" },
-
-  // Life Market（東エリア：日常と稼ぎ）
-  { id:"earn1",  name:"Hotel ホテル",            icon:"🏨", zone:"earn",  px:80, py:25, desc:"SchoolParkのオンラインホテル。現実になるようにがんばります！",                 status:"open",   eastKey:"hotel",   sub:"日常・宿泊" },
-  { id:"earn2",  name:"Mansion マンション",      icon:"🏰", zone:"earn",  px:87, py:34, desc:"SchoolParkのオンラインマンション。現実になるようにがんばります！",           status:"open",   eastKey:"mansion", sub:"日常・住居" },
-  { id:"earn3",  name:"Shopping ショッピング",   icon:"🛍️", zone:"earn",  px:75, py:38, desc:"East Area Mall。SchoolParkオリジナルアイテムをEMUERで購入できるショッピングモール", status:"open", page:"/schoolpark/east-shopping.html" },
-  { id:"earn4",  name:"Greengrocer 八百屋",     icon:"🥦", zone:"earn",  px:83, py:44, desc:"健康・栄養コンテンツ。体と心を整えるライフスタイル提案",             status:"open",   eastKey:"yakuya",  sub:"日常・買い物" },
-  { id:"earn5",  name:"Fruit Shop 果物屋",      icon:"🍎", zone:"earn",  px:81, py:55, desc:"健康・栄養コンテンツ。体と心を整えるライフスタイル提案",             status:"open",   eastKey:"fruits",  sub:"日常・買い物" },
-  { id:"earn6",  name:"Coffee 珈琲",            icon:"☕", zone:"earn",  px:83, py:63, desc:"SchoolParkのオンラインコーヒーショップ。現実になるようにがんばります！",             status:"open",   eastKey:"coffee",  sub:"日常・癒し" },
-  { id:"earn7",  name:"Hotel ホテル（下）",      icon:"🏩", zone:"earn",  px:88, py:69, desc:"SchoolParkのオンラインホテル。現実になるようにがんばります！",                              status:"open",   eastKey:"hotel2",  sub:"日常・宿泊" },
-  // Frontier Gate（南エリア：冒険と救助）
-  { id:"play1",  name:"Non-theater 映画館",     icon:"🎬", zone:"play",  px:68, py:73, desc:"SchoolParkの映画館。名作をもう一度。",  status:"open", page:"/schoolpark/south-cinema.html", sub:"冒険・娯楽" },
-  { id:"play2",  name:"Elevator エレベーター",   icon:"🛗", zone:"play",  px:74, py:79, desc:"のって・しらべて・たのしもう！世界のエレベーターとしくみを探検",    status:"open", page:"/schoolpark/south-elevator.html", sub:"わくわく・体験" },
-  { id:"play3",  name:"Terminal Station 駅舎",  icon:"🚉", zone:"play",  px:51, py:77, desc:"各エリアへの出発点・交通ハブ。SchoolParkの玄関口",                  status:"open", page:"/schoolpark/south-station.html", sub:"冒険・移動" },
-  { id:"play4",  name:"Crossing 交差点",        icon:"🚦", zone:"play",  px:43, py:82, desc:"思考・意見の交差点。安全運転で議論を楽しもう！",  status:"open", page:"/schoolpark/south-crossing.html" },
-  { id:"play5",  name:"Mountain Climbing 登山", icon:"⛰️", zone:"play",  px:37, py:84, desc:"のぼって・しらべて・たのしもう！せかいのすごいやまとのぼりかた",    status:"open", page:"/schoolpark/south-mountain.html" },
-  { id:"play6",  name:"Fishing 釣り",           icon:"🎣", zone:"play",  px:42, py:89, desc:"つって・しらべて・たのしもう！せかいのすごいさかなとつりかた",       status:"open", page:"/schoolpark/south-fishing.html" },
-  { id:"play7",  name:"Terminal Station 駅舎（下）",icon:"🚇", zone:"play",  px:57, py:88, desc:"南エリア中央の交通ハブ。各方面への乗り換えポイント", sub:"冒険・旅立ち",        status:"open", page:"/schoolpark/south-station2.html" },
-  { id:"play8",  name:"Amusement アミューズメント", icon:"🎪", zone:"play",  px:63, py:83, desc:"南エリアの遊びの拠点。ECHO FIELD・秘密のとびら・林檎の方程式・隕石研究所がここで遊べる！", status:"open", action:"openSpAmusement", sub:"冒険・遊び", btnLabel:"🎪 遊びに行く" },
-  // 交通・インフラ（ゲート）
-  /* Gate A — Dawn Plaza 削除済み */
-  { id:"star2",  name:"Frontier Gate 前線の砦",      icon:"🏰", zone:"star", px:50, py:94, desc:"Gate B — 南エリアの正面玄関。新コンテンツ準備中",           status:"coming" },
-  { id:"star3",  name:"Creative Academy 学びの門",   icon:"🎓", zone:"star", px:52, py:7,  desc:"Gate C — 北エリアの入口。新コンテンツ準備中",  status:"coming" },
-  // 夜明けの広場
-  { id:"dawn1",  name:"Community Stage 夜明けの舞台", icon:"🎭", zone:"dawn", px:18, py:84, desc:"夜明けの広場に佇む小さな舞台。コミュニティのための交流・発表スペース",  status:"coming" },
-  { id:"star4",  name:"Starry Sky Station 星空の駅", icon:"🚀", zone:"star", px:88, py:86, desc:"Gate D — 星空の駅。宇宙への扉。EMUERトークンで未来を切り拓く",         status:"coming" },
-  { id:"star5",  name:"Night Sky 夜空の展望台",      icon:"🌌", zone:"star", px:93, py:79, desc:"星空の駅に併設された展望台。満天の星空と夜の宇宙を、Emuの仲間とともに眺める場所", status:"open", action:"openRoom2" },
-  // 中央・健康
-  { id:"plaza1", name:"Fountain 噴水広場",      icon:"⛲", zone:"plaza", px:50, py:38, desc:"SchoolParkの中心。コミュニティ交流広場。DAO投票・イベント開催スポット", status:"open", page:"/schoolpark/fountain.html" },
-  // 暮らし
-  { id:"life1",  name:"House 家",               icon:"🏡", zone:"life",  px:84, py:51, desc:"SchoolParkのオンライン不動産。現実になるようにがんばります！",               status:"open",   eastKey:"house"   },
-];
 
 const GATE_NAMES = {
   b: "Gate B — Frontier Gate（南エリア・冒険と救助）",
@@ -14808,13 +13688,7 @@ const GATE_NAMES = {
 
 let _currentGate = "";
 let _spMapZoomLevel = 1;
-let _spMapFilter = "all";
 
-function selectSpGate(gate) {
-  _currentGate = gate;
-  document.getElementById("schoolparkOverlay").style.display = "none";
-  openSpMap(gate);
-}
 
 /* ══════════════════════════════════════════════════════
    SchoolPark インフォバー: 混雑状況 + リアルタイム天気
@@ -14905,80 +13779,7 @@ const _WTTR_WC = {
   374:'🌨️ 霰', 377:'🌨️ 霰',
   386:'⛈️ 雷雨', 389:'⛈️ 雷雨', 392:'⛈️ 雷雪', 395:'⛈️ 雷雪',
 };
-async function _spFetchWeather() {
-  try {
-    const results = await Promise.all(_SP_WEATHER_CITIES.map(c =>
-      fetch(`https://wttr.in/${c.city}?format=j1`, { headers:{ 'Accept':'application/json' } })
-        .then(r => r.json())
-    ));
-    const parts = results.map((r, i) => {
-      const cc  = r.current_condition?.[0] || {};
-      const code = parseInt(cc.weatherCode || '116');
-      const icon = _WTTR_WC[code] || '🌤️';
-      const temp = cc.temp_C != null ? cc.temp_C + '°C' : '—';
-      const key  = _SP_WEATHER_CITIES[i].key;
-      return `${icon} <strong>(${key}) ${temp}</strong>`;
-    });
-    const el = document.getElementById('spInfoWeather');
-    if (el) el.innerHTML = parts.join(' &nbsp;');
-  } catch(e) {
-    const el = document.getElementById('spInfoWeather');
-    if (el) el.innerHTML = '🌤️ 天気 (fuk)/(kan)/(osk)：<strong>—</strong>';
-  }
-}
 
-function openSpMap(gate) {
-  /* ハブのボタン以外からも開けるので、入口そのものでメンテナンスを見る */
-  if (typeof isBrandUnderMaintenance === 'function' && isBrandUnderMaintenance('schoolpark')) {
-    alert('SchoolPark はただいま準備中です。\n\n再開までもうしばらくお待ちください。\nEmu は通常どおりご利用いただけます。');
-    return;
-  }
-  /* SchoolParkのマップを開いた時点で計上する（ハブのボタン以外の経路も拾う） */
-  if (typeof spTrackBrand === 'function') spTrackBrand('schoolpark');
-  _currentGate = gate || _currentGate;
-  const overlay = document.getElementById("spMapOverlay");
-  overlay.style.display = "flex";
-  document.body.classList.add('spmap-open'); /* 問い合わせボタン非表示 */
-  const gateEl = document.getElementById("spMapGateLabel");
-  if (gateEl) gateEl.textContent = GATE_NAMES[_currentGate] || "";
-  _spMapZoomLevel = window.innerWidth <= 1024 ? 1 : 0.75;
-  _spMapFilter = "all";
-  renderSpMapPois();
-  renderSpContentList("all");
-  /* デフォルトズーム同期適用 */
-  _applySpMapZoom();
-  /* 混雑状況・天気を起動 */
-  _spCrowdJoin();
-  _spFetchWeather();
-  /* EMUER残高初期化・表示 */
-  _initEmuer();
-  /* JS駆動アニメ起動 */
-  requestAnimationFrame(() => _startSpLive());
-
-  // スクロール中央揃え（レイアウトサイズ基準で中央に合わせる）
-  requestAnimationFrame(() => {
-    _centerSpMapViewport();
-  });
-
-  // マップ内ホイールがメイン画面にバブルしないよう1回だけ設定
-  const vp = document.getElementById("spMapVP");
-  if (vp && !vp._scrollBound) {
-    vp._scrollBound = true;
-    vp.addEventListener("wheel", e => e.stopPropagation(), { passive: true });
-    vp.addEventListener("touchmove", e => e.stopPropagation(), { passive: true });
-  }
-  if (!window._spMapResizeBound) {
-    window._spMapResizeBound = true;
-    window.addEventListener('resize', () => {
-      if (document.getElementById('spMapOverlay')?.style.display !== 'flex') return;
-      _applySpMapZoom();
-      _centerSpMapViewport();
-    });
-  }
-
-  // ★ 初回のみ冷蔵庫くんチュートリアル演出を開始
-  startSpTutorial();
-}
 
 // ── SchoolPark コンテンツ iframe オーバーレイ ─────────────────
 // コンテンツID マッピング（ランキング集計用）
@@ -15011,76 +13812,12 @@ const _SP_CONTENT_ID_MAP = {
   '/schoolpark/east-coffee.html':    'coffee',
 };
 
-function _spTrackVisit(url) {
-  if (!window.db || !window.fbLib) return;
-  try {
-    const cid = _SP_CONTENT_ID_MAP[url.split('?')[0]];
-    if (!cid) return;
-    const today = new Date().toISOString().slice(0, 10);
-    const ref = window.fbLib.doc(window.db, 'sp_content_visits', `${cid}_${today}`);
-    window.fbLib.setDoc(ref, { contentId: cid, date: today, visits: window.fbLib.increment(1) }, { merge: true }).catch(() => {});
-  } catch(e) {}
-}
 
-function openSpContent(url) {
-  const wallet  = window.connectedAccount || localStorage.getItem("emuWallet") || "";
-  const sep     = url.includes("?") ? "&" : "?";
-  const fullUrl = wallet ? url + sep + "wallet=" + encodeURIComponent(wallet) : url;
 
-  // 訪問数をFirestoreに記録（ランキング集計用）
-  _spTrackVisit(url);
-
-  // SchoolParkマップを一旦隠す（重複表示防止）
-  const spMap = document.getElementById("spMapOverlay");
-  if (spMap) spMap.style.display = "none";
-
-  // body・htmlのスクロールを完全停止（背景スクロール防止）
-  document.documentElement.style.overflow = "hidden";
-  document.body.style.overflow = "hidden";
-  document.body.style.position = "fixed";
-  document.body.style.width = "100%";
-  document.body.dataset.scrollY = String(window.scrollY); // スクロール位置を保存
-
-  const overlay = document.getElementById("spContentOverlay");
-  const frame   = document.getElementById("spContentFrame");
-  frame.src = fullUrl;
-  overlay.style.display = "flex";
-}
-
-function closeSpContent() {
-  const overlay = document.getElementById("spContentOverlay");
-  const frame   = document.getElementById("spContentFrame");
-  overlay.style.display = "none";
-  frame.src = ""; // iframeをリセット
-
-  // スクロール復元
-  const savedY = parseInt(document.body.dataset.scrollY || "0");
-  document.body.style.position = "";
-  document.body.style.width = "";
-  document.body.style.overflow = "";
-  document.documentElement.style.overflow = "";
-  window.scrollTo(0, savedY);
-
-  // SchoolParkマップに即戻り
-  openSpMap();
-}
 
 // iframe内からのメッセージを受信
 window.addEventListener("message", (e) => {
   if (!e.data || typeof e.data !== "object") return;
-  if (e.data.type === "spContentClose") {
-    // 東エリア各棟のオーバーレイを閉じる
-    Object.values(EAST_BUILDINGS || {}).forEach(function(b) {
-      var ov = document.getElementById(b.overlay);
-      if (ov && ov.style.display !== "none") {
-        ov.style.display = "none";
-        document.getElementById(b.frame).src = "";
-      }
-    });
-    closeSpContent();
-    // ナビリンクのアクティブ状態をリセット
-    document.querySelectorAll('.spmap-nav-link').forEach(el => el.classList.remove('active'));
-  }
   // iframeからパネルを開く
   if (e.data.type === "openSpWallet")   { openSpPanel('spWalletPanel'); }
   if (e.data.type === "openSpRobot")    { openSpPanel('spRobotPanel'); }
@@ -15090,33 +13827,7 @@ window.addEventListener("message", (e) => {
     _spLogAdd({ type: e.data.logType || 'action', icon: e.data.icon || '📌', title: e.data.title || 'アクション', detail: e.data.detail || '' });
   }
   // iframeからイベント会場へ移動（EMUER利用料支払い含む）
-  if (e.data.type === "spEventGo") {
-    const evPage = e.data.page;
-    const evFee  = parseInt(e.data.fee || 0);
-    const evTitle = e.data.title || "イベント会場";
-    if (!evPage) return;
-    if (evFee > 0) {
-      const poiKey = "__event__" + evPage.replace(/[^a-zA-Z0-9]/g,"_");
-      EMUER_RATE_CONFIG[poiKey] = evFee;
-      gatedOpen(poiKey, () => openSpContent(evPage));
-    } else {
-      openSpContent(evPage);
-    }
-  }
   // iframeからEMUER購入（切符売り場など）
-  if (e.data.type === "spPurchase") {
-    const fee   = parseInt(e.data.fee || 0);
-    const label = (e.data.label || "切符").replace(/[^a-zA-Z0-9぀-鿿]/g,"_");
-    if (fee <= 0) return;
-    const poiKey = "__ticket__" + label + "__" + fee;
-    EMUER_RATE_CONFIG[poiKey] = fee;
-    gatedOpen(poiKey, () => {
-      const frame = document.getElementById("spContentFrame");
-      if (frame && frame.contentWindow) {
-        frame.contentWindow.postMessage({type:"spPurchaseOk", fee: fee, label: e.data.label}, "*");
-      }
-    });
-  }
 });
 
 /* ═══════════════════════════════════════════════════════
@@ -15371,11 +14082,6 @@ function spSettingSave() {
   localStorage.setItem('spSettings', JSON.stringify(s));
 }
 
-function spSettingReplayTutorial() {
-  closeSpPanel('spSettingsPanel');
-  localStorage.removeItem(SP_TUT_KEY);
-  setTimeout(() => { _spTutIdx = 0; _spTutRunning = true; _spTutRender(true); }, 300);
-}
 
 function spSettingApplyMap() {
   spSettingSave();
@@ -15419,20 +14125,6 @@ function toggleSpMapMenu() {
   backdrop.classList.toggle('open', !isOpen);
 }
 
-function closeSpMap() {
-  document.getElementById("spMapOverlay").style.display = "none";
-  document.body.classList.remove('spmap-open'); /* 問い合わせボタン復元 */
-  closeSpDetail();
-  _stopSpLive();
-  if (_fwTimer) { clearTimeout(_fwTimer); _fwTimer = null; }
-  _spCrowdLeave(); /* Firestoreからセッション削除 */
-  /* 冷蔵庫くん（SchoolPark専用UI）はマップを離れたら必ず閉じる。
-     開いたまま「今日のEmu」等へ移動するとEmu画面に残ってしまうため。 */
-  try { spReizoClose(); } catch (e) {}
-  try { _cancelSpLoadingOverlay(); } catch (e) {}
-  /* ※Emuのカウントはここではしない（「ハブに戻る」時も通るため誤カウントになる）。
-       ハブのEmuボタン / CHESメニューのEmu で明示的にカウントする。 */
-}
 
 /* ブランド別のユニーク入場者カウント（アドレス単位・重複なし・0スタート）
    brand: 'camellia' | 'heartoo' | 'emu' | 'schoolpark'
@@ -15495,13 +14187,7 @@ function chesHubSyncHeader() {
 function _chesHubLiftPanel(id) {
   const el = document.getElementById(id);
   if (!el) return null;
-  const overlay = document.getElementById('spMapOverlay');
-  if (overlay && overlay.contains(el)) document.body.appendChild(el);
   return el;
-}
-function chesHubOpenNotif() {
-  _chesHubLiftPanel('spNotifPanel');
-  if (typeof toggleSpNotifPanel === 'function') toggleSpNotifPanel();
 }
 function chesHubOpenSettings() {
   _chesHubLiftPanel('spSettingsPanel');
@@ -15509,7 +14195,6 @@ function chesHubOpenSettings() {
 }
 
 function chesHubShow() {
-  try { closeSpMap(); } catch (e) {}
   ['logoScreen', 'walletScreen', 'mainApp'].forEach(function (id) {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
@@ -15521,13 +14206,12 @@ function chesHubShow() {
   }
   // ウォレット等の全画面オーバーレイが残っているとハブ(z-index:900)より前面(z-index:3000)に
   // 被さって真っ白になるため確実に閉じる。
-  ['myWalletPage','spContentOverlay'].forEach(function (id) {
+  ['myWalletPage'].forEach(function (id) {
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
   const greet = document.getElementById('hubGreeting');
   if (greet) greet.textContent = CHES_HUB_GREETINGS[Math.floor(Math.random() * CHES_HUB_GREETINGS.length)];
   chesHubSyncHeader();
-  try { if (typeof _renderSpNotifBadge === 'function') _renderSpNotifBadge(); } catch (e) {}
   const hub = document.getElementById('chesHubScreen'); if (hub) hub.style.display = 'block';
 }
 
@@ -15578,7 +14262,7 @@ function _setEmuHomeTab(activeId) {
 // Emu内(#mainApp)は position:static(z-index無し)のため、全画面オーバーレイが残っていると
 // その上に被さって「真っ白」になる。Emuを開く時点で残存オーバーレイを確実に閉じる。
 function _emuCloseFullscreenOverlays() {
-  ['logoScreen','walletScreen','myWalletPage','chesBrandFrame','spContentOverlay'].forEach(function(id){
+  ['logoScreen','walletScreen','myWalletPage','chesBrandFrame'].forEach(function(id){
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
   // ウォレット表示で main-content を display:none にしているので、Emu表示前に復帰させる
@@ -15602,8 +14286,7 @@ function _emuEnsureAppVisible() {
   const legacy = app && app.querySelector(':scope > .container');
   if (legacy) {
     [
-      'spMapOverlay', 'spContentOverlay', 'spReizoPanel', 'spComingOverlay',
-      'exploreOverlay', 'spNotifPanel', 'spMapModal', 'spTutOverlay', 'spTutMascot',
+      'spReizoPanel',
       'emuerRestrictOverlay'
     ].forEach(function (id) {
       const el = document.getElementById(id);
@@ -15611,7 +14294,6 @@ function _emuEnsureAppVisible() {
     });
     legacy.style.display = 'none';
   }
-  try { closeSpMap(); } catch (e) {}
   _emuCloseFullscreenOverlays();
 }
 
@@ -17576,16 +16258,12 @@ function chesHubGo(brand) {
       if (main) main.style.display = 'block';
       const footer = document.getElementById('siteFooter');
       if (footer) footer.style.display = 'block';
-      if (typeof openSpMap === 'function') openSpMap();
       break;
     }
   }
 }
 
 /* POIを検索 */
-function _findPoi(poiId) {
-  return SP_POIS.find(p => p.id === poiId) || null;
-}
 
 /* ゾーン配列 or 'all' でPOIをフィルタ */
 function _spZoneMatch(poi, filter) {
@@ -17594,125 +16272,10 @@ function _spZoneMatch(poi, filter) {
   return poi.zone === filter;
 }
 
-function renderSpMapPois(filter) {
-  const container = document.getElementById("spPOIContainer");
-  if (!container) return;
-  const activeFilter = filter || _spMapFilter || "all";
-  container.innerHTML = "";
-  SP_POIS.forEach(poi => {
-    if (!_spZoneMatch(poi, activeFilter)) return;
-    const zone = SP_ZONES[poi.zone] || {};
-    const color = zone.color || "#fff";
-    const el = document.createElement("div");
-    el.className = "spmap-poi-marker";
-    el.setAttribute("data-poi", poi.id);
-    el.style.left = poi.px + "%";
-    el.style.top  = poi.py + "%";
-    el.innerHTML = `
-      <div class="spmap-poi-diamond" style="background:${color};border-color:rgba(255,255,255,0.9);color:${color};"></div>
-    `;  /* ラベルなし — 詳細パネルにのみ表示 */
-    el.addEventListener("click", (e) => { e.stopPropagation(); spMapSelectPoi(poi.id); });
-    container.appendChild(el);
-  });
-}
 
 /* 左サイドバーのコンテンツ一覧を更新 */
-function renderSpContentList(filter) {
-  const list = document.getElementById("spContentList");
-  if (!list) return;
-  const pois = SP_POIS.filter(p => _spZoneMatch(p, filter));
-  if (pois.length === 0) { list.innerHTML = ''; return; }
 
-  /* エリアごとにグループ化して表示 */
-  const AREA_LABELS = {
-    'all':           'すべてのコンテンツ',
-    'plaza':         '中央エリア — 健康・運動・交流',
-    'earn,life':     '東エリア — 生活・住居、商業・経済',
-    'guard':         '西エリア — 安全・公共',
-    'play':          '南エリア — 遊び・自然',
-    'learn':         '北エリア — 学び・文化',
-  };
-  const key = Array.isArray(filter) ? filter.join(',') : (filter || 'all');
-  const label = AREA_LABELS[key] || '';
 
-  let html = label ? `<div class="spmap-content-sep">${label}（${pois.length}件）</div>` : '';
-  pois.forEach(poi => {
-    const zone = SP_ZONES[poi.zone] || {};
-    html += `<div class="spmap-content-item" id="spcitem-${poi.id}" onclick="spMapSelectPoiFromList('${poi.id}')">
-      <span class="spmap-content-icon">${poi.icon}</span>
-      <div class="spmap-content-info">
-        <div class="spmap-content-name">${poi.name}</div>
-        <div class="spmap-content-zone" style="color:${zone.color||'#666'}">${poi.sub||zone.sub||zone.label||''}</div>
-      </div>
-    </div>`;
-  });
-  list.innerHTML = html;
-}
-
-function spMapSelectPoiFromList(poiId) {
-  /* サイドバーのアクティブ状態更新 */
-  document.querySelectorAll(".spmap-content-item").forEach(el => el.classList.remove("spc-active"));
-  const item = document.getElementById(`spcitem-${poiId}`);
-  if (item) { item.classList.add("spc-active"); item.scrollIntoView({block:"nearest"}); }
-  spMapSelectPoi(poiId);
-}
-
-function spMapSelectPoi(poiId) {
-  const poi = _findPoi(poiId);
-  if (!poi) return;
-  const zone = SP_ZONES[poi.zone] || {};
-  const color = zone.color || "#aaa";
-
-  // アクティブマーカー切り替え
-  document.querySelectorAll(".spmap-poi-marker").forEach(m => m.classList.remove("spm-active"));
-  const active = document.querySelector(`[data-poi="${poiId}"]`);
-  if (active) active.classList.add("spm-active");
-
-  // 詳細パネル表示
-  const panel = document.getElementById("spDetailPanel");
-  const content = document.getElementById("spDetailContent");
-  if (!panel || !content) return;
-  content.innerHTML = `
-    <div class="spmap-detail-icon">${poi.icon}</div>
-    <div class="spmap-detail-name">${poi.name}</div>
-    <div class="spmap-detail-zone" style="background:${color}22;color:${color};border-color:${color}55">
-      ${zone.label}${(poi.sub || zone.sub) ? " — " + (poi.sub || zone.sub) : ""}
-    </div>
-    <div class="spmap-detail-desc">${poi.desc}</div>
-    ${poi.action === "openEmu"
-      ? `<button class="spmap-detail-go-btn" onclick="closeSpMap()">🎓 Emuへ入る</button>`
-      : poi.action === "openExplore"
-        ? `<button class="spmap-detail-go-btn" onclick="closeSpMap();setTimeout(()=>{const b=document.getElementById('exploreBtn');if(b)b.click();},150)">🔍 探索・遊びへ</button>`
-      : poi.action === "openRoom2"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>{closeSpMap();setTimeout(()=>openRoom2(),150)})">🌌 星を見に行く</button>`
-      : poi.action === "openSpAmusement"
-        ? `<button class="spmap-detail-go-btn" onclick="openSpAmusement()">${poi.btnLabel||'🎪 遊びに行く'}</button>`
-      : poi.action === "openTakoyakiStall"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openTakoyakiStall())">${poi.btnLabel||'🐙 屋台に行く'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
-      : poi.action === "openShagekiStall"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openShagekiStall())">${poi.btnLabel||'🎯 狙う'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
-      : poi.action === "openYoyoStall"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openYoyoStall())">${poi.btnLabel||'🎈 遊ぶ'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
-      : poi.action === "openKingyoStall"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKingyoStall())">${poi.btnLabel||'🐟 挑戦する'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
-      : poi.action === "openKakigoriStall"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKakigoriStall())">${poi.btnLabel||'🍧 屋台に行く'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
-      : poi.action === "openKaraageStall"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKaraageStall())">${poi.btnLabel||'🍗 屋台に行く'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
-      : poi.action === "openKaiensaiMarche"
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openKaiensaiMarche())">${poi.btnLabel||'🛍️ マルシェに行く'} <span style="font-size:0.7rem;opacity:0.7">-10 💎</span></button>`
-      : poi.eastKey
-        ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openEastBuilding('${poi.eastKey}'))">${poi.btnLabel||'🚪 遊びに行く'}${EMUER_RATE_CONFIG[poi.id] ? ` <span style="font-size:0.7rem;opacity:0.7">-${EMUER_RATE_CONFIG[poi.id]} 💎</span>` : ''}</button>`
-        : poi.page
-          ? `<button class="spmap-detail-go-btn" onclick="gatedOpen('${poi.id}',()=>openSpContent('${poi.page}'))">${poi.btnLabel||'🚪 遊びに行く'}${EMUER_RATE_CONFIG[poi.id] ? ` <span style="font-size:0.7rem;opacity:0.7">-${EMUER_RATE_CONFIG[poi.id]} 💎</span>` : ''}</button>`
-          : `<div class="spmap-detail-badge">🕐 COMING SOON</div>`
-    }
-  `;
-  panel.classList.add("smd-open");
-  /* 右上ラベルを選択中コンテンツ名に更新 */
-  const gateEl = document.getElementById("spMapGateLabel");
-  if (gateEl) gateEl.textContent = `📍 ${poi.icon} ${poi.name}`;
-}
 
 function closeSpDetail() {
   const panel = document.getElementById("spDetailPanel");
@@ -17723,124 +16286,10 @@ function closeSpDetail() {
   if (gateEl) gateEl.textContent = GATE_NAMES[_currentGate] || '';
 }
 
-function spMapFilter(zones, el) {
-  _spTutOnAreaClick(zones); // チュートリアル ステップ2フック
-  _spMapFilter = zones;
-  document.querySelectorAll(".spmap-area-item").forEach(i => i.classList.remove("spa-active"));
-  if (el) el.classList.add("spa-active");
-  closeSpDetail();
-  renderSpMapPois(zones);
-  renderSpContentList(zones);
-}
 
 /* ── SchoolPark マップ内モーダル ─────────────────── */
-function openSpModal(title, bodyHtml) {
-  document.getElementById('spModalTitle').textContent = title;
-  document.getElementById('spModalBody').innerHTML = bodyHtml;
-  document.getElementById('spMapModal').classList.add('spm-open');
-}
-function closeSpModal() {
-  document.getElementById('spMapModal').classList.remove('spm-open');
-}
 
 /* フッターリンク & チケットボタン */
-function spMapLinkClick(type) {
-  if (type === 'ticket') {
-    openSpModal('🎫 チケットストア', `
-      <p class="spmm-desc">SchoolParkの公式入場券・プレミアム入場券を購入できます。限定コンテンツや限定イベント・SchoolPark運営への参加権が得られます。<br><small style="color:#888;font-size:0.72rem">※ SchoolParkの運営参加権はプレミアム入場券のみ</small></p>
-      <button class="spmm-mkt-btn" onclick="window.open('https://nft.hexanft.com/users/N2IgWc7ul2vOsQ','_blank')">
-        <span class="spmm-mkt-icon">🇯🇵</span>
-        <div class="spmm-mkt-info">
-          <div class="spmm-mkt-name">HEXA マーケットプレイス</div>
-          <div class="spmm-mkt-sub">日本円・クレジットカード対応 / 国内向け</div>
-        </div>
-        <span class="spmm-mkt-arr">→</span>
-      </button>
-      <button class="spmm-mkt-btn" onclick="window.open('https://opensea.io/collection/school-parkemuoffisialnft','_blank')">
-        <span class="spmm-mkt-icon">🌊</span>
-        <div class="spmm-mkt-info">
-          <div class="spmm-mkt-name">OpenSea</div>
-          <div class="spmm-mkt-sub">暗号資産（ETH）対応 / グローバルNFTマーケット</div>
-        </div>
-        <span class="spmm-mkt-arr">→</span>
-      </button>
-      <p class="spmm-desc" style="font-size:0.70rem;margin-top:14px;color:#666">※ 各入場券をご購入後、ウォレットをEmuアプリに接続することで、各機能をご利用いただけます。</p>
-    `);
-  }
-  else if (type === 'company') {
-    openSpModal('🏢 企業情報', `
-      <p class="spmm-desc">SchoolParkを運営する合同会社型DAOの公式情報をご覧いただけます。</p>
-      <a class="spmm-company-link" href="https://school-park-homepage.vercel.app/" target="_blank" rel="noopener">
-        <span style="font-size:1.8rem">🌐</span>
-        <div>
-          <div class="spmm-company-name">SchoolPark 公式ホームページ</div>
-          <div class="spmm-company-sub">school-park-homepage.vercel.app</div>
-        </div>
-        <span style="margin-left:auto;color:#555">→</span>
-      </a>
-      <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px 16px;font-size:0.78rem;color:#888;line-height:1.8">
-        <div>📛 名称：合同会社型DAO SchoolPark</div>
-        <div>📍 運営：合同会社型DAO SchoolPark</div>
-        <div>📅 開園日：2025年5月20日</div>
-        <div>🔗 ブロックチェーン：Ethereum / Polygon</div>
-        <div>🎓 コンセプト：学校より学べて公園より楽しめて会社より稼げる場所を</div>
-      </div>
-    `);
-  }
-  else if (type === 'faq') {
-    const faqs = [
-      { q:'CHESとは何ですか？', a:'合同会社型DAO SchoolParkが運営する、4つのブランドの総称です。Camellia（花と暮らし）、Heartoo（こころ）、Emu（知識を分かち合う場）、SchoolPark（仮想都市）が並んでいます。ログイン後のメイン画面から、どこへでも行き来できます。' },
-      { q:'SchoolParkとは何ですか？', a:'CHESのなかの仮想都市です。マップ上の施設を訪ねながら、学んだり遊んだり買い物をしたりできます。合同会社型DAOとして運営しています。' },
-      { q:'Emuとは何ですか？', a:'CHESのなかの、知識を分かち合う場です。知識の投稿、一日シェア、議論、遊びなどがあります。SchoolParkとは別のブランドで、どちらも同じアカウントで使えます。' },
-      { q:'利用するのにウォレットや暗号資産は必要ですか？', a:'必要ありません。LINE・Google・メールアドレスのいずれかで入場でき、あなた専用のCHESアドレスが自動で作られます。MetaMaskなどのウォレットをお持ちの方は、入場画面の「その他の方法で入る」からご利用いただけます。' },
-      { q:'ログインにパスワードはありますか？', a:'ありません。メールを選んだ場合は、届いたリンクを開くとログインできます。リンクは送信したときと同じブラウザで開いてください。' },
-      { q:'EMUERトークンとは何ですか？', a:'CHESのコミュニティトークン（Polygon上のERC-20）です。知識への反応や学習、ログインボーナスなどで貯まります。詳しくは冷蔵庫くんのチュートリアルをご覧ください。' },
-      { q:'Emuの有料会員にはどんなプランがありますか？', a:'Emu light（月額500円）・Emu plus（月額3,000円）・Emu pro（月額10,000円）の3つがあります。30日間の「語り合える一人」保証が付くのは Emu pro のみです。入場画面の下部、またはEmuの価値プロフィール内「会員ページを開く」からご確認いただけます。' },
-      { q:'有料会員の解約や返金はできますか？', a:'解約はいつでも会員ページから行えます。返金については「語り合える一人」保証のページに条件を記載しています。ご不明な点は下記のお問い合わせからご連絡ください。' },
-      { q:'NFT（有料パス）はどこで購入できますか？', a:'HEXAマーケットプレイス（日本円・クレジットカード対応）またはOpenSea（暗号資産対応）で購入できます。ナビの「チケット購入」からアクセスできます。' },
-      { q:'どんなコンテンツがありますか？', a:'中央エリア（噴水広場）、東エリア（生活・商業）、西エリア（安全・公共）、南エリア（余暇）、北エリア（学び）に加え、グルメ・ショッピングの各エリアがあります。' },
-      { q:'不具合を見つけたときはどうすればいいですか？', a:'左下のサポートボタンから「不具合の報告」を選んでお知らせください。お使いの端末とブラウザ、どの画面で起きたかを書いていただけると助かります。' },
-      { q:'お問い合わせはどこでできますか？', a:'左下のサポートボタンからフォームをご利用ください。2〜3営業日以内にご返答いたします。' },
-    ];
-    openSpModal('❓ よくあるご質問', faqs.map(f => `
-      <div class="spmm-faq-item">
-        <div class="spmm-faq-q">${f.q}</div>
-        <div class="spmm-faq-a">${f.a}</div>
-      </div>`).join(''));
-  }
-  else if (type === 'contact') {
-    openSpModal('📩 お問い合わせ', `
-      <p class="spmm-desc">ご質問・ご要望・取材のご依頼など、お気軽にご連絡ください。2〜3営業日以内にご返答いたします。</p>
-      <div class="spmm-form-group">
-        <label class="spmm-form-label">種別<span class="spmm-req">*</span></label>
-        <select class="spmm-form-select" id="spmm-type">
-          <option value="">選択してください</option>
-          <option value="general">💬 一般的なご質問</option>
-          <option value="account">🔑 アカウント・ログイン</option>
-          <option value="bug">🐛 不具合の報告</option>
-          <option value="membership">🎫 有料会員・お支払い・返金</option>
-          <option value="event">🎪 イベント申込</option>
-          <option value="media">📰 取材・メディア</option>
-          <option value="investor">💰 投資家・提携</option>
-          <option value="nft">🖼️ NFT・購入に関して</option>
-        </select>
-      </div>
-      <div class="spmm-form-group">
-        <label class="spmm-form-label">お名前<span class="spmm-req">*</span></label>
-        <input class="spmm-form-input" id="spmm-name" type="text" placeholder="山田 太郎" />
-      </div>
-      <div class="spmm-form-group">
-        <label class="spmm-form-label">メールアドレス<span class="spmm-req">*</span></label>
-        <input class="spmm-form-input" id="spmm-email" type="email" placeholder="hello@example.com" />
-      </div>
-      <div class="spmm-form-group">
-        <label class="spmm-form-label">お問い合わせ内容<span class="spmm-req">*</span></label>
-        <textarea class="spmm-form-textarea" id="spmm-msg" placeholder="ご質問・ご意見をご記入ください"></textarea>
-      </div>
-      <button class="spmm-submit-btn" onclick="spmmSubmitContact()">送信する</button>
-    `);
-  }
-}
 
 /* お問い合わせ送信 */
 async function spmmSubmitContact() {
@@ -17874,153 +16323,12 @@ async function spmmSubmitContact() {
 }
 
 /* 上部ナビのクリックハンドラ */
-function spMapNavClick(type) {
-  /* アクティブクラスの更新 */
-  document.querySelectorAll('.spmap-nav-link').forEach(el => el.classList.remove('active'));
-  event.target.classList.add('active');
-
-  if (type === 'map') {
-    closeSpModal();
-    return;
-  }
-  if (type === 'gourmet') {
-    openSpContent('/schoolpark/east-gourmet.html');
-    return;
-  }
-  if (type === 'shopping') {
-    closeSpModal();
-    openSpContent('/schoolpark/east-shopping.html');
-    return;
-  }
-  if (type === 'tutorial') {
-    openSpContent('/schoolpark/tutorial.html');
-    return;
-  }
-}
 
 /* ── 南エリア アミューズメント（旧イベントボタンの中身） ── */
-function openSpAmusement() {
-  const evItems = [
-    { icon:'♟️', label:'ECHO FIELD', color:'rgba(74,158,255,0.18)', border:'rgba(74,158,255,0.45)', desc:'戦略・思考ゲーム。AIと対戦しながら判断力を鍛えよう。', fn:'openEchoFieldDirect()' },
-    { icon:'🔒', label:'秘密のとびら', color:'rgba(255,215,0,0.1)', border:'rgba(255,215,0,0.4)', desc:'謎を解いて扉を開けるとEMUER報酬が手に入る。探索とアドベンチャーが融合。', fn:'openSecretDoor()' },
-    { icon:'🍎', label:'林檎の方程式', color:'rgba(184,48,40,0.18)', border:'rgba(184,48,40,0.45)', desc:'思考実験・論理パズル。哲学と数式の境界を遊ぶ先行公開コンテンツ。', fn:'openRingoGame()' },
-    { icon:'☄️', label:'隕石研究所', color:'rgba(0,180,130,0.2)', border:'rgba(0,220,170,0.5)', desc:'隕石・宇宙・地球の謎を探究する研究所。科学コンテンツでEmuの世界が広がる。', fn:'openMeteoriteLab()' },
-  ];
-  openSpModal('🎪 アミューズメント', evItems.map(it => `
-    <div style="background:${it.color};border:1px solid ${it.border};border-radius:12px;padding:16px;cursor:pointer;transition:opacity .15s"
-      onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'"
-      onclick="closeSpModal();setTimeout(()=>{ ${it.fn} },80)">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-        <span style="font-size:1.8rem">${it.icon}</span>
-        <div>
-          <div style="font-size:0.9rem;font-weight:700;color:#e8e8f0">${it.label}</div>
-        </div>
-      </div>
-      <div style="font-size:0.76rem;color:#aaa;line-height:1.6">${it.desc}</div>
-      <div style="margin-top:10px;text-align:right;font-size:0.72rem;color:${it.border.replace('0.45','0.9').replace('0.4','0.9').replace('0.5','0.9')}">▶ 開く</div>
-    </div>`).join(''));
-}
 
 /* ── コマンドバー Enter ── */
-function spMapCmdKeydown(e) {
-  if (e.key !== 'Enter') return;
-  const raw = e.target.value.trim().toLowerCase().replace(/\s+/g, '');
-  e.target.value = '';
-  e.target.blur();
-  if (!raw) return;
-  /* ★ コマンドバーは有料パス限定 */
-  if (!_spIsPaidUser()) {
-    _showAgentToast('🎫 コマンドバーは有料パス限定です');
-    return;
-  }
-  const cmd = raw.replace(/^\//, ''); // 先頭スラッシュ除去
-  if (['agents','schoolparkagents','agent'].includes(cmd)) {
-    openSpPanel('spRobotPanel');
-  } else if (['tutorial','チュートリアル'].includes(cmd)) {
-    openSpContent('/schoolpark/tutorial.html');
-  } else if (['wallet','ウォレット','w'].includes(cmd)) {
-    openSpPanel('spWalletPanel');
-  } else if (['settings','設定','s'].includes(cmd)) {
-    openSpPanel('spSettingsPanel');
-  } else if (['map','マップ'].includes(cmd)) {
-    closeSpModal();
-  } else {
-    _showAgentToast(`❓ コマンド「${raw}」は不明です\nヒント: agents / tutorial / wallet / settings`);
-  }
-}
 
 /* ── イベントモーダル内タブ切り替え ── */
-function spEvSwitch(tag) {
-  // タブボタンスタイル更新
-  const tabs = { '探索':'spEvTab1', 'イベント':'spEvTab2', 'campaign':'spEvTab3' };
-  const labels = { '探索':'🔍 探索', 'イベント':'🎉 イベント', 'campaign':'📢 キャンペーン' };
-  Object.entries(tabs).forEach(([k, id]) => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    const active = k === tag;
-    btn.style.background = active ? 'rgba(212,168,67,0.2)' : 'rgba(255,255,255,0.04)';
-    btn.style.borderColor = active ? 'rgba(212,168,67,0.5)' : 'rgba(255,255,255,0.1)';
-    btn.style.color = active ? '#D4A843' : '#aaa';
-    btn.style.fontWeight = active ? '700' : '400';
-  });
-
-  const list = document.getElementById('spEvList');
-  if (!list) return;
-  list.innerHTML = '<div style="color:#777;text-align:center;padding:20px;font-size:0.8rem">⏳ 読み込み中…</div>';
-
-  if (tag === 'campaign') {
-    // 静的キャンペーン情報
-    const campaigns = [
-      { tag:'CAMPAIGN', title:'🎫 HEXA NFT 先行販売', date:'〜 2025年5月19日', desc:'開園前の特別価格でSchoolPark公式NFTを販売中。' },
-      { tag:'EVENT',    title:'🎉 SchoolPark グランドオープン', date:'2025年5月20日（予定）', desc:'28コンテンツエリアが一斉公開されます。' },
-      { tag:'CAMPAIGN', title:'🎁 RTキャンペーン（HEXA NFT）', date:'2025年5月15日〜', desc:'公式Xをフォロー＆RTで抽選プレゼント。' },
-    ];
-    list.innerHTML = campaigns.map(ev => `
-      <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px">
-        <div style="font-size:0.65rem;color:#D4A843;font-weight:700;margin-bottom:4px">${ev.tag}</div>
-        <div style="font-size:0.82rem;font-weight:700;margin-bottom:4px">${ev.title}</div>
-        <div style="font-size:0.7rem;color:#888;margin-bottom:6px">📅 ${ev.date}</div>
-        <div style="font-size:0.76rem;color:#aaa">${ev.desc}</div>
-      </div>`).join('');
-    return;
-  }
-
-  // Firestoreから探索 or イベント タグの投稿を取得
-  if (!window.db || !window.fbLib) {
-    list.innerHTML = '<div style="color:#888;text-align:center;padding:20px;font-size:0.8rem">🔒 ログイン後に表示されます</div>';
-    return;
-  }
-  const lib = window.fbLib;
-  const q = lib.query(
-    lib.collection(window.db, 'posts'),
-    lib.where('tags', 'array-contains', tag),
-    lib.orderBy('createdAt', 'desc'),
-    lib.limit(15)
-  );
-  lib.getDocs(q).then(snap => {
-    if (snap.empty) {
-      list.innerHTML = `<div style="color:#777;text-align:center;padding:20px;font-size:0.8rem">📭 ${tag}タグの投稿がありません</div>`;
-      return;
-    }
-    list.innerHTML = snap.docs.map(d => {
-      const p = d.data();
-      const title = (p.title || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      const body  = (p.body  || '').replace(/</g,'&lt;').replace(/>/g,'&gt;').slice(0, 80);
-      const goodC = p.goodCount || 0;
-      return `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;cursor:pointer"
-                onclick="closeSpModal();setTimeout(()=>{closeSpMap();},50)">
-        <div style="font-size:0.82rem;font-weight:700;margin-bottom:4px">${title}</div>
-        <div style="font-size:0.74rem;color:#aaa;margin-bottom:8px">${body}${body.length>=80?'…':''}</div>
-        <div style="display:flex;gap:10px;font-size:0.7rem;color:#666">
-          <span>👍 ${goodC}</span>
-          <span>🏷️ ${tag}</span>
-        </div>
-      </div>`;
-    }).join('');
-  }).catch(() => {
-    list.innerHTML = '<div style="color:#e55;text-align:center;padding:20px;font-size:0.8rem">⚠️ 読み込みエラー</div>';
-  });
-}
 
 function _applySpMapZoom() {
   const inner = document.getElementById("spMapInner");
@@ -18079,390 +16387,28 @@ const SP_ANIMALS = [
   { id:'bir', emoji:'🐦', rx:50, ry:45, cx:50, cy:50, a:90,  spd: 0.22, fly:true }, /* 広域 */
 ];
 /* 飛行機 — マップ外縁をゆっくり周回 */
-const SP_PLANE = { rx:54, ry:48, cx:50, cy:50, a:210, spd:0.15 };
 
-const FW_COLORS = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b','#cc5de8','#f06595','#fff'];
 
 /* ── ランタイム状態 ── */
-let _spLiveRunning = false;
-let _spLiveRAF = null;
-let _spDrag = null; // { wId, prevState }
-const _spWS = {};   // walker state per id
+// walker state per id
 
-function _ellipsePos(a, rx, ry, cx, cy, iw, ih) {
-  const r = a * Math.PI / 180;
-  return { x: cx/100*iw + rx/100*iw * Math.cos(r),
-           y: cy/100*ih + ry/100*ih * Math.sin(r) };
-}
-function _ellipseDir(a, spd) {
-  const r = a * Math.PI / 180;
-  const s = spd >= 0 ? 1 : -1;
-  return { dx: -Math.sin(r)*s, dy: Math.cos(r)*s };
-}
 
 /* ── rAF ループ ── */
-function _spLiveFrame() {
-  const inner = document.getElementById('spMapInner');
-  if (!inner || !_spLiveRunning) return;
-  const iw = inner.offsetWidth  || 960;
-  const ih = inner.offsetHeight || 960;
-  const t = performance.now() / 1000;
-
-  /* 人10人 */
-  SP_WALKERS.forEach(w => {
-    const st = _spWS[w.id];
-    if (!st?.el || st.state !== 'walking') return;
-    /* spdの符号で時計/反時計 */
-    st.a = ((st.a + w.spd) % 360 + 360) % 360;
-    const pos = _ellipsePos(st.a, w.rx, w.ry, w.cx, w.cy, iw, ih);
-    const dir = _ellipseDir(st.a, w.spd);
-    st.x = pos.x; st.y = pos.y;
-    const bounce = Math.sin(t * 7 + w.a * 0.1) * 1.5;
-    /* 進行方向に向ける (spdが負なら左向き基準) */
-    const flipX = dir.dx < 0 ? -1 : 1;
-    st.el.style.transform = `translate(${pos.x}px,${pos.y + bounce}px) scaleX(${flipX})`;
-  });
-
-  /* 動物 */
-  SP_ANIMALS.forEach(an => {
-    const el = document.getElementById(`spal-${an.id}`);
-    if (!el) return;
-    an.a = (an.a + an.spd + 360) % 360;
-    const pos = _ellipsePos(an.a, an.rx, an.ry, an.cx, an.cy, iw, ih);
-    const dir = _ellipseDir(an.a, an.spd);
-    const flipX = dir.dx < 0 ? -1 : 1;
-    const flutter = an.fly ? Math.sin(t * 14) * 3.5 : Math.abs(Math.sin(t * 6 + an.a)) * 1.5;
-    el.style.transform = `translate(${pos.x}px,${pos.y + flutter}px) scaleX(${flipX})`;
-  });
-
-  /* 飛行機 — 楕円の接線方向を正確に計算して向きを合わせる
-     接線ベクトル: dx = -rx*sin(a), dy = ry*cos(a)
-     ✈️は右上向き(−45°)なので +45° 補正する */
-  {
-    const pl = document.getElementById('sppl-plane');
-    if (pl) {
-      SP_PLANE.a = ((SP_PLANE.a + SP_PLANE.spd) % 360 + 360) % 360;
-      const pos = _ellipsePos(SP_PLANE.a, SP_PLANE.rx, SP_PLANE.ry, SP_PLANE.cx, SP_PLANE.cy, iw, ih);
-      const r   = SP_PLANE.a * Math.PI / 180;
-      /* 楕円接線の正確な角度 */
-      const tx  = -SP_PLANE.rx * Math.sin(r);
-      const ty  =  SP_PLANE.ry * Math.cos(r);
-      const travelAngleDeg = Math.atan2(ty, tx) * 180 / Math.PI;
-      pl.style.transform = `translate(${pos.x}px,${pos.y}px) rotate(${travelAngleDeg + 45}deg)`;
-    }
-  }
-
-  _spLiveRAF = requestAnimationFrame(_spLiveFrame);
-}
 
 /* ── CSS人間フィギュアのカラー定義 ── */
-const _HUM_SHIRTS  = ['#e74c3c','#3498db','#2ecc71','#9b59b6','#f39c12',
-                      '#1abc9c','#e67e22','#e91e63','#00bcd4','#795548'];
-const _HUM_SKINS   = ['#F4C28A','#E8A87C','#C68642','#F4C28A','#8D5524',
-                      '#FFDBB4','#E8A87C','#C68642','#F4C28A','#FFDBB4'];
-const _HUM_HAIRS   = ['#1a1a1a','#5c3317','#222','#8B4513','#1a1a1a',
-                      '#D4A843','#1a1a1a','#5c3317','#888','#222'];
-const _HUM_PANTS   = ['#2c3e50','#1a1a1a','#3d2b1f','#2c3e50','#1a1a1a',
-                      '#2c3e50','#3d2b1f','#1a1a1a','#34495e','#3d2b1f'];
-function _makeHuman(shirtCol, skinCol, hairCol, pantsCol) {
-  return `<div class="sp-hum">
-    <div class="sp-hum-hair" style="background:${hairCol}"></div>
-    <div class="sp-hum-head" style="background:${skinCol}">
-      <div class="sp-hum-face">
-        <div class="sp-hum-eye-l"></div>
-        <div class="sp-hum-eye-r"></div>
-      </div>
-    </div>
-    <div class="sp-hum-body" style="background:${shirtCol}">
-      <div class="sp-hum-arm-l" style="background:${shirtCol}"></div>
-      <div class="sp-hum-arm-r" style="background:${shirtCol}"></div>
-    </div>
-    <div class="sp-hum-legl" style="background:${pantsCol}"></div>
-    <div class="sp-hum-legr" style="background:${pantsCol}"></div>
-  </div>`;
-}
 
 /* ── 初期化 & 描画 ── */
-function _startSpLive() {
-  if (_spLiveRunning) return;
-  _spLiveRunning = true;
-  const inner = document.getElementById('spMapInner');
-  if (!inner) return;
 
-  /* 既存削除 */
-  inner.querySelectorAll('.sp-person,.sp-animal,.sp-plane').forEach(e => e.remove());
-
-  /* 人（CSSフィギュア） */
-  SP_WALKERS.forEach((w, idx) => {
-    _spWS[w.id] = { a: w.a, state:'walking', x:0, y:0, el:null };
-    const el = document.createElement('div');
-    el.className = 'sp-person'; el.id = `spwk-${w.id}`;
-    el.innerHTML = _makeHuman(
-      _HUM_SHIRTS[idx], _HUM_SKINS[idx], _HUM_HAIRS[idx], _HUM_PANTS[idx]
-    );
-    inner.appendChild(el);
-    _spWS[w.id].el = el;
-    /* ドラッグ */
-    el.addEventListener('mousedown',  e => _spGrab(w.id, e));
-    el.addEventListener('touchstart', e => _spGrab(w.id, e), {passive:false});
-  });
-
-  /* 動物 */
-  SP_ANIMALS.forEach(an => {
-    const el = document.createElement('div');
-    el.className = 'sp-animal'; el.id = `spal-${an.id}`;
-    el.textContent = an.emoji;
-    inner.appendChild(el);
-  });
-
-  /* 飛行機 */
-  const pl = document.createElement('div');
-  pl.className = 'sp-plane'; pl.id = 'sppl-plane';
-  pl.textContent = '✈️';
-  inner.appendChild(pl);
-
-  /* 花火スケジュール */
-  _scheduleFw();
-
-  _spLiveRAF = requestAnimationFrame(_spLiveFrame);
-}
-
-function _stopSpLive() {
-  _spLiveRunning = false;
-  if (_spLiveRAF) cancelAnimationFrame(_spLiveRAF);
-}
 
 /* ── ドラッグ＆ドロップ ── */
-function _spGrab(wId, e) {
-  e.preventDefault(); e.stopPropagation();
-  const st = _spWS[wId];
-  if (!st || st.state !== 'walking') return;
-  /* つかんだ瞬間のカーソルと人物の位置差を記録 */
-  const inner = document.getElementById('spMapInner');
-  const rect  = inner ? inner.getBoundingClientRect() : {left:0,top:0};
-  const cx = e.touches ? e.touches[0].clientX : e.clientX;
-  const cy = e.touches ? e.touches[0].clientY : e.clientY;
-  const grabOffX = (cx - rect.left) - st.x;
-  const grabOffY = (cy - rect.top)  - st.y;
-  _spDrag = { wId, grabOffX, grabOffY };
-  st.state = 'dragging';
-  st.el.classList.add('sp-dragging');
-  document.addEventListener('mousemove',  _spMove);
-  document.addEventListener('mouseup',    _spDrop);
-  document.addEventListener('touchmove',  _spMove, {passive:false});
-  document.addEventListener('touchend',   _spDrop);
-}
 
-function _spMove(e) {
-  if (!_spDrag) return;
-  e.preventDefault();
-  const st = _spWS[_spDrag.wId];
-  if (!st) return;
-  const inner = document.getElementById('spMapInner');
-  if (!inner) return;
-  const rect = inner.getBoundingClientRect();
-  const cx = e.touches ? e.touches[0].clientX : e.clientX;
-  const cy = e.touches ? e.touches[0].clientY : e.clientY;
-  /* オフセット補正: つかんだ点を基準に移動 */
-  const x = (cx - rect.left) - _spDrag.grabOffX;
-  const y = (cy - rect.top)  - _spDrag.grabOffY;
-  st.x = x; st.y = y;
-  st.el.style.transform = `translate(${x}px,${y}px)`;
-}
 
-function _spDrop() {
-  if (!_spDrag) return;
-  const { wId } = _spDrag;
-  _spDrag = null;
-  document.removeEventListener('mousemove',  _spMove);
-  document.removeEventListener('mouseup',    _spDrop);
-  document.removeEventListener('touchmove',  _spMove);
-  document.removeEventListener('touchend',   _spDrop);
-
-  const st = _spWS[wId];
-  if (!st) return;
-  st.el.classList.remove('sp-dragging');
-
-  /* 最寄り建物を探す */
-  const inner = document.getElementById('spMapInner');
-  const iw = inner ? (inner.offsetWidth || 960) : 960;
-  const ih = inner ? (inner.offsetHeight || 960) : 960;
-  let nearest = null, nearDist = Infinity;
-  SP_POIS.forEach(poi => {
-    const px = poi.px/100*iw, py = poi.py/100*ih;
-    const d = Math.hypot(st.x - px, st.y - py);
-    if (d < nearDist) { nearDist = d; nearest = poi; }
-  });
-
-  // 距離制限なし: 最寄り建物へ向かう（制限があると掴んだ場所に戻るバグが発生するため）
-  if (nearest) {
-    _spEnter(wId, nearest, iw, ih);
-  } else {
-    st.state = 'walking';
-  }
-}
 
 /* ── 建物入場 ── */
-const _SP_ENTRY_MSGS = [
-  'いってきます！', 'ちょっとのぞいてみよう', 'よーし！入ろう',
-  'はーい♪', 'いくよ～', 'うわ楽しそう！', 'ここかな？',
-  '入ってみよっと', 'なんだろう…', 'わあ！', 'お邪魔しまーす',
-  'ちょっと休憩', 'よし！決めた', 'いい場所発見！',
-];
-function _spEnter(wId, poi, iw, ih) {
-  const st = _spWS[wId];
-  if (!st) return;
-  st.state = 'entering';
-  const tx = poi.px/100*iw, ty = poi.py/100*ih;
-  const dx = tx - st.x, dy = ty - st.y;
-  const steps = Math.max(30, Math.hypot(dx,dy) / 2.5);
-  let step = 0;
-
-  /* 吹き出し — 住人の近くに表示（右上か左上） */
-  const inner = document.getElementById('spMapInner');
-  if (inner) {
-    const pop = document.createElement('div');
-    pop.className = 'sp-entry-popup';
-    const msg = _SP_ENTRY_MSGS[Math.floor(Math.random() * _SP_ENTRY_MSGS.length)];
-    pop.textContent = msg;
-    /* 右上か左上かを判定（画面左半分なら右上、右半分なら左上） */
-    const offsetX = st.x < iw * 0.6 ? 4 : -(pop.offsetWidth || 80) - 4;
-    pop.style.left = (st.x + offsetX) + 'px';
-    pop.style.top  = (st.y - 36) + 'px';
-    inner.appendChild(pop);
-    setTimeout(() => pop.remove(), 2400);
-  }
-
-  const iv = setInterval(() => {
-    step++;
-    const tt = step / steps;
-    const x = st.x + dx * tt;
-    const y = st.y + dy * tt;
-    const sc = 1 - tt * 0.85;
-    const op = 1 - tt;
-    st.el.style.transform = `translate(${x}px,${y}px) scale(${sc})`;
-    st.el.style.opacity   = op;
-    if (step >= steps) {
-      clearInterval(iv);
-      st.state = 'inside';
-      st.el.style.opacity = '0';
-      st.insidePoi = poi;
-      /* 5〜10秒後に退場 */
-      setTimeout(() => _spExit(wId), 5000 + Math.random() * 5000);
-    }
-  }, 16);
-}
 
 /* ── 建物退場 ── */
-function _spExit(wId) {
-  const st = _spWS[wId];
-  if (!st || !st.insidePoi) return;
-  const poi = st.insidePoi;
-  const inner = document.getElementById('spMapInner');
-  const iw = inner ? (inner.offsetWidth || 960) : 960;
-  const ih = inner ? (inner.offsetHeight || 960) : 960;
-  const tx = poi.px/100*iw, ty = poi.py/100*ih;
-  st.x = tx; st.y = ty; st.insidePoi = null;
-  st.el.style.transform = `translate(${tx}px,${ty}px) scale(0.1)`;
-  st.el.style.opacity   = '1';
-  st.state = 'exiting';
-  let sc = 0.1;
-  const iv = setInterval(() => {
-    sc = Math.min(1, sc + 0.04);
-    st.el.style.transform = `translate(${tx}px,${ty}px) scale(${sc})`;
-    if (sc >= 1) {
-      clearInterval(iv);
-      st.state = 'walking';
-    }
-  }, 16);
-}
 
 /* ── 花火（豪華版） ── */
-function _firework(x, y, colorSet) {
-  const inner = document.getElementById('spMapInner');
-  if (!inner) return;
-  const colors = colorSet || FW_COLORS;
-
-  /* ① リング波紋 */
-  const ring = document.createElement('div');
-  ring.style.cssText = `position:absolute;left:${x}px;top:${y}px;
-    width:60px;height:60px;border-radius:50%;
-    border:4px solid ${colors[0]};pointer-events:none;z-index:36;
-    animation:spFwRing 0.7s ease-out forwards;`;
-  inner.appendChild(ring);
-  setTimeout(() => ring.remove(), 750);
-
-  /* ② 中心フラッシュ */
-  const fl = document.createElement('div');
-  fl.style.cssText = `position:absolute;left:${x-14}px;top:${y-14}px;
-    width:28px;height:28px;border-radius:50%;
-    background:radial-gradient(circle,#fff 30%,${colors[1]} 70%);
-    pointer-events:none;z-index:37;animation:spFwPop 0.4s ease-out forwards;`;
-  inner.appendChild(fl);
-  setTimeout(() => fl.remove(), 450);
-
-  /* ③ メインバースト（丸いパーティクル） */
-  const cnt = 28 + Math.floor(Math.random() * 12);
-  for (let i = 0; i < cnt; i++) {
-    const ang  = (i / cnt) * 360 + Math.random() * 8;
-    const dist = 45 + Math.random() * 75;
-    const r    = ang * Math.PI / 180;
-    const fx   = (Math.cos(r) * dist).toFixed(1) + 'px';
-    const fy   = (Math.sin(r) * dist).toFixed(1) + 'px';
-    const col  = colors[Math.floor(Math.random() * colors.length)];
-    const sz   = (3 + Math.random() * 6).toFixed(1);
-    const dur  = (0.8 + Math.random() * 0.6).toFixed(2);
-    const delay = (Math.random() * 0.08).toFixed(3);
-    const p = document.createElement('div');
-    p.style.cssText = `position:absolute;left:${x}px;top:${y}px;
-      width:${sz}px;height:${sz}px;border-radius:50%;background:${col};
-      pointer-events:none;z-index:35;--fx:${fx};--fy:${fy};
-      animation:spFwBurst ${dur}s ${delay}s ease-out forwards;
-      box-shadow:0 0 ${parseFloat(sz)+3}px ${col};`;
-    inner.appendChild(p);
-    setTimeout(() => p.remove(), (parseFloat(dur)+parseFloat(delay)+0.1)*1000);
-  }
-
-  /* ④ 星形パーティクル（少数） */
-  const starCnt = 8 + Math.floor(Math.random() * 5);
-  for (let i = 0; i < starCnt; i++) {
-    const ang  = (i / starCnt) * 360 + 20;
-    const dist = 55 + Math.random() * 50;
-    const r    = ang * Math.PI / 180;
-    const fx   = (Math.cos(r) * dist).toFixed(1) + 'px';
-    const fy   = (Math.sin(r) * dist).toFixed(1) + 'px';
-    const col  = colors[Math.floor(Math.random() * colors.length)];
-    const sz   = (5 + Math.random() * 4).toFixed(1);
-    const dur  = (1.0 + Math.random() * 0.5).toFixed(2);
-    const s = document.createElement('div');
-    /* 星: clip-path の代わりに正方形を45度回転 */
-    s.style.cssText = `position:absolute;left:${x}px;top:${y}px;
-      width:${sz}px;height:${sz}px;background:${col};
-      transform:rotate(45deg);pointer-events:none;z-index:35;
-      --fx:${fx};--fy:${fy};animation:spFwStar ${dur}s ease-out forwards;
-      box-shadow:0 0 8px ${col};`;
-    inner.appendChild(s);
-    setTimeout(() => s.remove(), (parseFloat(dur)+0.1)*1000);
-  }
-
-  /* ⑤ トレイル（軌跡の残光） */
-  const trailCnt = 12;
-  for (let i = 0; i < trailCnt; i++) {
-    const ang  = Math.random() * 360;
-    const dist = 20 + Math.random() * 30;
-    const r    = ang * Math.PI / 180;
-    const fx   = (Math.cos(r) * dist).toFixed(1) + 'px';
-    const fy   = (Math.sin(r) * dist).toFixed(1) + 'px';
-    const col  = colors[Math.floor(Math.random() * colors.length)];
-    const t = document.createElement('div');
-    t.style.cssText = `position:absolute;left:${x}px;top:${y}px;
-      width:2px;height:10px;border-radius:1px;background:${col};
-      pointer-events:none;z-index:34;--fx:${fx};--fy:${fy};
-      animation:spFwTrail 0.6s ease-out forwards;opacity:0.7;`;
-    inner.appendChild(t);
-    setTimeout(() => t.remove(), 700);
-  }
-}
 
 function _shootFireworks() {
   const inner = document.getElementById('spMapInner');
@@ -18502,16 +16448,6 @@ function _shootFireworks() {
 }
 
 let _fwTimer = null;
-function _scheduleFw() {
-  if (_fwTimer) clearTimeout(_fwTimer);
-  _fwTimer = setTimeout(() => {
-    /* マップが表示されているときだけ発射 */
-    if (document.getElementById('spMapOverlay')?.style.display === 'flex') {
-      _shootFireworks();
-    }
-    _scheduleFw(); /* 必ず再スケジュール（繰り返し保証） */
-  }, 28000 + Math.random() * 4000); /* 28〜32秒ごと */
-}
 
 
 function getCurrentUserType() {
@@ -18551,7 +16487,6 @@ function closeUpgradeModal() {
 }
 
 function openRoom(roomId) {
-  closeExplore();
 
   // 🚫 無料NFTユーザーは room1 NG
  if (roomId === 1 && isFreeOnlyUser()) {
@@ -18607,31 +16542,6 @@ function closeMeteoriteLab() {
 }
 
 // ══ 東エリア 7棟 open/close ══
-var EAST_BUILDINGS = {
-  yakuya:  { overlay:"eastYakuyaOverlay",  frame:"eastYakuyaFrame",  src:"/schoolpark/east-yakuya.html"  },
-  fruits:  { overlay:"eastFruitsOverlay",  frame:"eastFruitsFrame",  src:"/schoolpark/east-fruits.html"  },
-  house:   { overlay:"eastHouseOverlay",   frame:"eastHouseFrame",   src:"/schoolpark/east-house.html"   },
-  mansion: { overlay:"eastMansionOverlay", frame:"eastMansionFrame", src:"/schoolpark/east-mansion.html" },
-  coffee:  { overlay:"eastCoffeeOverlay",  frame:"eastCoffeeFrame",  src:"/schoolpark/east-coffee.html"  },
-  hotel:   { overlay:"eastHotelOverlay",   frame:"eastHotelFrame",   src:"/schoolpark/east-hotel.html"   },
-  hotel2:  { overlay:"eastHotel2Overlay",  frame:"eastHotel2Frame",  src:"/schoolpark/east-hotel2.html"  }
-};
-function openEastBuilding(key) {
-  var b = EAST_BUILDINGS[key]; if (!b) return;
-  // 訪問数を記録（ランキング集計用）
-  _spTrackVisit(b.src);
-  // SchoolParkマップを閉じる
-  var spMap = document.getElementById("spMapOverlay");
-  if (spMap) spMap.style.display = "none";
-  // スクロール固定
-  document.documentElement.style.overflow = "hidden";
-  document.body.style.overflow = "hidden";
-  document.body.style.position = "fixed";
-  document.body.style.width = "100%";
-  // オーバーレイを開く
-  document.getElementById(b.overlay).style.display = "block";
-  document.getElementById(b.frame).src = b.src;
-}
 function closeEastBuilding(overlayId, frameId) {
   document.getElementById(overlayId).style.display = "none";
   document.getElementById(frameId).src = "";
@@ -18652,7 +16562,6 @@ function openRingoGame() {
       return;
     }
   }
-  closeExplore();
   document.getElementById("ringoOverlay").style.display = "block";
   document.getElementById("ringoFrame").src = "/ringo-game.html";
 }
@@ -18662,7 +16571,6 @@ function closeRingoGame() {
 }
 
 function openEchoFieldDirect() {
-  closeExplore();
   const overlay = document.getElementById("room3Overlay");
   const iframe = document.getElementById("room2Frame");
   const popup = document.querySelector("#room3Overlay .popup");
@@ -18677,7 +16585,6 @@ function openEchoFieldDirect() {
 }
 
 function openSecretDoor() {
-  closeExplore();
   const overlay = document.getElementById("secretDoorOverlay");
   const iframe = document.getElementById("secretDoorFrame");
   overlay.style.display = "block";
@@ -20679,7 +18586,7 @@ window.fbLib = {
       <!-- ボタン群 -->
       <div style="display:flex;flex-direction:column;gap:10px;padding:0 4px 20px;">
         <!-- チュートリアルページを開く（ログイン前後どちらでも動作） -->
-        <button onclick="(function(){toggleContactPanel();var inMap=document.body.classList.contains('spmap-open');setTimeout(function(){if(inMap&&typeof openSpContent==='function'){openSpContent('/schoolpark/tutorial.html');}else{window.open('/schoolpark/tutorial.html','_blank');}},300);})();"
+        <button onclick="toggleContactPanel();setTimeout(function(){window.open('/schoolpark/tutorial.html','_blank');},300);"
           style="display:flex;align-items:center;gap:12px;background:rgba(212,168,67,0.14);border:1px solid rgba(212,168,67,0.4);color:#D4A843;padding:14px 16px;border-radius:12px;cursor:pointer;width:100%;text-align:left;font-family:'Noto Sans JP',sans-serif;font-size:0.88rem;font-weight:700;transition:background 0.2s;"
           onmouseover="this.style.background='rgba(212,168,67,0.24)'" onmouseout="this.style.background='rgba(212,168,67,0.14)'">
           <span style="font-size:1.5rem;">📄</span>
@@ -21757,17 +19664,6 @@ let _spNotifData     = [];
 let _spNotifLoaded   = false;
 let _spNotifPollTimer = null;
 
-function _spNotifAddress() {
-  return (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
-}
-function _spNotifTimeAgo(ts) {
-  if (!ts) return '';
-  const diff = Date.now() - (typeof ts === 'number' ? ts : new Date(ts).getTime());
-  if (diff < 60000)    return 'たった今';
-  if (diff < 3600000)  return Math.floor(diff / 60000) + '分前';
-  if (diff < 86400000) return Math.floor(diff / 3600000) + '時間前';
-  return Math.floor(diff / 86400000) + '日前';
-}
 function _spShowLogEnabled() {
   try { return JSON.parse(localStorage.getItem('spSettings') || '{}').spSettingShowLog !== false; }
   catch { return true; }
@@ -21793,10 +19689,6 @@ function _spLogAdd(entry) {
   logs.unshift({ id: Date.now() + '_' + Math.random().toString(36).slice(2,6), isRead: false, timestamp: Date.now(), ...entry });
   if (logs.length > _SP_LOG_MAX) logs.length = _SP_LOG_MAX;
   _spLogSave(logs);
-  _renderSpNotifBadge();
-  // パネルが開いていれば即時反映
-  const panel = document.getElementById('spNotifPanel');
-  if (panel && panel.style.display !== 'none') _renderSpLogList();
 }
 function _spLogUnreadCount() {
   return _spLogGet().filter(l => !l.isRead).length;
@@ -21804,139 +19696,27 @@ function _spLogUnreadCount() {
 function spLogMarkAllRead() {
   const logs = _spLogGet().map(l => ({ ...l, isRead: true }));
   _spLogSave(logs);
-  _renderSpNotifBadge();
-  _renderSpLogList();
-}
-function _renderSpLogList() {
-  const sec  = document.getElementById('spLogSection');
-  const list = document.getElementById('spLogList');
-  if (!sec || !list) return;
-  const show = _spShowLogEnabled();
-  sec.style.display = show ? '' : 'none';
-  if (!show) return;
-  const logs = _spLogGet();
-  if (!logs.length) {
-    list.innerHTML = '<div class="spn-empty">📭 ログはありません</div>';
-    return;
-  }
-  list.innerHTML = logs.slice(0, 50).map((l, i) => `
-    <div class="spn-item log-item ${l.isRead ? '' : 'unread'}" onclick="_spLogMarkOne(${i})">
-      <div class="spn-icon">${l.icon || '📌'}</div>
-      <div class="spn-content">
-        <div class="spn-title">${l.title}</div>
-        ${l.detail ? `<div class="spn-body">${l.detail}</div>` : ''}
-        <div class="spn-footer"><span class="spn-time">${_spNotifTimeAgo(l.timestamp)}</span></div>
-      </div>
-    </div>`).join('');
 }
 function _spLogMarkOne(idx) {
   const logs = _spLogGet();
-  if (logs[idx]) { logs[idx].isRead = true; _spLogSave(logs); _renderSpNotifBadge(); _renderSpLogList(); }
 }
 // ログセクションの表示/非表示を設定変更時に即時反映
 function _spApplyLogVisibility() {
-  _renderSpLogList();
-  _renderSpNotifBadge();
 }
 
 // ──────── ②  お知らせ（Firestore API） ────────
-async function loadSpNotifications() {
-  const address = _spNotifAddress();
-  const url = `${_SP_NOTIF_API}/api/sp/notifications?limit=20${address ? '&address=' + encodeURIComponent(address) : ''}`;
-  try {
-    const r    = await fetch(url);
-    const data = await r.json();
-    _spNotifData   = Array.isArray(data) ? data : [];
-    _spNotifLoaded = true;
-    _renderSpNotifBadge();
-  } catch {
-    if (!_spNotifLoaded) { _spNotifData = []; _spNotifLoaded = true; }
-  }
-}
-function _startSpNotifPoll() {
-  if (_spNotifPollTimer) return;
-  _spNotifPollTimer = setInterval(async () => {
-    await loadSpNotifications();
-    const panel = document.getElementById('spNotifPanel');
-    if (panel && panel.style.display !== 'none') _renderSpNotifList();
-  }, 60 * 1000);
-}
 
 // ──────── ③  バッジ（通知＋ログを合算） ────────
-function _renderSpNotifBadge() {
-  const badge = document.getElementById('spNotifBadge');
-  const unreadNotif = _spNotifData.filter(n => !n.isRead).length;
-  const unreadLog   = _spShowLogEnabled() ? _spLogUnreadCount() : 0;
-  const total = unreadNotif + unreadLog;
-  // CHESハブ画面の通知ドット（数字は出さず有無だけ示す）
-  const hubDot = document.getElementById('hubNotifDot');
-  if (hubDot) hubDot.style.display = total > 0 ? 'block' : 'none';
-  if (!badge) return;
-  if (total > 0) {
-    badge.textContent   = total > 99 ? '99+' : String(total);
-    badge.style.display = 'flex';
-  } else {
-    badge.style.display = 'none';
-  }
-}
 
 // ──────── ④  お知らせ一覧レンダリング ────────
-function _renderSpNotifList() {
-  const container = document.getElementById('spNotifList');
-  if (!container) return;
-  if (!_spNotifLoaded) {
-    container.innerHTML = '<div class="spn-loading">📨 読み込み中…</div>';
-    return;
-  }
-  if (!_spNotifData.length) {
-    container.innerHTML = '<div class="spn-empty">📭 お知らせはありません</div>';
-    return;
-  }
-  container.innerHTML = _spNotifData.map((n, i) => {
-    const gotoBtn = n.link
-      ? `<button class="spn-goto-btn" onclick="spNotifGoto(${i})">見に行く →</button>`
-      : '';
-    return `<div class="spn-item ${n.isRead ? '' : 'unread'}" id="spni-${n.id}">
-      <div class="spn-icon">${n.icon || '📢'}</div>
-      <div class="spn-content">
-        <div class="spn-title">${n.title}</div>
-        ${n.body ? `<div class="spn-body">${n.body}</div>` : ''}
-        <div class="spn-footer">
-          <span class="spn-time">${_spNotifTimeAgo(n.createdAt)}</span>
-          ${gotoBtn}
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
 
 // ──────── ⑤  パネル開閉 ────────
-function toggleSpNotifPanel() {
-  const panel = document.getElementById('spNotifPanel');
-  if (!panel) return;
-  const isOpen = panel.style.display !== 'none' && panel.style.display !== '';
-  if (isOpen) { panel.style.display = 'none'; return; }
-  panel.style.display = 'flex';
-  _renderSpNotifList();
-  _renderSpLogList();
-  loadSpNotifications().then(_renderSpNotifList);
-}
-function closeSpNotifPanel() {
-  const panel = document.getElementById('spNotifPanel');
-  if (panel) panel.style.display = 'none';
-}
 /* パネルの外側をクリックしたら閉じる。
    以前は .spmap-brand の中かどうかだけで判定していた。
    CHESハブのベルは .spmap-brand の外にあるため、開いた直後に
    同じクリックがここへ届いて即座に閉じ、一度も開けなかった。
    また _chesHubLiftPanel でパネルを body へ移すと、パネル自身の中の
    クリック（既読・閉じるなど）も「外側」と見なされていた。 */
-document.addEventListener('click', e => {
-  const panel = document.getElementById('spNotifPanel');
-  if (!panel || panel.style.display === 'none' || panel.style.display === '') return;
-  if (e.target.closest('#spNotifPanel, .spmap-brand, #chesHubNotifBtn')) return;
-  closeSpNotifPanel();
-});
 
 /* ──────── CHES ブランドメニュー ──────── */
 function toggleChesMenu(e) {
@@ -21982,7 +19762,6 @@ function chesMenuGo(brand) {
       /* SchoolPark内でメニューから選んだ場合。表示はお知らせパネルのままだが、
          入場者としては計上する（ハブ経由と数え方をそろえる）。 */
       if (typeof spTrackBrand === 'function') spTrackBrand('schoolpark');
-      toggleSpNotifPanel();
       break;
   }
 }
@@ -21995,60 +19774,11 @@ document.addEventListener('click', e => {
 });
 
 // ──────── ⑥  既読操作 ────────
-async function spMarkRead(notifId) {
-  const address = _spNotifAddress();
-  const n = _spNotifData.find(x => x.id === notifId);
-  if (!n || n.isRead) return;
-  n.isRead = true;
-  _renderSpNotifBadge(); _renderSpNotifList();
-  if (!address) return;
-  try {
-    await fetch(`${_SP_NOTIF_API}/api/sp/notifications/${notifId}/read`, {
-      method: 'POST', headers: await emuAuthHeaders(true), body: JSON.stringify({ address })
-    });
-  } catch {}
-}
-async function spMarkAllRead() {
-  _spNotifData.forEach(n => { n.isRead = true; });
-  _renderSpNotifBadge(); _renderSpNotifList();
-  const address = _spNotifAddress();
-  if (!address) return;
-  try {
-    await fetch(`${_SP_NOTIF_API}/api/sp/notifications/read-all`, {
-      method: 'POST', headers: await emuAuthHeaders(true), body: JSON.stringify({ address })
-    });
-  } catch {}
-}
 // お知らせ＋ログ まとめて既読
-async function spMarkAllReadAll() {
-  await spMarkAllRead();
-  spLogMarkAllRead();
-}
 
 // ──────── ⑦  施設ナビ ────────
-function spNotifGoto(idx) {
-  const n = _spNotifData[idx];
-  if (!n || !n.link) return;
-  spMarkRead(n.id);
-  closeSpNotifPanel();
-  const poi = (window.SP_POIS || []).find(p => p.page === n.link);
-  if (poi && typeof gatedOpen === 'function') {
-    gatedOpen(poi.id, () => openSpContent(n.link));
-  } else if (typeof openSpContent === 'function') {
-    openSpContent(n.link);
-  } else {
-    window.open(n.link, '_blank');
-  }
-}
 
 // ──────── ⑧  初期化 ────────
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    loadSpNotifications();
-    _startSpNotifPoll();
-    _renderSpNotifBadge(); // ログの未読分もすぐ反映
-  }, 2000);
-});
 
 </script>
 <!-- ▼ バッジ一覧パネル -->
