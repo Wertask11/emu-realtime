@@ -1337,14 +1337,6 @@ app.post("/api/room1/direct-add", requireAdmin, async (req, res) => {
     const docRef = await db.collection(ROOM1_CONTENTS_COL).add(newItem);
     _room1Cache.data = null; // キャッシュ無効化
     console.log(`✅ Direct add: ${newItem.title} (${docRef.id})`);
-    // 自動お知らせ追加
-    _spAddNotification({
-      title: `📚 学習コンテンツが追加されました`,
-      body: `「${newItem.title}」が学習ルームに追加されました。`,
-      link: "/schoolpark/north-library.html",
-      contentType: "room1",
-      icon: "📚"
-    });
     res.json({ success: true, item: { id: docRef.id, ...newItem } });
 
   } catch (err) {
@@ -1430,14 +1422,6 @@ app.post("/api/room1/approve/:id", requireAdmin, async (req, res) => {
     await db.collection(ROOM1_SUBMISSIONS_COL).doc(req.params.id).update({ status: "done" });
     _room1Cache.data = null; // キャッシュ無効化
     console.log(`✅ Approved & added to contents: ${newItem.title}`);
-    // 自動お知らせ追加
-    _spAddNotification({
-      title: `📚 学習コンテンツが追加されました`,
-      body: `「${newItem.title}」が学習ルームに追加されました。`,
-      link: "/schoolpark/north-library.html",
-      contentType: "room1",
-      icon: "📚"
-    });
     res.json({ success: true });
 
   } catch (err) {
@@ -1734,24 +1718,6 @@ async function loadFountainHistory() {
 }
 loadFountainHistory();
 
-// Mansion 掲示板（Socket.io + Firestore永続化）
-const mansionPosts    = new Map();
-const MANSION_BOARD_COL = "sp_mansion_board";
-
-async function loadMansionBoard() {
-  if (!db) { console.warn("⚠️ Firestore未接続 - Mansion 掲示板ロードをスキップ"); return; }
-  try {
-    const snap = await db.collection(MANSION_BOARD_COL).orderBy("ts", "desc").limit(200).get();
-    const docs = [];
-    snap.forEach(d => docs.push({ postId: d.id, ...d.data() }));
-    docs.reverse().forEach(m => mansionPosts.set(m.postId, m));
-    console.log(`✅ Mansion 掲示板 ${mansionPosts.size}件 を復元しました`);
-  } catch(e) {
-    console.warn("⚠️ Mansion 掲示板の復元に失敗:", e.message);
-  }
-}
-loadMansionBoard();
-
 io.on("connection", (socket) => {
   console.log("接続:", socket.id);
   socket.emit("today topic", getTodayTopic());
@@ -1801,42 +1767,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ★ Mansion 掲示板履歴を送信
-  socket.emit("mansion history", Array.from(mansionPosts.values()).slice(-50));
-
-  // ★ Mansion 参加
-  socket.on("join mansion", ({ wallet, name }) => {
-    socket.mansionWallet = wallet || "guest";
-    socket.mansionName   = name   || "住民";
-  });
-
-  // ★ Mansion 掲示板投稿
-  socket.on("mansion post", (data) => {
-    if (!data.text || String(data.text).trim().length === 0) return;
-    const postId = randomUUID();
-    const post = {
-      postId,
-      author: socket.mansionName || "住民",
-      wallet: socket.mansionWallet || "guest",
-      text: String(data.text).slice(0, 500),
-      tag:  String(data.tag  || "住民投稿").slice(0, 20),
-      ts:   Date.now()
-    };
-    mansionPosts.set(postId, post);
-    if (mansionPosts.size > 200) {
-      mansionPosts.delete(mansionPosts.keys().next().value);
-    }
-    io.emit("mansion post", post);
-    if (db) {
-      db.collection(MANSION_BOARD_COL).doc(postId).set(post).catch(e => {
-        console.warn("Mansion 投稿保存失敗:", e.message);
-      });
-      db.collection(MANSION_BOARD_COL).orderBy("ts","desc").offset(200).limit(50).get()
-        .then(old => { const b = db.batch(); old.forEach(d => b.delete(d.ref)); b.commit().catch(()=>{}); })
-        .catch(()=>{});
-    }
-  });
-
   // ★ 議題の再リクエスト
   socket.on("request topic", () => {
     socket.emit("today topic", getTodayTopic());
@@ -1869,117 +1799,6 @@ io.on("connection", (socket) => {
     io.emit("room3 message", message);
   });
 });
-
-// =====================
-// SchoolPark お知らせ API
-// =====================
-const SP_NOTIFICATIONS_COL = "sp_notifications";
-
-// GET /api/sp/notifications?limit=20&address=0x...
-app.get("/api/sp/notifications", async (req, res) => {
-  if (!db) return res.json([]);
-  try {
-    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
-    const address = (req.query.address || "").toLowerCase();
-    const snap = await db.collection(SP_NOTIFICATIONS_COL)
-      .orderBy("createdAt", "desc")
-      .limit(limit)
-      .get();
-    const items = snap.docs.map(doc => {
-      const d = doc.data();
-      return {
-        id: doc.id,
-        title: d.title || "",
-        body: d.body || "",
-        link: d.link || "",
-        contentType: d.contentType || "general",
-        icon: d.icon || "📢",
-        createdAt: d.createdAt?.toDate?.()?.toISOString() || d.createdAt || new Date().toISOString(),
-        isRead: address ? (d.readBy || []).includes(address) : false
-      };
-    });
-    return res.json(items);
-  } catch (err) {
-    console.error("sp/notifications get error:", err.message);
-    return res.json([]);
-  }
-});
-
-// POST /api/sp/notifications （管理者専用）
-app.post("/api/sp/notifications", requireAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Firestore未接続" });
-  const { title, body, link, contentType, icon } = req.body;
-  if (!title) return res.status(400).json({ error: "title is required" });
-  try {
-    const ref = await db.collection(SP_NOTIFICATIONS_COL).add({
-      title,
-      body: body || "",
-      link: link || "",
-      contentType: contentType || "general",
-      icon: icon || "📢",
-      readBy: [],
-      createdAt: new Date()
-    });
-    console.log(`✅ SP通知追加: ${ref.id} "${title}"`);
-    return res.json({ success: true, id: ref.id });
-  } catch (err) {
-    console.error("sp/notifications post error:", err.message);
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/sp/notifications/read-all （全既読）
-app.post("/api/sp/notifications/read-all", requireFirebaseUser, requireOwnAddress, async (req, res) => {
-  const address = (req.body.address || "").toLowerCase();
-  if (!address || !db) return res.json({ success: true });
-  try {
-    const admin = require("firebase-admin");
-    const snap = await db.collection(SP_NOTIFICATIONS_COL)
-      .orderBy("createdAt", "desc").limit(50).get();
-    const batch = db.batch();
-    snap.docs.forEach(doc => {
-      if (!(doc.data().readBy || []).includes(address)) {
-        batch.update(doc.ref, { readBy: admin.firestore.FieldValue.arrayUnion(address) });
-      }
-    });
-    await batch.commit();
-    return res.json({ success: true });
-  } catch (err) {
-    console.error("sp/notifications read-all error:", err.message);
-    return res.json({ success: true });
-  }
-});
-
-// POST /api/sp/notifications/:id/read （1件既読）
-app.post("/api/sp/notifications/:id/read", requireFirebaseUser, requireOwnAddress, async (req, res) => {
-  const address = (req.body.address || "").toLowerCase();
-  if (!address || !db) return res.json({ success: true });
-  try {
-    const admin = require("firebase-admin");
-    await db.collection(SP_NOTIFICATIONS_COL).doc(req.params.id).update({
-      readBy: admin.firestore.FieldValue.arrayUnion(address)
-    });
-    return res.json({ success: true });
-  } catch (err) {
-    console.error("sp/notifications read error:", err.message);
-    return res.json({ success: true }); // 非クリティカル
-  }
-});
-
-// 内部ヘルパー: お知らせ自動追加
-async function _spAddNotification({ title, body, link, contentType, icon }) {
-  if (!db) return;
-  try {
-    await db.collection(SP_NOTIFICATIONS_COL).add({
-      title, body: body || "", link: link || "",
-      contentType: contentType || "general", icon: icon || "📢",
-      readBy: [], createdAt: new Date()
-    });
-    console.log(`📢 SP自動通知: "${title}"`);
-  } catch (e) {
-    console.warn("SP通知追加失敗:", e.message);
-  }
-}
 
 // =====================
 // CHES Identity: LINE ログイン（認可コード → Firebase custom token）
