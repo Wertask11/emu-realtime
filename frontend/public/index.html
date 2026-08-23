@@ -5093,19 +5093,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 
 
 
-<!-- Room4ポップアップ（イベント） -->
-<div id="room4Overlay" class="overlay" style="display:none;">
-  <div class="popup" style="max-width:600px; min-height:300px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;">
-    <span class="closeBtn" onclick="document.getElementById('room4Overlay').style.display='none'">✖</span>
-    <h2 style="margin:0;">🎉 イベント</h2>
-    <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:8px;">
-      <div class="room" onclick="openEchoFieldFromRoom4()" style="background:linear-gradient(135deg,rgba(74,158,255,0.15),rgba(168,85,247,0.1));border-color:rgba(74,158,255,0.4);">♟️ ECHO FIELD</div>
-      <div class="room" onclick="openSecretDoorFromRoom4()" style="background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,107,157,0.1));border-color:rgba(255,215,0,0.35);">🔒 秘密のとびら</div>
-      <div class="room" onclick="openRingoFromRoom4()" style="background:linear-gradient(135deg,rgba(184,48,40,0.15),rgba(184,134,11,0.1));border-color:rgba(184,48,40,0.4);position:relative;">🍎 林檎の方程式<br><span style="font-size:10px;background:#B83028;color:#fff;border-radius:3px;padding:1px 6px;position:absolute;top:6px;right:6px;" id="ringo-badge">先行公開中</span></div>
-    </div>
-  </div>
-</div>
-
 <!-- Room3ポップアップ -->
 <!-- 重なり順は CSS 側（#room3Overlay{z-index:1400}）で指定する。
      ここに style で書くと CSS より強く、ヘッダー(1200)の下に潜って議題が読めなくなる。 -->
@@ -5197,11 +5184,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </div>
 
 <!-- 秘密のとびら オーバーレイ -->
-<div id="secretDoorOverlay" style="display:none;position:fixed;inset:0;z-index:1100;background:#070511;">
-  <span id="secretDoorCloseBtn" onclick="closeSecretDoor()" style="position:absolute;top:16px;right:20px;font-size:24px;cursor:pointer;z-index:1101;color:rgba(255,255,255,0.5);line-height:1;">✖</span>
-  <iframe id="secretDoorFrame" src="" style="width:100%;height:100%;border:none;"></iframe>
-</div>
-
 <div id="ringoOverlay" style="display:none;position:fixed;inset:0;z-index:1100;background:#0C0C0C;">
   <span onclick="closeRingoGame()" style="position:absolute;top:16px;right:20px;font-size:24px;cursor:pointer;z-index:1101;color:rgba(255,255,255,0.4);line-height:1;">✖</span>
   <iframe id="ringoFrame" src="" style="width:100%;height:100%;border:none;"></iframe>
@@ -5588,26 +5570,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         </div>
         <label class="sp-toggle">
           <input type="checkbox" id="spSettingAnonymize" onchange="spSettingSave()">
-          <span class="sp-toggle-slider"></span>
-        </label>
-      </div>
-      <div class="sp-setting-row">
-        <div>
-          <div class="sp-setting-label">行動ログの記録</div>
-          <div class="sp-setting-sub">SchoolPark内の移動履歴を記録</div>
-        </div>
-        <label class="sp-toggle">
-          <input type="checkbox" id="spSettingActivityLog" checked onchange="spSettingSave()">
-          <span class="sp-toggle-slider"></span>
-        </label>
-      </div>
-      <div class="sp-setting-row">
-        <div>
-          <div class="sp-setting-label">ログをお知らせに表示</div>
-          <div class="sp-setting-sub">お知らせボタン内にログ一覧を表示・バッジに未読ログ数を加算</div>
-        </div>
-        <label class="sp-toggle">
-          <input type="checkbox" id="spSettingShowLog" checked onchange="spSettingSave();_spApplyLogVisibility()">
           <span class="sp-toggle-slider"></span>
         </label>
       </div>
@@ -12660,7 +12622,6 @@ async function openPostChangeHistory(postData) {
               acceptedChangeCount:window.fbLib.increment(1), lastChangedAt:new Date()
             });
             await batch.commit();
-            _spLogAdd({ type:"change", icon:"✅", title:"Changeを採用しました", detail:(postData.title || "").slice(0,25) });
             await openPostChangeHistory(postData);
           } catch (error) {
             console.error("Change採用失敗:", error);
@@ -12747,7 +12708,6 @@ async function attachReactionHandlers(postElement) {
         //   EMUERはサーバーの照合バッチが durable台帳(emuer_offchain)へ計上する。
         if (myWalletPage.style.display === "block") renderWallet();
 
-        _spLogAdd({ type:'good', icon:'👍', title:'Good を送りました', detail: `「${(postData.title||'').slice(0,20)}」` });
         postData.goodCount = (Number(postData.goodCount) || 0) + 1;
         if (!Array.isArray(postData.goodUsers)) postData.goodUsers = [];
         postData.goodUsers.push((emuIdentityNow() || me).wallet);
@@ -12829,7 +12789,6 @@ async function attachReactionHandlers(postElement) {
         //   EMUERはサーバーの照合バッチが durable台帳(emuer_offchain)へ計上する。
         if (myWalletPage.style.display === "block") renderWallet();
 
-        _spLogAdd({ type:'change', icon:'🤝', title:'Change を送りました', detail: `「${(postData.title||'').slice(0,20)}」` });
         postData.changeCount = (Number(postData.changeCount) || 0) + 1;
         if (!Array.isArray(postData.changeUsers)) postData.changeUsers = [];
         postData.changeUsers.push((emuIdentityNow() || me).wallet);
@@ -13132,7 +13091,6 @@ const editingId = editingPostId;
       _postBatch.set(window.fbLib.doc(window.fbLib.collection(window.db, "posts")), postData);
       _emuAddUsage(_postBatch, 'post');
       await _postBatch.commit();
-      _spLogAdd({ type:'post', icon:'📝', title:'Emu に投稿しました', detail: (postTitleInput.value||postData.title||'').slice(0,25) });
       console.log("✅ 新規投稿を作成しました");
     }
 
@@ -13766,7 +13724,6 @@ window.addEventListener("message", (e) => {
   if (e.data.type === "openSpSettings") { openSpPanel('spSettingsPanel'); }
   // iframeからアクティビティログを追加
   if (e.data.type === "spActivityLog") {
-    _spLogAdd({ type: e.data.logType || 'action', icon: e.data.icon || '📌', title: e.data.title || 'アクション', detail: e.data.detail || '' });
   }
   // iframeからイベント会場へ移動（EMUER利用料支払い含む）
   // iframeからEMUER購入（切符売り場など）
@@ -13969,8 +13926,6 @@ function _loadSpSettings() {
     setChk('spSettingEventNotif', true);
     setChk('spSettingPoiLabel', true);
     setChk('spSettingAnonymize', false);
-    setChk('spSettingActivityLog', true);
-    setChk('spSettingShowLog', true);
     const langEl = document.getElementById('spSettingLang');
     if (langEl && s.spSettingLang) langEl.value = s.spSettingLang;
     const zoomEl = document.getElementById('spSettingZoom');
@@ -14011,8 +13966,6 @@ function spSettingSave() {
     spSettingEventNotif:   get('spSettingEventNotif')?.checked ?? true,
     spSettingPoiLabel:     get('spSettingPoiLabel')?.checked ?? true,
     spSettingAnonymize:    get('spSettingAnonymize')?.checked ?? false,
-    spSettingActivityLog:  get('spSettingActivityLog')?.checked ?? true,
-    spSettingShowLog:      get('spSettingShowLog')?.checked ?? true,
     spSettingLang:          get('spSettingLang')?.value || 'ja',
     spSettingZoom:          get('spSettingZoom')?.value || '1',
     spSettingTutorialMode:  get('spSettingTutorialMode')?.value || 'always',
@@ -14652,7 +14605,6 @@ document.getElementById("emuRequestSubmit")?.addEventListener("click", async fun
     _emuAddUsage(_reqBatch, 'request');
     await _reqBatch.commit();
     closeEmuSheet("emuRequestSheet");
-    _spLogAdd({ type:"post", icon:"🔎", title:"知識を募集しました", detail:question.slice(0,25) });
     await loadKnowledgeRequests();
   } catch (error) {
     console.error("知識募集作成失敗:", error);
@@ -16448,29 +16400,9 @@ function openRoom(roomId) {
   }
 }
 
-function openRoom4() {
-  document.getElementById("room4Overlay").style.display = "flex";
-  var badge = document.getElementById("ringo-badge");
-  if (badge) {
-    var past = new Date() >= new Date('2026-04-18T23:59:59+09:00');
-    badge.style.display = past ? "none" : "";
-  }
-}
 
-function openEchoFieldFromRoom4() {
-  document.getElementById("room4Overlay").style.display = "none";
-  openEchoFieldDirect();
-}
 
-function openSecretDoorFromRoom4() {
-  document.getElementById("room4Overlay").style.display = "none";
-  openSecretDoor();
-}
 
-function openRingoFromRoom4() {
-  document.getElementById("room4Overlay").style.display = "none";
-  openRingoGame();
-}
 
 // ══ 東エリア 7棟 open/close ══
 function closeEastBuilding(overlayId, frameId) {
@@ -16515,23 +16447,7 @@ function openEchoFieldDirect() {
   closeBtn.style.display = "inline-flex";
 }
 
-function openSecretDoor() {
-  const overlay = document.getElementById("secretDoorOverlay");
-  const iframe = document.getElementById("secretDoorFrame");
-  overlay.style.display = "block";
-  iframe.src = "/himitsu-no-tobira.html";
-  iframe.onload = () => {
-    const uid = window.currentUserId || window.connectedAccount || "guest";
-    iframe.contentWindow.postMessage({ type: "SET_USER_ID", uid }, "*");
-  };
-}
 
-function closeSecretDoor() {
-  const overlay = document.getElementById("secretDoorOverlay");
-  const iframe = document.getElementById("secretDoorFrame");
-  overlay.style.display = "none";
-  iframe.src = "";
-}
 
 /* ルームを開いている間の、背面ページのスクロール位置。
    ルームは画面全体を覆うので、背面が動くと閉じたときに別の場所へ出てしまう。
@@ -16640,7 +16556,6 @@ document.getElementById('postBtn').addEventListener('click', ()=>{
     replyTo: replyTarget
   });
 
-  _spLogAdd({ type:'chat', icon:'💬', title:'討論ルームでチャットしました', detail: text.length > 25 ? text.slice(0, 25) + '…' : text });
 
   // 送信後は返信状態を解除して入力欄を空にする
   replyTarget = null;
@@ -19224,11 +19139,6 @@ row.appendChild(medal);
   window.addEventListener('message', async function(event) {
     if (!event.data || !event.data.type) return;
 
-    // 秘密のとびら：戻る
-    if (event.data.type === 'SECRET_DOOR_BACK') {
-      closeSecretDoor();
-      return;
-    }
 
     // ECHO FIELD 直接表示時の戻る
     if (event.data.type === 'ECHO_FIELD_BACK') {
@@ -19236,56 +19146,8 @@ row.appendChild(medal);
       return;
     }
 
-    if (event.data.type === 'spContentClose') {
-      return;
-    }
 
-    // 秘密のとびら：UID要求
-    if (event.data.type === 'SECRET_DOOR_REQUEST_UID') {
-      var sdFrame = document.getElementById('secretDoorFrame');
-      if (sdFrame && sdFrame.contentWindow) {
-        var uid = window.currentUserId || window.connectedAccount || 'guest';
-        sdFrame.contentWindow.postMessage({
-          type: 'SET_USER_ID',
-          uid: uid,
-          walletAddress: window.connectedAccount || ''
-        }, '*');
-      }
-      return;
-    }
 
-    // 秘密のとびら：EMUER報酬自動送金
-    if (event.data.type === 'SECRET_DOOR_REWARD') {
-      var doorId = event.data.doorId;
-      var amount = event.data.amount;
-      var walletAddr = window.connectedAccount;
-      if (!walletAddr) {
-        console.warn('SECRET_DOOR_REWARD: ウォレット未接続のため報酬登録スキップ');
-        return;
-      }
-      fetch('https://emu-realtime.onrender.com/secret-door/reward', {
-        method: 'POST',
-        headers: await emuAuthHeaders(true),
-        body: JSON.stringify({ address: walletAddr, doorId: doorId, amount: amount })
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.success) {
-          console.log('🎉 秘密のとびら報酬登録完了 door:', doorId, amount, 'EMUER');
-          var toast = document.createElement('div');
-          toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#1a8a5a,#0d6e45);color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;font-weight:bold;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
-          toast.textContent = '🎉 報酬 +' + amount + ' EMUER 受取予約完了！';
-          document.body.appendChild(toast);
-          setTimeout(function() { toast.remove(); }, 4000);
-        } else if (data.error === 'ALREADY_REGISTERED') {
-          console.log('ℹ️ 秘密のとびら door:' + doorId + ' は既に受け取り済み');
-        } else {
-          console.warn('秘密のとびら報酬登録エラー:', data.error || data.message);
-        }
-      })
-      .catch(function(e) { console.error('秘密のとびら報酬リクエストエラー:', e); });
-      return;
-    }
 
     if (event.data.type === 'room2_name_set') {
       var name    = event.data.displayName;
@@ -19589,49 +19451,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ──────── 共通ユーティリティ ────────
 const _SP_NOTIF_API  = 'https://emu-realtime.onrender.com';
-let _spNotifData     = [];
 let _spNotifLoaded   = false;
-let _spNotifPollTimer = null;
 
-function _spShowLogEnabled() {
-  try { return JSON.parse(localStorage.getItem('spSettings') || '{}').spSettingShowLog !== false; }
-  catch { return true; }
-}
-function _spActivityLogEnabled() {
-  try { return JSON.parse(localStorage.getItem('spSettings') || '{}').spSettingActivityLog !== false; }
-  catch { return true; }
-}
 
 // ──────── ①  アクティビティログ（localStorage） ────────
-const _SP_LOG_KEY = 'sp_activity_log';
-const _SP_LOG_MAX = 100;
 
-function _spLogGet() {
-  try { return JSON.parse(localStorage.getItem(_SP_LOG_KEY) || '[]'); } catch { return []; }
-}
-function _spLogSave(logs) {
-  try { localStorage.setItem(_SP_LOG_KEY, JSON.stringify(logs)); } catch {}
-}
-function _spLogAdd(entry) {
-  if (!_spActivityLogEnabled()) return;
-  const logs = _spLogGet();
-  logs.unshift({ id: Date.now() + '_' + Math.random().toString(36).slice(2,6), isRead: false, timestamp: Date.now(), ...entry });
-  if (logs.length > _SP_LOG_MAX) logs.length = _SP_LOG_MAX;
-  _spLogSave(logs);
-}
-function _spLogUnreadCount() {
-  return _spLogGet().filter(l => !l.isRead).length;
-}
-function spLogMarkAllRead() {
-  const logs = _spLogGet().map(l => ({ ...l, isRead: true }));
-  _spLogSave(logs);
-}
-function _spLogMarkOne(idx) {
-  const logs = _spLogGet();
-}
 // ログセクションの表示/非表示を設定変更時に即時反映
-function _spApplyLogVisibility() {
-}
 
 // ──────── ②  お知らせ（Firestore API） ────────
 
