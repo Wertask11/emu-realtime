@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SchoolPark DAO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Zen+Old+Mincho:wght@700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#D0E2BE; }
+  a { color:#0F5C3F; text-decoration:none; }
+  a:hover { color:#0A3F2B; }
+  ::-webkit-scrollbar { width:10px; height:10px }
+  ::-webkit-scrollbar-thumb { background:rgba(20,19,16,.18); border-radius:8px }
+</style>
+</head>
+<body>
+<div id="dao-root"></div>
+
+<!-- 設計ファイルのテンプレート。ここは1文字も変えていない -->
+<template id="dao-template">
+
+<div style="min-height:100vh; background:#D0E2BE; font-family:'Zen Kaku Gothic New',sans-serif; padding:0 0 60px">
+
+  <div style="position:sticky; top:0; z-index:40; background:#141310; color:#F4F1EA; padding:12px 24px; display:flex; align-items:center; gap:20px">
+    <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.24em; color:#D0E2BE">SCHOOLPARK DAO / PREVIEW</div>
+    <div style="flex:1"></div>
+    <div style="display:flex; gap:6px">
+      <sc-for list="{{ devices }}" as="d" hint-placeholder-count="3">
+        <div onClick="{{ d.go }}" style="padding:8px 16px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; background:{{ d.bg }}; color:{{ d.fg }}">{{ d.label }}</div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="padding:24px 20px 0; display:flex; justify-content:center; overflow:hidden; height:{{ L.boxH }}">
+  <div style="width:{{ L.w }}; height:{{ L.h }}; flex:none; transform:{{ L.scale }}; transform-origin:top center; background:#F4F1EA; color:#141310; border-radius:{{ L.frameR }}; overflow:hidden; box-shadow:0 18px 48px rgba(20,19,16,.14); display:flex">
+
+    <div style="display:{{ L.sidebarShow }}; width:248px; flex:0 0 248px; background:#141310; color:#F4F1EA; flex-direction:column; overflow-y:auto">
+      <div style="padding:24px 18px 22px 24px; display:flex; align-items:flex-start; gap:12px; border-bottom:1px solid rgba(244,241,234,.12)">
+        <div style="display:flex; flex:1; flex-direction:column; gap:6px">
+          <div style="font-family:'Zen Old Mincho',serif; font-size:23px; font-weight:900; letter-spacing:.02em">SchoolPark</div>
+          <div style="font-family:Inter,sans-serif; font-size:11px; letter-spacing:.28em; color:#D0E2BE">D A O</div>
+        </div>
+        <div onClick="{{ toggleSidebar }}" title="サイドバーを閉じる" style="width:32px; height:32px; border:1px solid rgba(244,241,234,.18); border-radius:7px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-family:Inter,sans-serif; font-size:18px; color:#D0E2BE" style-hover="background:rgba(244,241,234,.1)">‹</div>
+      </div>
+      <div style="flex:1; padding:16px 12px; display:flex; flex-direction:column; gap:2px">
+        <sc-for list="{{ nav }}" as="item" hint-placeholder-count="8">
+          <div onClick="{{ item.go }}" style="display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500; line-height:1.3; background:{{ item.bg }}; color:{{ item.fg }}" style-hover="background:rgba(244,241,234,.09)">
+            <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.12em; width:18px; opacity:.55">{{ item.num }}</div>
+            <div>{{ item.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="padding:18px 20px 22px; border-top:1px solid rgba(244,241,234,.12); display:flex; flex-direction:column; gap:12px">
+        <div style="display:flex; justify-content:space-between; align-items:baseline">
+          <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; opacity:.5">TREASURY</div>
+          <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:#D0E2BE">¥{{ treasury.total }}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; padding-top:4px">
+          <div style="width:32px; height:32px; border-radius:50%; background:#0F5C3F; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700">彩</div>
+          <div style="display:flex; flex-direction:column; gap:2px">
+            <div style="font-size:13px; font-weight:500">あやか</div>
+            <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.1em; color:#D0E2BE">WISDOM 14 · クエスト 6</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow-y:{{ L.scrollY }}" ref="{{ scrollRef }}">
+
+      <div style="background:#F4F1EA; border-bottom:1px solid rgba(20,19,16,.12); padding:{{ L.headPad }}; position:sticky; top:0; z-index:6; display:flex; align-items:center; gap:16px">
+        <div onClick="{{ toggleSidebar }}" title="{{ sidebarButtonTitle }}" style="display:{{ L.sidebarToggle }}; width:38px; height:38px; flex:0 0 38px; border:1px solid rgba(20,19,16,.16); border-radius:7px; align-items:center; justify-content:center; cursor:pointer; font-family:Inter,sans-serif; font-size:18px; color:#0F5C3F" style-hover="background:#E7E2D6">{{ sidebarButtonIcon }}</div>
+        <div style="display:flex; flex-direction:column; gap:5px; flex:1; min-width:0">
+          <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#0F5C3F">{{ head.kicker }}</div>
+          <div style="font-size:{{ L.headSize }}; font-weight:700; letter-spacing:.02em">{{ head.title }}</div>
+        </div>
+        <div onClick="{{ goPropose }}" style="padding:12px 18px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap" style-hover="background:#0A3F2B">{{ L.ctaLabel }}</div>
+      </div>
+
+      <div style="padding:{{ L.pad }}; display:flex; flex-direction:column; gap:36px">
+
+        <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; gap:36px">
+
+            <div style="background:#141310; color:#F4F1EA; padding:{{ L.cardPad }}; border-radius:12px; display:grid; grid-template-columns:{{ L.hero }}; gap:32px">
+              <div style="display:flex; flex-direction:column; gap:16px">
+                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE">THIS WEEK</div>
+                <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.45">今週、{{ stats.newWisdom }}個の知識が<br>知恵になった。</div>
+                <div style="font-size:14px; line-height:1.9; color:rgba(244,241,234,.68)">読んで終わった知識は0。走っている{{ word }}は{{ stats.running }}本、受けている仲間は{{ stats.people }}人。</div>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; align-content:center">
+                <div style="border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:6px">
+                  <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; color:#D0E2BE">{{ stats.myCommit }}</div>
+                  <div style="font-size:12px; color:rgba(244,241,234,.6)">受けているクエスト</div>
+                </div>
+                <div style="border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:6px">
+                  <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; color:#D0E2BE">{{ stats.due }}</div>
+                  <div style="font-size:12px; color:rgba(244,241,234,.6)">今週締切の報告</div>
+                </div>
+                <div style="border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:6px">
+                  <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; color:#D0E2BE">{{ stats.wisdomTotal }}</div>
+                  <div style="font-size:12px; color:rgba(244,241,234,.6)">ライブラリの知恵</div>
+                </div>
+                <div style="border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:6px">
+                  <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; color:#D0E2BE">{{ stats.payout }}</div>
+                  <div style="font-size:12px; color:rgba(244,241,234,.6)">今月の分配見込</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:18px">
+              <div style="display:flex; align-items:baseline; gap:14px">
+                <div style="font-size:17px; font-weight:700">今週生まれた知恵</div>
+                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                <div onClick="{{ goLibrary }}" style="font-size:13px; color:#0F5C3F; cursor:pointer; font-weight:500">ライブラリへ →</div>
+              </div>
+              <div style="display:grid; grid-template-columns:{{ L.g3 }}; gap:16px">
+                <sc-for list="{{ freshWisdom }}" as="w" hint-placeholder-count="3">
+                  <div onClick="{{ w.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:14px; cursor:pointer" style-hover="border-color:#0F5C3F">
+                    <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:#0F5C3F">{{ w.tag }}</div>
+                    <div style="font-family:'Zen Old Mincho',serif; font-size:20px; font-weight:900; line-height:1.55; text-wrap:pretty">{{ w.insight }}</div>
+                    <div style="display:flex; flex-direction:column; gap:6px; padding-top:4px; border-top:1px dashed rgba(20,19,16,.16); font-size:12px; color:#6E695C; line-height:1.7">
+                      <div>知識：{{ w.from }}</div>
+                      <div>{{ wordShort }}：{{ w.experiment }}</div>
+                    </div>
+                    <div style="font-size:12px; color:#6E695C">by {{ w.author }} · 引用 {{ w.uses }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:{{ L.g2b }}; gap:28px">
+              <div style="display:flex; flex-direction:column; gap:18px">
+                <div style="display:flex; align-items:baseline; gap:14px">
+                  <div style="font-size:17px; font-weight:700">走っている{{ word }}</div>
+                  <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                  <div onClick="{{ goExperiments }}" style="font-size:13px; color:#0F5C3F; cursor:pointer; font-weight:500">すべて →</div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:12px">
+                  <sc-for list="{{ runningExps }}" as="e" hint-placeholder-count="3">
+                    <div onClick="{{ e.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:10px; padding:18px 20px; display:flex; align-items:center; gap:20px; cursor:pointer; flex-wrap:wrap" style-hover="border-color:#0F5C3F">
+                      <div style="flex:1; min-width:160px; display:flex; flex-direction:column; gap:7px">
+                        <div style="font-size:15px; font-weight:700; line-height:1.5">{{ e.title }}</div>
+                        <div style="font-size:12px; color:#6E695C">{{ e.owner }} · 締切 {{ e.due }}</div>
+                      </div>
+                      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; white-space:nowrap">
+                        <div style="font-family:Inter,sans-serif; font-size:13px; font-weight:600; color:#0F5C3F">{{ e.commits }} 人が受けてる</div>
+                        <div style="width:120px; height:5px; background:rgba(20,19,16,.1); border-radius:3px; overflow:hidden">
+                          <div style="height:100%; background:#0F5C3F; width:{{ e.progress }}"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:18px">
+                <div style="display:flex; align-items:baseline; gap:14px">
+                  <div style="font-size:17px; font-weight:700">自分の宿題</div>
+                  <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                </div>
+                <div style="background:#E7E2D6; border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:16px">
+                  <sc-for list="{{ todos }}" as="t" hint-placeholder-count="3">
+                    <div style="display:flex; gap:12px; align-items:flex-start; padding-bottom:14px; border-bottom:1px solid rgba(20,19,16,.1)">
+                      <div style="width:16px; height:16px; border:1.5px solid #0F5C3F; border-radius:4px; margin-top:3px; flex:0 0 16px"></div>
+                      <div style="display:flex; flex-direction:column; gap:5px">
+                        <div style="font-size:14px; font-weight:500; line-height:1.6">{{ t.label }}</div>
+                        <div style="font-size:12px; color:#6E695C">{{ t.meta }}</div>
+                      </div>
+                    </div>
+                  </sc-for>
+                  <div onClick="{{ goLogs }}" style="text-align:center; font-size:13px; font-weight:700; color:#0F5C3F; cursor:pointer; padding-top:2px">ログを書く →</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isPark }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:34px">
+
+            <div style="background:#E7E2D6; border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:12px">
+              <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.5">ここには締切も、報酬も、進捗バーもない。</div>
+              <div style="font-size:14px; line-height:1.95; color:#3B382F; max-width:640px">クエストが「ひとりで試す」なら、公園は「みんなでやる」。数えないし、評価もしない。ただ、ここで出た気づきは<b>「知恵にする」</b>でライブラリに持っていける。</div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:18px">
+              <div style="display:flex; align-items:baseline; gap:14px">
+                <div style="font-size:17px; font-weight:700">今日ひま？ボード</div>
+                <div style="font-size:12px; color:#6E695C">思いついたら投げる。返事がなくても気にしない。</div>
+                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+              </div>
+              <div style="display:grid; grid-template-columns:{{ L.g3 }}; gap:16px">
+                <sc-for list="{{ board }}" as="b" hint-placeholder-count="3">
+                  <div style="background:#FBF9F3; border:1px dashed rgba(20,19,16,.24); border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px">
+                    <div style="font-family:Inter,sans-serif; font-size:11px; letter-spacing:.14em; color:#C2703D">{{ b.when }}</div>
+                    <div style="font-size:16px; font-weight:700; line-height:1.6; text-wrap:pretty">{{ b.title }}</div>
+                    <div style="font-size:13px; line-height:1.85; color:#6E695C">{{ b.note }}</div>
+                    <div style="display:flex; align-items:center; gap:10px; padding-top:10px; border-top:1px solid rgba(20,19,16,.1); flex-wrap:wrap">
+                      <div style="font-size:12px; color:#6E695C">{{ b.who }}</div>
+                      <div style="flex:1"></div>
+                      <div onClick="{{ b.join }}" style="padding:9px 16px; border-radius:18px; font-size:13px; font-weight:700; cursor:pointer; border:1px solid #C2703D; background:{{ b.bg }}; color:{{ b.fg }}">{{ b.label }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:{{ L.g2b }}; gap:28px">
+              <div style="display:flex; flex-direction:column; gap:18px">
+                <div style="display:flex; align-items:baseline; gap:14px">
+                  <div style="font-size:17px; font-weight:700">バカな挑戦</div>
+                  <div style="font-size:12px; color:#6E695C">役に立たないことを、本気で。</div>
+                  <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:12px">
+                  <sc-for list="{{ dumb }}" as="d" hint-placeholder-count="3">
+                    <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:20px 22px; display:flex; flex-direction:column; gap:10px">
+                      <div style="font-family:'Zen Old Mincho',serif; font-size:20px; font-weight:900; line-height:1.5">{{ d.title }}</div>
+                      <div style="font-size:13px; line-height:1.9; color:rgba(244,241,234,.66)">{{ d.body }}</div>
+                      <div style="font-size:12px; color:#D0E2BE">{{ d.who }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:18px">
+                <div style="display:flex; align-items:baseline; gap:14px">
+                  <div style="font-size:17px; font-weight:700">いま開いてる部屋</div>
+                  <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                </div>
+                <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; overflow:hidden">
+                  <sc-for list="{{ rooms }}" as="r" hint-placeholder-count="4">
+                    <div style="padding:16px 20px; border-bottom:1px solid rgba(20,19,16,.09); display:flex; align-items:center; gap:14px">
+                      <div style="width:8px; height:8px; border-radius:50%; background:{{ r.dot }}; flex:0 0 8px"></div>
+                      <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
+                        <div style="font-size:14px; font-weight:700; line-height:1.5">{{ r.name }}</div>
+                        <div style="font-size:12px; color:#6E695C">{{ r.who }}</div>
+                      </div>
+                      <div style="font-size:12px; font-weight:700; color:#0F5C3F; cursor:pointer; white-space:nowrap">入る</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="font-size:12px; line-height:1.9; color:#6E695C">部屋は誰でも立てられる。無言で作業してるだけの部屋もある。</div>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:18px">
+              <div style="display:flex; align-items:baseline; gap:14px">
+                <div style="font-size:17px; font-weight:700">月例、リアルの集まり</div>
+                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+              </div>
+              <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:16px">
+                <sc-for list="{{ events }}" as="ev" hint-placeholder-count="2">
+                  <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; gap:22px; align-items:flex-start">
+                    <div style="display:flex; flex-direction:column; align-items:center; gap:2px; padding:12px 14px; background:#C2703D; color:#F4F1EA; border-radius:10px; flex:0 0 auto">
+                      <div style="font-family:Inter,sans-serif; font-size:11px; letter-spacing:.14em">{{ ev.month }}</div>
+                      <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; line-height:1">{{ ev.day }}</div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:9px; min-width:0">
+                      <div style="font-size:17px; font-weight:700; line-height:1.55">{{ ev.title }}</div>
+                      <div style="font-size:13px; line-height:1.9; color:#3B382F">{{ ev.body }}</div>
+                      <div style="font-size:12px; color:#6E695C">{{ ev.place }} · {{ ev.who }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:18px">
+              <div style="display:flex; align-items:baseline; gap:14px">
+                <div style="font-size:17px; font-weight:700">見学でついていく</div>
+                <div style="font-size:12px; color:#6E695C">受けるほどじゃないけど、見てみたいクエスト。</div>
+                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+              </div>
+              <div style="display:grid; grid-template-columns:{{ L.g3 }}; gap:16px">
+                <sc-for list="{{ peeks }}" as="p" hint-placeholder-count="3">
+                  <div onClick="{{ p.open }}" style="background:#E7E2D6; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:10px; cursor:pointer" style-hover="background:#BFD6A6">
+                    <div style="font-size:15px; font-weight:700; line-height:1.6">{{ p.title }}</div>
+                    <div style="font-size:12px; color:#6E695C">{{ p.owner }} · 見学 {{ p.watchers }}人</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isExperiments }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:24px">
+            <div style="display:flex; gap:8px; flex-wrap:wrap">
+              <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+                <div onClick="{{ f.go }}" style="padding:9px 16px; border-radius:20px; font-size:13px; font-weight:500; cursor:pointer; border:1px solid rgba(20,19,16,.16); background:{{ f.bg }}; color:{{ f.fg }}">{{ f.label }}</div>
+              </sc-for>
+            </div>
+            <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:18px">
+              <sc-for list="{{ shownExps }}" as="e" hint-placeholder-count="4">
+                <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; flex-direction:column; gap:16px">
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+                    <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ e.statusBg }}; color:{{ e.statusFg }}">{{ e.status }}</div>
+                    <div style="font-size:12px; color:#6E695C">締切 {{ e.due }}</div>
+                  </div>
+                  <div onClick="{{ e.open }}" style="font-size:19px; font-weight:700; line-height:1.55; cursor:pointer; text-wrap:pretty" style-hover="color:#0F5C3F">{{ e.title }}</div>
+                  <div style="font-size:13px; line-height:1.9; color:#3B382F">{{ e.hypothesis }}</div>
+                  <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:#6E695C; padding:10px 12px; background:#F4F1EA; border-radius:8px; line-height:1.6">
+                    <span style="color:#0F5C3F; font-weight:700">元の知識</span>{{ e.knowledge }}
+                  </div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding-top:4px; border-top:1px solid rgba(20,19,16,.1); flex-wrap:wrap">
+                    <div style="display:flex; flex-direction:column; gap:4px">
+                      <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:#0F5C3F">{{ e.commits }} / {{ e.need }} 人が受けた</div>
+                      <div style="font-size:11px; color:#6E695C">予算 ¥{{ e.budget }} · {{ e.owner }}</div>
+                    </div>
+                    <div onClick="{{ e.commit }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:{{ e.btnBg }}; color:{{ e.btnFg }}; border:1px solid #0F5C3F">{{ e.btnLabel }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid; grid-template-columns:{{ L.gDetail }}; gap:32px; align-items:start">
+            <div style="display:flex; flex-direction:column; gap:28px">
+              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:22px">
+                <div style="display:flex; align-items:center; gap:12px">
+                  <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ cur.statusBg }}; color:{{ cur.statusFg }}">{{ cur.status }}</div>
+                  <div onClick="{{ goExperiments }}" style="font-size:12px; color:#6E695C; cursor:pointer">← {{ word }}一覧</div>
+                </div>
+                <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.5; text-wrap:pretty">{{ cur.title }}</div>
+                <div style="display:flex; flex-direction:column; gap:18px">
+                  <div style="display:grid; grid-template-columns:88px 1fr; gap:16px; font-size:14px; line-height:1.95">
+                    <div style="color:#0F5C3F; font-weight:700">元の知識</div><div style="color:#3B382F">{{ cur.knowledge }}</div>
+                  </div>
+                  <div style="display:grid; grid-template-columns:88px 1fr; gap:16px; font-size:14px; line-height:1.95">
+                    <div style="color:#0F5C3F; font-weight:700">予想</div><div style="color:#3B382F">{{ cur.hypothesis }}</div>
+                  </div>
+                  <div style="display:grid; grid-template-columns:88px 1fr; gap:16px; font-size:14px; line-height:1.95">
+                    <div style="color:#0F5C3F; font-weight:700">やること</div><div style="color:#3B382F">{{ cur.action }}</div>
+                  </div>
+                  <div style="display:grid; grid-template-columns:88px 1fr; gap:16px; font-size:14px; line-height:1.95">
+                    <div style="color:#0F5C3F; font-weight:700">確かめ方</div><div style="color:#3B382F">{{ cur.measure }}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:16px">
+                <div style="display:flex; align-items:baseline; gap:14px">
+                  <div style="font-size:17px; font-weight:700">{{ word }}ログ</div>
+                  <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                  <div style="font-size:12px; color:#6E695C">{{ cur.logCount }} 件</div>
+                </div>
+                <sc-for list="{{ curLogs }}" as="l" hint-placeholder-count="3">
+                  <div style="display:flex; gap:16px; padding:20px 0; border-bottom:1px solid rgba(20,19,16,.1)">
+                    <div style="width:36px; height:36px; flex:0 0 36px; border-radius:50%; background:#E7E2D6; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#0F5C3F">{{ l.initial }}</div>
+                    <div style="display:flex; flex-direction:column; gap:8px; min-width:0">
+                      <div style="display:flex; gap:10px; align-items:baseline; flex-wrap:wrap">
+                        <div style="font-size:14px; font-weight:700">{{ l.author }}</div>
+                        <div style="font-size:11px; color:#6E695C">{{ l.time }}</div>
+                        <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.12em; padding:3px 8px; border-radius:3px; background:{{ l.kindBg }}; color:{{ l.kindFg }}">{{ l.kind }}</div>
+                      </div>
+                      <div style="font-size:14px; line-height:1.95; color:#3B382F; text-wrap:pretty">{{ l.body }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:20px; position:{{ L.stick }}; top:24px">
+              <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:26px; display:flex; flex-direction:column; gap:20px">
+                <div style="display:flex; flex-direction:column; gap:8px">
+                  <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; color:#D0E2BE">ACCEPT</div>
+                  <div style="font-size:14px; line-height:1.8; color:rgba(244,241,234,.72)">賛成/反対ではなく、<b style="color:#F4F1EA">自分も受けるか</b>で決める。受けた人数が予算配分になる。</div>
+                </div>
+                <div style="display:flex; align-items:baseline; gap:8px">
+                  <div style="font-family:Inter,sans-serif; font-size:38px; font-weight:600; color:#D0E2BE">{{ cur.commits }}</div>
+                  <div style="font-size:13px; color:rgba(244,241,234,.6)">/ 成立ライン {{ cur.need }}人</div>
+                </div>
+                <div style="height:6px; background:rgba(244,241,234,.14); border-radius:3px; overflow:hidden">
+                  <div style="height:100%; background:#D0E2BE; width:{{ cur.progress }}"></div>
+                </div>
+                <div onClick="{{ cur.commit }}" style="text-align:center; padding:14px; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; background:{{ cur.btnBg2 }}; color:{{ cur.btnFg2 }}; border:1px solid #D0E2BE">{{ cur.btnLabel }}</div>
+                <div style="font-size:12px; line-height:1.8; color:rgba(244,241,234,.5)">受けると、締切までにログを1本出す約束になります。</div>
+              </div>
+
+              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; flex-direction:column; gap:16px">
+                <div style="font-size:14px; font-weight:700">受けている人 {{ cur.commits }}人</div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px">
+                  <sc-for list="{{ cur.people }}" as="p" hint-placeholder-count="5">
+                    <div style="padding:7px 12px; background:#E7E2D6; border-radius:16px; font-size:12px">{{ p }}</div>
+                  </sc-for>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:13px; padding-top:14px; border-top:1px solid rgba(20,19,16,.1)">
+                  <div style="color:#6E695C">配分予算</div>
+                  <div style="font-family:Inter,sans-serif; font-weight:600; color:#0F5C3F">¥{{ cur.budget }}</div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:13px">
+                  <div style="color:#6E695C">完走時の分配</div>
+                  <div style="font-family:Inter,sans-serif; font-weight:600; color:#0F5C3F">¥{{ cur.perHead }} / 人</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isLogs }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid; grid-template-columns:{{ L.gLogs }}; gap:32px; align-items:start">
+            <div style="display:flex; flex-direction:column; gap:20px">
+              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:14px">
+                <div style="font-size:14px; font-weight:700">今日やったことを書く</div>
+                <div style="min-height:74px; padding:14px; background:#F4F1EA; border-radius:8px; font-size:14px; color:#9A9484; line-height:1.8">試したこと、うまくいかなかったこと、気づいたこと——3行でいい。</div>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                  <div style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer">やってみた</div>
+                  <div style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer">つまずいた</div>
+                  <div style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer">気づいた</div>
+                  <div style="flex:1"></div>
+                  <div style="padding:10px 20px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer">投稿</div>
+                </div>
+              </div>
+
+              <sc-for list="{{ logs }}" as="l" hint-placeholder-count="5">
+                <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; gap:16px">
+                  <div style="width:38px; height:38px; flex:0 0 38px; border-radius:50%; background:#E7E2D6; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; color:#0F5C3F">{{ l.initial }}</div>
+                  <div style="display:flex; flex-direction:column; gap:10px; min-width:0">
+                    <div style="display:flex; gap:10px; align-items:baseline; flex-wrap:wrap">
+                      <div style="font-size:14px; font-weight:700">{{ l.author }}</div>
+                      <div style="font-size:11px; color:#6E695C">{{ l.time }}</div>
+                      <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.12em; padding:3px 8px; border-radius:3px; background:{{ l.kindBg }}; color:{{ l.kindFg }}">{{ l.kind }}</div>
+                    </div>
+                    <div style="font-size:12px; color:#6E695C">{{ word }}：{{ l.exp }}</div>
+                    <div style="font-size:14px; line-height:1.95; color:#3B382F; text-wrap:pretty">{{ l.body }}</div>
+                    <div style="display:flex; gap:16px; font-size:12px; color:#6E695C; padding-top:4px">
+                      <div style="cursor:pointer">👏 {{ l.claps }}</div>
+                      <div style="cursor:pointer">返信 {{ l.replies }}</div>
+                      <div style="cursor:pointer; color:#0F5C3F; font-weight:700">知恵にする</div>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="background:#E7E2D6; border-radius:12px; padding:26px; display:flex; flex-direction:column; gap:18px">
+              <div style="font-size:15px; font-weight:700">ログが知恵になるまで</div>
+              <div style="font-size:13px; line-height:1.95; color:#3B382F">3件以上のログが溜まった{{ word }}は、締切後に「知恵カード」の下書きが自動生成されます。書き手が一文に削り、ライブラリへ。</div>
+              <div style="display:flex; flex-direction:column; gap:10px; padding-top:6px">
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">01</div>ログを溜める</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">02</div>一文に削る</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">03</div>ライブラリに置く</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">04</div>誰かが引用する＝分配</div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isLibrary }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:26px">
+            <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:{{ L.cardPad }}; display:flex; align-items:center; gap:32px; flex-wrap:wrap">
+              <div style="flex:1; min-width:220px; display:flex; flex-direction:column; gap:10px">
+                <div style="font-family:'Zen Old Mincho',serif; font-size:26px; font-weight:900; line-height:1.5">DAOの資産は、金庫ではなくここにある。</div>
+                <div style="font-size:13px; line-height:1.9; color:rgba(244,241,234,.66)">知恵カードは「元の知識 → 通した経験 → 残った一文」で1枚。引用されるほど、書き手に分配が回る。</div>
+              </div>
+              <div style="display:flex; gap:28px">
+                <div style="display:flex; flex-direction:column; gap:6px"><div style="font-family:Inter,sans-serif; font-size:30px; font-weight:600; color:#D0E2BE">{{ stats.wisdomTotal }}</div><div style="font-size:12px; color:rgba(244,241,234,.6)">知恵</div></div>
+                <div style="display:flex; flex-direction:column; gap:6px"><div style="font-family:Inter,sans-serif; font-size:30px; font-weight:600; color:#D0E2BE">{{ stats.citations }}</div><div style="font-size:12px; color:rgba(244,241,234,.6)">引用</div></div>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap">
+              <sc-for list="{{ tags }}" as="t" hint-placeholder-count="5">
+                <div style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:18px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">{{ t }}</div>
+              </sc-for>
+            </div>
+            <div style="columns:{{ L.libCols }}; column-gap:16px">
+              <sc-for list="{{ wisdom }}" as="w" hint-placeholder-count="6">
+                <div style="break-inside:avoid; margin-bottom:16px; background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; flex-direction:column; gap:16px">
+                  <div style="display:flex; justify-content:space-between; align-items:center">
+                    <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:#0F5C3F">{{ w.tag }}</div>
+                    <div style="font-family:Inter,sans-serif; font-size:11px; color:#6E695C">引用 {{ w.uses }}</div>
+                  </div>
+                  <div style="font-family:'Zen Old Mincho',serif; font-size:21px; font-weight:900; line-height:1.6; text-wrap:pretty">{{ w.insight }}</div>
+                  <div style="display:flex; flex-direction:column; gap:10px; padding-top:14px; border-top:1px dashed rgba(20,19,16,.16)">
+                    <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">知識</div><div>{{ w.from }}</div></div>
+                    <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">経験</div><div>{{ w.experiment }}</div></div>
+                  </div>
+                  <div style="font-size:12px; color:#6E695C">by {{ w.author }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isMembers }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:22px">
+            <div style="font-size:14px; line-height:1.9; color:#3B382F; max-width:720px">貢献は「発言量」ではなく、<b>知恵を残したか</b>で測る。完走率が低い人は同時に受けられる数に上限がかかる。</div>
+            <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; overflow:hidden">
+              <div style="display:grid; grid-template-columns:{{ L.table }}; gap:12px; padding:16px 20px; background:#E7E2D6; font-size:12px; font-weight:700; color:#3B382F">
+                <div>メンバー</div><div>知恵</div><div style="display:{{ L.colHide }}">完走</div><div style="display:{{ L.colHide }}">引用され</div><div>分配</div>
+              </div>
+              <sc-for list="{{ members }}" as="m" hint-placeholder-count="6">
+                <div style="display:grid; grid-template-columns:{{ L.table }}; gap:12px; padding:18px 20px; border-top:1px solid rgba(20,19,16,.09); align-items:center; font-size:14px">
+                  <div style="display:flex; align-items:center; gap:12px">
+                    <div style="width:32px; height:32px; flex:0 0 32px; border-radius:50%; background:#E7E2D6; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#0F5C3F">{{ m.initial }}</div>
+                    <div style="display:flex; flex-direction:column; gap:3px; min-width:0">
+                      <div style="font-weight:700">{{ m.name }}</div>
+                      <div style="font-size:11px; color:#6E695C">{{ m.role }}</div>
+                    </div>
+                  </div>
+                  <div style="font-family:Inter,sans-serif; font-weight:600">{{ m.wisdom }}</div>
+                  <div style="font-family:Inter,sans-serif; font-weight:600; display:{{ L.colHide }}">{{ m.done }}</div>
+                  <div style="font-family:Inter,sans-serif; font-weight:600; display:{{ L.colHide }}">{{ m.cited }}</div>
+                  <div style="font-family:Inter,sans-serif; font-weight:600; color:#0F5C3F">¥{{ m.share }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isTreasury }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:24px; align-items:start">
+            <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:26px">
+              <div style="display:flex; flex-direction:column; gap:10px">
+                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE">TOTAL BALANCE</div>
+                <div style="font-family:Inter,sans-serif; font-size:{{ L.bigNum }}; font-weight:600; line-height:1">¥{{ treasury.total }}</div>
+                <div style="font-size:13px; color:rgba(244,241,234,.6)">今月の流入 ¥{{ treasury.in }} / 分配 ¥{{ treasury.out }}</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:14px">
+                <sc-for list="{{ treasury.alloc }}" as="a" hint-placeholder-count="4">
+                  <div style="display:flex; flex-direction:column; gap:8px">
+                    <div style="display:flex; justify-content:space-between; font-size:13px">
+                      <div style="color:rgba(244,241,234,.8)">{{ a.label }}</div>
+                      <div style="font-family:Inter,sans-serif; color:#D0E2BE">{{ a.pct }}</div>
+                    </div>
+                    <div style="height:6px; background:rgba(244,241,234,.14); border-radius:3px; overflow:hidden"><div style="height:100%; background:#D0E2BE; width:{{ a.pct }}"></div></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:16px">
+              <div style="font-size:17px; font-weight:700">直近の動き</div>
+              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; overflow:hidden">
+                <sc-for list="{{ treasury.txs }}" as="t" hint-placeholder-count="5">
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:18px 22px; border-bottom:1px solid rgba(20,19,16,.09)">
+                    <div style="display:flex; flex-direction:column; gap:5px; min-width:0">
+                      <div style="font-size:14px; font-weight:500; line-height:1.5">{{ t.label }}</div>
+                      <div style="font-size:11px; color:#6E695C">{{ t.date }} · {{ t.kind }}</div>
+                    </div>
+                    <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; white-space:nowrap; color:{{ t.color }}">{{ t.amount }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="font-size:12px; line-height:1.9; color:#6E695C">分配ルール：完走したメンバーに予算の70%、知恵カードの引用数に応じて20%、残り10%を次の原資にプール。</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isPropose }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid; grid-template-columns:{{ L.gPropose }}; gap:32px; align-items:start">
+            <div style="display:flex; flex-direction:column; gap:4px">
+              <sc-for list="{{ steps }}" as="s" hint-placeholder-count="4">
+                <div onClick="{{ s.go }}" style="display:flex; gap:14px; padding:14px 12px; border-radius:8px; cursor:pointer; background:{{ s.bg }}">
+                  <div style="font-family:Inter,sans-serif; font-size:11px; letter-spacing:.1em; color:{{ s.numFg }}; padding-top:3px">{{ s.num }}</div>
+                  <div style="display:flex; flex-direction:column; gap:4px">
+                    <div style="font-size:14px; font-weight:700; color:{{ s.fg }}">{{ s.label }}</div>
+                    <div style="font-size:11px; color:#6E695C; line-height:1.6">{{ s.hint }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:26px">
+              <div style="display:flex; flex-direction:column; gap:10px">
+                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; color:#0F5C3F">STEP {{ stepNum }} / 4</div>
+                <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.5">{{ step.title }}</div>
+                <div style="font-size:14px; line-height:1.95; color:#3B382F; max-width:620px">{{ step.desc }}</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:18px">
+                <sc-for list="{{ step.fields }}" as="f" hint-placeholder-count="2">
+                  <div style="display:flex; flex-direction:column; gap:8px">
+                    <div style="font-size:13px; font-weight:700">{{ f.label }}</div>
+                    <div style="min-height:{{ f.h }}; padding:14px 16px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; line-height:1.8; color:#9A9484">{{ f.ph }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex; align-items:center; gap:12px; padding:16px 18px; background:#E7E2D6; border-radius:8px; font-size:13px; line-height:1.8; color:#3B382F">{{ step.note }}</div>
+              <div style="display:flex; gap:12px; justify-content:flex-end; padding-top:6px">
+                <div onClick="{{ prevStep }}" style="padding:13px 22px; border:1px solid rgba(20,19,16,.2); border-radius:6px; font-size:14px; font-weight:500; cursor:pointer">戻る</div>
+                <div onClick="{{ nextStep }}" style="padding:13px 26px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer" style-hover="background:#0A3F2B">{{ nextLabel }}</div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+      </div>
+
+      <div style="display:{{ L.bottom }}; position:sticky; bottom:0; z-index:8; flex:0 0 76px; width:100%; min-height:76px; background:#141310; padding:8px 8px 12px; justify-content:flex-start; align-items:stretch; gap:4px; overflow-x:scroll; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; touch-action:pan-x; -webkit-overflow-scrolling:touch">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="9">
+          <div onClick="{{ t.go }}" style="flex:0 0 72px; display:flex; flex-direction:column; align-items:center; gap:5px; padding:8px 4px; border-radius:8px; cursor:pointer; min-height:44px; background:{{ t.bg }}; scroll-snap-align:start">
+            <div style="font-family:Inter,sans-serif; font-size:9px; letter-spacing:.1em; color:{{ t.num }}">{{ t.n }}</div>
+            <div style="font-size:11px; font-weight:700; color:{{ t.fg }}">{{ t.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+</template>
+
+<script>
+
+var React = { createRef: function () { return { current: null }; } };
+
+var DCLogic = function () {};
+DCLogic.prototype.setState = function (upd) {
+  var next = (typeof upd === 'function') ? upd(this.state) : upd;
+  this.state = Object.assign({}, this.state, next);
+  schedule();
+};
+
+const EXPS = [
+  {id:'e1', title:'「先に名乗る」を1週間、初対面20人でやってみる', hypothesis:'関係構築は情報量ではなく先出しの順番で決まる、という説を自分の現場で確かめる。', knowledge:'Emu／人間関係の設計 第3回「返報性」', action:'初対面の場で必ず自分から名乗り、相手より先に自己開示を1つ出す。', measure:'20回のうち、相手から質問が返ってきた率を記録する。', owner:'あやか', due:'5/22', commits:7, need:5, budget:'40,000', status:'RUNNING', progress:'62%', people:['あやか','けんと','みお','しゅん','りな','たく','ゆい'], logCount:8},
+  {id:'e2', title:'値付けを2倍にして、断られ方を観察する', hypothesis:'価格は価値ではなく自信の表明。断られ方の質が変わるはず。', knowledge:'外部：価格戦略の本／第4章', action:'次の3件の見積もりを現行の2倍で出す。', measure:'断られた理由を逐語で記録し、金額理由か価値理由かを分類。', owner:'けんと', due:'5/30', commits:4, need:5, budget:'25,000', status:'OPEN', progress:'80%', people:['けんと','みお','たく','ゆい'], logCount:3},
+  {id:'e3', title:'朝の30分だけ、通知を全部切って作る', hypothesis:'集中は時間の長さではなく中断の数で決まる。', knowledge:'Emu／集中の科学 第1回', action:'14日間、起床後30分は通知オフで手を動かす。', measure:'完了タスク数と主観的満足度を毎朝記録。', owner:'みお', due:'6/04', commits:12, need:5, budget:'30,000', status:'RUNNING', progress:'45%', people:['みお','あやか','しゅん','りな','たく'], logCount:11},
+  {id:'e4', title:'断り文句を3パターン用意して、1週間で全部使う', hypothesis:'断れないのは意志ではなく在庫の問題。', knowledge:'外部：交渉の型／勉強会メモ', action:'「今は無理」「条件付き」「代替案」の3型を事前に書き、実地で使う。', measure:'使えた回数と、関係が悪化したかの自己評価。', owner:'しゅん', due:'5/26', commits:9, need:5, budget:'20,000', status:'RUNNING', progress:'70%', people:['しゅん','けんと','ゆい','りな'], logCount:6},
+  {id:'e5', title:'学んだ翌日に「誰かに説明する」を必ず入れる', hypothesis:'定着率は復習ではなく出力で決まる。', knowledge:'Emu／学習設計 第2回', action:'Emu受講の翌日、必ず1人に5分で説明する。', measure:'2週間後に同内容を書き出せるかテスト。', owner:'りな', due:'6/10', commits:3, need:5, budget:'18,000', status:'OPEN', progress:'60%', people:['りな','みお','あやか'], logCount:2},
+  {id:'e6', title:'1日1回、知らない人に小さく頼む', hypothesis:'頼む力は筋肉。回数でしか増えない。', knowledge:'外部：依頼と信頼／podcast', action:'14日間、毎日1回だけ他人に小さな依頼をする。', measure:'受諾率と、依頼時の緊張度の推移。', owner:'たく', due:'5/18', commits:6, need:5, budget:'15,000', status:'CLOSED', progress:'100%', people:['たく','しゅん','けんと'], logCount:14}
+];
+
+const WISDOM = [
+  {id:'w1', tag:'RELATIONSHIP', insight:'先に名乗ると、相手は情報ではなく安心を返してくる。', from:'Emu／人間関係の設計 第3回', experiment:'初対面20人で先出し自己開示', author:'あやか', uses:23},
+  {id:'w2', tag:'MONEY', insight:'値段で断られたのは1件だけ。あとは全部、伝え方で断られていた。', from:'外部：価格戦略の本', experiment:'見積もりを2倍で3件出す', author:'けんと', uses:17},
+  {id:'w3', tag:'FOCUS', insight:'集中が切れるのは疲れたときではなく、次の一手が決まっていないとき。', from:'Emu／集中の科学 第1回', experiment:'朝30分の通知オフを14日', author:'みお', uses:31},
+  {id:'w4', tag:'NEGOTIATION', insight:'断り文句は「その場で考えるもの」ではなく「持ち歩くもの」。', from:'外部：交渉の型', experiment:'3パターンを1週間で使い切る', author:'しゅん', uses:12},
+  {id:'w5', tag:'LEARNING', insight:'説明できなかった箇所が、自分が本当に分かっていない場所の地図になる。', from:'Emu／学習設計 第2回', experiment:'翌日に人へ5分で説明する', author:'りな', uses:26},
+  {id:'w6', tag:'COURAGE', insight:'頼むのが怖いのではなく、断られた後の沈黙が怖いだけだった。', from:'外部：依頼と信頼', experiment:'1日1回、知らない人に頼む', author:'たく', uses:9},
+  {id:'w7', tag:'FOCUS', insight:'やることを減らすより、始める時刻を固定するほうが早く効く。', from:'Emu／習慣の作り方 第1回', experiment:'起床後の行動を1つに固定', author:'ゆい', uses:14},
+  {id:'w8', tag:'MONEY', insight:'記録していない支出は、記憶の中では必ず半額になっている。', from:'外部：家計の本', experiment:'30日間レシート全記録', author:'あやか', uses:11},
+  {id:'w9', tag:'RELATIONSHIP', insight:'相談は答えをもらう行為ではなく、相手を巻き込む行為だった。', from:'Emu／人間関係の設計 第5回', experiment:'週1で誰かに相談する', author:'みお', uses:8}
+];
+
+const LOGS = [
+  {id:'l1', author:'みお', initial:'み', time:'2時間前', exp:'朝の30分だけ、通知を全部切って作る', kind:'つまずいた', body:'6日目で崩れた。通知を切っても、切ったこと自体が気になって結局スマホを見る。物理的に別の部屋に置いたら解決したので、意志ではなく距離の問題だった。', claps:14, replies:3},
+  {id:'l2', author:'あやか', initial:'彩', time:'5時間前', exp:'「先に名乗る」を1週間、初対面20人でやってみる', kind:'気づいた', body:'12人目。先に名乗ると相手の情報が増えるんじゃなくて、相手の表情が先にゆるむ。順番の効果は情報量じゃなく安心らしい。', claps:22, replies:5},
+  {id:'l3', author:'しゅん', initial:'俊', time:'昨日', exp:'断り文句を3パターン用意して、1週間で全部使う', kind:'やってみた', body:'「代替案」型が一番使いやすい。断ってるのに相手が礼を言ってくる場面が2回。断りは拒否じゃなく提案の一種として設計できる。', claps:18, replies:2},
+  {id:'l4', author:'けんと', initial:'健', time:'昨日', exp:'値付けを2倍にして、断られ方を観察する', kind:'つまずいた', body:'1件目、出した瞬間に沈黙。怖くて自分から値引きを言ってしまった。失敗というより、自分の耐えられなさが計測できた。', claps:31, replies:7},
+  {id:'l5', author:'りな', initial:'莉', time:'2日前', exp:'学んだ翌日に「誰かに説明する」を必ず入れる', kind:'気づいた', body:'説明相手が「で、それ何に使うの」と聞いてきて答えられなかった。使い道のない知識は、やっぱり残らない。', claps:26, replies:4}
+];
+
+const MEMBERS = [
+  {name:'あやか', initial:'彩', role:'コアメンバー / 進行', wisdom:14, done:'6/6', cited:52, share:'38,000'},
+  {name:'みお', initial:'み', role:'コアメンバー', wisdom:11, done:'5/6', cited:47, share:'32,000'},
+  {name:'けんと', initial:'健', role:'メンバー', wisdom:9, done:'4/5', cited:29, share:'24,000'},
+  {name:'しゅん', initial:'俊', role:'メンバー', wisdom:7, done:'4/4', cited:21, share:'21,000'},
+  {name:'りな', initial:'莉', role:'メンバー', wisdom:6, done:'3/5', cited:26, share:'16,000'},
+  {name:'たく', initial:'拓', role:'新規', wisdom:2, done:'1/3', cited:9, share:'6,000'}
+];
+
+const STEPS = [
+  {label:'元の知識', hint:'どこで得た何か', title:'その知識は、どこから来た？', desc:'Emuの講座でも、本でも、人から聞いた話でもいい。出どころが書けない知識は、まだ知恵にできない。',
+   fields:[{label:'知識の出どころ', ph:'例：Emu／人間関係の設計 第3回「返報性」', h:'0px'},{label:'この知識の主張を一文で', ph:'例：人は先に与えられると返したくなる', h:'0px'}],
+   note:'ここが空欄のままだと、次のステップに進めません。'},
+  {label:'予想', hint:'自分の現場で何が起きるか', title:'自分の現場では、何が起きると思う？', desc:'一般論ではなく、自分の生活・仕事の話にする。ここで具体にできない知識は、まだ使える知識ではない。',
+   fields:[{label:'予想', ph:'例：初対面で先に名乗ると、相手からの質問が増えるはず', h:'80px'}],
+   note:'予想は外れていい。外れたことがわかるのも知恵。'},
+  {label:'行動', hint:'誰が・いつまでに・何を', title:'今週、実際にやることは？', desc:'「意識する」は行動ではない。回数・期間・場所が入った、うまくいかなかったと判定できる行動にする。',
+   fields:[{label:'やること', ph:'例：初対面の場で必ず自分から名乗り、先に自己開示を1つ出す', h:'60px'},{label:'回数・期間', ph:'例：2週間で20人', h:'0px'},{label:'締切', ph:'例：5/22', h:'0px'}],
+   note:'締切を過ぎてログがないものは自動でクローズされます。'},
+  {label:'確かめ方と予算', hint:'何を記録するか', title:'どうやって、効いたと判断する？', desc:'記録の形を先に決める。ここが決まっていれば、終わったとき知恵カードは半分書けている。',
+   fields:[{label:'記録すること', ph:'例：質問が返ってきた率、相手の反応の逐語メモ', h:'60px'},{label:'必要な予算（任意）', ph:'例：¥40,000（場所代・書籍代）', h:'0px'}],
+   note:'公開すると、5人が受けた時点で成立。成立したクエストにトレジャリーから予算が付きます。'}
+];
+
+const BOARD = [
+  {id:'b1', when:'今夜 20:00〜', title:'誰か通話つないで作業しない？', note:'無言でいい。カメラも要らない。抜けるのも自由。', who:'あやか が声かけ · みお, しゅん が乗ってる'},
+  {id:'b2', when:'土曜 13:00〜', title:'神保町で古本あさり、その後だらだら', note:'買った本の自慢会つき。手ぶら参加OK。', who:'けんと が声かけ · りな が乗ってる'},
+  {id:'b3', when:'いつでも', title:'献立が決まらないので一緒に決めてほしい', note:'心底どうでもいい相談。だからこそ公園向き。', who:'ゆい が声かけ'}
+];
+const DUMB = [
+  {title:'1週間、敬語を一切使わずに生活する', body:'礼儀の正体を知りたいという建前で、たぶんただ怒られる。経過は全部ログに残す。', who:'しゅん · 見物人 8人'},
+  {title:'コンビニのおにぎりを全種類、格付けする', body:'誰の役にも立たない。ただし本気で採点表を作る。', who:'たく · 見物人 14人'},
+  {title:'1日だけ、全部の判断をサイコロで決める', body:'意思決定の疲れがどこから来るのか、身体で知る回。', who:'みお · 見物人 6人'}
+];
+const ROOMS = [
+  {name:'もくもく作業（無言可）', who:'3人 · 2時間経過', dot:'#0F5C3F'},
+  {name:'雑な相談ある人どうぞ', who:'2人 · さっき開いた', dot:'#0F5C3F'},
+  {name:'ゲーム部屋（今日は協力系）', who:'4人 · 満員に近い', dot:'#C2703D'},
+  {name:'深夜の読書ラジオ', who:'22:00に開く予定', dot:'#9A9484'}
+];
+const EVENTS = [
+  {month:'JUN', day:'08', title:'月例あつまり：持ち寄り知恵市', body:'今月ライブラリに入った知恵を、書いた本人が5分で話す。あとは飲みながらだらだら。', place:'渋谷・古民家スペース', who:'12人が行く'},
+  {month:'JUN', day:'22', title:'公園でほんとうにピクニック', body:'企画なし。名前どおりのやつを一度やっておきたい、というだけの回。', place:'代々木公園', who:'7人が行く'}
+];
+const PEEKS = [
+  {id:'e2', title:'値付けを2倍にして、断られ方を観察する', owner:'けんと', watchers:9},
+  {id:'e3', title:'朝の30分だけ、通知を全部切って作る', owner:'みお', watchers:16},
+  {id:'e6', title:'1日1回、知らない人に小さく頼む', owner:'たく', watchers:5}
+];
+
+const LAYOUTS = {
+  pc: {frameW:1440, frameH:900, scrollY:'auto', frameR:'14px', sidebar:'flex', bottom:'none', pad:'36px 40px 80px', headPad:'22px 40px', headSize:'22px',
+       hero:'1.35fr 1fr', heroSize:'34px', g3:'repeat(3,1fr)', g2:'repeat(2,1fr)', g2b:'1.4fr 1fr', gDetail:'1.5fr 1fr', gLogs:'1.6fr 1fr',
+       gPropose:'220px 1fr', libCols:'3', table:'2fr 1fr 1fr 1fr 1fr', colHide:'block', stick:'sticky', cardPad:'32px', bigNum:'52px', ctaLabel:'＋ 提案する'},
+  tablet: {frameW:834, frameH:1112, scrollY:'auto', frameR:'20px', sidebar:'flex', bottom:'none', pad:'28px 26px 60px', headPad:'20px 26px', headSize:'19px',
+       hero:'1fr', heroSize:'30px', g3:'repeat(2,1fr)', g2:'1fr', g2b:'1fr', gDetail:'1fr', gLogs:'1fr',
+       gPropose:'200px 1fr', libCols:'2', table:'2fr 1fr 1fr 1fr 1fr', colHide:'block', stick:'static', cardPad:'28px', bigNum:'44px', ctaLabel:'＋ 提案'},
+  mobile: {frameW:390, frameH:844, scrollY:'auto', frameR:'28px', sidebar:'none', bottom:'flex', pad:'20px 16px 40px', headPad:'16px 16px', headSize:'17px',
+       hero:'1fr', heroSize:'26px', g3:'1fr', g2:'1fr', g2b:'1fr', gDetail:'1fr', gLogs:'1fr',
+       gPropose:'1fr', libCols:'1', table:'1.6fr .6fr .8fr', colHide:'none', stick:'static', cardPad:'22px', bigNum:'38px', ctaLabel:'＋'}
+};
+
+class Component extends DCLogic {
+  state = { screen:'home', expId:'e1', filter:'すべて', step:0, committed:{e1:true, e3:true}, device:'pc', sidebarOpen:false, vw: window.innerWidth, vh: window.innerHeight, joined:{b1:true} };
+  componentDidMount(){ this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight}); window.addEventListener('resize', this._r); }
+  componentWillUnmount(){ window.removeEventListener('resize', this._r); }
+
+  scroller = React.createRef();
+  toTop(){ if(this.scroller.current) this.scroller.current.scrollTop = 0; window.scrollTo(0,0); }
+  go(screen){ return () => { this.setState({screen}); this.toTop(); }; }
+  openExp(id){ return () => { this.setState({screen:'detail', expId:id}); this.toTop(); }; }
+  joinBoard(id){ return () => this.setState(s => ({joined:{...s.joined, [id]:!s.joined[id]}})); }
+  commit(id){ return (ev) => { if(ev) ev.stopPropagation(); this.setState(s => ({committed:{...s.committed, [id]:!s.committed[id]}})); }; }
+  toggleSidebar = () => this.setState(s => ({sidebarOpen:!s.sidebarOpen}));
+
+  decorate(e){
+    const on = !!this.state.committed[e.id];
+    const sc = e.status==='RUNNING' ? ['#0F5C3F','#F4F1EA'] : e.status==='OPEN' ? ['#E7E2D6','#0F5C3F'] : ['#E7E2D6','#8A8474'];
+    const n = e.commits + (on?1:0);
+    return {...e, commits:n,
+      open:this.openExp(e.id), commit:this.commit(e.id),
+      statusBg:sc[0], statusFg:sc[1],
+      btnLabel: on ? '✓ 受けている' : 'このクエストを受ける',
+      btnBg: on ? '#0F5C3F' : 'transparent', btnFg: on ? '#F4F1EA' : '#0F5C3F',
+      btnBg2: on ? '#D0E2BE' : 'transparent', btnFg2: on ? '#141310' : '#D0E2BE',
+      perHead: (Math.round(parseInt(e.budget.replace(/,/g,''),10)/n/100)*100).toLocaleString()
+    };
+  }
+
+  renderVals(){
+    const s = this.state, W = 'クエスト';
+    const base = LAYOUTS[s.device];
+    const k = Math.min(1, (s.vw - 56) / base.frameW, (s.vh - 130) / base.frameH);
+    const hasSidebar = base.sidebar !== 'none';
+    const sidebarOpen = hasSidebar && s.sidebarOpen;
+    const L = {...base, sidebarShow:sidebarOpen ? 'flex' : 'none', sidebarToggle:hasSidebar && !sidebarOpen ? 'flex' : 'none', w: base.frameW + 'px', h: base.frameH + 'px', scale: 'scale(' + k.toFixed(4) + ')', boxH: Math.round(base.frameH * k) + 40 + 'px'};
+    const navDefs = [['home','01','今週の広場'],['park','02','公園'],['experiments','03',W+'一覧'],['detail','04',W+'の詳細'],['logs','05',W+'ログ'],['library','06','知恵ライブラリ'],['members','07','メンバー・貢献'],['treasury','08','トレジャリー'],['propose','09',W+'を提案']];
+    const heads = {
+      home:['THE SQUARE / 今週の広場','おはよう、あやか'],
+      park:['THE PARK / 公園','締切のないほう'],
+      experiments:['QUESTS','走っている'+W+'・募集中の'+W],
+      detail:['QUEST', W+'の詳細'],
+      logs:['LOGS', W+'ログ・フィード'],
+      library:['WISDOM LIBRARY','知恵ライブラリ'],
+      members:['MEMBERS','メンバーと貢献度'],
+      treasury:['TREASURY','トレジャリーと分配'],
+      propose:['NEW QUEST', W+'を提案する']
+    };
+    const exps = EXPS.map(e => this.decorate(e));
+    const cur = exps.find(e => e.id === s.expId) || exps[0];
+    const filters = ['すべて','募集中','進行中','完了'].map(f => ({
+      label:f, go:()=>this.setState({filter:f}),
+      bg: s.filter===f ? '#141310' : 'transparent', fg: s.filter===f ? '#F4F1EA' : '#3B382F'}));
+    const fmap = {'募集中':'OPEN','進行中':'RUNNING','完了':'CLOSED'};
+    const shownExps = s.filter==='すべて' ? exps : exps.filter(e => e.status === fmap[s.filter]);
+    const kind = k => k==='つまずいた' ? ['#F0DCD2','#A85A33'] : k==='気づいた' ? ['#0F5C3F','#F4F1EA'] : ['#E7E2D6','#3B382F'];
+    const logs = LOGS.map(l => { const c = kind(l.kind); return {...l, kindBg:c[0], kindFg:c[1]}; });
+
+    return {
+      L, word:W, wordShort:'経験', scrollRef:this.scroller,
+      toggleSidebar:this.toggleSidebar,
+      sidebarButtonIcon:sidebarOpen ? '‹' : '☰',
+      sidebarButtonTitle:sidebarOpen ? 'サイドバーを閉じる' : 'サイドバーを開く',
+      devices: [['pc','パソコン'],['tablet','タブレット'],['mobile','スマホ']].map(([id,label]) => ({
+        label, go:()=>this.setState({device:id}),
+        bg: s.device===id ? '#D0E2BE' : 'rgba(244,241,234,.1)',
+        fg: s.device===id ? '#141310' : 'rgba(244,241,234,.8)'})),
+      nav: navDefs.map(([id,num,label]) => ({num, label, go:this.go(id),
+        bg: s.screen===id ? '#0F5C3F' : 'transparent',
+        fg: s.screen===id ? '#F4F1EA' : 'rgba(244,241,234,.72)'})),
+      tabs: [['home','01','広場'],['park','02','公園'],['experiments','03',W],['detail','04','詳細'],['logs','05','ログ'],['library','06','知恵'],['members','07','メンバー'],['treasury','08','会計'],['propose','09','提案']].map(([id,n,label]) => ({
+        n, label, go:this.go(id),
+        bg: s.screen===id ? '#0F5C3F' : 'transparent',
+        fg: s.screen===id ? '#F4F1EA' : 'rgba(244,241,234,.6)',
+        num: s.screen===id ? '#D0E2BE' : 'rgba(244,241,234,.35)'})),
+      head: {kicker: heads[s.screen][0], title: heads[s.screen][1]},
+      isHome:s.screen==='home', isPark:s.screen==='park', isExperiments:s.screen==='experiments', isDetail:s.screen==='detail',
+      isLogs:s.screen==='logs', isLibrary:s.screen==='library', isMembers:s.screen==='members',
+      isTreasury:s.screen==='treasury', isPropose:s.screen==='propose',
+      goPropose:this.go('propose'), goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
+      stats: {newWisdom:3, running:4, people:28, myCommit:Object.values(s.committed).filter(Boolean).length, due:2, wisdomTotal:WISDOM.length+40, payout:'¥24,000', citations:412},
+      freshWisdom: WISDOM.slice(0,3).map(w => ({...w, open:this.go('library')})),
+      runningExps: exps.filter(e => e.status==='RUNNING').slice(0,3),
+      todos: [
+        {label:'「先に名乗る」の中間ログを書く', meta:'締切まであと2日'},
+        {label:'みおのログに返信する', meta:'つまずき報告 · 3件未読'},
+        {label:'知恵カードの下書きを一文に削る', meta:'自動生成済み · 1件'}
+      ],
+      board: BOARD.map(b => { const on = !!s.joined[b.id]; return {...b, join:this.joinBoard(b.id),
+        label: on ? '✓ 乗ってる' : '乗る', bg: on ? '#C2703D' : 'transparent', fg: on ? '#F4F1EA' : '#C2703D'}; }),
+      dumb: DUMB, rooms: ROOMS, events: EVENTS,
+      peeks: PEEKS.map(p => ({...p, open:this.openExp(p.id)})),
+      filters, shownExps, cur,
+      curLogs: logs.filter(l => l.exp === cur.title).concat(logs.filter(l => l.exp !== cur.title)).slice(0,3),
+      logs, wisdom: WISDOM,
+      tags: ['すべて','RELATIONSHIP','MONEY','FOCUS','LEARNING','NEGOTIATION','COURAGE'],
+      members: MEMBERS,
+      treasury: {total:'1,284,000', in:'320,000', out:'186,000',
+        alloc:[{label:W+'予算',pct:'52%'},{label:'完走メンバーへの分配',pct:'26%'},{label:'知恵の引用インセンティブ',pct:'14%'},{label:'運営プール',pct:'8%'}],
+        txs:[
+          {label:'「朝30分の通知オフ」に予算配分', date:'5/07', kind:W+'予算', amount:'-30,000', color:'#8A8474'},
+          {label:'たく：完走の分配', date:'5/06', kind:'分配', amount:'-6,000', color:'#8A8474'},
+          {label:'Emu受講料からの拠出', date:'5/05', kind:'流入', amount:'+180,000', color:'#0F5C3F'},
+          {label:'知恵カード引用インセンティブ（4月分）', date:'5/01', kind:'分配', amount:'-42,000', color:'#8A8474'},
+          {label:'外部ワークショップ売上', date:'4/28', kind:'流入', amount:'+140,000', color:'#0F5C3F'}
+        ]},
+      steps: STEPS.map((st,i) => ({num:'0'+(i+1), label:st.label, hint:st.hint, go:()=>this.setState({step:i}),
+        bg: s.step===i ? '#E7E2D6' : 'transparent',
+        fg: s.step===i ? '#141310' : '#6E695C',
+        numFg: s.step===i ? '#0F5C3F' : '#9A9484'})),
+      step: STEPS[s.step], stepNum: s.step+1,
+      nextLabel: s.step===3 ? '公開してコミットを募る' : '次へ',
+      nextStep: () => this.setState(p => ({step: Math.min(3, p.step+1)})),
+      prevStep: () => this.setState(p => ({step: Math.max(0, p.step-1)}))
+    };
+  }
+}
+
+/* ───── テンプレートを解釈して画面に出す仕組み ─────
+
+   元は React が担っていた部分。使われている記法は3つだけだった。
+     {{ 参照 }}                     … 値を差し込む（211か所、すべて単純な参照）
+     <sc-for list="{{ 配列 }}" as="x"> … 繰り返す
+     <sc-if value="{{ 真偽 }}">        … 出す・出さない
+   ほかに onClick と ref。それだけを実装する。 */
+
+/* 「a.b.c」をたどって値を取る */
+function pick(scope, path) {
+  var parts = String(path).trim().split('.');
+  var v = scope;
+  for (var i = 0; i < parts.length; i++) {
+    if (v == null) return undefined;
+    v = v[parts[i]];
+  }
+  return v;
+}
+
+var MUSTACHE = /\{\{([^}]+)\}\}/g;
+
+/* 文字列の中の {{ }} を置き換える */
+function fill(text, scope) {
+  return text.replace(MUSTACHE, function (_, path) {
+    var v = pick(scope, path);
+    return (v === undefined || v === null) ? '' : String(v);
+  });
+}
+
+/* 属性の値がまるごと1つの参照なら、値そのもの（関数など）を返す */
+function whole(text, scope) {
+  var m = /^\s*\{\{([^}]+)\}\}\s*$/.exec(text);
+  return m ? pick(scope, m[1]) : undefined;
+}
+
+function walk(node, scope, out) {
+  for (var i = 0; i < node.childNodes.length; i++) {
+    var n = node.childNodes[i];
+
+    if (n.nodeType === 3) {                       // 文字
+      out.appendChild(document.createTextNode(fill(n.nodeValue, scope)));
+      continue;
+    }
+    if (n.nodeType !== 1) continue;
+
+    var tag = n.tagName.toLowerCase();
+
+    if (tag === 'sc-for') {
+      var list = whole(n.getAttribute('list') || '', scope) || [];
+      var as = n.getAttribute('as') || 'item';
+      for (var j = 0; j < list.length; j++) {
+        var child = Object.create(scope);
+        child[as] = list[j];
+        walk(n, child, out);
+      }
+      continue;
+    }
+
+    if (tag === 'sc-if') {
+      if (whole(n.getAttribute('value') || '', scope)) walk(n, scope, out);
+      continue;
+    }
+
+    var el = document.createElementNS(n.namespaceURI, tag);
+    for (var a = 0; a < n.attributes.length; a++) {
+      var at = n.attributes[a], name = at.name, val = at.value;
+
+      if (name === 'ref') {                        // 要素を控えておく
+        var box = whole(val, scope);
+        if (box) box.current = el;
+        continue;
+      }
+      /* onClick は、テンプレートを読み込んだ時点で onclick に小文字化される。
+         大文字で判定すると空振りするので、大小を区別せずに見る。 */
+      if (/^on[a-z]+$/i.test(name)) {
+        var fn = whole(val, scope);
+        if (typeof fn === 'function') el.addEventListener(name.slice(2).toLowerCase(), fn);
+        continue;
+      }
+      if (name.indexOf('hint-') === 0) continue;   // 編集画面用の目印。表示には要らない
+
+      el.setAttribute(name, fill(val, scope));
+    }
+    walk(n, scope, el);
+    out.appendChild(el);
+  }
+}
+
+/* ───── 起動 ───── */
+var app = new Component();
+var host = document.getElementById('dao-root');
+var tpl = document.getElementById('dao-template');
+var queued = false;
+
+function draw() {
+  queued = false;
+  var vals = app.renderVals();
+  var frag = document.createDocumentFragment();
+  walk(tpl.content, vals, frag);
+  host.replaceChildren(frag);
+}
+/* まとめて1回だけ描き直す。
+   requestAnimationFrame は、画面が描画されていない状態（背景タブなど）では
+   進まないため使わない。押したのに変わらない、が起きる。 */
+function schedule() {
+  if (queued) return;
+  queued = true;
+  Promise.resolve().then(draw);
+}
+
+draw();
+if (app.componentDidMount) app.componentDidMount();
+
+</script>
+</body>
+</html>

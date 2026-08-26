@@ -3092,6 +3092,17 @@ body.emu-ichinichi-open #openPostFormButton { display:none !important; }
 }
 /* 知識を読む（固定Emuナビの下に専用ページをiframe表示） */
 #emuKnowledgePage { display:none; }
+/* SchoolPark は自前で端末の切り替えを持っているので、画面いっぱいに出す */
+#spDaoPage { display:none; position:fixed; inset:0; z-index:1500; background:#D0E2BE; }
+body.sp-dao-open #spDaoPage { display:block; }
+#spDaoFrame { width:100%; height:100%; border:0; display:block; }
+#spDaoBack {
+  position:fixed; left:14px; top:14px; z-index:1510;
+  background:#141310; color:#F4F1EA; border:0; border-radius:6px;
+  padding:9px 15px; font-size:13px; font-family:inherit; cursor:pointer;
+  box-shadow:0 6px 18px -8px rgba(0,0,0,.5); display:none;
+}
+body.sp-dao-open #spDaoBack { display:block; }
 body.emu-knowledge-open > #mainApp > .container { display:none; }
 body.emu-knowledge-open > #mainApp > #emuTodayHome { display:block; }
 body.emu-knowledge-open #emuTodayDashboard,
@@ -15351,6 +15362,24 @@ document.addEventListener('click', async (e) => {
   } finally { btn.disabled = false; }
 });
 
+/* ───── SchoolPark ─────
+   画面は schoolpark/dao.html に置いてある。あちらが端末の切り替えも
+   持っているので、こちらは全画面の枠として出すだけにする。 */
+function openSpDao() {
+  const page = document.getElementById('spDaoPage');
+  const frame = document.getElementById('spDaoFrame');
+  if (!page || !frame) return;
+  if (!frame.getAttribute('src')) frame.src = '/schoolpark/dao.html';
+  document.body.classList.add('sp-dao-open');
+  const hub = document.getElementById('chesHubScreen');
+  if (hub) hub.style.display = 'none';
+}
+
+function closeSpDao() {
+  document.body.classList.remove('sp-dao-open');
+  if (typeof chesHubShow === 'function') chesHubShow();
+}
+
 function accountGo(what) {
   closeAccountMenu();
   if (what === 'me') { openMeSheet(); return; }
@@ -16107,14 +16136,7 @@ function chesHubGo(brand) {
       break;
     }
     case 'schoolpark': {
-      /* 旧SchoolParkのマップと施設は作り直しのため取り除いた。
-         一般ユーザーは上の BRAND_MAINTENANCE で止まるが、
-         オーナーはそこを素通りする。行き先が無いまま画面だけ
-         切り替えると Emu が出てしまい、何が起きたのか分からない。
-         いまの状態をそのまま伝えて、画面は動かさない。 */
-      alert('SchoolPark は作り直しの準備中です。\n\n'
-        + 'マップと施設は取り除きました。\n'
-        + '引き継ぐのは 噴水広場（DAO）・ショッピング・冷蔵庫くん です。');
+      openSpDao();
       break;
     }
   }
@@ -20954,5 +20976,11 @@ async function sendEmuFeedback() {
   });
 })();
 </script>
+<!-- SchoolPark。親が隠れていても出せるよう、いちばん外側に置く。
+     中身は schoolpark/dao.html にそのまま入っている -->
+<button type="button" id="spDaoBack" onclick="closeSpDao()">← メイン画面</button>
+<div id="spDaoPage">
+  <iframe id="spDaoFrame" title="SchoolPark" loading="lazy"></iframe>
+</div>
 </body>
 </html>
