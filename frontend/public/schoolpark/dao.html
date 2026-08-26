@@ -14,6 +14,17 @@
   ::-webkit-scrollbar { width:10px; height:10px }
   ::-webkit-scrollbar-thumb { background:rgba(20,19,16,.18); border-radius:8px }
 </style>
+<style>
+/* 枠のまわりの余白・角丸・影を外す。
+   これらはテンプレートに直に書かれていて、「確かめるための枠」を
+   見せるためのもの。本番では画面いっぱいに出すので要らない。
+   入れ子はこの3段で固定されている:
+     いちばん外（背景）> 枠の入れ物 > 枠 */
+#dao-root > div            { padding-bottom: 0 !important; }
+#dao-root > div > div      { padding: 0 !important; }
+#dao-root > div > div > div{ border-radius: 0 !important; box-shadow: none !important; }
+html, body                 { height: 100%; }
+</style>
 </head>
 <body>
 <div id="dao-root"></div>
@@ -699,7 +710,7 @@ const LAYOUTS = {
 
 class Component extends DCLogic {
   state = { screen:'home', expId:'e1', filter:'すべて', step:0, committed:{e1:true, e3:true}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, vw: window.innerWidth, vh: window.innerHeight, joined:{b1:true} };
-  componentDidMount(){ this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight}); window.addEventListener('resize', this._r); }
+  componentDidMount(){ this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
   scroller = React.createRef();
@@ -727,10 +738,10 @@ class Component extends DCLogic {
   renderVals(){
     const s = this.state, W = 'クエスト';
     const base = LAYOUTS[s.device];
-    const k = Math.min(1, (s.vw - 56) / base.frameW, (s.vh - 130) / base.frameH);
+    const k = 1;   /* 本番では縮小しない */
     const hasSidebar = base.sidebar !== 'none';
     const sidebarOpen = hasSidebar && s.sidebarOpen;
-    const L = {...base, sidebarShow:sidebarOpen ? 'flex' : 'none', sidebarToggle:hasSidebar && !sidebarOpen ? 'flex' : 'none', w: base.frameW + 'px', h: base.frameH + 'px', scale: 'scale(' + k.toFixed(4) + ')', boxH: Math.round(base.frameH * k) + 40 + 'px'};
+    const L = {...base, sidebarShow:sidebarOpen ? 'flex' : 'none', sidebarToggle:hasSidebar && !sidebarOpen ? 'flex' : 'none', w: '100%', h: '100%', scale: 'none', boxH: '100vh', frameR: '0'};
     const navDefs = [['home','01','今週の広場'],['park','02','公園'],['experiments','03',W+'一覧'],['detail','04',W+'の詳細'],['logs','05',W+'ログ'],['library','06','知恵ライブラリ'],['members','07','メンバー・貢献'],['treasury','08','トレジャリー'],['propose','09',W+'を提案']];
     const heads = {
       home:['THE SQUARE / 今週の広場','おはよう、あやか'],
