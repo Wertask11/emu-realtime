@@ -522,7 +522,10 @@ html, body                 { height: 100%; }
                     <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">知識</div><div>{{ w.from }}</div></div>
                     <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">経験</div><div>{{ w.experiment }}</div></div>
                   </div>
-                  <div style="font-size:12px; color:#6E695C">by {{ w.author }}</div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+                    <div style="font-size:12px; color:#6E695C">by {{ w.author }}</div>
+                    <div onClick="{{ w.cite }}" style="padding:7px 13px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; background:{{ w.citeBg }}; color:{{ w.citeFg }}; border:1px solid #0F5C3F; white-space:nowrap" style-hover="opacity:.85">{{ w.citeLabel }}</div>
+                  </div>
                 </div>
               </sc-for>
             </div>
@@ -532,6 +535,9 @@ html, body                 { height: 100%; }
         <sc-if value="{{ isMembers }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex; flex-direction:column; gap:22px">
             <div style="font-size:14px; line-height:1.9; color:#3B382F; max-width:720px">貢献は「発言量」ではなく、<b>知恵を残したか</b>で測る。完走率が低い人は同時に受けられる数に上限がかかる。</div>
+            <sc-if value="{{ noMembers }}">
+              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだ活動の記録がありません。クエストを受ける・知恵を残す・議題に投票すると、ここに出ます。</div>
+            </sc-if>
             <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; overflow:hidden">
               <div style="display:grid; grid-template-columns:{{ L.table }}; gap:12px; padding:16px 20px; background:#E7E2D6; font-size:12px; font-weight:700; color:#3B382F">
                 <div>メンバー</div><div>知恵</div><div style="display:{{ L.colHide }}">完走</div><div style="display:{{ L.colHide }}">引用され</div><div>分配</div>
@@ -699,8 +705,8 @@ const LAYOUTS = {
 };
 
 class Component extends DCLogic {
-  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, wisdom:[], noWisdom:true, citations:0, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
-  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} try { window.parent.spDaoLoadWisdom(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
+  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, wisdom:[], noWisdom:true, citations:0, members:[], noMembers:true, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
+  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} try { window.parent.spDaoLoadWisdom(this); } catch (e) {} try { window.parent.spDaoLoadMembers(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
   scroller = React.createRef();
@@ -770,7 +776,7 @@ class Component extends DCLogic {
       toggleSidebar:this.toggleSidebar,
       me:s.me,
       votes:s.votes, noVotes:s.noVotes,
-      noQuests:s.noQuests, noWisdom:s.noWisdom,
+      noQuests:s.noQuests, noWisdom:s.noWisdom, noMembers:s.noMembers,
       openVoteForm:() => { try { window.parent.openSpVoteForm(this); } catch (e) {} },
       openPassport:this.openPassport,
       askReizo:this.askReizo,
@@ -812,7 +818,7 @@ class Component extends DCLogic {
       curLogs: logs.filter(l => l.exp === cur.title).concat(logs.filter(l => l.exp !== cur.title)).slice(0,3),
       logs, wisdom: s.wisdom || [],
       tags: ['すべて','RELATIONSHIP','MONEY','FOCUS','LEARNING','NEGOTIATION','COURAGE'],
-      members: MEMBERS,
+      members: s.members || [],
       treasury: {total:'0', in:'0', out:'0',
         alloc:[{label:W+'予算',pct:'52%'},{label:'完走メンバーへの分配',pct:'26%'},{label:'知恵の引用インセンティブ',pct:'14%'},{label:'運営プール',pct:'8%'}],
         txs:[]},

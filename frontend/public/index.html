@@ -15939,22 +15939,143 @@ window.spDaoLoadWisdom = async function (app) {
     console.warn('知恵を読めませんでした:', e && (e.message || e));
     return;
   }
+  const p = await spPassportLoad();
+  const mine = p ? p.addr.toLowerCase() : '';
   const wisdom = [];
   let cites = 0;
   for (const w of docs) {
     let uses = 0;
+    const citedBy = {};
     try {
       const cs = await fb.getDocs(fb.collection(window.db, 'sp_wisdom', w.id, 'cites'));
-      cs.forEach(function () { uses++; });
+      cs.forEach(function (c) { uses++; citedBy[c.id.toLowerCase()] = true; });
     } catch (e) {}
     cites += uses;
+    const did = !!(mine && citedBy[mine]);
     wisdom.push({
       id: w.id, tag: w.tag || 'LEARNING', insight: w.insight || '',
       from: w.knowledge || '', experiment: w.experiment || '',
-      author: w.authorName || _spShortAddr(w.author), uses: uses
+      author: w.authorName || _spShortAddr(w.author), uses: uses,
+      citeLabel: did ? '✓ 引用した' : '引用する',
+      citeBg: did ? '#0F5C3F' : 'transparent',
+      citeFg: did ? '#F4F1EA' : '#0F5C3F',
+      cite: (function (id) { return function () { window.spWisdomCite(id, app); }; })(w.id)
     });
   }
   app.setState({ wisdom: wisdom, noWisdom: wisdom.length === 0, citations: cites });
+};
+
+/* 引用する／取り消す。1つのパスポートにつき1回。
+   引用の数が、あとで分配のもとになる。 */
+window.spWisdomCite = async function (wisdomId, app) {
+  const p = await spPassportLoad();
+  if (!p) { alert('引用するにはログインが必要です。'); return; }
+  const fb = window.fbLib;
+  const ref = fb.doc(window.db, 'sp_wisdom', wisdomId, 'cites', p.addr);
+  try {
+    const cur = await fb.getDoc(ref);
+    if (cur.exists()) {
+      if (!confirm('引用を取り消しますか？')) return;
+      await fb.deleteDoc(ref);
+    } else {
+      await fb.setDoc(ref, { name: p.name, citedAt: Date.now() });
+    }
+  } catch (e) {
+    alert('うまくいきませんでした。もう一度お試しください。');
+    return;
+  }
+  await window.spDaoLoadWisdom(app);
+  await window.spDaoLoadMembers(app);
+};
+
+/* ═══════════════════════════════════════
+   メンバーと貢献
+
+   名簿を別に持たない。SchoolPark で実際に動いた人だけが並ぶ。
+     知恵     … 自分が置いた知恵カードの数
+     完走     … 受けたクエストのうち、完了したものの数
+     引用され … 自分の知恵カードが引用された数
+     分配     … 完了したクエストの予算から計算する（下の割合どおり）
+
+   分配の割合は画面に書いてあるとおり：
+     完走したメンバーに予算の70%
+     知恵カードの引用数に応じて20%
+     残り10%は次の原資としてプール
+═══════════════════════════════════════ */
+window.spDaoLoadMembers = async function (app) {
+  if (!app || typeof app.setState !== 'function') return;
+  if (!window.db || !window.fbLib) return;
+  const fb = window.fbLib;
+  const M = {};                        // 番号 → 集計
+  const pick = function (addr, name) {
+    const key = String(addr || '').toLowerCase();
+    if (!key) return null;
+    if (!M[key]) M[key] = { addr: key, name: name || _spShortAddr(key), wisdom: 0, done: 0, cited: 0, share: 0 };
+    if (name && M[key].name.indexOf('…') >= 0) M[key].name = name;   // 短縮表示より実名を優先
+    return M[key];
+  };
+
+  /* 知恵カードと、その引用 */
+  let citeTotal = 0;
+  try {
+    const ws = await fb.getDocs(fb.collection(window.db, 'sp_wisdom'));
+    const ids = [];
+    ws.forEach(function (s) { ids.push({ id: s.id, ...(s.data() || {}) }); });
+    for (const w of ids) {
+      const m = pick(w.author, w.authorName);
+      if (m) m.wisdom++;
+      let uses = 0;
+      try {
+        const cs = await fb.getDocs(fb.collection(window.db, 'sp_wisdom', w.id, 'cites'));
+        cs.forEach(function () { uses++; });
+      } catch (e) {}
+      if (m) m.cited += uses;
+      citeTotal += uses;
+    }
+  } catch (e) {}
+
+  /* 完了したクエストと、それを受けた人 */
+  let closedBudget = 0;
+  try {
+    const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
+    const list = [];
+    qs.forEach(function (s) { list.push({ id: s.id, ...(s.data() || {}) }); });
+    for (const q of list) {
+      const took = [];
+      try {
+        const cs = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'commits'));
+        cs.forEach(function (c) { took.push({ addr: c.id, name: (c.data() || {}).name || '' }); });
+      } catch (e) {}
+      took.forEach(function (t) { pick(t.addr, t.name); });
+      if (q.status !== 'CLOSED' || took.length === 0) continue;
+      const budget = parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0;
+      closedBudget += budget;
+      const each = budget * 0.7 / took.length;      // 完走したメンバーに70%
+      took.forEach(function (t) {
+        const m = pick(t.addr, t.name);
+        if (m) { m.done++; m.share += each; }
+      });
+    }
+  } catch (e) {}
+
+  /* 引用に応じた20% */
+  if (citeTotal > 0) {
+    const pool = closedBudget * 0.2;
+    Object.keys(M).forEach(function (k) { M[k].share += pool * (M[k].cited / citeTotal); });
+  }
+
+  const members = Object.keys(M).map(function (k) { return M[k]; })
+    .filter(function (m) { return m.wisdom || m.done || m.cited; })
+    .sort(function (a, b) { return (b.wisdom - a.wisdom) || (b.cited - a.cited) || (b.done - a.done); })
+    .map(function (m) {
+      return {
+        name: m.name, initial: m.name.slice(0, 1),
+        role: m.done ? ('完走 ' + m.done + '本') : '参加中',
+        wisdom: m.wisdom, done: m.done, cited: m.cited,
+        share: Math.round(m.share / 100) * 100 ? (Math.round(m.share / 100) * 100).toLocaleString() : '0'
+      };
+    });
+  app.setState({ members: members, noMembers: members.length === 0 });
 };
 
 /* SchoolPark の枠から「自分は誰か」を聞かれたときに答える。
