@@ -4890,15 +4890,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     <!-- 変換は価値プロフィールの「EMUERに変換」に一本化。ここでは表示しないが、
          変換処理(handleConversion)がこのボタンを状態管理に使うためDOMには残す。 -->
     <button id="convertButton" hidden aria-hidden="true">変換</button>
-    <button id="exchangeBtn">取引所</button>
   </div>
 
 
-  <!-- NFT交換セクション -->
-<div id="nftExchangeSection" style="display:none; margin-top:20px;">
-  <h3>交換可能なNFT</h3>
-  <div id="nftList" style="display:flex; flex-wrap:wrap; gap:10px;"></div>
-</div>
 
 </div>
 
@@ -4954,20 +4948,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <!-- 取引所（新デザイン）。
      従来は旧マイウォレット画面を丸ごと開いていたため、見た目が旧レイアウトに戻り、
      さらにウォレット未接続だと provider / emuerContract が未定義で例外になっていた。 -->
-<div class="emu-sheet" id="emuExchangeSheet" role="dialog" aria-modal="true" aria-labelledby="emuExchangeTitle">
-  <div class="emu-sheet-card">
-    <div class="emu-sheet-head">
-      <div>
-        <h2 id="emuExchangeTitle" data-i18n="exchange.title">取引所</h2>
-        <p id="emuExchangeSubtitle" data-i18n="exchange.desc">集めたEMUERを、NFTと交換できます。</p>
-      </div>
-      <button class="emu-sheet-close" type="button" onclick="closeEmuSheet('emuExchangeSheet')">×</button>
-    </div>
-    <div class="exch-balance" id="emuExchangeBalance"></div>
-    <div class="exch-notice" id="emuExchangeNotice" hidden></div>
-    <div class="exch-grid" id="emuExchangeList"></div>
-  </div>
-</div>
 
 <div class="emu-sheet" id="emuRequestSheet" role="dialog" aria-modal="true" aria-labelledby="emuRequestTitle">
   <div class="emu-sheet-card">
@@ -5044,9 +5024,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     </form>
     <!-- NFT未所持の場合のロック表示 -->
     <div id="scheduleNFTBanner" style="display:none;margin-top:12px;padding:10px 14px;background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:8px;color:#aaa;font-size:12px;text-align:center;">
-      🔒 <strong style="color:#f0b429;">予約投稿</strong> は専用NFTで解放できます →
-      <button onclick="document.getElementById('postFormModal').style.display='none'; document.getElementById('exchangeBtn').click();"
-        style="background:none;border:none;color:#f0b429;text-decoration:underline;cursor:pointer;font-size:12px;">取引所を見る</button>
+      🔒 <strong style="color:#f0b429;">予約投稿</strong> は専用NFTで解放できます
     </div>
   </div>
 </div>
@@ -11673,25 +11651,10 @@ function updateSchedulePostUI() {
 }
 
 //取引所制限
-function canUseExchange() {
-  // 有料NFTは常にOK
-  if (window.emuAuth?.type === "paidNFT") return true;
-
-  // 無料NFTは月曜日のみ
-  if (window.emuAuth?.type === "freeNFT") {
-    const today = new Date();
-    return today.getDay() === 1; // 月曜
-  }
-
-  return false;
-}
 
 	  // === START: Exchange UI handlers & loaders ===
 
 const nftListDiv = document.getElementById("nftList");
-const nftExchangeSection = document.getElementById("nftExchangeSection");
-const exchangeBtn = document.getElementById("exchangeBtn");
-
 // helper: 小数整形
 function formatEmuer(amountBN) {
   try {
@@ -11923,111 +11886,8 @@ card.appendChild(detailBtn);
 }
 
 // NFT一覧を取得して表示
-async function loadExchangeableNFTs() {
-  try {
-    nftListDiv.innerHTML = "<p>読み込み中…</p>";
-
-    // 1. NFTコントラクトのアドレスを取得（コントラクトの変数名 emuNFT に合わせる）
-    const nftAddr = await emuerContract.emuNFT();
-    const nftAbi = ["function tokenURI(uint256 tokenId) view returns (string)"];
-    const nftContract = new ethers.Contract(nftAddr, nftAbi, provider);
-
-    nftListDiv.innerHTML = "";
-    let foundCount = 0;
-
-    // 2. ID 1〜20 を確認するループ（予約投稿NFTを含む）
-    for (let i = 1; i <= 20; i++) {
-      try {
-        // コントラクトの listedNFTs マッピングを直接見に行く
-        const info = await emuerContract.listedNFTs(i);
-        
-        // 出品中でなければスキップ
-        if (!info.available) continue;
-
-        foundCount++;
-        const tokenId = i.toString();
-        
-        // 価格取得（Solidity側の変数名 emuerPrice / jpycPrice に合わせる）
-        const emuPrice = info.emuerPrice;
-        const jpycPrice = info.jpycPrice;
-
-// メタデータ取得
-        let metadata = {};
-        try {
-          const uri = await nftContract.tokenURI(tokenId);
-          const normalized = normalizeTokenURI(uri);
-          if (normalized && normalized.startsWith("http")) {
-            // ★ 複数ゲートウェイでフォールバック
-            const gateways = [
-              normalized,
-              normalized.replace("https://ipfs.io/ipfs/", "https://gateway.pinata.cloud/ipfs/"),
-              normalized.replace("https://ipfs.io/ipfs/", "https://cloudflare-ipfs.com/ipfs/"),
-            ];
-            for (const gw of gateways) {
-              try {
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 8000);
-                const res = await fetch(gw, { signal: controller.signal });
-                clearTimeout(timeout);
-                const text = await res.text();
-                if (text.trim().startsWith("{")) {
-                  metadata = JSON.parse(text);
-                  break;
-                }
-              } catch(e) { continue; }
-            }
-          }
-        } catch (e) {
-          console.warn(`tokenURI取得失敗: ${tokenId}`, e);
-        }
-
-        // カードを作成して表示
-        const card = createNFTCard(tokenId, metadata, emuPrice, jpycPrice);
-        nftListDiv.appendChild(card);
-
-      } catch (e) {
-        console.error(`NFT読み込みエラー ID ${i}:`, e);
-      }
-    }
-
-    // 1つも見つからなかった場合
-    if (foundCount === 0) {
-      nftListDiv.innerHTML = "<p>現在、交換可能なNFTはありません。</p>";
-    }
-
-  } catch (err) {
-    console.error("Error loading NFTs:", err);
-    nftListDiv.innerHTML = "<p style='color:red;'>エラーが発生しました。コンソールを確認してください。</p>";
-  }
-}
 
 
-// 取引所ボタンに接続
-document.addEventListener("DOMContentLoaded", () => {
-  const exchangeBtn = document.getElementById("exchangeBtn");
-
-  if (!exchangeBtn) {
-    console.warn("❌ exchangeBtn not found");
-    return;
-  }
-
-  exchangeBtn.addEventListener("click", async () => {
-    console.log("🔥 exchangeBtn clicked");
-
-    const userType = getCurrentUserType();
-    console.log("👤 userType:", userType);
-
-    // 無料は週1（月曜）
-    if (userType === "free" && !canUseExchange()) {
-      alert("無料ユーザーは週1回（毎週月曜日のみ）ご利用いただけます。");
-      return;
-    }
-
-    // 有料 or 許可された無料のみ
-    nftExchangeSection.style.display = "block";
-    await loadExchangeableNFTs();
-  });
-});
 
 /* ======= UI トグル ======= */
 themeButton.addEventListener('click', () => themeSubButtons.classList.toggle('hidden'));
@@ -15836,111 +15696,6 @@ function _emuReadOnlyEmuerContract() {
    の4点で作り直す。 */
 let _emuExchangeRunId = 0;
 
-async function emuWalletExchange() {
-  openEmuSheet('emuExchangeSheet');
-  const listEl = document.getElementById('emuExchangeList');
-  const balEl = document.getElementById('emuExchangeBalance');
-  const noticeEl = document.getElementById('emuExchangeNotice');
-  if (!listEl) return;
-
-  // 連打対策。あとから始まった実行だけが描画する。
-  const runId = ++_emuExchangeRunId;
-  const isStale = () => runId !== _emuExchangeRunId;
-
-  listEl.innerHTML = '<div class="exch-loading">' + escapeHtml(emuT('exchange.loading')) + '</div>';
-  if (noticeEl) noticeEl.hidden = true;
-
-  // 残高は一覧と並行して出す（ここで待たない）
-  if (balEl) {
-    balEl.innerHTML = '';
-    _emuReadTokenBalance()
-      .then(function (balance) {
-        if (isStale()) return;
-        balEl.innerHTML = '<span>' + escapeHtml(emuT('wallet.label')) + '</span>'
-          + '<strong>' + Number(balance || 0).toLocaleString('ja-JP') + '</strong>'
-          + '<small>' + escapeHtml(emuT('unit.emuer')) + '</small>';
-      })
-      .catch(function () { if (!isStale()) balEl.innerHTML = ''; });
-  }
-
-  // 無料ユーザーの利用制限（従来と同じ条件）
-  if (noticeEl && typeof getCurrentUserType === 'function' && getCurrentUserType() === 'free'
-      && typeof canUseExchange === 'function' && !canUseExchange()) {
-    noticeEl.hidden = false;
-    noticeEl.textContent = emuT('exchange.freeLimit');
-  }
-
-  // 一覧は読み取り専用RPCで取得。ウォレット未接続でも中身を見られる。
-  const readContract = (typeof emuerContract !== 'undefined' && emuerContract)
-    ? emuerContract : _emuReadOnlyEmuerContract();
-  if (!readContract) {
-    listEl.innerHTML = '<div class="exch-empty">' + escapeHtml(emuT('exchange.unavailable')) + '</div>';
-    return;
-  }
-
-  try {
-    // 出品情報は並列に取る。1件の失敗が全体を止めないよう個別に握りつぶす。
-    const MAX_ITEMS = 20;
-    const listings = await Promise.all(
-      Array.from({ length: MAX_ITEMS }, function (_, k) {
-        return readContract.listedNFTs(k + 1).catch(function () { return null; });
-      })
-    );
-    if (isStale()) return;
-
-    const available = [];
-    listings.forEach(function (info, k) {
-      if (info && info.available) available.push({ id: String(k + 1), info: info });
-    });
-
-    if (!available.length) {
-      listEl.innerHTML = '<div class="exch-empty">' + escapeHtml(emuT('exchange.empty')) + '</div>';
-      return;
-    }
-
-    // 価格だけで先に描画する。メタデータ（名前・画像）は後から差し替える。
-    listEl.innerHTML = '';
-    const cardById = {};
-    available.forEach(function (item) {
-      const card = _emuExchangeCard(item.id, {}, item.info.emuerPrice, item.info.jpycPrice);
-      cardById[item.id] = card;
-      listEl.appendChild(card);
-    });
-
-    // メタデータは並列＋短いタイムアウト。取れなかったものは価格表示のまま残す。
-    let nftContract = null;
-    try {
-      const nftAddr = await readContract.emuNFT();
-      nftContract = new ethers.Contract(nftAddr,
-        ['function tokenURI(uint256 tokenId) view returns (string)'], readContract.provider);
-    } catch (e) { /* メタデータなしでも価格は出せる */ }
-    if (!nftContract || isStale()) return;
-
-    await Promise.all(available.map(async function (item) {
-      try {
-        const uri = await nftContract.tokenURI(item.id);
-        const normalized = normalizeTokenURI(uri);
-        if (!normalized || !normalized.startsWith('http')) return;
-        const controller = new AbortController();
-        const timer = setTimeout(function () { controller.abort(); }, 4000);
-        const res = await fetch(normalized, { signal: controller.signal });
-        clearTimeout(timer);
-        const text = await res.text();
-        if (!text.trim().startsWith('{')) return;
-        const metadata = JSON.parse(text);
-        if (isStale()) return;
-        const fresh = _emuExchangeCard(item.id, metadata, item.info.emuerPrice, item.info.jpycPrice);
-        const old = cardById[item.id];
-        if (old && old.parentNode) old.parentNode.replaceChild(fresh, old);
-      } catch (e) { /* 名前・画像なしのまま残す */ }
-    }));
-  } catch (error) {
-    console.error('取引所の読み込みに失敗:', error);
-    if (!isStale()) {
-      listEl.innerHTML = '<div class="exch-empty">' + escapeHtml(emuT('exchange.error')) + '</div>';
-    }
-  }
-}
 
 function _emuExchangeCard(tokenId, metadata, emuerPrice, jpycPrice) {
   const card = document.createElement('div');
@@ -16571,10 +16326,7 @@ function showUpgradeModal(type) {
   } 
   else if (type === "freeToPaid") {
     msg.innerHTML = "この機能は<b>有料NFTユーザー限定</b>です。<br>特別なエリアや機能が解放されます。";
-    actionBtn.onclick = () => { /* 取引所を開くか、特定のURLへ */ 
-      closeUpgradeModal();
-      document.getElementById("exchangeBtn").click(); 
-    };
+    actionBtn.onclick = () => { closeUpgradeModal(); if (typeof openMarketplace === "function") openMarketplace(); };
     actionBtn.textContent = "NFTを確認する";
   }
 
@@ -18348,8 +18100,6 @@ function ppOpenWalletOnly() {
   window.scrollTo({ top: 0 });
   
   setTimeout(async () => {
-    const nftSection = document.getElementById('nftExchangeSection');
-    if (nftSection) nftSection.style.display = 'none';
     document.getElementById('myWalletButton').click();
     
     if (window.connectedAccount && typeof emuerContract !== 'undefined' && emuerContract) {
@@ -19414,7 +19164,6 @@ const PP_ALL_SHORTCUTS = [
   { id: 'explore',  icon: '🔍', label: '探索する',           action: () => document.getElementById('exploreBtn').click() },
   { id: 'post',     icon: '✏️', label: '投稿する',           action: () => document.getElementById('openPostFormButton').click() },
   { id: 'wallet',   icon: '👛', label: 'ウォレット',         action: () => document.getElementById('myWalletButton').click() },
-  { id: 'exchange', icon: '🛒', label: '取引所',             action: () => document.getElementById('exchangeBtn').click() },
   { id: 'nft',      icon: '🔑', label: '公式NFT',            action: () => openMarketplace() },
   { id: 'note',     icon: '📝', label: 'note',               action: () => window.open('https://note.com/paberuuu11','_blank') },
   { id: 'ranking',  icon: '🏆', label: 'ランキング',         action: () => loadRanking('good_post') },
@@ -19591,27 +19340,12 @@ function ppNavClick(tab) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } else if (tab === 'explore') {
     document.getElementById('exploreBtn').click();
-  } else if (tab === 'exchange') {
-    window._fromPayPay = true;
-    isPayPayMode = false;
-    document.body.classList.remove('paypay-mode');
-    window.scrollTo({ top: 0 });
-    setTimeout(() => {
-      document.getElementById('myWalletButton').click();
-      setTimeout(() => {
-        const nftSection = document.getElementById('nftExchangeSection');
-        if (nftSection) nftSection.style.display = 'block';
-        document.getElementById('exchangeBtn').click();
-      }, 300);
-    }, 100);
   } else if (tab === 'wallet') {
     window._fromPayPay = true;
     isPayPayMode = false;
     document.body.classList.remove('paypay-mode');
     window.scrollTo({ top: 0 });
     setTimeout(() => {
-      const nftSection = document.getElementById('nftExchangeSection');
-      if (nftSection) nftSection.style.display = 'none';
       document.getElementById('myWalletButton').click();
     }, 100);
   } else if (tab === 'mypage') {
