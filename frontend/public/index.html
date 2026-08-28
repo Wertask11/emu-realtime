@@ -3193,7 +3193,16 @@ body.emu-play-open #openPostFormButton { display:none !important; }
    1025px以上でだけ出す。そのとき上のタブ列は隠す（同じものが2つ並ぶため）。
    #mainApp の中にあるので、Emuを開いているあいだしか出ない。 */
 #emuSideNav { display:none; }
-.esn-brand-wrap { position:relative; margin:0 4px 14px; }
+#emuNavOpen { display:none; }
+.esn-top { display:flex; align-items:flex-start; gap:8px; margin:0 4px 14px; }
+.esn-brand-wrap { position:relative; flex:1; min-width:0; }
+.esn-collapse {
+  width:32px; height:32px; flex:0 0 32px; margin-top:2px;
+  border:1px solid #e0dbd1; border-radius:7px; background:#fff;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; font-size:18px; color:#9a9184; line-height:1;
+}
+.esn-collapse:hover { background:#f6f3ee; }
 .esn-brand {
   display:flex; align-items:center; gap:7px; width:100%;
   background:none; border:0; padding:6px 8px; cursor:pointer;
@@ -3251,6 +3260,15 @@ body.emu-play-open #openPostFormButton { display:none !important; }
   #mainApp { padding-left:248px; }
   /* 左に同じものが並ぶので、上のタブ列は隠す。言語の切替は残す */
   #mainApp .eth-tab { display:none; }
+  /* 閉じているあいだは、左タブを引っ込めて「☰」だけ出す（SchoolPark と同じ） */
+  body.emu-nav-closed #emuSideNav { display:none; }
+  body.emu-nav-closed #mainApp { padding-left:0; }
+  body.emu-nav-closed #emuNavOpen {
+    display:inline-flex; align-items:center; justify-content:center; flex:none;
+    width:36px; height:36px; border:1px solid #e0dbd1; border-radius:7px;
+    background:#fff; cursor:pointer; font-size:17px; color:#9a9184; line-height:1;
+  }
+  body.emu-nav-closed #emuNavOpen:hover { background:#f6f3ee; }
 }
 /* 今日のEmu／価値プロフィール／知識探し表示中は、右上の検索・投稿は不要（知識を読むタブでは表示） */
 body.emu-today-open .header-right .search-bar,
@@ -4409,15 +4427,18 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
      #mainApp の中に置いてあるので、Emuを開いているあいだだけ出る。
      画面が狭いときは出さず、今までどおり上のタブ列を使う。 -->
 <nav id="emuSideNav" aria-label="Emuのメニュー">
-  <div class="esn-brand-wrap">
-    <button type="button" class="esn-brand" onclick="emuBrandToggle()" title="ブランドを切り替える">
-      <span>Emu</span><span class="esn-caret" id="esnCaret">▾</span>
-    </button>
-    <div class="esn-brand-menu" id="esnBrandMenu">
-      <button type="button" style="color:#e0576f" onclick="emuBrandGo('camellia')">Camellia</button>
-      <button type="button" style="color:#f08300" onclick="emuBrandGo('emu')">Emu</button>
-      <button type="button" style="color:#0f5c3f" onclick="emuBrandGo('schoolpark')">SchoolPark</button>
+  <div class="esn-top">
+    <div class="esn-brand-wrap">
+      <button type="button" class="esn-brand" onclick="emuBrandToggle()" title="ブランドを切り替える">
+        <span>Emu</span><span class="esn-caret" id="esnCaret">▾</span>
+      </button>
+      <div class="esn-brand-menu" id="esnBrandMenu">
+        <button type="button" style="color:#e0576f" onclick="emuBrandGo('camellia')">Camellia</button>
+        <button type="button" style="color:#f08300" onclick="emuBrandGo('emu')">Emu</button>
+        <button type="button" style="color:#d0e2be" onclick="emuBrandGo('schoolpark')">SchoolPark</button>
+      </div>
     </div>
+    <button type="button" class="esn-collapse" onclick="emuNavToggle()" title="サイドバーを閉じる">‹</button>
   </div>
   <button type="button" class="esn-item active" id="esnToday"      onclick="showEmuToday()"><i>01</i>今日のEmu</button>
   <button type="button" class="esn-item"        id="esnFeed"       onclick="showEmuFeed()"><i>02</i>知識を読む</button>
@@ -4444,6 +4465,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </div>
 </nav>
 <header class="header" style="display: flex; align-items: center; padding: 0 20px; gap: 8px; flex-wrap: wrap;">
+  <!-- 左タブを閉じているときだけ出る、開くためのボタン（SchoolPark と同じ作り） -->
+  <button type="button" id="emuNavOpen" onclick="emuNavToggle()" title="サイドバーを開く">☰</button>
   <!-- Emuロゴ：PCでは非表示（下部CSS）。モバイル/タブレットではPayPay支払いUIへの入口として残す -->
   <a id="logo" class="logo" href="#" style="margin-right: 10px; cursor: pointer;" onclick="toggleDesignMode(); return false;">Emu</a>
 
@@ -14126,6 +14149,35 @@ function emuSideNavSync() {
   else watch();
 })();
 
+/* 左タブの開け閉め。SchoolPark のサイドバーと同じ動き。 */
+function emuNavToggle() {
+  document.body.classList.toggle('emu-nav-closed');
+  emuFitContact();
+}
+
+/* お問い合わせボタンを、左タブの中（残高と名前の上）に置く。
+   SchoolPark と同じ位置にそろえる。
+   左タブが出ていないとき（狭い画面・閉じているとき）は元の左下に戻す。 */
+function emuFitContact() {
+  const btn  = document.getElementById('emu-contact-btn');
+  const nav  = document.getElementById('emuSideNav');
+  const foot = document.querySelector('.esn-foot');
+  if (!btn || !nav || !foot) return;
+  /* SchoolPark を見ているあいだは、あちらの置き方（spDaoPlaceContact）に任せる */
+  if (document.body.classList.contains('sp-dao-open')) return;
+  if (getComputedStyle(nav).display === 'none') {
+    btn.style.left = ''; btn.style.bottom = '';
+    return;
+  }
+  const r = foot.getBoundingClientRect();
+  btn.style.left = '16px';
+  btn.style.bottom = (Math.round(window.innerHeight - r.top) + 14) + 'px';
+}
+window.addEventListener('resize', function () {
+  clearTimeout(window._emuFitTimer);
+  window._emuFitTimer = setTimeout(emuFitContact, 80);
+});
+
 /* 左タブの上にあるブランド切り替え。SchoolPark 側のロゴと同じはたらき。 */
 function emuBrandToggle() {
   const menu = document.getElementById('esnBrandMenu');
@@ -14173,6 +14225,8 @@ function _emuEnsureAppVisible() {
   document.body.classList.remove('sp-dao-open', 'sp-dao-sidebar');
   const cbtn = document.getElementById('emu-contact-btn');
   if (cbtn) { cbtn.style.left = ''; cbtn.style.bottom = ''; }
+  /* Emu の左タブが出ているなら、その中（残高と名前の上）へ置き直す */
+  if (typeof emuFitContact === 'function') setTimeout(emuFitContact, 0);
   if (hub) hub.style.display = 'none';
   if (app) app.style.display = 'block';
   if (footer) footer.style.display = 'block';
