@@ -25,6 +25,8 @@ button.ok{background:var(--ok);color:#fff} button.no{background:#fff;color:var(-
 button.neutral{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
 button:disabled{opacity:.5;cursor:default}
 input,select,textarea{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px;font-family:inherit;font-size:14px;margin-top:6px}
+/* 入力欄の見出し。SchoolParkタブで使う */
+label{display:block;margin-top:12px;font-size:12px;font-weight:600;color:var(--muted)}
 .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 10px;border-radius:999px;background:#f2efeb;color:var(--muted)}
 .pill.on{background:#e7f5ec;color:var(--ok)} .pill.warn{background:#fdecea;color:var(--warn)}
 .gate{text-align:center;padding:70px 20px;color:var(--muted)}
@@ -52,6 +54,7 @@ input,select,textarea{width:100%;border:1.5px solid var(--line);border-radius:10
       <button data-tab="kyc">本人確認</button>
       <button data-tab="dialogue">対話記録</button>
       <button data-tab="metrics">指標</button>
+      <button data-tab="schoolpark">SchoolPark</button>
     </div>
 
     <section id="tab-members"></section>
@@ -60,6 +63,7 @@ input,select,textarea{width:100%;border:1.5px solid var(--line);border-radius:10
     <section id="tab-kyc" class="hide"></section>
     <section id="tab-dialogue" class="hide"></section>
     <section id="tab-metrics" class="hide"></section>
+    <section id="tab-schoolpark" class="hide"></section>
   </main>
 </div>
 
@@ -548,12 +552,148 @@ async function renderMetrics() {
   }
 }
 
+/* ───────── SchoolPark ─────────
+   クエストと議題を、ここから出す。
+   ほかのタブはサーバー（Render）に聞いているが、SchoolPark の記録は
+   Firestore に直接ある。ルールが「運営だけが書ける」を見ているので、
+   この画面から書いてもすり抜けはできない。 */
+let _sp = null;   // Firestore の道具。使うときに読み込む
+
+async function spReady() {
+  if (_sp) return _sp;
+  const fs = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+  _sp = { db: fs.getFirestore(app), ...fs };
+  return _sp;
+}
+
+/* 自分のパスポート番号。ches_accounts に入っている。 */
+async function spMyAddress() {
+  const f = await spReady();
+  const uid = auth.currentUser && auth.currentUser.uid;
+  if (!uid) return null;
+  const snap = await f.getDoc(f.doc(f.db, "ches_accounts", uid));
+  const d = snap.exists() ? (snap.data() || {}) : {};
+  return d.chesAddress || d.walletAddress || null;
+}
+
+async function renderSchoolPark() {
+  const el = $("#tab-schoolpark");
+  el.innerHTML = '<p class="empty">読み込み中…</p>';
+  let f, addr;
+  try { f = await spReady(); addr = await spMyAddress(); }
+  catch (e) { el.innerHTML = '<p class="empty">読み込みに失敗しました。</p>'; return; }
+  if (!addr) { el.innerHTML = '<p class="empty">パスポートが見つかりません。一度 Emu にログインしてください。</p>'; return; }
+
+  const [qs, vs, ws] = await Promise.all([
+    f.getDocs(f.collection(f.db, "sp_quests")),
+    f.getDocs(f.collection(f.db, "sp_votes")),
+    f.getDocs(f.collection(f.db, "sp_wisdom"))
+  ]);
+  const quests = []; qs.forEach(s => quests.push({ id: s.id, ...(s.data() || {}) }));
+  quests.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const votes = []; vs.forEach(s => votes.push({ id: s.id, ...(s.data() || {}) }));
+  votes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  let wisdomCount = 0; ws.forEach(() => wisdomCount++);
+
+  const STATUS = { OPEN: "募集中", RUNNING: "進行中", CLOSED: "完了" };
+  const yen = v => (parseInt(String(v || "0").replace(/[^0-9]/g, ""), 10) || 0).toLocaleString();
+
+  el.innerHTML =
+    '<div class="card"><h3>いまの状態</h3>'
+    + '<div class="row"><span>クエスト</span><span>' + quests.length + ' 本</span></div>'
+    + '<div class="row"><span>議題</span><span>' + votes.length + ' 件</span></div>'
+    + '<div class="row"><span>知恵カード</span><span>' + wisdomCount + ' 枚</span></div></div>'
+
+    + '<div class="card"><h3>クエストを出す</h3>'
+    + '<p class="empty" style="text-align:left;margin:0 0 10px">出したあと、題名や予算は動かせません。'
+    + '進行中・完了への切り替えだけ、あとからできます。</p>'
+    + '<label>何を試す？</label><input id="aqTitle" placeholder="例：「先に名乗る」を1週間、初対面20人でやってみる">'
+    + '<label>元の知識（どこで得たか）</label><input id="aqKnowledge" placeholder="例：Emu／人間関係の設計 第3回">'
+    + '<label>予想（たぶんこうなる）</label><textarea id="aqHypothesis" rows="2" placeholder="確かめたい説を一文で"></textarea>'
+    + '<label>やること</label><textarea id="aqAction" rows="2" placeholder="毎日・毎回、具体的に何をするか"></textarea>'
+    + '<label>確かめ方</label><textarea id="aqMeasure" rows="2" placeholder="何を記録すれば分かるか"></textarea>'
+    + '<label>予算（円）</label><input id="aqBudget" inputmode="numeric" value="0">'
+    + '<label>成立に必要な人数</label><input id="aqNeed" type="number" min="1" max="50" value="5">'
+    + '<label>締切まで（日）</label><input id="aqDays" type="number" min="1" max="90" value="14">'
+    + '<div class="actions"><button class="btn primary" id="aqSubmit">クエストを出す</button></div></div>'
+
+    + '<div class="card"><h3>議題を出す</h3>'
+    + '<p class="empty" style="text-align:left;margin:0 0 10px">1つのパスポートにつき1票。入れた票は取り消せません。</p>'
+    + '<label>議題</label><input id="avTitle" placeholder="例：来月の予算を何に使うか">'
+    + '<label>説明</label><textarea id="avBody" rows="2" placeholder="決めたいことと、判断の材料"></textarea>'
+    + '<label>選択肢（1行に1つ、2〜4つ）</label><textarea id="avOpts" rows="4" placeholder="クエストの予算&#10;知恵の引用への分配"></textarea>'
+    + '<label>締切まで（日）</label><input id="avDays" type="number" min="1" max="30" value="7">'
+    + '<div class="actions"><button class="btn primary" id="avSubmit">議題を出す</button></div></div>'
+
+    + '<div class="card"><h3>クエストの状態を変える</h3>'
+    + (quests.length ? quests.map(q =>
+        '<div class="row"><span>' + esc(q.title || "") + '<br>'
+        + '<small style="color:var(--muted)">¥' + yen(q.budget) + ' · ' + (STATUS[q.status] || q.status) + '</small></span>'
+        + '<span>'
+        + (q.status !== "RUNNING" ? '<button class="act neutral" data-qrun="' + esc(q.id) + '">進行中にする</button> ' : '')
+        + (q.status !== "CLOSED" ? '<button class="act ok" data-qclose="' + esc(q.id) + '">完了にする</button>' : '')
+        + '</span></div>').join("")
+      : '<p class="empty">まだクエストがありません。</p>')
+    + '</div>';
+
+  $("#aqSubmit").onclick = async () => {
+    const v = id => ($("#" + id).value || "").trim();
+    if (!v("aqTitle")) { alert("何を試すのかを書いてください。"); return; }
+    if (!v("aqHypothesis")) { alert("予想を書いてください。"); return; }
+    const days = Math.max(1, Math.min(90, parseInt(v("aqDays"), 10) || 14));
+    try {
+      await f.addDoc(f.collection(f.db, "sp_quests"), {
+        title: v("aqTitle").slice(0, 120), knowledge: v("aqKnowledge").slice(0, 200),
+        hypothesis: v("aqHypothesis").slice(0, 400), action: v("aqAction").slice(0, 400),
+        measure: v("aqMeasure").slice(0, 400),
+        budget: String(parseInt(v("aqBudget").replace(/[^0-9]/g, ""), 10) || 0),
+        need: Math.max(1, Math.min(50, parseInt(v("aqNeed"), 10) || 5)),
+        owner: addr, ownerName: (auth.currentUser && auth.currentUser.displayName) || "運営",
+        status: "OPEN", createdAt: Date.now(), closesAt: Date.now() + days * 86400000
+      });
+    } catch (e) { alert("出せませんでした（" + (e.code || e.message) + "）"); return; }
+    renderSchoolPark();
+  };
+
+  $("#avSubmit").onclick = async () => {
+    const v = id => ($("#" + id).value || "").trim();
+    if (!v("avTitle")) { alert("議題を書いてください。"); return; }
+    const labels = v("avOpts").split("\n").map(x => x.trim()).filter(Boolean);
+    if (labels.length < 2 || labels.length > 4) { alert("選択肢は2〜4つにしてください。"); return; }
+    const days = Math.max(1, Math.min(30, parseInt(v("avDays"), 10) || 7));
+    try {
+      await f.addDoc(f.collection(f.db, "sp_votes"), {
+        title: v("avTitle").slice(0, 120), body: v("avBody").slice(0, 600),
+        options: labels.map((l, i) => ({ id: "o" + (i + 1), label: l.slice(0, 60) })),
+        createdBy: addr, createdAt: Date.now(), closesAt: Date.now() + days * 86400000
+      });
+    } catch (e) { alert("出せませんでした（" + (e.code || e.message) + "）"); return; }
+    renderSchoolPark();
+  };
+
+  el.querySelectorAll("[data-qrun]").forEach(b => {
+    b.onclick = async () => {
+      try { await f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qrun), { status: "RUNNING" }); }
+      catch (e) { alert("変えられませんでした（" + (e.code || e.message) + "）"); return; }
+      renderSchoolPark();
+    };
+  });
+  el.querySelectorAll("[data-qclose]").forEach(b => {
+    b.onclick = async () => {
+      if (!confirm("このクエストを完了にします。受付は締め切られます。よろしいですか？")) return;
+      try { await f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qclose), { status: "CLOSED", closedAt: Date.now() }); }
+      catch (e) { alert("変えられませんでした（" + (e.code || e.message) + "）"); return; }
+      renderSchoolPark();
+    };
+  });
+}
+
 document.querySelectorAll(".tabs button").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
-    ["members","review","refunds","kyc","dialogue","metrics"].forEach(t =>
+    ["members","review","refunds","kyc","dialogue","metrics","schoolpark"].forEach(t =>
       document.getElementById("tab-" + t).classList.toggle("hide", t !== b.dataset.tab));
-    ({ members: renderMembers, review: renderReview, refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics })[b.dataset.tab]();
+    ({ members: renderMembers, review: renderReview, refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics, schoolpark: renderSchoolPark })[b.dataset.tab]();
   };
 });
 

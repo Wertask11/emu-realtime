@@ -15730,6 +15730,7 @@ window.spDaoLoadQuests = async function (app) {
   const quests = [];
   for (const q of docs) {
     let people = [], iTook = false, logCount = 0;
+    const logs = [];
     try {
       const cs = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'commits'));
       cs.forEach(function (c) {
@@ -15739,7 +15740,8 @@ window.spDaoLoadQuests = async function (app) {
     } catch (e) {}
     try {
       const ls = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'logs'));
-      ls.forEach(function () { logCount++; });
+      ls.forEach(function (l) { logCount++; logs.push({ id: l.id, ...(l.data() || {}) }); });
+      logs.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
     } catch (e) {}
     quests.push({
       id: q.id, title: q.title || '', hypothesis: q.hypothesis || '',
@@ -15751,7 +15753,19 @@ window.spDaoLoadQuests = async function (app) {
       status: q.status || 'OPEN', commits: people.length, need: q.need || 5,
       people: people, logCount: logCount, iTook: iTook,
       /* 完了にできるのは、出した本人だけ */
-      isMine: !!(mine && String(q.owner || '').toLowerCase() === mine)
+      isMine: !!(mine && String(q.owner || '').toLowerCase() === mine),
+      logs: logs.map(function (l) {
+        const kind = l.kind || 'やってみた';
+        const c = kind === 'つまずいた' ? ['#F0DCD2', '#A85A33']
+                : kind === '気づいた'   ? ['#0F5C3F', '#F4F1EA']
+                : ['#E7E2D6', '#3B382F'];
+        const name = l.authorName || _spShortAddr(l.author);
+        const d = l.at ? new Date(l.at) : null;
+        return { author: name, initial: name.slice(0, 1), body: l.body || '',
+          kind: kind, kindBg: c[0], kindFg: c[1],
+          time: d ? ((d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0')
+                     + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')) : '' };
+      })
     });
   }
   app.setState({ quests: quests, noQuests: quests.length === 0 });
@@ -15778,6 +15792,31 @@ window.spQuestToggle = async function (questId, app) {
     return;
   }
   _spQuestBusy = false;
+  await window.spDaoLoadQuests(app);
+};
+
+/* 途中報告を書く。書けるのは、そのクエストを受けた人だけ。
+   ルールでも「受けた記録があること」を確かめている。 */
+window.spQuestLog = async function (questId, kind, app) {
+  const p = await spPassportLoad();
+  if (!p) { alert('報告するにはログインが必要です。'); return; }
+  const body = prompt('今日やったことを書く（' + kind + '）\n\n試したこと、うまくいかなかったこと、気づいたこと——3行でいい。');
+  if (body === null) return;
+  const text = String(body).trim();
+  if (!text) { alert('中身を書いてください。'); return; }
+  try {
+    const fb = window.fbLib;
+    await fb.addDoc(fb.collection(window.db, 'sp_quests', questId, 'logs'), {
+      author: p.addr, authorName: p.name,
+      kind: kind, body: text.slice(0, 2000), at: Date.now()
+    });
+  } catch (e) {
+    const code = String((e && e.code) || '');
+    alert(code === 'permission-denied'
+      ? '報告できるのは、そのクエストを受けた人だけです。'
+      : '報告を残せませんでした。もう一度お試しください。');
+    return;
+  }
   await window.spDaoLoadQuests(app);
 };
 

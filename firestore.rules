@@ -621,13 +621,17 @@ service cloud.firestore {
         allow delete: if isMyWallet(addr);
       }
 
-      /* クエストのログ。書けるのは自分名義のときだけ。あとから消せない。 */
+      /* クエストの途中報告。書けるのは、そのクエストを実際に受けた人だけ。
+         受けた記録（commits/{番号}）があることを、その場で確かめる。
+         いちど書いた報告は、書き換えも削除もできない。 */
       match /logs/{logId} {
         allow read: if true;
         allow create: if isMyWallet(request.resource.data.get('author', ''))
+          && exists(/databases/$(database)/documents/sp_quests/$(questId)/commits/$(request.resource.data.author))
           && request.resource.data.body is string
           && request.resource.data.body.size() > 0
-          && request.resource.data.body.size() <= 2000;
+          && request.resource.data.body.size() <= 2000
+          && request.resource.data.get('kind', '') in ['やってみた', 'つまずいた', '気づいた'];
         allow update, delete: if false;
       }
     }
