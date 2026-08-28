@@ -581,9 +581,51 @@ service cloud.firestore {
       }
     }
 
+    /* ───────── SchoolPark のクエスト ─────────
+
+       投票と同じ考え方。
+       「受けた」は commits/{パスポート番号} に置く。文書のIDが誰かを表し、
+       作ることしか許していないので、1つのパスポートにつき1回しか受けられない。
+
+       クエストそのものは、出した本人だけが status と closedAt を書き換えられる。
+       題名・予算・元の知識などは、出したあと動かせない
+       （受けた人が見ていた条件が、あとからすり替わらないようにするため）。 */
+    match /sp_quests/{questId} {
+      allow read: if true;
+      allow create: if isMyWallet(request.resource.data.get('owner', ''))
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.get('status', '') == 'OPEN';
+      // 出した本人が「進行中にする」「完了にする」だけ。ほかの欄は動かせない。
+      allow update: if isMyWallet(resource.data.get('owner', ''))
+        && changedOnly(['status', 'closedAt'])
+        && request.resource.data.status in ['OPEN', 'RUNNING', 'CLOSED'];
+      allow delete: if false;
+
+      match /commits/{addr} {
+        allow read: if true;
+        allow create: if isMyWallet(addr);
+        allow update: if false;
+        // 受けたあとで降りることは認める。ただし自分の分だけ。
+        allow delete: if isMyWallet(addr);
+      }
+
+      /* クエストのログ。書けるのは自分名義のときだけ。あとから消せない。 */
+      match /logs/{logId} {
+        allow read: if true;
+        allow create: if isMyWallet(request.resource.data.get('author', ''))
+          && request.resource.data.body is string
+          && request.resource.data.body.size() > 0
+          && request.resource.data.body.size() <= 2000;
+        allow update, delete: if false;
+      }
+    }
+
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
     match /{coll}/{document=**} {
       allow read, write: if coll != 'sp_votes'
+        && coll != 'sp_quests'
         && coll != 'emuer_offchain'
         && coll != 'emuer_offchain_ledger'
         && coll != 'ches_accounts'

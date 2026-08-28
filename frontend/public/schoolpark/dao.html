@@ -320,6 +320,9 @@ html, body                 { height: 100%; }
                 <div onClick="{{ f.go }}" style="padding:9px 16px; border-radius:20px; font-size:13px; font-weight:500; cursor:pointer; border:1px solid rgba(20,19,16,.16); background:{{ f.bg }}; color:{{ f.fg }}">{{ f.label }}</div>
               </sc-for>
             </div>
+            <sc-if value="{{ noQuests }}">
+              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだクエストがありません。右上の「＋ 提案する」から出せます。</div>
+            </sc-if>
             <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:18px">
               <sc-for list="{{ shownExps }}" as="e" hint-placeholder-count="4">
                 <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; flex-direction:column; gap:16px">
@@ -721,8 +724,8 @@ const LAYOUTS = {
 };
 
 class Component extends DCLogic {
-  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
-  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
+  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
+  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
   scroller = React.createRef();
@@ -730,7 +733,7 @@ class Component extends DCLogic {
   go(screen){ return () => { this.setState({screen}); this.toTop(); }; }
   openExp(id){ return () => { this.setState({screen:'detail', expId:id}); this.toTop(); }; }
   joinBoard(id){ return () => this.setState(s => ({joined:{...s.joined, [id]:!s.joined[id]}})); }
-  commit(id){ return (ev) => { if(ev) ev.stopPropagation(); this.setState(s => ({committed:{...s.committed, [id]:!s.committed[id]}})); }; }
+  commit(id){ return (ev) => { if(ev) ev.stopPropagation(); try { window.parent.spQuestToggle(id, this); } catch (e) {} }; }
   toggleSidebar = () => this.setState(s => ({sidebarOpen:!s.sidebarOpen}));
   openPassport = () => { try { window.parent.openSpPassport(); } catch (e) {} };
   askReizo = () => { try { window.parent.spReizoOpen(); } catch (e) {} };
@@ -743,16 +746,16 @@ class Component extends DCLogic {
   }; }
 
   decorate(e){
-    const on = !!this.state.committed[e.id];
+    const on = !!e.iTook;
     const sc = e.status==='RUNNING' ? ['#0F5C3F','#F4F1EA'] : e.status==='OPEN' ? ['#E7E2D6','#0F5C3F'] : ['#E7E2D6','#8A8474'];
-    const n = e.commits + (on?1:0);
+    const n = e.commits;
     return {...e, commits:n,
       open:this.openExp(e.id), commit:this.commit(e.id),
       statusBg:sc[0], statusFg:sc[1],
       btnLabel: on ? '✓ 受けている' : 'このクエストを受ける',
       btnBg: on ? '#0F5C3F' : 'transparent', btnFg: on ? '#F4F1EA' : '#0F5C3F',
       btnBg2: on ? '#D0E2BE' : 'transparent', btnFg2: on ? '#141310' : '#D0E2BE',
-      perHead: (Math.round(parseInt(e.budget.replace(/,/g,''),10)/n/100)*100).toLocaleString()
+      perHead: n > 0 ? (Math.round((parseInt(String(e.budget).replace(/,/g,''),10)||0)/n/100)*100).toLocaleString() : '0'
     };
   }
 
@@ -775,7 +778,7 @@ class Component extends DCLogic {
       treasury:['TREASURY','トレジャリーと分配'],
       propose:['NEW QUEST', W+'を提案する']
     };
-    const exps = EXPS.map(e => this.decorate(e));
+    const exps = (s.quests || []).map(e => this.decorate(e));
     const cur = exps.find(e => e.id === s.expId) || exps[0] || {};
     const filters = ['すべて','募集中','進行中','完了'].map(f => ({
       label:f, go:()=>this.setState({filter:f}),
@@ -790,6 +793,7 @@ class Component extends DCLogic {
       toggleSidebar:this.toggleSidebar,
       me:s.me,
       votes:s.votes, noVotes:s.noVotes,
+      noQuests:s.noQuests,
       openVoteForm:() => { try { window.parent.openSpVoteForm(this); } catch (e) {} },
       openPassport:this.openPassport,
       askReizo:this.askReizo,
@@ -818,7 +822,7 @@ class Component extends DCLogic {
       isHome:s.screen==='home', isPark:s.screen==='park', isExperiments:s.screen==='experiments', isDetail:s.screen==='detail',
       isLogs:s.screen==='logs', isLibrary:s.screen==='library', isMembers:s.screen==='members',
       isTreasury:s.screen==='treasury', isPropose:s.screen==='propose',
-      goPropose:this.go('propose'), goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
+      goPropose:() => { try { window.parent.openSpQuestForm(this); } catch (e) { this.setState({screen:'propose'}); } }, goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
       stats: {newWisdom:0, running:exps.filter(e => e.status==='RUNNING').length, people:0, myCommit:Object.values(s.committed).filter(Boolean).length, due:0, wisdomTotal:WISDOM.length, payout:'¥0', citations:0},
       freshWisdom: WISDOM.slice(0,3).map(w => ({...w, open:this.go('library')})),
       runningExps: exps.filter(e => e.status==='RUNNING').slice(0,3),

@@ -3090,9 +3090,10 @@ body.emu-ichinichi-open #openPostFormButton { display:none !important; }
 /* ── SchoolPark パスポート ──
    ログインすると作られる CHESアドレスに、名前と居場所を与えたもの。
    SchoolPark からも Emu からも開くので、どちらの色にも寄せず暗い札にする。 */
-#spPassport, #spVoteSheet { display:none; position:fixed; inset:0; z-index:1800; }
+#spPassport, #spVoteSheet, #spQuestSheet { display:none; position:fixed; inset:0; z-index:1800; }
 body.sp-passport-open #spPassport,
-body.sp-vote-open #spVoteSheet { display:flex; align-items:center; justify-content:center; }
+body.sp-vote-open #spVoteSheet,
+body.sp-quest-open #spQuestSheet { display:flex; align-items:center; justify-content:center; }
 .spp-veil { position:absolute; inset:0; background:rgba(10,9,7,.62); }
 /* 議題を出す入力欄。札と同じ見た目にそろえる */
 .spv-label { display:block; font-size:11px; letter-spacing:.06em; color:rgba(244,241,234,.6); margin:12px 0 6px; }
@@ -3104,7 +3105,7 @@ body.sp-vote-open #spVoteSheet { display:flex; align-items:center; justify-conte
 .spv-in::placeholder { color:rgba(244,241,234,.35); }
 .spv-in:focus { outline:none; border-color:#D0E2BE; }
 .spv-area { min-height:84px; resize:vertical; line-height:1.8; }
-#spPassport .spp-card, #spVoteSheet .spp-card {
+#spPassport .spp-card, #spVoteSheet .spp-card, #spQuestSheet .spp-card {
   position:relative; width:min(420px, calc(100vw - 32px)); max-height:calc(100vh - 48px);
   overflow-y:auto; background:#141310; color:#F4F1EA; border-radius:16px;
   padding:26px 24px 22px; box-shadow:0 30px 70px -20px rgba(0,0,0,.7);
@@ -14059,11 +14060,16 @@ function _setEmuHomeTab(activeId) {
 function emuSideNavSync() {
   const from = function (id) { const el = document.getElementById(id); return el ? el.textContent.trim() : ''; };
   const set  = function (id, v) { const el = document.getElementById(id); if (el && el.textContent !== v) el.textContent = v; };
-  const name = from('emuAccountName') || 'ゲスト';
   set('esnBalance', from('emuTodayBalance') || '0');
-  set('esnUserName', name);
-  set('esnUserSub', from('emuAccountAddr'));
-  set('esnAvatar', name.slice(0, 1));
+  /* 名前は #emuAccountName から取っていたが、あそこはアカウントメニューを
+     開いたときにしか埋まらない。開くまで「ゲスト」のままになっていた。
+     名前はパスポート（ches_accounts）を元にする。 */
+  const p = window._spPassport;
+  if (p) {
+    set('esnUserName', p.name);
+    set('esnUserSub', p.short);
+    set('esnAvatar', p.initial);
+  }
 }
 /* 元の場所が書き換わったら写し直す */
 (function () {
@@ -15441,6 +15447,69 @@ function _sppRow(label, value) {
 
 function closeSpPassport() { document.body.classList.remove('sp-passport-open'); }
 
+/* ───── パスポートの中身を1か所で作る ─────
+
+   SchoolPark・Emu・Camellia・Heartoo（CHES）のどこにいても、
+   「あなたが誰か」はこの1つで決まる。名前も区分もここから配る。
+
+   前は Emu のサイドバーが #emuAccountName を写していたが、あの欄は
+   アカウントメニューを開いたときにしか埋まらない。だから有料の人でも
+   開くまで「ゲスト」と出ていた。ここを直した。 */
+window._spPassport = null;
+let _spPassportBusy = null;
+
+function _spShortAddr(a) {
+  const s = String(a || '');
+  return s.length > 12 ? (s.slice(0, 6) + '…' + s.slice(-4)) : s;
+}
+
+async function spPassportLoad(force) {
+  if (window._spPassport && !force) return window._spPassport;
+  if (_spPassportBusy) return _spPassportBusy;
+  _spPassportBusy = (async function () {
+    let me = null;
+    try { me = await emuMyIdentity(); } catch (e) {}
+    if (!me) { _spPassportBusy = null; return null; }
+    let d = {};
+    try {
+      const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid));
+      if (snap.exists()) d = snap.data() || {};
+    } catch (e) {}
+
+    const addr = me.ches || me.wallet;
+    /* 名前は分かるものから順に。どれも無ければ番号の頭を使う。 */
+    let name = String(d.displayName || '').trim();
+    if (!name) { try { name = String(localStorage.getItem('ches_name') || '').trim(); } catch (e) {} }
+    if (!name) name = _spShortAddr(addr);
+
+    /* いま何ができるか。サーバーが答えた entitlement が正。
+       ches_accounts の membership は初期値（free）のまま残ることがあるので、
+       そちらを先に見ると有料の人が無料に見えてしまう。 */
+    const ent = String(window.emuEntitlement || '').toLowerCase();
+    const tier = (ent && ent !== 'guest') ? ent : ((d.membership && d.membership.tier) || 'free');
+    const tierLabel = { free: '見学（無料）', light: 'Emu light', plus: 'Emu plus', pro: 'Emu pro' }[tier] || tier;
+
+    window._spPassport = {
+      uid: me.uid, addr: addr, short: _spShortAddr(addr),
+      name: name, initial: name.slice(0, 1),
+      createdAt: d.createdAt || 0, provider: d.provider || '',
+      tier: tier, tierLabel: tierLabel, hasPass: !!window.hasPaidNFT
+    };
+    _spPassportBusy = null;
+    return window._spPassport;
+  })();
+  return _spPassportBusy;
+}
+
+/* プランの答えが返ってきたら作り直す（最初は guest のことがある） */
+window.addEventListener('emu-entitlement', function () {
+  spPassportLoad(true).then(function () {
+    try { emuSideNavSync(); } catch (e) {}
+    const fr = document.getElementById('spDaoFrame');
+    try { if (fr && fr.contentWindow && fr.contentWindow.app) window.spDaoWhoAmI(fr.contentWindow.app); } catch (e) {}
+  });
+});
+
 /* ═══════════════════════════════════════
    SchoolPark の議題と投票（ギルド）
 
@@ -15600,26 +15669,157 @@ async function spVoteSubmit() {
   if (_spVoteFormApp) await window.spDaoLoadVotes(_spVoteFormApp);
 }
 
+/* ═══════════════════════════════════════
+   SchoolPark のクエスト
+
+   置き場所
+     sp_quests/{id}                    … 題名・予想・やること・確かめ方・予算・締切
+     sp_quests/{id}/commits/{番号}      … 受けた人。文書のIDが誰かを表す
+     sp_quests/{id}/logs/{自動ID}       … 途中の報告
+
+   投票と同じで、「受けた」は文書のIDが本人の番号になっている。
+   だから同じ人が二重に受けることはできない。降りるのは自分の分だけ。
+═══════════════════════════════════════ */
+let _spQuestBusy = false;
+
+function _spQuestDue(closesAt) {
+  if (!closesAt) return '締切なし';
+  const d = new Date(Number(closesAt));
+  return (d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0');
+}
+
+window.spDaoLoadQuests = async function (app) {
+  if (!app || typeof app.setState !== 'function') return;
+  if (!window.db || !window.fbLib) return;
+  const fb = window.fbLib;
+  const p = await spPassportLoad();
+  const mine = p ? p.addr.toLowerCase() : '';
+
+  let docs = [];
+  try {
+    const q = fb.query(fb.collection(window.db, 'sp_quests'), fb.orderBy('createdAt', 'desc'), fb.limit(30));
+    const snap = await fb.getDocs(q);
+    snap.forEach(function (s) { docs.push({ id: s.id, ...(s.data() || {}) }); });
+  } catch (e) {
+    console.warn('クエストを読めませんでした:', e && (e.message || e));
+    return;
+  }
+
+  const quests = [];
+  for (const q of docs) {
+    let people = [], iTook = false, logCount = 0;
+    try {
+      const cs = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'commits'));
+      cs.forEach(function (c) {
+        people.push((c.data() || {}).name || _spShortAddr(c.id));
+        if (mine && c.id.toLowerCase() === mine) iTook = true;
+      });
+    } catch (e) {}
+    try {
+      const ls = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'logs'));
+      ls.forEach(function () { logCount++; });
+    } catch (e) {}
+    quests.push({
+      id: q.id, title: q.title || '', hypothesis: q.hypothesis || '',
+      action: q.action || '', measure: q.measure || '',
+      knowledge: q.knowledge || '', owner: q.ownerName || _spShortAddr(q.owner),
+      /* 金額は3桁ごとに区切って出す（記録には数字だけを入れてある） */
+      budget: (parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0).toLocaleString(),
+      due: _spQuestDue(q.closesAt),
+      status: q.status || 'OPEN', commits: people.length, need: q.need || 5,
+      people: people, logCount: logCount, iTook: iTook
+    });
+  }
+  app.setState({ quests: quests, noQuests: quests.length === 0 });
+};
+
+/* 受ける／降りる。文書のIDを自分の番号にする。 */
+window.spQuestToggle = async function (questId, app) {
+  if (_spQuestBusy) return;
+  const p = await spPassportLoad();
+  if (!p) { alert('クエストを受けるにはログインが必要です。'); return; }
+  _spQuestBusy = true;
+  const fb = window.fbLib;
+  const ref = fb.doc(window.db, 'sp_quests', questId, 'commits', p.addr);
+  try {
+    const cur = await fb.getDoc(ref);
+    if (cur.exists()) {
+      if (confirm('このクエストから降りますか？')) await fb.deleteDoc(ref);
+    } else {
+      await fb.setDoc(ref, { name: p.name, tookAt: Date.now() });
+    }
+  } catch (e) {
+    alert('うまくいきませんでした。通信を確かめて、もう一度お試しください。');
+    _spQuestBusy = false;
+    return;
+  }
+  _spQuestBusy = false;
+  await window.spDaoLoadQuests(app);
+};
+
+/* クエストを出す */
+let _spQuestFormApp = null;
+window.openSpQuestForm = function (app) {
+  _spQuestFormApp = app || null;
+  const sheet = document.getElementById('spQuestSheet');
+  if (!sheet) return;
+  ['sqTitle', 'sqKnowledge', 'sqHypothesis', 'sqAction', 'sqMeasure', 'sqBudget'].forEach(function (id) {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const n = document.getElementById('sqNeed'); if (n) n.value = '5';
+  const d = document.getElementById('sqDays'); if (d) d.value = '14';
+  document.body.classList.add('sp-quest-open');
+};
+function closeSpQuestForm() { document.body.classList.remove('sp-quest-open'); }
+
+async function spQuestSubmit() {
+  const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const title = val('sqTitle');
+  if (!title) { alert('何を試すのかを書いてください。'); return; }
+  if (!val('sqHypothesis')) { alert('「たぶんこうなる」という予想を書いてください。'); return; }
+  const p = await spPassportLoad();
+  if (!p) { alert('クエストを出すにはログインが必要です。'); return; }
+
+  const days = Math.max(1, Math.min(90, parseInt(val('sqDays'), 10) || 14));
+  const need = Math.max(1, Math.min(50, parseInt(val('sqNeed'), 10) || 5));
+  try {
+    const fb = window.fbLib;
+    await fb.addDoc(fb.collection(window.db, 'sp_quests'), {
+      title: title.slice(0, 120),
+      knowledge: val('sqKnowledge').slice(0, 200),
+      hypothesis: val('sqHypothesis').slice(0, 400),
+      action: val('sqAction').slice(0, 400),
+      measure: val('sqMeasure').slice(0, 400),
+      budget: String(parseInt(val('sqBudget').replace(/[^0-9]/g, ''), 10) || 0),
+      need: need,
+      owner: p.addr, ownerName: p.name,
+      status: 'OPEN',
+      createdAt: Date.now(),
+      closesAt: Date.now() + days * 86400000
+    });
+  } catch (e) {
+    console.warn('クエストを出せませんでした:', e && (e.message || e));
+    alert('クエストを出せませんでした。もう一度お試しください。');
+    return;
+  }
+  closeSpQuestForm();
+  if (_spQuestFormApp) await window.spDaoLoadQuests(_spQuestFormApp);
+}
+
 /* SchoolPark の枠から「自分は誰か」を聞かれたときに答える。
    枠の中は作り物の名前を持たなくなったので、ここから渡す。
    まだ分からないうちは、枠の中の初期値（ゲスト）のままにしておく。 */
 window.spDaoWhoAmI = async function (app) {
   if (!app || typeof app.setState !== 'function') return;
-  let me = null;
-  try { me = await emuMyIdentity(); } catch (e) {}
-  if (!me) return;
-  let d = {};
-  try {
-    const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid));
-    if (snap.exists()) d = snap.data() || {};
-  } catch (e) {}
-  const name = d.displayName || 'あなた';
+  const p = await spPassportLoad();
+  if (!p) return;
   app.setState({ me: {
-    name: name,
-    initial: name.slice(0, 1),
+    name: p.name,
+    initial: p.initial,
     /* 数はまだ本物の記録が無い。0のまま出す（作り物は出さない）。 */
     line: 'WISDOM 0 · クエスト 0'
   }});
+  try { emuSideNavSync(); } catch (e) {}
 };
 
 window.sppCopyAddress = function (addr) {
@@ -15643,9 +15843,8 @@ async function openSpPassport() {
   document.body.classList.add('sp-passport-open');
   body.innerHTML = '<p class="spp-note">読み込んでいます…</p>';
 
-  let me = null;
-  try { me = await emuMyIdentity(); } catch (e) {}
-  if (!me) {
+  const p = await spPassportLoad(true);
+  if (!p) {
     body.innerHTML =
       '<p class="spp-note">パスポートはログインすると作られます。<br>'
       + 'LINE・Google・メール・ウォレットのどれで入っても、あなたの番号は同じひとつです。</p>'
@@ -15653,31 +15852,39 @@ async function openSpPassport() {
     return;
   }
 
-  /* 発行日・入り方・会員の区分は記録そのものから読む */
-  let d = {};
-  try {
-    const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid));
-    if (snap.exists()) d = snap.data() || {};
-  } catch (e) { /* 読めなくても番号だけは出す */ }
-
-  const addr = me.ches || me.wallet;
-  const name = d.displayName || (window.emuAccountName && window.emuAccountName.textContent) || 'ゲスト';
-  const tier = (d.membership && d.membership.tier) || 'free';
-  const tierLabel = { free: '見学（無料）', light: 'Emu light', plus: 'Emu plus', pro: 'Emu pro' }[tier] || tier;
-
   body.innerHTML =
     '<div class="spp-num">'
     + '<div class="spp-num-label">PASSPORT NO.</div>'
-    + '<div class="spp-num-val">' + escapeHtml(addr) + '</div>'
-    + '<button type="button" class="spp-copy" id="sppCopyBtn" onclick="sppCopyAddress(\'' + escapeHtml(addr) + '\')">番号をコピー</button>'
+    + '<div class="spp-num-val">' + escapeHtml(p.addr) + '</div>'
+    + '<button type="button" class="spp-copy" id="sppCopyBtn" onclick="sppCopyAddress(\'' + escapeHtml(p.addr) + '\')">番号をコピー</button>'
     + '</div>'
-    + _sppRow('名前', name)
-    + _sppRow('入った日', _sppDate(d.createdAt))
-    + _sppRow('入り方', _sppProviderLabel(d.provider, me.uid))
-    + _sppRow('区分', tierLabel)
+    + _sppRow('名前', p.name)
+    + _sppRow('入った日', _sppDate(p.createdAt))
+    + _sppRow('入り方', _sppProviderLabel(p.provider, p.uid))
+    + _sppRow('区分', p.tierLabel + (p.hasPass ? '（公式パスあり）' : ''))
+    + '<div id="sppRecords"><div class="spp-row"><dt>記録</dt><dd>読み込んでいます…</dd></div></div>'
     + '<p class="spp-note">この番号は、あなたのログイン方法から決まります。'
     + '入り方を変えても番号は変わりません。<br>'
-    + '同じ番号を2人が持つことはできません。</p>';
+    + '同じ番号を2人が持つことはできません。<br>'
+    + 'SchoolPark・Emu・Camellia・Heartoo のどこでの記録も、この番号に付きます。</p>';
+
+  /* CHES全体の記録。いまは投票だけが本物なので、それを数える。
+     クエストと知恵は、本物になった順にここへ足していく。 */
+  const rec = document.getElementById('sppRecords');
+  let votes = 0;
+  try {
+    const fb = window.fbLib;
+    const snap = await fb.getDocs(fb.collection(window.db, 'sp_votes'));
+    const ids = [];
+    snap.forEach(function (s) { ids.push(s.id); });
+    for (const id of ids) {
+      try {
+        const b = await fb.getDoc(fb.doc(window.db, 'sp_votes', id, 'ballots', p.addr));
+        if (b.exists()) votes++;
+      } catch (e) {}
+    }
+  } catch (e) {}
+  if (rec) rec.innerHTML = _sppRow('SchoolPark｜投票した議題', votes + '件');
 }
 
 /* SchoolPark の中から小部屋（エレベーターなど）を開く。
@@ -21280,6 +21487,38 @@ async function sendEmuFeedback() {
 <div id="spDaoPage">
   <iframe id="spDaoFrame" title="SchoolPark" loading="lazy"></iframe>
 </div>
+<!-- クエストを出す -->
+<div id="spQuestSheet" role="dialog" aria-modal="true" aria-labelledby="sqTitleLabel">
+  <div class="spp-veil" onclick="closeSpQuestForm()"></div>
+  <div class="spp-card">
+    <div class="spp-head">
+      <div class="spp-head-text">
+        <div class="spp-kicker">NEW QUEST</div>
+        <div class="spp-title" id="sqTitleLabel">クエストを出す</div>
+      </div>
+      <button type="button" class="spp-close" onclick="closeSpQuestForm()" aria-label="閉じる">✕</button>
+    </div>
+    <label class="spv-label" for="sqTitle">何を試す？</label>
+    <input class="spv-in" id="sqTitle" maxlength="120" placeholder="例：「先に名乗る」を1週間、初対面20人でやってみる">
+    <label class="spv-label" for="sqKnowledge">元の知識（どこで得たか）</label>
+    <input class="spv-in" id="sqKnowledge" maxlength="200" placeholder="例：Emu／人間関係の設計 第3回">
+    <label class="spv-label" for="sqHypothesis">予想（たぶんこうなる）</label>
+    <textarea class="spv-in spv-area" id="sqHypothesis" maxlength="400" placeholder="確かめたい説を一文で"></textarea>
+    <label class="spv-label" for="sqAction">やること</label>
+    <textarea class="spv-in spv-area" id="sqAction" maxlength="400" placeholder="毎日・毎回、具体的に何をするか"></textarea>
+    <label class="spv-label" for="sqMeasure">確かめ方</label>
+    <textarea class="spv-in spv-area" id="sqMeasure" maxlength="400" placeholder="何を記録すれば分かるか"></textarea>
+    <label class="spv-label" for="sqBudget">予算（円）</label>
+    <input class="spv-in" id="sqBudget" inputmode="numeric" placeholder="0">
+    <label class="spv-label" for="sqNeed">成立に必要な人数</label>
+    <input class="spv-in" id="sqNeed" type="number" min="1" max="50" value="5">
+    <label class="spv-label" for="sqDays">締切まで（日）</label>
+    <input class="spv-in" id="sqDays" type="number" min="1" max="90" value="14">
+    <button type="button" class="spp-cta" onclick="spQuestSubmit()">クエストを出す</button>
+    <p class="spp-note">出したあと、題名や条件は動かせません（受けた人が見た条件が変わらないようにするためです）。進行中・完了への切り替えだけ、出した本人ができます。</p>
+  </div>
+</div>
+
 <!-- 議題を出す（ギルド） -->
 <div id="spVoteSheet" role="dialog" aria-modal="true" aria-labelledby="spvTitleLabel">
   <div class="spp-veil" onclick="closeSpVoteForm()"></div>
