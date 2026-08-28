@@ -8858,7 +8858,10 @@ function goToChesHub() {
   window._chesEntered = true;
   window._chesBusy = false;
 
-  if (typeof chesHubShow === "function") {
+  if (typeof chesLandAfterLogin === "function") {
+    chesLandAfterLogin();
+    _hideSpLoadingOverlay();
+  } else if (typeof chesHubShow === "function") {
     chesHubShow();
     _hideSpLoadingOverlay();
   } else {
@@ -14004,6 +14007,9 @@ function _emuEnsureAppVisible() {
   const hub = document.getElementById('chesHubScreen');
   const app = document.getElementById('mainApp');
   const footer = document.getElementById('siteFooter');
+  /* SchoolPark は position:fixed の全画面（z-index:1500）なので、
+     開いたままだと Emu がその下に隠れる。念のためここで閉じる。 */
+  document.body.classList.remove('sp-dao-open');
   if (hub) hub.style.display = 'none';
   if (app) app.style.display = 'block';
   if (footer) footer.style.display = 'block';
@@ -15240,6 +15246,23 @@ function openSpDao() {
 function closeSpDao() {
   document.body.classList.remove('sp-dao-open');
   if (typeof chesHubShow === 'function') chesHubShow();
+}
+
+/* ログインが終わったあとの着地点。
+   以前は CHES ハブ（4ブランドを選ぶ画面）だったが、SchoolPark を先に出す。
+   ハブは SchoolPark の「← メイン画面」からいつでも行ける。
+
+   先に chesHubShow() を呼ぶのは、ログイン画面やフッターを片付ける手順が
+   そこにまとまっているため。同じ処理の中で続けて openSpDao() が
+   ハブを隠すので、ハブが一瞬見えることはない。 */
+function chesLandAfterLogin() {
+  if (typeof chesHubShow === 'function') chesHubShow();
+  /* SchoolPark はまだ準備中の設定（BRAND_MAINTENANCE）。
+     入れない人をそこへ着地させると、準備中の画面が外に出てしまう。
+     入れる人だけ SchoolPark に着き、それ以外はハブのままにする。
+     準備中を外せば、全員が SchoolPark に着地する。 */
+  if (typeof isBrandUnderMaintenance === 'function' && isBrandUnderMaintenance('schoolpark')) return;
+  if (typeof openSpDao === 'function') openSpDao();
 }
 
 function accountGo(what) {
@@ -19929,9 +19952,12 @@ async function sendEmuFeedback() {
       }
       return;
     }
-    // ログイン後は CHES ハブ（メイン画面）へ。SchoolParkマップはハブで
-    // SchoolPark を選んだときに開く。
-    if (typeof chesHubShow === "function") {
+    // ログイン後は SchoolPark へ。ハブ（メイン画面）は
+    // SchoolPark の「← メイン画面」から行ける。
+    if (typeof chesLandAfterLogin === "function") {
+      chesLandAfterLogin();
+      if (typeof _hideSpLoadingOverlay === "function") _hideSpLoadingOverlay();
+    } else if (typeof chesHubShow === "function") {
       chesHubShow();
       if (typeof _hideSpLoadingOverlay === "function") _hideSpLoadingOverlay();
     } else if (typeof goTomainapp === "function") {
@@ -20331,7 +20357,10 @@ async function sendEmuFeedback() {
   // 認証処理の例外や通信停止が重なっても、全画面非表示のまま残さない最終ガード。
   setTimeout(function () {
     if (!window._chesBusy && !document.documentElement.classList.contains("ches-resuming")) return;
-    var ids = ["logoScreen", "walletScreen", "mainApp", "chesHubScreen", "maintenanceScreen"];
+    /* spDaoPage を入れておくこと。ログイン後の着地は SchoolPark で、
+       そのときハブは隠れている。ここに無いと「画面が1枚も出ていない」と
+       判定され、18秒後にログイン画面へ戻されてしまう。 */
+    var ids = ["logoScreen", "walletScreen", "mainApp", "chesHubScreen", "maintenanceScreen", "spDaoPage"];
     var hasVisibleScreen = ids.some(function (id) {
       var el = document.getElementById(id);
       return el && window.getComputedStyle(el).display !== "none";
