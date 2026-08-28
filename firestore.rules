@@ -546,9 +546,45 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    /* ───────── SchoolPark の議題と投票 ─────────
+
+       議題は誰でも読める。出せるのは自分名義のときだけ。
+       いちど出した議題は書き換えも削除もできない（あとから条件を
+       すり替えられないようにするため）。
+
+       票は ballots/{パスポート番号} に置く。文書のIDがそのまま
+       「誰の票か」になっていて、作ることしか許していない。
+       これで
+         ・1つのパスポートにつき1票（同じIDは2度作れない）
+         ・入れたあとで書き換えたり消したりできない
+       が、アプリ側の作りに関係なく成り立つ。
+       旧SchoolParkは localStorage の使い捨てIDで数えていたので、
+       消せば何度でも投票できた。ここが根本的に違う。 */
+    match /sp_votes/{voteId} {
+      allow read: if true;
+      allow create: if isMyWallet(request.resource.data.get('createdBy', ''))
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.options is list
+        && request.resource.data.options.size() >= 2
+        && request.resource.data.options.size() <= 4;
+      allow update, delete: if false;
+
+      match /ballots/{addr} {
+        allow read: if true;
+        // 文書のIDが自分のアドレスのときだけ作れる。他人の票は作れない。
+        allow create: if isMyWallet(addr)
+          && request.resource.data.get('optionId', '') is string
+          && request.resource.data.get('optionId', '').size() > 0;
+        allow update, delete: if false;
+      }
+    }
+
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
     match /{coll}/{document=**} {
-      allow read, write: if coll != 'emuer_offchain'
+      allow read, write: if coll != 'sp_votes'
+        && coll != 'emuer_offchain'
         && coll != 'emuer_offchain_ledger'
         && coll != 'ches_accounts'
         && coll != 'ches_wallets'

@@ -3090,10 +3090,21 @@ body.emu-ichinichi-open #openPostFormButton { display:none !important; }
 /* ── SchoolPark パスポート ──
    ログインすると作られる CHESアドレスに、名前と居場所を与えたもの。
    SchoolPark からも Emu からも開くので、どちらの色にも寄せず暗い札にする。 */
-#spPassport { display:none; position:fixed; inset:0; z-index:1800; }
-body.sp-passport-open #spPassport { display:flex; align-items:center; justify-content:center; }
-#spPassport .spp-veil { position:absolute; inset:0; background:rgba(10,9,7,.62); }
-#spPassport .spp-card {
+#spPassport, #spVoteSheet { display:none; position:fixed; inset:0; z-index:1800; }
+body.sp-passport-open #spPassport,
+body.sp-vote-open #spVoteSheet { display:flex; align-items:center; justify-content:center; }
+.spp-veil { position:absolute; inset:0; background:rgba(10,9,7,.62); }
+/* 議題を出す入力欄。札と同じ見た目にそろえる */
+.spv-label { display:block; font-size:11px; letter-spacing:.06em; color:rgba(244,241,234,.6); margin:12px 0 6px; }
+.spv-in {
+  width:100%; box-sizing:border-box; background:#1D1B16; color:#F4F1EA;
+  border:1px solid rgba(244,241,234,.16); border-radius:8px;
+  padding:11px 12px; font-family:inherit; font-size:14px; margin-bottom:6px;
+}
+.spv-in::placeholder { color:rgba(244,241,234,.35); }
+.spv-in:focus { outline:none; border-color:#D0E2BE; }
+.spv-area { min-height:84px; resize:vertical; line-height:1.8; }
+#spPassport .spp-card, #spVoteSheet .spp-card {
   position:relative; width:min(420px, calc(100vw - 32px)); max-height:calc(100vh - 48px);
   overflow-y:auto; background:#141310; color:#F4F1EA; border-radius:16px;
   padding:26px 24px 22px; box-shadow:0 30px 70px -20px rgba(0,0,0,.7);
@@ -15430,6 +15441,165 @@ function _sppRow(label, value) {
 
 function closeSpPassport() { document.body.classList.remove('sp-passport-open'); }
 
+/* ═══════════════════════════════════════
+   SchoolPark の議題と投票（ギルド）
+
+   票は sp_votes/{議題}/ballots/{パスポート番号} に置く。
+   文書のIDがそのまま「誰の票か」で、作ることしか許していない。
+   だから同じパスポートで2回入れられないし、入れたあとで
+   書き換えることもできない。ルール側だけで成り立つ作りにしてある。
+
+   旧SchoolParkは localStorage の使い捨てIDで数えていたので、
+   消せば何度でも投票できた。ここが変わったところ。
+═══════════════════════════════════════ */
+let _spVoteBusy = false;
+
+function _spVoteCloseLabel(closesAt) {
+  if (!closesAt) return '締切なし';
+  const left = Number(closesAt) - Date.now();
+  if (left <= 0) return '締め切りました';
+  const days = Math.floor(left / 86400000);
+  if (days >= 1) return '締切まであと' + days + '日';
+  const hours = Math.max(1, Math.floor(left / 3600000));
+  return '締切まであと' + hours + '時間';
+}
+
+/* 議題と票を読み、枠の中へ渡す */
+window.spDaoLoadVotes = async function (app) {
+  if (!app || typeof app.setState !== 'function') return;
+  if (!window.db || !window.fbLib) return;
+  const fb = window.fbLib;
+  let me = null;
+  try { me = await emuMyIdentity(); } catch (e) {}
+  const mine = me ? (me.ches || me.wallet) : '';
+
+  let docs = [];
+  try {
+    const q = fb.query(fb.collection(window.db, 'sp_votes'), fb.orderBy('createdAt', 'desc'), fb.limit(20));
+    const snap = await fb.getDocs(q);
+    snap.forEach(function (s) { docs.push({ id: s.id, ...(s.data() || {}) }); });
+  } catch (e) {
+    console.warn('議題を読めませんでした:', e && (e.message || e));
+    return;
+  }
+
+  const votes = [];
+  for (const v of docs) {
+    /* 票は1件ずつ数える。数を別に持つと、書き換えられる余地ができる。 */
+    let counts = {}, total = 0, myPick = '';
+    try {
+      const bs = await fb.getDocs(fb.collection(window.db, 'sp_votes', v.id, 'ballots'));
+      bs.forEach(function (b) {
+        const opt = String((b.data() || {}).optionId || '');
+        if (!opt) return;
+        counts[opt] = (counts[opt] || 0) + 1;
+        total++;
+        if (mine && b.id.toLowerCase() === mine.toLowerCase()) myPick = opt;
+      });
+    } catch (e) { /* 読めなくても議題は出す */ }
+
+    const closed = !!v.closesAt && Number(v.closesAt) <= Date.now();
+    const done = !!myPick || closed;
+    const opts = (v.options || []).map(function (o) {
+      const n = counts[o.id] || 0;
+      const pct = total ? Math.round(n / total * 100) : 0;
+      const picked = (myPick === o.id);
+      return {
+        id: o.id, label: o.label,
+        /* 入れる前は数を見せない。先に結果が見えると引きずられる。 */
+        countLabel: done ? (n + '票 · ' + pct + '%') : '',
+        pct: done ? pct + '%' : '0%',
+        barBg: picked ? 'rgba(15,92,63,.18)' : 'rgba(20,19,16,.07)',
+        border: picked ? '#0F5C3F' : 'rgba(20,19,16,.16)',
+        weight: picked ? '700' : '500',
+        cursor: done ? 'default' : 'pointer',
+        go: done ? function () {} : function () { spVoteCast(v.id, o.id, app); }
+      };
+    });
+    votes.push({
+      id: v.id, title: v.title || '', body: v.body || '',
+      closes: _spVoteCloseLabel(v.closesAt),
+      stateLabel: closed ? 'CLOSED' : (myPick ? 'VOTED' : 'OPEN'),
+      stateBg: closed ? '#E7E2D6' : (myPick ? '#0F5C3F' : '#D0E2BE'),
+      stateFg: closed ? '#8A8474' : (myPick ? '#F4F1EA' : '#0F5C3F'),
+      options: opts,
+      note: done ? (total + '票入りました。1つのパスポートにつき1票です。')
+                 : '選ぶと投票されます。あとから変えられません。'
+    });
+  }
+  app.setState({ votes: votes, noVotes: votes.length === 0 });
+};
+
+/* 1票入れる。文書のIDを自分のアドレスにする。 */
+async function spVoteCast(voteId, optionId, app) {
+  if (_spVoteBusy) return;
+  let me = null;
+  try { me = await emuMyIdentity(); } catch (e) {}
+  if (!me) { alert('投票にはログインが必要です。'); return; }
+  const addr = me.ches || me.wallet;
+  if (!confirm('この選択で投票します。あとから変えられません。\n\nよろしいですか？')) return;
+  _spVoteBusy = true;
+  try {
+    const fb = window.fbLib;
+    await fb.setDoc(fb.doc(window.db, 'sp_votes', voteId, 'ballots', addr),
+      { optionId: String(optionId), castAt: Date.now() });
+  } catch (e) {
+    const msg = String((e && e.code) || '');
+    alert(msg === 'permission-denied'
+      ? 'すでに投票済みか、投票する資格がありません。'
+      : '投票できませんでした。通信を確かめて、もう一度お試しください。');
+    _spVoteBusy = false;
+    return;
+  }
+  _spVoteBusy = false;
+  await window.spDaoLoadVotes(app);
+}
+
+/* 議題を出す。枠の外の入力欄を使う。 */
+let _spVoteFormApp = null;
+window.openSpVoteForm = function (app) {
+  _spVoteFormApp = app || null;
+  const sheet = document.getElementById('spVoteSheet');
+  if (!sheet) return;
+  ['spvTitle', 'spvBody', 'spvOpt1', 'spvOpt2', 'spvOpt3', 'spvOpt4'].forEach(function (id) {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const d = document.getElementById('spvDays'); if (d) d.value = '7';
+  document.body.classList.add('sp-vote-open');
+};
+function closeSpVoteForm() { document.body.classList.remove('sp-vote-open'); }
+
+async function spVoteSubmit() {
+  const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const title = val('spvTitle');
+  if (!title) { alert('議題を書いてください。'); return; }
+  const labels = ['spvOpt1', 'spvOpt2', 'spvOpt3', 'spvOpt4'].map(val).filter(Boolean);
+  if (labels.length < 2) { alert('選択肢は2つ以上いります。'); return; }
+
+  let me = null;
+  try { me = await emuMyIdentity(); } catch (e) {}
+  if (!me) { alert('議題を出すにはログインが必要です。'); return; }
+
+  const days = Math.max(1, Math.min(30, parseInt(val('spvDays'), 10) || 7));
+  try {
+    const fb = window.fbLib;
+    await fb.addDoc(fb.collection(window.db, 'sp_votes'), {
+      title: title.slice(0, 120),
+      body: val('spvBody').slice(0, 600),
+      options: labels.map(function (l, i) { return { id: 'o' + (i + 1), label: l.slice(0, 60) }; }),
+      createdBy: me.ches || me.wallet,
+      createdAt: Date.now(),
+      closesAt: Date.now() + days * 86400000
+    });
+  } catch (e) {
+    console.warn('議題を出せませんでした:', e && (e.message || e));
+    alert('議題を出せませんでした。もう一度お試しください。');
+    return;
+  }
+  closeSpVoteForm();
+  if (_spVoteFormApp) await window.spDaoLoadVotes(_spVoteFormApp);
+}
+
 /* SchoolPark の枠から「自分は誰か」を聞かれたときに答える。
    枠の中は作り物の名前を持たなくなったので、ここから渡す。
    まだ分からないうちは、枠の中の初期値（ゲスト）のままにしておく。 */
@@ -21110,6 +21280,33 @@ async function sendEmuFeedback() {
 <div id="spDaoPage">
   <iframe id="spDaoFrame" title="SchoolPark" loading="lazy"></iframe>
 </div>
+<!-- 議題を出す（ギルド） -->
+<div id="spVoteSheet" role="dialog" aria-modal="true" aria-labelledby="spvTitleLabel">
+  <div class="spp-veil" onclick="closeSpVoteForm()"></div>
+  <div class="spp-card">
+    <div class="spp-head">
+      <div class="spp-head-text">
+        <div class="spp-kicker">NEW PROPOSAL</div>
+        <div class="spp-title" id="spvTitleLabel">議題を出す</div>
+      </div>
+      <button type="button" class="spp-close" onclick="closeSpVoteForm()" aria-label="閉じる">✕</button>
+    </div>
+    <label class="spv-label" for="spvTitle">議題</label>
+    <input class="spv-in" id="spvTitle" maxlength="120" placeholder="例：来月の予算を何に使うか">
+    <label class="spv-label" for="spvBody">説明</label>
+    <textarea class="spv-in spv-area" id="spvBody" maxlength="600" placeholder="決めたいことと、判断の材料を書く"></textarea>
+    <label class="spv-label">選択肢（2つ以上）</label>
+    <input class="spv-in" id="spvOpt1" maxlength="60" placeholder="1つ目">
+    <input class="spv-in" id="spvOpt2" maxlength="60" placeholder="2つ目">
+    <input class="spv-in" id="spvOpt3" maxlength="60" placeholder="3つ目（任意）">
+    <input class="spv-in" id="spvOpt4" maxlength="60" placeholder="4つ目（任意）">
+    <label class="spv-label" for="spvDays">締切まで（日）</label>
+    <input class="spv-in" id="spvDays" type="number" min="1" max="30" value="7">
+    <button type="button" class="spp-cta" onclick="spVoteSubmit()">議題を出す</button>
+    <p class="spp-note">出した議題は書き換えも取り消しもできません。投票は1つのパスポートにつき1票です。</p>
+  </div>
+</div>
+
 <!-- SchoolPark パスポート -->
 <div id="spPassport" role="dialog" aria-modal="true" aria-labelledby="sppTitle">
   <div class="spp-veil" onclick="closeSpPassport()"></div>

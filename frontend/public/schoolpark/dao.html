@@ -435,6 +435,40 @@ html, body                 { height: 100%; }
         <sc-if value="{{ isLogs }}" hint-placeholder-val="{{ false }}">
           <div style="display:grid; grid-template-columns:{{ L.gLogs }}; gap:32px; align-items:start">
             <div style="display:flex; flex-direction:column; gap:20px">
+
+              <div style="display:flex; flex-direction:column; gap:16px">
+                <div style="display:flex; align-items:baseline; gap:14px">
+                  <div style="font-size:17px; font-weight:700">いま出ている議題</div>
+                  <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                  <div onClick="{{ openVoteForm }}" style="font-size:12px; font-weight:700; color:#0F5C3F; cursor:pointer; white-space:nowrap">＋ 議題を出す</div>
+                </div>
+                <sc-if value="{{ noVotes }}">
+                  <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだ議題がありません。「＋ 議題を出す」から出せます。</div>
+                </sc-if>
+                <sc-for list="{{ votes }}" as="v" hint-placeholder-count="2">
+                  <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:14px">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+                      <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ v.stateBg }}; color:{{ v.stateFg }}">{{ v.stateLabel }}</div>
+                      <div style="font-size:12px; color:#6E695C">{{ v.closes }}</div>
+                    </div>
+                    <div style="font-size:17px; font-weight:700; line-height:1.55; text-wrap:pretty">{{ v.title }}</div>
+                    <div style="font-size:13px; line-height:1.9; color:#3B382F">{{ v.body }}</div>
+                    <div style="display:flex; flex-direction:column; gap:8px">
+                      <sc-for list="{{ v.options }}" as="o" hint-placeholder-count="2">
+                        <div onClick="{{ o.go }}" style="position:relative; overflow:hidden; border:1px solid {{ o.border }}; border-radius:8px; padding:12px 14px; cursor:{{ o.cursor }}; background:#F4F1EA">
+                          <div style="position:absolute; left:0; top:0; bottom:0; width:{{ o.pct }}; background:{{ o.barBg }}"></div>
+                          <div style="position:relative; display:flex; justify-content:space-between; gap:12px; font-size:14px; font-weight:{{ o.weight }}; color:#141310">
+                            <div>{{ o.label }}</div>
+                            <div style="font-family:Inter,sans-serif; color:#0F5C3F">{{ o.countLabel }}</div>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="font-size:12px; color:#6E695C">{{ v.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+
               <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:14px">
                 <div style="font-size:14px; font-weight:700">今日やったことを書く</div>
                 <div style="min-height:74px; padding:14px; background:#F4F1EA; border-radius:8px; font-size:14px; color:#9A9484; line-height:1.8">試したこと、うまくいかなかったこと、気づいたこと——3行でいい。</div>
@@ -687,8 +721,8 @@ const LAYOUTS = {
 };
 
 class Component extends DCLogic {
-  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
-  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
+  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
+  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
   scroller = React.createRef();
@@ -755,6 +789,8 @@ class Component extends DCLogic {
       L, word:W, wordShort:'経験', scrollRef:this.scroller,
       toggleSidebar:this.toggleSidebar,
       me:s.me,
+      votes:s.votes, noVotes:s.noVotes,
+      openVoteForm:() => { try { window.parent.openSpVoteForm(this); } catch (e) {} },
       openPassport:this.openPassport,
       askReizo:this.askReizo,
       goElevator:this.goElevator,
