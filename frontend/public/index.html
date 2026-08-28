@@ -15482,18 +15482,39 @@ async function spPassportLoad(force) {
     if (!name) { try { name = String(localStorage.getItem('ches_name') || '').trim(); } catch (e) {} }
     if (!name) name = _spShortAddr(addr);
 
+    /* 公式パス（NFT）を持っているか。持ち主は paid_users に載っている。
+       window.hasPaidNFT はウォレットで入ったときにしか立たないことがあるので、
+       記録そのものも見る。実際のウォレットと CHESアドレスの両方で照らす。 */
+    let hasPass = !!window.hasPaidNFT;
+    if (!hasPass) {
+      const seen = {};
+      for (const a of [me.wallet, me.ches]) {
+        const key = String(a || '').toLowerCase();
+        if (!key || seen[key]) continue;
+        seen[key] = true;
+        try {
+          const s = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'paid_users', key));
+          if (s.exists()) { hasPass = true; break; }
+        } catch (e) {}
+      }
+    }
+
     /* いま何ができるか。サーバーが答えた entitlement が正。
-       ches_accounts の membership は初期値（free）のまま残ることがあるので、
+       ches_accounts の membership は作ったときの free のまま残るので、
        そちらを先に見ると有料の人が無料に見えてしまう。 */
     const ent = String(window.emuEntitlement || '').toLowerCase();
-    const tier = (ent && ent !== 'guest') ? ent : ((d.membership && d.membership.tier) || 'free');
+    let tier = (ent && ent !== 'guest') ? ent : ((d.membership && d.membership.tier) || 'free');
+    /* 公式パスの持ち主は有料。「見学（無料）で公式パスあり」はあり得ない。
+       サーバー側も公式パス＝plus 相当として配っている（entitlement.js）。 */
+    if (hasPass && (tier === 'free' || tier === 'guest' || !tier)) tier = 'plus';
     const tierLabel = { free: '見学（無料）', light: 'Emu light', plus: 'Emu plus', pro: 'Emu pro' }[tier] || tier;
 
     window._spPassport = {
       uid: me.uid, addr: addr, short: _spShortAddr(addr),
       name: name, initial: name.slice(0, 1),
       createdAt: d.createdAt || 0, provider: d.provider || '',
-      tier: tier, tierLabel: tierLabel, hasPass: !!window.hasPaidNFT
+      tier: tier, tierLabel: tierLabel, hasPass: hasPass,
+      isOwner: String(addr || '').toLowerCase() === '0xdcc687c05f130e57597a8525771299a4efb6edf7'
     };
     _spPassportBusy = null;
     return window._spPassport;
@@ -15759,8 +15780,16 @@ window.spQuestToggle = async function (questId, app) {
 
 /* クエストを出す */
 let _spQuestFormApp = null;
-window.openSpQuestForm = function (app) {
+window.openSpQuestForm = async function (app) {
   _spQuestFormApp = app || null;
+  const p = await spPassportLoad();
+  if (!p) { alert('クエストを出すにはログインが必要です。'); return; }
+  /* クエストは仕事なので、出せるのは当面は運営だけ。
+     受けるのは誰でもできる。 */
+  if (!p.isOwner) {
+    alert('クエストを出せるのは、いまのところ運営だけです。\n\n受けるのはどなたでもできます。');
+    return;
+  }
   const sheet = document.getElementById('spQuestSheet');
   if (!sheet) return;
   ['sqTitle', 'sqKnowledge', 'sqHypothesis', 'sqAction', 'sqMeasure', 'sqBudget'].forEach(function (id) {
@@ -15779,6 +15808,7 @@ async function spQuestSubmit() {
   if (!val('sqHypothesis')) { alert('「たぶんこうなる」という予想を書いてください。'); return; }
   const p = await spPassportLoad();
   if (!p) { alert('クエストを出すにはログインが必要です。'); return; }
+  if (!p.isOwner) { alert('クエストを出せるのは、いまのところ運営だけです。'); return; }
 
   const days = Math.max(1, Math.min(90, parseInt(val('sqDays'), 10) || 14));
   const need = Math.max(1, Math.min(50, parseInt(val('sqNeed'), 10) || 5));

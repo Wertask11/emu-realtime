@@ -50,6 +50,13 @@ service cloud.firestore {
         );
     }
 
+    /* 運営（オーナー）。クエストを出せるのは当面ここだけ。
+       あとで「信用スコアに応じて」広げるときは、この関数を差し替える。 */
+    function isOwnerAddr(value) {
+      return value is string
+        && value.lower() == '0xdcc687c05f130e57597a8525771299a4efb6edf7';
+    }
+
     function changedOnly(fields) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
@@ -592,7 +599,10 @@ service cloud.firestore {
        （受けた人が見ていた条件が、あとからすり替わらないようにするため）。 */
     match /sp_quests/{questId} {
       allow read: if true;
+      /* クエストは「仕事」なので、誰でも出せるものではない。
+         当面は運営だけ。自分名義であることも合わせて確かめる。 */
       allow create: if isMyWallet(request.resource.data.get('owner', ''))
+        && isOwnerAddr(request.resource.data.get('owner', ''))
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 120
