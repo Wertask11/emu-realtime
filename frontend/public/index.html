@@ -3834,19 +3834,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 .ches-consent a { color: #6c5ce7; text-decoration: none; font-weight: 600; }
 .ches-consent a:hover { text-decoration: underline; }
 
-#termsAgreement { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; margin-bottom: 6px; }
-.ws-checkbox-vis {
-  width: 14px; height: 14px; min-width: 14px; margin-top: 1px;
-  border-radius: 4px; border: 1.5px solid rgba(155,142,196,0.55);
-  background: transparent; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  padding: 0; flex-shrink: 0; transition: all .15s ease;
-}
-.ws-checkbox-vis.checked { background: #7c5fe6; border-color: #7c5fe6; }
-.ws-terms-text { font-size: 10.5px; color: rgba(26,24,64,0.55); line-height: 1.5; }
-.ws-terms-text a { color: #6c5ce7; text-decoration: none; font-weight: 600; }
-.ws-terms-text a:hover { text-decoration: underline; }
-.ws-terms-note { font-size: 9.5px; color: rgba(26,24,64,0.4); line-height: 1.5; padding-left: 22px; margin-bottom: 4px; }
 #walletStatus { font-size: 12px; color: #888; text-align: center; margin: 6px 0 0; min-height: 14px; }
 
 .ws-tut-overlay {
@@ -3890,12 +3877,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 .ws-tut-yn button:hover { background: #f4f0ff; transform: translateY(-1px); }
 .ws-tut-yn button.ws-yes { background: linear-gradient(135deg,#7c5fe6,#b794f6); color:#fff; border-color: transparent; }
 .ws-tut-close { position: absolute; top: 8px; right: 10px; width: 22px; height: 22px; border: none; background: transparent; color: #9b8ec4; font-size: 16px; cursor: pointer; line-height: 1; }
-.ws-tut-highlight { position: relative; z-index: 30; animation: wsTutPulse 1.6s ease-in-out infinite; border-radius: 12px; }
-.ws-tut-highlight-terms { background: rgba(255,255,255,0.95); box-shadow: 0 0 0 2px #7c5fe6, 0 12px 30px -10px rgba(124,95,230,0.45); }
-@keyframes wsTutPulse {
-  0%,100%{box-shadow:0 0 0 2px #7c5fe6,0 0 0 0 rgba(124,95,230,0.4)}
-  50%{box-shadow:0 0 0 2px #7c5fe6,0 0 0 10px rgba(124,95,230,0)}
-}
 </style>
 
 <!-- 検索とAIが読むための本文。
@@ -4022,13 +4003,12 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 
 <script id="ws-gate-js">
 (function() {
-  /* 冷蔵庫くんの案内文。[3] は「初めて？」の答えで変わるので空にしてある */
+  /* 冷蔵庫くんの案内文。[2] は「初めて？」の答えで変わるので空にしてある */
   var WS_TUT_LINES = [
     "こんにちは！\nぼくは冷蔵庫くん。\nSchoolParkの案内役だよ！",
-    "ここは、学校より学べて、\n公園より楽しめて、\n会社より稼げる場所。",
     "SchoolParkは\n初めて？",
     "",
-    "またね！\nバイバイ 👋"
+    "また会おうね！\nバイバイ 👋"
   ];
   var wsTutStep = null;
   var wsFirstTime = null;
@@ -4046,78 +4026,50 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     if (ov) ov.style.display = 'none';
     var hint = document.getElementById('wsMascotHint');
     if (hint) hint.style.display = '';
-    var ta = document.getElementById('termsAgreement');
-    if (ta) { ta.classList.remove('ws-tut-highlight','ws-tut-highlight-terms'); }
   };
+  /* 1 は「はい／いいえ」を押してもらう場面なので、吹き出しを押しても進めない */
   window.wsTutBubbleClick = function() {
     if (wsTutStep === 0) { wsTutStep = 1; wsRenderTut(); }
-    else if (wsTutStep === 1) { wsTutStep = 2; wsRenderTut(); }
-    else if (wsTutStep === 3) { wsTutStep = 4; wsRenderTut(); }
-    else if (wsTutStep === 4) { wsCloseTutorial(); }
+    else if (wsTutStep === 2) { wsTutStep = 3; wsRenderTut(); }
+    else if (wsTutStep === 3) { wsCloseTutorial(); }
   };
   window.wsTutAnswer = function(first) {
-    wsFirstTime = first; wsTutStep = 3; wsRenderTut();
+    wsFirstTime = first; wsTutStep = 2; wsRenderTut();
   };
 
   function wsRenderTut() {
     var overlay = document.getElementById('wsTutOverlay');
     var bubble  = document.getElementById('wsTutBubble');
-    var ta      = document.getElementById('termsAgreement');
     if (!overlay || !bubble) return;
     if (wsTutStep === null) { overlay.style.display = 'none'; return; }
     overlay.style.display = 'flex';
     var hint = document.getElementById('wsMascotHint');
     if (hint) hint.style.display = 'none';
-    if (ta) ta.classList.remove('ws-tut-highlight','ws-tut-highlight-terms');
 
     var html = '<div class="ws-tut-mascot-mini"><img src="/assets/mascot.jpg" alt=""></div>';
     var tapHint = '<div class="ws-tut-tap"><span class="ws-tut-tap-dot"></span>タップして次へ</div>';
     var closeBtn = '<button class="ws-tut-close" onclick="event.stopPropagation();wsCloseTutorial()">&#215;</button>';
 
-    if (wsTutStep === 0) {
-      overlay.className = 'ws-tut-overlay';
+    overlay.className = 'ws-tut-overlay';
+
+    if (wsTutStep === 0) {                       // あいさつ
       html += '<div class="ws-tut-msg">' + WS_TUT_LINES[0].replace(/\n/g,'<br>') + '</div>' + tapHint;
-    } else if (wsTutStep === 1) {
-      overlay.className = 'ws-tut-overlay';
-      html += '<div class="ws-tut-msg">' + WS_TUT_LINES[1].replace(/\n/g,'<br>') + '</div>' + tapHint;
-    } else if (wsTutStep === 2) {
-      overlay.className = 'ws-tut-overlay';
-      html += '<div class="ws-tut-msg">' + WS_TUT_LINES[2].replace(/\n/g,'<br>') + '</div>';
+    } else if (wsTutStep === 1) {                // 初めて？
+      html += '<div class="ws-tut-msg">' + WS_TUT_LINES[1].replace(/\n/g,'<br>') + '</div>';
       html += '<div class="ws-tut-yn"><button class="ws-yes" onclick="event.stopPropagation();wsTutAnswer(true)">はい</button>';
       html += '<button onclick="event.stopPropagation();wsTutAnswer(false)">いいえ</button></div>';
-    } else if (wsTutStep === 3) {
-      overlay.className = 'ws-tut-overlay';
+    } else if (wsTutStep === 2) {                // 答えに合わせた返事
       var msg = wsFirstTime
-        ? "見学は無料だよ。<br>カードの番号は聞かないから、<br>まずはのぞいてみて！"
-        : "おかえり！<br>LINEかGoogleかメールで<br>入れるよ。";
+        ? "来てくれてありがとう！<br>好きな方法で<br>ログインしてね！"
+        : "いつもありがとう！<br>今日も楽しんで<br>くれるといいなぁ！";
       html += '<div class="ws-tut-msg">' + msg + '</div>' + tapHint;
-    } else if (wsTutStep === 4) {
-      overlay.className = 'ws-tut-overlay';
-      html += '<div class="ws-tut-msg">' + WS_TUT_LINES[4].replace(/\n/g,'<br>') + '</div>';
+    } else if (wsTutStep === 3) {                // おわかれ
+      html += '<div class="ws-tut-msg">' + WS_TUT_LINES[3].replace(/\n/g,'<br>') + '</div>';
       html += '<div class="ws-tut-tap"><span class="ws-tut-tap-dot"></span>タップして閉じる</div>';
     }
     html += closeBtn;
     bubble.innerHTML = html;
   }
-
-  window.wsToggleAgreed = function() {
-    var cb  = document.getElementById('agreeTerms');
-    var vis = document.getElementById('wsCheckboxVis');
-    if (!cb || !vis) return;
-    cb.checked = !cb.checked;
-    vis.setAttribute('aria-checked', String(cb.checked));
-    if (cb.checked) {
-      vis.classList.add('checked');
-      vis.innerHTML = '<svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    } else {
-      vis.classList.remove('checked');
-      vis.innerHTML = '';
-    }
-    cb.dispatchEvent(new Event('change'));
-    if (wsTutStep === 1 && cb.checked) {
-      setTimeout(function() { wsTutStep = 2; wsRenderTut(); }, 500);
-    }
-  };
 
   // 「その他の方法で入る」（MetaMask 有料パス）の開閉
   window.wsToggleAdvanced = function() {
