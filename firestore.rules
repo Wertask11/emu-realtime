@@ -632,10 +632,37 @@ service cloud.firestore {
       }
     }
 
+    /* ───────── 知恵カード ─────────
+
+       知恵は「クエストを完了したとき」にしか生まれない。
+       それをルールで守る：出そうとしているクエストが実際にあって、
+       状態が CLOSED になっていることを、その場で確かめる。
+       いちど置いた知恵は書き換えも削除もできない。 */
+    match /sp_wisdom/{wisdomId} {
+      allow read: if true;
+      allow create: if isMyWallet(request.resource.data.get('author', ''))
+        && request.resource.data.insight is string
+        && request.resource.data.insight.size() > 0
+        && request.resource.data.insight.size() <= 200
+        && request.resource.data.questId is string
+        && exists(/databases/$(database)/documents/sp_quests/$(request.resource.data.questId))
+        && get(/databases/$(database)/documents/sp_quests/$(request.resource.data.questId)).data.get('status', '') == 'CLOSED';
+      allow update, delete: if false;
+
+      /* 引用。1つのパスポートにつき1回。数はここを数えて出す。 */
+      match /cites/{addr} {
+        allow read: if true;
+        allow create: if isMyWallet(addr);
+        allow update: if false;
+        allow delete: if isMyWallet(addr);
+      }
+    }
+
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
     match /{coll}/{document=**} {
       allow read, write: if coll != 'sp_votes'
         && coll != 'sp_quests'
+        && coll != 'sp_wisdom'
         && coll != 'emuer_offchain'
         && coll != 'emuer_offchain_ledger'
         && coll != 'ches_accounts'

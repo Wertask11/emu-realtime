@@ -412,6 +412,9 @@ html, body                 { height: 100%; }
                   <div style="height:100%; background:#D0E2BE; width:{{ cur.progress }}"></div>
                 </div>
                 <div onClick="{{ cur.commit }}" style="text-align:center; padding:14px; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; background:{{ cur.btnBg2 }}; color:{{ cur.btnFg2 }}; border:1px solid #D0E2BE">{{ cur.btnLabel }}</div>
+                <sc-if value="{{ cur.canClose }}">
+                  <div onClick="{{ cur.close }}" style="text-align:center; padding:12px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:#D0E2BE; border:1px solid rgba(208,226,190,.45)" style-hover="background:rgba(208,226,190,.12)">完了にして知恵カードを置く</div>
+                </sc-if>
                 <div style="font-size:12px; line-height:1.8; color:rgba(244,241,234,.5)">受けると、締切までにログを1本出す約束になります。</div>
               </div>
 
@@ -504,6 +507,9 @@ html, body                 { height: 100%; }
                 <div style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:18px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">{{ t }}</div>
               </sc-for>
             </div>
+            <sc-if value="{{ noWisdom }}">
+              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだ知恵カードがありません。知恵は、クエストを完了したときに生まれます。</div>
+            </sc-if>
             <div style="columns:{{ L.libCols }}; column-gap:16px">
               <sc-for list="{{ wisdom }}" as="w" hint-placeholder-count="6">
                 <div style="break-inside:avoid; margin-bottom:16px; background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; flex-direction:column; gap:16px">
@@ -693,8 +699,8 @@ const LAYOUTS = {
 };
 
 class Component extends DCLogic {
-  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
-  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
+  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, wisdom:[], noWisdom:true, citations:0, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
+  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} try { window.parent.spDaoLoadWisdom(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
   scroller = React.createRef();
@@ -724,6 +730,8 @@ class Component extends DCLogic {
       btnLabel: on ? '✓ 受けている' : 'このクエストを受ける',
       btnBg: on ? '#0F5C3F' : 'transparent', btnFg: on ? '#F4F1EA' : '#0F5C3F',
       btnBg2: on ? '#D0E2BE' : 'transparent', btnFg2: on ? '#141310' : '#D0E2BE',
+      canClose: !!e.isMine && e.status !== 'CLOSED',
+      close: () => { try { window.parent.spQuestClose(e.id, this); } catch (err) {} },
       perHead: n > 0 ? (Math.round((parseInt(String(e.budget).replace(/,/g,''),10)||0)/n/100)*100).toLocaleString() : '0'
     };
   }
@@ -762,7 +770,7 @@ class Component extends DCLogic {
       toggleSidebar:this.toggleSidebar,
       me:s.me,
       votes:s.votes, noVotes:s.noVotes,
-      noQuests:s.noQuests,
+      noQuests:s.noQuests, noWisdom:s.noWisdom,
       openVoteForm:() => { try { window.parent.openSpVoteForm(this); } catch (e) {} },
       openPassport:this.openPassport,
       askReizo:this.askReizo,
@@ -792,8 +800,8 @@ class Component extends DCLogic {
       isLogs:s.screen==='logs', isLibrary:s.screen==='library', isMembers:s.screen==='members',
       isTreasury:s.screen==='treasury', isPropose:s.screen==='propose',
       goPropose:() => { try { window.parent.openSpQuestForm(this); } catch (e) { this.setState({screen:'propose'}); } }, goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
-      stats: {newWisdom:0, running:exps.filter(e => e.status==='RUNNING').length, people:0, myCommit:Object.values(s.committed).filter(Boolean).length, due:0, wisdomTotal:WISDOM.length, payout:'¥0', citations:0},
-      freshWisdom: WISDOM.slice(0,3).map(w => ({...w, open:this.go('library')})),
+      stats: {newWisdom:(s.wisdom || []).length, running:exps.filter(e => e.status==='RUNNING').length, people:0, myCommit:Object.values(s.committed).filter(Boolean).length, due:0, wisdomTotal:(s.wisdom || []).length, payout:'¥0', citations:s.citations || 0},
+      freshWisdom: (s.wisdom || []).slice(0,3).map(w => ({...w, open:this.go('library')})),
       runningExps: exps.filter(e => e.status==='RUNNING').slice(0,3),
       todos: [],
       board: BOARD.map(b => { const on = !!s.joined[b.id]; return {...b, join:this.joinBoard(b.id),
@@ -802,7 +810,7 @@ class Component extends DCLogic {
       peeks: PEEKS.map(p => ({...p, open:this.openExp(p.id)})),
       filters, shownExps, cur,
       curLogs: logs.filter(l => l.exp === cur.title).concat(logs.filter(l => l.exp !== cur.title)).slice(0,3),
-      logs, wisdom: WISDOM,
+      logs, wisdom: s.wisdom || [],
       tags: ['すべて','RELATIONSHIP','MONEY','FOCUS','LEARNING','NEGOTIATION','COURAGE'],
       members: MEMBERS,
       treasury: {total:'0', in:'0', out:'0',

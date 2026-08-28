@@ -3090,10 +3090,11 @@ body.emu-ichinichi-open #openPostFormButton { display:none !important; }
 /* ── SchoolPark パスポート ──
    ログインすると作られる CHESアドレスに、名前と居場所を与えたもの。
    SchoolPark からも Emu からも開くので、どちらの色にも寄せず暗い札にする。 */
-#spPassport, #spVoteSheet, #spQuestSheet { display:none; position:fixed; inset:0; z-index:1800; }
+#spPassport, #spVoteSheet, #spQuestSheet, #spWisdomSheet { display:none; position:fixed; inset:0; z-index:1800; }
 body.sp-passport-open #spPassport,
 body.sp-vote-open #spVoteSheet,
-body.sp-quest-open #spQuestSheet { display:flex; align-items:center; justify-content:center; }
+body.sp-quest-open #spQuestSheet,
+body.sp-wisdom-open #spWisdomSheet { display:flex; align-items:center; justify-content:center; }
 .spp-veil { position:absolute; inset:0; background:rgba(10,9,7,.62); }
 /* 議題を出す入力欄。札と同じ見た目にそろえる */
 .spv-label { display:block; font-size:11px; letter-spacing:.06em; color:rgba(244,241,234,.6); margin:12px 0 6px; }
@@ -3105,7 +3106,7 @@ body.sp-quest-open #spQuestSheet { display:flex; align-items:center; justify-con
 .spv-in::placeholder { color:rgba(244,241,234,.35); }
 .spv-in:focus { outline:none; border-color:#D0E2BE; }
 .spv-area { min-height:84px; resize:vertical; line-height:1.8; }
-#spPassport .spp-card, #spVoteSheet .spp-card, #spQuestSheet .spp-card {
+#spPassport .spp-card, #spVoteSheet .spp-card, #spQuestSheet .spp-card, #spWisdomSheet .spp-card {
   position:relative; width:min(420px, calc(100vw - 32px)); max-height:calc(100vh - 48px);
   overflow-y:auto; background:#141310; color:#F4F1EA; border-radius:16px;
   padding:26px 24px 22px; box-shadow:0 30px 70px -20px rgba(0,0,0,.7);
@@ -15748,7 +15749,9 @@ window.spDaoLoadQuests = async function (app) {
       budget: (parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0).toLocaleString(),
       due: _spQuestDue(q.closesAt),
       status: q.status || 'OPEN', commits: people.length, need: q.need || 5,
-      people: people, logCount: logCount, iTook: iTook
+      people: people, logCount: logCount, iTook: iTook,
+      /* 完了にできるのは、出した本人だけ */
+      isMine: !!(mine && String(q.owner || '').toLowerCase() === mine)
     });
   }
   app.setState({ quests: quests, noQuests: quests.length === 0 });
@@ -15835,6 +15838,124 @@ async function spQuestSubmit() {
   closeSpQuestForm();
   if (_spQuestFormApp) await window.spDaoLoadQuests(_spQuestFormApp);
 }
+
+/* ═══════════════════════════════════════
+   知恵カード
+
+   クエストを完了したときにだけ生まれる。ルールでもそう守ってある
+   （出そうとしているクエストが CLOSED でなければ作れない）。
+
+   1枚の形は「元の知識 → 通した経験 → 残った一文」。
+     元の知識  … Emu の講座・議論、または外部の本
+     通した経験… SchoolPark のクエスト
+     残った一文… 書き手が削って残したもの
+═══════════════════════════════════════ */
+let _spWisdomQuest = null;
+
+/* クエストを完了にする。出した本人（＝運営）だけができる。
+   完了にしたら、そのまま知恵カードの下書きを開く。 */
+window.spQuestClose = async function (questId, app) {
+  const p = await spPassportLoad();
+  if (!p) { alert('ログインが必要です。'); return; }
+  const fb = window.fbLib;
+  let q = null;
+  try {
+    const snap = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));
+    if (snap.exists()) q = { id: snap.id, ...(snap.data() || {}) };
+  } catch (e) {}
+  if (!q) { alert('クエストが見つかりませんでした。'); return; }
+  if (String(q.owner || '').toLowerCase() !== p.addr.toLowerCase()) {
+    alert('完了にできるのは、そのクエストを出した人だけです。'); return;
+  }
+  if (q.status !== 'CLOSED') {
+    if (!confirm('このクエストを完了にします。\n\n完了にすると、受付は締め切られます。よろしいですか？')) return;
+    try {
+      await fb.updateDoc(fb.doc(window.db, 'sp_quests', questId), { status: 'CLOSED', closedAt: Date.now() });
+    } catch (e) {
+      alert('完了にできませんでした。もう一度お試しください。'); return;
+    }
+    q.status = 'CLOSED';
+  }
+  await window.spDaoLoadQuests(app);
+  openSpWisdomForm(q, app);
+};
+
+/* 知恵カードの下書き。クエストの中身をそのまま入れておき、
+   書き手は「残った一文」を削るところだけをやる。 */
+let _spWisdomApp = null;
+function openSpWisdomForm(q, app) {
+  _spWisdomQuest = q; _spWisdomApp = app || null;
+  const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  set('swQuest', q.title);
+  set('swKnowledge', q.knowledge);
+  set('swExperiment', q.action || q.title);
+  set('swInsight', '');
+  const t = document.getElementById('swTag'); if (t) t.value = 'LEARNING';
+  document.body.classList.add('sp-wisdom-open');
+}
+function closeSpWisdomForm() { document.body.classList.remove('sp-wisdom-open'); }
+
+async function spWisdomSubmit() {
+  const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const insight = val('swInsight');
+  if (!insight) { alert('残った一文を書いてください。'); return; }
+  if (!_spWisdomQuest) { alert('もとのクエストが分かりません。'); return; }
+  const p = await spPassportLoad();
+  if (!p) { alert('ログインが必要です。'); return; }
+  try {
+    const fb = window.fbLib;
+    await fb.addDoc(fb.collection(window.db, 'sp_wisdom'), {
+      questId: _spWisdomQuest.id,
+      questTitle: _spWisdomQuest.title || '',
+      knowledge: val('swKnowledge').slice(0, 200),
+      experiment: val('swExperiment').slice(0, 200),
+      insight: insight.slice(0, 200),
+      tag: val('swTag') || 'LEARNING',
+      author: p.addr, authorName: p.name,
+      createdAt: Date.now()
+    });
+  } catch (e) {
+    const code = String((e && e.code) || '');
+    alert(code === 'permission-denied'
+      ? '知恵カードは、完了したクエストからしか作れません。'
+      : '知恵カードを置けませんでした。もう一度お試しください。');
+    return;
+  }
+  closeSpWisdomForm();
+  if (_spWisdomApp) await window.spDaoLoadWisdom(_spWisdomApp);
+}
+
+/* 知恵ライブラリを読む */
+window.spDaoLoadWisdom = async function (app) {
+  if (!app || typeof app.setState !== 'function') return;
+  if (!window.db || !window.fbLib) return;
+  const fb = window.fbLib;
+  let docs = [];
+  try {
+    const q = fb.query(fb.collection(window.db, 'sp_wisdom'), fb.orderBy('createdAt', 'desc'), fb.limit(50));
+    const snap = await fb.getDocs(q);
+    snap.forEach(function (s) { docs.push({ id: s.id, ...(s.data() || {}) }); });
+  } catch (e) {
+    console.warn('知恵を読めませんでした:', e && (e.message || e));
+    return;
+  }
+  const wisdom = [];
+  let cites = 0;
+  for (const w of docs) {
+    let uses = 0;
+    try {
+      const cs = await fb.getDocs(fb.collection(window.db, 'sp_wisdom', w.id, 'cites'));
+      cs.forEach(function () { uses++; });
+    } catch (e) {}
+    cites += uses;
+    wisdom.push({
+      id: w.id, tag: w.tag || 'LEARNING', insight: w.insight || '',
+      from: w.knowledge || '', experiment: w.experiment || '',
+      author: w.authorName || _spShortAddr(w.author), uses: uses
+    });
+  }
+  app.setState({ wisdom: wisdom, noWisdom: wisdom.length === 0, citations: cites });
+};
 
 /* SchoolPark の枠から「自分は誰か」を聞かれたときに答える。
    枠の中は作り物の名前を持たなくなったので、ここから渡す。
@@ -21517,6 +21638,35 @@ async function sendEmuFeedback() {
 <div id="spDaoPage">
   <iframe id="spDaoFrame" title="SchoolPark" loading="lazy"></iframe>
 </div>
+<!-- 知恵カードを置く（クエスト完了時） -->
+<div id="spWisdomSheet" role="dialog" aria-modal="true" aria-labelledby="swTitleLabel">
+  <div class="spp-veil" onclick="closeSpWisdomForm()"></div>
+  <div class="spp-card">
+    <div class="spp-head">
+      <div class="spp-head-text">
+        <div class="spp-kicker">NEW WISDOM</div>
+        <div class="spp-title" id="swTitleLabel">知恵カードを置く</div>
+      </div>
+      <button type="button" class="spp-close" onclick="closeSpWisdomForm()" aria-label="閉じる">✕</button>
+    </div>
+    <label class="spv-label" for="swQuest">完了したクエスト</label>
+    <input class="spv-in" id="swQuest" readonly>
+    <label class="spv-label" for="swKnowledge">元の知識（どこから来たか）</label>
+    <input class="spv-in" id="swKnowledge" maxlength="200" placeholder="例：Emu／人間関係の設計 第3回">
+    <label class="spv-label" for="swExperiment">通した経験</label>
+    <input class="spv-in" id="swExperiment" maxlength="200" placeholder="何を、どれだけやったか">
+    <label class="spv-label" for="swInsight">残った一文</label>
+    <textarea class="spv-in spv-area" id="swInsight" maxlength="200" placeholder="やってみて分かったことを、一文に削る"></textarea>
+    <label class="spv-label" for="swTag">分類</label>
+    <select class="spv-in" id="swTag">
+      <option>RELATIONSHIP</option><option>MONEY</option><option>FOCUS</option>
+      <option>LEARNING</option><option>NEGOTIATION</option><option>COURAGE</option>
+    </select>
+    <button type="button" class="spp-cta" onclick="spWisdomSubmit()">ライブラリに置く</button>
+    <p class="spp-note">知恵カードは、完了したクエストからしか生まれません。置いたあとは書き換えられません。</p>
+  </div>
+</div>
+
 <!-- クエストを出す -->
 <div id="spQuestSheet" role="dialog" aria-modal="true" aria-labelledby="sqTitleLabel">
   <div class="spp-veil" onclick="closeSpQuestForm()"></div>
