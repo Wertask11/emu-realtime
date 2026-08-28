@@ -27,7 +27,6 @@
   var EMU_I18N = {
     ja: {
       "lang.label": "言語",
-      "nav.mainScreen": "← メイン画面",
       "header.searchPlaceholder": "検索...",
       "header.post": "投稿",
       "header.walletDisconnected": "ウォレット未接続",
@@ -221,7 +220,6 @@
 
     en: {
       "lang.label": "Language",
-      "nav.mainScreen": "← Main screen",
       "header.searchPlaceholder": "Search...",
       "header.post": "Post",
       "header.walletDisconnected": "Wallet not connected",
@@ -415,7 +413,6 @@
 
     zh: {
       "lang.label": "语言",
-      "nav.mainScreen": "← 主页面",
       "header.searchPlaceholder": "搜索...",
       "header.post": "发布",
       "header.walletDisconnected": "钱包未连接",
@@ -609,7 +606,6 @@
 
     ko: {
       "lang.label": "언어",
-      "nav.mainScreen": "← 메인 화면",
       "header.searchPlaceholder": "검색...",
       "header.post": "게시",
       "header.walletDisconnected": "지갑 미연결",
