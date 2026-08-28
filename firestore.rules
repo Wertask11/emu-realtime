@@ -576,7 +576,14 @@ service cloud.firestore {
         && request.resource.data.options is list
         && request.resource.data.options.size() >= 2
         && request.resource.data.options.size() <= 4;
-      allow update, delete: if false;
+      /* 出した本人が「予定より早く締め切る」ことだけできる。
+         締切を先に延ばすのは認めない（負けそうだから延長、ができてしまう）。
+         題名・説明・選択肢は動かせない。 */
+      allow update: if isMyWallet(resource.data.get('createdBy', ''))
+        && changedOnly(['closesAt'])
+        && request.resource.data.closesAt is int
+        && request.resource.data.closesAt <= resource.data.get('closesAt', 0);
+      allow delete: if false;
 
       match /ballots/{addr} {
         allow read: if true;

@@ -595,6 +595,27 @@ async function renderSchoolPark() {
   votes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   let wisdomCount = 0; ws.forEach(() => wisdomCount++);
 
+  /* 議題ごとの票を数える。数を別に持たず、票そのものを毎回数える。 */
+  for (const v of votes) {
+    v.counts = {}; v.total = 0;
+    try {
+      const bs = await f.getDocs(f.collection(f.db, "sp_votes", v.id, "ballots"));
+      bs.forEach(b => {
+        const o = String((b.data() || {}).optionId || "");
+        if (!o) return;
+        v.counts[o] = (v.counts[o] || 0) + 1; v.total++;
+      });
+    } catch (e) {}
+  }
+  /* クエストごとの「受けた人」も数える */
+  for (const q of quests) {
+    q.took = 0;
+    try {
+      const cs = await f.getDocs(f.collection(f.db, "sp_quests", q.id, "commits"));
+      cs.forEach(() => q.took++);
+    } catch (e) {}
+  }
+
   const STATUS = { OPEN: "募集中", RUNNING: "進行中", CLOSED: "完了" };
   const yen = v => (parseInt(String(v || "0").replace(/[^0-9]/g, ""), 10) || 0).toLocaleString();
 
@@ -628,12 +649,35 @@ async function renderSchoolPark() {
     + '<div class="card"><h3>クエストの状態を変える</h3>'
     + (quests.length ? quests.map(q =>
         '<div class="row"><span>' + esc(q.title || "") + '<br>'
-        + '<small style="color:var(--muted)">¥' + yen(q.budget) + ' · ' + (STATUS[q.status] || q.status) + '</small></span>'
+        + '<small style="color:var(--muted)">¥' + yen(q.budget) + ' · ' + (STATUS[q.status] || q.status)
+        + ' · ' + q.took + '/' + (q.need || 5) + '人が受けた</small></span>'
         + '<span>'
         + (q.status !== "RUNNING" ? '<button class="act neutral" data-qrun="' + esc(q.id) + '">進行中にする</button> ' : '')
         + (q.status !== "CLOSED" ? '<button class="act ok" data-qclose="' + esc(q.id) + '">完了にする</button>' : '')
         + '</span></div>').join("")
       : '<p class="empty">まだクエストがありません。</p>')
+    + '</div>'
+
+    + '<div class="card"><h3>議題と投票の結果</h3>'
+    + '<p class="empty" style="text-align:left;margin:0 0 10px">締切は早めることだけできます。'
+    + '先に延ばすことはできません（負けそうだから延長、ができないように）。'
+    + '題名・説明・選択肢は出したあと動かせません。</p>'
+    + (votes.length ? votes.map(v => {
+        const closed = !!v.closesAt && v.closesAt <= Date.now();
+        const bars = (v.options || []).map(o => {
+          const n = v.counts[o.id] || 0;
+          const pct = v.total ? Math.round(n / v.total * 100) : 0;
+          return '<div class="row"><span>' + esc(o.label) + '</span>'
+            + '<span>' + n + '票 · ' + pct + '%</span></div>';
+        }).join("");
+        return '<div style="border-top:1px solid var(--line);padding-top:12px;margin-top:12px">'
+          + '<div class="row"><span><b>' + esc(v.title || "") + '</b><br>'
+          + '<small style="color:var(--muted)">' + (closed ? "締め切り済み" : "受付中")
+          + ' · ' + v.total + '票 · ' + fmt(v.closesAt ? new Date(v.closesAt).toISOString() : null) + ' まで</small></span>'
+          + '<span>' + (closed ? "" : '<button class="act no" data-vclose="' + esc(v.id) + '">いま締め切る</button>') + '</span></div>'
+          + bars + '</div>';
+      }).join("")
+      : '<p class="empty">まだ議題がありません。</p>')
     + '</div>';
 
   $("#aqSubmit").onclick = async () => {
@@ -683,6 +727,14 @@ async function renderSchoolPark() {
       if (!confirm("このクエストを完了にします。受付は締め切られます。よろしいですか？")) return;
       try { await f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qclose), { status: "CLOSED", closedAt: Date.now() }); }
       catch (e) { alert("変えられませんでした（" + (e.code || e.message) + "）"); return; }
+      renderSchoolPark();
+    };
+  });
+  el.querySelectorAll("[data-vclose]").forEach(b => {
+    b.onclick = async () => {
+      if (!confirm("この議題をいま締め切ります。\n\n締め切ると、もう投票できません。よろしいですか？")) return;
+      try { await f.updateDoc(f.doc(f.db, "sp_votes", b.dataset.vclose), { closesAt: Date.now() }); }
+      catch (e) { alert("締め切れませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
   });
