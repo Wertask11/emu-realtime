@@ -3087,6 +3087,18 @@ body.emu-ichinichi-open #openPostFormButton { display:none !important; }
 }
 /* 知識を読む（固定Emuナビの下に専用ページをiframe表示） */
 #emuKnowledgePage { display:none; }
+/* SchoolPark の中から開く小部屋（エレベーターなど）。
+   SchoolPark 本体(1500)より手前に出し、閉じると元の画面に戻る。 */
+#spRoomPage { display:none; position:fixed; inset:0; z-index:1700; background:#141310; }
+body.sp-room-open #spRoomPage { display:block; }
+#spRoomFrame { width:100%; height:100%; border:0; display:block; }
+#spRoomBack {
+  position:fixed; right:14px; bottom:14px; z-index:1710;
+  background:#141310; color:#F4F1EA; border:1px solid rgba(244,241,234,.25);
+  border-radius:999px; padding:9px 16px; font-size:13px; font-family:inherit;
+  cursor:pointer; box-shadow:0 8px 22px -8px rgba(0,0,0,.6); display:none;
+}
+body.sp-room-open #spRoomBack { display:block; }
 /* SchoolPark は自前で端末の切り替えを持っているので、画面いっぱいに出す */
 #spDaoPage { display:none; position:fixed; inset:0; z-index:1500; background:#D0E2BE; }
 body.sp-dao-open #spDaoPage { display:block; }
@@ -4782,27 +4794,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
             <button class="nav-button" id="emuTodayNavBtn" onclick="showEmuToday()">今日のEmu</button>
           </li>
 
-<!-- ── 冷蔵庫くん チャットパネル（SchoolParkマップ用） ── -->
-<div id="spReizoPanel" class="sp-reizo-panel">
-  <div class="sp-reizo-header">
-    <img src="/assets/mascot.jpg" alt="冷蔵庫くん">
-    <div style="flex:1;min-width:0">
-      <div class="sp-reizo-header-title">冷蔵庫くん</div>
-      <div class="sp-reizo-header-sub">🤖 SchoolPark agents 統合版</div>
-    </div>
-    <button class="sp-reizo-close" onclick="spReizoClose()">✕</button>
-  </div>
-  <div class="sp-reizo-msgs" id="spReizoMessages">
-    <div class="sp-reizo-msg sp-reizo-msg-bot">
-      <img src="/assets/mascot.jpg" alt="">
-      <div class="sp-reizo-bubble">こんにちは！SchoolParkについてなんでも聞いてね🧊<br><br>「残高教えて」「おすすめある？」「巡回して」「リマインドして」「アラート設定して」も言ってくれたら、ぼくが代わりに動くよ！</div>
-    </div>
-  </div>
-  <div class="sp-reizo-input-area">
-    <input id="spReizoInput" type="text" placeholder="質問する..." onkeydown="spReizoKeydown(event)">
-    <button class="sp-reizo-send" onclick="spReizoSend()">↑</button>
-  </div>
-</div>
 
 <li><button id="refreshAllPosts" class="nav-button">知識を読む</button></li>
           <li>
@@ -15489,6 +15480,29 @@ function openSpDao() {
   spDaoWatchRender();
 }
 
+/* SchoolPark の中から小部屋（エレベーターなど）を開く。
+   枠の中から window.parent 経由で呼ばれる。 */
+function openSpRoom(url, title) {
+  const page = document.getElementById('spRoomPage');
+  const frame = document.getElementById('spRoomFrame');
+  if (!page || !frame) return;
+  frame.src = url;
+  if (title) frame.title = title;
+  document.body.classList.add('sp-room-open');
+}
+function closeSpRoom() {
+  const frame = document.getElementById('spRoomFrame');
+  document.body.classList.remove('sp-room-open');
+  if (frame) frame.src = 'about:blank';   /* 音や読み上げを止める */
+}
+/* 小部屋の中にある「← もどる」は、親に spContentClose を送ってくる作りになっている。
+   旧SchoolParkのマップへ戻る合図だったものを、そのまま閉じる合図として受ける。 */
+window.addEventListener('message', function (ev) {
+  if (ev.origin !== window.location.origin) return;   /* 別サイトからの合図は受けない */
+  if (!ev.data || ev.data.type !== 'spContentClose') return;
+  closeSpRoom();
+});
+
 /* お問い合わせボタンを、SchoolPark のサイドバーの中に置く。
    サイドバーが開いているときだけ出す（閉じていると置き場所がないため）。
 
@@ -21186,5 +21200,34 @@ async function sendEmuFeedback() {
 <div id="spDaoPage">
   <iframe id="spDaoFrame" title="SchoolPark" loading="lazy"></iframe>
 </div>
+<!-- SchoolPark の中から開く小部屋（エレベーターなど） -->
+<button type="button" id="spRoomBack" onclick="closeSpRoom()">← SchoolParkへ</button>
+<div id="spRoomPage">
+  <iframe id="spRoomFrame" title="SchoolParkの小部屋"></iframe>
+</div>
+<!-- ── 冷蔵庫くん チャットパネル ──
+     もとは #mainApp の中にあった。SchoolPark を見ているあいだ #mainApp は
+     display:none になるため、そこにあると開けない。body の直下へ移す。 -->
+<div id="spReizoPanel" class="sp-reizo-panel">
+  <div class="sp-reizo-header">
+    <img src="/assets/mascot.jpg" alt="冷蔵庫くん">
+    <div style="flex:1;min-width:0">
+      <div class="sp-reizo-header-title">冷蔵庫くん</div>
+      <div class="sp-reizo-header-sub">🤖 SchoolPark agents 統合版</div>
+    </div>
+    <button class="sp-reizo-close" onclick="spReizoClose()">✕</button>
+  </div>
+  <div class="sp-reizo-msgs" id="spReizoMessages">
+    <div class="sp-reizo-msg sp-reizo-msg-bot">
+      <img src="/assets/mascot.jpg" alt="">
+      <div class="sp-reizo-bubble">こんにちは！SchoolParkについてなんでも聞いてね🧊<br><br>「残高教えて」「おすすめある？」「巡回して」「リマインドして」「アラート設定して」も言ってくれたら、ぼくが代わりに動くよ！</div>
+    </div>
+  </div>
+  <div class="sp-reizo-input-area">
+    <input id="spReizoInput" type="text" placeholder="質問する..." onkeydown="spReizoKeydown(event)">
+    <button class="sp-reizo-send" onclick="spReizoSend()">↑</button>
+  </div>
+</div>
+
 </body>
 </html>

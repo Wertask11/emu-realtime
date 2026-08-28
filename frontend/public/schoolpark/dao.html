@@ -86,6 +86,7 @@ html, body                 { height: 100%; }
           <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#0F5C3F">{{ head.kicker }}</div>
           <div style="font-size:{{ L.headSize }}; font-weight:700; letter-spacing:.02em">{{ head.title }}</div>
         </div>
+        <div onClick="{{ askReizo }}" title="冷蔵庫くんに聞く" style="width:38px; height:38px; flex:0 0 38px; border:1px solid rgba(20,19,16,.16); border-radius:7px; display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden" style-hover="background:#E7E2D6"><img src="/assets/mascot.jpg" alt="冷蔵庫くん" style="width:100%; height:100%; object-fit:cover"></div>
         <div onClick="{{ goPropose }}" style="padding:12px 18px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap" style-hover="background:#0A3F2B">{{ L.ctaLabel }}</div>
       </div>
 
@@ -254,6 +255,21 @@ html, body                 { height: 100%; }
                   </sc-for>
                 </div>
                 <div style="font-size:12px; line-height:1.9; color:#6E695C">部屋は誰でも立てられる。無言で作業してるだけの部屋もある。</div>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:18px">
+              <div style="display:flex; align-items:baseline; gap:14px">
+                <div style="font-size:17px; font-weight:700">エレベーター</div>
+                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+              </div>
+              <div onClick="{{ goElevator }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
+                <div style="font-size:20px">🛗</div>
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
+                  <div style="font-size:14px; font-weight:700; line-height:1.5">6つの階をのぼりおりする</div>
+                  <div style="font-size:12px; color:#6E695C">屋上・星空ホール・ラボ・たんけん・カフェ・エントランス</div>
+                </div>
+                <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">乗る</div>
               </div>
             </div>
 
@@ -729,6 +745,8 @@ class Component extends DCLogic {
   joinBoard(id){ return () => this.setState(s => ({joined:{...s.joined, [id]:!s.joined[id]}})); }
   commit(id){ return (ev) => { if(ev) ev.stopPropagation(); this.setState(s => ({committed:{...s.committed, [id]:!s.committed[id]}})); }; }
   toggleSidebar = () => this.setState(s => ({sidebarOpen:!s.sidebarOpen}));
+  askReizo = () => { try { window.parent.spReizoOpen(); } catch (e) {} };
+  goElevator = () => { try { window.parent.openSpRoom('/schoolpark/south-elevator.html', 'エレベーター'); } catch (e) {} };
   toggleBrand = () => this.setState(s => ({brandOpen:!s.brandOpen}));
   goBrand(id){ return () => {
     this.setState({brandOpen:false});
@@ -782,6 +800,8 @@ class Component extends DCLogic {
     return {
       L, word:W, wordShort:'経験', scrollRef:this.scroller,
       toggleSidebar:this.toggleSidebar,
+      askReizo:this.askReizo,
+      goElevator:this.goElevator,
       toggleBrand:this.toggleBrand,
       brandOpen:s.brandOpen,
       brandIcon:s.brandOpen ? '▴' : '▾',
