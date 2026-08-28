@@ -15560,9 +15560,9 @@ window.spDaoLoadVotes = async function (app) {
   if (!app || typeof app.setState !== 'function') return;
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
-  let me = null;
-  try { me = await emuMyIdentity(); } catch (e) {}
-  const mine = me ? (me.ches || me.wallet) : '';
+  /* 本人はパスポートから取る。ほかの画面と同じ道にそろえる。 */
+  const p = await spPassportLoad();
+  const mine = p ? p.addr : '';
 
   let docs = [];
   try {
@@ -15624,10 +15624,9 @@ window.spDaoLoadVotes = async function (app) {
 /* 1票入れる。文書のIDを自分のアドレスにする。 */
 async function spVoteCast(voteId, optionId, app) {
   if (_spVoteBusy) return;
-  let me = null;
-  try { me = await emuMyIdentity(); } catch (e) {}
-  if (!me) { alert('投票にはログインが必要です。'); return; }
-  const addr = me.ches || me.wallet;
+  const p = await spPassportLoad();
+  if (!p) { alert('投票にはログインが必要です。'); return; }
+  const addr = p.addr;
   if (!confirm('この選択で投票します。あとから変えられません。\n\nよろしいですか？')) return;
   _spVoteBusy = true;
   try {
@@ -15667,9 +15666,8 @@ async function spVoteSubmit() {
   const labels = ['spvOpt1', 'spvOpt2', 'spvOpt3', 'spvOpt4'].map(val).filter(Boolean);
   if (labels.length < 2) { alert('選択肢は2つ以上いります。'); return; }
 
-  let me = null;
-  try { me = await emuMyIdentity(); } catch (e) {}
-  if (!me) { alert('議題を出すにはログインが必要です。'); return; }
+  const p = await spPassportLoad();
+  if (!p) { alert('議題を出すにはログインが必要です。'); return; }
 
   const days = Math.max(1, Math.min(30, parseInt(val('spvDays'), 10) || 7));
   try {
@@ -15678,7 +15676,7 @@ async function spVoteSubmit() {
       title: title.slice(0, 120),
       body: val('spvBody').slice(0, 600),
       options: labels.map(function (l, i) { return { id: 'o' + (i + 1), label: l.slice(0, 60) }; }),
-      createdBy: me.ches || me.wallet,
+      createdBy: p.addr,
       createdAt: Date.now(),
       closesAt: Date.now() + days * 86400000
     });
