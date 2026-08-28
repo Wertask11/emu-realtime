@@ -3091,13 +3091,28 @@ body.emu-ichinichi-open #openPostFormButton { display:none !important; }
 #spDaoPage { display:none; position:fixed; inset:0; z-index:1500; background:#D0E2BE; }
 body.sp-dao-open #spDaoPage { display:block; }
 #spDaoFrame { width:100%; height:100%; border:0; display:block; }
+/* 戻るボタンは右下に置く。
+   左上には SchoolPark 側の「☰」と、サイドバーを開いたときのロゴがあり、
+   左下にはサイドバーのトレジャリー表示がある。どちらも隠してはいけない。 */
 #spDaoBack {
-  position:fixed; left:14px; top:14px; z-index:1510;
-  background:#141310; color:#F4F1EA; border:0; border-radius:6px;
-  padding:9px 15px; font-size:13px; font-family:inherit; cursor:pointer;
-  box-shadow:0 6px 18px -8px rgba(0,0,0,.5); display:none;
+  position:fixed; right:14px; bottom:14px; z-index:1510;
+  background:#141310; color:#F4F1EA; border:0; border-radius:999px;
+  padding:9px 16px; font-size:13px; font-family:inherit; cursor:pointer;
+  box-shadow:0 8px 22px -8px rgba(0,0,0,.55); display:none;
+  opacity:.92; transition:opacity .15s ease;
 }
+#spDaoBack:hover { opacity:1; }
 body.sp-dao-open #spDaoBack { display:block; }
+/* スマホ幅では SchoolPark 側が下ナビを出す。その高さは spDaoFitBack() が
+   実際に測って持ち上げる（決め打ちにすると、余白の分だけずれて重なる）。 */
+@media (max-width: 699px) {
+  #spDaoBack { padding:8px 14px; font-size:12px; }
+}
+/* SchoolPark を見ているあいだは、お問い合わせの浮きボタンを引っ込める。
+   左下でサイドバーのトレジャリー表示に重なるため。
+   （SchoolParkマップや議論ルームでも同じことをしている） */
+body.sp-dao-open #emu-contact-btn,
+body.sp-dao-open #emu-contact-label { display:none !important; }
 body.emu-knowledge-open > #mainApp > .container { display:none; }
 body.emu-knowledge-open > #mainApp > #emuTodayHome { display:block; }
 body.emu-knowledge-open #emuTodayDashboard,
@@ -15237,10 +15252,67 @@ function openSpDao() {
   const page = document.getElementById('spDaoPage');
   const frame = document.getElementById('spDaoFrame');
   if (!page || !frame) return;
-  if (!frame.getAttribute('src')) frame.src = '/schoolpark/dao.html';
+  if (!frame.getAttribute('src')) {
+    frame.src = '/schoolpark/dao.html';
+    frame.addEventListener('load', spDaoFitBack);
+  }
   document.body.classList.add('sp-dao-open');
   const hub = document.getElementById('chesHubScreen');
   if (hub) hub.style.display = 'none';
+  spDaoWatchSize();
+  spDaoFitBack();
+}
+
+/* 戻るボタンが SchoolPark の下ナビに重ならないようにする。
+   下ナビはスマホ幅のときだけ出て、高さは中身と余白で決まる。
+   決め打ちの数字にすると余白の分だけずれるので、実際に測る。
+   同じ場所のファイルなので中を読める。読めなければ既定の位置のままにする。 */
+function spDaoFitBack() {
+  const back = document.getElementById('spDaoBack');
+  const frame = document.getElementById('spDaoFrame');
+  if (!back || !frame) return;
+  let lift = 14;
+  try {
+    const d = frame.contentDocument, w = frame.contentWindow;
+    if (d && w) {
+      const nav = Array.prototype.find.call(d.querySelectorAll('div'), function (el) {
+        const s = w.getComputedStyle(el), r = el.getBoundingClientRect();
+        return s.position === 'sticky' && s.bottom === '0px' && r.height > 40 && r.width > 200;
+      });
+      /* 高さではなく「画面の下から下ナビの上端まで」を測る。
+         下ナビ自体が少し浮いていることがあり、高さだけだとその分ずれる。 */
+      if (nav) lift = Math.round(w.innerHeight - nav.getBoundingClientRect().top) + 12;
+    }
+  } catch (e) { /* 読めないときは既定のまま */ }
+  back.style.bottom = lift + 'px';
+}
+/* 画面の大きさが変わると SchoolPark 側が作り直され、下ナビが出たり消えたりする。
+   作り直しが済んでから測り直す。 */
+/* 大きさが変わったときの後始末。
+   ① 枠の中に「大きさが変わった」を伝える。
+      枠は width:100%/height:100% で親に追従するが、resize を受け取り損ねることがあり、
+      そのままだと端末の判定（パソコン／タブレット／スマホ）が古いまま残る。
+      実際、834→1280 に広げても tablet のままになった。
+   ② 戻るボタンの位置を測り直す（下ナビが出たり消えたりするため）。 */
+function spDaoOnResize() {
+  if (!document.body.classList.contains('sp-dao-open')) return;
+  try {
+    const w = document.getElementById('spDaoFrame').contentWindow;
+    if (w) w.dispatchEvent(new w.Event('resize'));
+  } catch (e) { /* 読めないときは何もしない */ }
+  clearTimeout(window._spDaoFitTimer);
+  window._spDaoFitTimer = setTimeout(spDaoFitBack, 80);
+}
+window.addEventListener('resize', spDaoOnResize);
+
+/* window の resize は環境によって届かないことがある（実際に届かない場面があった）。
+   枠そのものの大きさも見張って、確実に気づけるようにする。 */
+function spDaoWatchSize() {
+  if (window._spDaoRO || typeof ResizeObserver !== 'function') return;
+  const frame = document.getElementById('spDaoFrame');
+  if (!frame) return;
+  window._spDaoRO = new ResizeObserver(spDaoOnResize);
+  window._spDaoRO.observe(frame);
 }
 
 function closeSpDao() {
