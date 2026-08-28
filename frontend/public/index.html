@@ -3223,6 +3223,23 @@ body.emu-play-open #openPostFormButton { display:none !important; }
 .esn-item:hover { background:#f6f3ee; }
 .esn-item.active { background:#f08300; color:#fff; }
 .esn-item.active i { opacity:.75; }
+/* 下の残高と名前。SchoolPark のトレジャリー表示と同じ位置・同じ組み方 */
+.esn-foot {
+  margin-top:auto; padding:16px 10px 2px; border-top:1px solid #e6e2da;
+  display:flex; flex-direction:column; gap:11px;
+}
+.esn-foot-row { display:flex; justify-content:space-between; align-items:baseline; }
+.esn-foot-label { font-size:10px; letter-spacing:.2em; color:#a49b8d; font-weight:700; }
+.esn-foot-val { font-size:15px; font-weight:700; color:#f08300; }
+.esn-user { display:flex; align-items:center; gap:9px; min-width:0; }
+.esn-avatar {
+  width:28px; height:28px; flex:0 0 28px; border-radius:50%;
+  background:#f08300; color:#fff; font-size:12px; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+}
+.esn-user-text { display:flex; flex-direction:column; min-width:0; }
+.esn-user-text b { font-size:13px; color:#3b382f; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.esn-user-text small { font-size:10px; letter-spacing:.06em; color:#a49b8d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 @media (min-width:1025px) {
   #emuSideNav {
     display:flex; flex-direction:column; gap:2px;
@@ -4409,6 +4426,22 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   <button type="button" class="esn-item"        id="esnDiscussion" onclick="showEmuDiscussion()"><i>05</i>議論</button>
   <button type="button" class="esn-item"        id="esnPlay"       onclick="showEmuPlay()"><i>06</i>遊び</button>
   <button type="button" class="esn-item"        id="esnProfile"    onclick="showEmuValueProfile()"><i>07</i>価値プロフィール</button>
+  <!-- SchoolPark のサイドバー下と同じ作り。残高と、いま入っている人。
+       数字は「今日のEmu」の報酬カードとアカウントから写しているので、
+       二重に持たない（ずれない）。 -->
+  <div class="esn-foot">
+    <div class="esn-foot-row">
+      <span class="esn-foot-label">EMUER</span>
+      <span class="esn-foot-val" id="esnBalance">0</span>
+    </div>
+    <div class="esn-user">
+      <span class="esn-avatar" id="esnAvatar">–</span>
+      <span class="esn-user-text">
+        <b id="esnUserName">ゲスト</b>
+        <small id="esnUserSub"></small>
+      </span>
+    </div>
+  </div>
 </nav>
 <header class="header" style="display: flex; align-items: center; padding: 0 20px; gap: 8px; flex-wrap: wrap;">
   <!-- Emuロゴ：PCでは非表示（下部CSS）。モバイル/タブレットではPayPay支払いUIへの入口として残す -->
@@ -4861,12 +4894,12 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <div class="emu-sheet" id="emuChangeSheet" role="dialog" aria-modal="true" aria-labelledby="emuChangeTitle">
   <div class="emu-sheet-card">
     <div class="emu-sheet-head">
-      <div><h2 id="emuChangeTitle">Changeを提案する</h2><p>否定ではなく、経験や根拠を持ち寄って知識を一緒に改善します。</p></div>
+      <div><h2 id="emuChangeTitle">Changeを届ける</h2><p>「この知識に、あなたの経験や別の視点を重ねてみよう。」</p></div>
       <button class="emu-sheet-close" type="button" onclick="closeEmuSheet('emuChangeSheet')">×</button>
     </div>
-    <div class="emu-field"><label for="emuChangeTarget">どこを変えたいですか</label><input id="emuChangeTarget" maxlength="120" placeholder="例：初心者向けの手順部分"></div>
-    <div class="emu-field"><label for="emuChangeReason">なぜ変えると良くなりますか</label><textarea id="emuChangeReason" maxlength="500" placeholder="自分の経験や根拠も含めてください"></textarea></div>
-    <div class="emu-field"><label for="emuChangeProposal">具体的な変更案</label><textarea id="emuChangeProposal" maxlength="1000" placeholder="置き換える文章や、追加したい内容"></textarea></div>
+    <div class="emu-field"><label for="emuChangeTarget">どこに共感した？どこに別の見方がある？</label><input id="emuChangeTarget" maxlength="120" placeholder="例：初心者向けの手順部分"></div>
+    <div class="emu-field"><label for="emuChangeReason">そう思った理由や、自分の経験を教えてください</label><textarea id="emuChangeReason" maxlength="500" placeholder="自分の経験や根拠も含めてください"></textarea></div>
+    <div class="emu-field"><label for="emuChangeProposal">こんな表現もありそう</label><textarea id="emuChangeProposal" maxlength="1000" placeholder="置き換える文章や、追加したい内容"></textarea></div>
     <div class="emu-sheet-actions"><button class="eth-btn" type="button" onclick="closeEmuSheet('emuChangeSheet')">やめる</button><button class="eth-btn primary" id="emuChangeSubmit" type="button">提案を届ける</button></div>
   </div>
 </div>
@@ -14066,6 +14099,32 @@ function _setEmuHomeTab(activeId) {
     if (side) side.classList.toggle('active', on);
   });
 }
+
+/* 左タブの下の残高と名前を、本文の表示から写す。
+   数字を二重に持つとどちらかが古くなるので、元の場所を見張って写すだけにする。 */
+function emuSideNavSync() {
+  const from = function (id) { const el = document.getElementById(id); return el ? el.textContent.trim() : ''; };
+  const set  = function (id, v) { const el = document.getElementById(id); if (el && el.textContent !== v) el.textContent = v; };
+  const name = from('emuAccountName') || 'ゲスト';
+  set('esnBalance', from('emuTodayBalance') || '0');
+  set('esnUserName', name);
+  set('esnUserSub', from('emuAccountAddr'));
+  set('esnAvatar', name.slice(0, 1));
+}
+/* 元の場所が書き換わったら写し直す */
+(function () {
+  function watch() {
+    if (typeof MutationObserver !== 'function') return;
+    const obs = new MutationObserver(emuSideNavSync);
+    ['emuTodayBalance', 'emuAccountName', 'emuAccountAddr'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) obs.observe(el, { childList: true, characterData: true, subtree: true });
+    });
+    emuSideNavSync();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch);
+  else watch();
+})();
 
 /* 左タブの上にあるブランド切り替え。SchoolPark 側のロゴと同じはたらき。 */
 function emuBrandToggle() {
