@@ -583,6 +583,9 @@ html, body                 { height: 100%; }
             </div>
             <div style="display:flex; flex-direction:column; gap:16px">
               <div style="font-size:17px; font-weight:700">直近の動き</div>
+              <sc-if value="{{ noTreasury }}">
+                <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだお金の動きがありません。クエストに予算が付くと、ここに出ます。</div>
+              </sc-if>
               <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; overflow:hidden">
                 <sc-for list="{{ treasury.txs }}" as="t" hint-placeholder-count="5">
                   <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:18px 22px; border-bottom:1px solid rgba(20,19,16,.09)">
@@ -705,8 +708,8 @@ const LAYOUTS = {
 };
 
 class Component extends DCLogic {
-  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, wisdom:[], noWisdom:true, citations:0, members:[], noMembers:true, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
-  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} try { window.parent.spDaoLoadWisdom(this); } catch (e) {} try { window.parent.spDaoLoadMembers(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
+  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, wisdom:[], noWisdom:true, citations:0, members:[], noMembers:true, noTreasury:true, treasury:{total:'0', in:'0', out:'0', alloc:[], txs:[]}, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
+  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} try { window.parent.spDaoLoadWisdom(this); } catch (e) {} try { window.parent.spDaoLoadMembers(this); } catch (e) {} try { window.parent.spDaoLoadTreasury(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
   scroller = React.createRef();
@@ -776,7 +779,7 @@ class Component extends DCLogic {
       toggleSidebar:this.toggleSidebar,
       me:s.me,
       votes:s.votes, noVotes:s.noVotes,
-      noQuests:s.noQuests, noWisdom:s.noWisdom, noMembers:s.noMembers,
+      noQuests:s.noQuests, noWisdom:s.noWisdom, noMembers:s.noMembers, noTreasury:s.noTreasury,
       openVoteForm:() => { try { window.parent.openSpVoteForm(this); } catch (e) {} },
       openPassport:this.openPassport,
       askReizo:this.askReizo,
@@ -819,9 +822,7 @@ class Component extends DCLogic {
       logs, wisdom: s.wisdom || [],
       tags: ['すべて','RELATIONSHIP','MONEY','FOCUS','LEARNING','NEGOTIATION','COURAGE'],
       members: s.members || [],
-      treasury: {total:'0', in:'0', out:'0',
-        alloc:[{label:W+'予算',pct:'52%'},{label:'完走メンバーへの分配',pct:'26%'},{label:'知恵の引用インセンティブ',pct:'14%'},{label:'運営プール',pct:'8%'}],
-        txs:[]},
+      treasury: s.treasury,
       steps: STEPS.map((st,i) => ({num:'0'+(i+1), label:st.label, hint:st.hint, go:()=>this.setState({step:i}),
         bg: s.step===i ? '#E7E2D6' : 'transparent',
         fg: s.step===i ? '#141310' : '#6E695C',

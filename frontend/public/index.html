@@ -16078,6 +16078,85 @@ window.spDaoLoadMembers = async function (app) {
   app.setState({ members: members, noMembers: members.length === 0 });
 };
 
+/* ═══════════════════════════════════════
+   トレジャリー
+
+   別の保存先は持たない。クエストの記録から全部を出す。
+   同じ数字が2か所にあると、いつか片方が古くなるため。
+
+   帯（取り分）は、設計ファイルに入っていた見本の固定値
+   （52/26/14/8）をやめて、実際の額から出す。
+   見本の値は下に書いてある分配ルール（70/20/10）と食い違っていた。
+     クエスト予算（確保中）    まだ完了していないクエストの予算
+     完走メンバーへの分配      完了した予算 × 70%
+     知恵の引用インセンティブ  完了した予算 × 20%
+     運営プール                完了した予算 × 10%
+
+   お金が外から入った記録はまだ無い。そのため TOTAL BALANCE は
+   「クエストに付いている予算の合計」＝ DAOが動かしているお金を指す。
+═══════════════════════════════════════ */
+function _spYen(n) { return (Math.round(Number(n) || 0)).toLocaleString(); }
+
+window.spDaoLoadTreasury = async function (app) {
+  if (!app || typeof app.setState !== 'function') return;
+  if (!window.db || !window.fbLib) return;
+  const fb = window.fbLib;
+  let list = [];
+  try {
+    const snap = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
+    snap.forEach(function (s) { list.push({ id: s.id, ...(s.data() || {}) }); });
+  } catch (e) {
+    console.warn('トレジャリーを読めませんでした:', e && (e.message || e));
+    return;
+  }
+
+  const now = new Date();
+  const sameMonth = function (ms) {
+    if (!ms) return false;
+    const d = new Date(Number(ms));
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  };
+  const yen = function (q) { return parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0; };
+
+  let reserved = 0, closed = 0, monthIn = 0, monthOut = 0;
+  const txs = [];
+  list.forEach(function (q) {
+    const b = yen(q);
+    if (q.status === 'CLOSED') {
+      closed += b;
+      if (sameMonth(q.closedAt)) monthOut += b * 0.9;   // 完走70% + 引用20%
+      txs.push({ at: q.closedAt || q.createdAt || 0,
+        label: (q.title || '') + '：完了して分配', kind: '分配',
+        amount: '-' + _spYen(b * 0.9), color: '#8A8474' });
+    } else {
+      reserved += b;
+    }
+    if (sameMonth(q.createdAt)) monthIn += b;
+    txs.push({ at: q.createdAt || 0,
+      label: (q.title || '') + ' に予算を確保', kind: '確保',
+      amount: '¥' + _spYen(b), color: '#0F5C3F' });
+  });
+
+  const total = reserved + closed;
+  const pct = function (v) { return total > 0 ? Math.round(v / total * 100) + '%' : '0%'; };
+
+  txs.sort(function (a, b) { return b.at - a.at; });
+  app.setState({ treasury: {
+    total: _spYen(total), in: _spYen(monthIn), out: _spYen(monthOut),
+    alloc: [
+      { label: 'クエスト予算（確保中）', pct: pct(reserved) },
+      { label: '完走メンバーへの分配',   pct: pct(closed * 0.7) },
+      { label: '知恵の引用インセンティブ', pct: pct(closed * 0.2) },
+      { label: '運営プール',             pct: pct(closed * 0.1) }
+    ],
+    txs: txs.slice(0, 6).map(function (t) {
+      const d = t.at ? new Date(t.at) : null;
+      return { label: t.label, kind: t.kind, amount: t.amount, color: t.color,
+        date: d ? ((d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0')) : '' };
+    })
+  }, noTreasury: list.length === 0 });
+};
+
 /* SchoolPark の枠から「自分は誰か」を聞かれたときに答える。
    枠の中は作り物の名前を持たなくなったので、ここから渡す。
    まだ分からないうちは、枠の中の初期値（ゲスト）のままにしておく。 */
