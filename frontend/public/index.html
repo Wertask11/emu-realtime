@@ -13984,6 +13984,9 @@ function chesBrandFrameClose() {
   const frame = document.getElementById('cbfFrame');
   if (wrap) wrap.style.display = 'none';
   if (frame) frame.src = 'about:blank'; /* 読み込みを止めて解放 */
+  /* SchoolPark から開いた場合は、その下に SchoolPark が出たまま残っている。
+     ハブを出すと SchoolPark を素通りして戻ってしまうので、閉じるだけにする。 */
+  if (document.body.classList.contains('sp-dao-open')) return;
   chesHubShow();
 }
 
@@ -15265,6 +15268,13 @@ function spDaoPlaceContact() {
   const btn = document.getElementById('emu-contact-btn');
   const frame = document.getElementById('spDaoFrame');
   if (!btn || !frame) return;
+  /* SchoolPark を離れたあとも枠は残り、中は描き直されつづける。
+     そのまま位置を書き換えると、Emu にいるのにボタンがずれる。 */
+  if (!document.body.classList.contains('sp-dao-open')) {
+    document.body.classList.remove('sp-dao-sidebar');
+    btn.style.left = ''; btn.style.bottom = '';
+    return;
+  }
   let placed = false;
   try {
     const d = frame.contentDocument, w = frame.contentWindow;

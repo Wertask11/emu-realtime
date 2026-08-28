@@ -40,9 +40,21 @@ html, body                 { height: 100%; }
 
     <div style="display:{{ L.sidebarShow }}; width:248px; flex:0 0 248px; background:#141310; color:#F4F1EA; flex-direction:column; overflow-y:auto">
       <div style="padding:24px 18px 22px 24px; display:flex; align-items:flex-start; gap:12px; border-bottom:1px solid rgba(244,241,234,.12)">
-        <div style="display:flex; flex:1; flex-direction:column; gap:6px">
-          <div style="font-family:'Zen Old Mincho',serif; font-size:23px; font-weight:900; letter-spacing:.02em">SchoolPark</div>
-          <div style="font-family:Inter,sans-serif; font-size:11px; letter-spacing:.28em; color:#D0E2BE">D A O</div>
+        <div style="display:flex; flex:1; flex-direction:column; gap:6px; position:relative">
+          <div onClick="{{ toggleBrand }}" title="ブランドを切り替える" style="display:flex; align-items:center; gap:8px; cursor:pointer">
+            <div style="font-family:'Zen Old Mincho',serif; font-size:23px; font-weight:900; letter-spacing:.02em">SchoolPark</div>
+            <div style="font-family:Inter,sans-serif; font-size:12px; color:#D0E2BE">{{ brandIcon }}</div>
+          </div>
+          <sc-if value="{{ brandOpen }}">
+            <div style="position:absolute; top:38px; left:0; z-index:20; min-width:168px; background:#1D1B16; border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:6px; display:flex; flex-direction:column; gap:2px; box-shadow:0 18px 40px -14px rgba(0,0,0,.7)">
+              <sc-for list="{{ brands }}" as="b">
+                <div onClick="{{ b.go }}" style="display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:7px; cursor:pointer; font-size:14px; font-weight:600; background:{{ b.bg }}; color:{{ b.fg }}" style-hover="background:rgba(244,241,234,.09)">
+                  <div style="width:7px; height:7px; border-radius:50%; flex:0 0 7px; background:{{ b.dot }}"></div>
+                  <div>{{ b.label }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
         </div>
         <div onClick="{{ toggleSidebar }}" title="サイドバーを閉じる" style="width:32px; height:32px; border:1px solid rgba(244,241,234,.18); border-radius:7px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-family:Inter,sans-serif; font-size:18px; color:#D0E2BE" style-hover="background:rgba(244,241,234,.1)">‹</div>
       </div>
@@ -709,7 +721,7 @@ const LAYOUTS = {
 };
 
 class Component extends DCLogic {
-  state = { screen:'home', expId:'e1', filter:'すべて', step:0, committed:{e1:true, e3:true}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, vw: window.innerWidth, vh: window.innerHeight, joined:{b1:true} };
+  state = { screen:'home', expId:'e1', filter:'すべて', step:0, committed:{e1:true, e3:true}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, vw: window.innerWidth, vh: window.innerHeight, joined:{b1:true} };
   componentDidMount(){ this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
@@ -720,6 +732,12 @@ class Component extends DCLogic {
   joinBoard(id){ return () => this.setState(s => ({joined:{...s.joined, [id]:!s.joined[id]}})); }
   commit(id){ return (ev) => { if(ev) ev.stopPropagation(); this.setState(s => ({committed:{...s.committed, [id]:!s.committed[id]}})); }; }
   toggleSidebar = () => this.setState(s => ({sidebarOpen:!s.sidebarOpen}));
+  toggleBrand = () => this.setState(s => ({brandOpen:!s.brandOpen}));
+  goBrand(id){ return () => {
+    this.setState({brandOpen:false});
+    if (id === 'schoolpark') return;              /* いま居る場所なので何もしない */
+    try { window.parent.chesHubGo(id); } catch (e) {}
+  }; }
 
   decorate(e){
     const on = !!this.state.committed[e.id];
@@ -767,6 +785,13 @@ class Component extends DCLogic {
     return {
       L, word:W, wordShort:'経験', scrollRef:this.scroller,
       toggleSidebar:this.toggleSidebar,
+      toggleBrand:this.toggleBrand,
+      brandOpen:s.brandOpen,
+      brandIcon:s.brandOpen ? '▴' : '▾',
+      brands: [['camellia','Camellia','#E0576F'],['emu','Emu','#F08300'],['schoolpark','SchoolPark','#D0E2BE']]
+        .map(([id,label,dot]) => ({label, dot, go:this.goBrand(id),
+          bg: id==='schoolpark' ? 'rgba(244,241,234,.08)' : 'transparent',
+          fg: id==='schoolpark' ? '#F4F1EA' : 'rgba(244,241,234,.82)'})),
       sidebarButtonIcon:sidebarOpen ? '‹' : '☰',
       sidebarButtonTitle:sidebarOpen ? 'サイドバーを閉じる' : 'サイドバーを開く',
       devices: [['pc','パソコン'],['tablet','タブレット'],['mobile','スマホ']].map(([id,label]) => ({
