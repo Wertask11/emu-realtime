@@ -643,6 +643,35 @@ service cloud.firestore {
       }
     }
 
+    /* ───────── 公園 ─────────
+
+       締切も報酬もない場所。ボード・挑戦・部屋・集まりの4種類を
+       1つのコレクションに入れ、kind で分ける。
+       出せるのは当面は運営だけ。「乗る」は誰でもできる。
+
+       乗った記録は joins/{パスポート番号}。文書のIDが誰かを表すので、
+       同じ人が二重に乗ることはできない。降りるのは自分の分だけ。 */
+    match /sp_park/{itemId} {
+      allow read: if true;
+      allow create: if isMyWallet(request.resource.data.get('by', ''))
+        && isOwnerAddr(request.resource.data.get('by', ''))
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.get('kind', '') in ['board', 'dumb', 'room', 'event'];
+      // 出した本人が、しまうことだけできる
+      allow update: if isMyWallet(resource.data.get('by', ''))
+        && changedOnly(['hidden']);
+      allow delete: if isMyWallet(resource.data.get('by', ''));
+
+      match /joins/{addr} {
+        allow read: if true;
+        allow create: if isMyWallet(addr);
+        allow update: if false;
+        allow delete: if isMyWallet(addr);
+      }
+    }
+
     /* ───────── 知恵カード ─────────
 
        知恵は「クエストを完了したとき」にしか生まれない。
@@ -674,6 +703,7 @@ service cloud.firestore {
       allow read, write: if coll != 'sp_votes'
         && coll != 'sp_quests'
         && coll != 'sp_wisdom'
+        && coll != 'sp_park'
         && coll != 'emuer_offchain'
         && coll != 'emuer_offchain_ledger'
         && coll != 'ches_accounts'

@@ -584,11 +584,15 @@ async function renderSchoolPark() {
   catch (e) { el.innerHTML = '<p class="empty">読み込みに失敗しました。</p>'; return; }
   if (!addr) { el.innerHTML = '<p class="empty">パスポートが見つかりません。一度 Emu にログインしてください。</p>'; return; }
 
-  const [qs, vs, ws] = await Promise.all([
+  const [qs, vs, ws, ps] = await Promise.all([
     f.getDocs(f.collection(f.db, "sp_quests")),
     f.getDocs(f.collection(f.db, "sp_votes")),
-    f.getDocs(f.collection(f.db, "sp_wisdom"))
+    f.getDocs(f.collection(f.db, "sp_wisdom")),
+    f.getDocs(f.collection(f.db, "sp_park"))
   ]);
+  const PARK_KIND = { board:"今日ひま？ボード", dumb:"バカな挑戦", room:"いま開いてる部屋", event:"月例の集まり" };
+  const park = []; ps.forEach(s => park.push({ id: s.id, ...(s.data() || {}) }));
+  park.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const quests = []; qs.forEach(s => quests.push({ id: s.id, ...(s.data() || {}) }));
   quests.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const votes = []; vs.forEach(s => votes.push({ id: s.id, ...(s.data() || {}) }));
@@ -623,7 +627,8 @@ async function renderSchoolPark() {
     '<div class="card"><h3>いまの状態</h3>'
     + '<div class="row"><span>クエスト</span><span>' + quests.length + ' 本</span></div>'
     + '<div class="row"><span>議題</span><span>' + votes.length + ' 件</span></div>'
-    + '<div class="row"><span>知恵カード</span><span>' + wisdomCount + ' 枚</span></div></div>'
+    + '<div class="row"><span>知恵カード</span><span>' + wisdomCount + ' 枚</span></div>'
+    + '<div class="row"><span>公園に置いたもの</span><span>' + park.length + ' 件</span></div></div>'
 
     + '<div class="card"><h3>クエストを出す</h3>'
     + '<p class="empty" style="text-align:left;margin:0 0 10px">出したあと、題名や予算は動かせません。'
@@ -656,6 +661,33 @@ async function renderSchoolPark() {
         + (q.status !== "CLOSED" ? '<button class="act ok" data-qclose="' + esc(q.id) + '">完了にする</button>' : '')
         + '</span></div>').join("")
       : '<p class="empty">まだクエストがありません。</p>')
+    + '</div>'
+
+    + '<div class="card"><h3>公園に置く</h3>'
+    + '<p class="empty" style="text-align:left;margin:0 0 10px">締切も報酬もない場所。'
+    + '「乗る」はどなたでもできます。</p>'
+    + '<label>種類</label><select id="apKind">'
+    + '<option value="board">今日ひま？ボード</option>'
+    + '<option value="dumb">バカな挑戦</option>'
+    + '<option value="room">いま開いてる部屋</option>'
+    + '<option value="event">月例、リアルの集まり</option></select>'
+    + '<label>題名</label><input id="apTitle" placeholder="例：誰か通話つないで作業しない？">'
+    + '<label>説明</label><textarea id="apBody" rows="2" placeholder="無言でいい。カメラも要らない。"></textarea>'
+    + '<label>いつ（ボードのみ）</label><input id="apWhen" placeholder="例：今夜 20:00〜 ／ いつでも">'
+    + '<label>日付（集まりのみ）</label><input id="apAt" type="date">'
+    + '<label>場所（集まりのみ）</label><input id="apPlace" placeholder="例：代々木公園">'
+    + '<label>ひとこと（挑戦・集まり）</label><input id="apWho" placeholder="例：12人が行く ／ 3日目で心が折れた">'
+    + '<div class="actions"><button class="btn primary" id="apSubmit">公園に置く</button></div></div>'
+
+    + '<div class="card"><h3>公園にあるもの</h3>'
+    + (park.length ? park.map(x =>
+        '<div class="row"><span>' + esc(x.title || "")
+        + '<br><small style="color:var(--muted)">' + (PARK_KIND[x.kind] || x.kind)
+        + (x.hidden ? ' · しまってある' : '') + '</small></span>'
+        + '<span><button class="act ' + (x.hidden ? 'ok' : 'neutral') + '" data-phide="' + esc(x.id) + '" data-pnow="'
+        + (x.hidden ? '1' : '0') + '">' + (x.hidden ? '出す' : 'しまう') + '</button> '
+        + '<button class="act no" data-pdel="' + esc(x.id) + '">消す</button></span></div>').join("")
+      : '<p class="empty">まだ何もありません。</p>')
     + '</div>'
 
     + '<div class="card"><h3>議題と投票の結果</h3>'
@@ -727,6 +759,39 @@ async function renderSchoolPark() {
       if (!confirm("このクエストを完了にします。受付は締め切られます。よろしいですか？")) return;
       try { await f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qclose), { status: "CLOSED", closedAt: Date.now() }); }
       catch (e) { alert("変えられませんでした（" + (e.code || e.message) + "）"); return; }
+      renderSchoolPark();
+    };
+  });
+  $("#apSubmit").onclick = async () => {
+    const v = id => ($("#" + id).value || "").trim();
+    if (!v("apTitle")) { alert("題名を書いてください。"); return; }
+    const kind = v("apKind") || "board";
+    const doc = { kind: kind, title: v("apTitle").slice(0, 120), body: v("apBody").slice(0, 600),
+      by: addr, createdAt: Date.now(), hidden: false };
+    if (kind === "board") doc.when = v("apWhen").slice(0, 60) || "いつでも";
+    if (kind === "event") {
+      const at = v("apAt");
+      if (!at) { alert("集まりの日付を入れてください。"); return; }
+      doc.at = new Date(at + "T00:00:00").getTime();
+      doc.place = v("apPlace").slice(0, 80);
+    }
+    if (kind === "dumb" || kind === "event") doc.who = v("apWho").slice(0, 80);
+    try { await f.addDoc(f.collection(f.db, "sp_park"), doc); }
+    catch (e) { alert("置けませんでした（" + (e.code || e.message) + "）"); return; }
+    renderSchoolPark();
+  };
+  el.querySelectorAll("[data-phide]").forEach(b => {
+    b.onclick = async () => {
+      try { await f.updateDoc(f.doc(f.db, "sp_park", b.dataset.phide), { hidden: b.dataset.pnow !== "1" }); }
+      catch (e) { alert("変えられませんでした（" + (e.code || e.message) + "）"); return; }
+      renderSchoolPark();
+    };
+  });
+  el.querySelectorAll("[data-pdel]").forEach(b => {
+    b.onclick = async () => {
+      if (!confirm("これを消します。元に戻せません。よろしいですか？")) return;
+      try { await f.deleteDoc(f.doc(f.db, "sp_park", b.dataset.pdel)); }
+      catch (e) { alert("消せませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
   });

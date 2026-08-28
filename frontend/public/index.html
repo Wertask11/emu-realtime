@@ -16196,6 +16196,87 @@ window.spDaoLoadTreasury = async function (app) {
   }, noTreasury: list.length === 0 });
 };
 
+/* ═══════════════════════════════════════
+   公園
+
+   締切も報酬もない場所。4種類を sp_park に入れ、kind で分ける。
+     board … 今日ひま？ボード
+     dumb  … バカな挑戦
+     room  … いま開いてる部屋
+     event … 月例、リアルの集まり
+
+   「乗る」は joins/{パスポート番号}。文書のIDが誰かを表すので、
+   同じ人が二重に乗ることはできない。
+═══════════════════════════════════════ */
+window.spDaoLoadPark = async function (app) {
+  if (!app || typeof app.setState !== 'function') return;
+  if (!window.db || !window.fbLib) return;
+  const fb = window.fbLib;
+  const p = await spPassportLoad();
+  const mine = p ? p.addr.toLowerCase() : '';
+
+  let items = [];
+  try {
+    const snap = await fb.getDocs(fb.collection(window.db, 'sp_park'));
+    snap.forEach(function (s) { items.push({ id: s.id, ...(s.data() || {}) }); });
+  } catch (e) {
+    console.warn('公園を読めませんでした:', e && (e.message || e));
+    return;
+  }
+  items = items.filter(function (i) { return !i.hidden; })
+               .sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+
+  const board = [], dumb = [], rooms = [], events = [];
+  for (const i of items) {
+    let names = [], on = false;
+    if (i.kind === 'board' || i.kind === 'room') {
+      try {
+        const js = await fb.getDocs(fb.collection(window.db, 'sp_park', i.id, 'joins'));
+        js.forEach(function (j) {
+          names.push((j.data() || {}).name || _spShortAddr(j.id));
+          if (mine && j.id.toLowerCase() === mine) on = true;
+        });
+      } catch (e) {}
+    }
+    if (i.kind === 'board') {
+      board.push({ id: i.id, when: i.when || 'いつでも', title: i.title || '', body: i.body || '',
+        who: names.length ? (names.join('・') + ' が乗ってる') : 'まだ誰も乗っていない',
+        label: on ? '✓ 乗ってる' : '乗る',
+        bg: on ? '#C2703D' : 'transparent', fg: on ? '#F4F1EA' : '#C2703D',
+        join: (function (id) { return function () { window.spParkJoin(id, app); }; })(i.id) });
+    } else if (i.kind === 'dumb') {
+      dumb.push({ title: i.title || '', body: i.body || '', who: i.who || '' });
+    } else if (i.kind === 'room') {
+      rooms.push({ name: i.title || '', who: names.length ? (names.length + '人') : '0人',
+        dot: names.length ? '#0F5C3F' : 'rgba(20,19,16,.2)' });
+    } else if (i.kind === 'event') {
+      const d = i.at ? new Date(i.at) : null;
+      events.push({ month: d ? ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getMonth()] : '',
+        day: d ? String(d.getDate()).padStart(2, '0') : '',
+        title: i.title || '', body: i.body || '', place: i.place || '', who: i.who || '' });
+    }
+  }
+  app.setState({ board: board, dumb: dumb, rooms: rooms, events: events,
+    noPark: items.length === 0 });
+};
+
+/* ボードや部屋に乗る／降りる */
+window.spParkJoin = async function (itemId, app) {
+  const p = await spPassportLoad();
+  if (!p) { alert('乗るにはログインが必要です。'); return; }
+  const fb = window.fbLib;
+  const ref = fb.doc(window.db, 'sp_park', itemId, 'joins', p.addr);
+  try {
+    const cur = await fb.getDoc(ref);
+    if (cur.exists()) { if (!confirm('降りますか？')) return; await fb.deleteDoc(ref); }
+    else { await fb.setDoc(ref, { name: p.name, at: Date.now() }); }
+  } catch (e) {
+    alert('うまくいきませんでした。もう一度お試しください。');
+    return;
+  }
+  await window.spDaoLoadPark(app);
+};
+
 /* SchoolPark の枠から「自分は誰か」を聞かれたときに答える。
    枠の中は作り物の名前を持たなくなったので、ここから渡す。
    まだ分からないうちは、枠の中の初期値（ゲスト）のままにしておく。 */
