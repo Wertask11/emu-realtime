@@ -69,10 +69,10 @@ html, body                 { height: 100%; }
           <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:#D0E2BE">¥{{ treasury.total }}</div>
         </div>
         <div onClick="{{ openPassport }}" title="SchoolPark パスポートを見る" style="display:flex; align-items:center; gap:10px; padding:4px 8px 6px; margin:0 -8px; border-radius:8px; cursor:pointer" style-hover="background:rgba(244,241,234,.08)">
-          <div style="width:32px; height:32px; border-radius:50%; background:#0F5C3F; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700">彩</div>
+          <div style="width:32px; height:32px; border-radius:50%; background:#0F5C3F; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700">{{ me.initial }}</div>
           <div style="display:flex; flex-direction:column; gap:2px">
-            <div style="font-size:13px; font-weight:500">あやか</div>
-            <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.1em; color:#D0E2BE">WISDOM 14 · クエスト 6</div>
+            <div style="font-size:13px; font-weight:500">{{ me.name }}</div>
+            <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.1em; color:#D0E2BE">{{ me.line }}</div>
           </div>
         </div>
       </div>
@@ -645,43 +645,13 @@ DCLogic.prototype.setState = function (upd) {
   schedule();
 };
 
-const EXPS = [
-  {id:'e1', title:'「先に名乗る」を1週間、初対面20人でやってみる', hypothesis:'関係構築は情報量ではなく先出しの順番で決まる、という説を自分の現場で確かめる。', knowledge:'Emu／人間関係の設計 第3回「返報性」', action:'初対面の場で必ず自分から名乗り、相手より先に自己開示を1つ出す。', measure:'20回のうち、相手から質問が返ってきた率を記録する。', owner:'あやか', due:'5/22', commits:7, need:5, budget:'40,000', status:'RUNNING', progress:'62%', people:['あやか','けんと','みお','しゅん','りな','たく','ゆい'], logCount:8},
-  {id:'e2', title:'値付けを2倍にして、断られ方を観察する', hypothesis:'価格は価値ではなく自信の表明。断られ方の質が変わるはず。', knowledge:'外部：価格戦略の本／第4章', action:'次の3件の見積もりを現行の2倍で出す。', measure:'断られた理由を逐語で記録し、金額理由か価値理由かを分類。', owner:'けんと', due:'5/30', commits:4, need:5, budget:'25,000', status:'OPEN', progress:'80%', people:['けんと','みお','たく','ゆい'], logCount:3},
-  {id:'e3', title:'朝の30分だけ、通知を全部切って作る', hypothesis:'集中は時間の長さではなく中断の数で決まる。', knowledge:'Emu／集中の科学 第1回', action:'14日間、起床後30分は通知オフで手を動かす。', measure:'完了タスク数と主観的満足度を毎朝記録。', owner:'みお', due:'6/04', commits:12, need:5, budget:'30,000', status:'RUNNING', progress:'45%', people:['みお','あやか','しゅん','りな','たく'], logCount:11},
-  {id:'e4', title:'断り文句を3パターン用意して、1週間で全部使う', hypothesis:'断れないのは意志ではなく在庫の問題。', knowledge:'外部：交渉の型／勉強会メモ', action:'「今は無理」「条件付き」「代替案」の3型を事前に書き、実地で使う。', measure:'使えた回数と、関係が悪化したかの自己評価。', owner:'しゅん', due:'5/26', commits:9, need:5, budget:'20,000', status:'RUNNING', progress:'70%', people:['しゅん','けんと','ゆい','りな'], logCount:6},
-  {id:'e5', title:'学んだ翌日に「誰かに説明する」を必ず入れる', hypothesis:'定着率は復習ではなく出力で決まる。', knowledge:'Emu／学習設計 第2回', action:'Emu受講の翌日、必ず1人に5分で説明する。', measure:'2週間後に同内容を書き出せるかテスト。', owner:'りな', due:'6/10', commits:3, need:5, budget:'18,000', status:'OPEN', progress:'60%', people:['りな','みお','あやか'], logCount:2},
-  {id:'e6', title:'1日1回、知らない人に小さく頼む', hypothesis:'頼む力は筋肉。回数でしか増えない。', knowledge:'外部：依頼と信頼／podcast', action:'14日間、毎日1回だけ他人に小さな依頼をする。', measure:'受諾率と、依頼時の緊張度の推移。', owner:'たく', due:'5/18', commits:6, need:5, budget:'15,000', status:'CLOSED', progress:'100%', people:['たく','しゅん','けんと'], logCount:14}
-];
+const EXPS = [];
 
-const WISDOM = [
-  {id:'w1', tag:'RELATIONSHIP', insight:'先に名乗ると、相手は情報ではなく安心を返してくる。', from:'Emu／人間関係の設計 第3回', experiment:'初対面20人で先出し自己開示', author:'あやか', uses:23},
-  {id:'w2', tag:'MONEY', insight:'値段で断られたのは1件だけ。あとは全部、伝え方で断られていた。', from:'外部：価格戦略の本', experiment:'見積もりを2倍で3件出す', author:'けんと', uses:17},
-  {id:'w3', tag:'FOCUS', insight:'集中が切れるのは疲れたときではなく、次の一手が決まっていないとき。', from:'Emu／集中の科学 第1回', experiment:'朝30分の通知オフを14日', author:'みお', uses:31},
-  {id:'w4', tag:'NEGOTIATION', insight:'断り文句は「その場で考えるもの」ではなく「持ち歩くもの」。', from:'外部：交渉の型', experiment:'3パターンを1週間で使い切る', author:'しゅん', uses:12},
-  {id:'w5', tag:'LEARNING', insight:'説明できなかった箇所が、自分が本当に分かっていない場所の地図になる。', from:'Emu／学習設計 第2回', experiment:'翌日に人へ5分で説明する', author:'りな', uses:26},
-  {id:'w6', tag:'COURAGE', insight:'頼むのが怖いのではなく、断られた後の沈黙が怖いだけだった。', from:'外部：依頼と信頼', experiment:'1日1回、知らない人に頼む', author:'たく', uses:9},
-  {id:'w7', tag:'FOCUS', insight:'やることを減らすより、始める時刻を固定するほうが早く効く。', from:'Emu／習慣の作り方 第1回', experiment:'起床後の行動を1つに固定', author:'ゆい', uses:14},
-  {id:'w8', tag:'MONEY', insight:'記録していない支出は、記憶の中では必ず半額になっている。', from:'外部：家計の本', experiment:'30日間レシート全記録', author:'あやか', uses:11},
-  {id:'w9', tag:'RELATIONSHIP', insight:'相談は答えをもらう行為ではなく、相手を巻き込む行為だった。', from:'Emu／人間関係の設計 第5回', experiment:'週1で誰かに相談する', author:'みお', uses:8}
-];
+const WISDOM = [];
 
-const LOGS = [
-  {id:'l1', author:'みお', initial:'み', time:'2時間前', exp:'朝の30分だけ、通知を全部切って作る', kind:'つまずいた', body:'6日目で崩れた。通知を切っても、切ったこと自体が気になって結局スマホを見る。物理的に別の部屋に置いたら解決したので、意志ではなく距離の問題だった。', claps:14, replies:3},
-  {id:'l2', author:'あやか', initial:'彩', time:'5時間前', exp:'「先に名乗る」を1週間、初対面20人でやってみる', kind:'気づいた', body:'12人目。先に名乗ると相手の情報が増えるんじゃなくて、相手の表情が先にゆるむ。順番の効果は情報量じゃなく安心らしい。', claps:22, replies:5},
-  {id:'l3', author:'しゅん', initial:'俊', time:'昨日', exp:'断り文句を3パターン用意して、1週間で全部使う', kind:'やってみた', body:'「代替案」型が一番使いやすい。断ってるのに相手が礼を言ってくる場面が2回。断りは拒否じゃなく提案の一種として設計できる。', claps:18, replies:2},
-  {id:'l4', author:'けんと', initial:'健', time:'昨日', exp:'値付けを2倍にして、断られ方を観察する', kind:'つまずいた', body:'1件目、出した瞬間に沈黙。怖くて自分から値引きを言ってしまった。失敗というより、自分の耐えられなさが計測できた。', claps:31, replies:7},
-  {id:'l5', author:'りな', initial:'莉', time:'2日前', exp:'学んだ翌日に「誰かに説明する」を必ず入れる', kind:'気づいた', body:'説明相手が「で、それ何に使うの」と聞いてきて答えられなかった。使い道のない知識は、やっぱり残らない。', claps:26, replies:4}
-];
+const LOGS = [];
 
-const MEMBERS = [
-  {name:'あやか', initial:'彩', role:'コアメンバー / 進行', wisdom:14, done:'6/6', cited:52, share:'38,000'},
-  {name:'みお', initial:'み', role:'コアメンバー', wisdom:11, done:'5/6', cited:47, share:'32,000'},
-  {name:'けんと', initial:'健', role:'メンバー', wisdom:9, done:'4/5', cited:29, share:'24,000'},
-  {name:'しゅん', initial:'俊', role:'メンバー', wisdom:7, done:'4/4', cited:21, share:'21,000'},
-  {name:'りな', initial:'莉', role:'メンバー', wisdom:6, done:'3/5', cited:26, share:'16,000'},
-  {name:'たく', initial:'拓', role:'新規', wisdom:2, done:'1/3', cited:9, share:'6,000'}
-];
+const MEMBERS = [];
 
 const STEPS = [
   {label:'元の知識', hint:'どこで得た何か', title:'その知識は、どこから来た？', desc:'Emuの講座でも、本でも、人から聞いた話でもいい。出どころが書けない知識は、まだ知恵にできない。',
@@ -698,31 +668,11 @@ const STEPS = [
    note:'公開すると、5人が受けた時点で成立。成立したクエストにトレジャリーから予算が付きます。'}
 ];
 
-const BOARD = [
-  {id:'b1', when:'今夜 20:00〜', title:'誰か通話つないで作業しない？', note:'無言でいい。カメラも要らない。抜けるのも自由。', who:'あやか が声かけ · みお, しゅん が乗ってる'},
-  {id:'b2', when:'土曜 13:00〜', title:'神保町で古本あさり、その後だらだら', note:'買った本の自慢会つき。手ぶら参加OK。', who:'けんと が声かけ · りな が乗ってる'},
-  {id:'b3', when:'いつでも', title:'献立が決まらないので一緒に決めてほしい', note:'心底どうでもいい相談。だからこそ公園向き。', who:'ゆい が声かけ'}
-];
-const DUMB = [
-  {title:'1週間、敬語を一切使わずに生活する', body:'礼儀の正体を知りたいという建前で、たぶんただ怒られる。経過は全部ログに残す。', who:'しゅん · 見物人 8人'},
-  {title:'コンビニのおにぎりを全種類、格付けする', body:'誰の役にも立たない。ただし本気で採点表を作る。', who:'たく · 見物人 14人'},
-  {title:'1日だけ、全部の判断をサイコロで決める', body:'意思決定の疲れがどこから来るのか、身体で知る回。', who:'みお · 見物人 6人'}
-];
-const ROOMS = [
-  {name:'もくもく作業（無言可）', who:'3人 · 2時間経過', dot:'#0F5C3F'},
-  {name:'雑な相談ある人どうぞ', who:'2人 · さっき開いた', dot:'#0F5C3F'},
-  {name:'ゲーム部屋（今日は協力系）', who:'4人 · 満員に近い', dot:'#C2703D'},
-  {name:'深夜の読書ラジオ', who:'22:00に開く予定', dot:'#9A9484'}
-];
-const EVENTS = [
-  {month:'JUN', day:'08', title:'月例あつまり：持ち寄り知恵市', body:'今月ライブラリに入った知恵を、書いた本人が5分で話す。あとは飲みながらだらだら。', place:'渋谷・古民家スペース', who:'12人が行く'},
-  {month:'JUN', day:'22', title:'公園でほんとうにピクニック', body:'企画なし。名前どおりのやつを一度やっておきたい、というだけの回。', place:'代々木公園', who:'7人が行く'}
-];
-const PEEKS = [
-  {id:'e2', title:'値付けを2倍にして、断られ方を観察する', owner:'けんと', watchers:9},
-  {id:'e3', title:'朝の30分だけ、通知を全部切って作る', owner:'みお', watchers:16},
-  {id:'e6', title:'1日1回、知らない人に小さく頼む', owner:'たく', watchers:5}
-];
+const BOARD = [];
+const DUMB = [];
+const ROOMS = [];
+const EVENTS = [];
+const PEEKS = [];
 
 const LAYOUTS = {
   pc: {frameW:1440, frameH:900, scrollY:'auto', frameR:'14px', sidebar:'flex', bottom:'none', pad:'36px 40px 80px', headPad:'22px 40px', headSize:'22px',
@@ -737,8 +687,8 @@ const LAYOUTS = {
 };
 
 class Component extends DCLogic {
-  state = { screen:'home', expId:'e1', filter:'すべて', step:0, committed:{e1:true, e3:true}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, vw: window.innerWidth, vh: window.innerHeight, joined:{b1:true} };
-  componentDidMount(){ this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
+  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
+  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
   scroller = React.createRef();
@@ -779,20 +729,20 @@ class Component extends DCLogic {
     const hasSidebar = base.sidebar !== 'none';
     const sidebarOpen = hasSidebar && s.sidebarOpen;
     const L = {...base, sidebarShow:sidebarOpen ? 'flex' : 'none', sidebarToggle:hasSidebar && !sidebarOpen ? 'flex' : 'none', w: '100%', h: '100%', scale: 'none', boxH: '100vh', frameR: '0'};
-    const navDefs = [['home','01','今週の広場'],['park','02','公園'],['experiments','03',W+'一覧'],['logs','04',W+'ログ'],['library','05','知恵ライブラリ'],['members','06','メンバー・貢献'],['treasury','07','トレジャリー']];
+    const navDefs = [['home','01','今週の広場'],['park','02','公園'],['experiments','03',W+'一覧'],['logs','04','ギルド'],['library','05','知恵ライブラリ'],['members','06','メンバー・貢献'],['treasury','07','トレジャリー']];
     const heads = {
-      home:['THE SQUARE / 今週の広場','おはよう、あやか'],
+      home:['THE SQUARE / 今週の広場','おはよう、' + s.me.name],
       park:['THE PARK / 公園','締切のないほう'],
       experiments:['QUESTS','走っている'+W+'・募集中の'+W],
       detail:['QUEST', W+'の詳細'],
-      logs:['LOGS', W+'ログ・フィード'],
+      logs:['GUILD','ギルド'],
       library:['WISDOM LIBRARY','知恵ライブラリ'],
       members:['MEMBERS','メンバーと貢献度'],
       treasury:['TREASURY','トレジャリーと分配'],
       propose:['NEW QUEST', W+'を提案する']
     };
     const exps = EXPS.map(e => this.decorate(e));
-    const cur = exps.find(e => e.id === s.expId) || exps[0];
+    const cur = exps.find(e => e.id === s.expId) || exps[0] || {};
     const filters = ['すべて','募集中','進行中','完了'].map(f => ({
       label:f, go:()=>this.setState({filter:f}),
       bg: s.filter===f ? '#141310' : 'transparent', fg: s.filter===f ? '#F4F1EA' : '#3B382F'}));
@@ -804,6 +754,7 @@ class Component extends DCLogic {
     return {
       L, word:W, wordShort:'経験', scrollRef:this.scroller,
       toggleSidebar:this.toggleSidebar,
+      me:s.me,
       openPassport:this.openPassport,
       askReizo:this.askReizo,
       goElevator:this.goElevator,
@@ -822,7 +773,7 @@ class Component extends DCLogic {
       nav: navDefs.map(([id,num,label]) => ({num, label, go:this.go(id),
         bg: s.screen===id ? '#0F5C3F' : 'transparent',
         fg: s.screen===id ? '#F4F1EA' : 'rgba(244,241,234,.72)'})),
-      tabs: [['home','01','広場'],['park','02','公園'],['experiments','03',W],['logs','04','ログ'],['library','05','知恵'],['members','06','メンバー'],['treasury','07','会計']].map(([id,n,label]) => ({
+      tabs: [['home','01','広場'],['park','02','公園'],['experiments','03',W],['logs','04','ギルド'],['library','05','知恵'],['members','06','メンバー'],['treasury','07','会計']].map(([id,n,label]) => ({
         n, label, go:this.go(id),
         bg: s.screen===id ? '#0F5C3F' : 'transparent',
         fg: s.screen===id ? '#F4F1EA' : 'rgba(244,241,234,.6)',
@@ -832,14 +783,10 @@ class Component extends DCLogic {
       isLogs:s.screen==='logs', isLibrary:s.screen==='library', isMembers:s.screen==='members',
       isTreasury:s.screen==='treasury', isPropose:s.screen==='propose',
       goPropose:this.go('propose'), goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
-      stats: {newWisdom:3, running:4, people:28, myCommit:Object.values(s.committed).filter(Boolean).length, due:2, wisdomTotal:WISDOM.length+40, payout:'¥24,000', citations:412},
+      stats: {newWisdom:0, running:exps.filter(e => e.status==='RUNNING').length, people:0, myCommit:Object.values(s.committed).filter(Boolean).length, due:0, wisdomTotal:WISDOM.length, payout:'¥0', citations:0},
       freshWisdom: WISDOM.slice(0,3).map(w => ({...w, open:this.go('library')})),
       runningExps: exps.filter(e => e.status==='RUNNING').slice(0,3),
-      todos: [
-        {label:'「先に名乗る」の中間ログを書く', meta:'締切まであと2日'},
-        {label:'みおのログに返信する', meta:'つまずき報告 · 3件未読'},
-        {label:'知恵カードの下書きを一文に削る', meta:'自動生成済み · 1件'}
-      ],
+      todos: [],
       board: BOARD.map(b => { const on = !!s.joined[b.id]; return {...b, join:this.joinBoard(b.id),
         label: on ? '✓ 乗ってる' : '乗る', bg: on ? '#C2703D' : 'transparent', fg: on ? '#F4F1EA' : '#C2703D'}; }),
       dumb: DUMB, rooms: ROOMS, events: EVENTS,
@@ -849,15 +796,9 @@ class Component extends DCLogic {
       logs, wisdom: WISDOM,
       tags: ['すべて','RELATIONSHIP','MONEY','FOCUS','LEARNING','NEGOTIATION','COURAGE'],
       members: MEMBERS,
-      treasury: {total:'1,284,000', in:'320,000', out:'186,000',
+      treasury: {total:'0', in:'0', out:'0',
         alloc:[{label:W+'予算',pct:'52%'},{label:'完走メンバーへの分配',pct:'26%'},{label:'知恵の引用インセンティブ',pct:'14%'},{label:'運営プール',pct:'8%'}],
-        txs:[
-          {label:'「朝30分の通知オフ」に予算配分', date:'5/07', kind:W+'予算', amount:'-30,000', color:'#8A8474'},
-          {label:'たく：完走の分配', date:'5/06', kind:'分配', amount:'-6,000', color:'#8A8474'},
-          {label:'Emu受講料からの拠出', date:'5/05', kind:'流入', amount:'+180,000', color:'#0F5C3F'},
-          {label:'知恵カード引用インセンティブ（4月分）', date:'5/01', kind:'分配', amount:'-42,000', color:'#8A8474'},
-          {label:'外部ワークショップ売上', date:'4/28', kind:'流入', amount:'+140,000', color:'#0F5C3F'}
-        ]},
+        txs:[]},
       steps: STEPS.map((st,i) => ({num:'0'+(i+1), label:st.label, hint:st.hint, go:()=>this.setState({step:i}),
         bg: s.step===i ? '#E7E2D6' : 'transparent',
         fg: s.step===i ? '#141310' : '#6E695C',

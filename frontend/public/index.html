@@ -15430,6 +15430,28 @@ function _sppRow(label, value) {
 
 function closeSpPassport() { document.body.classList.remove('sp-passport-open'); }
 
+/* SchoolPark の枠から「自分は誰か」を聞かれたときに答える。
+   枠の中は作り物の名前を持たなくなったので、ここから渡す。
+   まだ分からないうちは、枠の中の初期値（ゲスト）のままにしておく。 */
+window.spDaoWhoAmI = async function (app) {
+  if (!app || typeof app.setState !== 'function') return;
+  let me = null;
+  try { me = await emuMyIdentity(); } catch (e) {}
+  if (!me) return;
+  let d = {};
+  try {
+    const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid));
+    if (snap.exists()) d = snap.data() || {};
+  } catch (e) {}
+  const name = d.displayName || 'あなた';
+  app.setState({ me: {
+    name: name,
+    initial: name.slice(0, 1),
+    /* 数はまだ本物の記録が無い。0のまま出す（作り物は出さない）。 */
+    line: 'WISDOM 0 · クエスト 0'
+  }});
+};
+
 window.sppCopyAddress = function (addr) {
   const btn = document.getElementById('sppCopyBtn');
   const done = function () { if (btn) { btn.textContent = 'コピーしました'; setTimeout(function () { btn.textContent = '番号をコピー'; }, 1600); } };
