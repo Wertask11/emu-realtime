@@ -3091,28 +3091,18 @@ body.emu-ichinichi-open #openPostFormButton { display:none !important; }
 #spDaoPage { display:none; position:fixed; inset:0; z-index:1500; background:#D0E2BE; }
 body.sp-dao-open #spDaoPage { display:block; }
 #spDaoFrame { width:100%; height:100%; border:0; display:block; }
-/* 戻るボタンは右下に置く。
-   左上には SchoolPark 側の「☰」と、サイドバーを開いたときのロゴがあり、
-   左下にはサイドバーのトレジャリー表示がある。どちらも隠してはいけない。 */
-#spDaoBack {
-  position:fixed; right:14px; bottom:14px; z-index:1510;
-  background:#141310; color:#F4F1EA; border:0; border-radius:999px;
-  padding:9px 16px; font-size:13px; font-family:inherit; cursor:pointer;
-  box-shadow:0 8px 22px -8px rgba(0,0,0,.55); display:none;
-  opacity:.92; transition:opacity .15s ease;
-}
-#spDaoBack:hover { opacity:1; }
-body.sp-dao-open #spDaoBack { display:block; }
-/* スマホ幅では SchoolPark 側が下ナビを出す。その高さは spDaoFitBack() が
-   実際に測って持ち上げる（決め打ちにすると、余白の分だけずれて重なる）。 */
-@media (max-width: 699px) {
-  #spDaoBack { padding:8px 14px; font-size:12px; }
-}
-/* SchoolPark を見ているあいだは、お問い合わせの浮きボタンを引っ込める。
-   左下でサイドバーのトレジャリー表示に重なるため。
-   （SchoolParkマップや議論ルームでも同じことをしている） */
+/* SchoolPark 表示中のお問い合わせボタン。
+   左下の定位置だとサイドバーのトレジャリー表示に重なるので、いったん引っ込め、
+   サイドバーが開いているときだけ、その中の空いているところに出す。
+   出す位置（left / bottom）は spDaoPlaceContact() が実際に測って入れる。 */
 body.sp-dao-open #emu-contact-btn,
 body.sp-dao-open #emu-contact-label { display:none !important; }
+body.sp-dao-open.sp-dao-sidebar #emu-contact-btn {
+  display:flex !important;
+  width:44px; height:44px; font-size:17px;
+  box-shadow:0 6px 18px -6px rgba(0,0,0,.55);
+  animation:none;   /* サイドバーの開け閉めのたびに跳ねないように */
+}
 body.emu-knowledge-open > #mainApp > .container { display:none; }
 body.emu-knowledge-open > #mainApp > #emuTodayHome { display:block; }
 body.emu-knowledge-open #emuTodayDashboard,
@@ -14023,8 +14013,11 @@ function _emuEnsureAppVisible() {
   const app = document.getElementById('mainApp');
   const footer = document.getElementById('siteFooter');
   /* SchoolPark は position:fixed の全画面（z-index:1500）なので、
-     開いたままだと Emu がその下に隠れる。念のためここで閉じる。 */
-  document.body.classList.remove('sp-dao-open');
+     開いたままだと Emu がその下に隠れる。念のためここで閉じる。
+     サイドバーに寄せていたお問い合わせボタンも定位置に戻す。 */
+  document.body.classList.remove('sp-dao-open', 'sp-dao-sidebar');
+  const cbtn = document.getElementById('emu-contact-btn');
+  if (cbtn) { cbtn.style.left = ''; cbtn.style.bottom = ''; }
   if (hub) hub.style.display = 'none';
   if (app) app.style.display = 'block';
   if (footer) footer.style.display = 'block';
@@ -15254,46 +15247,62 @@ function openSpDao() {
   if (!page || !frame) return;
   if (!frame.getAttribute('src')) {
     frame.src = '/schoolpark/dao.html';
-    frame.addEventListener('load', spDaoFitBack);
+    frame.addEventListener('load', spDaoWatchRender);
   }
   document.body.classList.add('sp-dao-open');
   const hub = document.getElementById('chesHubScreen');
   if (hub) hub.style.display = 'none';
   spDaoWatchSize();
-  spDaoFitBack();
+  spDaoWatchRender();
 }
 
-/* 戻るボタンが SchoolPark の下ナビに重ならないようにする。
-   下ナビはスマホ幅のときだけ出て、高さは中身と余白で決まる。
-   決め打ちの数字にすると余白の分だけずれるので、実際に測る。
-   同じ場所のファイルなので中を読める。読めなければ既定の位置のままにする。 */
-function spDaoFitBack() {
-  const back = document.getElementById('spDaoBack');
+/* お問い合わせボタンを、SchoolPark のサイドバーの中に置く。
+   サイドバーが開いているときだけ出す（閉じていると置き場所がないため）。
+
+   サイドバーの作りは「上のロゴ／真ん中のメニュー／下のトレジャリー」の3段。
+   いちばん下の段の上に置く。位置は決め打ちにせず実際に測る。 */
+function spDaoPlaceContact() {
+  const btn = document.getElementById('emu-contact-btn');
   const frame = document.getElementById('spDaoFrame');
-  if (!back || !frame) return;
-  let lift = 14;
+  if (!btn || !frame) return;
+  let placed = false;
   try {
     const d = frame.contentDocument, w = frame.contentWindow;
-    if (d && w) {
-      const nav = Array.prototype.find.call(d.querySelectorAll('div'), function (el) {
-        const s = w.getComputedStyle(el), r = el.getBoundingClientRect();
-        return s.position === 'sticky' && s.bottom === '0px' && r.height > 40 && r.width > 200;
-      });
-      /* 高さではなく「画面の下から下ナビの上端まで」を測る。
-         下ナビ自体が少し浮いていることがあり、高さだけだとその分ずれる。 */
-      if (nav) lift = Math.round(w.innerHeight - nav.getBoundingClientRect().top) + 12;
+    const root = d && d.getElementById('dao-root');
+    const side = root && root.children[0] && root.children[0].children[0]
+              && root.children[0].children[0].children[0]
+              && root.children[0].children[0].children[0].children[0];
+    if (side && w.getComputedStyle(side).display !== 'none' && side.children.length >= 2) {
+      const foot = side.children[side.children.length - 1].getBoundingClientRect();
+      btn.style.left = '16px';
+      btn.style.bottom = (Math.round(w.innerHeight - foot.top) + 14) + 'px';
+      placed = true;
     }
-  } catch (e) { /* 読めないときは既定のまま */ }
-  back.style.bottom = lift + 'px';
+  } catch (e) { /* 読めないときは出さない */ }
+  document.body.classList.toggle('sp-dao-sidebar', placed);
+  if (!placed) { btn.style.left = ''; btn.style.bottom = ''; }
 }
-/* 画面の大きさが変わると SchoolPark 側が作り直され、下ナビが出たり消えたりする。
-   作り直しが済んでから測り直す。 */
+
+/* SchoolPark は状態が変わるたび中身を作り直す（dao-root の子を入れ替える）。
+   その入れ替わりを見て、サイドバーの開け閉めに追いつく。
+   画面を描いていない環境でも届くよう、rAF や resize ではなく DOM の変化を見る。 */
+function spDaoWatchRender() {
+  spDaoPlaceContact();
+  if (window._spDaoMO) return;
+  const frame = document.getElementById('spDaoFrame');
+  const d = frame && frame.contentDocument;
+  const root = d && d.getElementById('dao-root');
+  if (!root) return;
+  window._spDaoMO = new MutationObserver(spDaoPlaceContact);
+  window._spDaoMO.observe(root, { childList: true });
+}
+
 /* 大きさが変わったときの後始末。
    ① 枠の中に「大きさが変わった」を伝える。
       枠は width:100%/height:100% で親に追従するが、resize を受け取り損ねることがあり、
       そのままだと端末の判定（パソコン／タブレット／スマホ）が古いまま残る。
       実際、834→1280 に広げても tablet のままになった。
-   ② 戻るボタンの位置を測り直す（下ナビが出たり消えたりするため）。 */
+   ② お問い合わせボタンの位置を測り直す。 */
 function spDaoOnResize() {
   if (!document.body.classList.contains('sp-dao-open')) return;
   try {
@@ -15301,7 +15310,7 @@ function spDaoOnResize() {
     if (w) w.dispatchEvent(new w.Event('resize'));
   } catch (e) { /* 読めないときは何もしない */ }
   clearTimeout(window._spDaoFitTimer);
-  window._spDaoFitTimer = setTimeout(spDaoFitBack, 80);
+  window._spDaoFitTimer = setTimeout(spDaoPlaceContact, 80);
 }
 window.addEventListener('resize', spDaoOnResize);
 
@@ -15315,14 +15324,8 @@ function spDaoWatchSize() {
   window._spDaoRO.observe(frame);
 }
 
-function closeSpDao() {
-  document.body.classList.remove('sp-dao-open');
-  if (typeof chesHubShow === 'function') chesHubShow();
-}
-
 /* ログインが終わったあとの着地点。
    以前は CHES ハブ（4ブランドを選ぶ画面）だったが、SchoolPark を先に出す。
-   ハブは SchoolPark の「← メイン画面」からいつでも行ける。
 
    先に chesHubShow() を呼ぶのは、ログイン画面やフッターを片付ける手順が
    そこにまとまっているため。同じ処理の中で続けて openSpDao() が
@@ -20024,8 +20027,7 @@ async function sendEmuFeedback() {
       }
       return;
     }
-    // ログイン後は SchoolPark へ。ハブ（メイン画面）は
-    // SchoolPark の「← メイン画面」から行ける。
+    // ログイン後は SchoolPark へ。
     if (typeof chesLandAfterLogin === "function") {
       chesLandAfterLogin();
       if (typeof _hideSpLoadingOverlay === "function") _hideSpLoadingOverlay();
@@ -20941,7 +20943,6 @@ async function sendEmuFeedback() {
 </script>
 <!-- SchoolPark。親が隠れていても出せるよう、いちばん外側に置く。
      中身は schoolpark/dao.html にそのまま入っている -->
-<button type="button" id="spDaoBack" onclick="closeSpDao()">← メイン画面</button>
 <div id="spDaoPage">
   <iframe id="spDaoFrame" title="SchoolPark" loading="lazy"></iframe>
 </div>
