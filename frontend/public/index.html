@@ -3087,6 +3087,58 @@ body.emu-ichinichi-open #openPostFormButton { display:none !important; }
 }
 /* 知識を読む（固定Emuナビの下に専用ページをiframe表示） */
 #emuKnowledgePage { display:none; }
+/* ── SchoolPark パスポート ──
+   ログインすると作られる CHESアドレスに、名前と居場所を与えたもの。
+   SchoolPark からも Emu からも開くので、どちらの色にも寄せず暗い札にする。 */
+#spPassport { display:none; position:fixed; inset:0; z-index:1800; }
+body.sp-passport-open #spPassport { display:flex; align-items:center; justify-content:center; }
+#spPassport .spp-veil { position:absolute; inset:0; background:rgba(10,9,7,.62); }
+#spPassport .spp-card {
+  position:relative; width:min(420px, calc(100vw - 32px)); max-height:calc(100vh - 48px);
+  overflow-y:auto; background:#141310; color:#F4F1EA; border-radius:16px;
+  padding:26px 24px 22px; box-shadow:0 30px 70px -20px rgba(0,0,0,.7);
+  font-family:'Noto Sans JP',sans-serif;
+  box-sizing:border-box;   /* これが無いと余白の分だけ広がり、スマホで画面いっぱいになる */
+}
+.spp-head { display:flex; align-items:flex-start; gap:12px; margin-bottom:20px; }
+.spp-head-text { flex:1; min-width:0; }
+.spp-kicker { font-size:10px; letter-spacing:.22em; color:#D0E2BE; margin-bottom:6px; }
+.spp-title { font-size:21px; font-weight:800; letter-spacing:.02em; }
+.spp-close {
+  width:32px; height:32px; flex:0 0 32px; border:1px solid rgba(244,241,234,.2);
+  border-radius:7px; background:none; color:#D0E2BE; cursor:pointer; font-size:15px; line-height:1;
+}
+.spp-close:hover { background:rgba(244,241,234,.1); }
+.spp-num {
+  background:#1D1B16; border:1px solid rgba(244,241,234,.14); border-radius:12px;
+  padding:14px 16px; margin-bottom:16px;
+}
+.spp-num-label { font-size:10px; letter-spacing:.2em; color:rgba(244,241,234,.5); margin-bottom:8px; }
+.spp-num-val {
+  font-family:'Courier New',monospace; font-size:13px; line-height:1.7;
+  color:#D0E2BE; word-break:break-all;
+}
+.spp-copy {
+  margin-top:10px; border:1px solid rgba(244,241,234,.22); border-radius:6px;
+  background:none; color:#F4F1EA; font-family:inherit; font-size:12px;
+  padding:7px 12px; cursor:pointer;
+}
+.spp-copy:hover { background:rgba(244,241,234,.1); }
+.spp-row {
+  display:flex; justify-content:space-between; align-items:baseline; gap:14px;
+  padding:11px 2px; border-bottom:1px solid rgba(244,241,234,.1);
+}
+.spp-row:last-of-type { border-bottom:none; }
+.spp-row dt { font-size:12px; color:rgba(244,241,234,.55); }
+.spp-row dd { margin:0; font-size:13px; font-weight:600; text-align:right; word-break:break-all; }
+.spp-note { font-size:11px; line-height:1.9; color:rgba(244,241,234,.5); margin:14px 0 0; }
+.spp-cta {
+  display:block; width:100%; margin-top:16px; border:0; border-radius:8px;
+  background:#0F5C3F; color:#F4F1EA; font-family:inherit; font-size:14px;
+  font-weight:700; padding:13px; cursor:pointer;
+}
+.spp-cta:hover { background:#0A3F2B; }
+
 /* SchoolPark の中から開く小部屋（エレベーターなど）。
    SchoolPark 本体(1500)より手前に出し、閉じると元の画面に戻る。 */
 #spRoomPage { display:none; position:fixed; inset:0; z-index:1700; background:#141310; }
@@ -3258,7 +3310,11 @@ body.emu-play-open #openPostFormButton { display:none !important; }
 .esn-foot-row { display:flex; justify-content:space-between; align-items:baseline; }
 .esn-foot-label { font-size:10px; letter-spacing:.2em; color:#a49b8d; }
 .esn-foot-val { font-size:15px; font-weight:600; color:#f08300; }
-.esn-user { display:flex; align-items:center; gap:10px; padding-top:4px; min-width:0; }
+.esn-user {
+  display:flex; align-items:center; gap:10px; padding:4px 6px 6px; min-width:0;
+  margin:0 -6px; border-radius:8px; cursor:pointer;
+}
+.esn-user:hover { background:#f6f3ee; }
 .esn-avatar {
   width:32px; height:32px; flex:0 0 32px; border-radius:50%;
   background:#f08300; color:#fff; font-size:13px; font-weight:700;
@@ -4477,7 +4533,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <span class="esn-foot-label">EMUER</span>
       <span class="esn-foot-val" id="esnBalance">0</span>
     </div>
-    <div class="esn-user">
+    <div class="esn-user" role="button" tabindex="0" title="SchoolPark パスポートを見る"
+         onclick="openSpPassport()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSpPassport();}">
       <span class="esn-avatar" id="esnAvatar">–</span>
       <span class="esn-user-text">
         <b id="esnUserName">ゲスト</b>
@@ -15340,6 +15397,97 @@ function openSpDao() {
   spDaoWatchRender();
 }
 
+/* ═══════════════════════════════════════
+   SchoolPark パスポート
+
+   ログインすると CHESアドレスが作られる。これは uid から決まる値で、
+   同じ人には必ず同じ、別の人には必ず別のものになる。
+   ches_wallets はそのアドレスを作ることしか許していないので、
+   同じアドレスを2人が持つことはできない。
+   それを「パスポート」として見える形にしたもの。
+
+   ここで新しく作るものは無い。読みに行くと、まだ記録が無い人には
+   emuMyIdentity() がその場で作る（前からある仕組み）。
+═══════════════════════════════════════ */
+function _sppProviderLabel(provider, uid) {
+  const p = String(provider || '').toLowerCase();
+  if (String(uid || '').indexOf('wallet:') === 0) return 'ウォレット';
+  if (p.indexOf('line') >= 0) return 'LINE';
+  if (p.indexOf('google') >= 0) return 'Google';
+  if (p === 'password' || p.indexOf('email') >= 0) return 'メール';
+  if (p.indexOf('wallet') >= 0) return 'ウォレット';
+  return '不明';
+}
+function _sppDate(ms) {
+  if (!ms) return '—';
+  const d = new Date(Number(ms));
+  if (isNaN(d.getTime())) return '—';
+  return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+}
+function _sppRow(label, value) {
+  return '<div class="spp-row"><dt>' + label + '</dt><dd>' + escapeHtml(String(value)) + '</dd></div>';
+}
+
+function closeSpPassport() { document.body.classList.remove('sp-passport-open'); }
+
+window.sppCopyAddress = function (addr) {
+  const btn = document.getElementById('sppCopyBtn');
+  const done = function () { if (btn) { btn.textContent = 'コピーしました'; setTimeout(function () { btn.textContent = '番号をコピー'; }, 1600); } };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(addr).then(done, function () {}); return; }
+  } catch (e) {}
+  /* clipboard が使えない場所（古い端末や http）向けの逃げ道 */
+  try {
+    const t = document.createElement('textarea');
+    t.value = addr; t.style.position = 'fixed'; t.style.opacity = '0';
+    document.body.appendChild(t); t.select(); document.execCommand('copy');
+    document.body.removeChild(t); done();
+  } catch (e) {}
+};
+
+async function openSpPassport() {
+  const body = document.getElementById('sppBody');
+  if (!body) return;
+  document.body.classList.add('sp-passport-open');
+  body.innerHTML = '<p class="spp-note">読み込んでいます…</p>';
+
+  let me = null;
+  try { me = await emuMyIdentity(); } catch (e) {}
+  if (!me) {
+    body.innerHTML =
+      '<p class="spp-note">パスポートはログインすると作られます。<br>'
+      + 'LINE・Google・メール・ウォレットのどれで入っても、あなたの番号は同じひとつです。</p>'
+      + '<button type="button" class="spp-cta" onclick="closeSpPassport(); if (typeof restoreLoginScreen===\'function\') restoreLoginScreen();">ログインして作る</button>';
+    return;
+  }
+
+  /* 発行日・入り方・会員の区分は記録そのものから読む */
+  let d = {};
+  try {
+    const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid));
+    if (snap.exists()) d = snap.data() || {};
+  } catch (e) { /* 読めなくても番号だけは出す */ }
+
+  const addr = me.ches || me.wallet;
+  const name = d.displayName || (window.emuAccountName && window.emuAccountName.textContent) || 'ゲスト';
+  const tier = (d.membership && d.membership.tier) || 'free';
+  const tierLabel = { free: '見学（無料）', light: 'Emu light', plus: 'Emu plus', pro: 'Emu pro' }[tier] || tier;
+
+  body.innerHTML =
+    '<div class="spp-num">'
+    + '<div class="spp-num-label">PASSPORT NO.</div>'
+    + '<div class="spp-num-val">' + escapeHtml(addr) + '</div>'
+    + '<button type="button" class="spp-copy" id="sppCopyBtn" onclick="sppCopyAddress(\'' + escapeHtml(addr) + '\')">番号をコピー</button>'
+    + '</div>'
+    + _sppRow('名前', name)
+    + _sppRow('入った日', _sppDate(d.createdAt))
+    + _sppRow('入り方', _sppProviderLabel(d.provider, me.uid))
+    + _sppRow('区分', tierLabel)
+    + '<p class="spp-note">この番号は、あなたのログイン方法から決まります。'
+    + '入り方を変えても番号は変わりません。<br>'
+    + '同じ番号を2人が持つことはできません。</p>';
+}
+
 /* SchoolPark の中から小部屋（エレベーターなど）を開く。
    枠の中から window.parent 経由で呼ばれる。 */
 function openSpRoom(url, title) {
@@ -20940,6 +21088,21 @@ async function sendEmuFeedback() {
 <div id="spDaoPage">
   <iframe id="spDaoFrame" title="SchoolPark" loading="lazy"></iframe>
 </div>
+<!-- SchoolPark パスポート -->
+<div id="spPassport" role="dialog" aria-modal="true" aria-labelledby="sppTitle">
+  <div class="spp-veil" onclick="closeSpPassport()"></div>
+  <div class="spp-card">
+    <div class="spp-head">
+      <div class="spp-head-text">
+        <div class="spp-kicker">SCHOOLPARK PASSPORT</div>
+        <div class="spp-title" id="sppTitle">SchoolPark パスポート</div>
+      </div>
+      <button type="button" class="spp-close" onclick="closeSpPassport()" aria-label="閉じる">✕</button>
+    </div>
+    <div id="sppBody"></div>
+  </div>
+</div>
+
 <!-- SchoolPark の中から開く小部屋（エレベーターなど） -->
 <button type="button" id="spRoomBack" onclick="closeSpRoom()">← 戻る</button>
 <div id="spRoomPage">

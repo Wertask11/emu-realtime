@@ -68,7 +68,7 @@ html, body                 { height: 100%; }
           <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; opacity:.5">TREASURY</div>
           <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:#D0E2BE">¥{{ treasury.total }}</div>
         </div>
-        <div style="display:flex; align-items:center; gap:10px; padding-top:4px">
+        <div onClick="{{ openPassport }}" title="SchoolPark パスポートを見る" style="display:flex; align-items:center; gap:10px; padding:4px 8px 6px; margin:0 -8px; border-radius:8px; cursor:pointer" style-hover="background:rgba(244,241,234,.08)">
           <div style="width:32px; height:32px; border-radius:50%; background:#0F5C3F; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700">彩</div>
           <div style="display:flex; flex-direction:column; gap:2px">
             <div style="font-size:13px; font-weight:500">あやか</div>
@@ -748,6 +748,7 @@ class Component extends DCLogic {
   joinBoard(id){ return () => this.setState(s => ({joined:{...s.joined, [id]:!s.joined[id]}})); }
   commit(id){ return (ev) => { if(ev) ev.stopPropagation(); this.setState(s => ({committed:{...s.committed, [id]:!s.committed[id]}})); }; }
   toggleSidebar = () => this.setState(s => ({sidebarOpen:!s.sidebarOpen}));
+  openPassport = () => { try { window.parent.openSpPassport(); } catch (e) {} };
   askReizo = () => { try { window.parent.spReizoOpen(); } catch (e) {} };
   goElevator = () => { try { window.parent.openSpRoom('/schoolpark/south-elevator.html', 'エレベーター'); } catch (e) {} };
   toggleBrand = () => this.setState(s => ({brandOpen:!s.brandOpen}));
@@ -803,6 +804,7 @@ class Component extends DCLogic {
     return {
       L, word:W, wordShort:'経験', scrollRef:this.scroller,
       toggleSidebar:this.toggleSidebar,
+      openPassport:this.openPassport,
       askReizo:this.askReizo,
       goElevator:this.goElevator,
       toggleBrand:this.toggleBrand,
