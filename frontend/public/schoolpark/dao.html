@@ -86,6 +86,7 @@ html, body                 { height: 100%; }
           <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#0F5C3F">{{ head.kicker }}</div>
           <div style="font-size:{{ L.headSize }}; font-weight:700; letter-spacing:.02em">{{ head.title }}</div>
         </div>
+        <div onClick="{{ openMenu }}" title="メニュー" style="display:{{ L.menuShow }}; width:38px; height:38px; flex:0 0 38px; border:1px solid rgba(20,19,16,.16); border-radius:7px; align-items:center; justify-content:center; cursor:pointer; font-family:Inter,sans-serif; font-size:16px; color:#0F5C3F" style-hover="background:#E7E2D6">☰</div>
         <div onClick="{{ askReizo }}" title="冷蔵庫くんに聞く" style="width:38px; height:38px; flex:0 0 38px; border:1px solid rgba(20,19,16,.16); border-radius:7px; display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden" style-hover="background:#E7E2D6"><img src="/assets/mascot.jpg" alt="冷蔵庫くん" style="width:100%; height:100%; object-fit:cover"></div>
         <div onClick="{{ goPropose }}" style="padding:12px 18px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap" style-hover="background:#0A3F2B">{{ L.ctaLabel }}</div>
       </div>
@@ -771,7 +772,7 @@ class Component extends DCLogic {
     const k = 1;   /* 本番では縮小しない */
     const hasSidebar = base.sidebar !== 'none';
     const sidebarOpen = hasSidebar && s.sidebarOpen;
-    const L = {...base, sidebarShow:sidebarOpen ? 'flex' : 'none', sidebarToggle:hasSidebar && !sidebarOpen ? 'flex' : 'none', w: '100%', h: '100%', scale: 'none', boxH: '100vh', frameR: '0'};
+    const L = {...base, menuShow: hasSidebar ? 'none' : 'flex', sidebarShow:sidebarOpen ? 'flex' : 'none', sidebarToggle:hasSidebar && !sidebarOpen ? 'flex' : 'none', w: '100%', h: '100%', scale: 'none', boxH: '100vh', frameR: '0'};
     const navDefs = [['home','01','今週の広場'],['park','02','公園'],['experiments','03',W+'一覧'],['logs','04','ギルド'],['library','05','知恵ライブラリ'],['members','06','メンバー・貢献'],['treasury','07','トレジャリー']];
     const heads = {
       home:['THE SQUARE / 今週の広場','おはよう、' + s.me.name],
@@ -798,6 +799,7 @@ class Component extends DCLogic {
       L, word:W, wordShort:'経験', scrollRef:this.scroller,
       toggleSidebar:this.toggleSidebar,
       me:s.me,
+      openMenu:() => { try { window.parent.openSpMobileMenu(); } catch (e) {} },
       votes:s.votes, noVotes:s.noVotes,
       noQuests:s.noQuests, noPark:s.noPark,
       noWisdom:s.noWisdom,

@@ -3090,11 +3090,12 @@ body.emu-ichinichi-open #openPostFormButton { display:none !important; }
 /* ── SchoolPark パスポート ──
    ログインすると作られる CHESアドレスに、名前と居場所を与えたもの。
    SchoolPark からも Emu からも開くので、どちらの色にも寄せず暗い札にする。 */
-#spPassport, #spVoteSheet, #spQuestSheet, #spWisdomSheet { display:none; position:fixed; inset:0; z-index:1800; }
+#spPassport, #spVoteSheet, #spQuestSheet, #spWisdomSheet, #spMobileMenu { display:none; position:fixed; inset:0; z-index:1800; }
 body.sp-passport-open #spPassport,
 body.sp-vote-open #spVoteSheet,
 body.sp-quest-open #spQuestSheet,
-body.sp-wisdom-open #spWisdomSheet { display:flex; align-items:center; justify-content:center; }
+body.sp-wisdom-open #spWisdomSheet,
+body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-content:center; }
 .spp-veil { position:absolute; inset:0; background:rgba(10,9,7,.62); }
 /* 議題を出す入力欄。札と同じ見た目にそろえる */
 .spv-label { display:block; font-size:11px; letter-spacing:.06em; color:rgba(244,241,234,.6); margin:12px 0 6px; }
@@ -3106,7 +3107,18 @@ body.sp-wisdom-open #spWisdomSheet { display:flex; align-items:center; justify-c
 .spv-in::placeholder { color:rgba(244,241,234,.35); }
 .spv-in:focus { outline:none; border-color:#D0E2BE; }
 .spv-area { min-height:84px; resize:vertical; line-height:1.8; }
-#spPassport .spp-card, #spVoteSheet .spp-card, #spQuestSheet .spp-card, #spWisdomSheet .spp-card {
+/* スマホ用メニューの行 */
+.smm-row {
+  display:flex; justify-content:space-between; align-items:center; gap:12px;
+  width:100%; box-sizing:border-box; margin-top:6px;
+  background:#1D1B16; border:1px solid rgba(244,241,234,.14); border-radius:10px;
+  padding:14px 14px; cursor:pointer;
+  font-family:inherit; font-size:14px; font-weight:700; color:#F4F1EA; text-align:left;
+}
+.smm-row:hover { background:rgba(244,241,234,.1); }
+.smm-go { font-size:12px; font-weight:400; color:rgba(244,241,234,.5); }
+.smm-label { font-size:11px; letter-spacing:.06em; color:rgba(244,241,234,.5); margin:16px 0 2px; }
+#spPassport .spp-card, #spVoteSheet .spp-card, #spQuestSheet .spp-card, #spWisdomSheet .spp-card, #spMobileMenu .spp-card {
   position:relative; width:min(420px, calc(100vw - 32px)); max-height:calc(100vh - 48px);
   overflow-y:auto; background:#141310; color:#F4F1EA; border-radius:16px;
   padding:26px 24px 22px; box-shadow:0 30px 70px -20px rgba(0,0,0,.7);
@@ -3273,6 +3285,16 @@ body.emu-play-open #openPostFormButton { display:none !important; }
    数字を変えるときは schoolpark/dao.html のサイドバーと見比べること。 */
 #emuSideNav { display:none; }
 #emuNavOpen { display:none; }
+/* 左タブが出ない幅（1024px以下）でだけ出す。SchoolPark 側のヘッダーと同じ役目。 */
+#emuMenuBtn { display:none; }
+@media (max-width:1024px) {
+  #emuMenuBtn {
+    display:inline-flex; align-items:center; justify-content:center; flex:none;
+    width:36px; height:36px; border:1px solid #e0dbd1; border-radius:7px;
+    background:#fff; cursor:pointer; font-size:17px; color:#9a9184; line-height:1;
+  }
+  #emuMenuBtn:hover { background:#f6f3ee; }
+}
 .esn-top {
   display:flex; align-items:flex-start; gap:12px;
   padding:24px 18px 22px 24px; border-bottom:1px solid #ece8e0;
@@ -4559,6 +4581,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <header class="header" style="display: flex; align-items: center; padding: 0 20px; gap: 8px; flex-wrap: wrap;">
   <!-- 左タブを閉じているときだけ出る、開くためのボタン（SchoolPark と同じ作り） -->
   <button type="button" id="emuNavOpen" onclick="emuNavToggle()" title="サイドバーを開く">☰</button>
+  <!-- 左タブが出ない幅のとき用。パスポート・ブランド切替・お問い合わせをまとめて開く -->
+  <button type="button" id="emuMenuBtn" onclick="openSpMobileMenu('emu')" title="メニュー">☰</button>
   <!-- Emuロゴ：PCでは非表示（下部CSS）。モバイル/タブレットではPayPay支払いUIへの入口として残す -->
   <a id="logo" class="logo" href="#" style="margin-right: 10px; cursor: pointer;" onclick="toggleDesignMode(); return false;">Emu</a>
 
@@ -15448,6 +15472,27 @@ function _sppRow(label, value) {
 
 function closeSpPassport() { document.body.classList.remove('sp-passport-open'); }
 
+/* スマホ用のメニュー。サイドバーが無い幅のときだけ、枠の中のヘッダーから開く。 */
+window.openSpMobileMenu = function (current) {
+  /* いま居るブランドには「いま居る」と出し、押しても何もしない */
+  const here = current || 'schoolpark';
+  ['camellia', 'emu', 'schoolpark'].forEach(function (b) {
+    const row = document.querySelector('#spMobileMenu [data-brand="' + b + '"]');
+    if (!row) return;
+    const go = row.querySelector('.smm-go');
+    if (go) go.textContent = (b === here) ? 'いま居る' : '→';
+    row.dataset.here = (b === here) ? '1' : '';
+  });
+  document.body.classList.add('sp-menu-open');
+};
+function closeSpMobileMenu() { document.body.classList.remove('sp-menu-open'); }
+function smmGo(brand) {
+  const row = document.querySelector('#spMobileMenu [data-brand="' + brand + '"]');
+  if (row && row.dataset.here === '1') { closeSpMobileMenu(); return; }   /* いま居る場所 */
+  closeSpMobileMenu();
+  if (typeof chesHubGo === 'function') chesHubGo(brand);
+}
+
 /* ───── パスポートの中身を1か所で作る ─────
 
    SchoolPark・Emu・Camellia・Heartoo（CHES）のどこにいても、
@@ -21956,6 +22001,37 @@ async function sendEmuFeedback() {
 <div id="spDaoPage">
   <iframe id="spDaoFrame" title="SchoolPark" loading="lazy"></iframe>
 </div>
+<!-- スマホ用のメニュー。
+     スマホの SchoolPark にはサイドバーが無いので、そこにあるもの
+     （パスポート・ブランドの切り替え・お問い合わせ）に手が届かない。
+     ヘッダーのボタン1つから、まとめて出す。 -->
+<div id="spMobileMenu" role="dialog" aria-modal="true" aria-labelledby="smmTitle">
+  <div class="spp-veil" onclick="closeSpMobileMenu()"></div>
+  <div class="spp-card">
+    <div class="spp-head">
+      <div class="spp-head-text">
+        <div class="spp-kicker">CHES</div>
+        <div class="spp-title" id="smmTitle">メニュー</div>
+      </div>
+      <button type="button" class="spp-close" onclick="closeSpMobileMenu()" aria-label="閉じる">✕</button>
+    </div>
+    <button type="button" class="smm-row" onclick="closeSpMobileMenu(); openSpPassport();">
+      <span>SchoolPark パスポート</span><span class="smm-go">→</span>
+    </button>
+    <div class="smm-label">ブランドを切り替える</div>
+    <button type="button" class="smm-row" data-brand="camellia" style="color:#E0576F" onclick="smmGo('camellia')">
+      <span>Camellia</span><span class="smm-go">→</span></button>
+    <button type="button" class="smm-row" data-brand="emu" style="color:#F08300" onclick="smmGo('emu')">
+      <span>Emu</span><span class="smm-go">→</span></button>
+    <button type="button" class="smm-row" data-brand="schoolpark" style="color:#D0E2BE" onclick="smmGo('schoolpark')">
+      <span>SchoolPark</span><span class="smm-go">→</span></button>
+    <div class="smm-label">こまったとき</div>
+    <button type="button" class="smm-row" onclick="closeSpMobileMenu(); toggleContactPanel();">
+      <span>お問い合わせ・イベント申込</span><span class="smm-go">→</span>
+    </button>
+  </div>
+</div>
+
 <!-- 知恵カードを置く（クエスト完了時） -->
 <div id="spWisdomSheet" role="dialog" aria-modal="true" aria-labelledby="swTitleLabel">
   <div class="spp-veil" onclick="closeSpWisdomForm()"></div>
