@@ -57,6 +57,34 @@ service cloud.firestore {
         && value.lower() == '0xdcc687c05f130e57597a8525771299a4efb6edf7';
     }
 
+    /* いま操作している人が運営かどうか */
+    function isOwner() {
+      return hasAccount() && (isOwnerAddr(chesAddress()) || isOwnerAddr(wallet()));
+    }
+
+    /* 公式パスの持ち主かどうか。paid_users は小文字のアドレスが鍵。
+       実際のウォレットと CHESアドレスの両方で照らす。 */
+    function hasPass() {
+      return hasAccount() && (
+        (wallet().size() > 0
+          && exists(/databases/$(database)/documents/paid_users/$(wallet().lower())))
+        || (chesAddress().size() > 0
+          && exists(/databases/$(database)/documents/paid_users/$(chesAddress().lower())))
+      );
+    }
+
+    /* ギルドに関われるか。
+         運営 ／ 公式パスの持ち主 ／ 信用が足りている人
+
+       信用スコアの合計はルールでは数えられない（何十件も読むことになる）。
+       そこで「参加を認めた人」を sp_trust に置き、ここではその1件だけを見る。
+       いまは運営が書き、あとでサーバーが計算して書くように差し替える。 */
+    function canGuild() {
+      return isOwner() || hasPass()
+        || (chesAddress().size() > 0
+            && exists(/databases/$(database)/documents/sp_trust/$(chesAddress())));
+    }
+
     function changedOnly(fields) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
@@ -567,9 +595,15 @@ service cloud.firestore {
        が、アプリ側の作りに関係なく成り立つ。
        旧SchoolParkは localStorage の使い捨てIDで数えていたので、
        消せば何度でも投票できた。ここが根本的に違う。 */
+    /* ギルドは2つに分ける。
+         free    一般ギルド。投票は誰でもできる
+         special 特殊ギルド。投票もギルドに関われる人だけ
+       どちらも「議題を出す」のはギルドに関われる人だけ。 */
     match /sp_votes/{voteId} {
       allow read: if true;
       allow create: if isMyWallet(request.resource.data.get('createdBy', ''))
+        && canGuild()
+        && request.resource.data.get('kind', '') in ['free', 'special']
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 120
@@ -587,10 +621,15 @@ service cloud.firestore {
 
       match /ballots/{addr} {
         allow read: if true;
-        // 文書のIDが自分のアドレスのときだけ作れる。他人の票は作れない。
+        /* 文書のIDが自分のアドレスのときだけ作れる。他人の票は作れない。
+           特殊ギルドの議題は、ギルドに関われる人だけが入れられる。 */
         allow create: if isMyWallet(addr)
           && request.resource.data.get('optionId', '') is string
-          && request.resource.data.get('optionId', '').size() > 0;
+          && request.resource.data.get('optionId', '').size() > 0
+          && (
+            get(/databases/$(database)/documents/sp_votes/$(voteId)).data.get('kind', 'free') == 'free'
+            || canGuild()
+          );
         allow update, delete: if false;
       }
     }
@@ -641,6 +680,19 @@ service cloud.firestore {
           && request.resource.data.get('kind', '') in ['やってみた', 'つまずいた', '気づいた'];
         allow update, delete: if false;
       }
+    }
+
+    /* ───────── ギルドへの参加を認めた人 ─────────
+
+       文書のIDはパスポート番号。あるかどうかだけを見る。
+       書けるのは運営だけ。誰でも読める（自分が入れるか分かるように）。
+
+       信用スコアの合計はルールでは数えられないので、
+       「一定に達したかどうか」の答えだけをここに置く。
+       いまは運営が管理画面から書く。あとでサーバーが自動で書くようにする。 */
+    match /sp_trust/{addr} {
+      allow read: if true;
+      allow write: if isOwner();
     }
 
     /* ───────── 公園 ─────────
@@ -704,6 +756,7 @@ service cloud.firestore {
         && coll != 'sp_quests'
         && coll != 'sp_wisdom'
         && coll != 'sp_park'
+        && coll != 'sp_trust'
         && coll != 'emuer_offchain'
         && coll != 'emuer_offchain_ledger'
         && coll != 'ches_accounts'

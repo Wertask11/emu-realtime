@@ -467,7 +467,10 @@ html, body                 { height: 100%; }
                 <sc-for list="{{ votes }}" as="v" hint-placeholder-count="2">
                   <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:14px">
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
-                      <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ v.stateBg }}; color:{{ v.stateFg }}">{{ v.stateLabel }}</div>
+                      <div style="display:flex; align-items:center; gap:8px">
+                        <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ v.stateBg }}; color:{{ v.stateFg }}">{{ v.stateLabel }}</div>
+                        <div style="font-size:10px; letter-spacing:.06em; padding:5px 10px; border-radius:4px; background:{{ v.kindBg }}; color:{{ v.kindFg }}">{{ v.kindLabel }}</div>
+                      </div>
                       <div style="font-size:12px; color:#6E695C">{{ v.closes }}</div>
                     </div>
                     <div style="font-size:17px; font-weight:700; line-height:1.55; text-wrap:pretty">{{ v.title }}</div>
@@ -491,13 +494,19 @@ html, body                 { height: 100%; }
             </div>
 
             <div style="background:#E7E2D6; border-radius:12px; padding:26px; display:flex; flex-direction:column; gap:18px">
-              <div style="font-size:15px; font-weight:700">投票の決まり</div>
-              <div style="font-size:13px; line-height:1.95; color:#3B382F">議題は誰でも出せます。票は1つのパスポートにつき1票。入れた票は取り消しも書き換えもできません。</div>
+              <div style="font-size:15px; font-weight:700">ギルドの決まり</div>
+              <div style="font-size:13px; line-height:1.95; color:#3B382F">議題を出せるのは、運営・有料の方・信用が足りている方です。<b>一般ギルド</b>の議題は誰でも投票できます。<b>特殊ギルド</b>は、関われる方だけが投票できます。票は1つのパスポートにつき1票で、入れた票は取り消しも書き換えもできません。</div>
+              <div style="background:#F4F1EA; border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:6px">
+                <div style="font-size:12px; color:#6E695C">あなたの信用スコア</div>
+                <div style="font-family:Inter,sans-serif; font-size:22px; font-weight:600; color:#0F5C3F">{{ trust.total }} <span style="font-size:12px; color:#6E695C">/ {{ trust.need }}</span></div>
+                <div style="font-size:11px; line-height:1.8; color:#6E695C">{{ trust.detail }}</div>
+              </div>
               <div style="display:flex; flex-direction:column; gap:10px; padding-top:6px">
-                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">01</div>議題を出す</div>
-                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">02</div>締切まで投票する</div>
-                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">03</div>入れたあとに結果が見える</div>
-                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">04</div>結果はそのまま残る</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">01</div>完走・知恵・引用で信用が増える</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">02</div>議題を出す</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">03</div>締切まで投票する</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">04</div>入れたあとに結果が見える</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">05</div>結果はそのまま残る</div>
               </div>
             </div>
           </div>
@@ -724,7 +733,7 @@ const LAYOUTS = {
 };
 
 class Component extends DCLogic {
-  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, wisdom:[], noWisdom:true, citations:0, members:[], noMembers:true, noTreasury:true, wtag:'すべて', board:[], dumb:[], rooms:[], events:[], noPark:true, treasury:{total:'0', in:'0', out:'0', alloc:[], txs:[]}, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
+  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, wisdom:[], noWisdom:true, citations:0, members:[], noMembers:true, noTreasury:true, wtag:'すべて', canGuild:false, trust:{total:0, need:20, detail:'読み込んでいます…'}, board:[], dumb:[], rooms:[], events:[], noPark:true, treasury:{total:'0', in:'0', out:'0', alloc:[], txs:[]}, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
   componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} try { window.parent.spDaoLoadWisdom(this); } catch (e) {} try { window.parent.spDaoLoadMembers(this); } catch (e) {} try { window.parent.spDaoLoadTreasury(this); } catch (e) {} try { window.parent.spDaoLoadPark(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
@@ -800,7 +809,7 @@ class Component extends DCLogic {
       toggleSidebar:this.toggleSidebar,
       me:s.me,
       openMenu:() => { try { window.parent.openSpMobileMenu(); } catch (e) {} },
-      votes:s.votes, noVotes:s.noVotes,
+      votes:s.votes, noVotes:s.noVotes, canGuild:s.canGuild, trust:s.trust,
       noQuests:s.noQuests, noPark:s.noPark,
       noWisdom:s.noWisdom,
       noHit:!s.noWisdom && s.wtag !== 'すべて' && !(s.wisdom || []).some(w => w.tag === s.wtag), noMembers:s.noMembers, noTreasury:s.noTreasury,

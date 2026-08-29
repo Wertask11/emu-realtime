@@ -611,14 +611,62 @@ async function renderSchoolPark() {
       });
     } catch (e) {}
   }
-  /* クエストごとの「受けた人」も数える */
+  /* クエストごとの「受けた人」「報告を出した人」を数える。
+     完走＝受けていて、報告を1本以上出していて、そのクエストが完了したもの。 */
+  const TRUST_NEED = 20;
+  const M = {};
+  const pick = (addr, name) => {
+    const k = String(addr || "").toLowerCase();
+    if (!k) return null;
+    if (!M[k]) M[k] = { addr: addr, key: k, name: name || (addr.slice(0,6)+"…"+addr.slice(-4)),
+      short: addr.slice(0,6)+"…"+addr.slice(-4), done:0, wisdom:0, cited:0 };
+    if (name && M[k].name.indexOf("…") >= 0) M[k].name = name;
+    return M[k];
+  };
   for (const q of quests) {
     q.took = 0;
+    const took = [];
     try {
       const cs = await f.getDocs(f.collection(f.db, "sp_quests", q.id, "commits"));
-      cs.forEach(() => q.took++);
+      cs.forEach(c => { q.took++; took.push({ addr: c.id, name: (c.data()||{}).name || "" }); });
     } catch (e) {}
+    const wrote = {};
+    try {
+      const ls = await f.getDocs(f.collection(f.db, "sp_quests", q.id, "logs"));
+      ls.forEach(l => { const a = String((l.data()||{}).author || "").toLowerCase(); if (a) wrote[a] = true; });
+    } catch (e) {}
+    took.forEach(t => {
+      const m = pick(t.addr, t.name);
+      if (m && q.status === "CLOSED" && wrote[m.key]) m.done++;
+    });
   }
+  /* 知恵カードと、引用された数 */
+  {
+    const mine = [];
+    ws.forEach(s => { const d = s.data() || {}; mine.push({ id: s.id, author: d.author, name: d.authorName }); });
+    for (const x of mine) {
+      const m = pick(x.author, x.name);
+      if (m) m.wisdom++;
+      try {
+        const cs = await f.getDocs(f.collection(f.db, "sp_wisdom", x.id, "cites"));
+        cs.forEach(() => { if (m) m.cited++; });
+      } catch (e) {}
+    }
+  }
+  /* いま認めている人 */
+  const trusted = {};
+  try {
+    const ts = await f.getDocs(f.collection(f.db, "sp_trust"));
+    ts.forEach(s => { trusted[String(s.id).toLowerCase()] = true; });
+  } catch (e) {}
+  const people = Object.keys(M).map(k => {
+    const m = M[k];
+    /* 在籍月数はここでは数えない（人ごとにアカウントを引くと重いため）。
+       画面に出すのは SchoolPark での実績ぶんの点数。 */
+    m.score = m.done * 10 + m.wisdom * 5 + m.cited * 3;
+    m.trusted = !!trusted[k];
+    return m;
+  }).sort((a, b) => b.score - a.score);
 
   const STATUS = { OPEN: "募集中", RUNNING: "進行中", CLOSED: "完了" };
   const yen = v => (parseInt(String(v || "0").replace(/[^0-9]/g, ""), 10) || 0).toLocaleString();
@@ -647,6 +695,9 @@ async function renderSchoolPark() {
     + '<p class="empty" style="text-align:left;margin:0 0 10px">1つのパスポートにつき1票。入れた票は取り消せません。</p>'
     + '<label>議題</label><input id="avTitle" placeholder="例：来月の予算を何に使うか">'
     + '<label>説明</label><textarea id="avBody" rows="2" placeholder="決めたいことと、判断の材料"></textarea>'
+    + '<label>どちらのギルドか</label><select id="avKind">'
+    + '<option value="free">一般ギルド（投票は誰でもできる）</option>'
+    + '<option value="special">特殊ギルド（関われる人だけが投票できる）</option></select>'
     + '<label>選択肢（1行に1つ、2〜4つ）</label><textarea id="avOpts" rows="4" placeholder="クエストの予算&#10;知恵の引用への分配"></textarea>'
     + '<label>締切まで（日）</label><input id="avDays" type="number" min="1" max="30" value="7">'
     + '<div class="actions"><button class="btn primary" id="avSubmit">議題を出す</button></div></div>'
@@ -688,6 +739,23 @@ async function renderSchoolPark() {
         + (x.hidden ? '1' : '0') + '">' + (x.hidden ? '出す' : 'しまう') + '</button> '
         + '<button class="act no" data-pdel="' + esc(x.id) + '">消す</button></span></div>').join("")
       : '<p class="empty">まだ何もありません。</p>')
+    + '</div>'
+
+    + '<div class="card"><h3>ギルドに関われる人</h3>'
+    + '<p class="empty" style="text-align:left;margin:0 0 10px">議題を出せるのは、運営・公式パスの方・ここで認めた方です。'
+    + '特殊ギルドの投票も同じ。一般ギルドの投票は誰でもできます。<br>'
+    + '信用スコア＝完走×10＋知恵×5＋引用され×3＋在籍月数（上限12）。'
+    + '目安は ' + TRUST_NEED + ' 点です。</p>'
+    + (people.length ? people.map(m =>
+        '<div class="row"><span>' + esc(m.name) + '<br>'
+        + '<small style="color:var(--muted)">' + esc(m.short) + ' · '
+        + '信用 ' + m.score + ' 点（完走' + m.done + '・知恵' + m.wisdom + '・引用され' + m.cited + '）'
+        + (m.trusted ? ' · 認めています' : '') + '</small></span>'
+        + '<span>' + (m.trusted
+            ? '<button class="act no" data-tdel="' + esc(m.addr) + '">取り消す</button>'
+            : '<button class="act ok" data-tadd="' + esc(m.addr) + '" data-tname="' + esc(m.name) + '">参加OKにする</button>')
+        + '</span></div>').join("")
+      : '<p class="empty">まだ活動している人がいません。</p>')
     + '</div>'
 
     + '<div class="card"><h3>議題と投票の結果</h3>'
@@ -741,6 +809,7 @@ async function renderSchoolPark() {
       await f.addDoc(f.collection(f.db, "sp_votes"), {
         title: v("avTitle").slice(0, 120), body: v("avBody").slice(0, 600),
         options: labels.map((l, i) => ({ id: "o" + (i + 1), label: l.slice(0, 60) })),
+        kind: (v("avKind") === "special") ? "special" : "free",
         createdBy: addr, createdAt: Date.now(), closesAt: Date.now() + days * 86400000
       });
     } catch (e) { alert("出せませんでした（" + (e.code || e.message) + "）"); return; }
@@ -792,6 +861,23 @@ async function renderSchoolPark() {
       if (!confirm("これを消します。元に戻せません。よろしいですか？")) return;
       try { await f.deleteDoc(f.doc(f.db, "sp_park", b.dataset.pdel)); }
       catch (e) { alert("消せませんでした（" + (e.code || e.message) + "）"); return; }
+      renderSchoolPark();
+    };
+  });
+  el.querySelectorAll("[data-tadd]").forEach(b => {
+    b.onclick = async () => {
+      if (!confirm("この方をギルドに参加OKにします。\n\n議題を出すことと、特殊ギルドへの投票ができるようになります。")) return;
+      try { await f.setDoc(f.doc(f.db, "sp_trust", b.dataset.tadd),
+        { name: b.dataset.tname || "", by: addr, at: Date.now() }); }
+      catch (e) { alert("できませんでした（" + (e.code || e.message) + "）"); return; }
+      renderSchoolPark();
+    };
+  });
+  el.querySelectorAll("[data-tdel]").forEach(b => {
+    b.onclick = async () => {
+      if (!confirm("この方の参加を取り消します。よろしいですか？")) return;
+      try { await f.deleteDoc(f.doc(f.db, "sp_trust", b.dataset.tdel)); }
+      catch (e) { alert("できませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
   });

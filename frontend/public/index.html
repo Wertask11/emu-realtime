@@ -15600,6 +15600,86 @@ function _spVoteCloseLabel(closesAt) {
   return '締切まであと' + hours + '時間';
 }
 
+/* ═══════════════════════════════════════
+   信用スコア
+
+     完走したクエスト   ×10  受けて、報告を1本以上出して、完了したもの
+     置いた知恵カード   × 5  完了したクエストからしか生まれない
+     引用された数       × 3  他人が押すので自分では増やせない
+     在籍の月数         × 1  上限12
+
+   20点でギルドに関われる。
+   ただしルールは合計を数えられないので、判定そのものは sp_trust に
+   置いた1件を見る（運営が書く）。ここで出すのは、その目安の数字。
+═══════════════════════════════════════ */
+const SP_TRUST_NEED = 20;
+
+window.spTrustScore = async function (addr, createdAt) {
+  const fb = window.fbLib;
+  const key = String(addr || '').toLowerCase();
+  if (!key || !fb || !window.db) return null;
+  let done = 0, wisdom = 0, cited = 0;
+
+  /* 完走：受けていて、報告を1本以上出していて、完了しているクエスト */
+  try {
+    const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
+    const list = [];
+    qs.forEach(function (s) { list.push({ id: s.id, ...(s.data() || {}) }); });
+    for (const q of list) {
+      if (q.status !== 'CLOSED') continue;
+      let took = false;
+      try {
+        const c = await fb.getDoc(fb.doc(window.db, 'sp_quests', q.id, 'commits', addr));
+        took = c.exists();
+      } catch (e) {}
+      if (!took) continue;
+      let wrote = false;
+      try {
+        const ls = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'logs'));
+        ls.forEach(function (l) {
+          if (String((l.data() || {}).author || '').toLowerCase() === key) wrote = true;
+        });
+      } catch (e) {}
+      if (wrote) done++;
+    }
+  } catch (e) {}
+
+  /* 知恵カードと、引用された数 */
+  try {
+    const ws = await fb.getDocs(fb.collection(window.db, 'sp_wisdom'));
+    const mine = [];
+    ws.forEach(function (s) {
+      const d = s.data() || {};
+      if (String(d.author || '').toLowerCase() === key) mine.push(s.id);
+    });
+    wisdom = mine.length;
+    for (const id of mine) {
+      try {
+        const cs = await fb.getDocs(fb.collection(window.db, 'sp_wisdom', id, 'cites'));
+        cs.forEach(function () { cited++; });
+      } catch (e) {}
+    }
+  } catch (e) {}
+
+  /* 在籍の月数（上限12） */
+  let months = 0;
+  if (createdAt) months = Math.max(0, Math.min(12, Math.floor((Date.now() - Number(createdAt)) / (30 * 86400000))));
+
+  const total = done * 10 + wisdom * 5 + cited * 3 + months;
+  return { done: done, wisdom: wisdom, cited: cited, months: months, total: total, need: SP_TRUST_NEED };
+};
+
+/* ギルドに関われるか。ルールと同じ順で見る。 */
+window.spCanGuild = async function () {
+  const p = await spPassportLoad();
+  if (!p) return false;
+  if (p.isOwner || p.hasPass) return true;
+  try {
+    const s = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'sp_trust', p.addr));
+    return s.exists();
+  } catch (e) { return false; }
+};
+
 /* 議題と票を読み、枠の中へ渡す */
 window.spDaoLoadVotes = async function (app) {
   if (!app || typeof app.setState !== 'function') return;
@@ -15608,6 +15688,8 @@ window.spDaoLoadVotes = async function (app) {
   /* 本人はパスポートから取る。ほかの画面と同じ道にそろえる。 */
   const p = await spPassportLoad();
   const mine = p ? p.addr : '';
+  /* 特殊ギルドに入れる人かどうか。入れない人には、押せない形で見せる。 */
+  const canGuild = await window.spCanGuild();
 
   let docs = [];
   try {
@@ -15635,7 +15717,10 @@ window.spDaoLoadVotes = async function (app) {
     } catch (e) { /* 読めなくても議題は出す */ }
 
     const closed = !!v.closesAt && Number(v.closesAt) <= Date.now();
-    const done = !!myPick || closed;
+    /* 一般ギルドは誰でも、特殊ギルドは関われる人だけが入れられる */
+    const special = (v.kind || 'free') === 'special';
+    const canVote = !special || canGuild;
+    const done = !!myPick || closed || !canVote;
     const opts = (v.options || []).map(function (o) {
       const n = counts[o.id] || 0;
       const pct = total ? Math.round(n / total * 100) : 0;
@@ -15649,21 +15734,39 @@ window.spDaoLoadVotes = async function (app) {
         border: picked ? '#0F5C3F' : 'rgba(20,19,16,.16)',
         weight: picked ? '700' : '500',
         cursor: done ? 'default' : 'pointer',
-        go: done ? function () {} : function () { spVoteCast(v.id, o.id, app); }
+        go: (done || !canVote) ? function () {} : function () { spVoteCast(v.id, o.id, app); }
       };
     });
     votes.push({
       id: v.id, title: v.title || '', body: v.body || '',
       closes: _spVoteCloseLabel(v.closesAt),
+      kindLabel: special ? '特殊ギルド' : '一般ギルド',
+      kindBg: special ? '#141310' : '#E7E2D6',
+      kindFg: special ? '#D0E2BE' : '#3B382F',
       stateLabel: closed ? 'CLOSED' : (myPick ? 'VOTED' : 'OPEN'),
       stateBg: closed ? '#E7E2D6' : (myPick ? '#0F5C3F' : '#D0E2BE'),
       stateFg: closed ? '#8A8474' : (myPick ? '#F4F1EA' : '#0F5C3F'),
       options: opts,
-      note: done ? (total + '票入りました。1つのパスポートにつき1票です。')
-                 : '選ぶと投票されます。あとから変えられません。'
+      note: (!canVote && !closed && !myPick)
+              ? 'この議題は特殊ギルドのものです。運営・有料の方・信用が足りている方が投票できます。'
+              : (done ? (total + '票入りました。1つのパスポートにつき1票です。')
+                      : '選ぶと投票されます。あとから変えられません。')
     });
   }
-  app.setState({ votes: votes, noVotes: votes.length === 0 });
+  /* 信用スコアも出す。判定そのものは sp_trust を見ているが、
+     「あと何点か」が見えないと、増やしようがない。 */
+  let trust = { total: 0, need: SP_TRUST_NEED, detail: '' };
+  if (p) {
+    const sc = await window.spTrustScore(p.addr, p.createdAt);
+    if (sc) {
+      trust = { total: sc.total, need: sc.need,
+        detail: '完走 ' + sc.done + '（×10）／知恵 ' + sc.wisdom + '（×5）／引用され ' + sc.cited
+              + '（×3）／在籍 ' + sc.months + 'か月（×1）' };
+    }
+  } else {
+    trust.detail = 'ログインすると出ます。';
+  }
+  app.setState({ votes: votes, noVotes: votes.length === 0, canGuild: canGuild, trust: trust });
 };
 
 /* 1票入れる。文書のIDを自分のアドレスにする。 */
@@ -15692,14 +15795,25 @@ async function spVoteCast(voteId, optionId, app) {
 
 /* 議題を出す。枠の外の入力欄を使う。 */
 let _spVoteFormApp = null;
-window.openSpVoteForm = function (app) {
+window.openSpVoteForm = async function (app) {
   _spVoteFormApp = app || null;
+  const p = await spPassportLoad();
+  if (!p) { alert('議題を出すにはログインが必要です。'); return; }
+  /* 議題を出せるのは、運営・有料の方・信用が足りている方だけ */
+  if (!(await window.spCanGuild())) {
+    const sc = await window.spTrustScore(p.addr, p.createdAt);
+    alert('議題を出せるのは、運営・有料の方・信用が足りている方です。\n\n'
+      + 'いまの信用スコア：' + (sc ? sc.total : 0) + ' / ' + SP_TRUST_NEED + '\n\n'
+      + 'クエストを完走する・知恵カードを置く・引用されると増えます。');
+    return;
+  }
   const sheet = document.getElementById('spVoteSheet');
   if (!sheet) return;
   ['spvTitle', 'spvBody', 'spvOpt1', 'spvOpt2', 'spvOpt3', 'spvOpt4'].forEach(function (id) {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   const d = document.getElementById('spvDays'); if (d) d.value = '7';
+  const kd = document.getElementById('spvKind'); if (kd) kd.value = 'free';
   document.body.classList.add('sp-vote-open');
 };
 function closeSpVoteForm() { document.body.classList.remove('sp-vote-open'); }
@@ -15721,6 +15835,7 @@ async function spVoteSubmit() {
       title: title.slice(0, 120),
       body: val('spvBody').slice(0, 600),
       options: labels.map(function (l, i) { return { id: 'o' + (i + 1), label: l.slice(0, 60) }; }),
+      kind: (val('spvKind') === 'special') ? 'special' : 'free',
       createdBy: p.addr,
       createdAt: Date.now(),
       closesAt: Date.now() + days * 86400000
@@ -22104,6 +22219,11 @@ async function sendEmuFeedback() {
       </div>
       <button type="button" class="spp-close" onclick="closeSpVoteForm()" aria-label="閉じる">✕</button>
     </div>
+    <label class="spv-label" for="spvKind">どちらのギルドか</label>
+    <select class="spv-in" id="spvKind">
+      <option value="free">一般ギルド（投票は誰でもできる）</option>
+      <option value="special">特殊ギルド（関われる人だけが投票できる）</option>
+    </select>
     <label class="spv-label" for="spvTitle">議題</label>
     <input class="spv-in" id="spvTitle" maxlength="120" placeholder="例：来月の予算を何に使うか">
     <label class="spv-label" for="spvBody">説明</label>
