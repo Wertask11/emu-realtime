@@ -950,10 +950,21 @@ async function renderEmu() {
   let subs = [];
   try { subs = await api("/api/room1/submissions"); }
   catch (e) {
+    const code = String(e.code || e.message || "");
+    /* 止まった理由ごとに言い分ける。まとめて出すと直しようがない。 */
+    const why =
+      (code === "UNAUTHORIZED")
+        ? "サーバー（Render）の再デプロイがまだのようです。ログインだけで使えるようにした変更が、まだ反映されていません。"
+      : (code === "OWNER_ONLY")
+        ? "この画面はオーナー専用です。別のアカウントでログインしていませんか。"
+      : (code === "AUTH_REQUIRED" || code === "INVALID_AUTH_TOKEN" || code === "AUTH_UNAVAILABLE")
+        ? "ログインが確認できませんでした。ページを開き直してみてください。"
+      : (code === "ACCOUNT_NOT_FOUND" || code === "WALLET_NOT_FOUND")
+        ? "アカウントの記録が見つかりませんでした。一度 Emu を開いてください。"
+      : "サーバーとのやりとりで止まりました。";
     el.innerHTML = '<div class="card"><h3>Room1 を開けませんでした</h3>'
-      + '<p class="empty" style="text-align:left">' + esc(e.code || e.message) + '</p>'
-      + '<p class="empty" style="text-align:left">サーバー（Render）の再デプロイがまだかもしれません。'
-      + 'ログインだけで使えるようにした変更が、まだ反映されていない可能性があります。</p></div>';
+      + '<p class="empty" style="text-align:left">' + esc(why) + '</p>'
+      + '<p class="meta">' + esc(code) + '</p></div>';
     return;
   }
   const waiting = (subs || []).filter(s => !s.status || s.status === "pending");
@@ -974,19 +985,9 @@ async function renderEmu() {
     + '<label for="r1NoteUrl">Note記事のURL（任意）</label><input id="r1NoteUrl" placeholder="https://note.com/...">'
     + '<div class="actions"><button class="act ok" id="r1Add">コンテンツを追加する</button></div></div>'
 
-    + '<div class="card"><h3>お預かり箱 <span class="pill">' + waiting.length + ' 件</span></h3>'
-    + '<p class="empty" style="text-align:left;margin:0 0 8px">利用者から届いた気づき・疑問・体験です。'
-    + '通すと学習コンテンツになります。</p>'
-    + (waiting.length ? waiting.map(s =>
-        '<div style="border-top:1px solid var(--line);padding-top:12px;margin-top:12px">'
-        + '<div class="meta">' + esc(R1_THEMES[s.theme] ? R1_THEMES[s.theme].label : (s.theme || "—"))
-        + (s.subTheme ? ' / ' + esc(s.subTheme) : "") + ' · ' + fmt(s.createdAt) + '</div>'
-        + '<p style="white-space:pre-wrap;font-size:14px;margin:8px 0">' + esc(s.body || "") + '</p>'
-        + '<div class="actions">'
-        + '<button class="act ok" data-r1ok="' + esc(s.id) + '">通して載せる</button>'
-        + '<button class="act no" data-r1no="' + esc(s.id) + '">見送る</button></div></div>').join("")
-      : '<p class="empty">いま届いているものはありません。</p>')
-    + '</div>';
+    + '<div class="card" id="r1Inbox"></div>';
+  paintInbox(subs);
+  startInboxWatch();
 
   const themeSel = $("#r1Theme"), subSel = $("#r1Sub"), subsubSel = $("#r1Subsub"), subsubRow = $("#r1SubsubRow");
   themeSel.onchange = () => {
@@ -1026,29 +1027,85 @@ async function renderEmu() {
     renderEmu();
   };
 
-  el.querySelectorAll("[data-r1ok]").forEach(b => {
+}
+
+/* お預かり箱の中身だけを描く。
+   直接追加の入力欄は描き直さない。書きかけが消えてしまうため。 */
+function paintInbox(subs) {
+  const box = $("#r1Inbox");
+  if (!box) return;
+  const waiting = (subs || []).filter(s => !s.status || s.status === "pending");
+  box.innerHTML =
+    '<h3>お預かり箱 <span class="pill">' + waiting.length + ' 件</span>'
+    + ' <span class="meta" id="r1InboxAt" style="font-weight:400"></span></h3>'
+    + '<p class="empty" style="text-align:left;margin:0 0 8px">利用者から届いた気づき・疑問・体験です。'
+    + '通すと学習コンテンツになります。開いているあいだ、15秒ごとに読み直します。</p>'
+    + (waiting.length ? waiting.map(s =>
+        '<div style="border-top:1px solid var(--line);padding-top:12px;margin-top:12px">'
+        + '<div class="meta">' + esc(R1_THEMES[s.theme] ? R1_THEMES[s.theme].label : (s.theme || "—"))
+        + (s.subTheme ? ' / ' + esc(s.subTheme) : "") + ' · ' + fmt(s.createdAt) + '</div>'
+        + '<p style="white-space:pre-wrap;font-size:14px;margin:8px 0">' + esc(s.body || "") + '</p>'
+        + '<div class="actions">'
+        + '<button class="act ok" data-r1ok="' + esc(s.id) + '">通して載せる</button>'
+        + '<button class="act no" data-r1no="' + esc(s.id) + '">見送る</button></div></div>').join("")
+      : '<p class="empty">いま届いているものはありません。</p>')
+    + '<div class="actions"><button class="act neutral" id="r1Reload">いま読み直す</button></div>';
+
+  const at = $("#r1InboxAt");
+  if (at) at.textContent = "最終確認 " + new Date().toLocaleTimeString("ja-JP");
+
+  /* タブにも件数を出す。開かないと気づけない、を無くす */
+  const tab = document.querySelector('.tabs button[data-tab="emu"]');
+  if (tab) {
+    tab.textContent = waiting.length ? ("Emu 📮" + waiting.length) : "Emu";
+    tab.style.borderColor = waiting.length ? "#f08300" : "";
+    tab.style.color = waiting.length ? "#b45309" : "";
+  }
+
+  $("#r1Reload").onclick = () => refreshInbox(true);
+  box.querySelectorAll("[data-r1ok]").forEach(b => {
     b.onclick = async () => {
       if (!confirm("これを学習コンテンツとして載せます。よろしいですか？")) return;
       try { await api("/api/room1/approve/" + encodeURIComponent(b.dataset.r1ok), { method: "POST", body: {} }); }
       catch (e) { alert("通せませんでした（" + (e.code || e.message) + "）"); return; }
-      renderEmu();
+      refreshInbox(true);
     };
   });
-  el.querySelectorAll("[data-r1no]").forEach(b => {
+  box.querySelectorAll("[data-r1no]").forEach(b => {
     b.onclick = async () => {
       if (!confirm("これを見送ります。よろしいですか？")) return;
       try { await api("/api/room1/reject/" + encodeURIComponent(b.dataset.r1no), { method: "POST", body: {} }); }
       catch (e) { alert("できませんでした（" + (e.code || e.message) + "）"); return; }
-      renderEmu();
+      refreshInbox(true);
     };
   });
 }
+
+/* 開いているあいだ、繰り返し読み直す。
+   届いたものが管理画面の再読み込みなしで出るようにするため。 */
+let _inboxTimer = null;
+async function refreshInbox(force) {
+  if (!$("#r1Inbox")) return;                       // Emuタブを離れた
+  if (!force && document.hidden) return;            // 見ていないときは休む
+  try { paintInbox(await api("/api/room1/submissions")); } catch (e) { /* 次の回で拾う */ }
+}
+function startInboxWatch() {
+  stopInboxWatch();
+  _inboxTimer = setInterval(refreshInbox, 15000);
+}
+function stopInboxWatch() {
+  if (_inboxTimer) { clearInterval(_inboxTimer); _inboxTimer = null; }
+}
+/* 画面に戻ってきたら、待たずに1回読む */
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshInbox(); });
 
 document.querySelectorAll(".tabs button").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
     ["members","review","refunds","kyc","dialogue","metrics","schoolpark","emu"].forEach(t =>
       document.getElementById("tab-" + t).classList.toggle("hide", t !== b.dataset.tab));
+    /* Emuタブを離れたら、お預かり箱の読み直しを止める */
+    if (b.dataset.tab !== "emu") stopInboxWatch();
     ({ members: renderMembers, review: renderReview, refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics, schoolpark: renderSchoolPark, emu: renderEmu })[b.dataset.tab]();
   };
 });
