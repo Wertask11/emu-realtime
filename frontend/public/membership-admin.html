@@ -566,23 +566,50 @@ async function spReady() {
   return _sp;
 }
 
-/* 自分のパスポート番号。ches_accounts に入っている。 */
+/* 自分のパスポート番号。ches_accounts に入っている。
+   取れなかったときは、どこで止まったのかを返す。
+   「パスポートが見つかりません」だけだと、原因が分からず直しようがない。 */
 async function spMyAddress() {
   const f = await spReady();
   const uid = auth.currentUser && auth.currentUser.uid;
-  if (!uid) return null;
-  const snap = await f.getDoc(f.doc(f.db, "ches_accounts", uid));
-  const d = snap.exists() ? (snap.data() || {}) : {};
-  return d.chesAddress || d.walletAddress || null;
+  if (!uid) return { addr: null, why: "ログインしていません。" };
+  let snap;
+  try {
+    snap = await f.getDoc(f.doc(f.db, "ches_accounts", uid));
+  } catch (e) {
+    return { addr: null, why: "アカウントの記録を読めませんでした（" + (e.code || e.message) + "）。uid: " + uid };
+  }
+  if (!snap.exists()) {
+    return { addr: null, why: "この uid のアカウントの記録がありません。uid: " + uid
+      + "\n一度 Emu を開いてログインすると作られます。" };
+  }
+  const d = snap.data() || {};
+  const addr = d.chesAddress || d.walletAddress || null;
+  if (!addr) {
+    return { addr: null, why: "アカウントの記録はありますが、アドレスの欄が空です。uid: " + uid };
+  }
+  return { addr: addr, why: "" };
 }
 
 async function renderSchoolPark() {
   const el = $("#tab-schoolpark");
   el.innerHTML = '<p class="empty">読み込み中…</p>';
-  let f, addr;
-  try { f = await spReady(); addr = await spMyAddress(); }
-  catch (e) { el.innerHTML = '<p class="empty">読み込みに失敗しました。</p>'; return; }
-  if (!addr) { el.innerHTML = '<p class="empty">パスポートが見つかりません。一度 Emu にログインしてください。</p>'; return; }
+  let f, me;
+  try { f = await spReady(); me = await spMyAddress(); }
+  catch (e) {
+    el.innerHTML = '<p class="empty">読み込みに失敗しました（' + esc(e.code || e.message) + '）。<br>'
+      + 'Firestore の読み込みが止められている可能性があります。</p>';
+    return;
+  }
+  if (!me.addr) {
+    el.innerHTML = '<div class="card"><h3>SchoolPark を開けませんでした</h3>'
+      + '<p class="empty" style="text-align:left;white-space:pre-wrap">' + esc(me.why) + '</p>'
+      + '<p class="empty" style="text-align:left">この画面は Firestore を直接読みます。'
+      + 'ほかのタブ（会員一覧など）はサーバー経由なので、そちらが動いていても'
+      + 'ここだけ止まることがあります。</p></div>';
+    return;
+  }
+  const addr = me.addr;
 
   const [qs, vs, ws, ps] = await Promise.all([
     f.getDocs(f.collection(f.db, "sp_quests")),
