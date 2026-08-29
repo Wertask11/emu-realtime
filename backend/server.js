@@ -121,6 +121,16 @@ function requireOwner(req, res, next) {
   });
 }
 
+/* Room1 の管理操作。
+   これまでは共有シークレット（x-admin-key）だけで、管理画面を開くたびに
+   鍵を手で入れる必要があった。会員管理と同じく、ログイン済みのオーナーなら
+   そのまま通す。鍵での呼び出しも当分は残す（古い画面や手作業のため）。 */
+function requireRoom1Admin(req, res, next) {
+  const expected = process.env.ADMIN_SECRET_KEY;
+  if (expected && req.headers["x-admin-key"] === expected) return next();
+  requireOwner(req, res, next);
+}
+
 const rateBuckets = new Map();
 function rateLimit({ windowMs, max, key }) {
   return (req, res, next) => {
@@ -1196,7 +1206,7 @@ app.get("/api/room1/contents", async (req, res) => {
 });
 
 // ── 直接追加（管理者のみ）──
-app.post("/api/room1/direct-add", requireAdmin, async (req, res) => {
+app.post("/api/room1/direct-add", requireRoom1Admin, async (req, res) => {
   try {
     const { theme, subTheme, subSubTheme, summary, body, note, noteUrl } = req.body;
 
@@ -1254,7 +1264,7 @@ app.post("/api/room1/submit", publicFormRateLimit, async (req, res) => {
 });
 
 // ── お預かり箱：一覧取得（pendingのみ）──
-app.get("/api/room1/submissions", requireAdmin, async (req, res) => {
+app.get("/api/room1/submissions", requireRoom1Admin, async (req, res) => {
   try {
     if (!db) return res.json([]);
 
@@ -1282,7 +1292,7 @@ app.get("/api/room1/submissions", requireAdmin, async (req, res) => {
 });
 
 // ── お預かり箱：昇華（承認）──
-app.post("/api/room1/approve/:id", requireAdmin, async (req, res) => {
+app.post("/api/room1/approve/:id", requireRoom1Admin, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
 
@@ -1317,7 +1327,7 @@ app.post("/api/room1/approve/:id", requireAdmin, async (req, res) => {
 });
 
 // ── お預かり箱：見送り ──
-app.post("/api/room1/reject/:id", requireAdmin, async (req, res) => {
+app.post("/api/room1/reject/:id", requireRoom1Admin, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     await db.collection(ROOM1_SUBMISSIONS_COL).doc(req.params.id).update({ status: "rejected" });
@@ -1330,7 +1340,7 @@ app.post("/api/room1/reject/:id", requireAdmin, async (req, res) => {
 });
 
 // ── コンテンツ全削除（管理者のみ）──
-app.delete("/api/room1/contents/all", requireAdmin, async (req, res) => {
+app.delete("/api/room1/contents/all", requireRoom1Admin, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const snapshot = await db.collection(ROOM1_CONTENTS_COL).get();

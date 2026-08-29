@@ -55,6 +55,7 @@ label{display:block;margin-top:12px;font-size:12px;font-weight:600;color:var(--m
       <button data-tab="dialogue">対話記録</button>
       <button data-tab="metrics">指標</button>
       <button data-tab="schoolpark">SchoolPark</button>
+      <button data-tab="emu">Emu</button>
     </div>
 
     <section id="tab-members"></section>
@@ -64,6 +65,7 @@ label{display:block;margin-top:12px;font-size:12px;font-weight:600;color:var(--m
     <section id="tab-dialogue" class="hide"></section>
     <section id="tab-metrics" class="hide"></section>
     <section id="tab-schoolpark" class="hide"></section>
+    <section id="tab-emu" class="hide"></section>
   </main>
 </div>
 
@@ -918,12 +920,136 @@ async function renderSchoolPark() {
   });
 }
 
+/* ───────── Emu（Room1）─────────
+   旧 Room1 管理画面にあった「直接追加」と「お預かり箱」を移した。
+   あちらは開くたびに管理者APIキーを手で入れる作りだったが、
+   サーバー側を直したので、ここではログインしているだけで通る。 */
+const R1_THEMES = {
+  money: { label: "マネーリテラシー",
+    subs: ["増やし方","育て方","守り方","使い方","付き合い方","稼ぎ方","見極め方","回し方"] },
+  net:   { label: "ネットリテラシー",
+    subs: ["SNSとの付き合い方","炎上・トラブル対策","詐欺・フェイクの見抜き方","個人情報・セキュリティ","AIとの付き合い方","発信と責任","ネットの法律・ルール"] },
+  life:  { label: "ライフリテラシー",
+    subs: ["感情との向き合い方","交渉","家事","エチケット","セルフケア","レジリエンス","パブリック"] },
+  blue:  { label: "ブルーファイル", subs: {
+    "リーダーシップ":   ["理念","ビジョン","戦略","変革","創造的能力","創造的態度"],
+    "マネジメント":     ["目標設定","計画立案","進捗管理","目標達成","計数管理"],
+    "人材活用":         ["組織運営","人材発掘・活用","業務委任","人材育成","動機付け","人的ネットワーク"],
+    "意思決定":         ["決断力","解決案の提示","問題分析","情報収集","改善"],
+    "ヒューマンスキル": ["状況把握","自己客観視点","チームワーク","共感力","異文化コミュニケーション","傾聴力","説得力","プレゼンテーション","企画提案力","伝達力"],
+    "志向":             ["クオリティ","カスタマー","プロフィット","スペシャリティ"],
+    "姿勢":             ["成長・学習意欲","柔軟な対応","主体的な行動","誠実な対応","ルール遵守","マナー意識"],
+    "エネルギー":       ["信念","タフネス","ストレスコントロール","継続力"]
+  }}
+};
+
+async function renderEmu() {
+  const el = $("#tab-emu");
+  el.innerHTML = '<p class="empty">読み込み中…</p>';
+
+  let subs = [];
+  try { subs = await api("/api/room1/submissions"); }
+  catch (e) {
+    el.innerHTML = '<div class="card"><h3>Room1 を開けませんでした</h3>'
+      + '<p class="empty" style="text-align:left">' + esc(e.code || e.message) + '</p>'
+      + '<p class="empty" style="text-align:left">サーバー（Render）の再デプロイがまだかもしれません。'
+      + 'ログインだけで使えるようにした変更が、まだ反映されていない可能性があります。</p></div>';
+    return;
+  }
+  const waiting = (subs || []).filter(s => !s.status || s.status === "pending");
+
+  el.innerHTML =
+    '<div class="card"><h3>学習コンテンツを直接追加</h3>'
+    + '<p class="empty" style="text-align:left;margin:0">Room1（マネー・ネット・ライフ・ブルーファイル）に、そのまま載ります。</p>'
+    + '<label for="r1Theme">テーマ</label><select id="r1Theme"><option value="">選んでください</option>'
+    + Object.keys(R1_THEMES).map(k => '<option value="' + k + '">' + esc(R1_THEMES[k].label) + '</option>').join("")
+    + '</select>'
+    + '<label for="r1Sub">サブテーマ</label><select id="r1Sub" disabled><option value="">先にテーマを選んでください</option></select>'
+    + '<div id="r1SubsubRow" class="hide"><label for="r1Subsub">サブサブテーマ（ブルーファイルのみ）</label>'
+    + '<select id="r1Subsub" disabled><option value="">先にサブテーマを選んでください</option></select></div>'
+    + '<label for="r1Summary">要約（一覧の冒頭に出ます）</label>'
+    + '<input id="r1Summary" placeholder="例：生活防衛資金は月収3〜6ヶ月分を目安に">'
+    + '<label for="r1Body">本文</label><textarea id="r1Body" rows="7" placeholder="学習コンテンツの本文"></textarea>'
+    + '<label for="r1Note">補足・背景・注意点</label><textarea id="r1Note" rows="3" placeholder="あれば"></textarea>'
+    + '<label for="r1NoteUrl">Note記事のURL（任意）</label><input id="r1NoteUrl" placeholder="https://note.com/...">'
+    + '<div class="actions"><button class="act ok" id="r1Add">コンテンツを追加する</button></div></div>'
+
+    + '<div class="card"><h3>お預かり箱 <span class="pill">' + waiting.length + ' 件</span></h3>'
+    + '<p class="empty" style="text-align:left;margin:0 0 8px">利用者から届いた気づき・疑問・体験です。'
+    + '通すと学習コンテンツになります。</p>'
+    + (waiting.length ? waiting.map(s =>
+        '<div style="border-top:1px solid var(--line);padding-top:12px;margin-top:12px">'
+        + '<div class="meta">' + esc(R1_THEMES[s.theme] ? R1_THEMES[s.theme].label : (s.theme || "—"))
+        + (s.subTheme ? ' / ' + esc(s.subTheme) : "") + ' · ' + fmt(s.createdAt) + '</div>'
+        + '<p style="white-space:pre-wrap;font-size:14px;margin:8px 0">' + esc(s.body || "") + '</p>'
+        + '<div class="actions">'
+        + '<button class="act ok" data-r1ok="' + esc(s.id) + '">通して載せる</button>'
+        + '<button class="act no" data-r1no="' + esc(s.id) + '">見送る</button></div></div>').join("")
+      : '<p class="empty">いま届いているものはありません。</p>')
+    + '</div>';
+
+  const themeSel = $("#r1Theme"), subSel = $("#r1Sub"), subsubSel = $("#r1Subsub"), subsubRow = $("#r1SubsubRow");
+  themeSel.onchange = () => {
+    const t = themeSel.value;
+    subsubSel.innerHTML = '<option value="">先にサブテーマを選んでください</option>';
+    subsubSel.disabled = true;
+    subsubRow.classList.toggle("hide", t !== "blue");
+    if (!t) { subSel.innerHTML = '<option value="">先にテーマを選んでください</option>'; subSel.disabled = true; return; }
+    const list = (t === "blue") ? Object.keys(R1_THEMES.blue.subs) : R1_THEMES[t].subs;
+    subSel.innerHTML = '<option value="">選んでください</option>'
+      + list.map(x => '<option value="' + esc(x) + '">' + esc(x) + '</option>').join("");
+    subSel.disabled = false;
+  };
+  subSel.onchange = () => {
+    if (themeSel.value !== "blue" || !subSel.value) { subsubSel.disabled = true; return; }
+    subsubSel.innerHTML = '<option value="">選んでください（任意）</option>'
+      + (R1_THEMES.blue.subs[subSel.value] || []).map(x => '<option value="' + esc(x) + '">' + esc(x) + '</option>').join("");
+    subsubSel.disabled = false;
+  };
+
+  $("#r1Add").onclick = async () => {
+    const v = id => ($("#" + id).value || "").trim();
+    if (!themeSel.value || !subSel.value || !v("r1Body")) {
+      alert("テーマ・サブテーマ・本文は必ず入れてください。"); return;
+    }
+    const btn = $("#r1Add"); btn.disabled = true; btn.textContent = "追加しています…";
+    try {
+      await api("/api/room1/direct-add", { method: "POST", body: {
+        theme: themeSel.value, subTheme: subSel.value,
+        subSubTheme: (themeSel.value === "blue" ? subsubSel.value : ""),
+        summary: v("r1Summary"), body: v("r1Body"), note: v("r1Note"), noteUrl: v("r1NoteUrl")
+      }});
+    } catch (e) {
+      alert("追加できませんでした（" + (e.code || e.message) + "）");
+      btn.disabled = false; btn.textContent = "コンテンツを追加する"; return;
+    }
+    renderEmu();
+  };
+
+  el.querySelectorAll("[data-r1ok]").forEach(b => {
+    b.onclick = async () => {
+      if (!confirm("これを学習コンテンツとして載せます。よろしいですか？")) return;
+      try { await api("/api/room1/approve/" + encodeURIComponent(b.dataset.r1ok), { method: "POST", body: {} }); }
+      catch (e) { alert("通せませんでした（" + (e.code || e.message) + "）"); return; }
+      renderEmu();
+    };
+  });
+  el.querySelectorAll("[data-r1no]").forEach(b => {
+    b.onclick = async () => {
+      if (!confirm("これを見送ります。よろしいですか？")) return;
+      try { await api("/api/room1/reject/" + encodeURIComponent(b.dataset.r1no), { method: "POST", body: {} }); }
+      catch (e) { alert("できませんでした（" + (e.code || e.message) + "）"); return; }
+      renderEmu();
+    };
+  });
+}
+
 document.querySelectorAll(".tabs button").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
-    ["members","review","refunds","kyc","dialogue","metrics","schoolpark"].forEach(t =>
+    ["members","review","refunds","kyc","dialogue","metrics","schoolpark","emu"].forEach(t =>
       document.getElementById("tab-" + t).classList.toggle("hide", t !== b.dataset.tab));
-    ({ members: renderMembers, review: renderReview, refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics, schoolpark: renderSchoolPark })[b.dataset.tab]();
+    ({ members: renderMembers, review: renderReview, refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics, schoolpark: renderSchoolPark, emu: renderEmu })[b.dataset.tab]();
   };
 });
 
