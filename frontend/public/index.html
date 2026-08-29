@@ -12737,7 +12737,9 @@ postElement.classList.add("post");
 // ── 新デザイン用の表示値（実データから算出。実処理・ボタンclassは従来どおり維持） ──
 const _kwPaid = normalizeUserType(post.userType) === "paid";
 const _kwAddrLc = (post.address || "").toLowerCase();
-const _kwName = post.displayName || (typeof shortAddr === "function" ? shortAddr(_kwAddrLc) : _kwAddrLc) || "匿名";
+/* 名前が入っていない古い投稿でも、自分の分だけは名前で出す */
+const _kwName = post.displayName || emuNameForAddress(_kwAddrLc)
+  || (typeof shortAddr === "function" ? shortAddr(_kwAddrLc) : _kwAddrLc) || "匿名";
 const _kwAvatarChar = (String(_kwName).trim().charAt(0) || "？");
 /* 自分の名義は1つとは限らない（walletAddress と chesAddress）。
    1つだけで見ると、自分の投稿なのにボタンが押せる状態で出てしまい、
@@ -12949,12 +12951,15 @@ postForm.addEventListener("submit", async function (e) {
       postImageUrl = postForm._knowledgeImageDataUrl;
     }
 
+    /* 名前を一緒に残す。これが無いと、読む側にはアドレスしか出ない。
+       「名前と写真」で決めた名前が投稿に出ないのは、ここが空だったため。 */
     const postData = {
       title: title,
       body: body,
       tags: normalizedTags.join(","),
       userType: userType,
       address: authorAddress,
+      displayName: emuDisplayName(),
       userId: currentUserId || "guest",
       updatedAt: new Date(),
       ...(postImageUrl ? { imageUrl: postImageUrl } : {})
@@ -15512,6 +15517,31 @@ function smmGo(brand) {
    開くまで「ゲスト」と出ていた。ここを直した。 */
 window._spPassport = null;
 let _spPassportBusy = null;
+
+/* いまの表示名。「名前と写真」で決めたもの。
+   決めていなければ空を返す（呼び出し側でアドレスに落とす）。 */
+function emuDisplayName() {
+  try {
+    const n = String(localStorage.getItem('ches_name') || '').trim();
+    if (n) return n;
+  } catch (e) {}
+  const p = window._spPassport;
+  if (p && p.name && p.name.indexOf('…') < 0) return p.name;
+  return '';
+}
+
+/* そのアドレスが自分なら、いまの表示名を返す。
+   古い投稿には名前が入っていないので、せめて自分の分は名前で出す。
+   実際のウォレットと CHESアドレスの両方を自分と見なす。 */
+function emuNameForAddress(addr) {
+  const a = String(addr || '').toLowerCase();
+  if (!a) return '';
+  const mine = [];
+  try { mine.push(String(window.connectedAccount || '').toLowerCase()); } catch (e) {}
+  try { mine.push(String(localStorage.getItem('emuWallet') || '').toLowerCase()); } catch (e) {}
+  if (window._spPassport) mine.push(String(window._spPassport.addr || '').toLowerCase());
+  return mine.indexOf(a) >= 0 ? emuDisplayName() : '';
+}
 
 function _spShortAddr(a) {
   const s = String(a || '');
@@ -21794,7 +21824,9 @@ async function sendEmuFeedback() {
     return {
       id: docSnap.id || data.id,
       title: data.title || '', body: data.body || '', tags: data.tags || '',
-      address: data.address || '', displayName: data.displayName || '',
+      address: data.address || '',
+      /* 名前が入っていない古い投稿でも、自分の分だけは名前で出す */
+      displayName: data.displayName || emuNameForAddress(data.address),
       userType: data.userType || 'free', imageUrl: data.imageUrl || '',
       goodCount: Number(data.goodCount) || 0, changeCount: Number(data.changeCount) || 0,
       acceptedChangeCount: Number(data.acceptedChangeCount) || 0,
