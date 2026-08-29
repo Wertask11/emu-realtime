@@ -10877,8 +10877,11 @@ const SP_REIZO_KB = [
     a:'「知識」は聞いた話、「知恵」は自分で通した話だよ🧊\n\nEmuで知識を受け取る\n→ SchoolParkのクエストで試す\n→ やったことを報告する\n→ 残った一文を知恵カードにする\n→ 誰かに引用されて分配が回る\n\nSchoolParkが残そうとしているのは、後者だけなんだ。' },
 
   // ── EmuとSchoolParkの関係
+  // 初めての人の「ここ何？」は、名前の説明より先に流れを見せたいので、
+  // 'ここは何' 'どんな場所' はSchoolPark概要ではなくこちらに置く。
   { k:['emuとschoolparkの違い','emuとschoolparkの関係','emuとschoolpark',
-       'schoolparkとemuの違い','2つの違い','どう繋がってる','つながり'],
+       'schoolparkとemuの違い','2つの違い','どう繋がってる','つながり',
+       'ここは何','ここで何','どんな場所','何をする場所'],
     a:'EmuとSchoolParkは、別々の機能じゃなくてひと続きなんだ🧊\n\n🌐 Emu → 経験から生まれた知識を、読んで・届けて・語り合う\n🏞️ SchoolPark → その知識を実際に試して、決めごとを投票で決める\n\nEmuで受け取った知識を、SchoolParkのクエストで試して、残ったものを知恵として置いていく。それがこの街の回り方だよ！' },
 
   // ── EMUER × 使い道
@@ -10908,7 +10911,7 @@ const SP_REIZO_KB = [
     a:'CHES（チェス）は、4つの場所が集まった一つの街だよ🧊\n\n🌐 Emu — 経験から生まれた知識を、読んで・届けて・語り合う\n🏞️ SchoolPark — その知識を実際に試して、決めごとを投票で決める\n🌸 Camellia — 準備中\n💍 Heartoo — 準備中\n\nサイドバーの左上のロゴを押すと、場所を切り替えられるよ！\nどこから入っても、きみは同じ一人として扱われるんだ。' },
 
   // ── SchoolPark 概要
-  { k:['schoolparkとは','スクールパークとは','schoolparkって','ここは何','どんな場所','概要'],
+  { k:['schoolparkとは','スクールパークとは','schoolparkって','schoolparkの中身','概要'],
     a:'SchoolPark は「合同会社型DAO SchoolPark」の中身だよ🧊\nEmuで受け取った知識を実際にやってみて、残ったものを知恵として置いていく場所。\n\n左のならびから7つの画面に行けるよ：\n01 今週の広場／02 公園／03 クエスト一覧／04 ギルド／05 知恵ライブラリ／06 メンバー・貢献／07 トレジャリー' },
 
   // ── 理念・タグライン
@@ -11042,7 +11045,7 @@ const SP_REIZO_KB = [
 
   // ── チュートリアル
   { k:['チュートリアル','使い方を見','説明書','マニュアル','ガイド','詳しく知りたい'],
-    a:'くわしい説明はチュートリアルにまとまっているよ📖\nSchoolParkのサイドバーから開けるからね！\n\nはじめに／Emu／SchoolPark／EMUER・プラン／サポート の5つに分かれていて、上の検索から言葉で探すこともできるよ🧊' },
+    a:'くわしい説明はチュートリアルにまとまっているよ📖\n左下の丸いボタン（お問い合わせ）→「📖 チュートリアル」タブ →「チュートリアルページを開く」で見られるよ。スマホは右上の「☰」からね！\n\nはじめに／Emu／SchoolPark／EMUER・プラン／サポート の5つに分かれていて、上の検索から言葉で探すこともできるよ🧊' },
 
   // ── 問い合わせ
   { k:['問い合わせ','といあわせ','contact','困った','相談','サポート','運営に'],
@@ -11190,6 +11193,16 @@ function spReizoSend() {
 }
 function spReizoKeydown(e) {
   if (e.key === 'Enter') spReizoSend();
+}
+
+/* 最初に出す例の質問。何を聞けばいいか分からない人が、押すだけで始められるように。
+   一度押したら例は消す（会話の途中に残っていると邪魔になるため）。 */
+function spReizoAsk(q) {
+  const opening = document.getElementById('spReizoOpening');
+  if (opening) opening.remove();
+  const input = document.getElementById('spReizoInput');
+  input.value = q;
+  spReizoSend();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -22487,7 +22500,8 @@ async function sendEmuFeedback() {
   <div class="sp-reizo-msgs" id="spReizoMessages">
     <div class="sp-reizo-msg sp-reizo-msg-bot">
       <img src="/assets/mascot.jpg" alt="">
-      <div class="sp-reizo-bubble">こんにちは！EmuとSchoolParkのこと、なんでも聞いてね🧊<br><br>クエスト・ギルド・知恵カード・信用スコア・EMUER・プランなど。<br>「残高教えて」「リマインドして」「通知して」も、言ってくれたらぼくが動くよ！</div>
+      <!-- 吹き出しは white-space:pre-wrap。改行と字下げがそのまま出るので、1行で書く -->
+      <div class="sp-reizo-bubble">こんにちは！ぼくは冷蔵庫くん🧊<br>EmuとSchoolParkの歩き方なら、だいたい知ってるよ。<br>何から聞く？<div class="sp-reizo-quick-wrap" id="spReizoOpening"><button class="sp-reizo-quick-btn" onclick="spReizoAsk('ここは何をする場所？')">🏞️ ここは何をする場所？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('クエストって何？')">🎯 クエストって何？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('EMUERはどうやって貯める？')">💎 EMUERはどうやって貯める？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('残高教えて')">📊 いまの残高を教えて</button></div></div>
     </div>
   </div>
   <div class="sp-reizo-input-area">

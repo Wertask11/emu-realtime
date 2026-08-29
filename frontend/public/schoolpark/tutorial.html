@@ -1621,9 +1621,33 @@ kbd {
 /* =============================================
    Back
 ============================================= */
+/* 「← 戻る」。このページは開かれ方が3通りあるので、それぞれで戻り先が違う。
+   ・iframeの中     → 親に閉じてもらう
+   ・別タブ         → 履歴も戻り先も無いので、そのタブを閉じる
+   ・直接ひらいた   → 履歴があれば戻る。無ければEmuのトップへ
+
+   以前は「親へ通知 → 履歴があれば戻る」しかしていなかった。
+   実際にはお問い合わせパネルから window.open(_blank) で開かれるため、
+   親は自分自身・履歴は1件で、押しても何も起きなかった。 */
 function handleBack() {
-  window.top.postMessage({ type: 'spContentClose' }, '*');
-  if (window.history.length > 1) history.back();
+  // ① iframeの中にいる
+  if (window.top !== window.self) {
+    try { window.top.postMessage({ type: 'spContentClose' }, '*'); } catch (e) {}
+    return;
+  }
+
+  // ② window.open で開かれた別タブ（openerが居る）→ 閉じる
+  if (window.opener && !window.opener.closed) {
+    try { window.opener.focus(); } catch (e) {}
+    window.close();
+    // ブラウザが閉じさせてくれなかったときのために、少しだけ待って次の手へ
+    setTimeout(function () { if (!window.closed) location.href = '/'; }, 200);
+    return;
+  }
+
+  // ③ 履歴があれば戻る。無ければトップへ
+  if (window.history.length > 1) { history.back(); return; }
+  location.href = '/';
 }
 
 /* =============================================
