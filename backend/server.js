@@ -1098,22 +1098,62 @@ app.delete("/api/scheduled-posts/:id", requireFirebaseUser, requireOwnAddress, a
 // ════════════════════════════════════════
 // お問い合わせ API（復元）
 // ════════════════════════════════════════
-app.post("/api/contact", publicFormRateLimit, async (req, res) => {
-  const { type, name, email, company, message, scale, source } = req.body;
+/* フォームの種別ごとに項目が違う（不具合報告とアカウント相談には名前欄が無い）。
+   name を必須にしていたせいで、その2種別は送信すると必ず400で弾かれていた。
+   本当に無いと困るのは「返信先」と「本文」の2つだけ。 */
+/* 種別ごとの追加項目。Notionの列は固定なので、本文の頭に付けて残す。 */
+const CONTACT_EXTRA_LABELS = {
+  login_method: "ふだんの入り方",
+  place:        "起きた画面",
+  device:       "端末・ブラウザ",
+  topic:        "ご用件",
+  child_age:    "お子様の年齢",
+  participants: "参加人数"
+};
 
-  if (!name || !email || !message) {
-    return res.status(400).json({ error: "必須項目が不足しています" });
+app.post("/api/contact", publicFormRateLimit, async (req, res) => {
+  const { type, email, company, message, scale, source } = req.body;
+  const name = String(req.body.name || "").trim();
+
+  if (!email || !message) {
+    return res.status(400).json({ error: "メールアドレスとお問い合わせ内容は必須です" });
   }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) {
+    return res.status(400).json({ error: "メールアドレスの形をご確認ください" });
+  }
+  if (String(message).length > 5000) {
+    return res.status(400).json({ error: "お問い合わせ内容が長すぎます（5000文字まで）" });
+  }
+
+  // 名前が無い種別は、メールアドレスの頭を表示名として使う（Notionのタイトル用）
+  const displayName = name || String(email).split("@")[0];
+
+  // 種別ごとの追加項目を拾う（想定外のキーは捨てる）
+  const extras = {};
+  Object.keys(CONTACT_EXTRA_LABELS).forEach(k => {
+    const v = req.body[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") {
+      extras[k] = String(v).slice(0, 300);
+    }
+  });
 
   const payload = {
     type: type || "general",
-    name, email,
+    name: displayName,
+    nameGiven: !!name,          // 本人が名前を書いたのかどうか
+    email,
     company: company || "",
     message,
     scale: scale || "",
+    ...extras,
     source: source || "unknown",
+    passport: String(req.body.passport || "").slice(0, 100),
     submittedAt: new Date().toISOString()
   };
+
+  // Notionは列が固定なので、追加項目は本文の頭にまとめて入れる
+  const extraLines = Object.keys(extras).map(k => `${CONTACT_EXTRA_LABELS[k]}: ${extras[k]}`);
+  const messageForNotion = (extraLines.length ? extraLines.join("\n") + "\n---\n" : "") + message;
 
   try {
     // 1. Firestoreに保存
@@ -1127,7 +1167,10 @@ app.post("/api/contact", publicFormRateLimit, async (req, res) => {
     const NOTION_DB_ID = "32b72abf64104a618d3d2ec00d3b37ba";
 
     if (NOTION_TOKEN) {
-      const typeMap = { general: "💬一般", event: "🎪イベント", media: "📰取材", investor: "💰投資家" };
+      const typeMap = {
+        general: "💬一般", event: "🎪イベント", media: "📰取材", investor: "💰投資家",
+        account: "🔑アカウント", bug: "🐛不具合", membership: "🎫有料会員", nft: "🎟️公式パス"
+      };
       const sourceMap = { "emu-widget": "Emuウィジェット", "hp-form": "HPフォーム" };
 
       const notionRes = await fetch("https://api.notion.com/v1/pages", {
@@ -1140,13 +1183,13 @@ app.post("/api/contact", publicFormRateLimit, async (req, res) => {
         body: JSON.stringify({
           parent: { database_id: NOTION_DB_ID },
           properties: {
-            "件名・概要": { title: [{ text: { content: `[${typeMap[type] || type}] ${name}` } }] },
+            "件名・概要": { title: [{ text: { content: `[${typeMap[type] || type}] ${displayName}` } }] },
             "種別": { select: { name: typeMap[type] || "💬一般" } },
             "ステータス": { select: { name: "未対応" } },
-            "送信者名": { rich_text: [{ text: { content: name } }] },
+            "送信者名": { rich_text: [{ text: { content: displayName } }] },
             "メールアドレス": { email: email },
             "会社名": { rich_text: [{ text: { content: company || "" } }] },
-            "メッセージ": { rich_text: [{ text: { content: message.slice(0, 2000) } }] },
+            "メッセージ": { rich_text: [{ text: { content: messageForNotion.slice(0, 2000) } }] },
             "ソース": { select: { name: sourceMap[source] || "直接" } },
             "送信日時": { date: { start: new Date().toISOString() } }
           }
