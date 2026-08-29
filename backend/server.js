@@ -1098,9 +1098,6 @@ app.delete("/api/scheduled-posts/:id", requireFirebaseUser, requireOwnAddress, a
 // ════════════════════════════════════════
 // お問い合わせ API（復元）
 // ════════════════════════════════════════
-/* フォームの種別ごとに項目が違う（不具合報告とアカウント相談には名前欄が無い）。
-   name を必須にしていたせいで、その2種別は送信すると必ず400で弾かれていた。
-   本当に無いと困るのは「返信先」と「本文」の2つだけ。 */
 /* 種別ごとの追加項目。Notionの列は固定なので、本文の頭に付けて残す。 */
 const CONTACT_EXTRA_LABELS = {
   login_method: "ふだんの入り方",
@@ -1110,18 +1107,32 @@ const CONTACT_EXTRA_LABELS = {
   child_age:    "お子様の年齢",
   participants: "参加人数"
 };
+/* Notionの「種別」は選択肢の列。知らない文字列をそのまま渡すと
+   送られてきた文字がそのまま選択肢として増えてしまうので、ここで受け付ける型を決めておく。 */
+const CONTACT_TYPES = {
+  general: "💬一般", event: "🎪イベント", media: "📰取材", investor: "💰投資家",
+  account: "🔑アカウント", bug: "🐛不具合", membership: "🎫有料会員", nft: "🎟️公式パス"
+};
 
 app.post("/api/contact", publicFormRateLimit, async (req, res) => {
-  const { type, email, company, message, scale, source } = req.body;
-  const name = String(req.body.name || "").trim();
+  const { source } = req.body;
+  /* フォームの種別ごとに項目が違う（不具合報告とアカウント相談には名前欄が無い）。
+     name を必須にしていたせいで、その2種別は送信すると必ず400で弾かれていた。
+     本当に無いと困るのは「返信先」と「本文」の2つだけ。 */
+  const name    = String(req.body.name    || "").trim().slice(0, 200);
+  const email   = String(req.body.email   || "").trim();
+  const message = String(req.body.message || "").trim();
+  const company = String(req.body.company || "").trim().slice(0, 300);
+  const scale   = String(req.body.scale   || "").trim().slice(0, 200);
+  const type    = CONTACT_TYPES[req.body.type] ? req.body.type : "general";
 
   if (!email || !message) {
     return res.status(400).json({ error: "メールアドレスとお問い合わせ内容は必須です" });
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
     return res.status(400).json({ error: "メールアドレスの形をご確認ください" });
   }
-  if (String(message).length > 5000) {
+  if (message.length > 5000) {
     return res.status(400).json({ error: "お問い合わせ内容が長すぎます（5000文字まで）" });
   }
 
@@ -1138,7 +1149,7 @@ app.post("/api/contact", publicFormRateLimit, async (req, res) => {
   });
 
   const payload = {
-    type: type || "general",
+    type,
     name: displayName,
     nameGiven: !!name,          // 本人が名前を書いたのかどうか
     email,
@@ -1167,10 +1178,7 @@ app.post("/api/contact", publicFormRateLimit, async (req, res) => {
     const NOTION_DB_ID = "32b72abf64104a618d3d2ec00d3b37ba";
 
     if (NOTION_TOKEN) {
-      const typeMap = {
-        general: "💬一般", event: "🎪イベント", media: "📰取材", investor: "💰投資家",
-        account: "🔑アカウント", bug: "🐛不具合", membership: "🎫有料会員", nft: "🎟️公式パス"
-      };
+      const typeMap = CONTACT_TYPES;
       const sourceMap = { "emu-widget": "Emuウィジェット", "hp-form": "HPフォーム" };
 
       const notionRes = await fetch("https://api.notion.com/v1/pages", {

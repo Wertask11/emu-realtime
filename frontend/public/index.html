@@ -9757,20 +9757,44 @@ function _stopAlertChecker() {
   if (_alertCheckerTimer) { clearInterval(_alertCheckerTimer); _alertCheckerTimer = null; }
 }
 
-async function _checkAlerts() {
-  _alertLastCheckTs = Date.now();
-  // 旧マップの台帳（emuer_rate）ではなく、画面に出ているのと同じ残高を見る。
-  // 旧台帳は誰も書き込まなくなったので、そちらを見ていると永久に発火しない。
-  let balance = 0;
+/* 見張り用の残高。
+   アラートは15秒ごと・タスクは30秒ごとに回るので、そのたびに
+   _emuReadBalancePair() を呼ぶと Polygon の公開RPC と Firestore を
+   叩き続けることになる。見張りの用途では5分前の値で十分なので、
+   ここでまとめてキャッシュする（画面表示は今までどおり素の値を使う）。 */
+const _EMU_WATCH_TTL_MS = 5 * 60 * 1000;
+let _emuWatchBal = { value: null, at: 0 };
+
+async function _emuWatchBalance() {
+  const now = Date.now();
+  if (_emuWatchBal.value !== null && now - _emuWatchBal.at < _EMU_WATCH_TTL_MS) {
+    return _emuWatchBal.value;
+  }
   try {
     const pair = await _emuReadBalancePair();
-    if (!pair) return;
-    balance = (Number(pair.real) || 0) + (Number(pair.unconverted) || 0);
-  } catch (e) { return; }
-  const rUntil  = 0; // 利用制限は廃止済み（restrictionUntil を立てるコードはもう無い）
+    if (!pair) return null;
+    const v = (Number(pair.real) || 0) + (Number(pair.unconverted) || 0);
+    _emuWatchBal = { value: v, at: now };
+    return v;
+  } catch (e) { return null; }
+}
+
+async function _checkAlerts() {
+  _alertLastCheckTs = Date.now();
   const now     = Date.now();
   const alerts  = _getAlerts();
   let changed   = false;
+
+  // 残高を見るアラートが1つも無いなら、残高は読まない
+  const needsBalance = alerts.some(a => a.active
+    && (a.type === 'balance_low' || a.type === 'balance_recovered'));
+  let balance = 0;
+  if (needsBalance) {
+    const b = await _emuWatchBalance();
+    if (b === null) return;   // 読めなかった回は、判定せず見送る
+    balance = b;
+  }
+  const rUntil  = 0; // 利用制限は廃止済み（restrictionUntil を立てるコードはもう無い）
 
   for (const alert of alerts) {
     if (!alert.active) continue;
@@ -9826,8 +9850,9 @@ async function _checkAlerts() {
     }
   }
 
-  // 前回状態を更新
-  _alertPrevBalance          = balance;
+  // 前回状態を更新。残高を読まなかった回に 0 を覚えてしまうと、
+  // 次にアラートを足した瞬間「0→155に回復した」と誤って鳴る。
+  if (needsBalance) _alertPrevBalance = balance;
   _alertPrevRestrictionUntil = rUntil;
 
   if (changed) { _saveAlerts(alerts); _renderAlertAgent(); }
@@ -10188,6 +10213,13 @@ async function _checkAndFireTasks() {
   const now = Date.now();
   let changed = false;
 
+  // 残高を見る予約が1つも無いなら、残高は読まない（毎回読むとRPCとFirestoreを叩き続ける）
+  const pending = tasks.filter(t => t.status === 'pending');
+  let bal = null;
+  if (pending.some(t => t.trigger.type === 'balance_below')) {
+    bal = await _emuWatchBalance();
+  }
+
   for (const task of tasks) {
     if (task.status !== 'pending') continue;
     let shouldFire = false;
@@ -10197,12 +10229,13 @@ async function _checkAndFireTasks() {
     } else if (task.trigger.type === 'delay') {
       shouldFire = now >= task.createdAt + task.trigger.value;
     } else if (task.trigger.type === 'restriction_lifted') {
-      // 利用制限は廃止済み。旧予約が残っていたら、その場で成立させて片付ける。
-      shouldFire = true;
+      // 利用制限は廃止済み。昔の予約が残っていても「制限が解除された」と
+      // 嘘の通知を出さないよう、鳴らさずに片付ける。
+      task.status = 'cancelled';
+      task.firedAt = now;
+      changed = true;
+      continue;
     } else if (task.trigger.type === 'balance_below') {
-      // 旧マップの台帳ではなく、画面に出ているのと同じ残高で判定する。
-      let bal = null;
-      try { const p = await _emuReadBalancePair(); if (p) bal = (Number(p.real)||0) + (Number(p.unconverted)||0); } catch (e) {}
       shouldFire = (bal !== null) && bal <= task.trigger.value;
     }
 
@@ -10869,7 +10902,9 @@ const SP_REIZO_KB = [
      ════════════════════════════════════════════ */
 
   // ── CHES（4つの場所）
-  { k:['ches','チェス','camellia','カメリア','heartoo','ハートゥー','ブランド','世界観','4つの'],
+  // camellia / heartoo はそれぞれの項目に任せる。
+  // ここに入れておくと「Camelliaはいつ開く？」までCHESの説明になってしまう。
+  { k:['ches','チェス','ブランド','世界観','4つの','4つで'],
     a:'CHES（チェス）は、4つの場所が集まった一つの街だよ🧊\n\n🌐 Emu — 経験から生まれた知識を、読んで・届けて・語り合う\n🏞️ SchoolPark — その知識を実際に試して、決めごとを投票で決める\n🌸 Camellia — 準備中\n💍 Heartoo — 準備中\n\nサイドバーの左上のロゴを押すと、場所を切り替えられるよ！\nどこから入っても、きみは同じ一人として扱われるんだ。' },
 
   // ── SchoolPark 概要
@@ -10885,11 +10920,16 @@ const SP_REIZO_KB = [
     a:'見学は無料だよ🧊 カードの番号を聞かれることはないよ。\n\n① https://schoolpark-emu.vercel.app を開く\n② LINE・Google・メールのどれかを押す\n　（メールはパスワードなし。届いたリンクを開くと入れるよ）\n③ 入った時点でパスポート番号ができるよ。手続きは要らないんだ\n\nウォレットで入りたい人は「その他の方法で入る」からどうぞ！' },
 
   // ── 入れない・不具合
-  { k:['入れない','ログインできない','真っ白','エラー','動かない','開かない','進まない','固まる'],
+  { k:['入れない','入れません','ログインできない','ログインできま','ログインが','真っ白',
+       'エラー','動かない','開かない','進まない','固まる','うまくいかない'],
     a:'こんなときは、これを試してみてね🧊\n\n・メールのリンクが開けない → リンクを送ったブラウザと同じブラウザで開いてね\n・画面が真っ白 → 一度閉じて開き直してね。18秒待っても進まないときは入場画面に戻るよ\n・「準備中です」と出る → Camellia・Heartoo は順番に開けているところ。Emu は通常どおり使えるよ\n\n直らないときは、画面に出たメッセージをそのまま問い合わせフォームに貼ってね！' },
 
+  // ── パスワード
+  { k:['パスワード','password','ログインし直','再ログイン','別の端末'],
+    a:'CHESにパスワードはないんだ🧊\n\n・LINE・Google → いつもの押すだけ\n・メール → 届いたリンクを開くだけ（パスワードなし）\n\nだから「忘れた」ということが起きないよ。\n別の端末で入るときも、同じ入り方を選べば同じパスポート番号のまま使えるからね！\nメールのリンクは、送ったブラウザと同じブラウザで開いてね。' },
+
   // ── パスポート
-  { k:['パスポート','passport','アドレス','身元','id','番号は','自分の番号'],
+  { k:['パスポート','passport','アドレス','身元','番号は','自分の番号'],
     a:'SchoolPark パスポートは、CHESでのきみの身元だよ🪪\nEmu・SchoolPark・Camellia・Heartoo、どこでの記録もこの番号に付くんだ。\n\n見かた：\n・Emu → 左のならびの下、きみの名前\n・SchoolPark → サイドバーの下、きみの名前\n・スマホ → 右上の「☰」→ SchoolPark パスポート\n\n入り方（LINE/Google/メール）を変えても番号は変わらないし、同じ番号を2人が持つことはできない作りだよ。投票もクエストも引用も、この番号で1回だけなんだ🧊' },
 
   /* ════════════════════════════════════════════
@@ -10905,7 +10945,8 @@ const SP_REIZO_KB = [
     a:'読んだ知識には、2つの返し方があるよ🧊\n\n👍 Good → 「役に立った」。相手には「何人の次の一歩になったか」として残るよ\n🔁 Change → 「一緒にもっと良くする」。きみの経験や別の視点が知識に重なるよ\n\nChangeは否定じゃないんだ。どこに共感して、どこに別の見方があるかを書いてね。\n採用されると、書いた人と提案した人の両方に記録が残るよ！' },
 
   // ── 投稿のしかた・名前
-  { k:['投稿','知識を届ける','書き方','どう書く','名前を出したい','名前を変え','表示名','写真を変え'],
+  { k:['投稿','知識を届ける','書き方','どう書く','名前','名前を出したい','名前を変え',
+       '表示名','写真を変え','アイコン'],
     a:'「＋ 知識を届ける」（左上のオレンジのボタン）から出せるよ🧊\n\n① 題名と本文を書く（画像も1枚まで）\n② テーマを付けると探されやすくなるよ\n③ 出す（下書きにも残せるよ）\n\n名前を出したいときは、右上のアカウントメニュー →「名前と写真」で決めてね。決めた名前が投稿にも出るよ。決めていないと番号が出るんだ。' },
 
   // ── 投稿が切れる
@@ -10973,15 +11014,18 @@ const SP_REIZO_KB = [
     a:'EMUER は CHES の中で流通するトークンだよ🧊 Emuでの活動で貯まるんだ。\n\n貯まりかた：\n・ログインボーナス → 毎日 +0.5\n・知識に Good が付く\n・議論・一日シェア\n\n100 EMUER で特別体験と交換できるよ。使い道は「今日のEmu」の「使い道を見る」から！' },
 
   // ── 残高の見かた
-  { k:['残高はどこ','残高の見かた','残高を見る','いくら持ってる','持ってる分'],
+  { k:['残高','ざんだか','いくら持ってる','いくら貯ま','どこで見れる'],
     a:'いまの残高は、Emuの右上に出ているよ💎\n「今日のEmu」の「現在の報酬」でも見られるし、次の特別体験まであと何EMUERかも出るよ！\n\nぼくに「残高教えて」って言ってくれれば、ここに出すこともできるからね🧊' },
 
   // ── プラン・料金
-  { k:['プラン','料金','有料','月額','いくら','値段','課金','light','plus','pro'],
+  // 'いくら' は入れない。「残高はいくら？」が料金表に来てしまうため。
+  { k:['プラン','料金','有料','月額','値段','課金','light','plus','pro'],
     a:'プランはこうなってるよ🎫\n\n・見学 → 無料（読む・見る）\n・Emu light → 500円（投稿・募集・回答・議論・一日シェア）\n・Emu plus → 3,000円（lightに加えて、議論を立てる・月次の学びの軌跡）\n・Emu pro → 10,000円（plusに加えて「語り合える一人」保証）\n\n変更・解約は、右上のアカウントメニュー →「プラン・お支払い」からどうぞ！' },
 
   // ── 公式パス
-  { k:['公式パス','nft','パス','無料で使える','無償'],
+  // 'パス' の2文字は入れない。「パスワードを忘れた」「パスポートは？」まで
+  // ここに来てしまうため。
+  { k:['公式パス','nft','無料で使える','無償'],
     a:'公式パス（NFT）を持っている方は、Emu plus 相当を無償で使えるよ🎫\nパスポートの「区分」のところに出るからね。\n\n持っていなくても、見学（無料）で読む・見るはできるよ！' },
 
   // ── 解約
@@ -11009,16 +11053,17 @@ const SP_REIZO_KB = [
     a:'ショッピングは、Emuの「みてみる」に入っているよ🛍️\nSchoolParkの教材・遊具・デジタルコンテンツやコラボアイテムが見られるよ。\n\nまだ品数は少ないけれど、少しずつ増やしているところなんだ🧊' },
 
   // ── 昔のSchoolParkの話（マップ・エリア・施設・タクシー）
+  // '前の' の2文字は入れない。「名前の変え方」がここに来てしまうため。
   { k:['マップ','エリア','タクシー','中央広場','噴水広場','取引所','銀行','図書館','映画館',
-       '施設','昔の','前の','以前','無くなった','なくなった','変わった'],
+       '施設','昔の','以前','無くなった','なくなった','変わった'],
     a:'昔のSchoolParkにあった「マップを歩いてエリアの施設に入る」形は、もう無いんだ🧊\n\nいまは左のならびから7つの画面に行く形になっているよ：\n01 今週の広場／02 公園／03 クエスト一覧／04 ギルド／05 知恵ライブラリ／06 メンバー・貢献／07 トレジャリー\n\n・エレベーター → 公園に残っているよ\n・遊び（ECHO FIELD・林檎の方程式）→ Emuの「遊び」へ\n・ショッピング → Emuの「みてみる」へ\n・タクシー・施設の解放コスト・利用制限 → 廃止したよ' },
 
   // ── Camellia
-  { k:['camelliaとは','カメリアとは','女性','ウェルネス','ウェルビーイング'],
+  { k:['camellia','カメリア','女性','ウェルネス','ウェルビーイング'],
     a:'Camellia（カメリア）は、女性のウェルネス／ウェルビーイングの場所だよ🌸\nいまは準備中で、順番に開けているところなんだ。\n\nパスポートは共通だから、開いたときはそのまま入れるよ🧊' },
 
   // ── Heartoo
-  { k:['heartooとは','ハートゥーとは','結婚指輪','指輪'],
+  { k:['heartoo','ハートゥー','結婚指輪','指輪'],
     a:'Heartoo（ハートゥー）は、スマート結婚指輪「♡を貴女に」の場所だよ💍\nいまは準備中で、順番に開けているところなんだ。\n\nパスポートは共通だから、開いたときはそのまま入れるよ🧊' },
 ];
 
@@ -11121,14 +11166,17 @@ function spReizoSend() {
   const typing = _spReizoShowTyping();
   setTimeout(async () => {
     typing.remove();
-    // 既存FAQ（SP_REIZO_KB）を優先。ヒットしなかった場合のみagentsスキルにフォールバック
+    // スキル（残高を出す・リマインド・通知）が先。
+    // キーワードは「残高教えて」のようにはっきりお願いされた形だけなので、
+    // 「残高ってどこで見るの？」のような普通の質問は下のFAQへ落ちる。
+    const skill = _matchReizoSkill(q);
+    if (skill) { await skill.handler(); return; }
+
     const ans = spReizoAnswer(q);
     if (ans !== null) {
       _spReizoAppendMsg(ans, false);
       return;
     }
-    const skill = _matchReizoSkill(q);
-    if (skill) { await skill.handler(); return; }
     {
       // わからない場合：謝罪 + 問い合わせボタン
       const msgDiv = _spReizoAppendMsg('ごめんね、「' + q + '」についてはうまく答えられなかったよ😢\n問い合わせフォームから運営に直接聞いてみてね！', false);
@@ -20053,9 +20101,18 @@ function submitContact() {
       || window.connectedAccount || localStorage.getItem('emuWallet') || '';
   } catch (e) {}
 
+  // formData は種別を選び直しても残る（打ち直さずに済むように）。
+  // そのまま送ると、前に選んだ種別の項目（端末・お子様の年齢など）まで
+  // 一緒に届いてしまうので、いま選んでいる種別の項目だけを送る。
+  const fields = {};
+  FORMS[selectedType].fields.forEach(f => {
+    const v = formData[f.id];
+    if (v !== undefined && String(v).trim() !== '') fields[f.id] = v;
+  });
+
   const payload = {
     type: selectedType,
-    ...formData,
+    ...fields,
     passport: passport,
     submittedAt: new Date().toISOString(),
     source: 'emu-widget'
@@ -20115,7 +20172,11 @@ function showSuccess() {
   document.getElementById('w-body').style.display = 'none';
   document.getElementById('w-footer').style.display = 'none';
   document.getElementById('w-progress').style.display = 'none';
-  document.getElementById('w-success').classList.add('show');
+  const s = document.getElementById('w-success');
+  // チュートリアルタブに切り替えると display:none が直接書き込まれる。
+  // それが残っていると .show を付けても出てこないので、先に消す。
+  s.style.display = '';
+  s.classList.add('show');
 }
 
 function resetWidget() {
