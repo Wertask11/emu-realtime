@@ -12798,6 +12798,18 @@ if (_readMore) _readMore.addEventListener("click", () => {
   const clamped = body.classList.toggle("clamp");
   _readMore.textContent = clamped ? "続きを読む" : "閉じる";
 });
+/* 折りたたみは4行、ボタンを出すかどうかは文字数で決めていた。
+   ものさしが違うので、100字を超えていても4行に収まる投稿では
+   押しても何も起きないボタンが出る。実際にはみ出しているかで決め直す。
+   （画面に入ってからでないと高さが測れないので、次の順番で見る） */
+setTimeout(function () {
+  const body = postElement.querySelector(".kw-body");
+  if (!body || !_readMore) return;
+  if (body.scrollHeight <= body.clientHeight + 1) {
+    body.classList.remove("clamp");
+    _readMore.style.display = "none";
+  }
+}, 0);
 
   // reaction ハンドラ
   attachReactionHandlers(postElement);
