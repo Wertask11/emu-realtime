@@ -833,29 +833,33 @@ const T_HEAD = `              <div style="display:flex; flex-direction:column; g
               </div>`;
 if (!template.includes(T_HEAD)) { console.error('トレジャリーの見出しが見つからない'); process.exit(1); }
 template = template.replace(T_HEAD,
-`              <div style="display:flex; flex-direction:column; gap:22px">
-                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE">TREASURY</div>
-                <sc-for list="{{ treasury.cards }}" as="c" hint-placeholder-count="1">
-                  <div style="display:flex; flex-direction:column; gap:10px; padding-bottom:18px; border-bottom:1px solid rgba(244,241,234,.14)">
-                    <div style="font-size:13px; font-weight:700; color:#D0E2BE">{{ c.cur }}</div>
-                    <div style="display:flex; gap:22px; flex-wrap:wrap">
-                      <div style="display:flex; flex-direction:column; gap:3px">
-                        <div style="font-size:11px; color:rgba(244,241,234,.55)">ある</div>
-                        <div style="font-family:Inter,sans-serif; font-size:20px; font-weight:600">{{ c.have }}</div>
-                      </div>
-                      <div style="display:flex; flex-direction:column; gap:3px">
-                        <div style="font-size:11px; color:rgba(244,241,234,.55)">約束済み</div>
-                        <div style="font-family:Inter,sans-serif; font-size:20px; font-weight:600">{{ c.promised }}</div>
-                      </div>
-                      <div style="display:flex; flex-direction:column; gap:3px">
-                        <div style="font-size:11px; color:rgba(244,241,234,.55)">使える</div>
-                        <div style="font-family:Inter,sans-serif; font-size:20px; font-weight:600; color:{{ c.freeColor }}">{{ c.free }}</div>
-                      </div>
-                    </div>
-                    <div style="font-size:11px; color:rgba(244,241,234,.5)">{{ c.month }}</div>
-                    <div style="font-size:11px; color:#E08A7A">{{ c.warn }}</div>
+`              <div style="display:flex; flex-direction:column; gap:20px">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap">
+                  <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE">TREASURY</div>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap">
+                    <sc-for list="{{ treasury.curTabs }}" as="ct" hint-placeholder-count="3">
+                      <div onClick="{{ ct.go }}" style="padding:6px 14px; border-radius:14px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid rgba(244,241,234,.24); background:{{ ct.bg }}; color:{{ ct.fg }}">{{ ct.label }}</div>
+                    </sc-for>
                   </div>
-                </sc-for>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:12px">
+                  <div style="display:flex; gap:26px; flex-wrap:wrap">
+                    <div style="display:flex; flex-direction:column; gap:4px">
+                      <div style="font-size:11px; color:rgba(244,241,234,.55)">ある</div>
+                      <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; line-height:1.1">{{ treasury.card.have }}</div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px">
+                      <div style="font-size:11px; color:rgba(244,241,234,.55)">約束済み</div>
+                      <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; line-height:1.1">{{ treasury.card.promised }}</div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px">
+                      <div style="font-size:11px; color:rgba(244,241,234,.55)">使える</div>
+                      <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; line-height:1.1; color:{{ treasury.card.freeColor }}">{{ treasury.card.free }}</div>
+                    </div>
+                  </div>
+                  <div style="font-size:11px; color:rgba(244,241,234,.5)">{{ treasury.card.month }}</div>
+                  <div style="font-size:11px; color:#E08A7A">{{ treasury.card.warn }}</div>
+                </div>
               </div>`);
 
 /* ㉛ 配分の帯を、通貨ごとに切り替えられるようにする。
@@ -876,14 +880,7 @@ const T_ALLOC = `              <div style="display:flex; flex-direction:column; 
 if (!template.includes(T_ALLOC)) { console.error('配分の帯が見つからない'); process.exit(1); }
 template = template.replace(T_ALLOC,
 `              <div style="display:flex; flex-direction:column; gap:14px">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap">
-                  <div style="font-size:13px; font-weight:700; color:#D0E2BE">{{ treasury.allocTitle }}</div>
-                  <div style="display:flex; gap:6px; flex-wrap:wrap">
-                    <sc-for list="{{ treasury.curTabs }}" as="ct" hint-placeholder-count="0">
-                      <div onClick="{{ ct.go }}" style="padding:5px 12px; border-radius:14px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid rgba(244,241,234,.24); background:{{ ct.bg }}; color:{{ ct.fg }}">{{ ct.label }}</div>
-                    </sc-for>
-                  </div>
-                </div>
+                <div style="font-size:13px; font-weight:700; color:#D0E2BE">{{ treasury.allocTitle }}</div>
                 <sc-for list="{{ treasury.alloc }}" as="a" hint-placeholder-count="4">
                   <div style="display:flex; flex-direction:column; gap:8px">
                     <div style="display:flex; justify-content:space-between; gap:12px; font-size:13px">
@@ -901,8 +898,8 @@ template = template.replace(T_ALLOC,
 const T_INIT = "treasury:{total:'0', in:'0', out:'0', alloc:[], txs:[]}";
 if (!logic.includes(T_INIT)) { console.error('トレジャリーの初期値が見つからない'); process.exit(1); }
 logic = logic.replace(T_INIT,
-  "treasury:{cards:[{cur:'円', have:'¥0', promised:'¥0', free:'¥0', freeColor:'#D0E2BE', warn:'', month:'今月 +¥0 / -¥0'}],"
-  + " curTabs:[], allocTitle:'内訳', allocNote:'', alloc:[], txs:[]}");
+  "treasury:{card:{have:'¥0', promised:'¥0', free:'¥0', freeColor:'#D0E2BE', warn:'', month:'今月 +¥0 / -¥0'},"
+  + " curTabs:[], allocTitle:'内訳（円）', allocNote:'', alloc:[], txs:[]}");
 
 /* 足もとの説明を、いまの中身に合わせる */
 const T_NOTE2 = '分配ルール：完走したメンバーに予算の70%、知恵カードの引用数に応じて20%、残り10%を次の原資にプール。<br>外からの入出金はまだ記録していません。ここに出ているのは、クエストに付いた予算です。';

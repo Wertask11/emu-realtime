@@ -16542,27 +16542,19 @@ window.spDaoLoadTreasury = async function (app) {
     });
   });
 
-  /* 画面に出す3段。使える＝ある − 約束済み。
+  /* 選んだ通貨の3段。使える＝ある − 約束済み。
      マイナスになったら、払えない約束をしていることになる。 */
-  const cards = SP_CURRENCIES.map(function (c) {
+  function cardFor(c) {
     const b = box[c];
     const free = b.have - b.promised;
     return {
-      cur: SP_CURRENCY_LABEL[c],
       have: spMoney(b.have, c),
       promised: spMoney(b.promised, c),
       free: spMoney(free, c),
       freeColor: free < 0 ? '#E08A7A' : '#D0E2BE',
       warn: free < 0 ? '約束が持っている額を超えています' : '',
-      month: '今月 +' + spMoney(b.monthIn, c) + ' / -' + spMoney(b.monthOut, c),
-      empty: (b.have === 0 && b.promised === 0 && b.closed === 0)
+      month: '今月 +' + spMoney(b.monthIn, c) + ' / -' + spMoney(b.monthOut, c)
     };
-  }).filter(function (x) { return !x.empty; });
-
-  /* どの通貨も動いていないときは、円の枠だけ出して形を保つ */
-  if (!cards.length) {
-    cards.push({ cur: '円', have: '¥0', promised: '¥0', free: '¥0',
-      freeColor: '#D0E2BE', warn: '', month: '今月 +¥0 / -¥0' });
   }
 
   /* 内訳は通貨ごとに出す。
@@ -16584,12 +16576,10 @@ window.spDaoLoadTreasury = async function (app) {
     ];
   }
 
-  /* 動いている通貨だけを出す。使っていない通貨は選ばせない。 */
-  const active = SP_CURRENCIES.filter(function (c) {
-    const b = box[c];
-    return !(b.have === 0 && b.promised === 0 && b.closed === 0);
-  });
-  const shown = active.length ? active : ['JPY'];
+  /* 3通貨とも、いつでも見られるようにする。
+     動いている通貨だけに絞っていたときは、まだ何も無い通貨を
+     確かめる手段がなく、タブそのものが出なかった。 */
+  const shown = SP_CURRENCIES.slice();
 
   txs.sort(function (a, b) { return b.at - a.at; });
   const txList = txs.slice(0, 8).map(function (t) {
@@ -16604,8 +16594,8 @@ window.spDaoLoadTreasury = async function (app) {
     const b = box[c];
     app.setState({
       treasury: {
-        cards: cards,
-        curTabs: shown.length > 1 ? shown.map(function (x) {
+        card: cardFor(c),
+        curTabs: shown.map(function (x) {
           const on = x === c;
           return {
             label: SP_CURRENCY_LABEL[x],
@@ -16613,7 +16603,7 @@ window.spDaoLoadTreasury = async function (app) {
             bg: on ? '#D0E2BE' : 'transparent',
             fg: on ? '#141310' : 'rgba(244,241,234,.7)'
           };
-        }) : [],
+        }),
         allocTitle: '内訳（' + SP_CURRENCY_LABEL[c] + '）',
         allocNote: (b.promised + b.closed) === 0
           ? 'この通貨のクエストはまだありません。'
