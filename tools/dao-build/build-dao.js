@@ -808,8 +808,11 @@ if (!template.includes(Q_FILTERS)) { console.error('クエスト一覧の入口�
 template = template.replace(Q_FILTERS, Q_FILTERS
   + '            <div style="background:#E7E2D6; border-radius:12px; padding:20px 22px; display:flex; gap:18px; align-items:center; flex-wrap:wrap">\n'
   + '              <div style="flex:1 1 380px; min-width:0; font-size:13px; line-height:1.95; color:#3B382F">'
-  + 'クエストは<b>仕事</b>です。SchoolPark・Emu・Camellia などの仕事を、DAOのメンバーやそれ以外の方が引き受けて動かします。'
-  + '報酬は EMUER・JPYC・円 で払われます。<br>'
+  + 'クエストは<b>仕事</b>です。SchoolPark・Emu・Camellia などの仕事を、DAOのメンバーやそれ以外の方が引き受けて動かします。<br>'
+  /* 予算の出どころと、受け取ったあとの扱いを先に書いておく。
+     あとから知らせるより、受ける前に見えているほうがいい。 */
+  + '<b>予算は SchoolPark が決めて出します。</b>報酬は EMUER・JPYC・円 のいずれかです。<br>'
+  + '受け取ったぶんは<b>雑所得</b>にあたります。ほかの所得と合わせて年20万円を超えると、確定申告が必要になります。<br>'
   + '決めごとを話し合う場所は<b>ギルド</b>です。こちらとは別ものです。'
   + '</div>\n'
   + '              <div onClick="{{ goPropose }}" style="padding:12px 18px; background:#0F5C3F; color:#F4F1EA;'
@@ -907,7 +910,11 @@ if (!template.includes(T_NOTE2)) { console.error('トレジャリーの注記が
 template = template.replace(T_NOTE2,
   '<b>ある</b>は、記録された入金から支出を引いた額。<b>約束済み</b>は、まだ完了していないクエストの予算。'
   + '<b>使える</b>はその差です。ここがマイナスなら、払えない約束をしていることになります。<br>'
-  + '分配ルール：完走したメンバーに予算の70%、知恵カードの引用数に応じて20%、残り10%を次の原資にプール。<br>'
+  /* 「集めた会費をそのまま配っている」ように読めると、
+     他人のお金を右から左に流している形に見える。
+     予算はSchoolParkが決めて出すものだと、はっきり書く。 */
+  + 'クエストの予算は、SchoolPark が決めて出します。下の割合は、その予算の分け方です。<br>'
+  + '完走したメンバーに予算の70%、知恵カードの引用数に応じて20%、残り10%を次の原資にプール。<br>'
   + '完了したクエストの分配は、実際に払ったときに支出として記録してください。');
 
 const T_EMPTY = 'まだお金の動きがありません。クエストに予算が付くと、ここに出ます。';
