@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>今週のボード｜Emu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════════
+   今週のボード
+
+   使い方
+   ① 左の「今週の中身」に、その週にEmuへ届いた知識を貼る
+   ② 大きさを選ぶ（Xに出すなら 4:5 がいちばん大きく出る）
+   ③ 「撮影モード」を押して、ボードだけを画面に出す
+   ④ 画面を撮って、そのまま投稿する
+
+   まだアプリには入れていない。手で3週間まわして、
+   外の反応と「自分のも載せて」という声が出るかを見るための道具。
+   ══════════════════════════════════════════════════════════ */
+
+:root {
+  --board:      #F4F1EA;   /* ボードの面。少し温かい白 */
+  --board-line: #E2DCCE;   /* 罫線 */
+  --frame:      #14130F;   /* 枠 */
+  --card:       #FFFDF7;   /* カードの紙 */
+  --ink:        #14130F;   /* 本文 */
+  --ink-soft:   #6B6355;   /* 添え字 */
+  --gold:       #B8892B;   /* Emuの金。紙の上なので少し濃くする */
+  --gold-pale:  #EFE3C8;
+  --tape:       rgba(212,168,67,.30);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: #0F1119;
+  color: #E8E3D8;
+  font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+  display: flex; min-height: 100vh;
+}
+
+/* ── 左：入力パネル（撮影のときは消える） ───────────── */
+#panel {
+  width: 380px; flex: 0 0 380px; padding: 20px;
+  border-right: 1px solid rgba(255,255,255,.09);
+  overflow-y: auto; height: 100vh;
+}
+#panel h1 { font-size: 1.05rem; margin: 0 0 4px; color: #D4A843; letter-spacing: .02em; }
+#panel .sub { font-size: .76rem; color: #8A8272; line-height: 1.7; margin-bottom: 18px; }
+.pl { display: block; font-size: .74rem; color: #A79C84; margin: 14px 0 5px; letter-spacing: .04em; }
+.pin, textarea {
+  width: 100%; background: #171A26; color: #E8E3D8;
+  border: 1px solid rgba(255,255,255,.14); border-radius: 8px;
+  padding: 9px 11px; font-size: .82rem; font-family: inherit; outline: none;
+}
+.pin:focus, textarea:focus { border-color: #D4A843; }
+textarea { min-height: 320px; line-height: 1.75; resize: vertical; }
+.row { display: flex; gap: 8px; }
+.row .pin { flex: 1; }
+.sizes { display: flex; gap: 6px; margin-top: 6px; }
+.sizes button {
+  flex: 1; background: #171A26; color: #A79C84; font-family: inherit;
+  border: 1px solid rgba(255,255,255,.14); border-radius: 8px;
+  padding: 8px 4px; font-size: .76rem; cursor: pointer;
+}
+.sizes button.on { background: rgba(212,168,67,.16); border-color: #D4A843; color: #D4A843; font-weight: 700; }
+#shoot {
+  width: 100%; margin-top: 18px; padding: 12px; cursor: pointer;
+  background: #D4A843; color: #14130F; border: none; border-radius: 9px;
+  font-family: inherit; font-size: .88rem; font-weight: 700;
+}
+.hint { font-size: .72rem; color: #6E6857; line-height: 1.8; margin-top: 12px; }
+.hint code { color: #A79C84; }
+
+/* ── 右：ボードの置き場 ───────────────────────── */
+#stage {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 24px; overflow: auto; height: 100vh;
+}
+#scaler { transform-origin: center center; }
+
+/* ── ボード本体。撮るのはここだけ ───────────────── */
+#board {
+  width: 1200px; height: 1500px;      /* JSで差し替える */
+  background: var(--board);
+  border: 14px solid var(--frame);
+  border-radius: 4px;
+  padding: 62px 58px 0;
+  display: flex; flex-direction: column;
+  position: relative; overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0,0,0,.55);
+  /* うっすら方眼。ホワイトボードらしさは、色より線で出す */
+  background-image:
+    linear-gradient(var(--board-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--board-line) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+/* 紙の面の陰影。均一な白は「画像」に見えるので、少しムラを置く */
+#board::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(120% 70% at 50% -10%, rgba(255,255,255,.85), transparent 60%),
+    radial-gradient(90% 60% at 110% 110%, rgba(20,19,15,.07), transparent 55%);
+}
+
+/* ── 見出し ─────────────────────────────── */
+.bd-head { position: relative; z-index: 1; flex: 0 0 auto; }
+.bd-kicker {
+  font-size: 15px; letter-spacing: .34em; color: var(--gold);
+  font-weight: 700; margin-bottom: 10px;
+}
+.bd-title {
+  font-size: 62px; font-weight: 900; color: var(--ink);
+  letter-spacing: -.02em; line-height: 1.05; margin: 0;
+}
+.bd-range { font-size: 21px; color: var(--ink-soft); margin-top: 12px; font-weight: 500; }
+.bd-rule {
+  height: 3px; background: var(--gold); width: 92px;
+  margin: 22px 0 0; border-radius: 2px;
+}
+
+/* ── カードのならび。長さがバラつくので段組みで流す ── */
+.bd-cards {
+  position: relative; z-index: 1; flex: 1 1 auto;
+  margin-top: 34px; padding-bottom: 20px;
+  column-gap: 22px; overflow: hidden;
+}
+.card {
+  break-inside: avoid; page-break-inside: avoid;
+  background: var(--card); border-radius: 3px;
+  padding: 22px 22px 18px; margin-bottom: 22px;
+  position: relative;
+  box-shadow: 0 3px 10px rgba(20,19,15,.13), 0 12px 26px rgba(20,19,15,.07);
+  border: 1px solid rgba(20,19,15,.07);
+}
+/* 貼ったテープ。まっすぐ貼られていないほうが、貼った感じが出る */
+.card::before {
+  content: ''; position: absolute; top: -9px; left: 50%;
+  width: 74px; height: 20px; transform: translateX(-50%) rotate(var(--tapeRot));
+  background: var(--tape);
+  border-left: 1px dashed rgba(20,19,15,.10);
+  border-right: 1px dashed rgba(20,19,15,.10);
+}
+.card-theme {
+  display: inline-block; font-size: 13px; font-weight: 700; color: var(--gold);
+  background: var(--gold-pale); border-radius: 3px;
+  padding: 3px 9px; margin-bottom: 11px; letter-spacing: .04em;
+}
+.card-title {
+  font-size: 24px; font-weight: 700; color: var(--ink);
+  line-height: 1.4; margin: 0 0 9px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.card-body {
+  font-size: 17px; line-height: 1.72; color: #3A362D; margin: 0;
+  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden;
+}
+.card-by {
+  margin-top: 14px; font-size: 14px; color: var(--ink-soft);
+  text-align: right; font-weight: 500;
+}
+
+/* 枚数が少ない週は大きく、多い週は小さく。
+   3枚しか無い週に小さいカードが散っていると、いちばん寂しく見える。
+   段を減らして1枚を大きくするほうが、余白より効く。 */
+#board[data-dense="s"] .bd-cards { column-count: 1; }
+#board[data-dense="s"] .card { padding: 34px 34px 28px; margin-bottom: 30px; }
+#board[data-dense="s"] .card-theme { font-size: 16px; padding: 4px 12px; }
+#board[data-dense="s"] .card-title { font-size: 36px; }
+#board[data-dense="s"] .card-body  { font-size: 22px; -webkit-line-clamp: 5; }
+#board[data-dense="s"] .card-by    { font-size: 18px; }
+
+#board[data-dense="m"] .bd-cards { column-count: 2; }
+#board[data-dense="m"] .card { padding: 26px 26px 22px; margin-bottom: 24px; }
+#board[data-dense="m"] .card-title { font-size: 27px; }
+#board[data-dense="m"] .card-body  { font-size: 19px; }
+
+#board[data-dense="l"] .bd-cards { column-count: 3; }
+#board[data-dense="l"] .card-title { font-size: 21px; }
+#board[data-dense="l"] .card-body  { font-size: 15px; -webkit-line-clamp: 5; }
+
+#board[data-dense="xl"] .bd-cards { column-count: 4; }
+#board[data-dense="xl"] .card { padding: 17px 17px 14px; margin-bottom: 17px; }
+#board[data-dense="xl"] .card-title { font-size: 18px; }
+#board[data-dense="xl"] .card-body  { font-size: 13.5px; -webkit-line-clamp: 5; }
+#board[data-dense="xl"] .card-theme { font-size: 11px; }
+
+/* それでも埋まりきらない週は、上に詰めず真ん中に置く。
+   下だけが空いていると「切れている」ように見えるため。 */
+.bd-cards.short { display: flex; flex-direction: column; justify-content: center; column-count: initial; }
+.bd-cards.short .card { margin-bottom: 26px; }
+.bd-cards.short .card:last-child { margin-bottom: 0; }
+
+/* 横長のときは、縦に詰めるより段を増やしたほうが収まる */
+#board[data-ratio="16x9"] .bd-title { font-size: 50px; }
+#board[data-ratio="16x9"] .bd-cards { column-count: 4; }
+#board[data-ratio="16x9"] .card-body { -webkit-line-clamp: 4; }
+
+/* ── 足もと ─────────────────────────────── */
+.bd-foot {
+  position: relative; z-index: 1; flex: 0 0 auto;
+  margin: 0 -58px; padding: 20px 58px;
+  border-top: 1px solid rgba(20,19,15,.12);
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+}
+.bd-count { font-size: 20px; color: var(--ink); font-weight: 700; }
+.bd-count b { color: var(--gold); font-size: 26px; margin: 0 3px; }
+.bd-url { font-size: 17px; color: var(--ink-soft); font-weight: 500; letter-spacing: .01em; }
+
+/* ── 撮影モード。ボード以外を消して、画面いっぱいに収める。
+      原寸（1200×1500）で出すと画面からはみ出して、
+      1回のスクリーンショットに入りきらないため。 ───────── */
+body.shoot #panel { display: none; }
+body.shoot #stage { padding: 0; }
+body.shoot #board { box-shadow: none; }
+#exit {
+  display: none; position: fixed; right: 16px; bottom: 16px; z-index: 99;
+  background: rgba(15,17,25,.92); color: #D4A843; cursor: pointer;
+  border: 1px solid #D4A843; border-radius: 8px; padding: 9px 15px;
+  font-family: inherit; font-size: .8rem; font-weight: 700;
+}
+body.shoot #exit { display: block; }
+</style>
+</head>
+<body>
+
+<!-- ══════════ 左：今週の中身を差し替えるところ ══════════ -->
+<div id="panel">
+  <h1>今週のボード</h1>
+  <div class="sub">
+    その週にEmuへ届いた知識を貼って、土曜10時に出すための1枚。<br>
+    まだアプリには入れず、手でまわして反応を見るための道具です。
+  </div>
+
+  <label class="pl">週（見出しに出ます）</label>
+  <div class="row">
+    <input class="pin" id="inFrom" placeholder="8/24">
+    <input class="pin" id="inTo"   placeholder="8/30">
+  </div>
+
+  <label class="pl">大きさ</label>
+  <div class="sizes" id="sizes">
+    <button data-r="4x5"  class="on">4:5<br><span style="font-size:.66rem">Xで大きい</span></button>
+    <button data-r="1x1">1:1<br><span style="font-size:.66rem">正方形</span></button>
+    <button data-r="16x9">16:9<br><span style="font-size:.66rem">横長</span></button>
+  </div>
+
+  <label class="pl">今週の中身</label>
+  <textarea id="inCards" spellcheck="false"></textarea>
+
+  <button id="shoot">撮影モードにする</button>
+
+  <div class="hint">
+    <b>書き方</b><br>
+    カードとカードのあいだは <code>---</code> の行で区切ります。<br>
+    1行目＝題名、<code>#</code> で始まる行＝テーマ、<code>by </code> で始まる行＝書いた人。<br>
+    残りが本文です。テーマと名前は無くてもかまいません。<br><br>
+    <b>撮り方</b><br>
+    撮影モードにすると、ボードだけが画面いっぱいに出ます。そのまま画面を撮ってください。<br>
+    もっと鮮明にしたいときは、ブラウザの窓を大きくしてから撮ると、そのぶん大きく出ます。
+  </div>
+</div>
+
+<!-- ══════════ 右：ボード ══════════ -->
+<div id="stage">
+  <div id="scaler">
+    <div id="board" data-ratio="4x5" data-dense="m">
+      <div class="bd-head">
+        <div class="bd-kicker">EMU / THIS WEEK</div>
+        <h2 class="bd-title">今週のボード</h2>
+        <div class="bd-range" id="outRange"></div>
+        <div class="bd-rule"></div>
+      </div>
+      <div class="bd-cards" id="outCards"></div>
+      <div class="bd-foot">
+        <div class="bd-count" id="outCount"></div>
+        <div class="bd-url">schoolpark-emu.vercel.app</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button id="exit">← 編集に戻る</button>
+
+<script>
+/* 大きさ。Xのタイムラインでいちばん面積を取れるのは 4:5。 */
+const SIZES = {
+  '4x5':  [1200, 1500],
+  '1x1':  [1200, 1200],
+  '16x9': [1600,  900]
+};
+
+/* 最初に入れておく例。実際に届いた知識に置き換えて使う。 */
+const SAMPLE = [
+  '#お金',
+  '家計簿が続かなかった理由',
+  '毎日つけようとしたのが間違いだった。週に1回、日曜の夜だけレシートをまとめて見る形にしたら3か月続いた。',
+  '正確さより、続くほうを選ぶ。',
+  'by 冷蔵庫くん',
+  '---',
+  '#人間関係',
+  '断るのが怖かったとき',
+  '「できません」だけだと角が立つと思っていたが、理由を足すほど相手は食い下がってきた。',
+  '理由を言わずに、代わりに出せるものだけ言うようにしたら早く終わるようになった。',
+  'by 冷蔵庫くん',
+  '---',
+  '#はたらく',
+  '会議で発言できない人へ',
+  '準備した意見を言おうとすると、いつも先を越されていた。',
+  '最初の5分で「質問」だけしておくと、その後に自分の意見を置く場所ができる。',
+  'by 冷蔵庫くん',
+  '---',
+  '#学び',
+  '本を最後まで読めない',
+  '目次を読んで、いま困っていることに一番近い章から読む。頭から読まない。',
+  '「読み切る」を目標にしていたときより、本の内容を人に話せるようになった。',
+  'by 冷蔵庫くん',
+  '---',
+  '#暮らし',
+  '朝起きられないのを直した',
+  '早く寝ることばかり試して失敗していた。起きる理由のほうを先に作った。',
+  '前の日の夜に、朝いちばんにやることを1つだけ机に出しておく。',
+  'by 冷蔵庫くん'
+].join('\n');
+
+/* テキストをカードに切り分ける。
+   区切りは --- の行。1行目が題名、# がテーマ、by  が名前、残りが本文。 */
+function parseCards(text) {
+  return String(text).split(/^\s*---\s*$/m).map(block => {
+    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return null;
+    let theme = '', by = '';
+    const rest = [];
+    lines.forEach(l => {
+      if (!theme && l.startsWith('#'))          { theme = l.slice(1).trim(); return; }
+      if (!by    && /^by\s+/i.test(l))          { by    = l.replace(/^by\s+/i, '').trim(); return; }
+      rest.push(l);
+    });
+    if (!rest.length) return null;
+    return { theme, title: rest[0], body: rest.slice(1).join(' '), by };
+  }).filter(Boolean);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* 枚数で密度を決める。少ない週にスカスカの小さいカードが散るのがいちばん寂しい。 */
+function densityFor(n) {
+  if (n <= 3) return 's';
+  if (n <= 8) return 'm';
+  if (n <= 14) return 'l';
+  return 'xl';
+}
+
+/* 描いたあとに、下がどれだけ空いたかを測る。
+   3割以上あまっていたら、上に詰めるのをやめて真ん中に置き直す。 */
+function balance() {
+  const area = document.getElementById('outCards');
+  area.classList.remove('short');
+  const cards = [...area.querySelectorAll('.card')];
+  if (!cards.length) return;
+  const top = area.getBoundingClientRect().top;
+  const used = Math.max(...cards.map(c => c.getBoundingClientRect().bottom)) - top;
+  const have = area.getBoundingClientRect().height;
+  if (have > 0 && used / have < 0.7) area.classList.add('short');
+}
+
+let ratio = '4x5';
+
+function draw() {
+  const cards = parseCards(document.getElementById('inCards').value);
+  const board = document.getElementById('board');
+
+  board.dataset.ratio = ratio;
+  board.dataset.dense = densityFor(cards.length);
+  const [w, h] = SIZES[ratio];
+  board.style.width  = w + 'px';
+  board.style.height = h + 'px';
+
+  const from = document.getElementById('inFrom').value.trim();
+  const to   = document.getElementById('inTo').value.trim();
+  document.getElementById('outRange').textContent =
+    (from && to) ? (from + ' 〜 ' + to) : (from || to || '');
+
+  document.getElementById('outCards').innerHTML = cards.map((c, i) => {
+    // 貼り方の傾きは、毎回変わると落ち着かないので順番から決める
+    const rot = [-5, 4, -2, 6, -4, 3][i % 6];
+    return '<div class="card" style="--tapeRot:' + rot + 'deg">'
+      + (c.theme ? '<div class="card-theme">' + esc(c.theme) + '</div>' : '')
+      + '<div class="card-title">' + esc(c.title) + '</div>'
+      + (c.body ? '<div class="card-body">' + esc(c.body) + '</div>' : '')
+      + (c.by ? '<div class="card-by">— ' + esc(c.by) + '</div>' : '')
+      + '</div>';
+  }).join('');
+
+  const people = new Set(cards.map(c => c.by).filter(Boolean)).size;
+  document.getElementById('outCount').innerHTML =
+    people
+      ? '今週、<b>' + people + '</b>人が <b>' + cards.length + '</b>個の知識を持ち寄りました。'
+      : '今週、<b>' + cards.length + '</b>個の知識が届きました。';
+
+  balance();
+  fit();
+}
+
+/* 画面に収まるように縮めて見せる。撮るときは原寸に戻す。 */
+function fit() {
+  const stage = document.getElementById('stage');
+  const [w, h] = SIZES[ratio];
+  const pad = document.body.classList.contains('shoot') ? 0 : 48;
+  const s = Math.min((stage.clientWidth - pad) / w, (stage.clientHeight - pad) / h, 1);
+  const sc = document.getElementById('scaler');
+  sc.style.transformOrigin = 'top left';
+  sc.style.transform = 'scale(' + s + ')';
+  // 縮めた分だけ場所も詰める。詰めないと、まわりに使われない余白が残る
+  sc.style.width  = (w * s) + 'px';
+  sc.style.height = (h * s) + 'px';
+}
+
+/* 今週の土曜までの7日を、最初から入れておく */
+(function initWeek() {
+  const now = new Date();
+  const sat = new Date(now);
+  sat.setDate(now.getDate() + ((6 - now.getDay() + 7) % 7));   // 次の土曜
+  const sun = new Date(sat); sun.setDate(sat.getDate() - 6);
+  const f = d => (d.getMonth() + 1) + '/' + d.getDate();
+  document.getElementById('inFrom').value = f(sun);
+  document.getElementById('inTo').value   = f(sat);
+})();
+
+document.getElementById('inCards').value = SAMPLE;
+['inFrom','inTo','inCards'].forEach(id =>
+  document.getElementById(id).addEventListener('input', draw));
+document.getElementById('sizes').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  ratio = b.dataset.r;
+  [...document.querySelectorAll('#sizes button')].forEach(x => x.classList.toggle('on', x === b));
+  draw();
+});
+document.getElementById('shoot').onclick = () => {
+  document.body.classList.add('shoot');
+  window.scrollTo(0, 0);
+  requestAnimationFrame(fit);   // パネルが消えて広くなってから測り直す
+};
+document.getElementById('exit').onclick = () => {
+  document.body.classList.remove('shoot');
+  requestAnimationFrame(fit);
+};
+window.addEventListener('resize', fit);
+
+draw();
+</script>
+</body>
+</html>

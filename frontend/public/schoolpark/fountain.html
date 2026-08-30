@@ -1488,7 +1488,11 @@ async function fpJoinGovernance() {
 //         ②第三弾プレミアムNFT保有者（sp_dao_creators に登録済みウォレット）
 // 現時点では第三弾未発行のため①のみ有効。
 const FP_OWNER_UID    = "oy9GHjxBDxc0h74AUQfRiXj8b3y1";
-const FP_OWNER_WALLET = "0xdcc687c05f130e57597a8525771299a4efb6edf7";
+/* 運営のアドレス。ウォレットで入ったときと、LINE等で入ったときで違うので両方。 */
+const FP_OWNER_WALLETS = [
+  "0xdcc687c05f130e57597a8525771299a4efb6edf7",  // 実ウォレット
+  "0x195f4478ee3865ee1dd360b79e121c638bdd42ac"   // SchoolParkパスポート
+];
 
 async function fpCheckDAOCreator() {
   // Firebase/Firestoreが未初期化なら待機して再試行
@@ -1508,7 +1512,7 @@ async function fpCheckDAOCreator() {
       if (pw) { fpWallet = pw; }
     } catch(e) {}
   }
-  if (fpWallet && fpWallet.toLowerCase() === FP_OWNER_WALLET) {
+  if (fpWallet && FP_OWNER_WALLETS.indexOf(fpWallet.toLowerCase()) >= 0) {
     _fpShowCreateSection("SchoolPark運営");
     return;
   }

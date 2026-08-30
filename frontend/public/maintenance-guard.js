@@ -17,7 +17,11 @@
   "use strict";
 
   var MAINTENANCE = true;
-  var OWNER = "0xdcc687c05f130e57597a8525771299a4efb6edf7";
+  /* 運営のアドレス。ウォレットで入ったときと、LINE等で入ったときで違うので両方。 */
+  var OWNERS = [
+    "0xdcc687c05f130e57597a8525771299a4efb6edf7",  // 実ウォレット
+    "0x195f4478ee3865ee1dd360b79e121c638bdd42ac"   // SchoolParkパスポート
+  ];
 
   if (!MAINTENANCE) return;
 
@@ -39,7 +43,7 @@
     } catch (e) { return ""; }
   }
 
-  if (currentAddress() === OWNER.toLowerCase()) return;
+  if (OWNERS.indexOf(currentAddress()) >= 0) return;
 
   // 画面を差し替える。中身を一瞬でも見せないよう、DOMを待たずに実行する。
   function paint() {

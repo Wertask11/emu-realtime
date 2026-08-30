@@ -52,9 +52,15 @@ service cloud.firestore {
 
     /* 運営（オーナー）。クエストを出せるのは当面ここだけ。
        あとで「信用スコアに応じて」広げるときは、この関数を差し替える。 */
+    /* 運営のアドレスは2つある。ウォレット（MetaMask）で入ったときは
+       実ウォレットのアドレス、LINE・Google・メールで入ったときは
+       uid から作られた別のアドレスになるため。同じ人なのでどちらも通す。 */
     function isOwnerAddr(value) {
       return value is string
-        && value.lower() == '0xdcc687c05f130e57597a8525771299a4efb6edf7';
+        && value.lower() in [
+          '0xdcc687c05f130e57597a8525771299a4efb6edf7',
+          '0x195f4478ee3865ee1dd360b79e121c638bdd42ac'
+        ];
     }
 
     /* いま操作している人が運営かどうか */

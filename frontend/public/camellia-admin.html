@@ -140,7 +140,11 @@ body{background:var(--bg);color:var(--text);font-family:'Zen Maru Gothic',sans-s
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, collection, getDocs, query, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const SP_OWNER_WALLET = '0xdcc687c05f130e57597a8525771299a4efb6edf7';
+/* 運営のアドレス。ウォレットで入ったときと、LINE等で入ったときで違うので両方。 */
+const SP_OWNER_WALLETS = [
+  '0xdcc687c05f130e57597a8525771299a4efb6edf7',  // 実ウォレット
+  '0x195f4478ee3865ee1dd360b79e121c638bdd42ac'   // SchoolParkパスポート
+];
 
 /* Emu本体と同じCHESプロジェクト */
 const firebaseConfig = {
@@ -175,7 +179,7 @@ function getWallet(){
   return String(w).toLowerCase();
 }
 function isOwner(){
-  return getWallet() === SP_OWNER_WALLET.toLowerCase();
+  return SP_OWNER_WALLETS.indexOf(getWallet()) >= 0;
 }
 /* iframe内なら親を閉じる。単体で開いていればEmuへ戻る。 */
 function goBack(){

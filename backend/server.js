@@ -113,10 +113,19 @@ function requireOwnAddress(req, res, next) {
 /* 管理操作（返金の承認・本人確認の閲覧など）はオーナーのウォレットに限定する。
    共有シークレット(x-admin-key)と違い、ブラウザの管理画面から
    ログイン済みユーザーとして本人性を確かめられる。 */
+/* 運営のアドレスは2つある。ウォレット（MetaMask）で入ったときは実ウォレット、
+   LINE・Google・メールで入ったときは uid から作られた別のアドレスになるため。
+   環境変数 SP_OWNER_ADDRESS はカンマ区切りで複数書ける。 */
+const SP_OWNER_ADDRESSES = String(
+  process.env.SP_OWNER_ADDRESS
+  || "0xdcc687c05f130e57597a8525771299a4efb6edf7,0x195f4478ee3865ee1dd360b79e121c638bdd42ac"
+).split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+
 function requireOwner(req, res, next) {
   requireFirebaseUser(req, res, () => {
-    const owner = String(process.env.SP_OWNER_ADDRESS || "0xdcc687c05f130e57597a8525771299a4efb6edf7").toLowerCase();
-    if (req.identity.walletAddress !== owner) return res.status(403).json({ error: "OWNER_ONLY" });
+    if (!SP_OWNER_ADDRESSES.includes(String(req.identity.walletAddress || "").toLowerCase())) {
+      return res.status(403).json({ error: "OWNER_ONLY" });
+    }
     next();
   });
 }

@@ -1062,7 +1062,30 @@ function paintInbox(subs) {
     tab.style.color = waiting.length ? "#b45309" : "";
   }
 
-  $("#r1Reload").onclick = () => refreshInbox(true);
+  /* 押したことが分かるようにする。
+     以前は refreshInbox(true) を呼ぶだけで、
+     ・失敗しても黙って捨てる
+     ・成功しても中身が同じなら見た目が変わらない
+     ので、押しても何も起きていないように見えていた。 */
+  $("#r1Reload").onclick = async (ev) => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    btn.textContent = "読み直しています…";
+    const err = await refreshInbox(true);
+    // 中身が同じなら描き直されず、このボタンがそのまま残る
+    const still = $("#r1Reload");
+    if (still) {
+      still.disabled = false;
+      still.textContent = err ? "もう一度読み直す" : "いま読み直す";
+    }
+    const at = $("#r1InboxAt");
+    if (at) {
+      at.textContent = err
+        ? "読み直せませんでした（" + err + "）"
+        : "最終確認 " + new Date().toLocaleTimeString("ja-JP");
+      at.style.color = err ? "#b91c1c" : "";
+    }
+  };
   box.querySelectorAll("[data-r1ok]").forEach(b => {
     b.onclick = async () => {
       if (!confirm("これを学習コンテンツとして載せます。よろしいですか？")) return;
@@ -1084,10 +1107,17 @@ function paintInbox(subs) {
 /* 開いているあいだ、繰り返し読み直す。
    届いたものが管理画面の再読み込みなしで出るようにするため。 */
 let _inboxTimer = null;
+/* 読めなかったときは、その理由を文字で返す（読めたときは null）。
+   自動の15秒ごとの回では黙って見送り、手で押したときだけ画面に出す。 */
 async function refreshInbox(force) {
-  if (!$("#r1Inbox")) return;                       // Emuタブを離れた
-  if (!force && document.hidden) return;            // 見ていないときは休む
-  try { paintInbox(await api("/api/room1/submissions")); } catch (e) { /* 次の回で拾う */ }
+  if (!$("#r1Inbox")) return null;                  // Emuタブを離れた
+  if (!force && document.hidden) return null;       // 見ていないときは休む
+  try {
+    paintInbox(await api("/api/room1/submissions"));
+    return null;
+  } catch (e) {
+    return (e && (e.code || e.message)) || "原因不明";
+  }
 }
 function startInboxWatch() {
   stopInboxWatch();

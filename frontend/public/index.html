@@ -6026,7 +6026,16 @@ const mainApp = document.getElementById("mainApp");
    MAINTENANCE_MODE = true  → 一般ユーザーはメンテ画面へ
    MAINTENANCE_MODE = false → 通常営業
 ═══════════════════════════════════════ */
+/* 運営のアドレス。
+   ウォレット（MetaMask）で入ったときは実ウォレットのアドレスになり、
+   LINE・Google・メールで入ったときは uid から作られた別のアドレスになる。
+   同じ人なのに番号が2つあるので、どちらも運営として扱う。
+   SP_OWNER は署名やメンテ解除など「実ウォレットであること」が要る場所で使う。 */
 const SP_OWNER = "0xdcc687c05f130e57597a8525771299a4efb6edf7";
+const SP_OWNER_ADDRS = [
+  "0xdcc687c05f130e57597a8525771299a4efb6edf7",  // 実ウォレット
+  "0x195f4478ee3865ee1dd360b79e121c638bdd42ac"   // SchoolParkパスポート
+];
 const MAINTENANCE_MODE = false;
 const MAINTENANCE_END  = new Date('2026-05-20T00:00:00+09:00');
 
@@ -6106,7 +6115,7 @@ const EMUER_INITIAL_AMOUNT = 1000; // 後方互換用（直接参照は非推奨
    URLだけで解除できると意味がない。ウォレットアドレスだけで判定する。 */
 function _isOwnerAccess() {
   const saved = (localStorage.getItem('emuWallet') || window.connectedAccount || '').toLowerCase();
-  return !!saved && saved === SP_OWNER.toLowerCase();
+  return !!saved && SP_OWNER_ADDRS.indexOf(saved) >= 0;
 }
 
 // SchoolParkコンテンツから戻った場合のフラグ（currentUserId宣言前なのでフラグのみ）
@@ -9063,7 +9072,7 @@ function goToChesHub() {
 const _SP_REIZO_LOADING_LINES = [
   "🌟 「学校より学べて、公園より楽しめて、会社より稼げる場所。」それがSchoolParkだよ！",
   "🧊 「知識」は聞いた話、「知恵」は自分で通した話。ここに残すのは後者だけなんだ！",
-  "🎯 クエストは「ひとりで試す」ほう。受けて、やって、報告すると完走になるよ！",
+  "🎯 クエストは仕事だよ。受けて、やって、報告すると完走。報酬はEMUER・JPYC・円で払われるよ！",
   "📚 知恵カードは、完了したクエストからしか生まれないんだ。ここだけは譲れないところ！",
   "🗳️ ギルドはSchoolParkの決めごとを決める場所。1つのパスポートにつき1票だよ！",
   "🗳️ 投票は入れる前に票数を見せないんだ。先に結果が見えると、判断が引きずられるからね！",
@@ -10978,7 +10987,7 @@ const SP_REIZO_KB = [
 
   // ── クエスト
   { k:['クエスト','quest','受ける','途中報告','完走','仕事をする'],
-    a:'クエストは「ひとりで試す」ほうだよ🎯 知識を実際に通してみる仕事なんだ。\n\n① 「このクエストを受ける」を押す（1つのパスポートにつき1回。降りることもできるよ）\n② 詳細の「今日やったことを書く」から、やってみた／つまずいた／気づいた を残す\n③ 出した人が完了にすると、受付が締め切られる\n④ 完了したクエストからだけ、知恵カードが生まれるよ\n\n※ クエストを出せるのは、いまのところ運営だけ。受けるのは誰でもできるよ！\n※ 出したあとに題名や予算は動かせないんだ。受けた人が見た条件が、あとからすり替わらないようにするためだよ。' },
+    a:'クエストは「仕事」だよ🎯 SchoolPark・Emu・Camellia などの仕事を、DAOのメンバーやそれ以外の方が引き受けて動かすところ。報酬は EMUER・JPYC・円 で払われるよ。\n\n① 「このクエストを受ける」を押す（1つのパスポートにつき1回。降りることもできるよ）\n② 詳細の「今日やったことを書く」から、やってみた／つまずいた／気づいた を残す\n③ 出した人が完了にすると、受付が締め切られる\n④ 完了したクエストからだけ、知恵カードが生まれるよ\n\n※ クエストを出せるのは、いまのところ運営だけ。受けるのは誰でもできるよ！\n※ 出したあとに題名や予算は動かせないんだ。受けた人が見た条件が、あとからすり替わらないようにするためだよ。' },
 
   // ── ギルド・投票
   { k:['ギルド','guild','投票','議題','一般ギルド','特殊ギルド','フリー議題','決めごと'],
@@ -11002,7 +11011,7 @@ const SP_REIZO_KB = [
 
   // ── 公園
   { k:['公園','park','エレベーター','今日ひま','バカな挑戦','部屋','リアルの集まり'],
-    a:'公園は、締切も報酬も進捗バーもない場所だよ🌳\nクエストが「ひとりで試す」なら、公園は「みんなでやる」。数えないし、評価もしないんだ。\n\n・今日ひま？ボード（返事がなくても気にしない）\n・バカな挑戦（役に立たないことを、本気で）\n・いま開いてる部屋（無言で作業してるだけの部屋もあるよ）\n・エレベーター（6つの階をのぼりおりする）\n・月例、リアルの集まり\n\nここで出た気づきも「知恵にする」でライブラリに持っていけるよ！' },
+    a:'公園は、締切も報酬も進捗バーもない場所だよ🌳\nクエストが「報酬のある仕事」なら、公園は「報酬のない遊び」。数えないし、評価もしないんだ。\n\n・今日ひま？ボード（返事がなくても気にしない）\n・バカな挑戦（役に立たないことを、本気で）\n・いま開いてる部屋（無言で作業してるだけの部屋もあるよ）\n・エレベーター（6つの階をのぼりおりする）\n・月例、リアルの集まり\n\nここで出た気づきも「知恵にする」でライブラリに持っていけるよ！' },
 
   // ── DAO・合同会社
   { k:['dao','合同会社','法人','運営会社','だれが運営','誰が運営','組織'],
@@ -15635,6 +15644,13 @@ function _spShortAddr(a) {
   return s.length > 12 ? (s.slice(0, 6) + '…' + s.slice(-4)) : s;
 }
 
+/* 運営のアドレスかどうか。Firestoreのルール側 isOwnerAddr() と同じ判定。
+   実ウォレットとパスポートの、どちらでも運営として扱う。 */
+function _spIsOwnerAddr(a) {
+  const v = String(a || '').toLowerCase();
+  return !!v && SP_OWNER_ADDRS.indexOf(v) >= 0;
+}
+
 async function spPassportLoad(force) {
   if (window._spPassport && !force) return window._spPassport;
   if (_spPassportBusy) return _spPassportBusy;
@@ -15686,7 +15702,16 @@ async function spPassportLoad(force) {
       name: name, initial: name.slice(0, 1),
       createdAt: d.createdAt || 0, provider: d.provider || '',
       tier: tier, tierLabel: tierLabel, hasPass: hasPass,
-      isOwner: String(addr || '').toLowerCase() === '0xdcc687c05f130e57597a8525771299a4efb6edf7'
+      /* 運営かどうかは、CHESアドレスと実ウォレットの両方で照らす。
+         addr（＝ches優先）だけを見ていたため、LINE・Google・メールで入ると
+         CHESアドレスしか当たらず、運営本人でもクエストを出せなかった。
+         Firestoreのルール側も isOwnerAddr(ches) || isOwnerAddr(wallet) で判定している。 */
+      isOwner: _spIsOwnerAddr(me.ches) || _spIsOwnerAddr(me.wallet),
+      /* 書き込むときに owner 欄へ入れるアドレス。
+         ルールは「owner が運営のアドレスであること」と
+         「それが自分のアドレスであること」の両方を求めるので、
+         運営のときは運営のアドレスそのものを渡す必要がある。 */
+      ownerAddr: _spIsOwnerAddr(me.ches) ? me.ches : (_spIsOwnerAddr(me.wallet) ? me.wallet : addr)
     };
     _spPassportBusy = null;
     return window._spPassport;
@@ -16148,7 +16173,9 @@ async function spQuestSubmit() {
       measure: val('sqMeasure').slice(0, 400),
       budget: String(parseInt(val('sqBudget').replace(/[^0-9]/g, ''), 10) || 0),
       need: need,
-      owner: p.addr, ownerName: p.name,
+      /* ルールは owner が「運営のアドレス」かつ「自分のアドレス」であることを求める。
+         p.addr（ches優先）を入れると、運営でもここで弾かれる。 */
+      owner: p.ownerAddr || p.addr, ownerName: p.name,
       status: 'OPEN',
       createdAt: Date.now(),
       closesAt: Date.now() + days * 86400000
@@ -22501,7 +22528,7 @@ async function sendEmuFeedback() {
     <div class="sp-reizo-msg sp-reizo-msg-bot">
       <img src="/assets/mascot.jpg" alt="">
       <!-- 吹き出しは white-space:pre-wrap。改行と字下げがそのまま出るので、1行で書く -->
-      <div class="sp-reizo-bubble">こんにちは！ぼくは冷蔵庫くん🧊<br>EmuとSchoolParkの歩き方なら、だいたい知ってるよ。<br>何から聞く？<div class="sp-reizo-quick-wrap" id="spReizoOpening"><button class="sp-reizo-quick-btn" onclick="spReizoAsk('ここは何をする場所？')">🏞️ ここは何をする場所？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('クエストって何？')">🎯 クエストって何？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('EMUERはどうやって貯める？')">💎 EMUERはどうやって貯める？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('残高教えて')">📊 いまの残高を教えて</button></div></div>
+      <div class="sp-reizo-bubble">こんにちは！ぼくは冷蔵庫くん🧊<br>SchoolParkのことなら、僕に任せて！<br>何が知りたい？<div class="sp-reizo-quick-wrap" id="spReizoOpening"><button class="sp-reizo-quick-btn" onclick="spReizoAsk('ここは何をする場所？')">🏞️ ここは何をする場所？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('クエストって何？')">🎯 クエストって何？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('EMUERはどうやって貯める？')">💎 EMUERはどうやって貯める？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('残高教えて')">📊 いまの残高を教えて</button></div></div>
     </div>
   </div>
   <div class="sp-reizo-input-area">
