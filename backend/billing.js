@@ -652,6 +652,68 @@ function createBillingRouter(deps) {
     }
   });
 
+  /* ───────── 1人ずつ渡す・取り消す ─────────
+
+     指定はSchoolParkパスポートのID（アドレス）。uidは画面に出ないので、
+     こちら側で引き当てる。entitlements はクライアントから書けないので、
+     必ずここを通す。 */
+  const grantRateLimit = rateLimit({ windowMs: 60_000, max: 20, key: "grant" });
+
+  router.get("/admin/grants", requireOwner, async (req, res) => {
+    try {
+      if (!entitlement || typeof entitlement.listGrants !== "function") {
+        return res.status(503).json({ error: "ENTITLEMENT_UNAVAILABLE" });
+      }
+      return res.json({ ok: true, grants: await entitlement.listGrants(200) });
+    } catch (e) {
+      console.error("grants list error:", e.message);
+      return res.status(500).json({ error: "LIST_FAILED" });
+    }
+  });
+
+  router.post("/admin/grants", requireOwner, grantRateLimit, async (req, res) => {
+    try {
+      if (!entitlement || typeof entitlement.grantOne !== "function") {
+        return res.status(503).json({ error: "ENTITLEMENT_UNAVAILABLE" });
+      }
+      const b = req.body || {};
+      const out = await entitlement.grantOne({
+        address: b.address, plan: b.plan, expiresAt: b.expiresAt || null,
+        note: b.note, grantedBy: (req.identity && req.identity.uid) || "admin"
+      });
+      await db.collection(AUDIT_COL).add({
+        action: "entitlement.grant", by: (req.identity && req.identity.uid) || "",
+        address: out.address, uid: out.uid, plan: out.plan, expiresAt: out.expiresAt,
+        at: new Date()
+      }).catch(function () {});
+      return res.json({ ok: true, ...out });
+    } catch (e) {
+      const known = ["BAD_ADDRESS", "BAD_PLAN", "BAD_EXPIRES", "EXPIRES_IN_PAST", "USER_NOT_FOUND"];
+      const code = known.indexOf(e.message) >= 0 ? e.message : "GRANT_FAILED";
+      if (code === "GRANT_FAILED") console.error("grant error:", e.message);
+      return res.status(400).json({ error: code });
+    }
+  });
+
+  router.post("/admin/grants/revoke", requireOwner, grantRateLimit, async (req, res) => {
+    try {
+      if (!entitlement || typeof entitlement.revokeOne !== "function") {
+        return res.status(503).json({ error: "ENTITLEMENT_UNAVAILABLE" });
+      }
+      const out = await entitlement.revokeOne((req.body || {}).address);
+      await db.collection(AUDIT_COL).add({
+        action: "entitlement.revoke", by: (req.identity && req.identity.uid) || "",
+        address: out.address, uid: out.uid, at: new Date()
+      }).catch(function () {});
+      return res.json({ ok: true, ...out });
+    } catch (e) {
+      const known = ["BAD_ADDRESS", "USER_NOT_FOUND"];
+      const code = known.indexOf(e.message) >= 0 ? e.message : "REVOKE_FAILED";
+      if (code === "REVOKE_FAILED") console.error("revoke error:", e.message);
+      return res.status(400).json({ error: code });
+    }
+  });
+
   router.get("/admin/refunds", requireOwner, async (req, res) => {
     try {
       const status = String(req.query.status || "pending");

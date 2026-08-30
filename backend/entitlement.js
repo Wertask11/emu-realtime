@@ -131,28 +131,115 @@ function createEntitlement(deps) {
      Socket.io（議論の発言）は uid を持たずアドレスしか分からないため、
      ここで uid に読み替えてから判定する。 */
   const addrCache = new Map();
-  async function getEntitlementByAddress(address) {
+  /* SchoolParkパスポートのID（＝アドレス）から、その人の uid を引く。
+     見つからなければ null。 */
+  async function uidOfAddress(address) {
     const addr = String(address || "").toLowerCase();
-    if (!addr || !db) return { plan: "guest", source: "none" };
+    if (!addr || !db) return null;
 
     const hit = addrCache.get(addr);
-    let uid = hit && hit.expiresAt > Date.now() ? hit.uid : null;
-    if (!uid) {
-      try {
-        const w = await db.collection("ches_wallets").doc(addr).get();
-        if (w.exists) uid = (w.data() || {}).uid || null;
-        if (!uid) {
-          // ches_wallets はチェックサム表記で入っていることがあるので、こちらでも引く
-          const q = await db.collection("ches_accounts").where("walletAddress", "==", addr).limit(1).get();
-          if (!q.empty) uid = q.docs[0].id;
-        }
-      } catch (e) {
-        console.warn("利用資格: アドレスからの引き当てに失敗:", e.message);
+    if (hit && hit.expiresAt > Date.now()) return hit.uid;
+
+    let uid = null;
+    try {
+      const w = await db.collection("ches_wallets").doc(addr).get();
+      if (w.exists) uid = (w.data() || {}).uid || null;
+      if (!uid) {
+        // ches_wallets はチェックサム表記で入っていることがあるので、こちらでも引く
+        const q = await db.collection("ches_accounts").where("walletAddress", "==", addr).limit(1).get();
+        if (!q.empty) uid = q.docs[0].id;
       }
-      if (uid) addrCache.set(addr, { uid, expiresAt: Date.now() + 10 * 60 * 1000 });
+      if (!uid) {
+        /* LINE・Google・メールで入った人は、chesAddress のほうに入っている。
+           ここを見ていないと「そのIDの人が見つかりません」になる。 */
+        const q2 = await db.collection("ches_accounts").where("chesAddress", "==", addr).limit(1).get();
+        if (!q2.empty) uid = q2.docs[0].id;
+      }
+    } catch (e) {
+      console.warn("利用資格: アドレスからの引き当てに失敗:", e.message);
     }
+    if (uid) addrCache.set(addr, { uid, expiresAt: Date.now() + 10 * 60 * 1000 });
+    return uid;
+  }
+
+  async function getEntitlementByAddress(address) {
+    const uid = await uidOfAddress(address);
     if (!uid) return { plan: "guest", source: "none" };
     return getEntitlement(uid);
+  }
+
+  /* 運営が1人ずつ渡す。SchoolParkパスポートのIDで指定する。
+     期限は任意（入れなければ期限なし）。同じ人に渡し直すと上書きする。 */
+  async function grantOne(opts) {
+    const o = opts || {};
+    const addr = String(o.address || "").trim().toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(addr)) throw new Error("BAD_ADDRESS");
+    if (PLAN_RANK[o.plan] === undefined || o.plan === "guest") throw new Error("BAD_PLAN");
+    if (!db) throw new Error("NO_DB");
+
+    const uid = await uidOfAddress(addr);
+    if (!uid) throw new Error("USER_NOT_FOUND");
+
+    let expiresAt = null;
+    if (o.expiresAt) {
+      const d = new Date(o.expiresAt);
+      if (isNaN(d.getTime())) throw new Error("BAD_EXPIRES");
+      if (d.getTime() <= Date.now()) throw new Error("EXPIRES_IN_PAST");
+      expiresAt = d;
+    }
+
+    const rec = {
+      uid: uid, plan: o.plan, source: "admin",
+      walletAddress: addr,
+      startsAt: new Date(),
+      grantedBy: String(o.grantedBy || "admin").slice(0, 120),
+      note: String(o.note || "").slice(0, 200),
+      createdAt: new Date()
+    };
+    /* 期限なしのときは項目ごと持たせない。
+       null を入れると「期限がある」と読まれてしまうため。 */
+    if (expiresAt) rec.expiresAt = expiresAt;
+
+    await db.collection(GRANTS_COL).doc(uid).set(rec);
+    forget(uid);
+    return { uid: uid, plan: o.plan, address: addr, expiresAt: expiresAt ? expiresAt.toISOString() : null };
+  }
+
+  /* 渡したものを取り消す。契約（Stripe）には触らない。 */
+  async function revokeOne(address) {
+    const addr = String(address || "").trim().toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(addr)) throw new Error("BAD_ADDRESS");
+    if (!db) throw new Error("NO_DB");
+    const uid = await uidOfAddress(addr);
+    if (!uid) throw new Error("USER_NOT_FOUND");
+    await db.collection(GRANTS_COL).doc(uid).delete();
+    forget(uid);
+    return { uid: uid, address: addr };
+  }
+
+  /* いま渡してあるものの一覧。期限切れも「切れた」と分かるように返す。 */
+  async function listGrants(limit) {
+    if (!db) return [];
+    const snap = await db.collection(GRANTS_COL).limit(Math.min(500, limit || 200)).get();
+    const now = Date.now();
+    const rows = [];
+    snap.forEach(function (d) {
+      const v = d.data() || {};
+      const exp = _toDate(v.expiresAt);
+      rows.push({
+        uid: d.id,
+        plan: v.plan || "",
+        source: v.source || "",
+        address: v.walletAddress || "",
+        note: v.note || "",
+        grantedBy: v.grantedBy || "",
+        startsAt: _toDate(v.startsAt) ? _toDate(v.startsAt).toISOString() : null,
+        expiresAt: exp ? exp.toISOString() : null,
+        expired: !!(exp && now >= exp.getTime())
+      });
+    });
+    rows.sort(function (a, b) { return String(b.startsAt || "").localeCompare(String(a.startsAt || "")); });
+    return rows;
   }
 
   function atLeast(plan, min) {
@@ -374,7 +461,9 @@ function createEntitlement(deps) {
     };
   }
 
-  return { getEntitlement, getEntitlementByAddress, requirePlan, forget, atLeast, grantInitial, consume, usageOf, usageWindow, limitOf, enforcing, PLAN_RANK, LIMITS, GRANTS_COL, ENFORCE_FROM };
+  return { getEntitlement, getEntitlementByAddress, uidOfAddress, requirePlan, forget, atLeast,
+    grantInitial, grantOne, revokeOne, listGrants,
+    consume, usageOf, usageWindow, limitOf, enforcing, PLAN_RANK, LIMITS, GRANTS_COL, ENFORCE_FROM };
 }
 
 module.exports = { createEntitlement, PLAN_RANK, LIMITS, ENFORCE_FROM };

@@ -150,6 +150,31 @@ async function renderMembers() {
       + '<button id="grantRun" class="btn" style="background:#b45309;color:#fff;">実際に配る</button>'
       + '</div><p id="grantOut" class="hint" style="margin-top:10px;"></p></div>';
 
+    /* 1人ずつ渡す。指定はSchoolParkパスポートのID（アドレス）。
+       期限は入れなければ「期限なし」。同じ人に渡し直すと上書きする。 */
+    const one = '<div class="card">'
+      + '<h3>1人に渡す（SchoolParkパスポートのID）</h3>'
+      + '<p class="hint">Emu light・plus・pro を、指定した方に渡します。'
+      + 'お金のやりとりはありません。Stripeの契約には触りません。<br>'
+      + '契約と重なった場合は、上の段のほうが使われます。</p>'
+      + '<label>SchoolPark パスポートのID</label>'
+      + '<input id="gOneAddr" placeholder="0x… （パスポートの画面からコピーできます）" spellcheck="false">'
+      + '<label>渡すもの</label><select id="gOnePlan">'
+      + '<option value="light">Emu light（月額500円ぶん）</option>'
+      + '<option value="plus">Emu plus（月額3,000円ぶん）</option>'
+      + '<option value="pro">Emu pro（月額10,000円ぶん）</option>'
+      + '</select>'
+      + '<label>いつまで有効か</label>'
+      + '<input id="gOneUntil" type="date">'
+      + '<p class="hint" style="margin:4px 0 0">空のままにすると期限なしになります。'
+      + 'その日の終わり（23:59）まで有効です。</p>'
+      + '<label>メモ（任意）</label><input id="gOneNote" placeholder="例：登壇のお礼／モニター参加">'
+      + '<div class="actions"><button class="btn primary" id="gOneRun">渡す</button></div>'
+      + '<p id="gOneOut" class="hint" style="margin-top:8px;"></p>'
+      + '<h3 style="margin-top:18px">いま渡してあるもの</h3>'
+      + '<div id="gList"><p class="empty">読み込み中…</p></div>'
+      + '</div>';
+
     const cards = !items.length
       ? '<p class="empty">まだ有料会員はいません。</p>'
       : items.map(function (m) {
@@ -181,7 +206,76 @@ async function renderMembers() {
         + '</div>';
     }).join("");
 
-    el.innerHTML = head + grant + cards;
+    el.innerHTML = head + grant + one + cards;
+
+    const PLAN_JA = { light: "Emu light", plus: "Emu plus", pro: "Emu pro" };
+    const GRANT_ERR = {
+      BAD_ADDRESS: "IDの形が違います。0x で始まる42文字を入れてください。",
+      BAD_PLAN: "渡すものを選んでください。",
+      BAD_EXPIRES: "日付の形が違います。",
+      EXPIRES_IN_PAST: "その日はもう過ぎています。先の日付にしてください。",
+      USER_NOT_FOUND: "そのIDの方が見つかりません。一度Emuにログインしたことがあるか、IDが正しいかをご確認ください。"
+    };
+
+    async function paintGrants() {
+      const box = $("#gList");
+      if (!box) return;
+      let rows = [];
+      try { rows = (await api("/api/billing/admin/grants")).grants || []; }
+      catch (e) { box.innerHTML = '<p class="empty">読み込めませんでした（' + esc(e.code || e.message) + '）</p>'; return; }
+      /* 最初の一括付与も同じ場所に入るので、手で渡したぶんが埋もれないよう分けて出す */
+      const byHand = rows.filter(r => r.source === "admin");
+      const auto = rows.length - byHand.length;
+      box.innerHTML = (byHand.length
+        ? byHand.map(r =>
+            '<div class="row"><span>' + esc(PLAN_JA[r.plan] || r.plan)
+            + (r.expired ? ' <b style="color:#b91c1c">期限切れ</b>' : '')
+            + '<br><small style="color:var(--muted)">' + esc(r.address || r.uid) + '</small>'
+            + (r.note ? '<br><small style="color:var(--muted)">' + esc(r.note) + '</small>' : '')
+            + '</span><span>'
+            + (r.expiresAt ? fmt(r.expiresAt) + " まで" : "期限なし")
+            + ' <button class="act no" data-grevoke="' + esc(r.address || "") + '">取り消す</button>'
+            + '</span></div>').join("")
+        : '<p class="empty">手で渡したものはまだありません。</p>')
+        + (auto ? '<p class="hint">このほかに、最初の一括付与ぶんが ' + auto + ' 件あります。</p>' : '');
+
+      box.querySelectorAll("[data-grevoke]").forEach(b => {
+        b.onclick = async () => {
+          if (!b.dataset.grevoke) { alert("このぶんはIDが記録されていないため、ここからは取り消せません。"); return; }
+          if (!confirm("この方に渡したものを取り消します。よろしいですか？")) return;
+          try { await api("/api/billing/admin/grants/revoke", { method: "POST", body: { address: b.dataset.grevoke } }); }
+          catch (e) { alert(GRANT_ERR[e.code] || ("取り消せませんでした（" + (e.code || e.message) + "）")); return; }
+          paintGrants();
+        };
+      });
+    }
+    paintGrants();
+
+    $("#gOneRun").onclick = async () => {
+      const out = $("#gOneOut");
+      const addr = ($("#gOneAddr").value || "").trim();
+      const plan = $("#gOnePlan").value;
+      const until = ($("#gOneUntil").value || "").trim();
+      if (!addr) { out.textContent = "SchoolPark パスポートのIDを入れてください。"; return; }
+      /* 日付だけを受け取っているので、その日の終わりまで有効にする。
+         0時にすると「その日はもう使えない」ことになって分かりにくい。 */
+      const expiresAt = until ? new Date(until + "T23:59:59").toISOString() : null;
+      const label = PLAN_JA[plan] + (until ? "（" + until + " まで）" : "（期限なし）");
+      if (!confirm(label + " を渡します。よろしいですか？\n\n" + addr)) return;
+      out.textContent = "渡しています…";
+      try {
+        const r = await api("/api/billing/admin/grants", {
+          method: "POST", body: { address: addr, plan: plan, expiresAt: expiresAt, note: ($("#gOneNote").value || "").trim() }
+        });
+        out.innerHTML = "渡しました。<b>" + esc(PLAN_JA[r.plan] || r.plan) + "</b>／"
+          + (r.expiresAt ? fmt(r.expiresAt) + " まで" : "期限なし")
+          + '<br><small style="color:var(--muted)">反映まで最大1分かかります。</small>';
+        $("#gOneAddr").value = ""; $("#gOneNote").value = "";
+        paintGrants();
+      } catch (e) {
+        out.textContent = GRANT_ERR[e.code] || ("渡せませんでした（" + (e.code || e.message) + "）");
+      }
+    };
 
     async function runGrant(dryRun) {
       const out = $("#grantOut");
