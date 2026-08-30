@@ -817,6 +817,65 @@ template = template.replace(Q_FILTERS, Q_FILTERS
   + ' style-hover="background:#0A3F2B">＋ クエストを出す</div>\n'
   + '            </div>\n');
 
+/* ㉚ トレジャリーを「ある／約束済み／使える」の3段にして、通貨ごとに出す。
+
+      これまでは大きな数字が1つだけで、しかもその中身は
+      「クエストに付いた予算の合計」＝これから払う約束でしかなかった。
+      いくら持っているかはどこにも出ていないので、
+      払えない約束をしても気づけない。 */
+const T_HEAD = `              <div style="display:flex; flex-direction:column; gap:10px">
+                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE">TOTAL BUDGET</div>
+                <div style="font-family:Inter,sans-serif; font-size:{{ L.bigNum }}; font-weight:600; line-height:1">¥{{ treasury.total }}</div>
+                <div style="font-size:13px; color:rgba(244,241,234,.6)">今月の確保 ¥{{ treasury.in }} / 分配 ¥{{ treasury.out }}</div>
+              </div>`;
+if (!template.includes(T_HEAD)) { console.error('トレジャリーの見出しが見つからない'); process.exit(1); }
+template = template.replace(T_HEAD,
+`              <div style="display:flex; flex-direction:column; gap:22px">
+                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE">TREASURY</div>
+                <sc-for list="{{ treasury.cards }}" as="c" hint-placeholder-count="1">
+                  <div style="display:flex; flex-direction:column; gap:10px; padding-bottom:18px; border-bottom:1px solid rgba(244,241,234,.14)">
+                    <div style="font-size:13px; font-weight:700; color:#D0E2BE">{{ c.cur }}</div>
+                    <div style="display:flex; gap:22px; flex-wrap:wrap">
+                      <div style="display:flex; flex-direction:column; gap:3px">
+                        <div style="font-size:11px; color:rgba(244,241,234,.55)">ある</div>
+                        <div style="font-family:Inter,sans-serif; font-size:20px; font-weight:600">{{ c.have }}</div>
+                      </div>
+                      <div style="display:flex; flex-direction:column; gap:3px">
+                        <div style="font-size:11px; color:rgba(244,241,234,.55)">約束済み</div>
+                        <div style="font-family:Inter,sans-serif; font-size:20px; font-weight:600">{{ c.promised }}</div>
+                      </div>
+                      <div style="display:flex; flex-direction:column; gap:3px">
+                        <div style="font-size:11px; color:rgba(244,241,234,.55)">使える</div>
+                        <div style="font-family:Inter,sans-serif; font-size:20px; font-weight:600; color:{{ c.freeColor }}">{{ c.free }}</div>
+                      </div>
+                    </div>
+                    <div style="font-size:11px; color:rgba(244,241,234,.5)">{{ c.month }}</div>
+                    <div style="font-size:11px; color:#E08A7A">{{ c.warn }}</div>
+                  </div>
+                </sc-for>
+              </div>`);
+
+/* 最初の状態も、新しい形に合わせる。
+   ここが古いままだと、読み込みが終わるまで枠が1つも出ない。 */
+const T_INIT = "treasury:{total:'0', in:'0', out:'0', alloc:[], txs:[]}";
+if (!logic.includes(T_INIT)) { console.error('トレジャリーの初期値が見つからない'); process.exit(1); }
+logic = logic.replace(T_INIT,
+  "treasury:{cards:[{cur:'円', have:'¥0', promised:'¥0', free:'¥0', freeColor:'#D0E2BE', warn:'', month:'今月 +¥0 / -¥0'}], alloc:[], txs:[]}");
+
+/* 足もとの説明を、いまの中身に合わせる */
+const T_NOTE2 = '分配ルール：完走したメンバーに予算の70%、知恵カードの引用数に応じて20%、残り10%を次の原資にプール。<br>外からの入出金はまだ記録していません。ここに出ているのは、クエストに付いた予算です。';
+if (!template.includes(T_NOTE2)) { console.error('トレジャリーの注記が見つからない'); process.exit(1); }
+template = template.replace(T_NOTE2,
+  '<b>ある</b>は、記録された入金から支出を引いた額。<b>約束済み</b>は、まだ完了していないクエストの予算。'
+  + '<b>使える</b>はその差です。ここがマイナスなら、払えない約束をしていることになります。<br>'
+  + '分配ルール：完走したメンバーに予算の70%、知恵カードの引用数に応じて20%、残り10%を次の原資にプール。<br>'
+  + '完了したクエストの分配は、実際に払ったときに支出として記録してください。');
+
+const T_EMPTY = 'まだお金の動きがありません。クエストに予算が付くと、ここに出ます。';
+if (!template.includes(T_EMPTY)) { console.error('トレジャリーの空の案内が見つからない'); process.exit(1); }
+template = template.replace(T_EMPTY,
+  'まだお金の動きがありません。管理画面から入金を記録するか、クエストに予算が付くと、ここに出ます。');
+
 /* Component クラスより前に置く必要がある土台。
    元は React と DCLogic が用意していたもの。 */
 const PRELUDE = `

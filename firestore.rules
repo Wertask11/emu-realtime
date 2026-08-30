@@ -756,6 +756,31 @@ service cloud.firestore {
       }
     }
 
+    /* ───────── トレジャリーの入出金 ─────────
+
+       クエストに付いた予算は「これから払う約束」でしかない。
+       実際にいくら持っているかは、ここに記録した入金と支出で決まる。
+
+       DAOの会計なので、中身は誰でも見られる。
+       書けるのは運営だけ。金額はあとから書き換えられない
+       （直すときは、打ち消しの記録をもう1本入れる）。 */
+    match /sp_treasury/{entryId} {
+      allow read: if true;
+      allow create: if isOwner()
+        && request.resource.data.get('kind', '') in ['in', 'out']
+        && request.resource.data.get('currency', '') in ['EMUER', 'JPYC', 'JPY']
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.label is string
+        && request.resource.data.label.size() > 0
+        && request.resource.data.label.size() <= 120
+        && request.resource.data.get('note', '') is string
+        && request.resource.data.get('note', '').size() <= 400;
+      /* 消すのは運営だけ。書き換えは認めない。 */
+      allow update: if false;
+      allow delete: if isOwner();
+    }
+
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
     match /{coll}/{document=**} {
       allow read, write: if coll != 'sp_votes'
@@ -763,6 +788,7 @@ service cloud.firestore {
         && coll != 'sp_wisdom'
         && coll != 'sp_park'
         && coll != 'sp_trust'
+        && coll != 'sp_treasury'
         && coll != 'emuer_offchain'
         && coll != 'emuer_offchain_ledger'
         && coll != 'ches_accounts'

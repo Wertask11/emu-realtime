@@ -11007,7 +11007,7 @@ const SP_REIZO_KB = [
 
   // ── トレジャリー・分配
   { k:['トレジャリー','treasury','分配','予算','取り分','金庫','お金の動き'],
-    a:'トレジャリーは、クエストの予算がどこにどれだけ向いているかを見る画面だよ💴\n\n分配の決まり：\n・70% → 完走したメンバー（受けた人数で山分け）\n・20% → 知恵カードの引用数に応じて\n・10% → 次の原資としてプール\n\n外からの入出金はまだ記録していなくて、いま出ているのはクエストに付いた予算だよ。' },
+    a:'トレジャリーは、DAOのお金を見る画面だよ💴 円・JPYC・EMUER を別々に数えるんだ。\n\n分配の決まり：\n・70% → 完走したメンバー（受けた人数で山分け）\n・20% → 知恵カードの引用数に応じて\n・10% → 次の原資としてプール\n\n通貨ごとに3つ出るよ。「ある」は記録した入金から支出を引いた額、「約束済み」はまだ完了していないクエストの予算、「使える」はその差。使えるがマイナスなら、払えない約束をしていることになるよ。' },
 
   // ── 公園
   { k:['公園','park','エレベーター','今日ひま','バカな挑戦','部屋','リアルの集まり'],
@@ -16172,6 +16172,12 @@ async function spQuestSubmit() {
       action: val('sqAction').slice(0, 400),
       measure: val('sqMeasure').slice(0, 400),
       budget: String(parseInt(val('sqBudget').replace(/[^0-9]/g, ''), 10) || 0),
+      /* 報酬は EMUER・JPYC・円 のどれか。
+         入れていない古いクエストは、読むときに円として扱う。 */
+      budgetCurrency: (function () {
+        const c = val('sqCurrency');
+        return SP_CURRENCIES.indexOf(c) >= 0 ? c : 'JPY';
+      })(),
       need: need,
       /* ルールは owner が「運営のアドレス」かつ「自分のアドレス」であることを求める。
          p.addr（ches優先）を入れると、運営でもここで弾かれる。 */
@@ -16447,17 +16453,37 @@ window.spDaoLoadMembers = async function (app) {
 ═══════════════════════════════════════ */
 function _spYen(n) { return (Math.round(Number(n) || 0)).toLocaleString(); }
 
+/* 扱う通貨。ここに無いものは受け取らない（ルール側も同じ3つに限っている）。 */
+const SP_CURRENCIES = ['JPY', 'JPYC', 'EMUER'];
+const SP_CURRENCY_LABEL = { JPY: '円', JPYC: 'JPYC', EMUER: 'EMUER' };
+/* 金額の書き方。円は前に¥、ほかは後ろに単位。 */
+function spMoney(n, cur) {
+  const v = _spYen(n);
+  if (cur === 'JPY') return (Number(n) < 0 ? '-¥' + _spYen(Math.abs(n)) : '¥' + v);
+  return v + ' ' + (SP_CURRENCY_LABEL[cur] || cur);
+}
+
 window.spDaoLoadTreasury = async function (app) {
   if (!app || typeof app.setState !== 'function') return;
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
-  let list = [];
+
+  /* クエスト（＝これから払う約束）と、入出金の記録（＝実際にあるお金）。
+     この2つは別ものなので、別々に読んで、別々に出す。 */
+  let quests = [], entries = [];
   try {
-    const snap = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
-    snap.forEach(function (s) { list.push({ id: s.id, ...(s.data() || {}) }); });
+    const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
+    qs.forEach(function (s) { quests.push({ id: s.id, ...(s.data() || {}) }); });
   } catch (e) {
-    console.warn('トレジャリーを読めませんでした:', e && (e.message || e));
+    console.warn('クエストを読めませんでした:', e && (e.message || e));
     return;
+  }
+  try {
+    const es = await fb.getDocs(fb.collection(window.db, 'sp_treasury'));
+    es.forEach(function (s) { entries.push({ id: s.id, ...(s.data() || {}) }); });
+  } catch (e) {
+    /* 記録がまだ1件も無いときも、ここは通る。予算だけ出す。 */
+    console.warn('入出金の記録を読めませんでした:', e && (e.message || e));
   }
 
   const now = new Date();
@@ -16466,45 +16492,103 @@ window.spDaoLoadTreasury = async function (app) {
     const d = new Date(Number(ms));
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   };
-  const yen = function (q) { return parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0; };
+  const num = function (v) { return parseInt(String(v == null ? 0 : v).replace(/[^0-9]/g, ''), 10) || 0; };
 
-  let reserved = 0, closed = 0, monthIn = 0, monthOut = 0;
-  const txs = [];
-  list.forEach(function (q) {
-    const b = yen(q);
-    if (q.status === 'CLOSED') {
-      closed += b;
-      if (sameMonth(q.closedAt)) monthOut += b * 0.9;   // 完走70% + 引用20%
-      txs.push({ at: q.closedAt || q.createdAt || 0,
-        label: (q.title || '') + '：完了して分配', kind: '分配',
-        amount: '-' + _spYen(b * 0.9), color: '#8A8474' });
-    } else {
-      reserved += b;
-    }
-    if (sameMonth(q.createdAt)) monthIn += b;
-    txs.push({ at: q.createdAt || 0,
-      label: (q.title || '') + ' に予算を確保', kind: '確保',
-      amount: '¥' + _spYen(b), color: '#0F5C3F' });
+  /* 通貨ごとの器 */
+  const box = {};
+  SP_CURRENCIES.forEach(function (c) {
+    box[c] = { have: 0, promised: 0, closed: 0, monthIn: 0, monthOut: 0 };
   });
 
-  const total = reserved + closed;
-  const pct = function (v) { return total > 0 ? Math.round(v / total * 100) + '%' : '0%'; };
+  /* ① 入出金の記録から「いま持っている額」を出す */
+  entries.forEach(function (e) {
+    const c = SP_CURRENCIES.indexOf(e.currency) >= 0 ? e.currency : 'JPY';
+    const v = Math.max(0, Number(e.amount) || 0);
+    if (e.kind === 'out') {
+      box[c].have -= v;
+      if (sameMonth(e.at)) box[c].monthOut += v;
+    } else {
+      box[c].have += v;
+      if (sameMonth(e.at)) box[c].monthIn += v;
+    }
+  });
+
+  /* ② クエストから「約束した額」を出す。
+        通貨を持っていない古いクエストは、円として扱う。 */
+  const txs = [];
+  quests.forEach(function (q) {
+    const c = SP_CURRENCIES.indexOf(q.budgetCurrency) >= 0 ? q.budgetCurrency : 'JPY';
+    const v = num(q.budget);
+    if (q.status === 'CLOSED') box[c].closed += v;
+    else box[c].promised += v;
+    txs.push({
+      at: q.createdAt || 0,
+      label: (q.title || '') + ' に予算を確保',
+      kind: q.status === 'CLOSED' ? '確保（完了ずみ）' : '確保',
+      amount: spMoney(v, c), color: '#6E695C'
+    });
+  });
+
+  /* 記録そのものも、動きとして並べる */
+  entries.forEach(function (e) {
+    const c = SP_CURRENCIES.indexOf(e.currency) >= 0 ? e.currency : 'JPY';
+    const v = Math.max(0, Number(e.amount) || 0);
+    txs.push({
+      at: e.at || e.createdAt || 0,
+      label: e.label || (e.kind === 'out' ? '支出' : '入金'),
+      kind: e.kind === 'out' ? '支出' : '入金',
+      amount: (e.kind === 'out' ? '-' : '+') + spMoney(v, c),
+      color: e.kind === 'out' ? '#8A4B3C' : '#0F5C3F'
+    });
+  });
+
+  /* 画面に出す3段。使える＝ある − 約束済み。
+     マイナスになったら、払えない約束をしていることになる。 */
+  const cards = SP_CURRENCIES.map(function (c) {
+    const b = box[c];
+    const free = b.have - b.promised;
+    return {
+      cur: SP_CURRENCY_LABEL[c],
+      have: spMoney(b.have, c),
+      promised: spMoney(b.promised, c),
+      free: spMoney(free, c),
+      freeColor: free < 0 ? '#E08A7A' : '#D0E2BE',
+      warn: free < 0 ? '約束が持っている額を超えています' : '',
+      month: '今月 +' + spMoney(b.monthIn, c) + ' / -' + spMoney(b.monthOut, c),
+      empty: (b.have === 0 && b.promised === 0 && b.closed === 0)
+    };
+  }).filter(function (x) { return !x.empty; });
+
+  /* どの通貨も動いていないときは、円の枠だけ出して形を保つ */
+  if (!cards.length) {
+    cards.push({ cur: '円', have: '¥0', promised: '¥0', free: '¥0',
+      freeColor: '#D0E2BE', warn: '', month: '今月 +¥0 / -¥0' });
+  }
+
+  /* 完了したクエストの分配の内訳（通貨をまたいだ割合なので、比だけ出す） */
+  const closedAll = SP_CURRENCIES.reduce(function (a, c) { return a + box[c].closed; }, 0);
+  const promisedAll = SP_CURRENCIES.reduce(function (a, c) { return a + box[c].promised; }, 0);
+  const totalAll = closedAll + promisedAll;
+  const pct = function (v) { return totalAll > 0 ? Math.round(v / totalAll * 100) + '%' : '0%'; };
 
   txs.sort(function (a, b) { return b.at - a.at; });
-  app.setState({ treasury: {
-    total: _spYen(total), in: _spYen(monthIn), out: _spYen(monthOut),
-    alloc: [
-      { label: 'クエスト予算（確保中）', pct: pct(reserved) },
-      { label: '完走メンバーへの分配',   pct: pct(closed * 0.7) },
-      { label: '知恵の引用インセンティブ', pct: pct(closed * 0.2) },
-      { label: '運営プール',             pct: pct(closed * 0.1) }
-    ],
-    txs: txs.slice(0, 6).map(function (t) {
-      const d = t.at ? new Date(t.at) : null;
-      return { label: t.label, kind: t.kind, amount: t.amount, color: t.color,
-        date: d ? ((d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0')) : '' };
-    })
-  }, noTreasury: list.length === 0 });
+  app.setState({
+    treasury: {
+      cards: cards,
+      alloc: [
+        { label: 'クエスト予算（確保中）', pct: pct(promisedAll) },
+        { label: '完走メンバーへの分配', pct: pct(closedAll * 0.7) },
+        { label: '知恵の引用インセンティブ', pct: pct(closedAll * 0.2) },
+        { label: '運営プール', pct: pct(closedAll * 0.1) }
+      ],
+      txs: txs.slice(0, 8).map(function (t) {
+        const d = t.at ? new Date(t.at) : null;
+        return { label: t.label, kind: t.kind, amount: t.amount, color: t.color,
+          date: d ? ((d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0')) : '' };
+      })
+    },
+    noTreasury: (quests.length === 0 && entries.length === 0)
+  });
 };
 
 /* ═══════════════════════════════════════
@@ -22450,8 +22534,15 @@ async function sendEmuFeedback() {
     <textarea class="spv-in spv-area" id="sqAction" maxlength="400" placeholder="毎日・毎回、具体的に何をするか"></textarea>
     <label class="spv-label" for="sqMeasure">確かめ方</label>
     <textarea class="spv-in spv-area" id="sqMeasure" maxlength="400" placeholder="何を記録すれば分かるか"></textarea>
-    <label class="spv-label" for="sqBudget">予算（円）</label>
-    <input class="spv-in" id="sqBudget" inputmode="numeric" placeholder="0">
+    <label class="spv-label" for="sqBudget">報酬（予算）</label>
+    <div style="display:flex; gap:8px">
+      <input class="spv-in" id="sqBudget" inputmode="numeric" placeholder="0" style="flex:1; min-width:0">
+      <select class="spv-in" id="sqCurrency" style="flex:0 0 110px">
+        <option value="JPY">円</option>
+        <option value="JPYC">JPYC</option>
+        <option value="EMUER">EMUER</option>
+      </select>
+    </div>
     <label class="spv-label" for="sqNeed">成立に必要な人数</label>
     <input class="spv-in" id="sqNeed" type="number" min="1" max="50" value="5">
     <label class="spv-label" for="sqDays">締切まで（日）</label>

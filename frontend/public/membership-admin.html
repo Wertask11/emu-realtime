@@ -613,12 +613,15 @@ async function renderSchoolPark() {
   }
   const addr = me.addr;
 
-  const [qs, vs, ws, ps] = await Promise.all([
+  const [qs, vs, ws, ps, ts2] = await Promise.all([
     f.getDocs(f.collection(f.db, "sp_quests")),
     f.getDocs(f.collection(f.db, "sp_votes")),
     f.getDocs(f.collection(f.db, "sp_wisdom")),
-    f.getDocs(f.collection(f.db, "sp_park"))
+    f.getDocs(f.collection(f.db, "sp_park")),
+    f.getDocs(f.collection(f.db, "sp_treasury"))
   ]);
+  const money = []; ts2.forEach(s => money.push({ id: s.id, ...(s.data() || {}) }));
+  money.sort((a, b) => (b.at || b.createdAt || 0) - (a.at || a.createdAt || 0));
   const PARK_KIND = { board:"今日ひま？ボード", dumb:"バカな挑戦", room:"いま開いてる部屋", event:"月例の集まり" };
   const park = []; ps.forEach(s => park.push({ id: s.id, ...(s.data() || {}) }));
   park.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -700,12 +703,70 @@ async function renderSchoolPark() {
   const STATUS = { OPEN: "募集中", RUNNING: "進行中", CLOSED: "完了" };
   const yen = v => (parseInt(String(v || "0").replace(/[^0-9]/g, ""), 10) || 0).toLocaleString();
 
+  /* ───── トレジャリーの集計 ─────
+     クエストの予算は「これから払う約束」でしかない。
+     いま持っている額は、記録した入金と支出で決まる。 */
+  const CURRENCIES = ["JPY", "JPYC", "EMUER"];
+  const CUR_LABEL = { JPY: "円", JPYC: "JPYC", EMUER: "EMUER" };
+  const asMoney = (n, cur) => {
+    const v = Math.round(Number(n) || 0);
+    if (cur === "JPY") return (v < 0 ? "-¥" : "¥") + Math.abs(v).toLocaleString();
+    return v.toLocaleString() + " " + (CUR_LABEL[cur] || cur);
+  };
+  const pot = {};
+  CURRENCIES.forEach(c => pot[c] = { have: 0, promised: 0 });
+  money.forEach(m => {
+    const c = CURRENCIES.indexOf(m.currency) >= 0 ? m.currency : "JPY";
+    const v = Math.max(0, Number(m.amount) || 0);
+    pot[c].have += (m.kind === "out" ? -v : v);
+  });
+  quests.forEach(q => {
+    const c = CURRENCIES.indexOf(q.budgetCurrency) >= 0 ? q.budgetCurrency : "JPY";
+    if (q.status !== "CLOSED") pot[c].promised += (parseInt(String(q.budget || "0").replace(/[^0-9]/g, ""), 10) || 0);
+  });
+
   el.innerHTML =
     '<div class="card"><h3>いまの状態</h3>'
     + '<div class="row"><span>クエスト</span><span>' + quests.length + ' 本</span></div>'
     + '<div class="row"><span>議題</span><span>' + votes.length + ' 件</span></div>'
     + '<div class="row"><span>知恵カード</span><span>' + wisdomCount + ' 枚</span></div>'
     + '<div class="row"><span>公園に置いたもの</span><span>' + park.length + ' 件</span></div></div>'
+
+    + '<div class="card"><h3>トレジャリー</h3>'
+    + '<p class="empty" style="text-align:left;margin:0 0 10px">'
+    + '<b>ある</b>＝記録した入金から支出を引いた額。<b>約束済み</b>＝まだ完了していないクエストの予算。'
+    + '<b>使える</b>がマイナスなら、払えない約束をしていることになります。</p>'
+    + CURRENCIES.map(c => {
+        const free = pot[c].have - pot[c].promised;
+        return '<div class="row"><span>' + CUR_LABEL[c] + '</span><span>'
+          + 'ある ' + asMoney(pot[c].have, c)
+          + ' ／ 約束済み ' + asMoney(pot[c].promised, c)
+          + ' ／ <b style="color:' + (free < 0 ? "#b91c1c" : "#166534") + '">使える '
+          + asMoney(free, c) + '</b></span></div>';
+      }).join("")
+    + '<label>何のお金か</label><input id="atLabel" placeholder="例：Emu light 会費（8月分）／サーバー代">'
+    + '<label>入金か支出か</label><select id="atKind">'
+    + '<option value="in">入金（入ってきた）</option>'
+    + '<option value="out">支出（出ていった）</option></select>'
+    + '<label>金額と通貨</label><div style="display:flex;gap:8px">'
+    + '<input id="atAmount" inputmode="numeric" placeholder="0" style="flex:1;min-width:0">'
+    + '<select id="atCurrency" style="flex:0 0 110px">'
+    + CURRENCIES.map(c => '<option value="' + c + '">' + CUR_LABEL[c] + '</option>').join("")
+    + '</select></div>'
+    + '<label>日付</label><input id="atDate" type="date">'
+    + '<label>メモ（任意）</label><textarea id="atNote" rows="2" placeholder="振込元・用途など"></textarea>'
+    + '<div class="actions"><button class="btn primary" id="atSubmit">記録する</button></div>'
+    + '<h3 style="margin-top:18px">記録（新しい順）</h3>'
+    + (money.length ? money.slice(0, 20).map(m => {
+        const c = CURRENCIES.indexOf(m.currency) >= 0 ? m.currency : "JPY";
+        const d = m.at || m.createdAt;
+        return '<div class="row"><span>' + (d ? fmt(d) : "—") + ' · ' + esc(m.label || "") + '</span>'
+          + '<span style="color:' + (m.kind === "out" ? "#b91c1c" : "#166534") + '">'
+          + (m.kind === "out" ? "-" : "+") + asMoney(m.amount, c)
+          + ' <button class="act no" data-atdel="' + esc(m.id) + '">消す</button></span></div>';
+      }).join("")
+      : '<p class="empty">まだ記録がありません。</p>')
+    + '</div>'
 
     + '<div class="card"><h3>クエストを出す</h3>'
     + '<p class="empty" style="text-align:left;margin:0 0 10px">出したあと、題名や予算は動かせません。'
@@ -715,7 +776,11 @@ async function renderSchoolPark() {
     + '<label>予想（たぶんこうなる）</label><textarea id="aqHypothesis" rows="2" placeholder="確かめたい説を一文で"></textarea>'
     + '<label>やること</label><textarea id="aqAction" rows="2" placeholder="毎日・毎回、具体的に何をするか"></textarea>'
     + '<label>確かめ方</label><textarea id="aqMeasure" rows="2" placeholder="何を記録すれば分かるか"></textarea>'
-    + '<label>予算（円）</label><input id="aqBudget" inputmode="numeric" value="0">'
+    + '<label>報酬（予算）</label><div style="display:flex;gap:8px">'
+    + '<input id="aqBudget" inputmode="numeric" value="0" style="flex:1;min-width:0">'
+    + '<select id="aqCurrency" style="flex:0 0 110px">'
+    + CURRENCIES.map(c => '<option value="' + c + '">' + CUR_LABEL[c] + '</option>').join('')
+    + '</select></div>'
     + '<label>成立に必要な人数</label><input id="aqNeed" type="number" min="1" max="50" value="5">'
     + '<label>締切まで（日）</label><input id="aqDays" type="number" min="1" max="90" value="14">'
     + '<div class="actions"><button class="btn primary" id="aqSubmit">クエストを出す</button></div></div>'
@@ -734,7 +799,7 @@ async function renderSchoolPark() {
     + '<div class="card"><h3>クエストの状態を変える</h3>'
     + (quests.length ? quests.map(q =>
         '<div class="row"><span>' + esc(q.title || "") + '<br>'
-        + '<small style="color:var(--muted)">¥' + yen(q.budget) + ' · ' + (STATUS[q.status] || q.status)
+        + '<small style="color:var(--muted)">' + asMoney(parseInt(String(q.budget||"0").replace(/[^0-9]/g,""),10)||0, CURRENCIES.indexOf(q.budgetCurrency)>=0?q.budgetCurrency:"JPY") + ' · ' + (STATUS[q.status] || q.status)
         + ' · ' + q.took + '/' + (q.need || 5) + '人が受けた</small></span>'
         + '<span>'
         + (q.status !== "RUNNING" ? '<button class="act neutral" data-qrun="' + esc(q.id) + '">進行中にする</button> ' : '')
@@ -809,6 +874,43 @@ async function renderSchoolPark() {
       : '<p class="empty">まだ議題がありません。</p>')
     + '</div>';
 
+  /* トレジャリーに1本記録する。
+     金額はあとから書き換えられない（ルールでも update を止めてある）。
+     間違えたら消して入れ直す。 */
+  $("#atSubmit").onclick = async () => {
+    const v = id => ($("#" + id).value || "").trim();
+    const label = v("atLabel");
+    if (!label) { alert("何のお金かを書いてください。"); return; }
+    const amount = parseInt(v("atAmount").replace(/[^0-9]/g, ""), 10) || 0;
+    if (amount <= 0) { alert("金額を入れてください。"); return; }
+    const cur = CURRENCIES.indexOf(v("atCurrency")) >= 0 ? v("atCurrency") : "JPY";
+    const kind = v("atKind") === "out" ? "out" : "in";
+    /* 日付は入れなければ今日。入れたらその日の正午として扱う
+       （時刻を0時にすると、時差で前日に見えることがあるため）。 */
+    let at = Date.now();
+    if (v("atDate")) {
+      const d = new Date(v("atDate") + "T12:00:00");
+      if (!isNaN(d.getTime())) at = d.getTime();
+    }
+    try {
+      await f.addDoc(f.collection(f.db, "sp_treasury"), {
+        kind: kind, currency: cur, amount: amount,
+        label: label.slice(0, 120), note: v("atNote").slice(0, 400),
+        at: at, createdAt: Date.now(), by: addr
+      });
+    } catch (e) { alert("記録できませんでした（" + (e.code || e.message) + "）"); return; }
+    renderSchoolPark();
+  };
+
+  document.querySelectorAll("[data-atdel]").forEach(b => {
+    b.onclick = async () => {
+      if (!confirm("この記録を消します。よろしいですか？\n（金額を直すときは、消して入れ直してください）")) return;
+      try { await f.deleteDoc(f.doc(f.db, "sp_treasury", b.dataset.atdel)); }
+      catch (e) { alert("消せませんでした（" + (e.code || e.message) + "）"); return; }
+      renderSchoolPark();
+    };
+  });
+
   $("#aqSubmit").onclick = async () => {
     const v = id => ($("#" + id).value || "").trim();
     if (!v("aqTitle")) { alert("何を試すのかを書いてください。"); return; }
@@ -820,6 +922,7 @@ async function renderSchoolPark() {
         hypothesis: v("aqHypothesis").slice(0, 400), action: v("aqAction").slice(0, 400),
         measure: v("aqMeasure").slice(0, 400),
         budget: String(parseInt(v("aqBudget").replace(/[^0-9]/g, ""), 10) || 0),
+        budgetCurrency: CURRENCIES.indexOf(v("aqCurrency")) >= 0 ? v("aqCurrency") : "JPY",
         need: Math.max(1, Math.min(50, parseInt(v("aqNeed"), 10) || 5)),
         owner: addr, ownerName: (auth.currentUser && auth.currentUser.displayName) || "運営",
         status: "OPEN", createdAt: Date.now(), closesAt: Date.now() + days * 86400000
