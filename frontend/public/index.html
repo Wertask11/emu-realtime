@@ -16565,30 +16565,66 @@ window.spDaoLoadTreasury = async function (app) {
       freeColor: '#D0E2BE', warn: '', month: '今月 +¥0 / -¥0' });
   }
 
-  /* 完了したクエストの分配の内訳（通貨をまたいだ割合なので、比だけ出す） */
-  const closedAll = SP_CURRENCIES.reduce(function (a, c) { return a + box[c].closed; }, 0);
-  const promisedAll = SP_CURRENCIES.reduce(function (a, c) { return a + box[c].promised; }, 0);
-  const totalAll = closedAll + promisedAll;
-  const pct = function (v) { return totalAll > 0 ? Math.round(v / totalAll * 100) + '%' : '0%'; };
+  /* 内訳は通貨ごとに出す。
+     以前は3通貨の額を足して割合にしていたが、
+     ¥250,000 + 3,000 JPYC のように単位の違う数を足すことになるので、
+     通貨を混ぜた瞬間に意味のない数字になっていた。 */
+  function allocFor(c) {
+    const b = box[c];
+    const total = b.promised + b.closed;
+    const row = function (label, v) {
+      return { label: label, amount: spMoney(v, c),
+        pct: total > 0 ? Math.round(v / total * 100) + '%' : '0%' };
+    };
+    return [
+      row('クエスト予算（確保中）', b.promised),
+      row('完走メンバーへの分配', b.closed * 0.7),
+      row('知恵の引用インセンティブ', b.closed * 0.2),
+      row('運営プール', b.closed * 0.1)
+    ];
+  }
+
+  /* 動いている通貨だけを出す。使っていない通貨は選ばせない。 */
+  const active = SP_CURRENCIES.filter(function (c) {
+    const b = box[c];
+    return !(b.have === 0 && b.promised === 0 && b.closed === 0);
+  });
+  const shown = active.length ? active : ['JPY'];
 
   txs.sort(function (a, b) { return b.at - a.at; });
-  app.setState({
-    treasury: {
-      cards: cards,
-      alloc: [
-        { label: 'クエスト予算（確保中）', pct: pct(promisedAll) },
-        { label: '完走メンバーへの分配', pct: pct(closedAll * 0.7) },
-        { label: '知恵の引用インセンティブ', pct: pct(closedAll * 0.2) },
-        { label: '運営プール', pct: pct(closedAll * 0.1) }
-      ],
-      txs: txs.slice(0, 8).map(function (t) {
-        const d = t.at ? new Date(t.at) : null;
-        return { label: t.label, kind: t.kind, amount: t.amount, color: t.color,
-          date: d ? ((d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0')) : '' };
-      })
-    },
-    noTreasury: (quests.length === 0 && entries.length === 0)
+  const txList = txs.slice(0, 8).map(function (t) {
+    const d = t.at ? new Date(t.at) : null;
+    return { label: t.label, kind: t.kind, amount: t.amount, color: t.color,
+      date: d ? ((d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0')) : '' };
   });
+
+  /* 通貨を選び直しても、読み直さずその場で描き替える。 */
+  function paint(sel) {
+    const c = shown.indexOf(sel) >= 0 ? sel : shown[0];
+    const b = box[c];
+    app.setState({
+      treasury: {
+        cards: cards,
+        curTabs: shown.length > 1 ? shown.map(function (x) {
+          const on = x === c;
+          return {
+            label: SP_CURRENCY_LABEL[x],
+            go: function () { paint(x); },
+            bg: on ? '#D0E2BE' : 'transparent',
+            fg: on ? '#141310' : 'rgba(244,241,234,.7)'
+          };
+        }) : [],
+        allocTitle: '内訳（' + SP_CURRENCY_LABEL[c] + '）',
+        allocNote: (b.promised + b.closed) === 0
+          ? 'この通貨のクエストはまだありません。'
+          : '合計 ' + spMoney(b.promised + b.closed, c) + ' の内訳です。完了したクエストのぶんだけ、下の3つに分かれます。',
+        alloc: allocFor(c),
+        txs: txList
+      },
+      noTreasury: (quests.length === 0 && entries.length === 0)
+    });
+  }
+  paint(shown[0]);
 };
 
 /* ═══════════════════════════════════════

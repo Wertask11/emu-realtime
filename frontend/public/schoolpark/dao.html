@@ -617,15 +617,24 @@ html, body                 { height: 100%; }
                 </sc-for>
               </div>
               <div style="display:flex; flex-direction:column; gap:14px">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap">
+                  <div style="font-size:13px; font-weight:700; color:#D0E2BE">{{ treasury.allocTitle }}</div>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap">
+                    <sc-for list="{{ treasury.curTabs }}" as="ct" hint-placeholder-count="0">
+                      <div onClick="{{ ct.go }}" style="padding:5px 12px; border-radius:14px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid rgba(244,241,234,.24); background:{{ ct.bg }}; color:{{ ct.fg }}">{{ ct.label }}</div>
+                    </sc-for>
+                  </div>
+                </div>
                 <sc-for list="{{ treasury.alloc }}" as="a" hint-placeholder-count="4">
                   <div style="display:flex; flex-direction:column; gap:8px">
-                    <div style="display:flex; justify-content:space-between; font-size:13px">
-                      <div style="color:rgba(244,241,234,.8)">{{ a.label }}</div>
-                      <div style="font-family:Inter,sans-serif; color:#D0E2BE">{{ a.pct }}</div>
+                    <div style="display:flex; justify-content:space-between; gap:12px; font-size:13px">
+                      <div style="color:rgba(244,241,234,.8); min-width:0">{{ a.label }}</div>
+                      <div style="font-family:Inter,sans-serif; color:#D0E2BE; white-space:nowrap">{{ a.amount }} · {{ a.pct }}</div>
                     </div>
                     <div style="height:6px; background:rgba(244,241,234,.14); border-radius:3px; overflow:hidden"><div style="height:100%; background:#D0E2BE; width:{{ a.pct }}"></div></div>
                   </div>
                 </sc-for>
+                <div style="font-size:11px; line-height:1.8; color:rgba(244,241,234,.45)">{{ treasury.allocNote }}</div>
               </div>
             </div>
             <div style="display:flex; flex-direction:column; gap:16px">
@@ -755,7 +764,7 @@ const LAYOUTS = {
 };
 
 class Component extends DCLogic {
-  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, wisdom:[], noWisdom:true, citations:0, members:[], noMembers:true, noTreasury:true, wtag:'すべて', canGuild:false, trust:{total:0, need:20, detail:'読み込んでいます…'}, board:[], dumb:[], rooms:[], events:[], noPark:true, treasury:{cards:[{cur:'円', have:'¥0', promised:'¥0', free:'¥0', freeColor:'#D0E2BE', warn:'', month:'今月 +¥0 / -¥0'}], alloc:[], txs:[]}, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
+  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, wisdom:[], noWisdom:true, citations:0, members:[], noMembers:true, noTreasury:true, wtag:'すべて', canGuild:false, trust:{total:0, need:20, detail:'読み込んでいます…'}, board:[], dumb:[], rooms:[], events:[], noPark:true, treasury:{cards:[{cur:'円', have:'¥0', promised:'¥0', free:'¥0', freeColor:'#D0E2BE', warn:'', month:'今月 +¥0 / -¥0'}], curTabs:[], allocTitle:'内訳', allocNote:'', alloc:[], txs:[]}, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
   componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} try { window.parent.spDaoLoadWisdom(this); } catch (e) {} try { window.parent.spDaoLoadMembers(this); } catch (e) {} try { window.parent.spDaoLoadTreasury(this); } catch (e) {} try { window.parent.spDaoLoadPark(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
