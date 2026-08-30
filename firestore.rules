@@ -659,8 +659,12 @@ service cloud.firestore {
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 120
         && request.resource.data.get('status', '') == 'OPEN';
-      // 出した本人が「進行中にする」「完了にする」だけ。ほかの欄は動かせない。
-      allow update: if isMyWallet(resource.data.get('owner', ''))
+      /* 出した本人が「進行中にする」「完了にする」だけ。ほかの欄は動かせない。
+         運営はどの入り方でも変えられるようにしておく。
+         同じ運営でも、ウォレットで入ったときとLINE等で入ったときで
+         アドレスが変わるため、名義だけで見ると
+         「自分が出したクエストなのに自分で完了にできない」が起きる。 */
+      allow update: if (isOwner() || isMyWallet(resource.data.get('owner', '')))
         && changedOnly(['status', 'closedAt'])
         && request.resource.data.status in ['OPEN', 'RUNNING', 'CLOSED'];
       allow delete: if false;
@@ -717,10 +721,11 @@ service cloud.firestore {
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 120
         && request.resource.data.get('kind', '') in ['board', 'dumb', 'room', 'event'];
-      // 出した本人が、しまうことだけできる
-      allow update: if isMyWallet(resource.data.get('by', ''))
+      /* 出した本人が、しまうことだけできる。
+         クエストと同じ理由で、運営はどの入り方でも触れるようにしておく。 */
+      allow update: if (isOwner() || isMyWallet(resource.data.get('by', '')))
         && changedOnly(['hidden']);
-      allow delete: if isMyWallet(resource.data.get('by', ''));
+      allow delete: if isOwner() || isMyWallet(resource.data.get('by', ''));
 
       match /joins/{addr} {
         allow read: if true;
@@ -756,6 +761,24 @@ service cloud.firestore {
       }
     }
 
+    /* ───────── 公式パスの持ち主 ─────────
+
+       ここに自分のアドレスの文書があると、公式パスの持ち主として扱われる。
+       画面では Emu plus 相当の表示になり、サーバー側の権利判定
+       （entitlement.js）でも plus として通り、ギルドの議題も出せるようになる。
+
+       ところが、ここは専用のルールが無く、いちばん下の受け皿に落ちていた。
+       つまり誰でも自分のアドレスの文書を作れて、
+       月3,000円ぶんの権利を無料で手に入れられる状態だった。
+
+       読むのは誰でもよい（自分に権利があるかを画面が確かめるため）。
+       書くのは止める。運営が入れるときは、Firebase の管理画面か
+       サーバー（Admin SDK）から入れる。どちらもこのルールを通らない。 */
+    match /paid_users/{addr} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     /* ───────── トレジャリーの入出金 ─────────
 
        クエストに付いた予算は「これから払う約束」でしかない。
@@ -789,6 +812,7 @@ service cloud.firestore {
         && coll != 'sp_park'
         && coll != 'sp_trust'
         && coll != 'sp_treasury'
+        && coll != 'paid_users'
         && coll != 'emuer_offchain'
         && coll != 'emuer_offchain_ledger'
         && coll != 'ches_accounts'

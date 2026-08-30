@@ -74,6 +74,12 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebas
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const API = "https://emu-realtime.onrender.com";
+/* 運営のアドレス。入り方によって変わるので両方。
+   index.html / firestore.rules / backend と同じ組み合わせにしておく。 */
+const SP_OWNER_ADDRS = [
+  "0xdcc687c05f130e57597a8525771299a4efb6edf7",  // 実ウォレット
+  "0x195f4478ee3865ee1dd360b79e121c638bdd42ac"   // SchoolParkパスポート
+];
 const app = initializeApp({
   apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
   authDomain: "schoolpark-emu.vercel.app",
@@ -590,7 +596,18 @@ async function spMyAddress() {
   if (!addr) {
     return { addr: null, why: "アカウントの記録はありますが、アドレスの欄が空です。uid: " + uid };
   }
-  return { addr: addr, why: "" };
+  /* クエストと公園は、ルールが「運営のアドレスであること」を求める。
+     ところが同じ運営でも、入り方でアドレスが変わる。
+       LINE等   … chesAddress = walletAddress = uid から作った番号
+       ウォレット … walletAddress は実ウォレット、chesAddress は
+                    "wallet:0x…" から作った、また別の番号
+     chesAddress を無条件に使うと、ウォレットで入ったときだけ
+     運営のアドレスに当たらず、出そうとしても弾かれる。
+     自分の持ち番号のうち、運営として登録されているものを選ぶ。 */
+  const owned = [d.chesAddress, d.walletAddress]
+    .filter(Boolean)
+    .find(a => SP_OWNER_ADDRS.indexOf(String(a).toLowerCase()) >= 0);
+  return { addr: addr, ownerAddr: owned || addr, why: "" };
 }
 
 async function renderSchoolPark() {
@@ -612,6 +629,8 @@ async function renderSchoolPark() {
     return;
   }
   const addr = me.addr;
+  /* クエストと公園を出すときは、運営として登録されているアドレスを使う */
+  const ownerAddr = me.ownerAddr || me.addr;
 
   const [qs, vs, ws, ps, ts2] = await Promise.all([
     f.getDocs(f.collection(f.db, "sp_quests")),
@@ -896,7 +915,7 @@ async function renderSchoolPark() {
       await f.addDoc(f.collection(f.db, "sp_treasury"), {
         kind: kind, currency: cur, amount: amount,
         label: label.slice(0, 120), note: v("atNote").slice(0, 400),
-        at: at, createdAt: Date.now(), by: addr
+        at: at, createdAt: Date.now(), by: ownerAddr
       });
     } catch (e) { alert("記録できませんでした（" + (e.code || e.message) + "）"); return; }
     renderSchoolPark();
@@ -924,7 +943,7 @@ async function renderSchoolPark() {
         budget: String(parseInt(v("aqBudget").replace(/[^0-9]/g, ""), 10) || 0),
         budgetCurrency: CURRENCIES.indexOf(v("aqCurrency")) >= 0 ? v("aqCurrency") : "JPY",
         need: Math.max(1, Math.min(50, parseInt(v("aqNeed"), 10) || 5)),
-        owner: addr, ownerName: (auth.currentUser && auth.currentUser.displayName) || "運営",
+        owner: ownerAddr, ownerName: (auth.currentUser && auth.currentUser.displayName) || "運営",
         status: "OPEN", createdAt: Date.now(), closesAt: Date.now() + days * 86400000
       });
     } catch (e) { alert("出せませんでした（" + (e.code || e.message) + "）"); return; }
@@ -968,7 +987,7 @@ async function renderSchoolPark() {
     if (!v("apTitle")) { alert("題名を書いてください。"); return; }
     const kind = v("apKind") || "board";
     const doc = { kind: kind, title: v("apTitle").slice(0, 120), body: v("apBody").slice(0, 600),
-      by: addr, createdAt: Date.now(), hidden: false };
+      by: ownerAddr, createdAt: Date.now(), hidden: false };
     if (kind === "board") doc.when = v("apWhen").slice(0, 60) || "いつでも";
     if (kind === "event") {
       const at = v("apAt");
