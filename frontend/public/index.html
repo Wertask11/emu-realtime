@@ -17013,6 +17013,17 @@ async function emuRenderMembership() {
           : '月額' + Number(s.planAmount).toLocaleString('ja-JP') + '円のプランをご利用中です。');
     } else if (s.status === 'past_due') {
       paint('is-free', 'お支払い確認中', 'カードのお支払いを確認できていません。');
+    } else if (s.entitlement && s.entitlement !== 'guest') {
+      /* 契約は無いが、運営から渡されている（管理画面での付与・公式パス・
+         施行時の付与）。ここを「プラン未加入」と出していたため、
+         実際には使える人に「使えません」と伝えてしまっていた。
+         バッジは契約の有無ではなく、いま何が使えるかを出す。 */
+      const label = { light: 'Emu light', plus: 'Emu plus', pro: 'Emu pro' }[s.entitlement] || s.entitlement;
+      // 付与の期限。期限なしで渡した場合は null が返る
+      const until = s.foundingUntil;
+      paint('is-paid', label,
+        (until ? new Date(until).toLocaleDateString('ja-JP') + ' まで' : '')
+        + '運営からお渡ししているぶんでご利用中です。');
     } else {
       // ここで初めて「入っていない」と言い切れる
       paint('is-free', 'プラン未加入', window.hasPaidNFT
