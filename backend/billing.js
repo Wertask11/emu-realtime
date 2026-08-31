@@ -189,8 +189,20 @@ function createBillingRouter(deps) {
                  guaranteed: k === GUARANTEED_PLAN };
       });
       if (!sub) {
+        /* 契約が1件も無い人。ここで entitlement を付けずに返していたため、
+           運営から渡したぶん（付与）・公式パス・施行時の付与を持っていても、
+           画面には「プラン未加入」と出ていた。
+           渡したぶんは契約ではないので、必ずこの枝を通る。 */
+        let ent0 = null;
+        if (entitlement) {
+          try { ent0 = await entitlement.getEntitlement(req.identity.uid, req.identity.account); }
+          catch (e) { console.warn("利用資格を読めませんでした:", e.message); }
+        }
         return res.json({ ok: true, status: "none", plans,
-                          planAmount: PLAN_AMOUNT_JPY });
+                          planAmount: PLAN_AMOUNT_JPY,
+                          entitlement: ent0 ? ent0.plan : "guest",
+                          entitlementSource: ent0 ? ent0.source : "none",
+                          foundingUntil: ent0 ? ent0.foundingUntil : null });
       }
 
       /* Stripe を正として読み直す。
