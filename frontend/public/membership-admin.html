@@ -251,30 +251,51 @@ async function renderMembers() {
     }
     paintGrants();
 
-    $("#gOneRun").onclick = async () => {
+    /* 結果は必ず目に入るようにする。
+       画面が縦に長いので、書いただけだと見えない位置に出ることがある。 */
+    function sayGrant(text, ok) {
       const out = $("#gOneOut");
+      if (!out) return;
+      out.textContent = text;
+      out.style.color = ok === true ? "#166534" : (ok === false ? "#b91c1c" : "");
+      out.style.fontWeight = ok === undefined ? "" : "700";
+      try { out.scrollIntoView({ block: "nearest" }); } catch (e) {}
+    }
+
+    /* 入力欄でEnterを押したら送る。
+       フォームではないので、そのままだとEnterでは何も起きず、
+       「押したのに反応がない」と見えてしまう。 */
+    ["gOneAddr", "gOneNote"].forEach(function (id) {
+      const el = $("#" + id);
+      if (el) el.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); $("#gOneRun").click(); } };
+    });
+
+    $("#gOneRun").onclick = async () => {
       const addr = ($("#gOneAddr").value || "").trim();
       const plan = $("#gOnePlan").value;
       const until = ($("#gOneUntil").value || "").trim();
-      if (!addr) { out.textContent = "SchoolPark パスポートのIDを入れてください。"; return; }
+      if (!addr) { sayGrant("SchoolPark パスポートのIDを入れてください。", false); return; }
       /* 日付だけを受け取っているので、その日の終わりまで有効にする。
          0時にすると「その日はもう使えない」ことになって分かりにくい。 */
       const expiresAt = until ? new Date(until + "T23:59:59").toISOString() : null;
       const label = PLAN_JA[plan] + (until ? "（" + until + " まで）" : "（期限なし）");
       if (!confirm(label + " を渡します。よろしいですか？\n\n" + addr)) return;
-      out.textContent = "渡しています…";
+      sayGrant("渡しています…");
+      const btn = $("#gOneRun");
+      btn.disabled = true;
       try {
         const r = await api("/api/billing/admin/grants", {
           method: "POST", body: { address: addr, plan: plan, expiresAt: expiresAt, note: ($("#gOneNote").value || "").trim() }
         });
-        out.innerHTML = "渡しました。<b>" + esc(PLAN_JA[r.plan] || r.plan) + "</b>／"
+        sayGrant("渡しました。" + (PLAN_JA[r.plan] || r.plan) + "／"
           + (r.expiresAt ? fmt(r.expiresAt) + " まで" : "期限なし")
-          + '<br><small style="color:var(--muted)">すぐ有効になります。'
-          + '受け取った方の画面は、Emuのタブに戻るか開き直すと変わります。</small>';
+          + "　すぐ有効になります（受け取った方の画面は、Emuのタブに戻るか開き直すと変わります）", true);
         $("#gOneAddr").value = ""; $("#gOneNote").value = "";
         paintGrants();
       } catch (e) {
-        out.textContent = GRANT_ERR[e.code] || ("渡せませんでした（" + (e.code || e.message) + "）");
+        sayGrant(GRANT_ERR[e.code] || ("渡せませんでした（" + (e.code || e.message) + "）"), false);
+      } finally {
+        btn.disabled = false;
       }
     };
 
