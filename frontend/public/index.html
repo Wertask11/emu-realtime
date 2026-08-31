@@ -17032,6 +17032,27 @@ function emuWatchMembership() {
 }
 if (window.__chesBillingReturn) emuWatchMembership();
 
+/* タブに戻ってきたら、いま何が使えるかを聞き直す。
+
+   運営が管理画面から Emu light / plus / pro を渡したとき、サーバー側は
+   その場で反映される（付与のときにキャッシュを捨てている）。
+   ところが受け取った人のブラウザは、開いたときに一度聞いたきりなので、
+   画面を丸ごと読み込み直すまで古いままだった。
+   管理画面で渡す → Emuのタブに戻る、で反映されるようにする。
+
+   何度も叩かないよう、前回から30秒は聞き直さない。 */
+(function () {
+  var lastAt = 0;
+  function recheck() {
+    if (document.hidden) return;
+    if (Date.now() - lastAt < 30000) return;
+    lastAt = Date.now();
+    try { emuRenderMembership(); } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', recheck);
+  window.addEventListener('focus', recheck);
+})();
+
 async function loadEmuWalletCard() {
   emuRenderMembership();
   const balanceEl = document.getElementById('emuWalletBalance');
