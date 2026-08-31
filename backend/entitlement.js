@@ -132,33 +132,56 @@ function createEntitlement(deps) {
      ここで uid に読み替えてから判定する。 */
   const addrCache = new Map();
   /* SchoolParkパスポートのID（＝アドレス）から、その人の uid を引く。
-     見つからなければ null。 */
-  async function uidOfAddress(address) {
-    const addr = String(address || "").toLowerCase();
-    if (!addr || !db) return null;
+     見つからなければ null。
 
-    const hit = addrCache.get(addr);
+     アドレスは deriveWalletAddress が ethers.getAddress を通しているので、
+     Firestore には「0x195f4478EE3865eE1DD360b79E121C638BDD42aC」のような
+     大文字混じり（チェックサム表記）で入っている。
+     Firestore の一致検索は大文字小文字を区別するため、小文字だけで探すと
+     どれにも当たらず「そのIDの人が見つかりません」になる。
+     小文字・チェックサム表記・渡された形の3つで探す。 */
+  function addressForms(address) {
+    const raw = String(address || "").trim();
+    if (!raw) return [];
+    const lower = raw.toLowerCase();
+    const forms = [lower, raw];
+    try {
+      const ethers = require("ethers");
+      forms.push(ethers.utils.getAddress(lower));   // チェックサム表記
+    } catch (e) { /* 形が違う・ethers が無い場合は、そのぶんだけ諦める */ }
+    return [...new Set(forms.filter(Boolean))];
+  }
+
+  async function uidOfAddress(address) {
+    const key = String(address || "").trim().toLowerCase();
+    if (!key || !db) return null;
+
+    const hit = addrCache.get(key);
     if (hit && hit.expiresAt > Date.now()) return hit.uid;
 
     let uid = null;
+    const forms = addressForms(address);
     try {
-      const w = await db.collection("ches_wallets").doc(addr).get();
-      if (w.exists) uid = (w.data() || {}).uid || null;
-      if (!uid) {
-        // ches_wallets はチェックサム表記で入っていることがあるので、こちらでも引く
-        const q = await db.collection("ches_accounts").where("walletAddress", "==", addr).limit(1).get();
-        if (!q.empty) uid = q.docs[0].id;
+      for (const form of forms) {
+        const w = await db.collection("ches_wallets").doc(form).get();
+        if (w.exists) { uid = (w.data() || {}).uid || null; if (uid) break; }
       }
+      /* ches_wallets に無いこともある（登録が済んでいない、古いアカウントなど）。
+         その場合はアカウントそのものを引く。
+         LINE・Google・メールで入った人は chesAddress のほうにしか入らない。 */
       if (!uid) {
-        /* LINE・Google・メールで入った人は、chesAddress のほうに入っている。
-           ここを見ていないと「そのIDの人が見つかりません」になる。 */
-        const q2 = await db.collection("ches_accounts").where("chesAddress", "==", addr).limit(1).get();
-        if (!q2.empty) uid = q2.docs[0].id;
+        outer:
+        for (const field of ["walletAddress", "chesAddress"]) {
+          for (const form of forms) {
+            const q = await db.collection("ches_accounts").where(field, "==", form).limit(1).get();
+            if (!q.empty) { uid = q.docs[0].id; break outer; }
+          }
+        }
       }
     } catch (e) {
       console.warn("利用資格: アドレスからの引き当てに失敗:", e.message);
     }
-    if (uid) addrCache.set(addr, { uid, expiresAt: Date.now() + 10 * 60 * 1000 });
+    if (uid) addrCache.set(key, { uid, expiresAt: Date.now() + 10 * 60 * 1000 });
     return uid;
   }
 
