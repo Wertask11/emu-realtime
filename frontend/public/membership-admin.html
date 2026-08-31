@@ -169,7 +169,8 @@ async function renderMembers() {
       + '<p class="hint" style="margin:4px 0 0">空のままにすると期限なしになります。'
       + 'その日の終わり（23:59）まで有効です。</p>'
       + '<label>メモ（任意）</label><input id="gOneNote" placeholder="例：登壇のお礼／モニター参加">'
-      + '<div class="actions"><button class="btn primary" id="gOneRun">渡す</button></div>'
+      + '<div class="actions"><button class="btn primary" id="gOneRun">渡す</button>'
+      + '<button class="btn" id="gOneWho">このIDを調べる</button></div>'
       + '<p id="gOneOut" class="hint" style="margin-top:8px;"></p>'
       + '<h3 style="margin-top:18px">いま渡してあるもの</h3>'
       + '<div id="gList"><p class="empty">読み込み中…</p></div>'
@@ -269,6 +270,36 @@ async function renderMembers() {
       const el = $("#" + id);
       if (el) el.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); $("#gOneRun").click(); } };
     });
+
+    /* 「渡したのに反映されない」ときに、サーバーが何を見ているかを出す。 */
+    $("#gOneWho").onclick = async () => {
+      const addr = ($("#gOneAddr").value || "").trim();
+      if (!addr) { sayGrant("調べたいIDを入れてください。", false); return; }
+      sayGrant("調べています…");
+      let w;
+      try { w = await api("/api/billing/admin/whois?address=" + encodeURIComponent(addr)); }
+      catch (e) { sayGrant("調べられませんでした（" + (e.code || e.message) + "）", false); return; }
+      const L = [];
+      L.push("見つかった人: " + (w.uid ? w.uid + "（" + w.foundBy + "）" : "★いません"));
+      if (w.account) {
+        L.push("　入り方: " + (w.account.provider || "不明") + "／名前: " + (w.account.displayName || "なし"));
+        L.push("　walletAddress: " + (w.account.walletAddress || "空"));
+        L.push("　chesAddress: " + (w.account.chesAddress || "空"));
+      }
+      L.push("渡してあるもの: " + (w.grant
+        ? w.grant.plan + "（" + w.grant.source + "）"
+          + (w.grant.expiresAt ? " / " + fmt(w.grant.expiresAt) + " まで" : " / 期限なし")
+          + (w.grant.notStartedYet ? " ★まだ始まっていない" : "")
+          + (w.grant.alreadyExpired ? " ★もう切れている" : "")
+        : "なし"));
+      L.push("契約: " + (w.subscription ? (w.subscription.plan || "?") + " / " + w.subscription.status : "なし"));
+      L.push("→ いま使えるもの: " + (w.effective ? w.effective.plan + "（" + w.effective.source + "）" : "不明"));
+      const out = $("#gOneOut");
+      out.style.color = ""; out.style.fontWeight = "";
+      out.textContent = L.join("\n");
+      out.style.whiteSpace = "pre-wrap";
+      try { out.scrollIntoView({ block: "nearest" }); } catch (e) {}
+    };
 
     $("#gOneRun").onclick = async () => {
       const addr = ($("#gOneAddr").value || "").trim();

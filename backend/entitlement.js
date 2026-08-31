@@ -240,6 +240,62 @@ function createEntitlement(deps) {
     return { uid: uid, address: addr };
   }
 
+  /* 指定したIDについて、サーバーが何を見ているかをそのまま返す。
+     「渡したのに反映されない」ときに、どこで食い違っているかを見るためのもの。 */
+  async function whois(address) {
+    const forms = addressForms(address);
+    const out = { input: String(address || "").trim(), forms: forms, uid: null, foundBy: null,
+      account: null, grant: null, subscription: null, effective: null };
+    if (!db || !forms.length) return out;
+
+    for (const form of forms) {
+      const w = await db.collection("ches_wallets").doc(form).get();
+      if (w.exists && (w.data() || {}).uid) {
+        out.uid = w.data().uid; out.foundBy = "ches_wallets/" + form; break;
+      }
+    }
+    if (!out.uid) {
+      outer:
+      for (const field of ["walletAddress", "chesAddress"]) {
+        for (const form of forms) {
+          const q = await db.collection("ches_accounts").where(field, "==", form).limit(1).get();
+          if (!q.empty) { out.uid = q.docs[0].id; out.foundBy = field + " == " + form; break outer; }
+        }
+      }
+    }
+    if (!out.uid) return out;
+
+    const acc = await db.collection("ches_accounts").doc(out.uid).get();
+    if (acc.exists) {
+      const d = acc.data() || {};
+      out.account = { uid: out.uid, provider: d.provider || "", displayName: d.displayName || "",
+        walletAddress: d.walletAddress || "", chesAddress: d.chesAddress || "" };
+    } else {
+      out.account = { uid: out.uid, missing: true };
+    }
+
+    const g = await db.collection(GRANTS_COL).doc(out.uid).get();
+    if (g.exists) {
+      const v = g.data() || {};
+      const st = _toDate(v.startsAt), ex = _toDate(v.expiresAt);
+      out.grant = { plan: v.plan || "", source: v.source || "", walletAddress: v.walletAddress || "",
+        startsAt: st ? st.toISOString() : null, expiresAt: ex ? ex.toISOString() : null,
+        notStartedYet: !!(st && Date.now() < st.getTime()),
+        alreadyExpired: !!(ex && Date.now() >= ex.getTime()) };
+    }
+
+    const sub = await db.collection("subscriptions").doc(out.uid).get();
+    if (sub.exists) {
+      const v = sub.data() || {};
+      out.subscription = { status: v.status || "", plan: v.plan || "" };
+    }
+
+    forget(out.uid);
+    const ent = await getEntitlement(out.uid);
+    out.effective = { plan: ent.plan, source: ent.source };
+    return out;
+  }
+
   /* いま渡してあるものの一覧。期限切れも「切れた」と分かるように返す。 */
   async function listGrants(limit) {
     if (!db) return [];
@@ -485,7 +541,7 @@ function createEntitlement(deps) {
   }
 
   return { getEntitlement, getEntitlementByAddress, uidOfAddress, requirePlan, forget, atLeast,
-    grantInitial, grantOne, revokeOne, listGrants,
+    grantInitial, grantOne, revokeOne, listGrants, whois,
     consume, usageOf, usageWindow, limitOf, enforcing, PLAN_RANK, LIMITS, GRANTS_COL, ENFORCE_FROM };
 }
 

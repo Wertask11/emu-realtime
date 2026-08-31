@@ -695,6 +695,19 @@ function createBillingRouter(deps) {
     }
   });
 
+  /* 「渡したのに反映されない」ときに、サーバーが何を見ているかを返す。 */
+  router.get("/admin/whois", requireOwner, async (req, res) => {
+    try {
+      if (!entitlement || typeof entitlement.whois !== "function") {
+        return res.status(503).json({ error: "ENTITLEMENT_UNAVAILABLE" });
+      }
+      return res.json({ ok: true, ...(await entitlement.whois(req.query.address)) });
+    } catch (e) {
+      console.error("whois error:", e.message);
+      return res.status(500).json({ error: "WHOIS_FAILED" });
+    }
+  });
+
   router.post("/admin/grants/revoke", requireOwner, grantRateLimit, async (req, res) => {
     try {
       if (!entitlement || typeof entitlement.revokeOne !== "function") {
