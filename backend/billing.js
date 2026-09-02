@@ -908,6 +908,49 @@ function createBillingRouter(deps) {
     }
   });
 
+  /* ───────── Camellia：通報 ─────────
+
+     通報はクライアントからは読めない（誰が誰を通報したか分からないように）。
+     運営だけがここから読む。通報された投稿の中身も一緒に返す。 */
+  router.get("/admin/camellia/reports", requireOwner, async (req, res) => {
+    try {
+      const snap = await db.collection("camellia_reports")
+        .orderBy("createdAt", "desc").limit(200).get();
+      const out = [];
+      for (const doc of snap.docs) {
+        const d = doc.data() || {};
+        let post = null;
+        try {
+          const p = await db.collection("camellia_community").doc(String(d.postId || "")).get();
+          post = p.exists ? { id: p.id, ...(p.data() || {}) } : null;
+        } catch (e) { /* もう消されている */ }
+        out.push({ id: doc.id, by: d.by || "", reason: d.reason || "",
+                   createdAt: d.createdAt || null, postId: d.postId || "", post });
+      }
+      return res.json({ ok: true, total: out.length, reports: out });
+    } catch (e) {
+      console.error("camellia reports error:", e.message);
+      return res.status(500).json({ error: "REPORTS_FAILED" });
+    }
+  });
+
+  /* 通報された投稿を消す。運営だけ。 */
+  router.post("/admin/camellia/post/delete", requireOwner, grantRateLimit, async (req, res) => {
+    try {
+      const id = String((req.body || {}).postId || "").trim();
+      if (!id) return res.status(400).json({ error: "NO_POST" });
+      await db.collection("camellia_community").doc(id).delete();
+      await db.collection(AUDIT_COL).add({
+        action: "camellia.post.delete", by: (req.identity && req.identity.uid) || "",
+        postId: id, at: new Date()
+      }).catch(function () {});
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error("camellia post delete error:", e.message);
+      return res.status(500).json({ error: "DELETE_FAILED" });
+    }
+  });
+
   /* ───────── Camellia：規則変更（判定の基準） ─────────
 
      従順とみなす境目などを、運営だけが変えられる。
