@@ -3358,6 +3358,10 @@ body.emu-play-open #openPostFormButton { display:none !important; }
 /* 左タブが出ていないあいだは、お問い合わせも出さない（SchoolPark と同じ） */
 body.emu-contact-off #emu-contact-btn,
 body.emu-contact-off #emu-contact-label { display:none !important; }
+/* Camellia のサイドバーが出ていないあいだも同じ。
+   丸ボタンは左下の定位置に出るので、サイドバーが無いと中身に重なる。 */
+body.cam-contact-off #emu-contact-btn,
+body.cam-contact-off #emu-contact-label { display:none !important; }
 @media (min-width:1025px) {
   #emuSideNav {
     display:flex; flex-direction:column; gap:2px;
@@ -14173,10 +14177,17 @@ function chesBrandFrameOpen(brand) {
   if (wrap) wrap.style.display = 'flex';
 }
 
+/* Camellia のサイドバーから呼ばれる。出ているあいだだけ、
+   お問い合わせの丸ボタンを出す。SchoolPark と同じ考え方。 */
+function camelliaSideState(open) {
+  document.body.classList.toggle('cam-contact-off', !open);
+}
+
 function chesBrandFrameClose() {
   const wrap  = document.getElementById('chesBrandFrame');
   const frame = document.getElementById('cbfFrame');
   if (wrap) wrap.style.display = 'none';
+  document.body.classList.remove('cam-contact-off');   /* Camellia を離れたので戻す */
   if (frame) frame.src = 'about:blank'; /* 読み込みを止めて解放 */
   /* SchoolPark から開いた場合は、その下に SchoolPark が出たまま残っている。
      ハブを出すと SchoolPark を素通りして戻ってしまうので、閉じるだけにする。 */

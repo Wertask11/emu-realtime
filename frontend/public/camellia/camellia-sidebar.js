@@ -78,6 +78,15 @@
       + "body.side-closed #camSideOpen{display:block}"
       /* もとの横並びタブは、広い画面では隠す（同じものが2つ出てしまう） */
       + "body.has-camside:not(.side-closed) nav.nav{display:none}"
+      /* ヘッダーの「✿ Camellia／お名前」も隠す。サイドバーに同じものが出ていて、
+         SchoolPark・Emu のヘッダーにはブランド名も名前も出ていない。
+         畳んだときと狭い画面では、どこに居るか分からなくなるので戻す。 */
+      + "body.has-camside:not(.side-closed) header.top .brand{display:none}"
+      /* ブランドを消すと、右にあったメニューが左へ寄ってしまう。右端に留める。 */
+      + "body.has-camside:not(.side-closed) header.top{justify-content:flex-end}"
+      + "header.top .brand small{display:none}"
+      /* 畳んだときは、取っ手のぶんだけヘッダーを右へずらす（文字と重なる） */
+      + "body.side-closed header.top{padding-left:56px}"
       + "@media (max-width:900px){"
       + "  #camSide,#camSideOpen{display:none!important}"
       + "  body.has-camside{padding-left:0}"
@@ -127,12 +136,21 @@
     }
   }
 
+  /* サイドバーが出ているかどうかを親（Emu）に伝える。
+     お問い合わせの丸ボタンは親のもので、サイドバーの上に重なる。
+     SchoolPark も同じ考えで、出ていないあいだは引っ込めている。 */
+  function tellParent(open) {
+    if (!inFrame) return;
+    try { window.parent.camelliaSideState(open); } catch (e) {}
+  }
+
   function setCollapsed(v) {
     collapsed = v;
     document.body.classList.toggle("side-closed", v);
     var side = document.getElementById("camSide");
     if (side) side.classList.toggle("closed", v);
     try { localStorage.setItem("camellia-side-collapsed", v ? "1" : "0"); } catch (e) {}
+    tellParent(!v && window.innerWidth > 900);
   }
 
   function build() {
@@ -190,7 +208,13 @@
         if (!b) return;
         box.remove();
         if (inFrame) {
-          try { window.parent.chesHubGo(b); return; } catch (e) {}
+          try {
+            /* 先にこの枠を閉じる。閉じずに切り替えると、行った先が
+               Camellia の後ろに出るだけで、見た目には何も起きない。 */
+            window.parent.chesBrandFrameClose();
+            window.parent.chesHubGo(b);
+            return;
+          } catch (e) {}
         }
         location.href = "/";
       };
@@ -203,6 +227,12 @@
     /* もとのタブが別の場所から押されたときも、印を合わせる。 */
     document.addEventListener("click", function (e) {
       if (e.target && e.target.closest && e.target.closest("nav.nav")) setTimeout(paintItems, 0);
+    });
+
+    /* 幅が変わるとサイドバーの出方が変わる（900px以下では出さない）。
+       親のお問い合わせボタンの出し入れも、それに合わせる。 */
+    window.addEventListener("resize", function () {
+      tellParent(!collapsed && window.innerWidth > 900);
     });
   }
 
