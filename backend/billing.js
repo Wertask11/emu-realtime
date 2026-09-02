@@ -720,6 +720,44 @@ function createBillingRouter(deps) {
     }
   });
 
+  /* ───────── 公式パスの持ち主の一覧 ─────────
+
+     paid_users にいる人は、買い切りで期限なしの Emu plus 相当。
+     管理画面には付与と契約しか出ておらず、いちばん人数の多いここが
+     どこにも見えなかった。
+
+     鍵はアドレス。同じ人が小文字と大文字まじりの2つの鍵で
+     入っていることがある（normalize でそろえたぶん）。
+     小文字でまとめて、1人を1行にする。 */
+  router.get("/admin/passes", requireOwner, async (req, res) => {
+    try {
+      const snap = await db.collection("paid_users").get();
+      const byPerson = new Map();
+      snap.docs.forEach(function (doc) {
+        const key = doc.id.toLowerCase();
+        const cur = byPerson.get(key) || { address: key, keys: [], data: {} };
+        cur.keys.push(doc.id);
+        cur.data = { ...cur.data, ...(doc.data() || {}) };
+        byPerson.set(key, cur);
+      });
+      const passes = [...byPerson.values()].map(function (p) {
+        const d = p.data || {};
+        return {
+          address: p.address,
+          keys: p.keys,
+          /* ルールは小文字の鍵しか探せない。無い人はここで気づけるようにする。 */
+          readableByRules: p.keys.some(function (k) { return k === k.toLowerCase(); }),
+          label: d.label || d.name || d.note || "",
+          since: d.since || d.createdAt || d.mintedAt || null
+        };
+      }).sort(function (a, b) { return a.address < b.address ? -1 : 1; });
+      return res.json({ ok: true, total: passes.length, passes });
+    } catch (e) {
+      console.error("passes list error:", e.message);
+      return res.status(500).json({ error: "PASSES_FAILED" });
+    }
+  });
+
   /* ───────── 公式パスの鍵を小文字にそろえる ─────────
 
      paid_users の鍵はアドレス。小文字で入っているものと、

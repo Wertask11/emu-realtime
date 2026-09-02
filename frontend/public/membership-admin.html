@@ -235,21 +235,46 @@ async function renderMembers() {
       let rows = [];
       try { rows = (await api("/api/billing/admin/grants")).grants || []; }
       catch (e) { box.innerHTML = '<p class="empty">読み込めませんでした（' + esc(e.code || e.message) + '）</p>'; return; }
-      /* 最初の一括付与も同じ場所に入るので、手で渡したぶんが埋もれないよう分けて出す */
+      /* 公式パスは別のところ（paid_users）にいる。読めなくても付与の表示は出す。 */
+      let passes = [];
+      try { passes = (await api("/api/billing/admin/passes")).passes || []; } catch (e) {}
+
+      /* 出どころで3つに分ける。まぜると、手で渡したぶんが埋もれる。 */
       const byHand = rows.filter(r => r.source === "admin");
-      const auto = rows.length - byHand.length;
-      box.innerHTML = (byHand.length
-        ? byHand.map(r =>
-            '<div class="row"><span>' + esc(PLAN_JA[r.plan] || r.plan)
-            + (r.expired ? ' <b style="color:#b91c1c">期限切れ</b>' : '')
-            + '<br><small style="color:var(--muted)">' + esc(r.address || r.uid) + '</small>'
-            + (r.note ? '<br><small style="color:var(--muted)">' + esc(r.note) + '</small>' : '')
-            + '</span><span>'
-            + (r.expiresAt ? fmt(r.expiresAt) + " まで" : "期限なし")
-            + ' <button class="act no" data-grevoke="' + esc(r.address || "") + '">取り消す</button>'
-            + '</span></div>').join("")
-        : '<p class="empty">手で渡したものはまだありません。</p>')
-        + (auto ? '<p class="hint">このほかに、最初の一括付与ぶんが ' + auto + ' 件あります。</p>' : '');
+      const bulk = rows.filter(r => r.source !== "admin");
+
+      const grantRow = r =>
+        '<div class="row"><span>' + esc(PLAN_JA[r.plan] || r.plan)
+        + (r.expired ? ' <b style="color:#b91c1c">期限切れ</b>' : '')
+        + '<br><small style="color:var(--muted)">' + esc(r.address || r.uid) + '</small>'
+        + (r.note ? '<br><small style="color:var(--muted)">' + esc(r.note) + '</small>' : '')
+        + '</span><span>'
+        + (r.expiresAt ? fmt(r.expiresAt) + " まで" : "期限なし")
+        + ' <button class="act no" data-grevoke="' + esc(r.address || "") + '">取り消す</button>'
+        + '</span></div>';
+
+      const section = (title, hint, html) =>
+        '<h4 style="margin:14px 0 6px;font-size:13px;color:var(--muted)">' + title + '</h4>'
+        + (hint ? '<p class="hint" style="margin:0 0 6px">' + hint + '</p>' : '')
+        + html;
+
+      box.innerHTML =
+        section('手で渡したもの（この画面から）', '',
+          byHand.length ? byHand.map(grantRow).join("")
+            : '<p class="empty">まだありません。</p>')
+        + section('最初の一括付与', '施行のときにまとめて渡したぶんです。',
+            bulk.length ? bulk.map(grantRow).join("")
+              : '<p class="empty">ありません。</p>')
+        + section('公式パスの持ち主',
+            '買い切りで期限なし。Emu plus 相当が、持っているあいだずっと続きます。',
+            passes.length
+              ? passes.map(p =>
+                  '<div class="row"><span>Emu plus 相当'
+                  + (p.readableByRules ? '' : ' <b style="color:#b91c1c">★鍵が大文字まじり。投稿できません</b>')
+                  + '<br><small style="color:var(--muted)">' + esc(p.address) + '</small>'
+                  + (p.label ? '<br><small style="color:var(--muted)">' + esc(p.label) + '</small>' : '')
+                  + '</span><span>期限なし</span></div>').join("")
+              : '<p class="empty">まだいません。</p>');
 
       box.querySelectorAll("[data-grevoke]").forEach(b => {
         b.onclick = async () => {
