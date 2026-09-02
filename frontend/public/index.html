@@ -4520,7 +4520,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 </div>
 <!-- Camellia / Heartoo をアプリ内に表示するフレーム（自前の戻るバー付き） -->
 <div id="chesBrandFrame">
-  <div class="cbf-bar">
+  <!-- 自分でサイドバーを持っているページ（Camellia）では、この戻るバーを隠す。
+       サイドバーの左上から Emu・SchoolPark へ移れるので、二重になる。 -->
+  <div class="cbf-bar" id="cbfBar">
     <button type="button" class="ches-hub-back" onclick="chesBrandFrameClose()" data-i18n="hub.back">← メイン画面に戻る</button>
     <span class="cbf-title" id="cbfTitle"></span>
   </div>
@@ -14145,7 +14147,7 @@ const CHES_BRAND_PAGES = {
   /* 新しい Camellia。SchoolParkパスポートで入り、初回だけ生年月日と同意を聞く。
      古い /camellia.html は自前の登録画面を持っていて、パスポートと繋がっていない。
      中身の保存はまだこの端末の中だけ。サーバーに移すのはこれから。 */
-  camellia: { url: '/camellia/control-user.html', name: 'Camellia', color: '#e0576f' },
+  camellia: { url: '/camellia/control-user.html', name: 'Camellia', color: '#e0576f', ownNav: true },
   heartoo:  { url: 'https://school-park-homepage.vercel.app/Heartoo.html',  name: 'Heartoo',  color: '#a0d8ef' }
 };
 
@@ -14162,6 +14164,10 @@ function chesBrandFrameOpen(brand) {
   const frame = document.getElementById('cbfFrame');
   const title = document.getElementById('cbfTitle');
   if (title) { title.textContent = conf.name; title.style.color = conf.color; }
+  /* 自分でサイドバーを持っているページでは、戻るバーを出さない。
+     サイドバーの左上から Emu・SchoolPark へ移れるので、二重になる。 */
+  const bar = document.getElementById('cbfBar');
+  if (bar) bar.style.display = conf.ownNav ? 'none' : '';
   if (frame) frame.src = conf.url;
   const hub  = document.getElementById('chesHubScreen'); if (hub) hub.style.display = 'none';
   if (wrap) wrap.style.display = 'flex';

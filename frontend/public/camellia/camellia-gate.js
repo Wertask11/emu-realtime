@@ -113,13 +113,6 @@
       + '  <label class="agree"><input name="health" type="checkbox" required>'
       + '    Camellia に記録する心と体の状態（気分・症状・服薬・月経など）を、'
       + '    わたしの記録として保存することに同意します</label>'
-      /* ここに書いてあることと、実際の扱いは必ず一致させること。
-         運営が管理画面から中身を見られる作りなので、「あなた以外には見せません」
-         とは書かない。見るのに見せないと書くのが、いちばん危ない。 */
-      + '  <p class="note">これらは「要配慮個人情報」にあたります。'
-      + '  サービスの運営・改善のために、合同会社型DAO SchoolPark の運営が'
-      + '  内容を確認することがあります。ほかの利用者には見えません。'
-      + '  第三者には提供しません。いつでも削除できます。</p>'
       + '  <button class="btn primary" style="margin-top:6px">はじめる</button>'
       + '  <div class="error" id="cgErr"></div>'
       + '</form>'

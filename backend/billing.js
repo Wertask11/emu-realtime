@@ -757,12 +757,11 @@ function createBillingRouter(deps) {
             provider = a.provider || "";
           }
         } catch (e) { /* 名前が読めなくても一覧は出す */ }
-        /* 日々の記録。新しい順に、直近のぶんだけ。
-           全部返すと件数が増えすぎるうえ、一覧では読み切れない。 */
+        /* 日々の記録。新しい順に、全部。 */
         let daily = [], personality = null;
         try {
           const ds = await doc.ref.collection("daily")
-            .orderBy("__name__", "desc").limit(14).get();
+            .orderBy("__name__", "desc").get();
           daily = ds.docs.map(function (x) { return { date: x.id, ...(x.data() || {}) }; });
         } catch (e) { /* まだ無い */ }
         try {
