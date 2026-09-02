@@ -774,6 +774,14 @@ function createBillingRouter(deps) {
         } catch (e) { /* まだ無い */ }
         const personality = profile.personality || null;
 
+        /* ほかのアプリから取り込んだもの（ChatGPT・Claude・ルナルナなど）。
+           本人が自分で書き出して、この画面に入れたぶん。 */
+        const imports = [];
+        try {
+          const is = await doc.ref.collection("imports").get();
+          is.docs.forEach(function (x) { imports.push({ type: x.id, ...(x.data() || {}) }); });
+        } catch (e) { /* まだ無い */ }
+
         /* 運営が決めたこと（7つの機構の入り切り）。
            本人が書き換えられない場所に置いてある。 */
         let adminControl = null;
@@ -856,7 +864,9 @@ function createBillingRouter(deps) {
           settings: profile.settings || null,
           location: profile.location || null,
           chat: profile.chat || null,
-          control: profile.control || null
+          control: profile.control || null,
+          activity: profile.activity || null,
+          imports: imports
         });
       }
       members.sort(function (a, b) {

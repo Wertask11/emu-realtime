@@ -29,7 +29,8 @@
 (function () {
   "use strict";
 
-  var CHAT_KEEP = 200;      /* 会話は新しいほうから、この件数まで置く */
+  var CHAT_KEEP = 200;       /* 会話は新しいほうから、この件数まで置く */
+  var IMPORT_KEEP = 150000;  /* 取り込んだ中身を、サーバーへ置く文字数の上限 */
   var WAIT = 1500;          /* まとめて送るまでの待ち時間（ミリ秒） */
 
   var KEYS = [
@@ -119,6 +120,23 @@
 
     put("profile", "basic", v2.profile);
     put("profile", "settings", v2.settings);
+
+    /* ほかのアプリから取り込んだもの（ChatGPT・Claude・ルナルナなど）。
+       1つの文書に入る大きさには上限（1MB）がある。日本語は1文字3バイトに
+       なるので、文字数で切っておかないと入りきらない。
+       全文はこの端末に残る。 */
+    var imports = v2.imports || {};
+    Object.keys(imports).forEach(function (k) {
+      var im = imports[k] || {};
+      var body = String(im.content || "");
+      put("imports", k, {
+        name: im.name || "",
+        characters: Number(im.characters) || body.length,
+        importedAt: im.importedAt || "",
+        content: body.slice(0, IMPORT_KEEP),
+        truncated: body.length > IMPORT_KEEP
+      });
+    });
     put("profile", "personality", readJSON("camellia-personality-full"));
     put("profile", "control", readJSON("camellia-control-state"));
 

@@ -193,6 +193,53 @@ function camChat(chat) {
   }).join("");
 }
 
+/* ほかのアプリ（ChatGPT・Claude・ルナルナなど）から取り込んだもの。
+   本人が自分で書き出して入れたファイルの中身。
+   長いので、そのまま流すと画面が壊れる。折りたたんで、枠の中で送る。 */
+function camImports(list) {
+  if (!Array.isArray(list) || !list.length) return "";
+  return list.map(function (im) {
+    const body = String(im.content || "");
+    return '<details style="margin:0 0 6px">'
+      + '<summary style="cursor:pointer">'
+      + '<b>' + esc(im.type || "不明") + '</b> '
+      + '<small style="color:var(--muted)">' + esc(im.name || "")
+      + (im.characters ? '／' + Number(im.characters).toLocaleString() + '文字' : '')
+      + (im.importedAt ? '／' + fmt(im.importedAt) : '')
+      + (im.truncated ? '／★長いので途中まで' : '')
+      + '</small></summary>'
+      + '<pre style="white-space:pre-wrap;word-break:break-all;max-height:320px;overflow:auto;'
+      + 'background:#f7f5f2;border:1px solid var(--line);border-radius:8px;padding:10px;'
+      + 'font-size:12px;margin:6px 0 0">' + esc(body.slice(0, 20000))
+      + (body.length > 20000 ? "\n…（ここまで表示）" : "") + '</pre>'
+      + '</details>';
+  }).join("");
+}
+
+/* 行動。どの画面をいつ開いたか、誘導を出して押したか。
+   観察が切られている方は、そもそも集まっていない。 */
+function camActivity(act) {
+  const list = (act && Array.isArray(act.events)) ? act.events : [];
+  if (!list.length) return "";
+  const counts = {};
+  list.forEach(function (e) {
+    const k = e.kind + (e.page ? "：" + e.page : "");
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  const head = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; })
+    .map(function (k) {
+      return '<span style="display:inline-block;margin:0 12px 4px 0">'
+        + '<small style="color:var(--muted)">' + esc(k) + '</small> ' + counts[k] + '回</span>';
+    }).join("");
+  const last = list.slice(-12).reverse().map(function (e) {
+    return '<div><small style="color:var(--muted)">' + esc(fmt(e.at)) + '</small> '
+      + esc(e.kind) + (e.page ? "：" + esc(e.page) : "") + '</div>';
+  }).join("");
+  return head + '<details style="margin-top:6px"><summary style="cursor:pointer">'
+    + '<small style="color:var(--muted)">最近の動き</small></summary>'
+    + '<div style="margin-top:4px">' + last + '</div></details>';
+}
+
 /* 見出しと中身。中身が無いところは、無いと分かるように出す。 */
 function camBlock(title, html) {
   return '<div style="margin:10px 0 0">'
@@ -280,7 +327,9 @@ async function paintCamellia() {
       + camBlock("位置情報", camPairs(m.location))
       + camBlock("性格診断", camPairs(m.personality))
       + camBlock("支配構造シミュレーションの状態", camPairs(m.control))
-      + camBlock("AIとの会話", camChat(m.chat))
+      + camBlock("Camellia AI との会話", camChat(m.chat))
+      + camBlock("ほかのアプリから取り込んだもの", camImports(m.imports))
+      + camBlock("行動", camActivity(m.activity))
       + camBlock("日々の記録", camDailyTable(m.daily))
       + '</div></details>';
   }).join("");
