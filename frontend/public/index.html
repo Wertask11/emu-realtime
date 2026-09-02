@@ -13111,7 +13111,7 @@ const editingId = editingPostId;
          別々に書くと、片方だけ通ってしまう余地が残る。 */
       const _postBatch = window.fbLib.writeBatch(window.db);
       _postBatch.set(window.fbLib.doc(window.fbLib.collection(window.db, "posts")), postData);
-      _emuAddUsage(_postBatch, 'post');
+      await _emuAddUsage(_postBatch, 'post');
       await _postBatch.commit();
       console.log("✅ 新規投稿を作成しました");
     }
@@ -14742,7 +14742,7 @@ document.getElementById("emuRequestSubmit")?.addEventListener("click", async fun
       settlementStatus:"uncommitted",
       createdAt:new Date()
     });
-    _emuAddUsage(_reqBatch, 'request');
+    await _emuAddUsage(_reqBatch, 'request');
     await _reqBatch.commit();
     closeEmuSheet("emuRequestSheet");
     await loadKnowledgeRequests();
@@ -14851,7 +14851,7 @@ document.getElementById("emuAnswerSubmit")?.addEventListener("click", async func
     batch.update(window.fbLib.doc(window.db, "knowledge_requests", _emuAnswerContext.id), {
       answerCount:window.fbLib.increment(1)
     });
-    _emuAddUsage(batch, 'answer');   // 回数の記録も同じ一括処理で
+    await _emuAddUsage(batch, 'answer');   // 回数の記録も同じ一括処理で
     await batch.commit();
     closeEmuSheet("emuAnswerSheet");
     alert("知識を届けました。募集者が採用すると、価値プロフィールと懸賞履歴に残ります。");
@@ -19182,14 +19182,35 @@ function _emuUsageRef() {
 }
 /* 一括処理に「この種類を1つ使った」を足す。
    数えられないまま書きにいくと、ルールに弾かれて投稿ごと失敗する。
-   黙って見送らず、ここで止めて理由を伝える。 */
-function _emuAddUsage(batch, kind) {
+   黙って見送らず、ここで止めて理由を伝える。
+
+   increment() は使えない。
+   Firestore のルールからは、increment のような「変換」で書く欄が
+   request.resource.data に見えない。ルールは
+
+     request.resource.data.get('post',0) >= resource.data.get('post',0)
+
+   で数が減っていないことを確かめているので、変換で書くと左辺が
+   いつも 0 になり、2件目以降は 0 >= 1 で必ず弾かれる。
+   （1件目は文書が無く create の枝を通るので、そこだけは通っていた）
+
+   そこで、いまの数を読んでから「読んだ数 + 1」をそのまま書く。
+   同時に2か所から書いて競り合った場合は、ルールの
+   getAfter( ... ) == usedBefore + 1 が食い違って弾かれる。
+   数が狂うより、弾かれて出し直すほうが安全。 */
+async function _emuAddUsage(batch, kind) {
   const ref = _emuUsageRef();
   if (!ref) throw new Error('ログインの状態を確認できませんでした。一度読み込み直してからお試しください。');
-  batch.set(ref, {
-    [kind]: window.fbLib.increment ? window.fbLib.increment(1) : 1,
-    updatedAt: new Date()
-  }, { merge: true });
+  let now = 0;
+  try {
+    const snap = await window.fbLib.getDoc(ref);
+    if (snap.exists()) now = Number((snap.data() || {})[kind]) || 0;
+  } catch (e) {
+    /* 読めないときは0から数える。ルール側が getAfter で辻褄を確かめるので、
+       食い違えば書き込みごと弾かれる。黙って多く見積もることはしない。 */
+    console.warn('回数を読めませんでした:', e && e.message);
+  }
+  batch.set(ref, { [kind]: now + 1, updatedAt: new Date() }, { merge: true });
 }
 
 /* 見学中の遊びの回数をサーバーで数える。
