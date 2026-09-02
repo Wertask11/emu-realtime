@@ -197,13 +197,35 @@ service cloud.firestore {
        付与と契約を1回ずつ数え、公式パスは要るときだけ見る
        （公式パスは plus 止まりなので、すでに plus 以上なら見なくていい）。 */
     function myRank() {
-      return topRank(grantRank(), subRank());
+      return rankOfUser(get(accountPath()).data);
     }
-    function topRank(g, s) {
-      return higherOf(g, s) >= 2 ? higherOf(g, s) : higherOf(higherOf(g, s), passRank());
+    /* 付与 → 契約 → 公式パス の順に、決まった時点で止める。
+       付与が pro ならそこで終わり（契約も公式パスも、それ以上にはならない）。
+       公式パスは plus 止まりなので、すでに plus 以上なら見に行かない。 */
+    function rankOfUser(a) {
+      return rankFromGrant(a, grantRank());
+    }
+    function rankFromGrant(a, g) {
+      return g == 3 ? 3 : rankFromSub(a, g, subRank());
+    }
+    function rankFromSub(a, g, s) {
+      return higherOf(g, s) >= 2 ? higherOf(g, s)
+        : higherOf(higherOf(g, s), hasPassFor(a) ? 2 : 0);
     }
     function higherOf(a, b) {
       return a > b ? a : b;
+    }
+
+    /* 新しく作ってよいか。名義の確認と段の確認をまとめて行う。
+       アカウントはここで1回だけ読み、中身を持ち回る。
+       isMyWallet と mayWrite を並べて書くと、同じ文書を2回読むことになる。 */
+    function mayCreate(addr, minRank, kind) {
+      return signedIn() && addr is string && addr.size() > 0
+        && mayCreateWith(get(accountPath()).data, addr, minRank, kind);
+    }
+    function mayCreateWith(a, addr, minRank, kind) {
+      return addrIsMine(a, addr)
+        && (!enforcing() || mayWriteAs(rankOfUser(a), minRank, kind));
     }
 
     /* この段以上で書けるか。施行日より前は誰も止めない。
@@ -266,9 +288,6 @@ service cloud.firestore {
     /* 段と回数を、いちどの判定でまとめて確かめる。
        段は myRank() で1回だけ数え、あとは引数で持ち回る。
        getAfter も1回だけ呼んで、その値を渡す。 */
-    function mayWrite(minRank, kind) {
-      return !enforcing() || mayWriteAs(myRank(), minRank, kind);
-    }
     function mayWriteAs(rank, minRank, kind) {
       return rank >= minRank && hasRoomIn(limitOf(rank, kind), kind);
     }
@@ -293,8 +312,12 @@ service cloud.firestore {
     }
     /* 作れるか。段が足りていて、ちょうど1増えていて、上限以内であること。
        ここも段を1回だけ数えて持ち回る（上の「参照の回数」を参照）。 */
-    function mayAddToLibrary(minRank) {
-      return !enforcing() || mayAddAs(myRank(), minRank);
+    function mayAddToLibrary(owner, minRank) {
+      return signedIn() && owner is string && owner.size() > 0
+        && mayAddToLibraryWith(get(accountPath()).data, owner, minRank);
+    }
+    function mayAddToLibraryWith(a, owner, minRank) {
+      return addrIsMine(a, owner) && (!enforcing() || mayAddAs(rankOfUser(a), minRank));
     }
     function mayAddAs(rank, minRank) {
       return rank >= minRank
@@ -500,8 +523,7 @@ service cloud.firestore {
       allow read: if true;
 
       // 知識を届けるのは light 以上（9/1から）
-      allow create: if isMyWallet(request.resource.data.get('address', ''))
-        && mayWrite(1, 'post')
+      allow create: if mayCreate(request.resource.data.get('address', ''), 1, 'post')
         && request.resource.data.get('goodCount', 0) == 0
         && request.resource.data.get('changeCount', 0) == 0
         && request.resource.data.get('goodUsers', []).size() == 0
@@ -537,8 +559,7 @@ service cloud.firestore {
       /* 下書きを残すのは light 以上（9/1から）。
          件数の上限（light 30 / plus 1,000）も、ここで確かめる。
          画面だけで数えていたときは、画面を通さなければ何件でも作れた。 */
-      allow create: if isMyWallet(request.resource.data.get('owner', ''))
-        && mayAddToLibrary(1);
+      allow create: if mayAddToLibrary(request.resource.data.get('owner', ''), 1);
       allow read, update: if isMyWallet(resource.data.get('owner', ''));
       // 消すときは、持っている数の記録も1つ減らしてもらう
       allow delete: if isMyWallet(resource.data.get('owner', '')) && libraryDecremented();
@@ -569,8 +590,7 @@ service cloud.firestore {
     match /knowledge_requests/{requestId} {
       allow read: if signedIn();
       // 知識を募集するのは light 以上（9/1から）
-      allow create: if isMyWallet(request.resource.data.get('author', ''))
-        && mayWrite(1, 'request')
+      allow create: if mayCreate(request.resource.data.get('author', ''), 1, 'request')
         && request.resource.data.status == 'open'
         && request.resource.data.answerCount == 0
         && request.resource.data.settlementStatus == 'uncommitted';
@@ -591,8 +611,7 @@ service cloud.firestore {
     match /knowledge_answers/{answerId} {
       allow read: if signedIn();
       // 募集へ答えるのは light 以上（9/1から）
-      allow create: if isMyWallet(request.resource.data.get('answerAuthor', ''))
-        && mayWrite(1, 'answer')
+      allow create: if mayCreate(request.resource.data.get('answerAuthor', ''), 1, 'answer')
         && request.resource.data.status == 'submitted'
         && get(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.author == request.resource.data.requestAuthor;
       allow update: if signedIn()
