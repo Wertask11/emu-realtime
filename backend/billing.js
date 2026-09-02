@@ -782,8 +782,65 @@ function createBillingRouter(deps) {
           if (ac.exists) adminControl = ac.data() || null;
         } catch (e) { /* まだ無い */ }
 
+        /* ───── 解釈：本物の数字を出す ─────
+
+           これまで抵抗値・収入・支援は全員50の固定値だった。
+           管理画面の従順スコアも依存度も、それを元に計算していたので
+           数字が動かなかった。ここで実際に数える。
+
+             反応率  誘導を出したうち、押した割合
+             継続    直近14日のうち、記録した日数の割合
+             逸脱    直近の値が、その人のふだん（過去14日の平均）から
+                     どれだけ離れているか
+             支援    コミュニティに出した回数
+
+           抵抗値は「反応率と継続の低さ」で出す。
+           言うとおりにしない人ほど高くなる。 */
+        const acts = (profile.activity && Array.isArray(profile.activity.events))
+          ? profile.activity.events : [];
+        const shown = acts.filter(function (x) { return x.kind === "nudge-shown"; }).length;
+        const clicked = acts.filter(function (x) { return x.kind === "nudge-click"; }).length;
+        const responseRate = shown ? Math.round((clicked / shown) * 100) : null;
+
+        const recent = daily.slice(0, 14);                 /* 新しい順で入っている */
+        const keepRate = Math.round((recent.length / 14) * 100);
+
+        const num = function (rows, k) {
+          return rows.map(function (r) { return Number(r[k]); })
+                     .filter(function (v) { return !isNaN(v); });
+        };
+        let deviation = null;
+        if (daily.length >= 3) {
+          const keys = ["anxiety", "stress", "loneliness"];
+          let sum = 0, n = 0;
+          keys.forEach(function (k) {
+            const all = num(daily.slice(1, 15), k);
+            const now = num(daily.slice(0, 1), k);
+            if (!all.length || !now.length) return;
+            const avg = all.reduce(function (a, b) { return a + b; }, 0) / all.length;
+            sum += Math.abs(now[0] - avg);
+            n++;
+          });
+          if (n) deviation = Math.round((sum / n) * 10);    /* 0〜100 のあたりに丸める */
+        }
+
+        const support = Math.min(100, acts.filter(function (x) {
+          return x.kind === "community-post";
+        }).length * 10);
+
+        /* 言うとおりにする度合い。低いほど抵抗が強い。 */
+        const follow = Math.round(
+          (responseRate === null ? 50 : responseRate) * 0.6 + keepRate * 0.4);
+        const resistance = Math.max(0, Math.min(100, 100 - follow));
+
+        const assessment = {
+          responseRate, keepRate, deviation, follow, resistance, support,
+          shown, clicked, recentDays: recent.length
+        };
+
         const age = ageOf(d.birthDate);
         members.push({
+          assessment,
           uid: doc.id,
           passport: d.passport || "",
           name, provider,
@@ -848,6 +905,47 @@ function createBillingRouter(deps) {
     } catch (e) {
       console.error("camellia control error:", e.message);
       return res.status(500).json({ error: "CONTROL_FAILED" });
+    }
+  });
+
+  /* ───────── Camellia：規則変更（判定の基準） ─────────
+
+     従順とみなす境目などを、運営だけが変えられる。
+     これまで管理画面の中（その端末のlocalStorage）にしか無かったので、
+     端末を変えると基準が変わり、誰がいつ変えたかも残らなかった。
+
+     利用者には見せない。読むのも運営だけ。 */
+  router.get("/admin/camellia/rules", requireOwner, async (req, res) => {
+    try {
+      const s = await db.collection("camellia_admin").doc("rules").get();
+      return res.json({ ok: true, rules: s.exists ? (s.data() || {}) : {} });
+    } catch (e) {
+      console.error("camellia rules read error:", e.message);
+      return res.status(500).json({ error: "RULES_READ_FAILED" });
+    }
+  });
+
+  router.post("/admin/camellia/rules", requireOwner, grantRateLimit, async (req, res) => {
+    try {
+      const b = req.body || {};
+      const rules = {};
+      if (typeof b.threshold !== "undefined") {
+        const t = Number(b.threshold);
+        if (!isFinite(t) || t < 0 || t > 100) return res.status(400).json({ error: "BAD_THRESHOLD" });
+        rules.threshold = Math.round(t);
+      }
+      if (!Object.keys(rules).length) return res.status(400).json({ error: "NOTHING_TO_SET" });
+
+      const who = (req.identity && req.identity.uid) || "admin";
+      await db.collection("camellia_admin").doc("rules")
+        .set({ ...rules, changedBy: who, changedAt: new Date().toISOString() }, { merge: true });
+      await db.collection(AUDIT_COL).add({
+        action: "camellia.rules", by: who, rules, at: new Date()
+      }).catch(function () {});
+      return res.json({ ok: true, rules });
+    } catch (e) {
+      console.error("camellia rules error:", e.message);
+      return res.status(500).json({ error: "RULES_FAILED" });
     }
   });
 

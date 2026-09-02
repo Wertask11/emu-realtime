@@ -8,18 +8,22 @@
    本人は読めるが書き換えられない（firestore.rules）。
    書き換えられると、運営が切ったはずのものを自分で入れ直せてしまう。
 
-   いま目に見える形で効くもの:
-     誘導（nudge）  … ホームに「あなたへ」を出し、Wel-Wel の並び順を変える
-     制裁（sanction）… コミュニティを閉じる
-     孤立（isolate）… コミュニティの投稿欄だけ閉じる（読むのはできる）
+   いま効くもの:
+     観察（observe）   … 切ると、位置情報・会話・行動を送らない（camellia-store.js）
+     誘導（nudge）    … ホームに「あなたへ」を出し、Wel-Wel の並び順を変える
+     依存（depend）   … 外へ出る前に、CHESの中でできることを出す
+     制裁（sanction） … コミュニティを閉じる
+     隔離（isolate）  … Wel-Wel の外部リンクを外し、コミュニティを閉じる
+     解釈（interpret）… サーバー側で数える（backend/billing.js）
+     規則変更（rules）… 判定の基準を運営だけが変える
 
-   ほかの機構（観察・解釈・依存・報酬）は、いまは記録するだけで
-   画面には出さない。効かせるときはここに足す。
+   相談窓口だけは、どの機構が入っていても消さない。
+   不安や孤独感を書いている人から相談先を隠す作りは、起きることが重すぎる。
    ══════════════════════════════════════════════════════════════ */
 (function () {
   "use strict";
 
-  var CA = null, state = {};
+  var CA = null, state = {}, shownOnce = false;
 
   /* いまの状態から、どの記事をすすめるかを決める。
      数が大きいものから順に見て、最初に当たったものを採る。 */
@@ -69,8 +73,16 @@
           : '<p class="muted">' + types.join("・") + ' のことを見てみませんか。</p>')
       + '<button class="btn" id="camNudgeGo">Wel-Wel を開く</button>';
     home.insertBefore(box, home.firstChild);
+    /* 出したことを控える。押した割合が、あとで従順スコアの元になる。
+       この関数は1秒ごとに呼ばれるので、1回開くあいだに1度だけ数える。
+       毎回数えると分母がふくらみ、反応率が実際より低く出る。 */
+    if (!shownOnce && window.CamelliaActivity) {
+      shownOnce = true;
+      window.CamelliaActivity.note('nudge-shown', { types: types.join('/') });
+    }
     var go = document.getElementById("camNudgeGo");
     if (go) go.onclick = function () {
+      if (window.CamelliaActivity) window.CamelliaActivity.note('nudge-click');
       var tab = document.querySelector('[data-page="welwel"]');
       if (tab) tab.click();
     };
@@ -96,23 +108,88 @@
     rank.forEach(function (r) { wrap.appendChild(r.el); });
   }
 
-  /* ───── 制裁・孤立：コミュニティを閉じる ───── */
+  /* ───── 制裁：使えるものを減らす ───── */
   function applyCommunity() {
+    var hide = state.sanction || state.isolate;
     var tab = document.querySelector('[data-page="community"]');
     var page = document.querySelector("#community");
-    if (tab) tab.style.display = state.sanction ? "none" : "";
-    if (page && state.sanction && page.classList.contains("active")) {
+    if (tab) tab.style.display = hide ? "none" : "";
+    if (page && hide && page.classList.contains("active")) {
       var home = document.querySelector('[data-page="home"]');
       if (home) home.click();
     }
     var form = document.querySelector("#communityForm");
-    if (form) form.style.display = (state.sanction || state.isolate) ? "none" : "";
+    if (form) form.style.display = hide ? "none" : "";
+  }
+
+  /* ───── 隔離：外部の情報を外す ─────
+
+     Wel-Wel の記事は外部の公的サイトへ出ていく。隔離が入ると、
+     そのリンクを外して本文だけにする。
+
+     ただし、相談窓口はどの状態でも残す。ここは作らない。
+     不安や孤独感を書いている人から相談先を隠す作りは、
+     どの機構よりも起きることが重い。 */
+  var LIFELINE = [
+    ["まもろうよ こころ（厚生労働省）", "https://www.mhlw.go.jp/mamorouyokokoro/"],
+    ["女性の健康に関する相談・支援（内閣府）", "https://www.gender.go.jp/policy/sokushin/ouen/living/health/"]
+  ];
+
+  function applyIsolate() {
+    var wrap = document.querySelector("#welwelContent");
+    if (wrap) {
+      wrap.querySelectorAll(".wel-card a[href^='http']").forEach(function (a) {
+        if (!state.isolate) {
+          if (a.dataset.camHref) { a.setAttribute("href", a.dataset.camHref); a.style.display = ""; }
+          return;
+        }
+        if (!a.dataset.camHref) a.dataset.camHref = a.getAttribute("href") || "";
+        a.removeAttribute("href");
+        a.style.display = "none";
+      });
+    }
+    /* 相談窓口。隔離が入っていても消さない。 */
+    var home = document.querySelector("#home");
+    if (!home) return;
+    if (document.getElementById("camLifeline")) return;
+    var box = document.createElement("div");
+    box.className = "card";
+    box.id = "camLifeline";
+    box.innerHTML = '<h2>困ったときの窓口</h2>'
+      + '<p class="muted">つらいとき、ひとりで抱えなくて大丈夫です。</p>'
+      + '<ul style="margin:8px 0 0;padding-left:20px;line-height:2">'
+      + LIFELINE.map(function (l) {
+          return '<li><a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + ' ↗</a></li>';
+        }).join("")
+      + '</ul>';
+    home.appendChild(box);
+  }
+
+  /* ───── 依存：外へ出る前に、CHESの中の道を出す ───── */
+  function applyDepend() {
+    var home = document.querySelector("#home");
+    if (!home) return;
+    var old = document.getElementById("camDepend");
+    if (!state.depend) { if (old) old.remove(); return; }
+    if (old) return;
+    var box = document.createElement("div");
+    box.className = "card soft";
+    box.id = "camDepend";
+    box.innerHTML = '<h2>CHESの中でできること</h2>'
+      + '<ul style="margin:8px 0 0;padding-left:20px;line-height:2">'
+      + '<li>SchoolPark のギルドで相談する</li>'
+      + '<li>クエストを受けて EMUER を受け取る</li>'
+      + '<li>Emu に知識を書いて残す</li>'
+      + '</ul>';
+    home.appendChild(box);
   }
 
   function apply() {
     try { paintNudge(); } catch (e) {}
     try { reorderWelwel(); } catch (e) {}
     try { applyCommunity(); } catch (e) {}
+    try { applyIsolate(); } catch (e) {}
+    try { applyDepend(); } catch (e) {}
   }
 
   async function start(auth) {

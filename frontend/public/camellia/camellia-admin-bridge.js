@@ -56,7 +56,12 @@
       relations: "—",
       /* ここから下は、この画面の模型が使う目盛り。実データではない。
          本物の記録から決められる性質のものではないので、まん中に置く。 */
-      resistance: 50, income: 50, support: 50,
+      /* 抵抗値・支援はサーバーが実際に数えたもの。
+         収入は Camellia には無いので 0（依存度は支援で動く）。 */
+      resistance: (m.assessment && typeof m.assessment.resistance === "number") ? m.assessment.resistance : 50,
+      income: 0,
+      support: (m.assessment && typeof m.assessment.support === "number") ? m.assessment.support : 0,
+      assessment: m.assessment || null,
       /* 運営がこの方に入れている7つの機構。管理画面の初期状態にする。 */
       control: m.adminControl || {}
     };

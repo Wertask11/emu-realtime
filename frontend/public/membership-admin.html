@@ -205,6 +205,7 @@ function camBlock(title, html) {
 /* 枠の中の管理画面へ渡す。まだ読み込みが終わっていないこともあるので、
    最後に読んだものを控えておき、あちらの用意ができた合図でもう一度送る。 */
 let camLastMembers = null;
+let camLastThreshold = null;
 function camSend(members) {
   if (members) camLastMembers = members;
   if (!camLastMembers) return;
@@ -225,6 +226,14 @@ window.addEventListener("message", function (ev) {
     }).catch(function (e) {
       alert("この方に効かせられませんでした（" + (e.code || e.message) + "）");
     });
+  }
+  /* 判定の基準。運営だけが変えられ、誰がいつ変えたかを残す。 */
+  if (ev.data.type === "camellia-rules") {
+    if (camLastThreshold === ev.data.threshold) return;   /* 変わっていないときは送らない */
+    camLastThreshold = ev.data.threshold;
+    api("/api/billing/admin/camellia/rules", {
+      method: "POST", body: { threshold: ev.data.threshold }
+    }).catch(function () {});
   }
 });
 

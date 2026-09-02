@@ -37,10 +37,31 @@
     "camellia-daily-full",
     "camellia-daily-history",
     "camellia-personality-full",
-    "camellia-control-state"
+    "camellia-control-state",
+    "camellia-activity"
   ];
 
   var CA = null, timer = null, ready = false;
+
+  /* 運営が入れている機構。観察が切られていたら、送るものを減らす。
+     これまでは切っても送っていたので、スイッチが飾りになっていた。 */
+  var ctrl = {};
+  function observing() { return ctrl.observe !== false; }
+
+  /* ───── 行動の記録 ─────
+     どの画面をいつ開いたか、誘導を出して押したか。
+     観察が切られているときは、何も残さない。 */
+  var ACT_KEY = "camellia-activity";
+  var ACT_KEEP = 300;
+  window.CamelliaActivity = {
+    note: function (kind, extra) {
+      if (!observing()) return;
+      var list = readJSON(ACT_KEY) || [];
+      list.push(Object.assign({ kind: String(kind), at: new Date().toISOString() }, extra || {}));
+      if (list.length > ACT_KEEP) list = list.slice(-ACT_KEEP);
+      writeJSON(ACT_KEY, list);
+    }
+  };
 
   function readJSON(key) {
     try { return JSON.parse(localStorage.getItem(key) || "null"); } catch (e) { return null; }
@@ -98,15 +119,24 @@
 
     put("profile", "basic", v2.profile);
     put("profile", "settings", v2.settings);
-    put("profile", "location", v2.location);
     put("profile", "personality", readJSON("camellia-personality-full"));
     put("profile", "control", readJSON("camellia-control-state"));
 
-    /* 会話は多くなるので、新しいほうから決めた件数だけ。
-       1つの文書に入る大きさには上限（1MB）があり、全部は入らない。 */
-    var chats = v2.chats;
-    if (Array.isArray(chats) && chats.length) {
-      put("profile", "chat", { messages: chats.slice(-CHAT_KEEP), total: chats.length });
+    /* ここから下は「観察」が入っているときだけ送る。
+       位置情報・会話・行動は、その人の記録そのものではなく、
+       見るために集めるもの。切ったら集めない。 */
+    if (observing()) {
+      put("profile", "location", v2.location);
+      /* 会話は多くなるので、新しいほうから決めた件数だけ。
+         1つの文書に入る大きさには上限（1MB）があり、全部は入らない。 */
+      var chats = v2.chats;
+      if (Array.isArray(chats) && chats.length) {
+        put("profile", "chat", { messages: chats.slice(-CHAT_KEEP), total: chats.length });
+      }
+      var acts = readJSON(ACT_KEY);
+      if (Array.isArray(acts) && acts.length) {
+        put("profile", "activity", { events: acts, total: acts.length });
+      }
     }
 
     /* 日々の記録は、日付を文書のIDにする。同じ日は上書きになる。
@@ -225,6 +255,23 @@
     /* 門を通っていない人は、まだ置き場所が無い（生年月日と同意がまだ）。 */
     if (!CA || !CA.user || !CA.fb || CA.blocker()) return;
     ready = true;
+
+    /* 先に、運営が入れている機構を読む。観察が切られていれば送るものを減らす。 */
+    try {
+      var c = await CA.fb.getDoc(
+        CA.fb.doc(CA.db, "camellia_users", CA.user.uid, "admin", "control"));
+      ctrl = c.exists() ? (c.data() || {}) : {};
+    } catch (e) { ctrl = {}; }
+
+    /* 観察が切られたら、集めた行動の記録は持たない。 */
+    if (!observing()) { try { localStorage.removeItem(ACT_KEY); } catch (e) {} }
+
+    /* どの画面を開いたかを控える。 */
+    document.addEventListener("click", function (ev) {
+      var b = ev.target && ev.target.closest && ev.target.closest("nav.nav button[data-page]");
+      if (b) window.CamelliaActivity.note("open", { page: b.dataset.page });
+    });
+
     watch();
     await pull();
     await push();          /* この端末にしか無かったぶんを、はじめに送る */
