@@ -13150,9 +13150,11 @@ console.log("🔄 画面をリロードせずに投稿一覧を更新します..
     
   } catch (error) {
     console.error("Firebaseへの保存に失敗:", error);
-    // エラー内容を具体的に出して、原因特定をしやすくする
-    alert("投稿に失敗しました。理由: " + error.message);
-    finishKnowledgeRequest(false, error.message || "投稿に失敗しました。");
+    /* 「権限がありません」だけでは、読んだ人に何もできない。
+       9/1から段ごとの上限が効いているので、その心当たりを添える。 */
+    const msg = _emuPostErrorText(error);
+    alert(msg);
+    finishKnowledgeRequest(false, msg);
   }
 });
 
@@ -15228,7 +15230,8 @@ function _emuLbAddr() {
   return (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
 }
 function _emuLbUid() {
-  return (localStorage.getItem('ches_uid') || '').trim();
+  /* Firebaseのセッションが正。ches_uid はその写しで、空のことがある。 */
+  return (typeof _emuUid === 'function' ? _emuUid() : (localStorage.getItem('ches_uid') || '')).trim();
 }
 // 受取日はサーバー（Asia/Tokyo）が正。端末のローカル日付で作ると、
 // 海外・時計ずれ・日付境界でサーバーとキャッシュがずれて誤判定になる。
@@ -19129,21 +19132,64 @@ window.emuHasPlan = emuHasPlan;
    何件でも作れてしまうため、書き込みと同じ処理の中で数える。
 
    期間の名前はルール側と必ず同じにすること（日本時間の暦月）。 */
+/* 誰として数えるか。
+   ルールは request.auth.uid で文書名を照らすので、必ずそれに合わせる。
+
+   以前は localStorage の ches_uid だけを見ていた。これはログインのときに
+   控える写しで、Firebaseのセッションが生きていても空のことがある
+   （セッションだけ復元された、保存領域が部分的に消えた、など）。
+   空だと文書名が「_r_m2026-9」になり、uid が抜けたまま書きにいくので
+   ルールに弾かれ、投稿そのものが「権限がありません」で失敗していた。 */
+/* 投稿が断られたときの文面。
+   Firestore は理由を教えてくれない（どの条件で落ちたかは返らない）ので、
+   起こりうる心当たりを並べて、次に何をすればよいかを示す。 */
+function _emuPostErrorText(error) {
+  const raw = (error && (error.code || error.message)) || '';
+  if (/permission|insufficient/i.test(String(raw))) {
+    const plan = (window.emuEntitlement || 'guest');
+    if (plan === 'guest') {
+      return '投稿できませんでした。\n\n'
+        + '9月1日から、知識を届けるには Emu light 以上が必要になりました。\n'
+        + '右上のアカウントメニュー →「プラン・お支払い」からご確認ください。';
+    }
+    return '投稿できませんでした。\n\n'
+      + '今月の投稿できる数を使い切っている可能性があります'
+      + '（Emu light は月2件、plus と pro は月30件）。\n'
+      + 'まだ余っているはずの場合は、一度読み込み直してからお試しください。';
+  }
+  return '投稿に失敗しました。理由: ' + (error && error.message ? error.message : raw);
+}
+
+function _emuUid() {
+  try {
+    if (window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
+      return window.auth.currentUser.uid;
+    }
+  } catch (e) {}
+  try { return localStorage.getItem('ches_uid') || ''; } catch (e) {}
+  return '';
+}
 function _emuUsageDocId() {
+  const uid = _emuUid();
+  if (!uid) return '';
   const jst = new Date(Date.now() + 9 * 3600 * 1000);
-  return (localStorage.getItem('ches_uid') || '') + '_r_m' + jst.getUTCFullYear() + '-' + (jst.getUTCMonth() + 1);
+  return uid + '_r_m' + jst.getUTCFullYear() + '-' + (jst.getUTCMonth() + 1);
 }
 function _emuUsageRef() {
-  return window.fbLib.doc(window.db, 'plan_usage', _emuUsageDocId());
+  const id = _emuUsageDocId();
+  if (!id) return null;
+  return window.fbLib.doc(window.db, 'plan_usage', id);
 }
-/* 一括処理に「この種類を1つ使った」を足す。 */
+/* 一括処理に「この種類を1つ使った」を足す。
+   数えられないまま書きにいくと、ルールに弾かれて投稿ごと失敗する。
+   黙って見送らず、ここで止めて理由を伝える。 */
 function _emuAddUsage(batch, kind) {
-  try {
-    batch.set(_emuUsageRef(), {
-      [kind]: window.fbLib.increment ? window.fbLib.increment(1) : 1,
-      updatedAt: new Date()
-    }, { merge: true });
-  } catch (e) { console.warn('回数の記録に失敗:', e && e.message); }
+  const ref = _emuUsageRef();
+  if (!ref) throw new Error('ログインの状態を確認できませんでした。一度読み込み直してからお試しください。');
+  batch.set(ref, {
+    [kind]: window.fbLib.increment ? window.fbLib.increment(1) : 1,
+    updatedAt: new Date()
+  }, { merge: true });
 }
 
 /* 見学中の遊びの回数をサーバーで数える。
