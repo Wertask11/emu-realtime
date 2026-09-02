@@ -690,6 +690,85 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    /* ───────── Camellia ─────────
+
+       ここに入るのは、気分・症状・服薬・月経といった
+       「要配慮個人情報」。取り違えたときの被害がいちばん大きい。
+
+       読めるのも書けるのも本人だけにする。
+       運営は管理画面から見るが、それはサーバー（Admin SDK）を通るので
+       このルールには当たらない。ここを開ける必要はない。
+
+       専用のルールが無かったあいだ、ここはいちばん下の受け皿に落ちていて、
+       ログインしていない人でも全員の記録を読み書きできる状態だった。
+
+       文書のIDは Firebase の uid。パスポート番号ではない。
+       パスポート番号は人に見せる番号なので、鍵にすると
+       番号を知っている人に狙われる。 */
+    function isMe(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    match /camellia_users/{uid} {
+      allow read: if isMe(uid);
+      /* 生年月日と同意。同意した記録は、あとから書き換えられる。
+         年齢の判定はサーバーとアプリで行う。ルールでは形だけ確かめる。 */
+      allow create, update: if isMe(uid)
+        && request.resource.data.get('birthDate', '') is string
+        && request.resource.data.get('agreedAt', '') is string;
+      allow delete: if isMe(uid);
+
+      /* 日々の記録・性格・設定。文書のIDで種類を分ける。
+           daily/{2026-09-02}   その日の記録
+           profile/basic        表示名・生年・職業・目標
+           profile/settings     設定
+           profile/personality  性格の結果
+         中身の形はアプリ側で変わっていくので、ここでは持ち主だけを見る。 */
+      match /{kind}/{docId} {
+        allow read, write: if isMe(uid);
+      }
+    }
+
+    /* ───────── Camellia のコミュニティ ─────────
+
+       ここだけは、ほかの人にも見える。
+       読めるのは、Camellia に入った人（camellia_users に文書がある人）だけ。
+       生年月日と同意を済ませていない人には見せない。
+
+       書けるのは自分の名義で、新しく置くときだけ。
+       いちど置いた投稿は書き換えられない（あとから中身をすり替えられないように）。
+       消せるのは、本人と運営。 */
+    function camelliaMember() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/camellia_users/$(request.auth.uid));
+    }
+
+    match /camellia_community/{postId} {
+      allow read: if camelliaMember();
+      allow create: if camelliaMember()
+        && request.resource.data.get('uid', '') == request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 500
+        && request.resource.data.get('name', '') is string
+        && request.resource.data.get('name', '').size() <= 40;
+      allow update: if false;
+      allow delete: if isOwner() || (signedIn() && resource.data.get('uid', '') == request.auth.uid);
+    }
+
+    /* 通報。出すことしかできない。
+       ほかの人の通報を読めると、誰が誰を通報したかが分かってしまう。
+       運営はサーバー（Admin SDK）か Firebase の管理画面から読む。 */
+    match /camellia_reports/{reportId} {
+      allow read: if false;
+      allow create: if camelliaMember()
+        && request.resource.data.get('by', '') == request.auth.uid
+        && request.resource.data.get('postId', '') is string
+        && request.resource.data.get('reason', '') is string
+        && request.resource.data.get('reason', '').size() <= 300;
+      allow update, delete: if false;
+    }
+
     /* ───────── SchoolPark の議題と投票 ─────────
 
        議題は誰でも読める。出せるのは自分名義のときだけ。
@@ -952,7 +1031,10 @@ service cloud.firestore {
         && coll != 'emu_feedback'
         && coll != 'discussion_conclusions'
         && coll != 'discussion_rooms'
-        && coll != 'member_profiles';
+        && coll != 'member_profiles'
+        && coll != 'camellia_users'
+        && coll != 'camellia_community'
+        && coll != 'camellia_reports';
     }
   }
 }

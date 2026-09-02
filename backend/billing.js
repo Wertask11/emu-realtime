@@ -758,16 +758,21 @@ function createBillingRouter(deps) {
           }
         } catch (e) { /* 名前が読めなくても一覧は出す */ }
         /* 日々の記録。新しい順に、全部。 */
-        let daily = [], personality = null;
+        let daily = [];
         try {
           const ds = await doc.ref.collection("daily")
             .orderBy("__name__", "desc").get();
           daily = ds.docs.map(function (x) { return { date: x.id, ...(x.data() || {}) }; });
         } catch (e) { /* まだ無い */ }
+
+        /* プロフィール・設定・位置情報・AIとの会話・性格・シミュレーションの状態。
+           どれも profile の下に1枚ずつ置いてある。まとめて1回で読む。 */
+        const profile = {};
         try {
-          const ps = await doc.ref.collection("profile").doc("personality").get();
-          if (ps.exists) personality = ps.data() || null;
+          const ps = await doc.ref.collection("profile").get();
+          ps.docs.forEach(function (x) { profile[x.id] = x.data() || {}; });
         } catch (e) { /* まだ無い */ }
+        const personality = profile.personality || null;
 
         const age = ageOf(d.birthDate);
         members.push({
@@ -781,7 +786,12 @@ function createBillingRouter(deps) {
           agreedAt: d.agreedAt || null,
           agreedVersion: d.agreedVersion || "",
           updatedAt: d.updatedAt || null,
-          daily, personality
+          daily, personality,
+          basic: profile.basic || null,
+          settings: profile.settings || null,
+          location: profile.location || null,
+          chat: profile.chat || null,
+          control: profile.control || null
         });
       }
       members.sort(function (a, b) {

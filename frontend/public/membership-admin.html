@@ -163,6 +163,45 @@ function camDailyTable(daily) {
   }).join("");
 }
 
+/* 中身の形はアプリ側で変わっていくので、欄を決め打ちにしない。
+   入っているものを、そのまま名前と値で並べる。 */
+function camPairs(o) {
+  if (!o || typeof o !== "object") return "";
+  const keys = Object.keys(o).filter(function (k) {
+    return CAM_SKIP.indexOf(k) < 0 && o[k] !== "" && o[k] !== null && o[k] !== undefined;
+  });
+  if (!keys.length) return "";
+  return keys.map(function (k) {
+    const v = (typeof o[k] === "object") ? JSON.stringify(o[k]) : String(o[k]);
+    return '<span style="display:inline-block;margin:0 12px 4px 0">'
+      + '<small style="color:var(--muted)">' + esc(CAM_FIELD_JA[k] || k) + '</small> '
+      + esc(v.length > 200 ? v.slice(0, 200) + "…" : v) + '</span>';
+  }).join("");
+}
+
+function camChat(chat) {
+  const list = (chat && Array.isArray(chat.messages)) ? chat.messages : [];
+  if (!list.length) return "";
+  const head = (chat.total && chat.total > list.length)
+    ? '<p class="hint" style="margin:0 0 6px">全' + chat.total + '件のうち、新しい'
+      + list.length + '件です。</p>' : "";
+  return head + list.map(function (mm) {
+    const who = mm && (mm.role === "user" || mm.me) ? "ご本人" : "Camellia";
+    const text = (mm && (mm.text || mm.message || mm.content)) || "";
+    return '<div style="margin:0 0 4px"><small style="color:var(--muted)">'
+      + esc(who) + '</small> ' + esc(String(text)) + '</div>';
+  }).join("");
+}
+
+/* 見出しと中身。中身が無いところは、無いと分かるように出す。 */
+function camBlock(title, html) {
+  return '<div style="margin:10px 0 0">'
+    + '<b style="font-size:12px;color:var(--muted)">' + esc(title) + '</b>'
+    + (html ? '<div style="margin-top:4px">' + html + '</div>'
+            : '<div style="margin-top:4px"><small style="color:var(--muted)">まだありません</small></div>')
+    + '</div>';
+}
+
 async function paintCamellia() {
   const box = $("#camList");
   if (!box) return;
@@ -192,9 +231,14 @@ async function paintCamellia() {
       + '<p class="hint" style="margin:0 0 6px">'
       + '生年月日 ' + esc(m.birthDate || "不明")
       + (m.agreedVersion ? '／同意の版 ' + esc(m.agreedVersion) : '')
-      + (p.mbti || p.animal ? '／' + esc([p.mbti, p.animal].filter(Boolean).join("・")) : '')
       + '</p>'
-      + camDailyTable(m.daily)
+      + camBlock("プロフィール", camPairs(m.basic))
+      + camBlock("設定", camPairs(m.settings))
+      + camBlock("位置情報", camPairs(m.location))
+      + camBlock("性格診断", camPairs(m.personality))
+      + camBlock("支配構造シミュレーションの状態", camPairs(m.control))
+      + camBlock("AIとの会話", camChat(m.chat))
+      + camBlock("日々の記録", camDailyTable(m.daily))
       + '</div></details>';
   }).join("");
 }
