@@ -19184,9 +19184,31 @@ async function emuEnsureEntitlement(force) {
 /* 断られたときに、判定に使われる材料をその場で読んで並べる。
    読むだけで、何も書き換えない。
    「権限がありません」だけでは、どの条件で落ちたのか外から分からないため。 */
+/* 投稿は「知識そのもの」と「回数の記録」の2つを同時に書いている。
+   まとめて断られるので、どちらが原因か外から分からない。
+   回数の記録だけを単独で書いてみて、切り分ける。
+
+   数が1増えるが、pro は投稿の数を数えないので実害が無い。
+   数を消費してしまう段（light・plus）では試さない。 */
+async function _emuPostProbe() {
+  if (String(window.emuEntitlement || '') !== 'pro') return '';
+  try {
+    const ref = _emuUsageRef();
+    if (!ref) return '';
+    let now = 0;
+    const s = await window.fbLib.getDoc(ref);
+    if (s.exists()) now = Number((s.data() || {}).post) || 0;
+    await window.fbLib.setDoc(ref, { post: now + 1, updatedAt: new Date() }, { merge: true });
+    return '切り分け: 回数の記録は単独なら書けた → 断られたのは「知識」のほう';
+  } catch (e) {
+    return '切り分け: 回数の記録が単独でも書けない(' + (e.code || e.message) + ') → 断られたのはこちら';
+  }
+}
+
 async function _emuPostDiagnose(authorAddress) {
   const L = [];
   try {
+    L.push('やろうとしたこと: ' + (editingPostId ? '更新（編集中）' : '新規'));
     const fb = window.fbLib, db = window.db;
     const uid = _emuUid();
     L.push('uid: ' + (uid || '（取れない）'));
@@ -19228,6 +19250,10 @@ async function _emuPostDiagnose(authorAddress) {
   } catch (e) {
     L.push('調べられませんでした: ' + (e && e.message));
   }
+  try {
+    const probe = await _emuPostProbe();
+    if (probe) L.push(probe);
+  } catch (e) {}
   return L.join('\n');
 }
 
