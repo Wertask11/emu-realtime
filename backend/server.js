@@ -176,6 +176,8 @@ const dialogue = require("./dialogue").createDialogueRouter(membershipDeps);
 const feedback = require("./feedback").createFeedbackRouter(membershipDeps);
 // 運営の受領コメント（light 以上）。light の存在理由そのもの。
 const review = require("./review").createReviewRouter(membershipDeps);
+/* Camellia AI。鍵は環境変数（ANTHROPIC_API_KEY）から読む。 */
+const camellia = require("./camellia").createCamelliaRouter(membershipDeps);
 
 // Webhook は生ボディで受ける（JSON パーサーは上で迂回済み）
 app.post(STRIPE_WEBHOOK_PATH, billing.webhookHandler, billing.handleWebhook);
@@ -184,6 +186,7 @@ app.use("/api/kyc", kyc.router);
 app.use("/api/dialogue", dialogue.router);
 app.use("/api/feedback", feedback.router);
 app.use("/api/review", review.router);
+app.use("/api/camellia", camellia.router);
 
 // 未処理のまま保持期限(30日)を過ぎた本人確認書類を毎日破棄する。
 cron.schedule("30 4 * * *", () => {
