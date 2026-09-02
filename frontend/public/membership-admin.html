@@ -215,7 +215,17 @@ function camSend(members) {
 }
 window.addEventListener("message", function (ev) {
   if (ev.origin !== location.origin) return;
-  if (ev.data && ev.data.type === "camellia-admin-ready") camSend(null);
+  if (!ev.data) return;
+  if (ev.data.type === "camellia-admin-ready") { camSend(null); return; }
+  /* 枠の中の管理画面で7つの機構を入れ切りしたら、その方に効かせる。
+     枠の中からはサーバーの鍵を使えないので、ここで代わりに送る。 */
+  if (ev.data.type === "camellia-control") {
+    api("/api/billing/admin/camellia/control", {
+      method: "POST", body: { uid: ev.data.uid, state: ev.data.state }
+    }).catch(function (e) {
+      alert("この方に効かせられませんでした（" + (e.code || e.message) + "）");
+    });
+  }
 });
 
 async function paintCamellia() {

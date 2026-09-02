@@ -774,6 +774,14 @@ function createBillingRouter(deps) {
         } catch (e) { /* まだ無い */ }
         const personality = profile.personality || null;
 
+        /* 運営が決めたこと（7つの機構の入り切り）。
+           本人が書き換えられない場所に置いてある。 */
+        let adminControl = null;
+        try {
+          const ac = await doc.ref.collection("admin").doc("control").get();
+          if (ac.exists) adminControl = ac.data() || null;
+        } catch (e) { /* まだ無い */ }
+
         const age = ageOf(d.birthDate);
         members.push({
           uid: doc.id,
@@ -801,6 +809,45 @@ function createBillingRouter(deps) {
     } catch (e) {
       console.error("camellia list error:", e.message);
       return res.status(500).json({ error: "CAMELLIA_LIST_FAILED" });
+    }
+  });
+
+  /* ───────── Camellia：運営が決めたことを、その人に効かせる ─────────
+
+     「7つの機構」の入り切りを、その人の記録の下に置く。
+     利用者の画面はこれを読んで、通知や並び順を変える。
+
+     本人は読めるが書き換えられない（firestore.rules）。
+     書き換えられると、運営が切ったはずのものを自分で入れ直せてしまう。
+     書けるのはここだけ。
+
+     誰がいつ何を変えたかを残す。あとから「誰も触っていない」と
+     言えない状態にしておく。 */
+  router.post("/admin/camellia/control", requireOwner, grantRateLimit, async (req, res) => {
+    try {
+      const b = req.body || {};
+      const uid = String(b.uid || "").trim();
+      if (!uid) return res.status(400).json({ error: "NO_UID" });
+
+      const allowed = ["observe", "interpret", "nudge", "depend", "sanction", "reward", "isolate"];
+      const state = {};
+      allowed.forEach(function (k) {
+        if (b.state && typeof b.state[k] !== "undefined") state[k] = !!b.state[k];
+      });
+
+      const who = (req.identity && req.identity.uid) || "admin";
+      await db.collection("camellia_users").doc(uid)
+        .collection("admin").doc("control")
+        .set({ ...state, changedBy: who, changedAt: new Date().toISOString() }, { merge: true });
+
+      await db.collection(AUDIT_COL).add({
+        action: "camellia.control", by: who, uid, state, at: new Date()
+      }).catch(function () {});
+
+      return res.json({ ok: true, uid, state });
+    } catch (e) {
+      console.error("camellia control error:", e.message);
+      return res.status(500).json({ error: "CONTROL_FAILED" });
     }
   });
 

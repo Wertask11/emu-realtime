@@ -725,7 +725,19 @@ service cloud.firestore {
            profile/personality  性格の結果
          中身の形はアプリ側で変わっていくので、ここでは持ち主だけを見る。 */
       match /{kind}/{docId} {
-        allow read, write: if isMe(uid);
+        allow read, write: if isMe(uid) && kind != 'admin';
+      }
+
+      /* 運営が決めたこと（7つの機構の入り切り）。
+         本人は読めるが、書き換えられない。
+         書き換えられると、運営が切ったはずのものを自分で入れ直せてしまう。
+         書くのはサーバー（Admin SDK）だけ。
+
+         本人が読めるようにしてあるのは、画面に効かせるため。
+         そして「運営が変えた」と本人に見せるため。 */
+      match /admin/{docId} {
+        allow read: if isMe(uid);
+        allow write: if false;
       }
     }
 
