@@ -202,6 +202,22 @@ function camBlock(title, html) {
     + '</div>';
 }
 
+/* 枠の中の管理画面へ渡す。まだ読み込みが終わっていないこともあるので、
+   最後に読んだものを控えておき、あちらの用意ができた合図でもう一度送る。 */
+let camLastMembers = null;
+function camSend(members) {
+  if (members) camLastMembers = members;
+  if (!camLastMembers) return;
+  document.querySelectorAll("#tab-camellia iframe").forEach(function (f) {
+    try { f.contentWindow.postMessage({ type: "camellia-members", members: camLastMembers }, location.origin); }
+    catch (e) {}
+  });
+}
+window.addEventListener("message", function (ev) {
+  if (ev.origin !== location.origin) return;
+  if (ev.data && ev.data.type === "camellia-admin-ready") camSend(null);
+});
+
 async function paintCamellia() {
   const box = $("#camList");
   if (!box) return;
@@ -211,6 +227,10 @@ async function paintCamellia() {
     box.innerHTML = '<p class="empty">読み込めませんでした（' + esc(e.code || e.message) + '）</p>';
     return;
   }
+  /* 枠の中の管理画面（control-admin / control-admin-previous）へ、本物の利用者を渡す。
+     枠の中からはサーバーの鍵を使えないので、外側で読んだものを送る。
+     以前あちらは架空の3人をその場で作って並べていた。 */
+  camSend(r.members);
   if (!r.members.length) { box.innerHTML = '<p class="empty">まだどなたも入っていません。</p>'; return; }
   box.innerHTML = r.members.map(function (m, i) {
     const age = (m.age === null || m.age === undefined) ? "不明" : (m.age + "歳");
