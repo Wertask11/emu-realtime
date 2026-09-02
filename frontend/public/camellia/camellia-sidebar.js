@@ -65,12 +65,14 @@
       + "#camSide .ic{width:32px;height:32px;border-radius:50%;background:" + ROSE + ";display:flex;"
       + "align-items:center;justify-content:center;font-size:13px;font-weight:700}"
       + "#camSide .pass{font-size:10px;letter-spacing:.1em;color:" + ACCENT + ";word-break:break-all}"
-      /* ブランドの切り替え */
-      + "#camSide .brands{position:absolute;left:24px;top:56px;background:" + INK + ";"
-      + "border:1px solid rgba(253,243,241,.18);border-radius:10px;padding:6px;min-width:150px;z-index:70}"
-      + "#camSide .brands button{display:block;width:100%;text-align:left;background:transparent;"
-      + "border:0;color:" + PAPER + ";padding:9px 12px;border-radius:7px;cursor:pointer;font-size:14px}"
-      + "#camSide .brands button:hover{background:rgba(253,243,241,.1)}"
+      /* ブランドの切り替え。寸法は SchoolPark（dao.html）と同じ値にそろえる。 */
+      + "#camSide .brands{position:absolute;top:38px;left:0;z-index:20;min-width:168px;"
+      + "background:#3A2026;border:1px solid rgba(253,243,241,.16);border-radius:10px;padding:6px;"
+      + "display:flex;flex-direction:column;gap:2px;box-shadow:0 18px 40px -14px rgba(0,0,0,.7)}"
+      + "#camSide .brands button{display:block;width:100%;text-align:left;border:0;"
+      + "padding:9px 11px;border-radius:7px;cursor:pointer;font-size:14px;font-weight:700;"
+      + "font-family:inherit}"
+      + "#camSide .brands button:hover{background:rgba(253,243,241,.09)!important}"
       /* 畳んだときに戻す取っ手 */
       + "#camSideOpen{position:fixed;left:12px;top:12px;z-index:60;width:34px;height:34px;"
       + "border-radius:8px;border:1px solid rgba(42,20,25,.2);background:" + INK + ";color:" + ACCENT + ";"
@@ -161,10 +163,10 @@
     side.id = "camSide";
     side.innerHTML =
       '<div class="head">'
-      + '  <div style="display:flex;flex:1;flex-direction:column;gap:6px;position:relative">'
-      + '    <div style="display:flex;align-items:center;gap:8px" title="ブランドを切り替える">'
-      + '      <div class="name" id="camSideBrand">Camellia</div>'
-      + '      <div class="caret">▾</div>'
+      + '  <div style="display:flex;flex:1;flex-direction:column;gap:6px;position:relative" id="camSideBrandWrap">'
+      + '    <div style="display:flex;align-items:center;gap:8px;cursor:pointer" title="ブランドを切り替える" id="camSideBrandBtn">'
+      + '      <div class="name">Camellia</div>'
+      + '      <div class="caret" id="camSideCaret">▾</div>'
       + '    </div>'
       + '  </div>'
       + '  <div class="fold" id="camSideFold" title="サイドバーを閉じる">‹</div>'
@@ -195,18 +197,37 @@
 
     document.getElementById("camSideFold").onclick = function () { setCollapsed(true); };
 
-    /* ブランドの切り替え。親（Emu）の中で開かれているときは親に頼む。 */
-    document.getElementById("camSideBrand").parentElement.onclick = function () {
+    /* ブランドの切り替え。並び・色・寸法は SchoolPark（dao.html）と同じ。
+       いま居るブランドも並べて、薄い下地を敷いて示す。
+       色は各ブランドのもの。CHES_BRAND_PAGES とも合わせてある。 */
+    var BRANDS = [
+      ["camellia", "Camellia", "#E0576F"],
+      ["emu", "Emu", "#F08300"],
+      ["schoolpark", "SchoolPark", "#D0E2BE"]
+    ];
+    var HERE = "camellia";
+
+    function closeBrands() {
       var old = side.querySelector(".brands");
-      if (old) { old.remove(); return; }
+      if (old) old.remove();
+      var c = document.getElementById("camSideCaret");
+      if (c) c.textContent = "▾";
+    }
+
+    document.getElementById("camSideBrandBtn").onclick = function (ev) {
+      ev.stopPropagation();
+      if (side.querySelector(".brands")) { closeBrands(); return; }
       var box = document.createElement("div");
       box.className = "brands";
-      box.innerHTML = '<button data-b="emu">Emu</button>'
-        + '<button data-b="schoolpark">SchoolPark</button>';
-      box.onclick = function (ev) {
-        var b = ev.target && ev.target.getAttribute("data-b");
+      box.innerHTML = BRANDS.map(function (b) {
+        return '<button data-b="' + b[0] + '" style="color:' + b[2] + ';background:'
+          + (b[0] === HERE ? "rgba(253,243,241,.08)" : "transparent") + '">' + b[1] + "</button>";
+      }).join("");
+      box.onclick = function (e2) {
+        var b = e2.target && e2.target.getAttribute("data-b");
         if (!b) return;
-        box.remove();
+        closeBrands();
+        if (b === HERE) return;                 /* いま居る場所なので何もしない */
         if (inFrame) {
           try {
             /* 先にこの枠を閉じる。閉じずに切り替えると、行った先が
@@ -218,8 +239,13 @@
         }
         location.href = "/";
       };
-      side.querySelector(".head").appendChild(box);
+      document.getElementById("camSideBrandWrap").appendChild(box);
+      document.getElementById("camSideCaret").textContent = "▴";
     };
+    /* ほかを押したら閉じる。開きっぱなしにならないように。 */
+    document.addEventListener("click", function (e) {
+      if (!e.target.closest || !e.target.closest("#camSideBrandWrap")) closeBrands();
+    });
 
     paintItems();
     paintWho();
