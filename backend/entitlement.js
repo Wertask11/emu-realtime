@@ -36,11 +36,18 @@ function enforcing() { return Date.now() >= ENFORCE_FROM; }
 
 /* 各段の上限。数える単位は暦月ではなく請求期間（契約開始日から次回更新日の前日まで）。
    無料の人には請求期間がないので、その場合だけ暦月で数える。 */
+/* 「制限なし」を表す数。無限を入れると、記録や画面で扱いに困る
+   （JSONに載らない・比較のたびに例外を考える）ので、届かない大きさの数にする。
+   画面に出すときは、この数以上なら「制限なし」と書く。
+   firestore.rules の UNLIMITED と必ず同じ値にすること。 */
+const UNLIMITED = 1000000;
+
 const LIMITS = {
   guest: { post: 0,  request: 0,  answer: 0,  ichinichi: 0,  discussion: 0, library: 0,    guestPlay: 3 },
   light: { post: 2,  request: 1,  answer: 5,  ichinichi: 7,  discussion: 0, library: 30,   guestPlay: 9999 },
   plus:  { post: 30, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000, guestPlay: 9999 },
-  pro:   { post: 30, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000, guestPlay: 9999 }
+  /* pro は投稿の数を数えない。ほかの項目は plus と同じ。 */
+  pro:   { post: UNLIMITED, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000, guestPlay: 9999 }
 };
 
 function createEntitlement(deps) {
@@ -81,6 +88,45 @@ function createEntitlement(deps) {
     }
   }
 
+  /* 公式パス（NFT）を持っているか。
+     持ち主は paid_users にアドレスを鍵にして入っている。
+
+     鍵が小文字で入っているとは限らない（アドレスは大文字混じりの
+     チェックサム表記で作られる）ので、両方の形で見る。
+     ウォレットで入った人と、LINE等で入った人でアドレスが違うので、
+     walletAddress と chesAddress の両方を見る。 */
+  async function holdsOfficialPass(uid, accountData) {
+    if (!db || !uid) return false;
+    let acc = accountData;
+    if (!acc) {
+      try {
+        const s = await db.collection("ches_accounts").doc(uid).get();
+        acc = s.exists ? (s.data() || {}) : null;
+      } catch (e) { return false; }
+    }
+    if (!acc) return false;
+
+    const seen = {};
+    for (const base of [acc.walletAddress, acc.chesAddress]) {
+      const raw = String(base || "").trim();
+      if (!raw) continue;
+      const forms = [raw.toLowerCase(), raw];
+      try {
+        const ethers = require("ethers");
+        forms.push(ethers.utils.getAddress(raw.toLowerCase()));
+      } catch (e) { /* 形が違うときは、そのぶんだけ諦める */ }
+      for (const f of forms) {
+        if (!f || seen[f]) continue;
+        seen[f] = true;
+        try {
+          const p = await db.collection("paid_users").doc(f).get();
+          if (p.exists) return true;
+        } catch (e) { /* 読めないときは「持っていない」とはせず、次を試す */ }
+      }
+    }
+    return false;
+  }
+
   /**
    * いまの利用資格を返す。
    * accountData を渡せば ches_accounts の読み直しを省ける
@@ -108,16 +154,27 @@ function createEntitlement(deps) {
     }
 
     const granted = await grantOf(uid);
+    const hasPass = await holdsOfficialPass(uid, accountData);
 
-    // 契約と付与のうち、上の段のほうを採る
+    /* 契約・付与・公式パスのうち、いちばん上の段を採る。
+
+       公式パス（NFT）は買い切りで、画面には
+       「公式パスをお持ちの方には、Emu plus 相当を無償でお渡しします」
+       と書いてある。期限は書いていない。
+       以前は施行時の一括付与でしか見ておらず、その付与には6か月の期限が
+       付いていたので、切れたあと見学に落ちてしまう形だった。
+       ここで毎回見るようにして、持っているあいだはずっと plus にする。
+       手放したら paid_users から消せば、その時点で戻る。 */
     let plan = "guest", source = "none";
     if (paid) { plan = paid; source = "stripe"; }
     if (granted && PLAN_RANK[granted.plan] > PLAN_RANK[plan]) { plan = granted.plan; source = granted.source; }
+    if (hasPass && PLAN_RANK.plus > PLAN_RANK[plan]) { plan = "plus"; source = "official-pass"; }
 
     const value = {
       plan,
       source,
       status,
+      hasPass,
       foundingUntil: granted && granted.until ? granted.until.toISOString() : null
     };
     cache.set(uid, { value, expiresAt: Date.now() + CACHE_MS });

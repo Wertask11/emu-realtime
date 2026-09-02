@@ -131,9 +131,18 @@ service cloud.firestore {
         ? rankOf(get(subPath()).data.get('plan', 'guest')) : 0;
     }
 
-    // 契約と付与のうち、上の段を採る
+    /* 公式パス（NFT）。買い切りで期限が無いので、持っているあいだはずっと plus。
+       画面と特商法にも「plus 相当を無償で」と書いてある。
+       hasPass() は下で paid_users を見ている。 */
+    function passRank() {
+      return hasPass() ? 2 : 0;
+    }
+
+    // 契約・付与・公式パスのうち、いちばん上の段を採る
     function myRank() {
-      return grantRank() > subRank() ? grantRank() : subRank();
+      return grantRank() > subRank()
+        ? (grantRank() > passRank() ? grantRank() : passRank())
+        : (subRank() > passRank() ? subRank() : passRank());
     }
 
     /* この段以上で書けるか。施行日より前は誰も止めない。
@@ -159,11 +168,17 @@ service cloud.firestore {
     }
 
     // 上限の表。backend/entitlement.js の LIMITS と必ず同じ数にすること。
+    /* 「制限なし」を表す数。届かない大きさの数で表す。
+       backend/entitlement.js の UNLIMITED と必ず同じ値にすること。 */
+    function unlimited() { return 1000000; }
+
     function limitFor(kind) {
       return planName() == 'guest' ? 0
         : (planName() == 'light'
             ? (kind == 'post' ? 2 : (kind == 'request' ? 1 : (kind == 'answer' ? 5 : 0)))
-            : (kind == 'post' ? 30 : (kind == 'request' ? 10 : (kind == 'answer' ? 30 : 0))));
+            /* pro は投稿の数を数えない。募集と回答は plus と同じ。 */
+            : (kind == 'post' ? (planName() == 'pro' ? unlimited() : 30)
+                : (kind == 'request' ? 10 : (kind == 'answer' ? 30 : 0))));
     }
 
     /* 数える期間の名前。日本時間の暦月。
