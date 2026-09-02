@@ -720,6 +720,81 @@ function createBillingRouter(deps) {
     }
   });
 
+  /* ───────── Camellia に入った人の一覧 ─────────
+
+     Camellia の管理は、これまで camellia/control-admin.html という
+     ログインの要らないページで行っていた。誰でも開けてしまうので、
+     運営だけが入れるこの管理画面へ寄せる。
+
+     気分・症状・服薬・月経といった記録も返す。要配慮個人情報にあたるので、
+     入口の同意文（camellia-gate.js）に「運営が内容を確認することがあります」と
+     書いてある。書いてあることと実際の扱いは、必ず一致させること。
+
+     日々の記録はまだこの端末の中にしかない。サーバーへ移すのはこれから。
+     それまで daily と personality は空で返る。 */
+  router.get("/admin/camellia", requireOwner, async (req, res) => {
+    const MIN_AGE = 18, MAX_AGE = 45;   // camellia-auth.js と必ず同じにすること
+    const ageOf = function (birth) {
+      const d = new Date(String(birth || ""));
+      if (isNaN(d.getTime())) return null;
+      const now = new Date();
+      let a = now.getFullYear() - d.getFullYear();
+      const m = now.getMonth() - d.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+      return a;
+    };
+    try {
+      const snap = await db.collection("camellia_users").limit(500).get();
+      const members = [];
+      for (const doc of snap.docs) {
+        const d = doc.data() || {};
+        let name = "", provider = "";
+        try {
+          const acc = await db.collection("ches_accounts").doc(doc.id).get();
+          if (acc.exists) {
+            const a = acc.data() || {};
+            name = a.displayName || "";
+            provider = a.provider || "";
+          }
+        } catch (e) { /* 名前が読めなくても一覧は出す */ }
+        /* 日々の記録。新しい順に、直近のぶんだけ。
+           全部返すと件数が増えすぎるうえ、一覧では読み切れない。 */
+        let daily = [], personality = null;
+        try {
+          const ds = await doc.ref.collection("daily")
+            .orderBy("__name__", "desc").limit(14).get();
+          daily = ds.docs.map(function (x) { return { date: x.id, ...(x.data() || {}) }; });
+        } catch (e) { /* まだ無い */ }
+        try {
+          const ps = await doc.ref.collection("profile").doc("personality").get();
+          if (ps.exists) personality = ps.data() || null;
+        } catch (e) { /* まだ無い */ }
+
+        const age = ageOf(d.birthDate);
+        members.push({
+          uid: doc.id,
+          passport: d.passport || "",
+          name, provider,
+          age,
+          birthDate: d.birthDate || "",
+          ageAtSignup: typeof d.ageAtSignup === "number" ? d.ageAtSignup : null,
+          eligible: age === null ? null : (age >= MIN_AGE && age <= MAX_AGE),
+          agreedAt: d.agreedAt || null,
+          agreedVersion: d.agreedVersion || "",
+          updatedAt: d.updatedAt || null,
+          daily, personality
+        });
+      }
+      members.sort(function (a, b) {
+        return String(b.agreedAt || "").localeCompare(String(a.agreedAt || ""));
+      });
+      return res.json({ ok: true, total: members.length, members });
+    } catch (e) {
+      console.error("camellia list error:", e.message);
+      return res.status(500).json({ error: "CAMELLIA_LIST_FAILED" });
+    }
+  });
+
   /* ───────── 公式パスの持ち主の一覧 ─────────
 
      paid_users にいる人は、買い切りで期限なしの Emu plus 相当。
