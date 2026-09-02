@@ -13153,7 +13153,9 @@ console.log("🔄 画面をリロードせずに投稿一覧を更新します..
     /* 「権限がありません」だけでは、読んだ人に何もできない。
        9/1から段ごとの上限が効いているので、その心当たりを添える。 */
     const msg = _emuPostErrorText(error);
-    alert(msg);
+    let detail = '';
+    try { detail = await _emuPostDiagnose(authorAddress); } catch (e) {}
+    alert(msg + (detail ? '\n\n───── 調べたこと ─────\n' + detail : ''));
     finishKnowledgeRequest(false, msg);
   }
 });
@@ -19177,6 +19179,56 @@ async function emuEnsureEntitlement(force) {
     } finally { _emuEntPromise = null; }
   })();
   return _emuEntPromise;
+}
+
+/* 断られたときに、判定に使われる材料をその場で読んで並べる。
+   読むだけで、何も書き換えない。
+   「権限がありません」だけでは、どの条件で落ちたのか外から分からないため。 */
+async function _emuPostDiagnose(authorAddress) {
+  const L = [];
+  try {
+    const fb = window.fbLib, db = window.db;
+    const uid = _emuUid();
+    L.push('uid: ' + (uid || '（取れない）'));
+    L.push('資格: ' + (window.emuEntitlement || '（未取得）')
+      + ' / 出どころ: ' + (window.emuEntitlementSource || '—'));
+
+    const read = async function (col, id) {
+      if (!id) return '（IDが無い）';
+      try {
+        const s = await fb.getDoc(fb.doc(db, col, id));
+        return s.exists() ? s.data() : '（無い）';
+      } catch (e) { return '読めない(' + (e.code || e.message) + ')'; }
+    };
+
+    const usageId = _emuUsageDocId();
+    L.push('回数の文書: ' + (usageId || '（作れない）'));
+    const u = await read('plan_usage', usageId);
+    L.push('  いまの回数: ' + (typeof u === 'object' ? ('post=' + (u.post || 0)) : u));
+
+    const g = await read('entitlements', uid);
+    L.push('付与: ' + (typeof g === 'object'
+      ? (g.plan + '/' + (g.source || '') + (g.expiresAt ? '（期限あり）' : '（期限なし）')) : g));
+
+    const sub = await read('subscriptions', uid);
+    L.push('契約: ' + (typeof sub === 'object' ? ((sub.plan || '?') + '/' + (sub.status || '?')) : sub));
+
+    const acc = await read('ches_accounts', uid);
+    if (typeof acc === 'object') {
+      L.push('wallet: ' + (acc.walletAddress || '空'));
+      L.push('ches  : ' + (acc.chesAddress || '空'));
+      const a = String(authorAddress || '').toLowerCase();
+      const w = String(acc.walletAddress || '').toLowerCase();
+      const c = String(acc.chesAddress || '').toLowerCase();
+      L.push('投稿の名義: ' + (authorAddress || '空')
+        + ' → ' + ((a && (a === w || a === c)) ? '本人と一致' : '★どちらとも違う'));
+    } else {
+      L.push('アカウント: ' + acc);
+    }
+  } catch (e) {
+    L.push('調べられませんでした: ' + (e && e.message));
+  }
+  return L.join('\n');
 }
 
 /* 投稿が断られたときの文面。
