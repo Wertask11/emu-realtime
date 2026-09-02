@@ -720,6 +720,54 @@ function createBillingRouter(deps) {
     }
   });
 
+  /* ───────── 公式パスの鍵を小文字にそろえる ─────────
+
+     paid_users の鍵はアドレス。小文字で入っているものと、
+     大文字まじり（チェックサム表記）で入っているものが混ざっていた。
+
+     サーバーは3通りの書き方すべてで照らすので、どちらでも plus になる。
+     ところが Firestore のルールは小文字でしか探せない
+     （ルールの中でチェックサム表記は作れない）。
+     そのため大文字まじりで入っている人は、
+     画面には Emu plus と出るのに、投稿しようとすると断られる状態だった。
+
+     ルール側で両方を探すこともできるが、そうすると
+     ほかの文書を見に行く回数が増え、10回の上限に触れる。
+     （tools/count-rule-access.js を参照）
+     鍵をそろえるほうが、確実で安い。
+
+     もとの記録は消さずに残す。消すと、取り違えたときに戻せない。 */
+  router.post("/admin/pass/normalize", requireOwner, grantRateLimit, async (req, res) => {
+    try {
+      const dry = String(req.query.dry || req.body?.dry || "") === "1";
+      const snap = await db.collection("paid_users").get();
+      const moved = [], kept = [], failed = [];
+
+      for (const doc of snap.docs) {
+        const id = doc.id;
+        const lower = id.toLowerCase();
+        if (id === lower) { kept.push(id); continue; }
+        try {
+          const already = await db.collection("paid_users").doc(lower).get();
+          if (already.exists) { moved.push({ from: id, to: lower, note: "すでにある" }); continue; }
+          if (!dry) {
+            await db.collection("paid_users").doc(lower).set(
+              { ...(doc.data() || {}), normalizedFrom: id, normalizedAt: new Date().toISOString() },
+              { merge: true }
+            );
+          }
+          moved.push({ from: id, to: lower });
+        } catch (e) {
+          failed.push({ id, error: e.message });
+        }
+      }
+      return res.json({ ok: true, dry, total: snap.size, moved, kept, failed });
+    } catch (e) {
+      console.error("pass normalize error:", e.message);
+      return res.status(500).json({ error: "NORMALIZE_FAILED" });
+    }
+  });
+
   router.post("/admin/grants/revoke", requireOwner, grantRateLimit, async (req, res) => {
     try {
       if (!entitlement || typeof entitlement.revokeOne !== "function") {
