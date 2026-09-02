@@ -239,7 +239,11 @@ async function paintCamellia() {
     return '<details style="border-bottom:1px solid var(--line)">'
       + '<summary style="cursor:pointer;padding:10px 0;display:flex;'
       + 'justify-content:space-between;gap:12px;align-items:flex-start">'
-      + '<span>' + esc(m.name || "（お名前なし）")
+      /* 名前は2つある。SchoolParkパスポートのお名前と、
+         Camellia で自分で登録したお名前。別のことがあるので両方出す。 */
+      + '<span>' + esc(m.name || (m.basic && m.basic.displayName) || "（お名前なし）")
+      + ((m.basic && m.basic.displayName && m.basic.displayName !== m.name)
+          ? ' <small style="color:var(--muted)">／Camellia: ' + esc(m.basic.displayName) + '</small>' : '')
       + (m.provider ? ' <small style="color:var(--muted)">' + esc(m.provider) + '</small>' : '')
       + (ng ? ' <b style="color:#b91c1c">★対象の年齢ではありません</b>' : '')
       + '<br><small style="color:var(--muted)">' + esc(m.passport || m.uid) + '</small></span>'

@@ -35,9 +35,20 @@
   function toPersona(m) {
     var latest = (m.daily && m.daily.length) ? m.daily[0] : null;   /* 新しい順で届く */
     var loc = m.location;
+    /* 名前は2つある。
+         SchoolParkパスポートのお名前（ログインしたときのもの）
+         Camellia で登録したお名前（プロフィールで自分で入れたもの）
+       別のことがあるので、両方出す。同じなら1つだけ。 */
+    var spName = m.name || "";
+    var camName = (m.basic && m.basic.displayName) || "";
+    var label = spName || camName || "（お名前なし）";
+    if (camName && camName !== spName) {
+      label = spName ? (spName + "／Camellia: " + camName) : camName;
+    }
+
     return {
       uid: m.uid,
-      name: (m.name || "（お名前なし）") + (m.passport ? " " + m.passport.slice(0, 6) : ""),
+      name: label + (m.passport ? " " + m.passport.slice(0, 6) : ""),
       mind: line(latest, [["anxiety", "不安"], ["stress", "ストレス"], ["loneliness", "孤独感"]]) || "記録なし",
       body: line(latest, [["fatigue", "疲労"], ["sleep", "睡眠", "時間"]]) || "記録なし",
       location: loc && loc.latitude ? "取得済み" : "取得なし",
