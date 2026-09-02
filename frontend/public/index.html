@@ -15726,6 +15726,9 @@ async function spPassportLoad(force) {
          運営のときは運営のアドレスそのものを渡す必要がある。 */
       ownerAddr: _spIsOwnerAddr(me.ches) ? me.ches : (_spIsOwnerAddr(me.wallet) ? me.wallet : addr)
     };
+    /* 準備中の表示を塗り直す。運営かどうかはパスポートを読むまで分からないので、
+       画面を開いた時点の一度きりだと、運営にも「準備中」の灰色が残ったままになる。 */
+    try { paintBrandMaintenance(); } catch (e) {}
     _spPassportBusy = null;
     return window._spPassport;
   })();
@@ -17549,9 +17552,16 @@ const BRAND_MAINTENANCE = {
 };
 const BRAND_LABELS = { camellia:'Camellia', heartoo:'Heartoo', schoolpark:'SchoolPark', emu:'Emu' };
 
+/* 運営のアドレスは2つある。ウォレット（MetaMask）で入ったときは実ウォレット、
+   LINE・Google・メールで入ったときは uid から作られた別のアドレスになる。
+   SP_OWNER ひとつだけで見ていたため、LINE等で入った運営が
+   準備中のブランドに入れなかった（自分のものなのに入れない状態）。
+   パスポート側のアドレスも見る。 */
 function _isBrandOwner() {
-  const addr = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
-  return !!addr && addr === SP_OWNER.toLowerCase();
+  /* パスポートは、どの入り方でも運営かどうかを判定済み（isOwner）。
+     まだ読み込めていないときのために、ウォレットのほうも見る。 */
+  if (window._spPassport && window._spPassport.isOwner) return true;
+  return _spIsOwnerAddr(window.connectedAccount || localStorage.getItem('emuWallet') || '');
 }
 function isBrandUnderMaintenance(brand) {
   return !!BRAND_MAINTENANCE[brand] && !_isBrandOwner();
