@@ -15692,7 +15692,15 @@ async function spPassportLoad(force) {
 
     /* いま何ができるか。サーバーが答えた entitlement が正。
        ches_accounts の membership は作ったときの free のまま残るので、
-       そちらを先に見ると有料の人が無料に見えてしまう。 */
+       そちらを先に見ると有料の人が無料に見えてしまう。
+
+       まだ聞いていなければ、ここで聞く。
+       以前は Emu のウォレット表示を描いたときにしか聞いていなかったので、
+       SchoolPark から直接パスポートを開くと空のままで、
+       価値プロフィールの表示と食い違っていた。 */
+    if (!window.emuEntitlement && typeof emuEnsureEntitlement === 'function') {
+      try { await emuEnsureEntitlement(); } catch (e) {}
+    }
     const ent = String(window.emuEntitlement || '').toLowerCase();
     let tier = (ent && ent !== 'guest') ? ent : ((d.membership && d.membership.tier) || 'free');
     /* 公式パスの持ち主は有料。「見学（無料）で公式パスあり」はあり得ない。
@@ -16990,18 +16998,12 @@ async function emuRenderMembership() {
     // ログインしていれば入り口を出す（プラン選択も解約もこの先にある）
     if (cta) cta.hidden = false;
 
-    const res = await fetch('https://emu-realtime.onrender.com/api/billing/status', { headers });
-    if (!res.ok) return;
-    const s = await res.json();
-
-    /* いま何ができるか。契約が無くても Founding Emuer なら light が入る。
-       機能の出し分けは s.plan ではなく、必ずこちらを見る。 */
-    window.emuEntitlement = s.entitlement || 'guest';
-    window.emuEntitlementSource = s.entitlementSource || 'none';
-    window.emuFoundingUntil = s.foundingUntil || null;
-    try {
-      window.dispatchEvent(new CustomEvent('emu-entitlement', { detail: { plan: window.emuEntitlement } }));
-    } catch (e) {}
+    /* 資格の取得は emuEnsureEntitlement() に一本化した。
+       ここでしか聞いていなかったせいで、この関数を通らない画面
+       （SchoolParkのパスポートなど）では空のままになっていた。 */
+    await emuEnsureEntitlement(true);
+    const s = window.emuBillingStatus;
+    if (!s) return;
 
     if (s.status === 'active' || s.status === 'trialing') {
       /* バッジにはプラン名をそのまま出す（Emu light / Emu plus / Emu pro）。
@@ -19140,6 +19142,43 @@ window.emuHasPlan = emuHasPlan;
    （セッションだけ復元された、保存領域が部分的に消えた、など）。
    空だと文書名が「_r_m2026-9」になり、uid が抜けたまま書きにいくので
    ルールに弾かれ、投稿そのものが「権限がありません」で失敗していた。 */
+/* いま何が使えるか（entitlement）をサーバーに聞いて、window に控える。
+
+   これまでは emuRenderMembership()（ウォレットの表示を描く処理）の
+   途中でしか聞いていなかった。あの関数は表示する箱が無いと先頭で抜けるので、
+   SchoolPark から直接パスポートを開いたときなどは一度も聞かないまま、
+   window.emuEntitlement が空だった。
+   その結果、価値プロフィールでは「Emu pro」、パスポートでは「Emu plus」と
+   食い違って出ていた（空のときは公式パスぶんだけで plus に落ちるため）。
+
+   表示から切り離して、必要な人がいつでも呼べるようにする。 */
+let _emuEntPromise = null;
+async function emuEnsureEntitlement(force) {
+  if (!force && window.emuEntitlement) return window.emuEntitlement;
+  if (!force && _emuEntPromise) return _emuEntPromise;
+  _emuEntPromise = (async function () {
+    try {
+      const headers = typeof emuAuthHeaders === 'function'
+        ? await emuAuthHeaders(false, { interactive: false }) : null;
+      if (!headers) return window.emuEntitlement || '';
+      const res = await fetch('https://emu-realtime.onrender.com/api/billing/status', { headers });
+      if (!res.ok) return window.emuEntitlement || '';
+      const s = await res.json();
+      window.emuEntitlement = s.entitlement || 'guest';
+      window.emuEntitlementSource = s.entitlementSource || 'none';
+      window.emuFoundingUntil = s.foundingUntil || null;
+      window.emuBillingStatus = s;
+      try {
+        window.dispatchEvent(new CustomEvent('emu-entitlement', { detail: { plan: window.emuEntitlement } }));
+      } catch (e) {}
+      return window.emuEntitlement;
+    } catch (e) {
+      return window.emuEntitlement || '';
+    } finally { _emuEntPromise = null; }
+  })();
+  return _emuEntPromise;
+}
+
 /* 投稿が断られたときの文面。
    Firestore は理由を教えてくれない（どの条件で落ちたかは返らない）ので、
    起こりうる心当たりを並べて、次に何をすればよいかを示す。 */
