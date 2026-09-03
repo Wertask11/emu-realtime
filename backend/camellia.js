@@ -17,6 +17,17 @@
    ここでは保存しない。二重に持つと食い違う。
    ══════════════════════════════════════════════════════════════ */
 
+/* 選べる相手。名前は Camellia のもの、中身はモデル。
+   ホームページで Camellia を「種・芽・葉・花」で表しているので、そこに乗せる。
+
+   使う人には名前だけを見せる。中身のモデル名は画面に出さない。
+   差し替えたときに、画面の言葉を直さずに済む。 */
+const MODELS = {
+  mebae: { label: "Camellia 芽", model: "claude-haiku-4-5-20251001", note: "軽くて速い" },
+  ha:    { label: "Camellia 葉", model: "claude-sonnet-5",           note: "ふだん使い" },
+  hana:  { label: "Camellia 花", model: "claude-opus-5",             note: "じっくり考える" }
+};
+const DEFAULT_KEY = process.env.CAMELLIA_AI_DEFAULT || "ha";
 const MODEL = process.env.CAMELLIA_AI_MODEL || "claude-sonnet-5";
 const MAX_TOKENS = 700;
 const MAX_TURNS = 12;        /* 送る往復の数。増やすほど費用が上がる */
@@ -66,6 +77,18 @@ function createCamelliaRouter(deps) {
     }
   }
 
+  /* 選べる相手の一覧。画面はこれを見て選択肢を作る。
+     中身のモデル名は返さない。使う人には関係がなく、
+     差し替えたときに画面を直さずに済む。 */
+  router.get("/models", requireFirebaseUser, requireMember, function (req, res) {
+    return res.json({
+      ok: true, defaultKey: DEFAULT_KEY,
+      models: Object.keys(MODELS).map(function (k) {
+        return { key: k, label: MODELS[k].label, note: MODELS[k].note };
+      })
+    });
+  });
+
   router.post("/chat", requireFirebaseUser, chatRateLimit, requireMember, async (req, res) => {
     const b = req.body || {};
     const text = String(b.message || "").trim();
@@ -88,7 +111,9 @@ function createCamelliaRouter(deps) {
     if (!key) {
       return res.json({
         ok: true, manual: true, reply: "",
-        message: "受け取りました。お返事まで、少しお待ちください。"
+        /* 受付の言い方（「受け取りました」）だと、窓口に用件を出したように読める。
+           ここは対話の相手なので、読んでいることが伝わる言い方にする。 */
+        message: "いま、ゆっくり読んでいます。少しだけ待っていてね。"
       });
     }
 
@@ -100,6 +125,10 @@ function createCamelliaRouter(deps) {
         message: "設定で「LLMへの外部送信」が切られています。設定から入れてください。"
       });
     }
+
+    /* 選ばれた相手。知らない名前が来たら、既定のものにする。
+       画面から来た値をそのままモデル名として使うと、任意のモデルを呼べてしまう。 */
+    const chosen = MODELS[String(b.model || "")] || MODELS[DEFAULT_KEY] || MODELS.ha;
 
     const history = Array.isArray(b.history) ? b.history.slice(-MAX_TURNS) : [];
     const messages = history
@@ -132,7 +161,7 @@ function createCamelliaRouter(deps) {
           "anthropic-version": "2023-06-01"
         },
         body: JSON.stringify({
-          model: MODEL, max_tokens: MAX_TOKENS, system: system, messages: messages
+          model: chosen.model, max_tokens: MAX_TOKENS, system: system, messages: messages
         })
       });
       const data = await r.json().catch(function () { return {}; });
@@ -146,7 +175,8 @@ function createCamelliaRouter(deps) {
       const reply = (data.content || [])
         .filter(function (c) { return c.type === "text"; })
         .map(function (c) { return c.text; }).join("\n").trim();
-      return res.json({ ok: true, reply: reply || "…うまく言葉にできませんでした。もう一度お願いします。", model: MODEL });
+      return res.json({ ok: true, reply: reply || "…うまく言葉にできませんでした。もう一度お願いします。",
+        model: chosen.label });
     } catch (e) {
       console.error("camellia ai exception:", e.message);
       return res.status(502).json({

@@ -39,7 +39,8 @@
     "camellia-daily-history",
     "camellia-personality-full",
     "camellia-control-state",
-    "camellia-activity"
+    "camellia-activity",
+    "camellia-ai-model"
   ];
 
   var CA = null, timer = null, ready = false;
@@ -119,7 +120,9 @@
     };
 
     put("profile", "basic", v2.profile);
-    put("profile", "settings", v2.settings);
+    /* 話す相手の選択も設定の一部として送る。管理画面から見えるようにする。 */
+    put("profile", "settings", Object.assign({}, v2.settings || {},
+      { aiModel: (function(){ try { return localStorage.getItem("camellia-ai-model") || ""; } catch(e){ return ""; } })() }));
 
     /* ほかのアプリから取り込んだもの（ChatGPT・Claude・ルナルナなど）。
        1つの文書に入る大きさには上限（1MB）がある。日本語は1文字3バイトに
