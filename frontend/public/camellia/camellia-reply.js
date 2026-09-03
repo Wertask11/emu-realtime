@@ -26,39 +26,42 @@
 
   function add(items) {
     var seen = readJSON(SEEN_KEY) || [];
-    var v2 = readJSON("camellia-v2") || {};
-    if (!Array.isArray(v2.chats)) v2.chats = [];
-    var added = 0;
+    var fresh = items.filter(function (it) { return seen.indexOf(it.id) < 0; });
+    if (!fresh.length) return;
 
-    items.forEach(function (it) {
-      if (seen.indexOf(it.id) >= 0) return;
-      seen.push(it.id);
-      v2.chats.push({ role: "assistant", text: String(it.text || ""), at: it.createdAt || "" });
-      added++;
-    });
-
-    if (!added) return;
-    /* 控えは増え続けるので、新しいほうから決めた数だけ持つ。 */
+    fresh.forEach(function (it) { seen.push(it.id); });
     if (seen.length > 500) seen = seen.slice(-500);
     writeJSON(SEEN_KEY, seen);
+
+    /* 画面が持っている会話に足してもらう。
+       localStorage に書くだけでは画面に出てこない。画面は読み込んだときの
+       写しを抱えたまま描いていて、その写しには入らないため。 */
+    if (typeof window.camelliaAddMessage === "function") {
+      fresh.forEach(function (it) {
+        window.camelliaAddMessage("assistant", it.text || "", it.createdAt || "");
+      });
+      return;
+    }
+
+    /* 窓口が無いとき（古い画面が残っているなど）は、自分で足して出す。 */
+    var v2 = readJSON("camellia-v2") || {};
+    if (!Array.isArray(v2.chats)) v2.chats = [];
+    fresh.forEach(function (it) {
+      v2.chats.push({ role: "assistant", text: String(it.text || ""), at: it.createdAt || "" });
+    });
     writeJSON("camellia-v2", v2);
 
-    /* 画面に出す。会話の描き直しは control-user.html 側が持っている。 */
-    if (typeof window.renderChats === "function") {
-      try { window.renderChats(); } catch (e) {}
-    } else {
-      var chat = document.getElementById("chat");
-      if (chat) {
-        items.slice(-added).forEach(function (it) {
-          var b = document.createElement("div");
-          b.className = "bubble";
-          b.textContent = String(it.text || "");
-          chat.appendChild(b);
-        });
-        chat.scrollTop = chat.scrollHeight;
-      }
-    }
+    var chat = document.getElementById("chat");
+    if (!chat) return;
+    fresh.forEach(function (it) {
+      var b = document.createElement("div");
+      b.className = "bubble";
+      b.textContent = String(it.text || "");
+      chat.appendChild(b);
+    });
+    chat.scrollTop = chat.scrollHeight;
   }
+
 
   function start(auth) {
     CA = auth;
@@ -71,7 +74,10 @@
         var items = [];
         snap.forEach(function (d) { items.push(Object.assign({ id: d.id }, d.data() || {})); });
         add(items);
-      }, function () { /* 読めなくても画面は動かす */ });
+      }, function (err) {
+        /* 黙って握りつぶすと、届かない理由が誰にも分からない。 */
+        console.warn("Camellia: 運営からの返事を受け取れません:", err && (err.code || err.message));
+      });
     } catch (e) { /* 同上 */ }
   }
 
