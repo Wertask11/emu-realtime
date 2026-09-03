@@ -148,9 +148,14 @@
         a.style.display = "none";
       });
     }
-    /* 相談窓口。隔離が入っていても消さない。 */
-    var home = document.querySelector("#home");
-    if (!home) return;
+    /* 相談窓口。隔離が入っていても消さない。
+       置き場所はホームではなく Wel-Wel。
+       ホームは日々を書く場所で、ここは情報の場所。並びとして自然だし、
+       ホームの見た目を触らずに済む。 */
+    var welwel = document.querySelector("#welwel .card") || document.querySelector("#welwel");
+    if (!welwel) return;
+    var stray = document.querySelector("#home #camLifeline");
+    if (stray) stray.remove();
     if (document.getElementById("camLifeline")) return;
     var box = document.createElement("div");
     box.className = "card";
@@ -162,7 +167,7 @@
           return '<li><a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + ' ↗</a></li>';
         }).join("")
       + '</ul>';
-    home.appendChild(box);
+    welwel.appendChild(box);
   }
 
   /* ───── 依存：外へ出る前に、CHESの中の道を出す ───── */
