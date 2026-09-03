@@ -918,6 +918,39 @@ function createBillingRouter(deps) {
     }
   });
 
+  /* ───────── Camellia AI：運営が自分で返す ─────────
+
+     モデルにつながっていないあいだ（鍵がまだ無い）、運営が手で返事を書く。
+     置き場所は camellia_users/{uid}/admin/replies/{id}。
+     本人は読めるが書けない（firestore.rules）。
+     書けると、運営が書いた返事を本人が差し替えられてしまう。
+
+     本人の画面はここを見張っていて、届いたら会話に足す。 */
+  router.post("/admin/camellia/reply", requireOwner, grantRateLimit, async (req, res) => {
+    try {
+      const b = req.body || {};
+      const uid = String(b.uid || "").trim();
+      const text = String(b.text || "").trim();
+      if (!uid) return res.status(400).json({ error: "NO_UID" });
+      if (!text) return res.status(400).json({ error: "NO_TEXT" });
+      if (text.length > 2000) return res.status(400).json({ error: "TOO_LONG" });
+
+      const who = (req.identity && req.identity.uid) || "admin";
+      const ref = await db.collection("camellia_users").doc(uid)
+        .collection("admin").doc("replies").collection("items")
+        .add({ text, by: who, createdAt: new Date().toISOString() });
+
+      await db.collection(AUDIT_COL).add({
+        action: "camellia.reply", by: who, uid, at: new Date()
+      }).catch(function () {});
+
+      return res.json({ ok: true, id: ref.id });
+    } catch (e) {
+      console.error("camellia reply error:", e.message);
+      return res.status(500).json({ error: "REPLY_FAILED" });
+    }
+  });
+
   /* ───────── Camellia：通報 ─────────
 
      通報はクライアントからは読めない（誰が誰を通報したか分からないように）。

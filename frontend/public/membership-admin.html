@@ -193,6 +193,19 @@ function camChat(chat) {
   }).join("");
 }
 
+/* 運営が手で返事を書く。送るとその方の画面に出る。
+   モデルにつながっていないあいだ、ここが Camellia AI の中身になる。 */
+function camReplyBox(uid) {
+  return '<div style="margin-top:8px">'
+    + '<textarea data-replyto="' + esc(uid) + '" rows="3" placeholder="この方への返事を書く"'
+    + ' style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;'
+    + 'font-family:inherit;font-size:13px"></textarea>'
+    + '<div class="actions" style="margin-top:6px">'
+    + '<button class="btn primary" data-sendreply="' + esc(uid) + '">送る</button>'
+    + '<span class="hint" data-replyout="' + esc(uid) + '"></span>'
+    + '</div></div>';
+}
+
 /* ほかのアプリ（ChatGPT・Claude・ルナルナなど）から取り込んだもの。
    本人が自分で書き出して入れたファイルの中身。
    長いので、そのまま流すと画面が壊れる。折りたたんで、枠の中で送る。 */
@@ -327,12 +340,34 @@ async function paintCamellia() {
       + camBlock("位置情報", camPairs(m.location))
       + camBlock("性格診断", camPairs(m.personality))
       + camBlock("支配構造シミュレーションの状態", camPairs(m.control))
-      + camBlock("Camellia AI との会話", camChat(m.chat))
+      + camBlock("Camellia AI との会話", camChat(m.chat) + camReplyBox(m.uid))
       + camBlock("ほかのアプリから取り込んだもの", camImports(m.imports))
       + camBlock("行動", camActivity(m.activity))
       + camBlock("日々の記録", camDailyTable(m.daily))
       + '</div></details>';
   }).join("");
+
+  /* 返事を送る。送るとその方の画面に、Camellia AI の返事として出る。 */
+  box.querySelectorAll("[data-sendreply]").forEach(function (b) {
+    b.onclick = async function () {
+      const uid = b.dataset.sendreply;
+      const ta = box.querySelector('[data-replyto="' + uid + '"]');
+      const out = box.querySelector('[data-replyout="' + uid + '"]');
+      const text = String((ta && ta.value) || "").trim();
+      if (!text) { if (out) out.textContent = "書いてから送ってください。"; return; }
+      b.disabled = true;
+      if (out) { out.style.color = ""; out.textContent = "送っています…"; }
+      try {
+        await api("/api/billing/admin/camellia/reply", { method: "POST", body: { uid, text } });
+        if (ta) ta.value = "";
+        if (out) { out.style.color = "#1b5e20"; out.textContent = "送りました。"; }
+      } catch (e) {
+        if (out) { out.style.color = "#b3261e"; out.textContent = "送れませんでした（" + (e.code || e.message) + "）"; }
+      } finally {
+        b.disabled = false;
+      }
+    };
+  });
 }
 
 /* Camellia タブ。最初に作った管理画面（camellia/control-admin.html）は

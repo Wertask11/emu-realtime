@@ -739,6 +739,12 @@ service cloud.firestore {
         allow read: if isMe(uid);
         allow write: if false;
       }
+      /* その下（運営からの返信など）も同じ。本人は読めるが書けない。
+         書けると、運営が書いた返事を本人が差し替えられてしまう。 */
+      match /admin/{docId}/{sub=**} {
+        allow read: if isMe(uid);
+        allow write: if false;
+      }
     }
 
     /* ───────── Camellia のコミュニティ ─────────
