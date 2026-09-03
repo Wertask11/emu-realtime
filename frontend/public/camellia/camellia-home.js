@@ -33,7 +33,16 @@
       "body.has-camside .app{max-width:1180px}"
       + "#camHomeGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}"
       + "#camHomeGrid > div > .card:last-child{margin-bottom:0}"
-      + "@media(max-width:900px){#camHomeGrid{grid-template-columns:1fr}}";
+      /* サイドバーを閉じると、そのぶん横幅が空く。
+         右を縦に3枚積んだままだと画面からはみ出して、下が見切れる。
+         空いた幅を使って2列にすると、縦が半分になって一枚に収まる。 */
+      + "body.side-closed #camHomeR{display:grid;grid-template-columns:1fr 1fr;"
+      + "gap:14px;align-items:start}"
+      + "body.side-closed #camHomeR > .card{margin-bottom:0}"
+      /* 閉じたときだけ出る横並びは、縦を詰めて置く */
+      + "body.side-closed nav.nav{padding:9px}"
+      + "@media(max-width:900px){#camHomeGrid{grid-template-columns:1fr}"
+      + "body.side-closed #camHomeR{grid-template-columns:1fr}}";
     document.head.appendChild(s);
   }
 

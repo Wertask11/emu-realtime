@@ -83,12 +83,12 @@
       /* ヘッダーの「✿ Camellia／お名前」も隠す。サイドバーに同じものが出ていて、
          SchoolPark・Emu のヘッダーにはブランド名も名前も出ていない。
          畳んだときと狭い画面では、どこに居るか分からなくなるので戻す。 */
-      + "body.has-camside:not(.side-closed) header.top .brand{display:none}"
+      + "body.has-camside header.top .brand{display:none}"
       /* ブランドを消すと、右にあったメニューが左へ寄ってしまう。右端に留める。 */
-      + "body.has-camside:not(.side-closed) header.top{justify-content:flex-end}"
+      + "body.has-camside header.top{justify-content:flex-end}"
       + "header.top .brand small{display:none}"
       /* 畳んだときは、取っ手のぶんだけヘッダーを右へずらす（文字と重なる） */
-      + "body.side-closed header.top{padding-left:56px}"
+      + ""
       + "@media (max-width:900px){"
       + "  #camSide,#camSideOpen{display:none!important}"
       + "  body.has-camside{padding-left:0}"
@@ -96,6 +96,9 @@
          ここを空文字にすると値として無効で、上の display:none が残り、
          行き先がひとつも出ない画面になる。 */
       + "  body.has-camside nav.nav{display:flex!important}"
+      /* この幅ではサイドバーを出さないので、どこに居るか分かるよう見出しを戻す */
+      + "  body.has-camside header.top .brand{display:block}"
+      + "  body.has-camside header.top{justify-content:space-between}"
       + "}";
     document.head.appendChild(s);
   }
