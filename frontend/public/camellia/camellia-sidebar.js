@@ -146,7 +146,21 @@
      SchoolPark も同じ考えで、出ていないあいだは引っ込めている。 */
   function tellParent(open) {
     if (!inFrame) return;
+    /* 親（Emu）に合図を送る。 */
     try { window.parent.camelliaSideState(open); } catch (e) {}
+    /* 合図だけだと、親の側が古いままのとき（読み込み済みのページが
+       残っているなど）に何も起きない。親のボタンを直に隠す。
+       同じサイトなので触れる。!important を付けるのは、親の指定に負けないため。 */
+    try {
+      var d = window.parent.document;
+      d.body.classList.toggle("cam-contact-off", !open);
+      ["emu-contact-btn", "emu-contact-label"].forEach(function (id) {
+        var el = d.getElementById(id);
+        if (!el) return;
+        if (open) el.style.removeProperty("display");
+        else el.style.setProperty("display", "none", "important");
+      });
+    } catch (e) {}
   }
 
   function setCollapsed(v) {
@@ -257,6 +271,10 @@
     document.addEventListener("click", function (e) {
       if (e.target && e.target.closest && e.target.closest("nav.nav")) setTimeout(paintItems, 0);
     });
+
+    /* Camellia を離れるときは、親のボタンを戻す。
+       隠したまま出ていくと、Emu に戻ったときにボタンが消えたままになる。 */
+    window.addEventListener("pagehide", function () { tellParent(true); });
 
     /* 幅が変わるとサイドバーの出方が変わる（900px以下では出さない）。
        親のお問い合わせボタンの出し入れも、それに合わせる。 */
