@@ -36,9 +36,16 @@
       /* サイドバーを閉じると、そのぶん横幅が空く。
          右を縦に3枚積んだままだと画面からはみ出して、下が見切れる。
          空いた幅を使って2列にすると、縦が半分になって一枚に収まる。 */
+      /* 3枚の高さをそろえる。align-items:start だと中身の量で高さが変わり、
+         「Camellia AIから」だけ小さく見えていた。
+         行の高さを等しくし（grid-auto-rows:1fr）、カードは行いっぱいに伸ばす。 */
       + "body.side-closed #camHomeR{display:grid;grid-template-columns:1fr 1fr;"
-      + "gap:14px;align-items:start}"
-      + "body.side-closed #camHomeR > .card{margin-bottom:0}"
+      + "gap:14px;align-items:stretch;grid-auto-rows:1fr}"
+      + "body.side-closed #camHomeR > .card{margin-bottom:0;height:100%;"
+      + "display:flex;flex-direction:column}"
+      /* 見出しと本文を上に、ボタンを下にそろえる。伸びたぶんが真ん中に空くと、
+         3枚の見え方がばらばらになる。 */
+      + "body.side-closed #camHomeR > .card > .btn{margin-top:auto;align-self:flex-start}"
       /* 閉じたときだけ出る横並びは、縦を詰めて置く */
       + "body.side-closed nav.nav{padding:9px}"
       + "@media(max-width:900px){#camHomeGrid{grid-template-columns:1fr}"
