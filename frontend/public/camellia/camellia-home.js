@@ -27,7 +27,11 @@
     var s = document.createElement("style");
     s.id = "camHomeStyle";
     s.textContent =
-      "#camHomeGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}"
+      /* 中身の入れ物は 820px で止まっていた。1列で読む前提の幅。
+         サイドバーが出て2列になったぶん、そのままだと真ん中に寄って
+         左右が大きく空く。サイドバーがあるときだけ広げる。 */
+      "body.has-camside .app{max-width:1180px}"
+      + "#camHomeGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}"
       + "#camHomeGrid > div > .card:last-child{margin-bottom:0}"
       + "@media(max-width:900px){#camHomeGrid{grid-template-columns:1fr}}";
     document.head.appendChild(s);
