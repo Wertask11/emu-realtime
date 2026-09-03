@@ -179,6 +179,15 @@ function camPairs(o) {
   }).join("");
 }
 
+/* 返事待ちかどうか。いちばん新しい発言がご本人のものなら、まだ返していない。
+   これが分からないと、誰に返せばいいのかを毎回ぜんぶ開いて探すことになる。 */
+function camWaiting(chat) {
+  const list = (chat && Array.isArray(chat.messages)) ? chat.messages : [];
+  if (!list.length) return false;
+  const last = list[list.length - 1] || {};
+  return last.role === "user" || last.me === true;
+}
+
 function camChat(chat) {
   const list = (chat && Array.isArray(chat.messages)) ? chat.messages : [];
   if (!list.length) return "";
@@ -325,6 +334,10 @@ async function paintCamellia() {
           ? ' <small style="color:var(--muted)">／Camellia: ' + esc(m.basic.displayName) + '</small>' : '')
       + (m.provider ? ' <small style="color:var(--muted)">' + esc(m.provider) + '</small>' : '')
       + (ng ? ' <b style="color:#b91c1c">★対象の年齢ではありません</b>' : '')
+      /* 返事待ちの方が一目で分かるようにする。開いて探さなくて済む。 */
+      + (camWaiting(m.chat)
+          ? ' <b style="color:#fff;background:#b3261e;border-radius:999px;'
+            + 'padding:2px 9px;font-size:11px">返事待ち</b>' : '')
       + '<br><small style="color:var(--muted)">' + esc(m.passport || m.uid) + '</small></span>'
       + '<span style="text-align:right;white-space:nowrap">' + esc(age)
       + '<br><small style="color:var(--muted)">'

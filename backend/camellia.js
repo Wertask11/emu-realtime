@@ -78,11 +78,17 @@ function createCamelliaRouter(deps) {
       return res.json({ ok: true, reply: CRISIS_REPLY, crisis: true, model: null });
     }
 
+    /* 鍵が無いあいだは、運営が手で返す。
+       ここでエラーを返して終わりにすると、書いた人は突き放される。
+       受け取ったことを伝えて、あとは管理画面から返事が届くのを待ってもらう。
+
+       書いた内容は、この時点ですでに本人の記録として残り
+       （camellia-store.js が profile/chat へ写す）、管理画面から読める。 */
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) {
-      return res.status(503).json({
-        error: "AI_NOT_CONFIGURED",
-        message: "いまは応答をお返しできません。少し時間をおいてからお試しください。"
+      return res.json({
+        ok: true, manual: true, reply: "",
+        message: "受け取りました。お返事まで、少しお待ちください。"
       });
     }
 
