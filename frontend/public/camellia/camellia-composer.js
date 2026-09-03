@@ -17,7 +17,7 @@
   var SOURCES = [
     ["ChatGPT", "ChatGPT の書き出し"],
     ["Claude", "Claude の書き出し"],
-    ["ルナルナ", "ルナルナの書き出し"],
+    ["ルナルナ", "ルナルナ（お手持ちのファイル）"],
     ["そのほか", "そのほかのファイル"]
   ];
 
@@ -26,11 +26,25 @@
     var s = document.createElement("style");
     s.id = "camComposerStyle";
     s.textContent =
-      "#chatForm.cam-composer{display:block;background:#fff;border:1px solid var(--line);"
+      /* ───── 会話の見た目 ─────
+         もとは吹き出しが横いっぱいに広がり、上から積まれた帯に見えていた。
+         短い言葉でも1行ぶんの幅を取るので、やりとりの往復が読み取れない。
+         中身の分だけの幅にして、自分は右、相手は左に寄せる。 */
+      "#chat{display:flex;flex-direction:column;gap:10px;background:var(--soft);"
+      + "border-radius:16px;padding:16px;min-height:220px;max-height:54vh;overflow-y:auto}"
+      + "#chat .bubble{max-width:78%;width:fit-content;margin:0;padding:10px 14px;"
+      + "border-radius:16px;line-height:1.75;white-space:pre-wrap;word-break:break-word;"
+      + "align-self:flex-start;background:#fff;border-bottom-left-radius:6px;"
+      + "box-shadow:0 1px 2px rgba(74,36,48,.07)}"
+      /* 自分の言葉は右に寄せて、色を変える。どちらが話したかを、読む前に分かるように。 */
+      + "#chat .bubble.me{align-self:flex-end;margin-left:0;background:var(--main);color:#fff;"
+      + "border-bottom-right-radius:6px;border-bottom-left-radius:16px}"
+      + "#chat > p.muted{margin:auto;text-align:center;max-width:22em;line-height:1.9}"
+      + "#chatForm.cam-composer{display:block;background:#fff;border:1px solid var(--line);"
       + "border-radius:18px;padding:10px 12px 8px;margin-top:10px;position:relative}"
       + "#chatForm.cam-composer textarea{width:100%;border:0;outline:none;resize:none;"
       + "background:transparent;color:var(--deep);font:inherit;font-size:15px;line-height:1.6;"
-      + "padding:4px 2px;min-height:30px;max-height:180px;overflow-y:auto}"
+      + "padding:4px 2px;min-height:30px;max-height:180px;overflow-y:hidden}"
       + "#chatForm.cam-composer .row{display:flex;align-items:center;gap:8px;margin-top:4px}"
       + "#chatForm.cam-composer .sp{flex:1}"
       + "#chatForm.cam-composer .rbtn{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);"
@@ -88,6 +102,9 @@
       input.style.height = "auto";
       /* 空のときに 0 近くまで縮んで、書く場所が見えなくなることがある。下限を置く。 */
       input.style.height = Math.max(30, Math.min(input.scrollHeight, 180)) + "px";
+      /* 収まっているのに細い巻き取り棒が出ると、部品が付いているように見える。
+         あふれたときだけ出す。 */
+      input.style.overflowY = input.scrollHeight > 180 ? "auto" : "hidden";
       send.disabled = !input.value.trim();
     }
     input.addEventListener("input", grow);
@@ -124,7 +141,11 @@
       if (document.getElementById("camPick")) { close(); return; }
       var box = document.createElement("div");
       box.id = "camPick";
+      /* ルナルナには、ファイルとして書き出す口が無い（アカウントでの引き継ぎのみ）。
+         「書き出し」と書くと、できないことを求めさせることになる。 */
       box.innerHTML = '<div class="cap">書き出したファイルを渡す</div>'
+        + '<div class="cap" style="padding:0 11px 6px">ルナルナは書き出しに対応していません。'
+        + '月経の記録は「デイリー記録」から入れてください。</div>'
         + SOURCES.map(function (s) {
             return '<button type="button" data-src="' + s[0] + '">' + s[1] + "</button>";
           }).join("");
@@ -172,10 +193,19 @@
         if (note) note.remove();
         if (wrap && wrap.id !== "camModelSlot") wrap.remove();
       }
+      /* 中身が入るまで出さない。空の選択欄は、押しても何も起きない
+         小さな部品が付いているだけに見える。 */
+      if (sel) sel.style.display = sel.options.length ? "" : "none";
     }, 500);
   }
 
-  function start() { build(); watchModel(); }
+  function start() {
+    build();
+    /* 一覧が来るまで隠す。来たら watchModel が出す。 */
+    var sel = document.getElementById("aiModel");
+    if (sel && !sel.options.length) sel.style.display = "none";
+    watchModel();
+  }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
   else start();

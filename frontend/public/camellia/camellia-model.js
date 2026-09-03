@@ -63,8 +63,11 @@
     } catch (e) {
       /* 一覧が取れないときは、選択欄を出さない。
          中身の分からない選択肢を出すより、無いほうが混乱しない。 */
-      var wrap = sel.parentElement;
-      if (wrap) wrap.style.display = "none";
+      /* 選択欄そのものを隠す。入れ物は入力欄の中なので、
+         入れ物を隠すと送るボタンまで消える。 */
+      sel.style.display = "none";
+      var note = document.getElementById("aiModelNote");
+      if (note) note.style.display = "none";
     }
   }
 
