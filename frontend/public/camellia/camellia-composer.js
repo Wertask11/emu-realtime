@@ -8,7 +8,7 @@
    もとの form（#chatForm）と入力欄の名前（message）は残す。
    送る処理は control-user.html にあり、そこを書き換えずに済む。
 
-   ＋ からは、ChatGPT・Claude・ルナルナ の書き出しファイルを入れられる。
+   ＋ からは、ChatGPT・Claude の書き出しファイルを入れられる。
    設定画面まで行かなくても、話しながら渡せる。
    ══════════════════════════════════════════════════════════════ */
 (function () {
@@ -17,7 +17,10 @@
   var SOURCES = [
     ["ChatGPT", "ChatGPT の書き出し"],
     ["Claude", "Claude の書き出し"],
-    ["ルナルナ", "ルナルナ（お手持ちのファイル）"],
+    /* ルナルナは外した。ファイルとして書き出す口が無く
+       （持ち出しはルナルナIDでのアカウント引き継ぎだけ）、
+       並べておくと、できないことを探させることになる。
+       月経の記録はデイリー記録から入れてもらう。 */
     ["そのほか", "そのほかのファイル"]
   ];
 
@@ -141,11 +144,7 @@
       if (document.getElementById("camPick")) { close(); return; }
       var box = document.createElement("div");
       box.id = "camPick";
-      /* ルナルナには、ファイルとして書き出す口が無い（アカウントでの引き継ぎのみ）。
-         「書き出し」と書くと、できないことを求めさせることになる。 */
       box.innerHTML = '<div class="cap">書き出したファイルを渡す</div>'
-        + '<div class="cap" style="padding:0 11px 6px">ルナルナは書き出しに対応していません。'
-        + '月経の記録は「デイリー記録」から入れてください。</div>'
         + SOURCES.map(function (s) {
             return '<button type="button" data-src="' + s[0] + '">' + s[1] + "</button>";
           }).join("");
