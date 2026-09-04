@@ -22550,6 +22550,11 @@ async function sendEmuFeedback() {
         canDraft:typeof isFreeOnlyUser === 'function' ? !isFreeOnlyUser() : false,
         canSchedule:!!window.hasScheduleNFT
       });
+      /* 出し終わったところで見張りを始める。
+         いま出ている先頭を覚えてから始めるので、開いた直後に
+         むだな読み直しが走らない。 */
+      knowledgeWatchTop = rows.length ? rows[0].id : '';
+      startKnowledgeWatch();
     })().catch(error => {
       console.error('知識iframe同期失敗:', error);
       sendKnowledge({ type:'emu-knowledge-error', error:error.message || '投稿を読み込めませんでした。' });
@@ -22560,6 +22565,70 @@ async function sendEmuFeedback() {
     return run;
   }
   window.syncKnowledgeFrame = syncKnowledgeFrame;
+
+  /* ───── 新しい知識が届いたら、その場で出す ─────
+
+     フィードは開いたときに一度読んで終わりだった。
+     スマホで書いた知識が、パソコンやタブレットの画面には
+     読み込み直すまで出てこない。
+
+     いちばん新しい1件だけを見張る。増えたら読み直す。
+     全部を見張ると、Good が押されるたびに読み直しが走り、
+     無料枠（1日5万回）をすぐ使い切る。1件なら、変わったときだけ数える。
+
+     見学の人は運営が選んだ知識しか見えないので、見張りも同じ条件にする。
+     条件が違うと、見えない知識が増えるたびに読み直してしまう。 */
+  let knowledgeWatchStop = null;
+  let knowledgeWatchTop = null;
+  let knowledgeWatchGuest = null;
+
+  function stopKnowledgeWatch() {
+    if (knowledgeWatchStop) { try { knowledgeWatchStop(); } catch (e) {} }
+    knowledgeWatchStop = null;
+    knowledgeWatchTop = null;
+  }
+
+  function startKnowledgeWatch() {
+    if (!window.db || !window.fbLib || !window.fbLib.onSnapshot) return;
+    const guest = !emuHasPlan('light');
+    /* すでに同じ条件で見張っているなら、そのまま。 */
+    if (knowledgeWatchStop && knowledgeWatchGuest === guest) return;
+    stopKnowledgeWatch();
+    knowledgeWatchGuest = guest;
+
+    const parts = [];
+    if (guest) parts.push(window.fbLib.where('recommended', '==', true));
+    parts.push(window.fbLib.orderBy('createdAt', 'desc'));
+    parts.push(window.fbLib.limit(1));
+
+    try {
+      knowledgeWatchStop = window.fbLib.onSnapshot(
+        window.fbLib.query(window.fbLib.collection(window.db, 'posts'), ...parts),
+        function (snap) {
+          const top = snap.docs.length ? snap.docs[0].id : '';
+          /* 最初の1回は、いま出ているものと同じ。読み直さない。 */
+          if (knowledgeWatchTop === null) { knowledgeWatchTop = top; return; }
+          if (top === knowledgeWatchTop) return;
+          knowledgeWatchTop = top;
+          syncKnowledgeFrame({ append: false });
+        },
+        function (err) {
+          /* 黙って止まると、出てこない理由が誰にも分からない。 */
+          console.warn('新しい知識を見張れません:', err && (err.code || err.message));
+          stopKnowledgeWatch();
+        }
+      );
+    } catch (e) {
+      console.warn('新しい知識の見張りを始められません:', e && e.message);
+    }
+  }
+  window.startKnowledgeWatch = startKnowledgeWatch;
+  window.stopKnowledgeWatch = stopKnowledgeWatch;
+
+  /* 段が変わると見える範囲が変わるので、見張りも張り直す。 */
+  window.addEventListener('emu-entitlement', function () {
+    if (knowledgeWatchStop) startKnowledgeWatch();
+  });
 
   async function loadKnowledgePanel(kind) {
     const account = _emuAddress();
