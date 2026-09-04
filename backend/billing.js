@@ -919,6 +919,79 @@ function createBillingRouter(deps) {
     }
   });
 
+  /* ───────── Camellia ID をまとめて発行する ─────────
+
+     Camellia ID は、門（生年月日と同意）を通ったときに作られる。
+     それを作る前から入っている方には、まだ ID が無い。
+     次に門を通るまで待たせず、ここでまとめて配る。
+
+     作り方は画面側（camellia-auth.js）と同じにすること。
+       CAM-XXXX-XXXX-XXXX
+       読み違えやすい文字（0 O 1 I）は使わない
+
+     すでに持っている方には触らない。作り直すと、それまでの記録との
+     結び付きが切れる。 */
+  const CAM_ID_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  function makeCamelliaId() {
+    const buf = require("crypto").randomBytes(12);
+    let out = "";
+    for (let i = 0; i < 12; i++) {
+      out += CAM_ID_CHARS[buf[i] % CAM_ID_CHARS.length];
+      if (i === 3 || i === 7) out += "-";
+    }
+    return "CAM-" + out;
+  }
+
+  router.post("/admin/camellia/issue-ids", requireOwner, grantRateLimit, async (req, res) => {
+    try {
+      const dry = String(req.query.dry || req.body?.dry || "") === "1";
+      const snap = await db.collection("camellia_users").limit(1000).get();
+
+      /* すでに使われている ID を集めておく。同じ番号を二人に出さないため。 */
+      const used = new Set();
+      snap.docs.forEach(function (d) {
+        const v = (d.data() || {}).camelliaId;
+        if (v) used.add(String(v));
+      });
+
+      const issued = [], had = [], failed = [];
+      for (const doc of snap.docs) {
+        const d = doc.data() || {};
+        if (d.camelliaId) { had.push(d.camelliaId); continue; }
+
+        let id = makeCamelliaId();
+        let tries = 0;
+        while (used.has(id) && tries++ < 20) id = makeCamelliaId();
+        if (used.has(id)) { failed.push({ uid: doc.id, error: "ID_COLLISION" }); continue; }
+        used.add(id);
+
+        try {
+          if (!dry) {
+            await doc.ref.set({
+              camelliaId: id,
+              camelliaIdIssuedBy: (req.identity && req.identity.uid) || "admin",
+              camelliaIdIssuedAt: new Date().toISOString()
+            }, { merge: true });
+          }
+          issued.push({ uid: doc.id, passport: d.passport || "", camelliaId: id });
+        } catch (e) {
+          failed.push({ uid: doc.id, error: e.message });
+        }
+      }
+
+      if (!dry && issued.length) {
+        await db.collection(AUDIT_COL).add({
+          action: "camellia.issueIds", by: (req.identity && req.identity.uid) || "",
+          count: issued.length, at: new Date()
+        }).catch(function () {});
+      }
+      return res.json({ ok: true, dry, total: snap.size, issued, hadCount: had.length, failed });
+    } catch (e) {
+      console.error("camellia issue ids error:", e.message);
+      return res.status(500).json({ error: "ISSUE_FAILED" });
+    }
+  });
+
   /* ───────── Camellia AI：運営が自分で返す ─────────
 
      モデルにつながっていないあいだ（鍵がまだ無い）、運営が手で返事を書く。

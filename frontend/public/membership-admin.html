@@ -424,6 +424,13 @@ async function renderCamellia() {
     + '要配慮個人情報です。画面を人に見られない場所で開いてください。</p>'
     /* Camellia ID・パスポート・お名前のどれでも探せるようにする。
        人数が増えると、目で追うのは無理になる。 */
+    /* Camellia ID は門を通ったときに作られる。それより前から入っている方には
+       まだ無いので、ここでまとめて配る。すでに持っている方には触らない。 */
+    + '<div class="actions" style="margin:0 0 10px">'
+    + '<button class="btn" id="camIdCheck">Camellia ID が無い方を調べる</button>'
+    + '<button class="btn primary" id="camIdIssue">まとめて発行する</button>'
+    + '<span class="hint" id="camIdOut"></span>'
+    + '</div>'
     + '<input id="camFind" placeholder="Camellia ID・パスポート・お名前で探す"'
     + ' style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:9px;'
     + 'font-family:inherit;font-size:13px;margin:0 0 10px">'
@@ -456,6 +463,41 @@ async function renderCamellia() {
       $("#camFrame").src = "/camellia/" + b.dataset.cam;
     };
   });
+  /* Camellia ID をまとめて配る。dry=1 のときは調べるだけで、何も書かない。 */
+  async function camIssueIds(dry) {
+    const out = $("#camIdOut");
+    out.style.whiteSpace = "pre-wrap"; out.style.color = ""; out.style.fontWeight = "";
+    out.textContent = dry ? "調べています…" : "発行しています…";
+    let r;
+    try {
+      r = await api("/api/billing/admin/camellia/issue-ids" + (dry ? "?dry=1" : ""), { method: "POST" });
+    } catch (e) {
+      out.style.color = "#b3261e"; out.style.fontWeight = "600";
+      out.textContent = "できませんでした（" + (e.code || e.message) + "）";
+      return;
+    }
+    const L = ["入っている方 " + r.total + "名／すでにお持ち " + r.hadCount + "名"];
+    if (!r.issued.length) L.push("配る必要のある方はいません。");
+    else {
+      L.push((dry ? "配るとこうなります" : "配りました") + "：" + r.issued.length + "名");
+      r.issued.slice(0, 20).forEach(function (x) {
+        L.push("　" + x.camelliaId + "　" + (x.passport || x.uid).slice(0, 12) + "…");
+      });
+      if (r.issued.length > 20) L.push("　ほか " + (r.issued.length - 20) + "名");
+    }
+    if (r.failed.length) L.push("できなかった方：" + r.failed.length + "名");
+    out.style.color = r.failed.length ? "#b3261e" : "#1b5e20";
+    out.style.fontWeight = "600";
+    out.textContent = L.join("\n");
+    if (!dry) paintCamellia();
+  }
+  $("#camIdCheck").onclick = function () { camIssueIds(true); };
+  $("#camIdIssue").onclick = function () {
+    if (!confirm("Camellia ID をお持ちでない方に、まとめて発行します。\n"
+      + "すでにお持ちの方には触りません。よろしいですか？")) return;
+    camIssueIds(false);
+  };
+
   paintCamellia();
   paintCamReports();
 }
