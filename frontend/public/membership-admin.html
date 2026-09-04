@@ -320,7 +320,27 @@ async function paintCamellia() {
      以前あちらは架空の3人をその場で作って並べていた。 */
   camSend(r.members);
   if (!r.members.length) { box.innerHTML = '<p class="empty">まだどなたも入っていません。</p>'; return; }
-  box.innerHTML = r.members.map(function (m, i) {
+
+  /* 探す。Camellia ID・パスポート・お名前のどれでも当たるようにする。
+     入れた側は大文字小文字を気にしなくていいようにそろえる。 */
+  const find = $("#camFind");
+  const rows = r.members;
+  const paint = function () {
+    const q = String((find && find.value) || "").trim().toLowerCase();
+    const hit = !q ? rows : rows.filter(function (m) {
+      return [m.camelliaId, m.passport, m.uid, m.name, m.basic && m.basic.displayName]
+        .some(function (v) { return String(v || "").toLowerCase().indexOf(q) >= 0; });
+    });
+    draw(hit, q);
+  };
+  if (find) find.oninput = paint;
+
+  function draw(list, q) {
+  if (!list.length) {
+    box.innerHTML = '<p class="empty">「' + esc(q) + '」に当たる方はいません。</p>';
+    return;
+  }
+  box.innerHTML = list.map(function (m, i) {
     const age = (m.age === null || m.age === undefined) ? "不明" : (m.age + "歳");
     const ng = m.eligible === false;
     const p = m.personality || {};
@@ -338,7 +358,12 @@ async function paintCamellia() {
       + (camWaiting(m.chat)
           ? ' <b style="color:#fff;background:#b3261e;border-radius:999px;'
             + 'padding:2px 9px;font-size:11px">返事待ち</b>' : '')
-      + '<br><small style="color:var(--muted)">' + esc(m.passport || m.uid) + '</small></span>'
+      /* IDは2つある。SchoolParkパスポートは全員が持ち、
+         Camellia ID は Camellia を使う人だけが持つ。別物なので両方出す。 */
+      + '<br><small style="color:var(--muted)">'
+      + (m.camelliaId
+          ? '<b style="color:var(--ink)">' + esc(m.camelliaId) + '</b><br>' : '')
+      + 'パスポート ' + esc(m.passport || m.uid) + '</small></span>'
       + '<span style="text-align:right;white-space:nowrap">' + esc(age)
       + '<br><small style="color:var(--muted)">'
       + (m.agreedAt ? '同意 ' + fmt(m.agreedAt) : '同意なし')
@@ -381,6 +406,9 @@ async function paintCamellia() {
       }
     };
   });
+  }
+
+  paint();
 }
 
 /* Camellia タブ。最初に作った管理画面（camellia/control-admin.html）は
@@ -394,6 +422,11 @@ async function renderCamellia() {
     + '対象は' + CAM_MIN_AGE + '〜' + CAM_MAX_AGE + '歳です。'
     + '名前を押すと、その方のこれまでの記録がすべて開きます。<br>'
     + '要配慮個人情報です。画面を人に見られない場所で開いてください。</p>'
+    /* Camellia ID・パスポート・お名前のどれでも探せるようにする。
+       人数が増えると、目で追うのは無理になる。 */
+    + '<input id="camFind" placeholder="Camellia ID・パスポート・お名前で探す"'
+    + ' style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:9px;'
+    + 'font-family:inherit;font-size:13px;margin:0 0 10px">'
     + '<div id="camList"><p class="empty">読み込み中…</p></div>'
     + '</div>'
     /* 通報。利用者からは読めないので、ここが唯一の行き先。 */

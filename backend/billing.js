@@ -851,6 +851,7 @@ function createBillingRouter(deps) {
           assessment,
           uid: doc.id,
           passport: d.passport || "",
+          camelliaId: d.camelliaId || "",
           name, provider,
           age,
           birthDate: d.birthDate || "",

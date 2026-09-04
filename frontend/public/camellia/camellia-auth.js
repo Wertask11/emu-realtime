@@ -43,6 +43,7 @@
     ready: false,
     user: null,          // Firebase のユーザー
     passport: "",        // SchoolParkパスポートの番号
+    camelliaId: "",      // Camellia ID（門を通った人だけが持つ）
     account: null,       // ches_accounts の中身
     profile: null,       // camellia_users の中身（生年・同意など）
     fb: null             // Firestore の関数一式
@@ -87,6 +88,33 @@
     return null;
   };
 
+  /* ───── Camellia ID ─────
+
+     SchoolParkパスポートとは別のIDを持つ。
+       SchoolParkパスポート … 全員が、ログインしたときに作られる
+       Camellia ID          … Camellia を使う人だけが、門を通ったときに作られる
+
+     18〜45歳の女性だけが2つを持ち、それ以外はパスポートだけになる。
+     2つは camellia_users で紐づける。将来 KYC を入れるときも、
+     両方に紐づける。
+
+     パスポートから計算して作らない。計算で出せると、パスポート番号を
+     知っている人が Camellia ID も分かってしまい、分けた意味がなくなる。
+     その場で作った乱数を、一度だけ書いて持ち続ける。
+
+     読み違えやすい文字（0 O 1 I）は使わない。人が声に出して伝えることがある。 */
+  var ID_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  function makeCamelliaId() {
+    var n = 12, out = "";
+    var buf = new Uint8Array(n);
+    (window.crypto || window.msCrypto).getRandomValues(buf);
+    for (var i = 0; i < n; i++) {
+      out += ID_CHARS[buf[i] % ID_CHARS.length];
+      if (i === 3 || i === 7) out += "-";
+    }
+    return "CAM-" + out;
+  }
+
   /* 初回の聞き取りを保存する。
      生年月日は Camellia のためだけに使うので、パスポート側には書かない。 */
   CA.saveIntake = async function (birthDate, agreed) {
@@ -107,8 +135,13 @@
       agreedVersion: "2026-09-01",
       updatedAt: new Date().toISOString()
     };
+    /* Camellia ID は一度だけ。すでにあるなら作り直さない。
+       作り直すと、それまでの記録との結び付きが切れる。 */
+    var had = (CA.profile && CA.profile.camelliaId) || "";
+    rec.camelliaId = had || makeCamelliaId();
     await CA.fb.setDoc(CA.fb.doc(CA.db, "camellia_users", CA.user.uid), rec, { merge: true });
     CA.profile = Object.assign({}, CA.profile || {}, rec);
+    CA.camelliaId = rec.camelliaId;
     return rec;
   };
 
@@ -139,6 +172,7 @@
       CA.passport = "";
       CA.account = null;
       CA.profile = null;
+      CA.camelliaId = "";
 
       if (user) {
         try {
@@ -158,6 +192,7 @@
           try {
             var me = await fsMod.getDoc(fsMod.doc(CA.db, "camellia_users", user.uid));
             if (me.exists()) CA.profile = me.data() || null;
+            CA.camelliaId = (CA.profile && CA.profile.camelliaId) || "";
           } catch (e) {
             console.warn("Camellia: 利用者の記録を読めませんでした:", e && e.message);
           }

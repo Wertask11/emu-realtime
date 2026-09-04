@@ -713,9 +713,18 @@ service cloud.firestore {
       allow read: if isMe(uid);
       /* 生年月日と同意。同意した記録は、あとから書き換えられる。
          年齢の判定はサーバーとアプリで行う。ルールでは形だけ確かめる。 */
-      allow create, update: if isMe(uid)
+      /* Camellia ID は、一度決まったら変えられない。
+         変えられると、それまでの記録との結び付きが切れ、
+         管理画面から追えなくなる。作り直して身元を洗うこともできてしまう。 */
+      allow create: if isMe(uid)
         && request.resource.data.get('birthDate', '') is string
-        && request.resource.data.get('agreedAt', '') is string;
+        && request.resource.data.get('agreedAt', '') is string
+        && request.resource.data.get('camelliaId', '') is string;
+      allow update: if isMe(uid)
+        && request.resource.data.get('birthDate', '') is string
+        && request.resource.data.get('agreedAt', '') is string
+        && (resource.data.get('camelliaId', '') == ''
+            || request.resource.data.get('camelliaId', '') == resource.data.get('camelliaId', ''));
       allow delete: if isMe(uid);
 
       /* 日々の記録・性格・設定。文書のIDで種類を分ける。

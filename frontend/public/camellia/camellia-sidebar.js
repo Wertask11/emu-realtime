@@ -145,9 +145,13 @@
     nameEl.textContent = name || "ゲスト";
     if (icEl) icEl.textContent = name ? name.slice(0, 1) : "ー";
     if (passEl) {
-      passEl.textContent = pass
+      /* IDは2つある。Camellia ID を先に出す（この場所ではそちらが本人の番号）。
+         SchoolParkパスポートは、CHES 全体での番号として下に添える。 */
+      var cid = (CA && CA.camelliaId) || (CA && CA.profile && CA.profile.camelliaId) || "";
+      var passLine = pass
         ? "パスポート " + pass.slice(0, 6) + "…" + pass.slice(-4)
         : "パスポートなし";
+      passEl.innerHTML = (cid ? esc(cid) + "<br>" : "") + esc(passLine);
     }
   }
 
