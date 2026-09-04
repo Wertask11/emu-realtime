@@ -60,8 +60,10 @@
       + "#camSide .foot{padding:18px 20px 22px;border-top:1px solid rgba(253,243,241,.12);"
       + "display:flex;flex-direction:column;gap:12px}"
       + "#camSide .foot .cap{font-size:10px;letter-spacing:.2em;opacity:.5}"
-      + "#camSide .who{display:flex;align-items:center;gap:10px;padding:4px 8px 6px;margin:0 -8px;"
-      + "border-radius:8px;cursor:default}"
+      + "#camSide .who{display:flex;align-items:center;gap:10px;padding:6px 8px;margin:0 -8px;"
+      + "border-radius:8px;cursor:pointer;border:0;background:transparent;color:inherit;"
+      + "font:inherit;text-align:left;width:calc(100% + 16px)}"
+      + "#camSide .who:hover{background:rgba(253,243,241,.08)}"
       + "#camSide .ic{width:32px;height:32px;border-radius:50%;background:" + ROSE + ";display:flex;"
       + "align-items:center;justify-content:center;font-size:13px;font-weight:700}"
       + "#camSide .pass{font-size:10px;letter-spacing:.1em;color:" + ACCENT + ";word-break:break-all}"
@@ -130,7 +132,15 @@
     var passEl = document.getElementById("camSidePass");
     var icEl = document.getElementById("camSideIc");
     if (!nameEl) return;
-    var name = (CA && CA.account && CA.account.displayName) || "";
+    /* 名前は、Camellia で登録したもの → SchoolParkパスポートのお名前 の順。
+       パスポート側だけを見ていたので、Camellia で名前を入れている人にも
+       「ゲスト」と出ていた（画面の右上には出ているのに、ここだけ違っていた）。 */
+    var mine = "";
+    try {
+      var v2 = JSON.parse(localStorage.getItem("camellia-v2") || "null") || {};
+      mine = (v2.profile && v2.profile.displayName) || "";
+    } catch (e) {}
+    var name = mine || (CA && CA.account && CA.account.displayName) || "";
     var pass = (CA && CA.passport) || "";
     nameEl.textContent = name || "ゲスト";
     if (icEl) icEl.textContent = name ? name.slice(0, 1) : "ー";
@@ -154,11 +164,21 @@
     try {
       var d = window.parent.document;
       d.body.classList.toggle("cam-contact-off", !open);
+      /* 丸ボタンは左下の定位置に出る。サイドバーの下にはパスポートの欄があり、
+         そのまま重なって押せなくなる。欄のぶんだけ上へずらす。
+         SchoolPark も同じ理由で、開いているあいだは位置を測って置き直している。 */
+      var foot = document.querySelector("#camSide .foot");
+      var lift = foot ? Math.round(foot.getBoundingClientRect().height) + 16 : 106;
       ["emu-contact-btn", "emu-contact-label"].forEach(function (id) {
         var el = d.getElementById(id);
         if (!el) return;
-        if (open) el.style.removeProperty("display");
-        else el.style.setProperty("display", "none", "important");
+        if (open) {
+          el.style.removeProperty("display");
+          el.style.setProperty("bottom", lift + "px", "important");
+        } else {
+          el.style.setProperty("display", "none", "important");
+          el.style.removeProperty("bottom");
+        }
       });
     } catch (e) {}
   }
@@ -191,13 +211,13 @@
       + '<div class="list" id="camSideList"></div>'
       + '<div class="foot">'
       + '  <div class="cap">SCHOOLPARK PASSPORT</div>'
-      + '  <div class="who">'
+      + '  <button type="button" class="who" id="camSideWho2" title="SchoolPark パスポートを見る">'
       + '    <div class="ic" id="camSideIc">ー</div>'
       + '    <div style="display:flex;flex-direction:column;gap:2px;min-width:0">'
       + '      <div style="font-size:13px;font-weight:500" id="camSideWho">ゲスト</div>'
       + '      <div class="pass" id="camSidePass">パスポートなし</div>'
       + '    </div>'
-      + '  </div>'
+      + '  </button>'
       + '</div>';
     document.body.appendChild(side);
 
@@ -264,8 +284,31 @@
       if (!e.target.closest || !e.target.closest("#camSideBrandWrap")) closeBrands();
     });
 
+    /* SchoolPark パスポートを開く。SchoolPark（dao.html）の下の欄と同じ動き。
+       パスポートは親（Emu）が持っていて、この枠より前に出る（1800 対 1600）ので、
+       Camellia を閉じずにそのまま重ねて出せる。 */
+    var who = document.getElementById("camSideWho2");
+    if (who) who.onclick = function () {
+      if (inFrame) {
+        try { window.parent.openSpPassport(); return; } catch (e) {}
+      }
+      /* 枠の外で開いているとき（親がいない）は、Emu へ移ってから見てもらう。 */
+      location.href = "/";
+    };
+
     paintItems();
     paintWho();
+
+    /* お名前はあとから入る（プロフィールで書いたとき、パスポートを読み終えたとき）。
+       一度描いて終わりにすると「ゲスト」のまま残るので、しばらく見て追いつく。 */
+    var wn = 0;
+    var wt = setInterval(function () {
+      if (++wn > 30) return clearInterval(wt);
+      try { paintWho(); } catch (e) {}
+    }, 2000);
+    window.addEventListener("storage", function (e) {
+      if (e && e.key === "camellia-v2") paintWho();
+    });
 
     /* もとのタブが別の場所から押されたときも、印を合わせる。 */
     document.addEventListener("click", function (e) {
@@ -274,7 +317,17 @@
 
     /* Camellia を離れるときは、親のボタンを戻す。
        隠したまま出ていくと、Emu に戻ったときにボタンが消えたままになる。 */
-    window.addEventListener("pagehide", function () { tellParent(true); });
+    window.addEventListener("pagehide", function () {
+      tellParent(true);
+      /* ずらした位置も戻す。戻さないと、Emu に帰ったあとも浮いたままになる。 */
+      try {
+        var pd = window.parent.document;
+        ["emu-contact-btn", "emu-contact-label"].forEach(function (id) {
+          var el = pd.getElementById(id);
+          if (el) el.style.removeProperty("bottom");
+        });
+      } catch (e) {}
+    });
 
     /* 幅が変わるとサイドバーの出方が変わる（900px以下では出さない）。
        親のお問い合わせボタンの出し入れも、それに合わせる。 */
