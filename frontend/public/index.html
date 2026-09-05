@@ -16780,6 +16780,15 @@ async function openSpPassport() {
     return;
   }
 
+  /* Camellia ID。Camellia を使っている人だけが持つ。
+     Camellia は18〜45歳の女性のための場所なので、全員が持つわけではない。
+     持っていない人には、この行そのものを出さない。 */
+  let camelliaId = '';
+  try {
+    const cs = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'camellia_users', p.uid));
+    if (cs.exists()) camelliaId = String((cs.data() || {}).camelliaId || '');
+  } catch (e) { /* 読めないときは出さないだけ。パスポートは開く */ }
+
   body.innerHTML =
     '<div class="spp-num">'
     + '<div class="spp-num-label">PASSPORT NO.</div>'
@@ -16790,11 +16799,16 @@ async function openSpPassport() {
     + _sppRow('入った日', _sppDate(p.createdAt))
     + _sppRow('入り方', _sppProviderLabel(p.provider, p.uid))
     + _sppRow('区分', p.tierLabel + (p.hasPass ? '（公式パスあり）' : ''))
+    + (camelliaId ? _sppRow('Camellia ID', camelliaId) : '')
     + '<div id="sppRecords"><div class="spp-row"><dt>記録</dt><dd>読み込んでいます…</dd></div></div>'
     + '<p class="spp-note">この番号は、あなたのログイン方法から決まります。'
     + '入り方を変えても番号は変わりません。<br>'
     + '同じ番号を2人が持つことはできません。<br>'
-    + 'SchoolPark・Emu・Camellia・Heartoo のどこでの記録も、この番号に付きます。</p>';
+    + 'SchoolPark・Emu・Camellia・Heartoo のどこでの記録も、この番号に付きます。'
+    + (camelliaId
+        ? '<br>Camellia ID は Camellia を使い始めたときに作られる別の番号です。'
+          + 'この番号と結び付いています。'
+        : '') + '</p>';
 
   /* CHES全体の記録。いまは投票だけが本物なので、それを数える。
      クエストと知恵は、本物になった順にここへ足していく。 */
