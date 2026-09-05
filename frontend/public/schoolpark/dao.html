@@ -171,18 +171,22 @@ html, body                 { height: 100%; }
                 <div style="display:flex; align-items:baseline; gap:14px">
                   <div style="font-size:17px; font-weight:700">自分の宿題</div>
                   <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                  <div style="font-size:12px; color:#6E695C">{{ todoLeft }}</div>
                 </div>
                 <div style="background:#E7E2D6; border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:16px">
+                  <sc-if value="{{ noTasks }}">
+                    <div style="font-size:13px; line-height:1.9; color:#6E695C">いまは何も残っていません。<br>下の「タスク管理 →」から書けます。</div>
+                  </sc-if>
                   <sc-for list="{{ todos }}" as="t" hint-placeholder-count="3">
                     <div style="display:flex; gap:12px; align-items:flex-start; padding-bottom:14px; border-bottom:1px solid rgba(20,19,16,.1)">
-                      <div style="width:16px; height:16px; border:1.5px solid #0F5C3F; border-radius:4px; margin-top:3px; flex:0 0 16px"></div>
+                      <div onClick="{{ t.toggle }}" title="終わったことにする" style="width:16px; height:16px; border:1.5px solid #0F5C3F; border-radius:4px; margin-top:3px; flex:0 0 16px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:11px; line-height:1; color:#0F5C3F" style-hover="background:#D0E2BE"></div>
                       <div style="display:flex; flex-direction:column; gap:5px">
                         <div style="font-size:14px; font-weight:500; line-height:1.6">{{ t.label }}</div>
-                        <div style="font-size:12px; color:#6E695C">{{ t.meta }}</div>
+                        <div style="font-size:12px; color:{{ t.dueColor }}">{{ t.meta }}</div>
                       </div>
                     </div>
                   </sc-for>
-                  <div onClick="{{ goExperiments }}" style="text-align:center; font-size:13px; font-weight:700; color:#0F5C3F; cursor:pointer; padding-top:2px">タスク管理 →</div>
+                  <div onClick="{{ goTasks }}" style="text-align:center; font-size:13px; font-weight:700; color:#0F5C3F; cursor:pointer; padding-top:2px">タスク管理 →</div>
                 </div>
               </div>
             </div>
@@ -692,6 +696,126 @@ html, body                 { height: 100%; }
           </div>
         </sc-if>
 
+        <!-- ───── 自分の宿題 ─────
+             クエストは人に見せる仕事。ここは自分の段取り。
+             自分にしか見えない。 -->
+        <sc-if value="{{ isTasks }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:28px">
+
+            <div onClick="{{ goHome }}" style="font-size:12px; color:#6E695C; cursor:pointer">← 今週の広場</div>
+
+            <div style="background:#141310; color:#F4F1EA; padding:{{ L.cardPad }}; border-radius:12px; display:grid; grid-template-columns:{{ L.hero }}; gap:32px">
+              <div style="display:flex; flex-direction:column; gap:16px">
+                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE">MY WORK</div>
+                <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.45">{{ taskHead }}</div>
+                <div style="font-size:14px; line-height:1.9; color:rgba(244,241,234,.68)">{{ taskLine }}</div>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; align-content:center">
+                <sc-for list="{{ taskStats }}" as="st" hint-placeholder-count="4">
+                  <div style="border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:6px">
+                    <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; color:#D0E2BE">{{ st.value }}</div>
+                    <div style="font-size:12px; color:rgba(244,241,234,.6)">{{ st.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:20px">
+              <div style="font-size:17px; font-weight:700">宿題を書く</div>
+
+              <div style="display:flex; flex-direction:column; gap:8px">
+                <div style="font-size:13px; font-weight:700">やること</div>
+                <input onInput="{{ onTaskTitle }}" value="{{ draft.title }}" placeholder="例：Camellia の管理画面から ID をまとめて配る" style="padding:14px 16px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:8px">
+                <div style="font-size:13px; font-weight:700">ひとことメモ（任意）</div>
+                <textarea onInput="{{ onTaskNote }}" placeholder="どこから手をつけるか、詰まっていること" style="min-height:64px; padding:14px 16px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; line-height:1.8; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none; resize:vertical">{{ draft.note }}</textarea>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:10px">
+                <div style="font-size:13px; font-weight:700">どの仕事？</div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap">
+                  <sc-for list="{{ taskBrands }}" as="b" hint-placeholder-count="4">
+                    <div onClick="{{ b.go }}" style="padding:9px 16px; border-radius:18px; font-size:13px; font-weight:700; cursor:pointer; border:1px solid {{ b.border }}; background:{{ b.bg }}; color:{{ b.fg }}">{{ b.label }}</div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:10px">
+                <div style="font-size:13px; font-weight:700">つないでいる{{ word }}</div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap">
+                  <sc-for list="{{ taskQuests }}" as="q" hint-placeholder-count="2">
+                    <div onClick="{{ q.go }}" style="padding:9px 16px; border-radius:18px; font-size:13px; font-weight:500; cursor:pointer; border:1px solid {{ q.border }}; background:{{ q.bg }}; color:{{ q.fg }}">{{ q.label }}</div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap">
+                <div style="display:flex; flex-direction:column; gap:8px">
+                  <div style="font-size:13px; font-weight:700">いつまでに（任意）</div>
+                  <input type="date" onInput="{{ onTaskDue }}" value="{{ draft.due }}" style="padding:13px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
+                </div>
+                <div style="flex:1"></div>
+                <div onClick="{{ addTask }}" style="padding:14px 26px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer" style-hover="background:#0A3F2B">これを宿題にする</div>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:18px">
+              <div style="display:flex; align-items:baseline; gap:14px">
+                <div style="font-size:17px; font-weight:700">残っていること</div>
+                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+              </div>
+              <sc-if value="{{ noOpenTasks }}">
+                <div style="font-size:13px; line-height:1.9; color:#6E695C">残っている宿題はありません。</div>
+              </sc-if>
+              <div style="display:flex; flex-direction:column; gap:12px">
+                <sc-for list="{{ openTasks }}" as="t" hint-placeholder-count="3">
+                  <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:10px; padding:18px 20px; display:flex; align-items:flex-start; gap:16px">
+                    <div onClick="{{ t.toggle }}" title="終わったことにする" style="width:20px; height:20px; border:1.5px solid #0F5C3F; border-radius:5px; margin-top:2px; flex:0 0 20px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; line-height:1; background:{{ t.markBg }}; color:{{ t.markFg }}">{{ t.mark }}</div>
+                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:7px">
+                      <div style="font-size:15px; font-weight:700; line-height:1.6; color:{{ t.titleColor }}; text-decoration:{{ t.titleLine }}">{{ t.title }}</div>
+                      <sc-if value="{{ t.hasNote }}">
+                        <div style="font-size:13px; line-height:1.85; color:#3B382F; white-space:pre-wrap">{{ t.note }}</div>
+                      </sc-if>
+                      <sc-if value="{{ t.hasQuest }}">
+                        <div style="font-size:12px; color:#0F5C3F">{{ t.questLabel }}</div>
+                      </sc-if>
+                    </div>
+                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; white-space:nowrap">
+                      <div style="font-size:12px; font-weight:700; color:{{ t.brandColor }}">{{ t.brandLabel }}</div>
+                      <div style="font-size:12px; color:{{ t.dueColor }}">{{ t.dueLabel }}</div>
+                      <div onClick="{{ t.remove }}" title="消す" style="font-size:12px; color:#9A9484; cursor:pointer">消す</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:18px">
+              <div style="display:flex; align-items:baseline; gap:14px">
+                <div style="font-size:17px; font-weight:700">終わったこと</div>
+                <div style="font-size:12px; color:#6E695C">直近20件</div>
+                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+              </div>
+              <sc-if value="{{ noDoneTasks }}">
+                <div style="font-size:13px; line-height:1.9; color:#6E695C">まだありません。</div>
+              </sc-if>
+              <div style="display:flex; flex-direction:column; gap:8px">
+                <sc-for list="{{ doneTasks }}" as="t" hint-placeholder-count="3">
+                  <div style="background:#E7E2D6; border-radius:10px; padding:14px 18px; display:flex; align-items:center; gap:14px">
+                    <div onClick="{{ t.toggle }}" title="やっぱりまだにする" style="width:20px; height:20px; border:1.5px solid #0F5C3F; border-radius:5px; flex:0 0 20px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; line-height:1; background:{{ t.markBg }}; color:{{ t.markFg }}">{{ t.mark }}</div>
+                    <div style="flex:1; min-width:0; font-size:14px; line-height:1.6; color:{{ t.titleColor }}; text-decoration:{{ t.titleLine }}">{{ t.title }}</div>
+                    <div style="font-size:12px; color:{{ t.brandColor }}; white-space:nowrap">{{ t.brandLabel }}</div>
+                    <div onClick="{{ t.remove }}" title="消す" style="font-size:12px; color:#9A9484; cursor:pointer; white-space:nowrap">消す</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+          </div>
+        </sc-if>
+
       </div>
 
       <div style="display:{{ L.bottom }}; position:sticky; bottom:0; z-index:8; flex:0 0 76px; width:100%; min-height:76px; background:#141310; padding:8px 8px 12px; justify-content:flex-start; align-items:stretch; gap:4px; overflow-x:scroll; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; touch-action:pan-x; -webkit-overflow-scrolling:touch">
@@ -748,6 +872,15 @@ const ROOMS = [];
 const EVENTS = [];
 const PEEKS = [];
 
+/* 宿題をどの仕事に付けるか。
+   色はブランドの色そのままだと明るい紙の上で読みにくいので、少し濃くしてある。 */
+const TASK_BRANDS = [
+  ['schoolpark', 'SchoolPark', '#0F5C3F'],
+  ['emu',        'Emu',        '#C2703D'],
+  ['camellia',   'Camellia',   '#B0405A'],
+  ['other',      'そのほか',    '#6E695C']
+];
+
 const LAYOUTS = {
   pc: {frameW:1440, frameH:900, scrollY:'auto', frameR:'14px', sidebar:'flex', bottom:'none', pad:'36px 40px 80px', headPad:'22px 40px', headSize:'22px',
        hero:'1.35fr 1fr', heroSize:'34px', g3:'repeat(3,1fr)', g2:'repeat(2,1fr)', g2b:'1.4fr 1fr', gDetail:'1.5fr 1fr', gLogs:'1.6fr 1fr',
@@ -761,8 +894,14 @@ const LAYOUTS = {
 };
 
 class Component extends DCLogic {
-  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, wisdom:[], noWisdom:true, citations:0, members:[], noMembers:true, noTreasury:true, wtag:'すべて', canGuild:false, trust:{total:0, need:20, detail:'読み込んでいます…'}, board:[], dumb:[], rooms:[], events:[], noPark:true, treasury:{card:{have:'¥0', promised:'¥0', free:'¥0', freeColor:'#D0E2BE', warn:'', month:'今月 +¥0 / -¥0'}, curTabs:[], allocTitle:'内訳（円）', allocNote:'', alloc:[], txs:[]}, vw: window.innerWidth, vh: window.innerHeight, joined:{} };
-  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} try { window.parent.spDaoLoadWisdom(this); } catch (e) {} try { window.parent.spDaoLoadMembers(this); } catch (e) {} try { window.parent.spDaoLoadTreasury(this); } catch (e) {} try { window.parent.spDaoLoadPark(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
+  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, wisdom:[], noWisdom:true, citations:0, members:[], noMembers:true, noTreasury:true, wtag:'すべて', canGuild:false, trust:{total:0, need:20, detail:'読み込んでいます…'}, board:[], dumb:[], rooms:[], events:[], noPark:true, treasury:{card:{have:'¥0', promised:'¥0', free:'¥0', freeColor:'#D0E2BE', warn:'', month:'今月 +¥0 / -¥0'}, curTabs:[], allocTitle:'内訳（円）', allocNote:'', alloc:[], txs:[]}, vw: window.innerWidth, vh: window.innerHeight, joined:{}, tasks:[], noTasks:true, today:'' };
+
+  /* 追加欄に打った途中の中身。
+     ここを state に入れると、1文字打つたびに画面を作り直してしまい
+     入力欄からカーソルが外れる。だから state の外に置いてある。 */
+  draft = { title:'', note:'', brand:'schoolpark', questId:'', questTitle:'', due:'' };
+
+  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadTasks(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} try { window.parent.spDaoLoadWisdom(this); } catch (e) {} try { window.parent.spDaoLoadMembers(this); } catch (e) {} try { window.parent.spDaoLoadTreasury(this); } catch (e) {} try { window.parent.spDaoLoadPark(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
   scroller = React.createRef();
@@ -816,6 +955,7 @@ class Component extends DCLogic {
       park:['THE PARK / 公園','無我夢中で遊ぼう'],
       experiments:['QUESTS','走っている'+W+'・募集中の'+W],
       detail:['QUEST', W+'の詳細'],
+      tasks:['MY WORK / 自分の宿題','自分の宿題'],
       logs:['GUILD','ギルド — SchoolParkのDAO投票'],
       library:['WISDOM LIBRARY','知恵ライブラリ'],
       members:['MEMBERS','メンバーと貢献度'],
@@ -831,6 +971,68 @@ class Component extends DCLogic {
     const shownExps = s.filter==='すべて' ? exps : exps.filter(e => e.status === fmap[s.filter]);
     const kind = k => k==='つまずいた' ? ['#F0DCD2','#A85A33'] : k==='気づいた' ? ['#0F5C3F','#F4F1EA'] : ['#E7E2D6','#3B382F'];
     const logs = LOGS.map(l => { const c = kind(l.kind); return {...l, kindBg:c[0], kindFg:c[1]}; });
+
+    /* ───── 自分の宿題 ───── */
+
+    /* 締切まであと何日か。きょうの日付は親からもらう（端末の時計で作っている）。 */
+    const today = s.today || '';
+    const daysTo = (due) => {
+      if (!due || !today) return null;
+      const a = new Date(today + 'T00:00:00'), b = new Date(due + 'T00:00:00');
+      if (isNaN(a.getTime()) || isNaN(b.getTime())) return null;
+      return Math.round((b - a) / 86400000);
+    };
+    const dueText = (due) => {
+      if (!due) return '締切なし';
+      const when = Number(due.slice(5,7)) + '/' + Number(due.slice(8,10));
+      const n = daysTo(due);
+      if (n === null) return when;
+      if (n < 0)  return when + '・' + (-n) + '日すぎている';
+      if (n === 0) return when + '・きょうまで';
+      if (n === 1) return when + '・あした';
+      return when + '・あと' + n + '日';
+    };
+
+    const brandOf = (id) => TASK_BRANDS.find(b => b[0] === id) || TASK_BRANDS[3];
+    const shapeTask = (t) => {
+      const b = brandOf(t.brand);
+      const n = daysTo(t.due);
+      const late  = !t.done && t.due && n !== null && n < 0;
+      const soon  = !t.done && t.due && n !== null && n === 0;
+      return {...t,
+        brandLabel:b[1], brandColor:b[2],
+        dueLabel:dueText(t.due),
+        dueColor: late ? '#A32020' : soon ? '#C2703D' : '#6E695C',
+        meta: b[1] + '・' + dueText(t.due),
+        label: t.title,
+        mark: t.done ? '✓' : '',
+        markBg: t.done ? '#0F5C3F' : 'transparent',
+        markFg: t.done ? '#F4F1EA' : '#0F5C3F',
+        titleColor: t.done ? '#9A9484' : '#141310',
+        titleLine: t.done ? 'line-through' : 'none',
+        hasNote: !!t.note, hasQuest: !!t.questTitle,
+        questLabel: t.questTitle ? ('クエスト：' + t.questTitle) : '',
+        toggle: () => { try { window.parent.spTaskToggle(this, t.id, !t.done); } catch (e) {} },
+        remove: () => { try { window.parent.spTaskDelete(this, t.id, t.title); } catch (e) {} }
+      };
+    };
+
+    /* 締切のあるものが先。日付の早い順。締切なしは後ろで、書いた順。 */
+    const byDue = (a, b) => {
+      const ad = a.due || '9999-99-99', bd = b.due || '9999-99-99';
+      if (ad !== bd) return ad < bd ? -1 : 1;
+      return (a.createdAt || 0) - (b.createdAt || 0);
+    };
+    const allTasks = s.tasks || [];
+    const openTasks = allTasks.filter(t => !t.done).sort(byDue).map(shapeTask);
+    const doneTasks = allTasks.filter(t => t.done)
+      .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)).slice(0, 20).map(shapeTask);
+    const lateCount  = openTasks.filter(t => t.due && daysTo(t.due) < 0).length;
+    const todayCount = openTasks.filter(t => t.due && daysTo(t.due) === 0).length;
+    /* 年末まで。「年末までに結果を出す」ための残り日数。 */
+    const yearEnd = today ? daysTo(today.slice(0,4) + '-12-31') : null;
+
+    const setDraft = (k, v) => { this.draft[k] = v; };
 
     return {
       L, word:W, wordShort:'経験', scrollRef:this.scroller,
@@ -868,12 +1070,54 @@ class Component extends DCLogic {
       head: {kicker: heads[s.screen][0], title: heads[s.screen][1]},
       isHome:s.screen==='home', isPark:s.screen==='park', isExperiments:s.screen==='experiments', isDetail:s.screen==='detail',
       isLogs:s.screen==='logs', isLibrary:s.screen==='library', isMembers:s.screen==='members',
-      isTreasury:s.screen==='treasury', isPropose:s.screen==='propose',
+      isTreasury:s.screen==='treasury', isPropose:s.screen==='propose', isTasks:s.screen==='tasks',
+      goTasks:this.go('tasks'), goHome:this.go('home'),
       goPropose:() => { try { window.parent.openSpQuestForm(this); } catch (e) { this.setState({screen:'propose'}); } }, goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
       stats: {newWisdom:(s.wisdom || []).length, running:exps.filter(e => e.status==='RUNNING').length, people:0, myCommit:Object.values(s.committed).filter(Boolean).length, due:0, wisdomTotal:(s.wisdom || []).length, payout:'¥0', citations:s.citations || 0},
       freshWisdom: (s.wisdom || []).slice(0,3).map(w => ({...w, open:this.go('library')})),
       runningExps: exps.filter(e => e.status==='RUNNING').slice(0,3),
-      todos: [],
+      /* 広場のカードには、残っているものを上から3つだけ出す */
+      todos: openTasks.slice(0, 3),
+      noTasks: openTasks.length === 0,
+      todoLeft: openTasks.length > 3 ? ('ほか ' + (openTasks.length - 3) + '件') : '',
+      openTasks, doneTasks,
+      noOpenTasks: openTasks.length === 0,
+      noDoneTasks: doneTasks.length === 0,
+      taskHead: openTasks.length === 0 ? '宿題は残っていない。' : ('残っている宿題は、' + openTasks.length + '個。'),
+      taskLine: (lateCount ? ('すぎているものが' + lateCount + '個。') : 'すぎているものはない。')
+        + (todayCount ? ('きょうまでが' + todayCount + '個。') : '')
+        + (yearEnd === null ? '' : ('　年末まで、あと' + yearEnd + '日。')),
+      taskStats: [
+        ['残っている', String(openTasks.length)],
+        ['きょうまで', String(todayCount)],
+        ['すぎている', String(lateCount)],
+        ['年末まで', yearEnd === null ? '—' : (yearEnd + '日')]
+      ].map(([label, value]) => ({label, value})),
+      draft: this.draft,
+      onTaskTitle: (ev) => setDraft('title', ev.target.value),
+      onTaskNote:  (ev) => setDraft('note',  ev.target.value),
+      onTaskDue:   (ev) => setDraft('due',   ev.target.value),
+      taskBrands: TASK_BRANDS.map(([id, label, color]) => ({
+        label, go: () => { this.draft.brand = id; this.setState({}); },
+        bg: this.draft.brand === id ? color : 'transparent',
+        fg: this.draft.brand === id ? '#F4F1EA' : color,
+        border: color })),
+      /* つなぐ先は、まだ終わっていないクエストだけ */
+      taskQuests: [{id:'', title:'どれにもつながない'}]
+        .concat(exps.filter(e => e.status !== 'CLOSED').map(e => ({id:e.id, title:e.title})))
+        .map(q => ({ label: q.title,
+          go: () => { this.draft.questId = q.id; this.draft.questTitle = q.id ? q.title : ''; this.setState({}); },
+          bg: this.draft.questId === q.id ? '#141310' : 'transparent',
+          fg: this.draft.questId === q.id ? '#F4F1EA' : '#3B382F',
+          border: this.draft.questId === q.id ? '#141310' : 'rgba(20,19,16,.16)' })),
+      addTask: async () => {
+        let ok = false;
+        try { ok = await window.parent.spTaskAdd(this, this.draft); } catch (e) {}
+        if (!ok) return;
+        /* 続けて書けるように、どの仕事かだけは残す */
+        this.draft = { title:'', note:'', brand:this.draft.brand, questId:'', questTitle:'', due:'' };
+        this.setState({});
+      },
       board: s.board || [],
       dumb: s.dumb || [], rooms: s.rooms || [], events: s.events || [],
       peeks: PEEKS.map(p => ({...p, open:this.openExp(p.id)})),

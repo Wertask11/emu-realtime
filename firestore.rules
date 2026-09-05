@@ -901,6 +901,30 @@ service cloud.firestore {
       }
     }
 
+    /* ───────── 自分の宿題 ─────────
+
+       クエストが「みんなに見える仕事」なら、こちらは「自分にしか見えない段取り」。
+       置き場は sp_tasks/{uid}/items/{id}。文書のIDが Firebase の uid なので、
+       本人以外はルールの時点で読めない。運営が覗く道も作っていない。
+
+       端末をまたいで同じものが出るように、端末ではなくここに置く。
+
+       ほかの文書を見に行かないので、参照は0回。 */
+    match /sp_tasks/{uid} {
+      allow read, write: if isMe(uid);
+
+      match /items/{taskId} {
+        allow read, delete: if isMe(uid);
+        allow create, update: if isMe(uid)
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 200
+          && request.resource.data.get('note', '') is string
+          && request.resource.data.get('note', '').size() <= 500
+          && request.resource.data.get('done', false) is bool;
+      }
+    }
+
     /* ───────── ギルドへの参加を認めた人 ─────────
 
        文書のIDはパスポート番号。あるかどうかだけを見る。
@@ -1017,6 +1041,7 @@ service cloud.firestore {
     match /{coll}/{document=**} {
       allow read, write: if coll != 'sp_votes'
         && coll != 'sp_quests'
+        && coll != 'sp_tasks'
         && coll != 'sp_wisdom'
         && coll != 'sp_park'
         && coll != 'sp_trust'

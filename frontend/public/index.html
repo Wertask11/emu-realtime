@@ -15760,7 +15760,9 @@ window.addEventListener('emu-entitlement', function () {
   spPassportLoad(true).then(function () {
     try { emuSideNavSync(); } catch (e) {}
     const fr = document.getElementById('spDaoFrame');
-    try { if (fr && fr.contentWindow && fr.contentWindow.app) window.spDaoWhoAmI(fr.contentWindow.app); } catch (e) {}
+    /* 宿題も読み直す。画面が先に立ち上がっていると、componentDidMount の時点では
+       まだ誰か分かっておらず、空のままになってしまう。 */
+    try { if (fr && fr.contentWindow && fr.contentWindow.app) { window.spDaoWhoAmI(fr.contentWindow.app); window.spDaoLoadTasks(fr.contentWindow.app); } } catch (e) {}
   });
 });
 
@@ -16230,6 +16232,114 @@ async function spQuestSubmit() {
   closeSpQuestForm();
   if (_spQuestFormApp) await window.spDaoLoadQuests(_spQuestFormApp);
 }
+
+/* ═══════════════════════════════════════
+   自分の宿題
+
+   クエストは「みんなに見える仕事」。こちらは「自分にしか見えない段取り」。
+   クエストを進めるために、今週どこから手をつけるかを並べておく場所。
+
+   置き場は sp_tasks/{uid}/items/{id}。文書のIDが Firebase の uid なので、
+   ルールの時点で本人しか読めない。運営が覗く道も作っていない。
+   端末をまたいで同じものが出るように、端末ではなくサーバーに置く。
+═══════════════════════════════════════ */
+
+/* どの仕事か。色は明るい紙の上でも読めるように、
+   ブランドの色より少し濃くしてある。 */
+const SP_TASK_BRANDS = ['schoolpark', 'emu', 'camellia', 'other'];
+
+function _spTaskCol(uid) {
+  return window.fbLib.collection(window.db, 'sp_tasks', uid, 'items');
+}
+
+/* きょうの日付（この端末の時計で）。締切は日付だけなので時刻は見ない。 */
+function _spTaskToday() {
+  const n = new Date();
+  return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0')
+    + '-' + String(n.getDate()).padStart(2, '0');
+}
+
+window.spDaoLoadTasks = async function (app) {
+  if (!app || typeof app.setState !== 'function') return;
+  if (!window.db || !window.fbLib) return;
+  const p = await spPassportLoad();
+  if (!p) { app.setState({ tasks: [], noTasks: true, today: _spTaskToday() }); return; }
+
+  const list = [];
+  try {
+    const snap = await window.fbLib.getDocs(_spTaskCol(p.uid));
+    snap.forEach(function (s) {
+      const d = s.data() || {};
+      list.push({
+        id: s.id, title: d.title || '', note: d.note || '',
+        brand: SP_TASK_BRANDS.indexOf(d.brand) >= 0 ? d.brand : 'other',
+        questId: d.questId || '', questTitle: d.questTitle || '',
+        due: d.due || '', done: !!d.done,
+        createdAt: d.createdAt || 0, doneAt: d.doneAt || 0
+      });
+    });
+  } catch (e) {
+    console.warn('宿題を読めませんでした:', e && (e.message || e));
+    return;
+  }
+  app.setState({ tasks: list, noTasks: list.length === 0, today: _spTaskToday() });
+};
+
+window.spTaskAdd = async function (app, draft) {
+  const d = draft || {};
+  const title = String(d.title || '').trim();
+  if (!title) { alert('やることを書いてください。'); return false; }
+  const p = await spPassportLoad();
+  if (!p) { alert('宿題を書くにはログインが必要です。'); return false; }
+  try {
+    await window.fbLib.addDoc(_spTaskCol(p.uid), {
+      title: title.slice(0, 200),
+      note: String(d.note || '').trim().slice(0, 500),
+      brand: SP_TASK_BRANDS.indexOf(d.brand) >= 0 ? d.brand : 'schoolpark',
+      questId: String(d.questId || '').slice(0, 80),
+      questTitle: String(d.questTitle || '').slice(0, 120),
+      /* 締切は「2026-09-30」の形だけ。ほかは締切なしとして扱う。 */
+      due: /^\d{4}-\d{2}-\d{2}$/.test(String(d.due || '')) ? String(d.due) : '',
+      done: false, doneAt: 0, createdAt: Date.now()
+    });
+  } catch (e) {
+    console.warn('宿題を書けませんでした:', e && (e.message || e));
+    alert('書けませんでした。通信を確かめて、もう一度お試しください。');
+    return false;
+  }
+  await window.spDaoLoadTasks(app);
+  return true;
+};
+
+/* 終わった／やっぱりまだ、を切り替える */
+window.spTaskToggle = async function (app, taskId, done) {
+  const p = await spPassportLoad();
+  if (!p) return;
+  try {
+    await window.fbLib.updateDoc(
+      window.fbLib.doc(window.db, 'sp_tasks', p.uid, 'items', taskId),
+      { done: !!done, doneAt: done ? Date.now() : 0 });
+  } catch (e) {
+    console.warn('宿題を書き換えられませんでした:', e && (e.message || e));
+    alert('うまくいきませんでした。もう一度お試しください。');
+    return;
+  }
+  await window.spDaoLoadTasks(app);
+};
+
+window.spTaskDelete = async function (app, taskId, title) {
+  if (!confirm('「' + (title || 'この宿題') + '」を消します。\n\n消したものは戻せません。よろしいですか？')) return;
+  const p = await spPassportLoad();
+  if (!p) return;
+  try {
+    await window.fbLib.deleteDoc(window.fbLib.doc(window.db, 'sp_tasks', p.uid, 'items', taskId));
+  } catch (e) {
+    console.warn('宿題を消せませんでした:', e && (e.message || e));
+    alert('消せませんでした。もう一度お試しください。');
+    return;
+  }
+  await window.spDaoLoadTasks(app);
+};
 
 /* ═══════════════════════════════════════
    知恵カード
