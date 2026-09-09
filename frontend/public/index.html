@@ -6040,7 +6040,8 @@ const mainApp = document.getElementById("mainApp");
 const SP_OWNER = "0xdcc687c05f130e57597a8525771299a4efb6edf7";
 const SP_OWNER_ADDRS = [
   "0xdcc687c05f130e57597a8525771299a4efb6edf7",  // 実ウォレット
-  "0x195f4478ee3865ee1dd360b79e121c638bdd42ac"   // SchoolParkパスポート
+  "0x195f4478ee3865ee1dd360b79e121c638bdd42ac",   // SchoolParkパスポート
+  "0x8ab838ebb2e3bf160bc61b7182d348a8500b35f7" // スマホの運営パスポート
 ];
 const MAINTENANCE_MODE = false;
 const MAINTENANCE_END  = new Date('2026-05-20T00:00:00+09:00');
@@ -16100,7 +16101,7 @@ window.spDaoLoadQuests = async function (app) {
       status: q.status || 'OPEN', commits: people.length, need: q.need || 5,
       people: people, logCount: logCount, iTook: iTook,
       /* 完了にできるのは、出した本人だけ */
-      isMine: !!(mine && String(q.owner || '').toLowerCase() === mine),
+      isMine: !!(p && (p.isOwner || (mine && String(q.owner || '').toLowerCase() === mine))),
       logs: logs.map(function (l) {
         const kind = l.kind || 'やってみた';
         const c = kind === 'つまずいた' ? ['#F0DCD2', '#A85A33']
@@ -16366,7 +16367,7 @@ window.spQuestClose = async function (questId, app) {
     if (snap.exists()) q = { id: snap.id, ...(snap.data() || {}) };
   } catch (e) {}
   if (!q) { alert('クエストが見つかりませんでした。'); return; }
-  if (String(q.owner || '').toLowerCase() !== p.addr.toLowerCase()) {
+  if (!p.isOwner && String(q.owner || '').toLowerCase() !== p.addr.toLowerCase()) {
     alert('完了にできるのは、そのクエストを出した人だけです。'); return;
   }
   if (q.status !== 'CLOSED') {

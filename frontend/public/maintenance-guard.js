@@ -20,7 +20,8 @@
   /* 運営のアドレス。ウォレットで入ったときと、LINE等で入ったときで違うので両方。 */
   var OWNERS = [
     "0xdcc687c05f130e57597a8525771299a4efb6edf7",  // 実ウォレット
-    "0x195f4478ee3865ee1dd360b79e121c638bdd42ac"   // SchoolParkパスポート
+    "0x195f4478ee3865ee1dd360b79e121c638bdd42ac",   // SchoolParkパスポート
+    "0x8ab838ebb2e3bf160bc61b7182d348a8500b35f7" // スマホの運営パスポート
   ];
 
   if (!MAINTENANCE) return;

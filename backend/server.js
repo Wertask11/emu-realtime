@@ -120,10 +120,13 @@ const SP_OWNER_ADDRESSES = String(
   process.env.SP_OWNER_ADDRESS
   || "0xdcc687c05f130e57597a8525771299a4efb6edf7,0x195f4478ee3865ee1dd360b79e121c638bdd42ac"
 ).split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+// 既存の環境変数設定でも、承認済みのスマホパスポートを認める。
+SP_OWNER_ADDRESSES.push("0x8ab838ebb2e3bf160bc61b7182d348a8500b35f7");
 
 function requireOwner(req, res, next) {
   requireFirebaseUser(req, res, () => {
-    if (!SP_OWNER_ADDRESSES.includes(String(req.identity.walletAddress || "").toLowerCase())) {
+    if (![req.identity.walletAddress, req.identity.account.chesAddress]
+      .some(address => SP_OWNER_ADDRESSES.includes(String(address || "").toLowerCase()))) {
       return res.status(403).json({ error: "OWNER_ONLY" });
     }
     next();
