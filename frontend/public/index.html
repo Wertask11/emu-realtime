@@ -9048,7 +9048,7 @@ function goTomainapp() {
 // ウォレット（MetaMask）ログイン後の着地点。
 // LINE / Google（CHES.enterSchoolPark）と同じく CHESハブ（メイン画面）を表示する。
 // SchoolParkマップはハブで SchoolPark を選んだときに開く。
-function goToChesHub() {
+async function goToChesHub() {
   // ★ メンテナンス中はオーナー以外をブロック
   if (MAINTENANCE_MODE && !_isOwnerAccess()) {
     walletScreen.style.display = "none";
@@ -9064,7 +9064,7 @@ function goToChesHub() {
   window._chesBusy = false;
 
   if (typeof chesLandAfterLogin === "function") {
-    chesLandAfterLogin();
+    await chesLandAfterLogin();
     _hideSpLoadingOverlay();
   } else if (typeof chesHubShow === "function") {
     chesHubShow();
@@ -11694,7 +11694,7 @@ if (typeof updateConvertButton === "function") {
   spTrack('paid', account).catch(() => {});
   // ★ spPassType はgoToChesHub()内でNFT実態から確定する
   // LINE / Google ログインと同じく、まず CHESハブ（メイン画面）へ
-  goToChesHub();
+  await goToChesHub();
 
   } catch (err) {
     console.error("❌ 接続エラー:", err);
@@ -17050,7 +17050,14 @@ function spDaoWatchSize() {
    先に chesHubShow() を呼ぶのは、ログイン画面やフッターを片付ける手順が
    そこにまとまっているため。同じ処理の中で続けて openSpDao() が
    ハブを隠すので、ハブが一瞬見えることはない。 */
-function chesLandAfterLogin() {
+async function chesLandAfterLogin() {
+  // ウォレットでは接続アドレスとパスポートが異なる。画面の行き先を
+  // 決める前に、認証中のアカウントに紐づく両方のアドレスを確認する。
+  // 署名キャンセル時は、ここで再び署名を要求しない。
+  if (window.auth && window.auth.currentUser) {
+    try { await emuMyIdentity(); }
+    catch (e) { console.warn('ログイン後の本人確認に失敗:', e); }
+  }
   if (typeof chesHubShow === 'function') chesHubShow();
   /* SchoolPark はまだ準備中の設定（BRAND_MAINTENANCE）。
      入れない人をそこへ着地させると、準備中の画面が外に出てしまう。
@@ -17703,10 +17710,15 @@ const BRAND_LABELS = { camellia:'Camellia', heartoo:'Heartoo', schoolpark:'Schoo
    準備中のブランドに入れなかった（自分のものなのに入れない状態）。
    パスポート側のアドレスも見る。 */
 function _isBrandOwner() {
-  /* パスポートは、どの入り方でも運営かどうかを判定済み（isOwner）。
-     まだ読み込めていないときのために、ウォレットのほうも見る。 */
-  if (window._spPassport && window._spPassport.isOwner) return true;
-  return _spIsOwnerAddr(window.connectedAccount || localStorage.getItem('emuWallet') || '');
+  const user = window.auth && window.auth.currentUser;
+  const me = emuIdentityNow();
+  // 前のログインのパスポートを引き継がず、現在のUIDの本人情報を優先する。
+  if (user && me && me.uid === user.uid) {
+    return _spIsOwnerAddr(me.ches) || _spIsOwnerAddr(me.wallet);
+  }
+  const passport = window._spPassport;
+  if (user && passport && passport.uid === user.uid && passport.isOwner) return true;
+  return _spIsOwnerAddr(window.connectedAccount || '');
 }
 function isBrandUnderMaintenance(brand) {
   return !!BRAND_MAINTENANCE[brand] && !_isBrandOwner();
@@ -19090,7 +19102,7 @@ emuSetWalletLabel(emuShortAddr(account));
   spTrack('free', account).catch(() => {});
   // ★ spPassType はgoToChesHub()内でNFT実態から確定する
   // LINE / Google ログインと同じく、まず CHESハブ（メイン画面）へ
-  goToChesHub();
+  await goToChesHub();
 };
 
   // 公式NFT最終判定
@@ -21861,7 +21873,7 @@ async function sendEmuFeedback() {
   };
 
   // ───── SchoolPark へ入園（既存グローバルにアドレスを流し込む） ─────
-  CHES.enterSchoolPark = function (account, provider) {
+  CHES.enterSchoolPark = async function (account, provider) {
     var addr = account.walletAddress;
     window.connectedAccount = addr;
     window.currentUserId = addr;
@@ -21927,7 +21939,7 @@ async function sendEmuFeedback() {
     }
     // ログイン後は SchoolPark へ。
     if (typeof chesLandAfterLogin === "function") {
-      chesLandAfterLogin();
+      await chesLandAfterLogin();
       if (typeof _hideSpLoadingOverlay === "function") _hideSpLoadingOverlay();
     } else if (typeof chesHubShow === "function") {
       chesHubShow();
@@ -22022,13 +22034,13 @@ async function sendEmuFeedback() {
           setTimeout(function () { reject(new Error("account lookup timeout")); }, 12000);
         })
       ]);
-      CHES.enterSchoolPark(account, provider);
+      await CHES.enterSchoolPark(account, provider);
     } catch (e) {
       console.error("[CHES] 共通フロー失敗:", e);
       var cached = cachedAccountFor(user);
       if (cached) {
         console.warn("[CHES] アカウント取得失敗のため保存済みセッションで復帰します");
-        CHES.enterSchoolPark(cached, provider);
+        await CHES.enterSchoolPark(cached, provider);
         return;
       }
       restoreLoginScreen("ログイン情報の取得に失敗しました。もう一度お試しください。");
