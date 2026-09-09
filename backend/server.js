@@ -121,7 +121,7 @@ const SP_OWNER_ADDRESSES = String(
   || "0xdcc687c05f130e57597a8525771299a4efb6edf7,0x195f4478ee3865ee1dd360b79e121c638bdd42ac"
 ).split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
 // 既存の環境変数設定でも、承認済みのスマホパスポートを認める。
-SP_OWNER_ADDRESSES.push("0x8ab838ebb2e3bf160bc61b7182d348a8500b35f7");
+SP_OWNER_ADDRESSES.push("0x66a676fdb1d45914472d3e0b53c75c8d0cfd2a98", "0x8ab838ebb2e3bf160bc61b7182d348a8500b35f7");
 
 function requireOwner(req, res, next) {
   requireFirebaseUser(req, res, () => {
