@@ -6041,7 +6041,7 @@ const SP_OWNER = "0xdcc687c05f130e57597a8525771299a4efb6edf7";
 const SP_OWNER_ADDRS = [
   "0xdcc687c05f130e57597a8525771299a4efb6edf7",  // 実ウォレット
   "0x195f4478ee3865ee1dd360b79e121c638bdd42ac",   // SchoolParkパスポート
-  "0x8ab838ebb2e3bf160bc61b7182d348a8500b35f7" // スマホの運営パスポート
+  "0x66a676fdb1d45914472d3e0b53c75c8d0cfd2a98", "0x8ab838ebb2e3bf160bc61b7182d348a8500b35f7" // スマホの運営パスポート
 ];
 const MAINTENANCE_MODE = false;
 const MAINTENANCE_END  = new Date('2026-05-20T00:00:00+09:00');
@@ -11573,7 +11573,7 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
        （検証などの意図があるかもしれないので）入場自体は止めない。 */
     const chainId = await window.ethereum.request({ method: "eth_chainId" });
     const POLYGON_MAINNET = "0x89"; // 137
-    const _isOwner = account.toLowerCase() === SP_OWNER.toLowerCase();
+    const _isOwner = _spIsOwnerAddr(account);
     window._emuWrongNetwork = false;
 
     if (chainId !== POLYGON_MAINNET) {
@@ -11682,7 +11682,7 @@ if (typeof updateConvertButton === "function") {
     updateConvertButton();
 }
   // ── メンテナンスゲート（オーナーのみ通過）──
-  const _isOwnerBypass = account.toLowerCase() === SP_OWNER.toLowerCase();
+  const _isOwnerBypass = _spIsOwnerAddr(account);
   if (MAINTENANCE_MODE && !_isOwnerBypass) {
     const _ws2 = document.getElementById('walletScreen');
     if (_ws2) _ws2.style.display = 'none';
