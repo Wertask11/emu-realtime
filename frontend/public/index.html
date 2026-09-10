@@ -15775,6 +15775,41 @@ window.addEventListener('emu-entitlement', function () {
   });
 });
 
+/* ───── Firebase の用意ができたら、SchoolPark を読み直す ─────
+
+   window.db と window.fbLib は、このファイルの最後にある module で作られる。
+   module は後回しで動くうえ、firebase 本体を3つ取りに行くので、
+   DAO の枠のほうが先に立ち上がることがある。
+
+   そのとき componentDidMount から呼ばれる8つの読み込みは、どれも先頭の
+   「if (!window.db || !window.fbLib) return;」で黙って引き返す。
+   誰も呼び直さないので、そのまま初期値で固まる。画面にはこう出る。
+
+     名前          ゲスト
+     ギルド        カード0枚（「ギルドの決まり」だけが残る）
+     クエスト      まだクエストがありません
+     信用スコア    読み込んでいます…
+
+   落ちたわけではないので、console にも何も出ない。
+   読み込みが早すぎた回だけ起きるため、出たり出なかったりする。
+
+   用意ができた合図は前から出ていた。聞いていなかっただけなので、ここで聞く。 */
+window.spDaoReloadAll = function () {
+  const fr = document.getElementById('spDaoFrame');
+  const app = fr && fr.contentWindow && fr.contentWindow.app;
+  if (!app || !window.db || !window.fbLib) return;
+  ['spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
+   'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark'
+  ].forEach(function (name) {
+    const fn = window[name];
+    if (typeof fn !== 'function') return;
+    /* 1つが転んでも、残りは読む。約束の失敗も拾っておく */
+    try { const r = fn(app); if (r && typeof r.catch === 'function') r.catch(function () {}); }
+    catch (e) {}
+  });
+};
+window.addEventListener('ches-firebase-ready', function () { window.spDaoReloadAll(); });
+
 /* ═══════════════════════════════════════
    SchoolPark のギルドと議題と投票
 
