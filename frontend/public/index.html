@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<script src="/schoolpark/quest-store.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
@@ -16070,6 +16071,9 @@ window.spDaoLoadQuests = async function (app) {
     const q = fb.query(fb.collection(window.db, 'sp_quests'), fb.orderBy('createdAt', 'desc'), fb.limit(30));
     const snap = await fb.getDocs(q);
     snap.forEach(function (s) { docs.push({ id: s.id, ...(s.data() || {}) }); });
+    const founder = await fb.getDoc(fb.doc(window.db, 'sp_quests', SpQuestStore.FOUNDER_ID));
+    if (founder.exists() && !docs.some(q => q.id === founder.id)) docs.push({ id: founder.id, ...founder.data() });
+    docs.sort((a, b) => Number(SpQuestStore.isFounder(b)) - Number(SpQuestStore.isFounder(a)));
   } catch (e) {
     console.warn('クエストを読めませんでした:', e && (e.message || e));
     return;
@@ -16092,13 +16096,15 @@ window.spDaoLoadQuests = async function (app) {
       logs.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
     } catch (e) {}
     quests.push({
-      id: q.id, title: q.title || '', hypothesis: q.hypothesis || '',
+      id: q.id, title: (SpQuestStore.label(q) && !SpQuestStore.isFounder(q) ? SpQuestStore.label(q) + ' ' : '') + (q.title || ''), hypothesis: q.hypothesis || '',
+      isFounder: SpQuestStore.isFounder(q),
+      founderSections: SpQuestStore.isFounder(q) ? q.founderSections : [],
       action: q.action || '', measure: q.measure || '',
       knowledge: q.knowledge || '', owner: q.ownerName || _spShortAddr(q.owner),
       /* 金額は3桁ごとに区切って出す（記録には数字だけを入れてある） */
       budget: (parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0).toLocaleString(),
-      due: _spQuestDue(q.closesAt),
-      status: q.status || 'OPEN', commits: people.length, need: q.need || 5,
+      due: SpQuestStore.isFounder(q) ? 'なし・恒久' : _spQuestDue(q.closesAt),
+      status: SpQuestStore.isFounder(q) ? 'FOUNDER' : (q.status || 'OPEN'), commits: people.length, need: q.need || 5,
       people: people, logCount: logCount, iTook: iTook,
       /* 完了にできるのは、出した本人だけ */
       isMine: !!(p && (p.isOwner || (mine && String(q.owner || '').toLowerCase() === mine))),
@@ -16121,6 +16127,7 @@ window.spDaoLoadQuests = async function (app) {
 
 /* 受ける／降りる。文書のIDを自分の番号にする。 */
 window.spQuestToggle = async function (questId, app) {
+  if (questId === SpQuestStore.FOUNDER_ID) return;
   if (_spQuestBusy) return;
   const p = await spPassportLoad();
   if (!p) { alert('クエストを受けるにはログインが必要です。'); return; }
@@ -16146,6 +16153,7 @@ window.spQuestToggle = async function (questId, app) {
 /* 途中報告を書く。書けるのは、そのクエストを受けた人だけ。
    ルールでも「受けた記録があること」を確かめている。 */
 window.spQuestLog = async function (questId, kind, app) {
+  if (questId === SpQuestStore.FOUNDER_ID) return;
   const p = await spPassportLoad();
   if (!p) { alert('報告するにはログインが必要です。'); return; }
   const body = prompt('今日やったことを書く（' + kind + '）\n\n試したこと、うまくいかなかったこと、気づいたこと——3行でいい。');
@@ -16191,7 +16199,9 @@ window.openSpQuestForm = async function (app) {
 };
 function closeSpQuestForm() { document.body.classList.remove('sp-quest-open'); }
 
+let spQuestSubmitting = false;
 async function spQuestSubmit() {
+  if (spQuestSubmitting) return;
   const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
   const title = val('sqTitle');
   if (!title) { alert('何を試すのかを書いてください。'); return; }
@@ -16200,11 +16210,13 @@ async function spQuestSubmit() {
   if (!p) { alert('クエストを出すにはログインが必要です。'); return; }
   if (!p.isOwner) { alert('クエストを出せるのは、いまのところ運営だけです。'); return; }
 
+  if (spQuestSubmitting) return;
+  spQuestSubmitting = true;
   const days = Math.max(1, Math.min(90, parseInt(val('sqDays'), 10) || 14));
   const need = Math.max(1, Math.min(50, parseInt(val('sqNeed'), 10) || 5));
   try {
     const fb = window.fbLib;
-    await fb.addDoc(fb.collection(window.db, 'sp_quests'), {
+    await SpQuestStore.createQuest(fb, window.db, {
       title: title.slice(0, 120),
       knowledge: val('sqKnowledge').slice(0, 200),
       hypothesis: val('sqHypothesis').slice(0, 400),
@@ -16228,8 +16240,10 @@ async function spQuestSubmit() {
   } catch (e) {
     console.warn('クエストを出せませんでした:', e && (e.message || e));
     alert('クエストを出せませんでした。もう一度お試しください。');
+    spQuestSubmitting = false;
     return;
   }
+  spQuestSubmitting = false;
   closeSpQuestForm();
   if (_spQuestFormApp) await window.spDaoLoadQuests(_spQuestFormApp);
 }
@@ -16358,6 +16372,7 @@ let _spWisdomQuest = null;
 /* クエストを完了にする。出した本人（＝運営）だけができる。
    完了にしたら、そのまま知恵カードの下書きを開く。 */
 window.spQuestClose = async function (questId, app) {
+  if (questId === SpQuestStore.FOUNDER_ID) return;
   const p = await spPassportLoad();
   if (!p) { alert('ログインが必要です。'); return; }
   const fb = window.fbLib;
@@ -20021,7 +20036,7 @@ function closeBadgePanel() {
 import {
     getFirestore, collection, addDoc, getDocs, query, orderBy, limit, startAfter, onSnapshot,
     doc, updateDoc, setDoc, deleteDoc, increment, where, writeBatch,
-    arrayUnion, getDoc
+    arrayUnion, getDoc, runTransaction
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   // 認証機能（CHES Identity：LINE / Google ログイン、MetaMask等で使用）
   import {
@@ -20056,7 +20071,7 @@ import {
 window.fbLib = {
     collection, addDoc, getDocs, query, orderBy, limit, startAfter, onSnapshot,
     doc, updateDoc, setDoc, deleteDoc, increment, where, writeBatch,
-    arrayUnion, getDoc,
+    arrayUnion, getDoc, runTransaction,
     signInAnonymously
   };
 
