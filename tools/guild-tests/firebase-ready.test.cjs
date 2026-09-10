@@ -53,6 +53,16 @@ function makeWindow(opts) {
       }
     },
     addEventListener(name, fn) { (listeners[name] = listeners[name] || []).push(fn); },
+    /* 待ち直しは偽の時計で進める（実時間を待たない） */
+    __pending: [],
+    setTimeout(fn) { win.__pending.push(fn); return win.__pending.length; },
+    __tick(n) {
+      for (let i = 0; i < (n || 1); i++) {
+        const q = win.__pending.splice(0, win.__pending.length);
+        if (!q.length) return;
+        q.forEach(f => f());
+      }
+    },
     __called: called, __listeners: listeners, __app: app
   };
   LOADERS.forEach(function (name) {
@@ -128,4 +138,63 @@ test('読み込みの失敗を、拾い残さない', async () => {
 test('合図を聞く前には、勝手に読まない', () => {
   const win = run(makeWindow());
   assert.deepEqual(win.__called, [], '合図の前に読んでいる');
+});
+
+/* ───── 合図の瞬間に画面がまだ出来ていなかった場合 ─────
+
+   合図は一度しか鳴らない。取りこぼすと、そのページでは二度と読まれない。
+   前の作りはここで諦めていた。 */
+
+test('合図のとき画面がまだでも、出てきたところで読む', () => {
+  let app = null;
+  const called = [];
+  const listeners = {};
+  const win = {
+    db: {}, fbLib: {},
+    document: { getElementById: () => ({ contentWindow: { get app() { return app; } } }) },
+    addEventListener(n, f) { (listeners[n] = listeners[n] || []).push(f); },
+    __pending: [],
+    setTimeout(fn) { win.__pending.push(fn); },
+    tick() { win.__pending.splice(0, win.__pending.length).forEach(f => f()); }
+  };
+  LOADERS.forEach(n => { win[n] = () => { called.push(n); return Promise.resolve(); }; });
+  const ctx = vm.createContext(win); ctx.window = ctx;
+  vm.runInContext(reloadSection(), ctx);
+
+  listeners['ches-firebase-ready'].forEach(f => f());
+  assert.deepEqual(called, [], '画面がまだなのに読んでいる');
+
+  win.tick();                       /* まだ出来ていない */
+  assert.deepEqual(called, []);
+
+  app = { setState() {} };          /* ここで画面が出来た */
+  win.tick();
+  assert.deepEqual(called, LOADERS, '出てきたのに読んでいない');
+
+  win.tick(); win.tick();
+  assert.deepEqual(called, LOADERS, '読めたあとも待ち直しが止まっていない');
+});
+
+test('画面がいつまでも出てこなければ、静かにあきらめる', () => {
+  const called = [];
+  const listeners = {};
+  const win = {
+    db: {}, fbLib: {},
+    document: { getElementById: () => null },
+    addEventListener(n, f) { (listeners[n] = listeners[n] || []).push(f); },
+    __pending: [],
+    setTimeout(fn) { win.__pending.push(fn); }
+  };
+  LOADERS.forEach(n => { win[n] = () => { called.push(n); return Promise.resolve(); }; });
+  const ctx = vm.createContext(win); ctx.window = ctx;
+  vm.runInContext(reloadSection(), ctx);
+
+  listeners['ches-firebase-ready'].forEach(f => f());
+  let rounds = 0;
+  while (win.__pending.length && rounds < 500) {
+    win.__pending.splice(0, win.__pending.length).forEach(f => f());
+    rounds++;
+  }
+  assert.ok(rounds < 500, '待ち直しが止まらない（無限に回っている）');
+  assert.deepEqual(called, []);
 });

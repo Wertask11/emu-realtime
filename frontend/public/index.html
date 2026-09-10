@@ -15800,7 +15800,7 @@ window.addEventListener('emu-entitlement', function () {
 window.spDaoReloadAll = function () {
   const fr = document.getElementById('spDaoFrame');
   const app = fr && fr.contentWindow && fr.contentWindow.app;
-  if (!app || !window.db || !window.fbLib) return;
+  if (!app || !window.db || !window.fbLib) return false;
   ['spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
    'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark'
   ].forEach(function (name) {
@@ -15810,8 +15810,22 @@ window.spDaoReloadAll = function () {
     try { const r = fn(app); if (r && typeof r.catch === 'function') r.catch(function () {}); }
     catch (e) {}
   });
+  return true;
 };
-window.addEventListener('ches-firebase-ready', function () { window.spDaoReloadAll(); });
+
+/* 合図は一度しか鳴らない。その瞬間に枠の中の画面がまだ出来ていないと、
+   一度きりの呼び直しでは取りこぼす。用意ができてから少しのあいだ、
+   画面が出てくるのを待って、出たところで読む。
+   読めたら止める。出てこなければ静かにあきらめる
+   （componentDidMount 側があとで読む）。 */
+window.spDaoReloadWhenReady = function (tries, waitMs) {
+  tries = typeof tries === 'number' ? tries : 20;
+  waitMs = typeof waitMs === 'number' ? waitMs : 250;
+  if (window.spDaoReloadAll()) return;
+  if (tries <= 0) return;
+  setTimeout(function () { window.spDaoReloadWhenReady(tries - 1, waitMs); }, waitMs);
+};
+window.addEventListener('ches-firebase-ready', function () { window.spDaoReloadWhenReady(); });
 
 /* ═══════════════════════════════════════
    SchoolPark のギルドと議題と投票
