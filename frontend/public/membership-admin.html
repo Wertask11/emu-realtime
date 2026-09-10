@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
 <script src="/schoolpark/quest-store.js"></script>
+<script src="/schoolpark/guild-store.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
@@ -1443,9 +1444,12 @@ async function renderSchoolPark() {
     + '<p class="empty" style="text-align:left;margin:0 0 10px">1つのパスポートにつき1票。入れた票は取り消せません。</p>'
     + '<label>議題</label><input id="avTitle" placeholder="例：来月の予算を何に使うか">'
     + '<label>説明</label><textarea id="avBody" rows="2" placeholder="決めたいことと、判断の材料"></textarea>'
-    + '<label>どちらのギルドか</label><select id="avKind">'
-    + '<option value="free">一般ギルド（投票は誰でもできる）</option>'
-    + '<option value="special">特殊ギルド（関われる人だけが投票できる）</option></select>'
+    + '<label>どのギルドの議題か</label><select id="avGuild">'
+    + SpGuildStore.OFFICIAL.map(g => '<option value="' + esc(g.id) + '">' + esc(g.short + '　' + g.concept) + '</option>').join("")
+    + '</select>'
+    + '<label>誰が投票できるか</label><select id="avKind">'
+    + '<option value="free">一般議題（投票は誰でもできる）</option>'
+    + '<option value="special">特殊議題（関われる人だけが投票できる）</option></select>'
     + '<label>選択肢（1行に1つ、2〜4つ）</label><textarea id="avOpts" rows="4" placeholder="クエストの予算&#10;知恵の引用への分配"></textarea>'
     + '<label>締切まで（日）</label><input id="avDays" type="number" min="1" max="30" value="7">'
     + '<div class="actions"><button class="btn primary" id="avSubmit">議題を出す</button></div></div>'
@@ -1491,7 +1495,7 @@ async function renderSchoolPark() {
 
     + '<div class="card"><h3>ギルドに関われる人</h3>'
     + '<p class="empty" style="text-align:left;margin:0 0 10px">議題を出せるのは、運営・公式パスの方・ここで認めた方です。'
-    + '特殊ギルドの投票も同じ。一般ギルドの投票は誰でもできます。<br>'
+    + '特殊議題の投票も同じ。一般議題の投票は誰でもできます。<br>'
     + '信用スコア＝完走×10＋知恵×5＋引用され×3＋在籍月数（上限12）。'
     + '目安は ' + TRUST_NEED + ' 点です。</p>'
     + (people.length ? people.map(m =>
@@ -1520,7 +1524,11 @@ async function renderSchoolPark() {
         }).join("");
         return '<div style="border-top:1px solid var(--line);padding-top:12px;margin-top:12px">'
           + '<div class="row"><span><b>' + esc(v.title || "") + '</b><br>'
-          + '<small style="color:var(--muted)">' + (closed ? "締め切り済み" : "受付中")
+          + '<small style="color:var(--muted)">'
+          + esc((SpGuildStore.byId(SpGuildStore.OFFICIAL, v.guildId) || {}).short || "未分類") + ' · '
+          + ((v.kind || "free") === "special" ? "特殊議題" : "一般議題") + ' · '
+          + (v.adoptedOptionId ? "採択済み · " : "")
+          + (closed ? "締め切り済み" : "受付中")
           + ' · ' + v.total + '票 · ' + fmt(v.closesAt ? new Date(v.closesAt).toISOString() : null) + ' まで</small></span>'
           + '<span>' + (closed ? "" : '<button class="act no" data-vclose="' + esc(v.id) + '">いま締め切る</button>') + '</span></div>'
           + bars + '</div>';
@@ -1595,11 +1603,15 @@ async function renderSchoolPark() {
     const labels = v("avOpts").split("\n").map(x => x.trim()).filter(Boolean);
     if (labels.length < 2 || labels.length > 4) { alert("選択肢は2〜4つにしてください。"); return; }
     const days = Math.max(1, Math.min(30, parseInt(v("avDays"), 10) || 7));
+    /* どのギルドの議題かは必ず入れる。記録の決まりでも空では作れない。 */
+    const guildId = v("avGuild");
+    if (!SpGuildStore.isValidId(guildId)) { alert("どのギルドの議題かを選んでください。"); return; }
     try {
       await f.addDoc(f.collection(f.db, "sp_votes"), {
         title: v("avTitle").slice(0, 120), body: v("avBody").slice(0, 600),
         options: labels.map((l, i) => ({ id: "o" + (i + 1), label: l.slice(0, 60) })),
         kind: (v("avKind") === "special") ? "special" : "free",
+        guildId: guildId,
         createdBy: addr, createdAt: Date.now(), closesAt: Date.now() + days * 86400000
       });
     } catch (e) { alert("出せませんでした（" + (e.code || e.message) + "）"); return; }

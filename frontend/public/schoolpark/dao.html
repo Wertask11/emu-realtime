@@ -350,7 +350,7 @@ html, body                 { height: 100%; }
         <sc-if value="{{ isExperiments }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex; flex-direction:column; gap:24px">
             <div style="background:#E7E2D6; border-radius:12px; padding:20px 22px; display:flex; gap:18px; align-items:center; flex-wrap:wrap">
-              <div style="flex:1 1 380px; min-width:0; font-size:13px; line-height:1.95; color:#3B382F">クエストは<b>仕事</b>です。SchoolPark・Emu・Camellia などの仕事を、DAOのメンバーやそれ以外の方が引き受けて動かします。<br><b>予算は SchoolPark が決めて出します。</b>報酬は EMUER・JPYC・円 のいずれかです。<br>受け取ったぶんは<b>雑所得</b>にあたります。ほかの所得と合わせて年20万円を超えると、確定申告が必要になります。<br>決めごとを話し合う場所は<b>ギルド</b>です。こちらとは別ものです。</div>
+              <div style="flex:1 1 380px; min-width:0; font-size:13px; line-height:1.95; color:#3B382F">クエストは<b>仕事</b>です。SchoolPark・Emu・Camellia などの仕事を、DAOのメンバーやそれ以外の方が引き受けて動かします。<br><b>予算は SchoolPark が決めて出します。</b>報酬は EMUER・JPYC・円 のいずれかです。<br>受け取ったぶんは<b>雑所得</b>にあたります。ほかの所得と合わせて年20万円を超えると、確定申告が必要になります。<br>クエストの始まり方は2つあります。<b>ギルド</b>の議題をみんなで決めてから動かす道と、小さな実験・個人の挑戦をここから直接出す道です。どちらも残しています。</div>
               <div onClick="{{ goPropose }}" style="padding:12px 18px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap; flex:0 0 auto" style-hover="background:#0A3F2B">＋ クエストを出す</div>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap">
@@ -364,8 +364,11 @@ html, body                 { height: 100%; }
             <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:18px">
               <sc-for list="{{ shownExps }}" as="e" hint-placeholder-count="4">
                 <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; flex-direction:column; gap:16px">
-                  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
-                    <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ e.statusBg }}; color:{{ e.statusFg }}">{{ e.status }}</div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                      <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ e.statusBg }}; color:{{ e.statusFg }}">{{ e.status }}</div>
+                      <div style="display:{{ e.guildShow }}; font-family:Inter,sans-serif; font-size:10px; letter-spacing:.1em; padding:5px 10px; border-radius:4px; background:#E7E2D6; color:#3B382F">{{ e.guildLabel }}</div>
+                    </div>
                     <div style="font-size:12px; color:#6E695C">締切 {{ e.due }}</div>
                   </div>
                   <div onClick="{{ e.open }}" style="font-size:19px; font-weight:700; line-height:1.55; cursor:pointer; text-wrap:pretty" style-hover="color:#0F5C3F">{{ e.title }}</div>
@@ -398,6 +401,12 @@ html, body                 { height: 100%; }
                   <div onClick="{{ goExperiments }}" style="font-size:12px; color:#6E695C; cursor:pointer">← {{ word }}一覧</div>
                 </div>
                 <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.5; text-wrap:pretty">{{ cur.title }}</div>
+                <sc-if value="{{ cur.hasFrom }}">
+                  <div onClick="{{ cur.goFrom }}" style="background:#E7E2D6; border-radius:8px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; flex-wrap:wrap" style-hover="background:#DDD7C8">
+                    <div style="flex:1 1 200px; min-width:0; font-size:12px; line-height:1.85; color:#3B382F">{{ cur.fromLabel }}</div>
+                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">議題を見る →</div>
+                  </div>
+                </sc-if>
                 <div style="display:flex; flex-direction:column; gap:18px">
                   <div style="display:grid; grid-template-columns:88px 1fr; gap:16px; font-size:14px; line-height:1.95">
                     <div style="color:#0F5C3F; font-weight:700">元の知識</div><div style="color:#3B382F">{{ cur.knowledge }}</div>
@@ -487,64 +496,191 @@ html, body                 { height: 100%; }
           </div>
         </sc-if>
 
+        <!-- ───── ギルド一覧 ─────
+             ここが SchoolPark の「活動領域」の入口。
+             議題はギルドの中にあるので、まずギルドを選ぶ。 -->
         <sc-if value="{{ isLogs }}" hint-placeholder-val="{{ false }}">
           <div style="display:grid; grid-template-columns:{{ L.gLogs }}; gap:32px; align-items:start">
-            <div style="display:flex; flex-direction:column; gap:20px">
+            <div style="display:flex; flex-direction:column; gap:22px">
 
-              <div style="display:flex; flex-direction:column; gap:16px">
-                <div style="display:flex; align-items:baseline; gap:14px">
-                  <div style="font-size:17px; font-weight:700">いま出ている議題</div>
-                  <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-                  <div onClick="{{ openVoteForm }}" style="font-size:12px; font-weight:700; color:#0F5C3F; cursor:pointer; white-space:nowrap">＋ 議題を出す</div>
-                </div>
-                <sc-if value="{{ noVotes }}">
-                  <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだ議題がありません。「＋ 議題を出す」から出せます。</div>
-                </sc-if>
-                <sc-for list="{{ votes }}" as="v" hint-placeholder-count="2">
-                  <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:14px">
-                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
-                      <div style="display:flex; align-items:center; gap:8px">
-                        <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ v.stateBg }}; color:{{ v.stateFg }}">{{ v.stateLabel }}</div>
-                        <div style="font-size:10px; letter-spacing:.06em; padding:5px 10px; border-radius:4px; background:{{ v.kindBg }}; color:{{ v.kindFg }}">{{ v.kindLabel }}</div>
-                      </div>
-                      <div style="font-size:12px; color:#6E695C">{{ v.closes }}</div>
+              <div style="background:#E7E2D6; border-radius:12px; padding:20px 22px; display:flex; flex-direction:column; gap:10px">
+                <div style="font-size:13px; line-height:1.85; color:#3B382F"><b>ギルド</b>　同じ目的を持つ人が集まる活動領域</div>
+                <div style="font-size:13px; line-height:1.85; color:#3B382F"><b>議題</b>　みんなで考え、決めること</div>
+                <div style="font-size:13px; line-height:1.85; color:#3B382F"><b>クエスト</b>　決めたこと・試したいことを実際にやる</div>
+              </div>
+
+              <div style="display:flex; align-items:baseline; gap:14px">
+                <div style="font-size:17px; font-weight:700">ギルドを選ぶ</div>
+                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                <div style="font-size:12px; color:#6E695C">{{ guildCount }}</div>
+              </div>
+
+              <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:14px">
+                <sc-for list="{{ guilds }}" as="g" hint-placeholder-count="5">
+                  <div onClick="{{ g.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-left:4px solid {{ g.accent }}; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px; cursor:pointer" style-hover="background:#F4F1EA">
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+                      <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:#9A9484">{{ g.code }}</div>
+                      <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:700; letter-spacing:.08em; color:{{ g.accent }}">{{ g.short }}</div>
+                      <div style="flex:1; min-width:0"></div>
+                      <div style="display:{{ g.meShow }}; font-size:10px; padding:4px 8px; border-radius:4px; background:#D0E2BE; color:#0F5C3F; white-space:nowrap">{{ g.meLabel }}</div>
                     </div>
-                    <div style="font-size:17px; font-weight:700; line-height:1.55; text-wrap:pretty">{{ v.title }}</div>
-                    <div style="font-size:13px; line-height:1.9; color:#3B382F">{{ v.body }}</div>
-                    <div style="display:flex; flex-direction:column; gap:8px">
-                      <sc-for list="{{ v.options }}" as="o" hint-placeholder-count="2">
-                        <div onClick="{{ o.go }}" style="position:relative; overflow:hidden; border:1px solid {{ o.border }}; border-radius:8px; padding:12px 14px; cursor:{{ o.cursor }}; background:#F4F1EA">
-                          <div style="position:absolute; left:0; top:0; bottom:0; width:{{ o.pct }}; background:{{ o.barBg }}"></div>
-                          <div style="position:relative; display:flex; justify-content:space-between; gap:12px; font-size:14px; font-weight:{{ o.weight }}; color:#141310">
-                            <div>{{ o.label }}</div>
-                            <div style="font-family:Inter,sans-serif; color:#0F5C3F">{{ o.countLabel }}</div>
-                          </div>
-                        </div>
-                      </sc-for>
+                    <div style="font-size:15px; font-weight:700; line-height:1.6; text-wrap:pretty">{{ g.concept }}</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px 16px; padding-top:10px; border-top:1px solid rgba(20,19,16,.1); font-size:11px; color:#6E695C">
+                      <div>参加したい <b style="font-family:Inter,sans-serif; font-size:13px; color:#0F5C3F">{{ g.joinCount }}</b></div>
+                      <div>応援 <b style="font-family:Inter,sans-serif; font-size:13px; color:#0F5C3F">{{ g.supportCount }}</b></div>
+                      <div>議題 <b style="font-family:Inter,sans-serif; font-size:13px; color:#0F5C3F">{{ g.proposalCount }}</b></div>
+                      <div>クエスト <b style="font-family:Inter,sans-serif; font-size:13px; color:#0F5C3F">{{ g.questCount }}</b></div>
                     </div>
-                    <div style="font-size:12px; color:#6E695C">{{ v.note }}</div>
                   </div>
                 </sc-for>
               </div>
 
+              <sc-if value="{{ hasUnsorted }}">
+                <div onClick="{{ guildUnsorted.open }}" style="background:#FBF9F3; border:1px dashed rgba(20,19,16,.22); border-radius:12px; padding:18px 20px; display:flex; align-items:center; gap:12px; cursor:pointer; flex-wrap:wrap" style-hover="background:#F4F1EA">
+                  <div style="flex:1; min-width:0; font-size:13px; line-height:1.8; color:#6E695C">ギルドができる前に出された議題があります。投票はこれまでどおりできます。</div>
+                  <div style="font-size:13px; font-weight:700; color:#0F5C3F; white-space:nowrap">{{ guildUnsorted.label }} →</div>
+                </div>
+              </sc-if>
             </div>
 
             <div style="background:#E7E2D6; border-radius:12px; padding:26px; display:flex; flex-direction:column; gap:18px">
               <div style="font-size:15px; font-weight:700">ギルドの決まり</div>
-              <div style="font-size:13px; line-height:1.95; color:#3B382F">議題を出せるのは、運営・有料の方・信用が足りている方です。<b>一般ギルド</b>の議題は誰でも投票できます。<b>特殊ギルド</b>は、関われる方だけが投票できます。票は1つのパスポートにつき1票で、入れた票は取り消しも書き換えもできません。</div>
+              <div style="font-size:13px; line-height:1.95; color:#3B382F">議題を出せるのは、運営・有料の方・信用が足りている方です。<b>一般議題</b>は誰でも投票できます。<b>特殊議題</b>は、関われる方だけが投票できます。これはギルドの分類ではなく、議題ごとの決め方です。同じギルドの中に両方が並びます。票は1つのパスポートにつき1票で、入れた票は取り消しも書き換えもできません。</div>
               <div style="background:#F4F1EA; border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:6px">
                 <div style="font-size:12px; color:#6E695C">あなたの信用スコア</div>
                 <div style="font-family:Inter,sans-serif; font-size:22px; font-weight:600; color:#0F5C3F">{{ trust.total }} <span style="font-size:12px; color:#6E695C">/ {{ trust.need }}</span></div>
                 <div style="font-size:11px; line-height:1.8; color:#6E695C">{{ trust.detail }}</div>
               </div>
               <div style="display:flex; flex-direction:column; gap:10px; padding-top:6px">
-                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">01</div>完走・知恵・引用で信用が増える</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">01</div>ギルドを選ぶ</div>
                 <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">02</div>議題を出す</div>
                 <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">03</div>締切まで投票する</div>
-                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">04</div>入れたあとに結果が見える</div>
-                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">05</div>結果はそのまま残る</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">04</div>採択された議題をクエストにする</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">05</div>実際にやって、結果が残る</div>
               </div>
+              <div style="font-size:12px; line-height:1.9; color:#6E695C; padding-top:4px; border-top:1px solid rgba(20,19,16,.12)">小さな実験や個人の挑戦は、議題を通さずクエストから直接始められます。</div>
             </div>
+          </div>
+        </sc-if>
+
+        <!-- ───── ギルドの中 ─────
+             そのギルドの議題と、そこから生まれたクエストが並ぶ。 -->
+        <sc-if value="{{ isGuild }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:26px">
+
+            <div onClick="{{ goLogs }}" style="font-size:12px; color:#6E695C; cursor:pointer">← ギルド一覧</div>
+
+            <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:16px">
+              <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#9A9484">{{ curGuild.code }}</div>
+                <div style="font-family:Inter,sans-serif; font-size:16px; font-weight:700; letter-spacing:.1em; color:#D0E2BE">{{ curGuild.short }}</div>
+              </div>
+              <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.5; text-wrap:pretty">{{ curGuild.concept }}</div>
+              <div style="font-size:14px; line-height:1.95; color:rgba(244,241,234,.72)">{{ curGuild.body }}</div>
+              <sc-if value="{{ curGuild.hasThemes }}">
+                <div style="display:flex; flex-wrap:wrap; gap:8px; padding-top:6px">
+                  <sc-for list="{{ curGuild.themes }}" as="t" hint-placeholder-count="6">
+                    <div style="padding:6px 12px; border:1px solid rgba(244,241,234,.22); border-radius:16px; font-size:12px; color:rgba(244,241,234,.82)">{{ t }}</div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{ curGuild.canAct }}">
+              <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:14px">
+                <div style="display:flex; flex-direction:column; gap:8px">
+                  <div onClick="{{ curGuild.join }}" style="text-align:center; padding:14px; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; background:{{ curGuild.joinBg }}; color:{{ curGuild.joinFg }}; border:1px solid #0F5C3F">{{ curGuild.joinLabel }}　{{ curGuild.joinCount }}</div>
+                  <div style="font-size:11px; line-height:1.8; color:#6E695C; text-align:center">{{ curGuild.joinHint }}</div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:8px">
+                  <div onClick="{{ curGuild.support }}" style="text-align:center; padding:14px; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; background:{{ curGuild.supportBg }}; color:{{ curGuild.supportFg }}; border:1px solid #141310">{{ curGuild.supportLabel }}　{{ curGuild.supportCount }}</div>
+                  <div style="font-size:11px; line-height:1.8; color:#6E695C; text-align:center">{{ curGuild.supportHint }}</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ curGuild.loading }}">
+              <div style="font-size:13px; line-height:1.9; color:#6E695C">読み込んでいます…</div>
+            </sc-if>
+
+            <div style="display:flex; flex-direction:column; gap:16px">
+              <div style="display:flex; align-items:baseline; gap:14px">
+                <div style="font-size:17px; font-weight:700">現在の議題</div>
+                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                <sc-if value="{{ curGuild.canAct }}">
+                  <div onClick="{{ curGuild.propose }}" style="font-size:12px; font-weight:700; color:#0F5C3F; cursor:pointer; white-space:nowrap">＋ 議題を出す</div>
+                </sc-if>
+              </div>
+              <sc-if value="{{ curGuild.noVotes }}">
+                <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだ議題がありません。「＋ 議題を出す」から、このギルドで決めたいことを出せます。</div>
+              </sc-if>
+              <sc-for list="{{ curGuild.votes }}" as="v" hint-placeholder-count="2">
+                <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:14px">
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                      <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ v.stateBg }}; color:{{ v.stateFg }}">{{ v.stateLabel }}</div>
+                      <div style="font-size:10px; letter-spacing:.06em; padding:5px 10px; border-radius:4px; background:{{ v.kindBg }}; color:{{ v.kindFg }}">{{ v.kindLabel }}</div>
+                    </div>
+                    <div style="font-size:12px; color:#6E695C">{{ v.closes }}</div>
+                  </div>
+                  <div style="font-size:17px; font-weight:700; line-height:1.55; text-wrap:pretty">{{ v.title }}</div>
+                  <div style="font-size:13px; line-height:1.9; color:#3B382F">{{ v.body }}</div>
+                  <div style="display:flex; flex-direction:column; gap:8px">
+                    <sc-for list="{{ v.options }}" as="o" hint-placeholder-count="2">
+                      <div onClick="{{ o.go }}" style="position:relative; overflow:hidden; border:1px solid {{ o.border }}; border-radius:8px; padding:12px 14px; cursor:{{ o.cursor }}; background:#F4F1EA">
+                        <div style="position:absolute; left:0; top:0; bottom:0; width:{{ o.pct }}; background:{{ o.barBg }}"></div>
+                        <div style="position:relative; display:flex; justify-content:space-between; gap:12px; font-size:14px; font-weight:{{ o.weight }}; color:#141310">
+                          <div>{{ o.label }}</div>
+                          <div style="font-family:Inter,sans-serif; color:#0F5C3F">{{ o.countLabel }}</div>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <sc-if value="{{ v.isAdopted }}">
+                    <div style="font-size:12px; font-weight:700; color:#0F5C3F">{{ v.adoptedLabel }}</div>
+                  </sc-if>
+                  <div style="font-size:12px; color:#6E695C">{{ v.note }}</div>
+                  <sc-if value="{{ v.hasQuest }}">
+                    <div onClick="{{ v.goQuest }}" style="display:flex; align-items:center; gap:10px; padding:12px 14px; background:#E7E2D6; border-radius:8px; cursor:pointer; flex-wrap:wrap" style-hover="background:#DDD7C8">
+                      <div style="font-size:11px; color:#6E695C">この議題から生まれたクエスト</div>
+                      <div style="font-size:13px; font-weight:700; color:#0F5C3F">{{ v.questLabel }} →</div>
+                    </div>
+                  </sc-if>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap">
+                    <sc-if value="{{ v.canAdopt }}">
+                      <div onClick="{{ v.adopt }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:#0F5C3F; border:1px solid #0F5C3F" style-hover="background:#E7E2D6">採択する（運営）</div>
+                    </sc-if>
+                    <sc-if value="{{ v.canQuest }}">
+                      <div onClick="{{ v.toQuest }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:#0F5C3F; color:#F4F1EA; border:1px solid #0F5C3F" style-hover="background:#0A3F2B">Questにする</div>
+                    </sc-if>
+                    <sc-if value="{{ v.canSetGuild }}">
+                      <div onClick="{{ v.setGuild }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:#6E695C; border:1px solid rgba(20,19,16,.2)" style-hover="background:#E7E2D6">ギルドを割り当てる（運営）</div>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+
+            <sc-if value="{{ curGuild.canAct }}">
+            <div style="display:flex; flex-direction:column; gap:16px">
+              <div style="display:flex; align-items:baseline; gap:14px">
+                <div style="font-size:17px; font-weight:700">このギルドから生まれたクエスト</div>
+                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+              </div>
+              <sc-if value="{{ curGuild.noQuests }}">
+                <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだクエストがありません。採択された議題を「Questにする」と、ここに並びます。</div>
+              </sc-if>
+              <sc-for list="{{ curGuild.quests }}" as="q" hint-placeholder-count="2">
+                <div onClick="{{ q.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:18px 20px; display:flex; align-items:center; gap:14px; cursor:pointer; flex-wrap:wrap" style-hover="background:#F4F1EA">
+                  <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ q.statusBg }}; color:{{ q.statusFg }}">{{ q.status }}</div>
+                  <div style="flex:1; min-width:140px; font-size:14px; font-weight:700; line-height:1.6">{{ q.title }}</div>
+                  <div style="font-size:11px; color:#6E695C; white-space:nowrap">{{ q.fromLabel }}</div>
+                  <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">詳細 →</div>
+                </div>
+              </sc-for>
+            </div>
+            </sc-if>
+
           </div>
         </sc-if>
 
@@ -923,7 +1059,7 @@ const LAYOUTS = {
 };
 
 class Component extends DCLogic {
-  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, votes:[], noVotes:true, quests:[], noQuests:true, wisdom:[], noWisdom:true, citations:0, members:[], noMembers:true, noTreasury:true, wtag:'すべて', canGuild:false, trust:{total:0, need:20, detail:'読み込んでいます…'}, board:[], dumb:[], rooms:[], events:[], noPark:true, treasury:{card:{have:'¥0', promised:'¥0', free:'¥0', freeColor:'#D0E2BE', warn:'', month:'今月 +¥0 / -¥0'}, curTabs:[], allocTitle:'内訳（円）', allocNote:'', alloc:[], txs:[]}, vw: window.innerWidth, vh: window.innerHeight, joined:{}, tasks:[], noTasks:true, today:'' };
+  state = { screen:'home', expId:'', filter:'すべて', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, quests:[], noQuests:true, guilds:[], guildCount:'', guildUnsorted:{count:0, label:'', open:function(){}}, hasUnsorted:false, curGuild:{},  wisdom:[], noWisdom:true, citations:0, members:[], noMembers:true, noTreasury:true, wtag:'すべて', canGuild:false, trust:{total:0, need:20, detail:'読み込んでいます…'}, board:[], dumb:[], rooms:[], events:[], noPark:true, treasury:{card:{have:'¥0', promised:'¥0', free:'¥0', freeColor:'#D0E2BE', warn:'', month:'今月 +¥0 / -¥0'}, curTabs:[], allocTitle:'内訳（円）', allocNote:'', alloc:[], txs:[]}, vw: window.innerWidth, vh: window.innerHeight, joined:{}, tasks:[], noTasks:true, today:'' };
 
   /* 追加欄に打った途中の中身。
      ここを state に入れると、1文字打つたびに画面を作り直してしまい
@@ -960,6 +1096,7 @@ class Component extends DCLogic {
       btnLabel: on ? '✓ 受けている' : 'このクエストを受ける',
       btnBg: on ? '#0F5C3F' : 'transparent', btnFg: on ? '#F4F1EA' : '#0F5C3F',
       btnBg2: on ? '#D0E2BE' : 'transparent', btnFg2: on ? '#141310' : '#D0E2BE',
+      guildShow: e.hasGuild ? 'block' : 'none',
       canClose: !e.isFounder && !!e.isMine && e.status !== 'CLOSED',
       canLog: !e.isFounder && !!e.iTook && e.status !== 'CLOSED',
       noLogs: !(e.logs && e.logs.length),
@@ -985,7 +1122,8 @@ class Component extends DCLogic {
       experiments:['QUESTS','走っている'+W+'・募集中の'+W],
       detail:['QUEST', W+'の詳細'],
       tasks:['MY WORK / 自分の宿題','自分の宿題'],
-      logs:['GUILD','ギルド — SchoolParkのDAO投票'],
+      logs:['GUILD','活動する領域を選ぶ'],
+      guild:['GUILD', (s.curGuild && s.curGuild.name) ? s.curGuild.name : 'ギルド'],
       library:['WISDOM LIBRARY','知恵ライブラリ'],
       members:['MEMBERS','メンバーと貢献度'],
       treasury:['TREASURY','トレジャリーと分配'],
@@ -1070,11 +1208,14 @@ class Component extends DCLogic {
       toggleSidebar:this.toggleSidebar,
       me:s.me,
       openMenu:() => { try { window.parent.openSpMobileMenu(); } catch (e) {} },
-      votes:s.votes, noVotes:s.noVotes, canGuild:s.canGuild, trust:s.trust,
+      canGuild:s.canGuild, trust:s.trust,
+      /* ギルド。中身は枠の外（親）が記録から作って渡す */
+      guilds:s.guilds || [], guildCount:s.guildCount || '',
+      guildUnsorted:s.guildUnsorted || {label:'', open:function(){}},
+      hasUnsorted:!!s.hasUnsorted, curGuild:s.curGuild || {},
       noQuests:exps.length === 0, noPark:s.noPark,
       noWisdom:s.noWisdom,
       noHit:!s.noWisdom && s.wtag !== 'すべて' && !(s.wisdom || []).some(w => w.tag === s.wtag), noMembers:s.noMembers, noTreasury:s.noTreasury,
-      openVoteForm:() => { try { window.parent.openSpVoteForm(this); } catch (e) {} },
       openPassport:this.openPassport,
       askReizo:this.askReizo,
       goElevator:this.goElevator,
@@ -1090,20 +1231,21 @@ class Component extends DCLogic {
         label, go:()=>this.setState({device:id}),
         bg: s.device===id ? '#D0E2BE' : 'rgba(244,241,234,.1)',
         fg: s.device===id ? '#141310' : 'rgba(244,241,234,.8)'})),
-      nav: navDefs.map(([id,num,label]) => ({num, label, go:this.go(id),
-        bg: s.screen===id ? '#0F5C3F' : 'transparent',
-        fg: s.screen===id ? '#F4F1EA' : 'rgba(244,241,234,.72)'})),
+      /* ギルドの中にいるあいだも、サイドバーの「ギルド」を選んだ状態にする */
+      nav: navDefs.map(([id,num,label]) => { const on = s.screen===id || (id==='logs' && s.screen==='guild'); return {num, label, go:this.go(id),
+        bg: on ? '#0F5C3F' : 'transparent',
+        fg: on ? '#F4F1EA' : 'rgba(244,241,234,.72)'}; }),
       tabs: [['home','01','広場'],['park','02','公園'],['experiments','03',W],['logs','04','ギルド'],['library','05','知恵'],['members','06','メンバー'],['treasury','07','会計']].map(([id,n,label]) => ({
         n, label, go:this.go(id),
-        bg: s.screen===id ? '#0F5C3F' : 'transparent',
-        fg: s.screen===id ? '#F4F1EA' : 'rgba(244,241,234,.6)',
-        num: s.screen===id ? '#D0E2BE' : 'rgba(244,241,234,.35)'})),
-      head: {kicker: heads[s.screen][0], title: heads[s.screen][1]},
+        bg: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#0F5C3F' : 'transparent',
+        fg: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#F4F1EA' : 'rgba(244,241,234,.6)',
+        num: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#D0E2BE' : 'rgba(244,241,234,.35)'})),
+      head: {kicker: (heads[s.screen] || heads.home)[0], title: (heads[s.screen] || heads.home)[1]},
       isHome:s.screen==='home', isPark:s.screen==='park', isExperiments:s.screen==='experiments', isDetail:s.screen==='detail' && !cur.isFounder,
       isFounderDetail:s.screen==='detail' && !!cur.isFounder,
       showFounder:!!founder && (s.screen==='home' || s.screen==='experiments'),
       founder:founder || {}, founderSections:founder ? founder.founderSections : [],
-      isLogs:s.screen==='logs', isLibrary:s.screen==='library', isMembers:s.screen==='members',
+      isLogs:s.screen==='logs', isGuild:s.screen==='guild', isLibrary:s.screen==='library', isMembers:s.screen==='members',
       isTreasury:s.screen==='treasury', isPropose:s.screen==='propose', isTasks:s.screen==='tasks',
       goTasks:this.go('tasks'), goHome:this.go('home'),
       goPropose:() => { try { window.parent.openSpQuestForm(this); } catch (e) { this.setState({screen:'propose'}); } }, goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
