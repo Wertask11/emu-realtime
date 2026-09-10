@@ -123,6 +123,14 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
 
+    /* ギルドの文書ID の形。小文字・数字・ハイフンだけ。
+       議題とクエストの guildId も、この形であることだけを確かめる。
+       「5つのうちどれか」を書かないのは、将来ギルドが増えたときに
+       Rules を書き換えないで済むようにするため。 */
+    function guildIdShape(v) {
+      return v is string && v.matches('^[a-z0-9-]{1,40}$');
+    }
+
     // ───────── 利用資格（プランごとの制限） ─────────
     // 規約 第10条により 2026-08-17 に掲示済み。効力は日本時間 2026-09-01 0:00 から。
     // それまでは、これまでどおり全員が全部書ける。
@@ -820,19 +828,40 @@ service cloud.firestore {
       allow create: if isMyWallet(request.resource.data.get('createdBy', ''))
         && canGuild()
         && request.resource.data.get('kind', '') in ['free', 'special']
+        && guildIdShape(request.resource.data.get('guildId', ''))
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 120
         && request.resource.data.options is list
         && request.resource.data.options.size() >= 2
-        && request.resource.data.options.size() <= 4;
+        && request.resource.data.options.size() <= 4
+        /* 採択は出したあとに運営が決めるもの。出すときには入れられない。 */
+        && !request.resource.data.keys().hasAny(['adoptedOptionId', 'adoptedAt', 'adoptedBy']);
       /* 出した本人が「予定より早く締め切る」ことだけできる。
          締切を先に延ばすのは認めない（負けそうだから延長、ができてしまう）。
-         題名・説明・選択肢は動かせない。 */
-      allow update: if isMyWallet(resource.data.get('createdBy', ''))
-        && changedOnly(['closesAt'])
-        && request.resource.data.closesAt is int
-        && request.resource.data.closesAt <= resource.data.get('closesAt', 0);
+         題名・説明・選択肢は動かせない。
+
+         これに2つだけ足す。どちらも運営だけ。
+           ・採択：どの選択肢で決まったかを記録する。1回だけ。
+             採択された議題からしか「Questにする」へ進めない。
+           ・ギルドの後付け：guildId がまだ空の古い議題に、1回だけ入れる。
+             すでに入っているものを別のギルドへ動かすことはできない。 */
+      allow update: if (isMyWallet(resource.data.get('createdBy', ''))
+          && changedOnly(['closesAt'])
+          && request.resource.data.closesAt is int
+          && request.resource.data.closesAt <= resource.data.get('closesAt', 0))
+        || (isOwner()
+          && changedOnly(['adoptedOptionId', 'adoptedAt', 'adoptedBy'])
+          && !resource.data.keys().hasAny(['adoptedOptionId'])
+          && request.resource.data.adoptedOptionId is string
+          && request.resource.data.adoptedOptionId.size() > 0
+          && request.resource.data.adoptedOptionId.size() <= 40
+          && request.resource.data.adoptedAt is int
+          && isMyWallet(request.resource.data.get('adoptedBy', '')))
+        || (isOwner()
+          && changedOnly(['guildId'])
+          && resource.data.get('guildId', '') == ''
+          && guildIdShape(request.resource.data.get('guildId', '')));
       allow delete: if false;
 
       match /ballots/{addr} {
@@ -908,13 +937,30 @@ service cloud.firestore {
     match /sp_quests/{questId} {
       allow read: if true;
       /* クエストは「仕事」なので、誰でも出せるものではない。
-         当面は運営だけ。自分名義であることも合わせて確かめる。 */
+         当面は運営だけ。自分名義であることも合わせて確かめる。
+
+         クエストは、どのギルドの活動かを持てる。
+           ・ギルドの議題から生まれたクエスト … guildId と fromProposalId の両方
+           ・直接出したクエスト             … guildId だけ、または何も無し
+           ・Quest #000                    … どちらも持たない（原点なので所属しない）
+         guildId は空でもよい。どのギルドにも属さない小さな試みを残すため。
+         ここで文書を見に行かないのは、1回の書き込みで見に行ける回数（10回）を
+         採番の確認で使い切っているため。中身の形だけを確かめる。 */
       allow create: if isMyWallet(request.resource.data.get('owner', ''))
         && isOwnerAddr(request.resource.data.get('owner', ''))
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 120
         && request.resource.data.get('status', '') == 'OPEN'
+        && (request.resource.data.get('guildId', '') == ''
+            || guildIdShape(request.resource.data.get('guildId', '')))
+        && request.resource.data.get('fromProposalId', '') is string
+        && request.resource.data.get('fromProposalId', '').size() <= 64
+        && request.resource.data.get('fromProposalTitle', '') is string
+        && request.resource.data.get('fromProposalTitle', '').size() <= 120
+        /* 元の議題があるなら、どのギルドの議題だったかも必ず付く */
+        && (request.resource.data.get('fromProposalId', '') == ''
+            || guildIdShape(request.resource.data.get('guildId', '')))
         && ordinaryQuestNumber(request.resource.data, questId);
       /* 出した本人が「進行中にする」「完了にする」だけ。ほかの欄は動かせない。
          運営はどの入り方でも変えられるようにしておく。
@@ -985,6 +1031,68 @@ service cloud.firestore {
     match /sp_trust/{addr} {
       allow read: if true;
       allow write: if isOwner();
+    }
+
+    /* ───── ギルド ─────
+
+       ギルドは「同じ目的・活動領域に関心を持つ人が集まる場所」。
+       最初の5つ（LEARN / WORK / PLAY / CONNECT / WEB3）は画面の中に書いてある。
+       ここは、そのあとで増えるぶんの置き場。
+       「新しいギルドを作りたい」という議題が通ったら、運営がここへ1件足す。
+       画面は、書いてある5つとここの中身をまとめて出す。
+
+       一般ギルド／特殊ギルドは、ギルドの分類ではない。
+       議題ごとの投票資格（sp_votes の kind）としてこれまでどおり残している。
+       同じギルドの中に、誰でも投票できる議題と、関われる人だけの議題が並ぶ。 */
+    match /sp_guilds/{guildId} {
+      allow read: if true;
+      allow create, update: if isOwner()
+        && guildIdShape(guildId)
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.get('concept', '') is string
+        && request.resource.data.get('concept', '').size() <= 120
+        && request.resource.data.get('body', '') is string
+        && request.resource.data.get('body', '').size() <= 600;
+      allow delete: if false;   /* 一度できたギルドは消さない。議題とクエストが紐づいているため */
+    }
+
+    /* ───── ギルドへの「参加したい」と「応援する」 ─────
+
+       いいねではない。
+         joins    … 自分もこの領域で活動・貢献したい
+         supports … 活動まではできないが、方向性に共感・期待している
+
+       どちらも 1つのパスポートにつき1回だけ。
+       文書のIDがパスポート番号なので、二重には置けない。
+       気が変わったときのために、自分の分だけ取り消せる。
+
+       投票権とは関係が無い。議題の投票資格はこれまでどおり
+       一般（誰でも）／特殊（関われる人だけ）で決まる。 */
+    match /sp_guild_members/{guildId} {
+      allow read: if true;
+      allow write: if false;    /* 数は下の2つを数えて出す。まとめの数字は置かない */
+
+      match /joins/{addr} {
+        allow read: if true;
+        allow create: if isMyWallet(addr)
+          && request.resource.data.get('name', '') is string
+          && request.resource.data.get('name', '').size() <= 60
+          && request.resource.data.get('at', 0) is int;
+        allow update: if false;
+        allow delete: if isMyWallet(addr);
+      }
+
+      match /supports/{addr} {
+        allow read: if true;
+        allow create: if isMyWallet(addr)
+          && request.resource.data.get('name', '') is string
+          && request.resource.data.get('name', '').size() <= 60
+          && request.resource.data.get('at', 0) is int;
+        allow update: if false;
+        allow delete: if isMyWallet(addr);
+      }
     }
 
     /* ───────── 公園 ─────────
@@ -1096,6 +1204,8 @@ service cloud.firestore {
         && coll != 'sp_wisdom'
         && coll != 'sp_park'
         && coll != 'sp_trust'
+        && coll != 'sp_guilds'
+        && coll != 'sp_guild_members'
         && coll != 'sp_treasury'
         && coll != 'paid_users'
         && coll != 'emuer_offchain'
