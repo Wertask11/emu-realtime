@@ -11,15 +11,16 @@
    落ちているのか、間に合っていないのか、そもそも届いていないのかが
    スマホからは分からない。console が見られないため。
 
-   そこで、いま何がそろっていて何がそろっていないかを画面に出す。
-   ふだんの表示には出ない。URL の末尾に ?diag=1 を付けたときだけ。 */
+   ふだんの表示には出ない。URL の末尾に ?diag=1 を付けたときだけ。
+
+   最初は隅の小さな丸だけを出す。押すと開く。
+   全面に出すと、下にあるログインの操作を塞いでしまう。 */
 (function () {
   try {
     if (location.search.indexOf('diag=1') < 0) return;
   } catch (e) { return; }
 
-  var errs = [];
-  var ready = false;
+  var errs = [], ready = false, open = false, timer = null;
   function note(kind, msg) {
     errs.push(kind + ': ' + String(msg == null ? '' : msg).slice(0, 240));
     if (errs.length > 12) errs.shift();
@@ -34,34 +35,30 @@
   window.addEventListener('ches-firebase-ready', function () { ready = true; });
 
   function row(label, ok, extra) {
-    return '<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #333">'
-      + '<span style="width:15px;flex:none;color:' + (ok ? '#7CE38B' : '#FF8A8A') + '">' + (ok ? '✓' : '✗') + '</span>'
+    return '<div style="display:flex;gap:8px;padding:2px 0;border-bottom:1px solid #333">'
+      + '<span style="width:14px;flex:none;color:' + (ok ? '#7CE38B' : '#FF8A8A') + '">' + (ok ? '✓' : '✗') + '</span>'
       + '<span style="flex:1;min-width:0">' + label + '</span>'
       + '<span style="color:#9AA;word-break:break-all;text-align:right">' + (extra == null ? '' : extra) + '</span></div>';
   }
 
   async function look() {
-    var box = document.getElementById('spDiag');
-    if (!box) return;
-    var fr = document.getElementById('spDaoFrame');
-    var w = null, app = null;
+    var body = document.getElementById('spDiagBody');
+    if (!body || !open) return;
+    var fr = document.getElementById('spDaoFrame'), w = null, app = null;
     try { w = fr && fr.contentWindow; app = w && w.app; } catch (e) { note('枠', e && e.message); }
-
     var pass = null, passErr = '';
     try { if (typeof spPassportLoad === 'function') pass = await spPassportLoad(); }
     catch (e) { passErr = (e && e.message) || String(e); }
-
     var st = null;
     try { st = app && app.state; } catch (e) {}
+    var u = null;
+    try { u = window.auth && window.auth.currentUser; } catch (e) {}
 
-    var html = '<b style="color:#D0E2BE">SchoolPark 診断</b>'
-      + '<div style="color:#9AA;padding-bottom:6px">' + new Date().toLocaleTimeString('ja-JP') + '</div>'
-      + row('window.db', !!window.db)
-      + row('window.fbLib', !!window.fbLib)
+    body.innerHTML = '<div style="color:#9AA;padding-bottom:4px">' + new Date().toLocaleTimeString('ja-JP') + '</div>'
+      + row('window.db', !!window.db) + row('window.fbLib', !!window.fbLib)
       + row('firebase 準備の合図', ready, ready ? '鳴った' : 'まだ')
       + row('window.auth', !!window.auth)
-      + row('ログイン中の人', !!(window.auth && window.auth.currentUser),
-            (window.auth && window.auth.currentUser) ? String(window.auth.currentUser.uid).slice(0, 10) + '…' : 'いない')
+      + row('ログイン中の人', !!u, u ? String(u.uid).slice(0, 10) + '…' : 'いない')
       + row('SpGuildStore', !!window.SpGuildStore,
             window.SpGuildStore ? (window.SpGuildStore.OFFICIAL || []).length + '個' : '')
       + row('SpQuestStore', !!window.SpQuestStore)
@@ -70,26 +67,52 @@
       + row('ギルドの枚数', !!(st && st.guilds && st.guilds.length), st ? String((st.guilds || []).length) : '画面なし')
       + row('クエストの件数', !!(st && st.quests && st.quests.length), st ? String((st.quests || []).length) : '画面なし')
       + row('読み直しの仕掛け', typeof window.spDaoReloadAll === 'function')
-      + '<div style="padding-top:8px;color:#FF8A8A;white-space:pre-wrap">'
-      + (errs.length ? errs.join('\n') : '（エラーなし）') + '</div>'
-      + '<button id="spDiagAgain" style="margin-top:10px;font:inherit;padding:8px 14px;background:#0F5C3F;color:#F4F1EA;border:0;border-radius:5px">もう一度調べる</button>';
-    box.innerHTML = html;
-    var b = document.getElementById('spDiagAgain');
-    if (b) b.onclick = function () { look(); };
+      + '<div style="padding-top:6px;color:#FF8A8A;white-space:pre-wrap">'
+      + (errs.length ? errs.join('\n') : '（エラーなし）') + '</div>';
+  }
+
+  function setOpen(v) {
+    open = v;
+    var panel = document.getElementById('spDiagPanel');
+    var chip = document.getElementById('spDiagChip');
+    if (panel) panel.hidden = !v;
+    if (chip) chip.hidden = v;
+    if (timer) { clearInterval(timer); timer = null; }
+    if (v) { look(); timer = setInterval(look, 1500); }
   }
 
   function mount() {
-    if (document.getElementById('spDiag')) return;
-    var d = document.createElement('div');
-    d.id = 'spDiag';
-    d.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;max-height:62vh;'
-      + 'overflow:auto;background:#11150F;color:#F4F1EA;font:12px/1.7 ui-monospace,monospace;'
-      + 'padding:12px 14px;border-top:3px solid #D0E2BE';
-    document.body.appendChild(d);
-    look();
-    /* 遅れて用意されるものがあるので、しばらく見張って書き直す */
-    var n = 0;
-    var t = setInterval(function () { if (++n > 12) clearInterval(t); look(); }, 1000);
+    if (document.getElementById('spDiagChip')) return;
+
+    /* 隅の小さな丸。ここ以外は塞がない */
+    var chip = document.createElement('button');
+    chip.id = 'spDiagChip';
+    chip.type = 'button';
+    chip.textContent = '診断';
+    chip.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:2147483647;'
+      + 'width:52px;height:52px;border-radius:26px;border:2px solid #D0E2BE;background:#11150F;'
+      + 'color:#D0E2BE;font:12px/1 system-ui,sans-serif;opacity:.85;padding:0';
+
+    var panel = document.createElement('div');
+    panel.id = 'spDiagPanel';
+    panel.hidden = true;
+    panel.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;'
+      + 'background:#11150F;color:#F4F1EA;font:12px/1.65 ui-monospace,monospace;'
+      + 'border-top:3px solid #D0E2BE;padding:10px 12px calc(10px + env(safe-area-inset-bottom))';
+    panel.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding-bottom:6px">'
+      + '<b style="flex:1;color:#D0E2BE">SchoolPark 診断</b>'
+      + '<button type="button" id="spDiagAgain" style="font:inherit;padding:8px 12px;background:#0F5C3F;color:#F4F1EA;border:0;border-radius:5px">調べ直す</button>'
+      + '<button type="button" id="spDiagClose" style="font:inherit;padding:8px 12px;background:#3B382F;color:#F4F1EA;border:0;border-radius:5px">閉じる</button></div>'
+      + '<div id="spDiagBody" style="max-height:52vh;overflow:auto"></div>';
+
+    document.body.appendChild(chip);
+    document.body.appendChild(panel);
+
+    /* 押しどころは作り直さない。中身だけを書き替えるので、
+       表示の更新中に押しても取りこぼさない */
+    chip.addEventListener('click', function () { setOpen(true); });
+    panel.querySelector('#spDiagClose').addEventListener('click', function () { setOpen(false); });
+    panel.querySelector('#spDiagAgain').addEventListener('click', function () { look(); });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
