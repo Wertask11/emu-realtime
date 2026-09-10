@@ -921,8 +921,6 @@ template = template.replace(T_EMPTY,
 
 /* Component クラスより前に置く必要がある土台。
    元は React と DCLogic が用意していたもの。 */
-({ template, logic } = require('./founder-quest')(template, logic));
-
 const PRELUDE = `
 var React = { createRef: function () { return { current: null }; } };
 
