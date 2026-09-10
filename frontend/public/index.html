@@ -4,6 +4,98 @@
 <script src="/schoolpark/quest-store.js"></script>
 <script src="/schoolpark/guild-store.js"></script>
   <meta charset="UTF-8" />
+<script>
+/* ───── 調べるための表示（?diag=1 のときだけ） ─────
+
+   画面が「名前はゲスト・ギルド0枚・クエストなし」で固まったとき、
+   落ちているのか、間に合っていないのか、そもそも届いていないのかが
+   スマホからは分からない。console が見られないため。
+
+   そこで、いま何がそろっていて何がそろっていないかを画面に出す。
+   ふだんの表示には出ない。URL の末尾に ?diag=1 を付けたときだけ。 */
+(function () {
+  try {
+    if (location.search.indexOf('diag=1') < 0) return;
+  } catch (e) { return; }
+
+  var errs = [];
+  var ready = false;
+  function note(kind, msg) {
+    errs.push(kind + ': ' + String(msg == null ? '' : msg).slice(0, 240));
+    if (errs.length > 12) errs.shift();
+  }
+  window.addEventListener('error', function (e) {
+    note('エラー', (e && e.message) + ' @ ' + ((e && e.filename) || '').split('/').pop() + ':' + (e && e.lineno));
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e && e.reason;
+    note('拾い漏れ', (r && (r.code || r.message)) || r);
+  });
+  window.addEventListener('ches-firebase-ready', function () { ready = true; });
+
+  function row(label, ok, extra) {
+    return '<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #333">'
+      + '<span style="width:15px;flex:none;color:' + (ok ? '#7CE38B' : '#FF8A8A') + '">' + (ok ? '✓' : '✗') + '</span>'
+      + '<span style="flex:1;min-width:0">' + label + '</span>'
+      + '<span style="color:#9AA;word-break:break-all;text-align:right">' + (extra == null ? '' : extra) + '</span></div>';
+  }
+
+  async function look() {
+    var box = document.getElementById('spDiag');
+    if (!box) return;
+    var fr = document.getElementById('spDaoFrame');
+    var w = null, app = null;
+    try { w = fr && fr.contentWindow; app = w && w.app; } catch (e) { note('枠', e && e.message); }
+
+    var pass = null, passErr = '';
+    try { if (typeof spPassportLoad === 'function') pass = await spPassportLoad(); }
+    catch (e) { passErr = (e && e.message) || String(e); }
+
+    var st = null;
+    try { st = app && app.state; } catch (e) {}
+
+    var html = '<b style="color:#D0E2BE">SchoolPark 診断</b>'
+      + '<div style="color:#9AA;padding-bottom:6px">' + new Date().toLocaleTimeString('ja-JP') + '</div>'
+      + row('window.db', !!window.db)
+      + row('window.fbLib', !!window.fbLib)
+      + row('firebase 準備の合図', ready, ready ? '鳴った' : 'まだ')
+      + row('window.auth', !!window.auth)
+      + row('ログイン中の人', !!(window.auth && window.auth.currentUser),
+            (window.auth && window.auth.currentUser) ? String(window.auth.currentUser.uid).slice(0, 10) + '…' : 'いない')
+      + row('SpGuildStore', !!window.SpGuildStore,
+            window.SpGuildStore ? (window.SpGuildStore.OFFICIAL || []).length + '個' : '')
+      + row('SpQuestStore', !!window.SpQuestStore)
+      + row('DAOの枠', !!fr) + row('枠の中の画面', !!app)
+      + row('パスポート', !!pass, pass ? (pass.name || '') : (passErr || 'なし'))
+      + row('ギルドの枚数', !!(st && st.guilds && st.guilds.length), st ? String((st.guilds || []).length) : '画面なし')
+      + row('クエストの件数', !!(st && st.quests && st.quests.length), st ? String((st.quests || []).length) : '画面なし')
+      + row('読み直しの仕掛け', typeof window.spDaoReloadAll === 'function')
+      + '<div style="padding-top:8px;color:#FF8A8A;white-space:pre-wrap">'
+      + (errs.length ? errs.join('\n') : '（エラーなし）') + '</div>'
+      + '<button id="spDiagAgain" style="margin-top:10px;font:inherit;padding:8px 14px;background:#0F5C3F;color:#F4F1EA;border:0;border-radius:5px">もう一度調べる</button>';
+    box.innerHTML = html;
+    var b = document.getElementById('spDiagAgain');
+    if (b) b.onclick = function () { look(); };
+  }
+
+  function mount() {
+    if (document.getElementById('spDiag')) return;
+    var d = document.createElement('div');
+    d.id = 'spDiag';
+    d.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;max-height:62vh;'
+      + 'overflow:auto;background:#11150F;color:#F4F1EA;font:12px/1.7 ui-monospace,monospace;'
+      + 'padding:12px 14px;border-top:3px solid #D0E2BE';
+    document.body.appendChild(d);
+    look();
+    /* 遅れて用意されるものがあるので、しばらく見張って書き直す */
+    var n = 0;
+    var t = setInterval(function () { if (++n > 12) clearInterval(t); look(); }, 1000);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+})();
+</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
   <!-- 検索とAIに、Emuが何かを伝えるための情報。
@@ -13508,7 +13600,18 @@ async function handleConversion() {
 // 初期設定（最上部）
 // =====================
 const overlay = document.getElementById("room3Overlay");
-const socket = io("https://emu-realtime.onrender.com");
+/* socket.io は CDN から来る（このファイルの上のほうで読み込んでいる）。
+   1回でも読めないと io が無く、ここで ReferenceError になる。
+   すると、この塊の以降の定義がまるごと消える。パスポートもギルドも
+   クエストも全部この下で定義しているので、SchoolPark が丸ごと動かなくなり、
+   名前はゲスト・ギルド0枚・クエストなし・信用スコアは読み込み中のまま固まる。
+   落ちたことは画面に出ないので、原因が分からないまま「たまに壊れる」ように見える。
+
+   実況（room3）が使えないのは仕方がない。それ以外まで道連れにしない。 */
+const socket = (typeof io === 'function')
+  ? io("https://emu-realtime.onrender.com")
+  : { on: function () {}, once: function () {}, emit: function () {},
+      connected: false, id: '', io: {} };
 
 const walletAddress = localStorage.getItem("emuWallet");
 let room3CurrentStep = 1;
@@ -15800,7 +15903,7 @@ window.addEventListener('emu-entitlement', function () {
 window.spDaoReloadAll = function () {
   const fr = document.getElementById('spDaoFrame');
   const app = fr && fr.contentWindow && fr.contentWindow.app;
-  if (!app || !window.db || !window.fbLib) return;
+  if (!app || !window.db || !window.fbLib) return false;
   ['spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
    'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark'
   ].forEach(function (name) {
@@ -15810,8 +15913,22 @@ window.spDaoReloadAll = function () {
     try { const r = fn(app); if (r && typeof r.catch === 'function') r.catch(function () {}); }
     catch (e) {}
   });
+  return true;
 };
-window.addEventListener('ches-firebase-ready', function () { window.spDaoReloadAll(); });
+
+/* 合図は一度しか鳴らない。その瞬間に枠の中の画面がまだ出来ていないと、
+   一度きりの呼び直しでは取りこぼす。用意ができてから少しのあいだ、
+   画面が出てくるのを待って、出たところで読む。
+   読めたら止める。出てこなければ静かにあきらめる
+   （componentDidMount 側があとで読む）。 */
+window.spDaoReloadWhenReady = function (tries, waitMs) {
+  tries = typeof tries === 'number' ? tries : 20;
+  waitMs = typeof waitMs === 'number' ? waitMs : 250;
+  if (window.spDaoReloadAll()) return;
+  if (tries <= 0) return;
+  setTimeout(function () { window.spDaoReloadWhenReady(tries - 1, waitMs); }, waitMs);
+};
+window.addEventListener('ches-firebase-ready', function () { window.spDaoReloadWhenReady(); });
 
 /* ═══════════════════════════════════════
    SchoolPark のギルドと議題と投票
