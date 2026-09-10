@@ -1,7 +1,188 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<script src="/schoolpark/quest-store.js"></script>
+<script src="/schoolpark/guild-store.js"></script>
   <meta charset="UTF-8" />
+<script>
+/* ───── 調べるための表示（?diag=1 のときだけ） ─────
+
+   画面が「名前はゲスト・ギルド0枚・クエストなし」で固まったとき、
+   落ちているのか、間に合っていないのか、そもそも届いていないのかが
+   スマホからは分からない。console が見られないため。
+
+   ふだんの表示には出ない。URL の末尾に ?diag=1 を付けたときだけ。
+
+   最初は隅の小さな丸だけを出す。押すと開く。
+   全面に出すと、下にあるログインの操作を塞いでしまう。 */
+(function () {
+  /* ログイン（LINE・Google）は一度この画面を離れて戻ってくる。
+     そのとき URL の ?diag=1 は消える。付け直さないと診断が出ず、
+     いちばん見たい「ログインしたあと」を見られない。
+     だから一度付けたら覚えておく。?diag=0 か、枠の「やめる」で消す。 */
+  var on = false;
+  try {
+    var q = location.search || '';
+    if (q.indexOf('diag=0') >= 0) { localStorage.removeItem('spDiag'); }
+    else if (q.indexOf('diag=1') >= 0) { localStorage.setItem('spDiag', '1'); on = true; }
+    else { on = localStorage.getItem('spDiag') === '1'; }
+  } catch (e) {
+    /* 保存が使えない端末では、その場かぎりで動かす */
+    try { on = (location.search || '').indexOf('diag=1') >= 0; } catch (e2) { return; }
+  }
+  if (!on) return;
+
+  var errs = [], ready = false, open = false, timer = null;
+  function note(kind, msg) {
+    errs.push(kind + ': ' + String(msg == null ? '' : msg).slice(0, 240));
+    if (errs.length > 12) errs.shift();
+  }
+  window.addEventListener('error', function (e) {
+    note('エラー', (e && e.message) + ' @ ' + ((e && e.filename) || '').split('/').pop() + ':' + (e && e.lineno));
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e && e.reason;
+    note('拾い漏れ', (r && (r.code || r.message)) || r);
+  });
+  window.addEventListener('ches-firebase-ready', function () { ready = true; });
+
+  function row(label, ok, extra) {
+    return '<div style="display:flex;gap:8px;padding:2px 0;border-bottom:1px solid #333">'
+      + '<span style="width:14px;flex:none;color:' + (ok ? '#7CE38B' : '#FF8A8A') + '">' + (ok ? '✓' : '✗') + '</span>'
+      + '<span style="flex:1;min-width:0">' + label + '</span>'
+      + '<span style="color:#9AA;word-break:break-all;text-align:right">' + (extra == null ? '' : extra) + '</span></div>';
+  }
+
+  async function look() {
+    var body = document.getElementById('spDiagBody');
+    if (!body || !open) return;
+    var fr = document.getElementById('spDaoFrame'), w = null, app = null;
+    try { w = fr && fr.contentWindow; app = w && w.app; } catch (e) { note('枠', e && e.message); }
+    /* パスポートの取得は、ログイン状態の復元を待つので数秒かかることがある。
+       待ち続けると、この枠自体が何も出せないまま固まる。
+       調べるための表示が、調べる前に固まっては意味がない。 */
+    var pass = null, passErr = '';
+    try {
+      if (typeof spPassportLoad === 'function') {
+        var TIMEOUT = {};
+        var r = await Promise.race([
+          spPassportLoad(),
+          new Promise(function (ok) { setTimeout(function () { ok(TIMEOUT); }, 2500); })
+        ]);
+        if (r === TIMEOUT) passErr = '2.5秒で返ってこない';
+        else pass = r;
+      }
+    } catch (e) { passErr = (e && e.message) || String(e); }
+    var st = null;
+    try { st = app && app.state; } catch (e) {}
+    var u = null;
+    try { u = window.auth && window.auth.currentUser; } catch (e) {}
+
+    /* #000 の記録そのものを見に行く。画面に出ないとき、
+       記録が無いのか、形が違うのか、読めないのかを分ける。 */
+    var f = null, fErr = '';
+    try {
+      if (window.db && window.fbLib) {
+        var fd = await window.fbLib.getDoc(
+          window.fbLib.doc(window.db, 'sp_quests', 'founder-quest-000'));
+        f = fd.exists() ? (fd.data() || {}) : null;
+        if (!fd.exists()) fErr = '記録が無い';
+      } else { fErr = 'Firebase がまだ'; }
+    } catch (e) { fErr = (e && (e.code || e.message)) || String(e); }
+
+    function shape(v) {
+      return v === undefined ? '欄が無い'
+        : (Array.isArray(v) ? '配列' + v.length + '件'
+          : (typeof v) + ' ' + JSON.stringify(v));
+    }
+    var founderOk = false;
+    try {
+      founderOk = !!(f && window.SpQuestStore &&
+        window.SpQuestStore.isFounder(Object.assign({ id: 'founder-quest-000' }, f)));
+    } catch (e) {}
+
+    body.innerHTML = '<div style="color:#9AA;padding-bottom:4px">' + new Date().toLocaleTimeString('ja-JP') + '</div>'
+      + row('window.db', !!window.db) + row('window.fbLib', !!window.fbLib)
+      + row('firebase 準備の合図', ready, ready ? '鳴った' : 'まだ')
+      + row('window.auth', !!window.auth)
+      + row('ログイン中の人', !!u, u ? String(u.uid).slice(0, 10) + '…' : 'いない')
+      + row('SpGuildStore', !!window.SpGuildStore,
+            window.SpGuildStore ? (window.SpGuildStore.OFFICIAL || []).length + '個' : '')
+      + row('SpQuestStore', !!window.SpQuestStore)
+      + row('DAOの枠', !!fr) + row('枠の中の画面', !!app)
+      + row('パスポート', !!pass, pass ? (pass.name || '') : (passErr || 'なし'))
+      + row('ギルドの枚数', !!(st && st.guilds && st.guilds.length), st ? String((st.guilds || []).length) : '画面なし')
+      + row('クエストの件数', !!(st && st.quests && st.quests.length), st ? String((st.quests || []).length) : '画面なし')
+      + row('読み直しの仕掛け', typeof window.spDaoReloadAll === 'function')
+      + '<div style="padding-top:6px;color:#D0E2BE">Quest #000</div>'
+      + row('記録がある', !!f, f ? '' : fErr)
+      + row('kind', !!f && f.kind === 'founder', f ? shape(f.kind) : '—')
+      + row('questNumber', !!f && f.questNumber === 0, f ? shape(f.questNumber) : '—')
+      + row('全文（6項目）', !!(f && Array.isArray(f.founderSections) && f.founderSections.length === 6),
+            f ? shape(f.founderSections) : '—')
+      + row('createdAt', !!(f && typeof f.createdAt === 'number'), f ? shape(f.createdAt) : '—')
+      + row('#000 と判定される', founderOk)
+      + row('画面に渡っている', !!(st && (st.quests || []).some(function (q) { return q.isFounder; })),
+            st ? ((st.quests || []).length + '件中') : '画面なし')
+      + '<div style="padding-top:6px;color:#FF8A8A;white-space:pre-wrap">'
+      + (errs.length ? errs.join('\n') : '（エラーなし）') + '</div>';
+  }
+
+  function setOpen(v) {
+    open = v;
+    var panel = document.getElementById('spDiagPanel');
+    var chip = document.getElementById('spDiagChip');
+    if (panel) panel.hidden = !v;
+    if (chip) chip.hidden = v;
+    if (timer) { clearInterval(timer); timer = null; }
+    if (v) { look(); timer = setInterval(look, 1500); }
+  }
+
+  function mount() {
+    if (document.getElementById('spDiagChip')) return;
+
+    /* 隅の小さな丸。ここ以外は塞がない */
+    var chip = document.createElement('button');
+    chip.id = 'spDiagChip';
+    chip.type = 'button';
+    chip.textContent = '診断';
+    chip.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:2147483647;'
+      + 'width:52px;height:52px;border-radius:26px;border:2px solid #D0E2BE;background:#11150F;'
+      + 'color:#D0E2BE;font:12px/1 system-ui,sans-serif;opacity:.85;padding:0';
+
+    var panel = document.createElement('div');
+    panel.id = 'spDiagPanel';
+    panel.hidden = true;
+    panel.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;'
+      + 'background:#11150F;color:#F4F1EA;font:12px/1.65 ui-monospace,monospace;'
+      + 'border-top:3px solid #D0E2BE;padding:10px 12px calc(10px + env(safe-area-inset-bottom))';
+    panel.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding-bottom:6px">'
+      + '<b style="flex:1;color:#D0E2BE">SchoolPark 診断</b>'
+      + '<button type="button" id="spDiagAgain" style="font:inherit;padding:8px 12px;background:#0F5C3F;color:#F4F1EA;border:0;border-radius:5px">調べ直す</button>'
+      + '<button type="button" id="spDiagClose" style="font:inherit;padding:8px 12px;background:#3B382F;color:#F4F1EA;border:0;border-radius:5px">閉じる</button>'
+      + '<button type="button" id="spDiagStop" style="font:inherit;padding:8px 12px;background:#6E3B2F;color:#F4F1EA;border:0;border-radius:5px">やめる</button></div>'
+      + '<div id="spDiagBody" style="max-height:52vh;overflow:auto"></div>';
+
+    document.body.appendChild(chip);
+    document.body.appendChild(panel);
+
+    /* 押しどころは作り直さない。中身だけを書き替えるので、
+       表示の更新中に押しても取りこぼさない */
+    chip.addEventListener('click', function () { setOpen(true); });
+    panel.querySelector('#spDiagClose').addEventListener('click', function () { setOpen(false); });
+    panel.querySelector('#spDiagAgain').addEventListener('click', function () { look(); });
+    /* 覚えているのを消して、この場から片付ける（URLをいじらなくていい） */
+    panel.querySelector('#spDiagStop').addEventListener('click', function () {
+      try { localStorage.removeItem('spDiag'); } catch (e) {}
+      setOpen(false);
+      chip.remove(); panel.remove();
+    });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+})();
+</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
   <!-- 検索とAIに、Emuが何かを伝えるための情報。
@@ -13506,7 +13687,18 @@ async function handleConversion() {
 // 初期設定（最上部）
 // =====================
 const overlay = document.getElementById("room3Overlay");
-const socket = io("https://emu-realtime.onrender.com");
+/* socket.io は CDN から来る（このファイルの上のほうで読み込んでいる）。
+   1回でも読めないと io が無く、ここで ReferenceError になる。
+   すると、この塊の以降の定義がまるごと消える。パスポートもギルドも
+   クエストも全部この下で定義しているので、SchoolPark が丸ごと動かなくなり、
+   名前はゲスト・ギルド0枚・クエストなし・信用スコアは読み込み中のまま固まる。
+   落ちたことは画面に出ないので、原因が分からないまま「たまに壊れる」ように見える。
+
+   実況（room3）が使えないのは仕方がない。それ以外まで道連れにしない。 */
+const socket = (typeof io === 'function')
+  ? io("https://emu-realtime.onrender.com")
+  : { on: function () {}, once: function () {}, emit: function () {},
+      connected: false, id: '', io: {} };
 
 const walletAddress = localStorage.getItem("emuWallet");
 let room3CurrentStep = 1;
@@ -15681,9 +15873,13 @@ async function spPassportLoad(force) {
   if (window._spPassport && !force) return window._spPassport;
   if (_spPassportBusy) return _spPassportBusy;
   _spPassportBusy = (async function () {
+   /* 途中で落ちても、必ず後始末する。戻さないと、失敗した約束を以後ずっと
+      返し続け、パスポートを見るところ（ギルド・クエスト・宿題）が
+      読み直すまで全部止まる。spGuildDefs と同じ直し方。 */
+   try {
     let me = null;
     try { me = await emuMyIdentity(); } catch (e) {}
-    if (!me) { _spPassportBusy = null; return null; }
+    if (!me) { return null; }
     let d = {};
     try {
       const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid));
@@ -15722,7 +15918,10 @@ async function spPassportLoad(force) {
        SchoolPark から直接パスポートを開くと空のままで、
        価値プロフィールの表示と食い違っていた。 */
     if (!window.emuEntitlement && typeof emuEnsureEntitlement === 'function') {
-      try { await emuEnsureEntitlement(); } catch (e) {}
+      /* 公開一覧の表示を、別サーバーの課金情報の返答で止めない。
+         返答後は既存の emu-entitlement イベントでパスポートを更新する。
+         書き込み資格は各操作とFirestore Rulesで引き続き確認する。 */
+      try { Promise.resolve(emuEnsureEntitlement()).catch(function () {}); } catch (e) {}
     }
     const ent = String(window.emuEntitlement || '').toLowerCase();
     let tier = (ent && ent !== 'guest') ? ent : ((d.membership && d.membership.tier) || 'free');
@@ -15750,8 +15949,10 @@ async function spPassportLoad(force) {
     /* 準備中の表示を塗り直す。運営かどうかはパスポートを読むまで分からないので、
        画面を開いた時点の一度きりだと、運営にも「準備中」の灰色が残ったままになる。 */
     try { paintBrandMaintenance(); } catch (e) {}
-    _spPassportBusy = null;
     return window._spPassport;
+   } finally {
+    _spPassportBusy = null;
+   }
   })();
   return _spPassportBusy;
 }
@@ -15767,8 +15968,64 @@ window.addEventListener('emu-entitlement', function () {
   });
 });
 
+/* ───── Firebase の用意ができたら、SchoolPark を読み直す ─────
+
+   window.db と window.fbLib は、このファイルの最後にある module で作られる。
+   module は後回しで動くうえ、firebase 本体を3つ取りに行くので、
+   DAO の枠のほうが先に立ち上がることがある。
+
+   そのとき componentDidMount から呼ばれる8つの読み込みは、どれも先頭の
+   「if (!window.db || !window.fbLib) return;」で黙って引き返す。
+   誰も呼び直さないので、そのまま初期値で固まる。画面にはこう出る。
+
+     名前          ゲスト
+     ギルド        カード0枚（「ギルドの決まり」だけが残る）
+     クエスト      まだクエストがありません
+     信用スコア    読み込んでいます…
+
+   落ちたわけではないので、console にも何も出ない。
+   読み込みが早すぎた回だけ起きるため、出たり出なかったりする。
+
+   用意ができた合図は前から出ていた。聞いていなかっただけなので、ここで聞く。 */
+window.spDaoReloadAll = function () {
+  const fr = document.getElementById('spDaoFrame');
+  const app = fr && fr.contentWindow && fr.contentWindow.app;
+  if (!app || !window.db || !window.fbLib) return false;
+  ['spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
+   'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark'
+  ].forEach(function (name) {
+    const fn = window[name];
+    if (typeof fn !== 'function') return;
+    /* 1つが転んでも、残りは読む。約束の失敗も拾っておく */
+    try { const r = fn(app); if (r && typeof r.catch === 'function') r.catch(function () {}); }
+    catch (e) {}
+  });
+  return true;
+};
+
+/* 合図は一度しか鳴らない。その瞬間に枠の中の画面がまだ出来ていないと、
+   一度きりの呼び直しでは取りこぼす。用意ができてから少しのあいだ、
+   画面が出てくるのを待って、出たところで読む。
+   読めたら止める。出てこなければ静かにあきらめる
+   （componentDidMount 側があとで読む）。 */
+window.spDaoReloadWhenReady = function (tries, waitMs) {
+  tries = typeof tries === 'number' ? tries : 20;
+  waitMs = typeof waitMs === 'number' ? waitMs : 250;
+  if (window.spDaoReloadAll()) return;
+  if (tries <= 0) return;
+  setTimeout(function () { window.spDaoReloadWhenReady(tries - 1, waitMs); }, waitMs);
+};
+window.addEventListener('ches-firebase-ready', function () { window.spDaoReloadWhenReady(); });
+
 /* ═══════════════════════════════════════
-   SchoolPark の議題と投票（ギルド）
+   SchoolPark のギルドと議題と投票
+
+   ギルドは「同じ目的・活動領域に関心を持つ人が集まる場所」。
+   その中で議題を立て、DAOで決め、必要ならQuestとして実行する。
+
+     ギルド     … 同じ目的を持つ人が集まる活動領域
+     議題       … みんなで考え、決めること
+     クエスト   … 決めたこと・試したいことを実際にやる
 
    票は sp_votes/{議題}/ballots/{パスポート番号} に置く。
    文書のIDがそのまま「誰の票か」で、作ることしか許していない。
@@ -15777,6 +16034,9 @@ window.addEventListener('emu-entitlement', function () {
 
    旧SchoolParkは localStorage の使い捨てIDで数えていたので、
    消せば何度でも投票できた。ここが変わったところ。
+
+   参加/応援は sp_guild_members/{ギルド}/joins|supports/{パスポート番号}。
+   こちらも文書のIDが誰かを表すので、二重には置けない。
 ═══════════════════════════════════════ */
 let _spVoteBusy = false;
 
@@ -15870,81 +16130,191 @@ window.spCanGuild = async function () {
   } catch (e) { return false; }
 };
 
-/* 議題と票を読み、枠の中へ渡す */
+/* ───── ギルドの一覧をつくる ─────
+
+   画面に書いてある5つ（guild-store.js）と、記録に足された分をまとめる。
+   ここを1回読んでおけば、あとは同じ並びを使い回せる。 */
+let _spGuildDefs = null;
+let _spGuildDefsBusy = null;
+async function spGuildDefs(force) {
+  if (_spGuildDefs && !force) return _spGuildDefs;
+  /* 画面の立ち上がりでは、いくつもの読み込みが同時に走る。
+     そのたびに読みに行かないよう、走っているものがあれば相乗りする。 */
+  if (_spGuildDefsBusy && !force) return _spGuildDefsBusy;
+  _spGuildDefsBusy = (async function () {
+    const extra = [];
+    try {
+      const snap = await window.fbLib.getDocs(window.fbLib.collection(window.db, 'sp_guilds'));
+      snap.forEach(function (s) { extra.push(Object.assign({ id: s.id }, s.data() || {})); });
+    } catch (e) { /* 読めなければ、書いてある5つだけで動く */ }
+    try {
+      _spGuildDefs = SpGuildStore.merge(extra);
+      return _spGuildDefs;
+    } finally {
+      /* 失敗しても必ず戻す。戻さないと、失敗した約束を以後ずっと返し続け、
+         読み直すまでギルドもクエストも出ないままになる。 */
+      _spGuildDefsBusy = null;
+    }
+  })();
+  return _spGuildDefsBusy;
+}
+
+/* 議題とクエストの生の記録。ギルドごとの数と一覧に使い回す。
+   票（ballots）はここでは読まない。ギルドを開いたときに、そのぶんだけ読む。 */
+let _spVoteDocs = [];
+let _spGuildQuestDocs = [];
+let _spGuildOpenId = null;      /* いま開いているギルド。'' は未分類 */
+
+function _spVoteClosed(v) { return !!v.closesAt && Number(v.closesAt) <= Date.now(); }
+
+/* 議題1件を、枠の中で使える形にする。票はここで数える。 */
+async function _spShapeVote(v, mine, canGuild, p, app, defs) {
+  const fb = window.fbLib;
+  /* 票は1件ずつ数える。数を別に持つと、書き換えられる余地ができる。 */
+  let counts = {}, total = 0, myPick = '';
+  try {
+    const bs = await fb.getDocs(fb.collection(window.db, 'sp_votes', v.id, 'ballots'));
+    bs.forEach(function (b) {
+      const opt = String((b.data() || {}).optionId || '');
+      if (!opt) return;
+      counts[opt] = (counts[opt] || 0) + 1;
+      total++;
+      if (mine && b.id.toLowerCase() === mine.toLowerCase()) myPick = opt;
+    });
+  } catch (e) { /* 読めなくても議題は出す */ }
+
+  const closed = _spVoteClosed(v);
+  /* 一般ギルドは誰でも、特殊ギルドは関われる人だけが入れられる。
+     これはギルドの分類ではなく、議題ごとの投票資格。
+     同じギルドの中に、両方の議題が並ぶ。 */
+  const special = (v.kind || 'free') === 'special';
+  const canVote = !special || canGuild;
+  const done = !!myPick || closed || !canVote;
+  const adoptedId = String(v.adoptedOptionId || '');
+  const opts = (v.options || []).map(function (o) {
+    const n = counts[o.id] || 0;
+    const pct = total ? Math.round(n / total * 100) : 0;
+    const picked = (myPick === o.id);
+    const won = adoptedId && adoptedId === o.id;
+    return {
+      id: o.id, label: (won ? '◎ ' : '') + o.label,
+      /* 入れる前は数を見せない。先に結果が見えると引きずられる。 */
+      countLabel: done ? (n + '票 · ' + pct + '%') : '',
+      pct: done ? pct + '%' : '0%',
+      barBg: won ? 'rgba(15,92,63,.28)' : picked ? 'rgba(15,92,63,.18)' : 'rgba(20,19,16,.07)',
+      border: (picked || won) ? '#0F5C3F' : 'rgba(20,19,16,.16)',
+      weight: (picked || won) ? '700' : '500',
+      cursor: done ? 'default' : 'pointer',
+      go: (done || !canVote) ? function () {} : function () { spVoteCast(v.id, o.id, app); }
+    };
+  });
+
+  const isOwner = !!(p && p.isOwner);
+  const gid = SpGuildStore.guildIdOf(v, defs);
+  const g = gid ? SpGuildStore.byId(defs, gid) : null;
+  /* この議題から生まれたクエスト。クエスト側が元の議題を覚えている。 */
+  const born = _spGuildQuestDocs.find(function (q) { return String(q.fromProposalId || '') === v.id; });
+  const adoptedLabel = adoptedId
+    ? '採択：' + (((v.options || []).find(function (o) { return o.id === adoptedId; }) || {}).label || '')
+    : '';
+
+  return {
+    id: v.id, title: v.title || '', body: v.body || '',
+    closes: _spVoteCloseLabel(v.closesAt),
+    kindLabel: special ? '特殊議題' : '一般議題',
+    kindBg: special ? '#141310' : '#E7E2D6',
+    kindFg: special ? '#D0E2BE' : '#3B382F',
+    guildLabel: g ? g.short : '未分類',
+    stateLabel: adoptedId ? 'ADOPTED' : (closed ? 'CLOSED' : (myPick ? 'VOTED' : 'OPEN')),
+    stateBg: adoptedId ? '#0F5C3F' : (closed ? '#E7E2D6' : (myPick ? '#0F5C3F' : '#D0E2BE')),
+    stateFg: adoptedId ? '#F4F1EA' : (closed ? '#8A8474' : (myPick ? '#F4F1EA' : '#0F5C3F')),
+    options: opts,
+    isAdopted: !!adoptedId,
+    adoptedLabel: adoptedLabel,
+    /* 採択とクエスト化は運営だけ。クエストには予算が付くため。 */
+    canAdopt: isOwner && !adoptedId,
+    adopt: function () { spVoteAdopt(v.id, app); },
+    canQuest: isOwner && !!adoptedId && !born && !!gid,
+    toQuest: function () { spVoteToQuest(v.id, app); },
+    hasQuest: !!born,
+    questLabel: born
+      ? ((SpQuestStore.label(born) ? SpQuestStore.label(born) + ' ' : '') + (born.title || ''))
+      : '',
+    goQuest: born ? function () { window.spQuestOpen(app, born.id); } : function () {},
+    /* ギルドが決まっていない古い議題に、運営があとから1回だけ入れられる */
+    canSetGuild: isOwner && !gid,
+    setGuild: function () { spVoteSetGuild(v.id, app); },
+    note: (!canVote && !closed && !myPick)
+            ? 'この議題は特殊議題です。運営・有料の方・信用が足りている方が投票できます。'
+            : (done ? (total + '票入りました。1つのパスポートにつき1票です。')
+                    : '選ぶと投票されます。あとから変えられません。')
+  };
+}
+
+/* ギルドの一覧を読み、枠の中へ渡す。
+   componentDidMount からはこの名前で呼ばれている（旧・議題の読み込み）。 */
 window.spDaoLoadVotes = async function (app) {
   if (!app || typeof app.setState !== 'function') return;
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
   /* 本人はパスポートから取る。ほかの画面と同じ道にそろえる。 */
   const p = await spPassportLoad();
-  const mine = p ? p.addr : '';
-  /* 特殊ギルドに入れる人かどうか。入れない人には、押せない形で見せる。 */
+  const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
+  /* 特殊議題に入れる人かどうか。入れない人には、押せない形で見せる。 */
   const canGuild = await window.spCanGuild();
+  const defs = await spGuildDefs();
 
-  let docs = [];
   try {
-    const q = fb.query(fb.collection(window.db, 'sp_votes'), fb.orderBy('createdAt', 'desc'), fb.limit(20));
+    const q = fb.query(fb.collection(window.db, 'sp_votes'), fb.orderBy('createdAt', 'desc'), fb.limit(100));
     const snap = await fb.getDocs(q);
-    snap.forEach(function (s) { docs.push({ id: s.id, ...(s.data() || {}) }); });
+    const list = [];
+    snap.forEach(function (s) { list.push(Object.assign({ id: s.id }, s.data() || {})); });
+    _spVoteDocs = list;
   } catch (e) {
     console.warn('議題を読めませんでした:', e && (e.message || e));
-    return;
+  }
+  try {
+    const q = fb.query(fb.collection(window.db, 'sp_quests'), fb.orderBy('createdAt', 'desc'), fb.limit(100));
+    const snap = await fb.getDocs(q);
+    const list = [];
+    snap.forEach(function (s) { list.push(Object.assign({ id: s.id }, s.data() || {})); });
+    _spGuildQuestDocs = list;
+  } catch (e) {
+    console.warn('クエストを読めませんでした:', e && (e.message || e));
   }
 
-  const votes = [];
-  for (const v of docs) {
-    /* 票は1件ずつ数える。数を別に持つと、書き換えられる余地ができる。 */
-    let counts = {}, total = 0, myPick = '';
+  const guilds = [];
+  for (const g of defs) {
+    let joins = 0, supports = 0, iJoined = false, iSupport = false;
     try {
-      const bs = await fb.getDocs(fb.collection(window.db, 'sp_votes', v.id, 'ballots'));
-      bs.forEach(function (b) {
-        const opt = String((b.data() || {}).optionId || '');
-        if (!opt) return;
-        counts[opt] = (counts[opt] || 0) + 1;
-        total++;
-        if (mine && b.id.toLowerCase() === mine.toLowerCase()) myPick = opt;
-      });
-    } catch (e) { /* 読めなくても議題は出す */ }
-
-    const closed = !!v.closesAt && Number(v.closesAt) <= Date.now();
-    /* 一般ギルドは誰でも、特殊ギルドは関われる人だけが入れられる */
-    const special = (v.kind || 'free') === 'special';
-    const canVote = !special || canGuild;
-    const done = !!myPick || closed || !canVote;
-    const opts = (v.options || []).map(function (o) {
-      const n = counts[o.id] || 0;
-      const pct = total ? Math.round(n / total * 100) : 0;
-      const picked = (myPick === o.id);
-      return {
-        id: o.id, label: o.label,
-        /* 入れる前は数を見せない。先に結果が見えると引きずられる。 */
-        countLabel: done ? (n + '票 · ' + pct + '%') : '',
-        pct: done ? pct + '%' : '0%',
-        barBg: picked ? 'rgba(15,92,63,.18)' : 'rgba(20,19,16,.07)',
-        border: picked ? '#0F5C3F' : 'rgba(20,19,16,.16)',
-        weight: picked ? '700' : '500',
-        cursor: done ? 'default' : 'pointer',
-        go: (done || !canVote) ? function () {} : function () { spVoteCast(v.id, o.id, app); }
-      };
-    });
-    votes.push({
-      id: v.id, title: v.title || '', body: v.body || '',
-      closes: _spVoteCloseLabel(v.closesAt),
-      kindLabel: special ? '特殊ギルド' : '一般ギルド',
-      kindBg: special ? '#141310' : '#E7E2D6',
-      kindFg: special ? '#D0E2BE' : '#3B382F',
-      stateLabel: closed ? 'CLOSED' : (myPick ? 'VOTED' : 'OPEN'),
-      stateBg: closed ? '#E7E2D6' : (myPick ? '#0F5C3F' : '#D0E2BE'),
-      stateFg: closed ? '#8A8474' : (myPick ? '#F4F1EA' : '#0F5C3F'),
-      options: opts,
-      note: (!canVote && !closed && !myPick)
-              ? 'この議題は特殊ギルドのものです。運営・有料の方・信用が足りている方が投票できます。'
-              : (done ? (total + '票入りました。1つのパスポートにつき1票です。')
-                      : '選ぶと投票されます。あとから変えられません。')
-    });
+      const js = await fb.getDocs(fb.collection(window.db, 'sp_guild_members', g.id, 'joins'));
+      js.forEach(function (d) { joins++; if (mine && d.id.toLowerCase() === mine) iJoined = true; });
+    } catch (e) {}
+    try {
+      const ss = await fb.getDocs(fb.collection(window.db, 'sp_guild_members', g.id, 'supports'));
+      ss.forEach(function (d) { supports++; if (mine && d.id.toLowerCase() === mine) iSupport = true; });
+    } catch (e) {}
+    guilds.push(_spGuildCard(g, {
+      joins: joins, supports: supports, iJoined: iJoined, iSupport: iSupport
+    }, defs, app));
   }
-  /* 信用スコアも出す。判定そのものは sp_trust を見ているが、
-     「あと何点か」が見えないと、増やしようがない。 */
+
+  /* ギルドが決まっていない古い議題。どこかへ勝手に寄せず、別に出す。 */
+  const unsorted = _spVoteDocs.filter(function (v) { return !SpGuildStore.guildIdOf(v, defs); });
+  app.setState({
+    guilds: guilds,
+    guildCount: guilds.length,
+    guildUnsorted: {
+      count: unsorted.length,
+      label: '未分類の議題 ' + unsorted.length + '件',
+      open: function () { window.spGuildOpen('', app); }
+    },
+    hasUnsorted: unsorted.length > 0,
+    canGuild: canGuild
+  });
+
+  /* 信用スコアは重い（クエスト・知恵をすべて数える）ので、
+     ギルドを出したあとで足す。ここで待たせない。 */
   let trust = { total: 0, need: SP_TRUST_NEED, detail: '' };
   if (p) {
     const sc = await window.spTrustScore(p.addr, p.createdAt);
@@ -15956,7 +16326,232 @@ window.spDaoLoadVotes = async function (app) {
   } else {
     trust.detail = 'ログインすると出ます。';
   }
-  app.setState({ votes: votes, noVotes: votes.length === 0, canGuild: canGuild, trust: trust });
+  app.setState({ trust: trust });
+
+  /* 開いたままのギルドがあれば、そちらも作り直す */
+  if (_spGuildOpenId !== null) await window.spGuildOpen(_spGuildOpenId, app, true);
+};
+
+/* ギルドカード1枚ぶん。数はその場で数える。 */
+function _spGuildCard(g, mem, defs, app) {
+  const props = _spVoteDocs.filter(function (v) { return SpGuildStore.guildIdOf(v, defs) === g.id; });
+  const live = props.filter(function (v) { return !_spVoteClosed(v); });
+  const quests = _spGuildQuestDocs.filter(function (q) {
+    return !SpQuestStore.isFounder(q) && SpGuildStore.guildIdOf(q, defs) === g.id;
+  });
+  const running = quests.filter(function (q) { return (q.status || 'OPEN') !== 'CLOSED'; });
+  const mineLabel = mem.iJoined ? '参加したい' : (mem.iSupport ? '応援している' : '');
+  return {
+    id: g.id, code: g.code, short: g.short, name: g.name,
+    concept: g.concept, accent: g.accent,
+    joinCount: String(mem.joins), supportCount: String(mem.supports),
+    proposalCount: String(live.length), questCount: String(running.length),
+    meLabel: mineLabel, meShow: mineLabel ? 'inline-block' : 'none',
+    open: function () { window.spGuildOpen(g.id, app); }
+  };
+}
+
+/* ギルドを1つ開く。そのギルドの議題の票だけを読む。 */
+window.spGuildOpen = async function (guildId, app, quiet) {
+  if (!app || typeof app.setState !== 'function') return;
+  if (!window.db || !window.fbLib) return;
+  const defs = await spGuildDefs();
+  const g = guildId ? SpGuildStore.byId(defs, guildId) : SpGuildStore.UNSORTED;
+  if (!g) return;
+  _spGuildOpenId = g.id;
+
+  if (!quiet) {
+    /* 先に枠だけ出す。票の読み込みを待たせない。 */
+    app.setState({ screen: 'guild', curGuild: _spGuildShell(g, true, app) });
+    try { app.toTop(); } catch (e) {}
+  }
+
+  const p = await spPassportLoad();
+  const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
+  const canGuild = await window.spCanGuild();
+
+  let joins = 0, supports = 0, iJoined = false, iSupport = false;
+  if (g.id) {
+    const fb = window.fbLib;
+    try {
+      const js = await fb.getDocs(fb.collection(window.db, 'sp_guild_members', g.id, 'joins'));
+      js.forEach(function (d) { joins++; if (mine && d.id.toLowerCase() === mine) iJoined = true; });
+    } catch (e) {}
+    try {
+      const ss = await fb.getDocs(fb.collection(window.db, 'sp_guild_members', g.id, 'supports'));
+      ss.forEach(function (d) { supports++; if (mine && d.id.toLowerCase() === mine) iSupport = true; });
+    } catch (e) {}
+  }
+
+  const props = _spVoteDocs
+    .filter(function (v) { return SpGuildStore.guildIdOf(v, defs) === g.id; })
+    .slice(0, 20);
+  const votes = [];
+  for (const v of props) votes.push(await _spShapeVote(v, mine, canGuild, p, app, defs));
+
+  /* 「未分類」は古い議題の置き場なので、クエストは並べない。
+     ギルドに属さないクエスト（直接出したもの）は、クエスト一覧のほうにある。 */
+  const quests = !g.id ? [] : _spGuildQuestDocs
+    .filter(function (q) { return !SpQuestStore.isFounder(q) && SpGuildStore.guildIdOf(q, defs) === g.id; })
+    .slice(0, 20)
+    .map(function (q) {
+      const st = q.status || 'OPEN';
+      const sc = st === 'RUNNING' ? ['#0F5C3F', '#F4F1EA'] : st === 'OPEN' ? ['#E7E2D6', '#0F5C3F'] : ['#E7E2D6', '#8A8474'];
+      return {
+        id: q.id,
+        title: (SpQuestStore.label(q) ? SpQuestStore.label(q) + ' ' : '') + (q.title || ''),
+        status: st, statusBg: sc[0], statusFg: sc[1],
+        fromLabel: q.fromProposalId ? '議題から生まれた' : '直接出された',
+        open: function () { window.spQuestOpen(app, q.id); }
+      };
+    });
+
+  const shell = _spGuildShell(g, false, app);
+  /* 読み直し（quiet）のときは画面を切り替えない。
+     ギルド一覧を見ているのに、勝手に詳細へ飛ばされないようにする。 */
+  const next = {
+    curGuild: Object.assign(shell, {
+      joinCount: String(joins), supportCount: String(supports),
+      joinLabel: iJoined ? '✓ 参加したい' : 'このギルドに参加したい',
+      joinBg: iJoined ? '#0F5C3F' : 'transparent',
+      joinFg: iJoined ? '#F4F1EA' : '#0F5C3F',
+      joinHint: iJoined ? 'もう一度押すと取り消せます' : '自分もこの領域で活動・貢献したい',
+      supportLabel: iSupport ? '✓ 応援している' : 'このギルドを応援する',
+      supportBg: iSupport ? '#141310' : 'transparent',
+      supportFg: iSupport ? '#F4F1EA' : '#141310',
+      supportHint: iSupport ? 'もう一度押すと取り消せます' : '活動まではできないが、方向性に共感・期待している',
+      join: function () { window.spGuildToggle(g.id, 'join', app); },
+      support: function () { window.spGuildToggle(g.id, 'support', app); },
+      canAct: !!g.id,
+      votes: votes, noVotes: votes.length === 0,
+      quests: quests, noQuests: quests.length === 0,
+      loading: false
+    })
+  };
+  if (!quiet) next.screen = 'guild';
+  app.setState(next);
+};
+
+/* ギルド詳細の、票を読む前の入れ物 */
+function _spGuildShell(g, loading, app) {
+  return {
+    id: g.id, code: g.code, short: g.short, name: g.name,
+    concept: g.concept, body: g.body, accent: g.accent,
+    themes: g.themes || [], hasThemes: (g.themes || []).length > 0,
+    isUnsorted: !g.id, canAct: !!g.id,
+    propose: function () { window.openSpVoteForm(app, g.id); },
+    joinCount: '—', supportCount: '—',
+    joinLabel: 'このギルドに参加したい', joinBg: 'transparent', joinFg: '#0F5C3F', joinHint: '',
+    supportLabel: 'このギルドを応援する', supportBg: 'transparent', supportFg: '#141310', supportHint: '',
+    join: function () {}, support: function () {},
+    votes: [], noVotes: false, quests: [], noQuests: false,
+    loading: !!loading
+  };
+}
+
+/* 「参加したい」「応援する」を押す。文書のIDを自分の番号にする。
+   同じパスポートから同じギルドへは1回だけ。もう一度押すと取り消す。 */
+let _spGuildBusy = false;
+window.spGuildToggle = async function (guildId, kind, app) {
+  if (!guildId) return;
+  if (_spGuildBusy) return;
+  const p = await spPassportLoad();
+  if (!p) { alert('ログインすると、参加したい・応援するを押せます。'); return; }
+  const sub = (kind === 'support') ? 'supports' : 'joins';
+  _spGuildBusy = true;
+  const fb = window.fbLib;
+  const ref = fb.doc(window.db, 'sp_guild_members', guildId, sub, p.addr);
+  try {
+    const cur = await fb.getDoc(ref);
+    if (cur.exists()) await fb.deleteDoc(ref);
+    else await fb.setDoc(ref, { name: p.name, at: Date.now() });
+  } catch (e) {
+    alert('うまくいきませんでした。通信を確かめて、もう一度お試しください。');
+    _spGuildBusy = false;
+    return;
+  }
+  _spGuildBusy = false;
+  await window.spDaoLoadVotes(app);
+};
+
+/* 採択する。運営だけ。1回だけ。あとから変えられない。 */
+window.spVoteAdopt = async function (voteId, app) {
+  const p = await spPassportLoad();
+  if (!p) { alert('ログインが必要です。'); return; }
+  if (!p.isOwner) { alert('議題を採択できるのは運営だけです。'); return; }
+  const v = _spVoteDocs.find(function (x) { return x.id === voteId; });
+  if (!v) { alert('議題が見つかりませんでした。'); return; }
+  if (v.adoptedOptionId) { alert('この議題はすでに採択されています。'); return; }
+  const opts = v.options || [];
+  const list = opts.map(function (o, i) { return (i + 1) + '. ' + o.label; }).join('\n');
+  const ans = prompt('どの選択肢で採択しますか？番号を入れてください。\n\n' + list
+    + '\n\n採択はあとから変えられません。', '1');
+  if (ans === null) return;
+  const at = parseInt(String(ans).trim(), 10);
+  if (!(at >= 1 && at <= opts.length)) { alert('番号が正しくありません。'); return; }
+  try {
+    const fb = window.fbLib;
+    await fb.updateDoc(fb.doc(window.db, 'sp_votes', voteId), {
+      adoptedOptionId: String(opts[at - 1].id),
+      adoptedAt: Date.now(),
+      adoptedBy: p.addr
+    });
+  } catch (e) {
+    const code = String((e && e.code) || '');
+    alert(code === 'permission-denied'
+      ? '採択できるのは運営だけです。すでに採択されている場合も変えられません。'
+      : '採択できませんでした。もう一度お試しください。');
+    return;
+  }
+  await window.spDaoLoadVotes(app);
+};
+
+/* ギルドが決まっていない古い議題に、あとからギルドを入れる。運営だけ。1回だけ。 */
+window.spVoteSetGuild = async function (voteId, app) {
+  const p = await spPassportLoad();
+  if (!p || !p.isOwner) { alert('ギルドを割り当てられるのは運営だけです。'); return; }
+  const defs = await spGuildDefs();
+  const list = defs.map(function (g, i) { return (i + 1) + '. ' + g.name; }).join('\n');
+  const ans = prompt('どのギルドの議題にしますか？番号を入れてください。\n\n' + list
+    + '\n\nあとから動かせません。', '1');
+  if (ans === null) return;
+  const at = parseInt(String(ans).trim(), 10);
+  if (!(at >= 1 && at <= defs.length)) { alert('番号が正しくありません。'); return; }
+  try {
+    const fb = window.fbLib;
+    await fb.updateDoc(fb.doc(window.db, 'sp_votes', voteId), { guildId: defs[at - 1].id });
+  } catch (e) {
+    alert('割り当てられませんでした。すでにギルドが決まっている議題は動かせません。');
+    return;
+  }
+  await window.spDaoLoadVotes(app);
+};
+
+/* 採択された議題を、クエストにする。運営だけ。
+   クエストには予算が付くので、出せるのは当面は運営だけという既存の決まりに合わせる。
+   元のギルドと元の議題は、クエスト側が覚える。 */
+window.spVoteToQuest = async function (voteId, app) {
+  const p = await spPassportLoad();
+  if (!p) { alert('ログインが必要です。'); return; }
+  if (!p.isOwner) {
+    alert('議題をクエストにできるのは、いまのところ運営だけです。\n\n'
+      + 'クエストには予算が付くためです。受けるのはどなたでもできます。');
+    return;
+  }
+  const v = _spVoteDocs.find(function (x) { return x.id === voteId; });
+  if (!v) { alert('元の議題が見つかりませんでした。'); return; }
+  if (!v.adoptedOptionId) { alert('先に採択してください。採択された議題だけがクエストになります。'); return; }
+  const defs = await spGuildDefs();
+  const gid = SpGuildStore.guildIdOf(v, defs);
+  if (!gid) { alert('この議題にはギルドが決まっていません。先にギルドを割り当ててください。'); return; }
+  const picked = ((v.options || []).find(function (o) { return o.id === v.adoptedOptionId; }) || {}).label || '';
+  await window.openSpQuestForm(app, {
+    guildId: gid,
+    fromProposalId: v.id,
+    fromProposalTitle: (v.title || '').slice(0, 120),
+    title: (v.title || '').slice(0, 120),
+    hypothesis: picked ? ('採択された案：' + picked) : ''
+  });
 };
 
 /* 1票入れる。文書のIDを自分のアドレスにする。 */
@@ -15983,9 +16578,10 @@ async function spVoteCast(voteId, optionId, app) {
   await window.spDaoLoadVotes(app);
 }
 
-/* 議題を出す。枠の外の入力欄を使う。 */
+/* 議題を出す。枠の外の入力欄を使う。
+   どのギルドの議題かは必ず選ぶ（記録の決まりでも空では作れない）。 */
 let _spVoteFormApp = null;
-window.openSpVoteForm = async function (app) {
+window.openSpVoteForm = async function (app, guildId) {
   _spVoteFormApp = app || null;
   const p = await spPassportLoad();
   if (!p) { alert('議題を出すにはログインが必要です。'); return; }
@@ -16004,6 +16600,17 @@ window.openSpVoteForm = async function (app) {
   });
   const d = document.getElementById('spvDays'); if (d) d.value = '7';
   const kd = document.getElementById('spvKind'); if (kd) kd.value = 'free';
+
+  /* ギルドの選び方は、いまある5つ（と足された分）から作る */
+  const defs = await spGuildDefs();
+  const gs = document.getElementById('spvGuild');
+  if (gs) {
+    gs.innerHTML = defs.map(function (g) {
+      return '<option value="' + escapeHtml(g.id) + '">'
+        + escapeHtml(g.short + '　' + g.concept) + '</option>';
+    }).join('');
+    if (guildId && defs.some(function (g) { return g.id === guildId; })) gs.value = guildId;
+  }
   document.body.classList.add('sp-vote-open');
 };
 function closeSpVoteForm() { document.body.classList.remove('sp-vote-open'); }
@@ -16014,6 +16621,8 @@ async function spVoteSubmit() {
   if (!title) { alert('議題を書いてください。'); return; }
   const labels = ['spvOpt1', 'spvOpt2', 'spvOpt3', 'spvOpt4'].map(val).filter(Boolean);
   if (labels.length < 2) { alert('選択肢は2つ以上いります。'); return; }
+  const guildId = val('spvGuild');
+  if (!SpGuildStore.isValidId(guildId)) { alert('どのギルドの議題かを選んでください。'); return; }
 
   const p = await spPassportLoad();
   if (!p) { alert('議題を出すにはログインが必要です。'); return; }
@@ -16026,6 +16635,7 @@ async function spVoteSubmit() {
       body: val('spvBody').slice(0, 600),
       options: labels.map(function (l, i) { return { id: 'o' + (i + 1), label: l.slice(0, 60) }; }),
       kind: (val('spvKind') === 'special') ? 'special' : 'free',
+      guildId: guildId,
       createdBy: p.addr,
       createdAt: Date.now(),
       closesAt: Date.now() + days * 86400000
@@ -16036,6 +16646,7 @@ async function spVoteSubmit() {
     return;
   }
   closeSpVoteForm();
+  _spGuildOpenId = guildId;
   if (_spVoteFormApp) await window.spDaoLoadVotes(_spVoteFormApp);
 }
 
@@ -16063,64 +16674,115 @@ window.spDaoLoadQuests = async function (app) {
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
   const p = await spPassportLoad();
-  const mine = p ? p.addr.toLowerCase() : '';
+  const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
+  const gdefs = await spGuildDefs();
 
   let docs = [];
   try {
     const q = fb.query(fb.collection(window.db, 'sp_quests'), fb.orderBy('createdAt', 'desc'), fb.limit(30));
     const snap = await fb.getDocs(q);
     snap.forEach(function (s) { docs.push({ id: s.id, ...(s.data() || {}) }); });
+    const founder = await fb.getDoc(fb.doc(window.db, 'sp_quests', SpQuestStore.FOUNDER_ID));
+    if (founder.exists() && !docs.some(q => q.id === founder.id)) docs.push({ id: founder.id, ...founder.data() });
+    docs.sort((a, b) => Number(SpQuestStore.isFounder(b)) - Number(SpQuestStore.isFounder(a)));
   } catch (e) {
     console.warn('クエストを読めませんでした:', e && (e.message || e));
     return;
   }
 
   const quests = [];
-  for (const q of docs) {
-    let people = [], iTook = false, logCount = 0;
-    const logs = [];
-    try {
-      const cs = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'commits'));
-      cs.forEach(function (c) {
-        people.push((c.data() || {}).name || _spShortAddr(c.id));
-        if (mine && c.id.toLowerCase() === mine) iTook = true;
-      });
-    } catch (e) {}
-    try {
-      const ls = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'logs'));
-      ls.forEach(function (l) { logCount++; logs.push({ id: l.id, ...(l.data() || {}) }); });
-      logs.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
-    } catch (e) {}
-    quests.push({
-      id: q.id, title: q.title || '', hypothesis: q.hypothesis || '',
-      action: q.action || '', measure: q.measure || '',
-      knowledge: q.knowledge || '', owner: q.ownerName || _spShortAddr(q.owner),
-      /* 金額は3桁ごとに区切って出す（記録には数字だけを入れてある） */
-      budget: (parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0).toLocaleString(),
-      due: _spQuestDue(q.closesAt),
-      status: q.status || 'OPEN', commits: people.length, need: q.need || 5,
-      people: people, logCount: logCount, iTook: iTook,
-      /* 完了にできるのは、出した本人だけ */
-      isMine: !!(p && (p.isOwner || (mine && String(q.owner || '').toLowerCase() === mine))),
-      logs: logs.map(function (l) {
-        const kind = l.kind || 'やってみた';
-        const c = kind === 'つまずいた' ? ['#F0DCD2', '#A85A33']
-                : kind === '気づいた'   ? ['#0F5C3F', '#F4F1EA']
-                : ['#E7E2D6', '#3B382F'];
-        const name = l.authorName || _spShortAddr(l.author);
-        const d = l.at ? new Date(l.at) : null;
-        return { author: name, initial: name.slice(0, 1), body: l.body || '',
-          kind: kind, kindBg: c[0], kindFg: c[1],
-          time: d ? ((d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0')
-                     + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')) : '' };
-      })
-    });
-  }
+  for (const q of docs) quests.push(await _spShapeQuest(q, p, mine, gdefs, app));
   app.setState({ quests: quests, noQuests: quests.length === 0 });
+};
+
+/* クエスト1件を、枠の中で使える形にする。
+   受けた人と途中報告は、その場で数える。 */
+async function _spShapeQuest(q, p, mine, gdefs, app) {
+  const fb = window.fbLib;
+  let people = [], iTook = false, logCount = 0;
+  const logs = [];
+  try {
+    const cs = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'commits'));
+    cs.forEach(function (c) {
+      people.push((c.data() || {}).name || _spShortAddr(c.id));
+      if (mine && c.id.toLowerCase() === mine) iTook = true;
+    });
+  } catch (e) {}
+  try {
+    const ls = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'logs'));
+    ls.forEach(function (l) { logCount++; logs.push({ id: l.id, ...(l.data() || {}) }); });
+    logs.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+  } catch (e) {}
+  /* このクエストが、どのギルドのどの議題から生まれたか。
+     Quest #000（原点）は、どのギルドにも属さない。 */
+  const qGuildId = SpQuestStore.isFounder(q) ? '' : SpGuildStore.guildIdOf(q, gdefs);
+  const qGuild = qGuildId ? SpGuildStore.byId(gdefs, qGuildId) : null;
+  const fromId = SpQuestStore.isFounder(q) ? '' : String(q.fromProposalId || '');
+  return {
+    id: q.id, title: (SpQuestStore.label(q) && !SpQuestStore.isFounder(q) ? SpQuestStore.label(q) + ' ' : '') + (q.title || ''), hypothesis: q.hypothesis || '',
+    isFounder: SpQuestStore.isFounder(q),
+    guildId: qGuildId,
+    guildLabel: qGuild ? qGuild.short : '',
+    hasGuild: !!qGuild,
+    /* 「このクエストは○○ Guildの議題から生まれました」 */
+    hasFrom: !!(fromId && qGuild),
+    fromLabel: (fromId && qGuild)
+      ? ('このクエストは ' + qGuild.short + ' Guild の議題「'
+         + (q.fromProposalTitle || '（題名なし）') + '」から生まれました。')
+      : '',
+    goFrom: (fromId && qGuild)
+      ? function () { window.spGuildOpen(qGuild.id, app); }
+      : function () {},
+    founderSections: SpQuestStore.sections(q),
+    action: q.action || '', measure: q.measure || '',
+    knowledge: q.knowledge || '', owner: q.ownerName || _spShortAddr(q.owner),
+    /* 金額は3桁ごとに区切って出す（記録には数字だけを入れてある） */
+    budget: (parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0).toLocaleString(),
+    due: SpQuestStore.isFounder(q) ? 'なし・恒久' : _spQuestDue(q.closesAt),
+    status: SpQuestStore.isFounder(q) ? 'FOUNDER' : (q.status || 'OPEN'), commits: people.length, need: q.need || 5,
+    people: people, logCount: logCount, iTook: iTook,
+    /* 完了にできるのは、出した本人だけ */
+    isMine: !!(p && (p.isOwner || (mine && String(q.owner || '').toLowerCase() === mine))),
+    logs: logs.map(function (l) {
+      const kind = l.kind || 'やってみた';
+      const c = kind === 'つまずいた' ? ['#F0DCD2', '#A85A33']
+              : kind === '気づいた'   ? ['#0F5C3F', '#F4F1EA']
+              : ['#E7E2D6', '#3B382F'];
+      const name = l.authorName || _spShortAddr(l.author);
+      const d = l.at ? new Date(l.at) : null;
+      return { author: name, initial: name.slice(0, 1), body: l.body || '',
+        kind: kind, kindBg: c[0], kindFg: c[1],
+        time: d ? ((d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0')
+                   + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')) : '' };
+    })
+  };
+}
+
+/* クエストの詳細を開く。
+   ギルドから来たときは、まだ読み込んでいないクエストのことがある
+   （一覧は新しい30件だけを読んでいる）。無ければその1件だけ読んで足す。 */
+window.spQuestOpen = async function (app, questId) {
+  if (!app || typeof app.setState !== 'function' || !questId) return;
+  const have = (app.state && app.state.quests) || [];
+  if (!have.some(function (q) { return q.id === questId; })) {
+    try {
+      const fb = window.fbLib;
+      const snap = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));
+      if (snap.exists()) {
+        const p = await spPassportLoad();
+        const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
+        const gdefs = await spGuildDefs();
+        const shaped = await _spShapeQuest({ id: snap.id, ...(snap.data() || {}) }, p, mine, gdefs, app);
+        app.setState({ quests: ((app.state && app.state.quests) || []).concat([shaped]) });
+      }
+    } catch (e) { /* 読めなくても画面は開く */ }
+  }
+  try { app.setState({ screen: 'detail', expId: questId }); app.toTop(); } catch (e) {}
 };
 
 /* 受ける／降りる。文書のIDを自分の番号にする。 */
 window.spQuestToggle = async function (questId, app) {
+  if (questId === SpQuestStore.FOUNDER_ID) return;
   if (_spQuestBusy) return;
   const p = await spPassportLoad();
   if (!p) { alert('クエストを受けるにはログインが必要です。'); return; }
@@ -16146,6 +16808,7 @@ window.spQuestToggle = async function (questId, app) {
 /* 途中報告を書く。書けるのは、そのクエストを受けた人だけ。
    ルールでも「受けた記録があること」を確かめている。 */
 window.spQuestLog = async function (questId, kind, app) {
+  if (questId === SpQuestStore.FOUNDER_ID) return;
   const p = await spPassportLoad();
   if (!p) { alert('報告するにはログインが必要です。'); return; }
   const body = prompt('今日やったことを書く（' + kind + '）\n\n試したこと、うまくいかなかったこと、気づいたこと——3行でいい。');
@@ -16168,9 +16831,14 @@ window.spQuestLog = async function (questId, kind, app) {
   await window.spDaoLoadQuests(app);
 };
 
-/* クエストを出す */
+/* クエストを出す。
+   道は2つある。どちらも残す。
+     A  ギルド → 議題 → 投票 → 採択 → 「クエストにする」
+     B  直接クエストを出す（小さな実験・個人の挑戦・検証）
+   B から来たときは from が空。A から来たときは、元のギルドと元の議題が入る。 */
 let _spQuestFormApp = null;
-window.openSpQuestForm = async function (app) {
+let _spQuestFrom = null;
+window.openSpQuestForm = async function (app, from) {
   _spQuestFormApp = app || null;
   const p = await spPassportLoad();
   if (!p) { alert('クエストを出すにはログインが必要です。'); return; }
@@ -16187,11 +16855,37 @@ window.openSpQuestForm = async function (app) {
   });
   const n = document.getElementById('sqNeed'); if (n) n.value = '5';
   const d = document.getElementById('sqDays'); if (d) d.value = '14';
+
+  _spQuestFrom = (from && from.fromProposalId) ? from : null;
+
+  /* どのギルドの活動か。「どのギルドにも属さない」も選べる。
+     Quest #000（原点）はここからは作らない。 */
+  const defs = await spGuildDefs();
+  const gs = document.getElementById('sqGuild');
+  if (gs) {
+    gs.innerHTML = '<option value="">どのギルドにも属さない</option>'
+      + defs.map(function (g) {
+          return '<option value="' + escapeHtml(g.id) + '">'
+            + escapeHtml(g.short + '　' + g.concept) + '</option>';
+        }).join('');
+    if (from && from.guildId) gs.value = from.guildId;
+    /* 議題から生まれたクエストは、その議題のギルドから動かせない */
+    gs.disabled = !!_spQuestFrom;
+  }
+  const fromRow = document.getElementById('sqFromRow');
+  const fromIn = document.getElementById('sqFrom');
+  if (fromRow) fromRow.style.display = _spQuestFrom ? 'block' : 'none';
+  if (fromIn) fromIn.value = _spQuestFrom ? _spQuestFrom.fromProposalTitle : '';
+  if (from && from.title) { const t = document.getElementById('sqTitle'); if (t) t.value = from.title; }
+  if (from && from.hypothesis) { const h = document.getElementById('sqHypothesis'); if (h) h.value = from.hypothesis; }
+
   document.body.classList.add('sp-quest-open');
 };
-function closeSpQuestForm() { document.body.classList.remove('sp-quest-open'); }
+function closeSpQuestForm() { document.body.classList.remove('sp-quest-open'); _spQuestFrom = null; }
 
+let spQuestSubmitting = false;
 async function spQuestSubmit() {
+  if (spQuestSubmitting) return;
   const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
   const title = val('sqTitle');
   if (!title) { alert('何を試すのかを書いてください。'); return; }
@@ -16200,12 +16894,23 @@ async function spQuestSubmit() {
   if (!p) { alert('クエストを出すにはログインが必要です。'); return; }
   if (!p.isOwner) { alert('クエストを出せるのは、いまのところ運営だけです。'); return; }
 
+  if (spQuestSubmitting) return;
+  spQuestSubmitting = true;
   const days = Math.max(1, Math.min(90, parseInt(val('sqDays'), 10) || 14));
   const need = Math.max(1, Math.min(50, parseInt(val('sqNeed'), 10) || 5));
+  /* どのギルドの活動か。議題から生まれたときは、その議題のギルドで固定。 */
+  const guildId = _spQuestFrom ? _spQuestFrom.guildId : val('sqGuild');
+  if (guildId && !SpGuildStore.isValidId(guildId)) { alert('ギルドの指定が正しくありません。'); spQuestSubmitting = false; return; }
+  if (_spQuestFrom && !guildId) { alert('元の議題のギルドが分かりませんでした。'); spQuestSubmitting = false; return; }
   try {
     const fb = window.fbLib;
-    await fb.addDoc(fb.collection(window.db, 'sp_quests'), {
+    await SpQuestStore.createQuest(fb, window.db, {
       title: title.slice(0, 120),
+      /* 元になったギルドと議題。クエスト側が覚えることで、
+         クエスト詳細から元の議題へ戻れる。直接出したときは空。 */
+      guildId: guildId || '',
+      fromProposalId: _spQuestFrom ? _spQuestFrom.fromProposalId : '',
+      fromProposalTitle: _spQuestFrom ? String(_spQuestFrom.fromProposalTitle || '').slice(0, 120) : '',
       knowledge: val('sqKnowledge').slice(0, 200),
       hypothesis: val('sqHypothesis').slice(0, 400),
       action: val('sqAction').slice(0, 400),
@@ -16228,10 +16933,16 @@ async function spQuestSubmit() {
   } catch (e) {
     console.warn('クエストを出せませんでした:', e && (e.message || e));
     alert('クエストを出せませんでした。もう一度お試しください。');
+    spQuestSubmitting = false;
     return;
   }
+  spQuestSubmitting = false;
   closeSpQuestForm();
-  if (_spQuestFormApp) await window.spDaoLoadQuests(_spQuestFormApp);
+  if (_spQuestFormApp) {
+    await window.spDaoLoadQuests(_spQuestFormApp);
+    /* ギルド側の「このギルドから生まれたクエスト」も数え直す */
+    await window.spDaoLoadVotes(_spQuestFormApp);
+  }
 }
 
 /* ═══════════════════════════════════════
@@ -16358,6 +17069,7 @@ let _spWisdomQuest = null;
 /* クエストを完了にする。出した本人（＝運営）だけができる。
    完了にしたら、そのまま知恵カードの下書きを開く。 */
 window.spQuestClose = async function (questId, app) {
+  if (questId === SpQuestStore.FOUNDER_ID) return;
   const p = await spPassportLoad();
   if (!p) { alert('ログインが必要です。'); return; }
   const fb = window.fbLib;
@@ -16367,7 +17079,7 @@ window.spQuestClose = async function (questId, app) {
     if (snap.exists()) q = { id: snap.id, ...(snap.data() || {}) };
   } catch (e) {}
   if (!q) { alert('クエストが見つかりませんでした。'); return; }
-  if (!p.isOwner && String(q.owner || '').toLowerCase() !== p.addr.toLowerCase()) {
+  if (!p.isOwner && String(q.owner || '').toLowerCase() !== String(p.addr || '').toLowerCase()) {
     alert('完了にできるのは、そのクエストを出した人だけです。'); return;
   }
   if (q.status !== 'CLOSED') {
@@ -16443,7 +17155,7 @@ window.spDaoLoadWisdom = async function (app) {
     return;
   }
   const p = await spPassportLoad();
-  const mine = p ? p.addr.toLowerCase() : '';
+  const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
   const wisdom = [];
   let cites = 0;
   for (const w of docs) {
@@ -16781,7 +17493,7 @@ window.spDaoLoadPark = async function (app) {
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
   const p = await spPassportLoad();
-  const mine = p ? p.addr.toLowerCase() : '';
+  const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
 
   let items = [];
   try {
@@ -16937,7 +17649,29 @@ async function openSpPassport() {
       } catch (e) {}
     }
   } catch (e) {}
-  if (rec) rec.innerHTML = _sppRow('SchoolPark｜投票した議題', votes + '件');
+
+  /* どのギルドに参加したいか・どのギルドを応援しているか。
+     パスポート本体の作りは変えず、記録の行として足す。
+     ここは表示だけ。押す・外すはギルドの画面でやる。 */
+  const joined = [], supported = [];
+  try {
+    const fb = window.fbLib;
+    const defs = await spGuildDefs();
+    for (const g of defs) {
+      try {
+        const j = await fb.getDoc(fb.doc(window.db, 'sp_guild_members', g.id, 'joins', p.addr));
+        if (j.exists()) joined.push(g.short);
+      } catch (e) {}
+      try {
+        const s = await fb.getDoc(fb.doc(window.db, 'sp_guild_members', g.id, 'supports', p.addr));
+        if (s.exists()) supported.push(g.short);
+      } catch (e) {}
+    }
+  } catch (e) {}
+
+  if (rec) rec.innerHTML = _sppRow('SchoolPark｜投票した議題', votes + '件')
+    + _sppRow('SchoolPark｜参加ギルド', joined.length ? joined.join(' / ') : 'まだありません')
+    + _sppRow('SchoolPark｜応援ギルド', supported.length ? supported.join(' / ') : 'まだありません');
 }
 
 /* SchoolPark の中から小部屋（エレベーターなど）を開く。
@@ -19128,11 +19862,17 @@ window.restoreAuth = function () {
 
 
 // --- 追加する設定 ---
-const POLYGON_GAS_OPTION = {
-  maxPriorityFeePerGas: ethers.utils.parseUnits("300", "gwei"), 
-  maxFeePerGas: ethers.utils.parseUnits("500", "gwei"),
-  gasLimit: 300000 
-};
+/* ethers は CDN から来る。読めないと、この行で ReferenceError になり、
+   ここから下（プラン判定・Good/Change・ログインボーナスなど）の定義が
+   まるごと消える。socket.io で起きたのと同じ壊れ方。
+   ethers が無ければNFTの操作はどのみちできないので、そこだけ諦める。 */
+const POLYGON_GAS_OPTION = (typeof ethers !== 'undefined' && ethers && ethers.utils)
+  ? {
+      maxPriorityFeePerGas: ethers.utils.parseUnits("300", "gwei"),
+      maxFeePerGas: ethers.utils.parseUnits("500", "gwei"),
+      gasLimit: 300000
+    }
+  : { gasLimit: 300000 };
 
 
 window.claimFreeNFT = async function () {
@@ -20021,7 +20761,7 @@ function closeBadgePanel() {
 import {
     getFirestore, collection, addDoc, getDocs, query, orderBy, limit, startAfter, onSnapshot,
     doc, updateDoc, setDoc, deleteDoc, increment, where, writeBatch,
-    arrayUnion, getDoc
+    arrayUnion, getDoc, runTransaction
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   // 認証機能（CHES Identity：LINE / Google ログイン、MetaMask等で使用）
   import {
@@ -20056,7 +20796,7 @@ import {
 window.fbLib = {
     collection, addDoc, getDocs, query, orderBy, limit, startAfter, onSnapshot,
     doc, updateDoc, setDoc, deleteDoc, increment, where, writeBatch,
-    arrayUnion, getDoc,
+    arrayUnion, getDoc, runTransaction,
     signInAnonymously
   };
 
@@ -23003,6 +23743,12 @@ async function sendEmuFeedback() {
       </div>
       <button type="button" class="spp-close" onclick="closeSpQuestForm()" aria-label="閉じる">✕</button>
     </div>
+    <div id="sqFromRow" style="display:none">
+      <label class="spv-label" for="sqFrom">元になった議題</label>
+      <input class="spv-in" id="sqFrom" readonly>
+    </div>
+    <label class="spv-label" for="sqGuild">どのギルドの活動か</label>
+    <select class="spv-in" id="sqGuild"></select>
     <label class="spv-label" for="sqTitle">何を試す？</label>
     <input class="spv-in" id="sqTitle" maxlength="120" placeholder="例：「先に名乗る」を1週間、初対面20人でやってみる">
     <label class="spv-label" for="sqKnowledge">元の知識（どこで得たか）</label>
@@ -23027,7 +23773,8 @@ async function sendEmuFeedback() {
     <label class="spv-label" for="sqDays">締切まで（日）</label>
     <input class="spv-in" id="sqDays" type="number" min="1" max="90" value="14">
     <button type="button" class="spp-cta" onclick="spQuestSubmit()">クエストを出す</button>
-    <p class="spp-note">出したあと、題名や条件は動かせません（受けた人が見た条件が変わらないようにするためです）。進行中・完了への切り替えだけ、出した本人ができます。</p>
+    <p class="spp-note">出したあと、題名や条件は動かせません（受けた人が見た条件が変わらないようにするためです）。進行中・完了への切り替えだけ、出した本人ができます。<br>
+      小さな実験・個人の挑戦・検証は、議題を通さずここから直接出せます。SchoolPark全体の方針・共同予算・大人数が関わることは、ギルドの議題から始めてください。</p>
   </div>
 </div>
 
@@ -23042,10 +23789,12 @@ async function sendEmuFeedback() {
       </div>
       <button type="button" class="spp-close" onclick="closeSpVoteForm()" aria-label="閉じる">✕</button>
     </div>
-    <label class="spv-label" for="spvKind">どちらのギルドか</label>
+    <label class="spv-label" for="spvGuild">どのギルドの議題か</label>
+    <select class="spv-in" id="spvGuild"></select>
+    <label class="spv-label" for="spvKind">誰が投票できるか</label>
     <select class="spv-in" id="spvKind">
-      <option value="free">一般ギルド（投票は誰でもできる）</option>
-      <option value="special">特殊ギルド（関われる人だけが投票できる）</option>
+      <option value="free">一般議題（投票は誰でもできる）</option>
+      <option value="special">特殊議題（関われる人だけが投票できる）</option>
     </select>
     <label class="spv-label" for="spvTitle">議題</label>
     <input class="spv-in" id="spvTitle" maxlength="120" placeholder="例：来月の予算を何に使うか">
@@ -23059,7 +23808,8 @@ async function sendEmuFeedback() {
     <label class="spv-label" for="spvDays">締切まで（日）</label>
     <input class="spv-in" id="spvDays" type="number" min="1" max="30" value="7">
     <button type="button" class="spp-cta" onclick="spVoteSubmit()">議題を出す</button>
-    <p class="spp-note">出した議題は書き換えも取り消しもできません。投票は1つのパスポートにつき1票です。</p>
+    <p class="spp-note">出した議題は書き換えも取り消しもできません。投票は1つのパスポートにつき1票です。<br>
+      一般／特殊はギルドの分類ではなく、この議題に誰が投票できるかの決め方です。同じギルドの中に両方が並びます。</p>
   </div>
 </div>
 
