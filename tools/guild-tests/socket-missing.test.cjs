@@ -36,6 +36,9 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 const NEEDED = ['spPassportLoad', 'spDaoWhoAmI', 'spDaoLoadVotes', 'spDaoLoadQuests',
                 'spDaoLoadTasks', 'spDaoLoadWisdom', 'spDaoReloadAll', 'spCanGuild'];
 
+/* ethers も同じ CDN 頼み。読めないと、その下の定義がまとめて消えていた */
+const NEEDED_AFTER_ETHERS = ['emuPlan', 'emuHasPlan', 'emuNeedPlan', 'claimFreeNFT'];
+
 let browser, server, port;
 
 before(async () => {
@@ -107,5 +110,15 @@ test('socket は、読めなくても呼べる形で置き換わる', async () =
   });
   assert.equal(shape.ok, true, '置き換えた socket が投げる: ' + shape.err);
   assert.equal(shape.connected, false, 'つながっていないのに、つながった扱いになっている');
+  await page.close();
+});
+
+test('ethers が読めなくても、その下の定義が消えない', async () => {
+  const { page, errors } = await openWith(true);
+  const missing = await page.evaluate(names => names.filter(n => typeof window[n] !== 'function'),
+    NEEDED_AFTER_ETHERS);
+  assert.deepEqual(missing, [], '消えている: ' + missing.join(', '));
+  assert.deepEqual(errors.filter(m => /ethers is not defined/.test(m)), [],
+    'ethers が無いことで、まだ落ちている');
   await page.close();
 });
