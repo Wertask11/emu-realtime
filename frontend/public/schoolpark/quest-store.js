@@ -9,6 +9,15 @@
   function isFounder(q) {
     return q.id === FOUNDER_ID && q.kind === 'founder' && q.questNumber === 0;
   }
+  /* #000 の全文。記録の形が崩れていても、ここで必ず配列にして返す。
+     素通しにすると、欄が1つ欠けただけで画面全体が描けなくなる。 */
+  function sections(q) {
+    if (!isFounder(q) || !Array.isArray(q.founderSections)) return [];
+    return q.founderSections.map(function (s) {
+      s = s || {};
+      return { title: String(s.title || ''), body: String(s.body || '') };
+    });
+  }
   async function createQuest(fb, db, data) {
     const ref = fb.doc(fb.collection(db, 'sp_quests'));
     const counter = fb.doc(db, 'sp_quest_counters', 'quests');
@@ -43,7 +52,7 @@
     }
     throw new Error('QUEST_SEQUENCE_BUSY');
   }
-  const api = { FOUNDER_ID, label, isFounder, createQuest };
+  const api = { FOUNDER_ID, label, isFounder, sections, createQuest };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SpQuestStore = api;
 })(typeof window !== 'undefined' ? window : this);
