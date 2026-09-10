@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<script src="/schoolpark/quest-store.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
@@ -1450,8 +1451,8 @@ async function renderSchoolPark() {
     + '<div class="actions"><button class="btn primary" id="avSubmit">議題を出す</button></div></div>'
 
     + '<div class="card"><h3>クエストの状態を変える</h3>'
-    + (quests.length ? quests.map(q =>
-        '<div class="row"><span>' + esc(q.title || "") + '<br>'
+    + (quests.length ? quests.filter(q => !SpQuestStore.isFounder(q)).map(q =>
+        '<div class="row"><span>' + esc((SpQuestStore.label(q) && !SpQuestStore.isFounder(q) ? SpQuestStore.label(q) + " " : "") + (q.title || "")) + '<br>'
         + '<small style="color:var(--muted)">' + asMoney(parseInt(String(q.budget||"0").replace(/[^0-9]/g,""),10)||0, CURRENCIES.indexOf(q.budgetCurrency)>=0?q.budgetCurrency:"JPY") + ' · ' + (STATUS[q.status] || q.status)
         + ' · ' + q.took + '/' + (q.need || 5) + '人が受けた</small></span>'
         + '<span>'
@@ -1564,13 +1565,16 @@ async function renderSchoolPark() {
     };
   });
 
+  let questSubmitting = false;
   $("#aqSubmit").onclick = async () => {
+    if (questSubmitting) return;
     const v = id => ($("#" + id).value || "").trim();
     if (!v("aqTitle")) { alert("何を試すのかを書いてください。"); return; }
     if (!v("aqHypothesis")) { alert("予想を書いてください。"); return; }
+    questSubmitting = true;
     const days = Math.max(1, Math.min(90, parseInt(v("aqDays"), 10) || 14));
     try {
-      await f.addDoc(f.collection(f.db, "sp_quests"), {
+      await SpQuestStore.createQuest(f, f.db, {
         title: v("aqTitle").slice(0, 120), knowledge: v("aqKnowledge").slice(0, 200),
         hypothesis: v("aqHypothesis").slice(0, 400), action: v("aqAction").slice(0, 400),
         measure: v("aqMeasure").slice(0, 400),
@@ -1581,6 +1585,7 @@ async function renderSchoolPark() {
         status: "OPEN", createdAt: Date.now(), closesAt: Date.now() + days * 86400000
       });
     } catch (e) { alert("出せませんでした（" + (e.code || e.message) + "）"); return; }
+    finally { questSubmitting = false; }
     renderSchoolPark();
   };
 
