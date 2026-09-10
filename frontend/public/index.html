@@ -15683,9 +15683,13 @@ async function spPassportLoad(force) {
   if (window._spPassport && !force) return window._spPassport;
   if (_spPassportBusy) return _spPassportBusy;
   _spPassportBusy = (async function () {
+   /* 途中で落ちても、必ず後始末する。戻さないと、失敗した約束を以後ずっと
+      返し続け、パスポートを見るところ（ギルド・クエスト・宿題）が
+      読み直すまで全部止まる。spGuildDefs と同じ直し方。 */
+   try {
     let me = null;
     try { me = await emuMyIdentity(); } catch (e) {}
-    if (!me) { _spPassportBusy = null; return null; }
+    if (!me) { return null; }
     let d = {};
     try {
       const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid));
@@ -15752,8 +15756,10 @@ async function spPassportLoad(force) {
     /* 準備中の表示を塗り直す。運営かどうかはパスポートを読むまで分からないので、
        画面を開いた時点の一度きりだと、運営にも「準備中」の灰色が残ったままになる。 */
     try { paintBrandMaintenance(); } catch (e) {}
-    _spPassportBusy = null;
     return window._spPassport;
+   } finally {
+    _spPassportBusy = null;
+   }
   })();
   return _spPassportBusy;
 }
@@ -16011,7 +16017,7 @@ window.spDaoLoadVotes = async function (app) {
   const fb = window.fbLib;
   /* 本人はパスポートから取る。ほかの画面と同じ道にそろえる。 */
   const p = await spPassportLoad();
-  const mine = p ? p.addr.toLowerCase() : '';
+  const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
   /* 特殊議題に入れる人かどうか。入れない人には、押せない形で見せる。 */
   const canGuild = await window.spCanGuild();
   const defs = await spGuildDefs();
@@ -16119,7 +16125,7 @@ window.spGuildOpen = async function (guildId, app, quiet) {
   }
 
   const p = await spPassportLoad();
-  const mine = p ? p.addr.toLowerCase() : '';
+  const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
   const canGuild = await window.spCanGuild();
 
   let joins = 0, supports = 0, iJoined = false, iSupport = false;
@@ -16426,7 +16432,7 @@ window.spDaoLoadQuests = async function (app) {
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
   const p = await spPassportLoad();
-  const mine = p ? p.addr.toLowerCase() : '';
+  const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
   const gdefs = await spGuildDefs();
 
   let docs = [];
@@ -16522,7 +16528,7 @@ window.spQuestOpen = async function (app, questId) {
       const snap = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));
       if (snap.exists()) {
         const p = await spPassportLoad();
-        const mine = p ? p.addr.toLowerCase() : '';
+        const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
         const gdefs = await spGuildDefs();
         const shaped = await _spShapeQuest({ id: snap.id, ...(snap.data() || {}) }, p, mine, gdefs, app);
         app.setState({ quests: ((app.state && app.state.quests) || []).concat([shaped]) });
@@ -16831,7 +16837,7 @@ window.spQuestClose = async function (questId, app) {
     if (snap.exists()) q = { id: snap.id, ...(snap.data() || {}) };
   } catch (e) {}
   if (!q) { alert('クエストが見つかりませんでした。'); return; }
-  if (!p.isOwner && String(q.owner || '').toLowerCase() !== p.addr.toLowerCase()) {
+  if (!p.isOwner && String(q.owner || '').toLowerCase() !== String(p.addr || '').toLowerCase()) {
     alert('完了にできるのは、そのクエストを出した人だけです。'); return;
   }
   if (q.status !== 'CLOSED') {
@@ -16907,7 +16913,7 @@ window.spDaoLoadWisdom = async function (app) {
     return;
   }
   const p = await spPassportLoad();
-  const mine = p ? p.addr.toLowerCase() : '';
+  const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
   const wisdom = [];
   let cites = 0;
   for (const w of docs) {
@@ -17245,7 +17251,7 @@ window.spDaoLoadPark = async function (app) {
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
   const p = await spPassportLoad();
-  const mine = p ? p.addr.toLowerCase() : '';
+  const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
 
   let items = [];
   try {
