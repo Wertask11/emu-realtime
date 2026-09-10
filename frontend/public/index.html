@@ -15728,7 +15728,10 @@ async function spPassportLoad(force) {
        SchoolPark から直接パスポートを開くと空のままで、
        価値プロフィールの表示と食い違っていた。 */
     if (!window.emuEntitlement && typeof emuEnsureEntitlement === 'function') {
-      try { await emuEnsureEntitlement(); } catch (e) {}
+      /* 公開一覧の表示を、別サーバーの課金情報の返答で止めない。
+         返答後は既存の emu-entitlement イベントでパスポートを更新する。
+         書き込み資格は各操作とFirestore Rulesで引き続き確認する。 */
+      try { Promise.resolve(emuEnsureEntitlement()).catch(function () {}); } catch (e) {}
     }
     const ent = String(window.emuEntitlement || '').toLowerCase();
     let tier = (ent && ent !== 'guest') ? ent : ((d.membership && d.membership.tier) || 'free');
