@@ -15899,9 +15899,14 @@ async function spGuildDefs(force) {
       const snap = await window.fbLib.getDocs(window.fbLib.collection(window.db, 'sp_guilds'));
       snap.forEach(function (s) { extra.push(Object.assign({ id: s.id }, s.data() || {})); });
     } catch (e) { /* 読めなければ、書いてある5つだけで動く */ }
-    _spGuildDefs = SpGuildStore.merge(extra);
-    _spGuildDefsBusy = null;
-    return _spGuildDefs;
+    try {
+      _spGuildDefs = SpGuildStore.merge(extra);
+      return _spGuildDefs;
+    } finally {
+      /* 失敗しても必ず戻す。戻さないと、失敗した約束を以後ずっと返し続け、
+         読み直すまでギルドもクエストも出ないままになる。 */
+      _spGuildDefsBusy = null;
+    }
   })();
   return _spGuildDefsBusy;
 }
@@ -16480,7 +16485,7 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
     goFrom: (fromId && qGuild)
       ? function () { window.spGuildOpen(qGuild.id, app); }
       : function () {},
-    founderSections: SpQuestStore.isFounder(q) ? q.founderSections : [],
+    founderSections: SpQuestStore.sections(q),
     action: q.action || '', measure: q.measure || '',
     knowledge: q.knowledge || '', owner: q.ownerName || _spShortAddr(q.owner),
     /* 金額は3桁ごとに区切って出す（記録には数字だけを入れてある） */
