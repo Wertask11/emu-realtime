@@ -16,9 +16,21 @@
    最初は隅の小さな丸だけを出す。押すと開く。
    全面に出すと、下にあるログインの操作を塞いでしまう。 */
 (function () {
+  /* ログイン（LINE・Google）は一度この画面を離れて戻ってくる。
+     そのとき URL の ?diag=1 は消える。付け直さないと診断が出ず、
+     いちばん見たい「ログインしたあと」を見られない。
+     だから一度付けたら覚えておく。?diag=0 か、枠の「やめる」で消す。 */
+  var on = false;
   try {
-    if (location.search.indexOf('diag=1') < 0) return;
-  } catch (e) { return; }
+    var q = location.search || '';
+    if (q.indexOf('diag=0') >= 0) { localStorage.removeItem('spDiag'); }
+    else if (q.indexOf('diag=1') >= 0) { localStorage.setItem('spDiag', '1'); on = true; }
+    else { on = localStorage.getItem('spDiag') === '1'; }
+  } catch (e) {
+    /* 保存が使えない端末では、その場かぎりで動かす */
+    try { on = (location.search || '').indexOf('diag=1') >= 0; } catch (e2) { return; }
+  }
+  if (!on) return;
 
   var errs = [], ready = false, open = false, timer = null;
   function note(kind, msg) {
@@ -102,7 +114,8 @@
     panel.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding-bottom:6px">'
       + '<b style="flex:1;color:#D0E2BE">SchoolPark 診断</b>'
       + '<button type="button" id="spDiagAgain" style="font:inherit;padding:8px 12px;background:#0F5C3F;color:#F4F1EA;border:0;border-radius:5px">調べ直す</button>'
-      + '<button type="button" id="spDiagClose" style="font:inherit;padding:8px 12px;background:#3B382F;color:#F4F1EA;border:0;border-radius:5px">閉じる</button></div>'
+      + '<button type="button" id="spDiagClose" style="font:inherit;padding:8px 12px;background:#3B382F;color:#F4F1EA;border:0;border-radius:5px">閉じる</button>'
+      + '<button type="button" id="spDiagStop" style="font:inherit;padding:8px 12px;background:#6E3B2F;color:#F4F1EA;border:0;border-radius:5px">やめる</button></div>'
       + '<div id="spDiagBody" style="max-height:52vh;overflow:auto"></div>';
 
     document.body.appendChild(chip);
@@ -113,6 +126,12 @@
     chip.addEventListener('click', function () { setOpen(true); });
     panel.querySelector('#spDiagClose').addEventListener('click', function () { setOpen(false); });
     panel.querySelector('#spDiagAgain').addEventListener('click', function () { look(); });
+    /* 覚えているのを消して、この場から片付ける（URLをいじらなくていい） */
+    panel.querySelector('#spDiagStop').addEventListener('click', function () {
+      try { localStorage.removeItem('spDiag'); } catch (e) {}
+      setOpen(false);
+      chip.remove(); panel.remove();
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
