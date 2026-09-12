@@ -15887,10 +15887,45 @@ async function spPassportLoad(force) {
     } catch (e) {}
 
     const addr = me.ches || me.wallet;
-    /* 名前は分かるものから順に。どれも無ければ番号の頭を使う。 */
-    let name = String(d.displayName || '').trim();
+    /* 名前は「本人が付けたもの」を最優先にする。
+
+       プロフィールで保存した名前の行き先は user_profiles/{アドレス} で、
+       鍵はウォレットのアドレス（backend の /api/user/setname）。
+       いっぽう ches_accounts/{uid}.displayName に入るのは、アカウントを
+       作った瞬間のログイン元の名前（LINEのプロフィール名など）で、
+       あとから付け直しても、そこは一生変わらない。
+
+       ここは ches_accounts のほうを先に見ていた。そのため自分で付けた名前は
+       永久に出ず、ログイン元の名前か、それも無ければ 0x195f…42ac のような
+       番号が出ていた。読む順を入れ替える。
+
+       実際のウォレットと CHESアドレスの両方で照らす。ログイン方法によって
+       どちらの名義で保存したかが変わるため。 */
+    let name = '';
+    {
+      const seen = {};
+      for (const a of [me.wallet, me.ches]) {
+        const key = String(a || '').toLowerCase();
+        if (!key || seen[key]) continue;
+        seen[key] = true;
+        try {
+          const s = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'user_profiles', key));
+          const v = s.exists() ? String((s.data() || {}).displayName || '').trim() : '';
+          if (v) { name = v; break; }
+        } catch (e) {}
+      }
+    }
+    if (!name) name = String(d.displayName || '').trim();
     if (!name) { try { name = String(localStorage.getItem('ches_name') || '').trim(); } catch (e) {} }
     if (!name) name = _spShortAddr(addr);
+
+    /* Emu 側は、名前を localStorage から何か所でも読んでいる。
+       本人が付けた名前が分かったら、そちらへも写しておく。
+       写さないと SchoolPark だけ直って、Emu は古い名前のままになる。
+       番号を縮めたもの（0x195f…42ac）は名前ではないので写さない。 */
+    if (name && name.indexOf('…') < 0) {
+      try { localStorage.setItem('ches_name', name); } catch (e) {}
+    }
 
     /* 公式パス（NFT）を持っているか。持ち主は paid_users に載っている。
        window.hasPaidNFT はウォレットで入ったときにしか立たないことがあるので、
@@ -22687,7 +22722,16 @@ async function sendEmuFeedback() {
     localStorage.setItem("ches_uid", account.uid);
     // CHESアドレスは全ログイン方法（LINE / Google / ウォレット）で紐づけて保持する
     localStorage.setItem("ches_address", account.chesAddress || addr);
-    if (account.displayName) localStorage.setItem("ches_name", account.displayName);
+    /* ログイン元の名前で、本人が付けた名前を上書きしない。
+       ここで毎回上書きしていたため、プロフィールで保存した名前が
+       ログインのたびに消え、Emu でも毎回付け直す必要があった。
+       まだ何も無いときだけ、ログイン元の名前を仮に入れておく。
+       本物の名前は、このあと spPassportLoad が user_profiles から拾って書く。 */
+    try {
+      if (account.displayName && !String(localStorage.getItem("ches_name") || "").trim()) {
+        localStorage.setItem("ches_name", account.displayName);
+      }
+    } catch (e) {}
 
     window.emuAuth = { type: "chesFree", address: addr, provider: provider, chesUid: account.uid };
     localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
