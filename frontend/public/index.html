@@ -9246,6 +9246,8 @@ async function goToChesHub() {
 
   if (typeof chesLandAfterLogin === "function") {
     await chesLandAfterLogin();
+    /* 中身が出来てから見せる。揃わなければ上限で切り上げる。 */
+    if (typeof spDaoWaitReady === "function") { try { await spDaoWaitReady(8000); } catch (e) {} }
     _hideSpLoadingOverlay();
   } else if (typeof chesHubShow === "function") {
     chesHubShow();
@@ -15766,6 +15768,60 @@ function openSpDao() {
   spDaoWatchSize();
   spDaoWatchRender();
 }
+
+/* SchoolPark を、中身が出来てから見せる。
+
+   openSpDao() は枠に src を入れて、すぐ戻る。読み込みの完了もデータの到着も
+   待たない。そのため覆い（冷蔵庫くん）を「画面を出し始めた時点」で外していて、
+   そのあとに届く中身が、途中経過のまま表に出ていた。
+     おはよう、ゲスト ／ クエスト0件 ／ ¥0 ／ 信用スコア「読み込んでいます…」
+   覆いを置いている意味が無くなっていた。
+
+   ここでは待つだけでなく、8つの読み込みを自分で走らせて、全部が終わるのを待つ。
+   待っているあいだは覆いが出たままなので、途中経過は表に出ない。
+
+   必ず上限で切り上げる。通信が転んでいるといつまでも揃わないため、
+   待たせ続けると入れなくなる。切り上げたときは、揃っていなくても見せる
+   （これまでと同じ見え方に戻るだけで、悪くはならない）。 */
+async function spDaoWaitReady(maxMs) {
+  const limit = Date.now() + (Number(maxMs) || 8000);
+  const nap = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+
+  /* SchoolPark を開いていないとき（準備中の案内やハブに着いたとき）は、
+     ここで待つ理由が無い。 */
+  if (!document.body.classList.contains('sp-dao-open')) return false;
+
+  /* ① 枠の中の画面が出来るのを待つ。これが無いと読み込みを渡す先が無い。 */
+  let app = null;
+  while (Date.now() < limit) {
+    try {
+      const fr = document.getElementById('spDaoFrame');
+      app = (fr && fr.contentWindow && fr.contentWindow.app) || null;
+    } catch (e) { app = null; }
+    if (app) break;
+    await nap(100);
+  }
+  if (!app) return false;
+
+  /* ② 8つの読み込みを走らせて、全部が終わるのを待つ。
+     1つが転んでも、残りは待つ（catch でつぶす）。 */
+  const names = ['spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
+                 'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark'];
+  const jobs = names.map(function (n) {
+    const fn = window[n];
+    if (typeof fn !== 'function') return Promise.resolve();
+    try { return Promise.resolve(fn(app)).catch(function () {}); }
+    catch (e) { return Promise.resolve(); }
+  });
+
+  let done = false;
+  await Promise.race([
+    Promise.all(jobs).then(function () { done = true; }),
+    nap(Math.max(0, limit - Date.now()))
+  ]);
+  return done;
+}
+window.spDaoWaitReady = spDaoWaitReady;
 
 /* ═══════════════════════════════════════
    SchoolPark パスポート
@@ -22788,6 +22844,8 @@ async function sendEmuFeedback() {
     // ログイン後は SchoolPark へ。
     if (typeof chesLandAfterLogin === "function") {
       await chesLandAfterLogin();
+      /* 中身が出来てから見せる。揃わなければ上限で切り上げる。 */
+      if (typeof window.spDaoWaitReady === "function") { try { await window.spDaoWaitReady(8000); } catch (e) {} }
       if (typeof _hideSpLoadingOverlay === "function") _hideSpLoadingOverlay();
     } else if (typeof chesHubShow === "function") {
       chesHubShow();
