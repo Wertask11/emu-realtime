@@ -16673,7 +16673,28 @@ function _spQuestDue(closesAt) {
    だんだん間隔を空けて、6回であきらめる（およそ1分）。 */
 const SP_QUEST_RETRY_MS = [1500, 3000, 6000, 10000, 10000, 10000];
 
-window.spDaoLoadQuests = async function (app, attempt) {
+/* 呼ぶ入口が2つある（枠の中の起動時と、親の spDaoReloadAll）。
+   そのままだと、それぞれが別々の読み直しの列を作って二重に走る。
+   実際、本番のログに同じ回が2つずつ並んだ。通信が倍になり、
+   かえって転びやすくなる。列は1本だけにする。 */
+let _spQuestsBusy = null;
+let _spQuestRetryTimer = null;
+
+window.spDaoLoadQuests = function (app, attempt) {
+  /* すでに読んでいる最中なら、その1本に相乗りする（spGuildDefs と同じ考え方）。
+     読み直しは自分で順番に呼ぶので、そちらは待たせない。 */
+  if (_spQuestsBusy && !attempt) return _spQuestsBusy;
+  const run = _spDaoLoadQuestsOnce(app, attempt);
+  if (!attempt) {
+    _spQuestsBusy = run;
+    run.catch(function () {}).then(function () {
+      if (_spQuestsBusy === run) _spQuestsBusy = null;
+    });
+  }
+  return run;
+};
+
+async function _spDaoLoadQuestsOnce(app, attempt) {
   if (!app || typeof app.setState !== 'function') return;
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
@@ -16682,12 +16703,14 @@ window.spDaoLoadQuests = async function (app, attempt) {
   const gdefs = await spGuildDefs();
 
   /* もう一度読み直す。いま画面に出ているものは消さない。
-     「まだクエストがありません」と言い切るのは、本当に読めたときだけ。 */
+     「まだクエストがありません」と言い切るのは、本当に読めたときだけ。
+     予約は1つだけ。あとから来たものが前の予約を引き取る。 */
   const n = Number(attempt) || 0;
   function later(why) {
     console.warn('クエストを読み直します（' + (n + 1) + '回目）:', why);
     if (n >= SP_QUEST_RETRY_MS.length) return;
-    setTimeout(function () { window.spDaoLoadQuests(app, n + 1); }, SP_QUEST_RETRY_MS[n]);
+    clearTimeout(_spQuestRetryTimer);
+    _spQuestRetryTimer = setTimeout(function () { window.spDaoLoadQuests(app, n + 1); }, SP_QUEST_RETRY_MS[n]);
   }
 
   let docs = [];
@@ -16731,8 +16754,10 @@ window.spDaoLoadQuests = async function (app, attempt) {
 
   const quests = [];
   for (const q of docs) quests.push(await _spShapeQuest(q, p, mine, gdefs, app));
+  /* 読めたので、待たせていた読み直しの予約は取り消す。 */
+  clearTimeout(_spQuestRetryTimer);
   app.setState({ quests: quests, noQuests: quests.length === 0 });
-};
+}
 
 /* クエスト1件を、枠の中で使える形にする。
    受けた人と途中報告は、その場で数える。 */
