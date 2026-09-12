@@ -15823,6 +15823,31 @@ async function spDaoWaitReady(maxMs) {
 }
 window.spDaoWaitReady = spDaoWaitReady;
 
+/* SchoolPark の画面に、もう中身が入っているか。
+   いちど入ったあとで 開き直すときに、毎回また覆いを出さないため。 */
+function spDaoLooksReady() {
+  try {
+    const fr = document.getElementById('spDaoFrame');
+    const st = fr && fr.contentWindow && fr.contentWindow.app && fr.contentWindow.app.state;
+    return !!(st && st.me && st.me.name && st.me.name !== 'ゲスト');
+  } catch (e) { return false; }
+}
+window.spDaoLooksReady = spDaoLooksReady;
+
+/* SchoolPark を、中身がそろってから見せる。覆いの出し入れまで面倒を見る。
+   ログイン直後の着地と、ハブから選んだときの、どちらもここを通す。 */
+function spDaoOpenWhenReady() {
+  const fresh = !spDaoLooksReady();
+  if (fresh) { try { _showSpLoadingOverlay(); } catch (e) {} }
+  openSpDao();
+  if (!fresh) return;
+  Promise.resolve()
+    .then(function () { return spDaoWaitReady(8000); })
+    .catch(function () {})
+    .then(function () { try { _hideSpLoadingOverlay(); } catch (e) {} });
+}
+window.spDaoOpenWhenReady = spDaoOpenWhenReady;
+
 /* ═══════════════════════════════════════
    SchoolPark パスポート
 
@@ -18645,7 +18670,11 @@ function chesHubGo(brand) {
       break;
     }
     case 'schoolpark': {
-      openSpDao();
+      /* ここは覆いも待ちも無く、そのまま開いていた。そのため
+         「おはよう、ゲスト」やクエスト0件のまま画面が出ていた。
+         ログイン直後の着地と同じ扱いにそろえる。 */
+      if (typeof spDaoOpenWhenReady === 'function') spDaoOpenWhenReady();
+      else openSpDao();
       break;
     }
   }
