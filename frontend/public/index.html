@@ -16669,7 +16669,11 @@ function _spQuestDue(closesAt) {
   return (d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0');
 }
 
-window.spDaoLoadQuests = async function (app) {
+/* 読み直しの間合い。転んでも、通信が戻るころにもう一度だけ試す。
+   だんだん間隔を空けて、6回であきらめる（およそ1分）。 */
+const SP_QUEST_RETRY_MS = [1500, 3000, 6000, 10000, 10000, 10000];
+
+window.spDaoLoadQuests = async function (app, attempt) {
   if (!app || typeof app.setState !== 'function') return;
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
@@ -16677,14 +16681,30 @@ window.spDaoLoadQuests = async function (app) {
   const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
   const gdefs = await spGuildDefs();
 
+  /* もう一度読み直す。いま画面に出ているものは消さない。
+     「まだクエストがありません」と言い切るのは、本当に読めたときだけ。 */
+  const n = Number(attempt) || 0;
+  function later(why) {
+    console.warn('クエストを読み直します（' + (n + 1) + '回目）:', why);
+    if (n >= SP_QUEST_RETRY_MS.length) return;
+    setTimeout(function () { window.spDaoLoadQuests(app, n + 1); }, SP_QUEST_RETRY_MS[n]);
+  }
+
   let docs = [];
   try {
     const q = fb.query(fb.collection(window.db, 'sp_quests'), fb.orderBy('createdAt', 'desc'), fb.limit(30));
     const snap = await fb.getDocs(q);
     snap.forEach(function (s) { docs.push({ id: s.id, ...(s.data() || {}) }); });
+    /* オフラインのとき、一覧の取得は例外を投げない。手元の控えをそのまま返す。
+       開いた直後は控えが空なので、「0件で成功」になる。
+       それを「クエストが無い」と読むと、通信が戻っても
+       「まだクエストがありません」のまま固まる。実際にそうなっていた。
+       控えから来ていて、しかも空のときは、読めたと見なさない。 */
+    if (docs.length === 0 && snap.metadata && snap.metadata.fromCache) {
+      return later('通信が戻っていないため、一覧が手元の控え（空）から返ってきた');
+    }
   } catch (e) {
-    console.warn('クエストを読めませんでした:', e && (e.message || e));
-    return;
+    return later((e && (e.message || e)) || '一覧を読めなかった');
   }
 
   /* Quest #000 の取りこぼしを防ぐ保険。上の30件に入っていれば要らない。
@@ -16701,7 +16721,10 @@ window.spDaoLoadQuests = async function (app) {
       const founder = await fb.getDoc(fb.doc(window.db, 'sp_quests', SpQuestStore.FOUNDER_ID));
       if (founder.exists()) docs.push({ id: founder.id, ...founder.data() });
     } catch (e) {
+      /* 読めた一覧は、そのまま画面へ出す（ここで引き返さない）。
+         #000 だけが欠けた状態なので、あとでもう一度だけ取りに行く。 */
       console.warn('Quest #000 を読めませんでした:', e && (e.message || e));
+      later('Quest #000 が読めなかった');
     }
   }
   docs.sort((a, b) => Number(SpQuestStore.isFounder(b)) - Number(SpQuestStore.isFounder(a)));
