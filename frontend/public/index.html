@@ -16682,13 +16682,29 @@ window.spDaoLoadQuests = async function (app) {
     const q = fb.query(fb.collection(window.db, 'sp_quests'), fb.orderBy('createdAt', 'desc'), fb.limit(30));
     const snap = await fb.getDocs(q);
     snap.forEach(function (s) { docs.push({ id: s.id, ...(s.data() || {}) }); });
-    const founder = await fb.getDoc(fb.doc(window.db, 'sp_quests', SpQuestStore.FOUNDER_ID));
-    if (founder.exists() && !docs.some(q => q.id === founder.id)) docs.push({ id: founder.id, ...founder.data() });
-    docs.sort((a, b) => Number(SpQuestStore.isFounder(b)) - Number(SpQuestStore.isFounder(a)));
   } catch (e) {
     console.warn('クエストを読めませんでした:', e && (e.message || e));
     return;
   }
+
+  /* Quest #000 の取りこぼしを防ぐ保険。上の30件に入っていれば要らない。
+     読みに行くのは、入っていなかったときだけ。
+
+     ここを一覧と同じ try にまとめていたため、#000 の1件が読めなかっただけで
+     読めていた一覧ごと捨てて、画面に何も出さないまま引き返していた。
+     Firestore は Listen が転ぶと一時的に「オフライン」になる。その一瞬に
+     当たると、一覧は取れているのにクエストが1件も出ない状態で固まっていた。
+     ギルド側（spDaoLoadVotes）が同じ状況でも出ていたのは、あちらが
+     読み取りを1つずつ別の try に分けているため。同じ形にそろえる。 */
+  if (!docs.some(function (d) { return d.id === SpQuestStore.FOUNDER_ID; })) {
+    try {
+      const founder = await fb.getDoc(fb.doc(window.db, 'sp_quests', SpQuestStore.FOUNDER_ID));
+      if (founder.exists()) docs.push({ id: founder.id, ...founder.data() });
+    } catch (e) {
+      console.warn('Quest #000 を読めませんでした:', e && (e.message || e));
+    }
+  }
+  docs.sort((a, b) => Number(SpQuestStore.isFounder(b)) - Number(SpQuestStore.isFounder(a)));
 
   const quests = [];
   for (const q of docs) quests.push(await _spShapeQuest(q, p, mine, gdefs, app));
