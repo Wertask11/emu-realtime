@@ -14324,6 +14324,8 @@ function chesHubShow() {
   const bf = document.getElementById('chesBrandFrame');
   if (bf && bf.style.display !== 'none') {
     bf.style.display = 'none';
+    bf.style.visibility = '';                       /* 次に開くとき見えないままにしない */
+    clearTimeout(window._cbfRevealTimer);
     const fr = document.getElementById('cbfFrame'); if (fr) fr.src = 'about:blank';
   }
   // ウォレット等の全画面オーバーレイが残っているとハブ(z-index:900)より前面(z-index:3000)に
@@ -14372,30 +14374,41 @@ function chesBrandFrameOpen(brand) {
   if (bar) bar.style.display = conf.ownNav ? 'none' : '';
   /* 白く光るのを止める。
 
-     これまでは src を入れてすぐ枠を表示していた。読み込みが終わるまでの
-     あいだ、枠は自分の既定の白（#cbfFrame の background: #fff）を塗る。
-     その下の外枠は濃い色（#100e18）なので、濃い画面 → 真っ白 → 行き先の色、
-     と二度変わって白く光って見えていた。
+     これまでは src を入れてすぐ枠を表示していた。読み込みが終わるまでのあいだ、
+     枠は自分の既定の白（#cbfFrame の background: #fff）を塗る。その下の外枠は
+     濃い色（#100e18）なので、いま居る画面 → 真っ白 → 行き先の色、と二度変わって
+     白く光って見えていた。
 
-     ・下地を行き先と同じ色にする（色が変わらない）
-     ・読み込みが終わるまで中身を見せない（描きかけを出さない）
-     load が来ない行き先もあるので、来なければ2.5秒で必ず見せる。 */
+     下地を行き先と同じ色にするだけでは直らない。Camellia の色（#fff6f2）は
+     ほとんど白なので、結局そのあいだ白い面を見せることになる。
+
+     直し方は「行き先が出来上がるまで、いま居る画面を出したままにする」。
+     枠は先に置いて読み込ませるが、見えない状態にしておく。読み込みが終わって
+     から、いま居る画面と入れ替える。あいだに何も挟まらないので光らない。
+
+     load が来ない行き先（外部サイトなど）もあるので、来なければ3秒で必ず出す。 */
   const bg = conf.bg || '#ffffff';
-  if (wrap) wrap.style.background = bg;
+  const hub = document.getElementById('chesHubScreen');
+  clearTimeout(window._cbfRevealTimer);
+  const reveal = function () {
+    clearTimeout(window._cbfRevealTimer);
+    /* 出来上がってから、いま居る画面を下げる。先に下げると、そのあいだ
+       何も無い面（＝白）が見えてしまう。 */
+    if (hub) hub.style.display = 'none';
+    if (wrap) wrap.style.visibility = '';
+  };
+  if (wrap) {
+    wrap.style.background = bg;
+    wrap.style.visibility = 'hidden';   /* 置き場所は作るが、まだ見せない */
+    wrap.style.display = 'flex';
+  }
   if (frame) {
     frame.style.background = bg;
-    frame.style.visibility = 'hidden';
-    clearTimeout(window._cbfRevealTimer);
-    const reveal = function () {
-      clearTimeout(window._cbfRevealTimer);
-      frame.style.visibility = '';
-    };
+    frame.style.visibility = '';
     frame.addEventListener('load', reveal, { once: true });
-    window._cbfRevealTimer = setTimeout(reveal, 2500);
     frame.src = conf.url;
   }
-  const hub  = document.getElementById('chesHubScreen'); if (hub) hub.style.display = 'none';
-  if (wrap) wrap.style.display = 'flex';
+  window._cbfRevealTimer = setTimeout(reveal, 3000);
 }
 
 /* Camellia のサイドバーから呼ばれる。出ているあいだだけ、
@@ -14409,8 +14422,10 @@ function chesBrandFrameClose() {
   const frame = document.getElementById('cbfFrame');
   if (wrap) wrap.style.display = 'none';
   document.body.classList.remove('cam-contact-off');   /* Camellia を離れたので戻す */
-  /* 見せる予約が残っていると、次に開いたとき中身が見えないままになる */
+  /* 見せる予約と「見せない」の指定を戻す。残っていると、次に開いたとき
+     中身が見えないままになる。 */
   clearTimeout(window._cbfRevealTimer);
+  if (wrap) wrap.style.visibility = '';
   if (frame) { frame.style.visibility = ''; frame.src = 'about:blank'; } /* 読み込みを止めて解放 */
   /* SchoolPark から開いた場合は、その下に SchoolPark が出たまま残っている。
      ハブを出すと SchoolPark を素通りして戻ってしまうので、閉じるだけにする。 */
