@@ -11175,7 +11175,7 @@ const SP_REIZO_KB = [
 
   // ── 公園
   { k:['公園','park','エレベーター','今日ひま','バカな挑戦','部屋','リアルの集まり'],
-    a:'公園は、締切も報酬も進捗バーもない場所だよ🌳\nクエストが「報酬のある仕事」なら、公園は「報酬のない遊び」。数えないし、評価もしないんだ。\n\n・今日ひま？ボード（返事がなくても気にしない）\n・バカな挑戦（役に立たないことを、本気で）\n・いま開いてる部屋（無言で作業してるだけの部屋もあるよ）\n・エレベーター（6つの階をのぼりおりする）\n・遊び（ECHO FIELD・林檎の方程式）\n・月例、リアルの集まり\n\nここで出た気づきも「知恵にする」でライブラリに持っていけるよ！' },
+    a:'公園は、締切も報酬も進捗バーもない場所だよ🌳\nクエストが「報酬のある仕事」なら、公園は「報酬のない遊び」。数えないし、評価もしないんだ。\n\n・今日ひま？ボード（返事がなくても気にしない）\n・バカな挑戦（役に立たないことを、本気で）\n・エレベーター（6つの階をのぼりおりする）\n・遊び（ECHO FIELD・林檎の方程式・日常の神々）\n・月例、リアルの集まり（運営からのお知らせ）\n\nここで出た気づきも「知恵にする」でライブラリに持っていけるよ！' },
 
   // ── DAO・合同会社
   { k:['dao','合同会社','法人','運営会社','だれが運営','誰が運営','組織'],
@@ -17663,10 +17663,9 @@ window.spDaoLoadTreasury = async function (app) {
 /* ═══════════════════════════════════════
    公園
 
-   締切も報酬もない場所。4種類を sp_park に入れ、kind で分ける。
+   締切も報酬もない場所。3種類を sp_park に入れ、kind で分ける。
      board … 今日ひま？ボード
      dumb  … バカな挑戦
-     room  … いま開いてる部屋
      event … 月例、リアルの集まり
 
    「乗る」は joins/{パスポート番号}。文書のIDが誰かを表すので、
@@ -17690,10 +17689,10 @@ window.spDaoLoadPark = async function (app) {
   items = items.filter(function (i) { return !i.hidden; })
                .sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
 
-  const board = [], dumb = [], rooms = [], events = [];
+  const board = [], dumb = [], events = [];
   for (const i of items) {
     let names = [], on = false;
-    if (i.kind === 'board' || i.kind === 'room') {
+    if (i.kind === 'board') {
       try {
         const js = await fb.getDocs(fb.collection(window.db, 'sp_park', i.id, 'joins'));
         js.forEach(function (j) {
@@ -17710,9 +17709,6 @@ window.spDaoLoadPark = async function (app) {
         join: (function (id) { return function () { window.spParkJoin(id, app); }; })(i.id) });
     } else if (i.kind === 'dumb') {
       dumb.push({ title: i.title || '', body: i.body || '', who: i.who || '' });
-    } else if (i.kind === 'room') {
-      rooms.push({ name: i.title || '', who: names.length ? (names.length + '人') : '0人',
-        dot: names.length ? '#0F5C3F' : 'rgba(20,19,16,.2)' });
     } else if (i.kind === 'event') {
       const d = i.at ? new Date(i.at) : null;
       events.push({ month: d ? ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getMonth()] : '',
@@ -17720,7 +17716,7 @@ window.spDaoLoadPark = async function (app) {
         title: i.title || '', body: i.body || '', place: i.place || '', who: i.who || '' });
     }
   }
-  app.setState({ board: board, dumb: dumb, rooms: rooms, events: events,
+  app.setState({ board: board, dumb: dumb, events: events,
     noPark: items.length === 0 });
 };
 
