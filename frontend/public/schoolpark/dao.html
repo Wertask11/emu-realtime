@@ -237,6 +237,14 @@ html, body                 { height: 100%; }
                 <div style="font-size:12px; color:#6E695C">思いついたら投げる。返事がなくても気にしない。</div>
                 <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
               </div>
+              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; gap:10px; flex-wrap:wrap">
+                  <input onInput="{{ onBoardWhen }}" value="{{ boardDraft.when }}" placeholder="いつ？（例：今夜20時〜）" style="flex:0 1 220px; padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
+                  <input onInput="{{ onBoardTitle }}" value="{{ boardDraft.title }}" placeholder="題名（例：誰か通話つないで作業しない？）" style="flex:1 1 260px; min-width:0; padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
+                </div>
+                <textarea onInput="{{ onBoardBody }}" placeholder="ひとこと（任意）。無言でいい。カメラも要らない。" style="min-height:60px; padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; line-height:1.8; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none; resize:vertical">{{ boardDraft.body }}</textarea>
+                <div onClick="{{ addBoard }}" style="padding:12px 22px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; align-self:flex-start" style-hover="background:#0A3F2B">ボードに出す</div>
+              </div>
               <div style="display:grid; grid-template-columns:{{ L.g3 }}; gap:16px">
                 <sc-for list="{{ board }}" as="b" hint-placeholder-count="3">
                   <div style="background:#FBF9F3; border:1px dashed rgba(20,19,16,.24); border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px">
@@ -247,6 +255,7 @@ html, body                 { height: 100%; }
                       <div style="font-size:12px; color:#6E695C">{{ b.who }}</div>
                       <div style="flex:1"></div>
                       <div onClick="{{ b.join }}" style="padding:9px 16px; border-radius:18px; font-size:13px; font-weight:700; cursor:pointer; border:1px solid #C2703D; background:{{ b.bg }}; color:{{ b.fg }}">{{ b.label }}</div>
+                      <div onClick="{{ b.del }}" style="display:{{ b.delShow }}; font-size:12px; color:#8A8474; cursor:pointer; align-items:center; white-space:nowrap">消す</div>
                     </div>
                   </div>
                 </sc-for>
@@ -259,12 +268,21 @@ html, body                 { height: 100%; }
                 <div style="font-size:12px; color:#6E695C">役に立たないことを、本気で。</div>
                 <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
               </div>
+              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:10px">
+                <input onInput="{{ onDumbTitle }}" value="{{ dumbDraft.title }}" placeholder="題名（例：牛乳パックだけで椅子を作る）" style="padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
+                <textarea onInput="{{ onDumbBody }}" placeholder="何をやるのか。どこまで本気か。" style="min-height:60px; padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; line-height:1.8; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none; resize:vertical">{{ dumbDraft.body }}</textarea>
+                <div onClick="{{ addDumb }}" style="padding:12px 22px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; align-self:flex-start" style-hover="background:#0A3F2B">挑戦を置く</div>
+              </div>
               <div style="display:flex; flex-direction:column; gap:12px">
                 <sc-for list="{{ dumb }}" as="d" hint-placeholder-count="3">
                   <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:20px 22px; display:flex; flex-direction:column; gap:10px">
                     <div style="font-family:'Zen Old Mincho',serif; font-size:20px; font-weight:900; line-height:1.5">{{ d.title }}</div>
                     <div style="font-size:13px; line-height:1.9; color:rgba(244,241,234,.66)">{{ d.body }}</div>
-                    <div style="font-size:12px; color:#D0E2BE">{{ d.who }}</div>
+                    <div style="display:flex; align-items:center; gap:12px">
+                      <div style="font-size:12px; color:#D0E2BE">{{ d.who }}</div>
+                      <div style="flex:1"></div>
+                      <div onClick="{{ d.del }}" style="display:{{ d.delShow }}; font-size:12px; color:rgba(244,241,234,.6); cursor:pointer; align-items:center; white-space:nowrap">消す</div>
+                    </div>
                   </div>
                 </sc-for>
               </div>
@@ -1060,6 +1078,10 @@ class Component extends DCLogic {
      ここを state に入れると、1文字打つたびに画面を作り直してしまい
      入力欄からカーソルが外れる。だから state の外に置いてある。 */
   draft = { title:'', note:'', brand:'schoolpark', questId:'', questTitle:'', due:'' };
+  /* 公園に出すときの下書き。ボードと挑戦で別に持つ（片方を書いている間に
+     もう片方が消えないように）。 */
+  boardDraft = { when:'', title:'', body:'' };
+  dumbDraft  = { title:'', body:'' };
 
   componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadTasks(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} try { window.parent.spDaoLoadWisdom(this); } catch (e) {} try { window.parent.spDaoLoadMembers(this); } catch (e) {} try { window.parent.spDaoLoadTreasury(this); } catch (e) {} try { window.parent.spDaoLoadPark(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
@@ -1295,6 +1317,27 @@ class Component extends DCLogic {
         if (!ok) return;
         /* 続けて書けるように、どの仕事かだけは残す */
         this.draft = { title:'', note:'', brand:this.draft.brand, questId:'', questTitle:'', due:'' };
+        this.setState({});
+      },
+      boardDraft: this.boardDraft,
+      onBoardWhen:  (ev) => { this.boardDraft.when  = ev.target.value; },
+      onBoardTitle: (ev) => { this.boardDraft.title = ev.target.value; },
+      onBoardBody:  (ev) => { this.boardDraft.body  = ev.target.value; },
+      addBoard: async () => {
+        let ok = false;
+        try { ok = await window.parent.spParkAdd('board', this.boardDraft, this); } catch (e) {}
+        if (!ok) return;
+        this.boardDraft = { when:'', title:'', body:'' };
+        this.setState({});
+      },
+      dumbDraft: this.dumbDraft,
+      onDumbTitle: (ev) => { this.dumbDraft.title = ev.target.value; },
+      onDumbBody:  (ev) => { this.dumbDraft.body  = ev.target.value; },
+      addDumb: async () => {
+        let ok = false;
+        try { ok = await window.parent.spParkAdd('dumb', this.dumbDraft, this); } catch (e) {}
+        if (!ok) return;
+        this.dumbDraft = { title:'', body:'' };
         this.setState({});
       },
       board: s.board || [],
