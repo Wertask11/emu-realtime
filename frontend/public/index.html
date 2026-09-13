@@ -17677,6 +17677,14 @@ window.spDaoLoadPark = async function (app) {
   const fb = window.fbLib;
   const p = await spPassportLoad();
   const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
+  /* 自分が出したものかを見るときは、実ウォレットと CHESアドレスの両方で照らす。
+     ログイン方法によって、どちらの名義で出したかが変わるため。 */
+  const mineAll = [];
+  if (p) { [p.addr, p.ownerAddr].forEach(function (a) {
+    const v = String(a || '').toLowerCase(); if (v && mineAll.indexOf(v) < 0) mineAll.push(v);
+  }); }
+  const isMine = function (by) { return mineAll.indexOf(String(by || '').toLowerCase()) >= 0; };
+  const delOf = function (id) { return function () { window.spParkRemove(id, app); }; };
 
   let items = [];
   try {
@@ -17706,9 +17714,12 @@ window.spDaoLoadPark = async function (app) {
         who: names.length ? (names.join('・') + ' が乗ってる') : 'まだ誰も乗っていない',
         label: on ? '✓ 乗ってる' : '乗る',
         bg: on ? '#C2703D' : 'transparent', fg: on ? '#F4F1EA' : '#C2703D',
+        /* 出した本人にだけ、消すところを見せる（Rules も本人と運営だけ許している） */
+        delShow: isMine(i.by) ? 'inline-flex' : 'none', del: delOf(i.id),
         join: (function (id) { return function () { window.spParkJoin(id, app); }; })(i.id) });
     } else if (i.kind === 'dumb') {
-      dumb.push({ title: i.title || '', body: i.body || '', who: i.who || '' });
+      dumb.push({ title: i.title || '', body: i.body || '', who: i.who || '',
+        delShow: isMine(i.by) ? 'inline-flex' : 'none', del: delOf(i.id) });
     } else if (i.kind === 'event') {
       const d = i.at ? new Date(i.at) : null;
       events.push({ month: d ? ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getMonth()] : '',
@@ -17720,7 +17731,54 @@ window.spDaoLoadPark = async function (app) {
     noPark: items.length === 0 });
 };
 
-/* ボードや部屋に乗る／降りる */
+/* 公園に出す。ボード（今日ひま？）と、バカな挑戦。
+
+   これまで公園に置けるのは運営だけで、管理画面からしか道が無かった。
+   「無我夢中で遊ぼう」と書いてある場所が、運営の掲示板になっていた。
+   Emu light 以上なら誰でも出せるようにする（運営はプランに関係なく出せる）。
+
+   ここで見るのは「出してよい人か」まで。本当に通すかどうかは Firestore の
+   Rules が決める。画面だけで止めても、画面を通さずに書けてしまうため。 */
+window.spParkAdd = async function (kind, draft, app) {
+  const p = await spPassportLoad();
+  if (!p) { alert('出すにはログインが必要です。'); return false; }
+  if (!p.isOwner && typeof emuHasPlan === 'function' && !emuHasPlan('light')) {
+    if (typeof emuNeedPlan === 'function') emuNeedPlan('light', '公園に出すこと');
+    else alert('Emu light（月額500円）以上で出せます。');
+    return false;
+  }
+  const title = String((draft && draft.title) || '').trim();
+  if (!title) { alert('題名を書いてください。'); return false; }
+  const item = {
+    kind: kind, title: title.slice(0, 120),
+    body: String((draft && draft.body) || '').trim().slice(0, 600),
+    by: p.ownerAddr || p.addr, createdAt: Date.now(), hidden: false
+  };
+  if (kind === 'board') item.when = String((draft && draft.when) || '').trim().slice(0, 60) || 'いつでも';
+  if (kind === 'dumb')  item.who  = String(p.name || '').slice(0, 80);
+  try {
+    await window.fbLib.addDoc(window.fbLib.collection(window.db, 'sp_park'), item);
+  } catch (e) {
+    alert('出せませんでした（' + ((e && (e.code || e.message)) || '') + '）');
+    return false;
+  }
+  try { await window.spDaoLoadPark(app); } catch (e) {}
+  return true;
+};
+
+/* 自分が出したものを消す。Rules は本人と運営だけ許している。 */
+window.spParkRemove = async function (itemId, app) {
+  if (!confirm('これを消しますか？ もとには戻せません。')) return;
+  try {
+    await window.fbLib.deleteDoc(window.fbLib.doc(window.db, 'sp_park', itemId));
+  } catch (e) {
+    alert('消せませんでした（' + ((e && (e.code || e.message)) || '') + '）');
+    return;
+  }
+  try { await window.spDaoLoadPark(app); } catch (e) {}
+};
+
+/* ボードに乗る／降りる */
 window.spParkJoin = async function (itemId, app) {
   const p = await spPassportLoad();
   if (!p) { alert('乗るにはログインが必要です。'); return; }

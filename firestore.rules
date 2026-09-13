@@ -109,6 +109,23 @@ service cloud.firestore {
             && exists(/databases/$(database)/documents/sp_trust/$(a.get('chesAddress', ''))));
     }
 
+    /* 公園に出せるか。
+         運営 ／ light 以上の人
+
+       公園に置けるのは運営だけだった。「無我夢中で遊ぼう」と書いてある場所が、
+       運営の掲示板になっていたので、light 以上なら誰でも出せるようにする。
+       集まり（event）だけは運営のまま（SchoolPark からのお知らせなので）。
+
+       アカウントはここで1回だけ読み、中身を持ち回る。canGuild と同じ書き方。
+       段を数えるのに参照を使うので、呼ぶ回数を増やさないこと
+       （1回の書き込みで見に行けるのは10回まで）。 */
+    function canPark() {
+      return signedIn() && canParkWith(get(accountPath()).data);
+    }
+    function canParkWith(a) {
+      return isOwnerData(a) || !enforcing() || rankOfUser(a) >= 1;
+    }
+
     /* 反応した人の一覧に、自分をちょうど1人だけ足したか。
        もとの並びは全部そのまま残っていること（他人を消せないように）。
        自分の名義は、いちど読んだアカウントの中身から取る。 */
@@ -1105,12 +1122,19 @@ service cloud.firestore {
        同じ人が二重に乗ることはできない。降りるのは自分の分だけ。 */
     match /sp_park/{itemId} {
       allow read: if true;
+      /* ボードと挑戦は light 以上なら誰でも。集まりは運営だけ。
+         「いま開いてる部屋」は行き先を持てず成り立たなかったので、種類ごと外した。 */
       allow create: if isMyWallet(request.resource.data.get('by', ''))
-        && isOwnerAddr(request.resource.data.get('by', ''))
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 120
-        && request.resource.data.get('kind', '') in ['board', 'dumb', 'room', 'event'];
+        && request.resource.data.get('body', '') is string
+        && request.resource.data.get('body', '').size() <= 600
+        && (
+          (request.resource.data.get('kind', '') in ['board', 'dumb'] && canPark())
+          || (request.resource.data.get('kind', '') == 'event'
+              && isOwnerAddr(request.resource.data.get('by', '')))
+        );
       /* 出した本人が、しまうことだけできる。
          クエストと同じ理由で、運営はどの入り方でも触れるようにしておく。 */
       allow update: if (isOwner() || isMyWallet(resource.data.get('by', '')))
