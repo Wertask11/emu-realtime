@@ -307,6 +307,33 @@ html, body                 { height: 100%; }
               </div>
             </div>
 
+            <!-- 遊び。Emu の「06 遊び」から公園へ移した。
+                 ゲームの画面は親（index.html）にあり、画面全体を覆う。
+                 エレベーターと同じで、親の関数を呼ぶだけ。 -->
+            <div style="display:flex; flex-direction:column; gap:18px">
+              <div style="display:flex; align-items:baseline; gap:14px">
+                <div style="font-size:17px; font-weight:700">遊び</div>
+                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+              </div>
+              <div onClick="{{ goEcho }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
+                <div style="font-size:20px">🎴</div>
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
+                  <div style="font-size:14px; font-weight:700; line-height:1.5">ECHO FIELD</div>
+                  <div style="font-size:12px; color:#6E695C">伏せた駒の読み合い。SchoolParkオリジナル</div>
+                </div>
+                <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">遊ぶ</div>
+              </div>
+              <div onClick="{{ goRingo }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
+                <div style="font-size:20px">🍎</div>
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
+                  <div style="font-size:14px; font-weight:700; line-height:1.5">林檎の方程式</div>
+                  <div style="font-size:12px; color:#6E695C">数の並びから、隠された式を見つける</div>
+                </div>
+                <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">遊ぶ</div>
+              </div>
+              <div style="font-size:12px; line-height:1.9; color:#6E695C">見学の方は林檎の方程式だけ遊べます（回数に上限あり）。Emu light 以上でどちらも制限なく遊べます。</div>
+            </div>
+
             <div style="display:flex; flex-direction:column; gap:18px">
               <div style="display:flex; align-items:baseline; gap:14px">
                 <div style="font-size:17px; font-weight:700">月例、リアルの集まり</div>
@@ -1079,6 +1106,9 @@ class Component extends DCLogic {
   openPassport = () => { try { window.parent.openSpPassport(); } catch (e) {} };
   askReizo = () => { try { window.parent.spReizoOpen(); } catch (e) {} };
   goElevator = () => { try { window.parent.openSpRoom('/schoolpark/south-elevator.html', 'エレベーター'); } catch (e) {} };
+  /* 遊び。プランの判定（見学は林檎の方程式だけ・回数制限）は親が持っている。 */
+  goEcho  = () => { try { window.parent.spOpenPlay('echo'); } catch (e) {} };
+  goRingo = () => { try { window.parent.spOpenPlay('ringo'); } catch (e) {} };
   toggleBrand = () => this.setState(s => ({brandOpen:!s.brandOpen}));
   goBrand(id){ return () => {
     this.setState({brandOpen:false});
@@ -1219,6 +1249,7 @@ class Component extends DCLogic {
       openPassport:this.openPassport,
       askReizo:this.askReizo,
       goElevator:this.goElevator,
+      goEcho:this.goEcho, goRingo:this.goRingo,
       toggleBrand:this.toggleBrand,
       brandOpen:s.brandOpen,
       brandIcon:s.brandOpen ? '▴' : '▾',
