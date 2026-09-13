@@ -4993,6 +4993,20 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         </p>
       </div>
 
+      <!-- 届いた声。
+           「役に立った」を押すと、選ばれた理由と書かれたメッセージが
+           post_good_impacts に保存されていたが、これまでどこにも出していなかった。
+           押した人には「投稿者へ届き」と表示していたので、届いていないのに
+           届いたと言っている状態だった。ここが、その受け取り口。 -->
+      <div class="eth-card" id="emuVoicesCard">
+        <div class="eth-section-head">
+          <div><h3>届いた声</h3><p>あなたの知識に「役に立った」を押した人が、選んだ理由と、書いてくれた言葉です。</p></div>
+        </div>
+        <div id="emuVoicesBody">
+          <p class="eth-loading">読み込んでいます…</p>
+        </div>
+      </div>
+
       <div class="eth-card">
         <div class="eth-section-head">
           <div><h3 data-i18n="value.title">残った価値</h3><p data-i18n="value.desc">投稿数ではなく、他者への影響を表示します。</p></div>
@@ -18493,6 +18507,136 @@ function _emuEsc(s) {
     c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
+/* ───── 届いた声 ─────
+
+   「役に立った」を押した人は、理由を選び、ひとこと書ける。
+   それは post_good_impacts に保存されていたが、読む場所がどこにも無く、
+   投稿者には合計の回数しか見えていなかった。
+   （押した人には「投稿者へ届き」と表示していたので、事実と違っていた）
+
+   並べ替えは手元で行う。createdAt で並べると複合インデックスが要り、
+   それを入れるまでの間ずっと空のままになるため。
+   （インデックスは firebase deploy が要るので、画面だけで完結させる） */
+
+const EMU_VOICE_LIMIT = 60;     // 一度に読む「声」の数
+const EMU_VOICE_NAME_LIMIT = 30; // 名前を引く相手の数の上限
+
+/* 押した人の名前。user_profiles は誰でも読める（ルールは allow read: if true）。
+   1件ごとに包むので、読めない人がいても一覧は止まらない。 */
+async function _emuVoiceNames(addresses) {
+  const names = {};
+  const uniq = [];
+  addresses.forEach(function (a) {
+    if (a && uniq.indexOf(a) === -1) uniq.push(a);
+  });
+  await Promise.all(uniq.slice(0, EMU_VOICE_NAME_LIMIT).map(async function (a) {
+    try {
+      const s = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'user_profiles', a));
+      const v = s.exists() ? String((s.data() || {}).displayName || '').trim() : '';
+      if (v) names[a] = v;
+    } catch (e) {}
+  }));
+  return names;
+}
+
+function _emuVoiceCard(group, names) {
+  const rows = group.items.map(function (v) {
+    const who = names[v.from] || _spShortAddr(v.from) || '読んでくれた人';
+    const chips = v.reasons.map(function (r) {
+      return '<span style="display:inline-block;padding:3px 10px;border-radius:999px;'
+        + 'background:#efeaff;color:#4b3c8f;font-size:12px;line-height:1.6;">'
+        + _emuEsc(r) + '</span>';
+    }).join(' ');
+    const note = v.note
+      ? '<p style="margin:8px 0 0;font-size:14px;line-height:1.9;color:#221f3a;white-space:pre-wrap;">'
+        + _emuEsc(v.note) + '</p>'
+      : '';
+    return '<li style="padding:12px 0;border-top:1px solid #ece9f6;list-style:none;">'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;">'
+      + '<b style="font-size:13px;color:#4b3c8f;">' + _emuEsc(who) + '</b>'
+      + '<span style="font-size:12px;color:#8e88a8;">' + _emuEsc(_emuFormatDate(v.at)) + '</span>'
+      + '</div>'
+      + (chips ? '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">' + chips + '</div>' : '')
+      + note
+      + '</li>';
+  }).join('');
+  return '<div style="padding:14px 0;border-bottom:1px solid #e3dff2;">'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;">'
+    + '<b style="font-size:15px;color:#221f3a;">' + _emuEsc(group.title) + '</b>'
+    + '<span style="font-size:12px;color:#8e88a8;">' + group.items.length + '人から</span>'
+    + '</div>'
+    + '<ul style="margin:4px 0 0;padding:0;">' + rows + '</ul>'
+    + '</div>';
+}
+
+async function emuLoadGoodVoices() {
+  const body = document.getElementById('emuVoicesBody');
+  if (!body) return;
+  const say = function (text) {
+    body.innerHTML = '<p class="eth-loading">' + _emuEsc(text) + '</p>';
+  };
+  if (!window.db || !window.fbLib) return say('読み込めませんでした。画面を開き直してみてください。');
+  const aliases = (typeof emuAliasesNow === 'function' ? emuAliasesNow() : [])
+    .filter(Boolean).slice(0, 10);
+  if (!aliases.length) return say('ログインすると、あなたに届いた声が読めます。');
+
+  try {
+    /* 名義は1つとは限らない（ウォレットとパスポートで2つ持つ人がいる）。
+       どちらの名義で書いた投稿にも、声は届く。 */
+    const match = aliases.length > 1
+      ? window.fbLib.where('postAuthor', 'in', aliases)
+      : window.fbLib.where('postAuthor', '==', aliases[0]);
+    const snap = await window.fbLib.getDocs(window.fbLib.query(
+      window.fbLib.collection(window.db, 'post_good_impacts'),
+      match,
+      window.fbLib.limit(EMU_VOICE_LIMIT)
+    ));
+
+    const voices = [];
+    snap.forEach(function (doc) {
+      const d = doc.data() || {};
+      voices.push({
+        postId: String(d.postId || ''),
+        title: String(d.postTitle || '').trim() || '題名のない知識',
+        from: String(d.fromAddress || '').toLowerCase(),
+        reasons: Array.isArray(d.reasons) ? d.reasons.filter(Boolean) : [],
+        note: String(d.note || '').trim(),
+        at: _emuTimestampMs(d.createdAt)
+      });
+    });
+
+    /* 通信が戻っていないと、getDocs は例外ではなく「手元の控え（空）」を返す。
+       これを「まだ誰も押していない」と書くと、事実と違う表示になる。 */
+    if (!voices.length && snap.metadata && snap.metadata.fromCache) {
+      return say('通信が戻っていないため、まだ読み込めていません。少し待ってから開き直してください。');
+    }
+    if (!voices.length) {
+      return say('まだ届いていません。あなたの知識が誰かの役に立ったとき、その理由と言葉がここに並びます。');
+    }
+
+    voices.sort(function (a, b) { return b.at - a.at; });
+    const names = await _emuVoiceNames(voices.map(function (v) { return v.from; }));
+
+    // 同じ投稿に届いた声は、ひとまとまりにして見せる
+    const groups = [];
+    const seen = {};
+    voices.forEach(function (v) {
+      const key = v.postId || ('t:' + v.title);
+      if (!seen[key]) { seen[key] = { title: v.title, at: v.at, items: [] }; groups.push(seen[key]); }
+      seen[key].items.push(v);
+      if (v.at > seen[key].at) seen[key].at = v.at;
+    });
+    groups.sort(function (a, b) { return b.at - a.at; });
+
+    body.innerHTML = groups.map(function (g) { return _emuVoiceCard(g, names); }).join('')
+      + '<p class="eth-reward-note" style="margin-top:12px;">'
+      + '新しい順に最大' + EMU_VOICE_LIMIT + '件まで表示します。</p>';
+  } catch (e) {
+    console.error('届いた声を読めませんでした:', e);
+    say('届いた声を読めませんでした。少し待ってから開き直してください。');
+  }
+}
+
 async function loadEmuValueProfile() {
   // plus の目玉と light の核。価値プロフィールを開いたときに一緒に読む。
   _emuLoadJourney();
@@ -18511,6 +18655,12 @@ async function loadEmuValueProfile() {
       });
   } catch (e) {}
   loadEmuWalletCard();   // ウォレット表示も同時に更新
+
+  /* 届いた声は、投稿の集計とは別に読む。
+     同じ try に入れると、片方が失敗したときにもう片方まで消える
+     （クエスト#000が出なくなっていたのが、まさにこれだった）。 */
+  emuLoadGoodVoices().catch(function (e) { console.warn('届いた声:', e); });
+
   const timeline = document.getElementById('emuValueTimeline');
   if (!timeline) return;
   timeline.innerHTML = '<div class="eth-loading">' + escapeHtml(emuT('value.loading')) + '</div>';
