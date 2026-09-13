@@ -223,27 +223,149 @@ html, body                 { height: 100%; }
         </sc-if>
 
         <sc-if value="{{ isPark }}" hint-placeholder-val="{{ false }}">
-          <div style="display:flex; flex-direction:column; gap:34px">
+          <div style="display:flex; flex-direction:column; gap:28px">
 
             <div style="background:#E7E2D6; border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:12px">
               <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.5">ここには締切も、報酬も、進捗バーもない。</div>
               <div style="font-size:14px; line-height:1.95; color:#3B382F; max-width:640px">クエストが「報酬のある仕事」なら、公園は「報酬のない遊び」。数えないし、評価もしない。ただ、ここで出た気づきは<b>「知恵にする」</b>でライブラリに持っていける。</div>
             </div>
 
-            <div style="display:flex; flex-direction:column; gap:18px">
+            <!-- 公園の地図と、右のならび。
+                 パソコンでは横に2つ、タブレット・スマホでは縦に積む（L.gPark）。 -->
+            <div style="display:grid; grid-template-columns:{{ L.gPark }}; gap:24px; align-items:start">
+
+              <!-- 地図。押せる場所は画像に対する割合で置くので、大きさが変わってもズレない -->
+              <div style="position:relative; width:100%; line-height:0">
+                <img src="/park.jpg" alt="SchoolPark の公園" style="width:100%; height:auto; display:block; border-radius:12px">
+                <div onClick="{{ goPlaza }}"      title="広場"     style="left:39%; top:22%; width:54%; height:56%; position:absolute; border-radius:10px; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px; border:2px solid rgba(255,255,255,.55); background:rgba(20,19,16,.12)"><span style="font-size:12px; font-weight:700; color:#141310; background:rgba(244,241,234,.92); border-radius:14px; padding:4px 12px; white-space:nowrap">広場</span></div>
+                <div onClick="{{ goSlide }}"      title="すべり台" style="left:11%; top:16%; width:29%; height:22%; position:absolute; border-radius:10px; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px; border:2px solid rgba(255,255,255,.55); background:rgba(20,19,16,.12)"><span style="font-size:12px; font-weight:700; color:#141310; background:rgba(244,241,234,.92); border-radius:14px; padding:4px 12px; white-space:nowrap">すべり台</span></div>
+                <div onClick="{{ goSwing }}"      title="ブランコ" style="left:9%;  top:38%; width:27%; height:25%; position:absolute; border-radius:10px; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px; border:2px solid rgba(255,255,255,.55); background:rgba(20,19,16,.12)"><span style="font-size:12px; font-weight:700; color:#141310; background:rgba(244,241,234,.92); border-radius:14px; padding:4px 12px; white-space:nowrap">ブランコ</span></div>
+                <div onClick="{{ goSandbox }}"    title="砂場"     style="left:12%; top:62%; width:30%; height:28%; position:absolute; border-radius:10px; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px; border:2px solid rgba(255,255,255,.55); background:rgba(20,19,16,.12)"><span style="font-size:12px; font-weight:700; color:#141310; background:rgba(244,241,234,.92); border-radius:14px; padding:4px 12px; white-space:nowrap">砂場</span></div>
+              </div>
+
+              <!-- 右のならび -->
+              <div style="display:flex; flex-direction:column; gap:26px; min-width:0">
+
+                <div style="display:flex; flex-direction:column; gap:14px">
+                  <div style="display:flex; align-items:baseline; gap:14px">
+                    <div style="font-size:17px; font-weight:700">遊具作成</div>
+                    <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                  </div>
+                  <div onClick="{{ toggleMake }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
+                    <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">🧰</div>
+                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
+                      <div style="font-size:14px; font-weight:700; line-height:1.5">公園に置く</div>
+                      <div style="font-size:12px; color:#6E695C">今日ひま？ボード ／ バカな挑戦</div>
+                    </div>
+                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">{{ makeLabel }}</div>
+                  </div>
+
+                  <sc-if value="{{ makeOpen }}">
+                    <div style="display:flex; flex-direction:column; gap:18px">
+                      <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:10px">
+                        <div style="font-size:13px; font-weight:700">今日ひま？ボード</div>
+                        <input onInput="{{ onBoardWhen }}" value="{{ boardDraft.when }}" placeholder="いつ？（例：今夜20時〜）" style="padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
+                        <input onInput="{{ onBoardTitle }}" value="{{ boardDraft.title }}" placeholder="題名（例：誰か通話つないで作業しない？）" style="padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
+                        <textarea onInput="{{ onBoardBody }}" placeholder="ひとこと（任意）。無言でいい。カメラも要らない。" style="min-height:60px; padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none; line-height:1.8; resize:vertical">{{ boardDraft.body }}</textarea>
+                        <div onClick="{{ addBoard }}" style="padding:12px 22px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; align-self:flex-start" style-hover="background:#0A3F2B">ボードに出す</div>
+                      </div>
+                      <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:10px">
+                        <div style="font-size:13px; font-weight:700">バカな挑戦</div>
+                        <input onInput="{{ onDumbTitle }}" value="{{ dumbDraft.title }}" placeholder="題名（例：牛乳パックだけで椅子を作る）" style="padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
+                        <textarea onInput="{{ onDumbBody }}" placeholder="何をやるのか。どこまで本気か。" style="min-height:60px; padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none; line-height:1.8; resize:vertical">{{ dumbDraft.body }}</textarea>
+                        <div onClick="{{ addDumb }}" style="padding:12px 22px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; align-self:flex-start" style-hover="background:#0A3F2B">挑戦を置く</div>
+                      </div>
+                      <div style="font-size:12px; line-height:1.9; color:#6E695C">出したものは、地図の「広場」で見られます。</div>
+                    </div>
+                  </sc-if>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:14px">
+                  <div style="display:flex; align-items:baseline; gap:14px">
+                    <div style="font-size:17px; font-weight:700">エレベーター</div>
+                    <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                  </div>
+                  <div onClick="{{ goElevator }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
+                    <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">🛗</div>
+                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
+                      <div style="font-size:14px; font-weight:700; line-height:1.5">6つの階をのぼりおりする</div>
+                      <div style="font-size:12px; color:#6E695C">屋上・星空ホール・ラボ・たんけん・カフェ・エントランス</div>
+                    </div>
+                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">乗る</div>
+                  </div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:14px">
+                  <div style="display:flex; align-items:baseline; gap:14px">
+                    <div style="font-size:17px; font-weight:700">遊び</div>
+                    <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                  </div>
+                  <div onClick="{{ goEcho }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
+                    <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">🎴</div>
+                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
+                      <div style="font-size:14px; font-weight:700; line-height:1.5">ECHO FIELD</div>
+                      <div style="font-size:12px; color:#6E695C">伏せた駒の読み合い。SchoolParkオリジナル</div>
+                    </div>
+                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">遊ぶ</div>
+                  </div>
+                  <div onClick="{{ goRingo }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
+                    <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">🍎</div>
+                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
+                      <div style="font-size:14px; font-weight:700; line-height:1.5">林檎の方程式</div>
+                      <div style="font-size:12px; color:#6E695C">数の並びから、隠された式を見つける</div>
+                    </div>
+                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">遊ぶ</div>
+                  </div>
+                  <div onClick="{{ goGods }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
+                    <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">⛩️</div>
+                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
+                      <div style="font-size:14px; font-weight:700; line-height:1.5">日常の神々</div>
+                      <div style="font-size:12px; color:#6E695C">九柱のカードで、CPUと気力を削り合う</div>
+                    </div>
+                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">遊ぶ</div>
+                  </div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:14px">
+                  <div style="display:flex; align-items:baseline; gap:14px">
+                    <div style="font-size:17px; font-weight:700">月例、リアルの集まり</div>
+                    <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                  </div>
+                  <sc-for list="{{ events }}" as="ev" hint-placeholder-count="2">
+                    <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:20px; display:flex; gap:18px; align-items:flex-start">
+                      <div style="display:flex; flex-direction:column; align-items:center; gap:2px; padding:10px 12px; background:#C2703D; color:#F4F1EA; border-radius:10px; flex:0 0 auto">
+                        <div style="font-family:Inter,sans-serif; font-size:11px; letter-spacing:.14em">{{ ev.month }}</div>
+                        <div style="font-family:Inter,sans-serif; font-size:24px; font-weight:600; line-height:1">{{ ev.day }}</div>
+                      </div>
+                      <div style="display:flex; flex-direction:column; gap:8px; min-width:0">
+                        <div style="font-size:16px; font-weight:700; line-height:1.55">{{ ev.title }}</div>
+                        <div style="font-size:13px; line-height:1.9; color:#3B382F">{{ ev.body }}</div>
+                        <div style="font-size:12px; color:#6E695C">{{ ev.place }} · {{ ev.who }}</div>
+                      </div>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ noEvents }}"><div style="font-size:12px; line-height:1.9; color:#6E695C">いまは予定がありません。</div></sc-if>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </sc-if>
+
+        <!-- 広場。地図の広場を押すと来る。公園に建てられたものが並ぶ。 -->
+        <sc-if value="{{ isPlaza }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:34px">
+
+            <div onClick="{{ goPark }}" style="align-self:flex-start; padding:10px 16px; border:1px solid rgba(20,19,16,.16); border-radius:8px; font-size:13px; font-weight:700; cursor:pointer" style-hover="background:#E7E2D6">← 公園にもどる</div>
+
+            <sc-if value="{{ noPark }}"><div style="font-size:13px; line-height:1.9; color:#6E695C">まだ何も建てられていません。公園の「遊具作成」から置けます。</div></sc-if>
+
+            <div style="display:flex; flex-direction:column; gap:14px">
               <div style="display:flex; align-items:baseline; gap:14px">
-                <sc-if value="{{ noPark }}"><div style="font-size:13px; line-height:1.9; color:#6E695C">公園にはまだ何もありません。</div></sc-if>
                 <div style="font-size:17px; font-weight:700">今日ひま？ボード</div>
                 <div style="font-size:12px; color:#6E695C">思いついたら投げる。返事がなくても気にしない。</div>
                 <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-              </div>
-              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:10px">
-                <div style="display:flex; gap:10px; flex-wrap:wrap">
-                  <input onInput="{{ onBoardWhen }}" value="{{ boardDraft.when }}" placeholder="いつ？（例：今夜20時〜）" style="flex:0 1 220px; padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
-                  <input onInput="{{ onBoardTitle }}" value="{{ boardDraft.title }}" placeholder="題名（例：誰か通話つないで作業しない？）" style="flex:1 1 260px; min-width:0; padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
-                </div>
-                <textarea onInput="{{ onBoardBody }}" placeholder="ひとこと（任意）。無言でいい。カメラも要らない。" style="min-height:60px; padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; line-height:1.8; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none; resize:vertical">{{ boardDraft.body }}</textarea>
-                <div onClick="{{ addBoard }}" style="padding:12px 22px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; align-self:flex-start" style-hover="background:#0A3F2B">ボードに出す</div>
               </div>
               <div style="display:grid; grid-template-columns:{{ L.g3 }}; gap:16px">
                 <sc-for list="{{ board }}" as="b" hint-placeholder-count="3">
@@ -262,16 +384,11 @@ html, body                 { height: 100%; }
               </div>
             </div>
 
-            <div style="display:flex; flex-direction:column; gap:18px">
+            <div style="display:flex; flex-direction:column; gap:14px">
               <div style="display:flex; align-items:baseline; gap:14px">
                 <div style="font-size:17px; font-weight:700">バカな挑戦</div>
                 <div style="font-size:12px; color:#6E695C">役に立たないことを、本気で。</div>
                 <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-              </div>
-              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:10px">
-                <input onInput="{{ onDumbTitle }}" value="{{ dumbDraft.title }}" placeholder="題名（例：牛乳パックだけで椅子を作る）" style="padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
-                <textarea onInput="{{ onDumbBody }}" placeholder="何をやるのか。どこまで本気か。" style="min-height:60px; padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; line-height:1.8; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none; resize:vertical">{{ dumbDraft.body }}</textarea>
-                <div onClick="{{ addDumb }}" style="padding:12px 22px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; align-self:flex-start" style-hover="background:#0A3F2B">挑戦を置く</div>
               </div>
               <div style="display:flex; flex-direction:column; gap:12px">
                 <sc-for list="{{ dumb }}" as="d" hint-placeholder-count="3">
@@ -282,77 +399,6 @@ html, body                 { height: 100%; }
                       <div style="font-size:12px; color:#D0E2BE">{{ d.who }}</div>
                       <div style="flex:1"></div>
                       <div onClick="{{ d.del }}" style="display:{{ d.delShow }}; font-size:12px; color:rgba(244,241,234,.6); cursor:pointer; align-items:center; white-space:nowrap">消す</div>
-                    </div>
-                  </div>
-                </sc-for>
-              </div>
-            </div>
-
-            <div style="display:flex; flex-direction:column; gap:18px">
-              <div style="display:flex; align-items:baseline; gap:14px">
-                <div style="font-size:17px; font-weight:700">エレベーター</div>
-                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-              </div>
-              <div onClick="{{ goElevator }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
-                <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">🛗</div>
-                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
-                  <div style="font-size:14px; font-weight:700; line-height:1.5">6つの階をのぼりおりする</div>
-                  <div style="font-size:12px; color:#6E695C">屋上・星空ホール・ラボ・たんけん・カフェ・エントランス</div>
-                </div>
-                <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">乗る</div>
-              </div>
-            </div>
-
-            <!-- 遊び。Emu の「06 遊び」から公園へ移した。
-                 ゲームの画面は親（index.html）にあり、画面全体を覆う。
-                 エレベーターと同じで、親の関数を呼ぶだけ。 -->
-            <div style="display:flex; flex-direction:column; gap:18px">
-              <div style="display:flex; align-items:baseline; gap:14px">
-                <div style="font-size:17px; font-weight:700">遊び</div>
-                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-              </div>
-              <div onClick="{{ goEcho }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
-                <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">🎴</div>
-                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
-                  <div style="font-size:14px; font-weight:700; line-height:1.5">ECHO FIELD</div>
-                  <div style="font-size:12px; color:#6E695C">伏せた駒の読み合い。SchoolParkオリジナル</div>
-                </div>
-                <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">遊ぶ</div>
-              </div>
-              <div onClick="{{ goRingo }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
-                <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">🍎</div>
-                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
-                  <div style="font-size:14px; font-weight:700; line-height:1.5">林檎の方程式</div>
-                  <div style="font-size:12px; color:#6E695C">数の並びから、隠された式を見つける</div>
-                </div>
-                <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">遊ぶ</div>
-              </div>
-              <div onClick="{{ goGods }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
-                <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">⛩️</div>
-                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
-                  <div style="font-size:14px; font-weight:700; line-height:1.5">日常の神々</div>
-                  <div style="font-size:12px; color:#6E695C">九柱のカードで、CPUと気力を削り合う</div>
-                </div>
-                <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">遊ぶ</div>
-              </div>
-            </div>
-
-            <div style="display:flex; flex-direction:column; gap:18px">
-              <div style="display:flex; align-items:baseline; gap:14px">
-                <div style="font-size:17px; font-weight:700">月例、リアルの集まり</div>
-                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-              </div>
-              <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:16px">
-                <sc-for list="{{ events }}" as="ev" hint-placeholder-count="2">
-                  <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; gap:22px; align-items:flex-start">
-                    <div style="display:flex; flex-direction:column; align-items:center; gap:2px; padding:12px 14px; background:#C2703D; color:#F4F1EA; border-radius:10px; flex:0 0 auto">
-                      <div style="font-family:Inter,sans-serif; font-size:11px; letter-spacing:.14em">{{ ev.month }}</div>
-                      <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; line-height:1">{{ ev.day }}</div>
-                    </div>
-                    <div style="display:flex; flex-direction:column; gap:9px; min-width:0">
-                      <div style="font-size:17px; font-weight:700; line-height:1.55">{{ ev.title }}</div>
-                      <div style="font-size:13px; line-height:1.9; color:#3B382F">{{ ev.body }}</div>
-                      <div style="font-size:12px; color:#6E695C">{{ ev.place }} · {{ ev.who }}</div>
                     </div>
                   </div>
                 </sc-for>
@@ -1061,13 +1107,13 @@ const TASK_BRANDS = [
 
 const LAYOUTS = {
   pc: {frameW:1440, frameH:900, scrollY:'auto', frameR:'14px', sidebar:'flex', bottom:'none', pad:'36px 40px 80px', headPad:'22px 40px', headSize:'22px',
-       hero:'1.35fr 1fr', heroSize:'34px', g3:'repeat(3,1fr)', g2:'repeat(2,1fr)', g2b:'1.4fr 1fr', gDetail:'1.5fr 1fr', gLogs:'1.6fr 1fr',
+       hero:'1.35fr 1fr', heroSize:'34px', g3:'repeat(3,1fr)', g2:'repeat(2,1fr)', g2b:'1.4fr 1fr', gPark:'1.25fr 1fr', gDetail:'1.5fr 1fr', gLogs:'1.6fr 1fr',
        gPropose:'220px 1fr', libCols:'3', table:'2fr 1fr 1fr 1fr 1fr', colHide:'block', stick:'sticky', cardPad:'32px', bigNum:'52px', ctaLabel:'＋ クエストを出す'},
   tablet: {frameW:834, frameH:1112, scrollY:'auto', frameR:'20px', sidebar:'flex', bottom:'none', pad:'28px 26px 60px', headPad:'20px 26px', headSize:'19px',
-       hero:'1fr', heroSize:'30px', g3:'repeat(2,1fr)', g2:'1fr', g2b:'1fr', gDetail:'1fr', gLogs:'1fr',
+       hero:'1fr', heroSize:'30px', g3:'repeat(2,1fr)', g2:'1fr', g2b:'1fr', gPark:'1fr', gDetail:'1fr', gLogs:'1fr',
        gPropose:'200px 1fr', libCols:'2', table:'2fr 1fr 1fr 1fr 1fr', colHide:'block', stick:'static', cardPad:'28px', bigNum:'44px', ctaLabel:'＋ クエスト'},
   mobile: {frameW:390, frameH:844, scrollY:'auto', frameR:'28px', sidebar:'none', bottom:'flex', pad:'20px 16px 40px', headPad:'16px 16px', headSize:'17px',
-       hero:'1fr', heroSize:'26px', g3:'1fr', g2:'1fr', g2b:'1fr', gDetail:'1fr', gLogs:'1fr',
+       hero:'1fr', heroSize:'26px', g3:'1fr', g2:'1fr', g2b:'1fr', gPark:'1fr', gDetail:'1fr', gLogs:'1fr',
        gPropose:'1fr', libCols:'1', table:'1.6fr .6fr .8fr', colHide:'none', stick:'static', cardPad:'22px', bigNum:'38px', ctaLabel:'＋'}
 };
 
@@ -1080,6 +1126,7 @@ class Component extends DCLogic {
   draft = { title:'', note:'', brand:'schoolpark', questId:'', questTitle:'', due:'' };
   /* 公園に出すときの下書き。ボードと挑戦で別に持つ（片方を書いている間に
      もう片方が消えないように）。 */
+  makeOpen = false;   /* 遊具作成を開いているか */
   boardDraft = { when:'', title:'', body:'' };
   dumbDraft  = { title:'', body:'' };
 
@@ -1140,6 +1187,7 @@ class Component extends DCLogic {
     const heads = {
       home:['The week / 今週の広場','おはよう、' + s.me.name],
       park:['THE PARK / 公園','無我夢中で遊ぼう'],
+      plaza:['THE PARK / 広場','建てられたもの'],
       experiments:['QUESTS','走っている'+W+'・募集中の'+W],
       detail:['QUEST', W+'の詳細'],
       tasks:['MY WORK / 自分の宿題','自分の宿題'],
@@ -1241,6 +1289,16 @@ class Component extends DCLogic {
       askReizo:this.askReizo,
       goElevator:this.goElevator,
       goEcho:this.goEcho, goRingo:this.goRingo, goGods:this.goGods,
+      /* 地図の押せる場所。広場だけ中身があり、遊具は順に作っていく。 */
+      goPlaza:   () => { this.setState({screen:'plaza'}); this.toTop(); },
+      goPark:    () => { this.setState({screen:'park'}); this.toTop(); },
+      goSandbox: () => alert('砂場「サバイバル遊び」は準備中です。\n\nもうしばらくお待ちください。'),
+      goSwing:   () => alert('ブランコ「靴を遠くに飛ばす」は準備中です。\n\nもうしばらくお待ちください。'),
+      goSlide:   () => alert('すべり台の遊びは準備中です。\n\nもうしばらくお待ちください。'),
+      makeOpen: this.makeOpen,
+      makeLabel: this.makeOpen ? '閉じる' : '開く',
+      toggleMake: () => { this.makeOpen = !this.makeOpen; this.setState({}); },
+      noEvents: (s.events || []).length === 0,
       toggleBrand:this.toggleBrand,
       brandOpen:s.brandOpen,
       brandIcon:s.brandOpen ? '▴' : '▾',
@@ -1263,7 +1321,7 @@ class Component extends DCLogic {
         fg: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#F4F1EA' : 'rgba(244,241,234,.6)',
         num: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#D0E2BE' : 'rgba(244,241,234,.35)'})),
       head: {kicker: (heads[s.screen] || heads.home)[0], title: (heads[s.screen] || heads.home)[1]},
-      isHome:s.screen==='home', isPark:s.screen==='park', isExperiments:s.screen==='experiments', isDetail:s.screen==='detail' && !cur.isFounder,
+      isHome:s.screen==='home', isPark:s.screen==='park', isPlaza:s.screen==='plaza', isExperiments:s.screen==='experiments', isDetail:s.screen==='detail' && !cur.isFounder,
       isFounderDetail:s.screen==='detail' && !!cur.isFounder,
       /* #000 はクエストの画面にだけ出す。広場には出さない。
          広場は「今週どうだったか」を見る場所で、恒久の原点は毎回そこに
