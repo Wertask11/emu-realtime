@@ -15823,6 +15823,31 @@ async function spDaoWaitReady(maxMs) {
 }
 window.spDaoWaitReady = spDaoWaitReady;
 
+/* SchoolPark の画面に、もう中身が入っているか。
+   いちど入ったあとで 開き直すときに、毎回また覆いを出さないため。 */
+function spDaoLooksReady() {
+  try {
+    const fr = document.getElementById('spDaoFrame');
+    const st = fr && fr.contentWindow && fr.contentWindow.app && fr.contentWindow.app.state;
+    return !!(st && st.me && st.me.name && st.me.name !== 'ゲスト');
+  } catch (e) { return false; }
+}
+window.spDaoLooksReady = spDaoLooksReady;
+
+/* SchoolPark を、中身がそろってから見せる。覆いの出し入れまで面倒を見る。
+   ログイン直後の着地と、ハブから選んだときの、どちらもここを通す。 */
+function spDaoOpenWhenReady() {
+  const fresh = !spDaoLooksReady();
+  if (fresh) { try { _showSpLoadingOverlay(); } catch (e) {} }
+  openSpDao();
+  if (!fresh) return;
+  Promise.resolve()
+    .then(function () { return spDaoWaitReady(8000); })
+    .catch(function () {})
+    .then(function () { try { _hideSpLoadingOverlay(); } catch (e) {} });
+}
+window.spDaoOpenWhenReady = spDaoOpenWhenReady;
+
 /* ═══════════════════════════════════════
    SchoolPark パスポート
 
@@ -16771,6 +16796,52 @@ const SP_QUEST_RETRY_MS = [1500, 3000, 6000, 10000, 10000, 10000];
 let _spQuestsBusy = null;
 let _spQuestRetryTimer = null;
 
+/* ───── 逃げ道：普通の通信でクエストを読む ─────
+
+   Firestore の SDK は、変更を受け取り続けるための専用の通信路（Listen）を
+   張る。ここが転ぶと、SDK は自分を「オフライン」と見なし、以後どの読み取りも
+   手元の控えから返す。開いた直後は控えが空なので「0件で成功」になる。
+
+   実際、本番では Listen が 404 を繰り返して復帰せず、読み直しを6回
+   （約40秒）続けても、ずっと控えの空が返ってきていた。
+
+   ところが同じ記録は、普通の HTTPS でも読める。専用の通信路を使わないので、
+   そちらが転んでいても関係なく届く。SDK が戻ってこないときの逃げ道にする。
+
+   sp_quests は Rules で誰でも読める（allow read: if true）ので、
+   ここに追加の権限は要らない。 */
+function _spRestValue(v) {
+  if (!v || typeof v !== 'object') return null;
+  if ('stringValue'  in v) return v.stringValue;
+  if ('integerValue' in v) return Number(v.integerValue);
+  if ('doubleValue'  in v) return Number(v.doubleValue);
+  if ('booleanValue' in v) return !!v.booleanValue;
+  if ('nullValue'    in v) return null;
+  if ('timestampValue' in v) return Date.parse(v.timestampValue) || 0;
+  if ('arrayValue'   in v) return ((v.arrayValue && v.arrayValue.values) || []).map(_spRestValue);
+  if ('mapValue'     in v) return _spRestFields((v.mapValue && v.mapValue.fields) || {});
+  if ('referenceValue' in v) return String(v.referenceValue).split('/').pop();
+  return null;
+}
+function _spRestFields(fields) {
+  const out = {};
+  Object.keys(fields || {}).forEach(function (k) { out[k] = _spRestValue(fields[k]); });
+  return out;
+}
+async function _spRestQuests() {
+  let opt = {};
+  try { opt = (window.db && window.db.app && window.db.app.options) || {}; } catch (e) {}
+  if (!opt.projectId || !opt.apiKey) throw new Error('設定が読めない');
+  const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
+            + '/databases/(default)/documents/sp_quests?pageSize=100&key=' + opt.apiKey;
+  const r = await fetch(url, { cache: 'no-store' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json();
+  return ((j && j.documents) || []).map(function (d) {
+    return Object.assign({ id: String(d.name || '').split('/').pop() }, _spRestFields(d.fields));
+  }).sort(function (a, b) { return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0); }).slice(0, 30);
+}
+
 window.spDaoLoadQuests = function (app, attempt) {
   /* すでに読んでいる最中なら、その1本に相乗りする（spGuildDefs と同じ考え方）。
      読み直しは自分で順番に呼ぶので、そちらは待たせない。 */
@@ -16815,7 +16886,21 @@ async function _spDaoLoadQuestsOnce(app, attempt) {
        「まだクエストがありません」のまま固まる。実際にそうなっていた。
        控えから来ていて、しかも空のときは、読めたと見なさない。 */
     if (docs.length === 0 && snap.metadata && snap.metadata.fromCache) {
-      return later('通信が戻っていないため、一覧が手元の控え（空）から返ってきた');
+      /* SDK が戻ってこないので、普通の通信で取りに行く。
+         読み直しを何回続けても控えの空しか返らない回があり、
+         そこでは待っても解決しなかったため。 */
+      try {
+        const rest = await _spRestQuests();
+        if (rest.length) {
+          docs = rest;
+          console.warn('クエストを普通の通信で読みました（' + rest.length + '件）');
+        }
+      } catch (e) {
+        console.warn('普通の通信でも読めませんでした:', e && (e.message || e));
+      }
+      if (docs.length === 0) {
+        return later('通信が戻っていないため、一覧が手元の控え（空）から返ってきた');
+      }
     }
   } catch (e) {
     return later((e && (e.message || e)) || '一覧を読めなかった');
@@ -18645,7 +18730,11 @@ function chesHubGo(brand) {
       break;
     }
     case 'schoolpark': {
-      openSpDao();
+      /* ここは覆いも待ちも無く、そのまま開いていた。そのため
+         「おはよう、ゲスト」やクエスト0件のまま画面が出ていた。
+         ログイン直後の着地と同じ扱いにそろえる。 */
+      if (typeof spDaoOpenWhenReady === 'function') spDaoOpenWhenReady();
+      else openSpDao();
       break;
     }
   }
