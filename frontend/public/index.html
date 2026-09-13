@@ -5166,11 +5166,11 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <div class="emu-sheet" id="emuGoodSheet" role="dialog" aria-modal="true" aria-labelledby="emuGoodTitle">
   <div class="emu-sheet-card">
     <div class="emu-sheet-head">
-      <div><h2 id="emuGoodTitle">どのように役に立ちましたか？</h2><p>理由が投稿者の価値として残ります。理由は1つ以上選べます。</p></div>
+      <div><h2 id="emuGoodTitle">どのように役に立ちましたか？</h2><p>選んだ理由とひとことは、この投稿の「届いた声」として、投稿者と読む人に見えます。理由は1つ以上選べます。</p></div>
       <button class="emu-sheet-close" type="button" onclick="closeEmuSheet('emuGoodSheet')">×</button>
     </div>
     <div class="emu-choice-grid" id="emuGoodChoices"></div>
-    <div class="emu-field"><label for="emuGoodNote">投稿者へ伝えるひとこと（任意）</label><textarea id="emuGoodNote" maxlength="300" placeholder="どんな場面で役立ったかを伝えられます"></textarea></div>
+    <div class="emu-field"><label for="emuGoodNote">ひとこと（任意・投稿に表示されます）</label><textarea id="emuGoodNote" maxlength="300" placeholder="どんな場面で役立ったかを伝えられます"></textarea></div>
     <div class="emu-sheet-actions"><button class="eth-btn" type="button" onclick="closeEmuSheet('emuGoodSheet')">やめる</button><button class="eth-btn primary" id="emuGoodSubmit" type="button">Goodを届ける</button></div>
   </div>
 </div>
@@ -12749,9 +12749,76 @@ document.getElementById("emuChangeSubmit")?.addEventListener("click", async func
   }
 });
 
+/* この投稿に届いた「役に立った」の理由と言葉を、誰でも読めるようにする。
+   改善（Change）は前から変更履歴で読めたが、Goodの側は読む場所が無く、
+   投稿者にも読者にも数字しか見えていなかった。 */
+async function openPostGoodVoices(postData) {
+  const list = document.getElementById("emuHistoryList");
+  const title = document.getElementById("emuHistoryTitle");
+  const sub = document.getElementById("emuHistorySubtitle");
+  if (!list) return;
+  if (title) title.textContent = "「" + (postData.title || "知識") + "」に届いた声";
+  if (sub) sub.textContent = "役に立ったと伝えた人が、選んだ理由と、書いてくれた言葉です。";
+  list.innerHTML = '<div class="eth-loading">届いた声を読み込んでいます...</div>';
+  openEmuSheet("emuHistorySheet");
+  if (!window.db || !window.fbLib) {
+    list.innerHTML = '<div class="emu-history-item">読み込めませんでした。</div>';
+    return;
+  }
+  try {
+    const snap = await window.fbLib.getDocs(window.fbLib.query(
+      window.fbLib.collection(window.db, "post_good_impacts"),
+      window.fbLib.where("postId", "==", String(postData.id || "")),
+      window.fbLib.limit(EMU_VOICE_LIMIT)
+    ));
+    const rows = [];
+    snap.forEach(function (docSnap) {
+      const d = docSnap.data() || {};
+      rows.push({
+        from: String(d.fromAddress || "").toLowerCase(),
+        reasons: Array.isArray(d.reasons) ? d.reasons.filter(Boolean) : [],
+        note: String(d.note || "").trim(),
+        at: _emuTimestampMs(d.createdAt)
+      });
+    });
+    /* 通信が戻っていないと getDocs は例外ではなく空の控えを返す。
+       それを「まだ無い」と書くと、事実と違う表示になる。 */
+    if (!rows.length && snap.metadata && snap.metadata.fromCache) {
+      list.innerHTML = '<div class="emu-history-item">通信が戻っていないため、まだ読み込めていません。</div>';
+      return;
+    }
+    if (!rows.length) {
+      list.innerHTML = '<div class="emu-history-item">まだ理由は届いていません。</div>';
+      return;
+    }
+    rows.sort(function (a, b) { return b.at - a.at; });
+    const names = await _emuVoiceNames(rows.map(function (r) { return r.from; }));
+    list.innerHTML = rows.map(function (r) {
+      const who = names[r.from] || _spShortAddr(r.from) || "読んでくれた人";
+      const chips = r.reasons.map(function (x) {
+        return '<span style="display:inline-block;padding:3px 10px;border-radius:999px;'
+          + 'background:#efeaff;color:#4b3c8f;font-size:12px;line-height:1.6;">' + _emuEsc(x) + '</span>';
+      }).join(" ");
+      return '<article class="emu-history-item">'
+        + '<div class="emu-history-meta"><span>' + _emuEsc(who) + '</span>'
+        + '<span>' + _emuEsc(_emuFormatDate(r.at)) + '</span></div>'
+        + (chips ? '<div style="margin:6px 0 0;display:flex;gap:6px;flex-wrap:wrap;">' + chips + '</div>' : '')
+        + (r.note ? '<p style="white-space:pre-wrap;margin:8px 0 0;">' + _emuEsc(r.note) + '</p>' : '')
+        + '</article>';
+    }).join("");
+  } catch (e) {
+    console.error("届いた声を読めませんでした:", e);
+    list.innerHTML = '<div class="emu-history-item">届いた声を読めませんでした。</div>';
+  }
+}
+
 async function openPostChangeHistory(postData) {
   const list = document.getElementById("emuHistoryList");
   document.getElementById("emuHistoryTitle").textContent = "「" + (postData.title || "知識") + "」の変更履歴";
+  /* 同じシートを「届いた声」でも使う。片方でしか説明文を書き換えないと、
+     前に開いたときの説明が残る。 */
+  const _histSub = document.getElementById("emuHistorySubtitle");
+  if (_histSub) _histSub.textContent = "提案と採用の記録を確認できます。";
   list.innerHTML = '<div class="eth-loading">変更履歴を読み込んでいます...</div>';
   openEmuSheet("emuHistorySheet");
   if (!window.db || !window.fbLib) {
@@ -13058,6 +13125,7 @@ postElement.innerHTML = `
   <div class="post-actions kw-actions">
     <button class="good-button ${_kwGooded ? "reacted" : ""}" ${(_kwGooded || _kwMine) ? "disabled" : ""} title="この知識が役に立ったことを投稿者へ伝えます">♡ <span>${_kwGooded ? "届けました" : "役に立った"}</span> <b class="good-count">${post.goodCount ?? 0}</b></button>
     <button class="change-button ${_kwChanged ? "reacted" : ""}" ${(_kwChanged || _kwMine) ? "disabled" : ""} title="この知識を一緒により良くする意思を伝えます">↻ <span>${_kwChanged ? "提案済み" : "改善案を届ける"}</span> <b class="change-count">${post.changeCount ?? 0}</b></button>
+    <button class="good-voices-button" title="この知識が役に立った理由を読む"${(post.goodCount ?? 0) ? "" : " disabled"}>届いた声${(post.goodCount ?? 0) ? ` <b>${post.goodCount}</b>` : ""}</button>
     <button class="change-history-button" title="変更履歴">変更履歴${_kwAccepted ? ` <b>${_kwAccepted}</b>` : ""}</button>
   </div>
   <div class="post-value-note kw-note">Goodは「役に立った」、Changeは「一緒にもっと良くする」。数字だけでなく、この投稿が生んだ価値として残ります。</div>
@@ -13087,6 +13155,7 @@ setTimeout(function () {
   // reaction ハンドラ
   attachReactionHandlers(postElement);
   postElement.querySelector(".change-history-button")?.addEventListener("click", () => openPostChangeHistory(post));
+  postElement.querySelector(".good-voices-button")?.addEventListener("click", () => openPostGoodVoices(post));
 
   // ★ 編集ボタンの制御
   const editBtn = postElement.querySelector(".edit-button");
