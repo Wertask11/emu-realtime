@@ -11177,7 +11177,7 @@ const SP_REIZO_KB = [
 
   // ── 知恵ライブラリ・引用
   { k:['知恵ライブラリ','知恵カード','引用','ライブラリ','残った一文'],
-    a:'DAOの資産は、金庫じゃなくて知恵ライブラリにあるんだ📚\n\n知恵カード1枚は3つでできてるよ：\n① 元の知識（どこから来たか）\n② 通した経験（クエストで何をどれだけやったか）\n③ 残った一文（やってみて分かったこと）\n\n知恵カードは、完了したクエストからしか生まれないよ。置いたあとは書き換えられないんだ。\n気に入った知恵は引用できるよ（1つのパスポートにつき1回）。引用された数が、書いた人の分配のもとになるんだ！' },
+    a:'DAOの資産は、金庫じゃなくて知恵ライブラリにあるんだ📚\n\n知恵カード1枚は3つでできてるよ：\n① 元の知識（どこから来たか）\n② 通した経験（クエストで何をどれだけやったか）\n③ 残った一文（やってみて分かったこと）\n\n知恵カードは、完了したクエストからしか生まれないよ。置いたあとは書き換えられないんだ。\n気に入った知恵は引用できるよ（1つのパスポートにつき1回）。引用された数は、書いた人の信用スコアに入るよ（1件で3点）。\n\nお金の分配は、まだ始めていないんだ。仕組みはできてるけど、法務と税務の確認が済んでからお知らせするよ！' },
 
   // ── 信用スコア
   { k:['信用スコア','信用','trust','20点','点数','スコア'],
@@ -17068,8 +17068,20 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
     founderSections: SpQuestStore.sections(q),
     action: q.action || '', measure: q.measure || '',
     knowledge: q.knowledge || '', owner: q.ownerName || _spShortAddr(q.owner),
-    /* 金額は3桁ごとに区切って出す（記録には数字だけを入れてある） */
-    budget: (parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0).toLocaleString(),
+    /* 金額は通貨も付けてここで組み立てる。
+       画面側で ¥ を決め打ちしていたため、EMUER建てのクエストが
+       「¥800」と出ていた。 */
+    budget: spMoney(parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0,
+                    SP_CURRENCIES.indexOf(q.budgetCurrency) >= 0 ? q.budgetCurrency : 'JPY'),
+    /* 1人あたりの目安。分配の決まり（完走した人へ80%）に合わせる。
+       いまは「受けた人の数」で割った目安で、実際は運営が完了と
+       認めた人だけで等分する。 */
+    perHead: (function () {
+      const cur = SP_CURRENCIES.indexOf(q.budgetCurrency) >= 0 ? q.budgetCurrency : 'JPY';
+      const v = parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0;
+      const n = people.length;
+      return n > 0 ? spMoney(Math.round(v * SP_SHARE_DONE / n / 100) * 100, cur) : spMoney(0, cur);
+    })(),
     due: SpQuestStore.isFounder(q) ? 'なし・恒久' : _spQuestDue(q.closesAt),
     status: SpQuestStore.isFounder(q) ? 'FOUNDER' : (q.status || 'OPEN'), commits: people.length, need: q.need || 5,
     people: people, logCount: logCount, iTook: iTook,
@@ -17585,7 +17597,8 @@ window.spOpenEmuPost = async function (postId) {
 };
 
 /* 引用する／取り消す。1つのパスポートにつき1回。
-   引用の数が、あとで分配のもとになる。 */
+   引用の数は信用スコア（×3）に入る。
+   お金の分配は、クエストの予算からは出さない（DAOプールから別に配る予定。未実装）。 */
 window.spWisdomCite = async function (wisdomId, app) {
   const p = await spPassportLoad();
   if (!p) { alert('引用するにはログインが必要です。'); return; }
@@ -17891,6 +17904,10 @@ window.spDaoLoadTreasury = async function (app) {
     const b = box[c];
     app.setState({
       treasury: {
+        /* 左下に出る合計。「使える額」（＝ある − 約束済み）を、
+           いま選んでいる通貨で出す。これまで total を渡しておらず、
+           画面には「¥」だけが出て数字が無かった。 */
+        total: cardFor(c).free,
         card: cardFor(c),
         curTabs: shown.map(function (x) {
           const on = x === c;
