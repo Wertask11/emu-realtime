@@ -1426,6 +1426,10 @@ async function renderSchoolPark() {
     + '<div class="card"><h3>クエストを出す</h3>'
     + '<p class="empty" style="text-align:left;margin:0 0 10px">出したあと、題名や予算は動かせません。'
     + '進行中・完了への切り替えだけ、あとからできます。</p>'
+    + '<label>どのギルドの活動か</label><select id="aqGuild">'
+    + '<option value="">どのギルドにも属さない</option>'
+    + SpGuildStore.OFFICIAL.map(g => '<option value="' + esc(g.id) + '">' + esc(g.short + '　' + g.concept) + '</option>').join("")
+    + '</select>'
     + '<label>何を試す？</label><input id="aqTitle" placeholder="例：「先に名乗る」を1週間、初対面20人でやってみる">'
     + '<label>元の知識（どこで得たか）</label><input id="aqKnowledge" placeholder="例：Emu／人間関係の設計 第3回">'
     + '<label>予想（たぶんこうなる）</label><textarea id="aqHypothesis" rows="2" placeholder="確かめたい説を一文で"></textarea>'
@@ -1580,9 +1584,15 @@ async function renderSchoolPark() {
     if (!v("aqHypothesis")) { alert("予想を書いてください。"); return; }
     questSubmitting = true;
     const days = Math.max(1, Math.min(90, parseInt(v("aqDays"), 10) || 14));
+    /* どのギルドの活動か。空（どこにも属さない）は認める。
+       入っているときだけ、正しいギルド番号かを確かめる。
+       ここが無かったため、管理画面から出したクエストは
+       すべて「どのギルドにも属さない」になっていた。 */
+    const aqGuildId = v("aqGuild");
+    if (aqGuildId && !SpGuildStore.isValidId(aqGuildId)) { alert("ギルドの指定が正しくありません。"); questSubmitting = false; return; }
     try {
       await SpQuestStore.createQuest(f, f.db, {
-        title: v("aqTitle").slice(0, 120), knowledge: v("aqKnowledge").slice(0, 200),
+        title: v("aqTitle").slice(0, 120), guildId: aqGuildId, knowledge: v("aqKnowledge").slice(0, 200),
         hypothesis: v("aqHypothesis").slice(0, 400), action: v("aqAction").slice(0, 400),
         measure: v("aqMeasure").slice(0, 400),
         budget: String(parseInt(v("aqBudget").replace(/[^0-9]/g, ""), 10) || 0),
