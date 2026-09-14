@@ -66,7 +66,7 @@ html, body                 { height: 100%; }
       <div style="padding:18px 20px 22px; border-top:1px solid rgba(244,241,234,.12); display:flex; flex-direction:column; gap:12px">
         <div style="display:flex; justify-content:space-between; align-items:baseline">
           <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; opacity:.5">TREASURY</div>
-          <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:#D0E2BE">¥{{ treasury.total }}</div>
+          <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:#D0E2BE">{{ treasury.total }}</div>
         </div>
         <div onClick="{{ openPassport }}" title="SchoolPark パスポートを見る" style="display:flex; align-items:center; gap:10px; padding:4px 8px 6px; margin:0 -8px; border-radius:8px; cursor:pointer" style-hover="background:rgba(244,241,234,.08)">
           <div style="width:32px; height:32px; border-radius:50%; background:#0F5C3F; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700">{{ me.initial }}</div>
@@ -145,7 +145,7 @@ html, body                 { height: 100%; }
                 </div>
                 <div style="border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:6px">
                   <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; color:#D0E2BE">{{ stats.payout }}</div>
-                  <div style="font-size:12px; color:rgba(244,241,234,.6)">今月の分配見込</div>
+                  <div style="font-size:12px; color:rgba(244,241,234,.6)">今月の分配の計算額<br><span style="font-size:10px; opacity:.7">お支払いはまだ始めていません</span></div>
                 </div>
               </div>
             </div>
@@ -439,7 +439,7 @@ html, body                 { height: 100%; }
                   <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding-top:4px; border-top:1px solid rgba(20,19,16,.1); flex-wrap:wrap">
                     <div style="display:flex; flex-direction:column; gap:4px">
                       <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:#0F5C3F">{{ e.commits }} / {{ e.need }} 人が受けた</div>
-                      <div style="font-size:11px; color:#6E695C">予算 ¥{{ e.budget }} · {{ e.owner }}</div>
+                      <div style="font-size:11px; color:#6E695C">予算 {{ e.budget }} · {{ e.owner }}</div>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px">
                       <div onClick="{{ e.open }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:#0F5C3F; border:1px solid rgba(20,19,16,.2)" style-hover="background:#E7E2D6">詳細</div>
@@ -545,11 +545,11 @@ html, body                 { height: 100%; }
                 </div>
                 <div style="display:flex; justify-content:space-between; font-size:13px; padding-top:14px; border-top:1px solid rgba(20,19,16,.1)">
                   <div style="color:#6E695C">配分予算</div>
-                  <div style="font-family:Inter,sans-serif; font-weight:600; color:#0F5C3F">¥{{ cur.budget }}</div>
+                  <div style="font-family:Inter,sans-serif; font-weight:600; color:#0F5C3F">{{ cur.budget }}</div>
                 </div>
                 <div style="display:flex; justify-content:space-between; font-size:13px">
-                  <div style="color:#6E695C">完走時の分配</div>
-                  <div style="font-family:Inter,sans-serif; font-weight:600; color:#0F5C3F">¥{{ cur.perHead }} / 人</div>
+                  <div style="color:#6E695C">完走1人あたりの目安</div>
+                  <div style="font-family:Inter,sans-serif; font-weight:600; color:#0F5C3F">{{ cur.perHead }} / 人</div>
                 </div>
               </div>
             </div>
@@ -796,9 +796,12 @@ html, body                 { height: 100%; }
             <sc-if value="{{ noMembers }}">
               <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだ活動の記録がありません。クエストを受ける・知恵を残す・議題に投票すると、ここに出ます。</div>
             </sc-if>
+            <div style="background:#FFF6E6; border:1px solid rgba(180,130,40,.35); border-radius:12px; padding:14px 18px; font-size:13px; line-height:1.9; color:#6B4E14">
+              <b>お支払いはまだ始めていません。</b>「分配」の欄に出ているのは、決まった割合（完走した人へ80%／DAOプールへ20%）で計算した額です。実際にお渡しする方法と時期は、法務と税務の確認が済んでからお知らせします。
+            </div>
             <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; overflow:hidden">
               <div style="display:grid; grid-template-columns:{{ L.table }}; gap:12px; padding:16px 20px; background:#E7E2D6; font-size:12px; font-weight:700; color:#3B382F">
-                <div>メンバー</div><div>知恵</div><div style="display:{{ L.colHide }}">完走</div><div style="display:{{ L.colHide }}">引用され</div><div>分配</div>
+                <div>メンバー</div><div>知恵</div><div style="display:{{ L.colHide }}">完走</div><div style="display:{{ L.colHide }}">引用され</div><div>分配（計算額）</div>
               </div>
               <sc-for list="{{ members }}" as="m" hint-placeholder-count="6">
                 <div style="display:grid; grid-template-columns:{{ L.table }}; gap:12px; padding:18px 20px; border-top:1px solid rgba(20,19,16,.09); align-items:center; font-size:14px">
@@ -812,7 +815,7 @@ html, body                 { height: 100%; }
                   <div style="font-family:Inter,sans-serif; font-weight:600">{{ m.wisdom }}</div>
                   <div style="font-family:Inter,sans-serif; font-weight:600; display:{{ L.colHide }}">{{ m.done }}</div>
                   <div style="font-family:Inter,sans-serif; font-weight:600; display:{{ L.colHide }}">{{ m.cited }}</div>
-                  <div style="font-family:Inter,sans-serif; font-weight:600; color:#0F5C3F">¥{{ m.share }}</div>
+                  <div style="font-family:Inter,sans-serif; font-weight:600; color:#0F5C3F">{{ m.share }}</div>
                 </div>
               </sc-for>
             </div>
@@ -1172,7 +1175,10 @@ class Component extends DCLogic {
       logStuck: () => { try { window.parent.spQuestLog(e.id, 'つまずいた', this); } catch (err) {} },
       logFound: () => { try { window.parent.spQuestLog(e.id, '気づいた', this); } catch (err) {} },
       close: () => { try { window.parent.spQuestClose(e.id, this); } catch (err) {} },
-      perHead: n > 0 ? (Math.round((parseInt(String(e.budget).replace(/,/g,''),10)||0)/n/100)*100).toLocaleString() : '0'
+      /* perHead は親（index.html）が通貨と割合込みで作って渡す。
+         ここで計算していたときは ¥ を決め打ちしていて、
+         EMUER建てのクエストが「¥800」と出ていた。 */
+      perHead: e.perHead || '0'
     };
   }
 
