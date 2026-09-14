@@ -16788,6 +16788,13 @@ async function spVoteSubmit() {
 
   const p = await spPassportLoad();
   if (!p) { alert('議題を出すにはログインが必要です。'); return; }
+  /* 開いたあとに条件が変わることがあるので、出すときにもう一度確かめる。
+     記録の決まり（canGuild）でも止まるが、そこで弾かれると
+     「出せませんでした」としか出ず、なぜ駄目なのかが分からない。 */
+  if (!(await window.spCanGuild())) {
+    alert('議題を出せるのは、運営・公式パスの方・運営が参加を認めた方です。');
+    return;
+  }
 
   const days = Math.max(1, Math.min(30, parseInt(val('spvDays'), 10) || 7));
   try {
@@ -16826,6 +16833,14 @@ async function spVoteSubmit() {
 async function spOpenProposalFromPost(postId, postTitle) {
   const from = { postId: String(postId || ''), postTitle: String(postTitle || '') };
   if (!from.postId) return;
+  /* SchoolPark が準備中のあいだは、議題フォームも開かない。
+     chesHubGo は準備中を知らせて戻るだけなので、そのあとを止めないと
+     「SchoolPark には入れないのに、議題フォームだけ開く」ことになる。
+     公式パスの方は canGuild を通るので、そのまま議題を出せてしまっていた。 */
+  if (typeof isBrandUnderMaintenance === 'function' && isBrandUnderMaintenance('schoolpark')) {
+    alert('SchoolPark はただいま準備中です。\n\n再開すると、この知識から議題を立てられるようになります。');
+    return;
+  }
   try {
     if (!document.body.classList.contains('sp-dao-open') && typeof chesHubGo === 'function') {
       chesHubGo('schoolpark');
