@@ -16200,7 +16200,7 @@ function _spVoteCloseLabel(closesAt) {
 /* ═══════════════════════════════════════
    信用スコア
 
-     完走したクエスト   ×10  受けて、報告を1本以上出して、完了したもの
+     完走したクエスト   ×10  受けて、運営が中身を認めて、完了したもの
      置いた知恵カード   × 5  完了したクエストからしか生まれない
      引用された数       × 3  他人が押すので自分では増やせない
      在籍の月数         × 1  上限12
@@ -16217,27 +16217,20 @@ window.spTrustScore = async function (addr, createdAt) {
   if (!key || !fb || !window.db) return null;
   let done = 0, wisdom = 0, cited = 0;
 
-  /* 完走：受けていて、報告を1本以上出していて、完了しているクエスト */
+  /* 完走：受けていて、運営が中身を認めていて、完了しているクエスト。
+     メンバー画面の分配と、まったく同じ条件にしてある。
+     前は信用スコアが「報告を1本以上書いた」、分配が「受けただけ」で、
+     同じ『完走』という言葉で2か所が違うものを数えていた。 */
   try {
     const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
     const list = [];
     qs.forEach(function (s) { list.push({ id: s.id, ...(s.data() || {}) }); });
     for (const q of list) {
       if (q.status !== 'CLOSED') continue;
-      let took = false;
       try {
         const c = await fb.getDoc(fb.doc(window.db, 'sp_quests', q.id, 'commits', addr));
-        took = c.exists();
+        if (c.exists() && (c.data() || {}).approved === true) done++;
       } catch (e) {}
-      if (!took) continue;
-      let wrote = false;
-      try {
-        const ls = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'logs'));
-        ls.forEach(function (l) {
-          if (String((l.data() || {}).author || '').toLowerCase() === key) wrote = true;
-        });
-      } catch (e) {}
-      if (wrote) done++;
     }
   } catch (e) {}
 
@@ -16696,6 +16689,11 @@ window.spVoteToQuest = async function (voteId, app) {
     guildId: gid,
     fromProposalId: v.id,
     fromProposalTitle: (v.title || '').slice(0, 120),
+    /* 議題が Emu の投稿から生まれていたら、クエストにも引き継ぐ。
+       ここで持ち直しておくと、知恵カードを作るときに議題まで
+       読みに行かなくてよい。 */
+    fromPostId: String(v.fromPostId || ''),
+    fromPostTitle: String(v.fromPostTitle || ''),
     title: (v.title || '').slice(0, 120),
     hypothesis: picked ? ('採択された案：' + picked) : ''
   });
@@ -16728,7 +16726,10 @@ async function spVoteCast(voteId, optionId, app) {
 /* 議題を出す。枠の外の入力欄を使う。
    どのギルドの議題かは必ず選ぶ（記録の決まりでも空では作れない）。 */
 let _spVoteFormApp = null;
-window.openSpVoteForm = async function (app, guildId) {
+/* Emu の投稿から来たときの元ネタ。ここから議題 → クエスト → 知恵カードまで、
+   それぞれが親のIDを覚えるので、あとから元の投稿まで遡れる。 */
+let _spVoteFrom = null;
+window.openSpVoteForm = async function (app, guildId, from) {
   _spVoteFormApp = app || null;
   const p = await spPassportLoad();
   if (!p) { alert('議題を出すにはログインが必要です。'); return; }
@@ -16748,6 +16749,20 @@ window.openSpVoteForm = async function (app, guildId) {
   const d = document.getElementById('spvDays'); if (d) d.value = '7';
   const kd = document.getElementById('spvKind'); if (kd) kd.value = 'free';
 
+  /* Emu の投稿から来たときは、その題名を出しておく。
+     題名は議題の下書きとしてそのまま入れる（書き換えてよい）。 */
+  _spVoteFrom = (from && from.postId) ? from : null;
+  const fRow = document.getElementById('spvFromRow');
+  const fIn = document.getElementById('spvFrom');
+  if (fRow) fRow.style.display = _spVoteFrom ? 'block' : 'none';
+  if (fIn) fIn.value = _spVoteFrom ? _spVoteFrom.postTitle : '';
+  if (_spVoteFrom) {
+    const t = document.getElementById('spvTitle');
+    if (t) t.value = String(_spVoteFrom.postTitle || '').slice(0, 120);
+    const o1 = document.getElementById('spvOpt1'); if (o1) o1.value = 'クエストにして試す';
+    const o2 = document.getElementById('spvOpt2'); if (o2) o2.value = 'いまはやらない';
+  }
+
   /* ギルドの選び方は、いまある5つ（と足された分）から作る */
   const defs = await spGuildDefs();
   const gs = document.getElementById('spvGuild');
@@ -16760,7 +16775,7 @@ window.openSpVoteForm = async function (app, guildId) {
   }
   document.body.classList.add('sp-vote-open');
 };
-function closeSpVoteForm() { document.body.classList.remove('sp-vote-open'); }
+function closeSpVoteForm() { document.body.classList.remove('sp-vote-open'); _spVoteFrom = null; }
 
 async function spVoteSubmit() {
   const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
@@ -16783,6 +16798,10 @@ async function spVoteSubmit() {
       options: labels.map(function (l, i) { return { id: 'o' + (i + 1), label: l.slice(0, 60) }; }),
       kind: (val('spvKind') === 'special') ? 'special' : 'free',
       guildId: guildId,
+      /* 元になった Emu の投稿。直接出したときは空。
+         これで 投稿 → 議題 → クエスト → 知恵カード が一本の線になる。 */
+      fromPostId: _spVoteFrom ? String(_spVoteFrom.postId).slice(0, 80) : '',
+      fromPostTitle: _spVoteFrom ? String(_spVoteFrom.postTitle || '').slice(0, 120) : '',
       createdBy: p.addr,
       createdAt: Date.now(),
       closesAt: Date.now() + days * 86400000
@@ -16795,6 +16814,33 @@ async function spVoteSubmit() {
   closeSpVoteForm();
   _spGuildOpenId = guildId;
   if (_spVoteFormApp) await window.spDaoLoadVotes(_spVoteFormApp);
+}
+
+/* Emu の投稿から「議題を立てる」。
+   SchoolPark は枠の中（iframe）にあるので、
+     ① SchoolPark を開く（まだ開いていなければ）
+     ② 中の画面ができるのを待つ
+     ③ ギルドの画面へ移す
+     ④ 元の投稿を持たせて議題フォームを出す
+   の順に進める。途中で転んでも、フォームだけは出す。 */
+async function spOpenProposalFromPost(postId, postTitle) {
+  const from = { postId: String(postId || ''), postTitle: String(postTitle || '') };
+  if (!from.postId) return;
+  try {
+    if (!document.body.classList.contains('sp-dao-open') && typeof chesHubGo === 'function') {
+      chesHubGo('schoolpark');
+    }
+  } catch (e) {}
+  if (typeof spDaoWaitReady === 'function') { try { await spDaoWaitReady(8000); } catch (e) {} }
+  let app = null;
+  try {
+    const fr = document.getElementById('spDaoFrame');
+    app = (fr && fr.contentWindow && fr.contentWindow.app) || null;
+  } catch (e) {}
+  /* 04 ギルドの画面。中では 'logs' という名前になっている。 */
+  if (app) { try { app.setState({ screen: 'logs' }); app.toTop(); } catch (e) {} }
+  try { await window.openSpVoteForm(app, '', from); }
+  catch (e) { console.warn('議題フォームを開けませんでした:', e && (e.message || e)); }
 }
 
 /* ═══════════════════════════════════════
@@ -17182,6 +17228,9 @@ async function spQuestSubmit() {
       guildId: guildId || '',
       fromProposalId: _spQuestFrom ? _spQuestFrom.fromProposalId : '',
       fromProposalTitle: _spQuestFrom ? String(_spQuestFrom.fromProposalTitle || '').slice(0, 120) : '',
+      /* 元になった Emu の投稿。議題から引き継ぐ。直接出したときは空。 */
+      fromPostId: _spQuestFrom ? String(_spQuestFrom.fromPostId || '').slice(0, 80) : '',
+      fromPostTitle: _spQuestFrom ? String(_spQuestFrom.fromPostTitle || '').slice(0, 120) : '',
       knowledge: val('sqKnowledge').slice(0, 200),
       hypothesis: val('sqHypothesis').slice(0, 400),
       action: val('sqAction').slice(0, 400),
@@ -17373,7 +17422,24 @@ function openSpWisdomForm(q, app) {
   _spWisdomQuest = q; _spWisdomApp = app || null;
   const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; };
   set('swQuest', q.title);
-  set('swKnowledge', q.knowledge);
+  /* 元の知識。Emu の投稿から始まったクエストなら、その投稿そのものを指す。
+     自由入力だと字面が残るだけで、どの投稿のことか分からなかった。
+     引き継いでいるときは書き換えられないようにする（実際の投稿を指すため）。 */
+  const kn = document.getElementById('swKnowledge');
+  if (kn) {
+    if (q.fromPostId) {
+      kn.value = String(q.fromPostTitle || '（Emuの投稿）');
+      kn.readOnly = true;
+    } else {
+      kn.value = q.knowledge || '';
+      kn.readOnly = false;
+    }
+  }
+  const knNote = document.getElementById('swKnowledgeNote');
+  if (knNote) {
+    knNote.textContent = q.fromPostId ? 'Emuの投稿から始まったクエストです。知恵カードから、その投稿を開けるようになります。' : '';
+    knNote.hidden = !q.fromPostId;
+  }
   set('swExperiment', q.action || q.title);
   set('swInsight', '');
   const t = document.getElementById('swTag'); if (t) t.value = 'LEARNING';
@@ -17393,6 +17459,10 @@ async function spWisdomSubmit() {
     await fb.addDoc(fb.collection(window.db, 'sp_wisdom'), {
       questId: _spWisdomQuest.id,
       questTitle: _spWisdomQuest.title || '',
+      /* 元になった Emu の投稿。これで
+         投稿 → 議題 → クエスト → 知恵カード が一本の線になる。 */
+      fromPostId: String(_spWisdomQuest.fromPostId || '').slice(0, 80),
+      fromPostTitle: String(_spWisdomQuest.fromPostTitle || '').slice(0, 120),
       knowledge: val('swKnowledge').slice(0, 200),
       experiment: val('swExperiment').slice(0, 200),
       insight: insight.slice(0, 200),
@@ -17442,6 +17512,16 @@ window.spDaoLoadWisdom = async function (app) {
       id: w.id, tag: w.tag || 'LEARNING', insight: w.insight || '',
       from: w.knowledge || '', experiment: w.experiment || '',
       author: w.authorName || _spShortAddr(w.author), uses: uses,
+      /* 元になった Emu の投稿があるときだけ、押して開けるようにする。
+         自由入力だけの古い知恵カードは、これまでどおり字面のまま。 */
+      fromLinked: w.fromPostId ? 'underline' : 'none',
+      fromCursor: w.fromPostId ? 'pointer' : 'default',
+      openPost: (function (pid) {
+        return function () { if (pid) window.spOpenEmuPost(pid); };
+      })(w.fromPostId || ''),
+      /* 自分の知恵カードには引用ボタンを出さない（自分で増やせてしまうため） */
+      citeShow: (mine && String(w.author || '').toLowerCase() === mine) ? 'none' : 'block',
+      mineShow: (mine && String(w.author || '').toLowerCase() === mine) ? 'block' : 'none',
       citeLabel: did ? '✓ 引用した' : '引用する',
       citeBg: did ? '#0F5C3F' : 'transparent',
       citeFg: did ? '#F4F1EA' : '#0F5C3F',
@@ -17451,12 +17531,63 @@ window.spDaoLoadWisdom = async function (app) {
   app.setState({ wisdom: wisdom, noWisdom: wisdom.length === 0, citations: cites });
 };
 
+/* 知恵カードから、元になった Emu の投稿を開く。
+   Emu には1つの投稿だけを出す画面が無いので、
+   変更履歴などと同じシートを使って中身をそのまま見せる。 */
+window.spOpenEmuPost = async function (postId) {
+  const list = document.getElementById('emuHistoryList');
+  const title = document.getElementById('emuHistoryTitle');
+  const sub = document.getElementById('emuHistorySubtitle');
+  if (!list) return;
+  if (title) title.textContent = '元になった知識';
+  if (sub) sub.textContent = 'この知恵は、Emuのこの投稿から始まりました。';
+  list.innerHTML = '<div class="eth-loading">読み込んでいます...</div>';
+  openEmuSheet('emuHistorySheet');
+  if (!window.db || !window.fbLib) {
+    list.innerHTML = '<div class="emu-history-item">読み込めませんでした。</div>';
+    return;
+  }
+  try {
+    const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'posts', String(postId)));
+    if (!snap.exists()) {
+      list.innerHTML = '<div class="emu-history-item">元の投稿が見つかりませんでした（消された可能性があります）。</div>';
+      return;
+    }
+    const d = snap.data() || {};
+    const tags = String(d.tags || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+    list.innerHTML = '<article class="emu-history-item">'
+      + '<div class="emu-history-meta"><span>' + _emuEsc(d.displayName || _spShortAddr(d.address) || '匿名') + '</span>'
+      + '<span>' + _emuEsc(_emuFormatDate(d.createdAt)) + '</span>'
+      + '<span>' + (Number(d.goodCount) || 0) + ' 役に立った</span></div>'
+      + '<p><strong>' + _emuEsc(d.title || '（題名なし）') + '</strong></p>'
+      + '<p style="white-space:pre-wrap">' + _emuEsc(d.body || '') + '</p>'
+      + (tags.length ? '<p style="color:#8e88a8">' + tags.map(function (t) { return '#' + _emuEsc(t); }).join(' ') + '</p>' : '')
+      + '</article>';
+  } catch (e) {
+    console.error('元の投稿を読めませんでした:', e);
+    list.innerHTML = '<div class="emu-history-item">元の投稿を読めませんでした。</div>';
+  }
+};
+
 /* 引用する／取り消す。1つのパスポートにつき1回。
    引用の数が、あとで分配のもとになる。 */
 window.spWisdomCite = async function (wisdomId, app) {
   const p = await spPassportLoad();
   if (!p) { alert('引用するにはログインが必要です。'); return; }
   const fb = window.fbLib;
+  /* 自分の知恵カードは引用できない。
+     引用は信用スコア（×3）のもとになるので、自分で押せると自分で増やせる。
+     画面でもボタンを隠すが、押せる道が残らないようここでも止める。
+     名義は1つとは限らないので、本人のどの名義でも自分と見なす。 */
+  try {
+    const w = await fb.getDoc(fb.doc(window.db, 'sp_wisdom', wisdomId));
+    const author = String(((w.data() || {}).author) || '').toLowerCase();
+    const mineAll = [p.addr, p.ches, p.wallet, p.ownerAddr]
+      .map(function (a) { return String(a || '').toLowerCase(); }).filter(Boolean);
+    if (author && mineAll.indexOf(author) >= 0) {
+      alert('自分の知恵カードは引用できません。'); return;
+    }
+  } catch (e) {}
   const ref = fb.doc(window.db, 'sp_wisdom', wisdomId, 'cites', p.addr);
   try {
     const cur = await fb.getDoc(ref);
@@ -17483,10 +17614,21 @@ window.spWisdomCite = async function (wisdomId, app) {
      引用され … 自分の知恵カードが引用された数
      分配     … 完了したクエストの予算から計算する（下の割合どおり）
 
-   分配の割合は画面に書いてあるとおり：
-     完走したメンバーに予算の70%
-     知恵カードの引用数に応じて20%
-     残り10%は次の原資としてプール
+   分配の決まり（2026年9月に見直した）：
+     完走したメンバーに、そのクエストの予算の80%
+     残り20%は、そのまま DAO プールへ
+
+   前は「完走70% / 引用20% / プール10%」だった。直した理由は2つ。
+     ・引用の20%が、そのクエストの予算から出ていた。
+       予算を出した側からすると、その仕事と関係ない人へ金が流れる形で、
+       出しづらい。引用への還元は、クエストの予算ではなく
+       DAOプールから別に配る。
+     ・通貨を見ずに足していた。¥1,000 と 1,000 EMUER が
+       同じ「1000」として合算されていた。通貨ごとに分ける。
+
+   「完走」は、運営が中身を見て認めた人だけ。
+   受けただけ（commits があるだけ）では分配しない。
+   実際に動いた証拠を運営が確かめて approved を立てる。
 ═══════════════════════════════════════ */
 window.spDaoLoadMembers = async function (app) {
   if (!app || typeof app.setState !== 'function') return;
@@ -17496,13 +17638,12 @@ window.spDaoLoadMembers = async function (app) {
   const pick = function (addr, name) {
     const key = String(addr || '').toLowerCase();
     if (!key) return null;
-    if (!M[key]) M[key] = { addr: key, name: name || _spShortAddr(key), wisdom: 0, done: 0, cited: 0, share: 0 };
+    if (!M[key]) M[key] = { addr: key, name: name || _spShortAddr(key), wisdom: 0, done: 0, cited: 0, share: {} };
     if (name && M[key].name.indexOf('…') >= 0) M[key].name = name;   // 短縮表示より実名を優先
     return M[key];
   };
 
-  /* 知恵カードと、その引用 */
-  let citeTotal = 0;
+  /* 知恵カードと、その引用（数として出すだけ。予算からは配らない） */
   try {
     const ws = await fb.getDocs(fb.collection(window.db, 'sp_wisdom'));
     const ids = [];
@@ -17516,12 +17657,10 @@ window.spDaoLoadMembers = async function (app) {
         cs.forEach(function () { uses++; });
       } catch (e) {}
       if (m) m.cited += uses;
-      citeTotal += uses;
     }
   } catch (e) {}
 
-  /* 完了したクエストと、それを受けた人 */
-  let closedBudget = 0;
+  /* 完了したクエストと、運営が認めた参加者 */
   try {
     const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
     const list = [];
@@ -17530,35 +17669,44 @@ window.spDaoLoadMembers = async function (app) {
       const took = [];
       try {
         const cs = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'commits'));
-        cs.forEach(function (c) { took.push({ addr: c.id, name: (c.data() || {}).name || '' }); });
+        cs.forEach(function (c) {
+          const d = c.data() || {};
+          took.push({ addr: c.id, name: d.name || '', approved: d.approved === true });
+        });
       } catch (e) {}
+      /* 受けた人は、認められていなくても一覧には出す（「参加中」として） */
       took.forEach(function (t) { pick(t.addr, t.name); });
-      if (q.status !== 'CLOSED' || took.length === 0) continue;
+      if (q.status !== 'CLOSED') continue;
+      const done = took.filter(function (t) { return t.approved; });
+      if (done.length === 0) continue;
+      const cur = SP_CURRENCIES.indexOf(q.budgetCurrency) >= 0 ? q.budgetCurrency : 'JPY';
       const budget = parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0;
-      closedBudget += budget;
-      const each = budget * 0.7 / took.length;      // 完走したメンバーに70%
-      took.forEach(function (t) {
+      const each = budget * SP_SHARE_DONE / done.length;
+      done.forEach(function (t) {
         const m = pick(t.addr, t.name);
-        if (m) { m.done++; m.share += each; }
+        if (!m) return;
+        m.done++;
+        m.share[cur] = (m.share[cur] || 0) + each;
       });
     }
   } catch (e) {}
 
-  /* 引用に応じた20% */
-  if (citeTotal > 0) {
-    const pool = closedBudget * 0.2;
-    Object.keys(M).forEach(function (k) { M[k].share += pool * (M[k].cited / citeTotal); });
-  }
+  /* 引用は数として残すが、クエストの予算からは配らない。
+     引用への還元は DAO プールから別に配る（そちらは未実装）。 */
 
   const members = Object.keys(M).map(function (k) { return M[k]; })
     .filter(function (m) { return m.wisdom || m.done || m.cited; })
     .sort(function (a, b) { return (b.wisdom - a.wisdom) || (b.cited - a.cited) || (b.done - a.done); })
     .map(function (m) {
+      /* 通貨ごとに出す。混ぜると単位の違う数を足すことになる。 */
+      const parts = SP_CURRENCIES
+        .filter(function (c) { return Math.round(m.share[c] || 0) > 0; })
+        .map(function (c) { return spMoney(Math.round((m.share[c] || 0) / 100) * 100, c); });
       return {
         name: m.name, initial: m.name.slice(0, 1),
         role: m.done ? ('完走 ' + m.done + '本') : '参加中',
         wisdom: m.wisdom, done: m.done, cited: m.cited,
-        share: Math.round(m.share / 100) * 100 ? (Math.round(m.share / 100) * 100).toLocaleString() : '0'
+        share: parts.length ? parts.join(' / ') : '—'
       };
     });
   app.setState({ members: members, noMembers: members.length === 0 });
@@ -17572,11 +17720,11 @@ window.spDaoLoadMembers = async function (app) {
 
    帯（取り分）は、設計ファイルに入っていた見本の固定値
    （52/26/14/8）をやめて、実際の額から出す。
-   見本の値は下に書いてある分配ルール（70/20/10）と食い違っていた。
-     クエスト予算（確保中）    まだ完了していないクエストの予算
-     完走メンバーへの分配      完了した予算 × 70%
-     知恵の引用インセンティブ  完了した予算 × 20%
-     運営プール                完了した予算 × 10%
+     クエスト予算（確保中）  まだ完了していないクエストの予算
+     完走メンバーへの分配    完了した予算 × 80%
+     DAOプール               完了した予算 × 20%
+   割合は SP_SHARE_DONE / SP_SHARE_POOL に置いてある。
+   引用への還元はここからは出さない（DAOプールから別に配る）。
 
    お金が外から入った記録はまだ無い。そのため TOTAL BALANCE は
    「クエストに付いている予算の合計」＝ DAOが動かしているお金を指す。
@@ -17585,6 +17733,11 @@ function _spYen(n) { return (Math.round(Number(n) || 0)).toLocaleString(); }
 
 /* 扱う通貨。ここに無いものは受け取らない（ルール側も同じ3つに限っている）。 */
 const SP_CURRENCIES = ['JPY', 'JPYC', 'EMUER'];
+
+/* 分配の割合。メンバー画面とトレジャリーの両方がここを見る。
+   2か所に数字を書くと、いつか片方だけ直されて食い違う。 */
+const SP_SHARE_DONE = 0.8;   // 完走したメンバーへ
+const SP_SHARE_POOL = 0.2;   // DAOプールへ
 const SP_CURRENCY_LABEL = { JPY: '円', JPYC: 'JPYC', EMUER: 'EMUER' };
 /* 金額の書き方。円は前に¥、ほかは後ろに単位。 */
 function spMoney(n, cur) {
@@ -17700,9 +17853,8 @@ window.spDaoLoadTreasury = async function (app) {
     };
     return [
       row('クエスト予算（確保中）', b.promised),
-      row('完走メンバーへの分配', b.closed * 0.7),
-      row('知恵の引用インセンティブ', b.closed * 0.2),
-      row('運営プール', b.closed * 0.1)
+      row('完走メンバーへの分配', b.closed * SP_SHARE_DONE),
+      row('DAOプール', b.closed * SP_SHARE_POOL)
     ];
   }
 
@@ -24171,6 +24323,13 @@ async function sendEmuFeedback() {
         /* 画面に出ている投稿カードを描いているのは index.html ではなく
            knowledge.html（iframe）の card()。読むだけの操作はここで受けて開く。 */
         if (message.action === 'voices') { openPostGoodVoices({ id:snap.id, ...snap.data() }); return; }
+        /* この知識から議題を立てる。SchoolPark を開き、ギルドの画面へ行き、
+           元の投稿を持ったまま議題フォームを出す。 */
+        if (message.action === 'propose') {
+          const d = snap.data() || {};
+          await spOpenProposalFromPost(snap.id, String(d.title || ''));
+          return;
+        }
         const holder = createPostElementFromData({ id:snap.id, ...snap.data() });
         holder.style.display = 'none';
         document.body.appendChild(holder);
@@ -24247,6 +24406,7 @@ async function sendEmuFeedback() {
     <input class="spv-in" id="swQuest" readonly>
     <label class="spv-label" for="swKnowledge">元の知識（どこから来たか）</label>
     <input class="spv-in" id="swKnowledge" maxlength="200" placeholder="例：Emu／人間関係の設計 第3回">
+    <p class="spp-note" id="swKnowledgeNote" hidden style="margin:6px 0 0"></p>
     <label class="spv-label" for="swExperiment">通した経験</label>
     <input class="spv-in" id="swExperiment" maxlength="200" placeholder="何を、どれだけやったか">
     <label class="spv-label" for="swInsight">残った一文</label>
@@ -24317,6 +24477,10 @@ async function sendEmuFeedback() {
         <div class="spp-title" id="spvTitleLabel">議題を出す</div>
       </div>
       <button type="button" class="spp-close" onclick="closeSpVoteForm()" aria-label="閉じる">✕</button>
+    </div>
+    <div id="spvFromRow" style="display:none">
+      <label class="spv-label" for="spvFrom">元になった知識（Emuの投稿）</label>
+      <input class="spv-in" id="spvFrom" readonly>
     </div>
     <label class="spv-label" for="spvGuild">どのギルドの議題か</label>
     <select class="spv-in" id="spvGuild"></select>
