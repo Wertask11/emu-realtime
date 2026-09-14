@@ -16689,6 +16689,11 @@ window.spVoteToQuest = async function (voteId, app) {
     guildId: gid,
     fromProposalId: v.id,
     fromProposalTitle: (v.title || '').slice(0, 120),
+    /* 議題が Emu の投稿から生まれていたら、クエストにも引き継ぐ。
+       ここで持ち直しておくと、知恵カードを作るときに議題まで
+       読みに行かなくてよい。 */
+    fromPostId: String(v.fromPostId || ''),
+    fromPostTitle: String(v.fromPostTitle || ''),
     title: (v.title || '').slice(0, 120),
     hypothesis: picked ? ('採択された案：' + picked) : ''
   });
@@ -17223,6 +17228,9 @@ async function spQuestSubmit() {
       guildId: guildId || '',
       fromProposalId: _spQuestFrom ? _spQuestFrom.fromProposalId : '',
       fromProposalTitle: _spQuestFrom ? String(_spQuestFrom.fromProposalTitle || '').slice(0, 120) : '',
+      /* 元になった Emu の投稿。議題から引き継ぐ。直接出したときは空。 */
+      fromPostId: _spQuestFrom ? String(_spQuestFrom.fromPostId || '').slice(0, 80) : '',
+      fromPostTitle: _spQuestFrom ? String(_spQuestFrom.fromPostTitle || '').slice(0, 120) : '',
       knowledge: val('sqKnowledge').slice(0, 200),
       hypothesis: val('sqHypothesis').slice(0, 400),
       action: val('sqAction').slice(0, 400),
@@ -17414,7 +17422,24 @@ function openSpWisdomForm(q, app) {
   _spWisdomQuest = q; _spWisdomApp = app || null;
   const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; };
   set('swQuest', q.title);
-  set('swKnowledge', q.knowledge);
+  /* 元の知識。Emu の投稿から始まったクエストなら、その投稿そのものを指す。
+     自由入力だと字面が残るだけで、どの投稿のことか分からなかった。
+     引き継いでいるときは書き換えられないようにする（実際の投稿を指すため）。 */
+  const kn = document.getElementById('swKnowledge');
+  if (kn) {
+    if (q.fromPostId) {
+      kn.value = String(q.fromPostTitle || '（Emuの投稿）');
+      kn.readOnly = true;
+    } else {
+      kn.value = q.knowledge || '';
+      kn.readOnly = false;
+    }
+  }
+  const knNote = document.getElementById('swKnowledgeNote');
+  if (knNote) {
+    knNote.textContent = q.fromPostId ? 'Emuの投稿から始まったクエストです。知恵カードから、その投稿を開けるようになります。' : '';
+    knNote.hidden = !q.fromPostId;
+  }
   set('swExperiment', q.action || q.title);
   set('swInsight', '');
   const t = document.getElementById('swTag'); if (t) t.value = 'LEARNING';
@@ -17434,6 +17459,10 @@ async function spWisdomSubmit() {
     await fb.addDoc(fb.collection(window.db, 'sp_wisdom'), {
       questId: _spWisdomQuest.id,
       questTitle: _spWisdomQuest.title || '',
+      /* 元になった Emu の投稿。これで
+         投稿 → 議題 → クエスト → 知恵カード が一本の線になる。 */
+      fromPostId: String(_spWisdomQuest.fromPostId || '').slice(0, 80),
+      fromPostTitle: String(_spWisdomQuest.fromPostTitle || '').slice(0, 120),
       knowledge: val('swKnowledge').slice(0, 200),
       experiment: val('swExperiment').slice(0, 200),
       insight: insight.slice(0, 200),
@@ -17483,6 +17512,13 @@ window.spDaoLoadWisdom = async function (app) {
       id: w.id, tag: w.tag || 'LEARNING', insight: w.insight || '',
       from: w.knowledge || '', experiment: w.experiment || '',
       author: w.authorName || _spShortAddr(w.author), uses: uses,
+      /* 元になった Emu の投稿があるときだけ、押して開けるようにする。
+         自由入力だけの古い知恵カードは、これまでどおり字面のまま。 */
+      fromLinked: w.fromPostId ? 'underline' : 'none',
+      fromCursor: w.fromPostId ? 'pointer' : 'default',
+      openPost: (function (pid) {
+        return function () { if (pid) window.spOpenEmuPost(pid); };
+      })(w.fromPostId || ''),
       /* 自分の知恵カードには引用ボタンを出さない（自分で増やせてしまうため） */
       citeShow: (mine && String(w.author || '').toLowerCase() === mine) ? 'none' : 'block',
       mineShow: (mine && String(w.author || '').toLowerCase() === mine) ? 'block' : 'none',
@@ -17493,6 +17529,44 @@ window.spDaoLoadWisdom = async function (app) {
     });
   }
   app.setState({ wisdom: wisdom, noWisdom: wisdom.length === 0, citations: cites });
+};
+
+/* 知恵カードから、元になった Emu の投稿を開く。
+   Emu には1つの投稿だけを出す画面が無いので、
+   変更履歴などと同じシートを使って中身をそのまま見せる。 */
+window.spOpenEmuPost = async function (postId) {
+  const list = document.getElementById('emuHistoryList');
+  const title = document.getElementById('emuHistoryTitle');
+  const sub = document.getElementById('emuHistorySubtitle');
+  if (!list) return;
+  if (title) title.textContent = '元になった知識';
+  if (sub) sub.textContent = 'この知恵は、Emuのこの投稿から始まりました。';
+  list.innerHTML = '<div class="eth-loading">読み込んでいます...</div>';
+  openEmuSheet('emuHistorySheet');
+  if (!window.db || !window.fbLib) {
+    list.innerHTML = '<div class="emu-history-item">読み込めませんでした。</div>';
+    return;
+  }
+  try {
+    const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'posts', String(postId)));
+    if (!snap.exists()) {
+      list.innerHTML = '<div class="emu-history-item">元の投稿が見つかりませんでした（消された可能性があります）。</div>';
+      return;
+    }
+    const d = snap.data() || {};
+    const tags = String(d.tags || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+    list.innerHTML = '<article class="emu-history-item">'
+      + '<div class="emu-history-meta"><span>' + _emuEsc(d.displayName || _spShortAddr(d.address) || '匿名') + '</span>'
+      + '<span>' + _emuEsc(_emuFormatDate(d.createdAt)) + '</span>'
+      + '<span>' + (Number(d.goodCount) || 0) + ' 役に立った</span></div>'
+      + '<p><strong>' + _emuEsc(d.title || '（題名なし）') + '</strong></p>'
+      + '<p style="white-space:pre-wrap">' + _emuEsc(d.body || '') + '</p>'
+      + (tags.length ? '<p style="color:#8e88a8">' + tags.map(function (t) { return '#' + _emuEsc(t); }).join(' ') + '</p>' : '')
+      + '</article>';
+  } catch (e) {
+    console.error('元の投稿を読めませんでした:', e);
+    list.innerHTML = '<div class="emu-history-item">元の投稿を読めませんでした。</div>';
+  }
 };
 
 /* 引用する／取り消す。1つのパスポートにつき1回。
@@ -24332,6 +24406,7 @@ async function sendEmuFeedback() {
     <input class="spv-in" id="swQuest" readonly>
     <label class="spv-label" for="swKnowledge">元の知識（どこから来たか）</label>
     <input class="spv-in" id="swKnowledge" maxlength="200" placeholder="例：Emu／人間関係の設計 第3回">
+    <p class="spp-note" id="swKnowledgeNote" hidden style="margin:6px 0 0"></p>
     <label class="spv-label" for="swExperiment">通した経験</label>
     <input class="spv-in" id="swExperiment" maxlength="200" placeholder="何を、どれだけやったか">
     <label class="spv-label" for="swInsight">残った一文</label>
