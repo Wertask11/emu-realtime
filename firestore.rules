@@ -992,8 +992,15 @@ service cloud.firestore {
 
       match /commits/{addr} {
         allow read: if true;
-        allow create: if questId != 'founder-quest-000' && isMyWallet(addr);
-        allow update: if false;
+        allow create: if questId != 'founder-quest-000' && isMyWallet(addr)
+          // 受けるときに自分で「認められた」ことにはできない
+          && !request.resource.data.keys().hasAny(['approved', 'approvedAt', 'approvedBy']);
+        /* 運営だけが「実際に動いたことを確かめた」印を付けられる。
+           分配も、信用スコアの完走も、この印が立っている人だけが対象。
+           受けただけでは分配しない。名前など他の欄は動かせない。 */
+        allow update: if isOwner()
+          && changedOnly(['approved', 'approvedAt', 'approvedBy'])
+          && request.resource.data.approved is bool;
         // 受けたあとで降りることは認める。ただし自分の分だけ。
         allow delete: if questId != 'founder-quest-000' && isMyWallet(addr);
       }
@@ -1166,10 +1173,14 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/sp_quests/$(request.resource.data.questId)).data.get('status', '') == 'CLOSED';
       allow update, delete: if false;
 
-      /* 引用。1つのパスポートにつき1回。数はここを数えて出す。 */
+      /* 引用。1つのパスポートにつき1回。数はここを数えて出す。
+         自分の知恵カードは引用できない。引用の数は信用スコア（×3）の
+         もとになるので、自分で押せると自分で点を増やせてしまう。
+         画面でもボタンを隠しているが、押せる道が残らないようここでも止める。 */
       match /cites/{addr} {
         allow read: if true;
-        allow create: if isMyWallet(addr);
+        allow create: if isMyWallet(addr)
+          && get(/databases/$(database)/documents/sp_wisdom/$(wisdomId)).data.get('author', '') != addr;
         allow update: if false;
         allow delete: if isMyWallet(addr);
       }
