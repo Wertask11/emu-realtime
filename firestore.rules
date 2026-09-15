@@ -968,6 +968,9 @@ service cloud.firestore {
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 120
+        /* 案内文。カードに出る呼びかけ。無くてもよい。 */
+        && request.resource.data.get('intro', '') is string
+        && request.resource.data.get('intro', '').size() <= 600
         && request.resource.data.get('status', '') == 'OPEN'
         && (request.resource.data.get('guildId', '') == ''
             || guildIdShape(request.resource.data.get('guildId', '')))
@@ -1015,7 +1018,15 @@ service cloud.firestore {
           && request.resource.data.body is string
           && request.resource.data.body.size() > 0
           && request.resource.data.body.size() <= 2000
-          && request.resource.data.get('kind', '') in ['やってみた', 'つまずいた', '気づいた'];
+          && request.resource.data.get('kind', '') in ['やってみた', 'つまずいた', '気づいた']
+          /* 元になった Emu の投稿。選ばなくてもよい。
+             入っていれば「誰の知識が、誰の行動に移ったか」が残る。
+             どの投稿かはここでは確かめない（1回の書き込みで見に行ける回数を使うため）。
+             長さだけを縛る。 */
+          && request.resource.data.get('fromPostId', '') is string
+          && request.resource.data.get('fromPostId', '').size() <= 80
+          && request.resource.data.get('fromPostTitle', '') is string
+          && request.resource.data.get('fromPostTitle', '').size() <= 120;
         allow update, delete: if false;
       }
     }

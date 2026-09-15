@@ -3275,11 +3275,12 @@ body.emu-ichinichi-open #openPostFormButton { display:none !important; }
 /* ── SchoolPark パスポート ──
    ログインすると作られる CHESアドレスに、名前と居場所を与えたもの。
    SchoolPark からも Emu からも開くので、どちらの色にも寄せず暗い札にする。 */
-#spPassport, #spVoteSheet, #spQuestSheet, #spWisdomSheet, #spMobileMenu { display:none; position:fixed; inset:0; z-index:1800; }
+#spPassport, #spVoteSheet, #spQuestSheet, #spWisdomSheet, #spLogSheet, #spMobileMenu { display:none; position:fixed; inset:0; z-index:1800; }
 body.sp-passport-open #spPassport,
 body.sp-vote-open #spVoteSheet,
 body.sp-quest-open #spQuestSheet,
 body.sp-wisdom-open #spWisdomSheet,
+body.sp-log-open #spLogSheet,
 body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-content:center; }
 .spp-veil { position:absolute; inset:0; background:rgba(10,9,7,.62); }
 /* 議題を出す入力欄。札と同じ見た目にそろえる */
@@ -3303,12 +3304,26 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
 .smm-row:hover { background:rgba(244,241,234,.1); }
 .smm-go { font-size:12px; font-weight:400; color:rgba(244,241,234,.5); }
 .smm-label { font-size:11px; letter-spacing:.06em; color:rgba(244,241,234,.5); margin:16px 0 2px; }
-#spPassport .spp-card, #spVoteSheet .spp-card, #spQuestSheet .spp-card, #spWisdomSheet .spp-card, #spMobileMenu .spp-card {
+#spPassport .spp-card, #spVoteSheet .spp-card, #spQuestSheet .spp-card, #spWisdomSheet .spp-card, #spLogSheet .spp-card, #spMobileMenu .spp-card {
   position:relative; width:min(420px, calc(100vw - 32px)); max-height:calc(100vh - 48px);
   overflow-y:auto; background:#141310; color:#F4F1EA; border-radius:16px;
   padding:26px 24px 22px; box-shadow:0 30px 70px -20px rgba(0,0,0,.7);
   font-family:'Noto Sans JP',sans-serif;
   box-sizing:border-box;   /* これが無いと余白の分だけ広がり、スマホで画面いっぱいになる */
+}
+/* パソコンでは、入力の多いフォーム（クエスト・議題・知恵カード・報告）を広く出す。
+   420px のままだと、欄が10個ならぶクエストフォームが細長い筒になって、
+   画面が広いのにひたすら縦スクロールする羽目になっていた。
+   この指定は広い画面のときだけ効くので、スマホの見え方は変わらない。 */
+@media (min-width:900px) {
+  #spQuestSheet .spp-card, #spVoteSheet .spp-card,
+  #spWisdomSheet .spp-card, #spLogSheet .spp-card {
+    width:min(720px, calc(100vw - 80px));
+    max-height:calc(100vh - 64px);
+    padding:32px 34px 28px;
+  }
+  /* 短い欄は横に並べて、縦の長さを詰める */
+  .spv-pair { display:grid; grid-template-columns:1fr 1fr; gap:0 18px; }
 }
 .spp-head { display:flex; align-items:flex-start; gap:12px; margin-bottom:20px; }
 .spp-head-text { flex:1; min-width:0; }
@@ -3348,6 +3363,29 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
   font-weight:700; padding:13px; cursor:pointer;
 }
 .spp-cta:hover { background:#0A3F2B; }
+/* 報告の札。元になった Emu の投稿を探して選ぶところ。 */
+.sl-results { max-height:230px; overflow-y:auto; border:1px solid rgba(244,241,234,.12); border-radius:8px; }
+.sl-results:empty { display:none; }
+.sl-msg { padding:12px 13px; font-size:12px; line-height:1.8; color:rgba(244,241,234,.5); }
+.sl-hit {
+  display:block; width:100%; box-sizing:border-box; text-align:left; cursor:pointer;
+  background:none; border:0; border-bottom:1px solid rgba(244,241,234,.1);
+  padding:11px 13px; font-family:inherit; color:#F4F1EA;
+}
+.sl-hit:last-child { border-bottom:0; }
+.sl-hit:hover { background:rgba(244,241,234,.08); }
+.sl-hit-t { display:block; font-size:13px; font-weight:700; line-height:1.6; }
+.sl-hit-m { display:block; margin-top:3px; font-size:11px; color:rgba(244,241,234,.5); }
+.sl-pick {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  background:#1D1B16; border:1px solid #0F5C3F; border-radius:8px; padding:11px 13px;
+}
+.sl-pick-t { flex:1; min-width:0; font-size:13px; font-weight:700; color:#D0E2BE; line-height:1.6; }
+.sl-pick-x {
+  border:1px solid rgba(244,241,234,.22); border-radius:6px; background:none;
+  color:#F4F1EA; font-family:inherit; font-size:11px; padding:5px 10px; cursor:pointer;
+}
+.sl-pick-x:hover { background:rgba(244,241,234,.1); }
 
 /* SchoolPark の中から開く小部屋（エレベーターなど）。
    SchoolPark 本体(1500)より手前に出し、閉じると元の画面に戻る。 */
@@ -17052,6 +17090,11 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
   const fromId = SpQuestStore.isFounder(q) ? '' : String(q.fromProposalId || '');
   return {
     id: q.id, title: (SpQuestStore.label(q) && !SpQuestStore.isFounder(q) ? SpQuestStore.label(q) + ' ' : '') + (q.title || ''), hypothesis: q.hypothesis || '',
+    /* カードと詳細の頭に出る呼びかけ。案内文があればそれを、
+       無ければ今までどおり「予想」を出す（古いクエストのため）。 */
+    intro: q.intro || '',
+    cardText: q.intro || q.hypothesis || '',
+    introShow: q.intro ? 'block' : 'none',
     isFounder: SpQuestStore.isFounder(q),
     guildId: qGuildId,
     guildLabel: qGuild ? qGuild.short : '',
@@ -17094,8 +17137,15 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
               : ['#E7E2D6', '#3B382F'];
       const name = l.authorName || _spShortAddr(l.author);
       const d = l.at ? new Date(l.at) : null;
+      /* この報告が、Emu のどの投稿から始まったか。
+         「誰かの知識が、別の誰かの行動に移った」ことを、字面ではなく
+         実際の投稿への道として残す。押すと元の投稿がそのまま開く。 */
+      const fromId = String(l.fromPostId || '');
       return { author: name, initial: name.slice(0, 1), body: l.body || '',
         kind: kind, kindBg: c[0], kindFg: c[1],
+        fromShow: fromId ? 'flex' : 'none',
+        fromTitle: l.fromPostTitle || '（Emuの投稿）',
+        openPost: fromId ? function () { window.spOpenEmuPost(fromId); } : function () {},
         time: d ? ((d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0')
                    + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')) : '' };
     })
@@ -17150,30 +17200,182 @@ window.spQuestToggle = async function (questId, app) {
 };
 
 /* 途中報告を書く。書けるのは、そのクエストを受けた人だけ。
-   ルールでも「受けた記録があること」を確かめている。 */
+   ルールでも「受けた記録があること」を確かめている。
+
+   以前は prompt() 一発だった。いまは札を開く。理由は、報告に
+   「元になった Emu の投稿」を付けられるようにしたため。
+   誰かの知識が別の誰かの行動に移ったことを、字面ではなく
+   実際の投稿への道として残す（知識 → 人 → 経験 → 知恵）。 */
+let _spLogQuestId = null, _spLogKind = '', _spLogApp = null;
+let _spLogPick = null;          /* 選んだ投稿 {id, title} */
+let _spLogPosts = null;         /* 投稿の一覧。札を開くたびに読み直さない */
+let _spLogSubmitting = false;
+
 window.spQuestLog = async function (questId, kind, app) {
   if (questId === SpQuestStore.FOUNDER_ID) return;
   const p = await spPassportLoad();
   if (!p) { alert('報告するにはログインが必要です。'); return; }
-  const body = prompt('今日やったことを書く（' + kind + '）\n\n試したこと、うまくいかなかったこと、気づいたこと——3行でいい。');
-  if (body === null) return;
-  const text = String(body).trim();
-  if (!text) { alert('中身を書いてください。'); return; }
+  _spLogQuestId = questId; _spLogKind = kind; _spLogApp = app || null; _spLogPick = null;
+
+  const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  set('slBody', ''); set('slSearch', '');
+  const k = document.getElementById('slKind'); if (k) k.textContent = kind;
+  const b = document.getElementById('slBody');
+  if (b) b.placeholder = kind === 'つまずいた'
+    ? '何をしようとして、どこで止まったか。3行でいい。'
+    : kind === '気づいた'
+    ? '何が分かったか。やる前と、やったあとで変わったこと。'
+    : '実際に何をやったか。うまくいったこと、いかなかったこと。';
+  const q = (((app && app.state) || {}).quests || []).filter(function (x) { return x.id === questId; })[0];
+  const qn = document.getElementById('slQuest');
+  if (qn) qn.textContent = q ? ('クエスト：' + (q.title || '')) : '';
+  _spLogRenderPick();
+  _spLogRenderResults('');
+  /* 候補を押したときの係。付け直さないよう、いちどだけ付ける。 */
+  const box = document.getElementById('slResults');
+  if (box && !box._bound) {
+    box._bound = true;
+    box.addEventListener('click', function (ev) {
+      const hit = ev.target && ev.target.closest ? ev.target.closest('.sl-hit') : null;
+      if (hit && hit.dataset && hit.dataset.pid) _spLogPickPost(hit.dataset.pid);
+    });
+  }
+  document.body.classList.add('sp-log-open');
+  _spLogLoadPosts();
+};
+
+function closeSpLogForm() { document.body.classList.remove('sp-log-open'); }
+window.closeSpLogForm = closeSpLogForm;
+
+/* 投稿の時刻。Firestore の Timestamp でも、ただの数でも読めるようにする。 */
+function _spPostTime(v) {
+  if (!v) return 0;
+  if (typeof v === 'number') return v;
+  if (typeof v.toMillis === 'function') { try { return v.toMillis(); } catch (e) {} }
+  if (typeof v.seconds === 'number') return v.seconds * 1000;
+  const t = Date.parse(v); return isNaN(t) ? 0 : t;
+}
+
+/* Emu の投稿を読む。where も orderBy も使わない（複合の索引が要るため）。
+   新しい順に並べ替えるのは、読んだあとこちら側でやる。 */
+async function _spLogLoadPosts() {
+  if (_spLogPosts) return;
+  const box = document.getElementById('slResults');
+  if (box) box.innerHTML = '<div class="sl-msg">投稿を読み込んでいます...</div>';
+  if (!window.db || !window.fbLib) {
+    if (box) box.innerHTML = '<div class="sl-msg">いまは投稿を読めません。選ばずに報告できます。</div>';
+    return;
+  }
   try {
     const fb = window.fbLib;
-    await fb.addDoc(fb.collection(window.db, 'sp_quests', questId, 'logs'), {
+    const snap = await fb.getDocs(fb.query(fb.collection(window.db, 'posts'), fb.limit(300)));
+    const rows = [];
+    snap.forEach(function (d) {
+      const x = d.data() || {};
+      rows.push({ id: d.id, title: x.title || '（題名なし）', body: String(x.body || ''),
+        tags: String(x.tags || ''), name: x.displayName || _spShortAddr(x.address) || '匿名',
+        good: Number(x.goodCount) || 0, at: _spPostTime(x.createdAt) });
+    });
+    /* getDocs は通信が切れていても例外を出さず、控えから空で返ってくる。
+       「本当に0件」と「読めていない」を取り違えないよう、ここで見分ける。 */
+    if (!rows.length && snap.metadata && snap.metadata.fromCache) {
+      if (box) box.innerHTML = '<div class="sl-msg">投稿を読み込めませんでした。選ばずに報告できます。</div>';
+      return;
+    }
+    rows.sort(function (a, b) { return b.at - a.at; });
+    _spLogPosts = rows;
+  } catch (e) {
+    console.warn('投稿を読めませんでした:', e && (e.message || e));
+    if (box) box.innerHTML = '<div class="sl-msg">投稿を読み込めませんでした。選ばずに報告できます。</div>';
+    return;
+  }
+  const cur = document.getElementById('slSearch');
+  _spLogRenderResults(cur ? cur.value : '');
+}
+
+function _spLogSearch(v) { _spLogRenderResults(v); }
+window._spLogSearch = _spLogSearch;
+
+function _spLogRenderResults(word) {
+  const box = document.getElementById('slResults');
+  if (!box) return;
+  if (!_spLogPosts) return;                       /* 読み込み中の表示を消さない */
+  const w = String(word || '').trim().toLowerCase();
+  const hit = _spLogPosts.filter(function (x) {
+    if (!w) return true;
+    return (x.title + ' ' + x.tags + ' ' + x.name + ' ' + x.body).toLowerCase().indexOf(w) >= 0;
+  });
+  if (!hit.length) {
+    box.innerHTML = '<div class="sl-msg">見つかりませんでした。ほかの言葉で探すか、選ばずに報告できます。</div>';
+    return;
+  }
+  box.innerHTML = hit.slice(0, 12).map(function (x) {
+    return '<button type="button" class="sl-hit" data-pid="' + _emuEsc(x.id) + '">'
+      + '<span class="sl-hit-t">' + _emuEsc(x.title) + '</span>'
+      + '<span class="sl-hit-m">' + _emuEsc(x.name)
+      + (x.tags ? ' ・ ' + _emuEsc(x.tags.split(',').slice(0, 3).map(function (t) { return '#' + t.trim(); }).join(' ')) : '')
+      + '</span></button>';
+  }).join('') + (hit.length > 12 ? '<div class="sl-msg">ほかにも ' + (hit.length - 12) + ' 件あります。言葉で絞ってください。</div>' : '');
+}
+
+function _spLogPickPost(id) {
+  const x = (_spLogPosts || []).filter(function (y) { return y.id === id; })[0];
+  if (!x) return;
+  _spLogPick = { id: x.id, title: x.title };
+  _spLogRenderPick();
+}
+window._spLogPickPost = _spLogPickPost;
+
+function _spLogClearPick() { _spLogPick = null; _spLogRenderPick(); }
+window._spLogClearPick = _spLogClearPick;
+
+function _spLogRenderPick() {
+  const picked = document.getElementById('slPicked');
+  const wrap = document.getElementById('slPickWrap');
+  if (!picked || !wrap) return;
+  if (_spLogPick) {
+    picked.innerHTML = '<span class="sl-pick-t">' + _emuEsc(_spLogPick.title) + '</span>'
+      + '<button type="button" class="sl-pick-x" onclick="_spLogClearPick()">外す</button>';
+    picked.hidden = false;
+    wrap.hidden = true;
+  } else {
+    picked.hidden = true;
+    wrap.hidden = false;
+  }
+}
+
+async function spLogSubmit() {
+  if (_spLogSubmitting) return;
+  const el = document.getElementById('slBody');
+  const text = el ? el.value.trim() : '';
+  if (!text) { alert('中身を書いてください。'); return; }
+  if (!_spLogQuestId) { alert('もとのクエストが分かりません。'); return; }
+  const p = await spPassportLoad();
+  if (!p) { alert('報告するにはログインが必要です。'); return; }
+  _spLogSubmitting = true;
+  try {
+    const fb = window.fbLib;
+    await fb.addDoc(fb.collection(window.db, 'sp_quests', _spLogQuestId, 'logs'), {
       author: p.addr, authorName: p.name,
-      kind: kind, body: text.slice(0, 2000), at: Date.now()
+      kind: _spLogKind, body: text.slice(0, 2000), at: Date.now(),
+      /* 元になった Emu の投稿。選ばなくてもよい。
+         これが入っていると、知恵カードを作るときに引き継がれる。 */
+      fromPostId: _spLogPick ? String(_spLogPick.id).slice(0, 80) : '',
+      fromPostTitle: _spLogPick ? String(_spLogPick.title).slice(0, 120) : ''
     });
   } catch (e) {
     const code = String((e && e.code) || '');
     alert(code === 'permission-denied'
       ? '報告できるのは、そのクエストを受けた人だけです。'
       : '報告を残せませんでした。もう一度お試しください。');
+    _spLogSubmitting = false;
     return;
   }
-  await window.spDaoLoadQuests(app);
-};
+  _spLogSubmitting = false;
+  closeSpLogForm();
+  await window.spDaoLoadQuests(_spLogApp);
+}
+window.spLogSubmit = spLogSubmit;
 
 /* クエストを出す。
    道は2つある。どちらも残す。
@@ -17194,7 +17396,7 @@ window.openSpQuestForm = async function (app, from) {
   }
   const sheet = document.getElementById('spQuestSheet');
   if (!sheet) return;
-  ['sqTitle', 'sqKnowledge', 'sqHypothesis', 'sqAction', 'sqMeasure', 'sqBudget'].forEach(function (id) {
+  ['sqTitle', 'sqKnowledge', 'sqHypothesis', 'sqAction', 'sqMeasure', 'sqIntro', 'sqBudget'].forEach(function (id) {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   const n = document.getElementById('sqNeed'); if (n) n.value = '5';
@@ -17262,6 +17464,10 @@ async function spQuestSubmit() {
       hypothesis: val('sqHypothesis').slice(0, 400),
       action: val('sqAction').slice(0, 400),
       measure: val('sqMeasure').slice(0, 400),
+      /* 案内文。カードに出る呼びかけ。空なら「予想」がそのままカードに出る。
+         「何を試す？」は見出しなので短くなる。受ける前の人に向けて、
+         もう少し人の言葉で語りかけられる場所として別に持たせている。 */
+      intro: val('sqIntro').slice(0, 600),
       budget: String(parseInt(val('sqBudget').replace(/[^0-9]/g, ''), 10) || 0),
       /* 報酬は EMUER・JPYC・円 のどれか。
          入れていない古いクエストは、読むときに円として扱う。 */
@@ -17438,6 +17644,26 @@ window.spQuestClose = async function (questId, app) {
     }
     q.status = 'CLOSED';
   }
+  /* 報告で挙がった Emu の投稿を集める。
+     このクエストが議題から来ていなくても、受けた人が
+     「この知識からやってみた」と選んでいれば、そこが元の知識になる。
+     知識 → 人 → 経験 → 知恵 の線を、ここで途切れさせない。 */
+  const cited = [];
+  try {
+    const seen = {};
+    const ls = await fb.getDocs(fb.collection(window.db, 'sp_quests', questId, 'logs'));
+    ls.forEach(function (d) {
+      const x = d.data() || {};
+      const pid = String(x.fromPostId || '');
+      if (!pid) return;
+      if (seen[pid]) { seen[pid].count++; return; }
+      seen[pid] = { id: pid, title: String(x.fromPostTitle || '（Emuの投稿）'), count: 1 };
+      cited.push(seen[pid]);
+    });
+    cited.sort(function (a, b) { return b.count - a.count; });
+  } catch (e) { console.warn('報告の投稿を読めませんでした:', e && (e.message || e)); }
+  q._citedPosts = cited;
+
   await window.spDaoLoadQuests(app);
   openSpWisdomForm(q, app);
 };
@@ -17445,17 +17671,40 @@ window.spQuestClose = async function (questId, app) {
 /* 知恵カードの下書き。クエストの中身をそのまま入れておき、
    書き手は「残った一文」を削るところだけをやる。 */
 let _spWisdomApp = null;
+let _spWisdomFrom = null;   /* この知恵カードが指す Emu の投稿 {id, title} */
 function openSpWisdomForm(q, app) {
   _spWisdomQuest = q; _spWisdomApp = app || null;
   const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; };
   set('swQuest', q.title);
-  /* 元の知識。Emu の投稿から始まったクエストなら、その投稿そのものを指す。
-     自由入力だと字面が残るだけで、どの投稿のことか分からなかった。
-     引き継いでいるときは書き換えられないようにする（実際の投稿を指すため）。 */
+
+  /* 元の投稿の決まり方は3通り。
+       ① クエスト自体が Emu の投稿から生まれた  … その投稿で固定
+       ② 受けた人が報告で投稿を選んでいた      … その中から運営が選ぶ
+       ③ どちらも無い                         … 今までどおり自由入力 */
+  const cited = (q._citedPosts || []).slice(0, 20);
+  const row = document.getElementById('swFromRow');
+  const sel = document.getElementById('swFromPost');
+  if (q.fromPostId) {
+    _spWisdomFrom = { id: String(q.fromPostId), title: String(q.fromPostTitle || '（Emuの投稿）') };
+    if (row) row.hidden = true;
+  } else if (cited.length && sel) {
+    _spWisdomFrom = { id: cited[0].id, title: cited[0].title };
+    sel.innerHTML = cited.map(function (c, i) {
+      return '<option value="' + i + '">' + _emuEsc(c.title)
+        + (c.count > 1 ? '（' + c.count + '件の報告）' : '') + '</option>';
+    }).join('') + '<option value="-1">選ばない（自由に書く）</option>';
+    sel.value = '0';
+    sel._cited = cited;
+    if (row) row.hidden = false;
+  } else {
+    _spWisdomFrom = null;
+    if (row) row.hidden = true;
+  }
+
   const kn = document.getElementById('swKnowledge');
   if (kn) {
-    if (q.fromPostId) {
-      kn.value = String(q.fromPostTitle || '（Emuの投稿）');
+    if (_spWisdomFrom) {
+      kn.value = _spWisdomFrom.title;
       kn.readOnly = true;
     } else {
       kn.value = q.knowledge || '';
@@ -17464,14 +17713,42 @@ function openSpWisdomForm(q, app) {
   }
   const knNote = document.getElementById('swKnowledgeNote');
   if (knNote) {
-    knNote.textContent = q.fromPostId ? 'Emuの投稿から始まったクエストです。知恵カードから、その投稿を開けるようになります。' : '';
-    knNote.hidden = !q.fromPostId;
+    knNote.textContent = !_spWisdomFrom ? ''
+      : q.fromPostId
+      ? 'Emuの投稿から始まったクエストです。知恵カードから、その投稿を開けるようになります。'
+      : '受けた人が報告で選んだ投稿です。知恵カードから、その投稿を開けるようになります。';
+    knNote.hidden = !_spWisdomFrom;
   }
   set('swExperiment', q.action || q.title);
   set('swInsight', '');
   const t = document.getElementById('swTag'); if (t) t.value = 'LEARNING';
   document.body.classList.add('sp-wisdom-open');
 }
+/* 報告で挙がった投稿を選び直したとき。「選ばない」を選べば自由入力に戻す。 */
+function _spWisdomPickFrom() {
+  const sel = document.getElementById('swFromPost');
+  const kn = document.getElementById('swKnowledge');
+  const knNote = document.getElementById('swKnowledgeNote');
+  if (!sel || !kn) return;
+  const i = parseInt(sel.value, 10);
+  const cited = sel._cited || [];
+  if (i >= 0 && cited[i]) {
+    _spWisdomFrom = { id: cited[i].id, title: cited[i].title };
+    kn.value = cited[i].title;
+    kn.readOnly = true;
+  } else {
+    _spWisdomFrom = null;
+    kn.value = '';
+    kn.readOnly = false;
+    kn.focus();
+  }
+  if (knNote) {
+    knNote.textContent = _spWisdomFrom ? '受けた人が報告で選んだ投稿です。知恵カードから、その投稿を開けるようになります。' : '';
+    knNote.hidden = !_spWisdomFrom;
+  }
+}
+window._spWisdomPickFrom = _spWisdomPickFrom;
+
 function closeSpWisdomForm() { document.body.classList.remove('sp-wisdom-open'); }
 
 async function spWisdomSubmit() {
@@ -17488,8 +17765,8 @@ async function spWisdomSubmit() {
       questTitle: _spWisdomQuest.title || '',
       /* 元になった Emu の投稿。これで
          投稿 → 議題 → クエスト → 知恵カード が一本の線になる。 */
-      fromPostId: String(_spWisdomQuest.fromPostId || '').slice(0, 80),
-      fromPostTitle: String(_spWisdomQuest.fromPostTitle || '').slice(0, 120),
+      fromPostId: String((_spWisdomFrom && _spWisdomFrom.id) || '').slice(0, 80),
+      fromPostTitle: String((_spWisdomFrom && _spWisdomFrom.title) || '').slice(0, 120),
       knowledge: val('swKnowledge').slice(0, 200),
       experiment: val('swExperiment').slice(0, 200),
       insight: insight.slice(0, 200),
@@ -24436,6 +24713,10 @@ async function sendEmuFeedback() {
     </div>
     <label class="spv-label" for="swQuest">完了したクエスト</label>
     <input class="spv-in" id="swQuest" readonly>
+    <div id="swFromRow" hidden>
+      <label class="spv-label" for="swFromPost">報告で挙がったEmuの投稿</label>
+      <select class="spv-in" id="swFromPost" onchange="_spWisdomPickFrom()"></select>
+    </div>
     <label class="spv-label" for="swKnowledge">元の知識（どこから来たか）</label>
     <input class="spv-in" id="swKnowledge" maxlength="200" placeholder="例：Emu／人間関係の設計 第3回">
     <p class="spp-note" id="swKnowledgeNote" hidden style="margin:6px 0 0"></p>
@@ -24480,6 +24761,8 @@ async function sendEmuFeedback() {
     <textarea class="spv-in spv-area" id="sqAction" maxlength="400" placeholder="毎日・毎回、具体的に何をするか"></textarea>
     <label class="spv-label" for="sqMeasure">確かめ方</label>
     <textarea class="spv-in spv-area" id="sqMeasure" maxlength="400" placeholder="何を記録すれば分かるか"></textarea>
+    <label class="spv-label" for="sqIntro">案内文（カードに出る呼びかけ・任意）</label>
+    <textarea class="spv-in spv-area" id="sqIntro" maxlength="600" placeholder="受ける前の人に向けた一言。空のままなら「予想」がカードに出ます。"></textarea>
     <label class="spv-label" for="sqBudget">報酬（予算）</label>
     <div style="display:flex; gap:8px">
       <input class="spv-in" id="sqBudget" inputmode="numeric" placeholder="0" style="flex:1; min-width:0">
@@ -24489,13 +24772,47 @@ async function sendEmuFeedback() {
         <option value="EMUER">EMUER</option>
       </select>
     </div>
-    <label class="spv-label" for="sqNeed">成立に必要な人数</label>
-    <input class="spv-in" id="sqNeed" type="number" min="1" max="50" value="5">
-    <label class="spv-label" for="sqDays">締切まで（日）</label>
-    <input class="spv-in" id="sqDays" type="number" min="1" max="90" value="14">
+    <div class="spv-pair">
+      <div>
+        <label class="spv-label" for="sqNeed">成立に必要な人数</label>
+        <input class="spv-in" id="sqNeed" type="number" min="1" max="50" value="5">
+      </div>
+      <div>
+        <label class="spv-label" for="sqDays">締切まで（日）</label>
+        <input class="spv-in" id="sqDays" type="number" min="1" max="90" value="14">
+      </div>
+    </div>
     <button type="button" class="spp-cta" onclick="spQuestSubmit()">クエストを出す</button>
     <p class="spp-note">出したあと、題名や条件は動かせません（受けた人が見た条件が変わらないようにするためです）。進行中・完了への切り替えだけ、出した本人ができます。<br>
       小さな実験・個人の挑戦・検証は、議題を通さずここから直接出せます。SchoolPark全体の方針・共同予算・大人数が関わることは、ギルドの議題から始めてください。</p>
+  </div>
+</div>
+
+<!-- クエストの報告。受けた人が書く。元になった Emu の投稿も選べる -->
+<div id="spLogSheet" role="dialog" aria-modal="true" aria-labelledby="slTitleLabel">
+  <div class="spp-veil" onclick="closeSpLogForm()"></div>
+  <div class="spp-card">
+    <div class="spp-head">
+      <div class="spp-head-text">
+        <div class="spp-kicker" id="slKind">やってみた</div>
+        <div class="spp-title" id="slTitleLabel">クエストの報告</div>
+      </div>
+      <button type="button" class="spp-close" onclick="closeSpLogForm()" aria-label="閉じる">✕</button>
+    </div>
+    <p class="spp-note" id="slQuest" style="margin:0"></p>
+    <label class="spv-label" for="slBody">報告</label>
+    <textarea class="spv-in spv-area" id="slBody" maxlength="2000"></textarea>
+
+    <label class="spv-label">元になったEmuの投稿（任意）</label>
+    <div id="slPicked" class="sl-pick" hidden></div>
+    <div id="slPickWrap">
+      <input class="spv-in" id="slSearch" maxlength="40" placeholder="題名・タグ・名前で探す"
+             oninput="_spLogSearch(this.value)">
+      <div id="slResults" class="sl-results"></div>
+    </div>
+    <p class="spp-note">Emuの誰かの知識から始まった報告なら、その投稿を選んでください。選ぶと「誰の知識が、誰の行動に移ったか」が残り、知恵カードにも引き継がれます。選ばなくても報告は出せます。</p>
+    <button type="button" class="spp-cta" onclick="spLogSubmit()">報告を出す</button>
+    <p class="spp-note">いちど出した報告は、書き換えも削除もできません。</p>
   </div>
 </div>
 
