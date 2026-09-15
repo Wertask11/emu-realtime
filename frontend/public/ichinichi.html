@@ -86,6 +86,12 @@ html:not([lang^="ja"]):not([lang^="zh"]) .hero h1 span { white-space: normal; }
 .fm-cell:last-child { border-right: 0; }
 .fm-chip { border: 1px solid var(--line); background: white; color: var(--ink); border-radius: 14px; padding: 5px 10px; font: inherit; font-size: 11px; cursor: pointer; line-height: 1.4; text-align: left; }
 .fm-chip:hover { border-color: var(--orange); color: var(--orange-dark); background: #fff7f0; }
+/* ── 公開された一日・自分の記録に出る3本柱 ── */
+.shared-focus { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+.sf-chip { display: inline-flex; align-items: baseline; gap: 6px; border: 1px solid var(--line); border-radius: 14px; padding: 5px 11px; font-size: 11px; line-height: 1.5; color: var(--ink); background: white; }
+.sf-chip b { font-size: 10px; font-weight: 800; color: var(--muted); }
+.sf-chip.on { border-color: #f0c39a; background: #fff7f0; }
+.sf-chip.on b { color: var(--orange-dark); }
 /* ── 予定ごとの振り返り ── */
 .item-result { margin-top: 8px; }
 .item-result input { width: 100%; box-sizing: border-box; border: 1px dashed var(--line); border-radius: 10px; padding: 8px 11px; font: inherit; font-size: 12px; color: var(--ink); background: #fffdfa; }
@@ -733,6 +739,19 @@ function scrollToAddForm() {
   });
 }
 
+/* 公開された一日や、自分の記録に、3本柱を小さく並べる。
+   書いていない行は出さない。3本とも空なら、まるごと出さない
+   （この機能より前の記録・使っていない人の見た目を変えないため）。 */
+function focusStrip(focus) {
+  if (!focus) return "";
+  const rows = FOCUS_MENU.filter((r) => (focus[r.key] || {}).text);
+  if (!rows.length) return "";
+  return `<div class="shared-focus">${rows.map((r) => {
+    const f = focus[r.key] || {};
+    return `<span class="sf-chip ${f.done ? "on" : ""}"><b>${esc(r.label)}</b>${esc(f.text)}${f.done ? " ✓" : ""}</span>`;
+  }).join("")}</div>`;
+}
+
 function renderExplore() {
   const filters = ["すべて", ...CATEGORIES];
   const cards = S.posts.length === 0 && !S.loading
@@ -741,6 +760,7 @@ function renderExplore() {
       <article class="person-card">
         <div class="person-head"><span>${esc(post.userName.slice(0, 1))}</span><div><b>${esc(emuT("i.explore.someonesDay", { name: post.userName }))}</b><small>${esc(post.date)}</small></div><button data-act="report" data-pi="${pi}" aria-label="${esc(emuT("i.explore.reportAria"))}">•••</button></div>
         <h2>${esc(post.learning.split("\n")[0] || emuT("i.explore.defaultLearning"))}</h2>
+        ${focusStrip(post.focus)}
         <div class="person-timeline">${post.items.map((it) => `<div class="shared-item"><p><i>時</i>${esc(it.time)} ${esc(it.title)}</p><button data-act="adopt" data-day="${esc(post.id)}" data-item="${esc(it.id)}">${esc(emuT("i.explore.adopt"))}</button></div>`).join("")}</div>
         <blockquote>“ ${esc(post.learning)} ”</blockquote>
         <div class="card-actions"><button class="${post.gooded ? "gooded" : ""}" data-act="good" data-pi="${pi}">♡ Good <b>${post.goodCount}</b></button><button data-act="report" data-pi="${pi}">${esc(emuT("i.explore.report"))}</button></div>
@@ -770,7 +790,7 @@ function renderMine() {
   const items = S.history.length === 0
     ? `<div class="empty-state"><span>記</span><h3>${esc(emuT("i.mine.emptyTitle"))}</h3><p>${esc(emuT("i.mine.emptyText"))}</p></div>`
     : S.history.map((day, di) => `
-      <article><span>${esc(day.date)}</span><p>${esc(day.learning || emuT("i.mine.noLearning"))}${esc(emuT("i.mine.planCount", { n: day.items.length }))}</p>
+      <article><span>${esc(day.date)}</span><div style="min-width:0"><p>${esc(day.learning || emuT("i.mine.noLearning"))}${esc(emuT("i.mine.planCount", { n: day.items.length }))}</p>${focusStrip(day.focus)}</div>
       <div class="history-actions"><button data-act="view" data-di="${di}">${esc(emuT("i.mine.view"))}</button><button data-act="del" data-di="${di}">${esc(emuT("i.mine.delete"))}</button></div></article>`).join("");
 
   $main.innerHTML = `
