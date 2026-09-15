@@ -2122,6 +2122,9 @@ app.get("/api/ichinichi/feed", requireFirebaseUser, requireOwnAddress, async (re
         visibility: "public",
         sharedAt: d.sharedAt || null,
         items: Array.isArray(d.items) ? d.items : [],
+        /* 心技体の3本柱。ここに来るのは本人が「Emu全体」で公開した日だけ。
+           非公開の日は上の filter で落ちているので、外には出ない。 */
+        focus: d.focus || null,
       };
     });
     // 学びと予定がある公開日のみ
