@@ -379,9 +379,22 @@ async function loadHistory(silent) {
 // ── アクション ─────────────────────────────
 async function persist(items, msg) {
   S.saving = true;
+  /* 3本柱と振り返りを送ったのに、返ってきた日がそれを持っていないときは、
+     サーバーがまだ新しくなっていない（画面とサーバーは別々に配られる）。
+     「保存しました」と出したまま中身だけ消えるのが一番こわいので、
+     そのときははっきり伝える。 */
+  const sentFocus = Object.keys(S.focus).some((k) => (S.focus[k] || {}).text || (S.focus[k] || {}).done);
+  const sentResult = (items || []).some((it) => it && it.result);
+  S.saving = true;
   try {
     const { day } = await apiPost("/api/ichinichi/save", { date: S.selectedDate, items, focus: S.focus });
-    if (day) { S.schedule = day.items; if (day.focus) S.focus = { ...emptyFocus(), ...day.focus }; }
+    if (day) {
+      S.schedule = day.items;
+      if (day.focus) S.focus = { ...emptyFocus(), ...day.focus };
+      const lostFocus = sentFocus && !day.focus;
+      const lostResult = sentResult && (day.items || []).every((it) => !it.result);
+      if (lostFocus || lostResult) { notify(emuT("i.msg.serverOld")); return; }
+    }
     notify(msg || emuT("i.msg.saved"));
   } catch (e) { notify(e.message); }
   finally { S.saving = false; render(); }
