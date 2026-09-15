@@ -1983,6 +1983,25 @@ const ICHI_REPORTS_COL = "ichinichi_reports";
 const ICHI_ADOPTS_COL  = "ichinichi_adopts";
 
 const ICHI_CATEGORIES = ["生活", "学び", "仕事", "健康", "暮らし", "子育て"];
+
+/* 心技体の3本柱。SchoolPark Quest #000 の
+   「リラックス（ありのままの素の状態）／リフレッシュ（充実し活力ある状態）／
+     リトライ（あらゆる事に挑戦し心技体をきたえる）」をその日のテーマとして持つ。
+   時間割の1件ではなく、その日全体にかかるものなので、日の文書側に置く。
+   使わない日は focus を持たないだけ。古い記録は今までどおり読める。 */
+const ICHI_FOCUS_KEYS = ["relax", "refresh", "retry"];
+function ichiNormalizeFocus(raw) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const out = {};
+  ICHI_FOCUS_KEYS.forEach((k) => {
+    const v = src[k] && typeof src[k] === "object" ? src[k] : {};
+    out[k] = {
+      text: String(v.text || "").trim().slice(0, 200),
+      done: Boolean(v.done),
+    };
+  });
+  return out;
+}
 const ichiToday = () => new Date().toISOString().slice(0, 10);
 const ichiNow = () => new Date().toISOString();
 const ichiDayId = (address, date) => `${address}__${date}`;
@@ -2013,6 +2032,10 @@ function ichiNormalizeItems(rawItems) {
       note: String(it.note || "").trim().slice(0, 200),
       category: ICHI_CATEGORIES.includes(it.category) ? it.category : "生活",
       done: Boolean(it.done),
+      /* やってみてどうだったか。予定ごとの振り返り。
+         書かない日・書かない予定は空のまま。古い記録には無いので、
+         読む側は必ず "" として扱えるようにここで埋める。 */
+      result: String(it.result || "").trim().slice(0, 300),
       sourceItemId: it.sourceItemId ? String(it.sourceItemId) : null,
       sourceUserId: it.sourceUserId ? String(it.sourceUserId) : null,
     }))
@@ -2242,7 +2265,11 @@ app.post("/api/ichinichi/save", requireFirebaseUser, requireOwnAddress, async (r
 
     const ref = await ichiEnsureDay(address, userName, date);
     const items = ichiNormalizeItems(req.body.items);
-    await ref.set({ items, updatedAt: ichiNow() }, { merge: true });
+    const patch = { items, updatedAt: ichiNow() };
+    /* focus を送ってこない呼び出し（古い画面・ほかの経路）では触らない。
+       undefined を書くと既存の3本柱が消えるため、来たときだけ入れる。 */
+    if (req.body.focus !== undefined) patch.focus = ichiNormalizeFocus(req.body.focus);
+    await ref.set(patch, { merge: true });
     return res.json({ day: await ichiGetDay(address, date) });
   } catch (err) {
     console.error("ichinichi/save error:", err);

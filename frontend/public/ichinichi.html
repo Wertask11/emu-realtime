@@ -59,6 +59,42 @@ html:not([lang^="ja"]):not([lang^="zh"]) .hero h1 span { white-space: normal; }
 .date-tools button { margin-left: auto; border: 0; border-radius: 10px; padding: 9px 13px; background: #fff0e4; color: var(--orange-dark); font-size: 11px; font-weight: 800; }
 .past-note { margin-left: auto; color: var(--muted); font-size: 10px; }
 .panel { background: white; border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 10px 30px #6e4f3410; overflow: hidden; }
+/* ── 心技体の3本柱（#000 のリラックス・リフレッシュ・リトライ） ── */
+.focus-panel { margin-bottom: 20px; }
+.focus-rows { padding: 8px 26px 22px; display: grid; gap: 10px; }
+.focus-row { display: grid; grid-template-columns: 124px 1fr 40px; gap: 12px; align-items: center; }
+.focus-key strong { display: block; font-size: 13px; font-weight: 800; color: var(--orange-dark); }
+.focus-key small { display: block; color: var(--muted); font-size: 10px; margin-top: 2px; line-height: 1.5; }
+.focus-row input { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 13px; color: var(--ink); background: white; }
+.focus-row input:focus { outline: none; border-color: var(--orange); }
+.focus-row input:disabled { background: #faf7f2; color: var(--muted); }
+.focus-check { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); background: white; color: transparent; font-size: 15px; font-weight: 800; cursor: pointer; }
+.focus-check.on { background: var(--orange); border-color: var(--orange); color: white; }
+.focus-check:disabled { cursor: default; opacity: .5; }
+.focus-note { padding: 0 26px 20px; color: var(--muted); font-size: 10px; line-height: 1.9; }
+/* ── 実践メニュー（参考表） ── */
+.focus-menu { margin: 0 26px 18px; border: 1px solid var(--line); border-radius: 16px; overflow-x: auto; }
+.fm-grid { min-width: 620px; }
+.fm-row { display: grid; grid-template-columns: 132px repeat(3, 1fr); border-bottom: 1px solid var(--line); }
+.fm-row:last-child { border-bottom: 0; }
+.fm-row.fm-head { background: #fff7f0; }
+.fm-row.fm-head > div { padding: 10px 12px; font-size: 11px; font-weight: 800; color: var(--orange-dark); }
+.fm-key { padding: 12px; border-right: 1px solid var(--line); }
+.fm-key strong { display: block; font-size: 12px; font-weight: 800; color: var(--orange-dark); }
+.fm-key small { display: block; color: var(--muted); font-size: 10px; margin-top: 3px; line-height: 1.5; }
+.fm-cell { padding: 10px; border-right: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+.fm-cell:last-child { border-right: 0; }
+.fm-chip { border: 1px solid var(--line); background: white; color: var(--ink); border-radius: 14px; padding: 5px 10px; font: inherit; font-size: 11px; cursor: pointer; line-height: 1.4; text-align: left; }
+.fm-chip:hover { border-color: var(--orange); color: var(--orange-dark); background: #fff7f0; }
+/* ── 予定ごとの振り返り ── */
+.item-result { margin-top: 8px; }
+.item-result input { width: 100%; box-sizing: border-box; border: 1px dashed var(--line); border-radius: 10px; padding: 8px 11px; font: inherit; font-size: 12px; color: var(--ink); background: #fffdfa; }
+.item-result input:focus { outline: none; border-style: solid; border-color: var(--orange); background: white; }
+.result-text { margin: 0; padding: 8px 11px; background: #fff7f0; border-radius: 10px; font-size: 12px; line-height: 1.8; color: var(--ink); white-space: pre-wrap; }
+@media (max-width: 720px) {
+  .focus-row { grid-template-columns: 1fr 40px; }
+  .focus-key { grid-column: 1 / -1; }
+}
 .panel-head { padding: 24px 26px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; }
 .panel-head > div { display: flex; gap: 12px; align-items: center; }
 .section-icon { width: 37px; height: 37px; display: grid; place-items: center; border-radius: 12px; background: #fff0e4; color: var(--orange-dark); font-family: serif; font-weight: 800; }
@@ -209,8 +245,36 @@ const ADDRESS = (
 const USER_NAME_SET = (localStorage.getItem("ches_name") || "").trim();
 const userName = () => USER_NAME_SET || emuT("i.me");
 
+/* #000「心技体」実践メニュー。押すとその行の欄に入る。
+   心＝精神・メンタル／技＝技術・能力／体＝身体 の3列。 */
+const FOCUS_MENU = [
+  { key: "relax", label: "Relax", sub: "ありのままの素に戻る",
+    心: ["15分何もしない", "感情をそのまま書く", "スマホを置いて散歩", "好きな音楽を聴く"],
+    技: ["得意なことを成果目的なしでやる", "好きなものを作る", "勉強をあえて止める"],
+    体: ["湯船", "ストレッチ", "昼寝", "早寝", "ゆっくり散歩"] },
+  { key: "refresh", label: "Refresh", sub: "満たして活力をつくる",
+    心: ["友達と話す", "笑う", "自然に触れる", "好きな場所へ行く", "映画を見る"],
+    技: ["読書", "新しい知識を1つ得る", "人から教わる", "イベント・図書館へ行く"],
+    体: ["しっかり食べる", "睡眠", "日光", "運動", "いつもより歩く"] },
+  { key: "retry", label: "Retry", sub: "適度な負荷で鍛える",
+    心: ["苦手なことから逃げない", "本音を伝える", "失敗を振り返って再挑戦"],
+    技: ["コードを書く", "営業する", "韓国語・中国語を使う", "知らない技術を触る", "制作物を公開"],
+    体: ["筋トレ", "少し長く歩く", "新しい運動", "昨日より少し負荷を増やす"] },
+];
+const FOCUS_COLS = ["心", "技", "体"];
+const emptyFocus = () => ({
+  relax:   { text: "", done: false },
+  refresh: { text: "", done: false },
+  retry:   { text: "", done: false },
+});
+
 const todayStr = () => {
   const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+};
+const yesterdayStr = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 };
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
@@ -224,6 +288,8 @@ const S = {
   schedule: [],
   learning: "",
   visibility: "private",
+  focus: emptyFocus(),
+  showMenu: false,
   showAdd: false,
   editingIndex: null,
   draft: { time: "", title: "", note: "", category: "生活", done: false },
@@ -284,6 +350,8 @@ async function loadDay(date) {
     S.schedule = day?.items || [];
     S.learning = day?.learning || "";
     S.visibility = day?.visibility || "private";
+    /* 3本柱を持っていない日（この機能より前の記録）は、空の形にそろえる。 */
+    S.focus = { ...emptyFocus(), ...(day?.focus || {}) };
   } catch (e) { notify(e.message); }
   finally { S.loading = false; render(); }
 }
@@ -312,8 +380,8 @@ async function loadHistory(silent) {
 async function persist(items, msg) {
   S.saving = true;
   try {
-    const { day } = await apiPost("/api/ichinichi/save", { date: S.selectedDate, items });
-    if (day) S.schedule = day.items;
+    const { day } = await apiPost("/api/ichinichi/save", { date: S.selectedDate, items, focus: S.focus });
+    if (day) { S.schedule = day.items; if (day.focus) S.focus = { ...emptyFocus(), ...day.focus }; }
     notify(msg || emuT("i.msg.saved"));
   } catch (e) { notify(e.message); }
   finally { S.saving = false; render(); }
@@ -437,7 +505,12 @@ function renderToday() {
   const isToday = S.selectedDate === todayStr();
   const isFuture = S.selectedDate > todayStr();
   const isPast = S.selectedDate < todayStr();
+  /* 前の晩に、明日の予定と3本柱を組む → 未来日でも書ける（canEdit）
+     その日の夜に、振り返る                → 当日に書く（canLog）
+     canLog に昨日を含めているのは、日付が変わってから書き終える場合の保険。
+     サーバー側も昨日までは受け付ける（ichiIsPastLocked）。 */
   const canEdit = !isPast;
+  const canLog = isToday || S.selectedDate === yesterdayStr();
   const yearEnd = `${new Date().getFullYear()}-12-31`;
   const completed = S.schedule.filter((it) => it.done).length;
   const progress = S.schedule.length ? (completed / S.schedule.length) * 100 : 0;
@@ -451,10 +524,13 @@ function renderToday() {
       : S.schedule.map((it, i) => `
         <article class="schedule-item ${it.done ? "done" : ""}">
           <time>${esc(it.time)}</time>
-          <button class="check" data-act="toggle" data-i="${i}" ${isToday ? "" : "disabled"} aria-label="${esc(emuT("i.today.completeAria", { title: it.title }))}">${it.done ? "✓" : ""}</button>
+          <button class="check" data-act="toggle" data-i="${i}" ${canLog ? "" : "disabled"} aria-label="${esc(emuT("i.today.completeAria", { title: it.title }))}">${it.done ? "✓" : ""}</button>
           <div class="item-body">
             <div><h3>${esc(it.title)}</h3><span style="background:${CATEGORY_COLOR[it.category]}18;color:${CATEGORY_COLOR[it.category]}">${esc(catLabel(it.category))}</span></div>
             <p>${esc(it.note || emuT("i.today.noNote"))}</p>
+            ${canLog
+              ? `<div class="item-result"><input data-result="${i}" value="${esc(it.result || "")}" maxlength="300" placeholder="${esc(emuT("i.today.resultPlaceholder"))}"></div>`
+              : (it.result ? `<div class="item-result"><p class="result-text">${esc(it.result)}</p></div>` : "")}
             ${canEdit ? `<div class="inline-actions"><button data-act="edit" data-i="${i}">${esc(emuT("i.today.edit"))}</button><button data-act="del" data-i="${i}">${esc(emuT("i.today.delete"))}</button></div>` : ""}
           </div>
         </article>`).join("");
@@ -482,6 +558,38 @@ function renderToday() {
         : `<small class="future-learning">${esc(emuT("i.learn.futureNote"))}</small>`}
     </section>`;
 
+  const menuHtml = !S.showMenu ? "" : `
+    <div class="focus-menu"><div class="fm-grid">
+      <div class="fm-row fm-head"><div></div>${FOCUS_COLS.map((c) => `<div>${esc(emuT("i.focus.col." + c))}</div>`).join("")}</div>
+      ${FOCUS_MENU.map((row) => `
+        <div class="fm-row">
+          <div class="fm-key"><strong>${esc(row.label)}</strong><small>${esc(row.sub)}</small></div>
+          ${FOCUS_COLS.map((c) => `<div class="fm-cell">${row[c].map((v) =>
+            `<button class="fm-chip" data-act="pick" data-k="${esc(row.key)}" data-v="${esc(v)}">${esc(v)}</button>`).join("")}</div>`).join("")}
+        </div>`).join("")}
+    </div></div>`;
+
+  const focusHtml = `
+    <section class="panel focus-panel">
+      <div class="panel-head">
+        <div><span class="section-icon">柱</span>
+          <div><h2>${esc(emuT("i.focus.title"))}</h2><p>${esc(emuT("i.focus.hint"))}</p></div></div>
+        <button data-act="toggleMenu" style="border:0;border-radius:10px;padding:9px 13px;background:#fff0e4;color:var(--orange-dark);font-size:11px;font-weight:800">${esc(S.showMenu ? emuT("i.focus.menuHide") : emuT("i.focus.menuShow"))}</button>
+      </div>
+      ${menuHtml}
+      <div class="focus-rows">
+        ${FOCUS_MENU.map((row) => {
+          const f = S.focus[row.key] || { text: "", done: false };
+          return `<div class="focus-row">
+            <div class="focus-key"><strong>${esc(row.label)}</strong><small>${esc(row.sub)}</small></div>
+            <input data-focus="${esc(row.key)}" value="${esc(f.text)}" maxlength="200" placeholder="${esc(emuT("i.focus.placeholder"))}" ${canEdit || canLog ? "" : "disabled"}>
+            <button class="focus-check ${f.done ? "on" : ""}" data-act="focusDone" data-k="${esc(row.key)}" ${canLog ? "" : "disabled"} aria-label="${esc(row.label)}">✓</button>
+          </div>`;
+        }).join("")}
+      </div>
+      <p class="focus-note">${esc(emuT("i.focus.note"))}</p>
+    </section>`;
+
   $main.innerHTML = `
     <section class="hero">
       <div><p class="eyebrow">${esc(dateLabel)}</p><h1><span>${esc(emuT("i.today.heroLine1"))}</span><span>${esc(emuT("i.today.heroLine2"))}</span></h1>
@@ -495,6 +603,8 @@ function renderToday() {
       ${isFuture ? `<span class="past-note">${esc(emuT("i.today.futureNote"))}</span>` : ""}
     </div>
     <div class="content-grid">
+      <div>
+      ${focusHtml}
       <section class="panel schedule-panel">
         <div class="panel-head">
           <div><span class="section-icon">時</span><div><h2>${esc(isToday ? emuT("i.today.scheduleToday") : emuT("i.today.scheduleOf", { date: dateLabel }))}</h2><p>${esc(isPast ? emuT("i.today.scheduleHintPast") : emuT("i.today.scheduleHint"))}</p></div></div>
@@ -503,6 +613,7 @@ function renderToday() {
         ${addFormHtml}
         <div class="timeline">${timelineHtml}</div>
       </section>
+      </div>
       <aside>
         ${learningHtml}
         <section class="mini-stats"><div><strong>${S.stats.streak}</strong><span>${esc(emuT("i.stats.streak"))}</span></div><div><strong>${S.stats.learningCount}</strong><span>${esc(emuT("i.stats.learning"))}</span></div><div><strong>${S.stats.usefulCount}</strong><span>${esc(emuT("i.stats.useful"))}</span></div></section>
@@ -522,6 +633,22 @@ function bindTodayEvents() {
       if (c) c.textContent = S.learning.length;
     });
   }
+  // 3本柱の入力。打つたびに送ると重いので、欄から離れたときに保存する。
+  $main.querySelectorAll("[data-focus]").forEach((el) => {
+    el.addEventListener("input", (e) => {
+      const k = el.dataset.focus;
+      S.focus[k] = { ...(S.focus[k] || { done: false }), text: e.target.value };
+    });
+    el.addEventListener("change", () => { persist(S.schedule, emuT("i.msg.saved")); });
+  });
+  // 予定ごとの振り返り。こちらも欄から離れたときに保存する。
+  $main.querySelectorAll("[data-result]").forEach((el) => {
+    el.addEventListener("input", (e) => {
+      const i = Number(el.dataset.result);
+      if (S.schedule[i]) S.schedule[i] = { ...S.schedule[i], result: e.target.value };
+    });
+    el.addEventListener("change", () => { persist(S.schedule, emuT("i.msg.saved")); });
+  });
   // 下書きフォーム入力（再描画せず状態のみ更新）
   $main.querySelectorAll("[data-draft]").forEach((el) => {
     el.addEventListener("input", (e) => { S.draft[el.dataset.draft] = e.target.value; });
@@ -560,6 +687,26 @@ function onTodayClick(e) {
     case "visPublic": S.visibility = "public"; render(); break;
     case "share": shareDay(); break;
     case "append": appendLearning(); break;
+    case "toggleMenu": S.showMenu = !S.showMenu; render(); break;
+    case "focusDone": {
+      const k = btn.dataset.k;
+      const cur = S.focus[k] || { text: "", done: false };
+      S.focus[k] = { ...cur, done: !cur.done };
+      render();                       // 押した瞬間に反映する
+      persist(S.schedule, emuT("i.msg.toggled"));
+      break;
+    }
+    case "pick": {
+      /* 実践メニューを押したら、その行の欄に入れる。
+         すでに書いてあるときは消さずに「／」でつなぐ。 */
+      const k = btn.dataset.k, v = btn.dataset.v;
+      const cur = S.focus[k] || { text: "", done: false };
+      const text = cur.text ? (cur.text.split("／").includes(v) ? cur.text : `${cur.text}／${v}`) : v;
+      S.focus[k] = { ...cur, text: text.slice(0, 200) };
+      render();
+      persist(S.schedule, emuT("i.msg.saved"));
+      break;
+    }
   }
 }
 
