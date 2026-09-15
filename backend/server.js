@@ -2056,6 +2056,10 @@ async function ichiGetDay(address, date) {
     visibility: d.visibility || "private",
     sharedAt: d.sharedAt || null,
     items: Array.isArray(d.items) ? d.items : [],
+    /* 心技体の3本柱。ここに入れ忘れていたため、保存はできていても
+       読み込みで落ちていた（予定だけ残るように見えていた）。
+       持っていない日は null を返し、画面側で空の形にそろえる。 */
+    focus: d.focus || null,
   };
 }
 
@@ -2179,6 +2183,7 @@ app.get("/api/ichinichi/history", requireFirebaseUser, requireOwnAddress, async 
         id: doc.id, userId: d.address, userName: d.userName || "わたし", date: d.date,
         learning: d.learning || "", visibility: d.visibility || "private",
         sharedAt: d.sharedAt || null, items: Array.isArray(d.items) ? d.items : [],
+        focus: d.focus || null,
       };
     });
     history.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
