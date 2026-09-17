@@ -4,185 +4,6 @@
 <script src="/schoolpark/quest-store.js"></script>
 <script src="/schoolpark/guild-store.js"></script>
   <meta charset="UTF-8" />
-<script>
-/* ───── 調べるための表示（?diag=1 のときだけ） ─────
-
-   画面が「名前はゲスト・ギルド0枚・クエストなし」で固まったとき、
-   落ちているのか、間に合っていないのか、そもそも届いていないのかが
-   スマホからは分からない。console が見られないため。
-
-   ふだんの表示には出ない。URL の末尾に ?diag=1 を付けたときだけ。
-
-   最初は隅の小さな丸だけを出す。押すと開く。
-   全面に出すと、下にあるログインの操作を塞いでしまう。 */
-(function () {
-  /* ログイン（LINE・Google）は一度この画面を離れて戻ってくる。
-     そのとき URL の ?diag=1 は消える。付け直さないと診断が出ず、
-     いちばん見たい「ログインしたあと」を見られない。
-     だから一度付けたら覚えておく。?diag=0 か、枠の「やめる」で消す。 */
-  var on = false;
-  try {
-    var q = location.search || '';
-    if (q.indexOf('diag=0') >= 0) { localStorage.removeItem('spDiag'); }
-    else if (q.indexOf('diag=1') >= 0) { localStorage.setItem('spDiag', '1'); on = true; }
-    else { on = localStorage.getItem('spDiag') === '1'; }
-  } catch (e) {
-    /* 保存が使えない端末では、その場かぎりで動かす */
-    try { on = (location.search || '').indexOf('diag=1') >= 0; } catch (e2) { return; }
-  }
-  if (!on) return;
-
-  var errs = [], ready = false, open = false, timer = null;
-  function note(kind, msg) {
-    errs.push(kind + ': ' + String(msg == null ? '' : msg).slice(0, 240));
-    if (errs.length > 12) errs.shift();
-  }
-  window.addEventListener('error', function (e) {
-    note('エラー', (e && e.message) + ' @ ' + ((e && e.filename) || '').split('/').pop() + ':' + (e && e.lineno));
-  }, true);
-  window.addEventListener('unhandledrejection', function (e) {
-    var r = e && e.reason;
-    note('拾い漏れ', (r && (r.code || r.message)) || r);
-  });
-  window.addEventListener('ches-firebase-ready', function () { ready = true; });
-
-  function row(label, ok, extra) {
-    return '<div style="display:flex;gap:8px;padding:2px 0;border-bottom:1px solid #333">'
-      + '<span style="width:14px;flex:none;color:' + (ok ? '#7CE38B' : '#FF8A8A') + '">' + (ok ? '✓' : '✗') + '</span>'
-      + '<span style="flex:1;min-width:0">' + label + '</span>'
-      + '<span style="color:#9AA;word-break:break-all;text-align:right">' + (extra == null ? '' : extra) + '</span></div>';
-  }
-
-  async function look() {
-    var body = document.getElementById('spDiagBody');
-    if (!body || !open) return;
-    var fr = document.getElementById('spDaoFrame'), w = null, app = null;
-    try { w = fr && fr.contentWindow; app = w && w.app; } catch (e) { note('枠', e && e.message); }
-    /* パスポートの取得は、ログイン状態の復元を待つので数秒かかることがある。
-       待ち続けると、この枠自体が何も出せないまま固まる。
-       調べるための表示が、調べる前に固まっては意味がない。 */
-    var pass = null, passErr = '';
-    try {
-      if (typeof spPassportLoad === 'function') {
-        var TIMEOUT = {};
-        var r = await Promise.race([
-          spPassportLoad(),
-          new Promise(function (ok) { setTimeout(function () { ok(TIMEOUT); }, 2500); })
-        ]);
-        if (r === TIMEOUT) passErr = '2.5秒で返ってこない';
-        else pass = r;
-      }
-    } catch (e) { passErr = (e && e.message) || String(e); }
-    var st = null;
-    try { st = app && app.state; } catch (e) {}
-    var u = null;
-    try { u = window.auth && window.auth.currentUser; } catch (e) {}
-
-    /* #000 の記録そのものを見に行く。画面に出ないとき、
-       記録が無いのか、形が違うのか、読めないのかを分ける。 */
-    var f = null, fErr = '';
-    try {
-      if (window.db && window.fbLib) {
-        var fd = await window.fbLib.getDoc(
-          window.fbLib.doc(window.db, 'sp_quests', 'founder-quest-000'));
-        f = fd.exists() ? (fd.data() || {}) : null;
-        if (!fd.exists()) fErr = '記録が無い';
-      } else { fErr = 'Firebase がまだ'; }
-    } catch (e) { fErr = (e && (e.code || e.message)) || String(e); }
-
-    function shape(v) {
-      return v === undefined ? '欄が無い'
-        : (Array.isArray(v) ? '配列' + v.length + '件'
-          : (typeof v) + ' ' + JSON.stringify(v));
-    }
-    var founderOk = false;
-    try {
-      founderOk = !!(f && window.SpQuestStore &&
-        window.SpQuestStore.isFounder(Object.assign({ id: 'founder-quest-000' }, f)));
-    } catch (e) {}
-
-    body.innerHTML = '<div style="color:#9AA;padding-bottom:4px">' + new Date().toLocaleTimeString('ja-JP') + '</div>'
-      + row('window.db', !!window.db) + row('window.fbLib', !!window.fbLib)
-      + row('firebase 準備の合図', ready, ready ? '鳴った' : 'まだ')
-      + row('window.auth', !!window.auth)
-      + row('ログイン中の人', !!u, u ? String(u.uid).slice(0, 10) + '…' : 'いない')
-      + row('SpGuildStore', !!window.SpGuildStore,
-            window.SpGuildStore ? (window.SpGuildStore.OFFICIAL || []).length + '個' : '')
-      + row('SpQuestStore', !!window.SpQuestStore)
-      + row('DAOの枠', !!fr) + row('枠の中の画面', !!app)
-      + row('パスポート', !!pass, pass ? (pass.name || '') : (passErr || 'なし'))
-      + row('ギルドの枚数', !!(st && st.guilds && st.guilds.length), st ? String((st.guilds || []).length) : '画面なし')
-      + row('クエストの件数', !!(st && st.quests && st.quests.length), st ? String((st.quests || []).length) : '画面なし')
-      + row('読み直しの仕掛け', typeof window.spDaoReloadAll === 'function')
-      + '<div style="padding-top:6px;color:#D0E2BE">Quest #000</div>'
-      + row('記録がある', !!f, f ? '' : fErr)
-      + row('kind', !!f && f.kind === 'founder', f ? shape(f.kind) : '—')
-      + row('questNumber', !!f && f.questNumber === 0, f ? shape(f.questNumber) : '—')
-      + row('全文（6項目）', !!(f && Array.isArray(f.founderSections) && f.founderSections.length === 6),
-            f ? shape(f.founderSections) : '—')
-      + row('createdAt', !!(f && typeof f.createdAt === 'number'), f ? shape(f.createdAt) : '—')
-      + row('#000 と判定される', founderOk)
-      + row('画面に渡っている', !!(st && (st.quests || []).some(function (q) { return q.isFounder; })),
-            st ? ((st.quests || []).length + '件中') : '画面なし')
-      + '<div style="padding-top:6px;color:#FF8A8A;white-space:pre-wrap">'
-      + (errs.length ? errs.join('\n') : '（エラーなし）') + '</div>';
-  }
-
-  function setOpen(v) {
-    open = v;
-    var panel = document.getElementById('spDiagPanel');
-    var chip = document.getElementById('spDiagChip');
-    if (panel) panel.hidden = !v;
-    if (chip) chip.hidden = v;
-    if (timer) { clearInterval(timer); timer = null; }
-    if (v) { look(); timer = setInterval(look, 1500); }
-  }
-
-  function mount() {
-    if (document.getElementById('spDiagChip')) return;
-
-    /* 隅の小さな丸。ここ以外は塞がない */
-    var chip = document.createElement('button');
-    chip.id = 'spDiagChip';
-    chip.type = 'button';
-    chip.textContent = '診断';
-    chip.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:2147483647;'
-      + 'width:52px;height:52px;border-radius:26px;border:2px solid #D0E2BE;background:#11150F;'
-      + 'color:#D0E2BE;font:12px/1 system-ui,sans-serif;opacity:.85;padding:0';
-
-    var panel = document.createElement('div');
-    panel.id = 'spDiagPanel';
-    panel.hidden = true;
-    panel.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;'
-      + 'background:#11150F;color:#F4F1EA;font:12px/1.65 ui-monospace,monospace;'
-      + 'border-top:3px solid #D0E2BE;padding:10px 12px calc(10px + env(safe-area-inset-bottom))';
-    panel.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding-bottom:6px">'
-      + '<b style="flex:1;color:#D0E2BE">SchoolPark 診断</b>'
-      + '<button type="button" id="spDiagAgain" style="font:inherit;padding:8px 12px;background:#0F5C3F;color:#F4F1EA;border:0;border-radius:5px">調べ直す</button>'
-      + '<button type="button" id="spDiagClose" style="font:inherit;padding:8px 12px;background:#3B382F;color:#F4F1EA;border:0;border-radius:5px">閉じる</button>'
-      + '<button type="button" id="spDiagStop" style="font:inherit;padding:8px 12px;background:#6E3B2F;color:#F4F1EA;border:0;border-radius:5px">やめる</button></div>'
-      + '<div id="spDiagBody" style="max-height:52vh;overflow:auto"></div>';
-
-    document.body.appendChild(chip);
-    document.body.appendChild(panel);
-
-    /* 押しどころは作り直さない。中身だけを書き替えるので、
-       表示の更新中に押しても取りこぼさない */
-    chip.addEventListener('click', function () { setOpen(true); });
-    panel.querySelector('#spDiagClose').addEventListener('click', function () { setOpen(false); });
-    panel.querySelector('#spDiagAgain').addEventListener('click', function () { look(); });
-    /* 覚えているのを消して、この場から片付ける（URLをいじらなくていい） */
-    panel.querySelector('#spDiagStop').addEventListener('click', function () {
-      try { localStorage.removeItem('spDiag'); } catch (e) {}
-      setOpen(false);
-      chip.remove(); panel.remove();
-    });
-  }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
-  else mount();
-})();
-</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
   <!-- 検索とAIに、Emuが何かを伝えるための情報。
@@ -3105,21 +2926,10 @@ body.paypay-mode #pp-post-fab {
 /* 会員種別の表示と、有料会員への導線 */
 .emu-membership { display:grid; gap:10px; }
 .emu-membership-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-/* 星空（旧room2）への入り口。見出しの横に小さく置く */
+/* 価値プロフィールの見出しの行 */
 .eth-profile-head {
   display:flex; align-items:center; justify-content:space-between;
   gap:10px; flex-wrap:wrap; margin-bottom:8px;
-}
-.emu-star-btn {
-  display:inline-flex; align-items:center; gap:6px; flex:none;
-  min-height:38px; padding:0 14px; border-radius:999px;
-  border:1px solid #d9d3e4; background:#fff; color:#4a4468;
-  font-family:'Noto Sans JP',sans-serif; font-size:12px; font-weight:700;
-  line-height:1; cursor:pointer;
-}
-.emu-star-btn:hover { background:#f5f2fb; border-color:#b9b0d4; color:#221f3a; }
-@media (max-width:600px) {
-  .emu-star-btn { min-height:36px; padding:0 12px; font-size:11.5px; }
 }
 .emu-membership-pill {
   flex:none; font-size:12px; font-weight:800; letter-spacing:.02em;
@@ -3609,6 +3419,8 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
   #spPassport .spp-page-title { margin-bottom:16px; }
   #spPassport .spp-page .spp-legend { margin-top:20px; }
   #spPassport .spp-page .spp-legend li { padding:9px 2px; }
+  #spPassport .spp-page .spp-chain li { padding:13px 2px 13px 26px; }
+  #spPassport .spp-page .spp-chain li::before { top:13px; }
   #spPassport .spp-page .spp-star { padding:18px 16px; }
 }
 
@@ -3622,6 +3434,26 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
   pointer-events:none; opacity:0; transition:opacity .2s;
 }
 #spPassport .spp-pages.spp-more::after { opacity:1; }
+
+/* 価値プロフィールへの入口。星空の入口と同じ形にして、
+   「同じ冊子の、次のページの入口」だと分かるようにする。 */
+.spp-star.spp-value { background:linear-gradient(135deg,#1D1B16,#20202A); border-color:rgba(208,226,190,.34); }
+
+/* 価値が渡っていく道すじ。数はここでは持たない（正本は Emu の価値プロフィール）。 */
+.spp-chain { margin:0; padding:0; list-style:none; counter-reset:sppc; }
+.spp-chain li {
+  position:relative; counter-increment:sppc; padding:9px 2px 9px 26px;
+  font-size:11px; line-height:1.9; color:rgba(244,241,234,.55);
+  border-bottom:1px solid rgba(244,241,234,.07);
+}
+.spp-chain li:last-child { border-bottom:none; }
+.spp-chain li::before {
+  content:counter(sppc); position:absolute; left:0; top:9px;
+  width:17px; height:17px; border-radius:50%; text-align:center; line-height:17px;
+  font-family:Inter,sans-serif; font-size:9px; font-weight:700;
+  background:rgba(208,226,190,.16); color:#D0E2BE;
+}
+.spp-chain b { display:block; font-weight:700; color:rgba(244,241,234,.85); }
 
 /* 星空の見かた。何色の星が何を指すのかを、ここで短く添える。 */
 .spp-legend { margin:14px 0 0; padding:0; list-style:none; }
@@ -5268,13 +5100,11 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 
   <section class="eth-profile" id="emuValueProfile">
     <aside class="eth-card eth-profile-summary">
+      <!-- 星空への入口は、SchoolPark パスポートの PAGE 2（私は何をしてきたのか）に
+           まとめた。ここに同じ入口を重ねると、入口が2つに割れる。
+           星空そのものと、パスポートからの導線は、これまでどおり動く。 -->
       <div class="eth-profile-head">
         <span class="eth-badge">VALUE PROFILE</span>
-        <!-- 星空。Emuでの行動がひとつずつ星になる -->
-        <button type="button" class="emu-star-btn" onclick="openRoom2()"
-                title="あなたの星空を見る" data-i18n-title="profile.starTitle">
-          <span aria-hidden="true">🌌</span><span data-i18n="profile.star">星空を見る</span>
-        </button>
       </div>
       <h2 data-i18n="profile.title">あなたが渡した価値</h2>
       <p data-i18n="profile.desc">日常の記録ではなく、誰かへ届き、改善され、学びになった価値だけを残します。</p>
@@ -18956,16 +18786,48 @@ async function openSpPassport() {
     + '</div>'
     + '</div>'
 
+    /* ───── 3ページ目：私はどんな価値を渡してきたのか ─────
+       価値プロフィールは Emu にあるものが正本。ここでは持たず、入口だけ置く。
+       同じ数を2か所で数えると、必ずどこかで食い違う。 */
+    + '<div class="spp-page" id="sppPage3" hidden>'
+    + '<p class="spp-page-label">PAGE 3 · VALUE PROFILE</p>'
+    + '<div class="spp-page-title">私はどんな価値を渡してきたのか</div>'
+    + '<div class="spp-spread">'
+    + '<div class="spp-leaf spp-leaf-a">'
+    + '<p class="spp-leaf-head">Value</p>'
+    + '<p class="spp-note" style="margin:0 0 12px">星空が「何をしてきたか」なら、ここは'
+    + '「その行動が、誰にどう届いたか」です。<br>'
+    + '投稿の数ではなく、誰かの役に立ち、改善され、学びになった分だけが残ります。</p>'
+    + '<button type="button" class="spp-star spp-value" onclick="spPassportOpenValue()">'
+    + '💠　価値プロフィールを見る<small>Emu に積み上がっている、あなたが渡した価値を見る</small></button>'
+    + '</div>'
+    + '<div class="spp-seam"></div>'
+    + '<div class="spp-leaf spp-leaf-b">'
+    + '<p class="spp-leaf-head">How it travels</p>'
+    + '<div class="spp-page-title" style="font-size:14px;margin:0 0 8px">価値が渡っていく道すじ</div>'
+    + '<ol class="spp-chain">'
+    + '<li><b>知識を届けた</b>投稿・募集への回答</li>'
+    + '<li><b>誰かの役に立った</b>役に立った人／役に立った回数</li>'
+    + '<li><b>改善された</b>改善に参加／採用された改善／採用したChange</li>'
+    + '<li><b>学びにつながった</b>受け取った学び／学びへ昇華</li>'
+    + '</ol>'
+    + '<p class="spp-note">数えているのは Emu の価値プロフィールです。'
+    + 'ここに写しは持ちません。</p>'
+    + '</div>'
+    + '</div>'
+    + '</div>'
+
     + '</div>'
 
     /* ───── めくり ───── */
     + '<div class="spp-nav">'
-    + '<button type="button" class="spp-nav-btn" id="sppPrev" hidden onclick="spPassportGoPage(1)">← 私は誰なのか</button>'
-    + '<div class="spp-dots" id="sppDots"><i class="on"></i><i></i></div>'
-    + '<button type="button" class="spp-nav-btn" id="sppNext" onclick="spPassportGoPage(2)">私は何をしてきたのか →</button>'
+    + '<button type="button" class="spp-nav-btn" id="sppPrev" hidden onclick="spPassportTurn(-1)">←</button>'
+    + '<div class="spp-dots" id="sppDots"><i class="on"></i><i></i><i></i></div>'
+    + '<button type="button" class="spp-nav-btn" id="sppNext" onclick="spPassportTurn(1)">私は何をしてきたのか →</button>'
     + '</div>';
 
   if (card) card.classList.remove('spp-lite');   /* ここから本の大きさ */
+  _sppSyncNav(1);
   _sppBindSwipe();
   _sppUpdateMore();
 
@@ -19043,51 +18905,86 @@ function _sppUpdateMore() {
 }
 window.addEventListener('resize', _sppUpdateMore);
 
-function spPassportGoPage(n) {
-  const p1 = document.getElementById('sppPage1');
-  const p2 = document.getElementById('sppPage2');
+/* 3ページぶんの見出し。めくりのボタンの文字もここから作る。
+   ページを足すときは、この並びに1行足せばよい。 */
+const SPP_PAGES = [
+  { id: 'sppPage1', label: '私は誰なのか' },
+  { id: 'sppPage2', label: '私は何をしてきたのか' },
+  { id: 'sppPage3', label: '私はどんな価値を渡してきたのか' }
+];
+
+function _sppPageEls() {
+  return SPP_PAGES.map(function (d) { return document.getElementById(d.id); });
+}
+function _sppCurrentPage() {
+  const els = _sppPageEls();
+  for (let i = 0; i < els.length; i++) if (els[i] && els[i].hidden === false) return i + 1;
+  return 1;
+}
+/* いま何ページ目か、どちらへ行けるかを、ボタンと点に映す */
+function _sppSyncNav(n) {
   const prev = document.getElementById('sppPrev');
   const next = document.getElementById('sppNext');
   const dots = document.getElementById('sppDots');
-  if (!p1 || !p2) return;
+  if (prev) {
+    prev.hidden = (n <= 1);
+    if (n > 1) prev.textContent = '← ' + SPP_PAGES[n - 2].label;
+  }
+  if (next) {
+    next.hidden = (n >= SPP_PAGES.length);
+    if (n < SPP_PAGES.length) next.textContent = SPP_PAGES[n].label + ' →';
+  }
+  if (dots) {
+    const i = dots.querySelectorAll('i');
+    for (let k = 0; k < i.length; k++) i[k].classList.toggle('on', k === (n - 1));
+  }
+}
+
+/* いまのページから、前後へ1枚めくる。ボタンはこちらを呼ぶ。 */
+function spPassportTurn(step) {
+  spPassportGoPage(_sppCurrentPage() + (step < 0 ? -1 : 1));
+}
+window.spPassportTurn = spPassportTurn;
+
+function spPassportGoPage(n) {
+  const els = _sppPageEls();
+  if (els.some(function (e) { return !e; })) return;
   /* めくっている最中の指示は受けない。連打で二重にめくると、
      中身と「いま何ページ目か」がずれて、直しようが無くなる。 */
   if (_sppTurning) return;
-  const toSecond = (n === 2);
-  const shown = toSecond ? p2 : p1;
-  const going = toSecond ? p1 : p2;
-  if (shown.hidden === false) return;   /* もう開いているページ */
+  if (n < 1 || n > els.length) return;
+
+  const from = _sppCurrentPage();
+  if (n === from) return;               /* もう開いているページ */
+  const forward = (n > from);
+  const going = els[from - 1];
+  const shown = els[n - 1];
 
   /* 差し替えの中身。前半が終わってから実行する。 */
   const swap = function () {
-    going.hidden = true;
-    shown.hidden = false;
-    if (prev) prev.hidden = !toSecond;
-    if (next) next.hidden = toSecond;
-    if (dots) {
-      const i = dots.querySelectorAll('i');
-      if (i[0]) i[0].classList.toggle('on', !toSecond);
-      if (i[1]) i[1].classList.toggle('on', toSecond);
-    }
+    els.forEach(function (e, i) { e.hidden = (i !== n - 1); });
+    _sppSyncNav(n);
     /* スクロールするのはページの中。開いたページは頭から読めるようにする。 */
     shown.scrollTop = 0;
     const card = document.querySelector('#spPassport .spp-card');
     if (card) card.scrollTop = 0;
   };
 
-  SPP_TURN_CLASSES.forEach(function (c) { p1.classList.remove(c); p2.classList.remove(c); });
+  els.forEach(function (e) {
+    SPP_TURN_CLASSES.forEach(function (c) { e.classList.remove(c); });
+  });
 
   if (_sppReducedMotion()) { swap(); _sppUpdateMore(); return; }
 
   _sppTurning = true;
   /* 前半：いまの紙が離れていく */
-  going.classList.add(toSecond ? 'spp-out' : 'spp-out-back');
+  going.classList.add(forward ? 'spp-out' : 'spp-out-back');
 
   _sppTurnTimers.push(setTimeout(function () {
     going.classList.remove('spp-out', 'spp-out-back');
     swap();
     /* 後半：次の紙が綴じ目から降りてくる */
-    shown.classList.add(toSecond ? 'spp-in' : 'spp-in-back');
+    shown.classList.add(forward ? 'spp-in' : 'spp-in-back');
     _sppTurnTimers.push(setTimeout(function () {
       shown.classList.remove('spp-in', 'spp-in-back');
       _sppTurning = false;
@@ -19103,8 +19000,8 @@ function _sppCancelTurn() {
   _sppTurnTimers.forEach(clearTimeout);
   _sppTurnTimers = [];
   _sppTurning = false;
-  ['sppPage1', 'sppPage2'].forEach(function (id) {
-    const el = document.getElementById(id);
+  SPP_PAGES.forEach(function (d) {
+    const el = document.getElementById(d.id);
     if (el) SPP_TURN_CLASSES.forEach(function (c) { el.classList.remove(c); });
   });
 }
@@ -19115,8 +19012,8 @@ document.addEventListener('keydown', function (e) {
   if (!document.body.classList.contains('sp-passport-open')) return;
   const t = e.target;
   if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '')) return;
-  if (e.key === 'ArrowRight') { e.preventDefault(); spPassportGoPage(2); }
-  else if (e.key === 'ArrowLeft') { e.preventDefault(); spPassportGoPage(1); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); spPassportTurn(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); spPassportTurn(-1); }
   else if (e.key === 'Escape') { e.preventDefault(); closeSpPassport(); }
 });
 
@@ -19136,7 +19033,7 @@ function _sppBindSwipe() {
     const t = e.changedTouches && e.changedTouches[0]; if (!t) return;
     const dx = t.clientX - x0, dy = t.clientY - y0;
     if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;   /* 縦に動かしたときは何もしない */
-    spPassportGoPage(dx < 0 ? 2 : 1);
+    spPassportTurn(dx < 0 ? 1 : -1);
   }, { passive: true });
 }
 
@@ -19168,6 +19065,34 @@ async function spPassportOpenStar() {
   openRoom2();
 }
 window.spPassportOpenStar = spPassportOpenStar;
+
+/* 3ページ目から価値プロフィールを開く。
+
+   価値プロフィールは Emu にあるものが正本。ここで数え直さないし、
+   写しも持たない。開くのは、いつもの showEmuValueProfile() そのもの。
+   （SchoolPark を見ている最中でも、あちらが自分で SchoolPark を閉じる）
+
+   星空と同じく、開く前に「画面が持っている自分」がパスポート本人の
+   名義かどうかだけ確かめる。価値プロフィールも同じアドレスで数えるので、
+   ここがずれていると他人の記録が出る道ができてしまう。 */
+async function spPassportOpenValue() {
+  let p = null;
+  try { p = await spPassportLoad(); } catch (e) {}
+  if (!p) { alert('価値プロフィールを見るにはログインが必要です。'); return; }
+
+  const shown = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+  const mine = (p.aliases && p.aliases.length ? p.aliases : [p.wallet, p.ches, p.addr])
+    .map(function (a) { return String(a || '').toLowerCase(); }).filter(Boolean);
+  if (!shown || mine.indexOf(shown) < 0) {
+    console.warn('価値プロフィールを開けません。画面のアドレスが本人と違います:', shown || '(なし)');
+    alert('ログインの状態を確かめています。\n\n一度ページを読み込み直してから、もう一度お試しください。');
+    return;
+  }
+
+  closeSpPassport();
+  if (typeof showEmuValueProfile === 'function') showEmuValueProfile();
+}
+window.spPassportOpenValue = spPassportOpenValue;
 
 /* SchoolPark の中から小部屋（エレベーターなど）を開く。
    枠の中から window.parent 経由で呼ばれる。 */
@@ -19906,7 +19831,26 @@ async function loadEmuValueProfile() {
   const timeline = document.getElementById('emuValueTimeline');
   if (!timeline) return;
   timeline.innerHTML = '<div class="eth-loading">' + escapeHtml(emuT('value.loading')) + '</div>';
-  const address = (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+  /* 誰の価値プロフィールか。
+
+     これまでは画面に出ているアドレス（window.connectedAccount）だけを見ていた。
+     あれは前の端末の値が残っていることがあり、本人の2つの名義
+     （ウォレット名義とCHES名義）のうち片方しか数えられなかった。
+
+     星空と同じく、パスポート本人から取る。ウォレットで入っても LINE で
+     入っても、同じ本人なら同じ価値プロフィールになる。
+     ログインの方法は鍵にしない。読み取るだけで、記録は増やさない。 */
+  let _vpMe = null;
+  try { _vpMe = await spPassportLoad(); } catch (e) {}
+  const addrs = [];
+  (_vpMe
+    ? (_vpMe.aliases && _vpMe.aliases.length ? _vpMe.aliases : [_vpMe.wallet, _vpMe.ches, _vpMe.addr])
+    : [window.connectedAccount, localStorage.getItem('emuWallet')]
+  ).forEach(function (a) {
+    const v = String(a || '').toLowerCase();
+    if (v && addrs.indexOf(v) < 0) addrs.push(v);
+  });
+  const address = addrs[0] || '';
   if (!address || !window.db || !window.fbLib) {
     timeline.innerHTML = '';
     timeline.appendChild(_emuValueEvent(emuT('value.emptyTitle'), emuT('value.emptyText')));
@@ -19916,7 +19860,7 @@ async function loadEmuValueProfile() {
     // 旧投稿にはチェックサム形式のアドレスもあるため、大小文字を無視して集計する
     const snap = await window.fbLib.getDocs(window.fbLib.query(
       window.fbLib.collection(window.db, 'posts'),
-      window.fbLib.where('address', '==', address)
+      window.fbLib.where('address', 'in', addrs)
     ));
     let helpful = 0;
     let changed = 0;
@@ -19961,7 +19905,7 @@ async function loadEmuValueProfile() {
     try {
       const changeQ = window.fbLib.query(
         window.fbLib.collection(window.db, 'post_changes'),
-        window.fbLib.where('fromAddress', '==', address),
+        window.fbLib.where('fromAddress', 'in', addrs),
         window.fbLib.limit(100)
       );
       const changeSnap = await window.fbLib.getDocs(changeQ);
@@ -19979,7 +19923,7 @@ async function loadEmuValueProfile() {
     try {
       const learnedQ = window.fbLib.query(
         window.fbLib.collection(window.db, 'posts'),
-        window.fbLib.where('goodUsers', 'array-contains', address),
+        window.fbLib.where('goodUsers', 'array-contains-any', addrs),
         window.fbLib.limit(100)
       );
       const learnedSnap = await window.fbLib.getDocs(learnedQ);
@@ -19997,7 +19941,7 @@ async function loadEmuValueProfile() {
     try {
       const answerQ = window.fbLib.query(
         window.fbLib.collection(window.db, 'knowledge_answers'),
-        window.fbLib.where('answerAuthor', '==', address),
+        window.fbLib.where('answerAuthor', 'in', addrs),
         window.fbLib.limit(100)
       );
       const answerSnap = await window.fbLib.getDocs(answerQ);
