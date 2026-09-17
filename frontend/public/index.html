@@ -3421,26 +3421,90 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
   margin:0 0 6px; text-transform:uppercase;
 }
 
-/* ── めくる ──
-   紙の端を綴じ目で留めて、そこを軸に倒す。
-   スマホは1枚なので、左の綴じ目を軸にページごと倒す。
-   0.34秒。長いと操作の邪魔になるだけで、本らしくはならない。 */
-@keyframes sppTurnFwd  { from { opacity:0; transform:rotateY(34deg); } to { opacity:1; transform:none; } }
-@keyframes sppTurnBack { from { opacity:0; transform:rotateY(-34deg); } to { opacity:1; transform:none; } }
-@keyframes sppLeafIn   { from { opacity:0; } to { opacity:1; } }
-#spPassport .spp-page { animation:sppTurnFwd .34s cubic-bezier(.22,.72,.26,1); transform-origin:left center; }
-#spPassport .spp-page.spp-back { animation-name:sppTurnBack; transform-origin:right center; }
+/* ══ めくる ══
+
+   紙は一瞬で入れ替わらない。前半で「いま読んでいる紙」が綴じ目を軸に
+   立ち上がって向こうへ倒れ、後半で「次の紙」が綴じ目から降りてくる。
+   0.8秒を半分ずつ使う。中身の差し替えは、紙が真横（＝見えない角度）を
+   向いている 0.4秒の時点で起きるので、切り替わる瞬間は目に映らない。
+
+     前半 0.00〜0.40s … いまの紙が離れていく（spp-out）
+     後半 0.40〜0.80s … 次の紙が降りてくる（spp-in）
+
+   JS 側の SPP_TURN_MS / SPP_TURN_HALF と同じ数字にしてある。 */
+#spPassport .spp-page { transform-origin:left center; }
+
+/* 前半：紙が少し手前に浮いてから、綴じ目を軸に向こうへ倒れる */
+@keyframes sppPaperAway {
+  0%   { transform:rotateY(0deg) translateZ(0); opacity:1; }
+  18%  { transform:rotateY(-11deg) translateZ(22px); opacity:1; }
+  100% { transform:rotateY(-94deg) translateZ(8px); opacity:.45; }
+}
+@keyframes sppPaperAwayBack {
+  0%   { transform:rotateY(0deg) translateZ(0); opacity:1; }
+  18%  { transform:rotateY(11deg) translateZ(22px); opacity:1; }
+  100% { transform:rotateY(94deg) translateZ(8px); opacity:.45; }
+}
+/* 後半：次の紙が立った状態から降りてくる。
+   最後に少しだけ行き過ぎてから戻る＝紙の重みが出る。 */
+@keyframes sppPaperLand {
+  0%   { transform:rotateY(94deg) translateZ(8px); opacity:.45; }
+  70%  { transform:rotateY(-5deg) translateZ(6px); opacity:1; }
+  100% { transform:rotateY(0deg) translateZ(0); opacity:1; }
+}
+@keyframes sppPaperLandBack {
+  0%   { transform:rotateY(-94deg) translateZ(8px); opacity:.45; }
+  70%  { transform:rotateY(5deg) translateZ(6px); opacity:1; }
+  100% { transform:rotateY(0deg) translateZ(0); opacity:1; }
+}
+/* めくっている紙が受ける影。綴じ目の側から濃くなる */
+@keyframes sppShadeOn  { from { opacity:0; } to { opacity:.55; } }
+@keyframes sppShadeOff { from { opacity:.55; } to { opacity:0; } }
+/* 動かないほうの紙。前半は置いたまま暗くなり、後半は下から現れる。 */
+@keyframes sppShadeFade   { 0% { opacity:1; } 100% { opacity:.55; } }
+@keyframes sppUnderReveal { 0% { opacity:.4; } 60% { opacity:.85; } 100% { opacity:1; } }
+
+/* スマホは紙が1枚。左の綴じ目を軸に、ページごと動く。 */
+#spPassport .spp-page.spp-out     { animation:sppPaperAway .4s cubic-bezier(.44,.02,.78,.30) both; }
+#spPassport .spp-page.spp-out-back{ animation:sppPaperAwayBack .4s cubic-bezier(.44,.02,.78,.30) both; transform-origin:right center; }
+#spPassport .spp-page.spp-in      { animation:sppPaperLand .4s cubic-bezier(.22,.68,.30,1) both; transform-origin:right center; }
+#spPassport .spp-page.spp-in-back { animation:sppPaperLandBack .4s cubic-bezier(.22,.68,.30,1) both; }
+
+/* 紙の影。めくっているあいだだけ出す */
+.spp-leaf { position:relative; }
+#spPassport .spp-page::before {
+  content:''; position:absolute; inset:0; pointer-events:none; opacity:0; border-radius:10px;
+  background:linear-gradient(90deg, rgba(0,0,0,.6), rgba(0,0,0,0) 62%);
+}
+#spPassport .spp-page.spp-out::before,
+#spPassport .spp-page.spp-out-back::before { animation:sppShadeOn .4s ease-in both; }
+#spPassport .spp-page.spp-in::before,
+#spPassport .spp-page.spp-in-back::before  { animation:sppShadeOff .4s ease-out both; }
+#spPassport .spp-page.spp-out-back::before,
+#spPassport .spp-page.spp-in-back::before {
+  background:linear-gradient(270deg, rgba(0,0,0,.6), rgba(0,0,0,0) 62%);
+}
 
 @media (min-width:900px) {
-  /* 机の上で開いたパスポート。縦に長い1枚ではなく、横長の冊子にする。 */
+  /* 机の上で開いたパスポート。縦に長い1枚ではなく、横長の冊子にする。
+     高さは画面の 86% まで使う。1ページぶんを、めくらずに最後まで
+     見せきるための高さ。入りきらない小さな画面では
+     calc(100vh - 44px) のほうが効いて、そのときだけ中がスクロールする。 */
   #spPassport .spp-card {
-    width:min(920px, calc(100vw - 72px));
-    height:min(596px, calc(100vh - 56px));
-    max-height:calc(100vh - 56px);
-    padding:28px 32px 20px;
+    width:min(980px, calc(100vw - 64px));
+    height:min(760px, 86vh, calc(100vh - 44px));
+    max-height:calc(100vh - 44px);
+    padding:30px 34px 26px;
   }
-  #spPassport .spp-head { margin-bottom:18px; }
+  #spPassport .spp-head { margin-bottom:16px; }
   #spPassport .spp-page { padding-right:10px; }
+  /* ノートパソコンのように画面の縦が短いときは、行間を詰めて
+     1ページを収めきる。読みづらくなるところまでは詰めない。 */
+  #spPassport .spp-page .spp-row { padding:10px 2px; }
+  #spPassport .spp-page .spp-note { line-height:1.85; margin-top:12px; }
+  #spPassport .spp-page-title { margin-bottom:12px; }
+  /* 下のめくりの列は、紙から少し離す。画面の底に貼り付いて見えないように。 */
+  #spPassport .spp-nav { margin-top:20px; padding-top:18px; }
   .spp-spread {
     display:grid; grid-template-columns:1fr 1px 1fr; gap:0 30px; align-items:start;
   }
@@ -3453,17 +3517,70 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
       transparent, rgba(244,241,234,.16) 14%,
       rgba(244,241,234,.16) 86%, transparent);
   }
-  /* パソコンでは、綴じ目を軸に右の紙が返る。左の紙はそこに残って現れる。
-     ページ全体を倒すより、はるかに「めくった」に近い。 */
-  #spPassport .spp-page { animation:none; transform:none; }
-  #spPassport .spp-page .spp-leaf-a { animation:sppLeafIn .34s ease-out; }
-  #spPassport .spp-page .spp-leaf-b {
-    animation:sppTurnFwd .38s cubic-bezier(.26,.74,.28,1); transform-origin:left center;
+  /* ── パソコンのめくり ──
+     本物の本と同じ動きにする。見開きのうち、手で持つのは右の紙。
+
+       進む  前半：右の紙が、まん中の綴じ目を軸に立ち上がって向こうへ倒れる
+             後半：倒れた紙の裏＝次の左の紙が、綴じ目から降りてくる
+                   同時に、下にあった次の右の紙が現れる
+       戻る  左右が入れ替わるだけで、動きは同じ
+
+     ページの箱そのものは動かさず、中の紙（.spp-leaf）だけを動かす。 */
+  #spPassport .spp-page.spp-out,
+  #spPassport .spp-page.spp-out-back,
+  #spPassport .spp-page.spp-in,
+  #spPassport .spp-page.spp-in-back { animation:none; transform:none; opacity:1; }
+  #spPassport .spp-page.spp-out::before,
+  #spPassport .spp-page.spp-out-back::before,
+  #spPassport .spp-page.spp-in::before,
+  #spPassport .spp-page.spp-in-back::before { animation:none; opacity:0; }
+  #spPassport .spp-spread { transform-style:preserve-3d; }
+
+  /* 進む：出ていく右の紙／入ってくる左の紙 */
+  #spPassport .spp-page.spp-out .spp-leaf-b {
+    animation:sppPaperAway .4s cubic-bezier(.44,.02,.78,.30) both; transform-origin:left center;
   }
-  #spPassport .spp-page.spp-back .spp-leaf-a {
-    animation:sppTurnBack .38s cubic-bezier(.26,.74,.28,1); transform-origin:right center;
+  #spPassport .spp-page.spp-out .spp-leaf-a { animation:sppShadeFade .4s ease-in both; }
+  #spPassport .spp-page.spp-in .spp-leaf-a {
+    animation:sppPaperLand .4s cubic-bezier(.22,.68,.30,1) both; transform-origin:right center;
   }
-  #spPassport .spp-page.spp-back .spp-leaf-b { animation:sppLeafIn .34s ease-out; }
+  #spPassport .spp-page.spp-in .spp-leaf-b { animation:sppUnderReveal .4s ease-out both; }
+
+  /* 戻る：左右を入れ替える */
+  #spPassport .spp-page.spp-out-back .spp-leaf-a {
+    animation:sppPaperAwayBack .4s cubic-bezier(.44,.02,.78,.30) both; transform-origin:right center;
+  }
+  #spPassport .spp-page.spp-out-back .spp-leaf-b { animation:sppShadeFade .4s ease-in both; }
+  #spPassport .spp-page.spp-in-back .spp-leaf-b {
+    animation:sppPaperLandBack .4s cubic-bezier(.22,.68,.30,1) both; transform-origin:left center;
+  }
+  #spPassport .spp-page.spp-in-back .spp-leaf-a { animation:sppUnderReveal .4s ease-out both; }
+
+  /* 紙が受ける影。返っている紙の綴じ目側から濃くする */
+  #spPassport .spp-page.spp-out .spp-leaf-b::after,
+  #spPassport .spp-page.spp-in .spp-leaf-a::after,
+  #spPassport .spp-page.spp-out-back .spp-leaf-a::after,
+  #spPassport .spp-page.spp-in-back .spp-leaf-b::after {
+    content:''; position:absolute; inset:-4px -8px; pointer-events:none; border-radius:10px;
+  }
+  #spPassport .spp-page.spp-out .spp-leaf-b::after {
+    background:linear-gradient(90deg, rgba(0,0,0,.55), rgba(0,0,0,0) 70%);
+    animation:sppShadeOn .4s ease-in both;
+  }
+  #spPassport .spp-page.spp-in .spp-leaf-a::after {
+    background:linear-gradient(270deg, rgba(0,0,0,.55), rgba(0,0,0,0) 70%);
+    animation:sppShadeOff .4s ease-out both;
+  }
+  #spPassport .spp-page.spp-out-back .spp-leaf-a::after {
+    background:linear-gradient(270deg, rgba(0,0,0,.55), rgba(0,0,0,0) 70%);
+    animation:sppShadeOn .4s ease-in both;
+  }
+  #spPassport .spp-page.spp-in-back .spp-leaf-b::after {
+    background:linear-gradient(90deg, rgba(0,0,0,.55), rgba(0,0,0,0) 70%);
+    animation:sppShadeOff .4s ease-out both;
+  }
+  /* 綴じ目は紙といっしょに動かない。本の背だから、そこに在り続ける。 */
+  #spPassport .spp-page .spp-seam { animation:sppUnderReveal .4s ease-out both; }
 
   /* めくりの操作列。点をまん中に置き、左右のボタンを端に寄せる。
      どちらへめくれるのかが、位置だけで分かるようにする。
@@ -3480,13 +3597,31 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
   }
 }
 
+/* 画面の縦に余裕がある大きなディスプレイでは、余ったぶんを行間に配る。
+   詰めたまま上に寄せると、下半分が空いて「中身が足りない紙」に見える。
+   紙のうえで行が息をしているほうが、冊子らしく、読みやすい。
+   縦が足りない画面ではこの段が効かないので、1ページは収まったまま。 */
+@media (min-width:900px) and (min-height:860px) {
+  #spPassport .spp-page .spp-row { padding:16px 2px; }
+  #spPassport .spp-page .spp-note { line-height:2.15; margin-top:18px; }
+  #spPassport .spp-page .spp-num { padding:18px 20px; margin-bottom:22px; }
+  #spPassport .spp-page .spp-leaf-head { margin-bottom:10px; }
+  #spPassport .spp-page-title { margin-bottom:16px; }
+  #spPassport .spp-page .spp-legend { margin-top:20px; }
+  #spPassport .spp-page .spp-legend li { padding:9px 2px; }
+  #spPassport .spp-page .spp-star { padding:18px 16px; }
+}
+
 /* 下に続きがあるとき、紙の端をぼかして「まだ続く」と分かるようにする。
-   ここで切れているのか、これで終わりなのかが読めないと不安になる。 */
+   ここで切れているのか、これで終わりなのかが読めないと不安になる。
+   逆に、全部見えているときに出すと、切れていないのに切れて見える。
+   だから JS が中身の高さを測って、はみ出しているときだけ付ける。 */
 #spPassport .spp-pages::after {
   content:''; position:absolute; left:0; right:0; bottom:0; height:26px;
   background:linear-gradient(180deg, rgba(20,19,16,0), #141310);
-  pointer-events:none;
+  pointer-events:none; opacity:0; transition:opacity .2s;
 }
+#spPassport .spp-pages.spp-more::after { opacity:1; }
 
 /* 星空の見かた。何色の星が何を指すのかを、ここで短く添える。 */
 .spp-legend { margin:14px 0 0; padding:0; list-style:none; }
@@ -3498,11 +3633,18 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
 .spp-legend li:last-child { border-bottom:none; }
 .spp-legend b { flex:0 0 auto; font-weight:700; color:rgba(244,241,234,.8); }
 
-/* 動きを減らす設定にしている人には、動かさずに出す */
+/* 動きを減らす設定にしている人には、動かさずに出す。
+   JS 側も、この設定のときは待ち時間を置かずに切り替える。 */
 @media (prefers-reduced-motion:reduce) {
   #spPassport .spp-page,
+  #spPassport .spp-page::before,
   #spPassport .spp-page .spp-leaf-a,
-  #spPassport .spp-page .spp-leaf-b { animation:none !important; transform:none !important; }
+  #spPassport .spp-page .spp-leaf-b,
+  #spPassport .spp-page .spp-leaf-a::after,
+  #spPassport .spp-page .spp-leaf-b::after,
+  #spPassport .spp-page .spp-seam {
+    animation:none !important; transform:none !important; opacity:1 !important;
+  }
 }
 /* 下のめくり。左右のボタンと、いま何ページ目かの点 */
 .spp-nav {
@@ -16263,7 +16405,12 @@ function _sppRowHtml(label, html) {
   return '<div class="spp-row"><dt>' + label + '</dt><dd>' + html + '</dd></div>';
 }
 
-function closeSpPassport() { document.body.classList.remove('sp-passport-open'); }
+function closeSpPassport() {
+  document.body.classList.remove('sp-passport-open');
+  /* めくっている最中に閉じられたら、残りの手順は捨てる。
+     残しておくと、閉じたあとに中身だけ入れ替わってしまう。 */
+  if (typeof _sppCancelTurn === 'function') _sppCancelTurn();
+}
 
 /* スマホ用のメニュー。サイドバーが無い幅のときだけ、枠の中のヘッダーから開く。 */
 window.openSpMobileMenu = function (current) {
@@ -18820,6 +18967,7 @@ async function openSpPassport() {
 
   if (card) card.classList.remove('spp-lite');   /* ここから本の大きさ */
   _sppBindSwipe();
+  _sppUpdateMore();
 
   /* CHES全体の記録。いまは投票だけが本物なので、それを数える。
      クエストと知恵は、本物になった順にここへ足していく。 */
@@ -18862,8 +19010,39 @@ async function openSpPassport() {
     + _sppRow('SchoolPark｜応援ギルド', supported.length ? supported.join(' / ') : 'まだありません');
 }
 
-/* ページをめくる。中身は入れ替えず、出す／隠すだけ。
-   読み直さないので、戻ったときに記録がもう一度読み込まれることはない。 */
+/* ページをめくる。
+
+   紙は一瞬で入れ替えない。前半でいまの紙が綴じ目を軸に離れ、
+   紙が真横を向いて見えなくなった時点（0.4秒）で中身を差し替え、
+   後半で次の紙が綴じ目から降りてくる。ぜんぶで0.8秒。
+   中身の差し替えは見えない角度で起きるので、
+   「先に中身が変わってから動く」ようには見えない。
+
+   中身そのものは組み立て直さない。出す／隠すだけなので、
+   戻ったときに記録がもう一度読み込まれることはない。 */
+const SPP_TURN_MS = 800;
+const SPP_TURN_HALF = SPP_TURN_MS / 2;
+const SPP_TURN_CLASSES = ['spp-out', 'spp-out-back', 'spp-in', 'spp-in-back'];
+let _sppTurning = false;
+let _sppTurnTimers = [];
+
+/* 動きを減らす設定の人には、待たずに切り替える */
+function _sppReducedMotion() {
+  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+  catch (e) { return false; }
+}
+
+/* 中身がページに収まりきらないときだけ、下のぼかしを出す。
+   収まっているのに出すと、切れていないのに切れて見える。 */
+function _sppUpdateMore() {
+  const zone = document.querySelector('#spPassport .spp-pages');
+  if (!zone) return;
+  const page = zone.querySelector('.spp-page:not([hidden])');
+  const more = !!page && page.scrollHeight > page.clientHeight + 1;
+  zone.classList.toggle('spp-more', more);
+}
+window.addEventListener('resize', _sppUpdateMore);
+
 function spPassportGoPage(n) {
   const p1 = document.getElementById('sppPage1');
   const p2 = document.getElementById('sppPage2');
@@ -18871,28 +19050,64 @@ function spPassportGoPage(n) {
   const next = document.getElementById('sppNext');
   const dots = document.getElementById('sppDots');
   if (!p1 || !p2) return;
+  /* めくっている最中の指示は受けない。連打で二重にめくると、
+     中身と「いま何ページ目か」がずれて、直しようが無くなる。 */
+  if (_sppTurning) return;
   const toSecond = (n === 2);
   const shown = toSecond ? p2 : p1;
-  if (shown.hidden === false) return;   /* もう開いているページ。めくり直さない */
+  const going = toSecond ? p1 : p2;
+  if (shown.hidden === false) return;   /* もう開いているページ */
 
-  /* めくる向き。進む＝紙が右から返る、戻る＝左から返る。
-     display:none から戻すと、CSSのめくりがもう一度はじめから動く。 */
-  shown.classList.toggle('spp-back', !toSecond);
-  p1.hidden = toSecond;
-  p2.hidden = !toSecond;
-  if (prev) prev.hidden = !toSecond;
-  if (next) next.hidden = toSecond;
-  if (dots) {
-    const i = dots.querySelectorAll('i');
-    if (i[0]) i[0].classList.toggle('on', !toSecond);
-    if (i[1]) i[1].classList.toggle('on', toSecond);
-  }
-  /* スクロールするのはページの中。開いたページは頭から読めるようにする。 */
-  shown.scrollTop = 0;
-  const card = document.querySelector('#spPassport .spp-card');
-  if (card) card.scrollTop = 0;
+  /* 差し替えの中身。前半が終わってから実行する。 */
+  const swap = function () {
+    going.hidden = true;
+    shown.hidden = false;
+    if (prev) prev.hidden = !toSecond;
+    if (next) next.hidden = toSecond;
+    if (dots) {
+      const i = dots.querySelectorAll('i');
+      if (i[0]) i[0].classList.toggle('on', !toSecond);
+      if (i[1]) i[1].classList.toggle('on', toSecond);
+    }
+    /* スクロールするのはページの中。開いたページは頭から読めるようにする。 */
+    shown.scrollTop = 0;
+    const card = document.querySelector('#spPassport .spp-card');
+    if (card) card.scrollTop = 0;
+  };
+
+  SPP_TURN_CLASSES.forEach(function (c) { p1.classList.remove(c); p2.classList.remove(c); });
+
+  if (_sppReducedMotion()) { swap(); _sppUpdateMore(); return; }
+
+  _sppTurning = true;
+  /* 前半：いまの紙が離れていく */
+  going.classList.add(toSecond ? 'spp-out' : 'spp-out-back');
+
+  _sppTurnTimers.push(setTimeout(function () {
+    going.classList.remove('spp-out', 'spp-out-back');
+    swap();
+    /* 後半：次の紙が綴じ目から降りてくる */
+    shown.classList.add(toSecond ? 'spp-in' : 'spp-in-back');
+    _sppTurnTimers.push(setTimeout(function () {
+      shown.classList.remove('spp-in', 'spp-in-back');
+      _sppTurning = false;
+      _sppUpdateMore();
+    }, SPP_TURN_HALF));
+  }, SPP_TURN_HALF));
 }
 window.spPassportGoPage = spPassportGoPage;
+
+/* めくっている最中にパスポートを閉じられたときの後始末。
+   待ち時間だけ残ると、閉じたあとに中身が入れ替わってしまう。 */
+function _sppCancelTurn() {
+  _sppTurnTimers.forEach(clearTimeout);
+  _sppTurnTimers = [];
+  _sppTurning = false;
+  ['sppPage1', 'sppPage2'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) SPP_TURN_CLASSES.forEach(function (c) { el.classList.remove(c); });
+  });
+}
 
 /* キーボードでもめくれるように。← → でめくり、Esc で閉じる。
    パスポートを開いているあいだだけ効く。文字を打っている最中は何もしない。 */
