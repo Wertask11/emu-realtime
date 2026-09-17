@@ -3357,6 +3357,49 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
 .spp-row dt { font-size:12px; color:rgba(244,241,234,.55); }
 .spp-row dd { margin:0; font-size:13px; font-weight:600; text-align:right; word-break:break-all; }
 .spp-note { font-size:11px; line-height:1.9; color:rgba(244,241,234,.5); margin:14px 0 0; }
+/* ── パスポートのページ ──
+   1ページ目「私は誰なのか」／2ページ目「私は何をしてきたのか」。
+   本物のパスポートのように、めくって移る。中身は入れ替えず、
+   両方とも組み立てておいて hidden で切り替える（戻ったとき読み直さないため）。 */
+.spp-pages { position:relative; overflow:hidden; }
+.spp-page[hidden] { display:none !important; }
+.spp-page { animation:sppTurn .22s ease-out; }
+@keyframes sppTurn { from { opacity:0; transform:translateX(var(--from,14px)); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion:reduce) { .spp-page { animation:none; } }
+.spp-page-label { font-size:10px; letter-spacing:.2em; color:#D0E2BE; margin:0 0 4px; }
+.spp-page-title { font-size:17px; font-weight:800; margin:0 0 14px; }
+/* 下のめくり。左右のボタンと、いま何ページ目かの点 */
+.spp-nav {
+  display:flex; align-items:center; gap:12px; margin-top:18px;
+  padding-top:14px; border-top:1px solid rgba(244,241,234,.12);
+}
+.spp-nav-btn {
+  flex:1; min-width:0; border:1px solid rgba(244,241,234,.22); border-radius:10px;
+  background:none; color:#F4F1EA; font-family:inherit; font-size:12px; font-weight:700;
+  padding:11px 10px; cursor:pointer; min-height:44px;
+}
+.spp-nav-btn:hover { background:rgba(244,241,234,.1); }
+.spp-nav-btn[hidden] { display:none !important; }
+.spp-dots { display:flex; gap:6px; flex:0 0 auto; }
+.spp-dots i { width:6px; height:6px; border-radius:50%; background:rgba(244,241,234,.25); display:block; }
+.spp-dots i.on { background:#D0E2BE; }
+/* Identity の状態表示。まだ繋がっていないものを、繋がっているように見せない */
+.spp-state { font-size:11px; font-weight:700; padding:3px 9px; border-radius:99px; white-space:nowrap; }
+.spp-state.ok { background:rgba(208,226,190,.18); color:#D0E2BE; }
+.spp-state.off { background:rgba(244,241,234,.08); color:rgba(244,241,234,.5); }
+.spp-state.soon { background:rgba(212,168,67,.14); color:#D4A843; }
+/* 星空への入口 */
+.spp-star {
+  display:block; width:100%; margin-top:6px; border:1px solid rgba(208,226,190,.4);
+  border-radius:12px; background:linear-gradient(135deg,#1D1B16,#14202A); color:#F4F1EA;
+  font-family:inherit; font-size:14px; font-weight:700; padding:16px 14px; cursor:pointer;
+  text-align:left; line-height:1.6;
+}
+.spp-star:hover { border-color:#D0E2BE; }
+.spp-star small { display:block; font-size:11px; font-weight:400; color:rgba(244,241,234,.55); margin-top:4px; }
+/* パスポートから星空を開いたときだけ、SchoolPark(1500)やパスポート(1800)より手前に出す。
+   Emu の価値プロフィールから開く既存の経路（z-index:1400）は触らない。 */
+body.sp-star-open #room3Overlay { z-index:1900; }
 .spp-cta {
   display:block; width:100%; margin-top:16px; border:0; border-radius:8px;
   background:#0F5C3F; color:#F4F1EA; font-family:inherit; font-size:14px;
@@ -16075,6 +16118,14 @@ function _sppDate(ms) {
 function _sppRow(label, value) {
   return '<div class="spp-row"><dt>' + label + '</dt><dd>' + escapeHtml(String(value)) + '</dd></div>';
 }
+/* 状態の札（未接続・Coming Soon など）を出すための行。
+   _sppRow は値を escape するので、札のHTMLがそのまま文字として出てしまう。
+   こちらは escape しないので、渡してよいのは
+   「この場で組み立てた固定のHTML」だけ。人が入れた値は、
+   呼ぶ側で escapeHtml してから混ぜること。 */
+function _sppRowHtml(label, html) {
+  return '<div class="spp-row"><dt>' + label + '</dt><dd>' + html + '</dd></div>';
+}
 
 function closeSpPassport() { document.body.classList.remove('sp-passport-open'); }
 
@@ -16245,6 +16296,12 @@ async function spPassportLoad(force) {
 
     window._spPassport = {
       uid: me.uid, addr: addr, short: _spShortAddr(addr),
+      /* Identity ページで「何が本当に紐づいているか」を正直に出すために持つ。
+         addr は ches 優先の表示用なので、素のウォレットと CHES を別に置く。
+         星空は connectedAccount（＝ウォレット）で引くので、
+         同じ人を見ているかの照合にもこの2つを使う。 */
+      wallet: me.wallet || '', ches: me.ches || '',
+      aliases: me.aliases || [],
       name: name, initial: name.slice(0, 1),
       createdAt: d.createdAt || 0, provider: d.provider || '',
       tier: tier, tierLabel: tierLabel, hasPass: hasPass,
@@ -18526,8 +18583,20 @@ async function openSpPassport() {
     if (cs.exists()) camelliaId = String((cs.data() || {}).camelliaId || '');
   } catch (e) { /* 読めないときは出さないだけ。パスポートは開く */ }
 
+  /* ログインの入り方。ウォレットで入った人だけ uid が wallet: で始まる。
+     これ以外の人（LINE・Google・メール）にも内部のアドレスは在るが、
+     それは本人が持っているウォレットではなく SchoolPark が発行した番号なので、
+     「ウォレット連携済み」とは書かない。 */
+  const byWallet = String(p.uid || '').indexOf('wallet:') === 0;
+
   body.innerHTML =
-    '<div class="spp-num">'
+    '<div class="spp-pages">'
+
+    /* ───── 1ページ目：私は誰なのか ───── */
+    + '<div class="spp-page" id="sppPage1">'
+    + '<p class="spp-page-label">PAGE 1 · IDENTITY</p>'
+    + '<div class="spp-page-title">私は誰なのか</div>'
+    + '<div class="spp-num">'
     + '<div class="spp-num-label">PASSPORT NO.</div>'
     + '<div class="spp-num-val">' + escapeHtml(p.addr) + '</div>'
     + '<button type="button" class="spp-copy" id="sppCopyBtn" onclick="sppCopyAddress(\'' + escapeHtml(p.addr) + '\')">番号をコピー</button>'
@@ -18537,7 +18606,16 @@ async function openSpPassport() {
     + _sppRow('入り方', _sppProviderLabel(p.provider, p.uid))
     + _sppRow('区分', p.tierLabel + (p.hasPass ? '（公式パスあり）' : ''))
     + (camelliaId ? _sppRow('Camellia ID', camelliaId) : '')
-    + '<div id="sppRecords"><div class="spp-row"><dt>記録</dt><dd>読み込んでいます…</dd></div></div>'
+
+    /* 本人性のところ。まだ繋がっていないものを、繋がっているように見せない。
+       性別などの属性は、確かめた元が無いので推測しないし、出さない。 */
+    + '<p class="spp-page-label" style="margin:20px 0 6px">本人であること</p>'
+    + _sppRowHtml('ウォレット', byWallet
+        ? '<span class="spp-state ok">接続済み</span> ' + escapeHtml(_spShortAddr(p.wallet))
+        : '<span class="spp-state off">未接続</span>')
+    + _sppRowHtml('人間であること', '<span class="spp-state off">未連携</span>')
+    + _sppRowHtml('本人確認（KYC）', '<span class="spp-state off">未確認</span>')
+    + _sppRowHtml('World ID', '<span class="spp-state soon">Coming Soon</span>')
     + '<p class="spp-note">この番号は、あなたのログイン方法から決まります。'
     + '入り方を変えても番号は変わりません。<br>'
     + '同じ番号を2人が持つことはできません。<br>'
@@ -18545,7 +18623,32 @@ async function openSpPassport() {
     + (camelliaId
         ? '<br>Camellia ID は Camellia を使い始めたときに作られる別の番号です。'
           + 'この番号と結び付いています。'
-        : '') + '</p>';
+        : '')
+    + '<br><br>本人確認・人間であることの証明は、まだ繋がっていません。'
+    + 'ここに出るのは、実際に確かめられたことだけです。</p>'
+    + '</div>'
+
+    /* ───── 2ページ目：私は何をしてきたのか ───── */
+    + '<div class="spp-page" id="sppPage2" hidden>'
+    + '<p class="spp-page-label">PAGE 2 · JOURNEY</p>'
+    + '<div class="spp-page-title">私は何をしてきたのか</div>'
+    + '<p class="spp-note" style="margin:0 0 14px">SchoolPark で歩いてきた記録は、星空に残っています。'
+    + 'ひとつの行動が、ひとつの星になります。</p>'
+    + '<button type="button" class="spp-star" onclick="spPassportOpenStar()">'
+    + '🌌　星空を見る<small>Quest・探究・制作・貢献・実績。これまでの記録を見る</small></button>'
+    + '<div id="sppRecords"><div class="spp-row"><dt>記録</dt><dd>読み込んでいます…</dd></div></div>'
+    + '</div>'
+
+    + '</div>'
+
+    /* ───── めくり ───── */
+    + '<div class="spp-nav">'
+    + '<button type="button" class="spp-nav-btn" id="sppPrev" hidden onclick="spPassportGoPage(1)">← 私は誰なのか</button>'
+    + '<div class="spp-dots" id="sppDots"><i class="on"></i><i></i></div>'
+    + '<button type="button" class="spp-nav-btn" id="sppNext" onclick="spPassportGoPage(2)">私は何をしてきたのか →</button>'
+    + '</div>';
+
+  _sppBindSwipe();
 
   /* CHES全体の記録。いまは投票だけが本物なので、それを数える。
      クエストと知恵は、本物になった順にここへ足していく。 */
@@ -18587,6 +18690,82 @@ async function openSpPassport() {
     + _sppRow('SchoolPark｜参加ギルド', joined.length ? joined.join(' / ') : 'まだありません')
     + _sppRow('SchoolPark｜応援ギルド', supported.length ? supported.join(' / ') : 'まだありません');
 }
+
+/* ページをめくる。中身は入れ替えず、出す／隠すだけ。
+   読み直さないので、戻ったときに記録がもう一度読み込まれることはない。 */
+function spPassportGoPage(n) {
+  const p1 = document.getElementById('sppPage1');
+  const p2 = document.getElementById('sppPage2');
+  const prev = document.getElementById('sppPrev');
+  const next = document.getElementById('sppNext');
+  const dots = document.getElementById('sppDots');
+  if (!p1 || !p2) return;
+  const toSecond = (n === 2);
+  /* めくる向きに合わせて、入ってくる側を寄せる */
+  const from = toSecond ? '14px' : '-14px';
+  (toSecond ? p2 : p1).style.setProperty('--from', from);
+  p1.hidden = toSecond;
+  p2.hidden = !toSecond;
+  if (prev) prev.hidden = !toSecond;
+  if (next) next.hidden = toSecond;
+  if (dots) {
+    const i = dots.querySelectorAll('i');
+    if (i[0]) i[0].classList.toggle('on', !toSecond);
+    if (i[1]) i[1].classList.toggle('on', toSecond);
+  }
+  const card = document.querySelector('#spPassport .spp-card');
+  if (card) card.scrollTop = 0;
+}
+window.spPassportGoPage = spPassportGoPage;
+
+/* 横になぞってもめくれるようにする。スマホで一番自然な操作。
+   縦に動かしているとき（読むためのスクロール）は無視する。 */
+function _sppBindSwipe() {
+  const zone = document.querySelector('#spPassport .spp-pages');
+  if (!zone || zone._sppSwipe) return;
+  zone._sppSwipe = true;
+  let x0 = 0, y0 = 0, on = false;
+  zone.addEventListener('touchstart', function (e) {
+    const t = e.touches && e.touches[0]; if (!t) return;
+    x0 = t.clientX; y0 = t.clientY; on = true;
+  }, { passive: true });
+  zone.addEventListener('touchend', function (e) {
+    if (!on) return; on = false;
+    const t = e.changedTouches && e.changedTouches[0]; if (!t) return;
+    const dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;   /* 縦に動かしたときは何もしない */
+    spPassportGoPage(dx < 0 ? 2 : 1);
+  }, { passive: true });
+}
+
+/* 2ページ目から星空を開く。
+   星空は自分で window.connectedAccount を見て集計する作りなので、
+   ここで別のIDを渡さない。渡すと「本人の見分け方」が2通りになり、
+   食い違ったときに他人の星空が出る道ができてしまう。
+   代わりに、開く直前に「画面が持っている自分」が
+   パスポート本人の名義かどうかだけを確かめる。 */
+async function spPassportOpenStar() {
+  let p = null;
+  try { p = await spPassportLoad(); } catch (e) {}
+  if (!p) { alert('星空を見るにはログインが必要です。'); return; }
+
+  const shown = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+  const mine = (p.aliases && p.aliases.length ? p.aliases : [p.wallet, p.ches, p.addr])
+    .map(function (a) { return String(a || '').toLowerCase(); }).filter(Boolean);
+  if (!shown || mine.indexOf(shown) < 0) {
+    /* ここに来るのは、前の端末や別アカウントのアドレスが残っているとき。
+       emuMyIdentity が直すはずだが、直っていなければ星空は開かない。
+       他人の星空を出すくらいなら、出さないほうがいい。 */
+    console.warn('星空を開けません。画面のアドレスが本人と違います:', shown || '(なし)');
+    alert('ログインの状態を確かめています。\n\n一度ページを読み込み直してから、もう一度お試しください。');
+    return;
+  }
+
+  closeSpPassport();
+  document.body.classList.add('sp-star-open');   /* SchoolParkより手前に出す */
+  openRoom2();
+}
+window.spPassportOpenStar = spPassportOpenStar;
 
 /* SchoolPark の中から小部屋（エレベーターなど）を開く。
    枠の中から window.parent 経由で呼ばれる。 */
@@ -20325,6 +20504,9 @@ function closePopup() {
   document.body.classList.remove('room2-open'); // 問い合わせボタン復元
   document.body.classList.remove('emu-sky-open');
   document.body.classList.remove('room3-open');
+  /* パスポートから開いたときだけ付けている、前に出すための印を外す。
+     残すと、次にEmuから開いた星空まで手前に出てしまう。 */
+  document.body.classList.remove('sp-star-open');
 
   /* 開いたときの位置へ戻す。これをしないと、ルームの中でスクロールした結果、
      閉じたときにページの下のほう（＝メイン画面に見える場所）へ出てしまう。 */
