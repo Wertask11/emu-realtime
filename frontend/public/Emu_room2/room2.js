@@ -10,6 +10,10 @@ let stars = [];
 let links = [];
 let pendingBirth = null;
 let postCount = 0;
+/* 星の数をまだ受け取っていない（waiting）／受け取った（ready）／
+   本人が分からない・数えられなかった（unknown）。
+   0個なのか、数えられなかったのかを区別して伝えるために持つ。 */
+let starCountsState = "waiting";
 const POSTS_PER_STAR = 10;
 const discussionStreaks = {};
 
@@ -77,39 +81,32 @@ userNameDisplay.addEventListener("click", askUserName);
 /* ==========================
    Data Persistence (Storage)
 ========================== */
+/* 星は端末に残さない。
+
+   これまでは room2_stars / room2_links / room2_postCount に星を書き、
+   次に開いたときそれを読み直していた。端末に残す以上、そこには
+   「誰の星か」が無い。同じ端末を家族や友人と使うと、前の人の星空が
+   そのまま次の人に見えてしまう。
+
+   いまは親（Emu本体）が、パスポート本人の実データから星の数を数えて
+   EMU_STAR_COUNTS で送ってくる。開くたびに数え直すので、端末に
+   残しておく必要がそもそも無い。保存はやめ、古い記録は消す。 */
+const ROOM2_LEGACY_KEYS = ["room2_stars", "room2_links", "room2_postCount", "room2_history_seeded_v1"];
+
 function saveState() {
-  localStorage.setItem("room2_stars", JSON.stringify(stars));
-  localStorage.setItem("room2_links", JSON.stringify(links));
-  localStorage.setItem("room2_postCount", String(postCount));
+  /* 何もしない。星の正は親が数える実データで、ここは映すだけ。
+     呼び出し元が多いので、関数そのものは残す。 */
 }
 
 function loadState() {
-  const s = localStorage.getItem("room2_stars");
-  const l = localStorage.getItem("room2_links");
-  const pc = localStorage.getItem("room2_postCount");
-
-  if (s) {
-    try {
-      stars = JSON.parse(s);
-      const now = performance.now();
-      stars.forEach(star => {
-        star.birthAt = now - 2000;
-        star.createdAt = now - Math.random() * 5000;
-        star.vx = -0.04 - Math.random() * 0.08;
-        star.vy = (Math.random() - 0.5) * 0.015;
-      });
-    } catch (e) { stars = []; }
-  }
-  if (l) {
-    try { links = JSON.parse(l); } catch(e) { links = []; }
-  }
-  if (pc) {
-    postCount = parseInt(pc) || 0;
-  }
+  /* 前の人の星空を映さないよう、端末に残っていた星は捨てる。 */
+  try { ROOM2_LEGACY_KEYS.forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
+  stars = [];
+  links = [];
+  postCount = 0;
+  starCountsState = "waiting";
   updateStarList();
 }
-
-window.addEventListener("beforeunload", saveState);
 
 /* ==========================
    初期履歴データ注入（初回のみ）
@@ -128,7 +125,17 @@ const STAR_LOOK = {
 };
 
 function applyRealStarCounts(counts) {
-  if (!counts) return;
+  /* 受け取れなかったとき（ログインが確かめられない・通信が届かない）は、
+     数を作らない。前に映っていた星も残さない。
+     残すと、それが自分の記録だと読めてしまう。 */
+  if (!counts) {
+    stars.length = 0;
+    links.length = 0;
+    postCount = 0;
+    starCountsState = "unknown";
+    try { updateStarList(); } catch (e) {}
+    return;
+  }
   const now = performance.now();
   const w = canvas.width  || window.innerWidth;
   const h = canvas.height || window.innerHeight;
@@ -153,89 +160,24 @@ function applyRealStarCounts(counts) {
     }
   });
 
-  // 実データで並べ直したので、固定値の流し込みは二度と走らせない
-  try { localStorage.setItem('room2_history_seeded_v1', '1'); } catch (e) {}
-  try { saveState(); } catch (e) {}
+  /* ここは「足す」ではなく「置き換える」。上で stars を空にしてから
+     受け取った数だけ作り直しているので、同じ数を二度受け取っても
+     星が2倍になることはない。 */
+  starCountsState = "ready";
   try { updateStarList(); } catch (e) {}
 }
 
 function seedHistoryStars() {
-  const KEY = "room2_history_seeded_v1";
-  if (localStorage.getItem(KEY)) return; // 既に実行済み
+  /* 以前はここで星を14個つくって置いていた。
+     「投稿44件・NFT交換7回・3日連続1回・学び2回」という、
+     2026年時点の誰か一人の実績を書き写した固定値で、
+     誰がログインしても、まだ何もしていない人にも同じ14個が出ていた。
 
-  const now = performance.now();
-  const w = canvas.width  || window.innerWidth;
-  const h = canvas.height || window.innerHeight;
-
-  // ─ 投稿44件 → floor(44/10)=4 白星、postCount=4 ─
-  for (let i = 0; i < 4; i++) {
-    const star = createStar({
-      type: "post",
-      power: 10,
-      baseColor: "#ffffff",
-      baseRadius: 3,
-      x: 80 + Math.random() * (w - 160),
-      y: 80 + Math.random() * (h - 160)
-    });
-    star.birthAt    = now - 3000 - i * 1000;
-    star.createdAt  = now - 3000 - i * 1000;
-    stars.push(star);
-  }
-  postCount = 4; // 残り端数
-
-  // ─ NFT交換7回 → 青星7個 ─
-  for (let i = 0; i < 7; i++) {
-    const star = createStar({
-      type: "nft",
-      power: 50,
-      baseColor: "#4da3ff",
-      baseRadius: 7,
-      x: 80 + Math.random() * (w - 160),
-      y: 80 + Math.random() * (h - 160)
-    });
-    star.birthAt   = now - 5000 - i * 500;
-    star.createdAt = now - 5000 - i * 500;
-    stars.push(star);
-  }
-
-  // ─ 探索・交流3日連続 → 黄色星1個 ─
-  const yellowStar = createStar({
-    type: "discussion",
-    power: 20,
-    baseColor: "#ffd166",
-    baseRadius: 5,
-    x: 80 + Math.random() * (w - 160),
-    y: 80 + Math.random() * (h - 160)
-  });
-  yellowStar.birthAt   = now - 8000;
-  yellowStar.createdAt = now - 8000;
-  stars.push(yellowStar);
-
-  // ─ 探索・学びコンテンツ2回反映 → 赤星2個 ─
-  for (let i = 0; i < 2; i++) {
-    const star = createStar({
-      type: "learning",
-      power: 30,
-      baseColor: "#ff6b6b",
-      baseRadius: 5,
-      x: 80 + Math.random() * (w - 160),
-      y: 80 + Math.random() * (h - 160)
-    });
-    star.birthAt   = now - 10000 - i * 500;
-    star.createdAt = now - 10000 - i * 500;
-    stars.push(star);
-  }
-
-  // タイムライン線を繋ぐ
-  for (let i = 1; i < stars.length; i++) {
-    links.push({ from: stars[i - 1].id, to: stars[i].id, type: "timeline" });
-  }
-
-  saveState();
-  localStorage.setItem(KEY, "1");
-  updateStarList();
-  console.log("🌟 初期星データを注入しました（14個）");
+     星空は「この人が何をしてきたか」を映す場所なので、
+     やっていないことを星にしてはいけない。作るのをやめる。
+     星の数は親（Emu本体）が実データから数えて送ってくる。 */
 }
+
 
 /* ==========================
    Star & Link Logic
@@ -622,11 +564,22 @@ function updateStarList() {
   const remaining = POSTS_PER_STAR - postCount;
 
   if (stars.length === 0) {
+    /* 「まだ0個」と「数えられなかった」は別のこと。
+       数えられなかったのに0個と書くと、記録が消えたように読めてしまう。 */
+    let body;
+    if (starCountsState === "waiting") {
+      body = '<div style="font-size:11px;color:#8899bb;">記録を読み込んでいます…</div>';
+    } else if (starCountsState === "unknown") {
+      body = '<div style="font-size:11px;color:#8899bb;">記録を読み込めませんでした</div>'
+           + '<div style="font-size:10px;color:#667799;margin-top:4px;">ログインの状態と通信を確かめて、開き直してください</div>';
+    } else {
+      body = '<div style="font-size:11px;color:#8899bb;">まだ星がありません</div>'
+           + `<div style="font-size:10px;color:#667799;margin-top:4px;">投稿${remaining}回で最初の星が生まれる</div>`;
+    }
     starInfoUI.innerHTML = `
       <div style="text-align:left;font-family:sans-serif;">
         <strong style="color:#c8d8ff;display:block;margin-bottom:6px;font-size:12px;">🌌 あなたの星座</strong>
-        <div style="font-size:11px;color:#8899bb;">まだ星がありません</div>
-        <div style="font-size:10px;color:#667799;margin-top:4px;">投稿${remaining}回で最初の星が生まれる</div>
+        ${body}
       </div>`;
     return;
   }
@@ -639,8 +592,8 @@ function updateStarList() {
   let html = `<div style="text-align:left;font-family:sans-serif;font-size:12px;">`;
   html += `<strong style="color:#c8d8ff;border-bottom:1px solid rgba(140,170,255,0.25);display:block;margin-bottom:5px;padding-bottom:3px;font-size:12px;">🌌 あなたの星座記録</strong>`;
   /* 新Emuの行動に合わせた呼び名。
-     post→知識星（誰かの役に立った）／nft→体験星（体験チケットと交換した）
-     discussion→議論星（続けて語った）／learning→学び星（受け取った学び）
+     post→知識星（誰かの役に立った）／nft→体験星（いま持っている体験チケット）
+     discussion→議論星（議論の結論を残した日数）／learning→学び星（受け取った学び）
      change→改善星（誰かの知識を良くした） */
   if (counts.post)       html += `<div style="color:#e8eeff;">⚪ 知識星 <span style="float:right;color:#aabbdd;">${counts.post}</span></div>`;
   if (counts.nft)        html += `<div style="color:#e8eeff;">🔵 体験星 <span style="float:right;color:#4da3ff;">${counts.nft}</span></div>`;

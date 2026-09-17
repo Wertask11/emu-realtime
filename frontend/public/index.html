@@ -19221,12 +19221,11 @@ function _emuExchangeBuyBtn(tokenId, useJpyc, label, primary) {
       await tx.wait();
       const el = document.getElementById('exch-nft-' + tokenId);
       if (el) el.remove();
-      /* 体験星の数。星空はこの数を読んで星を出しているが、
-         これまでどこでも増やしておらず、交換しても永久に0のままだった。 */
-      try {
-        const n = Number(localStorage.getItem('emu_exchange_count') || 0) + 1;
-        localStorage.setItem('emu_exchange_count', String(n));
-      } catch (e) {}
+      /* 体験星の数はここでは持たない。
+         端末に数えていた頃は、同じ端末を2人で使うと混ざり、機種を変えると
+         消えていた。いまは星空を開くたびに、いま持っている体験チケットの
+         数をコントラクト（emuNFT）から数え直している。
+         買えばその場で星が1つ増える演出は、下の NFT_PURCHASE で出す。 */
       const room2Frame = document.getElementById('room2Frame');
       if (room2Frame && room2Frame.contentWindow) {
         room2Frame.contentWindow.postMessage({ type: 'NFT_PURCHASE' }, '*');
@@ -20378,10 +20377,92 @@ let room2PendingStreak = null; // { level, projectId }
 /* 星空に出す数を、価値プロフィールと同じ元データから数える。
    固定値をやめ、その人の実際の行動を映す。
    ・知識星  … 誰かの役に立った回数 ÷ 10（10回でひとつ）
-   ・体験星  … 体験チケット（NFT）と交換した回数
-   ・議論星  … 議論を続けて語った日数
+   ・体験星  … いま持っている体験チケット（NFT）の数
+   ・議論星  … 議論の結論を残した日数
    ・学び星  … 受け取った学び（Goodを押した知識）の数
    ・改善星  … 自分の改善が採用された数 */
+/* 星の数をどこから数えるか。
+
+   これまでは、5つのうち3つ（知識星・学び星・改善星）だけが Firestore の
+   実データで、残る2つ（体験星・議論星）は端末の localStorage だった。
+   端末に置く以上、そこには「誰の記録か」が無い。同じ端末を2人で使えば
+   混ざるし、機種を変えれば消える。パスポートの本人に紐づいていなかった。
+
+   いまは5つとも、本人に紐づいた残っている記録から数え直す。
+     知識星 … posts の good 合計 ÷10          （Firestore）
+     学び星 … 自分が Good を押した posts       （Firestore）
+     改善星 … 採用された post_changes          （Firestore）
+     議論星 … 自分が結論を残した日数           （Firestore / discussion_conclusions）
+     体験星 … いま持っている体験チケットの数    （Polygon / emuNFT の ERC-721）
+
+   「誰か」は画面に出ているアドレスではなく、パスポート本人から取る。
+   本人はウォレット名義とCHES名義の2つを持つことがあるので、両方を自分として
+   数える。こうすると、ウォレットで入っても LINE で入っても、同じ本人なら
+   同じ星空になる。ログインの方法は鍵にしない。
+
+   数え直しなので、開くたびに同じ答えになる。足し算ではないから、
+   何度開いても星が2倍3倍になることはない。 */
+
+const EMU_STAR_CACHE_KEY = 'emu_star_cache_v2';
+
+/* 前に数えた結果。本人が同じときだけ使う。
+   これは「正」ではなく、数え直しが届くまでのあいだ映しておくための控え。 */
+function _emuStarCacheRead(uid) {
+  if (!uid) return null;
+  try {
+    const raw = JSON.parse(localStorage.getItem(EMU_STAR_CACHE_KEY) || 'null');
+    if (!raw || raw.uid !== uid || !raw.counts) return null;
+    return raw.counts;
+  } catch (e) { return null; }
+}
+function _emuStarCacheWrite(uid, counts) {
+  if (!uid || !counts) return;
+  try {
+    localStorage.setItem(EMU_STAR_CACHE_KEY, JSON.stringify({ uid: uid, counts: counts, at: Date.now() }));
+  } catch (e) {}
+}
+
+/* 日本時間の「その日」。議論星は日数で数えるので、境目をそろえる。 */
+function _emuJstDateStr(ms) {
+  const d = new Date(Number(ms || 0) + 9 * 60 * 60 * 1000);
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0')
+    + '-' + String(d.getUTCDate()).padStart(2, '0');
+}
+
+/* getDocs は通信が届かなくても例外を投げない。控えから答えて空で返ってくる。
+   そのまま0として扱うと「記録が消えた」ように見えるので、
+   控えから来たものは「数えられなかった」として扱う。 */
+function _emuStarSnapUsable(snap) {
+  try { return !(snap.metadata && snap.metadata.fromCache); } catch (e) { return true; }
+}
+
+/* いま持っている体験チケット（NFT）の数。
+   取引所の NFT は EMUER コントラクトが握る ERC-721（emuNFT）。
+   購入の記録をどこにも残していないので、持ち主そのものを数える。
+   売ったり移したりすれば減る ―― それが「いま持っている数」。 */
+async function _emuOwnedNftCount(addrs) {
+  if (typeof ethers === 'undefined') return null;
+  const ro = (typeof _emuReadOnlyEmuerContract === 'function') ? _emuReadOnlyEmuerContract() : null;
+  if (!ro) return null;
+  let nftAddr = '';
+  try { nftAddr = await ro.emuNFT(); } catch (e) { return null; }
+  if (!nftAddr || /^0x0{40}$/i.test(nftAddr)) return null;
+  let nft;
+  try {
+    nft = new ethers.Contract(nftAddr, ['function balanceOf(address owner) view returns (uint256)'], ro.provider);
+  } catch (e) { return null; }
+  let total = 0;
+  let readAny = false;
+  for (const a of addrs) {
+    try {
+      const b = await nft.balanceOf(a);
+      total += Number(b.toString());
+      readAny = true;
+    } catch (e) { /* この名義は読めなかった。ほかを試す。 */ }
+  }
+  return readAny ? total : null;
+}
+
 async function _emuSendStarCounts(frame) {
   const send = function (counts) {
     try {
@@ -20390,49 +20471,114 @@ async function _emuSendStarCounts(frame) {
       }
     } catch (e) {}
   };
-  const address = (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
-  if (!address || !window.db || !window.fbLib) { send(null); return; }
+
+  /* 誰の星空か。画面に出ているアドレスではなく、パスポート本人から決める。
+     （window.connectedAccount は前の端末の値が残っていることがある） */
+  let p = null;
+  try { p = await spPassportLoad(); } catch (e) {}
+  if (!p || !window.db || !window.fbLib) { send(null); return; }
+
+  const aliases = [];
+  (p.aliases && p.aliases.length ? p.aliases : [p.wallet, p.ches, p.addr]).forEach(function (a) {
+    const v = String(a || '').toLowerCase();
+    if (v && aliases.indexOf(v) < 0) aliases.push(v);
+  });
+  if (!aliases.length) { send(null); return; }
+
+  // 数え直しが届くまでのあいだ、前の答えを映しておく（同じ本人のときだけ）
+  const cached = _emuStarCacheRead(p.uid);
+  if (cached) send(cached);
 
   const counts = { post: 0, nft: 0, discussion: 0, learning: 0, change: 0 };
+  const read = { post: false, nft: false, discussion: false, learning: false, change: false };
+  const fb = window.fbLib;
+
   try {
     // 自分の投稿が受け取った Good の合計（＝誰かの役に立った回数）
-    const mine = await window.fbLib.getDocs(window.fbLib.query(
-      window.fbLib.collection(window.db, 'posts'),
-      window.fbLib.where('address', '==', address),
-      window.fbLib.limit(200)));
-    let helpful = 0;
-    mine.forEach(function (d) { helpful += Number(d.data().good || 0); });
-    counts.post = Math.floor(helpful / 10);
+    const mine = await fb.getDocs(fb.query(
+      fb.collection(window.db, 'posts'),
+      fb.where('address', 'in', aliases),
+      fb.limit(200)));
+    if (_emuStarSnapUsable(mine)) {
+      let helpful = 0;
+      mine.forEach(function (d) { helpful += Number(d.data().good || 0); });
+      counts.post = Math.floor(helpful / 10);
+      read.post = true;
+    }
+  } catch (e) { console.warn('知識星を数えられませんでした:', e && e.message); }
 
+  try {
     // 受け取った学び（自分が Good を押した知識）
-    const learned = await window.fbLib.getDocs(window.fbLib.query(
-      window.fbLib.collection(window.db, 'posts'),
-      window.fbLib.where('goodUsers', 'array-contains', address),
-      window.fbLib.limit(200)));
-    counts.learning = learned.size;
+    const learned = await fb.getDocs(fb.query(
+      fb.collection(window.db, 'posts'),
+      fb.where('goodUsers', 'array-contains-any', aliases),
+      fb.limit(200)));
+    if (_emuStarSnapUsable(learned)) {
+      counts.learning = learned.size;
+      read.learning = true;
+    }
+  } catch (e) { console.warn('学び星を数えられませんでした:', e && e.message); }
 
+  try {
     // 自分が出した改善のうち、採用されたもの
-    const changes = await window.fbLib.getDocs(window.fbLib.query(
-      window.fbLib.collection(window.db, 'post_changes'),
-      window.fbLib.where('fromAddress', '==', address),
-      window.fbLib.limit(200)));
-    changes.forEach(function (d) { if (d.data().status === 'accepted') counts.change += 1; });
-  } catch (e) {
-    console.warn('星の数の集計に失敗:', e && e.message);
-  }
+    const changes = await fb.getDocs(fb.query(
+      fb.collection(window.db, 'post_changes'),
+      fb.where('fromAddress', 'in', aliases),
+      fb.limit(200)));
+    if (_emuStarSnapUsable(changes)) {
+      let n = 0;
+      changes.forEach(function (d) { if ((d.data() || {}).status === 'accepted') n += 1; });
+      counts.change = n;
+      read.change = true;
+    }
+  } catch (e) { console.warn('改善星を数えられませんでした:', e && e.message); }
 
-  // 議論を続けて語った日数（端末に残している記録）
   try {
-    const st = JSON.parse(localStorage.getItem('room3_discussion') || '{}');
-    counts.discussion = Number(st.streak || 0);
-  } catch (e) {}
+    /* 議論星 ── 自分が「みんなの結論」を残した日数（日本時間）。
 
-  /* 体験星。交換した回数の記録はまだ持っていないため、
-     交換のたびに増やしている端末側の数を使う。
-     記録をサーバーに残すようにしたら、ここを差し替える。 */
+       議論そのものの発言はどこにも残っていない。部屋（discussion_rooms）は
+       その日限りで翌日に消え、発言は socket を流れるだけで保存されない。
+       残っているのは、結論として置かれたものだけ。
+       だからここは「議論した日数」ではなく「結論を残した日数」を数える。
+       少なめには出るが、やっていないことを星にはしない。
+
+       参加者(participants)の欄は本人以外でも書けるため、数には使わない。
+       他人が自分の名前を並べるだけで星が増えてしまうため。 */
+    const talks = await fb.getDocs(fb.query(
+      fb.collection(window.db, 'discussion_conclusions'),
+      fb.where('author', 'in', aliases),
+      fb.limit(200)));
+    if (_emuStarSnapUsable(talks)) {
+      const days = {};
+      talks.forEach(function (d) {
+        const v = d.data() || {};
+        const t = v.createdAt && v.createdAt.toDate ? v.createdAt.toDate().getTime() : 0;
+        if (t) days[_emuJstDateStr(t)] = 1;
+      });
+      counts.discussion = Object.keys(days).length;
+      read.discussion = true;
+    }
+  } catch (e) { console.warn('議論星を数えられませんでした:', e && e.message); }
+
   try {
-    counts.nft = Number(localStorage.getItem('emu_exchange_count') || 0);
-  } catch (e) {}
+    const owned = await _emuOwnedNftCount(aliases);
+    if (owned !== null) { counts.nft = owned; read.nft = true; }
+  } catch (e) { console.warn('体験星を数えられませんでした:', e && e.message); }
+
+  /* 読めなかった分は0にしない。前の答えがあればそれを置く。
+     0と書くと「記録が消えた」ように見えるため。 */
+  let anyRead = false;
+  Object.keys(read).forEach(function (k) {
+    if (read[k]) { anyRead = true; return; }
+    if (cached && typeof cached[k] === 'number') counts[k] = cached[k];
+  });
+  if (!anyRead && !cached) { send(null); return; }
+
+  /* 控えを新しくするのは、全部ちゃんと読めたときだけ。
+     一部しか読めなかった答えを控えにすると、次に開いたとき
+     その欠けた数が「前の答え」として残ってしまう。 */
+  const allRead = Object.keys(read).every(function (k) { return read[k]; });
+  if (allRead) _emuStarCacheWrite(p.uid, counts);
 
   send(counts);
 }
