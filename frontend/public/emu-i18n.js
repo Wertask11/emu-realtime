@@ -38,7 +38,6 @@
       "tab.ichinichi": "一日シェア",
       "tab.feed": "知識を読む",
       "tab.requests": "知識を探す",
-      "tab.profile": "価値プロフィール",
       "tab.discussion": "議論",
 
       "today.greeting": "こんにちは。今日は、どこから始める？",
@@ -223,7 +222,6 @@
       "tab.ichinichi": "Share a Day",
       "tab.feed": "Read knowledge",
       "tab.requests": "Find knowledge",
-      "tab.profile": "Value profile",
       "tab.discussion": "Discussion",
 
       "today.greeting": "Hello. Where would you like to start today?",
@@ -408,7 +406,6 @@
       "tab.ichinichi": "分享一天",
       "tab.feed": "阅读知识",
       "tab.requests": "寻找知识",
-      "tab.profile": "价值档案",
       "tab.discussion": "讨论",
 
       "today.greeting": "你好。今天想从哪里开始？",
@@ -593,7 +590,6 @@
       "tab.ichinichi": "하루 공유",
       "tab.feed": "지식 읽기",
       "tab.requests": "지식 찾기",
-      "tab.profile": "가치 프로필",
       "tab.discussion": "토론",
 
       "today.greeting": "안녕하세요. 오늘은 어디부터 시작할까요?",
