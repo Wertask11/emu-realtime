@@ -2926,6 +2926,26 @@ body.paypay-mode #pp-post-fab {
 /* 会員種別の表示と、有料会員への導線 */
 .emu-membership { display:grid; gap:10px; }
 .emu-membership-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+/* 価値プロフィールを、パスポートから開いたときの戻り口。
+   星空の「✕ 星空を閉じる」と同じ位置（画面の右上）に置いて、
+   どちらから開いても閉じ方が同じになるようにする。 */
+.emu-value-back {
+  /* 画面に貼り付けず、この画面の中の右上に置く。
+     貼り付けると、Emuのヘッダー右上（ウォレットのボタン・言語の選択）に
+     かぶって、下のボタンが押せなくなる。 */
+  grid-column:1 / -1; justify-self:end; margin-bottom:2px;
+  display:inline-flex; align-items:center; gap:6px;
+  min-height:40px; padding:0 16px; border-radius:999px;
+  border:1px solid #e6e2dc; background:#fff; color:#4a4468;
+  font-family:'Noto Sans JP',sans-serif; font-size:13px; font-weight:700;
+  line-height:1; cursor:pointer; box-shadow:0 6px 18px -8px rgba(26,24,64,.4);
+}
+.emu-value-back:hover { color:#1a1840; border-color:#cfc9c0; }
+.emu-value-back[hidden] { display:none !important; }
+@media (max-width:600px) {
+  .emu-value-back { padding:0 13px; font-size:12px; min-height:38px; }
+}
+
 /* 価値プロフィールの見出しの行 */
 .eth-profile-head {
   display:flex; align-items:center; justify-content:space-between;
@@ -5099,6 +5119,10 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </div>
 
   <section class="eth-profile" id="emuValueProfile">
+    <!-- パスポートの PAGE 3 から開いたときだけ出す。もと居たページへ戻すための口。
+         Emu のタブから開いたときは戻り先が無いので出さない。 -->
+    <button type="button" class="emu-value-back" id="emuValueBackBtn" hidden
+            onclick="spPassportBackFromValue()" aria-label="パスポートに戻る">✕ パスポートに戻る</button>
     <aside class="eth-card eth-profile-summary">
       <!-- 星空への入口は、SchoolPark パスポートの PAGE 2（私は何をしてきたのか）に
            まとめた。ここに同じ入口を重ねると、入口が2つに割れる。
@@ -15089,11 +15113,19 @@ function showEmuFeed(mode) {
   setTimeout(emuFitKnowledgeFrame, 300);
 }
 
-function showEmuValueProfile() {
+/* fromPassport: パスポートの PAGE 3 から開いたときだけ true。
+   そのときだけ「✕ パスポートに戻る」を出す。
+   Emu のタブから開いたときは戻り先が無いので出さない。 */
+function showEmuValueProfile(fromPassport) {
   _emuEnsureAppVisible();
   document.body.classList.remove('emu-today-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open','emu-discussion-open');
   document.body.classList.add('emu-profile-open');
   _setEmuHomeTab('emuProfileTab');
+  const back = document.getElementById('emuValueBackBtn');
+  if (back) back.hidden = !fromPassport;
+  /* タブから開き直したときは、前に覚えた戻り先を捨てる。
+     残すと、押していない戻り口の行き先だけが生き続ける。 */
+  if (!fromPassport) { _sppValueReturn = 0; _sppReturnDao = false; }
   loadEmuValueProfile();
   window.scrollTo({ top:0, behavior:'smooth' });
 }
@@ -18921,6 +18953,39 @@ function _sppCurrentPage() {
   for (let i = 0; i < els.length; i++) if (els[i] && els[i].hidden === false) return i + 1;
   return 1;
 }
+/* 星空・価値プロフィールへ出ていったとき、どのページから出たかを覚えておく。
+   戻ってきたときに1ページ目へ戻してしまうと、開き直すたびに
+   「私は誰なのか」から読み直すことになる。
+
+   星空ぶんと価値プロフィールぶんは別に持つ。1つにまとめると、
+   価値プロフィールを開いたまま別の画面へ行って、そのあと Emu から
+   星空を開いて閉じたときに、覚えたままの控えでパスポートが開いてしまう。 */
+let _sppStarReturn = 0;      /* 星空から戻るページ（0 = 戻らない） */
+let _sppValueReturn = 0;     /* 価値プロフィールから戻るページ */
+let _sppReturnDao = false;   /* 出ていったとき SchoolPark を見ていたか */
+
+/* 控えたページで開き直す。組み立て直さないので、読み込んだ記録もそのまま。
+   めくりの動きは出さない（行って戻るだけで紙が返るのは、うるさい）。 */
+function spPassportReopen(n) {
+  if (!n) return false;
+  const els = _sppPageEls();
+  /* 何かの拍子に中身が無いときは、ふつうに開き直す（1ページ目から） */
+  if (els.some(function (e) { return !e; })) {
+    if (typeof openSpPassport === 'function') openSpPassport();
+    return true;
+  }
+  _sppCancelTurn();
+  els.forEach(function (e, i) { e.hidden = (i !== n - 1); });
+  _sppSyncNav(n);
+  const card = document.querySelector('#spPassport .spp-card');
+  if (card) { card.classList.remove('spp-lite'); card.scrollTop = 0; }
+  els[n - 1].scrollTop = 0;
+  document.body.classList.add('sp-passport-open');
+  _sppUpdateMore();
+  return true;
+}
+window.spPassportReopen = spPassportReopen;
+
 /* いま何ページ目か、どちらへ行けるかを、ボタンと点に映す */
 function _sppSyncNav(n) {
   const prev = document.getElementById('sppPrev');
@@ -19060,6 +19125,7 @@ async function spPassportOpenStar() {
     return;
   }
 
+  _sppStarReturn = _sppCurrentPage();            /* 「✕ 星空を閉じる」で戻る先 */
   closeSpPassport();
   document.body.classList.add('sp-star-open');   /* SchoolParkより手前に出す */
   openRoom2();
@@ -19089,10 +19155,29 @@ async function spPassportOpenValue() {
     return;
   }
 
+  _sppValueReturn = _sppCurrentPage();           /* 「✕ パスポートに戻る」で戻る先 */
+  _sppReturnDao = document.body.classList.contains('sp-dao-open');
   closeSpPassport();
-  if (typeof showEmuValueProfile === 'function') showEmuValueProfile();
+  if (typeof showEmuValueProfile === 'function') showEmuValueProfile(true);
 }
 window.spPassportOpenValue = spPassportOpenValue;
+
+/* 価値プロフィールから、出てきたページへ戻る。
+
+   出ていくとき showEmuValueProfile() が SchoolPark を閉じている
+   （_emuEnsureAppVisible が sp-dao-open を外す）。SchoolPark から来たなら、
+   そこへ戻してからパスポートを出す。Emu から来たならそのまま。
+   パスポートは組み立て直さない。開いていたページのまま戻る。 */
+function spPassportBackFromValue() {
+  const back = document.getElementById('emuValueBackBtn');
+  if (back) back.hidden = true;
+  const n = _sppValueReturn;
+  _sppValueReturn = 0;
+  if (_sppReturnDao && typeof openSpDao === 'function') openSpDao();
+  _sppReturnDao = false;
+  spPassportReopen(n);
+}
+window.spPassportBackFromValue = spPassportBackFromValue;
 
 /* SchoolPark の中から小部屋（エレベーターなど）を開く。
    枠の中から window.parent 経由で呼ばれる。 */
@@ -21018,6 +21103,15 @@ function closePopup() {
   const topicEl = document.getElementById('topic');
   if (topicEl) topicEl.textContent = room3DailyTopic || '';
   if (typeof setRoom3ContributionMode === 'function') setRoom3ContributionMode('opinion');
+
+  /* パスポートから星空を開いていたなら、出てきたページへ戻す。
+     閉じるボタンは足さない。いまある「✕ 星空を閉じる」の行き先を変えるだけ。
+     パスポート以外から開いたときは控えが無いので、これまでどおり何もしない。 */
+  if (typeof spPassportReopen === 'function' && _sppStarReturn) {
+    const n = _sppStarReturn;
+    _sppStarReturn = 0;
+    spPassportReopen(n);
+  }
 }
 
 function handleDiscussion() {
