@@ -3363,11 +3363,147 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
    両方とも組み立てておいて hidden で切り替える（戻ったとき読み直さないため）。 */
 .spp-pages { position:relative; overflow:hidden; }
 .spp-page[hidden] { display:none !important; }
-.spp-page { animation:sppTurn .22s ease-out; }
-@keyframes sppTurn { from { opacity:0; transform:translateX(var(--from,14px)); } to { opacity:1; transform:none; } }
-@media (prefers-reduced-motion:reduce) { .spp-page { animation:none; } }
 .spp-page-label { font-size:10px; letter-spacing:.2em; color:#D0E2BE; margin:0 0 4px; }
 .spp-page-title { font-size:17px; font-weight:800; margin:0 0 14px; }
+
+/* ══ パスポートを「1冊の本」にする ══
+
+   これまで札には高さが無く、中身の長さでふくらんでいた。
+   1ページ目は行が多く、2ページ目は少ないので、めくるたびに札の高さが
+   変わり、画面のまん中で位置が飛んでいた。「別々の札が2枚ある」ように
+   見えていたのは、これが理由。
+
+   ここで札の大きさを先に決めてしまい、中身のほうをスクロールさせる。
+   外枠が動かないので、めくっても同じ1冊の中に居られる。
+   ここから下は #spPassport だけに効く。議題・クエスト・知恵・報告・
+   スマホメニューは .spp-card を共有しているが、そちらは変えない。 */
+#spPassport .spp-card {
+  width:min(440px, calc(100vw - 28px));
+  height:min(660px, calc(100vh - 36px));
+  max-height:calc(100vh - 36px);
+  overflow:hidden;                       /* スクロールするのはページの中だけ */
+  display:flex; flex-direction:column;
+  padding:22px 20px 16px;
+  /* 表紙の質感。紙の縁をうっすら光らせる程度にとどめる */
+  border:1px solid rgba(244,241,234,.08);
+}
+/* ログイン前など、中身がひと言だけのときは、無理に本の大きさにしない */
+#spPassport .spp-card.spp-lite { height:auto; display:block; overflow-y:auto; }
+
+#spPassport .spp-head { flex:0 0 auto; margin-bottom:14px; }
+#spPassport #sppBody { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+
+/* ページの束。めくりはこの中だけで起きる */
+#spPassport .spp-pages {
+  position:relative; flex:1 1 auto; min-height:0;
+  perspective:1600px;                    /* 倒れる向きが分かる程度の奥行き */
+}
+#spPassport .spp-page {
+  position:absolute; inset:0; overflow-y:auto; overscroll-behavior:contain;
+  padding-right:6px;                     /* 文字がスクロールバーに触れないように */
+  transform-style:preserve-3d;
+}
+#spPassport .spp-nav { flex:0 0 auto; margin-top:12px; }
+/* スマホでは点を必ず左に置く。そのままだと、出ているボタンが
+   「進む」か「戻る」かで点が左右に飛んで、いま何ページ目かを
+   目で追えなくなる。ボタンは今までどおり幅いっぱいで押しやすいまま。 */
+#spPassport .spp-dots { order:-1; }
+
+/* ── 見開き ──
+   スマホは1枚（そのまま縦に読む）。パソコンでは左右2枚にして、
+   まん中に綴じ目を置く。2ページ目にも右側に置く中身があるので、
+   1ページ目とページの形が揃う。 */
+.spp-spread { display:block; }
+.spp-seam { display:none; }
+.spp-leaf-b { margin-top:20px; }
+.spp-leaf-head {
+  font-size:10px; letter-spacing:.2em; color:rgba(244,241,234,.45);
+  margin:0 0 6px; text-transform:uppercase;
+}
+
+/* ── めくる ──
+   紙の端を綴じ目で留めて、そこを軸に倒す。
+   スマホは1枚なので、左の綴じ目を軸にページごと倒す。
+   0.34秒。長いと操作の邪魔になるだけで、本らしくはならない。 */
+@keyframes sppTurnFwd  { from { opacity:0; transform:rotateY(34deg); } to { opacity:1; transform:none; } }
+@keyframes sppTurnBack { from { opacity:0; transform:rotateY(-34deg); } to { opacity:1; transform:none; } }
+@keyframes sppLeafIn   { from { opacity:0; } to { opacity:1; } }
+#spPassport .spp-page { animation:sppTurnFwd .34s cubic-bezier(.22,.72,.26,1); transform-origin:left center; }
+#spPassport .spp-page.spp-back { animation-name:sppTurnBack; transform-origin:right center; }
+
+@media (min-width:900px) {
+  /* 机の上で開いたパスポート。縦に長い1枚ではなく、横長の冊子にする。 */
+  #spPassport .spp-card {
+    width:min(920px, calc(100vw - 72px));
+    height:min(596px, calc(100vh - 56px));
+    max-height:calc(100vh - 56px);
+    padding:28px 32px 20px;
+  }
+  #spPassport .spp-head { margin-bottom:18px; }
+  #spPassport .spp-page { padding-right:10px; }
+  .spp-spread {
+    display:grid; grid-template-columns:1fr 1px 1fr; gap:0 30px; align-items:start;
+  }
+  .spp-leaf { min-width:0; }
+  .spp-leaf-b { margin-top:0; }
+  /* 綴じ目。上下は紙に溶けるように薄くする */
+  .spp-seam {
+    display:block; align-self:stretch; min-height:100%;
+    background:linear-gradient(180deg,
+      transparent, rgba(244,241,234,.16) 14%,
+      rgba(244,241,234,.16) 86%, transparent);
+  }
+  /* パソコンでは、綴じ目を軸に右の紙が返る。左の紙はそこに残って現れる。
+     ページ全体を倒すより、はるかに「めくった」に近い。 */
+  #spPassport .spp-page { animation:none; transform:none; }
+  #spPassport .spp-page .spp-leaf-a { animation:sppLeafIn .34s ease-out; }
+  #spPassport .spp-page .spp-leaf-b {
+    animation:sppTurnFwd .38s cubic-bezier(.26,.74,.28,1); transform-origin:left center;
+  }
+  #spPassport .spp-page.spp-back .spp-leaf-a {
+    animation:sppTurnBack .38s cubic-bezier(.26,.74,.28,1); transform-origin:right center;
+  }
+  #spPassport .spp-page.spp-back .spp-leaf-b { animation:sppLeafIn .34s ease-out; }
+
+  /* めくりの操作列。点をまん中に置き、左右のボタンを端に寄せる。
+     どちらへめくれるのかが、位置だけで分かるようにする。
+     出ていないほうのボタンは、場所だけ残して隠す（点がずれないように）。 */
+  #spPassport .spp-nav {
+    display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:16px;
+  }
+  #spPassport .spp-dots { order:0; }            /* パソコンでは点はまん中 */
+  #spPassport .spp-nav-btn { max-width:280px; justify-self:stretch; }
+  #spPassport .spp-nav-btn#sppPrev { justify-self:start; }
+  #spPassport .spp-nav-btn#sppNext { justify-self:end; }
+  #spPassport .spp-nav-btn[hidden] {
+    display:block !important; visibility:hidden; pointer-events:none;
+  }
+}
+
+/* 下に続きがあるとき、紙の端をぼかして「まだ続く」と分かるようにする。
+   ここで切れているのか、これで終わりなのかが読めないと不安になる。 */
+#spPassport .spp-pages::after {
+  content:''; position:absolute; left:0; right:0; bottom:0; height:26px;
+  background:linear-gradient(180deg, rgba(20,19,16,0), #141310);
+  pointer-events:none;
+}
+
+/* 星空の見かた。何色の星が何を指すのかを、ここで短く添える。 */
+.spp-legend { margin:14px 0 0; padding:0; list-style:none; }
+.spp-legend li {
+  display:flex; align-items:baseline; gap:8px;
+  font-size:11px; line-height:1.9; color:rgba(244,241,234,.55);
+  padding:4px 2px; border-bottom:1px solid rgba(244,241,234,.07);
+}
+.spp-legend li:last-child { border-bottom:none; }
+.spp-legend b { flex:0 0 auto; font-weight:700; color:rgba(244,241,234,.8); }
+
+/* 動きを減らす設定にしている人には、動かさずに出す */
+@media (prefers-reduced-motion:reduce) {
+  #spPassport .spp-page,
+  #spPassport .spp-page .spp-leaf-a,
+  #spPassport .spp-page .spp-leaf-b { animation:none !important; transform:none !important; }
+}
 /* 下のめくり。左右のボタンと、いま何ページ目かの点 */
 .spp-nav {
   display:flex; align-items:center; gap:12px; margin-top:18px;
@@ -18562,7 +18698,10 @@ window.sppCopyAddress = function (addr) {
 async function openSpPassport() {
   const body = document.getElementById('sppBody');
   if (!body) return;
+  const card = document.querySelector('#spPassport .spp-card');
   document.body.classList.add('sp-passport-open');
+  /* 中身が決まるまでは、本の大きさにしない（空の大箱を見せないため） */
+  if (card) card.classList.add('spp-lite');
   body.innerHTML = '<p class="spp-note">読み込んでいます…</p>';
 
   const p = await spPassportLoad(true);
@@ -18592,10 +18731,16 @@ async function openSpPassport() {
   body.innerHTML =
     '<div class="spp-pages">'
 
-    /* ───── 1ページ目：私は誰なのか ───── */
+    /* ───── 1ページ目：私は誰なのか ─────
+       パソコンでは左右2枚の見開きになる（.spp-spread）。
+       左の紙に「あなたの番号と届け出」、右の紙に「本人であること」。
+       スマホでは上下に続く1枚として、今までどおり縦に読める。 */
     + '<div class="spp-page" id="sppPage1">'
     + '<p class="spp-page-label">PAGE 1 · IDENTITY</p>'
     + '<div class="spp-page-title">私は誰なのか</div>'
+    + '<div class="spp-spread">'
+    + '<div class="spp-leaf spp-leaf-a">'
+    + '<p class="spp-leaf-head">Holder</p>'
     + '<div class="spp-num">'
     + '<div class="spp-num-label">PASSPORT NO.</div>'
     + '<div class="spp-num-val">' + escapeHtml(p.addr) + '</div>'
@@ -18606,10 +18751,15 @@ async function openSpPassport() {
     + _sppRow('入り方', _sppProviderLabel(p.provider, p.uid))
     + _sppRow('区分', p.tierLabel + (p.hasPass ? '（公式パスあり）' : ''))
     + (camelliaId ? _sppRow('Camellia ID', camelliaId) : '')
+    + '</div>'
+
+    + '<div class="spp-seam"></div>'
 
     /* 本人性のところ。まだ繋がっていないものを、繋がっているように見せない。
        性別などの属性は、確かめた元が無いので推測しないし、出さない。 */
-    + '<p class="spp-page-label" style="margin:20px 0 6px">本人であること</p>'
+    + '<div class="spp-leaf spp-leaf-b">'
+    + '<p class="spp-leaf-head">Verification</p>'
+    + '<div class="spp-page-title" style="font-size:14px;margin:0 0 8px">本人であること</div>'
     + _sppRowHtml('ウォレット', byWallet
         ? '<span class="spp-state ok">接続済み</span> ' + escapeHtml(_spShortAddr(p.wallet))
         : '<span class="spp-state off">未接続</span>')
@@ -18627,16 +18777,36 @@ async function openSpPassport() {
     + '<br><br>本人確認・人間であることの証明は、まだ繋がっていません。'
     + 'ここに出るのは、実際に確かめられたことだけです。</p>'
     + '</div>'
+    + '</div>'
+    + '</div>'
 
     /* ───── 2ページ目：私は何をしてきたのか ───── */
     + '<div class="spp-page" id="sppPage2" hidden>'
     + '<p class="spp-page-label">PAGE 2 · JOURNEY</p>'
     + '<div class="spp-page-title">私は何をしてきたのか</div>'
-    + '<p class="spp-note" style="margin:0 0 14px">SchoolPark で歩いてきた記録は、星空に残っています。'
+    + '<div class="spp-spread">'
+    + '<div class="spp-leaf spp-leaf-a">'
+    + '<p class="spp-leaf-head">Starfield</p>'
+    + '<p class="spp-note" style="margin:0 0 12px">SchoolPark で歩いてきた記録は、星空に残っています。'
     + 'ひとつの行動が、ひとつの星になります。</p>'
     + '<button type="button" class="spp-star" onclick="spPassportOpenStar()">'
     + '🌌　星空を見る<small>Quest・探究・制作・貢献・実績。これまでの記録を見る</small></button>'
+    /* 何色の星が何を指すのか。星空の中で使っている呼び名とそろえてある。 */
+    + '<ul class="spp-legend">'
+    + '<li><b>⚪ 知識星</b>誰かの役に立った</li>'
+    + '<li><b>🔵 体験星</b>いま持っている体験チケット</li>'
+    + '<li><b>🟡 議論星</b>議論の結論を残した日数</li>'
+    + '<li><b>🔴 学び星</b>受け取った学び</li>'
+    + '<li><b>🟣 改善星</b>誰かの知識を良くした</li>'
+    + '</ul>'
+    + '</div>'
+    + '<div class="spp-seam"></div>'
+    + '<div class="spp-leaf spp-leaf-b">'
+    + '<p class="spp-leaf-head">Record</p>'
+    + '<div class="spp-page-title" style="font-size:14px;margin:0 0 8px">SchoolPark の記録</div>'
     + '<div id="sppRecords"><div class="spp-row"><dt>記録</dt><dd>読み込んでいます…</dd></div></div>'
+    + '</div>'
+    + '</div>'
     + '</div>'
 
     + '</div>'
@@ -18648,6 +18818,7 @@ async function openSpPassport() {
     + '<button type="button" class="spp-nav-btn" id="sppNext" onclick="spPassportGoPage(2)">私は何をしてきたのか →</button>'
     + '</div>';
 
+  if (card) card.classList.remove('spp-lite');   /* ここから本の大きさ */
   _sppBindSwipe();
 
   /* CHES全体の記録。いまは投票だけが本物なので、それを数える。
@@ -18701,9 +18872,12 @@ function spPassportGoPage(n) {
   const dots = document.getElementById('sppDots');
   if (!p1 || !p2) return;
   const toSecond = (n === 2);
-  /* めくる向きに合わせて、入ってくる側を寄せる */
-  const from = toSecond ? '14px' : '-14px';
-  (toSecond ? p2 : p1).style.setProperty('--from', from);
+  const shown = toSecond ? p2 : p1;
+  if (shown.hidden === false) return;   /* もう開いているページ。めくり直さない */
+
+  /* めくる向き。進む＝紙が右から返る、戻る＝左から返る。
+     display:none から戻すと、CSSのめくりがもう一度はじめから動く。 */
+  shown.classList.toggle('spp-back', !toSecond);
   p1.hidden = toSecond;
   p2.hidden = !toSecond;
   if (prev) prev.hidden = !toSecond;
@@ -18713,10 +18887,23 @@ function spPassportGoPage(n) {
     if (i[0]) i[0].classList.toggle('on', !toSecond);
     if (i[1]) i[1].classList.toggle('on', toSecond);
   }
+  /* スクロールするのはページの中。開いたページは頭から読めるようにする。 */
+  shown.scrollTop = 0;
   const card = document.querySelector('#spPassport .spp-card');
   if (card) card.scrollTop = 0;
 }
 window.spPassportGoPage = spPassportGoPage;
+
+/* キーボードでもめくれるように。← → でめくり、Esc で閉じる。
+   パスポートを開いているあいだだけ効く。文字を打っている最中は何もしない。 */
+document.addEventListener('keydown', function (e) {
+  if (!document.body.classList.contains('sp-passport-open')) return;
+  const t = e.target;
+  if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '')) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); spPassportGoPage(2); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); spPassportGoPage(1); }
+  else if (e.key === 'Escape') { e.preventDefault(); closeSpPassport(); }
+});
 
 /* 横になぞってもめくれるようにする。スマホで一番自然な操作。
    縦に動かしているとき（読むためのスクロール）は無視する。 */
