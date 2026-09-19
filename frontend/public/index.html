@@ -5008,7 +5008,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <section id="emuTodayHome" aria-label="今日のEmu">
   <div class="eth-topbar">
     <div>
-      <h1 class="eth-title" data-i18n="home.title">今日のEmu</h1>
+      <h1 class="eth-title" id="emuPageTitle" data-i18n="home.title">今日のEmu</h1>
       <p class="eth-subtitle" data-i18n="home.subtitle">あなたの熱に、ついてこられる場所。</p>
     </div>
     <div class="eth-tabs" role="navigation" aria-label="Emu画面" data-i18n-aria="home.tabsAria">
@@ -15032,6 +15032,18 @@ function _emuHealSession() {
   }).catch(function () {});
 }
 
+/* Emu の共通ヘッダーは各ページでも残すため、現在地だけを明示的に更新する。
+   キャッチコピーは .eth-subtitle に分離したまま変えない。 */
+function _setEmuPageTitle(key, fallback) {
+  const heading = document.getElementById('emuPageTitle');
+  if (heading) {
+    heading.setAttribute('data-i18n', key);
+    heading.textContent = (typeof emuT === 'function') ? emuT(key) : fallback;
+  }
+  const home = document.getElementById('emuTodayHome');
+  if (home) home.setAttribute('aria-label', heading ? heading.textContent : fallback);
+}
+
 function showEmuToday() {
   /* Emuに入ったら計上する。以前はハブのボタンだけで数えていたため、
      タブ操作やセッション復帰で入った人が数に入らなかった。
@@ -15043,6 +15055,7 @@ function showEmuToday() {
   document.body.classList.add('emu-today-open');
   document.body.classList.remove('emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open','emu-discussion-open');
   _setEmuHomeTab('emuTodayTab');
+  _setEmuPageTitle('tab.today', '今日のEmu');
   updateEmuTodayHome();
   window.scrollTo({ top:0, behavior:'smooth' });
 }
@@ -15052,6 +15065,7 @@ function showEmuIchinichi() {
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-knowledge-open','emu-discussion-open');
   document.body.classList.add('emu-ichinichi-open');
   _setEmuHomeTab('emuIchinichiTab');
+  _setEmuPageTitle('tab.ichinichi', '一日シェア');
   const frame = document.getElementById('emuIchinichiFrame');
   if (frame && !frame.getAttribute('src')) frame.src = '/ichinichi.html?embed=1';
   window.scrollTo({ top:0, behavior:'smooth' });
@@ -15100,6 +15114,7 @@ function showEmuFeed(mode) {
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-discussion-open');
   document.body.classList.add('emu-knowledge-open');
   _setEmuHomeTab('emuFeedTab');
+  _setEmuPageTitle('tab.feed', '知識を読む');
   const frame = document.getElementById('emuKnowledgeFrame');
   const filterMode = mode || 'new'; // 知識を読むの既定は「新着」
   if (frame) frame.dataset.pendingFilter = filterMode;
@@ -15138,6 +15153,7 @@ function showEmuRequests() {
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-ichinichi-open','emu-knowledge-open','emu-discussion-open');
   document.body.classList.add('emu-requests-open');
   _setEmuHomeTab('emuRequestsTab');
+  _setEmuPageTitle('tab.requests', '知識を探す');
   loadKnowledgeRequests();
   window.scrollTo({ top:0, behavior:'smooth' });
 }
@@ -15147,6 +15163,7 @@ function showEmuDiscussion() {
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open');
   document.body.classList.add('emu-discussion-open');
   _setEmuHomeTab('emuDiscussionTab');
+  _setEmuPageTitle('tab.discussion', '議論');
   const frame = document.getElementById('emuDiscussionFrame');
   if (frame && !frame.getAttribute('src')) frame.src = '/discussion.html';
   if (typeof socket !== 'undefined') {
@@ -18529,6 +18546,9 @@ window.spDaoLoadTreasury = async function (app) {
           };
         }),
         allocTitle: '内訳（' + SP_CURRENCY_LABEL[c] + '）',
+        startNotice: c === 'EMUER'
+          ? '新しいEMUERの仕組みは2026年10月1日開始予定です。現在の残高と記録は保持されます。'
+          : '',
         allocNote: (b.promised + b.closed) === 0
           ? 'この通貨のクエストはまだありません。'
           : '合計 ' + spMoney(b.promised + b.closed, c) + ' の内訳です。完了したクエストのぶんだけ、下の3つに分かれます。',
