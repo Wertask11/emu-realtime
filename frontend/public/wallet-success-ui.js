@@ -17,6 +17,9 @@ document.head.appendChild(emuerGuildQuestRewardScript);
 const emuerV2CutoverScript=document.createElement("script");
 emuerV2CutoverScript.src="/emuer-v2-cutover-ui.js";
 document.head.appendChild(emuerV2CutoverScript);
+const emuerV2PublicCopyScript=document.createElement("script");
+emuerV2PublicCopyScript.src="/emuer-v2-public-copy.js";
+document.head.appendChild(emuerV2PublicCopyScript);
 
 (function(){
   const s=document.createElement("style");
