@@ -12,6 +12,8 @@ const policy = require("./policy");
 
 const CONTRACT = "0x9c102cC3016C70767082b60196565878D9314864";
 const CHAIN_ID = 137;
+const TREASURY = "0x1c156b6a8caa6772430eda2cbb0d20cf41b9cfe4";
+const FOUNDER_QUEST_ID = "founder-quest-000";
 const ABI = [
   "function hasRole(bytes32 role,address account) view returns (bool)",
   "function claimPaid(bytes32) view returns (uint256)",
@@ -38,6 +40,8 @@ function createEmuerV2Router(deps) {
   const requireOwnAddress = deps.requireOwnAddress;
   const env = deps.env || process.env;
   const isEnabled = () => enabled(env);
+  const operatorAddresses = new Set(String(env.EMUER_V2_OPERATOR_ADDRESSES || TREASURY)
+    .split(",").map(value => String(value || "").trim().toLowerCase()).filter(validAddress));
   const rpcUrl = env.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com";
   const privateKey = env.EMUER_V2_AUTHORIZER_PRIVATE_KEY || "";
   const provider = privateKey ? new ethers.providers.JsonRpcProvider(rpcUrl) : null;
@@ -88,11 +92,140 @@ function createEmuerV2Router(deps) {
     });
     return row;
   }
+  function requireOperator(req, res, next) {
+    const address = String(req.identity && req.identity.walletAddress || "").toLowerCase();
+    if (!operatorAddresses.has(address)) return res.status(403).json({ error: "OPERATOR_REQUIRED" });
+    next();
+  }
+  function scopeRef(scopeType, scopeId) {
+    return db.collection("emuer_v2_guild_quest_budgets").doc(`${scopeType}:${scopeId}`);
+  }
+  function cleanScope(body) {
+    const scopeType = String(body.scopeType || "");
+    const scopeId = String(body.scopeId || "").trim();
+    if (!['guild', 'quest'].includes(scopeType) || !/^[A-Za-z0-9_-]{1,120}$/.test(scopeId)) return null;
+    if (scopeType === "quest" && scopeId === FOUNDER_QUEST_ID) return null;
+    return { scopeType, scopeId };
+  }
 
   router.get("/config", (req, res) => res.json({
     enabled: isEnabled(), chainId: CHAIN_ID, contract: CONTRACT,
     startsAt: new Date(policy.START_MS).toISOString(), monthlyCap: "416000"
   }));
+
+  // Guild/Quest rewards are deliberately not automatic.  An operator first
+  // publishes a fixed whole-EMUER budget and conditions; members then leave
+  // contribution records; finally the operator allocates a verified amount.
+  router.get("/guild-quest/budgets", async (req, res) => {
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    try {
+      const snap = await db.collection("emuer_v2_guild_quest_budgets").where("status", "==", "published").limit(100).get();
+      return res.json({ budgets: snap.docs.map(doc => {
+        const row = doc.data() || {};
+        return { id: doc.id, scopeType: row.scopeType, scopeId: row.scopeId, title: row.title || "", conditions: row.conditions || "", totalEmuer: row.totalEmuer || 0, allocatedEmuer: row.allocatedEmuer || 0, remainingEmuer: Math.max(0, Number(row.totalEmuer || 0) - Number(row.allocatedEmuer || 0)) };
+      }) });
+    } catch (error) { return res.status(500).json({ error: "BUDGET_LIST_FAILED" }); }
+  });
+
+  router.post("/guild-quest/budgets", requireFirebaseUser, requireOperator, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const scope = cleanScope(req.body || {});
+    const totalEmuer = Number(req.body && req.body.totalEmuer);
+    const title = String(req.body && req.body.title || "").trim().slice(0, 160);
+    const conditions = String(req.body && req.body.conditions || "").trim().slice(0, 2000);
+    if (!scope || !Number.isSafeInteger(totalEmuer) || totalEmuer < 1 || totalEmuer > 416000 || !title || !conditions) return res.status(400).json({ error: "INVALID_BUDGET" });
+    try {
+      if (scope.scopeType === "quest") {
+        const quest = await db.collection("sp_quests").doc(scope.scopeId).get();
+        if (!quest.exists) return res.status(404).json({ error: "QUEST_NOT_FOUND" });
+      }
+      const ref = scopeRef(scope.scopeType, scope.scopeId);
+      await ref.set({ schema: "emuer-v2-guild-quest-budget-v1", ...scope, title, conditions, totalEmuer, allocatedEmuer: 0,
+        status: "published", publishedBy: String(req.identity.walletAddress).toLowerCase(), publishedAt: new Date(), updatedAt: new Date() });
+      return res.json({ ok: true, id: ref.id });
+    } catch (error) { console.error("EMUER v2 budget publish error:", error.message); return res.status(500).json({ error: "BUDGET_PUBLISH_FAILED" }); }
+  });
+
+  router.post("/guild-quest/contributions", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const scope = cleanScope(req.body || {});
+    const recipient = String(req.identity.walletAddress || "").toLowerCase();
+    const evidenceLogId = String(req.body && req.body.evidenceLogId || "").trim();
+    const note = String(req.body && req.body.note || "").trim().slice(0, 1000);
+    if (!scope || !validAddress(recipient)) return res.status(400).json({ error: "INVALID_CONTRIBUTION" });
+    try {
+      const budget = await scopeRef(scope.scopeType, scope.scopeId).get();
+      if (!budget.exists || (budget.data() || {}).status !== "published") return res.status(409).json({ error: "BUDGET_NOT_PUBLISHED" });
+      if (scope.scopeType === "quest") {
+        if (!evidenceLogId) return res.status(400).json({ error: "QUEST_LOG_REQUIRED" });
+        const [quest, commit, log] = await Promise.all([
+          db.collection("sp_quests").doc(scope.scopeId).get(),
+          db.collection("sp_quests").doc(scope.scopeId).collection("commits").doc(recipient).get(),
+          db.collection("sp_quests").doc(scope.scopeId).collection("logs").doc(evidenceLogId).get()
+        ]);
+        if (!quest.exists || !commit.exists || !log.exists || String((log.data() || {}).author || "").toLowerCase() !== recipient) return res.status(409).json({ error: "QUEST_CONTRIBUTION_NOT_VERIFIED" });
+      }
+      const key = JSON.stringify(["emuer-v2", "guild-quest-contribution", scope.scopeType, scope.scopeId, recipient, evidenceLogId || note]);
+      const id = claimId(key);
+      const ref = db.collection("emuer_v2_guild_quest_contributions").doc(id);
+      await db.runTransaction(async tx => {
+        const prior = await tx.get(ref);
+        if (prior.exists) return;
+        tx.create(ref, { schema: "emuer-v2-guild-quest-contribution-v1", key, ...scope, recipient, evidenceLogId, note, status: "submitted", submittedAt: new Date(), updatedAt: new Date() });
+      });
+      return res.json({ ok: true, contributionId: id });
+    } catch (error) { console.error("EMUER v2 contribution error:", error.message); return res.status(500).json({ error: "CONTRIBUTION_RECORD_FAILED" }); }
+  });
+
+  router.get("/guild-quest/contributions", requireFirebaseUser, requireOperator, async (req, res) => {
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    try {
+      const snap = await db.collection("emuer_v2_guild_quest_contributions").where("status", "==", "submitted").limit(100).get();
+      return res.json({ contributions: snap.docs.map(doc => ({ id: doc.id, ...(doc.data() || {}) })) });
+    } catch (error) { return res.status(500).json({ error: "CONTRIBUTION_LIST_FAILED" }); }
+  });
+
+  router.post("/guild-quest/contributions/:id/approve", requireFirebaseUser, requireOperator, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const amountEmuer = Number(req.body && req.body.amountEmuer);
+    if (!Number.isSafeInteger(amountEmuer) || amountEmuer < 1 || amountEmuer > 416000) return res.status(400).json({ error: "INVALID_ALLOCATION" });
+    const contributionRef = db.collection("emuer_v2_guild_quest_contributions").doc(String(req.params.id));
+    try {
+      let reward;
+      await db.runTransaction(async tx => {
+        const contributionSnap = await tx.get(contributionRef);
+        if (!contributionSnap.exists) throw new Error("CONTRIBUTION_NOT_FOUND");
+        const contribution = contributionSnap.data() || {};
+        if (contribution.status !== "submitted") throw new Error("CONTRIBUTION_ALREADY_REVIEWED");
+        const budgetRef = scopeRef(contribution.scopeType, contribution.scopeId);
+        const budgetSnap = await tx.get(budgetRef);
+        const budget = budgetSnap.exists ? budgetSnap.data() || {} : {};
+        const allocated = Number(budget.allocatedEmuer || 0);
+        const total = Number(budget.totalEmuer || 0);
+        if (!budgetSnap.exists || budget.status !== "published" || allocated + amountEmuer > total) throw new Error("BUDGET_EXCEEDED");
+        const rewardKey = JSON.stringify(["emuer-v2", "guild-quest-reward", contributionRef.id]);
+        const rewardId = claimId(rewardKey);
+        const rewardRef = db.collection("emuer_v2_rewards").doc(rewardId);
+        const amountWei = (BigInt(amountEmuer) * policy.UNIT).toString();
+        reward = { schema: "emuer-v2-reward-v1", kind: "guild-quest-contribution", key: rewardKey, claimId: rewardId,
+          recipient: String(contribution.recipient).toLowerCase(), amountWei, amount: String(amountEmuer), status: "pending",
+          scopeType: contribution.scopeType, scopeId: contribution.scopeId, contributionId: contributionRef.id, budgetTitle: budget.title || "", createdAt: new Date(), updatedAt: new Date() };
+        tx.create(rewardRef, reward);
+        tx.update(budgetRef, { allocatedEmuer: allocated + amountEmuer, updatedAt: new Date() });
+        tx.update(contributionRef, { status: "approved", approvedEmuer: amountEmuer, approvedBy: String(req.identity.walletAddress).toLowerCase(), approvedAt: new Date(), rewardId, updatedAt: new Date() });
+      });
+      return res.json({ ok: true, rewardId: reward.claimId, amount: reward.amount });
+    } catch (error) {
+      const code = String(error.message || "");
+      if (["CONTRIBUTION_NOT_FOUND", "CONTRIBUTION_ALREADY_REVIEWED", "BUDGET_EXCEEDED"].includes(code)) return res.status(409).json({ error: code });
+      console.error("EMUER v2 contribution approval error:", error.message); return res.status(500).json({ error: "CONTRIBUTION_APPROVAL_FAILED" });
+    }
+  });
 
   // The client uses this only to render the daily-login button.  The actual
   // claim remains protected by the signed /daily/login endpoint below.

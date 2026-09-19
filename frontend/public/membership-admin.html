@@ -3,6 +3,7 @@
 <head>
 <script src="/schoolpark/quest-store.js"></script>
 <script src="/schoolpark/guild-store.js"></script>
+<script src="/guild-quest-rewards-admin.js" defer></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
@@ -111,6 +112,11 @@ async function api(path, options) {
   if (!res.ok) throw Object.assign(new Error(data.error || ("HTTP " + res.status)), { code: data.error, status: res.status });
   return data;
 }
+
+/* The separate EMUER budget panel uses the same owner-authenticated request
+   path as this page.  Keeping it outside this large legacy file makes the
+   reward rollout auditable without disturbing SchoolPark administration. */
+window.emuerV2AdminApi = function (path, options) { return api("/api/emuer/v2" + path, options); };
 
 /* ───────── 会員一覧 ─────────
    誰が light / plus / pro なのかを見る。これまで一覧する手段がなかった。

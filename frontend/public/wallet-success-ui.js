@@ -11,6 +11,9 @@ document.head.appendChild(emuerDiscussionRewardScript);
 const emuerKnowledgeBountyScript=document.createElement("script");
 emuerKnowledgeBountyScript.src="/knowledge-bounty-v2-ui.js";
 document.head.appendChild(emuerKnowledgeBountyScript);
+const emuerGuildQuestRewardScript=document.createElement("script");
+emuerGuildQuestRewardScript.src="/guild-quest-rewards-ui.js";
+document.head.appendChild(emuerGuildQuestRewardScript);
 
 (function(){
   const s=document.createElement("style");
