@@ -1,4 +1,4 @@
-/* Public-facing EMUER v2 wording and balance adapter. Active only after cutover. */
+/* Public-facing EMUER v2 wording and balance adapter. */
 (function () {
   const API = "https://emu-realtime.onrender.com/api/emuer/v2";
   const ABI = ["function balanceOf(address) view returns (uint256)", "function claimReward(bytes32,uint256,uint256,bytes) returns (uint256)"];
@@ -6,8 +6,9 @@
   const account = () => String(window.connectedAccount || "").toLowerCase();
   const byId = (id) => document.getElementById(id);
   async function headers(interactive) { if (typeof window.emuAuthHeaders !== "function") throw new Error("再ログインしてください。"); return window.emuAuthHeaders(!!interactive); }
-  function setText(id, value) { const node = byId(id); if (!node) return; node.textContent = value; node.removeAttribute("data-i18n"); }
-  function hide(node) { if (node) node.style.display = "none"; }
+  function setText(id, value) { const node = byId(id); if (!node) return; if (node.textContent !== value) node.textContent = value; node.removeAttribute("data-i18n"); }
+  function hide(node) { if (node && node.style.display !== "none") node.style.display = "none"; }
+  function waitingForStart() { return !!config && Date.now() < Date.parse(config.startsAt); }
   function applyCopy() {
     if (!config) return;
     hide(byId("emuBalanceHint")); hide(byId("emuOffchainNote"));
@@ -15,8 +16,8 @@
     const progress = byId("emuTodayProgress"); hide(progress && progress.parentElement);
     setText("emuNextRewardNote", "新しいEMUERの交換は、商品ごとの価格・提供条件・返金条件を公開してから開始します。");
     const row = byId("emuLoginBonusRow");
-    if (row) { const title = row.querySelector("strong"); if (title) { title.textContent = "今日のログイン報酬"; title.removeAttribute("data-i18n"); } }
-    setText("emuLoginBonusNote", "1日1回 +1 EMUER");
+    if (row) { const title = row.querySelector("strong"); if (title) { title.textContent = waitingForStart() ? "EMUER v2 開始待ち" : "今日のログイン報酬"; title.removeAttribute("data-i18n"); } }
+    setText("emuLoginBonusNote", waitingForStart() ? "10月1日 00:00（日本時間）から 1日1回 +1 EMUER" : "1日1回 +1 EMUER");
     const request = byId("emuRequestSheet");
     if (request) {
       const labels = request.querySelectorAll(".emu-field > label");
@@ -25,6 +26,13 @@
       if (amount) amount.textContent = "確認済みの回答に 1 EMUER";
       const description = request.querySelector(".emu-sheet-actions").previousElementSibling;
       if (description && description.tagName === "P") description.textContent = "募集者の残高は減りません。採用後、基準確認を通った回答者へ運営トレジャリーから1 EMUERが付与されます。";
+      if (waitingForStart()) {
+        const submit = byId("emuRequestSubmit");
+        if (submit) { submit.disabled = true; submit.textContent = "10月1日開始"; }
+        request.querySelectorAll("button").forEach((button) => {
+          if (/採用|EMUERで採用/.test(button.textContent)) { button.disabled = true; button.textContent = "10月1日開始"; }
+        });
+      }
     }
     hide(byId("pp-campaign-section"));
     const uses = byId("emuUsesPanel");
@@ -48,8 +56,20 @@
     const wrapped = async function () { const result = await original.apply(this, arguments); applyCopy(); await refreshBalance(); await refreshLoginButton(); return result; };
     wrapped.__emuerV2PublicCopy = true; window.updateEmuTodayHome = wrapped;
   }
+  function observeLegacyWrites() {
+    const root = byId("emuLoginBonusRow");
+    if (!root || root.dataset.emuerV2Observer) return;
+    root.dataset.emuerV2Observer = "true";
+    let enforcing = false;
+    new MutationObserver(() => {
+      if (!config || enforcing) return;
+      enforcing = true;
+      applyCopy();
+      refreshLoginButton().finally(() => { setTimeout(() => { enforcing = false; }, 0); });
+    }).observe(root, { subtree: true, childList: true, characterData: true, attributes: true });
+  }
   async function start() {
-    try { const response = await fetch(API + "/config"); const next = await response.json(); if (!response.ok || Number(next.chainId) !== 137) return; config = next; window.claimEmuLoginBonus = claimLogin; window.handleLoginBonus = claimLogin; applyCopy(); wrapLegacyRender(); await refreshBalance(); await refreshLoginButton(); } catch (_) {}
+    try { const response = await fetch(API + "/config"); const next = await response.json(); if (!response.ok || Number(next.chainId) !== 137) return; config = next; window.claimEmuLoginBonus = claimLogin; window.handleLoginBonus = claimLogin; applyCopy(); wrapLegacyRender(); observeLegacyWrites(); await refreshBalance(); await refreshLoginButton(); } catch (_) {}
   }
   window.addEventListener("load", () => { start(); setTimeout(() => { wrapLegacyRender(); applyCopy(); }, 1200); });
 })();
