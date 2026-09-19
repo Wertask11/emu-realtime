@@ -159,20 +159,21 @@ function createEmuerV2Router(deps) {
       const ledgerRef = db.collection("emuer_v2_unconverted_legacy").doc(recipient);
       let reward;
       await db.runTransaction(async tx => {
-        const [ledgerSnap, usageSnap] = await Promise.all([tx.get(ledgerRef), access.ref ? tx.get(access.ref) : Promise.resolve(null)]);
-        const ledger = ledgerSnap.exists ? ledgerSnap.data() || {} : {};
-        const amountEmuer = Number(ledger.unconverted || 0);
-        if (!ledgerSnap.exists || ledger.status !== "identity_pending" || !Number.isSafeInteger(amountEmuer) || amountEmuer < 1) throw new Error("NO_VERIFIED_LEGACY_BALANCE");
-        if (access.period.limit !== null && Number((usageSnap && usageSnap.data() || {}).used || 0) >= access.period.limit) throw new Error("PERIOD_LIMIT_REACHED");
         const key = JSON.stringify(["emuer-v2", "legacy-good-change", recipient]);
         const id = claimId(key);
         const rewardRef = db.collection("emuer_v2_rewards").doc(id);
+        const [ledgerSnap, usageSnap, rewardSnap] = await Promise.all([tx.get(ledgerRef), access.ref ? tx.get(access.ref) : Promise.resolve(null), tx.get(rewardRef)]);
+        const ledger = ledgerSnap.exists ? ledgerSnap.data() || {} : {};
+        const amountEmuer = Number(ledger.unconverted || 0);
+        if (rewardSnap.exists) { reward = rewardSnap.data(); return; }
+        if (!ledgerSnap.exists || ledger.status !== "identity_pending" || !Number.isSafeInteger(amountEmuer) || amountEmuer < 1) throw new Error("NO_VERIFIED_LEGACY_BALANCE");
+        if (access.period.limit !== null && Number((usageSnap && usageSnap.data() || {}).used || 0) >= access.period.limit) throw new Error("PERIOD_LIMIT_REACHED");
         reward = { schema: "emuer-v2-reward-v1", kind: "legacy-good-change", key, claimId: id, recipient,
           amountWei: (BigInt(amountEmuer) * policy.UNIT).toString(), amount: String(amountEmuer), status: "pending",
-          source: "verified-backfill", createdAt: new Date(), updatedAt: new Date() };
+          source: "verified-backfill", uid: req.identity.uid, legacyLedgerAddress: recipient,
+          conversionPlan: access.plan, conversionPeriod: access.period.key, conversionLimit: access.period.limit,
+          conversionSettled: false, createdAt: new Date(), updatedAt: new Date() };
         tx.create(rewardRef, reward);
-        tx.update(ledgerRef, { status: "converted", convertedClaimId: id, convertedAt: new Date(), updatedAt: new Date() });
-        if (access.period.limit !== null) tx.set(access.ref, { uid: req.identity.uid, action: "convert", period: access.period.key, plan: access.plan, used: Number((usageSnap && usageSnap.data() || {}).used || 0) + 1, updatedAt: new Date() }, { merge: true });
       });
       return res.json({ ok: true, rewardId: reward.claimId, amount: reward.amount, plan: access.plan });
     } catch (error) {
@@ -180,6 +181,43 @@ function createEmuerV2Router(deps) {
       if (["NO_VERIFIED_LEGACY_BALANCE", "PERIOD_LIMIT_REACHED"].includes(code)) return res.status(409).json({ error: code });
       if (code.includes("ALREADY_EXISTS")) return res.status(409).json({ error: "LEGACY_BALANCE_ALREADY_CONVERTED" });
       console.error("EMUER v2 legacy conversion error:", error.message); return res.status(500).json({ error: "LEGACY_CONVERSION_FAILED" });
+    }
+  });
+
+
+  // A conversion only consumes its plan allowance after the chain confirms a
+  // payment. A rejected MetaMask request therefore leaves the same claim
+  // available to retry and does not spend the monthly/weekly allowance.
+  router.post("/rewards/:claimId/settle-conversion", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    if (!db || !contract) return res.status(503).json({ error: "EMUER_V2_UNAVAILABLE" });
+    const id = String(req.params.claimId || "");
+    const rewardRef = db.collection("emuer_v2_rewards").doc(id);
+    try {
+      const initial = await rewardRef.get();
+      const row = initial.exists ? initial.data() || {} : {};
+      const recipient = String(req.identity.walletAddress || "").toLowerCase();
+      if (!initial.exists || row.kind !== "legacy-good-change" || row.recipient !== recipient || row.uid !== req.identity.uid) return res.status(404).json({ error: "CONVERSION_NOT_FOUND" });
+      if (row.conversionSettled) return res.json({ ok: true, alreadySettled: true });
+      const paid = await contract.claimPaid(row.claimId);
+      if (paid.lte(0)) return res.status(409).json({ error: "CHAIN_CLAIM_NOT_CONFIRMED" });
+      const ledgerRef = db.collection("emuer_v2_unconverted_legacy").doc(String(row.legacyLedgerAddress || recipient));
+      const usageRef = row.conversionLimit === null ? null : db.collection("emuer_v2_access_usage").doc(`${row.uid}:convert:${row.conversionPeriod}`);
+      await db.runTransaction(async tx => {
+        const [rewardSnap, usageSnap] = await Promise.all([tx.get(rewardRef), usageRef ? tx.get(usageRef) : Promise.resolve(null)]);
+        const current = rewardSnap.exists ? rewardSnap.data() || {} : {};
+        if (!rewardSnap.exists || current.kind !== "legacy-good-change") throw new Error("CONVERSION_NOT_FOUND");
+        if (current.conversionSettled) return;
+        tx.update(rewardRef, { conversionSettled: true, conversionSettledAt: new Date(), updatedAt: new Date() });
+        tx.set(ledgerRef, { status: "converted", convertedClaimId: id, convertedAt: new Date(), updatedAt: new Date() }, { merge: true });
+        if (usageRef) tx.set(usageRef, { uid: row.uid, action: "convert", period: row.conversionPeriod, plan: row.conversionPlan, used: Number((usageSnap && usageSnap.data() || {}).used || 0) + 1, updatedAt: new Date() }, { merge: true });
+      });
+      return res.json({ ok: true, paidWei: paid.toString() });
+    } catch (error) {
+      const code = String(error.message || "");
+      if (["CONVERSION_NOT_FOUND", "CHAIN_CLAIM_NOT_CONFIRMED"].includes(code)) return res.status(code === "CONVERSION_NOT_FOUND" ? 404 : 409).json({ error: code });
+      console.error("EMUER v2 conversion settle error:", error.message); return res.status(500).json({ error: "CONVERSION_SETTLE_FAILED" });
     }
   });
 
