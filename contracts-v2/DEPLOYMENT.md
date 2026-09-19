@@ -56,7 +56,14 @@
 
 ## アプリ切替の必須項目
 
-- Render: 新コントラクトアドレス、署名ドメイン、開始日時を設定。旧`addGoodBatch`、月次配布、旧懸賞精算を停止。
+- Render: 以下を設定してから `EMUER_V2_ENABLED=true` にする。**先に true にしない**。
+  - `EMUER_V2_ENABLED=true`
+  - `EMUER_V2_AUTHORIZER_PRIVATE_KEY`：報酬署名専用ウォレットの秘密鍵。トレジャリー鍵を常用しない。
+  - `POLYGON_RPC_URL`：Polygon mainnet RPC。
+  - 署名専用ウォレットに、トレジャリーから `AUTHORIZER_ROLE` を付与する。
+  - 起動ログまたは `/api/emuer/v2/config` で接続先が `0x9c102cC3016C70767082b60196565878D9314864` であることを確認する。
+  - `EMUER_V2_ENABLED` が有効でも、署名者に `AUTHORIZER_ROLE` がなければ配布は安全に拒否される。
+- 旧`addGoodBatch`、月次配布、旧懸賞精算はv2の報酬としては使わない。新ゲートは `claimReward` 用のEIP-712署名だけを発行し、利用者同士の送金は発行しない。
 - Firestore: v2台帳、申請、注文、返金の書込みはサーバー専用。利用者は自分の表示用データだけ読めるようRulesを追加。
 - Emu: 旧0.5ログインや旧3 EMUER懸賞の説明・計算を新仕様へ変更。
 - Passport「価値」: 変換・みてみるへの入口、未変換、申請待ち、受取可能、オンチェーン残高を区別。
