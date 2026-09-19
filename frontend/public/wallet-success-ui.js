@@ -233,3 +233,88 @@ function shareWalletSuccess() {
   const text = encodeURIComponent(`Emuのウォレット接続完了！🎉\nアドレス: ${short}\nエアドロも受取予約済み👍\n#EmuRelease #SchoolPark`);
   window.open("https://twitter.com/intent/tweet?text=" + text, "_blank");
 }
+
+// ================================================================
+// EMUER v2 — feature-flagged daily login reward
+// Kept in this already-loaded small file so the v2 rollout never requires a
+// risky replacement of the large application HTML file.  It is dormant until
+// the server explicitly returns enabled: true.
+// ================================================================
+(function installEmuerV2LoginReward() {
+  const API = "https://emu-realtime.onrender.com/api/emuer/v2";
+  const ABI = [
+    "function claimReward(bytes32 claimId,uint256 totalAmount,uint256 deadline,bytes authorization) returns (uint256)"
+  ];
+  let config = null;
+
+  function button() { return document.getElementById("emuLoginBonusBtn"); }
+  function showReady() {
+    const btn = button();
+    if (!btn) return;
+    btn.textContent = "+1 EMUER 受取";
+    btn.disabled = false;
+    btn.onclick = window.claimEmuV2LoginReward;
+  }
+
+  async function headers(interactive) {
+    if (typeof window.emuAuthHeaders !== "function") throw new Error("ログイン情報を確認できません");
+    return window.emuAuthHeaders(!!interactive);
+  }
+
+  window.claimEmuV2LoginReward = async function () {
+    if (!config || !config.enabled) return;
+    const btn = button();
+    try {
+      if (!window.ethereum || !window.ethers) throw new Error("MetaMaskを接続してください");
+      const account = window.connectedAccount || (await window.ethereum.request({ method: "eth_accounts" }))[0];
+      if (!account) throw new Error("ウォレットを接続してください");
+      if (btn) { btn.disabled = true; btn.textContent = "署名を準備中…"; }
+      const response = await fetch(API + "/daily/login", {
+        method: "POST",
+        headers: await headers(true),
+        body: JSON.stringify({ address: account })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "ログイン報酬を準備できませんでした");
+
+      const provider = new window.ethers.providers.Web3Provider(window.ethereum);
+      const network = await provider.getNetwork();
+      if (Number(network.chainId) !== 137) throw new Error("Polygon Mainnetに切り替えてください");
+      if (btn) btn.textContent = "MetaMaskで確認…";
+      const reward = data.reward;
+      const contract = new window.ethers.Contract(config.contract, ABI, provider.getSigner());
+      const tx = await contract.claimReward(reward.claimId, reward.totalAmount, reward.deadline, reward.authorization);
+      if (btn) btn.textContent = "確定を待っています…";
+      await tx.wait();
+      if (btn) { btn.disabled = true; btn.textContent = "本日は受取済み"; }
+      if (typeof window.showToast === "function") window.showToast("+1 EMUER を受け取りました", "success");
+    } catch (error) {
+      console.error("EMUER v2 login reward error:", error);
+      if (btn) { btn.disabled = false; btn.textContent = "+1 EMUER 受取"; }
+      alert(error.message || "ログイン報酬の受取に失敗しました");
+    }
+  };
+
+  window.addEventListener("load", async () => {
+    try {
+      const response = await fetch(API + "/config");
+      const next = await response.json();
+      if (!response.ok || !next.enabled || Number(next.chainId) !== 137) return;
+      config = next;
+      window._emuerV2 = { enabled: true, contract: config.contract };
+      showReady();
+      const account = window.connectedAccount;
+      if (!account) return;
+      const status = await fetch(API + "/daily/login/status?address=" + encodeURIComponent(account), {
+        headers: await headers(false)
+      });
+      if (status.ok && (await status.json()).claimedToday) {
+        const btn = button();
+        if (btn) { btn.disabled = true; btn.textContent = "本日は受取済み"; }
+      }
+    } catch (error) {
+      // The legacy UI stays untouched when v2 is disabled or unavailable.
+      console.info("EMUER v2 login reward is not active:", error.message);
+    }
+  });
+})();

@@ -72,6 +72,22 @@ function createEmuerV2Router(deps) {
     startsAt: new Date(policy.START_MS).toISOString(), monthlyCap: "416000"
   }));
 
+  // The client uses this only to render the daily-login button.  The actual
+  // claim remains protected by the signed /daily/login endpoint below.
+  router.get("/daily/login/status", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const key = rewardKey(req.identity.uid, Date.now());
+    const id = claimId(key);
+    try {
+      const reward = await db.collection("emuer_v2_rewards").doc(id).get();
+      return res.json({ claimedToday: reward.exists, date: key.split(":").pop() });
+    } catch (error) {
+      console.error("EMUER v2 login status error:", error.message);
+      return res.status(500).json({ error: "REWARD_STATUS_FAILED" });
+    }
+  });
+
   router.post("/daily/login", requireFirebaseUser, requireOwnAddress, async (req, res) => {
     if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
