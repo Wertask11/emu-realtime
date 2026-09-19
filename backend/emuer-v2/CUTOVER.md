@@ -19,6 +19,6 @@ Required Render values:
 - `EMUER_V2_ENABLED=false` until the start time
 - `EMUER_V2_OPERATOR_ADDRESSES` only when an operator wallet other than the treasury needs Guild/Quest approval
 
-Conversion constraints are server-enforced: guest/free users cannot convert, Light is once per JST month, Plus once per JST week, Pro unlimited. The conversion counter is separate from the future exchange counter. It advances only after a verified legacy balance is made into a v2 claim; failed browser/MetaMask operations do not advance it.
+Conversion constraints are server-enforced: guest/free users cannot convert, Light is once per JST month, Plus once per JST week, Pro unlimited. The conversion counter is separate from the future exchange counter. It advances only after the v2 contract has confirmed payment; failed browser/MetaMask operations do not advance it.
 
 Legacy contract conversion and legacy NFT purchase are disabled in the v2 UI. Do not add a v2 exchange product until its price, delivery condition, refund rule, and service/NFT record have been defined and an EIP-712 order endpoint is reviewed.
