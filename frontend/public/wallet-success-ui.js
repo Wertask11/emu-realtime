@@ -2,6 +2,9 @@
 const EMUER_V2_API="https://emu-realtime.onrender.com/api/emuer/v2";
 const EMUER_V2_ABI=["function claimReward(bytes32,uint256,uint256,bytes) returns (uint256)"];
 let emuerV2Config=null;
+const emuerReflectionScript=document.createElement("script");
+emuerReflectionScript.src="/change-reflection-ui.js";
+document.head.appendChild(emuerReflectionScript);
 
 (function(){
   const s=document.createElement("style");
