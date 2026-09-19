@@ -179,6 +179,9 @@ const dialogue = require("./dialogue").createDialogueRouter(membershipDeps);
 const feedback = require("./feedback").createFeedbackRouter(membershipDeps);
 // 運営の受領コメント（light 以上）。light の存在理由そのもの。
 const review = require("./review").createReviewRouter(membershipDeps);
+const emuerV2 = require("./emuer-v2/router").createEmuerV2Router({
+  db, requireFirebaseUser, requireOwnAddress, env: process.env
+});
 /* Camellia AI。鍵は環境変数（ANTHROPIC_API_KEY）から読む。 */
 const camellia = require("./camellia").createCamelliaRouter(membershipDeps);
 
@@ -189,6 +192,7 @@ app.use("/api/kyc", kyc.router);
 app.use("/api/dialogue", dialogue.router);
 app.use("/api/feedback", feedback.router);
 app.use("/api/review", review.router);
+app.use("/api/emuer/v2", emuerV2.router);
 app.use("/api/camellia", camellia.router);
 
 // 未処理のまま保持期限(30日)を過ぎた本人確認書類を毎日破棄する。
