@@ -180,7 +180,7 @@ const feedback = require("./feedback").createFeedbackRouter(membershipDeps);
 // 運営の受領コメント（light 以上）。light の存在理由そのもの。
 const review = require("./review").createReviewRouter(membershipDeps);
 const emuerV2 = require("./emuer-v2/router").createEmuerV2Router({
-  db, requireFirebaseUser, requireOwnAddress, env: process.env
+  db, requireFirebaseUser, requireOwnAddress, entitlement, env: process.env
 });
 /* Camellia AI。鍵は環境変数（ANTHROPIC_API_KEY）から読む。 */
 const camellia = require("./camellia").createCamelliaRouter(membershipDeps);
