@@ -205,6 +205,35 @@ function createEmuerV2Router(deps) {
     }
   });
 
+  // Saving several conclusions on one day still yields one EMUER.  The server
+  // reads the stored conclusion and binds the daily reward to the Passport.
+  router.post("/activity/discussion-conclusion", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const conclusionId = String(req.body.conclusionId || "").trim();
+    const recipient = String(req.identity.walletAddress || "").toLowerCase();
+    if (!conclusionId || !validAddress(recipient)) return res.status(400).json({ error: "INVALID_DISCUSSION_CONCLUSION" });
+    try {
+      const snap = await db.collection("discussion_conclusions").doc(conclusionId).get();
+      const data = snap.exists ? snap.data() || {} : {};
+      const createdAt = data.createdAt && typeof data.createdAt.toDate === "function" ? data.createdAt.toDate().getTime() : 0;
+      if (!snap.exists || String(data.author || "").toLowerCase() !== recipient || !String(data.topic || "").trim() ||
+          !String(data.conclusion || "").trim() || !createdAt || policy.dayKey(createdAt) !== policy.dayKey(Date.now())) {
+        return res.status(409).json({ error: "DISCUSSION_CONCLUSION_NOT_VERIFIED" });
+      }
+      const row = await createReward({
+        key: policy.dailyRewardKey(req.identity.uid, "discussion-conclusion", Date.now()),
+        kind: "discussion-conclusion", recipient,
+        meta: { conclusionId, topic: String(data.topic).slice(0, 160) }
+      });
+      return res.json({ ok: true, rewardId: row.claimId });
+    } catch (error) {
+      console.error("EMUER v2 discussion conclusion reward error:", error.message);
+      return res.status(500).json({ error: "DISCUSSION_CONCLUSION_REWARD_FAILED" });
+    }
+  });
+
   router.get("/rewards", requireFirebaseUser, requireOwnAddress, async (req, res) => {
     if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });

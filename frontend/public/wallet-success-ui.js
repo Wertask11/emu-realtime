@@ -5,6 +5,9 @@ let emuerV2Config=null;
 const emuerReflectionScript=document.createElement("script");
 emuerReflectionScript.src="/change-reflection-ui.js";
 document.head.appendChild(emuerReflectionScript);
+const emuerDiscussionRewardScript=document.createElement("script");
+emuerDiscussionRewardScript.src="/discussion-reward-ui.js";
+document.head.appendChild(emuerDiscussionRewardScript);
 
 (function(){
   const s=document.createElement("style");
