@@ -426,6 +426,11 @@ async function shareDay() {
       date: S.selectedDate, learning: S.learning, visibility: S.visibility,
     });
     if (day) S.visibility = day.visibility;
+    /* 公開済みの保存をサーバーが読み直してから、当日1回だけ EMUER v2 の
+       未請求報酬を作る。開始前・v2無効・一時障害は一日シェアの保存を妨げない。 */
+    if (S.visibility === "public") {
+      try { await apiPost("/api/emuer/v2/activity/public-reflection", { date: S.selectedDate }); } catch (_) {}
+    }
     notify(S.visibility === "public" ? emuT("i.msg.sharedPublic") : emuT("i.msg.savedPrivate"));
     loadHistory(true);
   } catch (e) { notify(e.message); }
