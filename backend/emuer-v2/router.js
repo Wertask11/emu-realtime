@@ -66,6 +66,25 @@ function createEmuerV2Router(deps) {
     );
     return { ...value, authorization: signature };
   }
+  function reactionKey(postId, action, actor) {
+    return JSON.stringify(["emuer-v2", "reaction", action, String(postId), String(actor).toLowerCase()]);
+  }
+  async function createReward({ key, kind, recipient, meta }) {
+    const id = claimId(key);
+    const ref = db.collection("emuer_v2_rewards").doc(id);
+    let row;
+    await db.runTransaction(async tx => {
+      const previous = await tx.get(ref);
+      if (previous.exists) { row = previous.data(); return; }
+      row = {
+        schema: "emuer-v2-reward-v1", kind, key, claimId: id,
+        recipient: String(recipient).toLowerCase(), amountWei: policy.UNIT.toString(), amount: "1",
+        status: "pending", ...meta, createdAt: new Date(), updatedAt: new Date()
+      };
+      tx.create(ref, row);
+    });
+    return row;
+  }
 
   router.get("/config", (req, res) => res.json({
     enabled: isEnabled(), chainId: CHAIN_ID, contract: CONTRACT,
@@ -86,6 +105,62 @@ function createEmuerV2Router(deps) {
       console.error("EMUER v2 login status error:", error.message);
       return res.status(500).json({ error: "REWARD_STATUS_FAILED" });
     }
+  });
+
+  // A reaction is only registered after Firestore shows that the signed-in
+  // person actually reacted.  The author receives a pending 1-EMUER reward;
+  // the reacting person never pays or transfers tokens to the author.
+  router.post("/activity/reaction", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const postId = String(req.body.postId || "").trim();
+    const action = String(req.body.action || "");
+    const actor = String(req.identity.walletAddress || "").toLowerCase();
+    if (!postId || !["good", "change"].includes(action)) return res.status(400).json({ error: "INVALID_REACTION" });
+    try {
+      const post = await db.collection("posts").doc(postId).get();
+      if (!post.exists) return res.status(404).json({ error: "POST_NOT_FOUND" });
+      const data = post.data() || {};
+      const author = String(data.address || "").toLowerCase();
+      const actors = Array.isArray(action === "good" ? data.goodUsers : data.changeUsers)
+        ? (action === "good" ? data.goodUsers : data.changeUsers).map(x => String(x).toLowerCase()) : [];
+      if (!validAddress(author) || author === actor || !actors.includes(actor)) return res.status(409).json({ error: "REACTION_NOT_VERIFIED" });
+      const row = await createReward({
+        key: reactionKey(postId, action, actor), kind: action === "good" ? "good-received" : "change-received",
+        recipient: author, meta: { postId, actor, postTitle: String(data.title || "").slice(0, 160) }
+      });
+      return res.json({ ok: true, rewardId: row.claimId, alreadyRecorded: !!row.createdAt });
+    } catch (error) {
+      console.error("EMUER v2 reaction reward error:", error.message);
+      return res.status(500).json({ error: "REACTION_REWARD_FAILED" });
+    }
+  });
+
+  router.get("/rewards", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    try {
+      const recipient = String(req.identity.walletAddress).toLowerCase();
+      const rewards = await db.collection("emuer_v2_rewards").where("recipient", "==", recipient).where("status", "==", "pending").limit(50).get();
+      return res.json({ rewards: rewards.docs.map(doc => ({ claimId: doc.id, kind: doc.data().kind, amount: doc.data().amount, postTitle: doc.data().postTitle || "" })) });
+    } catch (error) { return res.status(500).json({ error: "REWARDS_LIST_FAILED" }); }
+  });
+
+  router.post("/rewards/:claimId/authorization", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    try {
+      const ref = db.collection("emuer_v2_rewards").doc(String(req.params.claimId));
+      const snap = await ref.get();
+      if (!snap.exists) return res.status(404).json({ error: "REWARD_NOT_FOUND" });
+      const row = snap.data();
+      if (String(row.recipient || "").toLowerCase() !== String(req.identity.walletAddress).toLowerCase()) return res.status(403).json({ error: "REWARD_NOT_OWNED" });
+      const ready = await signerReady();
+      if (!ready.ok) return res.status(503).json({ error: ready.code });
+      return res.json({ ok: true, reward: await signReward(row) });
+    } catch (error) { console.error("EMUER v2 reward auth error:", error.message); return res.status(500).json({ error: "REWARD_ISSUE_FAILED" }); }
   });
 
   router.post("/daily/login", requireFirebaseUser, requireOwnAddress, async (req, res) => {
