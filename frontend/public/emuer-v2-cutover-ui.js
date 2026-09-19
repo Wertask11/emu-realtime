@@ -35,7 +35,14 @@
     if (button) { button.disabled = true; button.textContent = "変換を準備中…"; }
     try {
       const converted = await request("/legacy/convert", { method:"POST", body:JSON.stringify({ address:String(window.connectedAccount || "") }) });
+      try {
+        await request("/rewards/" + encodeURIComponent(converted.rewardId) + "/settle-conversion", { method:"POST", body:JSON.stringify({}) });
+        alert("EMUERへの変換が完了しました。"); return;
+      } catch (settleError) {
+        if (String(settleError.message || "") !== "CHAIN_CLAIM_NOT_CONFIRMED") throw settleError;
+      }
       await claim(value, converted);
+      await request("/rewards/" + encodeURIComponent(converted.rewardId) + "/settle-conversion", { method:"POST", body:JSON.stringify({}) });
       alert("EMUERへの変換が完了しました。");
     } catch (error) {
       const code = String(error.message || "");
