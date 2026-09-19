@@ -7,7 +7,7 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-/// @notice Fixed-supply EMUER candidate for SchoolPark. Not deployed.
+/// @notice Fixed-supply EMUER for SchoolPark, deployed on Polygon PoS.
 /// @dev Free transfers and allowances are disabled. Opaque IDs must not contain personal data.
 contract EMUERv2 is ERC20, AccessControlDefaultAdminRules, Pausable, EIP712 {
     using ECDSA for bytes32;

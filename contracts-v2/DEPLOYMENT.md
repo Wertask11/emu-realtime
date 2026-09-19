@@ -2,7 +2,15 @@
 
 ## 現在地
 
-`EMUERv2.sol` は未デプロイ。既存本番のアドレス、残高、画面、APIは変更していない。2026-10-01 00:00 JSTより前は、コントラクト自身が変換と交換を拒否する。
+`EMUERv2.sol` は2026-09-18にPolygon PoSへデプロイ済み。既存本番の旧アドレス、残高、画面、APIはこのデプロイだけでは変更されない。2026-10-01 00:00 JSTより前は、コントラクト自身が報酬請求と交換を拒否する。
+
+- Network: Polygon PoS Mainnet（chain ID 137）
+- Contract: `0x9c102cC3016C70767082b60196565878D9314864`
+- Admin / Treasury: `0x1C156b6a8CaA6772430edA2cBB0d20CF41B9CFE4`
+- Compiler: Solidity 0.8.27
+- OpenZeppelin Contracts: 5.0.2
+- EVM: Shanghai
+- Optimizer: enabled, 200 runs
 
 ## 固定した値
 
