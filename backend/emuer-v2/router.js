@@ -69,6 +69,9 @@ function createEmuerV2Router(deps) {
   function reactionKey(postId, action, actor) {
     return JSON.stringify(["emuer-v2", "reaction", action, String(postId), String(actor).toLowerCase()]);
   }
+  function reflectionKey(postId, changeId) {
+    return JSON.stringify(["emuer-v2", "change-reflection", String(postId), String(changeId)]);
+  }
   async function createReward({ key, kind, recipient, meta }) {
     const id = claimId(key);
     const ref = db.collection("emuer_v2_rewards").doc(id);
@@ -134,6 +137,42 @@ function createEmuerV2Router(deps) {
     } catch (error) {
       console.error("EMUER v2 reaction reward error:", error.message);
       return res.status(500).json({ error: "REACTION_REWARD_FAILED" });
+    }
+  });
+
+  // A Change proposer is rewarded only after the post author records what was
+  // actually reflected.  `accepted` alone deliberately never reaches here.
+  router.post("/activity/change-reflection", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const postId = String(req.body.postId || "").trim();
+    const changeId = String(req.body.changeId || "").trim();
+    const actor = String(req.identity.walletAddress || "").toLowerCase();
+    if (!postId || !changeId) return res.status(400).json({ error: "INVALID_CHANGE_REFLECTION" });
+    try {
+      const [postSnap, changeSnap] = await Promise.all([
+        db.collection("posts").doc(postId).get(),
+        db.collection("post_changes").doc(changeId).get()
+      ]);
+      if (!postSnap.exists || !changeSnap.exists) return res.status(404).json({ error: "CHANGE_OR_POST_NOT_FOUND" });
+      const post = postSnap.data() || {};
+      const change = changeSnap.data() || {};
+      const author = String(post.address || "").toLowerCase();
+      const proposer = String(change.fromAddress || "").toLowerCase();
+      const reflectedBy = String(change.reflectedBy || "").toLowerCase();
+      if (!validAddress(author) || !validAddress(proposer) || author !== actor || reflectedBy !== author ||
+          String(change.postId || "") !== postId || change.status !== "accepted" || !change.reflectedAt) {
+        return res.status(409).json({ error: "REFLECTION_NOT_VERIFIED" });
+      }
+      const row = await createReward({
+        key: reflectionKey(postId, changeId), kind: "change-reflected", recipient: proposer,
+        meta: { postId, changeId, postTitle: String(post.title || "").slice(0, 160), reflectedBy: author }
+      });
+      return res.json({ ok: true, rewardId: row.claimId });
+    } catch (error) {
+      console.error("EMUER v2 change reflection reward error:", error.message);
+      return res.status(500).json({ error: "CHANGE_REFLECTION_REWARD_FAILED" });
     }
   });
 
