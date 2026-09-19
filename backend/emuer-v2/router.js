@@ -72,6 +72,18 @@ function createEmuerV2Router(deps) {
     startsAt: new Date(policy.START_MS).toISOString(), monthlyCap: "416000"
   }));
 
+  router.get("/daily/login/status", requireFirebaseUser, async (req, res) => {
+    if (!isEnabled()) return res.json({ enabled: false, claimedToday: false });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    try {
+      const key = rewardKey(req.identity.uid, Date.now());
+      const existing = await db.collection("emuer_v2_rewards").doc(claimId(key)).get();
+      return res.json({ enabled: true, claimedToday: existing.exists });
+    } catch (error) {
+      return res.status(500).json({ error: "REWARD_STATUS_FAILED" });
+    }
+  });
+
   router.post("/daily/login", requireFirebaseUser, requireOwnAddress, async (req, res) => {
     if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
