@@ -176,6 +176,35 @@ function createEmuerV2Router(deps) {
     }
   });
 
+  // A public daily reflection is eligible once per Passport and JST day.  The
+  // server rereads the saved day, so a client cannot reward a private or empty
+  // draft by merely sending a request.
+  router.post("/activity/public-reflection", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const date = String(req.body.date || "");
+    const today = policy.dayKey(Date.now());
+    const recipient = String(req.identity.walletAddress || "").toLowerCase();
+    if (date !== today || !validAddress(recipient)) return res.status(409).json({ error: "PUBLIC_REFLECTION_NOT_VERIFIED" });
+    try {
+      const day = await db.collection("ichinichi_days").doc(`${recipient}__${date}`).get();
+      const data = day.exists ? day.data() || {} : {};
+      if (!day.exists || data.visibility !== "public" || !String(data.learning || "").trim() || !data.sharedAt ||
+          String(data.address || "").toLowerCase() !== recipient || String(data.date || "") !== date) {
+        return res.status(409).json({ error: "PUBLIC_REFLECTION_NOT_VERIFIED" });
+      }
+      const row = await createReward({
+        key: policy.dailyRewardKey(req.identity.uid, "public-reflection", Date.now()),
+        kind: "public-reflection", recipient, meta: { date, dayId: day.id }
+      });
+      return res.json({ ok: true, rewardId: row.claimId });
+    } catch (error) {
+      console.error("EMUER v2 public reflection reward error:", error.message);
+      return res.status(500).json({ error: "PUBLIC_REFLECTION_REWARD_FAILED" });
+    }
+  });
+
   router.get("/rewards", requireFirebaseUser, requireOwnAddress, async (req, res) => {
     if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
