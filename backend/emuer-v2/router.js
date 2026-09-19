@@ -21,7 +21,10 @@ const ABI = [
 ];
 
 function enabled(env) {
-  return env.EMUER_V2_ENABLED === "true";
+  // The old reward system is frozen during the migration. New rewards become
+  // available exactly at the published JST start time; an explicit hold is the
+  // only way to stop this in an emergency.
+  return env.EMUER_V2_LAUNCH_HOLD !== "true" && policy.isActive(Date.now());
 }
 /* Keccak is intentionally computed by the server library at runtime.  The
  * deterministic input itself stays dependency-free so policy tests can run

@@ -206,9 +206,10 @@ cron.schedule("30 4 * * *", () => {
 // =====================
 const OPERATOR_PRIVATE_KEY = process.env.OPERATOR_PRIVATE_KEY;
 const EMUER_CONTRACT_ADDRESS = process.env.EMUER_CONTRACT_ADDRESS || "0x4418d5250Dae4b1125ADFCD5C0779B1412E4a964";
-// v2 を有効にしたら、旧コントラクトへ送金する処理は一切実行しない。
-// 旧EMUERは履歴参照用として残し、v2の配布は /api/emuer/v2 の署名フローだけで行う。
-const EMUER_V2_ENABLED = process.env.EMUER_V2_ENABLED === "true";
+// 旧報酬は移行開始待ちの間も停止する。旧EMUERは履歴参照用として残し、
+// v2の配布は 2026-10-01 00:00 JST 以降に /api/emuer/v2 の署名フローだけで行う。
+// 緊急時だけ Render の EMUER_LEGACY_REWARDS_DISABLED=false で旧機能を一時復帰できる。
+const EMUER_LEGACY_REWARDS_DISABLED = process.env.EMUER_LEGACY_REWARDS_DISABLED !== "false";
 // 旧既定の https://polygon-rpc.com は API キー必須になり 401 を返すため、公開RPCへ変更。
 const POLYGON_RPC_URL = process.env.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com";
 const CAMPAIGN_ID = "EmuRelease2026";
@@ -261,7 +262,7 @@ function verifyAirdropSignature({ address, campaign, timestamp, signature }) {
 // エアドロ一括送金バッチ（Dプラン）
 // =====================
 async function runAirdropBatch() {
-  if (EMUER_V2_ENABLED) {
+  if (EMUER_LEGACY_REWARDS_DISABLED) {
     console.warn("⚠️ EMUER v2 有効中: 旧エアドロ配布をスキップ");
     return;
   }
@@ -437,7 +438,7 @@ function verifyOwnerSignature({ address, action, timestamp, signature }) {
 // 月次EMUER配布 API (毎月20日・オーナーのみ)
 // =====================
 async function runMonthlyDistribution(monthKey) {
-  if (EMUER_V2_ENABLED) {
+  if (EMUER_LEGACY_REWARDS_DISABLED) {
     console.warn("⚠️ EMUER v2 有効中: 旧月次配布をスキップ");
     return { error: "LEGACY_EMUER_DISABLED" };
   }
@@ -469,7 +470,7 @@ async function runMonthlyDistribution(monthKey) {
 }
 
 app.post("/monthly-distribute", async (req, res) => {
-  if (EMUER_V2_ENABLED) return res.status(409).json({ error: "LEGACY_EMUER_DISABLED" });
+  if (EMUER_LEGACY_REWARDS_DISABLED) return res.status(409).json({ error: "LEGACY_EMUER_DISABLED" });
   const { address, action, timestamp, signature } = req.body;
   if (!verifyOwnerSignature({ address, action: "monthly-distribute", timestamp, signature }))
     return res.status(403).json({ error: "UNAUTHORIZED" });
@@ -522,7 +523,7 @@ app.get("/admin/restriction-stats", async (req, res) => {
 // 管理者: ボーナス報酬手動送金
 // =====================
 app.post("/admin/send-reward", async (req, res) => {
-  if (EMUER_V2_ENABLED) return res.status(409).json({ error: "LEGACY_EMUER_DISABLED" });
+  if (EMUER_LEGACY_REWARDS_DISABLED) return res.status(409).json({ error: "LEGACY_EMUER_DISABLED" });
   const { address: ownerAddress, action, timestamp, signature, targetAddress, amount, reason } = req.body;
   if (!verifyOwnerSignature({ address: ownerAddress, action: "send-reward", timestamp, signature }))
     return res.status(403).json({ error: "UNAUTHORIZED" });
@@ -559,7 +560,7 @@ const KNOWLEDGE_BOUNTY = 3;
 const KNOWLEDGE_BOUNTY_ALLOWED = [KNOWLEDGE_BOUNTY, 10];
 
 async function runKnowledgeBountyBatch() {
-  if (EMUER_V2_ENABLED) {
+  if (EMUER_LEGACY_REWARDS_DISABLED) {
     console.warn("⚠️ EMUER v2 有効中: 旧知識懸賞配布をスキップ");
     return;
   }
@@ -721,7 +722,7 @@ function _jstDateStr(d) {
 const EMU_LOGIN_BONUS = 0.5;
 
 async function runOffchainEmuerReconcile() {
-  if (EMUER_V2_ENABLED) {
+  if (EMUER_LEGACY_REWARDS_DISABLED) {
     console.warn("⚠️ EMUER v2 有効中: 旧オフチェーン台帳照合をスキップ");
     return;
   }
@@ -835,7 +836,7 @@ async function _findChesAccount(uid, addr) {
 
 // ── 受取状況の確認 ──
 app.get("/api/emuer/login-bonus/status", requireFirebaseUser, requireOwnAddress, async (req, res) => {
-  if (EMUER_V2_ENABLED) return res.status(409).json({ error: "LEGACY_EMUER_DISABLED" });
+  if (EMUER_LEGACY_REWARDS_DISABLED) return res.status(409).json({ error: "LEGACY_EMUER_DISABLED" });
   try {
     if (!db) return res.json({ claimedToday: false });
     const uid = req.identity.uid;
@@ -853,7 +854,7 @@ app.get("/api/emuer/login-bonus/status", requireFirebaseUser, requireOwnAddress,
 
 // ── 受取（1日1回・アカウント単位） ──
 app.post("/api/emuer/login-bonus", requireFirebaseUser, requireOwnAddress, async (req, res) => {
-  if (EMUER_V2_ENABLED) return res.status(409).json({ error: "LEGACY_EMUER_DISABLED" });
+  if (EMUER_LEGACY_REWARDS_DISABLED) return res.status(409).json({ error: "LEGACY_EMUER_DISABLED" });
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });
     const address = String(req.body.address || "").toLowerCase().trim();
