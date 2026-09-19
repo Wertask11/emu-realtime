@@ -1,0 +1,110 @@
+"use strict";
+
+/*
+ * EMUER v2 gateway.
+ *
+ * The chain only accepts an EIP-712 authorisation from AUTHORIZER_ROLE.  This
+ * module keeps the activity record in Firestore and returns a short-lived
+ * authorisation to the self-custody wallet; it never sends a user-to-user
+ * transfer and it never stores a private key in Firestore.
+ */
+const policy = require("./policy");
+
+const CONTRACT = "0x9c102cC3016C70767082b60196565878D9314864";
+const CHAIN_ID = 137;
+const ABI = [
+  "function hasRole(bytes32 role,address account) view returns (bool)",
+  "function claimPaid(bytes32) view returns (uint256)",
+  "function claimAuthorizedTotal(bytes32) view returns (uint256)"
+];
+
+function enabled(env) {
+  return env.EMUER_V2_ENABLED === "true";
+}
+/* Keccak is intentionally computed by the server library at runtime.  The
+ * deterministic input itself stays dependency-free so policy tests can run
+ * without installing the web server. */
+function rewardKey(uid, timestamp) { return policy.dailyRewardKey(uid, "login", timestamp); }
+
+function createEmuerV2Router(deps) {
+  const express = require("express");
+  const ethers = require("ethers");
+  const AUTHORIZER_ROLE = ethers.utils.id("AUTHORIZER_ROLE");
+  const claimId = key => ethers.utils.keccak256(ethers.utils.toUtf8Bytes(key));
+  const validAddress = value => ethers.utils.isAddress(String(value || ""));
+  const router = express.Router();
+  const db = deps.db;
+  const requireFirebaseUser = deps.requireFirebaseUser;
+  const requireOwnAddress = deps.requireOwnAddress;
+  const env = deps.env || process.env;
+  const isEnabled = () => enabled(env);
+  const rpcUrl = env.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com";
+  const privateKey = env.EMUER_V2_AUTHORIZER_PRIVATE_KEY || "";
+  const provider = privateKey ? new ethers.providers.JsonRpcProvider(rpcUrl) : null;
+  const signer = provider ? new ethers.Wallet(privateKey, provider) : null;
+  const contract = provider ? new ethers.Contract(CONTRACT, ABI, provider) : null;
+
+  async function signerReady() {
+    if (!signer || !contract) return { ok: false, code: "AUTHORIZER_NOT_CONFIGURED" };
+    const hasRole = await contract.hasRole(AUTHORIZER_ROLE, signer.address);
+    return hasRole ? { ok: true } : { ok: false, code: "AUTHORIZER_ROLE_MISSING" };
+  }
+  async function signReward(record) {
+    const deadline = Math.floor(Date.now() / 1000) + 15 * 60;
+    const value = {
+      claimId: record.claimId,
+      recipient: ethers.utils.getAddress(record.recipient),
+      totalAmount: record.amountWei,
+      deadline
+    };
+    const signature = await signer._signTypedData(
+      { name: "Emuer", version: "2", chainId: CHAIN_ID, verifyingContract: CONTRACT },
+      { Reward: [
+        { name: "claimId", type: "bytes32" }, { name: "recipient", type: "address" },
+        { name: "totalAmount", type: "uint256" }, { name: "deadline", type: "uint256" }
+      ] }, value
+    );
+    return { ...value, authorization: signature };
+  }
+
+  router.get("/config", (req, res) => res.json({
+    enabled: isEnabled(), chainId: CHAIN_ID, contract: CONTRACT,
+    startsAt: new Date(policy.START_MS).toISOString(), monthlyCap: "416000"
+  }));
+
+  router.post("/daily/login", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const recipient = String(req.identity.walletAddress || "").toLowerCase();
+    if (!validAddress(recipient)) return res.status(400).json({ error: "SELF_CUSTODY_WALLET_REQUIRED" });
+    if (Date.now() < policy.START_MS) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    try {
+      const ready = await signerReady();
+      if (!ready.ok) return res.status(503).json({ error: ready.code });
+      const key = rewardKey(req.identity.uid, Date.now());
+      const id = claimId(key);
+      const ref = db.collection("emuer_v2_rewards").doc(id);
+      let row;
+      await db.runTransaction(async tx => {
+        const previous = await tx.get(ref);
+        if (previous.exists) { row = previous.data(); return; }
+        row = {
+          schema: "emuer-v2-reward-v1", kind: "login", key, claimId: id,
+          uid: req.identity.uid, recipient, amountWei: policy.UNIT.toString(), amount: "1",
+          status: "pending", createdAt: new Date(), updatedAt: new Date()
+        };
+        tx.create(ref, row);
+      });
+      if (String(row.recipient || "").toLowerCase() !== recipient) return res.status(409).json({ error: "REWARD_BOUND_TO_ANOTHER_WALLET" });
+      const authorization = await signReward(row);
+      return res.json({ ok: true, alreadyCreated: !!row.createdAt && row.key === key, reward: authorization });
+    } catch (error) {
+      console.error("EMUER v2 login reward error:", error.message);
+      return res.status(500).json({ error: "REWARD_ISSUE_FAILED" });
+    }
+  });
+
+  return { router, isEnabled, signerReady, contractAddress: CONTRACT };
+}
+
+module.exports = { createEmuerV2Router, CONTRACT, CHAIN_ID, rewardKey, enabled };
