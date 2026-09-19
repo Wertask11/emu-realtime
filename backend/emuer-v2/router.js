@@ -234,6 +234,47 @@ function createEmuerV2Router(deps) {
     }
   });
 
+  // Knowledge requests never debit the requester.  An adopted answer is
+  // automatically approved only when the stored request/answer pass the
+  // objective checks below; anything outside that shape receives no reward.
+  router.post("/activity/knowledge-answer", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const requestId = String(req.body.requestId || "").trim();
+    const answerId = String(req.body.answerId || "").trim();
+    const requester = String(req.identity.walletAddress || "").toLowerCase();
+    if (!requestId || !answerId || !validAddress(requester)) return res.status(400).json({ error: "INVALID_KNOWLEDGE_ANSWER" });
+    try {
+      const [requestSnap, answerSnap] = await Promise.all([
+        db.collection("knowledge_requests").doc(requestId).get(),
+        db.collection("knowledge_answers").doc(answerId).get()
+      ]);
+      if (!requestSnap.exists || !answerSnap.exists) return res.status(404).json({ error: "REQUEST_OR_ANSWER_NOT_FOUND" });
+      const request = requestSnap.data() || {};
+      const answer = answerSnap.data() || {};
+      const recipient = String(answer.answerAuthor || "").toLowerCase();
+      const acceptedAt = request.awardedAt && typeof request.awardedAt.toDate === "function" ? request.awardedAt.toDate().getTime() : 0;
+      const objectiveChecks = String(request.author || "").toLowerCase() === requester &&
+        request.status === "awarded" && request.rewardPolicy === "emuer-v2-treasury-1" &&
+        String(request.acceptedAnswerId || "") === answerId && String(request.acceptedAnswerAuthor || "").toLowerCase() === recipient &&
+        answer.status === "accepted" && String(answer.requestId || "") === requestId &&
+        validAddress(recipient) && recipient !== requester && acceptedAt >= policy.START_MS &&
+        String(answer.experience || "").trim().length >= 10 && String(answer.knowledge || "").trim().length >= 10 &&
+        String(answer.limits || "").trim().length >= 3;
+      if (!objectiveChecks) return res.status(409).json({ error: "KNOWLEDGE_ANSWER_NOT_VERIFIED" });
+      const row = await createReward({
+        key: JSON.stringify(["emuer-v2", "knowledge-answer", requestId, answerId]), kind: "knowledge-answer", recipient,
+        meta: { requestId, answerId, question: String(request.question || "").slice(0, 160), review: "automatic-approved" }
+      });
+      await requestSnap.ref.set({ rewardReviewStatus: "automatic-approved", rewardReviewedAt: new Date() }, { merge: true });
+      return res.json({ ok: true, rewardId: row.claimId, review: "automatic-approved" });
+    } catch (error) {
+      console.error("EMUER v2 knowledge answer reward error:", error.message);
+      return res.status(500).json({ error: "KNOWLEDGE_ANSWER_REWARD_FAILED" });
+    }
+  });
+
   router.get("/rewards", requireFirebaseUser, requireOwnAddress, async (req, res) => {
     if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
