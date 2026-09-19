@@ -38,6 +38,7 @@ function createEmuerV2Router(deps) {
   const db = deps.db;
   const requireFirebaseUser = deps.requireFirebaseUser;
   const requireOwnAddress = deps.requireOwnAddress;
+  const entitlement = deps.entitlement;
   const env = deps.env || process.env;
   const isEnabled = () => enabled(env);
   const operatorAddresses = new Set(String(env.EMUER_V2_OPERATOR_ADDRESSES || TREASURY)
@@ -76,7 +77,8 @@ function createEmuerV2Router(deps) {
   function reflectionKey(postId, changeId) {
     return JSON.stringify(["emuer-v2", "change-reflection", String(postId), String(changeId)]);
   }
-  async function createReward({ key, kind, recipient, meta }) {
+  async function createReward({ key, kind, recipient, meta, amountEmuer = 1 }) {
+    if (!Number.isSafeInteger(amountEmuer) || amountEmuer < 1) throw new Error("INVALID_REWARD_AMOUNT");
     const id = claimId(key);
     const ref = db.collection("emuer_v2_rewards").doc(id);
     let row;
@@ -85,7 +87,7 @@ function createEmuerV2Router(deps) {
       if (previous.exists) { row = previous.data(); return; }
       row = {
         schema: "emuer-v2-reward-v1", kind, key, claimId: id,
-        recipient: String(recipient).toLowerCase(), amountWei: policy.UNIT.toString(), amount: "1",
+        recipient: String(recipient).toLowerCase(), amountWei: (BigInt(amountEmuer) * policy.UNIT).toString(), amount: String(amountEmuer),
         status: "pending", ...meta, createdAt: new Date(), updatedAt: new Date()
       };
       tx.create(ref, row);
@@ -107,11 +109,79 @@ function createEmuerV2Router(deps) {
     if (scopeType === "quest" && scopeId === FOUNDER_QUEST_ID) return null;
     return { scopeType, scopeId };
   }
+  async function accessFor(req, action) {
+    if (!entitlement) throw new Error("ENTITLEMENT_UNAVAILABLE");
+    const current = await entitlement.getEntitlement(req.identity.uid, req.identity.account);
+    const plan = current.plan;
+    if (!['light', 'plus', 'pro'].includes(plan)) return { ok: false, code: "PLAN_REQUIRED", plan };
+    const period = policy.period(plan, action, Date.now());
+    if (period.limit === null) return { ok: true, plan, period, used: 0 };
+    const ref = db.collection("emuer_v2_access_usage").doc(`${req.identity.uid}:${action}:${period.key}`);
+    const snap = await ref.get();
+    const used = snap.exists ? Number((snap.data() || {}).used || 0) : 0;
+    return { ok: used < period.limit, code: used < period.limit ? null : "PERIOD_LIMIT_REACHED", plan, period, used, ref };
+  }
 
   router.get("/config", (req, res) => res.json({
     enabled: isEnabled(), chainId: CHAIN_ID, contract: CONTRACT,
     startsAt: new Date(policy.START_MS).toISOString(), monthlyCap: "416000"
   }));
+
+  router.get("/readiness", async (req, res) => {
+    const active = policy.isActive(Date.now());
+    let authorizer = { ok: false, code: "AUTHORIZER_NOT_CONFIGURED" };
+    try { authorizer = await signerReady(); } catch (_) { authorizer = { ok: false, code: "AUTHORIZER_CHECK_FAILED" }; }
+    res.json({ enabled: isEnabled(), active, startsAt: new Date(policy.START_MS).toISOString(), authorizer, contract: CONTRACT, chainId: CHAIN_ID });
+  });
+
+  router.get("/access/:action", requireFirebaseUser, async (req, res) => {
+    if (!['convert', 'exchange'].includes(String(req.params.action))) return res.status(400).json({ error: "INVALID_ACTION" });
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    try {
+      const access = await accessFor(req, String(req.params.action));
+      return res.json({ ok: access.ok, error: access.code || null, plan: access.plan, used: access.used || 0, limit: access.period && access.period.limit, period: access.period && access.period.key });
+    } catch (error) { return res.status(503).json({ error: error.message === "ENTITLEMENT_UNAVAILABLE" ? error.message : "ACCESS_CHECK_FAILED" }); }
+  });
+
+  // Historical Good / received Change is deliberately the only past data that
+  // can become EMUER.  The backfill job writes the verified total once; this
+  // endpoint turns that one immutable legacy ledger amount into a v2 claim.
+  router.post("/legacy/convert", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const recipient = String(req.identity.walletAddress || "").toLowerCase();
+    if (!validAddress(recipient)) return res.status(400).json({ error: "SELF_CUSTODY_WALLET_REQUIRED" });
+    try {
+      const access = await accessFor(req, "convert");
+      if (!access.ok) return res.status(403).json({ error: access.code, plan: access.plan });
+      const ledgerRef = db.collection("emuer_v2_unconverted_legacy").doc(recipient);
+      let reward;
+      await db.runTransaction(async tx => {
+        const [ledgerSnap, usageSnap] = await Promise.all([tx.get(ledgerRef), access.ref ? tx.get(access.ref) : Promise.resolve(null)]);
+        const ledger = ledgerSnap.exists ? ledgerSnap.data() || {} : {};
+        const amountEmuer = Number(ledger.unconverted || 0);
+        if (!ledgerSnap.exists || ledger.status !== "identity_pending" || !Number.isSafeInteger(amountEmuer) || amountEmuer < 1) throw new Error("NO_VERIFIED_LEGACY_BALANCE");
+        if (access.period.limit !== null && Number((usageSnap && usageSnap.data() || {}).used || 0) >= access.period.limit) throw new Error("PERIOD_LIMIT_REACHED");
+        const key = JSON.stringify(["emuer-v2", "legacy-good-change", recipient]);
+        const id = claimId(key);
+        const rewardRef = db.collection("emuer_v2_rewards").doc(id);
+        reward = { schema: "emuer-v2-reward-v1", kind: "legacy-good-change", key, claimId: id, recipient,
+          amountWei: (BigInt(amountEmuer) * policy.UNIT).toString(), amount: String(amountEmuer), status: "pending",
+          source: "verified-backfill", createdAt: new Date(), updatedAt: new Date() };
+        tx.create(rewardRef, reward);
+        tx.update(ledgerRef, { status: "converted", convertedClaimId: id, convertedAt: new Date(), updatedAt: new Date() });
+        if (access.period.limit !== null) tx.set(access.ref, { uid: req.identity.uid, action: "convert", period: access.period.key, plan: access.plan, used: Number((usageSnap && usageSnap.data() || {}).used || 0) + 1, updatedAt: new Date() }, { merge: true });
+      });
+      return res.json({ ok: true, rewardId: reward.claimId, amount: reward.amount, plan: access.plan });
+    } catch (error) {
+      const code = String(error.message || "");
+      if (["NO_VERIFIED_LEGACY_BALANCE", "PERIOD_LIMIT_REACHED"].includes(code)) return res.status(409).json({ error: code });
+      if (code.includes("ALREADY_EXISTS")) return res.status(409).json({ error: "LEGACY_BALANCE_ALREADY_CONVERTED" });
+      console.error("EMUER v2 legacy conversion error:", error.message); return res.status(500).json({ error: "LEGACY_CONVERSION_FAILED" });
+    }
+  });
 
   // Guild/Quest rewards are deliberately not automatic.  An operator first
   // publishes a fixed whole-EMUER budget and conditions; members then leave
