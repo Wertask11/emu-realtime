@@ -94,6 +94,20 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/paid_users/$(a.get('chesAddress', '').lower())));
     }
 
+    /* SchoolPark の公開期間。request.time は Firebase が付ける時刻なので、
+       利用者が端末時計を変えても早く入ることはできない。 */
+    function schoolParkPassPreviewStarted() {
+      return request.time >= timestamp.date(2026, 9, 21) - duration.value(9, 'h');
+    }
+    function schoolParkPublicStarted() {
+      return request.time >= timestamp.date(2026, 10, 1) - duration.value(9, 'h');
+    }
+    function canAccessSchoolPark() {
+      return schoolParkPublicStarted()
+        || isOwner()
+        || (schoolParkPassPreviewStarted() && hasPass());
+    }
+
     /* ギルドに関われるか。
          運営 ／ 公式パスの持ち主 ／ 信用が足りている人
 
@@ -841,8 +855,9 @@ service cloud.firestore {
          special 特殊ギルド。投票もギルドに関われる人だけ
        どちらも「議題を出す」のはギルドに関われる人だけ。 */
     match /sp_votes/{voteId} {
-      allow read: if true;
-      allow create: if isMyWallet(request.resource.data.get('createdBy', ''))
+      allow read: if canAccessSchoolPark();
+      allow create: if canAccessSchoolPark()
+        && isMyWallet(request.resource.data.get('createdBy', ''))
         && canGuild()
         && request.resource.data.get('kind', '') in ['free', 'special']
         && guildIdShape(request.resource.data.get('guildId', ''))
@@ -863,7 +878,7 @@ service cloud.firestore {
              採択された議題からしか「Questにする」へ進めない。
            ・ギルドの後付け：guildId がまだ空の古い議題に、1回だけ入れる。
              すでに入っているものを別のギルドへ動かすことはできない。 */
-      allow update: if (isMyWallet(resource.data.get('createdBy', ''))
+      allow update: if canAccessSchoolPark() && ((isMyWallet(resource.data.get('createdBy', ''))
           && changedOnly(['closesAt'])
           && request.resource.data.closesAt is int
           && request.resource.data.closesAt <= resource.data.get('closesAt', 0))
@@ -878,14 +893,14 @@ service cloud.firestore {
         || (isOwner()
           && changedOnly(['guildId'])
           && resource.data.get('guildId', '') == ''
-          && guildIdShape(request.resource.data.get('guildId', '')));
+          && guildIdShape(request.resource.data.get('guildId', ''))));
       allow delete: if false;
 
       match /ballots/{addr} {
-        allow read: if true;
+        allow read: if canAccessSchoolPark();
         /* 文書のIDが自分のアドレスのときだけ作れる。他人の票は作れない。
            特殊ギルドの議題は、ギルドに関われる人だけが入れられる。 */
-        allow create: if isMyWallet(addr)
+        allow create: if canAccessSchoolPark() && isMyWallet(addr)
           && request.resource.data.get('optionId', '') is string
           && request.resource.data.get('optionId', '').size() > 0
           && (
@@ -926,9 +941,9 @@ service cloud.firestore {
             && getAfter(questNumberPath(d.questNumber)).data.questId == questId));
     }
     match /sp_quest_counters/{id} {
-      allow read: if true;
+      allow read: if canAccessSchoolPark();
       allow create, delete: if false;
-      allow update: if id == 'quests' && isOwner()
+      allow update: if canAccessSchoolPark() && id == 'quests' && isOwner()
         && changedOnly(['nextNumber', 'lastQuestId'])
         && request.resource.data.nextNumber is int
         && request.resource.data.nextNumber == resource.data.nextNumber + 1
@@ -939,9 +954,9 @@ service cloud.firestore {
         && getAfter(questNumberPath(resource.data.nextNumber)).data.questId == request.resource.data.lastQuestId;
     }
     match /sp_quest_numbers/{number} {
-      allow read: if true;
+      allow read: if canAccessSchoolPark();
       allow update, delete: if false;
-      allow create: if isOwner()
+      allow create: if canAccessSchoolPark() && isOwner()
         && request.resource.data.keys().hasOnly(['questId'])
         && request.resource.data.questId is string
         && number == string(get(questCounter()).data.nextNumber)
@@ -952,7 +967,7 @@ service cloud.firestore {
     }
 
     match /sp_quests/{questId} {
-      allow read: if true;
+      allow read: if canAccessSchoolPark();
       /* クエストは「仕事」なので、誰でも出せるものではない。
          当面は運営だけ。自分名義であることも合わせて確かめる。
 
@@ -963,7 +978,7 @@ service cloud.firestore {
          guildId は空でもよい。どのギルドにも属さない小さな試みを残すため。
          ここで文書を見に行かないのは、1回の書き込みで見に行ける回数（10回）を
          採番の確認で使い切っているため。中身の形だけを確かめる。 */
-      allow create: if isMyWallet(request.resource.data.get('owner', ''))
+      allow create: if canAccessSchoolPark() && isMyWallet(request.resource.data.get('owner', ''))
         && isOwnerAddr(request.resource.data.get('owner', ''))
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
@@ -987,33 +1002,33 @@ service cloud.firestore {
          同じ運営でも、ウォレットで入ったときとLINE等で入ったときで
          アドレスが変わるため、名義だけで見ると
          「自分が出したクエストなのに自分で完了にできない」が起きる。 */
-      allow update: if questId != 'founder-quest-000'
+      allow update: if canAccessSchoolPark() && questId != 'founder-quest-000'
         && (isOwner() || isMyWallet(resource.data.get('owner', '')))
         && changedOnly(['status', 'closedAt'])
         && request.resource.data.status in ['OPEN', 'RUNNING', 'CLOSED'];
       allow delete: if false;
 
       match /commits/{addr} {
-        allow read: if true;
-        allow create: if questId != 'founder-quest-000' && isMyWallet(addr)
+        allow read: if canAccessSchoolPark();
+        allow create: if canAccessSchoolPark() && questId != 'founder-quest-000' && isMyWallet(addr)
           // 受けるときに自分で「認められた」ことにはできない
           && !request.resource.data.keys().hasAny(['approved', 'approvedAt', 'approvedBy']);
         /* 運営だけが「実際に動いたことを確かめた」印を付けられる。
            分配も、信用スコアの完走も、この印が立っている人だけが対象。
            受けただけでは分配しない。名前など他の欄は動かせない。 */
-        allow update: if isOwner()
+        allow update: if canAccessSchoolPark() && isOwner()
           && changedOnly(['approved', 'approvedAt', 'approvedBy'])
           && request.resource.data.approved is bool;
         // 受けたあとで降りることは認める。ただし自分の分だけ。
-        allow delete: if questId != 'founder-quest-000' && isMyWallet(addr);
+        allow delete: if canAccessSchoolPark() && questId != 'founder-quest-000' && isMyWallet(addr);
       }
 
       /* クエストの途中報告。書けるのは、そのクエストを実際に受けた人だけ。
          受けた記録（commits/{番号}）があることを、その場で確かめる。
          いちど書いた報告は、書き換えも削除もできない。 */
       match /logs/{logId} {
-        allow read: if true;
-        allow create: if questId != 'founder-quest-000' && isMyWallet(request.resource.data.get('author', ''))
+        allow read: if canAccessSchoolPark();
+        allow create: if canAccessSchoolPark() && questId != 'founder-quest-000' && isMyWallet(request.resource.data.get('author', ''))
           && exists(/databases/$(database)/documents/sp_quests/$(questId)/commits/$(request.resource.data.author))
           && request.resource.data.body is string
           && request.resource.data.body.size() > 0
@@ -1041,11 +1056,11 @@ service cloud.firestore {
 
        ほかの文書を見に行かないので、参照は0回。 */
     match /sp_tasks/{uid} {
-      allow read, write: if isMe(uid);
+      allow read, write: if canAccessSchoolPark() && isMe(uid);
 
       match /items/{taskId} {
-        allow read, delete: if isMe(uid);
-        allow create, update: if isMe(uid)
+        allow read, delete: if canAccessSchoolPark() && isMe(uid);
+        allow create, update: if canAccessSchoolPark() && isMe(uid)
           && request.resource.data.title is string
           && request.resource.data.title.size() > 0
           && request.resource.data.title.size() <= 200
@@ -1064,8 +1079,8 @@ service cloud.firestore {
        「一定に達したかどうか」の答えだけをここに置く。
        いまは運営が管理画面から書く。あとでサーバーが自動で書くようにする。 */
     match /sp_trust/{addr} {
-      allow read: if true;
-      allow write: if isOwner();
+      allow read: if canAccessSchoolPark();
+      allow write: if canAccessSchoolPark() && isOwner();
     }
 
     /* ───── ギルド ─────
@@ -1080,8 +1095,8 @@ service cloud.firestore {
        議題ごとの投票資格（sp_votes の kind）としてこれまでどおり残している。
        同じギルドの中に、誰でも投票できる議題と、関われる人だけの議題が並ぶ。 */
     match /sp_guilds/{guildId} {
-      allow read: if true;
-      allow create, update: if isOwner()
+      allow read: if canAccessSchoolPark();
+      allow create, update: if canAccessSchoolPark() && isOwner()
         && guildIdShape(guildId)
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
@@ -1106,27 +1121,27 @@ service cloud.firestore {
        投票権とは関係が無い。議題の投票資格はこれまでどおり
        一般（誰でも）／特殊（関われる人だけ）で決まる。 */
     match /sp_guild_members/{guildId} {
-      allow read: if true;
+      allow read: if canAccessSchoolPark();
       allow write: if false;    /* 数は下の2つを数えて出す。まとめの数字は置かない */
 
       match /joins/{addr} {
-        allow read: if true;
-        allow create: if isMyWallet(addr)
+        allow read: if canAccessSchoolPark();
+        allow create: if canAccessSchoolPark() && isMyWallet(addr)
           && request.resource.data.get('name', '') is string
           && request.resource.data.get('name', '').size() <= 60
           && request.resource.data.get('at', 0) is int;
         allow update: if false;
-        allow delete: if isMyWallet(addr);
+        allow delete: if canAccessSchoolPark() && isMyWallet(addr);
       }
 
       match /supports/{addr} {
-        allow read: if true;
-        allow create: if isMyWallet(addr)
+        allow read: if canAccessSchoolPark();
+        allow create: if canAccessSchoolPark() && isMyWallet(addr)
           && request.resource.data.get('name', '') is string
           && request.resource.data.get('name', '').size() <= 60
           && request.resource.data.get('at', 0) is int;
         allow update: if false;
-        allow delete: if isMyWallet(addr);
+        allow delete: if canAccessSchoolPark() && isMyWallet(addr);
       }
     }
 
@@ -1139,10 +1154,10 @@ service cloud.firestore {
        乗った記録は joins/{パスポート番号}。文書のIDが誰かを表すので、
        同じ人が二重に乗ることはできない。降りるのは自分の分だけ。 */
     match /sp_park/{itemId} {
-      allow read: if true;
+      allow read: if canAccessSchoolPark();
       /* ボードと挑戦は light 以上なら誰でも。集まりは運営だけ。
          「いま開いてる部屋」は行き先を持てず成り立たなかったので、種類ごと外した。 */
-      allow create: if isMyWallet(request.resource.data.get('by', ''))
+      allow create: if canAccessSchoolPark() && isMyWallet(request.resource.data.get('by', ''))
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 120
@@ -1155,15 +1170,15 @@ service cloud.firestore {
         );
       /* 出した本人が、しまうことだけできる。
          クエストと同じ理由で、運営はどの入り方でも触れるようにしておく。 */
-      allow update: if (isOwner() || isMyWallet(resource.data.get('by', '')))
+      allow update: if canAccessSchoolPark() && (isOwner() || isMyWallet(resource.data.get('by', '')))
         && changedOnly(['hidden']);
-      allow delete: if isOwner() || isMyWallet(resource.data.get('by', ''));
+      allow delete: if canAccessSchoolPark() && (isOwner() || isMyWallet(resource.data.get('by', '')));
 
       match /joins/{addr} {
-        allow read: if true;
-        allow create: if isMyWallet(addr);
+        allow read: if canAccessSchoolPark();
+        allow create: if canAccessSchoolPark() && isMyWallet(addr);
         allow update: if false;
-        allow delete: if isMyWallet(addr);
+        allow delete: if canAccessSchoolPark() && isMyWallet(addr);
       }
     }
 
@@ -1174,8 +1189,8 @@ service cloud.firestore {
        状態が CLOSED になっていることを、その場で確かめる。
        いちど置いた知恵は書き換えも削除もできない。 */
     match /sp_wisdom/{wisdomId} {
-      allow read: if true;
-      allow create: if isMyWallet(request.resource.data.get('author', ''))
+      allow read: if canAccessSchoolPark();
+      allow create: if canAccessSchoolPark() && isMyWallet(request.resource.data.get('author', ''))
         && request.resource.data.insight is string
         && request.resource.data.insight.size() > 0
         && request.resource.data.insight.size() <= 200
@@ -1189,11 +1204,11 @@ service cloud.firestore {
          もとになるので、自分で押せると自分で点を増やせてしまう。
          画面でもボタンを隠しているが、押せる道が残らないようここでも止める。 */
       match /cites/{addr} {
-        allow read: if true;
-        allow create: if isMyWallet(addr)
+        allow read: if canAccessSchoolPark();
+        allow create: if canAccessSchoolPark() && isMyWallet(addr)
           && get(/databases/$(database)/documents/sp_wisdom/$(wisdomId)).data.get('author', '') != addr;
         allow update: if false;
-        allow delete: if isMyWallet(addr);
+        allow delete: if canAccessSchoolPark() && isMyWallet(addr);
       }
     }
 
@@ -1224,8 +1239,8 @@ service cloud.firestore {
        書けるのは運営だけ。金額はあとから書き換えられない
        （直すときは、打ち消しの記録をもう1本入れる）。 */
     match /sp_treasury/{entryId} {
-      allow read: if true;
-      allow create: if isOwner()
+      allow read: if canAccessSchoolPark();
+      allow create: if canAccessSchoolPark() && isOwner()
         && request.resource.data.get('kind', '') in ['in', 'out']
         && request.resource.data.get('currency', '') in ['EMUER', 'JPYC', 'JPY']
         && request.resource.data.amount is number
@@ -1237,7 +1252,7 @@ service cloud.firestore {
         && request.resource.data.get('note', '').size() <= 400;
       /* 消すのは運営だけ。書き換えは認めない。 */
       allow update: if false;
-      allow delete: if isOwner();
+      allow delete: if canAccessSchoolPark() && isOwner();
     }
 
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。

@@ -172,6 +172,53 @@ const publicFormRateLimit = rateLimit({ windowMs: 10 * 60_000, max: 5, key: "for
 const entitlement = require("./entitlement").createEntitlement({ db });
 const requirePlan = entitlement.requirePlan;
 
+/* SchoolPark 公開日。判定はブラウザ時計ではなく、このサーバーの時刻で行う。
+   2026-09-21 00:00 JST = 2026-09-20 15:00 UTC
+   2026-10-01 00:00 JST = 2026-09-30 15:00 UTC */
+const {
+  PASS_PREVIEW_AT: SCHOOLPARK_PASS_PREVIEW_AT,
+  PUBLIC_AT: SCHOOLPARK_PUBLIC_AT,
+  decideSchoolParkAccess
+} = require("./schoolpark-access");
+
+async function optionalFirebaseIdentity(req) {
+  if (!firebaseAdmin || !db) return null;
+  const header = String(req.headers.authorization || "");
+  if (!header.startsWith("Bearer ")) return null;
+  const decoded = await firebaseAdmin.auth().verifyIdToken(header.slice(7));
+  const account = await db.collection("ches_accounts").doc(decoded.uid).get();
+  if (!account.exists) return { uid: decoded.uid, account: null };
+  return { uid: decoded.uid, account: account.data() || {} };
+}
+
+app.get("/api/schoolpark/access", async (req, res) => {
+  res.set("Cache-Control", "no-store, max-age=0");
+  try {
+    if (!firebaseAdmin || !db) return res.status(503).json({ error: "ACCESS_CHECK_UNAVAILABLE" });
+    const now = Date.now();
+    const identity = await optionalFirebaseIdentity(req);
+    const account = identity && identity.account;
+    const isOwner = !!account && [account.walletAddress, account.chesAddress]
+      .some(address => SP_OWNER_ADDRESSES.includes(String(address || "").toLowerCase()));
+    const hasOfficialPass = !!(identity && account)
+      && await entitlement.holdsOfficialPass(identity.uid, account);
+    const decision = decideSchoolParkAccess(now, { isOwner, hasOfficialPass });
+    return res.json({
+      serverNow: new Date(now).toISOString(),
+      phase: decision.phase,
+      allowed: decision.allowed,
+      authenticated: !!identity,
+      isOwner,
+      hasOfficialPass,
+      passPreviewStartsAt: new Date(SCHOOLPARK_PASS_PREVIEW_AT).toISOString(),
+      publicStartsAt: new Date(SCHOOLPARK_PUBLIC_AT).toISOString()
+    });
+  } catch (error) {
+    const invalidToken = /token|auth|credential|jwt/i.test(String(error && error.message || ""));
+    return res.status(invalidToken ? 401 : 500).json({ error: invalidToken ? "INVALID_AUTH_TOKEN" : "ACCESS_CHECK_FAILED" });
+  }
+});
+
 const membershipDeps = { db, firebaseAdmin, requireFirebaseUser, requireOwner, rateLimit, entitlement, requirePlan };
 const billing = require("./billing").createBillingRouter({ ...membershipDeps, webhookPath: STRIPE_WEBHOOK_PATH });
 const kyc = require("./kyc").createKycRouter(membershipDeps);

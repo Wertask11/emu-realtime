@@ -597,7 +597,7 @@ function createEntitlement(deps) {
     };
   }
 
-  return { getEntitlement, getEntitlementByAddress, uidOfAddress, requirePlan, forget, atLeast,
+  return { getEntitlement, getEntitlementByAddress, uidOfAddress, holdsOfficialPass, requirePlan, forget, atLeast,
     grantInitial, grantOne, revokeOne, listGrants, whois,
     consume, usageOf, usageWindow, limitOf, enforcing, PLAN_RANK, LIMITS, GRANTS_COL, ENFORCE_FROM };
 }
