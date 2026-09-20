@@ -11928,9 +11928,2834 @@ function _spIsPaidUser() {
   });
 
   /* ── カスタムキー実行 ── */
-  function _spRu
-... 120809 bytes omitted ...
-mellia', color: '#e0576f', bg: '#fff6f2', ownNav: true },
+  function _spRunAction(action) {
+    switch (action) {
+      case 'agents':   openSpPanel('spRobotPanel');    break;
+      case 'wallet':   openSpPanel('spWalletPanel');   break;
+      case 'settings': openSpPanel('spSettingsPanel'); break;
+      case 'reizo':    spReizoOpen?.();                break;
+      case 'emu':      break;
+    }
+  }
+  function _execCustomKey(n) {
+    const s = JSON.parse(localStorage.getItem('spSettings') || '{}');
+    const action = s['spCustomKey' + n] || 'none';
+    if (action === 'none') return;
+    _spRunAction(action);
+  }
+})();
+
+
+
+/* ======= ロゴ → ウォレット → メイン ======= */
+// ★ ロゴクリック時はウォレット画面を常に表示（メンテチェックはgoTomainapp内で行う）
+logoScreen.addEventListener("click", () => {
+  logoScreen.style.display = "none";
+  walletScreen.style.display = "flex";
+  // ロゴタップ数をFirebaseに記録（非ブロッキング）
+  spTrack('tap').catch(() => {});
+});
+
+// 規約チェックボックスは廃止（ログイン/登録＝みなし同意）。ボタンは常時有効。
+
+// --- [1] グローバル定数の更新 ---
+const AMOY_CHAIN_ID = "0x13882"; // 80002
+const SEPOLIA_CHAIN_ID = "0xaa36a7"; // 11155111
+
+// ======= SchoolPark アクセス統計トラッカー (Firebase) =======
+// type: 'tap' | 'paid' | 'free'
+// address: ウォレットアドレス（tap の場合は不要）
+async function spTrack(type, address) {
+  try {
+    if (!window.db || !window.fbLib) return;
+    const { doc, setDoc, collection, addDoc, increment, getDoc } = window.fbLib;
+    const db = window.db;
+    const now = new Date();
+    const addr = address ? address.toLowerCase() : null;
+
+    // ① グローバルカウンター (sp_stats/global)
+    const globalRef = doc(db, 'sp_stats', 'global');
+    const globalUpdate = { updated_at: now };
+    if (type === 'tap')  globalUpdate.total_taps  = increment(1);
+    if (type === 'paid') globalUpdate.paid_count  = increment(1);
+    if (type === 'free') globalUpdate.free_count  = increment(1);
+    setDoc(globalRef, globalUpdate, { merge: true })
+      .catch(e => console.warn('[spTrack] global:', e));
+
+    // ①-2 ユニーク入場者カウント（アドレス単位・重複なし・0スタート）
+    if (addr && (type === 'paid' || type === 'free')) {
+      const entrantRef = doc(db, 'sp_entrants', addr);
+      const entrantSnap = await getDoc(entrantRef);
+      if (!entrantSnap.exists()) {
+        await setDoc(entrantRef, { address: addr, first_seen: now });
+        setDoc(globalRef, { entrants: increment(1) }, { merge: true })
+          .catch(e => console.warn('[spTrack] entrants:', e));
+      }
+    }
+
+    // ② アドレス別ドキュメント（有料/無料パスのみ）
+    if (addr && (type === 'paid' || type === 'free')) {
+      const colName = type === 'paid' ? 'sp_paid_pass' : 'sp_free_pass';
+      const addrRef  = doc(db, colName, addr);
+      const snap     = await getDoc(addrRef);
+      let visitNum;
+
+      if (!snap.exists()) {
+        // 初回アクセス
+        visitNum = 1;
+        await setDoc(addrRef, {
+          address:     addr,
+          first_seen:  now,
+          last_seen:   now,
+          count:       1,
+        });
+      } else {
+        // 2回目以降
+        visitNum = (snap.data().count || 0) + 1;
+        await setDoc(addrRef, {
+          last_seen: now,
+          count:     increment(1),
+        }, { merge: true });
+      }
+
+      // ③ 個別ログ (sp_pass_logs)
+      addDoc(collection(db, 'sp_pass_logs'), {
+        type,
+        address:   addr,
+        timestamp: now,
+        visit_num: visitNum,
+      }).catch(e => console.warn('[spTrack] log:', e));
+    }
+  } catch (e) {
+    console.warn('[spTrack] error:', e);
+  }
+}
+
+/* スマホ判定。CHESレイヤーの _isMobile と同じ条件だが、
+   あちらは即時関数の内側にあり、ここからは呼べないため別に持つ。 */
+function _emuIsMobile() {
+  return /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|BlackBerry|Opera Mini/i.test(navigator.userAgent || "");
+}
+
+// --- [2] 接続ボタン（connectWalletButton）の本番用 ---
+document.getElementById("connectWalletButton").addEventListener("click", async () => {
+  // ★ ボタンを押した瞬間にローディング表示
+  _showSpLoadingOverlay();
+
+  if (typeof window.ethereum === "undefined") {
+    _cancelSpLoadingOverlay();
+    /* スマホの通常ブラウザには window.ethereum が無い。MetaMaskはアプリなので、
+       ディープリンクで「MetaMaskアプリ内のブラウザ」に同じURLを開き直してもらう。
+       これでSafariやChromeから入った人もウォレットで入場できる。 */
+    if (_emuIsMobile()) {
+      /* MetaMask のディープリンクは scheme を除いたURLを受け取る。
+         末尾スラッシュやクエリが付くと解決に失敗して「ページがありません」になるため、
+         ホスト＋パスだけにして末尾のスラッシュも落とす。 */
+      const target = (location.host + location.pathname).replace(/\/+$/, "");
+      const deepLink = "https://metamask.app.link/dapp/" + target;
+      if (confirm(
+        "ウォレットで入るには MetaMask アプリが必要です。\n\n" +
+        "「OK」を押すと MetaMask アプリでこのページを開き直します。\n" +
+        "（アプリが入っていない場合はインストール画面が開きます）"
+      )) {
+        location.href = deepLink;
+      }
+      return;
+    }
+    if (confirm(
+      "MetaMask が見つかりません。\n\n" +
+      "「OK」を押すと MetaMask の配布ページを開きます。\n" +
+      "インストール後、このページに戻ってもう一度お試しください。"
+    )) {
+      window.open("https://metamask.io/download/", "_blank", "noopener");
+    }
+    return;
+  }
+
+  try {
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const account = accounts[0];
+    window.connectedAccount = account;
+    currentUserId = account;
+    localStorage.setItem("emuWallet", account); // SchoolParkコンテンツ用に保存
+
+    console.log("🦊 Wallet Connected:", account);
+
+    /* ② ネットワークチェック（Polygonメインネット固定）
+
+       以前はオーナーだけこの確認を飛ばしていた。しかしコントラクトが
+       置かれているのは Polygon だけなので、別のチェーンに繋がっていると
+       balanceOf も users も空(0x)を返し、CALL_EXCEPTION が延々と出ていた。
+       残高もNFT判定も変換も、全部そこで壊れる。
+       オーナーであっても確認はする。ただし切り替えを断った場合は
+       （検証などの意図があるかもしれないので）入場自体は止めない。 */
+    const chainId = await window.ethereum.request({ method: "eth_chainId" });
+    const POLYGON_MAINNET = "0x89"; // 137
+    const _isOwner = _spIsOwnerAddr(account);
+    window._emuWrongNetwork = false;
+
+    if (chainId !== POLYGON_MAINNET) {
+      let switched = false;
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: POLYGON_MAINNET }]
+        });
+        switched = true;
+      } catch (e) {
+        // 4902 = ウォレットにPolygonが未登録。登録してから再度切り替える。
+        if (e && e.code === 4902) {
+          try {
+            await window.ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: POLYGON_MAINNET,
+                chainName: "Polygon Mainnet",
+                nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
+                rpcUrls: ["https://polygon-bor-rpc.publicnode.com"],
+                blockExplorerUrls: ["https://polygonscan.com"]
+              }]
+            });
+            switched = true;
+          } catch (addErr) { console.warn("Polygonの追加に失敗:", addErr && addErr.message); }
+        } else {
+          console.warn("Polygonへの切り替えに失敗:", e && e.message);
+        }
+      }
+
+      if (!switched) {
+        const nowChain = await window.ethereum.request({ method: "eth_chainId" }).catch(() => null);
+        switched = nowChain === POLYGON_MAINNET;
+      }
+      if (!switched) {
+        window._emuWrongNetwork = true;
+        if (!_isOwner) {
+          _cancelSpLoadingOverlay();
+          alert("Polygonメインネットに切り替えてください。");
+          return;
+        }
+        // オーナーは続行できるが、何が起きるかは伝える
+        console.warn("⚠️ Polygon以外に接続中。コントラクトの読み取りはすべて失敗します。");
+        alert("Polygon 以外のネットワークに接続されています。\n\n"
+            + "このまま進めますが、EMUER残高・NFT判定・変換はすべて失敗します。\n"
+            + "正しく使うにはウォレットを Polygon に切り替えてください。");
+      }
+    }
+
+    // ②-2 Firebase セッションを確立（LINE / Google と同じ土台）
+    // 署名でウォレット所有を証明し、CHESアカウントを用意する。
+    // これが無いと Emu のサーバーAPI（ログインボーナス等）と Firestore への書き込みが
+    // 「ログイン情報を確認できません」で弾かれる。署名を断られても入場自体は続行する。
+    window.emuAuth = { type: "wallet", address: account, provider: "metamask" };
+    localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
+    try {
+      const _walletSession = await window.CHES.signInWithWallet(account);
+      window.emuAuth.chesUid = _walletSession.uid;
+      localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
+    } catch (e) {
+      console.warn("[CHES] ウォレットのFirebaseセッション確立に失敗:", e && (e.message || e));
+      const _rejected = e && (e.code === 4001 || /reject|denied/i.test(String(e.message || "")));
+      const _wsEl = document.getElementById("walletStatus");
+      if (_wsEl) {
+        _wsEl.textContent = _rejected
+          ? "署名をキャンセルしたため、ログインボーナスなど一部の機能は使えません。"
+          : "ログイン確認に失敗したため、ログインボーナスなど一部の機能は使えません。";
+        _wsEl.style.color = "#a06000";
+        _wsEl.style.fontSize = "12px";
+      }
+    }
+
+    // ③ 公式NFTチェックの実行（失敗しても先へ進む）
+    await window.checkHexaNFT().catch(e => console.warn("checkHexaNFT:", e));
+    await window.checkFreeNFT().catch(e => console.warn("checkFreeNFT:", e));
+    await window.checkScheduleNFT().catch(e => console.warn("checkScheduleNFT:", e));
+
+    // オーナーは常にpaidNFT扱い
+    if (_isOwner) window.hasPaidNFT = true;
+
+    window.hasOfficialNFT = window.hasFreeNFT || window.hasPaidNFT;
+    console.log("🏫 本番NFT最終判定:", window.hasOfficialNFT);
+
+    // ④ ethers.js 初期化
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    signer = provider.getSigner();
+    
+    // 本番用コントラクト（後でアドレスを入れてください）
+emuerContract = new ethers.Contract(EMUER_CONTRACT_ADDRESS, EMUER_CONTRACT_ABI, signer);
+jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
+    // 接続直後にEMUER残高をキャッシュ（銀行iframeから参照可能に）
+    window.getEmuerBalance(account).catch(()=>{});
+
+    // ⑤ UI更新してメインへ
+    localStorage.removeItem("userMode");
+    const walletAddressButton = document.getElementById("walletAddressButton");
+    if (walletAddressButton) {
+      emuSetWalletLabel(emuShortAddr(account));
+    }
+    
+	if (typeof updateBonusCountdown === "function") {
+        await updateBonusCountdown(); 
+    }
+if (typeof updateConvertButton === "function") {
+    updateConvertButton();
+}
+  // ── メンテナンスゲート（オーナーのみ通過）──
+  const _isOwnerBypass = _spIsOwnerAddr(account);
+  if (MAINTENANCE_MODE && !_isOwnerBypass) {
+    const _ws2 = document.getElementById('walletScreen');
+    if (_ws2) _ws2.style.display = 'none';
+    const _ms2 = document.getElementById('maintenanceScreen');
+    if (_ms2) { _ms2.style.display = 'flex'; _startMaintenanceCountdown(); }
+    return;
+  }
+  // 有料パス入場をFirebaseに記録（非ブロッキング）
+  spTrack('paid', account).catch(() => {});
+  // ★ spPassType はgoToChesHub()内でNFT実態から確定する
+  // LINE / Google ログインと同じく、まず CHESハブ（メイン画面）へ
+  await goToChesHub();
+
+  } catch (err) {
+    console.error("❌ 接続エラー:", err);
+    _cancelSpLoadingOverlay();
+    // MetaMask TransportTimeoutError など接続失敗時のメッセージ
+    const _ws = document.getElementById("walletStatus");
+    if (_ws) {
+      const isTimeout = err && (err.message || "").toLowerCase().includes("timeout");
+      _ws.textContent = isTimeout
+        ? "⚠️ MetaMaskが応答していません。MetaMaskアイコンをクリックして起動してから再試行してください。"
+        : "❌ 接続に失敗しました。MetaMaskを確認して再試行してください。";
+      _ws.style.color = "#c0392b";
+      _ws.style.fontSize = "12px";
+    }
+  }
+});
+
+
+// --- [3] checkHexaNFT の修正（本番用） ---
+window.checkHexaNFT = async function () {
+  if (!window.connectedAccount) return;
+
+  // ★ まずFirestoreのpaid_usersを優先チェック（HEXA譲渡不可NFT対応）
+  // ── 24時間キャッシュで Firebase 無料枠節約 ──
+  const _paidCacheKey = '_paidUsersCache_' + (window.connectedAccount || '').toLowerCase();
+  const _paidCache = JSON.parse(localStorage.getItem(_paidCacheKey) || 'null');
+  const _paidCacheValid = _paidCache && (Date.now() - _paidCache.ts < 24 * 60 * 60 * 1000);
+  if (_paidCacheValid) {
+    if (_paidCache.isPaid) {
+      window.hasPaidNFT = true;
+      window._fromFirebasePaidUsers = true;
+      console.log("✅ paid_users キャッシュ利用:", window.connectedAccount);
+      return;
+    }
+  } else if (window.db && window.fbLib) {
+    try {
+      const docRef = window.fbLib.doc(
+        window.db, "paid_users", window.connectedAccount.toLowerCase()
+      );
+      const snap = await window.fbLib.getDoc(docRef);
+      localStorage.setItem(_paidCacheKey, JSON.stringify({ isPaid: snap.exists(), ts: Date.now() }));
+      if (snap.exists()) {
+        window.hasPaidNFT = true;
+        window._fromFirebasePaidUsers = true;
+        console.log("✅ Firestore有料ユーザー確認済み:", window.connectedAccount);
+        return;
+      }
+    } catch(e) {
+      console.error("Firestore有料ユーザーチェックエラー:", e);
+    }
+  }
+
+  try {
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const network = await provider.getNetwork();
+
+
+    // Polygonメインネット(137)でのみ実行
+    if (network.chainId === 137) { 
+      const hexaAddr = "0xC333F84fd2FD86760e7dC5a288b7a9D4128F2Dab";
+      const osAddr = "0x20a32466e6d9c43d73c569b8a934e6622d89c2db";
+      const abi = ["function balanceOf(address account, uint256 id) view returns (uint256)"];
+      const hexaContract = new ethers.Contract(hexaAddr, abi, provider);
+      const osContract = new ethers.Contract(osAddr, abi, provider);
+      const targetAddr = window.connectedAccount;
+
+      const hexaTokenIds = [
+        ...Array.from({ length: 13 }, (_, i) => i + 1),
+        64174, 64219, 64220, 64449, 64451, 64450, 64523
+      ];
+      const hexaChecks = hexaTokenIds.map(id =>
+        hexaContract.balanceOf(targetAddr, id).catch(() => ethers.BigNumber.from(0))
+      );
+
+      const osChecks = Array.from({ length: 20 }, (_, i) => 
+        osContract.balanceOf(targetAddr, i + 1).catch(() => ethers.BigNumber.from(0))
+      );
+
+      const allBalances = await Promise.all([...hexaChecks, ...osChecks]);
+      window.hasPaidNFT = allBalances.some(b => b.gt(0));
+    } else {
+      // ネットワークが違う場合は一旦falseにする（RPCエラー防止）
+      window.hasPaidNFT = false;
+    }
+  } catch (e) {
+    console.error("NFT Check Error:", e);
+    window.hasPaidNFT = false;
+  }
+};
+
+
+// --- [4] checkFreeNFT の修正 ---
+window.checkFreeNFT = async function () {
+  try {
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const freeNFT = getOfficialNFT("free");
+    
+    if (!freeNFT || !freeNFT.contract || freeNFT.contract.startsWith("0x000")) {
+        window.hasFreeNFT = false;
+        return;
+    }
+
+    const nft = new ethers.Contract(freeNFT.contract, ["function balanceOf(address) view returns (uint256)"], provider);
+    const balance = await nft.balanceOf(window.connectedAccount);
+    window.hasFreeNFT = balance.gt(0);
+  } catch (e) {
+    window.hasFreeNFT = false;
+  }
+};
+
+// --- [5] 予約投稿NFTチェック ---
+window.checkScheduleNFT = async function () {
+  window.hasScheduleNFT = false;
+  if (!window.connectedAccount || !SCHEDULE_NFT_ADDRESS) return;
+  try {
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const nft = new ethers.Contract(
+      SCHEDULE_NFT_ADDRESS,
+      ["function balanceOf(address) view returns (uint256)"],
+      provider
+    );
+    const balance = await nft.balanceOf(window.connectedAccount);
+    window.hasScheduleNFT = balance.gt(0);
+    console.log("📅 予約投稿NFT:", window.hasScheduleNFT);
+  } catch (e) {
+    console.warn("予約投稿NFTチェック失敗:", e.message);
+    window.hasScheduleNFT = false;
+  }
+  updateSchedulePostUI();
+};
+
+function updateSchedulePostUI() {
+  const scheduleBtn = document.getElementById("schedulePostButton");
+  const scheduleSection = document.getElementById("scheduleSection");
+  const scheduleBanner = document.getElementById("scheduleNFTBanner");
+  if (!scheduleBtn) return;
+
+  const isGuest = !window.connectedAccount;
+  if (!isGuest && window.hasScheduleNFT) {
+    scheduleBtn.style.display = "";
+    scheduleSection.style.display = "";
+    if (scheduleBanner) scheduleBanner.style.display = "none";
+  } else {
+    scheduleBtn.style.display = "none";
+    scheduleSection.style.display = "none";
+    if (scheduleBanner) scheduleBanner.style.display = isGuest ? "none" : "";
+  }
+}
+
+//取引所制限
+
+	  // === START: Exchange UI handlers & loaders ===
+
+const nftListDiv = document.getElementById("nftList");
+// helper: 小数整形
+function formatEmuer(amountBN) {
+  try {
+    return ethers.utils.formatUnits(amountBN, 18);
+  } catch (e) {
+    return amountBN.toString();
+  }
+}
+
+// helper: tokenURI整形（IPFS対応）
+function normalizeTokenURI(uri) {
+  if (!uri) return null;
+  if (uri.startsWith("ipfs://")) return uri.replace("ipfs://", "https://ipfs.io/ipfs/");
+  return uri;
+}
+
+// === END: Exchange UI handlers & loaders ===
+
+
+//NFTカードレイアウト
+const nftModal = document.getElementById("nftModal");
+const modalBody = document.getElementById("modalBody");
+const closeModal = document.getElementById("closeModal");
+
+closeModal.onclick = () => {
+  nftModal.style.display = "none";
+};
+
+window.onclick = (e) => {
+  if (e.target === nftModal) {
+    nftModal.style.display = "none";
+  }
+};
+
+function openNFTDetail(metadata, tokenId, emuPrice, jpycPrice) {
+  const imageUrl = metadata.image ? normalizeTokenURI(metadata.image) : null;
+  let showingImage = true;
+
+  function renderModal() {
+    modalBody.innerHTML = `
+      <div style="position:relative;">
+        <h3 style="margin-right:80px;">${metadata.name || `NFT #${tokenId}`}</h3>
+
+        <!-- ★ 表裏切り替えボタン -->
+        <button id="flipBtn" style="
+          position:absolute;top:0;right:0;
+          background:#f0f0f0;border:none;border-radius:20px;
+          padding:4px 12px;font-size:12px;cursor:pointer;
+        ">${showingImage ? "📋 詳細を見る" : "🖼 画像を見る"}</button>
+      </div>
+
+      ${showingImage
+        ? `${imageUrl
+            ? `<img src="${imageUrl}" style="width:100%;border-radius:8px;margin:10px 0;">`
+            : "<p>画像なし</p>"}`
+        : `
+          <div style="margin:10px 0;line-height:1.8;">
+            <p><strong>ジャンル:</strong> ${metadata.genre || "未設定"}</p>
+            <p><strong>用途:</strong> ${metadata.usage || "未設定"}</p>
+            <p><strong>特典:</strong> ${metadata.perks || "未設定"}</p>
+            <p>${metadata.description || ""}</p>
+            <hr>
+            <p><strong>EMUER価格:</strong> ${ethers.utils.formatUnits(emuPrice, 18)} EMUER</p>
+            <p><strong>JPYC価格:</strong> ${jpycPrice.eq(0) ? "なし" : ethers.utils.formatUnits(jpycPrice, 18) + " JPYC"}</p>
+          </div>
+        `
+      }
+    `;
+
+    // 切り替えボタンのイベント
+    document.getElementById("flipBtn").addEventListener("click", () => {
+      showingImage = !showingImage;
+      renderModal();
+    });
+  }
+
+  renderModal();
+  nftModal.style.display = "block";
+}
+
+
+// NFTカード生成（createNFTCard)
+function createNFTCard(tokenId, metadata, emuPrice, jpycPrice) {
+  const card = document.createElement("div");
+  card.id = `nft-${tokenId}`;
+  card.style.border = "1px solid #ccc";
+  card.style.padding = "10px";
+  card.style.borderRadius = "8px";
+  card.style.background = "#fff";
+  card.style.marginBottom = "10px";
+
+  const title = document.createElement("h4");
+  title.textContent = metadata.name || `NFT #${tokenId}`;
+  card.appendChild(title);
+
+  // 予約投稿NFTバッジ
+  if (metadata.scheduleFeature || (metadata.perks && metadata.perks.includes("予約投稿"))) {
+    const badge = document.createElement("div");
+    badge.style.cssText = "display:inline-block;background:linear-gradient(135deg,#f0b429,#e67e22);color:#fff;font-size:11px;font-weight:bold;padding:3px 8px;border-radius:12px;margin-bottom:6px;";
+    badge.textContent = "⏰ 予約投稿機能 解放";
+    card.appendChild(badge);
+  }
+
+  if (metadata.image) {
+    const imgWrapper = document.createElement("div");
+    imgWrapper.style.cssText = `
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      margin: 10px 0;
+    `;
+    const img = document.createElement("img");
+    img.src = normalizeTokenURI(metadata.image);
+    img.style.cssText = `
+      width: 100%;
+      max-width: 200px;
+      height: 200px;
+      object-fit: cover;
+      border-radius: 8px;
+    `;
+    imgWrapper.appendChild(img);
+    card.appendChild(imgWrapper);
+  }
+
+
+  const price = document.createElement("p");
+  price.innerHTML = `
+    EMUER: ${ethers.utils.formatUnits(emuPrice, 18)}<br>
+    JPYC: ${ethers.utils.formatUnits(jpycPrice, 18)}
+  `;
+  card.appendChild(price);
+
+const emuBtn = document.createElement("button");
+emuBtn.textContent = "EMUERで交換";
+
+emuBtn.onclick = async () => {
+  // ★ emuerPrice が0の場合はEMUER交換不可
+  if (emuPrice.eq(0)) {
+    alert("このNFTはEMUERでの交換には対応していません。");
+    return;
+  }
+  try {
+    console.log("EMUER交換開始 tokenId:", tokenId);
+
+    const tx = await emuerContract.buyNFT(tokenId, false, POLYGON_GAS_OPTION);
+    
+await tx.wait();
+    // 交換完了したNFTを即座に画面から削除
+    const nftElement = document.getElementById(`nft-${tokenId}`);
+    if (nftElement) nftElement.remove();
+
+    // ★ room2に青い星を生成
+    const room2Frame = document.getElementById("room2Frame");
+    if (room2Frame && room2Frame.contentWindow) {
+      room2Frame.contentWindow.postMessage({ type: "NFT_PURCHASE" }, "*");
+    }
+
+    alert("EMUERで交換成功！");
+    // 予約投稿NFT取得後にUIを更新
+    if (typeof window.checkScheduleNFT === "function") await window.checkScheduleNFT();
+  } catch (err) {
+    console.error("EMUER交換エラー:", err);
+    alert("EMUERでの交換に失敗しました");
+  }
+};
+
+card.appendChild(emuBtn);
+
+const jpycBtn = document.createElement("button");
+jpycBtn.textContent = "JPYCで交換";
+
+jpycBtn.onclick = async () => {
+  // ★ jpycPrice が0の場合はJPYC交換不可
+  if (jpycPrice.eq(0)) {
+    alert("このNFTはJPYCでの交換には対応していません。");
+    return;
+  }
+  try {
+    console.log("JPYC交換開始 tokenId:", tokenId);
+
+    // ① JPYCコントラクト
+    const jpyc = jpycContract;
+
+    // ② 価格
+    const price = jpycPrice;
+
+    // ③ approve
+    const tx1 = await jpyc.approve(
+      EMUER_CONTRACT_ADDRESS,
+      price
+    );
+    await tx1.wait();
+
+    console.log("JPYC approve 完了");
+
+    // ④ NFT購入
+    const tx2 = await emuerContract.buyNFT(tokenId, true, POLYGON_GAS_OPTION);
+    await tx2.wait();
+
+    // ⑤ 交換完了したNFTは即座に画面から削除
+    const nftElement = document.getElementById(`nft-${tokenId}`);
+    if (nftElement) nftElement.remove();
+
+    // ★ room2に青い星を生成
+    const room2Frame = document.getElementById("room2Frame");
+    if (room2Frame && room2Frame.contentWindow) {
+      room2Frame.contentWindow.postMessage({ type: "NFT_PURCHASE" }, "*");
+    }
+
+    alert("JPYCでNFT交換完了！");
+    // 予約投稿NFT取得後にUIを更新
+    if (typeof window.checkScheduleNFT === "function") await window.checkScheduleNFT();
+  } catch (err) {
+    console.error("JPYC交換エラー:", err);
+    alert("JPYC交換に失敗しました");
+  }
+};
+
+  card.appendChild(jpycBtn);
+
+  const detailBtn = document.createElement("button");
+detailBtn.textContent = "詳細を見る";
+detailBtn.onclick = () => {
+  openNFTDetail(metadata, tokenId, emuPrice, jpycPrice);
+};
+card.appendChild(detailBtn);
+
+  return card;
+}
+
+// NFT一覧を取得して表示
+
+
+
+/* ======= UI トグル ======= */
+themeButton.addEventListener('click', () => themeSubButtons.classList.toggle('hidden'));
+libraryButton.addEventListener('click', () => librarySubButtons.classList.toggle('hidden'));
+
+
+function getPosterId() {
+  // ウォレット接続ユーザー
+  if (window.connectedAccount) {
+    return window.connectedAccount.toLowerCase();
+  }
+
+  // それ以外（ありえないが保険）
+  return "unknown";
+}
+
+function getAuthorInfo() {
+  // ウォレットユーザー
+  if (window.connectedAccount) {
+    return {
+      authorId: window.connectedAccount.toLowerCase(),
+      userType: "wallet" // paid or free
+    };
+  }
+
+  throw new Error("author情報を取得できません");
+}
+
+
+// アドレスに紐づく全バッジを取得
+async function getUserBadges(address) {
+  if (!address || !window.db || !window.fbLib) return [];
+  const addr = address.toLowerCase();
+  const badges = [];
+
+  try {
+    // GENESIS
+    const gSnap = await window.fbLib.getDoc(
+      window.fbLib.doc(window.db, 'airdrop_registrations', addr)
+    );
+    if (gSnap.exists()) badges.push('GENESIS');
+
+    // EVOLVE
+    const eSnap = await window.fbLib.getDoc(
+      window.fbLib.doc(window.db, 'evolve_users', addr)
+    );
+    if (eSnap.exists()) badges.push('EVOLVE');
+
+    // ランキング報酬バッジ
+    const rSnap = await window.fbLib.getDoc(
+      window.fbLib.doc(window.db, 'rank_badges', addr)
+    );
+    if (rSnap.exists()) {
+      const data = rSnap.data();
+      if (data.badges) badges.push(...data.badges);
+    }
+
+  } catch(e) {
+    console.error('バッジ取得エラー:', e);
+  }
+
+  return badges;
+}
+
+function getUserTypeBadge(type, address) {
+  let badge = '';
+  switch (type) {
+    case 'paid':  badge = `<span class="badge badge-paid">有料利用者</span>`; break;
+    default:      badge = `<span class="badge badge-free">無料利用者</span>`;
+  }
+
+  if (address) {
+    getUserBadges(address).then(badges => {
+      document.querySelectorAll(
+        `.post[data-address="${address.toLowerCase()}"] .genesis-slot`
+      ).forEach(el => {
+        if (badges.length === 0) { el.innerHTML = ''; return; }
+
+        // 最初のバッジ（GENESIS優先）を表示
+        const firstBadge = badges[0];
+        const extraCount = badges.length - 1;
+
+        let html = makeBadgeHtml(firstBadge);
+
+        // 追加バッジ数を右上に表示
+        if (extraCount > 0) {
+          html += `<span style="
+            font-size:9px;background:#ff4b4b;color:#fff;
+            border-radius:99px;padding:1px 5px;
+            font-weight:bold;margin-left:2px;
+            vertical-align:middle;cursor:pointer;
+          " onclick="showBadgePanelForAddress('${address.toLowerCase()}', event)">+${extraCount}</span>`;
+        }
+
+        el.innerHTML = html;
+      });
+    });
+  }
+
+  return badge + `<span class="genesis-slot"></span>`;
+}
+
+/* ======= 投稿フォーム ======= */
+function openPostForm() {
+  if (!_emuAddress()) {
+    alert("投稿するにはウォレットを接続してください。");
+    return false;
+  }
+  postFormModal.style.display = 'flex';
+  return true;
+}
+function closePostForm() { postFormModal.style.display = 'none'; }
+
+openPostFormButton.addEventListener('click', () => {
+  editMode = null; editingPostId = null;
+  postTitleInput.value = ""; postBodyInput.value = ""; postTagsInput.value = "";
+  postTitleInput.disabled = false;
+  openPostForm();
+});
+closeButton.addEventListener('click', closePostForm);
+clearFormButton.addEventListener('click', () => {
+  postTitleInput.value = ""; postBodyInput.value = ""; postTagsInput.value = "";
+  postTitleInput.disabled = false;
+  const imgInput = document.getElementById('postImage');
+  const imgPreview = document.getElementById('postImagePreview');
+  if (imgInput) imgInput.value = '';
+  if (imgPreview) { imgPreview.src = ''; imgPreview.style.display = 'none'; }
+});
+
+// 投稿画像プレビュー
+(function() {
+  const imgInput = document.getElementById('postImage');
+  const imgPreview = document.getElementById('postImagePreview');
+  if (imgInput && imgPreview) {
+    imgInput.addEventListener('change', function() {
+      if (this.files && this.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          imgPreview.src = e.target.result;
+          imgPreview.style.display = 'block';
+        };
+        reader.readAsDataURL(this.files[0]);
+      } else {
+        imgPreview.src = '';
+        imgPreview.style.display = 'none';
+      }
+    });
+  }
+})();
+
+/* テーマサブボタンで開く（タイトル固定） */
+document.querySelectorAll(".theme-specific-button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const theme = btn.dataset.theme;
+    editMode = "theme";
+    editingPostId = null;
+    postTitleInput.value = theme;
+    postBodyInput.value = "";
+    postTagsInput.value = "";
+    postTitleInput.disabled = true;
+    openPostForm();
+  });
+});
+
+/* ======= 下書き ======= */
+saveDraftButton.addEventListener("click", function () {
+  if (isFreeOnlyUser()) {
+    alert("この機能は有料NFTユーザー限定です");
+    return;
+  }
+
+  const title = postTitleInput.value.trim();
+  const body = postBodyInput.value.trim();
+  const tags = postTagsInput.value.trim();
+
+  if (!title || !body) {
+    alert("タイトルと本文は必須です！");
+    return;
+  }
+
+  if (editMode === "draft" && editingPostId) {
+    const draft = drafts.find(d => d.id === editingPostId);
+    if (draft) {
+      draft.title = title;
+      draft.body = body;
+      draft.tags = tags;
+      alert("下書きを更新しました！");
+    }
+  } else {
+    const draftId = Date.now();
+    drafts.push({ id: draftId, title, body, tags });
+    alert("下書きを保存しました！");
+  }
+
+  closePostForm();
+  editingPostId = null;
+  editMode = null;
+});
+
+function editDraft(draft) {
+  editingPostId = draft.id; editMode = "draft";
+  postTitleInput.value = draft.title; postBodyInput.value = draft.body; postTagsInput.value = draft.tags;
+  postTitleInput.disabled = false;
+  openPostForm();
+}
+
+/* ======= 予約投稿 ======= */
+const schedulePostButton = document.getElementById("schedulePostButton");
+if (schedulePostButton) {
+  schedulePostButton.addEventListener("click", async function () {
+    if (!window.hasScheduleNFT) {
+      alert("予約投稿NFTが必要です。取引所でNFTを入手してください。");
+      return;
+    }
+    const title = postTitleInput.value.trim();
+    const body = postBodyInput.value.trim();
+    const tags = postTagsInput.value.trim();
+    const scheduledAt = document.getElementById("scheduleDateTime").value;
+
+    if (!title || !body) { alert("タイトルと本文は必須です！"); return; }
+    if (!scheduledAt) { alert("公開日時を設定してください！"); return; }
+
+    const scheduledDate = new Date(scheduledAt);
+    if (scheduledDate <= new Date()) { alert("公開日時は未来の時刻を設定してください！"); return; }
+
+    try {
+      schedulePostButton.disabled = true;
+      schedulePostButton.textContent = "予約中...";
+
+      const userType = getCurrentUserType();
+      const res = await fetch("https://emu-realtime.onrender.com/api/scheduled-posts", {
+        method: "POST",
+        headers: await emuAuthHeaders(true),
+        body: JSON.stringify({
+          address: window.connectedAccount,
+          title, body, tags,
+          scheduledAt: scheduledDate.toISOString(),
+          userId: currentUserId || window.connectedAccount,
+          userType
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.error === "SCHEDULE_NFT_REQUIRED") {
+          alert("予約投稿NFTが確認できませんでした。NFTを取得してから再試行してください。");
+        } else if (data.error === "INVALID_DATE") {
+          alert("無効な日時です。未来の日時を設定してください。");
+        } else {
+          alert("予約に失敗しました: " + (data.error || "不明なエラー"));
+        }
+        return;
+      }
+
+      alert(`✅ 投稿を予約しました！\n公開予定: ${scheduledDate.toLocaleString("ja-JP")}`);
+      postTitleInput.value = "";
+      postBodyInput.value = "";
+      postTagsInput.value = "";
+      document.getElementById("scheduleDateTime").value = "";
+      closePostForm();
+    } catch (e) {
+      console.error("予約投稿エラー:", e);
+      alert("予約投稿に失敗しました: " + e.message);
+    } finally {
+      schedulePostButton.disabled = false;
+      schedulePostButton.textContent = "⏰ 予約投稿";
+    }
+  });
+}
+
+/* ======= 予約投稿一覧 ======= */
+const scheduledPostsBtn = document.getElementById("scheduledPostsBtn");
+const scheduledPostsContainer = document.getElementById("scheduledPostsContainer");
+
+if (scheduledPostsBtn) {
+  scheduledPostsBtn.addEventListener("click", async () => {
+    if (!window.connectedAccount) {
+      alert("ウォレットを接続してください。");
+      return;
+    }
+    if (!window.hasScheduleNFT) {
+      scheduledPostsContainer.innerHTML = `
+        <div style="padding:12px;background:#1a1a2e;border-radius:8px;color:#aaa;font-size:13px;text-align:center;">
+          🔒 予約投稿NFTを取得すると利用できます
+        </div>`;
+      scheduledPostsContainer.classList.remove("hidden");
+      return;
+    }
+
+    scheduledPostsContainer.innerHTML = "<p style='font-size:13px;color:#aaa;'>読み込み中...</p>";
+    scheduledPostsContainer.classList.remove("hidden");
+
+    try {
+      const res = await fetch(
+        `https://emu-realtime.onrender.com/api/scheduled-posts?address=${encodeURIComponent(window.connectedAccount)}`,
+        { headers: await emuAuthHeaders(false) }
+      );
+      const items = await res.json();
+
+      if (!Array.isArray(items) || items.length === 0) {
+        scheduledPostsContainer.innerHTML = "<p style='font-size:13px;color:#aaa;'>予約中の投稿はありません。</p>";
+        return;
+      }
+
+      scheduledPostsContainer.innerHTML = `<h4 style="margin:0 0 8px;font-size:13px;">⏰ 予約投稿一覧 (${items.length}件) <button onclick="document.getElementById('scheduledPostsBtn').click()" style="font-size:11px;margin-left:8px;background:none;border:1px solid #ddd;border-radius:4px;padding:2px 8px;cursor:pointer;">🔄 更新</button></h4>`;
+      items.forEach(item => {
+        const dt = new Date(item.scheduledAt).toLocaleString("ja-JP");
+        const el = document.createElement("div");
+        el.style.cssText = "background:#fff;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;";
+        el.innerHTML = `
+          <div style="font-weight:bold;margin-bottom:4px;">${escapeHtml(item.title)}</div>
+          <div style="color:#888;font-size:11px;margin-bottom:6px;">📅 ${dt}</div>
+          <div style="color:#555;font-size:12px;overflow:hidden;max-height:40px;">${escapeHtml(item.body.slice(0, 80))}${item.body.length > 80 ? "…" : ""}</div>
+          <button data-id="${item.id}" class="cancel-schedule-btn" style="margin-top:8px;background:#fee;border:1px solid #f88;color:#c00;border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;">キャンセル</button>
+        `;
+        el.querySelector(".cancel-schedule-btn").addEventListener("click", async function () {
+          if (!confirm("この予約投稿をキャンセルしますか？")) return;
+          try {
+            const r = await fetch(
+              `https://emu-realtime.onrender.com/api/scheduled-posts/${this.dataset.id}`,
+              {
+                method: "DELETE",
+                headers: await emuAuthHeaders(true),
+                body: JSON.stringify({ address: window.connectedAccount })
+              }
+            );
+            const d = await r.json();
+            if (d.success) {
+              el.remove();
+              alert("予約をキャンセルしました。");
+            } else {
+              alert("キャンセルに失敗しました: " + (d.error || ""));
+            }
+          } catch (e) {
+            alert("エラー: " + e.message);
+          }
+        });
+        scheduledPostsContainer.appendChild(el);
+      });
+    } catch (e) {
+      scheduledPostsContainer.innerHTML = "<p style='color:red;font-size:13px;'>読み込みに失敗しました。</p>";
+    }
+  });
+}
+
+libraryDraftsButton.addEventListener("click", () => {
+  if (drafts.length === 0) {
+    draftsContainer.innerHTML = "<p>下書きはありません。</p>";
+  } else {
+    draftsContainer.innerHTML = "";
+    drafts.forEach(draft => {
+      const draftEl = document.createElement("div");
+      draftEl.classList.add("post");
+      draftEl.innerHTML = `
+        <h3>${escapeHtml(draft.title)}</h3>
+        <p>${escapeHtml(draft.body)}</p>
+        <div class="tags">#${(draft.tags||'').split(",").map(t => t.trim()).filter(Boolean).map(escapeHtml).join(" #")}</div>
+        <div class="post-actions"><button class="edit-draft-button">再編集</button></div>
+      `;
+      draftEl.querySelector(".edit-draft-button").addEventListener("click", () => editDraft(draft));
+      draftsContainer.appendChild(draftEl);
+    });
+  }
+  draftsContainer.classList.toggle("hidden");
+});
+
+/* ======= 投稿 / リアクション ======= */
+/* escapeHtml: 簡易エスケープ（本文やタグをそのまま挿入するより安全） */
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+const EMU_GOOD_REASONS = [
+  "今日すぐ使えた",
+  "不安が減った",
+  "判断が変わった",
+  "SchoolParkで試したい",
+  "誰かにも伝えたい"
+];
+let _emuGoodContext = null;
+let _emuChangeContext = null;
+let _emuAnswerContext = null;
+
+function openEmuSheet(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add("open");
+}
+function _finishReactionContext(action, context, error) {
+  if (!context) return;
+  window.dispatchEvent(new CustomEvent("emu-reaction-result", {
+    detail:{ postId:context.postData?.id || context.postElement?.dataset?.id || "", action, ok:false, error:error || "操作を中止しました。" }
+  }));
+}
+function closeEmuSheet(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove("open");
+  if (id === "emuGoodSheet" && _emuGoodContext) {
+    _finishReactionContext("good", _emuGoodContext);
+    _emuGoodContext = null;
+  }
+  if (id === "emuChangeSheet" && _emuChangeContext) {
+    _finishReactionContext("change", _emuChangeContext);
+    _emuChangeContext = null;
+  }
+}
+["emuGoodSheet","emuChangeSheet"].forEach(id => {
+  const sheet = document.getElementById(id);
+  if (sheet) sheet.addEventListener("click", event => {
+    if (event.target === sheet) closeEmuSheet(id);
+  });
+});
+document.addEventListener("keydown", event => {
+  if (event.key !== "Escape") return;
+  if (document.getElementById("emuGoodSheet")?.classList.contains("open")) closeEmuSheet("emuGoodSheet");
+  if (document.getElementById("emuChangeSheet")?.classList.contains("open")) closeEmuSheet("emuChangeSheet");
+});
+function _emuAddress() {
+  return String(window.connectedAccount || localStorage.getItem("emuWallet") || "").toLowerCase();
+}
+function _emuTimestampMs(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (value.seconds) return value.seconds * 1000;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+function _emuFormatDate(value) {
+  const ms = _emuTimestampMs(value);
+  return ms ? new Intl.DateTimeFormat("ja-JP", { year:"numeric", month:"short", day:"numeric" }).format(ms) : "日時不明";
+}
+
+function openGoodReasonSheet(postElement, postData, submitAction) {
+  _emuGoodContext = { postElement, postData, submitAction };
+  const choices = document.getElementById("emuGoodChoices");
+  choices.innerHTML = "";
+  EMU_GOOD_REASONS.forEach(reason => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "emu-choice";
+    button.textContent = reason;
+    button.dataset.reason = reason;
+    button.addEventListener("click", () => button.classList.toggle("selected"));
+    choices.appendChild(button);
+  });
+  document.getElementById("emuGoodNote").value = "";
+  openEmuSheet("emuGoodSheet");
+}
+
+document.getElementById("emuGoodSubmit")?.addEventListener("click", async function() {
+  if (!_emuGoodContext || this.disabled) return;
+  const reasons = Array.from(document.querySelectorAll("#emuGoodChoices .selected")).map(el => el.dataset.reason);
+  if (!reasons.length) return alert("役に立った理由を1つ以上選んでください。");
+  this.disabled = true;
+  this.textContent = "届けています...";
+  try {
+    await _emuGoodContext.submitAction({
+      reasons,
+      note: document.getElementById("emuGoodNote").value.trim().slice(0, 300)
+    });
+    _emuGoodContext = null;
+    closeEmuSheet("emuGoodSheet");
+  } finally {
+    this.disabled = false;
+    this.textContent = "Goodを届ける";
+  }
+});
+
+function openChangeProposalSheet(postElement, postData, submitAction) {
+  _emuChangeContext = { postElement, postData, submitAction };
+  ["emuChangeTarget","emuChangeReason","emuChangeProposal"].forEach(id => document.getElementById(id).value = "");
+  openEmuSheet("emuChangeSheet");
+}
+
+document.getElementById("emuChangeSubmit")?.addEventListener("click", async function() {
+  if (!_emuChangeContext || this.disabled) return;
+  const target = document.getElementById("emuChangeTarget").value.trim();
+  const reason = document.getElementById("emuChangeReason").value.trim();
+  const proposal = document.getElementById("emuChangeProposal").value.trim();
+  if (target.length < 3 || reason.length < 5 || proposal.length < 5) {
+    return alert("変更箇所・理由・具体案を入力してください。");
+  }
+  this.disabled = true;
+  this.textContent = "届けています...";
+  try {
+    await _emuChangeContext.submitAction({ target, reason, proposal });
+    _emuChangeContext = null;
+    closeEmuSheet("emuChangeSheet");
+  } finally {
+    this.disabled = false;
+    this.textContent = "提案を届ける";
+  }
+});
+
+/* この投稿に届いた「役に立った」の理由と言葉を、誰でも読めるようにする。
+   改善（Change）は前から変更履歴で読めたが、Goodの側は読む場所が無く、
+   投稿者にも読者にも数字しか見えていなかった。 */
+async function openPostGoodVoices(postData) {
+  const list = document.getElementById("emuHistoryList");
+  const title = document.getElementById("emuHistoryTitle");
+  const sub = document.getElementById("emuHistorySubtitle");
+  if (!list) return;
+  if (title) title.textContent = "「" + (postData.title || "知識") + "」に届いた声";
+  if (sub) sub.textContent = "役に立ったと伝えた人が、選んだ理由と、書いてくれた言葉です。";
+  list.innerHTML = '<div class="eth-loading">届いた声を読み込んでいます...</div>';
+  openEmuSheet("emuHistorySheet");
+  if (!window.db || !window.fbLib) {
+    list.innerHTML = '<div class="emu-history-item">読み込めませんでした。</div>';
+    return;
+  }
+  try {
+    const snap = await window.fbLib.getDocs(window.fbLib.query(
+      window.fbLib.collection(window.db, "post_good_impacts"),
+      window.fbLib.where("postId", "==", String(postData.id || "")),
+      window.fbLib.limit(EMU_VOICE_LIMIT)
+    ));
+    const rows = [];
+    snap.forEach(function (docSnap) {
+      const d = docSnap.data() || {};
+      rows.push({
+        from: String(d.fromAddress || "").toLowerCase(),
+        reasons: Array.isArray(d.reasons) ? d.reasons.filter(Boolean) : [],
+        note: String(d.note || "").trim(),
+        at: _emuTimestampMs(d.createdAt)
+      });
+    });
+    /* 通信が戻っていないと getDocs は例外ではなく空の控えを返す。
+       それを「まだ無い」と書くと、事実と違う表示になる。 */
+    if (!rows.length && snap.metadata && snap.metadata.fromCache) {
+      list.innerHTML = '<div class="emu-history-item">通信が戻っていないため、まだ読み込めていません。</div>';
+      return;
+    }
+    if (!rows.length) {
+      list.innerHTML = '<div class="emu-history-item">まだ理由は届いていません。</div>';
+      return;
+    }
+    rows.sort(function (a, b) { return b.at - a.at; });
+    const names = await _emuVoiceNames(rows.map(function (r) { return r.from; }));
+    list.innerHTML = rows.map(function (r) {
+      const who = names[r.from] || _spShortAddr(r.from) || "読んでくれた人";
+      const chips = r.reasons.map(function (x) {
+        return '<span style="display:inline-block;padding:3px 10px;border-radius:999px;'
+          + 'background:#efeaff;color:#4b3c8f;font-size:12px;line-height:1.6;">' + _emuEsc(x) + '</span>';
+      }).join(" ");
+      return '<article class="emu-history-item">'
+        + '<div class="emu-history-meta"><span>' + _emuEsc(who) + '</span>'
+        + '<span>' + _emuEsc(_emuFormatDate(r.at)) + '</span></div>'
+        + (chips ? '<div style="margin:6px 0 0;display:flex;gap:6px;flex-wrap:wrap;">' + chips + '</div>' : '')
+        + (r.note ? '<p style="white-space:pre-wrap;margin:8px 0 0;">' + _emuEsc(r.note) + '</p>' : '')
+        + '</article>';
+    }).join("");
+  } catch (e) {
+    console.error("届いた声を読めませんでした:", e);
+    list.innerHTML = '<div class="emu-history-item">届いた声を読めませんでした。</div>';
+  }
+}
+
+async function openPostChangeHistory(postData) {
+  const list = document.getElementById("emuHistoryList");
+  document.getElementById("emuHistoryTitle").textContent = "「" + (postData.title || "知識") + "」の変更履歴";
+  /* 同じシートを「届いた声」でも使う。片方でしか説明文を書き換えないと、
+     前に開いたときの説明が残る。 */
+  const _histSub = document.getElementById("emuHistorySubtitle");
+  if (_histSub) _histSub.textContent = "提案と採用の記録を確認できます。";
+  list.innerHTML = '<div class="eth-loading">変更履歴を読み込んでいます...</div>';
+  openEmuSheet("emuHistorySheet");
+  if (!window.db || !window.fbLib) {
+    list.innerHTML = '<div class="emu-history-item">履歴を読み込めません。</div>';
+    return;
+  }
+  try {
+    const q = window.fbLib.query(
+      window.fbLib.collection(window.db, "post_changes"),
+      window.fbLib.where("postId", "==", postData.id)
+    );
+    const snap = await window.fbLib.getDocs(q);
+    const rows = [];
+    snap.forEach(docSnap => rows.push({ id:docSnap.id, ...docSnap.data() }));
+    rows.sort((a,b) => _emuTimestampMs(b.createdAt) - _emuTimestampMs(a.createdAt));
+    list.innerHTML = "";
+    if (!rows.length) {
+      list.innerHTML = '<div class="emu-history-item">まだChange提案はありません。</div>';
+      return;
+    }
+    const isAuthor = _emuAddress() && _emuAddress() === String(postData.address || "").toLowerCase();
+    rows.forEach(change => {
+      const item = document.createElement("article");
+      item.className = "emu-history-item";
+      const accepted = change.status === "accepted";
+      item.innerHTML = `
+        <div class="emu-history-meta">
+          <span class="emu-status ${accepted ? "accepted" : ""}">${accepted ? "採用済み" : "提案中"}</span>
+          <span>${escapeHtml(_emuFormatDate(change.createdAt))}</span>
+          <span>${escapeHtml((change.fromAddress || "").slice(0,6))}…</span>
+        </div>
+        <p><strong>変更箇所：</strong>${escapeHtml(change.target || "指定なし")}</p>
+        <p><strong>理由：</strong>${escapeHtml(change.reason || "")}</p>
+        <p><strong>変更案：</strong>${escapeHtml(change.proposal || change.suggestion || "")}</p>
+      `;
+      if (isAuthor && !accepted) {
+        const accept = document.createElement("button");
+        accept.type = "button";
+        accept.className = "eth-btn primary";
+        accept.style.marginTop = "10px";
+        accept.textContent = "このChangeを採用する";
+        accept.addEventListener("click", async () => {
+          if (!confirm("この提案を採用し、変更履歴として残しますか？")) return;
+          accept.disabled = true;
+          try {
+            const batch = window.fbLib.writeBatch(window.db);
+            batch.update(window.fbLib.doc(window.db, "post_changes", change.id), {
+              status:"accepted", acceptedAt:new Date(), acceptedBy:_emuAddress()
+            });
+            batch.update(window.fbLib.doc(window.db, "posts", postData.id), {
+              acceptedChangeCount:window.fbLib.increment(1), lastChangedAt:new Date()
+            });
+            await batch.commit();
+            await openPostChangeHistory(postData);
+          } catch (error) {
+            console.error("Change採用失敗:", error);
+            alert("採用を保存できませんでした。");
+            accept.disabled = false;
+          }
+        });
+        item.appendChild(accept);
+      }
+      list.appendChild(item);
+    });
+  } catch (error) {
+    console.error("変更履歴取得失敗:", error);
+    list.innerHTML = '<div class="emu-history-item">変更履歴を読み込めませんでした。</div>';
+  }
+}
+
+/* attachReactionHandlers: 1投稿要素につき1回だけハンドラを付ける */
+async function attachReactionHandlers(postElement) {
+  // ブラウザ上の二重登録防止
+  if (postElement.dataset.handlersAttached === "true") return;
+  postElement.dataset.handlersAttached = "true";
+
+  const postId = postElement.dataset.id; 
+  const postData = postElement.postData; // 投稿データ
+  
+  /* 「自分」は押された時点で emuMyIdentity() から取る。
+     ここで画面の値を control 変数に控えると、開いたまま放置して
+     ログインし直した場合に古い名義のまま書き込んでしまう。 */
+
+  // 👍 Goodボタンの処理
+  const goodButton = postElement.querySelector(".good-button");
+  if (goodButton) {
+    goodButton.addEventListener("click", async () => {
+      const rejectGood = message => {
+        alert(message);
+        window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"good", ok:false, error:message } }));
+      };
+      /* 「自分」はルールと同じ場所から取る。画面の値を使うと、
+         端末やログイン方法によって食い違い、書き込みだけ弾かれる。 */
+      const me = await emuMyIdentity();
+      if (!me) {
+        return rejectGood("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");
+      }
+
+      // 【不正防止1】自分の投稿には押せない（別名義で書いた投稿も自分と見なす）
+      if (emuIsMine(postData.address, me)) {
+        return rejectGood("自分の投稿にGoodは押せません！");
+      }
+
+      // 【不正防止2】1回しか押せない（Firebaseから届いたリストを確認）
+      if (emuListHasMe(postData.goodUsers, me)) {
+        return rejectGood("すでにGood済みです！");
+      }
+
+      openGoodReasonSheet(postElement, postData, async ({ reasons, note }) => {
+      /* やり直せるように、書き込みを関数にしておく。
+         名義は毎回その時点の本人から取る（途中で直ることがあるため）。 */
+      const writeGood = async () => {
+        const mine = emuIdentityNow() || me;
+        const postRef = window.fbLib.doc(window.db, "posts", postId);
+        const impactRef = window.fbLib.doc(window.fbLib.collection(window.db, "post_good_impacts"));
+        const batch = window.fbLib.writeBatch(window.db);
+        batch.set(impactRef, {
+          postId,
+          postTitle:postData.title || "",
+          postAuthor:String(postData.address || "").toLowerCase(),
+          // ルールは goodUsers に walletAddress が入ることを求めるので、名義をそろえる
+          fromAddress:mine.wallet,
+          reasons,
+          note,
+          createdAt:new Date()
+        });
+        batch.update(postRef, {
+          goodCount: window.fbLib.increment(1),
+          goodUsers: window.fbLib.arrayUnion(mine.wallet)
+        });
+        await batch.commit();
+      };
+      try {
+        await emuSaveReaction('good', postId, writeGood);
+
+        // ※Goodを「押した人」への加算は廃止（確定ルール=評価された投稿者が得る）。
+        //   EMUERはサーバーの照合バッチが durable台帳(emuer_offchain)へ計上する。
+        if (myWalletPage.style.display === "block") renderWallet();
+
+        postData.goodCount = (Number(postData.goodCount) || 0) + 1;
+        if (!Array.isArray(postData.goodUsers)) postData.goodUsers = [];
+        postData.goodUsers.push((emuIdentityNow() || me).wallet);
+        const countEl = goodButton.querySelector('.good-count');
+        const impactEl = postElement.querySelector('.post-helpful-count');
+        const noteEl = postElement.querySelector('.post-value-note');
+        if (countEl) countEl.textContent = postData.goodCount;
+        if (impactEl) impactEl.textContent = postData.goodCount + '回';
+        if (noteEl) noteEl.textContent = 'あなたの「役に立った」が投稿者へ届き、この知識の価値として残りました。';
+        goodButton.disabled = true;
+        window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"good", ok:true } }));
+        console.log("✅ Firebase: Good記録完了");
+      } catch (e) {
+        console.error("Firebase Good Error:", e);
+        const _msg = e && e.emuMessage ? e.emuMessage : emuWriteErrorMessage(e);
+        alert(_msg);
+        window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"good", ok:false, error:_msg } }));
+        throw e;
+      }
+      });
+    });
+  }
+
+  // 🤝 Changeボタンの処理
+  const changeButton = postElement.querySelector(".change-button");
+  if (changeButton) {
+    changeButton.addEventListener("click", async () => {
+      const rejectChange = message => {
+        alert(message);
+        window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"change", ok:false, error:message } }));
+      };
+      // Good と同じく、「自分」はルールと同じ場所から取る
+      const me = await emuMyIdentity();
+      if (!me) {
+        return rejectChange("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");
+      }
+
+      // 【不正防止1】自分の投稿には押せない（別名義で書いた投稿も自分と見なす）
+      if (emuIsMine(postData.address, me)) {
+        return rejectChange("自分の投稿にChangeは押せません！");
+      }
+
+      // 【不正防止2】1回しか押せない
+      if (emuListHasMe(postData.changeUsers, me)) {
+        return rejectChange("すでにChange済みです！");
+      }
+
+      openChangeProposalSheet(postElement, postData, async ({ target, reason, proposal }) => {
+      // Good と同じく、やり直せるように書き込みを関数にしておく
+      const writeChange = async () => {
+        const mine = emuIdentityNow() || me;
+        const postRef = window.fbLib.doc(window.db, "posts", postId);
+        // Changeの中身を保存。数字だけの反応にせず、投稿者が改善に使える形で残す
+        const changeRef = window.fbLib.doc(window.fbLib.collection(window.db, "post_changes"));
+        const batch = window.fbLib.writeBatch(window.db);
+        batch.set(changeRef, {
+          postId,
+          postTitle: postData.title || "",
+          postAuthor: (postData.address || "").toLowerCase(),
+          // ルールは changeUsers に walletAddress が入ることを求めるので、名義をそろえる
+          fromAddress: mine.wallet,
+          target,
+          reason,
+          proposal,
+          suggestion: proposal,
+          status: "pending",
+          createdAt: new Date()
+        });
+        batch.update(postRef, {
+          changeCount: window.fbLib.increment(1),
+          changeUsers: window.fbLib.arrayUnion(mine.wallet)
+        });
+        await batch.commit();
+      };
+      try {
+        await emuSaveReaction('change', postId, writeChange);
+
+        // ※Changeを「押した人」への加算は廃止（確定ルール=評価された投稿者が得る）。
+        //   EMUERはサーバーの照合バッチが durable台帳(emuer_offchain)へ計上する。
+        if (myWalletPage.style.display === "block") renderWallet();
+
+        postData.changeCount = (Number(postData.changeCount) || 0) + 1;
+        if (!Array.isArray(postData.changeUsers)) postData.changeUsers = [];
+        postData.changeUsers.push((emuIdentityNow() || me).wallet);
+        const countEl = changeButton.querySelector('.change-count');
+        const impactEl = postElement.querySelector('.post-change-count');
+        const noteEl = postElement.querySelector('.post-value-note');
+        if (countEl) countEl.textContent = postData.changeCount;
+        if (impactEl) impactEl.textContent = postData.changeCount + '回';
+        if (noteEl) noteEl.textContent = '具体的な改善案が投稿者へ届きました。反映されると、この知識の改善履歴として残ります。';
+        changeButton.disabled = true;
+        window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"change", ok:true } }));
+        console.log("✅ Firebase: Change記録完了");
+      } catch (e) {
+        console.error("Firebase Change Error:", e);
+        const _msg = e && e.emuMessage ? e.emuMessage : emuWriteErrorMessage(e);
+        alert(_msg);
+        window.dispatchEvent(new CustomEvent("emu-reaction-result", { detail:{ postId, action:"change", ok:false, error:_msg } }));
+        throw e;
+      }
+      });
+    });
+  }
+}
+
+
+
+/* addPostToFeed: 投稿を追加（表示上は reaction の数 = 0 で始まる） */
+function createPostElementFromData(post) {
+  const postElement = document.createElement("div");
+postElement.classList.add("post");
+  postElement.postData = post;
+  postElement.dataset.id = post.id;
+  postElement.dataset.address = (post.address || "").toLowerCase();
+  postElement.dataset.good = post.goodCount ?? 0;
+  postElement.dataset.change = post.changeCount ?? 0;
+
+// ── 新デザイン用の表示値（実データから算出。実処理・ボタンclassは従来どおり維持） ──
+const _kwPaid = normalizeUserType(post.userType) === "paid";
+const _kwAddrLc = (post.address || "").toLowerCase();
+/* 名前が入っていない古い投稿でも、自分の分だけは名前で出す */
+const _kwName = post.displayName || emuNameForAddress(_kwAddrLc)
+  || (typeof shortAddr === "function" ? shortAddr(_kwAddrLc) : _kwAddrLc) || "匿名";
+const _kwAvatarChar = (String(_kwName).trim().charAt(0) || "？");
+/* 自分の名義は1つとは限らない（walletAddress と chesAddress）。
+   1つだけで見ると、自分の投稿なのにボタンが押せる状態で出てしまい、
+   押した先でルールに弾かれて「保存できませんでした」になる。 */
+const _kwAliases = emuAliasesNow();
+const _kwMy = _kwAliases[0] || "";
+const _kwMine = !!_kwAddrLc && _kwAliases.indexOf(_kwAddrLc) !== -1;
+const _kwGooded = emuListHasMe(post.goodUsers, null);
+const _kwChanged = emuListHasMe(post.changeUsers, null);
+const _kwAccepted = post.acceptedChangeCount || 0;
+const _kwTags = String(post.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
+let _kwDate = "";
+try {
+  const _d = post.createdAt && post.createdAt.toDate ? post.createdAt.toDate() : (post.createdAt ? new Date(post.createdAt) : null);
+  if (_d && !isNaN(_d.getTime())) _kwDate = new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(_d);
+} catch (e) {}
+const _kwLong = String(post.body || "").length > 100;
+
+postElement.innerHTML = `
+  <div class="kw-author">
+    <div class="kw-avatar ${_kwPaid ? "paid" : ""}">${escapeHtml(_kwAvatarChar)}</div>
+    <div>
+      <div class="kw-author-line"><b>${escapeHtml(_kwName)}</b><span class="kw-access ${_kwPaid ? "paid" : ""}">${_kwPaid ? "有料パス" : "無料利用者"}</span></div>
+      ${_kwDate ? `<small>${_kwDate}</small>` : ""}
+    </div>
+    <button class="edit-button kw-more" title="編集">•••</button>
+  </div>
+  ${_kwTags[0] ? `<span class="kw-theme">${escapeHtml(_kwTags[0])}</span>` : ""}
+  <h3 class="kw-title">${escapeHtml(post.title)}</h3>
+  <p class="kw-body ${_kwLong ? "clamp" : ""}">${escapeHtml(post.body)}</p>
+  ${_kwLong ? `<button type="button" class="kw-readmore">続きを読む</button>` : ""}
+  ${post.imageUrl ? `<img class="kw-img" src="${escapeHtml(post.imageUrl)}" alt="">` : ""}
+  <div class="kw-tags">${_kwTags.map((t) => `<span>#${escapeHtml(t)}</span>`).join("")}</div>
+  <div class="kw-impact">
+    <div><span>この知識が生んだ価値</span><b>${post.goodCount ?? 0}人の次の一歩に</b></div>
+    <div class="kw-impact-stats">
+      <span><b class="post-helpful-count">${post.goodCount ?? 0}</b>役に立った</span>
+      <span><b class="post-change-count">${post.changeCount ?? 0}</b>改善参加</span>
+      <span><b>${_kwAccepted}</b>採用済み</span>
+    </div>
+  </div>
+  <div class="post-actions kw-actions">
+    <button class="good-button ${_kwGooded ? "reacted" : ""}" ${(_kwGooded || _kwMine) ? "disabled" : ""} title="この知識が役に立ったことを投稿者へ伝えます">♡ <span>${_kwGooded ? "届けました" : "役に立った"}</span> <b class="good-count">${post.goodCount ?? 0}</b></button>
+    <button class="change-button ${_kwChanged ? "reacted" : ""}" ${(_kwChanged || _kwMine) ? "disabled" : ""} title="この知識を一緒により良くする意思を伝えます">↻ <span>${_kwChanged ? "提案済み" : "改善案を届ける"}</span> <b class="change-count">${post.changeCount ?? 0}</b></button>
+    <button class="good-voices-button" title="この知識が役に立った理由を読む"${(post.goodCount ?? 0) ? "" : " disabled"}>届いた声${(post.goodCount ?? 0) ? ` <b>${post.goodCount}</b>` : ""}</button>
+    <button class="change-history-button" title="変更履歴">変更履歴${_kwAccepted ? ` <b>${_kwAccepted}</b>` : ""}</button>
+  </div>
+  <div class="post-value-note kw-note">Goodは「役に立った」、Changeは「一緒にもっと良くする」。数字だけでなく、この投稿が生んだ価値として残ります。</div>
+`;
+
+// 「続きを読む」トグル
+const _readMore = postElement.querySelector(".kw-readmore");
+if (_readMore) _readMore.addEventListener("click", () => {
+  const body = postElement.querySelector(".kw-body");
+  if (!body) return;
+  const clamped = body.classList.toggle("clamp");
+  _readMore.textContent = clamped ? "続きを読む" : "閉じる";
+});
+/* 折りたたみは4行、ボタンを出すかどうかは文字数で決めていた。
+   ものさしが違うので、100字を超えていても4行に収まる投稿では
+   押しても何も起きないボタンが出る。実際にはみ出しているかで決め直す。
+   （画面に入ってからでないと高さが測れないので、次の順番で見る） */
+setTimeout(function () {
+  const body = postElement.querySelector(".kw-body");
+  if (!body || !_readMore) return;
+  if (body.scrollHeight <= body.clientHeight + 1) {
+    body.classList.remove("clamp");
+    _readMore.style.display = "none";
+  }
+}, 0);
+
+  // reaction ハンドラ
+  attachReactionHandlers(postElement);
+  postElement.querySelector(".change-history-button")?.addEventListener("click", () => openPostChangeHistory(post));
+  postElement.querySelector(".good-voices-button")?.addEventListener("click", () => openPostGoodVoices(post));
+
+  // ★ 編集ボタンの制御
+  const editBtn = postElement.querySelector(".edit-button");
+  
+  // 今ログインしている人のアドレス（小文字）
+  const myAddr = window.connectedAccount ? window.connectedAccount.toLowerCase() : null;
+  // 投稿者のアドレス（小文字）
+  const postAuthorAddr = post.address ? post.address.toLowerCase() : "";
+
+  // 自分以外の投稿なら、編集ボタンを消す（または隠す）
+  if (myAddr !== postAuthorAddr) {
+    editBtn.style.display = "none"; 
+  } else {
+    // 自分の投稿なら、編集ボタンを表示してクリック可能にする
+    editBtn.style.display = "inline-block";
+    editBtn.addEventListener("click", () => {
+      editMode = "theme";
+      editingPostId = post.id; // FirebaseのドキュメントIDをセット
+
+      postTitleInput.value = post.title;
+      postBodyInput.value = post.body;
+      postTagsInput.value = post.tags;
+
+      // タイトルは変更不可にする（既存ロジック）
+      postTitleInput.disabled = true;
+      openPostForm();
+    });
+  }
+
+  return postElement;
+}
+
+
+function normalizeUserType(rawType) {
+  if (rawType === "paidNFT") return "paid";
+  return "free";
+}
+
+function renderPosts(postList = posts) {
+  const postFeed = document.getElementById("postFeed");
+  postFeed.innerHTML = "";
+
+  postList.forEach(post => {
+    const el = createPostElementFromData(post);
+    postFeed.appendChild(el);
+  });
+}
+
+
+/* 投稿フォーム submit (Firebase版) */
+postForm.addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  const knowledgeRequestId = postForm._knowledgeRequestId || "";
+  const finishKnowledgeRequest = (ok, error) => {
+    if (!knowledgeRequestId) return;
+    window.dispatchEvent(new CustomEvent("emu-post-save-result", {
+      detail: { requestId: knowledgeRequestId, ok, error: error || "" }
+    }));
+    postForm._knowledgeRequestId = "";
+    if (!ok) postForm._knowledgeImageDataUrl = "";
+  };
+
+  const title = postTitleInput.value.trim();
+  const body = postBodyInput.value.trim();
+  const tags = postTagsInput.value.trim();
+  const authorAddress = _emuAddress();
+
+  if (!authorAddress) {
+    alert("投稿するにはウォレットを接続してください。");
+    finishKnowledgeRequest(false, "投稿するにはウォレットを接続してください。");
+    return;
+  }
+
+  if (!title || !body) {
+    alert("タイトルと本文は必須です！");
+    finishKnowledgeRequest(false, "タイトルと本文は必須です。");
+    return;
+  }
+
+  /* Firestore へ書く前にログインを確かめる。
+     画面は「ログイン済み」に見えていても、セッションだけ切れていることがある。 */
+  if (!await emuEnsureSignedIn()) {
+    const _m = "ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。";
+    alert(_m);
+    finishKnowledgeRequest(false, _m);
+    return;
+  }
+
+  // --- Firebase保存処理 ---
+  try {
+    const userType = getCurrentUserType();
+    // ★ タグを正規化（#を除去・カンマorスペース区切りを配列に）
+    const normalizedTags = tags
+      .split(/[,\s]+/)
+      .map(t => t.trim().replace(/^#/, ""))
+      .filter(Boolean);
+
+    // 画像圧縮 → データURLに変換（Firebase Storage不要）
+    let postImageUrl = '';
+    const _imgEl = document.getElementById('postImage');
+    const postImageFile = _imgEl && _imgEl.files && _imgEl.files[0];
+    if (postImageFile) {
+      try {
+        if (postImageFile.size > 8 * 1024 * 1024) throw new Error("画像は8MB以下にしてください");
+        postImageUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = reject;
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onerror = reject;
+            img.onload = () => {
+              const MAX = 900;
+              let w = img.width, h = img.height;
+              if (w > MAX || h > MAX) {
+                if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+                else { w = Math.round(w * MAX / h); h = MAX; }
+              }
+              const canvas = document.createElement('canvas');
+              canvas.width = w; canvas.height = h;
+              canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+              resolve(canvas.toDataURL('image/jpeg', 0.75));
+            };
+            img.src = e.target.result;
+          };
+          reader.readAsDataURL(postImageFile);
+        });
+        console.log("✅ 画像圧縮完了");
+      } catch (imgErr) {
+        console.error("⚠️ 画像処理失敗:", imgErr);
+        alert("画像の処理に失敗しました（" + imgErr.message + "）。\n画像なしで投稿を続けます。");
+      }
+    }
+    // 新しい「知識を読む」iframeの投稿フォームから渡された圧縮済み画像
+    if (!postImageUrl && postForm._knowledgeImageDataUrl) {
+      postImageUrl = postForm._knowledgeImageDataUrl;
+    }
+
+    /* 名前を一緒に残す。これが無いと、読む側にはアドレスしか出ない。
+       「名前と写真」で決めた名前が投稿に出ないのは、ここが空だったため。 */
+    const postData = {
+      title: title,
+      body: body,
+      tags: normalizedTags.join(","),
+      userType: userType,
+      address: authorAddress,
+      displayName: emuDisplayName(),
+      userId: currentUserId || "guest",
+      updatedAt: new Date(),
+      ...(postImageUrl ? { imageUrl: postImageUrl } : {})
+    };
+const editingId = editingPostId;
+// ★ 初投稿ボーナス判定
+    if (!editingId && window.connectedAccount) {
+      const myAddr = window.connectedAccount.toLowerCase();
+      const postsRef = window.fbLib.collection(window.db, "posts");
+      const myPostsQ = window.fbLib.query(
+        postsRef, window.fbLib.where("address", "==", myAddr), window.fbLib.limit(1)
+      );
+      const myPostsSnap = await window.fbLib.getDocs(myPostsQ);
+      if (myPostsSnap.empty) {
+        // 初投稿！サーバーに登録
+        fetch("https://emu-realtime.onrender.com/first-post/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address: myAddr })
+        }).then(r => r.json()).then(data => {
+          if (data.success) {
+            console.log("🎉 初投稿ボーナス登録完了！30 EMUER 受取予約");
+            // トースト表示
+            const toast = document.createElement("div");
+            toast.style.cssText = `
+              position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+              background:linear-gradient(135deg,#1a8a5a,#0d6e45);
+              color:#fff;padding:12px 24px;border-radius:12px;
+              font-size:14px;font-weight:bold;z-index:9999;
+              box-shadow:0 4px 12px rgba(0,0,0,0.3);
+            `;
+            toast.textContent = "🎉 初投稿ボーナス！+30 EMUER 受取予約完了";
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+          }
+        }).catch(e => console.error("初投稿ボーナス登録失敗:", e));
+      }
+    }
+
+    if (editingId) {
+      // 【更新モード】
+      const postRef = window.fbLib.doc(window.db, "posts", editingId);
+      await window.fbLib.updateDoc(postRef, postData);
+      console.log("✅ 投稿を更新しました:", editingId);
+      editingPostId = null;
+      editMode = null;
+    } else {
+      // 【新規モード】
+      postData.createdAt = new Date();
+      postData.goodCount = 0;
+      postData.changeCount = 0;
+      /* 投稿と、回数の記録を同じ一括処理で書く。
+         別々に書くと、片方だけ通ってしまう余地が残る。 */
+      const _postBatch = window.fbLib.writeBatch(window.db);
+      _postBatch.set(window.fbLib.doc(window.fbLib.collection(window.db, "posts")), postData);
+      await _emuAddUsage(_postBatch, 'post');
+      await _postBatch.commit();
+      console.log("✅ 新規投稿を作成しました");
+    }
+
+  showSakuraModal();
+    
+    // 入力欄をクリアして閉じる
+    postTitleInput.value = "";
+    postBodyInput.value = "";
+    postTagsInput.value = "";
+    const _imgInput = document.getElementById('postImage');
+    const _imgPreview = document.getElementById('postImagePreview');
+    if (_imgInput) _imgInput.value = '';
+    if (_imgPreview) { _imgPreview.src = ''; _imgPreview.style.display = 'none'; }
+    postForm._knowledgeImageDataUrl = '';
+    
+    // ✅ 正しい関数名で閉じる
+    closePostForm();
+
+    // 💡 location.reload() の代わりにこれを入れる！
+console.log("🔄 画面をリロードせずに投稿一覧を更新します...");
+    await refreshAllPosts();
+    finishKnowledgeRequest(true, "");
+
+// ★ room2に投稿アクションを通知（開いていない場合は累積）
+    const room2Frame = document.getElementById("room2Frame");
+    if (room2Frame && room2Frame.style.display === "block" && room2Frame.contentWindow) {
+      room2Frame.contentWindow.postMessage({ type: "NEW_POST" }, "*");
+    } else {
+      room2PendingPosts++;
+    }
+    
+    // オプション：一番上までスクロールさせると親切です
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    
+  } catch (error) {
+    console.error("Firebaseへの保存に失敗:", error);
+    /* 「権限がありません」だけでは、読んだ人に何もできない。
+       9/1から段ごとの上限が効いているので、その心当たりを添える。 */
+    const msg = _emuPostErrorText(error);
+    let detail = '';
+    try { detail = await _emuPostDiagnose(authorAddress); } catch (e) {}
+    alert(msg + (detail ? '\n\n───── 調べたこと ─────\n' + detail : ''));
+    finishKnowledgeRequest(false, msg);
+  }
+});
+
+
+/* 初期状態である投稿要素があればハンドラを付与 */
+document.querySelectorAll(".post").forEach(p => attachReactionHandlers(p));
+
+/* ======= マイウォレット画面 ======= */
+function renderWallet() {
+  const pendingEl = document.getElementById('walletEmuerCount');
+  if (pendingEl) pendingEl.textContent = pendingEmuer;
+
+  if (window.connectedAccount) {
+    getUserBadges(window.connectedAccount).then(badges => {
+      const el = document.getElementById('genesisWalletBadge');
+      if (!el) return;
+
+      let html = `
+        <div style="background:#f9f9f9;border:1px solid #eee;border-radius:12px;padding:16px;margin-bottom:16px;">
+          <div style="font-size:12px;color:#aaa;margin-bottom:10px;">🏆 称号バッジケース (${badges.length}個)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      `;
+
+      if (badges.length === 0) {
+        html += '<span style="font-size:12px;color:#ccc;">バッジなし</span>';
+      } else {
+        badges.forEach(id => {
+          const def = BADGE_DEFINITIONS[id];
+          if (!def) return;
+          html += `
+            <div style="text-align:center;cursor:pointer;" onclick="showBadgePanelForAddress('${window.connectedAccount.toLowerCase()}', event)">
+              <span style="
+                font-size:11px;padding:4px 10px;border-radius:99px;
+                ${def.style}font-weight:bold;display:inline-block;
+              ">${def.label}</span>
+              <div style="font-size:9px;color:#aaa;margin-top:3px;">${def.description}</div>
+            </div>
+          `;
+        });
+      }
+
+      html += '</div></div>';
+      el.innerHTML = html;
+    });
+  }
+}
+
+// マイウォレットを開く時の処理
+myWalletButton.addEventListener("click", async () => {
+  if (!window.connectedAccount) {
+    alert("ウォレットを接続してください");
+    return;
+  }
+
+  document.querySelector(".main-content").style.display = "none";
+  myWalletPage.style.display = "block";
+
+  try {
+    // 1. 最新のEMUERトークン残高を取得
+    const balance = await emuerContract.balanceOf(window.connectedAccount);
+    totalEmuer = Math.floor(parseFloat(ethers.utils.formatUnits(balance, 18)));
+
+    // 2. スマコンからGood/Change/予定数を取得して画面を更新
+    await syncPendingEmuer(); 
+    
+    // 3. 最後に全体を整える
+    renderWallet();
+  } catch (e) {
+    console.error("マイウォレット読み込みエラー:", e);
+  }
+});
+
+// 「閉じる」ボタンの処理
+closeWalletPage.addEventListener("click", () => {
+  myWalletPage.style.display = "none";
+  
+  // PayPayモードから来た場合はPayPayモードに戻る
+  const savedMode = localStorage.getItem('emu_design_mode');
+  if (savedMode === 'paypay' || window._fromPayPay) {
+    window._fromPayPay = false;
+    isPayPayMode = true;
+    localStorage.setItem('emu_design_mode', 'paypay');
+    document.body.classList.add('paypay-mode');
+    window.scrollTo({ top: 0 });
+  } else {
+    document.querySelector(".main-content").style.display = "block";
+  }
+});
+
+/* ======= 1. ポイントとトークンの完全同期関数 ======= */
+async function syncPendingEmuer() {
+  const accounts = await ethereum.request({ method: 'eth_accounts' });
+  if (accounts.length === 0) return;
+  const myAddr = accounts[0].toLowerCase(); // 小文字で統一して比較
+
+  try {
+    // --- 1. Firebaseから「自分の投稿」のGood/Change合計を計算 ---
+    const postsRef = window.fbLib.collection(window.db, "posts");
+    // 投稿者(address)が自分であるものを検索
+    const q = window.fbLib.query(postsRef, window.fbLib.where("address", "==", myAddr));
+    const querySnapshot = await window.fbLib.getDocs(q);
+
+    let fbGoodTotal = 0;
+    let fbChangeTotal = 0;
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      fbGoodTotal += (data.goodCount || 0);
+      fbChangeTotal += (data.changeCount || 0);
+    });
+
+    // --- 2. スマコンから取得（これまでの確定分） ---
+    const userData = await emuerContract.users(myAddr);
+    const scGoodVal = parseInt(userData.good.toString());
+    const scChangeVal = parseInt(userData.change.toString());
+
+    // --- 3. 合算して表示 (Firebase最新 + スマコン確定分) ---
+    // ※ 運用方針によりますが、まずはFirebaseの総数を表示するのが「リアルタイム」感が出ます
+    const displayGood = fbGoodTotal;
+    const displayChange = fbChangeTotal;
+
+    // グローバルに保存（spWalletPanel でも参照できるように）
+    totalgoodcount = displayGood;
+    totalchangecount = displayChange;
+
+    if (document.getElementById("walletGoodCount")) document.getElementById("walletGoodCount").innerText = displayGood;
+    if (document.getElementById("walletChangeCount")) document.getElementById("walletChangeCount").innerText = displayChange;
+
+    // --- 4. トークン残高などの処理 (既存のまま) ---
+    const balanceBN = await emuerContract.balanceOf(myAddr);
+    const totalEmuerVal = Math.floor(parseFloat(ethers.utils.formatUnits(balanceBN, 18)));
+    if (document.getElementById("walletTotalEmuer")) document.getElementById("walletTotalEmuer").innerText = totalEmuerVal;
+
+    // 変換予定数の計算ロジック
+    const goodEmuer = Math.floor(displayGood / 10);
+    const changeEmuer = Math.floor(displayChange / 20) * 3;
+    pendingEmuer = goodEmuer + changeEmuer;
+
+    if (document.getElementById("walletEmuerCount")) {
+      document.getElementById("walletEmuerCount").innerText = pendingEmuer;
+    }
+
+    console.log(`📊 Firebase同期完了: Good:${fbGoodTotal} Change:${fbChangeTotal}`);
+  } catch (e) {
+    console.error("❌ 同期失敗:", e);
+  }
+}
+
+/* ======= 2. 変換ボタンの表示制御（曜日チェック） ======= */
+// 💡 テスト時は true、本番は false にしてください
+const isTestMode = false; 
+
+function updateConvertButton() {
+  const convertBtn = document.getElementById("convertButton");
+  if (!convertBtn) return;
+
+  const now = new Date();
+  const day = now.getDay(); 
+  
+  // window.hasPaidNFT や window.hasFreeNFT は接続コードの中で判定されているはず
+  let userType = "none";
+  if (window.hasPaidNFT) {
+    userType = "paidNFT";
+  } else if (window.hasFreeNFT) {
+    userType = "freeNFT";
+  } else if (window.connectedAccount) {
+    // ウォレットは繋がっているがNFTがない状態（必要なら）
+    userType = "walletUser";
+  }
+
+  console.log("--- 変換ボタンの状態チェック ---");
+  console.log("判定された種別:", userType);
+
+  // 1. 【ウォレット未接続】チェック（アドレスすら無い場合）
+  if (!window.connectedAccount && !isTestMode) {
+    lockButton(convertBtn, "ウォレットを接続してください");
+    return;
+  }
+
+  /* 2. 【月額プラン】light 以上はいつでも変換できる。
+     ここを見ていなかったため、月3,000円を払っている plus 会員でも
+     NFTを持っていないと「NFTが必要です」で止まっていた。
+     公式パス（NFT）は引き続き有効なので、どちらかを満たせばよい。 */
+  if (typeof emuHasPlan === "function" && emuHasPlan("light")) {
+    unlockButton(convertBtn, "変換を実行");
+    return;
+  }
+
+  // 3. 【有料NFT（公式パス）】はいつでもOK
+  if (userType === "paidNFT" || isTestMode) {
+    unlockButton(convertBtn, "変換を実行");
+    return;
+  }
+
+  // 4. 【無料NFT】は月曜日のみ
+  if (userType === "freeNFT") {
+    if (day === 1) {
+      unlockButton(convertBtn, "変換を実行");
+    } else {
+      lockButton(convertBtn, "無料NFT: 次回は月曜日です");
+    }
+    return;
+  }
+
+  // それ以外（プランも公式パスも無い人）
+  lockButton(convertBtn, "Emu light 以上で使えます");
+}
+
+
+// 🔒 ボタンを無効化する補助関数
+function lockButton(btn, text) {
+  btn.disabled = true;
+  btn.style.backgroundColor = "#cccccc";
+  btn.style.color = "#666666";
+  btn.style.cursor = "not-allowed";
+  btn.style.pointerEvents = "none";
+  btn.textContent = text;
+  btn.onclick = null;
+}
+
+// ✅ ボタンを有効化する補助関数
+function unlockButton(btn, text) {
+  btn.disabled = false;
+  btn.style.backgroundColor = "#4CAF50";
+  btn.style.color = "#ffffff";
+  btn.style.cursor = "pointer";
+  btn.style.pointerEvents = "auto";
+  btn.textContent = text;
+  btn.onclick = handleConversion; // 変換処理を紐付け
+}
+
+
+/* ======= 3. 変換実行処理（一括処理） ======= */
+async function handleConversion() {
+  // --- 判定ロジックを updateConvertButton と同じものに修正 ---
+  let userType = "none";
+  if (window.hasPaidNFT) {
+    userType = "paidNFT";
+  } else if (window.hasFreeNFT) {
+    userType = "freeNFT";
+  }
+
+  // NFT非保有ユーザーを弾く
+  if (userType === "none" && !isTestMode) {
+    alert("変換機能を利用するにはNFT（無料 / 有料パス）が必要です。");
+    return;
+  }
+
+  // 無料ユーザーの月曜チェック
+  /* 月曜だけの制限は、プランに入っていない無料NFTの人にだけかける。
+     light 以上の会員はいつでも変換できる。 */
+  const _hasPlan = typeof emuHasPlan === "function" && emuHasPlan("light");
+  if (!_hasPlan && userType === "freeNFT" && new Date().getDay() !== 1 && !isTestMode) {
+    alert("無料ユーザーは月曜日のみ変換可能です。");
+    return;
+  }
+
+  // --- 以降、変換処理 ---
+  // window.connectedAccount があるはずなのでそれを使う
+  const myAddr = window.connectedAccount;
+  if (!myAddr) {
+    alert("ウォレットを接続してください");
+    return;
+  }
+
+  /* emuerContract は MetaMask 接続時（Web3Provider + signer）にしか作られない。
+     メール / Google / LINE で入った CHES ユーザーはアドレスだけを持ち秘密鍵が無いため、
+     ここに来ると emuerContract が undefined のまま例外になり、
+     原因の分からない「変換に失敗しました」だけが出ていた。
+     何が足りないのかを先に伝える。 */
+  if (typeof emuerContract === "undefined" || !emuerContract) {
+    alert(
+      "実EMUERへの変換にはウォレットの接続が必要です。\n\n" +
+      "メール・Google・LINE でログインした場合、Emu内で使えるEMUERは貯まりますが、" +
+      "ブロックチェーン上の実EMUERへ換えるには署名できるウォレット（MetaMask等）が要ります。\n\n" +
+      "ログイン画面の「その他の方法で入る」からウォレットで接続し直してください。"
+    );
+    return;
+  }
+
+  await syncPendingEmuer();
+
+  // (以下、既存の try-catch 処理はそのまま)
+  const btn = document.getElementById("convertButton"); // 変数名を合わせる
+  try {
+    btn.disabled = true;
+    btn.textContent = "処理中...";
+
+    // 1. 最新の残高をコントラクトから取得
+    const userData = await emuerContract.users(myAddr);
+
+    // 2. good も change も 0 ならここで止める！
+    if (Number(userData.good) === 0 && Number(userData.change) === 0) {
+      alert("変換に必要なEMUERが溜まっていません！");
+      btn.disabled = false;
+      btn.textContent = "変換を実行";
+      return; 
+    }
+
+    // 3. どちらかが 0 より大きい場合のみ通信
+    if (Number(userData.good) > 0) {
+      const tx1 = await emuerContract.convertGood(userData.good);
+      await tx1.wait();
+    }
+    if (Number(userData.change) > 0) {
+      const tx2 = await emuerContract.convertChange(userData.change);
+      await tx2.wait();
+    }
+
+    alert("🎉 変換が完了しました！");
+    await syncPendingEmuer();
+  } catch (err) {
+    console.error("EMUER変換エラー:", err);
+    /* 「失敗しました」だけでは利用者が次に何をすればよいか分からないので、
+       よくある原因を切り分けて伝える。 */
+    let msg = "変換に失敗しました。";
+    const code = err && (err.code || err.reason || "");
+    const text = String(err && (err.message || err)).toLowerCase();
+    if (code === 4001 || code === "ACTION_REJECTED") {
+      msg = "ウォレットで署名がキャンセルされました。";
+    } else if (text.includes("insufficient funds")) {
+      msg = "ガス代（MATIC）が足りません。ウォレットにMATICを用意してから、もう一度お試しください。";
+    } else if (code === "NETWORK_ERROR" || text.includes("network") || text.includes("underlying network changed")) {
+      msg = "ネットワークが違うようです。ウォレットの接続先を Polygon に切り替えてから、もう一度お試しください。";
+    } else if (code === "CALL_EXCEPTION" || text.includes("call revert") || text.includes("execution reverted")) {
+      /* data="0x"（空の応答）は「そのアドレスにコントラクトが無い」状態。
+         ほぼ確実に接続チェーンが違う。revert とは原因が別なので分けて伝える。 */
+      const emptyReturn = window._emuWrongNetwork || /data="0x"/.test(String(err && err.message));
+      msg = emptyReturn
+        ? "ウォレットが Polygon 以外のネットワークに接続されています。\n\nPolygon メインネットに切り替えてから、もう一度お試しください。"
+        : "コントラクト側で処理が拒否されました。変換できる分がまだ反映されていない可能性があります。時間をおいてお試しください。";
+    }
+    alert(msg);
+  } finally {
+    updateConvertButton();
+  }
+}
+
+
+// 初期設定（最上部）
+// =====================
+const overlay = document.getElementById("room3Overlay");
+/* socket.io は CDN から来る（このファイルの上のほうで読み込んでいる）。
+   1回でも読めないと io が無く、ここで ReferenceError になる。
+   すると、この塊の以降の定義がまるごと消える。パスポートもギルドも
+   クエストも全部この下で定義しているので、SchoolPark が丸ごと動かなくなり、
+   名前はゲスト・ギルド0枚・クエストなし・信用スコアは読み込み中のまま固まる。
+   落ちたことは画面に出ないので、原因が分からないまま「たまに壊れる」ように見える。
+
+   実況（room3）が使えないのは仕方がない。それ以外まで道連れにしない。 */
+const socket = (typeof io === 'function')
+  ? io("https://emu-realtime.onrender.com")
+  : { on: function () {}, once: function () {}, emit: function () {},
+      connected: false, id: '', io: {} };
+
+const walletAddress = localStorage.getItem("emuWallet");
+let room3CurrentStep = 1;
+let replyTarget = null;
+let room3TopicOverride = '';
+/* サーバーが配る「今日の議題」。ユーザーが自分で立てた議題(room3TopicOverride)で
+   上書きされないよう別に持つ。これを分けないと、一度自分で議題を立てたあとに
+   議論画面を開き直したとき、前回の議題が「今日の議題」として出てしまう。 */
+let room3DailyTopic = '';
+let room3ContributionMode = 'opinion';
+/* 発言の「種類」。見た目を変えるだけでなく、
+   ・種類ごとに色分けして一覧で区別できる
+   ・種類で絞り込める
+   ・何が足りていないかを示して議論の偏りを防ぐ
+   という形で機能させる。 */
+const ROOM3_CONTRIBUTION_MODES = {
+  opinion:{
+    label:'意見', icon:'💬', prefix:'【意見】',
+    placeholder:'あなたの考えと、その理由を書いてください',
+    hint:'自分はこう思う、という考えを理由とセットで置きます。'
+  },
+  experience:{
+    label:'体験', icon:'🌱', prefix:'【体験共有】',
+    placeholder:'実際に経験したことと、そこから感じたことを書いてください',
+    hint:'実際にあった出来事を書きます。議論の土台になるので、体験が増えるほど話が深まります。'
+  },
+  perspective:{
+    label:'別の視点', icon:'🔭', prefix:'【別の視点】',
+    placeholder:'まだ出ていない立場や見方を書いてください',
+    hint:'まだ誰も言っていない立場を足します。結論が一方向に偏るのを防ぎます。'
+  },
+  question:{
+    label:'問い', icon:'❓', prefix:'【問い】',
+    placeholder:'議論を深めるために、参加者へ聞きたいことを書いてください',
+    hint:'参加者へ質問します。答えが付くと議論が前に進みます。'
+  }
+};
+const ROOM3_MODE_ORDER = ['experience','perspective','question','opinion'];
+
+/* 本文の先頭にある接頭辞から種類を判定する（サーバーは文字列を中継するだけなので、
+   既存の発言もそのまま分類できる） */
+function room3ParseMode(text) {
+  const raw = String(text || '');
+  for (const key of Object.keys(ROOM3_CONTRIBUTION_MODES)) {
+    const prefix = ROOM3_CONTRIBUTION_MODES[key].prefix;
+    if (raw.startsWith(prefix)) {
+      return { mode: key, body: raw.slice(prefix.length).trim() };
+    }
+  }
+  return { mode: 'opinion', body: raw };
+}
+
+function setRoom3ContributionMode(mode) {
+  room3ContributionMode = ROOM3_CONTRIBUTION_MODES[mode] ? mode : 'opinion';
+  const config = ROOM3_CONTRIBUTION_MODES[room3ContributionMode];
+  const input = document.getElementById('userInput');
+  if (input) input.placeholder = config.placeholder;
+  const hint = document.getElementById('dscModeHint');
+  if (hint) hint.textContent = config.icon + ' ' + config.label + '：' + config.hint;
+  document.querySelectorAll('#dscModes .dsc-mode').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.mode === room3ContributionMode);
+  });
+}
+
+/* 投稿フォームの種類ボタンを作る */
+function room3RenderModes() {
+  const wrap = document.getElementById('dscModes');
+  if (!wrap) return;
+  wrap.innerHTML = ROOM3_MODE_ORDER.map(function (key) {
+    const m = ROOM3_CONTRIBUTION_MODES[key];
+    return '<button type="button" class="dsc-mode" data-mode="' + key + '">' + m.icon + ' ' + m.label + '</button>';
+  }).join('');
+  wrap.querySelectorAll('.dsc-mode').forEach(function (b) {
+    b.onclick = function () { setRoom3ContributionMode(b.dataset.mode); };
+  });
+  setRoom3ContributionMode(room3ContributionMode);
+}
+
+/* 絞り込みチップと「議論の状態」を作り直す */
+let room3Filter = 'all';
+function room3RefreshOverview() {
+  const list = document.getElementById('discussion');
+  if (!list) return;
+  const counts = { experience:0, perspective:0, question:0, opinion:0 };
+  list.querySelectorAll('.dsc-msg').forEach(function (el) {
+    const m = el.dataset.mode;
+    if (counts[m] !== undefined) counts[m]++;
+  });
+  const total = Object.values(counts).reduce(function (a, b) { return a + b; }, 0);
+
+  const filters = document.getElementById('dscFilters');
+  if (filters) {
+    const chips = ['<button type="button" class="dsc-chip' + (room3Filter === 'all' ? ' active' : '') + '" data-filter="all">すべて ' + total + '</button>']
+      .concat(ROOM3_MODE_ORDER.map(function (key) {
+        const m = ROOM3_CONTRIBUTION_MODES[key];
+        return '<button type="button" class="dsc-chip' + (room3Filter === key ? ' active' : '') + '" data-filter="' + key + '">' + m.icon + ' ' + m.label + ' ' + counts[key] + '</button>';
+      }));
+    filters.innerHTML = chips.join('');
+    filters.querySelectorAll('.dsc-chip').forEach(function (b) {
+      b.onclick = function () { room3Filter = b.dataset.filter; room3ApplyFilter(); room3RefreshOverview(); };
+    });
+  }
+
+  // 足りていない種類を促す（議論が意見だけに偏るのを防ぐ）
+  const bal = document.getElementById('dscBalance');
+  if (bal) {
+    if (!total) { bal.innerHTML = ''; }
+    else {
+      bal.innerHTML = ROOM3_MODE_ORDER.map(function (key) {
+        const m = ROOM3_CONTRIBUTION_MODES[key];
+        const need = counts[key] === 0;
+        return '<span class="bal' + (need ? ' need' : '') + '">' + m.icon + ' ' + m.label + ' ' + counts[key] + (need ? '・募集中' : '') + '</span>';
+      }).join('');
+    }
+  }
+}
+
+function room3ApplyFilter() {
+  document.querySelectorAll('#discussion .dsc-msg').forEach(function (el) {
+    el.style.display = (room3Filter === 'all' || el.dataset.mode === room3Filter) ? '' : 'none';
+  });
+}
+
+// =====================
+// Explore / Room 制御
+// =====================
+
+
+
+function closeSchoolPark() { /* no-op: 4ゲートオーバーレイ廃止済み */ }
+
+/* ── SchoolPark マップ ─────────────────────────────── */
+
+/* POI positions: px/py = % of spmap-inner(960x960px=画像1:1) に基づく正確な建物位置 */
+
+const GATE_NAMES = {
+  b: "Gate B — Frontier Gate（南エリア・冒険と救助）",
+  c: "Gate C — Creative Academy（学びと創造）",
+  d: "Gate D — Starry Sky Station（星空の駅）"
+};
+
+let _currentGate = "";
+let _spMapZoomLevel = 1;
+
+
+/* ══════════════════════════════════════════════════════
+   SchoolPark インフォバー: 混雑状況 + リアルタイム天気
+   ══════════════════════════════════════════════════════ */
+
+/* ── 混雑状況（Firestore アクティブセッション数で判定） ── */
+let _spSessionId = null;
+let _spCrowdHb = null;
+const _SP_CROWD_COL = 'sp_active_users';
+
+async function _spRefreshCrowd() {
+  if (!window.db || !window.fbLib) return;
+  try {
+    const cutoff = Date.now() - 10 * 60 * 1000;
+    const q = window.fbLib.query(
+      window.fbLib.collection(window.db, _SP_CROWD_COL),
+      window.fbLib.where('ts', '>=', cutoff),
+      window.fbLib.limit(100)
+    );
+    const snap = await window.fbLib.getDocs(q);
+    _spUpdateCrowd(snap.size);
+  } catch (error) {
+    console.warn('混雑状況の取得に失敗:', error.message);
+  }
+}
+
+async function _spCrowdJoin() {
+  if (!window.db || !window.fbLib) return;
+  if (!_spSessionId) {
+    const account = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
+    if (account) {
+      _spSessionId = `wallet_${account}`;
+    } else {
+      let clientId = localStorage.getItem('spCrowdClientId');
+      if (!clientId) {
+        clientId = Math.random().toString(36).slice(2);
+        localStorage.setItem('spCrowdClientId', clientId);
+      }
+      _spSessionId = `client_${clientId}`;
+    }
+  }
+  const ref = window.fbLib.doc(window.db, _SP_CROWD_COL, _spSessionId);
+  // マップ再表示時にタイマーを重複させない。
+  if (_spCrowdHb) clearInterval(_spCrowdHb);
+  await window.fbLib.setDoc(ref, { ts: Date.now() });
+  await _spRefreshCrowd();
+  /* 全件リアルタイム監視は行わず、10分ごとの在席更新時だけ期限付きで取得する。 */
+  _spCrowdHb = setInterval(async () => {
+    await window.fbLib.setDoc(ref, { ts: Date.now() });
+    await _spRefreshCrowd();
+  }, 600000);
+}
+async function _spCrowdLeave() {
+  clearInterval(_spCrowdHb);
+  _spCrowdHb = null;
+  if (window.db && window.fbLib && _spSessionId) {
+    window.fbLib.deleteDoc(
+      window.fbLib.doc(window.db, _SP_CROWD_COL, _spSessionId)
+    ).catch(() => {});
+  }
+}
+function _spUpdateCrowd(n) {
+  let icon, label;
+  if      (n >= 20) { icon = '🔴'; label = '混雑'; }
+  else if (n >= 10) { icon = '🟠'; label = 'やや混雑'; }
+  else if (n >=  5) { icon = '🟢'; label = '普通'; }
+  else              { icon = '🟦'; label = '空いています'; }
+  const el = document.getElementById('spInfoCrowd');
+  if (el) el.innerHTML = `👥 混雑状況：<strong>${icon} ${label}</strong>`;
+}
+
+/* ── リアルタイム天気（wttr.in API / CORS対応） ── */
+const _SP_WEATHER_CITIES = [
+  { key:'fuk', city:'Fukuoka' },
+  { key:'kan', city:'Kanazawa' },
+  { key:'osk', city:'Osaka' },
+];
+const _WTTR_WC = {
+  113:'☀️ 快晴', 116:'🌤️ 晴れ', 119:'⛅ 曇り', 122:'☁️ 曇り',
+  143:'🌫️ 霞', 248:'🌫️ 霧', 260:'🌫️ 霧',
+  263:'🌦️ 小雨', 266:'🌦️ 小雨', 281:'🌧️ 霧雨', 284:'🌧️ 霧雨',
+  293:'🌦️ 弱い雨', 296:'🌧️ 雨', 299:'🌧️ 雨', 302:'🌧️ 雨', 305:'🌧️ 大雨', 308:'🌧️ 大雨',
+  311:'🌧️ 雨', 314:'🌧️ 雨',
+  317:'🌨️ みぞれ', 320:'🌨️ みぞれ',
+  323:'🌨️ 雪', 326:'🌨️ 雪', 329:'🌨️ 雪', 332:'🌨️ 雪', 335:'❄️ 大雪', 338:'❄️ 大雪',
+  350:'🌨️ 霰', 353:'🌦️ にわか雨', 356:'🌧️ 激しい雨', 359:'🌧️ 豪雨',
+  362:'🌨️ みぞれ', 365:'🌨️ みぞれ', 368:'🌨️ 雪', 371:'❄️ 大雪',
+  374:'🌨️ 霰', 377:'🌨️ 霰',
+  386:'⛈️ 雷雨', 389:'⛈️ 雷雨', 392:'⛈️ 雷雪', 395:'⛈️ 雷雪',
+};
+
+
+// ── SchoolPark コンテンツ iframe オーバーレイ ─────────────────
+
+
+
+
+// iframe内からのメッセージを受信
+window.addEventListener("message", (e) => {
+  if (!e.data || typeof e.data !== "object") return;
+  // iframeからパネルを開く
+  if (e.data.type === "openSpWallet")   { openSpPanel('spWalletPanel'); }
+  if (e.data.type === "openSpRobot")    { openSpPanel('spRobotPanel'); }
+  if (e.data.type === "openSpSettings") { openSpPanel('spSettingsPanel'); }
+  // iframeからアクティビティログを追加
+  if (e.data.type === "spActivityLog") {
+  }
+  // iframeからイベント会場へ移動（EMUER利用料支払い含む）
+  // iframeからEMUER購入（切符売り場など）
+});
+
+/* ═══════════════════════════════════════════════════════
+   SpMap スライドインパネル（💰🤖⚙️）
+═══════════════════════════════════════════════════════ */
+function openSpPanel(panelId) {
+  // SchoolPark agents は冷蔵庫くんに統合済み。旧パネルを開こうとしたら統合後の入口へリダイレクト
+  if (panelId === 'spRobotPanel') { spReizoOpen(); return; }
+  closeAllSpPanels(panelId);
+  const panel = document.getElementById(panelId);
+  const backdrop = document.getElementById('spPanelBackdrop');
+  if (!panel) return;
+  // display:flex にしてから次フレームで .open を付けてスライドアニメを起動
+  panel.style.display = 'flex';
+  if (backdrop) { backdrop.style.display = 'block'; requestAnimationFrame(() => backdrop.classList.add('open')); }
+  requestAnimationFrame(() => {
+    panel.classList.add('open');
+  });
+  if (panelId === 'spWalletPanel') setTimeout(_refreshSpWalletPanel, 80);
+  if (panelId === 'spSettingsPanel') setTimeout(_loadSpSettings, 80);
+  if (panelId === 'spRobotPanel') setTimeout(_startEmuerAgent, 80);
+}
+
+function closeSpPanel(panelId) {
+  if (panelId === 'spRobotPanel') _stopEmuerAgent();
+  const panel = document.getElementById(panelId);
+  if (panel) {
+    panel.classList.remove('open');
+    panel.style.display = 'none';
+  }
+  const anyOpen = ['spWalletPanel','spRobotPanel','spSettingsPanel'].some(id => {
+    if (id === panelId) return false;
+    const p = document.getElementById(id);
+    return p && p.classList.contains('open');
+  });
+  if (!anyOpen) {
+    const bd = document.getElementById('spPanelBackdrop');
+    if (bd) { bd.classList.remove('open'); bd.style.display = 'none'; }
+  }
+}
+
+function closeAllSpPanels(exceptId) {
+  ['spWalletPanel','spRobotPanel','spSettingsPanel'].forEach(id => {
+    if (id !== exceptId) {
+      const p = document.getElementById(id);
+      if (p) { p.classList.remove('open'); p.style.display = 'none'; }
+    }
+  });
+  // 全パネルを閉じるとき（exceptId未指定）は背景も閉じる
+  if (exceptId === undefined) {
+    const bd = document.getElementById('spPanelBackdrop');
+    if (bd) { bd.classList.remove('open'); bd.style.display = 'none'; }
+  }
+}
+
+/* ── 💰 ウォレットパネル ── */
+function _refreshSpWalletPanel() {
+  const data = _getEmuerData();
+  const balance = data ? data.balance : 0;
+
+  // 残高
+  const balEl = document.getElementById('spWalletBalanceNum');
+  if (balEl) balEl.textContent = balance.toLocaleString();
+
+  // パスタイプバッジ（spPassType を真のソースとして使用）
+  const passEl = document.getElementById('spWalletPassType');
+  if (passEl) {
+    const _passType = localStorage.getItem('spPassType'); // 'paid' / 'free' / null
+    // spPassType が明示的にセットされていればそれを使う
+    const isPaid = _passType === 'paid' || (!_passType && !!(window.hasPaidNFT || window._fromFirebasePaidUsers));
+    const isFree = _passType === 'free' || (!_passType && !!(window.hasFreeNFT) && !isPaid);
+    if (isPaid) {
+      passEl.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(212,168,67,0.15);border:1px solid rgba(212,168,67,0.4);color:#D4A843;padding:5px 16px;border-radius:20px;font-size:0.8rem;font-weight:700;letter-spacing:0.05em;">🎫 有料パス</span>';
+    } else if (isFree) {
+      passEl.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.35);color:#60a5fa;padding:5px 16px;border-radius:20px;font-size:0.8rem;font-weight:700;letter-spacing:0.05em;">🎟️ 無料パス</span>';
+    } else {
+      passEl.innerHTML = '';
+    }
+  }
+
+  // ポイント
+  const goodEl = document.getElementById('spWalletGoodPts');
+  const changeEl = document.getElementById('spWalletChangePts');
+  const pendingEl = document.getElementById('spWalletPendingEMUER');
+  if (goodEl) goodEl.textContent = '---';
+  if (changeEl) changeEl.textContent = '---';
+  if (pendingEl) pendingEl.textContent = (typeof pendingEmuer !== 'undefined' ? pendingEmuer : 0) + ' EMUER';
+
+  // ウォレットアドレス
+  const addrEl = document.getElementById('spWalletAddr');
+  if (addrEl) {
+    const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
+    addrEl.textContent = addr || '未接続';
+  }
+
+  // アラートしきい値
+  const thr = document.getElementById('spWalletAlertThreshold');
+  if (thr) {
+    const saved = localStorage.getItem('spWalletAlertThreshold');
+    if (saved) thr.value = saved;
+  }
+
+  // 取引履歴
+  const histEl = document.getElementById('spWalletHistoryList');
+  if (histEl) {
+    const hist = (data && data.history) ? data.history : [];
+    if (hist.length === 0) {
+      histEl.innerHTML = '<div style="color:#555;font-size:0.82rem;text-align:center;padding:20px 0;">履歴なし</div>';
+    } else {
+      histEl.innerHTML = hist.map(h => {
+        const d = new Date(h.time);
+        const timeStr = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const isPlus = h.amount > 0;
+        const amtClass = isPlus ? 'sp-wallet-plus' : 'sp-wallet-minus';
+        const amtStr = (isPlus ? '+' : '') + h.amount;
+        return `<div class="sp-wallet-history-item">
+          <span style="color:#aaa;">${h.label || '—'}</span>
+          <span style="color:#555;font-size:0.75rem;">${timeStr}</span>
+          <span class="${amtClass}">${amtStr}</span>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Firebase からポイント同期（非同期）
+  if (window.connectedAccount && typeof syncPendingEmuer === 'function') {
+    syncPendingEmuer().then(() => {
+      // Good / Change ポイントを totalgoodcount / totalchangecount から表示
+      if (goodEl)   goodEl.textContent   = (typeof totalgoodcount !== 'undefined' ? totalgoodcount : 0) + ' pt';
+      if (changeEl) changeEl.textContent = (typeof totalchangecount !== 'undefined' ? totalchangecount : 0) + ' pt';
+      // 変換予定 EMUER
+      const pending = typeof pendingEmuer !== 'undefined' ? pendingEmuer : 0;
+      if (pendingEl) pendingEl.textContent = pending + ' EMUER';
+      // 残高表示を localBalance（blockchainBalance）形式に更新
+      // walletTotalEmuer = syncPendingEmuer内でセットされるブロックチェーン上の実EMUER
+      const data2 = _getEmuerData();
+      const bal2  = data2 ? data2.balance : 0;
+      const blockchainBal = parseInt(document.getElementById('walletTotalEmuer')?.innerText || '0');
+      if (balEl) balEl.textContent = bal2.toLocaleString() + '（' + blockchainBal.toLocaleString() + '）';
+    }).catch(()=>{});
+  } else {
+    const pending = typeof pendingEmuer !== 'undefined' ? pendingEmuer : 0;
+    if (goodEl)   goodEl.textContent   = (typeof totalgoodcount !== 'undefined' ? totalgoodcount : 0) + ' pt';
+    if (changeEl) changeEl.textContent = (typeof totalchangecount !== 'undefined' ? totalchangecount : 0) + ' pt';
+    // ブロックチェーン残高が取れない場合は localBalance のみ表示
+    if (balEl) balEl.textContent = balance.toLocaleString();
+  }
+}
+
+function spWalletConvert() {
+  // 有料NFTユーザーはいつでも変換可能
+  if (window.hasPaidNFT || isTestMode) {
+    closeSpPanel('spWalletPanel');
+    if (typeof handleConversion === 'function') handleConversion();
+    return;
+  }
+  // 無料NFTユーザーは月曜日のみ
+  if (window.hasFreeNFT) {
+    if (new Date().getDay() === 1) {
+      closeSpPanel('spWalletPanel');
+      if (typeof handleConversion === 'function') handleConversion();
+    } else {
+      alert('無料ユーザーは毎週月曜日のみ変換できます。');
+    }
+    return;
+  }
+  // ウォレット未接続 or NFTなし
+  if (!window.connectedAccount) {
+    alert('ウォレットを接続してください。');
+  } else {
+    alert('NFTが必要です。');
+  }
+}
+
+function spWalletCopyAddr() {
+  const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
+  if (!addr) { alert('ウォレット未接続です'); return; }
+  navigator.clipboard.writeText(addr).then(() => {
+    const btn = document.querySelector('#spWalletPanel button[onclick="spWalletCopyAddr()"]');
+    if (btn) { const orig = btn.textContent; btn.textContent = '✓ コピー済'; setTimeout(() => btn.textContent = orig, 1500); }
+  }).catch(() => alert(addr));
+}
+
+function spWalletSaveAlert() {
+  const val = document.getElementById('spWalletAlertThreshold')?.value || '100';
+  localStorage.setItem('spWalletAlertThreshold', val);
+  const btn = document.querySelector('#spWalletPanel .sp-panel-btn.secondary');
+  if (btn) { const orig = btn.textContent; btn.textContent = '✓ 保存しました'; setTimeout(() => btn.textContent = orig, 1500); }
+}
+
+/* ── ⚙️ 設定パネル ── */
+function _loadSpSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('spSettings') || '{}');
+    const setChk = (id, def) => { const el = document.getElementById(id); if (el) el.checked = s[id] !== undefined ? s[id] : def; };
+    setChk('spSettingBalanceAlert', true);
+    setChk('spSettingEventNotif', true);
+    setChk('spSettingPoiLabel', true);
+    setChk('spSettingAnonymize', false);
+    const langEl = document.getElementById('spSettingLang');
+    if (langEl && s.spSettingLang) langEl.value = s.spSettingLang;
+    const zoomEl = document.getElementById('spSettingZoom');
+    if (zoomEl && s.spSettingZoom) { zoomEl.value = s.spSettingZoom; spSettingApplyZoom(s.spSettingZoom, true); }
+    const tutEl = document.getElementById('spSettingTutorialMode');
+    if (tutEl) tutEl.value = s.spSettingTutorialMode || 'always';
+    // カスタムキー
+    [1,2,3,4].forEach(n => {
+      const el = document.getElementById('spCustomKey' + n);
+      if (el) el.value = s['spCustomKey' + n] || 'none';
+    });
+    // キーボード設定：無料パスはグレーアウト（spPassType を真のソースとして使用）
+    const _isPaidUser = _spIsPaidUser();
+    const kbSection = document.getElementById('spKeyboardSettingSection');
+    const kbPaidOnly = document.getElementById('spKeyboardPaidOnly');
+    if (kbSection) {
+      const rows = kbSection.querySelectorAll('.sp-ck-row');
+      const selects = kbSection.querySelectorAll('.sp-ck-select');
+      if (!_isPaidUser) {
+        kbSection.style.opacity = '0.45';
+        kbSection.style.pointerEvents = 'none';
+        if (kbPaidOnly) kbPaidOnly.style.display = '';
+        selects.forEach(el => el.disabled = true);
+      } else {
+        kbSection.style.opacity = '';
+        kbSection.style.pointerEvents = '';
+        if (kbPaidOnly) kbPaidOnly.style.display = 'none';
+        selects.forEach(el => el.disabled = false);
+      }
+    }
+  } catch(e) {}
+}
+
+function spSettingSave() {
+  const get = id => document.getElementById(id);
+  const s = {
+    spSettingBalanceAlert: get('spSettingBalanceAlert')?.checked ?? true,
+    spSettingEventNotif:   get('spSettingEventNotif')?.checked ?? true,
+    spSettingPoiLabel:     get('spSettingPoiLabel')?.checked ?? true,
+    spSettingAnonymize:    get('spSettingAnonymize')?.checked ?? false,
+    spSettingLang:          get('spSettingLang')?.value || 'ja',
+    spSettingZoom:          get('spSettingZoom')?.value || '1',
+    spSettingTutorialMode:  get('spSettingTutorialMode')?.value || 'always',
+    spCustomKey1: get('spCustomKey1')?.value || 'none',
+    spCustomKey2: get('spCustomKey2')?.value || 'none',
+    spCustomKey3: get('spCustomKey3')?.value || 'none',
+    spCustomKey4: get('spCustomKey4')?.value || 'none',
+  };
+  localStorage.setItem('spSettings', JSON.stringify(s));
+}
+
+
+function spSettingApplyMap() {
+  spSettingSave();
+  const show = document.getElementById('spSettingPoiLabel')?.checked ?? true;
+  document.querySelectorAll('.sp-poi-label, .poi-label').forEach(el => {
+    el.style.display = show ? '' : 'none';
+  });
+}
+
+function spSettingApplyZoom(val, silent) {
+  const labels = { '1':'標準（×1）', '1.5':'中（×1.5）', '2':'大（×2）', '2.5':'特大（×2.5）', '3':'最大（×3）' };
+  const lb = document.getElementById('spSettingZoomLabel');
+  if (lb) lb.textContent = labels[String(val)] || `×${val}`;
+  _spMapZoomLevel = Math.max(1, Math.min(3, Number(val) || 1));
+  _applySpMapZoom();
+  _centerSpMapViewport();
+  if (!silent) spSettingSave();
+}
+
+function spSettingClearCache() {
+  if (!confirm('SchoolPark のキャッシュデータを削除しますか？\n（EMUER残高・ウォレット情報は保持されます）')) return;
+  const keep = ['emuWallet', 'pendingEmuer', 'spSettings', 'spWalletAlertThreshold'];
+  const emuerKey = typeof _EMUER_LS_KEY === 'function' ? _EMUER_LS_KEY() : null;
+  if (emuerKey) keep.push(emuerKey);
+  const allKeys = Object.keys(localStorage);
+  allKeys.forEach(k => {
+    if (!keep.includes(k) && (k.startsWith('sp') || k.startsWith('emu') || k.startsWith('school'))) {
+      localStorage.removeItem(k);
+    }
+  });
+  alert('キャッシュをクリアしました。');
+}
+
+/* ── モバイル：サイドバードロワー開閉 ── */
+function toggleSpMapMenu() {
+  const sidebar  = document.querySelector('.spmap-left');
+  const backdrop = document.getElementById('spMapMenuBackdrop');
+  if (!sidebar || !backdrop) return;
+  const isOpen = sidebar.classList.contains('spmap-left-open');
+  sidebar.classList.toggle('spmap-left-open', !isOpen);
+  backdrop.classList.toggle('open', !isOpen);
+}
+
+
+/* ブランド別のユニーク入場者カウント（アドレス単位・重複なし・0スタート）
+   brand: 'camellia' | 'heartoo' | 'emu' | 'schoolpark'
+   → sp_stats/global.{brand}_entrants を初回のみ +1 */
+async function spTrackBrand(brand) {
+  try {
+    if (!brand || !window.db || !window.fbLib) return;
+    const addr = (window.connectedAccount || window.currentUserId || localStorage.getItem('emuWallet') || '').toLowerCase();
+    if (!addr) return;
+    const lsKey = 'sp_brand_tracked_' + brand + '_' + addr;
+    if (localStorage.getItem(lsKey)) return; /* 同一端末・同一アドレスは再問い合わせしない */
+    const { doc, setDoc, getDoc, increment } = window.fbLib;
+    const db = window.db;
+    const ref = doc(db, 'sp_brand_entrants', brand + '_' + addr);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      await setDoc(ref, { brand: brand, address: addr, first_seen: new Date() });
+      const patch = {};
+      patch[brand + '_entrants'] = increment(1);
+      setDoc(doc(db, 'sp_stats', 'global'), patch, { merge: true })
+        .catch(e => console.warn('[spTrackBrand] global:', e));
+    }
+    localStorage.setItem(lsKey, '1');
+  } catch (e) {
+    console.warn('[spTrackBrand] error:', e);
+  }
+}
+
+/* ───── CHES ハブ画面（ログイン後の「メイン画面」） ───── */
+const CHES_HUB_GREETINGS = [
+  'こんにちは、どこに行く？',
+  'おかえりなさい、今日はどこへ？',
+  'ようこそ、街を選んでください。',
+  'さあ、今日の行き先は？',
+  'どの街から始めますか？'
+];
+
+/* ヘッダー（名前・アバター・EMUER残高）を実データで更新 */
+function chesHubSyncHeader() {
+  const name = localStorage.getItem('ches_name') || '';
+  const addr = localStorage.getItem('emuWallet') || '';
+  const nameEl = document.getElementById('hubUserName');
+  if (nameEl) nameEl.textContent = name || (addr ? addr.substring(0, 6) + '…' + addr.slice(-4) : 'ゲスト');
+  const av = document.getElementById('hubAvatar');
+  if (av) {
+    const src = (name || addr.replace(/^0x/, '') || '・').trim();
+    av.textContent = src.charAt(0).toUpperCase();
+  }
+  // 残高は Emu の表示と同じ取得経路（実ウォレット=オンチェーン / CHES=オフチェーン台帳）。
+  // ローカルの pendingEmuer は「変換予定のポイント」であって残高ではないため使わない。
+  const em = document.getElementById('hubEmuer');
+  if (em && typeof _emuReadBalancePair === 'function') {
+    _emuReadBalancePair()
+      .then(function (pair) { em.textContent = _emuFormatBalancePair(pair); })
+      .catch(function () {});
+  }
+}
+
+/* お知らせ・設定パネルはマップ内にあるため、ハブからでも開けるよう body 直下へ移す（初回のみ） */
+function _chesHubLiftPanel(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  return el;
+}
+function chesHubOpenSettings() {
+  _chesHubLiftPanel('spSettingsPanel');
+  if (typeof openSpPanel === 'function') openSpPanel('spSettingsPanel');
+}
+
+function chesHubShow() {
+  ['logoScreen', 'walletScreen', 'mainApp'].forEach(function (id) {
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  const footer = document.getElementById('siteFooter'); if (footer) footer.style.display = 'none';
+  const bf = document.getElementById('chesBrandFrame');
+  if (bf && bf.style.display !== 'none') {
+    bf.style.display = 'none';
+    bf.style.visibility = '';                       /* 次に開くとき見えないままにしない */
+    clearTimeout(window._cbfRevealTimer);
+    const fr = document.getElementById('cbfFrame'); if (fr) fr.src = 'about:blank';
+  }
+  // ウォレット等の全画面オーバーレイが残っているとハブ(z-index:900)より前面(z-index:3000)に
+  // 被さって真っ白になるため確実に閉じる。
+  ['myWalletPage'].forEach(function (id) {
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  const greet = document.getElementById('hubGreeting');
+  if (greet) greet.textContent = CHES_HUB_GREETINGS[Math.floor(Math.random() * CHES_HUB_GREETINGS.length)];
+  chesHubSyncHeader();
+  const hub = document.getElementById('chesHubScreen'); if (hub) hub.style.display = 'block';
+  /* Emuを離れたので、お問い合わせボタンの隠し指定を外す */
+  document.body.classList.remove('emu-contact-off');
+}
+
+/* Camellia / Heartoo の表示先（アプリ内フレームで開く）
+   Camellia は本リポジトリへ移管済み（/camellia.html）。同一オリジンのため
+   今後 CHESアカウント・EMUER と直接連携できる。Heartoo は外部のまま。 */
+const CHES_BRAND_PAGES = {
+  /* 新しい Camellia。SchoolParkパスポートで入り、初回だけ生年月日と同意を聞く。
+     古い /camellia.html は自前の登録画面を持っていて、パスポートと繋がっていない。
+     中身の保存はまだこの端末の中だけ。サーバーに移すのはこれから。 */
+  /* bg は読み込みが終わるまでの下地の色。行き先のページと同じ色にしておくと、
+     切り替わるときに色が変わらない。入れていなかったため、枠の既定の白
+     （#cbfFrame の background）が濃い色の外枠の上に一瞬出て、白く光っていた。 */
+  camellia: { url: '/camellia/control-user.html', name: 'Camellia', color: '#e0576f', bg: '#fff6f2', ownNav: true },
   heartoo:  { url: 'https://school-park-homepage.vercel.app/Heartoo.html',  name: 'Heartoo',  color: '#a0d8ef', bg: '#ffffff' }
 };
 
