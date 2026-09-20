@@ -1260,9 +1260,8 @@ service cloud.firestore {
 
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
     match /{coll}/{document=**} {
-      /* SchoolPark用の sp_ コレクションは、上で明示したものだけを許可する。
-         将来名前を追加した際に、汎用許可へ漏れる事故を防ぐ。 */
-      allow read, write: if !coll.matches('^sp_.*')
+      /* 未使用の旧コレクションも汎用許可へ漏らさない。 */
+      allow read, write: if coll != 'sp_members'
         && coll != 'sp_votes'
         && coll != 'sp_quests'
         && coll != 'sp_quest_counters'
