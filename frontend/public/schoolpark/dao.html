@@ -54,7 +54,7 @@ if (window.top === window.self) window.location.replace('/');
           <sc-if value="{{ brandOpen }}">
             <div style="position:absolute; top:38px; left:0; z-index:20; min-width:168px; background:#1D1B16; border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:6px; display:flex; flex-direction:column; gap:2px; box-shadow:0 18px 40px -14px rgba(0,0,0,.7)">
               <sc-for list="{{ brands }}" as="b">
-                <div onClick="{{ b.go }}" style="padding:9px 11px; border-radius:7px; cursor:pointer; font-size:14px; font-weight:700; background:{{ b.bg }}; color:{{ b.fg }}" style-hover="background:rgba(244,241,234,.09)">{{ b.label }}</div>
+                <div onClick="{{ b.go }}" style="padding:9px 11px; border-radius:7px; cursor:{{ b.cursor }}; font-size:14px; font-weight:700; background:{{ b.bg }}; color:{{ b.fg }}" style-hover="background:rgba(244,241,234,.09)">{{ b.label }}</div>
               </sc-for>
             </div>
           </sc-if>
@@ -1182,6 +1182,7 @@ class Component extends DCLogic {
   goBrand(id){ return () => {
     this.setState({brandOpen:false});
     if (id === 'schoolpark') return;              /* いま居る場所なので何もしない */
+    if (id === 'camellia') return;                /* 準備中。まだ中へは進ませない */
     try { window.parent.chesHubGo(id); } catch (e) {}
   }; }
 
@@ -1351,8 +1352,13 @@ class Component extends DCLogic {
       toggleBrand:this.toggleBrand,
       brandOpen:s.brandOpen,
       brandIcon:s.brandOpen ? '▴' : '▾',
-      brands: [['camellia','Camellia','#E0576F'],['emu','Emu','#F08300'],['schoolpark','SchoolPark','#D0E2BE']]
-        .map(([id,label,color]) => ({label, fg:color, go:this.goBrand(id),
+      /* Camellia は準備中。一覧からは消さず、押しても進まないことが見て分かるようにする。 */
+      brands: [['camellia','Camellia','#E0576F',true],['emu','Emu','#F08300',false],['schoolpark','SchoolPark','#D0E2BE',false]]
+        .map(([id,label,color,soon]) => ({
+          label: soon ? label + '（準備中）' : label,
+          fg: soon ? 'rgba(244,241,234,.38)' : color,
+          cursor: soon ? 'default' : 'pointer',
+          go: this.goBrand(id),
           bg: id==='schoolpark' ? 'rgba(244,241,234,.08)' : 'transparent'})),
       sidebarButtonIcon:sidebarOpen ? '‹' : '☰',
       sidebarButtonTitle:sidebarOpen ? 'サイドバーを閉じる' : 'サイドバーを開く',
