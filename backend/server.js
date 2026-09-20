@@ -191,7 +191,7 @@ async function optionalFirebaseIdentity(req) {
   return { uid: decoded.uid, account: account.data() || {} };
 }
 
-app.get("/api/schoolpark/access", async (req, res) => {
+async function schoolParkEntryStatus(req, res) {
   res.set("Cache-Control", "no-store, max-age=0");
   try {
     if (!firebaseAdmin || !db) return res.status(503).json({ error: "ACCESS_CHECK_UNAVAILABLE" });
@@ -217,7 +217,13 @@ app.get("/api/schoolpark/access", async (req, res) => {
     const invalidToken = /token|auth|credential|jwt/i.test(String(error && error.message || ""));
     return res.status(invalidToken ? 401 : 500).json({ error: invalidToken ? "INVALID_AUTH_TOKEN" : "ACCESS_CHECK_FAILED" });
   }
-});
+}
+
+/* `access` というURLは一部の広告ブロッカーに計測用エンドポイントと誤認され、
+   ERR_BLOCKED_BY_CLIENT になる。画面はブロックされにくい業務名を使う。
+   旧URLは既に開いているタブとの互換用に残す。 */
+app.get("/api/schoolpark/entry-status", schoolParkEntryStatus);
+app.get("/api/schoolpark/access", schoolParkEntryStatus);
 
 const membershipDeps = { db, firebaseAdmin, requireFirebaseUser, requireOwner, rateLimit, entitlement, requirePlan };
 const billing = require("./billing").createBillingRouter({ ...membershipDeps, webhookPath: STRIPE_WEBHOOK_PATH });
