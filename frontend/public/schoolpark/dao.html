@@ -1179,10 +1179,16 @@ class Component extends DCLogic {
   goRingo = () => { try { window.parent.spOpenPlay('ringo'); } catch (e) {} };
   goGods  = () => { try { window.parent.spOpenPlay('gods'); } catch (e) {} };
   toggleBrand = () => this.setState(s => ({brandOpen:!s.brandOpen}));
+  /* 準備中かどうかは親（Emu側）の BRAND_MAINTENANCE に合わせる。
+     運営には準備中を出さず、そのまま入れる。親に聞けないときは閉じ扱いにしない。 */
+  brandClosed(id){
+    if (id === 'schoolpark') return false;        /* いま居る場所 */
+    try { return !!window.parent.isBrandUnderMaintenance(id); } catch (e) { return false; }
+  }
+
   goBrand(id){ return () => {
     this.setState({brandOpen:false});
     if (id === 'schoolpark') return;              /* いま居る場所なので何もしない */
-    if (id === 'camellia') return;                /* 準備中。まだ中へは進ませない */
     try { window.parent.chesHubGo(id); } catch (e) {}
   }; }
 
@@ -1352,14 +1358,18 @@ class Component extends DCLogic {
       toggleBrand:this.toggleBrand,
       brandOpen:s.brandOpen,
       brandIcon:s.brandOpen ? '▴' : '▾',
-      /* Camellia は準備中。一覧からは消さず、押しても進まないことが見て分かるようにする。 */
-      brands: [['camellia','Camellia','#E0576F',true],['emu','Emu','#F08300',false],['schoolpark','SchoolPark','#D0E2BE',false]]
-        .map(([id,label,color,soon]) => ({
-          label: soon ? label + '（準備中）' : label,
-          fg: soon ? 'rgba(244,241,234,.38)' : color,
-          cursor: soon ? 'default' : 'pointer',
-          go: this.goBrand(id),
-          bg: id==='schoolpark' ? 'rgba(244,241,234,.08)' : 'transparent'})),
+      /* 準備中のブランドは一覧から消さず、入れないことが押す前に分かるようにする。
+         判定は親に合わせるので、運営には準備中を出さずそのまま通す。 */
+      brands: [['camellia','Camellia','#E0576F'],['emu','Emu','#F08300'],['schoolpark','SchoolPark','#D0E2BE']]
+        .map(([id,label,color]) => {
+          const soon = this.brandClosed(id);
+          return {
+            label: soon ? label + '（準備中）' : label,
+            fg: soon ? 'rgba(244,241,234,.38)' : color,
+            cursor: soon ? 'default' : 'pointer',
+            go: this.goBrand(id),
+            bg: id==='schoolpark' ? 'rgba(244,241,234,.08)' : 'transparent'};
+        }),
       sidebarButtonIcon:sidebarOpen ? '‹' : '☰',
       sidebarButtonTitle:sidebarOpen ? 'サイドバーを閉じる' : 'サイドバーを開く',
       devices: [['pc','パソコン'],['tablet','タブレット'],['mobile','スマホ']].map(([id,label]) => ({
