@@ -20129,11 +20129,37 @@ const SCHOOLPARK_ACCESS_API = '/api/schoolpark/entry-status';
 let _spAccess = null;
 let _spAccessPromise = null;
 
+/* 運営は公開日時に関係なく入れる。APIの応答だけに依存すると、Renderの
+   起動待ちやIDトークン更新の一時失敗で、Emuから戻った瞬間だけ運営まで
+   閉め出される。Firebaseで認証中のUIDから ches_accounts を読み直し、
+   正式な運営アドレスと一致した場合だけ、先に運営として確定する。 */
+async function spVerifiedOwnerAccess() {
+  let user = window.auth && window.auth.currentUser;
+  if (!user && window.CHES && typeof window.CHES.whenAuthStateResolved === 'function') {
+    try { user = await window.CHES.whenAuthStateResolved(); } catch (e) {}
+  }
+  if (!user) return null;
+  let me = typeof emuIdentityNow === 'function' ? emuIdentityNow() : null;
+  if (!me || me.uid !== user.uid) {
+    try { me = await emuMyIdentity(); } catch (e) { me = null; }
+  }
+  if (!me || me.uid !== user.uid
+      || !(_spIsOwnerAddr(me.ches) || _spIsOwnerAddr(me.wallet))) return null;
+  return { allowed:true, authenticated:true, isOwner:true, hasOfficialPass:false, phase:'owner-verified' };
+}
+
 async function spEnsureSchoolParkAccess(force) {
   if (_spAccess && !force) return _spAccess;
   if (_spAccessPromise && !force) return _spAccessPromise;
   _spAccessPromise = (async function () {
     try {
+      const ownerAccess = await spVerifiedOwnerAccess();
+      if (ownerAccess) {
+        _spAccess = ownerAccess;
+        paintBrandMaintenance();
+        spPaintEarlyAccessNotice(_spAccess);
+        return _spAccess;
+      }
       const headers = typeof emuAuthHeaders === 'function'
         ? (await emuAuthHeaders(false, { interactive:false }) || {}) : {};
       const response = await fetch(SCHOOLPARK_ACCESS_API, { headers, cache:'no-store' });
@@ -20148,11 +20174,9 @@ async function spEnsureSchoolParkAccess(force) {
          APIが広告ブロッカー等で落ちても、Firebase認証中のUIDと
          読み込み済みPassportのUIDが一致し、正式な運営アドレスなら通す。
          connectedAccountだけでは判定しない（localStorage偽装を避けるため）。 */
-      const user = window.auth && window.auth.currentUser;
-      const me = typeof emuIdentityNow === 'function' ? emuIdentityNow() : null;
-      if (user && me && me.uid === user.uid
-          && (_spIsOwnerAddr(me.ches) || _spIsOwnerAddr(me.wallet))) {
-        _spAccess = { allowed:true, authenticated:true, isOwner:true, hasOfficialPass:false, phase:'owner-fallback' };
+      const ownerAccess = await spVerifiedOwnerAccess();
+      if (ownerAccess) {
+        _spAccess = ownerAccess;
         paintBrandMaintenance();
         return _spAccess;
       }
@@ -20213,6 +20237,8 @@ function _isBrandOwner() {
 }
 function isBrandUnderMaintenance(brand) {
   if (brand === 'schoolpark') return !(_spAccess && _spAccess.allowed);
+  /* 左上のブランド切替では、運営を含めCamelliaを準備中に統一する。 */
+  if (brand === 'camellia') return true;
   return !!BRAND_MAINTENANCE[brand] && !_isBrandOwner();
 }
 /* 入れないことを、押す前に分かるようにする（押してから断られるのは体験が悪い） */
@@ -20234,7 +20260,8 @@ document.addEventListener('DOMContentLoaded', paintBrandMaintenance);
 /* ハブの4ボタン：カウント+1 → それぞれの行き先へ */
 async function chesHubGo(brand) {
   if (brand === 'schoolpark') {
-    const access = await spEnsureSchoolParkAccess(true);
+    /* 確認済み結果を再利用し、戻るたびの一時的な通信失敗を防ぐ。 */
+    const access = await spEnsureSchoolParkAccess(false);
     if (!access || !access.allowed) { spShowSchoolParkUnavailable(access); return; }
   }
   if (isBrandUnderMaintenance(brand)) {
@@ -24082,7 +24109,7 @@ async function chesMenuGo(brand) {
       chesHubGo(brand);
       break;
     case 'schoolpark':
-      const access = await spEnsureSchoolParkAccess(true);
+      const access = await spEnsureSchoolParkAccess(false);
       if (!access || !access.allowed) { spShowSchoolParkUnavailable(access); break; }
       /* SchoolPark内でメニューから選んだ場合。表示はお知らせパネルのままだが、
          入場者としては計上する（ハブ経由と数え方をそろえる）。 */
