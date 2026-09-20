@@ -3573,6 +3573,15 @@ body.sp-room-open #emu-contact-label { display:none !important; }
 #spDaoPage { display:none; position:fixed; inset:0; z-index:1500; background:#D0E2BE; }
 body.sp-dao-open #spDaoPage { display:block; }
 #spDaoFrame { width:100%; height:100%; border:0; display:block; }
+#spEarlyAccessNotice {
+  display:none; position:fixed; z-index:1605; top:14px; right:14px; width:min(340px,calc(100vw - 28px));
+  box-sizing:border-box; padding:12px 42px 12px 14px; border:1px solid rgba(15,92,63,.22);
+  border-radius:10px; background:rgba(244,241,234,.96); color:#141310;
+  box-shadow:0 12px 34px rgba(20,19,16,.16); font-family:'Noto Sans JP',sans-serif;
+}
+#spEarlyAccessNotice strong { display:block; color:#0F5C3F; font-size:13px; margin-bottom:5px; }
+#spEarlyAccessNotice p { margin:0; font-size:11px; line-height:1.65; }
+#spEarlyAccessNotice button { position:absolute; top:7px; right:8px; border:0; background:none; color:#555; font-size:18px; cursor:pointer; }
 /* SchoolPark 表示中のお問い合わせボタン。
    左下の定位置だとサイドバーのトレジャリー表示に重なるので、いったん引っ込め、
    サイドバーが開いているときだけ、その中の空いているところに出す。
@@ -16228,7 +16237,9 @@ window.spDaoLooksReady = spDaoLooksReady;
 
 /* SchoolPark を、中身がそろってから見せる。覆いの出し入れまで面倒を見る。
    ログイン直後の着地と、ハブから選んだときの、どちらもここを通す。 */
-function spDaoOpenWhenReady() {
+async function spDaoOpenWhenReady() {
+  const access = await spEnsureSchoolParkAccess();
+  if (!access || !access.allowed) { spShowSchoolParkUnavailable(access); return; }
   const fresh = !spDaoLooksReady();
   if (fresh) { try { _showSpLoadingOverlay(); } catch (e) {} }
   openSpDao();
@@ -17217,8 +17228,9 @@ async function spOpenProposalFromPost(postId, postTitle) {
      chesHubGo は準備中を知らせて戻るだけなので、そのあとを止めないと
      「SchoolPark には入れないのに、議題フォームだけ開く」ことになる。
      公式パスの方は canGuild を通るので、そのまま議題を出せてしまっていた。 */
-  if (typeof isBrandUnderMaintenance === 'function' && isBrandUnderMaintenance('schoolpark')) {
-    alert('SchoolPark はただいま準備中です。\n\n再開すると、この知識から議題を立てられるようになります。');
+  const access = await spEnsureSchoolParkAccess(true);
+  if (!access || !access.allowed) {
+    spShowSchoolParkUnavailable(access);
     return;
   }
   try {
@@ -19317,8 +19329,9 @@ async function chesLandAfterLogin() {
      入れない人をそこへ着地させると、準備中の画面が外に出てしまう。
      入れる人だけ SchoolPark に着き、それ以外はハブのままにする。
      準備中を外せば、全員が SchoolPark に着地する。 */
-  if (typeof isBrandUnderMaintenance === 'function' && isBrandUnderMaintenance('schoolpark')) return;
-  if (typeof openSpDao === 'function') openSpDao();
+  const access = await spEnsureSchoolParkAccess(true);
+  if (!access || !access.allowed) return;
+  if (typeof spDaoOpenWhenReady === 'function') await spDaoOpenWhenReady();
 }
 
 function accountGo(what) {
@@ -20111,6 +20124,63 @@ const BRAND_MAINTENANCE = {
   emu:        false   // Emu は通常営業
 };
 const BRAND_LABELS = { camellia:'Camellia', heartoo:'Heartoo', schoolpark:'SchoolPark', emu:'Emu' };
+const SCHOOLPARK_ACCESS_API = 'https://emu-realtime.onrender.com/api/schoolpark/access';
+let _spAccess = null;
+let _spAccessPromise = null;
+
+async function spEnsureSchoolParkAccess(force) {
+  if (_spAccess && !force) return _spAccess;
+  if (_spAccessPromise && !force) return _spAccessPromise;
+  _spAccessPromise = (async function () {
+    try {
+      const headers = typeof emuAuthHeaders === 'function'
+        ? (await emuAuthHeaders(false, { interactive:false }) || {}) : {};
+      const response = await fetch(SCHOOLPARK_ACCESS_API, { headers, cache:'no-store' });
+      if (!response.ok) throw new Error('access check ' + response.status);
+      _spAccess = await response.json();
+      paintBrandMaintenance();
+      spPaintEarlyAccessNotice(_spAccess);
+      return _spAccess;
+    } catch (error) {
+      console.warn('SchoolPark の公開状態を確認できません:', error);
+      _spAccess = { allowed:false, unavailable:true };
+      return _spAccess;
+    } finally { _spAccessPromise = null; }
+  })();
+  return _spAccessPromise;
+}
+window.spEnsureSchoolParkAccess = spEnsureSchoolParkAccess;
+
+function spShowSchoolParkUnavailable(access) {
+  const screen = document.getElementById('spAccessScreen');
+  const lead = document.getElementById('spAccessLead');
+  if (!screen) return;
+  if (lead) lead.textContent = access && access.unavailable
+    ? '公開状態を確認できませんでした。通信を確認して、もう一度お試しください。'
+    : 'SchoolParkは現在、公式パス保有者向けに先行公開中です。';
+  screen.style.display = 'flex';
+}
+function spCloseAccessScreen() {
+  const screen = document.getElementById('spAccessScreen');
+  if (screen) screen.style.display = 'none';
+  if (typeof showEmuToday === 'function') showEmuToday();
+}
+function spPaintEarlyAccessNotice(access) {
+  const notice = document.getElementById('spEarlyAccessNotice');
+  if (!notice) return;
+  let dismissed = false;
+  try { dismissed = sessionStorage.getItem('spPassPreviewNoticeDismissed') === '1'; } catch (e) {}
+  notice.style.display = access && access.allowed && access.phase === 'pass-preview'
+    && access.hasOfficialPass && !dismissed ? 'block' : 'none';
+}
+function spDismissEarlyAccessNotice() {
+  try { sessionStorage.setItem('spPassPreviewNoticeDismissed', '1'); } catch (e) {}
+  const notice = document.getElementById('spEarlyAccessNotice');
+  if (notice) notice.style.display = 'none';
+}
+window.spShowSchoolParkUnavailable = spShowSchoolParkUnavailable;
+window.spCloseAccessScreen = spCloseAccessScreen;
+window.spDismissEarlyAccessNotice = spDismissEarlyAccessNotice;
 
 /* 運営のアドレスは2つある。ウォレット（MetaMask）で入ったときは実ウォレット、
    LINE・Google・メールで入ったときは uid から作られた別のアドレスになる。
@@ -20129,6 +20199,7 @@ function _isBrandOwner() {
   return _spIsOwnerAddr(window.connectedAccount || '');
 }
 function isBrandUnderMaintenance(brand) {
+  if (brand === 'schoolpark') return !(_spAccess && _spAccess.allowed);
   return !!BRAND_MAINTENANCE[brand] && !_isBrandOwner();
 }
 /* 入れないことを、押す前に分かるようにする（押してから断られるのは体験が悪い） */
@@ -20146,7 +20217,11 @@ function paintBrandMaintenance() {
 document.addEventListener('DOMContentLoaded', paintBrandMaintenance);
 
 /* ハブの4ボタン：カウント+1 → それぞれの行き先へ */
-function chesHubGo(brand) {
+async function chesHubGo(brand) {
+  if (brand === 'schoolpark') {
+    const access = await spEnsureSchoolParkAccess(true);
+    if (!access || !access.allowed) { spShowSchoolParkUnavailable(access); return; }
+  }
   if (isBrandUnderMaintenance(brand)) {
     alert(BRAND_LABELS[brand] + ' はただいま準備中です。\n\n再開までもうしばらくお待ちください。\nEmu は通常どおりご利用いただけます。');
     return;
@@ -23982,7 +24057,7 @@ function closeChesMenu() {
   const menu = document.getElementById('chesMenu');
   if (menu) { menu.classList.remove('open'); menu.style.left = ''; }
 }
-function chesMenuGo(brand) {
+async function chesMenuGo(brand) {
   closeChesMenu();
   switch (brand) {
     // ハブ画面と同じ挙動・同じカウント計上に統一
@@ -23992,10 +24067,8 @@ function chesMenuGo(brand) {
       chesHubGo(brand);
       break;
     case 'schoolpark':
-      if (isBrandUnderMaintenance('schoolpark')) {
-        alert('SchoolPark はただいま準備中です。\n\n再開までもうしばらくお待ちください。\nEmu は通常どおりご利用いただけます。');
-        break;
-      }
+      const access = await spEnsureSchoolParkAccess(true);
+      if (!access || !access.allowed) { spShowSchoolParkUnavailable(access); break; }
       /* SchoolPark内でメニューから選んだ場合。表示はお知らせパネルのままだが、
          入場者としては計上する（ハブ経由と数え方をそろえる）。 */
       if (typeof spTrackBrand === 'function') spTrackBrand('schoolpark');
@@ -25579,6 +25652,22 @@ async function sendEmuFeedback() {
      中身は schoolpark/dao.html にそのまま入っている -->
 <div id="spDaoPage">
   <iframe id="spDaoFrame" title="SchoolPark" loading="lazy"></iframe>
+</div>
+<div id="spEarlyAccessNotice" role="status">
+  <button type="button" onclick="spDismissEarlyAccessNotice()" aria-label="閉じる">×</button>
+  <strong>🎫 公式パス保有者 先行公開</strong>
+  <p>SchoolParkへようこそ。<br>10月1日の一般公開に先駆けて、公式パスをお持ちの方へSchoolParkを先行公開しています。</p>
+</div>
+<div id="spAccessScreen" role="dialog" aria-modal="true" aria-labelledby="spAccessTitle"
+  style="display:none;position:fixed;inset:0;z-index:2100;background:#F4F1EA;color:#141310;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:'Noto Sans JP',sans-serif">
+  <div style="width:min(520px,100%);border:1px solid rgba(20,19,16,.14);border-radius:14px;padding:clamp(24px,6vw,42px);box-sizing:border-box;background:#fff;text-align:center;box-shadow:0 18px 50px rgba(20,19,16,.1)">
+    <div style="font-size:28px;margin-bottom:12px">🎫</div>
+    <div style="font-size:11px;letter-spacing:.18em;color:#0F5C3F;margin-bottom:10px">SCHOOLPARK EARLY ACCESS</div>
+    <h2 id="spAccessTitle" style="font-size:clamp(21px,5vw,28px);margin:0 0 16px">公式パス保有者向け先行公開</h2>
+    <p id="spAccessLead" style="font-size:14px;line-height:1.9;margin:0 0 10px">SchoolParkは現在、公式パス保有者向けに先行公開中です。</p>
+    <p style="font-size:14px;line-height:1.9;margin:0 0 24px">一般公開は2026年10月1日です。<br>10月1日から、どなたでもSchoolParkをご利用いただけます。</p>
+    <button type="button" onclick="spCloseAccessScreen()" style="border:0;border-radius:8px;background:#0F5C3F;color:#fff;padding:12px 22px;font:700 14px inherit;cursor:pointer">Emuを利用する</button>
+  </div>
 </div>
 <!-- スマホ用のメニュー。
      スマホの SchoolPark にはサイドバーが無いので、そこにあるもの
