@@ -82,16 +82,19 @@ service cloud.firestore {
       return isOwnerAddr(a.get('chesAddress', '')) || isOwnerAddr(a.get('walletAddress', ''));
     }
 
-    /* 公式パスの持ち主かどうか。paid_users は小文字のアドレスが鍵。
-       実際のウォレットと CHESアドレスの両方で照らす。 */
+    /* 公式パスの持ち主かどうか。
+       paid_users には小文字IDとチェックサム表記IDの両方が現存するため、
+       実際の保存形と小文字形を、ウォレット・CHESアドレス双方で照らす。 */
     function hasPass() {
       return signedIn() && hasPassFor(get(accountPath()).data);
     }
     function hasPassFor(a) {
       return (a.get('walletAddress', '').size() > 0
-          && exists(/databases/$(database)/documents/paid_users/$(a.get('walletAddress', '').lower())))
+          && (exists(/databases/$(database)/documents/paid_users/$(a.get('walletAddress', '')))
+            || exists(/databases/$(database)/documents/paid_users/$(a.get('walletAddress', '').lower()))))
         || (a.get('chesAddress', '').size() > 0
-          && exists(/databases/$(database)/documents/paid_users/$(a.get('chesAddress', '').lower())));
+          && (exists(/databases/$(database)/documents/paid_users/$(a.get('chesAddress', '')))
+            || exists(/databases/$(database)/documents/paid_users/$(a.get('chesAddress', '').lower()))));
     }
 
     /* SchoolPark の公開期間。request.time は Firebase が付ける時刻なので、
