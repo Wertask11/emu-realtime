@@ -3573,6 +3573,15 @@ body.sp-room-open #emu-contact-label { display:none !important; }
 #spDaoPage { display:none; position:fixed; inset:0; z-index:1500; background:#D0E2BE; }
 body.sp-dao-open #spDaoPage { display:block; }
 #spDaoFrame { width:100%; height:100%; border:0; display:block; }
+#spEarlyAccessNotice {
+  display:none; position:fixed; z-index:1605; top:14px; right:14px; width:min(340px,calc(100vw - 28px));
+  box-sizing:border-box; padding:12px 42px 12px 14px; border:1px solid rgba(15,92,63,.22);
+  border-radius:10px; background:rgba(244,241,234,.96); color:#141310;
+  box-shadow:0 12px 34px rgba(20,19,16,.16); font-family:'Noto Sans JP',sans-serif;
+}
+#spEarlyAccessNotice strong { display:block; color:#0F5C3F; font-size:13px; margin-bottom:5px; }
+#spEarlyAccessNotice p { margin:0; font-size:11px; line-height:1.65; }
+#spEarlyAccessNotice button { position:absolute; top:7px; right:8px; border:0; background:none; color:#555; font-size:18px; cursor:pointer; }
 /* SchoolPark 表示中のお問い合わせボタン。
    左下の定位置だとサイドバーのトレジャリー表示に重なるので、いったん引っ込め、
    サイドバーが開いているときだけ、その中の空いているところに出す。
@@ -5008,7 +5017,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <section id="emuTodayHome" aria-label="今日のEmu">
   <div class="eth-topbar">
     <div>
-      <h1 class="eth-title" data-i18n="home.title">今日のEmu</h1>
+      <h1 class="eth-title" id="emuPageTitle" data-i18n="home.title">今日のEmu</h1>
       <p class="eth-subtitle" data-i18n="home.subtitle">あなたの熱に、ついてこられる場所。</p>
     </div>
     <div class="eth-tabs" role="navigation" aria-label="Emu画面" data-i18n-aria="home.tabsAria">
@@ -11293,17 +11302,17 @@ const SP_REIZO_KB = [
   { k:['emuerで何ができる','emuerの使い方','emuerは何に使う','emuerを何に使う',
        'emuerの使い道','emuerで何が買える','emuerはどこで使える','emuerを使って',
        'emuerで何と交換','emuerの交換'],
-    a:'EMUER は 100 貯まると、特別体験と交換できるよ🧊\n使い道は「今日のEmu」の「使い道を見る」から見てね！\n\n実EMUER（チェーン上のトークン）に換えることもできるけど、そのときはウォレットが必要で、送金手数料は自分の負担になるよ。' },
+    a:'新しいEMUERの仕組みは、2026年10月1日開始予定だよ🧊\n交換は、商品ごとの価格・提供条件・返金条件が公開されたものから始まるんだ。「今日のEmu」の「使い道を見る」で確認してね。\n\n9月30日までは開始待ちで、旧「100 EMUERで特別体験」の交換は利用できないよ。今までの残高は消えず、そのまま保持されるから安心してね。' },
 
   // ── EMUER × 貯め方
   { k:['emuerを稼ぐ','emuerを貯める','emuerを増やす','emuerの獲得','emuerの貯め方',
        'emuerはどうやって','どうやって貯める','どうやって稼ぐ','稼ぎ方','貯め方'],
-    a:'EMUER の貯まりかたは3つだよ🧊\n\n① ログインボーナス → 毎日 +0.5\n② 知識に Good が付く → 誰かの役に立った分\n③ 議論・一日シェア → 続けた分\n\nコツコツ続けるのがいちばん早いよ！' },
+    a:'新しいEMUERの仕組みは、2026年10月1日開始予定だよ🧊\n\n9月30日までは開始待ちなので、旧ログインボーナスの「毎日 +0.5」は受け取れないんだ。開始後の付与条件や交換条件は、画面に公開された内容を確認してね。\n\n今までのEMUER残高は削除もリセットもされず、そのまま保持されるよ。' },
 
   // ── 実EMUER・表示の見かた
   { k:['かっこの中','括弧の中','（）の数字','数字が2つ','実emuer','未変換',
        'まだ換えて','変換','オンチェーン'],
-    a:'「150（4）」みたいな表示は、（　）の中が「まだ実EMUERに換えていない分」だよ🧊\n\n・外の数字 → 実EMUER（チェーン上にある分）\n・（　）の中 → ログインボーナスや評価でもらった分\n\n実EMUERに換えるにはウォレットが必要で、送金手数料は自分の負担になるよ。LINE・Google・メールで入っている人は、外の数字が0のままになるんだ。' },
+    a:'EMUER残高は、これまで貯めた分も含めて保持されているよ🧊\n新しいEMUERの仕組みは2026年10月1日開始予定で、9月30日までは開始待ちなんだ。\n\n交換できる商品は、価格・提供条件・返金条件が公開されたものから順に案内されるよ。古い表示方法や旧交換条件ではなく、いま画面に出ている残高と案内を確認してね。' },
 
   /* ════════════════════════════════════════════
      はじめに
@@ -11313,11 +11322,11 @@ const SP_REIZO_KB = [
   // camellia / heartoo はそれぞれの項目に任せる。
   // ここに入れておくと「Camelliaはいつ開く？」までCHESの説明になってしまう。
   { k:['ches','チェス','ブランド','世界観','4つの','4つで'],
-    a:'CHES（チェス）は、4つの場所が集まった一つの街だよ🧊\n\n🌐 Emu — 経験から生まれた知識を、読んで・届けて・語り合う\n🏞️ SchoolPark — その知識を実際に試して、決めごとを投票で決める\n🌸 Camellia — 準備中\n💍 Heartoo — 準備中\n\nサイドバーの左上のロゴを押すと、場所を切り替えられるよ！\nどこから入っても、きみは同じ一人として扱われるんだ。' },
+    a:'CHES（チェス）は、4つの場所が集まった一つの街だよ🧊\n\n🌐 Emu — 経験から生まれた知識を、読んで・届けて・語り合う\n🏞️ SchoolPark — その知識を実際に試して、決めごとを投票で決める\n🌸 Camellia — β公開中\n💍 Heartoo — 準備中\n\nメニューのブランド切替から場所を移動できるよ。どこから入っても、きみは同じ一人として扱われるんだ。' },
 
   // ── SchoolPark 概要
   { k:['schoolparkとは','スクールパークとは','schoolparkって','schoolparkの中身','概要'],
-    a:'SchoolPark は「合同会社型DAO SchoolPark」の中身だよ🧊\nEmuで受け取った知識を実際にやってみて、残ったものを知恵として置いていく場所。\n\n左のならびから7つの画面に行けるよ：\n01 今週の広場／02 公園／03 クエスト一覧／04 ギルド／05 知恵ライブラリ／06 メンバー・貢献／07 トレジャリー' },
+    a:'SchoolPark は「合同会社型DAO SchoolPark」の中身だよ🧊\nEmuで受け取った知識を実際にやってみて、残ったものを知恵として置いていく場所。\n\n7つの画面があるよ：\n01 今週の広場／02 ギルド／03 クエスト一覧／04 知恵ライブラリ／05 公園／06 メンバー・貢献／07 トレジャリー' },
 
   // ── 理念・タグライン
   { k:['理念','ビジョン','目指','コンセプト','なぜ作','どんな想い','タグライン'],
@@ -11338,7 +11347,7 @@ const SP_REIZO_KB = [
 
   // ── パスポート
   { k:['パスポート','passport','アドレス','身元','番号は','自分の番号'],
-    a:'SchoolPark パスポートは、CHESでのきみの身元だよ🪪\nEmu・SchoolPark・Camellia・Heartoo、どこでの記録もこの番号に付くんだ。\n\n見かた：\n・Emu → 左のならびの下、きみの名前\n・SchoolPark → サイドバーの下、きみの名前\n・スマホ → 右上の「☰」→ SchoolPark パスポート\n\n入り方（LINE/Google/メール）を変えても番号は変わらないし、同じ番号を2人が持つことはできない作りだよ。投票もクエストも引用も、この番号で1回だけなんだ🧊' },
+    a:'SchoolPark パスポートは、CHESでのきみの身元だよ🪪\nEmu・SchoolPark・Camellia・Heartoo、どこでの記録もこの番号に付くんだ。\n\n見かた：\n・Emu → 左のならびの下、きみの名前\n・SchoolPark → サイドバーの下、きみの名前\n・スマホ → 左上の「☰」→ SchoolPark パスポート\n\n入り方（LINE/Google/メール）を変えても番号は変わらないし、同じ番号を2人が持つことはできない作りだよ。投票もクエストも引用も、この番号で1回だけなんだ🧊' },
 
   /* ════════════════════════════════════════════
      Emu
@@ -11419,11 +11428,11 @@ const SP_REIZO_KB = [
 
   // ── EMUER 全般
   { k:['emuer','エミュアー','エミュア','トークン','token'],
-    a:'EMUER は CHES の中で流通するトークンだよ🧊 Emuでの活動で貯まるんだ。\n\n貯まりかた：\n・ログインボーナス → 毎日 +0.5\n・知識に Good が付く\n・議論・一日シェア\n\n100 EMUER で特別体験と交換できるよ。使い道は「今日のEmu」の「使い道を見る」から！' },
+    a:'EMUER は CHES で使う仕組みだよ🧊 新しい仕組みは2026年10月1日開始予定。9月30日までは開始待ちで、旧「毎日+0.5」のログイン報酬や「100 EMUERで特別体験」は利用できないんだ。\n\nこれまでの残高は消えず、そのまま保持されるよ。交換は、商品ごとの価格・提供条件・返金条件が公開されたものから始まるので、「今日のEmu」の「使い道を見る」で確認してね。' },
 
   // ── 残高の見かた
   { k:['残高','ざんだか','いくら持ってる','いくら貯ま','どこで見れる'],
-    a:'いまの残高は、Emuの右上に出ているよ💎\n「今日のEmu」の「現在の報酬」でも見られるし、次の特別体験まであと何EMUERかも出るよ！\n\nぼくに「残高教えて」って言ってくれれば、ここに出すこともできるからね🧊' },
+    a:'いまの残高は、Emuの残高表示と「今日のEmu」で確認できるよ💎\nこれまでの残高は、新しい仕組みの開始待ち中も削除・リセットされず保持されるんだ。\n\nぼくに「残高教えて」と言ってくれれば、ここに表示することもできるよ🧊' },
 
   // ── プラン・料金
   // 'いくら' は入れない。「残高はいくら？」が料金表に来てしまうため。
@@ -11446,15 +11455,15 @@ const SP_REIZO_KB = [
 
   // ── スマホ
   { k:['スマホ','スマートフォン','タブレット','mobile','iphone','android','携帯'],
-    a:'スマホでも、普通のブラウザでそのまま使えるよ🧊（専用アプリは要らないよ）\n\n狭い画面では、サイドバーの代わりに下のならびが出るよ。\nパスポート・ブランドの切り替え・お問い合わせは、右上の「☰」からまとめて開けるんだ！' },
+    a:'スマホでも、普通のブラウザでそのまま使えるよ🧊（専用アプリは要らないよ）\n\n狭い画面では、サイドバーの代わりに下のならびが出るよ。\nパスポート・ブランドの切り替え・お問い合わせは、左上の「☰」からまとめて開けるんだ！' },
 
   // ── チュートリアル
   { k:['チュートリアル','使い方を見','説明書','マニュアル','ガイド','詳しく知りたい'],
-    a:'くわしい説明はチュートリアルにまとまっているよ📖\n左下の丸いボタン（お問い合わせ）→「📖 チュートリアル」タブ →「チュートリアルページを開く」で見られるよ。スマホは右上の「☰」からね！\n\nはじめに／Emu／SchoolPark／EMUER・プラン／サポート の5つに分かれていて、上の検索から言葉で探すこともできるよ🧊' },
+    a:'くわしい説明はチュートリアルにまとまっているよ📖\n左下の丸いボタン（お問い合わせ）→「📖 チュートリアル」タブ →「チュートリアルページを開く」で見られるよ。スマホは左上の「☰」からね！\n\nはじめに／Emu／SchoolPark／EMUER・プラン／サポート の5つに分かれていて、上の検索から言葉で探すこともできるよ🧊' },
 
   // ── 問い合わせ
   { k:['問い合わせ','といあわせ','contact','困った','相談','サポート','運営に'],
-    a:'困ったときはここからどうぞ🧊\n\n・お問い合わせ・イベント申込 → 左下の丸いボタン（スマホは右上の「☰」から）\n・ひとこと送る → 右上のアカウントメニュー →「ひとこと」\n・ぼくに聞く → いまここ！\n\nうまくいかないときは、画面に出たメッセージをそのまま教えてくれると助かるよ！' },
+    a:'困ったときはここからどうぞ🧊\n\n・お問い合わせ・イベント申込 → 左下の丸いボタン（スマホは左上の「☰」から）\n・ひとこと送る → アカウントメニューの「ひとこと」\n・ぼくに聞く → いまここ！\n\nうまくいかないときは、画面に出たメッセージをそのまま教えてくれると助かるよ！' },
 
   // ── ショッピング（Emuの「みてみる」）
   { k:['ショッピング','みてみる','買い物','グッズ','商品','store','グルメ','売って'],
@@ -11468,7 +11477,7 @@ const SP_REIZO_KB = [
 
   // ── Camellia
   { k:['camellia','カメリア','女性','ウェルネス','ウェルビーイング'],
-    a:'Camellia（カメリア）は、女性のウェルネス／ウェルビーイングの場所だよ🌸\nいまは準備中で、順番に開けているところなんだ。\n\nパスポートは共通だから、開いたときはそのまま入れるよ🧊' },
+    a:'Camellia（カメリア）は、女性のウェルネス／ウェルビーイングの場所だよ🌸\nいまはβ公開中。メニューのブランド切替から移動できるよ。\n\nパスポートは共通だから、そのまま同じ身元で使えるんだ🧊' },
 
   // ── Heartoo
   { k:['heartoo','ハートゥー','結婚指輪','指輪'],
@@ -11772,19 +11781,11 @@ async function _reizoSkillEmuer() {
   }
   const real = Math.floor(Number(pair.real) || 0);
   const un   = Math.round((Number(pair.unconverted) || 0) * 10) / 10;
-  const total = real + un;
-
   let msg = `💎 いまの残高は ${_emuFormatBalancePair(pair)} EMUER だよ！`;
   if (un > 0) {
     msg += `\n（　）の中は、まだ実EMUERに換えていない分だよ。`;
   }
-  const REWARD_AT = 100; // 特別体験と交換できる目安
-  if (total >= REWARD_AT) {
-    msg += `\n🎁 ${REWARD_AT} EMUER 貯まってるよ！「今日のEmu」の「使い道を見る」から交換できるからね！`;
-  } else {
-    const rest = Math.round((REWARD_AT - total) * 10) / 10;
-    msg += `\n次の特別体験まで、あと ${rest} EMUER だよ。ログインボーナスは毎日 +0.5 だからね！`;
-  }
+  msg += `\n新しいEMUERの仕組みは2026年10月1日開始予定だよ。9月30日までは旧ログイン報酬や旧「100 EMUERで特別体験」は利用できないけれど、今までの残高はそのまま保持されるからね。`;
   _spReizoAppendMsg(msg, false);
 }
 
@@ -15032,6 +15033,18 @@ function _emuHealSession() {
   }).catch(function () {});
 }
 
+/* Emu の共通ヘッダーは各ページでも残すため、現在地だけを明示的に更新する。
+   キャッチコピーは .eth-subtitle に分離したまま変えない。 */
+function _setEmuPageTitle(key, fallback) {
+  const heading = document.getElementById('emuPageTitle');
+  if (heading) {
+    heading.setAttribute('data-i18n', key);
+    heading.textContent = (typeof emuT === 'function') ? emuT(key) : fallback;
+  }
+  const home = document.getElementById('emuTodayHome');
+  if (home) home.setAttribute('aria-label', heading ? heading.textContent : fallback);
+}
+
 function showEmuToday() {
   /* Emuに入ったら計上する。以前はハブのボタンだけで数えていたため、
      タブ操作やセッション復帰で入った人が数に入らなかった。
@@ -15043,6 +15056,7 @@ function showEmuToday() {
   document.body.classList.add('emu-today-open');
   document.body.classList.remove('emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open','emu-discussion-open');
   _setEmuHomeTab('emuTodayTab');
+  _setEmuPageTitle('tab.today', '今日のEmu');
   updateEmuTodayHome();
   window.scrollTo({ top:0, behavior:'smooth' });
 }
@@ -15052,6 +15066,7 @@ function showEmuIchinichi() {
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-knowledge-open','emu-discussion-open');
   document.body.classList.add('emu-ichinichi-open');
   _setEmuHomeTab('emuIchinichiTab');
+  _setEmuPageTitle('tab.ichinichi', '一日シェア');
   const frame = document.getElementById('emuIchinichiFrame');
   if (frame && !frame.getAttribute('src')) frame.src = '/ichinichi.html?embed=1';
   window.scrollTo({ top:0, behavior:'smooth' });
@@ -15100,6 +15115,7 @@ function showEmuFeed(mode) {
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-discussion-open');
   document.body.classList.add('emu-knowledge-open');
   _setEmuHomeTab('emuFeedTab');
+  _setEmuPageTitle('tab.feed', '知識を読む');
   const frame = document.getElementById('emuKnowledgeFrame');
   const filterMode = mode || 'new'; // 知識を読むの既定は「新着」
   if (frame) frame.dataset.pendingFilter = filterMode;
@@ -15138,6 +15154,7 @@ function showEmuRequests() {
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-ichinichi-open','emu-knowledge-open','emu-discussion-open');
   document.body.classList.add('emu-requests-open');
   _setEmuHomeTab('emuRequestsTab');
+  _setEmuPageTitle('tab.requests', '知識を探す');
   loadKnowledgeRequests();
   window.scrollTo({ top:0, behavior:'smooth' });
 }
@@ -15147,6 +15164,7 @@ function showEmuDiscussion() {
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open');
   document.body.classList.add('emu-discussion-open');
   _setEmuHomeTab('emuDiscussionTab');
+  _setEmuPageTitle('tab.discussion', '議論');
   const frame = document.getElementById('emuDiscussionFrame');
   if (frame && !frame.getAttribute('src')) frame.src = '/discussion.html';
   if (typeof socket !== 'undefined') {
@@ -16219,7 +16237,9 @@ window.spDaoLooksReady = spDaoLooksReady;
 
 /* SchoolPark を、中身がそろってから見せる。覆いの出し入れまで面倒を見る。
    ログイン直後の着地と、ハブから選んだときの、どちらもここを通す。 */
-function spDaoOpenWhenReady() {
+async function spDaoOpenWhenReady() {
+  const access = await spEnsureSchoolParkAccess();
+  if (!access || !access.allowed) { spShowSchoolParkUnavailable(access); return; }
   const fresh = !spDaoLooksReady();
   if (fresh) { try { _showSpLoadingOverlay(); } catch (e) {} }
   openSpDao();
@@ -17208,8 +17228,9 @@ async function spOpenProposalFromPost(postId, postTitle) {
      chesHubGo は準備中を知らせて戻るだけなので、そのあとを止めないと
      「SchoolPark には入れないのに、議題フォームだけ開く」ことになる。
      公式パスの方は canGuild を通るので、そのまま議題を出せてしまっていた。 */
-  if (typeof isBrandUnderMaintenance === 'function' && isBrandUnderMaintenance('schoolpark')) {
-    alert('SchoolPark はただいま準備中です。\n\n再開すると、この知識から議題を立てられるようになります。');
+  const access = await spEnsureSchoolParkAccess(true);
+  if (!access || !access.allowed) {
+    spShowSchoolParkUnavailable(access);
     return;
   }
   try {
@@ -18529,6 +18550,9 @@ window.spDaoLoadTreasury = async function (app) {
           };
         }),
         allocTitle: '内訳（' + SP_CURRENCY_LABEL[c] + '）',
+        startNotice: c === 'EMUER'
+          ? '新しいEMUERの仕組みは2026年10月1日開始予定です。現在の残高と記録は保持されます。'
+          : '',
         allocNote: (b.promised + b.closed) === 0
           ? 'この通貨のクエストはまだありません。'
           : '合計 ' + spMoney(b.promised + b.closed, c) + ' の内訳です。完了したクエストのぶんだけ、下の3つに分かれます。',
@@ -19305,8 +19329,9 @@ async function chesLandAfterLogin() {
      入れない人をそこへ着地させると、準備中の画面が外に出てしまう。
      入れる人だけ SchoolPark に着き、それ以外はハブのままにする。
      準備中を外せば、全員が SchoolPark に着地する。 */
-  if (typeof isBrandUnderMaintenance === 'function' && isBrandUnderMaintenance('schoolpark')) return;
-  if (typeof openSpDao === 'function') openSpDao();
+  const access = await spEnsureSchoolParkAccess(true);
+  if (!access || !access.allowed) return;
+  if (typeof spDaoOpenWhenReady === 'function') await spDaoOpenWhenReady();
 }
 
 function accountGo(what) {
@@ -20099,6 +20124,63 @@ const BRAND_MAINTENANCE = {
   emu:        false   // Emu は通常営業
 };
 const BRAND_LABELS = { camellia:'Camellia', heartoo:'Heartoo', schoolpark:'SchoolPark', emu:'Emu' };
+const SCHOOLPARK_ACCESS_API = 'https://emu-realtime.onrender.com/api/schoolpark/access';
+let _spAccess = null;
+let _spAccessPromise = null;
+
+async function spEnsureSchoolParkAccess(force) {
+  if (_spAccess && !force) return _spAccess;
+  if (_spAccessPromise && !force) return _spAccessPromise;
+  _spAccessPromise = (async function () {
+    try {
+      const headers = typeof emuAuthHeaders === 'function'
+        ? (await emuAuthHeaders(false, { interactive:false }) || {}) : {};
+      const response = await fetch(SCHOOLPARK_ACCESS_API, { headers, cache:'no-store' });
+      if (!response.ok) throw new Error('access check ' + response.status);
+      _spAccess = await response.json();
+      paintBrandMaintenance();
+      spPaintEarlyAccessNotice(_spAccess);
+      return _spAccess;
+    } catch (error) {
+      console.warn('SchoolPark の公開状態を確認できません:', error);
+      _spAccess = { allowed:false, unavailable:true };
+      return _spAccess;
+    } finally { _spAccessPromise = null; }
+  })();
+  return _spAccessPromise;
+}
+window.spEnsureSchoolParkAccess = spEnsureSchoolParkAccess;
+
+function spShowSchoolParkUnavailable(access) {
+  const screen = document.getElementById('spAccessScreen');
+  const lead = document.getElementById('spAccessLead');
+  if (!screen) return;
+  if (lead) lead.textContent = access && access.unavailable
+    ? '公開状態を確認できませんでした。通信を確認して、もう一度お試しください。'
+    : 'SchoolParkは現在、公式パス保有者向けに先行公開中です。';
+  screen.style.display = 'flex';
+}
+function spCloseAccessScreen() {
+  const screen = document.getElementById('spAccessScreen');
+  if (screen) screen.style.display = 'none';
+  if (typeof showEmuToday === 'function') showEmuToday();
+}
+function spPaintEarlyAccessNotice(access) {
+  const notice = document.getElementById('spEarlyAccessNotice');
+  if (!notice) return;
+  let dismissed = false;
+  try { dismissed = sessionStorage.getItem('spPassPreviewNoticeDismissed') === '1'; } catch (e) {}
+  notice.style.display = access && access.allowed && access.phase === 'pass-preview'
+    && access.hasOfficialPass && !dismissed ? 'block' : 'none';
+}
+function spDismissEarlyAccessNotice() {
+  try { sessionStorage.setItem('spPassPreviewNoticeDismissed', '1'); } catch (e) {}
+  const notice = document.getElementById('spEarlyAccessNotice');
+  if (notice) notice.style.display = 'none';
+}
+window.spShowSchoolParkUnavailable = spShowSchoolParkUnavailable;
+window.spCloseAccessScreen = spCloseAccessScreen;
+window.spDismissEarlyAccessNotice = spDismissEarlyAccessNotice;
 
 /* 運営のアドレスは2つある。ウォレット（MetaMask）で入ったときは実ウォレット、
    LINE・Google・メールで入ったときは uid から作られた別のアドレスになる。
@@ -20117,6 +20199,7 @@ function _isBrandOwner() {
   return _spIsOwnerAddr(window.connectedAccount || '');
 }
 function isBrandUnderMaintenance(brand) {
+  if (brand === 'schoolpark') return !(_spAccess && _spAccess.allowed);
   return !!BRAND_MAINTENANCE[brand] && !_isBrandOwner();
 }
 /* 入れないことを、押す前に分かるようにする（押してから断られるのは体験が悪い） */
@@ -20134,7 +20217,11 @@ function paintBrandMaintenance() {
 document.addEventListener('DOMContentLoaded', paintBrandMaintenance);
 
 /* ハブの4ボタン：カウント+1 → それぞれの行き先へ */
-function chesHubGo(brand) {
+async function chesHubGo(brand) {
+  if (brand === 'schoolpark') {
+    const access = await spEnsureSchoolParkAccess(true);
+    if (!access || !access.allowed) { spShowSchoolParkUnavailable(access); return; }
+  }
   if (isBrandUnderMaintenance(brand)) {
     alert(BRAND_LABELS[brand] + ' はただいま準備中です。\n\n再開までもうしばらくお待ちください。\nEmu は通常どおりご利用いただけます。');
     return;
@@ -23970,7 +24057,7 @@ function closeChesMenu() {
   const menu = document.getElementById('chesMenu');
   if (menu) { menu.classList.remove('open'); menu.style.left = ''; }
 }
-function chesMenuGo(brand) {
+async function chesMenuGo(brand) {
   closeChesMenu();
   switch (brand) {
     // ハブ画面と同じ挙動・同じカウント計上に統一
@@ -23980,10 +24067,8 @@ function chesMenuGo(brand) {
       chesHubGo(brand);
       break;
     case 'schoolpark':
-      if (isBrandUnderMaintenance('schoolpark')) {
-        alert('SchoolPark はただいま準備中です。\n\n再開までもうしばらくお待ちください。\nEmu は通常どおりご利用いただけます。');
-        break;
-      }
+      const access = await spEnsureSchoolParkAccess(true);
+      if (!access || !access.allowed) { spShowSchoolParkUnavailable(access); break; }
       /* SchoolPark内でメニューから選んだ場合。表示はお知らせパネルのままだが、
          入場者としては計上する（ハブ経由と数え方をそろえる）。 */
       if (typeof spTrackBrand === 'function') spTrackBrand('schoolpark');
@@ -25567,6 +25652,22 @@ async function sendEmuFeedback() {
      中身は schoolpark/dao.html にそのまま入っている -->
 <div id="spDaoPage">
   <iframe id="spDaoFrame" title="SchoolPark" loading="lazy"></iframe>
+</div>
+<div id="spEarlyAccessNotice" role="status">
+  <button type="button" onclick="spDismissEarlyAccessNotice()" aria-label="閉じる">×</button>
+  <strong>🎫 公式パス保有者 先行公開</strong>
+  <p>SchoolParkへようこそ。<br>10月1日の一般公開に先駆けて、公式パスをお持ちの方へSchoolParkを先行公開しています。</p>
+</div>
+<div id="spAccessScreen" role="dialog" aria-modal="true" aria-labelledby="spAccessTitle"
+  style="display:none;position:fixed;inset:0;z-index:2100;background:#F4F1EA;color:#141310;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:'Noto Sans JP',sans-serif">
+  <div style="width:min(520px,100%);border:1px solid rgba(20,19,16,.14);border-radius:14px;padding:clamp(24px,6vw,42px);box-sizing:border-box;background:#fff;text-align:center;box-shadow:0 18px 50px rgba(20,19,16,.1)">
+    <div style="font-size:28px;margin-bottom:12px">🎫</div>
+    <div style="font-size:11px;letter-spacing:.18em;color:#0F5C3F;margin-bottom:10px">SCHOOLPARK EARLY ACCESS</div>
+    <h2 id="spAccessTitle" style="font-size:clamp(21px,5vw,28px);margin:0 0 16px">公式パス保有者向け先行公開</h2>
+    <p id="spAccessLead" style="font-size:14px;line-height:1.9;margin:0 0 10px">SchoolParkは現在、公式パス保有者向けに先行公開中です。</p>
+    <p style="font-size:14px;line-height:1.9;margin:0 0 24px">一般公開は2026年10月1日です。<br>10月1日から、どなたでもSchoolParkをご利用いただけます。</p>
+    <button type="button" onclick="spCloseAccessScreen()" style="border:0;border-radius:8px;background:#0F5C3F;color:#fff;padding:12px 22px;font:700 14px inherit;cursor:pointer">Emuを利用する</button>
+  </div>
 </div>
 <!-- スマホ用のメニュー。
      スマホの SchoolPark にはサイドバーが無いので、そこにあるもの
