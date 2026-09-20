@@ -23,7 +23,8 @@
 #dao-root > div            { padding-bottom: 0 !important; }
 #dao-root > div > div      { padding: 0 !important; }
 #dao-root > div > div > div{ border-radius: 0 !important; box-shadow: none !important; }
-html, body                 { height: 100%; }
+html, body                 { height: 100%; width:100%; overflow-x:hidden; }
+#dao-root                  { width:100%; overflow-x:hidden; }
 </style>
 </head>
 <body>
@@ -102,7 +103,7 @@ html, body                 { height: 100%; }
             <div style="font-size:11px; letter-spacing:.12em; color:#D0E2BE">FOUNDER QUEST · 恒久の原点</div>
             <h2 style="font-size:24px; line-height:1.5">SchoolPark Quest #000</h2>
             <p style="line-height:1.9">目印にしてスタート、ゴールにして原点、原点にして頂点</p>
-            <sc-if value="{{ showFounderSummary }}"><button onClick="{{ toggleFounderSummary }}" style="font:inherit; background:#D0E2BE; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">詳しく見る</button></sc-if>
+            <sc-if value="{{ showFounderToggle }}"><button onClick="{{ toggleFounderSummary }}" style="font:inherit; background:#D0E2BE; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">{{ founderToggleLabel }}</button></sc-if>
             <sc-if value="{{ showFounderDetails }}">
               <p style="font-size:13px; line-height:1.9">SchoolParkは何のために存在するのか。どんな社会をつくりたいのか。何を大切にするのか。その原点を記録する。</p>
               <p style="font-size:13px">報酬 0円 · Founder 1人 · 期限なし</p>
@@ -135,7 +136,7 @@ html, body                 { height: 100%; }
               <div style="display:flex; flex-direction:column; gap:16px">
                 <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE">THIS WEEK</div>
                 <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.45">今週、{{ stats.newWisdom }}個の知識が<br>知恵になった。</div>
-                <sc-if value="{{ showWeekSummary }}"><button onClick="{{ toggleWeekSummary }}" style="align-self:flex-start; font:inherit; background:#D0E2BE; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">詳しく見る</button></sc-if>
+                <sc-if value="{{ showWeekToggle }}"><button onClick="{{ toggleWeekSummary }}" style="align-self:flex-start; font:inherit; background:#D0E2BE; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">{{ weekToggleLabel }}</button></sc-if>
                 <sc-if value="{{ showWeekDetails }}"><div style="font-size:14px; line-height:1.9; color:rgba(244,241,234,.68)">読んで終わった知識は0。走っている{{ word }}は{{ stats.running }}本、受けている仲間は{{ stats.people }}人。</div></sc-if>
               </div>
               <sc-if value="{{ showWeekDetails }}"><div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; align-content:center">
@@ -762,7 +763,7 @@ html, body                 { height: 100%; }
             <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:{{ L.cardPad }}; display:flex; align-items:center; gap:32px; flex-wrap:wrap">
               <div style="flex:1; min-width:220px; display:flex; flex-direction:column; gap:10px">
                 <div style="font-family:'Zen Old Mincho',serif; font-size:26px; font-weight:900; line-height:1.5">DAOの資産は、金庫ではなくここにある。</div>
-                <sc-if value="{{ showLibrarySummary }}"><button onClick="{{ toggleLibrarySummary }}" style="align-self:flex-start; font:inherit; background:#D0E2BE; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">詳しく見る</button></sc-if>
+                <sc-if value="{{ showLibraryToggle }}"><button onClick="{{ toggleLibrarySummary }}" style="align-self:flex-start; font:inherit; background:#D0E2BE; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">{{ libraryToggleLabel }}</button></sc-if>
                 <sc-if value="{{ showLibraryDetails }}"><div style="font-size:13px; line-height:1.9; color:rgba(244,241,234,.66)">知恵カードは「元の知識 → 通した経験 → 残った一文」で1枚。引用されるほど、書き手に分配が回る。</div></sc-if>
               </div>
               <sc-if value="{{ showLibraryDetails }}"><div style="display:flex; gap:28px">
@@ -1064,7 +1065,7 @@ html, body                 { height: 100%; }
 
       </div>
 
-      <div style="display:{{ L.bottom }}; position:sticky; bottom:0; z-index:8; flex:0 0 64px; width:100%; max-width:100vw; min-height:64px; box-sizing:border-box; background:#141310; padding:6px 6px 8px; justify-content:flex-start; align-items:stretch; gap:2px; overflow-x:auto; overflow-y:hidden; overscroll-behavior:contain; touch-action:pan-x; -webkit-overflow-scrolling:touch">
+      <div ref="{{ bottomRef }}" style="display:{{ L.bottom }}; position:sticky; bottom:0; z-index:8; flex:0 0 64px; width:100%; max-width:100vw; min-height:64px; box-sizing:border-box; background:#141310; padding:6px 6px 8px; justify-content:flex-start; align-items:stretch; gap:2px; overflow-x:auto; overflow-y:hidden; overscroll-behavior:contain; touch-action:pan-x; -webkit-overflow-scrolling:touch">
         <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="9">
           <div onClick="{{ t.go }}" style="flex:0 0 62px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:5px 3px; border-radius:7px; cursor:pointer; min-height:42px; background:{{ t.bg }}">
             <div style="font-family:Inter,sans-serif; font-size:9px; letter-spacing:.1em; color:{{ t.num }}">{{ t.n }}</div>
@@ -1152,13 +1153,15 @@ class Component extends DCLogic {
   weekExpanded = false;
   founderExpanded = false;
   libraryExpanded = false;
+  bottomRef = React.createRef();
+  tabScrollLeft = 0;
 
-  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadTasks(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} try { window.parent.spDaoLoadWisdom(this); } catch (e) {} try { window.parent.spDaoLoadMembers(this); } catch (e) {} try { window.parent.spDaoLoadTreasury(this); } catch (e) {} try { window.parent.spDaoLoadPark(this); } catch (e) {} this._r = () => this.setState({vw: window.innerWidth, vh: window.innerHeight, device: (window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc')}); window.addEventListener('resize', this._r); }
+  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} try { window.parent.spDaoLoadTasks(this); } catch (e) {} try { window.parent.spDaoLoadVotes(this); } catch (e) {} try { window.parent.spDaoLoadQuests(this); } catch (e) {} try { window.parent.spDaoLoadWisdom(this); } catch (e) {} try { window.parent.spDaoLoadMembers(this); } catch (e) {} try { window.parent.spDaoLoadTreasury(this); } catch (e) {} try { window.parent.spDaoLoadPark(this); } catch (e) {} this._r = () => { const device = window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'; if(device !== this.state.device) this.setState({vw:window.innerWidth, vh:window.innerHeight, device}); }; window.addEventListener('resize', this._r); }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
   scroller = React.createRef();
   toTop(){ if(this.scroller.current) this.scroller.current.scrollTop = 0; window.scrollTo(0,0); }
-  go(screen){ return () => { this.setState({screen}); this.toTop(); }; }
+  go(screen){ return () => { if(this.bottomRef.current) this.tabScrollLeft = this.bottomRef.current.scrollLeft; this.setState({screen}); this.toTop(); }; }
   openExp(id){ return () => { this.setState({screen:'detail', expId:id}); this.toTop(); }; }
   joinBoard(id){ return () => this.setState(s => ({joined:{...s.joined, [id]:!s.joined[id]}})); }
   commit(id){ return (ev) => { if(ev) ev.stopPropagation(); try { window.parent.spQuestToggle(id, this); } catch (e) {} }; }
@@ -1302,16 +1305,19 @@ class Component extends DCLogic {
     const isMobile = s.device === 'mobile';
 
     return {
-      L, word:W, wordShort:'経験', scrollRef:this.scroller,
-      showWeekSummary:isMobile && !this.weekExpanded,
+      L, word:W, wordShort:'経験', scrollRef:this.scroller, bottomRef:this.bottomRef,
+      showWeekToggle:isMobile,
       showWeekDetails:!isMobile || this.weekExpanded,
-      toggleWeekSummary:() => { this.weekExpanded = true; this.setState({}); },
-      showFounderSummary:isMobile && !this.founderExpanded,
+      weekToggleLabel:this.weekExpanded ? '閉じる' : '詳しく見る',
+      toggleWeekSummary:() => { this.weekExpanded = !this.weekExpanded; this.setState({}); },
+      showFounderToggle:isMobile,
       showFounderDetails:!isMobile || this.founderExpanded,
-      toggleFounderSummary:() => { this.founderExpanded = true; this.setState({}); },
-      showLibrarySummary:isMobile && !this.libraryExpanded,
+      founderToggleLabel:this.founderExpanded ? '閉じる' : '詳しく見る',
+      toggleFounderSummary:() => { this.founderExpanded = !this.founderExpanded; this.setState({}); },
+      showLibraryToggle:isMobile,
       showLibraryDetails:!isMobile || this.libraryExpanded,
-      toggleLibrarySummary:() => { this.libraryExpanded = true; this.setState({}); },
+      libraryToggleLabel:this.libraryExpanded ? '閉じる' : '詳しく見る',
+      toggleLibrarySummary:() => { this.libraryExpanded = !this.libraryExpanded; this.setState({}); },
       toggleSidebar:this.toggleSidebar,
       me:s.me,
       openMenu:() => { try { window.parent.openSpMobileMenu(); } catch (e) {} },
@@ -1560,6 +1566,9 @@ function draw() {
   var frag = document.createDocumentFragment();
   walk(tpl.content, vals, frag);
   host.replaceChildren(frag);
+  /* タブを押して画面を描き直しても、利用者が横に動かした位置を保つ。
+     先頭へ戻ると、タブと画面全体が勝手に動いたように見えるため。 */
+  if (app.bottomRef.current) app.bottomRef.current.scrollLeft = app.tabScrollLeft || 0;
 }
 /* まとめて1回だけ描き直す。
    requestAnimationFrame は、画面が描画されていない状態（背景タブなど）では
