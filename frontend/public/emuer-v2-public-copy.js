@@ -19,8 +19,31 @@
       notice.style.cssText = "margin:8px 0 0;font-size:12px;line-height:1.7;color:#8a5b18;";
       container.appendChild(notice);
     }
-    notice.textContent = text;
-    notice.hidden = !waitingForStart();
+    if (notice.textContent !== text) notice.textContent = text;
+    const shouldHide = !waitingForStart();
+    if (notice.hidden !== shouldHide) notice.hidden = shouldHide;
+  }
+  function lockButton(button) {
+    if (!button) return;
+    if (!button.disabled) button.disabled = true;
+    if (button.textContent !== "2026年10月1日開始") button.textContent = "2026年10月1日開始";
+    button.removeAttribute("data-i18n");
+  }
+  function applyPrelaunchLocks() {
+    if (!waitingForStart()) return;
+    const uses = byId("emuUsesPanel");
+    if (uses) {
+      const heading = uses.querySelector(".eth-section-head > div");
+      ensureNotice(heading, "emuUsesStartNotice", START_MESSAGE + " 商品ごとの条件公開後に利用できます。");
+      uses.querySelectorAll(".eth-use-row button").forEach(lockButton);
+    }
+    const wallet = document.querySelector("#emuValueProfile .eth-wallet-card");
+    if (wallet) {
+      ensureNotice(wallet.querySelector(".eth-section-head > div"), "emuWalletStartNotice", START_MESSAGE + " 現在の残高は保持されます。");
+      const membership = byId("emuMembershipDesc");
+      if (membership && membership.textContent !== "開始までは旧変換を利用できません。") membership.textContent = "開始までは旧変換を利用できません。";
+      wallet.querySelectorAll(".eth-wallet-actions button").forEach(lockButton);
+    }
   }
   function applyCopy() {
     if (!config) return;
@@ -52,7 +75,8 @@
     hide(byId("pp-campaign-section"));
     ensureNotice(byId("pp-emuer-section"), "ppEmuerStartNotice", START_MESSAGE + " 現在の残高は保持されます。");
     const uses = byId("emuUsesPanel");
-    if (uses) { const title = uses.querySelector("h3"); if (title) title.textContent = "EMUERの交換・利用"; const note = uses.querySelector(".eth-uses-note"); if (note) note.textContent = waitingForStart() ? START_MESSAGE + " 商品ごとの条件は公開後に確認できます。" : "SchoolPark内のイベント・教材・教具・NFTなどに使えます。商品ごとの条件は公開後に確認できます。"; }
+    if (uses) { const title = uses.querySelector("h3"); if (title) title.textContent = "EMUERの交換・利用"; }
+    applyPrelaunchLocks();
   }
   async function refreshBalance() {
     if (!config || !account() || !window.ethereum || !window.ethers) return;
@@ -83,6 +107,17 @@
       applyCopy();
       refreshLoginButton().finally(() => { setTimeout(() => { enforcing = false; }, 0); });
     }).observe(root, { subtree: true, childList: true, characterData: true, attributes: true });
+    const wallet = document.querySelector("#emuValueProfile .eth-wallet-card");
+    if (wallet && !wallet.dataset.emuerV2Observer) {
+      wallet.dataset.emuerV2Observer = "true";
+      let walletEnforcing = false;
+      new MutationObserver(() => {
+        if (!config || walletEnforcing) return;
+        walletEnforcing = true;
+        applyPrelaunchLocks();
+        setTimeout(() => { walletEnforcing = false; }, 0);
+      }).observe(wallet, { subtree: true, childList: true, characterData: true, attributes: true });
+    }
   }
   async function start() {
     try { const response = await fetch(API + "/config"); const next = await response.json(); if (!response.ok || Number(next.chainId) !== 137) return; config = next; window.claimEmuLoginBonus = claimLogin; window.handleLoginBonus = claimLogin; applyCopy(); wrapLegacyRender(); observeLegacyWrites(); await refreshBalance(); await refreshLoginButton(); } catch (_) {}
