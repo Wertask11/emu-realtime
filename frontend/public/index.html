@@ -20144,6 +20144,18 @@ async function spEnsureSchoolParkAccess(force) {
       return _spAccess;
     } catch (error) {
       console.warn('SchoolPark の公開状態を確認できません:', error);
+      /* 運営は全期間入場可能なので、時刻判定を必要としない。
+         APIが広告ブロッカー等で落ちても、Firebase認証中のUIDと
+         読み込み済みPassportのUIDが一致し、正式な運営アドレスなら通す。
+         connectedAccountだけでは判定しない（localStorage偽装を避けるため）。 */
+      const user = window.auth && window.auth.currentUser;
+      const me = typeof emuIdentityNow === 'function' ? emuIdentityNow() : null;
+      if (user && me && me.uid === user.uid
+          && (_spIsOwnerAddr(me.ches) || _spIsOwnerAddr(me.wallet))) {
+        _spAccess = { allowed:true, authenticated:true, isOwner:true, hasOfficialPass:false, phase:'owner-fallback' };
+        paintBrandMaintenance();
+        return _spAccess;
+      }
       _spAccess = { allowed:false, unavailable:true };
       return _spAccess;
     } finally { _spAccessPromise = null; }
