@@ -212,17 +212,13 @@ service cloud.firestore {
     /* 公式パス（NFT）。買い切りで期限が無いので、持っているあいだはずっと plus。
        画面と特商法にも「plus 相当を無償で」と書いてある。
        hasPass() は下で paid_users を見ている。 */
-    function passRank() {
-      return hasPass() ? 2 : 0;
-    }
-
     /* ───────── 参照の回数 ─────────
 
        Firestoreのルールには「1つの書き込みにつき、ほかの文書を見に行けるのは
        10回まで」という上限がある。超えると、条件を満たしていても断られる。
 
        以前の書き方は、この上限を大きく超えていた。
-         myRank() が grantRank()・subRank()・passRank() を毎回すべて呼び、
+         myRank() が grantRank()・subRank() を毎回すべて呼び、
          planName() が myRank() を最大3回、
          limitFor() が planName() を最大5回、
          hasRoom() が limitFor() を2回呼んでいた。
