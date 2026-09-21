@@ -645,6 +645,10 @@ async function renderMembers() {
     el.innerHTML = head + grant + one + cards;
 
     const PLAN_JA = { light: "Emu light", plus: "Emu plus", pro: "Emu pro" };
+    const DUP_JA = {
+      "auth-already-linked": "このログイン方法が、別の SchoolPark ID にも使われています",
+      "wallet-already-linked": "このウォレットが、別の SchoolPark ID にも連携されています"
+    };
     const GRANT_ERR = {
       BAD_ADDRESS: "IDの形が違います。0x で始まる42文字を入れてください。",
       BAD_PLAN: "渡すものを選んでください。",
@@ -663,6 +667,14 @@ async function renderMembers() {
       /* 公式パスは別のところ（paid_users）にいる。読めなくても付与の表示は出す。 */
       let passes = [];
       try { passes = (await api("/api/billing/admin/passes")).passes || []; } catch (e) {}
+
+      /* SchoolPark ID の重複候補。
+         同じ人に見える別の番号が見つかったときに、ここへ溜まる。
+         サーバーは絶対に自動で統合しない（EMUER・投稿・Quest・ギルド・星空・
+         公式パス・Membership・ウォレット・実績が、それぞれ別に入っているため）。
+         中身を見て決めるのは運営。 */
+      let dups = [];
+      try { dups = (await api("/api/identity/admin/duplicates")).duplicates || []; } catch (e) {}
 
       /* 出どころで3つに分ける。まぜると、手で渡したぶんが埋もれる。 */
       const byHand = rows.filter(r => r.source === "admin");
@@ -699,7 +711,21 @@ async function renderMembers() {
                   + '<br><small style="color:var(--muted)">' + esc(p.address) + '</small>'
                   + (p.label ? '<br><small style="color:var(--muted)">' + esc(p.label) + '</small>' : '')
                   + '</span><span>期限なし</span></div>').join("")
-              : '<p class="empty">まだいません。</p>');
+              : '<p class="empty">まだいません。</p>')
+        + section('SchoolPark ID の重複候補',
+            'ひとつの認証情報やウォレットが、別の SchoolPark ID にも結び付いていた記録です。'
+            + '<b>自動では統合しません。</b>中身（EMUER・投稿・Quest・ギルド・星空・公式パス・'
+            + 'Membership・ウォレット・実績）を確かめてから決めてください。',
+            dups.length
+              ? dups.map(d =>
+                  '<div class="row"><span>'
+                  + esc(DUP_JA[d.reason] || d.reason)
+                  + '<br><small style="color:var(--muted)">' + esc(d.spid || '?') + '</small>'
+                  + '<br><small style="color:var(--muted)">' + esc(d.otherSpid || '?') + '</small>'
+                  + (d.detail ? '<br><small style="color:var(--muted)">' + esc(d.detail) + '</small>' : '')
+                  + '</span><span>' + (d.createdAt ? fmt(d.createdAt) : '') 
+                  + '<br><small style="color:var(--muted)">' + esc(String(d.status || '')) + '</small></span></div>').join("")
+              : '<p class="empty">ありません。</p>');
 
       box.querySelectorAll("[data-grevoke]").forEach(b => {
         b.onclick = async () => {

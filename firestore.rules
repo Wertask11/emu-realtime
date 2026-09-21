@@ -1229,6 +1229,58 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ═══════════ SchoolPark ID（Passport ID） ═══════════
+
+       「この人は誰か」を表す固定の番号。ログイン方法（LINE / Google /
+       メール / ウォレット）は、この番号へ入るための入口にすぎない。
+
+       番号を作れるのはサーバーだけ（Admin SDK はルールを通らない）。
+       ブラウザからは一切書けない。これは次の2つを守るため。
+
+         1. ログインのたびに番号が増えないこと
+         2. 他人のパスポートへ、自分のログイン方法を横から足せないこと
+
+       詳しくは backend/identity.js と docs/schoolpark-id.md。 */
+
+    /* 番号そのもの。読めるのは本人と運営だけ。
+       自分の番号かどうかは ches_accounts/{uid}.spid で照らす
+       （この欄はサーバーしか書けないので、名乗り変えはできない）。 */
+    match /sp_identities/{spid} {
+      allow read: if signedIn()
+        && (get(accountPath()).data.get('spid', '') == spid
+            || isOwnerData(get(accountPath()).data));
+      allow write: if false;
+    }
+
+    /* 認証情報 → 番号 の対応表。ここが「一人一つ」の要。
+
+       ブラウザからは読むことも書くこともできない。
+         ・書けると、他人の番号へ自分のログイン方法を足せてしまう
+         ・読めると、番号を片端から引いて回れてしまう（列挙）
+       サーバーは Admin SDK なのでルールを通らず、これまでどおり動く。 */
+    match /sp_auth_links/{linkId} {
+      allow read, write: if false;
+    }
+
+    /* ログイン方法を足すときの引換券。10分・1回きり。
+       券の中身が読めると他人の番号へ足せてしまうので、完全に閉じる。 */
+    match /sp_link_tickets/{ticketId} {
+      allow read, write: if false;
+    }
+
+    /* 同じ人かもしれない別番号の候補。運営が中身を見て決めるためのもの。
+       勝手に統合・削除はしない（サーバーも自動では動かさない）。 */
+    match /sp_identity_duplicates/{docId} {
+      allow read: if isOwner();
+      allow write: if false;
+    }
+
+    /* 発行・連携・拒否の記録。あとから追えるようにするためのもの。 */
+    match /sp_identity_audit/{docId} {
+      allow read: if isOwner();
+      allow write: if false;
+    }
+
     /* ───────── トレジャリーの入出金 ─────────
 
        クエストに付いた予算は「これから払う約束」でしかない。
@@ -1269,6 +1321,12 @@ service cloud.firestore {
         && coll != 'sp_guilds'
         && coll != 'sp_guild_members'
         && coll != 'sp_treasury'
+        /* SchoolPark ID の一式。汎用許可へ漏らさない。 */
+        && coll != 'sp_identities'
+        && coll != 'sp_auth_links'
+        && coll != 'sp_link_tickets'
+        && coll != 'sp_identity_duplicates'
+        && coll != 'sp_identity_audit'
         && coll != 'paid_users'
         && coll != 'emuer_offchain'
         && coll != 'emuer_offchain_ledger'

@@ -840,7 +840,12 @@ async function fpCheckNFT() {
         fpWallet = window.parent.connectedAccount;
         fpMyName = fpWallet.slice(0,6) + "…" + fpWallet.slice(-4);
       }
-      if (window.parent.hasPaidNFT === true) {
+      /* 公式パスの保有は SchoolPark ID にぶら下がる。
+         hasPaidNFT はウォレットを繋いだときにしか立たないので、
+         LINE・Google で入っている保有者はここで落ちていた。
+         パスポート（＝SchoolPark ID の判定結果）も見る。 */
+      const fpPassport = window.parent._spPassport;
+      if (window.parent.hasPaidNFT === true || (fpPassport && fpPassport.hasPass === true)) {
         fpHasNFT = true;
         fpNFTList = ["Emu有料ユーザー"];
         fpUpdateNFTStatus(true, fpNFTList);

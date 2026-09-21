@@ -95,7 +95,11 @@ async function requireFirebaseUser(req, res, next) {
     }
     const walletAddress = String(accountData.walletAddress || "").toLowerCase();
     if (!walletAddress) return res.status(403).json({ error: "WALLET_NOT_FOUND" });
-    req.identity = { uid: decoded.uid, walletAddress, account: accountData };
+    /* どのログイン方法で入ってきたか。Firebase が付ける値なので、
+       ブラウザ側で名乗り変えることはできない。SchoolPark ID の
+       「連携済みログイン方法」の表示にだけ使う（権限には使わない）。 */
+    const signInProvider = String((decoded.firebase && decoded.firebase.sign_in_provider) || "");
+    req.identity = { uid: decoded.uid, walletAddress, account: accountData, signInProvider };
     next();
   } catch (_) {
     return res.status(401).json({ error: "INVALID_AUTH_TOKEN" });
@@ -169,7 +173,16 @@ const publicFormRateLimit = rateLimit({ windowMs: 10 * 60_000, max: 5, key: "for
 /* 利用資格。「この人はいま何ができるか」をここ1か所で決める。
    契約（Stripe）と付与（Founding Emuer）の両方を見る。
    判定するだけで、まだ何も止めていない。止める場所は requirePlan を足したところだけ。 */
-const entitlement = require("./entitlement").createEntitlement({ db });
+/* SchoolPark ID（Passport ID）。「この人は誰か」を1本の番号で表す。
+   ログイン方法（LINE / Google / メール / ウォレット）は、その番号へ入る
+   入口として下にぶら下がる。番号を作れるのはここ（サーバー）だけ。
+   詳しくは backend/identity.js と docs/schoolpark-id.md を参照。 */
+const identity = require("./identity").createIdentity({ db, ethers });
+
+/* 利用資格に identity を渡す。公式パスの判定を
+   「いま繋いでいる名義」だけでなく「SchoolPark ID に連携済みの名義」でも
+   行えるようにするため。旧判定はそのまま残してあり、足すだけ。 */
+const entitlement = require("./entitlement").createEntitlement({ db, identity });
 const requirePlan = entitlement.requirePlan;
 
 /* SchoolPark 公開日。判定はブラウザ時計ではなく、このサーバーの時刻で行う。
@@ -196,18 +209,30 @@ async function schoolParkEntryStatus(req, res) {
   try {
     if (!firebaseAdmin || !db) return res.status(503).json({ error: "ACCESS_CHECK_UNAVAILABLE" });
     const now = Date.now();
-    const identity = await optionalFirebaseIdentity(req);
-    const account = identity && identity.account;
+    /* 変数名は user。この関数の外に、SchoolPark ID を扱う identity があるため。 */
+    const user = await optionalFirebaseIdentity(req);
+    const account = user && user.account;
     const isOwner = !!account && [account.walletAddress, account.chesAddress]
       .some(address => SP_OWNER_ADDRESSES.includes(String(address || "").toLowerCase()));
-    const hasOfficialPass = !!(identity && account)
-      && await entitlement.holdsOfficialPass(identity.uid, account);
+    /* 公式パスの判定。
+       entitlement.holdsOfficialPass は「いまのアカウントの名義」を見る旧判定で、
+       そのまま残してある（互換）。そのうえで SchoolPark ID に連携済みの
+       名義でも見る。旧判定で通っていた人は、これまでどおり必ず通る。 */
+    const hasOfficialPass = !!(user && account)
+      && await entitlement.holdsOfficialPass(user.uid, account);
+    /* この人の SchoolPark ID。無ければ作らない（入場判定は毎回呼ばれるため）。
+       発行は /api/identity/resolve（ログイン直後に1回）で行う。 */
+    let schoolParkId = null;
+    if (user && identity) {
+      try { schoolParkId = await identity.findByUid(user.uid); } catch (e) { schoolParkId = null; }
+    }
     const decision = decideSchoolParkAccess(now, { isOwner, hasOfficialPass });
     return res.json({
       serverNow: new Date(now).toISOString(),
       phase: decision.phase,
       allowed: decision.allowed,
-      authenticated: !!identity,
+      authenticated: !!user,
+      schoolParkId,
       isOwner,
       hasOfficialPass,
       passPreviewStartsAt: new Date(SCHOOLPARK_PASS_PREVIEW_AT).toISOString(),
@@ -2036,16 +2061,41 @@ app.post("/api/auth/wallet", async (req, res) => {
     // requireFirebaseUser のキャッシュに古い内容が残らないようにする
     identityAccountCache.delete(uid);
 
+    /* SchoolPark ID を用意する（無ければ一度だけ発行）。
+       署名で所有を確かめた実アドレスも、この番号のものとして登録される。
+       ここが失敗してもログインは止めない。番号は次回の
+       /api/identity/resolve で必ず付く（何度呼んでも増えない）。 */
+    let schoolParkId = null;
+    try {
+      const resolved = await identity.resolveForUid(uid, { linkedBy: "wallet-login" });
+      schoolParkId = resolved.spid;
+    } catch (e) {
+      console.warn("SchoolPark ID を用意できませんでした（ログインは続行）:", e.message);
+    }
+
     const firebaseToken = await firebaseAdmin.auth().createCustomToken(uid, {
       provider: "wallet",
       address: checksummed
     });
-    return res.json({ firebaseToken, uid, address: checksummed, chesAddress });
+    return res.json({ firebaseToken, uid, address: checksummed, chesAddress, schoolParkId });
   } catch (e) {
     console.error("❌ /api/auth/wallet 失敗:", e);
     return res.status(500).json({ error: "サーバーエラー" });
   }
 });
+
+/* ════════════════════════════════════════
+   SchoolPark ID（Passport ID）の窓口
+   ここで mount しているのは、ウォレットの nonce（上で定義）を
+   連携の署名確認でも使い回すため。定義より前に置くと参照できない。
+   ════════════════════════════════════════ */
+const identityApi = require("./identity-router").createIdentityRouter({
+  db, identity, requireFirebaseUser, requireOwner, rateLimit,
+  ethers, walletNonces,
+  purgeWalletNonces: _purgeWalletNonces,
+  walletNonceTtlMs: WALLET_NONCE_TTL_MS
+});
+app.use("/api/identity", identityApi.router);
 
 // ════════════════════════════════════════
 // 一日シェア (Ichinichi Share) API ── Firestore永続化版
