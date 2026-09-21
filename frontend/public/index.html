@@ -4401,6 +4401,13 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 }
 .ches-email-form button:disabled { opacity: 0.5; cursor: default; }
 .ches-email-note { margin: 2px 0 0; font-size: 11px; line-height: 1.6; color: rgba(26,24,64,0.55); text-align: center; }
+/* 前から使っている人への案内。別の入り方で「はじめる」を押すと
+   2つ目のパスポートができてしまうので、押す前に気づいてもらう。 */
+.ches-returning-note {
+  margin: 14px 2px 0; font-size: 11.5px; line-height: 1.85;
+  color: rgba(26,24,64,0.6); text-align: center;
+}
+.ches-returning-note b { color: rgba(26,24,64,0.82); }
 
 /* ===== その他の方法（MetaMask 有料パス） ===== */
 .ches-advanced { margin-top: 12px; text-align: center; }
@@ -4553,6 +4560,13 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
           <p class="ches-email-note">パスワードはありません。届いたメールのリンクを開くとログインできます。</p>
         </div>
       </div>
+
+      <!-- 前から使っている人が、別の入り方で「はじめる」を押してしまうと
+           2つ目のパスポートができてしまう。押す前に気づいてもらう。 -->
+      <p class="ches-returning-note">
+        前に使ったことがある方は、<b>そのときと同じ方法</b>でログインしてください。<br>
+        入ったあと、パスポートから別の方法を追加できます。
+      </p>
 
       <div class="ches-advanced">
         <button type="button" id="chesAdvancedToggle" class="ches-adv-toggle" onclick="wsToggleAdvanced()">その他の方法で入る ▾</button>
@@ -24687,6 +24701,127 @@ async function sendEmuFeedback() {
 
   SPID.now = function () { return window._spIdentity; };
 
+  /* ───── 番号を作る前に、一度だけ確かめる ─────
+
+     いちばん困るのは「前から使っている人が、別の入り方で『はじめる』を押して、
+     気づかないうちに2つ目のパスポートを作ってしまう」こと。
+     そうなると、投稿・Quest・ギルド・EMUER・星空・公式パスが2つに分かれ、
+     あとから直すには統合が要る（運営の手作業になる）。
+
+     入口で一度だけ聞けば、これは起きない。 */
+
+  /* いまの状態を聞くだけ。ここでは作らない。 */
+  SPID.status = async function () {
+    try {
+      var headers = await authHeaders(false);
+      var res = await fetch(SPID.api + "/status", { headers: headers, cache: "no-store" });
+      var data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      if (!res.ok || !data) return null;
+      return data;
+    } catch (e) {
+      console.warn("[SchoolPark ID] 状態を確認できませんでした:", e && (e.message || e));
+      return null;
+    }
+  };
+
+  /* 「はじめまして？」を聞く小さな窓。
+     confirm() に落とせるようにしてある。何かの理由で画面を作れなくても、
+     ここで詰まって先へ進めなくなることが無いようにするため。 */
+  SPID.askFirstTime = function () {
+    var message =
+      "はじめまして、でよろしいですか？\n\n"
+      + "SchoolPark ID（あなたの番号）を、これから新しく作ります。\n\n"
+      + "すでに LINE・Google・メール・ウォレットのどれかで SchoolPark や Emu を"
+      + "使ったことがある場合は、そのときの方法でログインしてください。\n"
+      + "そのあとパスポートの「追加」からこの入り方を足すと、番号はひとつのままになります。\n\n"
+      + "［OK］はじめてです　／　［キャンセル］前に使ったことがあります";
+
+    return new Promise(function (resolve) {
+      var overlay;
+      try {
+        overlay = document.createElement("div");
+        overlay.id = "spidFirstTime";
+        overlay.setAttribute("role", "dialog");
+        overlay.setAttribute("aria-modal", "true");
+        overlay.style.cssText = "position:fixed;inset:0;z-index:99999;display:flex;"
+          + "align-items:center;justify-content:center;padding:20px;"
+          + "background:rgba(20,18,24,.72);backdrop-filter:blur(4px)";
+        overlay.innerHTML =
+          '<div style="max-width:420px;width:100%;background:#1E1B24;color:#F4F1EA;'
+          + 'border-radius:18px;padding:26px 22px;box-shadow:0 20px 60px rgba(0,0,0,.45);'
+          + 'font-size:14px;line-height:1.9;max-height:90vh;overflow-y:auto">'
+          + '<div style="font-size:10px;letter-spacing:.2em;color:rgba(244,241,234,.5);margin-bottom:10px">SCHOOLPARK ID</div>'
+          + '<div style="font-size:18px;font-weight:700;margin-bottom:14px">はじめまして、でよろしいですか？</div>'
+          + '<p style="margin:0 0 12px">あなたの番号（SchoolPark ID）を、これから新しく作ります。</p>'
+          + '<p style="margin:0 0 12px;color:rgba(244,241,234,.75)">'
+          + 'すでに <b>LINE・Google・メール・ウォレット</b> のどれかで SchoolPark や Emu を'
+          + '使ったことがある場合は、<b>そのときの方法でログイン</b>してください。<br>'
+          + 'そのあとパスポートの「追加」からこの入り方を足すと、番号はひとつのままになります。</p>'
+          + '<p style="margin:0 0 20px;color:rgba(244,241,234,.55);font-size:12px">'
+          + '番号が2つに分かれると、投稿・Quest・ギルド・EMUER・星空・公式パスも分かれてしまい、'
+          + 'あとから戻すには運営の確認が必要になります。</p>'
+          + '<div style="display:flex;flex-direction:column;gap:10px">'
+          + '<button type="button" id="spidFtYes" style="width:100%;padding:13px;border:0;border-radius:12px;'
+          + 'background:#D0E2BE;color:#1E1B24;font-weight:700;font-size:14px;cursor:pointer">'
+          + 'はじめてです。番号を作る</button>'
+          + '<button type="button" id="spidFtNo" style="width:100%;padding:13px;border:1px solid rgba(244,241,234,.25);'
+          + 'border-radius:12px;background:transparent;color:#F4F1EA;font-size:14px;cursor:pointer">'
+          + '前に使ったことがあります</button>'
+          + '</div></div>';
+
+        var done = false;
+        var finish = function (answer) {
+          if (done) return;
+          done = true;
+          try { overlay.remove(); } catch (e) {}
+          resolve(answer);
+        };
+        overlay.querySelector("#spidFtYes").onclick = function () { finish(true); };
+        overlay.querySelector("#spidFtNo").onclick = function () { finish(false); };
+        document.body.appendChild(overlay);
+        /* 覆いが出ているあいだは、読み込み中の表示を外す。
+           重なったままだと「固まった」ように見える。 */
+        if (typeof _hideSpLoadingOverlay === "function") { try { _hideSpLoadingOverlay(); } catch (e) {} }
+        try { overlay.querySelector("#spidFtYes").focus(); } catch (e) {}
+      } catch (e) {
+        /* 画面を作れなかったときの逃げ道。ここで止まらないことを優先する。 */
+        try { resolve(window.confirm(message)); } catch (e2) { resolve(true); }
+      }
+    });
+  };
+
+  /* ログイン直後に呼ぶ入口。状態を見て、必要なときだけ確認を出す。
+
+     ここで何かに失敗しても、番号を作らないだけで先へは進める。
+     通信が不調なだけで新しいパスポートが生まれることはない。 */
+  SPID.ensure = async function () {
+    var status = null;
+    try {
+      status = await Promise.race([
+        SPID.status(),
+        new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 8000); })
+      ]);
+    } catch (e) { status = null; }
+
+    // 状態が分からない → 何もしない。次の機会に聞き直す。
+    if (!status) return null;
+
+    // すでに番号がある → そのまま使う
+    if (status.exists && status.schoolParkId) return remember(status);
+
+    // 前から使っている人（番号の仕組みより前からいる）→ 黙って発行する
+    if (!status.looksNew) return SPID.resolve(true);
+
+    // 初めて見る入り方 → 一度だけ確かめる
+    var yes = await SPID.askFirstTime();
+    if (!yes) {
+      SPID.declined = true;
+      return null;                      // 作らない
+    }
+    return SPID.resolve(true);
+  };
+
   /* ───── ログイン方法を足す ───── */
 
   SPID.pending = function () {
@@ -25062,16 +25197,19 @@ async function sendEmuFeedback() {
     window._chesEntered = true;
     window._chesBusy = false;
 
-    /* SchoolPark ID（Passport ID）を用意する。無ければサーバーが一度だけ作る。
+    /* SchoolPark ID（Passport ID）を用意する。
+
+       発行前の確認（はじめまして？）は completeCommonFlow で済ませてある。
+       ここは、その経路を通らずに入ってきた場合（セッションの自動復元など）の
+       ための保険。すでに番号がある人は読むだけで終わる。
 
        入場を待たせない（結果が返るのを待たずに進む）。
        ここで待つと、Render が起きるまでのあいだ画面が止まって見える。
-       番号が要るところ（パスポート）は、そのとき改めて聞き直す。
 
        失敗しても何も起きない。番号が増えることはない。 */
-    if (window.SPID && typeof window.SPID.resolve === "function") {
+    if (window.SPID && typeof window.SPID.ensure === "function" && !window.SPID.declined) {
       try {
-        Promise.resolve(window.SPID.resolve(true)).then(function (identity) {
+        Promise.resolve(window.SPID.ensure()).then(function (identity) {
           /* 連携の結果を伝えるため、パスポートを開く。
              「LINEを追加」を押した本人が、追加できたかどうかを
              その場で確かめられるようにする。 */
@@ -25231,6 +25369,32 @@ async function sendEmuFeedback() {
             new Promise(function (resolve) { setTimeout(resolve, 8000); })
           ]);
         } catch (e) { console.warn("[SchoolPark ID] 連携に失敗:", e && (e.message || e)); }
+      }
+
+      /* SchoolPark ID を用意する。新しく作ることになる場合だけ、
+         「はじめまして、でよろしいですか？」を一度だけ聞く。
+
+         入場する前に聞くのは、ここで「前に使ったことがある」と分かったら、
+         そのまま元の入り方へ戻ってもらうのがいちばん早いため。
+
+         聞いている最中は読み込み中の覆いを外す（askFirstTime が外す）。
+         状態を確認できないときは8秒で切り上げ、何も聞かずに先へ進む。
+         ここで入場を止めない。 */
+      if (window.SPID && typeof window.SPID.ensure === "function") {
+        try {
+          await window.SPID.ensure();
+        } catch (e) { console.warn("[SchoolPark ID] 用意できませんでした:", e && (e.message || e)); }
+
+        /* 「前に使ったことがあります」と答えた人は、元の入り方へ戻ってもらう。
+           番号は作っていないので、このあと正しい方法で入れば、
+           これまでのパスポートにそのまま戻れる。 */
+        if (window.SPID.declined) {
+          window.SPID.declined = false;
+          alert("前に使っていた方法（LINE・Google・メール・ウォレット）でログインしてください。\n\n"
+            + "ログインしたあと、パスポートの「追加」から、この入り方を足せます。\n"
+            + "そうすると、どちらから入っても同じパスポートになります。");
+          if (typeof CHES.logout === "function") { CHES.logout(); return; }
+        }
       }
 
       await CHES.enterSchoolPark(account, provider);
@@ -26176,7 +26340,9 @@ async function sendEmuFeedback() {
       <button type="button" class="spp-close" onclick="closeSpMobileMenu()" aria-label="閉じる">✕</button>
     </div>
     <button type="button" class="smm-row" onclick="closeSpMobileMenu(); openSpPassport();">
-      <span>SchoolPark パスポート</span><span class="smm-go">→</span>
+      <span>SchoolPark パスポート<br>
+        <small style="opacity:.6;font-weight:400">SchoolPark ID・ログイン方法の追加・ウォレット連携</small>
+      </span><span class="smm-go">→</span>
     </button>
     <div class="smm-label">ブランドを切り替える</div>
     <button type="button" class="smm-row" data-brand="camellia" style="color:#E0576F" onclick="smmGo('camellia')">

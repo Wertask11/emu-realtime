@@ -66,6 +66,62 @@ function createIdentityRouter(deps) {
   router.get("/me", requireFirebaseUser, limitRead, resolveHandler);
   router.post("/resolve", requireFirebaseUser, limitRead, resolveHandler);
 
+  /* ───────── 番号を作らずに、いまの状態だけ見る ─────────
+
+     「はじめまして、でよろしいですか？」の確認を出すかどうかを決めるためのもの。
+     ここでは絶対に発行しない。確認より先に作ってしまっては意味がないため。
+
+     番号がまだ無い人には、二通りある。
+
+       ① 前から SchoolPark / Emu を使っている人
+          （番号の仕組みより前からいるので、まだ振られていないだけ）
+          → 黙って発行してよい。確認を出しても驚かせるだけ。
+
+       ② いま初めて、この入り方で入ってきた人
+          → すでに別の入り方でパスポートを持っているかもしれない。
+            ここで確かめないと、同じ人に2つ目のパスポートができる。
+
+     見分けは ches_accounts が作られた日。いま作られたばかりなら ②。
+     ログイン方法を増やすと、その方法ぶんの ches_accounts が新しく作られるので、
+     「前からいる人が、別の入り方で入ってきた」場合もちゃんと ② になる。 */
+  const NEW_ACCOUNT_WINDOW_MS = 10 * 60 * 1000;
+
+  function accountCreatedMs(account) {
+    const v = account && account.createdAt;
+    if (!v) return 0;
+    if (typeof v === "number") return v;
+    if (typeof v.toDate === "function") return v.toDate().getTime();
+    if (v instanceof Date) return v.getTime();
+    const parsed = Date.parse(String(v));
+    return isNaN(parsed) ? 0 : parsed;
+  }
+
+  router.get("/status", requireFirebaseUser, limitRead, async (req, res) => {
+    if (!db || !identity) return unavailable(res);
+    res.set("Cache-Control", "no-store, max-age=0");
+    try {
+      const spid = await identity.findByUid(req.identity.uid);
+      if (spid) {
+        const body = await summarize(spid, { exists: true, looksNew: false });
+        return res.json(body);
+      }
+      const createdAt = accountCreatedMs(req.identity.account);
+      const ageMs = createdAt ? Math.max(0, Date.now() - createdAt) : 0;
+      return res.json({
+        ok: true,
+        exists: false,
+        schoolParkId: null,
+        /* 作られた日が分からないときは、確かめる側に倒す。
+           黙って2つ目を作るより、一度聞くほうが害が小さい。 */
+        looksNew: !createdAt || ageMs < NEW_ACCOUNT_WINDOW_MS,
+        accountAgeMs: ageMs
+      });
+    } catch (e) {
+      console.error("SchoolPark ID の状態を読めませんでした:", e.message);
+      return res.status(500).json({ error: "STATUS_FAILED" });
+    }
+  });
+
   /* ───────── ログイン方法を足す：① 引換券をもらう ─────────
 
      いま入っている SchoolPark ID に紐づく、10分だけ有効な1回きりの券。
