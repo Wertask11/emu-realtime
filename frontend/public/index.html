@@ -19525,14 +19525,30 @@ async function chesLandAfterLogin() {
     try { await emuMyIdentity(); }
     catch (e) { console.warn('ログイン後の本人確認に失敗:', e); }
   }
+  /* 入口の画面をしまう。ハブ（CHES）はその土台として出すだけで、
+     ここが行き先になってはいけない。 */
   if (typeof chesHubShow === 'function') chesHubShow();
-  /* SchoolPark はまだ準備中の設定（BRAND_MAINTENANCE）。
-     入れない人をそこへ着地させると、準備中の画面が外に出てしまう。
-     入れる人だけ SchoolPark に着き、それ以外はハブのままにする。
-     準備中を外せば、全員が SchoolPark に着地する。 */
+
+  /* SchoolPark に入れるかはサーバーが決める（公式パスの有無・公開日）。
+     入れる人は SchoolPark へ。 */
   const access = await spEnsureSchoolParkAccess(true);
-  if (!access || !access.allowed) return;
-  if (typeof spDaoOpenWhenReady === 'function') await spDaoOpenWhenReady();
+  if (access && access.allowed) {
+    if (typeof spDaoOpenWhenReady === 'function') await spDaoOpenWhenReady();
+    return;
+  }
+
+  /* 入れない人を、ハブに置き去りにしない。
+
+     ここは以前 return していた。そのため、公式パスを持たない人
+     （先行公開の期間中）や、まだ番号に連携していない別のログイン方法で
+     入った人が、そのまま CHES のハブ画面に着地していた。
+     ハブはもう使っていないので、行き先として Emu を出す。
+     Emu は通常営業（BRAND_MAINTENANCE.emu = false）なので誰でも入れる。
+
+     SchoolPark へ行こうとしたときは、これまでどおり
+     spShowSchoolParkUnavailable が理由を出す。 */
+  if (typeof showEmuToday === 'function') { showEmuToday(); return; }
+  if (typeof _emuEnsureAppVisible === 'function') _emuEnsureAppVisible();
 }
 
 function accountGo(what) {
