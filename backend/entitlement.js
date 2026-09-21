@@ -52,6 +52,10 @@ const LIMITS = {
 
 function createEntitlement(deps) {
   const db = deps && deps.db;
+  /* SchoolPark ID（backend/identity.js）。渡されていれば、公式パスの判定を
+     「いま名乗っている名義」だけでなく「SchoolPark ID に連携済みの名義」でも
+     行う。渡されていなければ今までどおりに動く（省略可能）。 */
+  const identity = deps && deps.identity;
   const cache = new Map();
 
   function _toDate(v) {
@@ -123,6 +127,19 @@ function createEntitlement(deps) {
           if (p.exists) return true;
         } catch (e) { /* 読めないときは「持っていない」とはせず、次を試す */ }
       }
+    }
+
+    /* ここまでが従来の判定（そのまま残す）。
+
+       これで当たらなかった場合だけ、SchoolPark ID を見る。
+       LINEで入っている人が、別途ウォレットを連携して公式パスを持っている、
+       というときに当たる。いまウォレットを繋いでいなくてもよい。
+
+       足すだけなので、これまで通っていた人が通らなくなることはない。 */
+    if (identity && typeof identity.holdsOfficialPassForUid === "function") {
+      try {
+        if (await identity.holdsOfficialPassForUid(uid)) return true;
+      } catch (e) { /* 読めないときは、これまでどおりの答えを返す */ }
     }
     return false;
   }

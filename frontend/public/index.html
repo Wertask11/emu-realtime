@@ -16290,6 +16290,140 @@ function _sppRowHtml(label, html) {
   return '<div class="spp-row"><dt>' + label + '</dt><dd>' + html + '</dd></div>';
 }
 
+/* ───── SchoolPark ID にぶら下がっている「入口」を出す ─────
+
+   ログイン方法（LINE / Google / メール / ウォレット）と、
+   署名で所有を確かめた連携ウォレット。
+   繋がっていないものを、繋がっているように見せない。
+
+   まだサーバーに聞けていない（番号が分からない）ときは、
+   ここには何も出さず「確認中」とだけ書く。
+   古い控えを本当のことのように出さないため。 */
+function _sppLinkLabel(link) {
+  const l = link || {};
+  if (l.kind === 'wallet') return _spShortAddr(l.address || l.subject || '');
+  return l.label || { line:'LINE', google:'Google', email:'メール', wallet:'ウォレット' }[l.provider] || l.provider || '不明';
+}
+
+function _sppIdentityHtml(p) {
+  /* 番号が分からないときも、番号は控えで出せたがサーバーの答えが
+     まだ手元に無いときも、「連携なし」とは書かない。
+     繋がっているものを繋がっていないように見せるのも、間違いなので。 */
+  if (!p.spid || !p.spLive) {
+    return _sppRowHtml('連携ログイン方法', '<span class="spp-state off">確認中</span>')
+      + '<p class="spp-note">いまサーバーに確認できていません。'
+      + '通信が戻ると、連携しているログイン方法が出ます。</p>';
+  }
+  const links   = Array.isArray(p.spLinks) ? p.spLinks : [];
+  const logins  = links.filter(function (l) { return l && l.kind === 'fb'; });
+  const wallets = links.filter(function (l) { return l && l.kind === 'wallet'; });
+  const has = function (provider) {
+    return logins.some(function (l) { return String(l.provider || '') === provider; });
+  };
+
+  let html = '';
+
+  /* いま繋がっているログイン方法 */
+  html += _sppRowHtml('連携ログイン方法', logins.length
+    ? logins.map(function (l) {
+        return '<span class="spp-state ok">' + escapeHtml(_sppLinkLabel(l)) + '</span>';
+      }).join(' ')
+    : '<span class="spp-state off">なし</span>');
+
+  /* 連携ウォレット。いま接続していなくても、連携済みならここに出る。
+     公式パスの判定も、この連携済みのアドレスで行う。 */
+  html += _sppRowHtml('連携ウォレット', wallets.length
+    ? wallets.map(function (l) {
+        return '<span class="spp-state ok">連携済み</span> ' + escapeHtml(_sppLinkLabel(l));
+      }).join('<br>')
+    : '<span class="spp-state off">未連携</span>');
+
+  /* 足せるものだけボタンを出す */
+  const buttons = [];
+  if (!has('line'))   buttons.push('<button type="button" class="spp-copy" id="sppLink_line" onclick="sppLinkLogin(\'line\')">LINEを追加</button>');
+  if (!has('google')) buttons.push('<button type="button" class="spp-copy" id="sppLink_google" onclick="sppLinkLogin(\'google\')">Googleを追加</button>');
+  buttons.push('<button type="button" class="spp-copy" id="sppLink_wallet" onclick="sppLinkWallet()">ウォレットを連携</button>');
+  html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px">' + buttons.join('') + '</div>';
+  html += '<p class="spp-note" style="margin-top:8px">追加したログイン方法は、どれで入っても同じパスポートになります。'
+    + '新しいパスポートは作られません。<br>'
+    + 'ウォレットの連携では、所有を確かめるための署名をお願いします（手数料はかかりません）。</p>';
+
+  if (p.spDuplicateReview) {
+    html += '<p class="spp-note" style="color:#D4A843">別の SchoolPark ID にも同じ心当たりが見つかっています。'
+      + '運営の確認が必要です。こちらのパスポートの中身はそのまま残ります。</p>';
+  }
+  return html;
+}
+
+/* 連携の結果（追加できた／できなかった）を、パスポートの先頭に出す。
+   一度出したら消す（開くたびに出し続けない）。 */
+function _sppNoticeHtml() {
+  const n = window.SPID && window.SPID.notice;
+  if (!n) return '';
+  window.SPID.notice = null;
+  const color = n.ok ? '#D0E2BE' : '#D4A843';
+  return '<p class="spp-note" style="color:' + color + ';margin:0 0 12px">' + escapeHtml(n.text) + '</p>';
+}
+
+/* ───── ログイン方法を足す（パスポートから） ─────
+   足すときは必ず、いまのパスポートへログイン済みであることを確かめる
+   （引換券はサーバーがそれを確かめてから出す）。
+   そのうえで、足す側も正式な認証を通す。名前やメールの一致では結び付けない。 */
+window.sppLinkLogin = async function (method) {
+  const label = method === 'line' ? 'LINE' : 'Google';
+  if (!window.SPID || typeof window.SPID.beginLink !== 'function') return;
+  const p = window._spPassport;
+  if (!p || !p.spid) {
+    alert('SchoolPark ID を確認できていません。通信を確認して、もう一度お試しください。');
+    return;
+  }
+  if (!confirm(label + ' を、いまの SchoolPark ID に追加します。\n\n'
+      + 'SchoolPark ID: ' + p.spid + '\n\n'
+      + 'このあと ' + label + ' のログイン画面に進みます。\n'
+      + '完了すると、' + label + ' からでも同じパスポートに入れるようになります。')) return;
+  const btn = document.getElementById('sppLink_' + method);
+  if (btn) { btn.disabled = true; btn.textContent = '準備しています…'; }
+  try {
+    await window.SPID.beginLink(method);   // LINE はページ遷移、Google はポップアップ
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = label + 'を追加'; }
+    alert(label + ' の追加を始められませんでした。\n' + ((e && e.message) || ''));
+  }
+};
+
+/* ───── ウォレットを連携する ─────
+   署名で所有を確かめる。アドレスを名乗るだけでは連携できない。 */
+window.sppLinkWallet = async function () {
+  if (!window.SPID || typeof window.SPID.linkWallet !== 'function') return;
+  const p = window._spPassport;
+  if (!p || !p.spid) {
+    alert('SchoolPark ID を確認できていません。通信を確認して、もう一度お試しください。');
+    return;
+  }
+  if (!window.ethereum) {
+    alert('この端末ではウォレットが見つかりませんでした。\nMetaMask などを入れた環境でお試しください。');
+    return;
+  }
+  if (!confirm('ウォレットを、いまの SchoolPark ID に連携します。\n\n'
+      + 'SchoolPark ID: ' + p.spid + '\n\n'
+      + '所有を確かめるための署名をお願いします（手数料はかかりません）。\n'
+      + '連携すると、ウォレットを繋いでいないときでも公式パスの保有が分かるようになります。')) return;
+  const btn = document.getElementById('sppLink_wallet');
+  if (btn) { btn.disabled = true; btn.textContent = '署名を待っています…'; }
+  try {
+    await window.SPID.linkWallet();
+    window.SPID.notice = { ok: true, text: 'ウォレットを連携しました。' };
+    await spPassportLoad(true);
+    if (typeof openSpPassport === 'function') await openSpPassport();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'ウォレットを連携'; }
+    const msg = (e && e.message) || '';
+    /* 署名を断った場合は、失敗として騒がない。 */
+    if (/4001|User (denied|rejected)/i.test(msg)) return;
+    alert('ウォレットを連携できませんでした。\n' + msg);
+  }
+};
+
 function closeSpPassport() {
   document.body.classList.remove('sp-passport-open');
   /* めくっている最中に閉じられたら、残りの手順は捨てる。
@@ -16424,10 +16558,39 @@ async function spPassportLoad(force) {
       try { localStorage.setItem('ches_name', name); } catch (e) {}
     }
 
+    /* SchoolPark ID（Passport ID）。「私は誰か」を表す固定の番号。
+
+       これまでパスポートに出していた 0x… の番号（chesAddress）は、
+       ログイン方法ごとに別物になる。LINEで入った人とウォレットで入った人が
+       同じ本人でも、違う番号になっていた。
+
+       番号を出すのはサーバーだけ。ここでは聞くだけで、作らない。
+       まだ聞けていなければ null のまま（画面には「確認中」と出す）。
+       通信が不調なだけで新しい番号を作ってしまわないようにするため。 */
+    let spid = null;
+    if (window.SPID) {
+      try {
+        /* force は付けない。パスポートは色々な場面で読み直されるので、
+           そのたびにサーバーへ聞くと、通信が増えて表示も遅くなる。
+           連携したときは SPID 側が直接更新するので、ここは控えで足りる。 */
+        const identity = await Promise.race([
+          window.SPID.resolve(false),
+          new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 8000); })
+        ]);
+        spid = (identity && identity.schoolParkId) || null;
+      } catch (e) {}
+      /* 通信が届かないときは、控えで表示だけ埋める（判定には使わない）。 */
+      if (!spid) { try { spid = window.SPID.cached(); } catch (e) {} }
+    }
+    const identityNow = (window.SPID && window.SPID.now && window.SPID.now()) || null;
+
     /* 公式パス（NFT）を持っているか。持ち主は paid_users に載っている。
        window.hasPaidNFT はウォレットで入ったときにしか立たないことがあるので、
        記録そのものも見る。実際のウォレットと CHESアドレスの両方で照らす。 */
-    let hasPass = !!window.hasPaidNFT;
+    /* SchoolPark ID に連携済みの名義でも見る（サーバーが答えた結果）。
+       ウォレットをいま繋いでいなくても、正式に連携してあれば当たる。
+       旧判定（下の paid_users 直読み）はそのまま残す。足すだけ。 */
+    let hasPass = !!window.hasPaidNFT || !!(identityNow && identityNow.hasOfficialPass);
     if (!hasPass) {
       const seen = {};
       for (const a of [me.wallet, me.ches]) {
@@ -16462,8 +16625,16 @@ async function spPassportLoad(force) {
     if (hasPass && (tier === 'free' || tier === 'guest' || !tier)) tier = 'plus';
     const tierLabel = { free: '見学（無料）', light: 'Emu light', plus: 'Emu plus', pro: 'Emu pro' }[tier] || tier;
 
+
     window._spPassport = {
       uid: me.uid, addr: addr, short: _spShortAddr(addr),
+      /* 固定の SchoolPark ID と、その下にぶら下がっているもの。 */
+      spid: spid,
+      spLive: !!identityNow,
+      spLinks: (identityNow && Array.isArray(identityNow.links)) ? identityNow.links : [],
+      spAddresses: (identityNow && Array.isArray(identityNow.addresses)) ? identityNow.addresses : [],
+      spDuplicateReview: !!(identityNow && identityNow.duplicateReview),
+      spHasPass: !!(identityNow && identityNow.hasOfficialPass),
       /* Identity ページで「何が本当に紐づいているか」を正直に出すために持つ。
          addr は ches 優先の表示用なので、素のウォレットと CHES を別に置く。
          星空は connectedAccount（＝ウォレット）で引くので、
@@ -18744,7 +18915,8 @@ async function openSpPassport() {
   if (!p) {
     body.innerHTML =
       '<p class="spp-note">パスポートはログインすると作られます。<br>'
-      + 'LINE・Google・メール・ウォレットのどれで入っても、あなたの番号は同じひとつです。</p>'
+      + 'あなたの SchoolPark ID はひとつだけです。'
+      + 'LINE・Google・メール・ウォレットを連携すれば、どれで入っても同じパスポートに戻ります。</p>'
       + '<button type="button" class="spp-cta" onclick="closeSpPassport(); if (typeof restoreLoginScreen===\'function\') restoreLoginScreen();">ログインして作る</button>';
     return;
   }
@@ -18765,7 +18937,8 @@ async function openSpPassport() {
   const byWallet = String(p.uid || '').indexOf('wallet:') === 0;
 
   body.innerHTML =
-    '<div class="spp-pages">'
+    _sppNoticeHtml()
+    + '<div class="spp-pages">'
 
     /* ───── 1ページ目：私は誰なのか ─────
        パソコンでは左右2枚の見開きになる（.spp-spread）。
@@ -18778,15 +18951,23 @@ async function openSpPassport() {
     + '<div class="spp-leaf spp-leaf-a">'
     + '<p class="spp-leaf-head">Holder</p>'
     + '<div class="spp-num">'
-    + '<div class="spp-num-label">PASSPORT NO.</div>'
-    + '<div class="spp-num-val">' + escapeHtml(p.addr) + '</div>'
-    + '<button type="button" class="spp-copy" id="sppCopyBtn" onclick="sppCopyAddress(\'' + escapeHtml(p.addr) + '\')">番号をコピー</button>'
+    /* SchoolPark ID。ログイン方法が変わっても、この番号は変わらない。
+       ウォレットアドレスや Firebase の uid は、ここには出さない。 */
+    + '<div class="spp-num-label">SCHOOLPARK ID</div>'
+    + '<div class="spp-num-val">' + escapeHtml(p.spid || '確認中…') + '</div>'
+    + (p.spid
+        ? '<button type="button" class="spp-copy" id="sppCopyBtn" onclick="sppCopyAddress(\'' + escapeHtml(p.spid) + '\')">番号をコピー</button>'
+        : '<p class="spp-note" style="margin:6px 0 0">いま確認できませんでした。通信が戻ると出ます。</p>')
     + '</div>'
     + _sppRow('名前', p.name)
     + _sppRow('入った日', _sppDate(p.createdAt))
     + _sppRow('入り方', _sppProviderLabel(p.provider, p.uid))
     + _sppRow('区分', p.tierLabel + (p.hasPass ? '（公式パスあり）' : ''))
     + (camelliaId ? _sppRow('Camellia ID', camelliaId) : '')
+    /* これまでパスポートに出していた 0x… の番号。
+       いまも投稿・Quest・星空・EMUER はこの名義にぶら下がっているので、
+       消さずに残す。ただし「あなたの番号」はもう上の SchoolPark ID。 */
+    + _sppRow('内部アドレス', _spShortAddr(p.addr))
     + '</div>'
 
     + '<div class="spp-seam"></div>'
@@ -18796,14 +18977,20 @@ async function openSpPassport() {
     + '<div class="spp-leaf spp-leaf-b">'
     + '<p class="spp-leaf-head">Verification</p>'
     + '<div class="spp-page-title" style="font-size:14px;margin:0 0 8px">本人であること</div>'
-    + _sppRowHtml('ウォレット', byWallet
-        ? '<span class="spp-state ok">接続済み</span> ' + escapeHtml(_spShortAddr(p.wallet))
-        : '<span class="spp-state off">未接続</span>')
+    /* SchoolPark ID にぶら下がっているログイン方法と連携ウォレット。
+       足す導線もここに置く（設定画面は新しく作らない）。 */
+    + _sppIdentityHtml(p)
+    + _sppRowHtml('ログイン中の入り方', byWallet
+        ? '<span class="spp-state ok">ウォレット</span> ' + escapeHtml(_spShortAddr(p.wallet))
+        : '<span class="spp-state ok">' + escapeHtml(_sppProviderLabel(p.provider, p.uid)) + '</span>')
+    + _sppRowHtml('公式パス', p.hasPass
+        ? '<span class="spp-state ok">保有</span>'
+        : '<span class="spp-state off">未確認</span>')
     + _sppRowHtml('人間であること', '<span class="spp-state off">未連携</span>')
     + _sppRowHtml('本人確認（KYC）', '<span class="spp-state off">未確認</span>')
     + _sppRowHtml('World ID', '<span class="spp-state soon">Coming Soon</span>')
-    + '<p class="spp-note">この番号は、あなたのログイン方法から決まります。'
-    + '入り方を変えても番号は変わりません。<br>'
+    + '<p class="spp-note">この番号は、あなた自身につく番号です。'
+    + 'ログイン方法を変えても、増やしても、番号は変わりません。<br>'
     + '同じ番号を2人が持つことはできません。<br>'
     + 'SchoolPark・Emu・Camellia・Heartoo のどこでの記録も、この番号に付きます。'
     + (camelliaId
@@ -24396,6 +24583,224 @@ async function sendEmuFeedback() {
     // lineTokenEndpoint は既定で Render バックエンドを使用（変更不要）
   };
 </script>
+<!-- ============================================================
+     SchoolPark ID（Passport ID）
+
+     「この人は誰か」を表す、変わらないひとつの番号。
+     LINE・Google・メール・ウォレットは、その番号へ入るための入口。
+
+     これまでは、パスポートの番号＝ chesAddress で、
+     chesAddress は Firebase の uid から作られていた。
+     uid はログイン方法ごとに別物なので、同じ人でも入り方を変えると
+     別の番号・別のパスポートになっていた。
+
+     番号を作れるのはサーバーだけ（POST /api/identity/resolve）。
+     ここ（ブラウザ）は、受け取って表示することしかしない。
+     localStorage に控えるのは表示を早くするためだけで、
+     本人かどうかの判定には一切使わない。
+     ============================================================ -->
+<script>
+(function () {
+  "use strict";
+
+  var SPID = {};
+
+  SPID.api = (window.CHES_CONFIG && window.CHES_CONFIG.identityEndpoint)
+    || "https://emu-realtime.onrender.com/api/identity";
+
+  /* 連携の途中経過。LINE は LINE アプリへ往復するので sessionStorage では消える。
+     券そのものはサーバーが発行した10分・1回きりのもので、
+     これだけでは何もできない（使うときにも正式な認証が要る）。 */
+  var PENDING_KEY = "sp_link_pending";
+  /* 表示用の控え。判定には使わない。uid ごと持って、
+     別の人でログインしたときに前の番号が出ないようにする。 */
+  var CACHE_KEY = "sp_id_cache";
+  var TICKET_TTL_MS = 10 * 60 * 1000;
+
+  window._spIdentity = null;
+  SPID.notice = null;          // 連携の結果。次にパスポートを開いたときに出す。
+  var _busy = null;
+
+  function authHeaders(json) {
+    if (typeof emuAuthHeaders !== "function") return Promise.reject(new Error("NO_AUTH"));
+    return emuAuthHeaders(json, { interactive: false });
+  }
+
+  function currentUid() {
+    try { return (window.auth && window.auth.currentUser && window.auth.currentUser.uid) || ""; }
+    catch (e) { return ""; }
+  }
+
+  function saveCache(spid) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ uid: currentUid(), spid: spid })); }
+    catch (e) {}
+  }
+
+  /* 通信できないときに、表示だけ埋めるための控え。
+     いまログインしている本人のものでなければ使わない。 */
+  SPID.cached = function () {
+    try {
+      var v = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+      if (!v || !v.spid) return null;
+      var uid = currentUid();
+      if (!uid || v.uid !== uid) return null;
+      return v.spid;
+    } catch (e) { return null; }
+  };
+
+  function remember(data) {
+    window._spIdentity = data;
+    saveCache(data.schoolParkId);
+    try { window.dispatchEvent(new CustomEvent("schoolpark-id", { detail: data })); } catch (e) {}
+    return data;
+  }
+
+  /* ───── いまの自分の SchoolPark ID を取る（無ければサーバーが一度だけ作る） ─────
+
+     何度呼んでも番号は増えない。サーバー側が
+     「認証情報 → 番号」の対応表を1件しか作れない形にしてある。 */
+  SPID.resolve = function (force) {
+    if (window._spIdentity && !force) return Promise.resolve(window._spIdentity);
+    if (_busy) return _busy;
+    _busy = (async function () {
+      try {
+        var headers = await authHeaders(false);
+        var res = await fetch(SPID.api + "/resolve", {
+          method: "POST", headers: headers, cache: "no-store"
+        });
+        var data = null;
+        try { data = await res.json(); } catch (e) { data = null; }
+        if (!res.ok || !data || !data.schoolParkId) {
+          throw new Error((data && data.error) || ("resolve " + res.status));
+        }
+        return remember(data);
+      } catch (e) {
+        /* 取れなかったときは、ここで番号を作らない。
+           勝手に作ると、通信が不調なだけで新しいパスポートが生まれてしまう。
+           次にもう一度聞く。 */
+        console.warn("[SchoolPark ID] いまは確認できませんでした:", e && (e.message || e));
+        return null;
+      } finally { _busy = null; }
+    })();
+    return _busy;
+  };
+
+  SPID.now = function () { return window._spIdentity; };
+
+  /* ───── ログイン方法を足す ───── */
+
+  SPID.pending = function () {
+    try {
+      var v = JSON.parse(localStorage.getItem(PENDING_KEY) || "null");
+      if (!v || !v.ticket) return null;
+      if (Date.now() - Number(v.at || 0) > TICKET_TTL_MS) { SPID.clearPending(); return null; }
+      return v;
+    } catch (e) { return null; }
+  };
+  SPID.clearPending = function () { try { localStorage.removeItem(PENDING_KEY); } catch (e) {} };
+
+  /* いまのパスポートに紐づく引換券をもらってから、新しい方法で認証しに行く。
+     券は、いまの SchoolPark ID へログイン済みでないと受け取れない。 */
+  SPID.beginLink = async function (method) {
+    var headers = await authHeaders(true);
+    var res = await fetch(SPID.api + "/link/ticket", { method: "POST", headers: headers, body: "{}" });
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok || !data || !data.ticket) {
+      throw new Error((data && data.error) || "引換券を受け取れませんでした");
+    }
+    try {
+      localStorage.setItem(PENDING_KEY, JSON.stringify({
+        ticket: data.ticket, spid: data.spid, method: method, at: Date.now()
+      }));
+    } catch (e) { throw new Error("この端末では連携を進められません（保存できません）"); }
+
+    if (method === "line") {
+      if (!window.CHES || typeof window.CHES.startLine !== "function") throw new Error("NO_LINE");
+      window.CHES.startLine();
+    } else if (method === "google") {
+      if (!window.CHES || typeof window.CHES.startGoogle !== "function") throw new Error("NO_GOOGLE");
+      window.CHES.startGoogle();
+    } else {
+      SPID.clearPending();
+      throw new Error("UNKNOWN_METHOD");
+    }
+    return data;
+  };
+
+  /* 新しい方法で認証できた直後に呼ぶ。券を使って既存の番号へ足す。
+
+     足せなかったときも、ログインそのものは続ける。
+     ここで止めると、利用者は何も見られなくなってしまう。
+     足せなかった理由は、次にパスポートを開いたときに出す。 */
+  SPID.consumePendingLink = async function () {
+    var pending = SPID.pending();
+    if (!pending) return null;
+    SPID.clearPending();
+    var label = pending.method === "line" ? "LINE" : (pending.method === "google" ? "Google" : "ログイン方法");
+    try {
+      var headers = await authHeaders(true);
+      var res = await fetch(SPID.api + "/link/complete", {
+        method: "POST", headers: headers, body: JSON.stringify({ ticket: pending.ticket })
+      });
+      var data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      if (res.ok && data && data.schoolParkId) {
+        SPID.notice = { ok: true, text: label + " を、いまの SchoolPark ID に追加しました。" };
+        return remember(data);
+      }
+      SPID.notice = {
+        ok: false,
+        text: (data && data.message)
+          || (label + " を追加できませんでした。もう一度お試しください。")
+      };
+    } catch (e) {
+      SPID.notice = { ok: false, text: label + " を追加できませんでした。通信を確認してください。" };
+    }
+    return null;
+  };
+
+  /* ───── ウォレットを連携する（署名で所有を確認） ─────
+     アドレスを名乗るだけでは連携できない。手数料はかからない。 */
+  SPID.linkWallet = async function () {
+    if (!window.ethereum) throw new Error("ウォレットが見つかりません。");
+    var accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    if (!accounts || !accounts.length) throw new Error("ウォレットを選べませんでした。");
+    var address = ethers.utils.getAddress(accounts[0]);
+
+    var headers = await authHeaders(true);
+    var nonceRes = await fetch(SPID.api + "/link/wallet/nonce?address=" + encodeURIComponent(address), { headers: headers });
+    var nonceData = null;
+    try { nonceData = await nonceRes.json(); } catch (e) { nonceData = null; }
+    if (!nonceRes.ok || !nonceData || !nonceData.message) {
+      throw new Error((nonceData && nonceData.error) || "署名の準備に失敗しました。");
+    }
+    var signature = await window.ethereum.request({
+      method: "personal_sign", params: [nonceData.message, address]
+    });
+
+    var res = await fetch(SPID.api + "/link/wallet", {
+      method: "POST", headers: await authHeaders(true),
+      body: JSON.stringify({ address: address, nonce: nonceData.nonce, signature: signature })
+    });
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok || !data || !data.schoolParkId) {
+      throw new Error((data && data.message) || (data && data.error) || "ウォレットを連携できませんでした。");
+    }
+    return remember(data);
+  };
+
+  SPID.forget = function () {
+    window._spIdentity = null;
+    SPID.notice = null;
+    SPID.clearPending();
+    try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+  };
+
+  window.SPID = SPID;
+})();
+</script>
 <script>
 (function () {
   "use strict";
@@ -24656,6 +25061,27 @@ async function sendEmuFeedback() {
 
     window._chesEntered = true;
     window._chesBusy = false;
+
+    /* SchoolPark ID（Passport ID）を用意する。無ければサーバーが一度だけ作る。
+
+       入場を待たせない（結果が返るのを待たずに進む）。
+       ここで待つと、Render が起きるまでのあいだ画面が止まって見える。
+       番号が要るところ（パスポート）は、そのとき改めて聞き直す。
+
+       失敗しても何も起きない。番号が増えることはない。 */
+    if (window.SPID && typeof window.SPID.resolve === "function") {
+      try {
+        Promise.resolve(window.SPID.resolve(true)).then(function (identity) {
+          /* 連携の結果を伝えるため、パスポートを開く。
+             「LINEを追加」を押した本人が、追加できたかどうかを
+             その場で確かめられるようにする。 */
+          if (window.SPID.notice && typeof openSpPassport === "function") {
+            setTimeout(function () { try { openSpPassport(); } catch (e) {} }, 700);
+          }
+        }).catch(function () {});
+      } catch (e) {}
+    }
+
     // 入園したら resuming クラスは不要（以降の画面に影響しないよう除去）
     try { document.documentElement.classList.remove("ches-resuming"); } catch (e) {}
     if (typeof spTrack === "function") spTrack("free", addr).catch(function () {});
@@ -24787,6 +25213,26 @@ async function sendEmuFeedback() {
           setTimeout(function () { reject(new Error("account lookup timeout")); }, 12000);
         })
       ]);
+
+      /* ログイン方法を足している途中なら、先に足す。
+
+         順番が大事。先に SchoolPark ID を聞いてしまうと、
+         この新しいログイン方法に新しい番号が発行され、
+         そのあとで既存のパスポートへ足そうとしても
+         「すでに別の番号のもの」として断られてしまう。
+
+         足せなくても入場は止めない（理由はパスポートで伝える）。
+         通信が止まっても8秒で切り上げる（ここで無限に待たない）。 */
+      if (window.SPID && typeof window.SPID.consumePendingLink === "function"
+          && window.SPID.pending()) {
+        try {
+          await Promise.race([
+            window.SPID.consumePendingLink(),
+            new Promise(function (resolve) { setTimeout(resolve, 8000); })
+          ]);
+        } catch (e) { console.warn("[SchoolPark ID] 連携に失敗:", e && (e.message || e)); }
+      }
+
       await CHES.enterSchoolPark(account, provider);
     } catch (e) {
       console.error("[CHES] 共通フロー失敗:", e);
@@ -25044,6 +25490,10 @@ async function sendEmuFeedback() {
 
   // ───── ログアウト（CHES セッション破棄） ─────
   CHES.logout = function () {
+    /* SchoolPark ID の控えも捨てる。次に別の人が入ったときに、
+       前の人の番号が一瞬でも出ないようにするため。
+       番号そのものはサーバーに残るので、入り直せば同じ番号に戻る。 */
+    try { if (window.SPID && typeof window.SPID.forget === "function") window.SPID.forget(); } catch (e) {}
     localStorage.removeItem("ches_uid");
     localStorage.removeItem("ches_name");
     localStorage.removeItem("ches_address");
