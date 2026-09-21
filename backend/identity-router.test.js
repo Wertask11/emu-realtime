@@ -292,6 +292,74 @@ test("窓口: 運営用の入り口は、運営以外には開かない", async 
   } finally { await s.close(); }
 });
 
+/* ───── 発行前の確認（はじめまして？） ─────
+
+   ここがいちばん効く。前から使っている人が、別の入り方で「はじめる」を
+   押してしまうと、気づかないうちに2つ目のパスポートができる。
+   /status は「番号を作らずに」状態だけ返し、画面はそれを見て確認を出す。 */
+
+test("窓口: /status は番号を作らない", async () => {
+  const s = await startServer();
+  try {
+    const st = await s.call("GET", "/status", { uid: LINE_UID });
+    assert.equal(st.status, 200);
+    assert.equal(st.body.exists, false);
+    assert.equal(st.body.schoolParkId, null);
+    assert.equal(s.db._count("sp_identities"), 0, "状態を見ただけで番号を作ってはいけない");
+    assert.equal(s.db._count("sp_auth_links"), 0);
+
+    // 何度見ても作られない
+    await s.call("GET", "/status", { uid: LINE_UID });
+    await s.call("GET", "/status", { uid: LINE_UID });
+    assert.equal(s.db._count("sp_identities"), 0);
+  } finally { await s.close(); }
+});
+
+test("窓口: いま作られたアカウントは looksNew（確認を出す）", async () => {
+  const s = await startServer();
+  try {
+    // ログイン方法を増やすと、その方法ぶんの ches_accounts が新しく作られる。
+    // その状態を再現する。
+    await s.db.collection("ches_accounts").doc(GOOGLE_UID)
+      .set({ createdAt: Date.now() }, { merge: true });
+    const st = await s.call("GET", "/status", { uid: GOOGLE_UID });
+    assert.equal(st.body.exists, false);
+    assert.equal(st.body.looksNew, true, "新しいアカウントは確認を出す側に倒す");
+  } finally { await s.close(); }
+});
+
+test("窓口: 前からいる人には確認を出さない（looksNew が false）", async () => {
+  const s = await startServer();
+  try {
+    // 番号の仕組みより前から居る人
+    await s.db.collection("ches_accounts").doc(LINE_UID)
+      .set({ createdAt: Date.now() - 90 * 24 * 60 * 60 * 1000 }, { merge: true });
+    const st = await s.call("GET", "/status", { uid: LINE_UID });
+    assert.equal(st.body.exists, false);
+    assert.equal(st.body.looksNew, false, "前からいる人を驚かせない");
+  } finally { await s.close(); }
+});
+
+test("窓口: すでに番号がある人には、二度と確認を出さない", async () => {
+  const s = await startServer();
+  try {
+    const mine = await s.call("POST", "/resolve", { uid: LINE_UID });
+    const st = await s.call("GET", "/status", { uid: LINE_UID });
+    assert.equal(st.body.exists, true);
+    assert.equal(st.body.looksNew, false);
+    assert.equal(st.body.schoolParkId, mine.body.schoolParkId);
+  } finally { await s.close(); }
+});
+
+test("窓口: /status も認証が要る", async () => {
+  const s = await startServer();
+  try {
+    const anon = await s.call("GET", "/status");
+    assert.equal(anon.status, 401);
+    assert.equal(s.db._count("sp_identities"), 0);
+  } finally { await s.close(); }
+});
+
 test("窓口: 他人の番号は覗けない（列挙もできない）", async () => {
   const s = await startServer();
   try {
