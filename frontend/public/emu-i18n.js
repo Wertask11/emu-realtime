@@ -852,7 +852,10 @@
   /* 画面上にある言語切替をすべて拾って、選択肢と現在値を揃える。
      Emu だけでなく CHESハブ・SchoolPark にも置いたため、
      id ひとつ決め打ちでは足りなくなった。 */
-  var LANG_SELECT_IDS = ["emuLangSelect", "chesHubLangSelect", "spMapLangSelect"];
+  /* 言語の選択肢を入れて、いまの言語に合わせる相手。
+     chesHubLangSelect（CHESハブ）と spMapLangSelect（旧マップ）は
+     画面ごと無くなったので外した。SchoolPark の設定パネルを足した。 */
+  var LANG_SELECT_IDS = ["emuLangSelect", "spSettingLangSelect"];
   function syncLangSelects(code) {
     LANG_SELECT_IDS.forEach(function (id) {
       var select = document.getElementById(id);
