@@ -396,7 +396,6 @@ Production に不要な文書を作ってしまうため。
 | `firestore.rules` | 新規5コレクションのルール＋汎用許可からの除外 |
 | `frontend/public/index.html` | `window.SPID` レイヤー／Passport に SchoolPark ID を表示／連携ログイン方法・連携ウォレットの表示と追加ボタン／ログイン時の解決と券の消費／ログアウト時の控え破棄 |
 | `frontend/public/membership-admin.html` | 重複候補の一覧を会員管理に表示 |
-| `frontend/public/schoolpark/fountain.html` | 公式パス判定でパスポート（番号ベースの結果）も見る |
 
 ---
 
