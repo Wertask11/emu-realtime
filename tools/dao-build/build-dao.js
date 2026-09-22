@@ -157,6 +157,15 @@ template = template.replace(CTA,
   + ' border:1px solid rgba(20,19,16,.16); border-radius:7px; display:flex; align-items:center;'
   + ' justify-content:center; cursor:pointer; overflow:hidden" style-hover="background:#E7E2D6">'
   + '<img src="/assets/mascot.jpg" alt="冷蔵庫くん" style="width:100%; height:100%; object-fit:cover"></div>\n'
+  /* 設定（歯車）。冷蔵庫くんの右どなり。
+     中身（通知・言語・プライバシー・キーボード・キャッシュ・アカウント）は
+     枠の外（親）の spSettingsPanel にある。押したら開くだけ。
+     以前は CHES ハブのヘッダーに置いてあったが、ハブを廃止したので
+     SchoolPark のヘッダーへ移した。 */
+  + '        <div onClick="{{ openSettings }}" title="設定" style="width:38px; height:38px; flex:0 0 38px;'
+  + ' border:1px solid rgba(20,19,16,.16); border-radius:7px; display:flex; align-items:center;'
+  + ' justify-content:center; cursor:pointer; font-family:Inter,sans-serif; font-size:17px;'
+  + ' color:#0F5C3F" style-hover="background:#E7E2D6">\u2699</div>\n'
   + CTA);
 
 /* ⑥ 公園にエレベーターを足す。「月例、リアルの集まり」の手前に置く。 */
@@ -186,6 +195,7 @@ template = template.replace(MONTHLY, ELEVATOR + MONTHLY);
 logic = logic.replace(OLD_TOGGLE + `
   toggleBrand`, OLD_TOGGLE + `
   askReizo = () => { try { window.parent.spReizoOpen(); } catch (e) {} };
+  openSettings = () => { try { window.parent.openSpPanel('spSettingsPanel'); } catch (e) {} };
   goElevator = () => { try { window.parent.openSpRoom('/schoolpark/south-elevator.html', 'エレベーター'); } catch (e) {} };
   toggleBrand`);
 if (!logic.includes('askReizo =')) { console.error('冷蔵庫くんの処理を入れられなかった'); process.exit(1); }
@@ -193,6 +203,7 @@ if (!logic.includes('askReizo =')) { console.error('冷蔵庫くんの処理を�
 logic = logic.replace(OLD_PASS + `
       toggleBrand`, OLD_PASS + `
       askReizo:this.askReizo,
+      openSettings:this.openSettings,
       goElevator:this.goElevator,
       toggleBrand`);
 if (!logic.includes('askReizo:this.askReizo')) { console.error('値の受け渡しに入れられなかった'); process.exit(1); }
