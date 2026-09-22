@@ -16432,6 +16432,89 @@ async function spGuildDefs(force) {
   return _spGuildDefsBusy;
 }
 
+/* ───── 完走したクエストを、パスポート本人の名義ぜんぶで拾う ─────
+
+   受けた記録は sp_quests/{id}/commits/{名義} にあり、文書のIDが名義そのもの。
+   運営が中身を確かめて approved を立てたものだけが「完走」。
+   受けただけ（commits があるだけ）では完走にしない。
+
+   名義はひとつとは限らない。同じ人がウォレットで入ったときと
+   LINE・Googleで入ったときでアドレスが変わるので、星空と同じく
+   パスポート本人の名義を全部自分として見る。片方だけで見ていると、
+   ウォレットで受けて完走したクエストが、LINEで開いたとたん消える。
+
+   同じクエストを2つの名義で受けていても、クエストは1つ。二重に数えない。
+   完走日は運営が認めた時刻（commits の approvedAt、ミリ秒）。
+   新しい順に並べて返す。
+
+   記録欄（パスポート）と星空の両方がここを呼ぶ。数える場所を1つにしておけば、
+   「記録欄では3件なのに星は2つ」という食い違いが起きない。
+
+   読めなかったときは null を返す。0件と区別できないと、
+   通信が届かなかっただけで「まだ1つも完走していない」と読めてしまう。 */
+async function spCompletedQuests(p) {
+  const fb = window.fbLib;
+  if (!p || !fb || !window.db) return null;
+
+  /* 誰の名義か。星空と同じ決め方にそろえる。 */
+  const aliases = [];
+  (p.aliases && p.aliases.length ? p.aliases : [p.wallet, p.ches, p.addr]).forEach(function (a) {
+    const v = String(a || '').toLowerCase();
+    if (v && aliases.indexOf(v) < 0) aliases.push(v);
+  });
+  if (!aliases.length) return null;   /* 誰の記録か決まらない。0件ではない */
+
+  let gdefs = [];
+  try { gdefs = await spGuildDefs(); } catch (e) { /* ギルドが読めなくても件数は出す */ }
+
+  const docs = [];
+  try {
+    const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
+    qs.forEach(function (s) { docs.push(Object.assign({ id: s.id }, s.data() || {})); });
+    /* オフラインのとき、一覧の取得は例外を投げず手元の控えを返す。
+       開いた直後は控えが空なので「0件で成功」になる。0件と書かない。 */
+    if (!docs.length && qs.metadata && qs.metadata.fromCache) return null;
+  } catch (e) {
+    console.warn('完走したクエストを読めませんでした:', e && (e.message || e));
+    return null;
+  }
+
+  const out = [];
+  await Promise.all(docs.map(async function (q) {
+    let hit = false, at = 0;
+    for (const a of aliases) {
+      try {
+        const c = await fb.getDoc(fb.doc(window.db, 'sp_quests', q.id, 'commits', a));
+        if (!c.exists()) continue;
+        const d = c.data() || {};
+        if (d.approved !== true) continue;   /* approved:false にも approvedAt は付く */
+        hit = true;                          /* 何人ぶん当たっても、クエストは1件 */
+        const t = Number(d.approvedAt || 0);
+        if (t > at) at = t;
+      } catch (e) { /* この名義は読めなかった。ほかの名義を試す */ }
+    }
+    if (!hit) return;
+    const gid = SpQuestStore.isFounder(q) ? '' : SpGuildStore.guildIdOf(q, gdefs);
+    const g = gid ? SpGuildStore.byId(gdefs, gid) : null;
+    out.push({
+      id: q.id,
+      isFounder: SpQuestStore.isFounder(q),
+      label: SpQuestStore.label(q) || '',
+      title: String(q.title || ''),
+      guildId: gid,
+      guildShort: g ? g.short : '',
+      accent: g ? g.accent : '',
+      /* ギルドの並び順（code 順）。星の一覧を開くたび順が入れ替わらないように。 */
+      guildOrder: g ? gdefs.indexOf(g) : 999,
+      at: at
+    });
+  }));
+
+  /* 新しい順。日付が入っていない古い記録は後ろへ落ちる。 */
+  out.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+  return out;
+}
+
 /* 議題とクエストの生の記録。ギルドごとの数と一覧に使い回す。
    票（ballots）はここでは読まない。ギルドを開いたときに、そのぶんだけ読む。 */
 let _spVoteDocs = [];
@@ -17797,6 +17880,8 @@ function openSpWisdomForm(q, app) {
     if (row) row.hidden = true;
   }
 
+  _spWisdomPaintTag();
+
   const kn = document.getElementById('swKnowledge');
   if (kn) {
     if (_spWisdomFrom) {
@@ -17817,7 +17902,6 @@ function openSpWisdomForm(q, app) {
   }
   set('swExperiment', q.action || q.title);
   set('swInsight', '');
-  const t = document.getElementById('swTag'); if (t) t.value = 'LEARNING';
   document.body.classList.add('sp-wisdom-open');
 }
 /* 報告で挙がった投稿を選び直したとき。「選ばない」を選べば自由入力に戻す。 */
@@ -17842,10 +17926,61 @@ function _spWisdomPickFrom() {
     knNote.textContent = _spWisdomFrom ? '受けた人が報告で選んだ投稿です。知恵カードから、その投稿を開けるようになります。' : '';
     knNote.hidden = !_spWisdomFrom;
   }
+  /* 出どころが変わると棚も変わる（Emu ↔ ギルド／その他）。 */
+  _spWisdomPaintTag();
 }
 window._spWisdomPickFrom = _spWisdomPickFrom;
 
+/* この知恵カードが入る棚を、フォームに出す。
+   出どころ（Emuの投稿）を選び直したら棚も変わるので、そのたびに呼ぶ。 */
+function _spWisdomPaintTag() {
+  const tagView = document.getElementById('swTagView');
+  if (!tagView) return;
+  const t = spWisdomTagFor(_spWisdomQuest, _spWisdomFrom && _spWisdomFrom.id);
+  tagView.textContent = t;
+  tagView.style.color = SP_WISDOM_TAG_COLORS[t] || '#6E695C';
+  tagView.style.fontWeight = '700';
+  tagView.style.letterSpacing = '.12em';
+}
+
 function closeSpWisdomForm() { document.body.classList.remove('sp-wisdom-open'); }
+
+/* ───── 知恵カードの分類 ─────
+
+   書く人に選ばせない。その知恵が「どこから来たか」で決まる。
+
+     Emu の投稿から生まれた       → Emu
+     ギルドの議題から生まれた     → そのギルド（LEARN / WORK / PLAY / CONNECT / WEB3）
+     どちらでもない               → その他
+
+   投稿 → 議題 → クエスト → 知恵カード が一本の線で繋がっているので、
+   選ばせなくても、出どころのまま棚に並ぶ。
+   選ばせていたときは、書く人の気分で棚が決まり、
+   どのギルドの活動から何が生まれたのかが追えなかった。
+
+   色はギルドの accent（schoolpark/guild-store.js）と同じものを使う。
+   変えるときは guild-store.js と schoolpark/dao.html も一緒に直すこと。 */
+const SP_WISDOM_GUILD_TAGS = ['LEARN', 'WORK', 'PLAY', 'CONNECT', 'WEB3'];
+const SP_WISDOM_TAGS = SP_WISDOM_GUILD_TAGS.concat(['Emu', 'その他']);
+const SP_WISDOM_TAG_COLORS = {
+  'LEARN': '#0F5C3F', 'WORK': '#141310', 'PLAY': '#C2703D',
+  'CONNECT': '#B0405A', 'WEB3': '#3B382F',
+  'Emu': '#F08300', 'その他': '#6E695C'
+};
+
+/* この知恵カードが入る棚を決める。 */
+function spWisdomTagFor(quest, fromPostId) {
+  if (fromPostId) return 'Emu';
+  const short = String((quest && quest.guildLabel) || '').toUpperCase();
+  return SP_WISDOM_GUILD_TAGS.indexOf(short) >= 0 ? short : 'その他';
+}
+
+/* 古い知恵カードの分類（RELATIONSHIP・MONEY・FOCUS など）は、いまの棚に無い。
+   記録は書き換えず、読むときだけ「その他」として出す。 */
+function spWisdomNormalizeTag(tag) {
+  const t = String(tag || '').trim();
+  return SP_WISDOM_TAGS.indexOf(t) >= 0 ? t : 'その他';
+}
 
 async function spWisdomSubmit() {
   const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
@@ -17866,7 +18001,8 @@ async function spWisdomSubmit() {
       knowledge: val('swKnowledge').slice(0, 200),
       experiment: val('swExperiment').slice(0, 200),
       insight: insight.slice(0, 200),
-      tag: val('swTag') || 'LEARNING',
+      /* 分類は選ばせない。出どころ（Emuの投稿 / ギルド）から決まる。 */
+      tag: spWisdomTagFor(_spWisdomQuest, _spWisdomFrom && _spWisdomFrom.id),
       author: p.addr, authorName: p.name,
       createdAt: Date.now()
     });
@@ -17909,7 +18045,10 @@ window.spDaoLoadWisdom = async function (app) {
     cites += uses;
     const did = !!(mine && citedBy[mine]);
     wisdom.push({
-      id: w.id, tag: w.tag || 'LEARNING', insight: w.insight || '',
+      id: w.id, tag: spWisdomNormalizeTag(w.tag),
+      /* 棚の色。カードの見出しにも同じ色を出す（ギルドと揃える）。 */
+      tagColor: SP_WISDOM_TAG_COLORS[spWisdomNormalizeTag(w.tag)] || '#6E695C',
+      insight: w.insight || '',
       from: w.knowledge || '', experiment: w.experiment || '',
       author: w.authorName || _spShortAddr(w.author), uses: uses,
       /* 元になった Emu の投稿があるときだけ、押して開けるようにする。
@@ -18593,6 +18732,7 @@ async function openSpPassport() {
     + '<li><b>🟡 議論星</b>議論の結論を残した日数</li>'
     + '<li><b>🔴 学び星</b>受け取った学び</li>'
     + '<li><b>🟣 改善星</b>誰かの知識を良くした</li>'
+    + '<li><b>⭐ クエスト星</b>完走したクエスト（ギルドの色）</li>'
     + '</ul>'
     + '</div>'
     + '<div class="spp-seam"></div>'
@@ -18685,7 +18825,32 @@ async function openSpPassport() {
     }
   } catch (e) {}
 
+  /* 完走したクエスト。運営が中身を認めたものだけを、新しい順に出す。
+     読めなかったときは行そのものを出さない（0件と書くと、
+     やっていないように読めてしまうため）。 */
+  let done = null;
+  try { done = await spCompletedQuests(p); } catch (e) { done = null; }
+
+  let doneHtml = '';
+  if (done) {
+    doneHtml = _sppRow('SchoolPark｜完走したクエスト', done.length + '件');
+    /* 多すぎると記録欄が1つのことで埋まるので、新しいほうから10件まで。 */
+    done.slice(0, 10).forEach(function (q) {
+      const name = ((q.label && !q.isFounder ? q.label + ' ' : '') + (q.title || '（題名なし）')).trim();
+      /* ギルドは色の札で出す。文字色にすると、WORK(#141310) や WEB3(#3B382F) が
+         パスポートの暗い紙に沈んで読めない。札の地色にして、上に明るい字を置く。 */
+      const tag = q.guildShort
+        ? '<span style="display:inline-block;background:' + escapeHtml(q.accent || '#6E695C')
+          + ';color:#F4F1EA;font-size:10px;font-weight:700;letter-spacing:.06em;'
+          + 'padding:2px 6px;border-radius:999px;margin-right:6px;vertical-align:1px;'
+          + 'box-shadow:0 0 0 1px rgba(244,241,234,.25)">' + escapeHtml(q.guildShort) + '</span>'
+        : '';
+      doneHtml += _sppRowHtml('　' + escapeHtml(_sppDate(q.at)), tag + escapeHtml(name));
+    });
+  }
+
   if (rec) rec.innerHTML = _sppRow('SchoolPark｜投票した議題', votes + '件')
+    + doneHtml
     + _sppRow('SchoolPark｜参加ギルド', joined.length ? joined.join(' / ') : 'まだありません')
     + _sppRow('SchoolPark｜応援ギルド', supported.length ? supported.join(' / ') : 'まだありません');
 }
@@ -20738,7 +20903,10 @@ let room2PendingStreak = null; // { level, projectId }
    数え直しなので、開くたびに同じ答えになる。足し算ではないから、
    何度開いても星が2倍3倍になることはない。 */
 
-const EMU_STAR_CACHE_KEY = 'emu_star_cache_v2';
+/* v3 ── クエスト星（ギルドの色）が増え、控えの形が変わった。
+   v2 の控えにはギルドの欄が無いので、そのまま読むと
+   「クエスト星だけ無い星空」が一瞬映る。古い控えは使わない。 */
+const EMU_STAR_CACHE_KEY = 'emu_star_cache_v3';
 
 /* 前に数えた結果。本人が同じときだけ使う。
    これは「正」ではなく、数え直しが届くまでのあいだ映しておくための控え。 */
@@ -20824,8 +20992,11 @@ async function _emuSendStarCounts(frame) {
   const cached = _emuStarCacheRead(p.uid);
   if (cached) send(cached);
 
-  const counts = { post: 0, nft: 0, discussion: 0, learning: 0, change: 0 };
-  const read = { post: false, nft: false, discussion: false, learning: false, change: false };
+  /* guilds はギルドごとのクエスト星。数だけでなく、名前と色もここで決めて渡す。
+     星空（Emu_room2）はギルドを知らないので、あちらに色の表を持たせない。
+     ギルドが6つ目・7つ目と増えても、guild-store.js の accent がそのまま届く。 */
+  const counts = { post: 0, nft: 0, discussion: 0, learning: 0, change: 0, guilds: [] };
+  const read = { post: false, nft: false, discussion: false, learning: false, change: false, guilds: false };
   const fb = window.fbLib;
 
   try {
@@ -20900,11 +21071,50 @@ async function _emuSendStarCounts(frame) {
     if (owned !== null) { counts.nft = owned; read.nft = true; }
   } catch (e) { console.warn('体験星を数えられませんでした:', e && e.message); }
 
+  try {
+    /* クエスト星 ── 完走したクエストを、ギルドごとに数える。
+
+       記録欄（パスポートの「SchoolPark の記録」）とまったく同じ元データ。
+       同じ「完走」という言葉で2か所が違うものを数えないよう、
+       数える場所は spCompletedQuests ひとつにしてある。
+
+       どのギルドにも属さないクエスト（guildId が無いもの・Quest #000）は
+       色が決まらないので、星にしない。数だけ出しても何色か言えない。 */
+    const done = await spCompletedQuests(p);
+    if (!done) throw new Error('完走したクエストを読めなかった');
+    const byGuild = {};
+    const order = [];
+    done.forEach(function (q) {
+      if (q.isFounder) return;               /* #000 は受けるクエストではない */
+      if (!q.guildId || !q.accent) return;   /* 色の決まらないものは星にしない */
+      if (!byGuild[q.guildId]) {
+        byGuild[q.guildId] = {
+          key: 'quest:' + q.guildId,
+          label: q.guildShort + '星',
+          color: q.accent,
+          order: q.guildOrder,
+          count: 0
+        };
+        order.push(q.guildId);
+      }
+      byGuild[q.guildId].count++;
+    });
+    /* ギルドの並び（LEARN→WORK→…）でそろえる。完走の新しい順だと、
+       開くたびに一覧の行が入れ替わって読みにくい。 */
+    counts.guilds = order.map(function (id) { return byGuild[id]; })
+      .sort(function (a, b) { return a.order - b.order; });
+    read.guilds = true;
+  } catch (e) { console.warn('クエスト星を数えられませんでした:', e && e.message); }
+
   /* 読めなかった分は0にしない。前の答えがあればそれを置く。
      0と書くと「記録が消えた」ように見えるため。 */
   let anyRead = false;
   Object.keys(read).forEach(function (k) {
     if (read[k]) { anyRead = true; return; }
+    if (k === 'guilds') {
+      if (cached && Array.isArray(cached.guilds)) counts.guilds = cached.guilds;
+      return;
+    }
     if (cached && typeof cached[k] === 'number') counts[k] = cached[k];
   });
   if (!anyRead && !cached) { send(null); return; }
@@ -25952,11 +26162,11 @@ async function sendEmuFeedback() {
     <input class="spv-in" id="swExperiment" maxlength="200" placeholder="何を、どれだけやったか">
     <label class="spv-label" for="swInsight">残った一文</label>
     <textarea class="spv-in spv-area" id="swInsight" maxlength="200" placeholder="やってみて分かったことを、一文に削る"></textarea>
-    <label class="spv-label" for="swTag">分類</label>
-    <select class="spv-in" id="swTag">
-      <option>RELATIONSHIP</option><option>MONEY</option><option>FOCUS</option>
-      <option>LEARNING</option><option>NEGOTIATION</option><option>COURAGE</option>
-    </select>
+    <label class="spv-label">分類</label>
+    <!-- 選ばせない。出どころ（Emuの投稿 / ギルド）から決まる。
+         何が入るかは開いた時点で分かるので、ここに出しておく。 -->
+    <div id="swTagView" class="spv-in" style="display:flex;align-items:center;gap:8px;">—</div>
+    <p class="spp-note" style="margin:6px 0 0">分類は、このクエストの出どころから決まります。選ぶ必要はありません。</p>
     <button type="button" class="spp-cta" onclick="spWisdomSubmit()">ライブラリに置く</button>
     <p class="spp-note">知恵カードは、完了したクエストからしか生まれません。置いたあとは書き換えられません。</p>
   </div>

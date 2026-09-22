@@ -174,7 +174,7 @@ if (window.top === window.self) window.location.replace('/');
               <div style="display:grid; grid-template-columns:{{ L.g3 }}; gap:16px">
                 <sc-for list="{{ freshWisdom }}" as="w" hint-placeholder-count="3">
                   <div onClick="{{ w.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:14px; cursor:pointer" style-hover="border-color:#0F5C3F">
-                    <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:#0F5C3F">{{ w.tag }}</div>
+                    <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:{{ w.tagColor }}">{{ w.tag }}</div>
                     <div style="font-family:'Zen Old Mincho',serif; font-size:20px; font-weight:900; line-height:1.55; text-wrap:pretty">{{ w.insight }}</div>
                     <div style="display:flex; flex-direction:column; gap:6px; padding-top:4px; border-top:1px dashed rgba(20,19,16,.16); font-size:12px; color:#6E695C; line-height:1.7">
                       <div>知識：{{ w.from }}</div>
@@ -792,7 +792,7 @@ if (window.top === window.self) window.location.replace('/');
               <sc-for list="{{ wisdom }}" as="w" hint-placeholder-count="6">
                 <div style="break-inside:avoid; margin-bottom:16px; background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; flex-direction:column; gap:16px">
                   <div style="display:flex; justify-content:space-between; align-items:center">
-                    <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:#0F5C3F">{{ w.tag }}</div>
+                    <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:{{ w.tagColor }}">{{ w.tag }}</div>
                     <div style="font-family:Inter,sans-serif; font-size:11px; color:#6E695C">引用 {{ w.uses }}</div>
                   </div>
                   <div style="font-family:'Zen Old Mincho',serif; font-size:21px; font-weight:900; line-height:1.6; text-wrap:pretty">{{ w.insight }}</div>
@@ -1472,11 +1472,12 @@ class Component extends DCLogic {
       filters, shownExps, cur,
       curLogs: cur.logs || [],
       logs, wisdom: (s.wtag && s.wtag !== 'すべて') ? (s.wisdom || []).filter(w => w.tag === s.wtag) : (s.wisdom || []),
-      tags: ['すべて','RELATIONSHIP','MONEY','FOCUS','LEARNING','NEGOTIATION','COURAGE'].map(t => ({
-        label:t, go:()=>this.setState({wtag:t}),
-        bg: s.wtag===t ? '#141310' : 'transparent',
-        fg: s.wtag===t ? '#F4F1EA' : '#3B382F',
-        border: s.wtag===t ? '#141310' : 'rgba(20,19,16,.16)'})),
+      /* 棚はギルドと揃える。色は guild-store.js の accent と同じ。 */
+      tags: [{t:'すべて',c:'#3B382F'},{t:'LEARN',c:'#0F5C3F'},{t:'WORK',c:'#141310'},{t:'PLAY',c:'#C2703D'},{t:'CONNECT',c:'#B0405A'},{t:'WEB3',c:'#3B382F'},{t:'Emu',c:'#F08300'},{t:'その他',c:'#6E695C'}].map(x => ({
+        label:x.t, go:()=>this.setState({wtag:x.t}),
+        bg: s.wtag===x.t ? x.c : 'transparent',
+        fg: s.wtag===x.t ? '#F4F1EA' : x.c,
+        border: s.wtag===x.t ? x.c : 'rgba(20,19,16,.16)'})),
       members: s.members || [],
       treasury: s.treasury,
       steps: STEPS.map((st,i) => ({num:'0'+(i+1), label:st.label, hint:st.hint, go:()=>this.setState({step:i}),

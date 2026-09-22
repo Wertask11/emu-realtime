@@ -124,6 +124,23 @@ const STAR_LOOK = {
   change:     { power: 30, baseColor: '#c084fc', baseRadius: 5 }
 };
 
+/* クエスト星 ── 完走したクエストの星。色はギルドの色そのまま。
+
+   ギルドの色（guild-store.js の accent）は、白い紙の上で読む前提で選ばれている。
+   WORK(#141310) と WEB3(#3B382F) は夜空に置くとほとんど沈んで見えない。
+   色を明るく作り変えると「ギルドの色」ではなくなるので、色はそのままにして、
+   明るい縁で形だけを見せる。ギルドごとに縁の有無が変わると
+   そちらが意味を持って見えてしまうので、縁は全ギルドに同じものを付ける。
+
+   どのギルドが何色かは、親（Emu本体）が送ってくる。ここに色の表は持たない。
+   持つと、ギルドが増えたときに2か所を直すことになる。 */
+const QUEST_STAR_OUTLINE = 'rgba(244,241,234,.6)';
+const QUEST_STAR_LOOK = { power: 30, baseRadius: 5 };
+
+/* 種類（quest:<ギルドID>）→ 呼び名と色。一覧とシェアの文面で使う。
+   受け取るたびに作り直すので、前のギルドが残ることはない。 */
+let questStarLook = [];
+
 function applyRealStarCounts(counts) {
   /* 受け取れなかったとき（ログインが確かめられない・通信が届かない）は、
      数を作らない。前に映っていた星も残さない。
@@ -132,6 +149,7 @@ function applyRealStarCounts(counts) {
     stars.length = 0;
     links.length = 0;
     postCount = 0;
+    questStarLook = [];
     starCountsState = "unknown";
     try { updateStarList(); } catch (e) {}
     return;
@@ -145,9 +163,7 @@ function applyRealStarCounts(counts) {
   postCount = 0;
 
   let n = 0;
-  Object.keys(STAR_LOOK).forEach(function (type) {
-    const look = STAR_LOOK[type];
-    const num = Math.max(0, Number(counts[type] || 0));
+  const place = function (type, look, num) {
     for (let i = 0; i < num; i++) {
       const star = createStar(Object.assign({ type: type }, look, {
         x: 80 + Math.random() * Math.max(1, w - 160),
@@ -158,6 +174,25 @@ function applyRealStarCounts(counts) {
       star.createdAt = star.birthAt;
       stars.push(star);
     }
+  };
+
+  Object.keys(STAR_LOOK).forEach(function (type) {
+    place(type, STAR_LOOK[type], Math.max(0, Number(counts[type] || 0)));
+  });
+
+  /* ギルドごとのクエスト星。ギルドの数も色も親が決めるので、
+     ここは届いたぶんだけ素直に置く。 */
+  questStarLook = [];
+  (Array.isArray(counts.guilds) ? counts.guilds : []).forEach(function (g) {
+    g = g || {};
+    const key = String(g.key || '');
+    const color = /^#[0-9A-Fa-f]{6}$/.test(String(g.color || '')) ? g.color : '';
+    const num = Math.max(0, Number(g.count || 0));
+    if (!key || !color || !num) return;
+    questStarLook.push({ key: key, label: String(g.label || 'クエスト星'), color: color });
+    place(key, Object.assign({}, QUEST_STAR_LOOK, {
+      baseColor: color, outline: QUEST_STAR_OUTLINE
+    }), num);
   });
 
   /* ここは「足す」ではなく「置き換える」。上で stars を空にしてから
@@ -182,7 +217,7 @@ function seedHistoryStars() {
 /* ==========================
    Star & Link Logic
 ========================= */
-function createStar({ type, power, baseColor, baseRadius, projectId = null, x, y }) {
+function createStar({ type, power, baseColor, baseRadius, projectId = null, outline = null, x, y }) {
   return {
     id: crypto.randomUUID(),
     type,
@@ -192,6 +227,8 @@ function createStar({ type, power, baseColor, baseRadius, projectId = null, x, y
     vy: (Math.random() - 0.5) * 0.015,
     baseColor,
     color: baseColor,
+    /* 暗い色の星に付ける明るい縁。付いていない星（これまでの5種類）は null。 */
+    outline,
     power,
     baseRadius,
     radius: 0,
@@ -510,6 +547,20 @@ function render(time = 0) {
     ctx.fill();
     ctx.restore();
 
+    /* 明るい縁（クエスト星だけ）。
+       ギルドの色は夜空に沈むものがあるので、色は変えずに輪郭で形を見せる。
+       これまでの5種類は outline を持たないので、見た目は変わらない。 */
+    if (star.outline) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, progress);
+      ctx.strokeStyle = star.outline;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(star.x, star.y, Math.max(2, auraSize * 0.62), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // クロス（十字）スパーク（大きい星のみ）
     if (star.baseRadius >= 5 && progress > 0.5) {
       const sparkLen = auraSize * 2;
@@ -600,6 +651,16 @@ function updateStarList() {
   if (counts.discussion) html += `<div style="color:#e8eeff;">🟡 議論星 <span style="float:right;color:#ffd166;">${counts.discussion}</span></div>`;
   if (counts.learning)   html += `<div style="color:#e8eeff;">🔴 学び星 <span style="float:right;color:#ff6b6b;">${counts.learning}</span></div>`;
   if (counts.change)     html += `<div style="color:#e8eeff;">🟣 改善星 <span style="float:right;color:#c084fc;">${counts.change}</span></div>`;
+  /* クエスト星 ── ギルドごと。色の丸は絵文字では出せないので、
+     夜空と同じ色の点に、同じ明るい縁を付けて並べる。 */
+  questStarLook.forEach(function (g) {
+    const num = counts[g.key];
+    if (!num) return;
+    html += `<div style="color:#e8eeff;">`
+      + `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;`
+      + `background:${g.color};box-shadow:0 0 0 1px ${QUEST_STAR_OUTLINE};margin-right:5px;"></span>`
+      + `${g.label} <span style="float:right;color:#aabbdd;">${num}</span></div>`;
+  });
   html += `<div style="border-top:1px solid rgba(140,170,255,0.2);margin-top:5px;padding-top:4px;color:#ffd166;">✨ 合計 <span style="float:right;">${stars.length}</span></div>`;
   if (postCount > 0) {
     html += `<div style="color:#667799;font-size:10px;margin-top:3px;">次の白星まで: ${remaining}投稿</div>`;
@@ -626,6 +687,12 @@ function shareToX() {
   if (red > 0)    parts.push(`🔴 学び星×${red}`);
   const purple = counts.change || 0;
   if (purple > 0) parts.push(`🟣 改善星×${purple}`);
+  /* クエスト星も合計に入っているので、内訳にも出す。
+     出さないと「合計だけ多い」文面になる。 */
+  questStarLook.forEach(function (g) {
+    const num = counts[g.key] || 0;
+    if (num > 0) parts.push(`⭐ ${g.label}×${num}`);
+  });
 
   const body = parts.length > 0
     ? `私の星座記録：${parts.join(' / ')}（合計${total}個）`
