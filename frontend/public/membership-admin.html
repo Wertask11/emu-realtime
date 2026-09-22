@@ -1474,6 +1474,18 @@ async function renderSchoolPark() {
     + '<option value="">どのギルドにも属さない</option>'
     + SpGuildStore.OFFICIAL.map(g => '<option value="' + esc(g.id) + '">' + esc(g.short + '　' + g.concept) + '</option>').join("")
     + '</select>'
+    /* 番号は自動では振らない。出すときに決める。
+       系列が違えば同じ #001 が両方にあるので、系列も合わせて指定する。 */
+    + '<label>系列</label><select id="aqSeries">'
+    + SpQuestStore.SERIES.map(x => '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>').join("")
+    + '</select>'
+    + '<label>番号（1〜' + SpQuestStore.NUMBER_MAX + '）</label><input id="aqNumber" type="number" min="1" max="' + SpQuestStore.NUMBER_MAX + '" value="1">'
+    + '<label>枝番（任意）</label><select id="aqBranch"><option value="0">枝番なし</option>'
+    + SpQuestStore.BRANCHES.map(b => '<option value="' + b.n + '">-' + b.n + '　' + esc(b.name) + '</option>').join("")
+    + '</select>'
+    + '<label>段階（任意）</label><select id="aqStage"><option value="">段階なし</option>'
+    + SpQuestStore.STAGES.map(x => '<option value="' + esc(x) + '">' + esc(x) + '</option>').join("")
+    + '</select>'
     + '<label>何を試す？</label><input id="aqTitle" placeholder="例：「先に名乗る」を1週間、初対面20人でやってみる">'
     + '<label>元の知識（どこで得たか）</label><input id="aqKnowledge" placeholder="例：Emu／人間関係の設計 第3回">'
     + '<label>予想（たぶんこうなる）</label><textarea id="aqHypothesis" rows="2" placeholder="確かめたい説を一文で"></textarea>'
@@ -1509,7 +1521,7 @@ async function renderSchoolPark() {
     + '認めると、信用スコアの「完走」にも入ります。</p>'
     + (quests.length ? quests.filter(q => !SpQuestStore.isFounder(q)).map(q =>
         '<div style="border-top:1px solid var(--line);padding-top:12px;margin-top:12px">'
-        + '<div class="row"><span>' + esc((SpQuestStore.label(q) && !SpQuestStore.isFounder(q) ? SpQuestStore.label(q) + " " : "") + (q.title || "")) + '<br>'
+        + '<div class="row"><span>' + esc((SpQuestStore.fullLabel(q) && !SpQuestStore.isFounder(q) ? SpQuestStore.fullLabel(q) + " " : "") + (q.title || "")) + '<br>'
         + '<small style="color:var(--muted)">' + asMoney(parseInt(String(q.budget||"0").replace(/[^0-9]/g,""),10)||0, CURRENCIES.indexOf(q.budgetCurrency)>=0?q.budgetCurrency:"JPY") + ' · ' + (STATUS[q.status] || q.status)
         + ' · ' + q.took + '/' + (q.need || 5) + '人が受けた · 認めた ' + q.approvedCount + '人</small></span>'
         + '<span>'
@@ -1652,8 +1664,18 @@ async function renderSchoolPark() {
        すべて「どのギルドにも属さない」になっていた。 */
     const aqGuildId = v("aqGuild");
     if (aqGuildId && !SpGuildStore.isValidId(aqGuildId)) { alert("ギルドの指定が正しくありません。"); questSubmitting = false; return; }
+    /* 番号。系列・番号・枝番・段階の4つで一意。同じ組み合わせは二度作れない。 */
+    const aqSeries = v("aqSeries");
+    const aqNumber = parseInt(v("aqNumber"), 10) || 0;
+    const aqBranch = parseInt(v("aqBranch"), 10) || 0;
+    const aqStage = v("aqStage");
+    if (!SpQuestStore.isValidSeries(aqSeries)) { alert("系列（一般・特殊）を選んでください。"); questSubmitting = false; return; }
+    if (!SpQuestStore.isValidNumber(aqNumber)) { alert("番号は 1〜" + SpQuestStore.NUMBER_MAX + " で入れてください。"); questSubmitting = false; return; }
+    if (!SpQuestStore.isValidBranch(aqBranch)) { alert("枝番の指定が正しくありません。"); questSubmitting = false; return; }
+    if (!SpQuestStore.isValidStage(aqStage)) { alert("段階の指定が正しくありません。"); questSubmitting = false; return; }
     try {
       await SpQuestStore.createQuest(f, f.db, {
+        series: aqSeries, questNumber: aqNumber, branch: aqBranch, stage: aqStage,
         title: v("aqTitle").slice(0, 120), guildId: aqGuildId, knowledge: v("aqKnowledge").slice(0, 200),
         hypothesis: v("aqHypothesis").slice(0, 400), action: v("aqAction").slice(0, 400),
         measure: v("aqMeasure").slice(0, 400),
@@ -1663,7 +1685,12 @@ async function renderSchoolPark() {
         owner: ownerAddr, ownerName: (auth.currentUser && auth.currentUser.displayName) || "運営",
         status: "OPEN", createdAt: Date.now(), closesAt: Date.now() + days * 86400000
       });
-    } catch (e) { alert("出せませんでした（" + (e.code || e.message) + "）"); return; }
+    } catch (e) {
+      const msg = String((e && e.message) || "");
+      if (msg.indexOf("QUEST_NUMBER_TAKEN") >= 0) alert("この番号はすでに使われています。別の番号にしてください。");
+      else alert("出せませんでした（" + (e.code || e.message) + "）");
+      return;
+    }
     finally { questSubmitting = false; }
     renderSchoolPark();
   };
