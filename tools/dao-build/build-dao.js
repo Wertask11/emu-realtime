@@ -636,14 +636,27 @@ if (!template.includes(OLD_TAG)) { console.error('タグの並びが見つから
 template = template.replace(OLD_TAG,
   '                <div onClick="{{ t.go }}" style="padding:8px 14px; border:1px solid {{ t.border }}; border-radius:18px; font-size:12px; cursor:pointer; background:{{ t.bg }}; color:{{ t.fg }}" style-hover="border-color:#0F5C3F">{{ t.label }}</div>');
 
+/* 知恵カードの分類の色を、棚の色に合わせる。
+   どの色にするかは親（index.html の SP_WISDOM_TAG_COLORS）が決めて
+   w.tagColor で渡す。ここは受け取って出すだけ。 */
+const OLD_WTAG_COLOR = '<div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:#0F5C3F">{{ w.tag }}</div>';
+if (template.split(OLD_WTAG_COLOR).length - 1 !== 2) { console.error('知恵カードの分類が2か所見つからない'); process.exit(1); }
+template = template.split(OLD_WTAG_COLOR).join(
+  '<div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:{{ w.tagColor }}">{{ w.tag }}</div>');
+
 const OLD_TAGS = "      tags: ['すべて','RELATIONSHIP','MONEY','FOCUS','LEARNING','NEGOTIATION','COURAGE'],";
 if (!logic.includes(OLD_TAGS)) { console.error('タグの一覧が見つからない'); process.exit(1); }
+/* 棚はギルドと揃える。知恵カードの分類は、書く人が選ぶのではなく
+   出どころ（Emuの投稿 / ギルドの議題）から決まる（index.html の spWisdomTagFor）。
+   色は guild-store.js の accent と同じ。変えるときは両方を直すこと。 */
 logic = logic.replace(OLD_TAGS,
-  "      tags: ['すべて','RELATIONSHIP','MONEY','FOCUS','LEARNING','NEGOTIATION','COURAGE'].map(t => ({\n"
-  + "        label:t, go:()=>this.setState({wtag:t}),\n"
-  + "        bg: s.wtag===t ? '#141310' : 'transparent',\n"
-  + "        fg: s.wtag===t ? '#F4F1EA' : '#3B382F',\n"
-  + "        border: s.wtag===t ? '#141310' : 'rgba(20,19,16,.16)'})),");
+  "      tags: [{t:'すべて',c:'#3B382F'},{t:'LEARN',c:'#0F5C3F'},{t:'WORK',c:'#141310'},"
+  + "{t:'PLAY',c:'#C2703D'},{t:'CONNECT',c:'#B0405A'},{t:'WEB3',c:'#3B382F'},"
+  + "{t:'Emu',c:'#F08300'},{t:'その他',c:'#6E695C'}].map(x => ({\n"
+  + "        label:x.t, go:()=>this.setState({wtag:x.t}),\n"
+  + "        bg: s.wtag===x.t ? x.c : 'transparent',\n"
+  + "        fg: s.wtag===x.t ? '#F4F1EA' : x.c,\n"
+  + "        border: s.wtag===x.t ? x.c : 'rgba(20,19,16,.16)'})),");
 
 /* 選ばれたタグで絞る。数の表示は全体のままにする（ライブラリ全体の規模を示すため） */
 const OLD_WISDOM_PASS = '      logs, wisdom: s.wisdom || [],';

@@ -17797,6 +17797,8 @@ function openSpWisdomForm(q, app) {
     if (row) row.hidden = true;
   }
 
+  _spWisdomPaintTag();
+
   const kn = document.getElementById('swKnowledge');
   if (kn) {
     if (_spWisdomFrom) {
@@ -17817,7 +17819,6 @@ function openSpWisdomForm(q, app) {
   }
   set('swExperiment', q.action || q.title);
   set('swInsight', '');
-  const t = document.getElementById('swTag'); if (t) t.value = 'LEARNING';
   document.body.classList.add('sp-wisdom-open');
 }
 /* 報告で挙がった投稿を選び直したとき。「選ばない」を選べば自由入力に戻す。 */
@@ -17842,10 +17843,61 @@ function _spWisdomPickFrom() {
     knNote.textContent = _spWisdomFrom ? '受けた人が報告で選んだ投稿です。知恵カードから、その投稿を開けるようになります。' : '';
     knNote.hidden = !_spWisdomFrom;
   }
+  /* 出どころが変わると棚も変わる（Emu ↔ ギルド／その他）。 */
+  _spWisdomPaintTag();
 }
 window._spWisdomPickFrom = _spWisdomPickFrom;
 
+/* この知恵カードが入る棚を、フォームに出す。
+   出どころ（Emuの投稿）を選び直したら棚も変わるので、そのたびに呼ぶ。 */
+function _spWisdomPaintTag() {
+  const tagView = document.getElementById('swTagView');
+  if (!tagView) return;
+  const t = spWisdomTagFor(_spWisdomQuest, _spWisdomFrom && _spWisdomFrom.id);
+  tagView.textContent = t;
+  tagView.style.color = SP_WISDOM_TAG_COLORS[t] || '#6E695C';
+  tagView.style.fontWeight = '700';
+  tagView.style.letterSpacing = '.12em';
+}
+
 function closeSpWisdomForm() { document.body.classList.remove('sp-wisdom-open'); }
+
+/* ───── 知恵カードの分類 ─────
+
+   書く人に選ばせない。その知恵が「どこから来たか」で決まる。
+
+     Emu の投稿から生まれた       → Emu
+     ギルドの議題から生まれた     → そのギルド（LEARN / WORK / PLAY / CONNECT / WEB3）
+     どちらでもない               → その他
+
+   投稿 → 議題 → クエスト → 知恵カード が一本の線で繋がっているので、
+   選ばせなくても、出どころのまま棚に並ぶ。
+   選ばせていたときは、書く人の気分で棚が決まり、
+   どのギルドの活動から何が生まれたのかが追えなかった。
+
+   色はギルドの accent（schoolpark/guild-store.js）と同じものを使う。
+   変えるときは guild-store.js と schoolpark/dao.html も一緒に直すこと。 */
+const SP_WISDOM_GUILD_TAGS = ['LEARN', 'WORK', 'PLAY', 'CONNECT', 'WEB3'];
+const SP_WISDOM_TAGS = SP_WISDOM_GUILD_TAGS.concat(['Emu', 'その他']);
+const SP_WISDOM_TAG_COLORS = {
+  'LEARN': '#0F5C3F', 'WORK': '#141310', 'PLAY': '#C2703D',
+  'CONNECT': '#B0405A', 'WEB3': '#3B382F',
+  'Emu': '#F08300', 'その他': '#6E695C'
+};
+
+/* この知恵カードが入る棚を決める。 */
+function spWisdomTagFor(quest, fromPostId) {
+  if (fromPostId) return 'Emu';
+  const short = String((quest && quest.guildLabel) || '').toUpperCase();
+  return SP_WISDOM_GUILD_TAGS.indexOf(short) >= 0 ? short : 'その他';
+}
+
+/* 古い知恵カードの分類（RELATIONSHIP・MONEY・FOCUS など）は、いまの棚に無い。
+   記録は書き換えず、読むときだけ「その他」として出す。 */
+function spWisdomNormalizeTag(tag) {
+  const t = String(tag || '').trim();
+  return SP_WISDOM_TAGS.indexOf(t) >= 0 ? t : 'その他';
+}
 
 async function spWisdomSubmit() {
   const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
@@ -17866,7 +17918,8 @@ async function spWisdomSubmit() {
       knowledge: val('swKnowledge').slice(0, 200),
       experiment: val('swExperiment').slice(0, 200),
       insight: insight.slice(0, 200),
-      tag: val('swTag') || 'LEARNING',
+      /* 分類は選ばせない。出どころ（Emuの投稿 / ギルド）から決まる。 */
+      tag: spWisdomTagFor(_spWisdomQuest, _spWisdomFrom && _spWisdomFrom.id),
       author: p.addr, authorName: p.name,
       createdAt: Date.now()
     });
@@ -17909,7 +17962,10 @@ window.spDaoLoadWisdom = async function (app) {
     cites += uses;
     const did = !!(mine && citedBy[mine]);
     wisdom.push({
-      id: w.id, tag: w.tag || 'LEARNING', insight: w.insight || '',
+      id: w.id, tag: spWisdomNormalizeTag(w.tag),
+      /* 棚の色。カードの見出しにも同じ色を出す（ギルドと揃える）。 */
+      tagColor: SP_WISDOM_TAG_COLORS[spWisdomNormalizeTag(w.tag)] || '#6E695C',
+      insight: w.insight || '',
       from: w.knowledge || '', experiment: w.experiment || '',
       author: w.authorName || _spShortAddr(w.author), uses: uses,
       /* 元になった Emu の投稿があるときだけ、押して開けるようにする。
@@ -25952,11 +26008,11 @@ async function sendEmuFeedback() {
     <input class="spv-in" id="swExperiment" maxlength="200" placeholder="何を、どれだけやったか">
     <label class="spv-label" for="swInsight">残った一文</label>
     <textarea class="spv-in spv-area" id="swInsight" maxlength="200" placeholder="やってみて分かったことを、一文に削る"></textarea>
-    <label class="spv-label" for="swTag">分類</label>
-    <select class="spv-in" id="swTag">
-      <option>RELATIONSHIP</option><option>MONEY</option><option>FOCUS</option>
-      <option>LEARNING</option><option>NEGOTIATION</option><option>COURAGE</option>
-    </select>
+    <label class="spv-label">分類</label>
+    <!-- 選ばせない。出どころ（Emuの投稿 / ギルド）から決まる。
+         何が入るかは開いた時点で分かるので、ここに出しておく。 -->
+    <div id="swTagView" class="spv-in" style="display:flex;align-items:center;gap:8px;">—</div>
+    <p class="spp-note" style="margin:6px 0 0">分類は、このクエストの出どころから決まります。選ぶ必要はありません。</p>
     <button type="button" class="spp-cta" onclick="spWisdomSubmit()">ライブラリに置く</button>
     <p class="spp-note">知恵カードは、完了したクエストからしか生まれません。置いたあとは書き換えられません。</p>
   </div>
