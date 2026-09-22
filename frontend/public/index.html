@@ -5781,181 +5781,41 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </div>
   <div class="sp-panel-body">
 
-    <!-- 1. 通知設定 -->
+    <!-- 1. 言語 -->
     <div class="sp-panel-section">
-      <div class="sp-panel-section-title">🔔 通知設定</div>
-      <div class="sp-setting-row">
-        <div>
-          <div class="sp-setting-label">残高低下アラート</div>
-          <div class="sp-setting-sub">EMUER残高がしきい値を下回ったら通知</div>
-        </div>
-        <label class="sp-toggle">
-          <input type="checkbox" id="spSettingBalanceAlert" checked onchange="spSettingSave()">
-          <span class="sp-toggle-slider"></span>
-        </label>
-      </div>
-      <div class="sp-setting-row">
-        <div>
-          <div class="sp-setting-label">イベント通知</div>
-          <div class="sp-setting-sub">新イベント・キャンペーンのお知らせ</div>
-        </div>
-        <label class="sp-toggle">
-          <input type="checkbox" id="spSettingEventNotif" checked onchange="spSettingSave()">
-          <span class="sp-toggle-slider"></span>
-        </label>
-      </div>
-    </div>
-
-    <!-- 2. マップ表示設定 -->
-    <div class="sp-panel-section">
-      <div class="sp-panel-section-title">🗺️ マップ表示設定</div>
-      <div class="sp-setting-row">
-        <div>
-          <div class="sp-setting-label">POI名を表示</div>
-          <div class="sp-setting-sub">マップ上の施設名ラベル</div>
-        </div>
-        <label class="sp-toggle">
-          <input type="checkbox" id="spSettingPoiLabel" checked onchange="spSettingApplyMap()">
-          <span class="sp-toggle-slider"></span>
-        </label>
-      </div>
-      <div class="sp-setting-row">
-        <div>
-          <div class="sp-setting-label">デフォルトズーム</div>
-          <div class="sp-setting-sub" id="spSettingZoomLabel">標準（×1）</div>
-        </div>
-        <input type="range" id="spSettingZoom" min="1" max="3" step="0.5" value="1"
-          style="width:100px;accent-color:#D4A843;" oninput="spSettingApplyZoom(this.value)">
-      </div>
-    </div>
-
-    <!-- 3. 言語設定 -->
-    <div class="sp-panel-section">
-      <div class="sp-panel-section-title">🌐 言語設定</div>
+      <div class="sp-panel-section-title">🌐 言語</div>
       <div class="sp-setting-row">
         <div>
           <div class="sp-setting-label">表示言語</div>
-          <div class="sp-setting-sub">UI言語（一部のみ対応）</div>
+          <div class="sp-setting-sub">SchoolPark と Emu で共通。選ぶとすぐ切り替わります</div>
         </div>
-        <select id="spSettingLang" onchange="spSettingSave()"
-          style="background:#1a1d2e;border:1px solid rgba(212,168,67,0.3);color:#D4A843;padding:6px 10px;border-radius:6px;font-size:0.82rem;outline:none;">
-          <option value="ja">🇯🇵 日本語</option>
-          <option value="en">🇺🇸 English</option>
-        </select>
+        <!-- 選択肢（日本語 / English / 中文 / 한국어）は emu-i18n.js が入れる。
+             LANG_SELECT_IDS に載せてあるので、ほかの場所で言語を変えても
+             ここの表示が勝手に揃う。保存先も向こうが持っている（emu_lang）。 -->
+        <select id="spSettingLangSelect" onchange="setEmuLang(this.value)" aria-label="表示言語"
+          style="background:#1a1d2e;border:1px solid rgba(212,168,67,0.3);color:#D4A843;padding:6px 10px;border-radius:6px;font-size:0.82rem;outline:none;"></select>
       </div>
     </div>
 
-    <!-- 4. プライバシー設定 -->
+    <!-- 2. SchoolPark ID -->
     <div class="sp-panel-section">
-      <div class="sp-panel-section-title">🔒 プライバシー設定</div>
-      <div class="sp-setting-row">
-        <div>
-          <div class="sp-setting-label">ウォレットアドレス匿名化</div>
-          <div class="sp-setting-sub">投稿などに表示されるアドレスを短縮表示</div>
-        </div>
-        <label class="sp-toggle">
-          <input type="checkbox" id="spSettingAnonymize" onchange="spSettingSave()">
-          <span class="sp-toggle-slider"></span>
-        </label>
+      <div class="sp-panel-section-title">🪪 SchoolPark ID</div>
+      <div style="font-size:0.82rem;color:#666;margin-bottom:12px;line-height:1.6;">
+        あなた自身につく番号です。ログイン方法（LINE / Google / メール / ウォレット）を
+        変えても、増やしても、この番号は変わりません。
       </div>
+      <div id="spSettingSpid"
+           style="font-family:'SF Mono',Menlo,Consolas,monospace;font-size:0.95rem;letter-spacing:.04em;
+                  color:#D4A843;background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.25);
+                  border-radius:8px;padding:12px 14px;margin-bottom:12px;word-break:break-all;">確認中…</div>
+      <button class="sp-panel-btn secondary" onclick="spSettingCopySpid()">📋 番号をコピー</button>
+      <button class="sp-panel-btn secondary"
+              onclick="closeSpPanel('spSettingsPanel'); if (typeof openSpPassport === 'function') openSpPassport();">
+        🪪 パスポートを開く
+      </button>
     </div>
 
-    <!-- 5. キーボード設定 -->
-    <div class="sp-panel-section" id="spKeyboardSettingSection">
-      <div class="sp-panel-section-title">⌨️ キーボード設定</div>
-      <div style="font-size:0.73rem;color:#666;margin-bottom:10px;line-height:1.55;">
-        キー <kbd style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:1px 6px;font-size:0.72rem;color:#ccc;">1</kbd>〜<kbd style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:1px 6px;font-size:0.72rem;color:#ccc;">4</kbd> に好きな機能を割り当てられます
-      </div>
-      <!-- 有料パス限定バナー（無料パス時に表示） -->
-      <div id="spKeyboardPaidOnly" style="display:none;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;text-align:center;font-size:0.78rem;color:#666;margin-bottom:10px;">
-        🎫 キーボード設定は<strong style="color:#D4A843;">有料パス</strong>限定の機能です
-      </div>
-      <style>
-        .sp-ck-row { display:flex;align-items:center;gap:8px;margin-bottom:7px; }
-        .sp-ck-label {
-          display:flex;align-items:center;gap:6px;
-          font-size:0.78rem;font-weight:700;color:#aaa;flex-shrink:0;width:52px;
-        }
-        .sp-ck-key {
-          background:rgba(212,168,67,.12);border:1px solid rgba(212,168,67,.35);
-          border-radius:7px;padding:2px 9px;font-size:0.75rem;font-weight:800;
-          color:#D4A843;font-family:'SF Mono',monospace;letter-spacing:.05em;
-        }
-        .sp-ck-select {
-          flex:1;background:#1a1d2e;border:1px solid rgba(255,255,255,.1);
-          border-radius:8px;color:#ccc;padding:6px 8px;font-size:0.78rem;outline:none;
-          transition:border-color .2s;
-        }
-        .sp-ck-select:focus { border-color:rgba(212,168,67,.5); }
-      </style>
-      <div class="sp-ck-row">
-        <div class="sp-ck-label"><span class="sp-ck-key">1</span></div>
-        <select id="spCustomKey1" class="sp-ck-select" onchange="spSettingSave()">
-          <option value="none">（なし）</option>
-          <option value="agents">🤖 SchoolPark agents</option>
-          <option value="wallet">💰 ウォレット</option>
-          <option value="settings">⚙️ 設定</option>
-          <option value="tutorial">📖 チュートリアル</option>
-          <option value="reizo">🧊 冷蔵庫くんに聞く</option>
-          <option value="emu">🌐 Emu</option>
-        </select>
-      </div>
-      <div class="sp-ck-row">
-        <div class="sp-ck-label"><span class="sp-ck-key">2</span></div>
-        <select id="spCustomKey2" class="sp-ck-select" onchange="spSettingSave()">
-          <option value="none">（なし）</option>
-          <option value="agents">🤖 SchoolPark agents</option>
-          <option value="wallet">💰 ウォレット</option>
-          <option value="settings">⚙️ 設定</option>
-          <option value="tutorial">📖 チュートリアル</option>
-          <option value="reizo">🧊 冷蔵庫くんに聞く</option>
-          <option value="emu">🌐 Emu</option>
-        </select>
-      </div>
-      <div class="sp-ck-row">
-        <div class="sp-ck-label"><span class="sp-ck-key">3</span></div>
-        <select id="spCustomKey3" class="sp-ck-select" onchange="spSettingSave()">
-          <option value="none">（なし）</option>
-          <option value="agents">🤖 SchoolPark agents</option>
-          <option value="wallet">💰 ウォレット</option>
-          <option value="settings">⚙️ 設定</option>
-          <option value="tutorial">📖 チュートリアル</option>
-          <option value="reizo">🧊 冷蔵庫くんに聞く</option>
-          <option value="emu">🌐 Emu</option>
-        </select>
-      </div>
-      <div class="sp-ck-row">
-        <div class="sp-ck-label"><span class="sp-ck-key">4</span></div>
-        <select id="spCustomKey4" class="sp-ck-select" onchange="spSettingSave()">
-          <option value="none">（なし）</option>
-          <option value="agents">🤖 SchoolPark agents</option>
-          <option value="wallet">💰 ウォレット</option>
-          <option value="settings">⚙️ 設定</option>
-          <option value="tutorial">📖 チュートリアル</option>
-          <option value="reizo">🧊 冷蔵庫くんに聞く</option>
-          <option value="emu">🌐 Emu</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- 6. チュートリアル設定 -->
-    <div class="sp-panel-section">
-      <div class="sp-panel-section-title">🎓 チュートリアル設定</div>
-      <div class="sp-setting-row">
-        <div>
-          <div class="sp-setting-label">冷蔵庫くんチュートリアル</div>
-          <div class="sp-setting-sub">SchoolParkマップを開いたときの表示タイミング</div>
-        </div>
-        <select id="spSettingTutorialMode" onchange="spSettingSave()"
-          style="background:#1a1d2e;border:1px solid rgba(212,168,67,0.3);color:#D4A843;
-                 padding:6px 10px;border-radius:6px;font-size:0.8rem;outline:none;max-width:130px;">
-          <option value="always">ログイン後毎回</option>
-          <option value="once">初回のみ</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- 6. キャッシュクリア -->
+    <!-- 3. キャッシュクリア -->
     <div class="sp-panel-section">
       <div class="sp-panel-section-title">🗑️ SchoolPark キャッシュ</div>
       <div style="font-size:0.82rem;color:#666;margin-bottom:12px;line-height:1.6;">
@@ -5965,7 +5825,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <button class="sp-panel-btn secondary" onclick="spSettingClearCache()">🗑️ キャッシュをクリア</button>
     </div>
 
-    <!-- 7. アカウント -->
+    <!-- 4. アカウント -->
     <div class="sp-panel-section">
       <div class="sp-panel-section-title">👤 アカウント</div>
       <div style="font-size:0.82rem;color:#666;margin-bottom:12px;line-height:1.6;">
@@ -5975,7 +5835,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
               style="border-color:rgba(224,87,111,0.5);color:#e0576f;">🚪 ログアウト</button>
     </div>
 
-    <button class="sp-panel-btn" onclick="spSettingSave();closeSpPanel('spSettingsPanel');">✅ 設定を保存して閉じる</button>
+    <button class="sp-panel-btn" onclick="closeSpPanel('spSettingsPanel');">✅ 閉じる</button>
   </div>
 </div>
 
@@ -11725,81 +11585,6 @@ let _spTutRunning = false;
    ★ キーボードショートカット・コマンドバーは有料パス限定
 ═══════════════════════════════════════════════════════ */
 
-/**
- * 有料パスユーザー判定
- * ★ spPassType（入場時に確実にセット）を最優先ソースとする
- *    window.hasPaidNFT は「NFT所持状況」であって「入場パス種別」ではないため
- *    free 入場後に paid NFT チェックで上書きされてしまう問題を防ぐ
- */
-function _spIsPaidUser() {
-  const _ls = localStorage.getItem('spPassType');
-  if (_ls === 'paid') return true;
-  if (_ls === 'free') return false;
-  // spPassType 未設定（旧セッション互換）
-  return !!(window.hasPaidNFT || window._fromFirebasePaidUsers);
-}
-
-(function () {
-  /* ── 単発ショートカット（W / T / A / S / Esc / Backspace） ── */
-  document.addEventListener('keydown', function (e) {
-    const tag = document.activeElement?.tagName?.toLowerCase();
-    const isInput = tag === 'input' || tag === 'textarea' || tag === 'select';
-
-    /* Esc / Backspace は全員有効（ナビゲーション基本操作） */
-    if (e.key === 'Escape') {
-      document.querySelectorAll('.sp-panel.open').forEach(p => p.classList.remove('open'));
-      document.querySelectorAll('.sp-panel-backdrop').forEach(b => b.remove());
-      return;
-    }
-    if (e.key === 'Backspace' && !isInput) {
-      const anyOpen = document.querySelector('.sp-panel.open');
-      return;
-    }
-
-    /* 入力欄にフォーカス中は単発ショートカット無効 */
-    if (isInput) return;
-    /* 修飾キー付き（Ctrl / Alt / Meta）は無視 */
-    if (e.ctrlKey || e.altKey || e.metaKey) return;
-
-    /* ★ 有料パス限定（W / T / A / S / 1〜4） */
-    if (!_spIsPaidUser()) {
-      const paid_keys = ['w','a','s','1','2','3','4'];
-      if (paid_keys.includes(e.key.toLowerCase())) {
-        _showAgentToast('🎫 キーボードショートカットは有料パス限定です');
-      }
-      return;
-    }
-
-    switch (e.key.toLowerCase()) {
-      case 'w': openSpPanel('spWalletPanel');    break;
-      case 'a': openSpPanel('spRobotPanel');     break;
-      case 's': openSpPanel('spSettingsPanel'); break;
-      case '1': _execCustomKey(1); break;
-      case '2': _execCustomKey(2); break;
-      case '3': _execCustomKey(3); break;
-      case '4': _execCustomKey(4); break;
-    }
-  });
-
-  /* ── カスタムキー実行 ── */
-  function _spRunAction(action) {
-    switch (action) {
-      case 'agents':   openSpPanel('spRobotPanel');    break;
-      case 'wallet':   openSpPanel('spWalletPanel');   break;
-      case 'settings': openSpPanel('spSettingsPanel'); break;
-      case 'reizo':    spReizoOpen?.();                break;
-      case 'emu':      break;
-    }
-  }
-  function _execCustomKey(n) {
-    const s = JSON.parse(localStorage.getItem('spSettings') || '{}');
-    const action = s['spCustomKey' + n] || 'none';
-    if (action === 'none') return;
-    _spRunAction(action);
-  }
-})();
-
-
 
 /* ======= ロゴ → ウォレット → メイン ======= */
 // ★ ロゴクリック時はウォレット画面を常に表示（メンテチェックはgoTomainapp内で行う）
@@ -14404,86 +14189,66 @@ function spWalletSaveAlert() {
 
 /* ── ⚙️ 設定パネル ── */
 function _loadSpSettings() {
+  /* 言語。選択肢も保存先も emu-i18n.js が持っている（localStorage の emu_lang）。
+     この select は LANG_SELECT_IDS に載せてあるので、ふつうは向こうが入れてくれる。
+     まだ空なら、ここで入れておく（読み込みの順で取りこぼさないように）。 */
   try {
-    const s = JSON.parse(localStorage.getItem('spSettings') || '{}');
-    const setChk = (id, def) => { const el = document.getElementById(id); if (el) el.checked = s[id] !== undefined ? s[id] : def; };
-    setChk('spSettingBalanceAlert', true);
-    setChk('spSettingEventNotif', true);
-    setChk('spSettingPoiLabel', true);
-    setChk('spSettingAnonymize', false);
-    const langEl = document.getElementById('spSettingLang');
-    if (langEl && s.spSettingLang) langEl.value = s.spSettingLang;
-    const zoomEl = document.getElementById('spSettingZoom');
-    if (zoomEl && s.spSettingZoom) { zoomEl.value = s.spSettingZoom; spSettingApplyZoom(s.spSettingZoom, true); }
-    const tutEl = document.getElementById('spSettingTutorialMode');
-    if (tutEl) tutEl.value = s.spSettingTutorialMode || 'always';
-    // カスタムキー
-    [1,2,3,4].forEach(n => {
-      const el = document.getElementById('spCustomKey' + n);
-      if (el) el.value = s['spCustomKey' + n] || 'none';
-    });
-    // キーボード設定：無料パスはグレーアウト（spPassType を真のソースとして使用）
-    const _isPaidUser = _spIsPaidUser();
-    const kbSection = document.getElementById('spKeyboardSettingSection');
-    const kbPaidOnly = document.getElementById('spKeyboardPaidOnly');
-    if (kbSection) {
-      const rows = kbSection.querySelectorAll('.sp-ck-row');
-      const selects = kbSection.querySelectorAll('.sp-ck-select');
-      if (!_isPaidUser) {
-        kbSection.style.opacity = '0.45';
-        kbSection.style.pointerEvents = 'none';
-        if (kbPaidOnly) kbPaidOnly.style.display = '';
-        selects.forEach(el => el.disabled = true);
-      } else {
-        kbSection.style.opacity = '';
-        kbSection.style.pointerEvents = '';
-        if (kbPaidOnly) kbPaidOnly.style.display = 'none';
-        selects.forEach(el => el.disabled = false);
-      }
+    const sel = document.getElementById('spSettingLangSelect');
+    if (sel && !sel.options.length && Array.isArray(window.EMU_LANGS)) {
+      window.EMU_LANGS.forEach(function (lang) {
+        const o = document.createElement('option');
+        o.value = lang.code; o.textContent = lang.label;
+        sel.appendChild(o);
+      });
     }
-  } catch(e) {}
+    if (sel && typeof window.getEmuLang === 'function') sel.value = window.getEmuLang();
+  } catch (e) {}
+
+  /* SchoolPark ID。番号を出すのはサーバーで、ここは表示するだけ。
+     まだ届いていなければ「確認中…」のままにする。ここで作りにはいかない。 */
+  const box = document.getElementById('spSettingSpid');
+  if (!box) return;
+  let spid = '';
+  try {
+    spid = (window._spIdentity && window._spIdentity.schoolParkId)
+      || (window._spPassport && window._spPassport.spid)
+      || (window.SPID && typeof window.SPID.cached === 'function' && window.SPID.cached())
+      || '';
+  } catch (e) {}
+  box.textContent = spid || '確認中…';
 }
 
-function spSettingSave() {
-  const get = id => document.getElementById(id);
-  const s = {
-    spSettingBalanceAlert: get('spSettingBalanceAlert')?.checked ?? true,
-    spSettingEventNotif:   get('spSettingEventNotif')?.checked ?? true,
-    spSettingPoiLabel:     get('spSettingPoiLabel')?.checked ?? true,
-    spSettingAnonymize:    get('spSettingAnonymize')?.checked ?? false,
-    spSettingLang:          get('spSettingLang')?.value || 'ja',
-    spSettingZoom:          get('spSettingZoom')?.value || '1',
-    spSettingTutorialMode:  get('spSettingTutorialMode')?.value || 'always',
-    spCustomKey1: get('spCustomKey1')?.value || 'none',
-    spCustomKey2: get('spCustomKey2')?.value || 'none',
-    spCustomKey3: get('spCustomKey3')?.value || 'none',
-    spCustomKey4: get('spCustomKey4')?.value || 'none',
+/* 番号をコピーする。clipboard が使えない場所（古い端末・http）向けの逃げ道つき。 */
+window.spSettingCopySpid = function () {
+  const box = document.getElementById('spSettingSpid');
+  const value = box ? String(box.textContent || '').trim() : '';
+  if (!value || value === '確認中…') {
+    alert('SchoolPark ID をまだ確認できていません。\n通信を確認して、もう一度お試しください。');
+    return;
+  }
+  const done = function () {
+    if (!box) return;
+    const original = box.textContent;
+    box.textContent = 'コピーしました';
+    setTimeout(function () { box.textContent = original; }, 1400);
   };
-  localStorage.setItem('spSettings', JSON.stringify(s));
-}
-
-
-function spSettingApplyMap() {
-  spSettingSave();
-  const show = document.getElementById('spSettingPoiLabel')?.checked ?? true;
-  document.querySelectorAll('.sp-poi-label, .poi-label').forEach(el => {
-    el.style.display = show ? '' : 'none';
-  });
-}
-
-function spSettingApplyZoom(val, silent) {
-  const labels = { '1':'標準（×1）', '1.5':'中（×1.5）', '2':'大（×2）', '2.5':'特大（×2.5）', '3':'最大（×3）' };
-  const lb = document.getElementById('spSettingZoomLabel');
-  if (lb) lb.textContent = labels[String(val)] || `×${val}`;
-  _spMapZoomLevel = Math.max(1, Math.min(3, Number(val) || 1));
-  _applySpMapZoom();
-  _centerSpMapViewport();
-  if (!silent) spSettingSave();
-}
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(value).then(done, function () {});
+      return;
+    }
+  } catch (e) {}
+  try {
+    const t = document.createElement('textarea');
+    t.value = value; t.style.position = 'fixed'; t.style.opacity = '0';
+    document.body.appendChild(t); t.select(); document.execCommand('copy');
+    document.body.removeChild(t); done();
+  } catch (e) {}
+};
 
 function spSettingClearCache() {
   if (!confirm('SchoolPark のキャッシュデータを削除しますか？\n（EMUER残高・ウォレット情報は保持されます）')) return;
-  const keep = ['emuWallet', 'pendingEmuer', 'spSettings', 'spWalletAlertThreshold'];
+  const keep = ['emuWallet', 'pendingEmuer', 'spWalletAlertThreshold'];
   const emuerKey = typeof _EMUER_LS_KEY === 'function' ? _EMUER_LS_KEY() : null;
   if (emuerKey) keep.push(emuerKey);
   const allKeys = Object.keys(localStorage);
