@@ -644,6 +644,73 @@ if (template.split(OLD_WTAG_COLOR).length - 1 !== 2) { console.error('知恵カ�
 template = template.split(OLD_WTAG_COLOR).join(
   '<div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:{{ w.tagColor }}">{{ w.tag }}</div>');
 
+/* ㉔ クエストの番号を「一般」と「特殊」の2系列に分ける。
+
+   系列が違えば同じ #001 が両方にあるので、一覧では
+   「すべて／募集中／進行中／完了」の上に、まず系列の切り替えを置く。
+   ここで選んだ系列のクエストだけが並ぶ。
+
+   系列の切り替えがある場所（この一覧）では番号だけを出す。
+   切り替えの無い場所（詳細・走っているクエスト・宿題の選び先）では、
+   特殊のときだけ番号の前に「特殊」を付ける（親が fullTitle で渡す）。 */
+/* 一覧を開いたときは「一般」から。state に置いておく。 */
+const OLD_FILTER_STATE = "filter:'すべて',";
+if ((logic.split(OLD_FILTER_STATE).length - 1) !== 1) { console.error('絞り込みの初期値が1つでない'); process.exit(1); }
+logic = logic.replace(OLD_FILTER_STATE, "filter:'すべて', series:'general',");
+
+const OLD_FILTER_ROW = `            <div style="display:flex; gap:8px; flex-wrap:wrap">
+              <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">`;
+if ((template.split(OLD_FILTER_ROW).length - 1) !== 1) { console.error('クエストの絞り込みの並びが1つでない'); process.exit(1); }
+template = template.replace(OLD_FILTER_ROW,
+  `            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+              <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:#6E695C; margin-right:2px">SERIES</div>
+              <sc-for list="{{ seriesFilters }}" as="f" hint-placeholder-count="2">
+                <div onClick="{{ f.go }}" style="padding:9px 18px; border-radius:20px; font-size:13px; font-weight:700; cursor:pointer; border:1px solid {{ f.border }}; background:{{ f.bg }}; color:{{ f.fg }}">{{ f.label }}</div>
+              </sc-for>
+            </div>
+` + OLD_FILTER_ROW);
+
+const OLD_FILTERS = `    const filters = ['すべて','募集中','進行中','完了'].map(f => ({
+      label:f, go:()=>this.setState({filter:f}),
+      bg: s.filter===f ? '#141310' : 'transparent', fg: s.filter===f ? '#F4F1EA' : '#3B382F'}));
+    const fmap = {'募集中':'OPEN','進行中':'RUNNING','完了':'CLOSED'};
+    const shownExps = s.filter==='すべて' ? exps : exps.filter(e => e.status === fmap[s.filter]);`;
+if (!logic.includes(OLD_FILTERS)) { console.error('クエストの絞り込みが見つからない'); process.exit(1); }
+logic = logic.replace(OLD_FILTERS,
+  `    /* 系列の切り替え。一般が最初に出る。
+       番号の無い古いクエストと Quest #000 は series が '' なので、
+       どちらの系列にも出ない（#000 は一覧の外に別で出している）。 */
+    const curSeries = s.series === 'special' ? 'special' : 'general';
+    const seriesFilters = [['general','一般'],['special','特殊']].map(([id,label]) => ({
+      label, go:()=>this.setState({series:id}),
+      bg: curSeries===id ? '#0F5C3F' : 'transparent',
+      fg: curSeries===id ? '#F4F1EA' : '#0F5C3F',
+      border: curSeries===id ? '#0F5C3F' : 'rgba(15,92,63,.35)'}));
+    const seriesExps = exps.filter(e => (e.series || 'general') === curSeries);
+    const filters = ['すべて','募集中','進行中','完了'].map(f => ({
+      label:f, go:()=>this.setState({filter:f}),
+      bg: s.filter===f ? '#141310' : 'transparent', fg: s.filter===f ? '#F4F1EA' : '#3B382F'}));
+    const fmap = {'募集中':'OPEN','進行中':'RUNNING','完了':'CLOSED'};
+    const shownExps = s.filter==='すべて' ? seriesExps : seriesExps.filter(e => e.status === fmap[s.filter]);`);
+
+const OLD_PASS_FILTERS = '      filters, shownExps, cur,';
+if (!logic.includes(OLD_PASS_FILTERS)) { console.error('絞り込みの受け渡しが見つからない'); process.exit(1); }
+logic = logic.replace(OLD_PASS_FILTERS, '      filters, seriesFilters, shownExps, cur,');
+
+/* 系列の切り替えが無い場所は、特殊が分かる題名（fullTitle）にする。 */
+const OLD_HERO = '<div style="font-family:\'Zen Old Mincho\',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.5; text-wrap:pretty">{{ cur.title }}</div>';
+if ((template.split(OLD_HERO).length - 1) !== 1) { console.error('クエスト詳細の見出しが1つでない'); process.exit(1); }
+template = template.replace(OLD_HERO, OLD_HERO.replace('{{ cur.title }}', '{{ cur.fullTitle }}'));
+
+const OLD_RUNNING = '      runningExps: exps.filter(e => e.status===\'RUNNING\').slice(0,3),';
+if (!logic.includes(OLD_RUNNING)) { console.error('走っているクエストの並びが見つからない'); process.exit(1); }
+logic = logic.replace(OLD_RUNNING,
+  '      runningExps: exps.filter(e => e.status===\'RUNNING\').slice(0,3).map(e => ({...e, title: e.fullTitle || e.title})),');
+
+/* 「自分の宿題」は、この組み立てより後に dao.html へ直に足された画面で、
+   ここには元の記述が無い。つなぐ先のクエスト名を特殊が分かる形（fullTitle）に
+   する変更は、dao.html 側にだけ入れてある。 */
+
 const OLD_TAGS = "      tags: ['すべて','RELATIONSHIP','MONEY','FOCUS','LEARNING','NEGOTIATION','COURAGE'],";
 if (!logic.includes(OLD_TAGS)) { console.error('タグの一覧が見つからない'); process.exit(1); }
 /* 棚はギルドと揃える。知恵カードの分類は、書く人が選ぶのではなく

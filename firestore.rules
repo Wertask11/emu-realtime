@@ -919,50 +919,65 @@ service cloud.firestore {
        クエストそのものは、出した本人だけが status と closedAt を書き換えられる。
        題名・予算・元の知識などは、出したあと動かせない
        （受けた人が見ていた条件が、あとからすり替わらないようにするため）。 */
-    // Sequence activation is performed by the reviewed Admin deployment script.
-    // Existing unnumbered documents keep their IDs and are never renumbered.
-    function questCounter() {
-      return /databases/$(database)/documents/sp_quest_counters/quests;
+    /* クエストの番号は2つの系列に分かれる。
+         一般（general）… ふつうのクエスト。#001 から
+         特殊（special）… 特殊なクエスト。こちらも #001 から
+       系列が違えば同じ #001 が両方にあるので、番号だけでは一意にならない。
+       枝番（1〜5、無しは0）と段階（入門・標準・実践、無しは空）も合わせて一意。
+
+       自動採番はやめた。運営が出すときに指定する。順番に縛られていたため、
+       一般 #003 を先に用意しておく、といったことができなかった。
+       通し番号の元帳（sp_quest_counters）はもう使わない。
+
+       重複防止は sp_quest_numbers の文書ID（予約札）で行う。
+       系列・番号・枝番・段階から1つの文字列を作り、それを文書IDにする。
+       同じIDの文書は2つ作れないので、それがそのまま重複防止になる。
+       ここは frontend/public/schoolpark/quest-store.js の numberKey と
+       一字一句そろえること。ずれると書き込みが弾かれる。
+
+       既存の番号なしのクエスト文書は、そのまま番号なしで残す（書き換えない）。 */
+    function questNumberPath(key) {
+      return /databases/$(database)/documents/sp_quest_numbers/$(key);
     }
-    function questNumberPath(n) {
-      return /databases/$(database)/documents/sp_quest_numbers/$(string(n));
+    /* 予約札のID … {系列}-{番号3桁}-{枝番}-{段階}
+       例：general-002-1-入門 ／ general-003-0-なし ／ special-001-0-なし */
+    function questNumberKey(d) {
+      return d.series + '-'
+        + (d.questNumber < 10 ? '00' : (d.questNumber < 100 ? '0' : ''))
+        + string(d.questNumber) + '-'
+        + string(d.get('branch', 0)) + '-'
+        + (d.get('stage', '') == '' ? 'なし' : d.get('stage', ''));
     }
     function ordinaryQuestNumber(d, questId) {
       return !d.keys().hasAny(['kind', 'founderSections', 'founderVersion'])
         && questId != 'founder-quest-000'
-        && ((!exists(questCounter()) && !d.keys().hasAny(['questNumber']))
-          || (d.get('questNumber', -1) is int && d.questNumber >= 1
-            && d.questNumber < 2147483647
-            && get(questCounter()).data.nextNumber == d.questNumber
-            && getAfter(questCounter()).data.nextNumber == d.questNumber + 1
-            && getAfter(questCounter()).data.lastQuestId == questId
-            && !exists(questNumberPath(d.questNumber))
-            && getAfter(questNumberPath(d.questNumber)).data.questId == questId));
+        && d.get('series', '') in ['general', 'special']
+        && d.get('questNumber', -1) is int
+        && d.get('questNumber', -1) >= 1 && d.get('questNumber', -1) <= 999
+        && d.get('branch', 0) is int
+        && d.get('branch', 0) >= 0 && d.get('branch', 0) <= 5
+        && d.get('stage', '') in ['', '入門', '標準', '実践']
+        /* 予約札がまだ無く、この書き込みで自分あてに立つこと */
+        && !exists(questNumberPath(questNumberKey(d)))
+        && getAfter(questNumberPath(questNumberKey(d))).data.questId == questId;
     }
+    /* 通し番号の元帳。もう使わないが、記録は残す（読むだけ）。 */
     match /sp_quest_counters/{id} {
       allow read: if canAccessSchoolPark();
-      allow create, delete: if false;
-      allow update: if canAccessSchoolPark() && id == 'quests' && isOwner()
-        && changedOnly(['nextNumber', 'lastQuestId'])
-        && request.resource.data.nextNumber is int
-        && request.resource.data.nextNumber == resource.data.nextNumber + 1
-        && request.resource.data.nextNumber <= 2147483647
-        && request.resource.data.lastQuestId is string
-        && !exists(/databases/$(database)/documents/sp_quests/$(request.resource.data.lastQuestId))
-        && getAfter(/databases/$(database)/documents/sp_quests/$(request.resource.data.lastQuestId)).data.questNumber == resource.data.nextNumber
-        && getAfter(questNumberPath(resource.data.nextNumber)).data.questId == request.resource.data.lastQuestId;
+      allow write: if false;
     }
-    match /sp_quest_numbers/{number} {
+    /* 予約札。運営だけが立てられる。いちど立てたら書き換えも削除もできない。
+       番号を別のクエストへ付け替えられないようにするため。 */
+    match /sp_quest_numbers/{key} {
       allow read: if canAccessSchoolPark();
       allow update, delete: if false;
       allow create: if canAccessSchoolPark() && isOwner()
         && request.resource.data.keys().hasOnly(['questId'])
         && request.resource.data.questId is string
-        && number == string(get(questCounter()).data.nextNumber)
+        && request.resource.data.questId.size() > 0
+        /* 同じ書き込みで作られるクエストの番号と、この札のIDが一致すること */
         && !exists(/databases/$(database)/documents/sp_quests/$(request.resource.data.questId))
-        && getAfter(/databases/$(database)/documents/sp_quests/$(request.resource.data.questId)).data.questNumber == get(questCounter()).data.nextNumber
-        && getAfter(questCounter()).data.lastQuestId == request.resource.data.questId
-        && getAfter(questCounter()).data.nextNumber == get(questCounter()).data.nextNumber + 1;
+        && questNumberKey(getAfter(/databases/$(database)/documents/sp_quests/$(request.resource.data.questId)).data) == key;
     }
 
     match /sp_quests/{questId} {

@@ -16499,7 +16499,7 @@ async function spCompletedQuests(p) {
     out.push({
       id: q.id,
       isFounder: SpQuestStore.isFounder(q),
-      label: SpQuestStore.label(q) || '',
+      label: SpQuestStore.fullLabel(q) || '',
       title: String(q.title || ''),
       guildId: gid,
       guildShort: g ? g.short : '',
@@ -16594,7 +16594,7 @@ async function _spShapeVote(v, mine, canGuild, p, app, defs) {
     toQuest: function () { spVoteToQuest(v.id, app); },
     hasQuest: !!born,
     questLabel: born
-      ? ((SpQuestStore.label(born) ? SpQuestStore.label(born) + ' ' : '') + (born.title || ''))
+      ? ((SpQuestStore.fullLabel(born) ? SpQuestStore.fullLabel(born) + ' ' : '') + (born.title || ''))
       : '',
     goQuest: born ? function () { window.spQuestOpen(app, born.id); } : function () {},
     /* ギルドが決まっていない古い議題に、運営があとから1回だけ入れられる */
@@ -16755,7 +16755,7 @@ window.spGuildOpen = async function (guildId, app, quiet) {
       const sc = st === 'RUNNING' ? ['#0F5C3F', '#F4F1EA'] : st === 'OPEN' ? ['#E7E2D6', '#0F5C3F'] : ['#E7E2D6', '#8A8474'];
       return {
         id: q.id,
-        title: (SpQuestStore.label(q) ? SpQuestStore.label(q) + ' ' : '') + (q.title || ''),
+        title: (SpQuestStore.fullLabel(q) ? SpQuestStore.fullLabel(q) + ' ' : '') + (q.title || ''),
         status: st, statusBg: sc[0], statusFg: sc[1],
         fromLabel: q.fromProposalId ? '議題から生まれた' : '直接出された',
         open: function () { window.spQuestOpen(app, q.id); }
@@ -17269,6 +17269,12 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
   const fromId = SpQuestStore.isFounder(q) ? '' : String(q.fromProposalId || '');
   return {
     id: q.id, title: (SpQuestStore.label(q) && !SpQuestStore.isFounder(q) ? SpQuestStore.label(q) + ' ' : '') + (q.title || ''), hypothesis: q.hypothesis || '',
+    /* どちらの系列か。一覧の「一般／特殊」の切り替えで使う。
+       #000 と、番号の無い古いクエストは、どちらにも属さない（'' になる）。 */
+    series: SpQuestStore.seriesOf(q),
+    /* 系列まで込みの題名。切り替えの無い場所（詳細・走っているクエスト・
+       宿題の選び先）で使う。特殊のときだけ前に「特殊」が付く。 */
+    fullTitle: (SpQuestStore.fullLabel(q) && !SpQuestStore.isFounder(q) ? SpQuestStore.fullLabel(q) + ' ' : '') + (q.title || ''),
     /* カードと詳細の頭に出る呼びかけ。案内文があればそれを、
        無ければ今までどおり「予想」を出す（古いクエストのため）。 */
     intro: q.intro || '',
@@ -17597,6 +17603,9 @@ window.openSpQuestForm = async function (app, from) {
     /* 議題から生まれたクエストは、その議題のギルドから動かせない */
     gs.disabled = !!_spQuestFrom;
   }
+  /* 番号（系列・番号・枝番・段階）。使われている番号もここで読む。 */
+  await _spQuestNumberSetup();
+
   const fromRow = document.getElementById('sqFromRow');
   const fromIn = document.getElementById('sqFrom');
   if (fromRow) fromRow.style.display = _spQuestFrom ? 'block' : 'none';
@@ -17607,6 +17616,96 @@ window.openSpQuestForm = async function (app, from) {
   document.body.classList.add('sp-quest-open');
 };
 function closeSpQuestForm() { document.body.classList.remove('sp-quest-open'); _spQuestFrom = null; }
+
+/* ───── クエストの番号 ─────
+
+   番号は自動では振らない。出すときに運営が決める。
+   系列（一般・特殊）・番号・枝番・段階の組み合わせで一意。
+
+   すでに使われている組み合わせは、ここで先に止める。
+   記録の決まり（Rules）と取引の中でも止まるが、出す前に分かるほうがよい。
+
+   控えは、フォームを開いたときに1回だけ読む。読めなかったときは
+   「確かめられない」として出すことは止めない（取引の側で必ず止まるため）。 */
+let _spQuestTaken = null;     /* { 予約札のID: true } ／ 読めなければ null */
+
+function _spQuestNumberNow() {
+  const v = function (id) { const el = document.getElementById(id); return el ? el.value : ''; };
+  return {
+    series: v('sqSeries') || 'general',
+    number: parseInt(v('sqNumber'), 10) || 0,
+    branch: parseInt(v('sqBranch'), 10) || 0,
+    stage: v('sqStage') || ''
+  };
+}
+
+/* いまの組み合わせが空いているか。空いていなければ「出す」を押せなくする。 */
+function spQuestNumberCheck() {
+  const note = document.getElementById('sqNumberNote');
+  const cta = document.getElementById('sqSubmitBtn');
+  const n = _spQuestNumberNow();
+  const S = window.SpQuestStore;
+  const ok = function (msg, color) {
+    if (note) { note.textContent = msg; note.style.color = color; }
+    if (cta) { cta.disabled = false; cta.style.opacity = ''; cta.style.pointerEvents = ''; }
+  };
+  const ng = function (msg) {
+    if (note) { note.textContent = msg; note.style.color = '#A32020'; }
+    if (cta) { cta.disabled = true; cta.style.opacity = '.45'; cta.style.pointerEvents = 'none'; }
+  };
+  if (!S) return;
+  if (!S.isValidNumber(n.number)) { ng('番号は 1〜' + S.NUMBER_MAX + ' で入れてください。'); return; }
+
+  /* 見た目の控え（#002-1 入門 のように出る） */
+  const shown = S.fullLabel({
+    series: n.series, questNumber: n.number, branch: n.branch, stage: n.stage
+  });
+  const key = S.numberKey(n.series, n.number, n.branch, n.stage);
+
+  if (_spQuestTaken === null) {
+    ok(shown + '　（使用中の番号を確かめられませんでした。出すときにもう一度確かめます）', '#6E695C');
+    return;
+  }
+  if (_spQuestTaken[key]) { ng(shown + '　この番号はすでに使われています。別の番号にしてください。'); return; }
+  ok(shown + '　空いています。', '#0F5C3F');
+}
+window.spQuestNumberCheck = spQuestNumberCheck;
+
+/* フォームの番号まわりを組み立て直す。開くたびに呼ぶ。 */
+async function _spQuestNumberSetup() {
+  const S = window.SpQuestStore;
+  if (!S) return;
+  const br = document.getElementById('sqBranch');
+  if (br) {
+    br.innerHTML = '<option value="0">枝番なし</option>'
+      + S.BRANCHES.map(function (b) {
+          return '<option value="' + b.n + '">-' + b.n + '　' + escapeHtml(b.name) + '</option>';
+        }).join('');
+    br.value = '0';
+  }
+  const st = document.getElementById('sqStage');
+  if (st) {
+    st.innerHTML = '<option value="">段階なし</option>'
+      + S.STAGES.map(function (x) {
+          return '<option value="' + escapeHtml(x) + '">' + escapeHtml(x) + '</option>';
+        }).join('');
+    st.value = '';
+  }
+  const se = document.getElementById('sqSeries'); if (se) se.value = 'general';
+  const nu = document.getElementById('sqNumber'); if (nu) nu.value = '1';
+
+  const note = document.getElementById('sqNumberNote');
+  if (note) { note.textContent = '使われている番号を確かめています…'; note.style.color = '#6E695C'; }
+  _spQuestTaken = await S.takenNumbers(window.fbLib, window.db);
+
+  /* 空いている最初の番号を、いちおう先に出しておく（そのままでも出せる） */
+  if (_spQuestTaken && nu) {
+    for (let i = 1; i <= S.NUMBER_MAX; i++) {
+      if (!_spQuestTaken[S.numberKey('general', i, 0, '')]) { nu.value = String(i); break; }
+    }
+  }
+  spQuestNumberCheck();
+}
 
 let spQuestSubmitting = false;
 async function spQuestSubmit() {
@@ -17627,9 +17726,19 @@ async function spQuestSubmit() {
   const guildId = _spQuestFrom ? _spQuestFrom.guildId : val('sqGuild');
   if (guildId && !SpGuildStore.isValidId(guildId)) { alert('ギルドの指定が正しくありません。'); spQuestSubmitting = false; return; }
   if (_spQuestFrom && !guildId) { alert('元の議題のギルドが分かりませんでした。'); spQuestSubmitting = false; return; }
+  /* 番号。自動では振らないので、ここで形を確かめる。
+     同じ番号がすでにあるかは、取引の中でもう一度見る（その間に
+     誰かが取っているかもしれないため）。 */
+  const num = _spQuestNumberNow();
+  if (!SpQuestStore.isValidSeries(num.series)) { alert('系列（一般・特殊）を選んでください。'); spQuestSubmitting = false; return; }
+  if (!SpQuestStore.isValidNumber(num.number)) { alert('番号は 1〜' + SpQuestStore.NUMBER_MAX + ' で入れてください。'); spQuestSubmitting = false; return; }
+  if (!SpQuestStore.isValidBranch(num.branch)) { alert('枝番の指定が正しくありません。'); spQuestSubmitting = false; return; }
+  if (!SpQuestStore.isValidStage(num.stage)) { alert('段階の指定が正しくありません。'); spQuestSubmitting = false; return; }
   try {
     const fb = window.fbLib;
     await SpQuestStore.createQuest(fb, window.db, {
+      /* 系列・番号・枝番・段階。この4つの組み合わせで一意。 */
+      series: num.series, questNumber: num.number, branch: num.branch, stage: num.stage,
       title: title.slice(0, 120),
       /* 元になったギルドと議題。クエスト側が覚えることで、
          クエスト詳細から元の議題へ戻れる。直接出したときは空。 */
@@ -17664,7 +17773,15 @@ async function spQuestSubmit() {
     });
   } catch (e) {
     console.warn('クエストを出せませんでした:', e && (e.message || e));
-    alert('クエストを出せませんでした。もう一度お試しください。');
+    const taken = e && String(e.message || '').indexOf('QUEST_NUMBER_TAKEN') >= 0;
+    if (taken) {
+      /* 開いてから出すまでのあいだに、誰かが同じ番号を取った。控えを読み直す。 */
+      _spQuestTaken = await SpQuestStore.takenNumbers(window.fbLib, window.db);
+      spQuestNumberCheck();
+      alert('この番号は、ちょうどいま使われました。別の番号にしてください。');
+    } else {
+      alert('クエストを出せませんでした。もう一度お試しください。');
+    }
     spQuestSubmitting = false;
     return;
   }
@@ -26189,6 +26306,32 @@ async function sendEmuFeedback() {
     </div>
     <label class="spv-label" for="sqGuild">どのギルドの活動か</label>
     <select class="spv-in" id="sqGuild"></select>
+    <!-- 番号。自動では振らない。出すときに決める。
+         系列が違えば同じ #001 が両方にあるので、系列も合わせて指定する。 -->
+    <div class="spv-pair">
+      <div>
+        <label class="spv-label" for="sqSeries">系列</label>
+        <select class="spv-in" id="sqSeries" onchange="spQuestNumberCheck()">
+          <option value="general">一般</option>
+          <option value="special">特殊</option>
+        </select>
+      </div>
+      <div>
+        <label class="spv-label" for="sqNumber">番号</label>
+        <input class="spv-in" id="sqNumber" type="number" min="1" max="999" value="1" oninput="spQuestNumberCheck()">
+      </div>
+    </div>
+    <div class="spv-pair">
+      <div>
+        <label class="spv-label" for="sqBranch">枝番（任意）</label>
+        <select class="spv-in" id="sqBranch" onchange="spQuestNumberCheck()"></select>
+      </div>
+      <div>
+        <label class="spv-label" for="sqStage">段階（任意）</label>
+        <select class="spv-in" id="sqStage" onchange="spQuestNumberCheck()"></select>
+      </div>
+    </div>
+    <p class="spp-note" id="sqNumberNote" style="margin:0 0 14px"></p>
     <label class="spv-label" for="sqTitle">何を試す？</label>
     <input class="spv-in" id="sqTitle" maxlength="120" placeholder="例：「先に名乗る」を1週間、初対面20人でやってみる">
     <label class="spv-label" for="sqKnowledge">元の知識（どこで得たか）</label>
@@ -26220,7 +26363,7 @@ async function sendEmuFeedback() {
         <input class="spv-in" id="sqDays" type="number" min="1" max="90" value="14">
       </div>
     </div>
-    <button type="button" class="spp-cta" onclick="spQuestSubmit()">クエストを出す</button>
+    <button type="button" class="spp-cta" id="sqSubmitBtn" onclick="spQuestSubmit()">クエストを出す</button>
     <p class="spp-note">出したあと、題名や条件は動かせません（受けた人が見た条件が変わらないようにするためです）。進行中・完了への切り替えだけ、出した本人ができます。<br>
       小さな実験・個人の挑戦・検証は、議題を通さずここから直接出せます。SchoolPark全体の方針・共同予算・大人数が関わることは、ギルドの議題から始めてください。</p>
   </div>
