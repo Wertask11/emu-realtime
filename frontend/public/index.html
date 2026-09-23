@@ -16298,7 +16298,8 @@ window.spDaoReloadAll = function () {
   const app = fr && fr.contentWindow && fr.contentWindow.app;
   if (!app || !window.db || !window.fbLib) return false;
   ['spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
-   'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark'
+   'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark',
+   'spDaoLoadYearDoc'
   ].forEach(function (name) {
     const fn = window[name];
     if (typeof fn !== 'function') return;
@@ -17194,6 +17195,101 @@ async function _spRestQuests() {
     return Object.assign({ id: String(d.name || '').split('/').pop() }, _spRestFields(d.fields));
   }).sort(function (a, b) { return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0); }).slice(0, 30);
 }
+
+/* ═══════════════════════════════════════
+   SchoolParkの年内目標
+
+   置き場は sp_docs/year-goals の1件だけ。運営が管理画面から書き換える。
+   画面（dao.html）は文字を差し込むだけの作りなので、
+   「これは見出し」「これは表」の判断はここで付けてから渡す。
+
+   blocks は上から順に並べる配列。種類は4つ。
+     heading … 見出し           { type, text }
+     text    … 本文（改行そのまま） { type, text }
+     table   … 表               { type, head:[...], rows:[{cells:[...]}, ...] }
+     image   … 画像             { type, url, caption }
+
+   表の行を {cells:[...]} の形にしているのは、Firestore が
+   「配列の中の配列」を持てないため。ここで詰め直す必要は無く、
+   記録の形のまま画面へ渡せる。
+
+   記録がまだ無いとき・読めなかったときは何も渡さない。
+   渡さなければ、カードそのものが出ない（空のカードを見せない）。
+   ═══════════════════════════════════════ */
+const SP_DOC_BLOCK_TYPES = ['heading', 'text', 'table', 'image'];
+
+function _spYearBlock(b) {
+  b = b || {};
+  const type = SP_DOC_BLOCK_TYPES.indexOf(String(b.type || '')) >= 0 ? String(b.type) : '';
+  if (!type) return null;
+  const out = {
+    type: type,
+    isHeading: type === 'heading',
+    isText: type === 'text',
+    isTable: type === 'table',
+    isImage: type === 'image',
+    text: String(b.text || ''),
+    url: String(b.url || ''),
+    caption: String(b.caption || ''),
+    head: Array.isArray(b.head) ? b.head.map(String) : [],
+    rows: []
+  };
+  out.hasHead = out.head.length > 0;
+  out.hasCaption = out.caption.length > 0;
+  if (type === 'table' && Array.isArray(b.rows)) {
+    out.rows = b.rows.map(function (r) {
+      const cells = (r && Array.isArray(r.cells)) ? r.cells : [];
+      return { cells: cells.map(String) };
+    }).filter(function (r) { return r.cells.length > 0; });
+  }
+  /* 中身の無いものは置かない。空の見出しや、行の無い表を出しても読めない。 */
+  if (type === 'heading' || type === 'text') return out.text ? out : null;
+  if (type === 'table') return out.rows.length ? out : null;
+  if (type === 'image') return out.url ? out : null;
+  return null;
+}
+
+function _spYearDate(ms) {
+  const t = Number(ms || 0);
+  if (!t) return '';
+  const d = new Date(t);
+  if (isNaN(d.getTime())) return '';
+  return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+}
+
+window.spDaoLoadYearDoc = async function (app) {
+  if (!app || typeof app.setState !== 'function') return;
+  if (!window.db || !window.fbLib) return;
+  const fb = window.fbLib;
+  let d = null;
+  try {
+    const snap = await fb.getDoc(fb.doc(window.db, 'sp_docs', 'year-goals'));
+    /* 通信が届いていないとき、控えから「無い」が返ることがある。
+       そのときは今までの表示を消さない（消すと、あったものが消えたように見える）。 */
+    if (!snap.exists()) {
+      if (snap.metadata && snap.metadata.fromCache) return;
+      app.setState({ yearDoc: null });
+      return;
+    }
+    d = snap.data() || {};
+  } catch (e) {
+    console.warn('年内目標を読めませんでした:', e && (e.message || e));
+    return;
+  }
+  const blocks = (Array.isArray(d.blocks) ? d.blocks : [])
+    .map(_spYearBlock).filter(Boolean);
+  if (!blocks.length) { app.setState({ yearDoc: null }); return; }
+  const updatedLabel = _spYearDate(d.updatedAt);
+  app.setState({
+    yearDoc: {
+      title: String(d.title || 'SchoolParkの年内目標'),
+      summary: String(d.summary || ''),
+      blocks: blocks,
+      hasUpdated: !!updatedLabel,
+      updatedLabel: updatedLabel
+    }
+  });
+};
 
 window.spDaoLoadQuests = function (app, attempt) {
   /* すでに読んでいる最中なら、その1本に相乗りする（spGuildDefs と同じ考え方）。
