@@ -1238,7 +1238,24 @@ let _sp = null;   // Firestore の道具。使うときに読み込む
 async function spReady() {
   if (_sp) return _sp;
   const fs = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-  _sp = { db: fs.getFirestore(app), ...fs };
+  /* Firestore への繋ぎ方。
+
+     既定の繋ぎ方（WebChannel の streaming）は、途中に挟まるものに弱い。
+     プロキシ、広告よけの拡張、一部の回線、タブを裏に回したときに
+     stream が切られ、getDocs が返ってこないまま止まる。
+     この画面は待ち続けるだけなので、「読み込み中…」から進まなくなる。
+
+     experimentalAutoDetectLongPolling を立てると、SDK が最初に streaming を
+     試し、通らない回線では自動で long-polling に切り替える。
+     index.html にも同じものを入れてある。 */
+  let db;
+  try {
+    db = fs.initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+  } catch (e) {
+    console.warn("Firestore の繋ぎ方を自動判定にできませんでした:", e && (e.message || e));
+    db = fs.getFirestore(app);
+  }
+  _sp = { db: db, ...fs };
   return _sp;
 }
 
@@ -1557,13 +1574,34 @@ async function renderSchoolPark() {
   /* クエストと公園を出すときは、運営として登録されているアドレスを使う */
   const ownerAddr = me.ownerAddr || me.addr;
 
-  const [qs, vs, ws, ps, ts2] = await Promise.all([
-    f.getDocs(f.collection(f.db, "sp_quests")),
-    f.getDocs(f.collection(f.db, "sp_votes")),
-    f.getDocs(f.collection(f.db, "sp_wisdom")),
-    f.getDocs(f.collection(f.db, "sp_park")),
-    f.getDocs(f.collection(f.db, "sp_treasury"))
-  ]);
+  /* 通信が転んだときに「読み込み中…」のまま固まらないよう、待つ時間を決めておく。
+     getDocs は届かなくても例外を投げないことがあるので、待ち続けると進まない。 */
+  const withLimit = function (p, label) {
+    return Promise.race([p, new Promise(function (_, reject) {
+      setTimeout(function () { reject(new Error(label + "が時間内に読めませんでした")); }, 20000);
+    })]);
+  };
+
+  let qs, vs, ws, ps, ts2, yd;
+  try {
+    [qs, vs, ws, ps, ts2, yd] = await withLimit(Promise.all([
+      f.getDocs(f.collection(f.db, "sp_quests")),
+      f.getDocs(f.collection(f.db, "sp_votes")),
+      f.getDocs(f.collection(f.db, "sp_wisdom")),
+      f.getDocs(f.collection(f.db, "sp_park")),
+      f.getDocs(f.collection(f.db, "sp_treasury")),
+      f.getDoc(f.doc(f.db, "sp_docs", "year-goals"))
+    ]), "SchoolPark の記録");
+  } catch (e) {
+    el.innerHTML = '<div class="card"><h3>読み込めませんでした</h3>'
+      + '<p class="empty" style="text-align:left">' + esc(e.message || e) + '</p>'
+      + '<p class="empty" style="text-align:left">通信が届いていない可能性があります。'
+      + '読み込み直すか、回線を変えて試してください。</p>'
+      + '<div class="actions"><button class="btn" id="spRetry">もう一度読む</button></div></div>';
+    const rb = $("#spRetry"); if (rb) rb.onclick = function () { renderSchoolPark(); };
+    return;
+  }
+  ydState = yd.exists() ? ydFromDoc(yd.data()) : ydBlank();
   const money = []; ts2.forEach(s => money.push({ id: s.id, ...(s.data() || {}) }));
   money.sort((a, b) => (b.at || b.createdAt || 0) - (a.at || a.createdAt || 0));
   const PARK_KIND = { board:"今日ひま？ボード", dumb:"バカな挑戦", event:"月例の集まり" };
@@ -1576,17 +1614,19 @@ async function renderSchoolPark() {
   let wisdomCount = 0; ws.forEach(() => wisdomCount++);
 
   /* 議題ごとの票を数える。数を別に持たず、票そのものを毎回数える。 */
-  for (const v of votes) {
+  /* 議題1件ごとに1往復していた。まとめて同時に聞く。 */
+  const ballotSnaps = await Promise.all(votes.map(v =>
+    f.getDocs(f.collection(f.db, "sp_votes", v.id, "ballots")).catch(() => null)));
+  votes.forEach((v, i) => {
     v.counts = {}; v.total = 0;
-    try {
-      const bs = await f.getDocs(f.collection(f.db, "sp_votes", v.id, "ballots"));
-      bs.forEach(b => {
-        const o = String((b.data() || {}).optionId || "");
-        if (!o) return;
-        v.counts[o] = (v.counts[o] || 0) + 1; v.total++;
-      });
-    } catch (e) {}
-  }
+    const bs = ballotSnaps[i];
+    if (!bs) return;
+    bs.forEach(b => {
+      const o = String((b.data() || {}).optionId || "");
+      if (!o) return;
+      v.counts[o] = (v.counts[o] || 0) + 1; v.total++;
+    });
+  });
   /* クエストごとの「受けた人」「報告を出した人」を数える。
      完走＝受けていて、報告を1本以上出していて、そのクエストが完了したもの。 */
   const TRUST_NEED = 20;
@@ -1599,26 +1639,32 @@ async function renderSchoolPark() {
     if (name && M[k].name.indexOf("…") >= 0) M[k].name = name;
     return M[k];
   };
-  for (const q of quests) {
+  /* クエスト1本につき「受けた人」と「報告」で2往復ある。
+     1本ずつ順に待っていたので、30本なら60往復ぶん待っていた。
+     クエストぶんも、その中の2つも、まとめて同時に投げる。 */
+  const questSnaps = await Promise.all(quests.map(q => Promise.all([
+    f.getDocs(f.collection(f.db, "sp_quests", q.id, "commits")).catch(() => null),
+    f.getDocs(f.collection(f.db, "sp_quests", q.id, "logs")).catch(() => null)
+  ])));
+  quests.forEach((q, qi) => {
     q.took = 0;
     const took = [];
-    try {
-      const cs = await f.getDocs(f.collection(f.db, "sp_quests", q.id, "commits"));
+    const cs = questSnaps[qi][0], ls = questSnaps[qi][1];
+    if (cs) {
       cs.forEach(c => {
         const d = c.data() || {};
         q.took++;
         took.push({ addr: c.id, name: d.name || "", approved: d.approved === true });
       });
-    } catch (e) {}
+    }
     /* 誰が何本ログを書いたか。承認するときの判断材料として画面に出す。 */
     const logCount = {};
-    try {
-      const ls = await f.getDocs(f.collection(f.db, "sp_quests", q.id, "logs"));
+    if (ls) {
       ls.forEach(l => {
         const a = String((l.data()||{}).author || "").toLowerCase();
         if (a) logCount[a] = (logCount[a] || 0) + 1;
       });
-    } catch (e) {}
+    }
     took.forEach(t => { t.logs = logCount[String(t.addr).toLowerCase()] || 0; });
     q.tookList = took;
     q.approvedCount = took.filter(t => t.approved).length;
@@ -1627,19 +1673,20 @@ async function renderSchoolPark() {
       const m = pick(t.addr, t.name);
       if (m && q.status === "CLOSED" && t.approved) m.done++;
     });
-  }
+  });
   /* 知恵カードと、引用された数 */
   {
     const mine = [];
     ws.forEach(s => { const d = s.data() || {}; mine.push({ id: s.id, author: d.author, name: d.authorName }); });
-    for (const x of mine) {
+    /* 知恵カード1枚ごとに1往復していた。まとめて同時に聞く。 */
+    const citeSnaps = await Promise.all(mine.map(x =>
+      f.getDocs(f.collection(f.db, "sp_wisdom", x.id, "cites")).catch(() => null)));
+    mine.forEach((x, i) => {
       const m = pick(x.author, x.name);
       if (m) m.wisdom++;
-      try {
-        const cs = await f.getDocs(f.collection(f.db, "sp_wisdom", x.id, "cites"));
-        cs.forEach(() => { if (m) m.cited++; });
-      } catch (e) {}
-    }
+      const cs = citeSnaps[i];
+      if (cs) cs.forEach(() => { if (m) m.cited++; });
+    });
   }
   /* いま認めている人 */
   const trusted = {};
@@ -1655,14 +1702,6 @@ async function renderSchoolPark() {
     m.trusted = !!trusted[k];
     return m;
   }).sort((a, b) => b.score - a.score);
-
-  /* 年内目標（1件だけ）。まだ無ければ、空の形から始める。 */
-  try {
-    const yd = await f.getDoc(f.doc(f.db, "sp_docs", "year-goals"));
-    ydState = yd.exists() ? ydFromDoc(yd.data()) : ydBlank();
-  } catch (e) {
-    ydState = ydBlank();
-  }
 
   const STATUS = { OPEN: "募集中", RUNNING: "進行中", CLOSED: "完了" };
   const yen = v => (parseInt(String(v || "0").replace(/[^0-9]/g, ""), 10) || 0).toLocaleString();
