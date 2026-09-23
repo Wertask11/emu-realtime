@@ -709,7 +709,11 @@ logic = logic.replace(OLD_RUNNING,
 
 /* 「自分の宿題」は、この組み立てより後に dao.html へ直に足された画面で、
    ここには元の記述が無い。つなぐ先のクエスト名を特殊が分かる形（fullTitle）に
-   する変更は、dao.html 側にだけ入れてある。 */
+   する変更は、dao.html 側にだけ入れてある。
+
+   Quest #000 の詳細画面（isFounderDetail）と、その下に置いた
+   「一般クエスト ギルド資料」も同じ。元の記述がここには無いので、
+   dao.html 側にだけ入れてある。 */
 
 const OLD_TAGS = "      tags: ['すべて','RELATIONSHIP','MONEY','FOCUS','LEARNING','NEGOTIATION','COURAGE'],";
 if (!logic.includes(OLD_TAGS)) { console.error('タグの一覧が見つからない'); process.exit(1); }
