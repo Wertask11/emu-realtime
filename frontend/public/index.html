@@ -15447,7 +15447,10 @@ function emuLoginBonusClaimedToday() {
   return localStorage.getItem(_emuLbCacheKey()) === _emuTodayStr();
 }
 // サーバー（アカウント単位）から受取状況を取得してUIへ反映
+/* 旧EMUERの配布が止まっていると分かったら立てる。立ったら聞きに行かない。 */
+let _emuLbRetired = false;
 async function refreshEmuLoginBonusStatus() {
+  if (_emuLbRetired) { updateEmuLoginBonusUI(); return; }
   const addr = _emuLbAddr();
   const uid = _emuLbUid();
   if (!addr && !uid) { updateEmuLoginBonusUI(); return; }
@@ -15455,6 +15458,15 @@ async function refreshEmuLoginBonusStatus() {
     // 状況確認は画面表示のたびに走るため、署名ダイアログは出さない（受取ボタンを押した時だけ）
     const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus/status?address=' + encodeURIComponent(addr) + '&uid=' + encodeURIComponent(uid), { headers: await emuAuthHeaders(false, { interactive: false }) });
     const j = await r.json();
+    /* 旧EMUERの配布はサーバー側で止めてある（EMUER_LEGACY_REWARDS_DISABLED）。
+       それでも画面を開くたびに聞きに行っていたので、毎回 409 が返り、
+       コンソールに赤い行が出続けていた。止まっていると分かったら、
+       この画面では二度と聞かず、欄ごと出さない。 */
+    if (r.status === 409 && j && j.error === 'LEGACY_EMUER_DISABLED') {
+      _emuLbRetired = true;
+      updateEmuLoginBonusUI();
+      return;
+    }
     if (r.ok) {
       _emuLbClaimedToday = !!j.claimedToday;
       // サーバーは受取済みだが、この端末のキャッシュに今日の受取記録が無い＝別端末で受取
@@ -15469,6 +15481,9 @@ function updateEmuLoginBonusUI() {
   const row = document.getElementById('emuLoginBonusRow');
   const btn = document.getElementById('emuLoginBonusBtn');
   const note = document.getElementById('emuLoginBonusNote');
+  /* 配布が止まっているなら、受取の欄そのものを出さない。
+     押せないボタンを見せても、できないことが増えるだけ。 */
+  if (_emuLbRetired) { if (row) row.style.display = 'none'; return; }
   if (!btn) return;
   if (emuLoginBonusClaimedToday()) {
     btn.textContent = emuT('lb.claimed');
@@ -16105,16 +16120,23 @@ async function spPassportLoad(force) {
        どちらの名義で保存したかが変わるため。 */
     let name = '';
     {
+      /* ウォレット名義とCHES名義を順に1往復ずつ聞いていた。同時に聞く。
+         採る順番は今までどおり（ウォレット名義が先。両方あれば先勝ち）。 */
       const seen = {};
-      for (const a of [me.wallet, me.ches]) {
+      const keys = [];
+      [me.wallet, me.ches].forEach(function (a) {
         const key = String(a || '').toLowerCase();
-        if (!key || seen[key]) continue;
+        if (!key || seen[key]) return;
         seen[key] = true;
-        try {
-          const s = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'user_profiles', key));
-          const v = s.exists() ? String((s.data() || {}).displayName || '').trim() : '';
-          if (v) { name = v; break; }
-        } catch (e) {}
+        keys.push(key);
+      });
+      const got = await Promise.all(keys.map(function (key) {
+        return window.fbLib.getDoc(window.fbLib.doc(window.db, 'user_profiles', key))
+               .catch(function () { return null; });
+      }));
+      for (const sp of got) {
+        const v = (sp && sp.exists()) ? String((sp.data() || {}).displayName || '').trim() : '';
+        if (v) { name = v; break; }
       }
     }
     if (!name) name = String(d.displayName || '').trim();
@@ -16163,16 +16185,20 @@ async function spPassportLoad(force) {
        旧判定（下の paid_users 直読み）はそのまま残す。足すだけ。 */
     let hasPass = !!window.hasPaidNFT || !!(identityNow && identityNow.hasOfficialPass);
     if (!hasPass) {
+      /* ここも2名義を順に聞いていた。同時に聞く。 */
       const seen = {};
-      for (const a of [me.wallet, me.ches]) {
+      const keys = [];
+      [me.wallet, me.ches].forEach(function (a) {
         const key = String(a || '').toLowerCase();
-        if (!key || seen[key]) continue;
+        if (!key || seen[key]) return;
         seen[key] = true;
-        try {
-          const s = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'paid_users', key));
-          if (s.exists()) { hasPass = true; break; }
-        } catch (e) {}
-      }
+        keys.push(key);
+      });
+      const got = await Promise.all(keys.map(function (key) {
+        return window.fbLib.getDoc(window.fbLib.doc(window.db, 'paid_users', key))
+               .catch(function () { return null; });
+      }));
+      if (got.some(function (sp) { return sp && sp.exists(); })) hasPass = true;
     }
 
     /* いま何ができるか。サーバーが答えた entitlement が正。
@@ -16358,13 +16384,15 @@ window.spTrustScore = async function (addr, createdAt) {
     const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
     const list = [];
     qs.forEach(function (s) { list.push({ id: s.id, ...(s.data() || {}) }); });
-    for (const q of list) {
-      if (q.status !== 'CLOSED') continue;
-      try {
-        const c = await fb.getDoc(fb.doc(window.db, 'sp_quests', q.id, 'commits', addr));
-        if (c.exists() && (c.data() || {}).approved === true) done++;
-      } catch (e) {}
-    }
+    /* 完了したクエスト1本ごとに1往復していた。まとめて同時に聞く。 */
+    const closed = list.filter(function (q) { return q.status === 'CLOSED'; });
+    const got = await Promise.all(closed.map(function (q) {
+      return fb.getDoc(fb.doc(window.db, 'sp_quests', q.id, 'commits', addr))
+               .catch(function () { return null; });
+    }));
+    got.forEach(function (c) {
+      if (c && c.exists() && (c.data() || {}).approved === true) done++;
+    });
   } catch (e) {}
 
   /* 知恵カードと、引用された数 */
@@ -16376,12 +16404,12 @@ window.spTrustScore = async function (addr, createdAt) {
       if (String(d.author || '').toLowerCase() === key) mine.push(s.id);
     });
     wisdom = mine.length;
-    for (const id of mine) {
-      try {
-        const cs = await fb.getDocs(fb.collection(window.db, 'sp_wisdom', id, 'cites'));
-        cs.forEach(function () { cited++; });
-      } catch (e) {}
-    }
+    /* 知恵カード1枚ごとに1往復していた。まとめて同時に聞く。 */
+    const citeSnaps = await Promise.all(mine.map(function (id) {
+      return fb.getDocs(fb.collection(window.db, 'sp_wisdom', id, 'cites'))
+               .catch(function () { return null; });
+    }));
+    citeSnaps.forEach(function (cs) { if (cs) cs.forEach(function () { cited++; }); });
   } catch (e) {}
 
   /* 在籍の月数（上限12） */
@@ -16639,21 +16667,20 @@ window.spDaoLoadVotes = async function (app) {
     console.warn('クエストを読めませんでした:', e && (e.message || e));
   }
 
-  const guilds = [];
-  for (const g of defs) {
+  /* ギルドごとに「参加したい」と「応援する」で2往復ある。
+     5ギルドを1つずつ順に待っていたので10往復ぶん待っていた。まとめて同時に投げる。 */
+  const guilds = await Promise.all(defs.map(async function (g) {
     let joins = 0, supports = 0, iJoined = false, iSupport = false;
-    try {
-      const js = await fb.getDocs(fb.collection(window.db, 'sp_guild_members', g.id, 'joins'));
-      js.forEach(function (d) { joins++; if (mine && d.id.toLowerCase() === mine) iJoined = true; });
-    } catch (e) {}
-    try {
-      const ss = await fb.getDocs(fb.collection(window.db, 'sp_guild_members', g.id, 'supports'));
-      ss.forEach(function (d) { supports++; if (mine && d.id.toLowerCase() === mine) iSupport = true; });
-    } catch (e) {}
-    guilds.push(_spGuildCard(g, {
+    const [js, ss] = await Promise.all([
+      fb.getDocs(fb.collection(window.db, 'sp_guild_members', g.id, 'joins')).catch(function () { return null; }),
+      fb.getDocs(fb.collection(window.db, 'sp_guild_members', g.id, 'supports')).catch(function () { return null; })
+    ]);
+    if (js) js.forEach(function (d) { joins++; if (mine && d.id.toLowerCase() === mine) iJoined = true; });
+    if (ss) ss.forEach(function (d) { supports++; if (mine && d.id.toLowerCase() === mine) iSupport = true; });
+    return _spGuildCard(g, {
       joins: joins, supports: supports, iJoined: iJoined, iSupport: iSupport
-    }, defs, app));
-  }
+    }, defs, app);
+  }));
 
   /* ギルドが決まっていない古い議題。どこかへ勝手に寄せず、別に出す。 */
   const unsorted = _spVoteDocs.filter(function (v) { return !SpGuildStore.guildIdOf(v, defs); });
@@ -17141,9 +17168,26 @@ async function _spRestQuests() {
   let opt = {};
   try { opt = (window.db && window.db.app && window.db.app.options) || {}; } catch (e) {}
   if (!opt.projectId || !opt.apiKey) throw new Error('設定が読めない');
+  /* ログインの証（IDトークン）を必ず付ける。
+
+     ここは前まで鍵（apiKey）だけで聞きに行っていた。
+     コメントには「sp_quests は誰でも読める」と書いてあったが、
+     いまの決まりは allow read: if canAccessSchoolPark() なので、
+     ログインの証が無い読み取りは必ず断られる。
+     つまりこの逃げ道は、呼ばれるたびに 403 を返すだけだった。
+     コンソールに出ていた「普通の通信でも読めませんでした: HTTP 403」がそれ。 */
+  let token = '';
+  try {
+    const u = window.auth && window.auth.currentUser;
+    if (u && typeof u.getIdToken === 'function') token = await u.getIdToken();
+  } catch (e) {}
+  if (!token) throw new Error('ログインの証が取れない');
   const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
             + '/databases/(default)/documents/sp_quests?pageSize=100&key=' + opt.apiKey;
-  const r = await fetch(url, { cache: 'no-store' });
+  const r = await fetch(url, {
+    cache: 'no-store',
+    headers: { 'Authorization': 'Bearer ' + token }
+  });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const j = await r.json();
   return ((j && j.documents) || []).map(function (d) {
@@ -17237,8 +17281,13 @@ async function _spDaoLoadQuestsOnce(app, attempt) {
   }
   docs.sort((a, b) => Number(SpQuestStore.isFounder(b)) - Number(SpQuestStore.isFounder(a)));
 
-  const quests = [];
-  for (const q of docs) quests.push(await _spShapeQuest(q, p, mine, gdefs, app));
+  /* クエスト1件につき、受けた人と途中報告で2往復ある。
+     1本ずつ順に待っていたため、30本なら60往復ぶん待っていた
+     （1往復100msなら、それだけで6秒）。まとめて同時に投げる。
+     Firestore は同じ接続に相乗りするので、待ち時間はほぼ1往復ぶんになる。 */
+  const quests = await Promise.all(docs.map(function (q) {
+    return _spShapeQuest(q, p, mine, gdefs, app);
+  }));
   /* 読めたので、待たせていた読み直しの予約は取り消す。 */
   clearTimeout(_spQuestRetryTimer);
   app.setState({ quests: quests, noQuests: quests.length === 0 });
@@ -17250,18 +17299,22 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
   const fb = window.fbLib;
   let people = [], iTook = false, logCount = 0;
   const logs = [];
-  try {
-    const cs = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'commits'));
+  /* 受けた人と途中報告は互いに関係が無いので、同時に読む。
+     片方が読めなくても、もう片方は出す（読み取りは別々の try のまま）。 */
+  const [cs, ls] = await Promise.all([
+    fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'commits')).catch(function () { return null; }),
+    fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'logs')).catch(function () { return null; })
+  ]);
+  if (cs) {
     cs.forEach(function (c) {
       people.push((c.data() || {}).name || _spShortAddr(c.id));
       if (mine && c.id.toLowerCase() === mine) iTook = true;
     });
-  } catch (e) {}
-  try {
-    const ls = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'logs'));
+  }
+  if (ls) {
     ls.forEach(function (l) { logCount++; logs.push({ id: l.id, ...(l.data() || {}) }); });
     logs.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
-  } catch (e) {}
+  }
   /* このクエストが、どのギルドのどの議題から生まれたか。
      Quest #000（原点）は、どのギルドにも属さない。 */
   const qGuildId = SpQuestStore.isFounder(q) ? '' : SpGuildStore.guildIdOf(q, gdefs);
@@ -18152,13 +18205,17 @@ window.spDaoLoadWisdom = async function (app) {
   const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
   const wisdom = [];
   let cites = 0;
-  for (const w of docs) {
+  /* 知恵カード1枚ごとに引用を1往復ずつ読んでいた。まとめて同時に読む。 */
+  const citeSnaps = await Promise.all(docs.map(function (w) {
+    return fb.getDocs(fb.collection(window.db, 'sp_wisdom', w.id, 'cites'))
+             .catch(function () { return null; });
+  }));
+  for (let wi = 0; wi < docs.length; wi++) {
+    const w = docs[wi];
     let uses = 0;
     const citedBy = {};
-    try {
-      const cs = await fb.getDocs(fb.collection(window.db, 'sp_wisdom', w.id, 'cites'));
-      cs.forEach(function (c) { uses++; citedBy[c.id.toLowerCase()] = true; });
-    } catch (e) {}
+    const cs = citeSnaps[wi];
+    if (cs) cs.forEach(function (c) { uses++; citedBy[c.id.toLowerCase()] = true; });
     cites += uses;
     const did = !!(mine && citedBy[mine]);
     wisdom.push({
@@ -18305,16 +18362,19 @@ window.spDaoLoadMembers = async function (app) {
     const ws = await fb.getDocs(fb.collection(window.db, 'sp_wisdom'));
     const ids = [];
     ws.forEach(function (s) { ids.push({ id: s.id, ...(s.data() || {}) }); });
-    for (const w of ids) {
+    /* 知恵カード1枚ごとに1往復していた。まとめて同時に聞く。 */
+    const citeSnaps = await Promise.all(ids.map(function (w) {
+      return fb.getDocs(fb.collection(window.db, 'sp_wisdom', w.id, 'cites'))
+               .catch(function () { return null; });
+    }));
+    ids.forEach(function (w, i) {
       const m = pick(w.author, w.authorName);
       if (m) m.wisdom++;
       let uses = 0;
-      try {
-        const cs = await fb.getDocs(fb.collection(window.db, 'sp_wisdom', w.id, 'cites'));
-        cs.forEach(function () { uses++; });
-      } catch (e) {}
+      const cs = citeSnaps[i];
+      if (cs) cs.forEach(function () { uses++; });
       if (m) m.cited += uses;
-    }
+    });
   } catch (e) {}
 
   /* 完了したクエストと、運営が認めた参加者 */
@@ -18322,15 +18382,21 @@ window.spDaoLoadMembers = async function (app) {
     const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
     const list = [];
     qs.forEach(function (s) { list.push({ id: s.id, ...(s.data() || {}) }); });
-    for (const q of list) {
+    /* クエスト1本ごとに1往復していた。まとめて同時に聞く。 */
+    const commitSnaps = await Promise.all(list.map(function (q) {
+      return fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'commits'))
+               .catch(function () { return null; });
+    }));
+    for (let qi = 0; qi < list.length; qi++) {
+      const q = list[qi];
       const took = [];
-      try {
-        const cs = await fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'commits'));
+      const cs = commitSnaps[qi];
+      if (cs) {
         cs.forEach(function (c) {
           const d = c.data() || {};
           took.push({ addr: c.id, name: d.name || '', approved: d.approved === true });
         });
-      } catch (e) {}
+      }
       /* 受けた人は、認められていなくても一覧には出す（「参加中」として） */
       took.forEach(function (t) { pick(t.addr, t.name); });
       if (q.status !== 'CLOSED') continue;
@@ -18601,16 +18667,24 @@ window.spDaoLoadPark = async function (app) {
                .sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
 
   const board = [], dumb = [], events = [];
-  for (const i of items) {
+  /* ボード1件ごとに「乗った人」を1往復ずつ読んでいた。まとめて同時に読む。
+     ボード以外（挑戦・集まり）は元から読んでいないので、そのまま飛ばす。 */
+  const joinSnaps = await Promise.all(items.map(function (i) {
+    if (i.kind !== 'board') return null;
+    return fb.getDocs(fb.collection(window.db, 'sp_park', i.id, 'joins'))
+             .catch(function () { return null; });
+  }));
+  for (let ii = 0; ii < items.length; ii++) {
+    const i = items[ii];
     let names = [], on = false;
     if (i.kind === 'board') {
-      try {
-        const js = await fb.getDocs(fb.collection(window.db, 'sp_park', i.id, 'joins'));
+      const js = joinSnaps[ii];
+      if (js) {
         js.forEach(function (j) {
           names.push((j.data() || {}).name || _spShortAddr(j.id));
           if (mine && j.id.toLowerCase() === mine) on = true;
         });
-      } catch (e) {}
+      }
     }
     if (i.kind === 'board') {
       board.push({ id: i.id, when: i.when || 'いつでも', title: i.title || '', body: i.body || '',
@@ -18915,12 +18989,12 @@ async function openSpPassport() {
     const snap = await fb.getDocs(fb.collection(window.db, 'sp_votes'));
     const ids = [];
     snap.forEach(function (s) { ids.push(s.id); });
-    for (const id of ids) {
-      try {
-        const b = await fb.getDoc(fb.doc(window.db, 'sp_votes', id, 'ballots', p.addr));
-        if (b.exists()) votes++;
-      } catch (e) {}
-    }
+    /* 議題1件ごとに「自分が入れたか」を1往復ずつ聞いていた。まとめて同時に聞く。 */
+    const ballots = await Promise.all(ids.map(function (id) {
+      return fb.getDoc(fb.doc(window.db, 'sp_votes', id, 'ballots', p.addr))
+               .catch(function () { return null; });
+    }));
+    ballots.forEach(function (b) { if (b && b.exists()) votes++; });
   } catch (e) {}
 
   /* どのギルドに参加したいか・どのギルドを応援しているか。
@@ -18930,16 +19004,19 @@ async function openSpPassport() {
   try {
     const fb = window.fbLib;
     const defs = await spGuildDefs();
-    for (const g of defs) {
-      try {
-        const j = await fb.getDoc(fb.doc(window.db, 'sp_guild_members', g.id, 'joins', p.addr));
-        if (j.exists()) joined.push(g.short);
-      } catch (e) {}
-      try {
-        const s = await fb.getDoc(fb.doc(window.db, 'sp_guild_members', g.id, 'supports', p.addr));
-        if (s.exists()) supported.push(g.short);
-      } catch (e) {}
-    }
+    /* ここも1ギルドずつ2往復していた。まとめて同時に聞く。
+       並び順はギルドの並びのままにしたいので、結果を受け取ってから詰める。 */
+    const pairs = await Promise.all(defs.map(function (g) {
+      return Promise.all([
+        fb.getDoc(fb.doc(window.db, 'sp_guild_members', g.id, 'joins', p.addr)).catch(function () { return null; }),
+        fb.getDoc(fb.doc(window.db, 'sp_guild_members', g.id, 'supports', p.addr)).catch(function () { return null; })
+      ]);
+    }));
+    defs.forEach(function (g, i) {
+      const j = pairs[i][0], sp = pairs[i][1];
+      if (j && j.exists()) joined.push(g.short);
+      if (sp && sp.exists()) supported.push(g.short);
+    });
   } catch (e) {}
 
   /* 完走したクエスト。運営が中身を認めたものだけを、新しい順に出す。
@@ -22864,7 +22941,7 @@ function closeBadgePanel() {
   // Firebase 本体と Firestore 機能を読み込む
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
-    getFirestore, collection, addDoc, getDocs, query, orderBy, limit, startAfter, onSnapshot,
+    getFirestore, initializeFirestore, collection, addDoc, getDocs, query, orderBy, limit, startAfter, onSnapshot,
     doc, updateDoc, setDoc, deleteDoc, increment, where, writeBatch,
     arrayUnion, getDoc, runTransaction
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -22892,7 +22969,33 @@ import {
 
   // 初期化
   const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+  /* Firestore への繋ぎ方。
+
+     既定の繋ぎ方（WebChannel の streaming）は、途中に挟まるものに弱い。
+     会社や学校の回線、プロキシ、広告よけの拡張、一部のモバイル回線では
+     stream が途中で切られ、コンソールに
+       WebChannelConnection RPC 'Listen' stream ... transport errored
+     が出続ける。
+
+     このとき getDocs は例外を投げない。サーバーへ届かないまま、
+     手元の控え（開いた直後は空）を「成功」として返す。
+     画面は「まだクエストがありません」と出し、読み直しの列
+     （1.5秒 → 3秒 → 6秒 → 10秒…）が走り出す。
+     ギルド・クエスト・パスポートが出るまで何十秒もかかっていたのは、
+     多くがこれ。
+
+     experimentalAutoDetectLongPolling を立てると、SDK が最初に
+     streaming を試し、通らない回線では自動で long-polling に切り替える。
+     通る回線では今までどおり streaming のままなので、速さは落ちない。 */
+  let db;
+  try {
+    db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+  } catch (e) {
+    /* 二重初期化などで弾かれたときは、今までどおりの繋ぎ方に戻す。
+       ここで落とすと、Firestore を使う画面が全部止まる。 */
+    console.warn('Firestore の繋ぎ方を自動判定にできませんでした:', e && (e.message || e));
+    db = getFirestore(app);
+  }
   const auth = getAuth(app);
 
   // 外部ファイル（script.js）から使えるように窓口を作る
