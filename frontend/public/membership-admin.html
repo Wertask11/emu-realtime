@@ -1382,7 +1382,13 @@ function renderYearDoc(f, ownerAddr) {
         return '<button class="btn" data-ydadd="' + t[0] + '">＋ ' + t[1] + '</button>';
       }).join('')
     + '</div>'
-    + '<div class="actions"><button class="btn primary" id="ydSave">保存する</button></div>'
+    + '<div class="actions"><button class="btn primary" id="ydSave">保存する</button>'
+    /* 最初の1回ぶんの見本。中身がまだ無いときだけ出す。
+       長いJSONを手で貼ると、コピー元の画面によっては途中で切れる。
+       ここから読めば切れようがない。 */
+    + (ydState.blocks.length ? ''
+       : '<button class="btn" id="ydSeed">見本（ギルド資料）を読み込む</button>')
+    + '</div>'
     + '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:13px">まとめて入れ替える（JSON）</summary>'
     + '<p class="empty" style="text-align:left">下の欄に blocks の配列を貼って「JSONを取り込む」を押すと、中身を丸ごと入れ替えます。保存はそのあと「保存する」で。</p>'
     + '<textarea id="ydJson" rows="8" placeholder=\'[{"type":"heading","text":"全体像"},{"type":"text","text":"…"}]\'></textarea>'
@@ -1449,6 +1455,27 @@ function renderYearDoc(f, ownerAddr) {
   const ti = $("#ydTitle"); if (ti) ti.oninput = function () { ydState.title = ti.value; };
   const su = $("#ydSummary"); if (su) su.oninput = function () { ydState.summary = su.value; };
 
+  const sd = $("#ydSeed");
+  if (sd) sd.onclick = async function () {
+    sd.disabled = true;
+    try {
+      const r = await fetch('/schoolpark/year-goals-seed.json', { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const v = await r.json();
+      if (!Array.isArray(v) || !v.length) throw new Error('中身が空です');
+      ydState.blocks = ydFromDoc({ blocks: v }).blocks;
+      if (!ydState.summary) {
+        ydState.summary = '12/31までに、7つのクエスト（一般5＋特殊2）をすべて完走させる。'
+          + '一般は5つのギルドから1本ずつ、特殊は年内に達成したいもの。';
+      }
+      renderYearDoc(f, ownerAddr);
+      alert('見本を読み込みました。中身を確かめて「保存する」を押してください。');
+    } catch (e) {
+      sd.disabled = false;
+      alert('見本を読み込めませんでした（' + (e.message || e) + '）');
+    }
+  };
+
   const ex = $("#ydExport");
   if (ex) ex.onclick = function () {
     const ta = $("#ydJson");
@@ -1457,9 +1484,20 @@ function renderYearDoc(f, ownerAddr) {
   const im = $("#ydImport");
   if (im) im.onclick = function () {
     const ta = $("#ydJson");
+    const raw = ta ? ta.value.trim() : '';
     let v;
-    try { v = JSON.parse(ta ? ta.value : ''); }
-    catch (e) { alert('JSONとして読めませんでした（' + e.message + '）'); return; }
+    try { v = JSON.parse(raw); }
+    catch (e) {
+      /* いちばん多いのは、長いJSONを貼ったときに途中で切れていること。
+         「読めません」だけだと、何を直せばいいのか分からない。 */
+      const cut = raw.length > 0 && !raw.endsWith(']');
+      alert('JSONとして読めませんでした（' + e.message + '）'
+        + (cut ? '\n\n貼った中身が途中で切れています（' + raw.length + '文字）。'
+               + '最後が ] で終わっていません。\n'
+               + 'コピー元の画面によっては、全選択しても途中までしか取れません。'
+               + '「見本（ギルド資料）を読み込む」を使うか、ファイルを開いてコピーし直してください。' : ''));
+      return;
+    }
     if (!Array.isArray(v)) { alert('配列（[ ... ]）を貼ってください。'); return; }
     if (!confirm('いまの中身を、貼ったものと丸ごと入れ替えます。よろしいですか？')) return;
     ydState.blocks = ydFromDoc({ blocks: v }).blocks;
