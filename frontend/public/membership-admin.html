@@ -1278,6 +1278,225 @@ async function spMyAddress() {
   return { addr: addr, ownerAddr: owned || addr, why: "" };
 }
 
+/* ═══════════════════════════════════════
+   SchoolParkの年内目標（sp_docs/year-goals）
+
+   クエスト一覧の頭に出る読みもの。置き場は1件だけ。
+   ここで書き換えると、SchoolPark 側の表示もそのまま変わる。
+
+   blocks は上から順に並べる配列。種類は4つ。
+     heading … 見出し
+     text    … 本文（改行はそのまま出る）
+     table   … 表。1行目を見出しの行にできる
+     image   … 画像。URLと説明文
+
+   表の行は { cells: [...] } の形で持つ。Firestore が
+   「配列の中の配列」を持てないため。
+   ═══════════════════════════════════════ */
+const YD_TYPES = [
+  ['heading', '見出し'], ['text', '本文'], ['table', '表'], ['image', '画像']
+];
+let ydState = null;     /* { title, summary, blocks } ／ まだ読んでいなければ null */
+let ydBusy = false;
+
+function ydBlank() { return { title: 'SchoolParkの年内目標', summary: '', blocks: [] }; }
+
+/* 記録の形 → 画面で扱う形。崩れていても落ちないようにここでそろえる。 */
+function ydFromDoc(d) {
+  d = d || {};
+  const blocks = (Array.isArray(d.blocks) ? d.blocks : []).map(function (b) {
+    b = b || {};
+    const type = YD_TYPES.some(function (t) { return t[0] === b.type; }) ? b.type : 'text';
+    return {
+      type: type,
+      text: String(b.text || ''),
+      url: String(b.url || ''),
+      caption: String(b.caption || ''),
+      head: Array.isArray(b.head) ? b.head.map(String) : [],
+      rows: (Array.isArray(b.rows) ? b.rows : []).map(function (r) {
+        return (r && Array.isArray(r.cells)) ? r.cells.map(String) : [];
+      })
+    };
+  });
+  return { title: String(d.title || 'SchoolParkの年内目標'), summary: String(d.summary || ''), blocks: blocks };
+}
+
+/* 表は、タブ区切りの文字で書いてもらう。1行が1行、タブが列の切れ目。
+   専用の表エディタを作るより、貼り付けで済むほうが早い。 */
+function ydTableToText(b) {
+  const lines = [];
+  if (b.head && b.head.length) lines.push(b.head.join('\t'));
+  (b.rows || []).forEach(function (r) { lines.push(r.join('\t')); });
+  return lines.join('\n');
+}
+function ydTextToTable(txt, useHead) {
+  const lines = String(txt || '').split('\n').map(function (l) { return l.replace(/\r$/, ''); })
+                 .filter(function (l) { return l.trim() !== ''; });
+  const rows = lines.map(function (l) { return l.split('\t').map(function (c) { return c.trim(); }); });
+  if (useHead && rows.length) return { head: rows[0], rows: rows.slice(1) };
+  return { head: [], rows: rows };
+}
+
+function renderYearDoc(f, ownerAddr) {
+  const box = $("#ydBox");
+  if (!box) return;
+  if (!ydState) { box.innerHTML = '<div class="card"><h3>年内目標</h3><p class="empty">読み込み中…</p></div>'; return; }
+
+  const rows = ydState.blocks.map(function (b, i) {
+    const sel = '<select data-ydtype="' + i + '">'
+      + YD_TYPES.map(function (t) {
+          return '<option value="' + t[0] + '"' + (b.type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>';
+        }).join('') + '</select>';
+    let body = '';
+    if (b.type === 'heading') {
+      body = '<input data-ydtext="' + i + '" value="' + esc(b.text) + '" placeholder="見出し">';
+    } else if (b.type === 'text') {
+      body = '<textarea data-ydtext="' + i + '" rows="4" placeholder="本文（改行はそのまま出ます）">' + esc(b.text) + '</textarea>';
+    } else if (b.type === 'table') {
+      body = '<label style="font-size:12px">表（1行が1行、列の区切りは Tab。表計算からそのまま貼れます）</label>'
+        + '<textarea data-ydtable="' + i + '" rows="6">' + esc(ydTableToText(b)) + '</textarea>'
+        + '<label style="font-size:12px"><input type="checkbox" data-ydhead="' + i + '"'
+        + ((b.head && b.head.length) ? ' checked' : '') + '> 1行目を見出しの行にする</label>';
+    } else {
+      body = '<input data-ydurl="' + i + '" value="' + esc(b.url) + '" placeholder="画像のURL（例：/schoolpark/images/quest-7-kousei.png）">'
+        + '<input data-ydcap="' + i + '" value="' + esc(b.caption) + '" placeholder="説明文（任意）">';
+    }
+    return '<div class="card" style="margin:8px 0; padding:12px">'
+      + '<div class="row"><span>' + (i + 1) + '　' + sel + '</span><span>'
+      + '<button class="act" data-ydup="' + i + '"' + (i === 0 ? ' disabled' : '') + '>↑</button> '
+      + '<button class="act" data-yddown="' + i + '"' + (i === ydState.blocks.length - 1 ? ' disabled' : '') + '>↓</button> '
+      + '<button class="act no" data-yddel="' + i + '">消す</button></span></div>'
+      + body + '</div>';
+  }).join('');
+
+  box.innerHTML = '<div class="card"><h3>年内目標（クエスト一覧の頭に出す読みもの）</h3>'
+    + '<p class="empty" style="text-align:left;margin:0 0 10px">'
+    + 'SchoolPark のクエスト一覧に、見出しと要約のカードで出ます。「全文を読む」で下の中身が1ページで開きます。<br>'
+    + '中身を空にして保存すると、カードそのものが出なくなります。</p>'
+    + '<label>見出し</label><input id="ydTitle" value="' + esc(ydState.title) + '" maxlength="120">'
+    + '<label>要約（カードに出る1〜2行）</label><textarea id="ydSummary" rows="2" maxlength="400">' + esc(ydState.summary) + '</textarea>'
+    + '<h3 style="margin-top:16px">中身（上から順に出ます）</h3>'
+    + (rows || '<p class="empty">まだ何もありません。下から足してください。</p>')
+    + '<div class="actions" style="flex-wrap:wrap">'
+    + YD_TYPES.map(function (t) {
+        return '<button class="btn" data-ydadd="' + t[0] + '">＋ ' + t[1] + '</button>';
+      }).join('')
+    + '</div>'
+    + '<div class="actions"><button class="btn primary" id="ydSave">保存する</button></div>'
+    + '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:13px">まとめて入れ替える（JSON）</summary>'
+    + '<p class="empty" style="text-align:left">下の欄に blocks の配列を貼って「JSONを取り込む」を押すと、中身を丸ごと入れ替えます。保存はそのあと「保存する」で。</p>'
+    + '<textarea id="ydJson" rows="8" placeholder=\'[{"type":"heading","text":"全体像"},{"type":"text","text":"…"}]\'></textarea>'
+    + '<div class="actions"><button class="btn" id="ydImport">JSONを取り込む</button>'
+    + '<button class="btn" id="ydExport">いまの中身をJSONで出す</button></div>'
+    + '</details></div>';
+
+  const redraw = function () { renderYearDoc(f, ownerAddr); };
+
+  document.querySelectorAll("[data-ydtype]").forEach(function (sl) {
+    sl.onchange = function () { ydState.blocks[+sl.dataset.ydtype].type = sl.value; redraw(); };
+  });
+  document.querySelectorAll("[data-ydtext]").forEach(function (t) {
+    t.oninput = function () { ydState.blocks[+t.dataset.ydtext].text = t.value; };
+  });
+  document.querySelectorAll("[data-ydurl]").forEach(function (t) {
+    t.oninput = function () { ydState.blocks[+t.dataset.ydurl].url = t.value; };
+  });
+  document.querySelectorAll("[data-ydcap]").forEach(function (t) {
+    t.oninput = function () { ydState.blocks[+t.dataset.ydcap].caption = t.value; };
+  });
+  const applyTable = function (i) {
+    const ta = document.querySelector('[data-ydtable="' + i + '"]');
+    const ck = document.querySelector('[data-ydhead="' + i + '"]');
+    if (!ta) return;
+    const t = ydTextToTable(ta.value, !!(ck && ck.checked));
+    ydState.blocks[i].head = t.head;
+    ydState.blocks[i].rows = t.rows;
+  };
+  document.querySelectorAll("[data-ydtable]").forEach(function (t) {
+    t.oninput = function () { applyTable(+t.dataset.ydtable); };
+  });
+  document.querySelectorAll("[data-ydhead]").forEach(function (c) {
+    c.onchange = function () { applyTable(+c.dataset.ydhead); };
+  });
+  document.querySelectorAll("[data-ydup]").forEach(function (b) {
+    b.onclick = function () {
+      const i = +b.dataset.ydup; if (i < 1) return;
+      const a = ydState.blocks;
+      a.splice(i - 1, 0, a.splice(i, 1)[0]); redraw();
+    };
+  });
+  document.querySelectorAll("[data-yddown]").forEach(function (b) {
+    b.onclick = function () {
+      const i = +b.dataset.yddown; const a = ydState.blocks;
+      if (i >= a.length - 1) return;
+      a.splice(i + 1, 0, a.splice(i, 1)[0]); redraw();
+    };
+  });
+  document.querySelectorAll("[data-yddel]").forEach(function (b) {
+    b.onclick = function () {
+      const i = +b.dataset.yddel;
+      if (!confirm('この' + (YD_TYPES.find(function (t) { return t[0] === ydState.blocks[i].type; }) || ['', ''])[1] + 'を消します。よろしいですか？')) return;
+      ydState.blocks.splice(i, 1); redraw();
+    };
+  });
+  document.querySelectorAll("[data-ydadd]").forEach(function (b) {
+    b.onclick = function () {
+      ydState.blocks.push({ type: b.dataset.ydadd, text: '', url: '', caption: '', head: [], rows: [] });
+      redraw();
+    };
+  });
+
+  const ti = $("#ydTitle"); if (ti) ti.oninput = function () { ydState.title = ti.value; };
+  const su = $("#ydSummary"); if (su) su.oninput = function () { ydState.summary = su.value; };
+
+  const ex = $("#ydExport");
+  if (ex) ex.onclick = function () {
+    const ta = $("#ydJson");
+    if (ta) ta.value = JSON.stringify(ydState.blocks.map(ydToDocBlock), null, 2);
+  };
+  const im = $("#ydImport");
+  if (im) im.onclick = function () {
+    const ta = $("#ydJson");
+    let v;
+    try { v = JSON.parse(ta ? ta.value : ''); }
+    catch (e) { alert('JSONとして読めませんでした（' + e.message + '）'); return; }
+    if (!Array.isArray(v)) { alert('配列（[ ... ]）を貼ってください。'); return; }
+    if (!confirm('いまの中身を、貼ったものと丸ごと入れ替えます。よろしいですか？')) return;
+    ydState.blocks = ydFromDoc({ blocks: v }).blocks;
+    redraw();
+  };
+
+  const sv = $("#ydSave");
+  if (sv) sv.onclick = async function () {
+    if (ydBusy) return;
+    if (!ydState.title.trim()) { alert('見出しを書いてください。'); return; }
+    ydBusy = true;
+    try {
+      await f.setDoc(f.doc(f.db, 'sp_docs', 'year-goals'), {
+        title: ydState.title.trim().slice(0, 120),
+        summary: ydState.summary.trim().slice(0, 400),
+        blocks: ydState.blocks.map(ydToDocBlock),
+        updatedAt: Date.now(),
+        by: ownerAddr
+      });
+      alert('保存しました。SchoolPark のクエスト一覧に出ます。');
+    } catch (e) {
+      alert('保存できませんでした（' + (e.code || e.message) + '）');
+    } finally { ydBusy = false; }
+  };
+}
+
+/* 画面で扱う形 → 記録の形。要らない欄は落として軽くする。 */
+function ydToDocBlock(b) {
+  if (b.type === 'heading' || b.type === 'text') return { type: b.type, text: String(b.text || '') };
+  if (b.type === 'image') return { type: 'image', url: String(b.url || ''), caption: String(b.caption || '') };
+  return {
+    type: 'table',
+    head: (b.head || []).map(String),
+    rows: (b.rows || []).map(function (r) { return { cells: (r || []).map(String) }; })
+  };
+}
+
 async function renderSchoolPark() {
   const el = $("#tab-schoolpark");
   el.innerHTML = '<p class="empty">読み込み中…</p>';
@@ -1399,6 +1618,14 @@ async function renderSchoolPark() {
     return m;
   }).sort((a, b) => b.score - a.score);
 
+  /* 年内目標（1件だけ）。まだ無ければ、空の形から始める。 */
+  try {
+    const yd = await f.getDoc(f.doc(f.db, "sp_docs", "year-goals"));
+    ydState = yd.exists() ? ydFromDoc(yd.data()) : ydBlank();
+  } catch (e) {
+    ydState = ydBlank();
+  }
+
   const STATUS = { OPEN: "募集中", RUNNING: "進行中", CLOSED: "完了" };
   const yen = v => (parseInt(String(v || "0").replace(/[^0-9]/g, ""), 10) || 0).toLocaleString();
 
@@ -1425,7 +1652,9 @@ async function renderSchoolPark() {
   });
 
   el.innerHTML =
-    '<div class="card"><h3>いまの状態</h3>'
+    /* 年内目標（クエスト一覧の頭に出す読みもの）。中身は別の関数で描く。 */
+    '<div id="ydBox"></div>'
+    + '<div class="card"><h3>いまの状態</h3>'
     + '<div class="row"><span>クエスト</span><span>' + quests.length + ' 本</span></div>'
     + '<div class="row"><span>議題</span><span>' + votes.length + ' 件</span></div>'
     + '<div class="row"><span>知恵カード</span><span>' + wisdomCount + ' 枚</span></div>'
@@ -1640,6 +1869,8 @@ async function renderSchoolPark() {
     } catch (e) { alert("記録できませんでした（" + (e.code || e.message) + "）"); return; }
     renderSchoolPark();
   };
+
+  renderYearDoc(f, ownerAddr);
 
   document.querySelectorAll("[data-atdel]").forEach(b => {
     b.onclick = async () => {

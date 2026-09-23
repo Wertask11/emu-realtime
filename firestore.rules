@@ -1296,6 +1296,38 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ───────── 運営が書く読みもの ─────────
+
+       いまは sp_docs/year-goals（SchoolParkの年内目標）の1件だけ。
+       クエスト一覧の頭にカードで出し、押すと全文が開く。
+
+       読むのは誰でもよい。これから来る人に「何を目指しているのか」を
+       先に見せる場所なので、入る前でも読めるようにしておく。
+       書けるのは運営だけ。中身は運営の言葉として出るので、
+       ほかの人が書き換えられると、言っていないことを言ったことにできる。
+
+       blocks は上から順に並べる配列。種類は heading / text / table / image。
+       Firestore は「配列の中の配列」を持てないので、表の行は
+       { cells: [...] } の形で持つ。 */
+    /* 1つ1つのブロックの中身は、ここでは確かめない。
+       記録の決まりでは配列を1件ずつ回せないため。
+       形の崩れたブロックは、読むときに画面側（index.html の _spYearBlock）が
+       落とす。書けるのは運営だけなので、ここは件数と全体の形だけを縛る。 */
+    match /sp_docs/{docId} {
+      allow read: if true;
+      allow create, update: if canAccessSchoolPark() && isOwner()
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.get('summary', '') is string
+        && request.resource.data.get('summary', '').size() <= 400
+        && request.resource.data.blocks is list
+        && request.resource.data.blocks.size() <= 200
+        && request.resource.data.get('updatedAt', 0) is int;
+      /* 消すのは運営だけ。書き換えの履歴は残さない（1件しか置かないため）。 */
+      allow delete: if canAccessSchoolPark() && isOwner();
+    }
+
     /* ───────── トレジャリーの入出金 ─────────
 
        クエストに付いた予算は「これから払う約束」でしかない。
@@ -1336,6 +1368,7 @@ service cloud.firestore {
         && coll != 'sp_guilds'
         && coll != 'sp_guild_members'
         && coll != 'sp_treasury'
+        && coll != 'sp_docs'
         /* SchoolPark ID の一式。汎用許可へ漏らさない。 */
         && coll != 'sp_identities'
         && coll != 'sp_auth_links'
