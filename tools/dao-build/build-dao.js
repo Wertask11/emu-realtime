@@ -326,8 +326,11 @@ if (!logic.includes("me:{name:'ゲスト'")) { console.error('本人の入れ物
 
 const OLD_MOUNT = "  componentDidMount(){ this._r = ";
 if (!logic.includes(OLD_MOUNT)) { console.error('起動時の処理が見つからない'); process.exit(1); }
+/* 読むものの一覧は親（index.html の SP_DAO_LOADERS）が持っている。
+   ここで名前を並べると、足したときに片方だけ直して取りこぼす。
+   実際それで、年内目標が開いても一度も読まれていなかった。 */
 logic = logic.replace(OLD_MOUNT,
-  "  componentDidMount(){ try { window.parent.spDaoWhoAmI(this); } catch (e) {} this._r = ");
+  "  componentDidMount(){ try { window.parent.spDaoReloadAll(this); } catch (e) {} this._r = ");
 
 logic = logic.replace(OLD_PASS + `
       openPassport`, OLD_PASS + `
