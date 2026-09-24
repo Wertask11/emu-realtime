@@ -516,21 +516,44 @@ service cloud.firestore {
 
     match /ches_accounts/{uid} {
       allow read: if signedIn();
+      /* ここは「自分が何者か」を決める記録で、ほかの決まりの土台になっている。
+         isOwner() も hasPass() も isMyWallet() も、ここの walletAddress と
+         chesAddress を見ている。だから、ここに何を書けるかがそのまま
+         「何を名乗れるか」になる。
+
+         前は walletAddress が文字列でありさえすれば作れた。
+         つまり誰でも、自分のアカウントに運営のアドレスを書いて作れば、
+         その場で運営として通ってしまった。クエストを出す、票を採択する、
+         知恵カードを消す ―― 運営にできることが全部できた。
+
+         作れるのは本人の分だけ、という条件はそのままに、次を足す。
+           ・運営のアドレスは名乗れない（サーバーは Admin SDK なので影響なし）
+           ・SchoolPark ID（spid）は混ぜられない。あれはサーバーだけが書く。
+             自分で書けると、他人の番号を名乗って sp_identities を読める
+           ・ログインボーナスの記録も、これまでどおり混ぜられない */
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.resource.data.walletAddress is string
-        && !request.resource.data.keys().hasAny(['lastLoginBonusDate']);
+        && request.resource.data.walletAddress.size() > 0
+        && !isOwnerAddr(request.resource.data.walletAddress)
+        && !isOwnerAddr(request.resource.data.get('chesAddress', ''))
+        && !request.resource.data.keys().hasAny(
+             ['lastLoginBonusDate', 'spid', 'spidLinkedAt']);
       /* chesAddress の補完だけは本人に許す。古いアカウントにはこの欄が無く、
          サーバーの補完はウォレットでログインしたときしか動かないため、
          LINE / Google / メールの人は欠けたままだった。
-         書き換えではなく、無いところへ入れるときだけ通す。 */
+         書き換えではなく、無いところへ入れるときだけ通す。
+
+         ここにも同じ穴があった。空の欄に運営のアドレスを入れれば、
+         作り直さなくても運営になれた。入れられる値から運営を外す。 */
       allow update: if signedIn()
         && request.auth.uid == uid
         && (changedOnly(['lastLogin', 'displayName', 'email', 'photoURL'])
             || (changedOnly(['chesAddress', 'lastLogin'])
                 && resource.data.get('chesAddress', '') == ''
                 && request.resource.data.get('chesAddress', '') is string
-                && request.resource.data.get('chesAddress', '').size() > 0));
+                && request.resource.data.get('chesAddress', '').size() > 0
+                && !isOwnerAddr(request.resource.data.get('chesAddress', ''))));
       allow delete: if false;
     }
 

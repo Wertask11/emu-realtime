@@ -1245,12 +1245,11 @@ async function spReady() {
      stream が切られ、getDocs が返ってこないまま止まる。
      この画面は待ち続けるだけなので、「読み込み中…」から進まなくなる。
 
-     experimentalAutoDetectLongPolling を立てると、SDK が最初に streaming を
-     試し、通らない回線では自動で long-polling に切り替える。
-     index.html にも同じものを入れてある。 */
+     自動判定では止まらなかったので、最初から long-polling を使う。
+     途中で切れて戻れなくなることがない。index.html と同じ。 */
   let db;
   try {
-    db = fs.initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+    db = fs.initializeFirestore(app, { experimentalForceLongPolling: true });
   } catch (e) {
     console.warn("Firestore の繋ぎ方を自動判定にできませんでした:", e && (e.message || e));
     db = fs.getFirestore(app);
