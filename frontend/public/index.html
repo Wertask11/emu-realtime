@@ -6070,13 +6070,21 @@ function evolveBadge() {
 </script>
 <script>
 	// ★ リアルタイム入場者数カウンター（ユニークなアカウント数・重複なし・0スタート）
+/* 見張りが転んだあと、どれだけ置いてから張り直すか。
+   だんだん間隔を空けて、3回であきらめる。 */
+const AIRDROP_RETRY_MS = [5000, 15000, 30000];
+let airdropRetries = 0;
+let airdropStop = null;
+
 function startAirdropCounter() {
   if (!window.fbLib || !window.db) {
     setTimeout(startAirdropCounter, 500);
     return;
   }
+  /* 二重に張らない。張り直すときは、前のを必ず外してから。 */
+  if (airdropStop) { try { airdropStop(); } catch (e) {} airdropStop = null; }
   const globalRef = window.fbLib.doc(window.db, "sp_stats", "global");
-  window.fbLib.onSnapshot(globalRef, (snap) => {
+  airdropStop = window.fbLib.onSnapshot(globalRef, (snap) => {
     const d = snap.exists() ? snap.data() : {};
     // 各ブランドを選んだユニーク人数（ハブ/CHESメニューでの選択時に spTrackBrand が加算）
     const n = {
@@ -6096,6 +6104,34 @@ function startAirdropCounter() {
     set("hubCountHeartoo",    n.heartoo);
     set("hubCountEmu",        n.emu);
     set("hubCountSchoolPark", n.schoolpark);
+  },
+  /* 転んだときの受け口が無かった。
+
+     Firestore の見張りは、一度転ぶとその場で外される。受け口が無いと、
+     外されたことが誰にも伝わらないまま、入場者数がその時の数で固まる。
+     通信が戻っても、もう誰も数えていない。
+
+     しかも受け取り手のない例外になるので、画面の控えに
+     「Uncaught Error in snapshot listener」だけが残る。
+     何が止まったのか分からない。
+
+     転んだら、少し置いて張り直す。3回で止める。
+     決まりで断られたときは、何度張り直しても同じなので張り直さない。 */
+  (err) => {
+    airdropStop = null;
+    const code = String((err && err.code) || '');
+    if (code === 'permission-denied') {
+      console.warn('入場者数を見張れません（権限）:', err && (err.message || err));
+      return;
+    }
+    if (airdropRetries >= AIRDROP_RETRY_MS.length) {
+      console.warn('入場者数の見張りを、あきらめました:', err && (err.message || err));
+      return;
+    }
+    const wait = AIRDROP_RETRY_MS[airdropRetries++];
+    console.warn('入場者数の見張りが切れました。' + (wait / 1000) + '秒後に張り直します:',
+      err && (err.message || err));
+    setTimeout(startAirdropCounter, wait);
   });
 }
 startAirdropCounter();
@@ -17232,10 +17268,43 @@ function _spRestFields(fields) {
   Object.keys(fields || {}).forEach(function (k) { out[k] = _spRestValue(fields[k]); });
   return out;
 }
-async function _spRestQuests() {
+/* 普通の通信の土台。行き先（path）だけ差し替えて使う。
+
+   needAuth … ログインの証が無ければ、そもそも投げない。
+               決まりが canAccessSchoolPark() を見ている記録はこちら。
+               誰でも読める記録（sp_docs）は false。証があれば付けるだけ。
+
+   記録がまだ無いときは 404 が返る。これは「断られた」のとは違うので、
+   例外にせず null を返す。区別しないと、通信が届かないだけのときと
+   「まだ書かれていない」が同じ扱いになり、画面が消えてしまう。 */
+async function _spRestGet(path, needAuth) {
   let opt = {};
   try { opt = (window.db && window.db.app && window.db.app.options) || {}; } catch (e) {}
   if (!opt.projectId || !opt.apiKey) throw new Error('設定が読めない');
+  let token = '';
+  try {
+    const u = window.auth && window.auth.currentUser;
+    if (u && typeof u.getIdToken === 'function') token = await u.getIdToken();
+  } catch (e) {}
+  if (needAuth && !token) throw new Error('ログインの証が取れない');
+  const headers = {};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
+            + '/databases/(default)/documents/' + path
+            + (path.indexOf('?') >= 0 ? '&' : '?') + 'key=' + opt.apiKey;
+  const r = await fetch(url, { cache: 'no-store', headers: headers });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return await r.json();
+}
+
+/* 記録を1件だけ読む。無ければ null。 */
+async function _spRestDoc(path, needAuth) {
+  const j = await _spRestGet(path, needAuth);
+  return j ? _spRestFields(j.fields || {}) : null;
+}
+
+async function _spRestQuests() {
   /* ログインの証（IDトークン）を必ず付ける。
 
      ここは前まで鍵（apiKey）だけで聞きに行っていた。
@@ -17244,20 +17313,7 @@ async function _spRestQuests() {
      ログインの証が無い読み取りは必ず断られる。
      つまりこの逃げ道は、呼ばれるたびに 403 を返すだけだった。
      コンソールに出ていた「普通の通信でも読めませんでした: HTTP 403」がそれ。 */
-  let token = '';
-  try {
-    const u = window.auth && window.auth.currentUser;
-    if (u && typeof u.getIdToken === 'function') token = await u.getIdToken();
-  } catch (e) {}
-  if (!token) throw new Error('ログインの証が取れない');
-  const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
-            + '/databases/(default)/documents/sp_quests?pageSize=100&key=' + opt.apiKey;
-  const r = await fetch(url, {
-    cache: 'no-store',
-    headers: { 'Authorization': 'Bearer ' + token }
-  });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const j = await r.json();
+  const j = await _spRestGet('sp_quests?pageSize=100', true);
   return ((j && j.documents) || []).map(function (d) {
     return Object.assign({ id: String(d.name || '').split('/').pop() }, _spRestFields(d.fields));
   }).sort(function (a, b) { return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0); }).slice(0, 30);
@@ -17324,25 +17380,68 @@ function _spYearDate(ms) {
   return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
 }
 
-window.spDaoLoadYearDoc = async function (app) {
+/* 読めなかったときに、少し置いてもう一度だけ試す。予約は1つ。 */
+let _spYearRetryTimer = null;
+
+window.spDaoLoadYearDoc = async function (app, attempt) {
   if (!app || typeof app.setState !== 'function') return;
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
+  const n = Number(attempt) || 0;
+
+  /* answered は「サーバーから本当の答えが返ってきたか」。
+     記録が無いという答えも、ここでは本当の答え。
+     手元の控えから返ってきたものと、通信が届かなかったものは含めない。 */
   let d = null;
+  let answered = false;
+  let err = null;
+
   try {
     const snap = await fb.getDoc(fb.doc(window.db, 'sp_docs', 'year-goals'));
-    /* 通信が届いていないとき、控えから「無い」が返ることがある。
-       そのときは今までの表示を消さない（消すと、あったものが消えたように見える）。 */
-    if (!snap.exists()) {
-      if (snap.metadata && snap.metadata.fromCache) return;
-      app.setState({ yearDoc: null });
-      return;
-    }
-    d = snap.data() || {};
+    const cached = !!(snap.metadata && snap.metadata.fromCache);
+    if (snap.exists()) { d = snap.data() || {}; answered = true; }
+    else if (!cached) { answered = true; }
   } catch (e) {
-    _spWarnDenied('年内目標', e);
+    /* 専用の通信路（Listen）が切れると、SDK は自分をオフラインと見なす。
+       そのあとの getDoc は、控えに無ければ
+         Failed to get document because the client is offline
+       を投げる。決まりで断られたときも、ここへ来る。
+       どちらなのかはこの時点では分からないので、まだ何も言わない。 */
+    err = e;
+  }
+
+  /* SDK から本当の答えが返らなかったときは、普通の通信で取りに行く。
+     クエスト一覧と同じ逃げ道。専用の通信路を使わないので、
+     そちらが切れていても届く。
+
+     ここが無かったために、通信が一瞬切れただけでカードが出ず、
+     そのまま黙って引き返していた。クエスト一覧は逃げ道で助かっていたのに、
+     年内目標だけ消えていたのはこれが理由。
+
+     sp_docs は誰でも読める（allow read: if true）ので、証は要らない。
+     持っていれば付けるが、無くても届く。 */
+  if (!answered) {
+    try {
+      d = await _spRestDoc('sp_docs/year-goals', false);
+      answered = true;
+      console.warn('年内目標を普通の通信で読みました' + (d ? '' : '（まだ記録がありません）'));
+    } catch (e2) {
+      console.warn('年内目標を普通の通信でも読めませんでした:', e2 && (e2.message || e2));
+    }
+  }
+
+  /* それでも答えが返らないときは、いま出ているものを消さない。
+     通信の都合だけで、見えていたカードが消えるのは嘘になる。 */
+  if (!answered) {
+    if (err) _spWarnDenied('年内目標', err);
+    if (n === 0) {
+      clearTimeout(_spYearRetryTimer);
+      _spYearRetryTimer = setTimeout(function () { window.spDaoLoadYearDoc(app, 1); }, 4000);
+    }
     return;
   }
+
+  d = d || {};
   const blocks = (Array.isArray(d.blocks) ? d.blocks : [])
     .map(_spYearBlock).filter(Boolean);
   if (!blocks.length) { app.setState({ yearDoc: null }); return; }
