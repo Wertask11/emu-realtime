@@ -16655,18 +16655,14 @@ window.spDaoLoadVotes = async function (app) {
     const list = [];
     snap.forEach(function (s) { list.push(Object.assign({ id: s.id }, s.data() || {})); });
     _spVoteDocs = list;
-  } catch (e) {
-    console.warn('議題を読めませんでした:', e && (e.message || e));
-  }
+  } catch (e) { _spWarnDenied('議題', e); }
   try {
     const q = fb.query(fb.collection(window.db, 'sp_quests'), fb.orderBy('createdAt', 'desc'), fb.limit(100));
     const snap = await fb.getDocs(q);
     const list = [];
     snap.forEach(function (s) { list.push(Object.assign({ id: s.id }, s.data() || {})); });
     _spGuildQuestDocs = list;
-  } catch (e) {
-    console.warn('クエストを読めませんでした:', e && (e.message || e));
-  }
+  } catch (e) { _spWarnDenied('クエスト', e); }
 
   /* ギルドごとに「参加したい」と「応援する」で2往復ある。
      5ギルドを1つずつ順に待っていたので10往復ぶん待っていた。まとめて同時に投げる。 */
@@ -17126,6 +17122,59 @@ function _spQuestDue(closesAt) {
    だんだん間隔を空けて、6回であきらめる（およそ1分）。 */
 const SP_QUEST_RETRY_MS = [1500, 3000, 6000, 10000, 10000, 10000];
 
+/* 記録の決まり（Rules）で断られたか。
+
+   断られたときは、何回読み直しても同じ答えしか返ってこない。
+   それでも読み直していたため、1.5秒→3秒→6秒→10秒…と40秒ほど
+   だまって待ったあげく、最後に「まだクエストがありません」と出していた。
+   読めなかったのに「無い」と言い切るのは嘘なので、そこも直す。 */
+function _spDenied(e) {
+  const code = String((e && e.code) || '');
+  const msg = String((e && e.message) || '');
+  return code === 'permission-denied'
+    || msg.indexOf('Missing or insufficient permissions') >= 0;
+}
+
+/* 断られたとき、証（IDトークン）を取り直して1回だけやり直す。
+
+   通信が切れているあいだ、SDK は証を更新できない。復旧しても古い証のまま
+   投げ続けることがあり、記録の決まりは当然それを断る。人は何も変わって
+   いないのに「権限がありません」になる。
+
+   force を付けて取り直すと、その場で新しい証に入れ替わる。
+   本当に権限が無いときは取り直しても断られるので、やり直しは1回だけ。
+   何度もやると、権限が無い人を無駄に待たせることになる。 */
+let _spTokenRefreshedAt = 0;
+async function _spRefreshAuth() {
+  const now = Date.now();
+  /* 短いあいだに何度も取り直さない（画面の各所から同時に呼ばれるため） */
+  if (now - _spTokenRefreshedAt < 10000) return false;
+  try {
+    const u = window.auth && window.auth.currentUser;
+    if (!u || typeof u.getIdToken !== 'function') return false;
+    await u.getIdToken(true);
+    _spTokenRefreshedAt = now;
+    console.warn('ログインの証を取り直しました。もう一度読みます。');
+    return true;
+  } catch (e) {
+    console.warn('ログインの証を取り直せませんでした:', e && (e.message || e));
+    return false;
+  }
+}
+
+/* 断られたときに、画面と控えに出す言葉。
+   「権限がありません」だけでは、誰が何をすれば直るのか分からない。 */
+const SP_DENIED_NOTE = 'SchoolPark の記録を読む権限がありません。'
+  + 'ログインし直しても直らないときは、運営に連絡してください。';
+function _spWarnDenied(where, e) {
+  if (_spDenied(e)) {
+    console.warn(where + '：' + SP_DENIED_NOTE
+      + '（公開前なので、公式パスか運営のアカウントが要ります）');
+  } else {
+    console.warn(where + 'を読めませんでした:', e && (e.message || e));
+  }
+}
+
 /* 呼ぶ入口が2つある（枠の中の起動時と、親の spDaoReloadAll）。
    そのままだと、それぞれが別々の読み直しの列を作って二重に走る。
    実際、本番のログに同じ回が2つずつ並んだ。通信が倍になり、
@@ -17273,7 +17322,7 @@ window.spDaoLoadYearDoc = async function (app) {
     }
     d = snap.data() || {};
   } catch (e) {
-    console.warn('年内目標を読めませんでした:', e && (e.message || e));
+    _spWarnDenied('年内目標', e);
     return;
   }
   const blocks = (Array.isArray(d.blocks) ? d.blocks : [])
@@ -17317,7 +17366,29 @@ async function _spDaoLoadQuestsOnce(app, attempt) {
      「まだクエストがありません」と言い切るのは、本当に読めたときだけ。
      予約は1つだけ。あとから来たものが前の予約を引き取る。 */
   const n = Number(attempt) || 0;
-  function later(why) {
+  /* 断られたときは読み直さない。何度やっても同じなので、待つだけ無駄になる。 */
+  let denied = false;
+  function later(why, e) {
+    if (_spDenied(e)) {
+      /* 証が古いだけかもしれない。取り直して1回だけやり直す。
+         attempt に -1 を渡し、やり直しは1回きりにする。 */
+      if (n >= 0) {
+        _spRefreshAuth().then(function (ok) {
+          if (ok) window.spDaoLoadQuests(app, -1);
+          else {
+            console.warn('クエスト：' + SP_DENIED_NOTE);
+            app.setState({ noQuests: false, questsDenied: true, questsNote: SP_DENIED_NOTE });
+          }
+        });
+        return;
+      }
+      denied = true;
+      console.warn('クエスト：' + SP_DENIED_NOTE);
+      app.setState({ noQuests: false, questsDenied: true, questsNote: SP_DENIED_NOTE });
+      return;
+    }
+    /* n が負のときは「証を取り直したあとの1回」。ここで数え直さない。 */
+    if (n < 0) { console.warn('クエストを読めませんでした:', why); return; }
     console.warn('クエストを読み直します（' + (n + 1) + '回目）:', why);
     if (n >= SP_QUEST_RETRY_MS.length) return;
     clearTimeout(_spQuestRetryTimer);
@@ -17352,7 +17423,7 @@ async function _spDaoLoadQuestsOnce(app, attempt) {
       }
     }
   } catch (e) {
-    return later((e && (e.message || e)) || '一覧を読めなかった');
+    return later((e && (e.message || e)) || '一覧を読めなかった', e);
   }
 
   /* Quest #000 の取りこぼしを防ぐ保険。上の30件に入っていれば要らない。
@@ -17386,7 +17457,11 @@ async function _spDaoLoadQuestsOnce(app, attempt) {
   }));
   /* 読めたので、待たせていた読み直しの予約は取り消す。 */
   clearTimeout(_spQuestRetryTimer);
-  app.setState({ quests: quests, noQuests: quests.length === 0 });
+  /* ここまで来たのは本当に読めたとき。断られていたら上で返している。 */
+  app.setState({
+    quests: quests, noQuests: quests.length === 0,
+    questsDenied: false, questsNote: ''
+  });
 }
 
 /* クエスト1件を、枠の中で使える形にする。
@@ -17989,7 +18064,7 @@ window.spDaoLoadTasks = async function (app) {
       });
     });
   } catch (e) {
-    console.warn('宿題を読めませんでした:', e && (e.message || e));
+    _spWarnDenied('宿題', e);
     return;
   }
   app.setState({ tasks: list, noTasks: list.length === 0, today: _spTaskToday() });
@@ -18294,7 +18369,7 @@ window.spDaoLoadWisdom = async function (app) {
     const snap = await fb.getDocs(q);
     snap.forEach(function (s) { docs.push({ id: s.id, ...(s.data() || {}) }); });
   } catch (e) {
-    console.warn('知恵を読めませんでした:', e && (e.message || e));
+    _spWarnDenied('知恵', e);
     return;
   }
   const p = await spPassportLoad();
@@ -18756,7 +18831,7 @@ window.spDaoLoadPark = async function (app) {
     const snap = await fb.getDocs(fb.collection(window.db, 'sp_park'));
     snap.forEach(function (s) { items.push({ id: s.id, ...(s.data() || {}) }); });
   } catch (e) {
-    console.warn('公園を読めませんでした:', e && (e.message || e));
+    _spWarnDenied('公園', e);
     return;
   }
   items = items.filter(function (i) { return !i.hidden; })
@@ -23080,12 +23155,20 @@ import {
      ギルド・クエスト・パスポートが出るまで何十秒もかかっていたのは、
      多くがこれ。
 
-     experimentalAutoDetectLongPolling を立てると、SDK が最初に
-     streaming を試し、通らない回線では自動で long-polling に切り替える。
-     通る回線では今までどおり streaming のままなので、速さは落ちない。 */
+     はじめは自動判定（experimentalAutoDetectLongPolling）にしていたが、
+     それでは止まらなかった。自動判定は最初に1回だけ試すので、
+     その1回が通ってしまうと、あとで stream が切れても streaming のまま
+     居座る。切れているあいだに認証の更新も通らなくなり、古い証のまま
+     リクエストが出て、記録の決まりに
+       Missing or insufficient permissions
+     で弾かれる。「権限がありません」に見えて、実は通信の問題だった。
+
+     experimentalForceLongPolling は最初から long-polling を使う。
+     streaming より少しだけ遅いが、途中で切れて戻れなくなることがない。
+     この規模では、速さより確実さを採る。 */
   let db;
   try {
-    db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+    db = initializeFirestore(app, { experimentalForceLongPolling: true });
   } catch (e) {
     /* 二重初期化などで弾かれたときは、今までどおりの繋ぎ方に戻す。
        ここで落とすと、Firestore を使う画面が全部止まる。 */
