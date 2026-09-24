@@ -16293,14 +16293,32 @@ window.addEventListener('emu-entitlement', function () {
    読み込みが早すぎた回だけ起きるため、出たり出なかったりする。
 
    用意ができた合図は前から出ていた。聞いていなかっただけなので、ここで聞く。 */
-window.spDaoReloadAll = function () {
-  const fr = document.getElementById('spDaoFrame');
-  const app = fr && fr.contentWindow && fr.contentWindow.app;
+/* SchoolPark の画面に出すものを読む一覧。
+
+   読む口は2つある。親の spDaoReloadAll（Firebaseの用意ができたとき）と、
+   枠の中の componentDidMount（SchoolPark を開いたとき）。
+   前は両方がそれぞれ名前を並べていたため、片方に足し忘れると
+   その画面だけ出ないことが起きた。実際、年内目標が componentDidMount
+   側に無く、開いても一度も読まれていなかった
+   （spDaoReloadAll は開くより前に5秒だけ待って諦める）。
+
+   一覧はここ1か所だけにする。足すときはこの配列に1行足せばよい。 */
+const SP_DAO_LOADERS = [
+  'spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
+  'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark',
+  'spDaoLoadYearDoc'
+];
+
+/* app を渡せば、その画面に読み込む（枠の中から呼ぶとき用）。
+   渡さなければ、いまある枠を探す（親から呼ぶとき用）。 */
+window.spDaoReloadAll = function (appFromFrame) {
+  let app = appFromFrame;
+  if (!app) {
+    const fr = document.getElementById('spDaoFrame');
+    app = fr && fr.contentWindow && fr.contentWindow.app;
+  }
   if (!app || !window.db || !window.fbLib) return false;
-  ['spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
-   'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark',
-   'spDaoLoadYearDoc'
-  ].forEach(function (name) {
+  SP_DAO_LOADERS.forEach(function (name) {
     const fn = window[name];
     if (typeof fn !== 'function') return;
     /* 1つが転んでも、残りは読む。約束の失敗も拾っておく */
