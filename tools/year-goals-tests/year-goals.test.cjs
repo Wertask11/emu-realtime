@@ -451,3 +451,62 @@ test('クエストの逃げ道：多くても30件まで', async () => {
   const q = questReader({ docs: docs });
   assert.equal((await q.api._spRestQuests()).length, 30);
 });
+
+/* ───────── 見本のボタン ─────────
+
+   前は「中身がまだ無いとき」だけ出していた。そのため、資料が新しくなって
+   入れ替えたいときにボタンが消えていて、いま入っている分を1件ずつ
+   「消す」で全部消すまで読み込めなかった。30件なら30回。
+   入れ替えこそ使いどきなので、いつでも出す。 */
+const fs = require('node:fs');
+const path = require('node:path');
+
+test('見本のボタンは、中身があっても出る', () => {
+  /* 画面を組み立てている字面を見る。条件で消していないこと。 */
+  assert.ok(ADMIN.indexOf("'<button class=\"btn\" id=\"ydSeed\">'") >= 0,
+    '見本のボタンが、条件つきで組み立てられている');
+  assert.equal(ADMIN.indexOf("ydState.blocks.length ? ''\n       : '<button class=\"btn\" id=\"ydSeed\">"), -1,
+    '中身が空のときだけ出す書き方が残っている');
+});
+
+test('見本のボタンは、中身の有無で言葉が変わる', () => {
+  assert.ok(ADMIN.indexOf('見本（ギルド資料）で入れ替える') >= 0);
+  assert.ok(ADMIN.indexOf('見本（ギルド資料）を読み込む') >= 0);
+});
+
+test('見本の中身は、画面と管理画面の両方をそのまま通る', () => {
+  const seed = JSON.parse(fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'public', 'schoolpark', 'year-goals-seed.json'), 'utf8'));
+  assert.ok(Array.isArray(seed) && seed.length > 0);
+
+  /* 画面側：1件も落ちない */
+  const r = reader({});
+  const shown = seed.map(r.api._spYearBlock);
+  assert.equal(shown.filter(Boolean).length, seed.length, '画面に出ないブロックがある');
+
+  /* 管理画面側：取り込み → 保存 の往復で中身が変わらない */
+  const w = writer();
+  const back = seedThroughEditor(seed);
+  assert.deepEqual(back, seed, '取り込んで保存すると中身が変わる');
+  void w;
+});
+
+/* 見本を編集欄の形に直して、また記録の形へ戻す。 */
+function seedThroughEditor(seed) {
+  const api = build(ADMIN, ['ydFromDoc', 'ydToDocBlock'], {},
+    "const YD_TYPES=[['heading','見出し'],['text','本文'],['table','表'],['image','画像']];");
+  return api.ydFromDoc({ blocks: seed }).blocks.map(api.ydToDocBlock);
+}
+
+test('見本に、資料の特殊クエストが入っている', () => {
+  const seed = JSON.parse(fs.readFileSync(
+    path.join(__dirname, '..', '..', 'frontend', 'public', 'schoolpark', 'year-goals-seed.json'), 'utf8'));
+  const heads = seed.filter(function (b) { return b.type === 'heading'; })
+                    .map(function (b) { return b.text; });
+  assert.ok(heads.some(function (h) { return h.indexOf('特殊 #001') === 0; }), '特殊 #001 の節が無い');
+  assert.ok(heads.some(function (h) { return h.indexOf('特殊 #002') === 0; }), '特殊 #002 の節が無い');
+  /* 一般5本も残っていること */
+  ['01 LEARN', '02 WORK', '03 PLAY', '04 CONNECT', '05 WEB3'].forEach(function (g) {
+    assert.ok(heads.some(function (h) { return h.indexOf(g) === 0; }), g + ' の節が無い');
+  });
+});

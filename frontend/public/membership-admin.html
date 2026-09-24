@@ -1418,11 +1418,17 @@ function renderYearDoc(f, ownerAddr) {
       }).join('')
     + '</div>'
     + '<div class="actions"><button class="btn primary" id="ydSave">保存する</button>'
-    /* 最初の1回ぶんの見本。中身がまだ無いときだけ出す。
-       長いJSONを手で貼ると、コピー元の画面によっては途中で切れる。
-       ここから読めば切れようがない。 */
-    + (ydState.blocks.length ? ''
-       : '<button class="btn" id="ydSeed">見本（ギルド資料）を読み込む</button>')
+    /* ギルド資料の見本。長いJSONを手で貼ると、コピー元の画面によっては
+       途中で切れる。ここから読めば切れようがない。
+
+       前は「中身がまだ無いとき」だけ出していた。そのため、資料が新しく
+       なって入れ替えたいときにボタンが消えていて、いま入っている分を
+       1件ずつ「消す」で全部消すまで読み込めなかった。30件なら30回。
+       入れ替えこそ使いどきなので、いつでも出す。中身があるときは
+       押した先で「入れ替えます」と確かめる。 */
+    + '<button class="btn" id="ydSeed">'
+    + (ydState.blocks.length ? '見本（ギルド資料）で入れ替える' : '見本（ギルド資料）を読み込む')
+    + '</button>'
     + '</div>'
     + '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:13px">まとめて入れ替える（JSON）</summary>'
     + '<p class="empty" style="text-align:left">下の欄に blocks の配列を貼って「JSONを取り込む」を押すと、中身を丸ごと入れ替えます。保存はそのあと「保存する」で。</p>'
@@ -1492,6 +1498,10 @@ function renderYearDoc(f, ownerAddr) {
 
   const sd = $("#ydSeed");
   if (sd) sd.onclick = async function () {
+    /* いま入っているものは消える。消える件数を見せてから確かめる。 */
+    if (ydState.blocks.length
+        && !confirm('いまの中身（' + ydState.blocks.length + '件）を、見本で丸ごと入れ替えます。\n'
+                    + 'よろしいですか？（この時点ではまだ保存されません）')) return;
     sd.disabled = true;
     try {
       const r = await fetch('/schoolpark/year-goals-seed.json', { cache: 'no-store' });
@@ -1503,8 +1513,9 @@ function renderYearDoc(f, ownerAddr) {
         ydState.summary = '12/31までに、7つのクエスト（一般5＋特殊2）をすべて完走させる。'
           + '一般は5つのギルドから1本ずつ、特殊は年内に達成したいもの。';
       }
+      const n = ydState.blocks.length;
       renderYearDoc(f, ownerAddr);
-      alert('見本を読み込みました。中身を確かめて「保存する」を押してください。');
+      alert('見本を読み込みました（' + n + '件）。中身を確かめて「保存する」を押してください。');
     } catch (e) {
       sd.disabled = false;
       alert('見本を読み込めませんでした（' + (e.message || e) + '）');
