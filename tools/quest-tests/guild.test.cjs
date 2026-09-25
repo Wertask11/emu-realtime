@@ -36,11 +36,29 @@ beforeEach(async () => {
     await fb.setDoc(fb.doc(d, 'ches_accounts', 'plain'), { walletAddress: 'plain', chesAddress: 'plain' });
     /* trusted は「ギルドに関われる人」として運営が認めた人 */
     await fb.setDoc(fb.doc(d, 'sp_trust', 'trusted'), { at: 1 });
+    /* 公式パス。10/1 の一般公開までは、これが無いと SchoolPark に入れない
+       （canAccessSchoolPark）。この試しを書いたときは、まだこの門が無かった。 */
+    for (const a of [owner, 'trusted']) {
+      await fb.setDoc(fb.doc(d, 'paid_users', a), { plan: 'official' });
+    }
   });
   db = env.authenticatedContext('founder').firestore();
   trusted = env.authenticatedContext('trusted').firestore();
   plain = env.authenticatedContext('plain').firestore();
 });
+
+/* 10/1 の一般公開まで、この試しは成り立たない。
+
+   いま SchoolPark に入れるのは、公式パスの持ち主と運営だけ
+   （canAccessSchoolPark）。そしてパスを持っている人は、それだけで
+   ギルドに関われる人になる（canGuildWith の hasPassFor）。
+   つまり「入れるけれど、ギルドには関われない人」が、いまは存在しない。
+   plain をそういう人として立てているので、パスを配っても配らなくても
+   前提が崩れる。
+
+   10/1 に schoolParkPublicStarted() が真になると、パスを持たない人も
+   入れるようになり、この区別が初めて意味を持つ。そのとき外す。 */
+const UNTIL_PUBLIC = { skip: '10/1の一般公開まで、パスを持たない参加者を作れないため' };
 
 const proposal = (by, extra) => Object.assign({
   title: '来月の予算を何に使うか',
@@ -81,7 +99,7 @@ test('出すときに採択を先に書き込むことはできない', async ()
     proposal(owner, { adoptedOptionId: 'o1', adoptedAt: 1, adoptedBy: owner })));
 });
 
-test('一般議題は誰でも、特殊議題は関われる人だけが投票できる', async () => {
+test('一般議題は誰でも、特殊議題は関われる人だけが投票できる', UNTIL_PUBLIC, async () => {
   await env.withSecurityRulesDisabled(async c => {
     const d = c.firestore();
     await fb.setDoc(fb.doc(d, 'sp_votes', 'free1'), proposal(owner));
@@ -92,7 +110,7 @@ test('一般議題は誰でも、特殊議題は関われる人だけが投票�
   await assertSucceeds(fb.setDoc(fb.doc(trusted, 'sp_votes', 'sp1', 'ballots', 'trusted'), { optionId: 'o1', castAt: 1 }));
 });
 
-test('二重投票と、他人の票の書き換えはできない', async () => {
+test('二重投票と、他人の票の書き換えはできない', UNTIL_PUBLIC, async () => {
   await env.withSecurityRulesDisabled(async c => {
     await fb.setDoc(fb.doc(c.firestore(), 'sp_votes', 'v1'), proposal(owner));
   });
@@ -145,7 +163,7 @@ test('ギルドの後付けは運営だけ。決まっているものは動か�
   await assertFails(fb.updateDoc(fb.doc(db, 'sp_votes', 'new1'), { guildId: 'play' }));
 });
 
-test('参加したい・応援するは、自分のぶんだけ。二重にはならない', async () => {
+test('参加したい・応援するは、自分のぶんだけ。二重にはならない', UNTIL_PUBLIC, async () => {
   const mine = fb.doc(plain, 'sp_guild_members', 'learn', 'joins', 'plain');
   await assertSucceeds(fb.setDoc(mine, { name: 'ぷれいん', at: 1 }));
   /* もう一度書くのは書き換え。認めていない（＝二重にならない） */
@@ -160,7 +178,7 @@ test('参加したい・応援するは、自分のぶんだけ。二重には�
   await assertFails(fb.setDoc(fb.doc(plain, 'sp_guild_members', 'learn'), { joins: 999 }));
 });
 
-test('ログインしていないと、参加も応援も投票もできない', async () => {
+test('ログインしていないと、参加も応援も投票もできない', UNTIL_PUBLIC, async () => {
   const anon = env.unauthenticatedContext().firestore();
   await assertFails(fb.setDoc(fb.doc(anon, 'sp_guild_members', 'learn', 'joins', 'plain'), { name: 'x', at: 1 }));
   await env.withSecurityRulesDisabled(async c => {
@@ -179,29 +197,32 @@ test('ギルドそのものを増やせるのは運営だけ', async () => {
   await assertFails(fb.deleteDoc(fb.doc(db, 'sp_guilds', 'music')));
 });
 
+/* クエストは、本体と予約札を1つの取引で作らないと決まりが通さない
+   （getAfter で予約札が立つことを確かめている）。だから addDoc では作れない。
+   番号は呼ぶたびに別のものを使う。同じ番号は二度使えないため。 */
+const store = require('../../frontend/public/schoolpark/quest-store.js');
+let nextNo = 0;
 const quest = (extra) => Object.assign({
   title: '議題から生まれたクエスト',
   knowledge: '', hypothesis: '予想', action: '', measure: '',
   budget: '0', budgetCurrency: 'JPY', need: 1,
   owner: owner, ownerName: '運営', status: 'OPEN',
-  createdAt: 1, closesAt: 2
+  createdAt: 1, closesAt: 2,
+  series: 'general', questNumber: (nextNo = nextNo + 1), branch: 0, stage: ''
 }, extra || {});
+const issue = (as, extra) => store.createQuest(fb, as, quest(extra));
 
 test('クエスト化できるのは運営だけ。元の議題とギルドを持てる', async () => {
-  await assertFails(fb.addDoc(fb.collection(trusted, 'sp_quests'),
-    quest({ owner: 'trusted', guildId: 'learn', fromProposalId: 'v1' })));
-  await assertSucceeds(fb.addDoc(fb.collection(db, 'sp_quests'),
-    quest({ guildId: 'learn', fromProposalId: 'v1', fromProposalTitle: '来月の予算' })));
+  await assert.rejects(() => issue(trusted, { owner: 'trusted', guildId: 'learn', fromProposalId: 'v1' }));
+  await assertSucceeds(issue(db, { guildId: 'learn', fromProposalId: 'v1', fromProposalTitle: '来月の予算' }));
   /* 元の議題があるのに、どのギルドの議題だったかが無いのは認めない */
-  await assertFails(fb.addDoc(fb.collection(db, 'sp_quests'),
-    quest({ guildId: '', fromProposalId: 'v1' })));
-  await assertFails(fb.addDoc(fb.collection(db, 'sp_quests'),
-    quest({ guildId: 'LEARN', fromProposalId: 'v1' })));
+  await assert.rejects(() => issue(db, { guildId: '', fromProposalId: 'v1' }));
+  await assert.rejects(() => issue(db, { guildId: 'LEARN', fromProposalId: 'v1' }));
 });
 
 test('議題を通さない直接クエストも、これまでどおり出せる', async () => {
-  await assertSucceeds(fb.addDoc(fb.collection(db, 'sp_quests'), quest()));
-  await assertSucceeds(fb.addDoc(fb.collection(db, 'sp_quests'), quest({ guildId: 'play' })));
+  await assertSucceeds(issue(db));
+  await assertSucceeds(issue(db, { guildId: 'play' }));
 });
 
 test('Quest #000 はどのギルドにも属さないまま、触れない', async () => {
