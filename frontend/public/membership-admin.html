@@ -1261,21 +1261,81 @@ async function spReady() {
 /* 自分のパスポート番号。ches_accounts に入っている。
    取れなかったときは、どこで止まったのかを返す。
    「パスポートが見つかりません」だけだと、原因が分からず直しようがない。 */
+/* 通信が届かなかっただけか。権限で断られたのとは分けて扱う。
+
+     unavailable        … サーバーへ届いていない
+     deadline-exceeded  … 待っても返ってこなかった
+     client is offline  … SDK が自分をオフラインと見なした
+
+   どれも、もう一度やれば通ることが多い。 */
+function spTransient(e) {
+  const code = String((e && e.code) || "");
+  const msg = String((e && e.message) || "");
+  return code === "unavailable" || code === "deadline-exceeded"
+    || code === "internal" || code === "aborted"
+    || msg.indexOf("client is offline") >= 0;
+}
+const spWait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* 普通の通信で、記録を1件読む。
+
+   専用の通信路（WebChannel）が切れていても、こちらは別の道なので届く。
+   ches_accounts は署名済みなら誰でも読める（allow read: if signedIn()）ので、
+   ログインの証を付けるだけでよい。 */
+async function spRestDoc(path) {
+  const opt = (app && app.options) || {};
+  if (!opt.projectId || !opt.apiKey) throw new Error("設定が読めない");
+  const u = auth.currentUser;
+  if (!u || typeof u.getIdToken !== "function") throw new Error("ログインの証が取れない");
+  const token = await u.getIdToken();
+  const url = "https://firestore.googleapis.com/v1/projects/" + opt.projectId
+            + "/databases/(default)/documents/" + path + "?key=" + opt.apiKey;
+  const r = await fetch(url, { cache: "no-store", headers: { Authorization: "Bearer " + token } });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const j = await r.json();
+  return ydFromRestFields((j && j.fields) || {});
+}
+
 async function spMyAddress() {
   const f = await spReady();
   const uid = auth.currentUser && auth.currentUser.uid;
   if (!uid) return { addr: null, why: "ログインしていません。" };
-  let snap;
-  try {
-    snap = await f.getDoc(f.doc(f.db, "ches_accounts", uid));
-  } catch (e) {
-    return { addr: null, why: "アカウントの記録を読めませんでした（" + (e.code || e.message) + "）。uid: " + uid };
+
+  /* ここは1回きりの読み取りだった。通信が一瞬届かないだけで
+     「SchoolPark を開けませんでした」で終わり、読み直す道も無かった。
+     SchoolPark 本体は逃げ道を持っているので、別タブでは開けているのに
+     この画面だけ開けない、という見え方になっていた。
+
+     まず2回まで読み直し、それでも駄目なら普通の通信で取りに行く。 */
+  let d = null, last = null;
+  for (let i = 0; i < 3 && !d; i++) {
+    if (i) await spWait(i * 800);
+    try {
+      const snap = await f.getDoc(f.doc(f.db, "ches_accounts", uid));
+      if (!snap.exists()) {
+        return { addr: null, why: "この uid のアカウントの記録がありません。uid: " + uid
+          + "\n一度 Emu を開いてログインすると作られます。" };
+      }
+      d = snap.data() || {};
+    } catch (e) {
+      last = e;
+      if (!spTransient(e)) break;   /* 権限で断られたなら、何度やっても同じ */
+    }
   }
-  if (!snap.exists()) {
-    return { addr: null, why: "この uid のアカウントの記録がありません。uid: " + uid
-      + "\n一度 Emu を開いてログインすると作られます。" };
+  if (!d) {
+    try {
+      d = await spRestDoc("ches_accounts/" + encodeURIComponent(uid));
+      if (d) console.warn("アカウントの記録を、普通の通信で読みました。");
+    } catch (e2) {
+      console.warn("普通の通信でも読めませんでした:", e2 && (e2.message || e2));
+    }
   }
-  const d = snap.data() || {};
+  if (!d) {
+    return { addr: null, retry: spTransient(last),
+      why: "アカウントの記録を読めませんでした（" + ((last && (last.code || last.message)) || "不明") + "）。uid: " + uid
+        + (spTransient(last) ? "\n通信が届いていないだけのことが多いので、もう一度読んでみてください。" : "") };
+  }
   const addr = d.chesAddress || d.walletAddress || null;
   if (!addr) {
     return { addr: null, why: "アカウントの記録はありますが、アドレスの欄が空です。uid: " + uid };
@@ -1731,7 +1791,11 @@ async function renderSchoolPark() {
       + '<p class="empty" style="text-align:left;white-space:pre-wrap">' + esc(me.why) + '</p>'
       + '<p class="empty" style="text-align:left">この画面は Firestore を直接読みます。'
       + 'ほかのタブ（会員一覧など）はサーバー経由なので、そちらが動いていても'
-      + 'ここだけ止まることがあります。</p></div>';
+      + 'ここだけ止まることがあります。</p>'
+      /* 読み直す道が無かった。通信のせいで開けなかったときは、
+         画面を読み込み直す以外に打つ手が無い状態だった。 */
+      + '<div class="actions"><button class="btn" id="spMeRetry">もう一度読む</button></div></div>';
+    const rb = $("#spMeRetry"); if (rb) rb.onclick = function () { renderSchoolPark(); };
     return;
   }
   const addr = me.addr;
