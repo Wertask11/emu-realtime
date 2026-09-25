@@ -622,10 +622,13 @@ if (window.top === window.self) window.location.replace('/');
                   <div style="height:100%; background:#D0E2BE; width:{{ cur.progress }}"></div>
                 </div>
                 <div onClick="{{ cur.commit }}" style="text-align:center; padding:14px; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; background:{{ cur.btnBg2 }}; color:{{ cur.btnFg2 }}; border:1px solid #D0E2BE">{{ cur.btnLabel }}</div>
-                <sc-if value="{{ cur.canClose }}">
-                  <div onClick="{{ cur.close }}" style="text-align:center; padding:12px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:#D0E2BE; border:1px solid rgba(208,226,190,.45)" style-hover="background:rgba(208,226,190,.12)">完了にして知恵カードを置く</div>
+                <sc-if value="{{ cur.canWisdom }}">
+                  <div onClick="{{ cur.wisdom }}" style="text-align:center; padding:12px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:#D0E2BE; border:1px solid rgba(208,226,190,.45)" style-hover="background:rgba(208,226,190,.12)">知恵カードを置く</div>
                 </sc-if>
-                <div style="font-size:12px; line-height:1.8; color:rgba(244,241,234,.5)">受けると、締切までにログを1本出す約束になります。</div>
+                <sc-if value="{{ cur.canClose }}">
+                  <div onClick="{{ cur.close }}" style="text-align:center; padding:12px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:rgba(244,241,234,.66); border:1px solid rgba(244,241,234,.28)" style-hover="background:rgba(244,241,234,.08)">クエストを完了にする</div>
+                </sc-if>
+                <div style="font-size:12px; line-height:1.8; color:rgba(244,241,234,.5)">受けると、締切までにログを1本出す約束になります。<br>やり終えたら、知恵カードを1枚置いてください。</div>
               </div>
 
               <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; flex-direction:column; gap:16px">
@@ -854,7 +857,7 @@ if (window.top === window.self) window.location.replace('/');
               </sc-for>
             </div>
             <sc-if value="{{ noWisdom }}">
-              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだ知恵カードがありません。知恵は、クエストを完了したときに生まれます。</div>
+              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだ知恵カードがありません。知恵は、クエストを受けてやってみた人が置きます。</div>
             </sc-if>
             <sc-if value="{{ noHit }}">
               <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">この分類の知恵はまだありません。</div>
@@ -1278,12 +1281,16 @@ class Component extends DCLogic {
       btnBg2: on ? '#D0E2BE' : 'transparent', btnFg2: on ? '#141310' : '#D0E2BE',
       guildShow: e.hasGuild ? 'block' : 'none',
       canClose: !e.isFounder && !!e.isMine && e.status !== 'CLOSED',
+      /* 知恵カードは「やった人」が置く。だから受けたかどうかだけを見る。
+         閉じたあとも置ける。締切のあとに書き上げる人がいるため。 */
+      canWisdom: !e.isFounder && !!e.iTook,
       canLog: !e.isFounder && !!e.iTook && e.status !== 'CLOSED',
       noLogs: !(e.logs && e.logs.length),
       logDid:   () => { try { window.parent.spQuestLog(e.id, 'やってみた', this); } catch (err) {} },
       logStuck: () => { try { window.parent.spQuestLog(e.id, 'つまずいた', this); } catch (err) {} },
       logFound: () => { try { window.parent.spQuestLog(e.id, '気づいた', this); } catch (err) {} },
       close: () => { try { window.parent.spQuestClose(e.id, this); } catch (err) {} },
+      wisdom: () => { try { window.parent.spQuestWisdom(e.id, this); } catch (err) {} },
       /* perHead は親（index.html）が通貨と割合込みで作って渡す。
          ここで計算していたときは ¥ を決め打ちしていて、
          EMUER建てのクエストが「¥800」と出ていた。 */

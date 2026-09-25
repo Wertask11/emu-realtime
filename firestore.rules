@@ -1221,9 +1221,22 @@ service cloud.firestore {
 
     /* ───────── 知恵カード ─────────
 
-       知恵は「クエストを完了したとき」にしか生まれない。
-       それをルールで守る：出そうとしているクエストが実際にあって、
-       状態が CLOSED になっていることを、その場で確かめる。
+       知恵は「やった人」が置く。だから条件は、そのクエストを
+       実際に受けていること。受けた記録（commits/{番号}）をその場で確かめる。
+       途中報告（logs）と同じ確かめ方にそろえてある。
+
+       前は「クエストの状態が CLOSED であること」を見ていた。
+       CLOSED にできるのは出した人（運営）だけなので、受けた人は
+       自分の知恵カードを置けなかった。完走条件が
+       「報告3回＋知恵カード1枚＋運営の確認」なのに、まん中の1枚を
+       自分で満たす道が無い、という状態だった。
+
+       クエストが実際にあることは別に確かめる。受けた記録だけを見ると、
+       ありもしないクエストの下に受けた記録を作って、そこへ
+       知恵カードをぶら下げられてしまう（受けるときの決まりは
+       クエストの有無を見ていない）。
+       見に行く回数は前と同じ2回なので、上限（10回）は変わらない。
+
        いちど置いた知恵は書き換えも削除もできない。 */
     match /sp_wisdom/{wisdomId} {
       allow read: if canAccessSchoolPark();
@@ -1233,7 +1246,7 @@ service cloud.firestore {
         && request.resource.data.insight.size() <= 200
         && request.resource.data.questId is string
         && exists(/databases/$(database)/documents/sp_quests/$(request.resource.data.questId))
-        && get(/databases/$(database)/documents/sp_quests/$(request.resource.data.questId)).data.get('status', '') == 'CLOSED';
+        && exists(/databases/$(database)/documents/sp_quests/$(request.resource.data.questId)/commits/$(request.resource.data.author));
       allow update, delete: if false;
 
       /* 引用。1つのパスポートにつき1回。数はここを数えて出す。
