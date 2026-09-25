@@ -18258,6 +18258,77 @@ let _spWisdomQuest = null;
 
 /* クエストを完了にする。出した本人（＝運営）だけができる。
    完了にしたら、そのまま知恵カードの下書きを開く。 */
+/* 報告で挙がった Emu の投稿を集める。
+   このクエストが議題から来ていなくても、受けた人が
+   「この知識からやってみた」と選んでいれば、そこが元の知識になる。
+   知識 → 人 → 経験 → 知恵 の線を、ここで途切れさせない。
+
+   mine に自分の番号を渡すと、自分が出した報告だけを見る。
+   知恵カードは「自分が通した経験」なので、置く人が自分で選んだ投稿を
+   先に出す。自分が1つも選んでいなければ、クエスト全体から拾う。 */
+async function _spQuestCited(questId, mine) {
+  const fb = window.fbLib;
+  const pick = function (rows) {
+    const seen = {}, out = [];
+    rows.forEach(function (x) {
+      const pid = String(x.fromPostId || '');
+      if (!pid) return;
+      if (seen[pid]) { seen[pid].count++; return; }
+      seen[pid] = { id: pid, title: String(x.fromPostTitle || '（Emuの投稿）'), count: 1 };
+      out.push(seen[pid]);
+    });
+    out.sort(function (a, b) { return b.count - a.count; });
+    return out;
+  };
+  let rows = [];
+  try {
+    const ls = await fb.getDocs(fb.collection(window.db, 'sp_quests', questId, 'logs'));
+    ls.forEach(function (d) { rows.push(d.data() || {}); });
+  } catch (e) {
+    console.warn('報告の投稿を読めませんでした:', e && (e.message || e));
+    return [];
+  }
+  if (mine) {
+    const a = String(mine).toLowerCase();
+    const ours = pick(rows.filter(function (x) { return String(x.author || '').toLowerCase() === a; }));
+    if (ours.length) return ours;
+  }
+  return pick(rows);
+}
+
+/* 知恵カードを置く。受けた人なら誰でも置ける。クエストの状態は動かさない。
+
+   前は、置く道が「完了にして知恵カードを置く」の1つしか無かった。
+   完了にできるのは出した人（運営）だけなので、受けた人は自分の
+   知恵カードを置けなかった。完走条件が「報告3回＋知恵カード1枚＋
+   運営の確認」なのに、まん中の1枚を自分で満たす道が無い、という状態だった。
+
+   しかも完了は1本のクエストにつき1回きりで、全員ぶんまとめて閉まる。
+   100人がそれぞれ14日で回るクエストでは、最初の1人のために閉じると
+   残りが報告を出せなくなる。だから置くことと閉じることを切り離す。 */
+window.spQuestWisdom = async function (questId, app) {
+  if (questId === SpQuestStore.FOUNDER_ID) return;
+  const p = await spPassportLoad();
+  if (!p) { alert('知恵カードを置くにはログインが必要です。'); return; }
+  const fb = window.fbLib;
+  let q = null;
+  try {
+    const snap = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));
+    if (snap.exists()) q = { id: snap.id, ...(snap.data() || {}) };
+  } catch (e) {}
+  if (!q) { alert('クエストが見つかりませんでした。'); return; }
+  /* 受けているかを、置く前に確かめる。決まりも同じところを見ているので、
+     ここで止めないと、書いたあとに断られて中身が消える。 */
+  try {
+    const c = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId, 'commits', p.addr));
+    if (!c.exists()) { alert('知恵カードを置けるのは、このクエストを受けた人だけです。'); return; }
+  } catch (e) {
+    alert('受けているかを確かめられませんでした。通信を確かめて、もう一度お試しください。'); return;
+  }
+  q._citedPosts = await _spQuestCited(questId, p.addr);
+  openSpWisdomForm(q, app);
+};
+
 window.spQuestClose = async function (questId, app) {
   if (questId === SpQuestStore.FOUNDER_ID) return;
   const p = await spPassportLoad();
@@ -18273,7 +18344,7 @@ window.spQuestClose = async function (questId, app) {
     alert('完了にできるのは、そのクエストを出した人だけです。'); return;
   }
   if (q.status !== 'CLOSED') {
-    if (!confirm('このクエストを完了にします。\n\n完了にすると、受付は締め切られます。よろしいですか？')) return;
+    if (!confirm('このクエストを完了にします。\n\n完了にすると、受付は締め切られ、受けた人も報告を出せなくなります。よろしいですか？')) return;
     try {
       await fb.updateDoc(fb.doc(window.db, 'sp_quests', questId), { status: 'CLOSED', closedAt: Date.now() });
     } catch (e) {
@@ -18281,27 +18352,17 @@ window.spQuestClose = async function (questId, app) {
     }
     q.status = 'CLOSED';
   }
-  /* 報告で挙がった Emu の投稿を集める。
-     このクエストが議題から来ていなくても、受けた人が
-     「この知識からやってみた」と選んでいれば、そこが元の知識になる。
-     知識 → 人 → 経験 → 知恵 の線を、ここで途切れさせない。 */
-  const cited = [];
-  try {
-    const seen = {};
-    const ls = await fb.getDocs(fb.collection(window.db, 'sp_quests', questId, 'logs'));
-    ls.forEach(function (d) {
-      const x = d.data() || {};
-      const pid = String(x.fromPostId || '');
-      if (!pid) return;
-      if (seen[pid]) { seen[pid].count++; return; }
-      seen[pid] = { id: pid, title: String(x.fromPostTitle || '（Emuの投稿）'), count: 1 };
-      cited.push(seen[pid]);
-    });
-    cited.sort(function (a, b) { return b.count - a.count; });
-  } catch (e) { console.warn('報告の投稿を読めませんでした:', e && (e.message || e)); }
-  q._citedPosts = cited;
-
   await window.spDaoLoadQuests(app);
+
+  /* 知恵カードは「やった人」が置くもの。出した人が自分でも受けていれば、
+     そのまま続けて置ける。受けていなければ、閉じるところで終わり。
+     ここで札を開いても、決まりの側で断られて書いたものが消えるだけ。 */
+  let took = false;
+  try {
+    took = (await fb.getDoc(fb.doc(window.db, 'sp_quests', questId, 'commits', p.addr))).exists();
+  } catch (e) {}
+  if (!took) { alert('完了にしました。\n（知恵カードは、このクエストを受けた人が置きます）'); return; }
+  q._citedPosts = await _spQuestCited(questId, p.addr);
   openSpWisdomForm(q, app);
 };
 
@@ -18316,7 +18377,8 @@ function openSpWisdomForm(q, app) {
 
   /* 元の投稿の決まり方は3通り。
        ① クエスト自体が Emu の投稿から生まれた  … その投稿で固定
-       ② 受けた人が報告で投稿を選んでいた      … その中から運営が選ぶ
+       ② 報告で投稿を選んでいた                … その中から置く人が選ぶ
+                                                （自分が選んだものが先に出る）
        ③ どちらも無い                         … 今までどおり自由入力 */
   const cited = (q._citedPosts || []).slice(0, 20);
   const row = document.getElementById('swFromRow');
@@ -18355,7 +18417,7 @@ function openSpWisdomForm(q, app) {
     knNote.textContent = !_spWisdomFrom ? ''
       : q.fromPostId
       ? 'Emuの投稿から始まったクエストです。知恵カードから、その投稿を開けるようになります。'
-      : '受けた人が報告で選んだ投稿です。知恵カードから、その投稿を開けるようになります。';
+      : '報告で選んだ投稿です。知恵カードから、その投稿を開けるようになります。';
     knNote.hidden = !_spWisdomFrom;
   }
   set('swExperiment', q.action || q.title);
@@ -18467,7 +18529,7 @@ async function spWisdomSubmit() {
   } catch (e) {
     const code = String((e && e.code) || '');
     alert(code === 'permission-denied'
-      ? '知恵カードは、完了したクエストからしか作れません。'
+      ? '知恵カードを置けるのは、このクエストを受けた人だけです。'
       : '知恵カードを置けませんでした。もう一度お試しください。');
     return;
   }
@@ -26654,7 +26716,7 @@ async function sendEmuFeedback() {
   </div>
 </div>
 
-<!-- 知恵カードを置く（クエスト完了時） -->
+<!-- 知恵カードを置く。受けた人なら誰でも置ける（クエストの状態は動かさない） -->
 <div id="spWisdomSheet" role="dialog" aria-modal="true" aria-labelledby="swTitleLabel">
   <div class="spp-veil" onclick="closeSpWisdomForm()"></div>
   <div class="spp-card">
