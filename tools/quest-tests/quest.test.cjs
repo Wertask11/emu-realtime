@@ -1,3 +1,13 @@
+/* Quest #000 と、クエストの出し方の決まりを確かめる。
+
+   番号の決まり（一般／特殊・枝番・段階・重複防止）は、
+   PR #94 で自動採番から手で指定する形に変わった。
+   そちらの試しは tools/quest-number-tests に移してある。
+   ここに残すのは #000 まわりと、受け付け・報告・完了の道すじ。
+
+   admin SDK はエミュレータの場所を環境変数から読む。
+   入れておかないと本物の Google に繋ぎに行き、資格が無いと言って落ちる。 */
+process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -17,18 +27,20 @@ before(async () => {
     const seedDb=c.firestore();
     await fb.setDoc(fb.doc(seedDb,'ches_accounts','founder'),{walletAddress:owner,chesAddress:owner});
     await fb.setDoc(fb.doc(seedDb,'ches_accounts','member'),{walletAddress:'member',chesAddress:'member'});
+    /* 10/1 の一般公開まで、SchoolPark に入るには公式パスが要る（canAccessSchoolPark）。
+       この試しを書いたときは、まだこの門が無かった。 */
+    await fb.setDoc(fb.doc(seedDb,'paid_users',owner),{plan:'official'});
+    await fb.setDoc(fb.doc(seedDb,'paid_users','member'),{plan:'official'});
   });
   db=env.authenticatedContext('founder').firestore();
   guest=env.authenticatedContext('member').firestore();
 });
 after(async () => { await env?.cleanup(); });
-test('pre-activation preserves legacy issuing; cannot create a fake founder or counter',async()=>{
-  const q=await store.createQuest(fb,db,normal);
-  assert.equal(q.questNumber,null);
-  await assertFails(fb.setDoc(fb.doc(db,'sp_quests','fake'),{...normal,kind:'founder',questNumber:0}));
-  await assertFails(fb.setDoc(fb.doc(db,'sp_quest_counters','quests'),{nextNumber:1}));
-  await assertFails(fb.setDoc(fb.doc(guest,'sp_quest_numbers','0'),{questId:'fake'}));
-});
+/* 自動採番の世界の試し3本（番号なしで先に出せる／#001 から順に振られる／
+   飛ばした番号・重複・偽の通し番号を書けない）は、ここから外した。
+   いまは運営が番号を指定する形なので、そのまま置いても意味が変わる。
+   tools/quest-number-tests に、いまの仕組みで書き直してある
+   （重複防止・同時に取りに行ったとき・予約札の付け替え防止など14本）。 */
 test('activate Founder singleton with complete text (Admin-only)',async()=>{
   await env.withSecurityRulesDisabled(async c=>{
     const d=c.firestore();const b=fb.writeBatch(d);
@@ -48,27 +60,9 @@ test('activate Founder singleton with complete text (Admin-only)',async()=>{
   await assertFails(fb.setDoc(fb.doc(guest,'sp_quests',store.FOUNDER_ID,'commits','member'),{name:'other',tookAt:2}));
   await assertFails(fb.addDoc(fb.collection(db,'sp_quests',store.FOUNDER_ID,'logs'),{author:owner,body:'log',kind:'やってみた'}));
 });
-test('concurrent creation assigns #001 onwards, no duplicates or gaps',async()=>{
-  const made=await Promise.all(Array.from({length:5},(_,i)=>store.createQuest(fb,db,{...normal,title:'Quest '+i})));
-  assert.deepEqual(made.map(q=>q.questNumber).sort((a,b)=>a-b),[1,2,3,4,5]);
-  for(const q of made){
-    assert.equal((await fb.getDoc(fb.doc(db,'sp_quest_numbers',String(q.questNumber)))).data().questId,q.id);
-  }
-  assert.equal((await fb.getDoc(fb.doc(db,'sp_quest_counters','quests'))).data().nextNumber,6);
-});
-test('cannot issue unnumbered, duplicate, skipped, forged or standalone sequence writes',async()=>{
-  await assertFails(fb.addDoc(fb.collection(db,'sp_quests'),normal));
-  for(const questNumber of [0,1,6,99]) await assertFails(fb.addDoc(fb.collection(db,'sp_quests'),{...normal,questNumber}));
-  await assertFails(fb.updateDoc(fb.doc(db,'sp_quest_counters','quests'),{nextNumber:7,lastQuestId:'fake'}));
-  await assertFails(fb.setDoc(fb.doc(db,'sp_quest_numbers','6'),{questId:'fake'}));
-  await assertFails(fb.updateDoc(fb.doc(db,'sp_quest_numbers','1'),{questId:'fake'}));
-  await assertFails(fb.deleteDoc(fb.doc(db,'sp_quest_numbers','1')));
-  await assertFails(store.createQuest(fb,guest,{...normal,owner:'member'}));
-  await assertFails(store.createQuest(fb,db,{...normal,kind:'founder',founderSections:payload.sections}));
-});
-test('normal Quest accepts participation, logs and close; number and conditions immutable',async()=>{
-  const q=await store.createQuest(fb,db,normal);
-  assert.equal(q.questNumber,6);
+test('ふつうのクエストは、受け付け・報告・完了が通る。番号と条件は動かせない',async()=>{
+  const q=await store.createQuest(fb,db,{...normal,series:'general',questNumber:1,branch:0,stage:''});
+  assert.equal(q.questNumber,1);
   await assertSucceeds(fb.setDoc(fb.doc(guest,'sp_quests',q.id,'commits','member'),{name:'Member',tookAt:1}));
   await assertSucceeds(fb.addDoc(fb.collection(guest,'sp_quests',q.id,'logs'),{author:'member',body:'通常の検証',kind:'やってみた'}));
   await assertFails(fb.updateDoc(fb.doc(db,'sp_quests',q.id),{questNumber:100}));
@@ -81,7 +75,13 @@ test('normal Quest accepts participation, logs and close; number and conditions 
   assert.equal(store.label({}),'');
 });
 
-test('actual seed is idempotent under concurrent retries and preserves full source',async()=>{
+test('#000 の種まきは、同時に2回走らせても1件しか作らない',async()=>{
+  /* エミュレータは走らせっぱなしなので、前の回の種が残っていることがある。
+     残っていると「もう在る」と判断され、作った数が 0 になって落ちる。
+     この試しの持ち場だけ、先に空にしてから始める。 */
+  await fetch('http://' + process.env.FIRESTORE_EMULATOR_HOST
+    + '/emulator/v1/projects/demo-schoolpark-seed/databases/(default)/documents',
+    { method: 'DELETE' });
   const app=admin.initializeApp({projectId:'demo-schoolpark-seed'},'seed-test');
   const seedDb=app.firestore();
   const results=await Promise.all([seed(seedDb,payload,require('node:crypto').createHash('sha256').update(JSON.stringify(payload)).digest('hex')),seed(seedDb,payload,require('node:crypto').createHash('sha256').update(JSON.stringify(payload)).digest('hex'))]);
