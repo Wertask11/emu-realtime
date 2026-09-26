@@ -245,3 +245,62 @@ test('出す：番号が取られていたら、やり直さない（また同�
   assert.equal(i.calls.create, 1, '同じ番号でやり直している');
   assert.equal(i.calls.refresh, 0);
 });
+
+/* ───────── 承認待ち ─────────
+
+   前は「クエストの状態を変える」カードの中に、クエストを全部並べて、
+   その下に受けた人を並べるだけだった。21本出したら21本ぜんぶ開いて、
+   誰が完走条件を満たしたかを目で探すことになる。
+   しかも判断材料は報告の数だけで、知恵カードを置いたかは出ていなかった。
+   完走条件は「報告3回＋知恵カード1枚＋運営の確認」なのに、
+   そのまん中が管理画面に無かった。 */
+
+test('承認待ちのカードがある', () => {
+  assert.ok(ADMIN.indexOf('<h3>承認待ち') >= 0, 'カードが無い');
+  assert.ok(ADMIN.indexOf('完走条件を満たしています') >= 0, '何人そろっているか出ていない');
+});
+
+test('承認待ちは、まだ認めていない人だけを集める', () => {
+  const i = ADMIN.indexOf('const rows = [];');
+  assert.ok(i > 0);
+  const seg = ADMIN.slice(i, i + 400);
+  assert.ok(seg.indexOf('if (t.approved) return;') >= 0, '認めた人まで並べている');
+  assert.ok(seg.indexOf('t.logs >= 3 && t.wisdom >= 1') >= 0, '完走条件で判定していない');
+});
+
+test('条件を満たした人が先に並ぶ', () => {
+  assert.ok(ADMIN.indexOf('rows.sort((a, b) => (b.ready - a.ready)') >= 0, '並び順が条件で決まっていない');
+});
+
+test('あと何が足りないかを出す', () => {
+  assert.ok(ADMIN.indexOf('"報告あと" + (3 - r.t.logs) + "本"') >= 0);
+  assert.ok(ADMIN.indexOf('"知恵カードあと1枚"') >= 0);
+});
+
+test('知恵カードの枚数を、人ごと・クエストごとに数えている', () => {
+  const i = ADMIN.indexOf('const wisdomCount = {};');
+  assert.ok(i > 0, '数えていない');
+  const seg = ADMIN.slice(i, i + 400);
+  assert.ok(seg.indexOf('String(d.questId || "") !== q.id') >= 0, 'クエストで絞っていない');
+  assert.ok(seg.indexOf('String(d.author || "").toLowerCase()') >= 0, '人で絞っていない');
+});
+
+test('クエストの行にも、知恵カードの枚数が出る', () => {
+  assert.ok(ADMIN.indexOf("' · 知恵カード ' + t.wisdom + '枚'") >= 0, '報告の数しか出ていない');
+});
+
+test('条件を満たしていない人を認めるときは、何が足りないかを見せて確かめる', () => {
+  const i = ADMIN.indexOf('const short = [];');
+  assert.ok(i > 0, '確かめていない');
+  const seg = ADMIN.slice(i, i + 700);
+  assert.ok(seg.indexOf('まだ完走条件を満たしていません') >= 0);
+  assert.ok(seg.indexOf('それでも認めますか？') >= 0);
+});
+
+test('管理画面の完走も、承認した時点で数える（CLOSED を待たない）', () => {
+  /* 前は「CLOSED、ただし一般#001 のLEARNだけ例外」という決め打ちだった。
+     SchoolPark 側（spDaoLoadMembers / spTrustScore）とそろえる。 */
+  assert.ok(ADMIN.indexOf('if (m && t.approved) m.done++;') >= 0, '承認で数えていない');
+  assert.equal(ADMIN.indexOf('q.status === "CLOSED" ||\n          (q.series === "general"'), -1,
+    '決め打ちが残っている');
+});

@@ -1901,13 +1901,30 @@ async function renderSchoolPark() {
       });
     }
     took.forEach(t => { t.logs = logCount[String(t.addr).toLowerCase()] || 0; });
+    /* そのクエストで、その人が置いた知恵カードの枚数。
+
+       完走条件は「報告3回＋知恵カード1枚＋運営の確認」なのに、
+       画面には報告の数しか出ていなかった。知恵カードを置いたかどうかは
+       SchoolPark 側の知恵ライブラリを別に見に行くしかなく、
+       認めるかどうかの判断がここだけでは付かなかった。 */
+    const wisdomCount = {};
+    ws.forEach(s => {
+      const d = s.data() || {};
+      if (String(d.questId || "") !== q.id) return;
+      const a = String(d.author || "").toLowerCase();
+      if (a) wisdomCount[a] = (wisdomCount[a] || 0) + 1;
+    });
+    took.forEach(t => { t.wisdom = wisdomCount[String(t.addr).toLowerCase()] || 0; });
     q.tookList = took;
     q.approvedCount = took.filter(t => t.approved).length;
     /* 完走＝運営が認めた人だけ。SchoolPark 側の分配とまったく同じ条件。 */
+    /* 完走は、運営が認めた時点で数える。クエスト全体を閉じるのを待たない。
+       SchoolPark 側（spDaoLoadMembers / spTrustScore）とそろえる。
+       前はここも「CLOSED、ただし一般#001 のLEARNだけ例外」という
+       決め打ちで、ほかのクエストは閉じるまで完走に入らなかった。 */
     took.forEach(t => {
       const m = pick(t.addr, t.name);
-      if (m && t.approved && (q.status === "CLOSED" ||
-          (q.series === "general" && Number(q.questNumber) === 1 && q.guildId === "learn"))) m.done++;
+      if (m && t.approved) m.done++;
     });
   });
   /* 知恵カードと、引用された数 */
@@ -2056,6 +2073,54 @@ async function renderSchoolPark() {
     + '<label>締切まで（日）</label><input id="avDays" type="number" min="1" max="30" value="7">'
     + '<div class="actions"><button class="btn primary" id="avSubmit">議題を出す</button></div></div>'
 
+    /* ───────── 承認待ち ─────────
+
+       前は「クエストの状態を変える」カードの中に、クエストを全部並べて、
+       その下に受けた人を並べるだけだった。21本出したら21本ぜんぶ開いて、
+       誰が完走条件を満たしたかを目で探すことになる。
+       しかも判断材料は報告の数だけで、知恵カードを置いたかは出ていない。
+
+       ここに、クエストを横断して「まだ認めていない人」を集める。
+       完走条件（報告3回＋知恵カード1枚）を満たした人を上に、
+       まだ足りない人は下に、何があと何本足りないかを添えて出す。 */
+    + (function () {
+        const rows = [];
+        quests.filter(q => !SpQuestStore.isFounder(q)).forEach(q => {
+          (q.tookList || []).forEach(t => {
+            if (t.approved) return;
+            rows.push({ q: q, t: t, ready: t.logs >= 3 && t.wisdom >= 1 });
+          });
+        });
+        /* 条件を満たした人が先。その中では報告の多い順。 */
+        rows.sort((a, b) => (b.ready - a.ready) || (b.t.logs - a.t.logs));
+        const ready = rows.filter(r => r.ready).length;
+        const line = r => {
+          const name = esc(r.t.name || (String(r.t.addr).slice(0,6) + "…" + String(r.t.addr).slice(-4)));
+          const label = esc((SpQuestStore.fullLabel(r.q) ? SpQuestStore.fullLabel(r.q) + " " : "") + (r.q.title || ""));
+          const need = [];
+          if (r.t.logs < 3) need.push("報告あと" + (3 - r.t.logs) + "本");
+          if (r.t.wisdom < 1) need.push("知恵カードあと1枚");
+          return '<div class="row" style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">'
+            + '<span><b>' + name + '</b>　' + label + '<br>'
+            + '<small style="color:var(--muted)">報告 ' + r.t.logs + '本'
+            + (r.t.logs >= 3 ? ' ✓' : '')
+            + ' · 知恵カード ' + r.t.wisdom + '枚' + (r.t.wisdom >= 1 ? ' ✓' : '')
+            + (need.length ? ' · <b style="color:#b45309">' + esc(need.join("、")) + '</b>' : '')
+            + '</small></span>'
+            + '<span><button class="act ' + (r.ready ? 'ok' : 'neutral') + '" data-qapprove="'
+            + esc(r.q.id) + '" data-addr="' + esc(r.t.addr) + '">認める</button></span></div>';
+        };
+        return '<div class="card"' + (ready ? ' style="border:2px solid #0F5C3F"' : '') + '>'
+          + '<h3>承認待ち' + (ready ? '（' + ready + '人が完走条件を満たしています）' : '') + '</h3>'
+          + '<p class="empty" style="text-align:left;margin:0 0 10px">'
+          + '完走条件は<b>報告3回＋知恵カード1枚＋運営の確認</b>です。'
+          + 'ここで認めると、信用スコアの「完走」とパスポートの記録、星空の星に入ります。<br>'
+          + 'EMUERは別です。下の「EMUERの予算と貢献」で渡します。</p>'
+          + (rows.length ? rows.map(line).join("")
+             : '<p class="empty">いま認めるものはありません。</p>')
+          + '</div>'
+      })()
+
     + '<div class="card"><h3>クエストの状態を変える</h3>'
     + '<p class="empty" style="text-align:left;margin:0 0 10px">分配を受けられるのは、'
     + 'ここで<b>認めた人だけ</b>です。受けただけでは分配されません。'
@@ -2078,6 +2143,9 @@ async function renderSchoolPark() {
                 '<div class="row" style="padding-left:14px"><span>'
                 + esc(t.name || (String(t.addr).slice(0,6) + "…" + String(t.addr).slice(-4)))
                 + '<br><small style="color:var(--muted)">報告 ' + t.logs + '本'
+                + (t.logs >= 3 ? ' ✓' : '')
+                /* 完走条件のまん中。ここが出ていないと、認めてよいか判断できない。 */
+                + ' · 知恵カード ' + t.wisdom + '枚' + (t.wisdom >= 1 ? ' ✓' : '')
                 + (t.approved ? ' · 認めています' : ' · まだ認めていません') + '</small></span>'
                 + '<span>' + (t.approved
                     ? (q.series === 'general' && Number(q.questNumber) === 1 && q.guildId === 'learn'
@@ -2289,11 +2357,27 @@ async function renderSchoolPark() {
   /* 参加を認める・取り消す。
      ここで認めた人だけが分配を受け、信用スコアの「完走」に入る。
      受けただけ（commits があるだけ）では分配しない。 */
+  /* 条件を満たしていない人を認めるときは、一度確かめる。
+     承認待ちの一覧からは「あと◯本」の人も押せるようにしてあるので、
+     押し間違いがそのまま通らないようにする。 */
   el.querySelectorAll("[data-qapprove]").forEach(b => {
     b.onclick = async () => {
-      if (!confirm("この人の参加を認めます。\n\n分配の対象になり、信用スコアの「完走」にも入ります。\n実際に動いた証拠は確かめましたか？")) return;
+      const q0 = quests.find(x => x.id === b.dataset.qapprove);
+      const t0 = ((q0 && q0.tookList) || []).find(x =>
+        String(x.addr).toLowerCase() === String(b.dataset.addr).toLowerCase());
+      /* 何が足りないかを、押す前に見せる。承認待ちの一覧からは
+         「あと◯本」の人も押せるようにしてあるので、押し間違いを止める。 */
+      const short = [];
+      if (t0 && t0.logs < 3) short.push("報告が " + t0.logs + "本（あと" + (3 - t0.logs) + "本）");
+      if (t0 && t0.wisdom < 1) short.push("知恵カードが 0枚（あと1枚）");
+      if (short.length) {
+        if (!confirm("この人は、まだ完走条件を満たしていません。\n\n"
+          + short.join("\n") + "\n\nそれでも認めますか？")) return;
+      } else if (!confirm("この人の参加を認めます。\n\n分配の対象になり、信用スコアの「完走」にも入ります。\n実際に動いた証拠は確かめましたか？")) {
+        return;
+      }
       try {
-        const q = quests.find(x => x.id === b.dataset.qapprove);
+        const q = q0;
         if (q && q.series === "general" && Number(q.questNumber) === 1 && q.guildId === "learn") {
           await api("/api/schoolpark/quest-completions/" + encodeURIComponent(q.id)
             + "/" + encodeURIComponent(b.dataset.addr) + "/approve", { method:"POST" });
