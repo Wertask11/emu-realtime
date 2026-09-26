@@ -313,6 +313,12 @@ function createEmuerV2Router(deps) {
         if (!contributionSnap.exists) throw new Error("CONTRIBUTION_NOT_FOUND");
         const contribution = contributionSnap.data() || {};
         if (contribution.status !== "submitted") throw new Error("CONTRIBUTION_ALREADY_REVIEWED");
+        if (contribution.scopeType === "quest") {
+          const questSnap = await tx.get(db.collection("sp_quests").doc(contribution.scopeId));
+          const quest = questSnap.exists ? questSnap.data() || {} : {};
+          if (quest.series === "general" && Number(quest.questNumber) === 1 && quest.guildId === "learn")
+            throw new Error("USE_QUEST_COMPLETION_APPROVAL");
+        }
         const budgetRef = scopeRef(contribution.scopeType, contribution.scopeId);
         const budgetSnap = await tx.get(budgetRef);
         const budget = budgetSnap.exists ? budgetSnap.data() || {} : {};
@@ -333,7 +339,7 @@ function createEmuerV2Router(deps) {
       return res.json({ ok: true, rewardId: reward.claimId, amount: reward.amount });
     } catch (error) {
       const code = String(error.message || "");
-      if (["CONTRIBUTION_NOT_FOUND", "CONTRIBUTION_ALREADY_REVIEWED", "BUDGET_EXCEEDED"].includes(code)) return res.status(409).json({ error: code });
+      if (["CONTRIBUTION_NOT_FOUND", "CONTRIBUTION_ALREADY_REVIEWED", "BUDGET_EXCEEDED", "USE_QUEST_COMPLETION_APPROVAL"].includes(code)) return res.status(409).json({ error: code });
       console.error("EMUER v2 contribution approval error:", error.message); return res.status(500).json({ error: "CONTRIBUTION_APPROVAL_FAILED" });
     }
   });
