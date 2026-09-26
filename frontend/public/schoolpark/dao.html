@@ -25,6 +25,10 @@
 #dao-root > div > div > div{ border-radius: 0 !important; box-shadow: none !important; }
 html, body                 { height: 100%; width:100%; overflow-x:hidden; }
 #dao-root                  { width:100%; overflow-x:hidden; }
+.sp-quest-detail-grid > div { min-width:0; }
+@media (max-width:1350px) {
+  .sp-quest-detail-grid { grid-template-columns:minmax(0,1fr) !important; }
+}
 </style>
 </head>
 <body>
@@ -539,8 +543,8 @@ if (window.top === window.self) window.location.replace('/');
         </sc-if>
 
         <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
-          <div style="display:grid; grid-template-columns:{{ L.gDetail }}; gap:32px; align-items:start">
-            <div style="display:flex; flex-direction:column; gap:28px">
+          <div class="sp-quest-detail-grid" style="display:grid; grid-template-columns:{{ L.gDetail }}; gap:32px; align-items:start; min-width:0">
+            <div style="display:flex; flex-direction:column; gap:28px; min-width:0">
               <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:22px">
                 <div style="display:flex; align-items:center; gap:12px">
                   <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ cur.statusBg }}; color:{{ cur.statusFg }}">{{ cur.status }}</div>
@@ -609,8 +613,8 @@ if (window.top === window.self) window.location.replace('/');
               </div>
             </div>
 
-            <div style="display:flex; flex-direction:column; gap:20px; position:static; min-width:0">
-              <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:26px; display:flex; flex-direction:column; gap:20px">
+            <div style="display:flex; flex-direction:column; gap:20px; position:static; min-width:0; max-width:100%">
+              <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:26px; display:flex; flex-direction:column; gap:20px; min-width:0; box-sizing:border-box; overflow-wrap:anywhere">
                 <div style="display:flex; flex-direction:column; gap:8px">
                   <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; color:#D0E2BE">ACCEPT</div>
                   <div style="font-size:14px; line-height:1.8; color:rgba(244,241,234,.72)">賛成/反対ではなく、<b style="color:#F4F1EA">自分も受けるか</b>で決める。受けた人数が予算配分になる。</div>
@@ -845,7 +849,7 @@ if (window.top === window.self) window.location.replace('/');
               <div style="flex:1; min-width:220px; display:flex; flex-direction:column; gap:10px">
                 <div style="font-family:'Zen Old Mincho',serif; font-size:26px; font-weight:900; line-height:1.5">DAOの資産は、金庫ではなくここにある。</div>
                 <sc-if value="{{ showLibraryToggle }}"><button onClick="{{ toggleLibrarySummary }}" style="align-self:flex-start; font:inherit; background:#D0E2BE; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">{{ libraryToggleLabel }}</button></sc-if>
-                <sc-if value="{{ showLibraryDetails }}"><div style="font-size:13px; line-height:1.9; color:rgba(244,241,234,.66)">知恵カードは「元の知識 → 通した経験 → 残った一文」で1枚。引用されるほど、書き手に分配が回る。</div></sc-if>
+                <sc-if value="{{ showLibraryDetails }}"><div style="font-size:13px; line-height:1.9; color:rgba(244,241,234,.66)">知恵カードは「元の知識 → 通した経験 → 残った一文」で1枚。引用はほかの人がこの知恵を参考にした記録です。書き手の信用スコアに反映されます。EMUERの自動付与はまだありません。</div></sc-if>
               </div>
               <sc-if value="{{ showLibraryDetails }}"><div style="display:flex; gap:28px">
                 <div style="display:flex; flex-direction:column; gap:6px"><div style="font-family:Inter,sans-serif; font-size:30px; font-weight:600; color:#D0E2BE">{{ stats.wisdomTotal }}</div><div style="font-size:12px; color:rgba(244,241,234,.6)">知恵</div></div>
@@ -875,6 +879,14 @@ if (window.top === window.self) window.location.replace('/');
                     <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">知識</div><div onClick="{{ w.openPost }}" style="text-decoration:{{ w.fromLinked }}; cursor:{{ w.fromCursor }}">{{ w.from }}</div></div>
                     <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">経験</div><div>{{ w.experiment }}</div></div>
                   </div>
+                  <sc-if value="{{ w.hasReports }}">
+                    <div style="display:flex; flex-direction:column; gap:8px; padding-top:12px; border-top:1px dashed rgba(20,19,16,.16)">
+                      <div style="font-size:12px; font-weight:700; color:#0F5C3F">この知恵につながる報告</div>
+                      <sc-for list="{{ w.reports }}" as="r" hint-placeholder-count="3">
+                        <div style="font-size:12px; line-height:1.75; white-space:pre-wrap; overflow-wrap:anywhere; color:#3B382F"><strong style="color:#0F5C3F">{{ r.kind }}：</strong>{{ r.body }}</div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
                   <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
                     <div style="font-size:12px; color:#6E695C">by {{ w.author }}</div>
                     <div onClick="{{ w.cite }}" style="display:{{ w.citeShow }}; padding:7px 13px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; background:{{ w.citeBg }}; color:{{ w.citeFg }}; border:1px solid #0F5C3F; white-space:nowrap" style-hover="opacity:.85">{{ w.citeLabel }}</div>
