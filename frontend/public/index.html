@@ -17304,6 +17304,14 @@ async function _spRestDoc(path, needAuth) {
   return j ? _spRestFields(j.fields || {}) : null;
 }
 
+/* Listen が切れたときも、参加人数はサーバーの記録から確認する。 */
+async function _spRestQuestCommits(questId) {
+  const j = await _spRestGet('sp_quests/' + encodeURIComponent(questId) + '/commits?pageSize=1000', true);
+  return ((j && j.documents) || []).map(function (d) {
+    return { id: decodeURIComponent(String(d.name || '').split('/').pop()), data: _spRestFields(d.fields || {}) };
+  });
+}
+
 async function _spRestQuests() {
   /* ログインの証（IDトークン）を必ず付ける。
 
@@ -17599,6 +17607,23 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
       if (mine && c.id.toLowerCase() === mine) iTook = true;
     });
   }
+  /* SDK の一覧が古い場合、本人の1件だけは普通の HTTPS で照合する。
+     本人が受けているのに人数が0のまま、という矛盾を残さない。 */
+  if (mine && (!iTook || (cs && cs.metadata && cs.metadata.fromCache))) {
+    try {
+      const own = await _spRestDoc('sp_quests/' + encodeURIComponent(q.id)
+        + '/commits/' + encodeURIComponent(p.addr), true);
+      iTook = !!own;
+      if (cs === null || (cs.metadata && cs.metadata.fromCache) || (iTook && people.length === 0)) {
+        const records = await _spRestQuestCommits(q.id);
+        people = records.map(function (c) { return c.data.name || _spShortAddr(c.id); });
+      }
+      if (iTook && people.length === 0) people.push(own.name || _spShortAddr(p.addr));
+    } catch (e) {
+      /* サーバーへ届かない間は、取得済みの表示を勝手に消さない。 */
+      console.warn('クエストの参加状態を確認できませんでした:', e && (e.message || e));
+    }
+  }
   if (ls) {
     ls.forEach(function (l) { logCount++; logs.push({ id: l.id, ...(l.data() || {}) }); });
     logs.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
@@ -17649,7 +17674,7 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
       const cur = SP_CURRENCIES.indexOf(q.budgetCurrency) >= 0 ? q.budgetCurrency : 'JPY';
       const v = parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0;
       const n = people.length;
-      return n > 0 ? spMoney(Math.round(v * SP_SHARE_DONE / n / 100) * 100, cur) : spMoney(0, cur);
+      return n > 0 ? spMoney(Math.round(v * SP_SHARE_DONE / n / 100) * 100, cur) : '未確定';
     })(),
     due: SpQuestStore.isFounder(q) ? 'なし・恒久' : _spQuestDue(q.closesAt),
     status: SpQuestStore.isFounder(q) ? 'FOUNDER' : (q.status || 'OPEN'), commits: people.length, need: q.need || 5,
@@ -17709,19 +17734,38 @@ window.spQuestToggle = async function (questId, app) {
   _spQuestBusy = true;
   const fb = window.fbLib;
   const ref = fb.doc(window.db, 'sp_quests', questId, 'commits', p.addr);
+  let joined = false;
   try {
-    const cur = await fb.getDoc(ref);
-    if (cur.exists()) {
-      if (confirm('このクエストから降りますか？')) await fb.deleteDoc(ref);
+    /* SDK のキャッシュで誤判定しないよう、操作前にサーバーの1件を読む。 */
+    const cur = await _spRestDoc('sp_quests/' + encodeURIComponent(questId)
+      + '/commits/' + encodeURIComponent(p.addr), true);
+    if (cur) {
+      if (!confirm('このクエストから降りますか？')) return;
+      await fb.deleteDoc(ref);
     } else {
       await fb.setDoc(ref, { name: p.name, tookAt: Date.now() });
+      joined = true;
     }
+    const saved = await _spRestDoc('sp_quests/' + encodeURIComponent(questId)
+      + '/commits/' + encodeURIComponent(p.addr), true);
+    if (!!saved !== joined) throw new Error('参加記録を確認できませんでした');
+    /* 一覧の再取得が失敗しても、確認済みの本人状態はすぐ画面に出す。 */
+    if (app && app.state && Array.isArray(app.state.quests)) {
+      app.setState({ quests: app.state.quests.map(function (q) {
+        if (q.id !== questId) return q;
+        const delta = joined && !q.iTook ? 1 : !joined && q.iTook ? -1 : 0;
+        return Object.assign({}, q, { iTook: joined, commits: Math.max(0, (q.commits || 0) + delta) });
+      }) });
+    }
+    alert(joined
+      ? 'クエストを受けました。詳細から「やってみた／つまずいた／気づいた」を記録できます。'
+      : 'クエストから降りました。');
   } catch (e) {
-    alert('うまくいきませんでした。通信を確かめて、もう一度お試しください。');
-    _spQuestBusy = false;
+    alert('参加状態を確認・更新できませんでした。通信を確かめて、もう一度お試しください。');
     return;
+  } finally {
+    _spQuestBusy = false;
   }
-  _spQuestBusy = false;
   await window.spDaoLoadQuests(app);
 };
 
@@ -18059,6 +18103,16 @@ async function spQuestSubmit() {
   if (!p) { alert('クエストを出すにはログインが必要です。'); return; }
   if (!p.isOwner) { alert('クエストを出せるのは、いまのところ運営だけです。'); return; }
 
+  /* 数字以外を消すと「12,500.00」が1250000になってしまう。 */
+  const budgetInput = val('sqBudget').replace(/,/g, '');
+  if (!/^\d+$/.test(budgetInput) || !Number.isSafeInteger(Number(budgetInput))) {
+    alert('予算は整数で入力してください（例：12500）。小数や単位は入力できません。'); return;
+  }
+  const budgetValue = Number(budgetInput);
+  const budgetCurrency = SP_CURRENCIES.indexOf(val('sqCurrency')) >= 0 ? val('sqCurrency') : 'JPY';
+  if (!confirm('予算は ' + spMoney(budgetValue, budgetCurrency)
+    + ' です。クエスト作成後は変更できません。\n\nこの内容で出しますか？')) return;
+
   if (spQuestSubmitting) return;
   spQuestSubmitting = true;
   const days = Math.max(1, Math.min(90, parseInt(val('sqDays'), 10) || 14));
@@ -18137,13 +18191,10 @@ async function _spCreateQuestRetry(fb, body) {
          「何を試す？」は見出しなので短くなる。受ける前の人に向けて、
          もう少し人の言葉で語りかけられる場所として別に持たせている。 */
       intro: val('sqIntro').slice(0, 600),
-      budget: String(parseInt(val('sqBudget').replace(/[^0-9]/g, ''), 10) || 0),
+      budget: String(budgetValue),
       /* 報酬は EMUER・JPYC・円 のどれか。
          入れていない古いクエストは、読むときに円として扱う。 */
-      budgetCurrency: (function () {
-        const c = val('sqCurrency');
-        return SP_CURRENCIES.indexOf(c) >= 0 ? c : 'JPY';
-      })(),
+      budgetCurrency: budgetCurrency,
       need: need,
       /* ルールは owner が「運営のアドレス」かつ「自分のアドレス」であることを求める。
          p.addr（ches優先）を入れると、運営でもここで弾かれる。 */
@@ -18362,12 +18413,22 @@ window.spQuestWisdom = async function (questId, app) {
     const snap = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));
     if (snap.exists()) q = { id: snap.id, ...(snap.data() || {}) };
   } catch (e) {}
+  if (!q) {
+    try {
+      const rest = await _spRestDoc('sp_quests/' + encodeURIComponent(questId), true);
+      if (rest) q = { id: questId, ...rest };
+    } catch (e) { console.warn('知恵カードのクエストを読めませんでした:', e); }
+  }
   if (!q) { alert('クエストが見つかりませんでした。'); return; }
   /* 受けているかを、置く前に確かめる。決まりも同じところを見ているので、
      ここで止めないと、書いたあとに断られて中身が消える。 */
   try {
     const c = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId, 'commits', p.addr));
-    if (!c.exists()) { alert('知恵カードを置けるのは、このクエストを受けた人だけです。'); return; }
+    if (!c.exists() || (c.metadata && c.metadata.fromCache)) {
+      const own = await _spRestDoc('sp_quests/' + encodeURIComponent(questId)
+        + '/commits/' + encodeURIComponent(p.addr), true);
+      if (!own) { alert('知恵カードを置けるのは、このクエストを受けた人だけです。'); return; }
+    }
   } catch (e) {
     alert('受けているかを確かめられませんでした。通信を確かめて、もう一度お試しください。'); return;
   }
@@ -18385,6 +18446,12 @@ window.spQuestClose = async function (questId, app) {
     const snap = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));
     if (snap.exists()) q = { id: snap.id, ...(snap.data() || {}) };
   } catch (e) {}
+  if (!q) {
+    try {
+      const rest = await _spRestDoc('sp_quests/' + encodeURIComponent(questId), true);
+      if (rest) q = { id: questId, ...rest };
+    } catch (e) { console.warn('完了するクエストを読めませんでした:', e); }
+  }
   if (!q) { alert('クエストが見つかりませんでした。'); return; }
   if (!p.isOwner && String(q.owner || '').toLowerCase() !== String(p.addr || '').toLowerCase()) {
     alert('完了にできるのは、そのクエストを出した人だけです。'); return;

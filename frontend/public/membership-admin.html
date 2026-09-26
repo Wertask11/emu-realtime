@@ -2199,6 +2199,13 @@ async function renderSchoolPark() {
     const v = id => ($("#" + id).value || "").trim();
     if (!v("aqTitle")) { alert("何を試すのかを書いてください。"); return; }
     if (!v("aqHypothesis")) { alert("予想を書いてください。"); return; }
+    const budgetInput = v("aqBudget").replace(/,/g, "");
+    if (!/^\d+$/.test(budgetInput) || !Number.isSafeInteger(Number(budgetInput))) {
+      alert("予算は整数で入力してください（例：12500）。小数や単位は入力できません。"); return;
+    }
+    const budgetValue = Number(budgetInput);
+    if (!confirm("予算は " + budgetValue.toLocaleString("ja-JP") + " " + v("aqCurrency")
+      + " です。クエスト作成後は変更できません。\n\nこの内容で出しますか？")) return;
     questSubmitting = true;
     const days = Math.max(1, Math.min(90, parseInt(v("aqDays"), 10) || 14));
     /* どのギルドの活動か。空（どこにも属さない）は認める。
@@ -2222,7 +2229,7 @@ async function renderSchoolPark() {
         title: v("aqTitle").slice(0, 120), guildId: aqGuildId, knowledge: v("aqKnowledge").slice(0, 200),
         hypothesis: v("aqHypothesis").slice(0, 400), action: v("aqAction").slice(0, 400),
         measure: v("aqMeasure").slice(0, 400),
-        budget: String(parseInt(v("aqBudget").replace(/[^0-9]/g, ""), 10) || 0),
+        budget: String(budgetValue),
         budgetCurrency: CURRENCIES.indexOf(v("aqCurrency")) >= 0 ? v("aqCurrency") : "JPY",
         need: Math.max(1, Math.min(50, parseInt(v("aqNeed"), 10) || 5)),
         owner: ownerAddr, ownerName: (auth.currentUser && auth.currentUser.displayName) || "運営",
