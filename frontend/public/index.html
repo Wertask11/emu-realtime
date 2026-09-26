@@ -18659,6 +18659,27 @@ function _spWisdomPaintTag() {
 
 function closeSpWisdomForm() { document.body.classList.remove('sp-wisdom-open'); }
 
+/* 知恵カード専用の完了画面。Emu投稿の演出とは独立している。 */
+let _spWisdomCelebrateApp = null;
+function spWisdomCelebrate(insight, app) {
+  _spWisdomCelebrateApp = app || null;
+  const quote = document.getElementById('spWisdomCelebrateQuote');
+  if (quote) quote.textContent = insight;
+  const dialog = document.getElementById('spWisdomCelebrate');
+  if (dialog) {
+    dialog.hidden = false;
+    const button = dialog.querySelector('.spwc-primary');
+    if (button) button.focus();
+  }
+}
+function closeSpWisdomCelebrate(goLibrary) {
+  const dialog = document.getElementById('spWisdomCelebrate');
+  if (dialog) dialog.hidden = true;
+  if (goLibrary && _spWisdomCelebrateApp) _spWisdomCelebrateApp.go('library')();
+  _spWisdomCelebrateApp = null;
+}
+window.closeSpWisdomCelebrate = closeSpWisdomCelebrate;
+
 /* ───── 知恵カードの分類 ─────
 
    書く人に選ばせない。その知恵が「どこから来たか」で決まる。
@@ -18729,14 +18750,7 @@ async function spWisdomSubmit() {
   }
   closeSpWisdomForm();
   if (_spWisdomApp) await window.spDaoLoadWisdom(_spWisdomApp);
-  const wisdomApp = _spWisdomApp;
-  showSakuraModal({
-    title: '知恵カードを置きました',
-    subtitle: 'あなたの経験が、次の人の知恵につながります',
-    badge: '報酬の付与はありません。引用されると信用スコアに反映されます',
-    first: '知恵ライブラリを見る', second: 'クエストに戻る',
-    onFirst: function () { if (wisdomApp) wisdomApp.go('library')(); }
-  });
+  spWisdomCelebrate(insight, _spWisdomApp);
 }
 
 /* 知恵ライブラリを読む */
@@ -23304,22 +23318,8 @@ var _skColors = [
   'rgba(176,157,62,A)'   /* 色づきかけ */
 ];
 
-function showSakuraModal(options) {
-  options = options || {};
+function showSakuraModal() {
   var modal = document.getElementById('sakuraModal');
-  document.getElementById('skTitle').textContent = options.title || '投稿を公開しました';
-  document.getElementById('skSub').textContent = options.subtitle || 'あなたの言葉が、誰かの心に届くかもしれない';
-  document.getElementById('skBadge').textContent = options.badge || 'Good / Change をもらうとEMUERを獲得';
-  var first = document.getElementById('skBtnFeed');
-  var second = document.getElementById('skBtnMore');
-  first.textContent = options.first || 'フィードを見る';
-  second.textContent = options.second || '続けて投稿';
-  first.onclick = function () { closeSakuraModal(); if (options.onFirst) options.onFirst(); };
-  second.onclick = function () {
-    closeSakuraModal();
-    if (options.onSecond) options.onSecond();
-    else if (!options.title) setTimeout(function () { openPostForm(); }, 200);
-  };
   modal.classList.add('active');
   ['skCheck','skTitle','skSub','skBadge','skActions'].forEach(function(id) {
     document.getElementById(id).classList.remove('show');
@@ -26955,6 +26955,41 @@ async function sendEmuFeedback() {
   </div>
 </div>
 
+<style>
+#spWisdomCelebrate[hidden] { display:none !important; }
+#spWisdomCelebrate { position:fixed; inset:0; z-index:10020; display:grid; place-items:center; padding:20px; box-sizing:border-box; background:rgba(9,31,24,.76); backdrop-filter:blur(7px); }
+.spwc-card { position:relative; width:min(100%,480px); max-height:calc(100vh - 40px); overflow:auto; box-sizing:border-box; padding:42px 32px 32px; border-radius:20px; background:#F7F4E9; color:#173C2D; text-align:center; box-shadow:0 28px 90px rgba(0,0,0,.28); animation:spwc-appear .55s cubic-bezier(.16,1,.3,1) both; }
+.spwc-orbit { position:relative; width:92px; height:92px; margin:0 auto 22px; border-radius:50%; border:1px solid #ADC7A9; display:grid; place-items:center; background:#E4EEDC; animation:spwc-grow .8s cubic-bezier(.16,1,.3,1) both; }
+.spwc-orbit:before,.spwc-orbit:after { content:'✦'; position:absolute; color:#7BA982; font-size:19px; animation:spwc-twinkle 2s ease-in-out infinite alternate; }
+.spwc-orbit:before { top:-7px; right:-22px; }.spwc-orbit:after { bottom:0; left:-25px; animation-delay:.7s; }
+.spwc-glyph { font-family:serif; font-size:46px; color:#246B49; }
+.spwc-kicker { font:600 11px Inter,sans-serif; letter-spacing:.22em; color:#44805E; }
+.spwc-card h2 { margin:10px 0 8px; font-size:27px; line-height:1.4; }
+.spwc-desc { margin:0 0 20px; font-size:14px; line-height:1.8; }
+.spwc-quote { margin:0 0 22px; padding:20px; border-radius:12px; background:#E7EEDC; font-family:'Zen Old Mincho',serif; font-weight:700; font-size:19px; line-height:1.7; overflow-wrap:anywhere; }
+.spwc-path { margin-bottom:18px; font-size:12px; color:#527561; line-height:1.7; }
+.spwc-note { margin:0 0 22px; font-size:12px; line-height:1.7; color:#57675B; }
+.spwc-actions { display:flex; gap:10px; flex-wrap:wrap; }
+.spwc-actions button { flex:1 1 160px; min-height:46px; border-radius:8px; cursor:pointer; font:700 13px 'Zen Kaku Gothic New',sans-serif; }
+.spwc-primary { border:1px solid #155C40; background:#155C40; color:#fff; }.spwc-secondary { border:1px solid #B9C5B3; background:transparent; color:#155C40; }
+@keyframes spwc-appear { from { opacity:0; transform:translateY(22px) scale(.94); } to { opacity:1; transform:none; } }
+@keyframes spwc-grow { from { opacity:0; transform:scale(.35) rotate(-35deg); } to { opacity:1; transform:scale(1) rotate(0); } }
+@keyframes spwc-twinkle { from { opacity:.25; transform:scale(.7); } to { opacity:1; transform:scale(1.2); } }
+@media (prefers-reduced-motion:reduce) { .spwc-card,.spwc-orbit,.spwc-orbit:before,.spwc-orbit:after { animation:none; } }
+</style>
+<div id="spWisdomCelebrate" role="dialog" aria-modal="true" aria-labelledby="spwcTitle" hidden>
+  <div class="spwc-card">
+    <div class="spwc-orbit" aria-hidden="true"><span class="spwc-glyph">✧</span></div>
+    <div class="spwc-kicker">WISDOM IS HERE</div>
+    <h2 id="spwcTitle">知恵が、ひとつ残りました</h2>
+    <p class="spwc-desc">試した経験が、次の人に渡せる一枚になりました。</p>
+    <blockquote class="spwc-quote" id="spWisdomCelebrateQuote"></blockquote>
+    <div class="spwc-path">元の知識 → やってみた経験 → 残った一文</div>
+    <p class="spwc-note">カードを置くだけでEMUERは付与されません。ほかの人に引用されると信用スコアに反映されます。</p>
+    <div class="spwc-actions"><button type="button" class="spwc-primary" onclick="closeSpWisdomCelebrate(true)">知恵ライブラリで見る</button><button type="button" class="spwc-secondary" onclick="closeSpWisdomCelebrate(false)">クエストに戻る</button></div>
+  </div>
+</div>
+
 <!-- 知恵カードを置く。受けた人なら誰でも置ける（クエストの状態は動かさない） -->
 <div id="spWisdomSheet" role="dialog" aria-modal="true" aria-labelledby="swTitleLabel">
   <div class="spp-veil" onclick="closeSpWisdomForm()"></div>
@@ -27160,4 +27195,27 @@ async function sendEmuFeedback() {
 <!-- ── 冷蔵庫くん チャットパネル ──
      もとは #mainApp の中にあった。SchoolPark を見ているあいだ #mainApp は
      display:none になるため、そこにあると開けない。body の直下へ移す。 -->
-<div id="spReizoPanel" clas
+<div id="spReizoPanel" class="sp-reizo-panel">
+  <div class="sp-reizo-header">
+    <img src="/assets/mascot.jpg" alt="冷蔵庫くん">
+    <div style="flex:1;min-width:0">
+      <div class="sp-reizo-header-title">冷蔵庫くん</div>
+      <div class="sp-reizo-header-sub">🧊 SchoolParkの案内役</div>
+    </div>
+    <button class="sp-reizo-close" onclick="spReizoClose()">✕</button>
+  </div>
+  <div class="sp-reizo-msgs" id="spReizoMessages">
+    <div class="sp-reizo-msg sp-reizo-msg-bot">
+      <img src="/assets/mascot.jpg" alt="">
+      <!-- 吹き出しは white-space:pre-wrap。改行と字下げがそのまま出るので、1行で書く -->
+      <div class="sp-reizo-bubble">こんにちは！ぼくは冷蔵庫くん🧊<br>SchoolParkのことなら、僕に任せて！<br>何が知りたい？<div class="sp-reizo-quick-wrap" id="spReizoOpening"><button class="sp-reizo-quick-btn" onclick="spReizoAsk('ここは何をする場所？')">🏞️ ここは何をする場所？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('クエストって何？')">🎯 クエストって何？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('EMUERはどうやって貯める？')">💎 EMUERはどうやって貯める？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('残高教えて')">📊 いまの残高を教えて</button></div></div>
+    </div>
+  </div>
+  <div class="sp-reizo-input-area">
+    <input id="spReizoInput" type="text" placeholder="質問する..." onkeydown="spReizoKeydown(event)">
+    <button class="sp-reizo-send" onclick="spReizoSend()">↑</button>
+  </div>
+</div>
+
+</body>
+</html>
