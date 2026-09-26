@@ -3526,6 +3526,8 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
   text-align:left; line-height:1.6;
 }
 .spp-star:hover { border-color:#D0E2BE; }
+.spp-star-claim { margin-top:8px; padding:7px 11px; border-radius:7px; border:1px solid #D0E2BE; color:#D0E2BE; background:transparent; font:700 11px 'Zen Kaku Gothic New',sans-serif; cursor:pointer; }
+.spp-star-claim:disabled { opacity:.65; cursor:default; }
 .spp-star small { display:block; font-size:11px; font-weight:400; color:rgba(244,241,234,.55); margin-top:4px; }
 /* パスポートから星空を開いたときだけ、SchoolPark(1500)やパスポート(1800)より手前に出す。
    Emu の価値プロフィールから開く既存の経路（z-index:1400）は触らない。 */
@@ -16431,7 +16433,7 @@ window.spTrustScore = async function (addr, createdAt) {
   if (!key || !fb || !window.db) return null;
   let done = 0, wisdom = 0, cited = 0;
 
-  /* 完走：受けていて、運営が中身を認めていて、完了しているクエスト。
+  /* 完走：受けていて、運営が中身を認めたクエスト。
      メンバー画面の分配と、まったく同じ条件にしてある。
      前は信用スコアが「報告を1本以上書いた」、分配が「受けただけ」で、
      同じ『完走』という言葉で2か所が違うものを数えていた。 */
@@ -16439,9 +16441,8 @@ window.spTrustScore = async function (addr, createdAt) {
     const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
     const list = [];
     qs.forEach(function (s) { list.push({ id: s.id, ...(s.data() || {}) }); });
-    /* 完了したクエスト1本ごとに1往復していた。まとめて同時に聞く。 */
-    const closed = list.filter(function (q) { return q.status === 'CLOSED'; });
-    const got = await Promise.all(closed.map(function (q) {
+    /* クエスト全体の受付を閉じる前でも、各参加者の承認日は完走日になる。 */
+    const got = await Promise.all(list.filter(function (q) { return !SpQuestStore.isFounder(q); }).map(function (q) {
       return fb.getDoc(fb.doc(window.db, 'sp_quests', q.id, 'commits', addr))
                .catch(function () { return null; });
     }));
@@ -16585,6 +16586,8 @@ async function spCompletedQuests(p) {
       label: SpQuestStore.fullLabel(q) || '',
       title: String(q.title || ''),
       guildId: gid,
+      series: q.series || '',
+      questNumber: Number(q.questNumber) || 0,
       guildShort: g ? g.short : '',
       accent: g ? g.accent : '',
       /* ギルドの並び順（code 順）。星の一覧を開くたび順が入れ替わらないように。 */
@@ -17680,6 +17683,19 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
   const qGuildId = SpQuestStore.isFounder(q) ? '' : SpGuildStore.guildIdOf(q, gdefs);
   const qGuild = qGuildId ? SpGuildStore.byId(gdefs, qGuildId) : null;
   const fromId = SpQuestStore.isFounder(q) ? '' : String(q.fromProposalId || '');
+  const isLearn001 = q.series === 'general' && Number(q.questNumber) === 1 && qGuildId === 'learn';
+  let rewardBudget = null;
+  if (isLearn001) {
+    try {
+      const response = await fetch('https://emu-realtime.onrender.com/api/emuer/v2/guild-quest/budgets');
+      if (response.ok) {
+        const data = await response.json();
+        rewardBudget = (data.budgets || []).find(function (b) {
+          return b.scopeType === 'quest' && b.scopeId === q.id;
+        }) || null;
+      }
+    } catch (e) { /* 未確認の予算を、画面の予算から推定しない。 */ }
+  }
   return {
     id: q.id, title: (SpQuestStore.label(q) && !SpQuestStore.isFounder(q) ? SpQuestStore.label(q) + ' ' : '') + (q.title || ''), hypothesis: q.hypothesis || '',
     /* どちらの系列か。一覧の「一般／特殊」の切り替えで使う。
@@ -17713,12 +17729,15 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
     /* 金額は通貨も付けてここで組み立てる。
        画面側で ¥ を決め打ちしていたため、EMUER建てのクエストが
        「¥800」と出ていた。 */
-    budget: spMoney(parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0,
+    budget: isLearn001
+      ? (rewardBudget ? spMoney(rewardBudget.totalEmuer, 'EMUER') : 'EMUER個別予算は未公開')
+      : spMoney(parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0,
                     SP_CURRENCIES.indexOf(q.budgetCurrency) >= 0 ? q.budgetCurrency : 'JPY'),
     /* 1人あたりの目安。分配の決まり（完走した人へ80%）に合わせる。
        いまは「受けた人の数」で割った目安で、実際は運営が完了と
        認めた人だけで等分する。 */
     perHead: (function () {
+      if (isLearn001) return rewardBudget ? '100 EMUER' : '未確定';
       const cur = SP_CURRENCIES.indexOf(q.budgetCurrency) >= 0 ? q.budgetCurrency : 'JPY';
       const v = parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0;
       const n = people.length;
@@ -18988,6 +19007,13 @@ window.spDaoLoadMembers = async function (app) {
       }
       /* 受けた人は、認められていなくても一覧には出す（「参加中」として） */
       took.forEach(function (t) { pick(t.addr, t.name); });
+      if (q.series === 'general' && Number(q.questNumber) === 1 && q.guildId === 'learn') {
+        took.filter(function (t) { return t.approved; }).forEach(function (t) {
+          const m = pick(t.addr, t.name);
+          if (m) { m.done++; m.share.EMUER = (m.share.EMUER || 0) + 100; }
+        });
+        continue;
+      }
       if (q.status !== 'CLOSED') continue;
       const done = took.filter(function (t) { return t.approved; });
       if (done.length === 0) continue;
@@ -19628,7 +19654,9 @@ async function openSpPassport() {
           + 'padding:2px 6px;border-radius:999px;margin-right:6px;vertical-align:1px;'
           + 'box-shadow:0 0 0 1px rgba(244,241,234,.25)">' + escapeHtml(q.guildShort) + '</span>'
         : '';
-      doneHtml += _sppRowHtml('　' + escapeHtml(_sppDate(q.at)), tag + escapeHtml(name));
+      const certificate = q.series === 'general' && q.questNumber === 1 && q.guildId === 'learn'
+        ? '<br><button type="button" data-quest-star="' + escapeHtml(q.id) + '" class="spp-star-claim">証明書NFTを受け取る</button>' : '';
+      doneHtml += _sppRowHtml('　' + escapeHtml(_sppDate(q.at)), tag + escapeHtml(name) + certificate);
     });
   }
 
@@ -19636,6 +19664,45 @@ async function openSpPassport() {
     + doneHtml
     + _sppRow('SchoolPark｜参加ギルド', joined.length ? joined.join(' / ') : 'まだありません')
     + _sppRow('SchoolPark｜応援ギルド', supported.length ? supported.join(' / ') : 'まだありません');
+  if (rec) rec.querySelectorAll('[data-quest-star]').forEach(function (button) {
+    button.onclick = function () { spClaimQuestStar(button.dataset.questStar, button); };
+  });
+  if (rec && rec.querySelector('[data-quest-star]')) {
+    try {
+      const ready = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/certificate/config')
+        .then(function (r) { return r.ok ? r.json() : null; });
+      if (!ready || !ready.ready) rec.querySelectorAll('[data-quest-star]').forEach(function (button) {
+        button.disabled = true;
+        button.textContent = '証明書NFTは発行準備中';
+      });
+    } catch (e) { /* 通信が届かない間は受取操作でエラーを説明する。 */ }
+  }
+}
+
+async function spClaimQuestStar(questId, button) {
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  button.textContent = '証明書を確認中…';
+  try {
+    const wallet = await window.ethereum?.request({ method: 'eth_requestAccounts' });
+    const p = await spPassportLoad();
+    const linked = (p.spLinks || []).filter(function (l) { return l && l.kind === 'wallet'; });
+    const chosen = String(linked[0] && linked[0].subject || '').toLowerCase();
+    if (!chosen || !wallet || !wallet.some(function (a) { return a.toLowerCase() === chosen; }))
+      throw new Error('先にパスポートに連携したウォレットを接続してください。');
+    const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/'
+      + encodeURIComponent(questId) + '/certificate/claim',
+      { method:'POST', headers:await emuAuthHeaders(true), body:'{}' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error === 'CERTIFICATE_NOT_DEPLOYED'
+      ? '証明書NFTは準備中です。星と完走記録は残っています。'
+      : data.error || '証明書を受け取れませんでした。');
+    button.textContent = '✓ 証明書NFTを受け取りました';
+  } catch (e) {
+    button.disabled = false;
+    button.textContent = '証明書NFTを受け取る';
+    alert(e.message || '証明書を受け取れませんでした。');
+  }
 }
 
 /* ページをめくる。
