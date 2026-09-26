@@ -17693,8 +17693,13 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
          「誰かの知識が、別の誰かの行動に移った」ことを、字面ではなく
          実際の投稿への道として残す。押すと元の投稿がそのまま開く。 */
       const fromId = String(l.fromPostId || '');
-      return { author: name, initial: name.slice(0, 1), body: l.body || '',
+      const root = l.sourceLogId ? logs.find(function (x) { return x.id === l.sourceLogId; }) : null;
+      return { id: l.id, author: name, authorAddress: String(l.author || ''), initial: name.slice(0, 1), body: l.body || '',
         kind: kind, kindBg: c[0], kindFg: c[1],
+        fromPostId: fromId, fromPostTitle: l.fromPostTitle || '',
+        at: Number(l.at) || 0,
+        threadShow: root ? 'block' : 'none',
+        threadLabel: root ? '「やってみた」の続き：' + String(root.body || '').slice(0, 60) : '',
         fromShow: fromId ? 'flex' : 'none',
         fromTitle: l.fromPostTitle || '（Emuの投稿）',
         openPost: fromId ? function () { window.spOpenEmuPost(fromId); } : function () {},
@@ -17782,12 +17787,26 @@ let _spLogPick = null;          /* 選んだ投稿 {id, title} */
 let _spLogPosts = null;         /* 投稿の一覧。札を開くたびに読み直さない */
 let _spLogSubmitting = false;
 let _spLogRequiresPost = false;
+let _spLogSource = null;         /* 続きの報告が参照する「やってみた」 */
 
 window.spQuestLog = async function (questId, kind, app) {
   if (questId === SpQuestStore.FOUNDER_ID) return;
   const p = await spPassportLoad();
   if (!p) { alert('報告するにはログインが必要です。'); return; }
-  _spLogQuestId = questId; _spLogKind = kind; _spLogApp = app || null; _spLogPick = null;
+  const q = (((app && app.state) || {}).quests || []).filter(function (x) { return x.id === questId; })[0];
+  _spLogSource = null;
+  if (kind !== 'やってみた') {
+    /* 自分の直近の「やってみた」から、投稿と報告のつながりを引き継ぐ。
+       既存の報告にも ID があるので、新仕様以前の報告からも続けられる。 */
+    _spLogSource = ((q && q.logs) || []).filter(function (l) {
+      return l.kind === 'やってみた' && l.id &&
+        String(l.authorAddress || '').toLowerCase() === String(p.addr || '').toLowerCase();
+    }).sort(function (a, b) { return b.at - a.at; })[0] || null;
+    if (!_spLogSource) { alert('先に「やってみた」で最初の報告を出してください。'); return; }
+  }
+  _spLogQuestId = questId; _spLogKind = kind; _spLogApp = app || null;
+  _spLogPick = _spLogSource && _spLogSource.fromPostId
+    ? { id:_spLogSource.fromPostId, title:_spLogSource.fromPostTitle || '（Emuの投稿）' } : null;
 
   const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; };
   set('slBody', ''); set('slSearch', '');
@@ -17798,7 +17817,6 @@ window.spQuestLog = async function (questId, kind, app) {
     : kind === '気づいた'
     ? '何が分かったか。やる前と、やったあとで変わったこと。'
     : '実際に何をやったか。うまくいったこと、いかなかったこと。';
-  const q = (((app && app.state) || {}).quests || []).filter(function (x) { return x.id === questId; })[0];
   /* 一般 #001 は Emu の投稿を実際に試すクエスト。出どころを必ず残す。 */
   _spLogRequiresPost = !!(q && q.series === 'general' && Number(q.questNumber) === 1);
   const qn = document.getElementById('slQuest');
@@ -17813,8 +17831,13 @@ window.spQuestLog = async function (questId, kind, app) {
   if (postLabel) postLabel.textContent = '試したEmuの投稿' + (_spLogRequiresPost ? '（必須）' : '（任意）');
   const postGuide = document.getElementById('slPostGuide');
   if (postGuide) postGuide.textContent = _spLogRequiresPost
-    ? 'クエスト一覧ではなく、Emuの全投稿から試した投稿を選んでください。検索でも探せます。'
+    ? (_spLogSource ? '直近の「やってみた」で選んだ投稿を引き継ぎます。' : 'Emuの全投稿から試した投稿を選んでください。検索でも探せます。')
     : 'Emuの全投稿から元になった投稿を選べます。選ぶと知恵カードにも引き継がれます。';
+  const source = document.getElementById('slSource');
+  if (source) {
+    source.hidden = !_spLogSource;
+    source.textContent = _spLogSource ? '続きの報告：' + _spLogSource.body.slice(0, 100) : '';
+  }
   _spLogRenderPick();
   _spLogRenderResults('');
   /* 候補を押したときの係。付け直さないよう、いちどだけ付ける。 */
@@ -17912,7 +17935,7 @@ function _spLogPickPost(id) {
 }
 window._spLogPickPost = _spLogPickPost;
 
-function _spLogClearPick() { _spLogPick = null; _spLogRenderPick(); }
+function _spLogClearPick() { if (_spLogSource && _spLogSource.fromPostId) return; _spLogPick = null; _spLogRenderPick(); }
 window._spLogClearPick = _spLogClearPick;
 
 function _spLogRenderPick() {
@@ -17921,7 +17944,7 @@ function _spLogRenderPick() {
   if (!picked || !wrap) return;
   if (_spLogPick) {
     picked.innerHTML = '<span class="sl-pick-t">' + _emuEsc(_spLogPick.title) + '</span>'
-      + '<button type="button" class="sl-pick-x" onclick="_spLogClearPick()">外す</button>';
+      + (_spLogSource && _spLogSource.fromPostId ? '' : '<button type="button" class="sl-pick-x" onclick="_spLogClearPick()">外す</button>');
     picked.hidden = false;
     wrap.hidden = true;
   } else {
@@ -17947,7 +17970,8 @@ async function spLogSubmit() {
       kind: _spLogKind, body: text.slice(0, 2000), at: Date.now(),
       /* 元になった Emu の投稿。一般 #001 では選択必須。 */
       fromPostId: _spLogPick ? String(_spLogPick.id).slice(0, 80) : '',
-      fromPostTitle: _spLogPick ? String(_spLogPick.title).slice(0, 120) : ''
+      fromPostTitle: _spLogPick ? String(_spLogPick.title).slice(0, 120) : '',
+      sourceLogId: _spLogSource ? String(_spLogSource.id) : ''
     });
   } catch (e) {
     const code = String((e && e.code) || '');
@@ -26971,6 +26995,7 @@ async function sendEmuFeedback() {
       <button type="button" class="spp-close" onclick="closeSpLogForm()" aria-label="閉じる">✕</button>
     </div>
     <p class="spp-note" id="slQuest" style="margin:0"></p>
+    <p class="spp-note" id="slSource" hidden style="margin:0"></p>
     <p class="spp-note" id="slKindGuide" style="margin:0"></p>
     <label class="spv-label" for="slBody">報告</label>
     <textarea class="spv-in spv-area" id="slBody" maxlength="2000"></textarea>
