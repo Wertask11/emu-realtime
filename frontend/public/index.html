@@ -18770,6 +18770,17 @@ async function spWisdomSubmit() {
   closeSpWisdomForm();
   if (_spWisdomApp) await window.spDaoLoadWisdom(_spWisdomApp);
   spWisdomCelebrate(insight, _spWisdomApp);
+
+  /* 置いた瞬間から、信用スコア（知恵カード ×5）とメンバー・貢献の
+     「知恵」の数が変わる。前はここで知恵ライブラリしか数え直しておらず、
+     画面を開き直すまで信用スコアは0のままだった。
+     祝いを先に出してから、裏で数え直す（待たせない）。 */
+  if (_spWisdomApp) {
+    Promise.all([
+      window.spDaoLoadMembers(_spWisdomApp),   // 中で信用スコアも数え直す
+      window.spDaoLoadVotes(_spWisdomApp)      // ギルド画面の信用スコア
+    ]).catch(function (e) { console.warn('置いたあとの数え直しに失敗:', e && (e.message || e)); });
+  }
 }
 
 /* 知恵ライブラリを読む */
@@ -18957,6 +18968,8 @@ window.spDaoLoadMembers = async function (app) {
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
   const M = {};                        // 番号 → 集計
+  /* 読めたかどうか。読めていないのに「記録がありません」と出さないため。 */
+  let failed = false;
   const pick = function (addr, name) {
     const key = String(addr || '').toLowerCase();
     if (!key) return null;
@@ -18983,7 +18996,10 @@ window.spDaoLoadMembers = async function (app) {
       if (cs) cs.forEach(function () { uses++; });
       if (m) m.cited += uses;
     });
-  } catch (e) {}
+  } catch (e) {
+    console.warn('メンバーの知恵カードを読めませんでした:', e && (e.message || e));
+    failed = true;
+  }
 
   /* 完了したクエストと、運営が認めた参加者 */
   try {
@@ -19007,27 +19023,37 @@ window.spDaoLoadMembers = async function (app) {
       }
       /* 受けた人は、認められていなくても一覧には出す（「参加中」として） */
       took.forEach(function (t) { pick(t.addr, t.name); });
-      if (q.series === 'general' && Number(q.questNumber) === 1 && q.guildId === 'learn') {
-        took.filter(function (t) { return t.approved; }).forEach(function (t) {
-          const m = pick(t.addr, t.name);
-          if (m) { m.done++; m.share.EMUER = (m.share.EMUER || 0) + 100; }
-        });
-        continue;
-      }
-      if (q.status !== 'CLOSED') continue;
       const done = took.filter(function (t) { return t.approved; });
-      if (done.length === 0) continue;
+
+      /* 完走は、運営が認めた時点で数える。クエスト全体の受付を閉じるのを待たない。
+         閉じるのは運営の都合で、その人が完走したかどうかとは別のこと。
+         信用スコア（spTrustScore）・パスポートの記録・星空も、
+         すべて approved を見ている。ここだけ CLOSED を待っていたため、
+         「パスポートには完走が出ているのに、メンバー画面は参加中のまま」
+         という食い違いが起きていた。 */
+      done.forEach(function (t) {
+        const m = pick(t.addr, t.name);
+        if (m) m.done++;
+      });
+
+      /* 分配（お金）は、クエストが完了してから。走っている最中には配らない。
+         まだ受けている人が増えるので、1人あたりの額が決まらない。 */
+      if (q.status !== 'CLOSED' || done.length === 0) continue;
       const cur = SP_CURRENCIES.indexOf(q.budgetCurrency) >= 0 ? q.budgetCurrency : 'JPY';
       const budget = parseInt(String(q.budget || '0').replace(/[^0-9]/g, ''), 10) || 0;
       const each = budget * SP_SHARE_DONE / done.length;
       done.forEach(function (t) {
         const m = pick(t.addr, t.name);
-        if (!m) return;
-        m.done++;
-        m.share[cur] = (m.share[cur] || 0) + each;
+        if (m) m.share[cur] = (m.share[cur] || 0) + each;
       });
     }
-  } catch (e) {}
+  } catch (e) {
+    /* 黙って握りつぶしていた。読めなくても0件になり、画面は
+       「まだ活動の記録がありません」と出す。読めなかったのに
+       「無い」と言い切るのは嘘なので、そこを分ける。 */
+    console.warn('メンバーのクエストを読めませんでした:', e && (e.message || e));
+    failed = true;
+  }
 
   /* 引用は数として残すが、クエストの予算からは配らない。
      引用への還元は DAO プールから別に配る（そちらは未実装）。 */
@@ -19047,7 +19073,33 @@ window.spDaoLoadMembers = async function (app) {
         share: parts.length ? parts.join(' / ') : '—'
       };
     });
-  app.setState({ members: members, noMembers: members.length === 0 });
+  /* 読めなかったときは、いま出ているものを消さない。
+     消したうえで「記録がありません」と出すと、二重に嘘になる。 */
+  if (failed && members.length === 0) {
+    const had = ((app.state || {}).members || []).length;
+    app.setState({ noMembers: false,
+      membersNote: 'いまメンバーの記録を読めませんでした。通信が戻ってから、もう一度開いてください。' });
+    if (!had) app.setState({ members: [] });
+    return;
+  }
+  app.setState({ members: members, noMembers: members.length === 0, membersNote: '' });
+
+  /* 信用スコアも、ここで数え直す。
+
+     前はギルドの画面（spDaoLoadVotes）でしか計算していなかった。
+     クエスト一覧やメンバー・貢献から見ているあいだは、
+     知恵カードを置いても完走が認められても、数字が変わらなかった。 */
+  try {
+    const p = await spPassportLoad();
+    if (p) {
+      const sc = await window.spTrustScore(p.addr, p.createdAt);
+      if (sc) {
+        app.setState({ trust: { total: sc.total, need: sc.need,
+          detail: '完走 ' + sc.done + '（×10）／知恵 ' + sc.wisdom + '（×5）／引用され ' + sc.cited
+                + '（×3）／在籍 ' + sc.months + 'か月（×1）' } });
+      }
+    }
+  } catch (e) { console.warn('信用スコアを数え直せませんでした:', e && (e.message || e)); }
 };
 
 /* ═══════════════════════════════════════
