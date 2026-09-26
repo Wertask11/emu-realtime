@@ -1241,6 +1241,17 @@ class Component extends DCLogic {
 
   scroller = React.createRef();
   toTop(){ if(this.scroller.current) this.scroller.current.scrollTop = 0; window.scrollTo(0,0); }
+  /* クエストの絞り込みは画面遷移ではない。再描画でスクロール位置を失わない。 */
+  setQuestFilter(patch){
+    const el = this.scroller.current;
+    const y = el ? el.scrollTop : 0, pageY = window.scrollY;
+    this.setState(patch);
+    const restore = () => {
+      if(this.scroller.current) this.scroller.current.scrollTop = y;
+      window.scrollTo(0, pageY);
+    };
+    requestAnimationFrame(() => { restore(); requestAnimationFrame(restore); });
+  }
   go(screen){ return () => { if(this.bottomRef.current) this.tabScrollLeft = this.bottomRef.current.scrollLeft; this.setState({screen}); this.toTop(); }; }
   openExp(id){ return () => { this.setState({screen:'detail', expId:id}); this.toTop(); }; }
   joinBoard(id){ return () => this.setState(s => ({joined:{...s.joined, [id]:!s.joined[id]}})); }
@@ -1332,13 +1343,13 @@ class Component extends DCLogic {
        渡してくる（消えないように）。Quest #000 は一覧の外に別で出している。 */
     const curSeries = s.series === 'special' ? 'special' : 'general';
     const seriesFilters = [['general','一般'],['special','特殊']].map(([id,label]) => ({
-      label, go:()=>this.setState({series:id}),
+      label, go:()=>this.setQuestFilter({series:id}),
       bg: curSeries===id ? '#0F5C3F' : 'transparent',
       fg: curSeries===id ? '#F4F1EA' : '#0F5C3F',
       border: curSeries===id ? '#0F5C3F' : 'rgba(15,92,63,.35)'}));
     const seriesExps = exps.filter(e => (e.series || 'general') === curSeries);
     const filters = ['すべて','募集中','進行中','完了'].map(f => ({
-      label:f, go:()=>this.setState({filter:f}),
+      label:f, go:()=>this.setQuestFilter({filter:f}),
       bg: s.filter===f ? '#141310' : 'transparent', fg: s.filter===f ? '#F4F1EA' : '#3B382F'}));
     const fmap = {'募集中':'OPEN','進行中':'RUNNING','完了':'CLOSED'};
     const shownExps = s.filter==='すべて' ? seriesExps : seriesExps.filter(e => e.status === fmap[s.filter]);
