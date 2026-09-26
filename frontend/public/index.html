@@ -17638,6 +17638,7 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
     /* どちらの系列か。一覧の「一般／特殊」の切り替えで使う。
        #000 と、番号の無い古いクエストは、どちらにも属さない（'' になる）。 */
     series: SpQuestStore.seriesOf(q),
+    questNumber: Number(q.questNumber) || 0,
     /* 系列まで込みの題名。切り替えの無い場所（詳細・走っているクエスト・
        宿題の選び先）で使う。特殊のときだけ前に「特殊」が付く。 */
     fullTitle: (SpQuestStore.fullLabel(q) && !SpQuestStore.isFounder(q) ? SpQuestStore.fullLabel(q) + ' ' : '') + (q.title || ''),
@@ -17780,6 +17781,7 @@ let _spLogQuestId = null, _spLogKind = '', _spLogApp = null;
 let _spLogPick = null;          /* 選んだ投稿 {id, title} */
 let _spLogPosts = null;         /* 投稿の一覧。札を開くたびに読み直さない */
 let _spLogSubmitting = false;
+let _spLogRequiresPost = false;
 
 window.spQuestLog = async function (questId, kind, app) {
   if (questId === SpQuestStore.FOUNDER_ID) return;
@@ -17797,8 +17799,22 @@ window.spQuestLog = async function (questId, kind, app) {
     ? '何が分かったか。やる前と、やったあとで変わったこと。'
     : '実際に何をやったか。うまくいったこと、いかなかったこと。';
   const q = (((app && app.state) || {}).quests || []).filter(function (x) { return x.id === questId; })[0];
+  /* 一般 #001 は Emu の投稿を実際に試すクエスト。出どころを必ず残す。 */
+  _spLogRequiresPost = !!(q && q.series === 'general' && Number(q.questNumber) === 1);
   const qn = document.getElementById('slQuest');
   if (qn) qn.textContent = q ? ('クエスト：' + (q.title || '')) : '';
+  const guide = document.getElementById('slKindGuide');
+  if (guide) guide.textContent = kind === 'つまずいた'
+    ? '試した投稿と、どこで止まったかを残します。うまくいかなかった記録も大切です。'
+    : kind === '気づいた'
+    ? '試した投稿から分かったことと、試す前後の変化を残します。'
+    : '試した投稿を選び、実際にやったことと結果を残します。';
+  const postLabel = document.getElementById('slPostLabel');
+  if (postLabel) postLabel.textContent = '試したEmuの投稿' + (_spLogRequiresPost ? '（必須）' : '（任意）');
+  const postGuide = document.getElementById('slPostGuide');
+  if (postGuide) postGuide.textContent = _spLogRequiresPost
+    ? 'クエスト一覧ではなく、Emuの全投稿から試した投稿を選んでください。検索でも探せます。'
+    : 'Emuの全投稿から元になった投稿を選べます。選ぶと知恵カードにも引き継がれます。';
   _spLogRenderPick();
   _spLogRenderResults('');
   /* 候補を押したときの係。付け直さないよう、いちどだけ付ける。 */
@@ -17833,12 +17849,12 @@ async function _spLogLoadPosts() {
   const box = document.getElementById('slResults');
   if (box) box.innerHTML = '<div class="sl-msg">投稿を読み込んでいます...</div>';
   if (!window.db || !window.fbLib) {
-    if (box) box.innerHTML = '<div class="sl-msg">いまは投稿を読めません。選ばずに報告できます。</div>';
+    if (box) box.innerHTML = '<div class="sl-msg">いまは投稿を読めません。時間をおいて開き直してください。</div>';
     return;
   }
   try {
     const fb = window.fbLib;
-    const snap = await fb.getDocs(fb.query(fb.collection(window.db, 'posts'), fb.limit(300)));
+    const snap = await fb.getDocs(fb.collection(window.db, 'posts'));
     const rows = [];
     snap.forEach(function (d) {
       const x = d.data() || {};
@@ -17849,14 +17865,14 @@ async function _spLogLoadPosts() {
     /* getDocs は通信が切れていても例外を出さず、控えから空で返ってくる。
        「本当に0件」と「読めていない」を取り違えないよう、ここで見分ける。 */
     if (!rows.length && snap.metadata && snap.metadata.fromCache) {
-      if (box) box.innerHTML = '<div class="sl-msg">投稿を読み込めませんでした。選ばずに報告できます。</div>';
+      if (box) box.innerHTML = '<div class="sl-msg">投稿を読み込めませんでした。時間をおいて開き直してください。</div>';
       return;
     }
     rows.sort(function (a, b) { return b.at - a.at; });
     _spLogPosts = rows;
   } catch (e) {
     console.warn('投稿を読めませんでした:', e && (e.message || e));
-    if (box) box.innerHTML = '<div class="sl-msg">投稿を読み込めませんでした。選ばずに報告できます。</div>';
+    if (box) box.innerHTML = '<div class="sl-msg">投稿を読み込めませんでした。時間をおいて開き直してください。</div>';
     return;
   }
   const cur = document.getElementById('slSearch');
@@ -17876,16 +17892,16 @@ function _spLogRenderResults(word) {
     return (x.title + ' ' + x.tags + ' ' + x.name + ' ' + x.body).toLowerCase().indexOf(w) >= 0;
   });
   if (!hit.length) {
-    box.innerHTML = '<div class="sl-msg">見つかりませんでした。ほかの言葉で探すか、選ばずに報告できます。</div>';
+    box.innerHTML = '<div class="sl-msg">見つかりませんでした。ほかの言葉で探してください。</div>';
     return;
   }
-  box.innerHTML = hit.slice(0, 12).map(function (x) {
+  box.innerHTML = hit.map(function (x) {
     return '<button type="button" class="sl-hit" data-pid="' + _emuEsc(x.id) + '">'
       + '<span class="sl-hit-t">' + _emuEsc(x.title) + '</span>'
       + '<span class="sl-hit-m">' + _emuEsc(x.name)
       + (x.tags ? ' ・ ' + _emuEsc(x.tags.split(',').slice(0, 3).map(function (t) { return '#' + t.trim(); }).join(' ')) : '')
       + '</span></button>';
-  }).join('') + (hit.length > 12 ? '<div class="sl-msg">ほかにも ' + (hit.length - 12) + ' 件あります。言葉で絞ってください。</div>' : '');
+  }).join('');
 }
 
 function _spLogPickPost(id) {
@@ -17920,6 +17936,7 @@ async function spLogSubmit() {
   const text = el ? el.value.trim() : '';
   if (!text) { alert('中身を書いてください。'); return; }
   if (!_spLogQuestId) { alert('もとのクエストが分かりません。'); return; }
+  if (_spLogRequiresPost && !_spLogPick) { alert('試したEmuの投稿を選んでください。'); return; }
   const p = await spPassportLoad();
   if (!p) { alert('報告するにはログインが必要です。'); return; }
   _spLogSubmitting = true;
@@ -17928,8 +17945,7 @@ async function spLogSubmit() {
     await fb.addDoc(fb.collection(window.db, 'sp_quests', _spLogQuestId, 'logs'), {
       author: p.addr, authorName: p.name,
       kind: _spLogKind, body: text.slice(0, 2000), at: Date.now(),
-      /* 元になった Emu の投稿。選ばなくてもよい。
-         これが入っていると、知恵カードを作るときに引き継がれる。 */
+      /* 元になった Emu の投稿。一般 #001 では選択必須。 */
       fromPostId: _spLogPick ? String(_spLogPick.id).slice(0, 80) : '',
       fromPostTitle: _spLogPick ? String(_spLogPick.title).slice(0, 120) : ''
     });
@@ -26955,17 +26971,18 @@ async function sendEmuFeedback() {
       <button type="button" class="spp-close" onclick="closeSpLogForm()" aria-label="閉じる">✕</button>
     </div>
     <p class="spp-note" id="slQuest" style="margin:0"></p>
+    <p class="spp-note" id="slKindGuide" style="margin:0"></p>
     <label class="spv-label" for="slBody">報告</label>
     <textarea class="spv-in spv-area" id="slBody" maxlength="2000"></textarea>
 
-    <label class="spv-label">元になったEmuの投稿（任意）</label>
+    <label class="spv-label" id="slPostLabel">試したEmuの投稿</label>
     <div id="slPicked" class="sl-pick" hidden></div>
     <div id="slPickWrap">
-      <input class="spv-in" id="slSearch" maxlength="40" placeholder="題名・タグ・名前で探す"
+      <input class="spv-in" id="slSearch" maxlength="40" placeholder="全投稿から題名・タグ・名前で絞り込む"
              oninput="_spLogSearch(this.value)">
       <div id="slResults" class="sl-results"></div>
     </div>
-    <p class="spp-note">Emuの誰かの知識から始まった報告なら、その投稿を選んでください。選ぶと「誰の知識が、誰の行動に移ったか」が残り、知恵カードにも引き継がれます。選ばなくても報告は出せます。</p>
+    <p class="spp-note" id="slPostGuide"></p>
     <button type="button" class="spp-cta" onclick="spLogSubmit()">報告を出す</button>
     <p class="spp-note">いちど出した報告は、書き換えも削除もできません。</p>
   </div>
