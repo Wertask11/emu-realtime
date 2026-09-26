@@ -17597,6 +17597,27 @@ async function _spDaoLoadQuestsOnce(app, attempt) {
   });
 }
 
+/* 保存直後の表示を、古いSDKキャッシュで消さないために保持する。 */
+const _spPendingQuestLogs = new Map();
+
+function _spLogView(l, logs) {
+  const kind = l.kind || 'やってみた';
+  const c = kind === 'つまずいた' ? ['#F0DCD2', '#A85A33']
+          : kind === '気づいた' ? ['#0F5C3F', '#F4F1EA'] : ['#E7E2D6', '#3B382F'];
+  const name = l.authorName || _spShortAddr(l.author);
+  const d = l.at ? new Date(l.at) : null;
+  const fromId = String(l.fromPostId || '');
+  const root = l.sourceLogId ? logs.find(function (x) { return x.id === l.sourceLogId; }) : null;
+  return { id:l.id, author:name, authorAddress:String(l.author || ''), initial:name.slice(0, 1), body:l.body || '',
+    kind:kind, kindBg:c[0], kindFg:c[1], fromPostId:fromId, fromPostTitle:l.fromPostTitle || '',
+    at:Number(l.at) || 0, threadShow:root ? 'block' : 'none',
+    threadLabel:root ? '「やってみた」の続き：' + String(root.body || '').slice(0, 60) : '',
+    fromShow:fromId ? 'flex' : 'none', fromTitle:l.fromPostTitle || '（Emuの投稿）',
+    openPost:fromId ? function () { window.spOpenEmuPost(fromId); } : function () {},
+    time:d ? ((d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0')
+      + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')) : '' };
+}
+
 /* クエスト1件を、枠の中で使える形にする。
    受けた人と途中報告は、その場で数える。 */
 async function _spShapeQuest(q, p, mine, gdefs, app) {
@@ -17645,6 +17666,14 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
       console.warn('クエスト報告の確認に失敗しました:', e && (e.message || e));
     }
   }
+  const serverIds = new Set(logs.map(function (l) { return l.id; }));
+  const pending = _spPendingQuestLogs.get(q.id) || [];
+  for (const item of pending) {
+    if (!logs.some(function (l) { return l.id === item.id; })) logs.push(item);
+  }
+  if (pending.length &&
+      pending.every(function (item) { return serverIds.has(item.id); })) _spPendingQuestLogs.delete(q.id);
+  logCount = logs.length;
   logs.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
   /* このクエストが、どのギルドのどの議題から生まれたか。
      Quest #000（原点）は、どのギルドにも属さない。 */
@@ -17700,30 +17729,7 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
     people: people, logCount: logCount, iTook: iTook,
     /* 完了にできるのは、出した本人だけ */
     isMine: !!(p && (p.isOwner || (mine && String(q.owner || '').toLowerCase() === mine))),
-    logs: logs.map(function (l) {
-      const kind = l.kind || 'やってみた';
-      const c = kind === 'つまずいた' ? ['#F0DCD2', '#A85A33']
-              : kind === '気づいた'   ? ['#0F5C3F', '#F4F1EA']
-              : ['#E7E2D6', '#3B382F'];
-      const name = l.authorName || _spShortAddr(l.author);
-      const d = l.at ? new Date(l.at) : null;
-      /* この報告が、Emu のどの投稿から始まったか。
-         「誰かの知識が、別の誰かの行動に移った」ことを、字面ではなく
-         実際の投稿への道として残す。押すと元の投稿がそのまま開く。 */
-      const fromId = String(l.fromPostId || '');
-      const root = l.sourceLogId ? logs.find(function (x) { return x.id === l.sourceLogId; }) : null;
-      return { id: l.id, author: name, authorAddress: String(l.author || ''), initial: name.slice(0, 1), body: l.body || '',
-        kind: kind, kindBg: c[0], kindFg: c[1],
-        fromPostId: fromId, fromPostTitle: l.fromPostTitle || '',
-        at: Number(l.at) || 0,
-        threadShow: root ? 'block' : 'none',
-        threadLabel: root ? '「やってみた」の続き：' + String(root.body || '').slice(0, 60) : '',
-        fromShow: fromId ? 'flex' : 'none',
-        fromTitle: l.fromPostTitle || '（Emuの投稿）',
-        openPost: fromId ? function () { window.spOpenEmuPost(fromId); } : function () {},
-        time: d ? ((d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0')
-                   + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')) : '' };
-    })
+    logs: logs.map(function (l) { return _spLogView(l, logs); })
   };
 }
 
@@ -17981,16 +17987,18 @@ async function spLogSubmit() {
   const p = await spPassportLoad();
   if (!p) { alert('報告するにはログインが必要です。'); return; }
   _spLogSubmitting = true;
+  const questId = _spLogQuestId, kind = _spLogKind, app = _spLogApp;
+  const data = {
+    author: p.addr, authorName: p.name,
+    kind: kind, body: text.slice(0, 2000), at: Date.now(),
+    fromPostId: _spLogPick ? String(_spLogPick.id).slice(0, 80) : '',
+    fromPostTitle: _spLogPick ? String(_spLogPick.title).slice(0, 120) : '',
+    sourceLogId: _spLogSource ? String(_spLogSource.id) : ''
+  };
+  let saved;
   try {
     const fb = window.fbLib;
-    await fb.addDoc(fb.collection(window.db, 'sp_quests', _spLogQuestId, 'logs'), {
-      author: p.addr, authorName: p.name,
-      kind: _spLogKind, body: text.slice(0, 2000), at: Date.now(),
-      /* 元になった Emu の投稿。一般 #001 では選択必須。 */
-      fromPostId: _spLogPick ? String(_spLogPick.id).slice(0, 80) : '',
-      fromPostTitle: _spLogPick ? String(_spLogPick.title).slice(0, 120) : '',
-      sourceLogId: _spLogSource ? String(_spLogSource.id) : ''
-    });
+    saved = await fb.addDoc(fb.collection(window.db, 'sp_quests', questId, 'logs'), data);
   } catch (e) {
     const code = String((e && e.code) || '');
     alert(code === 'permission-denied'
@@ -18000,9 +18008,22 @@ async function spLogSubmit() {
     return;
   }
   _spLogSubmitting = false;
+  const created = { id: saved.id, ...data };
+  const pending = _spPendingQuestLogs.get(questId) || [];
+  pending.push(created);
+  _spPendingQuestLogs.set(questId, pending);
   closeSpLogForm();
-  alert('「' + _spLogKind + '」の報告を保存しました。クエストログに表示されます。');
-  try { await window.spDaoLoadQuests(_spLogApp); }
+  if (app) app.setState(function (state) {
+    return { quests: (state.quests || []).map(function (q) {
+      if (q.id !== questId) return q;
+      const raw = [created].concat(q.logs || []);
+      return { ...q, logCount: (Number(q.logCount) || 0) + 1,
+        logs: [_spLogView(created, raw)].concat(q.logs || []) };
+    }) };
+  });
+  /* ブラウザが新しい報告を描画してから通信結果を照合する。 */
+  await new Promise(function (resolve) { requestAnimationFrame(resolve); });
+  try { await window.spDaoLoadQuests(app); }
   catch (e) { console.warn('保存後の報告一覧を更新できませんでした:', e); }
 }
 window.spLogSubmit = spLogSubmit;
