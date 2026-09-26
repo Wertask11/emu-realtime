@@ -16422,37 +16422,56 @@ function _spVoteCloseLabel(closesAt) {
 ═══════════════════════════════════════ */
 const SP_TRUST_NEED = 20;
 
-window.spTrustScore = async function (addr, createdAt) {
+window.spTrustScore = async function (addr, createdAt, p) {
   const fb = window.fbLib;
-  const key = String(addr || '').toLowerCase();
-  if (!key || !fb || !window.db) return null;
+
+  /* 名義は、パスポートと同じ決め方にそろえる。
+
+     前はここだけ addr（＝ches優先の表示用）ひとつしか見ていなかった。
+     クエストを受けた記録（commits）の文書IDは、そのとき使った名義で作る。
+     ウォレットで受けてCHESで数えると、承認されていても完走0になる。
+     パスポートの記録（spCompletedQuests）は両方の名義を見ていたので、
+     「パスポートには完走が出ているのに、信用スコアは0」が起きていた。 */
+  const me = p || { addr: addr, wallet: addr, ches: addr, aliases: [] };
+  const aliases = [];
+  ((me.aliases && me.aliases.length) ? me.aliases : [me.wallet, me.ches, me.addr, addr])
+    .forEach(function (a) {
+      const v = String(a || '').toLowerCase();
+      if (v && aliases.indexOf(v) < 0) aliases.push(v);
+    });
+  if (!aliases.length || !fb || !window.db) return null;
   let done = 0, wisdom = 0, cited = 0;
 
+  /* 読めなかったものがあるかどうか。
+
+     前は try { … } catch (e) {} で握りつぶしていたので、通信が落ちていても
+     「完走0・知恵0」と出た。0と書けば、本人には「記録が消えた」に見える。
+     さらに getDocs は通信が落ちていても例外を投げない。手元の控えを返すので、
+     控えが空なら「0件で成功」になる。例外を捕まえるだけでは足りない。 */
+  let failed = false;
+
   /* 完走：受けていて、運営が中身を認めたクエスト。
-     メンバー画面の分配と、まったく同じ条件にしてある。
-     前は信用スコアが「報告を1本以上書いた」、分配が「受けただけ」で、
-     同じ『完走』という言葉で2か所が違うものを数えていた。 */
+     数える場所は spCompletedQuests ひとつ。パスポートの記録・星空と同じ元データ。
+     前はここだけ別に数えていたので、直すたびに片方だけ直る形になっていた。 */
   try {
-    const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
-    const list = [];
-    qs.forEach(function (s) { list.push({ id: s.id, ...(s.data() || {}) }); });
-    /* クエスト全体の受付を閉じる前でも、各参加者の承認日は完走日になる。 */
-    const got = await Promise.all(list.filter(function (q) { return !SpQuestStore.isFounder(q); }).map(function (q) {
-      return fb.getDoc(fb.doc(window.db, 'sp_quests', q.id, 'commits', addr))
-               .catch(function () { return null; });
-    }));
-    got.forEach(function (c) {
-      if (c && c.exists() && (c.data() || {}).approved === true) done++;
-    });
-  } catch (e) {}
+    const list = await spCompletedQuests(me);
+    if (!list) throw new Error('完走したクエストを読めなかった');
+    done = list.filter(function (q) { return !q.isFounder; }).length;
+  } catch (e) {
+    console.warn('完走を数えられませんでした:', e && (e.message || e));
+    failed = true;
+  }
 
   /* 知恵カードと、引用された数 */
   try {
     const ws = await fb.getDocs(fb.collection(window.db, 'sp_wisdom'));
+    /* 控えしか無いときの「0件」は、0件ではない。 */
+    if (!ws.size && ws.metadata && ws.metadata.fromCache)
+      throw new Error('手元の控えしか無かった');
     const mine = [];
     ws.forEach(function (s) {
       const d = s.data() || {};
-      if (String(d.author || '').toLowerCase() === key) mine.push(s.id);
+      if (aliases.indexOf(String(d.author || '').toLowerCase()) >= 0) mine.push(s.id);
     });
     wisdom = mine.length;
     /* 知恵カード1枚ごとに1往復していた。まとめて同時に聞く。 */
@@ -16461,14 +16480,18 @@ window.spTrustScore = async function (addr, createdAt) {
                .catch(function () { return null; });
     }));
     citeSnaps.forEach(function (cs) { if (cs) cs.forEach(function () { cited++; }); });
-  } catch (e) {}
+  } catch (e) {
+    console.warn('知恵カードを数えられませんでした:', e && (e.message || e));
+    failed = true;
+  }
 
   /* 在籍の月数（上限12） */
   let months = 0;
   if (createdAt) months = Math.max(0, Math.min(12, Math.floor((Date.now() - Number(createdAt)) / (30 * 86400000))));
 
   const total = done * 10 + wisdom * 5 + cited * 3 + months;
-  return { done: done, wisdom: wisdom, cited: cited, months: months, total: total, need: SP_TRUST_NEED };
+  return { done: done, wisdom: wisdom, cited: cited, months: months,
+           total: total, need: SP_TRUST_NEED, failed: failed };
 };
 
 /* ギルドに関われるか。ルールと同じ順で見る。 */
@@ -16749,11 +16772,20 @@ window.spDaoLoadVotes = async function (app) {
      ギルドを出したあとで足す。ここで待たせない。 */
   let trust = { total: 0, need: SP_TRUST_NEED, detail: '' };
   if (p) {
-    const sc = await window.spTrustScore(p.addr, p.createdAt);
-    if (sc) {
+    const sc = await window.spTrustScore(p.addr, p.createdAt, p);
+    if (sc && !sc.failed) {
       trust = { total: sc.total, need: sc.need,
         detail: '完走 ' + sc.done + '（×10）／知恵 ' + sc.wisdom + '（×5）／引用され ' + sc.cited
               + '（×3）／在籍 ' + sc.months + 'か月（×1）' };
+    } else if (sc) {
+      /* 読めなかったぶんがある。いま出ている数字は消さない。
+         消して0を出すと「完走が取り消された」ように見える。 */
+      const prev = (app.state || {}).trust;
+      trust = (prev && prev.total)
+        ? { total: prev.total, need: prev.need || SP_TRUST_NEED,
+            detail: (prev.detail || '') + '（いま数え直せませんでした）' }
+        : { total: sc.total, need: sc.need,
+            detail: 'いま数え直せませんでした。通信が戻ってから、もう一度開いてください。' };
     }
   } else {
     trust.detail = 'ログインすると出ます。';
@@ -17027,9 +17059,11 @@ window.openSpVoteForm = async function (app, guildId, from) {
   if (!p) { alert('議題を出すにはログインが必要です。'); return; }
   /* 議題を出せるのは、運営・有料の方・信用が足りている方だけ */
   if (!(await window.spCanGuild())) {
-    const sc = await window.spTrustScore(p.addr, p.createdAt);
+    const sc = await window.spTrustScore(p.addr, p.createdAt, p);
     alert('議題を出せるのは、運営・有料の方・信用が足りている方です。\n\n'
-      + 'いまの信用スコア：' + (sc ? sc.total : 0) + ' / ' + SP_TRUST_NEED + '\n\n'
+      + (sc && sc.failed
+          ? 'いまの信用スコアを数え直せませんでした（通信を確かめてください）。\n\n'
+          : 'いまの信用スコア：' + (sc ? sc.total : 0) + ' / ' + SP_TRUST_NEED + '\n\n')
       + 'クエストを完走する・知恵カードを置く・引用されると増えます。');
     return;
   }
@@ -19087,12 +19121,14 @@ window.spDaoLoadMembers = async function (app) {
   try {
     const p = await spPassportLoad();
     if (p) {
-      const sc = await window.spTrustScore(p.addr, p.createdAt);
-      if (sc) {
+      const sc = await window.spTrustScore(p.addr, p.createdAt, p);
+      if (sc && !sc.failed) {
         app.setState({ trust: { total: sc.total, need: sc.need,
           detail: '完走 ' + sc.done + '（×10）／知恵 ' + sc.wisdom + '（×5）／引用され ' + sc.cited
                 + '（×3）／在籍 ' + sc.months + 'か月（×1）' } });
       }
+      /* 読めなかったときは、いま出ている数字をそのままにする。
+         0で塗りつぶすと「完走が取り消された」ように見える。 */
     }
   } catch (e) { console.warn('信用スコアを数え直せませんでした:', e && (e.message || e)); }
 };

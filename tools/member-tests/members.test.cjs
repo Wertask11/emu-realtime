@@ -143,3 +143,132 @@ test('画面に、読めなかったときの一言が出る口がある', () =>
   assert.ok(DAO.indexOf('hasMembersNote') >= 0, '結び付けが無い');
   assert.ok(DAO.indexOf('{{ membersNote }}') >= 0, '出す場所が無い');
 });
+
+/* ───────── 信用スコアそのもの ─────────
+
+   画面に「あなたの信用スコア 1/20 ／ 完走0・知恵0」と出るのに、
+   パスポートには完走が出ている、ということが起きていた。
+
+   原因は2つ。どちらも spTrustScore の中にあった。
+
+     1. 名義をひとつ（addr＝ches優先の表示用）しか見ていなかった。
+        受けた記録の文書IDは、受けたときの名義で作る。ウォレットで受けて
+        CHESで数えれば、承認されていても完走0になる。
+        パスポートの記録（spCompletedQuests）は両方見ていたので、
+        片方だけ正しい、という形になっていた。
+
+     2. 読めなかったときに、黙って0を出していた。
+        getDocs は通信が落ちても例外を投げない。手元の控えを返すので、
+        控えが空なら「0件で成功」になる。catch だけでは足りない。 */
+
+function scorer(opts) {
+  opts = opts || {};
+  const warn = [];
+  const stubs = {
+    console: { warn: function () { warn.push([].slice.call(arguments).join(' ')); } },
+    SP_TRUST_NEED: 20,
+    SpQuestStore: { isFounder: function (q) { return !!q.isFounder; } },
+    spCompletedQuests: async function (me) {
+      if (opts.doneFails) return null;
+      opts.sawMe = me;
+      return opts.done || [];
+    },
+    window: {
+      db: {}, fbLib: {
+        collection: function () { return { path: [].slice.call(arguments, 1).join('/') }; },
+        getDocs: async function (ref) {
+          const path = ref.path || '';
+          if (path === 'sp_wisdom') {
+            if (opts.wisdomFails) throw new Error('offline');
+            const rows = opts.wisdom || [];
+            return { size: rows.length, metadata: { fromCache: !!opts.fromCache },
+                     forEach: function (f) { rows.forEach(function (r) { f({ id: r.id, data: function () { return r; } }); }); } };
+          }
+          return { size: 0, metadata: { fromCache: false }, forEach: function () {} };
+        }
+      }
+    }
+  };
+  const api = build(INDEX, ['spTrustScore'], stubs);
+  return { score: api.spTrustScore, opts: opts, warn: warn, api: api };
+}
+
+const PASSPORT = { addr: '0xches', wallet: '0xwallet', ches: '0xches', aliases: ['0xwallet', '0xches'] };
+
+test('ウォレットで受けた完走も数える（名義はパスポートと同じ決め方）', async () => {
+  const s = scorer({ done: [{ id: 'q1' }] });
+  const sc = await s.score('0xches', 0, PASSPORT);
+  assert.equal(sc.done, 1, '完走が数えられていない');
+  /* 完走の数え直しは spCompletedQuests ひとつに任せる（記録・星空と同じ元データ） */
+  assert.deepEqual(s.opts.sawMe, PASSPORT, 'パスポートを渡していない');
+});
+
+test('知恵カードも、どちらの名義でも自分のものと見なす', async () => {
+  const s = scorer({ wisdom: [{ id: 'w1', author: '0xWALLET' }, { id: 'w2', author: '0xよそ' }] });
+  const sc = await s.score('0xches', 0, PASSPORT);
+  assert.equal(sc.wisdom, 1, 'ウォレット名義の知恵カードを落としている');
+});
+
+test('Quest #000 は完走に数えない', async () => {
+  const s = scorer({ done: [{ id: 'q1' }, { id: 'founder-quest-000', isFounder: true }] });
+  const sc = await s.score('0xches', 0, PASSPORT);
+  assert.equal(sc.done, 1);
+});
+
+test('完走を読めなかったら、0ではなく「読めなかった」と言う', async () => {
+  const s = scorer({ doneFails: true, wisdom: [] });
+  const sc = await s.score('0xches', 0, PASSPORT);
+  assert.equal(sc.failed, true, '読めなかったことを伝えていない');
+  assert.match(s.warn.join(''), /完走を数えられませんでした/);
+});
+
+test('知恵カードを読めなかったときも同じ', async () => {
+  const s = scorer({ wisdomFails: true });
+  const sc = await s.score('0xches', 0, PASSPORT);
+  assert.equal(sc.failed, true);
+});
+
+test('控えしか無いときの「0件」は、0件として扱わない', async () => {
+  /* getDocs は通信が落ちても投げない。ここが今回いちばん効く。 */
+  const s = scorer({ wisdom: [], fromCache: true });
+  const sc = await s.score('0xches', 0, PASSPORT);
+  assert.equal(sc.failed, true, '控えの空っぽを0件だと信じている');
+});
+
+test('ぜんぶ読めたときは failed が立たない', async () => {
+  const s = scorer({ done: [{ id: 'q1' }], wisdom: [{ id: 'w1', author: '0xches' }] });
+  const sc = await s.score('0xches', 0, PASSPORT);
+  assert.equal(sc.failed, false);
+  assert.equal(sc.total, 1 * 10 + 1 * 5, '完走×10＋知恵×5 になっていない');
+});
+
+test('パスポートを渡さなくても、渡されたアドレスだけで数えられる', async () => {
+  const s = scorer({ done: [{ id: 'q1' }], wisdom: [{ id: 'w1', author: '0xsolo' }] });
+  const sc = await s.score('0xsolo', 0);
+  assert.equal(sc.done, 1);
+  assert.equal(sc.wisdom, 1);
+});
+
+/* ───────── 呼び出し側 ───────── */
+
+test('読めなかったときは、いま出ている数字を0で塗りつぶさない', () => {
+  const i = INDEX.indexOf('} else if (sc) {');
+  assert.ok(i > 0, '読めなかったときの枝が無い');
+  const seg = INDEX.slice(i, i + 700);
+  assert.ok(seg.indexOf('(app.state || {}).trust') >= 0, '前の数字を見ていない');
+  assert.ok(seg.indexOf('いま数え直せませんでした') >= 0, '読めなかったと伝えていない');
+});
+
+test('メンバーを数え直したあとも、読めなければ書き換えない', () => {
+  assert.ok(INDEX.indexOf('if (sc && !sc.failed) {') >= 0, '読めたときだけ書く形になっていない');
+});
+
+test('議題の案内でも、読めていないのに「足りない」と言い切らない', () => {
+  assert.ok(INDEX.indexOf('いまの信用スコアを数え直せませんでした') >= 0);
+});
+
+test('3か所とも、パスポートを渡して呼ぶ', () => {
+  const n = INDEX.split('spTrustScore(p.addr, p.createdAt, p)').length - 1;
+  assert.equal(n, 3, '名義をひとつしか見ない呼び方が残っている');
+  assert.equal(INDEX.indexOf('spTrustScore(p.addr, p.createdAt)\n'), -1);
+});
