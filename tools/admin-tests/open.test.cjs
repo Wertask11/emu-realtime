@@ -168,3 +168,80 @@ test('画面に「もう一度読む」がある', () => {
   assert.ok(ADMIN.indexOf('id="spMeRetry"') >= 0, 'ボタンが無い');
   assert.ok(ADMIN.indexOf('$("#spMeRetry")') >= 0, '押しても何も起きない');
 });
+
+/* ───────── クエストを出すところ ─────────
+
+   本番でこれが出た（2026/9/26）。
+
+     RestConnection RPC 'BatchGetDocuments' failed {"code":"permission-denied"}
+     documents: [".../sp_quest_numbers/general-001-0-なし"]
+     クエストを出せませんでした: Missing or insufficient permissions.
+
+   断られたのは予約札を読むところ。決まりは canAccessSchoolPark() だけなので、
+   運営なら通る。通らなかったのは、直前の
+
+     [spTrack] error: Failed to get document because the client is offline.
+
+   のとおり SDK が自分をオフラインと見なし、古い証のまま投げたため。
+   読むほうには証を取り直す道が入っていたが、出すほうだけ素通りだった。 */
+const INDEX = readHtml('frontend/public/index.html');
+
+function issuer(opts) {
+  opts = opts || {};
+  const calls = { create: 0, refresh: 0 };
+  const stubs = {
+    console: { warn: function () {} },
+    window: { db: {} },
+    _spDenied: function (e) {
+      return String((e && e.code) || '') === 'permission-denied'
+        || String((e && e.message) || '').indexOf('Missing or insufficient permissions') >= 0;
+    },
+    _spRefreshAuth: async function () { calls.refresh++; return opts.refresh !== false; },
+    SpQuestStore: {
+      createQuest: async function () {
+        calls.create++;
+        const step = (opts.results || [])[calls.create - 1];
+        if (step instanceof Error) throw step;
+        return step || { id: 'q1' };
+      }
+    }
+  };
+  return { api: build(INDEX, ['_spCreateQuestRetry'], stubs), calls: calls };
+}
+
+const PERM = Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
+const TAKEN = new Error('QUEST_NUMBER_TAKEN');
+
+test('出す：1回で通れば、証は取り直さない', async () => {
+  const i = issuer({ results: [{ id: 'q1' }] });
+  assert.deepEqual(await i.api._spCreateQuestRetry({}, {}), { id: 'q1' });
+  assert.equal(i.calls.create, 1);
+  assert.equal(i.calls.refresh, 0);
+});
+
+test('出す：断られたら証を取り直して、もう一度出す', async () => {
+  const i = issuer({ results: [PERM, { id: 'q2' }] });
+  assert.deepEqual(await i.api._spCreateQuestRetry({}, {}), { id: 'q2' });
+  assert.equal(i.calls.create, 2, 'やり直していない');
+  assert.equal(i.calls.refresh, 1, '証を取り直していない');
+});
+
+test('出す：やり直しは1回だけ（本当に権限が無いときに待たせない）', async () => {
+  const i = issuer({ results: [PERM, PERM] });
+  await assert.rejects(function () { return i.api._spCreateQuestRetry({}, {}); },
+    function (e) { return e.code === 'permission-denied'; });
+  assert.equal(i.calls.create, 2);
+});
+
+test('出す：証を取り直せなくても、1回は試す（10秒の間引きがあるため）', async () => {
+  const i = issuer({ results: [PERM, { id: 'q3' }], refresh: false });
+  assert.deepEqual(await i.api._spCreateQuestRetry({}, {}), { id: 'q3' });
+  assert.equal(i.calls.create, 2);
+});
+
+test('出す：番号が取られていたら、やり直さない（また同じ番号で弾かれる）', async () => {
+  const i = issuer({ results: [TAKEN] });
+  await assert.rejects(function () { return i.api._spCreateQuestRetry({}, {}); }, /QUEST_NUMBER_TAKEN/);
+  assert.equal(i.calls.create, 1, '同じ番号でやり直している');
+  assert.equal(i.calls.refresh, 0);
+});
