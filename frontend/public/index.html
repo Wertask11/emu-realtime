@@ -18067,6 +18067,46 @@ async function spQuestSubmit() {
   const guildId = _spQuestFrom ? _spQuestFrom.guildId : val('sqGuild');
   if (guildId && !SpGuildStore.isValidId(guildId)) { alert('ギルドの指定が正しくありません。'); spQuestSubmitting = false; return; }
   if (_spQuestFrom && !guildId) { alert('元の議題のギルドが分かりませんでした。'); spQuestSubmitting = false; return; }
+/* クエストを出す取引を、断られたときに1回だけやり直す。
+
+   本番でこれが出た（2026/9/26）。
+
+     RestConnection RPC 'BatchGetDocuments' failed
+     {"code":"permission-denied"}
+     documents: [".../sp_quest_numbers/general-001-0-なし"]
+     クエストを出せませんでした: Missing or insufficient permissions.
+
+   断られたのは予約札を読むところ。その決まりは canAccessSchoolPark() だけで、
+   運営なら通る。通らなかったのは、直前に出ている
+
+     [spTrack] error: Failed to get document because the client is offline.
+
+   のとおり、SDK が自分をオフラインと見なしていたため。
+   このあいだ SDK は証（IDトークン）を更新できず、復旧しても古い証のまま
+   投げることがある。記録の決まりは当然それを断る。
+   人は運営のままなのに「権限がありません」になる。
+
+   読むほう（クエスト一覧・年内目標・管理画面）には、証を取り直して
+   やり直す道を入れてあった。出すほうだけ素通りで、押しても
+   「もう一度お試しください」と出るだけだった。同じ形にそろえる。
+
+   やり直しは1回だけ。本当に権限が無いときは何度やっても同じで、
+   待たせるだけになる。番号が取られていた（QUEST_NUMBER_TAKEN）ときも
+   やり直さない。もう一度やれば、また同じ番号で弾かれる。 */
+async function _spCreateQuestRetry(fb, body) {
+  try {
+    return await SpQuestStore.createQuest(fb, window.db, body);
+  } catch (e) {
+    if (!_spDenied(e)) throw e;
+    console.warn('断られたので、ログインの証を取り直してもう一度出します。');
+    /* 取り直せなくても1回は試す。_spRefreshAuth は10秒の間引きがあり、
+       ほかの場所が直前に取り直していると false を返す。そのときは証が
+       新しいので、やり直す価値がある。 */
+    await _spRefreshAuth();
+    return await SpQuestStore.createQuest(fb, window.db, body);
+  }
+}
+
   /* 番号。自動では振らないので、ここで形を確かめる。
      同じ番号がすでにあるかは、取引の中でもう一度見る（その間に
      誰かが取っているかもしれないため）。 */
@@ -18077,7 +18117,7 @@ async function spQuestSubmit() {
   if (!SpQuestStore.isValidStage(num.stage)) { alert('段階の指定が正しくありません。'); spQuestSubmitting = false; return; }
   try {
     const fb = window.fbLib;
-    await SpQuestStore.createQuest(fb, window.db, {
+    await _spCreateQuestRetry(fb, {
       /* 系列・番号・枝番・段階。この4つの組み合わせで一意。 */
       series: num.series, questNumber: num.number, branch: num.branch, stage: num.stage,
       title: title.slice(0, 120),
@@ -18120,6 +18160,12 @@ async function spQuestSubmit() {
       _spQuestTaken = await SpQuestStore.takenNumbers(window.fbLib, window.db);
       spQuestNumberCheck();
       alert('この番号は、ちょうどいま使われました。別の番号にしてください。');
+    } else if (_spDenied(e)) {
+      /* 証を取り直しても断られた。本当に権限が無いか、通信が戻っていない。 */
+      alert('クエストを出せませんでした（権限がありません）。\n\n'
+        + '通信が切れているあいだは、ログインの証が古いまま送られて断られることがあります。\n'
+        + '少し置いてから、もう一度「クエストを出す」を押してください。\n'
+        + '何度やっても同じときは、いちどログインし直してください。');
     } else {
       alert('クエストを出せませんでした。もう一度お試しください。');
     }
