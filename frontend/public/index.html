@@ -17312,6 +17312,14 @@ async function _spRestQuestCommits(questId) {
   });
 }
 
+/* Listen が切れて控えが古いとき、報告を通常の HTTPS で読み直す。 */
+async function _spRestQuestLogs(questId) {
+  const j = await _spRestGet('sp_quests/' + encodeURIComponent(questId) + '/logs?pageSize=1000', true);
+  return ((j && j.documents) || []).map(function (d) {
+    return { id: decodeURIComponent(String(d.name || '').split('/').pop()), ..._spRestFields(d.fields || {}) };
+  });
+}
+
 async function _spRestQuests() {
   /* ログインの証（IDトークン）を必ず付ける。
 
@@ -17624,10 +17632,20 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
       console.warn('クエストの参加状態を確認できませんでした:', e && (e.message || e));
     }
   }
-  if (ls) {
+  if (ls && !(ls.metadata && ls.metadata.fromCache)) {
     ls.forEach(function (l) { logCount++; logs.push({ id: l.id, ...(l.data() || {}) }); });
-    logs.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+  } else {
+    try {
+      logs.push(...await _spRestQuestLogs(q.id));
+      logCount = logs.length;
+    } catch (e) {
+      /* 通常の通信も届かない間は、控えに残る報告だけでも表示する。 */
+      if (ls) ls.forEach(function (l) { logs.push({ id: l.id, ...(l.data() || {}) }); });
+      logCount = logs.length;
+      console.warn('クエスト報告の確認に失敗しました:', e && (e.message || e));
+    }
   }
+  logs.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
   /* このクエストが、どのギルドのどの議題から生まれたか。
      Quest #000（原点）は、どのギルドにも属さない。 */
   const qGuildId = SpQuestStore.isFounder(q) ? '' : SpGuildStore.guildIdOf(q, gdefs);
@@ -17983,7 +18001,9 @@ async function spLogSubmit() {
   }
   _spLogSubmitting = false;
   closeSpLogForm();
-  await window.spDaoLoadQuests(_spLogApp);
+  alert('「' + _spLogKind + '」の報告を保存しました。クエストログに表示されます。');
+  try { await window.spDaoLoadQuests(_spLogApp); }
+  catch (e) { console.warn('保存後の報告一覧を更新できませんでした:', e); }
 }
 window.spLogSubmit = spLogSubmit;
 
