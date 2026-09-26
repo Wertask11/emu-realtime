@@ -272,3 +272,131 @@ test('3か所とも、パスポートを渡して呼ぶ', () => {
   assert.equal(n, 3, '名義をひとつしか見ない呼び方が残っている');
   assert.equal(INDEX.indexOf('spTrustScore(p.addr, p.createdAt)\n'), -1);
 });
+
+/* ───────── SDK が死んでいても数える ─────────
+
+   実際の画面のコンソールに出ていたもの：
+
+     WebChannelConnection RPC 'Listen' stream ... transport errored
+     完走を数えられませんでした: 完走したクエストを読めなかった
+     知恵カードを数えられませんでした: 手元の控えしか無かった
+     クエストを普通の通信で読みました（2件）        ← 一覧だけは通っている
+
+   SDK の通信が切れている。クエスト一覧は普通の通信（REST）へ逃げる道を
+   持っているので出る。信用スコアが使う2つには、その道が無かった。
+   だから「知恵ライブラリもメンバー・貢献も出ているのに、スコアだけ0」。 */
+
+function offline(opts) {
+  opts = opts || {};
+  const warn = [];
+  /* 手元の控えしか返さない SDK。例外は投げない（本物と同じ）。 */
+  const cacheOnly = { size: 0, metadata: { fromCache: true }, forEach: function () {},
+                      exists: function () { return false; } };
+  const stubs = {
+    console: { warn: function () { warn.push([].slice.call(arguments).join(' ')); } },
+    SP_TRUST_NEED: 20,
+    SpQuestStore: { isFounder: function (q) { return !!q.isFounder; },
+                    fullLabel: function () { return '一般 #001'; } },
+    SpGuildStore: { guildIdOf: function (q) { return q.guildId || ''; }, byId: function () { return null; } },
+    spGuildDefs: async function () { return []; },
+    _spRestQuests: async function () {
+      if (opts.restQuestsFail) throw new Error('HTTP 403');
+      return opts.restQuests || [{ id: 'q1', title: 'クエスト', guildId: 'learn' }];
+    },
+    _spRestQuestCommits: async function (id) {
+      if (opts.restCommitsFail) throw new Error('HTTP 403');
+      return (opts.restCommits || {})[id] || [];
+    },
+    _spRestWisdom: async function () {
+      if (opts.restWisdomFail) throw new Error('HTTP 403');
+      return opts.restWisdom || [];
+    },
+    _spRestCites: async function () { return opts.restCites === undefined ? 0 : opts.restCites; },
+    window: {
+      db: {}, fbLib: {
+        doc: function () { return { path: [].slice.call(arguments, 1).join('/') }; },
+        collection: function () { return { path: [].slice.call(arguments, 1).join('/') }; },
+        getDoc: async function () { return cacheOnly; },
+        getDocs: async function () { return cacheOnly; }
+      }
+    }
+  };
+  const api = build(INDEX, ['spCompletedQuests', 'spTrustScore'], stubs);
+  return { api: api, warn: warn };
+}
+
+const ME2 = { addr: '0xches', wallet: '0xwallet', ches: '0xches', aliases: ['0xwallet', '0xches'] };
+
+test('SDKが控えしか返さなくても、完走を普通の通信で数える', async () => {
+  const o = offline({ restCommits: { q1: [{ id: '0xwallet', data: { approved: true, approvedAt: 5 } }] } });
+  const sc = await o.api.spTrustScore('0xches', 0, ME2);
+  assert.equal(sc.done, 1, '完走が0のまま');
+  assert.equal(sc.failed, false, '読めているのに failed が立っている');
+  assert.match(o.warn.join(''), /普通の通信で読みました/);
+});
+
+test('SDKが控えしか返さなくても、知恵カードを普通の通信で数える', async () => {
+  const o = offline({ restWisdom: [{ id: 'w1', author: '0xWALLET' }, { id: 'w2', author: '0xよそ' }] });
+  const sc = await o.api.spTrustScore('0xches', 0, ME2);
+  assert.equal(sc.wisdom, 1, '知恵が0のまま');
+});
+
+test('普通の通信で引用も数え直す', async () => {
+  const o = offline({ restWisdom: [{ id: 'w1', author: '0xches' }], restCites: 3 });
+  const sc = await o.api.spTrustScore('0xches', 0, ME2);
+  assert.equal(sc.cited, 3);
+});
+
+test('控えしか無くても、受けていなければ完走にはしない', async () => {
+  const o = offline({ restCommits: { q1: [{ id: '0xよそ', data: { approved: true } }] } });
+  const sc = await o.api.spTrustScore('0xches', 0, ME2);
+  assert.equal(sc.done, 0, '他人の記録を自分の完走にしている');
+});
+
+test('認められていない記録は完走にしない（普通の通信でも）', async () => {
+  const o = offline({ restCommits: { q1: [{ id: '0xwallet', data: { approved: false } }] } });
+  const sc = await o.api.spTrustScore('0xches', 0, ME2);
+  assert.equal(sc.done, 0);
+});
+
+test('普通の通信でも読めなければ、0ではなく「読めなかった」と言う', async () => {
+  const o = offline({ restQuestsFail: true, restWisdomFail: true });
+  const sc = await o.api.spTrustScore('0xches', 0, ME2);
+  assert.equal(sc.failed, true);
+});
+
+test('SDKが生きていて本当に受けていないときは、余計に聞きに行かない', async () => {
+  /* 控えではなくサーバーが「無い」と答えたときは REST を叩かない。 */
+  let asked = 0;
+  const warn = [];
+  const live = { size: 0, metadata: { fromCache: false }, forEach: function () {},
+                 exists: function () { return false; } };
+  const stubs = {
+    console: { warn: function () { warn.push([].slice.call(arguments).join(' ')); } },
+    SP_TRUST_NEED: 20,
+    SpQuestStore: { isFounder: function () { return false; },
+                    fullLabel: function () { return '一般 #001'; } },
+    SpGuildStore: { guildIdOf: function () { return ''; }, byId: function () { return null; } },
+    spGuildDefs: async function () { return []; },
+    _spRestQuests: async function () { asked++; return []; },
+    _spRestQuestCommits: async function () { asked++; return []; },
+    _spRestWisdom: async function () { asked++; return []; },
+    _spRestCites: async function () { asked++; return 0; },
+    window: {
+      db: {}, fbLib: {
+        doc: function () { return { path: '' }; },
+        collection: function () { return { path: '' }; },
+        getDoc: async function () { return live; },
+        getDocs: async function () {
+          return { size: 1, metadata: { fromCache: false },
+                   forEach: function (f) { f({ id: 'q1', data: function () { return { title: 'q' }; } }); } };
+        }
+      }
+    }
+  };
+  const api = build(INDEX, ['spCompletedQuests', 'spTrustScore'], stubs);
+  const sc = await api.spTrustScore('0xches', 0, ME2);
+  assert.equal(sc.done, 0);
+  assert.equal(sc.failed, false);
+  assert.equal(asked, 0, '通信が生きているのに普通の通信で聞きに行っている');
+});

@@ -16463,26 +16463,53 @@ window.spTrustScore = async function (addr, createdAt, p) {
   }
 
   /* 知恵カードと、引用された数 */
+  let rows = null;
   try {
     const ws = await fb.getDocs(fb.collection(window.db, 'sp_wisdom'));
-    /* 控えしか無いときの「0件」は、0件ではない。 */
-    if (!ws.size && ws.metadata && ws.metadata.fromCache)
-      throw new Error('手元の控えしか無かった');
-    const mine = [];
-    ws.forEach(function (s) {
-      const d = s.data() || {};
-      if (aliases.indexOf(String(d.author || '').toLowerCase()) >= 0) mine.push(s.id);
-    });
+    /* 控えしか無いときの「0件」は、0件ではない。下で普通の通信に回す。 */
+    if (ws.size || !(ws.metadata && ws.metadata.fromCache)) {
+      rows = [];
+      ws.forEach(function (s) { rows.push(Object.assign({ id: s.id }, s.data() || {})); });
+    }
+  } catch (e) {
+    console.warn('知恵カードを SDK で読めませんでした:', e && (e.message || e));
+  }
+  if (!rows) {
+    /* クエスト一覧と同じ逃げ道。前はここが無く、Listen が切れているあいだ
+       「知恵0」と出ていた。0と書けば、本人には記録が消えたように見える。 */
+    try {
+      rows = await _spRestWisdom();
+      console.warn('知恵カードを普通の通信で読みました（' + rows.length + '件）');
+    } catch (e) {
+      console.warn('知恵カードを普通の通信でも読めませんでした:', e && (e.message || e));
+      failed = true;
+    }
+  }
+  if (rows) {
+    const mine = rows.filter(function (r) {
+      return aliases.indexOf(String(r.author || '').toLowerCase()) >= 0;
+    }).map(function (r) { return r.id; });
     wisdom = mine.length;
     /* 知恵カード1枚ごとに1往復していた。まとめて同時に聞く。 */
     const citeSnaps = await Promise.all(mine.map(function (id) {
       return fb.getDocs(fb.collection(window.db, 'sp_wisdom', id, 'cites'))
                .catch(function () { return null; });
     }));
-    citeSnaps.forEach(function (cs) { if (cs) cs.forEach(function () { cited++; }); });
-  } catch (e) {
-    console.warn('知恵カードを数えられませんでした:', e && (e.message || e));
-    failed = true;
+    const stale = [];
+    citeSnaps.forEach(function (cs, i) {
+      if (!cs || (!cs.size && cs.metadata && cs.metadata.fromCache)) { stale.push(mine[i]); return; }
+      cs.forEach(function () { cited++; });
+    });
+    /* 引用も、控えしか無かったぶんだけ普通の通信で数え直す。 */
+    if (stale.length) {
+      const got = await Promise.all(stale.map(function (id) {
+        return _spRestCites(id).catch(function () { return null; });
+      }));
+      got.forEach(function (n) {
+        if (n === null) { failed = true; return; }
+        cited += n;
+      });
+    }
   }
 
   /* 在籍の月数（上限12） */
@@ -16569,31 +16596,64 @@ async function spCompletedQuests(p) {
   let gdefs = [];
   try { gdefs = await spGuildDefs(); } catch (e) { /* ギルドが読めなくても件数は出す */ }
 
-  const docs = [];
+  let docs = [];
   try {
     const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
     qs.forEach(function (s) { docs.push(Object.assign({ id: s.id }, s.data() || {})); });
-    /* オフラインのとき、一覧の取得は例外を投げず手元の控えを返す。
-       開いた直後は控えが空なので「0件で成功」になる。0件と書かない。 */
-    if (!docs.length && qs.metadata && qs.metadata.fromCache) return null;
   } catch (e) {
-    console.warn('完走したクエストを読めませんでした:', e && (e.message || e));
-    return null;
+    console.warn('完走したクエストを SDK で読めませんでした:', e && (e.message || e));
+  }
+  /* オフラインのとき、一覧の取得は例外を投げず手元の控えを返す。
+     開いた直後は控えが空なので「0件で成功」になる。0件と書かない。
+     クエスト一覧（spDaoLoadQuests）と同じく、普通の通信で取りに行く。
+     前はここで null を返すだけだったので、Listen が切れているあいだ
+     信用スコアの完走が、ずっと0本のままだった。 */
+  if (!docs.length) {
+    try {
+      const rest = await _spRestQuests();
+      if (rest.length) {
+        docs = rest;
+        console.warn('完走を数えるクエストを普通の通信で読みました（' + rest.length + '件）');
+      }
+    } catch (e) {
+      console.warn('クエストを普通の通信でも読めませんでした:', e && (e.message || e));
+    }
+    if (!docs.length) return null;
   }
 
   const out = [];
   await Promise.all(docs.map(async function (q) {
-    let hit = false, at = 0;
+    let hit = false, at = 0, stale = false;
     for (const a of aliases) {
       try {
         const c = await fb.getDoc(fb.doc(window.db, 'sp_quests', q.id, 'commits', a));
-        if (!c.exists()) continue;
+        /* 「無い」が手元の控えから来たのなら、それは「無い」ではない。 */
+        if (!c.exists()) {
+          if (c.metadata && c.metadata.fromCache) stale = true;
+          continue;
+        }
         const d = c.data() || {};
         if (d.approved !== true) continue;   /* approved:false にも approvedAt は付く */
         hit = true;                          /* 何人ぶん当たっても、クエストは1件 */
         const t = Number(d.approvedAt || 0);
         if (t > at) at = t;
-      } catch (e) { /* この名義は読めなかった。ほかの名義を試す */ }
+      } catch (e) { stale = true; /* この名義は読めなかった。ほかの名義を試す */ }
+    }
+    /* SDK が控えしか返さなかったときだけ、普通の通信で受けた記録を読み直す。
+       通信が生きていて本当に受けていないときは、ここへ来ない（余計に聞かない）。 */
+    if (!hit && stale) {
+      try {
+        const rows = await _spRestQuestCommits(q.id);
+        rows.forEach(function (r) {
+          if (aliases.indexOf(String(r.id || '').toLowerCase()) < 0) return;
+          if (!r.data || r.data.approved !== true) return;
+          hit = true;
+          const t = Number(r.data.approvedAt || 0);
+          if (t > at) at = t;
+        });
+      } catch (e) {
+        console.warn('受けた記録を普通の通信で読めませんでした:', e && (e.message || e));
+      }
     }
     if (!hit) return;
     const gid = SpQuestStore.isFounder(q) ? '' : SpGuildStore.guildIdOf(q, gdefs);
@@ -17365,6 +17425,24 @@ async function _spRestQuests() {
   return ((j && j.documents) || []).map(function (d) {
     return Object.assign({ id: String(d.name || '').split('/').pop() }, _spRestFields(d.fields));
   }).sort(function (a, b) { return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0); }).slice(0, 30);
+}
+
+/* 知恵カードを普通の通信で読む。
+
+   信用スコアは sp_wisdom を SDK だけで読んでいた。Listen が切れていると
+   getDocs は例外を投げず、空の控えを返す。それを0枚と信じて「知恵0」と
+   出していた。クエスト一覧と同じ逃げ道をこちらにも用意する。 */
+async function _spRestWisdom() {
+  const j = await _spRestGet('sp_wisdom?pageSize=300', true);
+  return ((j && j.documents) || []).map(function (d) {
+    return Object.assign({ id: String(d.name || '').split('/').pop() }, _spRestFields(d.fields));
+  });
+}
+
+/* 引用された数も同じ。数だけ分かればよいので中身は見ない。 */
+async function _spRestCites(wisdomId) {
+  const j = await _spRestGet('sp_wisdom/' + encodeURIComponent(wisdomId) + '/cites?pageSize=300', true);
+  return ((j && j.documents) || []).length;
 }
 
 /* ═══════════════════════════════════════
