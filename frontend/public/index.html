@@ -18729,6 +18729,14 @@ async function spWisdomSubmit() {
   }
   closeSpWisdomForm();
   if (_spWisdomApp) await window.spDaoLoadWisdom(_spWisdomApp);
+  const wisdomApp = _spWisdomApp;
+  showSakuraModal({
+    title: '知恵カードを置きました',
+    subtitle: 'あなたの経験が、次の人の知恵につながります',
+    badge: '報酬の付与はありません。引用されると信用スコアに反映されます',
+    first: '知恵ライブラリを見る', second: 'クエストに戻る',
+    onFirst: function () { if (wisdomApp) wisdomApp.go('library')(); }
+  });
 }
 
 /* 知恵ライブラリを読む */
@@ -18754,6 +18762,20 @@ window.spDaoLoadWisdom = async function (app) {
     return fb.getDocs(fb.collection(window.db, 'sp_wisdom', w.id, 'cites'))
              .catch(function () { return null; });
   }));
+  /* 既存の知恵カードにも報告を表示する。クエストごとに一度だけ読み、
+     カードを書いた本人・選んだ Emu 投稿に結び付く報告を探す。 */
+  const questIds = [...new Set(docs.map(function (w) { return w.questId; }).filter(Boolean))];
+  const logSets = await Promise.all(questIds.map(async function (id) {
+    try {
+      const snap = await fb.getDocs(fb.collection(window.db, 'sp_quests', id, 'logs'));
+      if (snap.metadata && snap.metadata.fromCache) return await _spRestQuestLogs(id);
+      const rows = []; snap.forEach(function (d) { rows.push({ id:d.id, ...(d.data() || {}) }); });
+      return rows;
+    } catch (e) {
+      try { return await _spRestQuestLogs(id); } catch (_) { return []; }
+    }
+  }));
+  const logsByQuest = new Map(questIds.map(function (id, i) { return [id, logSets[i]]; }));
   for (let wi = 0; wi < docs.length; wi++) {
     const w = docs[wi];
     let uses = 0;
@@ -18762,6 +18784,14 @@ window.spDaoLoadWisdom = async function (app) {
     if (cs) cs.forEach(function (c) { uses++; citedBy[c.id.toLowerCase()] = true; });
     cites += uses;
     const did = !!(mine && citedBy[mine]);
+    const matched = (logsByQuest.get(w.questId) || []).filter(function (l) {
+      return String(l.author || '').toLowerCase() === String(w.author || '').toLowerCase()
+        && (!w.fromPostId || String(l.fromPostId || '') === String(w.fromPostId));
+    }).sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+    const reports = ['やってみた', 'つまずいた', '気づいた'].map(function (kind) {
+      const r = matched.find(function (l) { return l.kind === kind; });
+      return r ? {kind:kind, body:r.body || ''} : null;
+    }).filter(Boolean);
     wisdom.push({
       id: w.id, tag: spWisdomNormalizeTag(w.tag),
       /* 棚の色。カードの見出しにも同じ色を出す（ギルドと揃える）。 */
@@ -18769,6 +18799,7 @@ window.spDaoLoadWisdom = async function (app) {
       insight: w.insight || '',
       from: w.knowledge || '', experiment: w.experiment || '',
       author: w.authorName || _spShortAddr(w.author), uses: uses,
+      reports: reports, hasReports: reports.length > 0,
       /* 元になった Emu の投稿があるときだけ、押して開けるようにする。
          自由入力だけの古い知恵カードは、これまでどおり字面のまま。 */
       fromLinked: w.fromPostId ? 'underline' : 'none',
@@ -23273,8 +23304,22 @@ var _skColors = [
   'rgba(176,157,62,A)'   /* 色づきかけ */
 ];
 
-function showSakuraModal() {
+function showSakuraModal(options) {
+  options = options || {};
   var modal = document.getElementById('sakuraModal');
+  document.getElementById('skTitle').textContent = options.title || '投稿を公開しました';
+  document.getElementById('skSub').textContent = options.subtitle || 'あなたの言葉が、誰かの心に届くかもしれない';
+  document.getElementById('skBadge').textContent = options.badge || 'Good / Change をもらうとEMUERを獲得';
+  var first = document.getElementById('skBtnFeed');
+  var second = document.getElementById('skBtnMore');
+  first.textContent = options.first || 'フィードを見る';
+  second.textContent = options.second || '続けて投稿';
+  first.onclick = function () { closeSakuraModal(); if (options.onFirst) options.onFirst(); };
+  second.onclick = function () {
+    closeSakuraModal();
+    if (options.onSecond) options.onSecond();
+    else if (!options.title) setTimeout(function () { openPostForm(); }, 200);
+  };
   modal.classList.add('active');
   ['skCheck','skTitle','skSub','skBadge','skActions'].forEach(function(id) {
     document.getElementById(id).classList.remove('show');
@@ -27115,27 +27160,4 @@ async function sendEmuFeedback() {
 <!-- ── 冷蔵庫くん チャットパネル ──
      もとは #mainApp の中にあった。SchoolPark を見ているあいだ #mainApp は
      display:none になるため、そこにあると開けない。body の直下へ移す。 -->
-<div id="spReizoPanel" class="sp-reizo-panel">
-  <div class="sp-reizo-header">
-    <img src="/assets/mascot.jpg" alt="冷蔵庫くん">
-    <div style="flex:1;min-width:0">
-      <div class="sp-reizo-header-title">冷蔵庫くん</div>
-      <div class="sp-reizo-header-sub">🧊 SchoolParkの案内役</div>
-    </div>
-    <button class="sp-reizo-close" onclick="spReizoClose()">✕</button>
-  </div>
-  <div class="sp-reizo-msgs" id="spReizoMessages">
-    <div class="sp-reizo-msg sp-reizo-msg-bot">
-      <img src="/assets/mascot.jpg" alt="">
-      <!-- 吹き出しは white-space:pre-wrap。改行と字下げがそのまま出るので、1行で書く -->
-      <div class="sp-reizo-bubble">こんにちは！ぼくは冷蔵庫くん🧊<br>SchoolParkのことなら、僕に任せて！<br>何が知りたい？<div class="sp-reizo-quick-wrap" id="spReizoOpening"><button class="sp-reizo-quick-btn" onclick="spReizoAsk('ここは何をする場所？')">🏞️ ここは何をする場所？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('クエストって何？')">🎯 クエストって何？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('EMUERはどうやって貯める？')">💎 EMUERはどうやって貯める？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('残高教えて')">📊 いまの残高を教えて</button></div></div>
-    </div>
-  </div>
-  <div class="sp-reizo-input-area">
-    <input id="spReizoInput" type="text" placeholder="質問する..." onkeydown="spReizoKeydown(event)">
-    <button class="sp-reizo-send" onclick="spReizoSend()">↑</button>
-  </div>
-</div>
-
-</body>
-</html>
+<div id="spReizoPanel" clas
