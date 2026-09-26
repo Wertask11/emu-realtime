@@ -1241,16 +1241,9 @@ class Component extends DCLogic {
 
   scroller = React.createRef();
   toTop(){ if(this.scroller.current) this.scroller.current.scrollTop = 0; window.scrollTo(0,0); }
-  /* クエストの絞り込みは画面遷移ではない。再描画でスクロール位置を失わない。 */
+  /* 絞り込みは画面遷移ではない。draw がスクロール位置を引き継ぐ。 */
   setQuestFilter(patch){
-    const el = this.scroller.current;
-    const y = el ? el.scrollTop : 0, pageY = window.scrollY;
     this.setState(patch);
-    const restore = () => {
-      if(this.scroller.current) this.scroller.current.scrollTop = y;
-      window.scrollTo(0, pageY);
-    };
-    requestAnimationFrame(() => { restore(); requestAnimationFrame(restore); });
   }
   go(screen){ return () => { if(this.bottomRef.current) this.tabScrollLeft = this.bottomRef.current.scrollLeft; this.setState({screen}); this.toTop(); }; }
   openExp(id){ return () => { this.setState({screen:'detail', expId:id}); this.toTop(); }; }
@@ -1695,10 +1688,16 @@ var queued = false;
 
 function draw() {
   queued = false;
+  /* replaceChildren はスクロール中の要素も破棄する。差し替え前の位置を
+     覚え、新しい要素へ同じ描画処理内で戻す（描画後の rAF では一度上に跳ぶ）。 */
+  var scrollTop = app.scroller.current ? app.scroller.current.scrollTop : 0;
+  var pageY = window.scrollY;
   var vals = app.renderVals();
   var frag = document.createDocumentFragment();
   walk(tpl.content, vals, frag);
   host.replaceChildren(frag);
+  if (app.scroller.current) app.scroller.current.scrollTop = scrollTop;
+  if (window.scrollY !== pageY) window.scrollTo(0, pageY);
   /* タブを押して画面を描き直しても、利用者が横に動かした位置を保つ。
      先頭へ戻ると、タブと画面全体が勝手に動いたように見えるため。 */
   if (app.bottomRef.current) app.bottomRef.current.scrollLeft = app.tabScrollLeft || 0;

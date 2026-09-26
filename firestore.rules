@@ -1071,12 +1071,15 @@ service cloud.firestore {
           && request.resource.data.body.size() > 0
           && request.resource.data.body.size() <= 2000
           && request.resource.data.get('kind', '') in ['やってみた', 'つまずいた', '気づいた']
-          /* 元になった Emu の投稿。選ばなくてもよい。
-             入っていれば「誰の知識が、誰の行動に移ったか」が残る。
+          /* 一般 #001 は Emu 投稿を試す仕事なので、その出どころを必須にする。
+             ほかのクエストでは投稿なしの報告も認める。
              どの投稿かはここでは確かめない（1回の書き込みで見に行ける回数を使うため）。
              長さだけを縛る。 */
           && request.resource.data.get('fromPostId', '') is string
           && request.resource.data.get('fromPostId', '').size() <= 80
+          && (get(/databases/$(database)/documents/sp_quests/$(questId)).data.get('series', '') != 'general'
+              || get(/databases/$(database)/documents/sp_quests/$(questId)).data.get('questNumber', 0) != 1
+              || request.resource.data.get('fromPostId', '').size() > 0)
           && request.resource.data.get('fromPostTitle', '') is string
           && request.resource.data.get('fromPostTitle', '').size() <= 120;
         allow update, delete: if false;
