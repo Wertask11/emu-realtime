@@ -119,10 +119,33 @@ test('いちど置いた知恵は、書き換えも削除もできない', async
 });
 
 test('途中報告は、受けた人だけが出せる（前からの決まりが壊れていないこと）', async () => {
+  /* このクエストは一般 #001。決まりのほうで Emu 投稿の出どころ（fromPostId）を
+     必須にしてある（Emu を使ってみる仕事なので）。空のまま出すと弾かれる。
+     以前ここを空で書いていたので、決まりは正しいのに試験だけが落ちていた。 */
   const log = (addr) => ({ author: addr, authorName: '名前', kind: 'やってみた',
-    body: '実際にやってみた', at: 1, fromPostId: '', fromPostTitle: '' });
+    body: '実際にやってみた', at: 1, fromPostId: 'post-1', fromPostTitle: 'Emuの投稿' });
   await assertSucceeds(fb.addDoc(fb.collection(taker, 'sp_quests', QUEST, 'logs'), log(TAKER)));
   await assertFails(fb.addDoc(fb.collection(other, 'sp_quests', QUEST, 'logs'), log(OTHER)));
+});
+
+test('一般 #001 は、Emu 投稿の出どころが無い報告を受け付けない', async () => {
+  /* わざとの決まり。ほかのクエストでは投稿なしの報告も認める。 */
+  await assertFails(fb.addDoc(fb.collection(taker, 'sp_quests', QUEST, 'logs'),
+    { author: TAKER, authorName: '名前', kind: 'やってみた', body: 'やってみた',
+      at: 1, fromPostId: '', fromPostTitle: '' }));
+});
+
+test('一般 #001 以外なら、投稿なしの報告も出せる', async () => {
+  await env.withSecurityRulesDisabled(async (c) => {
+    const d = c.firestore();
+    await fb.setDoc(fb.doc(d, 'sp_quests', 'quest-work-002'),
+      { title: '提案資料', series: 'general', questNumber: 2, branch: 1, stage: '実践',
+        owner: OWNER, status: 'OPEN', createdAt: 1, closesAt: 2, need: 10 });
+    await fb.setDoc(fb.doc(d, 'sp_quests', 'quest-work-002', 'commits', TAKER), { name: '受けた人', tookAt: 1 });
+  });
+  await assertSucceeds(fb.addDoc(fb.collection(taker, 'sp_quests', 'quest-work-002', 'logs'),
+    { author: TAKER, authorName: '名前', kind: 'やってみた', body: 'やってみた',
+      at: 1, fromPostId: '', fromPostTitle: '' }));
 });
 
 /* ───────── 画面側 ─────────
@@ -144,6 +167,15 @@ function app(opts) {
     confirm: function () { return true; },
     console: { warn: function () {} },
     spPassportLoad: async function () { return opts.me === null ? null : (opts.me || { addr: '0xtaker', name: '受けた人', isOwner: false }); },
+    /* SDK が「無い」と言っても、それが端末の控えなら普通の通信で確かめ直す。
+       本体はこの道を通るので、偽物にも用意しておく。
+       opts.restTook を決めなければ、SDK と同じ答えを返す。 */
+    _spRestDoc: async function (path) {
+      if (opts.restThrows) throw new Error('offline');
+      if (path.indexOf('/commits/') >= 0)
+        return (opts.restTook === undefined ? !!opts.took : !!opts.restTook) ? { name: '受けた人' } : null;
+      return opts.quest || { title: 'クエスト', owner: '0xowner', status: 'OPEN' };
+    },
     openSpWisdomForm: function (q) { opened.push(q); },
     SpQuestStore: { FOUNDER_ID: 'founder-quest-000' },
     window: {
@@ -182,6 +214,21 @@ test('受けていない人は、書く前に止める（書いたあとに断�
   await a.api.spQuestWisdom('q1', null);
   assert.equal(a.opened.length, 0);
   assert.match(a.said.join(''), /受けた人だけ/);
+});
+
+test('端末の控えで「受けていない」と見えても、通信で確かめ直してから開く', async () => {
+  /* 前は控えを見て断っていたので、受けているのに置けないことがあった。 */
+  const a = app({ took: false, restTook: true });
+  await a.api.spQuestWisdom('q1', null);
+  assert.equal(a.opened.length, 1, '札が開いていない');
+  assert.equal(a.said.join(''), '', '断ってしまっている');
+});
+
+test('確かめられなかったときは、断らずにそう言う', async () => {
+  const a = app({ took: false, restThrows: true });
+  await a.api.spQuestWisdom('q1', null);
+  assert.equal(a.opened.length, 0);
+  assert.match(a.said.join(''), /確かめられませんでした/);
 });
 
 test('ログインしていなければ開かない', async () => {

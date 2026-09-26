@@ -6,6 +6,31 @@ const express = require("express");
 const ethers = require("ethers");
 const policy = require("./emuer-v2/policy");
 
+/* ギルドの色。frontend/public/schoolpark/guild-store.js と同じ値。
+   証明書の絵と、星空の星の色をそろえるために使う。 */
+const GUILD_COLOR = {
+  learn: "#0F5C3F", work: "#141310", play: "#C2703D",
+  connect: "#B0405A", web3: "#3B382F"
+};
+const GUILD_LABEL = {
+  learn: "LEARN", work: "WORK", play: "PLAY", connect: "CONNECT", web3: "WEB3"
+};
+
+/* 段ごとの1人あたりの報酬。年内目標の資料どおり。
+   入門3日50 ／ 標準7日100 ／ 実践14日200。段の無いクエストは100。
+   運営が予算を公開するときに別の額を入れれば、そちらが優先される。 */
+const STAGE_EMUER = { "入門": 50, "標準": 100, "実践": 200 };
+function defaultPerPerson(quest) {
+  return STAGE_EMUER[String(quest && quest.stage || "")] || 100;
+}
+
+/* #000 は原点なので、予算も報酬も持たない。 */
+const FOUNDER_QUEST_ID = "founder-quest-000";
+function usableQuest(questId, quest) {
+  return !!quest && questId !== FOUNDER_QUEST_ID && quest.kind !== "founder"
+    && Number.isSafeInteger(Number(quest.questNumber)) && Number(quest.questNumber) >= 1;
+}
+
 function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, env = process.env }) {
   const router = express.Router();
   const certContract = String(env.SP_QUEST_STAR_CONTRACT || "");
@@ -21,25 +46,44 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     try {
       const q = await db.collection("sp_quests").doc(questId).get();
       const quest = q.exists ? q.data() || {} : {};
-      if (!q.exists || quest.series !== "general" || Number(quest.questNumber) !== 1 || quest.guildId !== "learn")
-        return res.status(409).json({ error: "QUEST_NOT_LEARN_001" });
+      /* 前は一般 #001 の LEARN しか受け付けなかった。ほかのクエストは
+         予算そのものを公開できず、途中報告からの貢献も記録されない。
+         クエストなら、どれでも同じ道を通す（#000 だけは除く）。 */
+      if (!usableQuest(questId, quest)) return res.status(409).json({ error: "QUEST_NOT_ELIGIBLE" });
+
+      /* 1人あたりの額は、運営が決める。入れなければ段から決める
+         （入門50／標準100／実践200、段が無ければ100）。 */
+      const perPerson = Number((req.body || {}).perPersonEmuer || defaultPerPerson(quest));
+      const total = Number((req.body || {}).totalEmuer || 0);
+      if (!Number.isSafeInteger(perPerson) || perPerson <= 0 || perPerson > 1000000)
+        return res.status(400).json({ error: "INVALID_PER_PERSON" });
+      if (!Number.isSafeInteger(total) || total < perPerson || total > 100000000)
+        return res.status(400).json({ error: "INVALID_TOTAL" });
+
+      const label = (quest.series === "special" ? "特殊 " : "一般 ") + "#"
+        + String(quest.questNumber).padStart(3, "0")
+        + (Number(quest.branch) >= 1 ? "-" + Number(quest.branch) : "")
+        + (quest.stage ? " " + quest.stage : "");
       const ref = db.collection("emuer_v2_guild_quest_budgets").doc("quest:" + questId);
       const result = await db.runTransaction(async tx => {
         const snap = await tx.get(ref);
         if (snap.exists) {
           const row = snap.data() || {};
-          if (row.status === "published" && row.totalEmuer === 10000) return { alreadyPublished: true };
+          if (row.status === "published" && Number(row.totalEmuer) === total
+              && Number(row.perPersonEmuer || 0) === perPerson) return { alreadyPublished: true };
           throw new Error("BUDGET_EXISTS_DIFFERENT");
         }
         tx.create(ref, {
           schema: "emuer-v2-guild-quest-budget-v1", scopeType: "quest", scopeId: questId,
-          title: "一般クエスト #001 LEARN 完走報酬", conditions: "やってみた・つまずいた・気づいたの報告と知恵カードを確認後、運営が完走承認。1人100 EMUER、最大100人。",
-          totalEmuer: 10000, allocatedEmuer: 0, status: "published",
+          title: label + " " + String(quest.title || "").slice(0, 80) + " 完走報酬",
+          conditions: "やってみた・つまずいた・気づいたの報告と知恵カードを確認後、運営が完走承認。1人"
+            + perPerson + " EMUER、最大" + Math.floor(total / perPerson) + "人。",
+          totalEmuer: total, perPersonEmuer: perPerson, allocatedEmuer: 0, status: "published",
           publishedBy: req.identity.walletAddress, publishedAt: new Date(), updatedAt: new Date()
         });
         return { alreadyPublished: false };
       });
-      return res.json({ ok: true, totalEmuer: 10000, ...result });
+      return res.json({ ok: true, totalEmuer: total, perPersonEmuer: perPerson, ...result });
     } catch (error) {
       if (error.message === "BUDGET_EXISTS_DIFFERENT") return res.status(409).json({ error: error.message });
       console.error("Quest budget failed:", error);
@@ -64,8 +108,7 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
         db.collection("ches_accounts").where("walletAddress", "==", address).limit(2).get()
       ]);
       const q = quest.exists ? quest.data() || {} : {};
-      if (!quest.exists || q.series !== "general" || Number(q.questNumber) !== 1 || q.guildId !== "learn")
-        return res.status(409).json({ error: "QUEST_NOT_LEARN_001" });
+      if (!usableQuest(questId, q)) return res.status(409).json({ error: "QUEST_NOT_ELIGIBLE" });
       if (!commit.exists) return res.status(409).json({ error: "NOT_JOINED" });
       const kinds = new Set();
       logs.forEach(doc => {
@@ -99,33 +142,61 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
           tx.get(commitRef), tx.get(budgetRef), tx.get(rewardRef), tx.get(certRef)
         ]);
         if (!current.exists) throw new Error("NOT_JOINED");
-        if (prior.exists || certificate.exists || (current.data() || {}).approved === true) {
-          if (prior.exists && certificate.exists && (current.data() || {}).approved === true) return { alreadyApproved: true };
+        const was = current.data() || {};
+        if (prior.exists || certificate.exists) {
+          if (prior.exists && certificate.exists && was.approved === true) return { alreadyApproved: true };
           throw new Error("COMPLETION_STATE_CONFLICT");
         }
+        /* 承認の印だけが立っていて、報酬も証明書も無いことがある。
+           サーバーへ届かないまま管理画面から通した承認がこれ。
+           何も払われていないので、ここで引き当て直してよい。
+           （この印は運営しか立てられない。firestore.rules の
+             sp_quests/{id}/commits/{addr} の update を見ること。）
+           前はこれも COMPLETION_STATE_CONFLICT で止めていたので、
+           いちど通した承認は、あとから EMUER を渡す道が無かった。 */
         const budget = budgetSnap.exists ? budgetSnap.data() || {} : {};
         if (budget.status !== "published" || budget.scopeType !== "quest" || budget.scopeId !== questId)
           throw new Error("BUDGET_NOT_PUBLISHED");
         const allocated = Number(budget.allocatedEmuer || 0);
         const total = Number(budget.totalEmuer || 0);
-        if (!Number.isSafeInteger(allocated) || !Number.isSafeInteger(total) || allocated + 100 > total)
+        /* 1人あたりの額は、予算を公開したときに決めたもの。
+           古い予算（この欄が無いもの）は、段から決める。
+           運営のブラウザから送られてきた数は使わない。 */
+        const per = Number(budget.perPersonEmuer || defaultPerPerson(q));
+        if (!Number.isSafeInteger(per) || per <= 0) throw new Error("BUDGET_NOT_PUBLISHED");
+        if (!Number.isSafeInteger(allocated) || !Number.isSafeInteger(total) || allocated + per > total)
           throw new Error("BUDGET_EXCEEDED");
         const now = Date.now();
-        tx.update(commitRef, { approved: true, approvedAt: now, approvedBy: req.identity.walletAddress });
-        tx.update(budgetRef, { allocatedEmuer: allocated + 100, updatedAt: new Date(now) });
+        const guildId = String(q.guildId || "");
+        /* 引き当てた額を、参加の記録そのものに書く。
+           管理画面は、この欄があるかどうかで「もう EMUER が動いた承認」と
+           「サーバーへ届かないまま通した承認」を見分ける。
+           前者は取り消せない（報酬と証明書がもう予約されている）。 */
+        /* 認めた日は動かさない。信用スコアと星空の並びが後ろへずれる。 */
+        const approvedAt = Number(was.approvedAt) > 0 ? Number(was.approvedAt) : now;
+        tx.update(commitRef, { approved: true, approvedAt, approvedBy: req.identity.walletAddress,
+          rewardEmuer: per });
+        tx.update(budgetRef, { allocatedEmuer: allocated + per, updatedAt: new Date(now) });
         tx.create(rewardRef, {
           schema: "emuer-v2-reward-v1", kind: "quest-completion", key: rewardKey, claimId: rewardId,
-          recipient, amountWei: (100n * policy.UNIT).toString(), amount: "100", status: "pending",
+          recipient, amountWei: (BigInt(per) * policy.UNIT).toString(), amount: String(per), status: "pending",
           scopeType: "quest", scopeId: questId, createdAt: new Date(now), updatedAt: new Date(now)
         });
         tx.create(certRef, {
           schema: "schoolpark-quest-star-v1", completionKey, questId, spid, address,
-          guildId: "learn", guildColor: "#0F5C3F", questTitle: String(q.title || "").slice(0, 120),
-          completedAt: now, status: "pending", createdAt: new Date(now)
+          /* 星空の星と同じ色にする。どのギルドにも属さないクエストは未分類の色。 */
+          guildId: guildId, guildColor: GUILD_COLOR[guildId] || "#6E695C",
+          questTitle: String(q.title || "").slice(0, 120),
+          questLabel: (q.series === "special" ? "特殊 " : "一般 ") + "#"
+            + String(q.questNumber).padStart(3, "0")
+            + (Number(q.branch) >= 1 ? "-" + Number(q.branch) : "")
+            + (q.stage ? " " + q.stage : ""),
+          amountEmuer: per,
+          completedAt: approvedAt, status: "pending", createdAt: new Date(now)
         });
-        return { alreadyApproved: false };
+        return { alreadyApproved: false, amountEmuer: per };
       });
-      return res.json({ ok: true, amountEmuer: 100, rewardId, ...result });
+      return res.json({ ok: true, rewardId, amountEmuer: result.amountEmuer || 0, ...result });
     } catch (error) {
       const code = String(error.message || "");
       if (["NOT_JOINED", "COMPLETION_STATE_CONFLICT", "BUDGET_NOT_PUBLISHED", "BUDGET_EXCEEDED"].includes(code))
@@ -140,16 +211,34 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     const snap = await db.collection("sp_quest_certificates").doc(key).get();
     if (!snap.exists) return res.status(404).json({ error: "NOT_FOUND" });
     const row = snap.data() || {};
+    /* 絵も名前も、そのクエストのものにする。
+       前はどのクエストで完走しても「#001 LEARN」と書かれた証明書が
+       出ていた。#002 を完走した人の手元に #001 の証明書が残る。 */
+    const guildId = String(row.guildId || "");
+    const guild = GUILD_LABEL[guildId] || "";
+    const color = row.guildColor || GUILD_COLOR[guildId] || "#6E695C";
+    const label = String(row.questLabel || "").trim();
+    const title = String(row.questTitle || "").slice(0, 40);
+    const caption = ("SchoolPark " + label + (guild ? " " + guild : "")).trim();
+    const esc = t => String(t).replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">'
-      + '<rect width="640" height="640" fill="#141310"/><circle cx="320" cy="280" r="170" fill="' + row.guildColor
+      + '<rect width="640" height="640" fill="#141310"/><circle cx="320" cy="280" r="170" fill="' + esc(color)
       + '" opacity=".35"/><path d="M320 115l42 124 130 2-105 78 39 125-106-75-106 75 39-125-105-78 130-2z" fill="#D0E2BE"/>'
-      + '<text x="320" y="530" text-anchor="middle" fill="#F4F1EA" font-size="32" font-family="sans-serif">SchoolPark #001 LEARN</text></svg>';
+      + '<text x="320" y="520" text-anchor="middle" fill="#F4F1EA" font-size="30" font-family="sans-serif">'
+      + esc(caption) + '</text>'
+      + '<text x="320" y="562" text-anchor="middle" fill="#D0E2BE" font-size="18" font-family="sans-serif">'
+      + esc(title) + '</text></svg>';
     res.set("Cache-Control", "public, max-age=3600");
+    const attributes = [{ trait_type: "Quest", value: label || String(row.questId || "") },
+      { trait_type: "Completed", value: new Date(row.completedAt).toISOString().slice(0, 10) }];
+    if (guild) attributes.unshift({ trait_type: "Guild", value: guild });
+    if (Number(row.amountEmuer) > 0) attributes.push({ trait_type: "EMUER", value: String(row.amountEmuer) });
     return res.json({
-      name: "SchoolPark Quest #001 LEARN · Star", description: "譲渡不可のクエスト完走証明。星空のLEARN星と同じ完走記録から発行されます。",
+      name: caption + " · Star",
+      description: "譲渡不可のクエスト完走証明。星空の星と同じ完走記録から発行されます。",
       image: "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64"),
-      attributes: [{ trait_type: "Guild", value: "LEARN" }, { trait_type: "Quest", value: "General #001" },
-        { trait_type: "Completed", value: new Date(row.completedAt).toISOString().slice(0, 10) }]
+      attributes: attributes
     });
   });
   router.post("/:questId/certificate/claim", requireFirebaseUser, async (req, res) => {

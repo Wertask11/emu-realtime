@@ -1889,7 +1889,9 @@ async function renderSchoolPark() {
       cs.forEach(c => {
         const d = c.data() || {};
         q.took++;
-        took.push({ addr: c.id, name: d.name || "", approved: d.approved === true });
+        took.push({ addr: c.id, name: d.name || "", approved: d.approved === true,
+          /* サーバーが引き当てた額。0 なら EMUER はまだ動いていない。 */
+          rewardEmuer: Number(d.rewardEmuer || 0) });
       });
     }
     /* 誰が何本ログを書いたか。承認するときの判断材料として画面に出す。 */
@@ -1963,6 +1965,10 @@ async function renderSchoolPark() {
      クエストの予算は「これから払う約束」でしかない。
      いま持っている額は、記録した入金と支出で決まる。 */
   const CURRENCIES = ["JPY", "JPYC", "EMUER"];
+  /* 段ごとの1人あたりの既定額。年内目標の資料どおり
+     （入門3日50／標準7日100／実践14日200、段が無ければ100）。
+     サーバー（backend/quest-completion.js の STAGE_EMUER）と同じ値。 */
+  const SP_STAGE_EMUER = q => ({ "入門": 50, "標準": 100, "実践": 200 })[String((q && q.stage) || "")] || 100;
   const CUR_LABEL = { JPY: "円", JPYC: "JPYC", EMUER: "EMUER" };
   const asMoney = (n, cur) => {
     const v = Math.round(Number(n) || 0);
@@ -2132,8 +2138,12 @@ async function renderSchoolPark() {
         + '<small style="color:var(--muted)">' + asMoney(parseInt(String(q.budget||"0").replace(/[^0-9]/g,""),10)||0, CURRENCIES.indexOf(q.budgetCurrency)>=0?q.budgetCurrency:"JPY") + ' · ' + (STATUS[q.status] || q.status)
         + ' · ' + q.took + '/' + (q.need || 5) + '人が受けた · 認めた ' + q.approvedCount + '人</small></span>'
         + '<span>'
-        + (q.series === 'general' && Number(q.questNumber) === 1 && q.guildId === 'learn'
-          ? '<button class="act ok" data-qbudget="' + esc(q.id) + '">EMUER個別予算10,000を公開</button> ' : '')
+        /* EMUER の予算は、クエストごとに公開する。
+           これを公開しないと、途中報告からの貢献も記録されず、
+           承認しても EMUER は動かない。#000 以外はどれでも出せる。 */
+        + (SpQuestStore.isFounder(q) ? ''
+          : '<button class="act ok" data-qbudget="' + esc(q.id) + '" data-qper="' + SP_STAGE_EMUER(q)
+            + '">EMUERの予算を公開</button> ')
         + (q.status !== "RUNNING" ? '<button class="act neutral" data-qrun="' + esc(q.id) + '">進行中にする</button> ' : '')
         + (q.status !== "CLOSED" ? '<button class="act ok" data-qclose="' + esc(q.id) + '">完了にする</button>' : '')
         + '</span></div>'
@@ -2147,9 +2157,19 @@ async function renderSchoolPark() {
                 /* 完走条件のまん中。ここが出ていないと、認めてよいか判断できない。 */
                 + ' · 知恵カード ' + t.wisdom + '枚' + (t.wisdom >= 1 ? ' ✓' : '')
                 + (t.approved ? ' · 認めています' : ' · まだ認めていません') + '</small></span>'
+                /* EMUER を引き当てた承認は取り消せない。報酬と証明書がもう
+                   予約されていて、取り消すと記録だけが食い違う。
+                   前はここが「一般 #001 の LEARN」の決め打ちで、
+                   ほかのクエストには取り消すボタンが出ていた。 */
                 + '<span>' + (t.approved
-                    ? (q.series === 'general' && Number(q.questNumber) === 1 && q.guildId === 'learn'
-                      ? '100 EMUERの承認済み' : '<button class="act no" data-qunapprove="' + esc(q.id) + '" data-addr="' + esc(t.addr) + '">取り消す</button>')
+                    ? (t.rewardEmuer > 0
+                      ? esc(String(t.rewardEmuer)) + ' EMUERの承認済み'
+                      /* 認めてはあるが、EMUER がまだ動いていない。予算を公開する前に
+                         認めた人と、Render へ届かないまま通した人がこれ。
+                         あとから渡せるので、そのボタンを出す。 */
+                      : '<button class="act ok" data-qapprove="' + esc(q.id) + '" data-addr="' + esc(t.addr)
+                        + '" data-qtopup="1">EMUERを渡す</button> '
+                        + '<button class="act no" data-qunapprove="' + esc(q.id) + '" data-addr="' + esc(t.addr) + '">取り消す</button>')
                     : '<button class="act ok" data-qapprove="' + esc(q.id) + '" data-addr="' + esc(t.addr) + '">認める</button>')
                 + '</span></div>').join("")
             : '<p class="empty" style="padding-left:14px">まだ誰も受けていません。</p>')
@@ -2370,31 +2390,70 @@ async function renderSchoolPark() {
       const short = [];
       if (t0 && t0.logs < 3) short.push("報告が " + t0.logs + "本（あと" + (3 - t0.logs) + "本）");
       if (t0 && t0.wisdom < 1) short.push("知恵カードが 0枚（あと1枚）");
-      if (short.length) {
+      if (b.dataset.qtopup) {
+        /* 認めるのは済んでいる。ここで聞くのは「EMUERを渡すか」だけ。 */
+        if (!confirm("この人は完走として認めてありますが、EMUER がまだ渡っていません。"
+          + "\n\n予算に書いた1人ぶんの EMUER を、いま渡します。よろしいですか？")) return;
+      } else if (short.length) {
         if (!confirm("この人は、まだ完走条件を満たしていません。\n\n"
           + short.join("\n") + "\n\nそれでも認めますか？")) return;
       } else if (!confirm("この人の参加を認めます。\n\n分配の対象になり、信用スコアの「完走」にも入ります。\n実際に動いた証拠は確かめましたか？")) {
         return;
       }
+      /* 承認はサーバーを通す。EMUERの引き当てと証明書の予約を、
+         approved を立てるのと同じ取引の中でやるため。
+         前は一般 #001 の LEARN だけがこの道を通り、ほかのクエストは
+         Firestore に直接 approved を書いていた。だから #002 以降は
+         いくら認めても EMUER も証明書も動かなかった。
+
+         サーバーが使えないとき（EMUER開始前・予算が未公開・Renderが落ちて
+         いるとき）は、承認だけは通す。完走の記録を止めないため。 */
       try {
-        const q = q0;
-        if (q && q.series === "general" && Number(q.questNumber) === 1 && q.guildId === "learn") {
-          await api("/api/schoolpark/quest-completions/" + encodeURIComponent(q.id)
-            + "/" + encodeURIComponent(b.dataset.addr) + "/approve", { method:"POST" });
-        } else {
+        const r = await api("/api/schoolpark/quest-completions/" + encodeURIComponent(b.dataset.qapprove)
+          + "/" + encodeURIComponent(b.dataset.addr) + "/approve", { method:"POST" });
+        if (r && r.amountEmuer) alert("認めました。" + r.amountEmuer + " EMUER を引き当てました。");
+      } catch (e) {
+        const code = String((e && (e.code || e.message)) || "");
+        const soft = ["NOT_STARTED", "BUDGET_NOT_PUBLISHED", "WALLET_REQUIRED",
+                      "PASSPORT_LINK_REQUIRED", "CERTIFICATE_NOT_DEPLOYED",
+                      "FIRESTORE_UNAVAILABLE"].some(x => code.indexOf(x) >= 0);
+        if (!soft && code.indexOf("Failed to fetch") < 0 && code.indexOf("NetworkError") < 0) {
+          alert("認められませんでした（" + code + "）"); return;
+        }
+        if (b.dataset.qtopup) {
+          /* 承認はもう立っている。ここで Firestore を触る意味は無い。 */
+          alert("EMUER はまだ渡せません（" + code + "）。\n\n"
+            + "「EMUERの予算を公開」が済んでいるか確かめてください。\n"
+            + "承認そのものは残っているので、あとから「EMUERを渡す」で渡せます。");
+          renderSchoolPark(); return;
+        }
+        try {
           await f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qapprove, "commits", b.dataset.addr),
             { approved: true, approvedAt: Date.now(), approvedBy: ownerAddr });
-        }
-      } catch (e) { alert("認められませんでした（" + (e.code || e.message) + "）"); return; }
+        } catch (e2) { alert("認められませんでした（" + (e2.code || e2.message) + "）"); return; }
+        alert("完走として認めました。\n\nただし EMUER は渡せていません（" + code + "）。\n"
+          + "「EMUERの予算を公開」を済ませてから、この人の行に出る「EMUERを渡す」を押すと渡せます。");
+      }
       renderSchoolPark();
     };
   });
   el.querySelectorAll("[data-qbudget]").forEach(b => {
     b.onclick = async () => {
-      if (!confirm("一般 #001 LEARN のEMUER v2個別予算を10,000公開します。100人に1人100 EMUERです。よろしいですか？")) return;
-      try { await api("/api/schoolpark/quest-completions/" + encodeURIComponent(b.dataset.qbudget) + "/budget", { method:"POST" }); }
-      catch (e) { alert("個別予算を公開できませんでした（" + (e.code || e.message) + "）"); return; }
-      alert("EMUER v2個別予算10,000を公開しました。");
+      /* 1人あたりと人数を聞いて、総額を出す。段から決めた額を既定にする
+         （入門50／標準100／実践200、段が無ければ100。年内目標の資料どおり）。
+         いちど公開すると額は変えられないので、確かめてから送る。 */
+      const per = parseInt(prompt("1人あたり何 EMUER にしますか？", b.dataset.qper || "100") || "", 10);
+      if (!Number.isSafeInteger(per) || per <= 0) return;
+      const people = parseInt(prompt("何人ぶん用意しますか？", "100") || "", 10);
+      if (!Number.isSafeInteger(people) || people <= 0) return;
+      const total = per * people;
+      if (!confirm("EMUER の予算を公開します。\n\n1人 " + per + " EMUER × " + people + "人 ＝ 総額 " + total
+        + " EMUER\n\nいちど公開すると、額は変えられません。よろしいですか？")) return;
+      try {
+        await api("/api/schoolpark/quest-completions/" + encodeURIComponent(b.dataset.qbudget) + "/budget",
+          { method:"POST", body: { perPersonEmuer: per, totalEmuer: total } });
+      } catch (e) { alert("予算を公開できませんでした（" + (e.code || e.message) + "）"); return; }
+      alert("EMUER の予算を公開しました（1人 " + per + " EMUER ／ 総額 " + total + "）。");
       renderSchoolPark();
     };
   });
