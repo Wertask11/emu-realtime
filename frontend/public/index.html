@@ -4954,14 +4954,13 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
           <span id="emuTodayProgress"></span>
         </div>
         <p class="eth-reward-note" id="emuNextRewardNote" data-i18n="reward.note">100 EMUERで特別体験と交換できます。</p>
-        <div class="eth-loginbonus" id="emuLoginBonusRow">
-          <div class="eth-lb-copy">
-            <strong data-i18n="lb.title">今日のログインボーナス</strong>
-            <span id="emuLoginBonusNote">毎日ログインで +0.5 EMUER</span>
-            <span id="emuOffchainNote" class="eth-lb-offchain" style="display:none;"></span>
-          </div>
-          <button type="button" class="eth-btn primary" id="emuLoginBonusBtn" onclick="claimEmuLoginBonus()">+0.5 受取</button>
-        </div>
+        <!-- 旧ログインボーナス（+0.5 EMUER）は廃止した。
+
+             配布そのものはサーバーで止めてあったが、画面の箱とボタンは
+             残っていて、隠すかどうかはサーバーの「もう配っていません」という
+             返事に頼っていた（_emuLbRetired）。その返事が返らなければ
+             ボタンが出たままになり、押せば失敗する。
+             出していない約束は、画面からも消す。 -->
         <button type="button" class="eth-btn" onclick="toggleEmuUses(true)" data-i18n="reward.uses">使い道を見る</button>
       </aside>
     </div>
@@ -5913,10 +5912,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <div class="pp-shortcut-item" onclick="window.open('https://school-park-homepage.vercel.app/','_blank')">
         <div class="pp-shortcut-icon">🏫</div>
         <span class="pp-shortcut-label">SchoolPark<br>HP</span>
-      </div>
-      <div class="pp-shortcut-item" onclick="handleLoginBonus()">
-        <div class="pp-shortcut-icon">🎁<span class="pp-new-badge">NEW</span></div>
-        <span class="pp-shortcut-label">ログイン<br>ボーナス</span>
       </div>
       <div class="pp-shortcut-item" onclick="ppFindNearSchoolPark()">
         <div class="pp-shortcut-icon">📍</div>
@@ -9243,7 +9238,6 @@ const _SP_REIZO_LOADING_LINES = [
   "🗓️ 一日シェアで時間割を決めると、今日がちょっと有意義になるかも！",
   "📗 Room1にはマネー・ネット・ライフのリテラシーが並んでるよ。のぞいてみてね！",
   "📮 Room1のお預かり箱に送った気づきは、学習コンテンツになることがあるよ！",
-  "💎 ログインボーナスは毎日+0.5 EMUER。100貯まると特別体験と交換できるよ！",
   "🔎 困りごとは「知識を探す」へ。出すのは答えじゃなくて、問いのほうだよ！",
   "🎮 ECHO FIELDと林檎の方程式、SchoolParkの公園で待ってるよ！",
   "🧊 困ったらいつでもぼくに聞いてね。答えられないときは問い合わせに繋ぐからね！",
@@ -15442,7 +15436,8 @@ async function updateEmuTodayHome() {
   if (starTitle) starTitle.textContent = emuT('today.star.title', { n: untilStar });
   if (starText) starText.textContent = emuT('today.star.text');
   _emuLoadRecommendedPost();
-  refreshEmuLoginBonusStatus();
+  /* 旧ログインボーナスは廃止した。画面から外したので、
+     受取状況をサーバーに聞きに行く必要もない。 */
 }
 
 /* ═══════════════════════════════════════
@@ -24739,7 +24734,6 @@ row.appendChild(medal);
 // ── 利用可能なショートカット一覧 ──
 const PP_ALL_SHORTCUTS = [
   { id: 'hp',       icon: '🏫', label: 'SchoolPark\nHP',    action: () => window.open('https://school-park-homepage.vercel.app/','_blank') },
-  { id: 'bonus',    icon: '🎁', label: 'ログイン\nボーナス', action: () => handleLoginBonus(), badge: 'NEW' },
   { id: 'near',     icon: '📍', label: '近くの\nSchoolPark', action: () => ppFindNearSchoolPark() },
   { id: 'explore',  icon: '🔍', label: '探索する',           action: () => document.getElementById('exploreBtn').click() },
   { id: 'post',     icon: '✏️', label: '投稿する',           action: () => document.getElementById('openPostFormButton').click() },
@@ -26484,6 +26478,17 @@ async function sendEmuFeedback() {
 /* 新しい「知識を読む」iframeと、既存Firebase投稿処理をつなぐ */
 (function () {
   const KNOWLEDGE_PAGE_SIZE = 20;
+  /* 見学の人（無料・パスなし）に見せる、新着の本数。
+
+     前は「運営が選んだ知識だけ（recommended == true）」を見せる作りだった。
+     ところが recommended を持つ投稿は1件も無く、立てる画面もサーバーの
+     入口も作られていなかった。だから見学の人には、106件あっても
+     「該当する知識がありません」しか出なかった。
+
+     選ぶ手間をかけずに「一部だけ見せる」を成り立たせるため、
+     新着の頭から数えて、この本数までを見学の範囲にする。 */
+  const GUEST_KNOWLEDGE_LIMIT = 20;
+  let knowledgeShown = 0;
   const KNOWLEDGE_ORIGIN = window.location.origin;
   let knowledgeLastDoc = null;
   let knowledgeHasMore = true;
@@ -26740,27 +26745,53 @@ async function sendEmuFeedback() {
       sendKnowledge({ type:'emu-knowledge-loading', append:!!options.append });
       if (!await waitForKnowledgeFirebase()) throw new Error('投稿データの準備に時間がかかっています。');
       const account = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
-      if (!options.append) { knowledgeLastDoc = null; knowledgeHasMore = true; }
+      if (!options.append) { knowledgeLastDoc = null; knowledgeHasMore = true; knowledgeShown = 0; }
       if (!knowledgeHasMore && options.append) return;
-      /* 見学の人には、運営が選んだ知識だけを見せる（9/1から）。
+
+      /* 段（プラン）が届くのを待ってから決める。
+
+         ここは待たずに emuHasPlan を見ていた。段は Render から届くので、
+         間に合わなければ guest 扱いになる。公式パスを持っている人でも、
+         開いた直後は見学者として絞られていた。
+         「読めるときと読めないときがある」の正体はこれ。 */
+      if (typeof emuEnsureEntitlement === 'function') {
+        try { await emuEnsureEntitlement(); } catch (e) {}
+      }
+      const guest = !emuHasPlan('light');
+
+      /* 見学の人にも、新着の頭から一部は見せる。
          全部読めてしまうと「見学」ではなくなり、light に進む理由が薄くなる。
          読むこと自体は無料のままなので、閲覧を止めるのではなく範囲を絞る。 */
       const constraints = [window.fbLib.orderBy('createdAt', 'desc')];
-      if (!emuHasPlan('light')) {
-        constraints.unshift(window.fbLib.where('recommended', '==', true));
-      }
       if (knowledgeLastDoc && options.append) constraints.push(window.fbLib.startAfter(knowledgeLastDoc));
       constraints.push(window.fbLib.limit(KNOWLEDGE_PAGE_SIZE + 1));
       const q = window.fbLib.query(window.fbLib.collection(window.db, 'posts'), ...constraints);
       const snap = await window.fbLib.getDocs(q);
       const rows = [];
-      const visibleDocs = snap.docs.slice(0, KNOWLEDGE_PAGE_SIZE);
+      let visibleDocs = snap.docs.slice(0, KNOWLEDGE_PAGE_SIZE);
+      knowledgeHasMore = snap.docs.length > KNOWLEDGE_PAGE_SIZE;
+
+      /* 見学の人は、新着 GUEST_KNOWLEDGE_LIMIT 件まで。
+         そこから先があることは画面で伝える（黙って終わらせない）。 */
+      let guestCapped = false;
+      if (guest) {
+        const room = Math.max(0, GUEST_KNOWLEDGE_LIMIT - knowledgeShown);
+        const cut = visibleDocs.length > room;
+        if (cut) visibleDocs = visibleDocs.slice(0, room);
+        if (cut || (knowledgeHasMore && visibleDocs.length >= room)) {
+          guestCapped = true;
+          knowledgeHasMore = false;
+        }
+      }
+      knowledgeShown += visibleDocs.length;
+
       visibleDocs.forEach(docSnap => rows.push(plainKnowledgePost(docSnap)));
       knowledgeLastDoc = visibleDocs.length ? visibleDocs[visibleDocs.length - 1] : knowledgeLastDoc;
-      knowledgeHasMore = snap.docs.length > KNOWLEDGE_PAGE_SIZE;
       const drafts = await readKnowledgeDrafts(account);
       sendKnowledge({
         type:'emu-knowledge-posts', posts:rows, append:!!options.append, hasMore:knowledgeHasMore,
+        /* 見学の範囲で止まったか。止まったことを画面で伝えるために渡す。 */
+        guestCapped: guestCapped, guestLimit: GUEST_KNOWLEDGE_LIMIT,
         account,
         monthlyTheme:String(typeof currentTheme === 'string' ? currentTheme : '整える'),
         drafts, scheduledCount:await scheduledKnowledgeCount(account),
@@ -26816,8 +26847,13 @@ async function sendEmuFeedback() {
     stopKnowledgeWatch();
     knowledgeWatchGuest = guest;
 
+    /* 新着の先頭を1件だけ見張る。見学の人も同じものを見る。
+
+       前は見学の人だけ recommended == true で絞っていた。
+       その欄を持つ投稿は1件も無いので、見張りは一生鳴らなかった。
+       いまは見学の人にも新着の頭から一部を見せるので、
+       絞らずに同じ先頭を見張る。 */
     const parts = [];
-    if (guest) parts.push(window.fbLib.where('recommended', '==', true));
     parts.push(window.fbLib.orderBy('createdAt', 'desc'));
     parts.push(window.fbLib.limit(1));
 
