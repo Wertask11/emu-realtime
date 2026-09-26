@@ -1906,7 +1906,8 @@ async function renderSchoolPark() {
     /* 完走＝運営が認めた人だけ。SchoolPark 側の分配とまったく同じ条件。 */
     took.forEach(t => {
       const m = pick(t.addr, t.name);
-      if (m && q.status === "CLOSED" && t.approved) m.done++;
+      if (m && t.approved && (q.status === "CLOSED" ||
+          (q.series === "general" && Number(q.questNumber) === 1 && q.guildId === "learn"))) m.done++;
     });
   });
   /* 知恵カードと、引用された数 */
@@ -2066,6 +2067,8 @@ async function renderSchoolPark() {
         + '<small style="color:var(--muted)">' + asMoney(parseInt(String(q.budget||"0").replace(/[^0-9]/g,""),10)||0, CURRENCIES.indexOf(q.budgetCurrency)>=0?q.budgetCurrency:"JPY") + ' · ' + (STATUS[q.status] || q.status)
         + ' · ' + q.took + '/' + (q.need || 5) + '人が受けた · 認めた ' + q.approvedCount + '人</small></span>'
         + '<span>'
+        + (q.series === 'general' && Number(q.questNumber) === 1 && q.guildId === 'learn'
+          ? '<button class="act ok" data-qbudget="' + esc(q.id) + '">EMUER個別予算10,000を公開</button> ' : '')
         + (q.status !== "RUNNING" ? '<button class="act neutral" data-qrun="' + esc(q.id) + '">進行中にする</button> ' : '')
         + (q.status !== "CLOSED" ? '<button class="act ok" data-qclose="' + esc(q.id) + '">完了にする</button>' : '')
         + '</span></div>'
@@ -2077,7 +2080,8 @@ async function renderSchoolPark() {
                 + '<br><small style="color:var(--muted)">報告 ' + t.logs + '本'
                 + (t.approved ? ' · 認めています' : ' · まだ認めていません') + '</small></span>'
                 + '<span>' + (t.approved
-                    ? '<button class="act no" data-qunapprove="' + esc(q.id) + '" data-addr="' + esc(t.addr) + '">取り消す</button>'
+                    ? (q.series === 'general' && Number(q.questNumber) === 1 && q.guildId === 'learn'
+                      ? '100 EMUERの承認済み' : '<button class="act no" data-qunapprove="' + esc(q.id) + '" data-addr="' + esc(t.addr) + '">取り消す</button>')
                     : '<button class="act ok" data-qapprove="' + esc(q.id) + '" data-addr="' + esc(t.addr) + '">認める</button>')
                 + '</span></div>').join("")
             : '<p class="empty" style="padding-left:14px">まだ誰も受けていません。</p>')
@@ -2289,9 +2293,24 @@ async function renderSchoolPark() {
     b.onclick = async () => {
       if (!confirm("この人の参加を認めます。\n\n分配の対象になり、信用スコアの「完走」にも入ります。\n実際に動いた証拠は確かめましたか？")) return;
       try {
-        await f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qapprove, "commits", b.dataset.addr),
-          { approved: true, approvedAt: Date.now(), approvedBy: ownerAddr });
+        const q = quests.find(x => x.id === b.dataset.qapprove);
+        if (q && q.series === "general" && Number(q.questNumber) === 1 && q.guildId === "learn") {
+          await api("/api/schoolpark/quest-completions/" + encodeURIComponent(q.id)
+            + "/" + encodeURIComponent(b.dataset.addr) + "/approve", { method:"POST" });
+        } else {
+          await f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qapprove, "commits", b.dataset.addr),
+            { approved: true, approvedAt: Date.now(), approvedBy: ownerAddr });
+        }
       } catch (e) { alert("認められませんでした（" + (e.code || e.message) + "）"); return; }
+      renderSchoolPark();
+    };
+  });
+  el.querySelectorAll("[data-qbudget]").forEach(b => {
+    b.onclick = async () => {
+      if (!confirm("一般 #001 LEARN のEMUER v2個別予算を10,000公開します。100人に1人100 EMUERです。よろしいですか？")) return;
+      try { await api("/api/schoolpark/quest-completions/" + encodeURIComponent(b.dataset.qbudget) + "/budget", { method:"POST" }); }
+      catch (e) { alert("個別予算を公開できませんでした（" + (e.code || e.message) + "）"); return; }
+      alert("EMUER v2個別予算10,000を公開しました。");
       renderSchoolPark();
     };
   });
