@@ -648,3 +648,52 @@ test('渡していないお金を、持っているように書かない', () =>
   assert.ok(seg.indexOf('あなたの分配（計算額）') >= 0, '計算額だと名乗っていない');
   assert.ok(seg.indexOf('まだ計算される分配はありません') >= 0, '0件のときに黙っている');
 });
+
+/* ───────── 2回目の知恵カード ─────────
+
+   一般 #001 を2回やって知恵カードを置こうとすると、札に1回目の投稿が
+   出ていた。並べ方が「報告の多い順」だったため。
+
+     1回目 … 報告3件  ← 先頭に来て、自動で選ばれる
+     2回目 … 報告1件
+
+   画面にも「（3件の報告）」と出ていた。やり終えた順に並べる。 */
+
+test('元の投稿は、新しい順に並べる', () => {
+  const i = INDEX.indexOf('async function _spQuestCited');
+  assert.ok(i > 0);
+  const seg = INDEX.slice(i, i + 1600);
+  assert.ok(seg.indexOf('(b.at - a.at)') >= 0, 'まだ報告の多い順で並べている');
+  assert.equal(seg.indexOf('out.sort(function (a, b) { return b.count - a.count; });'), -1,
+    '古い並べ方が残っている');
+});
+
+test('同じ投稿の報告が増えたら、いちばん新しい時刻を持つ', () => {
+  const i = INDEX.indexOf('async function _spQuestCited');
+  const seg = INDEX.slice(i, i + 1600);
+  assert.ok(seg.indexOf('if (at > seen[pid].at) seen[pid].at = at;') >= 0,
+    '2件目以降の時刻を捨てている');
+});
+
+test('時刻が同じときは、報告の多いほうが先', () => {
+  const i = INDEX.indexOf('async function _spQuestCited');
+  const seg = INDEX.slice(i, i + 1600);
+  assert.ok(seg.indexOf('|| (b.count - a.count)') >= 0, '並びが決まらない');
+});
+
+/* ───────── 右の列が切れる ───────── */
+
+test('狭い列の長い値は、切らずに折り返す', () => {
+  const i = DAO.indexOf('配分予算');
+  assert.ok(i > 0);
+  const seg = DAO.slice(i - 500, i + 900);
+  assert.ok(seg.indexOf('flex-wrap:wrap') >= 0, '折り返せない');
+  assert.ok(seg.indexOf('min-width:0') >= 0, 'flex が縮まずはみ出す');
+  assert.ok(seg.indexOf('overflow-wrap:anywhere') >= 0, '長い語が切れる');
+});
+
+test('値は右に寄せたまま', () => {
+  const i = DAO.indexOf('完走1人あたりの目安');
+  const seg = DAO.slice(i, i + 400);
+  assert.ok(seg.indexOf('text-align:right') >= 0, '折り返したとき左に寄ってしまう');
+});
