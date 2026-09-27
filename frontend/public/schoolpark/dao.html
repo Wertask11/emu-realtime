@@ -870,9 +870,11 @@ if (window.top === window.self) window.location.replace('/');
             <sc-if value="{{ noHit }}">
               <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">この分類の知恵はまだありません。</div>
             </sc-if>
-            <div style="columns:{{ L.libCols }}; column-gap:16px">
+            <!-- 段組み（columns）だと、カードが中身の分だけ伸び縮みして高さがそろわない。
+                 グリッドにして、同じ行のカードを同じ高さに引き伸ばす。 -->
+            <div style="display:grid; grid-template-columns:repeat({{ L.libCols }}, minmax(0, 1fr)); gap:16px; align-items:stretch">
               <sc-for list="{{ wisdom }}" as="w" hint-placeholder-count="6">
-                <div style="break-inside:avoid; margin-bottom:16px; background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; flex-direction:column; gap:16px">
+                <div style="height:100%; min-width:0; background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; flex-direction:column; gap:16px">
                   <div style="display:flex; justify-content:space-between; align-items:center">
                     <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:{{ w.tagColor }}">{{ w.tag }}</div>
                     <div style="font-family:Inter,sans-serif; font-size:11px; color:#6E695C">引用 {{ w.uses }}</div>
@@ -890,8 +892,8 @@ if (window.top === window.self) window.location.replace('/');
                       </sc-for>
                     </div>
                   </sc-if>
-                  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
-                    <div style="font-size:12px; color:#6E695C">by {{ w.author }}</div>
+                  <div style="margin-top:auto; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
+                    <div style="font-size:12px; color:#6E695C; min-width:0">by {{ w.author }}</div>
                     <div onClick="{{ w.cite }}" style="display:{{ w.citeShow }}; padding:7px 13px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; background:{{ w.citeBg }}; color:{{ w.citeFg }}; border:1px solid #0F5C3F; white-space:nowrap" style-hover="opacity:.85">{{ w.citeLabel }}</div>
                     <div style="display:{{ w.mineShow }}; padding:7px 13px; font-size:12px; color:#6E695C; white-space:nowrap">自分の知恵</div>
                   </div>

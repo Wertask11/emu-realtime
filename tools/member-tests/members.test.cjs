@@ -697,3 +697,62 @@ test('値は右に寄せたまま', () => {
   const seg = DAO.slice(i, i + 400);
   assert.ok(seg.indexOf('text-align:right') >= 0, '折り返したとき左に寄ってしまう');
 });
+
+/* ───────── ギルドに、クエストとボタンを戻す ───────── */
+
+test('ギルドが見るクエストにも、普通の通信の逃げ道がある', () => {
+  /* クエスト一覧とは別に、ギルドはもう一度読んでいる。
+     こちらにだけ逃げ道が無く「LEARN のクエスト 0」になっていた。 */
+  const i = INDEX.indexOf('ギルドは、クエスト一覧とは別に');
+  assert.ok(i > 0, '逃げ道が無い');
+  const seg = INDEX.slice(i, i + 1400);
+  assert.ok(seg.indexOf('_spSoon(') >= 0, '返ってこないときに見切れない');
+  assert.ok(seg.indexOf('_spRestQuests()') >= 0, '普通の通信へ回していない');
+  assert.ok(seg.indexOf('ギルドのクエストを普通の通信で読みました') >= 0);
+});
+
+test('読めなかったら、前に出ていたクエストを消さない', () => {
+  assert.ok(INDEX.indexOf('if (questList.length || !_spGuildQuestDocs.length) _spGuildQuestDocs = questList;') >= 0,
+    '読めないたびに空で塗りつぶしてしまう');
+});
+
+test('参加したい・応援するは、返ってこなくても固まらない', () => {
+  const i = INDEX.indexOf('window.spGuildToggle = async function');
+  assert.ok(i > 0);
+  const seg = INDEX.slice(i, i + 1800);
+  assert.ok(seg.indexOf('_spSoon(fb.getDoc(ref)') >= 0, 'いまの状態の読み取りを見切れない');
+  assert.ok(seg.indexOf('_spSoon(write') >= 0, '保存を見切れない');
+  assert.ok(seg.indexOf('} finally {') >= 0, '途中で抜けると次から押せなくなる');
+  /* finally の中で必ず戻すこと。ここが無いと _spGuildBusy が居座る。 */
+  const fin = seg.indexOf('} finally {');
+  assert.ok(seg.slice(fin, fin + 220).indexOf('_spGuildBusy = false;') >= 0,
+    '押せない状態のまま残る');
+});
+
+test('押しても黙って終わらない', () => {
+  const i = INDEX.indexOf('window.spGuildToggle = async function');
+  const seg = INDEX.slice(i, i + 1800);
+  assert.ok(seg.indexOf('うまくいきませんでした') >= 0, '失敗を伝えていない');
+  assert.ok(seg.indexOf('ギルドの参加・応援を保存できませんでした') >= 0, '記録に残していない');
+});
+
+/* ───────── 知恵ライブラリのカード ───────── */
+
+test('知恵カードは、同じ行で同じ高さになる', () => {
+  const i = DAO.indexOf('段組み（columns）だと');
+  assert.ok(i > 0, 'まだ段組みのまま');
+  const seg = DAO.slice(i, i + 700);
+  assert.ok(seg.indexOf('display:grid') >= 0, 'グリッドになっていない');
+  assert.ok(seg.indexOf('align-items:stretch') >= 0, '引き伸ばしていない');
+  assert.ok(seg.indexOf('height:100%') >= 0, 'カードが伸びない');
+  assert.equal(seg.indexOf('break-inside:avoid'), -1, '段組みの名残が残っている');
+});
+
+test('署名は、カードの下端に寄せる', () => {
+  /* by {{ w.author }} は広場側にもある。ライブラリのグリッドから探す。 */
+  const from = DAO.indexOf('段組み（columns）だと');
+  const i = DAO.indexOf('by {{ w.author }}', from);
+  assert.ok(i > from, 'ライブラリのカードが見つからない');
+  const seg = DAO.slice(i - 300, i + 100);
+  assert.ok(seg.indexOf('margin-top:auto') >= 0, '引き伸ばすと中途半端な位置に浮く');
+});
