@@ -2521,9 +2521,21 @@ async function renderSchoolPark() {
             + "承認そのものは残っているので、あとから「EMUERを渡す」で渡せます。");
           renderSchoolPark(); return;
         }
+        /* 周回の数も、ここで書く。
+
+           前はサーバーだけが approvedRounds を書いていた。ところが
+           10/1 までサーバーは NOT_STARTED で断るので、承認は毎回この
+           逃げ道を通る。つまり周回の数が一度も書かれず、2周目を認めても
+           完走が1のままだった。（記録の決まりにも approvedRounds を
+           足してある。firestore.rules の commits の update を見ること） */
+        const q1 = quests.find(x => x.id === b.dataset.qapprove);
+        const t1 = ((q1 && q1.tookList) || []).find(x =>
+          String(x.addr).toLowerCase() === String(b.dataset.addr).toLowerCase());
+        const nextRound = Math.max(Number((t1 && t1.rounds) || 0), (t1 && t1.approved) ? 1 : 0) + 1;
         try {
           await f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qapprove, "commits", b.dataset.addr),
-            { approved: true, approvedAt: Date.now(), approvedBy: ownerAddr });
+            { approved: true, approvedAt: Date.now(), approvedBy: ownerAddr,
+              approvedRounds: nextRound, lastApprovedAt: Date.now() });
         } catch (e2) { alert("認められませんでした（" + (e2.code || e2.message) + "）"); return; }
         alert("完走として認めました。\n\nただし EMUER は渡せていません（" + code + "）。\n"
           + "「EMUERの予算を公開」を済ませてから、この人の行に出る「EMUERを渡す」を押すと渡せます。");

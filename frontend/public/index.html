@@ -17011,8 +17011,8 @@ window.spDaoLoadVotes = async function (app) {
   const guilds = await Promise.all(defs.map(async function (g) {
     let joins = 0, supports = 0, iJoined = false, iSupport = false;
     const [js, ss] = await Promise.all([
-      fb.getDocs(fb.collection(window.db, 'sp_guild_members', g.id, 'joins')).catch(function () { return null; }),
-      fb.getDocs(fb.collection(window.db, 'sp_guild_members', g.id, 'supports')).catch(function () { return null; })
+      _spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/joins').catch(function () { return null; }),
+      _spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/supports').catch(function () { return null; })
     ]);
     if (js) js.forEach(function (d) { joins++; if (mine && d.id.toLowerCase() === mine) iJoined = true; });
     if (ss) ss.forEach(function (d) { supports++; if (mine && d.id.toLowerCase() === mine) iSupport = true; });
@@ -17105,11 +17105,13 @@ window.spGuildOpen = async function (guildId, app, quiet) {
   if (g.id) {
     const fb = window.fbLib;
     try {
-      const js = await fb.getDocs(fb.collection(window.db, 'sp_guild_members', g.id, 'joins'));
+      const js = await _spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/joins');
+      if (!js) throw new Error('参加を読めなかった');
       js.forEach(function (d) { joins++; if (mine && d.id.toLowerCase() === mine) iJoined = true; });
     } catch (e) {}
     try {
-      const ss = await fb.getDocs(fb.collection(window.db, 'sp_guild_members', g.id, 'supports'));
+      const ss = await _spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/supports');
+      if (!ss) throw new Error('応援を読めなかった');
       ss.forEach(function (d) { supports++; if (mine && d.id.toLowerCase() === mine) iSupport = true; });
     } catch (e) {}
   }
@@ -17689,6 +17691,22 @@ async function _spReadAll(path, ms) {
   }
 }
 window._spReadAll = _spReadAll;
+
+/* その記録が有るかどうか。SDK → だめなら普通の通信。
+   参加ギルド・応援ギルドのように「有る／無い」だけ要るところで使う。 */
+async function _spHasDoc(path) {
+  const fb = window.fbLib;
+  const parts = String(path || '').split('/').filter(Boolean);
+  if (fb && window.db && parts.length) {
+    try {
+      const r = await _spSoon(fb.getDoc(fb.doc.apply(null, [window.db].concat(parts))), 3500);
+      if (r.ok && (r.value.exists() || !(r.value.metadata && r.value.metadata.fromCache)))
+        return r.value.exists();
+    } catch (e) { /* 下の普通の通信で確かめ直す */ }
+  }
+  try { return !!(await _spRestDoc(path, true)); } catch (e) { return false; }
+}
+window._spHasDoc = _spHasDoc;
 
 /* 記録を1件だけ読む。無ければ null。 */
 async function _spRestDoc(path, needAuth) {
@@ -20159,14 +20177,14 @@ async function openSpPassport() {
        並び順はギルドの並びのままにしたいので、結果を受け取ってから詰める。 */
     const pairs = await Promise.all(defs.map(function (g) {
       return Promise.all([
-        fb.getDoc(fb.doc(window.db, 'sp_guild_members', g.id, 'joins', p.addr)).catch(function () { return null; }),
-        fb.getDoc(fb.doc(window.db, 'sp_guild_members', g.id, 'supports', p.addr)).catch(function () { return null; })
+        _spHasDoc('sp_guild_members/' + encodeURIComponent(g.id) + '/joins/' + encodeURIComponent(p.addr)),
+        _spHasDoc('sp_guild_members/' + encodeURIComponent(g.id) + '/supports/' + encodeURIComponent(p.addr))
       ]);
     }));
     defs.forEach(function (g, i) {
-      const j = pairs[i][0], sp = pairs[i][1];
-      if (j && j.exists()) joined.push(g.short);
-      if (sp && sp.exists()) supported.push(g.short);
+      /* _spHasDoc は「有る／無い」を真偽で返す。 */
+      if (pairs[i][0]) joined.push(g.short);
+      if (pairs[i][1]) supported.push(g.short);
     });
   } catch (e) {}
 

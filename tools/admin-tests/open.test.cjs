@@ -349,7 +349,7 @@ test('承認は、どのクエストでもサーバーを通す', () => {
 test('サーバーが使えないときは、承認だけは通して EMUER が未払いだと伝える', () => {
   const i = ADMIN.indexOf('const soft = [');
   assert.ok(i > 0, '逃げ道が無い');
-  const seg = ADMIN.slice(i, i + 1200);
+  const seg = ADMIN.slice(i, ADMIN.indexOf('ただし EMUER は渡せていません', i) + 40);
   ['NOT_STARTED', 'BUDGET_NOT_PUBLISHED', 'WALLET_REQUIRED', 'CERTIFICATE_NOT_DEPLOYED',
    'FIRESTORE_UNAVAILABLE', 'Failed to fetch'].forEach(code =>
     assert.ok(seg.indexOf(code) >= 0, code + ' で転んだときに承認が止まる'));
@@ -577,4 +577,26 @@ test('残っていれば、もう一度「認める」が出る', () => {
 test('サーバーが書いた周回数を読んでいる', () => {
   assert.ok(ADMIN.indexOf('rounds: Number(d.approvedRounds || 0)') >= 0,
     '周回数を持ってきていない');
+});
+
+test('サーバーが使えないときも、周回の数を書く', () => {
+  /* 10/1 までサーバーは NOT_STARTED で断る。周回の数をサーバーだけが
+     書く形にしていたため、2周目を認めても完走が1のままだった。 */
+  const i = ADMIN.indexOf('周回の数も、ここで書く');
+  assert.ok(i > 0, '逃げ道が周回を書いていない');
+  const seg = ADMIN.slice(i, i + 1400);
+  assert.ok(seg.indexOf('const nextRound =') >= 0, '次の周回を出していない');
+  assert.ok(seg.indexOf('approvedRounds: nextRound') >= 0, '書いていない');
+  assert.ok(seg.indexOf('lastApprovedAt: Date.now()') >= 0, '認めた日を残していない');
+});
+
+test('記録の決まりが、周回の数を許している', () => {
+  const RULES = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', '..', 'firestore.rules'), 'utf8');
+  const i = RULES.indexOf("changedOnly(['approved', 'approvedAt', 'approvedBy', 'approvedRounds'");
+  assert.ok(i > 0, 'ルールが周回の数を弾く');
+  const seg = RULES.slice(i, i + 700);
+  assert.ok(seg.indexOf('approvedRounds is int') >= 0, '数かどうかを見ていない');
+  assert.ok(seg.indexOf(">= resource.data.get('approvedRounds', 0)") >= 0,
+    '減らせてしまう（認めた周回を無かったことにできる）');
 });

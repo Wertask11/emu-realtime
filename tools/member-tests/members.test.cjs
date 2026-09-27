@@ -1039,3 +1039,36 @@ test('認めた日は、いちばん新しい周回のもの', () => {
   assert.ok(INDEX.indexOf('Number(d.lastApprovedAt || d.approvedAt || 0)') >= 0,
     '2周目を認めても日付が動かない');
 });
+
+/* ───────── ギルドの人数とパスポートの参加ギルド ─────────
+
+   ギルド一覧は「参加したい 0」、詳細は「✓参加したい 1」。
+   パスポートの参加ギルドも「まだありません」。同じ押した結果なのに
+   場所によって違う。人数を読むところにだけ逃げ道が無かった。 */
+
+test('ギルド一覧の人数も、普通の通信で読む', () => {
+  assert.ok(INDEX.indexOf("_spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/joins')") >= 0,
+    '一覧の参加が逃げ道を通っていない');
+  assert.ok(INDEX.indexOf("_spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/supports')") >= 0,
+    '一覧の応援が逃げ道を通っていない');
+  assert.equal(INDEX.indexOf("fb.getDocs(fb.collection(window.db, 'sp_guild_members'"), -1,
+    '古い読み方が残っている');
+});
+
+test('パスポートの参加ギルドも、普通の通信で確かめる', () => {
+  const i = INDEX.indexOf('async function _spHasDoc');
+  assert.ok(i > 0, '1件を確かめる道具が無い');
+  const seg = INDEX.slice(i, i + 800);
+  assert.ok(seg.indexOf('_spSoon(') >= 0, '返ってこないときに見切れない');
+  assert.ok(seg.indexOf('_spRestDoc(path, true)') >= 0, '普通の通信へ回していない');
+  assert.ok(seg.indexOf('fromCache') >= 0, '控えの「無い」を信じてしまう');
+  assert.ok(INDEX.indexOf("_spHasDoc('sp_guild_members/' + encodeURIComponent(g.id) + '/joins/'") >= 0,
+    'パスポートが使っていない');
+});
+
+test('_spHasDoc は真偽を返す（呼ぶ側が exists() を呼ばない）', () => {
+  assert.ok(INDEX.indexOf('if (pairs[i][0]) joined.push(g.short);') >= 0,
+    '真偽前提になっていない');
+  assert.equal(INDEX.indexOf('if (j && j.exists()) joined.push(g.short);'), -1,
+    '古い書き方が残っている');
+});
