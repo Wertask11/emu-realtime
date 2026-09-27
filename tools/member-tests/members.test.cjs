@@ -554,3 +554,60 @@ test('管理画面と同じ直し方にそろえる', () => {
   assert.ok(ADMIN.indexOf('spRestDoc') >= 0, '管理画面の逃げ道が消えている');
   assert.ok(INDEX.indexOf("_spRestDoc('ches_accounts/'") >= 0, 'こちらに入っていない');
 });
+
+/* ───────── 戻ってこない読み取り ─────────
+
+   コンソールで測って分かったこと。
+
+     ■ uid: wallet:0xdcc687…
+     Promise {<pending>}        ← ここから先が一生出てこない
+
+   通信が切れているとき、getDoc は例外を投げないし、値も返さない。
+   そのまま pending で止まる。
+
+   ここまでに書いた対策は、どれも「例外を投げる」か「控えを返す」前提
+   だった。try/catch も metadata.fromCache の判定も、戻ってこない相手には
+   一度も届かない。await がそこで止まるので、読み直しも逃げ道も動かない。
+   待つのではなく、見切る必要がある。 */
+
+function soonApi() {
+  return build(INDEX, ['_spSoon'], { setTimeout: setTimeout, clearTimeout: clearTimeout });
+}
+
+test('返ってきたら、包んで返す', async () => {
+  const { _spSoon } = soonApi();
+  const r = await _spSoon(Promise.resolve('中身'), 1000);
+  assert.deepEqual(r, { ok: true, value: '中身' });
+});
+
+test('返ってこなければ、見切る', async () => {
+  const { _spSoon } = soonApi();
+  const r = await _spSoon(new Promise(function () {}), 30);   /* 永遠に pending */
+  assert.deepEqual(r, { ok: false });
+});
+
+test('undefined が返ってきたのと、返ってこないのを取り違えない', async () => {
+  const { _spSoon } = soonApi();
+  const got = await _spSoon(Promise.resolve(undefined), 1000);
+  assert.equal(got.ok, true, 'undefined を「返ってこなかった」と読んでいる');
+  const none = await _spSoon(new Promise(function () {}), 30);
+  assert.equal(none.ok, false);
+});
+
+test('例外はそのまま投げる（呼ぶ側の catch を殺さない）', async () => {
+  const { _spSoon } = soonApi();
+  await assert.rejects(function () {
+    return _spSoon(Promise.reject(new Error('だめ')), 1000);
+  }, /だめ/);
+});
+
+test('本人情報の読み取りは、返ってこなければ見切る', () => {
+  const i = INDEX.indexOf('async function emuMyIdentity');
+  const seg = INDEX.slice(i, i + 2800);
+  assert.ok(seg.indexOf('_spSoon(') >= 0, '見切らずに待っている');
+  assert.ok(seg.indexOf('読み取りが返ってきません') >= 0, '見切ったことを残していない');
+  assert.ok(seg.indexOf('if (!r.ok)') >= 0);
+  /* 見切ったあとは、読み直し → 普通の通信、という順に進むこと。 */
+  const to = seg.indexOf('読み取りが返ってきません');
+  assert.ok(seg.slice(to, to + 200).indexOf('continue;') >= 0, '見切ったあと先へ進めていない');
+});

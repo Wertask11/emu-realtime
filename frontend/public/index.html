@@ -6545,7 +6545,15 @@ async function emuMyIdentity() {
   for (let i = 0; i < 3 && !snap; i += 1) {
     if (i) await new Promise(function (r) { setTimeout(r, i * 400); });
     try {
-      const got = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', user.uid));
+      /* 戻ってこないことがある。待たずに見切る。 */
+      const r = await _spSoon(
+        window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', user.uid)), 3500);
+      if (!r.ok) {
+        console.warn('自分のアカウントの読み取りが返ってきません（' + (i + 1) + '回目）');
+        stale = true;
+        continue;
+      }
+      const got = r.value;
       /* 「無い」が手元の控えから来たのなら、それは「無い」ではない。 */
       if (!got.exists() && got.metadata && got.metadata.fromCache) { stale = true; continue; }
       snap = got;
@@ -17509,6 +17517,33 @@ async function _spRestGet(path, needAuth) {
   if (r.status === 404) return null;
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return await r.json();
+}
+
+/* SDK の読み取りが「戻ってこない」ことへの備え。
+
+   通信が切れているとき、getDoc / getDocs は例外を投げないし、値も返さない。
+   そのまま pending で止まる。実際にコンソールで測って確かめた：
+
+     ■ uid: wallet:0xdcc687…
+     Promise {<pending>}          ← ここから先が一生出てこない
+
+   try/catch も metadata.fromCache の判定も、戻ってこない相手には
+   一度も届かない。await がそこで止まるので、読み直しも逃げ道も動かない。
+   だから「待つ」のではなく「見切る」必要がある。
+
+   時間で見切って、返ってきたかどうかを包んで返す。
+     { ok: true, value }  … 返ってきた
+     { ok: false }        … 見切った（返ってこなかった）
+   例外はそのまま投げる（呼ぶ側の catch はこれまでどおり効く）。
+
+   包みを使うのは、値そのもので見分けようとすると
+   「undefined が返ってきた」と「返ってこなかった」を区別できないため。 */
+function _spSoon(promise, ms) {
+  let timer = null;
+  return Promise.race([
+    Promise.resolve(promise).then(function (value) { return { ok: true, value: value }; }),
+    new Promise(function (r) { timer = setTimeout(function () { r({ ok: false }); }, Number(ms) || 4000); })
+  ]).finally(function () { if (timer) clearTimeout(timer); });
 }
 
 /* 記録を1件だけ読む。無ければ null。 */
