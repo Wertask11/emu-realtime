@@ -16456,6 +16456,11 @@ async function spPassportLoad(force) {
       aliases: me.aliases || [],
       name: name, initial: name.slice(0, 1),
       createdAt: d.createdAt || 0, provider: d.provider || '',
+      /* パスポートを発行した日。信用スコアの「在籍」をここから数える。
+         サーバーが sp_identities に createdAt を、ches_accounts に
+         spidLinkedAt を書く。どちらも無い古いアカウントは、
+         アカウントを作った日で代える。 */
+      spSince: Number((identityNow && identityNow.createdAt) || d.spidLinkedAt || d.createdAt || 0),
       tier: tier, tierLabel: tierLabel, hasPass: hasPass,
       /* 運営かどうかは、CHESアドレスと実ウォレットの両方で照らす。
          addr（＝ches優先）だけを見ていたため、LINE・Google・メールで入ると
@@ -16605,6 +16610,27 @@ function _spVoteCloseLabel(closesAt) {
 ═══════════════════════════════════════ */
 const SP_TRUST_NEED = 20;
 
+/* 在籍の月数。暦の月で数え、始めた月を1か月目とする。
+   1月に始めた人は、9月の時点で9か月（1月, 2月, … 9月）。
+   日数で割っていたころは、1月1日から9月27日で8か月にしかならず、
+   数えた月の数と合わなかった。
+
+   運営は SchoolPark を1月から動かしているので、パスポートを
+   あとから発行していても、そこから数える。 */
+const SP_OWNER_SINCE = Date.parse('2026-01-01T00:00:00+09:00');
+function spMonthsSince(p) {
+  const jst = function (ms) { return new Date(Number(ms) + 9 * 3600000); };
+  let from = Number((p && p.spSince) || 0);
+  if (p && p.isOwner) from = SP_OWNER_SINCE;
+  if (!from) return 0;
+  const a = jst(from), b = jst(Date.now());
+  if (!(a.getTime() > 0) || b < a) return 0;
+  const n = (b.getUTCFullYear() - a.getUTCFullYear()) * 12
+          + (b.getUTCMonth() - a.getUTCMonth()) + 1;
+  return Math.max(0, Math.min(12, n));
+}
+window.spMonthsSince = spMonthsSince;
+
 window.spTrustScore = async function (addr, createdAt, p) {
   const fb = window.fbLib;
 
@@ -16697,9 +16723,8 @@ window.spTrustScore = async function (addr, createdAt, p) {
     }
   }
 
-  /* 在籍の月数（上限12） */
-  let months = 0;
-  if (createdAt) months = Math.max(0, Math.min(12, Math.floor((Date.now() - Number(createdAt)) / (30 * 86400000))));
+  /* 在籍の月数（上限12）。パスポートを発行した日から、暦の月で数える。 */
+  const months = spMonthsSince(p || { spSince: createdAt });
 
   const total = done * 10 + wisdom * 5 + cited * 3 + months;
   return { done: done, wisdom: wisdom, cited: cited, months: months,
