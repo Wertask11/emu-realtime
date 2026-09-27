@@ -17581,18 +17581,37 @@ async function _spRestGet(path, needAuth) {
   let opt = {};
   try { opt = (window.db && window.db.app && window.db.app.options) || {}; } catch (e) {}
   if (!opt.projectId || !opt.apiKey) throw new Error('設定が読めない');
+  /* 証（IDトークン）は期限切れになる。そのときの getIdToken() は、
+     裏で取り直そうとして失敗し、空や例外で返ってくることがある。
+     前はそこで「ログインの証が取れない」と投げて終わりだった。
+     コンソールに sp_wisdom / sp_quests / sp_park がまとめて
+     「ログインの証が取れない」と並んでいたのはこれ。
+
+     取り直しを1回だけ明示的に頼む（getIdToken(true)）。
+     それでもだめなら、はじめてあきらめる。 */
   let token = '';
-  try {
+  const ask = async function (force) {
     const u = window.auth && window.auth.currentUser;
-    if (u && typeof u.getIdToken === 'function') token = await u.getIdToken();
-  } catch (e) {}
+    if (!u || typeof u.getIdToken !== 'function') return '';
+    try { return String((await u.getIdToken(force)) || ''); } catch (e) { return ''; }
+  };
+  token = await ask(false);
+  if (!token) token = await ask(true);
   if (needAuth && !token) throw new Error('ログインの証が取れない');
   const headers = {};
   if (token) headers['Authorization'] = 'Bearer ' + token;
   const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
             + '/databases/(default)/documents/' + path
             + (path.indexOf('?') >= 0 ? '&' : '?') + 'key=' + opt.apiKey;
-  const r = await fetch(url, { cache: 'no-store', headers: headers });
+  let r = await fetch(url, { cache: 'no-store', headers: headers });
+  /* 証が古いと 401/403 で断られる。取り直して、1回だけやり直す。 */
+  if ((r.status === 401 || r.status === 403) && token) {
+    const fresh = await ask(true);
+    if (fresh && fresh !== token) {
+      r = await fetch(url, { cache: 'no-store',
+        headers: Object.assign({}, headers, { 'Authorization': 'Bearer ' + fresh }) });
+    }
+  }
   if (r.status === 404) return null;
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return await r.json();
