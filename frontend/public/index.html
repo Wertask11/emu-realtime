@@ -15999,6 +15999,60 @@ async function spDaoOpenWhenReady() {
 }
 window.spDaoOpenWhenReady = spDaoOpenWhenReady;
 
+/* 管理画面で変えたものを、SchoolPark へ持ってくる。
+
+   管理画面は別のタブで開く。あちらで承認したりクエストを出したりしても、
+   こちらは開いたときに読んだきりなので、いつまでも古いままだった。
+
+   onSnapshot（変わった瞬間に届く仕組み）は使わない。それは Listen という
+   通信路の上に乗っていて、いまその通信路が切れている環境がある。
+   切れているあいだは一度も届かないので、頼ると「即時」どころか永久に
+   反映されない。代わりに、普通の通信でも通る読み直しを回す。
+
+     ・タブに戻ってきたとき（管理画面で直して戻る、がこれ）
+     ・開いているあいだ、60秒ごと
+
+   どちらも短い間引き（8秒）を入れる。画面を行き来するたびに
+   何往復も投げると、かえって遅くなる。 */
+let _spRefreshAt = 0;
+let _spRefreshTimer = null;
+async function spDaoRefreshNow(why) {
+  if (!document.body.classList.contains('sp-dao-open')) return;
+  const now = Date.now();
+  if (now - _spRefreshAt < 8000) return;
+  _spRefreshAt = now;
+  let app = null;
+  try {
+    const fr = document.getElementById('spDaoFrame');
+    app = (fr && fr.contentWindow && fr.contentWindow.app) || null;
+  } catch (e) { app = null; }
+  if (!app) return;
+  /* 持っている資格（Emu light など）も、管理画面で変わる。 */
+  if (typeof emuEnsureEntitlement === 'function') {
+    try { await emuEnsureEntitlement(true); } catch (e) {}
+  }
+  const names = ['spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
+                 'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark'];
+  await Promise.all(names.map(function (n) {
+    const fn = window[n];
+    if (typeof fn !== 'function') return Promise.resolve();
+    try { return Promise.resolve(fn(app)).catch(function () {}); }
+    catch (e) { return Promise.resolve(); }
+  }));
+  console.warn('SchoolPark を読み直しました（' + (why || '定期') + '）');
+}
+window.spDaoRefreshNow = spDaoRefreshNow;
+
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') spDaoRefreshNow('タブに戻った');
+});
+window.addEventListener('focus', function () { spDaoRefreshNow('画面に戻った'); });
+if (!_spRefreshTimer) {
+  _spRefreshTimer = setInterval(function () {
+    if (document.visibilityState === 'visible') spDaoRefreshNow('定期');
+  }, 60000);
+}
+
 /* ═══════════════════════════════════════
    SchoolPark パスポート
 
@@ -19289,7 +19343,7 @@ window.spDaoLoadMembers = async function (app) {
   const pick = function (addr, name) {
     const key = String(addr || '').toLowerCase();
     if (!key) return null;
-    if (!M[key]) M[key] = { addr: key, name: name || _spShortAddr(key), wisdom: 0, done: 0, cited: 0, share: {} };
+    if (!M[key]) M[key] = { addr: key, name: name || _spShortAddr(key), wisdom: 0, done: 0, cited: 0, took: 0, share: {} };
     if (name && M[key].name.indexOf('…') >= 0) M[key].name = name;   // 短縮表示より実名を優先
     return M[key];
   };
@@ -19338,7 +19392,7 @@ window.spDaoLoadMembers = async function (app) {
         });
       }
       /* 受けた人は、認められていなくても一覧には出す（「参加中」として） */
-      took.forEach(function (t) { pick(t.addr, t.name); });
+      took.forEach(function (t) { const m = pick(t.addr, t.name); if (m) m.took++; });
       const done = took.filter(function (t) { return t.approved; });
 
       /* 完走は、運営が認めた時点で数える。クエスト全体の受付を閉じるのを待たない。
@@ -19375,8 +19429,17 @@ window.spDaoLoadMembers = async function (app) {
      引用への還元は DAO プールから別に配る（そちらは未実装）。 */
 
   const members = Object.keys(M).map(function (k) { return M[k]; })
-    .filter(function (m) { return m.wisdom || m.done || m.cited; })
-    .sort(function (a, b) { return (b.wisdom - a.wisdom) || (b.cited - a.cited) || (b.done - a.done); })
+    /* 受けた人は残す。
+
+       ここは「知恵・完走・引用のどれかがある人」だけを通していた。
+       すぐ上で「受けた人は、認められていなくても一覧には出す」と
+       書いてあるのに、その人たちをここで捨てていた。
+       クエストを受けただけの人（知恵0・完走0・引用0）は
+       メンバーに出てこない。別の名義で受けた自分すら出てこない。 */
+    .filter(function (m) { return m.wisdom || m.done || m.cited || m.took; })
+    .sort(function (a, b) {
+      return (b.wisdom - a.wisdom) || (b.cited - a.cited) || (b.done - a.done) || (b.took - a.took);
+    })
     .map(function (m) {
       /* 通貨ごとに出す。混ぜると単位の違う数を足すことになる。 */
       const parts = SP_CURRENCIES

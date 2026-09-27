@@ -95,10 +95,24 @@ test('完了したら、予算の80%を完走した人で分ける', async () =>
   assert.match(l.state.members[0].share, /EMUER 10000/, '12500 × 80% になっていない');
 });
 
-test('認められていない人は「参加中」。完走にはならない', async () => {
+test('認められていない人は「参加中」として並ぶ。完走にはならない', async () => {
+  /* 前はここで「並ばないこと」を確かめていた。だが受けた人を消すと、
+     別の名義でクエストを受けた自分すらメンバーに出てこない。
+     コードのコメントも「受けた人は、認められていなくても一覧には出す
+     （参加中として）」と書いてあり、絞り込みと食い違っていた。
+     受けた人は出す。完走に数えないのは、これまでどおり。 */
   const l = loader({ quests: [CLOSED_QUEST], commits: { q1: [{ id: YOU, name: 'あなた', approved: false }] } });
   await l.api.spDaoLoadMembers(l.app);
-  assert.equal(l.state.members.length, 0, '何もしていない人が並んでいる');
+  assert.equal(l.state.members.length, 1, '受けた人が消えている');
+  assert.equal(l.state.members[0].done, 0, '認めていないのに完走に入っている');
+  assert.equal(l.state.members[0].role, '参加中');
+  assert.equal(l.state.members[0].share, '—', '認めていないのに分配が出ている');
+});
+
+test('誰も受けていなければ、やはり並ばない', async () => {
+  const l = loader({ quests: [CLOSED_QUEST], commits: { q1: [] } });
+  await l.api.spDaoLoadMembers(l.app);
+  assert.equal(l.state.members.length, 0);
 });
 
 test('知恵カードを置いた人は、クエストが無くても並ぶ', async () => {
@@ -755,4 +769,84 @@ test('署名は、カードの下端に寄せる', () => {
   assert.ok(i > from, 'ライブラリのカードが見つからない');
   const seg = DAO.slice(i - 300, i + 100);
   assert.ok(seg.indexOf('margin-top:auto') >= 0, '引き伸ばすと中途半端な位置に浮く');
+});
+
+/* ───────── 受けた人を、メンバーから捨てない ─────────
+
+   クエストを受けた別アカウント（知恵0・完走0・引用0）が
+   メンバー・貢献に出てこなかった。コードの中で矛盾していた。
+
+     took.forEach(t => pick(t.addr, t.name));            ← 一覧に入れて
+     .filter(m => m.wisdom || m.done || m.cited)         ← すぐ捨てる
+
+   すぐ上のコメントには「受けた人は、認められていなくても一覧には出す
+   （参加中として）」と書いてある。 */
+
+test('クエストを受けただけの人も、メンバーに出る', () => {
+  const i = INDEX.indexOf('受けた人は残す。');
+  assert.ok(i > 0, 'まだ捨てている');
+  const seg = INDEX.slice(i, i + 700);
+  assert.ok(seg.indexOf('m.wisdom || m.done || m.cited || m.took') >= 0,
+    '受けただけの人が残らない');
+});
+
+test('受けたことを数えている', () => {
+  assert.ok(INDEX.indexOf('const m = pick(t.addr, t.name); if (m) m.took++;') >= 0,
+    '受けた回数を数えていない');
+  assert.ok(INDEX.indexOf('cited: 0, took: 0, share: {}') >= 0, '入れ物に欄が無い');
+});
+
+test('並び順の最後に、受けた数を使う', () => {
+  /* 全部0の人が先頭に来ないように。 */
+  assert.ok(INDEX.indexOf('(b.took - a.took)') >= 0, '並びが決まらない');
+});
+
+/* ───────── 管理画面で変えたものを、すぐ持ってくる ─────────
+
+   管理画面は別のタブで開く。あちらで承認したりクエストを出したりしても、
+   SchoolPark は開いたときに読んだきりで、古いままだった。 */
+
+test('タブに戻ったら、読み直す', () => {
+  const i = INDEX.indexOf('async function spDaoRefreshNow');
+  assert.ok(i > 0, '読み直す道が無い');
+  assert.ok(INDEX.indexOf("document.addEventListener('visibilitychange'") >= 0,
+    'タブに戻ったことを見ていない');
+  assert.ok(INDEX.indexOf("window.addEventListener('focus'") >= 0, '画面に戻ったことを見ていない');
+});
+
+test('開いているあいだは、定期でも読み直す', () => {
+  const i = INDEX.indexOf('_spRefreshTimer = setInterval');
+  assert.ok(i > 0, '定期の読み直しが無い');
+  const seg = INDEX.slice(i, i + 300);
+  assert.ok(seg.indexOf("document.visibilityState === 'visible'") >= 0,
+    '見ていないタブでも投げてしまう');
+  assert.ok(seg.indexOf('60000') >= 0);
+});
+
+test('行き来のたびに何往復も投げない（間引き）', () => {
+  const i = INDEX.indexOf('async function spDaoRefreshNow');
+  const seg = INDEX.slice(i, i + 700);
+  assert.ok(seg.indexOf('now - _spRefreshAt < 8000') >= 0, '間引きが無い');
+});
+
+test('SchoolPark を開いていないときは、何もしない', () => {
+  const i = INDEX.indexOf('async function spDaoRefreshNow');
+  const seg = INDEX.slice(i, i + 400);
+  assert.ok(seg.indexOf("document.body.classList.contains('sp-dao-open')") >= 0,
+    '閉じているのに読みに行く');
+});
+
+test('資格（Emu light など）も取り直す', () => {
+  /* 管理画面で付けた期限付きの資格が、すぐ効くように。 */
+  const i = INDEX.indexOf('async function spDaoRefreshNow');
+  const seg = INDEX.slice(i, i + 1400);
+  assert.ok(seg.indexOf('emuEnsureEntitlement(true)') >= 0, '資格を取り直していない');
+});
+
+test('onSnapshot には頼らない', () => {
+  /* Listen が切れている環境では一度も届かない。 */
+  const i = INDEX.indexOf('async function spDaoRefreshNow');
+  const seg = INDEX.slice(i - 1200, i + 1400);
+  assert.equal(seg.indexOf('onSnapshot('), -1, '切れている通信路に頼っている');
+  assert.ok(seg.indexOf('いまその通信路が切れている') >= 0, '理由を残していない');
 });

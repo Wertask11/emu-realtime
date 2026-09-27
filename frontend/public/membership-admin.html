@@ -1936,10 +1936,15 @@ async function renderSchoolPark() {
       f.getDocs(f.collection(f.db, "sp_quests", q.id, "commits")).catch(() => null),
       f.getDocs(f.collection(f.db, "sp_quests", q.id, "logs")).catch(() => null)
     ]);
-    return await Promise.all([
+    const rows = await Promise.all([
       spRows(cs, "sp_quests/" + encodeURIComponent(q.id) + "/commits", "受けた記録"),
       spRows(ls, "sp_quests/" + encodeURIComponent(q.id) + "/logs", "報告")
     ]);
+    /* SDK も普通の通信も空で返ってきたのか、本当に誰も受けていないのか。
+       画面がこれを区別していなかったので、「いま認めるものはありません」が
+       どちらの意味なのか運営に分からなかった。 */
+    q.tookUnread = !rows[0].length && !cs;
+    return rows;
   }));
   quests.forEach((q, qi) => {
     q.took = 0;
@@ -2182,7 +2187,21 @@ async function renderSchoolPark() {
           + 'ここで認めると、信用スコアの「完走」とパスポートの記録、星空の星に入ります。<br>'
           + 'EMUERは別です。下の「EMUERの予算と貢献」で渡します。</p>'
           + (rows.length ? rows.map(line).join("")
-             : '<p class="empty">いま認めるものはありません。</p>')
+             : (function () {
+                 /* 空の理由を言い分ける。黙って「ありません」と出すと、
+                    通信で読めていないだけのときに運営が気づけない。 */
+                 const qn = quests.filter(q => !SpQuestStore.isFounder(q)).length;
+                 const unread = quests.filter(q => q.tookUnread).length;
+                 if (!qn) return '<p class="empty">クエストを読めていません。'
+                   + '上の「もう一度読む」を押すか、通信を確かめてください。</p>';
+                 if (unread) return '<p class="empty">クエスト' + qn + '本のうち'
+                   + unread + '本で、受けた記録を読めませんでした。<br>'
+                   + '通信が届いていない可能性があります。読み込み直してください。</p>';
+                 const took = quests.reduce((n, q) => n + (q.took || 0), 0);
+                 if (!took) return '<p class="empty">クエスト' + qn + '本を読めています。'
+                   + 'まだ誰も受けていません。</p>';
+                 return '<p class="empty">受けた' + took + '人は、全員すでに認めてあります。</p>';
+               })())
           + '</div>'
       })()
 
