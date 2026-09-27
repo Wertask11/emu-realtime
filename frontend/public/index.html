@@ -18733,11 +18733,22 @@ async function _spQuestCited(questId, mine) {
     rows.forEach(function (x) {
       const pid = String(x.fromPostId || '');
       if (!pid) return;
-      if (seen[pid]) { seen[pid].count++; return; }
-      seen[pid] = { id: pid, title: String(x.fromPostTitle || '（Emuの投稿）'), count: 1 };
+      const at = Number(x.at || x.createdAt || 0);
+      if (seen[pid]) {
+        seen[pid].count++;
+        if (at > seen[pid].at) seen[pid].at = at;
+        return;
+      }
+      seen[pid] = { id: pid, title: String(x.fromPostTitle || '（Emuの投稿）'), count: 1, at: at };
       out.push(seen[pid]);
     });
-    out.sort(function (a, b) { return b.count - a.count; });
+    /* 新しい順。いちばん上が、知恵カードの札で最初から選ばれる。
+
+       前は「報告の多い順」だった。2回目をやった人は、1回目の投稿に
+       報告が3件たまっていて、2回目はまだ1件。だから1回目が先頭に来て、
+       2回目の知恵カードを置こうとすると1回目の投稿が選ばれていた。
+       やり終えた順に並べれば、いま終えたものが先に出る。 */
+    out.sort(function (a, b) { return (b.at - a.at) || (b.count - a.count); });
     return out;
   };
   let rows = [];
