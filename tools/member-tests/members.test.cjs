@@ -998,3 +998,44 @@ test('取り直してもだめなときは、はじめてあきらめる', () =>
   const retry = seg.indexOf('if (!token) token = await ask(true);');
   assert.ok(retry > 0 && give > retry, '取り直す前にあきらめている');
 });
+
+/* ───────── 完走は「認めた周回」の合計 ───────── */
+
+test('2周認めた人は、完走2本', () => {
+  const i = INDEX.indexOf('完走は「認めた周回」の合計');
+  assert.ok(i > 0, 'まだクエストの本数で数えている');
+  const seg = INDEX.slice(i, i + 400);
+  assert.ok(seg.indexOf('Number(q.rounds || 1)') >= 0, '周回を足していない');
+  assert.equal(INDEX.indexOf("done = list.filter(function (q) { return !q.isFounder; }).length;"), -1,
+    '古い数え方が残っている');
+});
+
+test('パスポートの記録も、周回を持つ', () => {
+  const i = INDEX.indexOf('認めた周回の数。1周しかしていない人は1');
+  assert.ok(i > 0, '記録に周回が無い');
+  assert.ok(INDEX.indexOf('rounds += Math.max(1, Number(d.approvedRounds || 0));') >= 0,
+    'SDK で読んだときに周回を足していない');
+  assert.ok(INDEX.indexOf('rounds += Math.max(1, Number(r.data.approvedRounds || 0));') >= 0,
+    '普通の通信で読んだときに周回を足していない');
+});
+
+test('メンバーの完走も、周回を足す', () => {
+  assert.ok(INDEX.indexOf('if (m) m.done += Math.max(1, Number(t.rounds || 0));') >= 0,
+    'メンバーが周回を足していない');
+  assert.ok(INDEX.indexOf('rounds: Math.max(1, Number(c.approvedRounds || 0))') >= 0,
+    '受けた記録から周回を持ってきていない');
+});
+
+test('古い記録（周回の欄が無い）は1周として数える', () => {
+  /* サーバーが書く前の記録を0本にしてしまうと、完走が消える。 */
+  ['Math.max(1, Number(d.approvedRounds || 0))',
+   'Math.max(1, Number(q.rounds || 1))',
+   'Math.max(1, Number(c.approvedRounds || 0))'].forEach(function (x) {
+    assert.ok(INDEX.indexOf(x) >= 0, '古い記録が0本になる: ' + x);
+  });
+});
+
+test('認めた日は、いちばん新しい周回のもの', () => {
+  assert.ok(INDEX.indexOf('Number(d.lastApprovedAt || d.approvedAt || 0)') >= 0,
+    '2周目を認めても日付が動かない');
+});

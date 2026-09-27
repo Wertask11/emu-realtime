@@ -1955,6 +1955,8 @@ async function renderSchoolPark() {
         const d = c;
         q.took++;
         took.push({ addr: c.id, name: d.name || "", approved: d.approved === true,
+          /* サーバーが認めた周回の数。2周目からはここが増える。 */
+          rounds: Number(d.approvedRounds || 0),
           /* サーバーが引き当てた額。0 なら EMUER はまだ動いていない。 */
           rewardEmuer: Number(d.rewardEmuer || 0) });
       });
@@ -2157,8 +2159,13 @@ async function renderSchoolPark() {
         const rows = [];
         quests.filter(q => !SpQuestStore.isFounder(q)).forEach(q => {
           (q.tookList || []).forEach(t => {
-            if (t.approved) return;
-            rows.push({ q: q, t: t, ready: t.logs >= 3 && t.wisdom >= 1 });
+            /* 知恵カード1枚が1周の証。認めた周回より枚数が多ければ、
+               まだ認めていない周回がある。前は approved が立っていたら
+               そこで打ち切っていたので、2周目が出てこなかった。 */
+            const left = Math.max(0, t.wisdom - Math.max(t.rounds, t.approved ? 1 : 0));
+            if (t.approved && left <= 0) return;
+            rows.push({ q: q, t: t, round: Math.max(t.rounds, t.approved ? 1 : 0) + 1,
+              ready: t.logs >= 3 && t.wisdom >= 1 && (!t.approved || left > 0) });
           });
         });
         /* 条件を満たした人が先。その中では報告の多い順。 */
@@ -2171,7 +2178,8 @@ async function renderSchoolPark() {
           if (r.t.logs < 3) need.push("報告あと" + (3 - r.t.logs) + "本");
           if (r.t.wisdom < 1) need.push("知恵カードあと1枚");
           return '<div class="row" style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">'
-            + '<span><b>' + name + '</b>　' + label + '<br>'
+            + '<span><b>' + name + '</b>　' + label
+            + (r.round > 1 ? '　<b style="color:#0F5C3F">' + r.round + '周目</b>' : '') + '<br>'
             + '<small style="color:var(--muted)">報告 ' + r.t.logs + '本'
             + (r.t.logs >= 3 ? ' ✓' : '')
             + ' · 知恵カード ' + r.t.wisdom + '枚' + (r.t.wisdom >= 1 ? ' ✓' : '')
@@ -2234,12 +2242,20 @@ async function renderSchoolPark() {
                 + (t.logs >= 3 ? ' ✓' : '')
                 /* 完走条件のまん中。ここが出ていないと、認めてよいか判断できない。 */
                 + ' · 知恵カード ' + t.wisdom + '枚' + (t.wisdom >= 1 ? ' ✓' : '')
-                + (t.approved ? ' · 認めています' : ' · まだ認めていません') + '</small></span>'
+                + (t.approved
+                    ? ' · ' + Math.max(t.rounds, 1) + '周ぶん認めています'
+                      + (t.wisdom > Math.max(t.rounds, 1) ? '（あと' + (t.wisdom - Math.max(t.rounds, 1)) + '周ぶん）' : '')
+                    : ' · まだ認めていません') + '</small></span>'
                 /* EMUER を引き当てた承認は取り消せない。報酬と証明書がもう
                    予約されていて、取り消すと記録だけが食い違う。
                    前はここが「一般 #001 の LEARN」の決め打ちで、
                    ほかのクエストには取り消すボタンが出ていた。 */
-                + '<span>' + (t.approved
+                /* 認めていない周回が残っていれば、もう一度「認める」を出す。 */
+                + '<span>' + ((t.approved && t.wisdom > Math.max(t.rounds, 1))
+                    ? '<button class="act ok" data-qapprove="' + esc(q.id) + '" data-addr="' + esc(t.addr)
+                      + '">' + (Math.max(t.rounds, 1) + 1) + '周目を認める</button> '
+                    : '')
+                + (t.approved
                     ? (t.rewardEmuer > 0
                       ? esc(String(t.rewardEmuer)) + ' EMUERの承認済み'
                       /* 認めてはあるが、EMUER がまだ動いていない。予算を公開する前に
