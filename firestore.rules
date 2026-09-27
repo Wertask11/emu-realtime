@@ -1053,9 +1053,22 @@ service cloud.firestore {
         /* 運営だけが「実際に動いたことを確かめた」印を付けられる。
            分配も、信用スコアの完走も、この印が立っている人だけが対象。
            受けただけでは分配しない。名前など他の欄は動かせない。 */
+        /* 周回の数（approvedRounds）も運営が書けるようにする。
+
+           同じクエストを2周3周する人がいる。周回の数はサーバーが書くが、
+           10/1 までサーバーは EMUER を扱えず NOT_STARTED で断るので、
+           承認は管理画面から直接この記録へ書くことになる。
+           ここを許していなかったため、2周目を認めても完走が1のままだった。
+
+           数であること・減らないことだけ確かめる。減らせると、認めた
+           周回を無かったことにできてしまう。 */
         allow update: if canAccessSchoolPark() && isOwner()
-          && changedOnly(['approved', 'approvedAt', 'approvedBy'])
-          && request.resource.data.approved is bool;
+          && changedOnly(['approved', 'approvedAt', 'approvedBy', 'approvedRounds', 'lastApprovedAt'])
+          && request.resource.data.approved is bool
+          && (!('approvedRounds' in request.resource.data)
+              || (request.resource.data.approvedRounds is int
+                  && request.resource.data.approvedRounds >= 1
+                  && request.resource.data.approvedRounds >= resource.data.get('approvedRounds', 0)));
         // 受けたあとで降りることは認める。ただし自分の分だけ。
         allow delete: if canAccessSchoolPark() && questId != 'founder-quest-000' && isMyWallet(addr);
       }
