@@ -19364,6 +19364,39 @@ window.spDaoLoadMembers = async function (app) {
   }
   app.setState({ members: members, noMembers: members.length === 0, membersNote: '' });
 
+  /* 左下に出す数字は、本人のもの。
+
+     前はここに DAO のトレジャリー（使える額＝ある − 約束済み）を出していた。
+     それは誰が開いても同じ数字で、本人の持ち物ではない。
+     クエストの予算が残高を超えていると、本人のところに
+     「-1,250,000 EMUER」と出る。自分が借金しているように見える。
+
+     お支払いはまだ始めていないので、ここに出せるのは
+     「完了したクエストから計算した、あなたの分配の額」まで。
+     実際に渡したお金ではないので、そう名乗る。 */
+  try {
+    const p2 = await spPassportLoad();
+    const names = [];
+    if (p2) {
+      ((p2.aliases && p2.aliases.length) ? p2.aliases : [p2.wallet, p2.ches, p2.addr])
+        .forEach(function (a) {
+          const v = String(a || '').toLowerCase();
+          if (v && names.indexOf(v) < 0) names.push(v);
+        });
+    }
+    const my = names.map(function (k) { return M[k]; }).find(Boolean) || null;
+    const parts = my ? SP_CURRENCIES
+      .filter(function (c) { return Math.round(my.share[c] || 0) > 0; })
+      .map(function (c) { return spMoney(Math.round((my.share[c] || 0) / 100) * 100, c); }) : [];
+    app.setState({ mine: {
+      label: 'あなたの分配（計算額）',
+      balance: parts.length ? parts.join(' / ') : '—',
+      note: parts.length ? '' : 'まだ計算される分配はありません'
+    } });
+  } catch (e) {
+    console.warn('あなたの分配を出せませんでした:', e && (e.message || e));
+  }
+
   /* 信用スコアも、ここで数え直す。
 
      前はギルドの画面（spDaoLoadVotes）でしか計算していなかった。
