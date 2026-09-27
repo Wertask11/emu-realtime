@@ -192,6 +192,8 @@ function scorer(opts) {
   const stubs = {
     console: { warn: function () { warn.push([].slice.call(arguments).join(' ')); } },
     SP_TRUST_NEED: 20,
+    /* 在籍の数え方は別に試す（この下の「在籍の月数」）。ここでは固定。 */
+    spMonthsSince: function () { return 0; },
     SpQuestStore: { isFounder: function (q) { return !!q.isFounder; } },
     spCompletedQuests: async function (me) {
       if (opts.doneFails) return null;
@@ -320,6 +322,7 @@ function offline(opts) {
   const stubs = {
     console: { warn: function () { warn.push([].slice.call(arguments).join(' ')); } },
     SP_TRUST_NEED: 20,
+    spMonthsSince: function () { return 0; },
     SpQuestStore: { isFounder: function (q) { return !!q.isFounder; },
                     fullLabel: function () { return '一般 #001'; } },
     SpGuildStore: { guildIdOf: function (q) { return q.guildId || ''; }, byId: function () { return null; } },
@@ -399,6 +402,7 @@ test('SDKが生きていて本当に受けていないときは、余計に聞�
   const stubs = {
     console: { warn: function () { warn.push([].slice.call(arguments).join(' ')); } },
     SP_TRUST_NEED: 20,
+    spMonthsSince: function () { return 0; },
     SpQuestStore: { isFounder: function () { return false; },
                     fullLabel: function () { return '一般 #001'; } },
     SpGuildStore: { guildIdOf: function () { return ''; }, byId: function () { return null; } },
@@ -1071,4 +1075,90 @@ test('_spHasDoc は真偽を返す（呼ぶ側が exists() を呼ばない）', 
     '真偽前提になっていない');
   assert.equal(INDEX.indexOf('if (j && j.exists()) joined.push(g.short);'), -1,
     '古い書き方が残っている');
+});
+
+/* ───────── 在籍の月数 ─────────
+
+   パスポートを発行した日から、暦の月で数える。始めた月が1か月目。
+   前は日数を30で割っていたので、1月1日から9月27日でも8か月にしかならず、
+   数えた月の数（1月〜9月＝9か月）と合わなかった。
+
+   運営は SchoolPark を1月から動かしているので、パスポートをあとから
+   発行していても、そこから数える。 */
+
+function months(opts) {
+  /* SP_OWNER_SINCE は関数の外にある定数なので、取り出しに入らない。
+     本体と同じ値を渡す（ずれたら下の試験が落ちる）。 */
+  const owner = Date.parse('2026-01-01T00:00:00+09:00');
+  const api = build(INDEX, ['spMonthsSince'], { Date: Date, window: {}, SP_OWNER_SINCE: owner });
+  return api.spMonthsSince(opts);
+}
+
+test('運営の起点は、本体もここも 2026-01-01', () => {
+  assert.ok(INDEX.indexOf("const SP_OWNER_SINCE = Date.parse('2026-01-01T00:00:00+09:00');") >= 0,
+    '起点が変わっている');
+});
+
+const AT_SEP27 = function (fn) {
+  const now = Date.now;
+  Date.now = function () { return Date.parse('2026-09-27T12:00:00+09:00'); };
+  try { return fn(); } finally { Date.now = now; }
+};
+
+test('1月に始めた運営は、9月の時点で9か月', () => {
+  AT_SEP27(function () {
+    assert.equal(months({ isOwner: true, spSince: Date.parse('2026-08-01T00:00:00+09:00') }), 9,
+      '運営は1月から数える');
+  });
+});
+
+test('パスポートを発行した月が、1か月目', () => {
+  AT_SEP27(function () {
+    assert.equal(months({ spSince: Date.parse('2026-09-27T00:00:00+09:00') }), 1, '発行した当月が0になる');
+    assert.equal(months({ spSince: Date.parse('2026-09-01T00:00:00+09:00') }), 1);
+    assert.equal(months({ spSince: Date.parse('2026-08-31T23:59:00+09:00') }), 2, '月をまたいだら2');
+  });
+});
+
+test('暦の月で数える（日数で割らない）', () => {
+  AT_SEP27(function () {
+    /* 1月1日から9月27日は269日。30で割ると8にしかならない。 */
+    assert.equal(months({ spSince: Date.parse('2026-01-01T00:00:00+09:00') }), 9);
+    assert.equal(months({ spSince: Date.parse('2026-01-31T00:00:00+09:00') }), 9, '月末でも同じ月は同じ');
+  });
+});
+
+test('上限は12か月のまま', () => {
+  AT_SEP27(function () {
+    assert.equal(months({ spSince: Date.parse('2024-01-01T00:00:00+09:00') }), 12);
+  });
+});
+
+test('発行した日が分からなければ0', () => {
+  AT_SEP27(function () {
+    assert.equal(months({ spSince: 0 }), 0);
+    assert.equal(months(null), 0);
+  });
+});
+
+test('先の日付では増えない', () => {
+  AT_SEP27(function () {
+    assert.equal(months({ spSince: Date.parse('2027-01-01T00:00:00+09:00') }), 0);
+  });
+});
+
+test('パスポートが発行日を持っている', () => {
+  const i = INDEX.indexOf('パスポートを発行した日。信用スコアの「在籍」');
+  assert.ok(i > 0, '発行日を持っていない');
+  const seg = INDEX.slice(i, i + 500);
+  assert.ok(seg.indexOf('identityNow && identityNow.createdAt') >= 0, 'sp_identities を見ていない');
+  assert.ok(seg.indexOf('d.spidLinkedAt') >= 0, 'ches_accounts の控えを見ていない');
+  assert.ok(seg.indexOf('d.createdAt') >= 0, '古いアカウントの代わりが無い');
+});
+
+test('信用スコアが、その数え方を使っている', () => {
+  assert.ok(INDEX.indexOf('const months = spMonthsSince(p || { spSince: createdAt });') >= 0,
+    '古い数え方が残っている');
+  assert.equal(INDEX.indexOf('Math.floor((Date.now() - Number(createdAt)) / (30 * 86400000))'), -1,
+    '日数で割る書き方が残っている');
 });
