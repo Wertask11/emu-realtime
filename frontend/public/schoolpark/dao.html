@@ -75,8 +75,8 @@ if (window.top === window.self) window.location.replace('/');
       </div>
       <div style="padding:18px 20px 22px; border-top:1px solid rgba(244,241,234,.12); display:flex; flex-direction:column; gap:12px">
         <div style="display:flex; justify-content:space-between; align-items:baseline">
-          <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; opacity:.5">TREASURY</div>
-          <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:#D0E2BE">{{ treasury.total }}</div>
+          <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; opacity:.5" title="{{ mine.note }}">{{ mine.label }}</div>
+          <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:#D0E2BE">{{ mine.balance }}</div>
         </div>
         <div onClick="{{ openPassport }}" title="SchoolPark パスポートを見る" style="display:flex; align-items:center; gap:10px; padding:4px 8px 6px; margin:0 -8px; border-radius:8px; cursor:pointer" style-hover="background:rgba(244,241,234,.08)">
           <div style="width:32px; height:32px; border-radius:50%; background:#0F5C3F; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700">{{ me.initial }}</div>
@@ -1520,6 +1520,10 @@ class Component extends DCLogic {
       goTasks:this.go('tasks'), goHome:this.go('home'),
       goPropose:() => { try { window.parent.openSpQuestForm(this); } catch (e) { this.setState({screen:'propose'}); } }, goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
       stats: {newWisdom:(s.wisdom || []).length, running:exps.filter(e => e.status==='RUNNING').length, people:0, myCommit:Object.values(s.committed).filter(Boolean).length, due:0, wisdomTotal:(s.wisdom || []).length, payout:'¥0', citations:s.citations || 0},
+      /* 左下は本人の数字。まだ数え終わっていないときは、0ではなく空で待つ。
+         ここに DAO のトレジャリーを出していたころは、誰が開いても同じ額が出て、
+         クエストの予算が残高を超えていると本人に「-1,250,000」と見えていた。 */
+      mine: Object.assign({ label:'あなたの分配（計算額）', balance:'—', note:'数えています…' }, s.mine || {}),
       freshWisdom: (s.wisdom || []).slice(0,3).map(w => ({...w, open:this.go('library')})),
       runningExps: exps.filter(e => e.status==='RUNNING').slice(0,3).map(e => ({...e, title: e.fullTitle || e.title})),
       /* 広場のカードには、残っているものを上から3つだけ出す */

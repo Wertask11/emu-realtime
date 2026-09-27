@@ -611,3 +611,40 @@ test('本人情報の読み取りは、返ってこなければ見切る', () =>
   const to = seg.indexOf('読み取りが返ってきません');
   assert.ok(seg.slice(to, to + 200).indexOf('continue;') >= 0, '見切ったあと先へ進めていない');
 });
+
+/* ───────── 左下の数字は、本人のもの ─────────
+
+   前はここに DAO のトレジャリー（使える額＝ある − 約束済み）を出していた。
+   誰が開いても同じ数字で、本人の持ち物ではない。しかもクエストの予算が
+   残高を超えていると、本人のところに「-1,250,000 EMUER」と出る。
+   自分が借金しているように見える。 */
+
+test('左下は、DAOのトレジャリーではなく本人の数字を出す', () => {
+  assert.equal(DAO.indexOf('{{ treasury.total }}'), -1, 'まだDAOの額を出している');
+  assert.ok(DAO.indexOf('{{ mine.balance }}') >= 0, '本人の数字になっていない');
+  assert.ok(DAO.indexOf('{{ mine.label }}') >= 0, '見出しが TREASURY のまま');
+});
+
+test('数え終わるまでは、0ではなく空で待つ', () => {
+  const i = DAO.indexOf("mine: Object.assign({");
+  assert.ok(i > 0, '既定値が無い');
+  const seg = DAO.slice(i, i + 220);
+  assert.ok(seg.indexOf("balance:'—'") >= 0, '0を出してしまう');
+  assert.ok(seg.indexOf('数えています') >= 0);
+});
+
+test('本人の分配は、パスポートの名義で引く', () => {
+  const i = INDEX.indexOf('左下に出す数字は、本人のもの');
+  assert.ok(i > 0, '本人の数字を作っていない');
+  const seg = INDEX.slice(i, i + 1400);
+  assert.ok(seg.indexOf('p2.aliases') >= 0, '片方の名義しか見ていない');
+  assert.ok(seg.indexOf('names.map(function (k) { return M[k]; })') >= 0);
+  assert.ok(seg.indexOf('mine:') >= 0);
+});
+
+test('渡していないお金を、持っているように書かない', () => {
+  const i = INDEX.indexOf('左下に出す数字は、本人のもの');
+  const seg = INDEX.slice(i, i + 1400);
+  assert.ok(seg.indexOf('あなたの分配（計算額）') >= 0, '計算額だと名乗っていない');
+  assert.ok(seg.indexOf('まだ計算される分配はありません') >= 0, '0件のときに黙っている');
+});
