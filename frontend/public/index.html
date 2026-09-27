@@ -16639,7 +16639,9 @@ window.spTrustScore = async function (addr, createdAt, p) {
   try {
     const list = await spCompletedQuests(me);
     if (!list) throw new Error('完走したクエストを読めなかった');
-    done = list.filter(function (q) { return !q.isFounder; }).length;
+    /* 完走は「認めた周回」の合計。同じクエストを2周した人は2本。 */
+    done = list.filter(function (q) { return !q.isFounder; })
+               .reduce(function (n, q) { return n + Math.max(1, Number(q.rounds || 1)); }, 0);
   } catch (e) {
     console.warn('完走を数えられませんでした:', e && (e.message || e));
     failed = true;
@@ -16806,7 +16808,7 @@ async function spCompletedQuests(p) {
 
   const out = [];
   await Promise.all(docs.map(async function (q) {
-    let hit = false, at = 0, stale = false;
+    let hit = false, at = 0, stale = false, rounds = 0;
     for (const a of aliases) {
       try {
         const c = await fb.getDoc(fb.doc(window.db, 'sp_quests', q.id, 'commits', a));
@@ -16817,8 +16819,12 @@ async function spCompletedQuests(p) {
         }
         const d = c.data() || {};
         if (d.approved !== true) continue;   /* approved:false にも approvedAt は付く */
-        hit = true;                          /* 何人ぶん当たっても、クエストは1件 */
-        const t = Number(d.approvedAt || 0);
+        hit = true;
+        /* 同じクエストを2周3周する人がいる。認めた周回のぶんだけ数える。
+           approvedRounds はサーバーが書く。古い記録には無いので、
+           印が立っていれば1周とみなす。 */
+        rounds += Math.max(1, Number(d.approvedRounds || 0));
+        const t = Number(d.lastApprovedAt || d.approvedAt || 0);
         if (t > at) at = t;
       } catch (e) { stale = true; /* この名義は読めなかった。ほかの名義を試す */ }
     }
@@ -16831,7 +16837,8 @@ async function spCompletedQuests(p) {
           if (aliases.indexOf(String(r.id || '').toLowerCase()) < 0) return;
           if (!r.data || r.data.approved !== true) return;
           hit = true;
-          const t = Number(r.data.approvedAt || 0);
+          rounds += Math.max(1, Number(r.data.approvedRounds || 0));
+          const t = Number(r.data.lastApprovedAt || r.data.approvedAt || 0);
           if (t > at) at = t;
         });
       } catch (e) {
@@ -16853,7 +16860,9 @@ async function spCompletedQuests(p) {
       accent: g ? g.accent : '',
       /* ギルドの並び順（code 順）。星の一覧を開くたび順が入れ替わらないように。 */
       guildOrder: g ? gdefs.indexOf(g) : 999,
-      at: at
+      at: at,
+      /* 認めた周回の数。1周しかしていない人は1。 */
+      rounds: Math.max(1, rounds)
     });
   }));
 
@@ -19443,7 +19452,8 @@ window.spDaoLoadMembers = async function (app) {
       const cs = commitSnaps[qi];
       if (cs) {
         cs.forEach(function (c) {
-          took.push({ addr: c.id, name: c.name || '', approved: c.approved === true });
+          took.push({ addr: c.id, name: c.name || '', approved: c.approved === true,
+            rounds: Math.max(1, Number(c.approvedRounds || 0)) });
         });
       }
       /* 受けた人は、認められていなくても一覧には出す（「参加中」として） */
@@ -19458,7 +19468,8 @@ window.spDaoLoadMembers = async function (app) {
          という食い違いが起きていた。 */
       done.forEach(function (t) {
         const m = pick(t.addr, t.name);
-        if (m) m.done++;
+        /* 認めた周回のぶんだけ数える。2周した人は2本。 */
+        if (m) m.done += Math.max(1, Number(t.rounds || 0));
       });
 
       /* 分配（お金）は、クエストが完了してから。走っている最中には配らない。

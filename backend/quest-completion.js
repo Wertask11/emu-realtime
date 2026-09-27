@@ -115,10 +115,25 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
         const row = doc.data() || {};
         if (String(row.author || "").toLowerCase() === address) kinds.add(row.kind);
       });
-      let hasWisdom = false;
-      wisdom.forEach(doc => { if (String((doc.data() || {}).author || "").toLowerCase() === address) hasWisdom = true; });
-      if (!["やってみた", "つまずいた", "気づいた"].every(kind => kinds.has(kind)) || !hasWisdom)
+      /* 終えた周回の数。知恵カード1枚が1周の証。
+
+         同じクエストを2回3回とやる人がいる。報告はクエストに積み上がるが、
+         知恵カードは周回ごとに別の記録として残る。だから枚数がそのまま
+         周回数になる。前はここを「1枚でもあるか」しか見ていなかったので、
+         2周目以降は承認する相手が無く、完走も増えなかった。 */
+      let rounds = 0;
+      wisdom.forEach(doc => { if (String((doc.data() || {}).author || "").toLowerCase() === address) rounds++; });
+      if (!["やってみた", "つまずいた", "気づいた"].every(kind => kinds.has(kind)) || !rounds)
         return res.status(409).json({ error: "COMPLETION_EVIDENCE_MISSING" });
+      /* 何周目を認めるのか。すでに払った数の次。
+
+         数えるのは approvedRounds だけ。approved の印だけが立っている
+         状態（サーバーへ届かないまま管理画面から通した承認）は、
+         まだ1周も払っていない。ここを「1周ぶん済み」と数えると、
+         あとから EMUER を渡す道が塞がる。 */
+      const already = Number((commit.data() || {}).approvedRounds || 0);
+      if (already >= rounds) return res.status(409).json({ error: "NO_NEW_ROUND" });
+      const round = already + 1;
       const accounts = [...byChes.docs, ...byWallet.docs];
       const spids = new Set(accounts.map(doc => String((doc.data() || {}).spid || "")));
       if (spids.size !== 1 || ![...spids][0]) return res.status(409).json({ error: "PASSPORT_LINK_REQUIRED" });
@@ -129,10 +144,14 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       const recipient = String(linkedWallet && linkedWallet.subject || "").toLowerCase();
       if (!ethers.utils.isAddress(recipient))
         return res.status(409).json({ error: "WALLET_REQUIRED" });
-      const completionKey = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(["schoolpark", questId, spid])));
+      /* 周回ごとに別の鍵。1周目だけは今までと同じ鍵にする
+         （すでに出してある報酬と証明書を、作り直さないため）。 */
+      const keyOf = (parts) => ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(parts)));
+      const roundTag = round > 1 ? [round] : [];
+      const completionKey = keyOf(["schoolpark", questId, spid, ...roundTag]);
       const certRef = db.collection("sp_quest_certificates").doc(completionKey);
-      const rewardKey = JSON.stringify(["emuer-v2", "quest-completion", questId, spid]);
-      const rewardId = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(rewardKey));
+      const rewardKey = JSON.stringify(["emuer-v2", "quest-completion", questId, spid, ...roundTag]);
+      const rewardId = keyOf(["emuer-v2", "quest-completion", questId, spid, ...roundTag]);
       const rewardRef = db.collection("emuer_v2_rewards").doc(rewardId);
 
       /* Resolve the wallet from the account that owns the quest address.
@@ -143,10 +162,16 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
         ]);
         if (!current.exists) throw new Error("NOT_JOINED");
         const was = current.data() || {};
+        /* 鍵には周回が混ざっているので、ここで当たるのは「この周をもう
+           認めてある」ときだけ。前の周の報酬や証明書には当たらない。 */
         if (prior.exists || certificate.exists) {
-          if (prior.exists && certificate.exists && was.approved === true) return { alreadyApproved: true };
+          if (prior.exists && certificate.exists) return { alreadyApproved: true, round: round };
           throw new Error("COMPLETION_STATE_CONFLICT");
         }
+        /* 数えた周回より先へ行っていないか、取引の中でもう一度見る。
+           同時に2回押されたときに、二重に払わないため。 */
+        const doneRounds = Number(was.approvedRounds || 0);
+        if (doneRounds >= rounds) throw new Error("NO_NEW_ROUND");
         /* 承認の印だけが立っていて、報酬も証明書も無いことがある。
            サーバーへ届かないまま管理画面から通した承認がこれ。
            何も払われていないので、ここで引き当て直してよい。
@@ -175,7 +200,10 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
         /* 認めた日は動かさない。信用スコアと星空の並びが後ろへずれる。 */
         const approvedAt = Number(was.approvedAt) > 0 ? Number(was.approvedAt) : now;
         tx.update(commitRef, { approved: true, approvedAt, approvedBy: req.identity.walletAddress,
-          rewardEmuer: per });
+          rewardEmuer: per,
+          /* 何周ぶん認めたか。完走の数はこれを足して出す。 */
+          approvedRounds: doneRounds + 1,
+          lastApprovedAt: now });
         tx.update(budgetRef, { allocatedEmuer: allocated + per, updatedAt: new Date(now) });
         tx.create(rewardRef, {
           schema: "emuer-v2-reward-v1", kind: "quest-completion", key: rewardKey, claimId: rewardId,
@@ -191,15 +219,16 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
             + String(q.questNumber).padStart(3, "0")
             + (Number(q.branch) >= 1 ? "-" + Number(q.branch) : "")
             + (q.stage ? " " + q.stage : ""),
-          amountEmuer: per,
-          completedAt: approvedAt, status: "pending", createdAt: new Date(now)
+          amountEmuer: per, round: round,
+          completedAt: round > 1 ? now : approvedAt, status: "pending", createdAt: new Date(now)
         });
-        return { alreadyApproved: false, amountEmuer: per };
+        return { alreadyApproved: false, amountEmuer: per, round: round, rounds: rounds };
       });
       return res.json({ ok: true, rewardId, amountEmuer: result.amountEmuer || 0, ...result });
     } catch (error) {
       const code = String(error.message || "");
-      if (["NOT_JOINED", "COMPLETION_STATE_CONFLICT", "BUDGET_NOT_PUBLISHED", "BUDGET_EXCEEDED"].includes(code))
+      if (["NOT_JOINED", "COMPLETION_STATE_CONFLICT", "BUDGET_NOT_PUBLISHED", "BUDGET_EXCEEDED",
+           "NO_NEW_ROUND"].includes(code))
         return res.status(409).json({ error: code });
       console.error("Quest completion failed:", error);
       return res.status(500).json({ error: "COMPLETION_FAILED" });

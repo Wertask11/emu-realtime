@@ -263,8 +263,12 @@ test('承認待ちのカードがある', () => {
 test('承認待ちは、まだ認めていない人だけを集める', () => {
   const i = ADMIN.indexOf('const rows = [];');
   assert.ok(i > 0);
-  const seg = ADMIN.slice(i, i + 400);
-  assert.ok(seg.indexOf('if (t.approved) return;') >= 0, '認めた人まで並べている');
+  const seg = ADMIN.slice(i, ADMIN.indexOf('rows.sort(', i));
+  /* 周回を数えるようにしたので、「認めた人は全部外す」ではなくなった。
+     認めた周回より知恵カードが多ければ、まだ認めていない周回がある。 */
+  assert.ok(seg.indexOf('if (t.approved && left <= 0) return;') >= 0,
+    '認め終わった人まで並べている');
+  assert.ok(seg.indexOf('t.wisdom - Math.max(t.rounds') >= 0, '残りの周回を見ていない');
   assert.ok(seg.indexOf('t.logs >= 3 && t.wisdom >= 1') >= 0, '完走条件で判定していない');
 });
 
@@ -533,4 +537,44 @@ test('承認待ちが空のとき、理由を言い分ける', () => {
 test('受けた記録を読めたかどうかを、クエストごとに覚える', () => {
   assert.ok(ADMIN.indexOf('q.tookUnread = !rows[0].length && !cs;') >= 0,
     '読めたかどうかを持っていない');
+});
+
+/* ───────── 2周目以降 ─────────
+
+   同じクエストを2回やると、報告はクエストに積み上がり、知恵カードは
+   周回ごとに別の記録として残る。だから知恵カードの枚数が周回数になる。
+   前は approved が立った時点で承認待ちから外れ、2周目を認める道が無かった。 */
+
+test('認めた周回より知恵カードが多ければ、承認待ちに残る', () => {
+  const i = ADMIN.indexOf('知恵カード1枚が1周の証');
+  assert.ok(i > 0, '周回を見ていない');
+  const seg = ADMIN.slice(i, i + 700);
+  assert.ok(seg.indexOf('const left = Math.max(0, t.wisdom - Math.max(t.rounds') >= 0,
+    '残りの周回を数えていない');
+  assert.ok(seg.indexOf('round: Math.max(t.rounds, t.approved ? 1 : 0) + 1') >= 0,
+    '何周目かを持っていない');
+});
+
+test('承認待ちの行に、何周目かを出す', () => {
+  assert.ok(ADMIN.indexOf("(r.round > 1 ? '　<b style=\"color:#0F5C3F\">' + r.round + '周目</b>' : '')") >= 0,
+    '何周目か分からない');
+});
+
+test('クエストの行に、何周ぶん認めたかを出す', () => {
+  assert.ok(ADMIN.indexOf("'周ぶん認めています'") >= 0, '周回数が出ていない');
+  assert.ok(ADMIN.indexOf("'（あと' + (t.wisdom - Math.max(t.rounds, 1)) + '周ぶん）'") >= 0,
+    '残りが出ていない');
+});
+
+test('残っていれば、もう一度「認める」が出る', () => {
+  const i = ADMIN.indexOf('認めていない周回が残っていれば');
+  assert.ok(i > 0, '2周目を認める道が無い');
+  const seg = ADMIN.slice(i, i + 500);
+  assert.ok(seg.indexOf("t.approved && t.wisdom > Math.max(t.rounds, 1)") >= 0);
+  assert.ok(seg.indexOf("'周目を認める</button> '") >= 0);
+});
+
+test('サーバーが書いた周回数を読んでいる', () => {
+  assert.ok(ADMIN.indexOf('rounds: Number(d.approvedRounds || 0)') >= 0,
+    '周回数を持ってきていない');
 });

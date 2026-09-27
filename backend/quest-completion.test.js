@@ -122,8 +122,11 @@ test("completion reserves exactly 100 once and creates one star entitlement", as
     assert.equal(reward.recipient, wallet);
     assert.equal(reward.amount, "100");
     assert.equal([...records.keys()].filter(key => key.startsWith("sp_quest_certificates/")).length, 1);
+    /* もう一度押したときは「新しい周回が無い」と答える。
+       前は alreadyApproved と答えていたが、周回を数えるようになったので、
+       運営には「この人はもう全部認めてある」と分かるほうがよい。 */
     const again = await request();
-    assert.equal(again.body.alreadyApproved, true);
+    assert.equal(again.body.error, "NO_NEW_ROUND");
     assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-001").allocatedEmuer, 100);
   } finally { Date.now = now; }
 });
@@ -291,8 +294,9 @@ test("報酬がもう予約されていれば、二重には渡さない", AT(as
   await request("quest-002");
   const before = records.get("emuer_v2_guild_quest_budgets/quest:quest-002").allocatedEmuer;
   const again = await request("quest-002");
-  assert.equal(again.body.alreadyApproved, true);
-  assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-002").allocatedEmuer, before);
+  assert.equal(again.body.error, "NO_NEW_ROUND", "新しい周回が無いと言っていない");
+  assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-002").allocatedEmuer, before,
+    "二重に引き当てている");
 }));
 
 test("証明書だけが先にあるときは、止める", AT(async () => {
@@ -304,4 +308,86 @@ test("証明書だけが先にあるときは、止める", AT(async () => {
   records.set("sp_quests/quest-002/commits/" + address, { name:"member" });
   const r = await request("quest-002");
   assert.equal(r.body.error, "COMPLETION_STATE_CONFLICT");
+}));
+
+/* ───────── 周回（同じクエストを2回3回やる） ─────────
+
+   報告はクエストに積み上がるが、知恵カードは周回ごとに別の記録として
+   残る。だから知恵カードの枚数がそのまま周回数になる。
+   前は「1枚でもあるか」しか見ていなかったので、2周目以降は承認する
+   相手が無く、完走も増えず、EMUER も渡らなかった。 */
+
+function addWisdom(questId, n) {
+  for (let i = 0; i < n; i += 1)
+    records.set("sp_wisdom/card-" + questId + "-" + i, {questId, author:address, insight:"分かった"});
+}
+
+test("2周目も認められる（EMUERももう一度渡る）", AT(async () => {
+  seedOther();
+  addWisdom("quest-002", 2);                       // 2周ぶんの知恵カード
+  const first = await request("quest-002");
+  assert.equal(first.body.round, 1);
+  const second = await request("quest-002");
+  assert.equal(second.status, 200, "2周目が通らない");
+  assert.equal(second.body.round, 2);
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).approvedRounds, 2);
+  assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-002").allocatedEmuer, 400,
+    "2周ぶん引き当てていない");
+}));
+
+test("周回ごとに、別の報酬と別の証明書ができる", AT(async () => {
+  seedOther();
+  addWisdom("quest-002", 2);
+  await request("quest-002");
+  await request("quest-002");
+  const rewards = [...records.keys()].filter(k => k.startsWith("emuer_v2_rewards/"));
+  const certs = [...records.keys()].filter(k => k.startsWith("sp_quest_certificates/"));
+  assert.equal(rewards.length, 2, "報酬が1件しかない");
+  assert.equal(certs.length, 2, "証明書が1件しかない");
+  const byRound = certs.map(k => records.get(k)).filter(c => c.questId === "quest-002")
+    .map(c => c.round).sort();
+  assert.deepEqual(byRound, [1, 2]);
+}));
+
+test("知恵カードが1枚しかなければ、2周目は認められない", AT(async () => {
+  seedOther();                                     // 知恵カード1枚
+  await request("quest-002");
+  const again = await request("quest-002");
+  assert.equal(again.body.error, "NO_NEW_ROUND");
+  assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-002").allocatedEmuer, 200,
+    "二重に引き当てている");
+}));
+
+test("予算が尽きたら、周回でも止まる", AT(async () => {
+  seedOther(null, { totalEmuer: 200, perPersonEmuer: 200 });
+  addWisdom("quest-002", 3);
+  const first = await request("quest-002");
+  assert.equal(first.status, 200);
+  const second = await request("quest-002");
+  assert.equal(second.body.error, "BUDGET_EXCEEDED");
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).approvedRounds, 1);
+}));
+
+test("1周目の鍵は、今までと同じままにする", AT(async () => {
+  /* すでに出してある報酬と証明書を作り直さないため。 */
+  seedOther();
+  const a = await request("quest-002");
+  const id = a.body.rewardId;
+  records.delete("sp_quests/quest-002/commits/" + address);
+  records.set("sp_quests/quest-002/commits/" + address, { name:"member" });
+  records.delete("emuer_v2_rewards/" + id);
+  const certKey = [...records.keys()].find(k => k.startsWith("sp_quest_certificates/"));
+  records.delete(certKey);
+  const b = await request("quest-002");
+  assert.equal(b.body.rewardId, id, "1周目の鍵が変わっている");
+}));
+
+test("届かないまま通した承認は、まだ1周も払っていない扱いにする", AT(async () => {
+  /* approved の印だけが立っている状態。approvedRounds は無い。 */
+  seedOther();
+  records.set("sp_quests/quest-002/commits/" + address,
+    { name:"member", approved:true, approvedAt: Date.parse("2026-10-01T10:00:00+09:00") });
+  const r = await request("quest-002");
+  assert.equal(r.status, 200, "あとから渡す道が塞がっている");
+  assert.equal(r.body.round, 1);
 }));
