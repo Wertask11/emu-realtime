@@ -962,3 +962,39 @@ test('配列に替えたのに .data() を呼び残していない', () => {
     assert.equal(INDEX.indexOf(bad), -1, '古い書き方が残っている: ' + bad.slice(0, 30));
   });
 });
+
+/* ───────── 証（IDトークン）が古いとき ─────────
+
+   コンソールに、これがまとめて並んでいた。
+
+     sp_wisdom を読めませんでした: ログインの証が取れない
+     sp_quests を読めませんでした: ログインの証が取れない
+     sp_park   を読めませんでした: ログインの証が取れない
+     完走したクエストを SDK で読めませんでした: Missing or insufficient permissions.
+
+   証は期限切れになる。そのときの getIdToken() は裏で取り直そうとして
+   失敗し、空や例外で返ってくることがある。前はそこで投げて終わりだった。 */
+
+test('証が取れなければ、取り直してから読む', () => {
+  const i = INDEX.indexOf('async function _spRestGet');
+  assert.ok(i > 0);
+  const seg = INDEX.slice(i, i + 1800);
+  assert.ok(seg.indexOf('token = await ask(false);') >= 0, '普通に取っていない');
+  assert.ok(seg.indexOf('if (!token) token = await ask(true);') >= 0, '取り直していない');
+  assert.ok(seg.indexOf('getIdToken(force)') >= 0, '取り直しを頼めない形になっている');
+});
+
+test('断られたときも、証を取り直して1回だけやり直す', () => {
+  const i = INDEX.indexOf('async function _spRestGet');
+  const seg = INDEX.slice(i, i + 2400);
+  assert.ok(seg.indexOf('r.status === 401 || r.status === 403') >= 0, '断られたまま終わる');
+  assert.ok(seg.indexOf("fresh !== token") >= 0, '同じ証で投げ直してしまう');
+});
+
+test('取り直してもだめなときは、はじめてあきらめる', () => {
+  const i = INDEX.indexOf('async function _spRestGet');
+  const seg = INDEX.slice(i, i + 1800);
+  const give = seg.indexOf("throw new Error('ログインの証が取れない')");
+  const retry = seg.indexOf('if (!token) token = await ask(true);');
+  assert.ok(retry > 0 && give > retry, '取り直す前にあきらめている');
+});
