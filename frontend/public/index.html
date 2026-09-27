@@ -15839,6 +15839,35 @@ async function spDaoWaitReady(maxMs) {
     Promise.all(jobs).then(function () { done = true; }),
     nap(Math.max(0, limit - Date.now()))
   ]);
+
+  /* ③ 8つが「終わった」だけでは足りない。通信が切れていると、どの読み込みも
+     手元の控え（空）を成功として返して、すぐ終わる。覆いを外すと
+     「おはよう、ゲスト」やクエスト0本・知恵0件のまま表に出る。実際そうなっていた。
+
+     中身が入ったかどうかを見て、空のままなら読み直す。上限までは粘る。
+     上限で切り上げるのは今までどおり（入れなくなるほうが困る）。 */
+  const filled = function () {
+    let st = null;
+    try { st = app.state || null; } catch (e) { return false; }
+    if (!st) return false;
+    /* 名前が出ていること。ゲストのままなら、まだログインが解けていない。 */
+    if (!(st.me && st.me.name && st.me.name !== 'ゲスト')) return false;
+    /* クエストか知恵が1つでも入っていること。
+       本当に0件の人もいるので、どちらも空でも上限まで待って切り上げる。 */
+    return ((st.quests || []).length + (st.wisdom || []).length) > 0;
+  };
+  while (Date.now() < limit && !filled()) {
+    await nap(400);
+    if (Date.now() >= limit) break;
+    const again = names.map(function (n) {
+      const fn = window[n];
+      if (typeof fn !== 'function') return Promise.resolve();
+      try { return Promise.resolve(fn(app)).catch(function () {}); }
+      catch (e) { return Promise.resolve(); }
+    });
+    await Promise.race([Promise.all(again), nap(Math.max(0, limit - Date.now()))]);
+  }
+  if (!filled()) console.warn('SchoolPark の中身がそろう前に、待つのを切り上げました');
   return done;
 }
 window.spDaoWaitReady = spDaoWaitReady;
@@ -15864,7 +15893,7 @@ async function spDaoOpenWhenReady() {
   openSpDao();
   if (!fresh) return;
   Promise.resolve()
-    .then(function () { return spDaoWaitReady(8000); })
+    .then(function () { return spDaoWaitReady(15000); })
     .catch(function () {})
     .then(function () { try { _hideSpLoadingOverlay(); } catch (e) {} });
 }
@@ -18902,7 +18931,24 @@ window.spDaoLoadWisdom = async function (app) {
     snap.forEach(function (s) { docs.push({ id: s.id, ...(s.data() || {}) }); });
   } catch (e) {
     _spWarnDenied('知恵', e);
-    return;
+  }
+  /* 通信が切れていると getDocs は例外を投げず、手元の控え（開いた直後は空）を
+     そのまま返す。それを0枚と信じて「ライブラリの知恵 0」「今週0個」と出していた。
+     下の報告（logs）は普通の通信へ逃げる道を持っていたのに、
+     肝心の本体にだけ無かった。クエスト一覧と同じ道をここにも通す。 */
+  if (!docs.length) {
+    try {
+      const rest = await _spRestWisdom();
+      if (rest.length) {
+        docs = rest.sort(function (a, b) {
+          return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+        }).slice(0, 50);
+        console.warn('知恵カードを普通の通信で読みました（' + docs.length + '件）');
+      }
+    } catch (e2) {
+      console.warn('知恵カードを普通の通信でも読めませんでした:', e2 && (e2.message || e2));
+      return;
+    }
   }
   const p = await spPassportLoad();
   const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
