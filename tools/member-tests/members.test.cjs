@@ -443,3 +443,54 @@ test('今週の広場の知恵も、普通の通信で読み直す', () => {
   assert.equal(seg.slice(0, seg.indexOf('if (!docs.length)')).indexOf('return;'), -1,
     '例外のときに逃げ道へ回らず、そこで終わっている');
 });
+
+/* ───────── ログインを先に待つ ─────────
+
+   コンソールに出ていたのは、これだけだった。
+
+     SchoolPark の中身がそろう前に、待つのを切り上げました
+
+   逃げ道が成功したログも失敗したログも出ていない。画面は
+   「おはよう、ゲスト」。つまりログインが解けていなかった。
+
+   10/1 までは記録の決まり（canAccessSchoolPark）が「運営」か
+   「公式パスの持ち主」を求める。どちらもログインの証が要る。
+   証が無いあいだは SDK も普通の通信もまとめて断られるので、
+   逃げ道をいくら足しても0のままになる。 */
+
+test('8つを走らせる前に、ログインが解けるのを待つ', () => {
+  const i = INDEX.indexOf('if (!app) return false;');
+  assert.ok(i > 0);
+  const seg = INDEX.slice(i, INDEX.indexOf('const names = [', i));
+  assert.ok(seg.indexOf('emuEnsureSignedIn') >= 0, '証を待たずに走らせている');
+  assert.ok(seg.indexOf('interactive: false') >= 0, '勝手にログイン画面を出してしまう');
+});
+
+test('証が無いまま走らせ直しても同じなので、やり直しの前にも待つ', () => {
+  const i = INDEX.indexOf('while (Date.now() < limit && !filled())');
+  const seg = INDEX.slice(i, i + 900);
+  assert.ok(seg.indexOf('window.auth && window.auth.currentUser') >= 0,
+    'やり直しの前に証を見ていない');
+  assert.ok(seg.indexOf('emuEnsureSignedIn') >= 0);
+});
+
+test('待てないときも、上限で必ず切り上げる', () => {
+  const i = INDEX.indexOf('if (!app) return false;');
+  const seg = INDEX.slice(i, INDEX.indexOf('const names = [', i));
+  assert.ok(seg.indexOf('Promise.race') >= 0, '証を待つところで止まりうる');
+  assert.ok(seg.indexOf('limit - Date.now()') >= 0);
+});
+
+test('切り上げたときは、ログイン済みかどうかも残す', () => {
+  assert.ok(INDEX.indexOf('（ログイン済み: ') >= 0, '切り分けの手がかりが無い');
+});
+
+test('証が取れないまま出すときは、0を並べて黙らない', () => {
+  const i = INDEX.indexOf('_spSaidSignIn = true;');
+  assert.ok(i > 0, '何も言わずに0を並べている');
+  const seg = INDEX.slice(i - 400, i + 700);
+  assert.ok(seg.indexOf('if (window.auth && window.auth.currentUser) return;') >= 0,
+    'ログインしている人にまで出してしまう');
+  assert.ok(seg.indexOf('記録が無いからではなく') >= 0, '0件の理由を伝えていない');
+  assert.ok(INDEX.indexOf('let _spSaidSignIn = false;') >= 0, '毎回出てしまう');
+});

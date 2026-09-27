@@ -15823,6 +15823,25 @@ async function spDaoWaitReady(maxMs) {
   }
   if (!app) return false;
 
+  /* ①.5 ログインが解けるのを、先に待つ。
+
+     10/1 までは記録の決まり（canAccessSchoolPark）が「運営」か
+     「公式パスの持ち主」であることを求める。どちらもログインの証が要る。
+     証が無いあいだは、SDK も普通の通信（REST）も、まとめて断られる。
+     逃げ道をいくら足しても、そこは変わらない。
+
+     前はここを待たずに8つを走らせていた。だから証が間に合わないと
+     「おはよう、ゲスト」＋全部0 のまま覆いが外れていた。
+     証が取れないときは、そのまま進む（ログインしていない人も見に来る）。 */
+  if (typeof emuEnsureSignedIn === 'function') {
+    try {
+      await Promise.race([
+        emuEnsureSignedIn({ interactive: false }),
+        nap(Math.max(0, limit - Date.now()))
+      ]);
+    } catch (e) { console.warn('ログインを待てませんでした:', e && (e.message || e)); }
+  }
+
   /* ② 8つの読み込みを走らせて、全部が終わるのを待つ。
      1つが転んでも、残りは待つ（catch でつぶす）。 */
   const names = ['spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
@@ -15859,6 +15878,17 @@ async function spDaoWaitReady(maxMs) {
   while (Date.now() < limit && !filled()) {
     await nap(400);
     if (Date.now() >= limit) break;
+    /* まだ証が取れていないなら、走らせ直しても同じ結果になる。先に待つ。 */
+    if (typeof emuEnsureSignedIn === 'function'
+        && !(window.auth && window.auth.currentUser)) {
+      try {
+        await Promise.race([
+          emuEnsureSignedIn({ interactive: false }),
+          nap(Math.max(0, limit - Date.now()))
+        ]);
+      } catch (e) {}
+      if (Date.now() >= limit) break;
+    }
     const again = names.map(function (n) {
       const fn = window[n];
       if (typeof fn !== 'function') return Promise.resolve();
@@ -15867,7 +15897,12 @@ async function spDaoWaitReady(maxMs) {
     });
     await Promise.race([Promise.all(again), nap(Math.max(0, limit - Date.now()))]);
   }
-  if (!filled()) console.warn('SchoolPark の中身がそろう前に、待つのを切り上げました');
+  if (!filled()) {
+    const signedIn = !!(window.auth && window.auth.currentUser);
+    console.warn('SchoolPark の中身がそろう前に、待つのを切り上げました'
+      + '（ログイン済み: ' + signedIn + '）'
+      + (signedIn ? '' : ' ← 10/1までは、ログインしていないと記録を読めません'));
+  }
   return done;
 }
 window.spDaoWaitReady = spDaoWaitReady;
@@ -15885,6 +15920,7 @@ window.spDaoLooksReady = spDaoLooksReady;
 
 /* SchoolPark を、中身がそろってから見せる。覆いの出し入れまで面倒を見る。
    ログイン直後の着地と、ハブから選んだときの、どちらもここを通す。 */
+let _spSaidSignIn = false;
 async function spDaoOpenWhenReady() {
   const access = await spEnsureSchoolParkAccess();
   if (!access || !access.allowed) { spShowSchoolParkUnavailable(access); return; }
@@ -15895,7 +15931,21 @@ async function spDaoOpenWhenReady() {
   Promise.resolve()
     .then(function () { return spDaoWaitReady(15000); })
     .catch(function () {})
-    .then(function () { try { _hideSpLoadingOverlay(); } catch (e) {} });
+    .then(function () {
+      try { _hideSpLoadingOverlay(); } catch (e) {}
+      /* 証が取れないまま出すときは、0を並べて黙っていない。
+         10/1 までは、ログインしていないと記録そのものを読めない。
+         「おはよう、ゲスト」と0が並ぶ画面を見せて、あとは黙る、
+         というのがいちばん分からない。1回だけ、理由を言う。 */
+      if (window.auth && window.auth.currentUser) return;
+      if (_spSaidSignIn) return;
+      _spSaidSignIn = true;
+      alert('ログインが確認できませんでした。\n\n'
+        + '10月1日までは、ログインした方だけが SchoolPark の記録を読めます。\n'
+        + 'クエストも知恵カードも0件と出ているのは、記録が無いからではなく、\n'
+        + 'まだログインが確認できていないためです。\n\n'
+        + '右上からログインし直してから、もう一度お開きください。');
+    });
 }
 window.spDaoOpenWhenReady = spDaoOpenWhenReady;
 
