@@ -167,26 +167,31 @@ if (window.top === window.self) window.location.replace('/');
               <sc-if value="{{ b.isText }}">
                 <p style="white-space:pre-wrap; line-height:1.95; margin:10px 0">{{ b.text }}</p>
               </sc-if>
+              <!-- 表は div の display:table で組む。表のタグ（table・thead・tbody・tr）の
+                   中に置いた独自タグ（sc-for・sc-if）は、HTML の決まりで表の外へ
+                   追い出される（foster parenting）。追い出された繰り返しは中身が空になり、
+                   表には見出し1セルと中身1セルだけが、しかも繰り返しの外に残る。
+                   年内目標の表が10個とも空で出ていたのはこれ。div なら追い出しは
+                   起きず、見た目も表のまま保てる。role で表の意味も残す。
+                   表のタグで書き直すと同じことが起きる。tools/year-goals-tests で見張っている。 -->
               <sc-if value="{{ b.isTable }}">
                 <div style="overflow-x:auto; margin:12px 0">
-                  <table style="width:100%; border-collapse:collapse; font-size:14px; line-height:1.9">
+                  <div role="table" style="display:table; width:100%; border-collapse:collapse; font-size:14px; line-height:1.9">
                     <sc-if value="{{ b.hasHead }}">
-                      <thead><tr>
+                      <div role="row" style="display:table-row">
                         <sc-for list="{{ b.head }}" as="h">
-                          <th style="text-align:left; padding:10px 12px; border-bottom:1px solid rgba(20,19,16,.22); font-size:12px; letter-spacing:.06em; color:#6E695C; vertical-align:top">{{ h }}</th>
+                          <div role="columnheader" style="display:table-cell; text-align:left; padding:10px 12px; border-bottom:1px solid rgba(20,19,16,.22); font-size:12px; letter-spacing:.06em; color:#6E695C; vertical-align:top">{{ h }}</div>
                         </sc-for>
-                      </tr></thead>
+                      </div>
                     </sc-if>
-                    <tbody>
-                      <sc-for list="{{ b.rows }}" as="r">
-                        <tr>
-                          <sc-for list="{{ r.cells }}" as="c">
-                            <td style="padding:10px 12px; border-bottom:1px solid rgba(20,19,16,.1); vertical-align:top">{{ c }}</td>
-                          </sc-for>
-                        </tr>
-                      </sc-for>
-                    </tbody>
-                  </table>
+                    <sc-for list="{{ b.rows }}" as="r">
+                      <div role="row" style="display:table-row">
+                        <sc-for list="{{ r.cells }}" as="c">
+                          <div role="cell" style="display:table-cell; padding:10px 12px; border-bottom:1px solid rgba(20,19,16,.1); vertical-align:top">{{ c }}</div>
+                        </sc-for>
+                      </div>
+                    </sc-for>
+                  </div>
                 </div>
               </sc-if>
               <sc-if value="{{ b.isImage }}">

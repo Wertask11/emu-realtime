@@ -510,3 +510,26 @@ test('見本に、資料の特殊クエストが入っている', () => {
     assert.ok(heads.some(function (h) { return h.indexOf(g) === 0; }), g + ' の節が無い');
   });
 });
+
+/* 独自タグ（sc-for・sc-if）を、表のタグの中に置かない。
+
+   HTML の決まりでは、<table> <thead> <tbody> <tr> の中に置かれた未知のタグは
+   表の外へ追い出される（foster parenting）。追い出された sc-for は中身が
+   空になるので、繰り返しが一度も回らない。年内目標の表10個が、見出しだけ
+   出て中身が空だったのはこれ。dao.html を実際の Chromium に読ませると、
+   4つの sc-for / sc-if が <table> の外へ出て空になっていることが確認できた。
+
+   直したあとも、うっかり <table> で書き直すと同じことが起きる。
+   表のタグが無いことだけを見張る（div の display:table で組んでいる）。 */
+test('年内目標の表を、<table> のタグで組んでいない', () => {
+  const dao = readHtml('frontend/public/schoolpark/dao.html');
+  ['<table', '<thead', '<tbody', '<tfoot', '<tr', '<td', '<th '].forEach(function (tag) {
+    assert.equal(dao.indexOf(tag), -1,
+      tag + '> が dao.html にある。表のタグの中では sc-for と sc-if が外へ追い出され、'
+      + '繰り返しが空になる。div の display:table で組むこと');
+  });
+  /* 組み替えたあとも、表として読めるようにしておく */
+  ['role="table"', 'role="row"', 'role="columnheader"', 'role="cell"'].forEach(function (r) {
+    assert.ok(dao.indexOf(r) >= 0, r + ' が無い。表であることが読み上げに伝わらない');
+  });
+});
