@@ -41,6 +41,17 @@ function loader(opts) {
     spMoney: function (v, c) { return c + ' ' + v; },
     spPassportLoad: async function () { return opts.me === null ? null : { addr: ME, createdAt: 0 }; },
     spTrustScore: async function () { return opts.trust || { total: 15, need: 20, done: 1, wisdom: 1, cited: 0, months: 0 }; },
+    /* 読むところを1つにまとめたので、偽物もそこに合わせる。
+       返すのは配列。読めなかったときは null（0件とは違う）。 */
+    _spReadAll: async function (path) {
+      if (path === 'sp_wisdom') return opts.wisdomFails ? null : (opts.wisdom || []);
+      if (path === 'sp_quests') return opts.questsFail ? null : (opts.quests || []);
+      let m = /^sp_quests\/(.*)\/commits$/.exec(path);
+      if (m) return (opts.commits || {})[decodeURIComponent(m[1])] || [];
+      m = /^sp_wisdom\/(.*)\/cites$/.exec(path);
+      if (m) return opts.cites || [];
+      return [];
+    },
     window: {
       db: {}, fbLib: {
         collection: function () { return { path: [].slice.call(arguments, 1).join('/') }; },
@@ -849,4 +860,105 @@ test('onSnapshot には頼らない', () => {
   const seg = INDEX.slice(i - 1200, i + 1400);
   assert.equal(seg.indexOf('onSnapshot('), -1, '切れている通信路に頼っている');
   assert.ok(seg.indexOf('いまその通信路が切れている') >= 0, '理由を残していない');
+});
+
+/* ───────── 読むところを1つにまとめる ─────────
+
+   この形の読み取りが SchoolPark の中に20以上あり、逃げ道を1つずつ
+   足していた。足した先だけ直って、足していない先は空のまま。実際に
+
+     ギルド・クエスト・知恵カード  → 出る（逃げ道あり）
+     メンバー・トレジャリー・公園  → 空（逃げ道なし）
+
+   という形で残っていた。読むところを1つにする。 */
+
+function reader(opts) {
+  opts = opts || {};
+  const warn = [];
+  const cacheOnly = { size: 0, metadata: { fromCache: true }, forEach: function () {} };
+  const live = function (rows) {
+    return { size: rows.length, metadata: { fromCache: false },
+             forEach: function (f) { rows.forEach(function (r) { f({ id: r.id, data: function () { return r; } }); }); } };
+  };
+  const stubs = {
+    console: { warn: function () { warn.push([].slice.call(arguments).join(' ')); } },
+    _spSoon: async function (pr, ms) {
+      if (opts.hangs) return { ok: false };
+      try { return { ok: true, value: await pr }; } catch (e) { throw e; }
+    },
+    _spRestGet: async function () {
+      if (opts.restFails) throw new Error('HTTP 403');
+      return { documents: (opts.rest || []).map(function (r) {
+        return { name: 'projects/x/databases/(default)/documents/c/' + r.id, fields: r };
+      }) };
+    },
+    _spRestFields: function (f) { const o = {}; Object.keys(f).forEach(function (k) { o[k] = f[k]; }); return o; },
+    window: {
+      db: {}, fbLib: {
+        collection: function () { return { path: [].slice.call(arguments, 1).join('/') }; },
+        getDocs: async function () {
+          if (opts.throws) throw new Error('offline');
+          return opts.sdk ? live(opts.sdk) : cacheOnly;
+        }
+      }
+    }
+  };
+  const api = build(INDEX, ['_spReadAll'], stubs);
+  return { read: api._spReadAll, warn: warn };
+}
+
+test('SDKで読めたら、それを配列で返す', async () => {
+  const r = reader({ sdk: [{ id: 'a', name: '甲' }] });
+  assert.deepEqual(await r.read('sp_quests'), [{ id: 'a', name: '甲' }]);
+});
+
+test('控えの空は0件と信じず、普通の通信へ回す', async () => {
+  const r = reader({ rest: [{ id: 'b', name: '乙' }] });   /* SDK は控えの空 */
+  const rows = await r.read('sp_quests');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, 'b');
+});
+
+test('返ってこないときも、普通の通信へ回す', async () => {
+  const r = reader({ hangs: true, rest: [{ id: 'c' }] });
+  const rows = await r.read('sp_treasury');
+  assert.equal(rows.length, 1);
+});
+
+test('例外でも、普通の通信へ回す', async () => {
+  const r = reader({ throws: true, rest: [{ id: 'd' }] });
+  const rows = await r.read('sp_park');
+  assert.equal(rows.length, 1);
+});
+
+test('どちらも読めなければ null（0件とは違う）', async () => {
+  const r = reader({ hangs: true, restFails: true });
+  assert.equal(await r.read('sp_quests'), null);
+  assert.match(r.warn.join(''), /読めませんでした/);
+});
+
+test('サーバーが本当に0件と答えたら、0件として返す', async () => {
+  const r = reader({ sdk: [] });   /* fromCache:false の空 */
+  assert.deepEqual(await r.read('sp_quests'), []);
+});
+
+test('メンバー・トレジャリー・公園・名前が、その道具を通る', () => {
+  [['sp_wisdom', "const ws = await _spReadAll('sp_wisdom')"],
+   ['sp_quests（メンバー）', "const qsRows = await _spReadAll('sp_quests')"],
+   ['受けた記録', "_spReadAll('sp_quests/' + encodeURIComponent(q.id) + '/commits')"],
+   ['入出金', "const es = await _spReadAll('sp_treasury')"],
+   ['公園', "const snap = await _spReadAll('sp_park')"],
+   ['乗った人', "_spReadAll('sp_park/' + encodeURIComponent(i.id) + '/joins')"],
+   ['議題', "const snap = await _spReadAll('sp_votes')"]].forEach(function (x) {
+    assert.ok(INDEX.indexOf(x[1]) >= 0, x[0] + ' が共通の読み取りを通っていない');
+  });
+});
+
+test('配列に替えたのに .data() を呼び残していない', () => {
+  /* 呼び残すと、その場で落ちて画面が空になる。 */
+  ['cs.forEach(function (c) {\n          const d = c.data()',
+   'es.forEach(function (s) { entries.push({ id: s.id, ...(s.data()',
+   "snap.forEach(function (s) { items.push({ id: s.id, ...(s.data()"].forEach(function (bad) {
+    assert.equal(INDEX.indexOf(bad), -1, '古い書き方が残っている: ' + bad.slice(0, 30));
+  });
 });
