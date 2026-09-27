@@ -400,3 +400,46 @@ test('SDKが生きていて本当に受けていないときは、余計に聞�
   assert.equal(sc.failed, false);
   assert.equal(asked, 0, '通信が生きているのに普通の通信で聞きに行っている');
 });
+
+/* ───────── 読み込み中の覆いと、今週の広場の数字 ─────────
+
+   画面は「おはよう、ゲスト」やクエスト0本・知恵0件のまま出ていた。
+   覆い（読み込み中の画面）は8つの読み込みが「終わる」のを待っていたが、
+   通信が切れていると、どの読み込みも手元の控え（空）を成功として返して
+   すぐ終わる。終わったので覆いを外す。中身は空のまま表に出る。 */
+
+test('覆いは、中身が入るまで外さない', () => {
+  const i = INDEX.indexOf('const filled = function () {');
+  assert.ok(i > 0, '中身が入ったかを見ていない');
+  const seg = INDEX.slice(i, i + 900);
+  assert.ok(seg.indexOf("st.me.name !== 'ゲスト'") >= 0, 'ゲストのままでも外してしまう');
+  assert.ok(seg.indexOf("(st.quests || []).length + (st.wisdom || []).length") >= 0,
+    'クエストも知恵も空のまま外してしまう');
+});
+
+test('中身が入るまで、読み込みをやり直す', () => {
+  const i = INDEX.indexOf('while (Date.now() < limit && !filled())');
+  assert.ok(i > 0, '読み直していない');
+  const seg = INDEX.slice(i, i + 700);
+  assert.ok(seg.indexOf('names.map') >= 0, '8つを走らせ直していない');
+});
+
+test('それでも上限で切り上げる（入れなくなるほうが困る）', () => {
+  const i = INDEX.indexOf('while (Date.now() < limit && !filled())');
+  const seg = INDEX.slice(i, i + 700);
+  assert.ok(seg.indexOf('if (Date.now() >= limit) break;') >= 0, '待ち続けてしまう');
+  assert.ok(INDEX.indexOf('待つのを切り上げました') >= 0, '切り上げたことを残していない');
+});
+
+test('今週の広場の知恵も、普通の通信で読み直す', () => {
+  /* stats.wisdomTotal は spDaoLoadWisdom が入れた配列の長さ。
+     本体の読みに逃げ道が無く、報告（logs）にだけあった。 */
+  const i = INDEX.indexOf("_spWarnDenied('知恵', e);");
+  assert.ok(i > 0);
+  const seg = INDEX.slice(i, i + 900);
+  assert.ok(seg.indexOf('_spRestWisdom()') >= 0, '知恵の本体に逃げ道が無い');
+  assert.ok(seg.indexOf('知恵カードを普通の通信で読みました') >= 0);
+  /* 例外で即 return していたのをやめ、逃げ道へ回す。 */
+  assert.equal(seg.slice(0, seg.indexOf('if (!docs.length)')).indexOf('return;'), -1,
+    '例外のときに逃げ道へ回らず、そこで終わっている');
+});
