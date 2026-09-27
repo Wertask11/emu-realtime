@@ -458,3 +458,62 @@ test('サーバーは、渡せていない承認にあとから渡せる', () =>
   assert.ok(BACKEND.indexOf('Number(was.approvedAt) > 0 ? Number(was.approvedAt) : now') >= 0,
     '認めた日を上書きしてしまう');
 });
+
+/* ───────── 管理画面にも、普通の通信の逃げ道 ─────────
+
+   SchoolPark 側のコンソールが、こう出ていた。
+
+     完走を数えるクエストを普通の通信で読みました（2件）
+     知恵カードを普通の通信で読みました（1件）
+
+   クエストは2本、知恵カードは1枚ある。なのに管理画面は
+
+     クエスト 0本 ／ 知恵カード 0枚 ／ まだクエストがありません
+     承認待ち：いま認めるものはありません。
+
+   逃げ道を SchoolPark 側にだけ入れて、管理画面に入れていなかった。
+   クエストが見えないので、承認しようにもボタンが出ない。 */
+
+test('一覧を普通の通信で読む道具がある', () => {
+  assert.ok(ADMIN.indexOf('async function spRestList(') >= 0, '一覧の逃げ道が無い');
+  /* spRestDoc は1件読み専用だった。 */
+  const i = ADMIN.indexOf('async function spRestList(');
+  const seg = ADMIN.slice(i, i + 900);
+  assert.ok(seg.indexOf('pageSize=') >= 0, '一覧として取りに行っていない');
+  assert.ok(seg.indexOf('documents') >= 0);
+  assert.ok(seg.indexOf('Bearer') >= 0, 'ログインの証を付けていない');
+});
+
+test('控えの空を0件だと信じない', () => {
+  const i = ADMIN.indexOf('async function spRows(');
+  assert.ok(i > 0, '控えの判定が無い');
+  const seg = ADMIN.slice(i, i + 900);
+  assert.ok(seg.indexOf('snap.metadata && snap.metadata.fromCache') >= 0, '控えを見ていない');
+  assert.ok(seg.indexOf('spRestList(') >= 0, '普通の通信へ回していない');
+  assert.ok(seg.indexOf('普通の通信で読みました') >= 0, '逃げ道を通ったことを残していない');
+});
+
+test('5つの一覧ぜんぶを、逃げ道つきで読む', () => {
+  const i = ADMIN.indexOf('const [money, park, quests, votes, wisdomRows]');
+  assert.ok(i > 0, '一覧が逃げ道を通っていない');
+  const seg = ADMIN.slice(i, i + 500);
+  ['sp_treasury', 'sp_park', 'sp_quests', 'sp_votes', 'sp_wisdom'].forEach(c =>
+    assert.ok(seg.indexOf(c) >= 0, c + ' が逃げ道を通っていない'));
+});
+
+test('受けた記録と報告にも逃げ道を通す', () => {
+  /* ここが空だと、承認待ちに誰も出ず、完走も数えられない。 */
+  const i = ADMIN.indexOf('const questRows = await Promise.all(');
+  assert.ok(i > 0, '受けた記録が逃げ道を通っていない');
+  const seg = ADMIN.slice(i, i + 700);
+  assert.ok(seg.indexOf('"/commits"') >= 0 || seg.indexOf('/commits') >= 0);
+  assert.ok(seg.indexOf('/logs') >= 0);
+  assert.ok(seg.indexOf('spRows(') >= 0);
+});
+
+test('生のスナップショットを使い残していない', () => {
+  /* 配列に替えたのに .data() や .forEach を呼ぶと、そこで落ちる。 */
+  assert.equal(/\b(qs|vs|ws|ps|ts2)\.(forEach|size|docs|empty)\b/.test(ADMIN), false,
+    '生のスナップショットが残っている');
+  assert.equal(ADMIN.indexOf('(l.data()||{}).author'), -1, '報告が配列前提になっていない');
+});

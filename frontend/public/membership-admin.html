@@ -1297,6 +1297,53 @@ async function spRestDoc(path) {
   return ydFromRestFields((j && j.fields) || {});
 }
 
+/* 一覧を普通の通信で読む。
+
+   spRestDoc は1件読み専用だったので、クエストや知恵カードの一覧には
+   逃げ道が無かった。SchoolPark 本体（index.html の _spRestQuests）と
+   同じ考え方をこちらにも置く。
+
+   通信が切れているとき getDocs は例外を投げない。手元の控え（開いた直後は
+   空）を「成功」として返す。それを0件と信じて
+     クエスト 0本 ／ 知恵カード 0枚 ／ まだクエストがありません
+   と出していた。承認待ちも出ないので、認めることすらできなかった。 */
+async function spRestList(path) {
+  const opt = (app && app.options) || {};
+  if (!opt.projectId || !opt.apiKey) throw new Error("設定が読めない");
+  const u = auth.currentUser;
+  if (!u || typeof u.getIdToken !== "function") throw new Error("ログインの証が取れない");
+  const token = await u.getIdToken();
+  const url = "https://firestore.googleapis.com/v1/projects/" + opt.projectId
+            + "/databases/(default)/documents/" + path + "?pageSize=300&key=" + opt.apiKey;
+  const r = await fetch(url, { cache: "no-store", headers: { Authorization: "Bearer " + token } });
+  if (r.status === 404) return [];
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const j = await r.json();
+  return ((j && j.documents) || []).map(function (d) {
+    return Object.assign({ id: decodeURIComponent(String(d.name || "").split("/").pop()) },
+      ydFromRestFields(d.fields || {}));
+  });
+}
+
+/* 読めた一覧を、扱いやすい形（配列）にして返す。
+   控えの空だったら、普通の通信で読み直す。 */
+async function spRows(snap, path, label) {
+  const got = [];
+  if (snap && typeof snap.forEach === "function") {
+    snap.forEach(function (d) { got.push(Object.assign({ id: d.id }, d.data() || {})); });
+  }
+  const stale = !snap || (!got.length && snap.metadata && snap.metadata.fromCache);
+  if (!stale) return got;
+  try {
+    const rest = await spRestList(path);
+    if (rest.length) console.warn((label || path) + "を普通の通信で読みました（" + rest.length + "件）");
+    return rest;
+  } catch (e) {
+    console.warn((label || path) + "を普通の通信でも読めませんでした:", e && (e.message || e));
+    return got;
+  }
+}
+
 async function spMyAddress() {
   const f = await spReady();
   const uid = auth.currentUser && auth.currentUser.uid;
@@ -1837,16 +1884,21 @@ async function renderSchoolPark() {
   /* 読めなかったときは ydState を空のままにする。
      renderYearDoc が編集欄の代わりに「もう一度読む」を出す。 */
   ydState = ydRead.ok ? (ydRead.data ? ydFromDoc(ydRead.data) : ydBlank()) : null;
-  const money = []; ts2.forEach(s => money.push({ id: s.id, ...(s.data() || {}) }));
+  /* 控えの空を0件だと信じない。信じていたので、クエストも知恵カードも
+     0と出て、承認待ちが出ず、認めることすらできなかった。 */
+  const [money, park, quests, votes, wisdomRows] = await Promise.all([
+    spRows(ts2, "sp_treasury", "トレジャリー"),
+    spRows(ps, "sp_park", "公園"),
+    spRows(qs, "sp_quests", "クエスト"),
+    spRows(vs, "sp_votes", "議題"),
+    spRows(ws, "sp_wisdom", "知恵カード")
+  ]);
   money.sort((a, b) => (b.at || b.createdAt || 0) - (a.at || a.createdAt || 0));
   const PARK_KIND = { board:"今日ひま？ボード", dumb:"バカな挑戦", event:"月例の集まり" };
-  const park = []; ps.forEach(s => park.push({ id: s.id, ...(s.data() || {}) }));
   park.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  const quests = []; qs.forEach(s => quests.push({ id: s.id, ...(s.data() || {}) }));
   quests.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  const votes = []; vs.forEach(s => votes.push({ id: s.id, ...(s.data() || {}) }));
   votes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  let wisdomCount = 0; ws.forEach(() => wisdomCount++);
+  const wisdomCount = wisdomRows.length;
 
   /* 議題ごとの票を数える。数を別に持たず、票そのものを毎回数える。 */
   /* 議題1件ごとに1往復していた。まとめて同時に聞く。 */
@@ -1877,17 +1929,25 @@ async function renderSchoolPark() {
   /* クエスト1本につき「受けた人」と「報告」で2往復ある。
      1本ずつ順に待っていたので、30本なら60往復ぶん待っていた。
      クエストぶんも、その中の2つも、まとめて同時に投げる。 */
-  const questSnaps = await Promise.all(quests.map(q => Promise.all([
-    f.getDocs(f.collection(f.db, "sp_quests", q.id, "commits")).catch(() => null),
-    f.getDocs(f.collection(f.db, "sp_quests", q.id, "logs")).catch(() => null)
-  ])));
+  /* 受けた記録と報告にも、同じ逃げ道を通す。ここが空のままだと、
+     承認待ちに誰も出ず、認めた人の完走も数えられない。 */
+  const questRows = await Promise.all(quests.map(async q => {
+    const [cs, ls] = await Promise.all([
+      f.getDocs(f.collection(f.db, "sp_quests", q.id, "commits")).catch(() => null),
+      f.getDocs(f.collection(f.db, "sp_quests", q.id, "logs")).catch(() => null)
+    ]);
+    return await Promise.all([
+      spRows(cs, "sp_quests/" + encodeURIComponent(q.id) + "/commits", "受けた記録"),
+      spRows(ls, "sp_quests/" + encodeURIComponent(q.id) + "/logs", "報告")
+    ]);
+  }));
   quests.forEach((q, qi) => {
     q.took = 0;
     const took = [];
-    const cs = questSnaps[qi][0], ls = questSnaps[qi][1];
+    const cs = questRows[qi][0], ls = questRows[qi][1];
     if (cs) {
       cs.forEach(c => {
-        const d = c.data() || {};
+        const d = c;
         q.took++;
         took.push({ addr: c.id, name: d.name || "", approved: d.approved === true,
           /* サーバーが引き当てた額。0 なら EMUER はまだ動いていない。 */
@@ -1898,7 +1958,7 @@ async function renderSchoolPark() {
     const logCount = {};
     if (ls) {
       ls.forEach(l => {
-        const a = String((l.data()||{}).author || "").toLowerCase();
+        const a = String((l && l.author) || "").toLowerCase();
         if (a) logCount[a] = (logCount[a] || 0) + 1;
       });
     }
@@ -1910,8 +1970,7 @@ async function renderSchoolPark() {
        SchoolPark 側の知恵ライブラリを別に見に行くしかなく、
        認めるかどうかの判断がここだけでは付かなかった。 */
     const wisdomCount = {};
-    ws.forEach(s => {
-      const d = s.data() || {};
+    wisdomRows.forEach(d => {
       if (String(d.questId || "") !== q.id) return;
       const a = String(d.author || "").toLowerCase();
       if (a) wisdomCount[a] = (wisdomCount[a] || 0) + 1;
@@ -1932,7 +1991,7 @@ async function renderSchoolPark() {
   /* 知恵カードと、引用された数 */
   {
     const mine = [];
-    ws.forEach(s => { const d = s.data() || {}; mine.push({ id: s.id, author: d.author, name: d.authorName }); });
+    wisdomRows.forEach(d => { mine.push({ id: d.id, author: d.author, name: d.authorName }); });
     /* 知恵カード1枚ごとに1往復していた。まとめて同時に聞く。 */
     const citeSnaps = await Promise.all(mine.map(x =>
       f.getDocs(f.collection(f.db, "sp_wisdom", x.id, "cites")).catch(() => null)));
