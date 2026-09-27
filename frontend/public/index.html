@@ -16920,13 +16920,28 @@ window.spDaoLoadVotes = async function (app) {
     snap.forEach(function (s) { list.push(Object.assign({ id: s.id }, s.data() || {})); });
     _spVoteDocs = list;
   } catch (e) { _spWarnDenied('議題', e); }
+  /* ギルドは、クエスト一覧とは別にもう一度読んでいる。
+     こちらにだけ逃げ道が無かったので、通信が切れていると
+     「LEARN のクエスト 0」「まだクエストがありません」になっていた。
+     一般 #001 は LEARN なのに、ギルドに出てこない。 */
+  let questList = [];
   try {
     const q = fb.query(fb.collection(window.db, 'sp_quests'), fb.orderBy('createdAt', 'desc'), fb.limit(100));
-    const snap = await fb.getDocs(q);
-    const list = [];
-    snap.forEach(function (s) { list.push(Object.assign({ id: s.id }, s.data() || {})); });
-    _spGuildQuestDocs = list;
+    const r = await _spSoon(fb.getDocs(q), 4000);
+    if (r.ok) r.value.forEach(function (s) { questList.push(Object.assign({ id: s.id }, s.data() || {})); });
+    else console.warn('ギルドのクエストの読み取りが返ってきません');
   } catch (e) { _spWarnDenied('クエスト', e); }
+  if (!questList.length) {
+    try {
+      const rest = await _spRestQuests();
+      if (rest.length) {
+        questList = rest;
+        console.warn('ギルドのクエストを普通の通信で読みました（' + rest.length + '件）');
+      }
+    } catch (e) { console.warn('ギルドのクエストを普通の通信でも読めませんでした:', e && (e.message || e)); }
+  }
+  /* 読めなかったときは、前に出ていたものを消さない。 */
+  if (questList.length || !_spGuildQuestDocs.length) _spGuildQuestDocs = questList;
 
   /* ギルドごとに「参加したい」と「応援する」で2往復ある。
      5ギルドを1つずつ順に待っていたので10往復ぶん待っていた。まとめて同時に投げる。 */
@@ -17114,16 +17129,26 @@ window.spGuildToggle = async function (guildId, kind, app) {
   _spGuildBusy = true;
   const fb = window.fbLib;
   const ref = fb.doc(window.db, 'sp_guild_members', guildId, sub, p.addr);
+  /* 通信が切れているとき、getDoc も setDoc も例外を投げず、値も返さない。
+     そのまま止まる。前はここで await したまま _spGuildBusy が true に
+     居座り、以後は何度押しても最初の行（if (_spGuildBusy) return;）で
+     跳ね返された。押しても何も起きず、断りの言葉すら出ない。
+     見切って、必ず _spGuildBusy を戻す。 */
   try {
-    const cur = await fb.getDoc(ref);
-    if (cur.exists()) await fb.deleteDoc(ref);
-    else await fb.setDoc(ref, { name: p.name, at: Date.now() });
+    const cur = await _spSoon(fb.getDoc(ref), 4000);
+    if (!cur.ok) throw new Error('いまの状態を確かめられませんでした');
+    const write = cur.value.exists() ? fb.deleteDoc(ref) : fb.setDoc(ref, { name: p.name, at: Date.now() });
+    const done = await _spSoon(write, 6000);
+    if (!done.ok) throw new Error('保存が返ってきませんでした');
   } catch (e) {
+    console.warn('ギルドの参加・応援を保存できませんでした:', e && (e.message || e));
     alert('うまくいきませんでした。通信を確かめて、もう一度お試しください。');
     _spGuildBusy = false;
     return;
+  } finally {
+    /* 途中で何が起きても、次に押せる状態へ戻す。 */
+    _spGuildBusy = false;
   }
-  _spGuildBusy = false;
   await window.spDaoLoadVotes(app);
 };
 
