@@ -494,3 +494,63 @@ test('証が取れないまま出すときは、0を並べて黙らない', () =
   assert.ok(seg.indexOf('記録が無いからではなく') >= 0, '0件の理由を伝えていない');
   assert.ok(INDEX.indexOf('let _spSaidSignIn = false;') >= 0, '毎回出てしまう');
 });
+
+/* ───────── 全部の入口（emuMyIdentity） ─────────
+
+   計器を付けたら、こう出た。
+
+     待つのを切り上げました（ログイン済み: true）
+
+   ログインは通っている。なのに「おはよう、ゲスト」で全部0。
+   犯人は通信でも認証でもなく、その間にある本人情報の読み取りだった。
+
+   emuMyIdentity が null を返すと、パスポートも名前も名義も無くなる。
+   画面はゲストになり、以降の読み込みが軒並み0件になる。
+   ところがここは getDoc を1回投げるだけで、転んだら終わりだった。
+   しかも getDoc は通信が切れても例外を投げず、控えを返す。
+   控えに無ければ「記録が無い」と読めて、その先は記録を作りに行く。
+   すでに有る記録を作ろうとするので、そこでも転ぶ。
+
+   同じ不具合は管理画面（spMyAddress）で先に直してあった。
+   こちらにだけ入っていなかった。 */
+
+test('1回で転んで終わりにしない（読み直す）', () => {
+  const i = INDEX.indexOf('async function emuMyIdentity');
+  assert.ok(i > 0);
+  const seg = INDEX.slice(i, i + 2600);
+  assert.ok(seg.indexOf('for (let i = 0; i < 3 && !snap; i += 1)') >= 0, '読み直していない');
+  assert.ok(seg.indexOf("e.code === 'permission-denied'") >= 0,
+    '権限で断られたときまで待たせている');
+});
+
+test('控えの「無い」を、記録が無いと読まない', () => {
+  const i = INDEX.indexOf('async function emuMyIdentity');
+  const seg = INDEX.slice(i, i + 2600);
+  assert.ok(seg.indexOf('!got.exists() && got.metadata && got.metadata.fromCache') >= 0,
+    '控えの空を真に受けている');
+  assert.ok(seg.indexOf('記録は作りません') >= 0, '確かめずに作りに行っている');
+});
+
+test('SDKで決められなければ、普通の通信で読む', () => {
+  const i = INDEX.indexOf('async function emuMyIdentity');
+  const seg = INDEX.slice(i, i + 2600);
+  assert.ok(seg.indexOf("_spRestDoc('ches_accounts/'") >= 0, '逃げ道が無い');
+  assert.ok(seg.indexOf('自分のアカウントを普通の通信で読みました') >= 0);
+});
+
+test('読めなかったときは、記録を作りに行かない', () => {
+  const i = INDEX.indexOf('async function emuMyIdentity');
+  const seg = INDEX.slice(i, i + 2600);
+  const rest = seg.indexOf('_spRestDoc(');
+  const made = seg.indexOf('_emuCreateAccountDoc(user)');
+  assert.ok(rest > 0 && made > rest, '逃げ道より先に作りに行っている');
+  const between = seg.slice(rest, made);
+  assert.ok(between.indexOf('return null;') >= 0, '読めなくてもそのまま作りに行く');
+});
+
+test('管理画面と同じ直し方にそろえる', () => {
+  /* membership-admin.html の spMyAddress で先に直したもの。 */
+  const ADMIN = readHtml('frontend/public/membership-admin.html');
+  assert.ok(ADMIN.indexOf('spRestDoc') >= 0, '管理画面の逃げ道が消えている');
+  assert.ok(INDEX.indexOf("_spRestDoc('ches_accounts/'") >= 0, 'こちらに入っていない');
+});

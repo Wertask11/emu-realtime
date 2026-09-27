@@ -6530,23 +6530,65 @@ async function emuMyIdentity() {
   const user = await emuEnsureSignedIn();
   if (!user || !window.db || !window.fbLib) return null;
   if (_emuIdentity && _emuIdentity.uid === user.uid) return _emuIdentity;
-  let snap;
-  try {
-    snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', user.uid));
-  } catch (e) {
-    console.warn('自分のアカウントを読めませんでした:', e && (e.message || e));
-    return null;
+  /* ここは全部の入口。ここが null を返すと、パスポートも名前も名義も無くなり、
+     画面は「おはよう、ゲスト」になって、以降の読み込みが軒並み0件になる。
+
+     ところが1回 getDoc を投げるだけで、転んだらそこで終わりだった。
+     しかも getDoc は通信が切れていても例外を投げない。手元の控えを返すので、
+     控えに無ければ「記録が無い」と読めてしまう。その先は記録を作りに行く。
+     すでに有る記録を作ろうとするので、そこでも転ぶ。
+
+     同じ不具合は管理画面（membership-admin.html の spMyAddress）で先に
+     見つけて直してあった。こちらにだけ入っていなかった。
+     直し方もそろえる：読み直す → それでもだめなら普通の通信で読む。 */
+  let snap = null, lastErr = null, stale = false;
+  for (let i = 0; i < 3 && !snap; i += 1) {
+    if (i) await new Promise(function (r) { setTimeout(r, i * 400); });
+    try {
+      const got = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', user.uid));
+      /* 「無い」が手元の控えから来たのなら、それは「無い」ではない。 */
+      if (!got.exists() && got.metadata && got.metadata.fromCache) { stale = true; continue; }
+      snap = got;
+    } catch (e) {
+      lastErr = e;
+      /* 権限で断られているなら、何度やっても同じ。待たせない。 */
+      if (e && e.code === 'permission-denied') break;
+    }
   }
+
+  /* SDK では決められなかった。普通の通信で読み直す。 */
+  let data = null;
+  if (snap) {
+    data = snap.exists() ? (snap.data() || {}) : null;
+  } else {
+    try {
+      data = await _spRestDoc('ches_accounts/' + encodeURIComponent(user.uid), true);
+      console.warn('自分のアカウントを普通の通信で読みました');
+    } catch (e) {
+      console.warn('自分のアカウントを読めませんでした:',
+        (lastErr && (lastErr.message || lastErr)) || (e && (e.message || e)));
+      return null;   /* 読めなかった。「記録が無い」とは言わない（作りに行かない） */
+    }
+  }
+
   /* ルールの hasAccount() と同じ条件。これが無いと、Good も Change も投稿も、
      何を書いても permission-denied になる。
      ウォレットで入り直したときなど、Firebaseのセッションだけ先にできて
      この記録が無い状態がありうるので、その場で作って復旧する。
-     （ルールも「本人のuidに限り作成してよい」と認めている） */
-  if (!snap.exists()) {
-    snap = await _emuCreateAccountDoc(user);
-    if (!snap) return null;
+     （ルールも「本人のuidに限り作成してよい」と認めている）
+
+     ただし「読めなかった」と「本当に無い」を取り違えないこと。
+     控えしか見ていないのに作りに行くと、すでに有る記録を作ろうとして転ぶ。 */
+  if (!data) {
+    if (stale && !snap) {
+      console.warn('アカウントの有無を確かめられませんでした（通信）。記録は作りません');
+      return null;
+    }
+    const made = await _emuCreateAccountDoc(user);
+    if (!made) return null;
+    data = made.data() || {};
   }
-  const d = snap.data() || {};
+  const d = data;
   const wallet = String(d.walletAddress || '').toLowerCase();
   const ches = String(d.chesAddress || d.walletAddress || '').toLowerCase();
   if (!wallet) return null;
