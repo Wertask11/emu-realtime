@@ -17625,6 +17625,43 @@ function _spSoon(promise, ms) {
   ]).finally(function () { if (timer) clearTimeout(timer); });
 }
 
+/* 一覧を1回で読む。SDK → だめなら普通の通信。
+
+   この形の読み取りが SchoolPark の中に20以上ある。逃げ道を1つずつ
+   足していたので、足した先だけ直って、足していない先は空のままだった。
+   実際に、ギルドとクエストと知恵は出るのにメンバーとトレジャリーだけ
+   空、ということが起きた。読むところを1つにまとめる。
+
+   返すのは配列。読めなかったときは null（0件とは違う）。 */
+async function _spReadAll(path, ms) {
+  const fb = window.fbLib;
+  const parts = String(path || '').split('/').filter(Boolean);
+  let rows = null;
+  if (fb && window.db && parts.length) {
+    try {
+      const r = await _spSoon(fb.getDocs(fb.collection.apply(null, [window.db].concat(parts))), ms || 4000);
+      if (r.ok) {
+        const out = [];
+        r.value.forEach(function (d) { out.push(Object.assign({ id: d.id }, d.data() || {})); });
+        /* 控えしか無いときの「0件」は、0件ではない。 */
+        if (out.length || !(r.value.metadata && r.value.metadata.fromCache)) rows = out;
+      }
+    } catch (e) { /* 下の普通の通信で読み直す */ }
+  }
+  if (rows) return rows;
+  try {
+    const j = await _spRestGet(path + '?pageSize=300', true);
+    return ((j && j.documents) || []).map(function (d) {
+      return Object.assign({ id: decodeURIComponent(String(d.name || '').split('/').pop()) },
+        _spRestFields(d.fields || {}));
+    });
+  } catch (e) {
+    console.warn(path + ' を読めませんでした:', e && (e.message || e));
+    return null;
+  }
+}
+window._spReadAll = _spReadAll;
+
 /* 記録を1件だけ読む。無ければ null。 */
 async function _spRestDoc(path, needAuth) {
   const j = await _spRestGet(path, needAuth);
@@ -19350,9 +19387,9 @@ window.spDaoLoadMembers = async function (app) {
 
   /* 知恵カードと、その引用（数として出すだけ。予算からは配らない） */
   try {
-    const ws = await fb.getDocs(fb.collection(window.db, 'sp_wisdom'));
-    const ids = [];
-    ws.forEach(function (s) { ids.push({ id: s.id, ...(s.data() || {}) }); });
+    const ws = await _spReadAll('sp_wisdom');
+    if (!ws) throw new Error('知恵カードを読めなかった');
+    const ids = ws.slice();
     /* 知恵カード1枚ごとに1往復していた。まとめて同時に聞く。 */
     const citeSnaps = await Promise.all(ids.map(function (w) {
       return fb.getDocs(fb.collection(window.db, 'sp_wisdom', w.id, 'cites'))
@@ -19373,12 +19410,12 @@ window.spDaoLoadMembers = async function (app) {
 
   /* 完了したクエストと、運営が認めた参加者 */
   try {
-    const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
-    const list = [];
-    qs.forEach(function (s) { list.push({ id: s.id, ...(s.data() || {}) }); });
+    const qsRows = await _spReadAll('sp_quests');
+    if (!qsRows) throw new Error('クエストを読めなかった');
+    const list = qsRows.slice();
     /* クエスト1本ごとに1往復していた。まとめて同時に聞く。 */
     const commitSnaps = await Promise.all(list.map(function (q) {
-      return fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'commits'))
+      return _spReadAll('sp_quests/' + encodeURIComponent(q.id) + '/commits')
                .catch(function () { return null; });
     }));
     for (let qi = 0; qi < list.length; qi++) {
@@ -19387,8 +19424,7 @@ window.spDaoLoadMembers = async function (app) {
       const cs = commitSnaps[qi];
       if (cs) {
         cs.forEach(function (c) {
-          const d = c.data() || {};
-          took.push({ addr: c.id, name: d.name || '', approved: d.approved === true });
+          took.push({ addr: c.id, name: c.name || '', approved: c.approved === true });
         });
       }
       /* 受けた人は、認められていなくても一覧には出す（「参加中」として） */
@@ -19559,15 +19595,17 @@ window.spDaoLoadTreasury = async function (app) {
      この2つは別ものなので、別々に読んで、別々に出す。 */
   let quests = [], entries = [];
   try {
-    const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
-    qs.forEach(function (s) { quests.push({ id: s.id, ...(s.data() || {}) }); });
+    const qs = await _spReadAll('sp_quests');
+    if (!qs) throw new Error('クエストを読めなかった');
+    qs.forEach(function (s) { quests.push(s); });
   } catch (e) {
     console.warn('クエストを読めませんでした:', e && (e.message || e));
     return;
   }
   try {
-    const es = await fb.getDocs(fb.collection(window.db, 'sp_treasury'));
-    es.forEach(function (s) { entries.push({ id: s.id, ...(s.data() || {}) }); });
+    const es = await _spReadAll('sp_treasury');
+    if (!es) throw new Error('入出金を読めなかった');
+    es.forEach(function (s) { entries.push(s); });
   } catch (e) {
     /* 記録がまだ1件も無いときも、ここは通る。予算だけ出す。 */
     console.warn('入出金の記録を読めませんでした:', e && (e.message || e));
@@ -19738,8 +19776,9 @@ window.spDaoLoadPark = async function (app) {
 
   let items = [];
   try {
-    const snap = await fb.getDocs(fb.collection(window.db, 'sp_park'));
-    snap.forEach(function (s) { items.push({ id: s.id, ...(s.data() || {}) }); });
+    const snap = await _spReadAll('sp_park');
+    if (!snap) throw new Error('公園を読めなかった');
+    snap.forEach(function (s) { items.push(s); });
   } catch (e) {
     _spWarnDenied('公園', e);
     return;
@@ -19752,7 +19791,7 @@ window.spDaoLoadPark = async function (app) {
      ボード以外（挑戦・集まり）は元から読んでいないので、そのまま飛ばす。 */
   const joinSnaps = await Promise.all(items.map(function (i) {
     if (i.kind !== 'board') return null;
-    return fb.getDocs(fb.collection(window.db, 'sp_park', i.id, 'joins'))
+    return _spReadAll('sp_park/' + encodeURIComponent(i.id) + '/joins')
              .catch(function () { return null; });
   }));
   for (let ii = 0; ii < items.length; ii++) {
@@ -19762,7 +19801,7 @@ window.spDaoLoadPark = async function (app) {
       const js = joinSnaps[ii];
       if (js) {
         js.forEach(function (j) {
-          names.push((j.data() || {}).name || _spShortAddr(j.id));
+          names.push(j.name || _spShortAddr(j.id));
           if (mine && j.id.toLowerCase() === mine) on = true;
         });
       }
@@ -20067,7 +20106,8 @@ async function openSpPassport() {
   let votes = 0;
   try {
     const fb = window.fbLib;
-    const snap = await fb.getDocs(fb.collection(window.db, 'sp_votes'));
+    const snap = await _spReadAll('sp_votes');
+    if (!snap) throw new Error('議題を読めなかった');
     const ids = [];
     snap.forEach(function (s) { ids.push(s.id); });
     /* 議題1件ごとに「自分が入れたか」を1往復ずつ聞いていた。まとめて同時に聞く。 */
