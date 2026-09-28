@@ -200,6 +200,16 @@ function scorer(opts) {
       opts.sawMe = me;
       return opts.done || [];
     },
+    /* 知恵カードと引用は共有の読み口から来る。
+       読めなかったとき（控えしか無いときを含む）は null。 */
+    _spAllWisdom: async function () {
+      if (opts.wisdomFails || opts.fromCache) return null;
+      return opts.wisdom || [];
+    },
+    _spReadAll: async function (path) {
+      if (/^sp_wisdom\/.*\/cites$/.test(path)) return opts.cites || [];
+      return [];
+    },
     window: {
       db: {}, fbLib: {
         collection: function () { return { path: [].slice.call(arguments, 1).join('/') }; },
@@ -340,6 +350,32 @@ function offline(opts) {
       return opts.restWisdom || [];
     },
     _spRestCites: async function () { return opts.restCites === undefined ? 0 : opts.restCites; },
+    /* 共有の読み口。SDK が控えしか返さないときは、この中で
+       普通の通信へ回る。ここでは「回った結果」を直に返す。 */
+    _spAllQuests: async function () {
+      if (opts.restQuestsFail) return null;
+      return opts.restQuests || [{ id: 'q1', title: 'クエスト', guildId: 'learn' }];
+    },
+    _spAllWisdom: async function () {
+      if (opts.restWisdomFail) return null;
+      return opts.restWisdom || [];
+    },
+    _spReadAll: async function (path) {
+      opts.readCount = (opts.readCount || 0) + 1;
+      let m = /^sp_quests\/(.*)\/commits$/.exec(path);
+      if (m) {
+        if (opts.restCommitsFail) return null;
+        const rows = (opts.restCommits || {})[decodeURIComponent(m[1])] || [];
+        /* 普通の通信は {id, data:{…}} で返していた。共有の読み口は
+           中身をそのまま平らに返す。試験の書き方は変えずに合わせる。 */
+        return rows.map(function (r) { return Object.assign({ id: r.id }, r.data || {}); });
+      }
+      if (/^sp_wisdom\/.*\/cites$/.test(path)) {
+        const n = opts.restCites === undefined ? 0 : opts.restCites;
+        return Array.from({ length: n }, function (_, i) { return { id: 'c' + i }; });
+      }
+      return [];
+    },
     window: {
       db: {}, fbLib: {
         doc: function () { return { path: [].slice.call(arguments, 1).join('/') }; },
@@ -349,8 +385,11 @@ function offline(opts) {
       }
     }
   };
-  const api = build(INDEX, ['spCompletedQuests', 'spTrustScore'], stubs);
-  return { api: api, warn: warn };
+  stubs.SP_COMPLETED_TTL_MS = 0;   /* 試験のあいだは取っておかない */
+  const api = build(INDEX,
+    ['_spMemoState', '_spMemo', '_spMemoDrop', '_spAliasesOf',
+     'spCompletedQuests', '_spCompletedQuestsOnce', 'spTrustScore'], stubs);
+  return { api: api, warn: warn, opts: opts };
 }
 
 const ME2 = { addr: '0xches', wallet: '0xwallet', ches: '0xches', aliases: ['0xwallet', '0xches'] };
@@ -360,7 +399,6 @@ test('SDKが控えしか返さなくても、完走を普通の通信で数え�
   const sc = await o.api.spTrustScore('0xches', 0, ME2);
   assert.equal(sc.done, 1, '完走が0のまま');
   assert.equal(sc.failed, false, '読めているのに failed が立っている');
-  assert.match(o.warn.join(''), /普通の通信で読みました/);
 });
 
 test('SDKが控えしか返さなくても、知恵カードを普通の通信で数える', async () => {
@@ -393,9 +431,12 @@ test('普通の通信でも読めなければ、0ではなく「読めなかっ�
   assert.equal(sc.failed, true);
 });
 
-test('SDKが生きていて本当に受けていないときは、余計に聞きに行かない', async () => {
-  /* 控えではなくサーバーが「無い」と答えたときは REST を叩かない。 */
+test('受けた記録は、クエスト1本につき1回しか読まない', async () => {
+  /* 前はここが「クエストの数 × 名義の数」だけ1件ずつ読んでいた。
+     名義が3つなら、1本も受けていない人がいちばん多く読む形だった。
+     クエストが17本に増えた日、1日の読み取り枠を5時間で使い切った。 */
   let asked = 0;
+  const reads = [];
   const warn = [];
   const live = { size: 0, metadata: { fromCache: false }, forEach: function () {},
                  exists: function () { return false; } };
@@ -411,6 +452,10 @@ test('SDKが生きていて本当に受けていないときは、余計に聞�
     _spRestQuestCommits: async function () { asked++; return []; },
     _spRestWisdom: async function () { asked++; return []; },
     _spRestCites: async function () { asked++; return 0; },
+    SP_COMPLETED_TTL_MS: 0,
+    _spAllQuests: async function () { return [{ id: 'q1', title: 'q' }, { id: 'q2', title: 'q' }]; },
+    _spAllWisdom: async function () { return []; },
+    _spReadAll: async function (path) { reads.push(path); return []; },
     window: {
       db: {}, fbLib: {
         doc: function () { return { path: '' }; },
@@ -423,11 +468,16 @@ test('SDKが生きていて本当に受けていないときは、余計に聞�
       }
     }
   };
-  const api = build(INDEX, ['spCompletedQuests', 'spTrustScore'], stubs);
+  const api = build(INDEX,
+    ['_spMemoState', '_spMemo', '_spMemoDrop', '_spAliasesOf',
+     'spCompletedQuests', '_spCompletedQuestsOnce', 'spTrustScore'], stubs);
   const sc = await api.spTrustScore('0xches', 0, ME2);
   assert.equal(sc.done, 0);
   assert.equal(sc.failed, false);
   assert.equal(asked, 0, '通信が生きているのに普通の通信で聞きに行っている');
+  const commits = reads.filter(function (p) { return /\/commits$/.test(p); });
+  assert.equal(commits.length, 2,
+    'クエスト2本に対して受けた記録を ' + commits.length + '回読んでいる（名義の数だけ読んでいないか）');
 });
 
 /* ───────── 読み込み中の覆いと、今週の広場の数字 ─────────
@@ -462,15 +512,16 @@ test('それでも上限で切り上げる（入れなくなるほうが困る�
 
 test('今週の広場の知恵も、普通の通信で読み直す', () => {
   /* stats.wisdomTotal は spDaoLoadWisdom が入れた配列の長さ。
-     本体の読みに逃げ道が無く、報告（logs）にだけあった。 */
-  const i = INDEX.indexOf("_spWarnDenied('知恵', e);");
-  assert.ok(i > 0);
-  const seg = INDEX.slice(i, i + 900);
-  assert.ok(seg.indexOf('_spRestWisdom()') >= 0, '知恵の本体に逃げ道が無い');
-  assert.ok(seg.indexOf('知恵カードを普通の通信で読みました') >= 0);
-  /* 例外で即 return していたのをやめ、逃げ道へ回す。 */
-  assert.equal(seg.slice(0, seg.indexOf('if (!docs.length)')).indexOf('return;'), -1,
-    '例外のときに逃げ道へ回らず、そこで終わっている');
+     逃げ道（SDK →だめなら普通の通信）は共有の読み口へ移した。
+     移した先の中身は reader() の試験（下の「SDKで読めたら…」）が見る。
+     ここで見るのは「本体がその読み口を通っているか」だけ。 */
+  const i = INDEX.indexOf('window.spDaoLoadWisdom = ');
+  assert.ok(i > 0, '知恵ライブラリが見つかりません');
+  const seg = INDEX.slice(i, i + 1200);
+  assert.ok(seg.indexOf('_spAllWisdom()') >= 0, '知恵の本体が共有の読み口を通っていない');
+  /* 読めなかった（null）を0枚と書かないこと。 */
+  assert.ok(seg.indexOf('if (all === null) return;') >= 0,
+    '読めなかったときに「知恵0」と書いてしまう');
 });
 
 /* ───────── ログインを先に待つ ─────────
@@ -729,15 +780,18 @@ test('値は右に寄せたまま', () => {
 
 /* ───────── ギルドに、クエストとボタンを戻す ───────── */
 
-test('ギルドが見るクエストにも、普通の通信の逃げ道がある', () => {
-  /* クエスト一覧とは別に、ギルドはもう一度読んでいる。
-     こちらにだけ逃げ道が無く「LEARN のクエスト 0」になっていた。 */
-  const i = INDEX.indexOf('ギルドは、クエスト一覧とは別に');
-  assert.ok(i > 0, '逃げ道が無い');
-  const seg = INDEX.slice(i, i + 1400);
-  assert.ok(seg.indexOf('_spSoon(') >= 0, '返ってこないときに見切れない');
-  assert.ok(seg.indexOf('_spRestQuests()') >= 0, '普通の通信へ回していない');
-  assert.ok(seg.indexOf('ギルドのクエストを普通の通信で読みました') >= 0);
+test('ギルドが見るクエストも、クエスト一覧と同じものを使う', () => {
+  /* ギルドはクエスト一覧とは別にもう一度読んでいた。中身は同じである。
+     逃げ道（SDK →だめなら普通の通信・返ってこないときの見切り）は
+     共有の読み口が持っているので、ここはそれを通るかだけを見る。 */
+  const i = INDEX.indexOf('ギルドは、クエスト一覧と同じものをもう一度読んでいた');
+  assert.ok(i > 0, '共有の読み口を通っていない');
+  const seg = INDEX.slice(i, i + 400);
+  assert.ok(seg.indexOf('_spAllQuests()') >= 0, '共有の読み口を通っていない');
+  /* 一覧側も同じ口であること（別々に読むと、また2回になる）。 */
+  const j = INDEX.indexOf('一覧は共有の読み口から取る');
+  assert.ok(j > 0 && INDEX.slice(j, j + 700).indexOf('_spAllQuests()') >= 0,
+    'クエスト一覧が別に読んでいる');
 });
 
 test('読めなかったら、前に出ていたクエストを消さない', () => {
@@ -839,10 +893,14 @@ test('タブに戻ったら、読み直す', () => {
 test('開いているあいだは、定期でも読み直す', () => {
   const i = INDEX.indexOf('_spRefreshTimer = setInterval');
   assert.ok(i > 0, '定期の読み直しが無い');
-  const seg = INDEX.slice(i, i + 300);
-  assert.ok(seg.indexOf("document.visibilityState === 'visible'") >= 0,
+  const seg = INDEX.slice(i, i + 400);
+  assert.ok(seg.indexOf("document.visibilityState !== 'visible'") >= 0,
     '見ていないタブでも投げてしまう');
-  assert.ok(seg.indexOf('60000') >= 0);
+  /* 60秒ごとに回していたころ、1回の読み直しが数百件になっていたため、
+     開いているだけで1日の読み取り枠を5時間で使い切った。5分にする。 */
+  assert.ok(seg.indexOf('5 * 60 * 1000') >= 0, '読み直しが速すぎる');
+  /* 置かれたままの画面は止める。 */
+  assert.ok(seg.indexOf('SP_IDLE_STOP_MS') >= 0, '置かれたままでも回り続ける');
 });
 
 test('行き来のたびに何往復も投げない（間引き）', () => {
@@ -904,6 +962,9 @@ function reader(opts) {
       }) };
     },
     _spRestFields: function (f) { const o = {}; Object.keys(f).forEach(function (k) { o[k] = f[k]; }); return o; },
+    /* build はモジュール直下の const を拾わない。実際の値は
+       tools/emu-tests/read-share.test.cjs が本文から確かめている。 */
+    SP_READ_TTL_MS: 25000,
     window: {
       db: {}, fbLib: {
         collection: function () { return { path: [].slice.call(arguments, 1).join('/') }; },
@@ -914,8 +975,12 @@ function reader(opts) {
       }
     }
   };
-  const api = build(INDEX, ['_spReadAll'], stubs);
-  return { read: api._spReadAll, warn: warn };
+  /* 読み口は「取っておく仕掛け＋本物の読み」の2段になった。
+     本物の読み（_spReadAllOnce）の中身は前と同じなので、
+     ここは2段まとめて組み立てて、これまでどおり外から試す。 */
+  const api = build(INDEX,
+    ['_spMemoState', '_spMemo', '_spMemoDrop', '_spReadAll', '_spReadAllOnce'], stubs);
+  return { read: api._spReadAll, warn: warn, api: api };
 }
 
 test('SDKで読めたら、それを配列で返す', async () => {
@@ -1024,10 +1089,11 @@ test('2周認めた人は、完走2本', () => {
 test('パスポートの記録も、周回を持つ', () => {
   const i = INDEX.indexOf('認めた周回の数。1周しかしていない人は1');
   assert.ok(i > 0, '記録に周回が無い');
-  assert.ok(/rounds \+= Math\.max\(1, Number\(d\.approvedRounds\)/.test(INDEX),
-    'SDK で読んだときに周回を足していない');
-  assert.ok(/rounds \+= Math\.max\(1, Number\(r\.data\.approvedRounds\)/.test(INDEX),
-    '普通の通信で読んだときに周回を足していない');
+  /* 読み口を1本にまとめたので、周回を足すところも1か所になった。
+     前は SDK 用（d.approvedRounds）と普通の通信用（r.data.approvedRounds）に
+     分かれていて、片方だけ直る、ということが起きていた。 */
+  assert.ok(/rounds \+= Math\.max\(1, Number\(r\.approvedRounds\)/.test(INDEX),
+    '受けた記録から周回を足していない');
 });
 
 test('メンバーの完走も、周回を足す', () => {
@@ -1060,7 +1126,7 @@ test('周回の数え方は、欠けた値・壊れた値でも1周になる', (
 
 test('古い記録（周回の欄が無い）は1周として数える', () => {
   /* サーバーが書く前の記録を0本にしてしまうと、完走が消える。 */
-  [/Math\.max\(1, Number\(d\.approvedRounds\)/,
+  [/Math\.max\(1, Number\(r\.approvedRounds\)/,
    /Math\.max\(1, Number\(q\.rounds\)/,
    /Math\.max\(1, Number\(c\.approvedRounds\)/].forEach(function (x) {
     assert.ok(x.test(INDEX), '古い記録が0本になる: ' + x);
@@ -1068,7 +1134,7 @@ test('古い記録（周回の欄が無い）は1周として数える', () => {
 });
 
 test('認めた日は、いちばん新しい周回のもの', () => {
-  assert.ok(INDEX.indexOf('Number(d.lastApprovedAt || d.approvedAt || 0)') >= 0,
+  assert.ok(INDEX.indexOf('Number(r.lastApprovedAt || r.approvedAt || 0)') >= 0,
     '2周目を認めても日付が動かない');
 });
 
