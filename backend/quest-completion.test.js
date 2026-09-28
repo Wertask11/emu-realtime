@@ -391,3 +391,61 @@ test("届かないまま通した承認は、まだ1周も払っていない扱�
   assert.equal(r.status, 200, "あとから渡す道が塞がっている");
   assert.equal(r.body.round, 1);
 }));
+
+/* ───────── 周回ぶんの証明書を受け取れるか ─────────
+
+   承認は周回ごとに証明書を作る。鍵に round が入るのは2周目以降だけで、
+   1周目には付かない（すでに出してある1周目を作り直さないため）。
+
+   受け取る側は round を付けずに1つだけ探していたので、
+   2周目以降の証明書は作られても永久に見つからなかった。
+   「2周目を認めたのに証明書が来ない」は、ここが原因になる。
+
+   本物の発行（Polygon への mint）までは試さない。
+   ここで見たいのは「その周の証明書を見つけられるか」だけなので、
+   見つけたあとの WALLET_REQUIRED / CERTIFICATE_NOT_DEPLOYED まで
+   進めば通ったことになる。404（NOT_COMPLETED）なら見つけられていない。 */
+const claim = routes.find(route => route.path === "/:questId/certificate/claim").handler;
+
+function claimFor(questId = "quest-001", spid = "spid-a") {
+  const { res } = reply();
+  return claim({ params: { questId }, identity: { account: { spid } } }, res);
+}
+
+test("2周目の証明書も見つけられる", AT(async () => {
+  seed();
+  await request();                       // 1周目
+  records.set("sp_wisdom/card-1b", { questId:"quest-001", author:address, insight:"2周目" });
+  await request();                       // 2周目
+  const certs = [...records.keys()].filter(k => k.startsWith("sp_quest_certificates/"));
+  assert.equal(certs.length, 2, "周回ぶんの証明書が作られていない");
+
+  /* 1周目を受け取り済みにして、2周目だけが残っている状態にする。 */
+  const rows = certs.map(k => [k, records.get(k)]);
+  const first = rows.find(([, v]) => (Number(v.round) || 1) === 1);
+  records.set(first[0], Object.assign({}, first[1], { status:"minted", tokenId:"1", txHash:"0x1" }));
+
+  const out = await claimFor();
+  assert.notEqual(out.status, 404,
+    "2周目の証明書を見つけられていない（前はここで NOT_COMPLETED になっていた）");
+  assert.notEqual(out.body && out.body.alreadyMinted, true,
+    "まだ受け取っていない2周目があるのに、受け取り済みとして返している");
+}));
+
+test("全部受け取り済みなら、受け取り済みとして返す", AT(async () => {
+  seed();
+  await request();
+  const k = [...records.keys()].find(x => x.startsWith("sp_quest_certificates/"));
+  records.set(k, Object.assign({}, records.get(k), { status:"minted", tokenId:"7", txHash:"0x7" }));
+  const out = await claimFor();
+  assert.equal(out.status, 200);
+  assert.equal(out.body.alreadyMinted, true);
+  assert.equal(out.body.tokenId, "7");
+}));
+
+test("完走していないクエストは、これまでどおり断る", AT(async () => {
+  seed();
+  const out = await claimFor("quest-999");
+  assert.equal(out.status, 404);
+  assert.equal(out.body.error, "NOT_COMPLETED");
+}));

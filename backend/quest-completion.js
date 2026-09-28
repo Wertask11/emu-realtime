@@ -248,7 +248,12 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     const color = row.guildColor || GUILD_COLOR[guildId] || "#6E695C";
     const label = String(row.questLabel || "").trim();
     const title = String(row.questTitle || "").slice(0, 40);
-    const caption = ("SchoolPark " + label + (guild ? " " + guild : "")).trim();
+    /* 2周目以降は、そのことを名前に出す。出さないと、同じクエストの
+       証明書がウォレットの中で見分けられない。1周目には付けない
+       （すでに出してあるものの名前を変えないため）。 */
+    const round = Number(row.round) || 1;
+    const roundLabel = round > 1 ? "（" + round + "周目）" : "";
+    const caption = ("SchoolPark " + label + (guild ? " " + guild : "")).trim() + roundLabel;
     const esc = t => String(t).replace(/[&<>"']/g, c =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">'
@@ -263,6 +268,7 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       { trait_type: "Completed", value: new Date(row.completedAt).toISOString().slice(0, 10) }];
     if (guild) attributes.unshift({ trait_type: "Guild", value: guild });
     if (Number(row.amountEmuer) > 0) attributes.push({ trait_type: "EMUER", value: String(row.amountEmuer) });
+    if (round > 1) attributes.push({ trait_type: "Round", value: String(round) });
     return res.json({
       name: caption + " · Star",
       description: "譲渡不可のクエスト完走証明。星空の星と同じ完走記録から発行されます。",
@@ -276,12 +282,36 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     if (!/^[A-Za-z0-9_-]{1,120}$/.test(questId)) return res.status(400).json({ error: "INVALID_QUEST" });
     const spid = String((req.identity.account || {}).spid || "");
     if (!spid) return res.status(409).json({ error: "PASSPORT_LINK_REQUIRED" });
-    const key = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(["schoolpark", questId, spid])));
-    const ref = db.collection("sp_quest_certificates").doc(key);
-    const snap = await ref.get();
-    if (!snap.exists) return res.status(404).json({ error: "NOT_COMPLETED" });
-    const row = snap.data() || {};
-    if (row.status === "minted") return res.json({ ok: true, tokenId: row.tokenId, txHash: row.txHash, alreadyMinted: true });
+
+    /* 承認は周回ごとに証明書を作る。鍵に round が入るのは2周目以降だけで、
+       1周目は付かない（上の roundTag と同じ形にしてある。付けてしまうと、
+       すでに出してある1周目の証明書を作り直すことになる）。
+
+       ここでは前まで round を付けずに1つだけ探していた。1周目は当たるが、
+       2周目以降の証明書は作られたまま、永久に受け取れなかった。
+
+       どの周を受け取るかは指定させない。まだ受け取っていないもののうち
+       いちばん古い1つを出す。押すたびに1つずつ進む。
+       周の数は上限（ROUND_SCAN_MAX）まで順に見て、記録が無いところで止める。 */
+    const keyOfRound = (r) => ethers.utils.keccak256(ethers.utils.toUtf8Bytes(
+      JSON.stringify(["schoolpark", questId, spid, ...(r > 1 ? [r] : [])])));
+    const ROUND_SCAN_MAX = 20;
+    let found = 0;
+    let pick = null;     /* 受け取る1つ（いちばん古い未受け取り） */
+    let last = null;     /* 最後に見た記録。全部受け取り済みのときに返す */
+    for (let r = 1; r <= ROUND_SCAN_MAX; r += 1) {
+      const s = await db.collection("sp_quest_certificates").doc(keyOfRound(r)).get();
+      if (!s.exists) break;
+      found += 1;
+      const d = s.data() || {};
+      last = d;
+      if (!pick && d.status !== "minted") pick = { ref: s.ref, row: d, round: r, key: keyOfRound(r) };
+    }
+    if (!found) return res.status(404).json({ error: "NOT_COMPLETED" });
+    if (!pick) return res.json({ ok: true, tokenId: last.tokenId, txHash: last.txHash, alreadyMinted: true });
+    const ref = pick.ref;
+    const row = pick.row;
+    const key = pick.key;
     const identity = await db.collection("sp_identities").doc(spid).get();
     const links = identity.exists ? (identity.data() || {}).links || [] : [];
     const linkedWallet = links.find(link => link && link.kind === "wallet" && ethers.utils.isAddress(link.subject));
