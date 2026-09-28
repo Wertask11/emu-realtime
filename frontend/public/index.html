@@ -16094,14 +16094,32 @@ window.spDaoOpenWhenReady = spDaoOpenWhenReady;
    反映されない。代わりに、普通の通信でも通る読み直しを回す。
 
      ・タブに戻ってきたとき（管理画面で直して戻る、がこれ）
-     ・開いているあいだ、60秒ごと
+     ・開いているあいだ、5分ごと
 
    どちらも短い間引き（8秒）を入れる。画面を行き来するたびに
-   何往復も投げると、かえって遅くなる。 */
+   何往復も投げると、かえって遅くなる。
+
+   前はこれを60秒ごとに回していた。1回の読み直しが数百件の
+   読み取りになっていたため、開いているだけで1時間に1万件を超え、
+   1日の枠（無料枠は50,000件）を5時間で使い切った。
+   読む回数は共有の読み口（_spReadAll）で減らしたが、
+   回す間隔そのものも人の見る速さに合わせる。
+   すぐ見たいときは、タブに戻れば読み直る。 */
 let _spRefreshAt = 0;
 let _spRefreshTimer = null;
 async function spDaoRefreshNow(why) {
   if (!document.body.classList.contains('sp-dao-open')) return;
+  /* 今日のぶんの読み取り枠を使い切っているあいだは、読み直さない。
+     読みに行っても断られるだけで、断られた記録がまた枠を削る。
+     混んでいるだけ（数秒で開く）のときは、これまでどおり回す。 */
+  try {
+    const st = _spRestState();
+    if (st && st.reason === 'quota' && Date.now() < st.blockedUntil) {
+      console.warn('今日のぶんの読み取り枠を使い切っています。'
+        + '読み直しを見合わせます（' + Math.ceil((st.blockedUntil - Date.now()) / 60000) + '分後にもう一度）。');
+      return;
+    }
+  } catch (e) {}
   const now = Date.now();
   if (now - _spRefreshAt < 8000) return;
   _spRefreshAt = now;
@@ -16127,14 +16145,32 @@ async function spDaoRefreshNow(why) {
 }
 window.spDaoRefreshNow = spDaoRefreshNow;
 
-document.addEventListener('visibilitychange', function () {
-  if (document.visibilityState === 'visible') spDaoRefreshNow('タブに戻った');
+/* 見ていない人のぶんは読み直さない。
+
+   今日いちばん枠を食ったのは、開いたまま置かれていた画面である。
+   タブが見えていれば、誰も触っていなくても読み直しは回り続ける。
+   人は席を立つし、別の作業に移る。そのあいだ読み直す意味は無い。
+
+   30分ものあいだ一度も触られていなければ、読み直しを止める。
+   触れば（押す・打つ・動かす・タブに戻る）その場で読み直るので、
+   止まっていたことに気づくことはない。 */
+const SP_IDLE_STOP_MS = 30 * 60 * 1000;
+let _spLastTouch = Date.now();
+function _spTouched() { _spLastTouch = Date.now(); }
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (ev) {
+  window.addEventListener(ev, _spTouched, { passive: true, capture: true });
 });
-window.addEventListener('focus', function () { spDaoRefreshNow('画面に戻った'); });
+
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') { _spTouched(); spDaoRefreshNow('タブに戻った'); }
+});
+window.addEventListener('focus', function () { _spTouched(); spDaoRefreshNow('画面に戻った'); });
 if (!_spRefreshTimer) {
   _spRefreshTimer = setInterval(function () {
-    if (document.visibilityState === 'visible') spDaoRefreshNow('定期');
-  }, 60000);
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - _spLastTouch > SP_IDLE_STOP_MS) return;   /* 置かれている */
+    spDaoRefreshNow('定期');
+  }, 5 * 60 * 1000);
 }
 
 /* ═══════════════════════════════════════
@@ -16796,54 +16832,35 @@ window.spTrustScore = async function (addr, createdAt, p) {
     failed = true;
   }
 
-  /* 知恵カードと、引用された数 */
+  /* 知恵カードと、引用された数。
+
+     前はここで sp_wisdom を独自に全件読んでいた。知恵ライブラリと
+     メンバー画面も別々に同じものを全件読んでいたので、1回の読み直しで
+     3回読んでいたことになる。共有の読み口にそろえる。
+     控えしか無いときの扱い（0件を0件と書かない）も、あちらが持っている。 */
   let rows = null;
   try {
-    const ws = await fb.getDocs(fb.collection(window.db, 'sp_wisdom'));
-    /* 控えしか無いときの「0件」は、0件ではない。下で普通の通信に回す。 */
-    if (ws.size || !(ws.metadata && ws.metadata.fromCache)) {
-      rows = [];
-      ws.forEach(function (s) { rows.push(Object.assign({ id: s.id }, s.data() || {})); });
-    }
+    rows = await _spAllWisdom();
   } catch (e) {
-    console.warn('知恵カードを SDK で読めませんでした:', e && (e.message || e));
+    console.warn('知恵カードを読めませんでした:', e && (e.message || e));
   }
-  if (!rows) {
-    /* クエスト一覧と同じ逃げ道。前はここが無く、Listen が切れているあいだ
-       「知恵0」と出ていた。0と書けば、本人には記録が消えたように見える。 */
-    try {
-      rows = await _spRestWisdom();
-      console.warn('知恵カードを普通の通信で読みました（' + rows.length + '件）');
-    } catch (e) {
-      console.warn('知恵カードを普通の通信でも読めませんでした:', e && (e.message || e));
-      failed = true;
-    }
-  }
+  if (!rows) failed = true;
   if (rows) {
     const mine = rows.filter(function (r) {
       return aliases.indexOf(String(r.author || '').toLowerCase()) >= 0;
     }).map(function (r) { return r.id; });
     wisdom = mine.length;
-    /* 知恵カード1枚ごとに1往復していた。まとめて同時に聞く。 */
-    const citeSnaps = await Promise.all(mine.map(function (id) {
-      return fb.getDocs(fb.collection(window.db, 'sp_wisdom', id, 'cites'))
+    /* 知恵カード1枚ごとに1往復していた。まとめて同時に聞く。
+       ここも共有の読み口にそろえる。知恵ライブラリとメンバー画面が
+       同じ引用を別々に数えていたので、1回の読み直しで3回読んでいた。 */
+    const citeRows = await Promise.all(mine.map(function (id) {
+      return _spReadAll('sp_wisdom/' + encodeURIComponent(id) + '/cites')
                .catch(function () { return null; });
     }));
-    const stale = [];
-    citeSnaps.forEach(function (cs, i) {
-      if (!cs || (!cs.size && cs.metadata && cs.metadata.fromCache)) { stale.push(mine[i]); return; }
-      cs.forEach(function () { cited++; });
+    citeRows.forEach(function (rs) {
+      if (rs === null) { failed = true; return; }   /* 読めなかった。0ではない */
+      cited += rs.length;
     });
-    /* 引用も、控えしか無かったぶんだけ普通の通信で数え直す。 */
-    if (stale.length) {
-      const got = await Promise.all(stale.map(function (id) {
-        return _spRestCites(id).catch(function () { return null; });
-      }));
-      got.forEach(function (n) {
-        if (n === null) { failed = true; return; }
-        cited += n;
-      });
-    }
   }
 
   /* 在籍の月数（上限12）。パスポートを発行した日から、暦の月で数える。 */
@@ -16914,85 +16931,89 @@ async function spGuildDefs(force) {
 
    読めなかったときは null を返す。0件と区別できないと、
    通信が届かなかっただけで「まだ1つも完走していない」と読めてしまう。 */
-async function spCompletedQuests(p) {
-  const fb = window.fbLib;
-  if (!p || !fb || !window.db) return null;
+/* 完走したクエスト。
 
-  /* 誰の名義か。星空と同じ決め方にそろえる。 */
+   ここは「クエストの数 × 名義の数」だけ1件ずつ読む。クエストが
+   2本のうちは6件で済んでいたが、17本になった日に51件になった。
+   しかも信用スコア・パスポート・星空から別々に呼ばれ、それを
+   60秒ごとの読み直しが回していた。1日の読み取り枠を5時間で
+   使い切ったのはここである。
+
+   完走が増えるのは、運営が承認したときだけ。めったに変わらない。
+   5分のあいだは同じ答えを返す。承認・参加・提出のあとは
+   _spMemoDrop() でその場で捨てるので、待たされることはない。 */
+const SP_COMPLETED_TTL_MS = 5 * 60 * 1000;
+async function spCompletedQuests(p) {
+  const aliases = _spAliasesOf(p);
+  if (!aliases.length) return null;   /* 誰の記録か決まらない。0件ではない */
+  return _spMemo('completed:' + aliases.join(','), SP_COMPLETED_TTL_MS, function () {
+    return _spCompletedQuestsOnce(p, aliases);
+  });
+}
+/* 名義の決め方。星空・信用スコアとそろえるため、ここ1か所で決める。 */
+function _spAliasesOf(p) {
   const aliases = [];
-  (p.aliases && p.aliases.length ? p.aliases : [p.wallet, p.ches, p.addr]).forEach(function (a) {
+  if (!p) return aliases;
+  ((p.aliases && p.aliases.length) ? p.aliases : [p.wallet, p.ches, p.addr]).forEach(function (a) {
     const v = String(a || '').toLowerCase();
     if (v && aliases.indexOf(v) < 0) aliases.push(v);
   });
-  if (!aliases.length) return null;   /* 誰の記録か決まらない。0件ではない */
+  return aliases;
+}
+async function _spCompletedQuestsOnce(p, aliases) {
+  const fb = window.fbLib;
+  if (!p || !fb || !window.db) return null;
 
   let gdefs = [];
   try { gdefs = await spGuildDefs(); } catch (e) { /* ギルドが読めなくても件数は出す */ }
 
-  let docs = [];
-  try {
-    const qs = await fb.getDocs(fb.collection(window.db, 'sp_quests'));
-    qs.forEach(function (s) { docs.push(Object.assign({ id: s.id }, s.data() || {})); });
-  } catch (e) {
-    console.warn('完走したクエストを SDK で読めませんでした:', e && (e.message || e));
-  }
-  /* オフラインのとき、一覧の取得は例外を投げず手元の控えを返す。
-     開いた直後は控えが空なので「0件で成功」になる。0件と書かない。
-     クエスト一覧（spDaoLoadQuests）と同じく、普通の通信で取りに行く。
-     前はここで null を返すだけだったので、Listen が切れているあいだ
-     信用スコアの完走が、ずっと0本のままだった。 */
-  if (!docs.length) {
-    try {
-      const rest = await _spRestQuests();
-      if (rest.length) {
-        docs = rest;
-        console.warn('完走を数えるクエストを普通の通信で読みました（' + rest.length + '件）');
-      }
-    } catch (e) {
-      console.warn('クエストを普通の通信でも読めませんでした:', e && (e.message || e));
-    }
-    if (!docs.length) return null;
-  }
+  /* 一覧は共有の読み口から。SDK →だめなら普通の通信、控えしか
+     無いときに0件と書かないことまで、あちらが1か所でやる。
 
+     「読めなかった（null）」と「本当に0件（空の配列）」は別物。
+     前はここが両方とも「0件」に潰れていたので、通信が切れている
+     あいだ、信用スコアの完走がずっと0本のままになっていた。 */
+  let docs = null;
+  try {
+    docs = await _spAllQuests();
+  } catch (e) {
+    console.warn('完走したクエストを読めませんでした:', e && (e.message || e));
+  }
+  if (docs === null) return null;   /* 分からない。0本ではない */
+  if (!docs.length) return [];      /* クエストが1本も無い */
+
+  /* 受けた記録を読む。
+
+     前はここが「クエストの数 × 名義の数」だけ1件ずつ読んでいた。
+     クエストが2本のうちは6件で済んでいたが、17本になった日に
+     51件になった。受けていないクエストでも名義を3つとも聞くので、
+     1本も受けていない人がいちばん多く読む、という形だった。
+
+     クエスト1本につき、受けた人の一覧を1回読む。一覧は
+     クエスト画面（_spShapeQuest）が同じものを読むので、
+     共有の読み口を通れば、ここでの読み取りは増えない。 */
   const out = [];
+  let couldNotRead = false;
   await Promise.all(docs.map(async function (q) {
-    let hit = false, at = 0, stale = false, rounds = 0;
-    for (const a of aliases) {
-      try {
-        const c = await fb.getDoc(fb.doc(window.db, 'sp_quests', q.id, 'commits', a));
-        /* 「無い」が手元の控えから来たのなら、それは「無い」ではない。 */
-        if (!c.exists()) {
-          if (c.metadata && c.metadata.fromCache) stale = true;
-          continue;
-        }
-        const d = c.data() || {};
-        if (d.approved !== true) continue;   /* approved:false にも approvedAt は付く */
-        hit = true;
-        /* 同じクエストを2周3周する人がいる。認めた周回のぶんだけ数える。
-           approvedRounds はサーバーが書く。古い記録には無いので、
-           印が立っていれば1周とみなす。 */
-        rounds += Math.max(1, Number(d.approvedRounds) || 0);
-        const t = Number(d.lastApprovedAt || d.approvedAt || 0);
-        if (t > at) at = t;
-      } catch (e) { stale = true; /* この名義は読めなかった。ほかの名義を試す */ }
+    let hit = false, at = 0, rounds = 0;
+    const rows = await _spReadAll('sp_quests/' + encodeURIComponent(q.id) + '/commits')
+                   .catch(function () { return null; });
+    if (rows === null) {
+      /* 読めなかった。「受けていない」ではない。 */
+      couldNotRead = true;
+      return;
     }
-    /* SDK が控えしか返さなかったときだけ、普通の通信で受けた記録を読み直す。
-       通信が生きていて本当に受けていないときは、ここへ来ない（余計に聞かない）。 */
-    if (!hit && stale) {
-      try {
-        const rows = await _spRestQuestCommits(q.id);
-        rows.forEach(function (r) {
-          if (aliases.indexOf(String(r.id || '').toLowerCase()) < 0) return;
-          if (!r.data || r.data.approved !== true) return;
-          hit = true;
-          rounds += Math.max(1, Number(r.data.approvedRounds) || 0);
-          const t = Number(r.data.lastApprovedAt || r.data.approvedAt || 0);
-          if (t > at) at = t;
-        });
-      } catch (e) {
-        console.warn('受けた記録を普通の通信で読めませんでした:', e && (e.message || e));
-      }
-    }
+    rows.forEach(function (r) {
+      if (aliases.indexOf(String(r.id || '').toLowerCase()) < 0) return;
+      if (r.approved !== true) return;   /* approved:false にも approvedAt は付く */
+      hit = true;
+      /* 同じクエストを2周3周する人がいる。認めた周回のぶんだけ数える。
+         approvedRounds はサーバーが書く。古い記録には無いので、
+         印が立っていれば1周とみなす。 */
+      rounds += Math.max(1, Number(r.approvedRounds) || 0);
+      const t = Number(r.lastApprovedAt || r.approvedAt || 0);
+      if (t > at) at = t;
+    });
     if (!hit) return;
     const gid = SpQuestStore.isFounder(q) ? '' : SpGuildStore.guildIdOf(q, gdefs);
     const g = gid ? SpGuildStore.byId(gdefs, gid) : null;
@@ -17013,6 +17034,11 @@ async function spCompletedQuests(p) {
       rounds: Math.max(1, Number(rounds) || 0)
     });
   }));
+
+  /* 1本も出ていないのに、読めなかったクエストがある。
+     それは「完走0」ではない。0と書けば、本人には記録が
+     消えたように見える。分からない、と返す。 */
+  if (!out.length && couldNotRead) return null;
 
   /* 新しい順。日付が入っていない古い記録は後ろへ落ちる。 */
   out.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
@@ -17135,22 +17161,12 @@ window.spDaoLoadVotes = async function (app) {
      こちらにだけ逃げ道が無かったので、通信が切れていると
      「LEARN のクエスト 0」「まだクエストがありません」になっていた。
      一般 #001 は LEARN なのに、ギルドに出てこない。 */
+  /* ギルドは、クエスト一覧と同じものをもう一度読んでいた。
+     共有の読み口にそろえる（中身は同じで、読み取りは1回で済む）。 */
   let questList = [];
   try {
-    const q = fb.query(fb.collection(window.db, 'sp_quests'), fb.orderBy('createdAt', 'desc'), fb.limit(100));
-    const r = await _spSoon(fb.getDocs(q), 4000);
-    if (r.ok) r.value.forEach(function (s) { questList.push(Object.assign({ id: s.id }, s.data() || {})); });
-    else console.warn('ギルドのクエストの読み取りが返ってきません');
+    questList = (await _spAllQuests()) || [];
   } catch (e) { _spWarnDenied('クエスト', e); }
-  if (!questList.length) {
-    try {
-      const rest = await _spRestQuests();
-      if (rest.length) {
-        questList = rest;
-        console.warn('ギルドのクエストを普通の通信で読みました（' + rest.length + '件）');
-      }
-    } catch (e) { console.warn('ギルドのクエストを普通の通信でも読めませんでした:', e && (e.message || e)); }
-  }
   /* 読めなかったときは、前に出ていたものを消さない。 */
   if (questList.length || !_spGuildQuestDocs.length) _spGuildQuestDocs = questList;
 
@@ -17768,6 +17784,62 @@ function _spRestFields(fields) {
    記録がまだ無いときは 404 が返る。これは「断られた」のとは違うので、
    例外にせず null を返す。区別しないと、通信が届かないだけのときと
    「まだ書かれていない」が同じ扱いになり、画面が消えてしまう。 */
+/* ───────── 同じものを何度も読まない ─────────
+
+   ひとつの読み直し（spDaoRefreshNow）の中で、同じものを
+   何度も読みに行っていた。
+
+     ・sp_quests …… 3回（クエスト一覧／ギルド／完走数え）
+     ・sp_wisdom …… 2回（知恵ライブラリ／信用スコア）
+     ・完走の数え …… 信用スコアとパスポートと星空から別々に
+
+   クエストが2本のうちは誰も気づかなかった。17本になった日、
+   完走を数えるところが「クエスト数 × 名義の数」で1件ずつ
+   読む作りだったため、1回の読み直しが 8件から68件になった。
+   それを60秒ごとに回していたので、1日の読み取り枠（無料枠は
+   50,000件）を5時間で使い切った。Firestore は 429 を返し、
+   画面は「ゲスト」になり、数字は全部0になった。
+
+   読む回数を減らす。答えは短いあいだ取っておき、同じものを
+   聞かれたら同じ答えを返す。書き換えたときは、その場で捨てる。 */
+function _spMemoState() {
+  const w = (typeof window !== 'undefined') ? window : globalThis;
+  if (!w.__spMemo) w.__spMemo = new Map();
+  return w.__spMemo;
+}
+/* key の答えを ms ミリ秒だけ取っておく。
+   走っている最中に同じ key を聞かれたら、同じ約束を返す
+   （2本目を走らせない）。 */
+function _spMemo(key, ms, run) {
+  const m = _spMemoState();
+  const now = Date.now();
+  const hit = m.get(key);
+  if (hit && now - hit.at < ms) return hit.p;
+  const p = Promise.resolve().then(run);
+  m.set(key, { at: now, p: p });
+  /* 失敗は取っておかない。次にすぐ試せるようにする。 */
+  p.catch(function () {
+    const cur = m.get(key);
+    if (cur && cur.p === p) m.delete(key);
+  });
+  /* 溜めすぎない。古いものから捨てる。 */
+  if (m.size > 100) {
+    const oldest = m.keys().next().value;
+    if (oldest !== undefined) m.delete(oldest);
+  }
+  return p;
+}
+/* 書き換えたあとに捨てる。prefix を渡せばそこだけ、無ければ全部。 */
+function _spMemoDrop(prefix) {
+  const m = _spMemoState();
+  const keys = [];
+  m.forEach(function (_, k) { keys.push(k); });
+  keys.forEach(function (k) {
+    if (!prefix || String(k).indexOf(prefix) === 0) m.delete(k);
+  });
+}
+window._spMemoDrop = _spMemoDrop;
+
 /* ───────── 普通の通信の関門 ─────────
 
    専用の通信路（Listen）が切れているとき、画面のあちこちが
@@ -17977,7 +18049,26 @@ function _spSoon(promise, ms) {
    空、ということが起きた。読むところを1つにまとめる。
 
    返すのは配列。読めなかったときは null（0件とは違う）。 */
-async function _spReadAll(path, ms) {
+const SP_READ_TTL_MS = 25000;
+async function _spReadAll(path, ms, fresh) {
+  /* 同じ一覧を、同じ読み直しの中で何度も取りに行かない。
+
+     1回の読み直し（spDaoRefreshNow）で sp_quests は5か所、
+     sp_wisdom は3か所から別々に読まれていた。中身は同じである。
+     25秒だけ取っておく。次の読み直し（5分後）には必ず読み直る。
+
+     書き換えたあとは _spMemoDrop() で捨てるので、
+     押した結果が25秒出てこない、ということにはならない。 */
+  if (fresh) _spMemoDrop('readall:' + path);
+  const rows = await _spMemo('readall:' + path, SP_READ_TTL_MS, function () {
+    return _spReadAllOnce(path, ms);
+  });
+  /* 読めなかった（null）は取っておかない。0件とは違う。 */
+  if (rows === null) _spMemoDrop('readall:' + path);
+  /* 取っておいたものを、呼ぶ側が並べ替えても壊れないように写しを返す。 */
+  return rows ? rows.slice() : rows;
+}
+async function _spReadAllOnce(path, ms) {
   const fb = window.fbLib;
   const parts = String(path || '').split('/').filter(Boolean);
   let rows = null;
@@ -18005,6 +18096,32 @@ async function _spReadAll(path, ms) {
   }
 }
 window._spReadAll = _spReadAll;
+
+/* クエスト一覧は、ここ1か所から取る。
+
+   前は5か所がそれぞれ Firestore を叩いていた（クエスト一覧・
+   ギルド・完走数え・メンバー・星空）。17本あれば1回の読み直しで
+   85件になる。中身はどれも同じなので、1回読んで配る。
+
+   並び順も件数もここでは決めない。呼ぶ側が自分の都合で
+   並べ替えて切る（クエスト一覧は30件、ギルドは100件、など）。 */
+async function _spAllQuests(fresh) {
+  const rows = await _spReadAll('sp_quests', 4000, fresh);
+  if (!rows) return null;
+  return rows.sort(function (a, b) {
+    return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+  });
+}
+/* 知恵カードも同じ。前は3か所が別々に全件読んでいた。 */
+async function _spAllWisdom(fresh) {
+  const rows = await _spReadAll('sp_wisdom', 4000, fresh);
+  if (!rows) return null;
+  return rows.sort(function (a, b) {
+    return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+  });
+}
+window._spAllQuests = _spAllQuests;
+window._spAllWisdom = _spAllWisdom;
 
 /* その記録が有るかどうか。SDK → だめなら普通の通信。
    参加ギルド・応援ギルドのように「有る／無い」だけ要るところで使う。 */
@@ -18270,33 +18387,22 @@ async function _spDaoLoadQuestsOnce(app, attempt) {
     _spQuestRetryTimer = setTimeout(function () { window.spDaoLoadQuests(app, n + 1); }, SP_QUEST_RETRY_MS[n]);
   }
 
+  /* 一覧は共有の読み口から取る。
+
+     前はここが自分で Firestore を叩き、同じものをギルドと完走数えと
+     メンバーがそれぞれ別に叩いていた。1回の読み直しで sp_quests を
+     5回読んでいたことになる。17本あれば85件。それを60秒ごとに
+     回していたので、1日の読み取り枠を5時間で使い切った。
+
+     「読めなかった（null）」と「0件だった（空の配列）」は別物。
+     null のときは前に出ていたものを消さず、あとで読み直す。 */
   let docs = [];
   try {
-    const q = fb.query(fb.collection(window.db, 'sp_quests'), fb.orderBy('createdAt', 'desc'), fb.limit(30));
-    const snap = await fb.getDocs(q);
-    snap.forEach(function (s) { docs.push({ id: s.id, ...(s.data() || {}) }); });
-    /* オフラインのとき、一覧の取得は例外を投げない。手元の控えをそのまま返す。
-       開いた直後は控えが空なので、「0件で成功」になる。
-       それを「クエストが無い」と読むと、通信が戻っても
-       「まだクエストがありません」のまま固まる。実際にそうなっていた。
-       控えから来ていて、しかも空のときは、読めたと見なさない。 */
-    if (docs.length === 0 && snap.metadata && snap.metadata.fromCache) {
-      /* SDK が戻ってこないので、普通の通信で取りに行く。
-         読み直しを何回続けても控えの空しか返らない回があり、
-         そこでは待っても解決しなかったため。 */
-      try {
-        const rest = await _spRestQuests();
-        if (rest.length) {
-          docs = rest;
-          console.warn('クエストを普通の通信で読みました（' + rest.length + '件）');
-        }
-      } catch (e) {
-        console.warn('普通の通信でも読めませんでした:', e && (e.message || e));
-      }
-      if (docs.length === 0) {
-        return later('通信が戻っていないため、一覧が手元の控え（空）から返ってきた');
-      }
+    const all = await _spAllQuests();
+    if (all === null) {
+      return later('通信が戻っていないため、一覧が読めなかった');
     }
+    docs = all.slice(0, 30);
   } catch (e) {
     return later((e && (e.message || e)) || '一覧を読めなかった', e);
   }
@@ -18390,46 +18496,33 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
   let people = [], iTook = false, logCount = 0;
   const logs = [];
   /* 受けた人と途中報告は互いに関係が無いので、同時に読む。
-     片方が読めなくても、もう片方は出す（読み取りは別々の try のまま）。 */
+     片方が読めなくても、もう片方は出す。
+
+     前はここで SDK を直に叩き、控えしか返らなかったときにだけ
+     普通の通信へ逃げていた。逃げ道は3本に分かれていて、そのうち
+     1本（本人の1件を照らすところ）は「まだ受けていないクエスト」で
+     毎回走った。クエストが17本なら、本人ぶんだけで17往復である。
+
+     共有の読み口（_spReadAll）は、SDK →だめなら普通の通信、
+     控えしか無いときの扱いまで同じことを1か所でやる。
+     一覧の中に本人の記録も入っているので、本人ぶんを別に
+     聞き直す必要そのものが無くなる。 */
   const [cs, ls] = await Promise.all([
-    fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'commits')).catch(function () { return null; }),
-    fb.getDocs(fb.collection(window.db, 'sp_quests', q.id, 'logs')).catch(function () { return null; })
+    _spReadAll('sp_quests/' + encodeURIComponent(q.id) + '/commits')
+      .catch(function () { return null; }),
+    _spReadAll('sp_quests/' + encodeURIComponent(q.id) + '/logs')
+      .catch(function () { return null; })
   ]);
   if (cs) {
     cs.forEach(function (c) {
-      people.push((c.data() || {}).name || _spShortAddr(c.id));
-      if (mine && c.id.toLowerCase() === mine) iTook = true;
+      people.push(c.name || _spShortAddr(c.id));
+      if (mine && String(c.id || '').toLowerCase() === mine) iTook = true;
     });
   }
-  /* SDK の一覧が古い場合、本人の1件だけは普通の HTTPS で照合する。
-     本人が受けているのに人数が0のまま、という矛盾を残さない。 */
-  if (mine && (!iTook || (cs && cs.metadata && cs.metadata.fromCache))) {
-    try {
-      const own = await _spRestDoc('sp_quests/' + encodeURIComponent(q.id)
-        + '/commits/' + encodeURIComponent(p.addr), true);
-      iTook = !!own;
-      if (cs === null || (cs.metadata && cs.metadata.fromCache) || (iTook && people.length === 0)) {
-        const records = await _spRestQuestCommits(q.id);
-        people = records.map(function (c) { return c.data.name || _spShortAddr(c.id); });
-      }
-      if (iTook && people.length === 0) people.push(own.name || _spShortAddr(p.addr));
-    } catch (e) {
-      /* サーバーへ届かない間は、取得済みの表示を勝手に消さない。 */
-      console.warn('クエストの参加状態を確認できませんでした:', e && (e.message || e));
-    }
-  }
-  if (ls && !(ls.metadata && ls.metadata.fromCache)) {
-    ls.forEach(function (l) { logCount++; logs.push({ id: l.id, ...(l.data() || {}) }); });
+  if (ls) {
+    ls.forEach(function (l) { logCount++; logs.push(l); });
   } else {
-    try {
-      logs.push(...await _spRestQuestLogs(q.id));
-      logCount = logs.length;
-    } catch (e) {
-      /* 通常の通信も届かない間は、控えに残る報告だけでも表示する。 */
-      if (ls) ls.forEach(function (l) { logs.push({ id: l.id, ...(l.data() || {}) }); });
-      logCount = logs.length;
-      console.warn('クエスト報告の確認に失敗しました:', e && (e.message || e));
-    }
+    console.warn('クエスト報告を読めませんでした（' + q.id + '）');
   }
   const serverIds = new Set(logs.map(function (l) { return l.id; }));
   const pending = _spPendingQuestLogs.get(q.id) || [];
@@ -19281,10 +19374,11 @@ async function _spQuestCited(questId, mine) {
     out.sort(function (a, b) { return (b.at - a.at) || (b.count - a.count); });
     return out;
   };
+  /* 報告は共有の読み口から取る。クエスト画面と知恵ライブラリも
+     同じものを読むので、ここで読み取りは増えない。 */
   let rows = [];
   try {
-    const ls = await fb.getDocs(fb.collection(window.db, 'sp_quests', questId, 'logs'));
-    ls.forEach(function (d) { rows.push(d.data() || {}); });
+    rows = (await _spReadAll('sp_quests/' + encodeURIComponent(questId) + '/logs')) || [];
   } catch (e) {
     console.warn('報告の投稿を読めませんでした:', e && (e.message || e));
     return [];
@@ -19620,61 +19714,42 @@ window.spDaoLoadWisdom = async function (app) {
   if (!app || typeof app.setState !== 'function') return;
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
+  /* 知恵カードは共有の読み口から取る。信用スコアとメンバー画面も
+     同じものを別々に全件読んでいた（1回の読み直しで3回）。 */
   let docs = [];
   try {
-    const q = fb.query(fb.collection(window.db, 'sp_wisdom'), fb.orderBy('createdAt', 'desc'), fb.limit(50));
-    const snap = await fb.getDocs(q);
-    snap.forEach(function (s) { docs.push({ id: s.id, ...(s.data() || {}) }); });
+    const all = await _spAllWisdom();
+    if (all === null) return;          /* 読めなかった。0枚とは書かない */
+    docs = all.slice(0, 50);
   } catch (e) {
     _spWarnDenied('知恵', e);
-  }
-  /* 通信が切れていると getDocs は例外を投げず、手元の控え（開いた直後は空）を
-     そのまま返す。それを0枚と信じて「ライブラリの知恵 0」「今週0個」と出していた。
-     下の報告（logs）は普通の通信へ逃げる道を持っていたのに、
-     肝心の本体にだけ無かった。クエスト一覧と同じ道をここにも通す。 */
-  if (!docs.length) {
-    try {
-      const rest = await _spRestWisdom();
-      if (rest.length) {
-        docs = rest.sort(function (a, b) {
-          return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
-        }).slice(0, 50);
-        console.warn('知恵カードを普通の通信で読みました（' + docs.length + '件）');
-      }
-    } catch (e2) {
-      console.warn('知恵カードを普通の通信でも読めませんでした:', e2 && (e2.message || e2));
-      return;
-    }
+    return;
   }
   const p = await spPassportLoad();
   const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
   const wisdom = [];
   let cites = 0;
-  /* 知恵カード1枚ごとに引用を1往復ずつ読んでいた。まとめて同時に読む。 */
-  const citeSnaps = await Promise.all(docs.map(function (w) {
-    return fb.getDocs(fb.collection(window.db, 'sp_wisdom', w.id, 'cites'))
+  /* 知恵カード1枚ごとに引用を1往復ずつ読んでいた。まとめて同時に読む。
+     共有の読み口なので、信用スコアが同じ引用を数え直すことはない。 */
+  const citeSets = await Promise.all(docs.map(function (w) {
+    return _spReadAll('sp_wisdom/' + encodeURIComponent(w.id) + '/cites')
              .catch(function () { return null; });
   }));
   /* 既存の知恵カードにも報告を表示する。クエストごとに一度だけ読み、
      カードを書いた本人・選んだ Emu 投稿に結び付く報告を探す。 */
   const questIds = [...new Set(docs.map(function (w) { return w.questId; }).filter(Boolean))];
   const logSets = await Promise.all(questIds.map(async function (id) {
-    try {
-      const snap = await fb.getDocs(fb.collection(window.db, 'sp_quests', id, 'logs'));
-      if (snap.metadata && snap.metadata.fromCache) return await _spRestQuestLogs(id);
-      const rows = []; snap.forEach(function (d) { rows.push({ id:d.id, ...(d.data() || {}) }); });
-      return rows;
-    } catch (e) {
-      try { return await _spRestQuestLogs(id); } catch (_) { return []; }
-    }
+    const rows = await _spReadAll('sp_quests/' + encodeURIComponent(id) + '/logs')
+                         .catch(function () { return null; });
+    return rows || [];
   }));
   const logsByQuest = new Map(questIds.map(function (id, i) { return [id, logSets[i]]; }));
   for (let wi = 0; wi < docs.length; wi++) {
     const w = docs[wi];
     let uses = 0;
     const citedBy = {};
-    const cs = citeSnaps[wi];
-    if (cs) cs.forEach(function (c) { uses++; citedBy[c.id.toLowerCase()] = true; });
+    const cs = citeSets[wi];
+    if (cs) cs.forEach(function (c) { uses++; citedBy[String(c.id || '').toLowerCase()] = true; });
     cites += uses;
     const did = !!(mine && citedBy[mine]);
     const matched = (logsByQuest.get(w.questId) || []).filter(function (l) {
@@ -19832,18 +19907,18 @@ window.spDaoLoadMembers = async function (app) {
     const ws = await _spReadAll('sp_wisdom');
     if (!ws) throw new Error('知恵カードを読めなかった');
     const ids = ws.slice();
-    /* 知恵カード1枚ごとに1往復していた。まとめて同時に聞く。 */
-    const citeSnaps = await Promise.all(ids.map(function (w) {
-      return fb.getDocs(fb.collection(window.db, 'sp_wisdom', w.id, 'cites'))
+    /* 知恵カード1枚ごとに1往復していた。まとめて同時に聞く。
+       共有の読み口なので、知恵ライブラリと信用スコアが同じ引用を
+       別々に数え直すことはない。 */
+    const citeSets = await Promise.all(ids.map(function (w) {
+      return _spReadAll('sp_wisdom/' + encodeURIComponent(w.id) + '/cites')
                .catch(function () { return null; });
     }));
     ids.forEach(function (w, i) {
       const m = pick(w.author, w.authorName);
       if (m) m.wisdom++;
-      let uses = 0;
-      const cs = citeSnaps[i];
-      if (cs) cs.forEach(function () { uses++; });
-      if (m) m.cited += uses;
+      const cs = citeSets[i];
+      if (m && cs) m.cited += cs.length;
     });
   } catch (e) {
     console.warn('メンバーの知恵カードを読めませんでした:', e && (e.message || e));
@@ -24839,11 +24914,40 @@ import {
   // 外部ファイル（script.js）から使えるように窓口を作る
   window.db = db;
   window.auth = auth;
-window.fbLib = {
-    collection, addDoc, getDocs, query, orderBy, limit, startAfter, onSnapshot,
-    doc, updateDoc, setDoc, deleteDoc, increment, where, writeBatch,
-    arrayUnion, getDoc, runTransaction,
-    signInAnonymously
+/* 読み取りは短いあいだ取っておく（_spMemo）。取っておいたままだと、
+     押した結果がすぐ出てこない。書き換えたら、その場で捨てる。
+     捨てる場所を書き込みの口に付けておけば、押す側は何も覚えなくてよい。 */
+  const _spDropMemo = function () {
+    try { if (window._spMemoDrop) window._spMemoDrop(); } catch (e) {}
+  };
+  const _spAfterWrite = function (fn) {
+    return function () {
+      let r;
+      try { r = fn.apply(null, arguments); } catch (e) { _spDropMemo(); throw e; }
+      if (r && typeof r.then === 'function') {
+        return r.then(function (v) { _spDropMemo(); return v; },
+                      function (e) { _spDropMemo(); throw e; });
+      }
+      _spDropMemo();
+      return r;
+    };
+  };
+  window.fbLib = {
+    collection, getDocs, query, orderBy, limit, startAfter, onSnapshot,
+    doc, increment, where, arrayUnion, getDoc, runTransaction,
+    signInAnonymously,
+    addDoc:    _spAfterWrite(addDoc),
+    updateDoc: _spAfterWrite(updateDoc),
+    setDoc:    _spAfterWrite(setDoc),
+    deleteDoc: _spAfterWrite(deleteDoc),
+    /* まとめ書きは commit() のときに書かれる。そこで捨てる。 */
+    writeBatch: function () {
+      const b = writeBatch.apply(null, arguments);
+      const commit = b.commit.bind(b);
+      b.commit = _spAfterWrite(commit);
+      return b;
+    },
+    runTransactionRaw: runTransaction
   };
 
   // CHES Identity（LINE / Google）用の Auth 窓口
