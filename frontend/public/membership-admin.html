@@ -2191,7 +2191,10 @@ async function renderSchoolPark() {
        決め打ちで、ほかのクエストは閉じるまで完走に入らなかった。 */
     took.forEach(t => {
       const m = pick(t.addr, t.name);
-      if (m && t.approved) m.done++;
+      /* 認めた周回のぶんだけ数える。2周した人は2本。
+         SchoolPark 側（spDaoLoadMembers）は前から周回で数えていたのに、
+         ここだけ1本ずつだったので、同じ人の完走数が2画面で食い違っていた。 */
+      if (m && t.approved) m.done += Math.max(1, Number(t.rounds) || 0);
     });
   });
   /* 知恵カードと、引用された数 */

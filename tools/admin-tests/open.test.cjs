@@ -304,7 +304,9 @@ test('条件を満たしていない人を認めるときは、何が足りな�
 test('管理画面の完走も、承認した時点で数える（CLOSED を待たない）', () => {
   /* 前は「CLOSED、ただし一般#001 のLEARNだけ例外」という決め打ちだった。
      SchoolPark 側（spDaoLoadMembers / spTrustScore）とそろえる。 */
-  assert.ok(ADMIN.indexOf('if (m && t.approved) m.done++;') >= 0, '承認で数えていない');
+  /* 数え方そのもの（1本ずつか、周回ぶんか）はここでは問わない。
+     見るのは「認めた時点で数えているか」だけ。周回は member-tests が見る。 */
+  assert.match(ADMIN, /if \(m && t\.approved\) m\.done/, '承認で数えていない');
   assert.equal(ADMIN.indexOf('q.status === "CLOSED" ||\n          (q.series === "general"'), -1,
     '決め打ちが残っている');
 });

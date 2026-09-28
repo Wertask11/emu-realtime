@@ -1009,7 +1009,7 @@ test('2周認めた人は、完走2本', () => {
   const i = INDEX.indexOf('完走は「認めた周回」の合計');
   assert.ok(i > 0, 'まだクエストの本数で数えている');
   const seg = INDEX.slice(i, i + 400);
-  assert.ok(seg.indexOf('Number(q.rounds || 1)') >= 0, '周回を足していない');
+  assert.ok(/Number\(q\.rounds\)/.test(seg), '周回を足していない');
   assert.equal(INDEX.indexOf("done = list.filter(function (q) { return !q.isFounder; }).length;"), -1,
     '古い数え方が残っている');
 });
@@ -1017,25 +1017,46 @@ test('2周認めた人は、完走2本', () => {
 test('パスポートの記録も、周回を持つ', () => {
   const i = INDEX.indexOf('認めた周回の数。1周しかしていない人は1');
   assert.ok(i > 0, '記録に周回が無い');
-  assert.ok(INDEX.indexOf('rounds += Math.max(1, Number(d.approvedRounds || 0));') >= 0,
+  assert.ok(/rounds \+= Math\.max\(1, Number\(d\.approvedRounds\)/.test(INDEX),
     'SDK で読んだときに周回を足していない');
-  assert.ok(INDEX.indexOf('rounds += Math.max(1, Number(r.data.approvedRounds || 0));') >= 0,
+  assert.ok(/rounds \+= Math\.max\(1, Number\(r\.data\.approvedRounds\)/.test(INDEX),
     '普通の通信で読んだときに周回を足していない');
 });
 
 test('メンバーの完走も、周回を足す', () => {
-  assert.ok(INDEX.indexOf('if (m) m.done += Math.max(1, Number(t.rounds || 0));') >= 0,
+  assert.ok(/m\.done \+= Math\.max\(1, Number\(t\.rounds\)/.test(INDEX),
     'メンバーが周回を足していない');
-  assert.ok(INDEX.indexOf('rounds: Math.max(1, Number(c.approvedRounds || 0))') >= 0,
+  assert.ok(/rounds: Math\.max\(1, Number\(c\.approvedRounds\)/.test(INDEX),
     '受けた記録から周回を持ってきていない');
+});
+
+/* 書き方を文字で当てるのではなく、実際に動かして確かめる。
+
+   前はここで古い書き方をそのまま探していたので、
+   Math.max(1, Number(x || 1)) を Math.max(1, Number(x) || 0) に直した
+   ときに落ちた。中身は良くなっている（前者は壊れた値で NaN になる）のに、
+   文字が変わっただけで落ちるのでは、試験が直すのを邪魔してしまう。 */
+test('周回の数え方は、欠けた値・壊れた値でも1周になる', () => {
+  const found = INDEX.match(/Math\.max\(1, Number\([A-Za-z.]*(?:rounds|approvedRounds)\)[^;)]*\)/g) || [];
+  assert.ok(found.length >= 5, '周回を数えているところが足りません: ' + found.length);
+  found.forEach(function (expr) {
+    /* 式のなかの「x」を差し替えて、そのまま評価する。 */
+    const body = expr.replace(/Number\([A-Za-z.]*(?:rounds|approvedRounds)\)/, 'Number(v)');
+    const f = new Function('v', 'return ' + body + ';');
+    [undefined, null, 0, '', 'x', NaN, -2].forEach(function (v) {
+      assert.equal(f(v), 1, expr + ' が ' + String(v) + ' で1周になりません');
+    });
+    assert.equal(f(2), 2, expr + ' が2周を数えません');
+    assert.equal(f('3'), 3, expr + ' が2周を数えません');
+  });
 });
 
 test('古い記録（周回の欄が無い）は1周として数える', () => {
   /* サーバーが書く前の記録を0本にしてしまうと、完走が消える。 */
-  ['Math.max(1, Number(d.approvedRounds || 0))',
-   'Math.max(1, Number(q.rounds || 1))',
-   'Math.max(1, Number(c.approvedRounds || 0))'].forEach(function (x) {
-    assert.ok(INDEX.indexOf(x) >= 0, '古い記録が0本になる: ' + x);
+  [/Math\.max\(1, Number\(d\.approvedRounds\)/,
+   /Math\.max\(1, Number\(q\.rounds\)/,
+   /Math\.max\(1, Number\(c\.approvedRounds\)/].forEach(function (x) {
+    assert.ok(x.test(INDEX), '古い記録が0本になる: ' + x);
   });
 });
 
