@@ -1530,6 +1530,13 @@ async function renderStarMint() {
     : '';
   const contract = cfg.contract
     ? '<p class="hint">コントラクト：<code>' + esc(cfg.contract) + '</code></p>' : '';
+  /* grantRole に貼る役の値。コントラクトから読んだ実物をそのまま出す。
+     「MINTER_ROLE を読んでください」と書くだけだと、書き写すときに
+     桁を落として、静かに別の役を与えてしまうことがある。 */
+  const role = (cfg.role && cfg.reason === 'MINTER_NOT_AUTHORIZED')
+    ? '<p class="hint">grantRole の <b>role</b>：<code>' + esc(cfg.role) + '</code><br>'
+      + 'grantRole の <b>account</b>：<code>' + esc(cfg.minter || '') + '</code></p>'
+    : '';
 
   /* 直し方まで書く。状態だけ出しても、次に何をすればよいか分からない。 */
   const guide = {
@@ -1541,9 +1548,11 @@ async function renderStarMint() {
     BAD_MINTER_KEY: '<p class="state ng">発行係の鍵を読めません。</p>'
       + '<p class="hint">SP_QUEST_STAR_MINTER_PRIVATE_KEY を見直してください。</p>',
     MINTER_NOT_AUTHORIZED: '<p class="state ng">発行係に、まだ発行の権限がありません。</p>'
-      + '<p class="hint">コントラクトを置いたウォレットで grantRole を1回実行してください。<br>'
-      + 'role には MINTER_ROLE の値（コントラクトの MINTER_ROLE を読むと出ます）、'
-      + 'account には下の発行係のアドレスを入れます。<br>'
+      + '<p class="hint">デプロイのとき <b>admin に指定したウォレット</b>'
+      + '（DEFAULT_ADMIN_ROLE を持つもの）から <code>grantRole</code> を1回だけ実行してください。'
+      + 'ほかのウォレットからでは通りません。<br>'
+      + 'このコントラクトは Polygonscan で未検証なので「Write Contract」は使えません。'
+      + 'Remix の「At Address」にコントラクトのアドレスを入れて呼び出します。<br>'
       + 'これを済ませるまで、パスポートの受け取りボタンは押せません。</p>',
     MINTER_LOW_GAS: '<p class="state ng">発行係のガス代（MATIC）が足りません。</p>'
       + '<p class="hint">下のアドレスへ MATIC を少し送ってください。'
@@ -1553,7 +1562,7 @@ async function renderStarMint() {
   };
   box.innerHTML = (guide[String(cfg.reason || "")]
       || '<p class="state ng">発行できません（' + esc(String(cfg.reason)) + '）。</p>')
-    + contract + minter;
+    + role + contract + minter;
 }
 
 async function renderLimitedStars() {

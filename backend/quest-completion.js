@@ -62,7 +62,7 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
   async function certificateReadiness() {
     const base = { ready: false, chainId: 137,
       contract: ethers.utils.isAddress(certContract) ? certContract : null,
-      minter: null, canMint: false, matic: null };
+      minter: null, canMint: false, matic: null, role: "" };
     if (!ethers.utils.isAddress(certContract) || !certKey)
       return { ...base, reason: "NOT_DEPLOYED" };
     const minter = minterAddress();
@@ -79,7 +79,11 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
         c.hasRole(role, minter), provider.getBalance(minter)
       ]);
       const hasGas = balance.gte(ethers.utils.parseEther(MINT_GAS_FLOOR_MATIC));
-      return { ...base, minter, canMint, matic: ethers.utils.formatEther(balance),
+      /* role はコントラクトから読んだ実物を返す。運営画面で grantRole に
+         貼るのはこの値。画面に書き写させると、桁を1つ落として
+         静かに別の役を与えてしまう。 */
+      return { ...base, minter, canMint, role: String(role || ""),
+        matic: ethers.utils.formatEther(balance),
         ready: !!canMint && hasGas,
         reason: !canMint ? "MINTER_NOT_AUTHORIZED" : (!hasGas ? "MINTER_LOW_GAS" : "") };
     } catch (e) {

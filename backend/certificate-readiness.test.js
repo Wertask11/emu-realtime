@@ -287,3 +287,20 @@ test("ウォレット未連携なら、記録に触らず WALLET_REQUIRED", asyn
   assert.equal(result.body.error, "WALLET_REQUIRED");
   assert.equal(records.get("sp_quest_certificates/" + key).status, "granted", "記録はそのまま");
 });
+
+test("役の値を返す（運営画面が grantRole にそのまま貼れるように）", async () => {
+  resetChain({ hasRole: false });
+  const body = await callConfig(build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY }).config);
+  assert.equal(body.reason, "MINTER_NOT_AUTHORIZED");
+  assert.equal(body.role, chain.minterRole,
+    "コントラクトから読んだ値をそのまま返すこと（書き写させない）");
+  assert.doesNotMatch(JSON.stringify(body), /1111111111/, "鍵は絶対に出さない");
+});
+
+test("役が読めないときも、欄そのものは返す", async () => {
+  resetChain({ reachable: false });
+  const body = await callConfig(build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY }).config);
+  assert.equal(body.role, "", "読めないときは空。前の値を出さない");
+});
