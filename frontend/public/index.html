@@ -17242,6 +17242,8 @@ window.spGuildOpen = async function (guildId, app, quiet) {
      ギルドに属さないクエスト（直接出したもの）は、クエスト一覧のほうにある。 */
   const quests = !g.id ? [] : _spGuildQuestDocs
     .filter(function (q) { return !SpQuestStore.isFounder(q) && SpGuildStore.guildIdOf(q, defs) === g.id; })
+    /* ここも番号順。クエスト一覧と並びが違うと、同じものを探し直すことになる。 */
+    .slice().sort(SpQuestStore.compare)
     .slice(0, 20)
     .map(function (q) {
       const st = q.status || 'OPEN';
@@ -17316,13 +17318,43 @@ window.spGuildToggle = async function (guildId, kind, app) {
      跳ね返された。押しても何も起きず、断りの言葉すら出ない。
      見切って、必ず _spGuildBusy を戻す。 */
   try {
+    /* いま入っているかどうかを確かめる。
+
+       SDK の読みは、Listen が切れているあいだ
+       「Failed to get document because the client is offline」で断る。
+       そのたびに押しても何も起きなかった。投稿の回数を数えるところ
+       （_emuAddUsage）と同じ症状なので、同じ手当てをする。
+
+       まず専用の通信路で読み、だめなら普通の通信（REST）で読み直す。
+       どちらも読めなかったときだけ、あきらめて理由を出す。
+       ここを飛ばして書くことはできない。すでに入っているのに
+       もう一度 setDoc すると、記録の決まりが update を認めていないので
+       断られる（入るのは1回だけ、という決まりのため）。 */
+    let joined = null;
     const cur = await _spSoon(fb.getDoc(ref), 4000);
-    if (!cur.ok) throw new Error('いまの状態を確かめられませんでした');
-    const write = cur.value.exists() ? fb.deleteDoc(ref) : fb.setDoc(ref, { name: p.name, at: Date.now() });
+    if (cur.ok && cur.value && typeof cur.value.exists === 'function') {
+      joined = cur.value.exists();
+    }
+    if (joined === null) {
+      try {
+        const d = await _spRestDoc('sp_guild_members/' + encodeURIComponent(guildId)
+          + '/' + sub + '/' + encodeURIComponent(p.addr), true);
+        joined = !!d;
+        console.warn('ギルドの参加・応援を、普通の通信で確かめました。');
+      } catch (e2) {
+        throw new Error('いまの状態を確かめられませんでした');
+      }
+    }
+    const write = joined ? fb.deleteDoc(ref) : fb.setDoc(ref, { name: p.name, at: Date.now() });
     const done = await _spSoon(write, 6000);
     if (!done.ok) throw new Error('保存が返ってきませんでした');
   } catch (e) {
     console.warn('ギルドの参加・応援を保存できませんでした:', e && (e.message || e));
+    /* 断られたときは、証が古いだけのことがある。取り直して1回だけやり直す。 */
+    if (_spDenied(e) && await _spRefreshAuth()) {
+      _spGuildBusy = false;
+      return window.spGuildToggle(guildId, kind, app);
+    }
     alert('うまくいきませんでした。通信を確かめて、もう一度お試しください。');
     _spGuildBusy = false;
     return;
@@ -18123,7 +18155,10 @@ async function _spDaoLoadQuestsOnce(app, attempt) {
       later('Quest #000 が読めなかった');
     }
   }
-  docs.sort((a, b) => Number(SpQuestStore.isFounder(b)) - Number(SpQuestStore.isFounder(a)));
+  /* 番号順に並べる。前は「#000 を先頭に」だけで、あとは記録が返ってきた
+     順だった。15本まとめて出した #002 は作った時刻がほぼ同じなので、
+     開くたびに並びが変わって読めなかった。 */
+  docs.sort(SpQuestStore.compare);
 
   /* クエスト1件につき、受けた人と途中報告で2往復ある。
      1本ずつ順に待っていたため、30本なら60往復ぶん待っていた
@@ -18160,6 +18195,26 @@ function _spLogView(l, logs) {
     openPost:fromId ? function () { window.spOpenEmuPost(fromId); } : function () {},
     time:d ? ((d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0')
       + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')) : '' };
+}
+
+/* クエストの現場資料に添える図。系列と番号で引く。
+
+   #002 WORK の5分野は、同じ町（緑ヶ丘）の同じ5つの現場が舞台なので、
+   図は15本で共通。1枚を全部に出す。 */
+const SP_BRIEF_IMAGES = {
+  'general-2': { url: '/schoolpark/midorigaoka-map.jpg',
+    alt: '緑ヶ丘（架空）案内図。北口に商店街・駅前30・北口の花、南口に佐藤税理士事務所・緑ヶ丘学習室・緑ヶ丘フード。' }
+};
+function _spBriefImage(q) {
+  const v = q || {};
+  if (!v.brief) return '';
+  const hit = SP_BRIEF_IMAGES[String(v.series || '') + '-' + (Number(v.questNumber) || 0)];
+  return hit ? hit.url : '';
+}
+function _spBriefImageAlt(q) {
+  const v = q || {};
+  const hit = SP_BRIEF_IMAGES[String(v.series || '') + '-' + (Number(v.questNumber) || 0)];
+  return hit ? hit.alt : '現場の案内図';
 }
 
 /* クエスト1件を、枠の中で使える形にする。
@@ -18266,6 +18321,9 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
       : function () {},
     founderSections: SpQuestStore.sections(q),
     action: q.action || '', measure: q.measure || '',
+    /* カードの「元の知識」の箱。案件ものは持っていないので、
+       出すと空の箱が並ぶ（15本ぜんぶに出ていた）。 */
+    knowledgeShow: (q.knowledge && !(q.given || q.deliverable || q.criteria)) ? 'flex' : 'none',
     /* 仕事の形のクエスト（#002 WORK のような案件もの）の欄。
 
        いまの4つ（知識・予想・やること・確かめ方）は仮説検証の形で、
@@ -18275,6 +18333,19 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
 
        どちらの形かは、欄があるかどうかで決める。片方しか持たない
        クエストは、持っている側だけが出る。古いクエストは今までどおり。 */
+    /* 現場資料の図。
+
+       出したあとのクエストは中身を変えられない（記録の決まりが
+       status と closedAt しか許さない。受けた人が見た条件が
+       すり替わらないようにするため）。番号の予約札も消せないので、
+       出し直しもできない。だから、すでに出した #002 の図は
+       ここで対応表から出す。
+
+       これから出すクエストは briefImage をデータに持てる。
+       持っていればそちらが優先される。 */
+    briefImage: q.briefImage || _spBriefImage(q),
+    briefImageAlt: _spBriefImageAlt(q),
+    briefImageShow: (q.briefImage || _spBriefImage(q)) ? 'block' : 'none',
     brief: q.brief || '', given: q.given || '',
     deliverable: q.deliverable || '', criteria: q.criteria || '',
     briefShow: q.brief ? 'block' : 'none',

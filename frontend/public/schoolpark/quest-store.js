@@ -97,6 +97,36 @@
     return !isFounder(q) && q && q.series === 'special';
   }
   /* 系列。#000 と、番号の無い古いクエストは、どちらにも属さない。 */
+  /* 一覧の並び。番号順にそろえる。
+
+     前は「#000 を先頭に」だけで、あとは記録が返ってきた順だった。
+     15本まとめて出した #002 は作った時刻がほぼ同じなので、
+     並びが毎回変わり、#002-4 標準 の次に #002-1 実践 が来るような
+     読みにくい一覧になっていた。
+
+     順番は 系列（一般→特殊）→ 番号 → 枝番 → 段（入門→標準→実践）。
+     #000 は原点なので、どの系列よりも先に出す。 */
+  function compare(a, b) {
+    /* isFounder は q.id を素で見るので、空を渡すと落ちる。 */
+    const fa = isFounder(a || {}) ? 0 : 1;
+    const fb = isFounder(b || {}) ? 0 : 1;
+    if (fa !== fb) return fa - fb;
+    const sa = SERIES_IDS.indexOf(String((a || {}).series || ''));
+    const sb = SERIES_IDS.indexOf(String((b || {}).series || ''));
+    /* 系列の無い古いクエストは後ろへ落とす（番号で並べようが無いため）。 */
+    if (sa !== sb) return (sa < 0 ? 99 : sa) - (sb < 0 ? 99 : sb);
+    const na = Number((a || {}).questNumber) || 0;
+    const nb = Number((b || {}).questNumber) || 0;
+    if (na !== nb) return na - nb;
+    const ba = Number((a || {}).branch) || 0;
+    const bb = Number((b || {}).branch) || 0;
+    if (ba !== bb) return ba - bb;
+    const ta = STAGES.indexOf(String((a || {}).stage || ''));
+    const tb = STAGES.indexOf(String((b || {}).stage || ''));
+    /* 段の無いものは、段のあるものより先。 */
+    return (ta < 0 ? -1 : ta) - (tb < 0 ? -1 : tb);
+  }
+
   function seriesOf(q) {
     return (q && isValidSeries(q.series) && !isFounder(q)) ? q.series : '';
   }
@@ -190,7 +220,7 @@
     seriesName, branchName, seriesOf, isSpecial, seriesTag,
     isValidSeries, isValidNumber, isValidBranch, isValidStage,
     numberKey, numberKeyOf, takenNumbers,
-    label, fullLabel, isFounder, sections, createQuest
+    label, fullLabel, isFounder, sections, createQuest, compare
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SpQuestStore = api;

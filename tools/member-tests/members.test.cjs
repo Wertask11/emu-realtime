@@ -745,10 +745,18 @@ test('読めなかったら、前に出ていたクエストを消さない', ()
     '読めないたびに空で塗りつぶしてしまう');
 });
 
-test('参加したい・応援するは、返ってこなくても固まらない', () => {
+/* 関数の終わりまでを切り出す。固定の文字数で切ると、中身が増えたときに
+   確かめたい行が窓の外へ出て、直っているのに落ちる。 */
+function toggleSrc() {
   const i = INDEX.indexOf('window.spGuildToggle = async function');
-  assert.ok(i > 0);
-  const seg = INDEX.slice(i, i + 1800);
+  assert.ok(i > 0, 'ギルドの切り替えが見つかりません');
+  const end = INDEX.indexOf('/* 採択する。運営だけ。', i);
+  assert.ok(end > i, '関数の終わりが見つかりません');
+  return INDEX.slice(i, end);
+}
+
+test('参加したい・応援するは、返ってこなくても固まらない', () => {
+  const seg = toggleSrc();
   assert.ok(seg.indexOf('_spSoon(fb.getDoc(ref)') >= 0, 'いまの状態の読み取りを見切れない');
   assert.ok(seg.indexOf('_spSoon(write') >= 0, '保存を見切れない');
   assert.ok(seg.indexOf('} finally {') >= 0, '途中で抜けると次から押せなくなる');
@@ -759,8 +767,7 @@ test('参加したい・応援するは、返ってこなくても固まらな�
 });
 
 test('押しても黙って終わらない', () => {
-  const i = INDEX.indexOf('window.spGuildToggle = async function');
-  const seg = INDEX.slice(i, i + 1800);
+  const seg = toggleSrc();
   assert.ok(seg.indexOf('うまくいきませんでした') >= 0, '失敗を伝えていない');
   assert.ok(seg.indexOf('ギルドの参加・応援を保存できませんでした') >= 0, '記録に残していない');
 });
