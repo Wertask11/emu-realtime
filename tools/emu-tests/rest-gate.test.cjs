@@ -106,6 +106,54 @@ test('Retry-After が無いか、おかしな値なら10秒', () => {
   }
 });
 
+/* ───────── 「混んでいる」と「枠を使い切った」は別物 ───────── */
+
+test('その日の読み取り枠を使い切ったと言われたら、10分待つ', () => {
+  const body = '{"error":{"code":429,"message":"Quota exceeded",'
+    + '"status":"RESOURCE_EXHAUSTED"}}';
+  const { ctx } = gate();
+  const before = Date.now();
+  ctx._spRestBlock({ headers: { get: () => null } }, body);
+  const st = vm.runInContext('_spRestState()', ctx);
+  const w = st.blockedUntil - before;
+  assert.ok(w >= 9.5 * 60000 && w <= 10.5 * 60000,
+    '枠切れなのに ' + Math.round(w / 1000) + '秒しか待っていない');
+  assert.equal(st.reason, 'quota', 'どちらの429なのかを覚えていない');
+});
+
+test('枠切れのときは、返ってきた文面を控えに残す', () => {
+  const { ctx } = gate();
+  ctx._spRestBlock({ headers: { get: () => null } },
+    '{"error":{"status":"RESOURCE_EXHAUSTED","message":"Quota exceeded"}}');
+  const st = vm.runInContext('_spRestState()', ctx);
+  assert.match(st.message, /RESOURCE_EXHAUSTED/, '原因が手元に残らない');
+  assert.ok(st.message.length <= 400, '控えが長すぎる');
+});
+
+test('ただ混んでいるだけなら、これまでどおり10秒', () => {
+  for (const body of ['', '{"error":{"message":"too many requests"}}', 'rate limit']) {
+    const { ctx } = gate();
+    const before = Date.now();
+    ctx._spRestBlock({ headers: { get: () => null } }, body);
+    const st = vm.runInContext('_spRestState()', ctx);
+    assert.equal(st.reason, 'busy', '文面「' + body + '」を枠切れと取り違えている');
+    const w = st.blockedUntil - before;
+    assert.ok(w >= 9000 && w <= 11000, body + ' で ' + w + 'ms');
+  }
+});
+
+test('Retry-After は枠切れの見立てより強い', () => {
+  const { ctx } = gate();
+  const before = Date.now();
+  ctx._spRestBlock({ headers: { get: () => '45' } },
+    '{"error":{"status":"RESOURCE_EXHAUSTED"}}');
+  const st = vm.runInContext('_spRestState()', ctx);
+  const w = st.blockedUntil - before;
+  assert.ok(w >= 44000 && w <= 46000,
+    '相手が45秒と言っているのに ' + Math.round(w / 1000) + '秒待っている');
+  assert.equal(st.reason, 'quota', '理由のほうは覚えておくこと');
+});
+
 test('失敗したものは取っておかない（すぐ試し直せる）', async () => {
   const { ctx, seen } = gate({ throwEvery: 1 });
   await ctx._spRestGet('x', true).catch(() => {});
@@ -155,7 +203,8 @@ test('429 を見分けて、関門を閉じている', () => {
   const once = INDEX.slice(INDEX.indexOf('async function _spRestGetOnce('),
                            INDEX.indexOf('/* 関門つきの入口。'));
   assert.match(once, /r\.status === 429/, '429 を他の失敗と同じに扱っている');
-  assert.match(once, /_spRestBlock\(r\)/);
+  assert.match(once, /_spRestBlock\(r, why\)/, '文面を読まずに閉めている');
+  assert.match(once, /await r\.text\(\)/, '429 の言い分を読んでいない');
   /* 404 は「まだ無い」であって失敗ではない。閉じてはいけない。 */
   const at404 = once.indexOf('r.status === 404');
   const at429 = once.indexOf('r.status === 429');

@@ -1589,7 +1589,6 @@ app.get('/api/user/name/:address', async (req, res) => {
 // ── ランキング用サーバーキャッシュ（1時間TTL） ──
 const _rankingCache = {
   postsSnap: null,
-  names:     null,
   fetchedAt: 0,
 };
 const RANKING_CACHE_TTL = 60 * 60 * 1000; // 1時間
@@ -1598,35 +1597,49 @@ async function _getRankingSource() {
   const now = Date.now();
   if (_rankingCache.postsSnap && now - _rankingCache.fetchedAt < RANKING_CACHE_TTL) {
     console.log('📊 RankingCache HIT');
-    return { postsSnap: _rankingCache.postsSnap, names: _rankingCache.names };
+    return { postsSnap: _rankingCache.postsSnap };
   }
   console.log('📊 RankingCache MISS — Firestore読み取り');
-  const [postsSnap, names] = await Promise.all([
-    db.collection('posts').limit(500).get(),
-    fetchAllDisplayNames(),
-  ]);
+  const postsSnap = await db.collection('posts').limit(500).get();
   _rankingCache.postsSnap = postsSnap;
-  _rankingCache.names     = names;
   _rankingCache.fetchedAt = now;
-  return { postsSnap, names };
+  return { postsSnap };
 }
 
-// ── ユーザー名テーブルを一括取得（ランキング用内部関数） ──
-async function fetchAllDisplayNames() {
+/* ── 名前を引く（ランキング用内部関数） ──
+
+   前はここで user_profiles を丸ごと読んでいた。
+   ランキングに出るのは多くて50人なのに、登録している人ぜんぶの
+   ドキュメントを読んでいたことになる。しかもプロフィール画像は
+   Storage が使えない（Blazeプランが必要）ため、1件200KBまでの
+   文字列として同じドキュメントに入っている。つまり、10人分の
+   名前を出すために、全員の画像まで運んでいた。
+
+   このプロジェクトは無料枠で動いており、1日の読み取りには
+   上限がある。使い切ると Firestore は 429（RESOURCE_EXHAUSTED）を
+   返し、画面側の読み取りもまとめて断られる。ここは効かせる。
+
+   出る人のぶんだけ、名前だけを引く。 */
+async function fetchDisplayNames(addresses) {
   if (!db) return {};
+  const ids = [...new Set((addresses || [])
+    .map(a => String(a || '').toLowerCase())
+    .filter(a => a && a !== 'unknown'))];
+  if (!ids.length) return {};
   try {
-    const snapshot = await db.collection('user_profiles').get();
+    const refs = ids.map(id => db.collection('user_profiles').doc(id));
+    /* fieldMask で displayName だけを運ぶ。画像は持ってこない。 */
+    const docs = await db.getAll(...refs, { fieldMask: ['displayName'] });
     const map = {};
-    snapshot.docs.forEach(doc => {
-      const d = doc.data();
-      if (d.address && d.displayName) {
-        map[d.address.toLowerCase()] = d.displayName;
-      }
+    docs.forEach(doc => {
+      if (!doc.exists) return;
+      const name = (doc.data() || {}).displayName;
+      if (name) map[doc.id] = name;
     });
     return map;
   } catch (e) {
-    console.error('fetchAllDisplayNames error:', e);
-    return {};
+    console.error('fetchDisplayNames error:', e && e.message);
+    return {};   /* 名前が引けなくても、順位そのものは出す */
   }
 }
 
@@ -1645,8 +1658,9 @@ app.get('/api/ranking', async (req, res) => {
     const type  = req.query.type  || 'good_post';
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
 
-    // キャッシュから posts + names を取得（1時間TTLで Firestore読み取りを抑制）
-    const { postsSnap, names } = await _getRankingSource();
+    // キャッシュから posts を取得（1時間TTLで Firestore読み取りを抑制）
+    // 名前は、上位に残った人のぶんだけ最後に引く（下の fetchDisplayNames）
+    const { postsSnap } = await _getRankingSource();
 
     let items = [];
 
@@ -1661,7 +1675,6 @@ app.get('/api/ranking', async (req, res) => {
 
       items = Object.keys(countMap).map(addr => ({
         address:     addr,
-        displayName: names[addr] || shortAddr(addr),
         score:       countMap[addr],
         scoreLabel:  '📝 ' + countMap[addr] + '件'
       }));
@@ -1686,7 +1699,6 @@ app.get('/api/ranking', async (req, res) => {
 
       items = Object.keys(givenMap).map(addr => ({
         address:     addr,
-        displayName: names[addr] || shortAddr(addr),
         score:       givenMap[addr],
         scoreLabel:  emoji + ' ' + givenMap[addr] + '回 ' + label + 'した'
       }));
@@ -1721,7 +1733,6 @@ app.get('/api/ranking', async (req, res) => {
 
         return {
           address:     addr,
-          displayName: names[addr] || shortAddr(addr),
           score,
           scoreLabel
         };
@@ -1732,12 +1743,20 @@ app.get('/api/ranking', async (req, res) => {
     // 0件フィルタ・上位N件
     items = items.filter(i => i.score > 0).slice(0, limit);
 
-    console.log(`📊 Ranking[${type}]: ${items.length}件`);
+    /* ここまで来て残った人だけ、名前を引く。多くて50件。 */
+    const found = await fetchDisplayNames(items.map(i => i.address));
+    items.forEach(i => { i.displayName = found[i.address] || shortAddr(i.address); });
+
+    console.log(`📊 Ranking[${type}]: ${items.length}件 / 名前 ${Object.keys(found).length}件`);
     res.json(items);
 
   } catch (err) {
-    console.error('ranking error:', err);
-    res.status(500).json([]);
+    /* ランキングは飾りである。読めなかったからといって 500 を返すと、
+       画面のコンソールが赤で埋まり、本当の不具合がそこに埋もれる。
+       空で返し、なぜ読めなかったのかはこちらの控えに残す。
+       （無料枠の読み取りを使い切ると、ここは RESOURCE_EXHAUSTED になる） */
+    console.error('ranking error:', err && err.code, err && err.message);
+    res.json([]);
   }
 });
 

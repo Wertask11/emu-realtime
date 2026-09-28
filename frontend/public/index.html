@@ -9265,7 +9265,16 @@ async function goToChesHub() {
   window._chesBusy = false;
 
   if (typeof chesLandAfterLogin === "function") {
-    await chesLandAfterLogin();
+    /* 入場の途中で返ってこなくても、覆いは必ず外す。
+
+       ここは前、返ってくるまで待っていた。中で記録を読むところが
+       返ってこないと（通信が混んでいて断られるときなど）、
+       画面は「読み込み中」のまま何もできなくなる。
+       実際、普通の通信が429で止められた日にそうなった。
+
+       読めたぶんだけでも先へ進める。足りないところは、
+       それぞれの場所が自分で読み直す。 */
+    try { await _spSoon(Promise.resolve(chesLandAfterLogin()), 12000); } catch (e) {}
     /* 中身が出来てから見せる。揃わなければ上限で切り上げる。 */
     if (typeof spDaoWaitReady === "function") { try { await spDaoWaitReady(8000); } catch (e) {} }
     _hideSpLoadingOverlay();
@@ -9344,14 +9353,35 @@ function _showSpLoadingOverlay() {
   if (readyEl)  { readyEl.style.display = 'none'; }
   if (speechEl) { speechEl.style.display = 'none'; }
   if (hintEl)   { hintEl.style.display = ''; }
-  // 最初の一言は自動で表示
-  setTimeout(_spLoadingTalk, 600);
+  /* 最初の一言は自動で表示。取っ手を持っておく。
+     取っ手が無いと、出して消してを繰り返したぶんだけ
+     あとから一言が湧いてきて、開いた画面で吹き出しが点滅する。 */
+  clearTimeout(_spLoadingIntro);
+  _spLoadingIntro = setTimeout(_spLoadingTalk, 600);
+  /* 最後の砦。
+
+     出した覆いは、何があっても消えること。どこか1か所が返って
+     こないだけで「読み込み中」のまま閉じ込められるのは、
+     読めないことより悪い。25秒で必ず外す。
+     中身が揃っていなくても、画面は触れるほうがよい。 */
+  clearTimeout(_spLoadingHardStop);
+  _spLoadingHardStop = setTimeout(function () {
+    const still = document.getElementById('spLoadingOverlay');
+    if (!still || still.style.display === 'none') return;
+    console.warn('読み込みが終わらないので、画面を開きます。'
+      + '足りないところは、それぞれの場所が読み直します。');
+    _cancelSpLoadingOverlay();
+  }, 25000);
 }
+let _spLoadingHardStop = null;
+let _spLoadingIntro = null;
 
 // エラーや中断時にローディングをキャンセルして非表示
 function _cancelSpLoadingOverlay() {
   const ov = document.getElementById('spLoadingOverlay');
   if (!ov) return;
+  clearTimeout(_spLoadingHardStop);
+  clearTimeout(_spLoadingIntro);
   ov.style.transition = 'none';
   ov.style.display = 'none';
   ov.style.opacity = '1';
@@ -9360,6 +9390,8 @@ function _cancelSpLoadingOverlay() {
 function _hideSpLoadingOverlay() {
   const ov = document.getElementById('spLoadingOverlay');
   if (!ov) return;
+  clearTimeout(_spLoadingHardStop);
+  clearTimeout(_spLoadingIntro);
   const msgEl    = document.getElementById('spLoadingMsg');
   const dotsEl   = document.getElementById('spLoadingDots');
   const readyEl  = document.getElementById('spLoadingReady');
@@ -17791,17 +17823,49 @@ function _spRestSlot(run) {
   });
 }
 /* 429 が返ったときに、次に開ける時刻を決める。
-   Retry-After があればそれに従う。無ければ10秒。 */
-function _spRestBlock(res) {
+
+   429 には、まったく違う二つの意味がある。どちらなのかで
+   待つ長さも、やることも変わる。相手の言い分をそのまま読む。
+
+     ・混んでいる（一時的な速さの制限）
+       …少し待てば通る。Retry-After があればそれに従い、
+         無ければ10秒。
+
+     ・その日の読み取り枠を使い切った（RESOURCE_EXHAUSTED）
+       …待っても翌日まで開かない。10秒で押し返しても無駄で、
+         コンソールが赤で埋まるだけ。10分待ってから1回だけ試す。
+         そして、なぜ読めないのかを控えに残す。直すのは
+         こちら側ではなく、Firebase の枠のほうである。
+
+   どちらなのかを推し測らない。返ってきた文面を読んで決める。 */
+function _spRestBlock(res, body) {
+  const st = _spRestState();
   let wait = 10000;
+  let kind = 'busy';
+  const text = String(body || '');
+  /* 相手が「枠を使い切った」と言っているか。 */
+  if (/RESOURCE_EXHAUSTED|[Qq]uota exceeded|quota metric|exceeded your .*quota/.test(text)) {
+    kind = 'quota';
+    wait = 10 * 60 * 1000;
+  }
+  /* Retry-After があれば、相手の言うとおりに待つ（こちらの見立てより優先）。 */
   try {
     const h = res && res.headers && res.headers.get('Retry-After');
     const n = Number(h);
     if (n > 0 && n < 300) wait = n * 1000;
   } catch (e) {}
-  _spRestState().blockedUntil = Date.now() + wait;
-  console.warn('普通の通信が混んでいます。' + Math.round(wait / 1000)
-    + '秒ほど待ってから読み直します。');
+  st.blockedUntil = Date.now() + wait;
+  st.reason = kind;
+  st.message = text.slice(0, 400);
+  if (kind === 'quota') {
+    console.warn('今日のぶんの読み取り枠を使い切ったと言われました。'
+      + Math.round(wait / 60000) + '分ほど待ってから1回だけ試します。'
+      + 'Firebase の読み取り枠を確かめてください。返ってきた文面：'
+      + st.message);
+  } else {
+    console.warn('普通の通信が混んでいます。' + Math.round(wait / 1000)
+      + '秒ほど待ってから読み直します。');
+  }
 }
 
 async function _spRestGetOnce(path, needAuth) {
@@ -17842,7 +17906,14 @@ async function _spRestGetOnce(path, needAuth) {
   if (r.status === 404) return null;
   /* 混んでいると言われた。しばらく誰も通さない。
      押し返すと余計に長引くので、ここで止める。 */
-  if (r.status === 429) { _spRestBlock(r); throw new Error('HTTP 429'); }
+  if (r.status === 429) {
+    /* 文面を読んでから閉める。「混んでいる」と「枠切れ」は別物で、
+       待つ長さが違う。読めなくても閉めるほうを優先する。 */
+    let why = '';
+    try { why = await r.text(); } catch (e) {}
+    _spRestBlock(r, why);
+    throw new Error('HTTP 429');
+  }
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return await r.json();
 }
