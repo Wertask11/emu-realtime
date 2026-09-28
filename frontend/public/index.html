@@ -21826,8 +21826,13 @@ function _isBrandOwner() {
 }
 function isBrandUnderMaintenance(brand) {
   if (brand === 'schoolpark') return !(_spAccess && _spAccess.allowed);
-  /* 左上のブランド切替では、運営を含めCamelliaを準備中に統一する。 */
-  if (brand === 'camellia') return true;
+  /* Camellia も、ほかの準備中のブランドと同じ扱いにする。
+     運営は入れて、それ以外の人には「準備中」を出す。
+
+     前はここだけ「運営を含めて準備中」と決め打ちしていた。
+     そのため運営自身が中身を見られず、直すにも確かめるにも
+     いちど URL を直打ちするしかなかった。
+     ほかのブランド（Heartoo）は下の一行で同じことをしている。 */
   return !!BRAND_MAINTENANCE[brand] && !_isBrandOwner();
 }
 /* 入れないことを、押す前に分かるようにする（押してから断られるのは体験が悪い） */
