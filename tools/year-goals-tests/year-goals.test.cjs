@@ -95,7 +95,10 @@ function reader(opts) {
     }
   };
   const api = build(INDEX,
-    ['_spDenied', '_spWarnDenied', '_spRestValue', '_spRestFields', '_spRestGet',
+    ['_spDenied', '_spWarnDenied', '_spRestValue', '_spRestFields',
+     /* 普通の通信は関門を通る。関門そのものも一緒に切り出す。 */
+     '_spRestState', '_spRestNext', '_spRestSlot', '_spRestBlock',
+     '_spRestGetOnce', '_spRestGet',
      '_spRestDoc', '_spYearBlock', '_spYearDate', 'spDaoLoadYearDoc'],
     stubs,
     "const SP_DOC_BLOCK_TYPES = ['heading','text','table','image'];\n"
@@ -418,7 +421,9 @@ function questReader(opts) {
         : { getIdToken: async function () { return 'TOKEN'; } } }
     }
   };
-  return { api: build(INDEX, ['_spRestValue', '_spRestFields', '_spRestGet', '_spRestQuests'], stubs), calls: calls };
+  return { api: build(INDEX, ['_spRestValue', '_spRestFields',
+    '_spRestState', '_spRestNext', '_spRestSlot', '_spRestBlock',
+    '_spRestGetOnce', '_spRestGet', '_spRestQuests'], stubs), calls: calls };
 }
 
 test('クエストの逃げ道：宛先と証はそのまま', async () => {

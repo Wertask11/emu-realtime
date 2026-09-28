@@ -17736,7 +17736,75 @@ function _spRestFields(fields) {
    記録がまだ無いときは 404 が返る。これは「断られた」のとは違うので、
    例外にせず null を返す。区別しないと、通信が届かないだけのときと
    「まだ書かれていない」が同じ扱いになり、画面が消えてしまう。 */
-async function _spRestGet(path, needAuth) {
+/* ───────── 普通の通信の関門 ─────────
+
+   専用の通信路（Listen）が切れているとき、画面のあちこちが
+   いっせいに普通の通信（REST）へ逃げる。クエストが2本のうちは
+   気づかなかったが、17本に増えた日に Firestore から
+   429（Too Many Requests）が返り、何も読めなくなった。
+   画面は「ゲスト」になり、数字は全部0になった。
+
+   逃げ道そのものは要る。要らないのは「いっせいに」のほう。
+   呼び口は20か所あるので、ひとつの関門で絞る。
+
+     ・同時に走らせるのは3本まで。残りは並んで待つ
+     ・同じ行き先は3秒だけ取っておく。17本のクエストが
+       同じ一覧を別々に取りに行っていた
+     ・429 が返ったら、しばらく誰も通さない（待ってから開ける）。
+       混んでいるところへ押し返すと、余計に長引く */
+/* 関門の状態。ひとつの入れ物にまとめて持つ。
+
+   モジュールの直下に let で置くと、ここだけを切り出して試すことが
+   できない（試験は名前のついた関数を拾う作りのため）。
+   入れ物を作る関数にしておけば、切り出しても同じように動く。 */
+function _spRestState() {
+  const w = (typeof window !== 'undefined') ? window : globalThis;
+  if (!w.__spRest) {
+    w.__spRest = {
+      max: 3,           /* 同時に走らせる数 */
+      hold: 3000,       /* 同じ行き先を取っておく時間（ミリ秒） */
+      running: 0,
+      queue: [],
+      cache: new Map(), /* path → { at, promise } */
+      blockedUntil: 0   /* 429 のあいだは誰も通さない */
+    };
+  }
+  return w.__spRest;
+}
+
+function _spRestNext() {
+  const st = _spRestState();
+  if (st.running >= st.max) return;
+  const job = st.queue.shift();
+  if (!job) return;
+  st.running += 1;
+  job.run().then(job.ok, job.ng).then(function () {
+    st.running -= 1;
+    _spRestNext();
+  });
+}
+function _spRestSlot(run) {
+  const st = _spRestState();
+  return new Promise(function (ok, ng) {
+    st.queue.push({ run: run, ok: ok, ng: ng });
+    _spRestNext();
+  });
+}
+/* 429 が返ったときに、次に開ける時刻を決める。
+   Retry-After があればそれに従う。無ければ10秒。 */
+function _spRestBlock(res) {
+  let wait = 10000;
+  try {
+    const h = res && res.headers && res.headers.get('Retry-After');
+    const n = Number(h);
+    if (n > 0 && n < 300) wait = n * 1000;
+  } catch (e) {}
+  _spRestState().blockedUntil = Date.now() + wait;
+  console.warn('普通の通信が混んでいます。' + Math.round(wait / 1000)
+    + '秒ほど待ってから読み直します。');
+}
+
+async function _spRestGetOnce(path, needAuth) {
   let opt = {};
   try { opt = (window.db && window.db.app && window.db.app.options) || {}; } catch (e) {}
   if (!opt.projectId || !opt.apiKey) throw new Error('設定が読めない');
@@ -17772,8 +17840,35 @@ async function _spRestGet(path, needAuth) {
     }
   }
   if (r.status === 404) return null;
+  /* 混んでいると言われた。しばらく誰も通さない。
+     押し返すと余計に長引くので、ここで止める。 */
+  if (r.status === 429) { _spRestBlock(r); throw new Error('HTTP 429'); }
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return await r.json();
+}
+
+/* 関門つきの入口。呼ぶ側はこれまでどおり _spRestGet を使う。 */
+async function _spRestGet(path, needAuth) {
+  const st = _spRestState();
+  const now = Date.now();
+  if (now < st.blockedUntil) {
+    throw new Error('HTTP 429');   /* 開くまで待つ。読み直しは呼ぶ側の都合で */
+  }
+  /* 同じ行き先は取っておく。17本のクエストが同じ一覧を
+     別々に取りに行っていたので、そこだけで17回になっていた。 */
+  const key = String(path) + (needAuth ? '|a' : '');
+  const hit = st.cache.get(key);
+  if (hit && now - hit.at < st.hold) return hit.promise;
+  const promise = _spRestSlot(function () { return _spRestGetOnce(path, needAuth); });
+  st.cache.set(key, { at: now, promise: promise });
+  /* 失敗したものは取っておかない。次にすぐ試せるようにする。 */
+  promise.catch(function () { st.cache.delete(key); });
+  /* 溜めすぎない。古いものから捨てる。 */
+  if (st.cache.size > 200) {
+    const oldest = st.cache.keys().next().value;
+    if (oldest !== undefined) st.cache.delete(oldest);
+  }
+  return promise;
 }
 
 /* SDK の読み取りが「戻ってこない」ことへの備え。
