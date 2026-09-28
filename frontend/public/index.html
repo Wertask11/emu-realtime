@@ -23621,6 +23621,9 @@ async function _emuPostDiagnose(authorAddress) {
    Firestore は理由を教えてくれない（どの条件で落ちたかは返らない）ので、
    起こりうる心当たりを並べて、次に何をすればよいかを示す。 */
 function _emuPostErrorText(error) {
+  /* こちらで文言を組み立てた失敗は、そのまま見せる。
+     「理由: …」を頭に付けると、読む人には暗号になる。 */
+  if (error && error.emuUserMessage) return '投稿できませんでした。\n\n' + error.message;
   const raw = (error && (error.code || error.message)) || '';
   if (/permission|insufficient/i.test(String(raw))) {
     const plan = (window.emuEntitlement || 'guest');
@@ -23678,16 +23681,60 @@ function _emuUsageRef() {
    数が狂うより、弾かれて出し直すほうが安全。 */
 async function _emuAddUsage(batch, kind) {
   const ref = _emuUsageRef();
-  if (!ref) throw new Error('ログインの状態を確認できませんでした。一度読み込み直してからお試しください。');
-  let now = 0;
+  const id = _emuUsageDocId();
+  if (!ref || !id) throw new Error('ログインの状態を確認できませんでした。一度読み込み直してからお試しください。');
+
+  /* 書くのは「いまの数 + 1」。決まりの側は getAfter で
+     「ちょうど1つ増えたか」を確かめている（roomLeft）。
+     だからここの数を間違えると、上限に余裕があっても投稿ごと弾かれる。
+
+     前はここで getDoc が失敗したら黙って0から数えていた。
+     専用の通信路（WebChannel）が切れると getDoc は unavailable を投げる。
+     すでに2件使っている人が post:1 を書きにいき、決まりが期待する3と
+     合わずに permission-denied。画面に出るのは上限の案内なので、
+     上限を上げても直らない。実際にそうなった：
+
+       いまの回数: 読めない(unavailable)
+       付与: 読めない(unavailable)
+       契約: 読めない(unavailable)
+       アカウント: 読めない(unavailable)
+
+     それでも出たのは「light で投稿できるのは 月5件 です」。
+     上限は一度も関係していなかった。
+
+     直し方は、読むところを SchoolPark 側と同じ形にする。
+       専用の通信路（時間で見切る） → だめなら普通の通信（REST）
+     どちらでも読めないときは0とみなさず、ここで止めて理由を伝える。
+     数を間違えて書くくらいなら、出し直してもらうほうが早い。 */
+  let now = null;
   try {
-    const snap = await window.fbLib.getDoc(ref);
-    if (snap.exists()) now = Number((snap.data() || {})[kind]) || 0;
+    const got = await _spSoon(window.fbLib.getDoc(ref), 6000);
+    if (got.ok && got.value && typeof got.value.exists === 'function') {
+      now = got.value.exists() ? (Number((got.value.data() || {})[kind]) || 0) : 0;
+    }
   } catch (e) {
-    /* 読めないときは0から数える。ルール側が getAfter で辻褄を確かめるので、
-       食い違えば書き込みごと弾かれる。黙って多く見積もることはしない。 */
-    console.warn('回数を読めませんでした:', e && e.message);
+    /* unavailable など。ここで0にしない。下で読み直す。 */
+    console.warn('回数を専用の通信路で読めませんでした:', e && (e.code || e.message));
   }
+
+  if (now === null) {
+    /* _spRestGet は 404（その月まだ1件も使っていない）だけ null を返し、
+       ほかの失敗は投げる。だから「無い」と「読めない」を分けられる。 */
+    let d = null;
+    try {
+      d = await _spRestDoc('plan_usage/' + encodeURIComponent(id), true);
+    } catch (e) {
+      console.warn('回数を普通の通信でも読めませんでした:', e && (e.code || e.message));
+      const err = new Error(
+        'いま何件使ったかを確認できませんでした（通信）。\n\n'
+        + '数を確かめずに書くと、上限に余裕があっても投稿ごと断られます。\n'
+        + '電波の良いところで、一度読み込み直してからお試しください。');
+      err.emuUserMessage = true;   /* そのまま見せてよい文言 */
+      throw err;
+    }
+    now = d ? (Number(d[kind]) || 0) : 0;
+  }
+
   batch.set(ref, { [kind]: now + 1, updatedAt: new Date() }, { merge: true });
 }
 
