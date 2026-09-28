@@ -19288,6 +19288,30 @@ function spWisdomNormalizeTag(tag) {
   return SP_WISDOM_TAGS.indexOf(t) >= 0 ? t : 'その他';
 }
 
+/* 置けなかった理由を、そのまま日本語にする。
+   とくに「報告があと何本か」は、書いた人がいちばん知りたいこと。 */
+function _spWisdomErrorText(data) {
+  const d = data || {};
+  switch (String(d.error || '')) {
+    case 'REPORTS_MISSING': {
+      const left = Array.isArray(d.missing) ? d.missing : [];
+      return '知恵カードは、クエストをやり終えてから置けます。\n\n'
+        + 'まだ書いていない報告：' + (left.length ? left.join('・') : '不明')
+        + '\n\nクエストの詳細から「今日やったことを書く」で残してください。';
+    }
+    case 'NOT_TAKEN':
+      return 'このクエストを受けてから置けます。';
+    case 'INSIGHT_REQUIRED':  return '残った一文を書いてください。';
+    case 'INSIGHT_TOO_LONG':  return '残った一文は200文字までです。';
+    case 'QUEST_NOT_FOUND':   return 'もとのクエストが見つかりません。';
+    case 'QUEST_NOT_ELIGIBLE':return 'このクエストでは知恵カードを置けません。';
+    case 'PASSPORT_LINK_REQUIRED':
+      return 'SchoolParkパスポートの発行が先に必要です。';
+    default:
+      return '知恵カードを置けませんでした。もう一度お試しください。';
+  }
+}
+
 async function spWisdomSubmit() {
   const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
   const insight = val('swInsight');
@@ -19295,27 +19319,26 @@ async function spWisdomSubmit() {
   if (!_spWisdomQuest) { alert('もとのクエストが分かりません。'); return; }
   const p = await spPassportLoad();
   if (!p) { alert('ログインが必要です。'); return; }
+  /* 置くのはサーバー。「報告3本が揃ってから」を守れるのがそこだけのため。
+
+     報告は自動のIDで並んでいて、Firestore のルールはサブコレクションを
+     数えられない。ルール側は create を閉じてあるので、ここから直接
+     書こうとしても通らない。 */
   try {
-    const fb = window.fbLib;
-    await fb.addDoc(fb.collection(window.db, 'sp_wisdom'), {
-      questId: _spWisdomQuest.id,
-      questTitle: _spWisdomQuest.title || '',
-      /* 元になった Emu の投稿。これで
-         投稿 → 議題 → クエスト → 知恵カード が一本の線になる。 */
-      fromPostId: String((_spWisdomFrom && _spWisdomFrom.id) || '').slice(0, 80),
-      fromPostTitle: String((_spWisdomFrom && _spWisdomFrom.title) || '').slice(0, 120),
-      knowledge: val('swKnowledge').slice(0, 200),
-      experiment: val('swExperiment').slice(0, 200),
-      insight: insight.slice(0, 200),
-      /* 分類は選ばせない。出どころ（Emuの投稿 / ギルド）から決まる。 */
-      tag: spWisdomTagFor(_spWisdomQuest, _spWisdomFrom && _spWisdomFrom.id),
-      author: p.addr, authorName: p.name,
-      createdAt: Date.now()
-    });
+    const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/'
+      + encodeURIComponent(_spWisdomQuest.id) + '/wisdom',
+      { method: 'POST', headers: await emuAuthHeaders(true), body: JSON.stringify({
+        fromPostId: String((_spWisdomFrom && _spWisdomFrom.id) || '').slice(0, 80),
+        fromPostTitle: String((_spWisdomFrom && _spWisdomFrom.title) || '').slice(0, 120),
+        knowledge: val('swKnowledge').slice(0, 200),
+        experiment: val('swExperiment').slice(0, 200),
+        insight: insight.slice(0, 200),
+        authorName: p.name
+      }) });
+    const data = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(_spWisdomErrorText(data));
   } catch (e) {
-    const code = String((e && e.code) || '');
-    alert(code === 'permission-denied'
-      ? '知恵カードを置けるのは、このクエストを受けた人だけです。'
+    alert(e && e.message ? e.message
       : '知恵カードを置けませんでした。もう一度お試しください。');
     return;
   }

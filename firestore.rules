@@ -1287,13 +1287,23 @@ service cloud.firestore {
        いちど置いた知恵は書き換えも削除もできない。 */
     match /sp_wisdom/{wisdomId} {
       allow read: if canAccessSchoolPark();
-      allow create: if canAccessSchoolPark() && isMyWallet(request.resource.data.get('author', ''))
-        && request.resource.data.insight is string
-        && request.resource.data.insight.size() > 0
-        && request.resource.data.insight.size() <= 200
-        && request.resource.data.questId is string
-        && exists(/databases/$(database)/documents/sp_quests/$(request.resource.data.questId))
-        && exists(/databases/$(database)/documents/sp_quests/$(request.resource.data.questId)/commits/$(request.resource.data.author));
+      /* 置くのはサーバーだけ（Admin SDK はこのルールを通らない）。
+
+         「知恵カードは、完了したクエストからしか生まれない」。
+         ここは「そのクエストを受けているか」しか見ていなかったので、
+         受けるだけで何枚でも置けた。信用スコアの「知恵 ×5」が
+         そのぶん増えるので、働かずに点を積める状態だった。
+
+         「完了した」は「承認済み」とは読めない。承認の口のほうが
+         知恵カード1枚を完走の証拠として要求しているので、
+         カードに承認を求めると、どちらも永久に起きない。
+         守るべきは「やってみた・つまずいた・気づいた が揃っている」。
+
+         それはここでは数えられない。報告は自動のIDで並んでいて、
+         ルールはサブコレクションを数えたり検索したりできないため。
+         だからサーバーで数える（backend/quest-completion.js の
+         POST /:questId/wisdom）。ここは閉じる。 */
+      allow create: if false;
       allow update, delete: if false;
 
       /* 引用。1つのパスポートにつき1回。数はここを数えて出す。

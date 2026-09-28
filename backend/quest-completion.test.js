@@ -39,9 +39,16 @@ function snapshot(path) {
   const data = records.get(path);
   return { id:path.split("/").at(-1), exists:!!data, data:() => data };
 }
+let _autoId = 0;
 function collection(path, filters = []) {
   return {
     doc: id => doc(path + "/" + id),
+    /* addDoc 相当。自動のIDで1件足す。 */
+    add: async value => {
+      const id = "auto-" + (++_autoId);
+      records.set(path + "/" + id, value);
+      return { id, path: path + "/" + id };
+    },
     where: (field, op, value) => collection(path, filters.concat([[field, value]])),
     limit: () => collection(path, filters),
     get: async () => {
@@ -61,7 +68,8 @@ const db = {
     update: (ref, patch) => records.set(ref.path, { ...records.get(ref.path), ...patch })
   })
 };
-createQuestCompletionRouter({ db, requireOwner: (_req, _res, next) => next(), env:{} });
+createQuestCompletionRouter({ db, requireOwner: (_req, _res, next) => next(),
+  requireFirebaseUser: (_req, _res, next) => next(), env:{} });
 const approve = routes.find(route => route.path === "/:questId/:address/approve").handler;
 const publishBudget = routes.find(route => route.path === "/:questId/budget").handler;
 function reply() {
@@ -594,4 +602,152 @@ test("配った人の一覧に、まだ受け取っていないことが出る",
   const out = await listFor("fes-2026-10");
   assert.equal(out.body.stars[0].minted, false);
   assert.equal(out.body.stars[0].note, "10/25 来場", "メモが消えている");
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   知恵カードは、やり終えてからしか置けない
+
+   「知恵カードは、完了したクエストからしか生まれない」。
+   前はこれを守っている場所が無かった。画面は一文が空かどうかだけ、
+   ルールは「受けているか」だけ。受けるだけで何枚でも置けて、
+   信用スコアの「知恵 ×5」が働かずに積めた。
+
+   「完了した」は「承認済み」とは読めない。承認のほうが知恵カードを
+   完走の証拠として要求するので、循環して両方とも起きなくなる。
+   守るのは「やってみた・つまずいた・気づいた が揃っている」。
+   ═══════════════════════════════════════════════════════════════ */
+const putWisdom = routes.find(r => r.path === "/:questId/wisdom").handler;
+
+function wisdomReply() {
+  const result = { status: 200 };
+  return { result, res: {
+    set() { return this; },
+    status(c) { result.status = c; return this; },
+    json(v) { result.body = v; return result; } } };
+}
+async function putCard(body, questId = "quest-001", spid = "spid-a") {
+  const { result, res } = wisdomReply();
+  await putWisdom({ params: { questId }, body: body || { insight: "分かった" },
+    identity: { account: { spid }, uid: "user-a" } }, res);
+  return result;
+}
+/* 受けてはいるが、報告は1本も無い状態。 */
+function seedTaken() {
+  records.clear();
+  records.set("sp_identities/spid-a", { addresses: [address] });
+  records.set("sp_quests/quest-001",
+    { series:"general", questNumber:1, guildId:"learn", title:"試して残す" });
+  records.set("sp_quests/quest-001/commits/" + address, { name:"member" });
+}
+function seedReports(kinds) {
+  kinds.forEach((kind, i) =>
+    records.set("sp_quests/quest-001/logs/log-" + i, { author: address, kind }));
+}
+const cards = () => [...records.keys()].filter(k => k.startsWith("sp_wisdom/"));
+
+test("報告が3本そろっていれば置ける", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  const out = await putCard({ insight: "14日続けると分かる" });
+  assert.equal(out.status, 200, JSON.stringify(out.body));
+  assert.equal(cards().length, 1);
+  assert.equal(records.get(cards()[0]).insight, "14日続けると分かる");
+});
+
+test("受けただけでは置けない（前はこれが通っていた）", async () => {
+  seedTaken();
+  const out = await putCard();
+  assert.equal(out.status, 409);
+  assert.equal(out.body.error, "REPORTS_MISSING");
+  assert.equal(cards().length, 0, "働かずに信用スコアを積めてしまう");
+});
+
+test("足りない報告の種類を、名前で返す", async () => {
+  seedTaken(); seedReports(["やってみた"]);
+  const out = await putCard();
+  assert.equal(out.body.error, "REPORTS_MISSING");
+  assert.deepEqual([...out.body.missing].sort(), ["つまずいた","気づいた"].sort());
+});
+
+test("2本までではまだ置けない", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた"]);
+  assert.equal((await putCard()).status, 409);
+  assert.equal(cards().length, 0);
+});
+
+test("他人の報告では数えない", async () => {
+  seedTaken();
+  ["やってみた","つまずいた","気づいた"].forEach((kind, i) =>
+    records.set("sp_quests/quest-001/logs/other-" + i,
+      { author: "0x" + "9".repeat(40), kind }));
+  const out = await putCard();
+  assert.equal(out.body.error, "REPORTS_MISSING", "他人の働きで置けてはいけない");
+});
+
+test("受けていないクエストには置けない", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  records.delete("sp_quests/quest-001/commits/" + address);
+  const out = await putCard();
+  assert.equal(out.status, 409);
+  assert.equal(out.body.error, "NOT_TAKEN");
+});
+
+test("自分のパスポートに無い名義の完走は、持ってこられない", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  records.set("sp_identities/spid-a", { addresses: ["0x" + "e".repeat(40)] });
+  assert.equal((await putCard()).body.error, "NOT_TAKEN");
+});
+
+test("一文が無い・長すぎるものは断る", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  assert.equal((await putCard({ insight: "" })).body.error, "INSIGHT_REQUIRED");
+  assert.equal((await putCard({ insight: "  " })).body.error, "INSIGHT_REQUIRED");
+  assert.equal((await putCard({ insight: "あ".repeat(201) })).body.error, "INSIGHT_TOO_LONG");
+  assert.equal(cards().length, 0);
+});
+
+test("Quest #000 には置けない", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  const out = await putCard({ insight: "x" }, "founder-quest-000");
+  assert.equal(out.body.error, "QUEST_NOT_ELIGIBLE");
+});
+
+test("パスポートが無ければ置けない", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  const out = await putCard({ insight: "x" }, "quest-001", "");
+  assert.equal(out.body.error, "PASSPORT_LINK_REQUIRED");
+});
+
+test("書いた人は名義から決める。画面の言い値では決めない", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  await putCard({ insight: "x", author: "0x" + "f".repeat(40), spid: "spid-z" });
+  const row = records.get(cards()[0]);
+  assert.equal(row.author, address, "他人の名前で置けてはいけない");
+  assert.equal(row.spid, "spid-a");
+});
+
+test("棚は出どころから決める。画面の言い値では決めない", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  await putCard({ insight: "x", tag: "WEB3" });
+  assert.equal(records.get(cards()[0]).tag, "LEARN", "ギルドの棚に入れること");
+
+  records.delete(cards()[0]);
+  await putCard({ insight: "y", fromPostId: "post-1", tag: "WEB3" });
+  assert.equal(records.get(cards()[0]).tag, "Emu", "Emuの投稿からなら Emu の棚");
+});
+
+test("長すぎる欄は切り詰める", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  await putCard({ insight: "x", knowledge: "あ".repeat(500),
+    experiment: "い".repeat(500), fromPostId: "p".repeat(200) });
+  const row = records.get(cards()[0]);
+  assert.equal(row.knowledge.length, 200);
+  assert.equal(row.experiment.length, 200);
+  assert.equal(row.fromPostId.length, 80);
+});
+
+test("2周目も、報告がそろっていれば置ける（枚数＝周回の数）", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  assert.equal((await putCard({ insight: "1周目" })).status, 200);
+  assert.equal((await putCard({ insight: "2周目" })).status, 200);
+  assert.equal(cards().length, 2, "周回ごとに1枚。承認はこの枚数を見ている");
 });

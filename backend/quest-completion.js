@@ -485,6 +485,103 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     return made;
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     知恵カードを置く
+
+     「知恵カードは、完了したクエストからしか生まれない」。
+     ところが、これを守っている場所がどこにも無かった。
+       画面   … 一文が空でないかだけ
+       ルール … そのクエストを受けているかだけ
+     受けるだけで何枚でも置けて、信用スコアの「知恵 ×5」が
+     そのぶん増える状態だった。
+
+     「完了した」は「承認済み」とは読めない。承認の口のほうが
+     知恵カード1枚を完走の証拠として要求しているので
+     （COMPLETION_EVIDENCE_MISSING を見ること）、
+     カードに承認を求めると、どちらも永久に起きない。
+     矛盾しない読み方は「やることをやり終えた」＝
+     やってみた・つまずいた・気づいた が揃っている、だけ。
+
+     これは Firestore のルールでは守れない。報告は自動のIDで
+     並んでいて、ルールはサブコレクションを数えられないため。
+     だからここで数える。ルール側は create を閉じる。
+     ══════════════════════════════════════════════════════════════ */
+  const LOG_KINDS = ["やってみた", "つまずいた", "気づいた"];
+
+  /* 知恵カードが入る棚。画面（index.html の spWisdomTagFor）と同じ決め方。
+     Emu の投稿から生まれたものは Emu の棚、それ以外はギルドの棚。
+     画面から送られてきた棚の名前は使わない。棚は出どころで決まるもので、
+     選ばせるものではないため。 */
+  function wisdomTagOf(quest, fromPostId) {
+    if (String(fromPostId || "").trim()) return "Emu";
+    return GUILD_LABEL[String((quest || {}).guildId || "")] || "その他";
+  }
+
+  /* パスポートの名義のうち、このクエストを受けているもの。
+     名義は1つとは限らない（ウォレット・LINE・Google で別になる）。 */
+  async function committedAddressOf(questId, spid) {
+    const idSnap = await db.collection("sp_identities").doc(spid).get();
+    const raw = idSnap.exists ? (idSnap.data() || {}).addresses : null;
+    const addrs = Array.isArray(raw) ? raw : [];
+    for (const a of addrs) {
+      const one = String(a || "").trim().toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(one)) continue;
+      const s = await db.collection("sp_quests").doc(questId)
+        .collection("commits").doc(one).get();
+      if (s.exists) return one;
+    }
+    return "";
+  }
+
+  router.post("/:questId/wisdom", requireFirebaseUser, async (req, res) => {
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const questId = String(req.params.questId || "");
+    if (!/^[A-Za-z0-9_-]{1,120}$/.test(questId)) return res.status(400).json({ error: "INVALID_QUEST" });
+    if (questId === FOUNDER_QUEST_ID) return res.status(409).json({ error: "QUEST_NOT_ELIGIBLE" });
+    const spid = String((req.identity.account || {}).spid || "");
+    if (!spid) return res.status(409).json({ error: "PASSPORT_LINK_REQUIRED" });
+
+    const b = req.body || {};
+    const insight = String(b.insight || "").trim();
+    if (!insight) return res.status(400).json({ error: "INSIGHT_REQUIRED" });
+    if (insight.length > 200) return res.status(400).json({ error: "INSIGHT_TOO_LONG" });
+
+    const q = await db.collection("sp_quests").doc(questId).get();
+    if (!q.exists) return res.status(404).json({ error: "QUEST_NOT_FOUND" });
+
+    const address = await committedAddressOf(questId, spid);
+    if (!address) return res.status(409).json({ error: "NOT_TAKEN" });
+
+    /* やることをやり終えたか。三種そろって初めて置ける。 */
+    const logs = await db.collection("sp_quests").doc(questId).collection("logs").get();
+    const kinds = new Set();
+    logs.forEach(d => {
+      const row = d.data() || {};
+      if (String(row.author || "").toLowerCase() === address) kinds.add(row.kind);
+    });
+    const missing = LOG_KINDS.filter(k => !kinds.has(k));
+    if (missing.length) return res.status(409).json({ error: "REPORTS_MISSING", missing });
+
+    const quest = q.data() || {};
+    const row = {
+      questId,
+      questTitle: String(quest.title || "").slice(0, 200),
+      fromPostId: String(b.fromPostId || "").slice(0, 80),
+      fromPostTitle: String(b.fromPostTitle || "").slice(0, 120),
+      knowledge: String(b.knowledge || "").slice(0, 200),
+      experiment: String(b.experiment || "").slice(0, 200),
+      insight: insight.slice(0, 200),
+      /* 棚は出どころから決まる。画面の言い値は使わない。 */
+      tag: wisdomTagOf(quest, b.fromPostId),
+      author: address,
+      authorName: String(b.authorName || "").slice(0, 80),
+      spid,
+      createdAt: Date.now()
+    };
+    const ref = await db.collection("sp_wisdom").add(row);
+    return res.json({ ok: true, id: ref.id, ...row });
+  });
+
   router.post("/:questId/certificate/claim", requireFirebaseUser, async (req, res) => {
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
     const questId = String(req.params.questId || "");
