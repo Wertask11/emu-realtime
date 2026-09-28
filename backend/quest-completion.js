@@ -128,6 +128,18 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     if (text.includes("accesscontrolunauthorizedaccount")
       || text.includes("0xe2517d3f")
       || text.includes("is missing role")) return "MINTER_NOT_AUTHORIZED";
+    /* 鎖に話しかけられていない。役やガスの問題ではないので、分けて返す。
+       ここを分けていなかったので、RPC が落ちているだけのときも
+       「発行が途中で止まりました」としか出ず、原因が分からなかった。 */
+    if (text.includes("network_error") || text.includes("server_error")
+      || text.includes("timeout") || text.includes("could not detect network")
+      || text.includes("enotfound") || text.includes("econnrefused")
+      || text.includes("econnreset") || text.includes("etimedout")
+      || text.includes("socket hang up") || text.includes("bad response")
+      || text.includes("failed to fetch")) return "CHAIN_UNREACHABLE";
+    /* このコントラクトは、同じ完走鍵で2枚目を作らない（AlreadyIssued）。
+       記録の側が「まだ」になっているのに鎖には在るときに起きる。 */
+    if (text.includes("alreadyissued")) return "CERTIFICATE_ALREADY_ISSUED";
     return "CERTIFICATE_MINT_FAILED";
   }
   router.post("/:questId/budget", requireOwner, async (req, res) => {
@@ -498,9 +510,16 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       let txHash = "";
       if (tokenId.isZero()) {
         const uri = "https://emu-realtime.onrender.com/api/schoolpark/quest-completions/certificates/" + key + "/metadata";
-        const tx = await contract.mint(wallet, key, uri);
-        txHash = tx.hash;
-        await tx.wait();
+        try {
+          const tx = await contract.mint(wallet, key, uri);
+          txHash = tx.hash;
+          await tx.wait();
+        } catch (e) {
+          /* 同じ完走鍵で2枚目は作れない（AlreadyIssued）。すれ違いで
+             先に発行されていたときにこうなる。鎖の上に在るなら失敗では
+             ないので、投げ返さずに読み直して記録のほうを合わせる。 */
+          if (mintErrorOf(e) !== "CERTIFICATE_ALREADY_ISSUED") throw e;
+        }
         tokenId = await contract.tokenForCompletion(key);
       }
       if (tokenId.isZero()) throw new Error("MINT_NOT_CONFIRMED");
@@ -643,9 +662,14 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       let txHash = "";
       if (tokenId.isZero()) {
         const uri = "https://emu-realtime.onrender.com/api/schoolpark/quest-completions/stars/" + key + "/metadata";
-        const tx = await contract.mint(wallet, key, uri);
-        txHash = tx.hash;
-        await tx.wait();
+        try {
+          const tx = await contract.mint(wallet, key, uri);
+          txHash = tx.hash;
+          await tx.wait();
+        } catch (e) {
+          /* 証明書と同じ。鎖に在るなら失敗ではない。 */
+          if (mintErrorOf(e) !== "CERTIFICATE_ALREADY_ISSUED") throw e;
+        }
         tokenId = await contract.tokenForCompletion(key);
       }
       if (tokenId.isZero()) throw new Error("MINT_NOT_CONFIRMED");

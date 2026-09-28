@@ -460,3 +460,60 @@ test("すでに正しく作られている証明書は、作り直さない", as
   assert.equal(row.backfilled, undefined, "作り直した印は付かない");
   assert.equal(row.status, "minted");
 });
+
+/* ───────── 失敗の理由を、もっと細かく分ける ─────────
+
+   「発行が途中で止まりました」しか出ないと、RPC が落ちているのか
+   コントラクトが断っているのか、運営にも分からない。 */
+
+test("鎖に届かないだけのときは、そう返す", async () => {
+  for (const err of [
+    Object.assign(new Error("could not detect network"), { code: "NETWORK_ERROR" }),
+    Object.assign(new Error("missing response"), { code: "SERVER_ERROR" }),
+    Object.assign(new Error("timeout exceeded"), { code: "TIMEOUT" }),
+    Object.assign(new Error("connect ECONNREFUSED 1.2.3.4:443"), {}),
+    Object.assign(new Error("socket hang up"), {}),
+  ]) {
+    resetChain({ mintThrows: err });
+    const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+      SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+    seedFallbackApproval(1);
+    const out = await claimOnce(claim);
+    assert.equal(out.body.error, "CHAIN_UNREACHABLE", err.message);
+  }
+});
+
+test("すでに発行されていたら、失敗にせず記録を合わせる", async () => {
+  resetChain({ mintThrows: new Error("execution reverted: AlreadyIssued") });
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  seedFallbackApproval(1);
+  /* 鎖の上にはもう在る、という状態にする。
+     mint は断るが、読み直せば番号が返る。 */
+  let reads = 0;
+  const origTokenId = chain.tokenId;
+  Object.defineProperty(chain, "tokenId", {
+    configurable: true,
+    get() { reads += 1; return reads > 1 ? 7n : origTokenId; },
+    set() {}
+  });
+  const out = await claimOnce(claim);
+  delete chain.tokenId; chain.tokenId = 0n;
+  assert.equal(out.status, 200, JSON.stringify(out.body));
+  assert.equal(out.body.tokenId, "7", "鎖に在る番号を拾って記録を合わせること");
+});
+
+test("役とガスの見分けは、今までどおり効いている", async () => {
+  for (const [err, want] of [
+    [Object.assign(new Error("reverted"), { error: { data: "0xe2517d3f00" } }), "MINTER_NOT_AUTHORIZED"],
+    [Object.assign(new Error("insufficient funds for gas"), {}), "MINTER_OUT_OF_GAS"],
+    [new Error("何だか分からない"), "CERTIFICATE_MINT_FAILED"],
+  ]) {
+    resetChain({ mintThrows: err });
+    const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+      SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+    seedFallbackApproval(1);
+    const out = await claimOnce(claim);
+    assert.equal(out.body.error, want, err.message);
+  }
+});
