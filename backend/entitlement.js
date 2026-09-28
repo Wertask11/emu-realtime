@@ -44,7 +44,7 @@ const UNLIMITED = 1000000;
 
 const LIMITS = {
   guest: { post: 0,  request: 0,  answer: 0,  ichinichi: 0,  discussion: 0, library: 0,    guestPlay: 3 },
-  light: { post: 2,  request: 1,  answer: 5,  ichinichi: 7,  discussion: 0, library: 30,   guestPlay: 9999 },
+  light: { post: 5,  request: 1,  answer: 5,  ichinichi: 7,  discussion: 0, library: 30,   guestPlay: 9999 },
   plus:  { post: 30, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000, guestPlay: 9999 },
   /* pro は投稿の数を数えない。ほかの項目は plus と同じ。 */
   pro:   { post: UNLIMITED, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000, guestPlay: 9999 }

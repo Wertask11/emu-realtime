@@ -267,6 +267,28 @@ service cloud.firestore {
         && (!enforcing() || mayWriteAs(rankOfUser(a), minRank, kind));
     }
 
+    /* クエストのための投稿。月の回数に数えない代わりに、
+       本当にそのクエストを受けていることをここで確かめる。
+
+       #003（ゴミ拾い）のように「写真と数をEmuに投稿し、その投稿を
+       途中報告で紐づける」クエストがある。報告3回ぶん投稿が要るので、
+       回数に数えると light（月5件）ではほかに使えなくなる。
+
+       受けた印は sp_quests/{questId}/commits/{自分の名義}。
+       questId を書くだけでは通らない。受けていない人の投稿は弾かれる。
+       名義は画面側もここも小文字（index.html の emuMyIdentity）。 */
+    function mayCreateForQuest(addr, qid) {
+      return signedIn() && addr is string && addr.size() > 0
+        && qid is string && qid.size() > 0 && qid.size() <= 80
+        && qid != 'founder-quest-000'
+        && mayCreateForQuestWith(get(accountPath()).data, addr, qid);
+    }
+    function mayCreateForQuestWith(a, addr, qid) {
+      return addrIsMine(a, addr)
+        && (!enforcing() || rankOfUser(a) >= 1)
+        && exists(/databases/$(database)/documents/sp_quests/$(qid)/commits/$(addr));
+    }
+
     /* この段以上で書けるか。施行日より前は誰も止めない。
        止めるのはサーバーだけでなくここでもやる。投稿や議論は
        サーバーを通らずクライアントから直接書いているため、
@@ -278,7 +300,7 @@ service cloud.firestore {
     /* ───────── 回数の上限 ─────────
 
        投稿・募集・回答はサーバーを通らずクライアントから直接書いている。
-       段の判定（canWriteAs）だけでは「light は月2件」を守れず、
+       段の判定（canWriteAs）だけでは「light は月5件」を守れず、
        画面を通さずに書けば何件でも作れてしまう。
 
        そこで、書き込みと同じ一括処理（batch）で使用回数の記録も1つ増やしてもらい、
@@ -295,7 +317,7 @@ service cloud.firestore {
     function limitOf(rank, kind) {
       return rank == 0 ? 0
         : (rank == 1
-            ? (kind == 'post' ? 2 : (kind == 'request' ? 1 : (kind == 'answer' ? 5 : 0)))
+            ? (kind == 'post' ? 5 : (kind == 'request' ? 1 : (kind == 'answer' ? 5 : 0)))
             /* pro は投稿の数を数えない。募集と回答は plus と同じ。 */
             : (kind == 'post' ? (rank == 3 ? unlimited() : 30)
                 : (kind == 'request' ? 10 : (kind == 'answer' ? 30 : 0))));
@@ -584,8 +606,17 @@ service cloud.firestore {
     match /posts/{postId} {
       allow read: if true;
 
-      // 知識を届けるのは light 以上（9/1から）
-      allow create: if mayCreate(request.resource.data.get('address', ''), 1, 'post')
+      /* 知識を届けるのは light 以上（9/1から）。
+         クエストのための投稿（questId 付き）だけは、月の回数に数えない。
+         そちらを先に見る。通れば回数の記録（plan_usage）は一度も見ない。
+         questId はあとから足せない（下の update の changedOnly に無い）。 */
+      allow create: if (
+          mayCreateForQuest(request.resource.data.get('address', ''),
+                            request.resource.data.get('questId', ''))
+          || mayCreate(request.resource.data.get('address', ''), 1, 'post')
+        )
+        && request.resource.data.get('questId', '') is string
+        && request.resource.data.get('questId', '').size() <= 80
         && request.resource.data.get('goodCount', 0) == 0
         && request.resource.data.get('changeCount', 0) == 0
         && request.resource.data.get('goodUsers', []).size() == 0

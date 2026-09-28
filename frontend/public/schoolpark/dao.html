@@ -592,6 +592,12 @@ if (window.top === window.self) window.location.replace('/');
                     <div onClick="{{ cur.logStuck }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">つまずいた</div>
                     <div onClick="{{ cur.logFound }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">気づいた</div>
                   </div>
+                  <!-- 写真や記録をEmuに残してから紐づけるクエスト（#003 など）のための入口。
+                       ここから出した投稿は、月の投稿回数に数えない。 -->
+                  <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:20px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                    <div style="font-size:13px; color:#6E695C; flex:1; min-width:160px">写真や記録をEmuに残す（月の投稿回数に数えません）</div>
+                    <div onClick="{{ cur.postEmu }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">Emuに投稿する</div>
+                  </div>
                 </sc-if>
                 <sc-if value="{{ cur.noLogs }}">
                   <div style="font-size:13px; line-height:1.9; color:#6E695C">まだ報告がありません。受けた人が書くと、ここに並びます。</div>
@@ -1319,6 +1325,10 @@ class Component extends DCLogic {
       logDid:   () => { try { window.parent.spQuestLog(e.id, 'やってみた', this); } catch (err) {} },
       logStuck: () => { try { window.parent.spQuestLog(e.id, 'つまずいた', this); } catch (err) {} },
       logFound: () => { try { window.parent.spQuestLog(e.id, '気づいた', this); } catch (err) {} },
+      /* このクエストのためにEmuへ投稿する。
+         #003 のように「Emuに投稿して、その投稿を途中報告で紐づける」クエストがある。
+         ここから開いた投稿は、月の投稿回数に数えない（クエストが回数で止まらないように）。 */
+      postEmu: () => { try { window.parent.openEmuPostForQuest(e.id, e.fullTitle || e.title || ''); } catch (err) {} },
       close: () => { try { window.parent.spQuestClose(e.id, this); } catch (err) {} },
       wisdom: () => { try { window.parent.spQuestWisdom(e.id, this); } catch (err) {} },
       /* perHead は親（index.html）が通貨と割合込みで作って渡す。
