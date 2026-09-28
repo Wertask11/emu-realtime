@@ -18,15 +18,23 @@ const chain = {
   tokenId: 0n,
   mintThrows: null,
   reachable: true,
-  roleCalls: 0
+  roleCalls: 0,
+  baseFeeWei: 50n * 10n ** 9n,     /* 基礎手数料 50 gwei */
+  chainTipWei: 15n * 10n ** 8n,    /* ethers の決め打ち 1.5 gwei */
+  feeDataThrows: false,
+  lastOverrides: null
 };
 
 const BN = (v) => ({
   _v: BigInt(v),
   gte(o) { return this._v >= BigInt(o._v !== undefined ? o._v : o); },
+  gt(o) { return this._v > BigInt(o._v !== undefined ? o._v : o); },
+  mul(n) { return BN(this._v * BigInt(n._v !== undefined ? n._v : n)); },
+  add(o) { return BN(this._v + BigInt(o._v !== undefined ? o._v : o)); },
   isZero() { return this._v === 0n; },
   toString() { return this._v.toString(); }
 });
+const GWEI = 10n ** 9n;
 
 const routes = [];
 const original = Module._load;
@@ -41,6 +49,10 @@ Module._load = function (name, parent, main) {
       toUtf8Bytes: v => Buffer.from(v),
       keccak256: v => "0x" + crypto.createHash("sha256").update(v).digest("hex"),
       parseEther: v => BN(BigInt(Math.round(Number(v) * 1e6)) * 10n ** 12n),
+      parseUnits: (v, unit) => {
+        const exp = unit === "gwei" ? 9n : (unit === "ether" ? 18n : BigInt(unit || 0));
+        return BN(BigInt(Math.round(Number(v) * 1e6)) * 10n ** (exp - 6n));
+      },
       formatEther: b => (Number(b._v) / 1e18).toString()
     };
     function Wallet(key) {
@@ -56,7 +68,8 @@ Module._load = function (name, parent, main) {
       this.hasRole = async () => chain.hasRole;
       this.tokenForCompletion = async () => BN(chain.tokenId);
       this.ownerOf = async () => "0x" + "b".repeat(40);
-      this.mint = async () => {
+      this.mint = async (_to, _key, _uri, overrides) => {
+        chain.lastOverrides = overrides || null;
         if (chain.mintThrows) throw chain.mintThrows;
         chain.tokenId = 5n;
         return { hash: "0xtx", wait: async () => ({}) };
@@ -66,6 +79,15 @@ Module._load = function (name, parent, main) {
       this.getBalance = async () => {
         if (!chain.reachable) throw new Error("could not detect network");
         return BN(chain.balanceWei);
+      };
+      /* ethers v5 が実際に返すのと同じ形。tip は 1.5 gwei の決め打ち。 */
+      this.getFeeData = async () => {
+        if (chain.feeDataThrows) throw new Error("no fee data");
+        return {
+          lastBaseFeePerGas: chain.baseFeeWei === null ? null : BN(chain.baseFeeWei),
+          maxPriorityFeePerGas: BN(chain.chainTipWei),
+          maxFeePerGas: BN(chain.baseFeeWei || 0n) , gasPrice: BN(0)
+        };
       };
     }
     return { utils, Wallet, Contract, providers: { JsonRpcProvider } };
@@ -117,7 +139,9 @@ async function callConfig(h) { const { result, res } = reply(); await h({}, res)
 
 function resetChain(over) {
   Object.assign(chain, { minterRole: "0x9f2d", hasRole: true, balanceWei: 10n ** 18n,
-    tokenId: 0n, mintThrows: null, reachable: true, roleCalls: 0 }, over || {});
+    tokenId: 0n, mintThrows: null, reachable: true, roleCalls: 0,
+    baseFeeWei: 50n * 10n ** 9n, chainTipWei: 15n * 10n ** 8n,
+    feeDataThrows: false, lastOverrides: null }, over || {});
 }
 
 /* ───────── 準備ができているかの判定 ───────── */
@@ -516,4 +540,114 @@ test("役とガスの見分けは、今までどおり効いている", async ()
     const out = await claimOnce(claim);
     assert.equal(out.body.error, want, err.message);
   }
+});
+
+/* ───────── Polygon の手数料の下限 ─────────
+
+   Polygon は優先手数料の下限が 25 gwei。ethers v5 はチェーンに
+   関係なく 1.5 gwei を決め打ちで入れるので、そのまま送ると
+     transaction gas price below minimum:
+     gas tip cap 1500000000, minimum needed 25000000000
+   と断られる。実際にこれで発行が止まっていた。 */
+
+const MIN_TIP = 25n * GWEI;          /* Polygon が要求する下限 */
+const ETHERS_DEFAULT = 15n * 10n ** 8n;  /* ethers の決め打ち 1.5 gwei */
+
+test("Polygon の下限（25 gwei）を満たす tip で送る", async () => {
+  resetChain();
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  seedFallbackApproval(1);
+  await claimOnce(claim);
+  const ov = chain.lastOverrides;
+  assert.ok(ov, "手数料を指定せずに送っている（ethers 任せでは通らない）");
+  const tip = BigInt(ov.maxPriorityFeePerGas.toString());
+  assert.ok(tip >= MIN_TIP, "tip が " + tip + " で下限 " + MIN_TIP + " に届いていない");
+  assert.notEqual(tip, ETHERS_DEFAULT, "ethers の決め打ちのまま送っている");
+});
+
+test("上限（maxFee）は tip 以上で、基礎手数料の跳ねを見込む", async () => {
+  resetChain({ baseFeeWei: 50n * GWEI });
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  seedFallbackApproval(1);
+  await claimOnce(claim);
+  const ov = chain.lastOverrides;
+  const tip = BigInt(ov.maxPriorityFeePerGas.toString());
+  const max = BigInt(ov.maxFeePerGas.toString());
+  assert.ok(max >= tip, "上限が tip を下回ると、そもそも送れない");
+  assert.equal(max, 50n * GWEI * 2n + tip, "基礎の2倍＋tip にすること");
+});
+
+test("チェーンが下限より高い tip を言うなら、そちらに従う", async () => {
+  resetChain({ chainTipWei: 80n * GWEI });   /* 混んでいる */
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  seedFallbackApproval(1);
+  await claimOnce(claim);
+  assert.equal(BigInt(chain.lastOverrides.maxPriorityFeePerGas.toString()), 80n * GWEI,
+    "混んでいるときに床のまま送ると、いつまでも取り込まれない");
+});
+
+test("手数料を聞けなくても、床の額で送る", async () => {
+  resetChain({ feeDataThrows: true });
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  seedFallbackApproval(1);
+  const out = await claimOnce(claim);
+  assert.equal(out.status, 200, "聞けないだけで発行をあきらめてはいけない");
+  const tip = BigInt(chain.lastOverrides.maxPriorityFeePerGas.toString());
+  assert.ok(tip >= MIN_TIP, "床の額が下限に届いていない");
+});
+
+test("それでも下限に届かなかったときは、そう分かる符号を返す", async () => {
+  resetChain({ mintThrows: Object.assign(
+    new Error("transaction gas price below minimum: gas tip cap 1500000000, "
+      + "minimum needed 25000000000"), { code: "SERVER_ERROR" }) });
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  seedFallbackApproval(1);
+  const out = await claimOnce(claim);
+  assert.equal(out.body.error, "MINTER_GAS_PRICE_TOO_LOW",
+    "残高はあるのに送れない。ガス切れとは別の話として出すこと");
+});
+
+test("限定星も同じ手数料で送る", async () => {
+  resetChain();
+  routes.length = 0;
+  createQuestCompletionRouterForStars();
+  function createQuestCompletionRouterForStars() {
+    build({ SP_QUEST_STAR_CONTRACT: CONTRACT, SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  }
+  const claimStar = (routes.find(r => r.path === "/stars/:starId/claim") || {}).handler;
+  assert.ok(claimStar, "限定星の受け取りの口が見つかりません");
+  records.clear();
+  records.set("sp_identities/spid-a", { addresses: [ADDR],
+    links: [{ kind: "wallet", subject: WALLET }] });
+  const starKey = "0x" + crypto.createHash("sha256")
+    .update(Buffer.from(JSON.stringify(["schoolpark-star", "fes-2026-10", "spid-a"])))
+    .digest("hex");
+  records.set("sp_stars/" + starKey, { status: "granted", spid: "spid-a", starId: "fes-2026-10" });
+  const { result, res } = reply();
+  await claimStar({ params: { starId: "fes-2026-10" },
+    identity: { account: { spid: "spid-a" }, uid: "user-a" } }, res);
+  assert.equal(result.status, 200, JSON.stringify(result.body));
+  const tip = BigInt(chain.lastOverrides.maxPriorityFeePerGas.toString());
+  assert.ok(tip >= MIN_TIP, "限定星だけ手数料の指定が漏れている");
+});
+
+test("本番で実際に出たエラーを、手数料の問題として見分ける", async () => {
+  /* Render のログからそのまま取ったもの。code は SERVER_ERROR なので、
+     並び順を間違えると「鎖に届かない」として片付けてしまう。 */
+  const real = Object.assign(new Error(
+    'processing response error (body="{\\"jsonrpc\\":\\"2.0\\",\\"id\\":55,'
+    + '\\"error\\":{\\"code\\":-32000,\\"message\\":\\"transaction gas price below '
+    + 'minimum: gas tip cap 1500000000, minimum needed 25000000000\\"}}", '
+    + 'code=SERVER_ERROR, version=web/5.8.0)'), { code: "SERVER_ERROR" });
+  resetChain({ mintThrows: real });
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  seedFallbackApproval(1);
+  const out = await claimOnce(claim);
+  assert.equal(out.body.error, "MINTER_GAS_PRICE_TOO_LOW");
 });

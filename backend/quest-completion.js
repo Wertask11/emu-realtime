@@ -117,6 +117,37 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
   /* なぜ発行できなかったのかを、言葉にして返す。
      どれも CERTIFICATE_MINT_FAILED で返していたので、
      役が無いのか、ガスが無いのか、誰にも分からなかった。 */
+  /* Polygon は優先手数料（tip）の下限が 25 gwei と決まっている。
+     ethers v5 はチェーンに関係なく 1.5 gwei を決め打ちで入れる
+     （@ethersproject/providers の base-provider.js を見ること）ので、
+     そのまま送るとノードに断られる。実際にこれで発行が止まっていた：
+
+       transaction gas price below minimum:
+       gas tip cap 1500000000, minimum needed 25000000000
+
+     下限より少し上（30 gwei）を床にして、混んでいるときは
+     チェーンが言う額のほうを使う。上限（maxFee）は基礎手数料の2倍＋tip。
+     基礎が跳ねても収まるようにしておく。 */
+  const POLYGON_MIN_TIP_GWEI = "30";
+  async function polygonFees(provider) {
+    const floor = ethers.utils.parseUnits(POLYGON_MIN_TIP_GWEI, "gwei");
+    let tip = floor;
+    let base = null;
+    try {
+      const fd = await provider.getFeeData();
+      if (fd && fd.maxPriorityFeePerGas && fd.maxPriorityFeePerGas.gt(tip)) {
+        tip = fd.maxPriorityFeePerGas;
+      }
+      base = (fd && fd.lastBaseFeePerGas) || null;
+    } catch (e) {
+      /* 手数料を聞けなくても送りたい。床の額で出す。 */
+    }
+    return {
+      maxPriorityFeePerGas: tip,
+      maxFeePerGas: base ? base.mul(2).add(tip) : tip.mul(2)
+    };
+  }
+
   function mintErrorOf(error) {
     const e = error || {};
     const text = JSON.stringify([e.code, e.message, e.reason,
@@ -128,6 +159,15 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     if (text.includes("accesscontrolunauthorizedaccount")
       || text.includes("0xe2517d3f")
       || text.includes("is missing role")) return "MINTER_NOT_AUTHORIZED";
+    /* 手数料が Polygon の下限に届いていない。ここは「鎖に届かない」より
+       先に見ること。ノードはこれを SERVER_ERROR として返してくるので、
+       あとに置くと通信の失敗として片付けられてしまう。
+       polygonFees を通していない
+       か、下限が引き上げられたときにここへ来る。ガス代が無いのとは
+       別の話なので分ける（残高はあるのに送れない）。 */
+    if (text.includes("gas price below minimum") || text.includes("gas tip cap")
+      || text.includes("transaction underpriced")
+      || text.includes("fee cap less than block base fee")) return "MINTER_GAS_PRICE_TOO_LOW";
     /* 鎖に話しかけられていない。役やガスの問題ではないので、分けて返す。
        ここを分けていなかったので、RPC が落ちているだけのときも
        「発行が途中で止まりました」としか出ず、原因が分からなかった。 */
@@ -511,7 +551,7 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       if (tokenId.isZero()) {
         const uri = "https://emu-realtime.onrender.com/api/schoolpark/quest-completions/certificates/" + key + "/metadata";
         try {
-          const tx = await contract.mint(wallet, key, uri);
+          const tx = await contract.mint(wallet, key, uri, await polygonFees(provider));
           txHash = tx.hash;
           await tx.wait();
         } catch (e) {
@@ -663,7 +703,7 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       if (tokenId.isZero()) {
         const uri = "https://emu-realtime.onrender.com/api/schoolpark/quest-completions/stars/" + key + "/metadata";
         try {
-          const tx = await contract.mint(wallet, key, uri);
+          const tx = await contract.mint(wallet, key, uri, await polygonFees(provider));
           txHash = tx.hash;
           await tx.wait();
         } catch (e) {
