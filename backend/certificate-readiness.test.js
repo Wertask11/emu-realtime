@@ -86,6 +86,13 @@ function snapshot(path) {
 }
 function doc(path) {
   return { id: path.split("/").at(-1), path, get: async () => snapshot(path),
+    collection: name => collection(path + "/" + name),
+    /* 本物と同じで、すでにあるところへは作れない。
+       受け取りの側は、この失敗を握りつぶして先へ進む作りにしてある。 */
+    create: async v => {
+      if (records.has(path)) { const e = new Error("ALREADY_EXISTS"); e.code = 6; throw e; }
+      records.set(path, v);
+    },
     set: async v => records.set(path, { ...(records.get(path) || {}), ...v }) };
 }
 function collection(path) { return { doc: id => doc(path + "/" + id) }; }
@@ -303,4 +310,153 @@ test("役が読めないときも、欄そのものは返す", async () => {
   const body = await callConfig(build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
     SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY }).config);
   assert.equal(body.role, "", "読めないときは空。前の値を出さない");
+});
+
+/* ───────── 証明書の取りこぼしを、受け取りのときに作り直す ─────────
+
+   10/1 までサーバーは承認を NOT_STARTED で断る。運営画面は逃げ道を通り、
+   commits に approved と approvedRounds だけを書く。証明書は作られない。
+   あとから認め直しても NO_NEW_ROUND で断られるので、直さないかぎり
+   その完走の証明書は永久に出ない。 */
+
+const ADDR = "0x" + "a".repeat(40);
+const certKeyOf = (questId, spid, r) => "0x" + crypto.createHash("sha256")
+  .update(Buffer.from(JSON.stringify(["schoolpark", questId, spid, ...(r > 1 ? [r] : [])])))
+  .digest("hex");
+
+/* 運営画面の逃げ道が書いたのと同じ形。証明書は無い。 */
+function seedFallbackApproval(rounds) {
+  records.clear();
+  records.set("sp_identities/spid-a", {
+    addresses: [ADDR], links: [{ kind: "wallet", subject: WALLET }] });
+  records.set("sp_quests/quest-001", { series: "general", questNumber: 1,
+    guildId: "learn", title: "Emuの知識を、やってみる" });
+  records.set("sp_quests/quest-001/commits/" + ADDR,
+    { approved: true, approvedRounds: rounds, approvedAt: 1759000000000 });
+}
+async function claimOnce(claim) {
+  const { result, res } = reply();
+  await claim({ params: { questId: "quest-001" },
+    identity: { account: { spid: "spid-a" }, uid: "user-a" } }, res);
+  return result;
+}
+
+test("証明書が無くても、完走が認めてあれば作って発行する", async () => {
+  resetChain();
+  seedFallbackApproval(1);
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  const out = await claimOnce(claim);
+  assert.equal(out.status, 200, JSON.stringify(out.body));
+  const row = records.get("sp_quest_certificates/" + certKeyOf("quest-001", "spid-a", 1));
+  assert.ok(row, "証明書が作られていません");
+  assert.equal(row.status, "minted");
+  assert.equal(row.backfilled, true, "あとから作った印を残すこと");
+});
+
+test("あとから作った証明書に、渡していない EMUER を書かない", async () => {
+  resetChain();
+  seedFallbackApproval(1);
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  await claimOnce(claim);
+  const row = records.get("sp_quest_certificates/" + certKeyOf("quest-001", "spid-a", 1));
+  assert.equal(row.amountEmuer, 0, "EMUERは動いていない。0のままにすること");
+});
+
+test("2周ぶん認めてあれば、2枚とも作って1回ずつ受け取れる", async () => {
+  resetChain();
+  seedFallbackApproval(2);
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+
+  const first = await claimOnce(claim);
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.equal(first.body.alreadyMinted, undefined, "1回目は新しく発行する");
+
+  chain.tokenId = 0n;                       /* 次の発行はまだ無い */
+  const second = await claimOnce(claim);
+  assert.equal(second.status, 200, JSON.stringify(second.body));
+
+  const r1 = records.get("sp_quest_certificates/" + certKeyOf("quest-001", "spid-a", 1));
+  const r2 = records.get("sp_quest_certificates/" + certKeyOf("quest-001", "spid-a", 2));
+  assert.equal(r1.status, "minted", "1周目が発行されていない");
+  assert.equal(r2.status, "minted", "2周目が発行されていない");
+  assert.equal(r1.round, 1);
+  assert.equal(r2.round, 2);
+});
+
+test("2周目の証明書は、名前で見分けられる", async () => {
+  resetChain();
+  seedFallbackApproval(2);
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  await claimOnce(claim);
+  const r2 = records.get("sp_quest_certificates/" + certKeyOf("quest-001", "spid-a", 2));
+  assert.equal(r2.questLabel, "一般 #001", "承認のときと同じ名前の作り方にすること");
+  assert.equal(r2.guildId, "learn");
+  assert.equal(r2.guildColor, "#0F5C3F", "星空の星と同じ色にすること");
+});
+
+/* ───────── 勝手に完走を名乗れないこと ───────── */
+
+test("認められていない参加では、証明書を作らない", async () => {
+  resetChain();
+  seedFallbackApproval(1);
+  records.set("sp_quests/quest-001/commits/" + ADDR, { approved: false, approvedRounds: 3 });
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  const out = await claimOnce(claim);
+  assert.equal(out.status, 404);
+  assert.equal(out.body.error, "NOT_COMPLETED");
+  assert.equal(records.get("sp_quest_certificates/" + certKeyOf("quest-001", "spid-a", 1)), undefined);
+});
+
+test("受けてもいないクエストでは、証明書を作らない", async () => {
+  resetChain();
+  seedFallbackApproval(1);
+  records.delete("sp_quests/quest-001/commits/" + ADDR);
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  const out = await claimOnce(claim);
+  assert.equal(out.status, 404);
+  assert.equal(out.body.error, "NOT_COMPLETED");
+});
+
+test("自分のパスポートに無いアドレスの完走は、持ってこられない", async () => {
+  resetChain();
+  seedFallbackApproval(1);
+  /* 完走しているのは他人のアドレス。自分の名義には入っていない。 */
+  records.set("sp_identities/spid-a", {
+    addresses: ["0x" + "e".repeat(40)], links: [{ kind: "wallet", subject: WALLET }] });
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  const out = await claimOnce(claim);
+  assert.equal(out.status, 404, "他人の完走で証明書が出てはいけない");
+  assert.equal(records.get("sp_quest_certificates/" + certKeyOf("quest-001", "spid-a", 1)), undefined);
+});
+
+test("周回の数が壊れていても、20枚を超えて作らない", async () => {
+  resetChain();
+  seedFallbackApproval(9999);
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  await claimOnce(claim);
+  const made = [...records.keys()].filter(k => k.startsWith("sp_quest_certificates/")).length;
+  assert.equal(made, 20, "上限（ROUND_SCAN_MAX）で止めること");
+});
+
+test("すでに正しく作られている証明書は、作り直さない", async () => {
+  resetChain();
+  seedFallbackApproval(1);
+  const key = certKeyOf("quest-001", "spid-a", 1);
+  records.set("sp_quest_certificates/" + key,
+    { status: "pending", spid: "spid-a", round: 1, amountEmuer: 100, questLabel: "一般 #001" });
+  const { claim } = build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY });
+  await claimOnce(claim);
+  const row = records.get("sp_quest_certificates/" + key);
+  assert.equal(row.amountEmuer, 100, "もとの記録を上書きしてはいけない");
+  assert.equal(row.backfilled, undefined, "作り直した印は付かない");
+  assert.equal(row.status, "minted");
 });

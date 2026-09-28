@@ -16,6 +16,18 @@ const GUILD_LABEL = {
   learn: "LEARN", work: "WORK", play: "PLAY", connect: "CONNECT", web3: "WEB3"
 };
 
+/* 証明書に書くクエストの名前。「一般 #001 入門」のような形。
+   承認のときと、あとから証明書を作り直すときの両方で使う。
+   2か所に同じ組み立てを書いておくと、片方だけ直したときに
+   同じクエストの証明書が2つの名前を持つ。 */
+function questLabelOf(q) {
+  const v = q || {};
+  return (v.series === "special" ? "特殊 " : "一般 ") + "#"
+    + String(v.questNumber).padStart(3, "0")
+    + (Number(v.branch) >= 1 ? "-" + Number(v.branch) : "")
+    + (v.stage ? " " + v.stage : "");
+}
+
 /* 段ごとの1人あたりの報酬。年内目標の資料どおり。
    入門3日50 ／ 標準7日100 ／ 実践14日200。段の無いクエストは100。
    運営が予算を公開するときに別の額を入れれば、そちらが優先される。 */
@@ -295,10 +307,7 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
           /* 星空の星と同じ色にする。どのギルドにも属さないクエストは未分類の色。 */
           guildId: guildId, guildColor: GUILD_COLOR[guildId] || "#6E695C",
           questTitle: String(q.title || "").slice(0, 120),
-          questLabel: (q.series === "special" ? "特殊 " : "一般 ") + "#"
-            + String(q.questNumber).padStart(3, "0")
-            + (Number(q.branch) >= 1 ? "-" + Number(q.branch) : "")
-            + (q.stage ? " " + q.stage : ""),
+          questLabel: questLabelOf(q),
           amountEmuer: per, round: round,
           completedAt: round > 1 ? now : approvedAt, status: "pending", createdAt: new Date(now)
         });
@@ -356,6 +365,74 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       attributes: attributes
     });
   });
+  /* 完走の印はあるのに、証明書の記録が無いことがある。それを作る。
+
+     10/1（EMUER の開始）までサーバーは承認を NOT_STARTED で断る。
+     そのとき運営画面は逃げ道を通り、commits に approved と
+     approvedRounds だけを直接書く（membership-admin.html の
+     data-qapprove を見ること）。証明書はサーバーの取引の中でしか
+     作られないので、この道を通った完走には証明書が無い。
+     予算が未公開のときや Render が落ちているときも同じ道を通る。
+
+     しかも、あとから認め直して作ることもできない。承認の口は
+     approvedRounds を見て「もう済んでいる」と断る（NO_NEW_ROUND）。
+     直さないかぎり、その完走の証明書は永久に出ない。
+
+     なので受け取りのときに作る。完走そのものは commits の approved が
+     証している。この印は運営しか立てられない（firestore.rules の
+     sp_quests/{id}/commits/{addr} の update を見ること）ので、
+     本人が勝手に完走を名乗ることはできない。
+
+     EMUER はここでは触らない。証明書は「やった」という記録で、
+     報酬とは別のもの。額を書くと、渡していないものを渡したことに
+     なってしまうので 0 のままにする。 */
+  async function backfillCertificates(questId, spid, keyOfRound, max) {
+    const idSnap = await db.collection("sp_identities").doc(spid).get();
+    const raw = idSnap.exists ? (idSnap.data() || {}).addresses : null;
+    const addrs = Array.isArray(raw) ? raw : [];
+    let commit = null;
+    let address = "";
+    for (const a of addrs) {
+      const one = String(a || "").trim().toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(one)) continue;
+      const s = await db.collection("sp_quests").doc(questId)
+        .collection("commits").doc(one).get();
+      if (!s.exists) continue;
+      const d = s.data() || {};
+      if (d.approved !== true) continue;
+      commit = d; address = one; break;
+    }
+    if (!commit) return 0;                 /* 本当に完走していない */
+    const rounds = Math.min(max, Math.max(1, Number(commit.approvedRounds) || 0));
+    const qSnap = await db.collection("sp_quests").doc(questId).get();
+    const q = qSnap.exists ? qSnap.data() || {} : {};
+    const guildId = String(q.guildId || "");
+    const now = Date.now();
+    let made = 0;
+    for (let r = 1; r <= rounds; r += 1) {
+      const key = keyOfRound(r);
+      const ref = db.collection("sp_quest_certificates").doc(key);
+      try {
+        await ref.create({
+          schema: "schoolpark-quest-star-v1", completionKey: key, questId, spid, address,
+          guildId: guildId, guildColor: GUILD_COLOR[guildId] || "#6E695C",
+          questTitle: String(q.title || "").slice(0, 120),
+          questLabel: questLabelOf(q),
+          amountEmuer: 0, round: r,
+          completedAt: Number(commit.approvedAt) || now,
+          status: "pending", createdAt: new Date(now),
+          /* あとから作ったもの、という印。監査のために残す。
+             EMUER が引き当てられていないことも、これで見分けられる。 */
+          backfilled: true
+        });
+        made += 1;
+      } catch (e) {
+        /* 同じ瞬間に承認が通って、先に作られた。それでよい。 */
+      }
+    }
+    return made;
+  }
+
   router.post("/:questId/certificate/claim", requireFirebaseUser, async (req, res) => {
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
     const questId = String(req.params.questId || "");
@@ -379,13 +456,24 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     let found = 0;
     let pick = null;     /* 受け取る1つ（いちばん古い未受け取り） */
     let last = null;     /* 最後に見た記録。全部受け取り済みのときに返す */
-    for (let r = 1; r <= ROUND_SCAN_MAX; r += 1) {
-      const s = await db.collection("sp_quest_certificates").doc(keyOfRound(r)).get();
-      if (!s.exists) break;
-      found += 1;
-      const d = s.data() || {};
-      last = d;
-      if (!pick && d.status !== "minted") pick = { ref: s.ref, row: d, round: r, key: keyOfRound(r) };
+    const scan = async () => {
+      found = 0; pick = null; last = null;
+      for (let r = 1; r <= ROUND_SCAN_MAX; r += 1) {
+        const s = await db.collection("sp_quest_certificates").doc(keyOfRound(r)).get();
+        if (!s.exists) break;
+        found += 1;
+        const d = s.data() || {};
+        last = d;
+        if (!pick && d.status !== "minted") pick = { ref: s.ref, row: d, round: r, key: keyOfRound(r) };
+      }
+    };
+    await scan();
+    /* 見つからない（または全部受け取り済みに見える）ときは、
+       完走の印そのものを見に行って、足りない証明書をここで作る。
+       なぜ必要かは backfillCertificates に書いてある。 */
+    if (!found || !pick) {
+      const made = await backfillCertificates(questId, spid, keyOfRound, ROUND_SCAN_MAX);
+      if (made) await scan();
     }
     if (!found) return res.status(404).json({ error: "NOT_COMPLETED" });
     if (!pick) return res.json({ ok: true, tokenId: last.tokenId, txHash: last.txHash, alreadyMinted: true });
