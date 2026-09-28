@@ -343,6 +343,155 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       return res.status(503).json({ error: "CERTIFICATE_MINT_FAILED" });
     }
   });
+
+  /* ══════════════════════════════════════════════════════════════
+     限定星
+
+     クエストの完走とは別に、運営が配る星。いまのところ使い道は
+     特殊 #002（解剖フェス）の「来た人全員」だが、仕組みは星の種類
+     （starId）で分けてあるので、別の催しにも使える。
+
+     設計は証明書と同じ「先に記録、ウォレットができてから発行」。
+       1. 運営が配ると sp_stars/{key} に記録ができる（鍵は spid）
+       2. 星空にはこの記録から出る。ウォレットは要らない
+       3. ウォレットを連携した人が「NFTで受け取る」を押すと発行される
+       4. 受け取らなくても記録は消えない。星空の記録が正で、NFTは写し
+
+     コントラクトは証明書と同じものを使う（SP_QUEST_STAR_CONTRACT）。
+     もともと「星」のコントラクトなので、分ける理由がない。
+     鍵の頭を "schoolpark-star" にしてあるので、完走の鍵とは衝突しない。
+     ══════════════════════════════════════════════════════════════ */
+  const STAR_ID_RE = /^[a-z0-9][a-z0-9-]{1,40}$/;
+  const starKeyOf = (starId, spid) =>
+    ethers.utils.keccak256(ethers.utils.toUtf8Bytes(
+      JSON.stringify(["schoolpark-star", starId, spid])));
+
+  /* 運営が配る。相手は SchoolPark ID で指定する。
+     ウォレットは要らない（LINE だけの人にも配れる）。
+     二重に配っても増えない（同じ鍵になるので上書きにならず、そのまま返す）。 */
+  router.post("/stars/grant", requireOwner, async (req, res) => {
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const b = req.body || {};
+    const starId = String(b.starId || "").trim().toLowerCase();
+    const spid = String(b.spid || "").trim();
+    if (!STAR_ID_RE.test(starId)) return res.status(400).json({ error: "INVALID_STAR_ID" });
+    if (!/^SP-[0-9A-Z]{4}(-[0-9A-Z]{4}){3}$/i.test(spid))
+      return res.status(400).json({ error: "INVALID_SPID" });
+    const color = /^#[0-9A-Fa-f]{6}$/.test(String(b.color || "")) ? String(b.color) : "#D4A843";
+    const key = starKeyOf(starId, spid);
+    const ref = db.collection("sp_stars").doc(key);
+    const snap = await ref.get();
+    if (snap.exists) return res.json({ ok: true, key, already: true });
+    await ref.set({
+      schema: "schoolpark-limited-star-v1",
+      starId, spid, key,
+      label: String(b.label || "限定星").slice(0, 60),
+      color,
+      note: String(b.note || "").slice(0, 200),
+      status: "pending",
+      grantedBy: (req.identity && req.identity.walletAddress) || "admin",
+      createdAt: new Date()
+    });
+    return res.json({ ok: true, key, already: false });
+  });
+
+  /* 自分の限定星。星空の数え上げと、パスポートの「受け取る」に使う。
+     ウォレットの有無で結果は変わらない。 */
+  router.get("/stars/mine", requireFirebaseUser, async (req, res) => {
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const spid = String((req.identity.account || {}).spid || "");
+    if (!spid) return res.json({ ok: true, stars: [] });
+    const q = await db.collection("sp_stars").where("spid", "==", spid).limit(200).get();
+    const stars = [];
+    q.forEach(d => {
+      const v = d.data() || {};
+      stars.push({
+        key: d.id, starId: v.starId || "", label: v.label || "限定星",
+        color: v.color || "#D4A843", note: v.note || "",
+        minted: v.status === "minted",
+        tokenId: v.tokenId || "", grantedAt: v.createdAt || null
+      });
+    });
+    return res.json({ ok: true, stars });
+  });
+
+  /* NFTで受け取る。証明書と同じ形。
+     ウォレットが無ければ WALLET_REQUIRED を返すだけで、記録は触らない。
+     あとで連携してもう一度押せば、そのとき発行される。 */
+  router.post("/stars/:starId/claim", requireFirebaseUser, async (req, res) => {
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const starId = String(req.params.starId || "").trim().toLowerCase();
+    if (!STAR_ID_RE.test(starId)) return res.status(400).json({ error: "INVALID_STAR_ID" });
+    const spid = String((req.identity.account || {}).spid || "");
+    if (!spid) return res.status(409).json({ error: "PASSPORT_LINK_REQUIRED" });
+    const key = starKeyOf(starId, spid);
+    const ref = db.collection("sp_stars").doc(key);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "STAR_NOT_GRANTED" });
+    const row = snap.data() || {};
+    if (row.status === "minted")
+      return res.json({ ok: true, tokenId: row.tokenId, txHash: row.txHash, alreadyMinted: true });
+
+    const identity = await db.collection("sp_identities").doc(spid).get();
+    const links = identity.exists ? (identity.data() || {}).links || [] : [];
+    const linkedWallet = links.find(link => link && link.kind === "wallet" && ethers.utils.isAddress(link.subject));
+    const wallet = String(linkedWallet && linkedWallet.subject || "").toLowerCase();
+    if (!ethers.utils.isAddress(wallet)) return res.status(409).json({ error: "WALLET_REQUIRED" });
+    if (!ethers.utils.isAddress(certContract) || !certKey) return res.status(503).json({ error: "CERTIFICATE_NOT_DEPLOYED" });
+    try {
+      const provider = new ethers.providers.JsonRpcProvider(env.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com");
+      const signer = new ethers.Wallet(certKey, provider);
+      const contract = new ethers.Contract(certContract, [
+        "function tokenForCompletion(bytes32) view returns (uint256)",
+        "function ownerOf(uint256) view returns (address)",
+        "function mint(address,bytes32,string) returns (uint256)"
+      ], signer);
+      let tokenId = await contract.tokenForCompletion(key);
+      let txHash = "";
+      if (tokenId.isZero()) {
+        const uri = "https://emu-realtime.onrender.com/api/schoolpark/quest-completions/stars/" + key + "/metadata";
+        const tx = await contract.mint(wallet, key, uri);
+        txHash = tx.hash;
+        await tx.wait();
+        tokenId = await contract.tokenForCompletion(key);
+      }
+      if (tokenId.isZero()) throw new Error("MINT_NOT_CONFIRMED");
+      await ref.set({ status: "minted", tokenId: tokenId.toString(), txHash,
+        mintedTo: (await contract.ownerOf(tokenId)).toLowerCase(), mintedAt: new Date() }, { merge: true });
+      return res.json({ ok: true, tokenId: tokenId.toString(), txHash });
+    } catch (error) {
+      console.error("Limited star claim failed:", error);
+      return res.status(503).json({ error: "CERTIFICATE_MINT_FAILED" });
+    }
+  });
+
+  /* NFTの中身。証明書と同じ作りで、絵は星ひとつ。 */
+  router.get("/stars/:key/metadata", async (req, res) => {
+    const key = String(req.params.key || "");
+    if (!/^0x[0-9a-f]{64}$/i.test(key) || !db) return res.status(404).json({ error: "NOT_FOUND" });
+    const snap = await db.collection("sp_stars").doc(key).get();
+    if (!snap.exists) return res.status(404).json({ error: "NOT_FOUND" });
+    const row = snap.data() || {};
+    const color = /^#[0-9A-Fa-f]{6}$/.test(String(row.color || "")) ? row.color : "#D4A843";
+    const label = String(row.label || "限定星").slice(0, 60);
+    const esc = t => String(t).replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">'
+      + '<rect width="600" height="600" fill="#14202A"/>'
+      + '<circle cx="300" cy="260" r="54" fill="' + color + '"/>'
+      + '<circle cx="300" cy="260" r="110" fill="none" stroke="' + color + '" stroke-opacity=".35" stroke-width="2"/>'
+      + '<text x="300" y="420" text-anchor="middle" fill="#F4F1EA" font-size="30"'
+      + ' font-family="sans-serif">' + esc(label) + '</text>'
+      + '<text x="300" y="462" text-anchor="middle" fill="#F4F1EA" fill-opacity=".55" font-size="18"'
+      + ' font-family="sans-serif">SchoolPark</text></svg>';
+    return res.json({
+      name: "SchoolPark " + label,
+      description: "譲渡不可の限定星。星空の記録から発行されます。受け取らなくても星は残ります。",
+      image: "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64"),
+      attributes: [{ trait_type: "Star", value: String(row.starId || "") }]
+    });
+  });
+
   return router;
 }
 

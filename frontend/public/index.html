@@ -20291,12 +20291,41 @@ async function openSpPassport() {
     });
   }
 
+  /* 限定星。運営が配った、完走とは別の星。
+     ウォレットが無くても星空には出ているので、ここは
+     「NFTでも受け取れます」という案内にとどめる。 */
+  let limitedHtml = '';
+  try {
+    const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/stars/mine',
+      { headers: await emuAuthHeaders(false) });
+    if (r.ok) {
+      const rows = ((await r.json()) || {}).stars || [];
+      rows.slice(0, 10).forEach(function (x) {
+        const tag = '<span style="display:inline-block;background:'
+          + escapeHtml(/^#[0-9A-Fa-f]{6}$/.test(String(x.color || '')) ? x.color : '#D4A843')
+          + ';color:#14202A;font-size:10px;font-weight:700;letter-spacing:.06em;'
+          + 'padding:2px 6px;border-radius:999px;margin-right:6px;vertical-align:1px">星</span>';
+        const btn = x.minted
+          ? '<br><small style="color:rgba(244,241,234,.55)">NFTで受け取り済み</small>'
+          : '<br><button type="button" data-limited-star="' + escapeHtml(x.starId)
+            + '" class="spp-star-claim">NFTで受け取る</button>';
+        limitedHtml += _sppRowHtml('　' + escapeHtml(_sppDate(x.grantedAt)),
+          tag + escapeHtml(x.label || '限定星') + btn);
+      });
+      if (rows.length) limitedHtml = _sppRow('SchoolPark｜限定星', rows.length + '個') + limitedHtml;
+    }
+  } catch (e) { console.warn('限定星を読めませんでした:', e && e.message); }
+
   if (rec) rec.innerHTML = _sppRow('SchoolPark｜投票した議題', votes + '件')
     + doneHtml
+    + limitedHtml
     + _sppRow('SchoolPark｜参加ギルド', joined.length ? joined.join(' / ') : 'まだありません')
     + _sppRow('SchoolPark｜応援ギルド', supported.length ? supported.join(' / ') : 'まだありません');
   if (rec) rec.querySelectorAll('[data-quest-star]').forEach(function (button) {
     button.onclick = function () { spClaimQuestStar(button.dataset.questStar, button); };
+  });
+  if (rec) rec.querySelectorAll('[data-limited-star]').forEach(function (button) {
+    button.onclick = function () { spClaimLimitedStar(button.dataset.limitedStar, button); };
   });
   if (rec && rec.querySelector('[data-quest-star]')) {
     try {
@@ -20307,6 +20336,35 @@ async function openSpPassport() {
         button.textContent = '証明書NFTは発行準備中';
       });
     } catch (e) { /* 通信が届かない間は受取操作でエラーを説明する。 */ }
+  }
+}
+
+/* 限定星をNFTで受け取る。証明書のものと同じ形。
+   受け取らなくても星空の星は消えない。記録が正で、NFTは写し。 */
+async function spClaimLimitedStar(starId, button) {
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  button.textContent = '確認中…';
+  try {
+    const wallet = await window.ethereum?.request({ method: 'eth_requestAccounts' });
+    const p = await spPassportLoad();
+    const linked = (p.spLinks || []).filter(function (l) { return l && l.kind === 'wallet'; });
+    const chosen = String(linked[0] && linked[0].subject || '').toLowerCase();
+    if (!chosen || !wallet || !wallet.some(function (a) { return a.toLowerCase() === chosen; }))
+      throw new Error('先にパスポートに連携したウォレットを接続してください。\n\n連携していなくても、星空の星はそのまま残ります。');
+    const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/stars/'
+      + encodeURIComponent(starId) + '/claim',
+      { method:'POST', headers:await emuAuthHeaders(true), body:'{}' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(
+      data.error === 'CERTIFICATE_NOT_DEPLOYED' ? '星のNFTは準備中です。星空の星は残っています。'
+      : data.error === 'WALLET_REQUIRED' ? 'パスポートにウォレットを連携してから、もう一度お試しください。'
+      : data.error || '受け取れませんでした。');
+    button.textContent = '✓ NFTを受け取りました';
+  } catch (e) {
+    button.disabled = false;
+    button.textContent = 'NFTで受け取る';
+    alert(e.message || '受け取れませんでした。');
   }
 }
 
@@ -22476,8 +22534,8 @@ async function _emuSendStarCounts(frame) {
   /* guilds はギルドごとのクエスト星。数だけでなく、名前と色もここで決めて渡す。
      星空（Emu_room2）はギルドを知らないので、あちらに色の表を持たせない。
      ギルドが6つ目・7つ目と増えても、guild-store.js の accent がそのまま届く。 */
-  const counts = { post: 0, nft: 0, discussion: 0, learning: 0, change: 0, guilds: [] };
-  const read = { post: false, nft: false, discussion: false, learning: false, change: false, guilds: false };
+  const counts = { post: 0, nft: 0, discussion: 0, learning: 0, change: 0, guilds: [], limited: [] };
+  const read = { post: false, nft: false, discussion: false, learning: false, change: false, guilds: false, limited: false };
   const fb = window.fbLib;
 
   try {
@@ -22587,13 +22645,44 @@ async function _emuSendStarCounts(frame) {
     read.guilds = true;
   } catch (e) { console.warn('クエスト星を数えられませんでした:', e && e.message); }
 
+  /* 限定星 ── 運営が配った星。完走とは別もの。
+
+     これはウォレットの有無に関係なく出る。記録はサーバーが spid で
+     持っているので、LINE だけの人にも同じように届く。
+     ウォレットを連携した人は、パスポートから NFT でも受け取れる。
+     受け取っても受け取らなくても、この星は消えない。 */
+  try {
+    const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/stars/mine',
+      { headers: await emuAuthHeaders(false) });
+    if (r.ok) {
+      const d = await r.json();
+      const rows = (d && Array.isArray(d.stars)) ? d.stars : [];
+      /* 同じ種類の星は1行にまとめる。同じ催しに2回出た人が
+         2行に分かれると、一覧が読みにくい。 */
+      const byStar = {};
+      const order = [];
+      rows.forEach(function (x) {
+        const id = String(x.starId || '');
+        if (!id) return;
+        if (!byStar[id]) {
+          byStar[id] = { key: 'limited:' + id, label: String(x.label || '限定星'),
+            color: /^#[0-9A-Fa-f]{6}$/.test(String(x.color || '')) ? x.color : '#D4A843', count: 0 };
+          order.push(id);
+        }
+        byStar[id].count++;
+      });
+      counts.limited = order.map(function (id) { return byStar[id]; });
+      read.limited = true;
+    }
+  } catch (e) { console.warn('限定星を数えられませんでした:', e && e.message); }
+
   /* 読めなかった分は0にしない。前の答えがあればそれを置く。
      0と書くと「記録が消えた」ように見えるため。 */
   let anyRead = false;
   Object.keys(read).forEach(function (k) {
     if (read[k]) { anyRead = true; return; }
-    if (k === 'guilds') {
-      if (cached && Array.isArray(cached.guilds)) counts.guilds = cached.guilds;
+    if (k === 'guilds' || k === 'limited') {
+      if (cached && Array.isArray(cached[k])) counts[k] = cached[k];
       return;
     }
     if (cached && typeof cached[k] === 'number') counts[k] = cached[k];

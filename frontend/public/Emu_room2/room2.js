@@ -136,6 +136,11 @@ const STAR_LOOK = {
    持つと、ギルドが増えたときに2か所を直すことになる。 */
 const QUEST_STAR_OUTLINE = 'rgba(244,241,234,.6)';
 const QUEST_STAR_LOOK = { power: 30, baseRadius: 5 };
+/* 限定星。運営が配る、完走とは別の星。
+   クエスト星より大きく、縁を明るくして見分けられるようにする。
+   色は親が決めて送ってくる（催しごとに変えられる）。 */
+const LIMITED_STAR_OUTLINE = 'rgba(255,255,255,.85)';
+const LIMITED_STAR_LOOK = { power: 45, baseRadius: 8 };
 
 /* 種類（quest:<ギルドID>）→ 呼び名と色。一覧とシェアの文面で使う。
    受け取るたびに作り直すので、前のギルドが残ることはない。 */
@@ -192,6 +197,20 @@ function applyRealStarCounts(counts) {
     questStarLook.push({ key: key, label: String(g.label || 'クエスト星'), color: color });
     place(key, Object.assign({}, QUEST_STAR_LOOK, {
       baseColor: color, outline: QUEST_STAR_OUTLINE
+    }), num);
+  });
+
+  /* 限定星。ギルド星と同じで、種類も色も親が決める。
+     届いたぶんだけ素直に置く。 */
+  (Array.isArray(counts.limited) ? counts.limited : []).forEach(function (g) {
+    g = g || {};
+    const key = String(g.key || '');
+    const color = /^#[0-9A-Fa-f]{6}$/.test(String(g.color || '')) ? g.color : '';
+    const num = Math.max(0, Number(g.count || 0));
+    if (!key || !color || !num) return;
+    questStarLook.push({ key: key, label: String(g.label || '限定星'), color: color });
+    place(key, Object.assign({}, LIMITED_STAR_LOOK, {
+      baseColor: color, outline: LIMITED_STAR_OUTLINE
     }), num);
   });
 

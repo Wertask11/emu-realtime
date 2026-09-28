@@ -7,8 +7,11 @@ const original = Module._load;
 const routes = [];
 Module._load = function (name, parent, main) {
   if (name === "express") return { Router: () => ({
-    post: (path, ...handlers) => routes.push({ path, handler: handlers.at(-1) }),
-    get: () => {}
+    post: (path, ...handlers) => routes.push({ path, method:"post", handler: handlers.at(-1) }),
+    /* GET も拾う。前は捨てていたので、読み取りの口を一度も試せなかった。
+       既存の find は path だけで引いているが、同じ path を GET と POST の
+       両方で登録しているところは無いので、そのままで当たる。 */
+    get: (path, ...handlers) => routes.push({ path, method:"get", handler: handlers.at(-1) })
   }) };
   if (name === "ethers") return { utils: {
     isAddress: v => /^0x[0-9a-f]{40}$/i.test(v),
@@ -449,3 +452,117 @@ test("完走していないクエストは、これまでどおり断る", AT(as
   assert.equal(out.status, 404);
   assert.equal(out.body.error, "NOT_COMPLETED");
 }));
+
+/* ───────── 限定星 ─────────
+
+   クエストの完走とは別に、運営が配る星。特殊 #002（解剖フェス）の
+   「来た人全員」に配るためのもの。
+
+   作りは証明書と同じ「先に記録、ウォレットができてから発行」。
+     1. 運営が配ると sp_stars/{key} に記録ができる（鍵は spid）
+     2. 星空にはこの記録から出る。ウォレットは要らない
+     3. ウォレットを連携した人が「NFTで受け取る」を押すと発行される
+     4. 受け取らなくても記録は消えない
+
+   ここで見たいのは 1・2・4。3（Polygon への mint）までは試さない。 */
+const grantStar = routes.find(r => r.path === "/stars/grant").handler;
+const myStars  = routes.find(r => r.path === "/stars/mine").handler;
+const claimStar = routes.find(r => r.path === "/stars/:starId/claim").handler;
+const SPID = "SP-AAAA-BBBB-CCCC-DDDD";
+
+function grant(body) {
+  const { res } = reply();
+  return grantStar({ body, identity:{ walletAddress: wallet } }, res);
+}
+function mine(spid = SPID) {
+  const { res } = reply();
+  return myStars({ identity:{ account:{ spid } } }, res);
+}
+function claimStarFor(starId = "fes-2026-10", spid = SPID) {
+  const { res } = reply();
+  return claimStar({ params:{ starId }, identity:{ account:{ spid } } }, res);
+}
+
+test("限定星は、ウォレットが無くても配れる", async () => {
+  records.clear();
+  const out = await grant({ starId:"fes-2026-10", spid:SPID, label:"解剖フェス 2026", color:"#D4A843" });
+  assert.equal(out.status, 200);
+  assert.equal(out.body.already, false);
+  const row = records.get("sp_stars/" + out.body.key);
+  assert.equal(row.spid, SPID, "鍵は SchoolPark ID で持つ（ウォレットではない）");
+  assert.equal(row.status, "pending", "配った時点ではまだ発行していない");
+});
+
+test("二度配っても増えない", async () => {
+  records.clear();
+  const first = await grant({ starId:"fes-2026-10", spid:SPID, label:"解剖フェス 2026" });
+  const again = await grant({ starId:"fes-2026-10", spid:SPID, label:"解剖フェス 2026" });
+  assert.equal(again.body.already, true);
+  assert.equal(again.body.key, first.body.key, "同じ人・同じ星なら同じ鍵になる");
+  assert.equal([...records.keys()].filter(k => k.startsWith("sp_stars/")).length, 1);
+});
+
+test("星の種類の名前が変なものは断る", async () => {
+  records.clear();
+  assert.equal((await grant({ starId:"", spid:SPID })).status, 400);
+  assert.equal((await grant({ starId:"Fes 2026", spid:SPID })).status, 400);
+  assert.equal((await grant({ starId:"fes-2026-10", spid:"ないID" })).status, 400);
+  assert.equal([...records.keys()].filter(k => k.startsWith("sp_stars/")).length, 0);
+});
+
+test("自分の限定星は、ウォレットが無くても読める（星空はここから出る）", async () => {
+  records.clear();
+  await grant({ starId:"fes-2026-10", spid:SPID, label:"解剖フェス 2026", color:"#D4A843" });
+  const out = await mine();
+  assert.equal(out.status, 200);
+  assert.equal(out.body.stars.length, 1);
+  assert.equal(out.body.stars[0].label, "解剖フェス 2026");
+  assert.equal(out.body.stars[0].minted, false);
+});
+
+test("他人の星は出てこない", async () => {
+  records.clear();
+  await grant({ starId:"fes-2026-10", spid:SPID });
+  const out = await mine("SP-ZZZZ-ZZZZ-ZZZZ-ZZZZ");
+  assert.equal(out.body.stars.length, 0);
+});
+
+test("ウォレットが無いと受け取れないが、星の記録は消えない", async () => {
+  records.clear();
+  const g = await grant({ starId:"fes-2026-10", spid:SPID });
+  records.set("sp_identities/" + SPID, { links: [] });      /* ウォレット未連携 */
+  const out = await claimStarFor();
+  assert.equal(out.status, 409);
+  assert.equal(out.body.error, "WALLET_REQUIRED");
+  assert.equal(records.get("sp_stars/" + g.body.key).status, "pending",
+    "受け取れなかったときに記録を触っている（星が消える）");
+});
+
+test("配られていない星は受け取れない", async () => {
+  records.clear();
+  const out = await claimStarFor();
+  assert.equal(out.status, 404);
+  assert.equal(out.body.error, "STAR_NOT_GRANTED");
+});
+
+test("受け取り済みなら、そう返す", async () => {
+  records.clear();
+  const g = await grant({ starId:"fes-2026-10", spid:SPID });
+  records.set("sp_stars/" + g.body.key,
+    Object.assign({}, records.get("sp_stars/" + g.body.key),
+      { status:"minted", tokenId:"5", txHash:"0x5" }));
+  const out = await claimStarFor();
+  assert.equal(out.status, 200);
+  assert.equal(out.body.alreadyMinted, true);
+  assert.equal(out.body.tokenId, "5");
+});
+
+test("限定星は、包括ルールの素通しから外してある", () => {
+  /* 外していないと、誰でも自分に星を書き込めてしまう。
+     書けるということは、そのままNFTまで発行できるということ。 */
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const rules = fs.readFileSync(path.join(__dirname, "..", "firestore.rules"), "utf8");
+  assert.match(rules, /coll != 'sp_stars'/,
+    "sp_stars が包括ルールの除外に入っていない（誰でも星を配れてしまう）");
+});
