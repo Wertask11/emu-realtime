@@ -582,7 +582,7 @@ async function renderMembers() {
       + 'お金のやりとりはありません。Stripeの契約には触りません。<br>'
       + '契約と重なった場合は、上の段のほうが使われます。</p>'
       + '<label>SchoolPark パスポートのID</label>'
-      + '<input id="gOneAddr" placeholder="0x… （パスポートの画面からコピーできます）" spellcheck="false">'
+      + '<input id="gOneAddr" placeholder="SP-… か 0x…（パスポートの「番号をコピー」で SP- が取れます）" spellcheck="false">'
       + '<label>渡すもの</label><select id="gOnePlan">'
       + '<option value="light">Emu light（月額500円ぶん）</option>'
       + '<option value="plus">Emu plus（月額3,000円ぶん）</option>'
@@ -650,7 +650,9 @@ async function renderMembers() {
       "wallet-already-linked": "このウォレットが、別の SchoolPark ID にも連携されています"
     };
     const GRANT_ERR = {
-      BAD_ADDRESS: "IDの形が違います。0x で始まる42文字を入れてください。",
+      BAD_ADDRESS: "IDの形が違います。SchoolPark ID（SP-…）か、0x で始まる42文字を入れてください。",
+      SPID_NO_ACCOUNT: "その SchoolPark ID に、渡せる名義がまだ結び付いていません。本人に一度Emuを開いてもらってから、もう一度お試しください。",
+      SPID_LOOKUP_FAILED: "SchoolPark ID を調べられませんでした。少し時間をおいてからお試しください。",
       BAD_PLAN: "渡すものを選んでください。",
       BAD_EXPIRES: "日付の形が違います。",
       EXPIRES_IN_PAST: "その日はもう過ぎています。先の日付にしてください。",
@@ -684,6 +686,10 @@ async function renderMembers() {
         '<div class="row"><span>' + esc(PLAN_JA[r.plan] || r.plan)
         + (r.expired ? ' <b style="color:#b91c1c">期限切れ</b>' : '')
         + '<br><small style="color:var(--muted)">' + esc(r.address || r.uid) + '</small>'
+        /* SchoolPark ID で渡したものは、その番号も出す。
+           キャンペーンでは番号を教えてもらって渡すので、
+           一覧が名義だけだと「誰に渡したか」を照合できない。 */
+        + (r.spid ? '<br><small style="color:var(--muted)">' + esc(r.spid) + '</small>' : '')
         + (r.note ? '<br><small style="color:var(--muted)">' + esc(r.note) + '</small>' : '')
         + '</span><span>'
         + (r.expiresAt ? fmt(r.expiresAt) + " まで" : "期限なし")
@@ -764,7 +770,12 @@ async function renderMembers() {
       if (!addr) { sayGrant("調べたいIDを入れてください。", false); return; }
       sayGrant("調べています…");
       let w;
-      try { w = await api("/api/billing/admin/whois?address=" + encodeURIComponent(addr)); }
+      /* パスポートの「番号をコピー」が渡すのは SchoolPark ID（SP-…）。
+         0x のアドレスだけを受け取る作りだと、そのまま貼って空振りする。 */
+      const q = /^SP-/i.test(addr)
+        ? "spid=" + encodeURIComponent(addr)
+        : "address=" + encodeURIComponent(addr);
+      try { w = await api("/api/billing/admin/whois?" + q); }
       catch (e) { sayGrant("調べられませんでした（" + (e.code || e.message) + "）", false); return; }
       const L = [];
       L.push("見つかった人: " + (w.uid ? w.uid + "（" + w.foundBy + "）" : "★いません"));

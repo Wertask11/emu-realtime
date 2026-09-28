@@ -32,7 +32,9 @@ function makeDb(seed) {
       limit: () => ({ get: async () => {
         const s = store(n);
         const docs = Object.keys(s).map((id) => ({ id, data: () => s[id] }));
-        return { docs, size: docs.length };
+        /* 本物の QuerySnapshot は forEach を持つ。listGrants がそれを使う。
+           無いと「forEach is not a function」で落ち、中身を試せない。 */
+        return { docs, size: docs.length, forEach: (f) => docs.forEach(f) };
       } })
     }),
     /* 本物の Firestore のトランザクションは、同じ書類に同時に触れたとき
@@ -319,4 +321,85 @@ test("クエストのための投稿は回数に数えず、受けた人だけ�
     flat.indexOf("mayCreateForQuest(request.resource.data.get('address', '')")
       < flat.indexOf("|| mayCreate(request.resource.data.get('address', ''), 1, 'post')"),
     "クエストの判定を先に見ていない");
+});
+
+/* ───────── SchoolPark ID で渡せるか ─────────
+
+   キャンペーンで「パスポートのIDを教えてください」と頼むと、
+   返ってくるのは SP-XXXX-XXXX-XXXX-XXXX。パスポートの
+   「番号をコピー」が渡すのがこれで、0x のアドレスではない
+   （index.html の sppCopyAddress(p.spid)）。
+
+   前は grantOne が 0x しか受け取らなかったので、
+   もらった番号をそのまま管理画面に貼ると BAD_ADDRESS。
+   渡す側には理由が見えず、キャンペーンがそこで止まる。
+
+   ここの偽DBの where() は常に空を返すので、名義の引き当ては
+   ches_wallets に積む（本物もまずそこを見る）。 */
+function makeIdentity(map) {
+  return {
+    isSchoolParkId: function (v) { return /^SP-[0-9A-Z]{4}(-[0-9A-Z]{4}){3}$/i.test(String(v || "")); },
+    readIdentity: async function (spid) { return map[spid] || null; }
+  };
+}
+
+const SPID = "SP-AAAA-BBBB-CCCC-DDDD";
+const ADDR_A = "0x" + "a".repeat(40);
+const ADDR_B = "0x" + "b".repeat(40);
+
+function dbWith(addr, uid) {
+  return makeDb({
+    ches_wallets: { [addr]: { uid: uid } },
+    ches_accounts: { [uid]: { walletAddress: addr, createdAt: Date.now() } }
+  });
+}
+
+test("SchoolPark ID で渡すと、その人の名義に渡る", async () => {
+  const e = createEntitlement({
+    db: dbWith(ADDR_A, "u9"),
+    /* 番号の側は大文字で持っていることがある。小文字に直して引く。 */
+    identity: makeIdentity({ [SPID]: { addresses: ["0x" + "A".repeat(40)] } })
+  });
+  const out = await e.grantOne({ address: SPID, plan: "light" });
+  assert.strictEqual(out.uid, "u9", "番号から本人に辿り着けていない");
+  assert.strictEqual(out.address, ADDR_A);
+});
+
+test("SchoolPark ID で渡した記録には、その番号も残る", async () => {
+  const e = createEntitlement({
+    db: dbWith(ADDR_A, "u9"),
+    identity: makeIdentity({ [SPID]: { addresses: [ADDR_A] } })
+  });
+  await e.grantOne({ address: SPID, plan: "light", note: "10月キャンペーン" });
+  const rows = await e.listGrants(10);
+  assert.ok(rows.some(function (r) { return r.spid === SPID; }), "あとから番号で辿れない");
+});
+
+test("番号にまだ名義が無いときは、見つからないのとは別に伝える", async () => {
+  const e = createEntitlement({
+    db: dbWith(ADDR_A, "u9"),
+    identity: makeIdentity({ [SPID]: { addresses: [] } })
+  });
+  await assert.rejects(() => e.grantOne({ address: SPID, plan: "light" }), function (err) {
+    assert.equal(err.message, "SPID_NO_ACCOUNT",
+      "BAD_ADDRESS や USER_NOT_FOUND に混ぜると、渡す側は何をすればよいか分からない");
+    return true;
+  });
+});
+
+test("0x のアドレスは、これまでどおり渡せる（identity が無くても）", async () => {
+  const e = createEntitlement({ db: dbWith(ADDR_B, "u9") });
+  const out = await e.grantOne({ address: "0x" + "B".repeat(40), plan: "light" });
+  assert.strictEqual(out.uid, "u9");
+});
+
+test("調べるほうも SchoolPark ID で引ける", async () => {
+  /* 渡すときは SP- が通るのに調べるときは通らない、では使えない。 */
+  const e = createEntitlement({
+    db: dbWith(ADDR_A, "u9"),
+    identity: makeIdentity({ [SPID]: { addresses: [ADDR_A] } })
+  });
+  const w = await e.whois(SPID);
+  assert.strictEqual(w.uid, "u9", "番号から引けていない");
+  assert.strictEqual(w.spid, SPID, "どの番号で引いたかを返していない");
 });

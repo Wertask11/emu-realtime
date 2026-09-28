@@ -267,12 +267,62 @@ function createEntitlement(deps) {
 
   /* 運営が1人ずつ渡す。SchoolParkパスポートのIDで指定する。
      期限は任意（入れなければ期限なし）。同じ人に渡し直すと上書きする。 */
+  /* 入れてもらった文字を名義（0x…）に直す。
+
+     SchoolPark ID（SP-XXXX-XXXX-XXXX-XXXX）でも受け取れるようにする。
+     パスポートの「番号をコピー」が渡すのは SchoolPark ID であって、
+     0x のアドレスではない（index.html の sppCopyAddress(p.spid)）。
+     キャンペーンで「パスポートのIDを教えてください」と頼むと、
+     返ってくるのは SP- のほう。0x しか受け取らない作りだと、
+     渡す側には BAD_ADDRESS としか見えず、理由が分からない。
+
+     番号には名義（addresses）がぶら下がっている。ひとつの番号に
+     複数の名義が付くことがあるので、アカウントとして引けるものを
+     順に探し、最初に当たったものを使う。
+
+     返すのは { address, spid }。spid は SchoolPark ID で来たときだけ入る。 */
+  async function addressForInput(value) {
+    const raw = String(value || "").trim();
+    if (!(identity && typeof identity.isSchoolParkId === "function"
+          && identity.isSchoolParkId(raw))) {
+      return { address: raw.toLowerCase(), spid: "" };
+    }
+    let rec = null;
+    try { rec = await identity.readIdentity(raw); }
+    catch (e) { throw new Error("SPID_LOOKUP_FAILED"); }
+    const list = (rec && Array.isArray(rec.addresses)) ? rec.addresses : [];
+    for (const a of list) {
+      const one = String(a || "").trim().toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(one)) continue;
+      if (await uidOfAddress(one)) return { address: one, spid: raw };
+    }
+    /* 番号はあるのに名義が無い／どれもアカウントに結び付いていない。
+       「そのIDの人がいない」とは別物なので、分けて返す。 */
+    throw new Error("SPID_NO_ACCOUNT");
+  }
+
   async function grantOne(opts) {
     const o = opts || {};
-    const addr = String(o.address || "").trim().toLowerCase();
-    if (!/^0x[0-9a-f]{40}$/.test(addr)) throw new Error("BAD_ADDRESS");
+    const raw = String(o.address || "").trim();
     if (PLAN_RANK[o.plan] === undefined || o.plan === "guest") throw new Error("BAD_PLAN");
     if (!db) throw new Error("NO_DB");
+
+    /* SchoolPark ID（SP-XXXX-XXXX-XXXX-XXXX）でも渡せるようにする。
+
+       パスポートの「番号をコピー」が渡すのは SchoolPark ID であって、
+       0x のアドレスではない（index.html の sppCopyAddress(p.spid)）。
+       キャンペーンで「パスポートのIDを教えてください」と頼むと、
+       返ってくるのは SP- のほうになる。それを管理画面に貼ると
+       BAD_ADDRESS で弾かれ、渡す側からは理由が分からない。
+
+       番号には名義（addresses）がぶら下がっているので、ここで引き当てる。
+       ひとつの番号に複数の名義が付くことがあるため、
+       アカウントとして引けるものを順に探して、最初に当たったものを使う。 */
+    const resolved = await addressForInput(raw);
+    const addr = resolved.address;
+    const fromSpid = resolved.spid;
+
+    if (!/^0x[0-9a-f]{40}$/.test(addr)) throw new Error("BAD_ADDRESS");
 
     const uid = await uidOfAddress(addr);
     if (!uid) throw new Error("USER_NOT_FOUND");
@@ -288,6 +338,9 @@ function createEntitlement(deps) {
     const rec = {
       uid: uid, plan: o.plan, source: "admin",
       walletAddress: addr,
+      /* SchoolPark ID で渡したときは、それも残す。
+         あとから「誰に渡したか」を番号で辿れるようにするため。 */
+      ...(fromSpid ? { spid: fromSpid } : {}),
       startsAt: new Date(),
       grantedBy: String(o.grantedBy || "admin").slice(0, 120),
       note: String(o.note || "").slice(0, 200),
@@ -316,9 +369,22 @@ function createEntitlement(deps) {
 
   /* 指定したIDについて、サーバーが何を見ているかをそのまま返す。
      「渡したのに反映されない」ときに、どこで食い違っているかを見るためのもの。 */
-  async function whois(address) {
+  async function whois(value) {
+    /* 渡す口（grantOne）と同じものを受け取れるようにする。
+       調べるときは 0x しか通らず、渡すときは SP- も通る、では使えない。 */
+    let address = value, spid = "";
+    try {
+      const r = await addressForInput(value);
+      address = r.address; spid = r.spid;
+    } catch (e) {
+      /* 番号は読めたが名義が無い、などはここでは失敗にしない。
+         「見つからない」として、そのまま下の空の答えを返す。 */
+      return { input: String(value || "").trim(), spid: String(value || "").trim(),
+        forms: [], uid: null, foundBy: null, account: null, grant: null,
+        subscription: null, effective: null, spidError: e.message };
+    }
     const forms = addressForms(address);
-    const out = { input: String(address || "").trim(), forms: forms, uid: null, foundBy: null,
+    const out = { input: String(value || "").trim(), spid: spid, forms: forms, uid: null, foundBy: null,
       account: null, grant: null, subscription: null, effective: null };
     if (!db || !forms.length) return out;
 
@@ -384,6 +450,9 @@ function createEntitlement(deps) {
         plan: v.plan || "",
         source: v.source || "",
         address: v.walletAddress || "",
+        /* SchoolPark ID で渡したときは、それも返す。
+           一覧から「どの番号に渡したか」を辿れるようにするため。 */
+        spid: v.spid || "",
         note: v.note || "",
         grantedBy: v.grantedBy || "",
         startsAt: _toDate(v.startsAt) ? _toDate(v.startsAt).toISOString() : null,

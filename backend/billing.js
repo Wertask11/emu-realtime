@@ -700,7 +700,8 @@ function createBillingRouter(deps) {
       }).catch(function () {});
       return res.json({ ok: true, ...out });
     } catch (e) {
-      const known = ["BAD_ADDRESS", "BAD_PLAN", "BAD_EXPIRES", "EXPIRES_IN_PAST", "USER_NOT_FOUND"];
+      const known = ["BAD_ADDRESS", "BAD_PLAN", "BAD_EXPIRES", "EXPIRES_IN_PAST",
+                     "USER_NOT_FOUND", "SPID_NO_ACCOUNT", "SPID_LOOKUP_FAILED"];
       const code = known.indexOf(e.message) >= 0 ? e.message : "GRANT_FAILED";
       if (code === "GRANT_FAILED") console.error("grant error:", e.message);
       return res.status(400).json({ error: code });
@@ -713,7 +714,9 @@ function createBillingRouter(deps) {
       if (!entitlement || typeof entitlement.whois !== "function") {
         return res.status(503).json({ error: "ENTITLEMENT_UNAVAILABLE" });
       }
-      return res.json({ ok: true, ...(await entitlement.whois(req.query.address)) });
+      /* SchoolPark ID（SP-…）でも引けるようにする。パスポートの
+         「番号をコピー」が渡すのはこちらで、0x のアドレスではない。 */
+      return res.json({ ok: true, ...(await entitlement.whois(req.query.address || req.query.spid)) });
     } catch (e) {
       console.error("whois error:", e.message);
       return res.status(500).json({ error: "WHOIS_FAILED" });
