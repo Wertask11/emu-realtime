@@ -2343,6 +2343,24 @@ async function renderSchoolPark() {
     + '<label>成立に必要な人数</label><input id="aqNeed" type="number" min="1" max="50" value="5">'
     + '<label>締切まで（日）</label><input id="aqDays" type="number" min="1" max="90" value="14">'
     + '<div class="actions"><button class="btn primary" id="aqSubmit">クエストを出す</button></div></div>'
+    /* まとめて出す。
+
+       #002 WORK は5分野×3段で15本あり、1本ずつ上の欄に貼っていくと
+       半日かかるうえ、貼り間違いが混ざる。貼るのは1回にする。
+
+       途中で失敗してもやり直せるようにしてある。すでにある番号は
+       飛ばすので、同じものを二度押しても増えない。 */
+    + '<div class="card"><h3>クエストをまとめて出す（JSON）</h3>'
+    + '<p class="hint">1本ずつの欄に貼る代わりに、まとめて出します。'
+    + '配列で、1件ずつが上の欄と同じ中身です。<br>'
+    + 'series（general／special）・questNumber・branch・stage・title は必須。'
+    + 'brief（現場資料）・given（与件）・deliverable（提出）・criteria（評価）は'
+    + '案件もののクエストで使います。<br>'
+    + '<b>すでにある番号は飛ばします。</b>途中で止まっても、そのまま押し直せます。</p>'
+    + '<textarea id="aqBulk" rows="8" placeholder=\'[{"series":"general","questNumber":2,"branch":1,"stage":"入門","title":"…"}]\' spellcheck="false" style="font-family:ui-monospace,monospace;font-size:12px"></textarea>'
+    + '<div class="actions"><button class="btn" id="aqBulkCheck">中身を確かめる</button>'
+    + '<button class="btn primary" id="aqBulkGo">まとめて出す</button></div>'
+    + '<div id="aqBulkOut"></div></div>'
 
     + '<div class="card"><h3>議題を出す</h3>'
     + '<p class="empty" style="text-align:left;margin:0 0 10px">1つのパスポートにつき1票。入れた票は取り消せません。</p>'
@@ -2642,6 +2660,125 @@ async function renderSchoolPark() {
       return;
     }
     finally { questSubmitting = false; }
+    renderSchoolPark();
+  };
+
+  /* まとめて出す。確かめてから出す。
+
+     読み取りと確かめだけを先にやる関数を分けてある。押す前に
+     「何本・どの番号・どれが既にあるか」を見せてから出したいため。 */
+  function aqBulkParse() {
+    const raw = ($("#aqBulk").value || "").trim();
+    if (!raw) throw new Error("JSON を貼ってください。");
+    let rows;
+    try { rows = JSON.parse(raw); }
+    catch (e) { throw new Error("JSON として読めません（" + e.message + "）"); }
+    if (!Array.isArray(rows)) throw new Error("配列（[ ]で囲んだ形）で貼ってください。");
+    if (!rows.length) throw new Error("中身が空です。");
+    if (rows.length > 60) throw new Error("一度に出せるのは60本までです。");
+    const seen = {};
+    return rows.map(function (r, i) {
+      const at = "の" + (i + 1) + "件目";
+      r = r || {};
+      const series = String(r.series || "");
+      const number = Number(r.questNumber);
+      const branch = Number(r.branch || 0);
+      const stage = String(r.stage || "");
+      const title = String(r.title || "").trim();
+      if (!SpQuestStore.isValidSeries(series)) throw new Error(at + "：系列が正しくありません。");
+      if (!SpQuestStore.isValidNumber(number)) throw new Error(at + "：番号が正しくありません。");
+      if (!SpQuestStore.isValidBranch(branch)) throw new Error(at + "：枝番が正しくありません。");
+      if (!SpQuestStore.isValidStage(stage)) throw new Error(at + "：段階が正しくありません。");
+      if (!title) throw new Error(at + "：題名が空です。");
+      const guildId = String(r.guildId || "");
+      if (guildId && !SpGuildStore.isValidId(guildId)) throw new Error(at + "：ギルドの指定が正しくありません。");
+      /* 貼った中に同じ番号が2つあると、1つ目だけ通って2つ目が落ちる。
+         出す前に気づけるよう、ここで止める。 */
+      const key = series + "-" + number + "-" + branch + "-" + stage;
+      if (seen[key]) throw new Error(at + "：同じ番号が貼った中に2つあります（" + key + "）。");
+      seen[key] = true;
+      /* 締切。closesAt（ミリ秒）を直接入れてもよいし、日数でもよい。
+         どちらも無ければ14日。 */
+      let closesAt = Number(r.closesAt || 0);
+      if (!closesAt) {
+        const days = Math.max(1, Math.min(90, Number(r.days) || 14));
+        closesAt = Date.now() + days * 86400000;
+      }
+      const cur = CURRENCIES.indexOf(String(r.budgetCurrency || "")) >= 0
+        ? String(r.budgetCurrency) : "JPY";
+      return { key: key, label: SpQuestStore.fullLabel({
+          series: series, questNumber: number, branch: branch, stage: stage }) || key,
+        closesAt: closesAt,
+        body: {
+          series: series, questNumber: number, branch: branch, stage: stage,
+          title: title.slice(0, 120), guildId: guildId,
+          knowledge: String(r.knowledge || "").slice(0, 200),
+          hypothesis: String(r.hypothesis || "").slice(0, 400),
+          action: String(r.action || "").slice(0, 400),
+          measure: String(r.measure || "").slice(0, 400),
+          intro: String(r.intro || "").slice(0, 600),
+          /* 案件ものの欄。仮説検証の4つとは別に持つ。 */
+          brief: String(r.brief || "").slice(0, 4000),
+          given: String(r.given || "").slice(0, 1500),
+          deliverable: String(r.deliverable || "").slice(0, 1500),
+          criteria: String(r.criteria || "").slice(0, 1500),
+          budget: String(Math.max(0, Number(r.budget) || 0)),
+          budgetCurrency: cur,
+          need: Math.max(1, Math.min(50, Number(r.need) || 5)),
+          owner: ownerAddr,
+          ownerName: (auth.currentUser && auth.currentUser.displayName) || "運営",
+          status: "OPEN", createdAt: Date.now(), closesAt: closesAt
+        } };
+    });
+  }
+
+  function aqBulkSay(html) { const b = $("#aqBulkOut"); if (b) b.innerHTML = html; }
+
+  $("#aqBulkCheck").onclick = function () {
+    let rows;
+    try { rows = aqBulkParse(); }
+    catch (e) { aqBulkSay('<p class="state ng">' + esc(e.message) + '</p>'); return; }
+    const d = (ms) => new Date(ms).toLocaleDateString("ja-JP");
+    aqBulkSay('<p class="state ok">' + rows.length + '本、形は問題ありません。</p>'
+      + '<div class="scroll"><table class="history"><thead><tr><th>番号</th><th>題名</th>'
+      + '<th>報酬</th><th>締切</th><th>資料</th></tr></thead><tbody>'
+      + rows.map(r => '<tr><td>' + esc(r.label) + '</td><td>' + esc(r.body.title) + '</td><td>'
+          + esc(r.body.budget + " " + r.body.budgetCurrency) + '</td><td>' + esc(d(r.closesAt))
+          + '</td><td>' + (r.body.brief ? r.body.brief.length + "字" : "—") + '</td></tr>').join("")
+      + '</tbody></table></div>');
+  };
+
+  $("#aqBulkGo").onclick = async function () {
+    let rows;
+    try { rows = aqBulkParse(); }
+    catch (e) { aqBulkSay('<p class="state ng">' + esc(e.message) + '</p>'); return; }
+    if (!confirm(rows.length + "本のクエストを出します。\n\n"
+      + "出したあとに題名・報酬・締切は変えられません。\n"
+      + "すでにある番号は飛ばします。よろしいですか？")) return;
+    const btn = $("#aqBulkGo");
+    btn.disabled = true;
+    const done = [], skipped = [], failed = [];
+    for (const r of rows) {
+      aqBulkSay('<p class="hint">出しています… ' + (done.length + skipped.length + failed.length + 1)
+        + ' / ' + rows.length + '</p>');
+      try {
+        await SpQuestStore.createQuest(f, f.db, r.body);
+        done.push(r.label);
+      } catch (e) {
+        const msg = String((e && e.message) || "");
+        /* すでにある番号は失敗ではない。押し直せるようにするための飛ばし。 */
+        if (msg.indexOf("QUEST_NUMBER_TAKEN") >= 0) skipped.push(r.label);
+        else failed.push(r.label + "（" + (e.code || msg) + "）");
+      }
+    }
+    btn.disabled = false;
+    aqBulkSay('<p class="state ' + (failed.length ? "ng" : "ok") + '">'
+        + '出した ' + done.length + '本／すでにあった ' + skipped.length
+        + '本／出せなかった ' + failed.length + '本</p>'
+      + (done.length ? '<p class="hint">出した：' + esc(done.join("、")) + '</p>' : "")
+      + (skipped.length ? '<p class="hint">すでにあった：' + esc(skipped.join("、")) + '</p>' : "")
+      + (failed.length ? '<p class="hint">出せなかった：' + esc(failed.join("、"))
+          + '<br>直してから、もう一度そのまま押してください。出し終えたぶんは飛ばされます。</p>' : ""));
     renderSchoolPark();
   };
 

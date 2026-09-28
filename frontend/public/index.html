@@ -18266,6 +18266,21 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
       : function () {},
     founderSections: SpQuestStore.sections(q),
     action: q.action || '', measure: q.measure || '',
+    /* 仕事の形のクエスト（#002 WORK のような案件もの）の欄。
+
+       いまの4つ（知識・予想・やること・確かめ方）は仮説検証の形で、
+       #001 LEARN には合うが、案件ものには合わない。案件ものは
+       「現場資料 → 与件 → 提出 → 評価」で、とくに現場資料は
+       1,700字ほどあり、入れる場所がどこにも無かった。
+
+       どちらの形かは、欄があるかどうかで決める。片方しか持たない
+       クエストは、持っている側だけが出る。古いクエストは今までどおり。 */
+    brief: q.brief || '', given: q.given || '',
+    deliverable: q.deliverable || '', criteria: q.criteria || '',
+    briefShow: q.brief ? 'block' : 'none',
+    isCase: !!(q.given || q.deliverable || q.criteria),
+    /* 仮説検証の4つを出すか。案件ものでは出さない（空の見出しが並ぶため）。 */
+    showTrial: !(q.given || q.deliverable || q.criteria),
     knowledge: q.knowledge || '', owner: q.ownerName || _spShortAddr(q.owner),
     /* 金額は通貨も付けてここで組み立てる。
        画面側で ¥ を決め打ちしていたため、EMUER建てのクエストが
