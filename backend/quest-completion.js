@@ -552,6 +552,30 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     const address = await committedAddressOf(questId, spid);
     if (!address) return res.status(409).json({ error: "NOT_TAKEN" });
 
+    /* 前の周が認められるまで、次のカードは置けない。
+
+       知恵カードの枚数が、そのまま周回の数になる（承認の口がそう数える）。
+       だから続けて何枚も置けると、運営がまだ認めていない周回まで
+       「認められる」ことになり、管理画面の「あと◯周」が実態とずれる。
+
+       置ける条件は「いまある枚数 ≦ 認められた周回の数」。
+         1枚目 … 0 ≦ 0 で置ける → 認められて 1
+         2枚目 … 1 ≦ 1 で置ける → 認められて 2
+       認められる前にもう1枚、はここで止まる。 */
+    const mine = await db.collection("sp_wisdom").where("questId", "==", questId).get();
+    let placed = 0;
+    mine.forEach(d => {
+      if (String((d.data() || {}).author || "").toLowerCase() === address) placed += 1;
+    });
+    const commitSnap = await db.collection("sp_quests").doc(questId)
+      .collection("commits").doc(address).get();
+    const approvedRounds = Math.max(0,
+      Number((commitSnap.data() || {}).approvedRounds) || 0);
+    if (placed > approvedRounds) {
+      return res.status(409).json({ error: "ROUND_NOT_APPROVED",
+        placed, approvedRounds });
+    }
+
     /* やることをやり終えたか。三種そろって初めて置ける。 */
     const logs = await db.collection("sp_quests").doc(questId).collection("logs").get();
     const kinds = new Set();

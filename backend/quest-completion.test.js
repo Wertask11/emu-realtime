@@ -745,9 +745,68 @@ test("長すぎる欄は切り詰める", async () => {
   assert.equal(row.fromPostId.length, 80);
 });
 
-test("2周目も、報告がそろっていれば置ける（枚数＝周回の数）", async () => {
+/* ───────── 前の周が認められるまで、次は置けない ─────────
+
+   枚数がそのまま周回の数になる（承認の口がそう数える）。
+   続けて何枚も置けると、まだ認めていない周回まで「認められる」
+   ことになり、管理画面の「あと◯周」が実態とずれる。 */
+
+function approveRound(n) {
+  records.set("sp_quests/quest-001/commits/" + address,
+    { name: "member", approved: true, approvedRounds: n });
+}
+
+test("2周目は、1周目が認められてから置ける", async () => {
   seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
   assert.equal((await putCard({ insight: "1周目" })).status, 200);
+
+  const blocked = await putCard({ insight: "2周目（まだ）" });
+  assert.equal(blocked.status, 409);
+  assert.equal(blocked.body.error, "ROUND_NOT_APPROVED");
+  assert.equal(cards().length, 1, "認められる前に2枚目が置けてしまう");
+
+  approveRound(1);
   assert.equal((await putCard({ insight: "2周目" })).status, 200);
   assert.equal(cards().length, 2, "周回ごとに1枚。承認はこの枚数を見ている");
+});
+
+test("止めたときは、いまの枚数と認められた周回を返す", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  await putCard({ insight: "1枚目" });
+  const out = await putCard({ insight: "2枚目" });
+  assert.equal(out.body.placed, 1);
+  assert.equal(out.body.approvedRounds, 0);
+});
+
+test("3枚目も、2周目が認められるまで置けない", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  await putCard({ insight: "1" }); approveRound(1);
+  await putCard({ insight: "2" });
+  assert.equal((await putCard({ insight: "3" })).body.error, "ROUND_NOT_APPROVED");
+  approveRound(2);
+  assert.equal((await putCard({ insight: "3" })).status, 200);
+  assert.equal(cards().length, 3);
+});
+
+test("他人のカードは、自分の枚数に数えない", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  records.set("sp_wisdom/other-1",
+    { questId: "quest-001", author: "0x" + "9".repeat(40), insight: "他人" });
+  assert.equal((await putCard({ insight: "1枚目" })).status, 200,
+    "他人のカードで自分が止められてはいけない");
+});
+
+test("別のクエストのカードは、このクエストの枚数に数えない", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  records.set("sp_wisdom/elsewhere",
+    { questId: "quest-999", author: address, insight: "よそ" });
+  assert.equal((await putCard({ insight: "1枚目" })).status, 200);
+});
+
+test("すでに2周認めてある人は、3枚目から置ける（いまの記録を止めない）", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  records.set("sp_wisdom/w1", { questId: "quest-001", author: address, insight: "1" });
+  records.set("sp_wisdom/w2", { questId: "quest-001", author: address, insight: "2" });
+  approveRound(2);
+  assert.equal((await putCard({ insight: "3枚目" })).status, 200);
 });
