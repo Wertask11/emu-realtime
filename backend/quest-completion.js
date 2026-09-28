@@ -35,9 +35,85 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
   const router = express.Router();
   const certContract = String(env.SP_QUEST_STAR_CONTRACT || "");
   const certKey = String(env.SP_QUEST_STAR_MINTER_PRIVATE_KEY || "");
-  router.get("/certificate/config", (_req, res) => {
-    res.json({ ready: ethers.utils.isAddress(certContract) && !!certKey, chainId: 137, contract: ethers.utils.isAddress(certContract) ? certContract : null });
+  /* 証明書・限定星のNFTを、いま本当に発行できるのか。
+
+     env に2つ入っているだけでは「配れる」と言えない。
+     コントラクトを置いたのは運営のウォレットで、MINTER_ROLE は
+     そのウォレットに付く。サーバーの発行係は別の住所なので、
+     役をもらっていなければ、押しても必ず失敗する。ガス代も要る。
+
+     ここを見ていなかったので「準備中」と出ないまま押せてしまい、
+     押しても理由の分からない失敗になっていた。
+
+     RPC を毎回叩かないよう、答えは60秒だけ取っておく。
+     秘密鍵はここでも外へ出さない。出すのは発行係の住所だけで、
+     これは MINTER_ROLE を与えるために運営が知る必要がある。 */
+  /* 一度の発行にかかるガス代のめやす。数えるのは鎖に聞くときだけで、
+     ここでは文字のまま置く。組み立てた瞬間に ethers を呼ぶと、
+     呼ぶ側の差し替え方ひとつで router が作れなくなる。 */
+  const MINT_GAS_FLOOR_MATIC = "0.01";
+  let readyCache = { at: 0, body: null };
+
+  function minterAddress() {
+    if (!certKey) return null;
+    try { return new ethers.Wallet(certKey).address; } catch (e) { return null; }
+  }
+
+  async function certificateReadiness() {
+    const base = { ready: false, chainId: 137,
+      contract: ethers.utils.isAddress(certContract) ? certContract : null,
+      minter: null, canMint: false, matic: null };
+    if (!ethers.utils.isAddress(certContract) || !certKey)
+      return { ...base, reason: "NOT_DEPLOYED" };
+    const minter = minterAddress();
+    if (!minter) return { ...base, reason: "BAD_MINTER_KEY" };
+    try {
+      const provider = new ethers.providers.JsonRpcProvider(
+        env.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com");
+      const c = new ethers.Contract(certContract, [
+        "function MINTER_ROLE() view returns (bytes32)",
+        "function hasRole(bytes32,address) view returns (bool)"
+      ], provider);
+      const role = await c.MINTER_ROLE();
+      const [canMint, balance] = await Promise.all([
+        c.hasRole(role, minter), provider.getBalance(minter)
+      ]);
+      const hasGas = balance.gte(ethers.utils.parseEther(MINT_GAS_FLOOR_MATIC));
+      return { ...base, minter, canMint, matic: ethers.utils.formatEther(balance),
+        ready: !!canMint && hasGas,
+        reason: !canMint ? "MINTER_NOT_AUTHORIZED" : (!hasGas ? "MINTER_LOW_GAS" : "") };
+    } catch (e) {
+      /* 鎖に届かないだけかもしれない。準備ができていないとは言い切らず、
+         届かなかったことをそのまま返す。 */
+      return { ...base, minter, reason: "CHAIN_UNREACHABLE" };
+    }
+  }
+
+  router.get("/certificate/config", async (_req, res) => {
+    res.set("Cache-Control", "no-store, max-age=0");
+    const now = Date.now();
+    if (readyCache.body && now - readyCache.at < 60_000) return res.json(readyCache.body);
+    const body = await certificateReadiness();
+    readyCache = { at: now, body };
+    return res.json(body);
   });
+
+  /* なぜ発行できなかったのかを、言葉にして返す。
+     どれも CERTIFICATE_MINT_FAILED で返していたので、
+     役が無いのか、ガスが無いのか、誰にも分からなかった。 */
+  function mintErrorOf(error) {
+    const e = error || {};
+    const text = JSON.stringify([e.code, e.message, e.reason,
+      e.error && e.error.message, e.data,
+      e.error && e.error.data]).toLowerCase();
+    if (text.includes("insufficient funds")) return "MINTER_OUT_OF_GAS";
+    /* OpenZeppelin AccessControl 5.x の AccessControlUnauthorizedAccount。
+       セレクタは ethers.utils.id(...) で確かめたもの。 */
+    if (text.includes("accesscontrolunauthorizedaccount")
+      || text.includes("0xe2517d3f")
+      || text.includes("is missing role")) return "MINTER_NOT_AUTHORIZED";
+    return "CERTIFICATE_MINT_FAILED";
+  }
   router.post("/:questId/budget", requireOwner, async (req, res) => {
     if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED" });
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
@@ -340,7 +416,8 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       return res.json({ ok: true, tokenId: tokenId.toString(), txHash });
     } catch (error) {
       console.error("Quest certificate claim failed:", error);
-      return res.status(503).json({ error: "CERTIFICATE_MINT_FAILED" });
+      readyCache = { at: 0, body: null };   /* 次に聞かれたら、いまの状態を見に行く */
+      return res.status(503).json({ error: mintErrorOf(error) });
     }
   });
 
@@ -485,7 +562,8 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       return res.json({ ok: true, tokenId: tokenId.toString(), txHash });
     } catch (error) {
       console.error("Limited star claim failed:", error);
-      return res.status(503).json({ error: "CERTIFICATE_MINT_FAILED" });
+      readyCache = { at: 0, body: null };
+      return res.status(503).json({ error: mintErrorOf(error) });
     }
   });
 

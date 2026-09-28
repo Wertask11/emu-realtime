@@ -13,12 +13,40 @@
 | OpenZeppelin | 5.0.2（Remix では `@openzeppelin/contracts@5.0.2/...` と版を明示して取り込む） |
 
 Render の `SP_QUEST_STAR_CONTRACT` と `SP_QUEST_STAR_MINTER_PRIVATE_KEY` は設定済み。
-`GET /api/schoolpark/quest-completions/certificate/config` が `ready:true` を返す。
 
-ただし `ready` は「環境変数が入っている」ことしか見ていない。MINTER_ROLE の付与と
-発行用ウォレットのガスは、実際に1件発行するまで確かめられない。
+`GET /api/schoolpark/quest-completions/certificate/config` は、環境変数だけでなく
+チェーンまで見て答える（2026-09-28 にそう直した。以前は環境変数が入っているだけで
+`ready:true` を返していた）。返すもの：
 
-残っているもの：Polygonscan でのソース検証（任意）。
+| 欄 | 意味 |
+|---|---|
+| `ready` | いま本当に1件発行できるか |
+| `reason` | `NOT_DEPLOYED` / `BAD_MINTER_KEY` / `MINTER_NOT_AUTHORIZED` / `MINTER_LOW_GAS` / `CHAIN_UNREACHABLE` / `""`（発行できる） |
+| `minter` | 発行係のアドレス。MINTER_ROLE を与える相手。**秘密鍵は返さない** |
+| `canMint` | 発行係が MINTER_ROLE を持っているか |
+| `matic` | 発行係の残高。0.01 MATIC を下回ると `MINTER_LOW_GAS` |
+
+答えは60秒だけ取っておく（発行に失敗したときは、その場で捨てて見直す）。
+同じ内容は運営画面の SchoolPark タブ →「限定星を配る」→「NFTの発行」に出る。
+直し方もそこに書いてある。
+
+### MINTER_ROLE の付与（未実施なら先にこれ）
+
+コントラクトの constructor は、**置いた人**（＝オーナーの実ウォレット）にだけ
+`MINTER_ROLE` を与える。サーバーの発行係は別の住所なので、役を渡すまで発行は必ず失敗する。
+
+1. 運営画面で発行係のアドレスを控える（上の `minter`）。
+2. Polygonscan か Remix で、**コントラクトを置いたウォレット**から
+   `grantRole(role, account)` を1回実行する。
+   - `role` = `MINTER_ROLE()` を読んだ値
+     （`0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6`）
+   - `account` = 発行係のアドレス
+3. 運営画面を開き直して「発行できます」になることを確かめる。
+
+発行係にはガス代の MATIC も要る（1件あたり 0.01 MATIC ほど）。
+
+残っているもの：実際に1件発行して `tokenForCompletion` / `ownerOf` / `tokenURI` と
+転送が拒否されることを確かめること。Polygonscan でのソース検証（任意）。
 検証するときは、**Remix で実際にコンパイルしたソース**を貼る。リポジトリの
 `src/SchoolParkQuestStar.sol` は import に版を書いていないので、そのままでは一致しない。
 

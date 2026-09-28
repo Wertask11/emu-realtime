@@ -36,6 +36,10 @@ label{display:block;margin-top:12px;font-size:12px;font-weight:600;color:var(--m
 .hide{display:none!important}
 .empty{color:var(--muted);font-size:13px;padding:20px;text-align:center}
 .warnbox{background:#fdecea;border:1px solid #f0c8c2;border-radius:10px;padding:12px;font-size:12px;color:#8a2b20;margin-bottom:16px}
+/* NFT発行の状態。直し方も並べて出すので、色は見出しの一行だけに使う */
+.state{font-size:13px;font-weight:700;margin:0 0 6px}
+.state.ok{color:var(--ok)} .state.ng{color:var(--warn)}
+#starMint code{background:#f2efeb;border-radius:6px;padding:1px 6px;font-size:12px;word-break:break-all}
 </style>
 </head>
 <body>
@@ -1507,6 +1511,51 @@ const STAR_ERR = {
   FIRESTORE_UNAVAILABLE: "記録に届きませんでした。少し時間をおいてからお試しください。"
 };
 
+async function renderStarMint() {
+  const box = $("#starMint");
+  if (!box) return;
+  let cfg = null;
+  try {
+    cfg = await api("/api/schoolpark/quest-completions/certificate/config");
+  } catch (e) { cfg = null; }
+  if (!cfg) {
+    box.innerHTML = '<p class="empty">発行の状態を確かめられませんでした。</p>';
+    return;
+  }
+  const minter = cfg.minter
+    ? '<p class="hint">発行係のアドレス：<code>' + esc(cfg.minter) + '</code>'
+      + (cfg.matic !== null && cfg.matic !== undefined
+          ? '<br>残り <b>' + esc(String(cfg.matic)) + '</b> MATIC' : '')
+      + '</p>'
+    : '';
+  const contract = cfg.contract
+    ? '<p class="hint">コントラクト：<code>' + esc(cfg.contract) + '</code></p>' : '';
+
+  /* 直し方まで書く。状態だけ出しても、次に何をすればよいか分からない。 */
+  const guide = {
+    "": '<p class="state ok">発行できます。</p>',
+    NOT_DEPLOYED: '<p class="state ng">まだ設定されていません。</p>'
+      + '<p class="hint">Render の環境変数に SP_QUEST_STAR_CONTRACT と '
+      + 'SP_QUEST_STAR_MINTER_PRIVATE_KEY を入れてください。'
+      + '秘密鍵はここには出しません。</p>',
+    BAD_MINTER_KEY: '<p class="state ng">発行係の鍵を読めません。</p>'
+      + '<p class="hint">SP_QUEST_STAR_MINTER_PRIVATE_KEY を見直してください。</p>',
+    MINTER_NOT_AUTHORIZED: '<p class="state ng">発行係に、まだ発行の権限がありません。</p>'
+      + '<p class="hint">コントラクトを置いたウォレットで grantRole を1回実行してください。<br>'
+      + 'role には MINTER_ROLE の値（コントラクトの MINTER_ROLE を読むと出ます）、'
+      + 'account には下の発行係のアドレスを入れます。<br>'
+      + 'これを済ませるまで、パスポートの受け取りボタンは押せません。</p>',
+    MINTER_LOW_GAS: '<p class="state ng">発行係のガス代（MATIC）が足りません。</p>'
+      + '<p class="hint">下のアドレスへ MATIC を少し送ってください。'
+      + '1件の発行にかかるのは 0.01 MATIC ほどです。</p>',
+    CHAIN_UNREACHABLE: '<p class="hint">いまチェーンに届きませんでした。'
+      + '設定が悪いとは限りません。少し待ってから開き直してください。</p>'
+  };
+  box.innerHTML = (guide[String(cfg.reason || "")]
+      || '<p class="state ng">発行できません（' + esc(String(cfg.reason)) + '）。</p>')
+    + contract + minter;
+}
+
 async function renderLimitedStars() {
   const box = $("#starBox");
   if (!box) return;
@@ -1533,7 +1582,17 @@ async function renderLimitedStars() {
     + '<p id="starOut" class="hint" style="margin-top:8px;white-space:pre-wrap"></p>'
     + '<h3 style="margin-top:18px">配った人</h3>'
     + '<div id="starList"><p class="empty">「配った人を見る」を押すと出ます。</p></div>'
+    + '<h3 style="margin-top:18px">NFTの発行</h3>'
+    + '<div id="starMint"><p class="empty">確かめています…</p></div>'
     + '</div>';
+
+  /* NFTを本当に発行できる状態かを出す。
+
+     env に2つ入れただけでは配れない。コントラクトを置いたのは
+     運営のウォレットで、MINTER_ROLE もそこに付く。サーバーの発行係は
+     別の住所なので、役を渡していなければ押しても必ず失敗する。
+     ここに発行係の住所を出すのは、その役を渡すため。 */
+  renderStarMint();
 
   /* 番号を貼ったらすぐ配れるよう、Enter でも押せるようにする。
      当日は並んでいる人を順に処理するので、マウスへ手を戻さずに済む。 */

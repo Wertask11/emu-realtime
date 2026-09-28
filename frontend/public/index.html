@@ -20379,11 +20379,64 @@ async function openSpPassport() {
     try {
       const ready = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/certificate/config')
         .then(function (r) { return r.ok ? r.json() : null; });
-      if (!ready || !ready.ready) rec.querySelectorAll('[data-quest-star]').forEach(function (button) {
+      /* 鎖に届かなかっただけのときは、ボタンを閉じない。
+         そのとき押せば、受け取りのほうが理由を言葉で出す。
+         本当に発行できないとき（役がない・ガスがない・未設置）だけ閉じる。 */
+      const blocked = ready && !ready.ready && ready.reason !== 'CHAIN_UNREACHABLE';
+      if (!ready || blocked) rec.querySelectorAll('[data-quest-star]').forEach(function (button) {
         button.disabled = true;
         button.textContent = '証明書NFTは発行準備中';
       });
     } catch (e) { /* 通信が届かない間は受取操作でエラーを説明する。 */ }
+  }
+}
+
+/* パスポートに連携済みのウォレットを取り出す。
+
+   サーバーは画面へ返すとき、ウォレットの宛先を address に入れ替える
+   （backend/identity.js の publicView。LINE・Google の内部IDは
+   出さないための作り）。Firestore の生の記録では、同じものが
+   subject に入っている。どちらの形で来ても拾えるように両方を見る。
+
+   ここは以前 subject だけを見ていた。画面に返ってくる形には
+   subject が無いので、連携済みの人でも必ず空になり、
+   「先に連携してください」としか出せなかった。 */
+function _spLinkedWallets(p) {
+  return ((p && p.spLinks) || [])
+    .filter(function (l) { return l && l.kind === 'wallet'; })
+    .map(function (l) { return String(l.address || l.subject || '').toLowerCase(); })
+    .filter(function (a) { return /^0x[0-9a-f]{40}$/.test(a); });
+}
+
+/* 受け取れなかった理由を、そのまま日本語にする。
+
+   前はどれも「失敗しました」か、英語の符号がそのまま画面に出ていた。
+   押した人には何が起きたのか分からないし、運営にも分からなかった。
+
+   what  … 受け取ろうとしたもの（証明書NFT／星のNFT）
+   keeps … 受け取れなくても残るもの。ここが一番伝えたいこと。 */
+function _spMintErrorText(code, what, keeps) {
+  const stays = '\n\n受け取れなくても、' + keeps + 'はそのまま残ります。';
+  switch (String(code || '')) {
+    case 'WALLET_REQUIRED':
+      return 'パスポートにウォレットを連携してから、もう一度お試しください。' + stays;
+    case 'PASSPORT_LINK_REQUIRED':
+      return 'SchoolParkパスポートの発行が先に必要です。' + stays;
+    case 'NOT_COMPLETED':
+      return 'この完走の記録がまだ見つかりません。少し待ってからお試しください。';
+    case 'STAR_NOT_GRANTED':
+      return 'この星は、まだあなたに配られていません。';
+    case 'CERTIFICATE_NOT_DEPLOYED':
+      return what + 'は準備中です。' + stays;
+    /* ここから下は運営が直すもの。押した人のせいではないと分かるように書く。 */
+    case 'MINTER_NOT_AUTHORIZED':
+      return what + 'の発行係に、まだ発行の権限がありません。運営の設定待ちです。' + stays;
+    case 'MINTER_OUT_OF_GAS':
+      return what + 'の発行にかかる手数料が足りていません。運営の対応待ちです。' + stays;
+    case 'CERTIFICATE_MINT_FAILED':
+      return what + 'の発行が途中で止まりました。しばらくしてからもう一度お試しください。' + stays;
+    default:
+      return what + 'を受け取れませんでした。' + stays;
   }
 }
 
@@ -20394,20 +20447,19 @@ async function spClaimLimitedStar(starId, button) {
   button.disabled = true;
   button.textContent = '確認中…';
   try {
-    const wallet = await window.ethereum?.request({ method: 'eth_requestAccounts' });
     const p = await spPassportLoad();
-    const linked = (p.spLinks || []).filter(function (l) { return l && l.kind === 'wallet'; });
-    const chosen = String(linked[0] && linked[0].subject || '').toLowerCase();
-    if (!chosen || !wallet || !wallet.some(function (a) { return a.toLowerCase() === chosen; }))
-      throw new Error('先にパスポートに連携したウォレットを接続してください。\n\n連携していなくても、星空の星はそのまま残ります。');
+    /* 宛先を決めるのはサーバー。連携済みのウォレットへ送る。
+       いまブラウザでウォレットを繋いでいる必要はない。電話から見ている人も、
+       LINE や Google で入って後からウォレットを連携した人も、
+       連携さえしてあれば受け取れる。ここで見るのは連携の有無だけ。
+       サーバーにまだ聞けていないとき（spLive が false）は止めない。 */
+    if (p.spLive && !_spLinkedWallets(p).length)
+      throw new Error('パスポートにウォレットを連携すると、星のNFTを受け取れます。\n\n連携していなくても、星空の星はそのまま残ります。');
     const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/stars/'
       + encodeURIComponent(starId) + '/claim',
       { method:'POST', headers:await emuAuthHeaders(true), body:'{}' });
     const data = await r.json();
-    if (!r.ok) throw new Error(
-      data.error === 'CERTIFICATE_NOT_DEPLOYED' ? '星のNFTは準備中です。星空の星は残っています。'
-      : data.error === 'WALLET_REQUIRED' ? 'パスポートにウォレットを連携してから、もう一度お試しください。'
-      : data.error || '受け取れませんでした。');
+    if (!r.ok) throw new Error(_spMintErrorText(data.error, '星のNFT', '星空の星'));
     button.textContent = '✓ NFTを受け取りました';
   } catch (e) {
     button.disabled = false;
@@ -20421,19 +20473,15 @@ async function spClaimQuestStar(questId, button) {
   button.disabled = true;
   button.textContent = '証明書を確認中…';
   try {
-    const wallet = await window.ethereum?.request({ method: 'eth_requestAccounts' });
     const p = await spPassportLoad();
-    const linked = (p.spLinks || []).filter(function (l) { return l && l.kind === 'wallet'; });
-    const chosen = String(linked[0] && linked[0].subject || '').toLowerCase();
-    if (!chosen || !wallet || !wallet.some(function (a) { return a.toLowerCase() === chosen; }))
-      throw new Error('先にパスポートに連携したウォレットを接続してください。');
+    /* 宛先を決めるのはサーバー。限定星と同じで、連携の有無だけを見る。 */
+    if (p.spLive && !_spLinkedWallets(p).length)
+      throw new Error('パスポートにウォレットを連携すると、証明書NFTを受け取れます。\n\n連携していなくても、完走の記録と星はそのまま残ります。');
     const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/'
       + encodeURIComponent(questId) + '/certificate/claim',
       { method:'POST', headers:await emuAuthHeaders(true), body:'{}' });
     const data = await r.json();
-    if (!r.ok) throw new Error(data.error === 'CERTIFICATE_NOT_DEPLOYED'
-      ? '証明書NFTは準備中です。星と完走記録は残っています。'
-      : data.error || '証明書を受け取れませんでした。');
+    if (!r.ok) throw new Error(_spMintErrorText(data.error, '証明書NFT', '完走の記録と星'));
     button.textContent = '✓ 証明書NFTを受け取りました';
   } catch (e) {
     button.disabled = false;
