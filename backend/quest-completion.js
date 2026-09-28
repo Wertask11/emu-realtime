@@ -62,8 +62,13 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
      これは MINTER_ROLE を与えるために運営が知る必要がある。 */
   /* 一度の発行にかかるガス代のめやす。数えるのは鎖に聞くときだけで、
      ここでは文字のまま置く。組み立てた瞬間に ethers を呼ぶと、
-     呼ぶ側の差し替え方ひとつで router が作れなくなる。 */
-  const MINT_GAS_FLOOR_MATIC = "0.01";
+     呼ぶ側の差し替え方ひとつで router が作れなくなる。
+
+     0.01 にしていたが、低すぎた。2026-09-28 に実際に1枚発行したときの
+     手数料は 0.0717 POL（基礎手数料が 256 グウェイまで跳ねていた時間帯）。
+     つまり残高 0.02 POL でも「発行できます」と答えてしまい、
+     押すと失敗する。混んでいるときの1回ぶんを賄える額にする。 */
+  const MINT_GAS_FLOOR_MATIC = "0.1";
   let readyCache = { at: 0, body: null };
 
   function minterAddress() {

@@ -651,3 +651,22 @@ test("本番で実際に出たエラーを、手数料の問題として見分�
   const out = await claimOnce(claim);
   assert.equal(out.body.error, "MINTER_GAS_PRICE_TOO_LOW");
 });
+
+test("ガスの下限は、混んでいるときの1回ぶんを賄える額にする", async () => {
+  /* 2026-09-28 に実際に1枚発行したときの手数料は 0.0717 POL。
+     下限がそれを下回ると「発行できます」と言ってから失敗する。 */
+  const REAL_MINT_COST = 0.0717;
+  resetChain({ balanceWei: BigInt(Math.round(REAL_MINT_COST * 1e6)) * 10n ** 12n });
+  const body = await callConfig(build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY }).config);
+  assert.equal(body.ready, false,
+    "1回ぶんちょうどでは足りない。次の1回で詰まる");
+  assert.equal(body.reason, "MINTER_LOW_GAS");
+});
+
+test("1回ぶんを十分に上回っていれば、発行できると答える", async () => {
+  resetChain({ balanceWei: 10n ** 18n });   /* 1 POL */
+  const body = await callConfig(build({ SP_QUEST_STAR_CONTRACT: CONTRACT,
+    SP_QUEST_STAR_MINTER_PRIVATE_KEY: KEY }).config);
+  assert.equal(body.ready, true);
+});
