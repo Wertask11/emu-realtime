@@ -196,3 +196,45 @@ test('証明書NFTのボタンが、#001 LEARN だけに絞られていない', 
   assert.match(head, /!q\.isFounder/,
     '出さないのは #000（創業クエスト）だけのはず');
 });
+
+/* ウォレットの連携が、押したあとどうなったか分かること。
+
+   前は「署名を待っています…」に変えたあと、成功したときに戻す処理が
+   catch の中にしか無かった。連携そのものは通っているのにボタンが
+   その文字のまま固まり、終わったのかどうかが分からなくなっていた。
+   実際に本番でそうなった（連携ウォレットの欄は「連携済み」なのに、
+   ボタンは「署名を待っています…」のまま）。 */
+function walletLinkBody() {
+  const i = INDEX.indexOf('window.sppLinkWallet = async function');
+  assert.ok(i > 0, 'sppLinkWallet が見つからない');
+  return INDEX.slice(i, INDEX.indexOf('\nfunction closeSpPassport', i));
+}
+
+test('ウォレット連携は、成功しても必ずボタンを戻す', () => {
+  const body = walletLinkBody();
+  assert.match(body, /\} finally \{/,
+    '後始末が finally に入っていない（成功したときに戻らない）');
+  assert.match(body, /btn\.isConnected/,
+    '描き直しで消えたボタンを触らない備えが無い');
+});
+
+test('署名待ちと、終わったことを、別の文字で出す', () => {
+  const body = walletLinkBody();
+  assert.match(body, /署名してください/, '署名を待っていることが出ない');
+  assert.match(body, /✓ 連携しました/, '終わったことが出ない');
+  assert.match(body, /署名を取り消しました/, '断ったときに黙っている');
+});
+
+test('連携できたあとの描き直しが転んでも、連携した事実を消さない', () => {
+  const body = walletLinkBody();
+  const i = body.indexOf('done = true;');
+  assert.ok(i > 0, '成功の印が無い');
+  const after = body.slice(i);
+  assert.match(after, /try \{[\s\S]*spPassportLoad\(true\)[\s\S]*\} catch/,
+    '読み直しを別の try で囲っていない（転ぶと成功が失敗に化ける）');
+});
+
+test('すでに連携済みなら、ボタンの名前で分かる', () => {
+  assert.match(INDEX, /wallets\.length \? '別のウォレットを連携' : 'ウォレットを連携'/,
+    '連携済みでも「ウォレットを連携」のまま。押すと何が起きるか分からない');
+});

@@ -16196,7 +16196,10 @@ function _sppIdentityHtml(p) {
   const buttons = [];
   if (!has('line'))   buttons.push('<button type="button" class="spp-copy" id="sppLink_line" onclick="sppLinkLogin(\'line\')">LINEを追加</button>');
   if (!has('google')) buttons.push('<button type="button" class="spp-copy" id="sppLink_google" onclick="sppLinkLogin(\'google\')">Googleを追加</button>');
-  buttons.push('<button type="button" class="spp-copy" id="sppLink_wallet" onclick="sppLinkWallet()">ウォレットを連携</button>');
+  /* すでに連携済みでも押せる（2つ目以降を足せる）。ただし
+     「ウォレットを連携」のままだと、押すと何が起きるのかが分からない。 */
+  buttons.push('<button type="button" class="spp-copy" id="sppLink_wallet" onclick="sppLinkWallet()">'
+    + (wallets.length ? '別のウォレットを連携' : 'ウォレットを連携') + '</button>');
   html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px">' + buttons.join('') + '</div>';
   html += '<p class="spp-note" style="margin-top:8px">追加したログイン方法は、どれで入っても同じパスポートになります。'
     + '新しいパスポートは作られません。<br>'
@@ -16263,18 +16266,54 @@ window.sppLinkWallet = async function () {
       + '所有を確かめるための署名をお願いします（手数料はかかりません）。\n'
       + '連携すると、ウォレットを繋いでいないときでも公式パスの保有が分かるようになります。')) return;
   const btn = document.getElementById('sppLink_wallet');
-  if (btn) { btn.disabled = true; btn.textContent = '署名を待っています…'; }
+  const was = btn ? btn.textContent : 'ウォレットを連携';
+  const say = function (t) { if (btn && btn.isConnected) btn.textContent = t; };
+
+  /* 前は成功しても文字を戻していなかった（戻すのは catch の中だけ）。
+     そのため、連携そのものは通っているのにボタンが
+     「署名を待っています…」のまま固まり、終わったのかどうかが
+     分からなくなっていた。実際にそうなった。
+
+     押してから終わるまでに3つの場面がある。全部ちがう文字を出す。
+       1. ウォレットの窓で署名を待つ（ここが長い）
+       2. サーバーへ送って記録する
+       3. 終わり（成功・断られた・失敗） */
+  if (btn) btn.disabled = true;
+  say('ウォレットで署名してください…');
+  let done = false;
   try {
     await window.SPID.linkWallet();
+    done = true;
+    say('✓ 連携しました');
     window.SPID.notice = { ok: true, text: 'ウォレットを連携しました。' };
-    await spPassportLoad(true);
-    if (typeof openSpPassport === 'function') await openSpPassport();
+    /* ここから先（読み直しと描き直し）が転んでも、連携そのものは
+       もう終わっている。「連携しました」を消してはいけない。 */
+    try {
+      await spPassportLoad(true);
+      if (typeof openSpPassport === 'function') await openSpPassport();
+    } catch (e2) {
+      console.warn('連携後の読み直しに失敗:', e2 && (e2.message || e2));
+      say('✓ 連携しました（表示の更新に失敗。開き直してください）');
+    }
   } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'ウォレットを連携'; }
     const msg = (e && e.message) || '';
-    /* 署名を断った場合は、失敗として騒がない。 */
-    if (/4001|User (denied|rejected)/i.test(msg)) return;
-    alert('ウォレットを連携できませんでした。\n' + msg);
+    /* 署名を断った場合は、失敗として騒がない。ただし黙りもしない。 */
+    if (/4001|User (denied|rejected)/i.test(msg)) {
+      say('署名を取り消しました');
+    } else {
+      say('連携できませんでした');
+      alert('ウォレットを連携できませんでした。\n' + msg);
+    }
+  } finally {
+    /* 描き直しが走っていれば、このボタンはもう画面に無い（isConnected が false）。
+       残っているときだけ、少し見せてから元に戻す。 */
+    if (btn && btn.isConnected) {
+      setTimeout(function () {
+        if (!btn || !btn.isConnected) return;
+        btn.disabled = false;
+        btn.textContent = was;
+      }, done ? 2000 : 1400);
+    }
   }
 };
 
