@@ -5340,6 +5340,14 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     <span class="close-button">&times;</span>
     <h2>新規投稿</h2>
     <form id="postForm">
+      <!-- クエストの画面から開いたときだけ出る。ここから出した投稿は
+           月の投稿回数に数えない（クエストが回数で止まらないようにするため）。 -->
+      <div class="form-group" id="postQuestRow" style="display:none">
+        <label>このクエストのための投稿</label>
+        <div id="postQuestName" style="font-weight:700;line-height:1.7"></div>
+        <p style="margin:6px 0 0;font-size:12px;line-height:1.8;color:#6E695C">
+          この投稿は月の投稿回数に数えません。投稿したあと、クエストの途中報告でこの投稿を選んでください。</p>
+      </div>
       <div class="form-group">
         <label for="postTitle">タイトル:</label>
         <input type="text" id="postTitle" required>
@@ -12432,12 +12440,42 @@ function openPostForm() {
   postFormModal.style.display = 'flex';
   return true;
 }
-function closePostForm() { postFormModal.style.display = 'none'; }
+function closePostForm() { postFormModal.style.display = 'none'; _emuSetPostQuest(null); }
+
+/* ───── クエストのための投稿 ─────
+
+   #003（ゴミ拾い）のように「写真と数をEmuに投稿し、その投稿を途中報告で
+   紐づける」クエストがある。報告3回ぶんEmuに投稿が要るのに、light の
+   投稿は月5件なので、ほかに使っていると足りなくなる。
+   クエストの画面から開いた投稿は questId を持たせ、回数に数えない。
+
+   なりすましは効かない。決まり（firestore.rules）の側で
+   sp_quests/{questId}/commits/{自分} があること、つまり本当にその
+   クエストを受けていることを確かめている。受けていない人が questId を
+   書いても、書き込みごと弾かれる。 */
+let _emuPostQuest = null;
+function _emuSetPostQuest(q) {
+  _emuPostQuest = (q && q.id) ? q : null;
+  const row = document.getElementById('postQuestRow');
+  const name = document.getElementById('postQuestName');
+  if (row) row.style.display = _emuPostQuest ? 'block' : 'none';
+  if (name) name.textContent = _emuPostQuest ? _emuPostQuest.title : '';
+}
+window.openEmuPostForQuest = function (questId, questTitle) {
+  const id = String(questId || '').trim();
+  if (!id) return;
+  editMode = null; editingPostId = null;
+  postTitleInput.value = ""; postBodyInput.value = ""; postTagsInput.value = "";
+  postTitleInput.disabled = false;
+  _emuSetPostQuest({ id: id, title: String(questTitle || '').slice(0, 120) });
+  if (!openPostForm()) _emuSetPostQuest(null);
+};
 
 openPostFormButton.addEventListener('click', () => {
   editMode = null; editingPostId = null;
   postTitleInput.value = ""; postBodyInput.value = ""; postTagsInput.value = "";
   postTitleInput.disabled = false;
+  _emuSetPostQuest(null);
   openPostForm();
 });
 closeButton.addEventListener('click', closePostForm);
@@ -13364,6 +13402,10 @@ postForm.addEventListener("submit", async function (e) {
 
     /* 名前を一緒に残す。これが無いと、読む側にはアドレスしか出ない。
        「名前と写真」で決めた名前が投稿に出ないのは、ここが空だったため。 */
+    /* クエストの画面から開いたときだけ入る。決まりの側で
+       「本当にそのクエストを受けているか」を確かめるので、
+       ここに好きな値を入れても通らない。 */
+    const _questId = _emuPostQuest ? String(_emuPostQuest.id).slice(0, 80) : '';
     const postData = {
       title: title,
       body: body,
@@ -13373,6 +13415,7 @@ postForm.addEventListener("submit", async function (e) {
       displayName: emuDisplayName(),
       userId: currentUserId || "guest",
       updatedAt: new Date(),
+      ...(_questId ? { questId: _questId } : {}),
       ...(postImageUrl ? { imageUrl: postImageUrl } : {})
     };
 const editingId = editingPostId;
@@ -13426,7 +13469,10 @@ const editingId = editingPostId;
          別々に書くと、片方だけ通ってしまう余地が残る。 */
       const _postBatch = window.fbLib.writeBatch(window.db);
       _postBatch.set(window.fbLib.doc(window.fbLib.collection(window.db, "posts")), postData);
-      await _emuAddUsage(_postBatch, 'post');
+      /* クエストのための投稿は回数に数えない。
+         数えないので、回数の記録も増やさない。増やすと決まりの側の
+         「ちょうど1つ増えていること」と食い違って、書き込みごと弾かれる。 */
+      if (!_questId) await _emuAddUsage(_postBatch, 'post');
       await _postBatch.commit();
       console.log("✅ 新規投稿を作成しました");
     }
@@ -23446,7 +23492,7 @@ window.emuHasPlan = emuHasPlan;
 
    Firestoreのルールは、増えたあとの値が上限以内かを getAfter で見る。
    ここで増やさずに書こうとすると、ルール側で弾かれる。
-   段の判定だけでは「light は月2件」を守れず、画面を通さずに書けば
+   段の判定だけでは「light は月5件」を守れず、画面を通さずに書けば
    何件でも作れてしまうため、書き込みと同じ処理の中で数える。
 
    期間の名前はルール側と必ず同じにすること（日本時間の暦月）。 */
@@ -23583,7 +23629,7 @@ function _emuPostErrorText(error) {
         + '9月1日から、知識を届けるには Emu light 以上が必要になりました。\n'
         + '右上のアカウントメニュー →「プラン・お支払い」からご確認ください。';
     }
-    const cap = (plan === 'pro') ? '制限なし' : (plan === 'plus' ? '月30件' : '月2件');
+    const cap = (plan === 'pro') ? '制限なし' : (plan === 'plus' ? '月30件' : '月5件');
     return '投稿できませんでした。\n\n'
       + 'ご利用中の ' + plan + ' で投稿できるのは ' + cap + ' です。\n'
       + 'まだ余っているはずの場合は、一度読み込み直してからお試しください。\n'

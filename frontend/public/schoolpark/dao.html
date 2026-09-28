@@ -167,26 +167,31 @@ if (window.top === window.self) window.location.replace('/');
               <sc-if value="{{ b.isText }}">
                 <p style="white-space:pre-wrap; line-height:1.95; margin:10px 0">{{ b.text }}</p>
               </sc-if>
+              <!-- 表は div の display:table で組む。表のタグ（table・thead・tbody・tr）の
+                   中に置いた独自タグ（sc-for・sc-if）は、HTML の決まりで表の外へ
+                   追い出される（foster parenting）。追い出された繰り返しは中身が空になり、
+                   表には見出し1セルと中身1セルだけが、しかも繰り返しの外に残る。
+                   年内目標の表が10個とも空で出ていたのはこれ。div なら追い出しは
+                   起きず、見た目も表のまま保てる。role で表の意味も残す。
+                   表のタグで書き直すと同じことが起きる。tools/year-goals-tests で見張っている。 -->
               <sc-if value="{{ b.isTable }}">
                 <div style="overflow-x:auto; margin:12px 0">
-                  <table style="width:100%; border-collapse:collapse; font-size:14px; line-height:1.9">
+                  <div role="table" style="display:table; width:100%; border-collapse:collapse; font-size:14px; line-height:1.9">
                     <sc-if value="{{ b.hasHead }}">
-                      <thead><tr>
+                      <div role="row" style="display:table-row">
                         <sc-for list="{{ b.head }}" as="h">
-                          <th style="text-align:left; padding:10px 12px; border-bottom:1px solid rgba(20,19,16,.22); font-size:12px; letter-spacing:.06em; color:#6E695C; vertical-align:top">{{ h }}</th>
+                          <div role="columnheader" style="display:table-cell; text-align:left; padding:10px 12px; border-bottom:1px solid rgba(20,19,16,.22); font-size:12px; letter-spacing:.06em; color:#6E695C; vertical-align:top">{{ h }}</div>
                         </sc-for>
-                      </tr></thead>
+                      </div>
                     </sc-if>
-                    <tbody>
-                      <sc-for list="{{ b.rows }}" as="r">
-                        <tr>
-                          <sc-for list="{{ r.cells }}" as="c">
-                            <td style="padding:10px 12px; border-bottom:1px solid rgba(20,19,16,.1); vertical-align:top">{{ c }}</td>
-                          </sc-for>
-                        </tr>
-                      </sc-for>
-                    </tbody>
-                  </table>
+                    <sc-for list="{{ b.rows }}" as="r">
+                      <div role="row" style="display:table-row">
+                        <sc-for list="{{ r.cells }}" as="c">
+                          <div role="cell" style="display:table-cell; padding:10px 12px; border-bottom:1px solid rgba(20,19,16,.1); vertical-align:top">{{ c }}</div>
+                        </sc-for>
+                      </div>
+                    </sc-for>
+                  </div>
                 </div>
               </sc-if>
               <sc-if value="{{ b.isImage }}">
@@ -586,6 +591,12 @@ if (window.top === window.self) window.location.replace('/');
                     <div onClick="{{ cur.logDid }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">やってみた</div>
                     <div onClick="{{ cur.logStuck }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">つまずいた</div>
                     <div onClick="{{ cur.logFound }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">気づいた</div>
+                  </div>
+                  <!-- 写真や記録をEmuに残してから紐づけるクエスト（#003 など）のための入口。
+                       ここから出した投稿は、月の投稿回数に数えない。 -->
+                  <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:20px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                    <div style="font-size:13px; color:#6E695C; flex:1; min-width:160px">写真や記録をEmuに残す（月の投稿回数に数えません）</div>
+                    <div onClick="{{ cur.postEmu }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">Emuに投稿する</div>
                   </div>
                 </sc-if>
                 <sc-if value="{{ cur.noLogs }}">
@@ -1314,6 +1325,10 @@ class Component extends DCLogic {
       logDid:   () => { try { window.parent.spQuestLog(e.id, 'やってみた', this); } catch (err) {} },
       logStuck: () => { try { window.parent.spQuestLog(e.id, 'つまずいた', this); } catch (err) {} },
       logFound: () => { try { window.parent.spQuestLog(e.id, '気づいた', this); } catch (err) {} },
+      /* このクエストのためにEmuへ投稿する。
+         #003 のように「Emuに投稿して、その投稿を途中報告で紐づける」クエストがある。
+         ここから開いた投稿は、月の投稿回数に数えない（クエストが回数で止まらないように）。 */
+      postEmu: () => { try { window.parent.openEmuPostForQuest(e.id, e.fullTitle || e.title || ''); } catch (err) {} },
       close: () => { try { window.parent.spQuestClose(e.id, this); } catch (err) {} },
       wisdom: () => { try { window.parent.spQuestWisdom(e.id, this); } catch (err) {} },
       /* perHead は親（index.html）が通貨と割合込みで作って渡す。
