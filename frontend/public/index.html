@@ -12460,6 +12460,12 @@ function _emuSetPostQuest(q) {
   const name = document.getElementById('postQuestName');
   if (row) row.style.display = _emuPostQuest ? 'block' : 'none';
   if (name) name.textContent = _emuPostQuest ? _emuPostQuest.title : '';
+  /* SchoolPark の画面（#spDaoPage）は z-index 1500、投稿フォーム（.modal）は 999。
+     クエストの画面から開くと、フォームは開いているのに SchoolPark の下に隠れる。
+     押しても何も起きないように見えるのはこれ（実際にそうなった）。
+     クエストから開いたときだけ、SchoolPark より上に出す。
+     1605 は SchoolPark のサイドバーなので、それより上にする。 */
+  if (postFormModal) postFormModal.style.zIndex = _emuPostQuest ? '1700' : '';
 }
 window.openEmuPostForQuest = function (questId, questTitle) {
   const id = String(questId || '').trim();

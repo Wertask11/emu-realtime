@@ -151,3 +151,32 @@ test('読めなかったことを、黙って0にしていない', () => {
   assert.equal(/catch\s*\([^)]*\)\s*\{[^}]*now\s*=\s*0/.test(head), false,
     '読めないときに0から数えている（この形に戻すと permission-denied に戻る）');
 });
+
+/* クエストから投稿フォームを開いたとき、SchoolPark の下に隠れないこと。
+
+   SchoolPark の画面（#spDaoPage）は z-index 1500、投稿フォーム（.modal）は 999。
+   クエストの画面から openPostForm() を呼ぶと、フォームは開くのに SchoolPark の
+   下に入るので、押しても何も起きないように見える。実際にそうなった。
+
+   ボタンそのものは #003 PLAY を出すまで dao.html から外してあるが、
+   戻したときに同じことにならないよう、重なり順はここで見張る。 */
+test('クエストから開いた投稿フォームが、SchoolPark より上に出る', () => {
+  const spZ = /#spDaoPage\s*\{[^}]*z-index:\s*(\d+)/.exec(INDEX);
+  assert.ok(spZ, '#spDaoPage の z-index が読めない');
+
+  const src = INDEX.slice(INDEX.indexOf('function _emuSetPostQuest'));
+  const body = src.slice(0, src.indexOf('\n}'));
+  const mine = /postFormModal\.style\.zIndex\s*=\s*_emuPostQuest\s*\?\s*'(\d+)'/.exec(body);
+  assert.ok(mine, 'クエストから開いたときの重なり順を上げていない');
+  assert.ok(Number(mine[1]) > Number(spZ[1]),
+    'フォーム(' + mine[1] + ') が SchoolPark(' + spZ[1] + ') より下にある。'
+    + '押しても何も起きないように見える');
+});
+
+test('#003 を出すまで、Emuに投稿するボタンは出さない', () => {
+  const dao = readHtml('frontend/public/schoolpark/dao.html');
+  /* コメントの中に手本として残してあるので、実際に描かれる行だけを見る。 */
+  const live = dao.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.equal(live.indexOf('cur.postEmu'), -1,
+    'Emuに投稿するボタンが出ている。要るのは #003 PLAY だけ');
+});
