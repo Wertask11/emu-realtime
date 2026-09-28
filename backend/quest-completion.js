@@ -395,6 +395,30 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     return res.json({ ok: true, key, already: false });
   });
 
+  /* 誰に配ったか。イベント当日に「もう配ったか」「何人に配ったか」を
+     見るためのもの。星の種類で絞れる。 */
+  router.get("/stars/list", requireOwner, async (req, res) => {
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const starId = String(req.query.starId || "").trim().toLowerCase();
+    let q = db.collection("sp_stars");
+    if (starId) {
+      if (!STAR_ID_RE.test(starId)) return res.status(400).json({ error: "INVALID_STAR_ID" });
+      q = q.where("starId", "==", starId);
+    }
+    const snap = await q.limit(500).get();
+    const stars = [];
+    snap.forEach(d => {
+      const v = d.data() || {};
+      stars.push({
+        key: d.id, starId: v.starId || "", spid: v.spid || "",
+        label: v.label || "", color: v.color || "",
+        note: v.note || "", minted: v.status === "minted",
+        createdAt: v.createdAt || null
+      });
+    });
+    return res.json({ ok: true, total: stars.length, stars });
+  });
+
   /* 自分の限定星。星空の数え上げと、パスポートの「受け取る」に使う。
      ウォレットの有無で結果は変わらない。 */
   router.get("/stars/mine", requireFirebaseUser, async (req, res) => {

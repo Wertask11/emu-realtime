@@ -600,3 +600,40 @@ test('記録の決まりが、周回の数を許している', () => {
   assert.ok(seg.indexOf(">= resource.data.get('approvedRounds', 0)") >= 0,
     '減らせてしまう（認めた周回を無かったことにできる）');
 });
+
+/* ───────── 限定星を配るところ ─────────
+
+   イベント（特殊 #002）の当日に、来た人へその場で配る。
+   並んでいる人を順に処理するので、番号を貼って Enter で進めること、
+   配ったあとに番号の欄だけ空くこと（種類・名前・色は残る）が要る。
+   ここが崩れると、当日に手が止まる。 */
+test('限定星を配る欄が、SchoolPark のタブに出る', () => {
+  assert.ok(ADMIN.indexOf('id="starBox"') >= 0, '限定星の置き場が無い');
+  assert.match(ADMIN, /renderYearDoc\(f, ownerAddr\);\s*\n\s*renderLimitedStars\(\);/,
+    '限定星を描く呼び出しが無い（置き場だけあって中身が出ない）');
+});
+
+test('配る相手は SchoolPark ID で指定する（ウォレットではない）', () => {
+  const i = ADMIN.indexOf('async function renderLimitedStars');
+  const body = ADMIN.slice(i, ADMIN.indexOf('async function paintStarList', i));
+  assert.match(body, /id="starSpid"/, '相手を入れる欄が無い');
+  assert.match(body, /番号をコピー/,
+    'どこから番号を取るのかが書かれていない（パスポートの「番号をコピー」で取れる）');
+  assert.equal(/id="starAddr"|0x…/.test(body), false,
+    'ウォレットのアドレスを求めている。パスポートがコピーするのは SP- のほう');
+});
+
+test('配ったあと、番号の欄だけが空く', () => {
+  const i = ADMIN.indexOf('async function renderLimitedStars');
+  const body = ADMIN.slice(i, ADMIN.indexOf('async function paintStarList', i));
+  assert.match(body, /\$\("#starSpid"\)\.value = "";/,
+    '次の人の番号を貼る前に、前の人の番号を消していない');
+  assert.equal(/\$\("#starId"\)\.value = "";/.test(body), false,
+    '星の種類まで消している。同じ催しで続けて配れなくなる');
+});
+
+test('Enter でも配れる（当日は片手がふさがる）', () => {
+  const i = ADMIN.indexOf('async function renderLimitedStars');
+  const body = ADMIN.slice(i, ADMIN.indexOf('async function paintStarList', i));
+  assert.match(body, /e\.key === "Enter"/, 'Enter で配れない');
+});

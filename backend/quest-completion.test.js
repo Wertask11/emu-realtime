@@ -566,3 +566,32 @@ test("限定星は、包括ルールの素通しから外してある", () => {
   assert.match(rules, /coll != 'sp_stars'/,
     "sp_stars が包括ルールの除外に入っていない（誰でも星を配れてしまう）");
 });
+
+/* 誰に配ったか。イベント当日に人数と重複を見るためのもの。 */
+const listStars = routes.find(r => r.path === "/stars/list").handler;
+function listFor(starId) {
+  const { res } = reply();
+  return listStars({ query: starId ? { starId } : {} }, res);
+}
+
+test("配った人を、星の種類で絞って見られる", async () => {
+  records.clear();
+  await grant({ starId:"fes-2026-10", spid:SPID, label:"解剖フェス 2026" });
+  await grant({ starId:"fes-2026-10", spid:"SP-BBBB-BBBB-BBBB-BBBB", label:"解剖フェス 2026" });
+  await grant({ starId:"other-2026", spid:SPID, label:"別の催し" });
+
+  const all = await listFor();
+  assert.equal(all.body.total, 3, "全部が出ていない");
+
+  const fes = await listFor("fes-2026-10");
+  assert.equal(fes.body.total, 2, "種類で絞れていない");
+  assert.ok(fes.body.stars.every(x => x.starId === "fes-2026-10"));
+});
+
+test("配った人の一覧に、まだ受け取っていないことが出る", async () => {
+  records.clear();
+  await grant({ starId:"fes-2026-10", spid:SPID, note:"10/25 来場" });
+  const out = await listFor("fes-2026-10");
+  assert.equal(out.body.stars[0].minted, false);
+  assert.equal(out.body.stars[0].note, "10/25 来場", "メモが消えている");
+});
