@@ -2,7 +2,28 @@
 
 ## 状態
 
-ソースと発行 API は用意済み。Polygon 本番へのデプロイ、ソース検証、発行用ロール設定は未実施です。アドレス未設定の間、パスポートは「証明書NFTは発行準備中」と表示します。星と完走記録は Firestore の承認記録から先に表示されます。
+**デプロイ済み（2026-09-28）。**
+
+| | |
+|---|---|
+| ネットワーク | Polygon PoS Mainnet（chain 137） |
+| アドレス | `0xdcAe7317F4E64fef054bd8f6BA94f9C06fb1F8B6` |
+| デプロイのブロック | 94579082 |
+| コンパイラ | Solidity 0.8.27 / optimizer 200 / EVM shanghai |
+| OpenZeppelin | 5.0.2（Remix では `@openzeppelin/contracts@5.0.2/...` と版を明示して取り込む） |
+
+Render の `SP_QUEST_STAR_CONTRACT` と `SP_QUEST_STAR_MINTER_PRIVATE_KEY` は設定済み。
+`GET /api/schoolpark/quest-completions/certificate/config` が `ready:true` を返す。
+
+ただし `ready` は「環境変数が入っている」ことしか見ていない。MINTER_ROLE の付与と
+発行用ウォレットのガスは、実際に1件発行するまで確かめられない。
+
+残っているもの：Polygonscan でのソース検証（任意）。
+検証するときは、**Remix で実際にコンパイルしたソース**を貼る。リポジトリの
+`src/SchoolParkQuestStar.sol` は import に版を書いていないので、そのままでは一致しない。
+
+限定星（`sp_stars`）も同じコントラクトを使う。もともと「星」のコントラクトなので
+分けていない。鍵の頭が `"schoolpark-star"` なので、完走の鍵とは衝突しない。
 
 ## 完走と100 EMUER
 
