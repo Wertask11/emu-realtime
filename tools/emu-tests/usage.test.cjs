@@ -180,3 +180,19 @@ test('#003 を出すまで、Emuに投稿するボタンは出さない', () => 
   assert.equal(live.indexOf('cur.postEmu'), -1,
     'Emuに投稿するボタンが出ている。要るのは #003 PLAY だけ');
 });
+
+/* 証明書NFTの受け取りボタンを、どの完走に出すか。
+
+   承認のときに証明書の記録は「どのクエストでも」作られる
+   （quest-completion.js の tx.create(certRef, ...) は無条件）。
+   ところが画面側は #001 LEARN の行にだけボタンを出していた。
+   #001 しか無かったころの名残で、10/1 に WORK 15本を出すと
+   「完走したのに受け取れない」人が出る。 */
+test('証明書NFTのボタンが、#001 LEARN だけに絞られていない', () => {
+  const i = INDEX.indexOf('data-quest-star="');
+  const head = INDEX.slice(Math.max(0, i - 900), i);
+  assert.equal(/q\.questNumber === 1 && q\.guildId === 'learn'/.test(head), false,
+    '#001 LEARN だけに絞っている。ほかのクエストを完走した人が受け取れない');
+  assert.match(head, /!q\.isFounder/,
+    '出さないのは #000（創業クエスト）だけのはず');
+});
