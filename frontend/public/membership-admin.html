@@ -1359,6 +1359,53 @@ async function spRows(snap, path, label) {
   }
 }
 
+/* 断られたとき、証（IDトークン）を取り直して1回だけやり直す。
+
+   通信が切れているあいだ、SDK は証を更新できない。復旧しても古い証のまま
+   投げ続けることがあり、記録の決まりは当然それを断る。人は何も変わって
+   いないのに「権限がありません」になる。
+
+   SchoolPark 本体（index.html の _spRefreshAuth）は前からこれをやっていたが、
+   この画面には無かった。だからトレジャリーの記録やクエストの承認が、
+   権限はあるのに permission-denied で落ちることがあった。
+
+   本当に権限が無いときは取り直しても断られるので、やり直しは1回だけ。 */
+let spTokenRefreshedAt = 0;
+async function spRefreshAuth() {
+  const now = Date.now();
+  /* 短いあいだに何度も取り直さない（各所から同時に呼ばれるため） */
+  if (now - spTokenRefreshedAt < 10000) return false;
+  try {
+    const u = auth && auth.currentUser;
+    if (!u || typeof u.getIdToken !== "function") return false;
+    await u.getIdToken(true);
+    spTokenRefreshedAt = now;
+    console.warn("ログインの証を取り直しました。もう一度書きます。");
+    return true;
+  } catch (e) {
+    console.warn("ログインの証を取り直せませんでした:", e && (e.message || e));
+    return false;
+  }
+}
+
+/* 書き込みを1回だけやり直す。断られたときだけ。
+   通信が届かないだけのときは、やり直しても同じなのでそのまま投げ返す。 */
+async function spWrite(run) {
+  try {
+    return await run();
+  } catch (e) {
+    if (!spDenied(e)) throw e;
+    if (!(await spRefreshAuth())) throw e;
+    return await run();
+  }
+}
+function spDenied(e) {
+  const code = String((e && e.code) || "");
+  const msg = String((e && e.message) || "");
+  return code === "permission-denied"
+    || msg.indexOf("Missing or insufficient permissions") >= 0;
+}
+
 async function spMyAddress() {
   const f = await spReady();
   const uid = auth.currentUser && auth.currentUser.uid;
@@ -2590,11 +2637,11 @@ async function renderSchoolPark() {
       if (!isNaN(d.getTime())) at = d.getTime();
     }
     try {
-      await f.addDoc(f.collection(f.db, "sp_treasury"), {
+      await spWrite(() => f.addDoc(f.collection(f.db, "sp_treasury"), {
         kind: kind, currency: cur, amount: amount,
         label: label.slice(0, 120), note: v("atNote").slice(0, 400),
         at: at, createdAt: Date.now(), by: ownerAddr
-      });
+      }));
     } catch (e) { alert("記録できませんでした（" + (e.code || e.message) + "）"); return; }
     renderSchoolPark();
   };
@@ -2605,7 +2652,7 @@ async function renderSchoolPark() {
   document.querySelectorAll("[data-atdel]").forEach(b => {
     b.onclick = async () => {
       if (!confirm("この記録を消します。よろしいですか？\n（金額を直すときは、消して入れ直してください）")) return;
-      try { await f.deleteDoc(f.doc(f.db, "sp_treasury", b.dataset.atdel)); }
+      try { await spWrite(() => f.deleteDoc(f.doc(f.db, "sp_treasury", b.dataset.atdel))); }
       catch (e) { alert("消せませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
@@ -2642,7 +2689,7 @@ async function renderSchoolPark() {
     if (!SpQuestStore.isValidBranch(aqBranch)) { alert("枝番の指定が正しくありません。"); questSubmitting = false; return; }
     if (!SpQuestStore.isValidStage(aqStage)) { alert("段階の指定が正しくありません。"); questSubmitting = false; return; }
     try {
-      await SpQuestStore.createQuest(f, f.db, {
+      await spWrite(() => SpQuestStore.createQuest(f, f.db, {
         series: aqSeries, questNumber: aqNumber, branch: aqBranch, stage: aqStage,
         title: v("aqTitle").slice(0, 120), guildId: aqGuildId, knowledge: v("aqKnowledge").slice(0, 200),
         hypothesis: v("aqHypothesis").slice(0, 400), action: v("aqAction").slice(0, 400),
@@ -2652,7 +2699,7 @@ async function renderSchoolPark() {
         need: Math.max(1, Math.min(50, parseInt(v("aqNeed"), 10) || 5)),
         owner: ownerAddr, ownerName: (auth.currentUser && auth.currentUser.displayName) || "運営",
         status: "OPEN", createdAt: Date.now(), closesAt: Date.now() + days * 86400000
-      });
+      }));
     } catch (e) {
       const msg = String((e && e.message) || "");
       if (msg.indexOf("QUEST_NUMBER_TAKEN") >= 0) alert("この番号はすでに使われています。別の番号にしてください。");
@@ -2762,7 +2809,7 @@ async function renderSchoolPark() {
       aqBulkSay('<p class="hint">出しています… ' + (done.length + skipped.length + failed.length + 1)
         + ' / ' + rows.length + '</p>');
       try {
-        await SpQuestStore.createQuest(f, f.db, r.body);
+        await spWrite(() => SpQuestStore.createQuest(f, f.db, r.body));
         done.push(r.label);
       } catch (e) {
         const msg = String((e && e.message) || "");
@@ -2792,20 +2839,20 @@ async function renderSchoolPark() {
     const guildId = v("avGuild");
     if (!SpGuildStore.isValidId(guildId)) { alert("どのギルドの議題かを選んでください。"); return; }
     try {
-      await f.addDoc(f.collection(f.db, "sp_votes"), {
+      await spWrite(() => f.addDoc(f.collection(f.db, "sp_votes"), {
         title: v("avTitle").slice(0, 120), body: v("avBody").slice(0, 600),
         options: labels.map((l, i) => ({ id: "o" + (i + 1), label: l.slice(0, 60) })),
         kind: (v("avKind") === "special") ? "special" : "free",
         guildId: guildId,
         createdBy: addr, createdAt: Date.now(), closesAt: Date.now() + days * 86400000
-      });
+      }));
     } catch (e) { alert("出せませんでした（" + (e.code || e.message) + "）"); return; }
     renderSchoolPark();
   };
 
   el.querySelectorAll("[data-qrun]").forEach(b => {
     b.onclick = async () => {
-      try { await f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qrun), { status: "RUNNING" }); }
+      try { await spWrite(() => f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qrun), { status: "RUNNING" })); }
       catch (e) { alert("変えられませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
@@ -2813,7 +2860,7 @@ async function renderSchoolPark() {
   el.querySelectorAll("[data-qclose]").forEach(b => {
     b.onclick = async () => {
       if (!confirm("このクエストを完了にします。受付は締め切られます。よろしいですか？")) return;
-      try { await f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qclose), { status: "CLOSED", closedAt: Date.now() }); }
+      try { await spWrite(() => f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qclose), { status: "CLOSED", closedAt: Date.now() })); }
       catch (e) { alert("変えられませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
@@ -2884,9 +2931,9 @@ async function renderSchoolPark() {
           String(x.addr).toLowerCase() === String(b.dataset.addr).toLowerCase());
         const nextRound = Math.max(Number((t1 && t1.rounds) || 0), (t1 && t1.approved) ? 1 : 0) + 1;
         try {
-          await f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qapprove, "commits", b.dataset.addr),
+          await spWrite(() => f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qapprove, "commits", b.dataset.addr),
             { approved: true, approvedAt: Date.now(), approvedBy: ownerAddr,
-              approvedRounds: nextRound, lastApprovedAt: Date.now() });
+              approvedRounds: nextRound, lastApprovedAt: Date.now() }));
         } catch (e2) { alert("認められませんでした（" + (e2.code || e2.message) + "）"); return; }
         alert("完走として認めました。\n\nただし EMUER は渡せていません（" + code + "）。\n"
           + "「EMUERの予算を公開」を済ませてから、この人の行に出る「EMUERを渡す」を押すと渡せます。");
@@ -2918,8 +2965,8 @@ async function renderSchoolPark() {
     b.onclick = async () => {
       if (!confirm("この人の参加の承認を取り消します。よろしいですか？")) return;
       try {
-        await f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qunapprove, "commits", b.dataset.addr),
-          { approved: false, approvedAt: Date.now(), approvedBy: ownerAddr });
+        await spWrite(() => f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qunapprove, "commits", b.dataset.addr),
+          { approved: false, approvedAt: Date.now(), approvedBy: ownerAddr }));
       } catch (e) { alert("取り消せませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
@@ -2938,13 +2985,13 @@ async function renderSchoolPark() {
       doc.place = v("apPlace").slice(0, 80);
     }
     if (kind === "dumb" || kind === "event") doc.who = v("apWho").slice(0, 80);
-    try { await f.addDoc(f.collection(f.db, "sp_park"), doc); }
+    try { await spWrite(() => f.addDoc(f.collection(f.db, "sp_park"), doc)); }
     catch (e) { alert("置けませんでした（" + (e.code || e.message) + "）"); return; }
     renderSchoolPark();
   };
   el.querySelectorAll("[data-phide]").forEach(b => {
     b.onclick = async () => {
-      try { await f.updateDoc(f.doc(f.db, "sp_park", b.dataset.phide), { hidden: b.dataset.pnow !== "1" }); }
+      try { await spWrite(() => f.updateDoc(f.doc(f.db, "sp_park", b.dataset.phide), { hidden: b.dataset.pnow !== "1" })); }
       catch (e) { alert("変えられませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
@@ -2952,7 +2999,7 @@ async function renderSchoolPark() {
   el.querySelectorAll("[data-pdel]").forEach(b => {
     b.onclick = async () => {
       if (!confirm("これを消します。元に戻せません。よろしいですか？")) return;
-      try { await f.deleteDoc(f.doc(f.db, "sp_park", b.dataset.pdel)); }
+      try { await spWrite(() => f.deleteDoc(f.doc(f.db, "sp_park", b.dataset.pdel))); }
       catch (e) { alert("消せませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
@@ -2960,8 +3007,8 @@ async function renderSchoolPark() {
   el.querySelectorAll("[data-tadd]").forEach(b => {
     b.onclick = async () => {
       if (!confirm("この方をギルドに参加OKにします。\n\n議題を出すことと、特殊ギルドへの投票ができるようになります。")) return;
-      try { await f.setDoc(f.doc(f.db, "sp_trust", b.dataset.tadd),
-        { name: b.dataset.tname || "", by: addr, at: Date.now() }); }
+      try { await spWrite(() => f.setDoc(f.doc(f.db, "sp_trust", b.dataset.tadd),
+        { name: b.dataset.tname || "", by: addr, at: Date.now() })); }
       catch (e) { alert("できませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
@@ -2969,7 +3016,7 @@ async function renderSchoolPark() {
   el.querySelectorAll("[data-tdel]").forEach(b => {
     b.onclick = async () => {
       if (!confirm("この方の参加を取り消します。よろしいですか？")) return;
-      try { await f.deleteDoc(f.doc(f.db, "sp_trust", b.dataset.tdel)); }
+      try { await spWrite(() => f.deleteDoc(f.doc(f.db, "sp_trust", b.dataset.tdel))); }
       catch (e) { alert("できませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
@@ -2977,7 +3024,7 @@ async function renderSchoolPark() {
   el.querySelectorAll("[data-vclose]").forEach(b => {
     b.onclick = async () => {
       if (!confirm("この議題をいま締め切ります。\n\n締め切ると、もう投票できません。よろしいですか？")) return;
-      try { await f.updateDoc(f.doc(f.db, "sp_votes", b.dataset.vclose), { closesAt: Date.now() }); }
+      try { await spWrite(() => f.updateDoc(f.doc(f.db, "sp_votes", b.dataset.vclose), { closesAt: Date.now() })); }
       catch (e) { alert("締め切れませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
