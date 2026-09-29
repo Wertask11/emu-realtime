@@ -326,9 +326,23 @@ test('予算は、#000 以外のどのクエストでも公開できる', () => 
   assert.equal(ADMIN.indexOf("Number(q.questNumber) === 1 && q.guildId === 'learn'"), -1,
     'LEARN #001 の決め打ちが残っている');
   assert.equal(ADMIN.indexOf('EMUER個別予算10,000を公開'), -1, '10,000の決め打ちが残っている');
+  /* 固定の文字数で切らない。中身が増えたとき、確かめたい行が窓の外へ
+     出て、直っているのに落ちる。手前をさかのぼって、同じ式の中に
+     #000 を外す判定があることを見る。 */
   const i = ADMIN.indexOf('data-qbudget="');
-  assert.ok(ADMIN.slice(i - 200, i).indexOf('SpQuestStore.isFounder(q)') >= 0,
-    '#000 を外していない');
+  const guard = ADMIN.lastIndexOf("SpQuestStore.isFounder(q) ? ''", i);
+  assert.ok(guard > 0 && guard < i, '#000 を外していない');
+  assert.equal(ADMIN.slice(guard, i).indexOf('</div>'), -1,
+    '#000 を外す判定が、別の行のものになっている');
+});
+
+test('予算が付いているクエストには、出すボタンを出さない', () => {
+  /* 二度出せない（額は変えられない）ので、押せてしまうこと自体が罠。
+     付いているときは、額と渡したぶんを出す。 */
+  const i = ADMIN.indexOf('data-qbudget="');
+  const guard = ADMIN.lastIndexOf("SpQuestStore.isFounder(q) ? ''", i);
+  assert.match(ADMIN.slice(guard, i), /emuBudgetOf\.has\(q\.id\)/,
+    'すでに予算があるのにボタンが出る');
 });
 
 test('予算は、1人あたりと人数を聞いてから送る', () => {
