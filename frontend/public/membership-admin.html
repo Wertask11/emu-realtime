@@ -104,15 +104,50 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&am
 const fmt = iso => iso ? new Date(iso).toLocaleString("ja-JP") : "—";
 let idToken = null;
 
+/* ログインの証は1時間で切れる。
+
+   前はログインしたときに1回だけ取って、そのまま使い回していた。
+   管理画面は開きっぱなしで使うものなので、1時間たつと
+   サーバーへの用事がぜんぶ INVALID_AUTH_TOKEN（401）で断られる。
+   画面は生きているのに、押すボタンが全部だめになる。
+
+   実際、EMUER の予算を公開しようとして 401 で止まった。
+   Firestore への書き込みには取り直して1回やり直す道を付けてあったが
+   （spWrite）、サーバーへの用事にだけ無かった。
+
+   getIdToken() は期限が近ければ裏で取り直してくれる。毎回それを呼ぶ。
+   それでも断られたときは、はっきり取り直して1回だけやり直す。 */
+async function spIdToken(force) {
+  const u = auth && auth.currentUser;
+  if (!u || typeof u.getIdToken !== "function") return idToken;
+  try {
+    idToken = await u.getIdToken(!!force);
+  } catch (e) {
+    console.warn("ログインの証を取れませんでした:", e && (e.message || e));
+  }
+  return idToken;
+}
+
 async function api(path, options) {
-  const res = await fetch(API + path, {
-    method: (options && options.method) || "GET",
-    headers: Object.assign({ "Authorization": "Bearer " + idToken },
-      (options && options.body) ? { "Content-Type": "application/json" } : {}),
-    body: options && options.body ? JSON.stringify(options.body) : undefined
-  });
-  let data = {};
-  try { data = await res.json(); } catch (_) {}
+  const send = async (token) => {
+    const res = await fetch(API + path, {
+      method: (options && options.method) || "GET",
+      headers: Object.assign({ "Authorization": "Bearer " + token },
+        (options && options.body) ? { "Content-Type": "application/json" } : {}),
+      body: options && options.body ? JSON.stringify(options.body) : undefined
+    });
+    let data = {};
+    try { data = await res.json(); } catch (_) {}
+    return { res, data };
+  };
+
+  let { res, data } = await send(await spIdToken(false));
+  /* 断られたのが証のせいなら、取り直して1回だけやり直す。
+     権限が無い（403）のときは、取り直しても同じなのでやり直さない。 */
+  if (res.status === 401) {
+    const fresh = await spIdToken(true);
+    if (fresh) ({ res, data } = await send(fresh));
+  }
   if (!res.ok) throw Object.assign(new Error(data.error || ("HTTP " + res.status)), { code: data.error, status: res.status });
   return data;
 }
