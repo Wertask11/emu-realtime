@@ -20105,6 +20105,44 @@ function spMoney(n, cur) {
   return v + ' ' + (SP_CURRENCY_LABEL[cur] || cur);
 }
 
+/* EMUER の本当の帳簿。
+
+   トレジャリーの画面は、長いあいだ sp_quests の budget 欄を足していた。
+   あれはカードに出る「1人あたりの報酬額」で、何人完走するかも、
+   実際にいくら確保したかも入っていない。開いているクエストのぶんを
+   ただ足して「約束済み」と呼び、「ある」から引いていたので、
+   クエストを15本出しただけで 1,750 が足され、使える額がマイナスに
+   なった。お金は1円も動いていないのに「約束が持っている額を
+   超えています」と出た。
+
+   本当の額は emuer_v2_guild_quest_budgets にある。ここは
+   サーバー専用で画面からは読めない（firestore.rules の
+   包括許可が emuer_v2_* を外している）ので、用意されている口から取る。
+
+     totalEmuer      確保の上限。ここまでなら配れる、という数
+     allocatedEmuer  実際に人へ引き当てた額。これが本当の負債
+     remainingEmuer  その差
+
+   「上限」は負債ではない。上限を大きく取っても何も減らない。
+   減るのは、運営が1人ずつ承認したときだけ。だから引き算に使うのは
+   allocatedEmuer のほうで、上限は別に見せる。 */
+async function _spQuestBudgets() {
+  return _spMemo('emuer-budgets', 60000, async function () {
+    const r = await fetch('https://emu-realtime.onrender.com/api/emuer/v2/guild-quest/budgets',
+      { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const rows = (j && j.budgets) || [];
+    let total = 0, allocated = 0;
+    rows.forEach(function (b) {
+      total += Math.max(0, Number(b.totalEmuer) || 0);
+      allocated += Math.max(0, Number(b.allocatedEmuer) || 0);
+    });
+    return { count: rows.length, total: total, allocated: allocated,
+             remaining: Math.max(0, total - allocated) };
+  });
+}
+
 window.spDaoLoadTreasury = async function (app) {
   if (!app || typeof app.setState !== 'function') return;
   if (!window.db || !window.fbLib) return;
@@ -20128,6 +20166,14 @@ window.spDaoLoadTreasury = async function (app) {
   } catch (e) {
     /* 記録がまだ1件も無いときも、ここは通る。予算だけ出す。 */
     console.warn('入出金の記録を読めませんでした:', e && (e.message || e));
+  }
+
+  /* EMUER の本当の帳簿。読めなくても画面は出す（0とは書かない）。 */
+  let ledger = null;
+  try {
+    ledger = await _spQuestBudgets();
+  } catch (e) {
+    console.warn('EMUER の予算を読めませんでした:', e && (e.message || e));
   }
 
   const now = new Date();
@@ -20186,18 +20232,37 @@ window.spDaoLoadTreasury = async function (app) {
     });
   });
 
-  /* 選んだ通貨の3段。使える＝ある − 約束済み。
-     マイナスになったら、払えない約束をしていることになる。 */
+  /* 選んだ通貨の3段。
+
+     引くのは「実際に人へ引き当てた額」だけにする。
+     確保の上限（totalEmuer）は引かない。上限を大きく取っても
+     お金は減らないので、引くと払えるのに払えないように見える。
+
+     EMUER は本当の帳簿（emuer_v2_guild_quest_budgets）から取る。
+     円と JPYC にはその帳簿が無い。支払ったぶんは入出金の記録から
+     すでに「ある」に反映されているので、ここでは何も引かない。
+     （前はここでクエストの「1人あたりの額」を足して引いていた。
+       単位も意味も違うものを引いていたことになる） */
   function cardFor(c) {
     const b = box[c];
-    const free = b.have - b.promised;
+    const known = (c !== 'EMUER') || !!ledger;
+    const paid = (c === 'EMUER') ? ((ledger && ledger.allocated) || 0) : 0;
+    const free = b.have - paid;
     return {
       have: spMoney(b.have, c),
-      promised: spMoney(b.promised, c),
-      free: spMoney(free, c),
-      freeColor: free < 0 ? '#E08A7A' : '#D0E2BE',
-      warn: free < 0 ? '約束が持っている額を超えています' : '',
-      month: '今月 +' + spMoney(b.monthIn, c) + ' / -' + spMoney(b.monthOut, c)
+      paid: known ? spMoney(paid, c) : 'いま読めません',
+      free: known ? spMoney(free, c) : '—',
+      freeColor: (known && free < 0) ? '#E08A7A' : '#D0E2BE',
+      warn: !known
+        ? 'EMUER の予算を読めませんでした。通信が戻ってから、もう一度開いてください。'
+        : (free < 0 ? '渡した額が、記録されている残高を超えています' : ''),
+      month: '今月 +' + spMoney(b.monthIn, c) + ' / -' + spMoney(b.monthOut, c),
+      /* 確保の上限。負債ではないので、数字の下に一言で添える。 */
+      reserved: (c === 'EMUER' && ledger && ledger.count)
+        ? 'クエストに確保してある上限は ' + spMoney(ledger.total, c)
+          + '（' + ledger.count + '本）。うち ' + spMoney(ledger.allocated, c) + ' を渡しました。'
+          + '上限は「ここまでなら渡せる」という数で、お金は減っていません。'
+        : ''
     };
   }
 
@@ -20207,15 +20272,31 @@ window.spDaoLoadTreasury = async function (app) {
      通貨を混ぜた瞬間に意味のない数字になっていた。 */
   function allocFor(c) {
     const b = box[c];
+    /* EMUER は本当の帳簿の内訳を出す。 */
+    if (c === 'EMUER') {
+      if (!ledger || !ledger.count) return [];
+      const t = ledger.total;
+      const row = function (label, v) {
+        return { label: label, amount: spMoney(v, c),
+          pct: t > 0 ? Math.round(v / t * 100) + '%' : '0%' };
+      };
+      return [
+        row('確保してある上限', t),
+        row('渡したぶん', ledger.allocated),
+        row('まだ渡せるぶん', ledger.remaining)
+      ];
+    }
+    /* 円と JPYC には帳簿が無い。クエストの画面上の額を目安として出す。
+       これは1人あたりの額の合計であって、支出でも約束でもない。 */
     const total = b.promised + b.closed;
     const row = function (label, v) {
       return { label: label, amount: spMoney(v, c),
         pct: total > 0 ? Math.round(v / total * 100) + '%' : '0%' };
     };
     return [
-      row('クエスト予算（確保中）', b.promised),
-      row('完走メンバーへの分配', b.closed * SP_SHARE_DONE),
-      row('DAOプール', b.closed * SP_SHARE_POOL)
+      row('走っているクエストの報酬（1人あたりの合計）', b.promised),
+      row('完了したクエストの報酬（同）', b.closed),
+      row('うち完走した人への目安（80%）', b.closed * SP_SHARE_DONE)
     ];
   }
 
@@ -20255,9 +20336,18 @@ window.spDaoLoadTreasury = async function (app) {
         startNotice: c === 'EMUER'
           ? '新しいEMUERの仕組みは2026年10月1日開始予定です。現在の残高と記録は保持されます。'
           : '',
-        allocNote: (b.promised + b.closed) === 0
-          ? 'この通貨のクエストはまだありません。'
-          : '合計 ' + spMoney(b.promised + b.closed, c) + ' の内訳です。完了したクエストのぶんだけ、下の3つに分かれます。',
+        allocNote: (c === 'EMUER')
+          ? (!ledger
+              ? 'EMUER の予算をいま読めませんでした。'
+              : (!ledger.count
+                  ? 'まだどのクエストにも EMUER の予算を出していません。管理画面の「EMUERの予算を公開」から出せます。'
+                  : 'クエストごとに確保した上限と、実際に渡したぶんです。'
+                    + '上限を決めただけでは EMUER は動きません。運営が1人ずつ認めたときに動きます。'))
+          : ((b.promised + b.closed) === 0
+              ? 'この通貨のクエストはまだありません。'
+              : 'クエストのカードに出ている報酬額（1人あたり）を足したものです。'
+                + '何人が完走するかは入っていないので、支払う額そのものではありません。'
+                + '実際に払ったぶんは、入出金の記録から「ある」に反映されます。'),
         alloc: allocFor(c),
         txs: txList
       },
