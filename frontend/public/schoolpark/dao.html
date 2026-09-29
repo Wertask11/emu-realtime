@@ -107,6 +107,11 @@ if (window.top === window.self) window.location.replace('/');
 
       <div style="padding:{{ L.pad }}; display:flex; flex-direction:column; gap:36px">
 
+        <sc-if value="{{ showCityReturn }}">
+          <button type="button" onClick="{{ goCity }}" style="align-self:flex-start; min-height:44px; padding:10px 16px; border:1px solid #0F5C3F; border-radius:7px; background:transparent; color:#0F5C3F; font:inherit; cursor:pointer">← Cityへ戻る</button>
+        </sc-if>
+        <sc-if value="{{ isCity }}"><div data-city-slot=""></div></sc-if>
+
 
         <sc-if value="{{ showFounder }}">
           <section style="background:#0F5C3F; color:#F4F1EA; border-radius:12px; padding:24px; margin-bottom:24px; overflow-wrap:anywhere">
@@ -1388,7 +1393,7 @@ class Component extends DCLogic {
     const L = {...base, menuShow: hasSidebar ? 'none' : 'flex', sidebarShow:sidebarOpen ? 'flex' : 'none', sidebarToggle:hasSidebar && !sidebarOpen ? 'flex' : 'none', w: '100%', h: '100%', scale: 'none', boxH: '100vh', frameR: '0'};
     /* 左の並び。「考える → 決める → やる → 残す」の順に置き、
        公園（報酬のない遊び）はそのあとに続ける。番号は並びに合わせて振り直す。 */
-    const navDefs = [['home','01','今週の広場'],['logs','02','ギルド'],['experiments','03',W+'一覧'],['library','04','知恵ライブラリ'],['park','05','公園'],['members','06','メンバー・貢献'],['treasury','07','トレジャリー']];
+    const navDefs = [['home','01','今週の広場'],['logs','02','ギルド'],['experiments','03',W+'一覧'],['library','04','知恵ライブラリ'],['park','05','公園'],['members','06','メンバー・貢献'],['treasury','07','トレジャリー'],['city','08','CITY']];
     const heads = {
       home:['The week / 今週の広場','おはよう、' + s.me.name],
       park:['THE PARK / 公園','無我夢中で遊ぼう'],
@@ -1401,6 +1406,7 @@ class Component extends DCLogic {
       library:['WISDOM LIBRARY','知恵ライブラリ'],
       members:['MEMBERS','メンバーと貢献度'],
       treasury:['TREASURY','トレジャリーと分配'],
+      city:['08 CITY / 分散型複合現実','SchoolPark City'],
       propose:['NEW QUEST', W+'を出す'],
       yeargoals:['YEAR GOALS', (s.yearDoc && s.yearDoc.title) ? s.yearDoc.title : '年内目標']
     };
@@ -1557,12 +1563,14 @@ class Component extends DCLogic {
       nav: navDefs.map(([id,num,label]) => { const on = s.screen===id || (id==='logs' && s.screen==='guild'); return {num, label, go:this.go(id),
         bg: on ? '#0F5C3F' : 'transparent',
         fg: on ? '#F4F1EA' : 'rgba(244,241,234,.72)'}; }),
-      tabs: [['home','01','広場'],['logs','02','ギルド'],['experiments','03',W],['library','04','知恵'],['park','05','公園'],['members','06','メンバー'],['treasury','07','会計']].map(([id,n,label]) => ({
+      tabs: [['home','01','広場'],['logs','02','ギルド'],['experiments','03',W],['library','04','知恵'],['park','05','公園'],['members','06','メンバー'],['treasury','07','会計'],['city','08','CITY']].map(([id,n,label]) => ({
         n, label, go:this.go(id),
         bg: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#0F5C3F' : 'transparent',
         fg: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#F4F1EA' : 'rgba(244,241,234,.6)',
         num: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#D0E2BE' : 'rgba(244,241,234,.35)'})),
       head: {kicker: (heads[s.screen] || heads.home)[0], title: (heads[s.screen] || heads.home)[1]},
+      isCity:s.screen==='city', goCity:this.go('city'),
+      showCityReturn:!!this.cityReturn && ['experiments','detail','guild'].includes(s.screen),
       isHome:s.screen==='home', isPark:s.screen==='park', isPlaza:s.screen==='plaza', isExperiments:s.screen==='experiments', isDetail:s.screen==='detail' && !cur.isFounder,
       isFounderDetail:s.screen==='detail' && !!cur.isFounder,
       /* #000 はクエストの画面にだけ出す。広場には出さない。
@@ -1769,6 +1777,24 @@ var app = new Component();
 var host = document.getElementById('dao-root');
 var tpl = document.getElementById('dao-template');
 var queued = false;
+/* Preserve City's DOM across the existing whole-frame redraws. Its module,
+   styles and data are not requested until the user opens 08. */
+var cityHost = null;
+var cityModule = null;
+function mountCity() {
+  var slot = host.querySelector('[data-city-slot]');
+  if (!slot) return;
+  if (!cityHost) { cityHost = document.createElement('section'); cityHost.id = 'sp-city'; }
+  slot.replaceWith(cityHost);
+  if (!cityModule) cityModule = import('./city.js').catch(function (err) { cityModule = null; throw err; });
+  cityModule.then(function (mod) { if (cityHost.isConnected) mod.mount(cityHost, app); }).catch(function () {
+    cityHost.textContent = 'Cityを読み込めませんでした。';
+    var retry = document.createElement('button');
+    retry.type = 'button'; retry.textContent = 'もう一度読み込む';
+    retry.onclick = function () { app.setState({}); };
+    cityHost.appendChild(retry);
+  });
+}
 
 function draw() {
   queued = false;
@@ -1780,6 +1806,7 @@ function draw() {
   var frag = document.createDocumentFragment();
   walk(tpl.content, vals, frag);
   host.replaceChildren(frag);
+  mountCity();
   if (app.scroller.current) app.scroller.current.scrollTop = scrollTop;
   if (window.scrollY !== pageY) window.scrollTo(0, pageY);
   /* タブを押して画面を描き直しても、利用者が横に動かした位置を保つ。

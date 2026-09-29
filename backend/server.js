@@ -273,6 +273,9 @@ app.use("/api/feedback", feedback.router);
 app.use("/api/review", review.router);
 app.use("/api/emuer/v2", emuerV2.router);
 app.use("/api/schoolpark/quest-completions", questCompletion);
+app.use("/api/schoolpark/city", require("./city").createCityRouter({
+  db, identity, entitlement, requireFirebaseUser, rateLimit, ownerAddresses: SP_OWNER_ADDRESSES
+}));
 app.use("/api/camellia", camellia.router);
 
 // 未処理のまま保持期限(30日)を過ぎた本人確認書類を毎日破棄する。
