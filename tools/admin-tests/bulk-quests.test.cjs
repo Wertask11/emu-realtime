@@ -190,3 +190,59 @@ test('すでにある番号は飛ばす作りになっている', () => {
   assert.match(go, /skipped/, '飛ばした数を数えていない');
   assert.match(go, /confirm\(/, '確かめずに15本出してしまう');
 });
+
+/* ───────── 一般 #003 PLAY「自分の町で、ゴミを拾う」 ─────────
+
+   完走の判定はサーバーが持っていて、報告が
+   「やってみた・つまずいた・気づいた」の3種類そろっているかを見る
+   （backend/quest-completion.js の LOG_KINDS）。1つでも欠けると
+   COMPLETION_EVIDENCE_MISSING で完走にならない。
+
+   クエストの文面が別の言葉（開始宣言・中間報告・最終報告）で
+   書かれていると、受けた人はそのとおりに3回書いて、それでも
+   完走できない。文面の側に読み替えを書いておく。 */
+const PLAY3 = JSON.parse(fs.readFileSync(
+  path.join(root, 'tools/quest-seeds/general-003-play.json'), 'utf8'));
+const LOG_KINDS = ['やってみた', 'つまずいた', '気づいた'];
+
+test('#003 PLAY を、そのまま読める', () => {
+  const rows = run(PLAY3);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].body.title, '自分の町で、ゴミを拾う');
+  assert.equal(rows[0].body.guildId, 'play');
+  assert.equal(rows[0].body.budget, '100');
+  assert.equal(rows[0].body.budgetCurrency, 'EMUER');
+});
+
+test('#003 の報告の言い換えが、システムの3種類と結び付けてある', () => {
+  const b = run(PLAY3)[0].body;
+  const text = b.brief + b.deliverable + b.criteria;
+  LOG_KINDS.forEach(function (k) {
+    assert.ok(text.indexOf(k) >= 0,
+      '「' + k + '」が文面に出てこない。受けた人はこれを書けないと完走できない');
+  });
+  /* 3種類そろわないと完走にならないことを、はっきり書いてあること。 */
+  assert.match(b.brief + b.deliverable, /1つでも欠けると/,
+    '1種類でも欠けたら完走にならないことが書かれていない');
+});
+
+test('#003 の締切は 12/17。受けた人の14日後が 12/31 に収まる', () => {
+  const at = run(PLAY3)[0].closesAt;
+  const jst = new Date(at + 9 * 3600000).toISOString().slice(0, 10);
+  assert.equal(jst, '2026-12-17', '募集の締切がずれている');
+  const last = new Date(at + 14 * 86400000 + 9 * 3600000).toISOString().slice(0, 10);
+  assert.equal(last, '2026-12-31', '最後に受けた人が年内に終わらない');
+});
+
+test('#003 に、安全と写真のきまりが書いてある', () => {
+  const b = run(PLAY3)[0].body;
+  [/ガラス片/, /注射針/, /顔が分かる写真/, /自宅が分かる写真/].forEach(function (x) {
+    assert.match(b.brief, x, '守ってほしいことが抜けている: ' + x);
+  });
+});
+
+test('#003 は案件ものとして出る（仮説検証の箱は出ない）', () => {
+  const b = run(PLAY3)[0].body;
+  assert.ok(b.given && b.deliverable && b.criteria, '案件ものの欄が空');
+  assert.equal(b.knowledge, '', '仮説検証の箱と両方出ると、同じことを2度書くことになる');
+});
