@@ -68,12 +68,15 @@ test('詳細も、読めなかったら null のまま', () => {
 });
 
 test('一覧と詳細が、同じ出し方を通る', () => {
-  const uses = INDEX.split('\n').filter(l => l.indexOf('joinCount:') >= 0);
-  assert.ok(uses.length >= 2, 'ギルドの数字を出すところが足りません');
-  uses.forEach(l => {
-    assert.ok(/_spCountLabel\(|joinCount: '—'/.test(l),
-      '生の数字を出しているところが残っています: ' + l.trim());
-  });
+  /* 見るのは「数から表示を作るところ」だけ。押した直後にその場で
+     動かすところ（_spGuildApplyLocal）は、もう表示になっている値を
+     受け取って足し引きするので、ここには入らない。 */
+  const raw = INDEX.split('\n')
+    .filter(l => /joinCount:\s*String\(|supportCount:\s*String\(/.test(l));
+  assert.deepEqual(Array.from(raw), [],
+    '生の数字を出しているところが残っています');
+  const n = (INDEX.match(/_spCountLabel\(/g) || []).length;
+  assert.ok(n >= 5, '出し方を通っているところが ' + n + 'か所しかありません');
 });
 
 /* ───────── 押してだめだったとき ───────── */
@@ -128,4 +131,150 @@ test('押してだめだったときの文言が、そこを通る', () => {
   const src = INDEX.slice(at, at + 3000);
   assert.match(src, /alert\(_spWhyFailed\(e\)\)/,
     'どこで転んでも同じ文言を出している');
+});
+
+/* ───────── 押した瞬間に、画面が動くこと ─────────
+
+   前は、書き終えてから spDaoLoadVotes で全部読み直していた。
+   読み直しは重い（議題・クエスト・5ギルド×2往復・信用スコア）ので、
+   押してから数字が動くまで数秒かかる。そのあいだ画面はまったく
+   変わらないので、押せたのかどうか分からない。
+   「ちょっと待つと反映される」のはこれである。
+
+   クエストの「受ける」は、押した結果をその場で出してから
+   読み直している。ギルドだけそうなっていなかった。 */
+
+function local() {
+  const from = INDEX.indexOf('function _spGuildBtn(iJoined, iSupport) {');
+  const to = INDEX.indexOf('/* 押してだめだったとき、何が起きているのかを言う。');
+  const src = INDEX.slice(from, to);
+  assert.ok(from > 0 && src.length > 1200, 'その場で出すところが見つかりません');
+  const ctx = vm.createContext({ Object, Number, Math, String, Array });
+  vm.runInContext(src, ctx);
+  return ctx;
+}
+
+function scene(opts) {
+  const o = opts || {};
+  const state = {
+    guilds: [{ id: 'learn', joinCount: o.join === undefined ? '3' : o.join,
+      supportCount: o.sup === undefined ? '5' : o.sup,
+      meJoined: !!o.meJoined, meSupport: !!o.meSupport, meLabel: '', meShow: 'none' }],
+    curGuild: o.open ? { id: 'learn', joinCount: o.join === undefined ? '3' : o.join,
+      supportCount: o.sup === undefined ? '5' : o.sup,
+      meJoined: !!o.meJoined, meSupport: !!o.meSupport } : null
+  };
+  return { state: state, setState: function (x) { Object.assign(state, x); } };
+}
+
+test('押すと、その場でボタンが変わる', () => {
+  const ctx = local();
+  const app = scene({ open: true });
+  ctx._spGuildApplyLocal('learn', 'join', true, app);
+  assert.equal(app.state.curGuild.joinLabel, '✓ 参加したい', '押しても見た目が変わらない');
+  assert.equal(app.state.curGuild.meJoined, true);
+  assert.equal(app.state.guilds[0].meLabel, '参加したい', '一覧のほうが変わらない');
+});
+
+test('押すと、その場で数字が動く', () => {
+  const ctx = local();
+  const app = scene({ open: true });
+  ctx._spGuildApplyLocal('learn', 'join', true, app);
+  assert.equal(app.state.guilds[0].joinCount, '4', '3 → 4 になっていない');
+  assert.equal(app.state.curGuild.joinCount, '4');
+  assert.equal(app.state.guilds[0].supportCount, '5', '関係ない数字まで動いている');
+});
+
+test('取り消すと、その場で戻る', () => {
+  const ctx = local();
+  const app = scene({ open: true, meJoined: true });
+  ctx._spGuildApplyLocal('learn', 'join', false, app);
+  assert.equal(app.state.guilds[0].joinCount, '2', '3 → 2 になっていない');
+  assert.equal(app.state.curGuild.joinLabel, 'このギルドに参加したい');
+  assert.equal(app.state.curGuild.meJoined, false);
+});
+
+test('同じ状態をもう一度入れても、数字は動かない', () => {
+  const ctx = local();
+  const app = scene({ open: true, meJoined: true });
+  ctx._spGuildApplyLocal('learn', 'join', true, app);
+  assert.equal(app.state.guilds[0].joinCount, '3', '押していないのに数字が増えている');
+});
+
+test('数えられていない（—）ものは、数えないまま', () => {
+  const ctx = local();
+  const app = scene({ open: true, join: '—' });
+  ctx._spGuildApplyLocal('learn', 'join', true, app);
+  assert.equal(app.state.guilds[0].joinCount, '—',
+    '読めていないのに 1 と数えている');
+  /* 見た目（自分が入ったこと）は動いてよい。そこは分かっている。 */
+  assert.equal(app.state.curGuild.meJoined, true);
+});
+
+test('応援を押しても、参加の数字は動かない', () => {
+  const ctx = local();
+  const app = scene({ open: true });
+  ctx._spGuildApplyLocal('learn', 'support', true, app);
+  assert.equal(app.state.guilds[0].supportCount, '6');
+  assert.equal(app.state.guilds[0].joinCount, '3');
+  assert.equal(app.state.curGuild.supportLabel, '✓ 応援している');
+});
+
+test('ほかのギルドは、いっさい動かない', () => {
+  const ctx = local();
+  const app = scene({ open: true });
+  app.state.guilds.push({ id: 'work', joinCount: '9', supportCount: '9',
+    meJoined: false, meSupport: false });
+  ctx._spGuildApplyLocal('learn', 'join', true, app);
+  const work = app.state.guilds.filter(g => g.id === 'work')[0];
+  assert.equal(work.joinCount, '9', '押していないギルドの数字が動いている');
+});
+
+test('詳細を開いていなくても、一覧だけは動く', () => {
+  const ctx = local();
+  const app = scene({ open: false });
+  ctx._spGuildApplyLocal('learn', 'join', true, app);
+  assert.equal(app.state.guilds[0].joinCount, '4');
+  assert.equal(app.state.curGuild, null);
+});
+
+test('数字が0のときに取り消しても、マイナスにならない', () => {
+  const ctx = local();
+  const app = scene({ open: true, join: '0', meJoined: true });
+  ctx._spGuildApplyLocal('learn', 'join', false, app);
+  assert.equal(app.state.guilds[0].joinCount, '0', 'マイナスになっている');
+});
+
+/* ───────── 押したところが、それを使っていること ───────── */
+
+function toggle() {
+  const at = INDEX.indexOf('window.spGuildToggle = async function');
+  const end = INDEX.indexOf('window.spVoteAdopt = async function', at);
+  assert.ok(at > 0 && end > at, '押すところが見つかりません');
+  return INDEX.slice(at, end);
+}
+
+test('押した瞬間に先へ出し、だめなら戻す', () => {
+  const src = toggle();
+  const flip = src.indexOf('_spGuildApplyLocal(guildId, kind, !wasMine, app)');
+  const back = src.indexOf('_spGuildApplyLocal(guildId, kind, wasMine, app)');
+  const write = src.indexOf('fb.setDoc(ref');
+  assert.ok(flip > 0, '押しても画面が動かない');
+  assert.ok(flip < write, '書き終わるまで待ってから画面を動かしている');
+  assert.ok(back > write, 'だめだったときに元へ戻していない');
+});
+
+test('書けたあとは、サーバーの値で上書きする', () => {
+  const src = toggle();
+  assert.match(src, /await window\.spDaoLoadVotes\(app\)/,
+    '先に動かしたぶんが間違っていても直らない');
+});
+
+test('ボタンの見た目は、1か所で決める', () => {
+  /* 一覧・詳細・押した直後で式が3つに分かれていると、
+     どれか1つだけ直る、ということが起きる。 */
+  const n = (INDEX.match(/'✓ 参加したい'/g) || []).length;
+  assert.equal(n, 1, "'✓ 参加したい' が " + n + "か所に書かれている");
+  const m = (INDEX.match(/'✓ 応援している'/g) || []).length;
+  assert.equal(m, 1, "'✓ 応援している' が " + m + "か所に書かれている");
 });
