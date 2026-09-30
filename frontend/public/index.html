@@ -17233,6 +17233,88 @@ window.spDaoLoadVotes = async function (app) {
 };
 
 /* ギルドカード1枚ぶん。数はその場で数える。 */
+/* ギルドのボタンの見た目。一覧・詳細・押した直後で同じ形になるよう、
+   ここ1か所で決める。前は詳細の組み立ての中に直接書いていたので、
+   押した瞬間に画面を動かそうとすると同じ式を2度書くことになった。 */
+function _spGuildBtn(iJoined, iSupport) {
+  return {
+    joinLabel: iJoined ? '✓ 参加したい' : 'このギルドに参加したい',
+    joinBg: iJoined ? '#0F5C3F' : 'transparent',
+    joinFg: iJoined ? '#F4F1EA' : '#0F5C3F',
+    joinHint: iJoined ? 'もう一度押すと取り消せます' : '自分もこの領域で活動・貢献したい',
+    supportLabel: iSupport ? '✓ 応援している' : 'このギルドを応援する',
+    supportBg: iSupport ? '#141310' : 'transparent',
+    supportFg: iSupport ? '#F4F1EA' : '#141310',
+    supportHint: iSupport ? 'もう一度押すと取り消せます' : '活動まではできないが、方向性に共感・期待している'
+  };
+}
+
+/* いま自分が入っているかどうか（画面が知っている値）。 */
+function _spGuildMineNow(guildId, kind, app) {
+  const st = (app && app.state) || {};
+  const key = (kind === 'support') ? 'meSupport' : 'meJoined';
+  const cur = st.curGuild;
+  if (cur && cur.id === guildId && typeof cur[key] === 'boolean') return cur[key];
+  const card = (st.guilds || []).filter(function (g) { return g.id === guildId; })[0];
+  return !!(card && card[key]);
+}
+
+/* 押した結果を、その場で画面へ出す。
+
+   前は書き終えてから spDaoLoadVotes で全部読み直していた。
+   読み直しは重い（議題・クエスト・5ギルド×2往復・信用スコア）ので、
+   押してから数字が動くまで数秒かかる。そのあいだ画面は何も変わらない
+   ので、押せたのかどうか分からない。「ちょっと待つと反映される」のは
+   これである。
+
+   クエストの「受ける」（spQuestToggle）は、押した結果をその場で出して
+   から読み直している。同じ形にそろえる。
+   だめだったときは、呼んだ側が元へ戻す。 */
+function _spGuildApplyLocal(guildId, kind, on, app) {
+  if (!app || typeof app.setState !== 'function') return;
+  const st = app.state || {};
+  const isSup = (kind === 'support');
+  const step = function (n, was) {
+    /* 数えられていない（—）ものは、数えないままにする。
+       1 や 0 を書くと、読めていないのに数えたことになる。 */
+    if (n === null || n === undefined || n === '—') return n;
+    const v = Number(n);
+    if (!Number.isFinite(v)) return n;
+    return String(Math.max(0, v + (on ? 1 : -1) * (was === on ? 0 : 1)));
+  };
+  const next = {};
+
+  const cards = st.guilds;
+  if (Array.isArray(cards)) {
+    next.guilds = cards.map(function (g) {
+      if (!g || g.id !== guildId) return g;
+      const j = isSup ? !!g.meJoined : on;
+      const sup = isSup ? on : !!g.meSupport;
+      const was = isSup ? !!g.meSupport : !!g.meJoined;
+      const label = j ? '参加したい' : (sup ? '応援している' : '');
+      return Object.assign({}, g, {
+        meJoined: j, meSupport: sup,
+        joinCount: isSup ? g.joinCount : step(g.joinCount, was),
+        supportCount: isSup ? step(g.supportCount, was) : g.supportCount,
+        meLabel: label, meShow: label ? 'inline-block' : 'none'
+      });
+    });
+  }
+
+  const cur = st.curGuild;
+  if (cur && cur.id === guildId) {
+    const j = isSup ? !!cur.meJoined : on;
+    const sup = isSup ? on : !!cur.meSupport;
+    const was = isSup ? !!cur.meSupport : !!cur.meJoined;
+    next.curGuild = Object.assign({}, cur, _spGuildBtn(j, sup), {
+      meJoined: j, meSupport: sup,
+      joinCount: isSup ? cur.joinCount : step(cur.joinCount, was),
+      supportCount: isSup ? step(cur.supportCount, was) : cur.supportCount
+    });
+  }
+  if (next.guilds || next.curGuild) app.setState(next);
+}
+
 /* 押してだめだったとき、何が起きているのかを言う。
 
    前はどこで転んでも「通信を確かめて、もう一度お試しください」だった。
@@ -17278,6 +17360,8 @@ function _spGuildCard(g, mem, defs, app) {
     joinCount: _spCountLabel(mem.joins), supportCount: _spCountLabel(mem.supports),
     proposalCount: String(live.length), questCount: String(running.length),
     meLabel: mineLabel, meShow: mineLabel ? 'inline-block' : 'none',
+    /* 押した瞬間に画面を動かすために、いまの状態も持たせる。 */
+    meJoined: !!mem.iJoined, meSupport: !!mem.iSupport,
     open: function () { window.spGuildOpen(g.id, app); }
   };
 }
@@ -17349,16 +17433,9 @@ window.spGuildOpen = async function (guildId, app, quiet) {
   /* 読み直し（quiet）のときは画面を切り替えない。
      ギルド一覧を見ているのに、勝手に詳細へ飛ばされないようにする。 */
   const next = {
-    curGuild: Object.assign(shell, {
+    curGuild: Object.assign(shell, _spGuildBtn(iJoined, iSupport), {
       joinCount: _spCountLabel(joins), supportCount: _spCountLabel(supports),
-      joinLabel: iJoined ? '✓ 参加したい' : 'このギルドに参加したい',
-      joinBg: iJoined ? '#0F5C3F' : 'transparent',
-      joinFg: iJoined ? '#F4F1EA' : '#0F5C3F',
-      joinHint: iJoined ? 'もう一度押すと取り消せます' : '自分もこの領域で活動・貢献したい',
-      supportLabel: iSupport ? '✓ 応援している' : 'このギルドを応援する',
-      supportBg: iSupport ? '#141310' : 'transparent',
-      supportFg: iSupport ? '#F4F1EA' : '#141310',
-      supportHint: iSupport ? 'もう一度押すと取り消せます' : '活動まではできないが、方向性に共感・期待している',
+      meJoined: !!iJoined, meSupport: !!iSupport,
       join: function () { window.spGuildToggle(g.id, 'join', app); },
       support: function () { window.spGuildToggle(g.id, 'support', app); },
       canAct: !!g.id,
@@ -17398,6 +17475,14 @@ window.spGuildToggle = async function (guildId, kind, app) {
   if (!p) { alert('ログインすると、参加したい・応援するを押せます。'); return; }
   const sub = (kind === 'support') ? 'supports' : 'joins';
   _spGuildBusy = true;
+  /* 押した瞬間に、画面を先に動かす。
+
+     ここから下は、いまの状態を確かめて書いて、そのあと全部読み直す。
+     読み直しは重いので、数字が動くまで数秒かかる。そのあいだ画面が
+     まったく変わらないと、押せたのかどうか分からない。
+     先に動かしておいて、だめだったら戻す。 */
+  const wasMine = _spGuildMineNow(guildId, kind, app);
+  _spGuildApplyLocal(guildId, kind, !wasMine, app);
   const fb = window.fbLib;
   const ref = fb.doc(window.db, 'sp_guild_members', guildId, sub, p.addr);
   /* 通信が切れているとき、getDoc も setDoc も例外を投げず、値も返さない。
@@ -17438,6 +17523,9 @@ window.spGuildToggle = async function (guildId, kind, app) {
     if (!done.ok) throw new Error('保存が返ってきませんでした');
   } catch (e) {
     console.warn('ギルドの参加・応援を保存できませんでした:', e && (e.message || e));
+    /* 先に動かした画面を、元へ戻す。戻さないと、入っていないのに
+       「✓ 参加したい」のまま残る。 */
+    _spGuildApplyLocal(guildId, kind, wasMine, app);
     /* 断られたときは、証が古いだけのことがある。取り直して1回だけやり直す。 */
     if (_spDenied(e) && await _spRefreshAuth()) {
       _spGuildBusy = false;
@@ -17450,6 +17538,9 @@ window.spGuildToggle = async function (guildId, kind, app) {
     /* 途中で何が起きても、次に押せる状態へ戻す。 */
     _spGuildBusy = false;
   }
+  /* 書けた。あとはサーバーの本当の値で上書きする。
+     先に動かしたぶんが間違っていても、ここで直る。
+     待たせない（画面はもう動いている）。 */
   await window.spDaoLoadVotes(app);
 };
 
