@@ -17180,8 +17180,13 @@ window.spDaoLoadVotes = async function (app) {
     ]);
     if (js) js.forEach(function (d) { joins++; if (mine && d.id.toLowerCase() === mine) iJoined = true; });
     if (ss) ss.forEach(function (d) { supports++; if (mine && d.id.toLowerCase() === mine) iSupport = true; });
+    /* 読めなかったときは null。0人ではない。
+       前はどちらも 0 のまま出していたので、通信が落ちているだけなのに
+       「参加したい 0・応援 0」と出ていた。押した人には、自分の1票が
+       消えたように見える。 */
     return _spGuildCard(g, {
-      joins: joins, supports: supports, iJoined: iJoined, iSupport: iSupport
+      joins: js ? joins : null, supports: ss ? supports : null,
+      iJoined: iJoined, iSupport: iSupport
     }, defs, app);
   }));
 
@@ -17228,6 +17233,36 @@ window.spDaoLoadVotes = async function (app) {
 };
 
 /* ギルドカード1枚ぶん。数はその場で数える。 */
+/* 押してだめだったとき、何が起きているのかを言う。
+
+   前はどこで転んでも「通信を確かめて、もう一度お試しください」だった。
+   通信は生きていて、Firestore がその日の読み取り枠を使い切っていた、
+   ということがある。そのとき「通信を確かめて」と言われても、
+   確かめる先が違う。相手が言っている理由をそのまま渡す。 */
+function _spWhyFailed(e) {
+  let st = null;
+  try { st = _spRestState(); } catch (x) {}
+  if (st && st.reason === 'quota' && Date.now() < st.blockedUntil) {
+    const min = Math.max(1, Math.ceil((st.blockedUntil - Date.now()) / 60000));
+    return '今日のぶんの読み取り枠を使い切っています。\n\n'
+      + '通信の問題ではありません。Firebase の読み取り枠が戻るまで、'
+      + '読むことも書くこともできません。\n'
+      + 'あと ' + min + '分ほどしてから、もう一度お試しください。';
+  }
+  const msg = (e && (e.message || e)) || '';
+  return 'うまくいきませんでした。通信を確かめて、もう一度お試しください。'
+    + (msg ? '\n\n（' + String(msg).slice(0, 120) + '）' : '');
+}
+
+/* 数えられた数か、数えられなかったか。
+
+   読めなかったときに 0 と書くと、本人には「自分の1票が消えた」
+   「誰も参加していない」に見える。数えられなかったことは、
+   0 ではなく「—」で出す。 */
+function _spCountLabel(n) {
+  return (n === null || n === undefined) ? '—' : String(n);
+}
+
 function _spGuildCard(g, mem, defs, app) {
   const props = _spVoteDocs.filter(function (v) { return SpGuildStore.guildIdOf(v, defs) === g.id; });
   const live = props.filter(function (v) { return !_spVoteClosed(v); });
@@ -17239,7 +17274,8 @@ function _spGuildCard(g, mem, defs, app) {
   return {
     id: g.id, code: g.code, short: g.short, name: g.name,
     concept: g.concept, accent: g.accent,
-    joinCount: String(mem.joins), supportCount: String(mem.supports),
+    /* 数えられなかったものは「—」。0 と書くと、記録が消えたように見える。 */
+    joinCount: _spCountLabel(mem.joins), supportCount: _spCountLabel(mem.supports),
     proposalCount: String(live.length), questCount: String(running.length),
     meLabel: mineLabel, meShow: mineLabel ? 'inline-block' : 'none',
     open: function () { window.spGuildOpen(g.id, app); }
@@ -17265,18 +17301,22 @@ window.spGuildOpen = async function (guildId, app, quiet) {
   const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
   const canGuild = await window.spCanGuild();
 
-  let joins = 0, supports = 0, iJoined = false, iSupport = false;
+  /* 読めなかったときは null のまま。0人ではない（一覧と同じ扱い）。 */
+  let joins = null, supports = null, iJoined = false, iSupport = false;
   if (g.id) {
-    const fb = window.fbLib;
     try {
       const js = await _spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/joins');
-      if (!js) throw new Error('参加を読めなかった');
-      js.forEach(function (d) { joins++; if (mine && d.id.toLowerCase() === mine) iJoined = true; });
+      if (js) {
+        joins = 0;
+        js.forEach(function (d) { joins++; if (mine && String(d.id || '').toLowerCase() === mine) iJoined = true; });
+      }
     } catch (e) {}
     try {
       const ss = await _spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/supports');
-      if (!ss) throw new Error('応援を読めなかった');
-      ss.forEach(function (d) { supports++; if (mine && d.id.toLowerCase() === mine) iSupport = true; });
+      if (ss) {
+        supports = 0;
+        ss.forEach(function (d) { supports++; if (mine && String(d.id || '').toLowerCase() === mine) iSupport = true; });
+      }
     } catch (e) {}
   }
 
@@ -17310,7 +17350,7 @@ window.spGuildOpen = async function (guildId, app, quiet) {
      ギルド一覧を見ているのに、勝手に詳細へ飛ばされないようにする。 */
   const next = {
     curGuild: Object.assign(shell, {
-      joinCount: String(joins), supportCount: String(supports),
+      joinCount: _spCountLabel(joins), supportCount: _spCountLabel(supports),
       joinLabel: iJoined ? '✓ 参加したい' : 'このギルドに参加したい',
       joinBg: iJoined ? '#0F5C3F' : 'transparent',
       joinFg: iJoined ? '#F4F1EA' : '#0F5C3F',
@@ -17403,7 +17443,7 @@ window.spGuildToggle = async function (guildId, kind, app) {
       _spGuildBusy = false;
       return window.spGuildToggle(guildId, kind, app);
     }
-    alert('うまくいきませんでした。通信を確かめて、もう一度お試しください。');
+    alert(_spWhyFailed(e));
     _spGuildBusy = false;
     return;
   } finally {
