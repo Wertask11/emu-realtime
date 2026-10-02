@@ -2631,10 +2631,23 @@ async function renderSchoolPark() {
            承認しても EMUER は動かない。#000 以外はどれでも出せる。 */
         + (SpQuestStore.isFounder(q) ? ''
           : (emuBudgetOf.has(q.id)
-              /* もう付いている。額と、そこからいくら渡したかを出す。 */
-              ? '<small style="color:var(--muted)">予算 '
-                + asMoney(emuBudgetOf.get(q.id).total, "EMUER")
-                + '（渡した ' + asMoney(emuBudgetOf.get(q.id).allocated, "EMUER") + '）</small> '
+              /* もう付いている。額と、そこからいくら渡したかを出す。
+                 上限が0だったり、渡したぶんが上限を越えていたら、
+                 それは正しく公開された予算ではない。手で直したか、
+                 消しそこねたか。黙って普通の予算のふりをすると、
+                 「公開ボタンが出ない」としか見えなくて行き止まりになる。
+                 10/2、#001 でこれが起きた。何が見えているかを出す。 */
+              ? ((emuBudgetOf.get(q.id).total <= 0
+                  || emuBudgetOf.get(q.id).total < emuBudgetOf.get(q.id).allocated)
+                  ? '<small style="color:#b91c1c">予算がこわれています（上限 '
+                    + asMoney(emuBudgetOf.get(q.id).total, "EMUER")
+                    + '／渡した ' + asMoney(emuBudgetOf.get(q.id).allocated, "EMUER") + '）<br>'
+                    + 'Firestore の emuer_v2_guild_quest_budgets から<br>'
+                    + 'quest:' + esc(q.id) + ' を<b>ドキュメントごと</b>消してから<br>'
+                    + '出し直してください。</small> '
+                  : '<small style="color:var(--muted)">予算 '
+                    + asMoney(emuBudgetOf.get(q.id).total, "EMUER")
+                    + '（渡した ' + asMoney(emuBudgetOf.get(q.id).allocated, "EMUER") + '）</small> ')
               : '<button class="act ok" data-qbudget="' + esc(q.id) + '" data-qper="' + emuPerPerson(q)
                 + '" data-qstage="' + SP_STAGE_EMUER(q)
                 + '">EMUERの予算を公開</button> '))

@@ -179,3 +179,44 @@ test('送れなければ、理由を出して、出せたことにしない', as
   assert.ok(s.seen.alerts[0].indexOf('公開しました') < 0, '出せたことになっています');
   assert.equal(s.seen.rendered, 0);
 });
+
+/* 予算が壊れているとき。10/2、#001 の予算を手で消したつもりが
+   フィールドだけ消えていて、上限0・渡した12,500 の記録が残った。
+   画面は「予算 0 EMUER（渡した 12,500 EMUER）」と普通に出し、
+   公開ボタンは出ないまま。行き止まりになる。 */
+const ROW = (() => {
+  const i = ADMIN.indexOf("+ (SpQuestStore.isFounder(q) ? ''");
+  const j = ADMIN.indexOf('data-qrun="', i);
+  assert.ok(i > 0 && j > i, '行の予算まわりが見つかりません');
+  return ADMIN.slice(i, j);
+})();
+
+test('上限0の予算は、こわれていると出す', () => {
+  assert.ok(ROW.indexOf('.total <= 0') >= 0, '上限0を見ていません');
+  assert.ok(ROW.indexOf('予算がこわれています') >= 0, 'こわれていることを出していません');
+});
+
+test('渡したぶんが上限を越えた予算も、こわれていると出す', () => {
+  assert.ok(ROW.indexOf('.total < emuBudgetOf.get(q.id).allocated') >= 0,
+    '渡したぶんと上限を比べていません');
+});
+
+test('こわれているときは、何をすればよいか出す', () => {
+  assert.ok(ROW.indexOf('emuer_v2_guild_quest_budgets') >= 0, '置き場所を出していません');
+  assert.ok(ROW.indexOf('ドキュメントごと') >= 0,
+    'フィールドだけ消しても直らないことを言っていません');
+  assert.ok(ROW.indexOf("'quest:' + esc(q.id)") >= 0, 'どの記録かを出していません');
+});
+
+test('まともな予算は、これまでどおり額と渡したぶんだけ出す', () => {
+  const i = ROW.indexOf('予算がこわれています');
+  const rest = ROW.slice(i);
+  assert.ok(rest.indexOf('>予算 \'') >= 0 || rest.indexOf('"color:var(--muted)">予算 ') >= 0,
+    'まともなときの出し方が消えています');
+  assert.ok(rest.indexOf('（渡した ') >= 0, '渡したぶんが消えています');
+});
+
+test('予算が無ければ、これまでどおり公開ボタンを出す', () => {
+  assert.ok(ROW.indexOf('EMUERの予算を公開') >= 0, '公開ボタンが消えています');
+  assert.ok(ROW.indexOf('emuBudgetOf.has(q.id)') >= 0, '予算の有無で分けていません');
+});
