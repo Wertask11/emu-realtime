@@ -29,6 +29,8 @@ function stage(rows, ok) {
     wsAccount: () => '0xme',
     wsHeaders: async () => ({}),
     wsBtn: () => ({ set hidden(v) { seen.hidden = v; } }),
+    wsHideClaim: (why) => { seen.hidden = true; seen.why = why; },
+    document: { getElementById: () => ({ set textContent(v) { seen.status = v; } }) },
     wsClaimLabel: (text, fn) => { seen.label = text; seen.fn = fn; },
     wsClaim: () => {},
     fetch: async () => ({ ok: ok !== false, json: async () => ({ rewards: rows }) })
