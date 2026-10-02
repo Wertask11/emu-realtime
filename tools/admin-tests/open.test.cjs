@@ -472,9 +472,26 @@ test('渡し直しが失敗したときは、Firestore を触らない', () => {
 });
 
 test('サーバーは、渡せていない承認にあとから渡せる', () => {
-  /* 前はこれも COMPLETION_STATE_CONFLICT で止めていた。 */
-  assert.ok(BACKEND.indexOf('if (prior.exists || certificate.exists) {') >= 0,
-    '承認の印だけで止めている');
+  /* 10/1 まで、サーバーは NOT_STARTED で承認を断っていた。そのあいだ
+     運営は管理画面の逃げ道を通り、Firestore へ直接 approved と
+     approvedRounds を書いていた。完走は記録されたが、報酬は
+     1枚も引き当てられていない。
+
+     その状態で「EMUERを渡す」を押すと、approvedRounds が知恵カードの
+     枚数に並んでいるので NO_NEW_ROUND で断られた。
+     渡すためのボタンが、渡せないと言う状態だった。
+
+     認めてある周回を順に見て、報酬がまだ無いものに渡す。
+     中身は backend/quest-completion.test.js が動かして確かめている。
+     ここでは、その道があることだけを見る。 */
+  assert.match(BACKEND, /let topupRound = 0;/, '渡しそびれを探す道が無い');
+  assert.match(BACKEND, /const isTopup = topupRound > 0;/);
+  /* 渡しそびれを渡すだけのときは、完走の数を増やさない。 */
+  assert.match(BACKEND, /approvedRounds: isTopup \? doneRounds : doneRounds \+ 1/,
+    'やってもいない周回を認めたことになる');
+  /* 証明書を受け取り済みでも渡せる。ただし作り直さない。 */
+  assert.match(BACKEND, /if \(!certificate\.exists\) tx\.create\(certRef/,
+    '受け取り済みの証明書を書き換えてしまう');
   assert.ok(BACKEND.indexOf('Number(was.approvedAt) > 0 ? Number(was.approvedAt) : now') >= 0,
     '認めた日を上書きしてしまう');
 });

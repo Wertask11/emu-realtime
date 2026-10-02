@@ -40,6 +40,7 @@ function stage(opts) {
     console: { warn() {} },
     $: () => ({ set onclick(f) { ctx.__fire = f; }, get onclick() { return ctx.__fire; } }),
     SpQuestStore: { fullLabel: q => '一般 #002 ' + q.stage, isFounder: () => false },
+    SP_STAGE_EMUER: q => ({ '入門': 50, '標準': 100, '実践': 200 })[String((q && q.stage) || '')] || 100,
     emuNeedBudget: () => targets,
     emuPerPerson: q => parseInt(q.budget, 10) || 100,
     prompt: (msg, def) => { seen.prompts.push(msg); return o.people === undefined ? def : o.people; },
@@ -199,4 +200,53 @@ test('帳簿が読めないときは、まとめて出す口を出さない', ()
                           ADMIN.indexOf('const qbAllBtn'));
   assert.match(box, /if \(!emuLedger\)/,
     '読めていないのに「予算が無い」と決めつけて出してしまう');
+});
+
+/* ───────── カードの額が「全体の予算」だったとき ─────────
+
+   10/2、一般 #001 でこれをやった。カードに「12,500 EMUER」と
+   書いてあったが、それはクエスト全体の予算のつもりで入れた数字で、
+   1人あたりではなかった。そのまま 12,500 × 100人 ＝ 1,250,000 の
+   予算が立ち、1人完走するたびに 12,500 出る状態になった。
+
+   予算はいちど出すと変えられない。長い一覧の中に混ぜて出すと、
+   1本だけ桁が違っていても気づかない。 */
+
+test('カードの額が段から決まる額と違えば、先に別で見せて止める', async () => {
+  const s = stage({ targets: [{ id: 'q1', title: 'Emuの知識を、やってみる', stage: '',
+    budget: '12500', budgetCurrency: 'EMUER', questNumber: 1 }] });
+  await s.fire();
+  assert.equal(s.seen.confirms.length, 2,
+    '確かめが ' + s.seen.confirms.length + '回しかない（桁違いを別に見せていない）');
+  const warn = s.seen.confirms[0];
+  assert.match(warn, /カードの額と、段から決まる額が違う/);
+  assert.match(warn, /12,500 EMUER/, 'カードの額が出ていない');
+  assert.match(warn, /100 EMUER/, '段から決まる額が出ていない');
+  assert.match(warn, /1,250,000 EMUER/, '総額が出ていない。桁が分からない');
+  assert.match(warn, /クエスト全体の予算を書いた欄ではありません/,
+    '何を取り違えやすいのか言っていない');
+});
+
+test('そこで「いいえ」なら、1本も出さない', async () => {
+  const s = stage({ cancel: true, targets: [{ id: 'q1', title: 'x', stage: '',
+    budget: '12500', budgetCurrency: 'EMUER', questNumber: 1 }] });
+  await s.fire();
+  assert.equal(s.seen.posts.length, 0, 'やめたのに出している');
+});
+
+test('カードの額と段から決まる額が同じなら、よけいに聞かない', async () => {
+  const s = stage();                               // #002 の15本。どれも一致する
+  await s.fire();
+  assert.equal(s.seen.confirms.length, 1,
+    '同じなのに2回聞いている（毎回聞くと、本当に違うときに気づかなくなる）');
+  assert.equal(s.seen.posts.length, 15);
+});
+
+test('違うものだけを出す（合っているものは混ぜない）', async () => {
+  const s = stage({ targets: work15().concat([{ id: 'odd', title: 'ずれている', stage: '',
+    budget: '12500', budgetCurrency: 'EMUER', questNumber: 1 }]) });
+  await s.fire();
+  const warn = s.seen.confirms[0];
+  assert.match(warn, /1本あります/, '何本ずれているのか合っていない');
+  assert.doesNotMatch(warn, /入門/, '合っているものまで並べている');
 });
