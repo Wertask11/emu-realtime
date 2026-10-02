@@ -3,6 +3,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const Module = require("node:module");
+/* 本物の ethers を先に捕まえておく。差し替えの中から使う。
+
+   差し替えの utils に getAddress が無かったため、アドレスの表記ゆれを
+   見分けるところ（addressForms）が本番と違う動きをしていた。
+   本番では使えるのに、試験では使えない。それでは試験にならない。 */
+const realEthers = require("ethers");
 const original = Module._load;
 const routes = [];
 Module._load = function (name, parent, main) {
@@ -16,7 +22,10 @@ Module._load = function (name, parent, main) {
   if (name === "ethers") return { utils: {
     isAddress: v => /^0x[0-9a-f]{40}$/i.test(v),
     toUtf8Bytes: v => Buffer.from(v),
-    keccak256: v => "0x" + crypto.createHash("sha256").update(v).digest("hex")
+    keccak256: v => "0x" + crypto.createHash("sha256").update(v).digest("hex"),
+    /* ここだけは本物を使う。チェックサム表記は決まった作り方があり、
+       偽物で作ると本番と違う文字列になる。 */
+    getAddress: v => realEthers.utils.getAddress(v)
   } };
   return original.call(this, name, parent, main);
 };
@@ -49,12 +58,16 @@ function collection(path, filters = []) {
       records.set(path + "/" + id, value);
       return { id, path: path + "/" + id };
     },
-    where: (field, op, value) => collection(path, filters.concat([[field, value]])),
+    /* in は配列のどれかに当たれば一致。== は1つだけ。
+       本物と同じにしておかないと、表記ゆれの試験が通ってしまう。 */
+    where: (field, op, value) => collection(path, filters.concat([[field, value, op]])),
     limit: () => collection(path, filters),
     get: async () => {
       const rows = [...records.entries()].filter(([key, row]) =>
         key.startsWith(path + "/") && !key.slice(path.length + 1).includes("/") &&
-        filters.every(([field, value]) => row[field] === value))
+        filters.every(([field, value, op]) => op === "in"
+          ? (Array.isArray(value) && value.includes(row[field]))
+          : row[field] === value))
         .map(([key, row]) => ({ id:key.split("/").at(-1), data:() => row }));
       return { docs:rows, forEach:fn => rows.forEach(fn) };
     }
@@ -905,4 +918,73 @@ test("ふつうの承認は、これまでどおり完走の数を増やす", AT
   assert.equal(r.body.round, 1);
   assert.notEqual(r.body.toppedUp, true, "ふつうの承認を渡しそびれとして扱っている");
   assert.equal(records.get("sp_quests/quest-002/commits/" + address).approvedRounds, 1);
+}));
+
+/* ───────── アドレスの表記ゆれ ─────────
+
+   10/2、実際に起きた。「EMUERを渡す」が PASSPORT_LINK_REQUIRED で
+   止まった。予算もウォレット連携も済んでいたのに。
+
+   ches_accounts の walletAddress / chesAddress には、
+   ethers.utils.getAddress が作るチェックサム表記（大文字混じり）が
+   入っている。いっぽうクエストを受けた記録の文書IDは小文字である。
+
+   Firestore の一致検索は大文字小文字を区別する。小文字だけで探すと
+   どのアカウントにも当たらず、SchoolPark ID が引けない。
+   ウォレットで入った人は、全員これで止まる。
+
+   同じ落とし穴は entitlement.js で先に見つかっていて、あちらは
+   addressForms で3つの形を試していた。こちらにだけ無かった。 */
+const checksummed = require("ethers").utils.getAddress(address);
+
+test("アカウントがチェックサム表記でも、本人だと分かる", AT(async () => {
+  seed();
+  assert.notEqual(checksummed, address, "この試験の前提（表記が違う）が崩れています");
+  /* 本物と同じ形で入れ直す。 */
+  records.set("ches_accounts/user-a",
+    { chesAddress: checksummed, walletAddress: checksummed, spid: "spid-a" });
+  const r = await request();
+  assert.equal(r.status, 200, "本人を引けない（" + String(r.body.error) + "）");
+  assert.equal(r.body.amountEmuer, 100);
+}));
+
+test("小文字で入っているアカウントも、これまでどおり引ける", AT(async () => {
+  seed();                                          // 小文字で入っている
+  const r = await request();
+  assert.equal(r.status, 200, "引けなくなっている（" + String(r.body.error) + "）");
+}));
+
+test("ウォレット名義だけがチェックサム表記でも引ける", AT(async () => {
+  seed();
+  records.set("ches_accounts/user-a",
+    { chesAddress: "", walletAddress: checksummed, spid: "spid-a" });
+  const r = await request();
+  assert.equal(r.status, 200, "引けない（" + String(r.body.error) + "）");
+}));
+
+test("そのアドレスのアカウントが無ければ、これまでどおり止める", AT(async () => {
+  seed();
+  records.delete("ches_accounts/user-a");
+  const r = await request();
+  assert.equal(r.body.error, "PASSPORT_LINK_REQUIRED");
+}));
+
+test("SchoolPark ID が空のアカウントは、本人と認めない", AT(async () => {
+  seed();
+  records.set("ches_accounts/user-a",
+    { chesAddress: checksummed, walletAddress: checksummed, spid: "" });
+  const r = await request();
+  assert.equal(r.body.error, "PASSPORT_LINK_REQUIRED",
+    "番号が無いまま渡そうとしている");
+}));
+
+test("別の番号のアカウントが2つ当たったら、止める", AT(async () => {
+  seed();
+  records.set("ches_accounts/user-a",
+    { chesAddress: checksummed, walletAddress: checksummed, spid: "spid-a" });
+  records.set("ches_accounts/user-b",
+    { chesAddress: address, walletAddress: address, spid: "spid-b" });
+  const r = await request();
+  assert.equal(r.body.error, "PASSPORT_LINK_REQUIRED",
+    "どちらの人か決まらないのに渡している");
 }));

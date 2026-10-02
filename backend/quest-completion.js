@@ -42,6 +42,28 @@ const FOUNDER_QUEST_ID = "founder-quest-000";
    証明書の受け取り（まだ受け取っていないものを探す）で同じ数を使う。
    別々に持つと、片方だけ直したときに食い違う。 */
 const ROUND_SCAN_MAX = 20;
+
+/* アドレスの表記ゆれ。
+
+   ches_accounts の walletAddress / chesAddress には、
+   ethers.utils.getAddress が作るチェックサム表記（大文字混じり、
+   例：0xDcC6…EDf7）が入っている。
+   いっぽうクエストを受けた記録（commits）の文書IDは小文字である。
+
+   Firestore の一致検索は大文字小文字を区別する。小文字だけで
+   探すと、どのアカウントにも当たらない。当たらなければ
+   SchoolPark ID が引けず、PASSPORT_LINK_REQUIRED で止まる。
+   ウォレットで入った人は全員これになる。
+
+   同じ落とし穴は entitlement.js で先に見つかっていて、あちらは
+   addressForms で3つの形を試している。こちらにだけ無かった。 */
+function addressForms(address) {
+  const raw = String(address || "").trim();
+  if (!raw) return [];
+  const out = new Set([raw, raw.toLowerCase()]);
+  try { out.add(ethers.utils.getAddress(raw.toLowerCase())); } catch (e) { /* 形が違うぶんは諦める */ }
+  return [...out];
+}
 function usableQuest(questId, quest) {
   return !!quest && questId !== FOUNDER_QUEST_ID && quest.kind !== "founder"
     && Number.isSafeInteger(Number(quest.questNumber)) && Number(quest.questNumber) >= 1;
@@ -257,8 +279,8 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       const [quest, commit, logs, wisdom, byChes, byWallet] = await Promise.all([
         questRef.get(), commitRef.get(), questRef.collection("logs").get(),
         db.collection("sp_wisdom").where("questId", "==", questId).get(),
-        db.collection("ches_accounts").where("chesAddress", "==", address).limit(2).get(),
-        db.collection("ches_accounts").where("walletAddress", "==", address).limit(2).get()
+        db.collection("ches_accounts").where("chesAddress", "in", addressForms(address)).limit(2).get(),
+        db.collection("ches_accounts").where("walletAddress", "in", addressForms(address)).limit(2).get()
       ]);
       const q = quest.exists ? quest.data() || {} : {};
       if (!usableQuest(questId, q)) return res.status(409).json({ error: "QUEST_NOT_ELIGIBLE" });
