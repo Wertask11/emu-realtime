@@ -3096,6 +3096,29 @@ async function renderSchoolPark() {
       return { q: q, per: per, total: per * people,
         label: (SpQuestStore.fullLabel(q) || q.id) + " " + String(q.title || "").slice(0, 24) };
     });
+    /* カードの額が、段から決まる額と大きく違うものは、先に見せて止める。
+
+       10/2、一般 #001 でこれをやった。カードに「12,500 EMUER」と
+       書いてあったが、それはクエスト全体の予算のつもりで入れた数字で、
+       1人あたりではなかった。そのまま 12,500 × 100人 ＝ 1,250,000 の
+       予算が立ち、1人completeするたびに 12,500 出る状態になった。
+
+       予算はいちど出すと変えられない。長い一覧の中に混ぜて出すと、
+       1本だけ桁が違っていても気づかない。別に出して、もう一度聞く。 */
+    const odd = plan.filter(x => x.per !== SP_STAGE_EMUER(x.q));
+    if (odd.length) {
+      const warn = odd.map(x => "・" + x.label
+        + "\n    カードの額 " + x.per.toLocaleString() + " EMUER"
+        + "　／　段から決まる額 " + SP_STAGE_EMUER(x.q).toLocaleString() + " EMUER"
+        + "\n    → 1人 " + x.per.toLocaleString() + " × " + people + "人 ＝ "
+        + (x.per * people).toLocaleString() + " EMUER").join("\n");
+      if (!confirm("カードの額と、段から決まる額が違うクエストが "
+        + odd.length + "本あります。\n\n" + warn
+        + "\n\nカードに書いた額を「1人あたり」として出します。\n"
+        + "クエスト全体の予算を書いた欄ではありません。\n\n"
+        + "桁は合っていますか？ このまま進めますか？")) return;
+    }
+
     const sum = plan.reduce((a, x) => a + x.total, 0);
     const lines = plan.map(x => "・" + x.label + "\n    1人 " + x.per
       + " × " + people + "人 ＝ " + x.total + " EMUER").join("\n");
