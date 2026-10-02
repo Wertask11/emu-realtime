@@ -37,11 +37,35 @@ async function wsBalance(account){
 }
 async function showWalletSuccessModal(account){document.getElementById("walletSuccessOverlay").classList.add("active");document.getElementById("wsAddress").textContent=account.slice(0,6)+"…"+account.slice(-4);await wsBalance(account);if(emuerV2Config?.enabled)await wsRewards();}
 function closeWalletSuccessAndStart(){document.getElementById("walletSuccessOverlay").classList.remove("active");if(typeof window.goTomainapp==="function")window.goTomainapp();}
+/* 未請求の報酬。
+
+   ボタンの文字に a.length（件数）を EMUER の額として出していた。
+   100 EMUER が2件あると「未請求の報酬 2 EMUER を受け取る」になる。
+   お金の画面で額を間違えて出すのは、いちばんやってはいけない。
+   額は額、件数は件数として出す。
+
+   受け取りは1件ずつ。押すたびに残りが減り、文字も書き替わる。 */
 async function wsRewards(){
-  try{const r=await fetch(EMUER_V2_API+"/rewards?address="+encodeURIComponent(wsAccount()),{headers:await wsHeaders(false)}),d=await r.json(),a=r.ok&&Array.isArray(d.rewards)?d.rewards:[];if(!a.length){wsBtn().hidden=true;return;}wsClaimLabel(`未請求の報酬 ${a.length} EMUER を受け取る`,()=>wsClaim(a[0]),false);}catch(_){}
+  try{
+    const r=await fetch(EMUER_V2_API+"/rewards?address="+encodeURIComponent(wsAccount()),{headers:await wsHeaders(false)});
+    const d=await r.json();
+    const a=r.ok&&Array.isArray(d.rewards)?d.rewards:[];
+    if(!a.length){wsBtn().hidden=true;return;}
+    const total=a.reduce((n,x)=>n+(Number(x.amount)||0),0);
+    const label=a.length>1
+      ? `未請求の報酬 ${total.toLocaleString("ja-JP")} EMUER（${a.length}件）のうち1件を受け取る`
+      : `未請求の報酬 ${total.toLocaleString("ja-JP")} EMUER を受け取る`;
+    wsClaimLabel(label,()=>wsClaim(a[0]),false);
+  }catch(_){}
 }
 async function wsClaim(row){
-  try{wsClaimLabel("署名を準備中…",null,true);const r=await fetch(EMUER_V2_API+"/rewards/"+encodeURIComponent(row.claimId)+"/authorization",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount()})}),d=await r.json();if(!r.ok)throw new Error(d.error||"報酬を準備できませんでした");const p=new ethers.providers.Web3Provider(window.ethereum);if(Number((await p.getNetwork()).chainId)!==137)throw new Error("Polygon Mainnetに切り替えてください");const x=d.reward,c=new ethers.Contract(emuerV2Config.contract,EMUER_V2_ABI,p.getSigner());wsClaimLabel("MetaMaskで確認…",null,true);await(await c.claimReward(x.claimId,x.totalAmount,x.deadline,x.authorization)).wait();await wsBalance(wsAccount());await wsRewards();}catch(e){wsClaimLabel("報酬を受け取る",wsRewards,false);alert(e.message||"報酬の受取に失敗しました");}
+  try{wsClaimLabel("署名を準備中…",null,true);const r=await fetch(EMUER_V2_API+"/rewards/"+encodeURIComponent(row.claimId)+"/authorization",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount()})}),d=await r.json();if(!r.ok)throw new Error(d.error||"報酬を準備できませんでした");const p=new ethers.providers.Web3Provider(window.ethereum);if(Number((await p.getNetwork()).chainId)!==137)throw new Error("Polygon Mainnetに切り替えてください");const x=d.reward,c=new ethers.Contract(emuerV2Config.contract,EMUER_V2_ABI,p.getSigner());wsClaimLabel("MetaMaskで確認…",null,true);await(await c.claimReward(x.claimId,x.totalAmount,x.deadline,x.authorization)).wait();
+    /* 受け取れたことを、はっきり出す。お金が動いたのに画面が
+       黙っていると、通ったのかどうか分からない。 */
+    const got=Number(row&&row.amount)||0;
+    document.getElementById("wsStatus").textContent=
+      got?`${got.toLocaleString("ja-JP")} EMUER を受け取りました`:"受け取りました";
+    await wsBalance(wsAccount());await wsRewards();}catch(e){wsClaimLabel("報酬を受け取る",wsRewards,false);alert(e.message||"報酬の受取に失敗しました");}
 }
 async function claimEmuV2LoginReward(){
   try{const b=wsLoginBtn();b.disabled=true;b.textContent="署名を準備中…";const r=await fetch(EMUER_V2_API+"/daily/login",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount()})}),d=await r.json();if(!r.ok)throw new Error(d.error||"ログイン報酬を準備できませんでした");const p=new ethers.providers.Web3Provider(window.ethereum);if(Number((await p.getNetwork()).chainId)!==137)throw new Error("Polygon Mainnetに切り替えてください");const x=d.reward,c=new ethers.Contract(emuerV2Config.contract,EMUER_V2_ABI,p.getSigner());await(await c.claimReward(x.claimId,x.totalAmount,x.deadline,x.authorization)).wait();b.textContent="本日は受取済み";}catch(e){const b=wsLoginBtn();b.disabled=false;b.textContent="+1 EMUER 受取";alert(e.message||"ログイン報酬の受取に失敗しました");}
