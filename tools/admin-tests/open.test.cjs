@@ -348,7 +348,11 @@ test('予算が付いているクエストには、出すボタンを出さな�
 test('予算は、1人あたりと人数を聞いてから送る', () => {
   const i = ADMIN.indexOf('const per = parseInt(prompt(');
   assert.ok(i > 0, '1人あたりを聞いていない');
-  const seg = ADMIN.slice(i, i + 900);
+  /* 幅を決め打ちにすると、文面を1行足しただけで落ちる。
+     口の終わりまでを見る。 */
+  const end = ADMIN.indexOf('el.querySelectorAll("[data-qunapprove]")', i);
+  assert.ok(end > i, '予算の口の終わりが見つからない');
+  const seg = ADMIN.slice(i, end);
   assert.ok(seg.indexOf('const people = parseInt(prompt(') >= 0, '人数を聞いていない');
   assert.ok(seg.indexOf('const total = per * people;') >= 0, '総額を出していない');
   assert.ok(seg.indexOf('perPersonEmuer: per, totalEmuer: total') >= 0, 'サーバーへ渡していない');
