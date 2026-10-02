@@ -146,14 +146,16 @@ test('EMUER v2 が動いていたら、読み込みのときにボタンを足�
 });
 
 /* 何も出ないのは、壊れているのと見分けがつかない。 */
-const REWARDS = SRC.slice(SRC.indexOf('async function wsRewards(){'),
+/* wsDone の宣言から取る。const は VM の場では外から見えないので、
+   使う側と同じ塊ごと動かす。 */
+const REWARDS = SRC.slice(SRC.indexOf('const wsDone=new Set();'),
                           SRC.indexOf('async function wsClaim(row){'));
 
 function rewards(opts) {
   const o = opts || {};
   const seen = { hidden: false, why: null, label: null };
   const ctx = vm.createContext({
-    EMUER_V2_API: 'https://x', Number, Array, String, encodeURIComponent,
+    EMUER_V2_API: 'https://x', Number, Array, String, Set, encodeURIComponent,
     wsAccount: () => '0xme',
     wsHeaders: async () => { if (o.throws) throw new Error(o.throws); return {}; },
     wsBtn: () => ({ set hidden(v) { seen.hidden = v; } }),
@@ -195,4 +197,95 @@ test('受け取るものがあれば、これまでどおり額を出す', async
   await s.run();
   assert.ok(String(s.seen.label).indexOf('200 EMUER') >= 0, '額が出ていません：' + s.seen.label);
   assert.ok(String(s.seen.label).indexOf('2件') >= 0, '件数が出ていません');
+});
+
+/* 受け取ったあと。
+
+   10/2、1件目は受け取れたのに、裏のウォレットの札は「使えるEMUER 0」の
+   ままだった。modal の残高だけ直して、ページの数字を直していなかった。
+   そして2件目を押したら estimateGas で落ちた。サーバーの一覧に
+   受け取り済みのぶんが残っていて、同じ claimId をもう一度送っていた。 */
+const CLAIM = SRC.slice(SRC.indexOf('async function wsClaim(row){'),
+                        SRC.indexOf('async function claimEmuV2LoginReward'));
+assert.ok(CLAIM.length > 400, '受け取るところが見つかりません');
+
+test('受け取れたら、ページの数字も書き替える', () => {
+  assert.ok(CLAIM.indexOf('window.emuerV2RefreshBalance') > 0,
+    'ページの数字を書き替えていません');
+  const i = CLAIM.indexOf('window.emuerV2RefreshBalance');
+  assert.ok(CLAIM.slice(0, i).indexOf('.wait()') > 0,
+    '鎖に乗る前に書き替えています');
+});
+
+test('書き替える口は、v2 の側から外に出してある', () => {
+  const COPY = fs.readFileSync(path.join(root, 'frontend/public/emuer-v2-public-copy.js'), 'utf8');
+  assert.ok(COPY.indexOf('window.emuerV2RefreshBalance = refreshBalance;') > 0,
+    '外から呼べません');
+  const i = COPY.indexOf('window.emuerV2RefreshBalance = refreshBalance;');
+  assert.ok(COPY.slice(0, i).lastIndexOf('config = next;') > 0,
+    'v2 が止まっていても外へ出しています');
+});
+
+test('書き替えに失敗しても、受け取りは成功のまま', () => {
+  const i = CLAIM.indexOf('window.emuerV2RefreshBalance');
+  const seg = CLAIM.slice(i - 60, i + 160);
+  assert.ok(seg.indexOf('try{') >= 0 && seg.indexOf('catch(_)') >= 0,
+    '書き替えで転ぶと、受け取れたのに失敗に見えます');
+});
+
+test('この画面で受け取ったものは、覚えておいて一覧から外す', () => {
+  assert.ok(SRC.indexOf('const wsDone=new Set();') > 0, '覚えていません');
+  assert.ok(CLAIM.indexOf('wsDone.add(') > 0, '受け取ったものを足していません');
+  const REW = SRC.slice(SRC.indexOf('async function wsRewards(){'),
+                        SRC.indexOf('async function wsClaim(row){'));
+  assert.ok(REW.indexOf('wsDone.has(') > 0, '一覧から外していません');
+});
+
+test('覚えているぶんを外した結果が空なら、無いと出す', async () => {
+  /* サーバーの読みが追いつかず、受け取り済みのぶんだけが返ったとき。
+     そのまま押せると、また estimateGas で落ちる。 */
+  const SEG = SRC.slice(SRC.indexOf('const wsDone=new Set();'),
+                        SRC.indexOf('async function wsClaim(row){'));
+  const seen = { hidden: false, why: null, label: null };
+  const ctx = vm.createContext({
+    EMUER_V2_API: 'https://x', Number, Array, String, Set, encodeURIComponent,
+    wsAccount: () => '0xme',
+    wsHeaders: async () => ({}),
+    wsBtn: () => ({ set hidden(v) { seen.hidden = v; } }),
+    wsHideClaim: (why) => { seen.hidden = true; seen.why = why; },
+    wsClaimLabel: (t) => { seen.label = t; },
+    wsClaim: () => {},
+    document: { getElementById: () => null },
+    fetch: async () => ({ ok: true, status: 200,
+      json: async () => ({ rewards: [{ claimId: '0xa', amount: 100 }] }) })
+  });
+  vm.runInContext(SEG + '\nglobalThis.__wsDone = wsDone;', ctx);
+  ctx.__wsDone.add('0xa');
+  await ctx.wsRewards();
+  assert.equal(seen.hidden, true, '受け取り済みのものを押せてしまいます');
+  assert.ok(String(seen.why).indexOf('ありません') >= 0);
+  assert.equal(seen.label, null);
+});
+
+test('覚えていないぶんは、これまでどおり出す', async () => {
+  const SEG = SRC.slice(SRC.indexOf('const wsDone=new Set();'),
+                        SRC.indexOf('async function wsClaim(row){'));
+  const seen = { label: null };
+  const ctx = vm.createContext({
+    EMUER_V2_API: 'https://x', Number, Array, String, Set, encodeURIComponent,
+    wsAccount: () => '0xme',
+    wsHeaders: async () => ({}),
+    wsBtn: () => ({ set hidden(v) {} }),
+    wsHideClaim: () => {},
+    wsClaimLabel: (t) => { seen.label = t; },
+    wsClaim: () => {},
+    document: { getElementById: () => null },
+    fetch: async () => ({ ok: true, status: 200,
+      json: async () => ({ rewards: [{ claimId: '0xa', amount: 100 }, { claimId: '0xb', amount: 100 }] }) })
+  });
+  vm.runInContext(SEG + '\nglobalThis.__wsDone = wsDone;', ctx);
+  ctx.__wsDone.add('0xa');
+  await ctx.wsRewards();
+  assert.ok(String(seen.label).indexOf('100 EMUER') >= 0, '残りの額が違います：' + seen.label);
+  assert.ok(String(seen.label).indexOf('件') < 0, '1件なのに件数を出しています');
 });

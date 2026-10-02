@@ -16,7 +16,9 @@ const vm = require('node:vm');
 const SRC = fs.readFileSync(
   path.join(__dirname, '../../frontend/public/wallet-success-ui.js'), 'utf8');
 
-const REWARDS = SRC.slice(SRC.indexOf('async function wsRewards(){'),
+/* wsDone の宣言から取る。wsRewards がそれを使うので、const は
+   VM の場では外から見えない以上、同じ塊ごと動かす。 */
+const REWARDS = SRC.slice(SRC.indexOf('const wsDone=new Set();'),
                           SRC.indexOf('async function wsClaim(row){'));
 assert.ok(REWARDS.length > 400, '未請求の報酬を出すところが見つかりません');
 
@@ -24,7 +26,7 @@ function stage(rows, ok) {
   const seen = { label: null, hidden: false, fn: null };
   const ctx = vm.createContext({
     EMUER_V2_API: 'https://x',
-    Number, Array, String,
+    Number, Array, String, Set,
     encodeURIComponent,
     wsAccount: () => '0xme',
     wsHeaders: async () => ({}),

@@ -525,13 +525,49 @@ function createEmuerV2Router(deps) {
     }
   });
 
+  /* 受け取り済みのものを、一覧から外す。
+
+     報酬は status:"pending" で作られるが、鎖の上で受け取っても
+     その status を戻すところがどこにも無かった。だから一度受け取った
+     ぶんも一覧に残り続ける。
+
+     10/2、これで二度目の受け取りが転んだ。一覧の先頭が受け取り済みの
+     ぶんのままなので、同じ claimId をもう一度コントラクトへ送ることに
+     なる。コントラクトは already >= totalAmount で ClaimUnavailable を
+     返すので、MetaMask の前に estimateGas が execution reverted で落ちる。
+     人からは「受け取ったのに、もう一度押したらエラー」としか見えない。
+
+     鎖に聞けば確かなことが分かるので、聞いて、済んでいるものは
+     Firestore にも印を付けて外す（次からは聞かずに済む）。
+     鎖に聞けないときは、今までどおり全部返す。黙って隠すより、
+     出して転ぶほうがまだ分かる。 */
+  async function unpaidOnly(docs) {
+    const rows = docs.map(doc => ({ id: doc.id, data: doc.data() || {} }));
+    if (!contract) return rows;
+    const settled = [];
+    const checked = await Promise.all(rows.map(async row => {
+      const want = String(row.data.amountWei || "0");
+      if (want === "0") return row;
+      try {
+        const paid = await contract.claimPaid(String(row.data.claimId || row.id));
+        if (paid.gte(want)) { settled.push(row.id); return null; }
+      } catch (_) { /* 読めないときは外さない */ }
+      return row;
+    }));
+    settled.forEach(id => db.collection("emuer_v2_rewards").doc(id)
+      .update({ status: "claimed", claimedAt: new Date(), updatedAt: new Date() })
+      .catch(() => { }));
+    return checked.filter(Boolean);
+  }
+
   router.get("/rewards", requireFirebaseUser, requireOwnAddress, async (req, res) => {
     if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
     try {
       const recipient = String(req.identity.walletAddress).toLowerCase();
       const rewards = await db.collection("emuer_v2_rewards").where("recipient", "==", recipient).where("status", "==", "pending").limit(50).get();
-      return res.json({ rewards: rewards.docs.map(doc => ({ claimId: doc.id, kind: doc.data().kind, amount: doc.data().amount, postTitle: doc.data().postTitle || "" })) });
+      const rows = await unpaidOnly(rewards.docs);
+      return res.json({ rewards: rows.map(row => ({ claimId: row.id, kind: row.data.kind, amount: row.data.amount, postTitle: row.data.postTitle || "" })) });
     } catch (error) { return res.status(500).json({ error: "REWARDS_LIST_FAILED" }); }
   });
 

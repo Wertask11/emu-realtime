@@ -36,7 +36,7 @@
     "url": "https://schoolpark-emu.vercel.app/",
     "applicationCategory": "SocialNetworkingApplication",
     "operatingSystem": "Web",
-    "inLanguage": ["ja", "en", "zh", "ko"],
+    "inLanguage": "ja",
     "description": "映画・本・学びなど答えのない問いについて、同じ熱量で語り合える相手と出会い、対話を続けられる場所。知識の投稿と交換、議論、一日シェアなどの機能がある。",
     "slogan": "あなたの熱に、ついてこられる場所。",
     "publisher": {
@@ -4883,7 +4883,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <button type="button" class="eth-tab" id="emuIchinichiTab" onclick="showEmuIchinichi()" data-i18n="tab.ichinichi">一日シェア</button>
       <button type="button" class="eth-tab" id="emuDiscussionTab" onclick="showEmuDiscussion()" data-i18n="tab.discussion">議論</button>
       <!-- 価値プロフィールは SchoolPark パスポートの PAGE 3 から開く -->
-      <select id="emuLangSelect" class="eth-lang" onchange="setEmuLang(this.value)" aria-label="Language" data-i18n-title="lang.label"></select>
+      <!-- 言語切替（日英中韓）は 2026-10-02 に外した。日本語だけで出す。 -->
     </div>
   </div>
 
@@ -5792,19 +5792,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 
     <!-- 1. 言語 -->
     <div class="sp-panel-section">
-      <div class="sp-panel-section-title">🌐 言語</div>
-      <div class="sp-setting-row">
-        <div>
-          <div class="sp-setting-label">表示言語</div>
-          <div class="sp-setting-sub">SchoolPark と Emu で共通。選ぶとすぐ切り替わります</div>
-        </div>
-        <!-- 選択肢（日本語 / English / 中文 / 한국어）は emu-i18n.js が入れる。
-             LANG_SELECT_IDS に載せてあるので、ほかの場所で言語を変えても
-             ここの表示が勝手に揃う。保存先も向こうが持っている（emu_lang）。 -->
-        <select id="spSettingLangSelect" onchange="setEmuLang(this.value)" aria-label="表示言語"
-          style="background:#1a1d2e;border:1px solid rgba(212,168,67,0.3);color:#D4A843;padding:6px 10px;border-radius:6px;font-size:0.82rem;outline:none;"></select>
-      </div>
-    </div>
+    <!-- 言語の段（日本語 / English / 中文 / 한국어）は 2026-10-02 に外した。
+         日本語だけで出すので、選ぶものが無い。 -->
 
     <!-- 2. SchoolPark ID -->
     <div class="sp-panel-section">
@@ -6012,9 +6001,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 </div><!-- ← mainApp の閉じタグ -->
 
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-<!-- Emuの多言語辞書（日本語/English/中文/한국어/Bahasa Indonesia）。
-     emuT() / applyEmuI18n() / setEmuLang() を提供する。
-     -pages はサブページ（一日シェア等）の辞書と議論のお題。お題の訳は本体でも使う。 -->
+<!-- Emu の画面文言（日本語）。emuT() / applyEmuI18n() を提供する。
+     -pages はサブページ（知識を読む・議論・遊び・一日シェア）の文言。
+     多言語（英中韓）と言語切替は 2026-10-02 に外した。 -->
 <script src="/emu-i18n.js"></script>
 <script src="/emu-i18n-pages.js"></script>
 <script src="/actionschema.js"></script>
@@ -14355,21 +14344,6 @@ function spWalletSaveAlert() {
 
 /* ── ⚙️ 設定パネル ── */
 function _loadSpSettings() {
-  /* 言語。選択肢も保存先も emu-i18n.js が持っている（localStorage の emu_lang）。
-     この select は LANG_SELECT_IDS に載せてあるので、ふつうは向こうが入れてくれる。
-     まだ空なら、ここで入れておく（読み込みの順で取りこぼさないように）。 */
-  try {
-    const sel = document.getElementById('spSettingLangSelect');
-    if (sel && !sel.options.length && Array.isArray(window.EMU_LANGS)) {
-      window.EMU_LANGS.forEach(function (lang) {
-        const o = document.createElement('option');
-        o.value = lang.code; o.textContent = lang.label;
-        sel.appendChild(o);
-      });
-    }
-    if (sel && typeof window.getEmuLang === 'function') sel.value = window.getEmuLang();
-  } catch (e) {}
-
   /* SchoolPark ID。番号を出すのはサーバーで、ここは表示するだけ。
      まだ届いていなければ「確認中…」のままにする。ここで作りにはいかない。 */
   const box = document.getElementById('spSettingSpid');
@@ -15536,7 +15510,7 @@ async function updateEmuTodayHome() {
     if (!el) return;
     if (topicPending) { delete el.dataset.topic; el.textContent = emuT('today.discussion.loading'); return; }
     el.dataset.topic = topic;
-    el.textContent = typeof emuTopic === 'function' ? emuTopic(topic) : topic;
+    el.textContent = topic;
   });
 
   const savedName = localStorage.getItem('ches_name');

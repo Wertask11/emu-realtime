@@ -161,7 +161,10 @@
     }
   }
   async function start() {
-    try { const response = await fetch(API + "/config"); const next = await response.json(); if (!response.ok || Number(next.chainId) !== 137) return; config = next; window.claimEmuLoginBonus = claimLogin; window.handleLoginBonus = claimLogin; applyCopy(); wrapLegacyRender(); wrapWalletCard(); observeLegacyWrites(); await refreshBalance(); await refreshLoginButton(); } catch (_) {}
+    try { const response = await fetch(API + "/config"); const next = await response.json(); if (!response.ok || Number(next.chainId) !== 137) return; config = next; window.claimEmuLoginBonus = claimLogin; window.handleLoginBonus = claimLogin;
+      /* 受け取ったあとに、ページの数字を書き替えるため外へ出す。
+         札ごと描き直すより軽い（balanceOf 一度で四か所そろう）。 */
+      window.emuerV2RefreshBalance = refreshBalance; applyCopy(); wrapLegacyRender(); wrapWalletCard(); observeLegacyWrites(); await refreshBalance(); await refreshLoginButton(); } catch (_) {}
   }
   window.addEventListener("load", () => { start(); setTimeout(() => { wrapLegacyRender(); wrapWalletCard(); applyCopy(); }, 1200); });
 })();
