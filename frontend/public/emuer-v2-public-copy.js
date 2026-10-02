@@ -78,9 +78,50 @@
     if (uses) { const title = uses.querySelector("h3"); if (title) title.textContent = "EMUERの交換・利用"; }
     applyPrelaunchLocks();
   }
+  /* 書けたかどうかを返す。書けていないのに「旧EMUER」の行を出すと、
+     同じ数字が二度出る。 */
   async function refreshBalance() {
-    if (!config || !account() || !window.ethereum || !window.ethers) return;
-    try { const provider = new ethers.providers.Web3Provider(window.ethereum); const value = await new ethers.Contract(config.contract, ABI, provider).balanceOf(account()); const formatted = Number(ethers.utils.formatUnits(value, 18)).toLocaleString("ja-JP"); ["emuTodayBalance", "emuWalletBalance", "pp-emuer-num", "pp-emuer-balance-main"].forEach((id) => setText(id, formatted)); } catch (_) {}
+    if (!config || !account() || !window.ethereum || !window.ethers) return false;
+    try { const provider = new ethers.providers.Web3Provider(window.ethereum); const value = await new ethers.Contract(config.contract, ABI, provider).balanceOf(account()); const formatted = Number(ethers.utils.formatUnits(value, 18)).toLocaleString("ja-JP"); ["emuTodayBalance", "emuWalletBalance", "pp-emuer-num", "pp-emuer-balance-main"].forEach((id) => setText(id, formatted)); return true; } catch (_) { return false; }
+  }
+  /* 「使えるEMUER」が、場所によって違う数字になっていた。
+
+     今日のEmu は updateEmuTodayHome を包んであるので v2 の残高に
+     書き替わる。ウォレットの札（loadEmuWalletCard）は包んでいない
+     ので、旧コントラクト 0x4418d5… ＋ サーバー台帳の「150（8）」が
+     そのまま残る。同じ名前の欄に、別の数字が出ていた。
+
+     10/2 に見つかった。札も包んで、v2 の残高にそろえる。
+     旧の数字は消さずに、別の行に名前を付けて出す。黙って消すと、
+     持っていたものが無くなったように見える。 */
+  function legacyLine(text) {
+    const box = document.querySelector("#emuValueProfile .eth-wallet-balance");
+    if (!box) return;
+    let line = byId("emuLegacyBalanceLine");
+    if (!text) { if (line) line.style.display = "none"; return; }
+    if (!line) {
+      line = document.createElement("p");
+      line.id = "emuLegacyBalanceLine";
+      line.className = "eth-wallet-pending";
+      const before = byId("emuWalletPendingLine");
+      if (before && before.parentNode === box) box.insertBefore(line, before);
+      else box.appendChild(line);
+    }
+    line.style.display = "";
+    line.textContent = "10月1日より前のEMUER：" + text + "（上の使えるEMUERとは別の記録です）";
+  }
+  function wrapWalletCard() {
+    const original = window.loadEmuWalletCard;
+    if (typeof original !== "function" || original.__emuerV2PublicCopy) return;
+    const wrapped = async function () {
+      const result = await original.apply(this, arguments);
+      const node = byId("emuWalletBalance");
+      const before = node ? node.textContent : "";
+      const wrote = await refreshBalance();
+      legacyLine(wrote ? before : "");
+      return result;
+    };
+    wrapped.__emuerV2PublicCopy = true; window.loadEmuWalletCard = wrapped;
   }
   async function refreshLoginButton() {
     const button = byId("emuLoginBonusBtn"); if (!button || !config) return; button.onclick = claimLogin;
@@ -120,7 +161,7 @@
     }
   }
   async function start() {
-    try { const response = await fetch(API + "/config"); const next = await response.json(); if (!response.ok || Number(next.chainId) !== 137) return; config = next; window.claimEmuLoginBonus = claimLogin; window.handleLoginBonus = claimLogin; applyCopy(); wrapLegacyRender(); observeLegacyWrites(); await refreshBalance(); await refreshLoginButton(); } catch (_) {}
+    try { const response = await fetch(API + "/config"); const next = await response.json(); if (!response.ok || Number(next.chainId) !== 137) return; config = next; window.claimEmuLoginBonus = claimLogin; window.handleLoginBonus = claimLogin; applyCopy(); wrapLegacyRender(); wrapWalletCard(); observeLegacyWrites(); await refreshBalance(); await refreshLoginButton(); } catch (_) {}
   }
-  window.addEventListener("load", () => { start(); setTimeout(() => { wrapLegacyRender(); applyCopy(); }, 1200); });
+  window.addEventListener("load", () => { start(); setTimeout(() => { wrapLegacyRender(); wrapWalletCard(); applyCopy(); }, 1200); });
 })();

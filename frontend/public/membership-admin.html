@@ -2631,11 +2631,25 @@ async function renderSchoolPark() {
            承認しても EMUER は動かない。#000 以外はどれでも出せる。 */
         + (SpQuestStore.isFounder(q) ? ''
           : (emuBudgetOf.has(q.id)
-              /* もう付いている。額と、そこからいくら渡したかを出す。 */
-              ? '<small style="color:var(--muted)">予算 '
-                + asMoney(emuBudgetOf.get(q.id).total, "EMUER")
-                + '（渡した ' + asMoney(emuBudgetOf.get(q.id).allocated, "EMUER") + '）</small> '
+              /* もう付いている。額と、そこからいくら渡したかを出す。
+                 上限が0だったり、渡したぶんが上限を越えていたら、
+                 それは正しく公開された予算ではない。手で直したか、
+                 消しそこねたか。黙って普通の予算のふりをすると、
+                 「公開ボタンが出ない」としか見えなくて行き止まりになる。
+                 10/2、#001 でこれが起きた。何が見えているかを出す。 */
+              ? ((emuBudgetOf.get(q.id).total <= 0
+                  || emuBudgetOf.get(q.id).total < emuBudgetOf.get(q.id).allocated)
+                  ? '<small style="color:#b91c1c">予算がこわれています（上限 '
+                    + asMoney(emuBudgetOf.get(q.id).total, "EMUER")
+                    + '／渡した ' + asMoney(emuBudgetOf.get(q.id).allocated, "EMUER") + '）<br>'
+                    + 'Firestore の emuer_v2_guild_quest_budgets から<br>'
+                    + 'quest:' + esc(q.id) + ' を<b>ドキュメントごと</b>消してから<br>'
+                    + '出し直してください。</small> '
+                  : '<small style="color:var(--muted)">予算 '
+                    + asMoney(emuBudgetOf.get(q.id).total, "EMUER")
+                    + '（渡した ' + asMoney(emuBudgetOf.get(q.id).allocated, "EMUER") + '）</small> ')
               : '<button class="act ok" data-qbudget="' + esc(q.id) + '" data-qper="' + emuPerPerson(q)
+                + '" data-qstage="' + SP_STAGE_EMUER(q)
                 + '">EMUERの予算を公開</button> '))
         + (q.status !== "RUNNING" ? '<button class="act neutral" data-qrun="' + esc(q.id) + '">進行中にする</button> ' : '')
         + (q.status !== "CLOSED" ? '<button class="act ok" data-qclose="' + esc(q.id) + '">完了にする</button>' : '')
@@ -3174,18 +3188,35 @@ async function renderSchoolPark() {
       /* 1人あたりと人数を聞いて、総額を出す。段から決めた額を既定にする
          （入門50／標準100／実践200、段が無ければ100。年内目標の資料どおり）。
          いちど公開すると額は変えられないので、確かめてから送る。 */
-      const per = parseInt(prompt("1人あたり何 EMUER にしますか？", b.dataset.qper || "100") || "", 10);
+      /* カードの budget 欄は、1人あたりのつもりで書かれていないことがある。
+         10/2、一般 #001 のカードには総額の 12,500 EMUER が入っていた。
+         それをそのまま既定にしたせいで、1人 12,500 の予算が立った。
+         食い違うときは安いほう（段から決まる額）を既定にして、
+         カードに何と書いてあるかも見せる。決めるのは人。 */
+      const onCard = parseInt(b.dataset.qper || "0", 10) || 0;
+      const byStage = parseInt(b.dataset.qstage || "0", 10) || 100;
+      const odd = onCard > 0 && onCard !== byStage;
+      const per = parseInt(prompt(odd
+        ? "1人あたり何 EMUER にしますか？\n\n"
+          + "カードの額　　　　 " + onCard.toLocaleString() + " EMUER\n"
+          + "段から決まる額　　 " + byStage.toLocaleString() + " EMUER\n\n"
+          + "この2つが違います。カードの額が「全体の予算」なら、\n"
+          + "ここは1人あたりの額に直してください。"
+        : "1人あたり何 EMUER にしますか？",
+        String(odd ? byStage : (onCard || byStage))) || "", 10);
       if (!Number.isSafeInteger(per) || per <= 0) return;
       const people = parseInt(prompt("何人ぶん用意しますか？", "100") || "", 10);
       if (!Number.isSafeInteger(people) || people <= 0) return;
       const total = per * people;
-      if (!confirm("EMUER の予算を公開します。\n\n1人 " + per + " EMUER × " + people + "人 ＝ 総額 " + total
+      if (!confirm("EMUER の予算を公開します。\n\n1人 " + per.toLocaleString() + " EMUER × "
+        + people.toLocaleString() + "人 ＝ 総額 " + total.toLocaleString()
         + " EMUER\n\nいちど公開すると、額は変えられません。よろしいですか？")) return;
       try {
         await api("/api/schoolpark/quest-completions/" + encodeURIComponent(b.dataset.qbudget) + "/budget",
           { method:"POST", body: { perPersonEmuer: per, totalEmuer: total } });
       } catch (e) { alert("予算を公開できませんでした（" + (e.code || e.message) + "）"); return; }
-      alert("EMUER の予算を公開しました（1人 " + per + " EMUER ／ 総額 " + total + "）。");
+      alert("EMUER の予算を公開しました（1人 " + per.toLocaleString()
+        + " EMUER ／ 総額 " + total.toLocaleString() + "）。");
       renderSchoolPark();
     };
   });
