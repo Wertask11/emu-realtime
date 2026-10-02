@@ -83,12 +83,20 @@ function wsAddWalletButton(){
    額は額、件数は件数として出す。
 
    受け取りは1件ずつ。押すたびに残りが減り、文字も書き替わる。 */
+/* この画面で受け取り終えたもの。
+
+   サーバーは鎖に聞いて受け取り済みを外すが、その読みが追いつかない
+   ことがある（1承認待っても、サーバーの繋ぎ先がまだ古いことがある）。
+   そのあいだ同じ claimId が一覧の先頭に残り、もう一度押すと
+   コントラクトが ClaimUnavailable を返して estimateGas で落ちる。
+   この画面で受け取ったものは、こちらでも覚えておいて外す。 */
+const wsDone=new Set();
 async function wsRewards(){
   try{
     const r=await fetch(EMUER_V2_API+"/rewards?address="+encodeURIComponent(wsAccount()),{headers:await wsHeaders(false)});
     const d=await r.json().catch(()=>({}));
     if(!r.ok){wsHideClaim("報酬を読めませんでした（"+(d.error||r.status)+"）");return;}
-    const a=Array.isArray(d.rewards)?d.rewards:[];
+    const a=(Array.isArray(d.rewards)?d.rewards:[]).filter(x=>!wsDone.has(String(x&&x.claimId)));
     if(!a.length){wsHideClaim("受け取り待ちの報酬はありません。");return;}
     const total=a.reduce((n,x)=>n+(Number(x.amount)||0),0);
     const label=a.length>1
@@ -104,6 +112,11 @@ async function wsClaim(row){
     const got=Number(row&&row.amount)||0;
     document.getElementById("wsStatus").textContent=
       got?`${got.toLocaleString("ja-JP")} EMUER を受け取りました`:"受け取りました";
+    wsDone.add(String(row&&row.claimId));
+    /* 受け取ったのに、裏のウォレットの札が古いままだった。
+       この modal の残高だけ直して、ページの数字は直していなかった。
+       同じ画面で違う数字が出るので、まとめて書き替える。 */
+    try{if(typeof window.emuerV2RefreshBalance==="function")await window.emuerV2RefreshBalance();}catch(_){}
     await wsBalance(wsAccount());await wsRewards();}catch(e){wsClaimLabel("報酬を受け取る",wsRewards,false);alert(e.message||"報酬の受取に失敗しました");}
 }
 async function claimEmuV2LoginReward(){
