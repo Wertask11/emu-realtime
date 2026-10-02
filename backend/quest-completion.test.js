@@ -810,3 +810,99 @@ test("すでに2周認めてある人は、3枚目から置ける（いまの記
   approveRound(2);
   assert.equal((await putCard({ insight: "3枚目" })).status, 200);
 });
+
+/* ───────── 認めてあるのに EMUER が渡っていない周回 ─────────
+
+   10/2、実際に起きた。
+
+   10/1 まで、このサーバーは NOT_STARTED で承認を断っていた。
+   そのあいだ運営は管理画面の逃げ道を通り、Firestore へ直接
+   approved と approvedRounds を書いていた。完走は記録されたが、
+   報酬は1枚も引き当てられていない。
+
+   その状態で「EMUERを渡す」を押すと、approvedRounds（2）が
+   知恵カードの枚数（2）に並んでいるので NO_NEW_ROUND で断られた。
+   渡すためのボタンが、渡せないと言う状態だった。 */
+
+/* サーバーを通さずに認めた状態をつくる（管理画面の逃げ道と同じ）。 */
+function approvedOffline(questId, rounds) {
+  records.set("sp_quests/" + questId + "/commits/" + address,
+    { name:"member", approved:true, approvedAt:1, approvedBy:wallet,
+      approvedRounds:rounds, lastApprovedAt:1 });
+}
+
+test("認めてあるのに渡っていない周回には、あとから渡せる", AT(async () => {
+  seedOther();
+  approvedOffline("quest-002", 1);                 // 認めた印だけがある
+  const r = await request("quest-002");
+  assert.equal(r.status, 200, "渡せない（" + String(r.body.error) + "）");
+  assert.equal(r.body.amountEmuer, 200);
+  assert.equal(r.body.round, 1, "渡すのは1周目のはず");
+  assert.equal(r.body.toppedUp, true, "渡しそびれとして扱っていない");
+  assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-002").allocatedEmuer, 200);
+}));
+
+test("あとから渡しても、完走の数は増えない", AT(async () => {
+  seedOther();
+  approvedOffline("quest-002", 1);
+  await request("quest-002");
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).approvedRounds, 1,
+    "やってもいない周回を認めたことになっている");
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).rewardEmuer, 200,
+    "渡した額が記録に残っていない");
+}));
+
+test("2周ぶん渡しそびれていたら、2回押して2周ぶん渡る", AT(async () => {
+  seedOther();                                     // 知恵カード1枚
+  addWisdom("quest-002", 1);                       // あわせて2枚＝2周ぶん
+  approvedOffline("quest-002", 2);                 // 2周とも認めた印だけ
+  const first = await request("quest-002");
+  assert.equal(first.body.round, 1, "古いほうから渡していない");
+  const second = await request("quest-002");
+  assert.equal(second.status, 200, "2周目が渡らない");
+  assert.equal(second.body.round, 2);
+  assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-002").allocatedEmuer, 400,
+    "2周ぶん引き当てていない");
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).approvedRounds, 2,
+    "完走の数が動いている");
+}));
+
+test("全部渡し終えたら、そこで止まる", AT(async () => {
+  seedOther();
+  approvedOffline("quest-002", 1);
+  await request("quest-002");
+  const again = await request("quest-002");
+  assert.equal(again.body.error, "NO_NEW_ROUND", "二重に渡そうとしている");
+  assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-002").allocatedEmuer, 200);
+}));
+
+test("証明書をもう受け取っていても、EMUER は渡せる", AT(async () => {
+  /* 10/1 前に承認 → 証明書だけ先に受け取った、という形。
+     これが実際に起きた状態である。 */
+  seedOther();
+  approvedOffline("quest-002", 1);
+  const key = require("ethers").utils.keccak256(require("ethers").utils.toUtf8Bytes(
+    JSON.stringify(["schoolpark", "quest-002", "spid-a"])));
+  records.set("sp_quest_certificates/" + key, { status:"claimed", round:1 });
+  const r = await request("quest-002");
+  assert.equal(r.status, 200, "証明書があると渡せない（" + String(r.body.error) + "）");
+  assert.equal(r.body.amountEmuer, 200);
+  /* 証明書は作り直さない。受け取り済みのものを pending に戻してはいけない。 */
+  assert.equal(records.get("sp_quest_certificates/" + key).status, "claimed",
+    "受け取り済みの証明書を書き換えている");
+}));
+
+test("予算が足りなければ、渡しそびれでも止まる", AT(async () => {
+  seedOther(null, { totalEmuer: 100, perPersonEmuer: 200 });
+  approvedOffline("quest-002", 1);
+  const r = await request("quest-002");
+  assert.equal(r.body.error, "BUDGET_EXCEEDED", "予算を超えて渡している");
+}));
+
+test("ふつうの承認は、これまでどおり完走の数を増やす", AT(async () => {
+  seedOther();
+  const r = await request("quest-002");
+  assert.equal(r.body.round, 1);
+  assert.notEqual(r.body.toppedUp, true, "ふつうの承認を渡しそびれとして扱っている");
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).approvedRounds, 1);
+}));
