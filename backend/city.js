@@ -4,8 +4,8 @@ const express = require("express");
 const { isSchoolParkId } = require("./identity");
 const { decideSchoolParkAccess } = require("./schoolpark-access");
 
-/* Versioned, operator-owned catalogue. No partner locations, coordinates or
- * pretend payment links. Replace this provider, not Identity/Quest, in phase 2. */
+/* Versioned, operator-owned catalogue. Partner shops and their reviewed
+ * external checkout destinations are managed separately in city-shops.js. */
 const SPOTS = Object.freeze([
   {
     spotId: "demo-book", name: "BOOK SPOT", type: "experience",
@@ -26,7 +26,7 @@ const SPOTS = Object.freeze([
     description: "Cityを探索し、気づきを次の体験につなぐ小さなVirtual Spot。",
     category: ["CREATE", "EXPERIENCE"], locationType: "VIRTUAL", image: null,
     questId: null, guildId: "web3", checkInType: "virtual-entry", status: "demo",
-    experience: "SchoolPark Cityを探索してみよう", destination: { kind: "city-lab" }
+    experience: "SchoolPark Cityを探索してみよう", destination: { kind: "city-showroom" }
   }
 ].map(s => Object.freeze({ ...s, category: Object.freeze(s.category) })));
 
@@ -45,7 +45,7 @@ function checkinView(id, data) {
 }
 
 function createCityRouter({ db, identity, entitlement, requireFirebaseUser,
-  rateLimit, ownerAddresses = [], now = Date.now }) {
+  rateLimit, ownerAddresses = [], now = Date.now, shopCatalog }) {
   const router = express.Router();
   const limited = (key, max) => rateLimit({ key, max, windowMs: 60000 });
 
@@ -76,6 +76,7 @@ function createCityRouter({ db, identity, entitlement, requireFirebaseUser,
     }
   });
 
+  require("./city-shops").attachShopRoutes(router, { limited, catalog:shopCatalog });
   router.get("/spots", (_req, res) => res.json({ ok: true, schema: "schoolpark-city-v1", spots: SPOTS }));
 
   router.get("/me", async (req, res) => {

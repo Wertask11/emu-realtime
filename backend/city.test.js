@@ -75,7 +75,8 @@ test("City: all catalogue fields, explicit demo state, no invented Quest IDs", (
   }
 });
 test("City: anonymous requests to every data/write endpoint fail", () => using(async f => {
-  for (const path of ["/spots","/me"]) assert.equal((await f.call("GET",path,"")).status,401);
+  for (const path of ["/spots","/me","/shops"]) assert.equal((await f.call("GET",path,"")).status,401);
+  assert.equal((await f.call("POST","/shops/checkout","",{shopId:"field-store",productId:"field-note"})).status,401);
   assert.equal((await f.call("POST","/checkins","",checkin)).status,401);
   assert.equal(f.db._count(checkinPath(A)),0);
 }));
