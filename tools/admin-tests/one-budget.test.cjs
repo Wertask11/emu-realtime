@@ -45,7 +45,9 @@ function stage(opts) {
   const ctx = vm.createContext({
     Number, String, Math, parseInt, Array, Object, Error, JSON,
     console: { warn() {} },
-    el: { querySelectorAll: () => [button] },
+    /* 選び手を見ずに何でも返すと、同じ塊にある別の口（招待を数える）まで
+       同じボタンを掴んで、onclick を上書きしてしまう。 */
+    el: { querySelectorAll: (sel) => String(sel).indexOf('data-qbudget') >= 0 ? [button] : [] },
     prompt: (msg, def) => {
       seen.prompts.push({ msg: String(msg), def: String(def) });
       return answers.length ? answers.shift() : def;

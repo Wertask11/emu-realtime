@@ -5790,10 +5790,21 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </div>
   <div class="sp-panel-body">
 
-    <!-- 1. 言語 -->
+    <!-- 1. 招待リンク
+         言語の段（日本語 / English / 中文 / 한국어）は 2026-10-02 に外した。
+         空いた場所に、一般クエスト #005 の招待リンクを置く。 -->
     <div class="sp-panel-section">
-    <!-- 言語の段（日本語 / English / 中文 / 한국어）は 2026-10-02 に外した。
-         日本語だけで出すので、選ぶものが無い。 -->
+      <div class="sp-panel-section-title">🔗 招待リンク</div>
+      <div class="sp-setting-row">
+        <div>
+          <div class="sp-setting-label">SchoolParkを、誰かに届ける</div>
+          <div class="sp-setting-sub">このリンクから入った人がパスポートを作ると、一般クエスト #005 の完走になります</div>
+        </div>
+        <button type="button" onclick="if(window.SpShareInvite)SpShareInvite.open()"
+          style="background:#1a1d2e;border:1px solid rgba(212,168,67,0.3);color:#D4A843;padding:6px 12px;border-radius:6px;font-size:0.82rem;cursor:pointer;white-space:nowrap;">
+          リンクを出す</button>
+      </div>
+    </div>
 
     <!-- 2. SchoolPark ID -->
     <div class="sp-panel-section">
@@ -6006,6 +6017,10 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
      多言語（英中韓）と言語切替は 2026-10-02 に外した。 -->
 <script src="/emu-i18n.js"></script>
 <script src="/emu-i18n-pages.js"></script>
+<!-- 招待リンクの共有（#005）。発行直後の画面がこれを呼ぶので、先に読む。 -->
+<script src="/schoolpark/share-invite.js"></script>
+<!-- パスポートができた直後に「次はあなたが届ける番」を出す（#005 の連鎖の起点）。 -->
+<script src="/schoolpark/passport-welcome.js"></script>
 <script src="/actionschema.js"></script>
 <script src="/actionhub.js"></script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -26810,20 +26825,55 @@ async function sendEmuFeedback() {
 
      何度呼んでも番号は増えない。サーバー側が
      「認証情報 → 番号」の対応表を1件しか作れない形にしてある。 */
+  /* 招待リンクの合言葉（一般クエスト #005）。
+
+     ?ref=XXXXXXXXXX で来た人は、その合言葉を控えておく。
+     番号ができるのはログインのあとなので、その場では使えない。
+     ログインの行き来で消えないよう localStorage に置く。
+
+     使うのは「初めて番号ができたとき」の1回だけ。サーバー側も
+     isNew のときしか数えないので、残っていても二重には数えない。 */
+  var REF_KEY = "sp_invite_ref";
+  var REF_RE = /^[0-9A-HJKMNP-TV-Z]{10}$/;
+  SPID.captureRef = function (search) {
+    try {
+      var q = new URLSearchParams(String(search == null ? location.search : search));
+      var ref = String(q.get("ref") || "").trim().toUpperCase();
+      if (!REF_RE.test(ref)) return null;
+      localStorage.setItem(REF_KEY, ref);
+      return ref;
+    } catch (e) { return null; }
+  };
+  SPID.ref = function () {
+    try {
+      var v = String(localStorage.getItem(REF_KEY) || "").trim().toUpperCase();
+      return REF_RE.test(v) ? v : "";
+    } catch (e) { return ""; }
+  };
+  SPID.clearRef = function () { try { localStorage.removeItem(REF_KEY); } catch (e) { } };
+  try { SPID.captureRef(); } catch (e) { }
+
   SPID.resolve = function (force) {
     if (window._spIdentity && !force) return Promise.resolve(window._spIdentity);
     if (_busy) return _busy;
     _busy = (async function () {
       try {
-        var headers = await authHeaders(false);
+        /* 合言葉を本文で送るので、Content-Type を付ける（true）。
+           付けないとサーバーが本文を読まず、招待が数えられない。 */
+        var headers = await authHeaders(true);
+        var ref = SPID.ref();
         var res = await fetch(SPID.api + "/resolve", {
-          method: "POST", headers: headers, cache: "no-store"
+          method: "POST", headers: headers, cache: "no-store",
+          body: JSON.stringify(ref ? { ref: ref } : {})
         });
         var data = null;
         try { data = await res.json(); } catch (e) { data = null; }
         if (!res.ok || !data || !data.schoolParkId) {
           throw new Error((data && data.error) || ("resolve " + res.status));
         }
+        /* 番号ができたら、合言葉の役目は終わり。残しておくと、
+           あとで番号を作り直した人に別の招待が付いてしまう。 */
+        if (data.isNew) SPID.clearRef();
         return remember(data);
       } catch (e) {
         /* 取れなかったときは、ここで番号を作らない。

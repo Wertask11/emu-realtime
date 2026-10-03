@@ -42,6 +42,7 @@ const LINK_COL    = "sp_auth_links";        // 認証情報 → SchoolPark ID（
 const TICKET_COL  = "sp_link_tickets";      // ログイン方法を足すときの一時引換券
 const DUP_COL     = "sp_identity_duplicates"; // 同一人物かもしれない重複候補（運営確認用）
 const AUDIT_COL   = "sp_identity_audit";    // 発行・連携・拒否の記録
+const INVITE_COL  = "sp_invite_codes";      // 招待リンクの合言葉 → 招待した人
 const ACCOUNT_COL = "ches_accounts";
 const PASS_COL    = "paid_users";
 
@@ -76,6 +77,23 @@ function isSchoolParkId(value) {
   return ID_RE.test(String(value || ""));
 }
 
+/* 招待リンクの合言葉。
+
+   SchoolPark ID そのものを ?ref= に入れてはいけない。番号は
+   「総当たりで当てられない・順に試せない」ことを前提に作ってあり（上の注）、
+   SNS に貼った時点でその前提が崩れる。番号とは別の、短い合言葉を配る。
+
+   10文字＝50ビット。合言葉が漏れても起きるのは「招待した人の取り違え」
+   だけで、誰かのパスポートが覗かれることはない。 */
+const INVITE_RE = /^[0-9A-HJKMNP-TV-Z]{10}$/;
+function newInviteCode() {
+  const bytes = crypto.randomBytes(10);
+  let out = "";
+  for (let i = 0; i < 10; i += 1) out += ALPHABET[bytes[i] % ALPHABET.length];
+  return out;
+}
+function isInviteCode(value) { return INVITE_RE.test(String(value || "").trim().toUpperCase()); }
+
 /* 認証情報の置き場所（文書ID）。
 
    kind は "fb"（Firebase のログイン）か "wallet"（署名で確かめたウォレット）。
@@ -105,6 +123,21 @@ function addressForms(address, ethers) {
 }
 
 function isAddress(v) { return /^0x[0-9a-fA-F]{40}$/.test(String(v || "").trim()); }
+
+/* 時刻をミリ秒にそろえる。
+
+   Firestore から戻ってくる形は一つではない。Admin SDK の Timestamp、
+   数値、ISOの文字列（JSON を経由したもの）が混ざる。
+   読めなかったときは 0 を返す。0 は「分からない」の意味で使い、
+   「受けた日より後か」の判定では必ず外れる側に倒れる。 */
+function millisOf(v) {
+  if (v == null) return 0;
+  if (typeof v.toMillis === "function") { try { return v.toMillis(); } catch (e) { return 0; } }
+  if (v instanceof Date) return v.getTime();
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const parsed = Date.parse(String(v));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 /* ログイン方法の呼び名。表示と記録にだけ使う（権限には使わない）。 */
 function providerOf(uid, account, signInProvider) {
@@ -722,6 +755,145 @@ function createIdentity(deps) {
     return out;
   }
 
+  /* ══════════════════════════════════════════════════════════
+     招待リンク（一般クエスト #005）
+
+     クエストの判定は「そのパスポートが、クエストを受けた日より後に
+     発行されたものか」を運営が照合する決まりになっている。
+     名前で突き合わせるのは手間だし、同姓同名で間違う。
+
+     合言葉つきのリンクから入ってパスポートができたら、その場で
+     「誰の招待か」と「いつできたか」を残す。運営は日付を比べるだけで済む。
+
+     できないことも書いておく。
+       ・同じ人が LINE と Google で入れば別の番号になる（この仕組みの
+         前提。identity.js の頭に書いたとおり、勝手に統合しない）。
+         つまり自作自演は機械では見分けられない。数えるだけにして、
+         認めるかどうかは運営が決める。
+       ・「相手が自分で決めて発行した」ことは証明できない。
+         リンクが踏まれたことしか分からない。
+     ══════════════════════════════════════════════════════════ */
+
+  /* その人の合言葉。無ければ一度だけ作る。何度呼んでも増えない。
+     逆引き（合言葉→番号）は sp_invite_codes、
+     順引き（番号→合言葉）は sp_identities.inviteCode に置く。 */
+  async function inviteCodeFor(spid) {
+    if (!db) throw new Error("NO_DB");
+    if (!isSchoolParkId(spid)) throw new Error("BAD_SPID");
+    const idRef = db.collection(ID_COL).doc(spid);
+    const snap = await idRef.get();
+    if (!snap.exists) throw new Error("IDENTITY_NOT_FOUND");
+    const cur = snap.data() || {};
+    if (isInviteCode(cur.inviteCode)) return String(cur.inviteCode);
+
+    /* 合言葉がぶつかったら引き直す。tx.create は既にあれば失敗するので、
+       先に居た人のものを上書きしない。 */
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const code = newInviteCode();
+      try {
+        await db.runTransaction(async (tx) => {
+          const codeRef = db.collection(INVITE_COL).doc(code);
+          const [cSnap, iSnap] = await Promise.all([tx.get(codeRef), tx.get(idRef)]);
+          if (cSnap.exists) throw new Error("CODE_TAKEN");
+          const now = iSnap.data() || {};
+          /* 待っているあいだに別の呼び出しが作っていたら、そちらを使う。 */
+          if (isInviteCode(now.inviteCode)) throw new Error("ALREADY_MADE");
+          tx.create(codeRef, { code, spid, total: 0, createdAt: new Date() });
+          tx.set(idRef, { inviteCode: code, updatedAt: Date.now() }, { merge: true });
+        });
+        return code;
+      } catch (e) {
+        const why = String(e && e.message);
+        if (why === "ALREADY_MADE") {
+          const again = await idRef.get();
+          const made = String(((again.exists && again.data()) || {}).inviteCode || "");
+          if (isInviteCode(made)) return made;
+        }
+        if (why !== "CODE_TAKEN" && why !== "ALREADY_MADE") throw e;
+      }
+    }
+    throw new Error("INVITE_CODE_FAILED");
+  }
+
+  /* 合言葉から、招待した人の番号を引く。 */
+  async function inviterOf(code) {
+    if (!db || !isInviteCode(code)) return null;
+    const snap = await db.collection(INVITE_COL).doc(String(code).trim().toUpperCase()).get();
+    if (!snap.exists) return null;
+    const spid = String((snap.data() || {}).spid || "");
+    return isSchoolParkId(spid) ? spid : null;
+  }
+
+  /* 招待を1件書き残す。番号ができた直後にだけ呼ぶ。
+
+     同じ相手は一度しか数えない（invited/{相手の番号} を create するので、
+     二度目は失敗する）。自分で自分を招待したことにはできない。 */
+  async function recordInvite(code, newSpid, opts) {
+    const o = opts || {};
+    if (!db) return { ok: false, reason: "NO_DB" };
+    const key = String(code || "").trim().toUpperCase();
+    if (!isInviteCode(key)) return { ok: false, reason: "BAD_CODE" };
+    if (!isSchoolParkId(newSpid)) return { ok: false, reason: "BAD_SPID" };
+
+    const codeRef = db.collection(INVITE_COL).doc(key);
+    const seatRef = codeRef.collection("invited").doc(newSpid);
+    const newRef = db.collection(ID_COL).doc(newSpid);
+    try {
+      return await db.runTransaction(async (tx) => {
+        const [cSnap, sSnap, nSnap] = await Promise.all([
+          tx.get(codeRef), tx.get(seatRef), tx.get(newRef)
+        ]);
+        if (!cSnap.exists) return { ok: false, reason: "UNKNOWN_CODE" };
+        const inviter = String((cSnap.data() || {}).spid || "");
+        if (!isSchoolParkId(inviter)) return { ok: false, reason: "UNKNOWN_CODE" };
+        if (inviter === newSpid) return { ok: false, reason: "SELF" };
+        if (sSnap.exists) return { ok: false, reason: "ALREADY", inviter };
+        if (!nSnap.exists) return { ok: false, reason: "IDENTITY_NOT_FOUND" };
+        /* すでに別の人の招待で数えてあるなら、上書きしない。 */
+        const already = String((nSnap.data() || {}).invitedByCode || "");
+        if (already && already !== key) return { ok: false, reason: "ALREADY_INVITED", inviter };
+
+        const now = new Date();
+        tx.create(seatRef, { spid: newSpid, code: key, inviter, createdAt: now });
+        tx.set(codeRef, {
+          total: Math.max(0, Number((cSnap.data() || {}).total || 0)) + 1, updatedAt: now
+        }, { merge: true });
+        tx.set(newRef, {
+          invitedByCode: key, invitedBySpid: inviter,
+          invitedAt: now.getTime(), invitedVia: o.via || "link", updatedAt: Date.now()
+        }, { merge: true });
+        return { ok: true, inviter };
+      });
+    } catch (e) {
+      /* 招待を数えられなくても、パスポートの発行そのものは止めない。 */
+      return { ok: false, reason: "RECORD_FAILED", error: e.message };
+    }
+  }
+
+  /* その人が招待した相手の一覧。since を渡すと、それより後にできたものだけ。
+     クエストの判定は「受けた日より後か」なので、since に tookAt を入れる。 */
+  async function invitesOf(spid, since) {
+    if (!db) throw new Error("NO_DB");
+    if (!isSchoolParkId(spid)) throw new Error("BAD_SPID");
+    const idSnap = await db.collection(ID_COL).doc(spid).get();
+    const code = String(((idSnap.exists && idSnap.data()) || {}).inviteCode || "");
+    if (!isInviteCode(code)) return { code: "", total: 0, since: Number(since) || 0, invited: [] };
+    const snap = await db.collection(INVITE_COL).doc(code)
+      .collection("invited").limit(500).get();
+    const from = Number(since) || 0;
+    const rows = snap.docs.map((d) => {
+      const r = d.data() || {};
+      return { spid: String(r.spid || d.id), createdAt: millisOf(r.createdAt) };
+    });
+    return {
+      code,
+      total: rows.length,
+      since: from,
+      invited: rows.filter((r) => !from || r.createdAt > from)
+        .sort((a, b) => a.createdAt - b.createdAt)
+    };
+  }
+
   return {
     // 番号そのもの
     newSchoolParkId, isSchoolParkId, linkIdFor,
@@ -729,12 +901,14 @@ function createIdentity(deps) {
     resolveForUid, findByUid, findByAddress, readIdentity, publicView,
     // 連携
     issueLinkTicket, completeLinkWithTicket, registerWalletLink,
+    // 招待（一般クエスト #005）
+    inviteCodeFor, inviterOf, recordInvite, invitesOf, isInviteCode,
     // 公式パス
     holdsOfficialPass, holdsOfficialPassForUid, forget,
     // 運営
     listDuplicates, whois, flagDuplicate, backfill, audit,
     // 定数
-    ID_COL, LINK_COL, TICKET_COL, DUP_COL, AUDIT_COL, TICKET_TTL_MS
+    ID_COL, LINK_COL, TICKET_COL, DUP_COL, AUDIT_COL, INVITE_COL, TICKET_TTL_MS
   };
 }
 
@@ -744,6 +918,7 @@ function safeEthers() {
 
 module.exports = {
   createIdentity,
-  newSchoolParkId, isSchoolParkId, linkIdFor, providerOf, addressesFromAccount,
-  ID_COL, LINK_COL, TICKET_COL, DUP_COL, AUDIT_COL
+  newSchoolParkId, isSchoolParkId, newInviteCode, isInviteCode,
+  linkIdFor, providerOf, addressesFromAccount,
+  ID_COL, LINK_COL, TICKET_COL, DUP_COL, AUDIT_COL, INVITE_COL
 };
