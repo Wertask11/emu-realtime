@@ -65,6 +65,8 @@ export function createBridge(parent, app) {
   }
   const apiBridge = {
     getSpots: () => jsonRequest(api + '/spots'),
+    getShops: () => jsonRequest(api + '/shops'),
+    prepareShopCheckout: (shopId, productId) => jsonRequest(api + '/shops/checkout', {shopId,productId}),
     getMyCity: () => jsonRequest(api + '/me'),
     checkIn: spot => jsonRequest(api + '/checkins', { spotId: spot.spotId, checkInType: spot.checkInType }),
     async achievements(expectedPassportId) {

@@ -61,7 +61,7 @@ async function fixture() {
   async function call(method, path, uid="alice", body) {
     const r = await fetch("http://127.0.0.1:" + server.address().port + "/city" + path,
       { method, headers:{"Content-Type":"application/json",...(uid ? {"x-test-uid":uid} : {})}, body:body === undefined ? undefined : JSON.stringify(body) });
-    return {status:r.status, body:await r.json().catch(()=>null), cache:r.headers.get("cache-control")};
+    return {status:r.status, body:await r.json().catch(()=>null), cache:r.headers.get("cache-control"), release:r.headers.get("x-schoolpark-city-release")};
   }
   return { db, call, setClock:ms => {clock=ms;}, close:() => new Promise(resolve=>server.close(resolve)) };
 }
@@ -75,7 +75,13 @@ test("City: all catalogue fields, explicit demo state, no invented Quest IDs", (
   }
 });
 test("City: anonymous requests to every data/write endpoint fail", () => using(async f => {
-  for (const path of ["/spots","/me"]) assert.equal((await f.call("GET",path,"")).status,401);
+  for (const path of ["/spots","/me","/shops"]) {
+    const response=await f.call("GET",path,"");
+    assert.equal(response.status,401);
+    assert.equal(response.release,"3d-shops-v1");
+    assert.deepEqual(response.body,{error:"AUTH_REQUIRED"});
+  }
+  assert.equal((await f.call("POST","/shops/checkout","",{shopId:"field-store",productId:"field-note"})).status,401);
   assert.equal((await f.call("POST","/checkins","",checkin)).status,401);
   assert.equal(f.db._count(checkinPath(A)),0);
 }));

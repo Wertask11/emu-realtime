@@ -22,6 +22,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
   let message = '', error = '', loading = false, recording = false, myLoading = false;
   let catalogAt = 0, myAt = 0, epoch = 0, myGeneration = 0, share = null, loadJob = null, myJob = null;
   const recorded = new Map();
+  let immersive = null, immersiveOpening = false;
   host.className = 'sp-city';
   host.setAttribute('aria-label', 'SchoolPark City');
 
@@ -49,7 +50,8 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       <h2 data-city-heading tabindex="-1">${escape(spot.name)}</h2><p>${escape(spot.description)}</p>
       <div class="city-note">${spot.locationType === 'REAL'
         ? 'REAL / DEMO：店舗との提携や現地訪問を証明するものではありません。QRチェックインは今後対応予定です。位置情報は取得しません。'
-        : 'VIRTUAL / DEMO：この画面のLabに入る操作を記録します。3D空間や外部Virtual Spaceへの接続は今後対応予定です。'}</div>
+        : 'VIRTUAL / DEMO：3Dショールームを歩いて探索できます。チェックインは明示操作で記録し、現地訪問の証明にはなりません。'}</div>
+      ${spot.locationType === 'VIRTUAL' ? button('walk','3D店舗に入る') : ''}
       <h3>Passport Check-in</h3><p>ログイン中のPassportへ保存します。同じSpotは日本時間で1日1件。報酬・星・Quest完了は付与されません。</p>
       ${button('checkin',recording ? '記録しています…' : spot.locationType === 'REAL' ? 'DEMOチェックインを記録' : 'このVirtual Spotに入る', spot.spotId, false, recording)}
       ${done ? `<p class="city-status">記録済み · ${escape(date(done.occurredAt))}${done.isDemo ? ' · DEMO' : ''}</p>` : ''}
@@ -91,20 +93,20 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       ${button('preview-share','MyCityをシェア','',true,visits.length === 0)}<p class="city-muted">共有前に内容を確認できます。Passport IDや非公開情報は共有しません。</p>
       ${share ? `<section class="city-share" role="region" aria-label="共有内容の確認"><h3>この内容だけを共有します</h3><pre>${escape(share.text)}\n${escape(share.url)}</pre><div class="city-row">${button('share','共有する')}${button('cancel-share','キャンセル','',true)}</div></section>` : ''}
       <div class="city-soon"><b>MY AGENTS</b><span>Explorer · Coming Soon</span></div>
-      <p class="city-muted">City Item・Agentへの権限委任・決済は未実装です。</p></section>`;
+      <p class="city-muted">店舗での購入履歴・City Item・Agentへの権限委任は準備中です。</p></section>`;
   }
   function render() {
     const focus = host.contains(document.activeElement) ? document.activeElement : null;
     const focusAction = focus?.dataset.action, focusValue = focus?.dataset.value;
-    host.innerHTML = `<div class="city-toolbar"><button type="button" class="city-link" data-action="home">← SchoolParkの広場へ</button><span class="city-eyebrow">08 CITY / v0.1</span></div>
-      ${page === 'home' ? `<section class="city-hero"><div><p class="city-eyebrow">REALITY × IDENTITY</p><h2 data-city-heading tabindex="-1">SchoolPark City</h2><p class="city-subtitle">Decentralized Mixed Reality<br>分散型複合現実</p><p>現実も、仮想も、学びのフィールドになる。</p></div><div class="city-worlds" aria-hidden="true"><div class="city-world"><span class="city-orbit">⌂</span><b>REAL</b><small>いつもの街から</small></div><div class="city-world"><span class="city-orbit">✧</span><b>VIRTUAL</b><small>まだ知らない世界へ</small></div></div></section>` : ''}
+    host.innerHTML = `<div class="city-toolbar"><button type="button" class="city-link" data-action="home">← SchoolParkの広場へ</button><span class="city-eyebrow">08 CITY / 3D EXPLORER</span></div>
+      ${page === 'home' ? `<section class="city-hero city-hero-3d"><img src="/schoolpark/city-showroom-preview.webp" alt="SchoolPark Cityの3Dショールーム。木の棚、商品、カウンターのある店内。" width="1200" height="675"><div class="city-hero-copy"><p class="city-eyebrow">REALITY × IDENTITY / 3D SHOWROOM</p><h2 data-city-heading tabindex="-1">SchoolPark City</h2><p>入って、歩いて、見つけよう。</p><p class="city-subtitle">Decentralized Mixed Reality · 分散型複合現実</p>${button('walk','3Dの街へ入る ↗','',false,loading || !spots)}</div></section>` : ''}
       <nav class="city-nav" aria-label="Cityの入口">${[['real','REAL','現実の体験例'],['virtual','VIRTUAL','仮想の入口'],['quest','QUEST','既存Questへ'],['my','MY CITY','自分の活動記録']].map(([id,label,note]) => `<button type="button" data-action="${id === 'quest' ? 'quest' : 'page'}" data-value="${id === 'quest' ? '' : id}"${page === id ? ' aria-current="page"' : ''}><b>${label}</b><span>${note}</span></button>`).join('')}</nav>
       ${page !== 'home' ? '<button type="button" class="city-link" data-action="page" data-value="home">← City HOME</button>' : ''}
       ${error ? `<div role="alert" class="city-status city-error">${escape(error)}</div>` : ''}
       ${message ? `<div role="status" class="city-status">${escape(message)}</div>` : ''}
       ${loading ? '<p role="status" class="city-note">Cityの入口を確認しています…</p>' : !spots ? `${unavailable('City')}${button('retry','もう一度読み込む','',true)}`
         : page === 'spot' ? detail() : page === 'my' ? myCity() : catalog()}
-      ${page === 'home' ? '<p class="city-note">ここはDEMOから始まるCityです。実在する提携店舗、決済、報酬の自動付与はありません。SHOP・EVENT・AGENTは今後拡張予定です。</p>' : ''}`;
+      ${page === 'home' ? '<p class="city-note">年内目標：リアル現場連携1〜2拠点。現在は店内を探索できる3Dショールームです。展示品の購入はできません。出店店舗の商品・提供条件・正式な決済先が整ったものから販売を開始します。</p>' : ''}`;
     if (focusAction) {
       [...host.querySelectorAll('[data-action]')].find(b => b.dataset.action === focusAction && b.dataset.value === focusValue)?.focus({ preventScroll:true });
     }
@@ -152,6 +154,17 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
   async function act(action, value) {
     const version = epoch;
     try {
+      if (action === 'walk') {
+        if(immersive || immersiveOpening) return;
+        immersiveOpening = true;
+        try {
+          const mod = await import('./city-shop.js');
+          if(version !== epoch) return;
+          immersive = mod.openShopWorld({bridge,spots:spots || [],onClose:()=>{immersive=null;},onMyCity:()=>go('my'),
+            onRecord:(spot,result)=>{recorded.set(spot.spotId,result.checkin);myGeneration++;myJob=null;myLoading=false;myAt=0;}});
+        } finally { immersiveOpening=false; }
+        return;
+      }
       if (action === 'home') return bridge.goHome();
       if (action === 'page') return go(value);
       if (action === 'spot') return go('spot',value);
@@ -207,6 +220,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     if (target && host.contains(target) && !target.disabled) act(target.dataset.action,target.dataset.value);
   });
   bridge.onSessionChange(() => {
+    immersive?.destroy(); immersive=null; immersiveOpening=false;
     epoch++; myGeneration++; spots = null; history = null; achievements = null; share = null;
     recorded.clear(); catalogAt = 0; myAt = 0; loadJob = null; myJob = null;
     loading = false; recording = false; myLoading = false; page = 'home';
