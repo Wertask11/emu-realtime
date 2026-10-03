@@ -53,7 +53,22 @@ function createIdentityRouter(deps) {
         signInProvider: req.identity.signInProvider,
         linkedBy: "login"
       });
-      const body = await summarize(out.spid, { isNew: !!out.isNew });
+      /* 招待リンクから来た人。いま初めて番号ができたときだけ数える。
+
+         すでに番号がある人が招待リンクを踏んでも数えない。
+         数えると「前からいる人を呼び直す」だけで件数が増やせてしまう。
+         数えられなくても、番号の発行そのものは止めない。 */
+      let invited = null;
+      if (out.isNew) {
+        const ref = String((req.body && req.body.ref) || "").trim().toUpperCase();
+        if (ref && typeof identity.recordInvite === "function") {
+          try {
+            const r = await identity.recordInvite(ref, out.spid, { via: "link" });
+            invited = r && r.ok ? { ok: true } : { ok: false, reason: (r && r.reason) || "FAILED" };
+          } catch (e) { invited = { ok: false, reason: "FAILED" }; }
+        }
+      }
+      const body = await summarize(out.spid, { isNew: !!out.isNew, ...(invited ? { invited } : {}) });
       return res.json(body);
     } catch (e) {
       console.error("SchoolPark ID の解決に失敗:", e.message);
@@ -126,6 +141,25 @@ function createIdentityRouter(deps) {
 
      いま入っている SchoolPark ID に紐づく、10分だけ有効な1回きりの券。
      券は、いまのパスポートへログイン済みでないと受け取れない。 */
+  /* ───────── 招待リンク（一般クエスト #005） ─────────
+
+     自分の合言葉を受け取る。無ければここで一度だけ作る。
+     番号そのものは返さない（SNS に貼る値なので、番号は出さない）。 */
+  router.get("/invite", requireFirebaseUser, limitRead, async (req, res) => {
+    if (!db || !identity) return unavailable(res);
+    res.set("Cache-Control", "no-store, max-age=0");
+    try {
+      const me = await identity.findByUid(req.identity.uid);
+      if (!me || !me.spid) return res.status(404).json({ error: "NO_PASSPORT" });
+      const code = await identity.inviteCodeFor(me.spid);
+      const out = await identity.invitesOf(me.spid, 0);
+      return res.json({ ok: true, code, total: out.total });
+    } catch (e) {
+      console.error("招待の合言葉を作れませんでした:", e.message);
+      return res.status(500).json({ error: "INVITE_FAILED" });
+    }
+  });
+
   router.post("/link/ticket", requireFirebaseUser, limitWrite, async (req, res) => {
     if (!db || !identity) return unavailable(res);
     try {
@@ -266,6 +300,35 @@ function createIdentityRouter(deps) {
       return res.json({ ok: true, ...out });
     } catch (e) {
       return res.status(500).json({ error: "WHOIS_FAILED" });
+    }
+  });
+
+  /* 招待の照合。クエスト #005 の判定に使う。
+
+     since にクエストを受けた日（tookAt）を入れると、それより後に
+     できたパスポートだけが返る。運営が名前で突き合わせていた作業が、
+     ここの件数を見るだけになる。
+
+     ただし「同じ人が別のログイン方法で入って作った番号」は、この
+     仕組みでは見分けられない（identity.js の頭に書いたとおり）。
+     数えるだけなので、認めるかどうかは運営が決める。 */
+  router.get("/admin/invites", requireOwner, async (req, res) => {
+    if (!db || !identity) return unavailable(res);
+    try {
+      /* 管理画面はクエストの参加者を名義（アドレス）で持っている。
+         番号を手で引き直さずに済むよう、どちらでも受ける。 */
+      let spid = String(req.query.spid || "").trim().toUpperCase();
+      if (!identity.isSchoolParkId(spid)) {
+        const addr = String(req.query.address || "").trim();
+        if (!addr) return res.status(400).json({ error: "BAD_SPID" });
+        const found = await identity.findByAddress(addr);
+        spid = String((found && found.spid) || "");
+        if (!identity.isSchoolParkId(spid)) return res.status(404).json({ error: "NO_PASSPORT" });
+      }
+      const out = await identity.invitesOf(spid, Number(req.query.since) || 0);
+      return res.json({ ok: true, spid, ...out, count: out.invited.length });
+    } catch (e) {
+      return res.status(500).json({ error: "INVITES_FAILED" });
     }
   });
 

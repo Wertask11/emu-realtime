@@ -62,7 +62,11 @@ function makeFirestore(seed) {
       async get() { maybeFail(); return snapshotOf(col, String(id)); },
       async set(value, opts) { maybeFail(); applyWrite(key(col, String(id)), value, !!(opts && opts.merge), false); return ref; },
       async create(value) { maybeFail(); applyWrite(key(col, String(id)), value, false, true); return ref; },
-      async delete() { maybeFail(); store.delete(key(col, String(id))); return ref; }
+      async delete() { maybeFail(); store.delete(key(col, String(id))); return ref; },
+      /* 文書の下のコレクション。置き場所は "親/文書ID/子" になる。
+         本物と同じで、親の文書が無くても子は置ける。
+         招待の記録（sp_invite_codes/{合言葉}/invited/{番号}）がこれを使う。 */
+      collection: (sub) => collection(col + "/" + String(id) + "/" + String(sub))
     };
     return ref;
   }
@@ -72,7 +76,11 @@ function makeFirestore(seed) {
     const rows = [];
     for (const [k, entry] of store) {
       if (typeof k !== "string" || !k.startsWith(prefix)) continue;
-      rows.push({ id: k.slice(prefix.length), data: () => clone(entry.data) });
+      const rest = k.slice(prefix.length);
+      /* 下のコレクションの文書は、親の一覧には出さない。
+         本物の Firestore も、親のコレクションを読んで子は返さない。 */
+      if (rest.indexOf("/") >= 0) continue;
+      rows.push({ id: rest, data: () => clone(entry.data) });
       if (limit && rows.length >= limit) break;
     }
     return {

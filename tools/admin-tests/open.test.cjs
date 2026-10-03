@@ -606,7 +606,11 @@ test('クエストの行に、何周ぶん認めたかを出す', () => {
 test('残っていれば、もう一度「認める」が出る', () => {
   const i = ADMIN.indexOf('認めていない周回が残っていれば');
   assert.ok(i > 0, '2周目を認める道が無い');
-  const seg = ADMIN.slice(i, i + 500);
+  /* 幅を決め打ちにすると、行にボタンを1つ足しただけで届かなくなる。
+     受けた人の行の終わりまでを見る。 */
+  const end = ADMIN.indexOf(`'</span></div>').join("")`, i);
+  assert.ok(end > i, '受けた人の行の終わりが見つからない');
+  const seg = ADMIN.slice(i, end);
   assert.ok(seg.indexOf("t.approved && t.wisdom > Math.max(t.rounds, 1)") >= 0);
   assert.ok(seg.indexOf("'周目を認める</button> '") >= 0);
 });

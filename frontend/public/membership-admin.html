@@ -2247,6 +2247,9 @@ async function renderSchoolPark() {
         took.push({ addr: c.id, name: d.name || "", approved: d.approved === true,
           /* サーバーが認めた周回の数。2周目からはここが増える。 */
           rounds: Number(d.approvedRounds || 0),
+          /* クエストを受けた日。#005 の招待の判定（受けた日より後に
+             できたパスポートか）で、ここから後ろだけを数える。 */
+          tookAt: Number(d.tookAt || 0),
           /* サーバーが引き当てた額。0 なら EMUER はまだ動いていない。 */
           rewardEmuer: Number(d.rewardEmuer || 0) });
       });
@@ -2672,7 +2675,15 @@ async function renderSchoolPark() {
                    前はここが「一般 #001 の LEARN」の決め打ちで、
                    ほかのクエストには取り消すボタンが出ていた。 */
                 /* 認めていない周回が残っていれば、もう一度「認める」を出す。 */
-                + '<span>' + ((t.approved && t.wisdom > Math.max(t.rounds, 1))
+                /* 一般 #005 は「招待した人がパスポートを発行したか」で完走する。
+                   これまでは名前で突き合わせるしかなかった。招待リンクから
+                   できたパスポートはサーバーが数えているので、ここで引く。
+                   押したときだけ聞く（全員ぶん先に聞くと、人数ぶん待たされる）。 */
+                + '<span>' + ((Number(q.questNumber) === 5 && q.series !== "special")
+                    ? '<button class="act neutral" data-qinvite="' + esc(t.addr)
+                      + '" data-since="' + (Number(t.tookAt) || 0) + '">招待を数える</button> '
+                    : '')
+                + ((t.approved && t.wisdom > Math.max(t.rounds, 1))
                     ? '<button class="act ok" data-qapprove="' + esc(q.id) + '" data-addr="' + esc(t.addr)
                       + '">' + (Math.max(t.rounds, 1) + 1) + '周目を認める</button> '
                     : '')
@@ -3218,6 +3229,30 @@ async function renderSchoolPark() {
       alert("EMUER の予算を公開しました（1人 " + per.toLocaleString()
         + " EMUER ／ 総額 " + total.toLocaleString() + "）。");
       renderSchoolPark();
+    };
+  });
+  /* #005 の招待を数える。受けた日より後にできたパスポートだけ。
+
+     数えるだけで、認めるところまではやらない。同じ人が LINE と Google で
+     入れば別の番号になるので、自作自演は機械では見分けられない
+     （backend/identity.js の頭に書いてあるとおり）。見てから決める。 */
+  el.querySelectorAll("[data-qinvite]").forEach(b => {
+    b.onclick = async () => {
+      const addr = b.dataset.qinvite, since = Number(b.dataset.since) || 0;
+      b.disabled = true; b.textContent = "数えています…";
+      try {
+        const r = await api("/api/identity/admin/invites?address=" + encodeURIComponent(addr)
+          + "&since=" + since);
+        const rows = (r && r.invited) || [];
+        b.textContent = "招待 " + rows.length + "件";
+        b.title = rows.length
+          ? rows.map(x => x.spid + "（" + new Date(x.createdAt).toLocaleString("ja-JP") + "）").join("\n")
+          : "受けた日より後にできたパスポートはありません。";
+      } catch (e) {
+        b.disabled = false;
+        b.textContent = "招待を数える";
+        alert("招待を数えられませんでした（" + (e.code || e.message) + "）");
+      }
     };
   });
   el.querySelectorAll("[data-qunapprove]").forEach(b => {

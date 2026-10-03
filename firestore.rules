@@ -1389,6 +1389,24 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* 招待リンクの合言葉（一般クエスト #005）。
+
+       合言葉 → 招待した人の番号、と、その下に招待した相手の一覧。
+       書けるのはサーバーだけ。ブラウザから書けると、招待した件数を
+       自分で増やせてしまう（＝完走を自作できてしまう）。
+
+       読むのも閉じる。自分の合言葉は /api/identity/invite が返すので、
+       ブラウザがここを読む必要はない。開けておくと、合言葉から
+       他人の番号が引けてしまう。 */
+    match /sp_invite_codes/{code} {
+      allow read: if isOwner();
+      allow write: if false;
+      match /invited/{spid} {
+        allow read: if isOwner();
+        allow write: if false;
+      }
+    }
+
     /* ───────── 運営が書く読みもの ─────────
 
        いまは sp_docs/year-goals（SchoolParkの年内目標）の1件だけ。
