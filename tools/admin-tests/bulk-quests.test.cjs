@@ -190,3 +190,156 @@ test('すでにある番号は飛ばす作りになっている', () => {
   assert.match(go, /skipped/, '飛ばした数を数えていない');
   assert.match(go, /confirm\(/, '確かめずに15本出してしまう');
 });
+
+/* ───────── 一般 #003 PLAY「自分の町で、ゴミを拾う」 ─────────
+
+   完走の判定はサーバーが持っていて、報告が
+   「やってみた・つまずいた・気づいた」の3種類そろっているかを見る
+   （backend/quest-completion.js の LOG_KINDS）。1つでも欠けると
+   COMPLETION_EVIDENCE_MISSING で完走にならない。
+
+   クエストの文面が別の言葉（開始宣言・中間報告・最終報告）で
+   書かれていると、受けた人はそのとおりに3回書いて、それでも
+   完走できない。文面の側に読み替えを書いておく。 */
+const PLAY3 = JSON.parse(fs.readFileSync(
+  path.join(root, 'tools/quest-seeds/general-003-play.json'), 'utf8'));
+const LOG_KINDS = ['やってみた', 'つまずいた', '気づいた'];
+
+test('#003 PLAY を、そのまま読める', () => {
+  const rows = run(PLAY3);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].body.title, '自分の町で、ゴミを拾う');
+  assert.equal(rows[0].body.guildId, 'play');
+  assert.equal(rows[0].body.budget, '100');
+  assert.equal(rows[0].body.budgetCurrency, 'EMUER');
+});
+
+test('#003 の報告の言い換えが、システムの3種類と結び付けてある', () => {
+  const b = run(PLAY3)[0].body;
+  const text = b.brief + b.deliverable + b.criteria;
+  LOG_KINDS.forEach(function (k) {
+    assert.ok(text.indexOf(k) >= 0,
+      '「' + k + '」が文面に出てこない。受けた人はこれを書けないと完走できない');
+  });
+  /* 3種類そろわないと完走にならないことを、はっきり書いてあること。 */
+  assert.match(b.brief + b.deliverable, /1つでも欠けると/,
+    '1種類でも欠けたら完走にならないことが書かれていない');
+});
+
+test('#003 の締切は 12/17。受けた人の14日後が 12/31 に収まる', () => {
+  const at = run(PLAY3)[0].closesAt;
+  const jst = new Date(at + 9 * 3600000).toISOString().slice(0, 10);
+  assert.equal(jst, '2026-12-17', '募集の締切がずれている');
+  const last = new Date(at + 14 * 86400000 + 9 * 3600000).toISOString().slice(0, 10);
+  assert.equal(last, '2026-12-31', '最後に受けた人が年内に終わらない');
+});
+
+test('#003 に、安全と写真のきまりが書いてある', () => {
+  const b = run(PLAY3)[0].body;
+  [/ガラス片/, /注射針/, /顔が分かる写真/, /自宅が分かる写真/].forEach(function (x) {
+    assert.match(b.brief, x, '守ってほしいことが抜けている: ' + x);
+  });
+});
+
+test('#003 は案件ものとして出る（仮説検証の箱は出ない）', () => {
+  const b = run(PLAY3)[0].body;
+  assert.ok(b.given && b.deliverable && b.criteria, '案件ものの欄が空');
+  assert.equal(b.knowledge, '', '仮説検証の箱と両方出ると、同じことを2度書くことになる');
+});
+
+/* ───────── #004 CONNECT・#005 WEB3・特殊 #001・#002 ─────────
+
+   どのクエストも、完走の判定はサーバーが持っている。
+   報告が「やってみた・つまずいた・気づいた」の3種類そろって
+   いるかを見る（backend/quest-completion.js の LOG_KINDS）。
+   文面が別の言葉で書かれていると、受けた人はそのとおりに
+   3回書いて、それでも完走できない。 */
+const REST = [
+  ['tools/quest-seeds/general-004-005.json', 2],
+  ['tools/quest-seeds/special-001-002.json', 2]
+].map(([f, n]) => [f, n, JSON.parse(fs.readFileSync(path.join(root, f), 'utf8'))]);
+
+REST.forEach(function ([file, count, seed]) {
+  const name = path.basename(file, '.json');
+
+  test(name + ' を、そのまま読める', () => {
+    assert.equal(run(seed).length, count);
+  });
+
+  test(name + ' の報告の言い換えが、システムの3種類と結び付けてある', () => {
+    run(seed).forEach(function (r) {
+      const text = r.body.brief + r.body.deliverable + r.body.criteria;
+      LOG_KINDS.forEach(function (k) {
+        assert.ok(text.indexOf(k) >= 0,
+          r.label + '：「' + k + '」が文面に出てこない。受けた人はこれを書けないと完走できない');
+      });
+      assert.match(r.body.brief + r.body.deliverable, /1つでも欠けると/,
+        r.label + '：1種類でも欠けたら完走にならないことが書かれていない');
+    });
+  });
+
+  test(name + ' の報酬と締切が入っている', () => {
+    run(seed).forEach(function (r) {
+      assert.equal(r.body.budgetCurrency, 'EMUER', r.label);
+      assert.ok(Number(r.body.budget) > 0, r.label + '：報酬が0のまま');
+      /* 締切は年内。出したあと変えられないので、ここで見ておく。 */
+      const jst = new Date(r.closesAt + 9 * 3600000).toISOString().slice(0, 10);
+      assert.ok(jst >= '2026-12-17' && jst <= '2026-12-31',
+        r.label + '：締切が ' + jst + ' になっている');
+    });
+  });
+
+  test(name + ' は案件ものとして出る（仮説検証の箱は出ない）', () => {
+    run(seed).forEach(function (r) {
+      assert.ok(r.body.given && r.body.deliverable && r.body.criteria, r.label + '：欄が空');
+      assert.equal(r.body.knowledge, '', r.label + '：同じことを2度書くことになる');
+    });
+  });
+});
+
+test('#005 に、EMUER を投資として書かせない断りがある', () => {
+  /* 「儲かる」「値上がりする」と書かせると、こちらが言わせたことになる。
+     金融商品としての勧誘と読まれかねない。文面の頭に置く。 */
+  const q = run(REST[0][2]).find(r => r.body.questNumber === 5);
+  assert.ok(q, '#005 が見つかりません');
+  assert.match(q.body.brief.slice(0, 400), /投資のように書かないで/,
+    '注意が現場資料の頭に無い');
+  ['儲かる', '値上がり'].forEach(w =>
+    assert.ok(q.body.brief.indexOf(w) >= 0, '「' + w + '」の例が書かれていない'));
+  assert.match(q.body.criteria, /投資のように書いた投稿は、認められません/,
+    '判定にも書かれていない');
+});
+
+test('#005 の招待は、代わりに発行させない', () => {
+  const q = run(REST[0][2]).find(r => r.body.questNumber === 5);
+  assert.match(q.body.brief, /代わりに発行してはいけません/);
+  assert.match(q.body.brief, /受けた日より後に発行されたもの/,
+    'いつ発行されたものが対象か書かれていない');
+});
+
+test('特殊 #001 の2つのきまりが書いてある', () => {
+  const q = run(REST[1][2]).find(r => r.body.questNumber === 1);
+  assert.match(q.body.brief, /AI をどこで使ったか|どこで使ったかを必ず明記/,
+    'AI をどこで使ったかを書かせていない');
+  assert.match(q.body.brief, /一次ファクト/, '自分の足で取る話が抜けている');
+  assert.match(q.body.brief, /Phase 1[\s\S]*Phase 2[\s\S]*Phase 3[\s\S]*Phase 4/,
+    '4つの段がそろっていない');
+});
+
+test('特殊 #002 の開催予算が、報酬と混ざっていない', () => {
+  /* 1万円は会場費。参加した人へ配る額ではない。混ざると、
+     来場者に「1万円を分ける」と読まれる。 */
+  const q = run(REST[1][2]).find(r => r.body.questNumber === 2);
+  assert.match(q.body.given, /会を開く費用で、参加した人への報酬とは別/,
+    '開催予算と報酬の区別が書かれていない');
+  assert.equal(q.body.budgetCurrency, 'EMUER');
+  assert.match(q.body.criteria, /当日は配りません/, 'その場で配ると読まれる');
+});
+
+test('5本とも、番号がぶつかっていない', () => {
+  const all = [PLAY3, REST[0][2], REST[1][2]].flat();
+  const rows = run(all);
+  assert.equal(rows.length, 5);
+  const keys = rows.map(r => r.key);
+  assert.equal(new Set(keys).size, 5, '同じ番号が2つある: ' + keys.join(' '));
+});

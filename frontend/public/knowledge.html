@@ -114,8 +114,6 @@ function renderConclusions(){
   }).join('');
 }
 function bindDynamic(){document.querySelectorAll('[data-compose]').forEach(b=>b.onclick=openComposer);document.querySelectorAll('.more').forEach(b=>{const body=b.previousElementSibling;/* 3行に収まっているならボタンは要らない。文字数ではなく、実際にはみ出しているかで決める。   改行の多い短い投稿が、折りたたまれたままボタンも出ない状態になっていた。 */if(body&&body.scrollHeight>body.clientHeight+1){b.hidden=false;}else if(body){body.classList.remove('clamp');}b.onclick=()=>{body.classList.toggle('clamp');b.textContent=body.classList.contains('clamp')?emuT('k.readMore'):emuT('k.collapse')};});document.querySelectorAll('[data-react]').forEach(b=>b.onclick=()=>{if(['history','voices','propose'].indexOf(b.dataset.react)===-1){b.disabled=true;b.textContent=emuT('k.sending')}send({type:'emu-knowledge-react',action:b.dataset.react,postId:b.dataset.id})})}
-/* 言語切替時は、動的に描いた一覧・フィルタを作り直す */
-window.onEmuLangChange=()=>{filterButtons();themeButtons();render()};
 function setBusy(busy){['#publish','#draft','#schedule'].forEach(s=>{const el=$(s);if(el)el.disabled=busy})}
 function resetComposer(){composeForm.reset();state.imageUrl='';state.composeTheme='経験';state.titleBeforeLock='';$('#preview').style.display='none';themeButtons();lockTitleForMonthly()}
 function openOverlay(el){state.lastFocus=document.activeElement;el.classList.add('open');el.setAttribute('aria-hidden','false');$('#appShell').setAttribute('inert','');setTimeout(()=>el.querySelector('button,input,textarea')?.focus(),0)}

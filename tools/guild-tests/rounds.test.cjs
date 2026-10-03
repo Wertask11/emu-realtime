@@ -146,7 +146,10 @@ test('運営画面のメンバー一覧も周回で数えている', () => {
 
 test('サーバーが approvedRounds を書いている（ここが元データ）', () => {
   const backend = fs.readFileSync(path.join(root, 'backend/quest-completion.js'), 'utf8');
-  assert.match(backend, /approvedRounds: doneRounds \+ 1/,
+  /* 認めるたびに1つ増える。ただし「認めてあるのに渡していなかった
+     ぶんを渡すだけ」のときは増やさない（やってもいない周回を
+     認めたことになる）。 */
+  assert.match(backend, /approvedRounds: isTopup \? doneRounds : doneRounds \+ 1/,
     '周回を書くのをやめたら、画面側の数え方も見直すこと');
 });
 

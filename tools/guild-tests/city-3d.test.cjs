@@ -45,12 +45,24 @@ for(const width of [375,390,412,768,1440])test(`3D City ${width}px: rendered Web
   await f.frame.waitForFunction(()=>{const p=JSON.parse(document.querySelector('.cs-canvas').dataset.position||'{}');return p.z===2.6;});
   const before=await f.canvas.getAttribute('data-position');await f.canvas.focus();await f.page.keyboard.down('w');await f.page.waitForTimeout(420);await f.page.keyboard.up('w');
   await f.frame.waitForFunction(old=>document.querySelector('.cs-canvas').dataset.position!==old,before);
+  if(width===390){
+   const old=await f.canvas.getAttribute('data-position'),pad=await f.frame.getByRole('button',{name:'前へ進む',exact:true}).boundingBox();
+   const session=await f.context.newCDPSession(f.page);
+   await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:pad.x+pad.width/2,y:pad.y+pad.height/2}]});
+   await f.frame.waitForFunction(value=>document.querySelector('.cs-canvas').dataset.position!==value,old);
+   await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await session.detach();
+  }
   const box=await f.canvas.boundingBox();await f.page.mouse.move(box.x+box.width*.5,box.y+box.height*.5);await f.page.mouse.down();await f.page.mouse.move(box.x+box.width*.65,box.y+box.height*.5,{steps:8});await f.page.mouse.up();
   await f.frame.getByRole('button',{name:'商品を見る',exact:true}).click();await f.frame.locator('[data-shop="product"]').first().click();
   assert.equal(await f.frame.getByRole('button',{name:'販売準備中',exact:true}).isDisabled(),true);
   assert.ok((await f.frame.locator('.cs-panel').innerText()).includes('実際の注文・支払いは発生しません'));
   await f.page.screenshot({path:path.join(qa,`city-3d-product-${width}.png`)});
   await f.frame.getByRole('button',{name:'商品パネルを閉じる'}).click();
+  if(width===390){
+   await f.page.keyboard.press('e');await f.frame.locator('.cs-panel:not([hidden])').waitFor();
+   assert.ok((await f.frame.locator('.cs-panel').innerText()).includes('探究ノート'));
+   await f.frame.getByRole('button',{name:'商品パネルを閉じる'}).click();
+  }
   await f.frame.locator('[data-shop="checkin"]').click();await f.frame.getByText('✓ 記録済み',{exact:true}).waitFor();
   assert.equal(f.requests.filter(p=>p.endsWith('/shops/checkout')).length,0,'demo never begins checkout');
   await f.frame.getByRole('button',{name:'カウンター',exact:true}).click();await f.page.waitForTimeout(150);
@@ -64,4 +76,19 @@ for(const width of [375,390,412,768,1440])test(`3D City ${width}px: rendered Web
 });
 test('3D City logout disposes the scene and clears the product panel',async()=>{
  const f=await open(390);try{await f.frame.getByRole('button',{name:'商品を見る',exact:true}).click();await f.page.evaluate(()=>__logout());assert.equal(await f.frame.locator('#city-explorer').count(),0);assert.deepEqual(f.errors,[]);}finally{await f.close();}
+});
+test('3D City recovers a lost context and can exit after a catalogue failure',async()=>{
+ const f=await open(390);
+ try{
+  await f.canvas.evaluate(c=>c.getContext('webgl2').getExtension('WEBGL_lose_context').loseContext());
+  await f.frame.getByRole('button',{name:'再開する',exact:true}).click();
+  await f.frame.locator('.cs-canvas[data-ready="true"]').waitFor({timeout:30000});
+  await f.context.route('**/api/schoolpark/city/shops',route=>route.fulfill({status:503,json:{error:'UNAVAILABLE'}}));
+  await f.canvas.evaluate(c=>c.getContext('webgl2').getExtension('WEBGL_lose_context').loseContext());
+  await f.frame.getByRole('button',{name:'再開する',exact:true}).click();
+  await f.frame.getByRole('button',{name:'もう一度読み込む',exact:true}).waitFor();
+  await f.frame.getByRole('button',{name:'← City',exact:true}).click();
+  assert.equal(await f.frame.locator('#city-explorer').count(),0);
+  assert.deepEqual(f.errors,[]);
+ }finally{await f.close();}
 });

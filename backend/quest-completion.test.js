@@ -3,6 +3,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const Module = require("node:module");
+/* 本物の ethers を先に捕まえておく。差し替えの中から使う。
+
+   差し替えの utils に getAddress が無かったため、アドレスの表記ゆれを
+   見分けるところ（addressForms）が本番と違う動きをしていた。
+   本番では使えるのに、試験では使えない。それでは試験にならない。 */
+const realEthers = require("ethers");
 const original = Module._load;
 const routes = [];
 Module._load = function (name, parent, main) {
@@ -16,7 +22,10 @@ Module._load = function (name, parent, main) {
   if (name === "ethers") return { utils: {
     isAddress: v => /^0x[0-9a-f]{40}$/i.test(v),
     toUtf8Bytes: v => Buffer.from(v),
-    keccak256: v => "0x" + crypto.createHash("sha256").update(v).digest("hex")
+    keccak256: v => "0x" + crypto.createHash("sha256").update(v).digest("hex"),
+    /* ここだけは本物を使う。チェックサム表記は決まった作り方があり、
+       偽物で作ると本番と違う文字列になる。 */
+    getAddress: v => realEthers.utils.getAddress(v)
   } };
   return original.call(this, name, parent, main);
 };
@@ -49,12 +58,16 @@ function collection(path, filters = []) {
       records.set(path + "/" + id, value);
       return { id, path: path + "/" + id };
     },
-    where: (field, op, value) => collection(path, filters.concat([[field, value]])),
+    /* in は配列のどれかに当たれば一致。== は1つだけ。
+       本物と同じにしておかないと、表記ゆれの試験が通ってしまう。 */
+    where: (field, op, value) => collection(path, filters.concat([[field, value, op]])),
     limit: () => collection(path, filters),
     get: async () => {
       const rows = [...records.entries()].filter(([key, row]) =>
         key.startsWith(path + "/") && !key.slice(path.length + 1).includes("/") &&
-        filters.every(([field, value]) => row[field] === value))
+        filters.every(([field, value, op]) => op === "in"
+          ? (Array.isArray(value) && value.includes(row[field]))
+          : row[field] === value))
         .map(([key, row]) => ({ id:key.split("/").at(-1), data:() => row }));
       return { docs:rows, forEach:fn => rows.forEach(fn) };
     }
@@ -810,3 +823,168 @@ test("すでに2周認めてある人は、3枚目から置ける（いまの記
   approveRound(2);
   assert.equal((await putCard({ insight: "3枚目" })).status, 200);
 });
+
+/* ───────── 認めてあるのに EMUER が渡っていない周回 ─────────
+
+   10/2、実際に起きた。
+
+   10/1 まで、このサーバーは NOT_STARTED で承認を断っていた。
+   そのあいだ運営は管理画面の逃げ道を通り、Firestore へ直接
+   approved と approvedRounds を書いていた。完走は記録されたが、
+   報酬は1枚も引き当てられていない。
+
+   その状態で「EMUERを渡す」を押すと、approvedRounds（2）が
+   知恵カードの枚数（2）に並んでいるので NO_NEW_ROUND で断られた。
+   渡すためのボタンが、渡せないと言う状態だった。 */
+
+/* サーバーを通さずに認めた状態をつくる（管理画面の逃げ道と同じ）。 */
+function approvedOffline(questId, rounds) {
+  records.set("sp_quests/" + questId + "/commits/" + address,
+    { name:"member", approved:true, approvedAt:1, approvedBy:wallet,
+      approvedRounds:rounds, lastApprovedAt:1 });
+}
+
+test("認めてあるのに渡っていない周回には、あとから渡せる", AT(async () => {
+  seedOther();
+  approvedOffline("quest-002", 1);                 // 認めた印だけがある
+  const r = await request("quest-002");
+  assert.equal(r.status, 200, "渡せない（" + String(r.body.error) + "）");
+  assert.equal(r.body.amountEmuer, 200);
+  assert.equal(r.body.round, 1, "渡すのは1周目のはず");
+  assert.equal(r.body.toppedUp, true, "渡しそびれとして扱っていない");
+  assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-002").allocatedEmuer, 200);
+}));
+
+test("あとから渡しても、完走の数は増えない", AT(async () => {
+  seedOther();
+  approvedOffline("quest-002", 1);
+  await request("quest-002");
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).approvedRounds, 1,
+    "やってもいない周回を認めたことになっている");
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).rewardEmuer, 200,
+    "渡した額が記録に残っていない");
+}));
+
+test("2周ぶん渡しそびれていたら、2回押して2周ぶん渡る", AT(async () => {
+  seedOther();                                     // 知恵カード1枚
+  addWisdom("quest-002", 1);                       // あわせて2枚＝2周ぶん
+  approvedOffline("quest-002", 2);                 // 2周とも認めた印だけ
+  const first = await request("quest-002");
+  assert.equal(first.body.round, 1, "古いほうから渡していない");
+  const second = await request("quest-002");
+  assert.equal(second.status, 200, "2周目が渡らない");
+  assert.equal(second.body.round, 2);
+  assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-002").allocatedEmuer, 400,
+    "2周ぶん引き当てていない");
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).approvedRounds, 2,
+    "完走の数が動いている");
+}));
+
+test("全部渡し終えたら、そこで止まる", AT(async () => {
+  seedOther();
+  approvedOffline("quest-002", 1);
+  await request("quest-002");
+  const again = await request("quest-002");
+  assert.equal(again.body.error, "NO_NEW_ROUND", "二重に渡そうとしている");
+  assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-002").allocatedEmuer, 200);
+}));
+
+test("証明書をもう受け取っていても、EMUER は渡せる", AT(async () => {
+  /* 10/1 前に承認 → 証明書だけ先に受け取った、という形。
+     これが実際に起きた状態である。 */
+  seedOther();
+  approvedOffline("quest-002", 1);
+  const key = require("ethers").utils.keccak256(require("ethers").utils.toUtf8Bytes(
+    JSON.stringify(["schoolpark", "quest-002", "spid-a"])));
+  records.set("sp_quest_certificates/" + key, { status:"claimed", round:1 });
+  const r = await request("quest-002");
+  assert.equal(r.status, 200, "証明書があると渡せない（" + String(r.body.error) + "）");
+  assert.equal(r.body.amountEmuer, 200);
+  /* 証明書は作り直さない。受け取り済みのものを pending に戻してはいけない。 */
+  assert.equal(records.get("sp_quest_certificates/" + key).status, "claimed",
+    "受け取り済みの証明書を書き換えている");
+}));
+
+test("予算が足りなければ、渡しそびれでも止まる", AT(async () => {
+  seedOther(null, { totalEmuer: 100, perPersonEmuer: 200 });
+  approvedOffline("quest-002", 1);
+  const r = await request("quest-002");
+  assert.equal(r.body.error, "BUDGET_EXCEEDED", "予算を超えて渡している");
+}));
+
+test("ふつうの承認は、これまでどおり完走の数を増やす", AT(async () => {
+  seedOther();
+  const r = await request("quest-002");
+  assert.equal(r.body.round, 1);
+  assert.notEqual(r.body.toppedUp, true, "ふつうの承認を渡しそびれとして扱っている");
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).approvedRounds, 1);
+}));
+
+/* ───────── アドレスの表記ゆれ ─────────
+
+   10/2、実際に起きた。「EMUERを渡す」が PASSPORT_LINK_REQUIRED で
+   止まった。予算もウォレット連携も済んでいたのに。
+
+   ches_accounts の walletAddress / chesAddress には、
+   ethers.utils.getAddress が作るチェックサム表記（大文字混じり）が
+   入っている。いっぽうクエストを受けた記録の文書IDは小文字である。
+
+   Firestore の一致検索は大文字小文字を区別する。小文字だけで探すと
+   どのアカウントにも当たらず、SchoolPark ID が引けない。
+   ウォレットで入った人は、全員これで止まる。
+
+   同じ落とし穴は entitlement.js で先に見つかっていて、あちらは
+   addressForms で3つの形を試していた。こちらにだけ無かった。 */
+const checksummed = require("ethers").utils.getAddress(address);
+
+test("アカウントがチェックサム表記でも、本人だと分かる", AT(async () => {
+  seed();
+  assert.notEqual(checksummed, address, "この試験の前提（表記が違う）が崩れています");
+  /* 本物と同じ形で入れ直す。 */
+  records.set("ches_accounts/user-a",
+    { chesAddress: checksummed, walletAddress: checksummed, spid: "spid-a" });
+  const r = await request();
+  assert.equal(r.status, 200, "本人を引けない（" + String(r.body.error) + "）");
+  assert.equal(r.body.amountEmuer, 100);
+}));
+
+test("小文字で入っているアカウントも、これまでどおり引ける", AT(async () => {
+  seed();                                          // 小文字で入っている
+  const r = await request();
+  assert.equal(r.status, 200, "引けなくなっている（" + String(r.body.error) + "）");
+}));
+
+test("ウォレット名義だけがチェックサム表記でも引ける", AT(async () => {
+  seed();
+  records.set("ches_accounts/user-a",
+    { chesAddress: "", walletAddress: checksummed, spid: "spid-a" });
+  const r = await request();
+  assert.equal(r.status, 200, "引けない（" + String(r.body.error) + "）");
+}));
+
+test("そのアドレスのアカウントが無ければ、これまでどおり止める", AT(async () => {
+  seed();
+  records.delete("ches_accounts/user-a");
+  const r = await request();
+  assert.equal(r.body.error, "PASSPORT_LINK_REQUIRED");
+}));
+
+test("SchoolPark ID が空のアカウントは、本人と認めない", AT(async () => {
+  seed();
+  records.set("ches_accounts/user-a",
+    { chesAddress: checksummed, walletAddress: checksummed, spid: "" });
+  const r = await request();
+  assert.equal(r.body.error, "PASSPORT_LINK_REQUIRED",
+    "番号が無いまま渡そうとしている");
+}));
+
+test("別の番号のアカウントが2つ当たったら、止める", AT(async () => {
+  seed();
+  records.set("ches_accounts/user-a",
+    { chesAddress: checksummed, walletAddress: checksummed, spid: "spid-a" });
+  records.set("ches_accounts/user-b",
+    { chesAddress: address, walletAddress: address, spid: "spid-b" });
+  const r = await request();
+  assert.equal(r.body.error, "PASSPORT_LINK_REQUIRED",
+    "どちらの人か決まらないのに渡している");
+}));

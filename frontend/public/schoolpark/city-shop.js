@@ -23,7 +23,8 @@ export function openShopWorld({bridge,spots,preview=false,onClose=()=>{},onMyCit
       <div class="cs-route"><p>ドラッグ / スワイプで見回す</p><div><button type="button" data-shop="waypoint" data-value="entrance">入店する ↗</button><button type="button" data-shop="waypoint" data-value="shelves">商品棚</button><button type="button" data-shop="waypoint" data-value="counter">カウンター</button></div></div>
       <button type="button" class="cs-passport" data-shop="checkin">Passport<br><b>チェックイン</b></button></footer>`;
   document.body.appendChild(root);
-  const canvas=root.querySelector('canvas'),panel=root.querySelector('.cs-panel'),load=root.querySelector('.cs-load');
+  let canvas=root.querySelector('canvas');
+  const panel=root.querySelector('.cs-panel'),load=root.querySelector('.cs-load');
   const pick=root.querySelector('.cs-pick'),toast=root.querySelector('.cs-toast'),pad=root.querySelector('.cs-pad'),knob=root.querySelector('.cs-pad-knob');
   let focusedProduct=null,toastTimer=null;
   function say(message){clearTimeout(toastTimer);toast.textContent=message;toast.hidden=false;toastTimer=setTimeout(()=>{toast.hidden=true;},6000);}
@@ -93,6 +94,9 @@ export function openShopWorld({bridge,spots,preview=false,onClose=()=>{},onMyCit
   window.addEventListener('blur',stopPad,listener);
   async function init(){
     const version=++loadNumber;world?.destroy();world=null;load.hidden=false;load.textContent='Cityの扉を開いています…';
+    // A disposed/lost WebGL context cannot be reused reliably on the same canvas.
+    const fresh=canvas.cloneNode(false);for(const key of Object.keys(fresh.dataset))delete fresh.dataset[key];
+    canvas.replaceWith(fresh);canvas=fresh;focusedProduct=null;pick.hidden=true;
     const [data,module]=await Promise.allSettled([bridge.getShops(),import('./city-world.js')]);
     if(closed||version!==loadNumber)return;
     if(data.status!=='fulfilled'||!data.value.shops?.length){load.innerHTML='店舗を読み込めませんでした。<button type="button" data-shop="retry">もう一度読み込む</button>';return;}

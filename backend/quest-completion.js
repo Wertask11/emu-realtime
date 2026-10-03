@@ -38,6 +38,32 @@ function defaultPerPerson(quest) {
 
 /* #000 は原点なので、予算も報酬も持たない。 */
 const FOUNDER_QUEST_ID = "founder-quest-000";
+/* 周回をさかのぼって見るときの上限。承認（渡しそびれを探す）と
+   証明書の受け取り（まだ受け取っていないものを探す）で同じ数を使う。
+   別々に持つと、片方だけ直したときに食い違う。 */
+const ROUND_SCAN_MAX = 20;
+
+/* アドレスの表記ゆれ。
+
+   ches_accounts の walletAddress / chesAddress には、
+   ethers.utils.getAddress が作るチェックサム表記（大文字混じり、
+   例：0xDcC6…EDf7）が入っている。
+   いっぽうクエストを受けた記録（commits）の文書IDは小文字である。
+
+   Firestore の一致検索は大文字小文字を区別する。小文字だけで
+   探すと、どのアカウントにも当たらない。当たらなければ
+   SchoolPark ID が引けず、PASSPORT_LINK_REQUIRED で止まる。
+   ウォレットで入った人は全員これになる。
+
+   同じ落とし穴は entitlement.js で先に見つかっていて、あちらは
+   addressForms で3つの形を試している。こちらにだけ無かった。 */
+function addressForms(address) {
+  const raw = String(address || "").trim();
+  if (!raw) return [];
+  const out = new Set([raw, raw.toLowerCase()]);
+  try { out.add(ethers.utils.getAddress(raw.toLowerCase())); } catch (e) { /* 形が違うぶんは諦める */ }
+  return [...out];
+}
 function usableQuest(questId, quest) {
   return !!quest && questId !== FOUNDER_QUEST_ID && quest.kind !== "founder"
     && Number.isSafeInteger(Number(quest.questNumber)) && Number(quest.questNumber) >= 1;
@@ -253,8 +279,8 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       const [quest, commit, logs, wisdom, byChes, byWallet] = await Promise.all([
         questRef.get(), commitRef.get(), questRef.collection("logs").get(),
         db.collection("sp_wisdom").where("questId", "==", questId).get(),
-        db.collection("ches_accounts").where("chesAddress", "==", address).limit(2).get(),
-        db.collection("ches_accounts").where("walletAddress", "==", address).limit(2).get()
+        db.collection("ches_accounts").where("chesAddress", "in", addressForms(address)).limit(2).get(),
+        db.collection("ches_accounts").where("walletAddress", "in", addressForms(address)).limit(2).get()
       ]);
       const q = quest.exists ? quest.data() || {} : {};
       if (!usableQuest(questId, q)) return res.status(409).json({ error: "QUEST_NOT_ELIGIBLE" });
@@ -274,15 +300,7 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       wisdom.forEach(doc => { if (String((doc.data() || {}).author || "").toLowerCase() === address) rounds++; });
       if (!["やってみた", "つまずいた", "気づいた"].every(kind => kinds.has(kind)) || !rounds)
         return res.status(409).json({ error: "COMPLETION_EVIDENCE_MISSING" });
-      /* 何周目を認めるのか。すでに払った数の次。
-
-         数えるのは approvedRounds だけ。approved の印だけが立っている
-         状態（サーバーへ届かないまま管理画面から通した承認）は、
-         まだ1周も払っていない。ここを「1周ぶん済み」と数えると、
-         あとから EMUER を渡す道が塞がる。 */
       const already = Number((commit.data() || {}).approvedRounds || 0);
-      if (already >= rounds) return res.status(409).json({ error: "NO_NEW_ROUND" });
-      const round = already + 1;
       const accounts = [...byChes.docs, ...byWallet.docs];
       const spids = new Set(accounts.map(doc => String((doc.data() || {}).spid || "")));
       if (spids.size !== 1 || ![...spids][0]) return res.status(409).json({ error: "PASSPORT_LINK_REQUIRED" });
@@ -296,6 +314,38 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       /* 周回ごとに別の鍵。1周目だけは今までと同じ鍵にする
          （すでに出してある報酬と証明書を、作り直さないため）。 */
       const keyOf = (parts) => ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(parts)));
+      const rewardIdOf = (r) => keyOf(["emuer-v2", "quest-completion", questId, spid, ...(r > 1 ? [r] : [])]);
+
+      /* ══════════════════════════════════════════════════════════════
+         何周目を認めるのか。
+
+         ふつうは「すでに認めた数の次」。
+         ただし、認めてあるのに EMUER が渡っていない周回がある。
+
+         10/1 まで、このサーバーは NOT_STARTED で承認を断っていた。
+         そのあいだ運営は管理画面の逃げ道を通り、Firestore へ直接
+         approved と approvedRounds を書いていた。完走は記録されたが、
+         報酬は1枚も引き当てられていない。
+
+         その状態で「EMUERを渡す」を押すと、approvedRounds（2）が
+         知恵カードの枚数（2）に並んでいるので NO_NEW_ROUND で断られた。
+         渡すためのボタンが、渡せないと言う状態だった。
+
+         認めてある周回を順に見て、報酬がまだ無いものがあれば、
+         そこへ渡す。新しく認めるわけではないので approvedRounds は
+         増やさない。
+         ══════════════════════════════════════════════════════════════ */
+      let topupRound = 0;
+      if (already >= rounds) {
+        const scan = Math.min(already, ROUND_SCAN_MAX);
+        const made = await Promise.all(Array.from({ length: scan },
+          (_, i) => db.collection("emuer_v2_rewards").doc(rewardIdOf(i + 1)).get()));
+        const miss = made.findIndex(snap => !snap.exists);
+        if (miss < 0) return res.status(409).json({ error: "NO_NEW_ROUND" });
+        topupRound = miss + 1;
+      }
+      const round = topupRound || (already + 1);
+      const isTopup = topupRound > 0;
       const roundTag = round > 1 ? [round] : [];
       const completionKey = keyOf(["schoolpark", questId, spid, ...roundTag]);
       const certRef = db.collection("sp_quest_certificates").doc(completionKey);
@@ -313,14 +363,28 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
         const was = current.data() || {};
         /* 鍵には周回が混ざっているので、ここで当たるのは「この周をもう
            認めてある」ときだけ。前の周の報酬や証明書には当たらない。 */
-        if (prior.exists || certificate.exists) {
-          if (prior.exists && certificate.exists) return { alreadyApproved: true, round: round };
+        /* 報酬がもう予約してあるなら、この周はもう渡してある。
+           証明書だけ先にできていることはある（backfillCertificates が
+           作った／サーバーへ届かないまま通した承認のあとに受け取った）。
+           そのときは、ここで作るのは報酬だけ。証明書は作り直さない。 */
+        if (prior.exists) {
+          if (certificate.exists) return { alreadyApproved: true, round: round };
           throw new Error("COMPLETION_STATE_CONFLICT");
         }
+        /* 報酬が無いのに証明書だけある。
+
+           渡しそびれ（isTopup）なら、それは起こりうる状態である。
+           承認は記録されていて、証明書も受け取り済み、EMUER だけが
+           渡っていない。ここで渡す。証明書は作り直さない。
+
+           渡しそびれでないなら、周回そのものが認められていないのに
+           証明書だけがある、ということになる。食い違いなので触らない。 */
+        if (!isTopup && certificate.exists) throw new Error("COMPLETION_STATE_CONFLICT");
         /* 数えた周回より先へ行っていないか、取引の中でもう一度見る。
            同時に2回押されたときに、二重に払わないため。 */
         const doneRounds = Number(was.approvedRounds || 0);
-        if (doneRounds >= rounds) throw new Error("NO_NEW_ROUND");
+        /* 渡しそびれていたぶんを渡すときは、新しく認めるわけではない。 */
+        if (!isTopup && doneRounds >= rounds) throw new Error("NO_NEW_ROUND");
         /* 承認の印だけが立っていて、報酬も証明書も無いことがある。
            サーバーへ届かないまま管理画面から通した承認がこれ。
            何も払われていないので、ここで引き当て直してよい。
@@ -350,8 +414,10 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
         const approvedAt = Number(was.approvedAt) > 0 ? Number(was.approvedAt) : now;
         tx.update(commitRef, { approved: true, approvedAt, approvedBy: req.identity.walletAddress,
           rewardEmuer: per,
-          /* 何周ぶん認めたか。完走の数はこれを足して出す。 */
-          approvedRounds: doneRounds + 1,
+          /* 何周ぶん認めたか。完走の数はこれを足して出す。
+             渡しそびれていたぶんを渡すだけのときは増やさない。
+             増やすと、やってもいない周回を認めたことになる。 */
+          approvedRounds: isTopup ? doneRounds : doneRounds + 1,
           lastApprovedAt: now });
         tx.update(budgetRef, { allocatedEmuer: allocated + per, updatedAt: new Date(now) });
         tx.create(rewardRef, {
@@ -359,7 +425,8 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
           recipient, amountWei: (BigInt(per) * policy.UNIT).toString(), amount: String(per), status: "pending",
           scopeType: "quest", scopeId: questId, createdAt: new Date(now), updatedAt: new Date(now)
         });
-        tx.create(certRef, {
+        /* 証明書がもうあるなら、作り直さない（受け取り済みのことがある）。 */
+        if (!certificate.exists) tx.create(certRef, {
           schema: "schoolpark-quest-star-v1", completionKey, questId, spid, address,
           /* 星空の星と同じ色にする。どのギルドにも属さないクエストは未分類の色。 */
           guildId: guildId, guildColor: GUILD_COLOR[guildId] || "#6E695C",
@@ -368,7 +435,8 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
           amountEmuer: per, round: round,
           completedAt: round > 1 ? now : approvedAt, status: "pending", createdAt: new Date(now)
         });
-        return { alreadyApproved: false, amountEmuer: per, round: round, rounds: rounds };
+        return { alreadyApproved: false, amountEmuer: per, round: round, rounds: rounds,
+                 toppedUp: isTopup };
       });
       return res.json({ ok: true, rewardId, amountEmuer: result.amountEmuer || 0, ...result });
     } catch (error) {
@@ -630,7 +698,6 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
        周の数は上限（ROUND_SCAN_MAX）まで順に見て、記録が無いところで止める。 */
     const keyOfRound = (r) => ethers.utils.keccak256(ethers.utils.toUtf8Bytes(
       JSON.stringify(["schoolpark", questId, spid, ...(r > 1 ? [r] : [])])));
-    const ROUND_SCAN_MAX = 20;
     let found = 0;
     let pick = null;     /* 受け取る1つ（いちばん古い未受け取り） */
     let last = null;     /* 最後に見た記録。全部受け取り済みのときに返す */

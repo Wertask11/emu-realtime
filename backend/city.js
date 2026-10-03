@@ -49,7 +49,12 @@ function createCityRouter({ db, identity, entitlement, requireFirebaseUser,
   const router = express.Router();
   const limited = (key, max) => rateLimit({ key, max, windowMs: 60000 });
 
-  router.use((_req, res, next) => { res.set("Cache-Control", "private, no-store"); next(); });
+  router.use((_req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
+    // Verify the backend rollout without requesting a user's token or private data.
+    res.set("X-SchoolPark-City-Release", "3d-shops-v1");
+    next();
+  });
   router.use(requireFirebaseUser);
   router.use(limited("schoolpark-city", 60));
   router.use(async (req, res, next) => {

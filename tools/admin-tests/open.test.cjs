@@ -326,15 +326,33 @@ test('予算は、#000 以外のどのクエストでも公開できる', () => 
   assert.equal(ADMIN.indexOf("Number(q.questNumber) === 1 && q.guildId === 'learn'"), -1,
     'LEARN #001 の決め打ちが残っている');
   assert.equal(ADMIN.indexOf('EMUER個別予算10,000を公開'), -1, '10,000の決め打ちが残っている');
+  /* 固定の文字数で切らない。中身が増えたとき、確かめたい行が窓の外へ
+     出て、直っているのに落ちる。手前をさかのぼって、同じ式の中に
+     #000 を外す判定があることを見る。 */
   const i = ADMIN.indexOf('data-qbudget="');
-  assert.ok(ADMIN.slice(i - 200, i).indexOf('SpQuestStore.isFounder(q)') >= 0,
-    '#000 を外していない');
+  const guard = ADMIN.lastIndexOf("SpQuestStore.isFounder(q) ? ''", i);
+  assert.ok(guard > 0 && guard < i, '#000 を外していない');
+  assert.equal(ADMIN.slice(guard, i).indexOf('</div>'), -1,
+    '#000 を外す判定が、別の行のものになっている');
+});
+
+test('予算が付いているクエストには、出すボタンを出さない', () => {
+  /* 二度出せない（額は変えられない）ので、押せてしまうこと自体が罠。
+     付いているときは、額と渡したぶんを出す。 */
+  const i = ADMIN.indexOf('data-qbudget="');
+  const guard = ADMIN.lastIndexOf("SpQuestStore.isFounder(q) ? ''", i);
+  assert.match(ADMIN.slice(guard, i), /emuBudgetOf\.has\(q\.id\)/,
+    'すでに予算があるのにボタンが出る');
 });
 
 test('予算は、1人あたりと人数を聞いてから送る', () => {
   const i = ADMIN.indexOf('const per = parseInt(prompt(');
   assert.ok(i > 0, '1人あたりを聞いていない');
-  const seg = ADMIN.slice(i, i + 900);
+  /* 幅を決め打ちにすると、文面を1行足しただけで落ちる。
+     口の終わりまでを見る。 */
+  const end = ADMIN.indexOf('el.querySelectorAll("[data-qunapprove]")', i);
+  assert.ok(end > i, '予算の口の終わりが見つからない');
+  const seg = ADMIN.slice(i, end);
   assert.ok(seg.indexOf('const people = parseInt(prompt(') >= 0, '人数を聞いていない');
   assert.ok(seg.indexOf('const total = per * people;') >= 0, '総額を出していない');
   assert.ok(seg.indexOf('perPersonEmuer: per, totalEmuer: total') >= 0, 'サーバーへ渡していない');
@@ -458,9 +476,26 @@ test('渡し直しが失敗したときは、Firestore を触らない', () => {
 });
 
 test('サーバーは、渡せていない承認にあとから渡せる', () => {
-  /* 前はこれも COMPLETION_STATE_CONFLICT で止めていた。 */
-  assert.ok(BACKEND.indexOf('if (prior.exists || certificate.exists) {') >= 0,
-    '承認の印だけで止めている');
+  /* 10/1 まで、サーバーは NOT_STARTED で承認を断っていた。そのあいだ
+     運営は管理画面の逃げ道を通り、Firestore へ直接 approved と
+     approvedRounds を書いていた。完走は記録されたが、報酬は
+     1枚も引き当てられていない。
+
+     その状態で「EMUERを渡す」を押すと、approvedRounds が知恵カードの
+     枚数に並んでいるので NO_NEW_ROUND で断られた。
+     渡すためのボタンが、渡せないと言う状態だった。
+
+     認めてある周回を順に見て、報酬がまだ無いものに渡す。
+     中身は backend/quest-completion.test.js が動かして確かめている。
+     ここでは、その道があることだけを見る。 */
+  assert.match(BACKEND, /let topupRound = 0;/, '渡しそびれを探す道が無い');
+  assert.match(BACKEND, /const isTopup = topupRound > 0;/);
+  /* 渡しそびれを渡すだけのときは、完走の数を増やさない。 */
+  assert.match(BACKEND, /approvedRounds: isTopup \? doneRounds : doneRounds \+ 1/,
+    'やってもいない周回を認めたことになる');
+  /* 証明書を受け取り済みでも渡せる。ただし作り直さない。 */
+  assert.match(BACKEND, /if \(!certificate\.exists\) tx\.create\(certRef/,
+    '受け取り済みの証明書を書き換えてしまう');
   assert.ok(BACKEND.indexOf('Number(was.approvedAt) > 0 ? Number(was.approvedAt) : now') >= 0,
     '認めた日を上書きしてしまう');
 });

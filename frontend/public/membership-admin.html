@@ -104,15 +104,50 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&am
 const fmt = iso => iso ? new Date(iso).toLocaleString("ja-JP") : "—";
 let idToken = null;
 
+/* ログインの証は1時間で切れる。
+
+   前はログインしたときに1回だけ取って、そのまま使い回していた。
+   管理画面は開きっぱなしで使うものなので、1時間たつと
+   サーバーへの用事がぜんぶ INVALID_AUTH_TOKEN（401）で断られる。
+   画面は生きているのに、押すボタンが全部だめになる。
+
+   実際、EMUER の予算を公開しようとして 401 で止まった。
+   Firestore への書き込みには取り直して1回やり直す道を付けてあったが
+   （spWrite）、サーバーへの用事にだけ無かった。
+
+   getIdToken() は期限が近ければ裏で取り直してくれる。毎回それを呼ぶ。
+   それでも断られたときは、はっきり取り直して1回だけやり直す。 */
+async function spIdToken(force) {
+  const u = auth && auth.currentUser;
+  if (!u || typeof u.getIdToken !== "function") return idToken;
+  try {
+    idToken = await u.getIdToken(!!force);
+  } catch (e) {
+    console.warn("ログインの証を取れませんでした:", e && (e.message || e));
+  }
+  return idToken;
+}
+
 async function api(path, options) {
-  const res = await fetch(API + path, {
-    method: (options && options.method) || "GET",
-    headers: Object.assign({ "Authorization": "Bearer " + idToken },
-      (options && options.body) ? { "Content-Type": "application/json" } : {}),
-    body: options && options.body ? JSON.stringify(options.body) : undefined
-  });
-  let data = {};
-  try { data = await res.json(); } catch (_) {}
+  const send = async (token) => {
+    const res = await fetch(API + path, {
+      method: (options && options.method) || "GET",
+      headers: Object.assign({ "Authorization": "Bearer " + token },
+        (options && options.body) ? { "Content-Type": "application/json" } : {}),
+      body: options && options.body ? JSON.stringify(options.body) : undefined
+    });
+    let data = {};
+    try { data = await res.json(); } catch (_) {}
+    return { res, data };
+  };
+
+  let { res, data } = await send(await spIdToken(false));
+  /* 断られたのが証のせいなら、取り直して1回だけやり直す。
+     権限が無い（403）のときは、取り直しても同じなのでやり直さない。 */
+  if (res.status === 401) {
+    const fresh = await spIdToken(true);
+    if (fresh) ({ res, data } = await send(fresh));
+  }
   if (!res.ok) throw Object.assign(new Error(data.error || ("HTTP " + res.status)), { code: data.error, status: res.status });
   return data;
 }
@@ -2306,10 +2341,55 @@ async function renderSchoolPark() {
     const v = Math.max(0, Number(m.amount) || 0);
     pot[c].have += (m.kind === "out" ? -v : v);
   });
+  /* クエストの budget 欄は「カードに出る1人あたりの報酬額」。
+     何人完走するかも、実際にいくら確保したかも入っていない。
+     これを足して「約束済み」と呼び「ある」から引いていたので、
+     #002 を15本出しただけで 1,750 が足され、使える額がマイナスに
+     なった。お金は1円も動いていない。目安として別に出す。 */
   quests.forEach(q => {
     const c = CURRENCIES.indexOf(q.budgetCurrency) >= 0 ? q.budgetCurrency : "JPY";
     if (q.status !== "CLOSED") pot[c].promised += (parseInt(String(q.budget || "0").replace(/[^0-9]/g, ""), 10) || 0);
   });
+  /* EMUER の本当の帳簿。emuer_v2_guild_quest_budgets は
+     サーバー専用（Rules の包括許可が emuer_v2_* を外している）ので、
+     用意されている口から取る。
+       totalEmuer      確保の上限。ここまでなら渡せる、という数
+       allocatedEmuer  実際に人へ引き当てた額。これが本当の負債
+     引くのは allocatedEmuer だけ。上限を大きく取っても何も減らない。 */
+  let emuLedger = null;
+  /* どのクエストに予算が付いているか。クエストの行に出すのと、
+     まとめて出すときに「もう済んでいるもの」を飛ばすのに使う。 */
+  const emuBudgetOf = new Map();
+  try {
+    const j = await emuerV2AdminApi("/guild-quest/budgets");
+    const rows = (j && j.budgets) || [];
+    let total = 0, allocated = 0;
+    rows.forEach(b => {
+      total += Math.max(0, Number(b.totalEmuer) || 0);
+      allocated += Math.max(0, Number(b.allocatedEmuer) || 0);
+      if (b.scopeType === "quest" && b.scopeId) {
+        emuBudgetOf.set(String(b.scopeId), {
+          total: Math.max(0, Number(b.totalEmuer) || 0),
+          allocated: Math.max(0, Number(b.allocatedEmuer) || 0)
+        });
+      }
+    });
+    emuLedger = { count: rows.length, total, allocated, remaining: Math.max(0, total - allocated) };
+  } catch (e) {
+    console.warn("EMUER の予算を読めませんでした:", e && (e.code || e.message));
+  }
+  /* 1人あたりいくら渡すか。カードに書いた額をそのまま使う。
+     カードが「100 EMUER」なのに予算が50だと、約束が食い違う。
+     書いていなければ段から決める（入門50／標準100／実践200）。 */
+  const emuPerPerson = q => {
+    const onCard = parseInt(String(q.budget || "0").replace(/[^0-9]/g, ""), 10) || 0;
+    return (q.budgetCurrency === "EMUER" && onCard > 0) ? onCard : SP_STAGE_EMUER(q);
+  };
+  /* まとめて出す相手。#000 は原点なので持たない。EMUER のクエストだけ。
+     すでに予算があるものは外す（押し直せるようにするため）。 */
+  const emuNeedBudget = () => quests.filter(q => !SpQuestStore.isFounder(q))
+    .filter(q => q.budgetCurrency === "EMUER")
+    .filter(q => !emuBudgetOf.has(q.id));
 
   el.innerHTML =
     /* 年内目標（クエスト一覧の頭に出す読みもの）。中身は別の関数で描く。 */
@@ -2324,16 +2404,38 @@ async function renderSchoolPark() {
 
     + '<div class="card"><h3>トレジャリー</h3>'
     + '<p class="empty" style="text-align:left;margin:0 0 10px">'
-    + '<b>ある</b>＝記録した入金から支出を引いた額。<b>約束済み</b>＝まだ完了していないクエストの予算。'
-    + '<b>使える</b>がマイナスなら、払えない約束をしていることになります。</p>'
+    + '<b>ある</b>＝記録した入金から支出を引いた額。<b>渡したぶん</b>＝完走を認めて実際に引き当てた額。'
+    + '<b>使える</b>はその差です。クエストに予算を出しただけでは EMUER は動きません。</p>'
     + CURRENCIES.map(c => {
-        const free = pot[c].have - pot[c].promised;
+        /* 引くのは、実際に人へ渡したぶんだけ。
+           円と JPYC にはこの帳簿が無く、支払ったぶんは入出金の記録から
+           すでに「ある」に入っているので、何も引かない。 */
+        const known = (c !== "EMUER") || !!emuLedger;
+        const paid = (c === "EMUER") ? ((emuLedger && emuLedger.allocated) || 0) : 0;
+        const free = pot[c].have - paid;
         return '<div class="row"><span>' + CUR_LABEL[c] + '</span><span>'
           + 'ある ' + asMoney(pot[c].have, c)
-          + ' ／ 約束済み ' + asMoney(pot[c].promised, c)
-          + ' ／ <b style="color:' + (free < 0 ? "#b91c1c" : "#166534") + '">使える '
-          + asMoney(free, c) + '</b></span></div>';
+          + ' ／ 渡したぶん ' + (known ? asMoney(paid, c) : "いま読めません")
+          + ' ／ <b style="color:' + ((known && free < 0) ? "#b91c1c" : "#166534") + '">使える '
+          + (known ? asMoney(free, c) : "—") + '</b></span></div>';
       }).join("")
+    /* 確保の上限は負債ではないので、引き算とは別の行に出す。 */
+    + (emuLedger && emuLedger.count
+        ? '<p class="empty" style="text-align:left;margin:10px 0 0">'
+          + 'クエストに確保してある上限は ' + asMoney(emuLedger.total, "EMUER")
+          + '（' + emuLedger.count + '本）。うち ' + asMoney(emuLedger.allocated, "EMUER") + ' を渡しました。'
+          + '上限は「ここまでなら渡せる」という数で、お金は減っていません。</p>'
+        : (emuLedger
+            ? '<p class="empty" style="text-align:left;margin:10px 0 0">'
+              + 'まだどのクエストにも EMUER の予算を出していません。'
+              + '下のクエスト一覧の「EMUERの予算を公開」から出せます。</p>'
+            : ''))
+    /* クエストの画面上の額は、目安として別に出す（引き算には使わない）。 */
+    + '<p class="empty" style="text-align:left;margin:6px 0 0">'
+    + '走っているクエストのカードに出ている報酬額（1人あたり）の合計は '
+    + CURRENCIES.filter(c => pot[c].promised > 0).map(c => asMoney(pot[c].promised, c)).join("／")
+    + (CURRENCIES.some(c => pot[c].promised > 0) ? '' : '0')
+    + '。何人が完走するかは入っていないので、支払う額そのものではありません。</p>'
     + '<label>何のお金か</label><input id="atLabel" placeholder="例：Emu light 会費（8月分）／サーバー代">'
     + '<label>入金か支出か</label><select id="atKind">'
     + '<option value="in">入金（入ってきた）</option>'
@@ -2492,6 +2594,28 @@ async function renderSchoolPark() {
       })()
 
     + '<div class="card"><h3>クエストの状態を変える</h3>'
+    /* EMUER の予算を、まとめて公開する。
+
+       #002 WORK は15本ある。1本ずつ押すと16回になり、途中で
+       1回でも転ぶとどこまで済んだか分からなくなる。
+       すでに予算があるものは飛ばすので、何度押しても同じ結果になる。 */
+    + (function () {
+        if (!emuLedger) {
+          return '<p class="empty" style="text-align:left;margin:0 0 10px">'
+            + 'EMUER の予算をいま読めませんでした。まとめて公開する口は、読めてから出します。</p>';
+        }
+        const left = emuNeedBudget();
+        if (!left.length) {
+          return '<p class="empty" style="text-align:left;margin:0 0 10px">'
+            + 'EMUER のクエストには、すべて予算が付いています。</p>';
+        }
+        return '<p class="empty" style="text-align:left;margin:0 0 10px">'
+          + '予算が付いていない EMUER のクエストが <b>' + left.length + '本</b> あります。'
+          + '予算を出さないと、完走を認めても EMUER は動きません。</p>'
+          + '<div class="actions" style="margin:0 0 10px">'
+          + '<button class="btn primary" id="qbAll">EMUERの予算をまとめて公開（' + left.length + '本）</button>'
+          + '</div>';
+      })()
     + '<p class="empty" style="text-align:left;margin:0 0 10px">分配を受けられるのは、'
     + 'ここで<b>認めた人だけ</b>です。受けただけでは分配されません。'
     + '実際に動いた証拠（報告・成果物など）を確かめてから認めてください。'
@@ -2506,8 +2630,27 @@ async function renderSchoolPark() {
            これを公開しないと、途中報告からの貢献も記録されず、
            承認しても EMUER は動かない。#000 以外はどれでも出せる。 */
         + (SpQuestStore.isFounder(q) ? ''
-          : '<button class="act ok" data-qbudget="' + esc(q.id) + '" data-qper="' + SP_STAGE_EMUER(q)
-            + '">EMUERの予算を公開</button> ')
+          : (emuBudgetOf.has(q.id)
+              /* もう付いている。額と、そこからいくら渡したかを出す。
+                 上限が0だったり、渡したぶんが上限を越えていたら、
+                 それは正しく公開された予算ではない。手で直したか、
+                 消しそこねたか。黙って普通の予算のふりをすると、
+                 「公開ボタンが出ない」としか見えなくて行き止まりになる。
+                 10/2、#001 でこれが起きた。何が見えているかを出す。 */
+              ? ((emuBudgetOf.get(q.id).total <= 0
+                  || emuBudgetOf.get(q.id).total < emuBudgetOf.get(q.id).allocated)
+                  ? '<small style="color:#b91c1c">予算がこわれています（上限 '
+                    + asMoney(emuBudgetOf.get(q.id).total, "EMUER")
+                    + '／渡した ' + asMoney(emuBudgetOf.get(q.id).allocated, "EMUER") + '）<br>'
+                    + 'Firestore の emuer_v2_guild_quest_budgets から<br>'
+                    + 'quest:' + esc(q.id) + ' を<b>ドキュメントごと</b>消してから<br>'
+                    + '出し直してください。</small> '
+                  : '<small style="color:var(--muted)">予算 '
+                    + asMoney(emuBudgetOf.get(q.id).total, "EMUER")
+                    + '（渡した ' + asMoney(emuBudgetOf.get(q.id).allocated, "EMUER") + '）</small> ')
+              : '<button class="act ok" data-qbudget="' + esc(q.id) + '" data-qper="' + emuPerPerson(q)
+                + '" data-qstage="' + SP_STAGE_EMUER(q)
+                + '">EMUERの予算を公開</button> '))
         + (q.status !== "RUNNING" ? '<button class="act neutral" data-qrun="' + esc(q.id) + '">進行中にする</button> ' : '')
         + (q.status !== "CLOSED" ? '<button class="act ok" data-qclose="' + esc(q.id) + '">完了にする</button>' : '')
         + '</span></div>'
@@ -2945,23 +3088,135 @@ async function renderSchoolPark() {
       renderSchoolPark();
     };
   });
+  /* EMUER の予算を、まとめて公開する。
+
+     #002 WORK は15本ある。1本ずつ押すと16回になり、途中で1回でも
+     転ぶと、どこまで済んだのか分からなくなる。
+     すでに予算があるものは相手から外してあるので、転んだら
+     押し直せばよい（済んだぶんは二度出さない）。
+
+     いちど出した予算は変えられないので、出す前に全部並べて見せる。 */
+  const qbAllBtn = $("#qbAll");
+  if (qbAllBtn) qbAllBtn.onclick = async () => {
+    const targets = emuNeedBudget();
+    if (!targets.length) { alert("予算が付いていない EMUER のクエストはありません。"); return; }
+    const people = parseInt(prompt(
+      "何人ぶん用意しますか？（どのクエストも同じ人数で出します）\n\n"
+      + "1人あたりの額は、クエストのカードに書いた額を使います。", "100") || "", 10);
+    if (!Number.isSafeInteger(people) || people <= 0) return;
+
+    const plan = targets.map(q => {
+      const per = emuPerPerson(q);
+      return { q: q, per: per, total: per * people,
+        label: (SpQuestStore.fullLabel(q) || q.id) + " " + String(q.title || "").slice(0, 24) };
+    });
+    /* カードの額が、段から決まる額と大きく違うものは、先に見せて止める。
+
+       10/2、一般 #001 でこれをやった。カードに「12,500 EMUER」と
+       書いてあったが、それはクエスト全体の予算のつもりで入れた数字で、
+       1人あたりではなかった。そのまま 12,500 × 100人 ＝ 1,250,000 の
+       予算が立ち、1人completeするたびに 12,500 出る状態になった。
+
+       予算はいちど出すと変えられない。長い一覧の中に混ぜて出すと、
+       1本だけ桁が違っていても気づかない。別に出して、もう一度聞く。 */
+    const odd = plan.filter(x => x.per !== SP_STAGE_EMUER(x.q));
+    if (odd.length) {
+      const warn = odd.map(x => "・" + x.label
+        + "\n    カードの額 " + x.per.toLocaleString() + " EMUER"
+        + "　／　段から決まる額 " + SP_STAGE_EMUER(x.q).toLocaleString() + " EMUER"
+        + "\n    → 1人 " + x.per.toLocaleString() + " × " + people + "人 ＝ "
+        + (x.per * people).toLocaleString() + " EMUER").join("\n");
+      if (!confirm("カードの額と、段から決まる額が違うクエストが "
+        + odd.length + "本あります。\n\n" + warn
+        + "\n\nカードに書いた額を「1人あたり」として出します。\n"
+        + "クエスト全体の予算を書いた欄ではありません。\n\n"
+        + "桁は合っていますか？ このまま進めますか？")) return;
+    }
+
+    const sum = plan.reduce((a, x) => a + x.total, 0);
+    const lines = plan.map(x => "・" + x.label + "\n    1人 " + x.per
+      + " × " + people + "人 ＝ " + x.total + " EMUER").join("\n");
+    if (!confirm("EMUER の予算を " + plan.length + "本ぶん公開します。\n\n" + lines
+      + "\n\n総額 " + sum.toLocaleString() + " EMUER\n\n"
+      + "いちど公開すると、額は変えられません。よろしいですか？")) return;
+
+    let done = 0, already = 0, stopped = false;
+    const conflicts = [], failed = [];
+    for (const x of plan) {
+      try {
+        const r = await api("/api/schoolpark/quest-completions/" + encodeURIComponent(x.q.id) + "/budget",
+          { method: "POST", body: { perPersonEmuer: x.per, totalEmuer: x.total } });
+        if (r && r.alreadyPublished) already += 1; else done += 1;
+      } catch (e) {
+        const code = String((e && (e.code || e.message)) || "");
+        /* 10/1 の関門。1本でも当たったら、残りも必ず同じなので止める。 */
+        if (code.indexOf("NOT_STARTED") >= 0 || code.indexOf("EMUER_V2_NOT_ACTIVE") >= 0) {
+          stopped = true; break;
+        }
+        /* すでに違う額で出ている。上書きはできないので、名前を控える。 */
+        if (code.indexOf("BUDGET_EXISTS_DIFFERENT") >= 0) { conflicts.push(x.label); continue; }
+        failed.push(x.label + "（" + code + "）");
+      }
+    }
+
+    const say = [];
+    if (stopped) {
+      say.push("EMUER の仕組みは 10月1日 0時（日本時間）から動きます。");
+      say.push("それまで予算は出せません。");
+      say.push("");
+    }
+    say.push("出した：" + done + "本");
+    if (already) say.push("すでに同じ額で出ていた：" + already + "本");
+    if (conflicts.length) {
+      say.push("");
+      say.push("すでに違う額で出ています（変えられません）：");
+      conflicts.forEach(x => say.push("・" + x));
+    }
+    if (failed.length) {
+      say.push("");
+      say.push("出せませんでした：");
+      failed.forEach(x => say.push("・" + x));
+      say.push("");
+      say.push("もう一度押すと、出せていないぶんだけやり直します。");
+    }
+    alert(say.join("\n"));
+    renderSchoolPark();
+  };
+
   el.querySelectorAll("[data-qbudget]").forEach(b => {
     b.onclick = async () => {
       /* 1人あたりと人数を聞いて、総額を出す。段から決めた額を既定にする
          （入門50／標準100／実践200、段が無ければ100。年内目標の資料どおり）。
          いちど公開すると額は変えられないので、確かめてから送る。 */
-      const per = parseInt(prompt("1人あたり何 EMUER にしますか？", b.dataset.qper || "100") || "", 10);
+      /* カードの budget 欄は、1人あたりのつもりで書かれていないことがある。
+         10/2、一般 #001 のカードには総額の 12,500 EMUER が入っていた。
+         それをそのまま既定にしたせいで、1人 12,500 の予算が立った。
+         食い違うときは安いほう（段から決まる額）を既定にして、
+         カードに何と書いてあるかも見せる。決めるのは人。 */
+      const onCard = parseInt(b.dataset.qper || "0", 10) || 0;
+      const byStage = parseInt(b.dataset.qstage || "0", 10) || 100;
+      const odd = onCard > 0 && onCard !== byStage;
+      const per = parseInt(prompt(odd
+        ? "1人あたり何 EMUER にしますか？\n\n"
+          + "カードの額　　　　 " + onCard.toLocaleString() + " EMUER\n"
+          + "段から決まる額　　 " + byStage.toLocaleString() + " EMUER\n\n"
+          + "この2つが違います。カードの額が「全体の予算」なら、\n"
+          + "ここは1人あたりの額に直してください。"
+        : "1人あたり何 EMUER にしますか？",
+        String(odd ? byStage : (onCard || byStage))) || "", 10);
       if (!Number.isSafeInteger(per) || per <= 0) return;
       const people = parseInt(prompt("何人ぶん用意しますか？", "100") || "", 10);
       if (!Number.isSafeInteger(people) || people <= 0) return;
       const total = per * people;
-      if (!confirm("EMUER の予算を公開します。\n\n1人 " + per + " EMUER × " + people + "人 ＝ 総額 " + total
+      if (!confirm("EMUER の予算を公開します。\n\n1人 " + per.toLocaleString() + " EMUER × "
+        + people.toLocaleString() + "人 ＝ 総額 " + total.toLocaleString()
         + " EMUER\n\nいちど公開すると、額は変えられません。よろしいですか？")) return;
       try {
         await api("/api/schoolpark/quest-completions/" + encodeURIComponent(b.dataset.qbudget) + "/budget",
           { method:"POST", body: { perPersonEmuer: per, totalEmuer: total } });
       } catch (e) { alert("予算を公開できませんでした（" + (e.code || e.message) + "）"); return; }
-      alert("EMUER の予算を公開しました（1人 " + per + " EMUER ／ 総額 " + total + "）。");
+      alert("EMUER の予算を公開しました（1人 " + per.toLocaleString()
+        + " EMUER ／ 総額 " + total.toLocaleString() + "）。");
       renderSchoolPark();
     };
   });

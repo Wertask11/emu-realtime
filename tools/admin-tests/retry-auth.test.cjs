@@ -120,3 +120,95 @@ test('SchoolPark 本体にも、同じ仕組みがある', () => {
   assert.match(index, /async function _spRefreshAuth\(\)/,
     '本体の仕組みが消えたら、この画面だけ直しても意味が無い');
 });
+
+/* ───────── サーバーへの用事も、証を取り直す ─────────
+
+   ログインの証（Firebase の ID トークン）は1時間で切れる。
+   管理画面は開きっぱなしで使うので、1時間たつとサーバーへの
+   用事がぜんぶ INVALID_AUTH_TOKEN（401）で断られる。
+   画面は生きているのに、押すボタンが全部だめになる。
+
+   9/29、EMUER の予算を公開しようとして実際にそうなった。
+   Firestore への書き込みには取り直す道を付けてあったが
+   （spWrite）、サーバーへの用事にだけ無かった。 */
+const vm2 = require('node:vm');
+
+function apiSrc() {
+  const from = ADMIN.indexOf('async function spIdToken(');
+  const to = ADMIN.indexOf('\n}\n', ADMIN.indexOf('async function api(path, options)')) + 3;
+  const src = ADMIN.slice(from, to);
+  assert.ok(from > 0 && src.length > 500, 'サーバーへの用事の口が見つかりません');
+  return src;
+}
+
+function caller(opts) {
+  const o = opts || {};
+  const seen = { tokens: [], forced: [], calls: 0 };
+  let live = o.freshToken || 'fresh';
+  const ctx = vm2.createContext({
+    API: 'https://x',
+    console: { warn() {} },
+    JSON, Object, Error,
+    auth: { currentUser: {
+      getIdToken: async function (force) {
+        seen.forced.push(!!force);
+        if (o.refreshThrows) throw new Error('network');
+        return force ? live : (o.staleToken || 'stale');
+      }
+    } },
+    fetch: async function (url, init) {
+      seen.calls += 1;
+      seen.tokens.push(String(init.headers.Authorization || '').replace('Bearer ', ''));
+      const ok = !o.alwaysReject && seen.tokens[seen.tokens.length - 1] === live;
+      return { ok: ok, status: ok ? 200 : (o.status || 401),
+        json: async () => (ok ? { ok: true } : { error: 'INVALID_AUTH_TOKEN' }) };
+    }
+  });
+  vm2.runInContext('let idToken = null;\n' + apiSrc(), ctx);
+  return { ctx, seen };
+}
+
+test('断られたら、証を取り直して1回だけやり直す', async () => {
+  const c = caller({ staleToken: 'stale', freshToken: 'fresh' });
+  const out = await c.ctx.api('/api/emuer/v2/guild-quest/budgets', { method: 'POST', body: { a: 1 } });
+  assert.deepEqual(Array.from(c.seen.tokens), ['stale', 'fresh'],
+    '取り直さずにあきらめている');
+  assert.equal(out.ok, true);
+  assert.equal(c.seen.calls, 2, 'やり直しが ' + c.seen.calls + '回になっている');
+});
+
+test('やり直すときだけ、はっきり取り直す', async () => {
+  const c = caller({ staleToken: 'stale', freshToken: 'fresh' });
+  await c.ctx.api('/x');
+  assert.deepEqual(Array.from(c.seen.forced), [false, true],
+    '毎回はっきり取り直すと、Firebase に無駄な往復が増える');
+});
+
+test('権限が無い（403）ときは、やり直さない', async () => {
+  const c = caller({ staleToken: 'stale', freshToken: 'fresh', status: 403 });
+  await assert.rejects(() => c.ctx.api('/x'));
+  assert.equal(c.seen.calls, 1, '取り直しても同じなのに、もう一度投げている');
+});
+
+test('取り直せなかったときは、断られたことをそのまま返す', async () => {
+  const c = caller({ refreshThrows: true });
+  await assert.rejects(() => c.ctx.api('/x'), (e) => {
+    assert.equal(e.code, 'INVALID_AUTH_TOKEN', '出た文言: ' + e.message);
+    assert.equal(e.status, 401);
+    return true;
+  });
+});
+
+test('2回目も断られたら、そこであきらめる（無限にやり直さない）', async () => {
+  const c = caller({ alwaysReject: true });   /* 取り直しても断られ続ける */
+  await assert.rejects(() => c.ctx.api('/x'));
+  assert.equal(c.seen.calls, 2, 'やり直しが ' + c.seen.calls + '回。止まらなくなっている');
+});
+
+test('ログインの証は、毎回そのときのものを使う', () => {
+  const src = apiSrc();
+  assert.match(src, /await spIdToken\(false\)/,
+    '取っておいた古い証をそのまま使っている');
+  assert.equal(ADMIN.indexOf('"Authorization": "Bearer " + idToken'), -1,
+    '1回だけ取った証を使い回す書き方が残っている');
+});

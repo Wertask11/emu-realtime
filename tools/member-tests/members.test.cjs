@@ -822,8 +822,17 @@ test('参加したい・応援するは、返ってこなくても固まらな�
 
 test('押しても黙って終わらない', () => {
   const seg = toggleSrc();
-  assert.ok(seg.indexOf('うまくいきませんでした') >= 0, '失敗を伝えていない');
+  /* 何が起きたかを言うところは _spWhyFailed に移した。
+     どこで転んでも同じ文言を出していたので、
+     「今日の読み取り枠を使い切っている」ときに
+     「通信を確かめて」と言っていた。確かめる先が違う。 */
+  assert.ok(seg.indexOf('alert(_spWhyFailed(e))') >= 0, '失敗を伝えていない');
   assert.ok(seg.indexOf('ギルドの参加・応援を保存できませんでした') >= 0, '記録に残していない');
+  /* 移した先が、ちゃんと言っていること。 */
+  const why = INDEX.slice(INDEX.indexOf('function _spWhyFailed(e) {'),
+                          INDEX.indexOf('/* 数えられた数か、数えられなかったか。'));
+  assert.ok(why.indexOf('うまくいきませんでした') >= 0, '移した先が黙っている');
+  assert.ok(why.indexOf('読み取り枠を使い切っています') >= 0, '枠切れを言い分けていない');
 });
 
 /* ───────── 知恵ライブラリのカード ───────── */

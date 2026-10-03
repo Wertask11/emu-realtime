@@ -58,10 +58,9 @@
 <script>
 const ORIGIN=location.origin,send=message=>parent.postMessage(message,ORIGIN),status=document.getElementById('status');
 const topicEl=document.getElementById('featuredTopic');
-// 親へ渡すお題は日本語の原文（部屋のお題として使われるため）。画面表示だけ選択言語にする。
+// お題は日本語のまま親へ渡す（部屋のお題として使われるため）。
 const rawTopic=()=>topicEl.dataset.topic||topicEl.textContent;
-function paintTopic(){if(topicEl.dataset.topic)topicEl.textContent=window.emuTopic?emuTopic(topicEl.dataset.topic):topicEl.dataset.topic}
-window.onEmuLangChange=paintTopic;
+function paintTopic(){if(topicEl.dataset.topic)topicEl.textContent=topicEl.dataset.topic}
 document.querySelector('[data-join]').onclick=()=>send({type:'emu-discussion-open',topic:rawTopic(),mode:'opinion'});
 document.querySelectorAll('[data-lens]').forEach(button=>button.onclick=()=>send({type:'emu-discussion-open',topic:rawTopic(),mode:button.dataset.lens}));
 window.addEventListener('message',event=>{if(event.origin!==ORIGIN||event.source!==parent)return;if(event.data?.type==='emu-discussion-topic'&&event.data.topic){topicEl.dataset.topic=event.data.topic;topicEl.removeAttribute('data-i18n');paintTopic();document.querySelectorAll('.actions button').forEach(button=>button.disabled=false)}});

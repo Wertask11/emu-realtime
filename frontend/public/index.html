@@ -36,7 +36,7 @@
     "url": "https://schoolpark-emu.vercel.app/",
     "applicationCategory": "SocialNetworkingApplication",
     "operatingSystem": "Web",
-    "inLanguage": ["ja", "en", "zh", "ko"],
+    "inLanguage": "ja",
     "description": "映画・本・学びなど答えのない問いについて、同じ熱量で語り合える相手と出会い、対話を続けられる場所。知識の投稿と交換、議論、一日シェアなどの機能がある。",
     "slogan": "あなたの熱に、ついてこられる場所。",
     "publisher": {
@@ -4883,7 +4883,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <button type="button" class="eth-tab" id="emuIchinichiTab" onclick="showEmuIchinichi()" data-i18n="tab.ichinichi">一日シェア</button>
       <button type="button" class="eth-tab" id="emuDiscussionTab" onclick="showEmuDiscussion()" data-i18n="tab.discussion">議論</button>
       <!-- 価値プロフィールは SchoolPark パスポートの PAGE 3 から開く -->
-      <select id="emuLangSelect" class="eth-lang" onchange="setEmuLang(this.value)" aria-label="Language" data-i18n-title="lang.label"></select>
+      <!-- 言語切替（日英中韓）は 2026-10-02 に外した。日本語だけで出す。 -->
     </div>
   </div>
 
@@ -5792,19 +5792,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 
     <!-- 1. 言語 -->
     <div class="sp-panel-section">
-      <div class="sp-panel-section-title">🌐 言語</div>
-      <div class="sp-setting-row">
-        <div>
-          <div class="sp-setting-label">表示言語</div>
-          <div class="sp-setting-sub">SchoolPark と Emu で共通。選ぶとすぐ切り替わります</div>
-        </div>
-        <!-- 選択肢（日本語 / English / 中文 / 한국어）は emu-i18n.js が入れる。
-             LANG_SELECT_IDS に載せてあるので、ほかの場所で言語を変えても
-             ここの表示が勝手に揃う。保存先も向こうが持っている（emu_lang）。 -->
-        <select id="spSettingLangSelect" onchange="setEmuLang(this.value)" aria-label="表示言語"
-          style="background:#1a1d2e;border:1px solid rgba(212,168,67,0.3);color:#D4A843;padding:6px 10px;border-radius:6px;font-size:0.82rem;outline:none;"></select>
-      </div>
-    </div>
+    <!-- 言語の段（日本語 / English / 中文 / 한국어）は 2026-10-02 に外した。
+         日本語だけで出すので、選ぶものが無い。 -->
 
     <!-- 2. SchoolPark ID -->
     <div class="sp-panel-section">
@@ -6012,9 +6001,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 </div><!-- ← mainApp の閉じタグ -->
 
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-<!-- Emuの多言語辞書（日本語/English/中文/한국어/Bahasa Indonesia）。
-     emuT() / applyEmuI18n() / setEmuLang() を提供する。
-     -pages はサブページ（一日シェア等）の辞書と議論のお題。お題の訳は本体でも使う。 -->
+<!-- Emu の画面文言（日本語）。emuT() / applyEmuI18n() を提供する。
+     -pages はサブページ（知識を読む・議論・遊び・一日シェア）の文言。
+     多言語（英中韓）と言語切替は 2026-10-02 に外した。 -->
 <script src="/emu-i18n.js"></script>
 <script src="/emu-i18n-pages.js"></script>
 <script src="/actionschema.js"></script>
@@ -14355,21 +14344,6 @@ function spWalletSaveAlert() {
 
 /* ── ⚙️ 設定パネル ── */
 function _loadSpSettings() {
-  /* 言語。選択肢も保存先も emu-i18n.js が持っている（localStorage の emu_lang）。
-     この select は LANG_SELECT_IDS に載せてあるので、ふつうは向こうが入れてくれる。
-     まだ空なら、ここで入れておく（読み込みの順で取りこぼさないように）。 */
-  try {
-    const sel = document.getElementById('spSettingLangSelect');
-    if (sel && !sel.options.length && Array.isArray(window.EMU_LANGS)) {
-      window.EMU_LANGS.forEach(function (lang) {
-        const o = document.createElement('option');
-        o.value = lang.code; o.textContent = lang.label;
-        sel.appendChild(o);
-      });
-    }
-    if (sel && typeof window.getEmuLang === 'function') sel.value = window.getEmuLang();
-  } catch (e) {}
-
   /* SchoolPark ID。番号を出すのはサーバーで、ここは表示するだけ。
      まだ届いていなければ「確認中…」のままにする。ここで作りにはいかない。 */
   const box = document.getElementById('spSettingSpid');
@@ -15536,7 +15510,7 @@ async function updateEmuTodayHome() {
     if (!el) return;
     if (topicPending) { delete el.dataset.topic; el.textContent = emuT('today.discussion.loading'); return; }
     el.dataset.topic = topic;
-    el.textContent = typeof emuTopic === 'function' ? emuTopic(topic) : topic;
+    el.textContent = topic;
   });
 
   const savedName = localStorage.getItem('ches_name');
@@ -17180,8 +17154,13 @@ window.spDaoLoadVotes = async function (app) {
     ]);
     if (js) js.forEach(function (d) { joins++; if (mine && d.id.toLowerCase() === mine) iJoined = true; });
     if (ss) ss.forEach(function (d) { supports++; if (mine && d.id.toLowerCase() === mine) iSupport = true; });
+    /* 読めなかったときは null。0人ではない。
+       前はどちらも 0 のまま出していたので、通信が落ちているだけなのに
+       「参加したい 0・応援 0」と出ていた。押した人には、自分の1票が
+       消えたように見える。 */
     return _spGuildCard(g, {
-      joins: joins, supports: supports, iJoined: iJoined, iSupport: iSupport
+      joins: js ? joins : null, supports: ss ? supports : null,
+      iJoined: iJoined, iSupport: iSupport
     }, defs, app);
   }));
 
@@ -17228,6 +17207,118 @@ window.spDaoLoadVotes = async function (app) {
 };
 
 /* ギルドカード1枚ぶん。数はその場で数える。 */
+/* ギルドのボタンの見た目。一覧・詳細・押した直後で同じ形になるよう、
+   ここ1か所で決める。前は詳細の組み立ての中に直接書いていたので、
+   押した瞬間に画面を動かそうとすると同じ式を2度書くことになった。 */
+function _spGuildBtn(iJoined, iSupport) {
+  return {
+    joinLabel: iJoined ? '✓ 参加したい' : 'このギルドに参加したい',
+    joinBg: iJoined ? '#0F5C3F' : 'transparent',
+    joinFg: iJoined ? '#F4F1EA' : '#0F5C3F',
+    joinHint: iJoined ? 'もう一度押すと取り消せます' : '自分もこの領域で活動・貢献したい',
+    supportLabel: iSupport ? '✓ 応援している' : 'このギルドを応援する',
+    supportBg: iSupport ? '#141310' : 'transparent',
+    supportFg: iSupport ? '#F4F1EA' : '#141310',
+    supportHint: iSupport ? 'もう一度押すと取り消せます' : '活動まではできないが、方向性に共感・期待している'
+  };
+}
+
+/* いま自分が入っているかどうか（画面が知っている値）。 */
+function _spGuildMineNow(guildId, kind, app) {
+  const st = (app && app.state) || {};
+  const key = (kind === 'support') ? 'meSupport' : 'meJoined';
+  const cur = st.curGuild;
+  if (cur && cur.id === guildId && typeof cur[key] === 'boolean') return cur[key];
+  const card = (st.guilds || []).filter(function (g) { return g.id === guildId; })[0];
+  return !!(card && card[key]);
+}
+
+/* 押した結果を、その場で画面へ出す。
+
+   前は書き終えてから spDaoLoadVotes で全部読み直していた。
+   読み直しは重い（議題・クエスト・5ギルド×2往復・信用スコア）ので、
+   押してから数字が動くまで数秒かかる。そのあいだ画面は何も変わらない
+   ので、押せたのかどうか分からない。「ちょっと待つと反映される」のは
+   これである。
+
+   クエストの「受ける」（spQuestToggle）は、押した結果をその場で出して
+   から読み直している。同じ形にそろえる。
+   だめだったときは、呼んだ側が元へ戻す。 */
+function _spGuildApplyLocal(guildId, kind, on, app) {
+  if (!app || typeof app.setState !== 'function') return;
+  const st = app.state || {};
+  const isSup = (kind === 'support');
+  const step = function (n, was) {
+    /* 数えられていない（—）ものは、数えないままにする。
+       1 や 0 を書くと、読めていないのに数えたことになる。 */
+    if (n === null || n === undefined || n === '—') return n;
+    const v = Number(n);
+    if (!Number.isFinite(v)) return n;
+    return String(Math.max(0, v + (on ? 1 : -1) * (was === on ? 0 : 1)));
+  };
+  const next = {};
+
+  const cards = st.guilds;
+  if (Array.isArray(cards)) {
+    next.guilds = cards.map(function (g) {
+      if (!g || g.id !== guildId) return g;
+      const j = isSup ? !!g.meJoined : on;
+      const sup = isSup ? on : !!g.meSupport;
+      const was = isSup ? !!g.meSupport : !!g.meJoined;
+      const label = j ? '参加したい' : (sup ? '応援している' : '');
+      return Object.assign({}, g, {
+        meJoined: j, meSupport: sup,
+        joinCount: isSup ? g.joinCount : step(g.joinCount, was),
+        supportCount: isSup ? step(g.supportCount, was) : g.supportCount,
+        meLabel: label, meShow: label ? 'inline-block' : 'none'
+      });
+    });
+  }
+
+  const cur = st.curGuild;
+  if (cur && cur.id === guildId) {
+    const j = isSup ? !!cur.meJoined : on;
+    const sup = isSup ? on : !!cur.meSupport;
+    const was = isSup ? !!cur.meSupport : !!cur.meJoined;
+    next.curGuild = Object.assign({}, cur, _spGuildBtn(j, sup), {
+      meJoined: j, meSupport: sup,
+      joinCount: isSup ? cur.joinCount : step(cur.joinCount, was),
+      supportCount: isSup ? step(cur.supportCount, was) : cur.supportCount
+    });
+  }
+  if (next.guilds || next.curGuild) app.setState(next);
+}
+
+/* 押してだめだったとき、何が起きているのかを言う。
+
+   前はどこで転んでも「通信を確かめて、もう一度お試しください」だった。
+   通信は生きていて、Firestore がその日の読み取り枠を使い切っていた、
+   ということがある。そのとき「通信を確かめて」と言われても、
+   確かめる先が違う。相手が言っている理由をそのまま渡す。 */
+function _spWhyFailed(e) {
+  let st = null;
+  try { st = _spRestState(); } catch (x) {}
+  if (st && st.reason === 'quota' && Date.now() < st.blockedUntil) {
+    const min = Math.max(1, Math.ceil((st.blockedUntil - Date.now()) / 60000));
+    return '今日のぶんの読み取り枠を使い切っています。\n\n'
+      + '通信の問題ではありません。Firebase の読み取り枠が戻るまで、'
+      + '読むことも書くこともできません。\n'
+      + 'あと ' + min + '分ほどしてから、もう一度お試しください。';
+  }
+  const msg = (e && (e.message || e)) || '';
+  return 'うまくいきませんでした。通信を確かめて、もう一度お試しください。'
+    + (msg ? '\n\n（' + String(msg).slice(0, 120) + '）' : '');
+}
+
+/* 数えられた数か、数えられなかったか。
+
+   読めなかったときに 0 と書くと、本人には「自分の1票が消えた」
+   「誰も参加していない」に見える。数えられなかったことは、
+   0 ではなく「—」で出す。 */
+function _spCountLabel(n) {
+  return (n === null || n === undefined) ? '—' : String(n);
+}
+
 function _spGuildCard(g, mem, defs, app) {
   const props = _spVoteDocs.filter(function (v) { return SpGuildStore.guildIdOf(v, defs) === g.id; });
   const live = props.filter(function (v) { return !_spVoteClosed(v); });
@@ -17239,9 +17330,12 @@ function _spGuildCard(g, mem, defs, app) {
   return {
     id: g.id, code: g.code, short: g.short, name: g.name,
     concept: g.concept, accent: g.accent,
-    joinCount: String(mem.joins), supportCount: String(mem.supports),
+    /* 数えられなかったものは「—」。0 と書くと、記録が消えたように見える。 */
+    joinCount: _spCountLabel(mem.joins), supportCount: _spCountLabel(mem.supports),
     proposalCount: String(live.length), questCount: String(running.length),
     meLabel: mineLabel, meShow: mineLabel ? 'inline-block' : 'none',
+    /* 押した瞬間に画面を動かすために、いまの状態も持たせる。 */
+    meJoined: !!mem.iJoined, meSupport: !!mem.iSupport,
     open: function () { window.spGuildOpen(g.id, app); }
   };
 }
@@ -17265,18 +17359,22 @@ window.spGuildOpen = async function (guildId, app, quiet) {
   const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
   const canGuild = await window.spCanGuild();
 
-  let joins = 0, supports = 0, iJoined = false, iSupport = false;
+  /* 読めなかったときは null のまま。0人ではない（一覧と同じ扱い）。 */
+  let joins = null, supports = null, iJoined = false, iSupport = false;
   if (g.id) {
-    const fb = window.fbLib;
     try {
       const js = await _spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/joins');
-      if (!js) throw new Error('参加を読めなかった');
-      js.forEach(function (d) { joins++; if (mine && d.id.toLowerCase() === mine) iJoined = true; });
+      if (js) {
+        joins = 0;
+        js.forEach(function (d) { joins++; if (mine && String(d.id || '').toLowerCase() === mine) iJoined = true; });
+      }
     } catch (e) {}
     try {
       const ss = await _spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/supports');
-      if (!ss) throw new Error('応援を読めなかった');
-      ss.forEach(function (d) { supports++; if (mine && d.id.toLowerCase() === mine) iSupport = true; });
+      if (ss) {
+        supports = 0;
+        ss.forEach(function (d) { supports++; if (mine && String(d.id || '').toLowerCase() === mine) iSupport = true; });
+      }
     } catch (e) {}
   }
 
@@ -17309,16 +17407,9 @@ window.spGuildOpen = async function (guildId, app, quiet) {
   /* 読み直し（quiet）のときは画面を切り替えない。
      ギルド一覧を見ているのに、勝手に詳細へ飛ばされないようにする。 */
   const next = {
-    curGuild: Object.assign(shell, {
-      joinCount: String(joins), supportCount: String(supports),
-      joinLabel: iJoined ? '✓ 参加したい' : 'このギルドに参加したい',
-      joinBg: iJoined ? '#0F5C3F' : 'transparent',
-      joinFg: iJoined ? '#F4F1EA' : '#0F5C3F',
-      joinHint: iJoined ? 'もう一度押すと取り消せます' : '自分もこの領域で活動・貢献したい',
-      supportLabel: iSupport ? '✓ 応援している' : 'このギルドを応援する',
-      supportBg: iSupport ? '#141310' : 'transparent',
-      supportFg: iSupport ? '#F4F1EA' : '#141310',
-      supportHint: iSupport ? 'もう一度押すと取り消せます' : '活動まではできないが、方向性に共感・期待している',
+    curGuild: Object.assign(shell, _spGuildBtn(iJoined, iSupport), {
+      joinCount: _spCountLabel(joins), supportCount: _spCountLabel(supports),
+      meJoined: !!iJoined, meSupport: !!iSupport,
       join: function () { window.spGuildToggle(g.id, 'join', app); },
       support: function () { window.spGuildToggle(g.id, 'support', app); },
       canAct: !!g.id,
@@ -17358,6 +17449,14 @@ window.spGuildToggle = async function (guildId, kind, app) {
   if (!p) { alert('ログインすると、参加したい・応援するを押せます。'); return; }
   const sub = (kind === 'support') ? 'supports' : 'joins';
   _spGuildBusy = true;
+  /* 押した瞬間に、画面を先に動かす。
+
+     ここから下は、いまの状態を確かめて書いて、そのあと全部読み直す。
+     読み直しは重いので、数字が動くまで数秒かかる。そのあいだ画面が
+     まったく変わらないと、押せたのかどうか分からない。
+     先に動かしておいて、だめだったら戻す。 */
+  const wasMine = _spGuildMineNow(guildId, kind, app);
+  _spGuildApplyLocal(guildId, kind, !wasMine, app);
   const fb = window.fbLib;
   const ref = fb.doc(window.db, 'sp_guild_members', guildId, sub, p.addr);
   /* 通信が切れているとき、getDoc も setDoc も例外を投げず、値も返さない。
@@ -17398,18 +17497,24 @@ window.spGuildToggle = async function (guildId, kind, app) {
     if (!done.ok) throw new Error('保存が返ってきませんでした');
   } catch (e) {
     console.warn('ギルドの参加・応援を保存できませんでした:', e && (e.message || e));
+    /* 先に動かした画面を、元へ戻す。戻さないと、入っていないのに
+       「✓ 参加したい」のまま残る。 */
+    _spGuildApplyLocal(guildId, kind, wasMine, app);
     /* 断られたときは、証が古いだけのことがある。取り直して1回だけやり直す。 */
     if (_spDenied(e) && await _spRefreshAuth()) {
       _spGuildBusy = false;
       return window.spGuildToggle(guildId, kind, app);
     }
-    alert('うまくいきませんでした。通信を確かめて、もう一度お試しください。');
+    alert(_spWhyFailed(e));
     _spGuildBusy = false;
     return;
   } finally {
     /* 途中で何が起きても、次に押せる状態へ戻す。 */
     _spGuildBusy = false;
   }
+  /* 書けた。あとはサーバーの本当の値で上書きする。
+     先に動かしたぶんが間違っていても、ここで直る。
+     待たせない（画面はもう動いている）。 */
   await window.spDaoLoadVotes(app);
 };
 
@@ -20105,6 +20210,44 @@ function spMoney(n, cur) {
   return v + ' ' + (SP_CURRENCY_LABEL[cur] || cur);
 }
 
+/* EMUER の本当の帳簿。
+
+   トレジャリーの画面は、長いあいだ sp_quests の budget 欄を足していた。
+   あれはカードに出る「1人あたりの報酬額」で、何人完走するかも、
+   実際にいくら確保したかも入っていない。開いているクエストのぶんを
+   ただ足して「約束済み」と呼び、「ある」から引いていたので、
+   クエストを15本出しただけで 1,750 が足され、使える額がマイナスに
+   なった。お金は1円も動いていないのに「約束が持っている額を
+   超えています」と出た。
+
+   本当の額は emuer_v2_guild_quest_budgets にある。ここは
+   サーバー専用で画面からは読めない（firestore.rules の
+   包括許可が emuer_v2_* を外している）ので、用意されている口から取る。
+
+     totalEmuer      確保の上限。ここまでなら配れる、という数
+     allocatedEmuer  実際に人へ引き当てた額。これが本当の負債
+     remainingEmuer  その差
+
+   「上限」は負債ではない。上限を大きく取っても何も減らない。
+   減るのは、運営が1人ずつ承認したときだけ。だから引き算に使うのは
+   allocatedEmuer のほうで、上限は別に見せる。 */
+async function _spQuestBudgets() {
+  return _spMemo('emuer-budgets', 60000, async function () {
+    const r = await fetch('https://emu-realtime.onrender.com/api/emuer/v2/guild-quest/budgets',
+      { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const rows = (j && j.budgets) || [];
+    let total = 0, allocated = 0;
+    rows.forEach(function (b) {
+      total += Math.max(0, Number(b.totalEmuer) || 0);
+      allocated += Math.max(0, Number(b.allocatedEmuer) || 0);
+    });
+    return { count: rows.length, total: total, allocated: allocated,
+             remaining: Math.max(0, total - allocated) };
+  });
+}
+
 window.spDaoLoadTreasury = async function (app) {
   if (!app || typeof app.setState !== 'function') return;
   if (!window.db || !window.fbLib) return;
@@ -20128,6 +20271,14 @@ window.spDaoLoadTreasury = async function (app) {
   } catch (e) {
     /* 記録がまだ1件も無いときも、ここは通る。予算だけ出す。 */
     console.warn('入出金の記録を読めませんでした:', e && (e.message || e));
+  }
+
+  /* EMUER の本当の帳簿。読めなくても画面は出す（0とは書かない）。 */
+  let ledger = null;
+  try {
+    ledger = await _spQuestBudgets();
+  } catch (e) {
+    console.warn('EMUER の予算を読めませんでした:', e && (e.message || e));
   }
 
   const now = new Date();
@@ -20186,18 +20337,37 @@ window.spDaoLoadTreasury = async function (app) {
     });
   });
 
-  /* 選んだ通貨の3段。使える＝ある − 約束済み。
-     マイナスになったら、払えない約束をしていることになる。 */
+  /* 選んだ通貨の3段。
+
+     引くのは「実際に人へ引き当てた額」だけにする。
+     確保の上限（totalEmuer）は引かない。上限を大きく取っても
+     お金は減らないので、引くと払えるのに払えないように見える。
+
+     EMUER は本当の帳簿（emuer_v2_guild_quest_budgets）から取る。
+     円と JPYC にはその帳簿が無い。支払ったぶんは入出金の記録から
+     すでに「ある」に反映されているので、ここでは何も引かない。
+     （前はここでクエストの「1人あたりの額」を足して引いていた。
+       単位も意味も違うものを引いていたことになる） */
   function cardFor(c) {
     const b = box[c];
-    const free = b.have - b.promised;
+    const known = (c !== 'EMUER') || !!ledger;
+    const paid = (c === 'EMUER') ? ((ledger && ledger.allocated) || 0) : 0;
+    const free = b.have - paid;
     return {
       have: spMoney(b.have, c),
-      promised: spMoney(b.promised, c),
-      free: spMoney(free, c),
-      freeColor: free < 0 ? '#E08A7A' : '#D0E2BE',
-      warn: free < 0 ? '約束が持っている額を超えています' : '',
-      month: '今月 +' + spMoney(b.monthIn, c) + ' / -' + spMoney(b.monthOut, c)
+      paid: known ? spMoney(paid, c) : 'いま読めません',
+      free: known ? spMoney(free, c) : '—',
+      freeColor: (known && free < 0) ? '#E08A7A' : '#D0E2BE',
+      warn: !known
+        ? 'EMUER の予算を読めませんでした。通信が戻ってから、もう一度開いてください。'
+        : (free < 0 ? '渡した額が、記録されている残高を超えています' : ''),
+      month: '今月 +' + spMoney(b.monthIn, c) + ' / -' + spMoney(b.monthOut, c),
+      /* 確保の上限。負債ではないので、数字の下に一言で添える。 */
+      reserved: (c === 'EMUER' && ledger && ledger.count)
+        ? 'クエストに確保してある上限は ' + spMoney(ledger.total, c)
+          + '（' + ledger.count + '本）。うち ' + spMoney(ledger.allocated, c) + ' を渡しました。'
+          + '上限は「ここまでなら渡せる」という数で、お金は減っていません。'
+        : ''
     };
   }
 
@@ -20207,15 +20377,31 @@ window.spDaoLoadTreasury = async function (app) {
      通貨を混ぜた瞬間に意味のない数字になっていた。 */
   function allocFor(c) {
     const b = box[c];
+    /* EMUER は本当の帳簿の内訳を出す。 */
+    if (c === 'EMUER') {
+      if (!ledger || !ledger.count) return [];
+      const t = ledger.total;
+      const row = function (label, v) {
+        return { label: label, amount: spMoney(v, c),
+          pct: t > 0 ? Math.round(v / t * 100) + '%' : '0%' };
+      };
+      return [
+        row('確保してある上限', t),
+        row('渡したぶん', ledger.allocated),
+        row('まだ渡せるぶん', ledger.remaining)
+      ];
+    }
+    /* 円と JPYC には帳簿が無い。クエストの画面上の額を目安として出す。
+       これは1人あたりの額の合計であって、支出でも約束でもない。 */
     const total = b.promised + b.closed;
     const row = function (label, v) {
       return { label: label, amount: spMoney(v, c),
         pct: total > 0 ? Math.round(v / total * 100) + '%' : '0%' };
     };
     return [
-      row('クエスト予算（確保中）', b.promised),
-      row('完走メンバーへの分配', b.closed * SP_SHARE_DONE),
-      row('DAOプール', b.closed * SP_SHARE_POOL)
+      row('走っているクエストの報酬（1人あたりの合計）', b.promised),
+      row('完了したクエストの報酬（同）', b.closed),
+      row('うち完走した人への目安（80%）', b.closed * SP_SHARE_DONE)
     ];
   }
 
@@ -20255,9 +20441,18 @@ window.spDaoLoadTreasury = async function (app) {
         startNotice: c === 'EMUER'
           ? '新しいEMUERの仕組みは2026年10月1日開始予定です。現在の残高と記録は保持されます。'
           : '',
-        allocNote: (b.promised + b.closed) === 0
-          ? 'この通貨のクエストはまだありません。'
-          : '合計 ' + spMoney(b.promised + b.closed, c) + ' の内訳です。完了したクエストのぶんだけ、下の3つに分かれます。',
+        allocNote: (c === 'EMUER')
+          ? (!ledger
+              ? 'EMUER の予算をいま読めませんでした。'
+              : (!ledger.count
+                  ? 'まだどのクエストにも EMUER の予算を出していません。管理画面の「EMUERの予算を公開」から出せます。'
+                  : 'クエストごとに確保した上限と、実際に渡したぶんです。'
+                    + '上限を決めただけでは EMUER は動きません。運営が1人ずつ認めたときに動きます。'))
+          : ((b.promised + b.closed) === 0
+              ? 'この通貨のクエストはまだありません。'
+              : 'クエストのカードに出ている報酬額（1人あたり）を足したものです。'
+                + '何人が完走するかは入っていないので、支払う額そのものではありません。'
+                + '実際に払ったぶんは、入出金の記録から「ある」に反映されます。'),
         alloc: allocFor(c),
         txs: txList
       },
