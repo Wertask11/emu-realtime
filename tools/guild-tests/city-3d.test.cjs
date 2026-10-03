@@ -34,35 +34,59 @@ async function open(width){
  await frame.getByText('08',{exact:true}).filter({visible:true}).click();
  await frame.getByRole('button',{name:'3Dの街へ入る ↗',exact:true}).click();
  await frame.locator('.cs-canvas[data-ready="true"]').waitFor({timeout:30000});
- return {page,frame,context,errors,requests,canvas:frame.locator('.cs-canvas'),close:()=>context.close()};
+ return {page,frame,context,touch:width<700,errors,requests,canvas:frame.locator('.cs-canvas'),close:()=>context.close()};
 }
-for(const width of [375,390,412,768,1440])test(`3D City ${width}px: rendered WebGL, entry, walk, product, checkout guard, Passport, exit`,async()=>{
+const pose=async canvas=>JSON.parse(await canvas.getAttribute('data-position')||'{}');
+const tap=async(f,x,y)=>f.touch?f.page.touchscreen.tap(x,y):f.page.mouse.click(x,y);
+async function stablePose(f){
+ await f.page.waitForTimeout(250);let previous=await pose(f.canvas);
+ for(let attempt=0;attempt<8;attempt++){await f.page.waitForTimeout(180);const current=await pose(f.canvas);if(Math.hypot(current.x-previous.x,current.z-previous.z)<.004&&Math.abs(current.yaw-previous.yaw)<.004)return current;previous=current;}
+ return previous;
+}
+for(const width of [375,390,412,768,1440])test(`3D City ${width}px: click/tap move, swipe look, collision, product, Passport, exit`,async()=>{
  const f=await open(width);
  try{
   const gl=await f.canvas.evaluate(c=>({width:c.width,height:c.height,gl:!!c.getContext('webgl2'),calls:Number(c.dataset.drawCalls||0)}));assert.ok(gl.gl&&gl.width>0&&gl.height>0);
   await f.page.screenshot({path:path.join(qa,`city-3d-street-${width}.png`)});
   await f.frame.getByRole('button',{name:'入店する ↗',exact:true}).click();
   await f.frame.waitForFunction(()=>{const p=JSON.parse(document.querySelector('.cs-canvas').dataset.position||'{}');return p.z===2.6;});
-  const before=await f.canvas.getAttribute('data-position');await f.canvas.focus();await f.page.keyboard.down('w');await f.page.waitForTimeout(420);await f.page.keyboard.up('w');
-  await f.frame.waitForFunction(old=>document.querySelector('.cs-canvas').dataset.position!==old,before);
-  if(width===390){
-   const old=await f.canvas.getAttribute('data-position'),pad=await f.frame.getByRole('button',{name:'前へ進む',exact:true}).boundingBox();
-   const session=await f.context.newCDPSession(f.page);
-   await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:pad.x+pad.width/2,y:pad.y+pad.height/2}]});
-   await f.frame.waitForFunction(value=>document.querySelector('.cs-canvas').dataset.position!==value,old);
-   await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await session.detach();
+  await f.page.screenshot({path:path.join(qa,`city-3d-entrance-${width}.png`)});
+  const box=await f.canvas.boundingBox(),beforeTap=await pose(f.canvas);
+  await tap(f,box.x+box.width*.5,box.y+box.height*.75);
+  await f.frame.waitForFunction(old=>{const p=JSON.parse(document.querySelector('.cs-canvas').dataset.position||'{}');return Math.hypot(p.x-old.x,p.z-old.z)>.12;},beforeTap);
+  await f.frame.waitForFunction(()=>document.querySelector('.cs-canvas').dataset.navigation!=='moving');
+  const afterTap=await pose(f.canvas);assert.ok(Math.hypot(afterTap.x-beforeTap.x,afterTap.z-beforeTap.z)>.12,'tap walks toward visible floor');
+  if(width>=700){
+   await f.frame.getByRole('button',{name:'入店する ↗',exact:true}).click();const beforeDouble=await stablePose(f);
+   await f.page.mouse.dblclick(box.x+box.width*.42,box.y+box.height*.7,{delay:70});
+   await f.frame.waitForFunction(old=>{const p=JSON.parse(document.querySelector('.cs-canvas').dataset.position||'{}');return Math.hypot(p.x-old.x,p.z-old.z)>.12;},beforeDouble);
+   await f.frame.waitForFunction(()=>document.querySelector('.cs-canvas').dataset.navigation!=='moving');
   }
-  const box=await f.canvas.boundingBox();await f.page.mouse.move(box.x+box.width*.5,box.y+box.height*.5);await f.page.mouse.down();await f.page.mouse.move(box.x+box.width*.65,box.y+box.height*.5,{steps:8});await f.page.mouse.up();
+  const beforeLook=await stablePose(f);
+  if(width<700){
+   await f.canvas.evaluate((c,{x,y})=>{
+    const send=(type,clientX)=>c.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:7,pointerType:'touch',button:0,clientX,clientY:y}));
+    send('pointerdown',x);for(let step=1;step<=7;step++)send('pointermove',x+step*10);send('pointerup',x+70);
+   },{x:box.x+box.width*.5,y:box.y+box.height*.45});
+  }else{await f.page.mouse.move(box.x+box.width*.5,box.y+box.height*.45);await f.page.mouse.down();await f.page.mouse.move(box.x+box.width*.65,box.y+box.height*.45,{steps:8});await f.page.mouse.up();}
+  await f.frame.waitForFunction(old=>Math.abs(JSON.parse(document.querySelector('.cs-canvas').dataset.position||'{}').yaw-old.yaw)>.08,beforeLook);
+  await f.page.waitForTimeout(250);const afterLook=await pose(f.canvas);assert.ok(Math.hypot(afterLook.x-beforeLook.x,afterLook.z-beforeLook.z)<.04,'drag/swipe looks without walking');
+  assert.notEqual(await f.canvas.getAttribute('data-navigation'),'moving');
+  const gestureState=await f.frame.evaluate(()=>({touchAction:getComputedStyle(document.querySelector('.cs-canvas')).touchAction,scrollY}));
+  assert.equal(gestureState.touchAction,'none');assert.equal(gestureState.scrollY,0,'3D swipe does not scroll the page');
+  await f.frame.getByRole('button',{name:'入店する ↗',exact:true}).click();const beforeWall=await stablePose(f);
+  await tap(f,box.x+box.width*.5,box.y+box.height*.23);await f.page.waitForTimeout(300);
+  const afterWall=await pose(f.canvas);assert.ok(Math.hypot(afterWall.x-beforeWall.x,afterWall.z-beforeWall.z)<.04,'wall/object is not a destination');
   await f.frame.getByRole('button',{name:'商品を見る',exact:true}).click();await f.frame.locator('[data-shop="product"]').first().click();
   assert.equal(await f.frame.getByRole('button',{name:'販売準備中',exact:true}).isDisabled(),true);
   assert.ok((await f.frame.locator('.cs-panel').innerText()).includes('実際の注文・支払いは発生しません'));
   await f.page.screenshot({path:path.join(qa,`city-3d-product-${width}.png`)});
   await f.frame.getByRole('button',{name:'商品パネルを閉じる'}).click();
-  if(width===390){
-   await f.page.keyboard.press('e');await f.frame.locator('.cs-panel:not([hidden])').waitFor();
-   assert.ok((await f.frame.locator('.cs-panel').innerText()).includes('探究ノート'));
-   await f.frame.getByRole('button',{name:'商品パネルを閉じる'}).click();
-  }
+  if(width===390){await f.page.keyboard.press('e');await f.frame.locator('.cs-panel:not([hidden])').waitFor();assert.ok((await f.frame.locator('.cs-panel').innerText()).includes('探究ノート'));await f.frame.getByRole('button',{name:'商品パネルを閉じる'}).click();}
+  const beforeProduct=await pose(f.canvas);await tap(f,box.x+box.width*.5,box.y+box.height*.5);
+  await f.frame.locator('.cs-panel:not([hidden])').waitFor();assert.ok((await f.frame.locator('.cs-panel').innerText()).includes('探究ノート'));
+  const afterProduct=await pose(f.canvas);assert.ok(Math.hypot(afterProduct.x-beforeProduct.x,afterProduct.z-beforeProduct.z)<.04,'product selection does not move the camera');
+  await f.frame.getByRole('button',{name:'商品パネルを閉じる'}).click();
   await f.frame.locator('[data-shop="checkin"]').click();await f.frame.getByText('✓ 記録済み',{exact:true}).waitFor();
   assert.equal(f.requests.filter(p=>p.endsWith('/shops/checkout')).length,0,'demo never begins checkout');
   await f.frame.getByRole('button',{name:'カウンター',exact:true}).click();await f.page.waitForTimeout(150);
