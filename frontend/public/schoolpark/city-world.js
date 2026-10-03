@@ -1,5 +1,5 @@
 import * as T from './vendor/city-three.min.js';
-import { slideMove } from './city-motion.js';
+import { isBlocked, slideMove } from './city-motion.js';
 
 const VIEWPOINTS = {
   street:{x:7,z:11,lookX:0,lookZ:1}, entrance:{x:0,z:2.6,lookX:0,lookZ:-3,lookY:1.25},
@@ -18,7 +18,7 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
   const scene=new T.Scene();scene.background=new T.Color('#dce3da');scene.fog=new T.Fog('#dce3da',24,70);
   const camera=new T.PerspectiveCamera(64,1,.08,85);camera.rotation.order='YXZ';
   const bounds={minX:-10,maxX:10,minZ:-8,maxZ:15}, boxes=[], disposables=new Set();
-  let yaw=0,pitch=0,drag=null,joystick={x:0,y:0},raf=0,last=0,dead=false,paused=false,visible=true,frames=0;
+  let yaw=0,pitch=0,drag=null,joystick={x:0,y:0},moveTarget=null,blockedFrames=0,raf=0,last=0,dead=false,paused=false,visible=true,frames=0;
   const keys=new Set(), ray=new T.Raycaster(), pointer=new T.Vector2(), abort=new AbortController();
   const options={signal:abort.signal};
   const mat=(color,more={}) => {const m=new T.MeshStandardMaterial({color,roughness:.85,...more});disposables.add(m);return m;};
@@ -55,6 +55,14 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
   const fill=new T.PointLight('#ffdaaa',15,15,2);fill.position.set(0,3,-3);scene.add(fill);
   block(0,-.13,3,48,.2,48,paving);
   block(0,-.015,-2,10,.15,12,wood);
+  // One invisible navigation surface sits just above the visible floors. The
+  // first opaque ray hit must be this surface, so walls, furniture and objects
+  // never become click-to-move destinations.
+  const walkMaterial=new T.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false});disposables.add(walkMaterial);
+  const walkSurface=mesh(new T.PlaneGeometry(20,23),walkMaterial,0,.075,3.5);walkSurface.rotation.x=-Math.PI/2;walkSurface.userData.walkable=true;walkSurface.castShadow=false;walkSurface.receiveShadow=false;
+  const markerMaterial=new T.MeshBasicMaterial({color:'#f7efd9',transparent:true,opacity:.82,depthWrite:false,side:T.DoubleSide});disposables.add(markerMaterial);
+  const moveMarker=mesh(new T.TorusGeometry(.22,.025,8,32),markerMaterial,0,.085,0);moveMarker.rotation.x=-Math.PI/2;moveMarker.visible=false;moveMarker.castShadow=false;moveMarker.receiveShadow=false;moveMarker.userData.navigationMarker=true;
+  let markerPulseUntil=0;
   // Store envelope, wide doorway and large windows. Collision boxes match walls.
   block(0,1.9,-8.15,10.4,3.8,.3,plaster);obstacle(0,-8.15,10.4,.3);
   block(5.15,1.9,-2,.3,3.8,12.3,plaster);obstacle(5.15,-2,.3,12.3);
@@ -158,7 +166,9 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
   });
   function resize(){const r=canvas.getBoundingClientRect();if(r.width<1||r.height<1)return;renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();}
   function look(){camera.rotation.set(pitch,yaw,0,'YXZ');}
-  function view(v){camera.position.set(v.x,1.68,v.z);yaw=Math.atan2(v.x-v.lookX,v.z-v.lookZ);pitch=Math.atan2((v.lookY??1.68)-1.68,Math.hypot(v.x-v.lookX,v.z-v.lookZ));look();keys.clear();joystick={x:0,y:0};}
+  function publishPose(){canvas.dataset.position=JSON.stringify({x:+camera.position.x.toFixed(3),z:+camera.position.z.toFixed(3),yaw:+yaw.toFixed(3)});}
+  function cancelWalk(state='idle'){moveTarget=null;blockedFrames=0;canvas.dataset.navigation=state;delete canvas.dataset.navigationTarget;publishPose();}
+  function view(v){camera.position.set(v.x,1.68,v.z);yaw=Math.atan2(v.x-v.lookX,v.z-v.lookZ);pitch=Math.atan2((v.lookY??1.68)-1.68,Math.hypot(v.x-v.lookX,v.z-v.lookZ));look();keys.clear();joystick={x:0,y:0};cancelWalk();moveMarker.visible=false;}
   function waypoint(name){const v=VIEWPOINTS[name];if(v)view(v);}
   function focusProduct(id){const i=products.findIndex(p=>p.id===id);if(i<0||i>3)return;const [x,y,z]=positions[i];const from=[[-2,.4],[2,.5],[2,-2.8],[1.6,-2.3]][i];view({x:from[0],z:from[1],lookX:x,lookZ:z,lookY:y+.18});}
   function productAt(x,y){
@@ -172,27 +182,63 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
     }
     return null;
   }
+  function walkPointAt(x,y) {
+    pointer.set(x,y);ray.setFromCamera(pointer,camera);
+    const hits=ray.intersectObjects(scene.children,true);
+    for(const hit of hits){
+      if(hit.object.userData.navigationMarker)continue;
+      if(hit.object.material?.transparent && hit.object.material.opacity<.3 && !hit.object.userData.walkable)continue;
+      if(!hit.object.userData.walkable)return null;
+      const point={x:hit.point.x,z:hit.point.z};
+      const dx=point.x-camera.position.x,dz=point.z-camera.position.z,distance=Math.hypot(dx,dz),steps=Math.max(1,Math.ceil(distance/.12));
+      let reachable={x:camera.position.x,z:camera.position.z};
+      for(let step=1;step<=steps;step++){
+        const candidate={x:camera.position.x+dx*step/steps,z:camera.position.z+dz*step/steps};
+        if(isBlocked(candidate,boxes,bounds))break;reachable=candidate;
+      }
+      return Math.hypot(reachable.x-camera.position.x,reachable.z-camera.position.z)>.12 ? reachable : null;
+    }
+    return null;
+  }
+  function showMarker(point,pulse=false){
+    if(!point){if(!moveTarget)moveMarker.visible=false;return;}
+    moveMarker.position.set(point.x,.085,point.z);moveMarker.visible=true;moveMarker.scale.setScalar(1);markerMaterial.opacity=.82;
+    if(pulse)markerPulseUntil=performance.now()+520;
+  }
+  function beginWalk(point){
+    if(!point)return;const distance=Math.hypot(point.x-camera.position.x,point.z-camera.position.z);showMarker(point,true);
+    if(distance<.12){cancelWalk();return;}
+    moveTarget={x:point.x,z:point.z,lastDistance:distance};blockedFrames=0;
+    canvas.dataset.navigation='moving';canvas.dataset.navigationTarget=JSON.stringify({x:+point.x.toFixed(3),z:+point.z.toFixed(3)});
+  }
+  function hoverAt(e){
+    if(e.pointerType!=='mouse'||drag||paused)return;
+    const p=point(e),product=productAt(p.x,p.y),target=product?null:walkPointAt(p.x,p.y);
+    canvas.style.cursor=product||target?'pointer':'grab';showMarker(target);
+  }
   function selectCenter(){const id=productAt(0,0);if(id)onSelect(id);}
   function point(e){const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)/r.width*2-1,y:1-(e.clientY-r.top)/r.height*2};}
   canvas.addEventListener('pointerdown',e=>{
-    if(paused||e.button!==0)return;canvas.focus({preventScroll:true});canvas.setPointerCapture(e.pointerId);
-    drag={id:e.pointerId,x:e.clientX,y:e.clientY,moved:0};
+    if(paused||e.button!==0)return;canvas.focus({preventScroll:true});try{canvas.setPointerCapture(e.pointerId);}catch{}
+    drag={id:e.pointerId,x:e.clientX,y:e.clientY,moved:0,started:performance.now()};canvas.style.cursor='grabbing';
   },options);
   canvas.addEventListener('pointermove',e=>{
-    if(!drag||drag.id!==e.pointerId||paused)return;
+    if(!drag||drag.id!==e.pointerId||paused){hoverAt(e);return;}
     const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.moved+=Math.hypot(dx,dy);drag.x=e.clientX;drag.y=e.clientY;
     yaw-=dx*.004;pitch=Math.max(-1.1,Math.min(.9,pitch-dy*.0035));look();
   },options);
   canvas.addEventListener('pointerup',e=>{
     if(!drag||drag.id!==e.pointerId)return;
-    if(drag.moved<7&&!paused){const p=point(e),id=productAt(p.x,p.y);if(id)onSelect(id);}
-    drag=null;
+    const tapped=drag.moved<9&&performance.now()-drag.started<650;drag=null;canvas.style.cursor='grab';
+    if(tapped&&!paused){const p=point(e),id=productAt(p.x,p.y);if(id)onSelect(id);else beginWalk(walkPointAt(p.x,p.y));}
+    else hoverAt(e);
   },options);
-  canvas.addEventListener('pointercancel',()=>{drag=null;},options);
+  canvas.addEventListener('pointercancel',()=>{drag=null;canvas.style.cursor='grab';},options);
+  canvas.addEventListener('pointerleave',()=>{if(!drag&&!moveTarget)moveMarker.visible=false;},options);
   const supported=new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyE']);
   canvas.addEventListener('keydown',e=>{if(paused||!supported.has(e.code))return;e.preventDefault();keys.add(e.code);if(e.code==='KeyE'&&!e.repeat)selectCenter();},options);
   window.addEventListener('keyup',e=>keys.delete(e.code),options);
-  function release(){keys.clear();drag=null;joystick={x:0,y:0};}
+  function release(){keys.clear();drag=null;joystick={x:0,y:0};canvas.style.cursor='grab';}
   canvas.addEventListener('blur',release,options);window.addEventListener('blur',release,options);
   canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();release();cancelAnimationFrame(raf);raf=0;onLost();},options);
   function loop(ms){
@@ -203,15 +249,33 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
       let forward=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-joystick.y;
       let side=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0)+joystick.x;
       const length=Math.max(1,Math.hypot(forward,side));forward/=length;side/=length;
-      const dx=(-Math.sin(yaw)*forward+Math.cos(yaw)*side)*dt*2.7;
-      const dz=(-Math.cos(yaw)*forward-Math.sin(yaw)*side)*dt*2.7;
+      if(forward||side){cancelWalk('manual');moveMarker.visible=false;}
+      let dx=(-Math.sin(yaw)*forward+Math.cos(yaw)*side)*dt*2.7;
+      let dz=(-Math.cos(yaw)*forward-Math.sin(yaw)*side)*dt*2.7;
+      if(moveTarget&&!drag){
+        const tx=moveTarget.x-camera.position.x,tz=moveTarget.z-camera.position.z,distance=Math.hypot(tx,tz);
+        if(distance<.07){cancelWalk();moveMarker.visible=false;}
+        else{
+          const speed=Math.min(4,Math.max(1.25,distance*2.4)),step=Math.min(distance,speed*dt);
+          dx=tx/distance*step;dz=tz/distance*step;
+          const desired=Math.atan2(-dx,-dz),turn=Math.atan2(Math.sin(desired-yaw),Math.cos(desired-yaw));
+          yaw+=turn*Math.min(1,dt*7);pitch+=(0-pitch)*Math.min(1,dt*4);
+        }
+      }
       if(dx||dz){const p=slideMove(camera.position,dx,dz,boxes,bounds);camera.position.x=p.x;camera.position.z=p.z;}
+      if(moveTarget){
+        const distance=Math.hypot(moveTarget.x-camera.position.x,moveTarget.z-camera.position.z);
+        blockedFrames=distance>=moveTarget.lastDistance-.001?blockedFrames+1:0;moveTarget.lastDistance=distance;
+        if(blockedFrames>12){cancelWalk('blocked');moveMarker.visible=false;}
+      }
       look();
     }
+    if(moveMarker.visible&&markerPulseUntil>ms){const phase=1-(markerPulseUntil-ms)/520;moveMarker.scale.setScalar(1+phase*.7);markerMaterial.opacity=.82*(1-phase);}
+    else if(markerPulseUntil&&markerPulseUntil<=ms){markerPulseUntil=0;markerMaterial.opacity=.82;if(!moveTarget&&matchMedia('(pointer:coarse)').matches)moveMarker.visible=false;}
     renderer.render(scene,camera);
     if(frames===0){renderer.shadowMap.autoUpdate=false;canvas.dataset.ready='true';}
     if(++frames%10===0){
-      canvas.dataset.position=JSON.stringify({x:+camera.position.x.toFixed(3),z:+camera.position.z.toFixed(3),yaw:+yaw.toFixed(3)});
+      publishPose();
       canvas.dataset.drawCalls=String(renderer.info.render.calls);canvas.dataset.triangles=String(renderer.info.render.triangles);
       onFocus(paused?null:productAt(0,0));
     }
@@ -221,12 +285,12 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
   const ro=new ResizeObserver(resize);ro.observe(canvas);
   const io=new IntersectionObserver(entries=>{visible=entries[0]?.isIntersecting!==false;if(visible)start();else{release();cancelAnimationFrame(raf);raf=0;}});io.observe(canvas);
   document.addEventListener('visibilitychange',()=>{release();if(document.hidden){cancelAnimationFrame(raf);raf=0;}else start();},options);
-  resize();waypoint('street');start();
+  canvas.style.cursor='grab';canvas.dataset.navigation='idle';resize();waypoint('street');start();
   return {
     waypoint, selectCenter, focusProduct,
     focus(){canvas.focus({preventScroll:true});},
     setJoystick(x,y){joystick={x:Math.max(-1,Math.min(1,x)),y:Math.max(-1,Math.min(1,y))};},
-    pause(value){paused=!!value;release();},
+    pause(value){paused=!!value;release();if(paused)cancelWalk();},
     destroy(){if(dead)return;dead=true;release();cancelAnimationFrame(raf);abort.abort();ro.disconnect();io.disconnect();
       scene.traverse(o=>{if(o.geometry)disposables.add(o.geometry);if(o.material){for(const m of [].concat(o.material)){disposables.add(m);if(m.map)disposables.add(m.map);}}});
       for(const d of disposables)d.dispose?.();renderer.dispose();renderer.forceContextLoss();canvas.dataset.ready='false';

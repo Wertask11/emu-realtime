@@ -8,9 +8,9 @@ export function openShopWorld({bridge,spots,preview=false,onClose=()=>{},onMyCit
   }
   const priorFocus=document.activeElement,abort=new AbortController(),root=document.createElement('section');
   const listener={signal:abort.signal};
-  let world=null,shop=null,catalog=null,selected=null,closed=false,busy=false,request=0,loadNumber=0,padPointer=null,padTimer=null,wantedShop='';
+  let world=null,shop=null,catalog=null,selected=null,closed=false,busy=false,request=0,loadNumber=0,wantedShop='';
   root.id='city-explorer';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','SchoolPark City 3Dショールーム');
-  root.innerHTML=`<canvas class="cs-canvas" tabindex="0" aria-label="3D店内。WASDで移動、ドラッグで見回す。商品をクリックまたはEで選択できます。"></canvas>
+  root.innerHTML=`<canvas class="cs-canvas" tabindex="0" aria-label="3D店内。行きたい床をクリックまたはタップして移動し、ドラッグまたはスワイプで見回せます。"></canvas>
     <div class="cs-wash" aria-hidden="true"></div>
     <header class="cs-top"><button type="button" data-shop="close" class="cs-exit">← City</button><div class="cs-brand">SchoolPark<span>CITY</span></div><div class="cs-top-actions"><button type="button" data-shop="products">商品を見る</button><button type="button" data-shop="help" aria-label="歩き方">?</button></div></header>
     <div class="cs-place"><span class="cs-kicker">A SMALL STORE. A BIG WORLD.</span><h2>THE FIELD STORE</h2><p>学びと暮らしの、小さなお店。</p><span class="cs-demo">3D SHOWROOM · 展示用店舗</span></div>
@@ -18,19 +18,17 @@ export function openShopWorld({bridge,spots,preview=false,onClose=()=>{},onMyCit
     <div class="cs-aim" aria-hidden="true">+</div><button class="cs-pick" type="button" data-shop="pick" hidden></button>
     <div class="cs-toast" role="status" hidden></div>
     <aside class="cs-panel" hidden></aside>
-    <footer class="cs-controls"><div class="cs-pad" role="group" aria-label="移動パッド"><span class="cs-pad-knob"></span>
-      <button type="button" data-move="0,-1" aria-label="前へ進む">↑</button><button type="button" data-move="-1,0" aria-label="左へ移動">←</button><button type="button" data-move="1,0" aria-label="右へ移動">→</button><button type="button" data-move="0,1" aria-label="後ろへ移動">↓</button></div>
-      <div class="cs-route"><p>ドラッグ / スワイプで見回す</p><div><button type="button" data-shop="waypoint" data-value="entrance">入店する ↗</button><button type="button" data-shop="waypoint" data-value="shelves">商品棚</button><button type="button" data-shop="waypoint" data-value="counter">カウンター</button></div></div>
+    <footer class="cs-controls"><div class="cs-route"><p><b>床をクリック / タップして移動</b> · ドラッグ / スワイプで見回す</p><div><button type="button" data-shop="waypoint" data-value="entrance">入店する ↗</button><button type="button" data-shop="waypoint" data-value="shelves">商品棚</button><button type="button" data-shop="waypoint" data-value="counter">カウンター</button></div></div>
       <button type="button" class="cs-passport" data-shop="checkin">Passport<br><b>チェックイン</b></button></footer>`;
   document.body.appendChild(root);
   let canvas=root.querySelector('canvas');
   const panel=root.querySelector('.cs-panel'),load=root.querySelector('.cs-load');
-  const pick=root.querySelector('.cs-pick'),toast=root.querySelector('.cs-toast'),pad=root.querySelector('.cs-pad'),knob=root.querySelector('.cs-pad-knob');
+  const pick=root.querySelector('.cs-pick'),toast=root.querySelector('.cs-toast');
   let focusedProduct=null,toastTimer=null;
   function say(message){clearTimeout(toastTimer);toast.textContent=message;toast.hidden=false;toastTimer=setTimeout(()=>{toast.hidden=true;},6000);}
   function showPanel(html){panel.innerHTML=`<button type="button" class="cs-panel-close" data-shop="panel-close" aria-label="商品パネルを閉じる">×</button>${html}`;panel.hidden=false;world?.pause(true);pick.hidden=true;panel.querySelector('button')?.focus({preventScroll:true});}
   function closePanel(){request++;busy=false;panel.hidden=true;panel.innerHTML='';selected=null;world?.pause(false);world?.focus();}
-  function destroy(){if(closed)return;closed=true;request++;loadNumber++;abort.abort();clearTimeout(toastTimer);clearTimeout(padTimer);world?.destroy();world=null;root.remove();priorFocus?.isConnected&&priorFocus.focus?.({preventScroll:true});onClose();}
+  function destroy(){if(closed)return;closed=true;request++;loadNumber++;abort.abort();clearTimeout(toastTimer);world?.destroy();world=null;root.remove();priorFocus?.isConnected&&priorFocus.focus?.({preventScroll:true});onClose();}
   function productPanel(id){
     const product=shop?.products.find(p=>p.id===id);if(!product)return;request++;busy=false;selected=product;world?.focusProduct(id);
     showPanel(`<p class="cs-kicker">${esc(shop.name)} / ${shop.status==='live'?'SHOP':'SHOWROOM'}</p><div class="cs-product-mark" style="--product-color:${/^#[0-9a-f]{6}$/i.test(product.color)?product.color:'#355a48'}"><span>${glyph(product.kind)}</span><b>${esc(product.kind.toUpperCase())}</b></div>
@@ -43,7 +41,7 @@ export function openShopWorld({bridge,spots,preview=false,onClose=()=>{},onMyCit
     selected=null;request++;
     showPanel(`<p class="cs-kicker">COLLECTION / ${shop.products.length} ITEMS</p><h3>店内の商品</h3><p>棚やテーブルの商品を、直接選ぶこともできます。</p><div class="cs-products">${shop.products.map(p=>`<button type="button" data-shop="product" data-value="${esc(p.id)}"><span class="cs-product-number">${glyph(p.kind)}</span><span><b>${esc(p.name)}</b><small>${esc(money(p))}${shop.status==='demo'?' / 参考価格':''}</small></span><span>↗</span></button>`).join('')}</div>${catalog.shops.length>1?`<h3>Cityのお店</h3>${catalog.shops.map(s=>`<button type="button" class="cs-secondary" data-shop="shop" data-value="${esc(s.id)}">${esc(s.name)}</button>`).join('')}`:''}<p class="cs-caption">${esc(catalog.goal)}</p><div class="cs-partners">${catalog.partnerSlots.map(p=>`<div><span>${esc(p.name)}</span><b>${p.status==='live'?'連携店舗':'出店準備中'}</b></div>`).join('')}</div>${preview?'':'<button type="button" class="cs-secondary" data-shop="mycity">MY CITYで記録を見る</button>'}`);
   }
-  function help(){showPanel('<p class="cs-kicker">HOW TO EXPLORE</p><h3>自分の足で、見つけよう。</h3><dl class="cs-help"><dt>PC</dt><dd>W / A / S / D または矢印キーで移動。画面をドラッグして見回します。</dd><dt>スマートフォン</dt><dd>左下のパッドで移動。店内をスワイプして見回します。</dd><dt>商品を見る</dt><dd>商品をクリック・タップ。中央の＋を商品に合わせてEキーでも選べます。</dd><dt>迷ったら</dt><dd>「入店する」「商品棚」「カウンター」で移動できます。</dd></dl><button type="button" class="cs-primary" data-shop="panel-close">歩いてみる</button>');}
+  function help(){showPanel('<p class="cs-kicker">HOW TO EXPLORE</p><h3>行きたい場所を、選ぶだけ。</h3><dl class="cs-help"><dt>移動する</dt><dd>PCは床をクリックまたはダブルクリック。スマートフォンは床をタップすると、そこまで歩きます。</dd><dt>周囲を見る</dt><dd>画面をドラッグ／スワイプします。スワイプしただけでは移動しません。</dd><dt>商品を見る</dt><dd>商品を直接クリック／タップします。</dd><dt>迷ったら</dt><dd>「入店する」「商品棚」「カウンター」から場所を選べます。PCではWASDも補助操作として使えます。</dd></dl><button type="button" class="cs-primary" data-shop="panel-close">歩いてみる</button>');}
   async function checkout(){
     if(!selected?.checkoutEnabled||busy)return;
     const product=selected,version=++request;busy=true;const button=panel.querySelector('[data-shop="checkout"]');button.disabled=true;button.textContent='店舗を確認しています…';
@@ -82,16 +80,6 @@ export function openShopWorld({bridge,spots,preview=false,onClose=()=>{},onMyCit
       else if(!e.shiftKey&&(document.activeElement===last||!scope.contains(document.activeElement))){e.preventDefault();first.focus();}
     }
   },listener);
-  function stopPad(){padPointer=null;knob.style.transform='';world?.setJoystick(0,0);}
-  pad.addEventListener('pointerdown',e=>{
-    if(e.button!==0||!panel.hidden)return;e.preventDefault();pad.setPointerCapture(e.pointerId);padPointer=e.pointerId;world?.focus();
-    const move=e.target.closest('[data-move]');if(move){const [x,y]=move.dataset.move.split(',').map(Number);world?.setJoystick(x,y);knob.style.transform=`translate(${x*22}px,${y*22}px)`;}else updatePad(e);
-  },listener);
-  function updatePad(e){const r=pad.getBoundingClientRect();let x=(e.clientX-r.left-r.width/2)/32,y=(e.clientY-r.top-r.height/2)/32;const n=Math.max(1,Math.hypot(x,y));x/=n;y/=n;world?.setJoystick(x,y);knob.style.transform=`translate(${x*25}px,${y*25}px)`;}
-  pad.addEventListener('pointermove',e=>{if(e.pointerId===padPointer)updatePad(e);},listener);
-  for(const type of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(type,stopPad,listener);
-  pad.addEventListener('click',e=>{if(e.detail!==0)return;const b=e.target.closest('[data-move]');if(!b)return;const [x,y]=b.dataset.move.split(',').map(Number);world?.setJoystick(x,y);clearTimeout(padTimer);padTimer=setTimeout(stopPad,240);},listener);
-  window.addEventListener('blur',stopPad,listener);
   async function init(){
     const version=++loadNumber;world?.destroy();world=null;load.hidden=false;load.textContent='Cityの扉を開いています…';
     // A disposed/lost WebGL context cannot be reused reliably on the same canvas.
