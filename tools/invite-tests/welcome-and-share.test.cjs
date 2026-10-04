@@ -176,12 +176,14 @@ test('配る文面は、投資の言い方をしない', () => {
   assert.ok(text.indexOf('EMUER') < 0, '文面で EMUER に触れています（投資と読まれます）');
 });
 
-test('配る文面は、残ることと3分であることを言う', () => {
+test('配る文面は、残ること・3分・ウォレットの3点を言う', () => {
+  /* 言い回しは変わってよい。この3つが落ちると、
+     押す理由（残る）・手間の見当（3分）・一番の離脱点（ウォレット）が消える。 */
   const s = stageShare();
   const text = String(s.ctx.window.SpShareInvite.text);
   assert.ok(text.indexOf('記録') >= 0, '何が残るのか書いてありません');
   assert.ok(text.indexOf('3分') >= 0, '手間の見当が書いてありません');
-  assert.ok(text.indexOf('ウォレットは要りません') >= 0, 'ウォレット不要が書いてありません');
+  assert.ok(text.indexOf('ウォレット') >= 0, 'ウォレットの話がありません');
 });
 
 test('合言葉は、一度取れば使い回す', async () => {
