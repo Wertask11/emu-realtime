@@ -1756,6 +1756,118 @@ async function paintStarList(starId) {
       }).join("");
 }
 
+/* ───────── 今月のテーマ ─────────
+
+   前はコードの5か所に同じ言葉を書いていて、毎月そのすべてを直していた。
+   直し漏れると、画面ごとに違うテーマが出る。10/4 に記録へ移した。
+
+     置き場   sp_docs/monthly-theme
+       title    テーマ名
+       summary  説明文
+       blocks   空（sp_docs の決まりで配列が要るだけ）
+
+   テーマ名は、そのまま投稿のタグとして照合される（knowledge.html の
+   visible()）。長い言葉や記号を入れると、どの投稿にも当たらなくなる。
+   既存のタグ（経験・失敗・本・出会い）と同じ名前にすると、
+   そちらの投稿が「今月のテーマ」に混ざる。 */
+let mtState = null;      /* { title, summary } 読めたときだけ入る */
+let mtRead = null;       /* { ok, why } 読めなかった理由 */
+
+async function mtLoad(f) {
+  mtRead = null;
+  try {
+    const snap = await f.getDoc(f.doc(f.db, 'sp_docs', 'monthly-theme'));
+    if (snap.exists()) {
+      const d = snap.data() || {};
+      mtState = { title: String(d.title || ''), summary: String(d.summary || '') };
+      mtRead = { ok: true };
+      return;
+    }
+    /* まだ無い。空から始めてよい（消す心配がない）。 */
+    mtState = { title: '', summary: '' };
+    mtRead = { ok: true, fresh: true };
+  } catch (e) {
+    mtState = null;
+    mtRead = { ok: false, why: String((e && (e.code || e.message)) || '読めません') };
+  }
+}
+
+function renderMonthlyTheme(f) {
+  const box = $("#mtBox");
+  if (!box) return;
+  if (!mtState) {
+    if (mtRead && !mtRead.ok) {
+      box.innerHTML = '<div class="card"><h3>今月のテーマ</h3>'
+        + '<p class="empty" style="text-align:left">いまの中身を読めませんでした（' + esc(mtRead.why) + '）。<br>'
+        + '空のまま保存すると、いま出ているテーマが消えてしまうので、編集欄は出していません。</p>'
+        + '<div class="actions"><button class="btn" id="mtRetry">もう一度読む</button></div></div>';
+      const r = $("#mtRetry"); if (r) r.onclick = function () { renderSchoolPark(); };
+      return;
+    }
+    box.innerHTML = '<div class="card"><h3>今月のテーマ</h3><p class="empty">読み込み中…</p></div>';
+    mtLoad(f).then(function () { renderMonthlyTheme(f); });
+    return;
+  }
+
+  box.innerHTML = '<div class="card"><h3>今月のテーマ</h3>'
+    + '<p class="empty" style="text-align:left;margin:0 0 10px">'
+    + '「知識を読む」の右側と、投稿のタブに出ます。'
+    + '<b>テーマ名はそのまま投稿のタグとして照合される</b>ので、短い言葉にしてください'
+    + '（例：はじめる／続ける／残す）。既存のタグ（経験・失敗・本・出会い）と'
+    + '同じ名前にすると、そちらの投稿が混ざります。</p>'
+    + '<label style="font-size:12px">テーマ名</label>'
+    + '<input id="mtTitle" maxlength="120" value="' + esc(mtState.title) + '" placeholder="はじめる">'
+    + '<label style="font-size:12px;margin-top:8px;display:block">説明文</label>'
+    + '<textarea id="mtSummary" rows="2" maxlength="400" placeholder="新しく始めたこと、始め方。やってみて分かったことを知識に。">'
+    + esc(mtState.summary) + '</textarea>'
+    + '<div class="actions" style="margin-top:10px">'
+    + '<button class="btn primary" id="mtSave">テーマを保存する</button>'
+    + '<span id="mtBusy" style="margin-left:10px;color:var(--muted);font-size:12px"></span>'
+    + '</div></div>';
+
+  const save = $("#mtSave"), busy = $("#mtBusy");
+  save.onclick = async function () {
+    const title = String($("#mtTitle").value || "").trim();
+    const summary = String($("#mtSummary").value || "").trim();
+    if (!title) { alert("テーマ名を入れてください。"); return; }
+    if (title.length > 120) { alert("テーマ名が長すぎます（120文字まで）。"); return; }
+    if (summary.length > 400) { alert("説明文が長すぎます（400文字まで）。"); return; }
+    /* 空白や記号が混ざると、タグとして照合できなくなる。 */
+    if (/\s/.test(title)) { alert("テーマ名に空白は入れられません（タグとして使うため）。"); return; }
+    if (!confirm("今月のテーマを「" + title + "」にします。\n\n"
+      + "前のテーマの投稿は、「今月のテーマ」の一覧から外れます"
+      + "（投稿そのものは消えません）。よろしいですか？")) return;
+
+    save.disabled = true; busy.textContent = "保存しています…";
+    const body = { title: title, summary: summary, blocks: [], updatedAt: Date.now() };
+    try {
+      await ydWriteTo(f, body, 'monthly-theme');
+      mtState = { title: title, summary: summary };
+      busy.textContent = "保存しました";
+      setTimeout(function () { busy.textContent = ""; }, 2000);
+    } catch (e) {
+      alert("保存できませんでした（" + (e.code || e.message) + "）");
+      busy.textContent = "";
+    } finally { save.disabled = false; }
+  };
+}
+
+/* 年内目標と同じ道（SDK が返らなければ普通の通信へ逃げる）。
+   どの記録へでも書けるように、置き場所だけ受け取る。 */
+async function ydWriteTo(f, body, docId) {
+  const sdk = f.setDoc(f.doc(f.db, 'sp_docs', docId), body);
+  let timer = null;
+  const slow = new Promise(function (res) { timer = setTimeout(function () { res('SLOW'); }, 15000); });
+  let how;
+  try {
+    how = await Promise.race([sdk.then(function () { return 'sdk'; }), slow]);
+  } finally { clearTimeout(timer); }
+  if (how === 'sdk') return 'sdk';
+  sdk.catch(function () { });
+  await ydRestWrite(body, docId);
+  return 'rest';
+}
+
 function renderYearDoc(f, ownerAddr) {
   const box = $("#ydBox");
   if (!box) return;
@@ -2018,7 +2130,7 @@ function ydRestFields(o) {
   Object.keys(o || {}).forEach(function (k) { out[k] = ydRestValue(o[k]); });
   return out;
 }
-async function ydRestWrite(body) {
+async function ydRestWrite(body, docId) {
   const opt = (app && app.options) || {};
   if (!opt.projectId || !opt.apiKey) throw new Error('設定が読めない');
   const u = auth.currentUser;
@@ -2028,7 +2140,8 @@ async function ydRestWrite(body) {
     return 'updateMask.fieldPaths=' + encodeURIComponent(k);
   }).join('&');
   const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
-            + '/databases/(default)/documents/sp_docs/year-goals?' + mask
+            + '/databases/(default)/documents/sp_docs/'
+            + encodeURIComponent(docId || 'year-goals') + '?' + mask
             + '&key=' + opt.apiKey;
   const r = await fetch(url, {
     method: 'PATCH',
@@ -2395,8 +2508,10 @@ async function renderSchoolPark() {
     .filter(q => !emuBudgetOf.has(q.id));
 
   el.innerHTML =
+    /* 今月のテーマ。中身は別の関数で描く。 */
+    '<div id="mtBox"></div>'
     /* 年内目標（クエスト一覧の頭に出す読みもの）。中身は別の関数で描く。 */
-    '<div id="ydBox"></div>'
+    + '<div id="ydBox"></div>'
     /* 限定星。イベントで配るので、中身は別の関数で描く。 */
     + '<div id="starBox"></div>'
     + '<div class="card"><h3>いまの状態</h3>'
@@ -2800,6 +2915,7 @@ async function renderSchoolPark() {
     renderSchoolPark();
   };
 
+  renderMonthlyTheme(f);
   renderYearDoc(f, ownerAddr);
   renderLimitedStars();
 

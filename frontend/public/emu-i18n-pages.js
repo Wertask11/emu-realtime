@@ -43,7 +43,9 @@
       "k.theme.meeting": "出会い",
       "k.count": "{n}件の知識",
       "k.monthlyLabel": "今月のテーマ",
-      "k.monthlyCopy": "夏のあとの、戻し方。試して効いたことを知識に。",
+      /* 記録（sp_docs/monthly-theme）がまだ読めていないときに出す控え。
+         ふだんはそちらの summary で上書きされる。 */
+      "k.monthlyCopy": "新しく始めたこと、始め方。やってみて分かったことを知識に。",
       "k.monthlyLink": "テーマの知識を見る →",
       "k.valueTitle": "いま届いている価値",
       "k.valueLoading": "読み込み中です。",

@@ -23569,13 +23569,42 @@ async function refreshAllPosts() {
 }
 
 
-/* 今月のテーマ。ここが大元だが、同じ言葉を次の3か所にも書いている。
-   変えるときは必ず一緒に直す。
-     ・この下の spKnowledgePayload（iframeへ渡すときの控え）
-     ・knowledge.html（表示の初期値・stateの初期値・受け取り時の控え）
-     ・emu-i18n-pages.js の k.monthlyCopy（説明文。日英中韓の4つ）
-   テーマ名はそのまま投稿のタグとして照合されるので、短い言葉にする。 */
-let currentTheme = "整える";//今月のテーマ
+/* 今月のテーマ。
+
+   前は同じ言葉をコードの5か所に書いていて、毎月そのすべてを直していた。
+   直し漏れると、画面ごとに違うテーマが出る。10/4 に Firestore へ移した。
+
+     置き場   sp_docs/monthly-theme
+       title    テーマ名（投稿のタグとして照合されるので、短い言葉）
+       summary  説明文
+     書くのは  管理画面 →「今月のテーマ」
+     読むのは  誰でも（sp_docs は allow read: if true）
+
+   下の2つは、まだ読めていないときに出す控え。記録が無ければこれが出る。
+   記録を置いたあとは、こちらを直す必要はない。 */
+let currentTheme = "はじめる";//今月のテーマ（控え）
+let currentThemeCopy = "新しく始めたこと、始め方。やってみて分かったことを知識に。";
+
+/* 記録から読む。一度読んだら覚えておく（開くたびに読みに行かない）。
+   読めなかったときは控えのまま進む。テーマが出ないより、
+   先月のままでも何か出ているほうがよい。 */
+let _spThemeOnce = null;
+function _spMonthlyTheme() {
+  if (_spThemeOnce) return _spThemeOnce;
+  _spThemeOnce = (async function () {
+    try {
+      const d = await _spRestDoc('sp_docs/monthly-theme', false);
+      const name = String((d && d.title) || '').trim();
+      const copy = String((d && d.summary) || '').trim();
+      if (name) currentTheme = name;
+      if (copy) currentThemeCopy = copy;
+    } catch (e) {
+      console.warn('今月のテーマを読めませんでした:', e && (e.message || e));
+    }
+    return { name: currentTheme, copy: currentThemeCopy };
+  })();
+  return _spThemeOnce;
+}
 
 // トレンド用
 async function filterTrendPosts() {
@@ -23583,6 +23612,8 @@ async function filterTrendPosts() {
   if (!postFeed) return;
 
   postFeed.innerHTML = "<p>読み込み中...</p>";
+  /* 見出しにテーマ名を出すので、先に記録から読む。 */
+  await _spMonthlyTheme();
 
   try {
     const postsRef = window.fbLib.collection(window.db, "posts");
@@ -28264,12 +28295,15 @@ async function sendEmuFeedback() {
       visibleDocs.forEach(docSnap => rows.push(plainKnowledgePost(docSnap)));
       knowledgeLastDoc = visibleDocs.length ? visibleDocs[visibleDocs.length - 1] : knowledgeLastDoc;
       const drafts = await readKnowledgeDrafts(account);
+      /* テーマは記録から。一度読んだら覚えているので、2ページ目以降は待たない。 */
+      await _spMonthlyTheme();
       sendKnowledge({
         type:'emu-knowledge-posts', posts:rows, append:!!options.append, hasMore:knowledgeHasMore,
         /* 見学の範囲で止まったか。止まったことを画面で伝えるために渡す。 */
         guestCapped: guestCapped, guestLimit: GUEST_KNOWLEDGE_LIMIT,
         account,
-        monthlyTheme:String(typeof currentTheme === 'string' ? currentTheme : '整える'),
+        monthlyTheme:String(typeof currentTheme === 'string' ? currentTheme : 'はじめる'),
+        monthlyCopy:String(typeof currentThemeCopy === 'string' ? currentThemeCopy : ''),
         drafts, scheduledCount:await scheduledKnowledgeCount(account),
         helpedCount:await countMyGoodPosts(account, !options.append),
         // 議論から生まれた「みんなの結論」。1ページ目にだけ添える。
