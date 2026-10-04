@@ -8,6 +8,14 @@
 から即時に見られるようにしてください。管理画面側はすでに完成していて、
 **そちらは一切変更しません。** β 側を管理画面の形に合わせます。
 
+### 前提（オーナーの決定）
+
+- **Camellia は独自アプリです。** SchoolPark / Emu の左上タブからは切り替えられません。
+  ブランドの切り替えからは削除済みで、戻す予定はありません。
+  **iframe の中で開かれる前提の作りは不要です**（親フレームを呼ぶ処理などは書かないこと）。
+- **利用規約・同意画面は作りません。** 同意を取る手順は入れないでください。
+- 繋ぐのは**管理画面だけ**です。入力されたデータが即時に管理画面へ出ればよい。
+
 **管理画面はここです → https://schoolpark-emu.vercel.app/membership-admin.html**
 （上のタブの「Camellia」を押すと、入った方の一覧が出ます）
 
@@ -41,12 +49,16 @@ Firebase プロジェクトは **`emusch-2a111`**（SchoolPark / Emu と同じ�
 
 ```
 camellia_users/{uid}                     ← {uid} は Firebase Auth の uid
-  birthDate      "1998-04-12"   ← 必須。文字列。無いとルールに弾かれる
-  agreedAt       ISO8601        ← 必須。文字列。同意した時刻
-  agreedVersion  "2026-10-04"   ← 任意
-  passport       "0x..."        ← ches_accounts/{uid}.chesAddress（無ければ .walletAddress）
-  updatedAt      ISO8601
-  ※ camelliaId は絶対に自分で書かない（後述 4-③）
+  updatedAt      ISO8601        ← これだけ入れておけばよい
+  birthDate      "1998-04-12"   ← 任意。入れると管理画面に年齢が出る
+  passport       "0x..."        ← 任意。ches_accounts/{uid}.chesAddress（無ければ .walletAddress）
+  agreedAt       ISO8601        ← 書かない（同意を取らないため）
+  ※ camelliaId は絶対に自分で書かない（後述 4-②）
+
+  ルールの確認：この3つは `get('birthDate','')` という書き方で見られていて、
+  **欄が無ければ `''` が返り、`'' is string` は真になるので通ります。**
+  非文字列（数値や Timestamp）で入れたときだけ弾かれます。
+  つまり birthDate も agreedAt も、**無くて構いません。**
 
 camellia_users/{uid}/daily/{YYYY-MM-DD}  ← 文書IDは「日本時間」の日付
 camellia_users/{uid}/profile/basic
@@ -103,21 +115,23 @@ useEffect(()=>{
 },[state,ready]);
 ```
 
-### 2-2. 新しく作るファイル（4つ）
+### 2-2. 新しく作るファイル（3つ）
 
 | ファイル | 役割 |
 |---|---|
-| `lib/schoolpark/firebase.ts` | Firebase の初期化と、ログイン状態の保持 |
+| `lib/schoolpark/firebase.ts` | Firebase の初期化と、サインイン（匿名なら `signInAnonymously` を1回呼ぶだけ） |
 | `lib/schoolpark/map.ts` | β の形 → 管理画面の形への変換（後述3） |
 | `lib/schoolpark/sync.ts` | `syncToSchoolPark(state)`。差分だけ送る（後述5） |
-| `components/PassportGate.tsx` | ログインしていない人に出す画面 |
 
-### 2-3. 変える既存ファイル（2つ）
+匿名ログインにするなら、**画面は1つも足りません。** ログイン画面も同意画面も作らないでください。
+
+### 2-3. 変える既存ファイル（1つ）
 
 | ファイル | 変更 |
 |---|---|
-| `hooks/useCamelliaStore.ts` | 上の1行 |
-| `app/page.tsx` | `if(!store.ready)` の直後に、未ログインなら `<PassportGate/>` を返す |
+| `hooks/useCamelliaStore.ts` | 上の1行だけ |
+
+`app/page.tsx` も `screens/*.tsx` も触りません。
 
 ### Firebase の設定（公開してよい web 設定。すでに公開リポジトリに入っています）
 
@@ -229,56 +243,62 @@ resistance   = 100 − follow
 
 ---
 
-## 4. 先に決めないと進めない4点
+## 4. 決めること・注意すること
 
-### ① ログインをどうするか（これが最大の作業）
+### ① ログインをどうするか（これだけが作業として重い）
 
 いまの β には認証がありません。`camellia_users/{uid}` に書くには
 **Firebase Auth のセッションが要ります**（ルールが `request.auth.uid == uid`）。
 
 **Firebase Auth のセッションはオリジンをまたぎません。**
 `camellia-beta.vercel.app` と `schoolpark-emu.vercel.app` は別オリジンなので、
-**SchoolPark でログイン済みでも、β 側では未ログインです。**
+SchoolPark でログイン済みでも β 側では未ログインです。独自アプリなので、
+β 側で自前のセッションを持つことになります。
 
-選べるのは2つです。
-
-- **案A（おすすめ）: β を SchoolPark と同じオリジンに載せる。**
-  `schoolpark-emu.vercel.app/camellia/` に Vercel の rewrite で出す。
-  → 既存のログインがそのまま効く。ブランド切り替えの iframe にも戻せる。
-  → 親の関数（`window.parent.openSpPassport()` など）も呼べる。
-- **案B: ドメインはそのままにして、β 側で自分でログインさせる。**
-  同じ Firebase プロジェクトなので、**同じアカウントなら uid も同じ**です。
-  → **Firebase コンソール → Authentication → 設定 → 承認済みドメイン に
-    `camellia-beta.vercel.app` を足す必要があります**（これが無いと必ず失敗します）。
-  → ブランド切り替えに入れると iframe が別オリジンになり、親の関数は呼べません。
+- **おすすめ：匿名ログイン（`signInAnonymously`）**
+  ログイン画面も、規約への同意も、入力も要りません。開いた瞬間に uid ができて、
+  そのまま書けます。**同意を取らない方針といちばん相性がよい**です。
+  - Firebase コンソール → Authentication → Sign-in method で
+    **「匿名」を有効にする**（オーナーの作業）。
+  - OAuth のリダイレクトを使わないので、**承認済みドメインの追加は不要**です。
+  - 弱点：uid はそのブラウザのもの。保存データを消すと別人になります。
+    端末をまたいだ引き継ぎもできません。
+- **SchoolPark の身元と結びつけたいなら：同じログイン方法でサインインさせる**
+  同じ Firebase プロジェクトなので、**同じアカウントなら uid も同じ**になります。
+  管理画面の一覧に SchoolPark 側のお名前とパスポート番号も並びます。
+  - このときは **Firebase コンソール → Authentication → 設定 → 承認済みドメインに
+    `camellia-beta.vercel.app` を足す必要があります**（無いと必ず失敗します）。
+  - 注意：SchoolPark と**違うログイン方法**を使うと uid が別になり、
+    管理画面では**別人として**並びます。
 
 **どちらにするかをオーナーに確認してから進めてください。**
 
-### ② 生年月日を集めていない
-
-`camellia_users/{uid}` は **`birthDate` が文字列で入っていないとルールに弾かれて
-1バイトも書けません。** いまの `OnboardingScreen.tsx` / `MyScreen.tsx` は
-`age`（文字列）だけで、生年月日は集めていません（grep で0件）。
-
-**オンボーディングに生年月日の入力を足してください。**
-あわせて **18〜45歳の判定**が要ります（この数字は emu-realtime の
-`backend/billing.js` と `membership-admin.html` に入っています。必ず同じに）。
-
-### ③ Camellia ID を自分で作らない
+### ② Camellia ID を自分で作らない
 
 形は `CAM-XXXX-XXXX-XXXX`（使う文字は `23456789ABCDEFGHJKLMNPQRSTUVWXYZ`。
 `0 O 1 I` は使わない）。**いま発行できるのは運営の管理画面だけ**です。
 ルール上も、一度入った `camelliaId` は書き換えられません。
 **β からは読むだけ**にしてください。
 
-### ④ 同意文
+### ③ 入れなかった欄が、管理画面でどう見えるか
 
-気分・睡眠・ストレス・月経は**要配慮個人情報**で、それを運営の管理画面に
-出します。**入口の同意文に「運営が内容を確認することがあります」を
-必ず入れてください。** これを書いていた旧 Camellia の入口画面は削除済みで、
-いま同意の根拠が宙に浮いています。同意した時刻を `agreedAt` に入れてください。
+同意も生年月日も取らないので、管理画面の表示は次のようになります。
+**どれも壊れているわけではありません。** 直す必要はありません。
 
----
+| 管理画面の表示 | 理由 |
+|---|---|
+| 年齢が「不明」 | `birthDate` が無い |
+| 「同意なし」 | `agreedAt` が無い |
+| 「★対象の年齢ではありません」が出ない | 年齢が分からないので判定しない |
+| お名前が空 | `ches_accounts/{uid}` が無い（匿名ログインのとき） |
+
+年齢を出したいときだけ、`birthDate` を `"YYYY-MM-DD"` の**文字列**で入れてください
+（Timestamp や数値で入れるとルールに弾かれます）。
+
+### ④ 書いてよい場所・いけない場所
+
+`camellia_users/{uid}/admin/**` は**ルールで書き込み禁止**です。
+読むのは自由です。それ以外（`daily` / `profile` / `imports`）は本人なら書けます。
 
 ## 5. 書き込み回数を抑える（これを外すと無料枠が飛びます）
 
@@ -313,15 +333,17 @@ function fingerprint(s: string) {
 
 ## 6. できたことの確かめ方
 
-1. β でログインしてチェックインを1件保存する。
+1. β を開いてチェックインを1件保存する（匿名ログインなら、開くだけで uid ができます）。
 2. 2秒以内に Firestore コンソールで
    `camellia_users/{自分のuid}/daily/{今日の日本時間の日付}` ができていること。
 3. **オーナーに** https://schoolpark-emu.vercel.app/membership-admin.html を開いてもらい、
    上のタブの **Camellia** を押して、自分の行を開いて「日々の記録」に出ていること。
    （この画面はオーナー専用です。あなたは開けません）
 4. 「プロフィール」「設定」「Camellia AI との会話」「行動」にも出ていること。
-5. 年齢が「不明」になっていないこと（＝`birthDate` が入っている）。
+5. 年齢が「不明」、同意が「同意なし」と出ていること（**これが正しい状態です**。
+   生年月日も同意も取らない方針なので、入っていないのが期待どおりです）。
 6. 同じ内容でもう一度保存して、**Firestore の書き込みが増えないこと**（＝差分判定が効いている）。
+7. 日付が1日ずれていないこと（朝9時より前に保存して確かめるのが確実）。
 
 ---
 
@@ -334,6 +356,9 @@ function fingerprint(s: string) {
 - `profile/` の7つ以外の名前で文書を作って「出るはず」と思うこと
 - 未記録の欄に 0 を入れること
 - localStorage をやめること（オフラインで書けなくなります。**両方に書く**のが正解）
+- **利用規約・同意画面・生年月日の入力を足すこと**（オーナーが要らないと決めています）
+- **親フレーム（`window.parent.*`）を呼ぶ処理を書くこと**（独自アプリで、iframe には入りません）
+- `birthDate` や `agreedAt` を Timestamp や数値で入れること（**文字列以外はルールに弾かれます**）
 
 ---
 

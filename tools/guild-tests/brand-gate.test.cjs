@@ -236,13 +236,18 @@ test('入った方の記録と、その権限のルールは消していない',
 
 /* ───────── 案内の文 ───────── */
 
-test('案内は、Camellia へ行けるとは言っていない', () => {
+test('案内は、Camellia が別のアプリだと言っている', () => {
+  /* 「準備中」ではない。戻ってくる予定が無いので、待たせる言い方はしない。
+     オーナーの決め: Camellia は独自アプリ。SchoolPark・Emu の中からは行けない。 */
   const tutorial = read('frontend/public/schoolpark/tutorial.html');
-  [html, tutorial].forEach(t => {
-    assert.ok(t.indexOf('🌸 Camellia — 準備中') > 0,
-      'Camellia を開いていることにしたままです');
+  [['index.html', html], ['tutorial.html', tutorial]].forEach(([name, t]) => {
+    assert.ok(t.indexOf('🌸 Camellia — 独立したアプリ（この中からは行けません）') > 0,
+      name + ' の案内が、いまの決まりと合っていません');
+    assert.ok(t.indexOf('Camellia・Heartoo は') < 0,
+      name + ' が Camellia を Heartoo と同じ「順番に開ける」扱いのままです');
   });
-  assert.ok(tutorial.indexOf('<td><strong>Camellia</strong></td><td>準備中</td>') > 0);
+  assert.ok(tutorial.indexOf(
+    '<td><strong>Camellia</strong></td><td>独立したアプリ（この中からは行けません）</td>') > 0);
 });
 
 test('Heartoo の準備中は、消さずに残してある', () => {
