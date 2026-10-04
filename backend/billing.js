@@ -1374,8 +1374,14 @@ function createBillingRouter(deps) {
     return res.json({ received: true });
   }
 
+  /* ほかの機能（みてみるの単発決済）の Webhook も同じ署名・同じ二重防止で受ける。
+     扱った機能が true を返したら、ここから下（月額会員の処理）は通さない。 */
+  let extraEventHandler = null;
+  function setExtraEventHandler(fn) { extraEventHandler = typeof fn === "function" ? fn : null; }
+
   async function applyEvent(event) {
     const obj = event.data.object;
+    if (extraEventHandler && await extraEventHandler(event)) return;
 
     if (event.type === "checkout.session.completed") {
       const uid = obj.client_reference_id;
@@ -1477,7 +1483,7 @@ function createBillingRouter(deps) {
     if (entitlement && typeof entitlement.forget === "function") entitlement.forget(uid);
   }
 
-  return { router, webhookPath, webhookHandler, handleWebhook, guaranteeWindow, PLAN_AMOUNT_JPY };
+  return { router, webhookPath, webhookHandler, handleWebhook, guaranteeWindow, PLAN_AMOUNT_JPY, setExtraEventHandler };
 }
 
 module.exports = { createBillingRouter, PLAN_AMOUNT_JPY, GUARANTEE_DAYS };

@@ -1480,6 +1480,9 @@ service cloud.firestore {
         /* EMUER v2 の予算・貢献・報酬・認可履歴はサーバー専用。
            Admin SDK は Rules を経由しない。 */
         && !coll.matches('emuer_v2_.*')
+        /* みてみる（商品・注文・使った送金）。お金の記録なのでサーバー専用。
+           ここに入れないと、誰でも自分の注文を「支払い済み」に書けてしまう。 */
+        && !coll.matches('mitemiru_.*')
         && coll != 'sp_tasks'
         && coll != 'sp_wisdom'
         && coll != 'sp_park'

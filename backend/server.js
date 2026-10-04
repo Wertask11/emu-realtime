@@ -260,6 +260,14 @@ const review = require("./review").createReviewRouter(membershipDeps);
 const emuerV2 = require("./emuer-v2/router").createEmuerV2Router({
   db, requireFirebaseUser, requireOwnAddress, entitlement, env: process.env
 });
+/* みてみる（SchoolPark内の交換所）。EMUER・JPYC・円で商品を手に入れる。 */
+const mitemiru = require("./mitemiru").createMitemiruRouter({
+  db, requireFirebaseUser, requireOwner, entitlement, rateLimit, env: process.env,
+  emuerEnabled: () => emuerV2.isEnabled(),
+  isOwner: (identity) => [identity.walletAddress, identity.account && identity.account.chesAddress]
+    .some(address => SP_OWNER_ADDRESSES.includes(String(address || "").toLowerCase()))
+});
+billing.setExtraEventHandler(mitemiru.handleStripeEvent);
 const questCompletion = require("./quest-completion").createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, env: process.env });
 /* Camellia AI。鍵は環境変数（ANTHROPIC_API_KEY）から読む。 */
 const camellia = require("./camellia").createCamelliaRouter(membershipDeps);
@@ -272,6 +280,7 @@ app.use("/api/dialogue", dialogue.router);
 app.use("/api/feedback", feedback.router);
 app.use("/api/review", review.router);
 app.use("/api/emuer/v2", emuerV2.router);
+app.use("/api/mitemiru", mitemiru.router);
 app.use("/api/schoolpark/quest-completions", questCompletion);
 app.use("/api/schoolpark/city", require("./city").createCityRouter({
   db, identity, entitlement, requireFirebaseUser, rateLimit, ownerAddresses: SP_OWNER_ADDRESSES

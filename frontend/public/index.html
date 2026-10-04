@@ -6854,6 +6854,13 @@ function _landAfterDirectReturn() {
     var ok = home && getComputedStyle(home).display !== "none";
     // 開けたら、旧レイアウトを抑えていた印を外す（以降は通常どおり）
     if (ok) { try { document.documentElement.classList.remove("ches-billing-return"); } catch (e) {} }
+    /* みてみるのカード払いから戻ったときは、引換券をそのまま開く。 */
+    if (ok && billing === "mitemiru" && !open._mitemiru) {
+      open._mitemiru = true;
+      setTimeout(function () {
+        try { if (typeof openSpRoom === "function") openSpRoom("/schoolpark/east-shopping.html#orders", "みてみる"); } catch (e) {}
+      }, 400);
+    }
     if (!ok && tries < 12) setTimeout(open, 300);
   };
   open();                                   // まず即時に開く
