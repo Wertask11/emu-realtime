@@ -1,688 +1,2332 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<!-- みてみるは「準備中」の止め方から外した。運営の4アドレス以外を
+     すべて止める作りなので、お客さんが1人も入れなかった。
+     Camellia・チュートリアル・南エレベーターは、これまでどおり止めたまま。 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>みてみる | SchoolPark</title>
+<title>School Park Mall | SchoolPark</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Noto+Serif+JP:wght@300;400;500;700&family=Zen+Maru+Gothic:wght@400;500&display=swap" rel="stylesheet">
 <style>
-/* みてみる — SchoolParkの交換所。
-   いちばん大事な画面は「引換券」。会場で運営に見せて、その場で受け取るためのもの。
-   色は CHES の基調（アイボリー・墨・椿の紅・金）。 */
+/* ═══════════════════════════════════════
+   DESIGN TOKENS
+═══════════════════════════════════════ */
 :root {
-  --ivory: #f6f1e6;
-  --paper: #fffdf8;
-  --ink: #1f1c2b;
-  --ink2: #5e5868;
-  --ink3: #9a93a3;
-  --line: #e2d9c7;
-  --tsubaki: #b3263a;
-  --tsubaki-soft: #f6e3e2;
-  --kin: #a8822f;
-  --kin-soft: #f3ead2;
-  --ok: #2f6b4f;
-  --ok-soft: #e1efe6;
-  --sans: 'Zen Kaku Gothic New', 'Hiragino Sans', sans-serif;
-  --mincho: 'Shippori Mincho', 'Hiragino Mincho ProN', serif;
+  /* Palette */
+  --cream:       #faf7f4;
+  --cream2:      #f5f0ea;
+  --cream3:      #ede6dd;
+  --white:       #ffffff;
+  --text:        #2d2520;
+  --text2:       #8a7f78;
+  --text3:       #c4b8b0;
+  --border:      rgba(180,160,145,0.2);
+  --border2:     rgba(180,160,145,0.12);
+  --card:        rgba(255,255,255,0.72);
+
+  /* Accents */
+  --rose:        #e8a4b0;
+  --rose2:       #d4788a;
+  --rose3:       #c05570;
+  --gold:        #c9a96e;
+  --gold2:       #b8924d;
+  --blush:       #f9eef0;
+  --sale:        #d4485a;
+  --new:         #6b9e8a;
+  --glow-rose:   rgba(232,164,176,0.22);
+
+  /* Layout */
+  --radius:      16px;
+  --radius-sm:   10px;
+  --header-h:    56px;
+
+  /* Typography */
+  --font-serif:  'Cormorant Garamond', 'Noto Serif JP', serif;
+  --font-sans:   'Zen Maru Gothic', sans-serif;
+  --font-jp:     'Noto Serif JP', serif;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { background: var(--ivory); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.7; }
-button, input, select, textarea { font: inherit; color: inherit; }
-button { cursor: pointer; }
-:focus-visible { outline: 2px solid var(--kin); outline-offset: 2px; }
-.wrap { max-width: 560px; margin: 0 auto; padding: 0 16px 96px; }
 
-/* 上部 */
-.top { position: sticky; top: 0; z-index: 5; background: var(--ivory); border-bottom: 1px solid var(--line); }
-.top-row { max-width: 560px; margin: 0 auto; padding: 10px 16px 0; display: flex; align-items: center; gap: 10px; }
-.back { border: 0; background: none; color: var(--ink2); font-size: 14px; padding: 6px 4px; }
-.top h1 { font-family: var(--mincho); font-weight: 800; font-size: 22px; letter-spacing: .04em; flex: 1; }
-.tabs { max-width: 560px; margin: 0 auto; padding: 8px 16px 0; display: flex; gap: 18px; }
-.tab { border: 0; background: none; padding: 6px 0 10px; color: var(--ink3); font-weight: 700; border-bottom: 3px solid transparent; }
-.tab[aria-selected="true"] { color: var(--ink); border-color: var(--tsubaki); }
-.tab .count { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 10px; background: var(--tsubaki); color: #fff; font-size: 12px; line-height: 20px; }
+/* ═══════════════════════════════════════
+   BASE
+═══════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
 
-/* 残高 */
-.purse { margin: 14px 0 4px; padding: 12px 14px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); font-size: 13px; color: var(--ink2); display: flex; flex-wrap: wrap; gap: 4px 14px; }
-.purse b { color: var(--ink); font-size: 16px; }
+body {
+  font-family: var(--font-jp);
+  background: var(--cream);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
 
-/* 商品 */
-.list { list-style: none; margin-top: 10px; }
-.item { display: grid; grid-template-columns: 84px 1fr; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--line); }
-.thumb { width: 84px; height: 84px; border-radius: 10px; background: var(--kin-soft); overflow: hidden; display: grid; place-items: center; font-family: var(--mincho); font-weight: 800; font-size: 30px; color: var(--kin); }
-.thumb img { width: 100%; height: 100%; object-fit: cover; }
-.item h2 { font-family: var(--mincho); font-weight: 800; font-size: 18px; line-height: 1.4; }
-.item p { color: var(--ink2); font-size: 13px; margin-top: 4px; }
-.prices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.price { font-size: 13px; padding: 2px 9px; border-radius: 6px; background: var(--paper); border: 1px solid var(--line); }
-.price b { font-size: 15px; }
-.meta { font-size: 12px; color: var(--ink3); margin-top: 6px; }
-.get { margin-top: 10px; border: 0; border-radius: 999px; padding: 9px 20px; background: var(--ink); color: var(--paper); font-weight: 700; }
-.get[disabled] { background: var(--line); color: var(--ink3); cursor: default; }
-.empty { padding: 48px 8px; text-align: center; color: var(--ink2); }
-.empty strong { display: block; font-family: var(--mincho); font-size: 18px; color: var(--ink); margin-bottom: 6px; }
+button { font-family: inherit; cursor: pointer; border: none; outline: none; background: none; }
+input, textarea, select { font-family: inherit; outline: none; }
 
-/* 引換券。この画面だけは大胆に。 */
-.ticket { position: relative; margin: 18px 0; background: var(--paper); border-radius: 14px; border: 1px solid var(--line); overflow: hidden; }
-.ticket::before, .ticket::after { content: ""; position: absolute; top: 118px; width: 22px; height: 22px; border-radius: 50%; background: var(--ivory); border: 1px solid var(--line); }
-.ticket::before { left: -12px; } .ticket::after { right: -12px; }
-.ticket-head { padding: 16px 18px 14px; min-height: 129px; }
-.ticket-head .name { font-family: var(--mincho); font-weight: 800; font-size: 20px; line-height: 1.4; }
-.ticket-head .how { font-size: 13px; color: var(--ink2); margin-top: 6px; }
-.ticket-code { border-top: 2px dashed var(--line); padding: 18px 18px 20px; text-align: center; }
-.ticket-code .say { font-size: 13px; color: var(--ink2); }
-.code { font-weight: 900; font-size: clamp(40px, 13vw, 58px); letter-spacing: .14em; line-height: 1.2; margin: 6px 0 4px; color: var(--tsubaki); font-variant-numeric: tabular-nums; }
-.ticket.done .code { color: var(--ink3); text-decoration: line-through; text-decoration-thickness: 3px; }
-.ticket.waiting .code { color: var(--kin); }
-.state { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px; }
-.state.paid { background: var(--tsubaki-soft); color: var(--tsubaki); }
-.state.fulfilled { background: var(--ok-soft); color: var(--ok); }
-.state.pending { background: var(--kin-soft); color: var(--kin); }
-.state.closed { background: var(--line); color: var(--ink2); }
-.ticket-foot { padding: 0 18px 16px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.ticket-foot .line { width: 100%; text-align: center; font-size: 12px; color: var(--ink3); }
-.small-btn { border: 1px solid var(--line); background: var(--paper); border-radius: 999px; padding: 6px 14px; font-size: 13px; }
-.small-btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-.small-btn.danger { color: var(--tsubaki); }
-.past { margin-top: 24px; font-size: 13px; color: var(--ink2); }
-.past li { list-style: none; padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--cream2); }
+::-webkit-scrollbar-thumb { background: var(--rose); border-radius: 2px; }
 
-/* 支払いの選択（下から出る） */
-.veil { position: fixed; inset: 0; background: rgba(31,28,43,.42); display: none; z-index: 20; }
-.veil.open { display: block; }
-.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; background: var(--paper); border-radius: 18px 18px 0 0; max-height: 86vh; overflow: auto; transform: translateY(100%); transition: transform .22s ease; }
-.sheet.open { transform: none; }
-.sheet-in { max-width: 560px; margin: 0 auto; padding: 18px 16px 28px; }
-.sheet h3 { font-family: var(--mincho); font-weight: 800; font-size: 20px; }
-.sheet .terms { font-size: 12px; color: var(--ink2); margin: 8px 0 14px; padding: 10px 12px; background: var(--ivory); border-radius: 10px; }
-.way { width: 100%; text-align: left; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 12px 14px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
-.way:hover:not([disabled]) { border-color: var(--ink2); }
-.way[disabled] { background: var(--ivory); color: var(--ink3); cursor: default; }
-.way .w-name { font-weight: 700; }
-.way .w-amt { font-weight: 900; text-align: right; }
-.way .w-note { grid-column: 1 / -1; font-size: 12px; color: var(--ink2); }
-.way[disabled] .w-note { color: var(--ink3); }
-.close-sheet { margin-top: 6px; width: 100%; border: 0; background: none; color: var(--ink2); padding: 10px; }
-.busy { padding: 26px 4px; text-align: center; color: var(--ink2); }
+#app {
+  max-width: 720px;
+  margin: 0 auto;
+  min-height: 100vh;
+  position: relative;
+  background: var(--cream);
+}
 
-/* 運営 */
-.admin h2 { font-family: var(--mincho); font-weight: 800; font-size: 18px; margin: 22px 0 8px; }
-.lookup { display: flex; gap: 8px; }
-.lookup input { flex: 1; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); font-weight: 900; font-size: 22px; letter-spacing: .14em; text-transform: uppercase; }
-.lookup button { border: 0; border-radius: 12px; background: var(--ink); color: var(--paper); font-weight: 700; padding: 0 18px; }
-.orow { padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
-.orow .top-line { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-.orow .ocode { font-weight: 900; letter-spacing: .1em; font-size: 16px; }
-.orow .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.filter { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
-.form { display: grid; gap: 10px; padding: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; }
-.form label { display: grid; gap: 4px; font-size: 13px; color: var(--ink2); }
-.form input, .form textarea, .form select { padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); }
-.form textarea { min-height: 64px; resize: vertical; }
-.row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.check { display: flex !important; grid-template-columns: none; align-items: center; gap: 8px; color: var(--ink) !important; }
-.prow { padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
-.prow b { font-size: 14px; }
+/* ═══════════════════════════════════════
+   HEADER
+═══════════════════════════════════════ */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--header-h);
+  background: rgba(250,247,244,0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 14px;
+}
 
-.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 14px; font-size: 14px; z-index: 30; display: none; max-width: calc(100% - 32px); text-align: center; }
-.toast.show { display: block; }
-.hidden { display: none !important; }
-@media (prefers-reduced-motion: reduce) { .sheet { transition: none; } }
+.header-back {
+  color: var(--text2);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  letter-spacing: 0.06em;
+  padding: 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+.header-back:hover { color: var(--rose3); }
+.header-back::before {
+  content: '←';
+  font-size: 14px;
+}
+
+.header-title {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--text);
+  font-style: italic;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.cart-btn {
+  position: relative;
+  font-size: 20px;
+  padding: 4px;
+  color: var(--text);
+  transition: transform 0.2s;
+  line-height: 1;
+}
+.cart-btn.bounce {
+  animation: cartBounce 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+@keyframes cartBounce {
+  0%,100% { transform: scale(1) rotate(0deg); }
+  20% { transform: scale(1.35) rotate(-12deg); }
+  50% { transform: scale(0.92) rotate(6deg); }
+  75% { transform: scale(1.08); }
+}
+
+.cart-badge {
+  position: absolute;
+  top: -3px; right: -6px;
+  background: var(--rose3);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 15px; height: 15px;
+  border-radius: 8px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  font-family: var(--font-sans);
+}
+.cart-badge.visible { display: flex; }
+
+.header-clock {
+  font-size: 11px;
+  color: var(--text3);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+}
+
+/* ═══════════════════════════════════════
+   HERO
+═══════════════════════════════════════ */
+.hero {
+  height: 200px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(150deg, #f9eef0 0%, #faf7f4 35%, #f5f0ea 65%, #fce8ec 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* Soft radial bloom */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 55% 70% at 30% 40%, rgba(232,164,176,0.28) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 50% at 75% 60%, rgba(201,169,110,0.14) 0%, transparent 60%);
+}
+
+/* Shimmer beam */
+.hero-beam {
+  position: absolute;
+  top: 0; left: -50%;
+  width: 25%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,255,255,0.0) 30%,
+    rgba(255,255,255,0.55) 50%,
+    rgba(255,255,255,0.0) 70%,
+    transparent 100%
+  );
+  animation: heroShimmer 4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes heroShimmer {
+  0%   { left: -50%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { left: 130%; opacity: 0; }
+}
+
+/* Floating petal particles */
+.hero-petal {
+  position: absolute;
+  font-size: 12px;
+  opacity: 0;
+  animation: petalFall linear infinite;
+  pointer-events: none;
+  user-select: none;
+}
+@keyframes petalFall {
+  0%   { opacity: 0; transform: translateY(-10px) rotate(0deg); }
+  10%  { opacity: 0.6; }
+  90%  { opacity: 0.3; }
+  100% { opacity: 0; transform: translateY(220px) rotate(360deg); }
+}
+
+.hero-eyebrow {
+  position: relative;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  color: var(--rose2);
+  text-transform: uppercase;
+}
+
+.hero-title {
+  position: relative;
+  font-family: var(--font-serif);
+  font-size: 42px;
+  font-weight: 300;
+  letter-spacing: 0.18em;
+  color: var(--text);
+  font-style: italic;
+  line-height: 1;
+}
+.hero-title span {
+  color: var(--rose2);
+}
+
+.hero-divider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 120px;
+}
+.hero-divider::before,
+.hero-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rose);
+  opacity: 0.5;
+}
+.hero-divider-dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--rose2);
+}
+
+.hero-sale-pill {
+  position: relative;
+  background: var(--rose3);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  padding: 6px 20px;
+  border-radius: 20px;
+  animation: salePulse 2.2s ease-in-out infinite;
+}
+@keyframes salePulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(0.98); }
+}
+
+/* ═══════════════════════════════════════
+   ORDER FORM BANNER
+═══════════════════════════════════════ */
+.order-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 20px;
+  background: linear-gradient(90deg, var(--blush) 0%, #fdf3f5 50%, var(--blush) 100%);
+  border-top: 1px solid rgba(232,164,176,0.35);
+  border-bottom: 1px solid rgba(232,164,176,0.35);
+  text-decoration: none;
+  color: var(--rose3);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  transition: background .2s, opacity .2s;
+  cursor: pointer;
+}
+.order-banner:hover {
+  background: linear-gradient(90deg, #fae4e8 0%, #fde8ec 50%, #fae4e8 100%);
+  opacity: 0.9;
+}
+.order-banner-icon { font-size: 16px; flex-shrink: 0; }
+.order-banner-arrow {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-left: 2px;
+}
+
+/* ═══════════════════════════════════════
+   TABS
+═══════════════════════════════════════ */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: rgba(250,247,244,0.95);
+  position: sticky;
+  top: var(--header-h);
+  z-index: 90;
+  backdrop-filter: blur(12px);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 14px 4px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text2);
+  letter-spacing: 0.08em;
+  border-bottom: 1.5px solid transparent;
+  transition: color 0.25s, border-color 0.25s;
+  position: relative;
+}
+.tab-btn:hover { color: var(--rose3); }
+.tab-btn.active {
+  color: var(--rose3);
+  border-bottom-color: var(--rose3);
+}
+
+/* ═══════════════════════════════════════
+   TAB PANELS
+═══════════════════════════════════════ */
+.tab-panel { display: none; padding: 24px 18px 120px; }
+.tab-panel.active { display: block; animation: panelFadeIn 0.35s ease; }
+@keyframes panelFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════
+   CATEGORY FILTER
+═══════════════════════════════════════ */
+.category-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+  scrollbar-width: none;
+}
+.category-scroll::-webkit-scrollbar { display: none; }
+
+.cat-btn {
+  flex-shrink: 0;
+  padding: 7px 18px;
+  border-radius: 20px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  background: var(--white);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  transition: all 0.22s;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.cat-btn:hover { border-color: var(--rose); color: var(--rose3); }
+.cat-btn.active {
+  background: var(--rose3);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(192,85,112,0.22);
+}
+
+/* ═══════════════════════════════════════
+   SHOP GRID
+═══════════════════════════════════════ */
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.shop-card {
+  background: var(--white);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 20px 16px 16px;
+  cursor: pointer;
+  transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.28s ease, border-color 0.28s;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.shop-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, var(--glow-rose) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.shop-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 36px rgba(192,85,112,0.13), 0 2px 8px rgba(0,0,0,0.06);
+  border-color: rgba(232,164,176,0.5);
+}
+.shop-card:hover::after { opacity: 1; }
+
+.shop-emoji {
+  font-size: 38px;
+  display: block;
+  margin-bottom: 12px;
+  transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1);
+}
+.shop-card:hover .shop-emoji { transform: scale(1.1); }
+
+.shop-badge {
+  position: absolute;
+  top: 12px; right: 12px;
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  border-radius: 8px;
+  text-transform: uppercase;
+}
+.badge-new { background: #e8f5f0; color: var(--new); border: 1px solid rgba(107,158,138,0.25); }
+.badge-sale {
+  background: #fdf0f0;
+  color: var(--sale);
+  border: 1px solid rgba(212,72,90,0.2);
+  animation: salePulse 2s ease-in-out infinite;
+}
+.badge-hot { background: #fdf6e8; color: var(--gold2); border: 1px solid rgba(201,169,110,0.25); }
+
+.shop-name {
+  font-family: var(--font-jp);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.3;
+  color: var(--text);
+}
+.shop-category {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--rose2);
+  margin-bottom: 6px;
+  letter-spacing: 0.08em;
+}
+.shop-desc {
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+.shop-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text3);
+}
+.shop-rating { color: var(--gold); font-weight: 500; letter-spacing: 0.04em; }
+
+/* ═══════════════════════════════════════
+   SECTION TITLE
+═══════════════════════════════════════ */
+.section-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 18px;
+}
+.section-title-en {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--text);
+  letter-spacing: 0.1em;
+}
+.section-title-jp {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  color: var(--text2);
+  text-transform: uppercase;
+}
+
+/* ═══════════════════════════════════════
+   MODAL
+═══════════════════════════════════════ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(45,37,32,0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.modal {
+  background: var(--cream);
+  border-radius: 24px 24px 0 0;
+  width: 100%;
+  max-width: 720px;
+  max-height: 82vh;
+  overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+  padding-bottom: 50px;
+  box-shadow: 0 -8px 40px rgba(0,0,0,0.1);
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+
+.modal-handle {
+  display: flex;
+  justify-content: center;
+  padding: 14px 0 6px;
+}
+.modal-handle-bar {
+  width: 36px; height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.modal-header {
+  padding: 4px 22px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid var(--border2);
+}
+.modal-shop-emoji { font-size: 32px; }
+.modal-shop-info { flex: 1; }
+.modal-shop-name {
+  font-family: var(--font-jp);
+  font-size: 18px;
+  font-weight: 500;
+  margin-bottom: 3px;
+}
+.modal-shop-meta {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text2);
+  letter-spacing: 0.04em;
+}
+.modal-close {
+  width: 32px; height: 32px;
+  background: var(--cream2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: 50%;
+  font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.modal-close:hover { background: var(--rose3); color: #fff; border-color: transparent; }
+
+.modal-products {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.product-card {
+  background: var(--white);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  padding: 18px 14px 14px;
+  text-align: center;
+  transition: transform 0.24s ease, box-shadow 0.24s ease;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.product-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(192,85,112,0.1);
+}
+
+.product-emoji {
+  font-size: 44px;
+  display: block;
+  margin-bottom: 10px;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+.product-card:hover .product-emoji { transform: scale(1.1); }
+.product-name {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+.product-desc {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--text2);
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+.product-price {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--rose3);
+  margin-bottom: 12px;
+  letter-spacing: 0.04em;
+}
+.product-price span {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--text2);
+  letter-spacing: 0.08em;
+}
+
+.add-cart-btn {
+  width: 100%;
+  padding: 9px;
+  background: var(--rose3);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  transition: opacity 0.2s, transform 0.15s;
+  box-shadow: 0 2px 8px rgba(192,85,112,0.2);
+}
+.add-cart-btn:hover { opacity: 0.88; }
+.add-cart-btn:active { transform: scale(0.97); }
+
+/* ═══════════════════════════════════════
+   TAB② NEW & SALE
+═══════════════════════════════════════ */
+.carousel-wrap {
+  overflow-x: auto;
+  margin: 0 -18px;
+  padding: 4px 18px 18px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.carousel-wrap::-webkit-scrollbar { display: none; }
+
+.carousel { display: flex; gap: 12px; width: max-content; }
+
+.carousel-card {
+  width: 148px;
+  background: var(--white);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  padding: 16px 14px;
+  text-align: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.carousel-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(192,85,112,0.12);
+}
+.carousel-card-emoji { font-size: 38px; display: block; margin-bottom: 8px; }
+.carousel-card-name {
+  font-size: 12px; font-weight: 500;
+  margin-bottom: 5px; line-height: 1.4;
+}
+.carousel-card-shop {
+  font-family: var(--font-sans);
+  font-size: 10px; color: var(--text2); margin-bottom: 6px;
+}
+.carousel-card-price {
+  font-family: var(--font-serif);
+  font-size: 15px; color: var(--rose3); margin-bottom: 6px;
+}
+.carousel-card-badge {
+  display: inline-block;
+  background: #e8f5f0; color: var(--new);
+  font-family: var(--font-sans);
+  font-size: 9px; font-weight: 500;
+  padding: 2px 8px; border-radius: 8px;
+  letter-spacing: 0.1em; margin-bottom: 8px;
+  border: 1px solid rgba(107,158,138,0.2);
+}
+.carousel-card-add {
+  width: 100%; padding: 7px;
+  background: var(--rose3); color: #fff;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 10px; font-weight: 500; letter-spacing: 0.06em;
+  transition: opacity 0.2s;
+}
+.carousel-card-add:hover { opacity: 0.88; }
+
+/* Countdown */
+.sale-section { margin-top: 36px; }
+
+.countdown-bar {
+  background: var(--white);
+  border: 1px solid rgba(212,72,90,0.15);
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.countdown-label {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text2);
+  letter-spacing: 0.06em;
+}
+.countdown-timer {
+  font-family: var(--font-serif);
+  font-size: 22px; font-weight: 400;
+  color: var(--sale);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+}
+
+.sale-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.sale-card {
+  background: var(--white);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 20px 14px 14px;
+  text-align: center;
+  transition: transform 0.25s ease, box-shadow 0.25s;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.sale-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(212,72,90,0.04) 0%, transparent 40%);
+}
+.sale-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(212,72,90,0.1); }
+
+.sale-off-tag {
+  position: absolute;
+  top: 12px; left: 12px;
+  background: var(--sale);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 10px; font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.06em;
+}
+.sale-card-emoji { font-size: 40px; display: block; margin: 8px 0 10px; }
+.sale-card-name { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+.sale-card-shop {
+  font-family: var(--font-sans);
+  font-size: 10px; color: var(--text2); margin-bottom: 8px;
+}
+.sale-price-original {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text3);
+  text-decoration: line-through; margin-bottom: 2px;
+}
+.sale-price-current {
+  font-family: var(--font-serif);
+  font-size: 20px; font-weight: 400; color: var(--sale);
+  margin-bottom: 12px; letter-spacing: 0.04em;
+}
+.sale-add-btn {
+  width: 100%; padding: 9px;
+  background: var(--sale); color: #fff;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 11px; font-weight: 500; letter-spacing: 0.06em;
+  transition: opacity 0.2s;
+}
+.sale-add-btn:hover { opacity: 0.88; }
+
+/* ═══════════════════════════════════════
+   TAB③ MY BAG
+═══════════════════════════════════════ */
+.empty-bag {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 70px 20px 40px;
+  gap: 14px;
+  text-align: center;
+}
+.empty-bag-icon {
+  font-size: 64px;
+  animation: floatBag 3.5s ease-in-out infinite;
+}
+@keyframes floatBag {
+  0%,100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-12px) rotate(4deg); }
+}
+.empty-bag-text {
+  font-family: var(--font-serif);
+  font-size: 20px; font-weight: 300; font-style: italic;
+  color: var(--text2);
+}
+.empty-bag-sub {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text3);
+  line-height: 1.8; letter-spacing: 0.06em;
+}
+
+.cart-list { display: flex; flex-direction: column; gap: 10px; }
+
+.cart-item {
+  background: var(--white);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: box-shadow 0.22s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  animation: cartItemIn 0.3s ease;
+}
+@keyframes cartItemIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.cart-item:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
+
+.cart-item-emoji { font-size: 32px; flex-shrink: 0; }
+.cart-item-info { flex: 1; min-width: 0; }
+.cart-item-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+.cart-item-shop {
+  font-family: var(--font-sans);
+  font-size: 10px; color: var(--text2); margin-bottom: 4px; letter-spacing: 0.04em;
+}
+.cart-item-price {
+  font-family: var(--font-serif);
+  font-size: 15px; color: var(--rose3);
+}
+
+.cart-item-qty {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+.qty-btn {
+  width: 28px; height: 28px;
+  background: var(--cream2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.17s;
+}
+.qty-btn:hover { background: var(--rose3); color: #fff; border-color: transparent; }
+.qty-val {
+  font-family: var(--font-serif);
+  font-size: 16px; min-width: 20px; text-align: center;
+}
+
+.cart-item-del {
+  color: var(--text3);
+  font-size: 17px;
+  padding: 4px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+.cart-item-del:hover { color: var(--sale); }
+
+/* Cart Footer */
+.cart-footer {
+  position: fixed;
+  bottom: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 100%; max-width: 720px;
+  background: rgba(250,247,244,0.97);
+  backdrop-filter: blur(18px);
+  border-top: 1px solid var(--border);
+  padding: 16px 20px;
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 80;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.06);
+}
+.cart-footer.visible { display: flex; }
+
+.cart-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.cart-total-label {
+  font-family: var(--font-sans);
+  font-size: 12px; color: var(--text2); letter-spacing: 0.06em;
+}
+.cart-total-amount {
+  font-family: var(--font-serif);
+  font-size: 24px; font-weight: 400; color: var(--rose3);
+}
+.cart-total-amount span {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text2); letter-spacing: 0.08em;
+}
+
+.buy-btn {
+  width: 100%;
+  padding: 15px;
+  background: var(--rose3);
+  color: #fff;
+  border-radius: 14px;
+  font-family: var(--font-jp);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  box-shadow: 0 4px 18px rgba(192,85,112,0.28);
+  transition: opacity 0.2s, transform 0.15s;
+}
+.buy-btn:hover { opacity: 0.9; }
+.buy-btn:active { transform: scale(0.99); }
+
+/* ═══════════════════════════════════════
+   TAB④ OWNER
+═══════════════════════════════════════ */
+.owner-section {
+  background: var(--white);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.owner-section-title {
+  font-family: var(--font-serif);
+  font-size: 16px; font-weight: 400; font-style: italic;
+  color: var(--rose3);
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+  letter-spacing: 0.06em;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 12px; margin-bottom: 20px;
+}
+.stat-box {
+  background: var(--cream2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  text-align: center;
+}
+.stat-num {
+  font-family: var(--font-serif);
+  font-size: 24px; font-weight: 400;
+  color: var(--rose3);
+  letter-spacing: 0.04em;
+}
+.stat-label {
+  font-family: var(--font-sans);
+  font-size: 10px; color: var(--text2);
+  margin-top: 3px; letter-spacing: 0.08em;
+}
+
+.form-group { margin-bottom: 14px; }
+.form-label {
+  font-family: var(--font-sans);
+  font-size: 11px; color: var(--text2);
+  margin-bottom: 6px; display: block;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.form-input {
+  width: 100%;
+  background: var(--cream2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 10px 14px;
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.form-input:focus {
+  border-color: var(--rose);
+  box-shadow: 0 0 0 3px rgba(232,164,176,0.15);
+}
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.form-submit {
+  width: 100%;
+  padding: 12px;
+  background: var(--rose3);
+  color: #fff;
+  border-radius: 10px;
+  font-family: var(--font-jp);
+  font-size: 14px; font-weight: 500;
+  letter-spacing: 0.06em;
+  margin-top: 4px;
+  transition: opacity 0.2s;
+}
+.form-submit:hover { opacity: 0.88; }
+
+.owner-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 70px 20px;
+  gap: 14px;
+  text-align: center;
+}
+.owner-gate-icon { font-size: 52px; }
+.owner-gate-text {
+  font-family: var(--font-serif);
+  font-size: 20px; font-style: italic; color: var(--text2);
+}
+.owner-gate-sub {
+  font-family: var(--font-sans);
+  font-size: 12px; color: var(--text3); line-height: 1.8;
+}
+
+.shop-manage-list { display: flex; flex-direction: column; gap: 10px; }
+.shop-manage-item {
+  background: var(--cream2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex; align-items: center; gap: 10px;
+}
+.shop-manage-emoji { font-size: 22px; }
+.shop-manage-info { flex: 1; }
+.shop-manage-name { font-size: 14px; font-weight: 500; }
+.shop-manage-cat {
+  font-family: var(--font-sans);
+  font-size: 10px; color: var(--text2);
+}
+.shop-manage-actions { display: flex; gap: 6px; }
+.edit-btn {
+  background: var(--blush);
+  border: 1px solid rgba(232,164,176,0.35);
+  color: var(--rose3);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-family: var(--font-sans);
+  font-size: 11px; font-weight: 500;
+  transition: all 0.2s;
+}
+.edit-btn:hover { background: var(--rose3); color: #fff; }
+.delete-btn {
+  background: rgba(212,72,90,0.07);
+  border: 1px solid rgba(212,72,90,0.2);
+  color: var(--sale);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-family: var(--font-sans);
+  font-size: 11px; font-weight: 500;
+  transition: all 0.2s;
+}
+.delete-btn:hover { background: var(--sale); color: #fff; }
+
+/* ═══════════════════════════════════════
+   TOAST
+═══════════════════════════════════════ */
+#toast-container {
+  position: fixed;
+  bottom: 90px; right: 16px;
+  z-index: 500;
+  display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  display: flex; align-items: center; gap: 8px;
+  animation: toastIn 0.32s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events: all;
+  max-width: 260px;
+  color: var(--text);
+  letter-spacing: 0.04em;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px) scale(0.9); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+.toast.out {
+  animation: toastOut 0.25s ease forwards;
+}
+@keyframes toastOut {
+  to { opacity: 0; transform: translateX(20px) scale(0.9); }
+}
+.toast.success { border-left: 3px solid var(--new); }
+.toast.error   { border-left: 3px solid var(--sale); }
+.toast.info    { border-left: 3px solid var(--rose); }
+
+/* ═══════════════════════════════════════
+   CONFETTI (Petal)
+═══════════════════════════════════════ */
+#confetti-canvas {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 999;
+  display: none;
+}
+
+/* ═══════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════ */
+@media (max-width: 480px) {
+  .shop-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .hero-title { font-size: 34px; }
+  .stats-row { grid-template-columns: 1fr 1fr; }
+  .form-row { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
-<header class="top">
-  <div class="top-row">
-    <button class="back" id="back" type="button">← もどる</button>
-    <h1>みてみる</h1>
-  </div>
-  <nav class="tabs" role="tablist">
-    <button class="tab" role="tab" data-tab="shop" aria-selected="true">商品</button>
-    <button class="tab" role="tab" data-tab="orders" aria-selected="false">引換券<span class="count hidden" id="ticketCount"></span></button>
-    <button class="tab hidden" role="tab" data-tab="admin" aria-selected="false" id="adminTab">運営</button>
-  </nav>
-</header>
 
-<main class="wrap">
-  <section id="view-shop">
-    <div class="purse hidden" id="purse"></div>
-    <ul class="list" id="products"><li class="busy">読み込んでいます…</li></ul>
-  </section>
+<canvas id="confetti-canvas"></canvas>
+<div id="toast-container"></div>
 
-  <section id="view-orders" class="hidden">
-    <div id="tickets"></div>
-  </section>
+<div id="app">
 
-  <section id="view-admin" class="hidden admin">
-    <h2>引換コードで探す</h2>
-    <form class="lookup" id="lookupForm">
-      <input id="lookupCode" maxlength="8" autocomplete="off" inputmode="latin" aria-label="引換コード" placeholder="ABC234">
-      <button type="submit">探す</button>
-    </form>
-    <div id="lookupResult"></div>
-
-    <h2>注文</h2>
-    <div class="filter" id="orderFilter">
-      <button class="small-btn primary" data-status="paid">受け取り待ち</button>
-      <button class="small-btn" data-status="pending_payment">支払い待ち</button>
-      <button class="small-btn" data-status="fulfilled">受け渡し済み</button>
-      <button class="small-btn" data-status="">すべて</button>
+  <!-- Header -->
+  <header class="header">
+    <button class="header-back" onclick="goBack()">戻る</button>
+    <div class="header-title">School Park Mall</div>
+    <div class="header-right">
+      <button class="cart-btn" id="cartBtn" onclick="switchTab('bag')">
+        🛍
+        <span class="cart-badge" id="cartBadge">0</span>
+      </button>
+      <span class="header-clock" id="clock">00:00:00</span>
     </div>
-    <div id="adminOrders"></div>
+  </header>
 
-    <h2>商品</h2>
-    <div id="adminProducts"></div>
-    <h2 id="formTitle">商品を出す</h2>
-    <form class="form" id="productForm">
-      <input type="hidden" id="pf-id">
-      <label>名前<input id="pf-name" maxlength="60" required placeholder="ステッカー引換券"></label>
-      <label>説明<textarea id="pf-desc" maxlength="600"></textarea></label>
-      <label>画像のURL（https）<input id="pf-image" maxlength="500" placeholder="https://…"></label>
-      <div class="row3">
-        <label>EMUER<input id="pf-emuer" type="number" min="1" step="1" placeholder="—"></label>
-        <label>JPYC<input id="pf-jpyc" type="number" min="1" step="1" placeholder="—"></label>
-        <label>円<input id="pf-jpy" type="number" min="1" step="1" placeholder="—"></label>
-      </div>
-      <label class="check"><input type="checkbox" id="pf-cash"> 会場で現金を受け取る（円の価格が必要）</label>
-      <label>在庫（空欄なら数を限らない）<input id="pf-stock" type="number" min="0" step="1"></label>
-      <label>受け取り方<input id="pf-fulfill" maxlength="200" required placeholder="解剖フェス会場で手渡し"></label>
-      <label>取消・返金の条件<textarea id="pf-cancel" maxlength="300" required placeholder="受け取り前で、運営の都合で渡せないときは全額返金します"></textarea></label>
-      <label>状態
-        <select id="pf-status">
-          <option value="draft">下書き（並べない）</option>
-          <option value="live">販売中</option>
-          <option value="ended">終了</option>
-        </select>
-      </label>
-      <div style="display:flex;gap:8px">
-        <button type="submit" class="small-btn primary" id="pf-save">商品を出す</button>
-        <button type="button" class="small-btn hidden" id="pf-reset">新しい商品にする</button>
-      </div>
-      <p class="meta" id="pf-note"></p>
-    </form>
-  </section>
-</main>
+  <!-- Hero -->
+  <div class="hero" id="hero">
+    <div class="hero-beam"></div>
+    <div class="hero-title"><span>School Park</span> Mall</div>
+    <div class="hero-divider"><div class="hero-divider-dot"></div></div>
+    <div class="hero-sale-pill">✦ Grand open Sale — 最大 50% OFF</div>
+  </div>
 
-<div class="veil" id="veil"></div>
-<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle"><div class="sheet-in" id="sheetIn"></div></div>
-<div class="toast" id="toast" role="status"></div>
+  <!-- Order Form Banner -->
+  <a class="order-banner"
+     href="https://forms.gle/R8a7A3KjwwGogEDj7"
+     target="_blank"
+     rel="noopener noreferrer">
+    <span class="order-banner-icon">🛍️</span>
+    <span>ご注文はこちら（住所入力フォーム）</span>
+    <span class="order-banner-arrow">›</span>
+  </a>
+
+  <!-- Tabs -->
+  <nav class="tabs">
+    <button class="tab-btn active" onclick="switchTab('shops')">Shop</button>
+    <button class="tab-btn" onclick="switchTab('sale')">New &amp; Sale</button>
+    <button class="tab-btn" onclick="switchTab('bag')">My Bag</button>
+    <button class="tab-btn" id="ownerTabBtn" onclick="switchTab('owner')" style="display:none">Manage</button>
+  </nav>
+
+  <!-- Tab① Shops -->
+  <div class="tab-panel active" id="panel-shops">
+    <div class="category-scroll" id="catFilter">
+      <button class="cat-btn active" data-cat="all" onclick="filterCat('all',this)">All</button>
+      <button class="cat-btn" data-cat="kyozai" onclick="filterCat('kyozai',this)">教材</button>
+      <button class="cat-btn" data-cat="yugu" onclick="filterCat('yugu',this)">遊具</button>
+      <button class="cat-btn" data-cat="zakka" onclick="filterCat('zakka',this)">雑貨</button>
+      <button class="cat-btn" data-cat="fashion" onclick="filterCat('fashion',this)">Fashion</button>
+      <button class="cat-btn" data-cat="digital" onclick="filterCat('digital',this)">Digital</button>
+      <button class="cat-btn" data-cat="other" onclick="filterCat('other',this)">その他</button>
+    </div>
+    <div class="shop-grid" id="shopGrid"></div>
+  </div>
+
+  <!-- Tab② New & Sale -->
+  <div class="tab-panel" id="panel-sale">
+    <div class="section-title">
+      <div class="section-title-en">New Arrivals</div>
+      <div class="section-title-jp">新着商品</div>
+    </div>
+    <div class="carousel-wrap"><div class="carousel" id="newCarousel"></div></div>
+
+    <div class="sale-section">
+      <div class="section-title">
+        <div class="section-title-en">On Sale</div>
+        <div class="section-title-jp">セール中</div>
+      </div>
+      <div class="countdown-bar">
+        <span class="countdown-label">セール終了まで</span>
+        <span class="countdown-timer" id="countdownTimer">--:--:--</span>
+      </div>
+      <div class="sale-grid" id="saleGrid"></div>
+    </div>
+  </div>
+
+  <!-- Tab③ My Bag -->
+  <div class="tab-panel" id="panel-bag">
+    <div id="bagContent"></div>
+  </div>
+
+  <!-- Tab④ Owner -->
+  <div class="tab-panel" id="panel-owner">
+    <div id="ownerContent"></div>
+  </div>
+
+</div><!-- #app -->
+
+<!-- Shop Modal -->
+<div class="modal-overlay" id="shopModal" onclick="closeModalOutside(event)">
+  <div class="modal" id="modalInner">
+    <div class="modal-handle"><div class="modal-handle-bar"></div></div>
+    <div class="modal-header">
+      <span class="modal-shop-emoji" id="modalEmoji"></span>
+      <div class="modal-shop-info">
+        <div class="modal-shop-name" id="modalName"></div>
+        <div class="modal-shop-meta" id="modalCat"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-products" id="modalProducts"></div>
+  </div>
+</div>
 
 <script>
-(function () {
-  "use strict";
-  var API = "https://emu-realtime.onrender.com/api/mitemiru";
-  var EMUER_ABI = [
-    "function exchange(bytes32 orderId, bytes32 productId, uint256 price, uint256 deadline, bytes authorization)",
-    "function refundExchange(bytes32 orderId)",
-    "function markExchangeFulfilled(bytes32 orderId)"
-  ];
-  var ERC20_ABI = ["function transfer(address to, uint256 amount) returns (bool)"];
+/* ═══════════════════════
+   DATA
 
-  var state = { products: [], me: null, orders: [], tab: "shop", adminStatus: "paid", adminProducts: [] };
-  var $ = function (id) { return document.getElementById(id); };
-  var esc = function (v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
-  var yen = function (n) { return Number(n).toLocaleString("ja-JP"); };
-  var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+   もとは空の配列が置いてあるだけの雛形だった（[MIGRATE] の印のとおり）。
+   中身はサーバー（/api/mitemiru）から入れる。
+   並べ方・見た目の関数はそのまま使うので、ここで同じ形に整える。
+═══════════════════════ */
+const API = 'https://emu-realtime.onrender.com/api/mitemiru';
+let SHOPS = [];
+let NEW_ITEMS = [];
+let SALE_ITEMS = [];
+let PRODUCTS = [];          /* サーバーから来た商品。注文のときに引く */
+const productById = (id) => PRODUCTS.find(p => String(p.id) === String(id)) || null;
 
-  var MESSAGES = {
-    PLAN_REQUIRED: "EMUERで払えるのは Emu Light 以上の方です。円かJPYCなら払えます。",
-    PERIOD_LIMIT_REACHED: "この期間のEMUERでの交換回数を使い切りました（Lightは月1回、Plusは週1回）。円かJPYCなら払えます。",
-    INSUFFICIENT_EMUER: "未変換のEMUERが足りません。",
-    SOLD_OUT: "売り切れました。",
-    NOT_FOR_SALE: "この商品はいまは手に入りません。",
-    METHOD_NOT_AVAILABLE: "この支払い方法は使えません。",
-    EMUER_NOT_ACTIVE: "EMUERの支払いはいま止まっています。",
-    WALLET_REQUIRED: "この支払いにはウォレットが必要です。",
-    CHAIN_UNAVAILABLE: "Polygonにつながりません。少し待ってからもう一度押してください。",
-    AUTHORIZER_NOT_READY: "EMUERの支払いの準備ができていません。運営に知らせてください。",
-    CARD_UNAVAILABLE: "カード払いの準備ができていません。",
-    CARD_NOT_PAID: "カードの支払いはまだ終わっていません。",
-    CHAIN_PAYMENT_NOT_FOUND: "鎖の上でまだ支払いが見つかりません。少し待ってから「支払いを確かめる」を押してください。",
-    TX_PENDING: "送金の確定を待っています。",
-    TX_NOT_FOUND: "その送金はまだ見つかりません。",
-    TRANSFER_NOT_FOUND: "この注文の金額・宛先の送金が見つかりません。",
-    TX_ALREADY_USED: "その送金は別の注文で使われています。",
-    ORDER_EXPIRED: "取り置きの期限が過ぎました。もう一度最初から選んでください。",
-    ORDER_NOT_PENDING: "この注文は支払い待ちではありません。",
-    ALREADY_DONE: "すでに済んでいます。",
-    NOT_PAID: "まだ支払われていません。",
-    CHAIN_REFUND_NOT_CONFIRMED: "先に運営ウォレットで鎖の上の返金をしてください。",
-    OWNER_ONLY: "運営だけが使えます。",
-    RATE_LIMITED: "押す回数が多すぎます。少し待ってください。",
-    AUTH_REQUIRED: "Emuにログインしてから開いてください。",
-    INVALID_AUTH_TOKEN: "ログインし直してください。"
+/* ═══════════════════════
+   STATE
+═══════════════════════ */
+/* [MIGRATE] cart localStorage → Firestore sp_shopping_carts */
+let cart = JSON.parse(localStorage.getItem('sp_cart') || '[]');
+let currentTab = 'shops';
+let currentFilter = 'all';
+const SALE_END = new Date(Date.now() + 2*24*3600000 + 7*3600000 + 23*60000);
+
+/* 運営かどうか。前は ?owner=1 を付ければ誰でも見られた。
+   サーバーに聞く（答えを待つまでは運営ではない扱い）。 */
+let ME = null;
+const isOwner = () => !!(ME && ME.isOwner);
+
+/* ═══════════════════════
+   PETALS
+═══════════════════════ */
+function spawnPetals() {
+  const hero = document.getElementById('hero');
+  const petalEmojis = ['🌸','🌷','✿','·','◦'];
+  for (let i = 0; i < 12; i++) {
+    const p = document.createElement('div');
+    p.className = 'hero-petal';
+    p.textContent = petalEmojis[Math.floor(Math.random() * petalEmojis.length)];
+    p.style.cssText = `
+      left: ${Math.random()*100}%;
+      top: -10px;
+      font-size: ${8 + Math.random()*10}px;
+      animation-duration: ${4 + Math.random()*4}s;
+      animation-delay: ${Math.random()*6}s;
+    `;
+    hero.appendChild(p);
+  }
+}
+
+/* ═══════════════════════
+   CLOCK
+═══════════════════════ */
+function startClock() {
+  const el = document.getElementById('clock');
+  const tick = () => el.textContent = new Date().toLocaleTimeString('ja-JP',{hour12:false});
+  tick(); setInterval(tick, 1000);
+}
+
+/* ═══════════════════════
+   COUNTDOWN
+═══════════════════════ */
+function startCountdown() {
+  const el = document.getElementById('countdownTimer');
+  const tick = () => {
+    const d = SALE_END - Date.now();
+    if (d <= 0) { el.textContent = 'セール終了'; return; }
+    const h = String(Math.floor(d/3600000)).padStart(2,'0');
+    const m = String(Math.floor(d%3600000/60000)).padStart(2,'0');
+    const s = String(Math.floor(d%60000/1000)).padStart(2,'0');
+    el.textContent = `${h}:${m}:${s}`;
   };
-  function say(code) { return MESSAGES[code] || code || "うまくいきませんでした。"; }
-  function toast(text) {
-    var t = $("toast"); t.textContent = text; t.classList.add("show");
-    clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove("show"); }, 4200);
+  tick(); setInterval(tick, 1000);
+}
+
+/* ═══════════════════════
+   TABS
+═══════════════════════ */
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  const order = ['shops','sale','bag','owner'];
+  const i = order.indexOf(tab);
+  const btns = document.querySelectorAll('.tab-btn');
+  if (i >= 0 && btns[i]) btns[i].classList.add('active');
+  if (tab === 'bag') renderBag();
+  const footer = document.getElementById('cartFooter');
+  if (footer) footer.className = 'cart-footer' + (tab === 'bag' && cart.length > 0 ? ' visible' : '');
+}
+
+/* ═══════════════════════
+   SHOP GRID
+═══════════════════════ */
+function renderShops() {
+  const shops = currentFilter === 'all' ? SHOPS : SHOPS.filter(s => s.category === currentFilter);
+  const grid = document.getElementById('shopGrid');
+  if (shops.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text2);">
+        <div style="font-size:48px;margin-bottom:14px;opacity:0.5">🛒</div>
+        <div style="font-family:var(--font-serif);font-size:18px;font-style:italic;margin-bottom:6px">No shops yet</div>
+        <div style="font-family:var(--font-sans);font-size:11px;color:var(--text3);letter-spacing:0.06em">ショップが登録されていません</div>
+      </div>`;
+    return;
+  }
+  grid.innerHTML = shops.map(shopCardHTML).join('');
+}
+
+function shopCardHTML(s) {
+  const badgeClass = s.badge === 'NEW' ? 'badge-new' : s.badge === 'SALE' ? 'badge-sale' : s.badge === 'HOT' ? 'badge-hot' : '';
+  const badgeLabel = s.badge === 'HOT' ? '✦ HOT' : s.badge === 'SALE' ? 'SALE' : s.badge || '';
+  return `
+  <div class="shop-card" onclick="openShop('${s.id}')">
+    ${s.badge ? `<span class="shop-badge ${badgeClass}">${badgeLabel}</span>` : ''}
+    <span class="shop-emoji">${s.emoji}</span>
+    <div class="shop-name">${s.name}</div>
+    <div class="shop-category">${catLabel(s.category)}</div>
+    <div class="shop-desc">${s.desc}</div>
+    <div class="shop-footer">
+      <span class="shop-rating">★ ${s.rating}</span>
+      <span style="font-family:var(--font-sans);font-size:10px;color:var(--text3)">${s.items}点</span>
+    </div>
+  </div>`;
+}
+
+function catLabel(c) {
+  return {kyozai:'教材',yugu:'遊具',zakka:'雑貨',fashion:'Fashion',digital:'Digital',other:'その他'}[c] || c;
+}
+
+function filterCat(cat, btn) {
+  currentFilter = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderShops();
+}
+
+/* ═══════════════════════
+   MODAL
+═══════════════════════ */
+function openShop(id) {
+  const shop = SHOPS.find(s => String(s.id) === String(id));
+  if (!shop) return;
+  document.getElementById('modalEmoji').textContent = shop.emoji;
+  document.getElementById('modalName').textContent = shop.name;
+  document.getElementById('modalCat').textContent = catLabel(shop.category) + '  ·  ★' + shop.rating + '  ·  ' + shop.items + '点';
+  document.getElementById('modalProducts').innerHTML = shop.products.map(p => productCardHTML(p, shop.name)).join('');
+  document.getElementById('shopModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function productCardHTML(p, shopName) {
+  return `
+  <div class="product-card">
+    <span class="product-emoji">${p.emoji}</span>
+    <div class="product-name">${p.name}</div>
+    <div class="product-desc">${p.desc}</div>
+    <div class="product-price">${p.price.toLocaleString()} <span>EMUER</span></div>
+    <button class="add-cart-btn" onclick="addToCart('${p.id}','${es(p.name)}','${p.emoji}',${p.price},'${es(shopName)}')">カートに追加</button>
+  </div>`;
+}
+const es = s => s.replace(/'/g,"\\'");
+
+function closeModal() {
+  document.getElementById('shopModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function closeModalOutside(e) {
+  if (e.target === document.getElementById('shopModal')) closeModal();
+}
+
+/* ═══════════════════════
+   CAROUSELS
+═══════════════════════ */
+function renderNewCarousel() {
+  const wrap = document.getElementById('newCarousel');
+  if (NEW_ITEMS.length === 0) {
+    wrap.innerHTML = `
+      <div style="padding:40px 20px;color:var(--text3);font-family:var(--font-sans);font-size:11px;letter-spacing:0.08em">新着商品はまだありません</div>`;
+    return;
+  }
+  wrap.innerHTML = NEW_ITEMS.map(item => `
+  <div class="carousel-card">
+    <span class="carousel-card-emoji">${item.emoji}</span>
+    <div class="carousel-card-name">${item.name}</div>
+    <div class="carousel-card-shop">${item.shop}</div>
+    <div class="carousel-card-price">${item.price.toLocaleString()} <span style="font-family:var(--font-sans);font-size:10px;color:var(--text2)">EMUER</span></div>
+    <span class="carousel-card-badge">NEW</span>
+    <button class="carousel-card-add" onclick="addToCart('${item.id}','${es(item.name)}','${item.emoji}',${item.price},'${es(item.shop)}')">カートに追加</button>
+  </div>`).join('');
+}
+
+function renderSaleGrid() {
+  const grid = document.getElementById('saleGrid');
+  if (SALE_ITEMS.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text3);font-family:var(--font-sans);font-size:11px;letter-spacing:0.08em">セール商品はまだありません</div>`;
+    return;
+  }
+  grid.innerHTML = SALE_ITEMS.map(item => {
+    const sp = Math.floor(item.original * (1 - item.off/100));
+    return `
+    <div class="sale-card">
+      <span class="sale-off-tag">${item.off}% OFF</span>
+      <span class="sale-card-emoji">${item.emoji}</span>
+      <div class="sale-card-name">${item.name}</div>
+      <div class="sale-card-shop">${item.shop}</div>
+      <div class="sale-price-original">${item.original.toLocaleString()} EMUER</div>
+      <div class="sale-price-current">${sp.toLocaleString()} <span style="font-family:var(--font-sans);font-size:12px">EMUER</span></div>
+      <button class="sale-add-btn" onclick="addToCart('${item.id}','${es(item.name)}','${item.emoji}',${sp},'${es(item.shop)}')">カートに追加</button>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════
+   CART
+═══════════════════════ */
+/* [MIGRATE] cart localStorage → Firestore sp_shopping_carts addDoc/getDocs */
+function saveCart() { localStorage.setItem('sp_cart', JSON.stringify(cart)); }
+
+function updateCartBadge() {
+  const total = cart.reduce((s,i) => s+i.qty, 0);
+  const b = document.getElementById('cartBadge');
+  b.textContent = total;
+  b.className = 'cart-badge' + (total > 0 ? ' visible' : '');
+}
+
+function addToCart(id, name, emoji, price, shop) {
+  const ex = cart.find(i => i.id === id);
+  if (ex) ex.qty++; else cart.push({id,name,emoji,price,shop,qty:1});
+  saveCart(); updateCartBadge(); bounceCart();
+  showToast(`${name} をバッグに追加しました`, 'success');
+  window.top.postMessage({ type:'spActivityLog', logType:'shop', icon:'🛍️', title:'ショッピングモールでカートに追加', detail: `${emoji}${name}（${price.toLocaleString()} EMUER）` }, '*');
+  if (currentTab === 'bag') renderBag();
+}
+
+function bounceCart() {
+  const btn = document.getElementById('cartBtn');
+  btn.classList.remove('bounce');
+  void btn.offsetWidth;
+  btn.classList.add('bounce');
+}
+
+function changeQty(id, delta) {
+  const item = cart.find(i => i.id === id);
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) cart = cart.filter(i => i.id !== id);
+  saveCart(); updateCartBadge(); renderBag();
+}
+
+function removeFromCart(id) {
+  cart = cart.filter(i => i.id !== id);
+  saveCart(); updateCartBadge(); renderBag();
+  showToast('アイテムを削除しました', 'info');
+}
+
+function renderBag() {
+  const container = document.getElementById('bagContent');
+  let footer = document.getElementById('cartFooter');
+
+  if (cart.length === 0) {
+    container.innerHTML = `
+      <div class="empty-bag">
+        <div class="empty-bag-icon">🛍</div>
+        <div class="empty-bag-text">My bag is empty</div>
+        <div class="empty-bag-sub">気になる商品を見つけて<br>バッグに入れてみましょう</div>
+      </div>`;
+    if (footer) footer.className = 'cart-footer';
+    return;
   }
 
-  /* ログインの証は親（Emu）からもらう。 */
-  function canAuth() {
-    try { return window.parent && window.parent !== window && typeof window.parent.emuAuthHeaders === "function"; }
-    catch (e) { return false; }
-  }
-  async function headers() {
-    if (!canAuth()) throw new Error("AUTH_REQUIRED");
-    return window.parent.emuAuthHeaders(true);
-  }
-  async function api(path, opts) {
-    var o = opts || {};
-    var h = o.auth === false ? { "Content-Type": "application/json" } : await headers();
-    var r = await fetch(API + path, { method: o.method || "GET", headers: h, body: o.body ? JSON.stringify(o.body) : undefined });
-    var v = await r.json().catch(function () { return {}; });
-    if (!r.ok) { var e = new Error(v.error || "FAILED"); e.data = v; throw e; }
-    return v;
-  }
+  const total = cart.reduce((s,i) => s+i.price*i.qty, 0);
+  container.innerHTML = `
+    <div class="cart-list">
+      ${cart.map(item => `
+      <div class="cart-item">
+        <span class="cart-item-emoji">${item.emoji}</span>
+        <div class="cart-item-info">
+          <div class="cart-item-name">${item.name}</div>
+          <div class="cart-item-shop">${item.shop}</div>
+          <div class="cart-item-price">${(item.price*item.qty).toLocaleString()} <span style="font-family:var(--font-sans);font-size:10px;color:var(--text2)">EMUER</span></div>
+        </div>
+        <div class="cart-item-qty">
+          <button class="qty-btn" onclick="changeQty('${item.id}',-1)">−</button>
+          <span class="qty-val">${item.qty}</span>
+          <button class="qty-btn" onclick="changeQty('${item.id}',1)">＋</button>
+        </div>
+        <button class="cart-item-del" onclick="removeFromCart('${item.id}')">🗑</button>
+      </div>`).join('')}
+    </div>
+    <div style="height:130px"></div>`;
 
-  /* ウォレット（MetaMask など）。この部屋か親のどちらかに入っている。 */
-  function injected() {
-    if (window.ethereum) return window.ethereum;
-    try { return window.parent && window.parent.ethereum; } catch (e) { return null; }
-  }
-  async function walletSigner(expected) {
-    var eth = injected();
-    if (!eth || typeof ethers === "undefined") throw new Error("ウォレット（MetaMaskなど）が入っているブラウザで開いてください。");
-    await eth.request({ method: "eth_requestAccounts" });
-    var chainId = await eth.request({ method: "eth_chainId" });
-    if (parseInt(chainId, 16) !== 137) {
-      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x89" }] });
-    }
-    var provider = new ethers.providers.Web3Provider(eth);
-    var signer = provider.getSigner();
-    var addr = (await signer.getAddress()).toLowerCase();
-    if (expected && addr !== String(expected).toLowerCase()) {
-      throw new Error("ウォレットのアカウントが、Emuに登録したアドレス（" + expected.slice(0, 6) + "…" + expected.slice(-4) + "）と違います。切り替えてください。");
-    }
-    return signer;
-  }
+  const footerHTML = `
+    <div class="cart-total-row">
+      <span class="cart-total-label">合計 ${cart.reduce((s,i)=>s+i.qty,0)}点</span>
+      <span class="cart-total-amount">${total.toLocaleString()} <span>EMUER</span></span>
+    </div>
+    <button class="buy-btn" onclick="purchase()">購入する — ${total.toLocaleString()} EMUER</button>`;
 
-  /* ───── タブ ───── */
-  function show(tab) {
-    state.tab = tab;
-    document.querySelectorAll(".tab").forEach(function (b) { b.setAttribute("aria-selected", String(b.dataset.tab === tab)); });
-    ["shop", "orders", "admin"].forEach(function (k) { $("view-" + k).classList.toggle("hidden", k !== tab); });
-    if (tab === "orders") loadOrders();
-    if (tab === "admin") { loadAdminOrders(); loadAdminProducts(); }
+  if (!footer) {
+    footer = document.createElement('div');
+    footer.id = 'cartFooter';
+    footer.className = 'cart-footer' + (currentTab === 'bag' ? ' visible' : '');
+    footer.innerHTML = footerHTML;
+    document.getElementById('app').appendChild(footer);
+  } else {
+    footer.className = 'cart-footer' + (currentTab === 'bag' ? ' visible' : '');
+    footer.innerHTML = footerHTML;
   }
-  document.querySelectorAll(".tab").forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.tab); }); });
-  $("back").addEventListener("click", function () {
-    try { if (window.parent !== window) { window.parent.postMessage({ type: "spContentClose" }, location.origin); return; } } catch (e) {}
-    location.href = "/";
-  });
+}
 
-  /* ───── 商品 ───── */
-  var WAYS = {
-    emuer_ledger: { name: "EMUER（未変換）", cur: "EMUER", note: "まだ受け取っていないEMUERから払います。ウォレットもガス代もいりません。" },
-    emuer_chain:  { name: "EMUER（ウォレット）", cur: "EMUER", note: "受け取り済みのEMUERで払います。ガス代（POL）が少しかかります。" },
-    jpyc:         { name: "JPYC", cur: "JPYC", note: "ウォレットからJPYCを送ります。ガス代（POL）が少しかかります。" },
-    jpy_card:     { name: "カード", cur: "JPY", note: "Stripeの支払い画面に移ります。" },
-    jpy_cash:     { name: "会場で現金", cur: "JPY", note: "コードを会場で見せて、その場で現金で払います。" }
-  };
-  function amountText(cur, n) { return cur === "JPY" ? yen(n) + "円" : yen(n) + " " + cur; }
+/* ═══════════════════════
+   PURCHASE
+═══════════════════════ */
+/* 払い方。カートの全部が使えるものだけ出す。
+   1つでも使えない商品があると、まとめて払えないため。 */
+const METHOD_LABEL = {
+  emuer_ledger: ['EMUER', 'まだ受け取っていない EMUER から引きます'],
+  emuer_chain:  ['EMUER（ウォレット）', '受け取り済みの EMUER で払います'],
+  jpyc:         ['JPYC', 'ウォレットから JPYC を送ります'],
+  jpy_card:     ['円（カード）', 'カードの画面へ進みます'],
+  jpy_cash:     ['円（会場で現金）', '当日その場でお支払いください']
+};
+const METHOD_CURRENCY = {
+  emuer_ledger: 'EMUER', emuer_chain: 'EMUER', jpyc: 'JPYC', jpy_card: 'JPY', jpy_cash: 'JPY'
+};
+const MONEY = { EMUER: 'EMUER', JPYC: 'JPYC', JPY: '円' };
 
-  function renderPurse() {
-    var me = state.me, el = $("purse");
-    if (!me || !me.emuer) { el.classList.add("hidden"); return; }
-    var e = me.emuer, plan = { light: "Emu Light", plus: "Emu Plus", pro: "Emu Pro" }[e.plan] || "無料プラン";
-    var quota = e.error === "PLAN_REQUIRED" ? "EMUERでの交換は Light から"
-      : e.limit === null ? "EMUERでの交換は回数の制限なし"
-      : "EMUERでの交換 " + (e.limit - e.used > 0 ? "あと" + (e.limit - e.used) + "回" : "この期間は使い切り");
-    el.innerHTML = "<span>未変換のEMUER <b>" + esc(e.unconverted) + "</b></span><span>" + esc(plan) + "：" + esc(quota) + "</span>";
-    el.classList.remove("hidden");
+function cartProducts() {
+  return cart.map(i => ({ line: i, product: productById(i.id) })).filter(x => x.product);
+}
+function payMethods() {
+  const rows = cartProducts();
+  if (!rows.length) return [];
+  return Object.keys(METHOD_LABEL).filter(m => rows.every(r => r.product.methods.includes(m)));
+}
+function methodTotal(method) {
+  const cur = METHOD_CURRENCY[method];
+  return cartProducts().reduce((sum, r) => sum + Number(r.product.prices[cur] || 0) * r.line.qty, 0);
+}
+
+/* 画面に出す小窓。ショップの小窓と同じ作り（同じ見た目）を使う。 */
+function sheet(title, inner) {
+  closeSheet();
+  const wrap = document.createElement('div');
+  wrap.className = 'modal-overlay open';
+  wrap.id = 'paySheet';
+  wrap.onclick = (e) => { if (e.target === wrap) closeSheet(); };
+  wrap.innerHTML = `
+  <div class="modal">
+    <div class="modal-handle"><div class="modal-handle-bar"></div></div>
+    <div class="modal-header">
+      <div class="modal-shop-info"><div class="modal-shop-name">${title}</div></div>
+      <button class="modal-close" onclick="closeSheet()">✕</button>
+    </div>
+    <div class="modal-products" style="display:block">${inner}</div>
+  </div>`;
+  document.body.appendChild(wrap);
+  document.body.style.overflow = 'hidden';
+  return wrap;
+}
+function closeSheet() {
+  const old = document.getElementById('paySheet');
+  if (old) old.remove();
+  document.body.style.overflow = '';
+}
+
+function purchase() {
+  if (!cart.length) return;
+  if (!ME) {
+    showToast('購入にはログインが必要です', 'error');
+    return;
   }
-
-  function renderProducts() {
-    var ul = $("products");
-    if (!state.products.length) {
-      ul.innerHTML = '<li class="empty"><strong>まだ商品がありません</strong>イベントの引換券などが並んだら、ここから手に入れられます。</li>';
-      return;
-    }
-    ul.innerHTML = state.products.map(function (p) {
-      var prices = [];
-      if (p.prices.EMUER !== null) prices.push('<span class="price"><b>' + yen(p.prices.EMUER) + "</b> EMUER</span>");
-      if (p.prices.JPYC !== null) prices.push('<span class="price"><b>' + yen(p.prices.JPYC) + "</b> JPYC</span>");
-      if (p.prices.JPY !== null) prices.push('<span class="price"><b>' + yen(p.prices.JPY) + "</b> 円</span>");
-      var thumb = p.imageUrl ? '<img alt="" src="' + esc(p.imageUrl) + '">' : esc(p.name.slice(0, 1));
-      var left = p.remaining === null ? "" : (p.soldOut ? "売り切れ" : "のこり " + p.remaining);
-      return '<li class="item"><div class="thumb">' + thumb + "</div><div>" +
-        "<h2>" + esc(p.name) + "</h2>" + (p.description ? "<p>" + esc(p.description) + "</p>" : "") +
-        '<div class="prices">' + prices.join("") + "</div>" +
-        '<div class="meta">' + esc(p.fulfillment) + (left ? "／" + left : "") + "</div>" +
-        '<button class="get" data-id="' + esc(p.id) + '"' + (p.soldOut || !p.methods.length ? " disabled" : "") + ">" + (p.soldOut ? "売り切れ" : "手に入れる") + "</button>" +
-        "</div></li>";
-    }).join("");
-    ul.querySelectorAll(".get").forEach(function (b) { b.addEventListener("click", function () { openSheet(b.dataset.id); }); });
+  const rows = cartProducts();
+  if (rows.length !== cart.length) {
+    showToast('販売が終わった商品がバッグに入っています', 'error');
+    return;
   }
-
-  async function loadProducts() {
-    try {
-      var v = await api("/products", { auth: false });
-      state.products = v.products || [];
-      renderProducts();
-    } catch (e) { $("products").innerHTML = '<li class="empty"><strong>商品を読み込めませんでした</strong>通信を確かめて、開き直してください。</li>'; }
+  const methods = payMethods();
+  if (!methods.length) {
+    sheet('お支払い', '<p style="font-family:var(--font-sans);font-size:12px;line-height:1.9;color:var(--text2)">'
+      + 'バッグの中で、同じ払い方が使える組み合わせになっていません。<br>'
+      + '商品を分けてお求めください。</p>');
+    return;
   }
-  async function loadMe() {
-    if (!canAuth()) return;
-    try {
-      state.me = await api("/me");
-      renderPurse();
-      if (state.me.isOwner) $("adminTab").classList.remove("hidden");
-    } catch (e) { /* 未ログインなら商品だけ見せる */ }
-  }
+  const body = methods.map(m => {
+    const cur = METHOD_CURRENCY[m];
+    const total = methodTotal(m);
+    return `
+    <button class="add-cart-btn" style="width:100%;text-align:left;margin-bottom:8px;padding:14px"
+      onclick="startPay('${m}')">
+      <div style="font-size:13px;font-weight:600;margin-bottom:3px">${METHOD_LABEL[m][0]}　${total.toLocaleString()} ${MONEY[cur]}</div>
+      <div style="font-size:11px;opacity:0.75;font-weight:400">${METHOD_LABEL[m][1]}</div>
+    </button>`;
+  }).join('');
+  sheet('お支払い方法', body
+    + '<p style="font-family:var(--font-sans);font-size:11px;color:var(--text3);line-height:1.8;margin-top:6px">'
+    + 'お支払いが確かめられると、引換コードが出ます。当日はそのコードをお見せください。</p>');
+}
 
-  /* ───── 支払いの選択 ───── */
-  function openSheetHtml(html) {
-    $("sheetIn").innerHTML = html;
-    $("veil").classList.add("open"); $("sheet").classList.add("open");
-  }
-  function closeSheet() { $("veil").classList.remove("open"); $("sheet").classList.remove("open"); }
-  $("veil").addEventListener("click", closeSheet);
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
-
-  function wayBlocked(method, p) {
-    var me = state.me;
-    if (!canAuth() || !me) return "Emuにログインすると選べます。";
-    if (WAYS[method].cur === "EMUER") {
-      if (me.emuer.error === "PLAN_REQUIRED") return "Emu Light 以上で使えます。";
-      if (me.emuer.error === "PERIOD_LIMIT_REACHED") return "この期間の回数を使い切りました。";
-      if (me.emuer.error) return say(me.emuer.error);
-      if (method === "emuer_ledger" && Number(me.emuer.unconverted) < p.prices.EMUER) return "未変換のEMUERが足りません（" + me.emuer.unconverted + "）。";
-    }
-    if ((method === "emuer_chain" || method === "jpyc") && !injected()) return "ウォレット（MetaMaskなど）が入っているブラウザで使えます。";
-    return "";
-  }
-
-  function openSheet(id) {
-    var p = state.products.find(function (x) { return x.id === id; });
-    if (!p) return;
-    var ways = p.methods.map(function (m) {
-      var cur = WAYS[m].cur, blocked = wayBlocked(m, p);
-      return '<button class="way" data-m="' + m + '"' + (blocked ? " disabled" : "") + '><span class="w-name">' + WAYS[m].name +
-        '</span><span class="w-amt">' + amountText(cur, p.prices[cur]) + '</span><span class="w-note">' + esc(blocked || WAYS[m].note) + "</span></button>";
-    }).join("");
-    openSheetHtml('<h3 id="sheetTitle">' + esc(p.name) + "</h3>" +
-      '<div class="terms">受け取り方：' + esc(p.fulfillment) + "<br>取消・返金：" + esc(p.cancelPolicy) + "</div>" +
-      ways + '<button class="close-sheet" type="button">やめる</button>');
-    $("sheetIn").querySelector(".close-sheet").addEventListener("click", closeSheet);
-    $("sheetIn").querySelectorAll(".way").forEach(function (b) { b.addEventListener("click", function () { buy(p, b.dataset.m); }); });
-  }
-
-  function busy(text) { $("sheetIn").innerHTML = '<div class="busy">' + esc(text) + "</div>"; }
-
-  async function confirmLoop(orderId, body, tries) {
-    for (var i = 0; i < (tries || 12); i += 1) {
-      try { return await api("/orders/" + orderId + "/confirm", { method: "POST", body: body || {} }); }
-      catch (e) {
-        if (["CHAIN_PAYMENT_NOT_FOUND", "TX_PENDING", "TX_NOT_FOUND", "CHAIN_UNAVAILABLE"].indexOf(e.message) < 0) throw e;
-        await sleep(4000);
-      }
-    }
-    throw new Error("CHAIN_PAYMENT_NOT_FOUND");
-  }
-
-  async function buy(p, method) {
-    busy("注文を作っています…");
-    try {
-      var created = await api("/orders", { method: "POST", body: { productId: p.id, method: method } });
-      var order = created.order;
-      if (method === "jpy_card") {
-        busy("カードの支払い画面に移ります…");
-        try { window.top.location.href = order.stripeUrl; } catch (e) { location.href = order.stripeUrl; }
-        return;
-      }
-      if (method === "emuer_chain") {
-        busy("ウォレットで支払いを承認してください…");
-        var signer = await walletSigner(state.me.wallet);
-        var ex = created.exchange;
-        var c = new ethers.Contract(ex.contract, EMUER_ABI, signer);
-        var tx = await c.exchange(ex.orderId, ex.productId, ex.price, ex.deadline, ex.authorization);
-        busy("Polygonで確定するのを待っています…");
-        await tx.wait(1);
-        order = (await confirmLoop(order.id)).order;
-      }
-      if (method === "jpyc") {
-        busy("ウォレットでJPYCの送金を承認してください…");
-        var s2 = await walletSigner(state.me.wallet);
-        var token = new ethers.Contract(order.jpyc.token, ERC20_ABI, s2);
-        var tx2 = await token.transfer(order.jpyc.receiver, order.jpyc.amountWei);
-        try { localStorage.setItem("mitemiru_tx_" + order.id, tx2.hash); } catch (e) {}
-        busy("送金の確定を待っています…");
-        await tx2.wait(2);
-        order = (await confirmLoop(order.id, { txHash: tx2.hash })).order;
-      }
-      closeSheet();
-      await loadMe(); await loadProducts();
-      show("orders");
-      toast(order.status === "paid" ? "引換券ができました。会場でこのコードを見せてください。" : "注文しました。会場でコードを見せて、現金で払ってください。");
-    } catch (e) {
-      var msg = say(e.message);
-      if (e.message === "INSUFFICIENT_EMUER" && e.data && e.data.available) msg += "（いま " + e.data.available + " EMUER）";
-      if (e.code === 4001 || e.code === "ACTION_REJECTED") msg = "ウォレットで取り消しました。引換券のタブから続きができます。";
-      openSheetHtml('<h3 id="sheetTitle">' + esc(p.name) + '</h3><div class="busy">' + esc(msg) + '</div><button class="close-sheet" type="button">閉じる</button>');
-      $("sheetIn").querySelector(".close-sheet").addEventListener("click", closeSheet);
-      loadMe(); loadProducts();
-    }
-  }
-
-  /* ───── 引換券 ───── */
-  var STATE_LABEL = { paid: ["paid", "受け取り前"], fulfilled: ["fulfilled", "受け取り済み"], pending_payment: ["pending", "支払い待ち"],
-    refunded: ["closed", "返金済み"], cancelled: ["closed", "取り消し"], expired: ["closed", "期限切れ"] };
-
-  function ticketHtml(o) {
-    var st = STATE_LABEL[o.status] || ["closed", o.status];
-    var cls = o.status === "fulfilled" ? " done" : o.status === "pending_payment" ? " waiting" : "";
-    var code = o.pickupCode || o.waitingCode || "------";
-    var sayLine = o.status === "paid" ? "この画面を運営に見せて、受け取ってください"
-      : o.status === "fulfilled" ? "受け取り済みです"
-      : o.method === "jpy_cash" ? "会場でこのコードを見せて、現金で払ってください"
-      : "支払いが終わるとコードが出ます";
-    var acts = [];
-    if (o.status === "pending_payment") {
-      if (o.method === "jpy_card" && o.stripeUrl) acts.push('<button class="small-btn primary" data-act="pay" data-url="' + esc(o.stripeUrl) + '">カードで払う</button>');
-      if (o.method !== "jpy_cash") acts.push('<button class="small-btn" data-act="confirm" data-id="' + esc(o.id) + '">支払いを確かめる</button>');
-      acts.push('<button class="small-btn danger" data-act="cancel" data-id="' + esc(o.id) + '">取り消す</button>');
-    }
-    var when = o.expiresAt ? '<span class="line">取り置きは ' + new Date(o.expiresAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) + " まで</span>" : "";
-    return '<article class="ticket' + cls + '"><div class="ticket-head"><span class="state ' + st[0] + '">' + st[1] + "</span>" +
-      '<div class="name">' + esc(o.productName) + '</div><div class="how">' + esc(o.fulfillment) + "／" + amountText(o.currency, o.amount) + "</div></div>" +
-      '<div class="ticket-code"><div class="say">' + esc(sayLine) + '</div><div class="code">' + esc(o.status === "pending_payment" && o.method !== "jpy_cash" ? "······" : code) + "</div></div>" +
-      '<div class="ticket-foot">' + acts.join("") + when + "</div></article>";
-  }
-
-  async function loadOrders() {
-    var box = $("tickets");
-    if (!canAuth()) { box.innerHTML = '<div class="empty"><strong>Emuにログインしてから開いてください</strong></div>'; return; }
-    box.innerHTML = '<div class="busy">読み込んでいます…</div>';
-    try {
-      state.orders = (await api("/orders")).orders || [];
-      var live = state.orders.filter(function (o) { return ["paid", "pending_payment"].indexOf(o.status) >= 0; });
-      var rest = state.orders.filter(function (o) { return ["paid", "pending_payment"].indexOf(o.status) < 0; });
-      var count = state.orders.filter(function (o) { return o.status === "paid"; }).length;
-      $("ticketCount").textContent = String(count); $("ticketCount").classList.toggle("hidden", !count);
-      if (!state.orders.length) { box.innerHTML = '<div class="empty"><strong>引換券はまだありません</strong>商品を手に入れると、ここに引換コードが出ます。</div>'; return; }
-      box.innerHTML = live.map(ticketHtml).join("") +
-        (rest.length ? '<ul class="past">' + rest.map(function (o) {
-          var st = STATE_LABEL[o.status] || ["closed", o.status];
-          return "<li><span>" + esc(o.productName) + "</span><span>" + st[1] + (o.pickupCode ? "（" + esc(o.pickupCode) + "）" : "") + "</span></li>";
-        }).join("") + "</ul>" : "");
-      box.querySelectorAll("[data-act]").forEach(function (b) { b.addEventListener("click", function () { ticketAction(b); }); });
-    } catch (e) { box.innerHTML = '<div class="empty"><strong>' + esc(say(e.message)) + "</strong></div>"; }
-  }
-
-  async function ticketAction(b) {
-    var act = b.dataset.act, id = b.dataset.id;
-    try {
-      if (act === "pay") { try { window.top.location.href = b.dataset.url; } catch (e) { location.href = b.dataset.url; } return; }
-      b.disabled = true;
-      if (act === "cancel") {
-        if (!confirm("この注文を取り消しますか？")) { b.disabled = false; return; }
-        await api("/orders/" + id + "/cancel", { method: "POST", body: {} });
-        toast("取り消しました。");
-      }
-      if (act === "confirm") {
-        var o = state.orders.find(function (x) { return x.id === id; }) || {};
-        var body = {};
-        if (o.method === "jpyc") {
-          var saved = ""; try { saved = localStorage.getItem("mitemiru_tx_" + id) || ""; } catch (e) {}
-          var h = saved || prompt("JPYCを送ったときのトランザクションハッシュ（0x…）を貼ってください");
-          if (!h) { b.disabled = false; return; }
-          body.txHash = h.trim();
-        }
-        await api("/orders/" + id + "/confirm", { method: "POST", body: body });
-        toast("支払いを確かめました。引換コードが出ています。");
-      }
-    } catch (e) { toast(say(e.message)); }
-    loadOrders(); loadProducts();
-  }
-
-  /* ───── 運営 ───── */
-  var METHOD_NAME = { emuer_ledger: "EMUER（未変換）", emuer_chain: "EMUER（ウォレット）", jpyc: "JPYC", jpy_card: "カード", jpy_cash: "現金" };
-  function adminRow(o) {
-    var st = STATE_LABEL[o.status] || ["closed", o.status];
-    var acts = [];
-    if (o.status === "pending_payment" && o.method === "jpy_cash") acts.push('<button class="small-btn primary" data-a="cash" data-id="' + o.id + '">現金を受け取って渡した</button>');
-    if (o.status === "paid") acts.push('<button class="small-btn primary" data-a="fulfill" data-id="' + o.id + '">渡した</button>');
-    if (o.status === "fulfilled" && o.method === "emuer_chain") acts.push('<button class="small-btn" data-a="chainDone" data-id="' + o.id + '" data-chain="' + esc(o.chainOrderId) + '">鎖の上でも渡し済みにする</button>');
-    if (o.status === "paid" || o.status === "fulfilled") acts.push('<button class="small-btn danger" data-a="refund" data-id="' + o.id + '" data-m="' + o.method + '" data-chain="' + esc(o.chainOrderId || "") + '">返金</button>');
-    return '<div class="orow"><div class="top-line"><span class="ocode">' + esc(o.pickupCode) + '</span><span class="state ' + st[0] + '">' + st[1] + "</span></div>" +
-      "<div>" + esc(o.productName) + "／" + METHOD_NAME[o.method] + " " + amountText(o.currency, o.amount) + "</div>" +
-      '<div class="meta">' + new Date(o.createdAt).toLocaleString("ja-JP") + (o.lateAfterExpiry ? "／取り置きの期限後に支払い" : "") + "</div>" +
-      '<div class="acts">' + acts.join("") + "</div></div>";
-  }
-  function bindAdminActs(root, after) {
-    root.querySelectorAll("[data-a]").forEach(function (b) {
-      b.addEventListener("click", async function () {
-        var id = b.dataset.id, a = b.dataset.a;
-        b.disabled = true;
+async function startPay(method) {
+  const rows = cartProducts();
+  closeSheet();
+  showToast('お手続きしています…', 'info');
+  const done = [];
+  const failed = [];
+  try {
+    for (const r of rows) {
+      for (let n = 0; n < r.line.qty; n += 1) {
         try {
-          if (a === "cash") await api("/admin/orders/" + id + "/cash-paid", { method: "POST", body: { fulfill: true } });
-          if (a === "fulfill") await api("/admin/orders/" + id + "/fulfill", { method: "POST", body: {} });
-          if (a === "chainDone") {
-            var s = await walletSigner(null);
-            await (await new ethers.Contract("0x9c102cC3016C70767082b60196565878D9314864", EMUER_ABI, s).markExchangeFulfilled(b.dataset.chain)).wait(1);
-          }
-          if (a === "refund") {
-            if (!confirm("全額を返金します。よろしいですか？")) { b.disabled = false; return; }
-            var body = { note: prompt("返金の理由（運営用のメモ）") || "" };
-            if (b.dataset.m === "emuer_chain") {
-              var s2 = await walletSigner(null);
-              await (await new ethers.Contract("0x9c102cC3016C70767082b60196565878D9314864", EMUER_ABI, s2).refundExchange(b.dataset.chain)).wait(1);
-            }
-            if (b.dataset.m === "jpyc") {
-              body.txHash = (prompt("購入者へJPYCを送り返したトランザクションハッシュ（0x…）") || "").trim();
-              if (!body.txHash) { b.disabled = false; return; }
-            }
-            if (b.dataset.m === "jpy_cash" && !confirm("現金は手渡しで返してください。返したことを記録しますか？")) { b.disabled = false; return; }
-            await api("/admin/orders/" + id + "/refund", { method: "POST", body: body });
-          }
-          toast({ cash: "受け取って渡したと記録しました。", fulfill: "渡したと記録しました。", chainDone: "鎖の上でも渡し済みにしました。", refund: "返金しました。" }[a]);
-        } catch (e) { toast(say(e.message)); }
-        after();
-      });
+          const res = await call('/orders', { method: 'POST', body: { productId: r.product.id, method } });
+          const after = await followUp(method, res);
+          done.push(after);
+        } catch (e) {
+          failed.push({ name: r.product.name, why: String(e.message || e) });
+        }
+      }
+    }
+  } catch (e) {
+    failed.push({ name: '', why: String(e.message || e) });
+  }
+
+  if (done.length) {
+    const total = done.reduce((s, o) => s + Number(o.amount || 0), 0);
+    const cur = METHOD_CURRENCY[method];
+    cart = []; saveCart(); updateCartBadge(); renderBag();
+    launchPetals();
+    showToast('✦ ご購入ありがとうございます', 'success');
+    window.top.postMessage({ type:'spActivityLog', logType:'shop', icon:'🧾',
+      title:'ショッピングモールで購入しました',
+      detail: `合計 ${total.toLocaleString()} ${MONEY[cur]}` }, '*');
+    await loadShop();
+    paintAll();
+  }
+  showOrders(done, failed, method);
+}
+
+/* 払い方ごとの、あとの手続き。
+   未変換の EMUER はその場で終わる。現金は当日その場で。
+   カードは決済の画面へ。JPYC とウォレットの EMUER はウォレットを動かす。 */
+async function followUp(method, res) {
+  const order = res.order || {};
+  if (method === 'jpy_card' && order.stripeUrl) {
+    window.open(order.stripeUrl, '_blank', 'noopener');
+    return order;
+  }
+  if (method === 'jpyc' && order.jpyc) {
+    const tx = await sendJpyc(order.jpyc);
+    const c = await call('/orders/' + order.id + '/confirm', { method: 'POST', body: { txHash: tx } });
+    return c.order || order;
+  }
+  if (method === 'emuer_chain' && res.exchange) {
+    await payOnChain(res.exchange);
+    const c = await call('/orders/' + order.id + '/confirm', { method: 'POST', body: {} });
+    return c.order || order;
+  }
+  return order;
+}
+
+let _ethers = null;
+async function ethersReady() {
+  if (_ethers) return _ethers;
+  if (!window.ethereum) throw new Error('WALLET_NOT_FOUND');
+  if (!window.ethers) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js';
+      s.onload = res; s.onerror = () => rej(new Error('WALLET_LIB_FAILED'));
+      document.head.appendChild(s);
     });
   }
+  await window.ethereum.request({ method: 'eth_requestAccounts' });
+  const p = new window.ethers.providers.Web3Provider(window.ethereum);
+  if (Number((await p.getNetwork()).chainId) !== 137) throw new Error('POLYGON_REQUIRED');
+  _ethers = p;
+  return p;
+}
 
-  $("lookupForm").addEventListener("submit", async function (e) {
-    e.preventDefault();
-    var code = $("lookupCode").value.trim().toUpperCase();
-    if (!code) return;
-    var box = $("lookupResult");
-    box.innerHTML = '<div class="busy">探しています…</div>';
-    try {
-      var v = await api("/admin/orders?code=" + encodeURIComponent(code));
-      if (!v.orders.length) { box.innerHTML = '<div class="busy">「' + esc(code) + "」の注文は見つかりません。</div>"; return; }
-      box.innerHTML = v.orders.map(adminRow).join("");
-      bindAdminActs(box, function () { $("lookupForm").dispatchEvent(new Event("submit")); loadAdminOrders(); });
-    } catch (err) { box.innerHTML = '<div class="busy">' + esc(say(err.message)) + "</div>"; }
-  });
+async function sendJpyc(j) {
+  const p = await ethersReady();
+  const c = new window.ethers.Contract(j.token,
+    ['function transfer(address,uint256) returns (bool)'], p.getSigner());
+  const tx = await c.transfer(j.receiver, j.amountWei);
+  await tx.wait();
+  return tx.hash;
+}
 
-  $("orderFilter").querySelectorAll("button").forEach(function (b) {
-    b.addEventListener("click", function () {
-      state.adminStatus = b.dataset.status;
-      $("orderFilter").querySelectorAll("button").forEach(function (x) { x.classList.toggle("primary", x === b); });
-      loadAdminOrders();
+async function payOnChain(x) {
+  const p = await ethersReady();
+  const c = new window.ethers.Contract(x.contract,
+    ['function payExchange(bytes32,bytes32,uint256,uint256,bytes)'], p.getSigner());
+  const tx = await c.payExchange(x.orderId, x.productId, x.price, x.deadline, x.authorization);
+  await tx.wait();
+  return tx.hash;
+}
+
+const WHY = {
+  LOGIN_REQUIRED: 'ログインが必要です',
+  WALLET_REQUIRED: 'ウォレットの連携が必要です',
+  WALLET_NOT_FOUND: 'ウォレットが見つかりません（MetaMask などが要ります）',
+  POLYGON_REQUIRED: 'Polygon に切り替えてください',
+  SOLD_OUT: '売り切れました',
+  NOT_FOR_SALE: 'いまは販売していません',
+  PLAN_REQUIRED: 'EMUER で払うには Emu Light 以上が要ります',
+  PERIOD_LIMIT_REACHED: 'この期間の回数を使い切りました',
+  INSUFFICIENT_EMUER: 'EMUER が足りません',
+  EMUER_NOT_ACTIVE: 'いま EMUER は使えません',
+  METHOD_NOT_AVAILABLE: 'この払い方は使えません'
+};
+
+function showOrders(done, failed, method) {
+  const codeBlock = (o) => {
+    const code = o.pickupCode || o.waitingCode;
+    const paid = o.status === 'paid' || o.status === 'fulfilled';
+    return `
+    <div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-family:var(--font-sans);font-size:11px;color:var(--text3);letter-spacing:0.08em">${paid ? 'お支払い済み' : 'お支払い待ち'}</div>
+      <div style="font-size:14px;font-weight:600;margin:4px 0 8px">${o.productName || ''}</div>
+      ${code ? `<div style="font-family:ui-monospace,Menlo,monospace;font-size:26px;letter-spacing:0.18em;color:var(--gold2)">${code}</div>
+      <div style="font-family:var(--font-sans);font-size:11px;color:var(--text2);margin-top:6px">${o.fulfillment || ''}</div>` : ''}
+    </div>`;
+  };
+  const okPart = done.length
+    ? `<p style="font-family:var(--font-sans);font-size:12px;color:var(--text2);line-height:1.9;margin-bottom:12px">
+         ${method === 'jpy_cash' ? '当日、このコードをお見せのうえお支払いください。' : 'このコードをお見せください。'}
+       </p>${done.map(codeBlock).join('')}`
+    : '';
+  const ngPart = failed.length
+    ? `<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:12px">
+         <div style="font-family:var(--font-sans);font-size:11px;color:var(--sale);letter-spacing:0.06em;margin-bottom:6px">お求めになれなかったもの</div>
+         ${failed.map(f => `<div style="font-size:12px;line-height:1.8">${f.name ? f.name + '：' : ''}${WHY[f.why] || f.why}</div>`).join('')}
+       </div>`
+    : '';
+  sheet(done.length ? '引換コード' : 'お手続きできませんでした', okPart + ngPart);
+}
+
+/* ═══════════════════════
+   PETAL CONFETTI
+═══════════════════════ */
+function launchPetals() {
+  const canvas = document.getElementById('confetti-canvas');
+  canvas.style.display = 'block';
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  const colors = ['#e8a4b0','#f3c5cc','#c9a96e','#d4788a','#f9eef0','#fce7f3','#e0c9d0','#b8924d'];
+  const pieces = Array.from({length:120},() => ({
+    x: Math.random() * canvas.width,
+    y: -20 - Math.random() * 80,
+    r: 3 + Math.random() * 5,
+    d: 1.5 + Math.random() * 2.5,
+    color: colors[Math.floor(Math.random()*colors.length)],
+    angle: Math.random() * Math.PI * 2,
+    spin: (Math.random()-0.5) * 0.15,
+    drift: (Math.random()-0.5) * 1.5,
+    opacity: 0.7 + Math.random() * 0.3,
+  }));
+  let frame = 0;
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    pieces.forEach(p => {
+      ctx.save();
+      ctx.globalAlpha = p.opacity * Math.min(1, (180-frame)/30);
+      ctx.fillStyle = p.color;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, p.r, p.r*0.45, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+      p.y += p.d; p.angle += p.spin; p.x += p.drift;
     });
+    frame++;
+    if (frame < 180) requestAnimationFrame(draw);
+    else { ctx.clearRect(0,0,canvas.width,canvas.height); canvas.style.display='none'; }
+  }
+  draw();
+}
+
+/* ═══════════════════════
+   OWNER PANEL
+═══════════════════════ */
+let OWNER = { shops: [], products: [], orders: [] };
+
+async function loadOwner() {
+  if (!isOwner()) return;
+  const [sh, pr, or_] = await Promise.all([
+    call('/admin/shops').catch(() => ({ shops: [] })),
+    call('/admin/products').catch(() => ({ products: [] })),
+    call('/admin/orders').catch(() => ({ orders: [] }))
+  ]);
+  OWNER = { shops: sh.shops || [], products: pr.products || [], orders: or_.orders || [] };
+}
+
+function renderOwnerPanel() {
+  const container = document.getElementById('ownerContent');
+  if (!isOwner()) {
+    container.innerHTML = `
+      <div class="owner-gate">
+        <div class="owner-gate-icon">🔐</div>
+        <div class="owner-gate-text">Owner Only Area</div>
+        <div class="owner-gate-sub">運営のアカウントでログインすると開きます。</div>
+      </div>`;
+    return;
+  }
+  const today = new Date(); today.setHours(0,0,0,0);
+  const paid = OWNER.orders.filter(o => ['paid','fulfilled'].includes(o.status));
+  const todays = paid.filter(o => Number(o.paidAt || o.createdAt || 0) >= today.getTime());
+  const emuerSales = paid.filter(o => o.currency === 'EMUER').reduce((n,o) => n + Number(o.amount||0), 0);
+  const waiting = OWNER.orders.filter(o => o.status === 'paid');
+
+  container.innerHTML = `
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-num">${todays.length}</div><div class="stat-label">本日の注文</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:var(--gold2)">${emuerSales.toLocaleString()}</div><div class="stat-label">EMUER 売上</div></div>
+      <div class="stat-box"><div class="stat-num" style="color:var(--new)">${OWNER.shops.filter(x=>x.status!=='ended').length}</div><div class="stat-label">ショップ数</div></div>
+    </div>
+
+    <div class="owner-section">
+      <div class="owner-section-title">✦ 引換（当日）</div>
+      <div class="form-group">
+        <label class="form-label">引換コード</label>
+        <input type="text" class="form-input" id="ownLookup" placeholder="例：C7S9SC" maxlength="10" style="letter-spacing:0.2em;text-transform:uppercase">
+      </div>
+      <button class="form-submit" onclick="lookupCode()">コードで探す</button>
+      <div id="ownLookupOut" style="margin-top:12px"></div>
+      ${waiting.length ? `<div style="margin-top:14px">
+        <div style="font-family:var(--font-sans);font-size:11px;color:var(--text3);letter-spacing:0.06em;margin-bottom:6px">お渡し待ち ${waiting.length}件</div>
+        ${waiting.slice(0,10).map(orderRow).join('')}
+      </div>` : ''}
+    </div>
+
+    <div class="owner-section">
+      <div class="owner-section-title">✦ Shop List</div>
+      <div class="shop-manage-list">
+        ${OWNER.shops.length === 0 ? `<div style="text-align:center;padding:24px 12px;color:var(--text3);font-family:var(--font-sans);font-size:11px;letter-spacing:0.06em">ショップが登録されていません</div>` : OWNER.shops.map(sh=>{
+          const items = OWNER.products.filter(p => p.shopId === sh.id).length;
+          return `
+        <div class="shop-manage-item">
+          <span class="shop-manage-emoji">${sh.emoji||'🏪'}</span>
+          <div class="shop-manage-info">
+            <div class="shop-manage-name">${sh.name}${sh.status!=='live'?` <span style="font-size:10px;color:var(--text3)">（${sh.status==='draft'?'下書き':'終了'}）</span>`:''}</div>
+            <div class="shop-manage-cat">${catLabel(sh.category)} · ${items}点</div>
+          </div>
+          <div class="shop-manage-actions">
+            <button class="edit-btn" onclick="toggleShopLive('${sh.id}','${sh.status}')">${sh.status==='live'?'下書きに戻す':'販売中にする'}</button>
+            <button class="delete-btn" onclick="confirmDeleteShop('${sh.id}')">閉じる</button>
+          </div>
+        </div>`;}).join('')}
+      </div>
+    </div>
+
+    <div class="owner-section">
+      <div class="owner-section-title">✦ New Shop</div>
+      <div class="form-group">
+        <label class="form-label">Shop Name</label>
+        <input type="text" class="form-input" id="newShopName" placeholder="例：フラワーショップ">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-input" id="newShopCat">
+            <option value="kyozai">教材</option>
+            <option value="yugu">遊具</option>
+            <option value="zakka">雑貨</option>
+            <option value="fashion">Fashion</option>
+            <option value="digital">Digital</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Emoji</label>
+          <input type="text" class="form-input" id="newShopEmoji" placeholder="🌸" maxlength="4">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <input type="text" class="form-input" id="newShopDesc" placeholder="ショップの説明">
+      </div>
+      <button class="form-submit" onclick="addShop()">ショップを追加</button>
+    </div>
+
+    <div class="owner-section">
+      <div class="owner-section-title">✦ New Item</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Shop</label>
+          <select class="form-input" id="npShop">
+            <option value="">（ショップに入れない）</option>
+            ${OWNER.shops.filter(x=>x.status!=='ended').map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Emoji</label>
+          <input type="text" class="form-input" id="npEmoji" placeholder="🎟" maxlength="4">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Item Name</label>
+        <input type="text" class="form-input" id="npName" placeholder="例：ステッカー引換券">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <input type="text" class="form-input" id="npDesc" placeholder="商品の説明">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">EMUER</label>
+          <input type="number" class="form-input" id="npEmuer" placeholder="100" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">JPYC</label>
+          <input type="number" class="form-input" id="npJpyc" placeholder="300" min="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">円</label>
+          <input type="number" class="form-input" id="npJpy" placeholder="300" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">在庫（空＝無制限）</label>
+          <input type="number" class="form-input" id="npStock" placeholder="50" min="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">受け取り方</label>
+        <input type="text" class="form-input" id="npFulfill" placeholder="例：会場の受付でコードをお見せください">
+      </div>
+      <div class="form-group">
+        <label class="form-label">取消の条件</label>
+        <input type="text" class="form-input" id="npCancel" placeholder="例：お渡し前なら取り消せます">
+      </div>
+      <label class="form-label" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <input type="checkbox" id="npCash" checked style="width:auto"> 会場で現金を受け取る
+      </label>
+      <button class="form-submit" onclick="addProduct()">商品を追加して販売中にする</button>
+    </div>
+
+    <div class="owner-section">
+      <div class="owner-section-title">✦ Item List</div>
+      <div class="shop-manage-list">
+        ${OWNER.products.length === 0 ? `<div style="text-align:center;padding:24px 12px;color:var(--text3);font-family:var(--font-sans);font-size:11px;letter-spacing:0.06em">商品がありません</div>` : OWNER.products.map(pr=>`
+        <div class="shop-manage-item">
+          <span class="shop-manage-emoji">${pr.emoji||'🎁'}</span>
+          <div class="shop-manage-info">
+            <div class="shop-manage-name">${pr.name}${pr.status!=='live'?` <span style="font-size:10px;color:var(--text3)">（${pr.status==='draft'?'下書き':'終了'}）</span>`:''}</div>
+            <div class="shop-manage-cat">${['EMUER','JPYC','JPY'].filter(c=>pr.prices&&pr.prices[c]!=null).map(c=>`${Number(pr.prices[c]).toLocaleString()}${MONEY[c]}`).join(' / ')}${pr.stock!=null?` · 残り${Math.max(0,pr.stock-(pr.sold||0)-(pr.reserved||0))}`:''}</div>
+          </div>
+          <div class="shop-manage-actions">
+            <button class="edit-btn" onclick="toggleProductLive('${pr.id}','${pr.status}')">${pr.status==='live'?'下書きに戻す':'販売中にする'}</button>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function orderRow(o) {
+  return `
+  <div class="shop-manage-item">
+    <span class="shop-manage-emoji" style="font-family:ui-monospace,Menlo,monospace;font-size:14px;letter-spacing:0.1em">${o.pickupCode||''}</span>
+    <div class="shop-manage-info">
+      <div class="shop-manage-name">${o.productName||''}</div>
+      <div class="shop-manage-cat">${Number(o.amount||0).toLocaleString()}${MONEY[o.currency]||''} · ${o.status==='paid'?'お渡し待ち':o.status}</div>
+    </div>
+    <div class="shop-manage-actions">
+      <button class="edit-btn" onclick="fulfill('${o.id}')">渡した</button>
+    </div>
+  </div>`;
+}
+
+async function lookupCode() {
+  const code = String(document.getElementById('ownLookup').value || '').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const out = document.getElementById('ownLookupOut');
+  if (!code) { showToast('引換コードを入れてください', 'error'); return; }
+  out.innerHTML = '<div style="font-family:var(--font-sans);font-size:11px;color:var(--text3)">探しています…</div>';
+  try {
+    const r = await call('/admin/orders?code=' + encodeURIComponent(code));
+    const rows = r.orders || [];
+    if (!rows.length) { out.innerHTML = '<div style="font-family:var(--font-sans);font-size:12px;color:var(--sale)">そのコードは見つかりません</div>'; return; }
+    out.innerHTML = rows.map(o => {
+      if (o.status === 'pending_payment' && o.method === 'jpy_cash') {
+        return `<div class="shop-manage-item">
+          <div class="shop-manage-info">
+            <div class="shop-manage-name">${o.productName||''}</div>
+            <div class="shop-manage-cat">${Number(o.amount||0).toLocaleString()}円 · 現金をお預かりしてください</div>
+          </div>
+          <div class="shop-manage-actions"><button class="edit-btn" onclick="cashAndFulfill('${o.id}')">現金を受け取って渡した</button></div>
+        </div>`;
+      }
+      if (o.status === 'paid') return orderRow(o);
+      return `<div class="shop-manage-item"><div class="shop-manage-info">
+        <div class="shop-manage-name">${o.productName||''}</div>
+        <div class="shop-manage-cat">${o.status === 'fulfilled' ? 'お渡し済み' : o.status}</div>
+      </div></div>`;
+    }).join('');
+  } catch (e) {
+    out.innerHTML = `<div style="font-family:var(--font-sans);font-size:12px;color:var(--sale)">${WHY[e.message]||e.message}</div>`;
+  }
+}
+
+async function fulfill(id) {
+  try {
+    await call('/admin/orders/' + id + '/fulfill', { method: 'POST', body: {} });
+    showToast('お渡しを記録しました', 'success');
+    await loadOwner(); renderOwnerPanel();
+    const el = document.getElementById('ownLookupOut'); if (el) el.innerHTML = '';
+  } catch (e) { showToast(WHY[e.message] || e.message, 'error'); }
+}
+async function cashAndFulfill(id) {
+  try {
+    await call('/admin/orders/' + id + '/cash-paid', { method: 'POST', body: {} });
+    await call('/admin/orders/' + id + '/fulfill', { method: 'POST', body: {} });
+    showToast('現金を受け取り、お渡しを記録しました', 'success');
+    await loadOwner(); renderOwnerPanel();
+    const el = document.getElementById('ownLookupOut'); if (el) el.innerHTML = '';
+  } catch (e) { showToast(WHY[e.message] || e.message, 'error'); }
+}
+
+async function addShop() {
+  const name = document.getElementById('newShopName').value.trim();
+  if (!name) { showToast('ショップ名を入力してください', 'error'); return; }
+  try {
+    await call('/admin/shops', { method: 'POST', body: {
+      name,
+      emoji: document.getElementById('newShopEmoji').value.trim() || '🏪',
+      category: document.getElementById('newShopCat').value,
+      description: document.getElementById('newShopDesc').value.trim(),
+      badge: 'NEW', status: 'live'
+    }});
+    showToast(`${name} を追加しました`, 'success');
+    await loadOwner(); await loadShop(); paintAll();
+  } catch (e) { showToast(WHY[e.message] || e.message, 'error'); }
+}
+
+async function addProduct() {
+  const v = (id) => String(document.getElementById(id).value || '').trim();
+  const num = (id) => (v(id) === '' ? null : Number(v(id)));
+  const name = v('npName');
+  if (!name) { showToast('商品名を入力してください', 'error'); return; }
+  const prices = { EMUER: num('npEmuer'), JPYC: num('npJpyc'), JPY: num('npJpy') };
+  if (prices.EMUER == null && prices.JPYC == null && prices.JPY == null) {
+    showToast('値段をどれか1つは入れてください', 'error'); return;
+  }
+  const fulfillment = v('npFulfill') || '会場の受付でコードをお見せください';
+  const cancelPolicy = v('npCancel') || 'お渡し前なら取り消せます';
+  try {
+    await call('/admin/products', { method: 'POST', body: {
+      name, description: v('npDesc'), emoji: v('npEmoji') || '🎁',
+      shopId: v('npShop'), prices, stock: v('npStock') === '' ? null : Number(v('npStock')),
+      cashAtVenue: document.getElementById('npCash').checked,
+      fulfillment, cancelPolicy, status: 'live'
+    }});
+    showToast(`${name} を販売中にしました`, 'success');
+    await loadOwner(); await loadShop(); paintAll();
+  } catch (e) { showToast(WHY[e.message] || e.message, 'error'); }
+}
+
+async function toggleShopLive(id, status) {
+  try {
+    await call('/admin/shops/' + id, { method: 'PUT', body: { status: status === 'live' ? 'draft' : 'live' } });
+    await loadOwner(); await loadShop(); paintAll();
+  } catch (e) { showToast(WHY[e.message] || e.message, 'error'); }
+}
+async function toggleProductLive(id, status) {
+  try {
+    await call('/admin/products/' + id, { method: 'PUT', body: { status: status === 'live' ? 'draft' : 'live' } });
+    await loadOwner(); await loadShop(); paintAll();
+  } catch (e) { showToast(WHY[e.message] || e.message, 'error'); }
+}
+
+async function confirmDeleteShop(id) {
+  const shop = OWNER.shops.find(x => String(x.id) === String(id));
+  if (!shop) return;
+  if (!confirm(`「${shop.name}」を閉じますか？\n\n商品と注文の記録は残ります。`)) return;
+  try {
+    await call('/admin/shops/' + id, { method: 'DELETE' });
+    showToast(`${shop.name} を閉じました`, 'info');
+    await loadOwner(); await loadShop(); paintAll();
+  } catch (e) { showToast(WHY[e.message] || e.message, 'error'); }
+}
+
+/* ═══════════════════════
+   TOAST
+═══════════════════════ */
+function showToast(message, type) {
+  const icons = {success:'✦', error:'✕', info:'·'};
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${icons[type]}</span><span>${message}</span>`;
+  c.appendChild(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(()=>t.remove(),300); }, 3000);
+}
+
+/* ═══════════════════════
+   BACK
+═══════════════════════ */
+function goBack() {
+  window.top.postMessage({ type: 'spContentClose' }, '*');
+}
+
+/* ═══════════════════════
+   SERVER
+
+   ログインは Emu・SchoolPark と同じ Firebase のものをそのまま使う。
+   同じドメインなので、あちらで入っていればここでも入れている。
+   （Camellia の画面と同じやり方。ログインの本体は写さない）
+
+   ショップと商品は誰でも読める。注文だけ、証が要る。
+═══════════════════════ */
+const FB = {
+  apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
+  authDomain: "schoolpark-emu.vercel.app",
+  projectId: "emusch-2a111",
+  storageBucket: "emusch-2a111.firebasestorage.app",
+  messagingSenderId: "795496371585",
+  appId: "1:795496371585:web:51deec91b8a2152e4c8480"
+};
+let _auth = null;
+async function authReady() {
+  if (_auth) return _auth;
+  const SDK = "https://www.gstatic.com/firebasejs/10.8.0/";
+  const [app, auth] = await Promise.all([
+    import(SDK + "firebase-app.js"), import(SDK + "firebase-auth.js")
+  ]);
+  const a = auth.getAuth(app.getApps().length ? app.getApp() : app.initializeApp(FB));
+  /* 最初の答えが返るまで待つ。待たずに聞くと、入っている人でも
+     未ログイン扱いになる。 */
+  await new Promise(res => {
+    const off = auth.onAuthStateChanged(a, () => { off(); res(); });
   });
-  async function loadAdminOrders() {
-    var box = $("adminOrders");
-    box.innerHTML = '<div class="busy">読み込んでいます…</div>';
-    try {
-      var v = await api("/admin/orders" + (state.adminStatus ? "?status=" + state.adminStatus : ""));
-      box.innerHTML = v.orders.length ? v.orders.map(adminRow).join("") : '<div class="busy">該当する注文はありません。</div>';
-      bindAdminActs(box, loadAdminOrders);
-    } catch (e) { box.innerHTML = '<div class="busy">' + esc(say(e.message)) + "</div>"; }
+  _auth = a;
+  return a;
+}
+async function token() {
+  const a = await authReady();
+  if (!a.currentUser) return null;
+  return a.currentUser.getIdToken();
+}
+async function call(path, options) {
+  const o = options || {};
+  const headers = {};
+  if (o.auth !== false) {
+    const t = await token();
+    if (!t) throw new Error('LOGIN_REQUIRED');
+    headers.Authorization = 'Bearer ' + t;
   }
+  if (o.body) headers['Content-Type'] = 'application/json';
+  const r = await fetch(API + path, {
+    method: o.method || 'GET', headers,
+    body: o.body ? JSON.stringify(o.body) : undefined,
+    cache: 'no-store'
+  });
+  let d = null;
+  try { d = await r.json(); } catch (_) { d = null; }
+  if (!r.ok) throw new Error((d && d.error) || ('HTTP ' + r.status));
+  return d || {};
+}
 
-  async function loadAdminProducts() {
-    var box = $("adminProducts");
-    try {
-      var v = await api("/admin/products");
-      state.adminProducts = v.products;
-      var notes = [];
-      if (!v.cardReady) notes.push("カード払いは使えません（サーバーにStripeの鍵がありません）。");
-      if (!v.emuerActive) notes.push("EMUERの支払いはいま止まっています。");
-      notes.push("JPYCの受取先：" + v.jpycReceiver);
-      $("pf-note").textContent = notes.join(" ");
-      var label = { draft: "下書き", live: "販売中", ended: "終了" };
-      box.innerHTML = v.products.length ? v.products.map(function (p) {
-        var price = [p.prices.EMUER !== null ? p.prices.EMUER + " EMUER" : "", p.prices.JPYC !== null ? p.prices.JPYC + " JPYC" : "", p.prices.JPY !== null ? yen(p.prices.JPY) + "円" : ""].filter(Boolean).join("／");
-        var stock = p.stock === null ? "在庫の制限なし" : "在庫 " + p.stock + "（売れた " + (p.sold || 0) + "・取り置き " + (p.reserved || 0) + "）";
-        return '<div class="prow"><div><b>' + esc(p.name) + "</b><div class=\"meta\">" + esc(price) + "／" + stock + (p.oversold ? "／在庫を超えて売れています" : "") + "</div></div>" +
-          '<div><span class="state ' + (p.status === "live" ? "paid" : "closed") + '">' + label[p.status] + '</span> <button class="small-btn" data-edit="' + p.id + '">直す</button></div></div>';
-      }).join("") : '<div class="busy">まだ商品はありません。下から出せます。</div>';
-      box.querySelectorAll("[data-edit]").forEach(function (b) { b.addEventListener("click", function () { editProduct(b.dataset.edit); }); });
-    } catch (e) { box.innerHTML = '<div class="busy">' + esc(say(e.message)) + "</div>"; }
-  }
+/* サーバーの商品を、画面がそのまま使える形に直す。
+   並べ方・見た目の関数は変えないので、同じ欄をそろえる。 */
+function shapeProduct(p) {
+  return {
+    id: p.id,
+    emoji: p.emoji || '\u{1F381}',
+    name: p.name,
+    desc: p.description || '',
+    price: Number((p.prices && p.prices.EMUER) || 0),
+    soldOut: !!p.soldOut,
+    remaining: p.remaining,
+    methods: p.methods || [],
+    prices: p.prices || {},
+    shopId: p.shopId || ''
+  };
+}
 
-  function editProduct(id) {
-    var p = state.adminProducts.find(function (x) { return x.id === id; });
-    if (!p) return;
-    $("pf-id").value = p.id; $("pf-name").value = p.name; $("pf-desc").value = p.description || ""; $("pf-image").value = p.imageUrl || "";
-    $("pf-emuer").value = p.prices.EMUER == null ? "" : p.prices.EMUER; $("pf-jpyc").value = p.prices.JPYC == null ? "" : p.prices.JPYC;
-    $("pf-jpy").value = p.prices.JPY == null ? "" : p.prices.JPY; $("pf-cash").checked = !!p.cashAtVenue;
-    $("pf-stock").value = p.stock == null ? "" : p.stock; $("pf-fulfill").value = p.fulfillment; $("pf-cancel").value = p.cancelPolicy;
-    $("pf-status").value = p.status; $("formTitle").textContent = "商品を直す"; $("pf-save").textContent = "変更を保存";
-    $("pf-reset").classList.remove("hidden");
-    $("productForm").scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-  function resetForm() {
-    $("productForm").reset(); $("pf-id").value = ""; $("formTitle").textContent = "商品を出す";
-    $("pf-save").textContent = "商品を出す"; $("pf-reset").classList.add("hidden");
-  }
-  $("pf-reset").addEventListener("click", resetForm);
-  $("productForm").addEventListener("submit", async function (e) {
-    e.preventDefault();
-    var num = function (id) { var v = $(id).value.trim(); return v === "" ? null : Number(v); };
-    var body = {
-      name: $("pf-name").value, description: $("pf-desc").value, imageUrl: $("pf-image").value.trim(),
-      prices: { EMUER: num("pf-emuer"), JPYC: num("pf-jpyc"), JPY: num("pf-jpy") },
-      cashAtVenue: $("pf-cash").checked, stock: num("pf-stock"),
-      fulfillment: $("pf-fulfill").value, cancelPolicy: $("pf-cancel").value, status: $("pf-status").value
+async function loadShop() {
+  const [shopRes, prodRes] = await Promise.all([
+    call('/shops', { auth: false }).catch(() => ({ shops: [] })),
+    call('/products', { auth: false }).catch(() => ({ products: [] }))
+  ]);
+  PRODUCTS = (prodRes.products || []).map(shapeProduct);
+
+  const shops = (shopRes.shops || []).map(sh => {
+    const items = PRODUCTS.filter(p => p.shopId === sh.id);
+    return {
+      id: sh.id, name: sh.name, emoji: sh.emoji, category: sh.category,
+      desc: sh.description || '', rating: sh.rating, badge: sh.badge || '',
+      items: items.length, products: items
     };
-    var id = $("pf-id").value;
-    var errs = { NAME_REQUIRED: "名前を入れてください。", FULFILLMENT_REQUIRED: "受け取り方を入れてください。", CANCEL_POLICY_REQUIRED: "取消・返金の条件を入れてください。",
-      PRICE_REQUIRED: "EMUER・JPYC・円のどれか1つ以上に価格を入れてください。", INVALID_PRICE: "価格は1以上の整数にしてください。",
-      CASH_NEEDS_JPY_PRICE: "会場で現金を受け取るなら、円の価格を入れてください。", INVALID_STOCK: "在庫は、売れた数と取り置きの数より少なくできません。",
-      INVALID_IMAGE_URL: "画像のURLは https:// で始まるものにしてください。" };
-    try {
-      await api(id ? "/admin/products/" + id : "/admin/products", { method: id ? "PUT" : "POST", body: body });
-      toast(id ? "変更を保存しました。" : "商品を出しました。");
-      resetForm(); loadAdminProducts(); loadProducts();
-    } catch (err) { toast(errs[err.message] || say(err.message)); }
   });
+  /* どのショップにも属さない商品。捨てずに「その他」へまとめる。
+     ショップを作らずに商品だけ置いても、ちゃんと売り場に出る。 */
+  const loose = PRODUCTS.filter(p => !p.shopId || !shops.some(sh => sh.id === p.shopId));
+  if (loose.length) {
+    shops.push({
+      id: '_loose', name: 'SchoolPark', emoji: '\u{1F3EB}', category: 'other',
+      desc: '運営から出している品です。', rating: 5, badge: '',
+      items: loose.length, products: loose
+    });
+  }
+  SHOPS = shops;
 
-  /* ───── はじめ ───── */
-  (async function start() {
-    await Promise.all([loadProducts(), loadMe()]);
-    if (/orders/.test(location.hash)) show("orders");
-    else if (canAuth()) loadOrders();   // 引換券の数をタブに出すため
-  })();
-})();
+  /* 新着は、新しく置かれた順の先頭から。セールは出していないので空のまま。
+     （セールの仕組みはまだサーバーに無い。出せるようになるまで空で出す） */
+  NEW_ITEMS = PRODUCTS.slice(0, 8).map(p => {
+    const sh = SHOPS.find(x => x.products.some(q => q.id === p.id));
+    return { id: p.id, emoji: p.emoji, name: p.name, price: p.price, shop: sh ? sh.name : '' };
+  });
+  SALE_ITEMS = [];
+
+  try { ME = await call('/me'); } catch (_) { ME = null; }
+}
+
+/* ═══════════════════════
+   INIT
+═══════════════════════ */
+function paintAll() {
+  if (isOwner()) document.getElementById('ownerTabBtn').style.display = '';
+  renderShops();
+  renderNewCarousel();
+  renderSaleGrid();
+  renderBag();
+  renderOwnerPanel();
+  updateCartBadge();
+}
+
+async function init() {
+  /* 飾りは先に動かす。中身を待つあいだ、画面が止まって見えないように。 */
+  startClock();
+  startCountdown();
+  spawnPetals();
+  paintAll();
+  try {
+    await loadShop();
+    /* 運営のときだけ、管理に要るものも読む。 */
+    if (isOwner()) await loadOwner();
+  } catch (e) {
+    showToast('商品を読み込めませんでした', 'error');
+  }
+  paintAll();
+}
+
+init();
 </script>
 </body>
 </html>
