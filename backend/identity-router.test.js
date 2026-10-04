@@ -515,3 +515,42 @@ test("窓口: 名義にパスポートが無ければ NO_PASSPORT", async () => 
     assert.equal(got.body.error, "NO_PASSPORT");
   } finally { await s.close(); }
 });
+
+/* ───────── いまの人数 ───────── */
+
+test("窓口: 運営だけが、人数を数えられる", async () => {
+  const s = await startServer();
+  try {
+    const anon = await s.call("GET", "/admin/headcount");
+    assert.equal(anon.status, 401);
+    const other = await s.call("GET", "/admin/headcount", { uid: LINE_UID });
+    assert.equal(other.status, 403);
+  } finally { await s.close(); }
+});
+
+test("窓口: 人数が、数えられて返る", async () => {
+  const s = await startServer();
+  try {
+    await s.call("POST", "/resolve", { uid: LINE_UID });
+    await s.call("POST", "/resolve", { uid: GOOGLE_UID });
+    const got = await s.call("GET", "/admin/headcount", { uid: OWNER_UID });
+    assert.equal(got.status, 200, got.status + " を返しています");
+    assert.equal(got.body.ok, true);
+    assert.equal(got.body.accounts, 4, "ches_accounts の数が違います");
+    assert.equal(got.body.passports, 2, "パスポートの数が違います");
+    assert.ok(Number(got.body.since) > 0, "月の切れ目が入っていません");
+    assert.ok(Number(got.body.countedAt) > 0, "数えた時刻が入っていません");
+  } finally { await s.close(); }
+});
+
+test("窓口: 招待から来た人も、数に入る", async () => {
+  const s = await startServer();
+  try {
+    await s.call("POST", "/resolve", { uid: LINE_UID });
+    const code = (await s.call("GET", "/invite", { uid: LINE_UID })).body.code;
+    await s.call("POST", "/resolve", { uid: GOOGLE_UID, body: { ref: code } });
+    const got = await s.call("GET", "/admin/headcount", { uid: OWNER_UID });
+    assert.equal(got.body.invited, 1);
+    assert.equal(got.body.invitedThisMonth, 1);
+  } finally { await s.close(); }
+});

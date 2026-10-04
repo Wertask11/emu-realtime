@@ -788,6 +788,62 @@ function createIdentity(deps) {
   }
 
   /* ══════════════════════════════════════════════════════════
+     いまの人数
+
+     「SchoolPark と Emu を何人が使っているか」を出す場所が無かった。
+     管理画面の会員一覧は有料の契約（emu_subscriptions）しか数えないので、
+     無料で使っている人が一人も入らない。
+
+     数えるのに全件は読まない。count() は、読んだ件数ではなく
+     索引の1000件ごとに1読み取りとして数えられる。数百人のうちは
+     どの数字も1読み取りで済む。前に1日の読み取り枠を使い切ったことが
+     あるので、ここは必ず count() を使うこと。
+
+     絞り込みは、どれも1つの欄だけにしてある。2つ以上を組み合わせると
+     索引を別に作ることになり、作るまで数えられなくなる。
+     ══════════════════════════════════════════════════════════ */
+
+  /* その月のはじまり（日本時間）。月の数は日本時間で切る。
+     UTC で切ると、毎月1日の朝9時までが先月に入ってしまう。 */
+  function jstMonthStart(now) {
+    const t = Number(now) || Date.now();
+    const jst = new Date(t + 9 * 3600 * 1000);
+    return Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), 1) - 9 * 3600 * 1000;
+  }
+
+  async function countOf(query) {
+    /* count() を持たない繋ぎ先（古い版・試験用）でも落ちないようにする。 */
+    if (query && typeof query.count === "function") {
+      const snap = await query.count().get();
+      const d = (snap && typeof snap.data === "function") ? snap.data() : null;
+      return Math.max(0, Number((d && d.count) || 0));
+    }
+    const snap = await query.get();
+    return Math.max(0, Number((snap && snap.size) || 0));
+  }
+
+  async function headcount(now) {
+    if (!db) throw new Error("NO_DB");
+    const at = Number(now) || Date.now();
+    const since = jstMonthStart(at);
+    const ids = db.collection(ID_COL);
+    const [accounts, passports, passportsThisMonth, invited, invitedThisMonth] =
+      await Promise.all([
+        countOf(db.collection(ACCOUNT_COL)),
+        countOf(ids),
+        countOf(ids.where("createdAt", ">=", since)),
+        /* 招待から来た人。Firestore に「この欄があるか」で絞る道は無いので、
+           文字列として空より大きいもの＝入っているもの、で絞る。 */
+        countOf(ids.where("invitedBySpid", ">", "")),
+        countOf(ids.where("invitedAt", ">=", since))
+      ]);
+    return {
+      accounts, passports, passportsThisMonth, invited, invitedThisMonth,
+      since, countedAt: at
+    };
+  }
+
+  /* ══════════════════════════════════════════════════════════
      招待リンク（一般クエスト #005）
 
      クエストの判定は「そのパスポートが、クエストを受けた日より後に
@@ -938,7 +994,7 @@ function createIdentity(deps) {
     // 公式パス
     holdsOfficialPass, holdsOfficialPassForUid, forget,
     // 運営
-    listDuplicates, whois, flagDuplicate, backfill, audit,
+    listDuplicates, whois, flagDuplicate, backfill, audit, headcount, jstMonthStart,
     // 定数
     ID_COL, LINK_COL, TICKET_COL, DUP_COL, AUDIT_COL, INVITE_COL, TICKET_TTL_MS
   };

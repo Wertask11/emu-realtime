@@ -96,6 +96,12 @@ function makeFirestore(seed) {
       if (c.op === "==") return v === c.value;
       if (c.op === "in") return Array.isArray(c.value) && c.value.indexOf(v) >= 0;
       if (c.op === "array-contains") return Array.isArray(v) && v.indexOf(c.value) >= 0;
+      /* 本物は、欄そのものが無い文書を大小の比べで拾わない。
+         ここもそろえる（undefined は、どの比べでも外れる）。 */
+      if (c.op === ">")  return v !== undefined && v !== null && v > c.value;
+      if (c.op === ">=") return v !== undefined && v !== null && v >= c.value;
+      if (c.op === "<")  return v !== undefined && v !== null && v < c.value;
+      if (c.op === "<=") return v !== undefined && v !== null && v <= c.value;
       throw new Error("fake-firestore: 知らない比べ方 " + c.op);
     });
     const run = (limit) => {
@@ -107,6 +113,9 @@ function makeFirestore(seed) {
     return {
       where: (field, op, value) => makeQuery(name, conds.concat([{ field, op, value }])),
       limit: (n) => ({ async get() { maybeFail(); return run(n); } }),
+      /* 件数だけ数える。本物は索引から数えるので、
+         何件あっても読み取りはごくわずかで済む。 */
+      count: () => ({ async get() { maybeFail(); return { data: () => ({ count: run(0).size }) }; } }),
       async get() { maybeFail(); return run(0); }
     };
   }
@@ -122,6 +131,7 @@ function makeFirestore(seed) {
       },
       async get() { maybeFail(); return docsOf(name, 0); },
       limit: (n) => ({ async get() { maybeFail(); return docsOf(name, n); } }),
+      count: () => ({ async get() { maybeFail(); return { data: () => ({ count: docsOf(name, 0).size }) }; } }),
       /* where は本当に絞る。空を返す作りにしていたころは、
          絞り込みを使うコードがテストでは素通りしていた
          （op を見ない作りだと "in" が "==" のように通ってしまう）。

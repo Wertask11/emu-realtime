@@ -337,6 +337,22 @@ function createIdentityRouter(deps) {
     }
   });
 
+  /* いまの人数。会員一覧（有料の契約だけ）では見えない、
+     無料で使っている人まで含めた数を出す。
+
+     count() で数えるので、何人いても読み取りはごくわずか。 */
+  router.get("/admin/headcount", requireOwner, async (req, res) => {
+    if (!db || !identity) return unavailable(res);
+    res.set("Cache-Control", "no-store, max-age=0");
+    try {
+      const out = await identity.headcount(Date.now());
+      return res.json({ ok: true, ...out });
+    } catch (e) {
+      console.error("人数を数えられませんでした:", e.message);
+      return res.status(500).json({ error: "HEADCOUNT_FAILED" });
+    }
+  });
+
   router.get("/admin/duplicates", requireOwner, async (req, res) => {
     if (!db || !identity) return unavailable(res);
     try {
