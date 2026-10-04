@@ -27,6 +27,10 @@ const crypto = require("node:crypto");
 const express = require("express");
 
 const PRODUCTS = "mitemiru_products";
+/* ショップ。みてみるの画面は「ショップを選ぶ → 中の商品を見る」という
+   並びになっている。商品だけだと、その階層が作れない。
+   商品は shopId でここへぶら下がる。 */
+const SHOPS = "mitemiru_shops";
 const ORDERS = "mitemiru_orders";
 const CHAIN_PAYMENTS = "mitemiru_chain_payments";
 const REWARDS = "emuer_v2_rewards";
@@ -106,10 +110,53 @@ function cleanProduct(body, previous) {
     try { u = new URL(imageUrl); } catch (_) { /* 下で断る */ }
     if (!u || u.protocol !== "https:") throw new Error("INVALID_IMAGE_URL");
   }
+  /* どのショップの商品か。空でも置ける（どこにも属さない商品）。 */
+  const shopId = slug(pick("shopId"), 40);
+  /* 画面に出す絵文字。1〜4文字まで（絵文字は1文字でも長さが2以上になる）。 */
+  const emoji = text(pick("emoji"), 8);
   const sortOrder = Number(pick("sortOrder") || 0);
   return {
     name, description: text(pick("description"), 600), imageUrl, prices, cashAtVenue, stock, status,
-    fulfillment, cancelPolicy, sortOrder: Number.isSafeInteger(sortOrder) ? sortOrder : 0
+    fulfillment, cancelPolicy, shopId, emoji,
+    sortOrder: Number.isSafeInteger(sortOrder) ? sortOrder : 0
+  };
+}
+
+/* ショップ。みてみるの画面に出るカードの中身。
+
+   並びは「ショップを選ぶ → 中の商品を見る」。商品だけではその階層が
+   作れないので、ここで持つ。商品そのもの・注文・支払いには触らない。 */
+const SHOP_CATEGORIES = ["kyozai", "yugu", "zakka", "fashion", "digital", "other"];
+const SHOP_BADGES = ["", "NEW", "SALE", "HOT"];
+
+function slug(value, max) {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return /^[a-z0-9_-]{1,120}$/.test(raw) ? raw.slice(0, max || 40) : "";
+}
+
+function cleanShop(body, previous) {
+  const b = body && typeof body === "object" && !Array.isArray(body) ? body : null;
+  if (!b) throw new Error("INVALID_SHOP");
+  const base = previous || {};
+  const pick = (k) => (Object.prototype.hasOwnProperty.call(b, k) ? b[k] : base[k]);
+  const name = text(pick("name"), 40);
+  if (!name) throw new Error("NAME_REQUIRED");
+  const category = String(pick("category") || "other");
+  if (!SHOP_CATEGORIES.includes(category)) throw new Error("INVALID_CATEGORY");
+  const badge = String(pick("badge") || "");
+  if (!SHOP_BADGES.includes(badge)) throw new Error("INVALID_BADGE");
+  const status = pick("status") || "draft";
+  if (!["draft", "live", "ended"].includes(status)) throw new Error("INVALID_STATUS");
+  /* 星は 0.0〜5.0。飾りなので無ければ 5.0 にする。 */
+  let rating = Number(pick("rating"));
+  if (!Number.isFinite(rating) || rating < 0 || rating > 5) rating = 5;
+  const sortOrder = Number(pick("sortOrder") || 0);
+  return {
+    name, category, badge, status,
+    emoji: text(pick("emoji"), 8) || "\u{1F3EA}",
+    description: text(pick("description"), 200),
+    rating: Math.round(rating * 10) / 10,
+    sortOrder: Number.isSafeInteger(sortOrder) ? sortOrder : 0
   };
 }
 
@@ -210,7 +257,9 @@ function createMitemiruRouter(deps) {
       CHAIN_REFUND_NOT_CONFIRMED: 409, ALREADY_DONE: 409, NOT_PAID: 409,
       NAME_REQUIRED: 400, FULFILLMENT_REQUIRED: 400, CANCEL_POLICY_REQUIRED: 400, PRICE_REQUIRED: 400,
       INVALID_PRICE: 400, CASH_NEEDS_JPY_PRICE: 400, INVALID_STOCK: 400, INVALID_STATUS: 400,
-      INVALID_IMAGE_URL: 400, INVALID_PRODUCT: 400, ENTITLEMENT_UNAVAILABLE: 503
+      INVALID_IMAGE_URL: 400, INVALID_PRODUCT: 400, ENTITLEMENT_UNAVAILABLE: 503,
+      /* ショップ。足しておかないと、入力の間違いが 500 として返る。 */
+      INVALID_SHOP: 400, INVALID_CATEGORY: 400, INVALID_BADGE: 400, SHOP_NOT_FOUND: 404
     };
     if (known[code]) return res.status(known[code]).json({ error: code, ...(error.extra || {}) });
     console.error("mitemiru error:", code);
@@ -231,7 +280,8 @@ function createMitemiruRouter(deps) {
     return {
       id, name: p.name, description: p.description || "", imageUrl: p.imageUrl || "",
       prices: p.prices, methods: methodsFor(p), remaining: left, soldOut: left === 0,
-      fulfillment: p.fulfillment, cancelPolicy: p.cancelPolicy
+      fulfillment: p.fulfillment, cancelPolicy: p.cancelPolicy,
+      shopId: p.shopId || "", emoji: p.emoji || ""
     };
   }
   function publicOrder(id, o) {
@@ -325,6 +375,23 @@ function createMitemiruRouter(deps) {
   }
 
   /* ───────── 利用者 ───────── */
+
+  const shopRef = (id) => db.collection(SHOPS).doc(String(id));
+  const publicShop = (id, x) => ({
+    id, name: x.name, emoji: x.emoji || "\u{1F3EA}", category: x.category || "other",
+    description: x.description || "", badge: x.badge || "", rating: Number(x.rating || 5)
+  });
+
+  /* 売っているショップ。誰でも読める（入る前の人にも見せる）。 */
+  router.get("/shops", async (req, res) => {
+    try {
+      const snap = await db.collection(SHOPS).where("status", "==", "live").limit(100).get();
+      const rows = snap.docs.map(d => ({ id: d.id, data: d.data() || {} }))
+        .sort((a, b) => (a.data.sortOrder || 0) - (b.data.sortOrder || 0)
+          || (a.data.createdAtMs || 0) - (b.data.createdAtMs || 0));
+      return res.json({ ok: true, shops: rows.map(r => publicShop(r.id, r.data)) });
+    } catch (e) { return fail(res, e); }
+  });
 
   router.get("/products", async (req, res) => {
     try {
@@ -699,6 +766,55 @@ function createMitemiruRouter(deps) {
         tx.set(productRef(id), { ...clean, updatedAtMs: now() }, { merge: true });
       });
       return res.json({ ok: true, product: { id, ...out } });
+    } catch (e) { return fail(res, e); }
+  });
+
+  router.get("/admin/shops", owner, async (req, res) => {
+    try {
+      const snap = await db.collection(SHOPS).limit(300).get();
+      const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }))
+        .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (b.createdAtMs || 0) - (a.createdAtMs || 0));
+      return res.json({ ok: true, shops: rows });
+    } catch (e) { return fail(res, e); }
+  });
+
+  router.post("/admin/shops", owner, async (req, res) => {
+    try {
+      const clean = cleanShop(req.body, null);
+      /* 名前から読める id を作る。使われていたら後ろに数を足す。
+         id は商品が指す先なので、あとから変えられない。 */
+      const wanted = slug(req.body && req.body.id, 40) || "s_" + crypto.randomBytes(5).toString("hex");
+      let id = wanted;
+      for (let i = 2; i <= 20; i += 1) {
+        if (!(await shopRef(id).get()).exists) break;
+        id = wanted + "-" + i;
+      }
+      const row = { ...clean, createdAtMs: now(), updatedAtMs: now(), createdBy: req.identity.uid };
+      await shopRef(id).create(row);
+      return res.json({ ok: true, shop: { id, ...row } });
+    } catch (e) { return fail(res, e); }
+  });
+
+  router.put("/admin/shops/:id", owner, async (req, res) => {
+    const id = String(req.params.id || "");
+    try {
+      const snap = await shopRef(id).get();
+      if (!snap.exists) throw err("SHOP_NOT_FOUND");
+      const clean = cleanShop(req.body, snap.data() || {});
+      await shopRef(id).set({ ...clean, updatedAtMs: now() }, { merge: true });
+      return res.json({ ok: true, shop: { id, ...(snap.data() || {}), ...clean } });
+    } catch (e) { return fail(res, e); }
+  });
+
+  /* ショップを閉じる。消さずに ended にする。
+     商品がぶら下がったまま消すと、注文の記録から店名を引けなくなる。 */
+  router.delete("/admin/shops/:id", owner, async (req, res) => {
+    const id = String(req.params.id || "");
+    try {
+      const snap = await shopRef(id).get();
+      if (!snap.exists) throw err("SHOP_NOT_FOUND");
+      await shopRef(id).set({ status: "ended", updatedAtMs: now() }, { merge: true });
+      return res.json({ ok: true, id, status: "ended" });
     } catch (e) { return fail(res, e); }
   });
 
