@@ -12,8 +12,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
+const root = path.join(__dirname, '../..');
 const html = fs.readFileSync(
-  path.join(__dirname, '../../frontend/public/index.html'), 'utf8');
+  path.join(root, 'frontend/public/index.html'), 'utf8');
 
 const maint = html.slice(html.indexOf('const BRAND_MAINTENANCE = {'),
                          html.indexOf('const BRAND_LABELS'));
@@ -46,8 +47,11 @@ test('運営は Heartoo にも入れる（前からの決まり）', () => {
 
 /* ───────── 運営でない人 ───────── */
 
-test('運営でない人には、Camellia は準備中', () => {
-  assert.equal(GUEST('camellia'), true, '公開前の中身が誰にでも見えてしまう');
+test('Camellia は、誰でも入れる（2026-10-04 に開いた）', () => {
+  /* SchoolPark の開幕に合わせて開けた。入ってからの年齢と同意の
+     確認（camellia-gate.js）は、これまでどおり効く。 */
+  assert.equal(GUEST('camellia'), false, '開いたはずなのに準備中のままです');
+  assert.equal(OWNER('camellia'), false);
 });
 
 test('運営でない人には、Heartoo も準備中', () => {
@@ -85,11 +89,28 @@ test('Camellia だけを名指しで閉じる書き方が残っていない', ()
     '運営も入れない決め打ちが戻っています');
 });
 
-test('準備中の表は、Camellia を準備中のままにしている', () => {
-  /* 運営以外に見せないのはこの表の役目。false にすると全員に開く。 */
-  assert.match(maint, /camellia:\s*true/);
-  assert.match(maint, /heartoo:\s*true/);
+test('準備中の表と、止める仕組みがそろっている', () => {
+  /* 画面の側（この表）と、ページの側（maintenance-guard.js）は
+     必ず同じにすること。片方だけ開けると、押せるのに開いた先が
+     「準備中」になる。2026-10-04、そろえて開けた。 */
+  assert.match(maint, /camellia:\s*false/);
   assert.match(maint, /emu:\s*false/);
+  /* Heartoo は外のサイト。こちらでは開けないので止めたまま。 */
+  assert.match(maint, /heartoo:\s*true/);
+
+  const guard = fs.readFileSync(path.join(root, 'frontend/public/maintenance-guard.js'), 'utf8');
+  assert.match(guard, /var MAINTENANCE = false;/, 'ページの側がまだ止めています');
+});
+
+test('止める仕組みは、消さずに残してある', () => {
+  /* もう一度止めるときに、各ページへ付け直さなくて済むようにする。 */
+  ['frontend/public/camellia.html', 'frontend/public/camellia-app.html',
+   'frontend/public/schoolpark/tutorial.html',
+   'frontend/public/schoolpark/south-elevator.html',
+   'frontend/public/schoolpark/east-shopping.html'].forEach(f => {
+    const t = fs.readFileSync(path.join(root, f), 'utf8');
+    assert.ok(t.indexOf('maintenance-guard.js') > 0, f + ' から止める仕組みが消えています');
+  });
 });
 
 test('運営かどうかは、パスポートを読んだあとに塗り直している', () => {

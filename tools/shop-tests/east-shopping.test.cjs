@@ -25,17 +25,9 @@ const BEFORE = execFileSync('git', ['show', 'd47dd16^:' + FILE], { cwd: root, en
 
 const DESIGN_END = '<script>\n/* ═══════════════════════\n   DATA';
 
-/* 「準備中」で止める1行だけは、わざと外した（下の試験で見ている）。
-   そこを除いて、CSS と HTML の骨組みが元と同じかを見る。 */
-const GUARD = '<script src="/maintenance-guard.js"></script>\n';
-const GUARD_NOTE_START = '<!-- みてみるは「準備中」の止め方から外した。';
-
 test('デザインの部分が、元と1バイトも違わない', () => {
-  const a = BEFORE.slice(0, BEFORE.indexOf(DESIGN_END)).replace(GUARD, '');
-  let b = NOW.slice(0, NOW.indexOf(DESIGN_END));
-  const i = b.indexOf(GUARD_NOTE_START);
-  assert.ok(i >= 0, '止め方を外した覚え書きがありません');
-  b = b.slice(0, i) + b.slice(b.indexOf('-->', i) + 4);
+  const a = BEFORE.slice(0, BEFORE.indexOf(DESIGN_END));
+  const b = NOW.slice(0, NOW.indexOf(DESIGN_END));
   assert.ok(a.length > 30000, '元の版を取れていません');
   assert.equal(b, a, 'CSS か HTML の骨組みが変わっています');
 });
@@ -134,19 +126,21 @@ test('引換コードで探して、その場で渡せる', () => {
 
 /* 開けること。 */
 
-test('みてみるは「準備中」で止めない', () => {
-  /* 止める作りは運営の4アドレス以外を全部はじくので、
-     付いているとお客さんが1人も入れない。 */
-  assert.equal(NOW.indexOf('maintenance-guard.js'), -1, 'お客さんが入れません');
+test('「準備中」で止めていない', () => {
+  /* 止める作りは運営の4アドレス以外を全部はじく。
+     開幕したので解除した。付いたままだとお客さんが1人も入れない。 */
+  const guard = fs.readFileSync(path.join(root, 'frontend/public/maintenance-guard.js'), 'utf8');
+  assert.ok(/var MAINTENANCE = false;/.test(guard), 'まだ止めています');
 });
 
-test('ほかの準備中のページは、止めたまま', () => {
-  ['frontend/public/camellia.html', 'frontend/public/camellia-app.html',
-   'frontend/public/schoolpark/tutorial.html',
-   'frontend/public/schoolpark/south-elevator.html'].forEach(f => {
-    const s = fs.readFileSync(path.join(root, f), 'utf8');
-    assert.ok(s.indexOf('maintenance-guard.js') > 0, f + ' の止め方まで外しています');
-  });
+test('画面の側と、止める仕組みの側がそろっている', () => {
+  /* 片方だけ開けると、押せるのに開いた先が「準備中」になる。 */
+  const idx = fs.readFileSync(path.join(root, 'frontend/public/index.html'), 'utf8');
+  const i = idx.indexOf('const BRAND_MAINTENANCE = {');
+  assert.ok(i > 0, 'ブランドの止め方が見つかりません');
+  const seg = idx.slice(i, i + 700);
+  assert.ok(/camellia:\s*false/.test(seg), 'Camellia が押せません');
+  assert.ok(/emu:\s*false/.test(seg), 'Emu が止まっています');
 });
 
 test('ログインしていない人にも、売り場は見せる', () => {
