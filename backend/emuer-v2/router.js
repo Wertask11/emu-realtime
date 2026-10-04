@@ -57,8 +57,8 @@ function createEmuerV2Router(deps) {
     const hasRole = await contract.hasRole(AUTHORIZER_ROLE, signer.address);
     return hasRole ? { ok: true } : { ok: false, code: "AUTHORIZER_ROLE_MISSING" };
   }
-  async function signReward(record) {
-    const deadline = Math.floor(Date.now() / 1000) + 15 * 60;
+  async function signReward(record, fixedDeadline) {
+    const deadline = fixedDeadline || Math.floor(Date.now() / 1000) + 15 * 60;
     const value = {
       claimId: record.claimId,
       recipient: ethers.utils.getAddress(record.recipient),
@@ -73,6 +73,23 @@ function createEmuerV2Router(deps) {
       ] }, value
     );
     return { ...value, authorization: signature };
+  }
+  /* 受け取りの署名を出す前に、その報酬が「みてみる」で使われていないか確かめ、
+     署名の期限を報酬に書いておく。みてみる（mitemiru.js）は、この期限が切れるまで
+     その報酬を支払いに選ばない。署名を出したあとに同じ報酬で払われると、
+     鎖の上でも受け取れてしまい、二重に使えるため。 */
+  async function reserveAuthorization(ref, recipient) {
+    const deadline = Math.floor(Date.now() / 1000) + 15 * 60;
+    let row;
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new Error("REWARD_NOT_FOUND");
+      row = snap.data() || {};
+      if (String(row.recipient || "").toLowerCase() !== String(recipient || "").toLowerCase()) throw new Error("REWARD_NOT_OWNED");
+      if (row.status === "spent") throw new Error("REWARD_SPENT");
+      tx.set(ref, { authorizedUntilMs: Math.max(Number(row.authorizedUntilMs || 0), deadline * 1000), updatedAt: new Date() }, { merge: true });
+    });
+    return { row, deadline };
   }
   function reactionKey(postId, action, actor) {
     return JSON.stringify(["emuer-v2", "reaction", action, String(postId), String(actor).toLowerCase()]);
@@ -577,14 +594,17 @@ function createEmuerV2Router(deps) {
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
     try {
       const ref = db.collection("emuer_v2_rewards").doc(String(req.params.claimId));
-      const snap = await ref.get();
-      if (!snap.exists) return res.status(404).json({ error: "REWARD_NOT_FOUND" });
-      const row = snap.data();
-      if (String(row.recipient || "").toLowerCase() !== String(req.identity.walletAddress).toLowerCase()) return res.status(403).json({ error: "REWARD_NOT_OWNED" });
       const ready = await signerReady();
       if (!ready.ok) return res.status(503).json({ error: ready.code });
-      return res.json({ ok: true, reward: await signReward(row) });
-    } catch (error) { console.error("EMUER v2 reward auth error:", error.message); return res.status(500).json({ error: "REWARD_ISSUE_FAILED" }); }
+      const { row, deadline } = await reserveAuthorization(ref, req.identity.walletAddress);
+      return res.json({ ok: true, reward: await signReward(row, deadline) });
+    } catch (error) {
+      const code = String(error.message || "");
+      if (code === "REWARD_NOT_FOUND") return res.status(404).json({ error: code });
+      if (code === "REWARD_NOT_OWNED") return res.status(403).json({ error: code });
+      if (code === "REWARD_SPENT") return res.status(409).json({ error: code });
+      console.error("EMUER v2 reward auth error:", error.message); return res.status(500).json({ error: "REWARD_ISSUE_FAILED" });
+    }
   });
 
   router.post("/daily/login", requireFirebaseUser, requireOwnAddress, async (req, res) => {
@@ -611,9 +631,11 @@ function createEmuerV2Router(deps) {
         tx.create(ref, row);
       });
       if (String(row.recipient || "").toLowerCase() !== recipient) return res.status(409).json({ error: "REWARD_BOUND_TO_ANOTHER_WALLET" });
-      const authorization = await signReward(row);
+      const reserved = await reserveAuthorization(ref, recipient);
+      const authorization = await signReward(reserved.row, reserved.deadline);
       return res.json({ ok: true, alreadyCreated: !!row.createdAt && row.key === key, reward: authorization });
     } catch (error) {
+      if (String(error.message || "") === "REWARD_SPENT") return res.status(409).json({ error: "REWARD_SPENT" });
       console.error("EMUER v2 login reward error:", error.message);
       return res.status(500).json({ error: "REWARD_ISSUE_FAILED" });
     }

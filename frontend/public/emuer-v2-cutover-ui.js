@@ -72,18 +72,7 @@
       button.onclick = function () { alert("新しいEMUER交換は、商品ごとの価格・提供条件・返金条件を公開してから開始します。"); };
       return button;
     };
-    const originalShopping = window.openEmuShopping;
-    window.openEmuShopping = async function () {
-      try {
-        const access = await request("/access/exchange", { method:"GET" });
-        if (!access.ok) throw new Error(access.error || "PLAN_REQUIRED");
-      } catch (error) {
-        const message = String(error.message || "") === "PLAN_REQUIRED"
-          ? "みてみるはEmu Light以上かつウォレットを持つ方の機能です。"
-          : String(error.message || "みてみるを開けませんでした。");
-        alert(message); return;
-      }
-      if (typeof originalShopping === "function") return originalShopping();
-    };
+    /* みてみるは誰でも開ける。EMUERで払うときだけ、プランと回数をサーバーが確かめる
+       （円・JPYCには制限をかけない。2026-10-04 決定）。 */
   });
 })();
