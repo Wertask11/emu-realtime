@@ -134,12 +134,17 @@ test('「準備中」で止めていない', () => {
 });
 
 test('画面の側と、止める仕組みの側がそろっている', () => {
-  /* 片方だけ開けると、押せるのに開いた先が「準備中」になる。 */
+  /* 片方だけ開けると、押せるのに開いた先が「準備中」になる。
+     みてみるは Emu の中にあるので、見るのは Emu のぶん。
+
+     Camellia もここで見ていたが、ブランドの切り替えから外したので
+     やめた。表に無いブランドは行き先そのものが無く、
+     止まっているかどうかを言えない。
+     ブランドの門そのものは tools/guild-tests/brand-gate.test.cjs が見る。 */
   const idx = fs.readFileSync(path.join(root, 'frontend/public/index.html'), 'utf8');
   const i = idx.indexOf('const BRAND_MAINTENANCE = {');
   assert.ok(i > 0, 'ブランドの止め方が見つかりません');
   const seg = idx.slice(i, i + 700);
-  assert.ok(/camellia:\s*false/.test(seg), 'Camellia が押せません');
   assert.ok(/emu:\s*false/.test(seg), 'Emu が止まっています');
 });
 

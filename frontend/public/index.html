@@ -4795,7 +4795,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <span>Emu</span><span class="esn-caret" id="esnCaret">▾</span>
       </button>
       <div class="esn-brand-menu" id="esnBrandMenu">
-        <button type="button" style="color:#e0576f" onclick="emuBrandGo('camellia')">Camellia</button>
         <button type="button" style="color:#f08300" onclick="emuBrandGo('emu')">Emu</button>
         <button type="button" style="color:#d0e2be" onclick="emuBrandGo('schoolpark')">SchoolPark</button>
       </div>
@@ -6096,20 +6095,19 @@ function startAirdropCounter() {
   airdropStop = window.fbLib.onSnapshot(globalRef, (snap) => {
     const d = snap.exists() ? snap.data() : {};
     // 各ブランドを選んだユニーク人数（ハブ/CHESメニューでの選択時に spTrackBrand が加算）
+    /* Camellia はブランドの切り替えから外したので、出す場所が無い。
+       これまでの人数は sp_stats/global.camellia_entrants に残してある。 */
     const n = {
-      camellia:   d.camellia_entrants   || 0,
       heartoo:    d.heartoo_entrants    || 0,
       emu:        d.emu_entrants        || 0,
       schoolpark: d.schoolpark_entrants || 0
     };
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     // ① CHESメニュー内（各ブランド名の横）
-    set("menuCountCamellia",   n.camellia);
     set("menuCountHeartoo",    n.heartoo);
     set("menuCountEmu",        n.emu);
     set("menuCountSchoolPark", n.schoolpark);
     // ② ハブ画面（メイン画面）の各ボタン
-    set("hubCountCamellia",   n.camellia);
     set("hubCountHeartoo",    n.heartoo);
     set("hubCountEmu",        n.emu);
     set("hubCountSchoolPark", n.schoolpark);
@@ -11169,7 +11167,7 @@ const SP_REIZO_KB = [
   // camellia / heartoo はそれぞれの項目に任せる。
   // ここに入れておくと「Camelliaはいつ開く？」までCHESの説明になってしまう。
   { k:['ches','チェス','ブランド','世界観','4つの','4つで'],
-    a:'CHES（チェス）は、4つの場所が集まった一つの街だよ🧊\n\n🌐 Emu — 経験から生まれた知識を、読んで・届けて・語り合う\n🏞️ SchoolPark — その知識を実際に試して、決めごとを投票で決める\n🌸 Camellia — β公開中\n💍 Heartoo — 準備中\n\nメニューのブランド切替から場所を移動できるよ。どこから入っても、きみは同じ一人として扱われるんだ。' },
+    a:'CHES（チェス）は、4つの場所が集まった一つの街だよ🧊\n\n🌐 Emu — 経験から生まれた知識を、読んで・届けて・語り合う\n🏞️ SchoolPark — その知識を実際に試して、決めごとを投票で決める\n🌸 Camellia — 準備中\n💍 Heartoo — 準備中\n\nメニューのブランド切替から場所を移動できるよ。どこから入っても、きみは同じ一人として扱われるんだ。' },
 
   // ── SchoolPark 概要
   { k:['schoolparkとは','スクールパークとは','schoolparkって','schoolparkの中身','概要'],
@@ -11186,7 +11184,7 @@ const SP_REIZO_KB = [
   // ── 入れない・不具合
   { k:['入れない','入れません','ログインできない','ログインできま','ログインが','真っ白',
        'エラー','動かない','開かない','進まない','固まる','うまくいかない'],
-    a:'こんなときは、これを試してみてね🧊\n\n・メールのリンクが開けない → リンクを送ったブラウザと同じブラウザで開いてね\n・画面が真っ白 → 一度閉じて開き直してね。18秒待っても進まないときは入場画面に戻るよ\n・「準備中です」と出る → Heartoo は順番に開けているところ。Emu・SchoolPark・Camellia は通常どおり使えるよ\n\n直らないときは、画面に出たメッセージをそのまま問い合わせフォームに貼ってね！' },
+    a:'こんなときは、これを試してみてね🧊\n\n・メールのリンクが開けない → リンクを送ったブラウザと同じブラウザで開いてね\n・画面が真っ白 → 一度閉じて開き直してね。18秒待っても進まないときは入場画面に戻るよ\n・「準備中です」と出る → Camellia・Heartoo は順番に開けているところ。Emu・SchoolPark は通常どおり使えるよ\n\n直らないときは、画面に出たメッセージをそのまま問い合わせフォームに貼ってね！' },
 
   // ── パスワード
   { k:['パスワード','password','ログインし直','再ログイン','別の端末'],
@@ -11324,7 +11322,7 @@ const SP_REIZO_KB = [
 
   // ── Camellia
   { k:['camellia','カメリア','女性','ウェルネス','ウェルビーイング'],
-    a:'Camellia（カメリア）は、女性のウェルネス／ウェルビーイングの場所だよ🌸\nいまはβ公開中。メニューのブランド切替から移動できるよ。\n\nパスポートは共通だから、そのまま同じ身元で使えるんだ🧊' },
+    a:'Camellia（カメリア）は、女性のウェルネス／ウェルビーイングの場所だよ🌸\nいま作り直しているところなんだ。できあがるまでは、ブランドの切り替えにも出していないよ。\n\nパスポートは共通だから、開いたときはそのまま入れるよ🧊' },
 
   // ── Heartoo
   { k:['heartoo','ハートゥー','結婚指輪','指輪'],
@@ -14486,17 +14484,17 @@ function chesTidyEntryScreens() {
   document.body.classList.remove('emu-contact-off');
 }
 
-/* Camellia / Heartoo の表示先（アプリ内フレームで開く）
-   Camellia は本リポジトリへ移管済み（/camellia.html）。同一オリジンのため
-   今後 CHESアカウント・EMUER と直接連携できる。Heartoo は外部のまま。 */
+/* ブランドページの表示先（アプリ内フレームで開く）
+
+   Camellia はここから外した。この枠で開いていた
+   /camellia/control-user.html は作り直すことになったので、消した。
+   管理画面（/camellia/control-admin.html）と、入った方の記録は残してある。
+   新しい Camellia ができたら、ここに1行足せば元どおり切り替わる。
+
+   bg は読み込みが終わるまでの下地の色。行き先のページと同じ色にしておくと、
+   切り替わるときに色が変わらない。入れていなかったため、枠の既定の白
+   （#cbfFrame の background）が濃い色の外枠の上に一瞬出て、白く光っていた。 */
 const CHES_BRAND_PAGES = {
-  /* 新しい Camellia。SchoolParkパスポートで入り、初回だけ生年月日と同意を聞く。
-     古い /camellia.html は自前の登録画面を持っていて、パスポートと繋がっていない。
-     中身の保存はまだこの端末の中だけ。サーバーに移すのはこれから。 */
-  /* bg は読み込みが終わるまでの下地の色。行き先のページと同じ色にしておくと、
-     切り替わるときに色が変わらない。入れていなかったため、枠の既定の白
-     （#cbfFrame の background）が濃い色の外枠の上に一瞬出て、白く光っていた。 */
-  camellia: { url: '/camellia/control-user.html', name: 'Camellia', color: '#e0576f', bg: '#fff6f2', ownNav: true },
   heartoo:  { url: 'https://school-park-homepage.vercel.app/Heartoo.html',  name: 'Heartoo',  color: '#a0d8ef', bg: '#ffffff' }
 };
 
@@ -14550,12 +14548,6 @@ function chesBrandFrameOpen(brand) {
     frame.src = conf.url;
   }
   window._cbfRevealTimer = setTimeout(reveal, 3000);
-}
-
-/* Camellia のサイドバーから呼ばれる。出ているあいだだけ、
-   お問い合わせの丸ボタンを出す。SchoolPark と同じ考え方。 */
-function camelliaSideState(open) {
-  document.body.classList.toggle('cam-contact-off', !open);
 }
 
 function chesBrandFrameClose() {
@@ -16392,7 +16384,7 @@ function closeSpPassport() {
 window.openSpMobileMenu = function (current) {
   /* いま居るブランドには「いま居る」と出し、押しても何もしない */
   const here = current || 'schoolpark';
-  ['camellia', 'emu', 'schoolpark'].forEach(function (b) {
+  ['emu', 'schoolpark'].forEach(function (b) {
     const row = document.querySelector('#spMobileMenu [data-brand="' + b + '"]');
     if (!row) return;
     const go = row.querySelector('.smm-go');
@@ -22286,15 +22278,13 @@ async function loadEmuValueProfile() {
    URLに ?admin=1 を付けるだけで通ってしまうため、ここでは使わない。
    ═══════════════════════════════════════════════════════ */
 const BRAND_MAINTENANCE = {
-  /* 2026-10-04、SchoolPark の開幕に合わせて Camellia も開いた。
-     maintenance-guard.js の MAINTENANCE と必ずそろえること。
-     片方だけ false にすると、押せるのに開いた先が「準備中」になる。 */
-  camellia:   false,
+  /* Camellia はブランドの切り替えから外した（画面を作り直すため）。
+     ここに無いブランドは、そもそも行き先が無いので止める必要がない。 */
   heartoo:    true,   // 外のサイト。こちらでは開けない
   schoolpark: true,   // 判定はサーバー（entry-status）が持つ。この値は見ていない
   emu:        false   // Emu は通常営業
 };
-const BRAND_LABELS = { camellia:'Camellia', heartoo:'Heartoo', schoolpark:'SchoolPark', emu:'Emu' };
+const BRAND_LABELS = { heartoo:'Heartoo', schoolpark:'SchoolPark', emu:'Emu' };
 /* `access` をURLに含めると広告ブロッカーに遮断される環境がある。 */
 const SCHOOLPARK_ACCESS_API = 'https://emu-realtime.onrender.com/api/schoolpark/entry-status';
 let _spAccess = null;
@@ -22408,13 +22398,8 @@ function _isBrandOwner() {
 }
 function isBrandUnderMaintenance(brand) {
   if (brand === 'schoolpark') return !(_spAccess && _spAccess.allowed);
-  /* Camellia も、ほかの準備中のブランドと同じ扱いにする。
-     運営は入れて、それ以外の人には「準備中」を出す。
-
-     前はここだけ「運営を含めて準備中」と決め打ちしていた。
-     そのため運営自身が中身を見られず、直すにも確かめるにも
-     いちど URL を直打ちするしかなかった。
-     ほかのブランド（Heartoo）は下の一行で同じことをしている。 */
+  /* 準備中のブランドは、運営だけが入れる。
+     表に無いブランド（行き先そのものが無い）は、ここでは止めない。 */
   return !!BRAND_MAINTENANCE[brand] && !_isBrandOwner();
 }
 /* 入れないことを、押す前に分かるようにする（押してから断られるのは体験が悪い） */
@@ -22446,7 +22431,6 @@ async function chesHubGo(brand) {
   }
   spTrackBrand(brand); /* 非ブロッキングで即時カウント */
   switch (brand) {
-    case 'camellia':
     case 'heartoo':
       chesBrandFrameOpen(brand);
       break;
@@ -26497,7 +26481,6 @@ async function chesMenuGo(brand) {
   closeChesMenu();
   switch (brand) {
     // ハブ画面と同じ挙動・同じカウント計上に統一
-    case 'camellia':
     case 'heartoo':
     case 'emu':
       chesHubGo(brand);
@@ -28617,8 +28600,6 @@ async function sendEmuFeedback() {
       </span><span class="smm-go">→</span>
     </button>
     <div class="smm-label">ブランドを切り替える</div>
-    <button type="button" class="smm-row" data-brand="camellia" style="color:#E0576F" onclick="smmGo('camellia')">
-      <span>Camellia</span><span class="smm-go">→</span></button>
     <button type="button" class="smm-row" data-brand="emu" style="color:#F08300" onclick="smmGo('emu')">
       <span>Emu</span><span class="smm-go">→</span></button>
     <button type="button" class="smm-row" data-brand="schoolpark" style="color:#D0E2BE" onclick="smmGo('schoolpark')">

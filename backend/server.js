@@ -269,8 +269,6 @@ const mitemiru = require("./mitemiru").createMitemiruRouter({
 });
 billing.setExtraEventHandler(mitemiru.handleStripeEvent);
 const questCompletion = require("./quest-completion").createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, env: process.env });
-/* Camellia AI。鍵は環境変数（ANTHROPIC_API_KEY）から読む。 */
-const camellia = require("./camellia").createCamelliaRouter(membershipDeps);
 
 // Webhook は生ボディで受ける（JSON パーサーは上で迂回済み）
 app.post(STRIPE_WEBHOOK_PATH, billing.webhookHandler, billing.handleWebhook);
@@ -285,7 +283,6 @@ app.use("/api/schoolpark/quest-completions", questCompletion);
 app.use("/api/schoolpark/city", require("./city").createCityRouter({
   db, identity, entitlement, requireFirebaseUser, rateLimit, ownerAddresses: SP_OWNER_ADDRESSES
 }));
-app.use("/api/camellia", camellia.router);
 
 // 未処理のまま保持期限(30日)を過ぎた本人確認書類を毎日破棄する。
 cron.schedule("30 4 * * *", () => {

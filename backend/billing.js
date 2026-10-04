@@ -729,14 +729,15 @@ function createBillingRouter(deps) {
      ログインの要らないページで行っていた。誰でも開けてしまうので、
      運営だけが入れるこの管理画面へ寄せる。
 
-     気分・症状・服薬・月経といった記録も返す。要配慮個人情報にあたるので、
-     入口の同意文（camellia-gate.js）に「運営が内容を確認することがあります」と
-     書いてある。書いてあることと実際の扱いは、必ず一致させること。
+     気分・症状・服薬・月経といった記録も返す。要配慮個人情報にあたる。
 
-     日々の記録はまだこの端末の中にしかない。サーバーへ移すのはこれから。
-     それまで daily と personality は空で返る。 */
+     同意は、入った方の記録（camellia_users の agreedAt / agreedVersion）に
+     残っている。それを取っていた入口の画面は、利用者側の Camellia を
+     消したときに一緒に消えた。新しい Camellia を作るときは、
+     「運営が内容を確認することがあります」を必ず入口に書くこと。
+     書いてあることと実際の扱いは、必ず一致させること。 */
   router.get("/admin/camellia", requireOwner, async (req, res) => {
-    const MIN_AGE = 18, MAX_AGE = 45;   // camellia-auth.js と必ず同じにすること
+    const MIN_AGE = 18, MAX_AGE = 45;   // 新しい Camellia の入口と必ず同じにすること
     const ageOf = function (birth) {
       const d = new Date(String(birth || ""));
       if (isNaN(d.getTime())) return null;
@@ -928,7 +929,8 @@ function createBillingRouter(deps) {
      それを作る前から入っている方には、まだ ID が無い。
      次に門を通るまで待たせず、ここでまとめて配る。
 
-     作り方は画面側（camellia-auth.js）と同じにすること。
+     以前は画面側（camellia-auth.js）でも作っていたが、そちらは消した。
+     いま作れるのはここだけ。形は変えないこと。
        CAM-XXXX-XXXX-XXXX
        読み違えやすい文字（0 O 1 I）は使わない
 
