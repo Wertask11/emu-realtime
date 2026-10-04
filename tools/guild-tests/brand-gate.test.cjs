@@ -174,3 +174,58 @@ test('「（準備中）」の札は、閉じているときだけ付く', () =>
   /* 札の判定は brandClosed から来ること（別の決め打ちに差し替わっていないか）。 */
   assert.match(label, /const soon = this\.brandClosed\(id\);/);
 });
+
+/* ───────── 案内の文も、開いたことに合わせる ─────────
+
+   門を開けても、チュートリアルと「れいぞうこ」が
+   「Camellia は準備中」と言ったままだった。
+   押せば入れるのに、説明は入れないと書いてある状態。
+
+   Heartoo は本当に閉じているので、そちらは残す。 */
+const tutorial = fs.readFileSync(
+  path.join(root, 'frontend/public/schoolpark/tutorial.html'), 'utf8');
+
+/* 「Camellia は準備中」と読める言い方。戻ってきたら落とす。 */
+const CAMELLIA_CLOSED = [
+  'Camellia — 準備中',
+  'Camellia・Heartoo は順番に開けているところ',
+  'Camellia・Heartoo・SchoolPark は、いま順番に開けています',
+  '<td><strong>Camellia</strong></td><td>準備中</td>',
+  'Camellia・Heartooに入れません',
+  'Camellia（カメリア）は、女性のウェルネス／ウェルビーイングの場所だよ🌸\\nいまは準備中'
+];
+
+test('チュートリアルは、Camellia を準備中と言っていない', () => {
+  CAMELLIA_CLOSED.forEach(phrase => {
+    assert.ok(tutorial.indexOf(phrase) < 0,
+      '準備中の案内が戻っています: ' + phrase);
+  });
+});
+
+test('れいぞうこ（Emu側）も、Camellia を準備中と言っていない', () => {
+  CAMELLIA_CLOSED.forEach(phrase => {
+    assert.ok(html.indexOf(phrase) < 0,
+      '準備中の案内が戻っています: ' + phrase);
+  });
+});
+
+test('Heartoo の準備中は、消さずに残してある', () => {
+  /* Heartoo は外のサイトで、こちらからは開けない。
+     まとめて消すと、入れない理由が誰にも分からなくなる。 */
+  assert.ok(tutorial.indexOf('<td><strong>Heartoo</strong></td><td>準備中</td>') > 0);
+  assert.match(tutorial, /💍 Heartoo — 準備中/);
+  assert.match(html, /💍 Heartoo — 準備中/);
+});
+
+test('入れないときの案内に、年齢と同意のことが書いてある', () => {
+  /* 準備中を消しただけだと、18〜45歳の外の方が断られたときに
+     理由の書いてある場所が無くなる。門（camellia-gate.js）が
+     実際に見ている条件を、そのまま案内に残す。 */
+  assert.match(tutorial, /Camelliaに入れません/);
+  assert.match(tutorial, /18〜45歳の女性向けです/);
+
+  const gate = fs.readFileSync(
+    path.join(root, 'frontend/public/camellia/camellia-auth.js'), 'utf8');
+  assert.match(gate, /var MIN_AGE = 18;/, '案内と門の数字がずれています');
+  assert.match(gate, /var MAX_AGE = 45;/, '案内と門の数字がずれています');
+});
