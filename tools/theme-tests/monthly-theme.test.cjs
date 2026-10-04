@@ -194,3 +194,50 @@ test('年内目標の保存先は、これまでどおり', () => {
   assert.ok(ADMIN.indexOf("f.doc(f.db, 'sp_docs', 'year-goals'), body") > 0,
     '年内目標の保存先が変わっています');
 });
+
+/* ───────── 読めなかったときの逃げ道 ─────────
+
+   10/4、管理画面が「いまの中身を読めませんでした（unavailable）」で
+   止まった。SDK の専用の通信路（WebChannel）が切れていて、getDoc が
+   自分をオフラインと見なして投げる状態だった。
+
+   年内目標には普通の通信で読み直す逃げ道があり、その理由も注意書きに
+   書いてあるのに、テーマの読みにだけ付け忘れていた。 */
+
+test('SDK で読めなければ、普通の通信で読み直す', () => {
+  const i = ADMIN.indexOf('async function mtLoad(f)');
+  assert.ok(i > 0, 'テーマの読みが見つかりません');
+  const seg = ADMIN.slice(i, ADMIN.indexOf('function renderMonthlyTheme(f)'));
+  assert.ok(seg.indexOf("ydRestRead('monthly-theme')") > 0, '逃げ道がありません');
+  assert.ok(seg.indexOf('fromCache') > 0,
+    '控えの「無い」を本当の「無い」と取り違えます');
+});
+
+test('普通の通信でも読めなければ、編集欄は出さない', () => {
+  const i = ADMIN.indexOf('async function mtLoad(f)');
+  const seg = ADMIN.slice(i, ADMIN.indexOf('function renderMonthlyTheme(f)'));
+  const j = seg.indexOf('catch (e2)');
+  assert.ok(j > 0, '逃げ道の失敗を見ていません');
+  const tail = seg.slice(j, j + 260);
+  assert.ok(tail.indexOf('mtState = null') > 0, '空の編集欄が出てしまいます');
+  assert.ok(tail.indexOf('ok: false') > 0, '読めたことにしています');
+});
+
+test('記録がまだ無いときは、空の編集欄から始められる', () => {
+  const i = ADMIN.indexOf('async function mtLoad(f)');
+  const seg = ADMIN.slice(i, ADMIN.indexOf('function renderMonthlyTheme(f)'));
+  assert.ok(seg.indexOf('mtRead = { ok: true, fresh: !d };') > 0,
+    'まだ無いときに読めなかった扱いになります');
+});
+
+test('普通の通信の読みは、置き場所を受け取る（既定は年内目標）', () => {
+  assert.ok(ADMIN.indexOf('async function ydRestRead(docId)') > 0, '置き場所を渡せません');
+  assert.ok(ADMIN.indexOf("encodeURIComponent(docId || 'year-goals') + '?key='") > 0,
+    '既定が変わっています');
+});
+
+test('年内目標の読みは、これまでどおり', () => {
+  /* 引数を足したが、年内目標側は渡さないまま＝既定で動く。 */
+  assert.ok(ADMIN.indexOf('await ydRestRead();') > 0 || ADMIN.indexOf('ydRestRead()') > 0,
+    '年内目標の読み方が変わっています');
+});

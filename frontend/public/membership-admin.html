@@ -1773,23 +1773,47 @@ async function paintStarList(starId) {
 let mtState = null;      /* { title, summary } 読めたときだけ入る */
 let mtRead = null;       /* { ok, why } 読めなかった理由 */
 
+/* いまの中身を読む。
+
+   SDK は、専用の通信路（WebChannel）が切れると自分をオフラインと見なし、
+   getDoc に unavailable（client is offline）を投げる。控えに古い「無い」が
+   残っていると、例外を投げないまま「無い」と答えることもある。
+
+   10/4、まさにこれが起きた。年内目標には普通の通信で読み直す逃げ道が
+   あるのに、こちらには付けていなかった（年内目標の注意書きに
+   書いてあったのに、そこだけ写し忘れた）。画面には
+   「読めませんでした（unavailable）」とだけ出て、編集欄が出せなくなった。
+
+   sp_docs は誰でも読める（allow read: if true）ので、証は要らない。 */
 async function mtLoad(f) {
   mtRead = null;
+  let d = null;
+  let answered = false;
+
   try {
     const snap = await f.getDoc(f.doc(f.db, 'sp_docs', 'monthly-theme'));
-    if (snap.exists()) {
-      const d = snap.data() || {};
-      mtState = { title: String(d.title || ''), summary: String(d.summary || '') };
-      mtRead = { ok: true };
-      return;
-    }
-    /* まだ無い。空から始めてよい（消す心配がない）。 */
-    mtState = { title: '', summary: '' };
-    mtRead = { ok: true, fresh: true };
+    const cached = !!(snap.metadata && snap.metadata.fromCache);
+    if (snap.exists()) { d = snap.data() || {}; answered = true; }
+    else if (!cached) { answered = true; }      /* 本当に無い */
   } catch (e) {
-    mtState = null;
     mtRead = { ok: false, why: String((e && (e.code || e.message)) || '読めません') };
   }
+
+  if (!answered) {
+    try {
+      d = await ydRestRead('monthly-theme');
+      answered = true;
+      console.warn('今月のテーマを普通の通信で読みました' + (d ? '' : '（まだ記録がありません）'));
+    } catch (e2) {
+      const why = String((e2 && (e2.code || e2.message)) || '読めません');
+      mtState = null;
+      mtRead = { ok: false, why: (mtRead && mtRead.why) || why };
+      return;
+    }
+  }
+
+  mtState = { title: String((d && d.title) || ''), summary: String((d && d.summary) || '') };
+  mtRead = { ok: true, fresh: !d };
 }
 
 function renderMonthlyTheme(f) {
@@ -2203,11 +2227,12 @@ function ydFromRestFields(fields) {
   Object.keys(fields || {}).forEach(function (k) { out[k] = ydFromRestValue(fields[k]); });
   return out;
 }
-async function ydRestRead() {
+async function ydRestRead(docId) {
   const opt = (app && app.options) || {};
   if (!opt.projectId || !opt.apiKey) throw new Error('設定が読めない');
   const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
-            + '/databases/(default)/documents/sp_docs/year-goals?key=' + opt.apiKey;
+            + '/databases/(default)/documents/sp_docs/'
+            + encodeURIComponent(docId || 'year-goals') + '?key=' + opt.apiKey;
   const r = await fetch(url, { cache: 'no-store' });
   if (r.status === 404) return null;
   if (!r.ok) throw new Error('HTTP ' + r.status);
