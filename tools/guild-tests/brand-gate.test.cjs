@@ -119,3 +119,58 @@ test('運営かどうかは、パスポートを読んだあとに塗り直し�
   const paint = html.indexOf('try { paintBrandMaintenance(); } catch (e) {}');
   assert.ok(paint > 0, 'パスポートを読んだあとの塗り直しが無い');
 });
+
+/* ───────── SchoolPark の左上の切り替え（dao.html） ─────────
+
+   門は index.html に1つだけ置いてあるのに、SchoolPark の
+   サイドバーだけが Camellia を名指しで閉じていた。
+   そのため Emu 側では開いているのに、SchoolPark のタブからは
+   「Camellia（準備中）」と出て、押しても何も起きなかった。
+   判定は親（index.html）の1か所に戻した。 */
+const dao = fs.readFileSync(
+  path.join(root, 'frontend/public/schoolpark/dao.html'), 'utf8');
+
+const brandClosedSrc = dao.slice(dao.indexOf('  brandClosed(id){'),
+                                 dao.indexOf('  goBrand(id){'));
+assert.ok(brandClosedSrc, 'dao.html の brandClosed が見つかりません');
+
+/* parentClosed … 親（index.html）が「準備中」と答えるかどうか。 */
+function daoGate(parentClosed) {
+  const ctx = vm.createContext({
+    window: { parent: { isBrandUnderMaintenance: (id) => parentClosed[id] } }
+  });
+  vm.runInContext('globalThis.__o = { ' + brandClosedSrc + ' };', ctx);
+  return (id) => ctx.__o.brandClosed(id);
+}
+
+test('SchoolPark の切り替えでも、Camellia は開いている', () => {
+  const closed = daoGate({ camellia: false, emu: false, heartoo: true });
+  assert.equal(closed('camellia'), false, 'SchoolPark 側だけ準備中のままです');
+  assert.equal(closed('emu'), false);
+});
+
+test('SchoolPark の切り替えは、親の答えにそのまま従う', () => {
+  /* もう一度止めるときは index.html の BRAND_MAINTENANCE だけを
+     直せば、ここも一緒に閉まること。 */
+  const closed = daoGate({ camellia: true, emu: false, heartoo: true });
+  assert.equal(closed('camellia'), true, '親が閉じても開いたままです');
+});
+
+test('いま居る場所（SchoolPark）は、準備中にしない', () => {
+  const closed = daoGate({ schoolpark: true });
+  assert.equal(closed('schoolpark'), false);
+});
+
+test('dao.html に Camellia だけを名指しで閉じる書き方が残っていない', () => {
+  assert.doesNotMatch(brandClosedSrc, /id === 'camellia'\s*\)\s*return true/,
+    '名指しの決め打ちが戻っています');
+});
+
+test('「（準備中）」の札は、閉じているときだけ付く', () => {
+  const label = dao.slice(dao.indexOf("brands: [['camellia'"),
+                          dao.indexOf('sidebarButtonIcon:'));
+  assert.match(label, /soon \? label \+ '（準備中）' : label/,
+    '札の付け方が変わっています');
+  /* 札の判定は brandClosed から来ること（別の決め打ちに差し替わっていないか）。 */
+  assert.match(label, /const soon = this\.brandClosed\(id\);/);
+});
