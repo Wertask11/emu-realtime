@@ -16,7 +16,11 @@
 (function () {
   "use strict";
 
-  var MAINTENANCE = true;
+  /* 2026-10-04、SchoolPark の開幕に合わせて解除した。
+     ここが true のあいだは、下の OWNERS 以外のすべての人に
+     「ただいま準備中です」を出す。もう一度止めるときは true に戻し、
+     index.html の BRAND_MAINTENANCE もそろえる。 */
+  var MAINTENANCE = false;
   /* 運営のアドレス。ウォレットで入ったときと、LINE等で入ったときで違うので両方。 */
   var OWNERS = [
     "0xdcc687c05f130e57597a8525771299a4efb6edf7",  // 実ウォレット
