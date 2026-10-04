@@ -1337,10 +1337,12 @@ class Component extends DCLogic {
   goGods  = () => { try { window.parent.spOpenPlay('gods'); } catch (e) {} };
   toggleBrand = () => this.setState(s => ({brandOpen:!s.brandOpen}));
   /* 準備中かどうかは親（Emu側）の BRAND_MAINTENANCE に合わせる。
-     Camelliaだけは公開確認のため運営を含め準備中表示に統一する。 */
+     ここで Camellia だけを別扱いにして、誰にでも「（準備中）」と
+     出していた。開幕して親の側は開いているのに、左上の切り替えだけが
+     閉じたままになっていたので、その別扱いをやめる。
+     判定は1か所（親の BRAND_MAINTENANCE）に戻す。 */
   brandClosed(id){
     if (id === 'schoolpark') return false;        /* いま居る場所 */
-    if (id === 'camellia') return true;           /* 左上切替では全員に準備中 */
     try { return !!window.parent.isBrandUnderMaintenance(id); } catch (e) { return false; }
   }
 
