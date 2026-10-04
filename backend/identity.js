@@ -207,6 +207,38 @@ function createIdentity(deps) {
     }
   }
 
+  /* 名義（アドレス）から番号を引く。
+
+     findByAddress は「署名で確かめて連携したウォレット」しか見ない。
+     LINE・Google・メールで入った人の名義（CHESアドレス）は、
+     そこには載っていないので引けない。クエストの参加者はその名義で
+     記録されているので、運営の照合にはこちらが要る。
+
+     やり方は quest-completion.js と同じ。ches_accounts を名義で引いて、
+     その文書に書いてある spid を使う。表記ゆれ（小文字とチェックサム）に
+     当たるよう、両方の形で聞く。 */
+  async function spidForAddress(address) {
+    if (!db) return null;
+    const direct = await findByAddress(address);
+    if (direct) return direct;
+    const forms = addressForms(address, ethers);
+    if (!forms.length) return null;
+    try {
+      const [byChes, byWallet] = await Promise.all([
+        db.collection(ACCOUNT_COL).where("chesAddress", "in", forms).limit(5).get(),
+        db.collection(ACCOUNT_COL).where("walletAddress", "in", forms).limit(5).get()
+      ]);
+      const spids = new Set([...byChes.docs, ...byWallet.docs]
+        .map((doc) => String((doc.data() || {}).spid || ""))
+        .filter(isSchoolParkId));
+      /* 2つ以上に当たったら、どちらの人か決められない。運営が見る。 */
+      return spids.size === 1 ? [...spids][0] : null;
+    } catch (e) {
+      console.warn("SchoolPark ID: 名義からの引き当てに失敗:", e.message);
+      return null;
+    }
+  }
+
   async function findByAddress(address) {
     if (!db || !isAddress(address)) return null;
     try {
@@ -898,7 +930,7 @@ function createIdentity(deps) {
     // 番号そのもの
     newSchoolParkId, isSchoolParkId, linkIdFor,
     // 解決・発行
-    resolveForUid, findByUid, findByAddress, readIdentity, publicView,
+    resolveForUid, findByUid, findByAddress, spidForAddress, readIdentity, publicView,
     // 連携
     issueLinkTicket, completeLinkWithTicket, registerWalletLink,
     // 招待（一般クエスト #005）

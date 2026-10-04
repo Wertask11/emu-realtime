@@ -372,3 +372,146 @@ test("窓口: 他人の番号は覗けない（列挙もできない）", async 
     assert.equal(peek.status, 403);
   } finally { await s.close(); }
 });
+
+/* ───────── 招待リンク（一般クエスト #005） ─────────
+
+   10/4、本番で /invite が必ず 404 になった。
+
+     const me = await identity.findByUid(uid);
+     if (!me || !me.spid) return 404;      ← me は番号そのもの（文字列）
+
+   findByUid はオブジェクトではなく番号を返す。me.spid は常に undefined
+   なので、パスポートを持っている人にも 404 を返していた。
+
+   backend/invite.test.js は identity の関数を直に呼んでいたので、
+   窓口の側のこの取り違えを拾えなかった。実際に叩く試験をここに置く。 */
+
+test("窓口: 招待の合言葉は、認証が無ければ取れない", async () => {
+  const s = await startServer();
+  try {
+    const anon = await s.call("GET", "/invite");
+    assert.equal(anon.status, 401);
+  } finally { await s.close(); }
+});
+
+test("窓口: パスポートがあれば、招待の合言葉が返る", async () => {
+  const s = await startServer();
+  try {
+    await s.call("POST", "/resolve", { uid: LINE_UID });
+    const got = await s.call("GET", "/invite", { uid: LINE_UID });
+    assert.equal(got.status, 200, "パスポートがあるのに " + got.status + " を返しています");
+    assert.equal(got.body.ok, true);
+    assert.equal(/^[0-9A-HJKMNP-TV-Z]{10}$/.test(String(got.body.code)), true, got.body.code);
+    assert.equal(got.body.total, 0);
+  } finally { await s.close(); }
+});
+
+test("窓口: 合言葉に SchoolPark ID そのものは返さない", async () => {
+  /* SNS に貼る値なので、番号を混ぜてはいけない。 */
+  const s = await startServer();
+  try {
+    const me = await s.call("POST", "/resolve", { uid: LINE_UID });
+    const got = await s.call("GET", "/invite", { uid: LINE_UID });
+    assert.equal(String(got.body.code).indexOf("SP-"), -1);
+    assert.notEqual(got.body.code, me.body.schoolParkId);
+    assert.equal(got.body.schoolParkId, undefined, "番号を返しています");
+  } finally { await s.close(); }
+});
+
+test("窓口: 何度聞いても、合言葉は同じ", async () => {
+  const s = await startServer();
+  try {
+    await s.call("POST", "/resolve", { uid: LINE_UID });
+    const a = await s.call("GET", "/invite", { uid: LINE_UID });
+    const b = await s.call("GET", "/invite", { uid: LINE_UID });
+    assert.equal(a.body.code, b.body.code);
+    assert.equal(s.db._count("sp_invite_codes"), 1);
+  } finally { await s.close(); }
+});
+
+test("窓口: パスポートが無ければ NO_PASSPORT", async () => {
+  const s = await startServer();
+  try {
+    const got = await s.call("GET", "/invite", { uid: LINE_UID });   // resolve していない
+    assert.equal(got.status, 404);
+    assert.equal(got.body.error, "NO_PASSPORT");
+  } finally { await s.close(); }
+});
+
+test("窓口: 招待リンクから入った人が、1件として数えられる", async () => {
+  const s = await startServer();
+  try {
+    const inviter = await s.call("POST", "/resolve", { uid: LINE_UID });
+    const invite = await s.call("GET", "/invite", { uid: LINE_UID });
+    const code = invite.body.code;
+
+    const newbie = await s.call("POST", "/resolve", { uid: GOOGLE_UID, body: { ref: code } });
+    assert.equal(newbie.status, 200);
+    assert.equal(newbie.body.isNew, true);
+    assert.deepEqual(newbie.body.invited, { ok: true });
+
+    const after = await s.call("GET", "/invite", { uid: LINE_UID });
+    assert.equal(after.body.total, 1);
+    const row = s.db._dump("sp_identities")[newbie.body.schoolParkId];
+    assert.equal(row.invitedBySpid, inviter.body.schoolParkId);
+  } finally { await s.close(); }
+});
+
+test("窓口: すでに番号がある人が踏んでも、数えない", async () => {
+  /* ここが緩むと、前からいる人を呼び直すだけで件数を増やせてしまう。 */
+  const s = await startServer();
+  try {
+    await s.call("POST", "/resolve", { uid: LINE_UID });
+    const code = (await s.call("GET", "/invite", { uid: LINE_UID })).body.code;
+    await s.call("POST", "/resolve", { uid: GOOGLE_UID });            // 先に番号を作る
+    const again = await s.call("POST", "/resolve", { uid: GOOGLE_UID, body: { ref: code } });
+    assert.equal(again.body.isNew, false);
+    assert.equal(again.body.invited, undefined, "数えています");
+    assert.equal((await s.call("GET", "/invite", { uid: LINE_UID })).body.total, 0);
+  } finally { await s.close(); }
+});
+
+test("窓口: 知らない合言葉でも、パスポートの発行は止めない", async () => {
+  const s = await startServer();
+  try {
+    const got = await s.call("POST", "/resolve", { uid: LINE_UID, body: { ref: "ZZZZZZZZZZ" } });
+    assert.equal(got.status, 200, "合言葉のせいで発行が止まっています");
+    assert.equal(got.body.isNew, true);
+    assert.equal(got.body.invited.ok, false);
+  } finally { await s.close(); }
+});
+
+test("窓口: 運営は、名義から招待を数えられる", async () => {
+  /* 管理画面はクエストの参加者を名義（アドレス）で持っている。
+     ここも findByAddress の戻りを取り違えていた。 */
+  const s = await startServer();
+  try {
+    await s.call("POST", "/resolve", { uid: LINE_UID });
+    const code = (await s.call("GET", "/invite", { uid: LINE_UID })).body.code;
+    await s.call("POST", "/resolve", { uid: GOOGLE_UID, body: { ref: code } });
+
+    const got = await s.call("GET", "/admin/invites?address=" + LINE_ADDR + "&since=0",
+      { uid: OWNER_UID });
+    assert.equal(got.status, 200, "名義から引けていません（" + got.status + "）");
+    assert.equal(got.body.count, 1);
+    assert.equal(got.body.invited.length, 1);
+  } finally { await s.close(); }
+});
+
+test("窓口: 運営以外は、招待を数えられない", async () => {
+  const s = await startServer();
+  try {
+    await s.call("POST", "/resolve", { uid: LINE_UID });
+    const got = await s.call("GET", "/admin/invites?address=" + LINE_ADDR, { uid: GOOGLE_UID });
+    assert.equal(got.status, 403);
+  } finally { await s.close(); }
+});
+
+test("窓口: 名義にパスポートが無ければ NO_PASSPORT", async () => {
+  const s = await startServer();
+  try {
+    const got = await s.call("GET", "/admin/invites?address=" + OTHER_ADDR, { uid: OWNER_UID });
+    assert.equal(got.status, 404);
+    assert.equal(got.body.error, "NO_PASSPORT");
+  } finally { await s.close(); }
+});

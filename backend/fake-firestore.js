@@ -89,6 +89,28 @@ function makeFirestore(seed) {
     };
   }
 
+  /* 絞り込み。where を重ねられるようにする。 */
+  function makeQuery(name, conds) {
+    const match = (data) => conds.every((c) => {
+      const v = data ? data[c.field] : undefined;
+      if (c.op === "==") return v === c.value;
+      if (c.op === "in") return Array.isArray(c.value) && c.value.indexOf(v) >= 0;
+      if (c.op === "array-contains") return Array.isArray(v) && v.indexOf(c.value) >= 0;
+      throw new Error("fake-firestore: 知らない比べ方 " + c.op);
+    });
+    const run = (limit) => {
+      const all = docsOf(name, 0).docs.filter((d) => match(d.data()));
+      const rows = limit ? all.slice(0, limit) : all;
+      return { docs: rows, size: rows.length, empty: rows.length === 0,
+        forEach: (fn) => rows.forEach(fn) };
+    };
+    return {
+      where: (field, op, value) => makeQuery(name, conds.concat([{ field, op, value }])),
+      limit: (n) => ({ async get() { maybeFail(); return run(n); } }),
+      async get() { maybeFail(); return run(0); }
+    };
+  }
+
   function collection(name) {
     return {
       doc: (id) => docRef(name, id),
@@ -100,8 +122,11 @@ function makeFirestore(seed) {
       },
       async get() { maybeFail(); return docsOf(name, 0); },
       limit: (n) => ({ async get() { maybeFail(); return docsOf(name, n); } }),
-      // このテストでは使わないが、呼ばれても落ちないようにしておく
-      where: () => ({ limit: () => ({ async get() { return { empty: true, docs: [] }; } }) })
+      /* where は本当に絞る。空を返す作りにしていたころは、
+         絞り込みを使うコードがテストでは素通りしていた
+         （op を見ない作りだと "in" が "==" のように通ってしまう）。
+         いま要るのは "==" と "in" だけ。ほかが来たら気づけるよう投げる。 */
+      where: (field, op, value) => makeQuery(name, [{ field, op, value }])
     };
   }
 
