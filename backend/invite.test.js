@@ -258,3 +258,32 @@ test("招待を数えられなくても、落ちずに理由を返す", async ()
   assert.equal(got.ok, false);
   assert.equal(got.reason, "RECORD_FAILED");
 });
+
+/* ───────── 名義から番号を引く ─────────
+
+   運営の照合はクエストの参加者の名義（アドレス）から始まる。
+   findByAddress は「署名で確かめて連携したウォレット」しか見ないので、
+   LINE・Google で入った人は引けない。10/4、管理画面の「招待を数える」が
+   それで 404 になった。 */
+
+test("連携ウォレットが無くても、CHESの名義から番号を引ける", async () => {
+  const { identity } = setup();
+  const a = await identity.resolveForUid(A_UID);
+  /* A は LINE。walletAddress ＝ chesAddress ＝ A_ADDR（連携ウォレットではない）。 */
+  assert.equal(await identity.findByAddress(A_ADDR), null, "連携ウォレットとしては無いはず");
+  assert.equal(await identity.spidForAddress(A_ADDR), a.spid);
+});
+
+test("名義の大文字小文字は、どちらでも引ける", async () => {
+  const { identity } = setup();
+  const a = await identity.resolveForUid(A_UID);
+  assert.equal(await identity.spidForAddress(A_ADDR.toUpperCase().replace("0X", "0x")), a.spid);
+});
+
+test("知らない名義は、引けない", async () => {
+  const { identity } = setup();
+  await identity.resolveForUid(A_UID);
+  assert.equal(await identity.spidForAddress("0x0000000000000000000000000000000000000000"), null);
+  assert.equal(await identity.spidForAddress("でたらめ"), null);
+  assert.equal(await identity.spidForAddress(""), null);
+});

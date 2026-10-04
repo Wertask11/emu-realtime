@@ -149,10 +149,13 @@ function createIdentityRouter(deps) {
     if (!db || !identity) return unavailable(res);
     res.set("Cache-Control", "no-store, max-age=0");
     try {
-      const me = await identity.findByUid(req.identity.uid);
-      if (!me || !me.spid) return res.status(404).json({ error: "NO_PASSPORT" });
-      const code = await identity.inviteCodeFor(me.spid);
-      const out = await identity.invitesOf(me.spid, 0);
+      /* findByUid は番号そのもの（文字列）を返す。オブジェクトではない。
+         ここを me.spid と書いていたので、常に undefined になり、
+         パスポートを持っている人にも 404 を返していた（10/4 に判明）。 */
+      const spid = await identity.findByUid(req.identity.uid);
+      if (!identity.isSchoolParkId(spid)) return res.status(404).json({ error: "NO_PASSPORT" });
+      const code = await identity.inviteCodeFor(spid);
+      const out = await identity.invitesOf(spid, 0);
       return res.json({ ok: true, code, total: out.total });
     } catch (e) {
       console.error("招待の合言葉を作れませんでした:", e.message);
@@ -321,8 +324,10 @@ function createIdentityRouter(deps) {
       if (!identity.isSchoolParkId(spid)) {
         const addr = String(req.query.address || "").trim();
         if (!addr) return res.status(400).json({ error: "BAD_SPID" });
-        const found = await identity.findByAddress(addr);
-        spid = String((found && found.spid) || "");
+        /* 連携ウォレットだけでなく、CHESの名義からも引く。
+           クエストの参加者は、LINE・Google で入った人の名義で
+           記録されていることが多い（findByAddress だけでは当たらない）。 */
+        spid = String((await identity.spidForAddress(addr)) || "");
         if (!identity.isSchoolParkId(spid)) return res.status(404).json({ error: "NO_PASSPORT" });
       }
       const out = await identity.invitesOf(spid, Number(req.query.since) || 0);
