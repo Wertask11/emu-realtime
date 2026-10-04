@@ -584,13 +584,56 @@ async function paintCamReports() {
   });
 }
 
+/* ───────── いまの人数 ─────────
+
+   会員一覧は有料の契約（emu_subscriptions）しか数えないので、
+   無料で使っている人が一人も入らない。「何人が使っているか」を
+   出す場所が無かったので足す。
+
+   数えるのはサーバー（count()）。何人いても読み取りはごくわずかで済む。
+   数えられなくても会員一覧は出す。人数が出ないだけで、
+   ほかが見られなくなるのは困る。 */
+function headcountCard(h) {
+  if (!h) {
+    return '<div class="card"><h3>いまの人数</h3>'
+      + '<p class="empty" style="text-align:left">いまは数えられませんでした。'
+      + '下の会員一覧は、そのまま見られます。</p></div>';
+  }
+  const n = v => Number(v || 0).toLocaleString("ja-JP");
+  /* since は日本時間の月初を UTC のミリ秒で持っている。
+     そのまま UTC で読むと前月の末日になるので、9時間ぶん足してから読む。 */
+  const jst = new Date((Number(h.since) || Date.now()) + 9 * 3600 * 1000);
+  const label = jst.getUTCMonth() + 1;
+  return '<div class="card"><h3>いまの人数</h3>'
+    + '<div class="row"><span>アカウント</span><span>' + n(h.accounts) + ' 人</span></div>'
+    + '<div class="row"><span><b>パスポート発行済み</b><br>'
+    + '<small style="color:var(--muted)">実際に使っている人の数</small></span>'
+    + '<span><b>' + n(h.passports) + ' 人</b></span></div>'
+    + '<div class="row"><span>今月できたパスポート</span><span>' + n(h.passportsThisMonth) + ' 件</span></div>'
+    + '<div class="row"><span>招待から来た人（累計）</span><span>' + n(h.invited) + ' 人</span></div>'
+    + '<div class="row"><span>今月、招待から来た人</span><span>' + n(h.invitedThisMonth) + ' 人</span></div>'
+    + '<p class="hint" style="margin:10px 0 0">'
+    + '「今月」は日本時間の ' + label + '月1日 0:00 から数えています。<br>'
+    + 'パスポートの数は、年内目標「SP Passport 500〜1,000件発行」の分母です。'
+    + '招待の数は、一般クエスト #005 がどれだけ効いているかです。</p>'
+    + '</div>';
+}
+
 async function renderMembers() {
   const el = $("#tab-members");
   el.innerHTML = '<p class="empty">読み込み中…</p>';
   try {
-    const { items, summary } = await api("/api/billing/admin/members");
+    /* 人数は、取れなくても止めない。 */
+    const [{ items, summary }, counted] = await Promise.all([
+      api("/api/billing/admin/members"),
+      api("/api/identity/admin/headcount").catch(function (e) {
+        console.warn("人数を数えられませんでした:", e && (e.code || e.message));
+        return null;
+      })
+    ]);
 
-    const head = '<div class="card"><h3>いまの会員</h3>'
+    const head = headcountCard(counted)
+      + '<div class="card"><h3>いまの会員</h3>'
       + '<div class="row"><span>Emu light</span><span>' + summary.light + ' 人</span></div>'
       + '<div class="row"><span>Emu plus</span><span>' + summary.plus + ' 人</span></div>'
       + '<div class="row"><span>Emu pro</span><span>' + summary.pro + ' 人</span></div>'
