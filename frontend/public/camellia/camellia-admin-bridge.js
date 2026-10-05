@@ -251,12 +251,14 @@
   }
 
   function apply(members) {
-    window.CamelliaMembers = (members || []).map(toPersona);
+    receivedMembers = Array.isArray(members) ? members : [];
+    window.CamelliaMembers = receivedMembers.map(toPersona);
     try {
       window.dispatchEvent(new CustomEvent("camellia-members", {
         detail: window.CamelliaMembers
       }));
     } catch (e) {}
+    void fetchParentIdentities().then(bindParentRows);
   }
 
   window.addEventListener("message", function (ev) {
