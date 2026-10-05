@@ -195,7 +195,6 @@
   function renderParentProfile() {
     var panel = parentIdentityPanel();
     if (!panel) return;
-    bindParentRows();
     var doc = window.parent.document;
     var member = receivedMembers.find(function (m) { return m.uid === activeUid; });
     var content = panel.querySelector("[data-cam-profile-content]");
