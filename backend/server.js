@@ -1984,6 +1984,11 @@ const identityApi = require("./identity-router").createIdentityRouter({
 });
 app.use("/api/identity", identityApi.router);
 
+const camelliaAuthApi = require("./camellia-auth").createCamelliaAuthRouter({
+  db, firebaseAdmin, identity, requireFirebaseUser
+});
+app.use("/api/camellia-auth", camelliaAuthApi.router);
+
 // ════════════════════════════════════════
 // 一日シェア (Ichinichi Share) API ── Firestore永続化版
 // 「わたしの一日が、誰かの学びになる。」
