@@ -174,9 +174,30 @@ test('管理画面が、消したファイルを読み込んでいない', () =>
 });
 
 test('利用者向けのサーバー窓口（/api/camellia）が外れている', () => {
+  /* 名前に camellia が入るものを全部禁じていたが、それは行き過ぎだった。
+     /api/camellia-auth（SchoolPark・LINE とつなぐ窓口）は別のもので、
+     あとから main に入った。消したのは対話の窓口のほうだけ。 */
   const server = read('backend/server.js');
-  assert.doesNotMatch(server, /camellia/i, 'server.js に組み込みが残っています');
+  assert.ok(server.indexOf('require("./camellia")') < 0,
+    '消した対話の窓口を、まだ読み込んでいます');
+  assert.doesNotMatch(server, /app\.use\("\/api\/camellia",/,
+    '消した対話の窓口が、まだ組み込まれています');
+  assert.equal(exists('backend/camellia.js'), false);
   assert.ok(html.indexOf('/api/camellia/') < 0, '画面から呼ぶ所が残っています');
+});
+
+test('SchoolPark とつなぐ窓口は、消していない', () => {
+  /* Camellia β から「SchoolParkとつなぐ」「LINEではじめる」で使う。
+     対話の窓口を消したときに、まとめて消さないこと。 */
+  const server = read('backend/server.js');
+  assert.match(server, /app\.use\("\/api\/camellia-auth", camelliaAuthApi\.router\)/,
+    'つなぐ窓口が組み込まれていません');
+  assert.ok(exists('backend/camellia-auth.js'), 'つなぐ窓口の本体が消えています');
+  assert.ok(exists('frontend/public/camellia-connect.html'), '橋渡しのページが消えています');
+  /* 戻り先は Camellia β に限る。どこへでも返すと、証を横取りされる。 */
+  const bridge = read('frontend/public/camellia-connect.html');
+  assert.match(bridge, /startsWith\('https:\/\/camellia-beta\.vercel\.app\/'\)/,
+    '戻り先の確かめが消えています');
 });
 
 /* ───────── 残すと決めたものが、巻き添えで消えていない ───────── */
