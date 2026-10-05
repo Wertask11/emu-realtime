@@ -171,7 +171,10 @@ const STATUS_LABEL = {
   canceled:"解約済み", unpaid:"未払い", incomplete:"手続き途中"
 };
 
-/* Camellia の対象年齢。camellia-auth.js・特商法・利用規約と必ず同じにすること。 */
+/* Camellia の対象年齢。
+   以前は画面側（camellia-auth.js）にも同じ数字があったが、利用者側の
+   Camellia を消したので、いまはここと backend/billing.js の2か所だけ。
+   新しい Camellia を作るときは、その入口と必ず同じにすること。 */
 const CAM_MIN_AGE = 18, CAM_MAX_AGE = 45;
 
 /* Camellia に入った人。サーバー（Admin SDK）を通して読む。
@@ -266,22 +269,138 @@ function camReplyBox(uid) {
 /* ほかのアプリ（ChatGPT・Claude・ルナルナなど）から取り込んだもの。
    本人が自分で書き出して入れたファイルの中身。
    長いので、そのまま流すと画面が壊れる。折りたたんで、枠の中で送る。 */
+/* 取り込んだもの（Camellia β が写してきた記録の控え）。
+
+   β は localStorage の中身を1件1文書で送ってくる。文書のIDは
+   「種類 + UUID」なので、そのまま並べると UUID の列になり、
+   中身は生の JSON が1行で出るだけだった。届いてはいるのに読めない。
+
+   種類ごとにまとめ、欄の名前と値を日本語に直して1行にする。
+   生の JSON も残す（直したいときに元が見えないと困る）。 */
+
+const CAM_IMPORT_KIND_JA = {
+  meta: "全体の状態", profile: "プロフィール", checkin: "チェックイン",
+  action: "やってみたこと", "action-feedback": "やってみた手ごたえ",
+  "saved-action": "あとでやる", conversation: "AIとのやりとり",
+  "context-memory": "すすめた記録", insight: "気づき",
+  "insight-feedback": "気づきの当たり外れ", fortune: "占い",
+  "tree-leaf": "木の葉（人）", analytics: "画面の動き"
+};
+
+const CAM_IMPORT_FIELD_JA = {
+  actionId: "やること", title: "題名", category: "種類", event: "できごと",
+  status: "状態", mood: "気分", sleep: "睡眠", body: "からだ", stress: "ストレス",
+  periodDays: "月経", timeBand: "時間帯", weekday: "曜日", lifestyle: "暮らし",
+  availableMinutes: "使える分", feedback: "手ごたえ", dismissReason: "やめた理由",
+  saveTiming: "いつやる", rating: "評価", timing: "いつやる", key: "鍵", text: "文",
+  confidence: "確からしさ", sampleSize: "件数", insightKey: "気づきの鍵",
+  verdict: "当たり外れ", date: "日付", cardId: "カード", orientation: "向き",
+  name: "名前", meaningTags: "意味", note: "メモ", reflections: "ふりかえり",
+  messages: "やりとり", properties: "中身", version: "版",
+  onboardingComplete: "はじめの設定", interests: "興味", priority: "大事にしたいこと",
+  periodEnabled: "月経の記録", age: "年齢", startedAt: "はじめた",
+  completedAt: "終えた", createdAt: "書いた", updatedAt: "直した",
+  forwardedAt: "送った", lastOpenedAt: "最後に開いた"
+};
+
+/* 決まった言葉は、そのまま出すと英語のままになる。 */
+const CAM_IMPORT_VALUE_JA = {
+  proposed: "すすめた", saved: "あとでにした", dismissed: "ことわった",
+  started: "はじめた", completed: "やった", skipped: "とばした", drawn: "引いた",
+  great: "とてもよかった", okay: "よかった", same: "変わらない", bad: "合わなかった",
+  no_time: "時間がない", not_now: "いまじゃない", not_needed: "必要ない",
+  dislike: "好みでない", other: "そのほか",
+  later_today: "今日のあとで", holiday: "休みの日", when_free: "手が空いたら",
+  save_only: "とっておくだけ",
+  REST: "休む", BODY: "からだ", BEAUTY: "きれい", PLAY: "あそぶ",
+  LEARN: "まなぶ", CONNECT: "つながる",
+  family: "家族", friend: "友だち", love: "恋愛", work: "仕事",
+  learning: "まなび", active: "いる", memory: "思い出",
+  upright: "正位置", reversed: "逆位置", correct: "当たり", incorrect: "はずれ"
+};
+
+const CAM_MOOD_JA = ["", "😢 とてもつらい", "😟 すこしつらい", "😶 ふつう", "🙂 よい", "😄 とてもよい"];
+const CAM_WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
+
+/* 出しても読む助けにならない欄。ID の類は長いだけで意味がない。 */
+const CAM_IMPORT_HIDE = ["id", "actionRecordId", "savedAt"];
+
+function camValueJa(key, value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (key === "mood") return CAM_MOOD_JA[Number(value)] || String(value);
+  if (key === "weekday") return (CAM_WEEKDAY_JA[Number(value)] || String(value)) + "曜";
+  if (key === "periodDays") return String(value) + "日目";
+  if (key === "sleep") return String(value) + "時間";
+  if (key === "availableMinutes") return String(value) + "分";
+  if (key === "confidence") return Math.round(Number(value) * 100) + "%";
+  if (/At$/.test(key)) return fmt(value);
+  if (typeof value === "boolean") return value ? "はい" : "いいえ";
+  if (Array.isArray(value)) {
+    if (!value.length) return "";
+    return value.map(function (v) {
+      if (v && typeof v === "object") return v.text || v.name || JSON.stringify(v);
+      return CAM_IMPORT_VALUE_JA[v] || String(v);
+    }).join("・");
+  }
+  if (value && typeof value === "object") {
+    return Object.keys(value).map(function (k) {
+      const inner = camValueJa(k, value[k]);
+      return inner ? (CAM_IMPORT_FIELD_JA[k] || k) + " " + inner : "";
+    }).filter(Boolean).join("・");
+  }
+  return CAM_IMPORT_VALUE_JA[value] || String(value);
+}
+
+/* 1件を1行にする。時刻を左に置いて、あとは欄の名前と値を並べる。 */
+function camImportRow(record) {
+  if (!record || typeof record !== "object") return esc(String(record));
+  const when = record.createdAt || record.updatedAt || record.date || "";
+  const parts = Object.keys(record)
+    .filter(function (k) { return CAM_IMPORT_HIDE.indexOf(k) < 0 && !/^(createdAt|updatedAt)$/.test(k); })
+    .map(function (k) {
+      const v = camValueJa(k, record[k]);
+      if (!v) return "";
+      return '<small style="color:var(--muted)">' + esc(CAM_IMPORT_FIELD_JA[k] || k) + '</small> ' + esc(v);
+    }).filter(Boolean);
+  return '<div style="border-top:1px solid var(--line);padding:6px 0;font-size:13px;line-height:1.8">'
+    + (when ? '<small style="color:var(--muted)">' + esc(fmt(when)) + '</small> ' : '')
+    + parts.join('　') + '</div>';
+}
+
 function camImports(list) {
   if (!Array.isArray(list) || !list.length) return "";
-  return list.map(function (im) {
-    const body = String(im.content || "");
+  /* 種類ごとにまとめる。種類は β が入れてくる kind。
+     無いときは文書のID（種類-UUID）の頭から取る。 */
+  const groups = {};
+  list.forEach(function (im) {
+    const kind = im.kind || String(im.type || "").replace(/-[0-9a-f-]{8,}$/i, "") || "不明";
+    (groups[kind] = groups[kind] || []).push(im);
+  });
+  return Object.keys(groups).sort().map(function (kind) {
+    const rows = groups[kind].slice().sort(function (a, b) {
+      return String(b.importedAt || "").localeCompare(String(a.importedAt || ""));
+    });
+    const body = rows.map(function (im) {
+      let parsed = null;
+      try { parsed = JSON.parse(String(im.content || "")); } catch (e) { /* 壊れていても出す */ }
+      return parsed ? camImportRow(parsed)
+        : '<div style="border-top:1px solid var(--line);padding:6px 0;font-size:12px">'
+          + esc(String(im.content || "").slice(0, 2000)) + '</div>';
+    }).join("");
+    const raw = rows.map(function (im) {
+      return esc(String(im.type || "")) + "\n" + esc(String(im.content || ""));
+    }).join("\n\n");
     return '<details style="margin:0 0 6px">'
-      + '<summary style="cursor:pointer">'
-      + '<b>' + esc(im.type || "不明") + '</b> '
-      + '<small style="color:var(--muted)">' + esc(im.name || "")
-      + (im.characters ? '／' + Number(im.characters).toLocaleString() + '文字' : '')
-      + (im.importedAt ? '／' + fmt(im.importedAt) : '')
-      + (im.truncated ? '／★長いので途中まで' : '')
-      + '</small></summary>'
+      + '<summary style="cursor:pointer"><b>' + esc(CAM_IMPORT_KIND_JA[kind] || kind) + '</b> '
+      + '<small style="color:var(--muted)">' + rows.length + '件'
+      + (CAM_IMPORT_KIND_JA[kind] ? '／' + esc(kind) : '') + '</small></summary>'
+      + '<div style="max-height:420px;overflow:auto;margin:4px 0 0">' + body + '</div>'
+      + '<details style="margin:6px 0 0"><summary style="cursor:pointer">'
+      + '<small style="color:var(--muted)">元のまま見る</small></summary>'
       + '<pre style="white-space:pre-wrap;word-break:break-all;max-height:320px;overflow:auto;'
       + 'background:#f7f5f2;border:1px solid var(--line);border-radius:8px;padding:10px;'
-      + 'font-size:12px;margin:6px 0 0">' + esc(body.slice(0, 20000))
-      + (body.length > 20000 ? "\n…（ここまで表示）" : "") + '</pre>'
+      + 'font-size:11px;margin:6px 0 0">' + raw.slice(0, 40000)
+      + (raw.length > 40000 ? "\n…（ここまで表示）" : "") + '</pre></details>'
       + '</details>';
   }).join("");
 }

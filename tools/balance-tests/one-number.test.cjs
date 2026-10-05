@@ -19,6 +19,18 @@ const vm = require('node:vm');
 
 const root = path.join(__dirname, '../..');
 const SRC = fs.readFileSync(path.join(root, 'frontend/public/emuer-v2-public-copy.js'), 'utf8');
+
+/* 切り出しは、必ず「意味のある終わり」で切る。
+   幅（start + 600）で切っていたため、上の行が1行減っただけで
+   式の途中で切れて構文が壊れた。目印が消えたときは、黙って
+   おかしなものを食わせずに、その場で落とす。 */
+function cut(from, to) {
+  const i = SRC.indexOf(from);
+  assert.ok(i >= 0, '切り出しの始まりが見つかりません: ' + from);
+  const j = SRC.indexOf(to, i);
+  assert.ok(j > i, '切り出しの終わりが見つかりません: ' + to);
+  return SRC.slice(i, j);
+}
 const INDEX = fs.readFileSync(path.join(root, 'frontend/public/index.html'), 'utf8');
 
 /* 置き場所。index.html の札が動いたら、旧の行はどこにも出ない。 */
@@ -31,9 +43,9 @@ test('旧の行を入れる場所が、index.html にある', () => {
 
 test('ウォレットの札も、今日のEmuと同じように包む', () => {
   assert.ok(SRC.indexOf('function wrapWalletCard()') > 0, '札を包んでいません');
-  const start = SRC.indexOf('async function start()');
+  const start = SRC.indexOf('  async function start()');
   assert.ok(start > 0);
-  const body = SRC.slice(start, start + 600);
+  const body = cut('  async function start()', '  window.addEventListener("load"');
   assert.ok(body.indexOf('wrapLegacyRender();') >= 0 && body.indexOf('wrapWalletCard();') >= 0,
     '始まりで両方を包んでいません');
   const load = SRC.slice(SRC.indexOf('window.addEventListener("load"'));
@@ -41,16 +53,14 @@ test('ウォレットの札も、今日のEmuと同じように包む', () => {
 });
 
 test('二度包まない', () => {
-  const i = SRC.indexOf('function wrapWalletCard()');
-  const seg = SRC.slice(i, i + 500);
+  const seg = cut('  function wrapWalletCard()', '  function wrapLegacyRender()');
   assert.ok(seg.indexOf('__emuerV2PublicCopy') >= 0, '印がありません');
 });
 
 /* 実際に動かす。 */
 function stage(opts) {
   const o = opts || {};
-  const SEG = SRC.slice(SRC.indexOf('async function refreshBalance()'),
-                        SRC.indexOf('async function refreshLoginButton()'));
+  const SEG = cut('async function refreshBalance()', '  function wrapLegacyRender()');
   const seen = { texts: {}, inserted: [], appended: [], legacy: null, display: {} };
   const nodes = {};
   const make = (id) => {

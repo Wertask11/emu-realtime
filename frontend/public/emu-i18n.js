@@ -12,7 +12,7 @@
    使い方:
      - HTML: <span data-i18n="tab.today">今日のEmu</span>
              属性に入れる場合は data-i18n-placeholder / data-i18n-title / data-i18n-aria
-     - JS  : emuT('lb.toastGot', { n: 0.5 })
+     - JS  : emuT('lb.unconverted', { n: 12 })
 
    ・辞書に無いキーは、キー名をそのまま返す。
    ・{name} のような波括弧は emuT の第2引数で置換する。
@@ -61,17 +61,7 @@
       "reward.uses": "使い道を見る",
       "unit.emuer": "EMUER",
 
-      "lb.title": "今日のログインボーナス",
-      "lb.note": "毎日ログインで +{n} EMUER",
-      "lb.claim": "+{n} 受取",
-      "lb.claimed": "受取済み",
-      "lb.tomorrow": "また明日、受け取れます。",
-      "lb.claimedElsewhere": "本日分は受取済みです（別の端末または自動付与）。また明日どうぞ。",
       "lb.unconverted": "まだ換えていない分：{n} EMUER",
-      "lb.toastGot": "🎁 ログインボーナス +{n} EMUER",
-      "lb.toastAlready": "本日はすでに受け取り済みです🧊",
-      "lb.needWallet": "ウォレットを接続してください",
-      "lb.failed": "受け取りに失敗しました",
 
       "uses.title": "EMUERでできること",
       "uses.desc": "集める理由を、獲得前から確認できます。",

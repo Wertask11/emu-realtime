@@ -1,11 +1,17 @@
-/* 準備中のブランドに、誰が入れるかの試験。
+/* 準備中のブランドに、誰が入れるかの試験と、
+   Camellia を外したあとに残っているもの・消えているものの試験。
 
-   Camellia だけ「運営を含めて準備中」と決め打ちしてあった。
-   そのため運営自身が中身を見られなかった。ほかのブランドと
-   同じ規則（運営は入れる・それ以外は準備中）にそろえた。
+   2026-10-04、利用者側の Camellia（/camellia/control-user.html と
+   その一式）を消した。画面を作り直すことになったため。
 
-   ここが緩むと、公開前の中身が誰にでも見えてしまう。
-   ここが厳しすぎると、運営が自分のものを確かめられない。 */
+   消していないもの:
+     管理画面      /camellia/control-admin.html ほか9本
+     管理用の窓口  /api/billing/admin/camellia*
+     入った方の記録 camellia_users ／ camellia_community ／ camellia_reports
+     権限のルール   firestore.rules の Camellia の章
+
+   ここが緩むと、消したはずの画面への入口が残る。
+   ここが厳しすぎると、残すと決めた管理画面まで巻き添えで消える。 */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -13,8 +19,11 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const root = path.join(__dirname, '../..');
-const html = fs.readFileSync(
-  path.join(root, 'frontend/public/index.html'), 'utf8');
+const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+const exists = (f) => fs.existsSync(path.join(root, f));
+
+const html = read('frontend/public/index.html');
+const dao = read('frontend/public/schoolpark/dao.html');
 
 const maint = html.slice(html.indexOf('const BRAND_MAINTENANCE = {'),
                          html.indexOf('const BRAND_LABELS'));
@@ -35,37 +44,20 @@ function gate(owner, sp) {
 const OWNER = gate(true, true);
 const GUEST = gate(false, true);
 
-/* ───────── 運営 ───────── */
+/* ───────── 残したブランドの門（変えていない） ───────── */
 
-test('運営は Camellia に入れる', () => {
-  assert.equal(OWNER('camellia'), false, '運営が自分のものを見られない');
-});
-
-test('運営は Heartoo にも入れる（前からの決まり）', () => {
+test('運営は Heartoo に入れる', () => {
   assert.equal(OWNER('heartoo'), false);
 });
 
-/* ───────── 運営でない人 ───────── */
-
-test('Camellia は、誰でも入れる（2026-10-04 に開いた）', () => {
-  /* SchoolPark の開幕に合わせて開けた。入ってからの年齢と同意の
-     確認（camellia-gate.js）は、これまでどおり効く。 */
-  assert.equal(GUEST('camellia'), false, '開いたはずなのに準備中のままです');
-  assert.equal(OWNER('camellia'), false);
-});
-
-test('運営でない人には、Heartoo も準備中', () => {
+test('運営でない人には、Heartoo は準備中', () => {
   assert.equal(GUEST('heartoo'), true);
 });
-
-/* ───────── Emu は誰でも ───────── */
 
 test('Emu は誰でも入れる', () => {
   assert.equal(OWNER('emu'), false);
   assert.equal(GUEST('emu'), false);
 });
-
-/* ───────── SchoolPark は別の決まり ───────── */
 
 test('SchoolPark は入場の可否そのもので決まる', () => {
   assert.equal(gate(false, true)('schoolpark'), false, '入れる人は入れる');
@@ -82,40 +74,206 @@ test('入場の答えがまだ無いときは、止める', () => {
     '答えを待たずに通してはいけない');
 });
 
-/* ───────── 決め打ちが戻っていないこと ───────── */
-
-test('Camellia だけを名指しで閉じる書き方が残っていない', () => {
-  assert.doesNotMatch(fn, /brand === 'camellia'\s*\)\s*return true/,
-    '運営も入れない決め打ちが戻っています');
-});
-
-test('準備中の表と、止める仕組みがそろっている', () => {
-  /* 画面の側（この表）と、ページの側（maintenance-guard.js）は
-     必ず同じにすること。片方だけ開けると、押せるのに開いた先が
-     「準備中」になる。2026-10-04、そろえて開けた。 */
-  assert.match(maint, /camellia:\s*false/);
-  assert.match(maint, /emu:\s*false/);
-  /* Heartoo は外のサイト。こちらでは開けないので止めたまま。 */
-  assert.match(maint, /heartoo:\s*true/);
-
-  const guard = fs.readFileSync(path.join(root, 'frontend/public/maintenance-guard.js'), 'utf8');
-  assert.match(guard, /var MAINTENANCE = false;/, 'ページの側がまだ止めています');
-});
-
 test('止める仕組みは、消さずに残してある', () => {
-  /* もう一度止めるときに、各ページへ付け直さなくて済むようにする。 */
+  /* また止めたくなったときに、各ページへ付け直さなくて済むようにする。 */
   ['frontend/public/camellia.html', 'frontend/public/camellia-app.html',
    'frontend/public/schoolpark/tutorial.html',
    'frontend/public/schoolpark/south-elevator.html',
    'frontend/public/schoolpark/east-shopping.html'].forEach(f => {
-    const t = fs.readFileSync(path.join(root, f), 'utf8');
-    assert.ok(t.indexOf('maintenance-guard.js') > 0, f + ' から止める仕組みが消えています');
+    assert.ok(read(f).indexOf('maintenance-guard.js') > 0,
+      f + ' から止める仕組みが消えています');
   });
+  assert.match(read('frontend/public/maintenance-guard.js'),
+    /var MAINTENANCE = false;/, 'ページの側がまだ止めています');
 });
 
 test('運営かどうかは、パスポートを読んだあとに塗り直している', () => {
   /* 運営かどうかは開いた時点では分からない。塗り直しが無いと、
      運営の画面にも「準備中」の灰色が残る。 */
-  const paint = html.indexOf('try { paintBrandMaintenance(); } catch (e) {}');
-  assert.ok(paint > 0, 'パスポートを読んだあとの塗り直しが無い');
+  assert.ok(html.indexOf('try { paintBrandMaintenance(); } catch (e) {}') > 0,
+    'パスポートを読んだあとの塗り直しが無い');
+});
+
+/* ───────── Camellia は切り替えに出さない ───────── */
+
+test('行き先の表に Camellia が無い', () => {
+  const pages = html.slice(html.indexOf('const CHES_BRAND_PAGES = {'),
+                           html.indexOf('/* 外部ブランドページをアプリ内フレームで開く'));
+  assert.ok(pages, '行き先の表が見つかりません');
+  assert.doesNotMatch(pages, /camellia:/, '行き先が戻っています');
+  assert.match(pages, /heartoo:/, 'Heartoo まで消えています');
+});
+
+test('準備中の表と名前の表に Camellia が無い', () => {
+  assert.doesNotMatch(maint, /camellia:/);
+  const labels = html.slice(html.indexOf('const BRAND_LABELS = {'));
+  assert.doesNotMatch(labels.slice(0, 200), /camellia:/);
+});
+
+test('Emu の3つの入口から Camellia の行が消えている', () => {
+  /* サイドバー・スマホのメニュー・振り分け。
+     どれか1つ残ると、そこからだけ入れてしまう。 */
+  assert.doesNotMatch(html, /emuBrandGo\('camellia'\)/, 'サイドバーに残っています');
+  assert.doesNotMatch(html, /smmGo\('camellia'\)/, 'スマホのメニューに残っています');
+  assert.doesNotMatch(html, /case 'camellia':/, '振り分けに残っています');
+});
+
+test('SchoolPark の左上の切り替えに Camellia が無い', () => {
+  const brands = dao.slice(dao.indexOf('brands: ['), dao.indexOf('sidebarButtonIcon:'));
+  assert.ok(brands, '切り替えの並びが見つかりません');
+  assert.doesNotMatch(brands, /'camellia'/, '並びに残っています');
+  assert.match(brands, /'emu'/);
+  assert.match(brands, /'schoolpark'/);
+});
+
+test('dao.html に Camellia だけを名指しで閉じる書き方が残っていない', () => {
+  const b = dao.slice(dao.indexOf('  brandClosed(id){'), dao.indexOf('  goBrand(id){'));
+  assert.ok(b, 'brandClosed が見つかりません');
+  assert.doesNotMatch(b, /id === 'camellia'/, '名指しの決め打ちが戻っています');
+});
+
+/* ───────── 消した画面が、どこからも呼ばれていない ───────── */
+
+const DELETED = [
+  'control-user.html', 'control-enhance.js', 'managed-settings.js',
+  'home-calendar.js', 'restore-location.js', 'user-db-sync.js',
+  'camellia-auth.js', 'camellia-gate.js', 'camellia-sidebar.js',
+  'camellia-store.js', 'camellia-nudge.js', 'camellia-community.js',
+  'camellia-home.js', 'camellia-reply.js', 'camellia-model.js',
+  'camellia-composer.js'
+];
+
+test('消した16本が、本当に消えている', () => {
+  DELETED.forEach(f => {
+    assert.equal(exists('frontend/public/camellia/' + f), false,
+      f + ' が残っています');
+  });
+  assert.equal(exists('backend/camellia.js'), false,
+    'backend/camellia.js が残っています');
+});
+
+test('消した画面への行き先が、どこにも残っていない', () => {
+  /* 説明のコメントに名前が出るのはよい。行き先として書いてあるのが困る。
+     引用符の中に入っているものだけを見る（src= / href= / url: ）。 */
+  const asTarget = /["'][^"'\n]*\/camellia\/control-user\.html[^"'\n]*["']/;
+  [['index.html', html], ['dao.html', dao],
+   ['membership-admin.html', read('frontend/public/membership-admin.html')]]
+    .forEach(([name, t]) => {
+      assert.doesNotMatch(t, asTarget, name + ' に消した画面への行き先が残っています');
+    });
+});
+
+test('管理画面が、消したファイルを読み込んでいない', () => {
+  ['control-admin.html', 'control-admin-previous.html'].forEach(f => {
+    const t = read('frontend/public/camellia/' + f);
+    DELETED.forEach(d => {
+      assert.ok(t.indexOf('"' + d + '"') < 0, f + ' が ' + d + ' を読もうとしています');
+    });
+    assert.ok(t.indexOf('/control-user') < 0, f + ' に消した画面へのリンクが残っています');
+  });
+});
+
+test('利用者向けのサーバー窓口（/api/camellia）が外れている', () => {
+  /* 名前に camellia が入るものを全部禁じていたが、それは行き過ぎだった。
+     /api/camellia-auth（SchoolPark・LINE とつなぐ窓口）は別のもので、
+     あとから main に入った。消したのは対話の窓口のほうだけ。 */
+  const server = read('backend/server.js');
+  assert.ok(server.indexOf('require("./camellia")') < 0,
+    '消した対話の窓口を、まだ読み込んでいます');
+  assert.doesNotMatch(server, /app\.use\("\/api\/camellia",/,
+    '消した対話の窓口が、まだ組み込まれています');
+  assert.equal(exists('backend/camellia.js'), false);
+  assert.ok(html.indexOf('/api/camellia/') < 0, '画面から呼ぶ所が残っています');
+});
+
+test('SchoolPark とつなぐ窓口は、消していない', () => {
+  /* Camellia β から「SchoolParkとつなぐ」「LINEではじめる」で使う。
+     対話の窓口を消したときに、まとめて消さないこと。 */
+  const server = read('backend/server.js');
+  assert.match(server, /app\.use\("\/api\/camellia-auth", camelliaAuthApi\.router\)/,
+    'つなぐ窓口が組み込まれていません');
+  assert.ok(exists('backend/camellia-auth.js'), 'つなぐ窓口の本体が消えています');
+  assert.ok(exists('frontend/public/camellia-connect.html'), '橋渡しのページが消えています');
+  /* 戻り先は Camellia β に限る。どこへでも返すと、証を横取りされる。 */
+  const bridge = read('frontend/public/camellia-connect.html');
+  assert.match(bridge, /startsWith\('https:\/\/camellia-beta\.vercel\.app\/'\)/,
+    '戻り先の確かめが消えています');
+});
+
+/* ───────── 残すと決めたものが、巻き添えで消えていない ───────── */
+
+const ADMIN_FILES = [
+  'control-admin.html', 'control-admin-previous.html', 'camellia-admin-bridge.js',
+  'admin-enhance.js', 'admin-settings.js', 'admin-calendar.js',
+  'admin-menstrual.js', 'personality-charts.js', 'daily-history-admin.js'
+];
+
+test('管理画面の9本は残っている', () => {
+  ADMIN_FILES.forEach(f => {
+    assert.ok(exists('frontend/public/camellia/' + f), f + ' が消えています');
+  });
+});
+
+test('管理画面が、必要なものを読み込めている', () => {
+  const a = read('frontend/public/camellia/control-admin.html');
+  assert.match(a, /src="camellia-admin-bridge\.js"/);
+  const b = read('frontend/public/camellia/control-admin-previous.html');
+  ['camellia-admin-bridge.js', 'admin-enhance.js', 'admin-settings.js',
+   'personality-charts.js', 'daily-history-admin.js', 'admin-menstrual.js',
+   'admin-calendar.js'].forEach(f => {
+    assert.ok(b.indexOf('src="' + f + '"') > 0, f + ' を読み込んでいません');
+  });
+});
+
+test('運営の管理画面に Camellia のタブが残っている', () => {
+  const m = read('frontend/public/membership-admin.html');
+  assert.match(m, /data-tab="camellia"/, 'タブが消えています');
+  assert.match(m, /id="tab-camellia"/);
+  assert.match(m, /\/api\/billing\/admin\/camellia/, '一覧を読む所が消えています');
+  /* 枠の中に出す管理画面は、消していないほうを指していること。 */
+  assert.match(m, /src="\/camellia\/control-admin\.html"/);
+});
+
+test('管理用の窓口が、サーバーに残っている', () => {
+  const billing = read('backend/billing.js');
+  ['/admin/camellia"', '/admin/camellia/control"', '/admin/camellia/issue-ids"',
+   '/admin/camellia/reply"', '/admin/camellia/reports"',
+   '/admin/camellia/post/delete"', '/admin/camellia/rules"'].forEach(r => {
+    assert.ok(billing.indexOf(r) > 0, r + ' が消えています');
+  });
+});
+
+test('入った方の記録と、その権限のルールは消していない', () => {
+  const rules = read('firestore.rules');
+  assert.match(rules, /match \/camellia_users\/\{uid\}/, '記録のルールが消えています');
+  assert.match(rules, /match \/camellia_community\/\{postId\}/);
+  assert.match(rules, /match \/camellia_reports\/\{reportId\}/);
+  /* いちばん下の受け皿へ落とさないこと。落ちると誰でも読み書きできる。 */
+  ["coll != 'camellia_users'", "coll != 'camellia_community'",
+   "coll != 'camellia_reports'"].forEach(line => {
+    assert.ok(rules.indexOf(line) > 0, line + ' が受け皿の除外から消えています');
+  });
+});
+
+/* ───────── 案内の文 ───────── */
+
+test('案内は、Camellia が別のアプリだと言っている', () => {
+  /* 「準備中」ではない。戻ってくる予定が無いので、待たせる言い方はしない。
+     オーナーの決め: Camellia は独自アプリ。SchoolPark・Emu の中からは行けない。 */
+  const tutorial = read('frontend/public/schoolpark/tutorial.html');
+  [['index.html', html], ['tutorial.html', tutorial]].forEach(([name, t]) => {
+    assert.ok(t.indexOf('🌸 Camellia — 独立したアプリ（この中からは行けません）') > 0,
+      name + ' の案内が、いまの決まりと合っていません');
+    assert.ok(t.indexOf('Camellia・Heartoo は') < 0,
+      name + ' が Camellia を Heartoo と同じ「順番に開ける」扱いのままです');
+  });
+  assert.ok(tutorial.indexOf(
+    '<td><strong>Camellia</strong></td><td>独立したアプリ（この中からは行けません）</td>') > 0);
+});
+
+test('Heartoo の準備中は、消さずに残してある', () => {
+  const tutorial = read('frontend/public/schoolpark/tutorial.html');
+  assert.ok(tutorial.indexOf('<td><strong>Heartoo</strong></td><td>準備中</td>') > 0);
+  assert.match(tutorial, /💍 Heartoo — 準備中/);
+  assert.match(html, /💍 Heartoo — 準備中/);
 });

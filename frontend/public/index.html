@@ -2500,7 +2500,6 @@ body.paypay-mode .container {
     overflow: visible;
   }
   /* スマホでは省スペースのため非表示にする要素 */
-  #login-bonus-mini-container { display: none !important; }
   #buyNftBtn                  { display: none !important; }
   .search-bar                 { display: none !important; }
 
@@ -4795,7 +4794,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <span>Emu</span><span class="esn-caret" id="esnCaret">▾</span>
       </button>
       <div class="esn-brand-menu" id="esnBrandMenu">
-        <button type="button" style="color:#e0576f" onclick="emuBrandGo('camellia')">Camellia</button>
         <button type="button" style="color:#f08300" onclick="emuBrandGo('emu')">Emu</button>
         <button type="button" style="color:#d0e2be" onclick="emuBrandGo('schoolpark')">SchoolPark</button>
       </div>
@@ -4956,11 +4954,10 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <p class="eth-reward-note" id="emuNextRewardNote" data-i18n="reward.note">100 EMUERで特別体験と交換できます。</p>
         <!-- 旧ログインボーナス（+0.5 EMUER）は廃止した。
 
-             配布そのものはサーバーで止めてあったが、画面の箱とボタンは
-             残っていて、隠すかどうかはサーバーの「もう配っていません」という
-             返事に頼っていた（_emuLbRetired）。その返事が返らなければ
-             ボタンが出たままになり、押せば失敗する。
-             出していない約束は、画面からも消す。 -->
+             2026-10-05、受け取りの処理ごと消した。押す場所（ボタンの要素）が
+             そもそも作られていなかったので、この仕組みは一度も動いていない。
+             いまのログインのぶんは EMUER v2（1日1回 +1 EMUER）で、
+             受け取りの modal の中にある。 -->
         <button type="button" class="eth-btn" onclick="toggleEmuUses(true)" data-i18n="reward.uses">使い道を見る</button>
       </aside>
     </div>
@@ -6096,20 +6093,19 @@ function startAirdropCounter() {
   airdropStop = window.fbLib.onSnapshot(globalRef, (snap) => {
     const d = snap.exists() ? snap.data() : {};
     // 各ブランドを選んだユニーク人数（ハブ/CHESメニューでの選択時に spTrackBrand が加算）
+    /* Camellia はブランドの切り替えから外したので、出す場所が無い。
+       これまでの人数は sp_stats/global.camellia_entrants に残してある。 */
     const n = {
-      camellia:   d.camellia_entrants   || 0,
       heartoo:    d.heartoo_entrants    || 0,
       emu:        d.emu_entrants        || 0,
       schoolpark: d.schoolpark_entrants || 0
     };
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     // ① CHESメニュー内（各ブランド名の横）
-    set("menuCountCamellia",   n.camellia);
     set("menuCountHeartoo",    n.heartoo);
     set("menuCountEmu",        n.emu);
     set("menuCountSchoolPark", n.schoolpark);
     // ② ハブ画面（メイン画面）の各ボタン
-    set("hubCountCamellia",   n.camellia);
     set("hubCountHeartoo",    n.heartoo);
     set("hubCountEmu",        n.emu);
     set("hubCountSchoolPark", n.schoolpark);
@@ -11169,7 +11165,7 @@ const SP_REIZO_KB = [
   // camellia / heartoo はそれぞれの項目に任せる。
   // ここに入れておくと「Camelliaはいつ開く？」までCHESの説明になってしまう。
   { k:['ches','チェス','ブランド','世界観','4つの','4つで'],
-    a:'CHES（チェス）は、4つの場所が集まった一つの街だよ🧊\n\n🌐 Emu — 経験から生まれた知識を、読んで・届けて・語り合う\n🏞️ SchoolPark — その知識を実際に試して、決めごとを投票で決める\n🌸 Camellia — β公開中\n💍 Heartoo — 準備中\n\nメニューのブランド切替から場所を移動できるよ。どこから入っても、きみは同じ一人として扱われるんだ。' },
+    a:'CHES（チェス）は、4つの場所が集まった一つの街だよ🧊\n\n🌐 Emu — 経験から生まれた知識を、読んで・届けて・語り合う\n🏞️ SchoolPark — その知識を実際に試して、決めごとを投票で決める\n🌸 Camellia — 独立したアプリ（この中からは行けません）\n💍 Heartoo — 準備中\n\nメニューのブランド切替から場所を移動できるよ。どこから入っても、きみは同じ一人として扱われるんだ。' },
 
   // ── SchoolPark 概要
   { k:['schoolparkとは','スクールパークとは','schoolparkって','schoolparkの中身','概要'],
@@ -11186,7 +11182,7 @@ const SP_REIZO_KB = [
   // ── 入れない・不具合
   { k:['入れない','入れません','ログインできない','ログインできま','ログインが','真っ白',
        'エラー','動かない','開かない','進まない','固まる','うまくいかない'],
-    a:'こんなときは、これを試してみてね🧊\n\n・メールのリンクが開けない → リンクを送ったブラウザと同じブラウザで開いてね\n・画面が真っ白 → 一度閉じて開き直してね。18秒待っても進まないときは入場画面に戻るよ\n・「準備中です」と出る → Camellia・Heartoo は順番に開けているところ。Emu は通常どおり使えるよ\n\n直らないときは、画面に出たメッセージをそのまま問い合わせフォームに貼ってね！' },
+    a:'こんなときは、これを試してみてね🧊\n\n・メールのリンクが開けない → リンクを送ったブラウザと同じブラウザで開いてね\n・画面が真っ白 → 一度閉じて開き直してね。18秒待っても進まないときは入場画面に戻るよ\n・「準備中です」と出る → Heartoo は順番に開けているところ。Emu・SchoolPark は通常どおり使えるよ\n\n直らないときは、画面に出たメッセージをそのまま問い合わせフォームに貼ってね！' },
 
   // ── パスワード
   { k:['パスワード','password','ログインし直','再ログイン','別の端末'],
@@ -11324,7 +11320,7 @@ const SP_REIZO_KB = [
 
   // ── Camellia
   { k:['camellia','カメリア','女性','ウェルネス','ウェルビーイング'],
-    a:'Camellia（カメリア）は、女性のウェルネス／ウェルビーイングの場所だよ🌸\nいまはβ公開中。メニューのブランド切替から移動できるよ。\n\nパスポートは共通だから、そのまま同じ身元で使えるんだ🧊' },
+    a:'Camellia（カメリア）は、女性のウェルネス／ウェルビーイングの場所だよ🌸\nいまは独立したアプリになっていて、SchoolPark や Emu の中からは行けないんだ。\n\nブランドの切り替えにも出していないよ🧊' },
 
   // ── Heartoo
   { k:['heartoo','ハートゥー','結婚指輪','指輪'],
@@ -11965,9 +11961,6 @@ jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
       emuSetWalletLabel(emuShortAddr(account));
     }
     
-	if (typeof updateBonusCountdown === "function") {
-        await updateBonusCountdown(); 
-    }
 if (typeof updateConvertButton === "function") {
     updateConvertButton();
 }
@@ -14486,17 +14479,17 @@ function chesTidyEntryScreens() {
   document.body.classList.remove('emu-contact-off');
 }
 
-/* Camellia / Heartoo の表示先（アプリ内フレームで開く）
-   Camellia は本リポジトリへ移管済み（/camellia.html）。同一オリジンのため
-   今後 CHESアカウント・EMUER と直接連携できる。Heartoo は外部のまま。 */
+/* ブランドページの表示先（アプリ内フレームで開く）
+
+   Camellia はここから外した。この枠で開いていた
+   /camellia/control-user.html は作り直すことになったので、消した。
+   管理画面（/camellia/control-admin.html）と、入った方の記録は残してある。
+   新しい Camellia ができたら、ここに1行足せば元どおり切り替わる。
+
+   bg は読み込みが終わるまでの下地の色。行き先のページと同じ色にしておくと、
+   切り替わるときに色が変わらない。入れていなかったため、枠の既定の白
+   （#cbfFrame の background）が濃い色の外枠の上に一瞬出て、白く光っていた。 */
 const CHES_BRAND_PAGES = {
-  /* 新しい Camellia。SchoolParkパスポートで入り、初回だけ生年月日と同意を聞く。
-     古い /camellia.html は自前の登録画面を持っていて、パスポートと繋がっていない。
-     中身の保存はまだこの端末の中だけ。サーバーに移すのはこれから。 */
-  /* bg は読み込みが終わるまでの下地の色。行き先のページと同じ色にしておくと、
-     切り替わるときに色が変わらない。入れていなかったため、枠の既定の白
-     （#cbfFrame の background）が濃い色の外枠の上に一瞬出て、白く光っていた。 */
-  camellia: { url: '/camellia/control-user.html', name: 'Camellia', color: '#e0576f', bg: '#fff6f2', ownNav: true },
   heartoo:  { url: 'https://school-park-homepage.vercel.app/Heartoo.html',  name: 'Heartoo',  color: '#a0d8ef', bg: '#ffffff' }
 };
 
@@ -14550,12 +14543,6 @@ function chesBrandFrameOpen(brand) {
     frame.src = conf.url;
   }
   window._cbfRevealTimer = setTimeout(reveal, 3000);
-}
-
-/* Camellia のサイドバーから呼ばれる。出ているあいだだけ、
-   お問い合わせの丸ボタンを出す。SchoolPark と同じ考え方。 */
-function camelliaSideState(open) {
-  document.body.classList.toggle('cam-contact-off', !open);
 }
 
 function chesBrandFrameClose() {
@@ -15556,7 +15543,6 @@ async function updateEmuTodayHome() {
   const hintEl = document.getElementById('emuBalanceHint');
   if (hintEl) hintEl.style.display = pair.unconverted > 0 ? '' : 'none';
 
-  // ログインボーナスは「まだ換えていない分」に入る。受け取った分がすぐ見えるようにする。
   updateEmuOffchainNote(pair.unconverted);
 
   const postRemainder = parseInt(localStorage.getItem('room2_postCount') || '0', 10) || 0;
@@ -15570,31 +15556,11 @@ async function updateEmuTodayHome() {
      受取状況をサーバーに聞きに行く必要もない。 */
 }
 
-/* ═══════════════════════════════════════
-   ログインボーナス（オフチェーン・1日1回・+0.5 EMUER）
-   受取済み判定も加算もサーバー（emuer_offchain 台帳）が権威。
-   実ウォレットの残高はオンチェーンなので、ここで増えるのはオフチェーン分。
-═══════════════════════════════════════ */
-const EMU_LOGIN_BONUS_AMOUNT = 0.5;
-const _EMU_LB_API = 'https://emu-realtime.onrender.com';
-// 受取済み判定はサーバー（アカウント単位）が正。null=未取得。
-// localStorage判定だと端末ごとに受け取れてしまう（=二重取得）ため、サーバーに一本化。
-let _emuLbClaimedToday = null;
-let _emuLbClaimedElsewhere = false; // サーバーでは受取済みだが、この端末では受け取っていない
-function _emuLbAddr() {
-  return (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
-}
-function _emuLbUid() {
-  /* Firebaseのセッションが正。ches_uid はその写しで、空のことがある。 */
-  return (typeof _emuUid === 'function' ? _emuUid() : (localStorage.getItem('ches_uid') || '')).trim();
-}
-// 受取日はサーバー（Asia/Tokyo）が正。端末のローカル日付で作ると、
-// 海外・時計ずれ・日付境界でサーバーとキャッシュがずれて誤判定になる。
-function _emuTodayStr() {
-  const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  return jst.getUTCFullYear() + '-' + (jst.getUTCMonth() + 1) + '-' + jst.getUTCDate();
-}
-// まだ実EMUERに換えていない分（ログインボーナス・評価・懸賞）の表示。
+/* まだ実EMUERに換えていない分（評価・懸賞・過去のログボ）の表示。
+
+   旧ログインボーナスと同じ場所に書いてあったが、これは別物。
+   台帳（emuer_offchain）に積まれている残高を出すだけで、
+   配る処理は持っていない。「EMUERに変換」の入口として要る。 */
 function updateEmuOffchainNote(balance) {
   const el = document.getElementById('emuOffchainNote');
   if (!el) return;
@@ -15603,113 +15569,18 @@ function updateEmuOffchainNote(balance) {
   el.style.display = '';
   el.textContent = emuT('lb.unconverted', { n: (Math.round(val * 10) / 10).toLocaleString('ja-JP') });
 }
-function _emuLbCacheKey() { return 'emu_loginbonus_last_' + _emuLbAddr(); }
-// サーバー状態が正。未取得(null)のときだけローカルキャッシュ（オフライン用）にフォールバック。
-function emuLoginBonusClaimedToday() {
-  if (_emuLbClaimedToday !== null) return _emuLbClaimedToday;
-  return localStorage.getItem(_emuLbCacheKey()) === _emuTodayStr();
-}
-// サーバー（アカウント単位）から受取状況を取得してUIへ反映
-/* 旧EMUERの配布が止まっていると分かったら立てる。立ったら聞きに行かない。 */
-let _emuLbRetired = false;
-async function refreshEmuLoginBonusStatus() {
-  if (_emuLbRetired) { updateEmuLoginBonusUI(); return; }
-  const addr = _emuLbAddr();
-  const uid = _emuLbUid();
-  if (!addr && !uid) { updateEmuLoginBonusUI(); return; }
-  try {
-    // 状況確認は画面表示のたびに走るため、署名ダイアログは出さない（受取ボタンを押した時だけ）
-    const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus/status?address=' + encodeURIComponent(addr) + '&uid=' + encodeURIComponent(uid), { headers: await emuAuthHeaders(false, { interactive: false }) });
-    const j = await r.json();
-    /* 旧EMUERの配布はサーバー側で止めてある（EMUER_LEGACY_REWARDS_DISABLED）。
-       それでも画面を開くたびに聞きに行っていたので、毎回 409 が返り、
-       コンソールに赤い行が出続けていた。止まっていると分かったら、
-       この画面では二度と聞かず、欄ごと出さない。 */
-    if (r.status === 409 && j && j.error === 'LEGACY_EMUER_DISABLED') {
-      _emuLbRetired = true;
-      updateEmuLoginBonusUI();
-      return;
-    }
-    if (r.ok) {
-      _emuLbClaimedToday = !!j.claimedToday;
-      // サーバーは受取済みだが、この端末のキャッシュに今日の受取記録が無い＝別端末で受取
-      _emuLbClaimedElsewhere = _emuLbClaimedToday &&
-        localStorage.getItem(_emuLbCacheKey()) !== _emuTodayStr();
-      if (_emuLbClaimedToday) localStorage.setItem(_emuLbCacheKey(), _emuTodayStr());
-    }
-  } catch (e) { /* オフライン時はローカルキャッシュのまま */ }
-  updateEmuLoginBonusUI();
-}
-function updateEmuLoginBonusUI() {
-  const row = document.getElementById('emuLoginBonusRow');
-  const btn = document.getElementById('emuLoginBonusBtn');
-  const note = document.getElementById('emuLoginBonusNote');
-  /* 配布が止まっているなら、受取の欄そのものを出さない。
-     押せないボタンを見せても、できないことが増えるだけ。 */
-  if (_emuLbRetired) { if (row) row.style.display = 'none'; return; }
-  if (!btn) return;
-  if (emuLoginBonusClaimedToday()) {
-    btn.textContent = emuT('lb.claimed');
-    btn.disabled = true;
-    if (row) row.classList.add('claimed');
-    if (note) note.textContent = _emuLbClaimedElsewhere
-      ? emuT('lb.claimedElsewhere')
-      : emuT('lb.tomorrow');
-  } else {
-    btn.textContent = emuT('lb.claim', { n: EMU_LOGIN_BONUS_AMOUNT });
-    btn.disabled = false;
-    if (row) row.classList.remove('claimed');
-    if (note) note.textContent = emuT('lb.note', { n: EMU_LOGIN_BONUS_AMOUNT });
-  }
-}
-function _emuLbToast(text) {
-  try {
-    const t = document.createElement('div');
-    t.textContent = text;
-    t.style.cssText = 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);background:#f08300;color:#fff;padding:10px 18px;border-radius:999px;font-weight:bold;z-index:3000;box-shadow:0 4px 14px rgba(0,0,0,.2);font-size:13px;max-width:90vw;text-align:center;';
-    document.body.appendChild(t);
-    setTimeout(function () { t.remove(); }, 2600);
-  } catch (e) {}
-}
-async function claimEmuLoginBonus() {
-  const addr = _emuLbAddr();
-  const uid = _emuLbUid();
-  if (!addr && !uid) { alert(emuT('lb.needWallet')); return; }
-  if (emuLoginBonusClaimedToday()) { updateEmuLoginBonusUI(); return; }
-  const btn = document.getElementById('emuLoginBonusBtn');
-  if (btn) btn.disabled = true; // 二重送信防止
-  try {
-    const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus', {
-      method: 'POST', headers: await emuAuthHeaders(true),
-      body: JSON.stringify({ address: addr, uid: uid })
-    });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || emuT('lb.failed'));
-    // 受取済み(別端末・自動付与含む)は必ず受取済み表示に統一（=二重取得を防ぐ）
-    _emuLbClaimedToday = true;
-    localStorage.setItem(_emuLbCacheKey(), _emuTodayStr());
-    updateEmuLoginBonusUI();
-    // 残高はサーバー(オフチェーン台帳)が正。戻り値をそのまま反映して即座に表示を更新する
-    // （Firestoreを読み直さないので、押した瞬間に数字が動く）。
-    if (typeof j.balance === 'number') {
-      _emuSetOffchainBalance(addr, j.balance);
-      updateEmuOffchainNote(j.balance);
-    }
-    try { if (typeof ppUpdateBalance === 'function') ppUpdateBalance(); } catch (e) {}
-    try { if (myWalletPage && myWalletPage.style.display === 'block') renderWallet(); } catch (e) {}
-    try { updateEmuTodayHome(); } catch (e) {}
-    try { if (typeof loadEmuWalletCard === 'function') loadEmuWalletCard(); } catch (e) {}
-    if (j.alreadyClaimed) {
-      // 本日分は受取済み（別端末での受取など）
-      _emuLbToast(emuT('lb.toastAlready'));
-    } else {
-      _emuLbToast(emuT('lb.toastGot', { n: EMU_LOGIN_BONUS_AMOUNT }));
-    }
-  } catch (e) {
-    if (btn) btn.disabled = false;
-    alert(e.message || emuT('lb.failed'));
-  }
-}
+
+/* 旧ログインボーナス（オフチェーン・1日1回・+0.5 EMUER）は全部消した。
+
+   押す場所（id が emuLoginBonusBtn の要素）が、どこにも作られていなかった。
+   読むところだけが5か所あり、どれも最初の行で return していたので、
+   この仕組みは一度も動いていない。
+
+   いまのログインのぶんは EMUER v2 のほう（1日1回 +1 EMUER）で、
+   受け取りの modal の中にある（wallet-success-ui.js の wsDaily）。
+
+   すでに台帳（emuer_offchain）に積まれている loginBalance は消していない。
+   受け取った方の残高なので、そのまま残す。積み増しが止まるだけ。 */
 
 function _emuValueEvent(title, detail) {
   const row = document.createElement('div');
@@ -16392,7 +16263,7 @@ function closeSpPassport() {
 window.openSpMobileMenu = function (current) {
   /* いま居るブランドには「いま居る」と出し、押しても何もしない */
   const here = current || 'schoolpark';
-  ['camellia', 'emu', 'schoolpark'].forEach(function (b) {
+  ['emu', 'schoolpark'].forEach(function (b) {
     const row = document.querySelector('#spMobileMenu [data-brand="' + b + '"]');
     if (!row) return;
     const go = row.querySelector('.smm-go');
@@ -22286,15 +22157,13 @@ async function loadEmuValueProfile() {
    URLに ?admin=1 を付けるだけで通ってしまうため、ここでは使わない。
    ═══════════════════════════════════════════════════════ */
 const BRAND_MAINTENANCE = {
-  /* 2026-10-04、SchoolPark の開幕に合わせて Camellia も開いた。
-     maintenance-guard.js の MAINTENANCE と必ずそろえること。
-     片方だけ false にすると、押せるのに開いた先が「準備中」になる。 */
-  camellia:   false,
+  /* Camellia はブランドの切り替えから外した（画面を作り直すため）。
+     ここに無いブランドは、そもそも行き先が無いので止める必要がない。 */
   heartoo:    true,   // 外のサイト。こちらでは開けない
   schoolpark: true,   // 判定はサーバー（entry-status）が持つ。この値は見ていない
   emu:        false   // Emu は通常営業
 };
-const BRAND_LABELS = { camellia:'Camellia', heartoo:'Heartoo', schoolpark:'SchoolPark', emu:'Emu' };
+const BRAND_LABELS = { heartoo:'Heartoo', schoolpark:'SchoolPark', emu:'Emu' };
 /* `access` をURLに含めると広告ブロッカーに遮断される環境がある。 */
 const SCHOOLPARK_ACCESS_API = 'https://emu-realtime.onrender.com/api/schoolpark/entry-status';
 let _spAccess = null;
@@ -22408,13 +22277,8 @@ function _isBrandOwner() {
 }
 function isBrandUnderMaintenance(brand) {
   if (brand === 'schoolpark') return !(_spAccess && _spAccess.allowed);
-  /* Camellia も、ほかの準備中のブランドと同じ扱いにする。
-     運営は入れて、それ以外の人には「準備中」を出す。
-
-     前はここだけ「運営を含めて準備中」と決め打ちしていた。
-     そのため運営自身が中身を見られず、直すにも確かめるにも
-     いちど URL を直打ちするしかなかった。
-     ほかのブランド（Heartoo）は下の一行で同じことをしている。 */
+  /* 準備中のブランドは、運営だけが入れる。
+     表に無いブランド（行き先そのものが無い）は、ここでは止めない。 */
   return !!BRAND_MAINTENANCE[brand] && !_isBrandOwner();
 }
 /* 入れないことを、押す前に分かるようにする（押してから断られるのは体験が悪い） */
@@ -22446,7 +22310,6 @@ async function chesHubGo(brand) {
   }
   spTrackBrand(brand); /* 非ブロッキングで即時カウント */
   switch (brand) {
-    case 'camellia':
     case 'heartoo':
       chesBrandFrameOpen(brand);
       break;
@@ -24738,95 +24601,10 @@ const intervalId = setInterval(async () => {
 });
 
 
-// ログボ実行関数（オフチェーンに統一：PayPayショートカット等の既存導線もこれを呼ぶ）
-function handleLoginBonus() {
-  claimEmuLoginBonus();
-}
-
-// ※旧ヘッダーの受取ボタン(#loginBonusBtn)は廃止したためイベント紐付けは行わない
-
-async function checkNextBonusTime() {
-  // 旧ヘッダーのログボpillは廃止済み。対象要素が無ければ何もしない
-  if (!document.getElementById("next-bonus-time") || !document.getElementById("loginBonusBtn")) return;
-  if (!window.connectedAccount || !emuerContract) return;
-  const userInfo = await emuerContract.users(window.connectedAccount);
-  const lastLogin = userInfo.lastLogin.toNumber(); // unix timestamp
-  
-  if (lastLogin === 0) {
-    document.getElementById("next-bonus-time").textContent = "初回ボーナス受取可能です！";
-    return;
-  }
-
-  const nextAvailable = lastLogin + (24 * 60 * 60); // +1日
-  const now = Math.floor(Date.now() / 1000);
-
-  if (now < nextAvailable) {
-    const diff = nextAvailable - now;
-    const hours = Math.floor(diff / 3600);
-    const minutes = Math.floor((diff % 3600) / 60);
-    document.getElementById("next-bonus-time").textContent = `次回まであと: ${hours}時間${minutes}分`;
-    document.getElementById("loginBonusBtn").disabled = true; // 時間外はボタン無効化
-  } else {
-    document.getElementById("next-bonus-time").textContent = "今すぐ受け取れます！";
-    document.getElementById("loginBonusBtn").disabled = false;
-  }
-}
-
-
-// カウントダウンを更新する関数
-async function updateBonusCountdown() {
-    const bonusBtn = document.getElementById("loginBonusBtn");
-    const nextTimeSpan = document.getElementById("next-bonus-time");
-    const statusText = document.getElementById("bonus-status-text");
-
-    // 旧ヘッダーのログボpillは廃止済み。対象要素が無ければ何もしない（オフチェーン版に移行）
-    if (!bonusBtn || !nextTimeSpan || !statusText) return;
-    if (!window.connectedAccount || !emuerContract) return;
-
-    try {
-        const userInfo = await emuerContract.users(window.connectedAccount);
-        const lastLogin = Number(userInfo.lastLogin);
-
-        if (lastLogin === 0) {
-            nextTimeSpan.textContent = "初回受取OK!";
-            return;
-        }
-
-        const nextAvailable = lastLogin + (24 * 60 * 60); // 24時間後
-        const now = Math.floor(Date.now() / 1000);
-
-        if (now < nextAvailable) {
-            // まだ時間が経過していない場合
-            const diff = nextAvailable - now;
-            const hours = Math.floor(diff / 3600);
-            const minutes = Math.floor((diff % 3600) / 60);
-            const seconds = diff % 60;
-
-            // ボタンを無効化してメッセージを変える
-            bonusBtn.disabled = true;
-            bonusBtn.style.backgroundColor = "#cccccc";
-            bonusBtn.style.cursor = "not-allowed";
-            bonusBtn.textContent = "待機中";
-            
-            statusText.textContent = "🎁 次回まで";
-            nextTimeSpan.textContent = `${hours}h ${minutes}m ${seconds}s`;
-
-            // 1秒ごとに再計算（リアルタイム更新）
-            setTimeout(updateBonusCountdown, 1000);
-        } else {
-            // 24時間経過している場合
-            bonusBtn.disabled = false;
-            bonusBtn.style.backgroundColor = "#007bff";
-            bonusBtn.style.cursor = "pointer";
-            bonusBtn.textContent = "受取";
-            statusText.textContent = "🎁 0.5 EMUER";
-            nextTimeSpan.textContent = "今すぐOK!";
-        }
-    } catch (e) {
-        console.error("Countdown error:", e);
-    }
-}
-
+/* 旧ヘッダーのログボ（handleLoginBonus / checkNextBonusTime /
+   updateBonusCountdown）も消した。見ていた loginBonusBtn・
+   next-bonus-time・bonus-status-text は、どれも廃止済みで
+   画面に無い。3つとも最初の行で return して終わっていた。 */
 
 // 公式NFT販売先を選択して開く関数
 function openMarketplace() {
@@ -26497,7 +26275,6 @@ async function chesMenuGo(brand) {
   closeChesMenu();
   switch (brand) {
     // ハブ画面と同じ挙動・同じカウント計上に統一
-    case 'camellia':
     case 'heartoo':
     case 'emu':
       chesHubGo(brand);
@@ -28617,8 +28394,6 @@ async function sendEmuFeedback() {
       </span><span class="smm-go">→</span>
     </button>
     <div class="smm-label">ブランドを切り替える</div>
-    <button type="button" class="smm-row" data-brand="camellia" style="color:#E0576F" onclick="smmGo('camellia')">
-      <span>Camellia</span><span class="smm-go">→</span></button>
     <button type="button" class="smm-row" data-brand="emu" style="color:#F08300" onclick="smmGo('emu')">
       <span>Emu</span><span class="smm-go">→</span></button>
     <button type="button" class="smm-row" data-brand="schoolpark" style="color:#D0E2BE" onclick="smmGo('schoolpark')">
