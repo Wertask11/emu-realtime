@@ -40,20 +40,6 @@ function createCamelliaAuthRouter({ db, firebaseAdmin, identity, requireFirebase
   }
 
 
-  router.post("/guest", async (_req, res) => {
-    if (!db || !firebaseAdmin) return res.status(503).json({ error: "AUTH_UNAVAILABLE" });
-    try {
-      const uid = `camellia:${randomUUID()}`;
-      await db.collection("camellia_auth_users").doc(uid).set({
-        uid, updatedAt: Date.now(), identities: { guest: true }
-      }, { merge: true });
-      return res.json({ firebaseToken: await tokenFor(uid, "guest"), linked: false });
-    } catch (error) {
-      console.error("Camellia guest auth failed:", error);
-      return res.status(500).json({ error: "AUTH_FAILED" });
-    }
-  });
-
   router.post("/line", async (req, res) => {
     const { code, redirectUri, nonce } = req.body || {};
     const channelId = process.env.LINE_CHANNEL_ID;
@@ -75,7 +61,7 @@ function createCamelliaAuthRouter({ db, firebaseAdmin, identity, requireFirebase
       const profile = await verifyRes.json();
       if (!verifyRes.ok || !profile.sub || profile.nonce !== nonce) return res.status(401).json({ error: "LINE_VERIFY_FAILED" });
       const current = await optionalUser(req);
-      const uid = await canonicalFor("line", profile.sub, current && current.camellia ? current.uid : null);
+      const uid = await canonicalFor("line", profile.sub, current && (current.camellia || current.firebase?.sign_in_provider === "anonymous") ? current.uid : null);
       return res.json({ firebaseToken: await tokenFor(uid, "line"), linked: !!current });
     } catch (error) {
       if (error.status === 409) return res.status(409).json({ error: error.message });
@@ -114,7 +100,7 @@ function createCamelliaAuthRouter({ db, firebaseAdmin, identity, requireFirebase
         return data;
       });
       const current = await optionalUser(req);
-      const uid = await canonicalFor("schoolpark", ticket.schoolParkId, current && current.camellia ? current.uid : null);
+      const uid = await canonicalFor("schoolpark", ticket.schoolParkId, current && (current.camellia || current.firebase?.sign_in_provider === "anonymous") ? current.uid : null);
       return res.json({
         firebaseToken: await tokenFor(uid, "schoolpark", { schoolParkId: ticket.schoolParkId }),
         linked: !!current
