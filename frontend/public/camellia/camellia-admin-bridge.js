@@ -67,6 +67,189 @@
     };
   }
 
+
+  var receivedMembers = [];
+  var identityByUid = {};
+  var identityLoadError = "";
+  var activeUid = "";
+  var activeView = "profile";
+  var parentObserver = null;
+
+  function valueText(value) {
+    if (value === undefined || value === null || value === "") return "未記録";
+    if (typeof value === "object") {
+      try { return JSON.stringify(value); } catch (_) { return "表示できません"; }
+    }
+    return String(value);
+  }
+
+  function tableRows(items) {
+    return '<table style="width:100%;border-collapse:collapse"><tbody>' +
+      items.map(function (item) {
+        return '<tr><th style="width:34%;text-align:left;vertical-align:top;padding:8px;border-bottom:1px solid #eee;color:#705d64">' +
+          esc(item[0]) + '</th><td style="padding:8px;border-bottom:1px solid #eee;word-break:break-word;white-space:pre-wrap">' +
+          esc(valueText(item[1])) + '</td></tr>';
+      }).join("") + '</tbody></table>';
+  }
+
+  function parentIdentityPanel() {
+    try {
+      var doc = window.parent.document;
+      var tab = doc.querySelector("#tab-camellia");
+      if (!tab) return null;
+      var panel = doc.querySelector("#camellia-profile-identity-sync");
+      if (!panel) {
+        panel = doc.createElement("section");
+        panel.id = "camellia-profile-identity-sync";
+        panel.className = "card";
+        panel.style.cssText = "margin-top:14px;overflow:auto";
+        panel.innerHTML = '<h2 style="margin:0 0 4px">Camellia Profile / Identity / Sync</h2>' +
+          '<p class="hint">選択した利用者について、Firestoreのプロフィール・連携方式・同期概要を表示します。識別子や健康情報を含むため、権限のある運営者だけが閲覧してください。</p>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">' +
+          '<button type="button" class="btn" data-cam-profile-view="profile">Profile</button>' +
+          '<button type="button" class="btn" data-cam-profile-view="identity">Identity</button>' +
+          '<button type="button" class="btn" data-cam-profile-view="sync">Sync</button>' +
+          '<button type="button" class="btn" data-cam-profile-refresh>連携状態を更新</button></div>' +
+          '<div data-cam-profile-status class="hint"></div><div data-cam-profile-content></div>' +
+          '<p class="hint" style="margin:10px 0 0">表示は一覧の読込時点です。最新の記録を見るにはCamelliaタブを再読み込みしてください。</p>';
+        var firstCard = tab.querySelector(":scope > .card");
+        if (firstCard && firstCard.nextSibling) tab.insertBefore(panel, firstCard.nextSibling);
+        else tab.appendChild(panel);
+        panel.querySelectorAll("[data-cam-profile-view]").forEach(function (button) {
+          button.addEventListener("click", function () {
+            activeView = button.getAttribute("data-cam-profile-view");
+            renderParentProfile();
+          });
+        });
+        var refresh = panel.querySelector("[data-cam-profile-refresh]");
+        if (refresh) refresh.addEventListener("click", function () {
+          fetchParentIdentities().then(renderParentProfile);
+        });
+      }
+      return panel;
+    } catch (_) { return null; }
+  }
+
+  function fetchParentIdentities() {
+    try {
+      var api = window.parent.api;
+      if (typeof api !== "function") {
+        identityLoadError = "認証済み管理APIを利用できませんでした。";
+        return Promise.resolve();
+      }
+      var panel = parentIdentityPanel();
+      if (panel) panel.querySelector("[data-cam-profile-status]").textContent = "連携状態を読み込んでいます…";
+      return api("/api/billing/admin/camellia-identities").then(function (result) {
+        identityByUid = (result && result.identities) || {};
+        identityLoadError = "";
+      }).catch(function (error) {
+        identityLoadError = "連携状態を取得できませんでした（" + (error.code || error.message || "ERROR") + "）。";
+      });
+    } catch (error) {
+      identityLoadError = "連携状態を取得できませんでした。";
+      return Promise.resolve();
+    }
+  }
+
+  function filteredReceivedMembers(doc) {
+    var input = doc.querySelector("#camFind");
+    var query = String((input && input.value) || "").trim().toLowerCase();
+    return receivedMembers.filter(function (m) {
+      return [m.camelliaId, m.passport, m.uid, m.name, m.basic && m.basic.displayName]
+        .some(function (value) { return String(value || "").toLowerCase().indexOf(query) >= 0; });
+    });
+  }
+
+  function bindParentRows() {
+    try {
+      var doc = window.parent.document;
+      var list = doc.querySelector("#camList");
+      if (!list) return;
+      var visible = filteredReceivedMembers(doc);
+      Array.prototype.forEach.call(list.querySelectorAll(":scope > details"), function (row, index) {
+        row.dataset.camelliaAdminUid = visible[index] ? visible[index].uid : "";
+      });
+      if (!list.dataset.camelliaProfileBound) {
+        list.dataset.camelliaProfileBound = "1";
+        list.addEventListener("click", function (event) {
+          var summary = event.target && event.target.closest ? event.target.closest("summary") : null;
+          var row = summary && summary.closest("details");
+          if (!row || !row.dataset.camelliaAdminUid) return;
+          activeUid = row.dataset.camelliaAdminUid;
+          renderParentProfile();
+        }, true);
+        var search = doc.querySelector("#camFind");
+        if (search) search.addEventListener("input", function () {
+          setTimeout(function () { bindParentRows(); renderParentProfile(); }, 0);
+        });
+        if (typeof MutationObserver !== "undefined") {
+          parentObserver = new MutationObserver(function () { bindParentRows(); });
+          parentObserver.observe(list, { childList: true, subtree: true });
+        }
+      }
+      if (!activeUid && visible.length) activeUid = visible[0].uid;
+      renderParentProfile();
+    } catch (_) {}
+  }
+
+  function renderParentProfile() {
+    var panel = parentIdentityPanel();
+    if (!panel) return;
+    bindParentRows();
+    var doc = window.parent.document;
+    var member = receivedMembers.find(function (m) { return m.uid === activeUid; });
+    var content = panel.querySelector("[data-cam-profile-content]");
+    var status = panel.querySelector("[data-cam-profile-status]");
+    if (!member) {
+      status.textContent = "ユーザー一覧の名前を開くと、その方の情報が表示されます。";
+      content.innerHTML = "";
+      return;
+    }
+    status.textContent = "対象：" + (member.basic && member.basic.displayName || member.name || "名前未登録");
+    var rows;
+    if (activeView === "identity") {
+      var identity = identityByUid[member.uid] || null;
+      rows = [
+        ["Camellia内部ID（Firebase UID）", member.uid],
+        ["LINE", identityLoadError ? "状態を確認できません" : identity && identity.line ? "連携済み" : "連携記録なし"],
+        ["SchoolPark Passport", identityLoadError ? "状態を確認できません" : identity && identity.schoolpark ? "連携済み" : member.passport ? "Passport番号あり（認証方式の連携記録なし）" : "連携記録なし"],
+        ["Passport ID", member.passport || "未記録"],
+        ["SchoolPark側ログイン方式", member.provider || "管理データなし"]
+      ];
+      status.textContent += identityLoadError ? " / " + identityLoadError : "";
+    } else if (activeView === "sync") {
+      var imports = Array.isArray(member.imports) ? member.imports : [];
+      rows = [
+        ["Firestoreの最終更新", member.updatedAt],
+        ["日々のCheck保存数", Array.isArray(member.daily) ? member.daily.length : 0],
+        ["プロフィール", member.basic ? "保存あり" : "未記録"],
+        ["設定", member.settings ? "保存あり" : "未記録"],
+        ["会話メッセージ数", member.chat && member.chat.total !== undefined ? member.chat.total : (member.chat && member.chat.messages || []).length],
+        ["行動イベント数", member.activity && member.activity.total !== undefined ? member.activity.total : (member.activity && member.activity.events || []).length],
+        ["localStorageアーカイブ数", imports.length],
+        ["アーカイブ種別", imports.map(function (x) { return x.kind || x.type || "不明"; }).join("、") || "なし"],
+        ["注意", "この画面はリアルタイム購読ではなく、一覧APIの取得結果です。"]
+      ];
+    } else {
+      var basic = member.basic || {};
+      rows = [
+        ["Camelliaプロフィール名", basic.displayName],
+        ["生年月日", basic.dateOfBirth || member.birthDate],
+        ["年齢（現在の一覧計算）", member.age === null || member.age === undefined ? "不明" : member.age + "歳"],
+        ["居住地域", basic.residencePrefecture],
+        ["生活スタイル", basic.occupation],
+        ["同居状況", basic.livingSituation],
+        ["関心", basic.interests],
+        ["利用目的", basic.goals || basic.goal],
+        ["女性向けサービス確認", basic.womenWellbeingConfirmedAt],
+        ["利用規約確認日時", basic.termsAcceptedAt],
+        ["プライバシー確認日時", basic.privacyAcknowledgedAt],
+        ["文書バージョン", basic.policyVersion]
+      ];
+    }
+    content.innerHTML = tableRows(rows);
+  }
+
   function apply(members) {
     window.CamelliaMembers = (members || []).map(toPersona);
     try {
