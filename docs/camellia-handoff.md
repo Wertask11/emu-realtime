@@ -280,6 +280,10 @@ match /{coll}/{document=**} {
 SchoolPark・Emu の中の Camellia  なし（切り替えから削除。戻さない）
 Camellia 本体                   独自アプリ https://camellia-beta.vercel.app/
 案内の文                        「独立したアプリ（この中からは行けません）」
+
+※ 2026-10-05、β 側の繋ぎ込みが終わった。検証結果は
+   docs/camellia-status.md を見ること。この引き継ぎ書は、
+   繋ぎ込み前の条件をまとめたもの。
 入った方の記録              そのまま（1件も消していない）
 権限のルール                そのまま
 管理画面                    そのまま動く（membership-admin.html の Camellia タブ）
