@@ -39,6 +39,21 @@ function createCamelliaAuthRouter({ db, firebaseAdmin, identity, requireFirebase
     return firebaseAdmin.auth().createCustomToken(uid, { provider, camellia: true, ...(extra || {}) });
   }
 
+
+  router.post("/guest", async (_req, res) => {
+    if (!db || !firebaseAdmin) return res.status(503).json({ error: "AUTH_UNAVAILABLE" });
+    try {
+      const uid = `camellia:${randomUUID()}`;
+      await db.collection("camellia_auth_users").doc(uid).set({
+        uid, updatedAt: Date.now(), identities: { guest: true }
+      }, { merge: true });
+      return res.json({ firebaseToken: await tokenFor(uid, "guest"), linked: false });
+    } catch (error) {
+      console.error("Camellia guest auth failed:", error);
+      return res.status(500).json({ error: "AUTH_FAILED" });
+    }
+  });
+
   router.post("/line", async (req, res) => {
     const { code, redirectUri, nonce } = req.body || {};
     const channelId = process.env.LINE_CHANNEL_ID;
