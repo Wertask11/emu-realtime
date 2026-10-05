@@ -348,8 +348,10 @@ test('サーバーが返す欄の名前（claimedToday）を見ている', () =>
   assert.ok(daily.indexOf('d.claimedToday') > 0, 'claimedToday を見ていません');
   assert.ok(daily.indexOf('d.claimed)') < 0, '古い欄名（claimed）が残っています');
 
+  /* 写しのほう（emuer-v2-public-copy.js）にも同じ処理があったが、
+     旧ログボを消したときに一緒に消した。読むのはここ1か所だけ。 */
   const copy = fs.readFileSync(path.join(root, 'frontend/public/emuer-v2-public-copy.js'), 'utf8');
-  assert.ok(copy.indexOf('data.claimedToday') > 0, '写しのほうが古い欄名のままです');
+  assert.ok(copy.indexOf('daily/login/status') < 0, '読むところが2か所に戻っています');
 
   const api = fs.readFileSync(path.join(root, 'backend/emuer-v2/router.js'), 'utf8');
   assert.match(api, /claimedToday: reward\.exists/, 'サーバーの返す欄が変わっています');
@@ -379,4 +381,72 @@ test('サーバーは、中の鍵を外に出さない', () => {
   const api = fs.readFileSync(path.join(root, 'backend/emuer-v2/router.js'), 'utf8');
   assert.ok(api.indexOf('key.split(":").pop()') < 0, '鍵がそのまま返っています');
   assert.match(api, /date: policy\.dayKey\(Date\.now\(\)\)/);
+});
+
+/* ───────── 旧ログインボーナスを消したこと ─────────
+
+   オフチェーンの +0.5 EMUER と、その前の v1 コントラクト版。
+   どちらも押す場所（ボタンの要素）が作られていなかったので、
+   一度も動いていない。2026-10-05、オーナーの指示で全部消した。
+
+   台帳（emuer_offchain）の loginBalance は消していない。
+   受け取った方の残高なので、そのまま残す。 */
+
+test('旧ログインボーナスの処理が、画面から消えている', () => {
+  ['claimEmuLoginBonus', 'updateEmuLoginBonusUI', 'refreshEmuLoginBonusStatus',
+   'emuLoginBonusClaimedToday', 'EMU_LOGIN_BONUS_AMOUNT', '_emuLbAddr', '_emuLbUid',
+   'handleLoginBonus', 'checkNextBonusTime', 'updateBonusCountdown'].forEach(name => {
+    /* 説明のコメントに名前が出るのはよい。関数として書いてあるのが困る。 */
+    assert.doesNotMatch(INDEX, new RegExp('function\\s+' + name + '\\s*\\('),
+      name + ' が残っています');
+    assert.doesNotMatch(INDEX, new RegExp('\\b' + name + '\\s*\\(\\)\\s*;'),
+      name + ' を呼ぶところが残っています');
+  });
+});
+
+test('旧ログインボーナスの窓口が、サーバーから消えている', () => {
+  const api = fs.readFileSync(path.join(root, 'backend/server.js'), 'utf8');
+  assert.doesNotMatch(api, /app\.(get|post)\("\/api\/emuer\/login-bonus/,
+    '窓口が残っています');
+  assert.doesNotMatch(api, /const EMU_LOGIN_BONUS\s*=/, '額の定数が残っています');
+});
+
+test('受け取った方の残高（loginBalance）は消していない', () => {
+  /* 配るのをやめただけ。すでに積まれているぶんは、照合バッチが
+     これまでどおり読んで balance に足すこと。 */
+  const api = fs.readFileSync(path.join(root, 'backend/server.js'), 'utf8');
+  assert.match(api, /const loginBalance = Number\(ex\.loginBalance\) \|\| 0;/,
+    '台帳から読むところが消えています');
+  assert.match(api, /const balance = bountyBalance \+ reactionBalance \+ loginBalance - spentBounty;/,
+    'balance の計算から loginBalance が外れています');
+});
+
+test('まだ換えていない分の表示は残っている', () => {
+  /* 旧ログボと同じ場所に書いてあったが別物。「EMUERに変換」の入口として要る。 */
+  assert.match(INDEX, /function updateEmuOffchainNote\(balance\)/, '関数が消えています');
+  assert.match(INDEX, /updateEmuOffchainNote\(pair\.unconverted\)/, '呼ぶところが消えています');
+  const i18n = fs.readFileSync(path.join(root, 'frontend/public/emu-i18n.js'), 'utf8');
+  assert.match(i18n, /"lb\.unconverted":/, '言葉が消えています');
+});
+
+test('使わなくなった言葉は、辞書からも消えている', () => {
+  const i18n = fs.readFileSync(path.join(root, 'frontend/public/emu-i18n.js'), 'utf8');
+  ['lb.title', 'lb.note', 'lb.claim', 'lb.claimed', 'lb.tomorrow',
+   'lb.claimedElsewhere', 'lb.toastGot', 'lb.toastAlready',
+   'lb.needWallet', 'lb.failed'].forEach(k => {
+    assert.ok(i18n.indexOf('"' + k + '"') < 0, k + ' が辞書に残っています');
+    assert.ok(INDEX.indexOf(k) < 0, k + ' を画面がまだ指しています');
+  });
+});
+
+test('ウォレットの札の見張りが、死んだ行で止まらない', () => {
+  /* もとは emuLoginBonusRow を先に見張っていて、その行が無いので
+     関数がそこで抜け、下のウォレットの見張りまで動いていなかった。 */
+  const copy = fs.readFileSync(path.join(root, 'frontend/public/emuer-v2-public-copy.js'), 'utf8');
+  const fn = copy.slice(copy.indexOf('function observeLegacyWrites()'),
+                        copy.indexOf('async function start()'));
+  assert.ok(fn, 'observeLegacyWrites が見つかりません');
+  assert.ok(fn.indexOf('emuLoginBonusRow') < 0, '死んだ行をまだ見張っています');
+  assert.ok(fn.indexOf('#emuValueProfile .eth-wallet-card') > 0,
+    'ウォレットの札の見張りが消えています');
 });

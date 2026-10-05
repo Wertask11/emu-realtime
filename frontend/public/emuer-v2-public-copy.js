@@ -53,9 +53,6 @@
     setText("emuNextRewardNote", waitingForStart()
       ? START_MESSAGE + " 交換は、商品ごとの価格・提供条件・返金条件の公開後に開始します。"
       : "EMUERの交換は、商品ごとの価格・提供条件・返金条件を確認して利用できます。");
-    const row = byId("emuLoginBonusRow");
-    if (row) { const title = row.querySelector("strong"); if (title) { title.textContent = waitingForStart() ? "EMUER v2 開始待ち" : "今日のログイン報酬"; title.removeAttribute("data-i18n"); } }
-    setText("emuLoginBonusNote", waitingForStart() ? START_MESSAGE + " 開始後は1日1回 +1 EMUERです。" : "1日1回 +1 EMUER");
     const request = byId("emuRequestSheet");
     if (request) {
       const labels = request.querySelectorAll(".emu-field > label");
@@ -123,35 +120,20 @@
     };
     wrapped.__emuerV2PublicCopy = true; window.loadEmuWalletCard = wrapped;
   }
-  /* 毎日のぶんのボタン。emuLoginBonusBtn はどこにも作られていないので、
-     ここは実際には何もしない。押す場所は受け取りの modal（#wsLogin）に移した
-     （wallet-success-ui.js の wsDaily）。
-     この写しを生かすときは、欄名が claimedToday であることに注意。 */
-  async function refreshLoginButton() {
-    const button = byId("emuLoginBonusBtn"); if (!button || !config) return; button.onclick = claimLogin;
-    if (!config.enabled || Date.now() < Date.parse(config.startsAt)) { button.disabled = true; button.textContent = "2026年10月1日開始"; return; }
-    try { const response = await fetch(API + "/daily/login/status?address=" + encodeURIComponent(account()), { headers: await headers(false) }); const data = await response.json(); if (response.ok && data.claimedToday) { button.disabled = true; button.textContent = "本日は受取済み"; } else { button.disabled = false; button.textContent = "+1 EMUER 受取"; } } catch (_) { button.disabled = false; button.textContent = "+1 EMUER 受取"; }
-  }
-  async function claimLogin() {
-    const button = byId("emuLoginBonusBtn");
-    try { if (!config?.enabled || waitingForStart()) throw new Error(START_MESSAGE); button.disabled = true; button.textContent = "署名を準備中…"; const response = await fetch(API + "/daily/login", { method: "POST", headers: await headers(true), body: JSON.stringify({ address: account() }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "ログイン報酬を準備できませんでした"); const provider = new ethers.providers.Web3Provider(window.ethereum); if (Number((await provider.getNetwork()).chainId) !== 137) throw new Error("Polygon Mainnetに切り替えてください"); const reward = data.reward; const contract = new ethers.Contract(config.contract, ABI, provider.getSigner()); button.textContent = "MetaMaskで確認…"; await (await contract.claimReward(reward.claimId, reward.totalAmount, reward.deadline, reward.authorization)).wait(); await refreshBalance(); await refreshLoginButton(); } catch (error) { await refreshLoginButton(); alert(error.message || "ログイン報酬の受取に失敗しました"); }
-  }
+  /* 毎日のぶん（+1 EMUER）の受け取りは、ここには無い。
+     受け取りの modal の中（wallet-success-ui.js の wsDaily / #wsLogin）。
+     ここにあった refreshLoginButton / claimLogin は、作られていない
+     emuLoginBonusBtn を掴んでいて一度も動いていなかったので消した。 */
   function wrapLegacyRender() {
     const original = window.updateEmuTodayHome; if (typeof original !== "function" || original.__emuerV2PublicCopy) return;
-    const wrapped = async function () { const result = await original.apply(this, arguments); applyCopy(); await refreshBalance(); await refreshLoginButton(); return result; };
+    const wrapped = async function () { const result = await original.apply(this, arguments); applyCopy(); await refreshBalance(); return result; };
     wrapped.__emuerV2PublicCopy = true; window.updateEmuTodayHome = wrapped;
   }
+  /* もとは旧ログボの行（emuLoginBonusRow）を見張るのが先頭にあった。
+     その行は作られていないので root が null になり、関数はそこで抜けていた。
+     そのため、下のウォレットの見張りも一度も動いていなかった。
+     旧ログボごと消したので、ウォレットのほうだけが残る。 */
   function observeLegacyWrites() {
-    const root = byId("emuLoginBonusRow");
-    if (!root || root.dataset.emuerV2Observer) return;
-    root.dataset.emuerV2Observer = "true";
-    let enforcing = false;
-    new MutationObserver(() => {
-      if (!config || enforcing) return;
-      enforcing = true;
-      applyCopy();
-      refreshLoginButton().finally(() => { setTimeout(() => { enforcing = false; }, 0); });
-    }).observe(root, { subtree: true, childList: true, characterData: true, attributes: true });
     const wallet = document.querySelector("#emuValueProfile .eth-wallet-card");
     if (wallet && !wallet.dataset.emuerV2Observer) {
       wallet.dataset.emuerV2Observer = "true";
@@ -165,10 +147,10 @@
     }
   }
   async function start() {
-    try { const response = await fetch(API + "/config"); const next = await response.json(); if (!response.ok || Number(next.chainId) !== 137) return; config = next; window.claimEmuLoginBonus = claimLogin; window.handleLoginBonus = claimLogin;
+    try { const response = await fetch(API + "/config"); const next = await response.json(); if (!response.ok || Number(next.chainId) !== 137) return; config = next;
       /* 受け取ったあとに、ページの数字を書き替えるため外へ出す。
          札ごと描き直すより軽い（balanceOf 一度で四か所そろう）。 */
-      window.emuerV2RefreshBalance = refreshBalance; applyCopy(); wrapLegacyRender(); wrapWalletCard(); observeLegacyWrites(); await refreshBalance(); await refreshLoginButton(); } catch (_) {}
+      window.emuerV2RefreshBalance = refreshBalance; applyCopy(); wrapLegacyRender(); wrapWalletCard(); observeLegacyWrites(); await refreshBalance(); } catch (_) {}
   }
   window.addEventListener("load", () => { start(); setTimeout(() => { wrapLegacyRender(); wrapWalletCard(); applyCopy(); }, 1200); });
 })();

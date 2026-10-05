@@ -799,17 +799,15 @@ cron.schedule("0 9 * * *", async () => {
 //   balance = bountyBalance(懸賞・イベント式) + reactionBalance(評価された分) + loginBalance(ログボ)
 // 付与ルール（確定）:
 //   ・Good/Change = 評価された投稿者が得る: floor(受Good/10) + floor(受Change/20)×3
-//   ・ログインボーナス = ユーザーが受取ボタンを押したときだけ +0.5（/api/emuer/login-bonus）
-//     このバッチでは自動付与しない。ログインしただけで勝手に受取済みになると、
-//     受取ボタンが機能していないように見えるため。loginBalance は読むだけで加算しない。
+//   ・ログインボーナス = 配布は終了した（2026-10-05、窓口ごと削除）。
+//     loginBalance は、これまでに受け取った方の残高として読むだけ。
+//     いまのログインのぶんは EMUER v2（/api/emuer/v2/daily/login）。
 // =====================
 function _jstDateStr(d) {
   // Asia/Tokyo の YYYY-MM-DD
   const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
   return jst.getUTCFullYear() + "-" + (jst.getUTCMonth() + 1) + "-" + jst.getUTCDate();
 }
-const EMU_LOGIN_BONUS = 0.5;
-
 async function runOffchainEmuerReconcile() {
   if (EMUER_LEGACY_REWARDS_DISABLED) {
     console.warn("⚠️ EMUER v2 有効中: 旧オフチェーン台帳照合をスキップ");
@@ -854,8 +852,7 @@ async function runOffchainEmuerReconcile() {
       const sumChange = reactionTotals.change;
       const reactionBalance = Math.floor(sumGood / 10) + Math.floor(sumChange / 20) * 3;
 
-      // ── ② ログインボーナスは受取ボタン（/api/emuer/login-bonus）でのみ付与する ──
-      // ここで自動付与すると、ユーザーが押す前に「受取済み」になってしまう。
+      // ── ② 旧ログインボーナスは配布終了。これまでのぶんを読むだけ ──
 
       // ── 台帳を更新（bountyBalanceは懸賞バッチがイベント式に積む。ここでは触らず読むだけ）──
       const balRef = db.collection("emuer_offchain").doc(addr);
@@ -923,95 +920,16 @@ async function _findChesAccount(uid, addr) {
   return null;
 }
 
-// ── 受取状況の確認 ──
-app.get("/api/emuer/login-bonus/status", requireFirebaseUser, requireOwnAddress, async (req, res) => {
-  if (EMUER_LEGACY_REWARDS_DISABLED) return res.status(409).json({ error: "LEGACY_EMUER_DISABLED" });
-  try {
-    if (!db) return res.json({ claimedToday: false });
-    const uid = req.identity.uid;
-    const address = String(req.query.address || "").trim();
-    if (!uid && !address) return res.json({ claimedToday: false });
-    const todayJst = _jstDateStr(new Date());
-    const accDoc = await _findChesAccount(uid, address);
-    const claimedToday = !!(accDoc && accDoc.data().lastLoginBonusDate === todayJst);
-    return res.json({ claimedToday, found: !!accDoc, date: todayJst });
-  } catch (err) {
-    console.error("login-bonus/status error:", err.message);
-    return res.json({ claimedToday: false });
-  }
-});
+/* 旧ログインボーナスの窓口（GET /api/emuer/login-bonus/status と
+   POST /api/emuer/login-bonus）は消した。
 
-// ── 受取（1日1回・アカウント単位） ──
-app.post("/api/emuer/login-bonus", requireFirebaseUser, requireOwnAddress, async (req, res) => {
-  if (EMUER_LEGACY_REWARDS_DISABLED) return res.status(409).json({ error: "LEGACY_EMUER_DISABLED" });
-  try {
-    if (!db) return res.status(500).json({ error: "Firestore未接続" });
-    const address = String(req.body.address || "").toLowerCase().trim();
-    const reqUid = req.identity.uid;
-    if (!address && !reqUid) return res.status(400).json({ error: "ウォレットが必要です" });
+   呼んでいた画面のボタンが、そもそも作られていなかった。
+   押す場所が無いので、この窓口は一度も使われていない。
+   いまのログインのぶんは EMUER v2（POST /api/emuer/v2/daily/login）。
 
-    const todayJst = _jstDateStr(new Date());
-    const accDoc = await _findChesAccount(reqUid, address);
-    if (!accDoc) return res.status(404).json({ error: "アカウントが見つかりません" });
-    const accRef = accDoc.ref;
-    const uid = accDoc.data().uid || accDoc.id;
-    // オフチェーン台帳のドキュメントIDは小文字アドレス（毎時バッチと統一）。
-    // アドレス未指定時はアカウントの walletAddress から復元。
-    const ledgerAddr = address || String(accDoc.data().walletAddress || "").toLowerCase();
-    if (!ledgerAddr) return res.status(400).json({ error: "ウォレットが必要です" });
-
-    // 評価された分（毎時バッチと同一計算）をトランザクション外で先に集計
-    let sumGood = 0, sumChange = 0;
-    const postsSnap = await db.collection("posts").where("address", "==", ledgerAddr).get();
-    postsSnap.forEach((p) => {
-      const d = p.data();
-      sumGood += Number(d.goodCount) || 0;
-      sumChange += Number(d.changeCount) || 0;
-    });
-    const reactionBalance = Math.floor(sumGood / 10) + Math.floor(sumChange / 20) * 3;
-
-    const balRef = db.collection("emuer_offchain").doc(ledgerAddr);
-
-    // アカウント単位の受取済みチェックと加算を原子的に実施（複数端末の同時押下でも二重付与しない）
-    const result = await db.runTransaction(async (tx) => {
-      const acc = await tx.get(accRef);
-      const already = acc.exists && acc.data().lastLoginBonusDate === todayJst;
-      const balDoc = await tx.get(balRef);
-      const ex = balDoc.exists ? balDoc.data() : {};
-      const bountyBalance = Number(ex.bountyBalance) || 0;
-      const spentBounty = Number(ex.spentBounty) || 0;
-      if (already) {
-        return { alreadyClaimed: true, balance: Number(ex.balance) || 0 };
-      }
-      const loginBalance = (Number(ex.loginBalance) || 0) + EMU_LOGIN_BONUS;
-      const balance = bountyBalance + reactionBalance + loginBalance - spentBounty;
-      tx.set(accRef, { lastLoginBonusDate: todayJst }, { merge: true });
-      tx.set(balRef, {
-        address: ledgerAddr, uid, reactionBalance, loginBalance, balance, updatedAt: new Date(),
-      }, { merge: true });
-      return { alreadyClaimed: false, balance };
-    });
-
-    if (!result.alreadyClaimed) {
-      await db.collection("emuer_offchain_ledger").add({
-        address: ledgerAddr, uid, amount: EMU_LOGIN_BONUS,
-        reason: "login_bonus", date: todayJst, createdAt: new Date(),
-      });
-    }
-
-    return res.json({
-      ok: true,
-      claimed: !result.alreadyClaimed,
-      alreadyClaimed: result.alreadyClaimed,
-      amount: EMU_LOGIN_BONUS,
-      balance: result.balance,
-      date: todayJst,
-    });
-  } catch (err) {
-    console.error("login-bonus error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+   台帳（emuer_offchain）の loginBalance は消していない。
+   受け取った方の残高なので残す。積み増しが止まるだけで、
+   上の照合バッチはこれまでどおり読んで balance に足す。 */
 
 // =====================
 // 予約投稿 システム

@@ -2500,7 +2500,6 @@ body.paypay-mode .container {
     overflow: visible;
   }
   /* スマホでは省スペースのため非表示にする要素 */
-  #login-bonus-mini-container { display: none !important; }
   #buyNftBtn                  { display: none !important; }
   .search-bar                 { display: none !important; }
 
@@ -4955,11 +4954,10 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <p class="eth-reward-note" id="emuNextRewardNote" data-i18n="reward.note">100 EMUERで特別体験と交換できます。</p>
         <!-- 旧ログインボーナス（+0.5 EMUER）は廃止した。
 
-             配布そのものはサーバーで止めてあったが、画面の箱とボタンは
-             残っていて、隠すかどうかはサーバーの「もう配っていません」という
-             返事に頼っていた（_emuLbRetired）。その返事が返らなければ
-             ボタンが出たままになり、押せば失敗する。
-             出していない約束は、画面からも消す。 -->
+             2026-10-05、受け取りの処理ごと消した。押す場所（ボタンの要素）が
+             そもそも作られていなかったので、この仕組みは一度も動いていない。
+             いまのログインのぶんは EMUER v2（1日1回 +1 EMUER）で、
+             受け取りの modal の中にある。 -->
         <button type="button" class="eth-btn" onclick="toggleEmuUses(true)" data-i18n="reward.uses">使い道を見る</button>
       </aside>
     </div>
@@ -11963,9 +11961,6 @@ jpycContract = new ethers.Contract(JPYC_ADDRESS, JPYC_ABI, signer);
       emuSetWalletLabel(emuShortAddr(account));
     }
     
-	if (typeof updateBonusCountdown === "function") {
-        await updateBonusCountdown(); 
-    }
 if (typeof updateConvertButton === "function") {
     updateConvertButton();
 }
@@ -15548,7 +15543,6 @@ async function updateEmuTodayHome() {
   const hintEl = document.getElementById('emuBalanceHint');
   if (hintEl) hintEl.style.display = pair.unconverted > 0 ? '' : 'none';
 
-  // ログインボーナスは「まだ換えていない分」に入る。受け取った分がすぐ見えるようにする。
   updateEmuOffchainNote(pair.unconverted);
 
   const postRemainder = parseInt(localStorage.getItem('room2_postCount') || '0', 10) || 0;
@@ -15562,31 +15556,11 @@ async function updateEmuTodayHome() {
      受取状況をサーバーに聞きに行く必要もない。 */
 }
 
-/* ═══════════════════════════════════════
-   ログインボーナス（オフチェーン・1日1回・+0.5 EMUER）
-   受取済み判定も加算もサーバー（emuer_offchain 台帳）が権威。
-   実ウォレットの残高はオンチェーンなので、ここで増えるのはオフチェーン分。
-═══════════════════════════════════════ */
-const EMU_LOGIN_BONUS_AMOUNT = 0.5;
-const _EMU_LB_API = 'https://emu-realtime.onrender.com';
-// 受取済み判定はサーバー（アカウント単位）が正。null=未取得。
-// localStorage判定だと端末ごとに受け取れてしまう（=二重取得）ため、サーバーに一本化。
-let _emuLbClaimedToday = null;
-let _emuLbClaimedElsewhere = false; // サーバーでは受取済みだが、この端末では受け取っていない
-function _emuLbAddr() {
-  return (window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
-}
-function _emuLbUid() {
-  /* Firebaseのセッションが正。ches_uid はその写しで、空のことがある。 */
-  return (typeof _emuUid === 'function' ? _emuUid() : (localStorage.getItem('ches_uid') || '')).trim();
-}
-// 受取日はサーバー（Asia/Tokyo）が正。端末のローカル日付で作ると、
-// 海外・時計ずれ・日付境界でサーバーとキャッシュがずれて誤判定になる。
-function _emuTodayStr() {
-  const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  return jst.getUTCFullYear() + '-' + (jst.getUTCMonth() + 1) + '-' + jst.getUTCDate();
-}
-// まだ実EMUERに換えていない分（ログインボーナス・評価・懸賞）の表示。
+/* まだ実EMUERに換えていない分（評価・懸賞・過去のログボ）の表示。
+
+   旧ログインボーナスと同じ場所に書いてあったが、これは別物。
+   台帳（emuer_offchain）に積まれている残高を出すだけで、
+   配る処理は持っていない。「EMUERに変換」の入口として要る。 */
 function updateEmuOffchainNote(balance) {
   const el = document.getElementById('emuOffchainNote');
   if (!el) return;
@@ -15595,113 +15569,18 @@ function updateEmuOffchainNote(balance) {
   el.style.display = '';
   el.textContent = emuT('lb.unconverted', { n: (Math.round(val * 10) / 10).toLocaleString('ja-JP') });
 }
-function _emuLbCacheKey() { return 'emu_loginbonus_last_' + _emuLbAddr(); }
-// サーバー状態が正。未取得(null)のときだけローカルキャッシュ（オフライン用）にフォールバック。
-function emuLoginBonusClaimedToday() {
-  if (_emuLbClaimedToday !== null) return _emuLbClaimedToday;
-  return localStorage.getItem(_emuLbCacheKey()) === _emuTodayStr();
-}
-// サーバー（アカウント単位）から受取状況を取得してUIへ反映
-/* 旧EMUERの配布が止まっていると分かったら立てる。立ったら聞きに行かない。 */
-let _emuLbRetired = false;
-async function refreshEmuLoginBonusStatus() {
-  if (_emuLbRetired) { updateEmuLoginBonusUI(); return; }
-  const addr = _emuLbAddr();
-  const uid = _emuLbUid();
-  if (!addr && !uid) { updateEmuLoginBonusUI(); return; }
-  try {
-    // 状況確認は画面表示のたびに走るため、署名ダイアログは出さない（受取ボタンを押した時だけ）
-    const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus/status?address=' + encodeURIComponent(addr) + '&uid=' + encodeURIComponent(uid), { headers: await emuAuthHeaders(false, { interactive: false }) });
-    const j = await r.json();
-    /* 旧EMUERの配布はサーバー側で止めてある（EMUER_LEGACY_REWARDS_DISABLED）。
-       それでも画面を開くたびに聞きに行っていたので、毎回 409 が返り、
-       コンソールに赤い行が出続けていた。止まっていると分かったら、
-       この画面では二度と聞かず、欄ごと出さない。 */
-    if (r.status === 409 && j && j.error === 'LEGACY_EMUER_DISABLED') {
-      _emuLbRetired = true;
-      updateEmuLoginBonusUI();
-      return;
-    }
-    if (r.ok) {
-      _emuLbClaimedToday = !!j.claimedToday;
-      // サーバーは受取済みだが、この端末のキャッシュに今日の受取記録が無い＝別端末で受取
-      _emuLbClaimedElsewhere = _emuLbClaimedToday &&
-        localStorage.getItem(_emuLbCacheKey()) !== _emuTodayStr();
-      if (_emuLbClaimedToday) localStorage.setItem(_emuLbCacheKey(), _emuTodayStr());
-    }
-  } catch (e) { /* オフライン時はローカルキャッシュのまま */ }
-  updateEmuLoginBonusUI();
-}
-function updateEmuLoginBonusUI() {
-  const row = document.getElementById('emuLoginBonusRow');
-  const btn = document.getElementById('emuLoginBonusBtn');
-  const note = document.getElementById('emuLoginBonusNote');
-  /* 配布が止まっているなら、受取の欄そのものを出さない。
-     押せないボタンを見せても、できないことが増えるだけ。 */
-  if (_emuLbRetired) { if (row) row.style.display = 'none'; return; }
-  if (!btn) return;
-  if (emuLoginBonusClaimedToday()) {
-    btn.textContent = emuT('lb.claimed');
-    btn.disabled = true;
-    if (row) row.classList.add('claimed');
-    if (note) note.textContent = _emuLbClaimedElsewhere
-      ? emuT('lb.claimedElsewhere')
-      : emuT('lb.tomorrow');
-  } else {
-    btn.textContent = emuT('lb.claim', { n: EMU_LOGIN_BONUS_AMOUNT });
-    btn.disabled = false;
-    if (row) row.classList.remove('claimed');
-    if (note) note.textContent = emuT('lb.note', { n: EMU_LOGIN_BONUS_AMOUNT });
-  }
-}
-function _emuLbToast(text) {
-  try {
-    const t = document.createElement('div');
-    t.textContent = text;
-    t.style.cssText = 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);background:#f08300;color:#fff;padding:10px 18px;border-radius:999px;font-weight:bold;z-index:3000;box-shadow:0 4px 14px rgba(0,0,0,.2);font-size:13px;max-width:90vw;text-align:center;';
-    document.body.appendChild(t);
-    setTimeout(function () { t.remove(); }, 2600);
-  } catch (e) {}
-}
-async function claimEmuLoginBonus() {
-  const addr = _emuLbAddr();
-  const uid = _emuLbUid();
-  if (!addr && !uid) { alert(emuT('lb.needWallet')); return; }
-  if (emuLoginBonusClaimedToday()) { updateEmuLoginBonusUI(); return; }
-  const btn = document.getElementById('emuLoginBonusBtn');
-  if (btn) btn.disabled = true; // 二重送信防止
-  try {
-    const r = await fetch(_EMU_LB_API + '/api/emuer/login-bonus', {
-      method: 'POST', headers: await emuAuthHeaders(true),
-      body: JSON.stringify({ address: addr, uid: uid })
-    });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || emuT('lb.failed'));
-    // 受取済み(別端末・自動付与含む)は必ず受取済み表示に統一（=二重取得を防ぐ）
-    _emuLbClaimedToday = true;
-    localStorage.setItem(_emuLbCacheKey(), _emuTodayStr());
-    updateEmuLoginBonusUI();
-    // 残高はサーバー(オフチェーン台帳)が正。戻り値をそのまま反映して即座に表示を更新する
-    // （Firestoreを読み直さないので、押した瞬間に数字が動く）。
-    if (typeof j.balance === 'number') {
-      _emuSetOffchainBalance(addr, j.balance);
-      updateEmuOffchainNote(j.balance);
-    }
-    try { if (typeof ppUpdateBalance === 'function') ppUpdateBalance(); } catch (e) {}
-    try { if (myWalletPage && myWalletPage.style.display === 'block') renderWallet(); } catch (e) {}
-    try { updateEmuTodayHome(); } catch (e) {}
-    try { if (typeof loadEmuWalletCard === 'function') loadEmuWalletCard(); } catch (e) {}
-    if (j.alreadyClaimed) {
-      // 本日分は受取済み（別端末での受取など）
-      _emuLbToast(emuT('lb.toastAlready'));
-    } else {
-      _emuLbToast(emuT('lb.toastGot', { n: EMU_LOGIN_BONUS_AMOUNT }));
-    }
-  } catch (e) {
-    if (btn) btn.disabled = false;
-    alert(e.message || emuT('lb.failed'));
-  }
-}
+
+/* 旧ログインボーナス（オフチェーン・1日1回・+0.5 EMUER）は全部消した。
+
+   押す場所（id が emuLoginBonusBtn の要素）が、どこにも作られていなかった。
+   読むところだけが5か所あり、どれも最初の行で return していたので、
+   この仕組みは一度も動いていない。
+
+   いまのログインのぶんは EMUER v2 のほう（1日1回 +1 EMUER）で、
+   受け取りの modal の中にある（wallet-success-ui.js の wsDaily）。
+
+   すでに台帳（emuer_offchain）に積まれている loginBalance は消していない。
+   受け取った方の残高なので、そのまま残す。積み増しが止まるだけ。 */
 
 function _emuValueEvent(title, detail) {
   const row = document.createElement('div');
@@ -24722,95 +24601,10 @@ const intervalId = setInterval(async () => {
 });
 
 
-// ログボ実行関数（オフチェーンに統一：PayPayショートカット等の既存導線もこれを呼ぶ）
-function handleLoginBonus() {
-  claimEmuLoginBonus();
-}
-
-// ※旧ヘッダーの受取ボタン(#loginBonusBtn)は廃止したためイベント紐付けは行わない
-
-async function checkNextBonusTime() {
-  // 旧ヘッダーのログボpillは廃止済み。対象要素が無ければ何もしない
-  if (!document.getElementById("next-bonus-time") || !document.getElementById("loginBonusBtn")) return;
-  if (!window.connectedAccount || !emuerContract) return;
-  const userInfo = await emuerContract.users(window.connectedAccount);
-  const lastLogin = userInfo.lastLogin.toNumber(); // unix timestamp
-  
-  if (lastLogin === 0) {
-    document.getElementById("next-bonus-time").textContent = "初回ボーナス受取可能です！";
-    return;
-  }
-
-  const nextAvailable = lastLogin + (24 * 60 * 60); // +1日
-  const now = Math.floor(Date.now() / 1000);
-
-  if (now < nextAvailable) {
-    const diff = nextAvailable - now;
-    const hours = Math.floor(diff / 3600);
-    const minutes = Math.floor((diff % 3600) / 60);
-    document.getElementById("next-bonus-time").textContent = `次回まであと: ${hours}時間${minutes}分`;
-    document.getElementById("loginBonusBtn").disabled = true; // 時間外はボタン無効化
-  } else {
-    document.getElementById("next-bonus-time").textContent = "今すぐ受け取れます！";
-    document.getElementById("loginBonusBtn").disabled = false;
-  }
-}
-
-
-// カウントダウンを更新する関数
-async function updateBonusCountdown() {
-    const bonusBtn = document.getElementById("loginBonusBtn");
-    const nextTimeSpan = document.getElementById("next-bonus-time");
-    const statusText = document.getElementById("bonus-status-text");
-
-    // 旧ヘッダーのログボpillは廃止済み。対象要素が無ければ何もしない（オフチェーン版に移行）
-    if (!bonusBtn || !nextTimeSpan || !statusText) return;
-    if (!window.connectedAccount || !emuerContract) return;
-
-    try {
-        const userInfo = await emuerContract.users(window.connectedAccount);
-        const lastLogin = Number(userInfo.lastLogin);
-
-        if (lastLogin === 0) {
-            nextTimeSpan.textContent = "初回受取OK!";
-            return;
-        }
-
-        const nextAvailable = lastLogin + (24 * 60 * 60); // 24時間後
-        const now = Math.floor(Date.now() / 1000);
-
-        if (now < nextAvailable) {
-            // まだ時間が経過していない場合
-            const diff = nextAvailable - now;
-            const hours = Math.floor(diff / 3600);
-            const minutes = Math.floor((diff % 3600) / 60);
-            const seconds = diff % 60;
-
-            // ボタンを無効化してメッセージを変える
-            bonusBtn.disabled = true;
-            bonusBtn.style.backgroundColor = "#cccccc";
-            bonusBtn.style.cursor = "not-allowed";
-            bonusBtn.textContent = "待機中";
-            
-            statusText.textContent = "🎁 次回まで";
-            nextTimeSpan.textContent = `${hours}h ${minutes}m ${seconds}s`;
-
-            // 1秒ごとに再計算（リアルタイム更新）
-            setTimeout(updateBonusCountdown, 1000);
-        } else {
-            // 24時間経過している場合
-            bonusBtn.disabled = false;
-            bonusBtn.style.backgroundColor = "#007bff";
-            bonusBtn.style.cursor = "pointer";
-            bonusBtn.textContent = "受取";
-            statusText.textContent = "🎁 0.5 EMUER";
-            nextTimeSpan.textContent = "今すぐOK!";
-        }
-    } catch (e) {
-        console.error("Countdown error:", e);
-    }
-}
-
+/* 旧ヘッダーのログボ（handleLoginBonus / checkNextBonusTime /
+   updateBonusCountdown）も消した。見ていた loginBonusBtn・
+   next-bonus-time・bonus-status-text は、どれも廃止済みで
+   画面に無い。3つとも最初の行で return して終わっていた。 */
 
 // 公式NFT販売先を選択して開く関数
 function openMarketplace() {
