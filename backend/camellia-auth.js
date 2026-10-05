@@ -40,6 +40,23 @@ function createCamelliaAuthRouter({ db, firebaseAdmin, identity, requireFirebase
   }
 
 
+  router.get("/identities", requireFirebaseUser, async (req, res) => {
+    try {
+      const uid = req.identity && req.identity.uid;
+      if (!uid) return res.status(401).json({ error: "AUTH_REQUIRED" });
+      const snap = await db.collection("camellia_auth_users").doc(uid).get();
+      const identities = (snap.exists && snap.data().identities) || {};
+      return res.json({
+        ok: true,
+        line: identities.line === true,
+        schoolpark: identities.schoolpark === true
+      });
+    } catch (error) {
+      console.error("Camellia identity status failed:", error.message);
+      return res.status(500).json({ error: "IDENTITIES_FAILED" });
+    }
+  });
+
   router.post("/line", async (req, res) => {
     const { code, redirectUri, nonce } = req.body || {};
     const channelId = process.env.LINE_CHANNEL_ID;
