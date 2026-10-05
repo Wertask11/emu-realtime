@@ -273,6 +273,7 @@ const questCompletion = require("./quest-completion").createQuestCompletionRoute
 // Webhook は生ボディで受ける（JSON パーサーは上で迂回済み）
 app.post(STRIPE_WEBHOOK_PATH, billing.webhookHandler, billing.handleWebhook);
 app.use("/api/billing", billing.router);
+app.use("/api/billing/admin/camellia-identities", require("./camellia-admin-identities").createCamelliaAdminIdentityRouter({ db, requireOwner }));
 app.use("/api/kyc", kyc.router);
 app.use("/api/dialogue", dialogue.router);
 app.use("/api/feedback", feedback.router);
