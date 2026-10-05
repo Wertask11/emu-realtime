@@ -123,10 +123,14 @@
     };
     wrapped.__emuerV2PublicCopy = true; window.loadEmuWalletCard = wrapped;
   }
+  /* 毎日のぶんのボタン。emuLoginBonusBtn はどこにも作られていないので、
+     ここは実際には何もしない。押す場所は受け取りの modal（#wsLogin）に移した
+     （wallet-success-ui.js の wsDaily）。
+     この写しを生かすときは、欄名が claimedToday であることに注意。 */
   async function refreshLoginButton() {
     const button = byId("emuLoginBonusBtn"); if (!button || !config) return; button.onclick = claimLogin;
     if (!config.enabled || Date.now() < Date.parse(config.startsAt)) { button.disabled = true; button.textContent = "2026年10月1日開始"; return; }
-    try { const response = await fetch(API + "/daily/login/status?address=" + encodeURIComponent(account()), { headers: await headers(false) }); const data = await response.json(); if (response.ok && data.claimed) { button.disabled = true; button.textContent = "本日は受取済み"; } else { button.disabled = false; button.textContent = "+1 EMUER 受取"; } } catch (_) { button.disabled = false; button.textContent = "+1 EMUER 受取"; }
+    try { const response = await fetch(API + "/daily/login/status?address=" + encodeURIComponent(account()), { headers: await headers(false) }); const data = await response.json(); if (response.ok && data.claimedToday) { button.disabled = true; button.textContent = "本日は受取済み"; } else { button.disabled = false; button.textContent = "+1 EMUER 受取"; } } catch (_) { button.disabled = false; button.textContent = "+1 EMUER 受取"; }
   }
   async function claimLogin() {
     const button = byId("emuLoginBonusBtn");

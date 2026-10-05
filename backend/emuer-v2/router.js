@@ -370,7 +370,10 @@ function createEmuerV2Router(deps) {
     const id = claimId(key);
     try {
       const reward = await db.collection("emuer_v2_rewards").doc(id).get();
-      return res.json({ claimedToday: reward.exists, date: key.split(":").pop() });
+      /* date は「その日」を返す欄。key は JSON の配列（["emuer-v2",...]）で
+         コロンを含まないので、split(":") では切れず、鍵がまるごと出ていた。
+         鍵は中の作りなので、外に出してはいけない。日付だけを返す。 */
+      return res.json({ claimedToday: reward.exists, date: policy.dayKey(Date.now()) });
     } catch (error) {
       console.error("EMUER v2 login status error:", error.message);
       return res.status(500).json({ error: "REWARD_STATUS_FAILED" });

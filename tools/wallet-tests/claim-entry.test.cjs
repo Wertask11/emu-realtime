@@ -289,3 +289,94 @@ test('覚えていないぶんは、これまでどおり出す', async () => {
   assert.ok(String(seen.label).indexOf('100 EMUER') >= 0, '残りの額が違います：' + seen.label);
   assert.ok(String(seen.label).indexOf('件') < 0, '1件なのに件数を出しています');
 });
+
+/* ───────── 毎日のぶん（+1 EMUER） ─────────
+
+   10/5、一度受け取ったあと二度目が受け取れなかった。
+   受け取りの modal は「受け取り待ちの報酬はありません。」と出る。
+   これは嘘ではない。活動でたまる報酬（/rewards）は本当に空だった。
+
+   毎日のぶんは別の作りで、押したときに作られる。押す前は一覧に出ない。
+   そしてその「押す場所」が、どこにも無かった。
+
+     emuLoginBonusBtn を読むところ … 5か所
+     id="emuLoginBonusBtn" を作るところ … 0か所
+
+   読むだけで作っていないので、毎日のぶんは画面から永久に受け取れない。
+   実在する modal の中（#wsLogin）へ移した。 */
+
+test('毎日のぶんのボタンが、modal の中に置いてある', () => {
+  assert.ok(SRC.indexOf('id="wsLogin"') > 0, 'modal に #wsLogin がありません');
+  /* 一覧のボタン（#wsClaim）より前に出す。活動の報酬が空でも、
+     毎日のぶんは受け取れることが先に目に入るように。 */
+  assert.ok(SRC.indexOf('id="wsLogin"') < SRC.indexOf('id="wsClaim"'),
+    '毎日のぶんが、一覧のボタンより後ろにあります');
+});
+
+test('毎日のぶんの行き先が、作られていない id を指していない', () => {
+  const line = SRC.slice(SRC.indexOf('const wsLoginBtn='),
+                         SRC.indexOf('\n', SRC.indexOf('const wsLoginBtn=')));
+  assert.ok(line.indexOf('wsLogin') > 0, '#wsLogin を指していません');
+  assert.ok(line.indexOf('emuLoginBonusBtn') < 0,
+    '作られていない id（emuLoginBonusBtn）に戻っています');
+});
+
+test('どのファイルも、作られていない id を新しく掴みにいかない', () => {
+  /* この id を作る側が1つも無いことを、まず確かめる。
+     作られたなら、この試験は役目を終えるので書き直してよい。 */
+  const files = ['frontend/public/index.html', 'frontend/public/wallet-success-ui.js',
+                 'frontend/public/emuer-v2-public-copy.js'];
+  const made = files.some(f =>
+    fs.readFileSync(path.join(root, f), 'utf8').indexOf('id="emuLoginBonusBtn"') >= 0);
+  assert.equal(made, false, 'id が作られました。この試験を書き直してください');
+  /* 作られていないのだから、modal の毎日のぶんがそれを掴んではいけない。 */
+  assert.ok(SRC.indexOf('wsLoginBtn=()=>document.getElementById("wsLogin")') > 0);
+});
+
+test('modal を開いたら、毎日のぶんも読む', () => {
+  const open = SRC.slice(SRC.indexOf('async function showWalletSuccessModal'),
+                         SRC.indexOf('function closeWalletSuccessAndStart'));
+  assert.ok(open.indexOf('wsDaily()') > 0, '毎日のぶんを読んでいません');
+  assert.ok(open.indexOf('wsRewards()') > 0, '活動の報酬を読んでいません');
+});
+
+test('サーバーが返す欄の名前（claimedToday）を見ている', () => {
+  /* サーバーは claimedToday を返す。claimed を見ていたので、
+     受け取り済みでも「受け取れます」と出ていた。 */
+  const daily = SRC.slice(SRC.indexOf('async function wsDaily()'),
+                          SRC.indexOf('async function wsRewards()'));
+  assert.ok(daily.indexOf('d.claimedToday') > 0, 'claimedToday を見ていません');
+  assert.ok(daily.indexOf('d.claimed)') < 0, '古い欄名（claimed）が残っています');
+
+  const copy = fs.readFileSync(path.join(root, 'frontend/public/emuer-v2-public-copy.js'), 'utf8');
+  assert.ok(copy.indexOf('data.claimedToday') > 0, '写しのほうが古い欄名のままです');
+
+  const api = fs.readFileSync(path.join(root, 'backend/emuer-v2/router.js'), 'utf8');
+  assert.match(api, /claimedToday: reward\.exists/, 'サーバーの返す欄が変わっています');
+});
+
+test('毎日のぶんを受け取ったら、一覧から外す', () => {
+  /* 受け取ると、そのぶんが「待っている報酬」として一覧に出る。
+     外さないと、すぐ下に同じものが出て、押すと鎖が ClaimUnavailable を返す。 */
+  const claim = SRC.slice(SRC.indexOf('async function claimEmuV2LoginReward()'));
+  assert.ok(claim.indexOf('wsDone.add(') > 0, '受け取ったぶんを外していません');
+  assert.ok(claim.indexOf('emuerV2RefreshBalance') > 0, 'ページの残高を直していません');
+  assert.ok(claim.indexOf('wsBalance(') > 0, 'modal の残高を直していません');
+});
+
+test('活動の報酬が空でも、毎日のぶんがあるなら言い切らない', () => {
+  const list = SRC.slice(SRC.indexOf('async function wsRewards()'),
+                         SRC.indexOf('async function wsClaim('));
+  assert.ok(list.indexOf('活動でたまった報酬は、いまはありません。') > 0,
+    '毎日のぶんがあるときの言い方がありません');
+  assert.ok(list.indexOf('受け取り待ちの報酬はありません。') > 0,
+    '本当に何も無いときの言い方が消えています');
+});
+
+test('サーバーは、中の鍵を外に出さない', () => {
+  /* date に key.split(":") を使っていた。鍵は JSON の配列でコロンを含まず、
+     切れずに鍵がまるごと返っていた。 */
+  const api = fs.readFileSync(path.join(root, 'backend/emuer-v2/router.js'), 'utf8');
+  assert.ok(api.indexOf('key.split(":").pop()') < 0, '鍵がそのまま返っています');
+  assert.match(api, /date: policy\.dayKey\(Date\.now\(\)\)/);
+});
