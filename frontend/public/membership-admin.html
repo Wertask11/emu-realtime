@@ -579,11 +579,21 @@ async function paintCamellia() {
   paint();
 }
 
-/* Camellia タブ。最初に作った管理画面（camellia/control-admin.html）は
-   ログインが要らないページなので、この運営専用の画面の中に出す。
-   その上に、サーバーに入っている「入った人」の一覧を並べる。 */
+/* Camellia タブ。概要・利用者一覧・詳細は camellia-dashboard.js。
+   その下に、コミュニティの通報を残す（利用者からは読めないので、ここが唯一の行き先）。 */
 async function renderCamellia() {
-  await window.renderCamelliaDashboard({element:$("#tab-camellia"),api,esc,fmt});
+  const el = $("#tab-camellia");
+  const dashboard = document.createElement("div");
+  const reports = document.createElement("div");
+  reports.className = "card";
+  reports.style.marginTop = "16px";
+  reports.innerHTML = '<h2 style="margin:0 0 4px">通報</h2>'
+    + '<p class="hint" style="margin:0 0 10px">コミュニティの投稿について届いたお知らせです。'
+    + '誰が通報したかは、ほかの利用者には見えません。</p>'
+    + '<div id="camReports"><p class="empty">読み込み中…</p></div>';
+  el.replaceChildren(dashboard, reports);
+  paintCamReports();
+  await window.renderCamelliaDashboard({element:dashboard,api,esc,fmt});
 }
 
 async function paintCamReports() {

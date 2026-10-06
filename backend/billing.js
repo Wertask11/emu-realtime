@@ -772,7 +772,8 @@ function createBillingRouter(deps) {
            どれも profile の下に1枚ずつ置いてある。まとめて1回で読む。 */
         const profile = {};
         try {
-          if(summaryOnly){const ps=await doc.ref.collection("profile").doc("basic").get();if(ps.exists)profile.basic=ps.data()||{};}else{const ps=await doc.ref.collection("profile").get();ps.docs.forEach(function(x){profile[x.id]=x.data()||{};});}
+          /* 一覧には名前だけ。気になっていること等の本文は、詳細を開いたときだけ渡す。 */
+          if(summaryOnly){const ps=await doc.ref.collection("profile").doc("basic").get();if(ps.exists)profile.basic={displayName:(ps.data()||{}).displayName||""};}else{const ps=await doc.ref.collection("profile").get();ps.docs.forEach(function(x){profile[x.id]=x.data()||{};});}
         } catch (e) { readErrors.push("profile"); }
         const personality = profile.personality || null;
 
