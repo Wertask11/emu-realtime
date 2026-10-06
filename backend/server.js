@@ -1985,6 +1985,13 @@ const identityApi = require("./identity-router").createIdentityRouter({
 });
 app.use("/api/identity", identityApi.router);
 
+/* Passkeys are attached to an existing Passport ID. These records remain
+   server-only; Firebase custom tokens restore the existing canonical account. */
+const passkeyApi = require("./passkey-router").createPasskeyRouter({
+  db, identity, firebaseAdmin, requireFirebaseUser, rateLimit, env: process.env
+});
+app.use("/api/passkey", passkeyApi);
+
 const camelliaAuthApi = require("./camellia-auth").createCamelliaAuthRouter({
   db, firebaseAdmin, identity, requireFirebaseUser
 });

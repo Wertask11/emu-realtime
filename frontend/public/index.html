@@ -4554,6 +4554,10 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
           </span>
           <span>メールではじめる</span>
         </button>
+        <button id="chesPasskeyButton" class="ches-btn ches-btn-email" onclick="window.sppLoginWithPasskey && window.sppLoginWithPasskey()" style="display:none">
+          <span class="ches-btn-ico" aria-hidden="true">⌁</span>
+          <span>Passkeyでログイン</span>
+        </button>
         <div id="chesEmailForm" class="ches-email-form" style="display:none;">
           <input id="chesEmailInput" type="email" inputmode="email" autocomplete="email"
                  placeholder="you@example.com" aria-label="メールアドレス">
@@ -16129,6 +16133,7 @@ function _sppIdentityHtml(p) {
 
   /* 足せるものだけボタンを出す */
   const buttons = [];
+  buttons.push('<button type="button" class="spp-copy" id="sppAddPasskey" onclick="sppAddPasskey()">この端末にPasskeyを追加</button>');
   if (!has('line'))   buttons.push('<button type="button" class="spp-copy" id="sppLink_line" onclick="sppLinkLogin(\'line\')">LINEを追加</button>');
   if (!has('google')) buttons.push('<button type="button" class="spp-copy" id="sppLink_google" onclick="sppLinkLogin(\'google\')">Googleを追加</button>');
   /* すでに連携済みでも押せる（2つ目以降を足せる）。ただし
@@ -16136,8 +16141,10 @@ function _sppIdentityHtml(p) {
   buttons.push('<button type="button" class="spp-copy" id="sppLink_wallet" onclick="sppLinkWallet()">'
     + (wallets.length ? '別のウォレットを連携' : 'ウォレットを連携') + '</button>');
   html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px">' + buttons.join('') + '</div>';
+  html += _sppRowHtml('Passkey', '<span id="sppPasskeyStatus">確認中</span>');
   html += '<p class="spp-note" style="margin-top:8px">追加したログイン方法は、どれで入っても同じパスポートになります。'
     + '新しいパスポートは作られません。<br>'
+    + 'Passkeyは端末の生体認証またはPINで使えます。登録時には現在のSchoolParkアカウントで認証します。<br>'
     + 'ウォレットの連携では、所有を確かめるための署名をお願いします（手数料はかかりません）。</p>';
 
   if (p.spDuplicateReview) {
@@ -20706,6 +20713,7 @@ async function openSpPassport() {
   _sppSyncNav(1);
   _sppBindSwipe();
   _sppUpdateMore();
+  if (typeof window.sppRefreshPasskeys === 'function') void window.sppRefreshPasskeys();
 
   /* CHES全体の記録。いまは投票だけが本物なので、それを数える。
      クエストと知恵は、本物になった順にここへ足していく。 */
@@ -26591,6 +26599,114 @@ async function sendEmuFeedback() {
 
   SPID.api = (window.CHES_CONFIG && window.CHES_CONFIG.identityEndpoint)
     || "https://emu-realtime.onrender.com/api/identity";
+  var PASSKEY_API = SPID.api.replace(/\/identity\/?$/, "/passkey");
+
+  function pkBytes(value) {
+    var padded = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+    while (padded.length % 4) padded += '=';
+    var binary = atob(padded);
+    return Uint8Array.from(binary, function (char) { return char.charCodeAt(0); });
+  }
+  function pkB64(value) {
+    var bytes = new Uint8Array(value || new ArrayBuffer(0));
+    var binary = '';
+    bytes.forEach(function (byte) { binary += String.fromCharCode(byte); });
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  }
+  function pkCredentialJSON(credential) {
+    var response = credential.response;
+    var result = {
+      id: credential.id,
+      rawId: pkB64(credential.rawId),
+      type: credential.type,
+      clientExtensionResults: credential.getClientExtensionResults()
+    };
+    if (credential.authenticatorAttachment) result.authenticatorAttachment = credential.authenticatorAttachment;
+    if (response.attestationObject) {
+      result.response = { clientDataJSON: pkB64(response.clientDataJSON), attestationObject: pkB64(response.attestationObject), transports: response.getTransports ? response.getTransports() : [] };
+    } else {
+      result.response = { clientDataJSON: pkB64(response.clientDataJSON), authenticatorData: pkB64(response.authenticatorData), signature: pkB64(response.signature), userHandle: response.userHandle ? pkB64(response.userHandle) : null };
+    }
+    return result;
+  }
+  function pkOptions(options, registration) {
+    var result = Object.assign({}, options, { challenge: pkBytes(options.challenge) });
+    if (registration && options.user) result.user = Object.assign({}, options.user, { id: pkBytes(options.user.id) });
+    if (options.allowCredentials) result.allowCredentials = options.allowCredentials.map(function (item) { return Object.assign({}, item, { id: pkBytes(item.id) }); });
+    if (options.excludeCredentials) result.excludeCredentials = options.excludeCredentials.map(function (item) { return Object.assign({}, item, { id: pkBytes(item.id) }); });
+    return result;
+  }
+  async function pkRequest(path, method, body, authenticated) {
+    var headers = { 'Content-Type': 'application/json' };
+    if (authenticated) Object.assign(headers, await emuAuthHeaders(true, { interactive: false }));
+    var response = await fetch(PASSKEY_API + path, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
+    var data = await response.json().catch(function () { return {}; });
+    if (!response.ok) throw new Error(data.error || 'PASSKEY_REQUEST_FAILED');
+    return data;
+  }
+  window.sppAddPasskey = async function () {
+    var button = document.getElementById('sppAddPasskey');
+    if (!window.PublicKeyCredential || !navigator.credentials) { alert('このブラウザではPasskeyを利用できません。'); return; }
+    if (!window.auth || !window.auth.currentUser || !window._spPassport || !window._spPassport.spLive) { alert('現在のSchoolPark IDを確認してからお試しください。'); return; }
+    if (!confirm('この端末の生体認証または画面ロックを使って、現在のSchoolPark IDにPasskeyを追加します。')) return;
+    if (button) { button.disabled = true; button.textContent = '準備しています…'; }
+    try {
+      var options = await pkRequest('/register/options', 'POST', {}, true);
+      var credential = await navigator.credentials.create({ publicKey: pkOptions(options, true) });
+      if (!credential) throw new Error('REGISTRATION_CANCELLED');
+      await pkRequest('/register/verify', 'POST', { challenge: options.challenge, response: pkCredentialJSON(credential), deviceName: 'この端末' }, true);
+      if (typeof window.sppRefreshPasskeys === 'function') await window.sppRefreshPasskeys();
+      alert('この端末にPasskeyを追加しました。次回からログイン画面でPasskeyを選べます。');
+    } catch (error) {
+      alert(error.message === 'PASSKEY_UNAVAILABLE' ? 'Passkeyは現在準備中です。' : 'Passkeyを追加できませんでした。もう一度お試しください。');
+    } finally {
+      if (button) { button.disabled = false; button.textContent = 'この端末にPasskeyを追加'; }
+    }
+  };
+  window.sppLoginWithPasskey = async function () {
+    var button = document.getElementById('chesPasskeyButton');
+    if (!window.PublicKeyCredential || !navigator.credentials || !window.fbAuth || !window.auth) return;
+    if (button) { button.disabled = true; }
+    try {
+      var options = await pkRequest('/login/options', 'POST', {}, false);
+      var credential = await navigator.credentials.get({ publicKey: pkOptions(options, false) });
+      if (!credential) throw new Error('LOGIN_CANCELLED');
+      var result = await pkRequest('/login/verify', 'POST', { challenge: options.challenge, response: pkCredentialJSON(credential) }, false);
+      await window.fbAuth.signInWithCustomToken(window.auth, result.firebaseToken);
+    } catch (error) {
+      alert(error.message === 'PASSKEY_UNAVAILABLE' ? 'Passkeyは現在準備中です。' : 'Passkeyでログインできませんでした。別のログイン方法をお試しください。');
+    } finally { if (button) button.disabled = false; }
+  };
+  window.sppRefreshPasskeys = async function () {
+    var statusNode = document.getElementById('sppPasskeyStatus');
+    var addButton = document.getElementById('sppAddPasskey');
+    if (!statusNode) return;
+    try {
+      var status = await pkRequest('/available', 'GET', null, false);
+      if (addButton) addButton.style.display = status.available ? '' : 'none';
+      if (!status.available) { statusNode.textContent = '準備中'; return; }
+      var result = await pkRequest('/list', 'GET', null, true);
+      var passkeys = result.passkeys || [];
+      statusNode.textContent = passkeys.length ? passkeys.length + '件登録済み ' : '未登録';
+      passkeys.forEach(function (passkey) {
+        var remove = document.createElement('button');
+        remove.type = 'button'; remove.className = 'spp-copy'; remove.textContent = 'この端末のPasskeyを解除';
+        remove.style.marginLeft = '6px';
+        remove.onclick = async function () {
+          if (!confirm('このSchoolPark IDからこのPasskeyを解除しますか？')) return;
+          remove.disabled = true;
+          try { await pkRequest('/' + encodeURIComponent(passkey.id), 'DELETE', null, true); await window.sppRefreshPasskeys(); }
+          catch (_) { alert('Passkeyを解除できませんでした。通信を確認してください。'); remove.disabled = false; }
+        };
+        statusNode.appendChild(remove);
+      });
+    } catch (_) { statusNode.textContent = '確認できません'; }
+  };
+  (function showPasskeyLoginWhenAvailable() {
+    var button = document.getElementById('chesPasskeyButton');
+    if (!button || !window.PublicKeyCredential || !navigator.credentials) return;
+    pkRequest('/available', 'GET', null, false).then(function (status) { button.style.display = status.available ? '' : 'none'; }).catch(function () {});
+  })();
 
   /* 連携の途中経過。LINE は LINE アプリへ往復するので sessionStorage では消える。
      券そのものはサーバーが発行した10分・1回きりのもので、
