@@ -50,7 +50,7 @@ function makeFirestore(seed) {
     return {
       exists: !!entry,
       id,
-      ref: null,
+      ref: docRef(col, id),
       data: () => (entry ? clone(entry.data) : undefined),
       _version: entry ? entry.version : 0
     };
@@ -80,7 +80,7 @@ function makeFirestore(seed) {
       /* 下のコレクションの文書は、親の一覧には出さない。
          本物の Firestore も、親のコレクションを読んで子は返さない。 */
       if (rest.indexOf("/") >= 0) continue;
-      rows.push({ id: rest, data: () => clone(entry.data) });
+      rows.push({ id: rest, exists: true, ref: docRef(col, rest), data: () => clone(entry.data) });
       if (limit && rows.length >= limit) break;
     }
     return {
