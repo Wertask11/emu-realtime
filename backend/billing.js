@@ -738,20 +738,18 @@ function createBillingRouter(deps) {
      書いてあることと実際の扱いは、必ず一致させること。 */
   router.get("/admin/camellia", requireOwner, async (req, res) => {
     const MIN_AGE = 18, MAX_AGE = 45;   // 新しい Camellia の入口と必ず同じにすること
-    const ageOf = function (birth) {
-      const d = new Date(String(birth || ""));
-      if (isNaN(d.getTime())) return null;
-      const now = new Date();
-      let a = now.getFullYear() - d.getFullYear();
-      const m = now.getMonth() - d.getMonth();
-      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
-      return a;
-    };
+    const { ageOfJst } = require("./camellia-admin-summary");
+    const ageOf = ageOfJst;
     try {
-      const snap = await db.collection("camellia_users").limit(500).get();
+      const detailUid = typeof req.query.uid === "string" ? req.query.uid : "";
+      if(detailUid && (!/^[A-Za-z0-9:_-]{1,128}$/.test(detailUid))) return res.status(400).json({error:"INVALID_UID"});
+      const summaryOnly = req.query.summary === "1";
+      const snap = detailUid ? {docs:[await db.collection("camellia_users").doc(detailUid).get()]} : await db.collection("camellia_users").limit(500).get();
       const members = [];
       for (const doc of snap.docs) {
+        if (!doc.exists) continue;
         const d = doc.data() || {};
+        const readErrors=[];
         let name = "", provider = "";
         try {
           const acc = await db.collection("ches_accounts").doc(doc.id).get();
@@ -760,39 +758,39 @@ function createBillingRouter(deps) {
             name = a.displayName || "";
             provider = a.provider || "";
           }
-        } catch (e) { /* 名前が読めなくても一覧は出す */ }
+        } catch (e) { readErrors.push("identity"); }
+        try {const identity=await db.collection("camellia_auth_users").doc(doc.id).get();if(identity.exists){const providers=identity.data().identities||{};provider=Object.keys(providers).filter(key=>providers[key]===true).join(" / ")||provider;}}catch(e){readErrors.push("identity");}
         /* 日々の記録。新しい順に、全部。 */
         let daily = [];
         try {
-          const ds = await doc.ref.collection("daily")
+          if (!summaryOnly) { const ds = await doc.ref.collection("daily")
             .orderBy("__name__", "desc").get();
-          daily = ds.docs.map(function (x) { return { date: x.id, ...(x.data() || {}) }; });
-        } catch (e) { /* まだ無い */ }
+          daily = ds.docs.map(function (x) { return { date: x.id, ...(x.data() || {}) }; }); }
+        } catch (e) { readErrors.push("daily"); }
 
         /* プロフィール・設定・位置情報・AIとの会話・性格・シミュレーションの状態。
            どれも profile の下に1枚ずつ置いてある。まとめて1回で読む。 */
         const profile = {};
         try {
-          const ps = await doc.ref.collection("profile").get();
-          ps.docs.forEach(function (x) { profile[x.id] = x.data() || {}; });
-        } catch (e) { /* まだ無い */ }
+          if(summaryOnly){const ps=await doc.ref.collection("profile").doc("basic").get();if(ps.exists)profile.basic=ps.data()||{};}else{const ps=await doc.ref.collection("profile").get();ps.docs.forEach(function(x){profile[x.id]=x.data()||{};});}
+        } catch (e) { readErrors.push("profile"); }
         const personality = profile.personality || null;
 
         /* ほかのアプリから取り込んだもの（ChatGPT・Claude・ルナルナなど）。
            本人が自分で書き出して、この画面に入れたぶん。 */
         const imports = [];
         try {
-          const is = await doc.ref.collection("imports").get();
-          is.docs.forEach(function (x) { imports.push({ type: x.id, ...(x.data() || {}) }); });
-        } catch (e) { /* まだ無い */ }
+          if(!summaryOnly){const is = await doc.ref.collection("imports").get();
+          is.docs.forEach(function (x) { imports.push({ type: x.id, ...(x.data() || {}) }); }); }
+        } catch (e) { readErrors.push("imports"); }
 
         /* 運営が決めたこと（7つの機構の入り切り）。
            本人が書き換えられない場所に置いてある。 */
         let adminControl = null;
         try {
-          const ac = await doc.ref.collection("admin").doc("control").get();
-          if (ac.exists) adminControl = ac.data() || null;
-        } catch (e) { /* まだ無い */ }
+          if(!summaryOnly){const ac = await doc.ref.collection("admin").doc("control").get();
+          if (ac.exists) adminControl = ac.data() || null; }
+        } catch (e) { readErrors.push("control"); }
 
         /* ───── 解釈：本物の数字を出す ─────
 
@@ -852,7 +850,13 @@ function createBillingRouter(deps) {
 
         const age = ageOf(d.birthDate);
         members.push({
-          assessment,
+          assessment: summaryOnly ? undefined : assessment,
+          readErrors,
+          archiveSyncInProgress: d.archiveSyncInProgress === true,
+          checkCount: Number.isInteger(d.checkCount) ? d.checkCount : null,
+          lastCheckAt: d.lastCheckAt || null,
+          registeredAt: d.registeredAt || d.agreedAt || null,
+          lastActiveAt: d.lastActiveAt || d.updatedAt || null,
           uid: doc.id,
           passport: d.passport || "",
           camelliaId: d.camelliaId || "",
@@ -877,7 +881,7 @@ function createBillingRouter(deps) {
       members.sort(function (a, b) {
         return String(b.agreedAt || "").localeCompare(String(a.agreedAt || ""));
       });
-      return res.json({ ok: true, total: members.length, members });
+      return res.json({ ok: true, total: members.length, limited: !detailUid && snap.docs.length >= 500, members });
     } catch (e) {
       console.error("camellia list error:", e.message);
       return res.status(500).json({ error: "CAMELLIA_LIST_FAILED" });
