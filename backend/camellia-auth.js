@@ -40,10 +40,19 @@ function createCamelliaAuthRouter({ db, firebaseAdmin, identity, requireFirebase
   }
 
 
-  router.get("/identities", requireFirebaseUser, async (req, res) => {
+  /* Camellia の利用者（LINE・Passport のログイン、β のゲスト）の確認。SchoolPark の requireFirebaseUser は
+     ches_accounts（ウォレット）を必須にするので、Camellia だけで使っている人は通らない。 */
+  async function requireCamelliaUser(req, res, next) {
+    if (!firebaseAdmin || !db) return res.status(503).json({ error: "AUTH_UNAVAILABLE" });
+    const user = await optionalUser(req);
+    if (!user) return res.status(401).json({ error: "AUTH_REQUIRED" });
+    req.camelliaUser = user;
+    next();
+  }
+
+  router.get("/identities", requireCamelliaUser, async (req, res) => {
     try {
-      const uid = req.identity && req.identity.uid;
-      if (!uid) return res.status(401).json({ error: "AUTH_REQUIRED" });
+      const uid = req.camelliaUser.uid;
       const snap = await db.collection("camellia_auth_users").doc(uid).get();
       const identities = (snap.exists && snap.data().identities) || {};
       return res.json({
