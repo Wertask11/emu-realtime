@@ -29,6 +29,23 @@ html, body                 { height: 100%; width:100%; overflow-x:hidden; }
 @media (max-width:1350px) {
   .sp-quest-detail-grid { grid-template-columns:minmax(0,1fr) !important; }
 }
+/* クエスト詳細の右の列（ACCEPT・受けている人）。
+   左の現場資料は長い。読み進めると、右の列も一緒に上へ流れていき、
+   「受ける」「知恵カードを置く」「完了にする」が見えなくなっていた。
+   2列で出ているときだけ、上の見出しのすぐ下で止めておく。
+
+   前は top:24px で止めていた。見出し（高さおよそ90px）より浅いので、
+   列の上側が見出しの下に潜って切れた。それで止めるのをやめていた。
+   止める高さは見出しの高さから決める（描くたびに測って --sp-head-h に入れる）。
+   画面が低くて列が収まらないときは、列の中だけで動かせるようにする。 */
+@media (min-width:1351px) {
+  .sp-quest-detail-grid > .sp-quest-side {
+    position:sticky;
+    top:calc(var(--sp-head-h, 92px) + 20px);
+    max-height:calc(100vh - var(--sp-head-h, 92px) - 40px);
+    overflow:auto;
+  }
+}
 </style>
 </head>
 <body>
@@ -90,7 +107,7 @@ if (window.top === window.self) window.location.replace('/');
 
     <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow-y:{{ L.scrollY }}" ref="{{ scrollRef }}">
 
-      <div style="background:#F4F1EA; border-bottom:1px solid rgba(20,19,16,.12); padding:{{ L.headPad }}; position:sticky; top:0; z-index:6; display:flex; align-items:center; gap:16px">
+      <div data-sp-head style="background:#F4F1EA; border-bottom:1px solid rgba(20,19,16,.12); padding:{{ L.headPad }}; position:sticky; top:0; z-index:6; display:flex; align-items:center; gap:16px">
         <!-- スマホのメニュー。左側に置く。
              ここは狭い画面のときだけ出る（パソコン・タブレットでは
              同じ場所にサイドバーの開け閉めボタンが出て、こちらは display:none）。
@@ -147,7 +164,7 @@ if (window.top === window.self) window.location.replace('/');
             <p style="line-height:1.9">SchoolParkは何のために存在するのか。どんな社会をつくりたいのか。何を大切にするのか。その原点を記録する。</p>
             <p style="line-height:1.9">報酬 0円 · 参加必要人数 1人（Founder） · 期限なし<br>実際の活動・行動・検証は #001 から開始します。</p>
             <sc-for list="{{ founderSections }}" as="section">
-              <details style="background:#FBF9F3; border:1px solid rgba(20,19,16,.16); border-radius:10px; padding:18px; margin:16px 0; min-width:0">
+              <details data-keep-open="founder-{{ section.title }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.16); border-radius:10px; padding:18px; margin:16px 0; min-width:0">
                 <summary style="font-size:17px; font-weight:700; line-height:1.7; cursor:pointer">{{ section.title }}</summary>
                 <div style="white-space:pre-wrap; overflow-wrap:anywhere; font-size:15px; line-height:2; margin-top:20px">{{ section.body }}</div>
               </details>
@@ -590,7 +607,7 @@ if (window.top === window.self) window.location.replace('/');
                      受ける前に全部を読ませると、何をする仕事なのかが埋もれる。 -->
                 <sc-if value="{{ cur.isCase }}">
                   <div style="display:flex; flex-direction:column; gap:18px">
-                    <details style="display:{{ cur.briefShow }}; background:#F4F1EA; border-radius:10px; border:1px solid rgba(20,19,16,.12)">
+                    <details data-keep-open="brief-{{ cur.id }}" style="display:{{ cur.briefShow }}; background:#F4F1EA; border-radius:10px; border:1px solid rgba(20,19,16,.12)">
                       <summary style="cursor:pointer; padding:14px 18px; font-size:14px; font-weight:700; color:#0F5C3F">現場の資料を読む</summary>
                       <div style="padding:0 18px 18px; font-size:14px; line-height:2.05; color:#3B382F; white-space:pre-wrap">{{ cur.brief }}</div>
                       <!-- 現場の図。文字だけでは位置関係が掴めないので、資料の中に置く。 -->
@@ -668,7 +685,7 @@ if (window.top === window.self) window.location.replace('/');
               </div>
             </div>
 
-            <div style="display:flex; flex-direction:column; gap:20px; position:static; min-width:0; max-width:100%">
+            <div class="sp-quest-side" style="display:flex; flex-direction:column; gap:20px; min-width:0; max-width:100%">
               <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:26px; display:flex; flex-direction:column; gap:20px; min-width:0; box-sizing:border-box; overflow-wrap:anywhere">
                 <div style="display:flex; flex-direction:column; gap:8px">
                   <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; color:#D0E2BE">ACCEPT</div>
@@ -1797,16 +1814,48 @@ function mountCity() {
   });
 }
 
+/* 開いている <details> を覚えておく。
+
+   描き直しは画面をまるごと作り直すので、<details> は毎回「閉じた」状態で
+   生まれ直す。親（index.html）は、タブに戻ったとき・画面に戻ったとき・
+   5分ごとに中身を読み直し、そのたびに描き直す。現場の資料を開いて
+   読んでいるあいだにそれが来ると、資料が勝手に閉じていた。
+
+   data-keep-open に名前を付けた <details> だけ、開いていたものを開いたまま
+   作り直す。名前にクエストの番号を入れておけば、別のクエストを開いたときに
+   前の開き方が持ち越されることはない。 */
+function keptOpen() {
+  var open = {};
+  host.querySelectorAll('details[data-keep-open]').forEach(function (d) {
+    if (d.open) open[d.getAttribute('data-keep-open')] = true;
+  });
+  return open;
+}
+function reopen(frag, open) {
+  frag.querySelectorAll('details[data-keep-open]').forEach(function (d) {
+    if (open[d.getAttribute('data-keep-open')]) d.open = true;
+  });
+}
+/* 上の見出しの高さ。右の列（ACCEPT）を、見出しのすぐ下で止めるのに使う。
+   見出しは幅によって高さが変わるので、決め打ちせずに測る。 */
+function syncHeadHeight() {
+  var head = host.querySelector('[data-sp-head]');
+  if (head) host.style.setProperty('--sp-head-h', head.offsetHeight + 'px');
+}
+
 function draw() {
   queued = false;
   /* replaceChildren はスクロール中の要素も破棄する。差し替え前の位置を
      覚え、新しい要素へ同じ描画処理内で戻す（描画後の rAF では一度上に跳ぶ）。 */
   var scrollTop = app.scroller.current ? app.scroller.current.scrollTop : 0;
   var pageY = window.scrollY;
+  var open = keptOpen();
   var vals = app.renderVals();
   var frag = document.createDocumentFragment();
   walk(tpl.content, vals, frag);
+  reopen(frag, open);
   host.replaceChildren(frag);
+  syncHeadHeight();
   mountCity();
   if (app.scroller.current) app.scroller.current.scrollTop = scrollTop;
   if (window.scrollY !== pageY) window.scrollTo(0, pageY);
@@ -1824,6 +1873,7 @@ function schedule() {
 }
 
 draw();
+window.addEventListener('resize', syncHeadHeight);
 if (app.componentDidMount) app.componentDidMount();
 
 </script>
