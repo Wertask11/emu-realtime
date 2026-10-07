@@ -842,6 +842,8 @@ function goBackToEmu() {
 if (EMBED) {
   const hl = document.getElementById("homeLink");
   if (hl) { hl.setAttribute("data-i18n", "i.backToEmuToday"); hl.textContent = emuT("i.backToEmuToday"); hl.href = "#"; }
+  /* スマホのEmuには「今日のEmu」が無く、下の固定ナビで行き来する。この戻る口は出さない。 */
+  try { const pw = _parentWin(); if (hl && pw && typeof pw._emuPhoneLayout === "function" && pw._emuPhoneLayout()) hl.style.display = "none"; } catch (e) {}
   // 埋め込み中は index.html への直接遷移／戻るリンクを親の画面遷移に置き換える
   // （iframe内でEmuを二重に開くのを防ぐ）
   document.addEventListener("click", (e) => {
