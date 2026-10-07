@@ -28,6 +28,13 @@ module.exports = function founderQuest(template, logic) {
                 <div style="white-space:pre-wrap; overflow-wrap:anywhere; font-size:15px; line-height:2; margin-top:20px">{{ section.body }}</div>
               </details>
             </sc-for>
+            <!-- 手書きの言葉（創業者の写真そのまま）。Firestore の founderSections とは別に、
+                 画面側に固定で置く。#000 の照合用ハッシュには入らない。
+                 元写真の右下にあった印刷イラスト（©表記つき）は消してある。 -->
+            <details style="background:#FBF9F3; border:1px solid rgba(20,19,16,.16); border-radius:10px; padding:18px; margin:16px 0; min-width:0">
+              <summary style="font-size:17px; font-weight:700; line-height:1.7; cursor:pointer">7. 手書きの言葉</summary>
+              <img src="/schoolpark/images/quest-000-tegaki.webp" alt="方眼紙に手書きされた言葉。「私はなんでもできる」「私は私のままでいい」などが並び、最後に「いつもありがとうございます。感謝しています！！ Tsubaki」と書かれている。" loading="lazy" width="886" height="1380" style="display:block; width:100%; max-width:560px; height:auto; margin:20px auto 0; border-radius:6px">
+            </details>
             <p><a href="https://note.com/paberuuu11/n/nb4417c69b0c6" target="_blank" rel="noopener noreferrer">SchoolPark論文の出典（note）</a></p>
           </article>
         </sc-if>
