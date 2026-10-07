@@ -190,7 +190,7 @@
       "i.tab.explore": "みんなの一日",
       "i.tab.mine": "わたしの記録",
       "i.backToEmu": "← Emuに戻る",
-      "i.backToEmuToday": "← 今日のEmu",
+      "i.backToEmuToday": "← 知識を読む",   /* 今日のEmuは無くなり、戻り先は知識を読む（showEmuToday） */
       "i.footerTagline": "学ぶことは、生きること。",
       "i.me": "わたし",
       "i.public": "公開中",

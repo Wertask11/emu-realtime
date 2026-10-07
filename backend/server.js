@@ -1514,6 +1514,29 @@ app.get('/api/user/name/:address', async (req, res) => {
   }
 });
 
+// ── 右上のユーザー表示（名前 / プロフィール画像）の保存 ──
+/* 本人が「設定」で選んだ、Emu の右上に出すもの。名前と写真と同じ
+   user_profiles/{アドレス} に、この1項目（headerIdentityMode）だけを足す。
+   値は 'name'（名前）か 'avatar'（プロフィール画像）。この項目を持たない人は
+   名前のまま（これまでと同じ表示）。名前と写真の欄には触らない（merge）。 */
+const HEADER_IDENTITY_MODES = ['name', 'avatar'];
+app.post('/api/user/settings', requireFirebaseUser, requireOwnAddress, async (req, res) => {
+  try {
+    const address = (req.body.address || '').toLowerCase().trim();
+    const mode = String(req.body.headerIdentityMode || '');
+    if (!address || !HEADER_IDENTITY_MODES.includes(mode)) {
+      return res.status(400).json({ error: 'BAD_SETTING' });
+    }
+    if (!db) return res.status(500).json({ error: 'Firestore未接続' });
+    await db.collection('user_profiles').doc(address).set(
+      { address, headerIdentityMode: mode, updatedAt: new Date().toISOString() }, { merge: true });
+    res.json({ success: true, headerIdentityMode: mode });
+  } catch (err) {
+    console.error('settings error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── ランキング用サーバーキャッシュ（1時間TTL） ──
 const _rankingCache = {
   postsSnap: null,
