@@ -162,6 +162,15 @@
 .emu-me-save:disabled { opacity:.5; cursor:default; }
 .emu-me-msg { font-size:13px; margin:10px 0 0; min-height:18px; }
 .emu-me-msg.ok { color:#1f8a4c; } .emu-me-msg.err { color:#c0392b; }
+/* 設定のシート（名前と写真のシートと同じ作り） */
+.emu-set-choices { display:grid; gap:8px; margin-top:6px; }
+.emu-set-choice {
+  display:flex; align-items:center; gap:10px; min-height:48px; padding:0 14px;
+  border:1.5px solid #e6e2dc; border-radius:12px; background:#fff; cursor:pointer;
+  font-size:15px; font-weight:700; color:#1a1840;
+}
+.emu-set-choice input { width:18px; height:18px; margin:0; accent-color:#f08300; flex:none; }
+.emu-set-choice:has(input:checked) { border-color:#f08300; background:#fff8f0; }
 
 /* アカウントメニュー。右上のアドレス表示から開く */
 .emu-account-wrap { position:relative; display:inline-block; }
@@ -3080,6 +3089,8 @@ body.emu-requests-open #emuRequestsPage { display:block; }
 .emu-request-empty { grid-column:1/-1; text-align:center; padding:34px 18px; color:#777; }
 body.emu-today-open > #mainApp > .container { display:none; }
 body.emu-today-open > #mainApp > #emuTodayHome { display:block; }
+/* 「今日のEmu」は無くした（パソコン・スマホとも）。中身はどの幅でも出さない（要素を残す理由は HTML 側に書いた）。 */
+#emuTodayDashboard { display:none !important; }
 body.emu-profile-open > #mainApp > .container { display:none; }
 body.emu-profile-open > #mainApp > #emuTodayHome { display:block; }
 body.emu-profile-open #emuTodayDashboard { display:none; }
@@ -3838,10 +3849,8 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   /* 問い合わせボタンが小さくなる分、閉じるボタンの高さも合わせる */
   .emu-page-close { bottom:calc(48px + 10px + max(12px,env(safe-area-inset-bottom))); }
   #emu-contact-label { display:none; }
-  /* スマホでは上の見出しとタブ列を出さない。行き来は下の固定ナビ（#emuBottomNav）で行う。
-     「今日のEmu」もスマホには無い（showEmuToday が知識を読むへ回す）。中身は念のため隠しておく。 */
+  /* スマホでは上の見出しとタブ列を出さない。行き来は下の固定ナビ（#emuBottomNav）で行う。 */
   .eth-topbar { display:none; }
-  #emuTodayDashboard { display:none !important; }
   .eth-hero,.eth-profile { grid-template-columns:1fr; }
   .eth-card { padding:16px; border-radius:14px; }
   .eth-welcome { gap:11px; }
@@ -3900,8 +3909,18 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   /* キーボードが出ているあいだは隠す。出したままだと、キーボードの上に浮いて入力欄にかぶる。 */
   body.emu-kb-open #emuBottomNav { display:none !important; }
   /* マイライブラリーは名前のメニュー（興味のあるテーマの下）へ、Room1 は知識を探すの中へ移した。
-     どちらもスマホだけ。パソコンは知識を読むの左のならびのまま。 */
+     どちらもスマホだけ。パソコンは知識を読むの左のならびのまま。
+     「設定」（右上のユーザー表示）も名前のメニューに置く。スマホだけ。 */
   #emuAccountMenu .emu-phone-only { display:block; }
+  /* 右上を「プロフィール画像」にしている人（設定）。名前の代わりに丸い写真を出す */
+  #walletAddressButton.emu-head-has-avatar {
+    width:36px; height:36px; max-width:none; padding:0; flex:none;
+    border-radius:50%; overflow:hidden; line-height:0;
+  }
+  #walletAddressButton .emu-head-avatar {
+    display:block; width:100%; height:100%; object-fit:cover;
+    border-radius:50%; border:1px solid #e6e2dc; box-sizing:border-box;
+  }
   #emuRequestsPage { position:relative; }
   .emu-room1-entry {   /* 見出しの上の「KNOWLEDGE REQUEST」と同じ段の右端に置く。一覧や見出しにかぶらない */
     display:inline-flex; align-items:center; gap:5px; position:absolute; top:-5px; right:0;
@@ -4850,17 +4869,17 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     <button type="button" class="esn-collapse" onclick="emuNavToggle()" title="サイドバーを閉じる">‹</button>
   </div>
   <div class="esn-list">
-    <button type="button" class="esn-item active" id="esnToday"      onclick="showEmuToday()"><i>01</i>今日のEmu</button>
-    <button type="button" class="esn-item"        id="esnFeed"       onclick="showEmuFeed()"><i>02</i>知識を読む</button>
-    <button type="button" class="esn-item"        id="esnRequests"   onclick="showEmuRequests()"><i>03</i>知識を探す</button>
-    <button type="button" class="esn-item"        id="esnIchinichi"  onclick="showEmuIchinichi()"><i>04</i>一日シェア</button>
-    <button type="button" class="esn-item"        id="esnDiscussion" onclick="showEmuDiscussion()"><i>05</i>議論</button>
+    <!-- 「今日のEmu」は無くした（スマホ・パソコンとも）。Emuを開くと、まず知識を読む。 -->
+    <button type="button" class="esn-item active" id="esnFeed"       onclick="showEmuFeed()"><i>01</i>知識を読む</button>
+    <button type="button" class="esn-item"        id="esnRequests"   onclick="showEmuRequests()"><i>02</i>知識を探す</button>
+    <button type="button" class="esn-item"        id="esnIchinichi"  onclick="showEmuIchinichi()"><i>03</i>一日シェア</button>
+    <button type="button" class="esn-item"        id="esnDiscussion" onclick="showEmuDiscussion()"><i>04</i>議論</button>
     <!-- 価値プロフィールは、SchoolPark パスポートの PAGE 3
          （私はどんな価値を渡してきたのか）から開く。入口はそこ1つにする。 -->
   </div>
   <!-- SchoolPark のサイドバー下と同じ作り。残高と、いま入っている人。
-       数字は「今日のEmu」の報酬カードとアカウントから写しているので、
-       二重に持たない（ずれない）。 -->
+       数字は「今日のEmu」の報酬カード（画面には出さず、残高の欄だけ残してある）と
+       アカウントから写しているので、二重に持たない（ずれない）。 -->
   <div class="esn-foot">
     <div class="esn-foot-row">
       <span class="esn-foot-label">EMUER</span>
@@ -4907,6 +4926,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <button type="button" role="menuitem" onclick="accountGo('themes')">興味のあるテーマ</button>
         <!-- スマホだけ。パソコンは知識を読むの左のならびから開く -->
         <button type="button" role="menuitem" class="emu-phone-only" onclick="accountGo('library')">マイライブラリー</button>
+        <!-- スマホだけ。右上のユーザー表示（名前 / プロフィール画像）を選ぶ -->
+        <button type="button" role="menuitem" class="emu-phone-only" onclick="accountGo('settings')">設定</button>
         <button type="button" role="menuitem" onclick="accountGo('sessions')">対話の予定</button>
         <!-- 気づいたことを送る口。スマホでは画面に浮かぶボタンが知識の本文に
              かぶっていたので、こちらへ移した。 -->
@@ -4919,15 +4940,14 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </div>
 </header>
 
-<section id="emuTodayHome" aria-label="今日のEmu">
+<section id="emuTodayHome" aria-label="知識を読む">
   <div class="eth-topbar">
     <div>
-      <h1 class="eth-title" id="emuPageTitle" data-i18n="home.title">今日のEmu</h1>
+      <h1 class="eth-title" id="emuPageTitle" data-i18n="tab.feed">知識を読む</h1>
       <p class="eth-subtitle" data-i18n="home.subtitle">あなたの熱に、ついてこられる場所。</p>
     </div>
     <div class="eth-tabs" role="navigation" aria-label="Emu画面" data-i18n-aria="home.tabsAria">
-      <button type="button" class="eth-tab active" id="emuTodayTab" onclick="showEmuToday()" data-i18n="tab.today">今日のEmu</button>
-      <button type="button" class="eth-tab" id="emuFeedTab" onclick="showEmuFeed()" data-i18n="tab.feed">知識を読む</button>
+      <button type="button" class="eth-tab active" id="emuFeedTab" onclick="showEmuFeed()" data-i18n="tab.feed">知識を読む</button>
       <button type="button" class="eth-tab" id="emuRequestsTab" onclick="showEmuRequests()" data-i18n="tab.requests">知識を探す</button>
       <button type="button" class="eth-tab" id="emuIchinichiTab" onclick="showEmuIchinichi()" data-i18n="tab.ichinichi">一日シェア</button>
       <button type="button" class="eth-tab" id="emuDiscussionTab" onclick="showEmuDiscussion()" data-i18n="tab.discussion">議論</button>
@@ -4936,6 +4956,10 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     </div>
   </div>
 
+  <!-- 「今日のEmu」の中身。2026-10-07 にパソコンからも無くした（スマホはその前に無くした）。
+       開く入口は無く、どの幅でも CSS で隠している。
+       要素を残しているのは、残高の欄（#emuTodayBalance）を左の EMUER 表示（#esnBalance）と
+       EMUER v2（emuer-v2-public-copy.js）が使っているため。EMUER 側は今回変えない。 -->
   <div id="emuTodayDashboard">
     <!-- 規約 第10条の掲示。効力発生日の14日前までに出す必要がある。
          掲示 2026-08-17 ／ 効力 2026-09-01。9/1になったら自動で消える。 -->
@@ -5196,9 +5220,6 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <li>
   <button class="nav-button" id="exploreBtn">探索する</button>
 </li>
-          <li>
-            <button class="nav-button" id="emuTodayNavBtn" onclick="showEmuToday()">今日のEmu</button>
-          </li>
 
 
 <li><button id="refreshAllPosts" class="nav-button">知識を読む</button></li>
@@ -11259,7 +11280,7 @@ const SP_REIZO_KB = [
 
   // ── Emu 全般
   { k:['emuとは','emuって','emuの使い方','emuの中身','今日のemu','emuで何'],
-    a:'Emu は、経験から生まれた知識をやりとりする場所だよ🧊\n\n左に01〜05が並んでいて、それがEmuの全部：\n01 今日のEmu／02 知識を読む／03 知識を探す／04 一日シェア／05 議論\n\n狭い画面では、上に横並びで出るよ。\n「今日のEmu」には、今日やるといいことが並ぶんだ！\n\n価値プロフィール（きみが渡した価値）は、SchoolPark パスポートの3ページ目から開けるよ🪪' },
+    a:'Emu は、経験から生まれた知識をやりとりする場所だよ🧊\n\n左に01〜04が並んでいて、それがEmuの全部：\n01 知識を読む／02 知識を探す／03 一日シェア／04 議論\n\nEmuを開くと、まず「知識を読む」が出るよ（「今日のEmu」は無くなったんだ）。\n狭い画面では上に横並び、スマホでは画面の下に並ぶよ。\n\n価値プロフィール（きみが渡した価値）は、SchoolPark パスポートの3ページ目から開けるよ🪪' },
 
   // ── Good と Change
   { k:['goodとchange','good','change','グッド','チェンジ','いいね','提案する','返し方'],
@@ -14635,10 +14656,10 @@ window._emuPhoneLayout = _emuPhoneLayout;
 
 /* 上のタブ列と左タブは、同じところを指しているので印も一緒に付け替える */
 const EMU_TAB_PAIRS = {
-  emuTodayTab:'esnToday', emuFeedTab:'esnFeed', emuRequestsTab:'esnRequests',
+  emuFeedTab:'esnFeed', emuRequestsTab:'esnRequests',
   emuIchinichiTab:'esnIchinichi', emuDiscussionTab:'esnDiscussion'
 };
-/* スマホの下の固定ナビも同じところを指す（今日のEmu はスマホに無い） */
+/* スマホの下の固定ナビも同じところを指す */
 const EMU_PHONE_NAV = {
   emuFeedTab:'ebnFeed', emuRequestsTab:'ebnRequests',
   emuIchinichiTab:'ebnIchinichi', emuDiscussionTab:'ebnDiscussion'
@@ -14694,6 +14715,8 @@ function emuSideNavSync() {
     set('esnUserSub', p.short);
     set('esnAvatar', p.initial);
   }
+  /* 名前が分かったので、右上（スマホ）も描き直す */
+  try { emuPaintHeaderIdentity(); } catch (e) {}
 }
 /* 元の場所が書き換わったら写し直す */
 (function () {
@@ -14824,13 +14847,6 @@ var EMU_ENFORCE_FROM = Date.parse('2026-08-31T15:00:00Z');   // JST 9/1 0:00
 function emuEnforcing() { return Date.now() >= EMU_ENFORCE_FROM; }
 window.emuEnforcing = emuEnforcing;
 
-/* 規約 第10条の掲示。効力発生日まで出し、9/1になったら自動で消す。 */
-function _emuShowChangeNotice() {
-  var el = document.getElementById('emuChangeNotice');
-  if (!el) return;
-  el.hidden = emuEnforcing();
-}
-
 /* Emuに入ったときに、Firebase のログインを一度だけ静かに確かめて直す。
 
    画面は localStorage の emuWallet を見て「ログイン済み」に見せているが、
@@ -14867,24 +14883,22 @@ function _setEmuPageTitle(key, fallback) {
   if (home) home.setAttribute('aria-label', heading ? heading.textContent : fallback);
 }
 
+/* Emuに入る・Emuへ戻る。
+
+   「今日のEmu」は無くした（スマホ・パソコンとも）。Emuに入ったら、まず知識を読む。
+   ログイン直後・リロード後・SchoolPark から Emu へ・枠を閉じたとき・一日シェアの「戻る」など、
+   Emuへ戻る処理はすべてここを通るので、ここで知識を読むを開けば、無い画面へ戻ることはない。
+   名前は呼び出し元（この中の10か所と ichinichi.html）との互換のために残している。 */
 function showEmuToday() {
   /* Emuに入ったら計上する。以前はハブのボタンだけで数えていたため、
      タブ操作やセッション復帰で入った人が数に入らなかった。
      重複はFirestoreのドキュメント有無で防いでいるので、経路を増やしても増えすぎない。 */
   if (typeof spTrackBrand === 'function') spTrackBrand('emu');
-  /* スマホには「今日のEmu」が無い。Emuに入ったら、まず知識を読む。
-     ログイン直後・枠を閉じたとき・一日シェアの「戻る」など、Emuへ戻る処理はすべてここを通るので、
-     ここで知識を読むへ回せば、無い画面へ戻ることはない。 */
-  if (_emuPhoneLayout()) { showEmuFeed(); return; }
-  _emuHealSession();
-  _emuShowChangeNotice();
-  _emuEnsureAppVisible();
-  document.body.classList.add('emu-today-open');
-  document.body.classList.remove('emu-profile-open','emu-requests-open','emu-ichinichi-open','emu-knowledge-open','emu-discussion-open');
-  _setEmuHomeTab('emuTodayTab');
-  _setEmuPageTitle('tab.today', '今日のEmu');
-  updateEmuTodayHome();
-  window.scrollTo({ top:0, behavior:'smooth' });
+  showEmuFeed();
+  /* パソコンの左下の EMUER は、今日のEmuの残高の欄から写している（emuSideNavSync）。
+     その欄を埋めていたのはここ（今日のEmuを開いたとき）なので、入ったときに続けて埋める。
+     スマホは左の欄が無いので、これまでどおり呼ばない。 */
+  if (!_emuPhoneLayout()) updateEmuTodayHome();
 }
 
 function showEmuIchinichi() {
@@ -15973,11 +15987,263 @@ document.addEventListener('click', async (e) => {
     msg.textContent = '保存しました。'; msg.className = 'emu-me-msg ok';
     // 表示中の名前を更新する
     try { if (typeof updateEmuTodayHome === 'function') updateEmuTodayHome(); } catch (err) {}
+    /* 右上（スマホ）・パスポート・左の名前・投稿の書き手も、保存できた内容にそろえる。
+       保存に失敗したときはここまで来ないので、入力しただけの名前は出ない。 */
+    try { emuProfileSaved(addr, name, meAvatar); } catch (err) {}
     setTimeout(closeMeSheet, 700);
   } catch (err) {
     msg.textContent = err.message || '保存できませんでした。';
     msg.className = 'emu-me-msg err';
   } finally { btn.disabled = false; }
+});
+
+/* ───────── 名前と写真を、表示しているところへ届ける ─────────
+
+   名前と写真の正は user_profiles/{アドレス}（書くのはサーバーの /api/user/setname）。
+   手元では localStorage の ches_name（名前）と ches_avatar（写真）に写して使う。
+
+   右上の名前だけは、ここを見ていなかった。ログインのときに、ログイン元の名前
+   （ches_accounts の displayName。アカウントを作ったときのまま変わらない）を
+   書いて、それきりだった。だから「名前と写真」で保存しても、リロードしても、
+   右上は前の名前のまま。写真はどこにも出ていなかった（投稿は名前の1文字目だけ）。
+
+   スマホ（700px以下）の右上は、ここで保存した名前・写真から描く。
+   どちらを出すか（名前 / プロフィール画像）は本人が「設定」で選ぶ。
+   選んだものは同じ書類の headerIdentityMode（/api/user/settings）。持っていない人は名前。
+   パソコン・タブレットの右上は、これまでどおりログインのときに決めた表示のまま（今回は変えない）。 */
+
+/* 写真として出してよい文字列か。サーバーが受け付ける形（png / jpeg / webp の data URL）だけ。 */
+function _emuSafeAvatar(v) {
+  const s = typeof v === 'string' ? v : '';
+  return (s.length <= 300000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/]+=*$/.test(s)) ? s : '';
+}
+
+/* 誰かの名前と写真と右上の表示（user_profiles は誰でも読める）。1ページで1人1回だけ読む。
+   読めなかったときは覚えない（次に要るときに読み直す）。 */
+const _emuProfiles = new Map();       // アドレス → 読んでいる途中／読んだ結果（Promise）
+const _emuProfilesKnown = new Map();  // アドレス → 読めた結果（書類が無い人は null）。描くときはこちらを見る
+function emuProfileOf(addr, force) {
+  const key = String(addr || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(key)) return Promise.resolve(null);
+  if (!force && _emuProfiles.has(key)) return _emuProfiles.get(key);
+  const p = (async function () {
+    for (let i = 0; i < 40 && !(window.db && window.fbLib); i++) await new Promise(function (r) { setTimeout(r, 250); });
+    if (!window.db || !window.fbLib) throw new Error('NO_FIREBASE');
+    const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'user_profiles', key));
+    if (!snap.exists()) return null;
+    const d = snap.data() || {};
+    return {
+      displayName: String(d.displayName || '').trim().slice(0, 30),
+      avatar: _emuSafeAvatar(d.avatar),
+      headerIdentityMode: d.headerIdentityMode === 'avatar' ? 'avatar' : 'name'
+    };
+  })();
+  _emuProfiles.set(key, p);
+  p.then(function (v) {
+    /* 読んでいるあいだに保存した場合は、保存したほうを残す（古い読み取りで戻さない） */
+    if (_emuProfiles.get(key) === p) _emuProfilesKnown.set(key, v);
+  }, function () {
+    if (_emuProfiles.get(key) === p) _emuProfiles.delete(key);
+  });
+  return p;
+}
+function emuProfileKnown(addr) { return _emuProfilesKnown.get(String(addr || '').toLowerCase()); }
+window.emuProfileOf = emuProfileOf;
+window.emuProfileKnown = emuProfileKnown;
+
+/* 保存できた内容で、覚えている分を書き換える。まだ読めていなかった人は、保存のあとで読み直す
+   （読めていないうちは写真や設定が分からないので、決めつけて空にしない）。 */
+function _emuProfilePatch(addr, patch) {
+  const key = String(addr || '').toLowerCase();
+  const known = _emuProfilesKnown.get(key);
+  if (known === undefined) { emuProfileOf(key, true).then(_emuProfileChanged.bind(null, key), function () {}); return; }
+  const v = Object.assign({ displayName: '', avatar: '', headerIdentityMode: 'name' }, known || {}, patch);
+  _emuProfilesKnown.set(key, v);
+  _emuProfiles.set(key, Promise.resolve(v));
+  _emuProfileChanged(key);
+}
+function _emuProfileChanged(key) {
+  emuPaintHeaderIdentity();
+  /* 知識を読むの投稿カード（書き手の名前と写真）も描き直す */
+  if (typeof window.emuKnowledgeSendAuthors === 'function') window.emuKnowledgeSendAuthors([key]);
+}
+
+/* 自分の写真と設定を読む（ログインのとき・設定を開いたとき）。
+   手元の写真（名前と写真のシートが最初に出すもの）も本人の書類にそろえる。
+   ches_avatar はログアウトしても残るので、同じ端末で別の人が入ると前の人の写真が出ていた。 */
+function emuSyncMyProfile() {
+  const addr = _emuAddress();
+  if (!addr) return Promise.resolve(null);
+  return emuProfileOf(addr).then(function () {
+    /* 読んでいるあいだに保存していたら、保存したほうが入っている（古い読み取りで写真を消さない） */
+    const v = emuProfileKnown(addr);
+    if (v === undefined || _emuAddress() !== addr) return v;   // まだ分からない・別の人に替わった
+    try {
+      if (v && v.avatar) localStorage.setItem('ches_avatar', v.avatar);
+      else localStorage.removeItem('ches_avatar');
+    } catch (e) {}
+    emuPaintHeaderIdentity();
+    return v;
+  }, function () { return null; });
+}
+
+/* 「名前と写真」の保存が通ったあと。avatar は null なら変えていない、'' なら消した。 */
+function emuProfileSaved(addr, name, avatar) {
+  const patch = { displayName: String(name || '').slice(0, 30) };
+  if (avatar !== null && avatar !== undefined) patch.avatar = _emuSafeAvatar(avatar);
+  _emuProfilePatch(addr, patch);
+  /* パスポート（左の名前・SchoolPark）も、読み直しを待たずに新しい名前にする */
+  const pp = window._spPassport;
+  if (pp && patch.displayName) { pp.name = patch.displayName; pp.initial = patch.displayName.slice(0, 1); }
+  try { emuSideNavSync(); } catch (e) {}
+}
+
+/* 右上の表示（スマホ）。どちらを出すか（'name' | 'avatar'）。選んでいない人は名前。 */
+function emuHeaderIdentityMode() {
+  const me = emuProfileKnown(_emuAddress());
+  return me && me.headerIdentityMode === 'avatar' ? 'avatar' : 'name';
+}
+
+let _emuHeadLabel = null;               // ログインなど、ほかの処理が右上に書いた表示（パソコン・タブレットはこれのまま）
+const _emuHeadOwn = new WeakSet();      // ここで書いた中身（ほかの処理が書いたものと見分けるため）
+let _emuHeadBroken = '';                // 出せなかった画像（同じものを何度も試さない）
+function _emuHeadPut(btn, node) { _emuHeadOwn.add(node); btn.textContent = ''; btn.appendChild(node); }
+function _emuHeadIsOurs(btn) {
+  return btn.childNodes.length > 0 && Array.prototype.every.call(btn.childNodes, function (n) { return _emuHeadOwn.has(n); });
+}
+
+function emuPaintHeaderIdentity() {
+  const btn = document.getElementById('walletAddressButton');
+  if (!btn) return;
+  if (_emuHeadLabel === null) _emuHeadLabel = btn.textContent;
+  const addr = _emuAddress();
+  if (!addr || !_emuPhoneLayout()) {
+    /* パソコン・タブレット（とログイン前）は、ほかの処理が決めた表示のまま。
+       スマホの幅で描いたあとに幅が変わったときだけ、元に戻す。 */
+    if (_emuHeadIsOurs(btn)) {
+      _emuHeadPut(btn, document.createTextNode(_emuHeadLabel));
+      btn.classList.remove('emu-head-has-avatar');
+      btn.removeAttribute('aria-label'); btn.removeAttribute('title');
+    }
+    return;
+  }
+  const name = (typeof emuDisplayName === 'function' && emuDisplayName()) || _emuHeadLabel || '';
+  const me = emuProfileKnown(addr);
+  const avatar = (me && me.headerIdentityMode === 'avatar' && me.avatar && me.avatar !== _emuHeadBroken) ? me.avatar : '';
+  if (avatar) {
+    const cur = btn.querySelector('img.emu-head-avatar');
+    if (!cur || cur.getAttribute('src') !== avatar || !_emuHeadIsOurs(btn)) {
+      const img = document.createElement('img');
+      img.className = 'emu-head-avatar';
+      img.alt = '';
+      /* 読めない画像だったら、壊れた絵を出さずに名前へ戻す */
+      img.addEventListener('error', function () { _emuHeadBroken = avatar; emuPaintHeaderIdentity(); });
+      img.src = avatar;
+      _emuHeadPut(btn, img);
+    }
+    btn.classList.add('emu-head-has-avatar');
+    btn.setAttribute('aria-label', name || 'アカウント');
+    btn.title = name;
+    return;
+  }
+  /* 名前（写真を選んでいても、写真がまだ無いときは名前） */
+  if (!(_emuHeadIsOurs(btn) && btn.childNodes.length === 1 && btn.firstChild.nodeType === 3 && btn.textContent === name)) {
+    _emuHeadPut(btn, document.createTextNode(name));
+  }
+  btn.classList.remove('emu-head-has-avatar');
+  btn.removeAttribute('aria-label'); btn.removeAttribute('title');
+}
+window.emuPaintHeaderIdentity = emuPaintHeaderIdentity;
+
+/* ほかの処理（ログイン・ウォレット接続など）が右上を書いたら、その表示を控えてから描き直す。
+   ログインの処理そのものには手を入れない。幅がスマホ⇔それ以外で変わったときも描き直す。 */
+(function () {
+  function watch() {
+    const btn = document.getElementById('walletAddressButton');
+    if (!btn || typeof MutationObserver !== 'function') return;
+    _emuHeadLabel = btn.textContent;
+    new MutationObserver(function (records) {
+      let theirs = false;
+      records.forEach(function (r) { r.addedNodes.forEach(function (n) { if (!_emuHeadOwn.has(n)) theirs = true; }); });
+      if (!theirs) return;
+      _emuHeadLabel = btn.textContent;
+      emuSyncMyProfile();          // 入った人が分かったので、その人の写真と設定を読む
+      emuPaintHeaderIdentity();
+    }).observe(btn, { childList: true });
+    const mq = window.matchMedia && window.matchMedia('(max-width:700px)');
+    if (mq) {
+      if (mq.addEventListener) mq.addEventListener('change', emuPaintHeaderIdentity);
+      else if (mq.addListener) mq.addListener(emuPaintHeaderIdentity);
+    }
+    if (_emuAddress()) { emuSyncMyProfile(); emuPaintHeaderIdentity(); }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch);
+  else watch();
+})();
+
+/* ───────── 設定（スマホのアカウントメニューから） ─────────
+   右上のユーザー表示を、名前 / プロフィール画像 から選ぶ。
+   選んだら、保存できてから右上に出す（保存できなかったら選ぶ前に戻す）。 */
+function _emuSettingsPaint(busy) {
+  const mode = emuHeaderIdentityMode();
+  document.querySelectorAll('#emuSettingsSheet input[name="emuHeadMode"]').forEach(function (r) {
+    r.checked = (r.value === mode);
+    r.disabled = !!busy;
+  });
+  const me = emuProfileKnown(_emuAddress());
+  const note = document.getElementById('emuSettingsNoAvatar');
+  if (note) note.hidden = !!(me && me.avatar);
+}
+function openSettingsSheet() {
+  const sheet = document.getElementById('emuSettingsSheet');
+  if (!sheet) return;
+  const msg = document.getElementById('emuSettingsMsg');
+  msg.textContent = ''; msg.className = 'emu-me-msg';
+  sheet.classList.add('open');
+  const addr = _emuAddress();
+  if (!addr) { _emuSettingsPaint(true); msg.textContent = 'ログインしてからお試しください。'; msg.className = 'emu-me-msg err'; return; }
+  if (emuProfileKnown(addr) !== undefined) { _emuSettingsPaint(false); return; }
+  /* まだ読めていなければ、読んでから選べるようにする（いまの選択と違う方を出さないため） */
+  _emuSettingsPaint(true);
+  msg.textContent = '読み込んでいます…';
+  emuSyncMyProfile().then(function () {
+    if (!sheet.classList.contains('open')) return;
+    if (emuProfileKnown(addr) === undefined) { msg.textContent = 'いまは読み込めませんでした。少しあとでお試しください。'; msg.className = 'emu-me-msg err'; return; }
+    msg.textContent = '';
+    _emuSettingsPaint(false);
+  });
+}
+function closeSettingsSheet() {
+  const sheet = document.getElementById('emuSettingsSheet');
+  if (sheet) sheet.classList.remove('open');
+}
+document.addEventListener('change', async function (e) {
+  const r = e.target;
+  if (!r || r.name !== 'emuHeadMode' || !r.closest('#emuSettingsSheet')) return;
+  const mode = r.value === 'avatar' ? 'avatar' : 'name';
+  const msg = document.getElementById('emuSettingsMsg');
+  const addr = _emuAddress();
+  if (!addr) { _emuSettingsPaint(false); return; }
+  _emuSettingsPaint(true);
+  r.checked = true;                        // 押したほうを、保存しているあいだも見せておく
+  msg.textContent = '保存しています…'; msg.className = 'emu-me-msg';
+  try {
+    const headers = typeof emuAuthHeaders === 'function' ? await emuAuthHeaders(true) : null;
+    const res = await fetch('https://emu-realtime.onrender.com/api/user/settings', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, headers || {}),
+      body: JSON.stringify({ address: addr, headerIdentityMode: mode })
+    });
+    if (!res.ok) throw new Error('SAVE_FAILED');
+    _emuProfilePatch(addr, { headerIdentityMode: mode });
+    _emuSettingsPaint(false);
+    msg.textContent = '保存しました。'; msg.className = 'emu-me-msg ok';
+    setTimeout(closeSettingsSheet, 700);
+  } catch (err) {
+    _emuSettingsPaint(false);              // 選ぶ前に戻す
+    msg.textContent = '保存できませんでした。通信の状態を確かめて、もう一度お試しください。';
+    msg.className = 'emu-me-msg err';
+  }
 });
 
 /* ───── SchoolPark ─────
@@ -21592,6 +21858,7 @@ function accountGo(what) {
     return;
   }
   if (what === 'library') { emuOpenKnowledgeLibrary(); return; }
+  if (what === 'settings') { openSettingsSheet(); return; }
   if (what === 'logout') {
     if (typeof window.spLogout === 'function') window.spLogout();
     return;
@@ -22525,7 +22792,7 @@ async function chesHubGo(brand) {
       chesBrandFrameOpen(brand);
       break;
     case 'emu': {
-      /* Emu：投稿一覧ではなく「今日のEmu」を初期表示 */
+      /* Emu：知識を読むを初期表示（showEmuToday が開く） */
       showEmuToday();
       break;
     }
@@ -25227,6 +25494,23 @@ import {
     <p class="emu-me-note">Emuの画面や、議論での表示名に使われます。あとからいつでも変えられます。</p>
     <button type="button" class="emu-me-save" id="emuMeSave">保存する</button>
     <p class="emu-me-msg" id="emuMeMsg"></p>
+  </div>
+</div>
+
+<!-- 設定。スマホのアカウントメニューから開く。右上に出すもの（名前 / プロフィール画像）を選ぶ。 -->
+<div id="emuSettingsSheet" class="emu-me-sheet" role="dialog" aria-modal="true" aria-labelledby="emuSettingsTitle">
+  <div class="emu-me-card">
+    <div class="emu-me-head">
+      <b id="emuSettingsTitle">設定</b>
+      <button type="button" class="emu-me-close" onclick="closeSettingsSheet()" aria-label="閉じる">✕</button>
+    </div>
+    <p class="emu-me-label" id="emuHeadModeLabel">右上のユーザー表示</p>
+    <div class="emu-set-choices" role="radiogroup" aria-labelledby="emuHeadModeLabel">
+      <label class="emu-set-choice"><input type="radio" name="emuHeadMode" value="name">名前</label>
+      <label class="emu-set-choice"><input type="radio" name="emuHeadMode" value="avatar">プロフィール画像</label>
+    </div>
+    <p class="emu-me-note" id="emuSettingsNoAvatar" hidden>プロフィール画像がまだ無いあいだは、名前を表示します。画像は「名前と写真」から選べます。</p>
+    <p class="emu-me-msg" id="emuSettingsMsg"></p>
   </div>
 </div>
 
@@ -28110,6 +28394,26 @@ async function sendEmuFeedback() {
     }
     writeLocalKnowledgeDrafts(readLocalKnowledgeDrafts().filter(item => String(item.id) !== String(draftId)));
   }
+  /* 投稿の書き手の、いまの名前と写真（user_profiles。誰でも読める）。
+     投稿には書いたときの名前しか入っていない（写真は入っていない）。書き手ごとに表示のときに引くので、
+     名前や写真を変えると、前の投稿にもそのまま出る。投稿のデータは書き換えない。
+     読むのは出ている投稿の書き手だけで、1ページで1人1回（emuProfileOf が覚える）。 */
+  function knowledgeAuthorAddrs(rows) {
+    return [...new Set(rows.map(r => String(r.address || '').toLowerCase()).filter(a => /^0x[0-9a-f]{40}$/.test(a)))];
+  }
+  function knowledgeAuthorsKnown(addrs) {
+    const out = {};
+    addrs.forEach(a => {
+      const v = typeof window.emuProfileKnown === 'function' ? window.emuProfileKnown(a) : undefined;
+      if (v) out[a] = { displayName: v.displayName || '', avatar: v.avatar || '' };
+    });
+    return out;
+  }
+  /* 名前と写真が変わった人（自分が保存したときなど）を、知識を読むの画面へ送り直す */
+  window.emuKnowledgeSendAuthors = function (addrs) {
+    const authors = knowledgeAuthorsKnown((addrs || []).map(a => String(a || '').toLowerCase()));
+    if (Object.keys(authors).length) sendKnowledge({ type:'emu-knowledge-authors', authors });
+  };
   function plainKnowledgePost(docSnap) {
     const data = docSnap.data ? docSnap.data() : docSnap;
     const created = data.createdAt && typeof data.createdAt.toDate === 'function'
@@ -28292,6 +28596,10 @@ async function sendEmuFeedback() {
 
       visibleDocs.forEach(docSnap => rows.push(plainKnowledgePost(docSnap)));
       knowledgeLastDoc = visibleDocs.length ? visibleDocs[visibleDocs.length - 1] : knowledgeLastDoc;
+      /* 書き手の名前と写真を読み始める（ここでは待たない。送るときに、読めた分を添える） */
+      const authorAddrs = knowledgeAuthorAddrs(rows);
+      const authorsRead = Promise.all(authorAddrs.map(a =>
+        typeof window.emuProfileOf === 'function' ? window.emuProfileOf(a).catch(() => null) : null));
       const drafts = await readKnowledgeDrafts(account);
       /* テーマは記録から。一度読んだら覚えているので、2ページ目以降は待たない。 */
       await _spMonthlyTheme();
@@ -28307,8 +28615,12 @@ async function sendEmuFeedback() {
         // 議論から生まれた「みんなの結論」。1ページ目にだけ添える。
         conclusions: options.append ? [] : await readDiscussionConclusions(),
         canDraft:typeof isFreeOnlyUser === 'function' ? !isFreeOnlyUser() : false,
-        canSchedule:!!window.hasScheduleNFT
+        canSchedule:!!window.hasScheduleNFT,
+        authors:knowledgeAuthorsKnown(authorAddrs)
       });
+      /* 送ったときにまだ読めていなかった書き手は、読めたところで送る */
+      const authorsLeft = authorAddrs.filter(a => typeof window.emuProfileKnown !== 'function' || window.emuProfileKnown(a) === undefined);
+      if (authorsLeft.length) authorsRead.then(() => window.emuKnowledgeSendAuthors(authorsLeft));
       /* 出し終わったところで見張りを始める。
          いま出ている先頭を覚えてから始めるので、開いた直後に
          むだな読み直しが走らない。 */
