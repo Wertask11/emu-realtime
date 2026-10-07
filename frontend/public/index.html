@@ -3829,16 +3829,19 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   #mainApp > .header .header-right { min-width:0; margin-left:auto; }
   #walletAddressButton { max-width:138px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .emu-account-menu { right:0; min-width:210px; }
-  #emuTodayHome { padding:16px 12px max(34px,env(safe-area-inset-bottom)); }
+  /* 下の固定ナビ（#emuBottomNav）のぶんの余白は、いちばん下にあるフッター（利用規約など）の側でとる
+     （下の #siteFooter の規則）。iframe の画面は、ヘッダーの下から固定ナビの上までに収まる。 */
+  #emuTodayHome { padding:12px 12px 0; }
+  body.emu-requests-open #emuTodayHome,
+  body.emu-profile-open #emuTodayHome { padding-bottom:24px; }
   #emu-contact-btn { width:48px; height:48px; left:12px; bottom:max(12px,env(safe-area-inset-bottom)); font-size:19px; }
   /* 問い合わせボタンが小さくなる分、閉じるボタンの高さも合わせる */
   .emu-page-close { bottom:calc(48px + 10px + max(12px,env(safe-area-inset-bottom))); }
   #emu-contact-label { display:none; }
-  /* スマホでは「今日のEmu」の見出し＋説明を出さず、その分タブを最上部に上げる */
-  .eth-topbar { display:block; margin-bottom:10px; }
-  .eth-topbar > div:first-child { display:none; }
-  .eth-tabs { margin-top:0; margin-left:-12px; width:calc(100% + 24px); padding-inline:12px; }
-  .eth-tab { min-height:42px; padding:9px 14px; font-size:13px; }
+  /* スマホでは上の見出しとタブ列を出さない。行き来は下の固定ナビ（#emuBottomNav）で行う。
+     「今日のEmu」もスマホには無い（showEmuToday が知識を読むへ回す）。中身は念のため隠しておく。 */
+  .eth-topbar { display:none; }
+  #emuTodayDashboard { display:none !important; }
   .eth-hero,.eth-profile { grid-template-columns:1fr; }
   .eth-card { padding:16px; border-radius:14px; }
   .eth-welcome { gap:11px; }
@@ -3856,9 +3859,55 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   #emuIchinichiPage iframe,
   #emuKnowledgePage iframe,
   #emuDiscussionPage iframe {
-    /* 見出しを省いた分だけ表示領域を広げる（ヘッダー54＋タブ約60＋余白） */
-    width:calc(100% + 24px); margin-left:-12px; height:calc(100dvh - 128px);
-    min-height:480px; border-radius:0; box-shadow:none;
+    /* ヘッダーの下から、下の固定ナビの上までに収める。この高さは目安で、
+       表示したあと実際の位置から測り直す（知識を読む：emuFitKnowledgeFrame、
+       一日シェア・議論：emuFitPhoneFrames）。ヘッダーの高さは端末で変わるため。 */
+    width:calc(100% + 24px); margin-left:-12px;
+    height:calc(100dvh - 81px - var(--emu-bnav-h) - env(safe-area-inset-bottom));
+    min-height:320px; border-radius:0; box-shadow:none;
+  }
+}
+/* ── スマホのEmu：下の固定ナビ ──
+   700px以下だけで出す（上の @media と同じ幅）。パソコン・タブレットは今までどおり左タブ／上のタブ。
+   並びは左から 📙 知識を読む／🔎 知識を探す／🔄 一日シェア／📣 議論。この順は変えないこと。
+   重なり順は、ふつうの画面より上、モーダル（.modal 999・.overlay 1000 以上）より下。 */
+:root { --emu-bnav-h:60px; }
+#emuBottomNav, #emuAccountMenu .emu-phone-only, .emu-room1-entry { display:none; }
+@media (max-width:700px) {
+  body.emu-knowledge-open #emuBottomNav, body.emu-requests-open #emuBottomNav,
+  body.emu-ichinichi-open #emuBottomNav, body.emu-discussion-open #emuBottomNav,
+  body.emu-profile-open #emuBottomNav { display:flex; }
+  #emuBottomNav {
+    position:fixed; left:0; right:0; bottom:0; z-index:950; box-sizing:border-box;
+    height:calc(var(--emu-bnav-h) + env(safe-area-inset-bottom));
+    padding:0 6px env(safe-area-inset-bottom);
+    background:rgba(255,255,255,.97); border-top:1px solid #eee;
+    -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+  }
+  #emuBottomNav button {
+    flex:1 1 0; min-width:0; margin:6px 2px; padding:0; border:0; border-radius:12px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    background:none; color:#8a8378; cursor:pointer;
+    font-family:inherit; font-size:10px; font-weight:700; line-height:1.2; white-space:nowrap;
+  }
+  #emuBottomNav .ebn-ico { font-size:21px; line-height:1; opacity:.55; }
+  #emuBottomNav button.active { background:#fff2e5; color:#b85f00; }
+  #emuBottomNav button.active .ebn-ico { opacity:1; }
+  /* いちばん下のフッター（利用規約など）も、下までスクロールしたときにナビの上に出るようにする */
+  body.emu-knowledge-open #siteFooter, body.emu-requests-open #siteFooter,
+  body.emu-ichinichi-open #siteFooter, body.emu-discussion-open #siteFooter,
+  body.emu-profile-open #siteFooter { padding-bottom:calc(16px + var(--emu-bnav-h) + env(safe-area-inset-bottom)) !important; }
+  /* キーボードが出ているあいだは隠す。出したままだと、キーボードの上に浮いて入力欄にかぶる。 */
+  body.emu-kb-open #emuBottomNav { display:none !important; }
+  /* マイライブラリーは名前のメニュー（興味のあるテーマの下）へ、Room1 は知識を探すの中へ移した。
+     どちらもスマホだけ。パソコンは知識を読むの左のならびのまま。 */
+  #emuAccountMenu .emu-phone-only { display:block; }
+  #emuRequestsPage { position:relative; }
+  .emu-room1-entry {   /* 見出しの上の「KNOWLEDGE REQUEST」と同じ段の右端に置く。一覧や見出しにかぶらない */
+    display:inline-flex; align-items:center; gap:5px; position:absolute; top:-5px; right:0;
+    min-height:32px; padding:0 12px; border:1px solid #e6e2dc; border-radius:999px;
+    background:#fff; color:#9c5100; cursor:pointer;
+    font-family:inherit; font-size:12px; font-weight:700; line-height:1;
   }
 }
 /* ③ タップ時に画面が青くなるのを防止（スマホ全体のタップハイライト無効化） */
@@ -4856,6 +4905,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <button type="button" role="menuitem" onclick="accountGo('plan')">プラン・お支払い</button>
         <button type="button" role="menuitem" onclick="accountGo('profile')">プロフィール</button>
         <button type="button" role="menuitem" onclick="accountGo('themes')">興味のあるテーマ</button>
+        <!-- スマホだけ。パソコンは知識を読むの左のならびから開く -->
+        <button type="button" role="menuitem" class="emu-phone-only" onclick="accountGo('library')">マイライブラリー</button>
         <button type="button" role="menuitem" onclick="accountGo('sessions')">対話の予定</button>
         <!-- 気づいたことを送る口。スマホでは画面に浮かぶボタンが知識の本文に
              かぶっていたので、こちらへ移した。 -->
@@ -5098,6 +5149,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </section>
 
   <section class="emu-request-page" id="emuRequestsPage">
+    <!-- スマホだけ。パソコンは知識を読むの左のならびから開く -->
+    <button type="button" class="emu-room1-entry" onclick="openSpRoom('/admin/room1/index.html', 'Room1')"
+            aria-label="Room1（学習コンテンツ）を開く"><span aria-hidden="true">◪</span>Room1</button>
     <div class="eth-section-head">
       <div>
         <span class="eth-badge">KNOWLEDGE REQUEST</span>
@@ -5125,6 +5179,13 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     <iframe id="emuDiscussionFrame" title="開催中の議論" loading="lazy"></iframe>
   </div>
 </section>
+<!-- スマホのEmu（700px以下）の下の固定ナビ。並びは変えないこと（CSSの #emuBottomNav を参照）。 -->
+<nav id="emuBottomNav" aria-label="Emuのメニュー">
+  <button type="button" id="ebnFeed" onclick="showEmuFeed()"><span class="ebn-ico" aria-hidden="true">📙</span>知識を読む</button>
+  <button type="button" id="ebnRequests" onclick="showEmuRequests()"><span class="ebn-ico" aria-hidden="true">🔎</span>知識を探す</button>
+  <button type="button" id="ebnIchinichi" onclick="showEmuIchinichi()"><span class="ebn-ico" aria-hidden="true">🔄</span>一日シェア</button>
+  <button type="button" id="ebnDiscussion" onclick="showEmuDiscussion()"><span class="ebn-ico" aria-hidden="true">📣</span>議論</button>
+</nav>
 
 
   <div class="container">
@@ -14565,10 +14626,22 @@ function chesBrandFrameClose() {
 /* ═══════════════════════════════════════
    今日のEmu — 画面切替・実データ反映
 ═══════════════════════════════════════ */
+/* スマホのEmu（700px以下）。下の固定ナビで行き来し、「今日のEmu」は無い。
+   CSS の @media (max-width:700px) と同じ幅で判定する。一日シェアの枠の中からも呼ばれる。 */
+function _emuPhoneLayout() {
+  return !!(window.matchMedia && window.matchMedia('(max-width:700px)').matches);
+}
+window._emuPhoneLayout = _emuPhoneLayout;
+
 /* 上のタブ列と左タブは、同じところを指しているので印も一緒に付け替える */
 const EMU_TAB_PAIRS = {
   emuTodayTab:'esnToday', emuFeedTab:'esnFeed', emuRequestsTab:'esnRequests',
   emuIchinichiTab:'esnIchinichi', emuDiscussionTab:'esnDiscussion'
+};
+/* スマホの下の固定ナビも同じところを指す（今日のEmu はスマホに無い） */
+const EMU_PHONE_NAV = {
+  emuFeedTab:'ebnFeed', emuRequestsTab:'ebnRequests',
+  emuIchinichiTab:'ebnIchinichi', emuDiscussionTab:'ebnDiscussion'
 };
 function _setEmuHomeTab(activeId) {
   Object.keys(EMU_TAB_PAIRS).forEach(function(id) {
@@ -14577,8 +14650,34 @@ function _setEmuHomeTab(activeId) {
     if (tab) tab.classList.toggle('active', on);
     const side = document.getElementById(EMU_TAB_PAIRS[id]);
     if (side) side.classList.toggle('active', on);
+    const bottom = EMU_PHONE_NAV[id] && document.getElementById(EMU_PHONE_NAV[id]);
+    if (bottom) {
+      bottom.classList.toggle('active', on);
+      if (on) bottom.setAttribute('aria-current', 'page'); else bottom.removeAttribute('aria-current');
+    }
   });
 }
+
+/* スマホでキーボードが出ているあいだは、下の固定ナビを隠す（CSS の body.emu-kb-open）。
+   出したままだと、キーボードのすぐ上に浮いて入力欄や本文にかぶる。
+   知識を読む・一日シェア・議論の枠（iframe）の中で入力しても、画面の見える高さ
+   （visualViewport）は同じように縮むので、ここで分かる。拡大表示（ピンチ）は数えない。 */
+(function () {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  let tallest = vv.height;
+  function check() {
+    if (vv.scale > 1.01) return;
+    tallest = Math.max(tallest, vv.height);
+    const open = vv.height < tallest * 0.75;
+    if (!document.body || document.body.classList.contains('emu-kb-open') === open) return;
+    document.body.classList.toggle('emu-kb-open', open);
+    if (typeof emuFitKnowledgeFrame === 'function') emuFitKnowledgeFrame();
+    if (typeof emuFitPhoneFrames === 'function') emuFitPhoneFrames();
+  }
+  vv.addEventListener('resize', check);
+  window.addEventListener('orientationchange', function () { tallest = 0; setTimeout(check, 300); });
+})();
 
 /* 左タブの下の残高と名前を、本文の表示から写す。
    数字を二重に持つとどちらかが古くなるので、元の場所を見張って写すだけにする。 */
@@ -14773,6 +14872,10 @@ function showEmuToday() {
      タブ操作やセッション復帰で入った人が数に入らなかった。
      重複はFirestoreのドキュメント有無で防いでいるので、経路を増やしても増えすぎない。 */
   if (typeof spTrackBrand === 'function') spTrackBrand('emu');
+  /* スマホには「今日のEmu」が無い。Emuに入ったら、まず知識を読む。
+     ログイン直後・枠を閉じたとき・一日シェアの「戻る」など、Emuへ戻る処理はすべてここを通るので、
+     ここで知識を読むへ回せば、無い画面へ戻ることはない。 */
+  if (_emuPhoneLayout()) { showEmuFeed(); return; }
   _emuHealSession();
   _emuShowChangeNotice();
   _emuEnsureAppVisible();
@@ -14793,6 +14896,8 @@ function showEmuIchinichi() {
   const frame = document.getElementById('emuIchinichiFrame');
   if (frame && !frame.getAttribute('src')) frame.src = '/ichinichi.html?embed=1';
   window.scrollTo({ top:0, behavior:'smooth' });
+  requestAnimationFrame(emuFitPhoneFrames);
+  setTimeout(emuFitPhoneFrames, 300);
 }
 
 /* スマホで、知識のiframeを画面にぴったり収める。
@@ -14813,10 +14918,13 @@ function emuFitKnowledgeFrame() {
   if (!fr.offsetParent) return;                                   // 表示されていないと測れない
   /* 画面の下ぴったりまで伸ばす。すき間を空けると、iframeの中で
      bottom:24px に置いた「＋」の高さが、画面に固定されている
-     お問い合わせボタン（bottom:24px）とその分だけずれてしまう。 */
+     お問い合わせボタン（bottom:24px）とその分だけずれてしまう。
+     スマホで下に固定ナビが出ているときは、その上まで。重ねると「＋」がナビにかぶる。 */
   let top = 0;
   for (let el = fr; el; el = el.offsetParent) top += el.offsetTop;
-  const height = Math.max(360, Math.round(window.innerHeight - top));
+  const nav = document.getElementById('emuBottomNav');
+  const navH = nav && getComputedStyle(nav).display !== 'none' ? nav.getBoundingClientRect().height : 0;
+  const height = Math.max(360, Math.round(window.innerHeight - top - navH));
   fr.style.height = height + 'px';
 
   /* 横も画面の端ぴったりに合わせる。iframeの右端が画面より内側にあると、
@@ -14830,6 +14938,25 @@ function emuFitKnowledgeFrame() {
 }
 window.addEventListener('resize', emuFitKnowledgeFrame);
 window.addEventListener('orientationchange', function () { setTimeout(emuFitKnowledgeFrame, 200); });
+
+/* スマホで、一日シェア・議論の枠を、ヘッダーの下から下の固定ナビの上までに収める。
+   ヘッダーの高さは端末で変わるので、決め打ちにせず実際の位置から測る（知識を読むと同じ考え方）。
+   スマホ以外では何もしない（CSS のまま）。 */
+function emuFitPhoneFrames() {
+  ['emuIchinichiFrame', 'emuDiscussionFrame'].forEach(function (id) {
+    const fr = document.getElementById(id);
+    if (!fr) return;
+    if (!_emuPhoneLayout()) { fr.style.height = ''; return; }
+    if (!fr.offsetParent) return;                                 // 表示されていないと測れない
+    let top = 0;
+    for (let el = fr; el; el = el.offsetParent) top += el.offsetTop;
+    const nav = document.getElementById('emuBottomNav');
+    const navH = nav && getComputedStyle(nav).display !== 'none' ? nav.getBoundingClientRect().height : 0;
+    fr.style.height = Math.max(320, Math.round(window.innerHeight - top - navH)) + 'px';
+  });
+}
+window.addEventListener('resize', emuFitPhoneFrames);
+window.addEventListener('orientationchange', function () { setTimeout(emuFitPhoneFrames, 200); });
 
 function showEmuFeed(mode) {
   // 「今日のEmu」を通らずに直接ここへ来ることがあるので、本人の確定はここでも行う
@@ -14850,6 +14977,20 @@ function showEmuFeed(mode) {
   // 表示が確定してから測る（隠れている間は高さが取れない）
   requestAnimationFrame(emuFitKnowledgeFrame);
   setTimeout(emuFitKnowledgeFrame, 300);
+}
+
+/* マイライブラリーを開く（スマホは名前のメニューから）。
+   中身（自分の投稿・下書き）は知識を読む（knowledge.html）の中にあるので、
+   知識を読むに切り替えてから、中の「マイライブラリー」を開いてもらう。
+   まだ読み込み中なら、準備ができたところ（emu-knowledge-ready）で開く。 */
+function emuOpenKnowledgeLibrary() {
+  showEmuFeed();
+  const frame = document.getElementById('emuKnowledgeFrame');
+  if (frame && frame.dataset.ready === 'true' && frame.contentWindow) {
+    frame.contentWindow.postMessage({ type:'emu-knowledge-open-library' }, window.location.origin);
+  } else {
+    window._emuOpenLibraryWhenReady = true;
+  }
 }
 
 /* fromPassport: パスポートの PAGE 3 から開いたときだけ true。
@@ -14890,6 +15031,8 @@ function showEmuDiscussion() {
   _setEmuPageTitle('tab.discussion', '議論');
   const frame = document.getElementById('emuDiscussionFrame');
   if (frame && !frame.getAttribute('src')) frame.src = '/discussion.html';
+  requestAnimationFrame(emuFitPhoneFrames);
+  setTimeout(emuFitPhoneFrames, 300);
   if (typeof socket !== 'undefined') {
     if (socket.connected) socket.emit('request topic');
     else socket.once('connect', () => socket.emit('request topic'));
@@ -15096,66 +15239,133 @@ document.getElementById("emuRequestSubmit")?.addEventListener("click", async fun
   }
 });
 
-async function loadKnowledgeRequests() {
+/* 知識を探す（募集の一覧）を読む。
+
+   ここの記録（knowledge_requests）は、ログインしている人しか読めない（firestore.rules の signedIn()）。
+   知識を読む（posts）は誰でも読めるので、同じ状態でも向こうは出て、こちらだけ出ないことがある。
+
+   これまでは getDocs を1回投げるだけだった。通信が一度でも途切れると、Firestore はしばらく
+   サーバーへ届かない状態のまま、手元の控え（開いた直後は空）を「成功」として返す。
+   それをそのまま「最初の募集を作ってみましょう」（0件）と出し、読み直しもしなかった。
+   スマホは移動中や電波の切り替えで途切れやすく、知識を探すが空のまま戻らなかったのはこれ。
+   Firebase の準備前やログインの復元前に開いたときも、そのまま失敗にしていた。
+
+   いまは、サーバーから届いた結果だけを出す（手元の控えを「0件」として出さない）。
+   届くまでは読み込み中のまま待ち、時間がかかるときはそう伝える。ログインが確認できないときは
+   その旨を出す。どの場合も「もう一度読み込む」で読み直せる。 */
+let _emuRequestSeq = 0;
+let _emuRequestStop = null;
+const EMU_REQUEST_LOGIN_MSG = '募集を見るには、ログインの確認が必要です。ログインの状態が切れている可能性があります。ページを開き直して、もう一度お試しください。';
+function _emuRequestMessage(list, text, retry) {
+  list.innerHTML = '<div class="eth-card emu-request-empty">' + escapeHtml(text)
+    + (retry ? '<br><button type="button" class="eth-btn" style="margin-top:12px;" onclick="loadKnowledgeRequests(true)">もう一度読み込む</button>' : '')
+    + '</div>';
+}
+
+/* byUser: 「もう一度読み込む」を押したとき。ウォレットで入った人は、ここでだけ署名を求めてよい
+   （開くたびに署名を求めない）。 */
+async function loadKnowledgeRequests(byUser) {
   const list = document.getElementById("emuRequestList");
   if (!list) return;
-  list.innerHTML = '<div class="eth-card emu-request-empty">' + escapeHtml(emuT('req.loading')) + '</div>';
-  if (!window.db || !window.fbLib) {
-    list.innerHTML = '<div class="eth-card emu-request-empty">' + escapeHtml(emuT('req.loadError')) + '</div>';
+  /* 後から始めた読み込みだけを画面に出す。続けて開いたときに、古い結果で上書きしない。 */
+  const seq = ++_emuRequestSeq;
+  const current = function () { return seq === _emuRequestSeq; };
+  if (_emuRequestStop) _emuRequestStop();
+  _emuRequestMessage(list, emuT('req.loading'));
+  /* Firebase は後から読み込まれる別の script（type=module）で用意される。開いた直後なら少し待つ。 */
+  for (let i = 0; i < 40 && !(window.db && window.fbLib); i++) {
+    await new Promise(function (resolve) { setTimeout(resolve, 250); });
+  }
+  if (!current()) return;
+  if (!window.db || !window.fbLib) { _emuRequestMessage(list, emuT('req.loadError'), true); return; }
+  /* 保存されているログインが戻るのを待ってから読む。戻る前に読むと、ルールに断られる。 */
+  let user = null;
+  try { user = await emuEnsureSignedIn({ interactive: byUser === true }); } catch (e) {}
+  if (!current()) return;
+  if (!user) { _emuRequestMessage(list, EMU_REQUEST_LOGIN_MSG, true); return; }
+
+  const q = window.fbLib.query(
+    window.fbLib.collection(window.db, "knowledge_requests"),
+    window.fbLib.orderBy("createdAt", "desc"),
+    window.fbLib.limit(30)
+  );
+  let unsubscribe = null, stopped = false;
+  const slow = setTimeout(function () {
+    if (current()) _emuRequestMessage(list, '通信に時間がかかっています。このまま少しお待ちください。電波の良いところで読み直すと、早く届くことがあります。', true);
+  }, 10000);
+  const giveUp = setTimeout(function () {
+    stop();
+    if (current()) _emuRequestMessage(list, '通信が届かず、募集を読み込めませんでした。電波の良いところで、もう一度お試しください。', true);
+  }, 90000);
+  function stop() {
+    stopped = true;
+    clearTimeout(slow); clearTimeout(giveUp);
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+    if (_emuRequestStop === stop) _emuRequestStop = null;
+  }
+  _emuRequestStop = stop;
+  /* サーバーの結果が届くまで待つ。届いたら見張りはやめる（読む回数は getDocs と同じ）。 */
+  unsubscribe = window.fbLib.onSnapshot(q, { includeMetadataChanges:true }, function (snap) {
+    if (!current()) { stop(); return; }
+    if (snap.metadata.fromCache) return;    // サーバーに届いていない控え。0件ではない
+    stop();
+    try {
+      _emuRenderKnowledgeRequests(list, snap);
+    } catch (error) {
+      console.error("知識募集取得失敗:", error);
+      _emuRequestMessage(list, '募集を読み込めませんでした。', true);
+    }
+  }, function (error) {
+    stop();
+    if (!current()) return;
+    console.error("知識募集取得失敗:", error);
+    _emuRequestMessage(list, error && error.code === 'permission-denied' ? EMU_REQUEST_LOGIN_MSG : '募集を読み込めませんでした。', true);
+  });
+  if (stopped && unsubscribe) { unsubscribe(); unsubscribe = null; }
+}
+
+function _emuRenderKnowledgeRequests(list, snap) {
+  const requests = [];
+  snap.forEach(docSnap => requests.push({ id:docSnap.id, ...docSnap.data() }));
+  list.innerHTML = "";
+  const openRequests = requests.filter(req => req.status !== "closed");
+  if (!openRequests.length) {
+    list.innerHTML = '<div class="eth-card emu-request-empty">最初の募集を作ってみましょう。<br>自分だけでは分からないことに、誰かの経験が届きます。</div>';
     return;
   }
-  try {
-    const q = window.fbLib.query(
-      window.fbLib.collection(window.db, "knowledge_requests"),
-      window.fbLib.orderBy("createdAt", "desc"),
-      window.fbLib.limit(30)
-    );
-    const snap = await window.fbLib.getDocs(q);
-    const requests = [];
-    snap.forEach(docSnap => requests.push({ id:docSnap.id, ...docSnap.data() }));
-    list.innerHTML = "";
-    const openRequests = requests.filter(req => req.status !== "closed");
-    if (!openRequests.length) {
-      list.innerHTML = '<div class="eth-card emu-request-empty">最初の募集を作ってみましょう。<br>自分だけでは分からないことに、誰かの経験が届きます。</div>';
-      return;
+  openRequests.forEach(request => {
+    const card = document.createElement("article");
+    card.className = "eth-card emu-request-card";
+    const deadline = _emuFormatDate(request.deadline);
+    const mine = _emuAddress() && _emuAddress() === String(request.author || "").toLowerCase();
+    card.innerHTML = `
+      <div class="emu-request-meta">
+        <span class="emu-status ${request.status === "awarded" ? "accepted" : ""}">${request.status === "awarded" ? "採用済み" : "募集中"}</span>
+        <span>回答 ${Number(request.answerCount) || 0}件</span>
+        <span>期限 ${escapeHtml(deadline)}</span>
+      </div>
+      <h3>${escapeHtml(request.question || "")}</h3>
+      <p>${escapeHtml(request.context || "")}</p>
+      <div class="eth-balance" style="margin-top:auto;"><strong style="font-size:23px;">${Number(request.bounty || 0).toLocaleString("ja-JP")}</strong><span>EMUER 懸賞</span></div>
+      <div class="post-actions"></div>
+    `;
+    const actions = card.querySelector(".post-actions");
+    if (request.status === "open" && !mine) {
+      const answer = document.createElement("button");
+      answer.type = "button";
+      answer.className = "eth-btn primary";
+      answer.textContent = "知識を届ける";
+      answer.addEventListener("click", () => openKnowledgeAnswer(request));
+      actions.appendChild(answer);
     }
-    openRequests.forEach(request => {
-      const card = document.createElement("article");
-      card.className = "eth-card emu-request-card";
-      const deadline = _emuFormatDate(request.deadline);
-      const mine = _emuAddress() && _emuAddress() === String(request.author || "").toLowerCase();
-      card.innerHTML = `
-        <div class="emu-request-meta">
-          <span class="emu-status ${request.status === "awarded" ? "accepted" : ""}">${request.status === "awarded" ? "採用済み" : "募集中"}</span>
-          <span>回答 ${Number(request.answerCount) || 0}件</span>
-          <span>期限 ${escapeHtml(deadline)}</span>
-        </div>
-        <h3>${escapeHtml(request.question || "")}</h3>
-        <p>${escapeHtml(request.context || "")}</p>
-        <div class="eth-balance" style="margin-top:auto;"><strong style="font-size:23px;">${Number(request.bounty || 0).toLocaleString("ja-JP")}</strong><span>EMUER 懸賞</span></div>
-        <div class="post-actions"></div>
-      `;
-      const actions = card.querySelector(".post-actions");
-      if (request.status === "open" && !mine) {
-        const answer = document.createElement("button");
-        answer.type = "button";
-        answer.className = "eth-btn primary";
-        answer.textContent = "知識を届ける";
-        answer.addEventListener("click", () => openKnowledgeAnswer(request));
-        actions.appendChild(answer);
-      }
-      const answers = document.createElement("button");
-      answers.type = "button";
-      answers.className = "eth-btn";
-      answers.textContent = mine ? "届いた知識を確認・採用" : "届いた知識を見る";
-      answers.addEventListener("click", () => openKnowledgeAnswers(request));
-      actions.appendChild(answers);
-      list.appendChild(card);
-    });
-  } catch (error) {
-    console.error("知識募集取得失敗:", error);
-    list.innerHTML = '<div class="eth-card emu-request-empty">募集を読み込めませんでした。</div>';
-  }
+    const answers = document.createElement("button");
+    answers.type = "button";
+    answers.className = "eth-btn";
+    answers.textContent = mine ? "届いた知識を確認・採用" : "届いた知識を見る";
+    answers.addEventListener("click", () => openKnowledgeAnswers(request));
+    actions.appendChild(answers);
+    list.appendChild(card);
+  });
 }
 
 function openKnowledgeAnswer(request) {
@@ -21381,6 +21591,7 @@ function accountGo(what) {
     if (typeof openEmuFeedback === 'function') openEmuFeedback();
     return;
   }
+  if (what === 'library') { emuOpenKnowledgeLibrary(); return; }
   if (what === 'logout') {
     if (typeof window.spLogout === 'function') window.spLogout();
     return;
@@ -28227,6 +28438,11 @@ async function sendEmuFeedback() {
         frame.dataset.ready = 'true';
         sendKnowledge({ type:'emu-knowledge-filter', mode:frame.dataset.pendingFilter || 'new' });
         flushKnowledgePrefill();   // 準備ができたので、待たせていた本文を渡す
+        // 名前のメニューから「マイライブラリー」を押してあった
+        if (window._emuOpenLibraryWhenReady) {
+          window._emuOpenLibraryWhenReady = false;
+          sendKnowledge({ type:'emu-knowledge-open-library' });
+        }
       }
       syncKnowledgeFrame({ append:false });
       return;
