@@ -16835,8 +16835,10 @@ async function spPassportLoad(force) {
     if (!me) { return null; }
     let d = {};
     try {
-      const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid));
-      if (snap.exists()) d = snap.data() || {};
+      /* 戻ってこないことがある（SDK の常時接続が止まっているとき）。待ち続けると、
+         パスポートを使うところ（知恵カード・報告・受ける）が全部止まる。見切る。 */
+      const r = await _spSoon(window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid)), 3500);
+      if (r.ok && r.value.exists()) d = r.value.data() || {};
     } catch (e) {}
 
     const addr = me.ches || me.wallet;
@@ -18475,12 +18477,19 @@ async function _spRestGetOnce(path, needAuth) {
   const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
             + '/databases/(default)/documents/' + path
             + (path.indexOf('?') >= 0 ? '&' : '?') + 'key=' + opt.apiKey;
-  let r = await fetch(url, { cache: 'no-store', headers: headers });
+  /* 返事が来ないまま待ち続けると、同時に走らせる3本の枠が埋まったままになり、
+     あとから来た読み取り（知恵カードの「受けているか」など）が全部止まる。15秒で見切る。 */
+  const fetchT = function (u, o) {
+    let signal;
+    try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) signal = AbortSignal.timeout(15000); } catch (e) {}
+    return fetch(u, signal ? Object.assign({}, o, { signal: signal }) : o);
+  };
+  let r = await fetchT(url, { cache: 'no-store', headers: headers });
   /* 証が古いと 401/403 で断られる。取り直して、1回だけやり直す。 */
   if ((r.status === 401 || r.status === 403) && token) {
     const fresh = await ask(true);
     if (fresh && fresh !== token) {
-      r = await fetch(url, { cache: 'no-store',
+      r = await fetchT(url, { cache: 'no-store',
         headers: Object.assign({}, headers, { 'Authorization': 'Bearer ' + fresh }) });
     }
   }
@@ -19292,12 +19301,18 @@ window.spQuestOpen = async function (app, questId) {
   if (!have.some(function (q) { return q.id === questId; })) {
     try {
       const fb = window.fbLib;
-      const snap = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));
-      if (snap.exists()) {
+      /* SDK が戻ってこないときは見切って、普通の通信で1件読む */
+      const r = await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500)
+        .catch(function () { return { ok: false }; });   // 「client is offline」で転んだときも普通の通信へ
+      let data = (r.ok && r.value.exists()) ? (r.value.data() || {}) : null;
+      if (!data && !(r.ok && !(r.value.metadata && r.value.metadata.fromCache))) {
+        data = await _spRestDoc('sp_quests/' + encodeURIComponent(questId), true).catch(function () { return null; });
+      }
+      if (data) {
         const p = await spPassportLoad();
         const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
         const gdefs = await spGuildDefs();
-        const shaped = await _spShapeQuest({ id: snap.id, ...(snap.data() || {}) }, p, mine, gdefs, app);
+        const shaped = await _spShapeQuest({ id: questId, ...data }, p, mine, gdefs, app);
         app.setState({ quests: ((app.state && app.state.quests) || []).concat([shaped]) });
       }
     } catch (e) { /* 読めなくても画面は開く */ }
@@ -20070,8 +20085,9 @@ window.spQuestWisdom = async function (questId, app) {
   const fb = window.fbLib;
   let q = null;
   try {
-    const snap = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));
-    if (snap.exists()) q = { id: snap.id, ...(snap.data() || {}) };
+    /* SDK が戻ってこないと、ここで止まって押しても何も起きなかった。見切って普通の通信へ。 */
+    const r = await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500);
+    if (r.ok && r.value.exists()) q = { id: r.value.id, ...(r.value.data() || {}) };
   } catch (e) {}
   if (!q) {
     try {
@@ -20106,8 +20122,9 @@ window.spQuestClose = async function (questId, app) {
   const fb = window.fbLib;
   let q = null;
   try {
-    const snap = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));
-    if (snap.exists()) q = { id: snap.id, ...(snap.data() || {}) };
+    /* SDK が戻ってこないと、ここで止まって押しても何も起きなかった。見切って普通の通信へ。 */
+    const r = await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500);
+    if (r.ok && r.value.exists()) q = { id: r.value.id, ...(r.value.data() || {}) };
   } catch (e) {}
   if (!q) {
     try {
