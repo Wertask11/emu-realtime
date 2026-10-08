@@ -268,7 +268,10 @@ const mitemiru = require("./mitemiru").createMitemiruRouter({
     .some(address => SP_OWNER_ADDRESSES.includes(String(address || "").toLowerCase()))
 });
 billing.setExtraEventHandler(mitemiru.handleStripeEvent);
-const questCompletion = require("./quest-completion").createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, env: process.env });
+const questCompletion = require("./quest-completion").createQuestCompletionRouter({
+  db, requireOwner, requireFirebaseUser, env: process.env,
+  emuerEnabled: () => emuerV2.isEnabled()
+});
 
 // Webhook は生ボディで受ける（JSON パーサーは上で迂回済み）
 app.post(STRIPE_WEBHOOK_PATH, billing.webhookHandler, billing.handleWebhook);
