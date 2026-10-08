@@ -9,6 +9,7 @@
  * transfer and it never stores a private key in Firestore.
  */
 const policy = require("./policy");
+const { enabled } = require("./flags");
 
 const CONTRACT = "0x9c102cC3016C70767082b60196565878D9314864";
 const CHAIN_ID = 137;
@@ -20,12 +21,6 @@ const ABI = [
   "function claimAuthorizedTotal(bytes32) view returns (uint256)"
 ];
 
-function enabled(env) {
-  // The old reward system is frozen during the migration. New rewards become
-  // available exactly at the published JST start time; an explicit hold is the
-  // only way to stop this in an emergency.
-  return env.EMUER_V2_LAUNCH_HOLD !== "true" && policy.isActive(Date.now());
-}
 /* Keccak is intentionally computed by the server library at runtime.  The
  * deterministic input itself stays dependency-free so policy tests can run
  * without installing the web server. */
