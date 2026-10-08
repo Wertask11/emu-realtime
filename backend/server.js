@@ -52,14 +52,21 @@ app.use(
 // =====================
 let db = null;
 let firebaseAdmin = null;
+const { resolveFirebaseConfig } = require("./firebase-environment");
 const initFirestore = () => {
   try {
     const admin = require("firebase-admin");
     if (!admin.apps.length) {
       const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      const firebaseConfig = resolveFirebaseConfig({
+        deploymentEnv: process.env.APP_ENV,
+        configuredProjectId: process.env.FIREBASE_PROJECT_ID,
+        configuredStorageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+        serviceAccount
+      });
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        storageBucket: "emusch-2a111.firebasestorage.app"
+        storageBucket: firebaseConfig.storageBucket
       });
     }
     firebaseAdmin = admin;
