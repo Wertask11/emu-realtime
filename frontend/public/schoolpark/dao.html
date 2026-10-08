@@ -1855,7 +1855,14 @@ function mountCity() {
     cityHost.textContent = 'Cityを読み込めませんでした。';
     var retry = document.createElement('button');
     retry.type = 'button'; retry.textContent = 'もう一度読み込む';
-    retry.onclick = function () { app.setState({}); };
+    /* 描き直す（app.setState）だけでは直らない。一度失敗した import() は、
+       ブラウザが同じページのあいだ失敗として覚えていて、取りに行き直さない。
+       押しても何も起きないように見えていた。枠（この dao.html）を City の画面のまま開き直す。 */
+    retry.onclick = function () {
+      var u = new URL(window.location.href);
+      u.searchParams.set('screen', 'city');
+      window.location.replace(u.toString());
+    };
     cityHost.appendChild(retry);
   });
 }

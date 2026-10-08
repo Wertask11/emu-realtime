@@ -33,3 +33,19 @@ test('完了にしたあと続けて置くときも、同じく REST で確か�
   assert.ok(b.indexOf(COMMIT_REST) >= 0);
   assert.equal(/getDoc\([^)]*'commits'/.test(b), false);
 });
+
+test('SDK が返事をしないまま止まっても、「知恵カードを置く」が固まらない（見切って普通の通信へ）', () => {
+  /* パソコンで、押しても何も起きなかった。最初のクエストの読み取り（getDoc）と、
+     パスポートのアカウントの読み取りに、待つ上限が無かった。 */
+  for (const head of ['window.spQuestWisdom = async function (questId, app) {', 'window.spQuestClose = async function (questId, app) {']) {
+    const b = bodyOf(head);
+    assert.ok(b.indexOf("const r = await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500);") > 0, head);
+    assert.equal(b.indexOf("await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));"), -1, head + ' まだ上限なしで待っている');
+  }
+  const pass = INDEX.slice(INDEX.indexOf('async function spPassportLoad(force) {'));
+  assert.ok(pass.indexOf("await _spSoon(window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid)), 3500);") > 0);
+  /* 普通の通信も、返事が来ないまま枠を埋め続けない */
+  const rest = INDEX.slice(INDEX.indexOf('async function _spRestGetOnce(path, needAuth) {'));
+  assert.ok(rest.indexOf('AbortSignal.timeout(15000)') > 0);
+  assert.ok(rest.indexOf("let r = await fetchT(url, { cache: 'no-store', headers: headers });") > 0);
+});

@@ -78,3 +78,16 @@ test('日常の神々に、SchoolPark へ戻る口がある（小部屋を閉じ
   assert.ok(INDEX.indexOf("if (!ev.data || ev.data.type !== 'spContentClose') return;") >= 0);
   assert.ok(INDEX.indexOf('closeSpRoom();') >= 0);
 });
+
+test('08 CITY の「もう一度読み込む」（City 本体を読み込めなかったとき）は、枠を City のまま開き直す', () => {
+  /* 一度失敗した import() は、同じページのあいだブラウザが失敗として覚えていて取り直さない。
+     描き直す（app.setState）だけだと、押しても何も起きなかった。 */
+  const DAO = readHtml('frontend/public/schoolpark/dao.html');
+  const i = DAO.indexOf('function mountCity()');
+  const body = DAO.slice(i, DAO.indexOf('\n}\n', i));
+  assert.equal(body.indexOf('retry.onclick = function () { app.setState({}); };'), -1, 'まだ描き直すだけ');
+  assert.ok(body.indexOf("u.searchParams.set('screen', 'city');") > 0);
+  assert.ok(body.indexOf('window.location.replace(u.toString());') > 0);
+  /* 開き直した枠は ?screen=city で City から始まる */
+  assert.ok(DAO.indexOf("state = { screen:(new URLSearchParams(window.location.search).get('screen') === 'city' ? 'city' : 'home')") > 0);
+});

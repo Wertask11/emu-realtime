@@ -16835,8 +16835,10 @@ async function spPassportLoad(force) {
     if (!me) { return null; }
     let d = {};
     try {
-      const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid));
-      if (snap.exists()) d = snap.data() || {};
+      /* 戻ってこないことがある（SDK の常時接続が止まっているとき）。待ち続けると、
+         パスポートを使うところ（知恵カード・報告・受ける）が全部止まる。見切る。 */
+      const r = await _spSoon(window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid)), 3500);
+      if (r.ok && r.value.exists()) d = r.value.data() || {};
     } catch (e) {}
 
     const addr = me.ches || me.wallet;
@@ -18475,12 +18477,19 @@ async function _spRestGetOnce(path, needAuth) {
   const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
             + '/databases/(default)/documents/' + path
             + (path.indexOf('?') >= 0 ? '&' : '?') + 'key=' + opt.apiKey;
-  let r = await fetch(url, { cache: 'no-store', headers: headers });
+  /* 返事が来ないまま待ち続けると、同時に走らせる3本の枠が埋まったままになり、
+     あとから来た読み取り（知恵カードの「受けているか」など）が全部止まる。15秒で見切る。 */
+  const fetchT = function (u, o) {
+    let signal;
+    try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) signal = AbortSignal.timeout(15000); } catch (e) {}
+    return fetch(u, signal ? Object.assign({}, o, { signal: signal }) : o);
+  };
+  let r = await fetchT(url, { cache: 'no-store', headers: headers });
   /* 証が古いと 401/403 で断られる。取り直して、1回だけやり直す。 */
   if ((r.status === 401 || r.status === 403) && token) {
     const fresh = await ask(true);
     if (fresh && fresh !== token) {
-      r = await fetch(url, { cache: 'no-store',
+      r = await fetchT(url, { cache: 'no-store',
         headers: Object.assign({}, headers, { 'Authorization': 'Bearer ' + fresh }) });
     }
   }
@@ -18587,8 +18596,14 @@ async function _spReadAllOnce(path, ms) {
       if (r.ok) {
         const out = [];
         r.value.forEach(function (d) { out.push(Object.assign({ id: d.id }, d.data() || {})); });
-        /* 控えしか無いときの「0件」は、0件ではない。 */
-        if (out.length || !(r.value.metadata && r.value.metadata.fromCache)) rows = out;
+        /* 控え（fromCache）から返ってきたものは、件数があっても使わない。
+
+           前は「控えの0件」だけを疑い、1件でもあれば全件として使っていた。
+           控えに入っているのは、この端末がたまたま前に読んだ記録だけである。
+           SDK の常時接続が切れていると（パソコンで起きやすい）、たとえば
+           クエストを受けた記録は自分の1件しか控えに無く、メンバー・貢献が
+           「自分だけ」になっていた。控えなら、普通の通信で全件を読み直す。 */
+        if (!(r.value.metadata && r.value.metadata.fromCache)) rows = out;
       }
     } catch (e) { /* 下の普通の通信で読み直す */ }
   }
@@ -19286,12 +19301,18 @@ window.spQuestOpen = async function (app, questId) {
   if (!have.some(function (q) { return q.id === questId; })) {
     try {
       const fb = window.fbLib;
-      const snap = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));
-      if (snap.exists()) {
+      /* SDK が戻ってこないときは見切って、普通の通信で1件読む */
+      const r = await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500)
+        .catch(function () { return { ok: false }; });   // 「client is offline」で転んだときも普通の通信へ
+      let data = (r.ok && r.value.exists()) ? (r.value.data() || {}) : null;
+      if (!data && !(r.ok && !(r.value.metadata && r.value.metadata.fromCache))) {
+        data = await _spRestDoc('sp_quests/' + encodeURIComponent(questId), true).catch(function () { return null; });
+      }
+      if (data) {
         const p = await spPassportLoad();
         const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
         const gdefs = await spGuildDefs();
-        const shaped = await _spShapeQuest({ id: snap.id, ...(snap.data() || {}) }, p, mine, gdefs, app);
+        const shaped = await _spShapeQuest({ id: questId, ...data }, p, mine, gdefs, app);
         app.setState({ quests: ((app.state && app.state.quests) || []).concat([shaped]) });
       }
     } catch (e) { /* 読めなくても画面は開く */ }
@@ -20064,8 +20085,9 @@ window.spQuestWisdom = async function (questId, app) {
   const fb = window.fbLib;
   let q = null;
   try {
-    const snap = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));
-    if (snap.exists()) q = { id: snap.id, ...(snap.data() || {}) };
+    /* SDK が戻ってこないと、ここで止まって押しても何も起きなかった。見切って普通の通信へ。 */
+    const r = await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500);
+    if (r.ok && r.value.exists()) q = { id: r.value.id, ...(r.value.data() || {}) };
   } catch (e) {}
   if (!q) {
     try {
@@ -20100,8 +20122,9 @@ window.spQuestClose = async function (questId, app) {
   const fb = window.fbLib;
   let q = null;
   try {
-    const snap = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId));
-    if (snap.exists()) q = { id: snap.id, ...(snap.data() || {}) };
+    /* SDK が戻ってこないと、ここで止まって押しても何も起きなかった。見切って普通の通信へ。 */
+    const r = await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500);
+    if (r.ok && r.value.exists()) q = { id: r.value.id, ...(r.value.data() || {}) };
   } catch (e) {}
   if (!q) {
     try {
@@ -20563,6 +20586,8 @@ window.spDaoLoadMembers = async function (app) {
   const M = {};                        // 番号 → 集計
   /* 読めたかどうか。読めていないのに「記録がありません」と出さないため。 */
   let failed = false;
+  /* 一部（あるクエストの受けた人・ある知恵カードの引用）だけ読めなかった */
+  let partial = false;
   const pick = function (addr, name) {
     const key = String(addr || '').toLowerCase();
     if (!key) return null;
@@ -20588,6 +20613,7 @@ window.spDaoLoadMembers = async function (app) {
       if (m) m.wisdom++;
       const cs = citeSets[i];
       if (m && cs) m.cited += cs.length;
+      if (!cs) partial = true;
     });
   } catch (e) {
     console.warn('メンバーの知恵カードを読めませんでした:', e && (e.message || e));
@@ -20608,6 +20634,7 @@ window.spDaoLoadMembers = async function (app) {
       const q = list[qi];
       const took = [];
       const cs = commitSnaps[qi];
+      if (!cs) partial = true;
       if (cs) {
         cs.forEach(function (c) {
           took.push({ addr: c.id, name: c.name || '', approved: c.approved === true,
@@ -20688,7 +20715,12 @@ window.spDaoLoadMembers = async function (app) {
     if (!had) app.setState({ members: [] });
     return;
   }
-  app.setState({ members: members, noMembers: members.length === 0, membersNote: '' });
+  /* 一部しか読めなかったときは、並べたうえでそう言う。
+     黙って出すと、人数が少ないのが本当なのか読めていないだけなのか分からない。 */
+  app.setState({ members: members, noMembers: members.length === 0,
+    membersNote: (failed || partial)
+      ? '一部のメンバーの記録を読めませんでした。人数や数字が少なく見えることがあります。通信が戻ってから、もう一度開いてください。'
+      : '' });
 
   /* 左下に出す数字は、本人のもの。
 
