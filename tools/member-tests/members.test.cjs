@@ -622,7 +622,7 @@ test('SDKで決められなければ、普通の通信で読む', () => {
 
 test('読めなかったときは、記録を作りに行かない', () => {
   const i = INDEX.indexOf('async function emuMyIdentity');
-  const seg = INDEX.slice(i, i + 2600);
+  const seg = INDEX.slice(i, i + 4000);
   const rest = seg.indexOf('_spRestDoc(');
   const made = seg.indexOf('_emuCreateAccountDoc(user)');
   assert.ok(rest > 0 && made > rest, '逃げ道より先に作りに行っている');
