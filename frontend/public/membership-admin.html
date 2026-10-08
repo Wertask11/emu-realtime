@@ -2927,6 +2927,11 @@ async function renderSchoolPark() {
                     ? '<button class="act neutral" data-qinvite="' + esc(t.addr)
                       + '" data-since="' + (Number(t.tookAt) || 0) + '">招待を数える</button> '
                     : '')
+                /* 周回ごとの EMUER と証明書の行き先（読むだけ） */
+                + (t.approved
+                    ? '<button class="act neutral" data-qlook="' + esc(q.id) + '" data-addr="' + esc(t.addr)
+                      + '">受け取り状況</button> '
+                    : '')
                 + ((t.approved && t.wisdom > Math.max(t.rounds, 1))
                     ? '<button class="act ok" data-qapprove="' + esc(q.id) + '" data-addr="' + esc(t.addr)
                       + '">' + (Math.max(t.rounds, 1) + 1) + '周目を認める</button> '
@@ -3280,6 +3285,30 @@ async function renderSchoolPark() {
   /* 条件を満たしていない人を認めるときは、一度確かめる。
      承認待ちの一覧からは「あと◯本」の人も押せるようにしてあるので、
      押し間違いがそのまま通らないようにする。 */
+  /* 周回ごとの EMUER と証明書が、誰宛てで、どこまで進んでいるか。
+     報酬の記録は Rules で読めないので、サーバーに聞く（読むだけ）。 */
+  el.querySelectorAll("[data-qlook]").forEach(b => {
+    b.onclick = async () => {
+      try {
+        const r = await api("/api/schoolpark/quest-completions/" + encodeURIComponent(b.dataset.qlook)
+          + "/" + encodeURIComponent(b.dataset.addr) + "/rewards");
+        const short = (a) => a ? String(a).slice(0, 6) + "…" + String(a).slice(-4) : "（なし）";
+        const when = (ms) => ms ? new Date(ms).toLocaleString("ja-JP") : "";
+        const lines = (r.rounds || []).map(x => {
+          const w = x.reward, k = x.certificate;
+          return x.round + "周目：EMUER "
+            + (w ? w.amount + "（" + (w.status === "claimed" ? "受け取り済み " + when(w.claimedAt) : w.status === "pending" ? "未受け取り" : w.status)
+                 + "・宛先 " + short(w.recipient) + (w.recipient && w.recipient !== r.linkedWallet ? " ※いまの連携ウォレットと違う" : "") + "）"
+                 : "まだ作っていない")
+            + "／証明書 " + (k ? (k.status === "minted" || k.status === "claimed" ? "受け取り済み" : "未受け取り") : "まだ無い");
+        });
+        alert("いまの連携ウォレット：" + short(r.linkedWallet)
+          + "\n認めた周回：" + r.approvedRounds + "　知恵カード：" + r.wisdomCards + "枚\n\n" + lines.join("\n"));
+      } catch (e) {
+        alert("読めませんでした（" + ((e && (e.code || e.message)) || "") + "）");
+      }
+    };
+  });
   el.querySelectorAll("[data-qapprove]").forEach(b => {
     b.onclick = async () => {
       const q0 = quests.find(x => x.id === b.dataset.qapprove);

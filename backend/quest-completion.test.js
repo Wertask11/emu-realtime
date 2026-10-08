@@ -915,6 +915,25 @@ test("何周ぶん EMUER を渡したかを、参加の記録に残す（管理�
   assert.equal(records.get("sp_quests/quest-002/commits/" + address).rewardedRounds, 2);
 }));
 
+test("運営は、周回ごとの報酬の宛先と状態を読める（読むだけ）", AT(async () => {
+  seedOther();
+  addWisdom("quest-002", 1);
+  approvedOffline("quest-002", 2);
+  await request("quest-002");                      // 1周目だけ渡す
+  const before = JSON.stringify([...records.entries()]);
+  const look = routes.find(route => route.path === "/:questId/:address/rewards").handler;
+  const { res } = reply();
+  const r = await look({ params:{ questId:"quest-002", address } }, res);
+  assert.equal(r.status, 200, String(r.body && r.body.error));
+  assert.equal(r.body.approvedRounds, 2);
+  assert.equal(r.body.wisdomCards, 2);
+  assert.equal(r.body.rounds.length, 2);
+  assert.equal(r.body.rounds[0].reward.recipient, wallet, "1周目の宛先が出ていない");
+  assert.equal(r.body.rounds[0].reward.status, "pending");
+  assert.equal(r.body.rounds[1].reward, null, "渡していない2周目に報酬があることになっている");
+  assert.equal(JSON.stringify([...records.entries()]), before, "読むだけのはずが書き換えている");
+}));
+
 test("この欄ができる前に1周ぶん渡した人は、額から1周ぶんと数えて続きを渡す", AT(async () => {
   /* 10/2 の実際の形：2周認めてあり、1周ぶんだけ渡してあって、rewardedRounds が無い。 */
   seedOther();
