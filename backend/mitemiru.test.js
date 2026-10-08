@@ -324,6 +324,8 @@ test("EMUER v2 が止まっているときは、EMUERの支払いを並べない
     const list = await t.call(null, "GET", "/products");
     assert.deepEqual(list.body.products[0].methods, ["jpyc", "jpy_card", "jpy_cash"]);
     assert.equal((await t.call("alice", "POST", "/orders", { productId: pid, method: "emuer_ledger" })).body.error, "METHOD_NOT_AVAILABLE");
+    const cash = await t.call("alice", "POST", "/orders", { productId: pid, method: "jpy_cash" });
+    assert.equal(cash.body.order.status, "pending_payment", "EMUER停止でも現金注文は継続できる");
   } finally { t.close(); }
 });
 
