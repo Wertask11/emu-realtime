@@ -8,7 +8,7 @@ const INDEX = readHtml('frontend/public/index.html');
 const DAO = readHtml('frontend/public/schoolpark/dao.html');
 
 test('受けているクエスト（#000 以外）を宿題に並べ、次に出す報告と締切を添え、押すと詳細が開く', () => {
-  assert.ok(DAO.indexOf("const myQuests = (s.quests || []).filter(q => q.iTook && !q.isFounder).map(q => {") > 0);
+  assert.ok(DAO.indexOf("const myQuests = (s.quests || []).filter(q => q.iTook && !q.iDone && !q.isFounder).map(q => {") > 0);
   assert.ok(DAO.indexOf("next: next ? ('次：' + next.head + ' を出す') : '次：知恵カードを置く（報告は3つそろっています）',") > 0);
   assert.ok(DAO.indexOf('open: this.openExp(q.id)') > 0);
   /* ホームの「自分の宿題」とタスク管理の両方 */
@@ -42,4 +42,14 @@ test('SDK が一度返事をしなかったら、しばらく（60秒）は SDK 
   assert.equal(api._spSdkStalled(), false, '60秒たったら、また SDK に聞く');
   const once = INDEX.slice(INDEX.indexOf('async function _spReadAllOnce(path, ms) {'));
   assert.ok(once.slice(0, 600).indexOf('!_spSdkStalled()') > 0);
+});
+
+test('完走した（運営が認めた）クエストは宿題から外し、「終わったこと」に並べる', () => {
+  /* 自分の受けた記録に approved が立っていれば完走 */
+  assert.ok(INDEX.indexOf("if (c.approved === true) { iDone = true; iDoneAt = Number(c.approvedAt) || 0; }") > 0);
+  assert.ok(INDEX.indexOf('iTook: iTook, iDone: iDone, iDoneAt: iDoneAt,') > 0);
+  assert.ok(DAO.indexOf("const myQuests = (s.quests || []).filter(q => q.iTook && !q.iDone && !q.isFounder).map(q => {") > 0, '完走したものまで宿題に残る');
+  assert.ok(DAO.indexOf("const doneQuests = (s.quests || []).filter(q => q.iTook && q.iDone && !q.isFounder)") > 0);
+  assert.ok(DAO.indexOf('<sc-for list="{{ doneQuests }}" as="dq">') > 0, '終わったことに出ていない');
+  assert.ok(DAO.indexOf('noDoneTasks: doneTasks.length === 0 && doneQuests.length === 0,') > 0);
 });

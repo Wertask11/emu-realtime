@@ -19172,10 +19172,16 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
   /* 受けた人と報告の書き手の名前を、出す前にプロフィールから読んでおく */
   await _spPrefetchNames([].concat((cs || []).map(function (c) { return c.id; }),
                                    (ls || []).map(function (l) { return l.author; })));
+  /* 自分が完走したか（運営が認めた＝自分の受けた記録に approved が立っている）。
+     宿題では、完走したクエストを「終わったこと」に移すのに使う。 */
+  let iDone = false, iDoneAt = 0;
   if (cs) {
     cs.forEach(function (c) {
       people.push(_spNameFor(c.id, c.name));
-      if (mine && String(c.id || '').toLowerCase() === mine) iTook = true;
+      if (mine && String(c.id || '').toLowerCase() === mine) {
+        iTook = true;
+        if (c.approved === true) { iDone = true; iDoneAt = Number(c.approvedAt) || 0; }
+      }
     });
   }
   if (ls) {
@@ -19290,7 +19296,7 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
     })(),
     due: SpQuestStore.isFounder(q) ? 'なし・恒久' : _spQuestDue(q.closesAt),
     status: SpQuestStore.isFounder(q) ? 'FOUNDER' : (q.status || 'OPEN'), commits: people.length, need: q.need || 5,
-    people: people, logCount: logCount, iTook: iTook,
+    people: people, logCount: logCount, iTook: iTook, iDone: iDone, iDoneAt: iDoneAt,
     /* 完走までの手順。報告の3つが、このクエストで何を指すか。
        受けている人には、自分が出した報告に ✓ を付ける。 */
     reportSteps: (function () {
