@@ -84,7 +84,25 @@ test('管理画面で承認・取り消しをしたら、同じブラウザの S
   assert.ok(body.indexOf("_spMemoDrop('completed:');") > 0);
   assert.ok(body.indexOf('_spRefreshAt = 0;') > 0);
   /* 普通の通信の取り置き（3秒）に残った古い答えも使わない */
-  assert.ok(body.indexOf('_spRestState().cache') > 0, '普通の通信の取り置きを捨てていない');
+  assert.ok(body.indexOf("_spRestDrop('sp_quests');") > 0, '普通の通信の取り置きを捨てていない');
   assert.ok(INDEX.indexOf("new BroadcastChannel('schoolpark-quests')") > 0);
   assert.ok(INDEX.indexOf("if (ev.key === 'sp_quest_changed') _spOnQuestChanged();") > 0);
+});
+
+test('クエストを受ける・降りる：書く前と書いたあとは取り置きを使わずに読み、受けた人の一覧を読み直す', () => {
+  const i = INDEX.indexOf('window.spQuestToggle = async function (questId, app) {');
+  assert.ok(i > 0);
+  const body = INDEX.slice(i, INDEX.indexOf('\n};\n', i));
+  /* 書く前（cur）と書いたあと（saved）の2回とも fresh */
+  assert.equal((body.match(/_spRestDoc\(path, true, true\)/g) || []).length, 2, '取り置きの答えで確かめている');
+  /* SDK の書き込みが返ってこなくても、止まらずにサーバーを読んで確かめる */
+  assert.ok(/await _spSoon\(cur \? fb\.deleteDoc\(ref\) : fb\.setDoc\(ref/.test(body), '書き込みを待ちきれないと止まる');
+  /* 読み直しの前に、受けた人の一覧の取り置きを捨てる（失敗したときも） */
+  const tail = body.slice(body.indexOf('} finally {'));
+  assert.ok(tail.indexOf("_spMemoDrop('readall:sp_quests/' + encodeURIComponent(questId) + '/commits');") > 0);
+  assert.ok(tail.indexOf("_spRestDrop('sp_quests/' + encodeURIComponent(questId) + '/commits');") > 0);
+  assert.ok(tail.indexOf('await window.spDaoLoadQuests(app);') > tail.indexOf('_spRestDrop('));
+  /* catch で引き返さない（読み直して、本当の状態を出す） */
+  const c = body.slice(body.indexOf('} catch (e) {'), body.indexOf('} finally {'));
+  assert.ok(c.indexOf('return') < 0, '失敗したとき読み直さずに引き返している');
 });
