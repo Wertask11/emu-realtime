@@ -1512,6 +1512,17 @@ async function spRefreshAuth() {
   }
 }
 
+/* クエストの承認が変わったことを、同じブラウザで開いている SchoolPark に知らせる。
+   SchoolPark 側は、知らせを受けたら取り置きを捨てて読み直す（index.html の
+   _spOnQuestChanged）。知らせないと、宿題や「終わったこと」に出るのは
+   次に読み直すとき（タブに戻る・5分ごと）だった。
+   BroadcastChannel が無いブラウザ向けに、localStorage の書き込みでも知らせる。 */
+function spNotifyQuestChanged(questId, addr) {
+  const msg = { type: "sp-quest-changed", questId: String(questId || ""), addr: String(addr || "").toLowerCase(), at: Date.now() };
+  try { const ch = new BroadcastChannel("schoolpark-quests"); ch.postMessage(msg); ch.close(); } catch (e) {}
+  try { localStorage.setItem("sp_quest_changed", JSON.stringify(msg)); } catch (e) {}
+}
+
 /* 書き込みを1回だけやり直す。断られたときだけ。
    通信が届かないだけのときは、やり直しても同じなのでそのまま投げ返す。 */
 async function spWrite(run) {
@@ -3326,6 +3337,7 @@ async function renderSchoolPark() {
         alert("完走として認めました。\n\nただし EMUER は渡せていません（" + code + "）。\n"
           + "「EMUERの予算を公開」を済ませてから、この人の行に出る「EMUERを渡す」を押すと渡せます。");
       }
+      spNotifyQuestChanged(b.dataset.qapprove, b.dataset.addr);
       renderSchoolPark();
     };
   });
@@ -3492,6 +3504,7 @@ async function renderSchoolPark() {
         await spWrite(() => f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qunapprove, "commits", b.dataset.addr),
           { approved: false, approvedAt: Date.now(), approvedBy: ownerAddr }));
       } catch (e) { alert("取り消せませんでした（" + (e.code || e.message) + "）"); return; }
+      spNotifyQuestChanged(b.dataset.qunapprove, b.dataset.addr);
       renderSchoolPark();
     };
   });
