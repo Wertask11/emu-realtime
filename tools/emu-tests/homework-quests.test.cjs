@@ -107,11 +107,12 @@ test('クエストを受ける・降りる：書く前と書いたあとは取�
   assert.ok(c.indexOf('return') < 0, '失敗したとき読み直さずに引き返している');
 });
 
-test('広場の一文：走っているクエストは「誰かが受けている／進行中」、仲間は受けている人の実数', () => {
+test('広場の一文：走っているクエストは締め切られていない全部（#000 も）、仲間は受けている人の実数', () => {
   const DAO = readHtml('frontend/public/schoolpark/dao.html');
   assert.ok(DAO.indexOf('読んで終わった知識は0') < 0, '数えていない「0」を決め打ちで出している');
-  assert.ok(DAO.indexOf("e.status === 'RUNNING' || (Number(e.commits) || 0) > 0") > 0, '募集中で受けられているクエストを数えていない');
-  assert.ok(DAO.indexOf('running:runningAll.length, people:runningPeople,') > 0, '仲間の数が決め打ちのまま');
+  /* 締め切られていないクエストは全部（#000・誰も受けていないものも）走っている */
+  assert.ok(DAO.indexOf("const liveAll = allQuests.filter(e => e.status !== 'CLOSED');") > 0, '締め切られていないクエストを全部数えていない');
+  assert.ok(DAO.indexOf('running:liveAll.length, people:runningPeople,') > 0, '数が一文と合っていない');
   assert.ok(DAO.indexOf('runningExps: runningAll.slice(0,3)') > 0, '「走っているクエスト」の並びが一文と食い違う');
   assert.ok(INDEX.indexOf("peopleAddrs: (cs || []).map(") > 0, '受けている人の番号を渡していない');
 });
