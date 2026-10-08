@@ -292,6 +292,8 @@ app.use("/api/review", review.router);
 app.use("/api/emuer/v2", emuerV2.router);
 app.use("/api/mitemiru", mitemiru.router);
 app.use("/api/schoolpark/quest-completions", questCompletion);
+/* Quest #000 の論文を、リポジトリの新しい版へ差し替える（運営だけ） */
+app.use("/api/schoolpark/founder", require("./founder-paper").createFounderPaperRouter({ db, requireOwner }));
 app.use("/api/schoolpark/city", require("./city").createCityRouter({
   db, identity, entitlement, requireFirebaseUser, rateLimit, ownerAddresses: SP_OWNER_ADDRESSES
 }));
