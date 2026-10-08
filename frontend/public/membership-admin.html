@@ -2957,6 +2957,14 @@ async function renderSchoolPark() {
       : '<p class="empty">まだクエストがありません。</p>')
     + '</div>'
 
+    /* Quest #000 の論文（1番目の節）を、リポジトリにある新しい版へ差し替える。
+       #000 はブラウザからは書けない（記録の決まり）ので、サーバーが書く。
+       本文は画面から送らない。サーバーがリポジトリのファイルを読む。 */
+    + '<div class="card"><h3>Quest #000 の論文</h3>'
+    + '<p class="empty" style="text-align:left;margin:0 0 10px">リポジトリにある新しい版の「SchoolPark論文」に差し替えます。'
+    + 'ほかの5つの節（A・B・起業観①②・人生観）は変わりません。</p>'
+    + '<div class="actions"><button class="btn primary" id="spFounderPaper">論文を新しい版にする</button></div></div>'
+
     + '<div class="card"><h3>公園に置く</h3>'
     + '<p class="empty" style="text-align:left;margin:0 0 10px">締切も報酬もない場所。'
     + '「乗る」はどなたでもできます。</p>'
@@ -3285,6 +3293,23 @@ async function renderSchoolPark() {
   /* 条件を満たしていない人を認めるときは、一度確かめる。
      承認待ちの一覧からは「あと◯本」の人も押せるようにしてあるので、
      押し間違いがそのまま通らないようにする。 */
+  const paperBtn = el.querySelector("#spFounderPaper");
+  if (paperBtn) paperBtn.onclick = async () => {
+    paperBtn.disabled = true;
+    try {
+      const st = await api("/api/schoolpark/founder/paper");
+      if (st.same) { alert("Quest #000 の論文は、もう新しい版になっています（第" + st.current.version + "版）。"); return; }
+      if (!confirm("Quest #000 の「SchoolPark論文」を新しい版に差し替えます。\n\n"
+        + "いま：第" + st.current.version + "版・" + st.current.characters.toLocaleString("ja-JP") + "文字\n"
+        + "新しい版：" + st.next.characters.toLocaleString("ja-JP") + "文字\n\n"
+        + "ほかの5つの節は変わりません。よろしいですか？")) return;
+      const r = await api("/api/schoolpark/founder/paper/apply", { method:"POST" });
+      alert(r.updated ? "論文を第" + r.version + "版にしました（" + Number(r.characters).toLocaleString("ja-JP") + "文字）。"
+                      : "もう新しい版になっていました（第" + r.version + "版）。");
+    } catch (e) {
+      alert("差し替えられませんでした（" + ((e && (e.code || e.message)) || "") + "）");
+    } finally { paperBtn.disabled = false; }
+  };
   /* 周回ごとの EMUER と証明書が、誰宛てで、どこまで進んでいるか。
      報酬の記録は Rules で読めないので、サーバーに聞く（読むだけ）。 */
   el.querySelectorAll("[data-qlook]").forEach(b => {

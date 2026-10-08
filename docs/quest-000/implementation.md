@@ -37,3 +37,13 @@ npm test --prefix backend
 ```
 
 The test preview at `tools/quest-tests/preview.html` uses local fixtures only, with selectable 375/768/1280px iframe widths. It never writes to Production. The original DAO generator already omits some hand-edited current features; the existing deployed DAO was patched directly and its Founder transformation is also included in the generator. Do not regenerate the entire DAO to deploy this patch.
+
+## Updating the paper (section 1)
+
+The seed tool never overwrites an existing #000. To replace only the first section ("SchoolPark論文") with a newer author-supplied version:
+
+1. Put the full text in `backend/founder/schoolpark-paper.txt` (verbatim) and set `PAPER_SHA256` in `backend/founder-paper.js` to its sha256.
+2. Deploy (main → Render). In the admin page, SchoolPark tab, press 「Quest #000 の論文 → 論文を新しい版にする」.
+3. The owner-only endpoint `POST /api/schoolpark/founder/paper/apply` replaces section 1's body in one transaction, bumps `founderVersion`, recomputes `founderHash`, and leaves the other five sections, the title, number, owner and participants unchanged. Pressing again is a no-op.
+
+After this, `tools/seed-founder-quest.cjs` will report "Existing Founder differs" (its manifest is the v1 source); it is only for the initial creation.
