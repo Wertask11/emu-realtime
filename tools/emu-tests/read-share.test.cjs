@@ -264,6 +264,8 @@ function countingRun(html, quests, aliases) {
   const stubs = {
     console: { warn() {}, log() {} },
     SP_READ_TTL_MS: 25000, SP_COMPLETED_TTL_MS: 300000,
+    /* SDK が止まっているかの印（_spReadAllOnce が見る）。この試験では止まっていない */
+    SP_SDK_STALL_MS: 60000, _spSdkStallUntil: 0,
     SpQuestStore: { isFounder: () => false, fullLabel: () => '一般 #001' },
     SpGuildStore: { guildIdOf: () => '', byId: () => null },
     spGuildDefs: async () => [],
@@ -284,7 +286,7 @@ function countingRun(html, quests, aliases) {
   };
   const names = ['spCompletedQuests'];
   ['_spMemoState', '_spMemo', '_spMemoDrop', '_spAliasesOf', '_spCompletedQuestsOnce',
-   '_spReadAll', '_spReadAllOnce', '_spAllQuests'].forEach(function (n) {
+   '_spReadAll', '_spReadAllOnce', '_spAllQuests', '_spSdkStalled', '_spSdkNoted'].forEach(function (n) {
     if (html.indexOf('function ' + n + '(') >= 0) names.push(n);
   });
   const api = build(html, names, stubs);

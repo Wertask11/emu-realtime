@@ -20,6 +20,8 @@ function stage({ fromCache, sdkRows, restRows, restFails }) {
   const stubs = {
     window: { db: {}, fbLib: { collection: () => ({}), getDocs: async () => snap } },
     _spSoon: async (p) => ({ ok: true, value: await p }),
+    _spSdkStalled: () => false,
+    _spSdkNoted: (r) => r,
     _spRestGet: async (path) => {
       calls.push(path);
       if (restFails) throw new Error('HTTP 429');

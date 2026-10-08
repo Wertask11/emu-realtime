@@ -318,9 +318,20 @@ if (window.top === window.self) window.location.replace('/');
                   <div style="font-size:12px; color:#6E695C">{{ todoLeft }}</div>
                 </div>
                 <div style="background:#E7E2D6; border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:16px">
-                  <sc-if value="{{ noTasks }}">
+                  <sc-if value="{{ noHomework }}">
                     <div style="font-size:13px; line-height:1.9; color:#6E695C">いまは何も残っていません。<br>下の「タスク管理 →」から書けます。</div>
                   </sc-if>
+                  <!-- 受けているクエスト。押すとそのクエストが開く。 -->
+                  <sc-for list="{{ myQuests }}" as="mq">
+                    <div onClick="{{ mq.open }}" style="display:flex; gap:12px; align-items:flex-start; padding-bottom:14px; border-bottom:1px solid rgba(20,19,16,.1); cursor:pointer" style-hover="opacity:.8">
+                      <div style="font-family:Inter,sans-serif; font-size:9px; letter-spacing:.12em; padding:3px 6px; border-radius:3px; background:#0F5C3F; color:#F4F1EA; margin-top:3px; flex:0 0 auto">QUEST</div>
+                      <div style="display:flex; flex-direction:column; gap:5px; min-width:0">
+                        <div style="font-size:14px; font-weight:500; line-height:1.6">{{ mq.title }}</div>
+                        <div style="font-size:12px; color:#0F5C3F">{{ mq.next }}</div>
+                        <div style="display:{{ mq.metaShow }}; font-size:12px; color:#6E695C">{{ mq.meta }}</div>
+                      </div>
+                    </div>
+                  </sc-for>
                   <sc-for list="{{ todos }}" as="t" hint-placeholder-count="3">
                     <div style="display:flex; gap:12px; align-items:flex-start; padding-bottom:14px; border-bottom:1px solid rgba(20,19,16,.1)">
                       <div onClick="{{ t.toggle }}" title="終わったことにする" style="width:16px; height:16px; border:1.5px solid #0F5C3F; border-radius:4px; margin-top:3px; flex:0 0 16px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:11px; line-height:1; color:#0F5C3F" style-hover="background:#D0E2BE"></div>
@@ -1184,6 +1195,25 @@ if (window.top === window.self) window.location.replace('/');
               </div>
             </div>
 
+            <!-- 受けているクエスト。書かなくても宿題に並ぶ。押すとそのクエストが開く。 -->
+            <sc-if value="{{ hasMyQuests }}">
+              <div style="display:flex; flex-direction:column; gap:18px">
+                <div style="display:flex; align-items:baseline; gap:14px">
+                  <div style="font-size:17px; font-weight:700">受けているクエスト</div>
+                  <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:12px">
+                  <sc-for list="{{ myQuests }}" as="mq">
+                    <div onClick="{{ mq.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-left:4px solid #0F5C3F; border-radius:10px; padding:18px 20px; display:flex; flex-direction:column; gap:7px; cursor:pointer" style-hover="background:#F4F1EA">
+                      <div style="font-size:15px; font-weight:700; line-height:1.6">{{ mq.title }}</div>
+                      <div style="font-size:13px; color:#0F5C3F">{{ mq.next }}</div>
+                      <div style="display:{{ mq.metaShow }}; font-size:12px; color:#6E695C">{{ mq.meta }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
             <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:20px">
               <div style="font-size:17px; font-weight:700">宿題を書く</div>
 
@@ -1549,6 +1579,21 @@ class Component extends DCLogic {
     };
     const allTasks = s.tasks || [];
     const openTasks = allTasks.filter(t => !t.done).sort(byDue).map(shapeTask);
+    /* 受けているクエストも、宿題として並べる（自分で書かなくても出る）。
+       どこにあったか探さなくていいように、押すとそのクエストの詳細が開く。
+       次にやることは、まだ出していない報告（完走までの手順）から決める。
+       #000（原点）は受けるものではないので出さない。 */
+    const myQuests = (s.quests || []).filter(q => q.iTook && !q.isFounder).map(q => {
+      const steps = (q.reportSteps || []).slice(0, 3);
+      const next = steps.find(st => !st.mark);
+      return {
+        title: q.fullTitle || q.title || '',
+        next: next ? ('次：' + next.head + ' を出す') : '次：知恵カードを置く（報告は3つそろっています）',
+        meta: (q.due && q.due !== '締切なし') ? ('締切 ' + q.due) : '',
+        metaShow: (q.due && q.due !== '締切なし') ? 'block' : 'none',
+        open: this.openExp(q.id)
+      };
+    });
     const doneTasks = allTasks.filter(t => t.done)
       .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)).slice(0, 20).map(shapeTask);
     const lateCount  = openTasks.filter(t => t.due && daysTo(t.due) < 0).length;
@@ -1652,7 +1697,8 @@ class Component extends DCLogic {
       isTreasury:s.screen==='treasury', isPropose:s.screen==='propose', isTasks:s.screen==='tasks',
       goTasks:this.go('tasks'), goHome:this.go('home'),
       goPropose:() => { try { window.parent.openSpQuestForm(this); } catch (e) { this.setState({screen:'propose'}); } }, goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
-      stats: {newWisdom:(s.wisdom || []).length, running:exps.filter(e => e.status==='RUNNING').length, people:0, myCommit:Object.values(s.committed).filter(Boolean).length, due:0, wisdomTotal:(s.wisdom || []).length, payout:'¥0', citations:s.citations || 0},
+      stats: {newWisdom:(s.wisdom || []).length, running:exps.filter(e => e.status==='RUNNING').length, people:0, myCommit:myQuests.length,   /* 実際に受けている記録（commits）から数える。宿題と同じ数 */
+         due:0, wisdomTotal:(s.wisdom || []).length, payout:'¥0', citations:s.citations || 0},
       /* 左下は本人の数字。まだ数え終わっていないときは、0ではなく空で待つ。
          ここに DAO のトレジャリーを出していたころは、誰が開いても同じ額が出て、
          クエストの予算が残高を超えていると本人に「-1,250,000」と見えていた。 */
@@ -1662,11 +1708,15 @@ class Component extends DCLogic {
       /* 広場のカードには、残っているものを上から3つだけ出す */
       todos: openTasks.slice(0, 3),
       noTasks: openTasks.length === 0,
+      myQuests, hasMyQuests: myQuests.length > 0,
+      noHomework: openTasks.length === 0 && myQuests.length === 0,
       todoLeft: openTasks.length > 3 ? ('ほか ' + (openTasks.length - 3) + '件') : '',
       openTasks, doneTasks,
       noOpenTasks: openTasks.length === 0,
       noDoneTasks: doneTasks.length === 0,
-      taskHead: openTasks.length === 0 ? '宿題は残っていない。' : ('残っている宿題は、' + openTasks.length + '個。'),
+      taskHead: openTasks.length === 0
+        ? (myQuests.length ? ('受けているクエストが' + myQuests.length + '本ある。') : '宿題は残っていない。')
+        : ('残っている宿題は、' + openTasks.length + '個。'),
       taskLine: (lateCount ? ('すぎているものが' + lateCount + '個。') : 'すぎているものはない。')
         + (todayCount ? ('きょうまでが' + todayCount + '個。') : '')
         + (yearEnd === null ? '' : ('　年末まで、あと' + yearEnd + '日。')),

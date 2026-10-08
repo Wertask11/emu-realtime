@@ -6638,12 +6638,16 @@ async function emuMyIdentity() {
      見つけて直してあった。こちらにだけ入っていなかった。
      直し方もそろえる：読み直す → それでもだめなら普通の通信で読む。 */
   let snap = null, lastErr = null, stale = false;
+  /* SDK が止まっていると分かったら3回待たずに普通の通信へ（印は後ろの script） */
+  const stalled = function () { return typeof _spSdkStalled === 'function' && _spSdkStalled(); };
+  const noted = function (r) { return typeof _spSdkNoted === 'function' ? _spSdkNoted(r) : r; };
   for (let i = 0; i < 3 && !snap; i += 1) {
+    if (stalled()) break;
     if (i) await new Promise(function (r) { setTimeout(r, i * 400); });
     try {
       /* 戻ってこないことがある。待たずに見切る。 */
-      const r = await _spSoon(
-        window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', user.uid)), 3500);
+      const r = noted(await _spSoon(
+        window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', user.uid)), 3500));
       if (!r.ok) {
         console.warn('自分のアカウントの読み取りが返ってきません（' + (i + 1) + '回目）');
         stale = true;
@@ -16040,8 +16044,8 @@ function emuProfileOf(addr, force) {
        そのときは普通の通信（REST）で読み直す。それでも読めなければ転ばせる
        （覚えずに、次に要るとき読み直す）。 */
     let d = null, decided = false;
-    try {
-      const r = await _spSoon(window.fbLib.getDoc(window.fbLib.doc(window.db, 'user_profiles', key)), 3500);
+    if (!_spSdkStalled()) try {
+      const r = _spSdkNoted(await _spSoon(window.fbLib.getDoc(window.fbLib.doc(window.db, 'user_profiles', key)), 3500));
       const snap = r.ok ? r.value : null;
       if (snap && (snap.exists() || !(snap.metadata && snap.metadata.fromCache))) {
         d = snap.exists() ? (snap.data() || {}) : null;
@@ -16837,7 +16841,8 @@ async function spPassportLoad(force) {
     try {
       /* 戻ってこないことがある（SDK の常時接続が止まっているとき）。待ち続けると、
          パスポートを使うところ（知恵カード・報告・受ける）が全部止まる。見切る。 */
-      const r = await _spSoon(window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid)), 3500);
+      const r = _spSdkStalled() ? { ok: false }
+        : _spSdkNoted(await _spSoon(window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid)), 3500));
       if (r.ok && r.value.exists()) d = r.value.data() || {};
     } catch (e) {}
 
@@ -17276,8 +17281,11 @@ async function spGuildDefs(force) {
   _spGuildDefsBusy = (async function () {
     const extra = [];
     try {
-      const snap = await window.fbLib.getDocs(window.fbLib.collection(window.db, 'sp_guilds'));
-      snap.forEach(function (s) { extra.push(Object.assign({ id: s.id }, s.data() || {})); });
+      /* 共有の読み口で読む（SDK が戻ってこないときは見切って普通の通信）。
+         前は getDocs を上限なしで待っていた。SDK の常時接続が返事をしないと、
+         SDK が自分で諦める（10秒ほど）まで、クエスト一覧もギルドも出なかった。 */
+      const rows = await _spReadAll('sp_guilds');
+      (rows || []).forEach(function (r) { extra.push(r); });
     } catch (e) { /* 読めなければ、書いてある5つだけで動く */ }
     try {
       _spGuildDefs = SpGuildStore.merge(extra);
@@ -18568,6 +18576,22 @@ function _spSoon(promise, ms) {
 
    返すのは配列。読めなかったときは null（0件とは違う）。 */
 const SP_READ_TTL_MS = 25000;
+
+/* SDK が返事をしないまま止まっているとき、読むたびに4秒待っていた。
+
+   パソコンでは、常時接続（Listen）が「切れてはいないが返事が来ない」状態に
+   なりやすい。そのときは、クエスト30本の受けた人・報告・書き手を読むたびに
+   4秒ずつ待ってから普通の通信へ移るので、一覧が出るまで長くかかり、
+   そのあいだクエスト0本・受けているクエスト0に見えていた。
+
+   一度待ちきれなかったら、しばらく（60秒）は SDK に聞かずに普通の通信で読む。 */
+var SP_SDK_STALL_MS = 60000;
+var _spSdkStallUntil = 0;
+function _spSdkStalled() { return Date.now() < _spSdkStallUntil; }
+function _spSdkNoted(r) {
+  if (r && r.ok === false) _spSdkStallUntil = Date.now() + SP_SDK_STALL_MS;
+  return r;
+}
 async function _spReadAll(path, ms, fresh) {
   /* 同じ一覧を、同じ読み直しの中で何度も取りに行かない。
 
@@ -18590,9 +18614,9 @@ async function _spReadAllOnce(path, ms) {
   const fb = window.fbLib;
   const parts = String(path || '').split('/').filter(Boolean);
   let rows = null;
-  if (fb && window.db && parts.length) {
+  if (fb && window.db && parts.length && !_spSdkStalled()) {
     try {
-      const r = await _spSoon(fb.getDocs(fb.collection.apply(null, [window.db].concat(parts))), ms || 4000);
+      const r = _spSdkNoted(await _spSoon(fb.getDocs(fb.collection.apply(null, [window.db].concat(parts))), ms || 4000));
       if (r.ok) {
         const out = [];
         r.value.forEach(function (d) { out.push(Object.assign({ id: d.id }, d.data() || {})); });
@@ -19302,8 +19326,9 @@ window.spQuestOpen = async function (app, questId) {
     try {
       const fb = window.fbLib;
       /* SDK が戻ってこないときは見切って、普通の通信で1件読む */
-      const r = await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500)
-        .catch(function () { return { ok: false }; });   // 「client is offline」で転んだときも普通の通信へ
+      const r = _spSdkStalled() ? { ok: false }
+        : _spSdkNoted(await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500)
+          .catch(function () { return { ok: null }; }));   // 「client is offline」で転んだときも普通の通信へ
       let data = (r.ok && r.value.exists()) ? (r.value.data() || {}) : null;
       if (!data && !(r.ok && !(r.value.metadata && r.value.metadata.fromCache))) {
         data = await _spRestDoc('sp_quests/' + encodeURIComponent(questId), true).catch(function () { return null; });
@@ -19929,11 +19954,14 @@ window.spDaoLoadTasks = async function (app) {
 
   const list = [];
   try {
-    const snap = await window.fbLib.getDocs(_spTaskCol(p.uid));
-    snap.forEach(function (s) {
-      const d = s.data() || {};
+    /* 自分の宿題も共有の読み口から読む（SDK が戻ってこないときは普通の通信）。
+       書いた直後に読み直すので、取り置きは使わない（fresh）。
+       前は getDocs を上限なしで待っていて、SDK が止まると宿題が出なかった。 */
+    const rows = await _spReadAll('sp_tasks/' + encodeURIComponent(p.uid) + '/items', 4000, true);
+    if (!rows) throw new Error('宿題を読めなかった');
+    rows.forEach(function (d) {
       list.push({
-        id: s.id, title: d.title || '', note: d.note || '',
+        id: d.id, title: d.title || '', note: d.note || '',
         brand: SP_TASK_BRANDS.indexOf(d.brand) >= 0 ? d.brand : 'other',
         questId: d.questId || '', questTitle: d.questTitle || '',
         due: d.due || '', done: !!d.done,
@@ -20086,7 +20114,8 @@ window.spQuestWisdom = async function (questId, app) {
   let q = null;
   try {
     /* SDK が戻ってこないと、ここで止まって押しても何も起きなかった。見切って普通の通信へ。 */
-    const r = await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500);
+    const r = _spSdkStalled() ? { ok: false }
+      : _spSdkNoted(await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500));
     if (r.ok && r.value.exists()) q = { id: r.value.id, ...(r.value.data() || {}) };
   } catch (e) {}
   if (!q) {
@@ -20123,7 +20152,8 @@ window.spQuestClose = async function (questId, app) {
   let q = null;
   try {
     /* SDK が戻ってこないと、ここで止まって押しても何も起きなかった。見切って普通の通信へ。 */
-    const r = await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500);
+    const r = _spSdkStalled() ? { ok: false }
+      : _spSdkNoted(await _spSoon(fb.getDoc(fb.doc(window.db, 'sp_quests', questId)), 3500));
     if (r.ok && r.value.exists()) q = { id: r.value.id, ...(r.value.data() || {}) };
   } catch (e) {}
   if (!q) {
