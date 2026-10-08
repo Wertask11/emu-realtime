@@ -31,6 +31,7 @@ const PRODUCTS = "mitemiru_products";
    並びになっている。商品だけだと、その階層が作れない。
    商品は shopId でここへぶら下がる。 */
 const SHOPS = "mitemiru_shops";
+const CITY_OFFICIAL_SHOP_ID = "schoolpark-official";
 const ORDERS = "mitemiru_orders";
 const CHAIN_PAYMENTS = "mitemiru_chain_payments";
 const REWARDS = "emuer_v2_rewards";
@@ -112,12 +113,18 @@ function cleanProduct(body, previous) {
   }
   /* どのショップの商品か。空でも置ける（どこにも属さない商品）。 */
   const shopId = slug(pick("shopId"), 40);
+  // Store type is derived from the authoritative shop record below. Never let
+  // a product editor choose its own payment policy.
+  const storeType = shopId === CITY_OFFICIAL_SHOP_ID ? "schoolpark_virtual" : "legacy";
+  if (storeType === "schoolpark_virtual" && (prices.EMUER === null || prices.JPY !== null || prices.JPYC !== null || cashAtVenue)) {
+    throw new Error("VIRTUAL_STORE_EMUER_ONLY");
+  }
   /* 画面に出す絵文字。1〜4文字まで（絵文字は1文字でも長さが2以上になる）。 */
   const emoji = text(pick("emoji"), 8);
   const sortOrder = Number(pick("sortOrder") || 0);
   return {
     name, description: text(pick("description"), 600), imageUrl, prices, cashAtVenue, stock, status,
-    fulfillment, cancelPolicy, shopId, emoji,
+    fulfillment, cancelPolicy, shopId, storeType, emoji,
     sortOrder: Number.isSafeInteger(sortOrder) ? sortOrder : 0
   };
 }
@@ -147,12 +154,23 @@ function cleanShop(body, previous) {
   if (!SHOP_BADGES.includes(badge)) throw new Error("INVALID_BADGE");
   const status = pick("status") || "draft";
   if (!["draft", "live", "ended"].includes(status)) throw new Error("INVALID_STATUS");
+  const storeType = pick("storeType") || "legacy";
+  if (!["schoolpark_virtual", "real_partner", "legacy"].includes(storeType)) throw new Error("INVALID_STORE_TYPE");
+  const address = text(pick("address"), 200);
+  const paymentGuide = text(pick("paymentGuide"), 500);
+  const imageUrl = text(pick("imageUrl"), 500);
+  if (imageUrl) {
+    let image = null;
+    try { image = new URL(imageUrl); } catch (_) { /* checked below */ }
+    if (!image || image.protocol !== "https:") throw new Error("INVALID_IMAGE_URL");
+  }
+  if (storeType === "real_partner" && status === "live" && !address) throw new Error("PARTNER_ADDRESS_REQUIRED");
   /* 星は 0.0〜5.0。飾りなので無ければ 5.0 にする。 */
   let rating = Number(pick("rating"));
   if (!Number.isFinite(rating) || rating < 0 || rating > 5) rating = 5;
   const sortOrder = Number(pick("sortOrder") || 0);
   return {
-    name, category, badge, status,
+    name, category, badge, status, storeType, address, imageUrl, paymentGuide,
     emoji: text(pick("emoji"), 8) || "\u{1F3EA}",
     description: text(pick("description"), 200),
     rating: Math.round(rating * 10) / 10,
@@ -249,6 +267,7 @@ function createMitemiruRouter(deps) {
     const code = String(error && error.message || "");
     const known = {
       PRODUCT_NOT_FOUND: 404, ORDER_NOT_FOUND: 404, NOT_FOR_SALE: 409, SOLD_OUT: 409, METHOD_NOT_AVAILABLE: 409,
+      PASSPORT_LINK_REQUIRED: 409,
       PLAN_REQUIRED: 403, PERIOD_LIMIT_REACHED: 409, INSUFFICIENT_EMUER: 409, EMUER_NOT_ACTIVE: 409,
       WALLET_REQUIRED: 400, ORDER_NOT_PENDING: 409, ORDER_EXPIRED: 409, CHAIN_PAYMENT_NOT_FOUND: 409,
       CHAIN_PAYMENT_MISMATCH: 409, TX_NOT_FOUND: 409, TX_FAILED: 409, TX_PENDING: 409, TX_ALREADY_USED: 409,
@@ -259,7 +278,12 @@ function createMitemiruRouter(deps) {
       INVALID_PRICE: 400, CASH_NEEDS_JPY_PRICE: 400, INVALID_STOCK: 400, INVALID_STATUS: 400,
       INVALID_IMAGE_URL: 400, INVALID_PRODUCT: 400, ENTITLEMENT_UNAVAILABLE: 503,
       /* ショップ。足しておかないと、入力の間違いが 500 として返る。 */
-      INVALID_SHOP: 400, INVALID_CATEGORY: 400, INVALID_BADGE: 400, SHOP_NOT_FOUND: 404
+      INVALID_SHOP: 400, INVALID_CATEGORY: 400, INVALID_BADGE: 400, SHOP_NOT_FOUND: 404,
+      INVALID_STORE_TYPE: 400, RESERVED_SHOP_ID: 400,
+      VIRTUAL_STORE_EMUER_ONLY: 400, PARTNER_STORE_FIAT_ONLY: 400, PARTNER_ADDRESS_REQUIRED: 400,
+      PARTNER_CHECKOUT_NOT_READY: 409, IDEMPOTENCY_KEY_REQUIRED: 400,
+      IDEMPOTENCY_KEY_CONFLICT: 409, EVENT_QR_PRODUCT_NOT_READY: 409,
+      EVENT_QR_CONFIG_INVALID: 503
     };
     if (known[code]) return res.status(known[code]).json({ error: code, ...(error.extra || {}) });
     console.error("mitemiru error:", code);
@@ -269,6 +293,15 @@ function createMitemiruRouter(deps) {
 
   function methodsFor(product) {
     const out = [];
+    const storeType = product.shopId === CITY_OFFICIAL_SHOP_ID ? "schoolpark_virtual" : (product.storeType || "legacy");
+    if (storeType === "schoolpark_virtual") {
+      if (product.prices.EMUER !== null && emuerEnabled()) out.push("emuer_ledger", "emuer_chain");
+      return out;
+    }
+    // Partner payments are intentionally not settled by SchoolPark. Reji's
+    // API/webhook contract is pending, and existing JPY/JPYC methods pay the
+    // SchoolPark account. The listing may show guides, but no order is allowed.
+    if (storeType === "real_partner") return out;
     if (product.prices.EMUER !== null && emuerEnabled()) out.push("emuer_ledger", "emuer_chain");
     if (product.prices.JPYC !== null) out.push("jpyc");
     if (product.prices.JPY !== null && stripe) out.push("jpy_card");
@@ -281,13 +314,15 @@ function createMitemiruRouter(deps) {
       id, name: p.name, description: p.description || "", imageUrl: p.imageUrl || "",
       prices: p.prices, methods: methodsFor(p), remaining: left, soldOut: left === 0,
       fulfillment: p.fulfillment, cancelPolicy: p.cancelPolicy,
-      shopId: p.shopId || "", emoji: p.emoji || ""
+      shopId: p.shopId || "", storeType: p.shopId === CITY_OFFICIAL_SHOP_ID ? "schoolpark_virtual" : (p.storeType || "legacy"), emoji: p.emoji || ""
     };
   }
   function publicOrder(id, o) {
     const shown = ["paid", "fulfilled"].includes(o.status);
     return {
-      id, productId: o.productId, productName: o.productName, method: o.method, currency: o.currency,
+      id, productId: o.productId, productName: o.productName, shopId: o.shopId || "",
+      storeType: o.storeType || "legacy", passportId: o.passportId || null,
+      method: o.method, currency: o.currency,
       amount: o.amount, status: o.status, pickupCode: shown ? o.pickupCode : null,
       fulfillment: o.fulfillment || "", createdAt: o.createdAtMs, paidAt: o.paidAtMs || null,
       fulfilledAt: o.fulfilledAtMs || null, expiresAt: o.status === "pending_payment" ? o.expiresAtMs : null,
@@ -377,9 +412,24 @@ function createMitemiruRouter(deps) {
   /* ───────── 利用者 ───────── */
 
   const shopRef = (id) => db.collection(SHOPS).doc(String(id));
+  async function authoritativeStoreType(shopId) {
+    if (shopId === CITY_OFFICIAL_SHOP_ID) return "schoolpark_virtual";
+    if (!shopId) return "legacy";
+    const snap = await shopRef(shopId).get();
+    return snap.exists ? ((snap.data() || {}).storeType || "legacy") : "legacy";
+  }
+  function validateStoreProduct(product, storeType) {
+    if (storeType === "schoolpark_virtual" && (product.prices.EMUER === null
+        || product.prices.JPY !== null || product.prices.JPYC !== null || product.cashAtVenue)) throw err("VIRTUAL_STORE_EMUER_ONLY");
+    if (storeType === "real_partner" && (product.prices.EMUER !== null
+        || (product.prices.JPY === null && product.prices.JPYC === null))) throw err("PARTNER_STORE_FIAT_ONLY");
+    return { ...product, storeType };
+  }
   const publicShop = (id, x) => ({
-    id, name: x.name, emoji: x.emoji || "\u{1F3EA}", category: x.category || "other",
-    description: x.description || "", badge: x.badge || "", rating: Number(x.rating || 5)
+      id, name: x.name, emoji: x.emoji || "\u{1F3EA}", category: x.category || "other",
+    description: x.description || "", badge: x.badge || "", rating: Number(x.rating || 5),
+    storeType: id === CITY_OFFICIAL_SHOP_ID ? "schoolpark_virtual" : (x.storeType || "legacy"),
+    address: x.address || "", imageUrl: x.imageUrl || "", paymentGuide: x.paymentGuide || ""
   });
 
   /* 売っているショップ。誰でも読める（入る前の人にも見せる）。 */
@@ -389,16 +439,33 @@ function createMitemiruRouter(deps) {
       const rows = snap.docs.map(d => ({ id: d.id, data: d.data() || {} }))
         .sort((a, b) => (a.data.sortOrder || 0) - (b.data.sortOrder || 0)
           || (a.data.createdAtMs || 0) - (b.data.createdAtMs || 0));
-      return res.json({ ok: true, shops: rows.map(r => publicShop(r.id, r.data)) });
+      const shops = rows.map(r => publicShop(r.id, r.data));
+      if (!shops.some(s => s.id === CITY_OFFICIAL_SHOP_ID)) shops.unshift(publicShop(CITY_OFFICIAL_SHOP_ID, {
+        name: "SchoolPark公式仮想店舗", emoji: "🏫", category: "other",
+        description: "SchoolParkが運営するEMUER専用の商品交換店舗です。商品・価格・在庫は登録済みデータのみ表示します。",
+        storeType: "schoolpark_virtual", status: "live", sortOrder: -10000
+      }));
+      return res.json({ ok: true, shops });
     } catch (e) { return fail(res, e); }
   });
 
   router.get("/products", async (req, res) => {
     try {
+      const shopId = req.query.shopId ? String(req.query.shopId) : "";
+      if (req.query.shopId && !/^[a-z0-9_-]{1,40}$/.test(shopId)) return res.status(400).json({ error: "INVALID_SHOP" });
+      if (shopId && shopId !== CITY_OFFICIAL_SHOP_ID) {
+        const shop = await shopRef(shopId).get();
+        if (!shop.exists || (shop.data() || {}).status !== "live") return res.json({ ok: true, products: [], emuerActive: emuerEnabled() });
+      }
       const snap = await db.collection(PRODUCTS).where("status", "==", "live").limit(100).get();
       const rows = snap.docs.map(d => ({ id: d.id, data: d.data() || {} }))
+        .filter(r => !shopId || String(r.data.shopId || "") === shopId)
         .sort((a, b) => (a.data.sortOrder || 0) - (b.data.sortOrder || 0) || (a.data.createdAtMs || 0) - (b.data.createdAtMs || 0));
-      return res.json({ ok: true, products: rows.map(r => publicProduct(r.id, r.data)), emuerActive: emuerEnabled() });
+      const products = await Promise.all(rows.map(async r => {
+        const type = await authoritativeStoreType(String(r.data.shopId || ""));
+        return publicProduct(r.id, { ...r.data, storeType: type });
+      }));
+      return res.json({ ok: true, products, emuerActive: emuerEnabled() });
     } catch (e) { return fail(res, e); }
   });
 
@@ -434,9 +501,14 @@ function createMitemiruRouter(deps) {
   router.get("/orders", deps.requireFirebaseUser, async (req, res) => {
     try {
       const snap = await db.collection(ORDERS).where("uid", "==", req.identity.uid).limit(200).get();
+      const passportId = deps.identity && await deps.identity.findByUid(req.identity.uid);
       const rows = snap.docs.map(d => ({ id: d.id, data: d.data() || {} }))
         .sort((a, b) => (b.data.createdAtMs || 0) - (a.data.createdAtMs || 0)).slice(0, 50);
-      return res.json({ ok: true, orders: rows.map(r => publicOrder(r.id, r.data)) });
+      // Older Mitemiru orders predate Passport linkage. Project the current
+      // server-resolved Passport ID into this authenticated user's response
+      // without rewriting historical orders or accepting a client-supplied ID.
+      return res.json({ ok: true, orders: rows.map(r => publicOrder(r.id,
+        { ...r.data, passportId: r.data.passportId || passportId || null })) });
     } catch (e) { return fail(res, e); }
   });
 
@@ -453,17 +525,40 @@ function createMitemiruRouter(deps) {
       const ps = await productRef(productId).get();
       if (!ps.exists) throw err("PRODUCT_NOT_FOUND");
       const product = ps.data() || {};
+      const storeType = await authoritativeStoreType(String(product.shopId || ""));
+      product.storeType = storeType;
+      if (storeType === "real_partner") throw err("PARTNER_CHECKOUT_NOT_READY");
+      const requestId = String(b.requestId || "");
+      if (storeType === "schoolpark_virtual" && !/^[A-Za-z0-9_-]{16,80}$/.test(requestId)) throw err("IDEMPOTENCY_KEY_REQUIRED");
+      const id = storeType === "schoolpark_virtual"
+        ? crypto.createHash("sha256").update(`${identity.uid}:${requestId}`).digest("hex").slice(0, 40)
+        : crypto.randomBytes(12).toString("hex");
+      let passportId = null;
+      if (storeType === "schoolpark_virtual") {
+        const prior = await orderRef(id).get();
+        if (prior.exists) {
+          const existing = prior.data() || {};
+          if (existing.uid !== identity.uid || existing.productId !== productId || existing.method !== method) throw err("IDEMPOTENCY_KEY_CONFLICT");
+          return res.json({ ok: true, order: publicOrder(id, existing), already: true });
+        }
+        passportId = deps.identity && await deps.identity.findByUid(identity.uid);
+        const person = passportId && deps.identity.readIdentity ? await deps.identity.readIdentity(passportId) : null;
+        if (!person || person.status !== "active") throw err("PASSPORT_LINK_REQUIRED");
+      }
       if (product.status !== "live") throw err("NOT_FOR_SALE");
       if (!methodsFor(product).includes(method)) throw err("METHOD_NOT_AVAILABLE");
       if (remaining(product) === 0) throw err("SOLD_OUT");
       const currency = METHODS[method].currency;
       const amount = product.prices[currency];
-      const id = crypto.randomBytes(12).toString("hex");
       const pickupCode = await newPickupCode();
       const base = {
         uid: identity.uid, wallet, productId, productName: product.name, fulfillment: product.fulfillment,
-        cancelPolicy: product.cancelPolicy, method, currency, amount, pickupCode, createdAtMs: now()
+        cancelPolicy: product.cancelPolicy, method, currency, amount, pickupCode, createdAtMs: now(),
+        shopId: product.shopId || "", storeType,
+        ...(storeType === "schoolpark_virtual" ? { requestId } : {})
       };
+
+      if (passportId) base.passportId = passportId;
 
       if (currency === "EMUER") {
         if (!emuerEnabled()) throw err("EMUER_NOT_ACTIVE");
@@ -585,7 +680,13 @@ function createMitemiruRouter(deps) {
     const changeId = change > 0n ? chainIdOf(changeKey) : null;
     const order = { ...base, status: "paid", paidAtMs: now(), spentRewardIds: chosen, spentWei: total.toString(),
       changeRewardId: changeId, changeWei: change.toString() };
-    await db.runTransaction(async tx => {
+    const result = await db.runTransaction(async tx => {
+      const existingOrder = await tx.get(orderRef(id));
+      if (existingOrder.exists) {
+        const old = existingOrder.data() || {};
+        if (old.uid !== base.uid || old.productId !== base.productId || old.method !== base.method) throw err("IDEMPOTENCY_KEY_CONFLICT");
+        return { order: old, already: true };
+      }
       const reads = [tx.get(productRef(base.productId))];
       if (base.usageId) reads.push(tx.get(db.collection(USAGE).doc(base.usageId)));
       const [ps, us] = await Promise.all(reads);
@@ -614,8 +715,9 @@ function createMitemiruRouter(deps) {
       tx.set(productRef(base.productId), { sold: Number(p.sold || 0) + 1 }, { merge: true });
       tx.create(orderRef(id), order);
       consumeUsage(tx, order, us);
+      return { order, already: false };
     });
-    return order;
+    return result.order;
   }
 
   router.post("/orders/:id/confirm", deps.requireFirebaseUser, async (req, res) => {
@@ -741,11 +843,35 @@ function createMitemiruRouter(deps) {
     } catch (e) { return fail(res, e); }
   });
 
+  router.get("/admin/products/:id/event-qr", owner, async (req, res) => {
+    try {
+      const id = String(req.params.id || "");
+      const snap = await productRef(id).get();
+      if (!snap.exists) throw err("PRODUCT_NOT_FOUND");
+      const product = snap.data() || {};
+      if (product.status !== "live" || await authoritativeStoreType(String(product.shopId || "")) !== "schoolpark_virtual") {
+        throw err("EVENT_QR_PRODUCT_NOT_READY");
+      }
+      let target;
+      try {
+        if (!env.CITY_PUBLIC_URL) throw new Error("missing");
+        target = new URL(env.CITY_PUBLIC_URL);
+      }
+      catch (_) { throw err("EVENT_QR_CONFIG_INVALID"); }
+      if (target.protocol !== "https:" || target.username || target.password) throw err("EVENT_QR_CONFIG_INVALID");
+      target.searchParams.set("cityProductId", id);
+      const QRCode = require("qrcode");
+      const dataUrl = await QRCode.toDataURL(target.href, { errorCorrectionLevel: "M", margin: 2, width: 640 });
+      return res.json({ ok: true, productId: id, productName: product.name, url: target.href, image: dataUrl });
+    } catch (e) { return fail(res, e); }
+  });
+
   router.post("/admin/products", owner, async (req, res) => {
     try {
       const clean = cleanProduct(req.body, null);
+      const authoritative = validateStoreProduct(clean, await authoritativeStoreType(clean.shopId));
       const id = "p_" + crypto.randomBytes(6).toString("hex");
-      const row = { ...clean, sold: 0, reserved: 0, createdAtMs: now(), updatedAtMs: now(), createdBy: req.identity.uid };
+      const row = { ...authoritative, sold: 0, reserved: 0, createdAtMs: now(), updatedAtMs: now(), createdBy: req.identity.uid };
       await productRef(id).create(row);
       return res.json({ ok: true, product: { id, ...row } });
     } catch (e) { return fail(res, e); }
@@ -760,10 +886,11 @@ function createMitemiruRouter(deps) {
         if (!s.exists) throw err("PRODUCT_NOT_FOUND");
         const prev = s.data() || {};
         const clean = cleanProduct(req.body, prev);
+        const authoritative = validateStoreProduct(clean, await authoritativeStoreType(clean.shopId));
         // 在庫は、すでに売れた・取り置き中の数より少なくできない
         if (clean.stock !== null && clean.stock < Number(prev.sold || 0) + Number(prev.reserved || 0)) throw err("INVALID_STOCK");
-        out = { ...prev, ...clean, updatedAtMs: now() };
-        tx.set(productRef(id), { ...clean, updatedAtMs: now() }, { merge: true });
+        out = { ...prev, ...authoritative, updatedAtMs: now() };
+        tx.set(productRef(id), { ...authoritative, updatedAtMs: now() }, { merge: true });
       });
       return res.json({ ok: true, product: { id, ...out } });
     } catch (e) { return fail(res, e); }
@@ -774,6 +901,9 @@ function createMitemiruRouter(deps) {
       const snap = await db.collection(SHOPS).limit(300).get();
       const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }))
         .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (b.createdAtMs || 0) - (a.createdAtMs || 0));
+      rows.unshift({ id: CITY_OFFICIAL_SHOP_ID, name: "SchoolPark公式仮想店舗", emoji: "🏫", category: "other",
+        description: "SchoolParkが運営するEMUER専用の商品交換店舗です。", status: "live",
+        storeType: "schoolpark_virtual", virtual: true, address: "" });
       return res.json({ ok: true, shops: rows });
     } catch (e) { return fail(res, e); }
   });
@@ -784,6 +914,7 @@ function createMitemiruRouter(deps) {
       /* 名前から読める id を作る。使われていたら後ろに数を足す。
          id は商品が指す先なので、あとから変えられない。 */
       const wanted = slug(req.body && req.body.id, 40) || "s_" + crypto.randomBytes(5).toString("hex");
+      if (wanted === CITY_OFFICIAL_SHOP_ID) throw err("RESERVED_SHOP_ID");
       let id = wanted;
       for (let i = 2; i <= 20; i += 1) {
         if (!(await shopRef(id).get()).exists) break;
@@ -798,6 +929,7 @@ function createMitemiruRouter(deps) {
   router.put("/admin/shops/:id", owner, async (req, res) => {
     const id = String(req.params.id || "");
     try {
+      if (id === CITY_OFFICIAL_SHOP_ID) throw err("RESERVED_SHOP_ID");
       const snap = await shopRef(id).get();
       if (!snap.exists) throw err("SHOP_NOT_FOUND");
       const clean = cleanShop(req.body, snap.data() || {});
@@ -811,6 +943,7 @@ function createMitemiruRouter(deps) {
   router.delete("/admin/shops/:id", owner, async (req, res) => {
     const id = String(req.params.id || "");
     try {
+      if (id === CITY_OFFICIAL_SHOP_ID) throw err("RESERVED_SHOP_ID");
       const snap = await shopRef(id).get();
       if (!snap.exists) throw err("SHOP_NOT_FOUND");
       await shopRef(id).set({ status: "ended", updatedAtMs: now() }, { merge: true });
@@ -830,7 +963,8 @@ function createMitemiruRouter(deps) {
       const snap = await q.get();
       const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }))
         .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0)).slice(0, 300)
-        .map(o => ({ id: o.id, productId: o.productId, productName: o.productName, method: o.method, currency: o.currency,
+        .map(o => ({ id: o.id, productId: o.productId, productName: o.productName, shopId: o.shopId || "",
+          storeType: o.storeType || "legacy", passportId: o.passportId || null, method: o.method, currency: o.currency,
           amount: o.amount, status: o.status, pickupCode: o.pickupCode, wallet: o.wallet, uid: o.uid,
           createdAt: o.createdAtMs, paidAt: o.paidAtMs || null, fulfilledAt: o.fulfilledAtMs || null,
           refundedAt: o.refundedAtMs || null, expiresAt: o.expiresAtMs || null, txHash: o.txHash || null,
@@ -855,22 +989,24 @@ function createMitemiruRouter(deps) {
   });
 
   async function fulfill(id, by) {
-    await db.runTransaction(async tx => {
+    return db.runTransaction(async tx => {
       const s = await tx.get(orderRef(id));
       const o = s.exists ? s.data() || {} : null;
       if (!o) throw err("ORDER_NOT_FOUND");
-      if (o.status === "fulfilled") return;
+      if (o.status === "fulfilled") return { already: true, order: o };
       if (o.status !== "paid") throw err("NOT_PAID");
-      tx.set(orderRef(id), { status: "fulfilled", fulfilledAtMs: now(), fulfilledBy: by }, { merge: true });
+      const patch = { status: "fulfilled", fulfilledAtMs: now(), fulfilledBy: by };
+      tx.set(orderRef(id), patch, { merge: true });
+      return { already: false, order: { ...o, ...patch } };
     });
   }
 
   router.post("/admin/orders/:id/fulfill", owner, async (req, res) => {
     const id = String(req.params.id || "");
     try {
-      await fulfill(id, req.identity.uid);
+      const delivered = await fulfill(id, req.identity.uid);
       const fresh = (await orderRef(id).get()).data();
-      return res.json({ ok: true, order: { id, ...fresh } });
+      return res.json({ ok: true, already: delivered.already, order: { id, ...fresh } });
     } catch (e) { return fail(res, e); }
   });
 

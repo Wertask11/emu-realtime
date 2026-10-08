@@ -76,6 +76,8 @@ test("名前のないショップ・知らない種類は断る", async () => {
     assert.equal((await t.call("owner", "POST", "/admin/shops", { ...SHOP, name: "" })).body.error, "NAME_REQUIRED");
     assert.equal((await t.call("owner", "POST", "/admin/shops", { ...SHOP, category: "xxx" })).body.error, "INVALID_CATEGORY");
     assert.equal((await t.call("owner", "POST", "/admin/shops", { ...SHOP, status: "xxx" })).body.error, "INVALID_STATUS");
+    assert.equal((await t.call("owner", "POST", "/admin/shops", { ...SHOP, storeType: "unknown" })).body.error, "INVALID_STORE_TYPE");
+    assert.equal((await t.call("owner", "POST", "/admin/shops", { ...SHOP, id: "schoolpark-official" })).body.error, "RESERVED_SHOP_ID");
   } finally { t.close(); }
 });
 
@@ -86,10 +88,10 @@ test("販売中のショップだけ、誰でも見られる", async () => {
     await t.call("owner", "POST", "/admin/shops", { ...SHOP, id: "draft-shop", name: "下書き", status: "draft" });
     const r = await t.call(null, "GET", "/shops");
     assert.equal(r.status, 200);
-    assert.deepEqual(r.body.shops.map(s => s.id), ["flower"], "下書きが出ています");
+    assert.deepEqual(r.body.shops.map(s => s.id), ["schoolpark-official", "flower"], "下書きが出ています");
     /* 運営は下書きも見える */
     const all = await t.call("owner", "GET", "/admin/shops");
-    assert.equal(all.body.shops.length, 2);
+    assert.equal(all.body.shops.length, 3);
   } finally { t.close(); }
 });
 
@@ -136,9 +138,9 @@ test("ショップは消さずに閉じる（商品と注文の記録を残す�
     assert.equal(d.body.status, "ended");
     /* 記録そのものは残っている */
     const all = await t.call("owner", "GET", "/admin/shops");
-    assert.equal(all.body.shops.length, 1);
+    assert.equal(all.body.shops.length, 2);
     /* 売り場からは消える */
-    assert.equal((await t.call(null, "GET", "/shops")).body.shops.length, 0);
+    assert.deepEqual((await t.call(null, "GET", "/shops")).body.shops.map(s => s.id), ["schoolpark-official"]);
     /* 商品は消えない */
     assert.equal((await t.call(null, "GET", "/products")).body.products.length, 1);
   } finally { t.close(); }
@@ -175,5 +177,63 @@ test("ショップを足しても、商品の払い方は変わっていない",
     assert.deepEqual(p.methods, ["emuer_ledger", "emuer_chain", "jpyc", "jpy_cash"]);
     assert.equal(p.fulfillment, "会場で手渡し");
     assert.equal(p.cancelPolicy, "お渡し前なら取り消せます");
+  } finally { t.close(); }
+});
+
+test("City公式店舗は実データの商品だけを出し、EMUER以外の商品設定を拒否する", async () => {
+  const t = setup();
+  try {
+    const empty = await t.call(null, "GET", "/shops");
+    assert.equal(empty.body.shops[0].id, "schoolpark-official");
+    assert.equal(empty.body.shops[0].storeType, "schoolpark_virtual");
+    assert.equal((await t.call(null, "GET", "/products?shopId=schoolpark-official")).body.products.length, 0);
+    const bad = await t.call("owner", "POST", "/admin/products", {
+      ...ITEM, shopId: "schoolpark-official", prices: { EMUER: 50, JPY: 300, JPYC: null }
+    });
+    assert.equal(bad.body.error, "VIRTUAL_STORE_EMUER_ONLY");
+    const good = await t.call("owner", "POST", "/admin/products", {
+      ...ITEM, shopId: "schoolpark-official", prices: { EMUER: 50, JPY: null, JPYC: null }, cashAtVenue: false
+    });
+    assert.equal(good.status, 200, JSON.stringify(good.body));
+    const listed = await t.call(null, "GET", "/products?shopId=schoolpark-official");
+    assert.equal(listed.body.products.length, 1);
+    assert.equal(listed.body.products[0].storeType, "schoolpark_virtual");
+    assert.deepEqual(listed.body.products[0].methods, ["emuer_ledger", "emuer_chain"]);
+  } finally { t.close(); }
+});
+
+test("リアル提携店舗は円・JPYCの商品情報だけを登録し、EMUERとSchoolPark決済を拒否する", async () => {
+  const t = setup();
+  try {
+    const shop = await t.call("owner", "POST", "/admin/shops", {
+      ...SHOP, id: "partner-cafe", name: "確認済み提携店舗", status: "live",
+      storeType: "real_partner", address: "東京都内", paymentGuide: "決済は店舗へお問い合わせください。"
+    });
+    assert.equal(shop.status, 200, JSON.stringify(shop.body));
+    const bad = await t.call("owner", "POST", "/admin/products", {
+      ...ITEM, shopId: "partner-cafe", prices: { EMUER: 50, JPY: 300, JPYC: null }
+    });
+    assert.equal(bad.body.error, "PARTNER_STORE_FIAT_ONLY");
+    const product = await t.call("owner", "POST", "/admin/products", {
+      ...ITEM, shopId: "partner-cafe", prices: { EMUER: null, JPY: 300, JPYC: 300 }, cashAtVenue: false
+    });
+    assert.equal(product.status, 200, JSON.stringify(product.body));
+    const shopList = await t.call(null, "GET", "/shops");
+    const partner = shopList.body.shops.find(s => s.id === "partner-cafe");
+    assert.equal(partner.storeType, "real_partner");
+    assert.equal(partner.address, "東京都内");
+    const productList = await t.call(null, "GET", "/products?shopId=partner-cafe");
+    assert.deepEqual(productList.body.products[0].methods, []);
+    const order = await t.call("alice", "POST", "/orders", { productId: product.body.product.id, method: "jpyc" });
+    assert.equal(order.body.error, "PARTNER_CHECKOUT_NOT_READY");
+    const draftShop = await t.call("owner", "POST", "/admin/shops", {
+      ...SHOP, id: "unconfirmed-partner", name: "未公開店舗", storeType: "real_partner", address: "住所未確認", status: "draft"
+    });
+    assert.equal(draftShop.status, 200);
+    const hidden = await t.call("owner", "POST", "/admin/products", {
+      ...ITEM, shopId: "unconfirmed-partner", prices: { EMUER: null, JPY: 300, JPYC: null }, cashAtVenue: false
+    });
+    assert.equal(hidden.status, 200);
+    assert.equal((await t.call(null, "GET", "/products?shopId=unconfirmed-partner")).body.products.length, 0);
   } finally { t.close(); }
 });

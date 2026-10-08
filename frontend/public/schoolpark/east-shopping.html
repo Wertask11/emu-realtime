@@ -1190,6 +1190,11 @@ input, textarea, select { font-family: inherit; outline: none; }
     </div>
   </header>
 
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px clamp(16px,4vw,36px);background:#eaf1e6;color:#244936;font:600 13px/1.5 'Zen Maru Gothic',sans-serif">
+    <span>買い物・商品交換の入口はSchoolPark Cityへ移りました。注文履歴・引換・管理機能はこの画面にも残しています。</span>
+    <button type="button" onclick="if(window.parent!==window&&typeof window.parent.openEmuShopping==='function')window.parent.openEmuShopping();else window.location.href='/?cityView=commerce'" style="border:1px solid #244936;border-radius:6px;background:#fff;padding:9px 14px;color:#244936;font:inherit">SchoolPark Cityを開く</button>
+  </div>
+
   <!-- Hero -->
   <div class="hero" id="hero">
     <div class="hero-beam"></div>
@@ -1922,12 +1927,12 @@ function renderOwnerPanel() {
           <span class="shop-manage-emoji">${sh.emoji||'🏪'}</span>
           <div class="shop-manage-info">
             <div class="shop-manage-name">${sh.name}${sh.status!=='live'?` <span style="font-size:10px;color:var(--text3)">（${sh.status==='draft'?'下書き':'終了'}）</span>`:''}</div>
-            <div class="shop-manage-cat">${catLabel(sh.category)} · ${items}点</div>
+            <div class="shop-manage-cat">${sh.storeType==='schoolpark_virtual'?'公式仮想店舗 / EMUER専用':sh.storeType==='real_partner'?'リアル提携店舗 / 円・JPYC案内':'従来店舗'} · ${catLabel(sh.category)} · ${items}点${sh.address?` · ${sh.address}`:''}</div>
           </div>
-          <div class="shop-manage-actions">
+          ${sh.virtual?'':`<div class="shop-manage-actions">
             <button class="edit-btn" onclick="toggleShopLive('${sh.id}','${sh.status}')">${sh.status==='live'?'下書きに戻す':'販売中にする'}</button>
             <button class="delete-btn" onclick="confirmDeleteShop('${sh.id}')">閉じる</button>
-          </div>
+          </div>`}
         </div>`;}).join('')}
       </div>
     </div>
@@ -1959,6 +1964,22 @@ function renderOwnerPanel() {
         <label class="form-label">Description</label>
         <input type="text" class="form-input" id="newShopDesc" placeholder="ショップの説明">
       </div>
+      <div class="form-group">
+        <label class="form-label">店舗種別</label>
+        <select class="form-input" id="newShopType"><option value="real_partner">リアル提携店舗（円・JPYC案内、EMUER不可）</option><option value="legacy">従来店舗</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">所在地（提携確認済み店舗のみ）</label>
+        <input type="text" class="form-input" id="newShopAddress" placeholder="実在する店舗の所在地">
+      </div>
+      <div class="form-group">
+        <label class="form-label">決済案内</label>
+        <input type="text" class="form-input" id="newShopPaymentGuide" placeholder="円・JPYCは店舗へ確認。Reji自動決済は準備中">
+      </div>
+      <div class="form-group">
+        <label class="form-label">店舗画像URL（HTTPS）</label>
+        <input type="url" class="form-input" id="newShopImage" placeholder="https://...">
+      </div>
       <button class="form-submit" onclick="addShop()">ショップを追加</button>
     </div>
 
@@ -1969,7 +1990,7 @@ function renderOwnerPanel() {
           <label class="form-label">Shop</label>
           <select class="form-input" id="npShop">
             <option value="">（ショップに入れない）</option>
-            ${OWNER.shops.filter(x=>x.status!=='ended').map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}
+            ${OWNER.shops.filter(x=>x.status!=='ended').map(x=>`<option value="${x.id}">${x.name}${x.storeType==='schoolpark_virtual'?'（EMUER専用）':''}</option>`).join('')}
           </select>
         </div>
         <div class="form-group">
@@ -1987,11 +2008,11 @@ function renderOwnerPanel() {
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">EMUER</label>
+            <label class="form-label">EMUER（公式仮想店舗専用）</label>
           <input type="number" class="form-input" id="npEmuer" placeholder="100" min="0">
         </div>
         <div class="form-group">
-          <label class="form-label">JPYC</label>
+            <label class="form-label">JPYC（リアル提携店舗はReji仕様確認後に案内）</label>
           <input type="number" class="form-input" id="npJpyc" placeholder="300" min="0">
         </div>
       </div>
@@ -2108,7 +2129,11 @@ async function addShop() {
       emoji: document.getElementById('newShopEmoji').value.trim() || '🏪',
       category: document.getElementById('newShopCat').value,
       description: document.getElementById('newShopDesc').value.trim(),
-      badge: 'NEW', status: 'live'
+      paymentGuide: document.getElementById('newShopPaymentGuide').value.trim(),
+      address: document.getElementById('newShopAddress').value.trim(),
+      imageUrl: document.getElementById('newShopImage').value.trim(),
+      storeType: document.getElementById('newShopType').value,
+      badge: 'NEW', status: 'draft'
     }});
     showToast(`${name} を追加しました`, 'success');
     await loadOwner(); await loadShop(); paintAll();
@@ -2121,6 +2146,13 @@ async function addProduct() {
   const name = v('npName');
   if (!name) { showToast('商品名を入力してください', 'error'); return; }
   const prices = { EMUER: num('npEmuer'), JPYC: num('npJpyc'), JPY: num('npJpy') };
+  const selectedShop = OWNER.shops.find(x => x.id === v('npShop'));
+  if (selectedShop?.storeType === 'schoolpark_virtual' && (prices.EMUER == null || prices.JPYC != null || prices.JPY != null)) {
+    showToast('公式仮想店舗はEMUER価格だけを設定してください', 'error'); return;
+  }
+  if (selectedShop?.storeType === 'real_partner' && (prices.EMUER != null || (prices.JPYC == null && prices.JPY == null))) {
+    showToast('リアル提携店舗は円・JPYC価格のみ設定できます', 'error'); return;
+  }
   if (prices.EMUER == null && prices.JPYC == null && prices.JPY == null) {
     showToast('値段をどれか1つは入れてください', 'error'); return;
   }
@@ -2130,7 +2162,8 @@ async function addProduct() {
     await call('/admin/products', { method: 'POST', body: {
       name, description: v('npDesc'), emoji: v('npEmoji') || '🎁',
       shopId: v('npShop'), prices, stock: v('npStock') === '' ? null : Number(v('npStock')),
-      cashAtVenue: document.getElementById('npCash').checked,
+      cashAtVenue: selectedShop?.storeType === 'schoolpark_virtual' || selectedShop?.storeType === 'real_partner'
+        ? false : document.getElementById('npCash').checked,
       fulfillment, cancelPolicy, status: 'live'
     }});
     showToast(`${name} を販売中にしました`, 'success');

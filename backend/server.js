@@ -269,7 +269,7 @@ const emuerV2 = require("./emuer-v2/router").createEmuerV2Router({
 });
 /* みてみる（SchoolPark内の交換所）。EMUER・JPYC・円で商品を手に入れる。 */
 const mitemiru = require("./mitemiru").createMitemiruRouter({
-  db, requireFirebaseUser, requireOwner, entitlement, rateLimit, env: process.env,
+  db, identity, requireFirebaseUser, requireOwner, entitlement, rateLimit, env: process.env,
   emuerEnabled: () => emuerV2.isEnabled(),
   isOwner: (identity) => [identity.walletAddress, identity.account && identity.account.chesAddress]
     .some(address => SP_OWNER_ADDRESSES.includes(String(address || "").toLowerCase()))

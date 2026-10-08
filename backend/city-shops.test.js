@@ -24,6 +24,7 @@ test('3D shops: no script/http/credential/unknown-host URLs or unsupported payme
  const s=live().shops[0],p=s.products[0];
  for(const url of ['javascript:alert(1)','http://buy.stripe.com/test','https://buy.stripe.com.evil.test/pay','https://user:pass@buy.stripe.com/test','https://buy.stripe.com:444/pay','https://127.0.0.1/pay'])assert.equal(checkoutFor(s,{...p,checkout:{...p.checkout,url}}),null,url);
  assert.equal(checkoutFor(s,{...p,checkout:{...p.checkout,methods:['UNKNOWN']}}),null);
+ assert.equal(checkoutFor(s,{...p,checkout:{...p.checkout,methods:['EMUER']}}),null,'real partner must not accept EMUER');
 });
 test('3D shops: demo checkout rejects without creating any order or pretending payment success',()=>using(DEFAULT_CATALOG,async call=>{
  const r=await call({shopId:'field-store',productId:'field-note'});assert.equal(r.status,409);assert.equal(r.data.error,'SHOP_CHECKOUT_NOT_READY');

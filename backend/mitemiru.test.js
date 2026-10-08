@@ -52,7 +52,10 @@ function setup(opts) {
   const requireOwner = (req, res, next) => requireFirebaseUser(req, res, () =>
     req.identity.uid === "owner" ? next() : res.status(403).json({ error: "OWNER_ONLY" }));
   const m = createMitemiruRouter({
-    db, chain, stripe, env: {}, now: () => clock, emuerEnabled: () => o.emuerOff ? false : true,
+    db, identity: o.noIdentity ? null : {
+      findByUid: async uid => uid === "alice" ? "SP-AAAA-AAAA-AAAA-AAAA" : null,
+      readIdentity: async spid => spid === "SP-AAAA-AAAA-AAAA-AAAA" ? { status: "active" } : null
+    }, chain, stripe, env: { CITY_PUBLIC_URL: "https://staging.example.test/" }, now: () => clock, emuerEnabled: () => o.emuerOff ? false : true,
     requireFirebaseUser, requireOwner, isOwner: (i) => i.uid === "owner",
     entitlement: { getEntitlement: async (uid) => ({ plan: plans[uid] || "guest" }) }
   });
@@ -125,6 +128,66 @@ test("未変換のEMUERで払うと、報酬は使用済みになり、おつり
     const again = await t.call("alice", "POST", "/orders", { productId: pid, method: "emuer_ledger" });
     assert.equal(again.body.error, "PERIOD_LIMIT_REACHED");
     assert.equal((await t.call("alice", "GET", "/me")).body.emuer.unconverted, "52");
+  } finally { t.close(); }
+});
+
+test("City公式仮想店舗はPassport IDと結びつき、二重送信でも同じEMUER注文だけを作る", async () => {
+  const t = setup();
+  try {
+    const made = await t.call("owner", "POST", "/admin/products", {
+      name: "公式イベント商品", fulfillment: "運営者から現地で受取", cancelPolicy: "未引渡しの場合は運営返金",
+      shopId: "schoolpark-official", prices: { EMUER: 50, JPYC: null, JPY: null }, cashAtVenue: false, stock: 2, status: "live"
+    });
+    assert.equal(made.status, 200, JSON.stringify(made.body));
+    seedRewards(t.db, [100]);
+    const request = { productId: made.body.product.id, method: "emuer_ledger", requestId: "city-order-key-0001" };
+    const first = await t.call("alice", "POST", "/orders", request);
+    const second = await t.call("alice", "POST", "/orders", request);
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+    assert.equal(second.status, 200, JSON.stringify(second.body));
+    assert.equal(second.body.already, true);
+    assert.equal(first.body.order.id, second.body.order.id);
+    assert.equal(first.body.order.storeType, "schoolpark_virtual");
+    assert.equal(first.body.order.passportId, "SP-AAAA-AAAA-AAAA-AAAA");
+    assert.equal(t.db._dump("mitemiru_products")[made.body.product.id].sold, 1);
+    assert.equal(Object.keys(t.db._dump("mitemiru_orders")).length, 1);
+    const jpy = await t.call("alice", "POST", "/orders", { productId: made.body.product.id, method: "jpy_cash", requestId: "city-order-key-0002" });
+    assert.equal(jpy.body.error, "METHOD_NOT_AVAILABLE");
+    const history = await t.call("alice", "GET", "/orders");
+    assert.equal(history.body.orders[0].passportId, "SP-AAAA-AAAA-AAAA-AAAA");
+  } finally { t.close(); }
+});
+
+test("City公式仮想店舗はPassport未連携のアカウントから注文を作らない", async () => {
+  const t = setup({ noIdentity: true });
+  try {
+    const made = await t.call("owner", "POST", "/admin/products", {
+      name: "公式商品", fulfillment: "現地受取", cancelPolicy: "運営返金",
+      shopId: "schoolpark-official", prices: { EMUER: 50 }, stock: 1, status: "live"
+    });
+    assert.equal(made.status, 200);
+    seedRewards(t.db, [100]);
+    const response = await t.call("alice", "POST", "/orders", {
+      productId: made.body.product.id, method: "emuer_ledger", requestId: "city-order-key-0003"
+    });
+    assert.equal(response.body.error, "PASSPORT_LINK_REQUIRED");
+    assert.equal(Object.keys(t.db._dump("mitemiru_orders")).length, 0);
+  } finally { t.close(); }
+});
+
+test("公式イベント用QRは商品URLを生成し、公開商品以外には作らない", async () => {
+  const t = setup();
+  try {
+    const id = await makeProduct(t, {
+      shopId: "schoolpark-official", prices: { EMUER: 50, JPY: null, JPYC: null }, cashAtVenue: false
+    });
+    const qr = await t.call("owner", "GET", `/admin/products/${id}/event-qr`);
+    assert.equal(qr.status, 200, JSON.stringify(qr.body));
+    assert.match(qr.body.image, /^data:image\/png;base64,/);
+    const target = new URL(qr.body.url);
+    assert.equal(target.searchParams.get("cityProductId"), id);
+    assert.equal((await t.call("alice", "GET", `/admin/products/${id}/event-qr`)).status, 403);
+    assert.equal((await t.call("owner", "GET", "/admin/products/missing/event-qr")).body.error, "PRODUCT_NOT_FOUND");
   } finally { t.close(); }
 });
 
@@ -280,6 +343,8 @@ test("会場の流れ: 引換コードで探し、現金を受け取り、渡す
     assert.equal(found.body.orders.length, 1);
     const done = await t.call("owner", "POST", `/admin/orders/${r.body.order.id}/cash-paid`, { fulfill: true });
     assert.equal(done.body.order.status, "fulfilled");
+    const duplicate = await t.call("owner", "POST", `/admin/orders/${r.body.order.id}/fulfill`, {});
+    assert.equal(duplicate.body.already, true, "同じ注文の二重引渡しを記録しない");
     const mine = await t.call("bob", "GET", "/orders");
     assert.equal(mine.body.orders[0].pickupCode, code);
     assert.equal(mine.body.orders[0].status, "fulfilled");

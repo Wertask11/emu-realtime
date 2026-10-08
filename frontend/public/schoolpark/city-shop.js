@@ -2,13 +2,13 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<'
 const money = product => Number.isSafeInteger(product.priceJPY) ? '¥'+product.priceJPY.toLocaleString('ja-JP') : '価格は店舗でご確認ください';
 const glyph = kind => ({notebook:'01',mug:'02',tote:'03',coffee:'04'}[kind] || '—');
 
-export function openShopWorld({bridge,spots,preview=false,onClose=()=>{},onMyCity=()=>{},onRecord=()=>{}}) {
+export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=()=>{},onMyCity=()=>{},onRecord=()=>{}}) {
   if(!document.querySelector('link[data-city-shop-style]')){
     const css=document.createElement('link');css.rel='stylesheet';css.href='/schoolpark/city-shop.css';css.dataset.cityShopStyle='';document.head.appendChild(css);
   }
   const priorFocus=document.activeElement,abort=new AbortController(),root=document.createElement('section');
   const listener={signal:abort.signal};
-  let world=null,shop=null,catalog=null,selected=null,closed=false,busy=false,request=0,loadNumber=0,wantedShop='';
+  let world=null,shop=null,catalog=null,selected=null,closed=false,busy=false,request=0,loadNumber=0;
   root.id='city-explorer';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','SchoolPark City 3Dショールーム');
   root.innerHTML=`<canvas class="cs-canvas" tabindex="0" aria-label="3D店内。行きたい床をクリックまたはタップして移動し、ドラッグまたはスワイプで見回せます。"></canvas>
     <div class="cs-wash" aria-hidden="true"></div>
@@ -31,6 +31,21 @@ export function openShopWorld({bridge,spots,preview=false,onClose=()=>{},onMyCit
   function destroy(){if(closed)return;closed=true;request++;loadNumber++;abort.abort();clearTimeout(toastTimer);world?.destroy();world=null;root.remove();priorFocus?.isConnected&&priorFocus.focus?.({preventScroll:true});onClose();}
   function productPanel(id){
     const product=shop?.products.find(p=>p.id===id);if(!product)return;request++;busy=false;selected=product;world?.focusProduct(id);
+    if(shop.storeType==='schoolpark_virtual'){
+      const canExchange=product.methods?.includes('emuer_ledger')&&product.remaining!==0;
+      showPanel(`<p class="cs-kicker">${esc(shop.name)} / EMUER STORE</p><div class="cs-product-mark"><span>🎁</span></div>
+        <h3>${esc(product.name)}</h3><p>${esc(product.description)}</p><div class="cs-price">${esc(product.prices?.EMUER??'価格未設定')} EMUER</div>
+        <p class="cs-caption">在庫：${product.remaining==null?'制限なし':esc(product.remaining)} · 交換条件と引渡しは登録済みの商品情報を確認してください。</p>
+        <button type="button" class="cs-primary" data-shop="exchange" ${canExchange?'':'disabled'}>EMUERで交換する</button>
+        <p class="cs-caption">${canExchange?'交換を確定すると、既存みてみるAPIの注文・在庫・EMUER処理を利用します。':product.remaining===0?'在庫がありません。':'交換機能停止中、または利用条件を確認できません。'}</p>
+        <button type="button" class="cs-secondary" data-shop="products">ほかの商品を見る</button>`);return;
+    }
+    if(shop.storeType==='real_partner'){
+      showPanel(`<p class="cs-kicker">${esc(shop.name)} / REAL PARTNER</p><h3>${esc(product.name)}</h3><p>${esc(product.description)}</p>
+        <p>円：${product.prices?.JPY==null?'店舗へ確認':'¥'+Number(product.prices.JPY).toLocaleString('ja-JP')} · JPYC：${product.prices?.JPYC==null?'店舗へ確認':esc(product.prices.JPYC)}</p>
+        <p class="cs-caption">EMUERは利用できません。決済・最終価格・在庫は店舗へ確認してください。Reji連携は仕様確認中で、Cityは決済完了を判定しません。</p>
+        <button type="button" class="cs-secondary" data-shop="products">ほかの商品を見る</button>`);return;
+    }
     showPanel(`<p class="cs-kicker">${esc(shop.name)} / ${shop.status==='live'?'SHOP':'SHOWROOM'}</p><div class="cs-product-mark" style="--product-color:${/^#[0-9a-f]{6}$/i.test(product.color)?product.color:'#355a48'}"><span>${glyph(product.kind)}</span><b>${esc(product.kind.toUpperCase())}</b></div>
       <h3>${esc(product.name)}</h3><p>${esc(product.description)}</p><div class="cs-price">${esc(money(product))}<small>${esc(product.priceLabel)}</small></div>
       ${product.checkoutEnabled?`<p class="cs-caption">支払い方法：${product.paymentMethods.map(esc).join(' / ')}</p><button type="button" class="cs-primary" data-shop="checkout">購入手続きへ</button><p class="cs-caption">販売・決済・受取は出店店舗が担当します。</p>`:`<button type="button" class="cs-primary" disabled>販売準備中</button><p class="cs-caption">${shop.status==='demo'?'これは展示品です。実際の注文・支払いは発生しません。':'店舗の決済準備が整い次第、購入できます。'}</p>`}
@@ -54,6 +69,21 @@ export function openShopWorld({bridge,spots,preview=false,onClose=()=>{},onMyCit
     }catch(e){if(!closed&&version===request){say(e.message==='SHOP_CHECKOUT_NOT_READY'?'この商品の販売準備はまだ完了していません。':'店舗の決済先を確認できませんでした。もう一度お試しください。');button.disabled=false;button.textContent='購入手続きへ';}}
     finally{if(version===request)busy=false;}
   }
+  async function exchange(){
+    if(shop?.storeType!=='schoolpark_virtual'||!selected||busy)return;
+    const product=selected,version=++request;busy=true;
+    const button=panel.querySelector('[data-shop="exchange"]');if(button){button.disabled=true;button.textContent='交換条件を確認しています…';}
+    try{
+      const me=await bridge.getCommerceMe();
+      if(!me.emuer?.ok)throw new Error(me.emuer?.error||'EMUER_NOT_ACTIVE');
+      if(!product.methods?.includes('emuer_ledger'))throw new Error('METHOD_NOT_AVAILABLE');
+      const requestId=(crypto.randomUUID?.()||`${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g,'').slice(0,80);
+      const result=await bridge.placeCommerceOrder(product.id,requestId);
+      if(closed||version!==request)return;
+      showPanel(`<p class="cs-kicker">ORDER / 交換受付</p><h3>${esc(product.name)}</h3><p>${result.already?'交換注文はすでに受け付け済みです。':'既存のEMUER交換処理で注文を受け付けました。'}</p><div class="cs-price">引換コード<br><b>${esc(result.order?.pickupCode||'履歴で確認')}</b></div><p>運営者にこのコードを提示してください。商品のお渡しは運営者の確認後に記録されます。</p><button type="button" class="cs-primary" data-shop="products">商品へ戻る</button>`);
+    }catch(e){if(!closed&&version===request){const reason={INSUFFICIENT_EMUER:'利用可能なEMUERが不足しています。',PERIOD_LIMIT_REACHED:'プランの交換回数上限に達しています。',SOLD_OUT:'在庫がなくなりました。',PASSPORT_LINK_REQUIRED:'Passport IDを連携してください。',EMUER_NOT_ACTIVE:'EMUER交換機能は停止中です。'}[e.message]||'交換できませんでした。Passport・残高・プラン条件を確認してください。';say(reason);if(button){button.disabled=false;button.textContent='EMUERで交換する';}}}
+    finally{busy=false;}
+  }
   async function checkin(){
     const spot=spots.find(s=>s.spotId===shop?.checkinSpotId),button=root.querySelector('[data-shop="checkin"]');
     if(!spot||button.disabled)return;button.disabled=true;
@@ -66,6 +96,7 @@ export function openShopWorld({bridge,spots,preview=false,onClose=()=>{},onMyCit
     const action=b.dataset.shop,value=b.dataset.value;
     if(action==='close')destroy();else if(action==='products')productsPanel();else if(action==='product')productPanel(value);
     else if(action==='panel-close')closePanel();else if(action==='help')help();else if(action==='checkout')checkout();
+    else if(action==='exchange')exchange();
     else if(action==='waypoint'){closePanel();world?.waypoint(value);world?.focus();root.dataset.location=value;}
     else if(action==='pick'&&focusedProduct)productPanel(focusedProduct);else if(action==='checkin')checkin();
     else if(action==='retry')init();else if(action==='mycity'){destroy();onMyCity();}
@@ -85,10 +116,24 @@ export function openShopWorld({bridge,spots,preview=false,onClose=()=>{},onMyCit
     // A disposed/lost WebGL context cannot be reused reliably on the same canvas.
     const fresh=canvas.cloneNode(false);for(const key of Object.keys(fresh.dataset))delete fresh.dataset[key];
     canvas.replaceWith(fresh);canvas=fresh;focusedProduct=null;pick.hidden=true;
-    const [data,module]=await Promise.allSettled([bridge.getShops(),import('./city-world.js')]);
+    const [data,module,commerce]=await Promise.allSettled([bridge.getShops(),import('./city-world.js'),bridge.getCommerceShops()]);
     if(closed||version!==loadNumber)return;
     if(data.status!=='fulfilled'||!data.value.shops?.length){load.innerHTML='店舗を読み込めませんでした。<button type="button" data-shop="retry">もう一度読み込む</button>';return;}
-    catalog=data.value;shop=catalog.shops.find(s=>s.id===wantedShop)||catalog.shops[0];root.querySelector('.cs-place h2').textContent=shop.name;root.querySelector('.cs-place p').textContent=shop.subtitle;
+    catalog=data.value;
+    if(commerce.status==='fulfilled'){
+      const rows=commerce.value.shops||[];
+      const official=rows.find(s=>s.storeType==='schoolpark_virtual');
+      if(official){
+        try{const products=await bridge.getCommerceProducts(official.id);official.products=(products.products||[]).map(p=>({...p,kind:'notebook',color:'#355a48',priceJPY:null,priceLabel:`${p.prices?.EMUER??'—'} EMUER`,checkoutEnabled:false}));}
+        catch(_){official.products=[];}
+        official.status='live';official.subtitle=official.description||'EMUER専用商品交換';catalog.shops.unshift(official);
+      }
+      for(const partner of rows.filter(s=>s.storeType==='real_partner')){
+        let items=[];try{const result=await bridge.getCommerceProducts(partner.id);items=(result.products||[]).map(p=>({...p,kind:'notebook',color:'#355a48',priceJPY:p.prices?.JPY??null,priceLabel:'店舗へ確認',checkoutEnabled:false}));}catch(_){items=[];}
+        catalog.shops.push({...partner,status:'live',subtitle:partner.address||'リアル提携店舗',products:items,checkinSpotId:''});
+      }
+    }
+    shop=catalog.shops.find(s=>s.id===wantedShop)||catalog.shops[0];root.querySelector('.cs-place h2').textContent=shop.name;root.querySelector('.cs-place p').textContent=shop.subtitle;
     root.querySelector('.cs-demo').textContent=preview?'操作プレビュー · 記録・購入なし':shop.status==='live'?'3D SHOP · 出店店舗':'3D SHOWROOM · 展示用店舗';
     if(preview){const b=root.querySelector('[data-shop="checkin"]');b.disabled=true;b.innerHTML='操作プレビュー<br><b>記録・購入なし</b>';}
     try{

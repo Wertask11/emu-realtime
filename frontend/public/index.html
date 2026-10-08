@@ -6942,7 +6942,7 @@ function _landAfterDirectReturn() {
     if (ok && billing === "mitemiru" && !open._mitemiru) {
       open._mitemiru = true;
       setTimeout(function () {
-        try { if (typeof openSpRoom === "function") openSpRoom("/schoolpark/east-shopping.html#orders", "みてみる"); } catch (e) {}
+        try { if (typeof openSpRoom === "function") openSpRoom("/schoolpark/dao.html?screen=city&cityView=orders", "SchoolPark City · 注文履歴"); } catch (e) {}
       }, 400);
     }
     if (!ok && tries < 12) setTimeout(open, 300);
@@ -21831,8 +21831,22 @@ function openSpRoom(url, title) {
 /* 「みてみる」の行き先。以前は取引所（NFTの出品一覧）だったが、
    旧SchoolParkのショッピングをここに移した。 */
 function openEmuShopping() {
-  openSpRoom('/schoolpark/east-shopping.html', 'ショッピング');
+  openSpRoom('/schoolpark/dao.html?screen=city', 'SchoolPark City');
 }
+
+/* Event QR entry stays in the authenticated SchoolPark shell, then opens the
+   existing City iframe. The QR carries only a public product ID. */
+function openCityEventLink() {
+  const params = new URLSearchParams(window.location.search);
+  const productId = params.get('cityProductId');
+  const view = params.get('cityView');
+  if (productId && /^[A-Za-z0-9_-]{1,64}$/.test(productId)) {
+    openSpRoom('/schoolpark/dao.html?screen=city&productId=' + encodeURIComponent(productId), 'SchoolPark City · イベント商品');
+  } else if (view === 'orders' || view === 'commerce') {
+    openSpRoom('/schoolpark/dao.html?screen=city&cityView=' + encodeURIComponent(view), 'SchoolPark City');
+  }
+}
+window.addEventListener('DOMContentLoaded', openCityEventLink, { once:true });
 
 function closeSpRoom() {
   const frame = document.getElementById('spRoomFrame');

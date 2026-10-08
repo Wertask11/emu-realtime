@@ -4,7 +4,9 @@
 // External checkout owns payment, stock, shipping and receipts. Opening a link
 // is NOT a paid order and must never award EMUER, stars or purchase records.
 const DEFAULT_CATALOG = require("./city-shops.json");
-const METHODS = new Set(["JPY", "JPYC", "EMUER"]);
+// A City partner checkout is a real merchant payment destination. EMUER is
+// reserved for the SchoolPark virtual shop and can never be routed here.
+const METHODS = new Set(["JPY", "JPYC"]);
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const text = (value, max = 300) => typeof value === "string" ? value.slice(0, max) : "";
 
