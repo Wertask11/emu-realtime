@@ -91,16 +91,18 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
   function ordersPage() {
     if (!commerceOrders) return `<section class="city-section"><h2 data-city-heading tabindex="-1">交換履歴</h2><p role="status">履歴を読み込んでいます…</p></section>`;
     return `<section class="city-section"><h2 data-city-heading tabindex="-1">交換履歴</h2><p class="city-muted">本人のPassport IDで既存みてみる注文を表示します。旧注文のIDはサーバーで解決して表示し、履歴文書への一括書込みはしません。Camelliaの記録は利用しません。</p>
-      ${commerceOrders.length ? `<ul class="city-list">${commerceOrders.map(o => `<li>${escape(o.productName)} · ${escape(o.amount)} ${escape(o.currency)} · ${escape(o.status)}${o.storeType==='schoolpark_virtual'?' · City / 公式イベント':' · 既存みてみる注文'}<small>${escape(date(o.createdAt))} · Passport ${escape(o.passportId||'未連携')} · ${o.pickupCode ? `引換コード: ${escape(o.pickupCode)}` : '引換コードは支払い確認後に表示'}</small></li>`).join('')}</ul>` : empty('交換履歴はありません','Cityや公式イベントで交換すると、ここに表示されます.')}
+      ${commerceOrders.length ? `<ul class="city-list">${commerceOrders.map(o => `<li>${escape(o.productName)} · ${escape(o.amount)} ${escape(o.currency)} · ${escape(o.status)}${o.storeType==='schoolpark_virtual'?' · City / 公式イベント':' · 既存みてみる注文'}<small>${escape(date(o.createdAt))} · Passport ${escape(o.passportId||'未連携')} · ${o.pickupCode ? `引換コード: ${escape(o.pickupCode)}` : '引換コードは支払い確認後に表示'}</small>${o.digitalStickerAvailable ? button('download-sticker','冷蔵庫くんステッカーをダウンロード',o.id) : ''}</li>`).join('')}</ul>` : empty('交換履歴はありません','Cityや公式イベントで交換すると、ここに表示されます.')}
       ${button('refresh-orders','履歴を更新','',true)}</section>`;
   }
   function eventOpsPage() {
     if (!commerceMe?.isOwner) return `<section class="city-section"><h2 data-city-heading tabindex="-1">イベント運営</h2><p class="city-note">SchoolPark運営者権限が必要です。</p></section>`;
     const products = (commerceProducts || []).filter(p => p.storeType === 'schoolpark_virtual');
+    const stickerProduct = products.find(p => p.id === 'reizo-kun-sticker-v1');
     return `<section class="city-section"><h2 data-city-heading tabindex="-1">公式イベント運営</h2>
       <p class="city-muted">商品QRはCityの商品詳細を開きます。QRを読むだけでは注文もEMUER消費も起きません。注文確定・引渡しは既存みてみる注文APIを使います。</p>
+      <article class="city-card"><h3>冷蔵庫くんデジタルステッカー</h3><p>所有者専用の準備操作です。商品を1 EMUERの下書きとして作成し、内容を確認してから販売開始できます。</p>${commerceMe.emuer?.ok ? '' : '<p class="city-note">EMUER交換機能は停止中です。商品は下書きで作成できますが、交換受付は有効化できません。</p>'}${stickerProduct?.imageUrl ? `<img src="${escape(stickerProduct.imageUrl)}" alt="冷蔵庫くんステッカーの商品プレビュー" loading="lazy">` : ''}${!stickerProduct ? button('seed-sticker','下書きを作成') : `<p>状態: ${escape(stickerProduct.status)} · 価格: ${priceLabel(stickerProduct)}</p>${stickerProduct.status === 'draft' ? button('publish-sticker','確認して販売開始',stickerProduct.id,true,!commerceMe.emuer?.ok) : '<p class="city-status">商品は販売中です。</p>'}`}</article>
       ${opsLoading ? '<p role="status">商品・注文情報を確認しています…</p>' : ''}
-      <div class="city-grid">${products.map(p => `<article class="city-card"><h3>${escape(p.name)}</h3><p>${priceLabel(p)} · 在庫 ${p.remaining == null ? '制限なし' : escape(p.remaining)}</p>${button('event-qr','商品QRを表示・印刷',p.id)}</article>`).join('')}</div>
+      <div class="city-grid">${products.filter(p => p.status === 'live').map(p => `<article class="city-card"><h3>${escape(p.name)}</h3><p>${priceLabel(p)} · 在庫 ${p.remaining == null ? '制限なし' : escape(p.remaining)}</p>${button('event-qr','商品QRを表示・印刷',p.id)}</article>`).join('')}</div>
       ${opsQr ? `<article class="city-card city-qr"><h3>${escape(opsQr.productName)} · イベント商品QR</h3><img src="${escape(opsQr.image)}" alt="${escape(opsQr.productName)} City商品QR"><p class="city-muted">${escape(opsQr.url)}</p><div class="city-row">${button('print-qr','QRを印刷')}${button('close-qr','閉じる','',true)}</div></article>` : ''}
       <form class="city-ops-form" data-ops-form><label for="city-pickup-code">引換コード照合</label><input id="city-pickup-code" name="code" autocomplete="off" maxlength="12" value="${escape(opsCode)}" placeholder="6文字の引換コード"><button type="submit" class="city-button">注文を検索</button></form>
       ${opsOrders ? opsOrders.length ? `<ul class="city-list">${opsOrders.map(o => `<li>${escape(o.productName)} · ${escape(o.amount)} ${escape(o.currency)} · ${escape(o.status)}<small>${escape(o.pickupCode)} · Passport ${escape(o.passportId || '旧注文')}</small>${o.status === 'paid' ? button('fulfill','引渡しを記録',o.id) : o.status === 'fulfilled' ? '<small>引渡し済み · 二重引渡しは記録されません</small>' : '<small>支払確定後に引き渡してください。</small>'}</li>`).join('')}</ul>` : empty('注文がありません','コードを確認してもう一度検索してください。') : ''}
@@ -262,7 +264,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       commerceShops = (catalog.shops || []).filter(s => ['schoolpark_virtual','real_partner'].includes(s.storeType));
       const official = commerceShops.find(s => s.storeType === 'schoolpark_virtual');
       if (official) {
-        const result = await bridge.getCommerceProducts(official.id);
+        const result = await bridge.getCommerceAdminProducts();
         commerceProducts = result.products || [];
       }
     } catch (e) { fail(e); }
@@ -312,6 +314,18 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
         return;
       }
       if (action === 'refresh-orders') return loadCommerceOrders();
+      if (action === 'download-sticker') return await bridge.downloadReizoSticker(value);
+      if (action === 'seed-sticker') {
+        const result = await bridge.seedReizoSticker();
+        message = result.created ? '冷蔵庫くんステッカーの下書きを作成しました。内容を確認してください。' : '既存の冷蔵庫くんステッカー下書きを読み込みました。';
+        return await loadEventOps();
+      }
+      if (action === 'publish-sticker') {
+        if (!commerceMe?.emuer?.ok) { error = 'EMUER交換機能が停止中のため、販売を開始できません。'; return; }
+        await bridge.publishCommerceProduct(value);
+        message = '冷蔵庫くんステッカーを販売開始しました。';
+        return await loadEventOps();
+      }
       if (action === 'event-qr') {
         opsLoading = true; render();
         try { opsQr = await bridge.getEventQR(value); }
