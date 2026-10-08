@@ -81,8 +81,9 @@ const db = {
     update: (ref, patch) => records.set(ref.path, { ...records.get(ref.path), ...patch })
   })
 };
+let emuerActive = true;
 createQuestCompletionRouter({ db, requireOwner: (_req, _res, next) => next(),
-  requireFirebaseUser: (_req, _res, next) => next(), env:{} });
+  requireFirebaseUser: (_req, _res, next) => next(), env:{}, emuerEnabled: () => emuerActive });
 const approve = routes.find(route => route.path === "/:questId/:address/approve").handler;
 const publishBudget = routes.find(route => route.path === "/:questId/budget").handler;
 function reply() {
@@ -100,6 +101,21 @@ function budget(questId, body) {
   const { res } = reply();
   return publishBudget({ params:{questId}, body, identity:{walletAddress:wallet} }, res);
 }
+test("EMUER v2 停止中はクエスト完走報酬を付与しない", async () => {
+  seed();
+  const previous = emuerActive;
+  emuerActive = false;
+  try {
+    const result = await request();
+    assert.equal(result.status, 409);
+    assert.equal(result.body.error, "EMUER_V2_NOT_ACTIVE");
+    assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-001").allocatedEmuer, 0);
+    assert.equal([...records.keys()].some(key => key.startsWith("emuer_v2_rewards/")), false);
+  } finally {
+    emuerActive = previous;
+  }
+});
+
 function seed() {
   records.clear();
   records.set("sp_quests/quest-001", { series:"general",questNumber:1,guildId:"learn",title:"試して残す" });
