@@ -3539,6 +3539,12 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
 .spp-star-claim { margin-top:8px; padding:7px 11px; border-radius:7px; border:1px solid #D0E2BE; color:#D0E2BE; background:transparent; font:700 11px 'Zen Kaku Gothic New',sans-serif; cursor:pointer; }
 .spp-star-claim:disabled { opacity:.65; cursor:default; }
 .spp-star small { display:block; font-size:11px; font-weight:400; color:rgba(244,241,234,.55); margin-top:4px; }
+/* SchoolPark の公園から遊び（ECHO FIELD・林檎の方程式）を開いたときも、SchoolPark(1500)より手前に出す。
+   どちらも Emu のために作った覆い（ECHO FIELD は #room3Overlay 1400、林檎は #ringoOverlay 1100）で、
+   SchoolPark を開いたままだとその下に開き、押しても何も起きないように見えていた。
+   SchoolPark を開いていないとき（Emu から開くとき）は、これまでどおり。 */
+body.sp-dao-open #room3Overlay { z-index:1750; }
+body.sp-dao-open #ringoOverlay { z-index:1750 !important; }   /* 林檎は style 属性で 1100 を持っているので !important */
 /* パスポートから星空を開いたときだけ、SchoolPark(1500)やパスポート(1800)より手前に出す。
    Emu の価値プロフィールから開く既存の経路（z-index:1400）は触らない。 */
 body.sp-star-open #room3Overlay { z-index:1900; }
@@ -23087,10 +23093,16 @@ function closeRingoGame() {
    プランの判定は、遊びの入口と一緒にこちらへ移した。置いていくと
    「見学でも ECHO FIELD が遊べる」「回数の上限が効かない」になる。
      見学      … 林檎の方程式だけ。回数に上限あり（サーバーで数える）
-     light 以上 … 両方とも制限なし */
+     light 以上 … どれも制限なし
+
+   あとから足した日常の神々を、見学の分け方に入れていなかった。見学の人が押すと
+   林檎の方程式の扱いになり、林檎を開いて見学の回数を1回使っていた。
+   日常の神々は ECHO FIELD と同じく light 以上にする（見学は林檎の方程式だけ、のまま）。 */
 window.spOpenPlay = function (play) {
   if (!emuHasPlan('light')) {
     if (play === 'echo') return emuNeedPlan('light', 'ECHO FIELD');
+    if (play === 'gods') return emuNeedPlan('light', '日常の神々');
+    if (play !== 'ringo') return;
     /* 見学でも林檎の方程式は遊べる。ただし回数に上限がある。
        端末で数えると、ブラウザを変えれば回避できるのでサーバーで数える。 */
     (async function () {
