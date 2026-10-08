@@ -6595,36 +6595,37 @@ var _emuIdentity = null;
 /* ches_accounts/{uid} を本人の分だけ作る。
    アドレスの決め方は CHES.deriveWalletAddress と同じにする。
    ここを別の決め方にすると、端末ごとに違う名義ができてしまう。 */
+const _emuAccountRequests = new Map();
+async function _emuEnsureServerAccount(user) {
+  if (!user) throw new Error('AUTH_REQUIRED');
+  var pending = _emuAccountRequests.get(user.uid);
+  if (pending) return pending;
+  var request = (async function () {
+    var token = await user.getIdToken();
+    var controller = new AbortController();
+    var timeout = setTimeout(function () { controller.abort(); }, 8000);
+    var response;
+    try { response = await fetch('https://emu-realtime.onrender.com/api/auth/account', {
+      signal: controller.signal,
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: '{}'
+    }); } finally { clearTimeout(timeout); }
+    var result = await response.json();
+    if (window.auth && window.auth.currentUser?.uid !== user.uid) throw new Error('ACCOUNT_CHANGED');
+    if (!response.ok || !result.account) throw new Error(result.error || 'ACCOUNT_UNAVAILABLE');
+    return result.account;
+  })();
+  _emuAccountRequests.set(user.uid, request);
+  try { return await request; } finally { _emuAccountRequests.delete(user.uid); }
+}
 async function _emuCreateAccountDoc(user) {
-  try {
-    const derive = window.CHES && window.CHES.deriveWalletAddress;
-    if (typeof derive !== 'function') return null;
-    const addr = derive(user.uid);
-    const now = Date.now();
-    const ref = window.fbLib.doc(window.db, 'ches_accounts', user.uid);
-    await window.fbLib.setDoc(ref, {
-      uid: user.uid,
-      provider: (user.providerData && user.providerData[0] && user.providerData[0].providerId) || 'unknown',
-      displayName: user.displayName || '',
-      email: user.email || '',
-      photoURL: user.photoURL || '',
-      walletAddress: addr,
-      chesAddress: addr,
-      membership: { tier: 'free', offchain: true, issuedAt: now },
-      createdAt: now,
-      lastLogin: now
-    });
-    console.warn('アカウントの記録が無かったので作りました:', user.uid);
-    return await window.fbLib.getDoc(ref);
-  } catch (e) {
-    console.warn('アカウントの記録を作れませんでした:', e && (e.message || e));
-    return null;
-  }
+  await _emuEnsureServerAccount(user);
+  return window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', user.uid));
 }
 
 async function emuMyIdentity() {
   const user = await emuEnsureSignedIn();
   if (!user || !window.db || !window.fbLib) return null;
+  await _emuEnsureServerAccount(user);
   if (_emuIdentity && _emuIdentity.uid === user.uid) return _emuIdentity;
   /* ここは全部の入口。ここが null を返すと、パスポートも名前も名義も無くなり、
      画面は「おはよう、ゲスト」になって、以降の読み込みが軒並み0件になる。
@@ -11826,69 +11827,17 @@ const SEPOLIA_CHAIN_ID = "0xaa36a7"; // 11155111
 // type: 'tap' | 'paid' | 'free'
 // address: ウォレットアドレス（tap の場合は不要）
 async function spTrack(type, address) {
-  try {
-    if (!window.db || !window.fbLib) return;
-    const { doc, setDoc, collection, addDoc, increment, getDoc } = window.fbLib;
-    const db = window.db;
-    const now = new Date();
-    const addr = address ? address.toLowerCase() : null;
-
-    // ① グローバルカウンター (sp_stats/global)
-    const globalRef = doc(db, 'sp_stats', 'global');
-    const globalUpdate = { updated_at: now };
-    if (type === 'tap')  globalUpdate.total_taps  = increment(1);
-    if (type === 'paid') globalUpdate.paid_count  = increment(1);
-    if (type === 'free') globalUpdate.free_count  = increment(1);
-    setDoc(globalRef, globalUpdate, { merge: true })
-      .catch(e => console.warn('[spTrack] global:', e));
-
-    // ①-2 ユニーク入場者カウント（アドレス単位・重複なし・0スタート）
-    if (addr && (type === 'paid' || type === 'free')) {
-      const entrantRef = doc(db, 'sp_entrants', addr);
-      const entrantSnap = await getDoc(entrantRef);
-      if (!entrantSnap.exists()) {
-        await setDoc(entrantRef, { address: addr, first_seen: now });
-        setDoc(globalRef, { entrants: increment(1) }, { merge: true })
-          .catch(e => console.warn('[spTrack] entrants:', e));
-      }
-    }
-
-    // ② アドレス別ドキュメント（有料/無料パスのみ）
-    if (addr && (type === 'paid' || type === 'free')) {
-      const colName = type === 'paid' ? 'sp_paid_pass' : 'sp_free_pass';
-      const addrRef  = doc(db, colName, addr);
-      const snap     = await getDoc(addrRef);
-      let visitNum;
-
-      if (!snap.exists()) {
-        // 初回アクセス
-        visitNum = 1;
-        await setDoc(addrRef, {
-          address:     addr,
-          first_seen:  now,
-          last_seen:   now,
-          count:       1,
-        });
-      } else {
-        // 2回目以降
-        visitNum = (snap.data().count || 0) + 1;
-        await setDoc(addrRef, {
-          last_seen: now,
-          count:     increment(1),
-        }, { merge: true });
-      }
-
-      // ③ 個別ログ (sp_pass_logs)
-      addDoc(collection(db, 'sp_pass_logs'), {
-        type,
-        address:   addr,
-        timestamp: now,
-        visit_num: visitNum,
-      }).catch(e => console.warn('[spTrack] log:', e));
-    }
-  } catch (e) {
-    console.warn('[spTrack] error:', e);
-  }
+  return _emuTrackActivity('entry', { type: type });
+}
+async function _emuTrackActivity(kind, data) {
+  var user = window.auth && window.auth.currentUser;
+  if (!user) return false;
+  var token = await user.getIdToken();
+  var response = await fetch('https://emu-realtime.onrender.com/api/activity/' + kind, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('ACTIVITY_UNAVAILABLE');
+  return true;
 }
 
 /* スマホ判定。CHESレイヤーの _isMobile と同じ条件だが、
@@ -14522,27 +14471,8 @@ function toggleSpMapMenu() {
    brand: 'camellia' | 'heartoo' | 'emu' | 'schoolpark'
    → sp_stats/global.{brand}_entrants を初回のみ +1 */
 async function spTrackBrand(brand) {
-  try {
-    if (!brand || !window.db || !window.fbLib) return;
-    const addr = (window.connectedAccount || window.currentUserId || localStorage.getItem('emuWallet') || '').toLowerCase();
-    if (!addr) return;
-    const lsKey = 'sp_brand_tracked_' + brand + '_' + addr;
-    if (localStorage.getItem(lsKey)) return; /* 同一端末・同一アドレスは再問い合わせしない */
-    const { doc, setDoc, getDoc, increment } = window.fbLib;
-    const db = window.db;
-    const ref = doc(db, 'sp_brand_entrants', brand + '_' + addr);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      await setDoc(ref, { brand: brand, address: addr, first_seen: new Date() });
-      const patch = {};
-      patch[brand + '_entrants'] = increment(1);
-      setDoc(doc(db, 'sp_stats', 'global'), patch, { merge: true })
-        .catch(e => console.warn('[spTrackBrand] global:', e));
-    }
-    localStorage.setItem(lsKey, '1');
-  } catch (e) {
-    console.warn('[spTrackBrand] error:', e);
-  }
+  try { return await _emuTrackActivity('brand', { brand: brand }); }
+  catch (error) { console.warn('[spTrackBrand]', error.message); }
 }
 
 /* ───── 入口の画面をしまう ─────
@@ -26631,22 +26561,8 @@ if (idx === 0) {
     `;
     medal.appendChild(badgeEl);
 
-    // ★ Firestoreにランキングバッジを保存（1位のアドレスに付与）
-    if (item.address && window.db && window.fbLib) {
-      const addr = item.address.toLowerCase();
-      const ref = window.fbLib.doc(window.db, 'rank_badges', addr);
-      window.fbLib.getDoc(ref).then(snap => {
-        const existing = snap.exists() ? (snap.data().badges || []) : [];
-        if (!existing.includes(rankBadgeId)) {
-window.fbLib.updateDoc(ref, {
-            badges: window.fbLib.arrayUnion(rankBadgeId)
-          }).catch(() => {
-            // ドキュメントが存在しない場合はsetDocで作成
-            window.fbLib.setDoc(ref, { badges: [rankBadgeId] });
-          });
-        }
-      });
-    }
+    // ランキングバッジは検証済みのサーバー集計から付与する。
+
   }
 }
 
@@ -27898,116 +27814,25 @@ async function sendEmuFeedback() {
      ※ 今後 CHESパスポートを入れるときは、アドレスの決め方が
        ここ（deriveWalletAddress）から passport のものへ変わる。
        呼び出し側は触らなくて済むよう、決め方はこの1か所に閉じてある。 */
-  CHES.ensureChesIdentity = async function (uid, walletAddress, provider, knownData) {
-    var db = window.db, fb = window.fbLib;
-    var chesAddress = CHES.deriveWalletAddress(uid);
-    var now = Date.now();
-
-    /* ches_accounts に欄が無ければ入れる（後から足した欄なので、古い分は空）。
-       ログインは12秒で打ち切られるので、すでに中身が分かっているときは
-       読み直さない（knownData）。 */
-    try {
-      var data = knownData;
-      if (!data) {
-        var snap = await fb.getDoc(fb.doc(db, "ches_accounts", uid));
-        data = snap.exists() ? snap.data() : null;
-      }
-      if (data && !data.chesAddress) {
-        await fb.setDoc(fb.doc(db, "ches_accounts", uid),
-          { chesAddress: chesAddress, lastLogin: now }, { merge: true });
-        console.warn("[CHES] chesAddress が無かったので入れました:", uid);
-      }
-    } catch (e) {
-      console.warn("[CHES] chesAddress を入れられませんでした:", e && (e.message || e));
-    }
-
-    // 逆引き（アドレス → アカウント）。自分の名義ぶんだけ登録する。
-    var names = [chesAddress];
-    if (walletAddress && walletAddress.toLowerCase() !== chesAddress.toLowerCase()) {
-      names.push(walletAddress);
-    }
-    for (var i = 0; i < names.length; i++) {
-      var addr = names[i];
-      try {
-        await fb.setDoc(fb.doc(db, "ches_wallets", addr), {
-          address: addr, uid: uid, type: "address-only",
-          provider: provider || "unknown", createdAt: now
-        });
-      } catch (e) {
-        /* すでに登録済みなら断られる。それが正しい（重複させない仕組み）。
-           自分の分がすでに入っているだけなので、そのまま進む。 */
-        var code = e && e.code;
-        if (code !== "permission-denied") {
-          console.warn("[CHES] 逆引きを作れませんでした:", addr, code || (e && e.message));
-        }
-      }
-    }
-    return chesAddress;
+  CHES.ensureChesIdentity = async function (uid) {
+    var user = window.auth && window.auth.currentUser;
+    if (!user || user.uid !== uid) throw new Error('ACCOUNT_CHANGED');
+    var account = await _emuEnsureServerAccount(user);
+    return account.chesAddress;
   };
 
   // ───── CHESアカウント検索 → なければ自動作成（+ウォレット+無料Membership） ─────
   CHES.findOrCreateAccount = async function (user, provider, profileOverride) {
-    var db = window.db, fb = window.fbLib;
-    var uid = user.uid;
-    var walletAddress = CHES.deriveWalletAddress(uid);
-    var ref = fb.doc(db, "ches_accounts", uid);
-    var snap = await fb.getDoc(ref);
-    var now = Date.now();
-
-    // LINE のように custom token で入ると user.displayName 等が空になるため、
-    // バックエンドから受け取ったプロフィールで補完する。
-    var pName  = user.displayName || (profileOverride && profileOverride.name) || "";
-    var pEmail = user.email       || (profileOverride && profileOverride.email) || "";
-    var pPhoto = user.photoURL    || (profileOverride && profileOverride.picture) || "";
-
-    if (snap.exists()) {
-      var data = snap.data();
-      // 最終ログイン更新（+ 未設定なら名前/メール/写真を補完・非ブロッキング）
-      var patch = { lastLogin: now };
-      if (!data.displayName && pName)  patch.displayName = pName;
-      if (!data.email && pEmail)       patch.email = pEmail;
-      if (!data.photoURL && pPhoto)    patch.photoURL = pPhoto;
-      fb.setDoc(ref, patch, { merge: true }).catch(function () {});
-      /* 前からあるアカウントにも CHESアドレスを用意する。
-         この欄は後から足したもので、古い分は空のままだった。
-         空だと Firestore のルールが本人と認められず、
-         Good も Change も投稿も、何も保存できない状態になる。 */
-      var _ches = await CHES.ensureChesIdentity(uid, data.walletAddress || walletAddress, data.provider || provider, data);
-      return {
-        uid: uid,
-        walletAddress: data.walletAddress || walletAddress,
-        chesAddress: data.chesAddress || _ches,
-        displayName: data.displayName || pName,
-        membership: data.membership || { tier: "free", offchain: true, issuedAt: now },
-        provider: data.provider || provider,
-        isNew: false
-      };
+    var account = await _emuEnsureServerAccount(user);
+    var patch = {};
+    if (!account.displayName && (user.displayName || profileOverride?.name)) patch.displayName = user.displayName || profileOverride.name;
+    if (!account.email && (user.email || profileOverride?.email)) patch.email = user.email || profileOverride.email;
+    if (!account.photoURL && (user.photoURL || profileOverride?.picture)) patch.photoURL = user.photoURL || profileOverride.picture;
+    if (Object.keys(patch).length) {
+      await window.fbLib.setDoc(window.fbLib.doc(window.db, 'ches_accounts', user.uid), patch, { merge: true });
+      Object.assign(account, patch);
     }
-
-    // 新規：CHESアカウント + ウォレット + 無料Membership（オフチェーン）
-    var account = {
-      uid: uid,
-      provider: provider,
-      providerUid: (user.providerData && user.providerData[0] && user.providerData[0].uid) || uid,
-      displayName: pName,
-      email: pEmail,
-      photoURL: pPhoto,
-      walletAddress: walletAddress,
-      // CHESアドレスは uid から決める。ログイン方法が変わっても同じ決め方。
-      chesAddress: CHES.deriveWalletAddress(uid),
-      membership: { tier: "free", offchain: true, issuedAt: now },
-      createdAt: now,
-      lastLogin: now
-    };
-    await fb.setDoc(ref, account);
-    // 逆引き（アドレス→アカウント）。重複しないことはここで担保される。
-    var _chesNew = await CHES.ensureChesIdentity(uid, walletAddress, provider, account);
-
-    return {
-      uid: uid, walletAddress: walletAddress, chesAddress: _chesNew,
-      displayName: account.displayName, membership: account.membership,
-      provider: provider, isNew: true
-    };
+    return Object.assign({}, account, { isNew: account.createdAt === account.lastLogin });
   };
 
   // ───── SchoolPark へ入園（既存グローバルにアドレスを流し込む） ─────

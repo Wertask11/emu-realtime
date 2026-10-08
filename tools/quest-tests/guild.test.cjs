@@ -32,8 +32,11 @@ beforeEach(async () => {
   await env.withSecurityRulesDisabled(async c => {
     const d = c.firestore();
     await fb.setDoc(fb.doc(d, 'ches_accounts', 'founder'), { walletAddress: owner, chesAddress: owner });
+    await fb.setDoc(fb.doc(d, 'ches_verified_accounts', 'founder'), { walletAddress: owner, chesAddress: owner });
     await fb.setDoc(fb.doc(d, 'ches_accounts', 'trusted'), { walletAddress: 'trusted', chesAddress: 'trusted' });
+    await fb.setDoc(fb.doc(d, 'ches_verified_accounts', 'trusted'), { walletAddress: 'trusted', chesAddress: 'trusted' });
     await fb.setDoc(fb.doc(d, 'ches_accounts', 'plain'), { walletAddress: 'plain', chesAddress: 'plain' });
+    await fb.setDoc(fb.doc(d, 'ches_verified_accounts', 'plain'), { walletAddress: 'plain', chesAddress: 'plain' });
     /* trusted は「ギルドに関われる人」として運営が認めた人 */
     await fb.setDoc(fb.doc(d, 'sp_trust', 'trusted'), { at: 1 });
     /* 公式パス。10/1 の一般公開までは、これが無いと SchoolPark に入れない
