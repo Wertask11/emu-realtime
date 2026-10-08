@@ -420,6 +420,13 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
              渡しそびれていたぶんを渡すだけのときは増やさない。
              増やすと、やってもいない周回を認めたことになる。 */
           approvedRounds: isTopup ? doneRounds : doneRounds + 1,
+          /* 何周ぶん EMUER を引き当てたか。管理画面はこれと approvedRounds を
+             比べて、まだ渡していない周回があれば「EMUERを渡す」を出す。
+             前は rewardEmuer（額）があるかだけを見ていたので、1周ぶん渡すと
+             2周目の「EMUERを渡す」が出なくなっていた。
+             この欄ができる前の記録は、額があれば1周ぶん渡した、と数える。 */
+          rewardedRounds: (Number.isSafeInteger(Number(was.rewardedRounds)) && Number(was.rewardedRounds) > 0
+            ? Number(was.rewardedRounds) : (Number(was.rewardEmuer) > 0 ? 1 : 0)) + 1,
           lastApprovedAt: now });
         tx.update(budgetRef, { allocatedEmuer: allocated + per, updatedAt: new Date(now) });
         tx.create(rewardRef, {

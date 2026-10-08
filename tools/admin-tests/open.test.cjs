@@ -457,6 +457,20 @@ test('渡せていない承認には、「EMUERを渡す」が出る', () => {
   assert.ok(seg.indexOf('data-qapprove') >= 0, '承認と同じ道を通っていない');
 });
 
+test('1周ぶん渡したあとも、渡していない周回があれば「EMUERを渡す」が出る', () => {
+  /* 10/8、#001 LEARN の2周目。2周とも認めてあり、EMUER は1周ぶんだけ。
+     額（rewardEmuer）があるだけで「承認済み」にしていたので、2周目を渡す道が無かった。 */
+  assert.ok(ADMIN.indexOf('rewardedRounds: Number(d.rewardedRounds) > 0') > 0, '何周ぶん渡したかを読んでいない');
+  const i = ADMIN.indexOf('t.rewardedRounds < Math.max(t.rounds, 1)');
+  assert.ok(i > 0, '渡していない周回を見分けていない');
+  const seg = ADMIN.slice(i, ADMIN.indexOf("EMUERの承認済み')", i));
+  assert.ok(seg.indexOf('data-qtopup="1"') > 0, '2周目の「EMUERを渡す」が出ない');
+  assert.ok(seg.indexOf('data-qunapprove') < 0, 'EMUER が動いたあとに取り消せてしまう');
+  assert.ok(BACKEND.indexOf('rewardedRounds: (') > 0, 'サーバーが何周ぶん渡したかを残していない');
+  /* 渡し終えていたら、そう伝える（「認められませんでした」ではない） */
+  assert.ok(ADMIN.indexOf('b.dataset.qtopup && code.indexOf("NO_NEW_ROUND") >= 0') > 0);
+});
+
 test('渡し直すときは、完走条件ではなく支払いを聞く', () => {
   const i = ADMIN.indexOf('if (b.dataset.qtopup) {');
   assert.ok(i > 0, '分けていない');
