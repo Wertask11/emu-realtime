@@ -905,6 +905,30 @@ test("全部渡し終えたら、そこで止まる", AT(async () => {
   assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-002").allocatedEmuer, 200);
 }));
 
+test("何周ぶん EMUER を渡したかを、参加の記録に残す（管理画面がこれで2周目のボタンを出す）", AT(async () => {
+  seedOther();
+  addWisdom("quest-002", 1);
+  approvedOffline("quest-002", 2);
+  await request("quest-002");
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).rewardedRounds, 1);
+  await request("quest-002");
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).rewardedRounds, 2);
+}));
+
+test("この欄ができる前に1周ぶん渡した人は、額から1周ぶんと数えて続きを渡す", AT(async () => {
+  /* 10/2 の実際の形：2周認めてあり、1周ぶんだけ渡してあって、rewardedRounds が無い。 */
+  seedOther();
+  addWisdom("quest-002", 1);
+  approvedOffline("quest-002", 2);
+  await request("quest-002");                      // 1周目を渡す
+  const row = records.get("sp_quests/quest-002/commits/" + address);
+  delete row.rewardedRounds;                       // 欄ができる前の記録にする
+  const r = await request("quest-002");
+  assert.equal(r.status, 200, "2周目が渡らない（" + String(r.body.error) + "）");
+  assert.equal(r.body.round, 2);
+  assert.equal(records.get("sp_quests/quest-002/commits/" + address).rewardedRounds, 2);
+}));
+
 test("証明書をもう受け取っていても、EMUER は渡せる", AT(async () => {
   /* 10/1 前に承認 → 証明書だけ先に受け取った、という形。
      これが実際に起きた状態である。 */

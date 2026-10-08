@@ -2489,7 +2489,11 @@ async function renderSchoolPark() {
              できたパスポートか）で、ここから後ろだけを数える。 */
           tookAt: Number(d.tookAt || 0),
           /* サーバーが引き当てた額。0 なら EMUER はまだ動いていない。 */
-          rewardEmuer: Number(d.rewardEmuer || 0) });
+          rewardEmuer: Number(d.rewardEmuer || 0),
+          /* 何周ぶん EMUER を引き当てたか（サーバーが書く）。この欄ができる前の
+             記録は、額があれば1周ぶん渡した、と数える。 */
+          rewardedRounds: Number(d.rewardedRounds) > 0 ? Number(d.rewardedRounds)
+            : (Number(d.rewardEmuer || 0) > 0 ? 1 : 0) });
       });
     }
     /* 誰が何本ログを書いたか。承認するときの判断材料として画面に出す。 */
@@ -2929,7 +2933,12 @@ async function renderSchoolPark() {
                     : '')
                 + (t.approved
                     ? (t.rewardEmuer > 0
-                      ? esc(String(t.rewardEmuer)) + ' EMUERの承認済み'
+                      /* 渡していない周回が残っていれば、もう一度「EMUERを渡す」 */
+                      ? (t.rewardedRounds < Math.max(t.rounds, 1)
+                        ? esc(String(t.rewardedRounds)) + '周ぶん渡しました '
+                          + '<button class="act ok" data-qapprove="' + esc(q.id) + '" data-addr="' + esc(t.addr)
+                          + '" data-qtopup="1">EMUERを渡す（' + (t.rewardedRounds + 1) + '周目）</button> '
+                        : esc(String(t.rewardEmuer)) + ' EMUERの承認済み')
                       /* 認めてはあるが、EMUER がまだ動いていない。予算を公開する前に
                          認めた人と、Render へ届かないまま通した人がこれ。
                          あとから渡せるので、そのボタンを出す。 */
@@ -3308,6 +3317,10 @@ async function renderSchoolPark() {
         const soft = ["NOT_STARTED", "BUDGET_NOT_PUBLISHED", "WALLET_REQUIRED",
                       "PASSPORT_LINK_REQUIRED", "CERTIFICATE_NOT_DEPLOYED",
                       "FIRESTORE_UNAVAILABLE"].some(x => code.indexOf(x) >= 0);
+        if (b.dataset.qtopup && code.indexOf("NO_NEW_ROUND") >= 0) {
+          alert("この人の認めた周回ぶんは、すべて EMUER を渡してあります。");
+          renderSchoolPark(); return;
+        }
         if (!soft && code.indexOf("Failed to fetch") < 0 && code.indexOf("NetworkError") < 0) {
           alert("認められませんでした（" + code + "）"); return;
         }
