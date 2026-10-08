@@ -16035,9 +16035,21 @@ function emuProfileOf(addr, force) {
   const p = (async function () {
     for (let i = 0; i < 40 && !(window.db && window.fbLib); i++) await new Promise(function (r) { setTimeout(r, 250); });
     if (!window.db || !window.fbLib) throw new Error('NO_FIREBASE');
-    const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'user_profiles', key));
-    if (!snap.exists()) return null;
-    const d = snap.data() || {};
+    /* SDK の常時接続が切れていると、getDoc は「client is offline」で転ぶか、
+       戻ってこないか、手元の控えから「無い」を返す。どれも「名前が無い」ではない。
+       そのときは普通の通信（REST）で読み直す。それでも読めなければ転ばせる
+       （覚えずに、次に要るとき読み直す）。 */
+    let d = null, decided = false;
+    try {
+      const r = await _spSoon(window.fbLib.getDoc(window.fbLib.doc(window.db, 'user_profiles', key)), 3500);
+      const snap = r.ok ? r.value : null;
+      if (snap && (snap.exists() || !(snap.metadata && snap.metadata.fromCache))) {
+        d = snap.exists() ? (snap.data() || {}) : null;
+        decided = true;
+      }
+    } catch (e) { /* 下で読み直す */ }
+    if (!decided) d = await _spRestDoc('user_profiles/' + encodeURIComponent(key), false);
+    if (!d) return null;
     return {
       displayName: String(d.displayName || '').trim().slice(0, 30),
       avatar: _emuSafeAvatar(d.avatar),
@@ -16842,7 +16854,7 @@ async function spPassportLoad(force) {
 
        実際のウォレットと CHESアドレスの両方で照らす。ログイン方法によって
        どちらの名義で保存したかが変わるため。 */
-    let name = '';
+    let name = '', nameUnsure = false;
     {
       /* ウォレット名義とCHES名義を順に1往復ずつ聞いていた。同時に聞く。
          採る順番は今までどおり（ウォレット名義が先。両方あれば先勝ち）。 */
@@ -16854,13 +16866,28 @@ async function spPassportLoad(force) {
         seen[key] = true;
         keys.push(key);
       });
+      /* 読めなかった（通信が切れていた）と、名前を付けていない、を分ける。
+
+         前は、読めなかったときも「名前が無い」として下のログイン元の名前
+         （LINEのプロフィール名など）に落ちていた。パスポートの名前は、
+         クエストを受けた記録・報告・知恵カードに書き手の名前として残る。
+         通信が不安定な日は、同じ人の報告が「メンマ」と「天輝」に分かれていた。 */
       const got = await Promise.all(keys.map(function (key) {
-        return window.fbLib.getDoc(window.fbLib.doc(window.db, 'user_profiles', key))
-               .catch(function () { return null; });
+        return emuProfileOf(key).then(function (v) { return { ok: true, v: v }; },
+                                      function () { return { ok: false }; });
       }));
-      for (const sp of got) {
-        const v = (sp && sp.exists()) ? String((sp.data() || {}).displayName || '').trim() : '';
+      let unread = false;
+      for (const g of got) {
+        if (!g.ok) { unread = true; continue; }
+        const v = g.v ? String(g.v.displayName || '').trim() : '';
         if (v) { name = v; break; }
+      }
+      if (name) {
+        try { localStorage.setItem('sp_profile_name:' + String(addr || '').toLowerCase(), name); } catch (e) {}
+      } else if (unread) {
+        /* 読めなかった。前にこの端末で読めた、本人が付けた名前を使う。 */
+        try { name = String(localStorage.getItem('sp_profile_name:' + String(addr || '').toLowerCase()) || '').trim(); } catch (e) {}
+        nameUnsure = !name;
       }
     }
     if (!name) name = String(d.displayName || '').trim();
@@ -16870,8 +16897,10 @@ async function spPassportLoad(force) {
     /* Emu 側は、名前を localStorage から何か所でも読んでいる。
        本人が付けた名前が分かったら、そちらへも写しておく。
        写さないと SchoolPark だけ直って、Emu は古い名前のままになる。
-       番号を縮めたもの（0x195f…42ac）は名前ではないので写さない。 */
-    if (name && name.indexOf('…') < 0) {
+       番号を縮めたもの（0x195f…42ac）は名前ではないので写さない。
+       本人の名前を読めずにログイン元の名前で埋めたときも写さない
+       （写すと、Emu 側までログイン元の名前に戻ってしまう）。 */
+    if (name && name.indexOf('…') < 0 && !nameUnsure) {
       try { localStorage.setItem('ches_name', name); } catch (e) {}
     }
 
@@ -18931,15 +18960,66 @@ async function _spDaoLoadQuestsOnce(app, attempt) {
 /* 保存直後の表示を、古いSDKキャッシュで消さないために保持する。 */
 const _spPendingQuestLogs = new Map();
 
+/* 書き手の名前は、出すときにプロフィール（user_profiles）から引く。
+
+   受けた記録（commits の name）・報告（authorName）・知恵カード（authorName）には、
+   書いた瞬間のパスポートの名前が残っている。その瞬間にプロフィールを読めないと
+   ログイン元の名前（LINEのプロフィール名など）が入るので、同じ人が
+   「メンマ」と「天輝」に分かれていた。記録はそのままにして（書き換えない）、
+   出すときに本人が付けた名前を使う。読めなければ、残っている名前のまま。
+
+   Emu の投稿の書き手と同じ考え方（emuProfileOf は1ページで1人1回だけ読む）。 */
+function _spNameFor(addr, stored) {
+  const known = typeof emuProfileKnown === 'function' ? emuProfileKnown(addr) : undefined;
+  const v = known && known.displayName ? String(known.displayName).trim() : '';
+  return v || String(stored || '').trim() || _spShortAddr(addr);
+}
+/* 出す前に、まとめて読んでおく。待つのは少しだけ（遅いときは残っている名前で出す）。 */
+async function _spPrefetchNames(addrs) {
+  if (typeof emuProfileOf !== 'function') return;
+  const seen = {};
+  const list = (addrs || []).map(function (a) { return String(a || '').toLowerCase(); })
+    .filter(function (a) { if (!/^0x[0-9a-f]{40}$/.test(a) || seen[a]) return false; seen[a] = true; return true; });
+  if (!list.length) return;
+  await _spSoon(Promise.all(list.map(function (a) { return emuProfileOf(a).catch(function () { return null; }); })), 4000);
+}
+
+/* 報告の本文を、文字とリンクに分ける（http / https の URL だけをリンクにする）。
+
+   本文は文字として出していたので、投稿の URL を貼っても押せなかった。
+   HTML として流し込むと書いた人が何でも埋め込めるので、それはしない。
+   分けた欠片を、画面側（dao.html）で文字（span）とリンク（a）に描き分ける。
+   文末の句読点や閉じかっこは URL に含めない。 */
+function _spTextParts(text) {
+  const s = String(text || '');
+  const out = [];
+  const plain = function (t) { if (t) out.push({ text: t, href: '', textShow: 'inline', linkShow: 'none' }); };
+  const re = new RegExp('https?://[^\\s<>"\'「」『』（）()【】、。，]+', 'g');
+  let last = 0, m;
+  while ((m = re.exec(s))) {
+    const url = m[0].replace(/[.,!?！？:;]+$/, '');
+    let ok = false;
+    try { const u = new URL(url); ok = u.protocol === 'https:' || u.protocol === 'http:'; } catch (e) {}
+    if (!ok || !url) continue;
+    plain(s.slice(last, m.index));
+    out.push({ text: url, href: url, textShow: 'none', linkShow: 'inline' });
+    last = m.index + url.length;
+    re.lastIndex = last;
+  }
+  plain(s.slice(last));
+  return out;
+}
+
 function _spLogView(l, logs) {
   const kind = l.kind || 'やってみた';
   const c = kind === 'つまずいた' ? ['#F0DCD2', '#A85A33']
           : kind === '気づいた' ? ['#0F5C3F', '#F4F1EA'] : ['#E7E2D6', '#3B382F'];
-  const name = l.authorName || _spShortAddr(l.author);
+  const name = _spNameFor(l.author, l.authorName);
   const d = l.at ? new Date(l.at) : null;
   const fromId = String(l.fromPostId || '');
   const root = l.sourceLogId ? logs.find(function (x) { return x.id === l.sourceLogId; }) : null;
   return { id:l.id, author:name, authorAddress:String(l.author || ''), initial:name.slice(0, 1), body:l.body || '',
+    bodyParts:_spTextParts(l.body || ''),
     kind:kind, kindBg:c[0], kindFg:c[1], fromPostId:fromId, fromPostTitle:l.fromPostTitle || '',
     at:Number(l.at) || 0, threadShow:root ? 'block' : 'none',
     threadLabel:root ? '「やってみた」の続き：' + String(root.body || '').slice(0, 60) : '',
@@ -19050,9 +19130,12 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
     _spReadAll('sp_quests/' + encodeURIComponent(q.id) + '/logs')
       .catch(function () { return null; })
   ]);
+  /* 受けた人と報告の書き手の名前を、出す前にプロフィールから読んでおく */
+  await _spPrefetchNames([].concat((cs || []).map(function (c) { return c.id; }),
+                                   (ls || []).map(function (l) { return l.author; })));
   if (cs) {
     cs.forEach(function (c) {
-      people.push(c.name || _spShortAddr(c.id));
+      people.push(_spNameFor(c.id, c.name));
       if (mine && String(c.id || '').toLowerCase() === mine) iTook = true;
     });
   }
@@ -20329,6 +20412,7 @@ window.spDaoLoadWisdom = async function (app) {
     return rows || [];
   }));
   const logsByQuest = new Map(questIds.map(function (id, i) { return [id, logSets[i]]; }));
+  await _spPrefetchNames(docs.map(function (w) { return w.author; }));
   for (let wi = 0; wi < docs.length; wi++) {
     const w = docs[wi];
     let uses = 0;
@@ -20343,7 +20427,7 @@ window.spDaoLoadWisdom = async function (app) {
     }).sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
     const reports = ['やってみた', 'つまずいた', '気づいた'].map(function (kind) {
       const r = matched.find(function (l) { return l.kind === kind; });
-      return r ? {kind:kind, body:r.body || ''} : null;
+      return r ? {kind:kind, body:r.body || '', bodyParts:_spTextParts(r.body || '')} : null;
     }).filter(Boolean);
     wisdom.push({
       id: w.id, tag: spWisdomNormalizeTag(w.tag),
@@ -20351,7 +20435,7 @@ window.spDaoLoadWisdom = async function (app) {
       tagColor: SP_WISDOM_TAG_COLORS[spWisdomNormalizeTag(w.tag)] || '#6E695C',
       insight: w.insight || '',
       from: w.knowledge || '', experiment: w.experiment || '',
-      author: w.authorName || _spShortAddr(w.author), uses: uses,
+      author: _spNameFor(w.author, w.authorName), uses: uses,
       reports: reports, hasReports: reports.length > 0,
       /* 元になった Emu の投稿があるときだけ、押して開けるようにする。
          自由入力だけの古い知恵カードは、これまでどおり字面のまま。 */
@@ -20568,6 +20652,9 @@ window.spDaoLoadMembers = async function (app) {
   /* 引用は数として残すが、クエストの予算からは配らない。
      引用への還元は DAO プールから別に配る（そちらは未実装）。 */
 
+  /* 名前は記録に残っているものではなく、本人が付けた名前（プロフィール）で出す */
+  await _spPrefetchNames(Object.keys(M));
+  Object.keys(M).forEach(function (k) { M[k].name = _spNameFor(k, M[k].name); });
   const members = Object.keys(M).map(function (k) { return M[k]; })
     /* 受けた人は残す。
 

@@ -706,7 +706,11 @@ if (window.top === window.self) window.location.replace('/');
                         <div style="font-size:11px; color:#6E695C">{{ l.time }}</div>
                         <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.12em; padding:3px 8px; border-radius:3px; background:{{ l.kindBg }}; color:{{ l.kindFg }}">{{ l.kind }}</div>
                       </div>
-                      <div style="font-size:14px; line-height:1.95; color:#3B382F; text-wrap:pretty">{{ l.body }}</div>
+                      <!-- 本文。長い URL がそのまま1行になると、スマホで画面の外まで伸びて
+                           横に崩れていた。どこでも折り返す。URL は押して開けるリンクにする
+                           （欠片は親の _spTextParts が作る。sc-for の間に空白を入れないこと。
+                           改行を残すので、空白もそのまま出る）。 -->
+                      <div style="font-size:14px; line-height:1.95; color:#3B382F; text-wrap:pretty; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; min-width:0"><sc-for list="{{ l.bodyParts }}" as="t"><span style="display:{{ t.textShow }}">{{ t.text }}</span><a href="{{ t.href }}" target="_blank" rel="noopener noreferrer" style="display:{{ t.linkShow }}; color:#0F5C3F; text-decoration:underline">{{ t.text }}</a></sc-for></div>
                       <div style="display:{{ l.threadShow }}; font-size:12px; line-height:1.7; color:#0F5C3F">{{ l.threadLabel }}</div>
                       <div onClick="{{ l.openPost }}" style="display:{{ l.fromShow }}; align-items:center; gap:10px; flex-wrap:wrap; background:#F4F1EA; border-radius:8px; padding:10px 12px; cursor:pointer; font-size:12px; line-height:1.7" style-hover="background:#E7E2D6">
                         <span style="color:#0F5C3F; font-weight:700">元にした知識</span>
@@ -980,7 +984,10 @@ if (window.top === window.self) window.location.replace('/');
                  グリッドにして、同じ行のカードを同じ高さに引き伸ばす。 -->
             <div style="display:grid; grid-template-columns:repeat({{ L.libCols }}, minmax(0, 1fr)); gap:16px; align-items:stretch">
               <sc-for list="{{ wisdom }}" as="w" hint-placeholder-count="6">
-                <div style="height:100%; min-width:0; background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; flex-direction:column; gap:16px">
+                <!-- height:100% は付けない。行の高さはグリッドが中身から決めて、
+                     そろえる（align-items:stretch）。100% を付けると、スマホで中身の
+                     ほうが高いカードが、下のカードに重なっていた。 -->
+                <div style="min-width:0; background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:24px; display:flex; flex-direction:column; gap:16px">
                   <div style="display:flex; justify-content:space-between; align-items:center">
                     <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:{{ w.tagColor }}">{{ w.tag }}</div>
                     <div style="font-family:Inter,sans-serif; font-size:11px; color:#6E695C">引用 {{ w.uses }}</div>
@@ -994,7 +1001,7 @@ if (window.top === window.self) window.location.replace('/');
                     <div style="display:flex; flex-direction:column; gap:8px; padding-top:12px; border-top:1px dashed rgba(20,19,16,.16)">
                       <div style="font-size:12px; font-weight:700; color:#0F5C3F">この知恵につながる報告</div>
                       <sc-for list="{{ w.reports }}" as="r" hint-placeholder-count="3">
-                        <div style="font-size:12px; line-height:1.75; white-space:pre-wrap; overflow-wrap:anywhere; color:#3B382F"><strong style="color:#0F5C3F">{{ r.kind }}：</strong>{{ r.body }}</div>
+                        <div style="font-size:12px; line-height:1.75; white-space:pre-wrap; overflow-wrap:anywhere; color:#3B382F"><strong style="color:#0F5C3F">{{ r.kind }}：</strong><sc-for list="{{ r.bodyParts }}" as="t"><span style="display:{{ t.textShow }}">{{ t.text }}</span><a href="{{ t.href }}" target="_blank" rel="noopener noreferrer" style="display:{{ t.linkShow }}; color:#0F5C3F; text-decoration:underline">{{ t.text }}</a></sc-for></div>
                       </sc-for>
                     </div>
                   </sc-if>
@@ -1022,15 +1029,17 @@ if (window.top === window.self) window.location.replace('/');
               <b>お支払いはまだ始めていません。</b>「分配」の欄に出ているのは、決まった割合（完走した人へ80%／DAOプールへ20%）で計算した額です。実際にお渡しする方法と時期は、法務と税務の確認が済んでからお知らせします。
             </div>
             <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; overflow:hidden">
-              <div style="display:grid; grid-template-columns:{{ L.table }}; gap:12px; padding:16px 20px; background:#E7E2D6; font-size:12px; font-weight:700; color:#3B382F">
+              <!-- スマホでも、パソコンと同じ5列（完走・引用されも出す）。
+                   幅が足りないぶんは、頭文字の丸を外し、すき間を詰めて入れる。 -->
+              <div style="display:grid; grid-template-columns:{{ L.table }}; gap:{{ L.tableGap }}; padding:16px {{ L.tablePad }}; background:#E7E2D6; font-size:12px; font-weight:700; color:#3B382F">
                 <div>メンバー</div><div>知恵</div><div style="display:{{ L.colHide }}">完走</div><div style="display:{{ L.colHide }}">引用され</div><div>分配（計算額）</div>
               </div>
               <sc-for list="{{ members }}" as="m" hint-placeholder-count="6">
-                <div style="display:grid; grid-template-columns:{{ L.table }}; gap:12px; padding:18px 20px; border-top:1px solid rgba(20,19,16,.09); align-items:center; font-size:14px">
-                  <div style="display:flex; align-items:center; gap:12px">
-                    <div style="width:32px; height:32px; flex:0 0 32px; border-radius:50%; background:#E7E2D6; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#0F5C3F">{{ m.initial }}</div>
+                <div style="display:grid; grid-template-columns:{{ L.table }}; gap:{{ L.tableGap }}; padding:18px {{ L.tablePad }}; border-top:1px solid rgba(20,19,16,.09); align-items:center; font-size:14px">
+                  <div style="display:flex; align-items:center; gap:12px; min-width:0">
+                    <div style="width:32px; height:32px; flex:0 0 32px; border-radius:50%; background:#E7E2D6; display:{{ L.memAvatar }}; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#0F5C3F">{{ m.initial }}</div>
                     <div style="display:flex; flex-direction:column; gap:3px; min-width:0">
-                      <div style="font-weight:700">{{ m.name }}</div>
+                      <div style="font-weight:700; overflow-wrap:anywhere">{{ m.name }}</div>
                       <div style="font-size:11px; color:#6E695C">{{ m.role }}</div>
                     </div>
                   </div>
@@ -1337,13 +1346,13 @@ const TASK_BRANDS = [
 const LAYOUTS = {
   pc: {frameW:1440, frameH:900, scrollY:'auto', frameR:'14px', sidebar:'flex', bottom:'none', pad:'36px 40px 80px', headPad:'22px 40px', headSize:'22px',
        hero:'1.35fr 1fr', heroSize:'34px', parkHeroSize:'34px', inputSize:'14px', g3:'repeat(3,1fr)', g2:'repeat(2,1fr)', g2b:'1.4fr 1fr', gPark:'1.25fr 1fr', gDetail:'1.5fr 1fr', gLogs:'1.6fr 1fr',
-       gPropose:'220px 1fr', libCols:'3', table:'2fr 1fr 1fr 1fr 1fr', colHide:'block', stick:'sticky', cardPad:'32px', bigNum:'52px', ctaLabel:'＋ クエストを出す'},
+       gPropose:'220px 1fr', libCols:'3', table:'2fr 1fr 1fr 1fr 1fr', colHide:'block', tableGap:'12px', tablePad:'20px', memAvatar:'flex', stick:'sticky', cardPad:'32px', bigNum:'52px', ctaLabel:'＋ クエストを出す'},
   tablet: {frameW:834, frameH:1112, scrollY:'auto', frameR:'20px', sidebar:'flex', bottom:'none', pad:'28px 26px 60px', headPad:'20px 26px', headSize:'19px',
        hero:'1fr', heroSize:'30px', parkHeroSize:'30px', inputSize:'14px', g3:'repeat(2,1fr)', g2:'1fr', g2b:'1fr', gPark:'1fr', gDetail:'1fr', gLogs:'1fr',
-       gPropose:'200px 1fr', libCols:'2', table:'2fr 1fr 1fr 1fr 1fr', colHide:'block', stick:'static', cardPad:'28px', bigNum:'44px', ctaLabel:'＋ クエスト'},
+       gPropose:'200px 1fr', libCols:'2', table:'2fr 1fr 1fr 1fr 1fr', colHide:'block', tableGap:'12px', tablePad:'20px', memAvatar:'flex', stick:'static', cardPad:'28px', bigNum:'44px', ctaLabel:'＋ クエスト'},
   mobile: {frameW:390, frameH:844, scrollY:'auto', frameR:'28px', sidebar:'none', bottom:'flex', pad:'20px 16px 40px', headPad:'16px 16px', headSize:'17px',
        hero:'1fr', heroSize:'26px', parkHeroSize:'20px', inputSize:'16px', g3:'1fr', g2:'1fr', g2b:'1fr', gPark:'1fr', gDetail:'1fr', gLogs:'1fr',
-       gPropose:'1fr', libCols:'1', table:'1.6fr .6fr .8fr', colHide:'none', stick:'static', cardPad:'22px', bigNum:'38px', ctaLabel:'＋'}
+       gPropose:'1fr', libCols:'1', table:'minmax(0,1.5fr) repeat(4,minmax(0,1fr))', colHide:'block', tableGap:'8px', tablePad:'12px', memAvatar:'none', stick:'static', cardPad:'22px', bigNum:'38px', ctaLabel:'＋'}
 };
 
 class Component extends DCLogic {
