@@ -41,6 +41,7 @@ before(async () => {
     /* 3人とも公式パスを持っている（先行公開のあいだ入れるように） */
     for (const [uid, addr] of [['owner', OWNER], ['taker', TAKER], ['other', OTHER]]) {
       await fb.setDoc(fb.doc(d, 'ches_accounts', uid), { walletAddress: addr, chesAddress: addr });
+      await fb.setDoc(fb.doc(d, 'ches_verified_accounts', uid), { walletAddress: addr, chesAddress: addr });
       await fb.setDoc(fb.doc(d, 'paid_users', addr), { plan: 'official' });
     }
     /* 走っているクエスト（まだ閉じていない）と、受けた記録 */

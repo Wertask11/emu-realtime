@@ -9,6 +9,7 @@ const path = require("path");
 const cors = require("cors");
 const ethers = require("ethers");
 const cron = require("node-cron");
+const { ensureVerifiedAccount, accountRouter, activityRouter, awardRankingBadge } = require("./verified-platform");
 
 // =====================
 // App / Server
@@ -95,9 +96,7 @@ async function requireFirebaseUser(req, res, next) {
     const cached = identityAccountCache.get(decoded.uid);
     let accountData = cached && cached.expiresAt > Date.now() ? cached.data : null;
     if (!accountData) {
-      const account = await db.collection("ches_accounts").doc(decoded.uid).get();
-      if (!account.exists) return res.status(403).json({ error: "ACCOUNT_NOT_FOUND" });
-      accountData = account.data();
+      accountData = await ensureVerifiedAccount(db, decoded);
       identityAccountCache.set(decoded.uid, { data: accountData, expiresAt: Date.now() + IDENTITY_CACHE_MS });
     }
     const walletAddress = String(accountData.walletAddress || "").toLowerCase();
@@ -112,6 +111,9 @@ async function requireFirebaseUser(req, res, next) {
     return res.status(401).json({ error: "INVALID_AUTH_TOKEN" });
   }
 }
+
+app.use("/api/auth", accountRouter({ db, firebaseAdmin, onVerified: uid => identityAccountCache.delete(uid) }));
+app.use("/api/activity", activityRouter({ db, requireFirebaseUser }));
 
 function requireOwnAddress(req, res, next) {
   const claimed = String(req.body?.address || req.query?.address || "").toLowerCase().trim();
@@ -206,9 +208,8 @@ async function optionalFirebaseIdentity(req) {
   const header = String(req.headers.authorization || "");
   if (!header.startsWith("Bearer ")) return null;
   const decoded = await firebaseAdmin.auth().verifyIdToken(header.slice(7));
-  const account = await db.collection("ches_accounts").doc(decoded.uid).get();
-  if (!account.exists) return { uid: decoded.uid, account: null };
-  return { uid: decoded.uid, account: account.data() || {} };
+  const account = await ensureVerifiedAccount(db, decoded);
+  return { uid: decoded.uid, account };
 }
 
 async function schoolParkEntryStatus(req, res) {
@@ -1708,6 +1709,7 @@ app.get('/api/ranking', async (req, res) => {
     const found = await fetchDisplayNames(items.map(i => i.address));
     items.forEach(i => { i.displayName = found[i.address] || shortAddr(i.address); });
 
+    void awardRankingBadge(db, type, items[0]?.address).catch(error => console.warn("ランキングバッジ保存失敗:", error.message));
     console.log(`📊 Ranking[${type}]: ${items.length}件 / 名前 ${Object.keys(found).length}件`);
     res.json(items);
 
@@ -1980,6 +1982,7 @@ app.post("/api/auth/wallet", async (req, res) => {
       address: chesAddress, uid, type: "address-only", provider: "wallet", createdAt: now
     }, { merge: true });
     // requireFirebaseUser のキャッシュに古い内容が残らないようにする
+    await ensureVerifiedAccount(db, { uid, provider: "wallet", address: checksummed, firebase: { sign_in_provider: "custom" } });
     identityAccountCache.delete(uid);
 
     /* SchoolPark ID を用意する（無ければ一度だけ発行）。

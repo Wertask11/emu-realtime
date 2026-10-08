@@ -13,7 +13,9 @@ before(async()=>{
   await env.withSecurityRulesDisabled(async c=>{
     const db=c.firestore();
     await setDoc(doc(db,'ches_accounts','alice'),{spid:A,walletAddress:'alice',chesAddress:'alice'});
+    await setDoc(doc(db,'ches_verified_accounts','alice'),{spid:A,walletAddress:'alice',chesAddress:'alice'});
     await setDoc(doc(db,'ches_accounts','owner'),{spid:B,walletAddress:'0x8ab838ebb2e3bf160bc61b7182d348a8500b35f7'});
+    await setDoc(doc(db,'ches_verified_accounts','owner'),{spid:B,walletAddress:'0x8ab838ebb2e3bf160bc61b7182d348a8500b35f7'});
     await setDoc(doc(db,'sp_identities',A),{spid:A,status:'active'});
     await setDoc(doc(db,'sp_identities',A,'city_checkins','saved'),{spotId:'demo-book',isDemo:true});
   });

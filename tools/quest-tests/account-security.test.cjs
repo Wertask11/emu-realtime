@@ -19,7 +19,9 @@ beforeEach(async () => {
       await fb.setDoc(fb.doc(db, name, 'victim'), { drafts: 1, post: 1 });
     }
     await fb.setDoc(fb.doc(db, 'ches_accounts', 'victim'), { walletAddress: '0x123', email: 'private@example.test' });
+    await fb.setDoc(fb.doc(db, 'ches_verified_accounts', 'victim'), { walletAddress: '0x123', email: 'private@example.test' });
     await fb.setDoc(fb.doc(db, 'ches_accounts', 'operator'), { walletAddress: '0xdcc687c05f130e57597a8525771299a4efb6edf7' });
+    await fb.setDoc(fb.doc(db, 'ches_verified_accounts', 'operator'), { walletAddress: '0xdcc687c05f130e57597a8525771299a4efb6edf7' });
     await fb.setDoc(fb.doc(db, 'sp_invite_codes', 'victim', 'invited', 'person'), { spid: 'SP-TEST' });
   });
 });
@@ -72,4 +74,38 @@ test('legitimate own reads, bounded usage updates and operator invite reads stil
   const operatorDb = env.authenticatedContext('operator').firestore();
   await assertSucceeds(fb.getDoc(fb.doc(operatorDb, 'sp_invite_codes', 'victim')));
   await assertSucceeds(fb.getDoc(fb.doc(operatorDb, 'sp_invite_codes', 'victim', 'invited', 'person')));
+});
+
+test('cannot claim or supplement another wallet, even through forged legacy account data', async () => {
+  const db = env.authenticatedContext('attacker', { firebase: { sign_in_provider: 'anonymous' } }).firestore();
+  await assertFails(fb.setDoc(fb.doc(db, 'ches_accounts', 'attacker'), { walletAddress: '0x123' }));
+  await env.withSecurityRulesDisabled(async c => {
+    const d = c.firestore();
+    await fb.setDoc(fb.doc(d, 'ches_accounts', 'attacker'), { walletAddress: '0x123', chesAddress: '' });
+    await fb.setDoc(fb.doc(d, 'knowledge_drafts', 'private'), { owner: '0x123', body: 'private' });
+  });
+  await assertFails(fb.updateDoc(fb.doc(db, 'ches_accounts', 'attacker'), { chesAddress: '0x123' }));
+  await assertFails(fb.setDoc(fb.doc(db, 'ches_verified_accounts', 'attacker'), { walletAddress: '0x123' }));
+  await assertFails(fb.getDoc(fb.doc(db, 'knowledge_drafts', 'private')));
+  await assertFails(fb.updateDoc(fb.doc(db, 'knowledge_drafts', 'private'), { body: 'changed' }));
+  const legitimate = env.authenticatedContext('victim').firestore();
+  await assertSucceeds(fb.getDoc(fb.doc(legitimate, 'knowledge_drafts', 'private')));
+  await assertSucceeds(fb.updateDoc(fb.doc(legitimate, 'knowledge_drafts', 'private'), { body: 'own edit' }));
+});
+
+test('badges, statistics and entry records cannot be created, changed or deleted by browsers', async () => {
+  const names = ['rank_badges', 'evolve_users', 'sp_stats', 'sp_entrants', 'sp_brand_entrants', 'sp_pass_logs', 'sp_paid_pass', 'sp_free_pass', 'sp_activity_limits'];
+  await env.withSecurityRulesDisabled(async c => {
+    const d = c.firestore();
+    for (const name of names) await fb.setDoc(fb.doc(d, name, 'existing'), { value: 1 });
+  });
+  for (const context of [env.unauthenticatedContext(), env.authenticatedContext('victim'), env.authenticatedContext('operator')]) {
+    const db = context.firestore();
+    for (const name of names) {
+      await assertFails(fb.setDoc(fb.doc(db, name, 'forged'), { value: 999 }));
+      await assertFails(fb.updateDoc(fb.doc(db, name, 'existing'), { value: 999 }));
+      await assertFails(fb.deleteDoc(fb.doc(db, name, 'existing')));
+    }
+    for (const name of ['rank_badges', 'evolve_users', 'sp_stats']) await assertSucceeds(fb.getDoc(fb.doc(db, name, 'existing')));
+  }
 });

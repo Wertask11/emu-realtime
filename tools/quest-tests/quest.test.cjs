@@ -26,7 +26,9 @@ before(async () => {
   await env.withSecurityRulesDisabled(async c => {
     const seedDb=c.firestore();
     await fb.setDoc(fb.doc(seedDb,'ches_accounts','founder'),{walletAddress:owner,chesAddress:owner});
+    await fb.setDoc(fb.doc(seedDb,'ches_verified_accounts','founder'),{walletAddress:owner,chesAddress:owner});
     await fb.setDoc(fb.doc(seedDb,'ches_accounts','member'),{walletAddress:'member',chesAddress:'member'});
+    await fb.setDoc(fb.doc(seedDb,'ches_verified_accounts','member'),{walletAddress:'member',chesAddress:'member'});
     /* 10/1 の一般公開まで、SchoolPark に入るには公式パスが要る（canAccessSchoolPark）。
        この試しを書いたときは、まだこの門が無かった。 */
     await fb.setDoc(fb.doc(seedDb,'paid_users',owner),{plan:'official'});
@@ -64,7 +66,8 @@ test('ふつうのクエストは、受け付け・報告・完了が通る。�
   const q=await store.createQuest(fb,db,{...normal,series:'general',questNumber:1,branch:0,stage:''});
   assert.equal(q.questNumber,1);
   await assertSucceeds(fb.setDoc(fb.doc(guest,'sp_quests',q.id,'commits','member'),{name:'Member',tookAt:1}));
-  await assertSucceeds(fb.addDoc(fb.collection(guest,'sp_quests',q.id,'logs'),{author:'member',body:'通常の検証',kind:'やってみた'}));
+  await assertFails(fb.addDoc(fb.collection(guest,'sp_quests',q.id,'logs'),{author:'member',body:'出どころなし',kind:'やってみた'}));
+  await assertSucceeds(fb.addDoc(fb.collection(guest,'sp_quests',q.id,'logs'),{author:'member',body:'通常の検証',kind:'やってみた',fromPostId:'synthetic-post'}));
   await assertFails(fb.updateDoc(fb.doc(db,'sp_quests',q.id),{questNumber:100}));
   await assertFails(fb.updateDoc(fb.doc(db,'sp_quests',q.id),{title:'差し替え'}));
   await assertSucceeds(fb.updateDoc(fb.doc(db,'sp_quests',q.id),{status:'RUNNING'}));

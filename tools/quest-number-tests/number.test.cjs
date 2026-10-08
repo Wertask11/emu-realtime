@@ -46,7 +46,9 @@ beforeEach(async () => {
   await env.withSecurityRulesDisabled(async (c) => {
     const d = c.firestore();
     await fb.setDoc(fb.doc(d, 'ches_accounts', 'owner'), { walletAddress: OWNER, chesAddress: OWNER });
+    await fb.setDoc(fb.doc(d, 'ches_verified_accounts', 'owner'), { walletAddress: OWNER, chesAddress: OWNER });
     await fb.setDoc(fb.doc(d, 'ches_accounts', 'member'), { walletAddress: MEMBER, chesAddress: MEMBER });
+    await fb.setDoc(fb.doc(d, 'ches_verified_accounts', 'member'), { walletAddress: MEMBER, chesAddress: MEMBER });
     /* 10/1 の一般公開まで、SchoolPark に入るには公式パスが要る */
     await fb.setDoc(fb.doc(d, 'paid_users', OWNER), { plan: 'official' });
     await fb.setDoc(fb.doc(d, 'paid_users', MEMBER), { plan: 'official' });
