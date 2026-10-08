@@ -19899,17 +19899,20 @@ window.spQuestWisdom = async function (questId, app) {
   }
   if (!q) { alert('クエストが見つかりませんでした。'); return; }
   /* 受けているかを、置く前に確かめる。決まりも同じところを見ているので、
-     ここで止めないと、書いたあとに断られて中身が消える。 */
+     ここで止めないと、書いたあとに断られて中身が消える。
+
+     前は Firestore の SDK（getDoc）に先に聞いていた。SDK の常時接続（Listen）が
+     切れていると「client is offline」で例外になり、普通の通信で聞き直す前に
+     「確かめられませんでした」で止まっていた。報告は出せるのに知恵カードだけ置けない、
+     はこれ。「受ける」と同じく、サーバーの記録を普通の通信で1件読む。 */
+  let took = false;
   try {
-    const c = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId, 'commits', p.addr));
-    if (!c.exists() || (c.metadata && c.metadata.fromCache)) {
-      const own = await _spRestDoc('sp_quests/' + encodeURIComponent(questId)
-        + '/commits/' + encodeURIComponent(p.addr), true);
-      if (!own) { alert('知恵カードを置けるのは、このクエストを受けた人だけです。'); return; }
-    }
+    took = !!(await _spRestDoc('sp_quests/' + encodeURIComponent(questId)
+      + '/commits/' + encodeURIComponent(p.addr), true));
   } catch (e) {
     alert('受けているかを確かめられませんでした。通信を確かめて、もう一度お試しください。'); return;
   }
+  if (!took) { alert('知恵カードを置けるのは、このクエストを受けた人だけです。'); return; }
   q._citedPosts = await _spQuestCited(questId, p.addr);
   openSpWisdomForm(q, app);
 };
@@ -19948,9 +19951,11 @@ window.spQuestClose = async function (questId, app) {
   /* 知恵カードは「やった人」が置くもの。出した人が自分でも受けていれば、
      そのまま続けて置ける。受けていなければ、閉じるところで終わり。
      ここで札を開いても、決まりの側で断られて書いたものが消えるだけ。 */
+  /* 知恵カードのときと同じく、サーバーの記録を普通の通信で読む（SDK が切れていても分かる） */
   let took = false;
   try {
-    took = (await fb.getDoc(fb.doc(window.db, 'sp_quests', questId, 'commits', p.addr))).exists();
+    took = !!(await _spRestDoc('sp_quests/' + encodeURIComponent(questId)
+      + '/commits/' + encodeURIComponent(p.addr), true));
   } catch (e) {}
   if (!took) { alert('完了にしました。\n（知恵カードは、このクエストを受けた人が置きます）'); return; }
   q._citedPosts = await _spQuestCited(questId, p.addr);
