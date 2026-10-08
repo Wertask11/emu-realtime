@@ -241,7 +241,7 @@ if (window.top === window.self) window.location.replace('/');
             <div style="background:#141310; color:#F4F1EA; padding:{{ L.cardPad }}; border-radius:12px; display:grid; grid-template-columns:{{ L.hero }}; gap:32px">
               <div style="display:flex; flex-direction:column; gap:16px">
                 <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE">THIS WEEK</div>
-                <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.45">今週、{{ stats.newWisdom }}個の知識が<br>知恵になった。</div>
+                <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.45">今まで、{{ stats.newWisdom }}個の知識が知恵になった。</div>
                 <sc-if value="{{ showWeekToggle }}"><button onClick="{{ toggleWeekSummary }}" style="align-self:flex-start; font:inherit; background:#D0E2BE; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">{{ weekToggleLabel }}</button></sc-if>
                 <sc-if value="{{ showWeekDetails }}"><div style="font-size:14px; line-height:1.9; color:rgba(244,241,234,.68)">走っている{{ word }}は{{ stats.running }}本、受けている仲間は{{ stats.people }}人。</div></sc-if>
               </div>
@@ -1177,7 +1177,7 @@ if (window.top === window.self) window.location.replace('/');
         <sc-if value="{{ isTasks }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex; flex-direction:column; gap:28px">
 
-            <div onClick="{{ goHome }}" style="font-size:12px; color:#6E695C; cursor:pointer">← 今週の広場</div>
+            <div onClick="{{ goHome }}" style="font-size:12px; color:#6E695C; cursor:pointer">← ホーム</div>
 
             <div style="background:#141310; color:#F4F1EA; padding:{{ L.cardPad }}; border-radius:12px; display:grid; grid-template-columns:{{ L.hero }}; gap:32px">
               <div style="display:flex; flex-direction:column; gap:16px">
@@ -1495,9 +1495,9 @@ class Component extends DCLogic {
     const L = {...base, menuShow: hasSidebar ? 'none' : 'flex', sidebarShow:sidebarOpen ? 'flex' : 'none', sidebarToggle:hasSidebar && !sidebarOpen ? 'flex' : 'none', w: '100%', h: '100%', scale: 'none', boxH: '100vh', frameR: '0'};
     /* 左の並び。「考える → 決める → やる → 残す」の順に置き、
        公園（報酬のない遊び）はそのあとに続ける。番号は並びに合わせて振り直す。 */
-    const navDefs = [['home','01','今週の広場'],['logs','02','ギルド'],['experiments','03',W+'一覧'],['library','04','知恵ライブラリ'],['park','05','公園'],['members','06','メンバー・貢献'],['treasury','07','トレジャリー'],['city','08','CITY']];
+    const navDefs = [['home','01','ホーム'],['logs','02','ギルド'],['experiments','03',W+'一覧'],['library','04','知恵ライブラリ'],['park','05','公園'],['members','06','メンバー・貢献'],['treasury','07','トレジャリー'],['city','08','CITY']];
     const heads = {
-      home:['The week / 今週の広場','おはよう、' + s.me.name],
+      home:['Home / ホーム','おはよう、' + s.me.name],
       park:['THE PARK / 公園','無我夢中で遊ぼう'],
       plaza:['THE PARK / 広場','建てられたもの'],
       experiments:['QUESTS','走っている'+W+'・募集中の'+W],
@@ -1515,15 +1515,15 @@ class Component extends DCLogic {
     const allQuests = (s.quests || []).map(e => this.decorate(e));
     const founder = allQuests.find(e => e.isFounder);
     const exps = allQuests.filter(e => !e.isFounder);
-    /* 走っているクエスト＝締め切られておらず、誰かが受けているもの（運営が
-       「進行中」にしたものも入れる）。前は「進行中」だけを数えていたが、
-       クエストはほぼ「募集中」のまま受けられて動くので、いつも0本だった。
-       進行中を先に、受けている人が多い順に並べる。 */
-    const runningAll = exps
-      .filter(e => e.status !== 'CLOSED' && (e.status === 'RUNNING' || (Number(e.commits) || 0) > 0))
+    /* 走っているクエスト＝締め切られていないもの全部（募集中・進行中、#000 も入れる）。
+       前は「誰かが受けているもの」だけを数えていたので、出ているクエストが22本あるのに
+       「4本」と出ていた。一覧（下の3件）は #000 を除き、進行中を先に、受けている人が
+       多い順に並べる（#000 はクエスト一覧の頭に別に出している）。 */
+    const liveAll = allQuests.filter(e => e.status !== 'CLOSED');
+    const runningAll = liveAll.filter(e => !e.isFounder)
       .sort((a, b) => ((b.status === 'RUNNING') - (a.status === 'RUNNING')) || ((Number(b.commits) || 0) - (Number(a.commits) || 0)));
-    /* 受けている仲間＝走っているクエストを受けている人（同じ人は1人と数える） */
-    const runningPeople = new Set([].concat(...runningAll.map(e => e.peopleAddrs || [])).filter(Boolean)).size;
+    /* 受けている仲間＝走っているクエストのどれかを受けている人（同じ人は1人と数える） */
+    const runningPeople = new Set([].concat(...liveAll.map(e => e.peopleAddrs || [])).filter(Boolean)).size;
     const cur = allQuests.find(e => e.id === s.expId) || exps[0] || {};
     /* 系列の切り替え。一般が最初に出る。
        番号の無い古いクエストは series が '' なので、親が 'general' 扱いで
@@ -1695,7 +1695,7 @@ class Component extends DCLogic {
       nav: navDefs.map(([id,num,label]) => { const on = s.screen===id || (id==='logs' && s.screen==='guild'); return {num, label, go:this.go(id),
         bg: on ? '#0F5C3F' : 'transparent',
         fg: on ? '#F4F1EA' : 'rgba(244,241,234,.72)'}; }),
-      tabs: [['home','01','広場'],['logs','02','ギルド'],['experiments','03',W],['library','04','知恵'],['park','05','公園'],['members','06','メンバー'],['treasury','07','会計'],['city','08','CITY']].map(([id,n,label]) => ({
+      tabs: [['home','01','ホーム'],['logs','02','ギルド'],['experiments','03',W],['library','04','知恵'],['park','05','公園'],['members','06','メンバー'],['treasury','07','会計'],['city','08','CITY']].map(([id,n,label]) => ({
         n, label, go:this.go(id),
         bg: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#0F5C3F' : 'transparent',
         fg: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#F4F1EA' : 'rgba(244,241,234,.6)',
@@ -1720,7 +1720,7 @@ class Component extends DCLogic {
       isTreasury:s.screen==='treasury', isPropose:s.screen==='propose', isTasks:s.screen==='tasks',
       goTasks:this.go('tasks'), goHome:this.go('home'),
       goPropose:() => { try { window.parent.openSpQuestForm(this); } catch (e) { this.setState({screen:'propose'}); } }, goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
-      stats: {newWisdom:(s.wisdom || []).length, running:runningAll.length, people:runningPeople, myCommit:myQuests.length,   /* 実際に受けている記録（commits）から数える。宿題と同じ数 */
+      stats: {newWisdom:(s.wisdom || []).length, running:liveAll.length, people:runningPeople, myCommit:myQuests.length,   /* 実際に受けている記録（commits）から数える。宿題と同じ数 */
          due:0, wisdomTotal:(s.wisdom || []).length, payout:'¥0', citations:s.citations || 0},
       /* 左下は本人の数字。まだ数え終わっていないときは、0ではなく空で待つ。
          ここに DAO のトレジャリーを出していたころは、誰が開いても同じ額が出て、
