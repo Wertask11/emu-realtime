@@ -18587,8 +18587,14 @@ async function _spReadAllOnce(path, ms) {
       if (r.ok) {
         const out = [];
         r.value.forEach(function (d) { out.push(Object.assign({ id: d.id }, d.data() || {})); });
-        /* 控えしか無いときの「0件」は、0件ではない。 */
-        if (out.length || !(r.value.metadata && r.value.metadata.fromCache)) rows = out;
+        /* 控え（fromCache）から返ってきたものは、件数があっても使わない。
+
+           前は「控えの0件」だけを疑い、1件でもあれば全件として使っていた。
+           控えに入っているのは、この端末がたまたま前に読んだ記録だけである。
+           SDK の常時接続が切れていると（パソコンで起きやすい）、たとえば
+           クエストを受けた記録は自分の1件しか控えに無く、メンバー・貢献が
+           「自分だけ」になっていた。控えなら、普通の通信で全件を読み直す。 */
+        if (!(r.value.metadata && r.value.metadata.fromCache)) rows = out;
       }
     } catch (e) { /* 下の普通の通信で読み直す */ }
   }
@@ -20563,6 +20569,8 @@ window.spDaoLoadMembers = async function (app) {
   const M = {};                        // 番号 → 集計
   /* 読めたかどうか。読めていないのに「記録がありません」と出さないため。 */
   let failed = false;
+  /* 一部（あるクエストの受けた人・ある知恵カードの引用）だけ読めなかった */
+  let partial = false;
   const pick = function (addr, name) {
     const key = String(addr || '').toLowerCase();
     if (!key) return null;
@@ -20588,6 +20596,7 @@ window.spDaoLoadMembers = async function (app) {
       if (m) m.wisdom++;
       const cs = citeSets[i];
       if (m && cs) m.cited += cs.length;
+      if (!cs) partial = true;
     });
   } catch (e) {
     console.warn('メンバーの知恵カードを読めませんでした:', e && (e.message || e));
@@ -20608,6 +20617,7 @@ window.spDaoLoadMembers = async function (app) {
       const q = list[qi];
       const took = [];
       const cs = commitSnaps[qi];
+      if (!cs) partial = true;
       if (cs) {
         cs.forEach(function (c) {
           took.push({ addr: c.id, name: c.name || '', approved: c.approved === true,
@@ -20688,7 +20698,12 @@ window.spDaoLoadMembers = async function (app) {
     if (!had) app.setState({ members: [] });
     return;
   }
-  app.setState({ members: members, noMembers: members.length === 0, membersNote: '' });
+  /* 一部しか読めなかったときは、並べたうえでそう言う。
+     黙って出すと、人数が少ないのが本当なのか読めていないだけなのか分からない。 */
+  app.setState({ members: members, noMembers: members.length === 0,
+    membersNote: (failed || partial)
+      ? '一部のメンバーの記録を読めませんでした。人数や数字が少なく見えることがあります。通信が戻ってから、もう一度開いてください。'
+      : '' });
 
   /* 左下に出す数字は、本人のもの。
 
