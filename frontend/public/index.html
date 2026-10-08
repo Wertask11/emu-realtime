@@ -15271,7 +15271,7 @@ async function loadKnowledgeRequests(byUser) {
     window.fbLib.orderBy("createdAt", "desc"),
     window.fbLib.limit(30)
   );
-  let unsubscribe = null, stopped = false;
+  let unsubscribe = null, stopped = false, restSoon = null;
   const slow = setTimeout(function () {
     if (current()) _emuRequestMessage(list, '通信に時間がかかっています。このまま少しお待ちください。電波の良いところで読み直すと、早く届くことがあります。', true);
   }, 10000);
@@ -15281,11 +15281,39 @@ async function loadKnowledgeRequests(byUser) {
   }, 90000);
   function stop() {
     stopped = true;
-    clearTimeout(slow); clearTimeout(giveUp);
+    clearTimeout(slow); clearTimeout(giveUp); clearTimeout(restSoon);
     if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     if (_emuRequestStop === stop) _emuRequestStop = null;
   }
   _emuRequestStop = stop;
+  /* 普通の通信（REST）で読む逃げ道。
+
+     ここは常時接続（Listen）からしか読んでいなかった。パソコンでは Listen が
+     「transport errored」を繰り返して戻らないことがあり、そのあいだずっと
+     「通信に時間がかかっています」のままだった。SchoolPark と同じく、
+     Listen が4秒で返らないとき（または転んだとき）は普通の通信で読む。 */
+  let restTried = false;
+  async function viaRest() {
+    if (restTried || stopped || typeof _spRestGet !== 'function') return false;
+    restTried = true;
+    try {
+      const j = await _spRestGet('knowledge_requests?pageSize=30&orderBy=' + encodeURIComponent('createdAt desc'), true);
+      if (stopped || !current()) return true;
+      const rows = ((j && j.documents) || []).map(function (d) {
+        return { id: decodeURIComponent(String(d.name || '').split('/').pop()), data: _spRestFields(d.fields || {}) };
+      });
+      stop();
+      _emuRenderKnowledgeRequests(list, { forEach: function (fn) {
+        rows.forEach(function (r) { fn({ id: r.id, data: function () { return r.data; } }); });
+      } });
+      console.warn('知識を探す：普通の通信で読みました。');
+      return true;
+    } catch (e) {
+      console.warn('知識を探す：普通の通信でも読めませんでした:', e && (e.message || e));
+      return false;
+    }
+  }
+  restSoon = setTimeout(viaRest, 4000);
   /* サーバーの結果が届くまで待つ。届いたら見張りはやめる（読む回数は getDocs と同じ）。 */
   unsubscribe = window.fbLib.onSnapshot(q, { includeMetadataChanges:true }, function (snap) {
     if (!current()) { stop(); return; }
@@ -15297,7 +15325,9 @@ async function loadKnowledgeRequests(byUser) {
       console.error("知識募集取得失敗:", error);
       _emuRequestMessage(list, '募集を読み込めませんでした。', true);
     }
-  }, function (error) {
+  }, async function (error) {
+    /* 断られたのでなければ、普通の通信で読み直してみる */
+    if (!(error && error.code === 'permission-denied') && await viaRest()) return;
     stop();
     if (!current()) return;
     console.error("知識募集取得失敗:", error);
