@@ -20,7 +20,7 @@ const INDEX = fs.readFileSync(
 const SRC = 'var _spRestGetOnce;\n'
   + INDEX.slice(INDEX.indexOf('function _spRestState() {'),
                 INDEX.indexOf('async function _spRestGetOnce('))
-  + INDEX.slice(INDEX.indexOf('/* 関門つきの入口。'),
+  + INDEX.slice(INDEX.indexOf('/* 書き換えたあとに、普通の通信の取り置き'),
                 INDEX.indexOf('async function _spRestDoc('));
 assert.ok(SRC.length > 800, '関門が見つかりません');
 
@@ -59,6 +59,23 @@ test('同じ行き先は、取っておいて1回で済ませる', async () => {
     ctx._spRestGet('sp_quests', true)));
   assert.equal(seen.calls, 1, '17本が同じ一覧を別々に取りに行っている');
   all.forEach(v => assert.deepEqual(v, { path: 'sp_quests' }, '同じ答えが返ること'));
+});
+
+test('fresh を付けたら、取っておいたものは使わない（書く前と書いたあとの確かめ）', async () => {
+  const { ctx, seen } = gate();
+  await ctx._spRestGet('sp_quests/q1/commits/0xabc', true);
+  await ctx._spRestGet('sp_quests/q1/commits/0xabc', true, true);
+  assert.equal(seen.calls, 2, '書いたあとの確かめに、書く前の答えを返している');
+});
+
+test('_spRestDrop で、その行き先の取り置きだけ捨てる', async () => {
+  const { ctx, seen } = gate();
+  await ctx._spRestGet('sp_quests/q1/commits?pageSize=300', true);
+  await ctx._spRestGet('sp_wisdom?pageSize=300', true);
+  ctx._spRestDrop('sp_quests/q1/commits');
+  await ctx._spRestGet('sp_quests/q1/commits?pageSize=300', true);
+  await ctx._spRestGet('sp_wisdom?pageSize=300', true);
+  assert.equal(seen.calls, 3, '捨てたものだけ読み直す');
 });
 
 test('行き先が違えば、取っておいたものは使わない', async () => {

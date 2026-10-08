@@ -16546,8 +16546,7 @@ function _spOnQuestChanged() {
     _spMemoDrop('readall:sp_quests'); _spMemoDrop('readall:sp_wisdom');
     _spMemoDrop('completed:');   /* パスポート・信用スコアの完走の数（5分取り置き） */
     /* 普通の通信の取り置き（3秒）も、クエストと知恵のぶんは捨てる。 */
-    const rc = _spRestState().cache;
-    Array.from(rc.keys()).forEach(function (k) { if (/^sp_(quests|wisdom)/.test(k)) rc.delete(k); });
+    _spRestDrop('sp_quests'); _spRestDrop('sp_wisdom');
   } catch (e) {}
   _spRefreshAt = 0;
   spDaoRefreshNow('運営が承認を変えた');
@@ -18537,8 +18536,14 @@ async function _spRestGetOnce(path, needAuth) {
   return await r.json();
 }
 
+/* 書き換えたあとに、普通の通信の取り置き（3秒）を捨てる。prefix で始まる行き先だけ。 */
+function _spRestDrop(prefix) {
+  const c = _spRestState().cache;
+  Array.from(c.keys()).forEach(function (k) { if (String(k).indexOf(prefix) === 0) c.delete(k); });
+}
+
 /* 関門つきの入口。呼ぶ側はこれまでどおり _spRestGet を使う。 */
-async function _spRestGet(path, needAuth) {
+async function _spRestGet(path, needAuth, fresh) {
   const st = _spRestState();
   const now = Date.now();
   if (now < st.blockedUntil) {
@@ -18548,7 +18553,9 @@ async function _spRestGet(path, needAuth) {
      別々に取りに行っていたので、そこだけで17回になっていた。 */
   const key = String(path) + (needAuth ? '|a' : '');
   const hit = st.cache.get(key);
-  if (hit && now - hit.at < st.hold) return hit.promise;
+  /* fresh … 書く前と書いたあとで同じ記録を読むとき。取っておいた
+     「書く前の答え」を返すと、書けたのに「書けていない」に見える。 */
+  if (hit && !fresh && now - hit.at < st.hold) return hit.promise;
   const promise = _spRestSlot(function () { return _spRestGetOnce(path, needAuth); });
   st.cache.set(key, { at: now, promise: promise });
   /* 失敗したものは取っておかない。次にすぐ試せるようにする。 */
@@ -18709,8 +18716,8 @@ async function _spHasDoc(path) {
 window._spHasDoc = _spHasDoc;
 
 /* 記録を1件だけ読む。無ければ null。 */
-async function _spRestDoc(path, needAuth) {
-  const j = await _spRestGet(path, needAuth);
+async function _spRestDoc(path, needAuth, fresh) {
+  const j = await _spRestGet(path, needAuth, fresh);
   return j ? _spRestFields(j.fields || {}) : null;
 }
 
@@ -19393,20 +19400,22 @@ window.spQuestToggle = async function (questId, app) {
   _spQuestBusy = true;
   const fb = window.fbLib;
   const ref = fb.doc(window.db, 'sp_quests', questId, 'commits', p.addr);
+  const path = 'sp_quests/' + encodeURIComponent(questId) + '/commits/' + encodeURIComponent(p.addr);
   let joined = false;
   try {
-    /* SDK のキャッシュで誤判定しないよう、操作前にサーバーの1件を読む。 */
-    const cur = await _spRestDoc('sp_quests/' + encodeURIComponent(questId)
-      + '/commits/' + encodeURIComponent(p.addr), true);
+    /* SDK のキャッシュで誤判定しないよう、操作前にサーバーの1件を読む。
+       書く前と書いたあとは、どちらも取り置き（3秒）を使わずに読む。
+       前は書いたあとの確かめに「書く前の答え」が返り、受けられていたのに
+       「通信を確かめて」と出て、画面も 0人のままだった。 */
+    const cur = await _spRestDoc(path, true, true);
     if (cur) {
       if (!confirm('このクエストから降りますか？')) return;
-      await fb.deleteDoc(ref);
-    } else {
-      await fb.setDoc(ref, { name: p.name, tookAt: Date.now() });
-      joined = true;
     }
-    const saved = await _spRestDoc('sp_quests/' + encodeURIComponent(questId)
-      + '/commits/' + encodeURIComponent(p.addr), true);
+    joined = !cur;
+    /* パソコンでは SDK の書き込みが返ってこないことがある（Listen が止まる）。
+       待ちきれなくても、届いているかはこのあとサーバーを読んで確かめる。 */
+    await _spSoon(cur ? fb.deleteDoc(ref) : fb.setDoc(ref, { name: p.name, tookAt: Date.now() }), 8000);
+    const saved = await _spRestDoc(path, true, true);
     if (!!saved !== joined) throw new Error('参加記録を確認できませんでした');
     /* 一覧の再取得が失敗しても、確認済みの本人状態はすぐ画面に出す。 */
     if (app && app.state && Array.isArray(app.state.quests)) {
@@ -19421,10 +19430,13 @@ window.spQuestToggle = async function (questId, app) {
       : 'クエストから降りました。');
   } catch (e) {
     alert('参加状態を確認・更新できませんでした。通信を確かめて、もう一度お試しください。');
-    return;
   } finally {
     _spQuestBusy = false;
   }
+  /* 受けた人の一覧の取り置き（25秒）を捨てて読み直す。捨てないと、
+     読み直しが古い一覧で「受けていない」に戻してしまう。 */
+  _spMemoDrop('readall:sp_quests/' + encodeURIComponent(questId) + '/commits');
+  _spRestDrop('sp_quests/' + encodeURIComponent(questId) + '/commits');
   await window.spDaoLoadQuests(app);
 };
 
