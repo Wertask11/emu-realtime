@@ -25,6 +25,7 @@
 
 const crypto = require("node:crypto");
 const express = require("express");
+const path = require("node:path");
 
 const PRODUCTS = "mitemiru_products";
 /* ショップ。みてみるの画面は「ショップを選ぶ → 中の商品を見る」という
@@ -32,6 +33,8 @@ const PRODUCTS = "mitemiru_products";
    商品は shopId でここへぶら下がる。 */
 const SHOPS = "mitemiru_shops";
 const CITY_OFFICIAL_SHOP_ID = "schoolpark-official";
+const REIZO_STICKER_PRODUCT_ID = "reizo-kun-sticker-v1";
+const REIZO_STICKER_ASSET_ID = "reizo-kun-digital-sticker-v1";
 const ORDERS = "mitemiru_orders";
 const CHAIN_PAYMENTS = "mitemiru_chain_payments";
 const REWARDS = "emuer_v2_rewards";
@@ -283,6 +286,7 @@ function createMitemiruRouter(deps) {
       VIRTUAL_STORE_EMUER_ONLY: 400, PARTNER_STORE_FIAT_ONLY: 400, PARTNER_ADDRESS_REQUIRED: 400,
       PARTNER_CHECKOUT_NOT_READY: 409, IDEMPOTENCY_KEY_REQUIRED: 400,
       IDEMPOTENCY_KEY_CONFLICT: 409, EVENT_QR_PRODUCT_NOT_READY: 409,
+      PRODUCT_ALREADY_EXISTS: 409,
       EVENT_QR_CONFIG_INVALID: 503
     };
     if (known[code]) return res.status(known[code]).json({ error: code, ...(error.extra || {}) });
@@ -324,6 +328,7 @@ function createMitemiruRouter(deps) {
       storeType: o.storeType || "legacy", passportId: o.passportId || null,
       method: o.method, currency: o.currency,
       amount: o.amount, status: o.status, pickupCode: shown ? o.pickupCode : null,
+      digitalStickerAvailable: o.digitalAssetId === REIZO_STICKER_ASSET_ID && shown,
       fulfillment: o.fulfillment || "", createdAt: o.createdAtMs, paidAt: o.paidAtMs || null,
       fulfilledAt: o.fulfilledAtMs || null, expiresAt: o.status === "pending_payment" ? o.expiresAtMs : null,
       stripeUrl: o.status === "pending_payment" && o.method === "jpy_card" ? (o.stripeUrl || null) : null,
@@ -512,6 +517,23 @@ function createMitemiruRouter(deps) {
     } catch (e) { return fail(res, e); }
   });
 
+  router.get("/orders/:id/digital-sticker", deps.requireFirebaseUser, async (req, res) => {
+    try {
+      const id = String(req.params.id || "");
+      if (!/^[a-f0-9]{40}$/.test(id)) return res.status(404).json({ error: "ORDER_NOT_FOUND" });
+      const snap = await orderRef(id).get();
+      if (!snap.exists) return res.status(404).json({ error: "ORDER_NOT_FOUND" });
+      const order = snap.data() || {};
+      if (order.uid !== req.identity.uid) return res.status(404).json({ error: "ORDER_NOT_FOUND" });
+      if (order.productId !== REIZO_STICKER_PRODUCT_ID || order.digitalAssetId !== REIZO_STICKER_ASSET_ID
+          || order.storeType !== "schoolpark_virtual" || !["paid", "fulfilled"].includes(order.status)) {
+        return res.status(409).json({ error: "DIGITAL_ASSET_NOT_AVAILABLE" });
+      }
+      res.set("Cache-Control", "private, no-store");
+      return res.download(path.join(__dirname, "private-assets", `${REIZO_STICKER_ASSET_ID}.png`), "reizo-kun-sticker-v1.png");
+    } catch (e) { return fail(res, e); }
+  });
+
   router.post("/orders", deps.requireFirebaseUser, limited, async (req, res) => {
     const b = req.body || {};
     const method = String(b.method || "");
@@ -555,6 +577,7 @@ function createMitemiruRouter(deps) {
         uid: identity.uid, wallet, productId, productName: product.name, fulfillment: product.fulfillment,
         cancelPolicy: product.cancelPolicy, method, currency, amount, pickupCode, createdAtMs: now(),
         shopId: product.shopId || "", storeType,
+        ...(product.digitalAssetId === REIZO_STICKER_ASSET_ID ? { digitalAssetId: REIZO_STICKER_ASSET_ID } : {}),
         ...(storeType === "schoolpark_virtual" ? { requestId } : {})
       };
 
@@ -840,6 +863,32 @@ function createMitemiruRouter(deps) {
         .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (b.createdAtMs || 0) - (a.createdAtMs || 0));
       return res.json({ ok: true, products: rows.map(p => ({ ...p, remaining: remaining(p), methods: methodsFor(p) })),
         cardReady: !!stripe, emuerActive: emuerEnabled(), jpycReceiver });
+    } catch (e) { return fail(res, e); }
+  });
+
+  router.post("/admin/city/reizo-sticker", owner, async (req, res) => {
+    try {
+      const ref = productRef(REIZO_STICKER_PRODUCT_ID);
+      const existing = await ref.get();
+      if (existing.exists) {
+        const row = existing.data() || {};
+        if (row.digitalAssetId !== REIZO_STICKER_ASSET_ID || row.shopId !== CITY_OFFICIAL_SHOP_ID) throw err("PRODUCT_ALREADY_EXISTS");
+        return res.json({ ok: true, already: true, product: { id: REIZO_STICKER_PRODUCT_ID, ...row } });
+      }
+      const row = {
+        name: "冷蔵庫くんのデジタルステッカー",
+        description: "SchoolPark公式キャラクターの透過PNGステッカー。初期交換価格は運営確認用の1 EMUERです。",
+        imageUrl: "https://schoolpark.jp/assets/mascot.jpg",
+        prices: { EMUER: 1, JPYC: null, JPY: null },
+        cashAtVenue: false, stock: null, sold: 0, reserved: 0,
+        status: "draft", fulfillment: "交換確定後、注文履歴からPNGをダウンロードできます。",
+        cancelPolicy: "公開前に運営者が取消・返金条件を確認してください。",
+        shopId: CITY_OFFICIAL_SHOP_ID, storeType: "schoolpark_virtual", emoji: "🧊",
+        sortOrder: -100, digitalAssetId: REIZO_STICKER_ASSET_ID,
+        createdAtMs: now(), updatedAtMs: now(), createdBy: req.identity.uid
+      };
+      await ref.create(row);
+      return res.json({ ok: true, already: false, product: { id: REIZO_STICKER_PRODUCT_ID, ...row } });
     } catch (e) { return fail(res, e); }
   });
 

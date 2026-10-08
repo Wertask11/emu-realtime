@@ -66,7 +66,9 @@ function setup(opts) {
   const base = `http://127.0.0.1:${server.address().port}/api/mitemiru`;
   async function call(user, method, path, body) {
     const r = await fetch(base + path, { method, headers: Object.assign({ "content-type": "application/json" }, user ? { "x-test-user": user } : {}), body: body ? JSON.stringify(body) : undefined });
-    return { status: r.status, body: await r.json() };
+    const type = r.headers.get("content-type") || "";
+    return { status: r.status, headers: r.headers, body: type.includes("application/json") ? await r.json() : null,
+      bytes: type.startsWith("image/") ? new Uint8Array(await r.arrayBuffer()) : null };
   }
   return { db, chain, stripe, m, call, close: () => server.close(), advance: (ms) => { clock += ms; }, now: () => clock };
 }
@@ -172,6 +174,62 @@ test("City公式仮想店舗はPassport未連携のアカウントから注文�
     });
     assert.equal(response.body.error, "PASSPORT_LINK_REQUIRED");
     assert.equal(Object.keys(t.db._dump("mitemiru_orders")).length, 0);
+  } finally { t.close(); }
+});
+
+test("冷蔵庫くんステッカーは運営だけが下書き登録でき、同じ商品を二重作成しない", async () => {
+  const t = setup();
+  try {
+    assert.equal((await t.call("alice", "POST", "/admin/city/reizo-sticker", {})).status, 403);
+    const first = await t.call("owner", "POST", "/admin/city/reizo-sticker", {});
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+    assert.equal(first.body.product.id, "reizo-kun-sticker-v1");
+    assert.equal(first.body.product.shopId, "schoolpark-official");
+    assert.equal(first.body.product.storeType, "schoolpark_virtual");
+    assert.equal(first.body.product.status, "draft");
+    assert.equal(first.body.product.prices.EMUER, 1);
+    assert.equal(first.body.product.prices.JPY, null);
+    assert.equal(t.db._dump("mitemiru_products")[first.body.product.id].digitalAssetId, "reizo-kun-digital-sticker-v1");
+    const again = await t.call("owner", "POST", "/admin/city/reizo-sticker", {});
+    assert.equal(again.status, 200);
+    assert.equal(again.body.already, true);
+    assert.equal((await t.call(null, "GET", "/products?shopId=schoolpark-official")).body.products.length, 0,
+      "draft is not public until the operator checks it");
+  } finally { t.close(); }
+});
+
+test("ステッカーPNGは本人の支払済み注文からだけ取得できる", async () => {
+  const t = setup();
+  try {
+    await t.call("owner", "POST", "/admin/city/reizo-sticker", {});
+    await t.call("owner", "PUT", "/admin/products/reizo-kun-sticker-v1", { status: "live" });
+    seedRewards(t.db, [5]);
+    const order = await t.call("alice", "POST", "/orders", {
+      productId: "reizo-kun-sticker-v1", method: "emuer_ledger", requestId: "reizo-sticker-order-test-01"
+    });
+    assert.equal(order.status, 200, JSON.stringify(order.body));
+    assert.equal(order.body.order.digitalStickerAvailable, true);
+    const download = await t.call("alice", "GET", `/orders/${order.body.order.id}/digital-sticker`);
+    assert.equal(download.status, 200);
+    assert.ok(download.bytes?.length > 10000);
+    assert.equal(download.headers.get("cache-control"), "private, no-store");
+    const other = await t.call("bob", "GET", `/orders/${order.body.order.id}/digital-sticker`);
+    assert.equal(other.status, 404, "another Passport cannot download the asset");
+  } finally { t.close(); }
+});
+
+test("未払いのステッカー注文からはPNGを取得できない", async () => {
+  const t = setup();
+  try {
+    await t.call("owner", "POST", "/admin/city/reizo-sticker", {});
+    await t.call("owner", "PUT", "/admin/products/reizo-kun-sticker-v1", { status: "live" });
+    const pending = await t.call("alice", "POST", "/orders", {
+      productId: "reizo-kun-sticker-v1", method: "emuer_chain", requestId: "reizo-sticker-order-test-02"
+    });
+    assert.equal(pending.status, 200, JSON.stringify(pending.body));
+    const download = await t.call("alice", "GET", `/orders/${pending.body.order.id}/digital-sticker`);
+    assert.equal(download.status, 409);
+    assert.equal(download.body.error, "DIGITAL_ASSET_NOT_AVAILABLE");
   } finally { t.close(); }
 });
 

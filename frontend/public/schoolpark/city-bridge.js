@@ -23,14 +23,14 @@ export function createBridge(parent, app) {
     checkSession();
     if (generation !== version) throw new Error('SESSION_CHANGED');
   }
-  async function jsonRequest(url, body) {
+  async function jsonRequest(url, body, method) {
     const version = checkSession();
     const headers = await bounded(parent.emuAuthHeaders(body !== undefined, { interactive: false }));
     stillCurrent(version);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const res = await fetch(url, { method: body === undefined ? 'GET' : 'POST',
+      const res = await fetch(url, { method: method || (body === undefined ? 'GET' : 'POST'),
         headers, body: body === undefined ? undefined : JSON.stringify(body),
         cache: 'no-store', signal: controller.signal });
       stillCurrent(version);
@@ -71,8 +71,28 @@ export function createBridge(parent, app) {
     getCommerceProducts: (shopId) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/products?shopId=' + encodeURIComponent(shopId)),
     getCommerceMe: () => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/me'),
     getCommerceOrders: () => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/orders'),
+    getCommerceAdminProducts: () => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/products'),
+    seedReizoSticker: () => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/city/reizo-sticker', {}),
+    publishCommerceProduct: (id) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/products/' + encodeURIComponent(id), { status:'live' }, 'PUT'),
     placeCommerceOrder: (productId, requestId) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/orders',
       { productId, method:'emuer_ledger', requestId }),
+    async downloadReizoSticker(orderId) {
+      const version = checkSession();
+      const headers = await bounded(parent.emuAuthHeaders(false, { interactive:false }));
+      stillCurrent(version);
+      const res = await bounded(fetch('https://emu-realtime.onrender.com/api/mitemiru/orders/' + encodeURIComponent(orderId) + '/digital-sticker',
+        { headers, cache:'no-store' }));
+      stillCurrent(version);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'DIGITAL_ASSET_UNAVAILABLE');
+      }
+      const blob = await res.blob();
+      stillCurrent(version);
+      const url = URL.createObjectURL(blob), link = document.createElement('a');
+      link.href = url; link.download = 'reizo-kun-sticker-v1.png'; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    },
     getOpsOrders: (code) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/orders?code=' + encodeURIComponent(code)),
     fulfillOpsOrder: (id) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/orders/' + encodeURIComponent(id) + '/fulfill', {}),
     getEventQR: (id) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/products/' + encodeURIComponent(id) + '/event-qr'),
