@@ -457,6 +457,61 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       return res.status(500).json({ error: "COMPLETION_FAILED" });
     }
   });
+
+  /* 周回ごとの EMUER と証明書が、いまどうなっているか（運営だけ・読むだけ）。
+
+     10/9、#001 LEARN の2周目で「EMUERを渡す」を押すと NO_NEW_ROUND
+     （2周ぶんとも報酬はもう作ってある）が返るのに、本人の受け取り一覧には
+     出てこなかった。報酬の記録は Rules で外から読めないので、どの周が
+     誰宛てで、どこまで進んでいるのかを確かめる道が無かった。 */
+  router.get("/:questId/:address/rewards", requireOwner, async (req, res) => {
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const questId = String(req.params.questId || "");
+    const address = String(req.params.address || "").toLowerCase();
+    if (!/^[A-Za-z0-9_-]{1,120}$/.test(questId) || !ethers.utils.isAddress(address))
+      return res.status(400).json({ error: "INVALID_COMPLETION" });
+    try {
+      const [commit, wisdom, byChes, byWallet] = await Promise.all([
+        db.collection("sp_quests").doc(questId).collection("commits").doc(address).get(),
+        db.collection("sp_wisdom").where("questId", "==", questId).get(),
+        db.collection("ches_accounts").where("chesAddress", "in", addressForms(address)).limit(2).get(),
+        db.collection("ches_accounts").where("walletAddress", "in", addressForms(address)).limit(2).get()
+      ]);
+      if (!commit.exists) return res.status(404).json({ error: "NOT_JOINED" });
+      const c = commit.data() || {};
+      let cards = 0;
+      wisdom.forEach(doc => { if (String((doc.data() || {}).author || "").toLowerCase() === address) cards++; });
+      const spids = new Set([...byChes.docs, ...byWallet.docs].map(doc => String((doc.data() || {}).spid || "")));
+      if (spids.size !== 1 || ![...spids][0]) return res.status(409).json({ error: "PASSPORT_LINK_REQUIRED" });
+      const spid = [...spids][0];
+      const identity = await db.collection("sp_identities").doc(spid).get();
+      const links = identity.exists ? (identity.data() || {}).links || [] : [];
+      const linked = links.find(link => link && link.kind === "wallet" && ethers.utils.isAddress(link.subject));
+      const keyOf = (parts) => ethers.utils.keccak256(ethers.utils.toUtf8Bytes(JSON.stringify(parts)));
+      const n = Math.min(ROUND_SCAN_MAX, Math.max(1, Number(c.approvedRounds) || 0, cards));
+      const at = (v) => (v && typeof v.toMillis === "function") ? v.toMillis() : (Number(v) || null);
+      const rounds = await Promise.all(Array.from({ length: n }, async (_, i) => {
+        const r = i + 1, tag = r > 1 ? [r] : [];
+        const [reward, cert] = await Promise.all([
+          db.collection("emuer_v2_rewards").doc(keyOf(["emuer-v2", "quest-completion", questId, spid, ...tag])).get(),
+          db.collection("sp_quest_certificates").doc(keyOf(["schoolpark", questId, spid, ...tag])).get()
+        ]);
+        const w = reward.exists ? reward.data() || {} : null;
+        const k = cert.exists ? cert.data() || {} : null;
+        return { round: r,
+          reward: w ? { amount: w.amount, recipient: w.recipient, status: w.status,
+                        createdAt: at(w.createdAt), claimedAt: at(w.claimedAt) } : null,
+          certificate: k ? { status: k.status, tokenId: k.tokenId || null } : null };
+      }));
+      return res.json({ ok: true, questId, address, spid,
+        linkedWallet: String(linked && linked.subject || "").toLowerCase(),
+        approvedRounds: Number(c.approvedRounds) || 0, wisdomCards: cards, rounds });
+    } catch (error) {
+      console.error("Quest reward lookup failed:", error);
+      return res.status(500).json({ error: "LOOKUP_FAILED" });
+    }
+  });
+
   router.get("/certificates/:key/metadata", async (req, res) => {
     const key = String(req.params.key || "");
     if (!/^0x[0-9a-f]{64}$/i.test(key) || !db) return res.status(404).json({ error: "NOT_FOUND" });
