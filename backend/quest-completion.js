@@ -5,6 +5,7 @@
 const express = require("express");
 const ethers = require("ethers");
 const policy = require("./emuer-v2/policy");
+const { enabled: emuerV2EnabledByEnv } = require("./emuer-v2/flags");
 
 /* ギルドの色。frontend/public/schoolpark/guild-store.js と同じ値。
    証明書の絵と、星空の星の色をそろえるために使う。 */
@@ -69,7 +70,7 @@ function usableQuest(questId, quest) {
     && Number.isSafeInteger(Number(quest.questNumber)) && Number(quest.questNumber) >= 1;
 }
 
-function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, env = process.env }) {
+function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, env = process.env, emuerEnabled = () => emuerV2EnabledByEnv(env) }) {
   const router = express.Router();
   const certContract = String(env.SP_QUEST_STAR_CONTRACT || "");
   const certKey = String(env.SP_QUEST_STAR_MINTER_PRIVATE_KEY || "");
@@ -266,6 +267,7 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     }
   });
   router.post("/:questId/:address/approve", requireOwner, async (req, res) => {
+    if (!emuerEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
     if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED" });
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
     const questId = String(req.params.questId || "");
