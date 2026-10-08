@@ -408,6 +408,7 @@ function createIdentity(deps) {
              欠けた記録ができると、APIが本人を確認できなくなるため）。 */
           if (aSnap.exists && String(account.spid || "") !== spid) {
             tx.set(accRef, { spid, spidLinkedAt: now }, { merge: true });
+            tx.set(db.collection("ches_verified_accounts").doc(u), { spid }, { merge: true });
           }
 
           return { spid, isNew: minted, account };
@@ -616,6 +617,7 @@ function createIdentity(deps) {
       }, { merge: true });
       if (aSnap.exists && String((account || {}).spid || "") !== spid) {
         tx.set(accRef, { spid, spidLinkedAt: now }, { merge: true });
+        tx.set(db.collection("ches_verified_accounts").doc(u), { spid }, { merge: true });
       }
       tx.set(ticketRef, { usedAt: now, usedByUid: u }, { merge: true });
       return { ok: true, spid, already: false };

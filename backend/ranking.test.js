@@ -66,7 +66,7 @@ function stage(opts) {
 
   let handler = null;
   const ctx = vm.createContext({
-    db,
+    db, awardRankingBadge: async () => {},
     console: { log() {}, error() {}, warn() {} },
     Date, Object, Array, Math, Number, String, Set, JSON, parseInt,
     app: { get(p, fn) { if (p === '/api/ranking') handler = fn; } }
