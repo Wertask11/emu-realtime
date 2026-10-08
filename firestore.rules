@@ -537,7 +537,8 @@ service cloud.firestore {
     }
 
     match /ches_accounts/{uid} {
-      allow read: if signedIn();
+      // アカウントの個人情報は本人と運営だけが読む。匿名認証での他人の参照も拒否する。
+      allow read: if signedIn() && (request.auth.uid == uid || isOwner());
       /* ここは「自分が何者か」を決める記録で、ほかの決まりの土台になっている。
          isOwner() も hasPass() も isMyWallet() も、ここの walletAddress と
          chesAddress を見ている。だから、ここに何を書けるかがそのまま
@@ -1524,6 +1525,11 @@ service cloud.firestore {
         && coll != 'secret_door_rewards'
         && coll != 'monthly_distributions'
         && coll != 'bonus_rewards'
+        // 個別ルールの契約・利用枠・招待の制限を包括許可で上書きしない。
+        && coll != 'entitlements'
+        && coll != 'plan_usage'
+        && coll != 'plan_counts'
+        && coll != 'sp_invite_codes'
         && coll != 'subscriptions'
         && coll != 'billing_events'
         && coll != 'refund_requests'
