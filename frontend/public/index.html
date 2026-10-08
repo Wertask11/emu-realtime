@@ -19174,15 +19174,27 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
                                    (ls || []).map(function (l) { return l.author; })));
   /* 自分が完走したか（運営が認めた＝自分の受けた記録に approved が立っている）。
      宿題では、完走したクエストを「終わったこと」に移すのに使う。 */
-  let iDone = false, iDoneAt = 0;
+  let iDone = false, iDoneAt = 0, myRounds = 0;
   if (cs) {
     cs.forEach(function (c) {
       people.push(_spNameFor(c.id, c.name));
       if (mine && String(c.id || '').toLowerCase() === mine) {
         iTook = true;
         if (c.approved === true) { iDone = true; iDoneAt = Number(c.approvedAt) || 0; }
+        myRounds = Math.max(c.approved === true ? 1 : 0, Number(c.approvedRounds) || 0);
       }
     });
+  }
+  /* この周回の知恵カードを、もう置いたか。知恵カード1枚が1周ぶん。
+     認められた周回より多く置いていれば、いまの周回のぶんは置いてある。
+     知恵カードは共有の読み口から取る（30本ぶん呼んでも、読むのは1回）。 */
+  let iWisdom = false;
+  if (mine && iTook) {
+    const ws = await _spAllWisdom().catch(function () { return null; });
+    const placed = (ws || []).filter(function (w) {
+      return w.questId === q.id && String(w.author || '').toLowerCase() === mine;
+    }).length;
+    iWisdom = placed > myRounds;
   }
   if (ls) {
     ls.forEach(function (l) { logCount++; logs.push(l); });
@@ -19296,7 +19308,7 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
     })(),
     due: SpQuestStore.isFounder(q) ? 'なし・恒久' : _spQuestDue(q.closesAt),
     status: SpQuestStore.isFounder(q) ? 'FOUNDER' : (q.status || 'OPEN'), commits: people.length, need: q.need || 5,
-    people: people, logCount: logCount, iTook: iTook, iDone: iDone, iDoneAt: iDoneAt,
+    people: people, logCount: logCount, iTook: iTook, iDone: iDone, iDoneAt: iDoneAt, iWisdom: iWisdom,
     /* 完走までの手順。報告の3つが、このクエストで何を指すか。
        受けている人には、自分が出した報告に ✓ を付ける。 */
     reportSteps: (function () {
@@ -19310,7 +19322,7 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
         return { no: String(i + 2), head: k + '（' + s.as + '）', ask: s.ask,
           mark: iTook && done[k] ? '✓ 出した' : '', markShow: iTook && done[k] ? 'inline' : 'none' };
       }).concat([{ no: '5', head: '知恵カードを1枚置く', ask: g.wisdom || 'やってみて分かったことを、一文に削る。',
-        mark: '', markShow: 'none' }]);
+        mark: iWisdom ? '✓ 置いた' : '', markShow: iWisdom ? 'inline' : 'none' }]);
     })(),
     /* 報告欄の頭の一言。案件ものは、提出物をどこに出すかを先に言う。 */
     logLead: spQuestReportGuide(q).kind === 'case'
@@ -19621,6 +19633,8 @@ async function spLogSubmit() {
     return;
   }
   _spLogSubmitting = false;
+  /* 出した報告がすぐ数えられるよう、取り置いている報告の一覧を捨てる */
+  try { _spMemoDrop('readall:sp_quests/' + encodeURIComponent(questId) + '/logs'); } catch (e) {}
   const created = { id: saved.id, ...data };
   const pending = _spPendingQuestLogs.get(questId) || [];
   pending.push(created);
@@ -20421,8 +20435,31 @@ async function spWisdomSubmit() {
     return;
   }
   closeSpWisdomForm();
+  /* 置いたことを、すぐ画面に出す。
+
+     一覧は25秒だけ取り置いているので、そのまま読み直すと置く前の一覧が返り、
+     宿題は「次：知恵カードを置く」のまま、手順の ✓ も付かなかった。
+     取り置きを捨て、読み直しを待たずに、そのクエストに「置いた」を立てる。 */
+  try { _spMemoDrop('readall:sp_wisdom'); } catch (e) {}
+  const placedQuestId = _spWisdomQuest && _spWisdomQuest.id;
+  if (_spWisdomApp && placedQuestId) {
+    try {
+      _spWisdomApp.setState(function (st) {
+        return { quests: (st.quests || []).map(function (q) {
+          if (q.id !== placedQuestId) return q;
+          const steps = (q.reportSteps || []).map(function (x) {
+            return x.no === '5' ? Object.assign({}, x, { mark: '✓ 置いた', markShow: 'inline' }) : x;
+          });
+          return Object.assign({}, q, { iWisdom: true, reportSteps: steps });
+        }) };
+      });
+    } catch (e) {}
+  }
   if (_spWisdomApp) await window.spDaoLoadWisdom(_spWisdomApp);
   spWisdomCelebrate(insight, _spWisdomApp);
+  if (_spWisdomApp) {
+    window.spDaoLoadQuests(_spWisdomApp).catch(function () {});
+  }
 
   /* 置いた瞬間から、信用スコア（知恵カード ×5）とメンバー・貢献の
      「知恵」の数が変わる。前はここで知恵ライブラリしか数え直しておらず、
