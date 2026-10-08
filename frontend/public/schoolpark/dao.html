@@ -243,7 +243,7 @@ if (window.top === window.self) window.location.replace('/');
                 <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE">THIS WEEK</div>
                 <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.45">今週、{{ stats.newWisdom }}個の知識が<br>知恵になった。</div>
                 <sc-if value="{{ showWeekToggle }}"><button onClick="{{ toggleWeekSummary }}" style="align-self:flex-start; font:inherit; background:#D0E2BE; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">{{ weekToggleLabel }}</button></sc-if>
-                <sc-if value="{{ showWeekDetails }}"><div style="font-size:14px; line-height:1.9; color:rgba(244,241,234,.68)">読んで終わった知識は0。走っている{{ word }}は{{ stats.running }}本、受けている仲間は{{ stats.people }}人。</div></sc-if>
+                <sc-if value="{{ showWeekDetails }}"><div style="font-size:14px; line-height:1.9; color:rgba(244,241,234,.68)">走っている{{ word }}は{{ stats.running }}本、受けている仲間は{{ stats.people }}人。</div></sc-if>
               </div>
               <sc-if value="{{ showWeekDetails }}"><div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; align-content:center">
                 <div style="border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:6px">
@@ -1515,6 +1515,15 @@ class Component extends DCLogic {
     const allQuests = (s.quests || []).map(e => this.decorate(e));
     const founder = allQuests.find(e => e.isFounder);
     const exps = allQuests.filter(e => !e.isFounder);
+    /* 走っているクエスト＝締め切られておらず、誰かが受けているもの（運営が
+       「進行中」にしたものも入れる）。前は「進行中」だけを数えていたが、
+       クエストはほぼ「募集中」のまま受けられて動くので、いつも0本だった。
+       進行中を先に、受けている人が多い順に並べる。 */
+    const runningAll = exps
+      .filter(e => e.status !== 'CLOSED' && (e.status === 'RUNNING' || (Number(e.commits) || 0) > 0))
+      .sort((a, b) => ((b.status === 'RUNNING') - (a.status === 'RUNNING')) || ((Number(b.commits) || 0) - (Number(a.commits) || 0)));
+    /* 受けている仲間＝走っているクエストを受けている人（同じ人は1人と数える） */
+    const runningPeople = new Set([].concat(...runningAll.map(e => e.peopleAddrs || [])).filter(Boolean)).size;
     const cur = allQuests.find(e => e.id === s.expId) || exps[0] || {};
     /* 系列の切り替え。一般が最初に出る。
        番号の無い古いクエストは series が '' なので、親が 'general' 扱いで
@@ -1711,14 +1720,14 @@ class Component extends DCLogic {
       isTreasury:s.screen==='treasury', isPropose:s.screen==='propose', isTasks:s.screen==='tasks',
       goTasks:this.go('tasks'), goHome:this.go('home'),
       goPropose:() => { try { window.parent.openSpQuestForm(this); } catch (e) { this.setState({screen:'propose'}); } }, goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
-      stats: {newWisdom:(s.wisdom || []).length, running:exps.filter(e => e.status==='RUNNING').length, people:0, myCommit:myQuests.length,   /* 実際に受けている記録（commits）から数える。宿題と同じ数 */
+      stats: {newWisdom:(s.wisdom || []).length, running:runningAll.length, people:runningPeople, myCommit:myQuests.length,   /* 実際に受けている記録（commits）から数える。宿題と同じ数 */
          due:0, wisdomTotal:(s.wisdom || []).length, payout:'¥0', citations:s.citations || 0},
       /* 左下は本人の数字。まだ数え終わっていないときは、0ではなく空で待つ。
          ここに DAO のトレジャリーを出していたころは、誰が開いても同じ額が出て、
          クエストの予算が残高を超えていると本人に「-1,250,000」と見えていた。 */
       mine: Object.assign({ label:'あなたの分配（計算額）', balance:'—', note:'数えています…' }, s.mine || {}),
       freshWisdom: (s.wisdom || []).slice(0,3).map(w => ({...w, open:this.go('library')})),
-      runningExps: exps.filter(e => e.status==='RUNNING').slice(0,3).map(e => ({...e, title: e.fullTitle || e.title})),
+      runningExps: runningAll.slice(0,3).map(e => ({...e, title: e.fullTitle || e.title})),
       /* 広場のカードには、残っているものを上から3つだけ出す */
       todos: openTasks.slice(0, 3),
       noTasks: openTasks.length === 0,
