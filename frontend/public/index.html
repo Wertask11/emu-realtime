@@ -18969,6 +18969,63 @@ function _spBriefImageAlt(q) {
   return hit ? hit.alt : '現場の案内図';
 }
 
+/* クエストごとの「報告の仕方」。
+
+   完走の決まりはどのクエストも同じ（やってみた・つまずいた・気づいた の
+   3つの報告と知恵カード1枚 → 運営が確認）。ところが、3つの報告が
+   そのクエストで何を指すのかは、クエストごとに違う。
+
+   #003 PLAY・#004 CONNECT・特殊クエストは「提出するもの」に
+     ・やってみた（＝開始宣言）どこで・何回拾うか
+   の形で書いてあるので、そこから読む。
+   #002 WORK（案件もの15本）には書いていない。提出物（3案など）を
+   どの報告に書けばいいのか分からず、報告の画面には #001 向けの
+   「試したEmuの投稿を選び…」が出ていた。案件ものは下の決まった読み方にする。
+
+   出したあとのクエストは中身を変えられない（記録の決まり）ので、
+   データに欄を足すのではなく、ここで決める。
+   どちらにも当たらない（#001 LEARN や、仮説検証の形のクエスト）ときは
+   kind が 'trial' になり、報告の画面は今までの文のまま。 */
+const SP_LOG_KINDS = ['やってみた', 'つまずいた', '気づいた'];
+function spQuestReportGuide(q) {
+  const v = q || {};
+  const text = String(v.deliverable || '').replace(/\r\n/g, '\n');
+  const steps = {};
+  SP_LOG_KINDS.forEach(function (k) {
+    const m = text.match(new RegExp('・' + k + '（＝([^）\\n]*)）([^\\n]*)((?:\\n　[^\\n]*)*)'));
+    if (!m) return;
+    const more = m[3].split('\n').map(function (s) { return s.replace(/^[\s　]+/, ''); }).filter(Boolean);
+    /* 次の行に続く書き方は1行につなげる。前の行が「、」で終わっていれば、そのまま続ける。 */
+    const ask = [m[2].trim()].concat(more).filter(Boolean).reduce(function (acc, piece) {
+      return !acc ? piece : acc + (/[、，,]$/.test(acc) ? '' : '／') + piece;
+    }, '');
+    steps[k] = { as: m[1].trim(), ask: ask };
+  });
+  const wm = text.match(/【知恵カード】([^\n]*)/);
+  const wisdomAsk = wm ? wm[1].replace(/^\s*1枚[。、]?\s*/, '').trim() : '';
+  /* Emu への投稿があるクエスト（#003 PLAY・特殊）。報告で、その投稿を紐づける。 */
+  const wantsPost = /【Emu\s*への投稿】/.test(text);
+  if (SP_LOG_KINDS.every(function (k) { return steps[k]; })) {
+    return { kind: 'listed', steps: steps, wisdom: wisdomAsk, wantsPost: wantsPost };
+  }
+  if (v.given || v.deliverable || v.criteria) {
+    return { kind: 'case', wantsPost: wantsPost, steps: {
+      'やってみた': { as: '提出', ask: '「提出するもの」に書かれた形のまま、提出物をここに貼る。評価されるのはこの報告です。' },
+      'つまずいた': { as: '迷ったところ', ask: '迷ったこと、捨てた案とその理由。' },
+      '気づいた': { as: '見直し', ask: '「評価」の合格・差し戻しの条件で自分の提出物を見直して、分かったこと・次に持ち越すこと。' }
+    }, wisdom: wisdomAsk || 'この案件から持ち帰る一文。' };
+  }
+  /* #001 LEARN は Emu の投稿を試すクエスト。試した投稿を選ばないと報告を出せない。 */
+  const learn001 = v.series === 'general' && Number(v.questNumber) === 1;
+  return { kind: 'trial', wantsPost: learn001, steps: {
+    'やってみた': { as: '試した', ask: learn001
+      ? '試したEmuの投稿を選び（必須）、実際にやったことと結果を書く。'
+      : '実際に何をやったか。うまくいったこと、いかなかったこと。' },
+    'つまずいた': { as: '止まったところ', ask: '何をしようとして、どこで止まったか。' },
+    '気づいた': { as: '分かったこと', ask: 'やる前と、やったあとで変わったこと。' }
+  }, wisdom: wisdomAsk || 'やってみて分かったことを、一文に削る。' };
+}
+
 /* クエスト1件を、枠の中で使える形にする。
    受けた人と途中報告は、その場で数える。 */
 async function _spShapeQuest(q, p, mine, gdefs, app) {
@@ -19112,6 +19169,25 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
     due: SpQuestStore.isFounder(q) ? 'なし・恒久' : _spQuestDue(q.closesAt),
     status: SpQuestStore.isFounder(q) ? 'FOUNDER' : (q.status || 'OPEN'), commits: people.length, need: q.need || 5,
     people: people, logCount: logCount, iTook: iTook,
+    /* 完走までの手順。報告の3つが、このクエストで何を指すか。
+       受けている人には、自分が出した報告に ✓ を付ける。 */
+    reportSteps: (function () {
+      const g = spQuestReportGuide(q);
+      const done = {};
+      if (mine) logs.forEach(function (l) {
+        if (String(l.author || '').toLowerCase() === mine) done[l.kind] = true;
+      });
+      return SP_LOG_KINDS.map(function (k, i) {
+        const s = g.steps[k];
+        return { no: String(i + 2), head: k + '（' + s.as + '）', ask: s.ask,
+          mark: iTook && done[k] ? '✓ 出した' : '', markShow: iTook && done[k] ? 'inline' : 'none' };
+      }).concat([{ no: '5', head: '知恵カードを1枚置く', ask: g.wisdom || 'やってみて分かったことを、一文に削る。',
+        mark: '', markShow: 'none' }]);
+    })(),
+    /* 報告欄の頭の一言。案件ものは、提出物をどこに出すかを先に言う。 */
+    logLead: spQuestReportGuide(q).kind === 'case'
+      ? '提出物は「やってみた」で出します'
+      : '今日やったことを書く',
     /* 完了にできるのは、出した本人だけ */
     isMine: !!(p && (p.isOwner || (mine && String(q.owner || '').toLowerCase() === mine))),
     logs: logs.map(function (l) { return _spLogView(l, logs); })
@@ -19242,6 +19318,23 @@ window.spQuestLog = async function (questId, kind, app) {
   if (postGuide) postGuide.textContent = _spLogRequiresPost
     ? (_spLogSource ? '直近の「やってみた」で選んだ投稿を引き継ぎます。' : 'Emuの全投稿から試した投稿を選んでください。検索でも探せます。')
     : 'Emuの全投稿から元になった投稿を選べます。選ぶと知恵カードにも引き継がれます。';
+  /* 上の文は #001 LEARN（Emu の投稿を試す）向け。ほかのクエストでは、
+     この報告がそのクエストで何を指すかを出す（spQuestReportGuide）。
+     #002 WORK なら「やってみた（＝提出）」に提出物を貼る、のように。 */
+  const rg = q ? spQuestReportGuide(q) : null;
+  if (rg && rg.kind !== 'trial' && !_spLogRequiresPost) {
+    const st = rg.steps[kind];
+    if (k) k.textContent = kind + '（' + st.as + '）';
+    if (guide) guide.textContent = 'このクエストでの「' + kind + '」は「' + st.as + '」です。'
+      + st.ask + (/[。．.！？!?）)]$/.test(st.ask) ? '' : '。');
+    if (b) b.placeholder = rg.kind === 'case' && kind === 'やってみた'
+      ? '「提出するもの」の形のまま貼ってください（2000字まで）。'
+      : st.ask;
+    if (postLabel) postLabel.textContent = rg.wantsPost ? 'このクエストで出したEmuの投稿' : '関係するEmuの投稿（任意）';
+    if (postGuide) postGuide.textContent = rg.wantsPost
+      ? 'このクエストには Emu への投稿があります（「提出するもの」を参照）。出した投稿は、ここで選んで紐づけます。'
+      : '選ばなくても出せます。選ぶと知恵カードにも引き継がれます。';
+  }
   const source = document.getElementById('slSource');
   if (source) {
     source.hidden = !_spLogSource;
@@ -19899,17 +19992,20 @@ window.spQuestWisdom = async function (questId, app) {
   }
   if (!q) { alert('クエストが見つかりませんでした。'); return; }
   /* 受けているかを、置く前に確かめる。決まりも同じところを見ているので、
-     ここで止めないと、書いたあとに断られて中身が消える。 */
+     ここで止めないと、書いたあとに断られて中身が消える。
+
+     前は Firestore の SDK（getDoc）に先に聞いていた。SDK の常時接続（Listen）が
+     切れていると「client is offline」で例外になり、普通の通信で聞き直す前に
+     「確かめられませんでした」で止まっていた。報告は出せるのに知恵カードだけ置けない、
+     はこれ。「受ける」と同じく、サーバーの記録を普通の通信で1件読む。 */
+  let took = false;
   try {
-    const c = await fb.getDoc(fb.doc(window.db, 'sp_quests', questId, 'commits', p.addr));
-    if (!c.exists() || (c.metadata && c.metadata.fromCache)) {
-      const own = await _spRestDoc('sp_quests/' + encodeURIComponent(questId)
-        + '/commits/' + encodeURIComponent(p.addr), true);
-      if (!own) { alert('知恵カードを置けるのは、このクエストを受けた人だけです。'); return; }
-    }
+    took = !!(await _spRestDoc('sp_quests/' + encodeURIComponent(questId)
+      + '/commits/' + encodeURIComponent(p.addr), true));
   } catch (e) {
     alert('受けているかを確かめられませんでした。通信を確かめて、もう一度お試しください。'); return;
   }
+  if (!took) { alert('知恵カードを置けるのは、このクエストを受けた人だけです。'); return; }
   q._citedPosts = await _spQuestCited(questId, p.addr);
   openSpWisdomForm(q, app);
 };
@@ -19948,9 +20044,11 @@ window.spQuestClose = async function (questId, app) {
   /* 知恵カードは「やった人」が置くもの。出した人が自分でも受けていれば、
      そのまま続けて置ける。受けていなければ、閉じるところで終わり。
      ここで札を開いても、決まりの側で断られて書いたものが消えるだけ。 */
+  /* 知恵カードのときと同じく、サーバーの記録を普通の通信で読む（SDK が切れていても分かる） */
   let took = false;
   try {
-    took = (await fb.getDoc(fb.doc(window.db, 'sp_quests', questId, 'commits', p.addr))).exists();
+    took = !!(await _spRestDoc('sp_quests/' + encodeURIComponent(questId)
+      + '/commits/' + encodeURIComponent(p.addr), true));
   } catch (e) {}
   if (!took) { alert('完了にしました。\n（知恵カードは、このクエストを受けた人が置きます）'); return; }
   q._citedPosts = await _spQuestCited(questId, p.addr);
@@ -20013,6 +20111,13 @@ function openSpWisdomForm(q, app) {
   }
   set('swExperiment', q.action || q.title);
   set('swInsight', '');
+  /* このクエストの知恵カードに何を書くか（「提出するもの」の【知恵カード】）。 */
+  const wg = document.getElementById('swGuide');
+  if (wg) {
+    const g = spQuestReportGuide(q);
+    wg.textContent = g.kind !== 'trial' && g.wisdom ? 'このクエストでは：' + g.wisdom : '';
+    wg.hidden = !wg.textContent;
+  }
   document.body.classList.add('sp-wisdom-open');
 }
 /* 報告で挙がった投稿を選び直したとき。「選ばない」を選べば自由入力に戻す。 */
@@ -29003,6 +29108,7 @@ async function sendEmuFeedback() {
     <label class="spv-label" for="swExperiment">通した経験</label>
     <input class="spv-in" id="swExperiment" maxlength="200" placeholder="何を、どれだけやったか">
     <label class="spv-label" for="swInsight">残った一文</label>
+    <p class="spp-note" id="swGuide" hidden style="margin:0 0 6px"></p>
     <textarea class="spv-in spv-area" id="swInsight" maxlength="200" placeholder="やってみて分かったことを、一文に削る"></textarea>
     <label class="spv-label">分類</label>
     <!-- 選ばせない。出どころ（Emuの投稿 / ギルド）から決まる。

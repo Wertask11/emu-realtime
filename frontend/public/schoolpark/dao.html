@@ -639,6 +639,33 @@ if (window.top === window.self) window.location.replace('/');
                 </sc-if>
               </div>
 
+              <!-- 完走までの手順。完走の決まりはどのクエストも同じだが、
+                   3つの報告がそのクエストで何を指すかはクエストごとに違う。
+                   中身は親（index.html の spQuestReportGuide）が決めて渡す。 -->
+              <sc-if value="{{ cur.showSteps }}">
+                <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:14px">
+                  <div style="font-size:15px; font-weight:700">完走までの手順</div>
+                  <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85">
+                    <div style="font-family:Inter,sans-serif; font-size:11px; color:#0F5C3F; padding-top:2px">1</div>
+                    <div style="color:#3B382F"><b>このクエストを受ける</b></div>
+                  </div>
+                  <sc-for list="{{ cur.reportSteps }}" as="s" hint-placeholder-count="4">
+                    <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85">
+                      <div style="font-family:Inter,sans-serif; font-size:11px; color:#0F5C3F; padding-top:2px">{{ s.no }}</div>
+                      <div style="display:flex; flex-direction:column; gap:2px; min-width:0">
+                        <div style="color:#3B382F"><b>{{ s.head }}</b> <span style="display:{{ s.markShow }}; font-size:11px; color:#0F5C3F; font-weight:700; margin-left:6px">{{ s.mark }}</span></div>
+                        <div style="color:#6E695C; white-space:pre-wrap; overflow-wrap:anywhere">{{ s.ask }}</div>
+                      </div>
+                    </div>
+                  </sc-for>
+                  <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85">
+                    <div style="font-family:Inter,sans-serif; font-size:11px; color:#0F5C3F; padding-top:2px">6</div>
+                    <div style="color:#3B382F"><b>運営が確認して完走</b></div>
+                  </div>
+                  <div style="font-size:12px; line-height:1.8; color:#6E695C; padding-top:10px; border-top:1px solid rgba(20,19,16,.1)">報告は3種類すべてが必要です。「つまずいた」「気づいた」は「やってみた」のあとに出せます。</div>
+                </div>
+              </sc-if>
+
               <div style="display:flex; flex-direction:column; gap:16px">
                 <div style="display:flex; align-items:baseline; gap:14px">
                   <div style="font-size:17px; font-weight:700">{{ word }}ログ</div>
@@ -647,7 +674,7 @@ if (window.top === window.self) window.location.replace('/');
                 </div>
                 <sc-if value="{{ cur.canLog }}">
                   <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:20px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
-                    <div style="font-size:13px; color:#6E695C; flex:1; min-width:160px">今日やったことを書く</div>
+                    <div style="font-size:13px; color:#6E695C; flex:1; min-width:160px">{{ cur.logLead }}</div>
                     <div onClick="{{ cur.logDid }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">やってみた</div>
                     <div onClick="{{ cur.logStuck }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">つまずいた</div>
                     <div onClick="{{ cur.logFound }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">気づいた</div>
@@ -1390,6 +1417,9 @@ class Component extends DCLogic {
          閉じたあとも置ける。締切のあとに書き上げる人がいるため。 */
       canWisdom: !e.isFounder && !!e.iTook,
       canLog: !e.isFounder && !!e.iTook && e.status !== 'CLOSED',
+      /* 完走までの手順。#000（原点）には報告も完走も無いので出さない。 */
+      showSteps: !e.isFounder && !!(e.reportSteps && e.reportSteps.length),
+      logLead: e.logLead || '今日やったことを書く',
       noLogs: !(e.logs && e.logs.length),
       logDid:   () => { try { window.parent.spQuestLog(e.id, 'やってみた', this); } catch (err) {} },
       logStuck: () => { try { window.parent.spQuestLog(e.id, 'つまずいた', this); } catch (err) {} },
