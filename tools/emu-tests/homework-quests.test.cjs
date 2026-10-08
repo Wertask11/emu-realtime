@@ -69,3 +69,22 @@ test('知恵カードを置いたら、すぐに「運営の確認を待つ」�
   /* 報告を出した直後も、報告の取り置きを捨てる */
   assert.ok(INDEX.indexOf("_spMemoDrop('readall:sp_quests/' + encodeURIComponent(questId) + '/logs');") > 0);
 });
+
+test('管理画面で承認・取り消しをしたら、同じブラウザの SchoolPark がすぐ読み直す', () => {
+  const ADMIN = readHtml('frontend/public/membership-admin.html');
+  assert.ok(ADMIN.indexOf('function spNotifyQuestChanged(questId, addr) {') > 0);
+  assert.ok(ADMIN.indexOf('spNotifyQuestChanged(b.dataset.qapprove, b.dataset.addr);') > 0, '承認で知らせていない');
+  assert.ok(ADMIN.indexOf('spNotifyQuestChanged(b.dataset.qunapprove, b.dataset.addr);') > 0, '取り消しで知らせていない');
+  assert.ok(ADMIN.indexOf('new BroadcastChannel("schoolpark-quests")') > 0);
+  /* 受ける側：取り置きを捨て、間隔を待たずに読み直す */
+  const i = INDEX.indexOf('function _spOnQuestChanged() {');
+  assert.ok(i > 0);
+  const body = INDEX.slice(i, INDEX.indexOf('\n}\n', i));
+  assert.ok(body.indexOf("_spMemoDrop('readall:sp_quests');") > 0);
+  assert.ok(body.indexOf("_spMemoDrop('completed:');") > 0);
+  assert.ok(body.indexOf('_spRefreshAt = 0;') > 0);
+  /* 普通の通信の取り置き（3秒）に残った古い答えも使わない */
+  assert.ok(body.indexOf('_spRestState().cache') > 0, '普通の通信の取り置きを捨てていない');
+  assert.ok(INDEX.indexOf("new BroadcastChannel('schoolpark-quests')") > 0);
+  assert.ok(INDEX.indexOf("if (ev.key === 'sp_quest_changed') _spOnQuestChanged();") > 0);
+});

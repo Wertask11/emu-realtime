@@ -16538,6 +16538,27 @@ if (!_spRefreshTimer) {
   }, 5 * 60 * 1000);
 }
 
+/* 管理画面でクエストの承認が変わったら（同じブラウザの別タブ）、すぐ読み直す。
+   取り置き（25秒）と読み直しの間隔（8秒）を待たずに、宿題・「終わったこと」・
+   完走の数を新しくする。知らせは membership-admin.html の spNotifyQuestChanged。 */
+function _spOnQuestChanged() {
+  try {
+    _spMemoDrop('readall:sp_quests'); _spMemoDrop('readall:sp_wisdom');
+    _spMemoDrop('completed:');   /* パスポート・信用スコアの完走の数（5分取り置き） */
+    /* 普通の通信の取り置き（3秒）も、クエストと知恵のぶんは捨てる。 */
+    const rc = _spRestState().cache;
+    Array.from(rc.keys()).forEach(function (k) { if (/^sp_(quests|wisdom)/.test(k)) rc.delete(k); });
+  } catch (e) {}
+  _spRefreshAt = 0;
+  spDaoRefreshNow('運営が承認を変えた');
+}
+try {
+  const _spQuestCh = new BroadcastChannel('schoolpark-quests');
+  _spQuestCh.onmessage = function (ev) { if (ev && ev.data && ev.data.type === 'sp-quest-changed') _spOnQuestChanged(); };
+} catch (e) {
+  window.addEventListener('storage', function (ev) { if (ev.key === 'sp_quest_changed') _spOnQuestChanged(); });
+}
+
 /* ═══════════════════════════════════════
    SchoolPark パスポート
 
