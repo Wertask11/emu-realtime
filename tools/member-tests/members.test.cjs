@@ -990,7 +990,8 @@ function reader(opts) {
      本物の読み（_spReadAllOnce）の中身は前と同じなので、
      ここは2段まとめて組み立てて、これまでどおり外から試す。 */
   const api = build(INDEX,
-    ['_spMemoState', '_spMemo', '_spMemoDrop', '_spReadAll', '_spReadAllOnce'], stubs);
+    ['_spMemoState', '_spMemo', '_spMemoDrop', '_spReadAll', '_spReadAllOnce', '_spSdkStalled', '_spSdkNoted'], stubs,
+    'var SP_SDK_STALL_MS = 60000; var _spSdkStallUntil = 0;\n');
   return { read: api._spReadAll, warn: warn, api: api };
 }
 
