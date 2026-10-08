@@ -21,7 +21,7 @@ The backend guard is only one layer. The current frontend still has Production-b
 - Multiple frontend modules contain the Production Render API URL.
 - Firebase initialization is embedded in multiple pages, including administrative and Camellia-related surfaces.
 
-Therefore an existing Vercel Preview from the Production project is **not safe for authenticated write testing**. Until a separate client build and API are configured, disable Preview deployments or put them behind mandatory deployment protection and retire accessible Preview aliases. Do not test writes from those previews.
+Therefore a Vercel Preview from the Production project is **not safe for authenticated write testing**. The branch created for this Phase 0 work already received a successful Vercel status check; no authentication or write test was performed there. Until a separate client build and API are configured, disable Preview deployments or put them behind mandatory deployment protection and retire accessible Preview aliases. Do not log in or test writes from those previews.
 
 Owner setup required before Staging integration tests:
 
@@ -91,7 +91,7 @@ Do not change any #002 limit, condition or reward in this Phase 0 branch. Live F
 
 - Source-level flag bug: **addressed in branch; tests added, pending execution in a complete checkout/CI**.
 - Backend rejection of Production Firebase credentials in Staging mode: **implemented and unit test added**.
-- Production Vercel Preview write prevention: **not completed; external Preview protection/disablement and client config split are required**.
+- Production Vercel Preview write prevention: **not completed; this branch has an auto-built Preview with Production-bound client config. No writes were tested. External Preview protection/disablement and client config split are required before use or PR review**.
 - Staging Auth/Firestore/API/test data: **not provisioned**.
 - Mainnet wallet/token tests: **not run and prohibited**.
 - Mitemiru dependency inventory: **completed from source; no API/schema migrations performed**.
