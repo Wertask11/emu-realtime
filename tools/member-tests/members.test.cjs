@@ -77,7 +77,9 @@ function loader(opts) {
     }
   };
   stubs.window.spTrustScore = stubs.spTrustScore;
-  const api = build(INDEX, ['spDaoLoadMembers'], stubs);
+  /* 名前は出すときにプロフィールから引く（_spNameFor）。この試験では
+     プロフィールを用意しないので、記録に残っている名前がそのまま出る。 */
+  const api = build(INDEX, ['spDaoLoadMembers', '_spPrefetchNames', '_spNameFor', '_spSoon'], stubs);
   return { api: api, app: app, state: state, warn: warn };
 }
 
