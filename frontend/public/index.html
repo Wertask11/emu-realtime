@@ -3577,6 +3577,21 @@ body.sp-star-open #room3Overlay { z-index:1900; }
   color:#F4F1EA; font-family:inherit; font-size:11px; padding:5px 10px; cursor:pointer;
 }
 .sl-pick-x:hover { background:rgba(244,241,234,.1); }
+/* 報告に添える画像（「やってみた」だけ）。選んだものを小さく並べ、1枚ずつ外せる。 */
+.sl-thumbs { display:flex; flex-wrap:wrap; gap:8px; }
+.sl-thumbs:empty { display:none; }
+.sl-thumb { position:relative; width:84px; height:84px; border-radius:8px; overflow:hidden; border:1px solid rgba(244,241,234,.18); background:#1D1B16; }
+.sl-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.sl-thumb button {
+  position:absolute; top:4px; right:4px; width:26px; height:26px; border-radius:50%;
+  border:0; background:rgba(20,19,16,.78); color:#F4F1EA; font-size:13px; line-height:26px; padding:0; cursor:pointer;
+}
+.sl-img-add {
+  display:inline-flex; align-items:center; justify-content:center; min-height:44px; margin-top:8px; padding:0 16px;
+  border:1px dashed rgba(244,241,234,.35); border-radius:8px; color:#F4F1EA; font-size:13px; cursor:pointer;
+}
+.sl-img-add:hover { background:rgba(244,241,234,.08); }
+.sl-img-add[aria-disabled="true"] { opacity:.45; cursor:default; }
 
 /* SchoolPark の中から開く小部屋（エレベーターなど）。
    SchoolPark 本体(1500)より手前に出し、閉じると元の画面に戻る。 */
@@ -19062,6 +19077,7 @@ function _spLogView(l, logs) {
   const root = l.sourceLogId ? logs.find(function (x) { return x.id === l.sourceLogId; }) : null;
   return { id:l.id, author:name, authorAddress:String(l.author || ''), initial:name.slice(0, 1), body:l.body || '',
     bodyParts:_spTextParts(l.body || ''),
+    images:_spLogImageViews(l), imagesShow:_spLogImageViews(l).length ? 'flex' : 'none',
     kind:kind, kindBg:c[0], kindFg:c[1], fromPostId:fromId, fromPostTitle:l.fromPostTitle || '',
     at:Number(l.at) || 0, threadShow:root ? 'block' : 'none',
     threadLabel:root ? '「やってみた」の続き：' + String(root.body || '').slice(0, 60) : '',
@@ -19314,7 +19330,7 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
     people: people,
     /* 受けている人の番号。広場の「受けている仲間」で、同じ人を2回数えないために使う。 */
     peopleAddrs: (cs || []).map(function (c) { return String(c.id || '').toLowerCase(); }),
-    logCount: logCount, iTook: iTook, iDone: iDone, iDoneAt: iDoneAt, iWisdom: iWisdom,
+    logCount: logCount, iTook: iTook, iDone: iDone, iDoneAt: iDoneAt, myRounds: myRounds, iWisdom: iWisdom,
     /* 完走までの手順。報告の3つが、このクエストで何を指すか。
        受けている人には、自分が出した報告に ✓ を付ける。 */
     reportSteps: (function () {
@@ -19386,6 +19402,12 @@ window.spQuestToggle = async function (questId, app) {
        前は書いたあとの確かめに「書く前の答え」が返り、受けられていたのに
        「通信を確かめて」と出て、画面も 0人のままだった。 */
     const cur = await _spRestDoc(path, true, true);
+    /* 運営が完走を認めた記録は、降りると一緒に消えてしまう（認めた周回・報酬・証明書の手がかり）。
+       完走したクエストからは降りられないようにする。 */
+    if (cur && (cur.approved === true || Number(cur.approvedRounds) > 0)) {
+      alert('このクエストは完走しています。完走の記録を守るため、降りることはできません。');
+      return;
+    }
     if (cur) {
       if (!confirm('このクエストから降りますか？')) return;
     }
@@ -19431,6 +19453,108 @@ let _spLogPosts = null;         /* 投稿の一覧。札を開くたびに読み
 let _spLogSubmitting = false;
 let _spLogRequiresPost = false;
 let _spLogSource = null;         /* 続きの報告が参照する「やってみた」 */
+let _spLogImages = [];           /* 添える画像（圧縮済みの data URL）。「やってみた」だけ */
+
+/* 報告に添える画像。
+
+   投稿の画像と同じく、ストレージは使わず、端末で JPEG に縮めて報告の記録へそのまま入れる。
+   記録1件の上限（約1MB）に収まるよう、1枚は約60万字までに縮め、合わせて約90万字までにする。
+   企画書の写真でも文字が読めるよう、長い辺は1600pxから縮め始める。 */
+const SP_LOG_IMAGE_MAX = 3;
+const SP_LOG_IMAGE_EACH = 600000;
+const SP_LOG_IMAGE_TOTAL = 900000;
+const SP_LOG_IMAGE_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+function _spLogCompress(file) {
+  return new Promise(function (resolve, reject) {
+    if (!file || !/^image\//.test(file.type || '')) { reject(new Error('画像のファイルを選んでください。')); return; }
+    if (file.size > 20 * 1024 * 1024) { reject(new Error('画像は20MB以下にしてください。')); return; }
+    const reader = new FileReader();
+    reader.onerror = function () { reject(new Error('画像を読めませんでした。')); };
+    reader.onload = function (e) {
+      const img = new Image();
+      img.onerror = function () { reject(new Error('この形式の画像は読めませんでした。JPEG か PNG で選んでください。')); };
+      img.onload = function () {
+        const tries = [[1600, 0.8], [1400, 0.72], [1200, 0.66], [1000, 0.6]];
+        let out = '';
+        for (let i = 0; i < tries.length; i++) {
+          const max = tries[i][0];
+          let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+          if (w > max || h > max) {
+            if (w >= h) { h = Math.round(h * max / w); w = max; }
+            else { w = Math.round(w * max / h); h = max; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);      /* 透明部分を黒にしない */
+          ctx.drawImage(img, 0, 0, w, h);
+          out = canvas.toDataURL('image/jpeg', tries[i][1]);
+          if (out.length <= SP_LOG_IMAGE_EACH) break;
+        }
+        if (out.length > SP_LOG_IMAGE_EACH) { reject(new Error('画像が大きすぎて縮めきれませんでした。')); return; }
+        resolve(out);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function _spLogRenderImages() {
+  const box = document.getElementById('slThumbs');
+  if (box) {
+    box.innerHTML = '';
+    _spLogImages.forEach(function (src, i) {
+      const cell = document.createElement('div');
+      cell.className = 'sl-thumb';
+      const img = document.createElement('img');
+      img.src = src; img.alt = '添える画像 ' + (i + 1);
+      const x = document.createElement('button');
+      x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', (i + 1) + '枚目の画像を外す');
+      x.onclick = function () { _spLogImages.splice(i, 1); _spLogRenderImages(); };
+      cell.appendChild(img); cell.appendChild(x); box.appendChild(cell);
+    });
+  }
+  const add = document.getElementById('slImgAdd');
+  if (add) add.setAttribute('aria-disabled', _spLogImages.length >= SP_LOG_IMAGE_MAX ? 'true' : 'false');
+}
+async function _spLogAddImages(input) {
+  const files = Array.prototype.slice.call((input && input.files) || []);
+  if (input) input.value = '';
+  for (let i = 0; i < files.length; i++) {
+    if (_spLogImages.length >= SP_LOG_IMAGE_MAX) { alert('画像は' + SP_LOG_IMAGE_MAX + '枚までです。'); break; }
+    try {
+      const url = await _spLogCompress(files[i]);
+      const total = _spLogImages.reduce(function (n, x) { return n + x.length; }, 0) + url.length;
+      if (total > SP_LOG_IMAGE_TOTAL) { alert('画像が合わせて大きすぎます。1枚減らしてください。'); break; }
+      _spLogImages.push(url);
+      _spLogRenderImages();
+    } catch (e) {
+      alert((e && e.message) || '画像を添えられませんでした。');
+    }
+  }
+}
+window._spLogAddImages = _spLogAddImages;
+/* 報告の画像を大きく開く。data URL は新しいタブで直接開けない（ブラウザが止める）ので、
+   いったん Blob にしてから開く。 */
+function _spLogOpenImage(src) {
+  try {
+    const m = /^data:([^;]+);base64,(.*)$/.exec(String(src || ''));
+    if (!m) return;
+    const bin = atob(m[2]);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: m[1] }));
+    window.open(url, '_blank', 'noopener');
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  } catch (e) { console.warn('画像を開けませんでした:', e && e.message); }
+}
+/* 記録から読んだ画像のうち、画像の data URL だけを出す（ほかの文字列は捨てる）。 */
+function _spLogImageViews(l) {
+  return (Array.isArray(l && l.images) ? l.images : [])
+    .filter(function (x) { return typeof x === 'string' && x.length <= SP_LOG_IMAGE_EACH * 2 && SP_LOG_IMAGE_RE.test(x); })
+    .slice(0, SP_LOG_IMAGE_MAX)
+    .map(function (src) { return { src: src, open: function () { _spLogOpenImage(src); } }; });
+}
 
 window.spQuestLog = async function (questId, kind, app) {
   if (questId === SpQuestStore.FOUNDER_ID) return;
@@ -19453,6 +19577,10 @@ window.spQuestLog = async function (questId, kind, app) {
 
   const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; };
   set('slBody', ''); set('slSearch', '');
+  _spLogImages = [];
+  _spLogRenderImages();
+  const imgWrap = document.getElementById('slImageWrap');
+  if (imgWrap) imgWrap.hidden = kind !== 'やってみた';
   const k = document.getElementById('slKind'); if (k) k.textContent = kind;
   const b = document.getElementById('slBody');
   if (b) b.placeholder = kind === 'つまずいた'
@@ -19617,7 +19745,8 @@ async function spLogSubmit() {
   if (_spLogSubmitting) return;
   const el = document.getElementById('slBody');
   const text = el ? el.value.trim() : '';
-  if (!text) { alert('中身を書いてください。'); return; }
+  const images = _spLogKind === 'やってみた' ? _spLogImages.slice(0, SP_LOG_IMAGE_MAX) : [];
+  if (!text && !images.length) { alert(_spLogKind === 'やってみた' ? '中身を書くか、画像を添えてください。' : '中身を書いてください。'); return; }
   if (!_spLogQuestId) { alert('もとのクエストが分かりません。'); return; }
   if (_spLogRequiresPost && !_spLogPick) { alert('試したEmuの投稿を選んでください。'); return; }
   const p = await spPassportLoad();
@@ -19626,10 +19755,12 @@ async function spLogSubmit() {
   const questId = _spLogQuestId, kind = _spLogKind, app = _spLogApp;
   const data = {
     author: p.addr, authorName: p.name,
-    kind: kind, body: text.slice(0, 2000), at: Date.now(),
+    /* 画像だけの報告でも、本文は空にしない（決まりで本文が要るため） */
+    kind: kind, body: (text || '（画像で提出）').slice(0, 2000), at: Date.now(),
     fromPostId: _spLogPick ? String(_spLogPick.id).slice(0, 80) : '',
     fromPostTitle: _spLogPick ? String(_spLogPick.title).slice(0, 120) : '',
-    sourceLogId: _spLogSource ? String(_spLogSource.id) : ''
+    sourceLogId: _spLogSource ? String(_spLogSource.id) : '',
+    ...(images.length ? { images: images } : {})
   };
   let saved;
   try {
@@ -19638,12 +19769,18 @@ async function spLogSubmit() {
   } catch (e) {
     const code = String((e && e.code) || '');
     alert(code === 'permission-denied'
-      ? '報告できるのは、そのクエストを受けた人だけです。'
+      ? (images.length
+        ? '報告を残せませんでした。そのクエストを受けているか、画像の大きさ（3枚まで）を確かめてください。'
+        : '報告できるのは、そのクエストを受けた人だけです。')
+      : code === 'invalid-argument' && images.length
+      ? '画像が大きすぎて保存できませんでした。1枚減らしてお試しください。'
       : '報告を残せませんでした。もう一度お試しください。');
     _spLogSubmitting = false;
     return;
   }
   _spLogSubmitting = false;
+  _spLogImages = [];
+  _spLogRenderImages();
   /* 出した報告がすぐ数えられるよう、取り置いている報告の一覧を捨てる */
   try { _spMemoDrop('readall:sp_quests/' + encodeURIComponent(questId) + '/logs'); } catch (e) {}
   const created = { id: saved.id, ...data };
@@ -20032,19 +20169,67 @@ window.spTaskAdd = async function (app, draft) {
   return true;
 };
 
-/* 終わった／やっぱりまだ、を切り替える */
+/* 普通の通信で、1件の欄だけを書き換える（PATCH + updateMask）。
+   SDK の書き込みが返ってこないとき（パソコンで常時接続が止まるとき）の逃げ道。
+   決まり（firestore.rules）は SDK と同じように効く。 */
+async function _spRestPatch(path, fields) {
+  let opt = {};
+  try { opt = (window.db && window.db.app && window.db.app.options) || {}; } catch (e) {}
+  const u = window.auth && window.auth.currentUser;
+  if (!opt.projectId || !opt.apiKey || !u) throw new Error('設定かログインが読めない');
+  const token = String((await u.getIdToken()) || '');
+  if (!token) throw new Error('ログインの証が取れない');
+  const body = {};
+  const mask = [];
+  Object.keys(fields).forEach(function (k) {
+    const v = fields[k];
+    body[k] = typeof v === 'boolean' ? { booleanValue: v }
+      : Number.isInteger(v) ? { integerValue: String(v) }
+      : typeof v === 'number' ? { doubleValue: v }
+      : { stringValue: String(v) };
+    mask.push('updateMask.fieldPaths=' + encodeURIComponent(k));
+  });
+  const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
+    + '/databases/(default)/documents/' + path
+    + '?' + mask.join('&') + '&currentDocument.exists=true&key=' + opt.apiKey;
+  let signal;
+  try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) signal = AbortSignal.timeout(15000); } catch (e) {}
+  const r = await fetch(url, { method: 'PATCH', cache: 'no-store', signal: signal,
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: body }) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return true;
+}
+
+/* 終わった／やっぱりまだ、を切り替える。
+
+   前は SDK の書き込み（updateDoc）を上限なしで待っていた。パソコンでは SDK が
+   返事をしないことがあり、そのあいだチェックを押しても何も変わらず、何も言われなかった。
+   押した見た目はすぐ出し、SDK は8秒で見切って、普通の通信で書き直して確かめる。 */
 window.spTaskToggle = async function (app, taskId, done) {
   const p = await spPassportLoad();
-  if (!p) return;
+  if (!p) { alert('宿題を書き換えるにはログインが必要です。'); return; }
+  const fields = { done: !!done, doneAt: done ? Date.now() : 0 };
+  const path = 'sp_tasks/' + encodeURIComponent(p.uid) + '/items/' + encodeURIComponent(taskId);
+  const before = app && app.state && Array.isArray(app.state.tasks) ? app.state.tasks : null;
+  if (before && app && typeof app.setState === 'function') {
+    app.setState({ tasks: before.map(function (t) { return t.id === taskId ? Object.assign({}, t, fields) : t; }) });
+  }
   try {
-    await window.fbLib.updateDoc(
-      window.fbLib.doc(window.db, 'sp_tasks', p.uid, 'items', taskId),
-      { done: !!done, doneAt: done ? Date.now() : 0 });
+    const r = await _spSoon(window.fbLib.updateDoc(
+      window.fbLib.doc(window.db, 'sp_tasks', p.uid, 'items', taskId), fields), 8000);
+    if (!r.ok) {
+      await _spRestPatch(path, fields);
+      const saved = await _spRestDoc(path, true, true);
+      if (!saved || !!saved.done !== !!done) throw new Error('宿題の書き換えを確認できませんでした');
+    }
   } catch (e) {
     console.warn('宿題を書き換えられませんでした:', e && (e.message || e));
-    alert('うまくいきませんでした。もう一度お試しください。');
+    if (before && app && typeof app.setState === 'function') app.setState({ tasks: before });
+    alert('うまくいきませんでした。通信を確かめて、もう一度お試しください。');
     return;
   }
+  try { _spRestDrop('sp_tasks/'); } catch (e) {}
   await window.spDaoLoadTasks(app);
 };
 
@@ -20534,7 +20719,8 @@ window.spDaoLoadWisdom = async function (app) {
     }).sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
     const reports = ['やってみた', 'つまずいた', '気づいた'].map(function (kind) {
       const r = matched.find(function (l) { return l.kind === kind; });
-      return r ? {kind:kind, body:r.body || '', bodyParts:_spTextParts(r.body || '')} : null;
+      return r ? {kind:kind, body:r.body || '', bodyParts:_spTextParts(r.body || ''),
+        images:_spLogImageViews(r), imagesShow:_spLogImageViews(r).length ? 'flex' : 'none'} : null;
     }).filter(Boolean);
     wisdom.push({
       id: w.id, tag: spWisdomNormalizeTag(w.tag),
@@ -29331,6 +29517,15 @@ async function sendEmuFeedback() {
     <p class="spp-note" id="slKindGuide" style="margin:0"></p>
     <label class="spv-label" for="slBody">報告</label>
     <textarea class="spv-in spv-area" id="slBody" maxlength="2000"></textarea>
+    <div id="slImageWrap" hidden>
+      <span class="spv-label">画像（任意・3枚まで）</span>
+      <div id="slThumbs" class="sl-thumbs"></div>
+      <label class="sl-img-add" id="slImgAdd" tabindex="0" role="button"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('slImages').click();}">
+        <input type="file" id="slImages" accept="image/*" multiple hidden onchange="_spLogAddImages(this)">＋ 画像を選ぶ
+      </label>
+      <p class="spp-note" id="slImgNote" style="margin:6px 0 0">企画書の写真やスクリーンショットをそのまま出せます。文字が読める大きさに縮めて残します。画像だけでも出せます。</p>
+    </div>
 
     <label class="spv-label" id="slPostLabel">試したEmuの投稿</label>
     <div id="slPicked" class="sl-pick" hidden></div>
