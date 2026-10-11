@@ -1108,7 +1108,25 @@ service cloud.firestore {
               || get(/databases/$(database)/documents/sp_quests/$(questId)).data.get('questNumber', 0) != 1
               || request.resource.data.get('fromPostId', '').size() > 0)
           && request.resource.data.get('fromPostTitle', '') is string
-          && request.resource.data.get('fromPostTitle', '').size() <= 120;
+          && request.resource.data.get('fromPostTitle', '').size() <= 120
+          /* 添える画像は「やってみた」だけ。端末で縮めた JPEG の data URL を3枚まで。
+             1枚の長さを縛り、記録1件の上限（約1MB）を超えないようにする。 */
+          && request.resource.data.get('images', []) is list
+          && request.resource.data.get('images', []).size() <= 3
+          && (request.resource.data.get('images', []).size() == 0
+              || request.resource.data.get('kind', '') == 'やってみた')
+          && (request.resource.data.get('images', []).size() < 1
+              || (request.resource.data.images[0] is string
+                  && request.resource.data.images[0].size() <= 600000
+                  && request.resource.data.images[0].matches('data:image/jpeg;base64,[A-Za-z0-9+/=]+')))
+          && (request.resource.data.get('images', []).size() < 2
+              || (request.resource.data.images[1] is string
+                  && request.resource.data.images[1].size() <= 600000
+                  && request.resource.data.images[1].matches('data:image/jpeg;base64,[A-Za-z0-9+/=]+')))
+          && (request.resource.data.get('images', []).size() < 3
+              || (request.resource.data.images[2] is string
+                  && request.resource.data.images[2].size() <= 600000
+                  && request.resource.data.images[2].matches('data:image/jpeg;base64,[A-Za-z0-9+/=]+')));
         allow update, delete: if false;
       }
     }

@@ -722,6 +722,8 @@ if (window.top === window.self) window.location.replace('/');
                            （欠片は親の _spTextParts が作る。sc-for の間に空白を入れないこと。
                            改行を残すので、空白もそのまま出る）。 -->
                       <div style="font-size:14px; line-height:1.95; color:#3B382F; text-wrap:pretty; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; min-width:0"><sc-for list="{{ l.bodyParts }}" as="t"><span style="display:{{ t.textShow }}">{{ t.text }}</span><a href="{{ t.href }}" target="_blank" rel="noopener noreferrer" style="display:{{ t.linkShow }}; color:#0F5C3F; text-decoration:underline">{{ t.text }}</a></sc-for></div>
+                      <!-- 報告に添えた画像（「やってみた」）。押すと大きく開く。 -->
+                      <div style="display:{{ l.imagesShow }}; flex-wrap:wrap; gap:8px; min-width:0"><sc-for list="{{ l.images }}" as="im"><img src="{{ im.src }}" alt="報告に添えた画像" title="押すと大きく開きます" onClick="{{ im.open }}" loading="lazy" style="display:block; max-width:100%; max-height:420px; width:auto; height:auto; border:1px solid rgba(20,19,16,.12); border-radius:8px; background:#fff; cursor:zoom-in"></sc-for></div>
                       <div style="display:{{ l.threadShow }}; font-size:12px; line-height:1.7; color:#0F5C3F">{{ l.threadLabel }}</div>
                       <div onClick="{{ l.openPost }}" style="display:{{ l.fromShow }}; align-items:center; gap:10px; flex-wrap:wrap; background:#F4F1EA; border-radius:8px; padding:10px 12px; cursor:pointer; font-size:12px; line-height:1.7" style-hover="background:#E7E2D6">
                         <span style="color:#0F5C3F; font-weight:700">元にした知識</span>
@@ -1013,6 +1015,7 @@ if (window.top === window.self) window.location.replace('/');
                       <div style="font-size:12px; font-weight:700; color:#0F5C3F">この知恵につながる報告</div>
                       <sc-for list="{{ w.reports }}" as="r" hint-placeholder-count="3">
                         <div style="font-size:12px; line-height:1.75; white-space:pre-wrap; overflow-wrap:anywhere; color:#3B382F"><strong style="color:#0F5C3F">{{ r.kind }}：</strong><sc-for list="{{ r.bodyParts }}" as="t"><span style="display:{{ t.textShow }}">{{ t.text }}</span><a href="{{ t.href }}" target="_blank" rel="noopener noreferrer" style="display:{{ t.linkShow }}; color:#0F5C3F; text-decoration:underline">{{ t.text }}</a></sc-for></div>
+                        <div style="display:{{ r.imagesShow }}; flex-wrap:wrap; gap:6px"><sc-for list="{{ r.images }}" as="im"><img src="{{ im.src }}" alt="報告に添えた画像" onClick="{{ im.open }}" loading="lazy" style="display:block; width:72px; height:72px; object-fit:cover; border:1px solid rgba(20,19,16,.12); border-radius:6px; cursor:zoom-in"></sc-for></div>
                       </sc-for>
                     </div>
                   </sc-if>
@@ -1450,14 +1453,19 @@ class Component extends DCLogic {
 
   decorate(e){
     const on = !!e.iTook;
+    /* 運営が認めて完走したら「完走した」。受けている途中と見分けられるようにする。
+       2周以上なら周回も添える。押しても降りる確認は出さず、詳細を開く。 */
+    const done = on && !!e.iDone;
+    const rounds = Math.max(1, Number(e.myRounds) || 0);
+    const doneLabel = '✓ 完走した' + (rounds > 1 ? '（' + rounds + '周）' : '');
     const sc = e.status==='RUNNING' ? ['#0F5C3F','#F4F1EA'] : e.status==='OPEN' ? ['#E7E2D6','#0F5C3F'] : ['#E7E2D6','#8A8474'];
     const n = e.commits;
     return {...e, commits:n,
-      open:this.openExp(e.id), commit:this.commit(e.id),
+      open:this.openExp(e.id), commit: done ? this.openExp(e.id) : this.commit(e.id),
       statusBg:sc[0], statusFg:sc[1],
-      btnLabel: on ? '✓ 受けている' : 'このクエストを受ける',
-      btnBg: on ? '#0F5C3F' : 'transparent', btnFg: on ? '#F4F1EA' : '#0F5C3F',
-      btnBg2: on ? '#D0E2BE' : 'transparent', btnFg2: on ? '#141310' : '#D0E2BE',
+      btnLabel: done ? doneLabel : on ? '✓ 受けている' : 'このクエストを受ける',
+      btnBg: done ? '#141310' : on ? '#0F5C3F' : 'transparent', btnFg: done ? '#D0E2BE' : on ? '#F4F1EA' : '#0F5C3F',
+      btnBg2: done ? '#F4F1EA' : on ? '#D0E2BE' : 'transparent', btnFg2: done ? '#0F5C3F' : on ? '#141310' : '#D0E2BE',
       guildShow: e.hasGuild ? 'block' : 'none',
       canClose: !e.isFounder && !!e.isMine && e.status !== 'CLOSED',
       /* 知恵カードは「やった人」が置く。だから受けたかどうかだけを見る。

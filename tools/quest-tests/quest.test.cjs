@@ -68,6 +68,13 @@ test('ふつうのクエストは、受け付け・報告・完了が通る。�
   await assertSucceeds(fb.setDoc(fb.doc(guest,'sp_quests',q.id,'commits','member'),{name:'Member',tookAt:1}));
   await assertFails(fb.addDoc(fb.collection(guest,'sp_quests',q.id,'logs'),{author:'member',body:'出どころなし',kind:'やってみた'}));
   await assertSucceeds(fb.addDoc(fb.collection(guest,'sp_quests',q.id,'logs'),{author:'member',body:'通常の検証',kind:'やってみた',fromPostId:'synthetic-post'}));
+  /* 「やってみた」には、端末で縮めた JPEG を3枚まで添えられる。ほかの種類や形式は通さない */
+  const jpeg='data:image/jpeg;base64,'+'A'.repeat(2000);
+  await assertSucceeds(fb.addDoc(fb.collection(guest,'sp_quests',q.id,'logs'),{author:'member',body:'（画像で提出）',kind:'やってみた',fromPostId:'synthetic-post',images:[jpeg,jpeg]}));
+  await assertFails(fb.addDoc(fb.collection(guest,'sp_quests',q.id,'logs'),{author:'member',body:'画像4枚',kind:'やってみた',fromPostId:'synthetic-post',images:[jpeg,jpeg,jpeg,jpeg]}));
+  await assertFails(fb.addDoc(fb.collection(guest,'sp_quests',q.id,'logs'),{author:'member',body:'つまずきに画像',kind:'つまずいた',fromPostId:'synthetic-post',images:[jpeg]}));
+  await assertFails(fb.addDoc(fb.collection(guest,'sp_quests',q.id,'logs'),{author:'member',body:'画像でない',kind:'やってみた',fromPostId:'synthetic-post',images:['javascript:alert(1)']}));
+  await assertFails(fb.addDoc(fb.collection(guest,'sp_quests',q.id,'logs'),{author:'member',body:'大きすぎ',kind:'やってみた',fromPostId:'synthetic-post',images:['data:image/jpeg;base64,'+'A'.repeat(600001)]}));
   await assertFails(fb.updateDoc(fb.doc(db,'sp_quests',q.id),{questNumber:100}));
   await assertFails(fb.updateDoc(fb.doc(db,'sp_quests',q.id),{title:'差し替え'}));
   await assertSucceeds(fb.updateDoc(fb.doc(db,'sp_quests',q.id),{status:'RUNNING'}));
