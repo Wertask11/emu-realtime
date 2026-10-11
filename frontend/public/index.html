@@ -19012,6 +19012,51 @@ async function _spDaoLoadQuestsOnce(app, attempt) {
     quests: quests, noQuests: quests.length === 0,
     questsDenied: false, questsNote: ''
   });
+  _spWatchApprovals(quests, mine);
+}
+
+/* 運営の承認を待っているクエストの見張り。
+
+   知恵カードを置いて運営の確認を待っているあいだ（受けていて、いまの周回の
+   知恵カードを置いてある）だけ、自分の受付記録（commits/自分）を20秒ごとに読む。
+   認めた周回が増えていたら、すぐ読み直して「✓ 完走した」に切り替える。
+
+   同じブラウザの管理画面で認めたときは、知らせ（BroadcastChannel）ですぐ変わる。
+   別の端末や別のブラウザで認めたときはその知らせが届かず、5分ごとの読み直しまで
+   「✓ 受けている」のままだった。
+   画面が隠れているときと、しばらく触られていないときは読まない（読み取りの節約）。 */
+const SP_APPROVAL_POLL_MS = 20000;
+let _spApprovalTimer = null;
+let _spApprovalWaiting = [];
+function _spWatchApprovals(quests, mine) {
+  _spApprovalWaiting = mine ? (quests || []).filter(function (q) {
+    return q && q.iTook && q.iWisdom && !q.isFounder;
+  }).map(function (q) {
+    return { id: q.id, rounds: Number(q.myRounds) || 0,
+      path: 'sp_quests/' + encodeURIComponent(q.id) + '/commits/' + encodeURIComponent(mine) };
+  }) : [];
+  clearTimeout(_spApprovalTimer);
+  _spApprovalTimer = _spApprovalWaiting.length ? setTimeout(_spCheckApprovals, SP_APPROVAL_POLL_MS) : null;
+}
+async function _spCheckApprovals() {
+  _spApprovalTimer = null;
+  const list = _spApprovalWaiting;
+  if (!list.length) return;
+  const active = document.visibilityState === 'visible' && Date.now() - _spLastTouch <= SP_IDLE_STOP_MS;
+  if (active) {
+    for (const w of list) {
+      try {
+        const c = await _spRestDoc(w.path, true, true);
+        const rounds = c ? Math.max(c.approved === true ? 1 : 0, Number(c.approvedRounds) || 0) : 0;
+        if (rounds > w.rounds) {
+          /* 読み直すと、この見張りも新しい一覧で張り直される */
+          _spOnQuestChanged();
+          return;
+        }
+      } catch (e) { /* 読めなかったときは次の回にまた見る */ }
+    }
+  }
+  if (_spApprovalWaiting === list) _spApprovalTimer = setTimeout(_spCheckApprovals, SP_APPROVAL_POLL_MS);
 }
 
 /* 保存直後の表示を、古いSDKキャッシュで消さないために保持する。 */
