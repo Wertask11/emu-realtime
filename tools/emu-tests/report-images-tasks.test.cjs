@@ -114,3 +114,55 @@ test('完走を認められた記録からは降りられない（降りると�
   const guard = t.indexOf("if (cur && (cur.approved === true || Number(cur.approvedRounds) > 0)) {");
   assert.ok(guard > 0 && guard < t.indexOf("if (!confirm('このクエストから降りますか？')) return;"));
 });
+
+function approvalHarness(commit) {
+  const calls = { reads: [], changed: 0, timers: [] };
+  const api = build(INDEX, ['_spWatchApprovals', '_spCheckApprovals'], {
+    setTimeout: (fn) => { calls.timers.push(fn); return calls.timers.length; },
+    clearTimeout: () => {},
+    document: { visibilityState: 'visible' },
+    _spLastTouch: Date.now(), SP_IDLE_STOP_MS: 60000,
+    _spRestDoc: async (path) => { calls.reads.push(path); return commit(); },
+    _spOnQuestChanged: () => { calls.changed++; },
+    Date
+  }, 'const SP_APPROVAL_POLL_MS = 20000; let _spApprovalTimer = null; let _spApprovalWaiting = [];\n');
+  return { api, calls };
+}
+
+test('承認待ち（知恵カードを置いた）のクエストだけを見張り、運営が認めたらすぐ読み直す', async () => {
+  let approved = false;
+  const { api, calls } = approvalHarness(() => (approved ? { approved: true, approvedRounds: 1 } : { approved: false }));
+  api._spWatchApprovals([
+    { id: 'wait', iTook: true, iWisdom: true, myRounds: 0 },
+    { id: 'notyet', iTook: true, iWisdom: false, myRounds: 0 },
+    { id: 'founder', iTook: true, iWisdom: true, isFounder: true },
+    { id: 'other', iTook: false, iWisdom: false }
+  ], '0xabc');
+  assert.equal(calls.timers.length, 1, '見張りを1つ張る');
+  await calls.timers.shift()();
+  assert.deepEqual(calls.reads, ['sp_quests/wait/commits/0xabc'], '承認待ちの1本だけを読む');
+  assert.equal(calls.changed, 0);
+  assert.equal(calls.timers.length, 1, 'まだなら次の回を予約する');
+  approved = true;
+  await calls.timers.shift()();
+  assert.equal(calls.changed, 1, '認められたらすぐ読み直す（完走したに変わる）');
+  assert.equal(calls.timers.length, 0);
+});
+
+test('2周目の承認も見分ける（認めた周回が増えたときだけ読み直す）', async () => {
+  let rounds = 1;
+  const { api, calls } = approvalHarness(() => ({ approved: true, approvedRounds: rounds }));
+  api._spWatchApprovals([{ id: 'q', iTook: true, iDone: true, iWisdom: true, myRounds: 1 }], '0xabc');
+  await calls.timers.shift()();
+  assert.equal(calls.changed, 0, '1周目の承認のままなら何もしない');
+  rounds = 2;
+  await calls.timers.shift()();
+  assert.equal(calls.changed, 1);
+});
+
+test('承認待ちが無ければ見張らない（読み取りを使わない）', () => {
+  const { api, calls } = approvalHarness(() => null);
+  api._spWatchApprovals([{ id: 'q', iTook: true, iDone: true, iWisdom: false, myRounds: 1 }], '0xabc');
+  api._spWatchApprovals([{ id: 'q', iTook: true, iWisdom: true }], '');
+  assert.equal(calls.timers.length, 0);
+});
