@@ -19786,6 +19786,67 @@ function _spLogRenderPick() {
   }
 }
 
+/* 報告を残す。
+
+   前は SDK の書き込み（addDoc）を上限なしで待っていた。パソコンでは SDK の
+   常時接続が切れたまま返事をしないことがあり、報告は届いているのに画面は
+   何も変わらず、何も言われなかった（画像つきで送りが重いと起きやすい）。
+   番号を先に決めてから書くので、同じ報告が二重にできることはない。
+   SDK を見切ったら、届いているかを普通の通信で確かめ、無ければ普通の通信で書く。 */
+const SP_LOG_SDK_WAIT_MS = 10000;
+async function _spLogSave(questId, data) {
+  const fb = window.fbLib;
+  const ref = fb.doc(fb.collection(window.db, 'sp_quests', questId, 'logs'));
+  const coll = 'sp_quests/' + encodeURIComponent(questId) + '/logs';
+  const path = coll + '/' + encodeURIComponent(ref.id);
+  const sdk = fb.setDoc(ref, data);
+  /* 見切ったあとで SDK が断られても（普通の通信で先に書けた等）、ここでは扱わない */
+  sdk.catch(function () {});
+  const r = await _spSoon(sdk, SP_LOG_SDK_WAIT_MS);
+  if (!r.ok) {
+    const has = async function () { return !!(await _spRestDoc(path + '?mask.fieldPaths=author', true, true)); };
+    if (!(await has())) {
+      await _spRestCreate(coll, ref.id, data);
+      if (!(await has())) throw new Error('報告が残ったか確かめられない');
+    }
+    try { _spRestDrop(coll); } catch (e) {}
+  }
+  return { id: ref.id };
+}
+/* 記録を1件、番号を決めて作る。もうあれば（SDK が先に書けていれば）それでよい。 */
+async function _spRestCreate(collPath, id, data) {
+  let opt = {};
+  try { opt = (window.db && window.db.app && window.db.app.options) || {}; } catch (e) {}
+  const u = window.auth && window.auth.currentUser;
+  if (!opt.projectId || !opt.apiKey || !u) throw new Error('設定かログインが読めない');
+  const token = String((await u.getIdToken()) || '');
+  if (!token) throw new Error('ログインの証が取れない');
+  const val = function (v) {
+    return Array.isArray(v) ? { arrayValue: { values: v.map(val) } }
+      : typeof v === 'boolean' ? { booleanValue: v }
+      : Number.isInteger(v) ? { integerValue: String(v) }
+      : typeof v === 'number' ? { doubleValue: v }
+      : { stringValue: String(v) };
+  };
+  const fields = {};
+  Object.keys(data).forEach(function (k) { fields[k] = val(data[k]); });
+  const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
+    + '/databases/(default)/documents/' + collPath
+    + '?documentId=' + encodeURIComponent(id) + '&key=' + opt.apiKey;
+  let signal;
+  try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) signal = AbortSignal.timeout(30000); } catch (e) {}
+  const res = await fetch(url, { method: 'POST', cache: 'no-store', signal: signal,
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: fields }) });
+  if (res.status === 409) return false;
+  if (!res.ok) {
+    const err = new Error('HTTP ' + res.status);
+    err.code = res.status === 403 ? 'permission-denied' : res.status === 400 ? 'invalid-argument' : '';
+    throw err;
+  }
+  return true;
+}
+
 async function spLogSubmit() {
   if (_spLogSubmitting) return;
   const el = document.getElementById('slBody');
@@ -19808,9 +19869,10 @@ async function spLogSubmit() {
     ...(images.length ? { images: images } : {})
   };
   let saved;
+  const btn = document.getElementById('slSubmit');
+  if (btn) { btn.disabled = true; btn.textContent = '出しています…'; }
   try {
-    const fb = window.fbLib;
-    saved = await fb.addDoc(fb.collection(window.db, 'sp_quests', questId, 'logs'), data);
+    saved = await _spLogSave(questId, data);
   } catch (e) {
     const code = String((e && e.code) || '');
     alert(code === 'permission-denied'
@@ -19822,6 +19884,8 @@ async function spLogSubmit() {
       : '報告を残せませんでした。もう一度お試しください。');
     _spLogSubmitting = false;
     return;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '報告を出す'; }
   }
   _spLogSubmitting = false;
   _spLogImages = [];
@@ -29580,7 +29644,7 @@ async function sendEmuFeedback() {
       <div id="slResults" class="sl-results"></div>
     </div>
     <p class="spp-note" id="slPostGuide"></p>
-    <button type="button" class="spp-cta" onclick="spLogSubmit()">報告を出す</button>
+    <button type="button" class="spp-cta" id="slSubmit" onclick="spLogSubmit()">報告を出す</button>
     <p class="spp-note">いちど出した報告は、書き換えも削除もできません。</p>
   </div>
 </div>
