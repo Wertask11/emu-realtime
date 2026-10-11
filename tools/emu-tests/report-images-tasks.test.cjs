@@ -166,3 +166,58 @@ test('承認待ちが無ければ見張らない（読み取りを使わない�
   api._spWatchApprovals([{ id: 'q', iTook: true, iWisdom: true }], '');
   assert.equal(calls.timers.length, 0);
 });
+
+function saveHarness(setDoc, existsSeq) {
+  const calls = { creates: [], reads: [], drops: [] };
+  const seq = existsSeq.slice();
+  const window = { db: {}, fbLib: {
+    collection: (...a) => a.slice(1).join('/'),
+    doc: (coll) => ({ id: 'LOG1', coll }),
+    setDoc
+  } };
+  const api = build(INDEX, ['_spSoon', '_spLogSave'], {
+    window,
+    setTimeout: (fn) => { setImmediate(fn); return 1; },   /* 10秒を待たず、次の番で見切る */
+    clearTimeout: () => {},
+    _spRestDoc: async (path) => { calls.reads.push(path); return seq.shift() ? { author: '0xabc' } : null; },
+    _spRestCreate: async (coll, id, data) => { calls.creates.push([coll, id, data]); return true; },
+    _spRestDrop: (p) => calls.drops.push(p)
+  }, 'const SP_LOG_SDK_WAIT_MS = 10000;\n');
+  return { api, calls };
+}
+
+test('報告：SDK がすぐ返事をすれば、普通の通信は使わない', async () => {
+  const { api, calls } = saveHarness(async () => {}, []);
+  assert.deepEqual(await api._spLogSave('q1', { body: 'x' }), { id: 'LOG1' });
+  assert.equal(calls.reads.length + calls.creates.length, 0);
+});
+
+test('報告：SDK が返事をしないとき、届いていなければ同じ番号で普通の通信で書いて確かめる', async () => {
+  const never = () => new Promise(() => {});
+  const { api, calls } = saveHarness(never, [false, true]);
+  const data = { body: '（画像で提出）', images: ['data:image/jpeg;base64,AAAA'] };
+  assert.deepEqual(await api._spLogSave('q1', data), { id: 'LOG1' });
+  assert.equal(calls.creates.length, 1);
+  assert.deepEqual(calls.creates[0], ['sp_quests/q1/logs', 'LOG1', data], '同じ番号で書くので二重にならない');
+  assert.equal(calls.reads[0], 'sp_quests/q1/logs/LOG1?mask.fieldPaths=author', '画像まで読み直さない');
+  assert.equal(calls.reads.length, 2);
+});
+
+test('報告：SDK が返事をしなくても、もう届いていれば書き直さない', async () => {
+  const never = () => new Promise(() => {});
+  const { api, calls } = saveHarness(never, [true]);
+  assert.deepEqual(await api._spLogSave('q1', { body: 'x' }), { id: 'LOG1' });
+  assert.equal(calls.creates.length, 0);
+});
+
+test('報告：普通の通信でも確かめられなければ、出せなかったと知らせる（例外）', async () => {
+  const never = () => new Promise(() => {});
+  const { api } = saveHarness(never, [false, false]);
+  await assert.rejects(api._spLogSave('q1', { body: 'x' }));
+});
+
+test('報告：SDK が断ったら（決まりで拒否など）、そのまま知らせる', async () => {
+  const { api, calls } = saveHarness(async () => { const e = new Error('no'); e.code = 'permission-denied'; throw e; }, []);
+  await assert.rejects(api._spLogSave('q1', { body: 'x' }), (e) => e.code === 'permission-denied');
+  assert.equal(calls.creates.length, 0);
+});
