@@ -6625,22 +6625,47 @@ var _emuIdentity = null;
    アドレスの決め方は CHES.deriveWalletAddress と同じにする。
    ここを別の決め方にすると、端末ごとに違う名義ができてしまう。 */
 const _emuAccountRequests = new Map();
+/* サーバーで確かめ終わったアカウント（uid → account）。
+
+   前は「自分」を確かめるたびに毎回サーバーへ聞いていた。サーバー（Render）が
+   眠っていて起きるまで待たされると、8秒で打ち切って「本人確認に失敗」になり、
+   ログイン直後の着地が止まって画面が真っ白のまま残った。
+   いちど確かめられた uid は、この画面のあいだ聞き直さない。 */
+const _emuAccountVerified = new Map();
+/* 長めに待っても返事が無かった時刻（uid → ms）。すぐ後にまた38秒待たせない。 */
+const _emuAccountDownAt = new Map();
 async function _emuEnsureServerAccount(user) {
   if (!user) throw new Error('AUTH_REQUIRED');
+  var done = _emuAccountVerified.get(user.uid);
+  if (done) return done;
+  if (Date.now() - (_emuAccountDownAt.get(user.uid) || 0) < 60000) throw new Error('ACCOUNT_SERVER_UNREACHABLE');
   var pending = _emuAccountRequests.get(user.uid);
   if (pending) return pending;
   var request = (async function () {
     var token = await user.getIdToken();
-    var controller = new AbortController();
-    var timeout = setTimeout(function () { controller.abort(); }, 8000);
+    var post = async function (ms) {
+      var controller = new AbortController();
+      var timeout = setTimeout(function () { controller.abort(); }, ms);
+      try {
+        return await fetch('https://emu-realtime.onrender.com/api/auth/account', {
+          signal: controller.signal,
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: '{}'
+        });
+      } finally { clearTimeout(timeout); }
+    };
     var response;
-    try { response = await fetch('https://emu-realtime.onrender.com/api/auth/account', {
-      signal: controller.signal,
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: '{}'
-    }); } finally { clearTimeout(timeout); }
+    try { response = await post(8000); }
+    catch (e) {
+      /* 返事が来ない（打ち切った・つながらない）。サーバーが起きるまで30秒ほど
+         かかることがあるので、1回だけ長めに待ってやり直す。 */
+      console.warn('アカウントの確認が返ってこないので、もう一度待ちます:', e && (e.name || e.message || e));
+      try { response = await post(30000); }
+      catch (e2) { _emuAccountDownAt.set(user.uid, Date.now()); throw e2; }
+    }
     var result = await response.json();
     if (window.auth && window.auth.currentUser?.uid !== user.uid) throw new Error('ACCOUNT_CHANGED');
     if (!response.ok || !result.account) throw new Error(result.error || 'ACCOUNT_UNAVAILABLE');
+    _emuAccountVerified.set(user.uid, result.account);
     return result.account;
   })();
   _emuAccountRequests.set(user.uid, request);
@@ -6654,8 +6679,9 @@ async function _emuCreateAccountDoc(user) {
 async function emuMyIdentity() {
   const user = await emuEnsureSignedIn();
   if (!user || !window.db || !window.fbLib) return null;
-  await _emuEnsureServerAccount(user);
+  /* 確かめ済みならサーバーへ聞き直さない */
   if (_emuIdentity && _emuIdentity.uid === user.uid) return _emuIdentity;
+  await _emuEnsureServerAccount(user);
   /* ここは全部の入口。ここが null を返すと、パスポートも名前も名義も無くなり、
      画面は「おはよう、ゲスト」になって、以降の読み込みが軒並み0件になる。
 
@@ -9403,7 +9429,18 @@ async function goToChesHub() {
 
        読めたぶんだけでも先へ進める。足りないところは、
        それぞれの場所が自分で読み直す。 */
-    try { await _spSoon(Promise.resolve(chesLandAfterLogin()), 12000); } catch (e) {}
+    const landing = Promise.resolve(chesLandAfterLogin()).catch(function () {});
+    let landed = { ok: false };
+    try { landed = await _spSoon(landing, 12000); } catch (e) {}
+    if (!landed.ok) {
+      /* まだ行き先が決まっていない（サーバーが起きるのを待っているなど）。
+         ここで覆いを外すと、ログイン画面はもう閉じているので真っ白になる。
+         覆いを出したまま、もう少し待つ（中の待ちはそれぞれ上限つき）。 */
+      console.warn('ログイン後の着地に時間がかかっています。もう少し待ちます');
+      clearTimeout(_spLoadingHardStop);
+      _spLoadingHardStop = setTimeout(_cancelSpLoadingOverlay, 65000);
+      try { await _spSoon(landing, 60000); } catch (e) {}
+    }
     /* 中身が出来てから見せる。揃わなければ上限で切り上げる。 */
     if (typeof spDaoWaitReady === "function") { try { await spDaoWaitReady(8000); } catch (e) {} }
     _hideSpLoadingOverlay();
@@ -22574,12 +22611,15 @@ async function chesLandAfterLogin() {
     try { await emuMyIdentity(); }
     catch (e) { console.warn('ログイン後の本人確認に失敗:', e); }
   }
-  /* 入口の画面（ロゴ・ログイン）をしまう。 */
-  chesTidyEntryScreens();
 
   /* SchoolPark に入れるかはサーバーが決める（公式パスの有無・公開日）。
-     入れる人は SchoolPark へ。 */
+     入れる人は SchoolPark へ。
+
+     入口の画面（ロゴ・ログイン）は、行き先が決まってからしまう。
+     前は先にしまっていたので、サーバーの返事を待つあいだ（呼び出し元は
+     12秒で覆いを外す）何も出ていない真っ白な画面になっていた。 */
   const access = await spEnsureSchoolParkAccess(true);
+  chesTidyEntryScreens();
   if (access && access.allowed) {
     if (typeof spDaoOpenWhenReady === 'function') await spDaoOpenWhenReady();
     return;
@@ -23428,7 +23468,10 @@ async function spEnsureSchoolParkAccess(force) {
       }
       const headers = typeof emuAuthHeaders === 'function'
         ? (await emuAuthHeaders(false, { interactive:false }) || {}) : {};
-      const response = await fetch(SCHOOLPARK_ACCESS_API, { headers, cache:'no-store' });
+      /* 返事が来ないまま待ち続けない（着地が止まって画面が真っ白になる）。20秒で見切る。 */
+      let signal;
+      try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) signal = AbortSignal.timeout(20000); } catch (e) {}
+      const response = await fetch(SCHOOLPARK_ACCESS_API, { headers, cache:'no-store', signal });
       if (!response.ok) throw new Error('access check ' + response.status);
       _spAccess = await response.json();
       paintBrandMaintenance();
