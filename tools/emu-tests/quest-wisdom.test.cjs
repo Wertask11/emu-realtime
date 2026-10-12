@@ -45,7 +45,7 @@ test('SDK が返事をしないまま止まっても、「知恵カードを置�
   const pass = INDEX.slice(INDEX.indexOf('async function spPassportLoad(force) {'));
   assert.ok(pass.indexOf("_spSdkNoted(await _spSoon(window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', me.uid)), 3500));") > 0);
   /* 普通の通信も、返事が来ないまま枠を埋め続けない */
-  const rest = INDEX.slice(INDEX.indexOf('async function _spRestGetOnce(path, needAuth) {'));
+  const rest = INDEX.slice(INDEX.indexOf('async function _spRestGetOnce(path, needAuth, post) {'));
   assert.ok(rest.indexOf('AbortSignal.timeout(15000)') > 0);
   assert.ok(rest.indexOf("let r = await fetchT(url, { cache: 'no-store', headers: headers });") > 0);
 });

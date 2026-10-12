@@ -275,10 +275,10 @@ if (window.top === window.self) window.location.replace('/');
                 <sc-for list="{{ freshWisdom }}" as="w" hint-placeholder-count="3">
                   <div onClick="{{ w.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:14px; cursor:pointer" style-hover="border-color:#0F5C3F">
                     <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:{{ w.tagColor }}">{{ w.tag }}</div>
-                    <div style="font-family:'Zen Old Mincho',serif; font-size:20px; font-weight:900; line-height:1.55; text-wrap:pretty">{{ w.insight }}</div>
+                    <div style="font-family:'Zen Old Mincho',serif; font-size:20px; font-weight:900; line-height:1.55; text-wrap:pretty; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:4">{{ w.insight }}</div>
                     <div style="display:flex; flex-direction:column; gap:6px; padding-top:4px; border-top:1px dashed rgba(20,19,16,.16); font-size:12px; color:#6E695C; line-height:1.7">
-                      <div>知識：{{ w.from }}</div>
-                      <div>{{ wordShort }}：{{ w.experiment }}</div>
+                      <div style="display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:2">知識：{{ w.from }}</div>
+                      <div style="display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:2">{{ wordShort }}：{{ w.experiment }}</div>
                     </div>
                     <div style="font-size:12px; color:#6E695C">by {{ w.author }} · 引用 {{ w.uses }}</div>
                   </div>
@@ -1005,12 +1005,13 @@ if (window.top === window.self) window.location.replace('/');
                     <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:{{ w.tagColor }}">{{ w.tag }}</div>
                     <div style="font-family:Inter,sans-serif; font-size:11px; color:#6E695C">引用 {{ w.uses }}</div>
                   </div>
-                  <div style="font-family:'Zen Old Mincho',serif; font-size:21px; font-weight:900; line-height:1.6; text-wrap:pretty">{{ w.insight }}</div>
+                  <!-- 長い知恵はたたんで出す（縦長で読みにくかった）。「詳細を見る」で全文と報告を出す。 -->
+                  <div style="font-family:'Zen Old Mincho',serif; font-size:21px; font-weight:900; line-height:1.6; text-wrap:pretty; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:{{ w.clampInsight }}">{{ w.insight }}</div>
                   <div style="display:flex; flex-direction:column; gap:10px; padding-top:14px; border-top:1px dashed rgba(20,19,16,.16)">
-                    <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">知識</div><div onClick="{{ w.openPost }}" style="text-decoration:{{ w.fromLinked }}; cursor:{{ w.fromCursor }}">{{ w.from }}</div></div>
-                    <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">経験</div><div>{{ w.experiment }}</div></div>
+                    <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">知識</div><div onClick="{{ w.openPost }}" style="text-decoration:{{ w.fromLinked }}; cursor:{{ w.fromCursor }}; min-width:0; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:{{ w.clampMeta }}">{{ w.from }}</div></div>
+                    <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">経験</div><div style="min-width:0; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:{{ w.clampMeta }}">{{ w.experiment }}</div></div>
                   </div>
-                  <sc-if value="{{ w.hasReports }}">
+                  <sc-if value="{{ w.reportsOn }}">
                     <div style="display:flex; flex-direction:column; gap:8px; padding-top:12px; border-top:1px dashed rgba(20,19,16,.16)">
                       <div style="font-size:12px; font-weight:700; color:#0F5C3F">この知恵につながる報告</div>
                       <sc-for list="{{ w.reports }}" as="r" hint-placeholder-count="3">
@@ -1019,6 +1020,7 @@ if (window.top === window.self) window.location.replace('/');
                       </sc-for>
                     </div>
                   </sc-if>
+                  <div onClick="{{ w.toggleMore }}" role="button" tabindex="0" aria-expanded="{{ w.moreOpen }}" style="display:{{ w.moreShow }}; align-self:flex-start; font-size:12px; font-weight:700; color:#0F5C3F; cursor:pointer; text-decoration:underline; text-underline-offset:3px">{{ w.moreLabel }}</div>
                   <div style="margin-top:auto; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
                     <div style="font-size:12px; color:#6E695C; min-width:0">by {{ w.author }}</div>
                     <div onClick="{{ w.cite }}" style="display:{{ w.citeShow }}; padding:7px 13px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; background:{{ w.citeBg }}; color:{{ w.citeFg }}; border:1px solid #0F5C3F; white-space:nowrap" style-hover="opacity:.85">{{ w.citeLabel }}</div>
@@ -1397,7 +1399,7 @@ const LAYOUTS = {
 };
 
 class Component extends DCLogic {
-  state = { screen:(new URLSearchParams(window.location.search).get('screen') === 'city' ? 'city' : 'home'), expId:'', filter:'すべて', series:'general', yearDoc:null, questsDenied:false, questsNote:'', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, quests:[], noQuests:true, guilds:[], guildCount:'', guildUnsorted:{count:0, label:'', open:function(){}}, hasUnsorted:false, curGuild:{},  wisdom:[], noWisdom:true, citations:0, members:[], noMembers:true, membersNote:'', noTreasury:true, wtag:'すべて', canGuild:false, trust:{total:0, need:20, detail:'読み込んでいます…'}, board:[], dumb:[], events:[], noPark:true, treasury:{card:{have:'¥0', promised:'¥0', free:'¥0', freeColor:'#D0E2BE', warn:'', month:'今月 +¥0 / -¥0'}, curTabs:[], allocTitle:'内訳（円）', startNotice:'', allocNote:'', alloc:[], txs:[]}, vw: window.innerWidth, vh: window.innerHeight, joined:{}, tasks:[], noTasks:true, today:'' };
+  state = { screen:(new URLSearchParams(window.location.search).get('screen') === 'city' ? 'city' : 'home'), expId:'', filter:'すべて', series:'general', yearDoc:null, questsDenied:false, questsNote:'', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, quests:[], noQuests:true, guilds:[], guildCount:'', guildUnsorted:{count:0, label:'', open:function(){}}, hasUnsorted:false, curGuild:{},  wisdom:[], wOpen:{}, noWisdom:true, citations:0, members:[], noMembers:true, membersNote:'', noTreasury:true, wtag:'すべて', canGuild:false, trust:{total:0, need:20, detail:'読み込んでいます…'}, board:[], dumb:[], events:[], noPark:true, treasury:{card:{have:'¥0', promised:'¥0', free:'¥0', freeColor:'#D0E2BE', warn:'', month:'今月 +¥0 / -¥0'}, curTabs:[], allocTitle:'内訳（円）', startNotice:'', allocNote:'', alloc:[], txs:[]}, vw: window.innerWidth, vh: window.innerHeight, joined:{}, tasks:[], noTasks:true, today:'' };
 
   /* 追加欄に打った途中の中身。
      ここを state に入れると、1文字打つたびに画面を作り直してしまい
@@ -1425,6 +1427,20 @@ class Component extends DCLogic {
   }
   go(screen){ return () => { if(this.bottomRef.current) this.tabScrollLeft = this.bottomRef.current.scrollLeft; this.setState({screen}); this.toTop(); }; }
   openExp(id){ return () => { this.setState({screen:'detail', expId:id}); this.toTop(); }; }
+  /* 知恵カードをたたむ。知恵は4行・知識と経験は3行まで、報告は「詳細を見る」で出す。
+     短いカードはたたむものが無いので、ボタンも出さない。 */
+  foldWisdom(w, s){
+    const nReports = (w.reports || []).length;
+    const long = String(w.insight || '').length > 48 || String(w.from || '').length > 66
+      || String(w.experiment || '').length > 66 || nReports > 0;
+    const open = !long || !!(s.wOpen || {})[w.id];
+    return { ...w, moreOpen: open ? 'true' : 'false',
+      clampInsight: open ? 'none' : '4', clampMeta: open ? 'none' : '3',
+      reportsOn: !!w.hasReports && open,
+      moreShow: long ? 'block' : 'none',
+      moreLabel: (s.wOpen || {})[w.id] ? '閉じる' : '詳細を見る' + (nReports ? '（報告' + nReports + '件）' : ''),
+      toggleMore: () => this.setState(st => ({ wOpen: { ...(st.wOpen || {}), [w.id]: !(st.wOpen || {})[w.id] } })) };
+  }
   joinBoard(id){ return () => this.setState(s => ({joined:{...s.joined, [id]:!s.joined[id]}})); }
   commit(id){ return (ev) => { if(ev) ev.stopPropagation(); try { window.parent.spQuestToggle(id, this); } catch (e) {} }; }
   toggleSidebar = () => this.setState(s => ({sidebarOpen:!s.sidebarOpen}));
@@ -1809,7 +1825,7 @@ class Component extends DCLogic {
       filters, seriesFilters, shownExps, cur,
       questsDenied:!!s.questsDenied, questsNote:s.questsNote || '',
       curLogs: cur.logs || [],
-      logs, wisdom: (s.wtag && s.wtag !== 'すべて') ? (s.wisdom || []).filter(w => w.tag === s.wtag) : (s.wisdom || []),
+      logs, wisdom: ((s.wtag && s.wtag !== 'すべて') ? (s.wisdom || []).filter(w => w.tag === s.wtag) : (s.wisdom || [])).map(w => this.foldWisdom(w, s)),
       /* 棚はギルドと揃える。色は guild-store.js の accent と同じ。 */
       tags: [{t:'すべて',c:'#3B382F'},{t:'LEARN',c:'#0F5C3F'},{t:'WORK',c:'#141310'},{t:'PLAY',c:'#C2703D'},{t:'CONNECT',c:'#B0405A'},{t:'WEB3',c:'#3B382F'},{t:'Emu',c:'#F08300'},{t:'その他',c:'#6E695C'}].map(x => ({
         label:x.t, go:()=>this.setState({wtag:x.t}),
