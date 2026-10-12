@@ -212,7 +212,7 @@ test('REST を呼ぶところは、すべて関門を通る', () => {
     .filter(([, l]) => l.indexOf('_spRestGetOnce(') >= 0)
     .filter(([, l]) => l.indexOf('async function _spRestGetOnce(') < 0)
     .filter(([, l]) => l.indexOf('_spRestGetOnce = ') < 0)
-    .filter(([, l]) => l.indexOf('return _spRestGetOnce(path, needAuth);') < 0);
+    .filter(([, l]) => l.indexOf('return _spRestGetOnce(path, needAuth, post);') < 0);
   assert.deepEqual(direct, [], '関門を通らない呼び方が残っています');
 });
 

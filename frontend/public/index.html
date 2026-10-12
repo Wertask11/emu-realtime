@@ -18469,7 +18469,7 @@ function _spRestBlock(res, body) {
   }
 }
 
-async function _spRestGetOnce(path, needAuth) {
+async function _spRestGetOnce(path, needAuth, post) {
   let opt = {};
   try { opt = (window.db && window.db.app && window.db.app.options) || {}; } catch (e) {}
   if (!opt.projectId || !opt.apiKey) throw new Error('設定が読めない');
@@ -18492,6 +18492,8 @@ async function _spRestGetOnce(path, needAuth) {
   if (needAuth && !token) throw new Error('ログインの証が取れない');
   const headers = {};
   if (token) headers['Authorization'] = 'Bearer ' + token;
+  /* post … 問い合わせ（runQuery）。欄を絞って読むときに使う。 */
+  if (post) headers['Content-Type'] = 'application/json';
   const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
             + '/databases/(default)/documents/' + path
             + (path.indexOf('?') >= 0 ? '&' : '?') + 'key=' + opt.apiKey;
@@ -18500,6 +18502,7 @@ async function _spRestGetOnce(path, needAuth) {
   const fetchT = function (u, o) {
     let signal;
     try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) signal = AbortSignal.timeout(15000); } catch (e) {}
+    if (post) o = Object.assign({}, o, { method: 'POST', body: JSON.stringify(post) });
     return fetch(u, signal ? Object.assign({}, o, { signal: signal }) : o);
   };
   let r = await fetchT(url, { cache: 'no-store', headers: headers });
@@ -18533,7 +18536,7 @@ function _spRestDrop(prefix) {
 }
 
 /* 関門つきの入口。呼ぶ側はこれまでどおり _spRestGet を使う。 */
-async function _spRestGet(path, needAuth, fresh) {
+async function _spRestGet(path, needAuth, fresh, post) {
   const st = _spRestState();
   const now = Date.now();
   if (now < st.blockedUntil) {
@@ -18541,12 +18544,12 @@ async function _spRestGet(path, needAuth, fresh) {
   }
   /* 同じ行き先は取っておく。17本のクエストが同じ一覧を
      別々に取りに行っていたので、そこだけで17回になっていた。 */
-  const key = String(path) + (needAuth ? '|a' : '');
+  const key = String(path) + (needAuth ? '|a' : '') + (post ? '|' + JSON.stringify(post) : '');
   const hit = st.cache.get(key);
   /* fresh … 書く前と書いたあとで同じ記録を読むとき。取っておいた
      「書く前の答え」を返すと、書けたのに「書けていない」に見える。 */
   if (hit && !fresh && now - hit.at < st.hold) return hit.promise;
-  const promise = _spRestSlot(function () { return _spRestGetOnce(path, needAuth); });
+  const promise = _spRestSlot(function () { return _spRestGetOnce(path, needAuth, post); });
   st.cache.set(key, { at: now, promise: promise });
   /* 失敗したものは取っておかない。次にすぐ試せるようにする。 */
   promise.catch(function () { st.cache.delete(key); });
@@ -18662,6 +18665,91 @@ async function _spReadAllOnce(path, ms) {
   }
 }
 window._spReadAll = _spReadAll;
+
+/* クエストの報告を読む。添えた画像は読まない。
+
+   画像は報告の記録の中に入っている（1件で約55万字）。前は報告の一覧を読むたびに
+   画像ごと読んでいたので、画像つきの報告が1件あるだけで、そのクエストの一覧が
+   約550KBになっていた。読み直し（5分ごと）のたびに全クエストぶんを読むので、
+   SDK の常時接続（long-polling）でも普通の通信でも時間切れになりやすく、
+   出したはずの報告が「0件」に見えていた。
+
+   一覧は欄を絞って読む（runQuery の select。約1.6KB）。画像は、画像があり得る
+   報告だけを、あとから1件ずつ読む（_spLogImagesFill）。報告は書き換えられないので、
+   いちど読んだ画像はこの画面のあいだ取っておく。 */
+const SP_LOG_FIELDS = ['author', 'authorName', 'kind', 'body', 'at', 'fromPostId',
+  'fromPostTitle', 'sourceLogId', 'imageCount'];
+/* imageCount を書き始める前に出た画像つきの報告（10/11）も拾う */
+const SP_LOG_IMAGES_SINCE = 1791644400000;
+const _spLogImageCache = new Map();   /* 報告の番号 → 画像（data URL の配列） */
+const _spLogImageWant = new Map();    /* 報告の番号 → 読みに行く行き先 */
+function _spLogMayHaveImages(l) {
+  if (!l || l.kind !== 'やってみた') return false;
+  if (l.imageCount !== undefined && l.imageCount !== null) return Number(l.imageCount) > 0;
+  return (Number(l.at) || 0) >= SP_LOG_IMAGES_SINCE;
+}
+async function _spReadLogs(questId, fresh) {
+  const path = 'sp_quests/' + encodeURIComponent(questId) + '/logs';
+  if (fresh) _spMemoDrop('readall:' + path);
+  const rows = await _spMemo('readall:' + path, SP_READ_TTL_MS, async function () {
+    try {
+      const j = await _spRestGet('sp_quests/' + encodeURIComponent(questId) + ':runQuery', true, true, {
+        structuredQuery: { from: [{ collectionId: 'logs' }],
+          select: { fields: SP_LOG_FIELDS.map(function (f) { return { fieldPath: f }; }) },
+          limit: 300 } });
+      return (Array.isArray(j) ? j : []).filter(function (x) { return x && x.document; }).map(function (x) {
+        return Object.assign({ id: decodeURIComponent(String(x.document.name || '').split('/').pop()) },
+          _spRestFields(x.document.fields || {}));
+      });
+    } catch (e) {
+      /* 絞って読めなかったときだけ、これまでどおり丸ごと読む */
+      console.warn(path + ' を絞って読めませんでした:', e && (e.message || e));
+      return _spReadAllOnce(path);
+    }
+  });
+  if (rows === null) { _spMemoDrop('readall:' + path); return null; }
+  rows.forEach(function (l) {
+    if (Array.isArray(l.images)) { if (!_spLogImageCache.has(l.id)) _spLogImageCache.set(l.id, l.images); }
+    else if (_spLogMayHaveImages(l) && !_spLogImageCache.has(l.id)) _spLogImageWant.set(l.id, path + '/' + encodeURIComponent(l.id));
+  });
+  return rows.slice();
+}
+/* 画像があり得る報告の画像を、1件ずつ読んで画面へ足す。 */
+let _spLogImagesBusy = false;
+async function _spLogImagesFill(app) {
+  if (_spLogImagesBusy || !_spLogImageWant.size || !app || typeof app.setState !== 'function') return;
+  _spLogImagesBusy = true;
+  const got = [];
+  try {
+    for (const [id, path] of Array.from(_spLogImageWant.entries())) {
+      try {
+        const d = await _spRestDoc(path + '?mask.fieldPaths=images', true);
+        _spLogImageCache.set(id, (d && Array.isArray(d.images)) ? d.images : []);
+        _spLogImageWant.delete(id);
+        got.push(id);
+      } catch (e) { /* 次の読み直しでもう一度 */ }
+    }
+  } finally { _spLogImagesBusy = false; }
+  if (!got.length) return;
+  const has = function (id) { return got.indexOf(id) >= 0; };
+  const views = function (id) {
+    const v = _spLogImageViews({ images: _spLogImageCache.get(id) });
+    return { images: v, imagesShow: v.length ? 'flex' : 'none' };
+  };
+  app.setState(function (state) {
+    return {
+      quests: (state.quests || []).map(function (q) {
+        if (!(q.logs || []).some(function (l) { return has(l.id); })) return q;
+        return { ...q, logs: q.logs.map(function (l) { return has(l.id) ? { ...l, ...views(l.id) } : l; }) };
+      }),
+      wisdom: (state.wisdom || []).map(function (w) {
+        if (!(w.reports || []).some(function (r) { return has(r.logId); })) return w;
+        return { ...w, reports: w.reports.map(function (r) { return has(r.logId) ? { ...r, ...views(r.logId) } : r; }) };
+      })
+    };
+  });
+}
+window._spLogImagesFill = _spLogImagesFill;
 
 /* クエスト一覧は、ここ1か所から取る。
 
@@ -19013,6 +19101,8 @@ async function _spDaoLoadQuestsOnce(app, attempt) {
     questsDenied: false, questsNote: ''
   });
   _spWatchApprovals(quests, mine);
+  /* 画像つきの報告の画像は、一覧を出したあとで読んで足す */
+  _spLogImagesFill(app);
 }
 
 /* 運営の承認を待っているクエストの見張り。
@@ -19230,8 +19320,7 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
   const [cs, ls] = await Promise.all([
     _spReadAll('sp_quests/' + encodeURIComponent(q.id) + '/commits')
       .catch(function () { return null; }),
-    _spReadAll('sp_quests/' + encodeURIComponent(q.id) + '/logs')
-      .catch(function () { return null; })
+    _spReadLogs(q.id).catch(function () { return null; })
   ]);
   /* 受けた人と報告の書き手の名前を、出す前にプロフィールから読んでおく */
   await _spPrefetchNames([].concat((cs || []).map(function (c) { return c.id; }),
@@ -19504,8 +19593,13 @@ let _spLogImages = [];           /* 添える画像（圧縮済みの data URL�
 
    投稿の画像と同じく、ストレージは使わず、端末で JPEG に縮めて報告の記録へそのまま入れる。
    記録1件の上限（約1MB）に収まるよう、1枚は約60万字までに縮め、合わせて約90万字までにする。
-   企画書の写真でも文字が読めるよう、長い辺は1600pxから縮め始める。 */
+   企画書の写真でも文字が読めるよう、長い辺は1600pxから縮め始める。
+
+   記録1件に入るのは3枚まで（決まり）。提案資料5枚のように4枚以上を出すときは、
+   3枚ずつ（合わせて約90万字まで）に分けて、2件目からは「画像の続き」として
+   1件目につないだ報告にする（_spLogImageChunks）。選べるのは10枚まで。 */
 const SP_LOG_IMAGE_MAX = 3;
+const SP_LOG_IMAGE_PICK_MAX = 10;
 const SP_LOG_IMAGE_EACH = 600000;
 const SP_LOG_IMAGE_TOTAL = 900000;
 const SP_LOG_IMAGE_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
@@ -19560,17 +19654,15 @@ function _spLogRenderImages() {
     });
   }
   const add = document.getElementById('slImgAdd');
-  if (add) add.setAttribute('aria-disabled', _spLogImages.length >= SP_LOG_IMAGE_MAX ? 'true' : 'false');
+  if (add) add.setAttribute('aria-disabled', _spLogImages.length >= SP_LOG_IMAGE_PICK_MAX ? 'true' : 'false');
 }
 async function _spLogAddImages(input) {
   const files = Array.prototype.slice.call((input && input.files) || []);
   if (input) input.value = '';
   for (let i = 0; i < files.length; i++) {
-    if (_spLogImages.length >= SP_LOG_IMAGE_MAX) { alert('画像は' + SP_LOG_IMAGE_MAX + '枚までです。'); break; }
+    if (_spLogImages.length >= SP_LOG_IMAGE_PICK_MAX) { alert('画像は' + SP_LOG_IMAGE_PICK_MAX + '枚までです。'); break; }
     try {
       const url = await _spLogCompress(files[i]);
-      const total = _spLogImages.reduce(function (n, x) { return n + x.length; }, 0) + url.length;
-      if (total > SP_LOG_IMAGE_TOTAL) { alert('画像が合わせて大きすぎます。1枚減らしてください。'); break; }
       _spLogImages.push(url);
       _spLogRenderImages();
     } catch (e) {
@@ -19579,6 +19671,19 @@ async function _spLogAddImages(input) {
   }
 }
 window._spLogAddImages = _spLogAddImages;
+/* 画像を、記録1件に入る束（3枚まで・合わせて約90万字まで）に分ける。順番は変えない。 */
+function _spLogImageChunks(images) {
+  const out = [];
+  let cur = [], size = 0;
+  (images || []).forEach(function (x) {
+    if (cur.length && (cur.length >= SP_LOG_IMAGE_MAX || size + x.length > SP_LOG_IMAGE_TOTAL)) {
+      out.push(cur); cur = []; size = 0;
+    }
+    cur.push(x); size += x.length;
+  });
+  if (cur.length) out.push(cur);
+  return out;
+}
 /* 報告の画像を大きく開く。data URL は新しいタブで直接開けない（ブラウザが止める）ので、
    いったん Blob にしてから開く。 */
 function _spLogOpenImage(src) {
@@ -19595,7 +19700,9 @@ function _spLogOpenImage(src) {
 }
 /* 記録から読んだ画像のうち、画像の data URL だけを出す（ほかの文字列は捨てる）。 */
 function _spLogImageViews(l) {
-  return (Array.isArray(l && l.images) ? l.images : [])
+  const imgs = Array.isArray(l && l.images) ? l.images
+    : (l && l.id && typeof _spLogImageCache !== 'undefined' && _spLogImageCache.get(l.id)) || [];
+  return imgs
     .filter(function (x) { return typeof x === 'string' && x.length <= SP_LOG_IMAGE_EACH * 2 && SP_LOG_IMAGE_RE.test(x); })
     .slice(0, SP_LOG_IMAGE_MAX)
     .map(function (src) { return { src: src, open: function () { _spLogOpenImage(src); } }; });
@@ -19851,7 +19958,9 @@ async function spLogSubmit() {
   if (_spLogSubmitting) return;
   const el = document.getElementById('slBody');
   const text = el ? el.value.trim() : '';
-  const images = _spLogKind === 'やってみた' ? _spLogImages.slice(0, SP_LOG_IMAGE_MAX) : [];
+  const allImages = _spLogKind === 'やってみた' ? _spLogImages.slice(0, SP_LOG_IMAGE_PICK_MAX) : [];
+  const chunks = _spLogImageChunks(allImages);
+  const images = chunks[0] || [];
   if (!text && !images.length) { alert(_spLogKind === 'やってみた' ? '中身を書くか、画像を添えてください。' : '中身を書いてください。'); return; }
   if (!_spLogQuestId) { alert('もとのクエストが分かりません。'); return; }
   if (_spLogRequiresPost && !_spLogPick) { alert('試したEmuの投稿を選んでください。'); return; }
@@ -19866,7 +19975,7 @@ async function spLogSubmit() {
     fromPostId: _spLogPick ? String(_spLogPick.id).slice(0, 80) : '',
     fromPostTitle: _spLogPick ? String(_spLogPick.title).slice(0, 120) : '',
     sourceLogId: _spLogSource ? String(_spLogSource.id) : '',
-    ...(images.length ? { images: images } : {})
+    ...(images.length ? { images: images, imageCount: images.length } : {})
   };
   let saved;
   const btn = document.getElementById('slSubmit');
@@ -19877,32 +19986,48 @@ async function spLogSubmit() {
     const code = String((e && e.code) || '');
     alert(code === 'permission-denied'
       ? (images.length
-        ? '報告を残せませんでした。そのクエストを受けているか、画像の大きさ（3枚まで）を確かめてください。'
+        ? '報告を残せませんでした。そのクエストを受けているか、画像の大きさを確かめてください。'
         : '報告できるのは、そのクエストを受けた人だけです。')
       : code === 'invalid-argument' && images.length
       ? '画像が大きすぎて保存できませんでした。1枚減らしてお試しください。'
       : '報告を残せませんでした。もう一度お試しください。');
     _spLogSubmitting = false;
-    return;
-  } finally {
     if (btn) { btn.disabled = false; btn.textContent = '報告を出す'; }
+    return;
   }
+  /* 出した画像は手元にあるので、読み直さずにそのまま出す */
+  if (images.length) _spLogImageCache.set(saved.id, images);
+  const created = [{ id: saved.id, ...data }];
+  /* 4枚目からは「画像の続き」として、1件目につないだ報告にする。
+     1件目より少し前の時刻にして、新しい順に並べたとき1件目のすぐ下に続くようにする。 */
+  let lost = 0;
+  for (let k = 1; k < chunks.length; k++) {
+    if (btn) btn.textContent = '画像の続きを出しています…（' + (k + 1) + '/' + chunks.length + '）';
+    const more = { ...data, body: '（画像の続き ' + (k + 1) + '/' + chunks.length + '）',
+      at: data.at - k, sourceLogId: saved.id, images: chunks[k], imageCount: chunks[k].length };
+    try {
+      const s2 = await _spLogSave(questId, more);
+      _spLogImageCache.set(s2.id, chunks[k]);
+      created.push({ id: s2.id, ...more });
+    } catch (e) { lost += chunks[k].length; }
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '報告を出す'; }
   _spLogSubmitting = false;
   _spLogImages = [];
   _spLogRenderImages();
+  if (lost) alert('報告は出しましたが、画像のうち' + lost + '枚を残せませんでした。残せなかった画像だけを、もう一度「やってみた」で出してください。');
   /* 出した報告がすぐ数えられるよう、取り置いている報告の一覧を捨てる */
   try { _spMemoDrop('readall:sp_quests/' + encodeURIComponent(questId) + '/logs'); } catch (e) {}
-  const created = { id: saved.id, ...data };
   const pending = _spPendingQuestLogs.get(questId) || [];
-  pending.push(created);
+  created.forEach(function (c) { pending.push(c); });
   _spPendingQuestLogs.set(questId, pending);
   closeSpLogForm();
   if (app) app.setState(function (state) {
     return { quests: (state.quests || []).map(function (q) {
       if (q.id !== questId) return q;
-      const raw = [created].concat(q.logs || []);
-      return { ...q, logCount: (Number(q.logCount) || 0) + 1,
-        logs: [_spLogView(created, raw)].concat(q.logs || []) };
+      const raw = created.concat(q.logs || []);
+      return { ...q, logCount: (Number(q.logCount) || 0) + created.length,
+        logs: created.map(function (c) { return _spLogView(c, raw); }).concat(q.logs || []) };
     }) };
   });
   /* ブラウザが新しい報告を描画してから通信結果を照合する。 */
@@ -20408,7 +20533,7 @@ async function _spQuestCited(questId, mine) {
      同じものを読むので、ここで読み取りは増えない。 */
   let rows = [];
   try {
-    rows = (await _spReadAll('sp_quests/' + encodeURIComponent(questId) + '/logs')) || [];
+    rows = (await _spReadLogs(questId)) || [];
   } catch (e) {
     console.warn('報告の投稿を読めませんでした:', e && (e.message || e));
     return [];
@@ -20808,8 +20933,7 @@ window.spDaoLoadWisdom = async function (app) {
      カードを書いた本人・選んだ Emu 投稿に結び付く報告を探す。 */
   const questIds = [...new Set(docs.map(function (w) { return w.questId; }).filter(Boolean))];
   const logSets = await Promise.all(questIds.map(async function (id) {
-    const rows = await _spReadAll('sp_quests/' + encodeURIComponent(id) + '/logs')
-                         .catch(function () { return null; });
+    const rows = await _spReadLogs(id).catch(function () { return null; });
     return rows || [];
   }));
   const logsByQuest = new Map(questIds.map(function (id, i) { return [id, logSets[i]]; }));
@@ -20828,7 +20952,7 @@ window.spDaoLoadWisdom = async function (app) {
     }).sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
     const reports = ['やってみた', 'つまずいた', '気づいた'].map(function (kind) {
       const r = matched.find(function (l) { return l.kind === kind; });
-      return r ? {kind:kind, body:r.body || '', bodyParts:_spTextParts(r.body || ''),
+      return r ? {kind:kind, logId:r.id, body:r.body || '', bodyParts:_spTextParts(r.body || ''),
         images:_spLogImageViews(r), imagesShow:_spLogImageViews(r).length ? 'flex' : 'none'} : null;
     }).filter(Boolean);
     wisdom.push({
@@ -20856,6 +20980,7 @@ window.spDaoLoadWisdom = async function (app) {
     });
   }
   app.setState({ wisdom: wisdom, noWisdom: wisdom.length === 0, citations: cites });
+  _spLogImagesFill(app);
 };
 
 /* 知恵カードから、元になった Emu の投稿を開く。
@@ -29627,13 +29752,13 @@ async function sendEmuFeedback() {
     <label class="spv-label" for="slBody">報告</label>
     <textarea class="spv-in spv-area" id="slBody" maxlength="2000"></textarea>
     <div id="slImageWrap" hidden>
-      <span class="spv-label">画像（任意・3枚まで）</span>
+      <span class="spv-label">画像（任意・10枚まで）</span>
       <div id="slThumbs" class="sl-thumbs"></div>
       <label class="sl-img-add" id="slImgAdd" tabindex="0" role="button"
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('slImages').click();}">
         <input type="file" id="slImages" accept="image/*" multiple hidden onchange="_spLogAddImages(this)">＋ 画像を選ぶ
       </label>
-      <p class="spp-note" id="slImgNote" style="margin:6px 0 0">企画書の写真やスクリーンショットをそのまま出せます。文字が読める大きさに縮めて残します。画像だけでも出せます。</p>
+      <p class="spp-note" id="slImgNote" style="margin:6px 0 0">企画書の写真やスクリーンショットをそのまま出せます。文字が読める大きさに縮めて残します。画像だけでも出せます。4枚以上は3枚ずつに分けて、「画像の続き」としてつないで残します。</p>
     </div>
 
     <label class="spv-label" id="slPostLabel">試したEmuの投稿</label>

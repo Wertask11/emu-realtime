@@ -25,8 +25,9 @@ test('「やってみた」の札に画像を選ぶ欄があり、出すとき�
   assert.ok(INDEX.indexOf('accept="image/*" multiple hidden onchange="_spLogAddImages(this)"') > 0);
   assert.ok(INDEX.indexOf("if (imgWrap) imgWrap.hidden = kind !== 'やってみた';") > 0);
   const submit = INDEX.slice(INDEX.indexOf('async function spLogSubmit() {'));
-  assert.ok(submit.indexOf("const images = _spLogKind === 'やってみた' ? _spLogImages.slice(0, SP_LOG_IMAGE_MAX) : [];") > 0);
-  assert.ok(submit.indexOf("...(images.length ? { images: images } : {})") > 0);
+  assert.ok(submit.indexOf("const allImages = _spLogKind === 'やってみた' ? _spLogImages.slice(0, SP_LOG_IMAGE_PICK_MAX) : [];") > 0);
+  assert.ok(submit.indexOf("const images = chunks[0] || [];") > 0, '1件目には最初の束だけ');
+  assert.ok(submit.indexOf("...(images.length ? { images: images, imageCount: images.length } : {})") > 0);
   assert.ok(submit.indexOf("body: (text || '（画像で提出）').slice(0, 2000)") > 0, '画像だけでも本文を空にしない');
   /* 圧縮は JPEG。決まり（rules）が JPEG だけを通すので揃える */
   assert.ok(INDEX.indexOf("out = canvas.toDataURL('image/jpeg', tries[i][1]);") > 0);
@@ -220,4 +221,96 @@ test('報告：SDK が断ったら（決まりで拒否など）、そのまま�
   const { api, calls } = saveHarness(async () => { const e = new Error('no'); e.code = 'permission-denied'; throw e; }, []);
   await assert.rejects(api._spLogSave('q1', { body: 'x' }), (e) => e.code === 'permission-denied');
   assert.equal(calls.creates.length, 0);
+});
+
+test('画像は10枚まで選べ、記録1件に入る束（3枚・約90万字まで）に順番どおり分ける', () => {
+  const api = build(INDEX, ['_spLogImageChunks'], {}, 'const SP_LOG_IMAGE_MAX = 3; const SP_LOG_IMAGE_TOTAL = 900000;\n');
+  const img = (n, len) => 'i' + n + ':' + 'A'.repeat(len);
+  const five = [1, 2, 3, 4, 5].map(n => img(n, 100));
+  assert.deepEqual(api._spLogImageChunks(five).map(c => c.length), [3, 2], '提案資料5枚 → 3枚＋2枚');
+  assert.deepEqual([].concat(...api._spLogImageChunks(five)), five, '順番は変えない');
+  const big = [1, 2, 3].map(n => img(n, 400000));
+  assert.deepEqual(api._spLogImageChunks(big).map(c => c.length), [2, 1], '合わせて90万字を超えないように分ける');
+  assert.deepEqual(api._spLogImageChunks([]), []);
+  assert.ok(INDEX.indexOf('const SP_LOG_IMAGE_PICK_MAX = 10;') > 0);
+  assert.ok(INDEX.indexOf('<span class="spv-label">画像（任意・10枚まで）</span>') > 0);
+});
+
+test('4枚目からは「画像の続き」として、1件目につないだ報告にする（1件目のすぐ下に並ぶ時刻）', () => {
+  const submit = INDEX.slice(INDEX.indexOf('async function spLogSubmit() {'));
+  assert.ok(submit.indexOf("const more = { ...data, body: '（画像の続き ' + (k + 1) + '/' + chunks.length + '）',") > 0);
+  assert.ok(submit.indexOf("at: data.at - k, sourceLogId: saved.id, images: chunks[k], imageCount: chunks[k].length };") > 0);
+  assert.ok(submit.indexOf("if (lost) alert(") > 0, '続きが残せなかったら知らせる');
+});
+
+test('報告の一覧は画像を読まない（欄を絞った問い合わせ）。画像があり得る報告だけ控える', async () => {
+  const calls = [];
+  const memo = new Map();
+  const api = build(INDEX, ['_spLogMayHaveImages', '_spReadLogs'], {
+    _spRestGet: async (path, needAuth, fresh, post) => { calls.push([path, post]); return [
+      { document: { name: 'p/sp_quests/q1/logs/A', fields: { kind: { stringValue: 'やってみた' }, at: { integerValue: '1791698978030' } } } },
+      { document: { name: 'p/sp_quests/q1/logs/B', fields: { kind: { stringValue: 'やってみた' }, imageCount: { integerValue: '0' }, at: { integerValue: '1791698978030' } } } },
+      { document: { name: 'p/sp_quests/q1/logs/C', fields: { kind: { stringValue: '気づいた' }, at: { integerValue: '1791698978030' } } } },
+      { document: { name: 'p/sp_quests/q1/logs/D', fields: { kind: { stringValue: 'やってみた' }, at: { integerValue: '1700000000000' } } } },
+      { readTime: 'x' }
+    ]; },
+    _spRestFields: (f) => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.stringValue !== undefined ? v.stringValue : Number(v.integerValue)])),
+    _spMemo: (k, ms, run) => { if (!memo.has(k)) memo.set(k, Promise.resolve().then(run)); return memo.get(k); },
+    _spMemoDrop: (k) => memo.delete(k),
+    _spReadAllOnce: async () => { throw new Error('丸ごと読んではいけない'); },
+    console
+  }, "const SP_READ_TTL_MS = 25000; const SP_LOG_FIELDS = ['author','kind','body','at','imageCount']; const SP_LOG_IMAGES_SINCE = 1791644400000;"
+    + " const _spLogImageCache = new Map(); const _spLogImageWant = new Map(); globalThis.__want = _spLogImageWant;\n");
+  const rows = await api._spReadLogs('q1');
+  assert.deepEqual(rows.map(r => r.id), ['A', 'B', 'C', 'D']);
+  assert.equal(calls[0][0], 'sp_quests/q1:runQuery');
+  const fields = calls[0][1].structuredQuery.select.fields.map(f => f.fieldPath);
+  assert.ok(fields.indexOf('images') < 0, '画像は一覧で読まない');
+  assert.deepEqual([...globalThis.__want.keys()], ['A'], '画像があり得るのは、imageCount の無い今日以降の「やってみた」だけ');
+  assert.ok(INDEX.indexOf("_spReadAll('sp_quests/' + encodeURIComponent(q.id) + '/logs')") < 0, 'クエストの報告は丸ごと読まない');
+});
+
+test('画像はあとから1件ずつ読み、クエストの報告と知恵カードの報告に足す', async () => {
+  const states = [];
+  const app = { state: {
+    quests: [{ id: 'q1', logs: [{ id: 'A', images: [], imagesShow: 'none' }, { id: 'B' }] }],
+    wisdom: [{ id: 'w', reports: [{ logId: 'A', images: [] }] }] },
+    setState(fn) { const next = typeof fn === 'function' ? fn(this.state) : fn; states.push(next); Object.assign(this.state, next); } };
+  const jpeg = 'data:image/jpeg;base64,AAAA';
+  const reads = [];
+  const api = build(INDEX, ['_spLogImagesFill'], {
+    _spRestDoc: async (path) => { reads.push(path); return { images: [jpeg] }; },
+    _spLogImageViews: (l) => (l.images || []).map(src => ({ src }))
+  }, "const _spLogImageCache = new Map(); const _spLogImageWant = new Map([['A', 'sp_quests/q1/logs/A']]); let _spLogImagesBusy = false;\n");
+  await api._spLogImagesFill(app);
+  assert.deepEqual(reads, ['sp_quests/q1/logs/A?mask.fieldPaths=images'], '画像の欄だけを読む');
+  assert.deepEqual(app.state.quests[0].logs[0].images, [{ src: jpeg }]);
+  assert.equal(app.state.quests[0].logs[0].imagesShow, 'flex');
+  assert.equal(app.state.quests[0].logs[1].images, undefined, 'ほかの報告は触らない');
+  assert.deepEqual(app.state.wisdom[0].reports[0].images, [{ src: jpeg }]);
+  await api._spLogImagesFill(app);
+  assert.equal(reads.length, 1, '一度読んだ画像は読み直さない');
+});
+
+test('知恵ライブラリのカードは長いとたたみ、「詳細を見る」で全文と報告を出す', () => {
+  const fold = DAO.slice(DAO.indexOf('  foldWisdom(w, s){'));
+  const api = { foldWisdom: new Function('return function ' + fold.slice(2, fold.indexOf('\n  }\n') + 4))() };
+  const self = { setState() {} };
+  const short = api.foldWisdom.call(self, { id: 's', insight: '短い', from: 'a', experiment: 'b', reports: [] }, {});
+  assert.equal(short.moreShow, 'none', '短いカードにはボタンを出さない');
+  assert.equal(short.clampInsight, 'none');
+  const long = { id: 'l', insight: 'あ'.repeat(80), from: 'x', experiment: 'y', hasReports: true, reports: [{}, {}] };
+  const closed = api.foldWisdom.call(self, long, { wOpen: {} });
+  assert.equal(closed.moreShow, 'block');
+  assert.equal(closed.moreLabel, '詳細を見る（報告2件）');
+  assert.equal(closed.clampInsight, '4');
+  assert.equal(closed.clampMeta, '3');
+  assert.equal(closed.reportsOn, false, 'たたんでいるあいだは報告を出さない');
+  const opened = api.foldWisdom.call(self, long, { wOpen: { l: true } });
+  assert.equal(opened.moreLabel, '閉じる');
+  assert.equal(opened.clampInsight, 'none');
+  assert.equal(opened.reportsOn, true);
+  assert.ok(DAO.indexOf('-webkit-line-clamp:{{ w.clampInsight }}') > 0);
+  assert.ok(DAO.indexOf('<sc-if value="{{ w.reportsOn }}">') > 0);
+  assert.ok(DAO.indexOf('.map(w => this.foldWisdom(w, s))') > 0);
 });
