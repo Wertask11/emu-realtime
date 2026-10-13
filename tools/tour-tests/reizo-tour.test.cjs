@@ -30,7 +30,7 @@ test('Room1 has one search entrance and no read-screen DOM entrance',()=>{
  const index=fs.readFileSync(path.join(root,'frontend/public/index.html'),'utf8'),knowledge=fs.readFileSync(path.join(root,'frontend/public/knowledge.html'),'utf8');
  assert.ok(!knowledge.includes('data-command="room1"'));
  assert.equal((index.match(/class="emu-room1-entry"/g)||[]).length,1);
- const start=index.indexOf('id="emuRequestsPage"'),end=index.indexOf('id="emuIchinichiPage"');assert.ok(index.indexOf('data-tour="room1-entry"')>start&&index.indexOf('data-tour="room1-entry"')<end);
+ const start=index.indexOf('id="emuRequestsPage"'),end=index.indexOf('id="emuIchinichiPage"');assert.ok(index.indexOf('data-tour="room1-entry emu-room1"')>start&&index.indexOf('data-tour="room1-entry emu-room1"')<end);
  assert.ok(index.includes("openSpRoom('/admin/room1/index.html', 'Room1')"));
 });
 test('core state/UI never dispatch network requests or app clicks',()=>{
@@ -46,4 +46,23 @@ test('SchoolPark readiness distinguishes default empty lists from delivered empt
  app.setState({quests:[]});assert.equal(app.tourDataReady.quests,true);assert.equal(app.tourDataReady.guilds,undefined);
  app.setState(state=>({guilds:[],filter:state.filter||'すべて'}));assert.equal(app.tourDataReady.guilds,true);
  assert.equal(app.state.filter,'すべて');assert.deepEqual(Object.keys(app.tourDataReady).sort(),['guilds','quests']);
+});
+test('flat v2 storage restores status and numbers without importing content',()=>{
+ const {tour}=load(JSON.stringify({'sp-home':6,'emu-feed':'done','emu-share':'skipped','sp-bad':{name:'PRIVATE'},'private/user':'done'}));
+ tour.register('sp-home',Array(9).fill(steps[0]));tour.register('emu-feed',steps);tour.register('emu-share',steps);tour.register('sp-bad',steps);
+ assert.equal(tour.progress('sp-home').index,6);assert.equal(tour.progress('emu-feed').state,'done');assert.equal(tour.progress('emu-share').state,'skipped');assert.equal(tour.progress('sp-bad').state,'not_started');assert.ok(!JSON.stringify(tour.progress()).includes('PRIVATE'));
+});
+test('legacy progress follows equivalent v2 steps rather than resetting',()=>{
+ const {tour}=load(JSON.stringify({version:1,tours:{'sp-home':{state:'in_progress',index:5},'emu-feed':{state:'in_progress',index:1},'sp-park':{state:'done',index:1}}}));
+ tour.register('sp-home',Array(9).fill(steps[0]));tour.register('emu-feed',Array(9).fill(steps[0]));tour.register('sp-park',Array(3).fill(steps[0]));
+ assert.equal(tour.progress('sp-home').index,6);assert.equal(tour.progress('emu-feed').index,4);assert.equal(tour.progress('sp-park').state,'done');
+});
+test('native logic/styles stay identical; only guide attributes and the guide loader are added',()=>{
+ const cp=require('node:child_process');
+ for(const name of ['index.html','schoolpark/dao.html','knowledge.html','ichinichi.html','discussion.html']) {
+  const file='frontend/public/'+name;
+  const before=cp.execFileSync('git',['show','4d11e28949506bf070b19330fd14b32f39d1f167:'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
+  const strip=s=>s.replace(/\sdata-tour(?:-ready)?="[^"]*"/g,'').replace('<script src="/tour/reizo-tour-frame.js"></script>\n','');
+  assert.equal(strip(fs.readFileSync(path.join(root,file),'utf8')),strip(before),file);
+ }
 });

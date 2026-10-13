@@ -84,7 +84,7 @@ if (window.top === window.self) window.location.replace('/');
       </div>
       <div data-tour="menu" style="flex:1; padding:16px 12px; display:flex; flex-direction:column; gap:2px">
         <sc-for list="{{ nav }}" as="item" hint-placeholder-count="8">
-          <div onClick="{{ item.go }}" style="display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500; line-height:1.3; background:{{ item.bg }}; color:{{ item.fg }}" style-hover="background:rgba(244,241,234,.09)">
+          <div data-tour="nav-{{ item.num }}" onClick="{{ item.go }}" style="display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500; line-height:1.3; background:{{ item.bg }}; color:{{ item.fg }}" style-hover="background:rgba(244,241,234,.09)">
             <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.12em; width:18px; opacity:.55">{{ item.num }}</div>
             <div>{{ item.label }}</div>
           </div>
@@ -95,7 +95,7 @@ if (window.top === window.self) window.location.replace('/');
           <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; opacity:.5" title="{{ mine.note }}">{{ mine.label }}</div>
           <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:#D0E2BE">{{ mine.balance }}</div>
         </div>
-        <div onClick="{{ openPassport }}" title="SchoolPark パスポートを見る" style="display:flex; align-items:center; gap:10px; padding:4px 8px 6px; margin:0 -8px; border-radius:8px; cursor:pointer" style-hover="background:rgba(244,241,234,.08)">
+        <div data-tour="passport-entry" onClick="{{ openPassport }}" title="SchoolPark パスポートを見る" style="display:flex; align-items:center; gap:10px; padding:4px 8px 6px; margin:0 -8px; border-radius:8px; cursor:pointer" style-hover="background:rgba(244,241,234,.08)">
           <div style="width:32px; height:32px; border-radius:50%; background:#0F5C3F; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700">{{ me.initial }}</div>
           <div style="display:flex; flex-direction:column; gap:2px">
             <div style="font-size:13px; font-weight:500">{{ me.name }}</div>
@@ -107,12 +107,12 @@ if (window.top === window.self) window.location.replace('/');
 
     <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow-y:{{ L.scrollY }}" ref="{{ scrollRef }}">
 
-      <div data-sp-head data-tour="screen-heading guild-intro contribution-intro quest-intro park-intro" style="background:#F4F1EA; border-bottom:1px solid rgba(20,19,16,.12); padding:{{ L.headPad }}; position:sticky; top:0; z-index:6; display:flex; align-items:center; gap:16px">
+      <div data-sp-head data-tour="screen-heading guild-intro contribution-intro quest-intro park-intro city-card" style="background:#F4F1EA; border-bottom:1px solid rgba(20,19,16,.12); padding:{{ L.headPad }}; position:sticky; top:0; z-index:6; display:flex; align-items:center; gap:16px">
         <!-- スマホのメニュー。左側に置く。
              ここは狭い画面のときだけ出る（パソコン・タブレットでは
              同じ場所にサイドバーの開け閉めボタンが出て、こちらは display:none）。
              押しどころは44pxにしてある。38pxだと指の腹より小さい。 -->
-        <div data-tour="menu support-btn" onClick="{{ openMenu }}" title="メニュー" style="display:{{ L.menuShow }}; width:44px; height:44px; flex:0 0 44px; border:1px solid rgba(20,19,16,.16); border-radius:8px; align-items:center; justify-content:center; cursor:pointer; font-family:Inter,sans-serif; font-size:18px; color:#0F5C3F" style-hover="background:#E7E2D6">☰</div>
+        <div data-tour="menu support-btn passport-entry" onClick="{{ openMenu }}" title="メニュー" style="display:{{ L.menuShow }}; width:44px; height:44px; flex:0 0 44px; border:1px solid rgba(20,19,16,.16); border-radius:8px; align-items:center; justify-content:center; cursor:pointer; font-family:Inter,sans-serif; font-size:18px; color:#0F5C3F" style-hover="background:#E7E2D6">☰</div>
         <div data-tour="menu support-btn" onClick="{{ toggleSidebar }}" title="{{ sidebarButtonTitle }}" style="display:{{ L.sidebarToggle }}; width:38px; height:38px; flex:0 0 38px; border:1px solid rgba(20,19,16,.16); border-radius:7px; align-items:center; justify-content:center; cursor:pointer; font-family:Inter,sans-serif; font-size:18px; color:#0F5C3F" style-hover="background:#E7E2D6">{{ sidebarButtonIcon }}</div>
         <div style="display:flex; flex-direction:column; gap:5px; flex:1; min-width:0">
           <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#0F5C3F">{{ head.kicker }}</div>
@@ -185,7 +185,7 @@ if (window.top === window.self) window.location.replace('/');
             <button onClick="{{ goExperiments }}" style="font:inherit; padding:10px 16px; cursor:pointer">← クエスト</button>
             <p style="font-family:Inter,sans-serif; color:#0F5C3F; font-weight:700; letter-spacing:.12em; font-size:11px">YEAR GOALS</p>
             <h1 style="font-size:28px; line-height:1.5">{{ yearDoc.title }}</h1>
-            <p style="line-height:1.9">{{ yearDoc.summary }}</p>
+            <p data-tour="year-goals" style="line-height:1.9">{{ yearDoc.summary }}</p>
             <sc-if value="{{ yearDoc.hasUpdated }}">
               <p style="font-size:12px; color:#6E695C">最終更新：{{ yearDoc.updatedLabel }}</p>
             </sc-if>
@@ -267,15 +267,15 @@ if (window.top === window.self) window.location.replace('/');
 
             <div style="display:flex; flex-direction:column; gap:18px">
               <div style="display:flex; align-items:baseline; gap:14px">
-                <div style="font-size:17px; font-weight:700" data-tour="home-wisdom">今週生まれた知恵</div>
+                <div style="font-size:17px; font-weight:700" data-tour="home-wisdom-heading">今週生まれた知恵</div>
                 <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-                <div onClick="{{ goLibrary }}" style="font-size:13px; color:#0F5C3F; cursor:pointer; font-weight:500">ライブラリへ →</div>
+                <div data-tour="home-wisdom" onClick="{{ goLibrary }}" style="font-size:13px; color:#0F5C3F; cursor:pointer; font-weight:500">ライブラリへ →</div>
               </div>
               <div style="display:grid; grid-template-columns:{{ L.g3 }}; gap:16px">
                 <sc-for list="{{ freshWisdom }}" as="w" hint-placeholder-count="3">
                   <div onClick="{{ w.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:14px; cursor:pointer" style-hover="border-color:#0F5C3F">
                     <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:{{ w.tagColor }}">{{ w.tag }}</div>
-                    <div style="font-family:'Zen Old Mincho',serif; font-size:20px; font-weight:900; line-height:1.55; text-wrap:pretty; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:4" data-tour="wisdom-list">{{ w.insight }}</div>
+                    <div style="font-family:'Zen Old Mincho',serif; font-size:20px; font-weight:900; line-height:1.55; text-wrap:pretty; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:4" data-tour="wisdom-list wisdom-card">{{ w.insight }}</div>
                     <div style="display:flex; flex-direction:column; gap:6px; padding-top:4px; border-top:1px dashed rgba(20,19,16,.16); font-size:12px; color:#6E695C; line-height:1.7">
                       <div style="display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:2">知識：{{ w.from }}</div>
                       <div style="display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:2">{{ wordShort }}：{{ w.experiment }}</div>
@@ -289,9 +289,9 @@ if (window.top === window.self) window.location.replace('/');
             <div style="display:grid; grid-template-columns:{{ L.g2b }}; gap:28px">
               <div style="display:flex; flex-direction:column; gap:18px">
                 <div style="display:flex; align-items:baseline; gap:14px">
-                  <div style="font-size:17px; font-weight:700" data-tour="home-quests">走っている{{ word }}</div>
+                  <div style="font-size:17px; font-weight:700" data-tour="home-quests-heading">走っている{{ word }}</div>
                   <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-                  <div onClick="{{ goExperiments }}" style="font-size:13px; color:#0F5C3F; cursor:pointer; font-weight:500">すべて →</div>
+                  <div data-tour="home-quests" onClick="{{ goExperiments }}" style="font-size:13px; color:#0F5C3F; cursor:pointer; font-weight:500">すべて →</div>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:12px">
                   <sc-for list="{{ runningExps }}" as="e" hint-placeholder-count="3">
@@ -352,7 +352,7 @@ if (window.top === window.self) window.location.replace('/');
           <div style="display:flex; flex-direction:column; gap:28px">
 
             <div style="background:#E7E2D6; border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:12px">
-              <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.parkHeroSize }}; font-weight:900; line-height:1.5">ここには締切も、報酬も、進捗バーもない。</div>
+              <div data-tour="park-hero" style="font-family:'Zen Old Mincho',serif; font-size:{{ L.parkHeroSize }}; font-weight:900; line-height:1.5">ここには締切も、報酬も、進捗バーもない。</div>
             </div>
 
             <!-- 公園の地図と、右のならび。
@@ -360,8 +360,8 @@ if (window.top === window.self) window.location.replace('/');
             <div style="display:grid; grid-template-columns:{{ L.gPark }}; gap:24px; align-items:start">
 
               <!-- 地図。押せる場所は画像に対する割合で置くので、大きさが変わってもズレない -->
-              <div style="position:relative; width:100%; line-height:0">
-                <img data-tour="park-map" src="/park.jpg" alt="SchoolPark の公園" style="width:100%; height:auto; display:block; border-radius:12px">
+              <div data-tour="park-map" style="position:relative; width:100%; line-height:0">
+                <img src="/park.jpg" alt="SchoolPark の公園" style="width:100%; height:auto; display:block; border-radius:12px">
                 <div onClick="{{ goPlaza }}"      title="広場"     style="left:39%; top:22%; width:54%; height:56%; position:absolute; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px"><span style="font-size:12px; font-weight:700; color:#141310; background:rgba(244,241,234,.92); border-radius:14px; padding:4px 12px; white-space:nowrap">広場</span></div>
                 <div onClick="{{ goSlide }}"      title="すべり台" style="left:11%; top:16%; width:29%; height:22%; position:absolute; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px"><span style="font-size:12px; font-weight:700; color:#141310; background:rgba(244,241,234,.92); border-radius:14px; padding:4px 12px; white-space:nowrap">すべり台</span></div>
                 <div onClick="{{ goSwing }}"      title="ブランコ" style="left:9%;  top:38%; width:27%; height:25%; position:absolute; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px"><span style="font-size:12px; font-weight:700; color:#141310; background:rgba(244,241,234,.92); border-radius:14px; padding:4px 12px; white-space:nowrap">ブランコ</span></div>
@@ -405,7 +405,7 @@ if (window.top === window.self) window.location.replace('/');
                   </sc-if>
                 </div>
 
-                <div style="display:flex; flex-direction:column; gap:14px">
+                <div data-tour="park-side" style="display:flex; flex-direction:column; gap:14px">
                   <div style="display:flex; align-items:baseline; gap:14px">
                     <div style="font-size:17px; font-weight:700">エレベーター</div>
                     <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
@@ -545,7 +545,7 @@ if (window.top === window.self) window.location.replace('/');
                 <div onClick="{{ f.go }}" style="padding:9px 18px; border-radius:20px; font-size:13px; font-weight:700; cursor:pointer; border:1px solid {{ f.border }}; background:{{ f.bg }}; color:{{ f.fg }}">{{ f.label }}</div>
               </sc-for>
             </div>
-            <div data-tour="quest-filter" style="display:flex; gap:8px; flex-wrap:wrap">
+            <div data-tour="quest-filter quest-filters" style="display:flex; gap:8px; flex-wrap:wrap">
               <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
                 <div onClick="{{ f.go }}" style="padding:9px 16px; border-radius:20px; font-size:13px; font-weight:500; cursor:pointer; border:1px solid rgba(20,19,16,.16); background:{{ f.bg }}; color:{{ f.fg }}">{{ f.label }}</div>
               </sc-for>
@@ -577,7 +577,7 @@ if (window.top === window.self) window.location.replace('/');
                       <div style="font-size:11px; color:#6E695C">予算 {{ e.budget }} · {{ e.owner }}</div>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px">
-                      <div onClick="{{ e.open }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:#0F5C3F; border:1px solid rgba(20,19,16,.2)" style-hover="background:#E7E2D6">詳細</div>
+                      <div data-tour="quest-card" onClick="{{ e.open }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:#0F5C3F; border:1px solid rgba(20,19,16,.2)" style-hover="background:#E7E2D6">詳細</div>
                       <div onClick="{{ e.commit }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:{{ e.btnBg }}; color:{{ e.btnFg }}; border:1px solid #0F5C3F">{{ e.btnLabel }}</div>
                     </div>
                   </div>
@@ -593,7 +593,7 @@ if (window.top === window.self) window.location.replace('/');
               <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:22px">
                 <div style="display:flex; align-items:center; gap:12px">
                   <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ cur.statusBg }}; color:{{ cur.statusFg }}">{{ cur.status }}</div>
-                  <div onClick="{{ goExperiments }}" style="font-size:12px; color:#6E695C; cursor:pointer">← {{ word }}一覧</div>
+                  <div data-tour="home-quests" onClick="{{ goExperiments }}" style="font-size:12px; color:#6E695C; cursor:pointer">← {{ word }}一覧</div>
                 </div>
                 <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.5; text-wrap:pretty" data-tour="quest-detail">{{ cur.fullTitle }}</div>
                 <sc-if value="{{ cur.hasFrom }}">
@@ -797,7 +797,7 @@ if (window.top === window.self) window.location.replace('/');
 
               <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:14px">
                 <sc-for list="{{ guilds }}" as="g" hint-placeholder-count="5">
-                  <div data-tour="guild-list" onClick="{{ g.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-left:4px solid {{ g.accent }}; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px; cursor:pointer" style-hover="background:#F4F1EA">
+                  <div data-tour="guild-card" onClick="{{ g.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-left:4px solid {{ g.accent }}; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px; cursor:pointer" style-hover="background:#F4F1EA">
                     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
                       <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:#9A9484">{{ g.code }}</div>
                       <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:700; letter-spacing:.08em; color:{{ g.accent }}">{{ g.short }}</div>
@@ -824,7 +824,7 @@ if (window.top === window.self) window.location.replace('/');
             </div>
 
             <div style="background:#E7E2D6; border-radius:12px; padding:26px; display:flex; flex-direction:column; gap:18px">
-              <div style="font-size:15px; font-weight:700">ギルドの決まり</div>
+              <div data-tour="guild-rules" style="font-size:15px; font-weight:700">ギルドの決まり</div>
               <div style="background:#F4F1EA; border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:8px">
                 <div style="font-size:13px; line-height:1.85; color:#3B382F"><b>ギルド</b>　同じ目的を持つ人が集まる活動領域</div>
                 <div style="font-size:13px; line-height:1.85; color:#3B382F"><b>議題</b>　みんなで考え、決めること</div>
@@ -973,7 +973,7 @@ if (window.top === window.self) window.location.replace('/');
           <div style="display:flex; flex-direction:column; gap:26px">
             <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:{{ L.cardPad }}; display:flex; align-items:center; gap:32px; flex-wrap:wrap">
               <div style="flex:1; min-width:220px; display:flex; flex-direction:column; gap:10px">
-                <div style="font-family:'Zen Old Mincho',serif; font-size:26px; font-weight:900; line-height:1.5" data-tour="wisdom-intro">DAOの資産は、金庫ではなくここにある。</div>
+                <div style="font-family:'Zen Old Mincho',serif; font-size:26px; font-weight:900; line-height:1.5" data-tour="wisdom-intro wisdom-hero">DAOの資産は、金庫ではなくここにある。</div>
                 <sc-if value="{{ showLibraryToggle }}"><button onClick="{{ toggleLibrarySummary }}" style="align-self:flex-start; font:inherit; background:#D0E2BE; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">{{ libraryToggleLabel }}</button></sc-if>
                 <sc-if value="{{ showLibraryDetails }}"><div style="font-size:13px; line-height:1.9; color:rgba(244,241,234,.66)">知恵カードは「元の知識 → 通した経験 → 残った一文」で1枚。引用はほかの人がこの知恵を参考にした記録です。書き手の信用スコアに反映されます。EMUERの自動付与はまだありません。</div></sc-if>
               </div>
@@ -984,7 +984,7 @@ if (window.top === window.self) window.location.replace('/');
             </div>
             <div data-tour="wisdom-tags" style="display:flex; gap:8px; flex-wrap:wrap">
               <sc-for list="{{ tags }}" as="t" hint-placeholder-count="5">
-                <div onClick="{{ t.go }}" style="padding:8px 14px; border:1px solid {{ t.border }}; border-radius:18px; font-size:12px; cursor:pointer; background:{{ t.bg }}; color:{{ t.fg }}" style-hover="border-color:#0F5C3F">{{ t.label }}</div>
+                <div data-tour="nav-{{ t.n }}" onClick="{{ t.go }}" style="padding:8px 14px; border:1px solid {{ t.border }}; border-radius:18px; font-size:12px; cursor:pointer; background:{{ t.bg }}; color:{{ t.fg }}" style-hover="border-color:#0F5C3F">{{ t.label }}</div>
               </sc-for>
             </div>
             <sc-if value="{{ noWisdom }}">
@@ -1006,7 +1006,7 @@ if (window.top === window.self) window.location.replace('/');
                     <div style="font-family:Inter,sans-serif; font-size:11px; color:#6E695C">引用 {{ w.uses }}</div>
                   </div>
                   <!-- 長い知恵はたたんで出す（縦長で読みにくかった）。「詳細を見る」で全文と報告を出す。 -->
-                  <div style="font-family:'Zen Old Mincho',serif; font-size:21px; font-weight:900; line-height:1.6; text-wrap:pretty; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:{{ w.clampInsight }}" data-tour="wisdom-list">{{ w.insight }}</div>
+                  <div style="font-family:'Zen Old Mincho',serif; font-size:21px; font-weight:900; line-height:1.6; text-wrap:pretty; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:{{ w.clampInsight }}" data-tour="wisdom-list wisdom-card">{{ w.insight }}</div>
                   <div style="display:flex; flex-direction:column; gap:10px; padding-top:14px; border-top:1px dashed rgba(20,19,16,.16)">
                     <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">知識</div><div onClick="{{ w.openPost }}" style="text-decoration:{{ w.fromLinked }}; cursor:{{ w.fromCursor }}; min-width:0; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:{{ w.clampMeta }}">{{ w.from }}</div></div>
                     <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">経験</div><div style="min-width:0; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:{{ w.clampMeta }}">{{ w.experiment }}</div></div>
@@ -1034,7 +1034,7 @@ if (window.top === window.self) window.location.replace('/');
 
         <sc-if value="{{ isMembers }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex; flex-direction:column; gap:22px">
-            <div style="font-size:14px; line-height:1.9; color:#3B382F; max-width:720px">貢献は「発言量」ではなく、<b>知恵を残したか</b>で測る。完走率が低い人は同時に受けられる数に上限がかかる。</div>
+            <div data-tour="contrib-intro" style="font-size:14px; line-height:1.9; color:#3B382F; max-width:720px">貢献は「発言量」ではなく、<b>知恵を残したか</b>で測る。完走率が低い人は同時に受けられる数に上限がかかる。</div>
             <sc-if value="{{ hasMembersNote }}">
               <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">{{ membersNote }}</div>
             </sc-if>
@@ -1042,7 +1042,7 @@ if (window.top === window.self) window.location.replace('/');
               <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだ活動の記録がありません。クエストを受ける・知恵を残す・議題に投票すると、ここに出ます。</div>
             </sc-if>
             <div style="background:#FFF6E6; border:1px solid rgba(180,130,40,.35); border-radius:12px; padding:14px 18px; font-size:13px; line-height:1.9; color:#6B4E14">
-              <b>お支払いはまだ始めていません。</b>「分配」の欄に出ているのは、決まった割合（完走した人へ80%／DAOプールへ20%）で計算した額です。実際にお渡しする方法と時期は、法務と税務の確認が済んでからお知らせします。
+              <b data-tour="contrib-note">お支払いはまだ始めていません。</b>「分配」の欄に出ているのは、決まった割合（完走した人へ80%／DAOプールへ20%）で計算した額です。実際にお渡しする方法と時期は、法務と税務の確認が済んでからお知らせします。
             </div>
             <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; overflow:hidden">
               <!-- スマホでも、パソコンと同じ5列（完走・引用されも出す）。
@@ -1055,7 +1055,7 @@ if (window.top === window.self) window.location.replace('/');
                   <div style="display:flex; align-items:center; gap:12px; min-width:0">
                     <div style="width:32px; height:32px; flex:0 0 32px; border-radius:50%; background:#E7E2D6; display:{{ L.memAvatar }}; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#0F5C3F">{{ m.initial }}</div>
                     <div style="display:flex; flex-direction:column; gap:3px; min-width:0">
-                      <div data-tour="contribution-list" style="font-weight:700; overflow-wrap:anywhere">{{ m.name }}</div>
+                      <div data-tour="contribution-list contrib-table" style="font-weight:700; overflow-wrap:anywhere">{{ m.name }}</div>
                       <div style="font-size:11px; color:#6E695C">{{ m.role }}</div>
                     </div>
                   </div>
@@ -1119,7 +1119,7 @@ if (window.top === window.self) window.location.replace('/');
               </div>
             </div>
             <div style="display:flex; flex-direction:column; gap:16px">
-              <div style="font-size:17px; font-weight:700" data-tour="treasury-transactions">直近の動き</div>
+              <div style="font-size:17px; font-weight:700" data-tour="treasury-transactions treasury-tx">直近の動き</div>
               <sc-if value="{{ noTreasury }}">
                 <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだお金の動きがありません。管理画面から入金を記録するか、クエストに予算が付くと、ここに出ます。</div>
               </sc-if>
@@ -1134,7 +1134,7 @@ if (window.top === window.self) window.location.replace('/');
                   </div>
                 </sc-for>
               </div>
-              <div style="font-size:12px; line-height:1.9; color:#6E695C"><b>ある</b>は、記録された入金から支出を引いた額。<b>渡したぶん</b>は、運営が完走を認めて実際に引き当てた額。<b>使える</b>はその差です。<br>クエストに予算を出しただけでは EMUER は動きません。「確保してある上限」は「ここまでなら渡せる」という数で、支出でも借りでもありません。実際に減るのは、運営が1人ずつ完走を認めたときだけです。<br>円と JPYC には、この帳簿がありません。内訳に出るのはクエストのカードに書いた1人あたりの報酬額を足したもので、支払う額そのものではありません。実際の支出は、支払ったときに入出金として記録してください。</div>
+              <div data-tour="treasury-help" style="font-size:12px; line-height:1.9; color:#6E695C"><b>ある</b>は、記録された入金から支出を引いた額。<b>渡したぶん</b>は、運営が完走を認めて実際に引き当てた額。<b>使える</b>はその差です。<br>クエストに予算を出しただけでは EMUER は動きません。「確保してある上限」は「ここまでなら渡せる」という数で、支出でも借りでもありません。実際に減るのは、運営が1人ずつ完走を認めたときだけです。<br>円と JPYC には、この帳簿がありません。内訳に出るのはクエストのカードに書いた1人あたりの報酬額を足したもので、支払う額そのものではありません。実際の支出は、支払ったときに入出金として記録してください。</div>
             </div>
           </div>
         </sc-if>
@@ -1327,7 +1327,7 @@ if (window.top === window.self) window.location.replace('/');
 
       <div data-tour="menu" ref="{{ bottomRef }}" style="display:{{ L.bottom }}; position:sticky; bottom:0; z-index:8; flex:0 0 64px; margin-top:auto; width:100%; max-width:100vw; min-height:64px; box-sizing:border-box; background:#141310; padding:6px 6px 8px; justify-content:flex-start; align-items:stretch; gap:2px; overflow-x:auto; overflow-y:hidden; overscroll-behavior:contain; touch-action:pan-x; -webkit-overflow-scrolling:touch">
         <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="9">
-          <div onClick="{{ t.go }}" style="flex:0 0 62px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:5px 3px; border-radius:7px; cursor:pointer; min-height:42px; background:{{ t.bg }}">
+          <div data-tour="nav-{{ t.n }}" onClick="{{ t.go }}" style="flex:0 0 62px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:5px 3px; border-radius:7px; cursor:pointer; min-height:42px; background:{{ t.bg }}">
             <div style="font-family:Inter,sans-serif; font-size:9px; letter-spacing:.1em; color:{{ t.num }}">{{ t.n }}</div>
             <div style="font-size:11px; font-weight:700; color:{{ t.fg }}">{{ t.label }}</div>
           </div>

@@ -13,15 +13,31 @@
     var raw = window.localStorage.getItem(KEY);
     if (raw) {
       var value = JSON.parse(raw);
-      if (!value || value.version !== 1 || !value.tours || typeof value.tours !== 'object' || Array.isArray(value.tours)) throw new Error('version');
-      Object.keys(value.tours).forEach(function (id) {
-        var item = value.tours[id];
-        if (/^(sp|emu)-[a-z-]+$/.test(id) && item && STATES.includes(item.state) && Number.isSafeInteger(item.index) && item.index >= 0)
-          state.tours[id] = { state: item.state, index: item.index };
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('version');
+      var legacy = value.version === 1 && value.tours && !Array.isArray(value.tours);
+      if ('version' in value && !legacy) throw new Error('version');
+      var records = legacy ? value.tours : value;
+      var oldIndices = {'sp-home':[0,1,2,3,4,6,7], 'sp-guilds':[0,2], 'sp-park':[0,2], 'sp-contribution':[0,2], 'emu-feed':[2,4,8], 'emu-requests':[0,1,4], 'emu-share':[0,5], 'emu-discussion':[0,0]};
+      Object.keys(records).forEach(function (id) {
+        if (!/^(sp|emu)-[a-z-]+$/.test(id)) return;
+        var item = records[id], status, index;
+        if (legacy && item && STATES.includes(item.state) && Number.isSafeInteger(item.index) && item.index >= 0) {
+          status = item.state; index = oldIndices[id]?.[item.index] ?? item.index;
+        } else if (!legacy && (item === 'done' || item === 'skipped')) { status=item; index=0; }
+        else if (!legacy && Number.isSafeInteger(item) && item >= 0) { status='in_progress'; index=item; }
+        if (status && status !== 'not_started') state.tours[id] = {state:status,index:index};
       });
     }
   } catch (error) {
-    try { window.localStorage.setItem(KEY, JSON.stringify(state)); } catch (ignored) { storageAvailable = false; }
+    try { window.localStorage.setItem(KEY, JSON.stringify(serialized())); } catch (ignored) { storageAvailable = false; }
+  }
+  function serialized() {
+    var output = Object.create(null);
+    Object.keys(state.tours).forEach(function (id) { var item=state.tours[id];
+      if (item.state === 'done' || item.state === 'skipped') output[id]=item.state;
+      else if (item.state === 'in_progress') output[id]=item.index;
+    });
+    return output;
   }
   function emit(name, properties) {
     // Local development diagnostics only. Never forward to existing analytics.
@@ -31,7 +47,7 @@
   function notify() { listeners.forEach(function (fn) { fn(); }); }
   function save(id, status, index) {
     state.tours[id] = { state: status, index: index };
-    try { window.localStorage.setItem(KEY, JSON.stringify(state)); } catch (error) { storageAvailable = false; }
+    try { window.localStorage.setItem(KEY, JSON.stringify(serialized())); } catch (error) { storageAvailable = false; }
     notify();
   }
   function progress(id) {
@@ -64,21 +80,24 @@
     panel.setAttribute('aria-labelledby', 'rk-tour-title');
     var header = node('div', 'rk-header');
     var mascot = node('img', 'rk-mascot'); mascot.src = '/assets/mascot.jpg'; mascot.alt = '';
-    var identity = node('div'); identity.append(node('small', '', '冷蔵庫くんの画面ガイド'));
+    var identity = node('div'); var service=node('small', '', '冷蔵庫くんの画面ガイド'); identity.append(service);
     var title = node('h2'); title.id = 'rk-tour-title'; identity.append(title);
+    var fold=button('縮める',function(){ ui.panel.classList.toggle('rk-collapsed'); ui.expandedByUser=!ui.panel.classList.contains('rk-collapsed'); ui.fold.textContent=ui.panel.classList.contains('rk-collapsed')?'説明を開く':'縮める'; refresh(); },'説明を縮める・開く'); fold.className='rk-fold';
+    var mini=button('次へ',nextStep);mini.className='rk-mini-next';
     var close = button('×', function () { pause(); }, 'ガイドをあとで閉じる'); close.className = 'rk-close';
-    header.append(mascot, identity, close);
+    header.append(mascot, identity, fold, mini, close);
     var text = node('p', 'rk-text'), count = node('p', 'rk-count'), status = node('p', 'rk-status');
     status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     var actions = node('div', 'rk-actions');
     var back = button('戻る', backStep), next = button('次へ', nextStep);
     next.className = 'rk-primary';
-    var skip = button('スキップ', skipTour), later = button('あとで閉じる', function () { pause(); });
+    var skip = button('今回はスキップ', skipTour), later = button('あとで続きを見る', function () { pause(); });
     actions.append(back, next, skip, later);
-    panel.append(header, count, text, status, actions);
+    var note=node('p','rk-note'); text.id='rk-tour-text'; note.id='rk-tour-note';panel.setAttribute('aria-describedby','rk-tour-text rk-tour-note');
+    var live=node('p','rk-sr-only');live.setAttribute('role','status');live.setAttribute('aria-live','polite'); panel.append(header, count, text, note, status, actions, live);
     var toast = node('p', 'rk-toast'); toast.setAttribute('role', 'status'); toast.setAttribute('aria-live', 'polite');
     root.append(spot, panel, toast); document.body.append(root);
-    ui = {root:root, spot:spot, panel:panel, title:title, text:text, count:count, status:status, back:back, next:next, skip:skip, later:later, toast:toast};
+    ui = {mini:mini,expandedByUser:false,live:live,fold:fold,note:note,service:service,root:root, spot:spot, panel:panel, title:title, text:text, count:count, status:status, back:back, next:next, skip:skip, later:later, toast:toast};
     panel.hidden = true; spot.hidden = true; toast.hidden = true;
   }
   function announce(text) {
@@ -107,7 +126,7 @@
     source = null; sourceSelector = ''; sourceRestore = null; sourceDocument = document;
   }
   function close(restore) {
-    stopWatching(); active = null;
+    stopWatching(); active = null; document.body.classList.remove('rk-guiding','rk-guide-support');
     if (ui) { ui.panel.hidden = true; ui.spot.hidden = true; }
     if (restore !== false) restoreFocus();
   }
@@ -116,7 +135,7 @@
     close(restore);
   }
   function ready(def) {
-    try { return !def.options.isReady || def.options.isReady(); }
+    try { return !def.options.isReady || def.options.isReady(active && def.steps[active.index]); }
     catch (error) { return false; }
   }
   function visible(el) {
@@ -137,7 +156,7 @@
     }
     return null;
   }
-  function parentRect(el) {
+  function parentRect(el, unclipped) {
     var rect = el.getBoundingClientRect(), owner = el.ownerDocument.defaultView;
     var r = {left:rect.left, top:rect.top, right:rect.right, bottom:rect.bottom};
     while (owner && owner !== window) {
@@ -155,6 +174,7 @@
     }
     var vp = window.visualViewport;
     var x = vp ? vp.offsetLeft : 0, y = vp ? vp.offsetTop : 0;
+    if(unclipped){r.width=r.right-r.left;r.height=r.bottom-r.top;return r;}
     r.left = Math.max(x, r.left); r.top = Math.max(y, r.top);
     r.right = Math.min(x + (vp ? vp.width : window.innerWidth), r.right);
     r.bottom = Math.min(y + (vp ? vp.height : window.innerHeight), r.bottom);
@@ -171,8 +191,8 @@
     var vw = vp ? vp.width : window.innerWidth, vh = vp ? vp.height : window.innerHeight;
     var vx = vp ? vp.offsetLeft : 0, vy = vp ? vp.offsetTop : 0;
     var width = Math.min(vw - 16, vw >= 1024 ? 330 : 480);
-    setStyle(ui.panel, {width:width + 'px', maxHeight:Math.max(160, vh - 24) + 'px'});
-    var h = ui.panel.getBoundingClientRect().height, gap = 14, point = null;
+    setStyle(ui.panel, {width:width + 'px', maxHeight:Math.min(Math.max(160,vh-24),vw<=768?300:Infinity) + 'px'});
+    var h = ui.panel.getBoundingClientRect().height, gap = 18, point = null;
     if (r && vw >= 1024) {
       var candidates = [[r.right+gap,r.top],[r.left-width-gap,r.top],[r.left,r.bottom+gap],[r.left,r.top-h-gap]];
       point = candidates.find(function (p) { return p[0] >= vx+8 && p[0]+width <= vx+vw-8 && p[1] >= vy+8 && p[1]+h <= vy+vh-8; });
@@ -196,6 +216,7 @@
             var owner = el.ownerDocument.defaultView;
             var scroll = el.parentElement;
             while (scroll && !/(auto|scroll)/.test(owner.getComputedStyle(scroll).overflowY)) scroll = scroll.parentElement;
+            if (vw <= 768 && !ui.expandedByUser && !ui.panel.classList.contains('rk-collapsed')) { ui.panel.classList.add('rk-collapsed'); ui.fold.textContent='説明を開く'; h=ui.panel.getBoundingClientRect().height; top=bottom-h; }
             var delta = r.bottom - top + gap;
             if (scroll && scroll.scrollHeight > scroll.clientHeight && delta > 0) scroll.scrollTop += delta;
             else if (delta > 0 && el.ownerDocument.documentElement.scrollHeight > owner.innerHeight) owner.scrollBy(0, delta);
@@ -204,6 +225,24 @@
         }
       }
       point = [vx + (vw-width)/2, Math.max(vy+8, top)];
+    }
+    var current=active && definitions.get(active.id), currentStep=current && current.steps[active.index];
+    var avoidEl=currentStep?.avoid && findTarget(current,{target:currentStep.avoid}), avoidRect=avoidEl && parentRect(avoidEl);
+    if(!r && avoidRect && point[1]<avoidRect.bottom+gap && point[1]+h>avoidRect.top-gap) {
+      var above=avoidRect.top-vy-gap-8;
+      if(above>=160) {setStyle(ui.panel,{maxHeight:Math.min(h,above)+'px'});h=ui.panel.getBoundingClientRect().height;point=[vx+(vw-width)/2,vy+8];}
+      else if(vw<=768){ui.panel.classList.add('rk-collapsed');ui.fold.textContent='説明を開く';h=ui.panel.getBoundingClientRect().height;point=[vx+(vw-width)/2,Math.max(vy+8,avoidRect.top-h-gap)];}
+    }
+    if(r && avoidRect && point[1]<avoidRect.bottom+gap && point[1]+h>avoidRect.top-gap) {
+      // Leave the native modal's Cancel/Publish row reachable throughout its guide.
+      var room=avoidRect.top-r.bottom-gap*2;
+      if(room>=160) {
+        setStyle(ui.panel,{maxHeight:Math.min(h,room)+'px'});h=ui.panel.getBoundingClientRect().height;
+        point=[vx+(vw-width)/2,r.bottom+gap];
+      } else {
+        if(vw<=768 && !ui.expandedByUser){ui.panel.classList.add('rk-collapsed');ui.fold.textContent='説明を開く';h=ui.panel.getBoundingClientRect().height;}
+        point=[vx+(vw-width)/2,r.top-vy>=h+gap+8?vy+8:r.bottom+gap];
+      }
     }
     setStyle(ui.panel, {left:Math.round(point[0])+'px', top:Math.round(point[1])+'px'});
     ui.spot.hidden = !r;
@@ -216,8 +255,15 @@
       var def = definitions.get(active.id), step = def.steps[active.index];
       if (!ready(def)) {
         // Data/cover waiting is not a missing target. Keep the step and its unseen status.
-        active.waiting = true; ui.panel.hidden = true; ui.spot.hidden = true;
+        active.waiting = true; document.body.classList.remove('rk-guiding','rk-guide-support'); ui.panel.hidden = true; ui.spot.hidden = true;
         window.clearTimeout(timeout); timeout = 0;
+        return;
+      }
+      if(step.pending && step.pending()) {
+        active.waiting=true;ui.panel.hidden=true;ui.spot.hidden=true;
+        document.body.classList.remove('rk-guiding','rk-guide-support');window.clearTimeout(timeout);timeout=0;
+        // A native page turn may still be finishing. Retry only on its DOM changes.
+        if(typeof step.open==='function') step.open();
         return;
       }
       if (active.waiting) { prepare(); return; }
@@ -228,7 +274,23 @@
         prepare(); return;
       }
       var el = findTarget(def, step);
-      if (el && !scrolled) { el.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'}); scrolled = true; }
+      if (el && !scrolled) {
+        el.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
+        // A tall iframe may place a fixed child control below the parent viewport.
+        // Bring that same control into the parent's scroll area, once per step.
+        var raw=parentRect(el,true), inset=0;
+        if(def.options.bottomInset) inset=def.options.bottomInset();
+        if(raw && el.ownerDocument !== document) {
+          var delta=raw.bottom > window.innerHeight-inset-8 ? raw.bottom-window.innerHeight+inset+8 : raw.top < 8 ? raw.top-8 : 0;
+          if(delta) {
+            var fr=el.ownerDocument.defaultView.frameElement, scroll=fr && fr.parentElement;
+            while(scroll && !/(auto|scroll)/.test(window.getComputedStyle(scroll).overflowY)) scroll=scroll.parentElement;
+            if(scroll && scroll.scrollHeight>scroll.clientHeight) scroll.scrollTop+=delta;
+            else window.scrollBy(0,delta);
+          }
+        }
+        scrolled = true;
+      }
       if (targetObserver && el !== observedTarget) {
         if (observedTarget) targetObserver.unobserve(observedTarget);
         if (el) targetObserver.observe(el); observedTarget = el;
@@ -239,6 +301,11 @@
         position(el);
       } else {
         position(null); ui.spot.hidden = true;
+        if(el) {
+          window.clearTimeout(timeout);timeout=0;
+          ui.status.textContent='案内の場所は画面の外です。次へでも進めます。';
+          return;
+        }
         ui.status.textContent = '画面の読み込みを待っています。次へでも進めます。';
         if (!timeout) {
           var token = generation;
@@ -256,12 +323,18 @@
     stopWatching(); mount();
     var def = definitions.get(active.id), step = def.steps[active.index];
     active.waiting = !ready(def);
+    if (!active.waiting && typeof step.open === 'function') { try { step.open(); active.waiting=!ready(def) || !!(step.pending && step.pending()); } catch (error) { announce('この操作は利用できません。次へだけでも進めます。'); } }
+    document.body.classList.toggle('rk-guiding',!active.waiting);
+    document.body.classList.toggle('rk-guide-support',step.target.includes('support-btn') && !active.waiting);
+    ui.expandedByUser=false;ui.panel.classList.remove('rk-collapsed'); ui.fold.textContent='縮める'; ui.fold.hidden=false;
     ui.panel.hidden = active.waiting; ui.spot.hidden = true; ui.panel.classList.remove('rk-choice');
-    ui.title.textContent = step.label; ui.text.textContent = step.text;
+    ui.title.textContent = step.label; ui.text.textContent = step.text; ui.note.textContent=step.note||''; ui.note.hidden=!step.note;
+    ui.service.textContent=def.options.brand+' · '+(active.index+1)+' / '+def.steps.length;
+    ui.live.textContent=ui.service.textContent+'。'+step.label+'。'+step.text;
     ui.count.textContent = def.options.label + ' · ' + (active.index+1) + ' / ' + def.steps.length;
     ui.status.textContent = ''; ui.back.disabled = active.index === 0;
     ui.next.textContent = active.index === def.steps.length-1 ? '完了' : '次へ';
-    ui.next.disabled = false; ui.later.textContent = 'あとで閉じる';
+    ui.mini.textContent=ui.next.textContent;ui.next.disabled = false; ui.later.textContent = 'あとで続きを見る';
     [ui.back,ui.next,ui.skip,ui.later].forEach(function (el) { el.hidden = false; });
     ui.next.onclick = nextStep; ui.later.onclick = function () { pause(); };
     var el = findTarget(def, step); scrolled = false;
@@ -280,18 +353,28 @@
         mo.observe(doc.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','hidden']});
         cleanup.push(function () { mo.disconnect(); });
       }
+      var pendingAfter=null;
       // Read a verified state after native handlers; never suppress or repeat a click.
       if (step.advanceOn && typeof step.advanceOn.read === 'function') watch(doc, function (event) {
-        if (!active || active.waiting || !ready(def)) return;
+        var cancel=step.advanceOn.cancel && step.advanceOn.target && event.target.closest(step.advanceOn.target);
+        if (!active || (!cancel && (active.waiting || !ready(def)))) return;
         var target = findTarget(def, step);
-        if (!target || !target.contains(event.target)) return;
+        if (!target) return;
+        if(step.advanceOn.target ? !event.target.closest(step.advanceOn.target) : !target.contains(event.target)) return;
         var before; try { before = step.advanceOn.read(); } catch (error) { return; }
-        window.requestAnimationFrame(function () {
-          if (!active || active.waiting || !ready(def) || token !== generation) return;
-          var after; try { after = step.advanceOn.read(); } catch (error) { return; }
-          if (after !== before) { emit('tour_step_advance',{screen:active.id,step:active.index,method:'native_state_change'}); nextStep(); }
-        });
+        // Native handlers run first. Check immediately after dispatch, then allow a
+        // short page-turn animation. Never dispatch a synthetic app click.
+        var until=Date.now()+1200;
+        function afterNative() {
+          if (!active || token !== generation) return;
+          var after; try { after=step.advanceOn.read(); } catch (error) { return; }
+          if (after !== before) { emit('tour_step_advance',{screen:active.id,step:active.index,method:'native_state_change'}); nextStep({native:true}); }
+          else if (Date.now()<until) window.setTimeout(afterNative,40);
+        }
+        pendingAfter={event:event,run:afterNative};
+        window.setTimeout(function(){if(pendingAfter && pendingAfter.event===event){pendingAfter=null;afterNative();}},0);
       }, 'click', true);
+      if(step.advanceOn) watch(doc,function(event){if(pendingAfter && pendingAfter.event===event){var run=pendingAfter.run;pendingAfter=null;run();}},'click');
     });
     if (window.visualViewport) { watch(window.visualViewport, refresh, 'resize'); watch(window.visualViewport, refresh, 'scroll'); }
     if (window.ResizeObserver) {
@@ -325,9 +408,9 @@
   function nextStep(reason) {
     if (!active) return;
     var def = definitions.get(active.id);
-    if (active.waiting || !ready(def)) { refresh(); return; }
+    if (!(reason && reason.native) && (active.waiting || !ready(def))) { refresh(); return; }
     if (active.index === def.steps.length-1) {
-      save(active.id,'done',active.index); emit('tour_complete',{screen:active.id}); close();
+      save(active.id,'done',active.index); emit('tour_complete',{screen:active.id}); close(!(reason && reason.native));
       announce((reason && reason.missing ? '対象が見つからないため、このステップを飛ばしました。' : '') + 'この画面のガイドを見終わりました。サポートからいつでも見返せます。');
     } else { active.index++; prepare(); }
   }
@@ -335,11 +418,11 @@
   function skipTour() { if (active) { save(active.id,'skipped',active.index); emit('tour_skip',{screen:active.id}); close(); } }
   function enter(id) {
     if (id === currentScreen) { refresh(); return; }
-    if (active) pause(false);
+    if (active) { pause(false); announce('別の画面へ移動したため、ガイドを途中で止めました。サポートから続きを見られます。'); }
     else if (ui && ui.panel.classList.contains('rk-choice')) close(false);
     currentScreen = id;
     if (!id || pendingNavigation || !definitions.has(id)) return;
-    if (progress(id).state === 'not_started') start(id);
+    if (definitions.get(id).options.auto !== false && progress(id).state === 'not_started') start(id);
   }
   async function navigate(id, restart, invoker) {
     var def = definitions.get(id); if (!def) return false;
@@ -365,7 +448,7 @@
     source = originalSource || document.activeElement;
     sourceSelector = ''; sourceRestore = null;
     ui.panel.hidden = false; ui.spot.hidden = true; ui.panel.classList.add('rk-choice');
-    ui.title.textContent = '冷蔵庫くん';
+    ui.live.textContent='';ui.title.textContent = '冷蔵庫くん'; ui.fold.hidden=true; ui.note.hidden=true; ui.panel.classList.remove('rk-collapsed'); ui.service.textContent='冷蔵庫くんの画面ガイド';
     var saved = definitions.has(id) ? progress(id) : null;
     ui.count.textContent = saved && saved.state === 'in_progress'
       ? '前回のガイドは途中です（'+(saved.index+1)+'/'+saved.total+'）。続きから再開できます。'
@@ -391,6 +474,7 @@
     resume:resume,restart:function (id) { emit('tour_restart',{screen:id}); return navigate(id,true); },
     enter:enter,refresh:refresh,pause:pause,navigate:navigate,choose:choose,announce:announce,
     current:function () { return currentScreen; },
+    running:function () { return active ? {id:active.id,index:active.index} : null; },
     list:function () { return Array.from(definitions, function (entry) { return {id:entry[0],label:entry[1].options.label,brand:entry[1].options.brand,total:entry[1].steps.length}; }); },
     subscribe:function (fn) { listeners.add(fn); return function () { listeners.delete(fn); }; }
   };

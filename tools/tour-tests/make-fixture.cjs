@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path');
 const {grab}=require('../year-goals-tests/extract.cjs');
 const root=path.resolve(__dirname,'../..');
 const source=fs.readFileSync(path.join(root,'frontend/public/index.html'),'utf8');
-const functions=['_emuPhoneLayout','_emuEnsureAppVisible','_emuCloseFullscreenOverlays','_setEmuHomeTab','_setEmuPageTitle','showEmuFeed','showEmuRequests','showEmuIchinichi','showEmuDiscussion','emuFitKnowledgeFrame','emuFitPhoneFrames','emuFitContact','emuNavToggle','openSpRoom','closeSpRoom','escapeHtml','_emuRenderKnowledgeRequests','spReizoOpen','spReizoClose','_spReizoAppendMsg','_spReizoShowTyping','spReizoSend','spReizoKeydown','spReizoAsk'];
+const functions=['_emuPhoneLayout','_emuEnsureAppVisible','_emuCloseFullscreenOverlays','_setEmuHomeTab','_setEmuPageTitle','showEmuFeed','showEmuRequests','showEmuIchinichi','showEmuDiscussion','emuFitKnowledgeFrame','emuFitPhoneFrames','emuFitContact','emuNavToggle','openSpRoom','closeSpRoom','escapeHtml','_emuRenderKnowledgeRequests','spReizoOpen','spReizoClose','_spReizoAppendMsg','_spReizoShowTyping','spReizoSend','spReizoKeydown','spReizoAsk','openSpPassport','closeSpPassport','_sppRow','_sppRowHtml','_sppDate','_sppProviderLabel','_spShortAddr','_sppPageEls','_sppCurrentPage','_sppSyncNav','spPassportTurn','spPassportGoPage','_sppReducedMotion','_sppUpdateMore','_sppCancelTurn','openKnowledgeRequestComposer','openEmuSheet','spDaoPlaceContact','spDaoWatchRender','toggleAccountMenu','closeAccountMenu','emuShortAddr','accountGo','emuOpenKnowledgeLibrary'];
 const scripts=[...source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
 const contact=scripts.find(m=>m[1].includes('let selectedType = null;'))[1];
 const kb=source.slice(source.indexOf('const SP_REIZO_KB = ['),source.indexOf('let _reizoAgentsStarted'));
@@ -16,9 +16,18 @@ const EMU_PHONE_NAV={emuFeedTab:'ebnFeed',emuRequestsTab:'ebnRequests',emuIchini
 let _reizoAgentsStarted=false;
 function _emuHealSession(){} function _cancelSpLoadingOverlay(){} function _matchReizoSkill(){return null;}
 function _startAlertChecker(){window.fixtureChatOpens++;} function _startTaskRunner(){}
-function _emuAddress(){return '';} function _emuFormatDate(){return 'ローカルの架空期限';}
+window.connectedAccount='0x0000000000000000000000000000000000000001';window.auth={currentUser:{async getIdToken(){return 'LOCAL-DUMMY-TOKEN';}}};
+function _emuAddress(){return window.connectedAccount;} function _emuFormatDate(){return 'ローカルの架空期限';}
 function isBrandUnderMaintenance(){return false;} function spTrackBrand(){}
-function openKnowledgeAnswer(){} function openSpPassport(){} function openSpPanel(){}
+function openKnowledgeAnswer(){} function openSpPanel(){}
+const SPP_TURN_MS=800,SPP_TURN_HALF=400,SPP_TURN_CLASSES=['spp-out','spp-out-back','spp-in','spp-in-back'];let _sppTurning=false,_sppTurnTimers=[];
+const SPP_PAGES=[{id:'sppPage1',label:'私は誰なのか'},{id:'sppPage2',label:'私は何をしてきたのか'},{id:'sppPage3',label:'私はどんな価値を渡してきたのか'}];
+function _sppBindSwipe(){} function _sppNoticeHtml(){return '';} function _sppIdentityHtml(){return '<p>LOCAL DUMMY 認証表示</p>';}
+async function spPassportLoad(){return {uid:'synthetic-user',spid:'LOCAL-DUMMY',name:'ダミー',addr:window.connectedAccount,provider:'line',tierLabel:'テスト'};}
+window.fbLib={doc(){return {};},async getDoc(){return {exists(){return false;}};}};async function _spReadAll(){return {forEach(){}};}async function spGuildDefs(){return [];}async function spCompletedQuests(){return [];}
+async function emuAuthHeaders(){return {};} function emuHasPlan(){return true;}
+function closeEmuSheet(id){document.getElementById(id)?.classList.remove('open');}
+
 function loadKnowledgeRequests(){_emuRenderKnowledgeRequests(document.getElementById('emuRequestList'),{forEach(fn){fn({id:'synthetic-request',data(){return {question:'ローカルのダミー募集',context:'実ユーザーの内容ではありません。',status:'open',bounty:0,answerCount:0};}});}});}
 function emuT(key){return window.EmuI18n&&window.EmuI18n.t?window.EmuI18n.t(key):({'tab.feed':'知識を読む','tab.requests':'知識を探す','tab.ichinichi':'一日シェア','tab.discussion':'議論'}[key]||key);}
 function showEmuToday(){showEmuFeed();}
@@ -36,7 +45,8 @@ function spDaoReloadAll(app){
 }
 `;
 const boot=`
-window.addEventListener('message',function(e){if(e.origin!==location.origin)return;const m=e.data||{};window.fixtureMessages.push(m.type);if(m.type==='emu-knowledge-ready'){e.source.postMessage({type:'emu-knowledge-posts',posts:[{id:'synthetic-post',title:'ローカルのダミー知識',body:'実ユーザーの投稿ではありません。\\n'.repeat(12),author:'synthetic-author',goodCount:0,changeCount:0,acceptedChangeCount:0,createdAt:'2026-10-13',tags:['経験']}],account:'',authors:{},canDraft:false,canSchedule:false},location.origin);}});
+document.getElementById('spDaoFrame').addEventListener('load',spDaoWatchRender);
+window.addEventListener('message',function(e){if(e.origin!==location.origin)return;const m=e.data||{};window.fixtureMessages.push(m.type);if(m.type==='emu-knowledge-panel'){const deliver=()=>e.source.postMessage({type:'emu-knowledge-panel-data',kind:'library',items:{posts:[],drafts:[]}},location.origin);if(new URLSearchParams(location.search).has('holdLibrary'))window.fixtureFinishLibrary=deliver;else deliver();}if(m.type==='emu-discussion-rooms-request'){e.source.postMessage({type:'emu-discussion-rooms',rooms:[]},location.origin);}if(m.type==='emu-knowledge-ready'){document.getElementById('emuKnowledgeFrame').dataset.ready='true';e.source.postMessage({type:'emu-knowledge-posts',posts:[{id:'synthetic-post',title:'ローカルのダミー知識',body:'実ユーザーの投稿ではありません。\\n'.repeat(12),author:'synthetic-author',goodCount:0,changeCount:0,acceptedChangeCount:0,createdAt:'2026-10-13',tags:['経験']}],account:'',authors:{},canDraft:false,canSchedule:false},location.origin);}});
 document.getElementById('mainApp').style.display='block';
 for(const id of ['logoScreen','walletScreen','chesHub','loadingOverlay']){const el=document.getElementById(id);if(el)el.style.display='none';}
 if(new URLSearchParams(location.search).has('cover'))document.getElementById('spLoadingOverlay').style.display='flex';
