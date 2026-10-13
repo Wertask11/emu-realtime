@@ -15,7 +15,9 @@
     var app = dao();
     if (!app || app.tourRenderedScreen !== spScreen || !visible(document.getElementById('spDaoFrame'))) return false;
     var required = {
-      home:['me','wisdom','quests','tasks'], logs:['guilds'], guild:[],
+      // Homework has an independent request that may fail after the main home content is ready.
+      // Its guide only points to the existing section heading, so it must not block the whole tour.
+      home:['me','wisdom','quests'], logs:['guilds'], guild:[],
       experiments:['quests'], detail:['quests'], library:['wisdom'],
       park:['board'], plaza:['board'], members:['members'], treasury:['treasury'],
       tasks:['tasks'], yeargoals:['yearDoc'], city:[]

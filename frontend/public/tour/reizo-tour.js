@@ -365,7 +365,13 @@
     source = originalSource || document.activeElement;
     sourceSelector = ''; sourceRestore = null;
     ui.panel.hidden = false; ui.spot.hidden = true; ui.panel.classList.add('rk-choice');
-    ui.title.textContent = '冷蔵庫くん'; ui.count.textContent = '今の画面で、何を見たい？';
+    ui.title.textContent = '冷蔵庫くん';
+    var saved = definitions.has(id) ? progress(id) : null;
+    ui.count.textContent = saved && saved.state === 'in_progress'
+      ? '前回のガイドは途中です（'+(saved.index+1)+'/'+saved.total+'）。続きから再開できます。'
+      : saved && saved.state === 'done' ? 'この画面のガイドは完了しています。もう一度見られます。'
+      : saved && saved.state === 'skipped' ? '前回はガイドをスキップしました。ここから再生できます。'
+      : '今の画面で、何を見たい？';
     ui.text.textContent = '操作の案内を見ることも、いつものチャットで質問することもできます。'; ui.status.textContent = '';
     ui.back.hidden = true; ui.skip.hidden = true; ui.next.hidden = false; ui.later.hidden = false;
     ui.next.textContent = definitions.has(id) ? 'この画面のガイドを見る' : 'この画面のガイドは準備中'; ui.next.disabled = !definitions.has(id);
