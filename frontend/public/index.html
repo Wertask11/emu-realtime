@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<script src="/knowledge-lab/integration.js"></script>
 <script src="/schoolpark/quest-store.js"></script>
 <script src="/schoolpark/guild-store.js"></script>
   <meta charset="UTF-8" />
@@ -5211,6 +5212,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </section>
 
   <section class="emu-request-page" id="emuRequestsPage">
+    <div class="eth-card" data-tour="emu-lab-entry"><h3>Emu Knowledge Lab</h3><p>経験知を分野から探し、異なる知識を掛け合わせて、新しい問いや実践案へ。</p><button type="button" class="eth-btn primary" onclick="openEmuKnowledgeLab()">知識図書館・掛け合わせ研究所を開く →</button></div>
     <!-- Room1は独立タブではなく、全端末で「知識を探す」から開く -->
     <button type="button" class="emu-room1-entry" data-tour="room1-entry emu-room1" onclick="openSpRoom('/admin/room1/index.html', 'Room1')"
             aria-label="Room1（学習コンテンツ）を開く"><span aria-hidden="true">◪</span>Room1</button>
@@ -13431,6 +13433,7 @@ setTimeout(function () {
     // 自分の投稿なら、編集ボタンを表示してクリック可能にする
     editBtn.style.display = "inline-block";
     editBtn.addEventListener("click", () => {
+      if (post.knowledgeLab) return window.openEmuKnowledgeLab("library", {edit:post.id});
       editMode = "theme";
       editingPostId = post.id; // FirebaseのドキュメントIDをセット
 
@@ -13610,6 +13613,7 @@ const editingId = editingPostId;
       // 【更新モード】
       const postRef = window.fbLib.doc(window.db, "posts", editingId);
       await window.fbLib.updateDoc(postRef, postData);
+      window.emuLabSyncIndex?.(editingId);
       console.log("✅ 投稿を更新しました:", editingId);
       editingPostId = null;
       editMode = null;
@@ -13621,12 +13625,14 @@ const editingId = editingPostId;
       /* 投稿と、回数の記録を同じ一括処理で書く。
          別々に書くと、片方だけ通ってしまう余地が残る。 */
       const _postBatch = window.fbLib.writeBatch(window.db);
-      _postBatch.set(window.fbLib.doc(window.fbLib.collection(window.db, "posts")), postData);
+      const _labPostRef = window.fbLib.doc(window.fbLib.collection(window.db, "posts"));
+      _postBatch.set(_labPostRef, postData);
       /* クエストのための投稿は回数に数えない。
          数えないので、回数の記録も増やさない。増やすと決まりの側の
          「ちょうど1つ増えていること」と食い違って、書き込みごと弾かれる。 */
       if (!_questId) await _emuAddUsage(_postBatch, 'post');
       await _postBatch.commit();
+      window.emuLabSyncIndex?.(_labPostRef.id);
       console.log("✅ 新規投稿を作成しました");
     }
 
@@ -29242,6 +29248,8 @@ async function sendEmuFeedback() {
       const rows = [];
       let visibleDocs = snap.docs.slice(0, KNOWLEDGE_PAGE_SIZE);
       knowledgeHasMore = snap.docs.length > KNOWLEDGE_PAGE_SIZE;
+      const _labPhysicalLast = visibleDocs.length ? visibleDocs[visibleDocs.length - 1] : knowledgeLastDoc;
+      visibleDocs = visibleDocs.filter(d => !d.data().knowledgeLab?.tombstone);
 
       /* 見学の人は、新着 GUEST_KNOWLEDGE_LIMIT 件まで。
          そこから先があることは画面で伝える（黙って終わらせない）。 */
@@ -29258,7 +29266,7 @@ async function sendEmuFeedback() {
       knowledgeShown += visibleDocs.length;
 
       visibleDocs.forEach(docSnap => rows.push(plainKnowledgePost(docSnap)));
-      knowledgeLastDoc = visibleDocs.length ? visibleDocs[visibleDocs.length - 1] : knowledgeLastDoc;
+      knowledgeLastDoc = _labPhysicalLast;
       /* 書き手の名前と写真を読み始める（ここでは待たない。送るときに、読めた分を添える） */
       const authorAddrs = knowledgeAuthorAddrs(rows);
       const authorsRead = Promise.all(authorAddrs.map(a =>
@@ -29404,6 +29412,48 @@ async function sendEmuFeedback() {
     if (detail.ok) syncKnowledgeFrame();
   });
 
+  // Shared entry for trusted Knowledge Lab and the existing knowledge iframe.
+  window.emuKnowledgeReact = async function (message) {
+      try {
+        const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'posts', message.postId));
+        if (!snap.exists()) {
+          sendKnowledge({ type:'emu-knowledge-reaction-result', postId:message.postId, action:message.action, ok:false, error:'投稿が見つかりません。' });
+          return;
+        }
+        if (message.action === 'history') { openPostChangeHistory({ id:snap.id, ...snap.data() }); return; }
+        /* 画面に出ている投稿カードを描いているのは index.html ではなく
+           knowledge.html（iframe）の card()。読むだけの操作はここで受けて開く。 */
+        if (message.action === 'voices') { openPostGoodVoices({ id:snap.id, ...snap.data() }); return; }
+        /* この知識から議題を立てる。SchoolPark を開き、ギルドの画面へ行き、
+           元の投稿を持ったまま議題フォームを出す。 */
+        if (message.action === 'propose') {
+          const d = snap.data() || {};
+          await spOpenProposalFromPost(snap.id, String(d.title || ''));
+          return;
+        }
+        const holder = createPostElementFromData({ id:snap.id, ...snap.data() });
+        holder.style.display = 'none';
+        document.body.appendChild(holder);
+        knowledgeReactionHolders.set(message.postId, holder);
+        const selector = message.action === 'change' ? '.change-button' : '.good-button';
+        const reactionButton = holder.querySelector(selector);
+        if (!reactionButton) throw new Error('反応ボタンを準備できませんでした。');
+        if (reactionButton.disabled) {
+          holder.remove();
+          knowledgeReactionHolders.delete(message.postId);
+          sendKnowledge({ type:'emu-knowledge-reaction-result', postId:message.postId, action:message.action, ok:false, error:message.action === 'change' ? 'すでにChange済みです。' : 'すでにGood済みです。' });
+          return;
+        }
+        reactionButton.click();
+      } catch (error) {
+        console.error('知識リアクション起動失敗:', error);
+        const holder = knowledgeReactionHolders.get(message.postId);
+        if (holder) holder.remove();
+        knowledgeReactionHolders.delete(message.postId);
+        sendKnowledge({ type:'emu-knowledge-reaction-result', postId:message.postId, action:message.action, ok:false, error:error.message || '操作を開始できませんでした。' });
+      }
+  };
+
   window.addEventListener('message', async function (event) {
     const frame = knowledgeFrame();
     if (!frame || event.source !== frame.contentWindow || event.origin !== KNOWLEDGE_ORIGIN || !event.data) return;
@@ -29494,6 +29544,8 @@ async function sendEmuFeedback() {
     }
     if (message.type === 'emu-knowledge-command') {
       if (message.command === 'wallet') myWalletButton.click();
+      if (message.command === 'knowledge-lab') window.openEmuKnowledgeLab();
+      if (message.command === 'experience') window.openEmuKnowledgeLab('library', {compose:true});
       /* Room1 は別のページなので、小部屋の枠で全画面に開く
          （エレベーターやショッピングと同じ出し方） */
       if (message.command === 'room1' && typeof openSpRoom === 'function') {
@@ -29502,44 +29554,7 @@ async function sendEmuFeedback() {
       return;
     }
     if (message.type === 'emu-knowledge-react' && message.postId && window.db && window.fbLib) {
-      try {
-        const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'posts', message.postId));
-        if (!snap.exists()) {
-          sendKnowledge({ type:'emu-knowledge-reaction-result', postId:message.postId, action:message.action, ok:false, error:'投稿が見つかりません。' });
-          return;
-        }
-        if (message.action === 'history') { openPostChangeHistory({ id:snap.id, ...snap.data() }); return; }
-        /* 画面に出ている投稿カードを描いているのは index.html ではなく
-           knowledge.html（iframe）の card()。読むだけの操作はここで受けて開く。 */
-        if (message.action === 'voices') { openPostGoodVoices({ id:snap.id, ...snap.data() }); return; }
-        /* この知識から議題を立てる。SchoolPark を開き、ギルドの画面へ行き、
-           元の投稿を持ったまま議題フォームを出す。 */
-        if (message.action === 'propose') {
-          const d = snap.data() || {};
-          await spOpenProposalFromPost(snap.id, String(d.title || ''));
-          return;
-        }
-        const holder = createPostElementFromData({ id:snap.id, ...snap.data() });
-        holder.style.display = 'none';
-        document.body.appendChild(holder);
-        knowledgeReactionHolders.set(message.postId, holder);
-        const selector = message.action === 'change' ? '.change-button' : '.good-button';
-        const reactionButton = holder.querySelector(selector);
-        if (!reactionButton) throw new Error('反応ボタンを準備できませんでした。');
-        if (reactionButton.disabled) {
-          holder.remove();
-          knowledgeReactionHolders.delete(message.postId);
-          sendKnowledge({ type:'emu-knowledge-reaction-result', postId:message.postId, action:message.action, ok:false, error:message.action === 'change' ? 'すでにChange済みです。' : 'すでにGood済みです。' });
-          return;
-        }
-        reactionButton.click();
-      } catch (error) {
-        console.error('知識リアクション起動失敗:', error);
-        const holder = knowledgeReactionHolders.get(message.postId);
-        if (holder) holder.remove();
-        knowledgeReactionHolders.delete(message.postId);
-        sendKnowledge({ type:'emu-knowledge-reaction-result', postId:message.postId, action:message.action, ok:false, error:error.message || '操作を開始できませんでした。' });
-      }
+      await window.emuKnowledgeReact(message);
     }
   });
 })();

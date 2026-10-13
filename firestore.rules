@@ -51,6 +51,11 @@ service cloud.firestore {
       return signedIn() && value is string && value.size() > 0
         && addrIsMine(get(accountPath()).data, value);
     }
+    function isOwnLabPost(data) {
+      return signedIn() && data.get('authorSchoolParkId', '') is string
+        && data.get('authorSchoolParkId', '').size() > 0
+        && data.get('authorSchoolParkId', '') == get(accountPath()).data.get('spid', '');
+    }
     function addrIsMine(a, value) {
       return (a.get('walletAddress', '') is string
               && a.get('walletAddress', '').size() > 0
@@ -593,7 +598,9 @@ service cloud.firestore {
          クエストのための投稿（questId 付き）だけは、月の回数に数えない。
          そちらを先に見る。通れば回数の記録（plan_usage）は一度も見ない。
          questId はあとから足せない（下の update の changedOnly に無い）。 */
-      allow create: if (
+      allow create: if !request.resource.data.keys().hasAny(['knowledgeLab', 'authorSchoolParkId'])
+        && request.resource.data.get('visibility', 'public') == 'public'
+        && (
           mayCreateForQuest(request.resource.data.get('address', ''),
                             request.resource.data.get('questId', ''))
           || mayCreate(request.resource.data.get('address', ''), 1, 'post')
@@ -606,7 +613,8 @@ service cloud.firestore {
         && request.resource.data.get('changeUsers', []).size() == 0;
 
       // 投稿者本人による本文編集。反応数・反応者一覧・投稿者は変更不可。
-      allow update: if isMyWallet(resource.data.get('address', '')) && changedOnly([
+      allow update: if !resource.data.keys().hasAny(['knowledgeLab'])
+        && isMyWallet(resource.data.get('address', '')) && changedOnly([
         'title', 'body', 'tags', 'userType', 'userId', 'updatedAt', 'imageUrl',
         'displayName'
       ])
@@ -615,20 +623,25 @@ service cloud.firestore {
         && request.resource.data.get('acceptedChangeCount', 0) == resource.data.get('acceptedChangeCount', 0) + 1)
       // Good は、認証ユーザー自身のウォレットを1件追加し、件数を1増やす場合だけ許可。
       || (canWriteAs(1)
+        && resource.data.get('visibility', 'public') == 'public'
         && !isMyWallet(resource.data.get('address', ''))
+        && !isOwnLabPost(resource.data)
         && changedOnly(['goodCount', 'goodUsers'])
         && request.resource.data.get('goodCount', 0) == resource.data.get('goodCount', 0) + 1
         && addedMeOnce(get(accountPath()).data,
              resource.data.get('goodUsers', []), request.resource.data.get('goodUsers', [])))
       // Change も同じく、1ユーザーにつき1件だけ許可。
       || (canWriteAs(1)
+        && resource.data.get('visibility', 'public') == 'public'
         && !isMyWallet(resource.data.get('address', ''))
+        && !isOwnLabPost(resource.data)
         && changedOnly(['changeCount', 'changeUsers'])
         && request.resource.data.get('changeCount', 0) == resource.data.get('changeCount', 0) + 1
         && addedMeOnce(get(accountPath()).data,
              resource.data.get('changeUsers', []), request.resource.data.get('changeUsers', [])));
 
-      allow delete: if isMyWallet(resource.data.get('address', ''));
+      allow delete: if !resource.data.keys().hasAny(['knowledgeLab'])
+        && isMyWallet(resource.data.get('address', ''));
     }
 
     match /knowledge_drafts/{draftId} {
@@ -1486,10 +1499,16 @@ service cloud.firestore {
       allow delete: if canAccessSchoolPark() && isOwner();
     }
 
+    // Knowledge Lab: Admin SDK + verified API only. No direct client data access.
+    match /{labCollection}/{document=**} {
+      allow read, write: if labCollection.matches('knowledge_lab_.*') && false;
+    }
+
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
     match /{coll}/{document=**} {
       /* 未使用の旧コレクションも汎用許可へ漏らさない。 */
-      allow read, write: if coll != 'sp_members'
+      allow read, write: if !coll.matches('knowledge_lab_.*')
+        && coll != 'sp_members'
         && coll != 'sp_votes'
         && coll != 'sp_quests'
         && coll != 'sp_quest_counters'

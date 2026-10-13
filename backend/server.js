@@ -290,6 +290,14 @@ app.use("/api/dialogue", dialogue.router);
 app.use("/api/feedback", feedback.router);
 app.use("/api/review", review.router);
 app.use("/api/emuer/v2", emuerV2.router);
+/* Knowledge Lab uses the same verified identity, plan limits and Owner authority. */
+const knowledgeLab = require("./knowledge-lab/router").createKnowledgeLabRouter({
+  db, identity, entitlement, requireFirebaseUser, requireOwner, rateLimit,
+  env: process.env, emuerEnabled: () => emuerV2.isEnabled(),
+  isOwner: person => [person.walletAddress, person.account && person.account.chesAddress]
+    .some(address => SP_OWNER_ADDRESSES.includes(String(address || "").toLowerCase()))
+});
+app.use("/api/knowledge-lab", knowledgeLab.router);
 app.use("/api/mitemiru", mitemiru.router);
 app.use("/api/schoolpark/quest-completions", questCompletion);
 /* Quest #000 の論文を、リポジトリの新しい版へ差し替える（運営だけ） */
@@ -1009,6 +1017,9 @@ async function publishScheduledPosts() {
           publishedPostId: postRef.id,
           publishedAt: new Date()
         });
+        if (process.env.KNOWLEDGE_LAB_ENABLED === 'true' && await knowledgeLab.checkRules()) {
+          await knowledgeLab.service.syncPublicPost(postRef.id).catch(() => console.warn('Knowledge Lab: scheduled index retry required'));
+        }
         console.log(`✅ 予約投稿公開: ${docSnap.id} → posts/${postRef.id}`);
       } catch (e) {
         console.error(`❌ 予約投稿公開失敗: ${docSnap.id}`, e.message);
