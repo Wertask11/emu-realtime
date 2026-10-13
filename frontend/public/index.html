@@ -15212,14 +15212,29 @@ function openKnowledgeRequestComposer() {
   openEmuSheet("emuRequestSheet");
 }
 
+/* 知識の募集で、足りないところを名指しで返す（無ければ空）。
+
+   前は「何について」を8文字以上、「状況」を10文字以上でないと通さず、
+   どれが足りないかも言わずに「入力してください」とだけ出していた。
+   「禁煙について」（6文字）のように、ちゃんと書いても止められていた。
+   短い題名でも、状況の欄で補えるので、下限は「空でない」程度にする。 */
+function _emuRequestProblem(question, context, deadline) {
+  if (String(question || '').trim().length < 2) return '「何について知識を探していますか」を入力してください（2文字以上）。';
+  if (String(context || '').trim().length < 5) return '「困っている状況・知りたい条件」を、もう少しだけ書いてください（5文字以上）。';
+  if (!deadline) return '回答期限を選んでください。';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  if (new Date(deadline + 'T23:59:59') < today) return '回答期限は、今日以降の日付を選んでください。';
+  return '';
+}
+window._emuRequestProblem = _emuRequestProblem;
+
 document.getElementById("emuRequestSubmit")?.addEventListener("click", async function() {
   const question = document.getElementById("emuRequestQuestion").value.trim();
   const context = document.getElementById("emuRequestContext").value.trim();
   const bounty = 3; // 懸賞は一律3 EMUERに固定（不正配布の上限を抑える。サーバー側でも3ちょうどを強制）
   const deadline = document.getElementById("emuRequestDeadline").value;
-  if (question.length < 8 || context.length < 10 || !deadline) {
-    return alert("探している知識、状況、回答期限を入力してください。");
-  }
+  const problem = _emuRequestProblem(question, context, deadline);
+  if (problem) return alert(problem);
   if (!window.db || !window.fbLib) return alert("データベースに接続できません。");
   if (!await emuEnsureSignedIn()) {
     return alert("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");

@@ -24,7 +24,11 @@
       const question = document.getElementById("emuRequestQuestion").value.trim();
       const context = document.getElementById("emuRequestContext").value.trim();
       const deadline = document.getElementById("emuRequestDeadline").value;
-      if (question.length < 8 || context.length < 10 || !deadline) return alert("探している知識、状況、回答期限を入力してください。");
+      // 足りない欄を名指しで知らせる（判定は index.html の _emuRequestProblem と同じ）
+      const problem = typeof window._emuRequestProblem === "function"
+        ? window._emuRequestProblem(question, context, deadline)
+        : (question.length < 2 || context.length < 5 || !deadline ? "何について・状況・回答期限を入力してください。" : "");
+      if (problem) return alert(problem);
       if (!window.db || !window.fbLib || !addr()) return alert("ログインとウォレット接続を確認してください。");
       button.disabled = true; button.textContent = "公開しています…";
       try {
