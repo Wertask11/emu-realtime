@@ -24,12 +24,22 @@ function emuT(key){return window.EmuI18n&&window.EmuI18n.t?window.EmuI18n.t(key)
 function showEmuToday(){showEmuFeed();}
 async function chesHubGo(brand){if(brand==='emu')showEmuFeed();else{document.body.classList.add('sp-dao-open');const fr=document.getElementById('spDaoFrame');if(!fr.src)fr.src='/schoolpark/dao.html';document.body.appendChild(document.getElementById('spDaoPage'));}}
 function openSpMobileMenu(){document.body.classList.add('sp-menu-open');} function closeSpMobileMenu(){document.body.classList.remove('sp-menu-open');}
-function spDaoReloadAll(app){app.setState({me:{name:'ダミー',initial:'D',line:'ローカル検証'},noMembers:false,members:[{name:'ダミーメンバー',initial:'D',role:'テスト',wisdom:0,done:0,cited:0,share:'計算例'}],quests:[{id:'synthetic-quest',title:'ローカルのダミークエスト',fullTitle:'ダミークエスト',status:'OPEN',need:1,commits:0,budget:'0',owner:'ダミー',due:'期限なし',cardText:'閲覧用テスト',reports:[],reportSteps:[]}],wisdom:[{id:'synthetic-wisdom',tag:'一般',insight:'ローカルのダミー知恵',author:'ダミー',from:'架空データ',experiment:'架空の経験',reports:[],uses:0}],noWisdom:false,guilds:[{id:'synthetic-guild',code:'LOCAL',short:'ダミーギルド',concept:'ローカルの活動',accent:'#0F5C3F',open(){app.setState({screen:'guild',curGuild:{short:'ダミーギルド',concept:'ローカルの活動',body:'閲覧用ルール',noVotes:true,votes:[]}});app.toTop();}}],yearDoc:{title:'ローカル目標',summary:'ダミーの資料です。',blocks:[]},noTreasury:true});}
+function spDaoReloadAll(app){
+ const params=new URLSearchParams(location.search),held=(params.get('hold')||'').split(',');
+ const data={me:{name:'ダミー',initial:'D',line:'ローカル検証'},tasks:[],board:[],treasury:app.state.treasury,noMembers:false,members:[{name:'ダミーメンバー',initial:'D',role:'テスト',wisdom:0,done:0,cited:0,share:'計算例'}],quests:[{id:'synthetic-quest',title:'ローカルのダミークエスト',fullTitle:'ダミークエスト',status:'OPEN',need:1,commits:0,budget:'0',owner:'ダミー',due:'期限なし',cardText:'閲覧用テスト',reports:[],reportSteps:[]}],wisdom:[{id:'synthetic-wisdom',tag:'一般',insight:'ローカルのダミー知恵',author:'ダミー',from:'架空データ',experiment:'架空の経験',reports:[],uses:0}],noWisdom:false,guilds:[{id:'synthetic-guild',code:'LOCAL',short:'ダミーギルド',concept:'ローカルの活動',accent:'#0F5C3F',open(){
+   const detail={short:'ダミーギルド',concept:'ローカルの活動',body:'閲覧用ルール',noVotes:true,votes:[],loading:false};
+   window.fixtureFinishGuild=()=>app.setState({curGuild:detail});
+   app.setState({screen:'guild',curGuild:params.has('holdGuildDetail')?{...detail,loading:true}:detail});app.toTop();
+ }}],yearDoc:{title:'ローカル目標',summary:'ダミーの資料です。',blocks:[]},noTreasury:true};
+ window.fixtureDeliverData=key=>app.setState({[key]:data[key]});
+ app.setState(Object.fromEntries(Object.entries(data).filter(([key])=>!held.includes(key))));
+}
 `;
 const boot=`
 window.addEventListener('message',function(e){if(e.origin!==location.origin)return;const m=e.data||{};window.fixtureMessages.push(m.type);if(m.type==='emu-knowledge-ready'){e.source.postMessage({type:'emu-knowledge-posts',posts:[{id:'synthetic-post',title:'ローカルのダミー知識',body:'実ユーザーの投稿ではありません。\\n'.repeat(12),author:'synthetic-author',goodCount:0,changeCount:0,acceptedChangeCount:0,createdAt:'2026-10-13',tags:['経験']}],account:'',authors:{},canDraft:false,canSchedule:false},location.origin);}});
 document.getElementById('mainApp').style.display='block';
 for(const id of ['logoScreen','walletScreen','chesHub','loadingOverlay']){const el=document.getElementById(id);if(el)el.style.display='none';}
+if(new URLSearchParams(location.search).has('cover'))document.getElementById('spLoadingOverlay').style.display='flex';
 _emuEnsureAppVisible();
 if(new URLSearchParams(location.search).get('brand')==='schoolpark')chesHubGo('schoolpark');else showEmuFeed();
 `;

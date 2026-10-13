@@ -112,8 +112,12 @@
     if (restore !== false) restoreFocus();
   }
   function pause(restore) {
-    if (active) { save(active.id, 'in_progress', active.index); emit('tour_pause', {screen:active.id, step:active.index}); }
+    if (active && active.started) { save(active.id, 'in_progress', active.index); emit('tour_pause', {screen:active.id, step:active.index}); }
     close(restore);
+  }
+  function ready(def) {
+    try { return !def.options.isReady || def.options.isReady(); }
+    catch (error) { return false; }
   }
   function visible(el) {
     if (!el || !el.isConnected) return false;
@@ -210,6 +214,13 @@
     raf = window.requestAnimationFrame(function () {
       raf = 0; if (!active) return;
       var def = definitions.get(active.id), step = def.steps[active.index];
+      if (!ready(def)) {
+        // Data/cover waiting is not a missing target. Keep the step and its unseen status.
+        active.waiting = true; ui.panel.hidden = true; ui.spot.hidden = true;
+        window.clearTimeout(timeout); timeout = 0;
+        return;
+      }
+      if (active.waiting) { prepare(); return; }
       var docs = documentsFor(def);
       if (docs.length !== activeDocuments.length || docs.some(function (doc, i) { return doc !== activeDocuments[i]; })) {
         // An iframe navigation replaces its Document, unlike a template redraw.
@@ -233,6 +244,7 @@
           var token = generation;
           timeout = window.setTimeout(function () {
             if (!active || token !== generation) return;
+            if (!ready(def)) { refresh(); return; }
             emit('tour_target_missing', {screen:active.id, step:active.index});
             announce('対象が見つからないため、このステップを飛ばしました。'); nextStep({missing:true});
           }, 2500);
@@ -243,7 +255,8 @@
   function prepare() {
     stopWatching(); mount();
     var def = definitions.get(active.id), step = def.steps[active.index];
-    ui.panel.hidden = false; ui.panel.classList.remove('rk-choice');
+    active.waiting = !ready(def);
+    ui.panel.hidden = active.waiting; ui.spot.hidden = true; ui.panel.classList.remove('rk-choice');
     ui.title.textContent = step.label; ui.text.textContent = step.text;
     ui.count.textContent = def.options.label + ' · ' + (active.index+1) + ' / ' + def.steps.length;
     ui.status.textContent = ''; ui.back.disabled = active.index === 0;
@@ -269,11 +282,12 @@
       }
       // Read a verified state after native handlers; never suppress or repeat a click.
       if (step.advanceOn && typeof step.advanceOn.read === 'function') watch(doc, function (event) {
+        if (!active || active.waiting || !ready(def)) return;
         var target = findTarget(def, step);
         if (!target || !target.contains(event.target)) return;
         var before; try { before = step.advanceOn.read(); } catch (error) { return; }
         window.requestAnimationFrame(function () {
-          if (!active || token !== generation) return;
+          if (!active || active.waiting || !ready(def) || token !== generation) return;
           var after; try { after = step.advanceOn.read(); } catch (error) { return; }
           if (after !== before) { emit('tour_step_advance',{screen:active.id,step:active.index,method:'native_state_change'}); nextStep(); }
         });
@@ -287,8 +301,12 @@
       docs.forEach(function (doc) { if (doc.defaultView && doc.defaultView.frameElement) ro.observe(doc.defaultView.frameElement); });
       cleanup.push(function () { ro.disconnect(); });
     }
-    save(active.id,'in_progress',active.index); emit('tour_step_view',{screen:active.id,step:active.index});
-    ui.next.focus({preventScroll:true}); refresh();
+    if (!active.waiting) {
+      active.started = true;
+      save(active.id,'in_progress',active.index); emit('tour_step_view',{screen:active.id,step:active.index});
+      ui.next.focus({preventScroll:true});
+    }
+    refresh();
   }
   function start(id, index, invoker) {
     var def = definitions.get(id); if (!def) return false;
@@ -298,7 +316,7 @@
     sourceSelector = ''; sourceRestore = def.options.restoreFocus || null;
     if (source && source.dataset.rkSource) sourceSelector = '[data-rk-source="'+source.dataset.rkSource+'"]';
     else if (source && source.dataset.tour) sourceSelector = '[data-tour~="'+source.dataset.tour.split(' ')[0]+'"]';
-    active = {id:id,index:Number.isInteger(index)?Math.min(Math.max(0,index),def.steps.length-1):0};
+    active = {id:id,index:Number.isInteger(index)?Math.min(Math.max(0,index),def.steps.length-1):0,started:false,waiting:false};
     // Manual replay can finish navigation before its queued DOM observer runs.
     // Acknowledge the already verified screen so that observer does not pause the new guide.
     currentScreen = id;
@@ -307,12 +325,13 @@
   function nextStep(reason) {
     if (!active) return;
     var def = definitions.get(active.id);
+    if (active.waiting || !ready(def)) { refresh(); return; }
     if (active.index === def.steps.length-1) {
       save(active.id,'done',active.index); emit('tour_complete',{screen:active.id}); close();
       announce((reason && reason.missing ? '対象が見つからないため、このステップを飛ばしました。' : '') + 'この画面のガイドを見終わりました。サポートからいつでも見返せます。');
     } else { active.index++; prepare(); }
   }
-  function backStep() { if (active && active.index > 0) { active.index--; emit('tour_back',{screen:active.id,step:active.index}); prepare(); } }
+  function backStep() { if (active && !active.waiting && ready(definitions.get(active.id)) && active.index > 0) { active.index--; emit('tour_back',{screen:active.id,step:active.index}); prepare(); } }
   function skipTour() { if (active) { save(active.id,'skipped',active.index); emit('tour_skip',{screen:active.id}); close(); } }
   function enter(id) {
     if (id === currentScreen) { refresh(); return; }
