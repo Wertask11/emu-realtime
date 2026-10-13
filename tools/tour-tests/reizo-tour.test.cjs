@@ -37,3 +37,13 @@ test('core state/UI never dispatch network requests or app clicks',()=>{
  assert.ok(!/\b(?:fetch|XMLHttpRequest|sendBeacon|postMessage)\s*\(/.test(source));assert.ok(!/\.click\s*\(/.test(source));
  const adapters=fs.readFileSync(path.join(root,'frontend/public/tour/reizo-tour-pages.js'),'utf8');assert.ok(!/\b(?:fetch|XMLHttpRequest|sendBeacon|postMessage)\s*\(/.test(adapters));
 });
+test('SchoolPark readiness distinguishes default empty lists from delivered empty results',()=>{
+ const dao=fs.readFileSync(path.join(root,'frontend/public/schoolpark/dao.html'),'utf8');
+ const section=dao.slice(dao.indexOf('var DCLogic = function'),dao.indexOf('const EXPS ='));
+ const sandbox={schedule(){},Object};vm.runInNewContext(section,sandbox);
+ const app=new sandbox.DCLogic();app.state={quests:[],guilds:[]};app.tourDataReady=Object.create(null);
+ app.setState({screen:'experiments'});assert.equal(app.tourDataReady.quests,undefined);
+ app.setState({quests:[]});assert.equal(app.tourDataReady.quests,true);assert.equal(app.tourDataReady.guilds,undefined);
+ app.setState(state=>({guilds:[],filter:state.filter||'すべて'}));assert.equal(app.tourDataReady.guilds,true);
+ assert.equal(app.state.filter,'すべて');assert.deepEqual(Object.keys(app.tourDataReady).sort(),['guilds','quests']);
+});

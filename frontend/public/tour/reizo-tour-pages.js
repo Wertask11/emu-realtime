@@ -7,6 +7,29 @@
   function frameDoc(id) { try { var fr = document.getElementById(id); return fr && fr.contentDocument; } catch (error) { return null; } }
   function dao() { try { var fr = document.getElementById('spDaoFrame'); return fr && fr.contentWindow && fr.contentWindow.app; } catch (error) { return null; } }
   function visible(el) { return !!el && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0 && getComputedStyle(el).visibility !== 'hidden'; }
+  function ready(spScreen) {
+    // Wait until the existing cover is actually removed, including its ready/fade phase.
+    if (document.documentElement.classList.contains('ches-resuming') ||
+        ['spLoadingOverlay','loadingOverlay'].some(function (id) { return visible(document.getElementById(id)); })) return false;
+    if (!spScreen) return true;
+    var app = dao();
+    if (!app || app.tourRenderedScreen !== spScreen || !visible(document.getElementById('spDaoFrame'))) return false;
+    var required = {
+      home:['me','wisdom','quests','tasks'], logs:['guilds'], guild:[],
+      experiments:['quests'], detail:['quests'], library:['wisdom'],
+      park:['board'], plaza:['board'], members:['members'], treasury:['treasury'],
+      tasks:['tasks'], yeargoals:['yearDoc'], city:[]
+    }[spScreen];
+    if (!required || !required.every(function (key) { return app.tourRenderedDataReady?.[key] === true; })) return false;
+    if (spScreen === 'guild') return app.state.curGuild?.loading === false;
+    if (spScreen === 'experiments' || spScreen === 'detail') {
+      if (app.state.questsDenied) return false;
+      if (spScreen === 'detail') return app.state.quests.some(function (quest) { return quest.id === app.state.expId; });
+    }
+    if (spScreen === 'members' && app.state.membersNote && !app.state.members.length) return false;
+    if (spScreen === 'yeargoals') return !!app.state.yearDoc;
+    return true;
+  }
   function screen() {
     if (document.getElementById('emu-contact-panel')?.classList.contains('open')) return null;
     if (document.getElementById('spReizoPanel')?.classList.contains('open')) return null;
@@ -82,6 +105,7 @@
     var brand = spScreen ? 'SchoolPark' : 'Emu';
     tour.register(id,steps,{
       label:label,brand:brand,isActive:function () { return screen() === id; },
+      isReady:function () { return ready(spScreen); },
       getDocuments:function () { return [frameDoc(spScreen?'spDaoFrame':emuFrame),document]; },
       bottomInset:function () { return bottomInset(brand); },
       restoreFocus:function (source) {
@@ -218,5 +242,6 @@
   ['spDaoFrame','emuKnowledgeFrame','emuIchinichiFrame','emuDiscussionFrame'].forEach(function(id){var fr=document.getElementById(id);if(fr){fr.addEventListener('load',function(){watchFrame(fr);scheduleRoute();});watchFrame(fr);}});
   var observer=new MutationObserver(function(records){if(records.some(function(record){return !record.target.closest?.('#rk-tour,#rk-guide-catalog');}))scheduleRoute();});
   observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','hidden']});
+  observer.observe(document.documentElement,{attributes:true,attributeFilter:['class','style','hidden']});
   synchronize();
 })(window, document);
