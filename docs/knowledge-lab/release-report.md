@@ -134,3 +134,21 @@ Preview・PR・commitは検証追記に記載する。
 | 自動AI掛け合わせ | FAIL（未実装） | API・予算未確認。手動機能とは明確に区別 |
 
 **Founderが今日から正式な書き手募集・営業・宣伝を始められるか: NOT READY。** 検証用画面を本番の完成画面として宣伝しない。専用Rules・インデックス・Preview・公開設定・必要な告知を確認し、本番での確認を終えてからREADYと判定する。
+
+## 最終検証・URL追記
+
+- 実装commit: `7009778337d1ac5c6721879ab986da3dba6cd5e2`
+- PR: https://github.com/Wertask11/emu-realtime/pull/195 （Draft、未マージ）
+- Preview: https://emu-realtime-qzrq-git-feature-emu-knowledge-lab-school-park.vercel.app/knowledge-lab.html
+- Vercelビルド: SUCCESS。実装commitに対するGitHub status/checkで確認。
+- Previewの実ブラウザ: **未確認**。この環境のプロキシがCONNECTをHTTP 403で拒否。該当Previewホストだけを環境設定ドラフトへ追加した。設定の確認・保存・Publishまでは接続許可の適用済みと扱わない。
+- 自動テスト: backend 349 / Emu回帰164 / ガイド10 / Lab実Auth・Firestore 16 / Rules 4、計543件PASS。失敗・skipなし。
+- 最新画面幅確認: 375/390/412/768/1024/1366px、主要6画面、横スクロールなし・pageerrorなし。登録から募集までの保存・再取得を確認。
+- 実Emu接続: 本番と分離した同じ版のSDK、既存completeCommonFlow、実エミュレータートークンを使用。入口、保存、別ユーザーからの既存Good/Change、議論入力、Passport、既存ライブラリーPASS。pageerrorなし。Analyticsへの外部リクエストは検証で遮断。
+- Rules・インデックスの本番反映: ユーザーの手動反映確認待ち。
+- Render: `KNOWLEDGE_LAB_ENABLED=true` の設定確認待ち。現在の環境にRender設定変更の接続はない。
+- main: `412a4d8fea5928dc9ca12c2839e6e448fd8cc5aa` のまま。本番公開・新機能の本番動作確認は未実施。
+
+代表画像は[evidence](evidence/)に保管。すべて検証用エミュレーターの画面で、Production写真ではない。現在の本番入口は別途読み取り確認したが、新機能の本番画像として使用していない。
+
+**公開判定は引き続きNOT READY。** 未検証の状態で本番へ反映しないという依頼条件を優先する。専用Rules・インデックス・Preview接続／確認・Renderフラグ・必要なPrivacy適用を確認してから、PRの公開ゲートを再判定する。

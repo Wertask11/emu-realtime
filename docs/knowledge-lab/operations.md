@@ -54,3 +54,15 @@ FIREBASE_EMULATORS_PATH=/workspace/.cache/firebase/emulators XDG_CONFIG_HOME=/wo
 別ターミナルで `node --test tools/knowledge-lab-tests/lab.test.cjs`、`node --test tools/knowledge-lab-tests/rules.test.cjs`。ブラウザ検証はテスト終了後に `node tools/knowledge-lab-tests/fixture.cjs` → `python tools/knowledge-lab-tests/browser.py`。fixtureは `demo-emu-knowledge-lab` のローカルAuth/Firestore以外を拒否し、起動時にその検証データだけを初期化する。同じ検証DBを使用するため、fixtureとAPIテストを同時に動かさない。
 
 本番のアカウントを作成すること、本番トークンを偽装すること、本番利用者の記録をテスト用に変更することは禁止。テストアカウントとデータの作成は、許可されたローカルエミュレーター内に限定する。
+
+### 実Emu画面との接続をローカルで確認する
+
+他のAPI／ブラウザテスト終了後に実行する。同じdemoプロジェクトを初期化するため、fixtureを並行実行しない。
+
+```sh
+curl -fsSL --max-time 25 https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js -o /tmp/knowledge-lab-ethers.js
+curl -fsSL --max-time 25 https://cdn.jsdelivr.net/npm/socket.io-client@4.7.2/dist/socket.io.min.js -o /tmp/knowledge-lab-socket.js
+node tools/knowledge-lab-tests/native-fixture.cjs
+```
+
+別ターミナルで `python tools/knowledge-lab-tests/native-browser.py`。本体HTMLの変更は検証用のFirebase設定・接続先・ローカルSDK・検証用ログイン入口のみ。実際のFirebase SDKでエミュレーターへログインし、既存completeCommonFlowと既存操作を実行する。認証情報やAPI成功を偽装しない。外部のAnalyticsや本番APIへ送信しない。課金・署名・オンチェーン処理はこの検証で確認済みとしない。
