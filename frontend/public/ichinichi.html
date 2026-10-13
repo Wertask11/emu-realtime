@@ -213,7 +213,7 @@ footer { max-width: 1180px; margin: auto; padding: 28px 24px 40px; display: flex
     <button class="brand" id="brandBtn" aria-label="一日シェア ホーム" data-i18n-aria="i.brandAria">
       <span class="brand-mark">日</span><span><b data-i18n="i.brand">一日シェア</b><small data-i18n="i.brandSub">わたしの一日が、誰かの学びになる。</small></span>
     </button>
-    <nav aria-label="メインメニュー" data-i18n-aria="i.menuAria">
+    <nav data-tour="emu-share-tabs" aria-label="メインメニュー" data-i18n-aria="i.menuAria">
       <button data-tab="today" data-i18n="i.tab.today">今日の一日</button>
       <button data-tab="explore" data-i18n="i.tab.explore">みんなの一日</button>
       <button data-tab="mine" data-i18n="i.tab.mine">わたしの記録</button>
@@ -615,7 +615,7 @@ function renderToday() {
     </section>`;
 
   $main.innerHTML = `
-    <section class="hero">
+    <section class="hero" data-tour="emu-today" data-tour-ready="${!S.loading}">
       <div><p class="eyebrow">${esc(dateLabel)}</p><h1><span>${esc(emuT("i.today.heroLine1"))}</span><span>${esc(emuT("i.today.heroLine2"))}</span></h1>
       <p>${esc(emuT("i.today.heroText"))}</p></div>
       <div class="day-progress"><div class="ring" style="--progress:${progress}%"><strong>${completed}<small>/${S.schedule.length}</small></strong></div><span>${esc(emuT("i.today.doneLabel"))}</span></div>
@@ -772,9 +772,9 @@ function renderExplore() {
       </article>`).join("");
 
   $main.innerHTML = `
-    <section class="explore-page">
-      <div class="page-title"><p class="eyebrow">${esc(emuT("i.explore.eyebrow"))}</p><h1>${esc(emuT("i.explore.title"))}</h1><p>${esc(emuT("i.explore.text"))}</p></div>
-      <div class="filter-row">${filters.map((n) => `<button class="${S.filter === n ? "selected" : ""}" data-filter="${esc(n)}">${esc(catLabel(n))}</button>`).join("")}</div>
+    <section class="explore-page" data-tour-ready="${!S.loading}">
+      <div class="page-title" data-tour="emu-everyone"><p class="eyebrow">${esc(emuT("i.explore.eyebrow"))}</p><h1>${esc(emuT("i.explore.title"))}</h1><p>${esc(emuT("i.explore.text"))}</p></div>
+      <div class="filter-row" data-tour="emu-filter">${filters.map((n) => `<button class="${S.filter === n ? "selected" : ""}" data-filter="${esc(n)}">${esc(catLabel(n))}</button>`).join("")}</div>
       <div class="people-grid">${cards}</div>
     </section>`;
 
@@ -799,14 +799,14 @@ function renderMine() {
       <div class="history-actions"><button data-act="view" data-di="${di}">${esc(emuT("i.mine.view"))}</button><button data-act="del" data-di="${di}">${esc(emuT("i.mine.delete"))}</button></div></article>`).join("");
 
   $main.innerHTML = `
-    <section class="records-page">
+    <section class="records-page" data-tour-ready="${!S.loading}">
       <div class="page-title"><p class="eyebrow">${esc(emuT("i.mine.eyebrow"))}</p><h1>${esc(emuT("i.mine.title"))}</h1></div>
-      <div class="record-summary">
+      <div class="record-summary" data-tour="emu-mystats">
         <div><span>${esc(emuT("i.mine.streak"))}</span><strong>${S.stats.streak}<small>${esc(emuT("i.mine.streakUnit"))}</small></strong><p>${esc(emuT("i.mine.streakNote"))}</p></div>
         <div><span>${esc(emuT("i.mine.rate"))}</span><strong>${S.stats.completionRate}<small>%</small></strong><p>${esc(emuT("i.mine.rateNote"))}</p></div>
         <div><span>${esc(emuT("i.mine.useful"))}</span><strong>${S.stats.usefulCount}<small>${esc(emuT("i.mine.usefulUnit"))}</small></strong><p>${esc(emuT("i.mine.usefulNote"))}</p></div>
       </div>
-      <div class="history"><h2>${esc(emuT("i.mine.historyTitle"))}</h2>${items}
+      <div class="history"><h2 data-tour="emu-history">${esc(emuT("i.mine.historyTitle"))}</h2>${items}
         ${S.hiddenNote ? `<p style="margin-top:14px;padding:12px 14px;border:1px solid #e6e2dc;border-radius:10px;background:#fff;color:#6f6a86;font-size:13px;line-height:1.7;">${esc(S.hiddenNote)}</p>` : ""}
       </div>
     </section>`;

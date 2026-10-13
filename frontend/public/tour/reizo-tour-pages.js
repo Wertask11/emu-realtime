@@ -2,7 +2,7 @@
 (function (window, document) {
   'use strict';
   var tour = window.ReizoTour; if (!tour) return;
-  var SP = {home:'home',logs:'guilds',guild:'guild',experiments:'quests',detail:'quest-detail',library:'wisdom',park:'park',plaza:'plaza',members:'contribution',treasury:'treasury',city:'city',tasks:'tasks',yeargoals:'year-goals'};
+  var SP = {home:'home',logs:'guilds',guild:'guild',experiments:'quests',detail:'quest-detail',library:'wisdom',park:'park',plaza:'plaza',members:'contribution',treasury:'treasury',city:'city',tasks:'tasks',yeargoals:'year-goals',passport:'passport'};
   var EMU = {'emu-knowledge-open':'feed','emu-requests-open':'requests','emu-ichinichi-open':'share','emu-discussion-open':'discussion'};
   function frameDoc(id) { try { var fr = document.getElementById(id); return fr && fr.contentDocument; } catch (error) { return null; } }
   function dao() { try { var fr = document.getElementById('spDaoFrame'); return fr && fr.contentWindow && fr.contentWindow.app; } catch (error) { return null; } }
@@ -11,6 +11,7 @@
     // Wait until the existing cover is actually removed, including its ready/fade phase.
     if (document.documentElement.classList.contains('ches-resuming') ||
         ['spLoadingOverlay','loadingOverlay'].some(function (id) { return visible(document.getElementById(id)); })) return false;
+    if (spScreen === 'passport') return !!document.querySelector('#sppPage1 [data-tour~=pp-id]');
     if (!spScreen) return true;
     var app = dao();
     if (!app || app.tourRenderedScreen !== spScreen || !visible(document.getElementById('spDaoFrame'))) return false;
@@ -32,21 +33,44 @@
     if (spScreen === 'yeargoals') return !!app.state.yearDoc;
     return true;
   }
+  var deliveries=new WeakMap();
+  function emuReady(id,frame,item) {
+    var doc=frameDoc(frame);
+    if(frame && (!doc?.body || !visible(document.getElementById(frame)))) return false;
+    if(id==='emu-feed') {
+      if(!deliveries.get(doc)?.posts && !doc.documentElement.hasAttribute('data-tour-posts-ready')) return false;
+      if(item?.target.includes('emu-lib-list') && doc.querySelector('#panel.open') && !deliveries.get(doc)?.library && !doc.documentElement.hasAttribute('data-tour-library-ready')) return false;
+    }
+    if(id==='emu-share' && doc.querySelector('[data-tour-ready="false"]')) return false;
+    if(id==='emu-discussion' && !deliveries.get(doc)?.rooms && !doc.documentElement.hasAttribute('data-tour-rooms-ready')) return false;
+    if(id==='emu-requests') {
+      var list=document.getElementById('emuRequestList');
+      // A real result (including an empty result) replaces the native loading/retry status.
+      if(!list?.children.length || list.querySelector('.emu-request-empty button')) return false;
+      if(list.querySelector('.emu-request-empty') && /読み込|ログイン/.test(list.textContent)) return false;
+    }
+    if(id==='sp-passport' && item?.target.includes('pp-record') && /読み込/.test(document.getElementById('sppRecords')?.textContent||'')) return false;
+    return true;
+  }
   function screen() {
+    var running=tour.running();
+    if(document.querySelector('#emuRequestSheet.open') && !(running?.id==='emu-requests' && [2,3].includes(running.index))) return null;
     if (document.getElementById('emu-contact-panel')?.classList.contains('open')) return null;
     if (document.getElementById('spReizoPanel')?.classList.contains('open')) return null;
-    if (Array.from(document.querySelectorAll('.modal')).some(visible)) return null;
+    if (Array.from(document.querySelectorAll('.modal,.emu-sheet.open')).some(function(el){return el.id !== 'emuRequestSheet' && visible(el);})) return null;
+    if (document.body.classList.contains('sp-passport-open')) return 'sp-passport';
     if (/(?:^|\s)sp-(?:room|menu|passport|vote|quest|wisdom|log)-open(?:\s|$)/.test(document.body.className)) return null;
     if (document.body.classList.contains('sp-dao-open')) { var app = dao(); return app && SP[app.state.screen] ? 'sp-' + SP[app.state.screen] : null; }
     if (!visible(document.getElementById('mainApp'))) return null;
     for (var cls of Object.keys(EMU)) if (document.body.classList.contains(cls)) {
       var doc = frameDoc(cls === 'emu-knowledge-open' ? 'emuKnowledgeFrame' : cls === 'emu-ichinichi-open' ? 'emuIchinichiFrame' : 'emuDiscussionFrame');
-      if (doc && doc.querySelector('.overlay.open')) return null;
+      if (doc && doc.querySelector('.overlay.open:not(#panel)')) return null;
+      if(doc?.querySelector('#panel.open') && !(running?.id==='emu-feed' && [6,7].includes(running.index))) return null;
       return 'emu-' + EMU[cls];
     }
     return null;
   }
-  function synchronize() { tour.enter(screen()); }
+  function synchronize() { var doc=frameDoc('spDaoFrame');var names=['home','guild','quest','wisdom','park','contrib','treasury','city'];if(doc)names.forEach(function(name,i){doc.querySelectorAll('[data-tour~=nav-0'+(i+1)+']').forEach(function(el){if(!el.dataset.tour.includes('nav-'+name))el.dataset.tour+=' nav-'+name;});});tour.enter(screen()); }
   var routeFrame = 0;
   function scheduleRoute() { if (!routeFrame) routeFrame = requestAnimationFrame(function () { routeFrame = 0; synchronize(); }); }
   function step(target, label, text, read) {
@@ -107,67 +131,521 @@
     var brand = spScreen ? 'SchoolPark' : 'Emu';
     tour.register(id,steps,{
       label:label,brand:brand,isActive:function () { return screen() === id; },
-      isReady:function () { return ready(spScreen); },
-      getDocuments:function () { return [frameDoc(spScreen?'spDaoFrame':emuFrame),document]; },
+      isReady:function (item) { return ready(spScreen) && emuReady(id,emuFrame,item); },
+      getDocuments:function () { return [frameDoc(spScreen && spScreen !== 'passport'?'spDaoFrame':emuFrame),document]; },
       bottomInset:function () { return bottomInset(brand); },
       restoreFocus:function (source) {
         var panel=document.getElementById('emu-contact-panel');
         if(source?.closest('#emu-contact-panel')&&panel&&!panel.classList.contains('open')&&typeof window.toggleContactPanel==='function')window.toggleContactPanel();
       },
-      navigate:function () { closeSupport(); return spScreen ? goSchoolPark(spScreen) : goEmu(id.slice(4)); }
+      auto:!['sp-guild','sp-quest-detail','sp-plaza','sp-tasks','sp-year-goals'].includes(id),
+      navigate:function () { closeSupport(); if(spScreen === 'passport') { if(!document.body.classList.contains('sp-passport-open')) window.openSpPassport(); return waitFor(function(){return document.body.classList.contains('sp-passport-open');},'パスポートを開けませんでした。'); } return spScreen ? goSchoolPark(spScreen) : goEmu(id.slice(4)); }
     });
   }
-  register('sp-home','ホーム',[
-    step('home-main','ホームの概要','知恵や進行中の仕事の概要を確認できます。'),
-    step('menu','メニューの見方','ホーム、ギルド、クエスト、知恵、公園、貢献、treasury、CITYの順です。'),
-    step('home-wisdom','生まれた知恵','経験から残った一文を読めます。'),
-    step('home-quests','進行中のクエスト','仕事の内容や締切を一覧から確認できます。'),
-    step('home-todo','自分の宿題','自分が取り組むことを確認する場所です。完了の操作はこの案内では不要です。'),
-    step('fridge','冷蔵庫くん','画面のガイドと、質問するチャットを選べます。'),
-    step('support-btn','困ったとき','メニューやサポートから、問い合わせとガイドの再生へ進めます。')
-  ],'home');
-  register('sp-guilds','ギルド',[
-    step('guild-intro','ギルドとは','活動のまとまりと決めごとを見る場所です。'),
-    step('guild-list','ギルド一覧','カードから活動とルールを確認できます。ここで参加する必要はありません。')
-  ],'logs');
+  var v2 = {
+  "home": {
+    "name": "ホーム",
+    "steps": [
+      {
+        "target": "home-main",
+        "label": "THIS WEEK",
+        "text": "ここがSchoolParkのホームだよ。これまでの知恵や、走っているクエストをここで見られるよ。",
+        "screen": "home"
+      },
+      {
+        "target": "menu",
+        "label": "メニュー",
+        "text": "メニューから、ギルドやクエストなど8つの場所へ移動できるよ。",
+        "screen": "home"
+      },
+      {
+        "target": "home-wisdom",
+        "label": "今週生まれた知恵",
+        "text": "今週生まれた知恵はここ。カードを押すと知恵のページへ行けるよ。",
+        "click": true,
+        "screen": "home"
+      },
+      {
+        "target": "home-quests",
+        "label": "走っているクエスト",
+        "text": "いま走っているクエストはここ。押すと一覧を見られるよ。",
+        "click": true,
+        "screen": "home"
+      },
+      {
+        "target": "home-todo",
+        "label": "自分の宿題",
+        "text": "受けているクエストや、自分のタスクはここにまとまるよ。",
+        "screen": "home"
+      },
+      {
+        "target": "passport-entry",
+        "label": "SchoolPark パスポート",
+        "text": "自分の名前を押すと、SchoolPark パスポートが開くよ。スマホは左上の ☰ から開けるよ。",
+        "click": true,
+        "screen": "home"
+      },
+      {
+        "target": "fridge",
+        "label": "冷蔵庫くん",
+        "text": "わからないときは、ここを押してね。この画面のガイドも、ぼくへの質問もここからだよ。",
+        "screen": "home"
+      },
+      {
+        "target": "support-btn",
+        "label": "お問い合わせ",
+        "text": "困ったときは、お問い合わせからいつでもガイドや動画を見返せるよ。",
+        "screen": "home"
+      },
+      {
+        "target": "nav-guild",
+        "label": "メニュー「ギルド」",
+        "text": "次はギルドへ行ってみよう。押すとギルドの案内が始まるよ。",
+        "click": true,
+        "screen": "home"
+      }
+    ]
+  },
+  "guild": {
+    "name": "ギルド",
+    "steps": [
+      {
+        "target": "guild-list",
+        "label": "ギルドを選ぶ",
+        "text": "ここではギルドを見つけられるよ。まずは気になるギルドをのぞいてみよう。",
+        "screen": "guild"
+      },
+      {
+        "target": "guild-rules",
+        "label": "ギルドの決まり",
+        "text": "ギルド・議題・クエストの関係は、ここで確かめられるよ。",
+        "screen": "guild"
+      },
+      {
+        "target": "guild-card",
+        "label": "ギルドのカード",
+        "text": "カードには考え方と、参加したい人・議題・クエストの数が出ているよ。押すとギルドの中を見られるよ。",
+        "click": true,
+        "note": "「参加したい」「応援」は完了条件にしない",
+        "screen": "guild"
+      }
+    ]
+  },
+  "quest": {
+    "name": "クエスト",
+    "steps": [
+      {
+        "target": "quest-intro",
+        "label": "クエストの説明",
+        "text": "ここではクエストの内容を見られるよ。参加するかは説明を見てから決めてね。",
+        "screen": "quest"
+      },
+      {
+        "target": "quest-filters",
+        "label": "絞り込み",
+        "text": "シリーズや状態で、クエストを絞り込めるよ。",
+        "screen": "quest"
+      },
+      {
+        "target": "quest-card",
+        "label": "「詳細」",
+        "text": "「詳細」を押すと、内容や締切、受けている人を確かめられるよ。",
+        "click": true,
+        "note": "「受ける」・応募・報告・報酬受取は完了条件にしない",
+        "screen": "quest"
+      }
+    ]
+  },
+  "wisdom": {
+    "name": "知恵",
+    "steps": [
+      {
+        "target": "wisdom-hero",
+        "label": "知恵",
+        "text": "ここから、経験から生まれた知恵を見つけられるよ。カードを開いて読んでみよう。",
+        "screen": "wisdom"
+      },
+      {
+        "target": "wisdom-tags",
+        "label": "分類",
+        "text": "分類を選ぶと、知恵を絞り込めるよ。",
+        "screen": "wisdom"
+      },
+      {
+        "target": "wisdom-card",
+        "label": "知恵カード",
+        "text": "カードは「元の知識 → 通した経験 → 残った一文」でできているよ。",
+        "note": "「参考にする（引用）」は完了条件にしない",
+        "screen": "wisdom"
+      }
+    ]
+  },
+  "park": {
+    "name": "公園",
+    "steps": [
+      {
+        "target": "park-hero",
+        "label": "公園",
+        "text": "ここは公園。みんなが集まる場所だよ。まずは中を見てみよう。",
+        "screen": "park"
+      },
+      {
+        "target": "park-side",
+        "label": "遊び・エレベーター",
+        "text": "右のならびから、遊びやエレベーターにも行けるよ。",
+        "note": "「公園に置く」（投稿）は案内の対象外",
+        "screen": "park"
+      },
+      {
+        "target": "park-map",
+        "label": "公園の地図",
+        "text": "地図の「広場」や「すべり台」を押すと、その場所へ行けるよ。",
+        "click": true,
+        "screen": "park"
+      }
+    ]
+  },
+  "contrib": {
+    "name": "貢献",
+    "steps": [
+      {
+        "target": "contrib-intro",
+        "label": "貢献",
+        "text": "ここでは、SchoolParkへの貢献が見られるよ。貢献は「知恵を残したか」で測るんだ。",
+        "screen": "contrib"
+      },
+      {
+        "target": "contrib-note",
+        "label": "お支払いについて",
+        "text": "分配はまだ計算額だけ。お支払いの始まりはここで知らせるよ。",
+        "screen": "contrib"
+      },
+      {
+        "target": "contrib-table",
+        "label": "メンバー一覧",
+        "text": "知恵・完走・引用され・分配（計算額）が並ぶよ。今日は見るだけでも大丈夫。",
+        "screen": "contrib"
+      }
+    ]
+  },
+  "treasury": {
+    "name": "treasury",
+    "steps": [
+      {
+        "target": "treasury-card",
+        "label": "TREASURY",
+        "text": "treasuryの入口だよ。お金の情報は、表示を読んで確かめよう。",
+        "screen": "treasury"
+      },
+      {
+        "target": "treasury-tx",
+        "label": "直近の動き",
+        "text": "入金や支出の記録は、ここに並ぶよ。",
+        "screen": "treasury"
+      },
+      {
+        "target": "treasury-help",
+        "label": "言葉の意味",
+        "text": "「ある」「渡したぶん」「使える」の意味は、ここに書いてあるよ。",
+        "screen": "treasury"
+      }
+    ]
+  },
+  "city": {
+    "name": "CITY（入口のみ）",
+    "steps": [
+      {
+        "target": "city-card",
+        "label": "CITYの入口",
+        "text": "ここからCITYに入れるよ。今日は入口を覚えておけばOK。",
+        "note": "3D移動・Spot操作・チェックイン・購入は別フェーズ",
+        "screen": "city"
+      }
+    ]
+  },
+  "passport": {
+    "name": "SchoolPark パスポート",
+    "steps": [
+      {
+        "target": "pp-id",
+        "label": "SchoolPark ID",
+        "text": "ここはあなたのパスポート。1ページ目は「私は誰なのか」。SchoolPark IDはここにあるよ。",
+        "pp": 1
+      },
+      {
+        "target": "pp-verify",
+        "label": "本人であること",
+        "text": "LINE・Google・ウォレットは、ここで追加や連携ができるよ。どれで入っても、同じパスポートになるよ。",
+        "pp": 1,
+        "note": "ログイン方法の追加・ウォレット連携・本人確認（KYC）は完了条件にしない"
+      },
+      {
+        "target": "pp-next1",
+        "label": "次のページへ",
+        "text": "「私は何をしてきたのか」を押すと、2ページ目へ進むよ。",
+        "pp": 1,
+        "click": true
+      },
+      {
+        "target": "pp-starfield",
+        "label": "星空を見る",
+        "text": "歩いてきた記録は、星空に残るよ。星の色で、どんな行動だったかがわかるんだ。",
+        "pp": 2
+      },
+      {
+        "target": "pp-record",
+        "label": "SchoolParkの記録",
+        "text": "投票した議題や完了したクエストは、ここに並ぶよ。",
+        "pp": 2,
+        "note": "証明書NFTの受け取りは完了条件にしない"
+      },
+      {
+        "target": "pp-next2",
+        "label": "次のページへ",
+        "text": "「私はどんな価値を渡してきたのか」を押すと、3ページ目へ進むよ。",
+        "pp": 2,
+        "click": true
+      },
+      {
+        "target": "pp-value",
+        "label": "価値プロフィール",
+        "text": "3ページ目は、あなたの行動が誰にどう届いたか。Emuの価値プロフィールで見られるよ。",
+        "pp": 3
+      },
+      {
+        "target": "pp-travels",
+        "label": "価値が渡っていく道すじ",
+        "text": "知識を届けた → 誰かの役に立った → 改善された → 学びにつながった。この順に価値が渡っていくよ。",
+        "pp": 3
+      }
+    ]
+  },
+  "emu-read": {
+    "name": "01 知識を読む",
+    "steps": [
+      {
+        "target": "emu-give",
+        "label": "知識を届ける",
+        "text": "やってみてわかったことは、ここから知識として届けられるよ。",
+        "note": "投稿は完了条件にしない",
+        "screen": "read"
+      },
+      {
+        "target": "emu-search",
+        "label": "検索",
+        "text": "悩み・体験・タグから、知識を探せるよ。",
+        "screen": "read"
+      },
+      {
+        "target": "emu-sort",
+        "label": "並び替え",
+        "text": "おすすめ・新着・今月のテーマ・役に立った・改善された、で並べ替えられるよ。",
+        "screen": "read"
+      },
+      {
+        "target": "emu-theme",
+        "label": "今月のテーマ",
+        "text": "毎月のテーマはここ。「テーマの知識を見る」を押すと、そのテーマの知識だけが並ぶよ。",
+        "click": true,
+        "screen": "read"
+      },
+      {
+        "target": "emu-card",
+        "label": "知識カード",
+        "text": "「続きを読む」で本文を読めるよ。下には、この知識が誰の次の一歩になったかが出るよ。",
+        "screen": "read"
+      },
+      {
+        "target": "emu-card-acts",
+        "label": "役に立った・改善案",
+        "text": "役に立ったら「役に立った」、もっと良くできそうなら「改善案を届ける」を押してね。",
+        "note": "役に立った・改善案・議題にするは完了条件にしない",
+        "screen": "read"
+      },
+      {
+        "target": "emu-library",
+        "label": "マイライブラリー",
+        "text": "自分の投稿は、マイライブラリーにまとまるよ。押して開いてみよう。",
+        "click": true,
+        "screen": "read"
+      },
+      {
+        "target": "emu-lib-list",
+        "label": "自分の投稿",
+        "text": "自分の投稿が並ぶよ。Good（役に立った）とChange（改善）の数もここで見られるよ。",
+        "lib": true,
+        "screen": "read"
+      },
+      {
+        "target": "emu-tabs",
+        "label": "タブ",
+        "text": "ほかの画面へは、ここで切り替えられるよ。",
+        "screen": "read"
+      }
+    ]
+  },
+  "emu-search": {
+    "name": "02 知識を探す",
+    "steps": [
+      {
+        "target": "emu-req-head",
+        "label": "知識を探しています",
+        "text": "ここには、みんなが探している知識が並ぶよ。",
+        "screen": "search"
+      },
+      {
+        "target": "emu-req-list",
+        "label": "募集の一覧",
+        "text": "答えられそうな募集があったら、知識を届けてみよう。採用されるとEMUERがもらえるよ。",
+        "note": "回答・採用は完了条件にしない",
+        "screen": "search"
+      },
+      {
+        "target": "emu-req-btn",
+        "label": "知識を募集する",
+        "text": "自分が知りたいことは「知識を募集する」から募集できるよ。押してみよう。",
+        "click": true,
+        "screen": "search"
+      },
+      {
+        "target": "emu-req-form",
+        "label": "募集の書き方",
+        "text": "何について知りたいか、困っている状況、回答期限を書くよ。今日は見るだけでOK。「やめる」で閉じられるよ。",
+        "req": true,
+        "note": "募集の公開は完了条件にしない",
+        "screen": "search"
+      },
+      {
+        "target": "emu-room1",
+        "label": "Room1の入口",
+        "text": "Room1もここから入れるよ。",
+        "click": true,
+        "note": "Room1は「知識を探す」の中だけに表示",
+        "screen": "search"
+      }
+    ]
+  },
+  "emu-share": {
+    "name": "03 一日シェア",
+    "steps": [
+      {
+        "target": "emu-share-tabs",
+        "label": "一日シェアのタブ",
+        "text": "一日シェアは「今日の一日」「みんなの一日」「わたしの記録」の3つだよ。",
+        "tab": "everyone",
+        "screen": "share"
+      },
+      {
+        "target": "emu-everyone",
+        "label": "みんなの一日",
+        "text": "みんなの一日の過ごし方を見られるよ。気になる予定は「＋取り入れる」で自分の今日に入れられるよ。",
+        "tab": "everyone",
+        "note": "取り入れる・投稿は完了条件にしない",
+        "screen": "share"
+      },
+      {
+        "target": "emu-filter",
+        "label": "カテゴリ",
+        "text": "生活・学び・仕事・健康などで絞り込めるよ。",
+        "tab": "everyone",
+        "screen": "share"
+      },
+      {
+        "target": "emu-today",
+        "label": "今日の一日",
+        "text": "今日の予定と学びは「今日の一日」に書くよ。公開するかは自分で決められるよ。",
+        "tab": "today",
+        "note": "入力内容は案内・計測の対象外",
+        "screen": "share"
+      },
+      {
+        "target": "emu-mystats",
+        "label": "わたしの記録",
+        "text": "連続日数・達成率・役に立った人の数はここ。毎日がちゃんと積み重なっていくよ。",
+        "tab": "mine",
+        "screen": "share"
+      },
+      {
+        "target": "emu-history",
+        "label": "これまでの一日シェア",
+        "text": "これまでの一日シェアは、ここで見返したり消したりできるよ。",
+        "tab": "mine",
+        "screen": "share"
+      }
+    ]
+  },
+  "emu-debate": {
+    "name": "04 議論",
+    "steps": [
+      {
+        "target": "emu-debate-list",
+        "label": "議論",
+        "text": "問いについて考える場所だよ。読むだけでも参加できるよ。",
+        "note": "発言は完了条件にしない",
+        "screen": "debate"
+      }
+    ]
+  }
+};
+  function viewState() {
+    var kd=frameDoc('emuKnowledgeFrame');
+    return [document.body.className.split(/\s+/).filter(function(cls){return /^(?:sp-(?:passport|menu|room)-open|emu-(?:knowledge|requests|ichinichi|discussion)-open)$/.test(cls);}).join(' '),dao()?.state.screen,!!document.querySelector('#emuRequestSheet.open'),kd?.querySelector('#panel')?.classList.contains('open'),kd?.querySelector('#topFilters .active')?.dataset.filter,window._sppCurrentPage?.()].join('|');
+  }
+  function openView(item) {
+    if(item.target==='emu-library' && window.innerWidth<=700 && !document.querySelector('#emuAccountMenu.open')) { requestAnimationFrame(function(){var running=tour.running();if(running?.id==='emu-feed' && running.index===6 && !document.querySelector('#emuAccountMenu.open'))window.toggleAccountMenu?.();}); }
+    if(item.target==='passport-entry' && dao()?.state.device !== 'mobile' && dao()?.state.sidebarOpen === false) dao().toggleSidebar();
+    if(item.pp && window._sppCurrentPage?.() !== item.pp) window.spPassportGoPage?.(item.pp);
+    var kd=frameDoc('emuKnowledgeFrame'), kw=kd?.defaultView;
+    if(item.lib && !kd?.querySelector('#panel.open')) { kd?.documentElement.removeAttribute('data-tour-library-ready'); kw?.openPanel?.('library'); }
+    if(item.target === 'emu-tabs' && kd?.querySelector('#panel.open')) kw?.closeOverlay?.(kd.querySelector('#panel'));
+    if(item.req && !document.querySelector('#emuRequestSheet.open')) {
+      // Keep existing access checks; never open a purchase prompt or reset a draft.
+      if(window.emuHasPlan?.('light') && window._emuAddress?.()) window.openEmuSheet?.('emuRequestSheet');
+    }
+    if(item.target === 'emu-room1' && document.querySelector('#emuRequestSheet.open')) window.closeEmuSheet?.('emuRequestSheet');
+    if(item.tab) {
+      var doc=frameDoc('emuIchinichiFrame'), tab=item.tab==='everyone'?'explore':item.tab;
+      if(doc && !doc.querySelector('[data-tab="'+tab+'"].active')) doc.defaultView.selectTab?.(tab);
+    }
+  }
+  function specificationStep(item) {
+    var entry=step(item.target,item.label,item.text);
+    if(item.target==='nav-guild') entry.target='[data-tour~=nav-guild],[data-tour~=nav-02]';
+    entry.note=item.note;entry.open=function(){openView(item);};
+    if(item.pp)entry.pending=function(){return window._sppCurrentPage?.()!==item.pp;};
+    // On smaller widths the native monthly filter is the visible equivalent.
+    if(item.target==='emu-theme') entry.target='[data-tour~=emu-theme],#topFilters [data-filter="monthly"]';
+    if(item.click) entry.advanceOn={read:viewState};
+    if(item.lib) entry.advanceOn={target:'[data-panel-close]',cancel:true,read:function(){return !!frameDoc('emuKnowledgeFrame')?.querySelector('#panel.open');}};
+    if(item.req) entry.avoid='[data-tour~=emu-req-actions]';
+    if(item.req) entry.advanceOn={target:'.emu-sheet-actions button:first-child',read:function(){return !!document.querySelector('#emuRequestSheet.open');}};
+    return entry;
+  }
+  register("sp-home","ホーム",v2["home"].steps.map(specificationStep),"home",null);
+  register("sp-guilds","ギルド",v2["guild"].steps.map(specificationStep),"logs",null);
+  register("sp-quests","クエスト",v2["quest"].steps.map(specificationStep),"experiments",null);
+  register("sp-wisdom","知恵",v2["wisdom"].steps.map(specificationStep),"library",null);
+  register("sp-park","公園",v2["park"].steps.map(specificationStep),"park",null);
+  register("sp-contribution","貢献",v2["contrib"].steps.map(specificationStep),"members",null);
+  register("sp-treasury","treasury",v2["treasury"].steps.map(specificationStep),"treasury",null);
+  register("sp-city","CITY（入口のみ）",v2["city"].steps.map(specificationStep),"city",null);
+  register("sp-passport","SchoolPark パスポート",v2["passport"].steps.map(specificationStep),"passport",null);
+  register("emu-feed","01 知識を読む",v2["emu-read"].steps.map(specificationStep),null,"emuKnowledgeFrame");
+  register("emu-requests","02 知識を探す",v2["emu-search"].steps.map(specificationStep),null,null);
+  register("emu-share","03 一日シェア",v2["emu-share"].steps.map(specificationStep),null,"emuIchinichiFrame");
+  register("emu-discussion","04 議論",v2["emu-debate"].steps.map(specificationStep),null,"emuDiscussionFrame");
   register('sp-guild','ギルドの詳細',[
     step('screen-heading','ギルドの詳細','活動や参加条件を確認できます。'),
     step('guild-detail','決めごとの見方','ルールと議題を読んでから判断できます。投票や参加はこの案内の条件ではありません。')
   ],'guild');
-  register('sp-quests','クエスト',[
-    step('quest-intro','クエストとは','仕事や実験の内容を確認する場所です。'),
-    step('quest-filter','絞り込み','表示する種類を切り替えられます。次へだけでも進めます。',function () { return dao()?.state.filter; }),
-    step('quest-list','一覧から詳細へ','内容や期限を読んで検討できます。応募・参加は案内の条件ではありません。')
-  ],'experiments');
   register('sp-quest-detail','クエストの詳細',[
     step('screen-heading','内容を読む','概要と現場の資料を確認する画面です。'),
     step('quest-detail','条件を確かめる','期限や報告の説明を読んでから判断してください。受ける・提出する必要はありません。')
   ],'detail');
-  register('sp-wisdom','知恵',[
-    step('wisdom-intro','知恵とは','元の知識を実際に試し、残った一文を読む場所です。'),
-    step('wisdom-tags','分類で探す','タグで表示を絞れます。次へだけでも進めます。',function () { return dao()?.state.wtag; }),
-    step('wisdom-list','カードを読む','必要なら詳細を開いて、経験の背景を読めます。引用や投稿は必須ではありません。')
-  ],'library');
-  register('sp-park','公園',[
-    step('park-intro','公園とは','遊びや活動の入口を見る場所です。'),
-    step('park-map','地図の見方','気になる場所を確認できます。移動や参加をしなくても案内を終えられます。')
-  ],'park');
   register('sp-plaza','公園の広場',[
     step('screen-heading','広場の見方','活動の表示内容を確認できます。'),
     step('plaza-list','一覧を読む','予定や挑戦を見られます。参加・投稿は必要ありません。')
   ],'plaza');
-  register('sp-contribution','貢献',[
-    step('contribution-intro','貢献とは','活動の記録を確認する場所です。'),
-    step('contribution-list','一覧の見方','知恵や完走、引用の記録を見られます。表示だけでは支払いは発生しません。')
-  ],'members');
-  register('sp-treasury','treasury',[
-    step('treasury-card','treasuryとは','予算とお金の記録を確認する場所です。'),
-    step('treasury-transactions','取引の見方','表示された記録を読む案内です。送金・購入は行いません。'),
-    step('support-btn','分からないとき','メニューやサポートから問い合わせできます。')
-  ],'treasury');
-  register('sp-city','CITY',[
-    step('screen-heading','CITYの入口','SchoolPark Cityへ広がる入口です。詳細な移動・購入・チェックインの案内は今回ありません。')
-  ],'city');
   register('sp-tasks','自分の宿題',[
     step('screen-heading','自分の宿題','取り組むことを確認できます。'),
     step('tasks-list','一覧の見方','締切やメモを読めます。追加・完了・削除はこの案内では行いません。')
@@ -175,26 +653,7 @@
   register('sp-year-goals','年内目標',[
     step('screen-heading','年内目標','SchoolParkの目標と資料を読む場所です。'),
     step('year-goals','資料を読む','必要な箇所を確認してください。提出・編集は必要ありません。')
-  ],'yeargoals');
-  register('emu-feed','知識を読む',[
-    step('knowledge-sort','一覧の見方','並び替えて知識を探せます。次へだけでも進めます。',function () { return frameDoc('emuKnowledgeFrame')?.querySelector('#topFilters .active')?.dataset.filter; }),
-    step('knowledge-card','カードを読む','本文はカード内で読めます。長い本文は「続きを読む」から確認できます。'),
-    step('emu-tabs','画面の切り替え','知識を読む、知識を探す、一日シェア、議論の4画面です。保存・投稿は案内の条件ではありません。')
-  ],null,'emuKnowledgeFrame');
-  register('emu-requests','知識を探す',[
-    step('request-intro','知識を探す','まだ答えがない困りごとを確認する場所です。'),
-    step('request-list','募集を読む','内容を読んで、自分に合うものを探せます。募集や回答を出す必要はありません。'),
-    step('room1-entry','Room1の入口','分野別の学習コンテンツはここから開けます。案内は次へだけでも完了できます。')
-  ]);
-  register('emu-share','一日シェア',[
-    step('share-frame','一日シェアとは','日々のシェアを読む画面です。'),
-    step('emu-tabs','次の画面へ','下部または左のタブで移れます。投稿や＋ボタンの操作は不要です。')
-  ],null,'emuIchinichiFrame');
-  register('emu-discussion','議論',[
-    step('discussion-frame','議論とは','開催中の議論を確認する画面です。'),
-    step('emu-tabs','画面の切り替え','読むだけでも大丈夫です。発言やルーム作成は案内の条件ではありません。')
-  ],null,'emuDiscussionFrame');
-  function closeSupport() {
+  ],'yeargoals');  function closeSupport() {
     var panel = document.getElementById('emu-contact-panel');
     if (panel?.classList.contains('open') && typeof window.toggleContactPanel === 'function') window.toggleContactPanel();
   }
@@ -237,7 +696,18 @@
   function watchFrame(fr) {
     var doc;try{doc=fr.contentDocument;}catch(error){return;}
     if(!doc||!doc.body||observed.has(doc))return;observed.add(doc);
-    var mo=new MutationObserver(function(){scheduleRoute();});
+    deliveries.set(doc,{});
+    fr.contentWindow.addEventListener('message',function(event){
+      if(event.origin!==window.location.origin || event.source!==window) return;
+      var type=event.data?.type, meta=deliveries.get(doc);
+      if(type==='emu-knowledge-loading'){meta.posts=false;}
+      if(type==='emu-knowledge-posts'){meta.posts=true;}
+      if(type==='emu-knowledge-panel-data' && event.data.kind==='library'){meta.library=true;}
+      if(type==='emu-discussion-rooms'){meta.rooms=true;}
+      tour.refresh();
+    });
+    var wasLibrary=false;
+    var mo=new MutationObserver(function(){var open=!!doc.querySelector('#panel.open');if(!open && wasLibrary)deliveries.get(doc).library=false;wasLibrary=open;scheduleRoute();});
     mo.observe(doc.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','hidden']});
     fr.contentWindow.addEventListener('pagehide',function(){mo.disconnect();},{once:true});
   }

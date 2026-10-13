@@ -4963,7 +4963,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <button type="button" role="menuitem" onclick="accountGo('profile')">プロフィール</button>
         <button type="button" role="menuitem" onclick="accountGo('themes')">興味のあるテーマ</button>
         <!-- Room1は独立タブではなく、全端末で「知識を探す」から開く -->
-        <button type="button" role="menuitem" class="emu-phone-only" onclick="accountGo('library')">マイライブラリー</button>
+        <button type="button" role="menuitem" class="emu-phone-only" data-tour="emu-library" onclick="accountGo('library')">マイライブラリー</button>
         <!-- スマホだけ。右上のユーザー表示（名前 / プロフィール画像）を選ぶ -->
         <button type="button" role="menuitem" class="emu-phone-only" onclick="accountGo('settings')">設定</button>
         <button type="button" role="menuitem" onclick="accountGo('sessions')">対話の予定</button>
@@ -5212,17 +5212,17 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 
   <section class="emu-request-page" id="emuRequestsPage">
     <!-- Room1は独立タブではなく、全端末で「知識を探す」から開く -->
-    <button type="button" class="emu-room1-entry" data-tour="room1-entry" onclick="openSpRoom('/admin/room1/index.html', 'Room1')"
+    <button type="button" class="emu-room1-entry" data-tour="room1-entry emu-room1" onclick="openSpRoom('/admin/room1/index.html', 'Room1')"
             aria-label="Room1（学習コンテンツ）を開く"><span aria-hidden="true">◪</span>Room1</button>
     <div class="eth-section-head">
       <div>
         <span class="eth-badge">KNOWLEDGE REQUEST</span>
-        <h2 data-tour="request-intro" style="margin:7px 0 3px;" data-i18n="req.title">知識を探しています</h2>
+        <h2 data-tour="request-intro emu-req-head" style="margin:7px 0 3px;" data-i18n="req.title">知識を探しています</h2>
         <p data-i18n="req.desc">まだ答えがない困りごとに、経験から得た知識を届け合う場所です。</p>
       </div>
-      <button type="button" class="eth-btn primary" onclick="openKnowledgeRequestComposer()" data-i18n="req.new">＋ 知識を募集する</button>
+      <button type="button" class="eth-btn primary" data-tour="emu-req-btn" onclick="openKnowledgeRequestComposer()" data-i18n="req.new">＋ 知識を募集する</button>
     </div>
-    <div class="emu-request-grid" id="emuRequestList">
+    <div class="emu-request-grid" id="emuRequestList" data-tour="emu-req-list">
       <div class="eth-card emu-request-empty" data-i18n="req.loading">募集を読み込んでいます...</div>
     </div>
   </section>
@@ -5417,7 +5417,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <div class="emu-sheet" id="emuRequestSheet" role="dialog" aria-modal="true" aria-labelledby="emuRequestTitle">
   <div class="emu-sheet-card">
     <div class="emu-sheet-head">
-      <div><h2 id="emuRequestTitle">知識を募集する</h2><p>困りごとと求める知識を具体的にすると、経験を持つ人へ届きやすくなります。</p></div>
+      <div><h2 id="emuRequestTitle" data-tour="emu-req-form">知識を募集する</h2><p>困りごとと求める知識を具体的にすると、経験を持つ人へ届きやすくなります。</p></div>
       <button class="emu-sheet-close" type="button" onclick="closeEmuSheet('emuRequestSheet')">×</button>
     </div>
     <div class="emu-field"><label for="emuRequestQuestion">何について知識を探していますか</label><input id="emuRequestQuestion" maxlength="120" placeholder="例：初めてイベントを主催するとき、参加者の緊張をほぐした方法"></div>
@@ -5427,7 +5427,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     </div>
     <div class="emu-field"><label for="emuRequestDeadline">回答期限</label><input id="emuRequestDeadline" type="date"></div>
     <p style="font-size:11px;color:#777;line-height:1.6;">懸賞は一律3 EMUER。採用時に<b>あなたの残高から</b>回答者へ渡されます（3 EMUER以上の残高が必要）。募集作成だけでは消費されません。</p>
-    <div class="emu-sheet-actions"><button class="eth-btn" type="button" onclick="closeEmuSheet('emuRequestSheet')">やめる</button><button class="eth-btn primary" id="emuRequestSubmit" type="button">募集を公開する</button></div>
+    <div class="emu-sheet-actions" data-tour="emu-req-actions"><button class="eth-btn" type="button" onclick="closeEmuSheet('emuRequestSheet')">やめる</button><button class="eth-btn primary" id="emuRequestSubmit" type="button">募集を公開する</button></div>
   </div>
 </div>
 
@@ -21828,7 +21828,7 @@ async function openSpPassport() {
     + '<div class="spp-spread">'
     + '<div class="spp-leaf spp-leaf-a">'
     + '<p class="spp-leaf-head">Holder</p>'
-    + '<div class="spp-num">'
+    + '<div class="spp-num" data-tour="pp-id">'
     /* SchoolPark ID。ログイン方法が変わっても、この番号は変わらない。
        ウォレットアドレスや Firebase の uid は、ここには出さない。 */
     + '<div class="spp-num-label">SCHOOLPARK ID</div>'
@@ -21852,7 +21852,7 @@ async function openSpPassport() {
 
     /* 本人性のところ。まだ繋がっていないものを、繋がっているように見せない。
        性別などの属性は、確かめた元が無いので推測しないし、出さない。 */
-    + '<div class="spp-leaf spp-leaf-b">'
+    + '<div class="spp-leaf spp-leaf-b" data-tour="pp-verify">'
     + '<p class="spp-leaf-head">Verification</p>'
     + '<div class="spp-page-title" style="font-size:14px;margin:0 0 8px">本人であること</div>'
     /* SchoolPark ID にぶら下がっているログイン方法と連携ウォレット。
@@ -21891,7 +21891,7 @@ async function openSpPassport() {
     + '<p class="spp-leaf-head">Starfield</p>'
     + '<p class="spp-note" style="margin:0 0 12px">SchoolPark で歩いてきた記録は、星空に残っています。'
     + 'ひとつの行動が、ひとつの星になります。</p>'
-    + '<button type="button" class="spp-star" onclick="spPassportOpenStar()">'
+    + '<button type="button" class="spp-star" data-tour="pp-starfield" onclick="spPassportOpenStar()">'
     + '🌌　星空を見る<small>Quest・探究・制作・貢献・実績。これまでの記録を見る</small></button>'
     /* 何色の星が何を指すのか。星空の中で使っている呼び名とそろえてある。 */
     + '<ul class="spp-legend">'
@@ -21907,7 +21907,7 @@ async function openSpPassport() {
     + '<div class="spp-leaf spp-leaf-b">'
     + '<p class="spp-leaf-head">Record</p>'
     + '<div class="spp-page-title" style="font-size:14px;margin:0 0 8px">SchoolPark の記録</div>'
-    + '<div id="sppRecords"><div class="spp-row"><dt>記録</dt><dd>読み込んでいます…</dd></div></div>'
+    + '<div id="sppRecords" data-tour="pp-record"><div class="spp-row"><dt>記録</dt><dd>読み込んでいます…</dd></div></div>'
     + '</div>'
     + '</div>'
     + '</div>'
@@ -21924,14 +21924,14 @@ async function openSpPassport() {
     + '<p class="spp-note" style="margin:0 0 12px">星空が「何をしてきたか」なら、ここは'
     + '「その行動が、誰にどう届いたか」です。<br>'
     + '投稿の数ではなく、誰かの役に立ち、改善され、学びになった分だけが残ります。</p>'
-    + '<button type="button" class="spp-star spp-value" onclick="spPassportOpenValue()">'
+    + '<button type="button" class="spp-star spp-value" data-tour="pp-value" onclick="spPassportOpenValue()">'
     + '💠　価値プロフィールを見る<small>Emu に積み上がっている、あなたが渡した価値を見る</small></button>'
     + '</div>'
     + '<div class="spp-seam"></div>'
     + '<div class="spp-leaf spp-leaf-b">'
     + '<p class="spp-leaf-head">How it travels</p>'
     + '<div class="spp-page-title" style="font-size:14px;margin:0 0 8px">価値が渡っていく道すじ</div>'
-    + '<ol class="spp-chain">'
+    + '<ol class="spp-chain" data-tour="pp-travels">'
     + '<li><b>知識を届けた</b>投稿・募集への回答</li>'
     + '<li><b>誰かの役に立った</b>役に立った人／役に立った回数</li>'
     + '<li><b>改善された</b>改善に参加／採用された改善／採用したChange</li>'
@@ -21949,7 +21949,7 @@ async function openSpPassport() {
     + '<div class="spp-nav">'
     + '<button type="button" class="spp-nav-btn" id="sppPrev" hidden onclick="spPassportTurn(-1)">←</button>'
     + '<div class="spp-dots" id="sppDots"><i class="on"></i><i></i><i></i></div>'
-    + '<button type="button" class="spp-nav-btn" id="sppNext" onclick="spPassportTurn(1)">私は何をしてきたのか →</button>'
+    + '<button type="button" class="spp-nav-btn" id="sppNext" data-tour="pp-next1 pp-next2" onclick="spPassportTurn(1)">私は何をしてきたのか →</button>'
     + '</div>';
 
   if (card) card.classList.remove('spp-lite');   /* ここから本の大きさ */
@@ -29564,7 +29564,7 @@ async function sendEmuFeedback() {
       </div>
       <button type="button" class="spp-close" onclick="closeSpMobileMenu()" aria-label="閉じる">✕</button>
     </div>
-    <button type="button" class="smm-row" onclick="closeSpMobileMenu(); openSpPassport();">
+    <button type="button" class="smm-row" data-tour="passport-entry" onclick="closeSpMobileMenu(); openSpPassport();">
       <span>SchoolPark パスポート<br>
         <small style="opacity:.6;font-weight:400">SchoolPark ID・ログイン方法の追加・ウォレット連携</small>
       </span><span class="smm-go">→</span>
