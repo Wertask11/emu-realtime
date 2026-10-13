@@ -666,16 +666,37 @@ service cloud.firestore {
     match /knowledge_requests/{requestId} {
       allow read: if signedIn();
       // 知識を募集するのは light 以上（9/1から）
+      /* 募集の作り方は2通り。
+           ・これまで：懸賞は募集者の残高から（settlementStatus: uncommitted）
+           ・EMUER v2（9/19〜）：募集者の残高は減らない。採用された回答には
+             運営トレジャリーから1 EMUER（rewardPolicy: emuer-v2-treasury-1、
+             settlementStatus: treasury_review、bounty: 1）。
+         前は v2 の形を通していなかったため、9/19 以降の募集の公開と採用が
+         すべて断られていた。v2 の報酬はサーバー（/activity/knowledge-answer）が
+         回答の中身を確かめてから出すので、ここでは形だけを確かめる。 */
       allow create: if mayCreate(request.resource.data.get('author', ''), 1, 'request')
         && request.resource.data.status == 'open'
         && request.resource.data.answerCount == 0
-        && request.resource.data.settlementStatus == 'uncommitted';
+        && (request.resource.data.settlementStatus == 'uncommitted'
+            || (request.resource.data.settlementStatus == 'treasury_review'
+                && request.resource.data.get('rewardPolicy', '') == 'emuer-v2-treasury-1'
+                && request.resource.data.get('bounty', 0) == 1));
       allow update: if signedIn() && (
         (isMyWallet(resource.data.get('author', '')) && changedOnly([
           'status', 'acceptedAnswerId', 'acceptedAnswerAuthor', 'awardedAt', 'settlementStatus'
         ])
           && request.resource.data.status == 'awarded'
           && request.resource.data.settlementStatus == 'pending_distribution'
+          && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.requestId == requestId
+          && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.answerAuthor == request.resource.data.acceptedAnswerAuthor)
+        /* v2 の採用：募集中の募集だけ。運営トレジャリーの確認待ちにする */
+        || (isMyWallet(resource.data.get('author', '')) && resource.data.status == 'open'
+          && changedOnly([
+            'status', 'acceptedAnswerId', 'acceptedAnswerAuthor', 'awardedAt', 'settlementStatus', 'rewardPolicy'
+          ])
+          && request.resource.data.status == 'awarded'
+          && request.resource.data.settlementStatus == 'treasury_review'
+          && request.resource.data.rewardPolicy == 'emuer-v2-treasury-1'
           && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.requestId == requestId
           && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.answerAuthor == request.resource.data.acceptedAnswerAuthor)
         || (changedOnly(['answerCount'])
