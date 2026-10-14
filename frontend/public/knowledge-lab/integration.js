@@ -270,6 +270,7 @@
         const result = Promise.resolve(original.apply(this, arguments));
         const tracked = result.finally(() => {
           if (pendingLanding === tracked) pendingLanding = null;
+          resume();
         });
         pendingLanding = tracked;
         return tracked;
@@ -303,20 +304,24 @@
       attributeFilter: ["class", "style"],
     });
     function resume() {
-      const main = document.getElementById("mainApp");
+      if (!intent) return;
       if (
-        !main ||
         !window.auth?.currentUser ||
-        !main.getBoundingClientRect().width ||
+        !window._chesEntered || pendingLanding || covered() ||
         document.documentElement.classList.contains("ches-resuming") ||
         typeof window.openSpRoom !== "function"
       )
         return;
+      const target = intent;
+      intent = null;
       observer.disconnect();
       sessionStorage.removeItem("emu-lab-return");
-      window.openEmuKnowledgeLab(intent.view, {
-        post: intent.post,
-        note: intent.note,
+      // The normal landing can be SchoolPark. An explicit Lab/recruitment URL
+      // must return to Emu after that existing login promise has completed.
+      if (typeof window.showEmuRequests === 'function') window.showEmuRequests();
+      window.openEmuKnowledgeLab(target.view, {
+        post: target.post,
+        note: target.note,
       });
     }
     resume();

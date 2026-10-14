@@ -31,6 +31,7 @@
     selected: new Map(),
     fields: [],
     post: null,
+    originAnswer: null,
     note: null,
     writerRevision: 0,
     termRevision: 0,
@@ -42,6 +43,11 @@
     loadedViews: {},
   };
   const messages = {
+    IDENTITY_REVIEW_REQUIRED: 'Passportの紐付けを確認できないため、運営による確認が必要です。回答・報酬は保留になります。',
+    SELF_ANSWER: '自分と同じPassportの募集には回答・採用できません。',
+    ANSWER_PUBLICATION_CONSENT_REQUIRED: '回答を公開する前に、内容と公開範囲の確認にチェックしてください。',
+    ANSWER_ALREADY_POSTED: 'この回答からの経験知は作成済みです。作成済みの投稿を編集してください。',
+    ARCHIVED_NOTE_RESTORE_REQUIRED: '保管したノートは復元してから編集できます。',
     READER_PLAN_REQUIRED:
       "見学では新着20件を読めます。続きの知識は既存のEmu light以上で利用できます。",
     LAUNCH_HOLD: "公開準備中です。保存・投稿はまだ利用できません。",
@@ -344,7 +350,7 @@
         )
         .join(
           "",
-        )}<p class="hint">医療・法律・金融などの内容は個人の経験であり、専門的な助言や結果を保証するものではありません。出典の有無と正しさの検証は別です。</p><div class="actions"><button type="button" id="saveKnowledge">マイライブラリーに保存</button><button type="button" id="unsaveKnowledge">保存を外す</button><button type="button" id="useKnowledge">研究に使う</button>${p.editable ? '<button type="button" id="editKnowledge">編集</button><button type="button" id="withdrawKnowledge">公開を取り下げる</button><button type="button" id="archiveKnowledge">削除して非公開で保管</button><button type="button" id="restoreKnowledge" hidden>下書きに復元</button><button type="button" id="postHistory">編集履歴</button>' : ""}${p.authorSchoolParkId ? '<button type="button" id="openWriter">書き手を見る</button>' : ""}<button type="button" id="goodKnowledge">役に立った</button><button type="button" id="changeKnowledge">改善案を届ける</button><button type="button" id="proposeKnowledge">議題にする</button><button type="button" id="discussKnowledge">議論へ</button></div><div class="report-controls"><label for="reportReason">通報する理由</label><textarea id="reportReason" maxlength="1500"></textarea><button type="button" id="reportKnowledge">運営へ通報</button></div>`;
+        )}<p class="hint">医療・法律・金融などの内容は個人の経験であり、専門的な助言や結果を保証するものではありません。出典の有無と正しさの検証は別です。</p>${lab.sourceAnswer ? `<p class="hint">元募集 ${esc(lab.sourceAnswer.requestId)}・元回答 ${esc(lab.sourceAnswer.answerId)}</p><button type="button" id="answerSource">元の募集・回答を見る</button>` : ""}<div class="actions"><button type="button" id="saveKnowledge">マイライブラリーに保存</button><button type="button" id="unsaveKnowledge">保存を外す</button><button type="button" id="useKnowledge">研究に使う</button>${p.editable ? '<button type="button" id="editKnowledge">編集</button><button type="button" id="withdrawKnowledge">公開を取り下げる</button><button type="button" id="archiveKnowledge">削除して非公開で保管</button><button type="button" id="restoreKnowledge" hidden>下書きに復元</button><button type="button" id="postHistory">編集履歴</button>' : ""}${p.authorSchoolParkId ? '<button type="button" id="openWriter">書き手を見る</button>' : ""}<button type="button" id="goodKnowledge">役に立った</button><button type="button" id="changeKnowledge">改善案を届ける</button><button type="button" id="proposeKnowledge">議題にする</button><button type="button" id="discussKnowledge">議論へ</button></div><div class="report-controls"><label for="reportReason">通報する理由</label><textarea id="reportReason" maxlength="1500"></textarea><button type="button" id="reportKnowledge">運営へ通報</button></div>`;
     $("#detailDialog").showModal();
     bindAsync($("#saveKnowledge"), async () => {
       await api("/saved/" + p.id, {
@@ -371,7 +377,8 @@
       await view("research");
     });
     if (p.editable) {
-      if (p.visibility === "archived") {
+      if ($("#answerSource")) bindAsync($("#answerSource"),()=>showAnswers(lab.sourceAnswer.requestId));
+    if (p.visibility === "archived") {
         $("#editKnowledge").hidden = true;
         $("#withdrawKnowledge").hidden = true;
         $("#archiveKnowledge").hidden = true;
@@ -469,6 +476,9 @@
   function edit(p = null) {
     state.post = p;
     $("#postForm").reset();
+    state.originAnswer = p?.knowledgeLab?.sourceAnswer || null;
+    $("#answerOrigin").hidden = !state.originAnswer;
+    $("#answerOriginText").textContent = state.originAnswer ? '元の募集・回答への参照を保持します。内容と公開範囲を確認してください。' : '';
     $("#editorTitle").textContent = p ? "経験知を編集する" : "経験知を届ける";
     $("#postTitle").value = p?.title || "";
     $("#postBody").value = p?.body || "";
@@ -506,6 +516,7 @@
           title: $("#postTitle").value,
           body: $("#postBody").value,
           tags: $("#postTags").value,
+          ...(state.originAnswer ? {answerId:state.originAnswer.answerId,answerPublicationConsent:$("#answerPublicationConsent").checked} : {}),
           facets: facetValue("#postFacets"),
           visibility: $("#postVisibility").value,
         };
@@ -671,7 +682,7 @@
   async function showNote(noteId) {
     const n = await api("/notes/" + noteId, { optional: true });
     $("#detailBody").innerHTML =
-      `<h2 id="detailTitle">${esc(n.title)}</h2><p>${esc(names(n.fields))}・更新 ${date(n.updatedAtMs)}</p><span class="badge">手動で記入した${n.result ? "実践の記録（自己申告）" : "未検証の仮説"}</span>${[
+      `<h2 id="detailTitle">${esc(n.title)}</h2><p>${esc(names(n.fields))}・更新 ${date(n.updatedAtMs)}・版 ${n.revision}</p>${n.archived ? '<p class="notice">保管済み・他の人には表示されません。復元すると自分用のノートとして編集できます。</p>' : ""}<span class="badge">手動で記入した${n.result ? "実践の記録（自己申告）" : "未検証の仮説"}</span>${[
         ["question", "問い"],
         ["hypothesis", "仮説（未検証）"],
         ["plan", "実践案・注意点"],
@@ -683,7 +694,7 @@
         )
         .join(
           "",
-        )}<h3>元になった知識</h3>${n.sourceIds.map((id) => `<p><button type="button" data-post="${esc(id)}">元知識 ${esc(id)} を読む</button></p>`).join("")}<div class="actions">${state.me?.schoolParkId === n.authorSchoolParkId ? '<button type="button" id="continueNote">結果を追記・編集</button><button type="button" id="archiveNote">ノートを非公開で保管</button><button type="button" id="publishExperience">試した結果を経験知として書く</button>' : ""}<button type="button" id="discussNote">既存の議論へ</button><button type="button" id="practiceNote">Quest・Guildで実践する</button></div><div class="report-controls"><label for="noteReport">通報理由</label><textarea id="noteReport" maxlength="1500"></textarea><button type="button" id="reportNote">運営へ通報</button></div>`;
+        )}<h3>元になった知識</h3>${n.sourceIds.map((id) => `<p><button type="button" data-post="${esc(id)}">元知識 ${esc(id)} を読む</button></p>`).join("")}<div class="actions">${state.me?.schoolParkId === n.authorSchoolParkId && !n.archived ? '<button type="button" id="continueNote">結果を追記・編集</button><button type="button" id="archiveNote">ノートを非公開で保管</button><button type="button" id="publishExperience">試した結果を経験知として書く</button>' : ""}${n.archived && state.me?.schoolParkId === n.authorSchoolParkId ? '<button type="button" id="restoreNote">自分用に復元</button>' : ""}${state.me?.schoolParkId === n.authorSchoolParkId || state.me?.owner ? '<button type="button" id="noteHistory">更新履歴</button>' : ""}<button type="button" id="discussNote" ${n.archived ? "disabled" : ""}>既存の議論へ</button><button type="button" id="practiceNote" ${n.archived ? "disabled" : ""}>Quest・Guildで実践する</button></div><div class="report-controls"><label for="noteReport">通報理由</label><textarea id="noteReport" maxlength="1500"></textarea><button type="button" id="reportNote">運営へ通報</button></div>`;
     $("#detailDialog").showModal();
     $("#detailBody")
       .querySelectorAll("[data-post]")
@@ -693,6 +704,13 @@
           await detail(b.dataset.post);
         }),
       );
+    if ($("#restoreNote")) bindAsync($("#restoreNote"), async () => {
+      await api("/notes/"+n.id+"/restore",{method:"POST",auth:true,body:{revision:n.revision}});
+      state.loadedViews.mine=0;
+      await showNote(n.id);
+      status("自分用に復元しました。公開範囲は自分で選び直せます。");
+    });
+    if ($("#noteHistory")) bindAsync($("#noteHistory"),()=>showNoteHistory(n.id));
     if ($("#continueNote")) {
       bindAsync($("#continueNote"), async () => {
         state.note = n;
@@ -726,6 +744,8 @@
           body: { revision: n.revision },
         });
         $("#detailDialog").close();
+        state.loadedViews.mine=0;
+        if(state.view === "mine") await loadMine();
         status("研究を非公開で保管しました。");
       });
       $("#publishExperience").onclick = () => {
@@ -761,20 +781,50 @@
       status("通報を受け付けました。");
     });
   }
+  async function showNoteHistory(noteId, cursor = null) {
+    const data=await api("/notes/"+noteId+"/history"+(cursor?"?cursor="+encodeURIComponent(cursor):""),{auth:true});
+    function version(v){return `<p>版 ${v.revision}・${esc(v.visibility)}${v.archived ? "・保管済み" : ""}</p>`+["title","question","hypothesis","plan","result"].map(k=>`<p class="body"><b>${esc({title:"題名",question:"問い",hypothesis:"仮説",plan:"実践案",result:"結果"}[k])}</b>：${esc(v[k]||"未記入")}</p>`).join("");}
+    const rows=data.items.map(h=>`<article class="card"><h3>更新 ${date(h.changedAtMs)}・更新者 ${esc(h.actorSchoolParkId||"以前の記録：更新者未記録")}</h3><details><summary>変更前</summary>${version(h.previous)}</details>${h.next?`<details><summary>変更後</summary>${version(h.next)}</details>`:""}</article>`).join("");
+    if(!cursor) $("#detailBody").innerHTML=`<h2 id="detailTitle">研究ノートの更新履歴</h2><p>本人と運営だけが確認できます。以前の非公開内容を他の人には表示しません。</p><button type="button" id="historyBack">ノートへ戻る</button><details><summary>現在の版</summary>${version(data.current)}</details><div id="historyRows"></div><button type="button" id="historyMore">以前の記録をさらに確認</button>`;
+    $("#historyRows").insertAdjacentHTML("beforeend",rows||"<p>更新履歴はまだありません。</p>");
+    $("#historyBack").onclick=()=>run(()=>showNote(noteId));
+    $("#historyMore").hidden=!data.next;
+    $("#historyMore").onclick=()=>run(()=>showNoteHistory(noteId,data.next));
+  }
+  async function showAnswers(requestId, cursor = null) {
+    const data=await api("/requests/"+requestId+"/answers"+(cursor?"?cursor="+encodeURIComponent(cursor):""),{auth:true});
+    if(!cursor) $("#detailBody").innerHTML='<h2 id="detailTitle">回答から知識を届ける</h2><p>あなた自身の回答を確認し、経験知フォームへ引き継げます。回答だけで自動公開されることはありません。</p><div id="answerRows"></div><button type="button" id="answerMore">さらに表示</button>';
+    $("#answerRows").insertAdjacentHTML("beforeend",data.items.map(a=>`<article class="card"><p class="body">${esc(a.experience)}</p><p class="body">${esc(a.knowledge)}</p><p class="body">${esc(a.limits)}</p>${a.canPublish?`<button type="button" data-publish-answer="${esc(a.id)}">この回答を知識として届ける</button>`:"<p>公開への引き継ぎは回答者本人が行います。</p>"}</article>`).join("")||"<p>まだ回答がありません。</p>");
+    $("#answerMore").hidden=!data.next;$("#answerMore").onclick=()=>run(()=>showAnswers(requestId,data.next));
+    $("#answerRows").querySelectorAll("[data-publish-answer]").forEach(b=>bindAsync(b,async()=>{
+      const d=await api("/answers/"+b.dataset.publishAnswer+"/draft",{auth:true});
+      $("#detailDialog").close();
+      if(d.existingPostId){await detail(d.existingPostId);status("この回答からの経験知は作成済みです。編集または復元して続けてください。");return;}
+      edit();state.originAnswer={answerId:d.answerId,requestId:d.requestId};
+      $("#answerOrigin").hidden=false;$("#answerOriginText").textContent="元募集 "+d.requestId+"・元回答 "+d.answerId+"。内容と公開範囲を確認してください。";
+      $("#postTitle").value=d.title;$("#postBody").value=d.body;$("#postHappened").value=d.happened;$("#postAdvice").value=d.advice;facetUI("#postFacets",d.facets);
+    }));
+    if(!$("#detailDialog").open) $("#detailDialog").showModal();
+  }
+  async function reviewRewards(more = false) {
+    const data=await api("/admin/reward-review"+(more && state.cursors.rewardReview ? "?cursor="+encodeURIComponent(state.cursors.rewardReview) : ""),{auth:true});
+    if(!more) $("#adminItems").innerHTML='<p>読み取りのみ。既存報酬の削除・回収・送金は行いません。</p>';
+    $("#adminItems").insertAdjacentHTML("beforeend",data.items.map(v=>`<article class="card"><p>${esc(v.id)}・${esc(v.status)}</p><p>${esc(v.identityCheck)}</p><small>募集 ${esc(v.requestId||"記録なし")}／回答 ${esc(v.answerId||"記録なし")}</small></article>`).join("")||"<p>確認対象の報酬はありません。</p>");
+    state.cursors.rewardReview=data.next;
+    $("#rewardReviewMore").hidden=!data.next;$("#adminMore").hidden=true;
+  }
+  bindAsync($("#reviewRewards"),()=>reviewRewards());
+  bindAsync($("#rewardReviewMore"),()=>reviewRewards(true));
   async function loadMine(more = false) {
-    const kind = state.mineKind,
-      data = await api(
-        "/me/" +
-          kind +
-          (more && state.cursors.mine
-            ? "?cursor=" + encodeURIComponent(state.cursors.mine)
-            : ""),
-        { auth: true },
-      );
+    const kind = state.mineKind, isNote = ["notes","archived-notes"].includes(kind);
+    const params = new URLSearchParams();
+    if(kind === "archived-notes") params.set("archived","1");
+    if(more && state.cursors.mine) params.set("cursor",state.cursors.mine);
+    const data = await api("/me/"+(isNote ? "notes" : kind)+(params.size ? "?"+params : ""),{auth:true});
     if (!more) $("#mineItems").innerHTML = "";
     $("#mineItems").insertAdjacentHTML(
       "beforeend",
-      (kind === "notes"
+      (isNote
         ? data.items.map(noteCard)
         : data.items.map((p) => card(p))
       ).join("") ||
@@ -782,7 +832,7 @@
           ? '<p class="card empty">まだ記録はありません。保存・投稿・研究をここから続けられます。</p>'
           : ""),
     );
-    if (kind === "notes") bindNotes("#mineItems");
+    if (isNote) bindNotes("#mineItems");
     else bindCards("#mineItems", data.items);
     state.cursors.mine = data.next;
     $("#mineMore").hidden = !data.next;
@@ -969,7 +1019,7 @@
       data.items
         .map(
           (r) =>
-            `<article class="card"><span class="badge">${r.status === "open" ? "募集中" : "終了"}・回答 ${r.answerCount || 0}</span><h3>${esc(r.question)}</h3><p>${esc(r.context)}</p><p>${esc(r.targetExperience || "")}</p>${badges(r)}<div class="actions"><button type="button" data-answer="${esc(r.id)}">経験を届ける</button><button type="button" data-answers="${esc(r.id)}">届いた知識・採用を確認</button></div></article>`,
+            `<article class="card"><span class="badge">${r.status === "open" ? "募集中" : "終了"}・回答 ${r.answerCount || 0}</span><h3>${esc(r.question)}</h3><p>${esc(r.context)}</p><p>${esc(r.targetExperience || "")}</p>${badges(r)}<div class="actions"><button type="button" data-answer="${esc(r.id)}">経験を届ける</button><button type="button" data-answers="${esc(r.id)}">届いた知識・採用を確認</button><button type="button" data-lab-answers="${esc(r.id)}">回答を知識として届ける</button></div></article>`,
         )
         .join("") ||
         (!more
@@ -990,6 +1040,7 @@
           (b.onclick = () =>
             integration("answers", { requestId: b.dataset.answers })),
       );
+    $("#requestItems").querySelectorAll("[data-lab-answers]").forEach(b=>bindAsync(b,()=>showAnswers(b.dataset.labAnswers)));
     state.cursors.requests = data.next;
     $("#requestMore").hidden = !data.next;
   }
@@ -1124,6 +1175,7 @@
     });
   });
   async function adminList(more = false) {
+    $("#rewardReviewMore").hidden=true;
     const kind = state.adminKind,
       data = await api(
         "/admin/list/" +

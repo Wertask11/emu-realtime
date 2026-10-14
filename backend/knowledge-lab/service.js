@@ -367,16 +367,38 @@ function createService({
     m.id(key);
     return ref("operations", m.hash([a.spid, kind, key]));
   }
+  async function answerDraft(a, answerId) {
+    const s = await db.collection('knowledge_answers').doc(m.id(answerId)).get();
+    if (!s.exists) m.fail('NOT_FOUND', 404);
+    const answer = s.data();
+    const who = await identity.knowledgeParticipant(answer.answerAuthor, answer.authorSchoolParkId);
+    if (!who) m.fail('IDENTITY_REVIEW_REQUIRED',409);
+    if (who !== a.spid) m.fail('NOT_OWNER',403);
+    const requestId = m.id(answer.requestId), request = await db.collection('knowledge_requests').doc(requestId).get();
+    if (!request.exists) m.fail('NOT_FOUND',404);
+    const postId = 'kla-' + m.hash([a.spid, answerId]);
+    const present = await Promise.all([db.collection('posts').doc(postId).get(),ref('private_posts',postId).get(),ref('archived_posts',postId).get()]);
+    return {answerId,requestId,postId,existingPostId:present.some(s=>s.exists)?postId:null,
+      title:String(request.data().question||'回答から届ける経験知').slice(0,160),
+      body:answer.knowledge||'',happened:answer.experience||'',advice:answer.limits||'',facets:request.data().facets||{}};
+  }
   async function savePost(a, input) {
+    const originAnswer = input.answerId && !input.id ? await answerDraft(a, m.id(input.answerId)) : null;
+    if (originAnswer && input.visibility === 'public' && input.answerPublicationConsent !== true)
+      m.fail('ANSWER_PUBLICATION_CONSENT_REQUIRED', 403);
     const postId = input.id
       ? m.id(input.id)
-      : "kl-" + m.hash([a.spid, m.id(input.key)]);
+      : originAnswer ? originAnswer.postId : "kl-" + m.hash([a.spid, m.id(input.key)]);
     const visibility = input.visibility || "draft";
     if (!["public", "private", "draft"].includes(visibility))
       m.fail("INVALID_VISIBILITY");
     const title = m.text(input.title, 160, true),
       body = m.text(input.body, 5000, true);
     const previous = input.id ? await rawPost(postId, a) : null;
+    if (input.id && input.answerId && previous?.knowledgeLab?.sourceAnswer?.answerId !== input.answerId)
+      m.fail('INVALID_ANSWER_POST_ID');
+    if (previous?.knowledgeLab?.sourceAnswer && visibility === 'public' && input.answerPublicationConsent !== true)
+      m.fail('ANSWER_PUBLICATION_CONSENT_REQUIRED',403);
     if (previous && !m.owner(previous, a)) m.fail("NOT_OWNER", 403);
     if (previous?.visibility === "archived")
       m.fail("ARCHIVED_POST_RESTORE_REQUIRED", 409);
@@ -428,6 +450,7 @@ function createService({
           ? ps.data()
           : null;
       if (old && !m.owner(old, a)) m.fail("NOT_OWNER", 403);
+      if (originAnswer && !input.id && (ps.exists || ds.exists)) m.fail('ANSWER_ALREADY_POSTED', 409);
       if (old?.knowledgeLab?.hidden) m.fail("MODERATED_POST", 403);
       const revision = old?.knowledgeLab?.revision || 0;
       if (old && input.revision !== revision) m.fail("REVISION_CONFLICT", 409);
@@ -472,6 +495,10 @@ function createService({
         knowledgeLab: {
           facets,
           ...details,
+          ...((originAnswer || old?.knowledgeLab?.sourceAnswer) ? {
+            sourceAnswer: originAnswer ? {requestId:originAnswer.requestId,answerId:originAnswer.answerId} : old.knowledgeLab.sourceAnswer,
+            ...(visibility==='public' ? {answerPublicationConsentAtMs:t} : {}),
+          } : {}),
           revision: revision + 1,
           publishedOnce:
             visibility === "public" ||
@@ -827,6 +854,7 @@ function createService({
       if (s.exists && s.data().authorSchoolParkId !== a.spid)
         m.fail("NOT_OWNER", 403);
       if (s.exists && s.data().moderated) m.fail("MODERATED_NOTE", 403);
+      if (s.exists && s.data().archived) m.fail('ARCHIVED_NOTE_RESTORE_REQUIRED', 409);
       const revision = s.exists ? s.data().revision : 0;
       if (s.exists && input.revision !== revision)
         m.fail("REVISION_CONFLICT", 409);
@@ -844,6 +872,8 @@ function createService({
           noteId,
           authorSchoolParkId: a.spid,
           previous: s.data(),
+          next: value,
+          actorSchoolParkId: a.spid,
           changedAtMs: now(),
         });
       tx.set(r, value);
@@ -854,10 +884,11 @@ function createService({
   }
   async function note(noteId, a = null) {
     const s = await ref("notes", noteId).get();
-    if (!s.exists || s.data().archived) m.fail("NOT_FOUND", 404);
+    if (!s.exists) m.fail("NOT_FOUND", 404);
     const v = s.data();
     if (v.authorSchoolParkId === a?.spid || a?.owner)
       return { id: noteId, ...v };
+    if (v.archived) m.fail('NOT_FOUND', 404);
     if (v.visibility !== "public") m.fail("NOT_FOUND", 404);
     try {
       await sources(v.sourceIds, null, true);
@@ -891,14 +922,44 @@ function createService({
       if (!s.exists || s.data().authorSchoolParkId !== a.spid)
         m.fail("NOT_FOUND", 404);
       if (s.data().revision !== revision) m.fail("REVISION_CONFLICT", 409);
-      tx.update(r, {
+      const next = { ...s.data(),
         archived: true,
         visibility: "private",
         revision: revision + 1,
         updatedAtMs: now(),
+      };
+      tx.set(ref('history', noteId + '-' + revision), {
+        noteId, authorSchoolParkId: a.spid, actorSchoolParkId: a.spid,
+        previous: s.data(), next, changedAtMs: now(), action: 'archive'
       });
+      tx.set(r, next);
       return { ok: true };
     });
+  }
+  async function restoreNote(a, noteId, revision) {
+    return db.runTransaction(async tx => {
+      const r = ref('notes', noteId), s = await tx.get(r);
+      if (!s.exists || s.data().authorSchoolParkId !== a.spid) m.fail('NOT_FOUND', 404);
+      if (s.data().revision !== revision) m.fail('REVISION_CONFLICT', 409);
+      if (!s.data().archived || s.data().moderated) m.fail('NOTE_NOT_RESTORABLE', 409);
+      const next = { ...s.data(), archived: false, visibility: 'private', revision: revision + 1, updatedAtMs: now() };
+      tx.set(ref('history', noteId + '-' + revision), {noteId, authorSchoolParkId:a.spid, actorSchoolParkId:a.spid, previous:s.data(), next, changedAtMs:now(), action:'restore'});
+      tx.set(r, next);
+      return {id:noteId, revision:next.revision};
+    });
+  }
+  async function ownNotes(a, q = {}) {
+    const result = await ownCollection('notes', a, q);
+    result.items = result.items.filter(n => !!n.archived === (q.archived === '1'));
+    return result;
+  }
+  async function noteHistory(a, noteId, q = {}) {
+    const current = await note(noteId, a);
+    if (!a.owner && current.authorSchoolParkId !== a.spid) m.fail('NOT_OWNER', 403);
+    let query = db.collection(COL('history')).where('noteId','==',m.id(noteId)).orderBy('__name__').limit(21);
+    if (q.cursor) query = query.startAfter(m.id(q.cursor));
+    const s = await query.get();
+    return {current, items:s.docs.slice(0,20).map(d=>({id:d.id,...d.data()})), next:s.size>20?s.docs[19].id:null};
   }
   async function saveBookmark(a, postId, on) {
     await rawPost(postId, a);
@@ -960,6 +1021,7 @@ function createService({
     post,
     quota,
     savePost,
+    answerDraft,
     removePost,
     archivePost,
     restorePost,
@@ -975,6 +1037,7 @@ function createService({
     note,
     publicNotes,
     archiveNote,
+    restoreNote, ownNotes, noteHistory,
     saveBookmark,
     bookmarks,
     history,

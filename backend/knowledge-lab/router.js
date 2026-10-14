@@ -100,6 +100,7 @@ function createKnowledgeLabRouter(deps) {
       reason: !enabled() ? "LAUNCH_HOLD" : !safe ? "RULES_NOT_VERIFIED" : null,
       aiAvailable: false,
       searchMethod: "normalized-substring",
+      releaseCommit: /^[a-f0-9]{40}$/i.test(env.RENDER_GIT_COMMIT || '') ? env.RENDER_GIT_COMMIT : null,
     });
   });
   router.use(async (req, res, next) => {
@@ -231,7 +232,7 @@ function createKnowledgeLabRouter(deps) {
   router.get(
     "/me/notes",
     ...signed,
-    wrap((req) => service.ownCollection("notes", req.labActor, req.query)),
+    wrap((req) => service.ownNotes(req.labActor, req.query)),
   );
   router.get(
     "/me/saved",
@@ -301,6 +302,18 @@ function createKnowledgeLabRouter(deps) {
     ...write,
     wrap((req) => service.comparison(req.labActor, req.body)),
   );
+  router.get('/answers/:id/draft', ...signed, wrap(req => service.answerDraft(req.labActor, req.params.id)));
+  router.get('/requests/:id/answers', ...signed, wrap(async req => {
+    let q = db.collection('knowledge_answers').where('requestId','==',m.id(req.params.id)).orderBy('__name__').limit(21);
+    if (req.query.cursor) q = q.startAfter(m.id(req.query.cursor));
+    const s = await q.get();
+    const items = [];
+    for (const d of s.docs.slice(0,20)) {
+      const v=d.data(), spid=await deps.identity.knowledgeParticipant(v.answerAuthor,v.authorSchoolParkId);
+      items.push({id:d.id,experience:v.experience,knowledge:v.knowledge,limits:v.limits,status:v.status,canPublish:spid===req.labActor.spid});
+    }
+    return {items,next:s.size>20?s.docs[19].id:null};
+  }));
   router.put(
     "/notes",
     ...write,
@@ -323,6 +336,8 @@ function createKnowledgeLabRouter(deps) {
       service.archiveNote(req.labActor, req.params.id, req.body.revision),
     ),
   );
+  router.post('/notes/:id/restore', ...write, wrap(req => service.restoreNote(req.labActor, req.params.id, req.body.revision)));
+  router.get('/notes/:id/history', ...signed, wrap(req => service.noteHistory(req.labActor, req.params.id, req.query)));
 
   // Existing request/answer documents, quota and EMUER policy remain the authority.
   router.get(
@@ -419,7 +434,10 @@ function createKnowledgeLabRouter(deps) {
         }
         if (!s.exists || s.data().status !== "open")
           m.fail("REQUEST_CLOSED", 409);
-        if (s.data().author === a.walletAddress) m.fail("SELF_ANSWER", 403);
+        const participants = await deps.identity.knowledgeParticipants(s.data(), {
+          answerAuthor: a.walletAddress, authorSchoolParkId: a.spid,
+        });
+        if (!participants.ok) m.fail(participants.code, participants.code === 'SELF_ANSWER' ? 403 : 409);
         const consume = await service.quota(tx, a, "answer");
         consume();
         tx.create(ar, {
@@ -571,6 +589,21 @@ function createKnowledgeLabRouter(deps) {
       };
     }),
   );
+  router.get('/admin/reward-review', ...admin, wrap(async req => {
+    let query = db.collection('emuer_v2_rewards').where('kind','==','knowledge-answer').orderBy('__name__').limit(21);
+    if(req.query.cursor) query=query.startAfter(m.id(req.query.cursor));
+    const s=await query.get(),items=[];
+    for(const d of s.docs.slice(0,20)){
+      const v=d.data();
+      if(!/^[a-zA-Z0-9_-]{1,100}$/.test(v.requestId||'') || !/^[a-zA-Z0-9_-]{1,100}$/.test(v.answerId||'')){
+        items.push({id:d.id,status:v.status,identityCheck:'IDENTITY_REVIEW_REQUIRED'});continue;
+      }
+      const rs=await db.collection('knowledge_requests').doc(v.requestId).get(),as=await db.collection('knowledge_answers').doc(v.answerId).get();
+      const result=rs.exists&&as.exists?await deps.identity.knowledgeParticipants(rs.data(),as.data()):{ok:false,code:'IDENTITY_REVIEW_REQUIRED'};
+      items.push({id:d.id,requestId:v.requestId,answerId:v.answerId,status:v.status,identityCheck:result.ok?'distinct-passports':result.code});
+    }
+    return {items,next:s.size>20?s.docs[19].id:null,readOnly:true};
+  }));
   router.put(
     "/admin/taxonomy/:id",
     ...admin,

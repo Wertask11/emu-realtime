@@ -266,7 +266,7 @@ const feedback = require("./feedback").createFeedbackRouter(membershipDeps);
 // 運営の受領コメント（light 以上）。light の存在理由そのもの。
 const review = require("./review").createReviewRouter(membershipDeps);
 const emuerV2 = require("./emuer-v2/router").createEmuerV2Router({
-  db, requireFirebaseUser, requireOwnAddress, entitlement, env: process.env
+  db, identity, requireFirebaseUser, requireOwnAddress, entitlement, env: process.env
 });
 /* みてみる（SchoolPark内の交換所）。EMUER・JPYC・円で商品を手に入れる。 */
 const mitemiru = require("./mitemiru").createMitemiruRouter({
@@ -708,6 +708,12 @@ async function runKnowledgeBountyBatch() {
         && KNOWLEDGE_BOUNTY_ALLOWED.includes(amount);
       if (!matches) {
         await claimDoc.ref.update({ status:"rejected", errorMessage:"CLAIM_MISMATCH", processedAt:new Date() });
+        continue;
+      }
+      const answerDoc = await db.collection('knowledge_answers').doc(String(request.acceptedAnswerId || 'missing')).get();
+      if (!answerDoc.exists || !(await identity.knowledgeParticipants(request, answerDoc.data())).ok) {
+        // Preserve the existing unpaid record for Owner review; never auto-pay
+        // ambiguous or linked self-answers and never bulk-delete old rewards.
         continue;
       }
       if (amount === 0) {

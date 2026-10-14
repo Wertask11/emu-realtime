@@ -32,6 +32,8 @@ async function main(){
   html=html.replace('  CHES.whenAuthStateResolved = whenAuthStateResolved;','  window.__localEmulatorComplete=user=>completeCommonFlow(user,"password");\n  CHES.whenAuthStateResolved = whenAuthStateResolved;');
   html=html.replace('<body>','<body><button type="button" id="localEmulatorLogin" style="position:fixed;top:4px;left:4px;z-index:20000" onclick="window.__localLoginResult=window.__localEmulatorLogin()">LOCAL EMULATORでログイン</button>');
   router.get('/test/native.html',(req,res)=>res.type('html').send(html));
+  // Recruitment's real /?lab=writer CTA must use the same isolated SDK/config.
+  router.get('/',(req,res)=>res.type('html').send(html));
   router.use((req,res,next)=>{if(!/\.(?:html|js)$/.test(req.path))return next();const publicRoot=path.join(ROOT,'frontend/public'),file=path.resolve(publicRoot,'.'+req.path);if(!file.startsWith(publicRoot+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile())return next();res.type(path.extname(file)).send(fs.readFileSync(file,'utf8').replace(/https:\/\/emu-realtime\.onrender\.com/g,base).replace(/https:\/\/firestore\.googleapis\.com/g,'http://127.0.0.1:8787').replace(/emusch-2a111/g,'demo-emu-knowledge-lab'));});
   // Missing integrations stay visibly unavailable, never return fabricated success.
   router.use('/api',(req,res,next)=>req.path.startsWith('/knowledge-lab')?next():res.status(503).json({error:'NOT_MOUNTED_IN_LOCAL_FIXTURE'}));

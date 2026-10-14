@@ -37,6 +37,7 @@ function createEmuerV2Router(deps) {
   const requireFirebaseUser = deps.requireFirebaseUser;
   const requireOwnAddress = deps.requireOwnAddress;
   const entitlement = deps.entitlement;
+  const identity = deps.identity || require('../identity').createIdentity({ db, ethers });
   const env = deps.env || process.env;
   const isEnabled = () => enabled(env);
   const operatorAddresses = new Set(String(env.EMUER_V2_OPERATOR_ADDRESSES || TREASURY)
@@ -528,6 +529,8 @@ function createEmuerV2Router(deps) {
         String(answer.experience || "").trim().length >= 10 && String(answer.knowledge || "").trim().length >= 10 &&
         String(answer.limits || "").trim().length >= 3;
       if (!objectiveChecks) return res.status(409).json({ error: "KNOWLEDGE_ANSWER_NOT_VERIFIED" });
+      const participants = await identity.knowledgeParticipants(request, answer);
+      if (!participants.ok) return res.status(409).json({ error: participants.code, review: 'identity-review-required' });
       const row = await createReward({
         key: JSON.stringify(["emuer-v2", "knowledge-answer", requestId, answerId]), kind: "knowledge-answer", recipient,
         meta: { requestId, answerId, question: String(request.question || "").slice(0, 160), review: "automatic-approved" }
@@ -592,6 +595,24 @@ function createEmuerV2Router(deps) {
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
     try {
       const ref = db.collection("emuer_v2_rewards").doc(String(req.params.claimId));
+      const existing = await ref.get();
+      if(existing.exists && String(existing.data().recipient||'').toLowerCase() !== String(req.identity.walletAddress).toLowerCase())
+        return res.status(403).json({error:'REWARD_NOT_OWNED'});
+      if (existing.exists && existing.data().kind === 'knowledge-answer') {
+        const reward = existing.data();
+        const [rs, as] = await Promise.all([
+          db.collection('knowledge_requests').doc(String(reward.requestId)).get(),
+          db.collection('knowledge_answers').doc(String(reward.answerId)).get()
+        ]);
+        if (!rs.exists || !as.exists) return res.status(409).json({ error: 'IDENTITY_REVIEW_REQUIRED' });
+        if(String(as.data().requestId)!==String(reward.requestId) ||
+          String(as.data().answerAuthor||'').toLowerCase()!==String(reward.recipient||'').toLowerCase() ||
+          rs.data().status!=='awarded' || as.data().status!=='accepted' ||
+          String(rs.data().acceptedAnswerId)!==String(reward.answerId))
+          return res.status(409).json({error:'KNOWLEDGE_ANSWER_NOT_VERIFIED'});
+        const people = await identity.knowledgeParticipants(rs.data(), as.data());
+        if (!people.ok) return res.status(409).json({ error: people.code });
+      }
       const ready = await signerReady();
       if (!ready.ok) return res.status(503).json({ error: ready.code });
       const { row, deadline } = await reserveAuthorization(ref, req.identity.walletAddress);

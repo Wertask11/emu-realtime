@@ -249,6 +249,49 @@ function createIdentity(deps) {
     } catch (e) { return null; }
   }
 
+  // Reward/answer decisions use only server-owned verified bindings. Missing or
+  // contradictory legacy data requires review; a user-supplied SPID is not proof.
+  async function knowledgeParticipant(address, declaredSpid) {
+    if (!db || !isAddress(address)) return null;
+    const forms = addressForms(address, ethers);
+    const candidates = new Set();
+    const direct = await db.collection(LINK_COL).doc(linkIdFor('wallet', lower(address))).get();
+    if (direct.exists) candidates.add(String(direct.data().spid || ''));
+    const snaps = await Promise.all(['walletAddress', 'chesAddress'].map(field =>
+      db.collection('ches_verified_accounts').where(field, 'in', forms).limit(6).get()));
+    if (snaps.some(s => s.size >= 6)) return null;
+    const accounts = new Map(snaps.flatMap(s => s.docs.map(d => [d.id, d.data()])));
+    const reverse = await Promise.all(forms.map(value=>db.collection('ches_wallets').doc(value).get()));
+    for(const s of reverse.filter(s=>s.exists)) {
+      if(!accounts.has(s.data().uid)) return null;
+      if(s.data().spid) candidates.add(String(s.data().spid));
+    }
+    for (const [uid, account] of accounts) {
+      const link = await db.collection(LINK_COL).doc(linkIdFor('fb', uid)).get();
+      if (!link.exists || !isSchoolParkId(link.data().spid)) return null;
+      const spid = link.data().spid;
+      if (account.spid && account.spid !== spid) return null;
+      candidates.add(spid);
+    }
+    if (candidates.size !== 1) return null;
+    const spid = [...candidates][0];
+    if (!isSchoolParkId(spid) || (declaredSpid && declaredSpid !== spid)) return null;
+    const canonical = await readIdentity(spid);
+    return canonical && canonical.status !== 'disabled' ? spid : null;
+  }
+  async function knowledgeParticipants(request, answer) {
+    const from = lower(request.author), to = lower(answer.answerAuthor);
+    if (from && from === to) return { ok: false, code: 'SELF_ANSWER' };
+    const [requester, respondent] = await Promise.all([
+      knowledgeParticipant(from, request.authorSchoolParkId),
+      knowledgeParticipant(to, answer.authorSchoolParkId)
+    ]);
+    if (!requester || !respondent) return { ok: false, code: 'IDENTITY_REVIEW_REQUIRED' };
+    return requester === respondent
+      ? { ok: false, code: 'SELF_ANSWER' }
+      : { ok: true, requester, respondent };
+  }
+
   /* ───────────────────── 記録 ───────────────────── */
 
   async function audit(action, detail) {
@@ -352,6 +395,7 @@ function createIdentity(deps) {
           /* 取引の中では「読む」を全部先に済ませる（Firestore の決まり）。 */
           const lSnap = await tx.get(linkRef);
           const aSnap = await tx.get(accRef);
+          const verifiedSnap = await tx.get(db.collection('ches_verified_accounts').doc(u));
           const wSnap = walletLinkRef ? await tx.get(walletLinkRef) : null;
           const account = aSnap.exists ? (aSnap.data() || {}) : null;
 
@@ -408,7 +452,13 @@ function createIdentity(deps) {
              欠けた記録ができると、APIが本人を確認できなくなるため）。 */
           if (aSnap.exists && String(account.spid || "") !== spid) {
             tx.set(accRef, { spid, spidLinkedAt: now }, { merge: true });
-            tx.set(db.collection("ches_verified_accounts").doc(u), { spid }, { merge: true });
+            tx.set(db.collection("ches_verified_accounts").doc(u), { spid, passportBindingVersion:1 }, { merge: true });
+          }
+          if (verifiedSnap.exists) {
+            tx.set(db.collection('ches_verified_accounts').doc(u), {spid,passportBindingVersion:1}, {merge:true});
+            for (const address of addressesFromAccount(verifiedSnap.data())) {
+              tx.set(db.collection('ches_wallets').doc(address), {uid:u,address,spid,passportBindingVersion:1}, {merge:true});
+            }
           }
 
           return { spid, isNew: minted, account };
@@ -586,6 +636,7 @@ function createIdentity(deps) {
       const lSnap = await tx.get(linkRef);
       const iSnap = await tx.get(idRef);
       const aSnap = await tx.get(accRef);
+      const verifiedSnap = await tx.get(db.collection('ches_verified_accounts').doc(u));
       if (!iSnap.exists) throw new Error("IDENTITY_NOT_FOUND");
 
       if (lSnap.exists) {
@@ -596,6 +647,9 @@ function createIdentity(deps) {
       }
 
       const account = aSnap.exists ? (aSnap.data() || {}) : null;
+      if (verifiedSnap.exists) for (const address of addressesFromAccount(verifiedSnap.data())) {
+        tx.set(db.collection('ches_wallets').doc(address), {uid:u,address,spid,passportBindingVersion:1}, {merge:true});
+      }
       const now = Date.now();
       const provider = providerOf(u, account, o.signInProvider);
       const cur = iSnap.data() || {};
@@ -617,7 +671,7 @@ function createIdentity(deps) {
       }, { merge: true });
       if (aSnap.exists && String((account || {}).spid || "") !== spid) {
         tx.set(accRef, { spid, spidLinkedAt: now }, { merge: true });
-        tx.set(db.collection("ches_verified_accounts").doc(u), { spid }, { merge: true });
+        tx.set(db.collection("ches_verified_accounts").doc(u), { spid, passportBindingVersion:1 }, { merge: true });
       }
       tx.set(ticketRef, { usedAt: now, usedByUid: u }, { merge: true });
       return { ok: true, spid, already: false };
@@ -989,6 +1043,7 @@ function createIdentity(deps) {
     newSchoolParkId, isSchoolParkId, linkIdFor,
     // 解決・発行
     resolveForUid, findByUid, findByAddress, spidForAddress, readIdentity, publicView,
+    knowledgeParticipant, knowledgeParticipants,
     // 連携
     issueLinkTicket, completeLinkWithTicket, registerWalletLink,
     // 招待（一般クエスト #005）
