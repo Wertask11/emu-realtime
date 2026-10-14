@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Emu Knowledge Lab — 経験知を探し、掛け合わせる</title>
+    <meta
+      name="description"
+      content="経験した人の知識を分野・仕事・目的から探す知識図書館。異なる知識を比較し、問いや実践案を研究ノートに残せます。"
+    />
+    <meta
+      property="og:title"
+      content="Emu Knowledge Lab — 経験から、次の発見へ。"
+    />
+    <meta
+      property="og:description"
+      content="経験知を探し、掛け合わせ、試してみる。主役は人間の経験です。"
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://schoolpark-emu.vercel.app/knowledge-lab.html"
+    />
+    <meta
+      property="og:image"
+      content="https://schoolpark-emu.vercel.app/knowledge-lab/lab-og.png"
+    />
+    <link rel="stylesheet" href="/knowledge-lab/lab.css" />
+    <link rel="stylesheet" href="/tour/reizo-tour.css" />
+  </head>
+  <body>
+    <a class="skip" href="#content">本文へ移動</a>
+    <header class="lab-header">
+      <div><a href="/" class="brand">Emu</a><span>KNOWLEDGE LAB</span></div>
+      <div class="actions">
+        <a href="/knowledge-lab-writers.html" target="_top">書き手募集</a
+        ><button id="guide" type="button" aria-label="冷蔵庫くんのガイドを見る">
+          🧊 ガイド
+        </button>
+      </div>
+    </header>
+    <main id="content" class="shell">
+      <section class="intro" data-tour="lab-intro">
+        <p class="eyebrow">経験から、次の発見へ。</p>
+        <h1>Emu Knowledge Lab</h1>
+        <p>
+          誰かの経験から学び、異なる知識を掛け合わせる場所。成功も、失敗も、まだ答えのない問いも。
+        </p>
+        <a href="/knowledge-lab-guide.html">はじめての使い方・投稿ガイド →</a>
+      </section>
+      <div id="status" class="status" role="status" aria-live="polite">
+        準備を確認しています…
+      </div>
+      <div id="loginBox" class="notice" hidden>
+        <p>
+          読む・探すことはログインなしで。保存・投稿・研究には、記録をあなたにつなげるためにログインが必要です。
+        </p>
+        <a id="loginLink" class="button primary" href="/?lab=library"
+          >既存のログイン方法で続ける</a
+        >
+      </div>
+      <nav class="tabs" aria-label="Knowledge Labの画面" data-tour="lab-tabs">
+        <button type="button" data-view="library" aria-pressed="true">
+          知識図書館</button
+        ><button type="button" data-view="research" aria-pressed="false">
+          掛け合わせ研究所</button
+        ><button type="button" data-view="mine" aria-pressed="false">
+          マイライブラリー</button
+        ><button type="button" data-view="requests" aria-pressed="false">
+          知識募集</button
+        ><button type="button" data-view="writer" aria-pressed="false">
+          書き手プロフィール</button
+        ><button
+          type="button"
+          data-view="admin"
+          id="adminTab"
+          aria-pressed="false"
+          hidden
+        >
+          運営管理
+        </button>
+      </nav>
+      <section id="library" class="view" data-tour="lab-library">
+        <div class="section-heading">
+          <div>
+            <h2>経験知を探す</h2>
+            <p>分類を組み合わせて、今のあなたに必要な知識へ。</p>
+          </div>
+          <button type="button" class="primary" data-compose>
+            ＋ 経験知を届ける
+          </button>
+        </div>
+        <form id="searchForm" class="card">
+          <label for="query">キーワード</label
+          ><input
+            id="query"
+            name="q"
+            maxlength="120"
+            placeholder="例：独立、育児、失敗から学んだこと"
+          />
+          <p class="hint">
+            文字の部分一致検索。空白で区切ると、すべての言葉を含む知識を探します。
+          </p>
+          <div id="searchFacets" class="facets"></div>
+          <div class="actions">
+            <label for="sort">表示順</label
+            ><select id="sort">
+              <option value="new">新着順</option>
+              <option value="relevance">関連度順</option>
+              <option value="updated">更新順</option></select
+            ><button class="primary" type="submit">この条件で探す</button
+            ><button type="button" id="resetFilters">条件を緩める</button
+            ><button type="button" id="shareSearch">条件のURLをコピー</button>
+          </div>
+        </form>
+        <div id="results" class="grid" aria-live="polite"></div>
+        <button type="button" id="moreResults" hidden>さらに読む</button>
+      </section>
+      <section id="research" class="view" hidden data-tour="lab-research">
+        <h2>知識掛け合わせ研究所</h2>
+        <p>
+          2〜3分野の知識を選び、比較して、新しい問いや実践案を考えます。仮説は事実や検証結果と区別して残します。
+        </p>
+        <p class="notice">
+          現在は人が考える研究ノートです。AIによる自動生成は提供していません。
+        </p>
+        <form id="researchFind" class="card">
+          <h3>1. 分野を2〜3つ選ぶ</h3>
+          <div id="researchFields" class="choices"></div>
+          <button type="submit" class="primary">関連する知識を探す</button>
+        </form>
+        <div id="researchCandidates" class="grid"></div>
+        <button id="researchMore" type="button" hidden>候補をさらに読む</button>
+        <div id="sourceSelection" class="card">
+          <h3>2. 元になる知識を選ぶ</h3>
+          <p>
+            各分野から2〜6件を選びます。検索で見つけた知識も「研究に使う」で追加できます。
+          </p>
+          <div id="selectedSources"></div>
+          <button type="button" id="compareSources" class="primary">
+            選んだ知識を比較する
+          </button>
+        </div>
+        <div id="comparison" data-tour="lab-source" hidden></div>
+        <form id="noteForm" class="card" data-tour="lab-note">
+          <h3>3. 問い・仮説・実践案を残す</h3>
+          <label for="noteTitle">研究タイトル</label
+          ><input id="noteTitle" maxlength="160" required /><label
+            for="noteQuestion"
+            >新しい問い</label
+          ><textarea id="noteQuestion" maxlength="2000"></textarea
+          ><label for="noteHypothesis">仮説（未検証）</label
+          ><textarea id="noteHypothesis" maxlength="3000"></textarea
+          ><label for="notePlan">小さく試す実践案・注意点</label
+          ><textarea id="notePlan" maxlength="3000"></textarea
+          ><label for="noteResult"
+            >試した結果・改善点（あとから追記できます）</label
+          ><textarea id="noteResult" maxlength="3000"></textarea
+          ><label for="noteVisibility">公開範囲</label
+          ><select id="noteVisibility">
+            <option value="private">自分用</option>
+            <option value="public">公開（元知識が公開中の場合のみ）</option>
+          </select>
+          <p class="hint">
+            公開後に元知識が取り下げられた場合、他の人には研究を表示しません。本文には第三者の個人情報・秘密を含めないでください。
+          </p>
+          <div class="actions">
+            <button type="submit" class="primary">研究ノートを保存</button
+            ><button type="button" id="newNote">新しいノート</button>
+          </div>
+        </form>
+        <h3>公開されている研究</h3>
+        <div id="publicNotes" class="grid"></div>
+        <button type="button" id="publicNotesMore" hidden>
+          研究をさらに読む
+        </button>
+      </section>
+      <section id="mine" class="view" hidden>
+        <h2>マイライブラリー</h2>
+        <p>
+          保存した知識、非公開の経験知、研究ノートを続きから開けます。通常投稿の下書き・予約は既存のマイライブラリーから利用できます。
+        </p>
+        <div class="actions">
+          <button type="button" data-mine="saved">保存した知識</button
+          ><button type="button" data-mine="public-posts">公開した経験知</button
+          ><button type="button" data-mine="posts">
+            下書き・取り下げた経験知</button
+          ><button type="button" data-mine="archived">
+            削除・保管した経験知</button
+          ><button type="button" data-mine="notes">自分の研究ノート</button
+          ><button type="button" data-mine="archived-notes">保管した研究ノート</button
+          ><button type="button" id="legacyLibrary">
+            既存のマイライブラリー
+          </button>
+        </div>
+        <div id="mineItems" class="grid"></div>
+        <button type="button" id="mineMore" hidden>さらに表示</button>
+      </section>
+      <section id="requests" class="view" hidden>
+        <h2>知りたい知識を募集する</h2>
+        <p>
+          実際に経験した人へ、まだ答えのない問いを届けます。既存の募集・回答・懸賞制度を使います。
+        </p>
+        <form id="requestForm" class="card">
+          <label for="requestQuestion">知りたいこと</label
+          ><input
+            id="requestQuestion"
+            minlength="2"
+            maxlength="160"
+            required
+          /><label for="requestContext">背景</label
+          ><textarea
+            id="requestContext"
+            minlength="5"
+            maxlength="2000"
+            required
+          ></textarea>
+          <div id="requestFacets" class="facets"></div>
+          <label for="requestTarget"
+            >どんな経験をした人に聞きたいですか？（任意）</label
+          ><input id="requestTarget" maxlength="500" />
+          <p class="hint">
+            懸賞条件は既存の制度に従います。新しい報酬や無制限の付与はありません。
+          </p>
+          <button type="submit" class="primary">知識を募集する</button>
+        </form>
+        <div id="requestItems" class="grid"></div>
+        <button type="button" id="requestMore" hidden>募集をさらに読む</button>
+      </section>
+      <section id="writer" class="view" hidden>
+        <h2>あなたの経験を、誰かの知識へ。</h2>
+        <p>
+          資格や肩書きは必須ではありません。書き手プロフィールはPassport
+          IDとつながります。本名・勤務先・連絡先の入力は不要です。
+        </p>
+        <form id="writerForm" class="card">
+          <label for="writerName">公開する表示名</label
+          ><input
+            id="writerName"
+            maxlength="60"
+            required
+            autocomplete="nickname"
+          /><label for="writerIcon">アイコン画像URL（HTTPS・任意）</label
+          ><input id="writerIcon" type="url" maxlength="500" /><label
+            for="writerBio"
+            >自己紹介・経験（自己申告）</label
+          ><textarea id="writerBio" maxlength="1000"></textarea>
+          <div id="writerFacets" class="facets"></div>
+          <label class="check"
+            ><input
+              id="writerPublished"
+              type="checkbox"
+            />プロフィールを公開する</label
+          ><label class="check"
+            ><input
+              id="writerConsent"
+              type="checkbox"
+            />表示名・自己紹介・経験分野が公開されることを確認しました</label
+          >
+          <p class="hint">
+            途中の内容は「非公開で保存」してから続きを書けます。公開経験知には投稿時点の表示名が付きます。記録は運営が安全性確認・通報対応等のため取り扱う場合があります。
+          </p>
+          <div class="actions">
+            <button type="submit" class="primary">プロフィールを保存</button
+            ><button type="button" id="writerDraft">非公開で保存</button
+            ><button type="button" data-compose>最初の経験知を書く</button
+            ><button type="button" id="passportLink">
+              Passport・星空を見る
+            </button>
+          </div>
+        </form>
+        <h3>知識を届ける仲間</h3>
+        <div id="writers" class="grid"></div>
+        <button type="button" id="writersMore" hidden>
+          書き手をさらに見る
+        </button>
+      </section>
+      <section id="admin" class="view" hidden>
+        <h2>Knowledge Lab 運営管理</h2>
+        <div class="actions">
+          <button type="button" id="adminRefresh">活動状況を更新</button
+          ><button type="button" id="adminInit">初期分類を登録</button
+          ><button type="button" id="adminIndex">
+            公開投稿の検索索引を作成・再確認
+          </button>
+        </div>
+        <div id="adminSummary" class="card"></div>
+        <div class="actions">
+          <button type="button" data-admin-list="writers">書き手</button
+          ><button type="button" data-admin-list="posts">知識・古い情報</button
+          ><button type="button" data-admin-list="notes">研究</button
+          ><button type="button" data-admin-list="requests">質問・未回答</button
+          ><button type="button" data-admin-list="reports">通報</button
+          ><button type="button" id="reviewRewards">既存報酬の本人性を確認</button
+          ><button type="button" data-admin-list="private_posts">
+            取り下げ・非公開
+          </button>
+        </div>
+        <div id="adminItems" class="grid"></div>
+        <button type="button" id="rewardReviewMore" hidden>報酬の本人性をさらに確認</button>
+        <button type="button" id="adminMore" hidden>さらに確認</button>
+        <h3>既存知識へ分類を付与・修正</h3>
+        <form id="classifyForm" class="card">
+          <label for="classifyId">公開投稿ID</label
+          ><input id="classifyId" required maxlength="100" /><label
+            for="classifyRevision"
+            >現在の版番号（未分類なら0）</label
+          ><input
+            id="classifyRevision"
+            type="number"
+            min="0"
+            value="0"
+            required
+          />
+          <div id="classifyFacets" class="facets"></div>
+          <label for="classifyReason">分類の理由</label
+          ><input id="classifyReason" required maxlength="500" /><button
+            type="submit"
+            class="primary"
+          >
+            本文を変えずに分類する
+          </button>
+          <p class="hint">
+            分類は運営による整理です。内容を検証済みと表示せず、投稿者自身が後から修正できます。
+          </p>
+        </form>
+        <h3>分類を管理</h3>
+        <form id="taxonomyForm" class="card">
+          <label for="termId">分類ID（変更できません）</label
+          ><input
+            id="termId"
+            pattern="[a-zA-Z0-9_-]{1,100}"
+            maxlength="100"
+            required
+          /><label for="termAxis">分類軸</label
+          ><select id="termAxis">
+            <option value="field">分野</option>
+            <option value="job">業種・職業</option>
+            <option value="experience">経験</option>
+            <option value="purpose">目的</option>
+            <option value="kind">知識の種類</option>
+            <option value="genre">ジャンル</option></select
+          ><label for="termLabel">表示名</label
+          ><input id="termLabel" maxlength="60" required /><label class="check"
+            ><input id="termActive" type="checkbox" checked />表示する</label
+          ><label for="termMerge">統合先の分類ID（任意・同じ軸）</label
+          ><input id="termMerge" maxlength="100" />
+          <p class="hint">
+            統合前のIDは残し、検索で統合先と同じ分類として扱います。既存投稿を一括で書き換えません。
+          </p>
+          <button type="submit" class="primary">分類を保存</button>
+        </form>
+        <div id="taxonomyList"></div>
+      </section>
+    </main>
+    <dialog id="detailDialog" aria-labelledby="detailTitle">
+      <button
+        type="button"
+        class="close"
+        data-close
+        aria-label="知識の詳細を閉じる"
+      >
+        ×
+      </button>
+      <div id="detailBody"></div>
+    </dialog>
+    <dialog id="editorDialog" aria-labelledby="editorTitle">
+      <button
+        type="button"
+        class="close"
+        data-close
+        aria-label="投稿フォームを閉じる"
+      >
+        ×
+      </button>
+      <h2 id="editorTitle">経験知を届ける</h2>
+      <p>短い経験談でも大丈夫です。必須はタイトルと本文だけ。</p>
+      <form id="postForm">
+        <div id="answerOrigin" class="notice" hidden>
+          <p id="answerOriginText"></p>
+          <label><input type="checkbox" id="answerPublicationConsent" />回答を経験知として公開する内容と範囲を確認しました</label>
+        </div>
+        <label for="postTitle">タイトル</label
+        ><input id="postTitle" maxlength="160" required /><label for="postBody"
+          >本文</label
+        ><textarea id="postBody" maxlength="5000" required></textarea>
+        <div id="postFacets" class="facets"></div>
+        <label for="postTags">関連タグ（カンマ区切り）</label
+        ><input id="postTags" maxlength="500" />
+        <details>
+          <summary>経験・出典を詳しく残す（任意）</summary>
+          <label for="postPeriod">経験した時期</label
+          ><input id="postPeriod" maxlength="120" /><label for="postHappened"
+            >何が起きたか</label
+          ><textarea id="postHappened" maxlength="2000"></textarea
+          ><label for="postLearned">そこから学んだこと</label
+          ><textarea id="postLearned" maxlength="2000"></textarea
+          ><label for="postAdvice">他の人への助言・注意点</label
+          ><textarea id="postAdvice" maxlength="2000"></textarea
+          ><label for="postSources">参考資料・出典（URLや資料名）</label
+          ><textarea id="postSources" maxlength="1500"></textarea
+          ><label for="postVerification">検証状況</label
+          ><select id="postVerification">
+            <option value="self-reported">
+              本人の経験（自己申告・未検証）
+            </option>
+            <option value="tested-by-author">
+              投稿者が試した結果（自己申告）
+            </option>
+          </select>
+        </details>
+        <label for="postVisibility">公開範囲</label
+        ><select id="postVisibility">
+          <option value="draft">非公開の下書き</option>
+          <option value="private">自分用・取り下げ</option>
+          <option value="public">公開</option>
+        </select>
+        <p class="notice">
+          他人の個人情報・勤務先の秘密・権利侵害を含めないでください。医療・法律・金融の経験談は専門的な助言や結果の保証ではありません。公開内容は他の画面にも表示されます。
+        </p>
+        <div class="actions">
+          <button type="submit" class="primary">この内容で保存</button
+          ><a href="/terms.html" target="_blank" rel="noopener">利用規約</a
+          ><a href="/privacy.html" target="_blank" rel="noopener"
+            >プライバシー</a
+          >
+        </div>
+      </form>
+    </dialog>
+    <footer>
+      <a href="/knowledge-lab-intro.html">Knowledge Labについて</a
+      ><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a>
+      <p>主役は人間の経験。学びを、現実の生活へ。</p>
+    </footer>
+    <script src="/tour/reizo-tour.js"></script>
+    <script src="/knowledge-lab/lab.js" defer></script>
+  </body>
+</html>

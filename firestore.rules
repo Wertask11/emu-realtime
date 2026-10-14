@@ -51,6 +51,37 @@ service cloud.firestore {
       return signedIn() && value is string && value.size() > 0
         && addrIsMine(get(accountPath()).data, value);
     }
+    function isOwnLabPost(data) {
+      return signedIn() && data.get('authorSchoolParkId', '') is string
+        && data.get('authorSchoolParkId', '').size() > 0
+        && data.get('authorSchoolParkId', '') == get(accountPath()).data.get('spid', '');
+    }
+    // Resolve legacy wallet names through protected server bindings. Unknown or
+    // inconsistent identities cannot answer/adopt rewards until linked safely.
+    function knowledgeSpid(value) {
+      // This SPID is written atomically with verified Passport linkage by the
+      // server. One read per participant keeps native light-plan quota batches
+      // within Rules' 10-document budget. Missing legacy bindings require review.
+      return knowledgeSpidWith(get(accountPath()).data, value);
+    }
+    function knowledgeSpidWith(account, value) {
+      return addrIsMine(account, value) ? verifiedKnowledgeSpid(account)
+        : verifiedKnowledgeSpid(get(/databases/$(database)/documents/ches_wallets/$(value.lower())).data);
+    }
+    function verifiedKnowledgeSpid(binding) {
+      return binding.get('passportBindingVersion', 0) == 1 ? binding.get('spid', '') : '';
+    }
+    function distinctKnowledgePeople(from, to) {
+      let left = knowledgeSpid(from);
+      let right = knowledgeSpid(to);
+      return from.lower() != to.lower() && left.size() > 0
+        && right.size() > 0 && left != right;
+    }
+    function validKnowledgeAdoption(requestData) {
+      let answer = getAfter(/databases/$(database)/documents/knowledge_answers/$(requestData.acceptedAnswerId)).data;
+      return distinctKnowledgePeople(requestData.author, answer.answerAuthor)
+        && answer.status == 'accepted';
+    }
     function addrIsMine(a, value) {
       return (a.get('walletAddress', '') is string
               && a.get('walletAddress', '').size() > 0
@@ -576,6 +607,7 @@ service cloud.firestore {
        ウォレットで入った人の chesAddress を画面から登録できなかった。 */
     match /ches_wallets/{address} {
       allow create: if signedIn()
+        && !request.resource.data.keys().hasAny(['spid','passportBindingVersion'])
         && request.resource.data.uid == request.auth.uid
         && (
           (wallet().size() > 0 && address.lower() == wallet().lower())
@@ -593,7 +625,9 @@ service cloud.firestore {
          クエストのための投稿（questId 付き）だけは、月の回数に数えない。
          そちらを先に見る。通れば回数の記録（plan_usage）は一度も見ない。
          questId はあとから足せない（下の update の changedOnly に無い）。 */
-      allow create: if (
+      allow create: if !request.resource.data.keys().hasAny(['knowledgeLab', 'authorSchoolParkId'])
+        && request.resource.data.get('visibility', 'public') == 'public'
+        && (
           mayCreateForQuest(request.resource.data.get('address', ''),
                             request.resource.data.get('questId', ''))
           || mayCreate(request.resource.data.get('address', ''), 1, 'post')
@@ -606,7 +640,8 @@ service cloud.firestore {
         && request.resource.data.get('changeUsers', []).size() == 0;
 
       // 投稿者本人による本文編集。反応数・反応者一覧・投稿者は変更不可。
-      allow update: if isMyWallet(resource.data.get('address', '')) && changedOnly([
+      allow update: if !resource.data.keys().hasAny(['knowledgeLab'])
+        && isMyWallet(resource.data.get('address', '')) && changedOnly([
         'title', 'body', 'tags', 'userType', 'userId', 'updatedAt', 'imageUrl',
         'displayName'
       ])
@@ -615,20 +650,25 @@ service cloud.firestore {
         && request.resource.data.get('acceptedChangeCount', 0) == resource.data.get('acceptedChangeCount', 0) + 1)
       // Good は、認証ユーザー自身のウォレットを1件追加し、件数を1増やす場合だけ許可。
       || (canWriteAs(1)
+        && resource.data.get('visibility', 'public') == 'public'
         && !isMyWallet(resource.data.get('address', ''))
+        && !isOwnLabPost(resource.data)
         && changedOnly(['goodCount', 'goodUsers'])
         && request.resource.data.get('goodCount', 0) == resource.data.get('goodCount', 0) + 1
         && addedMeOnce(get(accountPath()).data,
              resource.data.get('goodUsers', []), request.resource.data.get('goodUsers', [])))
       // Change も同じく、1ユーザーにつき1件だけ許可。
       || (canWriteAs(1)
+        && resource.data.get('visibility', 'public') == 'public'
         && !isMyWallet(resource.data.get('address', ''))
+        && !isOwnLabPost(resource.data)
         && changedOnly(['changeCount', 'changeUsers'])
         && request.resource.data.get('changeCount', 0) == resource.data.get('changeCount', 0) + 1
         && addedMeOnce(get(accountPath()).data,
              resource.data.get('changeUsers', []), request.resource.data.get('changeUsers', [])));
 
-      allow delete: if isMyWallet(resource.data.get('address', ''));
+      allow delete: if !resource.data.keys().hasAny(['knowledgeLab'])
+        && isMyWallet(resource.data.get('address', ''));
     }
 
     match /knowledge_drafts/{draftId} {
@@ -687,6 +727,8 @@ service cloud.firestore {
         ])
           && request.resource.data.status == 'awarded'
           && request.resource.data.settlementStatus == 'pending_distribution'
+          && resource.data.status == 'open'
+          && validKnowledgeAdoption(request.resource.data)
           && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.requestId == requestId
           && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.answerAuthor == request.resource.data.acceptedAnswerAuthor)
         /* v2 の採用：募集中の募集だけ。運営トレジャリーの確認待ちにする */
@@ -696,6 +738,7 @@ service cloud.firestore {
           ])
           && request.resource.data.status == 'awarded'
           && request.resource.data.settlementStatus == 'treasury_review'
+          && validKnowledgeAdoption(request.resource.data)
           && request.resource.data.rewardPolicy == 'emuer-v2-treasury-1'
           && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.requestId == requestId
           && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.answerAuthor == request.resource.data.acceptedAnswerAuthor)
@@ -710,10 +753,14 @@ service cloud.firestore {
       // 募集へ答えるのは light 以上（9/1から）
       allow create: if mayCreate(request.resource.data.get('answerAuthor', ''), 1, 'answer')
         && request.resource.data.status == 'submitted'
+        && distinctKnowledgePeople(request.resource.data.requestAuthor, request.resource.data.answerAuthor)
+        && get(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.status == 'open'
         && get(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.author == request.resource.data.requestAuthor;
       allow update: if signedIn()
         && isMyWallet(get(/databases/$(database)/documents/knowledge_requests/$(resource.data.requestId)).data.author)
         && changedOnly(['status', 'acceptedAt'])
+        && resource.data.status == 'submitted'
+        && distinctKnowledgePeople(resource.data.requestAuthor, resource.data.answerAuthor)
         && request.resource.data.status == 'accepted';
       allow delete: if false;
     }
@@ -723,6 +770,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && isMyWallet(request.resource.data.get('requestAuthor', ''))
         && request.resource.data.status == 'pending'
+        && distinctKnowledgePeople(request.resource.data.requestAuthor, request.resource.data.recipient)
         && getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.status == 'awarded'
         && getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.settlementStatus == 'pending_distribution'
         && request.resource.data.requestAuthor == getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.author
@@ -1486,10 +1534,16 @@ service cloud.firestore {
       allow delete: if canAccessSchoolPark() && isOwner();
     }
 
+    // Knowledge Lab: Admin SDK + verified API only. No direct client data access.
+    match /{labCollection}/{document=**} {
+      allow read, write: if labCollection.matches('knowledge_lab_.*') && false;
+    }
+
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
     match /{coll}/{document=**} {
       /* 未使用の旧コレクションも汎用許可へ漏らさない。 */
-      allow read, write: if coll != 'sp_members'
+      allow read, write: if !coll.matches('knowledge_lab_.*')
+        && coll != 'sp_members'
         && coll != 'sp_votes'
         && coll != 'sp_quests'
         && coll != 'sp_quest_counters'

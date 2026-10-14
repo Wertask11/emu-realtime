@@ -1,0 +1,12 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+const ROOT=path.resolve(__dirname,'../..'),publicRoot=path.join(ROOT,'frontend/public');
+const files=['backend/knowledge-lab/model.js','backend/knowledge-lab/service.js','backend/knowledge-lab/router.js','backend/server.js','frontend/public/knowledge-lab/lab.js','frontend/public/knowledge-lab/integration.js','frontend/public/knowledge-lab/availability.js'];
+for(const file of files)cp.execFileSync(process.execPath,['--check',path.join(ROOT,file)],{stdio:'inherit'});
+for(const name of ['index.html','knowledge.html','discussion.html','knowledge-lab.html','knowledge-lab-writers.html','knowledge-lab-intro.html','knowledge-lab-guide.html']){
+ const html=fs.readFileSync(path.join(publicRoot,name),'utf8');let i=0;
+ for(const match of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)){if(/\bsrc=/.test(match[1])||!match[2].trim()||/application\/ld\+json/.test(match[1]))continue;const temp=path.join('/tmp','knowledge-lab-check-'+(++i)+(/type="module"/.test(match[1])?'.mjs':'.cjs'));fs.writeFileSync(temp,match[2]);cp.execFileSync(process.execPath,['--check',temp],{stdio:'inherit'});fs.unlinkSync(temp);}
+ if(name.startsWith('knowledge-lab')){const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);if(new Set(ids).size!==ids.length)throw new Error('DUPLICATE_IDS:'+name);for(const m of html.matchAll(/(?:href|src)="(\/[^"?#]+)(?:[?#][^"]*)?"/g)){if(m[1]==='/'||m[1].startsWith('/api/'))continue;if(!fs.existsSync(path.join(publicRoot,m[1])))throw new Error('MISSING_ASSET:'+name+':'+m[1]);}}
+}
+JSON.parse(fs.readFileSync(path.join(ROOT,'frontend/vercel.json'),'utf8'));JSON.parse(fs.readFileSync(path.join(ROOT,'firestore.indexes.json'),'utf8'));
+console.log('Syntax, JSON, unique IDs and local links: PASS');

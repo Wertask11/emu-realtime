@@ -57,12 +57,29 @@ test('legacy progress follows equivalent v2 steps rather than resetting',()=>{
  tour.register('sp-home',Array(9).fill(steps[0]));tour.register('emu-feed',Array(9).fill(steps[0]));tour.register('sp-park',Array(3).fill(steps[0]));
  assert.equal(tour.progress('sp-home').index,6);assert.equal(tour.progress('emu-feed').index,4);assert.equal(tour.progress('sp-park').state,'done');
 });
-test('native logic/styles stay identical; only guide attributes and the guide loader are added',()=>{
+test('existing navigation and native behavior remain identical after removing the explicit Lab integration',()=>{
  const cp=require('node:child_process');
+ const baseline='412a4d8fea5928dc9ca12c2839e6e448fd8cc5aa';
  for(const name of ['index.html','schoolpark/dao.html','knowledge.html','ichinichi.html','discussion.html']) {
   const file='frontend/public/'+name;
-  const before=cp.execFileSync('git',['show','4d11e28949506bf070b19330fd14b32f39d1f167:'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
-  const strip=s=>s.replace(/\sdata-tour(?:-ready)?="[^"]*"/g,'').replace('<script src="/tour/reizo-tour-frame.js"></script>\n','');
-  assert.equal(strip(fs.readFileSync(path.join(root,file),'utf8')),strip(before),file);
+  const before=cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
+  let current=fs.readFileSync(path.join(root,file),'utf8');
+  if(name==='index.html') {
+   current=current.replace('<script src="/knowledge-lab/integration.js"></script>\n','')
+    .replace(/^    <div class="eth-card" data-tour="emu-lab-entry">.*<\/div>\n/m,'')
+    .replace(/^      window\.emuLabSyncIndex\?\.\([^\n]+\);\n/gm,'')
+    .replace('      const _labPostRef = window.fbLib.doc(window.fbLib.collection(window.db, "posts"));\n      _postBatch.set(_labPostRef, postData);','      _postBatch.set(window.fbLib.doc(window.fbLib.collection(window.db, "posts")), postData);')
+    .replace('      const _labPhysicalLast = visibleDocs.length ? visibleDocs[visibleDocs.length - 1] : knowledgeLastDoc;\n      visibleDocs = visibleDocs.filter(d => !d.data().knowledgeLab?.tombstone);\n','')
+    .replace('      knowledgeLastDoc = _labPhysicalLast;','      knowledgeLastDoc = visibleDocs.length ? visibleDocs[visibleDocs.length - 1] : knowledgeLastDoc;')
+    .replace('      if (post.knowledgeLab) return window.openEmuKnowledgeLab("library", {edit:post.id});\n','')
+    .replace("      if (message.command === 'knowledge-lab') window.openEmuKnowledgeLab();\n",'')
+    .replace("      if (message.command === 'experience') window.openEmuKnowledgeLab('library', {compose:true});\n",'');
+   const start=current.indexOf('  // Shared entry for trusted Knowledge Lab'), end=current.indexOf("\n  window.addEventListener('message', async function (event) {\n    const frame = knowledgeFrame();",start);
+   const shared=current.slice(start,end),body=shared.slice(shared.indexOf('\n',shared.indexOf('window.emuKnowledgeReact'))+1,shared.lastIndexOf('\n  };'));
+   current=current.slice(0,start)+current.slice(end+1);
+   current=current.replace('      await window.emuKnowledgeReact(message);',body);
+  }
+  if(name==='knowledge.html')current=current.replace('<button type="button" data-command="experience">分類・出典を付けた経験知を書く →</button>','').replace("(['wallet','room1','knowledge-lab','experience'].includes(b.dataset.command))","(b.dataset.command==='wallet'||b.dataset.command==='room1')");
+  assert.equal(current,before,file);
  }
 });

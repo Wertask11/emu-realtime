@@ -11,8 +11,11 @@ async function ensureVerifiedAccount(db, decoded) {
   const walletLogin = uid.startsWith('wallet:');
   const ref = db.collection('ches_accounts').doc(uid);
   const trustedRef = db.collection('ches_verified_accounts').doc(uid);
+  const {linkIdFor,isSchoolParkId}=require('./identity');
+  const passportRef=db.collection('sp_auth_links').doc(linkIdFor('fb',uid));
   return db.runTransaction(async tx => {
-    const [snap, trusted] = await Promise.all([tx.get(ref), tx.get(trustedRef)]);
+    const [snap, trusted, passport] = await Promise.all([tx.get(ref), tx.get(trustedRef), tx.get(passportRef)]);
+    const spid=passport.exists && isSchoolParkId(passport.data().spid) ? passport.data().spid : '';
     let walletAddress = chesAddress;
     if (walletLogin) {
       if (decoded.provider === "wallet" && decoded.address && decoded.firebase?.sign_in_provider === "custom") {
@@ -26,7 +29,7 @@ async function ensureVerifiedAccount(db, decoded) {
     const old = snap.exists ? snap.data() : {};
     const now = Date.now();
     const account = {
-      ...old, uid, walletAddress, chesAddress,
+      ...old, ...(spid ? {spid} : {}), uid, walletAddress, chesAddress,
       provider: walletLogin ? 'wallet' : (decoded.firebase?.sign_in_provider || 'custom'),
       displayName: old.displayName || decoded.name || '', email: old.email || decoded.email || '',
       photoURL: old.photoURL || decoded.picture || '', createdAt: old.createdAt || now, lastLogin: now,
@@ -34,9 +37,11 @@ async function ensureVerifiedAccount(db, decoded) {
     };
     // Never use a browser-supplied wallet as an authorization source, including legacy records.
     tx.set(ref, account);
-    tx.set(trustedRef, { uid, walletAddress, chesAddress, ...(old.spid ? { spid: old.spid } : {}) });
-    for (const address of new Set([walletAddress, chesAddress])) {
-      tx.set(db.collection('ches_wallets').doc(address), { address, uid, provider: account.provider, type: walletLogin && address === walletAddress ? 'self-custody' : 'address-only', createdAt: now }, { merge: true });
+    tx.set(trustedRef, { uid, walletAddress, chesAddress, spid, passportBindingVersion:spid?1:0 });
+    // Rules cannot compute an EIP-55 checksum. Preserve existing keys and add
+    // server-verified lowercase aliases for legacy knowledge participant checks.
+    for (const address of new Set([walletAddress, chesAddress, walletAddress.toLowerCase(), chesAddress.toLowerCase()])) {
+      tx.set(db.collection('ches_wallets').doc(address), { address, uid, spid, passportBindingVersion:spid?1:0, provider: account.provider, type: walletLogin && address.toLowerCase() === walletAddress.toLowerCase() ? 'self-custody' : 'address-only', createdAt: now }, { merge: true });
     }
     return account;
   });
