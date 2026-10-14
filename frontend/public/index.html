@@ -24583,6 +24583,7 @@ function openRoom2() {
     // 入口の選択画面を出さずに星空を見せる（クエリは配信側に落とされることがある）
     try { iframe.contentWindow.postMessage({ type: 'EMU_OPEN_STAR' }, '*'); } catch (e) {}
     _emuSendStarCounts(iframe);
+    window.emuLabSendActivity?.(iframe);
   });
   // 閉じるボタンの文言は開いた中身に合わせる（ECHO FIELD と共用のため）
   if (closeBtn) closeBtn.textContent = "✕ 星空を閉じる";
@@ -29409,7 +29410,7 @@ async function sendEmuFeedback() {
       knowledgeReactionHolders.delete(detail.postId);
     }
     sendKnowledge({ type:'emu-knowledge-reaction-result', ...detail });
-    if (detail.ok) syncKnowledgeFrame();
+    if (detail.ok) { syncKnowledgeFrame(); window.emuLabSyncIndex?.(detail.postId); }
   });
 
   // Shared entry for trusted Knowledge Lab and the existing knowledge iframe.

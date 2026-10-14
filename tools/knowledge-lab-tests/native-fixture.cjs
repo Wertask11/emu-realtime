@@ -3,9 +3,9 @@
 // Authentication and all tested actions use real emulator SDKs and existing app functions.
 const {createFixture}=require('./fixture.cjs');const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const ROOT=path.resolve(__dirname,'../..');
-async function main(){
+async function main(options={}){
   if(process.env.STRIPE_SECRET_KEY)throw new Error('UNSET_PAYMENT_SECRET_FOR_LOCAL_FIXTURE');
-  const f=await createFixture({port:4201}),{app,db,identity,entitlement,middleware:c,base}=f;
+  const f=await createFixture({port:4201,...options}),{app,db,identity,entitlement,middleware:c,base}=f;
   const source=fs.readFileSync(path.join(ROOT,'frontend/public/index.html'),'utf8');
   const serverSource=fs.readFileSync(path.join(ROOT,'backend/server.js'),'utf8');
   const access=require('../../backend/schoolpark-access');Object.assign(c,{identity,entitlement,decideSchoolParkAccess:access.decideSchoolParkAccess,SCHOOLPARK_PASS_PREVIEW_AT:access.PASS_PREVIEW_AT,SCHOOLPARK_PUBLIC_AT:access.PUBLIC_AT});
@@ -42,4 +42,5 @@ async function main(){
   app.use(router);const layer=stack.pop(),staticIndex=stack.findIndex(l=>l.name==='serveStatic');stack.splice(staticIndex,0,layer);
   await f.api.service.rebuild({owner:true});await f.api.service.waitForRebuild();console.log('Native application with actual emulator auth: '+base+'/test/native.html');
 }
-main().catch(e=>{console.error(e.stack);process.exitCode=1;});
+if(require.main===module)main().catch(e=>{console.error(e.message);process.exitCode=1;});
+module.exports={main};
