@@ -32,12 +32,12 @@
 |13|研究→知識|service.js / derived_links / lab.js|本人同意、非公開参照保護、元研究保持PASS|未公開|
 |14|書き手登録/投稿|writers.html / service.js / lab.js|募集CTA→実エミュレーターAuth→プロフィール→投稿PASS|追加版未公開|
 |15|募集→図書館|router.js / service.js / lab.js|既存回答→本人確認→明示公開→検索→編集・重複防止PASS|旧版Founder確認、追加版未検証|
-|16|Passport/星空活動|activity.js / integration.js / star-activity.js|canonical Passport/活動重複防止、既存星/NFT/EMUER不変PASS|UI/本番星空の追加欄未検証|
+|16|Passport/星空活動|activity.js / integration.js / star-activity.js|canonical Passport/活動重複防止、既存星/NFT/EMUER不変PASS|追加欄の実ネイティブUI・6幅・実別ユーザー切替PASS。本番は未検証|
 |17|Owner管理|router.js / lab.js|Owner一覧・分類・通報・注目・非公開/復元UI、一般ユーザー拒否PASS|未検証|
 |18|利用分析|analytics.js / router.js / lab.js|実成功イベント、重複防止、転換、0件分野、PIIなしPASS|未計測・未検証|
 |19|AI使用量/費用管理|ai-budget.js / ai-service.js / lab.js|回数・同時実行・停止・再試行・取得/未報告使用量PASS|無料プロジェクト/実使用量未検証|
 |20|PC/スマホ|Lab各HTML / lab.js|375/390/412/768/1024/1366、通常/模擬AI UI PASS|追加版未公開|
-|21|既存Emu/SchoolPark維持|root最小hook / integration.js|既存Emu・ガイド・バックエンド回帰PASS。全SchoolPark本番操作は未検証|既存版復帰。既存全機能PASSとはしない|
+|21|既存Emu/SchoolPark維持|root最小hook / integration.js|既存Emu/ガイド/バックエンド回帰、SchoolPark主要5画面×6幅、Room1の4領域、City DEMO保存PASS。全本番操作は未検証|旧版の安全検査停止が再発。既存全機能PASSとはしない|
 |22|Rules/権限安全|既存firestore.rules / router.js|ローカルRules・API・本人性・一般ユーザー拒否PASS|11:31 UTCに旧版の安全検査成功。追加版32領域/公開中Rules全文は未検証|
 |23|Production実動作|追加PRとVercel/Render|公開ゲート未通過|FAIL：追加未公開/既存版復帰|
 |24|募集ページ公開|knowledge-lab-writers.html|ローカル表示・CTA・FAQ・利用条件PASS|旧版公開ページの表示を6幅で確認。追加版登録は未検証|
@@ -172,6 +172,8 @@ Rules全文の再貼り付けを現時点で一律要求していない。今回
 - `tools/knowledge-lab-tests/completion-ui-fixture.cjs`
 - `tools/knowledge-lab-tests/completion-ui.py`
 - `tools/knowledge-lab-tests/live-gemini.cjs`
+- `tools/knowledge-lab-tests/platform-fixture.cjs`
+- `tools/knowledge-lab-tests/platform-browser.py`
 
 ## 公開前の残件
 
@@ -181,3 +183,11 @@ Rules全文の再貼り付けを現時点で一律要求していない。今回
 - 必須：追加版Previewと本番の正規ログイン後の保存/運営/回帰確認。
 - P2：本番の追加活動欄/新指標/最新Google条件の確認。
 - P3：20,000文書負荷、長期指標蓄積、実動画の撮影。
+
+## 継続検証で追加した証拠
+
+実ネイティブUIとAuth/Firestoreエミュレーターで、公開2投稿→私用研究/自己申告結果→星空活動表示、別の実エミュレーターログインへの切替で前の活動を消し本人の0件を表示、SchoolParkのhome/Quest/Guild/library/park 5画面×6幅、Room1の4領域と保存済み4データの取得、City DEMOの明示チェックイン→記録済み表示を確認した。38枚のLOCAL写真、ページ例外0、Productionへの書き込みなし。ナビゲーションには既存遷移関数を使い、投稿/研究/City記録は実UI操作。Cityの実店舗訪問・決済・報酬・3D全操作を確認した証拠ではない。結果は `outputs/knowledge-lab-completion/platform/results.json`。
+
+検証ドライバーは非同期の元知識取得完了と描画完了を待つよう修正した。Room1見出しは既存仕様では固定のRoom1なので、選択した各リテラシーの実項目を検証する。これらはアプリ機能修正ではなく検証手順の修正。
+
+2026-10-15の再確認では、旧Production ceab38eの `RULES_NOT_VERIFIED` が再発している（API取得時刻は証拠JSONにUTCで保持）。以前の一時復帰で現在をPASSにしない。追加版は引き続き未公開。Geminiシークレット/通信許可は現在の実行環境へ未適用で、設定案にも保存済みキーの紐付けがない。既存版の原因切り分けを最小の別修正で進める。
