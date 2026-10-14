@@ -1,5 +1,6 @@
 "use strict";
 const express = require("express");
+const { randomUUID } = require("node:crypto");
 const m = require("./model");
 const { createService, COL } = require("./service");
 
@@ -8,23 +9,84 @@ function createKnowledgeLabRouter(deps) {
   const env = deps.env || process.env,
     service = createService(deps),
     router = express.Router();
+  const rulesNow = deps.rulesNow || Date.now;
+  const pendingProbeCleanup = new Set();
   let rulesCheckedAt = 0,
     rulesSafe = false,
-    rulesCheck = null;
+    rulesCheck = null,
+    rulesFailure = null;
+  function failureCode(e) {
+    const code = e?.code ?? e?.cause?.code;
+    if (Number.isInteger(code) && code >= 0 && code <= 16) return code;
+    if (
+      [
+        "ECONNRESET",
+        "ETIMEDOUT",
+        "ENOTFOUND",
+        "ECONNREFUSED",
+        "EAI_AGAIN",
+        "CERT_HAS_EXPIRED",
+        "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+        "SELF_SIGNED_CERT_IN_CHAIN",
+        "DEPTH_ZERO_SELF_SIGNED_CERT",
+        "ERR_TLS_CERT_ALTNAME_INVALID",
+        "UND_ERR_CONNECT_TIMEOUT",
+        "UND_ERR_HEADERS_TIMEOUT",
+      ].includes(code)
+    )
+      return code;
+    return ["TimeoutError", "AbortError"].includes(e?.name)
+      ? e.name
+      : "CHECK_UNAVAILABLE";
+  }
+  function rejected(collection, stage, code, httpStatus) {
+    const diagnostic = {
+      stage,
+      code,
+      ...(collection ? { collection } : {}),
+      ...(Number.isInteger(httpStatus) ? { httpStatus } : {}),
+    };
+    if (!rulesFailure) rulesFailure = diagnostic;
+    console.warn("Knowledge Lab: Rules check unavailable", diagnostic);
+    return false;
+  }
+  function rulesDiagnostic() {
+    return {
+      status: rulesSafe ? "verified" : "not_verified",
+      checkedAtMs: rulesCheckedAt || null,
+      retryAfterSeconds: rulesCheckedAt
+        ? Math.max(
+            0,
+            Math.ceil((300000 - (rulesNow() - rulesCheckedAt)) / 1000),
+          )
+        : 0,
+      failure: rulesSafe ? null : rulesFailure,
+    };
+  }
   // An unprotected collection must never receive private user data. Probe contains no user data.
   async function checkRules() {
-    if (rulesSafe && Date.now() - rulesCheckedAt < 300000) return true;
+    if (rulesSafe && rulesNow() - rulesCheckedAt < 300000) return true;
     if (rulesCheck) return rulesCheck;
+    if (!rulesSafe && rulesCheckedAt && rulesNow() - rulesCheckedAt < 300000)
+      return false;
+    rulesFailure = null;
     rulesCheck = (async () => {
+      // Retry only documents this process created successfully. Do not accumulate new
+      // probes while cleanup is unavailable, or delete a pre-existing document.
+      for (const probe of pendingProbeCleanup) {
+        try { await probe.delete(); pendingProbeCleanup.delete(probe); }
+        catch (e) { return rejected(null, "cleanup", failureCode(e)); }
+      }
       const projectId = db?.projectId;
-      if (!projectId || !/^[a-z0-9-]+$/.test(projectId)) return false;
+      if (!projectId || !/^[a-z0-9-]+$/.test(projectId))
+        return rejected(null, "preflight", "PROJECT_CONFIGURATION_UNAVAILABLE");
       let origin = "https://firestore.googleapis.com";
       if (env.FIRESTORE_EMULATOR_HOST) {
         if (
           !projectId.startsWith("demo-") ||
           !/^127\.0\.0\.1:\d+$/.test(env.FIRESTORE_EMULATOR_HOST)
         )
-          return false;
+          return rejected(null, "preflight", "INVALID_EMULATOR_CONFIGURATION");
         origin = "http://" + env.FIRESTORE_EMULATOR_HOST;
       }
       const checks = await Promise.all(
@@ -44,16 +106,26 @@ function createKnowledgeLabRouter(deps) {
           "limits",
           "taxonomy",
         ].map(async (name) => {
-          const probe = service.ref(name, "security-probe");
+          // Never overwrite a pre-existing document or delete one we did not create.
+          const probeId = deps.rulesProbeId
+            ? m.id(deps.rulesProbeId())
+            : "security-probe-" + randomUUID();
+          const probe = service.ref(name, probeId);
+          let created = false;
+          let stage = "admin-probe-write";
           try {
-            await probe.set({ probe: "lab-1" });
+            await probe.create({ probe: "lab-1" });
+            created = true;
+            pendingProbeCleanup.add(probe);
+            stage = "anonymous-access-check";
             const url =
               origin +
               "/v1/projects/" +
               projectId +
               "/databases/(default)/documents/" +
               COL(name) +
-              "/security-probe";
+              "/" +
+              probeId;
             const responses = await Promise.all([
               fetch(url, { signal: AbortSignal.timeout(6000) }),
               fetch(url, {
@@ -70,12 +142,28 @@ function createKnowledgeLabRouter(deps) {
               if (
                 r.status !== 403 ||
                 body.error?.status !== "PERMISSION_DENIED"
-              )
-                return false;
+              ) {
+                return rejected(
+                  name,
+                  stage,
+                  "UNEXPECTED_RULES_RESPONSE",
+                  r.status,
+                );
+              }
             }
             return true;
+          } catch (e) {
+            return rejected(name, stage, failureCode(e));
           } finally {
-            await probe.delete();
+            if (created) {
+              try {
+                await probe.delete();
+                pendingProbeCleanup.delete(probe);
+              } catch (e) {
+                rejected(name, "cleanup", failureCode(e));
+                throw e;
+              }
+            }
           }
         }),
       );
@@ -83,10 +171,12 @@ function createKnowledgeLabRouter(deps) {
     })();
     try {
       rulesSafe = await rulesCheck;
-      rulesCheckedAt = Date.now();
+      rulesCheckedAt = rulesNow();
       return rulesSafe;
-    } catch (_) {
+    } catch (e) {
       rulesSafe = false;
+      rulesCheckedAt = rulesNow();
+      if (!rulesFailure) rejected(null, "check", failureCode(e));
       return false;
     } finally {
       rulesCheck = null;
@@ -98,6 +188,11 @@ function createKnowledgeLabRouter(deps) {
     res.set("Cache-Control", "no-store").json({
       enabled: safe,
       reason: !enabled() ? "LAUNCH_HOLD" : !safe ? "RULES_NOT_VERIFIED" : null,
+      safetyCheck: !enabled()
+        ? { status: "held", failure: null }
+        : !db
+          ? { status: "not_verified", failure: { stage: "firebase-init", code: "DB_UNAVAILABLE" } }
+          : rulesDiagnostic(),
       aiAvailable: false,
       searchMethod: "normalized-substring",
       releaseCommit: /^[a-f0-9]{40}$/i.test(env.RENDER_GIT_COMMIT || '') ? env.RENDER_GIT_COMMIT : null,
@@ -108,7 +203,7 @@ function createKnowledgeLabRouter(deps) {
     if (!enabled() || !db)
       return res.status(503).json({ error: "LAUNCH_HOLD" });
     if (!(await checkRules()))
-      return res.status(503).json({ error: "RULES_NOT_VERIFIED" });
+      return res.status(503).json({ error: "RULES_NOT_VERIFIED", safetyCheck: rulesDiagnostic() });
     next();
   });
   router.use(
@@ -577,7 +672,8 @@ function createKnowledgeLabRouter(deps) {
       return {
         items: s.docs
           .slice(0, 20)
-          .filter((d) => d.id !== "security-probe")
+          .filter((d) => d.id !== "security-probe"
+            && !(d.id.startsWith("security-probe-") && d.data().probe === "lab-1"))
           .filter((d) => req.params.kind !== "posts" || m.publicPost(d.data()))
           .map((d) => ({
             id: d.id,
