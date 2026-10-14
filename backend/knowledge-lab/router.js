@@ -1,5 +1,6 @@
 "use strict";
 const express = require("express");
+const { randomUUID } = require("node:crypto");
 const m = require("./model");
 const { createService, COL } = require("./service");
 const taxonomyModel = require("./taxonomy");
@@ -78,10 +79,16 @@ function createKnowledgeLabRouter(deps) {
           "verification",
           "derived_links",
         ].map(async (name) => {
-          const probe = service.ref(name, "security-probe");
+          // Never overwrite a pre-existing document or delete one we did not create.
+          const probeId = deps.rulesProbeId
+            ? m.id(deps.rulesProbeId())
+            : "security-probe-" + randomUUID();
+          const probe = service.ref(name, probeId);
+          let created = false;
           let stage = "admin-probe-write";
           try {
-            await probe.set({ probe: "lab-1" });
+            await probe.create({ probe: "lab-1" });
+            created = true;
             stage = "anonymous-access-check";
             const url =
               origin +
@@ -89,7 +96,8 @@ function createKnowledgeLabRouter(deps) {
               projectId +
               "/databases/(default)/documents/" +
               COL(name) +
-              "/security-probe";
+              "/" +
+              probeId;
             const responses = await Promise.all([
               fetch(url, { signal: AbortSignal.timeout(6000) }),
               fetch(url, {
@@ -132,7 +140,7 @@ function createKnowledgeLabRouter(deps) {
             });
             return false;
           } finally {
-            await probe.delete();
+            if (created) await probe.delete();
           }
         }),
       );
@@ -888,7 +896,13 @@ function createKnowledgeLabRouter(deps) {
       return {
         items: s.docs
           .slice(0, 20)
-          .filter((d) => d.id !== "security-probe")
+          .filter(
+            (d) =>
+              d.id !== "security-probe" &&
+              !(
+                d.id.startsWith("security-probe-") && d.data().probe === "lab-1"
+              ),
+          )
           .filter((d) => req.params.kind !== "posts" || m.publicPost(d.data()))
           .map((d) => ({
             id: d.id,

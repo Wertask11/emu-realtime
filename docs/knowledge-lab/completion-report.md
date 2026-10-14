@@ -1,13 +1,13 @@
 # Emu Knowledge Lab — 完成機能追加の実装・検証報告
 
-2026-10-14。**総合判定：NOT READY（全機能の正式公開基準）**。追加コードとローカル検証は進めたが、実Gemini/意味検索の品質、Preview、本番追加機能を実証していない。現在の既存Productionも `RULES_NOT_VERIFIED` で停止していることを再確認した。古い成功報告を現在の稼働の証明にはしていない。
+2026-10-14。**総合判定：NOT READY（全機能の正式公開基準）**。追加コードとローカル検証は進めたが、実Gemini/意味検索の品質、Preview、本番追加機能を実証していない。既存Productionは一時 `RULES_NOT_VERIFIED` だったが、11:27・11:31 UTCの再確認では `enabled:true` に復帰した。停止原因は未特定で、古い成功報告を現在の稼働の証明にはしていない。
 
 ## A. 前作業と現在
 
 - PR #195：MERGED。main基準 `ceab38ec7149b2d3f6cd815f0827e99e9c4e9fdf`。旧4不具合の実装を再利用し、作り直していない。
 - Founder本人確認：プロフィール保存、下書き→公開、研究保存→編集→履歴→保管→復元は前リリースで成功との報告。機械による本人ログイン検証とは区別する。
-- 新ブランチ：`feature/emu-knowledge-lab-completion`。追加リリースは未マージ・未デプロイ。
-- 現在のRender `/api/knowledge-lab/config`：HTTP200、`enabled:false`、`reason:RULES_NOT_VERIFIED`、AI false、releaseCommit ceab。Vercel Lab HTMLはHTTP200。200のHTMLだけで機能の稼働をPASSにしていない。
+- 新ブランチ：`feature/emu-knowledge-lab-completion`。追加PR [#196](https://github.com/Wertask11/emu-realtime/pull/196) はdraft・未マージ。実装コミット `e25d5668f0bc2dc5481f7b49635deab75cc5394f`。Vercelの追加Previewビルドは成功、Renderの追加版は未デプロイ。
+- 最新Render `/api/knowledge-lab/config`：HTTP200、`enabled:true`、`reason:null`、AI false、releaseCommit ceab（11:31 UTC）。Vercel Lab HTMLはHTTP200。旧版公開4画面×6幅を実際のHTTPS応答で表示確認した。200のHTMLだけで機能の稼働をPASSにしていない。
 - RenderのAIキー登録はFounder報告済み。このCodex環境の秘密情報は空、Gemini APIドメインは現行許可外。保存した設定案にキー要件・許可ドメインはあるが、保存だけでは適用されない。
 - Founderが共有したFirebase管理鍵は使用・保存していない。交換が必要。既存のFirebaseプロジェクト設定は emusch-2a111。FIREBASE_PROJECT_IDの省略自体は異常ではない。
 
@@ -17,7 +17,7 @@
 
 |#|完成条件|実装ファイル|自動/ローカル検証|追加版Production|
 |---|---|---|---|---|
-|1|経験知投稿|service.js / lab.js|投稿・公開・編集・下書き・権限PASS|未公開。旧版はFounder確認、現在停止|
+|1|経験知投稿|service.js / lab.js|投稿・公開・編集・下書き・権限PASS|未公開。旧版はFounder確認、11:31 UTCでは既存版復帰|
 |2|独立分類10軸|taxonomy.js / model.js / taxonomy-migration.js|旧49ID保持、97種、同義語、曖昧jobを推測しないPASS|未公開|
 |3|複数条件検索|model.js / service.js / lab.js|AND/OR/完全/部分/除外/URL/5順/0件PASS|未公開|
 |4|実際の意味検索|semantic.js / gemini.js|ベクトル取得・類似度・キャッシュ・公開範囲は模擬APIでPASS。実日本語品質未検証|未公開・実API未検証|
@@ -37,10 +37,10 @@
 |18|利用分析|analytics.js / router.js / lab.js|実成功イベント、重複防止、転換、0件分野、PIIなしPASS|未計測・未検証|
 |19|AI使用量/費用管理|ai-budget.js / ai-service.js / lab.js|回数・同時実行・停止・再試行・取得/未報告使用量PASS|無料プロジェクト/実使用量未検証|
 |20|PC/スマホ|Lab各HTML / lab.js|375/390/412/768/1024/1366、通常/模擬AI UI PASS|追加版未公開|
-|21|既存Emu/SchoolPark維持|root最小hook / integration.js|既存Emu・ガイド・バックエンド回帰PASS。全SchoolPark本番操作は未検証|現在Lab停止。既存全機能PASSとはしない|
-|22|Rules/権限安全|既存firestore.rules / router.js|ローカルRules・API・本人性・一般ユーザー拒否PASS|現在Rules安全検査未成功。公開中Rules全文取得なし|
-|23|Production実動作|追加PRとVercel/Render|公開ゲート未通過|FAIL：追加未公開/現在Lab停止|
-|24|募集ページ公開|knowledge-lab-writers.html|ローカル表示・CTA・FAQ・利用条件PASS|旧ページHTTP200、登録サービス現在停止|
+|21|既存Emu/SchoolPark維持|root最小hook / integration.js|既存Emu・ガイド・バックエンド回帰PASS。全SchoolPark本番操作は未検証|既存版復帰。既存全機能PASSとはしない|
+|22|Rules/権限安全|既存firestore.rules / router.js|ローカルRules・API・本人性・一般ユーザー拒否PASS|11:31 UTCに旧版の安全検査成功。追加版32領域/公開中Rules全文は未検証|
+|23|Production実動作|追加PRとVercel/Render|公開ゲート未通過|FAIL：追加未公開/既存版復帰|
+|24|募集ページ公開|knowledge-lab-writers.html|ローカル表示・CTA・FAQ・利用条件PASS|旧版公開ページの表示を6幅で確認。追加版登録は未検証|
 |25|営業資料|completion-outreach-draft.md / 各公開ページ|3対象、初投稿、FAQ、X/Instagram/TikTok/note/DM/mail/運営手順作成|下書き。追加版の本番写真・動画未制作|
 
 ## C. AIの実装状況
@@ -73,7 +73,7 @@ AI管理は回数/成功/エラー/キャッシュ/取得済みトークン/入�
 
 ## G. GitHub/デプロイ
 
-ブランチ `feature/emu-knowledge-lab-completion`、基準main ceab。追加PR/commitはGitHub記録で確認する。PR #195は再利用実装の正本で、追加は新PR。公開ゲート不足のため追加main反映・Productionデプロイを行わない。Vercel/Renderの現在基準はceab。Preview URLとアクセス確認は公開記録に追記し、ローカルをPreviewと呼ばない。
+ブランチ `feature/emu-knowledge-lab-completion`、基準main ceab。追加PR [#196](https://github.com/Wertask11/emu-realtime/pull/196) はdraft、実装コミット e25d5668f0bc2dc5481f7b49635deab75cc5394f。PR #195は再利用実装の正本で、追加は新PR。公開ゲート不足のため追加main反映・Productionデプロイを行わない。Vercel/Renderの現在基準はceab。Preview URLは https://emu-realtime-qzrq-git-feature-emu-knowledge-cd2aa0-school-park.vercel.app/knowledge-lab.html 。Vercelビルド成功をGitHub状態で確認したが、11:35 UTCの実接続は通信プロキシのCONNECT403で止まり、アプリ応答/表示は未検証。新ホストを設定案へ追加した。ローカルをPreviewと呼ばない。
 
 ## H. Firestore/Privacy
 
@@ -81,7 +81,7 @@ AI管理は回数/成功/エラー/キャッシュ/取得済みトークン/入�
 
 Privacyに外部AIの任意同意、無料枠での提供元利用、非公開除外、Ownerアクセス、撤回後の新送信停止を最小補足。著作権/既存Termsを全面改変していない。最新Google条件の確認と法律専門家の確認は未実施。外部AI側に渡した内容の完全削除は保証しない。
 
-Rules検査は安全ゲートであり、IAM/管理API/ネットワーク/クォータ/後片付け障害でも停止する。現在の停止原因は未特定。一般ユーザーへの開放や認証回避で通していない。正常/失敗の再検査には5分の有界キャッシュを設け、短時間の繰り返し書き込みを防ぐ。検査自体にFirestore費用/無料枠負荷がある。
+Rules検査は安全ゲートであり、IAM/管理API/ネットワーク/クォータ/後片付け障害でも停止する。一時停止の原因は未特定で、11:31 UTCには旧版が復帰している。一般ユーザーへの開放や認証回避で通していない。正常/失敗の再検査には5分の有界キャッシュを設け、短時間の繰り返し書き込みを防ぐ。検査自体にFirestore費用/無料枠負荷がある。固定 `security-probe` は既存でもユーザー指定を拒否していた。追加版では乱数IDのcreate専用にし、作成が成功した文書だけを後片付けする。衝突時は既存文書を上書き/削除せず安全ゲートを閉じる。
 
 ## I. 営業資料
 
@@ -90,7 +90,7 @@ Rules検査は安全ゲートであり、IAM/管理API/ネットワーク/クォ
 ## J. Founderの必要操作
 
 1. 共有したFirebase管理鍵を交換し、Render再デプロイ後に古い鍵を失効する。値をチャットへ貼らない。
-2. 本番停止の切り分けにRender LogsのFirebase初期化・安全検査のエラー**名/コードだけ**を確認する。コードやネットワークの確認で解消できる部分はこちらで修正する。
+2. 安全検査の停止が再発した場合のみ、Render Logsの失敗段階/エラー**名・コードだけ**を確認する。11:31 UTCには旧版は復帰済み。秘密値を貼らない。
 3. Codex環境へGeminiキーを安全に登録し、保存したGoogle APIドメイン設定を適用する。Render登録は別。課金は許可されておらず有効化しない。
 4. 公開ゲート通過後、必要なOwnerログイン、無料枠/モデル確認、本人の本番保存・検索・AI操作確認を行う。
 
@@ -98,16 +98,18 @@ Rules全文の再貼り付けを現時点で一律要求していない。今回
 
 ## K. 最終確認
 
-「当初構想の完成形になったか」：**NO**。コード/ローカルの拡張は実装・検証したが、実Gemini、実意味検索品質、追加版Preview/Production、現在本番の安全ゲート復旧が未完了。FounderがAIを含む全機能の正式完成として営業できる状態とは判定しない。未確認をPASSとしない。
+「当初構想の完成形になったか」：**NO**。コード/ローカルの拡張は実装・検証したが、実Gemini、実意味検索品質、追加版Preview/Production、追加版32領域の本番安全検査が未完了。FounderがAIを含む全機能の正式完成として営業できる状態とは判定しない。未確認をPASSとしない。
 
 ## テストと証拠
 
 - Backend全体：349 PASS、Emu+ガイド：174 PASS。
-- Lab/API/Rules/追加回帰：87 PASS（前リリース38件＋追加49件）、失敗0、skip0。Backend/Emu/ガイドと合わせ610 PASS。追加テストは分類、保存数、AI安全、意味検索、循環、保護ゲート。実Providerは模擬。
+- Lab/API/Rules/追加回帰：88 PASS（前リリース38件＋追加50件）、失敗0、skip0。Backend/Emu/ガイドと合わせ611 PASS。追加テストは分類、保存数、AI安全、意味検索、循環、保護ゲート。実Providerは模擬。
 - 実ネイティブUI+エミュレーター：募集→ログイン→書き手→回答公開→検索/保存/通報→2/3分野→3更新/履歴→保管→再ログイン→復元/編集→Owner各一覧/注目/公開停止/復元。
 - AI UI：モデル操作→作者同意→自動元知識→模擬分析/引用→保存/再分析→手動継続→過去AI分析/引用履歴。意味検索は模擬ベクトル。6幅で横はみ出しなし。
 - `90/min` の既存制限は維持。ブラウザで実429とretryAfterMsを確認し、待機後200を確認。上限を増やしてテストを通していない。
 - 証拠は `/workspace/outputs/knowledge-lab-completion/`。Production現在状態は `production-current-config.json`、通常UIは `browser/`、模擬AI UIは `mock-ui/`。旧ceab本番写真は別ディレクトリに保持する。
+- 旧版Productionの公開Lab/募集/紹介/ガイド4画面×6幅（24表示）は横はみ出しなし。Chromiumの直接TLSはローカルCA信頼エラーのため、Pythonの通常TLS検証を通した実HTTPS応答をChromiumへ転送して表示した。HTMLを書き換えず、認証/書き込みを遮断。証拠 `production-current-public/results.json` とProductionラベルの写真。旧版/公開表示だけであり、追加版や本人操作をPASSにしない。
+- 実API用 `live-gemini.cjs` を追加。実モデル一覧→実分析→私用研究保存/履歴→実埋め込み→日本語検索をローカルに限定して実行する。現在はキー不足を実行前に検出しただけで、実API成功は未確認。
 - 追加版Preview、Production本人ログイン、LINE/wallet/実送金、全SchoolPark UI、実Gemini/品質/大量負荷、最新外部規約は未検証。
 
 ## 変更ファイル一覧
@@ -169,11 +171,12 @@ Rules全文の再貼り付けを現時点で一律要求していない。今回
 - `tools/knowledge-lab-tests/completion-storage.test.cjs`
 - `tools/knowledge-lab-tests/completion-ui-fixture.cjs`
 - `tools/knowledge-lab-tests/completion-ui.py`
+- `tools/knowledge-lab-tests/live-gemini.cjs`
 
 ## 公開前の残件
 
 - 管理用秘密鍵の交換。侵害の発生は未確認だが、共有した鍵の継続使用は避ける。
-- P1：Production LabのRULES_NOT_VERIFIED停止原因の特定・復旧。
+- P1：追加版の実Gemini/意味検索と本番統合が未検証。旧Productionの一時停止は復帰済みだが原因不明・再発監視が必要。
 - 必須：実Gemini分析、実日本語意味検索、参照元/同意/品質/無料利用の確認。
 - 必須：追加版Previewと本番の正規ログイン後の保存/運営/回帰確認。
 - P2：本番の追加活動欄/新指標/最新Google条件の確認。

@@ -62,3 +62,18 @@
 AIだけの問題ならOwner停止とRender `KNOWLEDGE_LAB_AI_ENABLED=false`。データを消さない。全体停止が必要なら `KNOWLEDGE_LAB_ENABLED=false`。最後に確認済みのVercel/Renderコードへ戻し、新規の保存領域を保持する。旧コードが追加フィールドを読まないことと既存投稿/認証/報酬の回帰を確認する。Labデータが存在する状態で包括許可を開くRulesへ戻さない。新しい秘密鍵への交換はロールバックしない。
 
 旧 #195 の認証・EMUER自己採用防止の修正を取り除かない。本番データ初期化・一括削除・報酬回収・送金は復旧手順に含めない。
+
+## Rules検査の運用補足
+
+検査用固定IDは既存でもユーザー指定を拒否していた。追加版はランダムIDをcreateし、自分が作成成功した文書だけを削除する。既存文書に衝突した場合は閉じ、上書き・削除しない。成功と失敗の再検査間隔は5分。Render Logsの collection/stage/code または httpStatus だけで切り分け、秘密鍵や本文を共有しない。2026-10-14 11:31 UTCの既存版は enabled:true。再発時だけログ確認を行う。
+
+## 実Geminiのローカル検証（模擬応答とは別）
+
+実行環境に安全なGeminiシークレットとGoogle API通信許可を適用し、Google側が無料枠・請求先なしであることを確認した後だけ実行する。キーをコマンド・ログ・チャットへ貼らない。`GEMINI_FREE_TIER_CONFIRMED=true`、`NODE_USE_ENV_PROXY=1` を使い、localhost/127.0.0.1への通信は既存のNO_PROXY設定でローカルのままにする。
+
+1. `NODE_PATH=backend/node_modules node tools/knowledge-lab-tests/live-gemini.cjs --list-models` で実APIのモデル一覧を取得する。課金を有効にせず、実一覧と無料枠からモデルを選び `GEMINI_ANALYSIS_MODEL` を設定する。
+2. 他のエミュレーターテスト/ブラウザーを止めてから `NODE_PATH=backend/node_modules node tools/knowledge-lab-tests/live-gemini.cjs` を実行する。Auth9199/Firestore8787、demoプロジェクトだけを使う。他のローカル検証との同時実行を避ける。
+3. 明示的に架空ケースと表示したローカル投稿3件を作成し、実Gemini分析、出典検証、私用研究保存/編集/履歴、実埋め込み索引、日本語意味検索の順位を確認する。通常は分析1回・索引1RPC・検索1RPCで、既存の回数/再試行制限が適用される。定期処理はこの検証内で止める。
+4. 成功した実結果のみ `/workspace/outputs/knowledge-lab-completion/live-gemini/results.json` へ保存する。秘密値、認証ヘッダー、実ユーザー本文は出力しない。失敗はコードだけ報告し、固定応答へ置き換えない。
+
+この検証が成功しても、本番利用者の実体験を分析できた証拠や意味検索全体の品質証明ではない。本番で作者/利用者の同意、出典の正しさ、無料枠、保存/更新、既存回帰を別途確認してからREADYとする。キーがない現在は `GEMINI_SECRET_REQUIRED` で開始前に停止することを確認しただけで、実API成功は未確認。
