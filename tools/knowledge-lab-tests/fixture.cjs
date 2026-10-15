@@ -1,6 +1,7 @@
 'use strict';
 // Test accounts and writes are restricted to local emulators, never production.
-const PROJECT='demo-emu-knowledge-lab';
+const PROJECT=process.env.LAB_EMULATOR_PROJECT||'demo-emu-knowledge-lab';
+if(!/^demo-emu-knowledge-lab(?:-[a-z0-9-]{1,30})?$/.test(PROJECT))throw new Error('LOCAL_PROJECT_ONLY');
 if(process.env.FIRESTORE_EMULATOR_HOST&&process.env.FIRESTORE_EMULATOR_HOST!=='127.0.0.1:8787')throw new Error('LOCAL_EMULATOR_ONLY');
 if(process.env.FIREBASE_AUTH_EMULATOR_HOST&&process.env.FIREBASE_AUTH_EMULATOR_HOST!=='127.0.0.1:9199')throw new Error('LOCAL_AUTH_EMULATOR_ONLY');
 process.env.FIRESTORE_EMULATOR_HOST='127.0.0.1:8787';process.env.FIREBASE_AUTH_EMULATOR_HOST='127.0.0.1:9199';process.env.GCLOUD_PROJECT=PROJECT;
