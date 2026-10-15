@@ -447,7 +447,6 @@
         b.setAttribute("aria-pressed", String(b.dataset.view === name)),
       );
     if (!state.enabled) return;
-    tour?.enter(tourId(name));
     if (["mine", "writer", "requests", "admin"].includes(name) && !state.me)
       showLogin();
     if (state.loadedViews[name] && Date.now() - state.loadedViews[name] < 30000)
@@ -2169,86 +2168,50 @@
     }
   });
   const tour = window.ReizoTour;
-  const tourId = (name) => "emu-lab-" + (name === "library" ? "welcome" : name);
+  let labGuideRestoreView = null;
+  window._emuLabSelectView = view;
   if (tour) {
-    const guides = {
-      library: [
-        [
-          "lab-intro",
-          "まずは、経験を探してみよう",
-          "図書館では投稿済みの経験を検索できるよ。経験者へ新しく質問したいときは「経験者に質問する」へ。",
-        ],
-        [
-          "lab-library",
-          "キーワードだけでも探せるよ",
-          "知りたいことを入力して検索。分野・業種などの細かい条件は、必要なときだけ開こう。自分の経験は「経験知を届ける」から書けるよ。",
-        ],
-        [
-          "lab-tabs",
-          "見つけた経験から、次の発見へ",
-          "異なる経験を組み合わせるなら研究所へ。保存した知識と研究の続きは、マイライブラリーに残るよ。",
-        ],
-        [
-          "lab-back",
-          "Emuへはここから戻れるよ",
-          "「Emuに戻る」で、もとのEmu画面へ。上の「使い方案内」から、この説明や今開いている画面の案内をいつでも見返せるよ。",
-        ],
-      ],
-      research: [
-        [
-          "lab-fields",
-          "組み合わせたい分野を2〜3つ選ぼう",
-          "分野を選んでからAI分析を始めると、同意済みの公開知識を自動で探すよ。元知識を自分で指定することもできるよ。",
-        ],
-        [
-          "lab-ai",
-          "AI分析と手動の比較は別の操作だよ",
-          "送信する内容を確認してAI分析を実行。成功すると引用付きの分析が表示され、下の問い・仮説・実践案が入力されるよ。「比較する（手動）」は元投稿と分類を並べる機能だよ。",
-        ],
-        [
-          "lab-note",
-          "内容を確認して、自分用に保存しよう",
-          "AIの答えは未検証の仮説。自分で修正して保存できるよ。現実で試した結果は、あとからこのノートへ追記しよう。案内だけではAIの実行や保存は行わないよ。",
-        ],
-      ],
-      mine: [
-        [
-          "lab-mine",
-          "自分の記録を続きから",
-          "公開した経験知、下書き、保存した知識、研究ノートを切り替えられるよ。ノートを開くと編集・履歴・保管・復元へ進めるよ。",
-        ],
-      ],
-      requests: [
-        [
-          "lab-requests",
-          "見つからない答えは、経験者へ聞いてみよう",
-          "ここはEmu「知識を探す」と同じ質問募集だよ。投稿済みの知識を検索する図書館とは使い分けよう。募集内容を入力し、自分で公開ボタンを押すまで投稿されないよ。",
-        ],
-      ],
-      writer: [
-        [
-          "lab-writer",
-          "どんな経験を書けるか、伝えてみよう",
-          "表示名と自己紹介から始めよう。分野や職歴は任意だよ。公開範囲を自分で選び、プロフィールを保存してから最初の経験を書いてみよう。",
-        ],
-      ],
+    const steps = [
+      ["lab-intro", "Knowledge Labとは", "経験を探す、自分の経験を書く、ちがう経験から新しいアイデアを考える。この3つができる場所だよ。", "library"],
+      ["lab-tabs", "5つの画面", "知識図書館・掛け合わせ研究所・マイライブラリー・経験者に質問する・書き手プロフィール。このタブで切り替えるよ。", "library", "運営管理タブ（Ownerのみ）は案内しない"],
+      ["lab-search", "キーワードで探す", "キーワードを入れて探すよ。「検索方法・除外条件」を開くと、AND／ORや含めない言葉も選べるよ。", "library"],
+      ["lab-mode", "探し方", "「文章の意味から探す（Gemini）」を選ぶと、意味の近い知識が見つかるよ。そのときは検索文をGeminiへ送る確認が出るよ。秘密や個人情報は入れないでね。", "library", "意味検索の利用・同意は完了条件にしない"],
+      ["lab-facets", "分類で絞る", "「分野・業種・職業などで絞り込む」を開くと、分類を組み合わせて今の自分に近い知識へ近づけるよ。使わなくても探せるよ。", "library"],
+      ["lab-results", "見つかった知識", "カードを押すと本文が読めるよ。気になったら「保存する」、比べたいときは「研究に使う」。", "library", "保存は完了条件にしない"],
+      ["lab-compose", "経験知を届ける", "自分の経験は「＋ 経験知を届ける」から。必須はタイトルと本文だけだよ。", "library", "投稿は完了条件にしない"],
+      ["lab-fields", "1. 分野を選ぶ", "掛け合わせ研究所では、まず分野を2〜3つ選んで、関連する知識を探すよ。", "research"],
+      ["lab-sources", "2. 元の知識を選ぶ", "自分で選ぶなら2〜6件選んで「比較する（手動）」。共通点と違いが並ぶよ。選ばずにAI分析を始めることもできるよ。", "research"],
+      ["lab-ai", "AIで掛け合わせる", "AIが使えるときは、選んだ知識（または分野）をGeminiで分析できるよ。結果はまだ確かめていない「仮説」として見てね。", "research", "AI分析は完了条件にしない"],
+      ["lab-note", "3. 研究ノート", "AI分析がうまくいくと、問い・仮説・実践案が入るよ。自分で書いてもOK。公開範囲は「自分用」から始められるよ。", "research", "保存は完了条件にしない"],
+      ["lab-mine", "マイライブラリー", "保存した知識、下書き、自分の研究ノートは、ここから続きを開けるよ。", "mine"],
+      ["lab-requests", "経験者に質問する", "答えが見つからないときは、経験した人に質問を届けられるよ。Emuの「知識を探す」の募集と同じしくみだよ。", "requests", "募集の公開は完了条件にしない"],
+      ["lab-writer", "書き手プロフィール", "表示名と経験分野を登録すると、書き手として参加できるよ。本名や勤務先はいらないよ。", "writer", "プロフィール公開は完了条件にしない"],
+      ["lab-guide", "いつでも見返せる", "迷ったら右上の「🧊 使い方案内」を押してね。この案内をもう一度見られるよ。", "writer"],
+      ["lab-back", "Emuに戻る", "「← Emuに戻る」で、いつものEmuの画面に戻れるよ。", "writer"],
+    ];
+    const restoreLabTab = () => {
+      if (labGuideRestoreView) view(labGuideRestoreView);
+      labGuideRestoreView = null;
     };
-    for (const [name, steps] of Object.entries(guides))
-      tour.register(
-        tourId(name),
-        steps.map(([target, label, text]) => ({ target, label, text })),
-        {
-          label: "Knowledge Lab",
-          brand: "Emu",
-          auto: name === "library",
-          isReady: () =>
-            state.enabled && state.terms.length > 0 && state.view === name,
-        },
-      );
+    tour.register("emu-lab", steps.map(([target, label, text, lv, note]) => ({
+      target: '[data-tour~="' + target + '"]',
+      label, text, note,
+      open: () => {
+        if (labGuideRestoreView === null) labGuideRestoreView = state.view;
+        if (state.view !== lv) view(lv);
+      },
+    })), {
+      label: "05 Knowledge Lab",
+      brand: "Emu",
+      auto: false,
+      isReady: () => state.enabled && state.terms.length > 0,
+      onComplete: restoreLabTab,
+      onSkip: restoreLabTab,
+    });
     $("#guide").onclick = () => {
-      if (state.view === "admin")
-        run(() => view("library").then(() => tour.restart(tourId("library"))));
-      else tour.restart(tourId(state.view));
+      if (parent !== window && parent.ReizoTour) {
+        if (parent.ReizoTour.running()?.id !== "emu-lab") parent.ReizoTour.restart("emu-lab");
+      } else tour.restart("emu-lab");
     };
   }
   window.addEventListener("message", (e) => {
@@ -2288,7 +2251,6 @@
       edit(await api("/posts/" + p.get("edit"), { auth: true }));
     if ($("#searchFacets input:checked"))
       $("#searchClassifications").open = true;
-    if (tour) tour.enter(tourId(state.view));
     document.documentElement.dataset.labReady = "true";
   }
   run(init);
