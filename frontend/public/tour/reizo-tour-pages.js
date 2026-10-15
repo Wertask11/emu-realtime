@@ -49,7 +49,6 @@
       if(!list?.children.length || list.querySelector('.emu-request-empty button')) return false;
       if(list.querySelector('.emu-request-empty') && /読み込|ログイン/.test(list.textContent)) return false;
     }
-    if(id==='emu-knowledge-lab' && (doc?.documentElement?.dataset.labReady !== 'true' || !doc.querySelector('.view:not([hidden])'))) return false;
     if(id==='sp-passport' && item?.target.includes('pp-record') && /読み込/.test(document.getElementById('sppRecords')?.textContent||'')) return false;
     return true;
   }
@@ -60,8 +59,6 @@
     if (document.getElementById('spReizoPanel')?.classList.contains('open')) return null;
     if (Array.from(document.querySelectorAll('.modal,.emu-sheet.open')).some(function(el){return el.id !== 'emuRequestSheet' && visible(el);})) return null;
     if (document.body.classList.contains('sp-passport-open')) return 'sp-passport';
-    var labRoom = document.getElementById('spRoomFrame');
-    if (document.body.classList.contains('sp-room-open') && labRoom?.getAttribute('src')?.startsWith('/knowledge-lab.html?')) return 'emu-knowledge-lab';
     if (/(?:^|\s)sp-(?:room|menu|passport|vote|quest|wisdom|log)-open(?:\s|$)/.test(document.body.className)) return null;
     if (document.body.classList.contains('sp-dao-open')) { var app = dao(); return app && SP[app.state.screen] ? 'sp-' + SP[app.state.screen] : null; }
     if (!visible(document.getElementById('mainApp'))) return null;
@@ -124,12 +121,6 @@
     if (document.body.classList.contains('sp-dao-open')) {
       if (typeof window.chesHubGo !== 'function') throw new Error('Emuの入口を開けませんでした。');
       await window.chesHubGo('emu');
-    }
-    if (name === 'knowledge-lab') {
-      if (typeof window.openEmuKnowledgeLab !== 'function') throw new Error('Knowledge Labの入口を開けませんでした。');
-      window.openEmuKnowledgeLab('library');
-      await waitFor(function () { return screen() === 'emu-knowledge-lab' && emuReady('emu-knowledge-lab','spRoomFrame'); },'Knowledge Labの読み込みを待っています。画面を開いてから再開してください。');
-      return;
     }
     var fn = {feed:'showEmuFeed',requests:'showEmuRequests',share:'showEmuIchinichi',discussion:'showEmuDiscussion'}[name];
     if (typeof window[fn] !== 'function') throw new Error('この画面の入口を開けませんでした。');
@@ -531,6 +522,14 @@
         "click": true,
         "note": "Room1は「知識を探す」の中だけに表示",
         "screen": "search"
+      },
+      {
+        "target": "emu-lab-entry",
+        "label": "Emu Knowledge Lab",
+        "text": "「知識を探す」の中から、経験知を検索して掛け合わせるKnowledge Labも開けるよ。押すとLabの画面に移動し、冷蔵庫くんが使い方を案内するよ。",
+        "click": true,
+        "note": "投稿・研究ノート保存・募集は完了条件にしない",
+        "screen": "search"
       }
     ]
   },
@@ -643,14 +642,6 @@
   register("emu-requests","02 知識を探す",v2["emu-search"].steps.map(specificationStep),null,null);
   register("emu-share","03 一日シェア",v2["emu-share"].steps.map(specificationStep),null,"emuIchinichiFrame");
   register("emu-discussion","04 議論",v2["emu-debate"].steps.map(specificationStep),null,"emuDiscussionFrame");
-  register("emu-knowledge-lab","05 Knowledge Lab",[
-    {target:'[data-tour~="lab-intro"]',label:'経験から、次の発見へ',text:'Emu Knowledge Labは、誰かの経験知を探し、異なる知識を比べて、新しい問いを考える場所です。読むだけでも使えます。'},
-    {target:'[data-tour~="lab-tabs"]',label:'知識図書館と研究所',text:'まず研究所を見てみましょう。ガイドを進めるには「掛け合わせ研究所」をタップしてください。保存・投稿・募集は必要ありません。',advanceOn:{target:'[data-view="research"]',read:function(){var d=frameDoc('spRoomFrame');return !!d?.querySelector('#research:not([hidden])');}}},
-    {target:'[data-tour~="lab-research"]',label:'経験知を比べて考える',text:'分野を選び、関連する公開知識を比べて問いや仮説を考える場所です。AI分析は任意です。この案内では検索・分析・保存を実行しません。'},
-    {target:'[data-tour~="lab-note"]',label:'研究ノート',text:'考えた問いや実践案を自分用のノートに残せます。入力・保存は任意です。今回はフォームを見るだけで大丈夫です。'},
-    {target:'[data-tour~="lab-tabs"]',label:'知識を探してみる',text:'では「知識図書館」に戻りましょう。タップすると検索画面を案内します。',advanceOn:{target:'[data-view="library"]',read:function(){var d=frameDoc('spRoomFrame');return !!d?.querySelector('#library:not([hidden])');}}},
-    {target:'#searchForm',label:'キーワードや分類から探す',text:'キーワードと分類を組み合わせて経験知を探せます。意味検索では入力文をAIへ送るため、個人情報や秘密は入力しないでください。閲覧だけならログインや投稿は不要です。'}
-  ],null,'spRoomFrame');
   register('sp-guild','ギルドの詳細',[
     step('screen-heading','ギルドの詳細','活動や参加条件を確認できます。'),
     step('guild-detail','決めごとの見方','ルールと議題を読んでから判断できます。投票や参加はこの案内の条件ではありません。')
@@ -728,7 +719,7 @@
     mo.observe(doc.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','hidden']});
     fr.contentWindow.addEventListener('pagehide',function(){mo.disconnect();},{once:true});
   }
-  ['spDaoFrame','emuKnowledgeFrame','emuIchinichiFrame','emuDiscussionFrame','spRoomFrame'].forEach(function(id){var fr=document.getElementById(id);if(fr){fr.addEventListener('load',function(){watchFrame(fr);scheduleRoute();});watchFrame(fr);}});
+  ['spDaoFrame','emuKnowledgeFrame','emuIchinichiFrame','emuDiscussionFrame'].forEach(function(id){var fr=document.getElementById(id);if(fr){fr.addEventListener('load',function(){watchFrame(fr);scheduleRoute();});watchFrame(fr);}});
   var observer=new MutationObserver(function(records){if(records.some(function(record){return !record.target.closest?.('#rk-tour,#rk-guide-catalog');}))scheduleRoute();});
   observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','hidden']});
   observer.observe(document.documentElement,{attributes:true,attributeFilter:['class','style','hidden']});
