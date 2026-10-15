@@ -7,7 +7,7 @@ const source=fs.readFileSync(path.join(root,'frontend/public/index.html'),'utf8'
 const functions=['_emuPhoneLayout','_emuEnsureAppVisible','_emuCloseFullscreenOverlays','_setEmuHomeTab','_setEmuPageTitle','showEmuFeed','showEmuRequests','showEmuIchinichi','showEmuDiscussion','emuFitKnowledgeFrame','emuFitPhoneFrames','emuFitContact','emuNavToggle','openSpRoom','closeSpRoom','escapeHtml','_emuRenderKnowledgeRequests','spReizoOpen','spReizoClose','_spReizoAppendMsg','_spReizoShowTyping','spReizoSend','spReizoKeydown','spReizoAsk','openSpPassport','closeSpPassport','_sppRow','_sppRowHtml','_sppDate','_sppProviderLabel','_spShortAddr','_sppPageEls','_sppCurrentPage','_sppSyncNav','spPassportTurn','spPassportGoPage','_sppReducedMotion','_sppUpdateMore','_sppCancelTurn','openKnowledgeRequestComposer','openEmuSheet','spDaoPlaceContact','spDaoWatchRender','toggleAccountMenu','closeAccountMenu','emuShortAddr','accountGo','emuOpenKnowledgeLibrary'];
 const scripts=[...source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
 const contact=scripts.find(m=>m[1].includes('let selectedType = null;'))[1];
-const kb=source.slice(source.indexOf('const SP_REIZO_KB = ['),source.indexOf('let _reizoAgentsStarted'));
+const kb=grab(source,'spReizoAnswer');
 const native=functions.map(name=>grab(source,name)).join('\n');
 const prefix=`
 window.fixtureMessages=[];window.fixtureChatOpens=0;
@@ -54,6 +54,6 @@ _emuEnsureAppVisible();
 if(new URLSearchParams(location.search).get('brand')==='schoolpark')chesHubGo('schoolpark');else showEmuFeed();
 `;
 let html=source.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');
-html=html.replace('</head>','<script src="/emu-i18n.js"></script><script src="/emu-i18n-pages.js"></script><script defer src="/tour/reizo-tour.js"></script><script defer src="/tour/reizo-tour-pages.js"></script></head>');
+html=html.replace('</head>','<script src="/reizo/knowledge.js"></script><script src="/reizo/chat.js"></script><script src="/emu-i18n.js"></script><script src="/emu-i18n-pages.js"></script><script defer src="/tour/reizo-tour.js"></script><script defer src="/tour/reizo-tour-pages.js"></script></head>');
 html=html.replace('</body>','<div style="position:fixed;right:4px;top:2px;z-index:10200;font:10px system-ui;background:#fff;padding:2px;pointer-events:none">LOCAL DUMMY — 本番の録画ではありません</div><script>'+prefix+kb+native+contact+boot+'</script></body>');
 const output=process.argv[2]||'/tmp/reizo-tour-fixture.html';fs.writeFileSync(output,html);console.log('LOCAL DUMMY fixture written:',output);

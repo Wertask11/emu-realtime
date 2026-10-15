@@ -57,7 +57,7 @@ test('legacy progress follows equivalent v2 steps rather than resetting',()=>{
  tour.register('sp-home',Array(9).fill(steps[0]));tour.register('emu-feed',Array(9).fill(steps[0]));tour.register('sp-park',Array(3).fill(steps[0]));
  assert.equal(tour.progress('sp-home').index,6);assert.equal(tour.progress('emu-feed').index,4);assert.equal(tour.progress('sp-park').state,'done');
 });
-test('existing navigation and native behavior remain identical after removing the explicit Lab integration',()=>{
+test('existing navigation and native behavior remain identical outside the explicit Lab and chat integrations',()=>{
  const cp=require('node:child_process');
  const baseline='412a4d8fea5928dc9ca12c2839e6e448fd8cc5aa';
  for(const name of ['index.html','schoolpark/dao.html','knowledge.html','ichinichi.html','discussion.html']) {
@@ -65,12 +65,20 @@ test('existing navigation and native behavior remain identical after removing th
   const before=cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
   let current=fs.readFileSync(path.join(root,file),'utf8');
   if(name==='index.html') {
-   // These two reviewed hooks deliver derived Lab data only. Keep the full native baseline comparison.
+   // Preserve the latest main's reviewed Knowledge Lab hooks.
    const starHook='    window.emuLabSendActivity?.(iframe);\n';
    const reactionHook='    if (detail.ok) { syncKnowledgeFrame(); window.emuLabSyncIndex?.(detail.postId); }';
-   assert.equal(current.split(starHook).length-1,1,'one authenticated activity hook');
-   assert.equal(current.split(reactionHook).length-1,1,'one successful-reaction index hook');
+   assert.equal(current.split(starHook).length-1,1);
+   assert.equal(current.split(reactionHook).length-1,1);
    current=current.replace(starHook,'').replace(reactionHook,'    if (detail.ok) syncKnowledgeFrame();');
+   // Intentional chat-only extension; every other byte stays under this regression.
+   const {grab}=require('../year-goals-tests/extract.cjs');
+   for (const fn of ['spReizoAnswer','spReizoSend','spReizoKeydown','_spReizoShowTyping']) current=current.replace(grab(current,fn),grab(before,fn));
+   current=current.replace('<script src="/reizo/knowledge.js"></script>\n','').replace('<script src="/reizo/chat.js"></script>\n','');
+   const kbStart=before.indexOf('const SP_REIZO_KB = ['), kbEnd=before.indexOf('function spReizoAnswer',kbStart);
+   current=current.replace(grab(before,'spReizoAnswer'), before.slice(kbStart,kbEnd)+grab(before,'spReizoAnswer'));
+   current=current.replace('placeholder="冷蔵庫くんに聞く…" aria-label="冷蔵庫くんに聞く" maxlength="1000"','placeholder="質問する..."').replace('class="sp-reizo-send" aria-label="送信"','class="sp-reizo-send"');
+
    current=current.replace('<script src="/knowledge-lab/integration.js"></script>\n','')
     .replace(/^    <div class="eth-card" data-tour="emu-lab-entry">.*<\/div>\n/m,'')
     .replace(/^      window\.emuLabSyncIndex\?\.\([^\n]+\);\n/gm,'')
@@ -86,6 +94,6 @@ test('existing navigation and native behavior remain identical after removing th
    current=current.replace('      await window.emuKnowledgeReact(message);',body);
   }
   if(name==='knowledge.html')current=current.replace('<button type="button" data-command="experience">分類・出典を付けた経験知を書く →</button>','').replace("(['wallet','room1','knowledge-lab','experience'].includes(b.dataset.command))","(b.dataset.command==='wallet'||b.dataset.command==='room1')");
-  assert.equal(current,before,file);
+  assert.ok(current===before,file+' differs outside approved changes');
  }
 });
