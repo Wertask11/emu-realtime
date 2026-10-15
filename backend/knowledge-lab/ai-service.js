@@ -180,7 +180,7 @@ function createAI({
         fields,
         fieldLabels,
         config.model,
-        "analysis-v1",
+        "analysis-v2-evidence-ids",
       ]),
       cacheRef = service.ref("ai_cache", cacheId),
       previous = await cacheRef.get();

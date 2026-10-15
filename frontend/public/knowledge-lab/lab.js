@@ -70,6 +70,8 @@
     AI_INVALID_OUTPUT:
       "AIの回答形式を確認できなかったため、分析結果を採用しませんでした。",
     AI_SOURCE_COUNT: "分野を2〜3つ、元になる知識を2〜6件選んでください。",
+    AI_SOURCE_EVIDENCE_MISSING:
+      "元知識が短すぎて引用できる箇所がありません。内容のある別の知識を選んでください。",
     AI_PROVIDER_REQUEST_REJECTED:
       "AIへの送信を受け付けてもらえませんでした。手動研究を利用するか、運営へお問い合わせください。",
     AI_DAILY_LIMIT: "今日のAI利用上限に達しました。手動研究を利用できます。",
