@@ -100,3 +100,9 @@ Camelliaは `api/camellia/chat.ts` → `lib/conversation/gemini-server.ts` → �
 競合解消・共通ゲート追加後、会話/クライアント/ガイド28テストがPASS・失敗0・skip0。今回のAPI再確認は、実Express Routerへリクエストを渡す方式で、待受ソケットを作らず認証・制限・障害処理を検証した。ガイド比較にはGitから事前取得した変更前ファイルを使用。旧版で成功した541件・ブラウザ検証と今回の追加確認を区別し、実Gemini検証や本番応答の成功とは報告しない。
 
 本番設定の変更や秘密値の参照は行わない。反映後はフロント配信・バックエンドのreleaseCommit・ `/api/reizo/config` の応答を確認する。AIが停止中の場合も既存FAQ・チュートリアル・問い合わせを利用できる。
+
+## Render接続後の既存方式との整合
+
+Founder指定のRenderサービス `srv-d5q17tf5r7bs73fmu6tg`（My Workspace / emu-realtime）で `REIZO_GEMINI_ENABLED=true` を既存値へのマージで設定。秘密値・他の環境変数は変更しない。
+
+本番mainには既に #202 が入り、Knowledge Labの追加client-eligibilityフラグ判定は削除されていた。一方 #199 の冷蔵庫くんには旧判定が残っていたため、同じ既存の `GEMINI_API_KEY` と `GEMINI_FREE_TIER_CONFIRMED=true`、および冷蔵庫くん専用スイッチで動く条件へ合わせる。新しい確認フラグを作成したり、実際に確認していない事実をtrueとして登録したりしない。

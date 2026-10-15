@@ -10,7 +10,7 @@ const express = require('../../backend/node_modules/express');
 const { createReizoRouter, generate, contentsFor, redact, enabled, SYSTEM_PROMPT } = require('../../backend/reizo/chat');
 const knowledge = require('../../backend/reizo/knowledge');
 const faq = require('../../frontend/public/reizo/knowledge');
-const env = { REIZO_GEMINI_ENABLED:'true', GEMINI_API_KEY:'TEST-NOT-A-REAL-KEY', GEMINI_FREE_TIER_CONFIRMED:'true', GEMINI_CLIENT_ELIGIBILITY_CONFIRMED:'true' };
+const env = { REIZO_GEMINI_ENABLED:'true', GEMINI_API_KEY:'TEST-NOT-A-REAL-KEY', GEMINI_FREE_TIER_CONFIRMED:'true' };
 async function api(t, { generateReply = async () => 'ぼくと一緒に考えてみよう🧊', config = env } = {}) {
   const limiter = new Map();
   const router = createReizoRouter({ env:config, generateReply,
@@ -50,7 +50,7 @@ test('guide grounding uses current pages, includes stars and ignores arbitrary c
 test('explicit feature flag and key are both required',()=>{
   assert.equal(enabled({GEMINI_API_KEY:'key'}),false);assert.equal(enabled({REIZO_GEMINI_ENABLED:'true'}),false);assert.equal(enabled(env),true);
   assert.equal(enabled({...env, GEMINI_FREE_TIER_CONFIRMED:undefined}), false);
-  assert.equal(enabled({...env, GEMINI_CLIENT_ELIGIBILITY_CONFIRMED:undefined}), false);
+  assert.equal(enabled({...env, GEMINI_CLIENT_ELIGIBILITY_CONFIRMED:undefined}), true);
 });
 test('private identifiers, wallet, contact and secrets are redacted with bounded history',()=>{
   const raw='秘密の名前 SP-PRIVATE-ID a@example.com 090-1234-5678 0x'+'a'.repeat(40)+' '+'a'.repeat(64)+' https://private.example/token';
