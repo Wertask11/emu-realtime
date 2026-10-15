@@ -253,17 +253,7 @@ test("上限の数が entitlement.js・firestore.rules・案内文で揃って�
 
   /* entitlement.js の表を、ここではなく本体から読む。
      ここに数を書き写すと、写し間違いを試すことになってしまう。 */
-  const src = fs.readFileSync(path.join(__dirname, "entitlement.js"), "utf8");
-  const row = function (plan) {
-    const m = new RegExp("\\n\\s*" + plan + ":\\s*\\{([^}]*)\\}").exec(src);
-    assert.ok(m, plan + " の行が entitlement.js に見つからない");
-    const get = function (kind) {
-      const k = new RegExp(kind + ":\\s*(\\d+)").exec(m[1]);
-      assert.ok(k, plan + "." + kind + " が読めない");
-      return Number(k[1]);
-    };
-    return { post: get("post"), request: get("request"), answer: get("answer") };
-  };
+  const row = plan => require("./membership-policy").PLANS[plan];
   const light = row("light");
   const plus = row("plus");
 

@@ -40,15 +40,11 @@ function enforcing() { return Date.now() >= ENFORCE_FROM; }
    （JSONに載らない・比較のたびに例外を考える）ので、届かない大きさの数にする。
    画面に出すときは、この数以上なら「制限なし」と書く。
    firestore.rules の UNLIMITED と必ず同じ値にすること。 */
-const UNLIMITED = 1000000;
+const membershipPolicy = require("./membership-policy");
+const UNLIMITED = membershipPolicy.UNLIMITED;
 
-const LIMITS = {
-  guest: { post: 0,  request: 0,  answer: 0,  ichinichi: 0,  discussion: 0, library: 0,    guestPlay: 3 },
-  light: { post: 5,  request: 1,  answer: 5,  ichinichi: 7,  discussion: 0, library: 30,   guestPlay: 9999 },
-  plus:  { post: 30, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000, guestPlay: 9999 },
-  /* pro は投稿の数を数えない。ほかの項目は plus と同じ。 */
-  pro:   { post: UNLIMITED, request: 10, answer: 30, ichinichi: 31, discussion: 10, library: 1000, guestPlay: 9999 }
-};
+const LIMITS = Object.fromEntries(Object.entries(membershipPolicy.PLANS).map(([key, p]) =>
+  [key, Object.fromEntries(["post", "request", "answer", "ichinichi", "discussion", "library", "guestPlay"].map(k => [k, p[k]]))]));
 
 function createEntitlement(deps) {
   const db = deps && deps.db;
@@ -57,6 +53,10 @@ function createEntitlement(deps) {
      行う。渡されていなければ今までどおりに動く（省略可能）。 */
   const identity = deps && deps.identity;
   const cache = new Map();
+
+  async function linkedUids(uid) {
+    return identity?.linkedUidsForUid ? identity.linkedUidsForUid(uid) : [uid];
+  }
 
   function _toDate(v) {
     if (!v) return null;
@@ -157,20 +157,34 @@ function createEntitlement(deps) {
 
     let paid = null;      // 契約から得た段
     let status = null;
+    let subscriptionUid = uid;
+    const subscriptionRecords = new Map();
+    const subjects = await linkedUids(uid);
     if (db) {
       try {
-        const snap = await db.collection("subscriptions").doc(uid).get();
-        if (snap.exists) {
+        for (const subject of subjects) {
+          const snap = await db.collection("subscriptions").doc(subject).get();
+          if (!snap.exists) continue;
           const v = snap.data() || {};
-          status = v.status || null;
-          if (LIVE_STATUS.has(String(v.status)) && PLAN_RANK[v.plan] !== undefined) paid = v.plan;
+          subscriptionRecords.set(subject, v);
+          if (subject === uid && !status) status = v.status || null;
+          if (LIVE_STATUS.has(String(v.status)) && PLAN_RANK[v.plan] !== undefined
+              && (paid === null || PLAN_RANK[v.plan] > PLAN_RANK[paid])) {
+            paid = v.plan;
+            status = v.status;
+            subscriptionUid = subject;
+          }
         }
       } catch (e) {
         console.warn("利用資格: 契約を読めませんでした:", e.message);
       }
     }
 
-    const granted = await grantOf(uid);
+    const grants = await Promise.all(subjects.map(async subject => {
+      const grant = await grantOf(subject);
+      return grant ? { ...grant, uid: subject } : null;
+    }));
+    const granted = grants.filter(Boolean).sort((a, b) => PLAN_RANK[b.plan] - PLAN_RANK[a.plan])[0] || null;
     const hasPass = await holdsOfficialPass(uid, accountData);
 
     /* 契約・付与・公式パスのうち、いちばん上の段を採る。
@@ -187,19 +201,77 @@ function createEntitlement(deps) {
     if (granted && PLAN_RANK[granted.plan] > PLAN_RANK[plan]) { plan = granted.plan; source = granted.source; }
     if (hasPass && PLAN_RANK.plus > PLAN_RANK[plan]) { plan = "plus"; source = "official-pass"; }
 
+    const schoolParkId = identity?.findByUid ? await identity.findByUid(uid) : null;
+    if (schoolParkId && identity?.readIdentity) {
+      const sources = { subscriptionUid, grantUid: granted?.uid || uid };
+      const canonicalRef = db.collection("sp_identities").doc(schoolParkId);
+      // Pointers, never a copied rank: Rules read the live subscription/grant so
+      // cancellation/expiry cannot leave a stale high-privilege snapshot.
+      await db.runTransaction(async tx => {
+        const canonical = await tx.get(canonicalRef);
+        if (!canonical.exists || canonical.data().status === "disabled") return;
+        if (canonical.data().membershipSources?.subscriptionUid !== sources.subscriptionUid
+            || canonical.data().membershipSources?.grantUid !== sources.grantUid)
+          tx.set(canonicalRef, { membershipSources: sources }, { merge: true });
+      });
+      if (Date.now() >= membershipPolicy.EFFECTIVE_AT) {
+        // Seed shared counters once from existing linked UID counters. A new
+        // login method or an application restart must never reset consumption.
+        const win = membershipPolicy.calendarWindow();
+        const carry = subjects.map(subject => {
+          const sub = subscriptionRecords.get(subject), end = _toDate(sub?.currentPeriodEnd);
+          if (!sub || !LIVE_STATUS.has(sub.status) || !end) return null;
+          const start = addMonths(end, -1);
+          return start.getTime() < membershipPolicy.EFFECTIVE_AT && end.getTime() > membershipPolicy.EFFECTIVE_AT
+            && win.start.getTime() === membershipPolicy.EFFECTIVE_AT
+            ? { subject, plan: sub.plan, ref: db.collection("plan_usage").doc(subject + "_p" + start.toISOString().slice(0, 10)) } : null;
+        }).filter(Boolean);
+        await db.runTransaction(async tx => {
+          const countsRef = db.collection("plan_counts").doc(schoolParkId);
+          const usageRef = db.collection("plan_usage").doc(schoolParkId + "_r_" + win.key);
+          const [count, usage, ...legacy] = await Promise.all([
+            tx.get(countsRef), tx.get(usageRef),
+            ...subjects.map(s => tx.get(db.collection("plan_counts").doc(s))),
+            ...subjects.map(s => tx.get(db.collection("plan_usage").doc(s + "_r_" + win.key))),
+            ...carry.map(c => tx.get(c.ref)),
+          ]);
+          const countMigrated = count.data()?.migratedUids || [];
+          const newCountSubjects = subjects.filter(s => !countMigrated.includes(s));
+          if (newCountSubjects.length) tx.set(countsRef, {
+            drafts: Number(count.data()?.drafts || 0) + legacy.slice(0, subjects.length).reduce((n, s, i) => n + (newCountSubjects.includes(subjects[i]) ? Number(s.data()?.drafts || 0) : 0), 0),
+            migratedUids: [...new Set([...countMigrated, ...subjects])], migratedAt: new Date(),
+          }, { merge: true });
+          const usageMigrated = usage.data()?.migratedUids || [];
+          const newUsageSubjects = subjects.filter(s => !usageMigrated.includes(s));
+          if (newUsageSubjects.length) {
+            const data = { migratedAt: new Date(), migratedUids: [...new Set([...usageMigrated, ...subjects])] };
+            data.transitionCredits = { ...(usage.data()?.transitionCredits || {}) };
+            for (const kind of ["post", "request", "answer", "ichinichi", "discussion", "guestPlay"])
+            {
+              data[kind] = Number(usage.data()?.[kind] || 0) + legacy.slice(subjects.length, subjects.length * 2).reduce((n, s, i) => n + (newUsageSubjects.includes(subjects[i]) ? Number(s.data()?.[kind] || 0) : 0), 0);
+              data.transitionCredits[kind] = Number(data.transitionCredits[kind] || 0) + carry.reduce((n, c, i) => n + (newUsageSubjects.includes(c.subject) ? Math.max(0, limitOf(c.plan, kind) - Number(legacy[subjects.length * 2 + i].data()?.[kind] || 0)) : 0), 0);
+            }
+            tx.set(usageRef, data, { merge: true });
+          }
+        });
+      }
+    }
     const value = {
+      schoolParkId,
       plan,
       source,
       status,
       hasPass,
       foundingUntil: granted && granted.until ? granted.until.toISOString() : null
     };
-    cache.set(uid, { value, expiresAt: Date.now() + CACHE_MS });
+    cache.set(uid, { value, expiresAt: Date.now() < membershipPolicy.EFFECTIVE_AT
+      ? Math.min(Date.now() + CACHE_MS, membershipPolicy.EFFECTIVE_AT)
+      : Math.min(Date.now() + CACHE_MS, membershipPolicy.calendarWindow().end.getTime()) });
     return value;
   }
 
   /* 契約が変わったときに呼ぶ。次の問い合わせで最新を読み直す。 */
-  function forget(uid) { if (uid) cache.delete(uid); }
+  function forget(uid) { if (uid) cache.clear(); }
 
   /* ウォレットアドレスから資格を引く。
      Socket.io（議論の発言）は uid を持たずアドレスしか分からないため、
@@ -497,7 +569,8 @@ function createEntitlement(deps) {
      暦月にすると月末に入会した人が翌日に上限が復活してしまうため、
      契約がある人は必ず請求期間で数える。 */
   async function usageWindow(uid) {
-    const now = new Date();
+    const now = new Date(Date.now());
+    if (now.getTime() >= membershipPolicy.EFFECTIVE_AT) return membershipPolicy.calendarWindow(now.getTime());
     if (db) {
       try {
         const snap = await db.collection("subscriptions").doc(uid).get();
@@ -530,12 +603,17 @@ function createEntitlement(deps) {
     const o = opts || {};
     if (!enforcing() && !o.force) return { ok: true, enforcing: false };
     const ent = await getEntitlement(uid, o.account);
-    const limit = limitOf(ent.plan, kind);
+    let limit = limitOf(ent.plan, kind);
     if (limit <= 0) return { ok: false, plan: ent.plan, limit: 0, used: 0 };
     if (!db) return { ok: true, plan: ent.plan, limit, used: 0 };
 
     const win = await usageWindow(uid);
-    const ref = db.collection("plan_usage").doc(uid + "_" + win.key);
+    const subject = Date.now() >= membershipPolicy.EFFECTIVE_AT ? (ent.schoolParkId || uid) : uid;
+    const ref = db.collection("plan_usage").doc(subject + (Date.now() >= membershipPolicy.EFFECTIVE_AT ? "_r_" : "_") + win.key);
+    if (Date.now() >= membershipPolicy.EFFECTIVE_AT) {
+      const current = await ref.get();
+      limit += Number(current.data()?.transitionCredits?.[kind] || 0);
+    }
 
     if (o.dryRun) {
       let used = 0;
@@ -575,13 +653,14 @@ function createEntitlement(deps) {
     let data = {};
     if (db) {
       try {
-        const snap = await db.collection("plan_usage").doc(uid + "_" + win.key).get();
+        const subject = Date.now() >= membershipPolicy.EFFECTIVE_AT ? (ent.schoolParkId || uid) : uid;
+        const snap = await db.collection("plan_usage").doc(subject + (Date.now() >= membershipPolicy.EFFECTIVE_AT ? "_r_" : "_") + win.key).get();
         if (snap.exists) data = snap.data() || {};
       } catch (e) {}
     }
     const out = { plan: ent.plan, enforcing: enforcing(), resetsAt: win.end.toISOString(), items: {} };
     Object.keys(LIMITS.plus).forEach(function (kind) {
-      out.items[kind] = { used: Number(data[kind]) || 0, limit: limitOf(ent.plan, kind) };
+      out.items[kind] = { used: Number(data[kind]) || 0, limit: limitOf(ent.plan, kind) + (Date.now() >= membershipPolicy.EFFECTIVE_AT ? Number(data.transitionCredits?.[kind] || 0) : 0) };
     });
     return out;
   }

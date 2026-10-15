@@ -77,11 +77,13 @@ ul.cond li{margin:4px 0}
   <!-- 戻る導線はモーダル側の「← Emuに戻る」に一本化する -->
   <!-- Emuer は「Emuを使う人」の呼び名。トークンの EMUER とは別物なので大文字にしない -->
   <h1>Emuerにようこそ</h1>
+  <p><a href="/" id="membershipBack">← SchoolPark・Emuに戻る</a> · <a href="/membership-plans.html" target="_blank" rel="noopener">プラン・公式パスを比較する</a></p>
   <p class="lead">プランを選んで、Emuでの過ごし方を決められます</p>
 
   <div id="gate" class="gate">読み込んでいます…</div>
 
   <main id="main" class="hide">
+    <section class="card" id="sec-features"><h2>あなたに合うプランを選ぶ</h2><p id="entitlementNotice" role="status"></p><div data-membership-features>利用範囲を読み込んでいます…</div><p><a href="/membership-plans.html#official-pass" target="_blank" rel="noopener">公式パスでできること・対象外の機能</a></p></section>
 
     <!-- 会員状態 -->
     <section class="card" id="sec-plan">
@@ -105,6 +107,7 @@ ul.cond li{margin:4px 0}
       <button class="btn" id="subscribeBtn" disabled>プランを選んでください</button>
       <button class="btn sub hide" id="portalBtn">支払い方法の変更・解約</button>
       <p class="note">解約手数料はかかりません。次回決済日の前までに解約すれば翌月の請求は発生しません。</p>
+      <p class="note">申込前に税込の月額・自動更新・利用枠・解約方法をご確認ください。proの対話・返金保証は規定条件がある別の特典です。AIは全プラン共通の無料枠内で、実行を保証しません。</p>
       <p class="err hide" id="subErr"></p>
     </section>
 
@@ -199,6 +202,8 @@ ul.cond li{margin:4px 0}
     </p>
   </main>
 </div>
+<style>[data-membership-features] table{width:100%;border-collapse:collapse;min-width:640px;font-size:12px}[data-membership-features] th,[data-membership-features] td{padding:8px;border:1px solid var(--line);text-align:left}[data-membership-features] th{background:#fff6e9}[data-membership-features] p{font-size:12px}</style>
+<script src="/membership-features.js" defer></script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -216,6 +221,9 @@ const app = initializeApp({
 const auth = getAuth(app);
 
 const $ = s => document.querySelector(s);
+$("#membershipBack").onclick = e => {
+  try { if (parent !== window && parent.location.origin === location.origin && typeof parent.closeLegal === "function") { e.preventDefault(); parent.closeLegal(); } } catch (_) {}
+};
 const fmt = iso => iso ? new Date(iso).toLocaleDateString("ja-JP", { year:"numeric", month:"long", day:"numeric" }) : "—";
 function show(el, on){ el.classList.toggle("hide", !on); }
 function msg(el, text, isErr){ el.textContent = text; show(el, !!text); }
@@ -223,10 +231,18 @@ function msg(el, text, isErr){ el.textContent = text; show(el, !!text); }
 let idToken = null;
 
 async function api(path, options) {
+  // Share the already verified login in the same-origin app overlay, and
+  // refresh tokens for long-lived sessions. Never request interactive re-login.
+  let authHeaders = { "Authorization": "Bearer " + idToken };
+  try {
+    if (parent !== window && parent.location.origin === location.origin && typeof parent.emuAuthHeaders === "function")
+      authHeaders = await parent.emuAuthHeaders(true, { interactive: false });
+    else if (auth.currentUser) authHeaders.Authorization = "Bearer " + await auth.currentUser.getIdToken();
+  } catch (_) { throw Object.assign(new Error("AUTH_REQUIRED"), { code: "AUTH_REQUIRED", status: 401 }); }
   const res = await fetch(API + path, {
     method: (options && options.method) || "GET",
     headers: Object.assign(
-      { "Authorization": "Bearer " + idToken },
+      authHeaders,
       (options && options.body) ? { "Content-Type": "application/json" } : {}
     ),
     body: options && options.body ? JSON.stringify(options.body) : undefined
@@ -239,6 +255,8 @@ async function api(path, options) {
 
 /* サーバーのエラーコードを、利用者が次に何をすればよいか分かる日本語にする。 */
 const ERRORS = {
+  ALREADY_ENTITLED: "選んだプランの機能は、公式パスや付与などですでに利用できます。重複する契約は必要ありません。",
+  MULTIPLE_SUBSCRIPTIONS_REVIEW_REQUIRED: "連携済みの契約が複数あります。追加購入せず、運営に確認してください。",
   ALREADY_SUBSCRIBED: "すでに有効なご契約があります。",
   BILLING_UNAVAILABLE: "決済の準備が整っていません。時間をおいてお試しください。",
   PRICE_NOT_CONFIGURED: "料金プランが未設定です。運営にお問い合わせください。",
@@ -283,7 +301,13 @@ async function loadBilling() {
   $("#periodEnd").textContent = endingSoon
     ? fmt(s.currentPeriodEnd) + " まで"
     : fmt(s.currentPeriodEnd);
-  const active = s.status === "active" || s.status === "trialing";
+  const active = ["active", "trialing", "past_due"].includes(s.status);
+  window._emuActivePlan = active ? s.plan : null;
+  const rank = { guest: 0, light: 1, plus: 2, pro: 3 };
+  const entitled = rank[s.entitlement] || 0;
+  $("#entitlementNotice").textContent = "現在使える範囲：" + (s.entitlement === "guest" ? "無料・見学" : s.entitlement || "無料・見学")
+    + (s.entitlementSource === "official-pass" ? "（公式パス。plus相当の追加月額料金は不要です）" : s.entitlementSource && s.entitlementSource !== "stripe" && s.entitlementSource !== "none" ? "（運営からの付与等を含みます）" : "")
+    + "。すでに使える段階の重複購入は表示しません。";
   show($("#subscribeBtn"), !active);
   show($("#portalBtn"), active);
 
@@ -291,16 +315,18 @@ async function loadBilling() {
     /* 契約中でも上の段へは移れる。以前は「一度解約して入り直す」しかなく、
        商品階段の設計と噛み合っていなかった。
        下げる・同じ段は出さない（解約は「支払い方法の変更・解約」から）。 */
-    const rank = { light: 1, plus: 2, pro: 3 };
-    const now = rank[s.plan] || 0;
+    const now = Math.max(rank[s.plan] || 0, entitled);
     const upper = (s.plans || []).filter(p => (rank[p.key] || 0) > now);
     show($("#planPick"), upper.length > 0);
     if (upper.length) renderPlans(upper, null, true);
+    show($("#subscribeBtn"), upper.length > 0);
     $("#planPrice").textContent = s.planLabel
       ? s.planLabel + "　月額 " + Number(s.planAmount).toLocaleString("ja-JP") + "円（税込）"
       : "月額 " + Number(s.planAmount).toLocaleString("ja-JP") + "円（税込）";
   } else {
-    renderPlans(s.plans, s.plan);
+    renderPlans((s.plans || []).filter(p => (rank[p.key] || 0) > entitled), null);
+    if (entitled) $("#planPrice").textContent = "利用資格あり（月額契約なし）";
+    if (!planCatalog.length) show($("#subscribeBtn"), false);
   }
   window._emuActivePlan = active ? s.plan : null;
 
@@ -330,7 +356,7 @@ async function loadBilling() {
 }
 
 /* いま選んでいるプラン。サーバーが返した一覧の中からしか選べない。 */
-let selectedPlan = null;
+let selectedPlan = new URLSearchParams(location.search).get("plan");
 let planCatalog = [];
 
 function renderPlans(plans, current, isUpgrade) {
@@ -342,9 +368,8 @@ function renderPlans(plans, current, isUpgrade) {
   const head = document.querySelector('#planPick > div');
   if (head) head.textContent = isUpgrade ? "上のプランへ移る" : "プランを選ぶ";
   if (isUpgrade) selectedPlan = null;
-  // 高い順に並べる。本会員を上に見せたいため
-  const sorted = planCatalog.slice().sort((a, b) => b.amount - a.amount);
-  if (!selectedPlan) selectedPlan = current || (sorted[0] && sorted[0].key);
+  const sorted = planCatalog.slice().sort((a, b) => a.amount - b.amount);
+  if (!sorted.some(p => p.key === selectedPlan)) selectedPlan = sorted.some(p => p.key === current) ? current : sorted[0]?.key;
   box.innerHTML = sorted.map(p => {
     const on = p.key === selectedPlan;
     return '<label style="display:flex;gap:10px;align-items:flex-start;border:1.5px solid ' +
@@ -663,7 +688,7 @@ $("#refundSubmit").onclick = async () => {
    全部を一枚に並べると、何をしに来たのか分からなくなるため。
    ハッシュが無いとき（直接開いたとき）は今までどおり全部出す。 */
 const SECTION_SETS = {
-  plan:     ["sec-plan", "sec-guarantee"],
+  plan:     ["sec-features", "sec-plan", "sec-guarantee"],
   profile:  ["sec-profile", "sec-kyc"],
   themes:   ["sec-profile"],
   sessions: ["sec-sessions"]
@@ -694,7 +719,9 @@ function scrollToSection() {
 }
 
 // ───────── 起動 ─────────
-onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(auth, async (localUser) => {
+  let user = localUser;
+  try { if (!user && parent !== window && parent.location.origin === location.origin) user = parent.auth?.currentUser || null; } catch (_) {}
   if (!user) {
     $("#gate").innerHTML = 'ご利用にはログインが必要です。<br><br><a href="/">Emu にログインする →</a>';
     return;

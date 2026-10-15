@@ -263,7 +263,7 @@ async function schoolParkEntryStatus(req, res) {
 app.get("/api/schoolpark/entry-status", schoolParkEntryStatus);
 app.get("/api/schoolpark/access", schoolParkEntryStatus);
 
-const membershipDeps = { db, firebaseAdmin, requireFirebaseUser, requireOwner, rateLimit, entitlement, requirePlan };
+const membershipDeps = { db, firebaseAdmin, requireFirebaseUser, requireOwner, rateLimit, entitlement, requirePlan, identity };
 const billing = require("./billing").createBillingRouter({ ...membershipDeps, webhookPath: STRIPE_WEBHOOK_PATH });
 const kyc = require("./kyc").createKycRouter(membershipDeps);
 const dialogue = require("./dialogue").createDialogueRouter(membershipDeps);

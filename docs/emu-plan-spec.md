@@ -1,3 +1,5 @@
+> **2026-10-15更新**：以下は旧v1.0の履歴です。最新の決定は [利用範囲の合意版](business/2026-10-15-membership-entitlements-review.md)、実装正本は `backend/membership-policy.js`。light投稿5件、pro投稿件数制限なし、2026-11-01のJST暦月・保持枠変更が優先します。「今日のEmu」は廃止済みで復活させません。
+
 # Emu プラン仕様 v1.0（無料見学 / light / plus / pro）
 
 最終更新: 2026-08-17 / 決定: オーナー（合同会社型DAO SchoolPark 代表）

@@ -15,7 +15,10 @@ async function main(options={}){
   router.use('/api/auth',require('../../backend/verified-platform').accountRouter({db,firebaseAdmin:c.firebaseAdmin}));
   router.use('/api/activity',require('../../backend/verified-platform').activityRouter({db,requireFirebaseUser:c.requireFirebaseUser}));
   router.use('/api/identity',require('../../backend/identity-router').createIdentityRouter({db,identity,requireFirebaseUser:c.requireFirebaseUser,requireOwner:c.requireOwner,rateLimit:c.rateLimit,ethers:require('../../backend/node_modules/ethers'),walletNonces:new Map(),purgeWalletNonces:()=>{},walletNonceTtlMs:60000}).router);
-  router.use('/api/billing',require('../../backend/billing').createBillingRouter({db,entitlement,requireFirebaseUser:c.requireFirebaseUser,requireOwner:c.requireOwner,rateLimit:c.rateLimit}).router);
+  router.use('/api/billing',require('../../backend/billing').createBillingRouter({db,identity:f.identity,entitlement,requireFirebaseUser:c.requireFirebaseUser,requireOwner:c.requireOwner,rateLimit:c.rateLimit}).router);
+  const membershipDeps={db,identity,entitlement,requireFirebaseUser:c.requireFirebaseUser,requireOwner:c.requireOwner,rateLimit:c.rateLimit};
+  router.use('/api/kyc',require('../../backend/kyc').createKycRouter(membershipDeps).router);
+  router.use('/api/dialogue',require('../../backend/dialogue').createDialogueRouter(membershipDeps).router);
   router.get('/api/schoolpark/entry-status',c.schoolParkEntryStatus);
   if(options.platformRegression){
     // Reuse real application routes, with local emulator persistence and no payment/NFT execution.
@@ -42,6 +45,16 @@ async function main(options={}){
   router.get('/test/native.html',(req,res)=>res.type('html').send(html));
   // Recruitment's real /?lab=writer CTA must use the same isolated SDK/config.
   router.get('/',(req,res)=>res.type('html').send(html));
+  // Same real membership module, isolated SDK/Auth configuration for browser tests.
+  router.get('/membership.html',(req,res)=>{
+    let page=fs.readFileSync(path.join(ROOT,'frontend/public/membership.html'),'utf8')
+      .replace(/https:\/\/emu-realtime\.onrender\.com/g,base)
+      .replace(/https:\/\/www\.gstatic\.com\/firebasejs\/10\.8\.0/g,'/test/firebase')
+      .replace(/const app = initializeApp\(\{[\s\S]*?\}\);/,'const app = initializeApp({apiKey:"emulator-only",projectId:"demo-emu-knowledge-lab",authDomain:"localhost",appId:"emulator-only"});')
+      .replace('getAuth, onAuthStateChanged','getAuth, onAuthStateChanged, connectAuthEmulator')
+      .replace('const auth = getAuth(app);','const auth = getAuth(app); connectAuthEmulator(auth,"http://127.0.0.1:9199",{disableWarnings:true});');
+    res.type('html').send(page);
+  });
   router.use((req,res,next)=>{if(!/\.(?:html|js)$/.test(req.path))return next();const publicRoot=path.join(ROOT,'frontend/public'),file=path.resolve(publicRoot,'.'+req.path);if(!file.startsWith(publicRoot+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile())return next();res.type(path.extname(file)).send(fs.readFileSync(file,'utf8').replace(/https:\/\/emu-realtime\.onrender\.com/g,base).replace(/https:\/\/firestore\.googleapis\.com/g,'http://127.0.0.1:8787').replace(/emusch-2a111/g,'demo-emu-knowledge-lab'));});
   // Missing integrations stay visibly unavailable, never return fabricated success.
   router.use('/api',(req,res,next)=>req.path.startsWith('/knowledge-lab')?next():res.status(503).json({error:'NOT_MOUNTED_IN_LOCAL_FIXTURE'}));

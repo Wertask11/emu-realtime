@@ -31,19 +31,17 @@ function createSavedMetrics({ db, ref, now = Date.now }) {
       );
     }
   }
-  async function save(a, postId, on) {
+  async function save(a, postId, on, cap = 1000) {
     m.id(postId);
     const savedRef = ref("saved", m.hash([a.spid, postId]));
     await db.runTransaction(async (tx) => {
-      const [s, limits, metric, post] = await Promise.all([
-        tx.get(savedRef),
-        tx.get(ref("limits", a.spid)),
-        tx.get(ref("post_metrics", postId)),
-        tx.get(db.collection("posts").doc(postId)),
-      ]);
+      const [s, limits, metric, post] = await tx.getAll(
+        savedRef, ref("limits", a.spid), ref("post_metrics", postId),
+        db.collection("posts").doc(postId),
+      );
       const count = Number(limits.exists ? limits.data().saved || 0 : 0);
       if (on && !s.exists) {
-        if (count >= 1000) m.fail("SAVED_LIMIT", 403);
+        if (count >= cap) m.fail("SAVED_LIMIT", 403);
         tx.set(savedRef, {
           authorSchoolParkId: a.spid,
           postId,
@@ -98,10 +96,9 @@ function createSavedMetrics({ db, ref, now = Date.now }) {
           const s = await tx.get(doc.ref);
           if (!s.exists || s.data().metricsCounted) return;
           const postId = m.id(s.data().postId);
-          const [metric, post] = await Promise.all([
-            tx.get(ref("post_metrics", postId)),
-            tx.get(db.collection("posts").doc(postId)),
-          ]);
+          const [metric, post] = await tx.getAll(
+            ref("post_metrics", postId), db.collection("posts").doc(postId),
+          );
           tx.set(doc.ref, { metricsCounted: true }, { merge: true });
           await updateCount(tx, postId, 1, { metric, post });
         });

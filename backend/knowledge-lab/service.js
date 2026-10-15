@@ -1,6 +1,7 @@
 "use strict";
 const m = require("./model");
 const seed = require("./taxonomy.json");
+const membershipPolicy = require("../membership-policy");
 const { Filter } = require("firebase-admin/firestore");
 const { utils: ethersUtils } = require("ethers");
 const COL = (name) => "knowledge_lab_" + name;
@@ -43,7 +44,7 @@ function createService({
     if (!a) m.fail("AUTH_REQUIRED", 401);
     const spid = await identity.findByUid(a.uid);
     if (!spid) m.fail("PASSPORT_REQUIRED", 409);
-    return { ...a, spid, owner: isOwner(a) };
+    return { ...a, spid, owner: isOwner(a), membership: await entitlement.getEntitlement(a.uid, a.account) };
   }
   async function taxonomy() {
     const s = await db.collection(COL("taxonomy")).limit(401).get();
@@ -397,15 +398,24 @@ function createService({
       a,
     );
   }
-  async function quota(tx, a, kind) {
-    const ent = await entitlement.getEntitlement(a.uid, a.account);
+  async function quota(tx, a, kind, prepared = a.membership) {
+    const ent = prepared;
+    if (!ent) m.fail("ENTITLEMENT_NOT_PREPARED", 503);
     const jst = new Date(now() + 9 * 3600000),
       key =
-        a.uid + "_r_m" + jst.getUTCFullYear() + "-" + (jst.getUTCMonth() + 1);
+        (now() >= membershipPolicy.EFFECTIVE_AT ? a.spid : a.uid) +
+        "_r_m" +
+        jst.getUTCFullYear() +
+        "-" +
+        (jst.getUTCMonth() + 1);
     const r = db.collection("plan_usage").doc(key),
       s = await tx.get(r),
       data = s.exists ? s.data() : {};
-    const cap = entitlement.limitOf(ent.plan, kind),
+    const cap =
+        entitlement.limitOf(ent.plan, kind) +
+        (now() >= membershipPolicy.EFFECTIVE_AT
+          ? Number(data.transitionCredits?.[kind] || 0)
+          : 0),
       used = Number(data[kind] || 0);
     if (!Number.isFinite(used) || cap <= 0 || used >= cap)
       m.fail("PLAN_LIMIT_REACHED", 403);
@@ -416,13 +426,30 @@ function createService({
         { merge: true },
       );
   }
-  async function draftQuota(tx, a, delta) {
-    const r = db.collection("plan_counts").doc(a.uid),
+  async function draftQuota(tx, a, delta, prepared = a.membership) {
+    const r = db
+        .collection("plan_counts")
+        .doc(now() >= membershipPolicy.EFFECTIVE_AT ? a.spid : a.uid),
       s = await tx.get(r);
     const used = Number(s.exists ? s.data().drafts || 0 : 0);
     if (delta > 0) {
-      const ent = await entitlement.getEntitlement(a.uid, a.account);
-      if (used >= entitlement.limitOf(ent.plan, "library"))
+      const ent = prepared;
+      if (!ent) m.fail("ENTITLEMENT_NOT_PREPARED", 503);
+      const subjects =
+        now() >= membershipPolicy.EFFECTIVE_AT
+          ? []
+          : identity.linkedUidsForUid
+            ? await identity.linkedUidsForUid(a.uid)
+            : [a.uid];
+      const others = await Promise.all(
+        subjects
+          .filter((uid) => uid !== a.uid)
+          .map((uid) => tx.get(db.collection("plan_counts").doc(uid))),
+      );
+      const total =
+        used +
+        others.reduce((n, doc) => n + Number(doc.data()?.drafts || 0), 0);
+      if (total >= membershipPolicy.storageLimits(ent.plan, now()).drafts)
         m.fail("LIBRARY_FULL", 403);
     }
     return () =>
@@ -474,6 +501,7 @@ function createService({
     };
   }
   async function savePost(a, input) {
+    const membership = await entitlement.getEntitlement(a.uid, a.account);
     const originResearch =
       input.sourceNoteId && !input.id
         ? await note(m.id(input.sourceNoteId), a)
@@ -608,9 +636,9 @@ function createService({
         !ps.exists &&
         !old?.knowledgeLab?.publishedOnce
       )
-        consume = await quota(tx, a, "post");
+        consume = await quota(tx, a, "post", membership);
       const nextPrivate = visibility !== "public";
-      if (nextPrivate && !ds.exists) count = await draftQuota(tx, a, 1);
+      if (nextPrivate && !ds.exists) count = await draftQuota(tx, a, 1, membership);
       else if (
         !nextPrivate &&
         ds.exists &&
@@ -821,6 +849,7 @@ function createService({
     return { ok: true };
   }
   async function restorePost(a, postId, revision) {
+    const membership = await entitlement.getEntitlement(a.uid, a.account);
     const ar = ref("archived_posts", postId),
       pr = ref("private_posts", postId);
     await db.runTransaction(async (tx) => {
@@ -835,7 +864,7 @@ function createService({
       const p = s.data(),
         rev = p.knowledgeLab?.revision || 0;
       if (revision !== rev) m.fail("REVISION_CONFLICT", 409);
-      const count = await draftQuota(tx, a, 1);
+      const count = await draftQuota(tx, a, 1, membership);
       count();
       tx.set(pr, {
         ...p,
@@ -972,7 +1001,38 @@ function createService({
       owner: a.owner,
       writer: s.exists ? s.data() : null,
       plan: ent.plan,
+      entitlementSource: ent.source,
+      hasPass: !!ent.hasPass,
+      storage: await storageUsage(a, ent.plan),
       aiAvailable: false,
+    };
+  }
+  async function storageUsage(a, plan = null) {
+    if (!plan) plan = (await entitlement.getEntitlement(a.uid, a.account)).plan;
+    const subjects =
+      now() >= membershipPolicy.EFFECTIVE_AT
+        ? [a.spid]
+        : identity.linkedUidsForUid
+          ? await identity.linkedUidsForUid(a.uid)
+          : [a.uid];
+    const [limits, ...counts] = await Promise.all([
+      ref("limits", a.spid).get(),
+      ...subjects.map((uid) => db.collection("plan_counts").doc(uid).get()),
+    ]);
+    const used = {
+      saved: Number(limits.data()?.saved || 0),
+      notes: Number(limits.data()?.notes || 0),
+      drafts: counts.reduce((n, s) => n + Number(s.data()?.drafts || 0), 0),
+    };
+    return {
+      plan,
+      used,
+      limits: membershipPolicy.storageLimits(plan, now()),
+      announced: membershipPolicy
+        .catalog(now())
+        .plans.find((p) => p.key === plan)?.announcedStorage,
+      effectiveAt: new Date(membershipPolicy.EFFECTIVE_AT).toISOString(),
+      active: now() >= membershipPolicy.EFFECTIVE_AT,
     };
   }
   async function sources(ids, a, publicOnly = false) {
@@ -1011,6 +1071,8 @@ function createService({
     };
   }
   async function saveNote(a, input) {
+    const plan = (await entitlement.getEntitlement(a.uid, a.account)).plan;
+    const cap = membershipPolicy.storageLimits(plan, now()).notes;
     const key = m.id(input.key),
       noteId = input.id ? m.id(input.id) : "note-" + m.hash([a.spid, key]);
     const visibility = input.visibility === "public" ? "public" : "private";
@@ -1108,7 +1170,7 @@ function createService({
       if (!s.exists) {
         const count = await tx.get(ref("limits", a.spid));
         const n = count.exists ? count.data().notes || 0 : 0;
-        if (n >= 1000) m.fail("NOTE_LIMIT", 403);
+        if (n >= cap) m.fail("NOTE_LIMIT", 403);
         tx.set(ref("limits", a.spid), { notes: n + 1 }, { merge: true });
       }
       recordActivity();
@@ -1305,7 +1367,13 @@ function createService({
   }
   async function saveBookmark(a, postId, on) {
     await rawPost(postId, a);
-    const result = await savedMetrics.save(a, postId, on);
+    const plan = (await entitlement.getEntitlement(a.uid, a.account)).plan;
+    const result = await savedMetrics.save(
+      a,
+      postId,
+      on,
+      membershipPolicy.storageLimits(plan, now()).saved,
+    );
     if (on) await track(a, "save", postId);
     invalidate();
     return result;
@@ -1333,6 +1401,7 @@ function createService({
     return { items: s.docs.map((d) => ({ id: d.id, ...d.data() })) };
   }
   return {
+    storageUsage,
     savedMetrics,
     activity,
     reconcileActivity,

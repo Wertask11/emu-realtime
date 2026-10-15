@@ -276,6 +276,8 @@ function createKnowledgeLabRouter(deps) {
     actor,
     rateLimit({ windowMs: 60000, max: 30, key: "knowledge-lab-admin" }),
   ];
+  router.get("/membership", wrap(() => require("../membership-policy").catalog()));
+  router.get("/me/storage", ...signed, wrap(req => service.storageUsage(req.labActor)));
   const verification = require("./verification").createVerification({
     db,
     service,
