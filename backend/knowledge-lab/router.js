@@ -3,6 +3,7 @@ const express = require("express");
 const { randomUUID } = require("node:crypto");
 const m = require("./model");
 const { createService, COL } = require("./service");
+const { createProbeTransport, boundedChecks } = require("./probe-transport");
 
 function createKnowledgeLabRouter(deps) {
   const { db, requireFirebaseUser, requireOwner, rateLimit } = deps;
@@ -10,6 +11,7 @@ function createKnowledgeLabRouter(deps) {
     service = createService(deps),
     router = express.Router();
   const rulesNow = deps.rulesNow || Date.now;
+  const probeFetch = createProbeTransport({ env });
   const pendingProbeCleanup = new Set();
   let rulesCheckedAt = 0,
     rulesSafe = false,
@@ -53,6 +55,7 @@ function createKnowledgeLabRouter(deps) {
   function rulesDiagnostic() {
     return {
       status: rulesSafe ? "verified" : "not_verified",
+      transport: probeFetch.modeFor(env.FIRESTORE_EMULATOR_HOST ? "http://127.0.0.1/" : "https://firestore.googleapis.com/"),
       checkedAtMs: rulesCheckedAt || null,
       retryAfterSeconds: rulesCheckedAt
         ? Math.max(
@@ -89,7 +92,7 @@ function createKnowledgeLabRouter(deps) {
           return rejected(null, "preflight", "INVALID_EMULATOR_CONFIGURATION");
         origin = "http://" + env.FIRESTORE_EMULATOR_HOST;
       }
-      const checks = await Promise.all(
+      const checks = await boundedChecks(
         [
           "system",
           "private_posts",
@@ -105,7 +108,7 @@ function createKnowledgeLabRouter(deps) {
           "audit",
           "limits",
           "taxonomy",
-        ].map(async (name) => {
+        ], 2, async (name) => {
           // Never overwrite a pre-existing document or delete one we did not create.
           const probeId = deps.rulesProbeId
             ? m.id(deps.rulesProbeId())
@@ -127,14 +130,13 @@ function createKnowledgeLabRouter(deps) {
               "/" +
               probeId;
             const responses = await Promise.all([
-              fetch(url, { signal: AbortSignal.timeout(6000) }),
-              fetch(url, {
+              probeFetch(url),
+              probeFetch(url, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   fields: { probe: { stringValue: "lab-1" } },
                 }),
-                signal: AbortSignal.timeout(6000),
               }),
             ]);
             for (const r of responses) {
@@ -165,7 +167,7 @@ function createKnowledgeLabRouter(deps) {
               }
             }
           }
-        }),
+        },
       );
       return checks.every(Boolean);
     })();
