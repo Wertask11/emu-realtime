@@ -57,14 +57,25 @@ test('legacy progress follows equivalent v2 steps rather than resetting',()=>{
  tour.register('sp-home',Array(9).fill(steps[0]));tour.register('emu-feed',Array(9).fill(steps[0]));tour.register('sp-park',Array(3).fill(steps[0]));
  assert.equal(tour.progress('sp-home').index,6);assert.equal(tour.progress('emu-feed').index,4);assert.equal(tour.progress('sp-park').state,'done');
 });
-test('existing navigation and native behavior remain identical outside the explicit Lab and chat integrations',()=>{
+test('existing navigation and native behavior remain identical outside the explicit Lab, chat and shared header integrations',()=>{
  const cp=require('node:child_process');
  const baseline='412a4d8fea5928dc9ca12c2839e6e448fd8cc5aa';
  for(const name of ['index.html','schoolpark/dao.html','knowledge.html','ichinichi.html','discussion.html']) {
   const file='frontend/public/'+name;
   const before=cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
   let current=fs.readFileSync(path.join(root,file),'utf8');
+  // Explicitly requested shared header: normalize only the reviewed markup and
+  // display condition; the byte-for-byte guard still covers all other behavior.
+  current=current.replace('<link rel="stylesheet" href="/service-header.css">\n','');
   if(name==='index.html') {
+   current=current.replace('<header class="header service-header"','<header class="header"')
+    .replace('<div class="service-heading"><small>知識と経験を、次の一歩へ</small><strong>Emu</strong></div>','<div style="flex-grow: 1;"></div>')
+    .replace('class="header-right service-tools"','class="header-right"')
+    .replace('class="wallet-button service-tool"','class="wallet-button"')
+    .replace(/^    <button type="button" class="service-tool" id="emuHeader(?:Reizo|Settings)"[^\n]+\n/gm,'')
+    .replace("if (!addr || (!_emuPhoneLayout() && !btn.closest('.service-tools'))) {",'if (!addr || !_emuPhoneLayout()) {')
+    .replace('    /* 未接続時はログイン処理の表示を維持。共通ヘッダーではPCでも\n       本人が選んだ名前・画像の設定を利用する。 */','    /* パソコン・タブレット（とログイン前）は、ほかの処理が決めた表示のまま。\n       スマホの幅で描いたあとに幅が変わったときだけ、元に戻す。 */');
+
    // Preserve the latest main's reviewed Knowledge Lab hooks.
    const starHook='    window.emuLabSendActivity?.(iframe);\n';
    const reactionHook='    if (detail.ok) { syncKnowledgeFrame(); window.emuLabSyncIndex?.(detail.postId); }';
@@ -92,6 +103,12 @@ test('existing navigation and native behavior remain identical outside the expli
    const shared=current.slice(start,end),body=shared.slice(shared.indexOf('\n',shared.indexOf('window.emuKnowledgeReact'))+1,shared.lastIndexOf('\n  };'));
    current=current.slice(0,start)+current.slice(end+1);
    current=current.replace('      await window.emuKnowledgeReact(message);',body);
+  }
+  if(name==='schoolpark/dao.html') {
+   current=current.replace('class="service-header" data-sp-head','data-sp-head').replace('class="service-heading" style="display:flex; flex-direction:column; gap:5px; flex:1; min-width:0"','style="display:flex; flex-direction:column; gap:5px; flex:1; min-width:0"');
+   const start=before.indexOf('        <div data-tour="fridge"'), end=before.indexOf('\n      </div>',start);
+   assert.ok(start>0 && end>start);
+   current=current.replace(/        <div class="service-tools" aria-label="アカウントとサポート">[\s\S]*?\n        <\/div>/, before.slice(start,end));
   }
   if(name==='knowledge.html')current=current.replace('<button type="button" data-command="experience">分類・出典を付けた経験知を書く →</button>','').replace("(['wallet','room1','knowledge-lab','experience'].includes(b.dataset.command))","(b.dataset.command==='wallet'||b.dataset.command==='room1')");
   assert.ok(current===before,file+' differs outside approved changes');

@@ -33,20 +33,24 @@
     <header class="lab-header">
       <div><a href="/" class="brand">Emu</a><span>KNOWLEDGE LAB</span></div>
       <div class="actions">
+        <a class="button" id="backToEmu" href="/" data-tour="lab-back"
+          >← Emuに戻る</a
+        >
         <a href="/knowledge-lab-writers.html" target="_top">書き手募集</a
         ><button id="guide" type="button" aria-label="冷蔵庫くんのガイドを見る">
-          🧊 ガイド
+          🧊 使い方案内
         </button>
       </div>
     </header>
     <main id="content" class="shell">
       <section class="intro" data-tour="lab-intro">
-        <p class="eyebrow">経験から、次の発見へ。</p>
         <h1>Emu Knowledge Lab</h1>
         <p>
-          誰かの経験から学び、異なる知識を掛け合わせる場所。成功も、失敗も、まだ答えのない問いも。
+          経験を探す。自分の経験を書く。異なる経験から、新しいアイデアを考える。
         </p>
-        <a href="/knowledge-lab-guide.html">はじめての使い方・投稿ガイド →</a>
+        <a href="/knowledge-lab-guide.html" target="_blank" rel="noopener"
+          >はじめての使い方・投稿ガイド →（別タブ）</a
+        >
       </section>
       <div id="status" class="status" role="status" aria-live="polite">
         準備を確認しています…
@@ -67,9 +71,9 @@
         ><button type="button" data-view="mine" aria-pressed="false">
           マイライブラリー</button
         ><button type="button" data-view="requests" aria-pressed="false">
-          知識募集</button
+          経験者に質問する</button
         ><button type="button" data-view="writer" aria-pressed="false">
-          書き手プロフィール</button
+          書き手<wbr />プロフィール</button
         ><button
           type="button"
           data-view="admin"
@@ -148,22 +152,27 @@
             <option value="lexical">言葉・分類から探す</option>
             <option value="semantic">文章の意味から探す（Gemini）</option>
           </select>
-          <label class="check"
-            ><input
-              id="semanticConsent"
-              type="checkbox"
-            />意味検索では、入力した検索文をGoogle
-            Geminiへ送ることを確認しました。</label
-          >
-          <p class="hint">
-            意味検索はAI利用に同意済みの公開知識が対象で、意味の近さ順に表示します。秘密や個人情報を検索文へ入力しないでください。<a
-              href="/knowledge-lab-ai.html"
-              target="_blank"
-              rel="noopener"
-              >データの取り扱い</a
+          <div id="semanticOptions" hidden>
+            <label class="check"
+              ><input
+                id="semanticConsent"
+                type="checkbox"
+              />意味検索では、入力した検索文をGoogle
+              Geminiへ送ることを確認しました。</label
             >
-          </p>
-          <div id="searchFacets" class="facets"></div>
+            <p class="hint">
+              意味検索はAI利用に同意済みの公開知識が対象で、意味の近さ順に表示します。秘密や個人情報を検索文へ入力しないでください。<a
+                href="/knowledge-lab-ai.html"
+                target="_blank"
+                rel="noopener"
+                >データの取り扱い</a
+              >
+            </p>
+          </div>
+          <details id="searchClassifications">
+            <summary>分野・業種・職業などで絞り込む（任意）</summary>
+            <div id="searchFacets" class="facets"></div>
+          </details>
           <div class="actions">
             <label for="sort">表示順</label
             ><select id="sort">
@@ -188,7 +197,7 @@
         <p class="notice">
           人が考える研究ノートとして利用できます。AIが有効な場合は、元知識を選ぶか、選択した分野から同意済みの公開知識を自動取得して分析できます。AIの結果は未検証の仮説です。
         </p>
-        <form id="researchFind" class="card">
+        <form id="researchFind" class="card" data-tour="lab-fields">
           <h3>1. 分野を2〜3つ選ぶ</h3>
           <div id="researchFields" class="choices"></div>
           <button type="submit" class="primary">関連する知識を探す</button>
@@ -198,15 +207,18 @@
         <div id="sourceSelection" class="card">
           <h3>2. 元になる知識を選ぶ</h3>
           <p>
-            各分野から2〜6件を選びます。検索で見つけた知識も「研究に使う」で追加できます。
+            自分で選ぶ場合は、選択した各分野の知識を含む2〜6件を選びます。選ばずにAI分析を始めると、同意済みの公開知識を分野から自動で探します。
           </p>
           <div id="selectedSources"></div>
-          <button type="button" id="compareSources" class="primary">
-            選んだ知識を比較する
+          <button type="button" id="compareSources">
+            選んだ知識を比較する（手動）
           </button>
+          <p class="hint">
+            元投稿と分類の共通点・違いを並べ、人が考えるための比較です。AI分析は下のボタンから実行します。
+          </p>
         </div>
         <div id="comparison" data-tour="lab-source" hidden></div>
-        <section class="card" id="aiResearch">
+        <section class="card" id="aiResearch" data-tour="lab-ai">
           <h3>AIで経験知を掛け合わせる</h3>
           <p id="aiAvailability">AIの利用状況を確認中です。</p>
           <label class="check"
@@ -224,9 +236,16 @@
               >データの取り扱いと制限</a
             >
           </p>
-          <button id="analyzeSources" type="button" disabled>
+          <button id="analyzeSources" type="button" class="primary" disabled>
             選んだ知識をAIで分析する
           </button>
+          <p
+            id="aiAnalysisFeedback"
+            class="status"
+            role="status"
+            aria-live="polite"
+            hidden
+          ></p>
           <div id="aiResult" hidden aria-live="polite"></div>
           <button id="reanalyzeSources" type="button" disabled>
             出典を確かめて再分析する（利用枠を消費）
@@ -234,6 +253,9 @@
         </section>
         <form id="noteForm" class="card" data-tour="lab-note">
           <h3>3. 問い・仮説・実践案を残す</h3>
+          <p class="hint">
+            AI分析に成功すると問い・仮説・実践案が入力されます。手動で記入して研究を保存することもできます。
+          </p>
           <label for="noteTitle">研究タイトル</label
           ><input id="noteTitle" maxlength="160" required /><label
             for="noteQuestion"
@@ -268,7 +290,7 @@
           研究をさらに読む
         </button>
       </section>
-      <section id="mine" class="view" hidden>
+      <section id="mine" class="view" hidden data-tour="lab-mine">
         <button id="syncActivities" type="button">
           採用された改善案を活動履歴へ確認する
         </button>
@@ -294,10 +316,18 @@
         <div id="mineItems" class="grid"></div>
         <button type="button" id="mineMore" hidden>さらに表示</button>
       </section>
-      <section id="requests" class="view" hidden>
-        <h2>知りたい知識を募集する</h2>
+      <section id="requests" class="view" hidden data-tour="lab-requests">
+        <h2>経験者に質問する・知識募集</h2>
         <p>
-          実際に経験した人へ、まだ答えのない問いを届けます。既存の募集・回答・懸賞制度を使います。
+          まだ答えが見つからないとき、経験した人へ質問を届ける場所です。Emuの「知識を探す」にある募集と同じデータ・回答・報酬制度を使います。
+        </p>
+        <p>
+          すでに投稿された知識を探す場合は、<button
+            type="button"
+            id="searchExistingKnowledge"
+          >
+            知識図書館で検索する</button
+          >へ。
         </p>
         <form id="requestForm" class="card">
           <label for="requestQuestion">知りたいこと</label
@@ -313,7 +343,10 @@
             maxlength="2000"
             required
           ></textarea>
-          <div id="requestFacets" class="facets"></div>
+          <details>
+            <summary>届けたい分野・経験を指定する（任意）</summary>
+            <div id="requestFacets" class="facets"></div>
+          </details>
           <label for="requestTarget"
             >どんな経験をした人に聞きたいですか？（任意）</label
           ><input id="requestTarget" maxlength="500" />
@@ -325,7 +358,7 @@
         <div id="requestItems" class="grid"></div>
         <button type="button" id="requestMore" hidden>募集をさらに読む</button>
       </section>
-      <section id="writer" class="view" hidden>
+      <section id="writer" class="view" hidden data-tour="lab-writer">
         <h2>あなたの経験を、誰かの知識へ。</h2>
         <p>
           資格や肩書きは必須ではありません。書き手プロフィールはPassport
@@ -343,7 +376,10 @@
             for="writerBio"
             >自己紹介・経験（自己申告）</label
           ><textarea id="writerBio" maxlength="1000"></textarea>
-          <div id="writerFacets" class="facets"></div>
+          <details>
+            <summary>自分の分野・経験を追加する（任意）</summary>
+            <div id="writerFacets" class="facets"></div>
+          </details>
           <label class="check"
             ><input
               id="writerPublished"
@@ -608,7 +644,10 @@
         ><input id="postTitle" maxlength="160" required /><label for="postBody"
           >本文</label
         ><textarea id="postBody" maxlength="5000" required></textarea>
-        <div id="postFacets" class="facets"></div>
+        <details id="postClassifications">
+          <summary>分野・経験などを選ぶ（任意・複数可）</summary>
+          <div id="postFacets" class="facets"></div>
+        </details>
         <label for="postTags">関連タグ（カンマ区切り）</label
         ><input id="postTags" maxlength="500" />
         <details>

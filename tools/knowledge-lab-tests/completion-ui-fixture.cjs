@@ -34,7 +34,7 @@ async function providerMock(url, opts) {
   const src = JSON.parse(input.contents[0].parts[0].text).sources;
   const claim = (s, text) => ({
     text,
-    citations: [{ sourceId: s.id, quote: s.body.slice(0, 20) }],
+    citations: [{ sourceId: s.id, evidenceId: s.evidence[0].id }],
   });
   const result = Object.fromEntries(
     CLAIM_KEYS.map((k) => [
@@ -59,21 +59,24 @@ async function providerMock(url, opts) {
     },
   });
 }
-require("./native-fixture.cjs")
-  .main({
-    aiEnv: {
-      GEMINI_API_KEY: "emulator-provider-mock-key",
-      GEMINI_FREE_TIER_CONFIRMED: "true",
-      KNOWLEDGE_LAB_AI_ENABLED: "true",
-    },
-    aiFetcher: providerMock,
-  })
-  .then(() =>
-    console.log(
-      "LOCAL Auth/Firestore; MOCK Gemini provider. Never use this as live API or Production proof.",
-    ),
-  )
-  .catch((e) => {
-    console.error(e.message);
-    process.exitCode = 1;
-  });
+if (require.main === module) {
+  require("./native-fixture.cjs")
+    .main({
+      aiEnv: {
+        GEMINI_API_KEY: "emulator-provider-mock-key",
+        GEMINI_FREE_TIER_CONFIRMED: "true",
+        KNOWLEDGE_LAB_AI_ENABLED: "true",
+      },
+      aiFetcher: providerMock,
+    })
+    .then(() =>
+      console.log(
+        "LOCAL Auth/Firestore; MOCK Gemini provider. Never use this as live API or Production proof.",
+      ),
+    )
+    .catch((e) => {
+      console.error(e.message);
+      process.exitCode = 1;
+    });
+}
+module.exports = { providerMock };

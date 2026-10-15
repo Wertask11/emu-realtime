@@ -1,6 +1,8 @@
 "use strict";
 const m = require("./model");
 const seed = require("./taxonomy.json");
+const { Filter } = require("firebase-admin/firestore");
+const { utils: ethersUtils } = require("ethers");
 const COL = (name) => "knowledge_lab_" + name;
 const MAX_INDEX = 20000,
   MAX_BYTES = 64 * 1024 * 1024,
@@ -870,9 +872,24 @@ function createService({
     return s;
   }
   async function myPublicPosts(a, q = {}) {
+    // Older Emu posts have no Passport attribution. Use only authenticated
+    // account addresses, including the legacy checksum spelling; never a
+    // caller-supplied address or an Owner-wide view of all users' posts.
+    const forms = new Set();
+    for (const address of [a.walletAddress, a.account?.chesAddress]) {
+      if (!ethersUtils.isAddress(address || "")) continue;
+      forms.add(address);
+      forms.add(address.toLowerCase());
+      forms.add(ethersUtils.getAddress(address.toLowerCase()));
+    }
+    const filters = [Filter.where("authorSchoolParkId", "==", a.spid)];
+    if (forms.size) {
+      for (const field of ["address", "owner", "author"])
+        filters.push(Filter.where(field, "in", [...forms]));
+    }
     let query = db
       .collection("posts")
-      .where("authorSchoolParkId", "==", a.spid)
+      .where(filters.length === 1 ? filters[0] : Filter.or(...filters))
       .orderBy("__name__")
       .limit(21);
     if (q.cursor) query = query.startAfter(m.id(q.cursor));
@@ -880,7 +897,9 @@ function createService({
     return {
       items: s.docs
         .slice(0, 20)
-        .filter((d) => m.publicPost(d.data()))
+        // Passport attribution wins over a matching legacy address. Reuse
+        // the same ownership check as detail/edit, and exclude private data.
+        .filter((d) => m.publicPost(d.data()) && m.owner(d.data(), a))
         .map((d) => m.safePost(d.id, d.data(), a)),
       next: s.size > 20 ? s.docs[19].id : null,
     };

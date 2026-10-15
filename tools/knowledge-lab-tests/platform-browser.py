@@ -1,4 +1,5 @@
 """Actual native UI + local Auth/Firestore, no production requests or mock API responses."""
+from facet_controls import select_facets
 import json, os, pathlib, urllib.parse
 from playwright.sync_api import sync_playwright, expect
 
@@ -38,7 +39,7 @@ with sync_playwright() as p:
         lab.locator('#library [data-compose]').click()
         lab.locator('#postTitle').fill('LOCAL 活動表示検証 ' + str(i))
         lab.locator('#postBody').fill('これはエミュレーター内の保存と活動表示の回帰検証です。')
-        lab.locator('#postFacets-field').select_option(field)
+        select_facets(lab, '#postFacets-field', field)
         lab.locator('#postVisibility').select_option('public')
         lab.locator('#postForm button[type=submit]').click()
         lab.locator('#editorDialog').wait_for(state='hidden')

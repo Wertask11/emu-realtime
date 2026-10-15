@@ -63,6 +63,15 @@
       "Geminiの無料枠に達しました。時間をおいて再度お試しください。課金へ切り替えません。",
     AI_MODEL_UNAVAILABLE:
       "設定したAIモデルを利用できません。運営にモデル設定の確認を依頼してください。",
+    AI_PROVIDER_AUTH_FAILED:
+      "Geminiの認証で拒否されました。運営によるAPIキーの設定確認が必要です。",
+    AI_PROVIDER_UNAVAILABLE:
+      "Geminiから応答を受け取れませんでした。少し時間をおいてお試しください。",
+    AI_INVALID_OUTPUT:
+      "AIの回答形式を確認できなかったため、分析結果を採用しませんでした。",
+    AI_SOURCE_COUNT: "分野を2〜3つ、元になる知識を2〜6件選んでください。",
+    AI_SOURCE_EVIDENCE_MISSING:
+      "元知識が短すぎて引用できる箇所がありません。内容のある別の知識を選んでください。",
     AI_PROVIDER_REQUEST_REJECTED:
       "AIへの送信を受け付けてもらえませんでした。手動研究を利用するか、運営へお問い合わせください。",
     AI_DAILY_LIMIT: "今日のAI利用上限に達しました。手動研究を利用できます。",
@@ -184,6 +193,13 @@
       integration("close");
     }
   });
+  $("#backToEmu").addEventListener("click", (e) => {
+    if (parent !== window) {
+      e.preventDefault();
+      integration("close");
+    }
+  });
+  bindAsync($("#searchExistingKnowledge"), () => view("library"));
   function showLogin() {
     const link = $("#loginLink");
     link.href = "/?lab=" + encodeURIComponent(state.view);
@@ -239,9 +255,24 @@
             ((t.active && !t.mergedInto) || (value[axis] || []).includes(t.id)),
         );
         if (!terms.length) return "";
-        return `<div><label for="${target.slice(1)}-${axis}">${axes[axis]}（複数可）</label><select multiple data-axis="${axis}" id="${target.slice(1)}-${axis}" size="3">${terms.map((t) => `<option value="${esc(t.id)}" ${(value[axis] || []).includes(t.id) ? "selected" : ""}>${esc(t.label)}${t.active ? "" : "（既存の分類）"}</option>`).join("")}</select></div>`;
+        return `<fieldset class="facet-group" data-axis="${axis}" id="${target.slice(1)}-${axis}"><legend>${axes[axis]}（複数可）</legend><div class="facet-options">${terms.map((t) => `<label><input type="checkbox" value="${esc(t.id)}" ${(value[axis] || []).includes(t.id) ? "checked" : ""}><span>${esc(t.label)}${t.active ? "" : "（既存の分類）"}</span></label>`).join("")}</div><p class="facet-selection" aria-live="polite"></p></fieldset>`;
       })
       .join("");
+    $(target)
+      .querySelectorAll(".facet-group")
+      .forEach((group) => {
+        group.addEventListener("change", () => facetSelection(group));
+        facetSelection(group);
+      });
+    const disclosure = $(target).closest("details");
+    if (disclosure)
+      disclosure.open = !!$(target).querySelector("input:checked");
+  }
+  function facetSelection(group) {
+    const selected = [...group.querySelectorAll("input:checked")];
+    group.querySelector(".facet-selection").textContent = selected.length
+      ? `${selected.length}件選択：${selected.map((input) => input.closest("label").textContent.trim()).join("、")}`
+      : "未選択";
   }
   function facetValue(target) {
     const value = {};
@@ -249,12 +280,20 @@
       .querySelectorAll("[data-axis]")
       .forEach(
         (el) =>
-          (value[el.dataset.axis] = [...el.selectedOptions].map(
-            (o) => o.value,
-          )),
+          (value[el.dataset.axis] = [
+            ...el.querySelectorAll("input:checked"),
+          ].map((input) => input.value)),
       );
     return value;
   }
+  document.addEventListener("reset", (event) => {
+    // Native form reset restores checked defaults after the reset event.
+    setTimeout(
+      () =>
+        event.target.querySelectorAll(".facet-group").forEach(facetSelection),
+      0,
+    );
+  });
   function names(ids) {
     return (ids || [])
       .map((id) => state.terms.find((t) => t.id === id)?.label || id)
@@ -346,6 +385,10 @@
     u.search = conditions().toString();
     return u;
   }
+  function searchModeUI() {
+    $("#semanticOptions").hidden = $("#searchMode").value !== "semantic";
+  }
+  $("#searchMode").addEventListener("change", searchModeUI);
   async function search(more = false) {
     const p = conditions();
     if (p.get("mode") === "semantic") {
@@ -395,11 +438,12 @@
       .querySelectorAll(".view")
       .forEach((el) => (el.hidden = el.id !== name));
     document
-      .querySelectorAll("[data-view]")
+      .querySelectorAll("nav [data-view]")
       .forEach((b) =>
         b.setAttribute("aria-pressed", String(b.dataset.view === name)),
       );
     if (!state.enabled) return;
+    tour?.enter(tourId(name));
     if (["mine", "writer", "requests", "admin"].includes(name) && !state.me)
       showLogin();
     if (state.loadedViews[name] && Date.now() - state.loadedViews[name] < 30000)
@@ -433,6 +477,10 @@
           "",
         )}<p class="hint">医療・法律・金融などの内容は個人の経験であり、専門的な助言や結果を保証するものではありません。出典の有無と正しさの検証は別です。</p>${lab.sourceAnswer ? `<p class="hint">元募集 ${esc(lab.sourceAnswer.requestId)}・元回答 ${esc(lab.sourceAnswer.answerId)}</p><button type="button" id="answerSource">元の募集・回答を見る</button>` : ""}<div class="actions"><button type="button" id="saveKnowledge">マイライブラリーに保存</button><button type="button" id="unsaveKnowledge">保存を外す</button><button type="button" id="useKnowledge">研究に使う</button>${p.editable ? '<button type="button" id="editKnowledge">編集</button><button type="button" id="withdrawKnowledge">公開を取り下げる</button><button type="button" id="archiveKnowledge">削除して非公開で保管</button><button type="button" id="restoreKnowledge" hidden>下書きに復元</button><button type="button" id="postHistory">編集履歴</button>' : ""}${p.authorSchoolParkId ? '<button type="button" id="openWriter">書き手を見る</button>' : ""}<button type="button" id="goodKnowledge">役に立った</button><button type="button" id="changeKnowledge">改善案を届ける</button><button type="button" id="proposeKnowledge">議題にする</button><button type="button" id="discussKnowledge">議論へ</button></div><div class="report-controls"><label for="reportReason">通報する理由</label><textarea id="reportReason" maxlength="1500"></textarea><button type="button" id="reportKnowledge">運営へ通報</button></div>`;
     $("#detailDialog").showModal();
+    $("#detailTitle").insertAdjacentHTML(
+      "afterend",
+      `<p class="hint">Gemini利用：${esc(aiSourceLabel(p))}。${p.editable ? "変更する場合は「編集」からAI利用の確認欄を設定して保存してください。" : "AI利用への同意を変更できるのは投稿者本人です。"}</p>`,
+    );
     if (lab.thirdPartyConfirmation) {
       const proof = lab.thirdPartyConfirmation;
       $("#detailBody").insertAdjacentHTML(
@@ -666,6 +714,10 @@
           body: { ...payload, key: keyFor("post", payload) },
         });
         state.post = await api("/posts/" + result.id, { auth: true });
+        if (state.selected.has(result.id)) {
+          state.selected.set(result.id, state.post);
+          selected();
+        }
         $("#editorDialog").close();
         status("経験知を保存しました。");
         await search();
@@ -674,14 +726,27 @@
       }
     });
   });
+  function aiSourceLabel(p) {
+    if (p.aiConsentAtAnalysis) return "分析時にAI利用同意を確認済み";
+    if (p.visibility && p.visibility !== "public")
+      return "非公開：AI分析の対象外";
+    return p.knowledgeLab?.aiUseConsent?.allowed === true
+      ? "AI利用同意あり"
+      : "AI利用同意なし（手動比較のみ）";
+  }
   function selected() {
     $("#selectedSources").innerHTML =
       [...state.selected.values()]
         .map(
           (p) =>
-            `<p class="source"><b>${esc(p.title)}</b> ${badges(p)} <button type="button" data-remove-source="${esc(p.id)}" aria-label="${esc(p.title)}を研究から外す">外す</button></p>`,
+            `<p class="source"><b>${esc(p.title)}</b> ${badges(p)} <span class="badge">${esc(aiSourceLabel(p))}</span> <button type="button" data-review-source="${esc(p.id)}">内容・同意を確認</button> <button type="button" data-remove-source="${esc(p.id)}" aria-label="${esc(p.title)}を研究から外す">外す</button></p>`,
         )
         .join("") || "<p>まだ元知識を選んでいません。</p>";
+    $("#selectedSources")
+      .querySelectorAll("[data-review-source]")
+      .forEach((button) =>
+        bindAsync(button, () => detail(button.dataset.reviewSource)),
+      );
     document.querySelectorAll("[data-remove-source]").forEach(
       (b) =>
         (b.onclick = () => {
@@ -765,13 +830,14 @@
         .join("")
     );
   }
+  let aiAnalysisBusy = false;
   function renderAIStatus(s) {
     state.aiStatus = s;
     $("#aiAvailability").textContent = s.available
       ? "実際の公開知識をGeminiで分析します。結果は未検証の仮説です。"
       : "AIは現在停止しています。手動の比較・研究ノートは利用できます。";
-    $("#analyzeSources").disabled = !s.available;
-    $("#reanalyzeSources").disabled = !s.available;
+    $("#analyzeSources").disabled = aiAnalysisBusy || !s.available;
+    $("#reanalyzeSources").disabled = aiAnalysisBusy || !s.available;
     $('#searchMode option[value="semantic"]').disabled = !s.semanticAvailable;
     $("#aiAdminStatus").textContent =
       `キー・無料枠確認：${s.configured ? "設定あり" : "未設定"}／Renderスイッチ：${s.environmentEnabled ? "有効" : "停止"}／運営停止：${s.stopped ? "停止" : "解除"}／モデル：${s.model || "未選択"}`;
@@ -820,8 +886,15 @@
     $("#research").scrollIntoView({ block: "start" });
   });
   async function analyzeSources(forceRefresh = false) {
-    const b = $("#analyzeSources");
-    b.disabled = true;
+    if (aiAnalysisBusy) return;
+    aiAnalysisBusy = true;
+    $("#analyzeSources").disabled = true;
+    $("#reanalyzeSources").disabled = true;
+    const feedback = $("#aiAnalysisFeedback");
+    feedback.hidden = false;
+    feedback.classList.remove("error");
+    feedback.textContent =
+      "公開状態・投稿者のAI利用同意を確認して分析しています…";
     try {
       const run = await api("/ai/analyze", {
         method: "POST",
@@ -841,7 +914,11 @@
       state.aiRun = run;
       state.selected.clear();
       for (const source of run.sources)
-        state.selected.set(source.id, { id: source.id, title: source.title });
+        state.selected.set(source.id, {
+          id: source.id,
+          title: source.title,
+          aiConsentAtAnalysis: true,
+        });
       selected();
       $("#detachAI").hidden = false;
       $("#aiResult").hidden = false;
@@ -862,12 +939,46 @@
       status(
         "分析を表示しました。内容と出典を確認してから、研究ノートとして保存できます。",
       );
+      feedback.textContent =
+        "分析が完了しました。③の問い・仮説・実践案へ入力しました。出典と内容を確認して保存してください。";
+    } catch (e) {
+      if (e.message === "AI_SOURCE_CONSENT_REQUIRED") {
+        await Promise.allSettled(
+          [...state.selected.keys()].map(async (id) => {
+            const post = await api("/posts/" + id, { auth: true });
+            if (state.selected.has(id)) state.selected.set(id, post);
+          }),
+        );
+        selected();
+      }
+      const code = /^[A-Z][A-Z0-9_]{1,80}$/.test(e.message)
+        ? e.message
+        : "SERVICE_UNAVAILABLE";
+      let message = messages[code] || "分析を完了できませんでした。";
+      if (code === "AI_SOURCE_CONSENT_REQUIRED") {
+        const missing = [...state.selected.values()].filter(
+          (p) => p.knowledgeLab?.aiUseConsent?.allowed !== true,
+        );
+        if (missing.length)
+          message +=
+            " 同意が確認できない知識：" +
+            missing.map((p) => "「" + p.title + "」").join("、") +
+            "。外して分析するか、投稿者本人が編集画面でAI利用への同意を保存してください。";
+      }
+      feedback.classList.add("error");
+      feedback.textContent = `${message}（${code}）③には今回の分析結果を入力していません。`;
+      throw e;
     } finally {
-      await refreshAI();
+      aiAnalysisBusy = false;
+      try {
+        await refreshAI();
+      } catch (_) {
+        if (state.aiStatus) renderAIStatus(state.aiStatus);
+      }
     }
   }
-  bindAsync($("#analyzeSources"), () => analyzeSources());
-  bindAsync($("#reanalyzeSources"), () => analyzeSources(true));
+  $("#analyzeSources").onclick = () => run(() => analyzeSources());
+  $("#reanalyzeSources").onclick = () => run(() => analyzeSources(true));
   bindAsync($("#aiLoadModels"), () =>
     aiAdminAction("モデル一覧を取得しています…", async () => {
       const models = await api("/admin/ai/models", { auth: true });
@@ -975,6 +1086,7 @@
     state.aiRun = null;
     $("#detachAI").hidden = true;
     $("#aiResult").hidden = true;
+    $("#aiAnalysisFeedback").hidden = true;
     $("#noteForm").reset();
     state.selected.clear();
     selected();
@@ -1272,7 +1384,9 @@
   }
   bindAsync($("#reviewRewards"), () => reviewRewards());
   bindAsync($("#rewardReviewMore"), () => reviewRewards(true));
+  let mineLoadSequence = 0;
   async function loadMine(more = false) {
+    const sequence = ++mineLoadSequence;
     const kind = state.mineKind,
       isNote = ["notes", "archived-notes"].includes(kind);
     const params = new URLSearchParams();
@@ -1282,6 +1396,9 @@
       "/me/" + (isNote ? "notes" : kind) + (params.size ? "?" + params : ""),
       { auth: true },
     );
+    // A slower response from the previous category must not replace the
+    // category the reader has just selected (e.g. saved → public posts).
+    if (sequence !== mineLoadSequence || kind !== state.mineKind) return;
     if (!more) $("#mineItems").innerHTML = "";
     $("#mineItems").insertAdjacentHTML(
       "beforeend",
@@ -1967,6 +2084,7 @@
     $("#query").value = params.get("q") || "";
     $("#searchMode").value =
       params.get("mode") === "semantic" ? "semantic" : "lexical";
+    searchModeUI();
     for (const key of [
       "keywordOp",
       "match",
@@ -2004,10 +2122,13 @@
   });
   $("#resetFilters").onclick = () => {
     $("#searchForm").reset();
+    searchModeUI();
     for (const selector of ["#searchFacets", "#excludeFacets"])
       $(selector)
-        .querySelectorAll("option")
-        .forEach((o) => (o.selected = false));
+        .querySelectorAll("input[type=checkbox]")
+        .forEach((input) => (input.checked = false));
+    for (const selector of ["#searchFacets", "#excludeFacets"])
+      $(selector).querySelectorAll(".facet-group").forEach(facetSelection);
     run(() => search());
   };
   bindAsync($("#moreResults"), () => search(true));
@@ -2020,38 +2141,86 @@
     }
   });
   const tour = window.ReizoTour;
+  const tourId = (name) => "emu-lab-" + (name === "library" ? "welcome" : name);
   if (tour) {
-    tour.register(
-      "emu-lab",
-      [
-        {
-          target: "lab-intro",
-          label: "経験から、次の発見へ",
-          text: "知識図書館で経験知を探し、研究所で異なる知識を比較できるよ。",
-        },
-        {
-          target: "lab-tabs",
-          label: "図書館と研究所",
-          text: "分野から探すなら図書館。2〜3分野の知識から問いを考えるなら研究所へ。保存した記録はマイライブラリーに残るよ。",
-        },
-        {
-          target: "lab-library",
-          label: "まず、必要な知識へ",
-          text: "キーワードや複数の分類から探してみよう。見るだけで投稿や保存は行われないよ。",
-        },
+    const guides = {
+      library: [
+        [
+          "lab-intro",
+          "まずは、経験を探してみよう",
+          "図書館では投稿済みの経験を検索できるよ。経験者へ新しく質問したいときは「経験者に質問する」へ。",
+        ],
+        [
+          "lab-library",
+          "キーワードだけでも探せるよ",
+          "知りたいことを入力して検索。分野・業種などの細かい条件は、必要なときだけ開こう。自分の経験は「経験知を届ける」から書けるよ。",
+        ],
+        [
+          "lab-tabs",
+          "見つけた経験から、次の発見へ",
+          "異なる経験を組み合わせるなら研究所へ。保存した知識と研究の続きは、マイライブラリーに残るよ。",
+        ],
+        [
+          "lab-back",
+          "Emuへはここから戻れるよ",
+          "「Emuに戻る」で、もとのEmu画面へ。上の「使い方案内」から、この説明や今開いている画面の案内をいつでも見返せるよ。",
+        ],
       ],
-      {
-        label: "Knowledge Lab",
-        brand: "Emu",
-        isReady: () =>
-          state.enabled && state.terms.length > 0 && state.view === "library",
-      },
-    );
+      research: [
+        [
+          "lab-fields",
+          "組み合わせたい分野を2〜3つ選ぼう",
+          "分野を選んでからAI分析を始めると、同意済みの公開知識を自動で探すよ。元知識を自分で指定することもできるよ。",
+        ],
+        [
+          "lab-ai",
+          "AI分析と手動の比較は別の操作だよ",
+          "送信する内容を確認してAI分析を実行。成功すると引用付きの分析が表示され、下の問い・仮説・実践案が入力されるよ。「比較する（手動）」は元投稿と分類を並べる機能だよ。",
+        ],
+        [
+          "lab-note",
+          "内容を確認して、自分用に保存しよう",
+          "AIの答えは未検証の仮説。自分で修正して保存できるよ。現実で試した結果は、あとからこのノートへ追記しよう。案内だけではAIの実行や保存は行わないよ。",
+        ],
+      ],
+      mine: [
+        [
+          "lab-mine",
+          "自分の記録を続きから",
+          "公開した経験知、下書き、保存した知識、研究ノートを切り替えられるよ。ノートを開くと編集・履歴・保管・復元へ進めるよ。",
+        ],
+      ],
+      requests: [
+        [
+          "lab-requests",
+          "見つからない答えは、経験者へ聞いてみよう",
+          "ここはEmu「知識を探す」と同じ質問募集だよ。投稿済みの知識を検索する図書館とは使い分けよう。募集内容を入力し、自分で公開ボタンを押すまで投稿されないよ。",
+        ],
+      ],
+      writer: [
+        [
+          "lab-writer",
+          "どんな経験を書けるか、伝えてみよう",
+          "表示名と自己紹介から始めよう。分野や職歴は任意だよ。公開範囲を自分で選び、プロフィールを保存してから最初の経験を書いてみよう。",
+        ],
+      ],
+    };
+    for (const [name, steps] of Object.entries(guides))
+      tour.register(
+        tourId(name),
+        steps.map(([target, label, text]) => ({ target, label, text })),
+        {
+          label: "Knowledge Lab",
+          brand: "Emu",
+          auto: name === "library",
+          isReady: () =>
+            state.enabled && state.terms.length > 0 && state.view === name,
+        },
+      );
     $("#guide").onclick = () => {
-      run(async () => {
-        await view("library");
-        tour.restart("emu-lab");
-      });
+      if (state.view === "admin")
+        run(() => view("library").then(() => tour.restart(tourId("library"))));
+      else tour.restart(tourId(state.view));
     };
   }
   window.addEventListener("message", (e) => {
@@ -2089,7 +2258,9 @@
     if (p.get("compose") === "1") edit();
     if (p.get("edit"))
       edit(await api("/posts/" + p.get("edit"), { auth: true }));
-    if (tour && state.view === "library") tour.enter("emu-lab");
+    if ($("#searchFacets input:checked"))
+      $("#searchClassifications").open = true;
+    if (tour) tour.enter(tourId(state.view));
     document.documentElement.dataset.labReady = "true";
   }
   run(init);
