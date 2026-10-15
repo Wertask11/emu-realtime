@@ -94,7 +94,7 @@ test("an unexpected upstream response cannot cause an uncaught stream callback e
       });
     return req;
   };
-  await assert.rejects(nativeProbe(URL, {}, request), TypeError);
+  await assert.rejects(nativeProbe(URL, {}, request), RangeError);
 });
 test("configured proxy keeps the ordinary fetch path without choosing direct sockets", async () => {
   let calls = 0;
