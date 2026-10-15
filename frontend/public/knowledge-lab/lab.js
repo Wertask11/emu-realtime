@@ -51,6 +51,8 @@
   };
   const messages = {
     AI_DISABLED: "AIは現在停止しています。手動の研究機能を利用できます。",
+    AI_CLIENT_ELIGIBILITY_REQUIRED:
+      "AIは公開準備中です。手動の比較・研究ノートを利用できます。",
     AI_SOURCE_CONSENT_REQUIRED:
       "投稿者がAI利用に同意した公開知識を選んでください。",
     AI_REQUEST_CONSENT_REQUIRED:
@@ -774,7 +776,7 @@
     $("#reanalyzeSources").disabled = !s.available;
     $('#searchMode option[value="semantic"]').disabled = !s.semanticAvailable;
     $("#aiAdminStatus").textContent =
-      `キー・無料枠確認：${s.configured ? "設定あり" : "未設定"}／Renderスイッチ：${s.environmentEnabled ? "有効" : "停止"}／運営停止：${s.stopped ? "停止" : "解除"}／モデル：${s.model || "未選択"}`;
+      `キー・無料枠確認：${s.configured ? "設定あり" : "未設定"}／提供条件確認：${s.clientEligibilityConfirmed ? "設定あり" : "未確認（対象年齢・地域等のGoogle API条件の確認が必要）"}／Renderスイッチ：${s.environmentEnabled ? "有効" : "停止"}／運営停止：${s.stopped ? "停止" : "解除"}／モデル：${s.model || "未選択"}`;
   }
   async function analyzeSources(forceRefresh = false) {
     const b = $("#analyzeSources");
