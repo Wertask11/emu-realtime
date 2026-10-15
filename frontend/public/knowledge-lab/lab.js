@@ -239,9 +239,21 @@
             ((t.active && !t.mergedInto) || (value[axis] || []).includes(t.id)),
         );
         if (!terms.length) return "";
-        return `<div><label for="${target.slice(1)}-${axis}">${axes[axis]}（複数可）</label><select multiple data-axis="${axis}" id="${target.slice(1)}-${axis}" size="3">${terms.map((t) => `<option value="${esc(t.id)}" ${(value[axis] || []).includes(t.id) ? "selected" : ""}>${esc(t.label)}${t.active ? "" : "（既存の分類）"}</option>`).join("")}</select></div>`;
+        return `<fieldset class="facet-group" data-axis="${axis}" id="${target.slice(1)}-${axis}"><legend>${axes[axis]}（複数可）</legend><div class="facet-options">${terms.map((t) => `<label><input type="checkbox" value="${esc(t.id)}" ${(value[axis] || []).includes(t.id) ? "checked" : ""}><span>${esc(t.label)}${t.active ? "" : "（既存の分類）"}</span></label>`).join("")}</div><p class="facet-selection" aria-live="polite"></p></fieldset>`;
       })
       .join("");
+    $(target)
+      .querySelectorAll(".facet-group")
+      .forEach((group) => {
+        group.addEventListener("change", () => facetSelection(group));
+        facetSelection(group);
+      });
+  }
+  function facetSelection(group) {
+    const selected = [...group.querySelectorAll("input:checked")];
+    group.querySelector(".facet-selection").textContent = selected.length
+      ? `${selected.length}件選択：${selected.map((input) => input.closest("label").textContent.trim()).join("、")}`
+      : "未選択";
   }
   function facetValue(target) {
     const value = {};
@@ -249,12 +261,20 @@
       .querySelectorAll("[data-axis]")
       .forEach(
         (el) =>
-          (value[el.dataset.axis] = [...el.selectedOptions].map(
-            (o) => o.value,
-          )),
+          (value[el.dataset.axis] = [
+            ...el.querySelectorAll("input:checked"),
+          ].map((input) => input.value)),
       );
     return value;
   }
+  document.addEventListener("reset", (event) => {
+    // Native form reset restores checked defaults after the reset event.
+    setTimeout(
+      () =>
+        event.target.querySelectorAll(".facet-group").forEach(facetSelection),
+      0,
+    );
+  });
   function names(ids) {
     return (ids || [])
       .map((id) => state.terms.find((t) => t.id === id)?.label || id)
@@ -2011,8 +2031,10 @@
     $("#searchForm").reset();
     for (const selector of ["#searchFacets", "#excludeFacets"])
       $(selector)
-        .querySelectorAll("option")
-        .forEach((o) => (o.selected = false));
+        .querySelectorAll("input[type=checkbox]")
+        .forEach((input) => (input.checked = false));
+    for (const selector of ["#searchFacets", "#excludeFacets"])
+      $(selector).querySelectorAll(".facet-group").forEach(facetSelection);
     run(() => search());
   };
   bindAsync($("#moreResults"), () => search(true));

@@ -1,4 +1,5 @@
 """Actual native UI + emulator persistence. Gemini provider/vectors are MOCKS, never live AI proof."""
+from facet_controls import select_facets
 import json, pathlib, urllib.parse
 from playwright.sync_api import sync_playwright
 BASE='http://127.0.0.1:4201'
@@ -24,10 +25,10 @@ with sync_playwright() as p:
  f.locator('#aiModel').select_option('gemini-test-flash');f.locator('#aiEmbeddingModel').select_option('gemini-embedding-001');f.locator('#aiFreeConfirmed').check()
  with g.expect_response(lambda r:r.request.method=='PUT' and '/admin/ai' in r.url) as configured:f.locator('#aiSettingsForm button[type=submit]').click()
  assert configured.value.status==200
- f=lab('bob','writer');f.locator('#writerName').fill('エミュレーター検証の書き手');f.locator('#writerBio').fill('AI表示と保存の検証用。外部AI応答は模擬です。');f.locator('#writerFacets-field').select_option('field-education');f.locator('#writerConsent').check();f.locator('#writerForm button[type=submit]').click()
+ f=lab('bob','writer');f.locator('#writerName').fill('エミュレーター検証の書き手');f.locator('#writerBio').fill('AI表示と保存の検証用。外部AI応答は模擬です。');select_facets(f, '#writerFacets-field', 'field-education');f.locator('#writerConsent').check();f.locator('#writerForm button[type=submit]').click()
  ids=[]
  for field,title in [('field-education','教育の検証記録'),('field-it','ITの検証記録')]:
-  f.locator('#writer [data-compose]').click();f.locator('#postTitle').fill(title);f.locator('#postBody').fill('エミュレーターで保存してから、一覧を再表示して確認しました。検証用の記録です。');f.locator('#postFacets-field').select_option(field);f.locator('#postAIConsent').check();f.locator('#postVisibility').select_option('public')
+  f.locator('#writer [data-compose]').click();f.locator('#postTitle').fill(title);f.locator('#postBody').fill('エミュレーターで保存してから、一覧を再表示して確認しました。検証用の記録です。');select_facets(f, '#postFacets-field', field);f.locator('#postAIConsent').check();f.locator('#postVisibility').select_option('public')
   with g.expect_response(lambda r:r.request.method=='PUT' and urllib.parse.urlparse(r.url).path=='/api/knowledge-lab/posts') as saved:f.locator('#postForm button[type=submit]').click()
   assert saved.value.status==200;ids.append(saved.value.json()['id']);f.locator('#editorDialog').wait_for(state='hidden')
  f.locator('[data-view="research"]').click();f.locator('#researchFields input[value="field-education"]').check();f.locator('#researchFields input[value="field-it"]').check();f.locator('#aiRequestConsent').check()
