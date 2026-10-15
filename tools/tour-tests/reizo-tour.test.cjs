@@ -65,6 +65,12 @@ test('existing navigation and native behavior remain identical after removing th
   const before=cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
   let current=fs.readFileSync(path.join(root,file),'utf8');
   if(name==='index.html') {
+   // These two reviewed hooks deliver derived Lab data only. Keep the full native baseline comparison.
+   const starHook='    window.emuLabSendActivity?.(iframe);\n';
+   const reactionHook='    if (detail.ok) { syncKnowledgeFrame(); window.emuLabSyncIndex?.(detail.postId); }';
+   assert.equal(current.split(starHook).length-1,1,'one authenticated activity hook');
+   assert.equal(current.split(reactionHook).length-1,1,'one successful-reaction index hook');
+   current=current.replace(starHook,'').replace(reactionHook,'    if (detail.ok) syncKnowledgeFrame();');
    current=current.replace('<script src="/knowledge-lab/integration.js"></script>\n','')
     .replace(/^    <div class="eth-card" data-tour="emu-lab-entry">.*<\/div>\n/m,'')
     .replace(/^      window\.emuLabSyncIndex\?\.\([^\n]+\);\n/gm,'')

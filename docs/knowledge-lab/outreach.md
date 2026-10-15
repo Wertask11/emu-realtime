@@ -1,5 +1,7 @@
 # 営業・広報用の説明文
 
+> これは初回PR #195の作業時の履歴資料です。現在の追加機能と公開状態は [completion-outreach-draft.md](completion-outreach-draft.md) を確認してください。
+
 公開判定がREADYになった後に使用する。予定URL：
 
 - 図書館・研究所：`https://schoolpark-emu.vercel.app/knowledge-lab.html`

@@ -87,6 +87,28 @@
       /* Publishing never fails because the derived index is unavailable. Owner reconciliation repairs it. */
     }
   };
+  window.emuLabSendActivity = async (frame) => {
+    const uid = window.auth?.currentUser?.uid;
+    if (!uid) return;
+    try {
+      const r = await fetch("/api/knowledge-lab/me/activity", {
+        headers: await window.emuAuthHeaders(true, { interactive: false }),
+      });
+      if (!r.ok) return;
+      const data = await r.json();
+      if (
+        window.auth?.currentUser?.uid !== uid ||
+        frame !== document.getElementById("room2Frame")
+      )
+        return;
+      frame.contentWindow?.postMessage(
+        { type: "EMU_LAB_ACTIVITY", data },
+        location.origin,
+      );
+    } catch (_) {
+      /* Existing star counts remain available independently. */
+    }
+  };
   function labFrame() {
     const frame = document.getElementById("spRoomFrame");
     if (
@@ -288,6 +310,16 @@
       let previous = window.auth.currentUser?.uid || null;
       window.fbAuth.onAuthStateChanged(window.auth, (user) => {
         const current = user?.uid || null;
+        if (previous !== current) {
+          try {
+            document
+              .getElementById("room2Frame")
+              ?.contentWindow?.postMessage(
+                { type: "EMU_LAB_ACTIVITY_CLEAR" },
+                location.origin,
+              );
+          } catch (_) {}
+        }
         if (current !== previous && labFrame()) window.closeSpRoom();
         previous = current;
       });
@@ -307,7 +339,9 @@
       if (!intent) return;
       if (
         !window.auth?.currentUser ||
-        !window._chesEntered || pendingLanding || covered() ||
+        !window._chesEntered ||
+        pendingLanding ||
+        covered() ||
         document.documentElement.classList.contains("ches-resuming") ||
         typeof window.openSpRoom !== "function"
       )
@@ -318,7 +352,8 @@
       sessionStorage.removeItem("emu-lab-return");
       // The normal landing can be SchoolPark. An explicit Lab/recruitment URL
       // must return to Emu after that existing login promise has completed.
-      if (typeof window.showEmuRequests === 'function') window.showEmuRequests();
+      if (typeof window.showEmuRequests === "function")
+        window.showEmuRequests();
       window.openEmuKnowledgeLab(target.view, {
         post: target.post,
         note: target.note,

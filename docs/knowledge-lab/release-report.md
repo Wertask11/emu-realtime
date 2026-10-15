@@ -1,5 +1,7 @@
 # Emu Knowledge Lab 最終修正・公開判定（2026-10-14）
 
+> これは初回PR #195の作業時の履歴資料です。現在の追加機能と公開状態は [completion-report.md](completion-report.md) を確認してください。
+
 ## A. 総合判定
 
 **NOT READY（Production公開条件待ち）。コード修正とローカル検証は完了。本番公開・本番実操作は未完了。**

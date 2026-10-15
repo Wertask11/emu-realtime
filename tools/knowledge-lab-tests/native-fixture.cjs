@@ -3,9 +3,9 @@
 // Authentication and all tested actions use real emulator SDKs and existing app functions.
 const {createFixture}=require('./fixture.cjs');const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const ROOT=path.resolve(__dirname,'../..');
-async function main(){
+async function main(options={}){
   if(process.env.STRIPE_SECRET_KEY)throw new Error('UNSET_PAYMENT_SECRET_FOR_LOCAL_FIXTURE');
-  const f=await createFixture({port:4201}),{app,db,identity,entitlement,middleware:c,base}=f;
+  const f=await createFixture({port:4201,...options}),{app,db,identity,entitlement,middleware:c,base}=f;
   const source=fs.readFileSync(path.join(ROOT,'frontend/public/index.html'),'utf8');
   const serverSource=fs.readFileSync(path.join(ROOT,'backend/server.js'),'utf8');
   const access=require('../../backend/schoolpark-access');Object.assign(c,{identity,entitlement,decideSchoolParkAccess:access.decideSchoolParkAccess,SCHOOLPARK_PASS_PREVIEW_AT:access.PASS_PREVIEW_AT,SCHOOLPARK_PUBLIC_AT:access.PUBLIC_AT});
@@ -17,6 +17,14 @@ async function main(){
   router.use('/api/identity',require('../../backend/identity-router').createIdentityRouter({db,identity,requireFirebaseUser:c.requireFirebaseUser,requireOwner:c.requireOwner,rateLimit:c.rateLimit,ethers:require('../../backend/node_modules/ethers'),walletNonces:new Map(),purgeWalletNonces:()=>{},walletNonceTtlMs:60000}).router);
   router.use('/api/billing',require('../../backend/billing').createBillingRouter({db,entitlement,requireFirebaseUser:c.requireFirebaseUser,requireOwner:c.requireOwner,rateLimit:c.rateLimit}).router);
   router.get('/api/schoolpark/entry-status',c.schoolParkEntryStatus);
+  if(options.platformRegression){
+    // Reuse real application routes, with local emulator persistence and no payment/NFT execution.
+    router.use('/api/schoolpark/city',require('../../backend/city').createCityRouter({db,identity,entitlement,requireFirebaseUser:c.requireFirebaseUser,rateLimit:c.rateLimit,ownerAddresses:c.SP_OWNER_ADDRESSES}));
+    router.use('/api/schoolpark/quest-completions',require('../../backend/quest-completion').createQuestCompletionRouter({db,requireFirebaseUser:c.requireFirebaseUser,requireOwner:c.requireOwner,env:{},emuerEnabled:()=>false}));
+    const roomStart=serverSource.indexOf('const ROOM1_CONTENTS_COL'),roomEnd=serverSource.indexOf('// ── 直接追加',roomStart);
+    if(roomStart<0||roomEnd<=roomStart)throw Error('ROOM1_SOURCE_SECTION_MISSING');
+    c.app=router;vm.runInContext(serverSource.slice(roomStart,roomEnd),c);
+  }
   router.use('/api/emuer/v2',require('../../backend/emuer-v2/router').createEmuerV2Router({db,entitlement,requireFirebaseUser:c.requireFirebaseUser,requireOwnAddress:(req,res,next)=>{req.body=req.body||{};const claimed=String(req.body.address||'').toLowerCase();if(claimed&&claimed!==req.identity.walletAddress)return res.status(403).json({error:'ADDRESS_MISMATCH'});req.body.address=req.identity.walletAddress;next();},env:{EMUER_V2_ENABLED:'true',EMUER_V2_LAUNCH_HOLD:'false'}}).router);
   router.get('/api/user/name/:address',async(req,res)=>res.json({name:'エミュレーター検証ユーザー'}));
   let html=source.replace(/https:\/\/emu-realtime\.onrender\.com/g,base).replace(/https:\/\/firestore\.googleapis\.com/g,'http://127.0.0.1:8787').replace(/emusch-2a111/g,'demo-emu-knowledge-lab');
@@ -41,5 +49,7 @@ async function main(){
   // Express mounting creates the real Layer; move it before static instead of fabricating one.
   app.use(router);const layer=stack.pop(),staticIndex=stack.findIndex(l=>l.name==='serveStatic');stack.splice(staticIndex,0,layer);
   await f.api.service.rebuild({owner:true});await f.api.service.waitForRebuild();console.log('Native application with actual emulator auth: '+base+'/test/native.html');
+  return f;
 }
-main().catch(e=>{console.error(e.stack);process.exitCode=1;});
+if(require.main===module)main().catch(e=>{console.error(e.message);process.exitCode=1;});
+module.exports={main};

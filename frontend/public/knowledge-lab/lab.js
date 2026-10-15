@@ -16,11 +16,16 @@
       );
   const axes = {
     field: "分野",
-    job: "業種・職業",
-    experience: "経験",
+    industry: "業種",
+    occupation: "職業",
+    experience: "経験の種類",
     purpose: "目的",
-    kind: "知識の種類",
+    kind: "知識の形式",
     genre: "ジャンル",
+    difficulty: "難易度",
+    audience: "対象者",
+    period: "経験した時期",
+    job: "以前の業種・職業分類（確認待ち）",
   };
   const state = {
     enabled: false,
@@ -32,7 +37,9 @@
     fields: [],
     post: null,
     originAnswer: null,
+    originResearch: null,
     note: null,
+    aiRun: null,
     writerRevision: 0,
     termRevision: 0,
     keys: new Map(),
@@ -43,11 +50,43 @@
     loadedViews: {},
   };
   const messages = {
-    IDENTITY_REVIEW_REQUIRED: 'Passportの紐付けを確認できないため、運営による確認が必要です。回答・報酬は保留になります。',
-    SELF_ANSWER: '自分と同じPassportの募集には回答・採用できません。',
-    ANSWER_PUBLICATION_CONSENT_REQUIRED: '回答を公開する前に、内容と公開範囲の確認にチェックしてください。',
-    ANSWER_ALREADY_POSTED: 'この回答からの経験知は作成済みです。作成済みの投稿を編集してください。',
-    ARCHIVED_NOTE_RESTORE_REQUIRED: '保管したノートは復元してから編集できます。',
+    AI_DISABLED: "AIは現在停止しています。手動の研究機能を利用できます。",
+    AI_CLIENT_ELIGIBILITY_REQUIRED:
+      "AIは公開準備中です。手動の比較・研究ノートを利用できます。",
+    AI_SOURCE_CONSENT_REQUIRED:
+      "投稿者がAI利用に同意した公開知識を選んでください。",
+    AI_REQUEST_CONSENT_REQUIRED:
+      "送信内容とデータの取り扱いを確認して、確認欄にチェックしてください。",
+    AI_FIELD_SOURCES_MISSING:
+      "選んだ各分野の知識を、少なくとも1件ずつ選んでください。",
+    AI_INSUFFICIENT_CONSENTED_SOURCES:
+      "最近の関連知識の中に、投稿者がAI利用に同意した知識が2件以上ありません。元知識を自分で選ぶか、知識を募集してください。",
+    AI_FREE_QUOTA_EXHAUSTED:
+      "Geminiの無料枠に達しました。時間をおいて再度お試しください。課金へ切り替えません。",
+    AI_MODEL_UNAVAILABLE:
+      "設定したAIモデルを利用できません。運営にモデル設定の確認を依頼してください。",
+    AI_PROVIDER_REQUEST_REJECTED:
+      "AIへの送信を受け付けてもらえませんでした。手動研究を利用するか、運営へお問い合わせください。",
+    AI_DAILY_LIMIT: "今日のAI利用上限に達しました。手動研究を利用できます。",
+    AI_BUSY: "AIが処理中です。少し待ってからお試しください。",
+    AI_SENSITIVE_SOURCE:
+      "連絡先や秘密情報と思われる内容を含むため、AIへ送信できません。",
+    AI_SOURCES_CHANGED:
+      "元知識が更新・取り下げされました。選び直してください。",
+    AI_INVALID_CITATION:
+      "AIの出典を確認できなかったため、分析を採用しませんでした。",
+    SAVED_METRICS_NOT_READY:
+      "保存数の集計準備中です。他の表示順を選んでください。",
+
+    IDENTITY_REVIEW_REQUIRED:
+      "Passportの紐付けを確認できないため、運営による確認が必要です。回答・報酬は保留になります。",
+    SELF_ANSWER: "自分と同じPassportの募集には回答・採用できません。",
+    ANSWER_PUBLICATION_CONSENT_REQUIRED:
+      "回答を公開する前に、内容と公開範囲の確認にチェックしてください。",
+    ANSWER_ALREADY_POSTED:
+      "この回答からの経験知は作成済みです。作成済みの投稿を編集してください。",
+    ARCHIVED_NOTE_RESTORE_REQUIRED:
+      "保管したノートは復元してから編集できます。",
     READER_PLAN_REQUIRED:
       "見学では新着20件を読めます。続きの知識は既存のEmu light以上で利用できます。",
     LAUNCH_HOLD: "公開準備中です。保存・投稿はまだ利用できません。",
@@ -127,7 +166,9 @@
       method,
       headers: h,
       body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(
+        ["/ai/analyze", "/admin/semantic-index"].includes(path) ? 75000 : 20000,
+      ),
     });
     if (path === "/config" && r.status === 404)
       return { enabled: false, reason: "LAUNCH_HOLD", aiAvailable: false };
@@ -135,6 +176,7 @@
     if (!r.ok)
       throw Object.assign(new Error(data.error || "SERVICE_UNAVAILABLE"), {
         status: r.status,
+        retryAfterMs: Number(data.retryAfterMs) || 0,
       });
     return data;
   }
@@ -169,7 +211,9 @@
       await action();
     } catch (e) {
       status(
-        messages[e.message] ||
+        (e.message === "RATE_LIMITED" && e.retryAfterMs
+          ? `操作が続いています。${Math.ceil(e.retryAfterMs / 1000)}秒ほど待ってから、もう一度お試しください。`
+          : messages[e.message]) ||
           "操作を完了できませんでした。入力内容を確認して、もう一度お試しください。",
         true,
       );
@@ -189,6 +233,7 @@
   }
   function facetUI(target, value = {}, include = Object.keys(axes)) {
     $(target).innerHTML = include
+      .filter((axis) => axis !== "job" || (value.job || []).length > 0)
       .map((axis) => {
         const terms = state.terms.filter(
           (t) =>
@@ -228,8 +273,21 @@
   function date(v) {
     return v ? new Date(v).toLocaleDateString("ja-JP") : "記録なし";
   }
+  function verificationLabel(p) {
+    const lab = p.knowledgeLab || {},
+      proof = lab.thirdPartyConfirmation;
+    if (proof && proof.confirmedRevision === lab.revision)
+      return "一部事項を運営が確認（記録あり）";
+    return (
+      {
+        "tested-by-author": "投稿者の結果報告（自己申告）",
+        "in-progress": "実践中（自己申告）",
+        "needs-update": "情報更新が必要",
+      }[lab.verification] || "未検証"
+    );
+  }
   function card(p, choose = false) {
-    return `<article class="card"><div>${p.knowledgeLab?.featured ? '<span class="badge">運営の注目知識</span>' : ""}${badges(p)}</div><h3>${esc(p.title)}</h3><p>${esc(p.body).slice(0, 160)}${p.body?.length > 160 ? "…" : ""}</p><small>${esc(p.displayName)}・更新 ${date(p.updatedAt)}${p.knowledgeLab ? "・本人の経験（自己申告）" : ""}</small><div class="actions"><button type="button" data-post="${esc(p.id)}">知識を読む</button><button type="button" data-source="${esc(p.id)}">${state.selected.has(p.id) ? "研究に選択済み" : "研究に使う"}</button>${p.editable && p.visibility !== "archived" ? `<button type="button" data-edit="${esc(p.id)}">編集</button>` : ""}</div></article>`;
+    return `<article class="card"><div>${p.knowledgeLab?.featured ? '<span class="badge">運営の注目知識</span>' : ""}${badges(p)}<span class="badge">${esc(verificationLabel(p))}</span></div><h3>${esc(p.title)}</h3><p>${esc(p.body).slice(0, 160)}${p.body?.length > 160 ? "…" : ""}</p>${p.searchEvidence?.method === "meaning" ? `<p class="hint">意味の近さ ${esc(p.searchEvidence.similarity)}（モデル ${esc(p.searchEvidence.model)}）。本文「${esc(p.searchEvidence.excerpt)}」を参照。事実や信頼性の点数ではありません。</p>` : ""}<small>${esc(p.displayName)}・更新 ${date(p.updatedAt)}${p.knowledgeLab?.quality ? "・" + esc(p.knowledgeLab.quality) : ""}</small>${p.updatedAt && Date.now() - p.updatedAt > 365 * 86400000 ? '<p class="hint">最終更新から1年以上経っています。現在の制度・状況と照らして確認してください。</p>' : ""}<div class="actions"><button type="button" data-post="${esc(p.id)}">知識を読む</button><button type="button" data-source="${esc(p.id)}">${state.selected.has(p.id) ? "研究に選択済み" : "研究に使う"}</button>${p.editable && p.visibility !== "archived" ? `<button type="button" data-edit="${esc(p.id)}">編集</button>` : ""}</div></article>`;
   }
   function bindCards(target, posts) {
     posts.forEach(
@@ -266,9 +324,23 @@
   function conditions() {
     const params = new URLSearchParams();
     if ($("#query").value.trim()) params.set("q", $("#query").value.trim());
-    params.set("sort", $("#sort").value);
+    params.set("mode", $("#searchMode").value);
+    params.set(
+      "sort",
+      $("#searchMode").value === "semantic" ? "relevance" : $("#sort").value,
+    );
+    for (const key of [
+      "keywordOp",
+      "match",
+      "facetOp",
+      "withinAxis",
+      "exclude",
+    ])
+      if ($("#" + key).value) params.set(key, $("#" + key).value);
     for (const [axis, values] of Object.entries(facetValue("#searchFacets")))
       if (values.length) params.set(axis, values.join(","));
+    for (const [axis, values] of Object.entries(facetValue("#excludeFacets")))
+      if (values.length) params.set("exclude_" + axis, values.join(","));
     return params;
   }
   function sharedURL() {
@@ -278,6 +350,15 @@
   }
   async function search(more = false) {
     const p = conditions();
+    if (p.get("mode") === "semantic") {
+      if (!$("#semanticConsent").checked) {
+        status(
+          "検索文をGeminiへ送ることを確認し、確認欄を選んでから検索してください。",
+        );
+        return;
+      }
+      p.set("externalAIConsent", "true");
+    }
     if (more && state.cursors.search) p.set("cursor", state.cursors.search);
     const data = await api("/search?" + p, { optional: true });
     if (!more) $("#results").innerHTML = "";
@@ -333,7 +414,9 @@
     if (name === "admin" && state.me?.owner) await adminSummary();
   }
   async function detail(postId) {
-    const p = await api("/posts/" + postId, { optional: true }),
+    const p = await api("/posts/" + postId + "?intent=view", {
+        optional: true,
+      }),
       lab = p.knowledgeLab || {};
     $("#detailBody").innerHTML =
       `<h2 id="detailTitle">${esc(p.title)}</h2><p>${esc(p.displayName)}・更新 ${date(p.updatedAt)}</p>${badges(p)}<p class="hint">${esc(lab.quality || "投稿者が届けた知識")} ${lab.verification === "tested-by-author" ? "／投稿者が試した結果（自己申告）" : ""}</p>${p.updatedAt > 0 && Date.now() - p.updatedAt > 180 * 86400000 ? '<p class="notice">更新から6か月以上経過しています。制度・環境・条件が変わっている可能性があります。</p>' : ""}<div class="body">${esc(p.body)}</div>${[
@@ -352,6 +435,31 @@
           "",
         )}<p class="hint">医療・法律・金融などの内容は個人の経験であり、専門的な助言や結果を保証するものではありません。出典の有無と正しさの検証は別です。</p>${lab.sourceAnswer ? `<p class="hint">元募集 ${esc(lab.sourceAnswer.requestId)}・元回答 ${esc(lab.sourceAnswer.answerId)}</p><button type="button" id="answerSource">元の募集・回答を見る</button>` : ""}<div class="actions"><button type="button" id="saveKnowledge">マイライブラリーに保存</button><button type="button" id="unsaveKnowledge">保存を外す</button><button type="button" id="useKnowledge">研究に使う</button>${p.editable ? '<button type="button" id="editKnowledge">編集</button><button type="button" id="withdrawKnowledge">公開を取り下げる</button><button type="button" id="archiveKnowledge">削除して非公開で保管</button><button type="button" id="restoreKnowledge" hidden>下書きに復元</button><button type="button" id="postHistory">編集履歴</button>' : ""}${p.authorSchoolParkId ? '<button type="button" id="openWriter">書き手を見る</button>' : ""}<button type="button" id="goodKnowledge">役に立った</button><button type="button" id="changeKnowledge">改善案を届ける</button><button type="button" id="proposeKnowledge">議題にする</button><button type="button" id="discussKnowledge">議論へ</button></div><div class="report-controls"><label for="reportReason">通報する理由</label><textarea id="reportReason" maxlength="1500"></textarea><button type="button" id="reportKnowledge">運営へ通報</button></div>`;
     $("#detailDialog").showModal();
+    if (lab.thirdPartyConfirmation) {
+      const proof = lab.thirdPartyConfirmation;
+      $("#detailBody").insertAdjacentHTML(
+        "beforeend",
+        `<p class="notice">第三者が確認した範囲：${esc(proof.summary)}・${date(proof.atMs)}・確認者 ${esc(proof.reviewerSchoolParkId)}。内容全体の正しさや専門資格を保証するものではありません。</p>`,
+      );
+    }
+    if (p.editable || state.me?.owner) {
+      $("#detailBody").insertAdjacentHTML(
+        "beforeend",
+        '<button type="button" id="verificationHistory">確認の履歴（本人・運営のみ）</button><div id="verificationRecords"></div>',
+      );
+      bindAsync($("#verificationHistory"), async () => {
+        const data = await api("/posts/" + p.id + "/verification", {
+          auth: true,
+        });
+        $("#verificationRecords").innerHTML =
+          data.items
+            .map(
+              (v) =>
+                `<details><summary>${date(v.atMs)}・版 ${v.confirmedRevision}・確認者 ${esc(v.reviewerSchoolParkId)}</summary><p>${esc(v.summary)}</p><p class="body">${esc(v.evidence)}</p></details>`,
+            )
+            .join("") || "<p>確認記録はありません。</p>";
+      });
+    }
     bindAsync($("#saveKnowledge"), async () => {
       await api("/saved/" + p.id, {
         method: "PUT",
@@ -377,8 +485,11 @@
       await view("research");
     });
     if (p.editable) {
-      if ($("#answerSource")) bindAsync($("#answerSource"),()=>showAnswers(lab.sourceAnswer.requestId));
-    if (p.visibility === "archived") {
+      if ($("#answerSource"))
+        bindAsync($("#answerSource"), () =>
+          showAnswers(lab.sourceAnswer.requestId),
+        );
+      if (p.visibility === "archived") {
         $("#editKnowledge").hidden = true;
         $("#withdrawKnowledge").hidden = true;
         $("#archiveKnowledge").hidden = true;
@@ -475,10 +586,14 @@
   }
   function edit(p = null) {
     state.post = p;
+    state.originResearch = null;
+    $("#researchOrigin").hidden = true;
     $("#postForm").reset();
     state.originAnswer = p?.knowledgeLab?.sourceAnswer || null;
     $("#answerOrigin").hidden = !state.originAnswer;
-    $("#answerOriginText").textContent = state.originAnswer ? '元の募集・回答への参照を保持します。内容と公開範囲を確認してください。' : '';
+    $("#answerOriginText").textContent = state.originAnswer
+      ? "元の募集・回答への参照を保持します。内容と公開範囲を確認してください。"
+      : "";
     $("#editorTitle").textContent = p ? "経験知を編集する" : "経験知を届ける";
     $("#postTitle").value = p?.title || "";
     $("#postBody").value = p?.body || "";
@@ -487,6 +602,7 @@
       : p?.tags || "";
     $("#postVisibility").value = p?.visibility || "draft";
     const lab = p?.knowledgeLab || {};
+    $("#postAIConsent").checked = lab.aiUseConsent?.allowed === true;
     for (const key of [
       "period",
       "happened",
@@ -497,7 +613,7 @@
     ])
       $("#post" + key[0].toUpperCase() + key.slice(1)).value =
         lab[key] || (key === "verification" ? "self-reported" : "");
-    facetUI("#postFacets", lab.facets);
+    facetUI("#postFacets", lab.facets || p?.facets || {});
     $("#editorDialog").showModal();
     $("#postTitle").focus();
   }
@@ -516,9 +632,23 @@
           title: $("#postTitle").value,
           body: $("#postBody").value,
           tags: $("#postTags").value,
-          ...(state.originAnswer ? {answerId:state.originAnswer.answerId,answerPublicationConsent:$("#answerPublicationConsent").checked} : {}),
+          ...(state.originResearch
+            ? {
+                sourceNoteId: state.originResearch.id,
+                researchPublicationConsent: $("#researchPublicationConsent")
+                  .checked,
+              }
+            : {}),
+          ...(state.originAnswer
+            ? {
+                answerId: state.originAnswer.answerId,
+                answerPublicationConsent: $("#answerPublicationConsent")
+                  .checked,
+              }
+            : {}),
           facets: facetValue("#postFacets"),
           visibility: $("#postVisibility").value,
+          aiUseConsent: $("#postAIConsent").checked,
         };
       for (const key of [
         "period",
@@ -607,6 +737,143 @@
       `<section class="card"><h3>比較：元の知識と、あなたの問い</h3><p>分類の共通点・違いを実データから表示しています。文章の意味をAIで分析した結果ではありません。</p><p><b>共通の分類：</b>${esc(Object.values(data.common).map(names).filter(Boolean).join("／") || "共通する分類は未登録です。")}</p><p><b>異なる分類：</b>${esc(Object.values(data.differences).map(names).filter(Boolean).join("／"))}</p>${data.sources.map((p) => `<div class="source"><a href="/knowledge-lab.html?post=${encodeURIComponent(p.id)}" target="_blank" rel="noopener">${esc(p.title)}</a><p>${esc(p.body.slice(0, 300))}</p><small>元知識・更新 ${date(p.updatedAt)} ${esc(p.displayName)}</small></div>`).join("")}<h3>考えるための問い（定型）</h3>${data.prompts.map((p) => `<p>${esc(p)}</p>`).join("")}<p class="hint">この下に書く問い・仮説は、元投稿の事実や検証済みの結果とは別です。</p></section>`;
     status("比較を表示しました。あなたの問いと仮説を記入してください。");
   });
+  const aiLabels = {
+    summaries: "各経験知の要点",
+    commonalities: "共通点",
+    differences: "相違点",
+    connections: "意外なつながり",
+    applications: "応用",
+    questions: "新しい問い",
+    hypotheses: "仮説（未検証）",
+    practice: "小さく試す実践案",
+    verification: "確かめる方法",
+    cautions: "注意点",
+    unknowns: "不明な点",
+  };
+  function renderAI(run) {
+    const references = (run.sources || run.aiSources || [])
+      .map(
+        (s) =>
+          `<p><a href="/knowledge-lab.html?post=${encodeURIComponent(s.id)}" target="_blank" rel="noopener">${esc(s.title)}</a>／${esc(s.displayName)}／参照 ${date(s.atMs)}・参照時は公開${s.truncated ? `・本文の先頭${s.inputCharacters}文字を分析（全${s.totalCharacters}文字）` : ""}</p>`,
+      )
+      .join("");
+    return (
+      `<h3>AIによる仮説・未検証</h3><p>モデル ${esc(run.model || run.aiModel)}。内容と出典を確認し、人が編集・検証してください。</p>${references}` +
+      Object.entries(run.analysis || run.aiAnalysis || {})
+        .map(
+          ([key, claims]) =>
+            `<h4>${esc(aiLabels[key] || key)}</h4>${claims.length ? claims.map((c) => `<p>${esc(c.text)}</p>${c.citations.map((q) => `<blockquote>${esc(q.quote)}<br><a href="/knowledge-lab.html?post=${encodeURIComponent(q.sourceId)}" target="_blank" rel="noopener">元の知識を読む</a></blockquote>`).join("")}`).join("") : "<p>根拠不足・提案なし</p>"}`,
+        )
+        .join("")
+    );
+  }
+  async function refreshAI() {
+    const s = await api("/ai/status");
+    $("#aiAvailability").textContent = s.available
+      ? "実際の公開知識をGeminiで分析します。結果は未検証の仮説です。"
+      : "AIは現在停止しています。手動の比較・研究ノートは利用できます。";
+    $("#analyzeSources").disabled = !s.available;
+    $("#reanalyzeSources").disabled = !s.available;
+    $('#searchMode option[value="semantic"]').disabled = !s.semanticAvailable;
+    $("#aiAdminStatus").textContent =
+      `キー・無料枠確認：${s.configured ? "設定あり" : "未設定"}／提供条件確認：${s.clientEligibilityConfirmed ? "設定あり" : "未確認（対象年齢・地域等のGoogle API条件の確認が必要）"}／Renderスイッチ：${s.environmentEnabled ? "有効" : "停止"}／運営停止：${s.stopped ? "停止" : "解除"}／モデル：${s.model || "未選択"}`;
+  }
+  async function analyzeSources(forceRefresh = false) {
+    const b = $("#analyzeSources");
+    b.disabled = true;
+    try {
+      const run = await api("/ai/analyze", {
+        method: "POST",
+        auth: true,
+        body: {
+          fields: selectedFields(),
+          sourceIds: [...state.selected.keys()],
+          externalAIConsent: $("#aiRequestConsent").checked,
+          ...(forceRefresh
+            ? {
+                forceRefresh: true,
+                key: keyFor("ai-refresh", { at: Date.now() }),
+              }
+            : {}),
+        },
+      });
+      state.aiRun = run;
+      state.selected.clear();
+      for (const source of run.sources)
+        state.selected.set(source.id, { id: source.id, title: source.title });
+      selected();
+      $("#detachAI").hidden = false;
+      $("#aiResult").hidden = false;
+      $("#aiResult").innerHTML = renderAI(run);
+      const asText = (k) =>
+        (run.analysis[k] || []).map((c) => c.text).join("\n");
+      if (!$("#noteTitle").value)
+        $("#noteTitle").value = names(selectedFields()) + "の掛け合わせ";
+      $("#noteQuestion").value = asText("questions").slice(0, 2000);
+      $("#noteHypothesis").value = asText("hypotheses").slice(0, 3000);
+      $("#notePlan").value = [
+        asText("practice"),
+        asText("verification"),
+        asText("cautions"),
+      ]
+        .join("\n\n")
+        .slice(0, 3000);
+      status(
+        "分析を表示しました。内容と出典を確認してから、研究ノートとして保存できます。",
+      );
+    } finally {
+      await refreshAI();
+    }
+  }
+  bindAsync($("#analyzeSources"), () => analyzeSources());
+  bindAsync($("#reanalyzeSources"), () => analyzeSources(true));
+  bindAsync($("#aiLoadModels"), async () => {
+    const models = await api("/admin/ai/models", { auth: true });
+    $("#aiModel").innerHTML =
+      '<option value="">選択してください</option>' +
+      models
+        .filter((m) => m.methods.includes("generateContent"))
+        .map((m) => `<option value="${esc(m.id)}">${esc(m.id)}</option>`)
+        .join("");
+    $("#aiEmbeddingModel").innerHTML =
+      '<option value="">停止する</option>' +
+      models
+        .filter(
+          (m) =>
+            m.id === "gemini-embedding-001" &&
+            m.methods.includes("embedContent"),
+        )
+        .map((m) => `<option value="${esc(m.id)}">${esc(m.id)}</option>`)
+        .join("");
+    status(
+      "実APIのモデル一覧を取得しました。無料枠対象かはAI Studioでも確認してください。",
+    );
+  });
+  $("#aiSettingsForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    run(async () => {
+      await api("/admin/ai", {
+        method: "PUT",
+        auth: true,
+        body: {
+          model: $("#aiModel").value,
+          embeddingModel: $("#aiEmbeddingModel").value,
+          freeTierAttested: $("#aiFreeConfirmed").checked,
+        },
+      });
+      await refreshAI();
+      status("モデルを設定しました。Renderのスイッチと停止状態に従います。");
+    });
+  });
+  bindAsync($("#aiStop"), async () => {
+    await api("/admin/ai", {
+      method: "PUT",
+      auth: true,
+      body: { stopped: true },
+    });
+    await refreshAI();
+    status("AIと意味検索を停止しました。");
+  });
   $("#noteForm").addEventListener("submit", (e) => {
     e.preventDefault();
     run(async () => {
@@ -616,6 +883,7 @@
           ? { id: state.note.id, revision: state.note.revision }
           : {}),
         title: $("#noteTitle").value,
+        aiRunId: state.aiRun?.id || null,
         sourceIds: [...state.selected.keys()],
         fields,
         question: $("#noteQuestion").value,
@@ -644,14 +912,25 @@
   });
   $("#newNote").onclick = () => {
     state.note = null;
+    state.aiRun = null;
+    $("#detachAI").hidden = true;
+    $("#aiResult").hidden = true;
     $("#noteForm").reset();
     state.selected.clear();
     selected();
     $("#comparison").hidden = true;
     status("新しい研究ノートを始めます。");
   };
+  $("#detachAI").onclick = () => {
+    state.aiRun = null;
+    $("#detachAI").hidden = true;
+    $("#aiResult").hidden = true;
+    status(
+      "手動の研究として続けます。これまで保存したAIの出典と分析は更新履歴に残ります。元知識を確認して選び直してください。",
+    );
+  };
   function noteCard(n) {
-    return `<article class="card"><span class="badge">${n.result ? "投稿者による実践結果" : "未検証の仮説"}・手動で記入</span><h3>${esc(n.title)}</h3><p>${esc(n.question || n.hypothesis).slice(0, 150)}</p><small>更新 ${date(n.updatedAtMs)}</small><div class="actions"><button type="button" data-note="${esc(n.id)}">研究を読む・続ける</button></div></article>`;
+    return `<article class="card"><span class="badge">${n.result ? "投稿者による実践結果" : "未検証の仮説"}・${n.aiRunId ? "AIによる仮説・人が編集" : "手動で記入"}</span><h3>${esc(n.title)}</h3><p>${esc(n.question || n.hypothesis).slice(0, 150)}</p><small>更新 ${date(n.updatedAtMs)}</small><div class="actions"><button type="button" data-note="${esc(n.id)}">研究を読む・続ける</button></div></article>`;
   }
   function bindNotes(target) {
     $(target)
@@ -682,7 +961,7 @@
   async function showNote(noteId) {
     const n = await api("/notes/" + noteId, { optional: true });
     $("#detailBody").innerHTML =
-      `<h2 id="detailTitle">${esc(n.title)}</h2><p>${esc(names(n.fields))}・更新 ${date(n.updatedAtMs)}・版 ${n.revision}</p>${n.archived ? '<p class="notice">保管済み・他の人には表示されません。復元すると自分用のノートとして編集できます。</p>' : ""}<span class="badge">手動で記入した${n.result ? "実践の記録（自己申告）" : "未検証の仮説"}</span>${[
+      `<h2 id="detailTitle">${esc(n.title)}</h2><p>${esc(names(n.fields))}・更新 ${date(n.updatedAtMs)}・版 ${n.revision}</p>${n.archived ? '<p class="notice">保管済み・他の人には表示されません。復元すると自分用のノートとして編集できます。</p>' : ""}<span class="badge">${n.aiRunId ? "AIの仮説を人が編集した" : "手動で記入した"}${n.result ? "実践の記録（自己申告）" : "未検証の仮説"}</span>${[
         ["question", "問い"],
         ["hypothesis", "仮説（未検証）"],
         ["plan", "実践案・注意点"],
@@ -695,25 +974,50 @@
         .join(
           "",
         )}<h3>元になった知識</h3>${n.sourceIds.map((id) => `<p><button type="button" data-post="${esc(id)}">元知識 ${esc(id)} を読む</button></p>`).join("")}<div class="actions">${state.me?.schoolParkId === n.authorSchoolParkId && !n.archived ? '<button type="button" id="continueNote">結果を追記・編集</button><button type="button" id="archiveNote">ノートを非公開で保管</button><button type="button" id="publishExperience">試した結果を経験知として書く</button>' : ""}${n.archived && state.me?.schoolParkId === n.authorSchoolParkId ? '<button type="button" id="restoreNote">自分用に復元</button>' : ""}${state.me?.schoolParkId === n.authorSchoolParkId || state.me?.owner ? '<button type="button" id="noteHistory">更新履歴</button>' : ""}<button type="button" id="discussNote" ${n.archived ? "disabled" : ""}>既存の議論へ</button><button type="button" id="practiceNote" ${n.archived ? "disabled" : ""}>Quest・Guildで実践する</button></div><div class="report-controls"><label for="noteReport">通報理由</label><textarea id="noteReport" maxlength="1500"></textarea><button type="button" id="reportNote">運営へ通報</button></div>`;
+    if (n.aiAnalysis)
+      $("#detailBody").insertAdjacentHTML("beforeend", renderAI(n));
+    $("#detailBody").insertAdjacentHTML(
+      "beforeend",
+      '<h3>この研究から生まれた知識</h3><div id="derivedKnowledge"></div>',
+    );
+    const derived = await api("/notes/" + n.id + "/derived", {
+      optional: true,
+    });
+    $("#derivedKnowledge").innerHTML =
+      derived.items.map((p) => card(p)).join("") ||
+      "<p>まだ派生した公開知識はありません。</p>";
+    bindCards("#derivedKnowledge", derived.items);
     $("#detailDialog").showModal();
     $("#detailBody")
       .querySelectorAll("[data-post]")
-      .forEach((b) =>
-        bindAsync(b, async () => {
-          $("#detailDialog").close();
-          await detail(b.dataset.post);
-        }),
+      .forEach(
+        (b) =>
+          !b.closest("#derivedKnowledge") &&
+          bindAsync(b, async () => {
+            $("#detailDialog").close();
+            await detail(b.dataset.post);
+          }),
       );
-    if ($("#restoreNote")) bindAsync($("#restoreNote"), async () => {
-      await api("/notes/"+n.id+"/restore",{method:"POST",auth:true,body:{revision:n.revision}});
-      state.loadedViews.mine=0;
-      await showNote(n.id);
-      status("自分用に復元しました。公開範囲は自分で選び直せます。");
-    });
-    if ($("#noteHistory")) bindAsync($("#noteHistory"),()=>showNoteHistory(n.id));
+    if ($("#restoreNote"))
+      bindAsync($("#restoreNote"), async () => {
+        await api("/notes/" + n.id + "/restore", {
+          method: "POST",
+          auth: true,
+          body: { revision: n.revision },
+        });
+        state.loadedViews.mine = 0;
+        await showNote(n.id);
+        status("自分用に復元しました。公開範囲は自分で選び直せます。");
+      });
+    if ($("#noteHistory"))
+      bindAsync($("#noteHistory"), () => showNoteHistory(n.id));
     if ($("#continueNote")) {
       bindAsync($("#continueNote"), async () => {
         state.note = n;
+        state.aiRun = n.aiRunId ? { id: n.aiRunId } : null;
+        $("#detachAI").hidden = !state.aiRun;
+        $("#aiResult").hidden = !n.aiAnalysis;
+        $("#aiResult").innerHTML = n.aiAnalysis ? renderAI(n) : "";
         state.selected.clear();
         for (const id of n.sourceIds) {
           try {
@@ -744,19 +1048,23 @@
           body: { revision: n.revision },
         });
         $("#detailDialog").close();
-        state.loadedViews.mine=0;
-        if(state.view === "mine") await loadMine();
+        state.loadedViews.mine = 0;
+        if (state.view === "mine") await loadMine();
         status("研究を非公開で保管しました。");
       });
       $("#publishExperience").onclick = () => {
         $("#detailDialog").close();
         edit();
+        state.originResearch = n;
+        $("#researchOrigin").hidden = false;
         $("#postTitle").value = n.title;
         $("#postBody").value = [
           n.result,
           n.plan,
-          "元の研究: " +
-            new URL("/knowledge-lab.html?note=" + n.id, location.origin),
+          n.visibility === "public"
+            ? "元の研究: " +
+              new URL("/knowledge-lab.html?note=" + n.id, location.origin)
+            : "",
         ]
           .filter(Boolean)
           .join("\n\n");
@@ -782,52 +1090,144 @@
     });
   }
   async function showNoteHistory(noteId, cursor = null) {
-    const data=await api("/notes/"+noteId+"/history"+(cursor?"?cursor="+encodeURIComponent(cursor):""),{auth:true});
-    function version(v){return `<p>版 ${v.revision}・${esc(v.visibility)}${v.archived ? "・保管済み" : ""}</p>`+["title","question","hypothesis","plan","result"].map(k=>`<p class="body"><b>${esc({title:"題名",question:"問い",hypothesis:"仮説",plan:"実践案",result:"結果"}[k])}</b>：${esc(v[k]||"未記入")}</p>`).join("");}
-    const rows=data.items.map(h=>`<article class="card"><h3>更新 ${date(h.changedAtMs)}・更新者 ${esc(h.actorSchoolParkId||"以前の記録：更新者未記録")}</h3><details><summary>変更前</summary>${version(h.previous)}</details>${h.next?`<details><summary>変更後</summary>${version(h.next)}</details>`:""}</article>`).join("");
-    if(!cursor) $("#detailBody").innerHTML=`<h2 id="detailTitle">研究ノートの更新履歴</h2><p>本人と運営だけが確認できます。以前の非公開内容を他の人には表示しません。</p><button type="button" id="historyBack">ノートへ戻る</button><details><summary>現在の版</summary>${version(data.current)}</details><div id="historyRows"></div><button type="button" id="historyMore">以前の記録をさらに確認</button>`;
-    $("#historyRows").insertAdjacentHTML("beforeend",rows||"<p>更新履歴はまだありません。</p>");
-    $("#historyBack").onclick=()=>run(()=>showNote(noteId));
-    $("#historyMore").hidden=!data.next;
-    $("#historyMore").onclick=()=>run(()=>showNoteHistory(noteId,data.next));
+    const data = await api(
+      "/notes/" +
+        noteId +
+        "/history" +
+        (cursor ? "?cursor=" + encodeURIComponent(cursor) : ""),
+      { auth: true },
+    );
+    function version(v) {
+      return (
+        `<p>版 ${v.revision}・${esc(v.visibility)}${v.archived ? "・保管済み" : ""}</p>` +
+        ["title", "question", "hypothesis", "plan", "result"]
+          .map(
+            (k) =>
+              `<p class="body"><b>${esc({ title: "題名", question: "問い", hypothesis: "仮説", plan: "実践案", result: "結果" }[k])}</b>：${esc(v[k] || "未記入")}</p>`,
+          )
+          .join("") +
+        (v.aiAnalysis
+          ? `<details><summary>AIの生成時の記録・出典（未検証）</summary>${renderAI(v)}</details>`
+          : "")
+      );
+    }
+    const rows = data.items
+      .map(
+        (h) =>
+          `<article class="card"><h3>更新 ${date(h.changedAtMs)}・更新者 ${esc(h.actorSchoolParkId || "以前の記録：更新者未記録")}</h3><details><summary>変更前</summary>${version(h.previous)}</details>${h.next ? `<details><summary>変更後</summary>${version(h.next)}</details>` : ""}</article>`,
+      )
+      .join("");
+    if (!cursor)
+      $("#detailBody").innerHTML =
+        `<h2 id="detailTitle">研究ノートの更新履歴</h2><p>本人と運営だけが確認できます。以前の非公開内容を他の人には表示しません。</p><button type="button" id="historyBack">ノートへ戻る</button><details><summary>現在の版</summary>${version(data.current)}</details><div id="historyRows"></div><button type="button" id="historyMore">以前の記録をさらに確認</button>`;
+    $("#historyRows").insertAdjacentHTML(
+      "beforeend",
+      rows || "<p>更新履歴はまだありません。</p>",
+    );
+    $("#historyBack").onclick = () => run(() => showNote(noteId));
+    $("#historyMore").hidden = !data.next;
+    $("#historyMore").onclick = () =>
+      run(() => showNoteHistory(noteId, data.next));
   }
   async function showAnswers(requestId, cursor = null) {
-    const data=await api("/requests/"+requestId+"/answers"+(cursor?"?cursor="+encodeURIComponent(cursor):""),{auth:true});
-    if(!cursor) $("#detailBody").innerHTML='<h2 id="detailTitle">回答から知識を届ける</h2><p>あなた自身の回答を確認し、経験知フォームへ引き継げます。回答だけで自動公開されることはありません。</p><div id="answerRows"></div><button type="button" id="answerMore">さらに表示</button>';
-    $("#answerRows").insertAdjacentHTML("beforeend",data.items.map(a=>`<article class="card"><p class="body">${esc(a.experience)}</p><p class="body">${esc(a.knowledge)}</p><p class="body">${esc(a.limits)}</p>${a.canPublish?`<button type="button" data-publish-answer="${esc(a.id)}">この回答を知識として届ける</button>`:"<p>公開への引き継ぎは回答者本人が行います。</p>"}</article>`).join("")||"<p>まだ回答がありません。</p>");
-    $("#answerMore").hidden=!data.next;$("#answerMore").onclick=()=>run(()=>showAnswers(requestId,data.next));
-    $("#answerRows").querySelectorAll("[data-publish-answer]").forEach(b=>bindAsync(b,async()=>{
-      const d=await api("/answers/"+b.dataset.publishAnswer+"/draft",{auth:true});
-      $("#detailDialog").close();
-      if(d.existingPostId){await detail(d.existingPostId);status("この回答からの経験知は作成済みです。編集または復元して続けてください。");return;}
-      edit();state.originAnswer={answerId:d.answerId,requestId:d.requestId};
-      $("#answerOrigin").hidden=false;$("#answerOriginText").textContent="元募集 "+d.requestId+"・元回答 "+d.answerId+"。内容と公開範囲を確認してください。";
-      $("#postTitle").value=d.title;$("#postBody").value=d.body;$("#postHappened").value=d.happened;$("#postAdvice").value=d.advice;facetUI("#postFacets",d.facets);
-    }));
-    if(!$("#detailDialog").open) $("#detailDialog").showModal();
+    const data = await api(
+      "/requests/" +
+        requestId +
+        "/answers" +
+        (cursor ? "?cursor=" + encodeURIComponent(cursor) : ""),
+      { auth: true },
+    );
+    if (!cursor)
+      $("#detailBody").innerHTML =
+        '<h2 id="detailTitle">回答から知識を届ける</h2><p>あなた自身の回答を確認し、経験知フォームへ引き継げます。回答だけで自動公開されることはありません。</p><div id="answerRows"></div><button type="button" id="answerMore">さらに表示</button>';
+    $("#answerRows").insertAdjacentHTML(
+      "beforeend",
+      data.items
+        .map(
+          (a) =>
+            `<article class="card"><p class="body">${esc(a.experience)}</p><p class="body">${esc(a.knowledge)}</p><p class="body">${esc(a.limits)}</p>${a.canPublish ? `<button type="button" data-publish-answer="${esc(a.id)}">この回答を知識として届ける</button>` : "<p>公開への引き継ぎは回答者本人が行います。</p>"}</article>`,
+        )
+        .join("") || "<p>まだ回答がありません。</p>",
+    );
+    $("#answerMore").hidden = !data.next;
+    $("#answerMore").onclick = () =>
+      run(() => showAnswers(requestId, data.next));
+    $("#answerRows")
+      .querySelectorAll("[data-publish-answer]")
+      .forEach((b) =>
+        bindAsync(b, async () => {
+          const d = await api(
+            "/answers/" + b.dataset.publishAnswer + "/draft",
+            { auth: true },
+          );
+          $("#detailDialog").close();
+          if (d.existingPostId) {
+            await detail(d.existingPostId);
+            status(
+              "この回答からの経験知は作成済みです。編集または復元して続けてください。",
+            );
+            return;
+          }
+          edit();
+          state.originAnswer = { answerId: d.answerId, requestId: d.requestId };
+          $("#answerOrigin").hidden = false;
+          $("#answerOriginText").textContent =
+            "元募集 " +
+            d.requestId +
+            "・元回答 " +
+            d.answerId +
+            "。内容と公開範囲を確認してください。";
+          $("#postTitle").value = d.title;
+          $("#postBody").value = d.body;
+          $("#postHappened").value = d.happened;
+          $("#postAdvice").value = d.advice;
+          facetUI("#postFacets", d.facets);
+        }),
+      );
+    if (!$("#detailDialog").open) $("#detailDialog").showModal();
   }
   async function reviewRewards(more = false) {
-    const data=await api("/admin/reward-review"+(more && state.cursors.rewardReview ? "?cursor="+encodeURIComponent(state.cursors.rewardReview) : ""),{auth:true});
-    if(!more) $("#adminItems").innerHTML='<p>読み取りのみ。既存報酬の削除・回収・送金は行いません。</p>';
-    $("#adminItems").insertAdjacentHTML("beforeend",data.items.map(v=>`<article class="card"><p>${esc(v.id)}・${esc(v.status)}</p><p>${esc(v.identityCheck)}</p><small>募集 ${esc(v.requestId||"記録なし")}／回答 ${esc(v.answerId||"記録なし")}</small></article>`).join("")||"<p>確認対象の報酬はありません。</p>");
-    state.cursors.rewardReview=data.next;
-    $("#rewardReviewMore").hidden=!data.next;$("#adminMore").hidden=true;
+    const data = await api(
+      "/admin/reward-review" +
+        (more && state.cursors.rewardReview
+          ? "?cursor=" + encodeURIComponent(state.cursors.rewardReview)
+          : ""),
+      { auth: true },
+    );
+    if (!more)
+      $("#adminItems").innerHTML =
+        "<p>読み取りのみ。既存報酬の削除・回収・送金は行いません。</p>";
+    $("#adminItems").insertAdjacentHTML(
+      "beforeend",
+      data.items
+        .map(
+          (v) =>
+            `<article class="card"><p>${esc(v.id)}・${esc(v.status)}</p><p>${esc(v.identityCheck)}</p><small>募集 ${esc(v.requestId || "記録なし")}／回答 ${esc(v.answerId || "記録なし")}</small></article>`,
+        )
+        .join("") || "<p>確認対象の報酬はありません。</p>",
+    );
+    state.cursors.rewardReview = data.next;
+    $("#rewardReviewMore").hidden = !data.next;
+    $("#adminMore").hidden = true;
   }
-  bindAsync($("#reviewRewards"),()=>reviewRewards());
-  bindAsync($("#rewardReviewMore"),()=>reviewRewards(true));
+  bindAsync($("#reviewRewards"), () => reviewRewards());
+  bindAsync($("#rewardReviewMore"), () => reviewRewards(true));
   async function loadMine(more = false) {
-    const kind = state.mineKind, isNote = ["notes","archived-notes"].includes(kind);
+    const kind = state.mineKind,
+      isNote = ["notes", "archived-notes"].includes(kind);
     const params = new URLSearchParams();
-    if(kind === "archived-notes") params.set("archived","1");
-    if(more && state.cursors.mine) params.set("cursor",state.cursors.mine);
-    const data = await api("/me/"+(isNote ? "notes" : kind)+(params.size ? "?"+params : ""),{auth:true});
+    if (kind === "archived-notes") params.set("archived", "1");
+    if (more && state.cursors.mine) params.set("cursor", state.cursors.mine);
+    const data = await api(
+      "/me/" + (isNote ? "notes" : kind) + (params.size ? "?" + params : ""),
+      { auth: true },
+    );
     if (!more) $("#mineItems").innerHTML = "";
     $("#mineItems").insertAdjacentHTML(
       "beforeend",
-      (isNote
-        ? data.items.map(noteCard)
-        : data.items.map((p) => card(p))
-      ).join("") ||
+      (isNote ? data.items.map(noteCard) : data.items.map((p) => card(p))).join(
+        "",
+      ) ||
         (!more
           ? '<p class="card empty">まだ記録はありません。保存・投稿・研究をここから続けられます。</p>'
           : ""),
@@ -853,7 +1253,12 @@
     $("#writerIcon").value = w?.icon || "";
     $("#writerPublished").checked = !!w?.published;
     $("#writerConsent").checked = !!w?.consentVersion;
-    facetUI("#writerFacets", w?.facets, ["field", "job"]);
+    facetUI("#writerFacets", w?.facets, [
+      "field",
+      "industry",
+      "occupation",
+      "job",
+    ]);
   }
   async function saveWriter(privateOnly = false) {
     const body = {
@@ -912,7 +1317,7 @@
   async function showWriter(spid) {
     const w = await api("/writers/" + spid, { optional: true });
     $("#detailBody").innerHTML =
-      `<h2 id="detailTitle">${esc(w.displayName)}</h2><p class="body">${esc(w.bio)}</p><p>経験分野：${esc(names(w.facets?.field))}</p><p>業種・職業：${esc(names(w.facets?.job))}</p><p class="hint">経験・職歴・資格は自己申告です。認証済みの資格を示すものではありません。</p><p>SchoolPark ID：${esc(w.id)}</p><a href="/?lab=writer">Passport・星空へ（ログイン後）</a>`;
+      `<h2 id="detailTitle">${esc(w.displayName)}</h2><p class="body">${esc(w.bio)}</p><p>経験分野：${esc(names(w.facets?.field))}</p><p>業種：${esc(names(w.facets?.industry))}</p><p>職業：${esc(names(w.facets?.occupation))}</p>${w.facets?.job?.length ? `<p>以前の業種・職業分類：${esc(names(w.facets.job))}</p>` : ""}<p class="hint">経験・職歴・資格は自己申告です。認証済みの資格を示すものではありません。</p><p>SchoolPark ID：${esc(w.id)}</p><a href="/?lab=writer">Passport・星空へ（ログイン後）</a>`;
     $("#detailDialog").showModal();
     const contribution = await api("/writers/" + spid + "/contributions", {
       optional: true,
@@ -1040,7 +1445,9 @@
           (b.onclick = () =>
             integration("answers", { requestId: b.dataset.answers })),
       );
-    $("#requestItems").querySelectorAll("[data-lab-answers]").forEach(b=>bindAsync(b,()=>showAnswers(b.dataset.labAnswers)));
+    $("#requestItems")
+      .querySelectorAll("[data-lab-answers]")
+      .forEach((b) => bindAsync(b, () => showAnswers(b.dataset.labAnswers)));
     state.cursors.requests = data.next;
     $("#requestMore").hidden = !data.next;
   }
@@ -1083,6 +1490,9 @@
       reports: "通報（全状態）",
       private_posts: "非公開・取り下げ",
       search: "検索索引",
+      publicPosts: "公開投稿（visibility明記）",
+      answers: "知識募集の回答",
+      practiceResults: "結果を報告した研究",
     };
     $("#adminSummary").innerHTML = `<div class="metrics">${Object.entries(
       s.counts,
@@ -1092,13 +1502,79 @@
       .map(([id, n]) => `${esc(names([id]))}: ${n}`)
       .join(
         "／",
-      )}</p><h3>検索索引</h3><p>${esc(s.index?.state || "未作成")}・${s.index?.processed || 0}件・最終確認 ${date(s.index?.finishedAtMs)}</p><p class="hint">索引上限20,000件・64MiB。通常の表示は20件単位。AI利用費は発生しません。新しい報酬設定はありません。</p>`;
+      )}</p><h3>保存数の集計</h3><p>${esc(s.savedMetrics?.state || "未開始")}・${s.savedMetrics?.processed || 0}件確認済み</p><h3>検索索引</h3><p>${esc(s.index?.state || "未作成")}・${s.index?.processed || 0}件・最終確認 ${date(s.index?.finishedAtMs)}</p><p class="hint">索引上限20,000件・64MiB。通常の表示は20件単位。外部AIは無料プロジェクト確認・同意・運営スイッチが必要です。新しい報酬設定はありません。</p>`;
+    const rate = (v) =>
+      v?.denominator
+        ? `${Math.round(v.rate * 100)}%（${v.numerator}/${v.denominator}）`
+        : "データ未蓄積";
+    const analytics = s.analytics;
+    $("#adminSummary").insertAdjacentHTML(
+      "beforeend",
+      `<h3>利用と知識の循環（直近30日）</h3><p>検索 ${analytics?.totals.search || 0}回／0件率 ${rate(analytics?.zeroSearchRate)}／閲覧 ${analytics?.totals.view || 0}／保存操作 ${analytics?.totals.save || 0}／活動中の書き手 ${analytics?.activeWriters30 || 0}</p><p>登録→初投稿 ${rate(analytics?.registrationToFirstPost)}／投稿→閲覧 ${rate(analytics?.publicationToView)}／閲覧→研究 ${rate(analytics?.viewToResearch)}／研究→実践 ${rate(analytics?.researchToPractice)}／再投稿 ${rate(analytics?.repeatPosting)}／継続 ${rate(analytics?.writerRetention)}</p><p class="hint">${esc(analytics?.definition || "")}</p><h3>よく探される分野</h3><p>${
+        Object.entries(analytics?.fields || {})
+          .sort((a, b) => b[1] - a[1])
+          .map(([id, n]) => `${esc(names([id]))}：${n}回`)
+          .join("／") || "データ未蓄積"
+      }</p><h3>検索0件が発生した分野（閲覧可能範囲）</h3><p>${
+        Object.entries(analytics?.zeroFields || {})
+          .map(([id, n]) => `${esc(names([id]))}：${n}回`)
+          .join("／") || "データ未蓄積"
+      }</p><h3>意味検索の索引</h3><p>待機 ${s.semanticStats?.queued || 0}／登録済み ${s.semanticStats?.indexed || 0}／送信制限による保留 ${s.semanticStats?.rejected || 0}。自動更新は1分ごと、1回8件・1日最大15回（無料枠制限で翌日へ繰越）。</p><h3>AI使用量（最大31日分）</h3>${(s.aiUsage || []).map((d) => `<p>${esc(d.day)}：呼び出し${d.attempts || 0}回・成功${d.successes || 0}・エラー${d.errors || 0}・キャッシュ${d.cacheHits || 0}・取得済みトークン${d.totalTokens || 0}・入力文字${d.inputCharacters || 0}・トークン未報告の成功${d.unreportedTokens || 0}</p>`).join("") || "<p>実行記録はありません。</p>"}<p class="hint">無料プロジェクトであることの運営確認を前提に、アプリから有料契約を開始しません。埋め込みAPIがトークン数を返さない場合、その使用量は呼び出し回数・入力文字数で管理します。未取得のトークン数を実測0として扱いません。</p>`,
+    );
+    await refreshAI();
     renderTaxonomy();
   }
+  let activityCursor = null;
+  bindAsync($("#syncActivities"), async () => {
+    const s = await api("/me/activity/reconcile", {
+      method: "POST",
+      auth: true,
+      body: { cursor: activityCursor },
+    });
+    activityCursor = s.next;
+    $("#activityStatus").textContent =
+      `採用済みの改善案を${s.confirmed}件確認しました。確認保留${s.needsReview}件。${s.next ? "もう一度押すと続きを確認します。" : "星空の活動履歴で確認できます。"}`;
+  });
+  let semanticSeedCursor = null;
+  bindAsync($("#semanticSeed"), async () => {
+    const s = await api("/admin/semantic-seed", {
+      method: "POST",
+      auth: true,
+      body: { cursor: semanticSeedCursor },
+    });
+    semanticSeedCursor = s.next;
+    status(
+      `今回の確認：同意済み${s.queued}件・対象外${s.skipped}件。${s.next ? "もう一度押すと次の25件を確認します。" : "全投稿の確認が完了しました。"}`,
+    );
+  });
+  bindAsync($("#semanticIndex"), async () => {
+    const s = await api("/admin/semantic-index", {
+      method: "POST",
+      auth: true,
+      body: {},
+    });
+    status(
+      `意味索引へ${s.processed}件登録しました。残り${s.remaining ?? "確認中"}件。無料枠上限に達したら停止します。`,
+    );
+  });
   bindAsync($("#adminRefresh"), adminSummary);
+  bindAsync($("#adminSaveMetrics"), async () => {
+    const result = await api("/admin/save-metrics", {
+      method: "POST",
+      auth: true,
+      body: {},
+    });
+    status(
+      result.state === "ready"
+        ? "保存数の集計が完了しました。"
+        : `保存記録を${result.processed}件確認しました。もう一度押すと続きから集計します。`,
+    );
+    await adminSummary();
+  });
   bindAsync($("#adminInit"), async () => {
     await api("/admin/init", { method: "POST", auth: true, body: {} });
     state.terms = await api("/taxonomy");
+    await refreshAI();
     renderFacets();
     await adminSummary();
     status("初期分類を登録しました。既存分類は上書きしていません。");
@@ -1106,7 +1582,7 @@
   bindAsync($("#adminIndex"), async () => {
     if (
       !confirm(
-        "公開投稿を128件ずつ読み、検索索引を更新します。Firestoreの読み書きが発生します。開始しますか？",
+        "公開投稿を25件ずつ読み、検索索引を更新します。Firestoreの読み書きが発生します。開始しますか？",
       )
     )
       return;
@@ -1116,7 +1592,91 @@
     );
     await adminSummary();
   });
+  $("#verifyForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    run(async () => {
+      await api(
+        "/admin/verify/" + encodeURIComponent($("#verifyPostId").value),
+        {
+          method: "POST",
+          auth: true,
+          body: {
+            revision: Number($("#verifyRevision").value),
+            summary: $("#verifySummary").value,
+            evidence: $("#verifyEvidence").value,
+            reviewed: $("#verifyReviewed").checked,
+          },
+        },
+      );
+      status(
+        "実際の確認範囲と記録を保存しました。投稿全体の正しさの保証ではありません。",
+      );
+    });
+  });
+  let legacyPage = null,
+    legacyCursor = null,
+    legacyMapping = null;
+  $("#legacyMigrationForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    run(async () => {
+      const mapping = {
+        job: $("#legacyJob").value,
+        industry: $("#legacyIndustry").value
+          ? [$("#legacyIndustry").value]
+          : [],
+        occupation: $("#legacyOccupation").value
+          ? [$("#legacyOccupation").value]
+          : [],
+      };
+      if (JSON.stringify(mapping) !== JSON.stringify(legacyMapping))
+        legacyCursor = null;
+      legacyMapping = mapping;
+      legacyPage = await api("/admin/taxonomy-migration/preview", {
+        method: "POST",
+        auth: true,
+        body: { ...mapping, cursor: legacyCursor },
+      });
+      legacyCursor = legacyPage.next;
+      $("#legacyPreview").innerHTML =
+        `<p>今回${legacyPage.scanned}投稿を確認・該当${legacyPage.items.length}件。${legacyPage.next ? "もう一度確認すると次の25件へ進みます。" : "最後まで確認しました。"}</p>${legacyPage.items.map((p) => `<p>${esc(p.title)}（版${p.revision}）</p>`).join("")}`;
+      $("#legacyApply").disabled = !legacyPage.items.length;
+    });
+  });
+  bindAsync($("#legacyApply"), async () => {
+    if (!legacyPage?.items.length) return;
+    const result = await api("/admin/taxonomy-migration/apply", {
+      method: "POST",
+      auth: true,
+      body: {
+        ...legacyMapping,
+        posts: legacyPage.items.map((p) => ({
+          id: p.id,
+          revision: p.revision,
+        })),
+        confirmed: true,
+        reason: $("#legacyReason").value,
+      },
+    });
+    $("#legacyApply").disabled = true;
+    status(
+      `分類を確認しました：${result.items.filter((i) => i.status === "applied").length}件追加。本文・以前の分類は保持しました。`,
+    );
+  });
   function renderTaxonomy() {
+    for (const [selector, axis] of [
+      ["#legacyJob", "job"],
+      ["#legacyIndustry", "industry"],
+      ["#legacyOccupation", "occupation"],
+    ]) {
+      $(selector).innerHTML =
+        (axis === "job"
+          ? '<option value="">選択してください</option>'
+          : '<option value="">追加しない</option>') +
+        state.terms
+          .filter((t) => t.axis === axis && t.active && !t.mergedInto)
+          .map((t) => `<option value="${esc(t.id)}">${esc(t.label)}</option>`)
+          .join("");
+    }
     $("#taxonomyList").innerHTML = state.terms
       .map(
         (t) =>
@@ -1132,6 +1692,7 @@
           $("#termAxis").value = t.axis;
           $("#termAxis").disabled = true;
           $("#termLabel").value = t.label;
+          $("#termAliases").value = (t.aliases || []).join(", ");
           $("#termActive").checked = t.active;
           $("#termMerge").value = t.mergedInto || "";
           state.termRevision = t.revision;
@@ -1161,6 +1722,10 @@
         auth: true,
         body: {
           label: $("#termLabel").value,
+          aliases: $("#termAliases")
+            .value.split(",")
+            .map((x) => x.trim())
+            .filter(Boolean),
           axis: $("#termAxis").value,
           active: $("#termActive").checked,
           mergedInto: $("#termMerge").value,
@@ -1174,9 +1739,16 @@
       status("分類を保存しました。表示名を変えても投稿のIDは維持されます。");
     });
   });
+  let adminListSequence = 0;
   async function adminList(more = false) {
-    $("#rewardReviewMore").hidden=true;
-    const kind = state.adminKind,
+    const sequence = ++adminListSequence;
+    if (!more)
+      $("#adminItems").innerHTML =
+        '<p role="status">一覧を読み込んでいます。</p>';
+    $("#rewardReviewMore").hidden = true;
+    const kind = state.adminKind;
+    let data;
+    try {
       data = await api(
         "/admin/list/" +
           kind +
@@ -1185,6 +1757,13 @@
             : ""),
         { auth: true },
       );
+    } catch (e) {
+      if (sequence === adminListSequence)
+        $("#adminItems").innerHTML =
+          '<p class="notice">一覧を取得できませんでした。表示された待ち時間の後に、項目を選び直してください。</p>';
+      throw e;
+    }
+    if (sequence !== adminListSequence || kind !== state.adminKind) return;
     if (!more) {
       $("#adminItems").innerHTML = "";
       state.adminRows.clear();
@@ -1294,6 +1873,12 @@
     for (const axis of Object.keys(axes))
       value[axis] = (params.get(axis) || "").split(",").filter(Boolean);
     facetUI("#searchFacets", value);
+    const excluded = {};
+    for (const axis of Object.keys(axes))
+      excluded[axis] = (params.get("exclude_" + axis) || "")
+        .split(",")
+        .filter(Boolean);
+    facetUI("#excludeFacets", excluded);
     facetUI("#requestFacets");
     facetUI("#postFacets");
     facetUI("#classifyFacets");
@@ -1306,9 +1891,23 @@
       )
       .join("");
     $("#query").value = params.get("q") || "";
-    $("#sort").value = ["new", "relevance", "updated"].includes(
-      params.get("sort"),
-    )
+    $("#searchMode").value =
+      params.get("mode") === "semantic" ? "semantic" : "lexical";
+    for (const key of [
+      "keywordOp",
+      "match",
+      "facetOp",
+      "withinAxis",
+      "exclude",
+    ])
+      if (params.has(key)) $("#" + key).value = params.get(key);
+    $("#sort").value = [
+      "new",
+      "relevance",
+      "updated",
+      "popular",
+      "saved",
+    ].includes(params.get("sort"))
       ? params.get("sort")
       : "new";
   }
@@ -1331,9 +1930,10 @@
   });
   $("#resetFilters").onclick = () => {
     $("#searchForm").reset();
-    $("#searchFacets")
-      .querySelectorAll("option")
-      .forEach((o) => (o.selected = false));
+    for (const selector of ["#searchFacets", "#excludeFacets"])
+      $(selector)
+        .querySelectorAll("option")
+        .forEach((o) => (o.selected = false));
     run(() => search());
   };
   bindAsync($("#moreResults"), () => search(true));
@@ -1397,6 +1997,7 @@
       return;
     }
     state.terms = await api("/taxonomy");
+    await refreshAI();
     try {
       state.me = await api("/me", { auth: true });
       $("#loginBox").hidden = true;

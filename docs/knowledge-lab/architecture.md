@@ -1,5 +1,7 @@
 # Emu Knowledge Lab — 実装設計
 
+> これは初回PR #195の作業時の履歴資料です。現在の追加機能と公開状態は [completion-architecture.md](completion-architecture.md) を確認してください。
+
 調査基点: main `412a4d8fea5928dc9ca12c2839e6e448fd8cc5aa`。既存の4ナビ、Room1、Firebase Auth、SchoolPark ID、EMUER v2を維持する。Previewは本番Firebase/Renderを共有するため、書き込み検証は `demo-emu-knowledge-lab` のAuth/Firestoreエミュレーターに限定する。
 
 ## データと権限

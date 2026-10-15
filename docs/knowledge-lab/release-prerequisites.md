@@ -1,5 +1,7 @@
 # Knowledge Lab 公開前の本人操作と確認
 
+> これは初回PR #195の作業時の履歴資料です。現在の追加機能と公開状態は [completion-operations.md](completion-operations.md) を確認してください。
+
 この文書はPR #195の修正版を公開するための手順。公開ゲートが未完了の間はmainへマージせず、Renderの `KNOWLEDGE_LAB_ENABLED` を有効にしない。
 
 ## 1. Firebase Rules（従来の手動運用）
