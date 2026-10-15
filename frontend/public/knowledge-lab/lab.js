@@ -1272,7 +1272,9 @@
   }
   bindAsync($("#reviewRewards"), () => reviewRewards());
   bindAsync($("#rewardReviewMore"), () => reviewRewards(true));
+  let mineLoadSequence = 0;
   async function loadMine(more = false) {
+    const sequence = ++mineLoadSequence;
     const kind = state.mineKind,
       isNote = ["notes", "archived-notes"].includes(kind);
     const params = new URLSearchParams();
@@ -1282,6 +1284,9 @@
       "/me/" + (isNote ? "notes" : kind) + (params.size ? "?" + params : ""),
       { auth: true },
     );
+    // A slower response from the previous category must not replace the
+    // category the reader has just selected (e.g. saved → public posts).
+    if (sequence !== mineLoadSequence || kind !== state.mineKind) return;
     if (!more) $("#mineItems").innerHTML = "";
     $("#mineItems").insertAdjacentHTML(
       "beforeend",
