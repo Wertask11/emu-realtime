@@ -19,7 +19,8 @@
       var records = legacy ? value.tours : value;
       var oldIndices = {'sp-home':[0,1,2,3,4,6,7], 'sp-guilds':[0,2], 'sp-park':[0,2], 'sp-contribution':[0,2], 'emu-feed':[2,4,8], 'emu-requests':[0,1,4], 'emu-share':[0,5], 'emu-discussion':[0,0]};
       Object.keys(records).forEach(function (id) {
-        if (!/^(sp|emu)-[a-z-]+$/.test(id)) return;
+        if (id === 'sp-quests' && !Object.prototype.hasOwnProperty.call(records,'quest')) id = 'quest';
+        if (!/^(?:(?:sp|emu)-[a-z-]+|quest|qdetail)$/.test(id)) return;
         var item = records[id], status, index;
         if (legacy && item && STATES.includes(item.state) && Number.isSafeInteger(item.index) && item.index >= 0) {
           status = item.state; index = oldIndices[id]?.[item.index] ?? item.index;
@@ -410,12 +411,14 @@
     var def = definitions.get(active.id);
     if (!(reason && reason.native) && (active.waiting || !ready(def))) { refresh(); return; }
     if (active.index === def.steps.length-1) {
-      save(active.id,'done',active.index); emit('tour_complete',{screen:active.id}); close(!(reason && reason.native));
+      save(active.id,'done',active.index); emit('tour_complete',{screen:active.id});
+      try { def.options.onComplete?.(); } catch (error) {}
+      close(!(reason && reason.native));
       announce((reason && reason.missing ? '対象が見つからないため、このステップを飛ばしました。' : '') + 'この画面のガイドを見終わりました。サポートからいつでも見返せます。');
     } else { active.index++; prepare(); }
   }
   function backStep() { if (active && !active.waiting && ready(definitions.get(active.id)) && active.index > 0) { active.index--; emit('tour_back',{screen:active.id,step:active.index}); prepare(); } }
-  function skipTour() { if (active) { save(active.id,'skipped',active.index); emit('tour_skip',{screen:active.id}); close(); } }
+  function skipTour() { if (active) { var def=definitions.get(active.id); save(active.id,'skipped',active.index); emit('tour_skip',{screen:active.id}); try { def?.options.onSkip?.(); } catch (error) {} close(); } }
   function enter(id) {
     if (id === currentScreen) { refresh(); return; }
     if (active) { pause(false); announce('別の画面へ移動したため、ガイドを途中で止めました。サポートから続きを見られます。'); }
@@ -467,7 +470,7 @@
   }
   window.ReizoTour = {
     register:function (id, steps, options) {
-      if (!/^(sp|emu)-[a-z-]+$/.test(id) || !Array.isArray(steps) || !steps.length || steps.some(function (step) { return !step || typeof step.target !== 'string' || typeof step.label !== 'string' || typeof step.text !== 'string'; })) throw new Error('Invalid tour definition');
+      if (!/^(?:(?:sp|emu)-[a-z-]+|quest|qdetail)$/.test(id) || !Array.isArray(steps) || !steps.length || steps.some(function (step) { return !step || typeof step.target !== 'string' || typeof step.label !== 'string' || typeof step.text !== 'string'; })) throw new Error('Invalid tour definition');
       definitions.set(id,{steps:steps.slice(),options:Object.assign({label:id,brand:id.startsWith('sp-')?'SchoolPark':'Emu'},options)}); notify();
     },
     start:start,next:nextStep,back:backStep,skip:skipTour,later:function () { pause(); },progress:progress,
