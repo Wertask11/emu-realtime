@@ -2072,18 +2072,9 @@
         brand: "Emu",
         isReady: () =>
           state.enabled && state.terms.length > 0 && state.view === "library",
-        auto: window.parent === window,
       },
     );
     $("#guide").onclick = () => {
-      const hostTour =
-        window.parent !== window ? window.parent.ReizoTour : null;
-      if (
-        hostTour?.list?.().some((item) => item.id === "emu-knowledge-lab")
-      ) {
-        hostTour.start("emu-knowledge-lab", 0, $("#guide"));
-        return;
-      }
       run(async () => {
         await view("library");
         tour.restart("emu-lab");
