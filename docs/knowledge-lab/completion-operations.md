@@ -77,3 +77,7 @@ AIだけの問題ならOwner停止とRender `KNOWLEDGE_LAB_AI_ENABLED=false`。�
 4. 成功した実結果のみ `/workspace/outputs/knowledge-lab-completion/live-gemini/results.json` へ保存する。秘密値、認証ヘッダー、実ユーザー本文は出力しない。失敗はコードだけ報告し、固定応答へ置き換えない。
 
 この検証が成功しても、本番利用者の実体験を分析できた証拠や意味検索全体の品質証明ではない。本番で作者/利用者の同意、出典の正しさ、無料枠、保存/更新、既存回帰を別途確認してからREADYとする。キーがない現在は `GEMINI_SECRET_REQUIRED` で開始前に停止することを確認しただけで、実API成功は未確認。
+
+## 継続作業の現在地
+
+2026-10-15：本番停止はPR #197で匿名アクセス検査のETIMEDOUTと切り分け、PR #198で復旧。main/Production e978e01。5分経過後の再検査も成功。追加PR #196は最新mainを取り込み、32保護領域を維持。622自動テストと実UI回帰はPASSだが、実Gemini/意味検索・追加版本番は未検証で未公開。CodexのGEMINI_API_KEYは未登録。設定案へ安全に入力して保存・Publish後、実API手順を実行する。Renderへの登録と混同しない。公開済みFirebase管理鍵の交換を確認する。
