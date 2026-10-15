@@ -22296,6 +22296,9 @@ async function chesLandAfterLogin() {
      前は先にしまっていたので、サーバーの返事を待つあいだ（呼び出し元は
      12秒で覆いを外す）何も出ていない真っ白な画面になっていた。 */
   const access = await spEnsureSchoolParkAccess(true);
+  // Preserve an explicit Lab/guide navigation if the default login landing returns late.
+  if (window.auth?.currentUser && document.body.classList.contains('sp-room-open')
+      && /^\/knowledge-lab(?:-guide)?\.html(?:[?#]|$)/.test(document.getElementById('spRoomFrame')?.getAttribute('src') || '')) return;
   chesTidyEntryScreens();
   if (access && access.allowed) {
     if (typeof spDaoOpenWhenReady === 'function') await spDaoOpenWhenReady();
@@ -25163,6 +25166,8 @@ window.emuHasPlan = emuHasPlan;
    表示から切り離して、必要な人がいつでも呼べるようにする。 */
 let _emuEntPromise = null;
 async function emuEnsureEntitlement(force) {
+  const membershipEpoch = Date.now() >= Date.parse('2026-11-01T00:00:00+09:00') ? new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 7) : 'legacy';
+  if (window.emuEntitlementEpoch !== membershipEpoch) force = true;
   if (!force && window.emuEntitlement) return window.emuEntitlement;
   if (!force && _emuEntPromise) return _emuEntPromise;
   _emuEntPromise = (async function () {
@@ -25175,6 +25180,8 @@ async function emuEnsureEntitlement(force) {
       const s = await res.json();
       window.emuEntitlement = s.entitlement || 'guest';
       window.emuEntitlementSource = s.entitlementSource || 'none';
+      window.emuEntitlementSchoolParkId = s.schoolParkId || null;
+      window.emuEntitlementEpoch = membershipEpoch;
       window.emuFoundingUntil = s.foundingUntil || null;
       window.emuBillingStatus = s;
       try {
@@ -25301,7 +25308,9 @@ function _emuUsageDocId() {
   const uid = _emuUid();
   if (!uid) return '';
   const jst = new Date(Date.now() + 9 * 3600 * 1000);
-  return uid + '_r_m' + jst.getUTCFullYear() + '-' + (jst.getUTCMonth() + 1);
+  const subject = Date.now() >= Date.parse('2026-11-01T00:00:00+09:00')
+    ? (window.emuEntitlementSchoolParkId || uid) : uid;
+  return subject + '_r_m' + jst.getUTCFullYear() + '-' + (jst.getUTCMonth() + 1);
 }
 function _emuUsageRef() {
   const id = _emuUsageDocId();
@@ -25327,6 +25336,7 @@ function _emuUsageRef() {
    getAfter( ... ) == usedBefore + 1 が食い違って弾かれる。
    数が狂うより、弾かれて出し直すほうが安全。 */
 async function _emuAddUsage(batch, kind) {
+  await emuEnsureEntitlement();
   const ref = _emuUsageRef();
   const id = _emuUsageDocId();
   if (!ref || !id) throw new Error('ログインの状態を確認できませんでした。一度読み込み直してからお試しください。');
@@ -28668,10 +28678,14 @@ async function sendEmuFeedback() {
   /* いま持っている下書きの数。ルールがこの数を見て上限を判断する。
      月でリセットしないので、回数の記録とは別の書類で持つ。 */
   function _emuCountsRef() {
-    return window.fbLib.doc(window.db, 'plan_counts', localStorage.getItem('ches_uid') || '');
+    const uid = _emuUid();
+    const subject = Date.now() >= Date.parse('2026-11-01T00:00:00+09:00')
+      ? (window.emuEntitlementSchoolParkId || uid) : uid;
+    return window.fbLib.doc(window.db, 'plan_counts', subject);
   }
 
   async function createKnowledgeDraft(account, payload) {
+    await emuEnsureEntitlement();
     /* マイライブラリーの上限（9/1から）。light は30件、plus 以上は1,000件。
        「無制限」にしないのは、荒らしや自動投稿で膨らむのを防ぐため。
        実際に止めるのは Firestore のルール。ここは先に知らせるためのもの。 */
@@ -28704,6 +28718,7 @@ async function sendEmuFeedback() {
     return localDraft;
   }
   async function deleteKnowledgeDraft(account, draftId) {
+    await emuEnsureEntitlement();
     if (account && window.db && window.fbLib && !/^\d+$/.test(String(draftId))) {
       try {
         // 消すときは、持っている数も1つ減らす。減らさないと枠が空かない。

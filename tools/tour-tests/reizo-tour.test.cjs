@@ -84,6 +84,20 @@ test('existing navigation and native behavior remain identical outside the expli
    current=current.replace(starHook,'').replace(reactionHook,'    if (detail.ok) syncKnowledgeFrame();');
    // Intentional chat-only extension; every other byte stays under this regression.
    const {grab}=require('../year-goals-tests/extract.cjs');
+   // Approved membership migration: only the shared Passport counter keys and
+   // returned own-Passport field change. Keep the rest of the monolith guarded.
+   current=current.replace("      window.emuEntitlementSchoolParkId = s.schoolParkId || null;\n",'');
+   current=current.replace("  const membershipEpoch = Date.now() >= Date.parse('2026-11-01T00:00:00+09:00') ? new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 7) : 'legacy';\n  if (window.emuEntitlementEpoch !== membershipEpoch) force = true;\n",'').replace("      window.emuEntitlementEpoch = membershipEpoch;\n",'');
+   for (const fn of ['_emuAddUsage','createKnowledgeDraft','deleteKnowledgeDraft']) {
+    const changed=grab(current,fn),old=grab(before,fn);
+    assert.equal(changed.replace(/\n\s+await emuEnsureEntitlement\(\);/,''),old,'Only entitlement preparation may change '+fn);
+    current=current.replace(changed,old);
+   }
+
+   current=current.replace("  // Preserve an explicit Lab/guide navigation if the default login landing returns late.\n  if (window.auth?.currentUser && document.body.classList.contains('sp-room-open')\n      && /^\\/knowledge-lab(?:-guide)?\\.html(?:[?#]|$)/.test(document.getElementById('spRoomFrame')?.getAttribute('src') || '')) return;\n",'');
+
+   for (const fn of ['_emuUsageDocId','_emuCountsRef']) current=current.replace(grab(current,fn),grab(before,fn));
+
    for (const fn of ['spReizoAnswer','spReizoSend','spReizoKeydown','_spReizoShowTyping']) current=current.replace(grab(current,fn),grab(before,fn));
    current=current.replace('<script src="/reizo/knowledge.js"></script>\n','').replace('<script src="/reizo/chat.js"></script>\n','');
    const kbStart=before.indexOf('const SP_REIZO_KB = ['), kbEnd=before.indexOf('function spReizoAnswer',kbStart);

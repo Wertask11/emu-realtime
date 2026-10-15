@@ -207,6 +207,22 @@ function createIdentity(deps) {
     }
   }
 
+  // Resolve subscription/grant owners only through server-owned, reciprocal
+  // Passport bindings. Neither editable account fields nor a client SPID suffice.
+  async function linkedUidsForUid(uid) {
+    const spid = await findByUid(uid);
+    if (!spid) return [uid];
+    const rec = await readIdentity(spid);
+    if (!rec || rec.status === "disabled") return [uid];
+    const candidates = [...new Set([uid, ...(rec.links || [])
+      .filter(l => l.kind === "fb" && typeof l.subject === "string")
+      .map(l => l.subject)])];
+    if (candidates.length > 30) throw new Error("IDENTITY_LINK_LIMIT");
+    const linked = await Promise.all(candidates.map(async subject =>
+      (await findByUid(subject)) === spid ? subject : null));
+    return linked.filter(Boolean);
+  }
+
   /* 名義（アドレス）から番号を引く。
 
      findByAddress は「署名で確かめて連携したウォレット」しか見ない。
@@ -1042,7 +1058,7 @@ function createIdentity(deps) {
     // 番号そのもの
     newSchoolParkId, isSchoolParkId, linkIdFor,
     // 解決・発行
-    resolveForUid, findByUid, findByAddress, spidForAddress, readIdentity, publicView,
+    resolveForUid, findByUid, linkedUidsForUid, findByAddress, spidForAddress, readIdentity, publicView,
     knowledgeParticipant, knowledgeParticipants,
     // 連携
     issueLinkTicket, completeLinkWithTicket, registerWalletLink,

@@ -138,6 +138,11 @@
     const message = event.data,
       action = message.action;
     try {
+      if (action === "membership") {
+        // A separate existing account overlay preserves the Lab frame and inputs.
+        window.accountGo("plan");
+        return;
+      }
       if (
         ["good", "change", "propose"].includes(action) &&
         validId(message.postId)
@@ -291,6 +296,11 @@
     if (typeof window.chesLandAfterLogin === "function") {
       const original = window.chesLandAfterLogin;
       window.chesLandAfterLogin = function () {
+        // A delayed default landing must not replace the user's explicit Lab
+        // navigation. Account changes are still cleared by the auth listener.
+        if (window.auth?.currentUser && window._chesEntered && labFrame()
+            && document.body.classList.contains("sp-room-open"))
+          return Promise.resolve();
         const result = Promise.resolve(original.apply(this, arguments));
         const tracked = result.finally(() => {
           if (pendingLanding === tracked) pendingLanding = null;

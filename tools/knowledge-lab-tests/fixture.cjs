@@ -3,7 +3,7 @@
 const PROJECT=process.env.LAB_EMULATOR_PROJECT||'demo-emu-knowledge-lab';
 if(!/^demo-emu-knowledge-lab(?:-[a-z0-9-]{1,30})?$/.test(PROJECT))throw new Error('LOCAL_PROJECT_ONLY');
 const AUTH_HOST=process.env.LAB_AUTH_EMULATOR_HOST||'127.0.0.1:9199';
-if(!['127.0.0.1:9199','127.0.0.1:9299'].includes(AUTH_HOST))throw new Error('LOCAL_AUTH_EMULATOR_ONLY');
+if(!['127.0.0.1:9199','127.0.0.1:9299','127.0.0.1:9399'].includes(AUTH_HOST))throw new Error('LOCAL_AUTH_EMULATOR_ONLY');
 if(process.env.FIRESTORE_EMULATOR_HOST&&process.env.FIRESTORE_EMULATOR_HOST!=='127.0.0.1:8787')throw new Error('LOCAL_EMULATOR_ONLY');
 if(process.env.FIREBASE_AUTH_EMULATOR_HOST&&process.env.FIREBASE_AUTH_EMULATOR_HOST!==AUTH_HOST)throw new Error('LOCAL_AUTH_EMULATOR_ONLY');
 process.env.FIRESTORE_EMULATOR_HOST='127.0.0.1:8787';process.env.FIREBASE_AUTH_EMULATOR_HOST=AUTH_HOST;process.env.GCLOUD_PROJECT=PROJECT;

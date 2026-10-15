@@ -11,14 +11,15 @@
  */
 
 const express = require("express");
+const membershipPolicy = require("./membership-policy");
 
 /* 月額プランは3つ。金額とStripeのPrice IDはサーバー側だけが持ち、
    クライアントから渡ってくるのはキー（light/standard/member）だけにする。
    金額を客側に決めさせない。 */
 const PLANS = {
-  light:    { key: "light",    amount: 500,   envPrice: "STRIPE_PRICE_LIGHT", label: "Emu light" },
-  plus:     { key: "plus",     amount: 3000,  envPrice: "STRIPE_PRICE_PLUS",  label: "Emu plus" },
-  pro:      { key: "pro",      amount: 10000, envPrice: "STRIPE_PRICE_PRO",   label: "Emu pro" }
+  light:    { key: "light",    amount: membershipPolicy.PLANS.light.amount, envPrice: "STRIPE_PRICE_LIGHT", label: "Emu light" },
+  plus:     { key: "plus",     amount: membershipPolicy.PLANS.plus.amount, envPrice: "STRIPE_PRICE_PLUS",  label: "Emu plus" },
+  pro:      { key: "pro",      amount: membershipPolicy.PLANS.pro.amount, envPrice: "STRIPE_PRICE_PRO",   label: "Emu pro" }
 };
 const DEFAULT_PLAN = "pro";
 
@@ -59,7 +60,7 @@ function createBillingRouter(deps) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
   const siteOrigin = process.env.PUBLIC_SITE_ORIGIN || "https://schoolpark-emu.vercel.app";
 
-  const stripe = secretKey ? require("stripe")(secretKey) : null;
+  const stripe = deps.stripeClient || (secretKey ? require("stripe")(secretKey) : null);
   if (!stripe) {
     console.warn("⚠️ STRIPE_SECRET_KEY 未設定。課金APIは 503 を返します。");
   }
@@ -112,9 +113,21 @@ function createBillingRouter(deps) {
   function subRef(uid) { return db.collection(SUBSCRIPTIONS_COL).doc(uid); }
 
   async function readSubscription(uid) {
-    const snap = await subRef(uid).get();
-    return snap.exists ? snap.data() : null;
+    const subjects = deps.identity?.linkedUidsForUid ? await deps.identity.linkedUidsForUid(uid) : [uid];
+    const rows = (await Promise.all(subjects.map(async subject => {
+      const snap = await subRef(subject).get();
+      return snap.exists ? { ...snap.data(), _ownerUid: subject } : null;
+    }))).filter(Boolean);
+    const active = rows.filter(s => ["active", "trialing", "past_due", "incomplete"].includes(s.status));
+    if (active.length > 1) {
+      const e = new Error("MULTIPLE_SUBSCRIPTIONS_REVIEW_REQUIRED");
+      e.status = 409;
+      throw e;
+    }
+    return active[0] || rows.find(s => s._ownerUid === uid) || null;
   }
+
+  router.get("/features", (req, res) => res.set("Cache-Control", "no-store").json(membershipPolicy.catalog()));
 
   async function audit(actorUid, action, target, detail) {
     try {
@@ -139,8 +152,13 @@ function createBillingRouter(deps) {
       if (!priceId) return res.status(503).json({ error: "PRICE_NOT_CONFIGURED", plan: planKey });
 
       const existing = await readSubscription(uid);
-      if (existing && existing.status === "active") {
+      if (existing && ["active", "trialing", "past_due", "incomplete"].includes(existing.status)) {
         return res.status(409).json({ error: "ALREADY_SUBSCRIBED" });
+      }
+      if (entitlement) {
+        const ent = await entitlement.getEntitlement(uid, account);
+        if (entitlement.atLeast(ent.plan, planKey))
+          return res.status(409).json({ error: "ALREADY_ENTITLED", current: ent.plan, source: ent.source });
       }
 
       // Stripe の顧客は uid につき1つに固定する。作り直すと課金履歴が分断されるため。
@@ -174,6 +192,7 @@ function createBillingRouter(deps) {
 
       return res.json({ ok: true, url: session.url });
     } catch (e) {
+      if (e.message === "MULTIPLE_SUBSCRIPTIONS_REVIEW_REQUIRED") return res.status(409).json({ error: e.message });
       console.error("checkout error:", e.message);
       return res.status(500).json({ error: "CHECKOUT_FAILED" });
     }
@@ -201,6 +220,7 @@ function createBillingRouter(deps) {
         return res.json({ ok: true, status: "none", plans,
                           planAmount: PLAN_AMOUNT_JPY,
                           entitlement: ent0 ? ent0.plan : "guest",
+                          schoolParkId: ent0?.schoolParkId || null,
                           entitlementSource: ent0 ? ent0.source : "none",
                           foundingUntil: ent0 ? ent0.foundingUntil : null });
       }
@@ -227,7 +247,7 @@ function createBillingRouter(deps) {
             || (fresh.plan && sub.plan !== fresh.plan);
           Object.assign(sub, fresh);
           if (changed) {
-            await subRef(req.identity.uid).set(
+            await subRef(sub._ownerUid || req.identity.uid).set(
               Object.assign({ updatedAt: new Date() }, fresh), { merge: true });
           }
         } catch (e) {
@@ -256,6 +276,7 @@ function createBillingRouter(deps) {
         /* いま使える段。契約が無くても Founding Emuer なら light が入る。
            画面で機能を出し分けるときは plan ではなくこちらを見る。 */
         entitlement: ent ? ent.plan : (currentPlan || "guest"),
+        schoolParkId: ent?.schoolParkId || null,
         entitlementSource: ent ? ent.source : (currentPlan ? "stripe" : "none"),
         foundingUntil: ent ? ent.foundingUntil : null,
         // 保証は本会員にだけ付く
@@ -274,6 +295,7 @@ function createBillingRouter(deps) {
         refundStatus: sub.refundStatus || null
       });
     } catch (e) {
+      if (e.message === "MULTIPLE_SUBSCRIPTIONS_REVIEW_REQUIRED") return res.status(409).json({ error: e.message });
       console.error("billing status error:", e.message);
       return res.status(500).json({ error: "STATUS_FAILED" });
     }
@@ -291,6 +313,7 @@ function createBillingRouter(deps) {
       });
       return res.json({ ok: true, url: session.url });
     } catch (e) {
+      if (e.message === "MULTIPLE_SUBSCRIPTIONS_REVIEW_REQUIRED") return res.status(409).json({ error: e.message });
       console.error("portal error:", e.message);
       return res.status(500).json({ error: "PORTAL_FAILED" });
     }
@@ -332,7 +355,7 @@ function createBillingRouter(deps) {
       const reason = String((req.body && req.body.reason) || "").slice(0, 2000);
 
       const doc = await db.collection(REFUND_REQUESTS_COL).add({
-        uid, walletAddress,
+        uid: sub._ownerUid || uid, requestedByUid: uid, walletAddress,
         email: sub.email || null,
         reason,
         survey: {
@@ -349,9 +372,10 @@ function createBillingRouter(deps) {
         requestedAt: new Date()
       });
 
-      await subRef(uid).set({ refundStatus: "pending", refundRequestId: doc.id }, { merge: true });
+      await subRef(sub._ownerUid || uid).set({ refundStatus: "pending", refundRequestId: doc.id }, { merge: true });
       return res.json({ ok: true, requestId: doc.id, status: "pending" });
     } catch (e) {
+      if (e.message === "MULTIPLE_SUBSCRIPTIONS_REVIEW_REQUIRED") return res.status(409).json({ error: e.message });
       console.error("refund request error:", e.message);
       return res.status(500).json({ error: "REFUND_REQUEST_FAILED" });
     }
@@ -508,13 +532,14 @@ function createBillingRouter(deps) {
       const updated = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
         items: [{ id: item.id, price: price }],
         proration_behavior: "always_invoice",
-        metadata: { ...(current.metadata || {}), plan: next, uid: uid }
+        metadata: { ...(current.metadata || {}), plan: next, uid: sub._ownerUid || uid }
       });
 
       // 画面をすぐ正しくするため、Webhook を待たずに写しを更新する
-      await upsertSubscription(uid, updated, {});
+      await upsertSubscription(sub._ownerUid || uid, updated, {});
       return res.json({ ok: true, plan: next, planLabel: PLANS[next].label });
     } catch (e) {
+      if (e.message === "MULTIPLE_SUBSCRIPTIONS_REVIEW_REQUIRED") return res.status(409).json({ error: e.message });
       console.error("change-plan error:", e.message);
       return res.status(500).json({ error: "CHANGE_FAILED", message: e.message });
     }

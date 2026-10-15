@@ -212,7 +212,21 @@ service cloud.firestore {
 
     // 付与（公式パス保有者・オーナーなど）。期限切れは数えない。
     function grantPath() {
-      return /databases/$(database)/documents/entitlements/$(request.auth.uid);
+      return /databases/$(database)/documents/entitlements/$(membershipUid('grantUid'));
+    }
+    /* 本人性を確認したサーバーだけが設定する参照先。段のコピーではなく、
+       契約・付与の原本を読むので、解約や失効を取り残さない。 */
+    function membershipUid(kind) {
+      let spid = get(accountPath()).data.get('spid', '');
+      let p = /databases/$(database)/documents/sp_identities/$(spid);
+      return spid is string && spid.size() > 0 && exists(p)
+        ? get(p).data.get('membershipSources', {}).get(kind, request.auth.uid)
+        : request.auth.uid;
+    }
+    function membershipCounterId() {
+      let spid = get(accountPath()).data.get('spid', '');
+      return request.time >= timestamp.date(2026, 11, 1) - duration.value(9, 'h')
+        && spid is string && spid.size() > 0 ? spid : request.auth.uid;
     }
     /* 期限は「無ければ期限なし」と読む。既定値に request.time を置くことで、
        expiresAt を持たない付与（オーナー）は必ず生きていると判定される。
@@ -221,19 +235,22 @@ service cloud.firestore {
        以前は get(grantPath()) を2回書いていて、そのぶん参照が増えていた。
        （なぜ参照の回数を惜しむのかは、下の「参照の回数」を参照） */
     function grantRank() {
-      return signedIn() && exists(grantPath()) ? grantRankOf(get(grantPath()).data) : 0;
+      let p = grantPath();
+      return signedIn() && exists(p) ? grantRankOf(get(p).data) : 0;
     }
     function grantRankOf(d) {
-      return d.get('expiresAt', request.time) >= request.time
+      return d.get('startsAt', request.time) <= request.time
+        && d.get('expiresAt', request.time) >= request.time
         ? rankOf(d.get('plan', 'guest')) : 0;
     }
 
     // 契約（Stripe）。支払い再試行中も会員のまま。
     function subPath() {
-      return /databases/$(database)/documents/subscriptions/$(request.auth.uid);
+      return /databases/$(database)/documents/subscriptions/$(membershipUid('subscriptionUid'));
     }
     function subRank() {
-      return signedIn() && exists(subPath()) ? subRankOf(get(subPath()).data) : 0;
+      let p = subPath();
+      return signedIn() && exists(p) ? subRankOf(get(p).data) : 0;
     }
     function subRankOf(d) {
       return d.get('status', '') in ['active', 'trialing', 'past_due']
@@ -363,7 +380,7 @@ service cloud.firestore {
         + '-' + string((request.time + duration.value(9, 'h')).month());
     }
     function usagePath() {
-      return /databases/$(database)/documents/plan_usage/$(request.auth.uid + '_r_' + usageKey());
+      return /databases/$(database)/documents/plan_usage/$(membershipCounterId() + '_r_' + usageKey());
     }
 
     /* 書く前の回数。記録がまだ無ければ0。 */
@@ -384,7 +401,9 @@ service cloud.firestore {
       return rank >= minRank && hasRoomIn(limitOf(rank, kind), kind);
     }
     function hasRoomIn(limit, kind) {
-      return limit > 0 && roomLeft(limit, kind, getAfter(usagePath()).data.get(kind, 0));
+      let credit = request.time >= timestamp.date(2026, 11, 1) - duration.value(9, 'h')
+        && exists(usagePath()) ? get(usagePath()).data.get('transitionCredits', {}).get(kind, 0) : 0;
+      return limit > 0 && roomLeft(limit + credit, kind, getAfter(usagePath()).data.get(kind, 0));
     }
     function roomLeft(limit, kind, after) {
       return after <= limit && after == usedBefore(kind) + 1;
@@ -394,13 +413,13 @@ service cloud.firestore {
        回数と違って、これは月でリセットしない「いまの総数」。
        増やしたら減らせるので、別の書類で持つ。 */
     function countsPath() {
-      return /databases/$(database)/documents/plan_counts/$(request.auth.uid);
+      return /databases/$(database)/documents/plan_counts/$(membershipCounterId());
     }
     function draftsBefore() {
       return exists(countsPath()) ? get(countsPath()).data.get('drafts', 0) : 0;
     }
     function libraryLimitOf(rank) {
-      return rank == 0 ? 0 : (rank == 1 ? 30 : 1000);
+      return rank == 0 ? 1 : (rank == 1 ? 30 : 1000);
     }
     /* 作れるか。段が足りていて、ちょうど1増えていて、上限以内であること。
        ここも段を1回だけ数えて持ち回る（上の「参照の回数」を参照）。 */
@@ -426,12 +445,15 @@ service cloud.firestore {
     }
 
     match /plan_counts/{uid} {
-      allow read: if signedIn() && request.auth.uid == uid;
-      allow create: if signedIn() && request.auth.uid == uid
+      allow read: if signedIn() && (request.auth.uid == uid || membershipCounterId() == uid);
+      allow create: if signedIn() && membershipCounterId() == uid
+        && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['drafts', 'updatedAt'])
         && request.resource.data.get('drafts', 0) is int
         && request.resource.data.get('drafts', 0) >= 0
         && request.resource.data.get('drafts', 0) <= 1;
-      allow update: if signedIn() && request.auth.uid == uid
+      allow update: if signedIn() && membershipCounterId() == uid
+        && (uid == request.auth.uid || resource.data.get('migratedUids', []).hasAny([request.auth.uid]))
         && changedOnly(['drafts', 'updatedAt'])
         && request.resource.data.get('drafts', 0) is int
         && request.resource.data.get('drafts', 0) >= 0
@@ -450,15 +472,19 @@ service cloud.firestore {
     /* 使用回数の記録。本人だけが、自分の分を1つずつ増やせる。
        減らすことも、まとめて増やすことも、負の数を入れることもできない。 */
     match /plan_usage/{docId} {
-      allow read: if signedIn();
+      allow read: if signedIn() && (docId == request.auth.uid + '_r_' + usageKey()
+        || docId == membershipCounterId() + '_r_' + usageKey());
       allow create: if signedIn()
-        && docId == request.auth.uid + '_r_' + usageKey()
+        && docId == membershipCounterId() + '_r_' + usageKey()
+        && membershipCounterId() == request.auth.uid
+        && request.resource.data.keys().hasOnly(['post', 'request', 'answer', 'updatedAt'])
         && usageSane(request.resource.data)
         && request.resource.data.get('post', 0) <= 1
         && request.resource.data.get('request', 0) <= 1
         && request.resource.data.get('answer', 0) <= 1;
       allow update: if signedIn()
-        && docId == request.auth.uid + '_r_' + usageKey()
+        && docId == membershipCounterId() + '_r_' + usageKey()
+        && (membershipCounterId() == request.auth.uid || resource.data.get('migratedUids', []).hasAny([request.auth.uid]))
         && changedOnly(['post', 'request', 'answer', 'updatedAt'])
         && usageSane(request.resource.data)
         && request.resource.data.get('post', 0) >= resource.data.get('post', 0)
@@ -675,7 +701,7 @@ service cloud.firestore {
       /* 下書きを残すのは light 以上（9/1から）。
          件数の上限（light 30 / plus 1,000）も、ここで確かめる。
          画面だけで数えていたときは、画面を通さなければ何件でも作れた。 */
-      allow create: if mayAddToLibrary(request.resource.data.get('owner', ''), 1);
+      allow create: if mayAddToLibrary(request.resource.data.get('owner', ''), 0);
       allow read, update: if isMyWallet(resource.data.get('owner', ''));
       // 消すときは、持っている数の記録も1つ減らしてもらう
       allow delete: if isMyWallet(resource.data.get('owner', '')) && libraryDecremented();

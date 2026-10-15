@@ -108,6 +108,10 @@
     PLAN_LIMIT_REACHED:
       "現在のプランの利用枠に達しています。既存の会員ページで条件を確認してください。",
     LIBRARY_FULL: "マイライブラリーの保存枠に達しています。",
+    SAVED_LIMIT:
+      "保存した知識の枠に達しています。保存を解除するか、プラン・利用枠を確認してください。",
+    NOTE_LIMIT:
+      "研究ノートの作成枠に達しています。既存ノートの編集・履歴・保管復元は引き続き利用できます。",
     REVISION_CONFLICT:
       "別の画面で更新されています。内容を控えて、最新のデータを開き直してください。",
     IDEMPOTENCY_CONFLICT:
@@ -1389,6 +1393,25 @@
     const sequence = ++mineLoadSequence;
     const kind = state.mineKind,
       isNote = ["notes", "archived-notes"].includes(kind);
+    if (!more) {
+      const usage = await api("/me/storage", { auth: true });
+      const names = {
+        saved: "保存した知識",
+        drafts: "下書き・自分用の経験知",
+        notes: "研究ノート（保管中を含む）",
+      };
+      $("#storageUsage").innerHTML =
+        `<strong>現在のプラン：${esc(usage.plan === "guest" ? "無料・見学" : usage.plan)}</strong><p>${Object.entries(
+          names,
+        )
+          .map(
+            ([key, label]) =>
+              `${esc(label)} ${esc(usage.used[key])} / ${esc(usage.limits[key])}件`,
+          )
+          .join(
+            "<br>",
+          )}</p>${!usage.active ? `<small>11月1日から：保存${esc(usage.announced.saved)}・下書き${esc(usage.announced.drafts)}・研究${esc(usage.announced.notes)}件。既存記録は削除しません。</small>` : "<small>枠を超えた既存記録も閲覧・編集できます。研究は保管しても枠を使用します。</small>"}`;
+    }
     const params = new URLSearchParams();
     if (kind === "archived-notes") params.set("archived", "1");
     if (more && state.cursors.mine) params.set("cursor", state.cursors.mine);
@@ -1422,6 +1445,11 @@
   );
   bindAsync($("#mineMore"), () => loadMine(true));
   $("#legacyLibrary").onclick = () => integration("library");
+  $("#membershipPlan").onclick = () => {
+    if (parent === window)
+      window.open("/membership.html#plan", "_blank", "noopener");
+    else integration("membership");
+  };
   function fillWriter() {
     const w = state.me?.writer;
     state.writerRevision = w?.revision || 0;
