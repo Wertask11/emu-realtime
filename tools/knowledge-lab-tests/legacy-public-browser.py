@@ -1,4 +1,5 @@
 """Legacy Emu publication → own list → actual edit/save → re-login. LOCAL only."""
+from facet_controls import select_facets
 import json,pathlib,urllib.parse
 from playwright.sync_api import sync_playwright
 OUT=pathlib.Path('/workspace/outputs/knowledge-lab-legacy-public');OUT.mkdir(parents=True,exist_ok=True)
@@ -37,7 +38,7 @@ with sync_playwright() as p:
  f.locator('#editorDialog').wait_for(state='visible')
  assert f.locator('#postTitle').input_value()=='LOCAL：旧Emuの公開投稿'
  f.locator('#postTitle').fill('LOCAL：旧投稿をそのまま更新')
- f.locator('#postFacets-field').select_option('field-it')
+ select_facets(f, '#postFacets-field', 'field-it')
  # User explicitly checks consent. Provider disabled in this fixture; no external AI call.
  f.locator('#postAIConsent').check()
  f.locator('#postVisibility').select_option('public')

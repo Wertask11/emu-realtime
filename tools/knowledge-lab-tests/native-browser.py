@@ -1,3 +1,4 @@
+from facet_controls import select_facets
 import json,pathlib,urllib.parse,os
 from playwright.sync_api import sync_playwright
 OUT=pathlib.Path(os.environ.get('LAB_TEST_OUTPUT','/workspace/outputs/knowledge-lab-native'));OUT.mkdir(parents=True,exist_ok=True)
@@ -21,7 +22,7 @@ with sync_playwright() as p:
  g.screenshot(path=str(OUT/'before-guide.png'))
  print(json.dumps({'cover':g.locator('#spLoadingOverlay').is_visible(),'classes':g.locator('html').get_attribute('class'),'bodyClass':g.locator('body').get_attribute('class')},ensure_ascii=False),flush=True)
  if guide.count() and guide.is_visible():guide.click()
- f.locator('#library [data-compose]').click();f.locator('#postTitle').fill('ネイティブ連携の検証投稿');f.locator('#postBody').fill('これは本番と分離したエミュレーター内の保存・連携検証用です。');f.locator('#postFacets-field').select_option('field-education');f.locator('#postVisibility').select_option('public');f.locator('#postForm button[type=submit]').click();f.locator('#editorDialog').wait_for(state='hidden');f.locator('#results .card').filter(has_text='ネイティブ連携').locator('[data-post]').click();f.locator('#discussKnowledge').click()
+ f.locator('#library [data-compose]').click();f.locator('#postTitle').fill('ネイティブ連携の検証投稿');f.locator('#postBody').fill('これは本番と分離したエミュレーター内の保存・連携検証用です。');select_facets(f, '#postFacets-field', 'field-education');f.locator('#postVisibility').select_option('public');f.locator('#postForm button[type=submit]').click();f.locator('#editorDialog').wait_for(state='hidden');f.locator('#results .card').filter(has_text='ネイティブ連携').locator('[data-post]').click();f.locator('#discussKnowledge').click()
  g.locator('#emuDiscussionFrame').wait_for(state='visible');discussion=g.frame_locator('#emuDiscussionFrame');discussion.locator('#ownTopic').wait_for();g.wait_for_function('document.getElementById("emuDiscussionFrame").contentDocument?.getElementById("ownTopic")?.value.includes("ネイティブ連携")',timeout=10000)
  g.screenshot(path=str(OUT/'discussion-prefill.png'))
  g.evaluate('openEmuKnowledgeLab("writer")');f=g.frame_locator('#spRoomFrame');f.locator('html[data-lab-ready="true"]').wait_for();f.locator('#passportLink').click();g.locator('#spPassport').wait_for(state='visible');g.screenshot(path=str(OUT/'passport.png'))
