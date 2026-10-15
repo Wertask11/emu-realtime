@@ -51,15 +51,19 @@ function nativeProbe(url, options = {}, request = https.request) {
         });
         response.on("end", () => {
           clearTimeout(deadline);
-          resolve(
-            new Response(Buffer.concat(chunks), {
-              status: response.statusCode,
-              headers: {
-                "Content-Type":
-                  response.headers["content-type"] || "application/json",
-              },
-            }),
-          );
+          try {
+            resolve(
+              new Response(Buffer.concat(chunks), {
+                status: response.statusCode,
+                headers: {
+                  "Content-Type":
+                    response.headers["content-type"] || "application/json",
+                },
+              }),
+            );
+          } catch (e) {
+            reject(e);
+          }
         });
       },
     );

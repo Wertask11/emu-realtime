@@ -79,6 +79,23 @@ test("native responses have a hard byte bound", async () => {
     /PROBE_RESPONSE_LIMIT/,
   );
 });
+
+test("an unexpected upstream response cannot cause an uncaught stream callback exception", async () => {
+  const request = (_url, _options, callback) => {
+    const req = new EventEmitter();
+    req.destroy = (e) => req.emit("error", e);
+    req.end = () =>
+      setImmediate(() => {
+        const res = new EventEmitter();
+        res.statusCode = 101;
+        res.headers = {};
+        callback(res);
+        res.emit("end");
+      });
+    return req;
+  };
+  await assert.rejects(nativeProbe(URL, {}, request), TypeError);
+});
 test("configured proxy keeps the ordinary fetch path without choosing direct sockets", async () => {
   let calls = 0;
   const transport = createProbeTransport({
