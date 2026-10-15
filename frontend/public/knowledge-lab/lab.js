@@ -63,6 +63,13 @@
       "Geminiの無料枠に達しました。時間をおいて再度お試しください。課金へ切り替えません。",
     AI_MODEL_UNAVAILABLE:
       "設定したAIモデルを利用できません。運営にモデル設定の確認を依頼してください。",
+    AI_PROVIDER_AUTH_FAILED:
+      "Geminiの認証で拒否されました。運営によるAPIキーの設定確認が必要です。",
+    AI_PROVIDER_UNAVAILABLE:
+      "Geminiから応答を受け取れませんでした。少し時間をおいてお試しください。",
+    AI_INVALID_OUTPUT:
+      "AIの回答形式を確認できなかったため、分析結果を採用しませんでした。",
+    AI_SOURCE_COUNT: "分野を2〜3つ、元になる知識を2〜6件選んでください。",
     AI_PROVIDER_REQUEST_REJECTED:
       "AIへの送信を受け付けてもらえませんでした。手動研究を利用するか、運営へお問い合わせください。",
     AI_DAILY_LIMIT: "今日のAI利用上限に達しました。手動研究を利用できます。",
@@ -453,6 +460,10 @@
           "",
         )}<p class="hint">医療・法律・金融などの内容は個人の経験であり、専門的な助言や結果を保証するものではありません。出典の有無と正しさの検証は別です。</p>${lab.sourceAnswer ? `<p class="hint">元募集 ${esc(lab.sourceAnswer.requestId)}・元回答 ${esc(lab.sourceAnswer.answerId)}</p><button type="button" id="answerSource">元の募集・回答を見る</button>` : ""}<div class="actions"><button type="button" id="saveKnowledge">マイライブラリーに保存</button><button type="button" id="unsaveKnowledge">保存を外す</button><button type="button" id="useKnowledge">研究に使う</button>${p.editable ? '<button type="button" id="editKnowledge">編集</button><button type="button" id="withdrawKnowledge">公開を取り下げる</button><button type="button" id="archiveKnowledge">削除して非公開で保管</button><button type="button" id="restoreKnowledge" hidden>下書きに復元</button><button type="button" id="postHistory">編集履歴</button>' : ""}${p.authorSchoolParkId ? '<button type="button" id="openWriter">書き手を見る</button>' : ""}<button type="button" id="goodKnowledge">役に立った</button><button type="button" id="changeKnowledge">改善案を届ける</button><button type="button" id="proposeKnowledge">議題にする</button><button type="button" id="discussKnowledge">議論へ</button></div><div class="report-controls"><label for="reportReason">通報する理由</label><textarea id="reportReason" maxlength="1500"></textarea><button type="button" id="reportKnowledge">運営へ通報</button></div>`;
     $("#detailDialog").showModal();
+    $("#detailTitle").insertAdjacentHTML(
+      "afterend",
+      `<p class="hint">Gemini利用：${esc(aiSourceLabel(p))}。${p.editable ? "変更する場合は「編集」からAI利用の確認欄を設定して保存してください。" : "AI利用への同意を変更できるのは投稿者本人です。"}</p>`,
+    );
     if (lab.thirdPartyConfirmation) {
       const proof = lab.thirdPartyConfirmation;
       $("#detailBody").insertAdjacentHTML(
@@ -686,6 +697,10 @@
           body: { ...payload, key: keyFor("post", payload) },
         });
         state.post = await api("/posts/" + result.id, { auth: true });
+        if (state.selected.has(result.id)) {
+          state.selected.set(result.id, state.post);
+          selected();
+        }
         $("#editorDialog").close();
         status("経験知を保存しました。");
         await search();
@@ -694,14 +709,27 @@
       }
     });
   });
+  function aiSourceLabel(p) {
+    if (p.aiConsentAtAnalysis) return "分析時にAI利用同意を確認済み";
+    if (p.visibility && p.visibility !== "public")
+      return "非公開：AI分析の対象外";
+    return p.knowledgeLab?.aiUseConsent?.allowed === true
+      ? "AI利用同意あり"
+      : "AI利用同意なし（手動比較のみ）";
+  }
   function selected() {
     $("#selectedSources").innerHTML =
       [...state.selected.values()]
         .map(
           (p) =>
-            `<p class="source"><b>${esc(p.title)}</b> ${badges(p)} <button type="button" data-remove-source="${esc(p.id)}" aria-label="${esc(p.title)}を研究から外す">外す</button></p>`,
+            `<p class="source"><b>${esc(p.title)}</b> ${badges(p)} <span class="badge">${esc(aiSourceLabel(p))}</span> <button type="button" data-review-source="${esc(p.id)}">内容・同意を確認</button> <button type="button" data-remove-source="${esc(p.id)}" aria-label="${esc(p.title)}を研究から外す">外す</button></p>`,
         )
         .join("") || "<p>まだ元知識を選んでいません。</p>";
+    $("#selectedSources")
+      .querySelectorAll("[data-review-source]")
+      .forEach((button) =>
+        bindAsync(button, () => detail(button.dataset.reviewSource)),
+      );
     document.querySelectorAll("[data-remove-source]").forEach(
       (b) =>
         (b.onclick = () => {
@@ -785,13 +813,14 @@
         .join("")
     );
   }
+  let aiAnalysisBusy = false;
   function renderAIStatus(s) {
     state.aiStatus = s;
     $("#aiAvailability").textContent = s.available
       ? "実際の公開知識をGeminiで分析します。結果は未検証の仮説です。"
       : "AIは現在停止しています。手動の比較・研究ノートは利用できます。";
-    $("#analyzeSources").disabled = !s.available;
-    $("#reanalyzeSources").disabled = !s.available;
+    $("#analyzeSources").disabled = aiAnalysisBusy || !s.available;
+    $("#reanalyzeSources").disabled = aiAnalysisBusy || !s.available;
     $('#searchMode option[value="semantic"]').disabled = !s.semanticAvailable;
     $("#aiAdminStatus").textContent =
       `キー・無料枠確認：${s.configured ? "設定あり" : "未設定"}／Renderスイッチ：${s.environmentEnabled ? "有効" : "停止"}／運営停止：${s.stopped ? "停止" : "解除"}／モデル：${s.model || "未選択"}`;
@@ -840,8 +869,15 @@
     $("#research").scrollIntoView({ block: "start" });
   });
   async function analyzeSources(forceRefresh = false) {
-    const b = $("#analyzeSources");
-    b.disabled = true;
+    if (aiAnalysisBusy) return;
+    aiAnalysisBusy = true;
+    $("#analyzeSources").disabled = true;
+    $("#reanalyzeSources").disabled = true;
+    const feedback = $("#aiAnalysisFeedback");
+    feedback.hidden = false;
+    feedback.classList.remove("error");
+    feedback.textContent =
+      "公開状態・投稿者のAI利用同意を確認して分析しています…";
     try {
       const run = await api("/ai/analyze", {
         method: "POST",
@@ -861,7 +897,11 @@
       state.aiRun = run;
       state.selected.clear();
       for (const source of run.sources)
-        state.selected.set(source.id, { id: source.id, title: source.title });
+        state.selected.set(source.id, {
+          id: source.id,
+          title: source.title,
+          aiConsentAtAnalysis: true,
+        });
       selected();
       $("#detachAI").hidden = false;
       $("#aiResult").hidden = false;
@@ -882,12 +922,46 @@
       status(
         "分析を表示しました。内容と出典を確認してから、研究ノートとして保存できます。",
       );
+      feedback.textContent =
+        "分析が完了しました。③の問い・仮説・実践案へ入力しました。出典と内容を確認して保存してください。";
+    } catch (e) {
+      if (e.message === "AI_SOURCE_CONSENT_REQUIRED") {
+        await Promise.allSettled(
+          [...state.selected.keys()].map(async (id) => {
+            const post = await api("/posts/" + id, { auth: true });
+            if (state.selected.has(id)) state.selected.set(id, post);
+          }),
+        );
+        selected();
+      }
+      const code = /^[A-Z][A-Z0-9_]{1,80}$/.test(e.message)
+        ? e.message
+        : "SERVICE_UNAVAILABLE";
+      let message = messages[code] || "分析を完了できませんでした。";
+      if (code === "AI_SOURCE_CONSENT_REQUIRED") {
+        const missing = [...state.selected.values()].filter(
+          (p) => p.knowledgeLab?.aiUseConsent?.allowed !== true,
+        );
+        if (missing.length)
+          message +=
+            " 同意が確認できない知識：" +
+            missing.map((p) => "「" + p.title + "」").join("、") +
+            "。外して分析するか、投稿者本人が編集画面でAI利用への同意を保存してください。";
+      }
+      feedback.classList.add("error");
+      feedback.textContent = `${message}（${code}）③には今回の分析結果を入力していません。`;
+      throw e;
     } finally {
-      await refreshAI();
+      aiAnalysisBusy = false;
+      try {
+        await refreshAI();
+      } catch (_) {
+        if (state.aiStatus) renderAIStatus(state.aiStatus);
+      }
     }
   }
-  bindAsync($("#analyzeSources"), () => analyzeSources());
-  bindAsync($("#reanalyzeSources"), () => analyzeSources(true));
+  $("#analyzeSources").onclick = () => run(() => analyzeSources());
+  $("#reanalyzeSources").onclick = () => run(() => analyzeSources(true));
   bindAsync($("#aiLoadModels"), () =>
     aiAdminAction("モデル一覧を取得しています…", async () => {
       const models = await api("/admin/ai/models", { auth: true });
@@ -995,6 +1069,7 @@
     state.aiRun = null;
     $("#detachAI").hidden = true;
     $("#aiResult").hidden = true;
+    $("#aiAnalysisFeedback").hidden = true;
     $("#noteForm").reset();
     state.selected.clear();
     selected();
