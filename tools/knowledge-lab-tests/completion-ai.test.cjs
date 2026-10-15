@@ -64,7 +64,7 @@ async function mock(url, opts) {
   const analysis = Object.fromEntries(CLAIM_KEYS.map((k) => [k, []]));
   analysis.summaries = input.sources.map((s) => ({
     text: "投稿の要点",
-    citations: [{ sourceId: s.id, quote: s.body.slice(0, 12) }],
+    citations: [{ sourceId: s.id, evidenceId: s.evidence[0].id }],
   }));
   analysis.hypotheses = [
     {
@@ -72,7 +72,7 @@ async function mock(url, opts) {
       citations: [
         {
           sourceId: input.sources[0].id,
-          quote: input.sources[0].body.slice(0, 12),
+          evidenceId: input.sources[0].evidence[0].id,
         },
       ],
     },
@@ -83,7 +83,7 @@ async function mock(url, opts) {
       citations: [
         {
           sourceId: input.sources[1].id,
-          quote: input.sources[1].body.slice(0, 12),
+          evidenceId: input.sources[1].evidence[0].id,
         },
       ],
     },

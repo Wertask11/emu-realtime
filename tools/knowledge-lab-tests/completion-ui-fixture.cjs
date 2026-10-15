@@ -34,7 +34,7 @@ async function providerMock(url, opts) {
   const src = JSON.parse(input.contents[0].parts[0].text).sources;
   const claim = (s, text) => ({
     text,
-    citations: [{ sourceId: s.id, quote: s.body.slice(0, 20) }],
+    citations: [{ sourceId: s.id, evidenceId: s.evidence[0].id }],
   });
   const result = Object.fromEntries(
     CLAIM_KEYS.map((k) => [
