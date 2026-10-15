@@ -65,6 +65,12 @@ test('existing navigation and native behavior remain identical outside the expli
   const before=cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
   let current=fs.readFileSync(path.join(root,file),'utf8');
   if(name==='index.html') {
+   // Preserve the latest main's reviewed Knowledge Lab hooks.
+   const starHook='    window.emuLabSendActivity?.(iframe);\n';
+   const reactionHook='    if (detail.ok) { syncKnowledgeFrame(); window.emuLabSyncIndex?.(detail.postId); }';
+   assert.equal(current.split(starHook).length-1,1);
+   assert.equal(current.split(reactionHook).length-1,1);
+   current=current.replace(starHook,'').replace(reactionHook,'    if (detail.ok) syncKnowledgeFrame();');
    // Intentional chat-only extension; every other byte stays under this regression.
    const {grab}=require('../year-goals-tests/extract.cjs');
    for (const fn of ['spReizoAnswer','spReizoSend','spReizoKeydown','_spReizoShowTyping']) current=current.replace(grab(current,fn),grab(before,fn));

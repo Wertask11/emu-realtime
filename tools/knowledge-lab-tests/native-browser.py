@@ -1,6 +1,6 @@
-import json,pathlib,urllib.parse
+import json,pathlib,urllib.parse,os
 from playwright.sync_api import sync_playwright
-OUT=pathlib.Path('/workspace/outputs/knowledge-lab-native');OUT.mkdir(parents=True,exist_ok=True)
+OUT=pathlib.Path(os.environ.get('LAB_TEST_OUTPUT','/workspace/outputs/knowledge-lab-native'));OUT.mkdir(parents=True,exist_ok=True)
 with sync_playwright() as p:
  b=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);c=b.new_context(viewport={'width':1366,'height':900});g=c.new_page();errors=[];blocked=[]
  g.on('pageerror',lambda e:errors.append(e.stack))

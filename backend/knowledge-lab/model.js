@@ -1,6 +1,6 @@
 "use strict";
 const crypto = require("node:crypto");
-const AXES = ["field", "job", "experience", "purpose", "kind", "genre"];
+const { AXES, PUBLIC_AXES } = require("./taxonomy");
 function fail(code, status = 400) {
   const e = new Error(code);
   e.status = status;
@@ -128,16 +128,55 @@ function indexPost(postId, p, now = Date.now()) {
     updatedAtMs: millis(p.updatedAt || p.createdAt),
     indexedAtMs: now,
     active: publicPost(p),
+    goodCount: Math.max(0, Number(p.goodCount) || 0),
   };
 }
 function searchParams(q) {
   const value = {
     q: normalize(String(q.q || "").slice(0, 120)),
-    sort: ["new", "updated", "relevance"].includes(q.sort) ? q.sort : "new",
+    mode: q.mode === "semantic" ? "semantic" : "lexical",
+    sort: ["new", "updated", "relevance", "popular", "saved"].includes(q.sort)
+      ? q.sort
+      : "new",
+    match: q.match === "exact" ? "exact" : "partial",
+    keywordOp: q.keywordOp === "or" ? "or" : "and",
+    facetOp: q.facetOp === "or" ? "or" : "and",
+    withinAxis: q.withinAxis === "and" ? "and" : "or",
+    exclude: normalize(String(q.exclude || "").slice(0, 120)),
   };
-  for (const a of AXES) value[a] = list(q[a] ? String(q[a]).split(",") : []);
+  for (const a of AXES) {
+    value[a] = list(q[a] ? String(q[a]).split(",") : []);
+    value["exclude_" + a] = list(
+      q["exclude_" + a] ? String(q["exclude_" + a]).split(",") : [],
+    );
+  }
   value.author = q.author ? id(q.author) : null;
   return value;
+}
+function keywordTerms(value) {
+  return [...normalize(value).matchAll(/"([^"]+)"|(\S+)/g)]
+    .map((m) => m[1] || m[2])
+    .filter(Boolean)
+    .slice(0, 16);
+}
+function includesKeyword(content, word, exact = false) {
+  if (!word) return true;
+  if (!exact) return content.includes(word);
+  let at = content.indexOf(word);
+  if (at < 0) return false;
+  // Real Japanese word boundaries, including contiguous quoted phrases.
+  const boundaries = new Set([0, content.length]);
+  for (const part of new Intl.Segmenter("ja", { granularity: "word" }).segment(
+    content,
+  )) {
+    boundaries.add(part.index);
+    boundaries.add(part.index + part.segment.length);
+  }
+  while (at >= 0) {
+    if (boundaries.has(at) && boundaries.has(at + word.length)) return true;
+    at = content.indexOf(word, at + 1);
+  }
+  return false;
 }
 function select(rows, query, taxonomy) {
   const aliases = new Map(
@@ -151,33 +190,75 @@ function select(rows, query, taxonomy) {
     }
     return value;
   }
-  const words = query.q.split(" ").filter(Boolean);
+  const words = keywordTerms(query.q),
+    excluded = keywordTerms(query.exclude);
+  const exact = query.match === "exact";
+  const terms = new Map(taxonomy.map((t) => [t.id, t]));
   const matched = [];
   for (const row of rows) {
+    const classificationText = Object.values(row.facets || {})
+      .flat()
+      .map((id) => terms.get(canonical(id)))
+      .filter(Boolean)
+      .flatMap((term) => [term.label, ...(term.aliases || [])])
+      .join(" ");
+    const content = normalize([row.text, classificationText].join(" "));
+    const wordMatches = words.map((w) => includesKeyword(content, w, exact));
     if (
       !row.active ||
       (query.author && row.authorSchoolParkId !== query.author) ||
-      words.some((w) => !row.text.includes(w))
+      (wordMatches.length &&
+        !(query.keywordOp === "or"
+          ? wordMatches.some(Boolean)
+          : wordMatches.every(Boolean))) ||
+      excluded.some((w) => includesKeyword(content, w, exact))
     )
       continue;
+    const axisMatches = AXES.filter((axis) => query[axis]?.length).map(
+      (axis) => {
+        const checks = query[axis].map((v) =>
+          (row.facets[axis] || []).some((f) => canonical(f) === canonical(v)),
+        );
+        return query.withinAxis === "and"
+          ? checks.every(Boolean)
+          : checks.some(Boolean);
+      },
+    );
     if (
-      !AXES.every(
-        (a) =>
-          !query[a].length ||
-          query[a].some((v) =>
-            (row.facets[a] || []).some((f) => canonical(f) === canonical(v)),
-          ),
+      (axisMatches.length &&
+        !(query.facetOp === "or"
+          ? axisMatches.some(Boolean)
+          : axisMatches.every(Boolean))) ||
+      AXES.some((axis) =>
+        (query["exclude_" + axis] || []).some((v) =>
+          (row.facets[axis] || []).some((f) => canonical(f) === canonical(v)),
+        ),
       )
     )
       continue;
     matched.push({
       ...row,
-      score: words.reduce((n, w) => n + (row.title.includes(w) ? 5 : 1), 0),
+      score: words.reduce(
+        (n, w) =>
+          n +
+          (includesKeyword(normalize(row.title), w, exact)
+            ? 5
+            : includesKeyword(content, w, exact)
+              ? 1
+              : 0),
+        0,
+      ),
     });
   }
   matched.sort(
     (a, b) =>
-      (query.sort === "relevance" ? b.score - a.score : 0) ||
+      (query.sort === "relevance"
+        ? b.score - a.score
+        : query.sort === "popular"
+          ? (b.goodCount || 0) - (a.goodCount || 0)
+          : query.sort === "saved"
+            ? (b.savedCount || 0) - (a.savedCount || 0)
+            : 0) ||
       (query.sort === "updated"
         ? b.updatedAtMs - a.updatedAtMs
         : b.createdAtMs - a.createdAtMs) ||
@@ -207,6 +288,7 @@ function safePost(postId, p, actor) {
     createdAt: millis(p.createdAt),
     updatedAt: millis(p.updatedAt || p.createdAt),
     knowledgeLab: p.knowledgeLab || null,
+    facets: facets(p),
     goodCount: Number(p.goodCount || 0),
     changeCount: Number(p.changeCount || 0),
     visibility: p.visibility || "public",
@@ -216,6 +298,7 @@ function safePost(postId, p, actor) {
 }
 module.exports = {
   AXES,
+  PUBLIC_AXES,
   fail,
   text,
   id,
@@ -229,6 +312,8 @@ module.exports = {
   facets,
   indexPost,
   searchParams,
+  keywordTerms,
+  includesKeyword,
   select,
   cursor,
   parseCursor,

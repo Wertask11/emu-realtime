@@ -8,6 +8,11 @@ if (parent !== window)
 fetch("/api/knowledge-lab/config")
   .then((r) => (r.ok ? r.json() : { enabled: false }))
   .then((config) => {
+    const aiStatus = document.getElementById("aiIntroStatus");
+    if (aiStatus)
+      aiStatus.textContent = config.aiAvailable
+        ? "手動の比較に加えて、同意済み公開知識のGemini分析を利用できます。"
+        : "AIは現在停止しています。手動の比較・研究ノートを利用できます。";
     if (config.enabled) return;
     const status = document.getElementById("availability");
     if (status)

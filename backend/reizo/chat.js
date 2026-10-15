@@ -29,7 +29,9 @@ function contentsFor(body, privateValues) {
   return contents;
 }
 function enabled(env) {
-  return env.REIZO_GEMINI_ENABLED === 'true' && !!env.GEMINI_API_KEY;
+  return env.REIZO_GEMINI_ENABLED === 'true' && !!env.GEMINI_API_KEY
+    && env.GEMINI_FREE_TIER_CONFIRMED === 'true'
+    && env.GEMINI_CLIENT_ELIGIBILITY_CONFIRMED === 'true';
 }
 function classify(error) {
   if (error?.status === 429) return 'rate_limited';

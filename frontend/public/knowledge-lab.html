@@ -99,7 +99,69 @@
             placeholder="例：独立、育児、失敗から学んだこと"
           />
           <p class="hint">
-            文字の部分一致検索。空白で区切ると、すべての言葉を含む知識を探します。
+            キーワードと複数の分類を組み合わせて探せます。検索方法は下で選べます。
+          </p>
+          <details id="advancedSearch">
+            <summary>検索方法・除外条件</summary>
+            <div class="facets">
+              <div>
+                <label for="keywordOp">キーワードの組み合わせ</label
+                ><select id="keywordOp">
+                  <option value="and">すべて含む（AND）</option>
+                  <option value="or">いずれかを含む（OR）</option>
+                </select>
+              </div>
+              <div>
+                <label for="match">一致方法</label
+                ><select id="match">
+                  <option value="partial">部分一致</option>
+                  <option value="exact">単語・フレーズの完全一致</option>
+                </select>
+              </div>
+              <div>
+                <label for="facetOp">異なる分類軸</label
+                ><select id="facetOp">
+                  <option value="and">すべて満たす（AND）</option>
+                  <option value="or">いずれかを満たす（OR）</option>
+                </select>
+              </div>
+              <div>
+                <label for="withinAxis">同じ分類軸の複数選択</label
+                ><select id="withinAxis">
+                  <option value="or">いずれかを含む</option>
+                  <option value="and">すべて含む</option>
+                </select>
+              </div>
+            </div>
+            <label for="exclude">含めないキーワード（空白区切り）</label
+            ><input id="exclude" maxlength="120" />
+            <p class="hint">
+              複数語を一つのフレーズとして探す場合は、半角の二重引用符で囲めます。完全一致は日本語の単語境界も確認します。
+            </p>
+            <details>
+              <summary>除外する分類</summary>
+              <div id="excludeFacets" class="facets"></div>
+            </details>
+          </details>
+          <label for="searchMode">探し方</label
+          ><select id="searchMode">
+            <option value="lexical">言葉・分類から探す</option>
+            <option value="semantic">文章の意味から探す（Gemini）</option>
+          </select>
+          <label class="check"
+            ><input
+              id="semanticConsent"
+              type="checkbox"
+            />意味検索では、入力した検索文をGoogle
+            Geminiへ送ることを確認しました。</label
+          >
+          <p class="hint">
+            意味検索はAI利用に同意済みの公開知識が対象で、意味の近さ順に表示します。秘密や個人情報を検索文へ入力しないでください。<a
+              href="/knowledge-lab-ai.html"
+              target="_blank"
+              rel="noopener"
+              >データの取り扱い</a
+            >
           </p>
           <div id="searchFacets" class="facets"></div>
           <div class="actions">
@@ -107,7 +169,9 @@
             ><select id="sort">
               <option value="new">新着順</option>
               <option value="relevance">関連度順</option>
-              <option value="updated">更新順</option></select
+              <option value="updated">更新順</option>
+              <option value="popular">役に立った数順</option>
+              <option value="saved">保存数順</option></select
             ><button class="primary" type="submit">この条件で探す</button
             ><button type="button" id="resetFilters">条件を緩める</button
             ><button type="button" id="shareSearch">条件のURLをコピー</button>
@@ -122,7 +186,7 @@
           2〜3分野の知識を選び、比較して、新しい問いや実践案を考えます。仮説は事実や検証結果と区別して残します。
         </p>
         <p class="notice">
-          現在は人が考える研究ノートです。AIによる自動生成は提供していません。
+          人が考える研究ノートとして利用できます。AIが有効な場合は、元知識を選ぶか、選択した分野から同意済みの公開知識を自動取得して分析できます。AIの結果は未検証の仮説です。
         </p>
         <form id="researchFind" class="card">
           <h3>1. 分野を2〜3つ選ぶ</h3>
@@ -142,6 +206,32 @@
           </button>
         </div>
         <div id="comparison" data-tour="lab-source" hidden></div>
+        <section class="card" id="aiResearch">
+          <h3>AIで経験知を掛け合わせる</h3>
+          <p id="aiAvailability">AIの利用状況を確認中です。</p>
+          <label class="check"
+            ><input
+              id="aiRequestConsent"
+              type="checkbox"
+            />選んだ公開知識と分野をGoogle
+            Geminiへ送ることを確認しました。</label
+          >
+          <p class="hint">
+            投稿者がAI利用に同意した公開知識のみが対象です。無料枠ではGoogleによるサービス改善等に入力・出力が利用される場合があります。個人情報・秘密は送らないでください。<a
+              href="/knowledge-lab-ai.html"
+              target="_blank"
+              rel="noopener"
+              >データの取り扱いと制限</a
+            >
+          </p>
+          <button id="analyzeSources" type="button" disabled>
+            選んだ知識をAIで分析する
+          </button>
+          <div id="aiResult" hidden aria-live="polite"></div>
+          <button id="reanalyzeSources" type="button" disabled>
+            出典を確かめて再分析する（利用枠を消費）
+          </button>
+        </section>
         <form id="noteForm" class="card" data-tour="lab-note">
           <h3>3. 問い・仮説・実践案を残す</h3>
           <label for="noteTitle">研究タイトル</label
@@ -167,6 +257,9 @@
           <div class="actions">
             <button type="submit" class="primary">研究ノートを保存</button
             ><button type="button" id="newNote">新しいノート</button>
+            <button type="button" id="detachAI" hidden>
+              元知識を選び直して手動で続ける
+            </button>
           </div>
         </form>
         <h3>公開されている研究</h3>
@@ -176,6 +269,10 @@
         </button>
       </section>
       <section id="mine" class="view" hidden>
+        <button id="syncActivities" type="button">
+          採用された改善案を活動履歴へ確認する
+        </button>
+        <p id="activityStatus" role="status"></p>
         <h2>マイライブラリー</h2>
         <p>
           保存した知識、非公開の経験知、研究ノートを続きから開けます。通常投稿の下書き・予約は既存のマイライブラリーから利用できます。
@@ -188,7 +285,8 @@
           ><button type="button" data-mine="archived">
             削除・保管した経験知</button
           ><button type="button" data-mine="notes">自分の研究ノート</button
-          ><button type="button" data-mine="archived-notes">保管した研究ノート</button
+          ><button type="button" data-mine="archived-notes">
+            保管した研究ノート</button
           ><button type="button" id="legacyLibrary">
             既存のマイライブラリー
           </button>
@@ -284,6 +382,13 @@
             公開投稿の検索索引を作成・再確認
           </button>
         </div>
+        <button type="button" id="semanticSeed">
+          公開投稿の意味検索対象を確認（25件ずつ）</button
+        ><button type="button" id="semanticIndex">
+          同意済み知識を意味索引へ登録（最大8件）</button
+        ><button type="button" id="adminSaveMetrics">
+          保存数を集計（100件ずつ・再開可能）
+        </button>
         <div id="adminSummary" class="card"></div>
         <div class="actions">
           <button type="button" data-admin-list="writers">書き手</button
@@ -291,14 +396,77 @@
           ><button type="button" data-admin-list="notes">研究</button
           ><button type="button" data-admin-list="requests">質問・未回答</button
           ><button type="button" data-admin-list="reports">通報</button
-          ><button type="button" id="reviewRewards">既存報酬の本人性を確認</button
+          ><button type="button" id="reviewRewards">
+            既存報酬の本人性を確認</button
           ><button type="button" data-admin-list="private_posts">
             取り下げ・非公開
           </button>
         </div>
         <div id="adminItems" class="grid"></div>
-        <button type="button" id="rewardReviewMore" hidden>報酬の本人性をさらに確認</button>
+        <button type="button" id="rewardReviewMore" hidden>
+          報酬の本人性をさらに確認
+        </button>
         <button type="button" id="adminMore" hidden>さらに確認</button>
+        <section class="card">
+          <h3>Geminiの無料枠・停止管理</h3>
+          <p id="aiAdminStatus"></p>
+          <button id="aiLoadModels" type="button">
+            APIで利用可能なモデルを取得
+          </button>
+          <form id="aiSettingsForm">
+            <label for="aiModel">分析モデル</label
+            ><select id="aiModel" required>
+              <option value="">モデルを取得してください</option>
+            </select>
+            <label for="aiEmbeddingModel">意味検索モデル（任意）</label
+            ><select id="aiEmbeddingModel">
+              <option value="">停止する</option>
+            </select>
+            <label class="check"
+              ><input id="aiFreeConfirmed" type="checkbox" required />AI
+              Studioで無料枠・請求先未設定を確認しました。課金は有効にしません。</label
+            >
+            <button type="submit">モデルを設定・無料枠内で利用する</button
+            ><button id="aiStop" type="button">AI・意味検索を停止する</button>
+          </form>
+          <p class="hint">
+            RenderのAIスイッチがfalseの場合、ここでモデルを設定しても実行されません。上限：全体で分析10回／日、埋め込み60回／日、同時2件。無料枠不足時は停止し、有料サービスへ切り替えません。
+          </p>
+        </section>
+        <section class="card">
+          <h3>知識の一部事項を運営が確認する</h3>
+          <p>
+            AI分析を確認記録として使いません。自己確認・投稿全体の正しさの保証とは区別します。
+          </p>
+          <p class="hint">
+            確認範囲の要約・確認者のPassport
+            ID・時刻を公開します。資料の所在や詳細記録は投稿者本人と運営だけが閲覧できます。
+          </p>
+          <form id="verifyForm">
+            <label for="verifyPostId">投稿ID</label
+            ><input id="verifyPostId" required maxlength="100" /><label
+              for="verifyRevision"
+              >現在の版番号</label
+            ><input id="verifyRevision" required type="number" min="0" /><label
+              for="verifySummary"
+              >実際に確認した範囲</label
+            ><textarea id="verifySummary" required maxlength="1000"></textarea
+            ><label for="verifyEvidence">確認記録・資料の所在</label
+            ><textarea
+              id="verifyEvidence"
+              required
+              minlength="20"
+              maxlength="1500"
+            ></textarea
+            ><label class="check"
+              ><input
+                id="verifyReviewed"
+                type="checkbox"
+                required
+              />本人以外として実際に確認し、記録を残すことを確認しました。</label
+            ><button type="submit">確認記録を保存</button>
+          </form>
+        </section>
         <h3>既存知識へ分類を付与・修正</h3>
         <form id="classifyForm" class="card">
           <label for="classifyId">公開投稿ID</label
@@ -324,6 +492,32 @@
             分類は運営による整理です。内容を検証済みと表示せず、投稿者自身が後から修正できます。
           </p>
         </form>
+        <section class="card">
+          <h3>以前の業種・職業分類を整理する</h3>
+          <p>
+            曖昧な分類を自動推測しません。運営が対応先を選び、対象を確認してから適用します。以前のID・本文は残します。
+          </p>
+          <form id="legacyMigrationForm">
+            <label for="legacyJob">以前の分類</label
+            ><select id="legacyJob" required></select
+            ><label for="legacyIndustry">対応する業種（任意）</label
+            ><select id="legacyIndustry">
+              <option value="">追加しない</option></select
+            ><label for="legacyOccupation">対応する職業（任意）</label
+            ><select id="legacyOccupation">
+              <option value="">追加しない</option></select
+            ><button type="submit">対象を確認（25投稿ずつ）</button>
+          </form>
+          <div id="legacyPreview" aria-live="polite"></div>
+          <label for="legacyReason">対応付けの理由</label
+          ><input id="legacyReason" maxlength="500" /><button
+            id="legacyApply"
+            type="button"
+            disabled
+          >
+            確認した対象へ分類を追加
+          </button>
+        </section>
         <h3>分類を管理</h3>
         <form id="taxonomyForm" class="card">
           <label for="termId">分類ID（変更できません）</label
@@ -335,13 +529,21 @@
           /><label for="termAxis">分類軸</label
           ><select id="termAxis">
             <option value="field">分野</option>
-            <option value="job">業種・職業</option>
+            <option value="industry">業種</option>
+            <option value="occupation">職業</option>
             <option value="experience">経験</option>
             <option value="purpose">目的</option>
             <option value="kind">知識の種類</option>
-            <option value="genre">ジャンル</option></select
+            <option value="genre">ジャンル</option>
+            <option value="difficulty">難易度</option>
+            <option value="audience">対象者</option>
+            <option value="period">経験した時期</option>
+            <option value="job">以前の業種・職業分類</option></select
           ><label for="termLabel">表示名</label
-          ><input id="termLabel" maxlength="60" required /><label class="check"
+          ><input id="termLabel" maxlength="60" required />
+          <label for="termAliases">同義語（カンマ区切り、12個まで）</label
+          ><input id="termAliases" maxlength="800" />
+          <label class="check"
             ><input id="termActive" type="checkbox" checked />表示する</label
           ><label for="termMerge">統合先の分類ID（任意・同じ軸）</label
           ><input id="termMerge" maxlength="100" />
@@ -378,7 +580,12 @@
       <form id="postForm">
         <div id="answerOrigin" class="notice" hidden>
           <p id="answerOriginText"></p>
-          <label><input type="checkbox" id="answerPublicationConsent" />回答を経験知として公開する内容と範囲を確認しました</label>
+          <label
+            ><input
+              type="checkbox"
+              id="answerPublicationConsent"
+            />回答を経験知として公開する内容と範囲を確認しました</label
+          >
         </div>
         <label for="postTitle">タイトル</label
         ><input id="postTitle" maxlength="160" required /><label for="postBody"
@@ -404,11 +611,36 @@
             <option value="self-reported">
               本人の経験（自己申告・未検証）
             </option>
+            <option value="in-progress">実践中（自己申告）</option>
+            <option value="needs-update">情報更新が必要</option>
             <option value="tested-by-author">
               投稿者が試した結果（自己申告）
             </option>
           </select>
         </details>
+        <label class="check"
+          ><input
+            id="postAIConsent"
+            type="checkbox"
+          />公開内容をGeminiの意味検索・掛け合わせに利用することに同意する（任意）</label
+        >
+        <p class="hint">
+          同意しなくても通常検索・投稿・手動研究を利用できます。無料枠ではGoogleのサービス改善に入力・出力が利用される場合があります。個人情報・秘密を含めないでください。<a
+            href="/knowledge-lab-ai.html"
+            target="_blank"
+            rel="noopener"
+            >取り扱いと同意の取り消し</a
+          >
+        </p>
+        <div id="researchOrigin" class="notice" hidden>
+          <p>自分の研究から経験知を届けます。元の研究は自動公開しません。</p>
+          <label class="check"
+            ><input
+              id="researchPublicationConsent"
+              type="checkbox"
+            />投稿内容と公開範囲を確認し、この経験知を公開することに同意します。</label
+          >
+        </div>
         <label for="postVisibility">公開範囲</label
         ><select id="postVisibility">
           <option value="draft">非公開の下書き</option>

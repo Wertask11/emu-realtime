@@ -1,5 +1,7 @@
 # Founder向け運営手順
 
+> これは初回PR #195の作業時の履歴資料です。現在の追加機能と公開状態は [completion-operations.md](completion-operations.md) を確認してください。
+
 この文書のURLは公開後の予定URLです。最終報告の公開判定がREADYになるまで、利用可能と案内しないでください。
 
 ## 最初の公開

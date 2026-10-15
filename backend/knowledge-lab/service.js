@@ -13,6 +13,8 @@ function createService({
   isOwner,
   emuerEnabled = () => false,
   now = Date.now,
+  queueSemantic = () => {},
+  verifyAI = async () => m.fail("AI_DISABLED", 503),
 }) {
   let cache = null,
     cacheUntil = 0,
@@ -23,6 +25,17 @@ function createService({
     rebuilding = null;
   const ref = (col, key) =>
     db.collection(COL(col)).doc(key === "security-probe" ? key : m.id(key));
+  const metrics = require("./analytics").createAnalytics({ db, ref, now });
+  const track = (...args) =>
+    metrics
+      .track(...args)
+      .catch(() => console.warn("Knowledge Lab: metrics update pending"));
+  const activity = require("./activity").createActivity({ db, ref, now });
+  const savedMetrics = require("./saved-metrics").createSavedMetrics({
+    db,
+    ref,
+    now,
+  });
   async function actor(req) {
     const a = req.identity;
     if (!a) m.fail("AUTH_REQUIRED", 401);
@@ -173,7 +186,7 @@ function createService({
             bytes += Buffer.byteLength(JSON.stringify(row));
             if (count > MAX_INDEX || bytes > MAX_BYTES)
               m.fail("SEARCH_CAPACITY_REACHED", 503);
-            batch.set(ref("search", d.id), row);
+            batch.set(ref("search", d.id), row, { merge: true });
           }
           await batch.commit();
           await ref("system", "index").set(
@@ -217,8 +230,12 @@ function createService({
         tx.delete(ref("search", postId));
         return;
       }
-      if (!m.owner(s.data(), a) && !a.owner) m.fail("NOT_OWNER", 403);
-      tx.set(ref("search", postId), m.indexPost(postId, s.data(), now()));
+      if (!m.publicPost(s.data()) && !m.owner(s.data(), a) && !a.owner)
+        m.fail("NOT_OWNER", 403);
+      tx.set(ref("search", postId), m.indexPost(postId, s.data(), now()), {
+        merge: true,
+      });
+      queueSemantic(tx, postId, s.data());
     });
     invalidate();
     return { ok: true };
@@ -227,9 +244,12 @@ function createService({
     const r = db.collection("posts").doc(m.id(postId));
     await db.runTransaction(async (tx) => {
       const s = await tx.get(r);
-      if (s.exists)
-        tx.set(ref("search", postId), m.indexPost(postId, s.data(), now()));
-      else tx.delete(ref("search", postId));
+      if (s.exists) {
+        tx.set(ref("search", postId), m.indexPost(postId, s.data(), now()), {
+          merge: true,
+        });
+        queueSemantic(tx, postId, s.data());
+      } else tx.delete(ref("search", postId));
     });
     invalidate();
   }
@@ -237,6 +257,11 @@ function createService({
     const params = m.searchParams(q),
       terms = await taxonomy(),
       all = await catalog();
+    if (
+      params.sort === "saved" &&
+      (await savedMetrics.status()).state !== "ready"
+    )
+      m.fail("SAVED_METRICS_NOT_READY", 503);
     const plan = a
       ? (await entitlement.getEntitlement(a.uid, a.account)).plan
       : "guest";
@@ -280,7 +305,14 @@ function createService({
           m.publicPost(s.data()) &&
           m.select([m.indexPost(s.id, s.data())], params, terms).length
         )
-          items.push(m.safePost(s.id, s.data(), a));
+          items.push({
+            ...m.safePost(s.id, await publicProof(s.id, s.data()), a),
+            savedCount: portion[i].savedCount || 0,
+            searchEvidence: {
+              keywords: m.keywordTerms(params.q),
+              classifications: m.AXES.filter((axis) => params[axis]?.length),
+            },
+          });
       }
     }
     return {
@@ -293,7 +325,7 @@ function createService({
       guestCapped: guest && all.length > 20,
       guestLimit: guest ? 20 : null,
       indexCheckedAt: cacheUntil - 60000,
-      searchMethod: "normalized-substring",
+      searchMethod: "japanese-lexical",
       aiAvailable: false,
     };
   }
@@ -325,8 +357,43 @@ function createService({
       m.fail("NOT_FOUND", 404);
     return archived.data();
   }
+  async function publicProof(postId, p) {
+    const proof = p.knowledgeLab?.thirdPartyConfirmation;
+    if (!proof) return p;
+    let record = null;
+    try {
+      const s = await ref("verification", m.id(proof.recordId)).get();
+      if (s.exists) record = s.data();
+    } catch (e) {
+      if (e.message !== "INVALID_ID") throw e;
+    }
+    const valid =
+      record &&
+      record.postId === postId &&
+      record.confirmedRevision === p.knowledgeLab.revision &&
+      record.reviewerSchoolParkId === proof.reviewerSchoolParkId;
+    return {
+      ...p,
+      knowledgeLab: {
+        ...p.knowledgeLab,
+        thirdPartyConfirmation: valid
+          ? {
+              recordId: proof.recordId,
+              summary: record.summary,
+              atMs: record.atMs,
+              reviewerSchoolParkId: record.reviewerSchoolParkId,
+              confirmedRevision: record.confirmedRevision,
+            }
+          : null,
+      },
+    };
+  }
   async function post(postId, a = null) {
-    return m.safePost(postId, await rawPost(postId, a), a);
+    return m.safePost(
+      postId,
+      await publicProof(postId, await rawPost(postId, a)),
+      a,
+    );
   }
   async function quota(tx, a, kind) {
     const ent = await entitlement.getEntitlement(a.uid, a.account);
@@ -368,37 +435,89 @@ function createService({
     return ref("operations", m.hash([a.spid, kind, key]));
   }
   async function answerDraft(a, answerId) {
-    const s = await db.collection('knowledge_answers').doc(m.id(answerId)).get();
-    if (!s.exists) m.fail('NOT_FOUND', 404);
+    const s = await db
+      .collection("knowledge_answers")
+      .doc(m.id(answerId))
+      .get();
+    if (!s.exists) m.fail("NOT_FOUND", 404);
     const answer = s.data();
-    const who = await identity.knowledgeParticipant(answer.answerAuthor, answer.authorSchoolParkId);
-    if (!who) m.fail('IDENTITY_REVIEW_REQUIRED',409);
-    if (who !== a.spid) m.fail('NOT_OWNER',403);
-    const requestId = m.id(answer.requestId), request = await db.collection('knowledge_requests').doc(requestId).get();
-    if (!request.exists) m.fail('NOT_FOUND',404);
-    const postId = 'kla-' + m.hash([a.spid, answerId]);
-    const present = await Promise.all([db.collection('posts').doc(postId).get(),ref('private_posts',postId).get(),ref('archived_posts',postId).get()]);
-    return {answerId,requestId,postId,existingPostId:present.some(s=>s.exists)?postId:null,
-      title:String(request.data().question||'回答から届ける経験知').slice(0,160),
-      body:answer.knowledge||'',happened:answer.experience||'',advice:answer.limits||'',facets:request.data().facets||{}};
+    const who = await identity.knowledgeParticipant(
+      answer.answerAuthor,
+      answer.authorSchoolParkId,
+    );
+    if (!who) m.fail("IDENTITY_REVIEW_REQUIRED", 409);
+    if (who !== a.spid) m.fail("NOT_OWNER", 403);
+    const requestId = m.id(answer.requestId),
+      request = await db.collection("knowledge_requests").doc(requestId).get();
+    if (!request.exists) m.fail("NOT_FOUND", 404);
+    const postId = "kla-" + m.hash([a.spid, answerId]);
+    const present = await Promise.all([
+      db.collection("posts").doc(postId).get(),
+      ref("private_posts", postId).get(),
+      ref("archived_posts", postId).get(),
+    ]);
+    return {
+      answerId,
+      requestId,
+      postId,
+      existingPostId: present.some((s) => s.exists) ? postId : null,
+      title: String(request.data().question || "回答から届ける経験知").slice(
+        0,
+        160,
+      ),
+      body: answer.knowledge || "",
+      happened: answer.experience || "",
+      advice: answer.limits || "",
+      facets: request.data().facets || {},
+    };
   }
   async function savePost(a, input) {
-    const originAnswer = input.answerId && !input.id ? await answerDraft(a, m.id(input.answerId)) : null;
-    if (originAnswer && input.visibility === 'public' && input.answerPublicationConsent !== true)
-      m.fail('ANSWER_PUBLICATION_CONSENT_REQUIRED', 403);
+    const originResearch =
+      input.sourceNoteId && !input.id
+        ? await note(m.id(input.sourceNoteId), a)
+        : null;
+    if (originResearch && originResearch.authorSchoolParkId !== a.spid)
+      m.fail("NOT_OWNER", 403);
+    if (originResearch?.archived) m.fail("ARCHIVED_NOTE_RESTORE_REQUIRED", 409);
+    if (
+      originResearch &&
+      input.visibility === "public" &&
+      input.researchPublicationConsent !== true
+    )
+      m.fail("RESEARCH_PUBLICATION_CONSENT_REQUIRED", 403);
+    const originAnswer =
+      input.answerId && !input.id
+        ? await answerDraft(a, m.id(input.answerId))
+        : null;
+    if (
+      originAnswer &&
+      input.visibility === "public" &&
+      input.answerPublicationConsent !== true
+    )
+      m.fail("ANSWER_PUBLICATION_CONSENT_REQUIRED", 403);
     const postId = input.id
       ? m.id(input.id)
-      : originAnswer ? originAnswer.postId : "kl-" + m.hash([a.spid, m.id(input.key)]);
+      : originAnswer
+        ? originAnswer.postId
+        : "kl-" + m.hash([a.spid, m.id(input.key)]);
     const visibility = input.visibility || "draft";
     if (!["public", "private", "draft"].includes(visibility))
       m.fail("INVALID_VISIBILITY");
     const title = m.text(input.title, 160, true),
       body = m.text(input.body, 5000, true);
     const previous = input.id ? await rawPost(postId, a) : null;
-    if (input.id && input.answerId && previous?.knowledgeLab?.sourceAnswer?.answerId !== input.answerId)
-      m.fail('INVALID_ANSWER_POST_ID');
-    if (previous?.knowledgeLab?.sourceAnswer && visibility === 'public' && input.answerPublicationConsent !== true)
-      m.fail('ANSWER_PUBLICATION_CONSENT_REQUIRED',403);
+    if (
+      input.id &&
+      input.answerId &&
+      previous?.knowledgeLab?.sourceAnswer?.answerId !== input.answerId
+    )
+      m.fail("INVALID_ANSWER_POST_ID");
+    if (
+      previous?.knowledgeLab?.sourceAnswer &&
+      visibility === "public" &&
+      input.answerPublicationConsent !== true
+    )
+      m.fail("ANSWER_PUBLICATION_CONSENT_REQUIRED", 403);
     if (previous && !m.owner(previous, a)) m.fail("NOT_OWNER", 403);
     if (previous?.visibility === "archived")
       m.fail("ARCHIVED_POST_RESTORE_REQUIRED", 409);
@@ -412,9 +531,21 @@ function createService({
       learned: m.text(input.learned || "", 2000),
       advice: m.text(input.advice || "", 2000),
       sources: m.text(input.sources || "", 1500),
-      verification: ["self-reported", "tested-by-author"].includes(
-        input.verification,
-      )
+      aiUseConsent:
+        input.aiUseConsent === undefined
+          ? previous?.knowledgeLab?.aiUseConsent || { allowed: false }
+          : {
+              allowed: input.aiUseConsent === true,
+              version: 1,
+              actorSchoolParkId: a.spid,
+              atMs: now(),
+            },
+      verification: [
+        "self-reported",
+        "tested-by-author",
+        "in-progress",
+        "needs-update",
+      ].includes(input.verification)
         ? input.verification
         : "self-reported",
     };
@@ -432,25 +563,39 @@ function createService({
       t = now();
     const fingerprint = m.hash({ ...input, id: postId });
     const result = await db.runTransaction(async (tx) => {
-      const [seen, ps, ds, writer, control] = await Promise.all([
-        tx.get(op),
-        tx.get(pub),
-        tx.get(priv),
-        tx.get(ref("writers", a.spid)),
-        tx.get(ref("post_control", postId)),
-      ]);
+      const [seen, ps, ds, writer, control, metrics, research] =
+        await Promise.all([
+          tx.get(op),
+          tx.get(pub),
+          tx.get(priv),
+          tx.get(ref("writers", a.spid)),
+          tx.get(ref("post_control", postId)),
+          tx.get(ref("post_metrics", postId)),
+          originResearch
+            ? tx.get(ref("notes", originResearch.id))
+            : Promise.resolve(null),
+        ]);
       if (seen.exists) {
         if (seen.data().fingerprint !== fingerprint)
           m.fail("IDEMPOTENCY_CONFLICT", 409);
         return seen.data().result;
       }
+      if (
+        originResearch &&
+        (!research?.exists ||
+          research.data().revision !== originResearch.revision ||
+          research.data().archived ||
+          research.data().authorSchoolParkId !== a.spid)
+      )
+        m.fail("REVISION_CONFLICT", 409);
       const old = ds.exists
         ? ds.data()
         : ps.exists && m.publicPost(ps.data())
           ? ps.data()
           : null;
       if (old && !m.owner(old, a)) m.fail("NOT_OWNER", 403);
-      if (originAnswer && !input.id && (ps.exists || ds.exists)) m.fail('ANSWER_ALREADY_POSTED', 409);
+      if (originAnswer && !input.id && (ps.exists || ds.exists))
+        m.fail("ANSWER_ALREADY_POSTED", 409);
       if (old?.knowledgeLab?.hidden) m.fail("MODERATED_POST", 403);
       const revision = old?.knowledgeLab?.revision || 0;
       if (old && input.revision !== revision) m.fail("REVISION_CONFLICT", 409);
@@ -495,19 +640,51 @@ function createService({
         knowledgeLab: {
           facets,
           ...details,
-          ...((originAnswer || old?.knowledgeLab?.sourceAnswer) ? {
-            sourceAnswer: originAnswer ? {requestId:originAnswer.requestId,answerId:originAnswer.answerId} : old.knowledgeLab.sourceAnswer,
-            ...(visibility==='public' ? {answerPublicationConsentAtMs:t} : {}),
-          } : {}),
+          ...(originAnswer || old?.knowledgeLab?.sourceAnswer
+            ? {
+                sourceAnswer: originAnswer
+                  ? {
+                      requestId: originAnswer.requestId,
+                      answerId: originAnswer.answerId,
+                    }
+                  : old.knowledgeLab.sourceAnswer,
+                ...(visibility === "public"
+                  ? { answerPublicationConsentAtMs: t }
+                  : {}),
+              }
+            : {}),
+          ...(originResearch && research.data().visibility === "public"
+            ? { sourceResearch: { noteId: originResearch.id, consentAtMs: t } }
+            : old?.knowledgeLab?.sourceResearch
+              ? { sourceResearch: old.knowledgeLab.sourceResearch }
+              : {}),
           revision: revision + 1,
           publishedOnce:
             visibility === "public" ||
             ps.exists ||
             !!old?.knowledgeLab?.publishedOnce,
           quality: "本人の経験（自己申告）",
+          thirdPartyConfirmation: null,
           hidden: false,
         },
       };
+      const recordActivity = await activity.prepare(tx, a, [
+        {
+          kind: "experience-posted",
+          targetId: postId,
+          visibility,
+          existingOnly: visibility !== "public",
+        },
+      ]);
+      queueSemantic(tx, postId, value);
+      recordActivity();
+      if (originResearch)
+        tx.set(ref("derived_links", postId), {
+          postId,
+          noteId: originResearch.id,
+          authorSchoolParkId: a.spid,
+          createdAtMs: t,
+        });
       consume();
       count();
       tx.set(
@@ -533,7 +710,14 @@ function createService({
       if (visibility === "public") {
         tx.set(pub, value);
         tx.delete(priv);
-        tx.set(ref("search", postId), m.indexPost(postId, value, t));
+        tx.set(
+          ref("search", postId),
+          {
+            ...m.indexPost(postId, value, t),
+            savedCount: metrics.exists ? metrics.data().savedCount || 0 : 0,
+          },
+          { merge: true },
+        );
       } else {
         tx.set(priv, value);
         if (value.knowledgeLab.publishedOnce)
@@ -555,6 +739,7 @@ function createService({
       return out;
     });
     invalidate();
+    if (visibility === "public") await track(a, "publish", postId);
     return result;
   }
   async function removePost(a, postId, revision, key) {
@@ -617,6 +802,7 @@ function createService({
         tx.set(pub, m.tombstone(p, rev + 1, now()));
       else tx.delete(pub);
       tx.delete(priv);
+      queueSemantic(tx, postId, { ...p, visibility: "archived" });
       if (p.knowledgeLab?.publishedOnce || ps.exists)
         tx.set(
           ref("search", postId),
@@ -713,7 +899,7 @@ function createService({
     const icon = input.icon || "";
     if (icon && !/^https:\/\//.test(icon)) m.fail("INVALID_ICON");
     m.text(icon, 500);
-    return db.runTransaction(async (tx) => {
+    const result = await db.runTransaction(async (tx) => {
       const r = ref("writers", a.spid),
         s = await tx.get(r),
         revision = s.exists ? s.data().revision : 0;
@@ -737,6 +923,8 @@ function createService({
       tx.set(r, value);
       return value;
     });
+    await track(a, "register", a.spid);
+    return result;
   }
   async function writer(spid, a) {
     const s = await ref("writers", spid).get();
@@ -816,6 +1004,18 @@ function createService({
       previous.exists ? { field: previous.data().fields } : null,
     );
     await sources(sourceIds, a, visibility === "public");
+    const aiRunId =
+      input.aiRunId === null
+        ? null
+        : input.aiRunId || previous.data()?.aiRunId || null;
+    const run = aiRunId ? await verifyAI(a, aiRunId) : null;
+    if (
+      run &&
+      (m.hash(run.sources.map((s) => s.id).sort()) !==
+        m.hash([...sourceIds].sort()) ||
+        m.hash([...run.fields].sort()) !== m.hash([...fields].sort()))
+    )
+      m.fail("AI_SOURCES_CHANGED", 409);
     const value = {
       authorSchoolParkId: a.spid,
       title: m.text(input.title, 160, true),
@@ -826,13 +1026,22 @@ function createService({
       plan: m.text(input.plan || "", 3000),
       result: m.text(input.result || "", 3000),
       visibility,
-      origin: "human",
+      origin: run ? "ai-hypothesis-human-editable" : "human",
+      ...(run
+        ? {
+            aiRunId,
+            aiAnalysis: run.analysis,
+            aiSources: run.sources,
+            aiModel: run.model,
+            aiGeneratedAtMs: run.createdAtMs,
+          }
+        : {}),
       verification: input.result?.trim()
         ? "author-reported-result"
         : "unverified-hypothesis",
       updatedAtMs: now(),
     };
-    return db.runTransaction(async (tx) => {
+    const result = await db.runTransaction(async (tx) => {
       const r = ref("notes", noteId),
         op = operation(a, key, "note");
       const [s, os, ...posts] = await Promise.all([
@@ -854,19 +1063,36 @@ function createService({
       if (s.exists && s.data().authorSchoolParkId !== a.spid)
         m.fail("NOT_OWNER", 403);
       if (s.exists && s.data().moderated) m.fail("MODERATED_NOTE", 403);
-      if (s.exists && s.data().archived) m.fail('ARCHIVED_NOTE_RESTORE_REQUIRED', 409);
+      if (s.exists && s.data().archived)
+        m.fail("ARCHIVED_NOTE_RESTORE_REQUIRED", 409);
       const revision = s.exists ? s.data().revision : 0;
       if (s.exists && input.revision !== revision)
         m.fail("REVISION_CONFLICT", 409);
       value.revision = revision + 1;
       value.createdAtMs = s.exists ? s.data().createdAtMs : now();
       value.archived = false;
+      const recordActivity = await activity.prepare(tx, a, [
+        { kind: "research-created", targetId: noteId, visibility },
+        ...(s.exists &&
+        ["question", "hypothesis", "plan", "result"].some(
+          (key) => s.data()[key] !== value[key],
+        )
+          ? [{ kind: "research-contributed", targetId: noteId, visibility }]
+          : []),
+        ...(value.result.trim()
+          ? [
+              { kind: "hypothesis-practiced", targetId: noteId, visibility },
+              { kind: "practice-reported", targetId: noteId, visibility },
+            ]
+          : []),
+      ]);
       if (!s.exists) {
         const count = await tx.get(ref("limits", a.spid));
         const n = count.exists ? count.data().notes || 0 : 0;
         if (n >= 1000) m.fail("NOTE_LIMIT", 403);
         tx.set(ref("limits", a.spid), { notes: n + 1 }, { merge: true });
       }
+      recordActivity();
       if (s.exists)
         tx.set(ref("history", noteId + "-" + revision), {
           noteId,
@@ -881,6 +1107,9 @@ function createService({
       tx.set(op, { fingerprint, result: out, createdAtMs: now() });
       return out;
     });
+    await track(a, "research", noteId);
+    if (value.result.trim()) await track(a, "practice", noteId);
+    return result;
   }
   async function note(noteId, a = null) {
     const s = await ref("notes", noteId).get();
@@ -888,10 +1117,10 @@ function createService({
     const v = s.data();
     if (v.authorSchoolParkId === a?.spid || a?.owner)
       return { id: noteId, ...v };
-    if (v.archived) m.fail('NOT_FOUND', 404);
+    if (v.archived) m.fail("NOT_FOUND", 404);
     if (v.visibility !== "public") m.fail("NOT_FOUND", 404);
     try {
-      await sources(v.sourceIds, null, true);
+      await sources(v.sourceIds, a, true);
     } catch (_) {
       m.fail("SOURCE_WITHDRAWN", 404);
     }
@@ -922,68 +1151,145 @@ function createService({
       if (!s.exists || s.data().authorSchoolParkId !== a.spid)
         m.fail("NOT_FOUND", 404);
       if (s.data().revision !== revision) m.fail("REVISION_CONFLICT", 409);
-      const next = { ...s.data(),
+      const next = {
+        ...s.data(),
         archived: true,
         visibility: "private",
         revision: revision + 1,
         updatedAtMs: now(),
       };
-      tx.set(ref('history', noteId + '-' + revision), {
-        noteId, authorSchoolParkId: a.spid, actorSchoolParkId: a.spid,
-        previous: s.data(), next, changedAtMs: now(), action: 'archive'
+      tx.set(ref("history", noteId + "-" + revision), {
+        noteId,
+        authorSchoolParkId: a.spid,
+        actorSchoolParkId: a.spid,
+        previous: s.data(),
+        next,
+        changedAtMs: now(),
+        action: "archive",
       });
       tx.set(r, next);
       return { ok: true };
     });
   }
   async function restoreNote(a, noteId, revision) {
-    return db.runTransaction(async tx => {
-      const r = ref('notes', noteId), s = await tx.get(r);
-      if (!s.exists || s.data().authorSchoolParkId !== a.spid) m.fail('NOT_FOUND', 404);
-      if (s.data().revision !== revision) m.fail('REVISION_CONFLICT', 409);
-      if (!s.data().archived || s.data().moderated) m.fail('NOTE_NOT_RESTORABLE', 409);
-      const next = { ...s.data(), archived: false, visibility: 'private', revision: revision + 1, updatedAtMs: now() };
-      tx.set(ref('history', noteId + '-' + revision), {noteId, authorSchoolParkId:a.spid, actorSchoolParkId:a.spid, previous:s.data(), next, changedAtMs:now(), action:'restore'});
+    return db.runTransaction(async (tx) => {
+      const r = ref("notes", noteId),
+        s = await tx.get(r);
+      if (!s.exists || s.data().authorSchoolParkId !== a.spid)
+        m.fail("NOT_FOUND", 404);
+      if (s.data().revision !== revision) m.fail("REVISION_CONFLICT", 409);
+      if (!s.data().archived || s.data().moderated)
+        m.fail("NOTE_NOT_RESTORABLE", 409);
+      const next = {
+        ...s.data(),
+        archived: false,
+        visibility: "private",
+        revision: revision + 1,
+        updatedAtMs: now(),
+      };
+      tx.set(ref("history", noteId + "-" + revision), {
+        noteId,
+        authorSchoolParkId: a.spid,
+        actorSchoolParkId: a.spid,
+        previous: s.data(),
+        next,
+        changedAtMs: now(),
+        action: "restore",
+      });
       tx.set(r, next);
-      return {id:noteId, revision:next.revision};
+      return { id: noteId, revision: next.revision };
     });
   }
   async function ownNotes(a, q = {}) {
-    const result = await ownCollection('notes', a, q);
-    result.items = result.items.filter(n => !!n.archived === (q.archived === '1'));
+    const result = await ownCollection("notes", a, q);
+    result.items = result.items.filter(
+      (n) => !!n.archived === (q.archived === "1"),
+    );
     return result;
   }
   async function noteHistory(a, noteId, q = {}) {
     const current = await note(noteId, a);
-    if (!a.owner && current.authorSchoolParkId !== a.spid) m.fail('NOT_OWNER', 403);
-    let query = db.collection(COL('history')).where('noteId','==',m.id(noteId)).orderBy('__name__').limit(21);
+    if (!a.owner && current.authorSchoolParkId !== a.spid)
+      m.fail("NOT_OWNER", 403);
+    let query = db
+      .collection(COL("history"))
+      .where("noteId", "==", m.id(noteId))
+      .orderBy("__name__")
+      .limit(21);
     if (q.cursor) query = query.startAfter(m.id(q.cursor));
     const s = await query.get();
-    return {current, items:s.docs.slice(0,20).map(d=>({id:d.id,...d.data()})), next:s.size>20?s.docs[19].id:null};
+    return {
+      current,
+      items: s.docs.slice(0, 20).map((d) => ({ id: d.id, ...d.data() })),
+      next: s.size > 20 ? s.docs[19].id : null,
+    };
+  }
+  async function reconcileActivity(a, q = {}) {
+    const aliases = [
+      ...new Set(
+        [a.walletAddress, a.account?.chesAddress]
+          .filter(Boolean)
+          .map((v) => v.toLowerCase()),
+      ),
+    ];
+    if (!aliases.length) return { confirmed: 0, needsReview: 1, next: null };
+    let query = db
+      .collection("post_changes")
+      .where("fromAddress", "in", aliases)
+      .orderBy("__name__")
+      .limit(20);
+    if (q.cursor) query = query.startAfter(m.id(q.cursor));
+    const changes = await query.get();
+    let confirmed = 0,
+      needsReview = 0;
+    for (const doc of changes.docs) {
+      await db.runTransaction(async (tx) => {
+        const change = await tx.get(doc.ref);
+        if (!change.exists || change.data().status !== "accepted") return;
+        if (!/^[a-zA-Z0-9_-]{1,100}$/.test(change.data().postId || "")) {
+          needsReview++;
+          return;
+        }
+        const post = await tx.get(
+          db.collection("posts").doc(m.id(change.data().postId)),
+        );
+        if (!post.exists) return;
+        const who = await identity.knowledgeParticipant(
+          change.data().fromAddress,
+          change.data().authorSchoolParkId,
+        );
+        const recipient = await identity.knowledgeParticipant(
+          post.data().address,
+          post.data().authorSchoolParkId,
+        );
+        if (who !== a.spid || !recipient) {
+          needsReview++;
+          return;
+        }
+        if (recipient === a.spid) return;
+        const record = await activity.prepare(tx, a, [
+          {
+            kind: "knowledge-improved",
+            targetId: doc.id,
+            visibility: "private",
+          },
+        ]);
+        record();
+        confirmed++;
+      });
+    }
+    return {
+      confirmed,
+      needsReview,
+      next: changes.size === 20 ? changes.docs.at(-1).id : null,
+    };
   }
   async function saveBookmark(a, postId, on) {
     await rawPost(postId, a);
-    const r = ref("saved", m.hash([a.spid, postId]));
-    await db.runTransaction(async (tx) => {
-      const [s, ls] = await Promise.all([
-        tx.get(r),
-        tx.get(ref("limits", a.spid)),
-      ]);
-      const count = Number(ls.exists ? ls.data().saved || 0 : 0);
-      if (on && !s.exists) {
-        if (count >= 1000) m.fail("SAVED_LIMIT", 403);
-        tx.set(r, { authorSchoolParkId: a.spid, postId, createdAtMs: now() });
-        tx.set(ref("limits", a.spid), { saved: count + 1 }, { merge: true });
-      } else if (!on && s.exists) {
-        tx.delete(r);
-        tx.set(
-          ref("limits", a.spid),
-          { saved: Math.max(0, count - 1) },
-          { merge: true },
-        );
-      }
-    });
-    return { ok: true };
+    const result = await savedMetrics.save(a, postId, on);
+    if (on) await track(a, "save", postId);
+    invalidate();
+    return result;
   }
   async function bookmarks(a, q) {
     const result = await ownCollection("saved", a, q);
@@ -1008,6 +1314,19 @@ function createService({
     return { items: s.docs.map((d) => ({ id: d.id, ...d.data() })) };
   }
   return {
+    savedMetrics,
+    activity,
+    reconcileActivity,
+    metrics,
+    queueSemantic,
+    catalog,
+    publicProof,
+    readerPlan: async (a) => {
+      const plan = a
+        ? (await entitlement.getEntitlement(a.uid, a.account)).plan
+        : "guest";
+      return { plan, guest: entitlement.limitOf(plan, "post") <= 0 };
+    },
     actor,
     taxonomy,
     validateFacets,
@@ -1037,7 +1356,9 @@ function createService({
     note,
     publicNotes,
     archiveNote,
-    restoreNote, ownNotes, noteHistory,
+    restoreNote,
+    ownNotes,
+    noteHistory,
     saveBookmark,
     bookmarks,
     history,

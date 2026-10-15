@@ -1,6 +1,6 @@
-import json,pathlib,urllib.parse
+import json,pathlib,urllib.parse,os
 from playwright.sync_api import sync_playwright
-OUT=pathlib.Path('/workspace/outputs/knowledge-lab-release');OUT.mkdir(parents=True,exist_ok=True)
+OUT=pathlib.Path(os.environ.get('LAB_TEST_OUTPUT','/workspace/outputs/knowledge-lab-release'));OUT.mkdir(parents=True,exist_ok=True)
 BASE='http://127.0.0.1:4201';results=[]
 with sync_playwright() as p:
  b=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);c=b.new_context(viewport={'width':390,'height':844});g=c.new_page();errors=[]
@@ -27,8 +27,12 @@ with sync_playwright() as p:
  page=c.new_page()
  for width in [375,390,412,768,1024,1366]:
   page.set_viewport_size({'width':width,'height':900 if width>=768 else 844})
-  for name in ['writers','intro','guide']:
+  for name in ['writers','intro','guide','ai']:
    r=page.goto(BASE+'/knowledge-lab-'+name+'.html',wait_until='domcontentloaded');assert r.status==200;assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1');assert page.locator('h1').is_visible();page.screenshot(path=str(OUT/f'local-static-{width}-{name}.png'))
-  results.append({'width':width,'staticViews':['recruitment','intro','guide'],'horizontalOverflow':False,'result':'PASS'})
+  results.append({'width':width,'staticViews':['recruitment','intro','guide','aiPrivacy'],'horizontalOverflow':False,'result':'PASS'})
+ # Owner controls must also remain operable at the same widths.
+ g.evaluate('async()=>{await auth.signOut();await window.__localEmulatorLogin("owner")}');g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000);g.evaluate('openEmuKnowledgeLab("admin")');f=g.frame_locator('#spRoomFrame');f.locator('html[data-lab-ready="true"]').wait_for(timeout=30000)
+ for width in [375,390,412,768,1024,1366]:
+  g.set_viewport_size({'width':width,'height':900 if width>=768 else 844});f.locator('#admin').wait_for(state='visible');assert f.locator('html').evaluate('e=>e.scrollWidth<=innerWidth+1');assert f.locator('#verifyForm button[type=submit]').is_visible();g.screenshot(path=str(OUT/f'local-native-{width}-owner-controls.png'));results.append({'width':width,'ownerControls':['AI settings','verification','classification','moderation','metrics'],'horizontalOverflow':False,'result':'PASS'})
  assert not errors,errors
  (OUT/'responsive-results.json').write_text(json.dumps({'environment':'local native + actual Auth/Firestore emulators','pageErrors':errors,'results':results},ensure_ascii=False,indent=2));print(json.dumps(results,ensure_ascii=False,indent=2));b.close()

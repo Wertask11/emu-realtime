@@ -89,3 +89,14 @@ Camelliaは `api/camellia/chat.ts` → `lib/conversation/gemini-server.ts` → �
 4. この報告と結果を確認後、Productionへ反映し、実配信コード・有効フラグ・実応答・既存ログインと主要機能を確認する。現時点で完成条件の「本番でGemini会話できる」は未達。
 
 不具合時は `REIZO_GEMINI_ENABLED=false` にしてAIだけを停止できる。既存ルール・ガイド・問い合わせは利用可能。画面変更も戻す場合は今回の変更をrevertする。DB移行や保存済み会話データの削除は不要。
+
+
+## 本番反映時の追従・追加確認（2026-10-15）
+
+本番反映の指示に従い、最新main `f9029d960d546dffdbff0f9188fb54c46f6c5c96` を保持してPR #199の競合を解消。Knowledge Labが追加した星空への活動配信・リアクション後の索引更新を両方残し、ガイドの全体一致テストでも両変更を明示的に検証する。
+
+当初のEmu provider調査は `e978e016` 時点の記録。新mainにはKnowledge Lab用の保護されたGemini経路が追加されている。その公開条件との整合を取り、冷蔵庫くんのAI有効化にも既存の `GEMINI_FREE_TIER_CONFIRMED=true` と `GEMINI_CLIENT_ELIGIBILITY_CONFIRMED=true` を要求する。キーと `REIZO_GEMINI_ENABLED=true` だけでは公開しない。提供条件が適合していると運営が確認したという意味であり、デプロイ指示だけで確認済みとは扱わない。
+
+競合解消・共通ゲート追加後、会話/クライアント/ガイド28テストがPASS・失敗0・skip0。今回のAPI再確認は、実Express Routerへリクエストを渡す方式で、待受ソケットを作らず認証・制限・障害処理を検証した。ガイド比較にはGitから事前取得した変更前ファイルを使用。旧版で成功した541件・ブラウザ検証と今回の追加確認を区別し、実Gemini検証や本番応答の成功とは報告しない。
+
+本番設定の変更や秘密値の参照は行わない。反映後はフロント配信・バックエンドのreleaseCommit・ `/api/reizo/config` の応答を確認する。AIが停止中の場合も既存FAQ・チュートリアル・問い合わせを利用できる。

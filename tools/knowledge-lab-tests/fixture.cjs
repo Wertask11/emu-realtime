@@ -10,7 +10,7 @@ const {ensureVerifiedAccount,deriveAddress}=require('../../backend/verified-plat
 const ethers=require('../../backend/node_modules/ethers');const ROOT=path.resolve(__dirname,'../..');
 const PASSWORD='Emulator-only-password-123';
 async function signIn(role){const r=await fetch('http://127.0.0.1:9199/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=emulator-only',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:role+'@knowledge-lab.example.invalid',password:PASSWORD,returnSecureToken:true})});const d=await r.json();if(!r.ok)throw new Error('EMULATOR_LOGIN_FAILED');return d.idToken;}
-async function createFixture({port=0,reset=true}={}){
+async function createFixture({port=0,reset=true,aiEnv={},aiFetcher}={}){
   if(reset){const r=await fetch('http://127.0.0.1:8787/emulator/v1/projects/'+PROJECT+'/databases/(default)/documents',{method:'DELETE'});if(!r.ok)throw new Error('EMULATOR_RESET_FAILED');}
   const firebase=admin.initializeApp({projectId:PROJECT},'knowledge-lab-'+Date.now()),db=firebase.firestore(),firebaseAdmin={auth:()=>firebase.auth()};
   const identity=require('../../backend/identity').createIdentity({db,ethers}),entitlement=require('../../backend/entitlement').createEntitlement({db,identity});
@@ -20,7 +20,7 @@ async function createFixture({port=0,reset=true}={}){
   vm.createContext(context);
   vm.runInContext(grab('async function requireFirebaseUser(','app.use("/api/auth"')+grab('function requireOwner(','/* Room1')+grab('function rateLimit(','const uploadRateLimit'),context);
   const isOwner=a=>[a.walletAddress,a.account?.chesAddress].some(v=>context.SP_OWNER_ADDRESSES.includes(String(v||'').toLowerCase()));
-  const api=require('../../backend/knowledge-lab/router').createKnowledgeLabRouter({db,identity,entitlement,requireFirebaseUser:context.requireFirebaseUser,requireOwner:context.requireOwner,rateLimit:context.rateLimit,isOwner,emuerEnabled:()=>true,env:{KNOWLEDGE_LAB_ENABLED:'true',FIRESTORE_EMULATOR_HOST:'127.0.0.1:8787'}});
+  const api=require('../../backend/knowledge-lab/router').createKnowledgeLabRouter({db,identity,entitlement,requireFirebaseUser:context.requireFirebaseUser,requireOwner:context.requireOwner,rateLimit:context.rateLimit,isOwner,emuerEnabled:()=>true,aiFetcher,env:{...aiEnv,KNOWLEDGE_LAB_ENABLED:'true',FIRESTORE_EMULATOR_HOST:'127.0.0.1:8787'}});
   const app=express();app.use('/api/knowledge-lab',api.router);
   const server=app.listen(port,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));const base='http://127.0.0.1:'+server.address().port;
   const users={};
@@ -34,7 +34,7 @@ async function createFixture({port=0,reset=true}={}){
   const a={...users.owner,spid:users.owner.spid,walletAddress:users.owner.account.walletAddress.toLowerCase(),owner:true};await api.service.init(a);
   app.get('/test/lab-shell.html',(req,res)=>res.type('html').send(`<!doctype html><html lang="ja"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>LOCAL EMULATOR — Knowledge Lab</title><style>body{margin:0;font:14px sans-serif}header{height:50px;display:flex;gap:12px;align-items:center;padding:0 12px;background:#fff0db}iframe{display:block;width:100%;height:calc(100dvh - 50px);border:0}</style></head><body><header><b>検証用エミュレーター</b><label>ログイン <select id="role"><option>alice</option><option>bob</option><option>owner</option><option>guest</option></select></label><button id="signin">ログイン</button></header><iframe id="lab" title="Knowledge Lab" src="/knowledge-lab.html"></iframe><script>let token=null;window.emuAuthHeaders=async()=>{if(!token)throw new Error('AUTH_REQUIRED');return {'Content-Type':'application/json',Authorization:'Bearer '+token}};document.getElementById('signin').onclick=async()=>{const role=document.getElementById('role').value;const r=await fetch('http://127.0.0.1:9199/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=emulator-only',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:role+'@knowledge-lab.example.invalid',password:'${PASSWORD}',returnSecureToken:true})});const d=await r.json();if(!r.ok)throw new Error('EMULATOR_LOGIN_FAILED');token=d.idToken;document.getElementById('lab').src='/knowledge-lab.html';};window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===document.getElementById('lab').contentWindow&&e.data?.type==='emu-lab-action'){document.getElementById('lab').contentWindow.postMessage({type:'emu-lab-feedback',message:'既存画面への接続要求を検証環境で受け取りました。'},location.origin);}});</script></body></html>`));
   app.use(express.static(path.join(ROOT,'frontend/public')));
-  async function close(){await new Promise(resolve=>server.close(resolve));await firebase.delete();}
+  async function close(){api.close();await new Promise(resolve=>server.close(resolve));await firebase.delete();}
   return {app,server,base,db,api,users,identity,firebase,entitlement,middleware:context,call,close};
 }
 if(require.main===module){createFixture({port:4200}).then(async f=>{await f.api.service.rebuild({owner:true});await f.api.service.waitForRebuild();console.log('Local emulator frontend: '+f.base+'/test/lab-shell.html');}).catch(e=>{console.error(e.message);process.exitCode=1;});}

@@ -10,17 +10,24 @@ const express = require('../../backend/node_modules/express');
 const { createReizoRouter, generate, contentsFor, redact, enabled, SYSTEM_PROMPT } = require('../../backend/reizo/chat');
 const knowledge = require('../../backend/reizo/knowledge');
 const faq = require('../../frontend/public/reizo/knowledge');
-const env = { REIZO_GEMINI_ENABLED:'true', GEMINI_API_KEY:'TEST-NOT-A-REAL-KEY' };
+const env = { REIZO_GEMINI_ENABLED:'true', GEMINI_API_KEY:'TEST-NOT-A-REAL-KEY', GEMINI_FREE_TIER_CONFIRMED:'true', GEMINI_CLIENT_ELIGIBILITY_CONFIRMED:'true' };
 async function api(t, { generateReply = async () => 'ぼくと一緒に考えてみよう🧊', config = env } = {}) {
-  const app = express(); app.use(express.json());
   const limiter = new Map();
-  app.use('/api/reizo', createReizoRouter({ env:config, generateReply,
+  const router = createReizoRouter({ env:config, generateReply,
     requireFirebaseUser(req,res,next) { if(req.headers.authorization !== 'Bearer TEST') return res.sendStatus(401); req.identity = { uid:'PRIVATE_UID', walletAddress:'0x'+'a'.repeat(40), account:{ spid:'SP-PRIVATE-ID', name:'秘密の名前' } }; next(); },
     rateLimit: ({max}) => (req,res,next) => { const count=(limiter.get('user')||0)+1; limiter.set('user',count); return count>max ? res.sendStatus(429) : next(); }
-  }));
-  const server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
-  t.after(() => { server.closeAllConnections(); server.close(); });
-  return (body, token='TEST') => fetch(`http://127.0.0.1:${server.address().port}/api/reizo/chat`, {method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body)});
+  });
+  // Exercise the real Express router without privileged listening sockets.
+  return (body, token='TEST') => new Promise((resolve,reject) => {
+    let status=200;
+    const response={
+      set(){return response;},
+      status(value){status=value;return response;},
+      sendStatus(value){status=value;return response.json({});},
+      json(value){resolve({status,json:async()=>value,text:async()=>JSON.stringify(value)});return response;}
+    };
+    router.handle({method:'POST',url:'/chat',headers:{authorization:'Bearer '+token},body},response,error=>error?reject(error):reject(Error('UNHANDLED_ROUTE')));
+  });
 }
 test('all existing FAQ data and exact matcher outputs are preserved', () => {
   const before=execFileSync('git',['show','63fd3ee:frontend/public/index.html'],{cwd:root,encoding:'utf8',maxBuffer:8e6});
@@ -42,6 +49,8 @@ test('guide grounding uses current pages, includes stars and ignores arbitrary c
 });
 test('explicit feature flag and key are both required',()=>{
   assert.equal(enabled({GEMINI_API_KEY:'key'}),false);assert.equal(enabled({REIZO_GEMINI_ENABLED:'true'}),false);assert.equal(enabled(env),true);
+  assert.equal(enabled({...env, GEMINI_FREE_TIER_CONFIRMED:undefined}), false);
+  assert.equal(enabled({...env, GEMINI_CLIENT_ELIGIBILITY_CONFIRMED:undefined}), false);
 });
 test('private identifiers, wallet, contact and secrets are redacted with bounded history',()=>{
   const raw='秘密の名前 SP-PRIVATE-ID a@example.com 090-1234-5678 0x'+'a'.repeat(40)+' '+'a'.repeat(64)+' https://private.example/token';
