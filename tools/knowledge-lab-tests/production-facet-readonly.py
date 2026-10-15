@@ -18,6 +18,8 @@ with sync_playwright() as p:
   route.fulfill(status=response.status,headers=headers,body=response.read())
  c.route('**/*',relay);g=c.new_page();g.on('pageerror',lambda e:errors.append(str(e)))
  g.goto(BASE+'/knowledge-lab.html',wait_until='domcontentloaded');g.locator('html[data-lab-ready="true"]').wait_for(timeout=30000)
+ if g.locator('#rk-tour .rk-close').is_visible():g.locator('#rk-tour .rk-close').click()
+ if not g.locator('#searchClassifications').evaluate('el=>el.open'):g.locator('#searchClassifications > summary').click()
  group=g.locator('#searchFacets-field');group.locator('input').nth(0).click();group.locator('input').nth(1).click()
  assert group.locator('input:checked').count()==2
  assert '2件選択' in group.locator('.facet-selection').inner_text()

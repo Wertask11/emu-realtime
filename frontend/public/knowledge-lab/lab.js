@@ -193,6 +193,13 @@
       integration("close");
     }
   });
+  $("#backToEmu").addEventListener("click", (e) => {
+    if (parent !== window) {
+      e.preventDefault();
+      integration("close");
+    }
+  });
+  bindAsync($("#searchExistingKnowledge"), () => view("library"));
   function showLogin() {
     const link = $("#loginLink");
     link.href = "/?lab=" + encodeURIComponent(state.view);
@@ -257,6 +264,9 @@
         group.addEventListener("change", () => facetSelection(group));
         facetSelection(group);
       });
+    const disclosure = $(target).closest("details");
+    if (disclosure)
+      disclosure.open = !!$(target).querySelector("input:checked");
   }
   function facetSelection(group) {
     const selected = [...group.querySelectorAll("input:checked")];
@@ -375,6 +385,10 @@
     u.search = conditions().toString();
     return u;
   }
+  function searchModeUI() {
+    $("#semanticOptions").hidden = $("#searchMode").value !== "semantic";
+  }
+  $("#searchMode").addEventListener("change", searchModeUI);
   async function search(more = false) {
     const p = conditions();
     if (p.get("mode") === "semantic") {
@@ -424,11 +438,12 @@
       .querySelectorAll(".view")
       .forEach((el) => (el.hidden = el.id !== name));
     document
-      .querySelectorAll("[data-view]")
+      .querySelectorAll("nav [data-view]")
       .forEach((b) =>
         b.setAttribute("aria-pressed", String(b.dataset.view === name)),
       );
     if (!state.enabled) return;
+    tour?.enter(tourId(name));
     if (["mine", "writer", "requests", "admin"].includes(name) && !state.me)
       showLogin();
     if (state.loadedViews[name] && Date.now() - state.loadedViews[name] < 30000)
@@ -2069,6 +2084,7 @@
     $("#query").value = params.get("q") || "";
     $("#searchMode").value =
       params.get("mode") === "semantic" ? "semantic" : "lexical";
+    searchModeUI();
     for (const key of [
       "keywordOp",
       "match",
@@ -2106,6 +2122,7 @@
   });
   $("#resetFilters").onclick = () => {
     $("#searchForm").reset();
+    searchModeUI();
     for (const selector of ["#searchFacets", "#excludeFacets"])
       $(selector)
         .querySelectorAll("input[type=checkbox]")
@@ -2124,38 +2141,86 @@
     }
   });
   const tour = window.ReizoTour;
+  const tourId = (name) => "emu-lab-" + (name === "library" ? "welcome" : name);
   if (tour) {
-    tour.register(
-      "emu-lab",
-      [
-        {
-          target: "lab-intro",
-          label: "経験から、次の発見へ",
-          text: "知識図書館で経験知を探し、研究所で異なる知識を比較できるよ。",
-        },
-        {
-          target: "lab-tabs",
-          label: "図書館と研究所",
-          text: "分野から探すなら図書館。2〜3分野の知識から問いを考えるなら研究所へ。保存した記録はマイライブラリーに残るよ。",
-        },
-        {
-          target: "lab-library",
-          label: "まず、必要な知識へ",
-          text: "キーワードや複数の分類から探してみよう。見るだけで投稿や保存は行われないよ。",
-        },
+    const guides = {
+      library: [
+        [
+          "lab-intro",
+          "まずは、経験を探してみよう",
+          "図書館では投稿済みの経験を検索できるよ。経験者へ新しく質問したいときは「経験者に質問する」へ。",
+        ],
+        [
+          "lab-library",
+          "キーワードだけでも探せるよ",
+          "知りたいことを入力して検索。分野・業種などの細かい条件は、必要なときだけ開こう。自分の経験は「経験知を届ける」から書けるよ。",
+        ],
+        [
+          "lab-tabs",
+          "見つけた経験から、次の発見へ",
+          "異なる経験を組み合わせるなら研究所へ。保存した知識と研究の続きは、マイライブラリーに残るよ。",
+        ],
+        [
+          "lab-back",
+          "Emuへはここから戻れるよ",
+          "「Emuに戻る」で、もとのEmu画面へ。上の「使い方案内」から、この説明や今開いている画面の案内をいつでも見返せるよ。",
+        ],
       ],
-      {
-        label: "Knowledge Lab",
-        brand: "Emu",
-        isReady: () =>
-          state.enabled && state.terms.length > 0 && state.view === "library",
-      },
-    );
+      research: [
+        [
+          "lab-fields",
+          "組み合わせたい分野を2〜3つ選ぼう",
+          "分野を選んでからAI分析を始めると、同意済みの公開知識を自動で探すよ。元知識を自分で指定することもできるよ。",
+        ],
+        [
+          "lab-ai",
+          "AI分析と手動の比較は別の操作だよ",
+          "送信する内容を確認してAI分析を実行。成功すると引用付きの分析が表示され、下の問い・仮説・実践案が入力されるよ。「比較する（手動）」は元投稿と分類を並べる機能だよ。",
+        ],
+        [
+          "lab-note",
+          "内容を確認して、自分用に保存しよう",
+          "AIの答えは未検証の仮説。自分で修正して保存できるよ。現実で試した結果は、あとからこのノートへ追記しよう。案内だけではAIの実行や保存は行わないよ。",
+        ],
+      ],
+      mine: [
+        [
+          "lab-mine",
+          "自分の記録を続きから",
+          "公開した経験知、下書き、保存した知識、研究ノートを切り替えられるよ。ノートを開くと編集・履歴・保管・復元へ進めるよ。",
+        ],
+      ],
+      requests: [
+        [
+          "lab-requests",
+          "見つからない答えは、経験者へ聞いてみよう",
+          "ここはEmu「知識を探す」と同じ質問募集だよ。投稿済みの知識を検索する図書館とは使い分けよう。募集内容を入力し、自分で公開ボタンを押すまで投稿されないよ。",
+        ],
+      ],
+      writer: [
+        [
+          "lab-writer",
+          "どんな経験を書けるか、伝えてみよう",
+          "表示名と自己紹介から始めよう。分野や職歴は任意だよ。公開範囲を自分で選び、プロフィールを保存してから最初の経験を書いてみよう。",
+        ],
+      ],
+    };
+    for (const [name, steps] of Object.entries(guides))
+      tour.register(
+        tourId(name),
+        steps.map(([target, label, text]) => ({ target, label, text })),
+        {
+          label: "Knowledge Lab",
+          brand: "Emu",
+          auto: name === "library",
+          isReady: () =>
+            state.enabled && state.terms.length > 0 && state.view === name,
+        },
+      );
     $("#guide").onclick = () => {
-      run(async () => {
-        await view("library");
-        tour.restart("emu-lab");
-      });
+      if (state.view === "admin")
+        run(() => view("library").then(() => tour.restart(tourId("library"))));
+      else tour.restart(tourId(state.view));
     };
   }
   window.addEventListener("message", (e) => {
@@ -2193,7 +2258,9 @@
     if (p.get("compose") === "1") edit();
     if (p.get("edit"))
       edit(await api("/posts/" + p.get("edit"), { auth: true }));
-    if (tour && state.view === "library") tour.enter("emu-lab");
+    if ($("#searchFacets input:checked"))
+      $("#searchClassifications").open = true;
+    if (tour) tour.enter(tourId(state.view));
     document.documentElement.dataset.labReady = "true";
   }
   run(init);
