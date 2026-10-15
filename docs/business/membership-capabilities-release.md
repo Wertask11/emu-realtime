@@ -1,6 +1,6 @@
 # 合意したプラン枠・公式パス説明の実装と検証
 
-2026-10-15 / ブランチ `feat/membership-capabilities`。価格・機能枠・11月1日目標・JST暦月・既存公式パス方針はFounder合意済み。**この報告作成時点では今回の変更は未公開。既存Knowledge Labの本番確認とは別。**
+2026-10-15 / [PR #214](https://github.com/Wertask11/emu-realtime/pull/214) / ブランチ `feat/membership-capabilities`。価格・機能枠・11月1日目標・JST暦月・既存公式パス方針はFounder合意済み。**この報告作成時点では今回の変更は未公開。既存Knowledge Labの本番確認とは別。**
 
 ## 利用者に変わること
 
@@ -51,3 +51,11 @@
 本番のお客様台帳を読んだ一括dry-run、最初の5人の個別対象者の再認定、実決済は未実施。これらの実データを推測で作り直さない。
 
 SchoolParkの別売上目標と提案は [月10万円・事業者/団体の企画支援案](2026-10-15-schoolpark-monthly-100k-proposal.md)。新しい5万円の商品の販売価格はまだFounder未承認。
+
+## 反映準備の最新確認
+
+- Founderから、commit `994174d23b0db0fbe0ebe5bfac61d857f7a03e7b` のRules全文をFirebaseへ公開したとの回答を受領。Rulesを再変更したものではない。
+- 公開後、ProductionのLab設定は `enabled=true`、保護検査 `verified`、AI・意味検索とも利用可能。未ログインでの `/admin/ai`・`/me`・`/me/public-posts` はすべて401。これはアクセス保護の確認であり、配信済みRules全文の取得・ハッシュ照合ではない。
+- PR #214のVercelビルド・Preview Commentsは成功、mainとの差分に競合なし。PreviewのHTTP確認は、この実行環境の通信先許可が未適用でCONNECT 403。アプリ側の403とは区別する。
+- Previewホストの追加と再開手順をCodex環境設定の下書きへ保存。下書き保存だけでは稼働環境に適用されない。環境設定の保存・公開後、Preview確認を再開する。
+- この追記時点ではmain未反映。既存本番のRender SHAは `8378031b754e5e86d9575c6f15cf37eb0dec15be`。Rules反映済みとの回答を、今回の新コードがProduction配信済みという意味には使わない。
