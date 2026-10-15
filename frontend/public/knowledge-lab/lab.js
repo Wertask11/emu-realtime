@@ -765,8 +765,8 @@
         .join("")
     );
   }
-  async function refreshAI() {
-    const s = await api("/ai/status");
+  function renderAIStatus(s) {
+    state.aiStatus = s;
     $("#aiAvailability").textContent = s.available
       ? "実際の公開知識をGeminiで分析します。結果は未検証の仮説です。"
       : "AIは現在停止しています。手動の比較・研究ノートは利用できます。";
@@ -776,6 +776,49 @@
     $("#aiAdminStatus").textContent =
       `キー・無料枠確認：${s.configured ? "設定あり" : "未設定"}／Renderスイッチ：${s.environmentEnabled ? "有効" : "停止"}／運営停止：${s.stopped ? "停止" : "解除"}／モデル：${s.model || "未選択"}`;
   }
+  async function refreshAI() {
+    renderAIStatus(await api("/ai/status"));
+  }
+  let aiAdminBusy = false;
+  function aiSettingsFeedback(message, error = false) {
+    const el = $("#aiSettingsFeedback");
+    el.hidden = false;
+    el.textContent = message;
+    el.classList.toggle("error", error);
+  }
+  async function aiAdminAction(pending, action) {
+    if (aiAdminBusy) return;
+    aiAdminBusy = true;
+    const buttons = [
+      $("#aiLoadModels"),
+      $("#aiSettingsForm button[type=submit]"),
+      $("#aiStop"),
+    ];
+    buttons.forEach((b) => {
+      b.disabled = true;
+    });
+    $("#aiSettingsForm").setAttribute("aria-busy", "true");
+    aiSettingsFeedback(pending);
+    try {
+      await action();
+    } catch (e) {
+      aiSettingsFeedback(
+        messages[e.message] || messages.SERVICE_UNAVAILABLE,
+        true,
+      );
+      throw e;
+    } finally {
+      aiAdminBusy = false;
+      buttons.forEach((b) => {
+        b.disabled = false;
+      });
+      $("#aiSettingsForm").setAttribute("aria-busy", "false");
+    }
+  }
+  bindAsync($("#aiOpenResearch"), async () => {
+    await view("research");
+    $("#research").scrollIntoView({ block: "start" });
+  });
   async function analyzeSources(forceRefresh = false) {
     const b = $("#analyzeSources");
     b.disabled = true;
@@ -825,53 +868,72 @@
   }
   bindAsync($("#analyzeSources"), () => analyzeSources());
   bindAsync($("#reanalyzeSources"), () => analyzeSources(true));
-  bindAsync($("#aiLoadModels"), async () => {
-    const models = await api("/admin/ai/models", { auth: true });
-    $("#aiModel").innerHTML =
-      '<option value="">選択してください</option>' +
-      models
-        .filter((m) => m.methods.includes("generateContent"))
-        .map((m) => `<option value="${esc(m.id)}">${esc(m.id)}</option>`)
-        .join("");
-    $("#aiEmbeddingModel").innerHTML =
-      '<option value="">停止する</option>' +
-      models
-        .filter(
-          (m) =>
-            m.id === "gemini-embedding-001" &&
-            m.methods.includes("embedContent"),
+  bindAsync($("#aiLoadModels"), () =>
+    aiAdminAction("モデル一覧を取得しています…", async () => {
+      const models = await api("/admin/ai/models", { auth: true });
+      $("#aiModel").innerHTML =
+        '<option value="">選択してください</option>' +
+        models
+          .filter((m) => m.methods.includes("generateContent"))
+          .map((m) => `<option value="${esc(m.id)}">${esc(m.id)}</option>`)
+          .join("");
+      $("#aiEmbeddingModel").innerHTML =
+        '<option value="">停止する</option>' +
+        models
+          .filter(
+            (m) =>
+              m.id === "gemini-embedding-001" &&
+              m.methods.includes("embedContent"),
+          )
+          .map((m) => `<option value="${esc(m.id)}">${esc(m.id)}</option>`)
+          .join("");
+      const previous = state.aiStatus;
+      if ([...$("#aiModel").options].some((o) => o.value === previous?.model))
+        $("#aiModel").value = previous.model;
+      if (
+        [...$("#aiEmbeddingModel").options].some(
+          (o) => o.value === previous?.embeddingModel,
         )
-        .map((m) => `<option value="${esc(m.id)}">${esc(m.id)}</option>`)
-        .join("");
-    status(
-      "実APIのモデル一覧を取得しました。無料枠対象かはAI Studioでも確認してください。",
-    );
-  });
+      )
+        $("#aiEmbeddingModel").value = previous.embeddingModel;
+      aiSettingsFeedback(
+        "モデル一覧を取得しました。モデルと無料枠を確認して保存してください。",
+      );
+    }),
+  );
   $("#aiSettingsForm").addEventListener("submit", (e) => {
     e.preventDefault();
-    run(async () => {
-      await api("/admin/ai", {
+    run(() =>
+      aiAdminAction("設定を保存しています…", async () => {
+        const saved = await api("/admin/ai", {
+          method: "PUT",
+          auth: true,
+          body: {
+            model: $("#aiModel").value,
+            embeddingModel: $("#aiEmbeddingModel").value,
+            freeTierAttested: $("#aiFreeConfirmed").checked,
+          },
+        });
+        renderAIStatus(saved);
+        aiSettingsFeedback(
+          `保存しました。分析：${saved.available ? "有効" : "停止中"}／意味検索：${saved.semanticAvailable ? "有効" : "停止中"}。分析は掛け合わせ研究所から始められます。`,
+        );
+        $("#aiOpenResearch").hidden = !saved.available;
+      }),
+    );
+  });
+  bindAsync($("#aiStop"), () =>
+    aiAdminAction("AIの停止を保存しています…", async () => {
+      const saved = await api("/admin/ai", {
         method: "PUT",
         auth: true,
-        body: {
-          model: $("#aiModel").value,
-          embeddingModel: $("#aiEmbeddingModel").value,
-          freeTierAttested: $("#aiFreeConfirmed").checked,
-        },
+        body: { stopped: true },
       });
-      await refreshAI();
-      status("モデルを設定しました。Renderのスイッチと停止状態に従います。");
-    });
-  });
-  bindAsync($("#aiStop"), async () => {
-    await api("/admin/ai", {
-      method: "PUT",
-      auth: true,
-      body: { stopped: true },
-    });
-    await refreshAI();
-    status("AIと意味検索を停止しました。");
-  });
+      renderAIStatus(saved);
+      aiSettingsFeedback("AIと意味検索を停止しました。設定は保存済みです。");
+      $("#aiOpenResearch").hidden = true;
+    }),
+  );
   $("#noteForm").addEventListener("submit", (e) => {
     e.preventDefault();
     run(async () => {
@@ -1557,17 +1619,31 @@
   });
   bindAsync($("#adminRefresh"), adminSummary);
   bindAsync($("#adminSaveMetrics"), async () => {
-    const result = await api("/admin/save-metrics", {
-      method: "POST",
-      auth: true,
-      body: {},
-    });
-    status(
-      result.state === "ready"
-        ? "保存数の集計が完了しました。"
-        : `保存記録を${result.processed}件確認しました。もう一度押すと続きから集計します。`,
-    );
-    await adminSummary();
+    const feedback = $("#saveMetricsFeedback");
+    feedback.hidden = false;
+    feedback.classList.remove("error");
+    feedback.textContent = "保存記録を集計しています…";
+    try {
+      const result = await api("/admin/save-metrics", {
+        method: "POST",
+        auth: true,
+        body: {},
+      });
+      feedback.textContent =
+        result.state === "ready"
+          ? `保存数の集計が完了しました（${result.processed}件確認済み）。知識図書館で「保存数順」を利用できます。`
+          : `保存記録を${result.processed}件確認しました。もう一度押すと続きから集計します。`;
+      // The successful write remains visible even if the separate summary refresh fails.
+      await adminSummary();
+    } catch (e) {
+      if (feedback.textContent === "保存記録を集計しています…") {
+        feedback.classList.add("error");
+        feedback.textContent =
+          (messages[e.message] || messages.SERVICE_UNAVAILABLE) +
+          " 保存済みの進捗から再開できます。";
+      }
+      throw e;
+    }
   });
   bindAsync($("#adminInit"), async () => {
     await api("/admin/init", { method: "POST", auth: true, body: {} });
