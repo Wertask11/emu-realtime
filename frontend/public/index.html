@@ -4032,6 +4032,7 @@ html, body { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 }
 </style>
 <link rel="stylesheet" href="/tour/reizo-tour.css">
+<link rel="stylesheet" href="/service-header.css">
 <script defer src="/tour/reizo-tour.js"></script>
 <script defer src="/tour/reizo-tour-pages.js"></script>
 </head>
@@ -4936,7 +4937,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
     </div>
   </div>
 </nav>
-<header class="header" style="display: flex; align-items: center; padding: 0 20px; gap: 8px; flex-wrap: wrap;">
+<header class="header service-header" style="display: flex; align-items: center; padding: 0 20px; gap: 8px; flex-wrap: wrap;">
   <!-- 左タブを閉じているときだけ出る、開くためのボタン（SchoolPark と同じ作り） -->
   <button type="button" id="emuNavOpen" onclick="emuNavToggle()" title="サイドバーを開く">☰</button>
   <!-- 左タブが出ない幅のとき用。パスポート・ブランド切替・お問い合わせをまとめて開く -->
@@ -4947,13 +4948,13 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   <!-- ログインボーナスpill・公式NFTボタンは廃止。
        ログボは「今日のEmu」報酬カードに統合（オフチェーン化）。 -->
 
-  <div style="flex-grow: 1;"></div>
+  <div class="service-heading"><small>知識と経験を、次の一歩へ</small><strong>Emu</strong></div>
 
-  <div class="header-right" style="display: flex; align-items: center; gap: 8px;">
+  <div class="header-right service-tools" style="display: flex; align-items: center; gap: 8px;">
     <input type="search" class="search-bar" placeholder="検索..." data-i18n-placeholder="header.searchPlaceholder" style="padding:6px 10px; border:1px solid #ccc; border-radius:4px; width: 120px;">
     <button id="openPostFormButton" class="post-button" data-i18n="header.post">投稿</button>
     <div class="emu-account-wrap">
-      <button id="walletAddressButton" class="wallet-button" data-i18n="header.walletDisconnected"
+      <button id="walletAddressButton" class="wallet-button service-tool" data-i18n="header.walletDisconnected"
               onclick="toggleAccountMenu(event)" aria-haspopup="true" aria-expanded="false">ウォレット未接続</button>
       <!-- アカウントメニュー。プラン・プロフィール・対話の予定・ログイン方法・ログアウト -->
       <div id="emuAccountMenu" class="emu-account-menu" role="menu">
@@ -4978,6 +4979,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <button type="button" role="menuitem" class="danger" onclick="accountGo('logout')">ログアウト</button>
       </div>
     </div>
+    <button type="button" class="service-tool" id="emuHeaderReizo" data-tour="fridge" aria-label="冷蔵庫くんに聞く・使い方案内" title="冷蔵庫くんに聞く・使い方案内" onclick="if(window.ReizoTourAsk) window.ReizoTourAsk(this); else spReizoOpen();"><img src="/assets/mascot.jpg" alt=""></button>
+    <button type="button" class="service-tool" id="emuHeaderSettings" aria-label="設定" title="設定" onclick="openSettingsSheet()">⚙</button>
   </div>
 </header>
 
@@ -15840,9 +15843,9 @@ function emuPaintHeaderIdentity() {
   if (!btn) return;
   if (_emuHeadLabel === null) _emuHeadLabel = btn.textContent;
   const addr = _emuAddress();
-  if (!addr || !_emuPhoneLayout()) {
-    /* パソコン・タブレット（とログイン前）は、ほかの処理が決めた表示のまま。
-       スマホの幅で描いたあとに幅が変わったときだけ、元に戻す。 */
+  if (!addr || (!_emuPhoneLayout() && !btn.closest('.service-tools'))) {
+    /* 未接続時はログイン処理の表示を維持。共通ヘッダーではPCでも
+       本人が選んだ名前・画像の設定を利用する。 */
     if (_emuHeadIsOurs(btn)) {
       _emuHeadPut(btn, document.createTextNode(_emuHeadLabel));
       btn.classList.remove('emu-head-has-avatar');

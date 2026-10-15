@@ -55,7 +55,8 @@ test('一日シェアの「戻る」は、無くなった今日のEmu ではな�
   assert.equal(PAGES.indexOf('← 今日のEmu'), -1);
 });
 
-test('「設定」はスマホのメニューだけ（マイライブラリーの下）にあり、名前 / プロフィール画像 を選ぶ', () => {
+test('「設定」は共通ヘッダーと既存スマホメニューから開き、名前 / プロフィール画像 を選ぶ', () => {
+  assert.ok(INDEX.includes('id="emuHeaderSettings" aria-label="設定" title="設定" onclick="openSettingsSheet()"'));
   const lib = INDEX.indexOf("onclick=\"accountGo('library')\">マイライブラリー</button>");
   const set = INDEX.indexOf("class=\"emu-phone-only\" onclick=\"accountGo('settings')\">設定</button>");
   assert.ok(lib > 0 && set > lib && set - lib < 300, '設定がマイライブラリーの下に無い（またはスマホだけになっていない）');

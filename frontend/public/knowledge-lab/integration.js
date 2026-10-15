@@ -113,7 +113,9 @@
     const frame = document.getElementById("spRoomFrame");
     if (
       !frame ||
-      !frame.getAttribute("src")?.startsWith("/knowledge-lab.html?")
+      !/^\/knowledge-lab(?:-guide)?\.html(?:[?#]|$)/.test(
+        frame.getAttribute("src") || "",
+      )
     )
       return null;
     return frame;
