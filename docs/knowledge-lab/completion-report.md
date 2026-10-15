@@ -1,6 +1,6 @@
 # Emu Knowledge Lab — 完成機能追加の実装・検証報告
 
-本番反映作業で、GoogleのAPI対象年齢・地域条件と現行Emu規約の整合が未確認であることを確認した。実API成功とは別の公開条件であり、[本番反映とAI公開条件](production-release-2026-10-15.md) に停止条件・本人操作を記載。全機能READYには未達。
+最新の本番反映とAI有効化は [本番反映とAI有効化](production-release-2026-10-15.md) を参照。PR #196はmainへ反映済み。Founderの明示指示で、こちらで追加した提供条件の停止フラグを撤去する修正を進めた。無料枠・認証・同意・出典・Owner停止は維持。全機能READYは本番のモデル設定と本人操作確認後に判定する。
 
 2026-10-15更新。**実Gemini検証：PASS。総合判定：NOT READY（全機能の正式公開基準）**。実Geminiによる2／3分野の引用付き分析、保存・履歴・保管復元、実埋め込みによる日本語検索5例、同意撤回と所有権保護、6幅の画面操作を確認した。詳細は [実Gemini検証](live-gemini-verification.md)。データは明示的なローカル架空ケースであり、本番ユーザーの経験・本番利用検証と混同しない。追加版Preview・Productionは未検証、PR #196は未マージ。既存ProductionはPR #198で復旧し、今回も保護検査verified／enabled:true、AI無効を確認した。
 
