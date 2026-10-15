@@ -1,6 +1,6 @@
 # Emu Knowledge Lab — 完成機能追加の実装・検証報告
 
-2026-10-15更新。**総合判定：NOT READY（全機能の正式公開基準）**。追加コードとローカル検証は進めたが、実Gemini/意味検索の品質、Preview、本番追加機能を実証していない。既存Productionは一時 `RULES_NOT_VERIFIED` だったが、11:27・11:31 UTCの再確認では `enabled:true` に復帰した。その後再発し、診断PR #197で匿名アクセス検査のETIMEDOUTを確認した。通信PR #198を本番反映して復旧し、5分のキャッシュ更新後も再検査成功を確認した。古い成功報告だけを現在の稼働の証明にはしていない。
+2026-10-15更新。**実Gemini検証：PASS。総合判定：NOT READY（全機能の正式公開基準）**。実Geminiによる2／3分野の引用付き分析、保存・履歴・保管復元、実埋め込みによる日本語検索5例、同意撤回と所有権保護、6幅の画面操作を確認した。詳細は [実Gemini検証](live-gemini-verification.md)。データは明示的なローカル架空ケースであり、本番ユーザーの経験・本番利用検証と混同しない。追加版Preview・Productionは未検証、PR #196は未マージ。既存ProductionはPR #198で復旧し、今回も保護検査verified／enabled:true、AI無効を確認した。
 
 ## A. 前作業と現在
 
@@ -8,7 +8,7 @@
 - Founder本人確認：プロフィール保存、下書き→公開、研究保存→編集→履歴→保管→復元は前リリースで成功との報告。機械による本人ログイン検証とは区別する。
 - 新ブランチ：`feature/emu-knowledge-lab-completion`。追加PR [#196](https://github.com/Wertask11/emu-realtime/pull/196) はdraft・未マージ。実装コミット `e25d5668f0bc2dc5481f7b49635deab75cc5394f`。Vercelの追加Previewビルドは成功、Renderの追加版は未デプロイ。
 - 最新Render `/api/knowledge-lab/config`：HTTP200、`enabled:true`、`reason:null`、AI false、releaseCommit e978e01（最新証拠JSON）。Vercel Lab HTMLはHTTP200。旧版公開4画面×6幅を実際のHTTPS応答で表示確認した。200のHTMLだけで機能の稼働をPASSにしていない。
-- RenderのAIキー登録はFounder報告済み。このCodex環境の秘密情報は空、Gemini APIドメインは現行許可外。保存した設定案にキー要件・許可ドメインはあるが、保存だけでは適用されない。
+- RenderのAIキー登録はFounder報告済み。Codex側もキーready・ネットワークenforcedとなり、実モデル一覧・生成・埋め込みAPIの成功まで確認した。キー再登録や同じ通信設定を再度要求する必要はない。
 - Founderが共有したFirebase管理鍵は使用・保存していない。交換が必要。既存のFirebaseプロジェクト設定は emusch-2a111。FIREBASE_PROJECT_IDの省略自体は異常ではない。
 
 ## B. 25項目判定
@@ -20,10 +20,10 @@
 |1|経験知投稿|service.js / lab.js|投稿・公開・編集・下書き・権限PASS|未公開。旧版はFounder確認、11:31 UTCでは既存版復帰|
 |2|独立分類10軸|taxonomy.js / model.js / taxonomy-migration.js|旧49ID保持、97種、同義語、曖昧jobを推測しないPASS|未公開|
 |3|複数条件検索|model.js / service.js / lab.js|AND/OR/完全/部分/除外/URL/5順/0件PASS|未公開|
-|4|実際の意味検索|semantic.js / gemini.js|ベクトル取得・類似度・キャッシュ・公開範囲は模擬APIでPASS。実日本語品質未検証|未公開・実API未検証|
+|4|実際の意味検索|semantic.js / gemini.js|実Gemini埋め込み・日本語5例の期待結果1位、同意撤回/取り下げ除外PASS。大量・実利用者投稿での品質は未検証|未公開|
 |5|2〜3分野掛け合わせ|service.js / ai-service.js|手動比較、実投稿からの自動候補取得・不足表示PASS|未公開|
-|6|AIが実経験知を分析|gemini.js / ai-service.js|保存済みエミュレーター投稿→模擬AI入力/出力検証PASS|実Gemini成功なし|
-|7|AI参照元|gemini.js / lab.js|架空ID/引用拒否、元タイトル・引用・参照日時・範囲をUI確認PASS|未検証|
+|6|AIが実経験知を分析|gemini.js / ai-service.js|実APIが保存済み架空ケースを2／3分野で分析PASS。実在ユーザーの経験を分析した証拠ではない|追加版未公開|
+|7|AI参照元|gemini.js / lab.js|実生成2回の全引用を照合、元タイトル・引用・参照日時を実UI表示PASS。架空ID/引用拒否の回帰もPASS|未検証|
 |8|仮説と検証の区別|verification.js / model.js / lab.js|未検証AI、自己申告結果、実確認記録、偽メタデータ拒否PASS|未検証|
 |9|研究保存/編集|service.js / lab.js|手動/AI由来、人の編集・手動継続PASS|未公開。旧版Founder確認|
 |10|研究履歴|service.js / lab.js|本人/Owner専用、過去AI出典と生成内容のUI表示PASS|未公開。旧版Founder確認|
@@ -35,8 +35,8 @@
 |16|Passport/星空活動|activity.js / integration.js / star-activity.js|canonical Passport/活動重複防止、既存星/NFT/EMUER不変PASS|追加欄の実ネイティブUI・6幅・実別ユーザー切替PASS。本番は未検証|
 |17|Owner管理|router.js / lab.js|Owner一覧・分類・通報・注目・非公開/復元UI、一般ユーザー拒否PASS|未検証|
 |18|利用分析|analytics.js / router.js / lab.js|実成功イベント、重複防止、転換、0件分野、PIIなしPASS|未計測・未検証|
-|19|AI使用量/費用管理|ai-budget.js / ai-service.js / lab.js|回数・同時実行・停止・再試行・取得/未報告使用量PASS|無料プロジェクト/実使用量未検証|
-|20|PC/スマホ|Lab各HTML / lab.js|375/390/412/768/1024/1366、通常/模擬AI UI PASS|追加版未公開|
+|19|AI使用量/費用管理|ai-budget.js / ai-service.js / lab.js|実分析4,851＋疎通11トークン、埋め込み7 RPC（トークン不明）、失敗3試行と停止・キャッシュ計測PASS。無料枠申告、課金有効化なし|本番未検証・請求書未確認|
+|20|PC/スマホ|Lab各HTML / lab.js|375/390/412/768/1024/1366、通常/模擬AI/実生成結果のUI PASS|追加版未公開|
 |21|既存Emu/SchoolPark維持|root最小hook / integration.js|既存Emu/ガイド/バックエンド回帰、SchoolPark主要5画面×6幅、Room1の4領域、City DEMO保存PASS。全本番操作は未検証|診断/通信修正後の既存版復旧を確認。既存全本番機能PASSとはしない|
 |22|Rules/権限安全|既存firestore.rules / router.js|ローカルRules・API・本人性・一般ユーザー拒否PASS|11:31 UTCに旧版の安全検査成功。本番14領域の匿名検査成功。追加版32領域/認証済み他人の本番権限/Rules全文は未検証|
 |23|Production実動作|追加PRとVercel/Render|公開ゲート未通過|FAIL：追加未公開/既存版復帰|
@@ -45,19 +45,19 @@
 
 ## C. AIの実装状況
 
-APIはGoogle Gemini v1beta。モデルはOwnerが実APIのモデル一覧と無料枠を確認して選ぶ。現在、**本番で使う分析モデルは未確定、実分析結果は未取得**。`gemini-test-flash` はテスト専用の模擬名で、利用可能な実モデルを意味しない。埋め込み対応コードは `gemini-embedding-001` に限定する。
+APIはGoogle Gemini v1beta。実検証は `gemini-3.5-flash-lite` と `gemini-embedding-001` で成功。分析の実応答modelVersionも一致。2分野・3分野で保存済みローカル架空ケースを分析し、出典を照合して保存・履歴・保管復元まで確認した。本番でのOwner設定・利用確認は残る。`gemini-test-flash` は模擬テスト専用。`gemini-2.5-flash-lite` は一覧に載っても実生成404だったため、利用可能と扱わない。
 
 外部AIへは同意した公開本文/題名/元ID/分野だけ。非公開・下書き・過去の未同意データを送らない。作者名・UID・Passportをプロンプトに送らない。無料枠の提供元による改善利用/人の確認の可能性を説明し、投稿者・利用者の同意を分離する。秘密文字列フィルターは完全匿名化を保証しない。
 
 本文最大3,000文字/元知識、全体12,000文字、2〜6件。入力超過・不足・同意なし・架空引用・途中出力・枠超過は採用しない。参照範囲と原文引用を表示。AIの推論の正しさは未保証で、人が確認・編集する。
 
-分析10/日・1Passport3、埋め込み60RPC/日・1Passport15、同時2、25秒×再試行最大1回。内部索引は1日15RPCまで。リトライも枠消費。費用はGoogle側未課金確認を前提とし、有料契約/課金設定/フォールバックなし。料金表・無料枠の最新値、実使用量、実請求は未検証。取得済みトークンと未報告量を分ける。
+分析10/日・1Passport3、埋め込み60RPC/日・1Passport15、同時2、25秒×一時障害の再試行最大1回。内部索引は1日15RPCまで。リトライも枠消費。404等の恒久的拒否は再試行せず、モデル設定の確認を案内。公式料金表で分析モデルの無料枠を確認し、Founderの未課金申告に従って実行。有料契約/課金設定/有料フォールバックなし。実分析4,851＋疎通11トークン、埋め込み7RPC（トークン未報告）を記録した。請求書は未確認。
 
 ## D. 検索
 
 日本語語句/分類は無料のサーバー索引・NFKC・Intl.Segmenter。意味検索は実埋め込みを受け取る構成で、Firestoreの全文/意味検索能力を装わない。20件ページ、URL条件共有、20,000文書/64MiBの明示上限。新規/編集は索引・意味キューへ、非公開/保管/撤回は現在の正本を照合して除外。過去jobは根拠付きOwner移行のみ。既存全公開投稿の語句索引は再利用、外部AIは作者同意があるものだけ。
 
-意味検索の日本語品質・実API・20,000件負荷は未検証。比較用の制御ベクトルが目的の順位を返すことだけでは意味検索完成としない。
+実Geminiの文書・クエリ埋め込みで日本語5例の期待結果が1位となり、実ブラウザーでも結果・元本文の根拠を確認した。少数の架空ケースによる検証であり、本番投稿全体の品質・20,000件負荷は未検証。模擬ベクトルの順位だけを実API成功の証拠にしていない。
 
 ## E. Passport/星空/EMUER
 
@@ -91,26 +91,26 @@ Rules検査は安全ゲートであり、IAM/管理API/ネットワーク/クォ
 
 1. 共有したFirebase管理鍵を交換し、Render再デプロイ後に古い鍵を失効する。値をチャットへ貼らない。
 2. 安全検査の停止が再発した場合のみ、Render Logsの失敗段階/エラー**名・コードだけ**を確認する。11:31 UTCには旧版は復帰済み。秘密値を貼らない。
-3. Codex環境へGeminiキーを安全に登録し、保存したGoogle APIドメイン設定を適用する。Render登録は別。課金は許可されておらず有効化しない。
+3. Codexのキー登録・通信設定は完了し、実API成功まで確認済み。再設定不要。Renderの本番モデル設定・無料枠確認は公開ゲート通過後に行い、課金を有効化しない。
 4. 公開ゲート通過後、必要なOwnerログイン、無料枠/モデル確認、本人の本番保存・検索・AI操作確認を行う。
 
 Rules全文の再貼り付けを現時点で一律要求していない。今回ファイル差分なしだが、現在の公開状態は検証が必要。
 
 ## K. 最終確認
 
-「当初構想の完成形になったか」：**NO**。コード/ローカルの拡張は実装・検証したが、実Gemini、実意味検索品質、追加版Preview/Production、追加版32領域の本番安全検査が未完了。FounderがAIを含む全機能の正式完成として営業できる状態とは判定しない。未確認をPASSとしない。
+「当初構想の完成形になったか」：**NO（正式公開基準）**。実Geminiの分析・引用・実意味検索・保存・保護までローカルで成功したが、追加版Preview/Production、追加版32領域の本番安全検査・本人操作は未完了。FounderがAIを含む全機能の正式完成として営業できる状態とは判定しない。未確認をPASSとしない。
 
 ## テストと証拠
 
 - Backend全体：349 PASS、Emu+ガイド：174 PASS。
-- Lab/API/Rules/追加回帰：99 PASS（前リリース38件＋追加61件）、失敗0、skip0。Backend/Emu/ガイドと合わせ622 PASS。追加テストは分類、保存数、AI安全、意味検索、循環、保護ゲート。実Providerは模擬。
+- Lab/API/Rules/追加回帰：今回107 PASS（直前99件＋今回8件）、最終再実行の失敗0、skip0。既存Backend349・Emu/ガイド174の証拠と合わせ630件。今回はLab107件を再実行し、変更していない349＋174件まで再実行したとは主張しない。初回は106 PASS／1 FAIL（並行編集のエミュレーターRPC INVALID_ARGUMENT）。期待値を弱めず単独16件、全体107件の再実行でPASS。実API成功は別の証拠として記録。
 - 実ネイティブUI+エミュレーター：募集→ログイン→書き手→回答公開→検索/保存/通報→2/3分野→3更新/履歴→保管→再ログイン→復元/編集→Owner各一覧/注目/公開停止/復元。
 - AI UI：モデル操作→作者同意→自動元知識→模擬分析/引用→保存/再分析→手動継続→過去AI分析/引用履歴。意味検索は模擬ベクトル。6幅で横はみ出しなし。
 - `90/min` の既存制限は維持。ブラウザで実429とretryAfterMsを確認し、待機後200を確認。上限を増やしてテストを通していない。
 - 証拠は `/workspace/outputs/knowledge-lab-completion/`。Production現在状態は `production-current-config.json`、通常UIは `browser/`、模擬AI UIは `mock-ui/`。旧ceab本番写真は別ディレクトリに保持する。
 - 旧版Productionの公開Lab/募集/紹介/ガイド4画面×6幅（24表示）は横はみ出しなし。Chromiumの直接TLSはローカルCA信頼エラーのため、Pythonの通常TLS検証を通した実HTTPS応答をChromiumへ転送して表示した。HTMLを書き換えず、認証/書き込みを遮断。証拠 `production-current-public/results.json` とProductionラベルの写真。旧版/公開表示だけであり、追加版や本人操作をPASSにしない。
-- 実API用 `live-gemini.cjs` を追加。実モデル一覧→実分析→私用研究保存/履歴→実埋め込み→日本語検索をローカルに限定して実行する。現在はキー不足を実行前に検出しただけで、実API成功は未確認。
-- 追加版Preview、Production本人ログイン、LINE/wallet/実送金、全SchoolPark UI、実Gemini/品質/大量負荷、最新外部規約は未検証。
+- 実API用 `live-gemini.cjs` で、実モデル一覧→実分析→私用研究保存/履歴→実埋め込み→日本語検索が成功。追加で実3分野、5検索例、保管復元、同意撤回、他人アクセス拒否、Owner停止を確認。詳細・実使用量・失敗を [実Gemini検証](live-gemini-verification.md) に記録。
+- 追加版Preview、Production本人ログイン、LINE/wallet/実送金、全SchoolPark UI、本番投稿全体での検索品質/大量負荷、最新外部規約の法的確認は未検証。実Geminiの少数ケースは検証済み。
 
 ## 変更ファイル一覧
 
@@ -161,6 +161,8 @@ Rules全文の再貼り付けを現時点で一律要求していない。今回
 - `docs/knowledge-lab/completion-operations.md`
 - `docs/knowledge-lab/completion-outreach-draft.md`
 - `docs/knowledge-lab/completion-report.md`
+- `docs/knowledge-lab/live-gemini-verification.md`
+- `docs/knowledge-lab/evidence/live-gemini-2026-10-15.json`
 - `frontend/public/knowledge-lab-ai.html`
 - `frontend/public/knowledge-lab/recruitment.js`
 - `frontend/public/knowledge-lab/star-activity.js`
@@ -174,14 +176,15 @@ Rules全文の再貼り付けを現時点で一律要求していない。今回
 - `tools/knowledge-lab-tests/completion-ui-fixture.cjs`
 - `tools/knowledge-lab-tests/completion-ui.py`
 - `tools/knowledge-lab-tests/live-gemini.cjs`
+- `tools/knowledge-lab-tests/provider-errors.test.cjs`
 - `tools/knowledge-lab-tests/platform-fixture.cjs`
 - `tools/knowledge-lab-tests/platform-browser.py`
 
 ## 公開前の残件
 
 - 管理用秘密鍵の交換。侵害の発生は未確認だが、共有した鍵の継続使用は避ける。
-- P1：追加版の実Gemini/意味検索と本番統合が未検証。旧Productionの停止はETIMEDOUTと切り分け、通信修正後に再検査成功。引き続き監視が必要。
-- 必須：実Gemini分析、実日本語意味検索、参照元/同意/品質/無料利用の確認。
+- P1公開ゲート：追加版の本番統合が未検証。実Gemini・実意味検索のローカル検証は成功。旧Productionの停止は通信修正後に再検査成功。
+- 必須：本番の同意済み知識によるAI操作、検索品質・参照元・無料枠設定を確認。
 - 必須：追加版Previewと本番の正規ログイン後の保存/運営/回帰確認。
 - P2：本番の追加活動欄/新指標/最新Google条件の確認。
 - P3：20,000文書負荷、長期指標蓄積、実動画の撮影。
@@ -192,7 +195,7 @@ Rules全文の再貼り付けを現時点で一律要求していない。今回
 
 検証ドライバーは非同期の元知識取得完了と描画完了を待つよう修正した。Room1見出しは既存仕様では固定のRoom1なので、選択した各リテラシーの実項目を検証する。これらはアプリ機能修正ではなく検証手順の修正。
 
-2026-10-15の再確認では、旧Production ceab38eの `RULES_NOT_VERIFIED` が再発している（API取得時刻は証拠JSONにUTCで保持）。以前の一時復帰で現在をPASSにしない。追加版は引き続き未公開。Geminiシークレット/通信許可は現在の実行環境へ未適用で、設定案にも保存済みキーの紐付けがない。既存版の原因切り分けを最小の別修正で進める。
+この継続検証当初は旧Production ceab38eで `RULES_NOT_VERIFIED` が再発し、CodexのGemini設定も未適用だった。その後の本番復旧は次節、設定反映後の実API成功は冒頭と実Gemini検証報告を現在の正本とする。
 
 ## 本番の診断・通信修正完了（全機能完成とは別）
 
@@ -203,4 +206,4 @@ Rules全文の再貼り付けを現時点で一律要求していない。今回
 - 通信診断修正の検証は574 PASS。追加版へマージ後は99 Lab/Rules +349 Backend +174 Emu/ガイド =622 PASS・失敗0・skip0。旧2保護テストは共通5保護テストに統合し、二重計上しない。
 - マージ後に追加版の実ブラウザフローも再実行しPASS、ページ例外0。Gene/APIの模擬UI証拠を実API成功と扱わない。
 - PR #196は引き続きdraft・未マージ。最新の実装マージコミットは19315b27b90bc5ffa2a111ab7193ec276bfd4d83（報告更新コミットは別途GitHubのheadを参照）。現在の本番復旧でAIを含む全25項目READYとはしない。
-- Codexの実行環境はrevision9、Geminiキーなし/Google API許可なし、設定案のGemini bindingも未保存。Renderキー登録とこの環境の登録は別。本人による安全なキー入力/保存/Publishが必要。チャットへ値を貼らない。管理鍵交換確認、本番の正規Owner操作、実Gemini/意味品質、追加版Preview/Production統合は残条件。
+- その後Codexはrevision10でキーready・ネットワークenforcedとなり、実API成功まで確認した。キー再設定は不要。管理鍵交換確認、本番の正規Owner操作・同意済み本番知識による品質、追加版Preview/Production統合は残条件。

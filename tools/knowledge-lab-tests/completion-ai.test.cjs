@@ -16,6 +16,7 @@ let f,
   run,
   requests = [],
   malformed = false,
+  providerFailure = null,
   quota = false;
 const actor = (role) => ({
   ...f.users[role],
@@ -50,6 +51,13 @@ async function mock(url, opts) {
         error: { message: "do not expose raw body or credentials" },
       }),
       { status: 429 },
+    );
+  if (providerFailure)
+    return new Response(
+      JSON.stringify({ error: { message: "private error" } }),
+      {
+        status: providerFailure,
+      },
     );
   const data = JSON.parse(opts.body),
     input = JSON.parse(data.contents[0].parts[0].text);
@@ -346,6 +354,21 @@ test("forced reanalysis creates an immutable new generation and an explicit manu
   assert.equal(history.body.current.aiRunId, undefined);
   assert.equal(history.body.items[0].previous.aiRunId, run.id);
   assert.deepEqual(history.body.items[0].previous.aiAnalysis, run.analysis);
+});
+test("a model listed by Gemini but returning 404 consumes only one attempt without retry or fallback", async () => {
+  const before = requests.filter((r) => r.method === "POST").length;
+  providerFailure = 404;
+  try {
+    await assert.rejects(
+      f.api.ai.budget.call(owner, "analysis", () =>
+        f.api.ai.provider.analyze("gemini-test-flash", [], []),
+      ),
+      /AI_MODEL_UNAVAILABLE/,
+    );
+  } finally {
+    providerFailure = null;
+  }
+  assert.equal(requests.filter((r) => r.method === "POST").length - before, 1);
 });
 test("revoking source consent invalidates run access and cache retrieval", async () => {
   const p = (await f.call("GET", "/posts/" + ids[0], "alice")).body;

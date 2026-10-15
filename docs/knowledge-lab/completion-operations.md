@@ -71,13 +71,13 @@ AIだけの問題ならOwner停止とRender `KNOWLEDGE_LAB_AI_ENABLED=false`。�
 
 実行環境に安全なGeminiシークレットとGoogle API通信許可を適用し、Google側が無料枠・請求先なしであることを確認した後だけ実行する。キーをコマンド・ログ・チャットへ貼らない。`GEMINI_FREE_TIER_CONFIRMED=true`、`NODE_USE_ENV_PROXY=1` を使い、localhost/127.0.0.1への通信は既存のNO_PROXY設定でローカルのままにする。
 
-1. `NODE_PATH=backend/node_modules node tools/knowledge-lab-tests/live-gemini.cjs --list-models` で実APIのモデル一覧を取得する。課金を有効にせず、実一覧と無料枠からモデルを選び `GEMINI_ANALYSIS_MODEL` を設定する。
-2. 他のエミュレーターテスト/ブラウザーを止めてから `NODE_PATH=backend/node_modules node tools/knowledge-lab-tests/live-gemini.cjs` を実行する。Auth9199/Firestore8787、demoプロジェクトだけを使う。他のローカル検証との同時実行を避ける。
+1. `NODE_PATH=backend/node_modules node tools/knowledge-lab-tests/live-gemini.cjs --list-models` で実APIのモデル一覧を取得する。課金を有効にせず、実一覧と無料枠からモデルを選び `GEMINI_ANALYSIS_MODEL` を設定する。2026-10-15は `gemini-3.5-flash-lite` の実生成と `gemini-embedding-001` の実埋め込みが成功。`gemini-2.5-flash-lite` は一覧にあっても生成404だったため、一覧だけで利用可と判断しない。
+2. 他のエミュレーターテスト/ブラウザーを止めてから `NODE_PATH=backend/node_modules node tools/knowledge-lab-tests/live-gemini.cjs` を実行する。Auth9199/Firestore8787、demoプロジェクトだけを使う。他のローカル検証との同時実行を避ける。ドライバーは使用量・データを消さない。上限に達した際、リセットやアカウント変更で回避せず待機する。
 3. 明示的に架空ケースと表示したローカル投稿3件を作成し、実Gemini分析、出典検証、私用研究保存/編集/履歴、実埋め込み索引、日本語意味検索の順位を確認する。通常は分析1回・索引1RPC・検索1RPCで、既存の回数/再試行制限が適用される。定期処理はこの検証内で止める。
 4. 成功した実結果のみ `/workspace/outputs/knowledge-lab-completion/live-gemini/results.json` へ保存する。秘密値、認証ヘッダー、実ユーザー本文は出力しない。失敗はコードだけ報告し、固定応答へ置き換えない。
 
-この検証が成功しても、本番利用者の実体験を分析できた証拠や意味検索全体の品質証明ではない。本番で作者/利用者の同意、出典の正しさ、無料枠、保存/更新、既存回帰を別途確認してからREADYとする。キーがない現在は `GEMINI_SECRET_REQUIRED` で開始前に停止することを確認しただけで、実API成功は未確認。
+この検証が成功しても、本番利用者の実体験を分析できた証拠や意味検索全体の品質証明ではない。本番で作者/利用者の同意、出典の正しさ、無料枠、保存/更新、既存回帰を別途確認してからREADYとする。2026-10-15には設定反映後の実API成功まで確認済み。
 
 ## 継続作業の現在地
 
-2026-10-15：本番停止はPR #197で匿名アクセス検査のETIMEDOUTと切り分け、PR #198で復旧。main/Production e978e01。5分経過後の再検査も成功。追加PR #196は最新mainを取り込み、32保護領域を維持。622自動テストと実UI回帰はPASSだが、実Gemini/意味検索・追加版本番は未検証で未公開。CodexのGEMINI_API_KEYは未登録。設定案へ安全に入力して保存・Publish後、実API手順を実行する。Renderへの登録と混同しない。公開済みFirebase管理鍵の交換を確認する。
+2026-10-15：本番停止はPR #198で復旧。main/Production e978e01、今回も保護検査verified・Lab有効・AI無効。Codexのキーと通信設定は反映済みで再設定不要。実Geminiの2／3分野分析、実検索5例、保存・履歴・保管復元、同意撤回・所有権・停止、実生成結果の6幅UIが成功した。詳細は [実Gemini検証](live-gemini-verification.md)。追加PR #196はまだdraft・未公開で、Preview・本番本人操作・32領域の本番保護確認が残る。公開済みFirebase管理鍵の交換は本番公開時の確認事項として維持する。

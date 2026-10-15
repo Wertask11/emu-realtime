@@ -144,7 +144,11 @@ function createGemini({ env = process.env, fetcher = fetch, now = Date.now }) {
           ? "AI_FREE_QUOTA_EXHAUSTED"
           : response.status === 401 || response.status === 403
             ? "AI_PROVIDER_AUTH_FAILED"
-            : "AI_PROVIDER_UNAVAILABLE",
+            : response.status === 404
+              ? "AI_MODEL_UNAVAILABLE"
+              : response.status >= 400 && response.status < 500
+                ? "AI_PROVIDER_REQUEST_REJECTED"
+                : "AI_PROVIDER_UNAVAILABLE",
         response.status === 429 ? 429 : 502,
       );
     const raw = await response.text();

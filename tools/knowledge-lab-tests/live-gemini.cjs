@@ -26,7 +26,13 @@ async function main() {
   await provider.checkModel(model, "generateContent");
   await provider.checkModel("gemini-embedding-001", "embedContent");
   const { createFixture } = require("./fixture.cjs");
-  const f = await createFixture({ aiEnv: env });
+  const role = process.env.LAB_LIVE_ACTOR || "alice";
+  if (!["alice", "bob"].includes(role)) throw Error("LOCAL_ACTOR_REQUIRED");
+  const f = await createFixture({
+    aiEnv: env,
+    // Never erase live-call receipts or daily limits when rerunning this driver.
+    reset: false,
+  });
   f.api.close(); // Disable the background worker; this run has an explicit bounded call count.
   const invoke = async (method, route, role, input) => {
     const r = await f.call(method, route, role, input);
@@ -78,7 +84,7 @@ async function main() {
       fields: ["field-business", "field-education"],
       externalAIConsent: true,
     };
-    const run = await invoke("POST", "/ai/analyze", "alice", input);
+    const run = await invoke("POST", "/ai/analyze", role, input);
     assert.equal(run.origin, "ai-hypothesis");
     assert.equal(run.verification, "unverified");
     assert.equal(run.model, model);
@@ -90,10 +96,10 @@ async function main() {
       aiRunId: run.id,
       hypothesis: "実API出力の保存を確認する。現実で検証した仮説ではない。",
     };
-    const saved = await invoke("PUT", "/notes", "alice", noteInput);
-    const note = await invoke("GET", "/notes/" + saved.id, "alice");
+    const saved = await invoke("PUT", "/notes", role, noteInput);
+    const note = await invoke("GET", "/notes/" + saved.id, role);
     assert.deepEqual(note.aiAnalysis, run.analysis);
-    await invoke("PUT", "/notes", "alice", {
+    await invoke("PUT", "/notes", role, {
       ...noteInput,
       key: "live-api-note-edit",
       id: saved.id,
@@ -104,17 +110,25 @@ async function main() {
     const history = await invoke(
       "GET",
       "/notes/" + saved.id + "/history",
-      "alice",
+      role,
     );
     await invoke("POST", "/admin/semantic-seed", "owner", {});
     const indexing = await invoke("POST", "/admin/semantic-index", "owner", {});
-    assert.equal(indexing.processed, 3);
+    const vectors = await f.db.getAll(
+      ...ids.map((id) => f.api.service.ref("vectors", id)),
+    );
+    // A repeat may reuse already indexed sources without another embedding call.
+    assert.ok(
+      vectors.every(
+        (v) => v.exists && v.data().model === "gemini-embedding-001",
+      ),
+    );
     const query = "会社を辞めて独立したい";
     const search = await invoke(
       "GET",
       "/search?mode=semantic&sort=relevance&externalAIConsent=true&q=" +
         encodeURIComponent(query),
-      "alice",
+      role,
     );
     assert.equal(search.items[0]?.id || search.items[0]?.postId, ids[0]);
     assert.equal(search.items[0].searchEvidence.method, "meaning");
@@ -130,6 +144,8 @@ async function main() {
           checkedAt: new Date().toISOString(),
           environment: "local Auth/Firestore emulators + live Gemini",
           productionWrites: false,
+          localActor: role,
+          emulatorDataAndQuotasPreserved: true,
           examples:
             "explicitly labelled synthetic cases, not real user experiences",
           model,
