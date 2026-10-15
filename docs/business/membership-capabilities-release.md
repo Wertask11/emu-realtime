@@ -57,5 +57,7 @@ SchoolParkの別売上目標と提案は [月10万円・事業者/団体の企�
 - Founderから、commit `994174d23b0db0fbe0ebe5bfac61d857f7a03e7b` のRules全文をFirebaseへ公開したとの回答を受領。Rulesを再変更したものではない。
 - 公開後、ProductionのLab設定は `enabled=true`、保護検査 `verified`、AI・意味検索とも利用可能。未ログインでの `/admin/ai`・`/me`・`/me/public-posts` はすべて401。これはアクセス保護の確認であり、配信済みRules全文の取得・ハッシュ照合ではない。
 - PR #214のVercelビルド・Preview Commentsは成功、mainとの差分に競合なし。PreviewのHTTP確認は、この実行環境の通信先許可が未適用でCONNECT 403。アプリ側の403とは区別する。
-- Previewホストの追加と再開手順をCodex環境設定の下書きへ保存。下書き保存だけでは稼働環境に適用されない。環境設定の保存・公開後、Preview確認を再開する。
+- Previewホストの追加と再開手順をCodex環境設定へ保存。その後の編集設定には追加先が含まれ、未保存のdraft IDもなくなったことを確認。一方、稼働環境はrevision 10の古い許可リストのままで、実接続もCONNECT 403。設定の再保存を繰り返さず、新設定が適用された実行環境でPreview確認を再開する。
 - この追記時点ではmain未反映。既存本番のRender SHAは `8378031b754e5e86d9575c6f15cf37eb0dec15be`。Rules反映済みとの回答を、今回の新コードがProduction配信済みという意味には使わない。
+
+営業素材の公開文面・運営手順を最新の本番確認へ更新。紹介・募集・ガイドの390px /1366pxの本番公開画面6枚を取得し、横崩れ・ブラウザエラーなし。撮影記録は `docs/knowledge-lab/evidence/outreach-production-2026-10-15.json`。画像はモックではなく実HTTPS配信で、ログイン・書き込み・AI生成を行っていない。原稿・画像・動画編集指示のZIPを `/workspace/outputs/knowledge-lab-outreach/knowledge-lab-outreach-2026-10-15.zip` に納品。動画自体は未制作。

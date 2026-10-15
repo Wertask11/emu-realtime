@@ -59,7 +59,7 @@ Founderの本人アカウントで操作し、この会話で次の回答を得�
 |22|Rules・権限|firestore.rules、B/router.js安全検査、T/rules.test.cjs|本番保護検査verified。他人の非公開内容は取得していない|
 |23|本番動作|Vercel/Render公開、本人操作の上記記録|中核経路PASS。未実施の経路を含めて全件PASSにはしない|
 |24|募集ページ|knowledge-lab-writers.html・recruitment.js、公開ブラウザ|公開済み。既存利用資格と投稿枠を説明|
-|25|営業資料|completion-outreach-draft.md・completion-operations.md・公開ガイド・営業kit|文章素材あり。公開配信用の最終編集・実操作動画は未完成|
+|25|営業資料|completion-outreach-draft.md・completion-operations.md・公開ガイド・営業kit|公開機能を案内する文章へ更新。Production紹介・募集・ガイド画像と動画編集指示を納品。実操作動画は未制作|
 
 ## AI・検索・費用・データ
 
@@ -72,6 +72,6 @@ Founderの本人アカウントで操作し、この会話で次の回答を得�
 
 ## 今回の範囲と残り
 
-元の設計を縮小した判定ではなく、未実施の証拠を区別した記録。とくに実践結果→派生投稿→星空の実際の本人利用と、営業素材の最終仕上げは残る。新しいプラン保持枠・購入画面は `docs/business/membership-capabilities-release.md` に分離し、この本番確認で適用済みとは扱わない。
+元の設計を縮小した判定ではなく、未実施の証拠を区別した記録。とくに実践結果→派生投稿→星空の実際の本人利用は残る。営業用の文章・Production公開ページ画像・動画編集指示は `completion-outreach-draft.md` へ納品済み。実操作動画の撮影・編集は未実施。新しいプラン保持枠・購入画面は `docs/business/membership-capabilities-release.md` に分離し、この本番確認で適用済みとは扱わない。
 
 最終質問「当初構想の全機能が25項目すべて本番で実証された完成形か」：**UNVERIFIED**。実装・ローカル検証・中核本番の証拠はあるが、表の未報告を推定で埋めない。サービスが使えないという判定ではない。
