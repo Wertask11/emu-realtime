@@ -16,12 +16,6 @@ function createAI({
 }) {
   const provider = createGemini({ env, fetcher, now }),
     budget = createBudget({ db, ref: service.ref, now });
-  // Local, synthetic-data verification is separate from authorizing an API Client
-  // for public use under Google's age/region and free-service conditions.
-  const clientEligibilityConfirmed =
-    (env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:8787" &&
-      String(db.projectId || "").startsWith("demo-")) ||
-    env.GEMINI_CLIENT_ELIGIBILITY_CONFIRMED === "true";
   const control = () => service.ref("system", "ai-control");
   async function settings() {
     const s = await control().get();
@@ -39,18 +33,15 @@ function createAI({
     return {
       available:
         provider.enabled() &&
-        clientEligibilityConfirmed &&
         c.stopped === false &&
         c.freeTierAttested === true &&
         !!c.model,
       semanticAvailable:
         provider.enabled() &&
-        clientEligibilityConfirmed &&
         c.stopped === false &&
         c.freeTierAttested === true &&
         !!c.embeddingModel,
       configured: provider.configured(),
-      clientEligibilityConfirmed,
       environmentEnabled: env.KNOWLEDGE_LAB_AI_ENABLED === "true",
       stopped: c.stopped !== false,
       model: c.model || null,
@@ -60,8 +51,6 @@ function createAI({
   }
   async function requireEnabled(kind = "analysis") {
     const s = await status();
-    if (!s.clientEligibilityConfirmed)
-      m.fail("AI_CLIENT_ELIGIBILITY_REQUIRED", 503);
     if (!(kind === "analysis" ? s.available : s.semanticAvailable))
       m.fail("AI_DISABLED", 503);
     return settings();
