@@ -176,6 +176,11 @@ function rateLimit({ windowMs, max, key }) {
 const uploadRateLimit = rateLimit({ windowMs: 60_000, max: 10, key: "upload" });
 const publicFormRateLimit = rateLimit({ windowMs: 10 * 60_000, max: 5, key: "form" });
 
+// Conversation only: no identity/Passport/Quest/EMUER writes or model tools.
+app.use('/api/reizo', require('./reizo/chat').createReizoRouter({
+  requireFirebaseUser, rateLimit, env: process.env
+}));
+
 // =====================
 // 有料会員（月額10,000円）: 課金 / 返金 / 本人確認 / 対話記録
 // =====================
