@@ -4952,26 +4952,26 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   <div class="service-heading"><small>知識と経験を、次の一歩へ</small><strong>Emu</strong></div>
 
   <div class="header-right service-tools" style="display: flex; align-items: center; gap: 8px;">
-    <button type="button" class="service-plan" id="emuHeaderPlan" onclick="accountGo('plan')" aria-label="プラン・お支払い"><span class="service-plan-wide">プラン・お支払い</span><span class="service-plan-short">プラン</span></button>
     <input type="search" class="search-bar" placeholder="検索..." data-i18n-placeholder="header.searchPlaceholder" style="padding:6px 10px; border:1px solid #ccc; border-radius:4px; width: 120px;">
     <button id="openPostFormButton" class="post-button" data-i18n="header.post">投稿</button>
-    <div class="emu-account-wrap">
-      <button id="walletAddressButton" class="wallet-button service-tool" data-i18n="header.walletDisconnected"
-              onclick="toggleAccountMenu(event)" aria-haspopup="true" aria-expanded="false">ウォレット未接続</button>
+    <div class="emu-account-wrap" id="sharedAccountControls" style="display:none">
+      <button id="walletAddressButton" class="wallet-button" data-i18n="header.walletDisconnected"
+              onclick="accountGo('me')" title="名前と写真">ウォレット未接続</button>
       <!-- アカウントメニュー。プラン・プロフィール・対話の予定・ログイン方法・ログアウト -->
-      <div id="emuAccountMenu" class="emu-account-menu" role="menu">
+      <div id="emuAccountMenu" class="emu-account-menu" role="menu" aria-label="プロフィール">
         <div class="emu-account-head">
           <b id="emuAccountName">ゲスト</b>
           <small id="emuAccountAddr"></small>
         </div>
         <button type="button" role="menuitem" onclick="accountGo('me')">名前と写真</button>
+        <button type="button" role="menuitem" onclick="accountGo('passport')">SchoolParkパスポート</button>
         <button type="button" role="menuitem" onclick="accountGo('plan')">プラン・お支払い</button>
         <button type="button" role="menuitem" onclick="accountGo('profile')">プロフィール</button>
         <button type="button" role="menuitem" onclick="accountGo('themes')">興味のあるテーマ</button>
         <!-- Room1は独立タブではなく、全端末で「知識を探す」から開く -->
-        <button type="button" role="menuitem" class="emu-phone-only" data-tour="emu-library" onclick="accountGo('library')">マイライブラリー</button>
-        <!-- スマホだけ。右上のユーザー表示（名前 / プロフィール画像）を選ぶ -->
-        <button type="button" role="menuitem" class="emu-phone-only" onclick="accountGo('settings')">設定</button>
+        <button type="button" role="menuitem" data-tour="emu-library" onclick="accountGo('library')">マイライブラリー</button>
+        <!-- 共通の設定（名前 / プロフィール画像もここから） -->
+        <button type="button" role="menuitem" onclick="accountGo('settings')">設定</button>
         <button type="button" role="menuitem" onclick="accountGo('sessions')">対話の予定</button>
         <!-- 気づいたことを送る口。スマホでは画面に浮かぶボタンが知識の本文に
              かぶっていたので、こちらへ移した。 -->
@@ -4981,8 +4981,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <button type="button" role="menuitem" class="danger" onclick="accountGo('logout')">ログアウト</button>
       </div>
     </div>
+    <button type="button" class="service-tool service-profile" id="emuHeaderProfile" onclick="toggleAccountMenu(event)" title="プロフィール" aria-label="プロフィール" aria-haspopup="menu" aria-expanded="false">👤</button>
     <button type="button" class="service-tool" id="emuHeaderReizo" data-tour="fridge" aria-label="冷蔵庫くんに聞く・使い方案内" title="冷蔵庫くんに聞く・使い方案内" onclick="if(window.ReizoTourAsk) window.ReizoTourAsk(this); else spReizoOpen();"><img src="/assets/mascot.jpg" alt=""></button>
-    <button type="button" class="service-tool" id="emuHeaderSettings" aria-label="設定" title="設定" onclick="openSettingsSheet()">⚙</button>
   </div>
 </header>
 
@@ -5911,10 +5911,21 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <!-- ⚙️ 設定パネル -->
 <div id="spSettingsPanel" class="sp-panel">
   <div class="sp-panel-header">
-    <div class="sp-panel-title">⚙️ SchoolPark 設定</div>
+    <div class="sp-panel-title">⚙️ SchoolPark・Emu 設定</div>
     <button class="sp-panel-close" onclick="closeSpPanel('spSettingsPanel')">✕ 閉じる</button>
   </div>
   <div class="sp-panel-body">
+
+    <div class="sp-panel-section" id="emuIdentitySettings">
+    <p class="emu-me-label" id="emuHeadModeLabel">プロフィールボタンの表示</p>
+    <div class="emu-set-choices" role="radiogroup" aria-labelledby="emuHeadModeLabel">
+      <label class="emu-set-choice"><input type="radio" name="emuHeadMode" value="name">名前</label>
+      <label class="emu-set-choice"><input type="radio" name="emuHeadMode" value="avatar">プロフィール画像</label>
+    </div>
+    <p class="emu-me-note" id="emuSettingsNoAvatar" hidden>プロフィール画像がまだ無いあいだは、名前を表示します。画像は下の「名前と写真を編集する」から選べます。</p>
+    <p class="emu-me-msg" id="emuSettingsMsg"></p>
+      <button type="button" class="sp-panel-btn secondary" onclick="closeSettingsSheet(); openMeSheet()">名前と写真を編集する</button>
+    </div>
 
     <!-- 1. 招待リンク
          言語の段（日本語 / English / 中文 / 한국어）は 2026-10-02 に外した。
@@ -13958,7 +13969,7 @@ function openSpPanel(panelId) {
     panel.classList.add('open');
   });
   if (panelId === 'spWalletPanel') setTimeout(_refreshSpWalletPanel, 80);
-  if (panelId === 'spSettingsPanel') setTimeout(_loadSpSettings, 80);
+  if (panelId === 'spSettingsPanel') { setTimeout(_loadSpSettings, 80); emuLoadIdentitySettings(); }
   if (panelId === 'spRobotPanel') setTimeout(_startEmuerAgent, 80);
 }
 
@@ -15560,29 +15571,42 @@ function emuSetWalletLabel(text) {
 /* ───────── アカウントメニュー（ヘッダー右上） ─────────
    プラン・プロフィール・対話の予定はすべて会員ページの中にあるので、
    該当の場所を開くよう会員ページへ「どこを見たいか」を伝える。 */
-function toggleAccountMenu(e) {
+let _emuProfileAnchor = null;
+function toggleAccountMenu(e, anchor) {
   if (e) e.stopPropagation();
   const menu = document.getElementById('emuAccountMenu');
-  const btn = document.getElementById('walletAddressButton');
-  if (!menu) return;
-  const willOpen = !menu.classList.contains('open');
-  menu.classList.toggle('open', willOpen);
-  if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-  if (willOpen) {
-    const name = localStorage.getItem('ches_name') || '';
-    const addr = (window.connectedAccount || localStorage.getItem('emuWallet') || '');
-    const n = document.getElementById('emuAccountName');
-    const a = document.getElementById('emuAccountAddr');
-    if (n) n.textContent = name || 'Emuer';
-    if (a) a.textContent = addr ? emuShortAddr(addr) : '';
-  }
+  const btn = anchor || (e && e.currentTarget) || document.getElementById('emuHeaderProfile');
+  if (!menu || !btn) return;
+  const willOpen = !menu.classList.contains('open') || _emuProfileAnchor !== btn;
+  closeAccountMenu();
+  if (!willOpen) return;
+  _emuProfileAnchor = btn;
+  menu.classList.add('open'); btn.setAttribute('aria-expanded', 'true');
+  const rect = btn.getBoundingClientRect();
+  const frame = btn.ownerDocument.defaultView.frameElement;
+  const offset = frame ? frame.getBoundingClientRect() : {left:0,top:0};
+  menu.style.top = Math.max(8, Math.min(rect.bottom + offset.top + 8, innerHeight - 160)) + 'px';
+  menu.style.right = Math.max(8, Math.min(innerWidth - rect.right - offset.left, innerWidth - 248)) + 'px';
+  menu.style.maxHeight = 'calc(100dvh - ' + (parseFloat(menu.style.top) + 12) + 'px)';
+  const name = localStorage.getItem('ches_name') || '';
+  const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
+  const n = document.getElementById('emuAccountName');
+  const a = document.getElementById('emuAccountAddr');
+  if (n) n.textContent = name || 'Emuer';
+  if (a) a.textContent = addr ? emuShortAddr(addr) : '';
+  emuSyncMyProfile(); emuPaintHeaderIdentity();
 }
 function closeAccountMenu() {
   const menu = document.getElementById('emuAccountMenu');
   if (menu) menu.classList.remove('open');
-  const btn = document.getElementById('walletAddressButton');
-  if (btn) btn.setAttribute('aria-expanded', 'false');
+  if (_emuProfileAnchor) _emuProfileAnchor.setAttribute('aria-expanded', 'false');
 }
+addEventListener('resize', closeAccountMenu);
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.getElementById('emuAccountMenu')?.classList.contains('open')) {
+    closeAccountMenu(); if (_emuProfileAnchor) _emuProfileAnchor.focus();
+  }
+});
 document.addEventListener('click', function (e) {
   if (e.target.closest && e.target.closest('.emu-account-wrap')) return;
   closeAccountMenu();
@@ -15826,7 +15850,7 @@ function emuProfileSaved(addr, name, avatar) {
   try { emuSideNavSync(); } catch (e) {}
 }
 
-/* 右上の表示（スマホ）。どちらを出すか（'name' | 'avatar'）。選んでいない人は名前。 */
+/* プロフィール内の表示。どちらを出すか（'name' | 'avatar'）。選んでいない人は名前。 */
 function emuHeaderIdentityMode() {
   const me = emuProfileKnown(_emuAddress());
   return me && me.headerIdentityMode === 'avatar' ? 'avatar' : 'name';
@@ -15840,14 +15864,13 @@ function _emuHeadIsOurs(btn) {
   return btn.childNodes.length > 0 && Array.prototype.every.call(btn.childNodes, function (n) { return _emuHeadOwn.has(n); });
 }
 
-function emuPaintHeaderIdentity() {
-  const btn = document.getElementById('walletAddressButton');
+function _emuPaintIdentityButton(btn) {
   if (!btn) return;
   if (_emuHeadLabel === null) _emuHeadLabel = btn.textContent;
   const addr = _emuAddress();
-  if (!addr || (!_emuPhoneLayout() && !btn.closest('.service-tools'))) {
-    /* 未接続時はログイン処理の表示を維持。共通ヘッダーではPCでも
-       本人が選んだ名前・画像の設定を利用する。 */
+  if (!addr) {
+    /* 未接続時はログイン処理の表示を維持。名前・画像の選択は
+       両サービス共通のプロフィール内で、端末幅によらず利用する。 */
     if (_emuHeadIsOurs(btn)) {
       _emuHeadPut(btn, document.createTextNode(_emuHeadLabel));
       btn.classList.remove('emu-head-has-avatar');
@@ -15881,6 +15904,18 @@ function emuPaintHeaderIdentity() {
   btn.classList.remove('emu-head-has-avatar');
   btn.removeAttribute('aria-label'); btn.removeAttribute('title');
 }
+function emuPaintHeaderIdentity() {
+  _emuPaintIdentityButton(document.getElementById('walletAddressButton'));
+  const buttons = [document.getElementById('emuHeaderProfile')];
+  try { buttons.push(document.getElementById('spDaoFrame')?.contentDocument?.querySelector('[data-sp-head] .service-profile')); } catch (_) {}
+  const name = typeof emuDisplayName === 'function' ? emuDisplayName() : '';
+  buttons.filter(Boolean).forEach(function(btn) {
+    if (_emuAddress()) _emuPaintIdentityButton(btn);
+    else if (btn.textContent !== '👤') { _emuHeadPut(btn, document.createTextNode('👤')); btn.classList.remove('emu-head-has-avatar'); }
+    btn.setAttribute('aria-label', 'プロフィール');
+    btn.title = name ? 'プロフィール：' + name : 'プロフィール';
+  });
+}
 window.emuPaintHeaderIdentity = emuPaintHeaderIdentity;
 
 /* ほかの処理（ログイン・ウォレット接続など）が右上を書いたら、その表示を控えてから描き直す。
@@ -15909,12 +15944,12 @@ window.emuPaintHeaderIdentity = emuPaintHeaderIdentity;
   else watch();
 })();
 
-/* ───────── 設定（スマホのアカウントメニューから） ─────────
-   右上のユーザー表示を、名前 / プロフィール画像 から選ぶ。
-   選んだら、保存できてから右上に出す（保存できなかったら選ぶ前に戻す）。 */
+/* ───────── 共通設定（プロフィールから） ─────────
+   プロフィール内の表示を名前 / プロフィール画像から選ぶ。
+   保存に成功してから表示し、失敗時は選ぶ前に戻す。 */
 function _emuSettingsPaint(busy) {
   const mode = emuHeaderIdentityMode();
-  document.querySelectorAll('#emuSettingsSheet input[name="emuHeadMode"]').forEach(function (r) {
+  document.querySelectorAll('#spSettingsPanel input[name="emuHeadMode"]').forEach(function (r) {
     r.checked = (r.value === mode);
     r.disabled = !!busy;
   });
@@ -15923,31 +15958,33 @@ function _emuSettingsPaint(busy) {
   if (note) note.hidden = !!(me && me.avatar);
 }
 function openSettingsSheet() {
-  const sheet = document.getElementById('emuSettingsSheet');
+  closeAccountMenu();
+  closeSpPassport();
+  openSpPanel('spSettingsPanel');
+}
+function emuLoadIdentitySettings() {
+  const sheet = document.getElementById('spSettingsPanel');
   if (!sheet) return;
   const msg = document.getElementById('emuSettingsMsg');
   msg.textContent = ''; msg.className = 'emu-me-msg';
-  sheet.classList.add('open');
   const addr = _emuAddress();
   if (!addr) { _emuSettingsPaint(true); msg.textContent = 'ログインしてからお試しください。'; msg.className = 'emu-me-msg err'; return; }
   if (emuProfileKnown(addr) !== undefined) { _emuSettingsPaint(false); return; }
-  /* まだ読めていなければ、読んでから選べるようにする（いまの選択と違う方を出さないため） */
   _emuSettingsPaint(true);
   msg.textContent = '読み込んでいます…';
   emuSyncMyProfile().then(function () {
-    if (!sheet.classList.contains('open')) return;
+    if (sheet.style.display !== 'flex' || _emuAddress() !== addr) return;
     if (emuProfileKnown(addr) === undefined) { msg.textContent = 'いまは読み込めませんでした。少しあとでお試しください。'; msg.className = 'emu-me-msg err'; return; }
     msg.textContent = '';
     _emuSettingsPaint(false);
   });
 }
 function closeSettingsSheet() {
-  const sheet = document.getElementById('emuSettingsSheet');
-  if (sheet) sheet.classList.remove('open');
+  closeSpPanel('spSettingsPanel');
 }
 document.addEventListener('change', async function (e) {
   const r = e.target;
-  if (!r || r.name !== 'emuHeadMode' || !r.closest('#emuSettingsSheet')) return;
+  if (!r || r.name !== 'emuHeadMode' || !r.closest('#spSettingsPanel')) return;
   const mode = r.value === 'avatar' ? 'avatar' : 'name';
   const msg = document.getElementById('emuSettingsMsg');
   const addr = _emuAddress();
@@ -15956,18 +15993,21 @@ document.addEventListener('change', async function (e) {
   r.checked = true;                        // 押したほうを、保存しているあいだも見せておく
   msg.textContent = '保存しています…'; msg.className = 'emu-me-msg';
   try {
-    const headers = typeof emuAuthHeaders === 'function' ? await emuAuthHeaders(true) : null;
+    const headers = new Headers(typeof emuAuthHeaders === 'function' ? await emuAuthHeaders(true) : {});
+    headers.set('Content-Type', 'application/json');
     const res = await fetch('https://emu-realtime.onrender.com/api/user/settings', {
       method: 'POST',
-      headers: Object.assign({ 'Content-Type': 'application/json' }, headers || {}),
+      headers,
       body: JSON.stringify({ address: addr, headerIdentityMode: mode })
     });
+    if (_emuAddress() !== addr) return;
     if (!res.ok) throw new Error('SAVE_FAILED');
     _emuProfilePatch(addr, { headerIdentityMode: mode });
     _emuSettingsPaint(false);
     msg.textContent = '保存しました。'; msg.className = 'emu-me-msg ok';
-    setTimeout(closeSettingsSheet, 700);
+    // Keep the shared settings open so the other settings remain available.
   } catch (err) {
+    if (_emuAddress() !== addr) return;
     _emuSettingsPaint(false);              // 選ぶ前に戻す
     msg.textContent = '保存できませんでした。通信の状態を確かめて、もう一度お試しください。';
     msg.className = 'emu-me-msg err';
@@ -22206,6 +22246,7 @@ window.addEventListener('message', function (ev) {
    サイドバーの作りは「上のロゴ／真ん中のメニュー／下のトレジャリー」の3段。
    いちばん下の段の上に置く。位置は決め打ちにせず実際に測る。 */
 function spDaoPlaceContact() {
+  emuPaintHeaderIdentity();
   const btn = document.getElementById('emu-contact-btn');
   const frame = document.getElementById('spDaoFrame');
   if (!btn || !frame) return;
@@ -22324,6 +22365,7 @@ async function chesLandAfterLogin() {
 
 function accountGo(what, selectedPlan) {
   closeAccountMenu();
+  if (what === 'passport') { openSpPassport(); return; }
   if (what === 'me') { openMeSheet(); return; }
   // ひとこと（気づいたことを送る）。会員ページではなくその場で開く
   if (what === 'feedback') {
@@ -25990,23 +26032,6 @@ import {
   </div>
 </div>
 
-<!-- 設定。スマホのアカウントメニューから開く。右上に出すもの（名前 / プロフィール画像）を選ぶ。 -->
-<div id="emuSettingsSheet" class="emu-me-sheet" role="dialog" aria-modal="true" aria-labelledby="emuSettingsTitle">
-  <div class="emu-me-card">
-    <div class="emu-me-head">
-      <b id="emuSettingsTitle">設定</b>
-      <button type="button" class="emu-me-close" onclick="closeSettingsSheet()" aria-label="閉じる">✕</button>
-    </div>
-    <p class="emu-me-label" id="emuHeadModeLabel">右上のユーザー表示</p>
-    <div class="emu-set-choices" role="radiogroup" aria-labelledby="emuHeadModeLabel">
-      <label class="emu-set-choice"><input type="radio" name="emuHeadMode" value="name">名前</label>
-      <label class="emu-set-choice"><input type="radio" name="emuHeadMode" value="avatar">プロフィール画像</label>
-    </div>
-    <p class="emu-me-note" id="emuSettingsNoAvatar" hidden>プロフィール画像がまだ無いあいだは、名前を表示します。画像は「名前と写真」から選べます。</p>
-    <p class="emu-me-msg" id="emuSettingsMsg"></p>
-  </div>
-</div>
-
 <!-- FLOATING BUTTON -->
 <button id="emu-contact-btn" data-tour="support-btn" onclick="toggleContactPanel()" title="お問い合わせ">
   <div class="btn-ripple"></div>
@@ -29540,6 +29565,19 @@ async function sendEmuFeedback() {
     <div id="sppBody"></div>
   </div>
 </div>
+
+<script>
+// Keep the existing identity node available to early login listeners, then put
+// the same account menu outside either service's hidden content container.
+{
+  const account = document.getElementById('sharedAccountControls');
+  const identity = document.getElementById('walletAddressButton');
+  const head = document.querySelector('#emuAccountMenu .emu-account-head');
+  if (account && identity && head) {
+    document.body.appendChild(account); head.prepend(identity); account.style.display = 'contents';
+  }
+}
+</script>
 
 <!-- SchoolPark の中から開く小部屋（エレベーターなど） -->
 <div id="spRoomPage">

@@ -64,6 +64,38 @@ test('existing navigation and native behavior remain identical outside the expli
   const file='frontend/public/'+name;
   const before=cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
   let current=fs.readFileSync(path.join(root,file),'utf8');
+  // Reviewed profile-only integration. Restore these UI regions to the last
+  // deployed version, then keep the existing guard over every other byte.
+  // Native Auth/Firestore browser tests exercise the new profile/settings paths.
+  if(name==='index.html') {
+   const previous=cp.execFileSync('git',['show','f8dd91d45b83b20aaacd0c9be24d883a5ef7bf7d:'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
+   const region=(s,a,b)=>s.slice(s.indexOf(a),s.indexOf(b,s.indexOf(a)));
+   const oldAccount=region(previous,'    <div class="emu-account-wrap">','    <button type="button" class="service-tool" id="emuHeaderReizo"');
+   const newAccount=region(current,'    <div class="emu-account-wrap" id="sharedAccountControls"','    <button type="button" class="service-tool service-profile" id="emuHeaderProfile"');
+   assert.ok(newAccount.includes('accountGo(\'passport\')'));
+   current=current.replace(newAccount,oldAccount).replace(/^    <button type="button" class="service-tool service-profile" id="emuHeaderProfile"[^\n]+\n/m,'');
+   current=current.replace(region(current,'<script>\n// Keep the existing identity node','<!-- SchoolPark の中から開く小部屋'),'');
+   current=current.replace('⚙️ SchoolPark・Emu 設定','⚙️ SchoolPark 設定');
+   current=current.replace(region(current,'    <div class="sp-panel-section" id="emuIdentitySettings">','    <!-- 1. 招待リンク'),'');
+   const oldSheet=region(previous,'<!-- 設定。スマホのアカウントメニューから開く。','<!-- FLOATING BUTTON -->');
+   current=current.replace('<!-- FLOATING BUTTON -->',oldSheet+'<!-- FLOATING BUTTON -->');
+   current=current.replace("  if (panelId === 'spSettingsPanel') { setTimeout(_loadSpSettings, 80); emuLoadIdentitySettings(); }","  if (panelId === 'spSettingsPanel') setTimeout(_loadSpSettings, 80);");
+   const oldMenu=region(previous,'/* ───────── アカウントメニュー（ヘッダー右上）','/* ───────── 名前と写真');
+   const newMenu=region(current,'/* ───────── アカウントメニュー（ヘッダー右上）','/* ───────── 名前と写真');
+   current=current.replace(newMenu,oldMenu);
+   const oldIdentity=region(previous,'/* 右上の表示（スマホ）。どちらを出すか','/* ───── SchoolPark ─────');
+   const newIdentity=region(current,'/* プロフィール内の表示。どちらを出すか','/* ───── SchoolPark ─────');
+   current=current.replace(newIdentity,oldIdentity);
+   current=current.replace("  if (what === 'passport') { openSpPassport(); return; }\n",'');
+   current=current.replace('function spDaoPlaceContact() {\n  emuPaintHeaderIdentity();','function spDaoPlaceContact() {');
+  }
+  if(name==='schoolpark/dao.html') {
+   current=current.replace("  openProfile = () => { try { window.parent.toggleAccountMenu(null, document.querySelector('[data-sp-head] .service-profile')); } catch (e) {} };\n",'');
+   current=current.replace('      openProfile:this.openProfile, openPassport:this.openPassport,','      openPassport:this.openPassport,');
+   current=current.replace('  goElevator = () =>',"  openSettings = () => { try { window.parent.openSpPanel('spSettingsPanel'); } catch (e) {} };\n  goElevator = () =>");
+   current=current.replace('      askReizo:this.askReizo, keyAskReizo:this.keyAskReizo,','      askReizo:this.askReizo, keyAskReizo:this.keyAskReizo,\n      openSettings:this.openSettings,');
+   current=current.replace(/<script>\n\/\/ Clicking elsewhere inside the SchoolPark frame[\s\S]*?<\/script>\n/,'');
+  }
   // Explicitly requested shared header: normalize only the reviewed markup and
   // display condition; the byte-for-byte guard still covers all other behavior.
   current=current.replace('<link rel="stylesheet" href="/service-header.css">\n','');

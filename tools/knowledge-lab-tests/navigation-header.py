@@ -11,23 +11,23 @@ with sync_playwright() as p:
  c.route('**/*',isolate);g=c.new_page();errors=[];g.on('pageerror',lambda e:errors.append(str(e)));g.goto('http://127.0.0.1:4206/test/native.html',wait_until='domcontentloaded');g.wait_for_function('typeof window.__localEmulatorLogin==="function"')
  with g.expect_response(lambda r:'/api/auth/account' in r.url and r.status==200):g.locator('#localEmulatorLogin').click()
  g.evaluate('window.__localLoginResult');g.wait_for_function('window._chesEntered===true');g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000);g.evaluate('showEmuFeed()')
- g.locator('#walletAddressButton').click();assert g.locator('#emuAccountMenu.open').is_visible();assert g.locator('#emuAccountMenu').get_by_role('menuitem',name='プラン・お支払い').is_visible();g.evaluate('closeAccountMenu()')
- g.locator('#emuHeaderSettings').click();g.locator('#emuSettingsSheet.open').wait_for();g.evaluate('closeSettingsSheet()')
+ g.locator('#emuHeaderProfile').click();assert g.locator('#emuAccountMenu.open').is_visible();assert g.locator('#emuAccountMenu').get_by_role('menuitem',name='プラン・お支払い').is_visible();g.evaluate('closeAccountMenu()')
+ g.locator('#emuHeaderProfile').click();g.locator('#emuAccountMenu').get_by_role('menuitem',name='設定',exact=True).click();g.locator('#spSettingsPanel.open').wait_for();g.evaluate('closeSettingsSheet()')
  g.locator('#emuHeaderReizo').click();g.locator('#rk-tour .rk-panel:not([hidden])').wait_for();g.locator('#rk-tour .rk-close').click()
  dimensions=[]
  for w in [375,390,412,768,1024,1366]:
   g.set_viewport_size({'width':w,'height':950})
-  for id in ['walletAddressButton','emuHeaderReizo','emuHeaderSettings']:
+  for id in ['emuHeaderProfile','emuHeaderReizo']:
    box=g.locator('#'+id).bounding_box();assert box and box['width']==44 and box['height']==44,(w,id,box)
   assert g.locator('html').evaluate('e=>e.scrollWidth<=innerWidth+1')
   dimensions.append({'width':w,'emuHeaderHeight':g.locator('#mainApp > .header').bounding_box()['height']});g.screenshot(path=str(OUT/f'LOCAL-Emu-header-{w}.png'))
  g.evaluate('openSpDao()');d=g.frame_locator('#spDaoFrame');d.locator('[data-sp-head]').wait_for()
  for w in [375,390,412,768,1024,1366]:
   g.set_viewport_size({'width':w,'height':950})
-  snapshot=d.locator('html').evaluate("""async root=>{for(let i=0;i<90;i++){await new Promise(requestAnimationFrame);const h=document.querySelector('[data-sp-head]');const bs=[...document.querySelectorAll('[data-sp-head] .service-tool')].map(x=>({width:x.getBoundingClientRect().width,height:x.getBoundingClientRect().height}));if(h?.offsetHeight && bs.length===3 && bs.every(b=>b.width===44&&b.height===44))return {height:h.getBoundingClientRect().height,overflow:root.scrollWidth>innerWidth+1};}throw Error('HEADER_NOT_READY')}""")
+  snapshot=d.locator('html').evaluate("""async root=>{for(let i=0;i<90;i++){await new Promise(requestAnimationFrame);const h=document.querySelector('[data-sp-head]');const bs=[...document.querySelectorAll('[data-sp-head] .service-tool')].map(x=>({width:x.getBoundingClientRect().width,height:x.getBoundingClientRect().height}));if(h?.offsetHeight && bs.length===2 && bs.every(b=>b.width===44&&b.height===44))return {height:h.getBoundingClientRect().height,overflow:root.scrollWidth>innerWidth+1};}throw Error('HEADER_NOT_READY')}""")
   assert not snapshot['overflow'];dimensions[[x['width'] for x in dimensions].index(w)]['schoolParkHeaderHeight']=snapshot['height'];g.screenshot(path=str(OUT/f'LOCAL-SchoolPark-header-{w}.png'))
- d.locator('[data-sp-head]').get_by_role('button',name='プロフィール・Passport').click();g.locator('#spPassport').wait_for(state='visible');g.evaluate('closeSpPassport()')
- d.locator('[data-sp-head]').get_by_role('button',name='設定',exact=True).click();g.locator('#spSettingsPanel').wait_for(state='visible');g.evaluate("closeSpPanel('spSettingsPanel')")
+ d.locator('[data-sp-head]').get_by_role('button',name='プロフィール',exact=True).click();g.locator('#emuAccountMenu').get_by_role('menuitem',name='SchoolParkパスポート').click();g.locator('#spPassport').wait_for(state='visible');g.evaluate('closeSpPassport()')
+ d.locator('[data-sp-head]').get_by_role('button',name='プロフィール',exact=True).click();g.locator('#emuAccountMenu').get_by_role('menuitem',name='設定',exact=True).click();g.locator('#spSettingsPanel').wait_for(state='visible');g.evaluate("closeSpPanel('spSettingsPanel')")
  d.locator('[data-sp-head]').get_by_role('button',name='冷蔵庫くんに聞く・使い方案内').click();g.locator('#rk-tour .rk-panel:not([hidden])').wait_for();g.locator('#rk-tour .rk-close').click()
  g.evaluate('showEmuRequests();openEmuKnowledgeLab()');f=g.frame_locator('#spRoomFrame');f.locator('html[data-lab-ready="true"]').wait_for()
  f.locator('#rk-tour .rk-panel:not([hidden])').wait_for();assert 'まずは、経験を探してみよう' in f.locator('#rk-tour-title').inner_text()
