@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Emuerにようこそ | 語り合える一人</title>
+<title>プラン・お支払い | SchoolPark・Emu</title>
 <style>
 :root{
   --ink:#1a1840; --muted:#6f6a86; --line:#e6e2dc; --bg:#faf8f5; --card:#fff;
@@ -14,7 +14,7 @@ body{margin:0;background:var(--bg);color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
   line-height:1.75;-webkit-text-size-adjust:100%;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
-.wrap{max-width:720px;margin:0 auto;padding:24px 18px 80px}
+.wrap{max-width:860px;margin:0 auto;padding:24px 18px 80px}
 header.top{display:flex;align-items:center;gap:12px;margin-bottom:24px}
 header.top a{color:var(--muted);text-decoration:none;font-size:13px}
 h1{font-size:22px;margin:0 0 4px}
@@ -70,24 +70,25 @@ ul.cond li{margin:4px 0}
 .session .rate button{flex:1;min-width:120px;min-height:40px;border-radius:999px;border:1.5px solid var(--line);
   background:#fff;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .stat div{flex:1;min-width:88px;background:#f7f5f1;border-radius:12px;padding:10px;text-align:center;font-size:11px;color:var(--muted)}
+.purchase-steps{display:flex;gap:8px;list-style:none;padding:0;counter-reset:step;margin:20px 0;color:var(--muted);font-size:12px}.purchase-steps li{flex:1;padding:10px 6px;background:#f1ece4;border-radius:9px;text-align:center}.purchase-steps li:before{counter-increment:step;content:counter(step) " ";font-weight:800;color:#a95000}.plan-choice{margin:0}.plan-choice:has(input:checked){background:#fff6e9}.plan-amount{display:block;font-size:23px;margin:4px 0;color:var(--ink)}.plan-amount small{font-size:12px;font-weight:400}.plan-purpose{display:block;color:var(--muted);font-size:12px}summary{cursor:pointer;min-height:44px;padding:10px 0}.gate{padding:28px 16px}#sec-features{background:#fffcf7}#sec-features h2{font-size:13px;color:var(--muted)}
 </style>
 </head>
 <body>
 <div class="wrap">
   <!-- 戻る導線はモーダル側の「← Emuに戻る」に一本化する -->
   <!-- Emuer は「Emuを使う人」の呼び名。トークンの EMUER とは別物なので大文字にしない -->
-  <h1>Emuerにようこそ</h1>
+  <h1>プラン・お支払い</h1>
   <p><a href="/" id="membershipBack">← SchoolPark・Emuに戻る</a> · <a href="/membership-plans.html" target="_blank" rel="noopener">プラン・公式パスを比較する</a></p>
-  <p class="lead">プランを選んで、Emuでの過ごし方を決められます</p>
+  <p class="lead">SchoolParkとEmuで共通のプランです。内容を選び、条件を確認して、カードで申し込めます。</p><ol class="purchase-steps" aria-label="お申し込みの流れ"><li>プランを選ぶ</li><li>条件を確認</li><li>カードでお支払い</li></ol>
 
-  <div id="gate" class="gate">読み込んでいます…</div>
+  <div id="gate" class="gate" role="status">ログイン情報を確認しています…</div><p class="err hide" id="loadNotice" role="alert"></p><button type="button" class="btn sub hide" id="retryLoad">もう一度読み込む</button>
 
   <main id="main" class="hide">
-    <section class="card" id="sec-features"><h2>あなたに合うプランを選ぶ</h2><p id="entitlementNotice" role="status"></p><div data-membership-features>利用範囲を読み込んでいます…</div><p><a href="/membership-plans.html#official-pass" target="_blank" rel="noopener">公式パスでできること・対象外の機能</a></p></section>
+    <section class="card" id="sec-features"><h2>現在のご利用状況</h2><p id="entitlementNotice" role="status"></p><details><summary>すべての機能・料金を比較する</summary><div data-membership-features>利用範囲を読み込んでいます…</div></details><p><a href="/membership-plans.html#official-pass" target="_blank" rel="noopener">公式パスでできること・対象外の機能</a></p></section>
 
     <!-- 会員状態 -->
     <section class="card" id="sec-plan">
-      <h2><span class="ico">◈</span>プラン</h2>
+      <h2><span class="ico">◈</span>月額プラン・お支払い</h2>
       <div class="row"><span class="k">状態</span><span class="v" id="subStatus">—</span></div>
       <div class="row"><span class="k">料金</span><span class="v" id="planPrice">—</span></div>
       <div class="row"><span class="k" id="periodKey">次回更新日</span><span class="v" id="periodEnd">—</span></div>
@@ -210,7 +211,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebas
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const API = "https://emu-realtime.onrender.com";
-const app = initializeApp({
+let parentSession = null;
+try { if (parent !== window && parent.location.origin === location.origin && typeof parent.emuAuthHeaders === "function" && parent.auth) parentSession = parent; } catch (_) {}
+const app = parentSession ? null : initializeApp({
   apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
   authDomain: "schoolpark-emu.vercel.app",
   projectId: "emusch-2a111",
@@ -218,7 +221,7 @@ const app = initializeApp({
   messagingSenderId: "795496371585",
   appId: "1:795496371585:web:51deec91b8a2152e4c8480"
 });
-const auth = getAuth(app);
+const auth = parentSession ? parentSession.auth : getAuth(app);
 
 const $ = s => document.querySelector(s);
 $("#membershipBack").onclick = e => {
@@ -228,25 +231,31 @@ const fmt = iso => iso ? new Date(iso).toLocaleDateString("ja-JP", { year:"numer
 function show(el, on){ el.classList.toggle("hide", !on); }
 function msg(el, text, isErr){ el.textContent = text; show(el, !!text); }
 
-let idToken = null;
-
-async function api(path, options) {
-  // Share the already verified login in the same-origin app overlay, and
-  // refresh tokens for long-lived sessions. Never request interactive re-login.
-  let authHeaders = { "Authorization": "Bearer " + idToken };
-  try {
-    if (parent !== window && parent.location.origin === location.origin && typeof parent.emuAuthHeaders === "function")
-      authHeaders = await parent.emuAuthHeaders(true, { interactive: false });
-    else if (auth.currentUser) authHeaders.Authorization = "Bearer " + await auth.currentUser.getIdToken();
-  } catch (_) { throw Object.assign(new Error("AUTH_REQUIRED"), { code: "AUTH_REQUIRED", status: 401 }); }
-  const res = await fetch(API + path, {
-    method: (options && options.method) || "GET",
-    headers: Object.assign(
-      authHeaders,
-      (options && options.body) ? { "Content-Type": "application/json" } : {}
-    ),
-    body: options && options.body ? JSON.stringify(options.body) : undefined
-  });
+async function sessionHeaders(refresh = false) {
+  const user = auth.currentUser;
+  if (refresh && user) await user.getIdToken(true);
+  const headers = new Headers(parentSession
+    ? await parentSession.emuAuthHeaders(true, { interactive: false })
+    : user ? { Authorization: "Bearer " + await user.getIdToken() } : {});
+  if (!/^Bearer \S+$/.test(headers.get("Authorization") || ""))
+    throw Object.assign(new Error("AUTH_REQUIRED"), { code: "AUTH_REQUIRED", status: 401 });
+  return headers;
+}
+async function api(path, options = {}) {
+  const uid = auth.currentUser?.uid;
+  const unchanged = () => { if (!uid || uid !== auth.currentUser?.uid) throw Object.assign(new Error("AUTH_REQUIRED"), {code:"AUTH_REQUIRED",status:401}); };
+  const send = async refresh => {
+    const headers = await sessionHeaders(refresh);
+    unchanged();
+    if (options.body) headers.set("Content-Type", "application/json");
+    return fetch(API + path, { method: options.method || "GET", headers,
+      body: options.body ? JSON.stringify(options.body) : undefined });
+  };
+  let res = await send(false);
+  // A rejected token has not executed the operation. Refresh once, without
+  // asking the user to connect a wallet or opening a second login session.
+  if (res.status === 401 && auth.currentUser) res = await send(true);
+  unchanged();
   let data = {};
   try { data = await res.json(); } catch (_) {}
   if (!res.ok) throw Object.assign(new Error(data.error || ("HTTP " + res.status)), { code: data.error, status: res.status });
@@ -255,6 +264,8 @@ async function api(path, options) {
 
 /* サーバーのエラーコードを、利用者が次に何をすればよいか分かる日本語にする。 */
 const ERRORS = {
+  AUTH_REQUIRED: "ログイン情報を確認できませんでした。もう一度読み込むか、SchoolParkへ戻ってログインしてください。",
+  INVALID_AUTH_TOKEN: "ログインの有効期限を確認できませんでした。SchoolParkへ戻ってログインし直してください。",
   ALREADY_ENTITLED: "選んだプランの機能は、公式パスや付与などですでに利用できます。重複する契約は必要ありません。",
   MULTIPLE_SUBSCRIPTIONS_REVIEW_REQUIRED: "連携済みの契約が複数あります。追加購入せず、運営に確認してください。",
   ALREADY_SUBSCRIBED: "すでに有効なご契約があります。",
@@ -301,8 +312,10 @@ async function loadBilling() {
   $("#periodEnd").textContent = endingSoon
     ? fmt(s.currentPeriodEnd) + " まで"
     : fmt(s.currentPeriodEnd);
+  show($("#periodEnd").closest(".row"), !!s.currentPeriodEnd);
   const active = ["active", "trialing", "past_due"].includes(s.status);
   window._emuActivePlan = active ? s.plan : null;
+  window._emuGuaranteed = !!s.guaranteed;
   const rank = { guest: 0, light: 1, plus: 2, pro: 3 };
   const entitled = rank[s.entitlement] || 0;
   $("#entitlementNotice").textContent = "現在使える範囲：" + (s.entitlement === "guest" ? "無料・見学" : s.entitlement || "無料・見学")
@@ -325,7 +338,7 @@ async function loadBilling() {
       : "月額 " + Number(s.planAmount).toLocaleString("ja-JP") + "円（税込）";
   } else {
     renderPlans((s.plans || []).filter(p => (rank[p.key] || 0) > entitled), null);
-    if (entitled) $("#planPrice").textContent = "利用資格あり（月額契約なし）";
+    $("#planPrice").textContent = entitled ? "利用資格あり（月額契約なし）" : "無料・見学（0円）";
     if (!planCatalog.length) show($("#subscribeBtn"), false);
   }
   window._emuActivePlan = active ? s.plan : null;
@@ -372,11 +385,11 @@ function renderPlans(plans, current, isUpgrade) {
   if (!sorted.some(p => p.key === selectedPlan)) selectedPlan = sorted.some(p => p.key === current) ? current : sorted[0]?.key;
   box.innerHTML = sorted.map(p => {
     const on = p.key === selectedPlan;
-    return '<label style="display:flex;gap:10px;align-items:flex-start;border:1.5px solid ' +
+    return '<label class="plan-choice" style="display:flex;gap:10px;align-items:flex-start;border:1.5px solid ' +
       (on ? 'var(--accent)' : 'var(--line)') + ';border-radius:12px;padding:12px 14px;cursor:pointer">' +
       '<input type="radio" name="plan" value="' + p.key + '"' + (on ? ' checked' : '') +
       ' style="width:auto;margin-top:3px;flex:none">' +
-      '<span><b>' + p.label + '</b>　月額 ' + p.amount.toLocaleString("ja-JP") + '円（税込）' +
+      '<span><b>' + p.label + '</b><strong class="plan-amount">' + p.amount.toLocaleString("ja-JP") + '円<small> / 月（税込）</small></strong><span class="plan-purpose">' + ({light:'まずは参加したい方へ · 公開投稿 月5件',plus:'知識を蓄積・研究したい方へ · 公開投稿 月30件',pro:'人と対話しながら進めたい方へ · 投稿の月次件数制限なし'}[p.key] || '') + '</span>' +
       (p.guaranteed ? '<br><small style="color:var(--muted)">30日間の「語り合える一人」保証つき</small>' : '') +
       '</span></label>';
   }).join("");
@@ -483,7 +496,7 @@ function syncSubscribeButton() {
   btn.disabled = !chk.checked || !plan;
   // 金額は選んだプランのものを出す（画面に固定の数字を書かない）
   btn.textContent = plan
-    ? "プランをアップグレードする（" + plan.amount.toLocaleString("ja-JP") + "円）"
+    ? (window._emuActivePlan ? "このプランへ変更する（月額" : "カード決済へ進む（月額") + plan.amount.toLocaleString("ja-JP") + "円）"
     : "プランを選んでください";
 }
 
@@ -699,12 +712,12 @@ const SECTION_TITLES = {
 };
 
 function scrollToSection() {
-  const want = (location.hash || "").replace("#", "");
+  const want = (location.hash || "#plan").replace("#", "");
   const set = SECTION_SETS[want];
   if (!set) return;                       // 直接開いたときは全部出す
 
   document.querySelectorAll("main#main > section.card").forEach(sec => {
-    sec.classList.toggle("hide", set.indexOf(sec.id) < 0);
+    sec.classList.toggle("hide", set.indexOf(sec.id) < 0 || (sec.id === "sec-guarantee" && !window._emuGuaranteed));
   });
   // 見出しも用件に合わせる
   const h1 = document.querySelector("h1");
@@ -719,24 +732,44 @@ function scrollToSection() {
 }
 
 // ───────── 起動 ─────────
-onAuthStateChanged(auth, async (localUser) => {
-  let user = localUser;
-  try { if (!user && parent !== window && parent.location.origin === location.origin) user = parent.auth?.currentUser || null; } catch (_) {}
+let loadingGeneration = 0;
+async function loadPage(user) {
+  const generation = ++loadingGeneration;
+  msg($("#loadNotice"), "");
+  $("#adultCheck").checked = false; $("#adultRow").style.display = "flex"; show($("#adultDone"), false);
+  show($("#main"), false); show($("#gate"), true); show($("#retryLoad"), false);
   if (!user) {
-    $("#gate").innerHTML = 'ご利用にはログインが必要です。<br><br><a href="/">Emu にログインする →</a>';
+    const target = new URL('/', location.origin); target.searchParams.set('membership', 'plan');
+    if (['light','plus','pro'].includes(selectedPlan)) target.searchParams.set('membershipPlan', selectedPlan);
+    $("#gate").innerHTML = 'ご利用にはログインが必要です。<br><br><a id="loginToContinue">SchoolPark・Emuにログインして続ける →</a>';
+    $("#loginToContinue").href = target.pathname + target.search;
+    $("#loginToContinue").target = "_top";
     return;
   }
+  $("#gate").textContent = "現在のプランを読み込んでいます…";
   try {
-    idToken = await user.getIdToken();
-    await Promise.all([loadBilling(), loadKyc(), loadProfile(), loadDialogue()]);
-    $("#gate").classList.add("hide");
-    $("#main").classList.remove("hide");
-    scrollToSection();
+    await loadBilling();
+    if (generation !== loadingGeneration) return;
+    scrollToSection(); show($("#gate"), false); show($("#main"), true);
+    const want = (location.hash || "#plan").slice(1);
+    const extra = [loadKyc];
+    if (["profile", "themes", "sessions"].includes(want)) extra.push(loadProfile);
+    if (want === "sessions" || (want === "plan" && window._emuGuaranteed)) extra.push(loadDialogue);
+    const settled = await Promise.allSettled(extra.map(fn => fn()));
+    if (generation !== loadingGeneration) return;
+    if (settled.some(r => r.status === "rejected")) {
+      msg($("#loadNotice"), "一部の情報を取得できませんでした。プランの確認はできます。再読み込みしてからお手続きください。");
+      show($("#retryLoad"), true);
+    }
   } catch (e) {
-    console.error(e);
-    $("#gate").textContent = "読み込みに失敗しました。時間をおいて再度お試しください。";
+    if (generation !== loadingGeneration) return;
+    $("#gate").textContent = human(e);
+    show($("#retryLoad"), true);
   }
-});
+}
+$("#retryLoad").onclick = () => loadPage(auth.currentUser);
+const unsubscribeAuth = onAuthStateChanged(auth, user => loadPage(user));
+addEventListener("pagehide", () => { ++loadingGeneration; unsubscribeAuth(); }, { once: true });
 </script>
 </body>
 </html>

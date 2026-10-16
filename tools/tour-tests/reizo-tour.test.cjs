@@ -68,6 +68,23 @@ test('existing navigation and native behavior remain identical outside the expli
   // display condition; the byte-for-byte guard still covers all other behavior.
   current=current.replace('<link rel="stylesheet" href="/service-header.css">\n','');
   if(name==='index.html') {
+   // Reviewed subscription entry: preserve the guard for every other byte.
+   current=current.replace('<button type="button" class="ches-legal-back" aria-label="前の画面に戻る" onclick="closeLegal()">← 戻る</button>','<button type="button" class="ches-legal-back" onclick="closeLegal()">← Emuに戻る</button>');
+   current=current.replace("  // A user-opened membership overlay takes precedence over a late default landing.\n  if (window.auth?.currentUser && document.getElementById('chesLegalModal')?.style.display === 'flex'\n      && /^\\/membership\\.html(?:[?#]|$)/.test(document.getElementById('chesLegalFrame')?.getAttribute('src') || '')) return;\n",'');
+   current=current.replace("    if (window.auth && !window.auth.currentUser && typeof emuEnsureSignedIn === 'function')\n      emuEnsureSignedIn({ interactive: true }).catch(() => {});\n",'');
+   current=current.replace('<script src="/membership-entry.js"></script>\n','')
+    .replace(/^    <button type="button" class="service-plan" id="emuHeaderPlan"[^\n]+\n/gm,'')
+    .replace('プラン・お支払いを確認する</span>','プランをアップグレードする</span>')
+    .replace('function accountGo(what, selectedPlan) {','function accountGo(what) {')
+    .replace("    openLegal('membership', what, selectedPlan);","    openLegal('membership');\n    const frame = document.getElementById('chesLegalFrame');\n    if (frame) frame.src = '/membership.html#' + what;")
+    .replace("membership:{ src: '/membership.html', title: 'プラン・お支払い' }","membership:{ src: '/membership.html', title: 'プランをアップグレードする' }")
+    .replace('window.openLegal = function (kind, section, selectedPlan) {','window.openLegal = function (kind) {');
+   const reviewedEntry="    if (kind === 'membership') {\n      const target = new URL(conf.src, location.origin);\n      target.hash = ['plan','profile','themes','sessions'].includes(section) ? section : 'plan';\n      if (['light','plus','pro'].includes(selectedPlan)) target.searchParams.set('plan', selectedPlan);\n      frame.src = target.pathname + target.search + target.hash;\n    } else frame.src = conf.src;\n    frame.title = conf.title;\n";
+   assert.ok(current.includes(reviewedEntry));
+   current=current.replace(reviewedEntry,"    frame.src = conf.src;\n");
+   const reviewedResume="\n    try {\n      const intent = JSON.parse(sessionStorage.getItem('emu-membership-entry') || 'null');\n      sessionStorage.removeItem('emu-membership-entry');\n      if (intent && Date.now() - intent.at < 30 * 60 * 1000 && typeof accountGo === 'function')\n        accountGo('plan', intent.plan);\n    } catch (_) {}\n";
+   assert.ok(current.includes(reviewedResume));
+   current=current.replace(reviewedResume,"");
    current=current.replace('<header class="header service-header"','<header class="header"')
     .replace('<div class="service-heading"><small>知識と経験を、次の一歩へ</small><strong>Emu</strong></div>','<div style="flex-grow: 1;"></div>')
     .replace('class="header-right service-tools"','class="header-right"')
@@ -119,6 +136,7 @@ test('existing navigation and native behavior remain identical outside the expli
    current=current.replace('      await window.emuKnowledgeReact(message);',body);
   }
   if(name==='schoolpark/dao.html') {
+   current=current.replace("  openPlans = () => { try { window.parent.accountGo('plan'); } catch (e) {} };\n",'').replace('      openPlans:this.openPlans, openPassport:this.openPassport,','      openPassport:this.openPassport,');
    current=current.replace('class="service-header" data-sp-head','data-sp-head').replace('class="service-heading" style="display:flex; flex-direction:column; gap:5px; flex:1; min-width:0"','style="display:flex; flex-direction:column; gap:5px; flex:1; min-width:0"');
    const start=before.indexOf('        <div data-tour="fridge"'), end=before.indexOf('\n      </div>',start);
    assert.ok(start>0 && end>start);

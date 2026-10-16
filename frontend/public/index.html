@@ -4,6 +4,7 @@
 <script src="/reizo/knowledge.js"></script>
 <script src="/reizo/chat.js"></script>
 <script src="/knowledge-lab/integration.js"></script>
+<script src="/membership-entry.js"></script>
 <script src="/schoolpark/quest-store.js"></script>
 <script src="/schoolpark/guild-store.js"></script>
   <meta charset="UTF-8" />
@@ -4951,6 +4952,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   <div class="service-heading"><small>知識と経験を、次の一歩へ</small><strong>Emu</strong></div>
 
   <div class="header-right service-tools" style="display: flex; align-items: center; gap: 8px;">
+    <button type="button" class="service-plan" id="emuHeaderPlan" onclick="accountGo('plan')" aria-label="プラン・お支払い"><span class="service-plan-wide">プラン・お支払い</span><span class="service-plan-short">プラン</span></button>
     <input type="search" class="search-bar" placeholder="検索..." data-i18n-placeholder="header.searchPlaceholder" style="padding:6px 10px; border:1px solid #ccc; border-radius:4px; width: 120px;">
     <button id="openPostFormButton" class="post-button" data-i18n="header.post">投稿</button>
     <div class="emu-account-wrap">
@@ -5144,7 +5146,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
                プラン選択・プロフィール・対話の予定・解約はすべて会員ページの中にある。 -->
           <a class="emu-membership-cta" id="emuMemberPageCta" href="/membership.html#plan"
              onclick="accountGo('plan');return false;" hidden>
-            <span class="emu-membership-cta-main">プランをアップグレードする</span>
+            <span class="emu-membership-cta-main">プラン・お支払いを確認する</span>
           </a>
         </div>
 
@@ -22299,6 +22301,9 @@ async function chesLandAfterLogin() {
   // Preserve an explicit Lab/guide navigation if the default login landing returns late.
   if (window.auth?.currentUser && document.body.classList.contains('sp-room-open')
       && /^\/knowledge-lab(?:-guide)?\.html(?:[?#]|$)/.test(document.getElementById('spRoomFrame')?.getAttribute('src') || '')) return;
+  // A user-opened membership overlay takes precedence over a late default landing.
+  if (window.auth?.currentUser && document.getElementById('chesLegalModal')?.style.display === 'flex'
+      && /^\/membership\.html(?:[?#]|$)/.test(document.getElementById('chesLegalFrame')?.getAttribute('src') || '')) return;
   chesTidyEntryScreens();
   if (access && access.allowed) {
     if (typeof spDaoOpenWhenReady === 'function') await spDaoOpenWhenReady();
@@ -22317,7 +22322,7 @@ async function chesLandAfterLogin() {
   if (typeof _emuEnsureAppVisible === 'function') _emuEnsureAppVisible();
 }
 
-function accountGo(what) {
+function accountGo(what, selectedPlan) {
   closeAccountMenu();
   if (what === 'me') { openMeSheet(); return; }
   // ひとこと（気づいたことを送る）。会員ページではなくその場で開く
@@ -22340,9 +22345,9 @@ function accountGo(what) {
   }
   // 会員ページの該当箇所へ。#plan などのハッシュで場所を伝える
   if (typeof openLegal === 'function') {
-    openLegal('membership');
-    const frame = document.getElementById('chesLegalFrame');
-    if (frame) frame.src = '/membership.html#' + what;
+    openLegal('membership', what, selectedPlan);
+    if (window.auth && !window.auth.currentUser && typeof emuEnsureSignedIn === 'function')
+      emuEnsureSignedIn({ interactive: true }).catch(() => {});
   }
 }
 
@@ -27374,7 +27379,7 @@ async function sendEmuFeedback() {
   <div class="ches-legal-sheet">
     <div class="ches-legal-head">
       <span id="chesLegalTitle">利用規約</span>
-      <button type="button" class="ches-legal-back" onclick="closeLegal()">← Emuに戻る</button>
+      <button type="button" class="ches-legal-back" aria-label="前の画面に戻る" onclick="closeLegal()">← 戻る</button>
     </div>
     <!-- 3つの書類を行き来できるようにする（閉じて開き直さなくてよい） -->
     <div class="ches-legal-tabs">
@@ -27440,15 +27445,21 @@ async function sendEmuFeedback() {
     tokusho:  { src: '/tokushoho.html',  title: '特定商取引法に基づく表記' },
     guarantee:{ src: '/guarantee.html',  title: '「語り合える一人」保証' },
     // 会員ページ。プロフィール・興味テーマ・対話の予定・解約はここで行う
-    membership:{ src: '/membership.html', title: 'プランをアップグレードする' }
+    membership:{ src: '/membership.html', title: 'プラン・お支払い' }
   };
-  window.openLegal = function (kind) {
+  window.openLegal = function (kind, section, selectedPlan) {
     var modal = document.getElementById('chesLegalModal');
     var frame = document.getElementById('chesLegalFrame');
     var title = document.getElementById('chesLegalTitle');
     if (!modal || !frame) return;
     var conf = LEGAL_PAGES[kind] || LEGAL_PAGES.terms;
-    frame.src = conf.src;
+    if (kind === 'membership') {
+      const target = new URL(conf.src, location.origin);
+      target.hash = ['plan','profile','themes','sessions'].includes(section) ? section : 'plan';
+      if (['light','plus','pro'].includes(selectedPlan)) target.searchParams.set('plan', selectedPlan);
+      frame.src = target.pathname + target.search + target.hash;
+    } else frame.src = conf.src;
+    frame.title = conf.title;
     if (title) title.textContent = conf.title;
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
@@ -28097,6 +28108,13 @@ async function sendEmuFeedback() {
     } else if (typeof goTomainapp === "function") {
       goTomainapp();
     }
+    try {
+      const intent = JSON.parse(sessionStorage.getItem('emu-membership-entry') || 'null');
+      sessionStorage.removeItem('emu-membership-entry');
+      if (intent && Date.now() - intent.at < 30 * 60 * 1000 && typeof accountGo === 'function')
+        accountGo('plan', intent.plan);
+    } catch (_) {}
+
   };
 
   // ───── ウォレット（MetaMask等）で Firebase セッションを確立 ─────

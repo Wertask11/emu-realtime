@@ -38,8 +38,10 @@ function fakeBatch() {
    rest … 普通の通信がどう返すか（オブジェクト | null=まだ無い | 'throw'） */
 function makeUsage(opts) {
   const o = opts || {};
-  const calls = { sdk: 0, rest: 0 };
+  const calls = { sdk: 0, rest: 0, entitlement: 0 };
   const stubs = {
+    // The current counter prepares the canonical Passport before reading usage.
+    emuEnsureEntitlement: async function () { calls.entitlement++; },
     _emuUsageRef: function () { return { path: 'plan_usage/u_r_m2026-9' }; },
     _emuUsageDocId: function () { return 'u_r_m2026-9'; },
     /* 本物と同じ契約にする（index.html の _spSoon）。
@@ -92,6 +94,7 @@ test('専用の通信路で読めたときは、その数 + 1 を書く', async 
   assert.equal(b.wrote.length, 1);
   assert.equal(b.wrote[0].post, 3, '2件使っていたなら3を書く');
   assert.equal(u.calls.rest, 0, '読めたのに普通の通信まで使っている');
+  assert.equal(u.calls.entitlement, 1, '本人の利用資格を確認してから回数を読む');
 });
 
 test('専用の通信路が unavailable でも、普通の通信で読んで正しい数を書く', async () => {

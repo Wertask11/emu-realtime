@@ -1,7 +1,7 @@
 'use strict';
 // The application itself is served with only test configuration/endpoint changes.
 // Authentication and all tested actions use real emulator SDKs and existing app functions.
-const {createFixture}=require('./fixture.cjs');const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const {createFixture,PROJECT}=require('./fixture.cjs');const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const ROOT=path.resolve(__dirname,'../..');
 async function main(options={}){
   if(process.env.STRIPE_SECRET_KEY)throw new Error('UNSET_PAYMENT_SECRET_FOR_LOCAL_FIXTURE');
@@ -15,7 +15,7 @@ async function main(options={}){
   router.use('/api/auth',require('../../backend/verified-platform').accountRouter({db,firebaseAdmin:c.firebaseAdmin}));
   router.use('/api/activity',require('../../backend/verified-platform').activityRouter({db,requireFirebaseUser:c.requireFirebaseUser}));
   router.use('/api/identity',require('../../backend/identity-router').createIdentityRouter({db,identity,requireFirebaseUser:c.requireFirebaseUser,requireOwner:c.requireOwner,rateLimit:c.rateLimit,ethers:require('../../backend/node_modules/ethers'),walletNonces:new Map(),purgeWalletNonces:()=>{},walletNonceTtlMs:60000}).router);
-  router.use('/api/billing',require('../../backend/billing').createBillingRouter({db,identity:f.identity,entitlement,requireFirebaseUser:c.requireFirebaseUser,requireOwner:c.requireOwner,rateLimit:c.rateLimit}).router);
+  router.use('/api/billing',require('../../backend/billing').createBillingRouter({db,identity:f.identity,entitlement,requireFirebaseUser:c.requireFirebaseUser,requireOwner:c.requireOwner,rateLimit:c.rateLimit,stripeClient:options.stripeClient}).router);
   const membershipDeps={db,identity,entitlement,requireFirebaseUser:c.requireFirebaseUser,requireOwner:c.requireOwner,rateLimit:c.rateLimit};
   router.use('/api/kyc',require('../../backend/kyc').createKycRouter(membershipDeps).router);
   router.use('/api/dialogue',require('../../backend/dialogue').createDialogueRouter(membershipDeps).router);
@@ -42,6 +42,7 @@ async function main(options={}){
   html=html.replace('  const auth = getAuth(app);','  connectFirestoreEmulator(db,"127.0.0.1",8787);\n  const auth = getAuth(app);\n  connectAuthEmulator(auth,"http://127.0.0.1:9199",{disableWarnings:true});\n  window.__localEmulatorLogin=async(role="alice")=>{if(!["alice","bob","owner","guest"].includes(role))throw new Error("LOCAL_ROLE_ONLY");const cred=await signInWithEmailAndPassword(auth,role+"@knowledge-lab.example.invalid","Emulator-only-password-123");return window.__localEmulatorComplete(cred.user);};');
   html=html.replace('  CHES.whenAuthStateResolved = whenAuthStateResolved;','  window.__localEmulatorComplete=user=>completeCommonFlow(user,"password");\n  CHES.whenAuthStateResolved = whenAuthStateResolved;');
   html=html.replace('<body>','<body><button type="button" id="localEmulatorLogin" style="position:fixed;top:4px;left:4px;z-index:20000" onclick="window.__localLoginResult=window.__localEmulatorLogin()">LOCAL EMULATORでログイン</button>');
+  html=html.replace(/demo-emu-knowledge-lab/g,PROJECT).replace(/127\.0\.0\.1:9199/g,process.env.LAB_AUTH_EMULATOR_HOST||'127.0.0.1:9199');
   router.get('/test/native.html',(req,res)=>res.type('html').send(html));
   // Recruitment's real /?lab=writer CTA must use the same isolated SDK/config.
   router.get('/',(req,res)=>res.type('html').send(html));
@@ -50,10 +51,10 @@ async function main(options={}){
     let page=fs.readFileSync(path.join(ROOT,'frontend/public/membership.html'),'utf8')
       .replace(/https:\/\/emu-realtime\.onrender\.com/g,base)
       .replace(/https:\/\/www\.gstatic\.com\/firebasejs\/10\.8\.0/g,'/test/firebase')
-      .replace(/const app = initializeApp\(\{[\s\S]*?\}\);/,'const app = initializeApp({apiKey:"emulator-only",projectId:"demo-emu-knowledge-lab",authDomain:"localhost",appId:"emulator-only"});')
+      .replace(/initializeApp\(\{[\s\S]*?\}\)/,'initializeApp({apiKey:"emulator-only",projectId:"demo-emu-knowledge-lab",authDomain:"localhost",appId:"emulator-only"})')
       .replace('getAuth, onAuthStateChanged','getAuth, onAuthStateChanged, connectAuthEmulator')
-      .replace('const auth = getAuth(app);','const auth = getAuth(app); connectAuthEmulator(auth,"http://127.0.0.1:9199",{disableWarnings:true});');
-    res.type('html').send(page);
+      .replace('const auth = parentSession ? parentSession.auth : getAuth(app);','const auth = parentSession ? parentSession.auth : getAuth(app); if (!parentSession) connectAuthEmulator(auth,"http://127.0.0.1:9199",{disableWarnings:true});');
+    res.type('html').send(page.replace(/demo-emu-knowledge-lab/g,PROJECT).replace(/127\.0\.0\.1:9199/g,process.env.LAB_AUTH_EMULATOR_HOST||'127.0.0.1:9199'));
   });
   router.use((req,res,next)=>{if(!/\.(?:html|js)$/.test(req.path))return next();const publicRoot=path.join(ROOT,'frontend/public'),file=path.resolve(publicRoot,'.'+req.path);if(!file.startsWith(publicRoot+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile())return next();res.type(path.extname(file)).send(fs.readFileSync(file,'utf8').replace(/https:\/\/emu-realtime\.onrender\.com/g,base).replace(/https:\/\/firestore\.googleapis\.com/g,'http://127.0.0.1:8787').replace(/emusch-2a111/g,'demo-emu-knowledge-lab'));});
   // Missing integrations stay visibly unavailable, never return fabricated success.
