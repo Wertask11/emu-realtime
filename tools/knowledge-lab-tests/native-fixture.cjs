@@ -20,6 +20,13 @@ async function main(options={}){
   router.use('/api/kyc',require('../../backend/kyc').createKycRouter(membershipDeps).router);
   router.use('/api/dialogue',require('../../backend/dialogue').createDialogueRouter(membershipDeps).router);
   router.get('/api/schoolpark/entry-status',c.schoolParkEntryStatus);
+  if(options.profileSettings){
+    // Execute the existing production handler and ownership guard against local Auth/Firestore.
+    const ownStart=serverSource.indexOf('function requireOwnAddress('),ownEnd=serverSource.indexOf('\n}',ownStart)+2;
+    const settingsStart=serverSource.indexOf('const HEADER_IDENTITY_MODES'),settingsEnd=serverSource.indexOf('// ── ランキング用サーバーキャッシュ',settingsStart);
+    if(ownStart<0||settingsStart<0||settingsEnd<=settingsStart)throw Error('SETTINGS_SOURCE_MISSING');
+    c.app=router;vm.runInContext(serverSource.slice(ownStart,ownEnd)+'\n'+serverSource.slice(settingsStart,settingsEnd),c);
+  }
   if(options.platformRegression){
     // Reuse real application routes, with local emulator persistence and no payment/NFT execution.
     router.use('/api/schoolpark/city',require('../../backend/city').createCityRouter({db,identity,entitlement,requireFirebaseUser:c.requireFirebaseUser,rateLimit:c.rateLimit,ownerAddresses:c.SP_OWNER_ADDRESSES}));

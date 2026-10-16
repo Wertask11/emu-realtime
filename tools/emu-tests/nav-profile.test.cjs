@@ -55,15 +55,17 @@ test('一日シェアの「戻る」は、無くなった今日のEmu ではな�
   assert.equal(PAGES.indexOf('← 今日のEmu'), -1);
 });
 
-test('「設定」は共通ヘッダーと既存スマホメニューから開き、名前 / プロフィール画像 を選ぶ', () => {
-  assert.ok(INDEX.includes('id="emuHeaderSettings" aria-label="設定" title="設定" onclick="openSettingsSheet()"'));
-  const lib = INDEX.indexOf("onclick=\"accountGo('library')\">マイライブラリー</button>");
-  const set = INDEX.indexOf("class=\"emu-phone-only\" onclick=\"accountGo('settings')\">設定</button>");
-  assert.ok(lib > 0 && set > lib && set - lib < 300, '設定がマイライブラリーの下に無い（またはスマホだけになっていない）');
-  assert.ok(INDEX.indexOf("if (what === 'settings') { openSettingsSheet(); return; }") >= 0);
-  assert.ok(INDEX.indexOf('<input type="radio" name="emuHeadMode" value="name">名前</label>') >= 0);
-  assert.ok(INDEX.indexOf('<input type="radio" name="emuHeadMode" value="avatar">プロフィール画像</label>') >= 0);
-  assert.ok(INDEX.indexOf("fetch('https://emu-realtime.onrender.com/api/user/settings'") >= 0, '本人に紐づけて残していない');
+test('両ヘッダーはEmuプロフィールを開き、共通設定で名前と画像を選べる', () => {
+  const header = INDEX.slice(INDEX.indexOf('<div class="header-right service-tools"'), INDEX.indexOf('</header>', INDEX.indexOf('<div class="header-right service-tools"')));
+  assert.ok(header.includes('id="emuHeaderProfile" onclick="toggleAccountMenu(event)"'));
+  assert.ok(header.includes('id="emuHeaderReizo"'));
+  assert.ok(!header.includes('id="emuHeaderSettings"') && !header.includes('id="emuHeaderPlan"'));
+  assert.ok(INDEX.includes('role="menuitem" onclick="accountGo(\'settings\')">設定'));
+  assert.ok(INDEX.includes('role="menuitem" onclick="accountGo(\'plan\')">プラン・お支払い'));
+  assert.ok(INDEX.includes("openSpPanel('spSettingsPanel');"));
+  assert.ok(INDEX.includes('<input type="radio" name="emuHeadMode" value="name">名前</label>'));
+  assert.ok(INDEX.includes('<input type="radio" name="emuHeadMode" value="avatar">プロフィール画像</label>'));
+  assert.ok(INDEX.includes("fetch('https://emu-realtime.onrender.com/api/user/settings'"));
 });
 
 test('選んでいない人は名前のまま（既存の人の表示を勝手に画像にしない）', () => {

@@ -120,10 +120,8 @@ if (window.top === window.self) window.location.replace('/');
           <div style="font-size:{{ L.headSize }}; font-weight:700; letter-spacing:.02em">{{ head.title }}</div>
         </div>
         <div class="service-tools" aria-label="アカウントとサポート">
-          <button type="button" class="service-plan" onClick="{{ openPlans }}" aria-label="プラン・お支払い"><span class="service-plan-wide">プラン・お支払い</span><span class="service-plan-short">プラン</span></button>
-          <button type="button" class="service-tool" onClick="{{ openPassport }}" title="プロフィール・Passport" aria-label="プロフィール・Passport">👤</button>
+          <button type="button" class="service-tool service-profile" onClick="{{ openProfile }}" title="プロフィール" aria-label="プロフィール" aria-haspopup="menu" aria-expanded="false">👤</button>
           <button type="button" class="service-tool" data-tour="fridge" onClick="{{ askReizo }}" title="冷蔵庫くんに聞く・使い方案内" aria-label="冷蔵庫くんに聞く・使い方案内"><img src="/assets/mascot.jpg" alt=""></button>
-          <button type="button" class="service-tool" onClick="{{ openSettings }}" title="設定" aria-label="設定">⚙</button>
         </div>
       </div>
 
@@ -1459,11 +1457,10 @@ class Component extends DCLogic {
   joinBoard(id){ return () => this.setState(s => ({joined:{...s.joined, [id]:!s.joined[id]}})); }
   commit(id){ return (ev) => { if(ev) ev.stopPropagation(); try { window.parent.spQuestToggle(id, this); } catch (e) {} }; }
   toggleSidebar = () => this.setState(s => ({sidebarOpen:!s.sidebarOpen}));
-  openPlans = () => { try { window.parent.accountGo('plan'); } catch (e) {} };
+  openProfile = () => { try { window.parent.toggleAccountMenu(null, document.querySelector('[data-sp-head] .service-profile')); } catch (e) {} };
   openPassport = () => { try { window.parent.openSpPassport(); } catch (e) {} };
   askReizo = (ev) => { try { if (window.parent.ReizoTourAsk) window.parent.ReizoTourAsk(ev && ev.currentTarget); else window.parent.spReizoOpen(); } catch (e) {} };
   keyAskReizo = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); this.askReizo(ev); } };
-  openSettings = () => { try { window.parent.openSpPanel('spSettingsPanel'); } catch (e) {} };
   goElevator = () => { try { window.parent.openSpRoom('/schoolpark/south-elevator.html', 'エレベーター'); } catch (e) {} };
   /* 遊び。プランの判定（見学は林檎の方程式だけ・回数制限）は親が持っている。 */
   goEcho  = () => { try { window.parent.spOpenPlay('echo'); } catch (e) {} };
@@ -1696,9 +1693,8 @@ class Component extends DCLogic {
       /* 読めなかったときに出す一言。「記録がありません」とは別に出す。
          読めなかったのに「無い」と言い切ると嘘になるため。 */
       hasMembersNote:!!s.membersNote, noTreasury:s.noTreasury,
-      openPlans:this.openPlans, openPassport:this.openPassport,
+      openProfile:this.openProfile, openPassport:this.openPassport,
       askReizo:this.askReizo, keyAskReizo:this.keyAskReizo,
-      openSettings:this.openSettings,
       goElevator:this.goElevator,
       goEcho:this.goEcho, goRingo:this.goRingo, goGods:this.goGods,
       /* 地図の押せる場所。広場だけ中身があり、遊具は順に作っていく。 */
@@ -2047,6 +2043,12 @@ draw();
 window.addEventListener('resize', syncHeadHeight);
 if (app.componentDidMount) app.componentDidMount();
 
+</script>
+<script>
+// Clicking elsewhere inside the SchoolPark frame dismisses the shared profile.
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.service-profile')) { try { window.parent.closeAccountMenu(); } catch (_) {} }
+});
 </script>
 </body>
 </html>

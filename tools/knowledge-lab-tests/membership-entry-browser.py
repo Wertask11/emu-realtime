@@ -14,6 +14,9 @@ with sync_playwright() as p:
         else:route.abort()
     c.route('**/*',isolate)
     g=c.new_page();g.set_default_timeout(25000);errors=[];billing=[]
+    def open_plan():
+        g.locator('#emuHeaderProfile').click()
+        g.locator('#emuAccountMenu').get_by_role('menuitem',name='プラン・お支払い',exact=True).click()
     g.on('pageerror',lambda e:errors.append(str(e)))
     g.on('response',lambda r:billing.append({'path':urllib.parse.urlparse(r.url).path,'status':r.status}) if '/api/billing/' in r.url else None)
     g.goto(BASE+'/test/native.html',wait_until='domcontentloaded')
@@ -35,7 +38,7 @@ with sync_playwright() as p:
     g.evaluate('closeLegal(); showEmuFeed()')
     # A valid Headers instance must retain Authorization, including across frames.
     g.evaluate('window.__headers=emuAuthHeaders;window.emuAuthHeaders=async(...args)=>new Headers(await window.__headers(...args))')
-    g.locator('#emuHeaderPlan').click();m.locator('#main').wait_for(state='visible')
+    open_plan();m.locator('#main').wait_for(state='visible')
     assert 'plus' in m.locator('#entitlementNotice').inner_text()
     g.evaluate('chesLandAfterLogin()');assert m.locator('#main').is_visible()
     g.evaluate('closeLegal()')
@@ -46,24 +49,24 @@ with sync_playwright() as p:
         if rejected['count']==1:route.fulfill(status=401,content_type='application/json',body='{"error":"INVALID_AUTH_TOKEN"}')
         else:route.continue_()
     g.route('**/api/billing/status',expire_once)
-    g.locator('#emuHeaderPlan').click();m.locator('#main').wait_for(state='visible')
+    open_plan();m.locator('#main').wait_for(state='visible')
     assert rejected['count']==2
     g.unroute('**/api/billing/status',expire_once);g.evaluate('closeLegal()')
     # Even a repeated auth failure offers a recovery action, never a blank modal.
     def expired(route):route.fulfill(status=401,content_type='application/json',body='{"error":"INVALID_AUTH_TOKEN"}')
-    g.route('**/api/billing/status',expired);g.locator('#emuHeaderPlan').click()
+    g.route('**/api/billing/status',expired);open_plan()
     m.locator('#retryLoad').wait_for(state='visible');assert 'ログイン' in m.locator('#gate').inner_text()
     g.unroute('**/api/billing/status',expired);m.locator('#retryLoad').click();m.locator('#main').wait_for(state='visible');g.evaluate('closeLegal()')
     print('Headers, token refresh and recovery PASS',flush=True)
-    g.evaluate('openSpDao()');d=g.frame_locator('#spDaoFrame');d.locator('[data-sp-head] .service-plan').wait_for()
-    d.locator('[data-sp-head] .service-plan').click();m.locator('#main').wait_for(state='visible');g.evaluate('closeLegal();showEmuFeed()')
+    g.evaluate('openSpDao()');d=g.frame_locator('#spDaoFrame');d.locator('[data-sp-head] [aria-label="プロフィール"]').wait_for()
+    d.locator('[data-sp-head] [aria-label="プロフィール"]').click();g.locator('#emuAccountMenu').get_by_role('menuitem',name='プラン・お支払い',exact=True).click();m.locator('#main').wait_for(state='visible');g.evaluate('closeLegal();showEmuFeed()')
     # Login as the real local free account to exercise available plan choices.
     g.evaluate('async()=>{await auth.signOut();await window.__localEmulatorLogin("guest");}')
     g.wait_for_function('window.auth?.currentUser?.uid==="lab-guest" && window._chesEntered===true')
     g.locator('#spLoadingOverlay').wait_for(state='hidden');g.evaluate('showEmuFeed()')
     results=[]
     for width in [375,390,412,768,1024,1366]:
-        g.set_viewport_size({'width':width,'height':950});g.locator('#emuHeaderPlan').click();m.locator('#main').wait_for(state='visible')
+        g.set_viewport_size({'width':width,'height':950});open_plan();m.locator('#main').wait_for(state='visible')
         assert m.locator('.plan-choice').count()==3
         assert m.locator('#planList input:checked').input_value()=='light'
         assert '500円' in m.locator('#subscribeBtn').inner_text()
@@ -74,7 +77,7 @@ with sync_playwright() as p:
         m.locator('input[value="plus"]').check();assert '3,000円' in m.locator('#subscribeBtn').inner_text()
         m.locator('#adultCheck').check();assert m.locator('#subscribeBtn').is_enabled()
         g.screenshot(path=str(OUT/f'LOCAL-membership-entry-{width}.png'))
-        g.evaluate('closeLegal();openSpDao()');assert d.locator('html').evaluate('e=>e.scrollWidth<=innerWidth+1');d.locator('[data-sp-head] .service-plan').click();m.locator('#main').wait_for(state='visible');g.evaluate('closeLegal();showEmuFeed()');results.append({'width':width,'entryVisible':True,'threeEligiblePlans':True,'priceUpdates':True,'noOverflow':True})
+        g.evaluate('closeLegal();openSpDao()');assert d.locator('html').evaluate('e=>e.scrollWidth<=innerWidth+1');d.locator('[data-sp-head] [aria-label="プロフィール"]').click();g.locator('#emuAccountMenu').get_by_role('menuitem',name='プラン・お支払い',exact=True).click();m.locator('#main').wait_for(state='visible');g.evaluate('closeLegal();showEmuFeed()');results.append({'width':width,'entryVisible':True,'threeEligiblePlans':True,'priceUpdates':True,'noOverflow':True})
     # A comparison link opened without auth preserves the selected plan at login.
     v=c.new_page();v.on('pageerror',lambda e:errors.append(str(e)));v.goto(BASE+'/membership.html?plan=plus#plan',wait_until='domcontentloaded')
     v.locator('#main').wait_for(state='visible');assert v.locator('input[value="plus"]').is_checked()
