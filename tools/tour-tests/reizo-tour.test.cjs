@@ -64,6 +64,49 @@ test('existing navigation and native behavior remain identical outside the expli
   const file='frontend/public/'+name;
   const before=cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
   let current=fs.readFileSync(path.join(root,file),'utf8');
+  // Participation UX changes only these read/navigation regions. Keep the
+  // previous full-file regression around the remaining native implementation.
+  const uxBefore=cp.execFileSync('git',['show','f52dc21cbe20c7e09ea21bf7496a0f4e5487cd8a:'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
+  const uxRegion=(source,a,b)=>{const i=source.indexOf(a),j=source.indexOf(b,i);assert.ok(i>=0&&j>i,a);return source.slice(i,j);};
+  const uxRestore=(a,b,oldA=a,oldB=b)=>{current=current.replace(uxRegion(current,a,b),uxRegion(uxBefore,oldA,oldB));};
+  if(name==='index.html') {
+   uxRestore('    <div class="esn-brand-wrap">','    <button type="button" class="esn-collapse"');
+   uxRestore('<div class="service-heading"><button type="button" class="service-switch"','\n\n  <div class="header-right service-tools"','<div class="service-heading"><small>','\n\n  <div class="header-right service-tools"');
+   current=current.replace(/^    <aside class="emu-practice-entry"[^\n]+\n/m,'');
+   const {grab}=require('../year-goals-tests/extract.cjs');
+   for(const fn of ['emuBrandToggle','emuBrandGo'])current=current.replace(grab(current,fn),grab(uxBefore,fn));
+   current=current.replace("  document.querySelector('.esn-brand')?.setAttribute('aria-expanded', 'false');\n",'');
+   uxRestore('let _spMenuReturnFocus = null;','\nfunction smmGo(brand)','window.openSpMobileMenu = function (current) {','\nfunction smmGo(brand)');
+   uxRestore('    <div class="smm-label">SchoolPark / Emu を切り替える','    <button type="button" class="smm-row" data-brand="emu"','    <div class="smm-label">ブランドを切り替える','    <button type="button" class="smm-row" data-brand="emu"');
+   current=current.replace("    stage: SpQuestStore.isValidStage(q.stage) ? q.stage : '',\n",'');
+  }
+  if(name==='schoolpark/dao.html') {
+   uxRestore('        <div class="service-heading service-schoolpark-heading"','        <div class="service-tools"','        <div class="service-heading"','        <div class="service-tools"');
+   uxRestore('          <button type="button" class="sp-sidebar-switch"','          <sc-if value="{{ brandOpen }}">','          <div onClick="{{ toggleBrand }}"','          <sc-if value="{{ brandOpen }}">');
+   uxRestore('            <div role="menu" aria-label="SchoolPark / Emu"','          </sc-if>','            <div style="position:absolute; top:38px;','          </sc-if>');
+   current=current.replace(/^          <aside class="sp-ux-note sp-ux-home-entry"[^\n]+\n/m,'');
+   current=current.replace(/^          <p class="sp-ux-note">まずは、[^\n]+\n/m,'').replace(/^          <div class="sp-ux-actions"><button[^\n]+\n/m,'').replace(/^          <sc-if value="{{ noShownQuests }}">[^\n]+\n/m,'');
+   uxRestore('              <details data-keep-open="quest-purpose"','              <div onClick="{{ goPropose }}"','              <div style="flex:1 1 380px;','              <div onClick="{{ goPropose }}"');
+   uxRestore('                      <button type="button" class="sp-ux-button" data-tour="quest-card"','\n                    </div>','                      <div data-tour="quest-card"','\n                    </div>');
+   current=current.replace('まずは、ギルドの活動を見る</div>','ギルドを選ぶ</div>').replace(/^              <p class="sp-ux-note">ギルドは、[^\n]+\n/m,'');
+   current=current.replace('role="button" tabindex="0" class="sp-ux-guild-card" data-tour="guild-card"','data-tour="guild-card"').replace(/^                      <span class="sp-ux-browse-label">[^\n]+\n/m,'');
+   current=current.replace(/^            <section class="sp-ux-note" data-tour="guild-before-join">[^\n]+\n/m,'');
+   for(const kind of ['join','support']) {
+    const a='<button type="button" class="sp-ux-guild-action" onClick="{{ curGuild.'+kind+' }}"',oldA='<div onClick="{{ curGuild.'+kind+' }}"';
+    const i=current.indexOf(a),j=current.indexOf('</button>',i)+9,oi=uxBefore.indexOf(oldA),oj=uxBefore.indexOf('</div>',oi)+6;
+    assert.ok(i>=0&&oi>=0);current=current.slice(0,i)+uxBefore.slice(oi,oj)+current.slice(j);
+   }
+   current=current.replace(/^                <section class="sp-ux-before-accept"[^\n]+\n/m,'');
+   uxRestore('                <button type="button" class="sp-ux-accept"','\n                <sc-if value="{{ cur.canWisdom }}">','                <div onClick="{{ cur.commit }}"','\n                <sc-if value="{{ cur.canWisdom }}">');
+   current=current.replace('未完走なら「受けている」を押して降りる確認に進めます。完走後は記録を守るため降りられません。<br>出した報告は編集・削除できません。','受けると、締切までにログを1本出す約束になります。<br>やり終えたら、知恵カードを1枚置いてください。');
+   current=current.replace(/^  openSwitch = \([^\n]+\n/m,'').replace('      openSwitch:this.openSwitch, openProfile:this.openProfile,','      openProfile:this.openProfile,');
+   current=current.replace("series:'general', entryOnly:false, yearDoc:null","series:'general', yearDoc:null");
+   current=current.replace(/^      previewLabel: [^\n]+\n/m,'');
+   uxRestore('    const statusExps =','    const kind =','    const shownExps =','    const kind =');
+   current=current.replace(/^      entryOnly:!!s.entryOnly,[^\n]+\n/m,'');
+   current=current.replace("  const switchFocus = document.hasFocus() && document.activeElement?.matches('.service-switch,.sp-sidebar-switch')\n    ? (document.activeElement.matches('.service-switch') ? '.service-switch' : '.sp-sidebar-switch') : null;\n",'').replace("  if (switchFocus) host.querySelector(switchFocus)?.focus({preventScroll:true});\n",'');
+   const a=current.indexOf('// Native keyboard activation'),b=current.indexOf('// Clicking elsewhere',a);assert.ok(a>=0&&b>a);current=current.slice(0,a)+current.slice(b);
+  }
   // Reviewed profile-only integration. Restore these UI regions to the last
   // deployed version, then keep the existing guard over every other byte.
   // Native Auth/Firestore browser tests exercise the new profile/settings paths.

@@ -16545,7 +16545,12 @@ window.openSpMobileMenu = function (current, source) {
 };
 function closeSpMobileMenu() {
   document.body.classList.remove('sp-menu-open');
-  if (_spMenuReturnFocus?.isConnected) _spMenuReturnFocus.focus();
+  const source = _spMenuReturnFocus;
+  const restore = () => {
+    const target = source?.matches?.('.service-switch') ? source.ownerDocument.querySelector('.service-switch') : source;
+    if (target?.isConnected && !document.body.classList.contains('sp-menu-open')) target.focus();
+  };
+  restore(); requestAnimationFrame(restore);
 }
 document.addEventListener('keydown', function(e) {
   const dialog = document.getElementById('spMobileMenu');

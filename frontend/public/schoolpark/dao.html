@@ -2017,6 +2017,8 @@ function syncHeadHeight() {
 
 function draw() {
   queued = false;
+  const switchFocus = document.hasFocus() && document.activeElement?.matches('.service-switch,.sp-sidebar-switch')
+    ? (document.activeElement.matches('.service-switch') ? '.service-switch' : '.sp-sidebar-switch') : null;
   /* replaceChildren はスクロール中の要素も破棄する。差し替え前の位置を
      覚え、新しい要素へ同じ描画処理内で戻す（描画後の rAF では一度上に跳ぶ）。 */
   var scrollTop = app.scroller.current ? app.scroller.current.scrollTop : 0;
@@ -2027,6 +2029,7 @@ function draw() {
   walk(tpl.content, vals, frag);
   reopen(frag, open);
   host.replaceChildren(frag);
+  if (switchFocus) host.querySelector(switchFocus)?.focus({preventScroll:true});
   syncHeadHeight();
   mountCity();
   if (app.scroller.current) app.scroller.current.scrollTop = scrollTop;
