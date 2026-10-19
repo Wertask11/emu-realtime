@@ -535,7 +535,7 @@ if (window.top === window.self) window.location.replace('/');
         </sc-if>
 
         <sc-if value="{{ isExperiments }}" hint-placeholder-val="{{ false }}">
-          <p class="sp-ux-note">まずは、やること・締切・報酬条件を読むだけでも大丈夫です。「内容を見る」では参加登録されません。受けるかどうかは詳細を読んでから選べます。</p>
+          <p class="sp-ux-note">Emuで読んだ知識や自分の経験を、実際の課題で試してみる。結果やつまずきを報告し、次にも使える学びを知恵カードに残せます。気になる課題の「内容を見る」から、試したいことを探してみてください。閲覧だけでは参加登録されません。</p>
           <div class="sp-ux-actions"><button type="button" class="sp-ux-button" aria-pressed="{{ entryOnly }}" onClick="{{ toggleEntryOnly }}">「入門」のクエストに絞る</button><span class="sp-ux-note">運営が「入門」と設定したものだけを表示します。</span></div>
           <sc-if value="{{ noShownQuests }}"><p class="sp-ux-note">この条件に合うクエストはありません。<button type="button" class="sp-ux-button" onClick="{{ resetQuestFilters }}">絞り込みを解除する</button></p></sc-if>
           <div style="display:flex; flex-direction:column; gap:24px">
@@ -651,6 +651,20 @@ if (window.top === window.self) window.location.replace('/');
                     </div>
                   </div>
                 </sc-if>
+                <!-- participation-value:start -->
+                <sc-if value="{{ cur.showSteps }}">
+                <section class="sp-ux-value" data-ux-value="quest" aria-label="このクエストでできること">
+                  <h2>知ったことを試して、自分の学びにする</h2>
+                  <p>この課題で試したことを、結果だけでなく考え方や気づきまで記録できます。</p>
+                  <dl>
+                    <div><dt>使う知識</dt><dd>「元の知識」や現場の資料を手がかりに、自分の経験も課題の条件に照らして使い方を考えます。</dd></div>
+                    <div><dt>関わる人・視点</dt><dd>同じ課題を受けている人は参加者一覧で確認できます。報告があれば、ほかの人の試し方や気づきも読めます。</dd></div>
+                    <div><dt>残せるもの</dt><dd>自分が試した結果・つまずき・気づきの報告と、学びを一文にした知恵カード。次の実践で振り返る記録になります。</dd></div>
+                  </dl>
+                  <p>参加後は、課題に取り組み、3種類の報告と知恵カードを提出します。完走には運営の確認も必要です。手順・締切・報酬条件を確かめてから選べます。</p>
+                </section>
+                </sc-if>
+                <!-- participation-value:end -->
               </div>
 
               <!-- 完走までの手順。完走の決まりはどのクエストも同じだが、
@@ -799,7 +813,7 @@ if (window.top === window.self) window.location.replace('/');
                 <div style="font-size:12px; color:#6E695C">{{ guildCount }}</div>
               </div>
 
-              <p class="sp-ux-note">ギルドは、関心のある分野の活動を知る場所です。カードを開いても参加登録はされません。議題やクエストを読んでから、関わり方を選べます。</p>
+              <p class="sp-ux-note">関心の近い人が、どんなことを考え、試そうとしているのか。ギルドの議題やクエストから、自分の知識・経験を使いたいテーマを探せます。カードを開いても参加登録はされません。</p>
               <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:14px">
                 <sc-for list="{{ guilds }}" as="g" hint-placeholder-count="5">
                   <div role="button" tabindex="0" class="sp-ux-guild-card" data-tour="guild-card" onClick="{{ g.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-left:4px solid {{ g.accent }}; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px; cursor:pointer" style-hover="background:#F4F1EA">
@@ -877,7 +891,17 @@ if (window.top === window.self) window.location.replace('/');
               </sc-if>
             </div>
 
-            <section class="sp-ux-note" data-tour="guild-before-join"><b>見るだけ → 関心を知ってもらう → 活動を選ぶ</b><p>登録ボタンを押さずに、下の議題やクエストを読めます。</p><p>「参加したい」は、この分野で活動したい意思の登録です。押すと参加希望の人数に加わります。仕事・クエストの受注や締切の設定は行われません。クエストを受ける・議題に投票するのは、それぞれ別の操作です。</p><p>「参加したい」「応援する」は同じボタンをもう一度押すと取り消せます。登録した名前は公開の記録になります。</p></section>
+            <!-- participation-value:start -->
+            <section class="sp-ux-value" data-ux-value="guild" aria-label="このギルドでできること">
+              <h2>「{{ curGuild.short }}」で、関心を次の行動へ</h2>
+              <dl>
+                <div><dt>知識を使うテーマを探す</dt><dd>上のテーマと、下の議題・クエストから、自分の知識や経験を活かして考えたいこと・試したいことを選べます。</dd></div>
+                <div><dt>関心の近い人の視点を知る</dt><dd>この分野に関心を持つ人が出した議題や、クエストの報告を読めます。投票資格を満たす議題では、自分の意思を投票で示せます。</dd></div>
+                <div><dt>考えたことを実践へつなぐ</dt><dd>気になるクエストがあれば、条件を確かめて選べます。実際に取り組んだことは、報告や知恵カードとして残せます。</dd></div>
+              </dl>
+            </section>
+            <!-- participation-value:end -->
+            <section class="sp-ux-note" data-tour="guild-before-join"><b>まずは、活動したい分野を伝える</b><p>「参加したい」は、この分野で活動したい意思の登録です。押すと参加希望の人数に加わります。次に関わる議題やクエストは自分で選びます。仕事・クエストの受注や締切の設定は行われません。クエストを受ける・議題に投票するのは、それぞれ別の操作です。</p><p>登録せずに議題やクエストを読むこともできます。「参加したい」「応援する」は同じボタンをもう一度押すと取り消せます。登録した名前は公開の記録になります。</p></section>
             <sc-if value="{{ curGuild.canAct }}">
               <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:14px">
                 <div style="display:flex; flex-direction:column; gap:8px">

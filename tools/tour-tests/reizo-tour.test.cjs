@@ -81,6 +81,9 @@ test('existing navigation and native behavior remain identical outside the expli
    current=current.replace("    stage: SpQuestStore.isValidStage(q.stage) ? q.stage : '',\n",'');
   }
   if(name==='schoolpark/dao.html') {
+   // Display-only participation value panels; action/identity code remains guarded.
+   current=current.replace(/^ *<!-- participation-value:start -->[\s\S]*?^ *<!-- participation-value:end -->\n/gm,'');
+   current=current.replace(/^          <p class="sp-ux-note">Emuで読んだ知識や[^\n]+\n/m,'').replace(/^              <p class="sp-ux-note">関心の近い人が、[^\n]+\n/m,'');
    uxRestore('        <div class="service-heading service-schoolpark-heading"','        <div class="service-tools"','        <div class="service-heading"','        <div class="service-tools"');
    uxRestore('          <button type="button" class="sp-sidebar-switch"','          <sc-if value="{{ brandOpen }}">','          <div onClick="{{ toggleBrand }}"','          <sc-if value="{{ brandOpen }}">');
    uxRestore('            <div role="menu" aria-label="SchoolPark / Emu"','          </sc-if>','            <div style="position:absolute; top:38px;','          </sc-if>');

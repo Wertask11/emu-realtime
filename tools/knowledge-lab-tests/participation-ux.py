@@ -1,9 +1,9 @@
 """Actual UI/Auth/Rules in the dedicated ux19 emulator; never Production writes."""
-import json,pathlib,urllib.request,urllib.parse,urllib.error
+import json,os,pathlib,urllib.request,urllib.parse,urllib.error
 from playwright.sync_api import sync_playwright
 
 BASE='http://127.0.0.1:4210'
-OUT=pathlib.Path('/workspace/outputs/participation-ux');OUT.mkdir(parents=True,exist_ok=True)
+OUT=pathlib.Path(os.environ.get('PARTICIPATION_UX_OUTPUT','/workspace/outputs/participation-ux'));OUT.mkdir(parents=True,exist_ok=True)
 if (OUT/'local-results.json').exists():(OUT/'local-results.json').rename(OUT/'previous-local-results.json')
 TOURS=['sp-home','sp-guilds','sp-quests','sp-passport','sp-guild','sp-quest-detail','emu-feed','emu-requests','emu-share','emu-discussion']
 def state():
@@ -79,6 +79,9 @@ with sync_playwright() as p:
         guild=d.locator('[data-tour="guild-card"]').filter(has_text='LEARN').first
         guild.focus();g.keyboard.press('Enter')
         d.locator('[data-tour="guild-before-join"]').wait_for()
+        guild_value=d.locator('[data-ux-value="guild"]')
+        assert guild_value.is_visible() and guild_value.locator('dt').count()==3
+        assert '知識を使うテーマ' in guild_value.inner_text()
         join=d.get_by_role('button',name='このギルドに参加したい',exact=False)
         join.wait_for();assert len(state()['guildJoins'])==0
         overflow();g.screenshot(path=str(OUT/f'LOCAL-guild-before-{width}.png'))
@@ -104,6 +107,9 @@ with sync_playwright() as p:
         g.screenshot(path=str(OUT/f'LOCAL-quests-{width}.png'))
         d.get_by_role('button',name='内容を見る（参加しません） →',exact=True).click()
         d.locator('[data-tour="quest-before-join"]').wait_for()
+        quest_value=d.locator('[data-ux-value="quest"]')
+        assert quest_value.is_visible() and quest_value.locator('dt').count()==3
+        assert '参加者一覧' in quest_value.inner_text() and '3種類の報告' in quest_value.inner_text()
         assert len(state()['entryCommits'])==0
         assert '報酬は確定しません' in d.locator('[data-tour="quest-before-join"]').inner_text()
         assert '要確認' in d.locator('[data-tour="quest-before-join"]').inner_text()
