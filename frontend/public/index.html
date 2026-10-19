@@ -4901,12 +4901,12 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <nav id="emuSideNav" aria-label="Emuのメニュー">
   <div class="esn-top">
     <div class="esn-brand-wrap">
-      <button type="button" class="esn-brand" onclick="emuBrandToggle()" title="ブランドを切り替える">
-        <span>Emu</span><span class="esn-caret" id="esnCaret">▾</span>
+      <button type="button" class="esn-brand" onclick="emuBrandToggle()" title="SchoolPark / Emu を切り替える" aria-label="Emuを表示中。SchoolPark / Emu を切り替える" aria-haspopup="menu" aria-controls="esnBrandMenu" aria-expanded="false">
+        <span>Emu</span><small class="brand-switch-label">切替</small><span class="esn-caret" id="esnCaret" aria-hidden="true">▾</span>
       </button>
-      <div class="esn-brand-menu" id="esnBrandMenu">
-        <button type="button" style="color:#f08300" onclick="emuBrandGo('emu')">Emu</button>
-        <button type="button" style="color:#d0e2be" onclick="emuBrandGo('schoolpark')">SchoolPark</button>
+      <div class="esn-brand-menu" id="esnBrandMenu" role="menu" aria-label="SchoolPark / Emu">
+        <button type="button" role="menuitem" aria-current="page" style="color:#f08300" onclick="emuBrandGo('emu')">Emu</button>
+        <button type="button" role="menuitem" style="color:#245343" onclick="emuBrandGo('schoolpark')">SchoolPark</button>
       </div>
     </div>
     <button type="button" class="esn-collapse" onclick="emuNavToggle()" title="サイドバーを閉じる">‹</button>
@@ -4949,7 +4949,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   <!-- ログインボーナスpill・公式NFTボタンは廃止。
        ログボは「今日のEmu」報酬カードに統合（オフチェーン化）。 -->
 
-  <div class="service-heading"><small>知識と経験を、次の一歩へ</small><strong>Emu</strong></div>
+  <div class="service-heading"><button type="button" class="service-switch" data-tour="brand-switch" onclick="openSpMobileMenu('emu', this)" aria-haspopup="dialog" aria-controls="spMobileMenu" aria-label="Emuを表示中。SchoolPark / Emu を切り替える"><span class="service-brand-name">Emu</span><span class="brand-switch-label">切替</span><span class="service-switch-caret" aria-hidden="true">▾</span></button></div>
 
   <div class="header-right service-tools" style="display: flex; align-items: center; gap: 8px;">
     <input type="search" class="search-bar" placeholder="検索..." data-i18n-placeholder="header.searchPlaceholder" style="padding:6px 10px; border:1px solid #ccc; border-radius:4px; width: 120px;">
@@ -5219,6 +5219,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </section>
 
   <section class="emu-request-page" id="emuRequestsPage">
+    <aside class="emu-practice-entry" data-tour="emu-practice-entry"><div><b>知ったことを、試してみたくなったら</b><p>SchoolParkでギルドの活動やクエストの内容を見られます。見るだけでは参加になりません。</p></div><button type="button" onclick="chesHubGo('schoolpark')">SchoolParkの活動を見る →</button></aside>
     <div class="eth-card" data-tour="emu-lab-entry"><h3>Emu Knowledge Lab</h3><p>経験知を分野から探し、異なる知識を掛け合わせて、新しい問いや実践案へ。</p><button type="button" class="eth-btn primary" onclick="openEmuKnowledgeLab()">知識図書館・掛け合わせ研究所を開く →</button></div>
     <!-- Room1は独立タブではなく、全端末で「知識を探す」から開く -->
     <button type="button" class="emu-room1-entry" data-tour="room1-entry emu-room1" onclick="openSpRoom('/admin/room1/index.html', 'Room1')"
@@ -14459,12 +14460,14 @@ function emuBrandToggle() {
   if (!menu) return;
   const open = menu.classList.toggle('open');
   if (caret) caret.textContent = open ? '▴' : '▾';
+  document.querySelector('.esn-brand')?.setAttribute('aria-expanded', String(open));
 }
 function emuBrandGo(brand) {
   const menu = document.getElementById('esnBrandMenu');
   const caret = document.getElementById('esnCaret');
   if (menu) menu.classList.remove('open');
   if (caret) caret.textContent = '▾';
+  document.querySelector('.esn-brand')?.setAttribute('aria-expanded', 'false');
   if (brand === 'emu') return;              /* いま居る場所なので何もしない */
   if (typeof chesHubGo === 'function') chesHubGo(brand);
 }
@@ -14476,6 +14479,7 @@ document.addEventListener('click', function (ev) {
   menu.classList.remove('open');
   const caret = document.getElementById('esnCaret');
   if (caret) caret.textContent = '▾';
+  document.querySelector('.esn-brand')?.setAttribute('aria-expanded', 'false');
 });
 
 // Emu内(#mainApp)は position:static(z-index無し)のため、全画面オーバーレイが残っていると
@@ -16524,19 +16528,43 @@ function closeSpPassport() {
 }
 
 /* スマホ用のメニュー。サイドバーが無い幅のときだけ、枠の中のヘッダーから開く。 */
-window.openSpMobileMenu = function (current) {
-  /* いま居るブランドには「いま居る」と出し、押しても何もしない */
+let _spMenuReturnFocus = null;
+window.openSpMobileMenu = function (current, source) {
   const here = current || 'schoolpark';
+  _spMenuReturnFocus = source || document.activeElement;
   ['emu', 'schoolpark'].forEach(function (b) {
     const row = document.querySelector('#spMobileMenu [data-brand="' + b + '"]');
     if (!row) return;
     const go = row.querySelector('.smm-go');
-    if (go) go.textContent = (b === here) ? 'いま居る' : '→';
-    row.dataset.here = (b === here) ? '1' : '';
+    if (go) go.textContent = b === here ? '表示中' : '開く →';
+    row.dataset.here = b === here ? '1' : '';
+    if (b === here) row.setAttribute('aria-current', 'page'); else row.removeAttribute('aria-current');
   });
   document.body.classList.add('sp-menu-open');
+  document.querySelector('#spMobileMenu [data-brand="' + (here === 'emu' ? 'schoolpark' : 'emu') + '"]')?.focus();
 };
-function closeSpMobileMenu() { document.body.classList.remove('sp-menu-open'); }
+function closeSpMobileMenu() {
+  document.body.classList.remove('sp-menu-open');
+  if (_spMenuReturnFocus?.isConnected) _spMenuReturnFocus.focus();
+}
+document.addEventListener('keydown', function(e) {
+  const dialog = document.getElementById('spMobileMenu');
+  if (document.body.classList.contains('sp-menu-open')) {
+    if (e.key === 'Escape') { e.preventDefault(); closeSpMobileMenu(); return; }
+    if (e.key === 'Tab') {
+      const items = Array.from(dialog.querySelectorAll('button:not([disabled])')).filter(el => el.getClientRects().length);
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+    }
+  }
+  const menu = document.getElementById('esnBrandMenu');
+  if (e.key === 'Escape' && menu?.classList.contains('open')) { e.preventDefault(); emuBrandGo('emu'); document.querySelector('.esn-brand')?.focus(); }
+  if (e.key === 'ArrowDown' && e.target?.matches('.esn-brand')) {
+    e.preventDefault(); if (!menu?.classList.contains('open')) emuBrandToggle(); menu?.querySelector('button')?.focus();
+  }
+});
+
 function smmGo(brand) {
   const row = document.querySelector('#spMobileMenu [data-brand="' + brand + '"]');
   if (row && row.dataset.here === '1') { closeSpMobileMenu(); return; }   /* いま居る場所 */
@@ -19143,6 +19171,7 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
        #000 と、番号の無い古いクエストは、どちらにも属さない（'' になる）。 */
     series: SpQuestStore.seriesOf(q),
     questNumber: Number(q.questNumber) || 0,
+    stage: SpQuestStore.isValidStage(q.stage) ? q.stage : '',
     /* 系列まで込みの題名。切り替えの無い場所（詳細・走っているクエスト・
        宿題の選び先）で使う。特殊のときだけ前に「特殊」が付く。 */
     fullTitle: (SpQuestStore.fullLabel(q) && !SpQuestStore.isFounder(q) ? SpQuestStore.fullLabel(q) + ' ' : '') + (q.title || ''),
@@ -29311,7 +29340,8 @@ async function sendEmuFeedback() {
         <small style="opacity:.6;font-weight:400">SchoolPark ID・ログイン方法の追加・ウォレット連携</small>
       </span><span class="smm-go">→</span>
     </button>
-    <div class="smm-label">ブランドを切り替える</div>
+    <div class="smm-label">SchoolPark / Emu を切り替える</div>
+    <p style="margin:4px 0 12px; font-size:12px; line-height:1.8; color:#ccc">同じログイン・Passportで行き来できます。切替だけでギルドやクエストに参加することはありません。</p>
     <button type="button" class="smm-row" data-brand="emu" style="color:#F08300" onclick="smmGo('emu')">
       <span>Emu</span><span class="smm-go">→</span></button>
     <button type="button" class="smm-row" data-brand="schoolpark" style="color:#D0E2BE" onclick="smmGo('schoolpark')">
