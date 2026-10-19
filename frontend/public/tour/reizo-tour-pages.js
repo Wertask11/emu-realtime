@@ -155,7 +155,7 @@
       {
         "target": "menu",
         "label": "メニュー",
-        "text": "メニューから、ギルドやクエストなど8つの場所へ移動できるよ。",
+        "text": "メニューから、ギルドやクエストなど8つの場所へ移動できるよ。上の「SchoolPark 切替」からEmuへも移れるよ。",
         "screen": "home"
       },
       {
@@ -224,7 +224,7 @@
       {
         "target": "guild-card",
         "label": "ギルドのカード",
-        "text": "カードには考え方と、参加したい人・議題・クエストの数が出ているよ。押すとギルドの中を見られるよ。",
+        "text": "カードは「活動を見る」入口だよ。開いても参加にはならないよ。議題やクエストを読んで、関わりたいと思ったら別のボタンで選べるよ。",
         "click": true,
         "note": "「参加したい」「応援」は完了条件にしない",
         "screen": "guild"
@@ -243,13 +243,13 @@
       {
         "target": "quest-filters",
         "label": "絞り込み",
-        "text": "シリーズや状態で、クエストを絞り込めるよ。",
+        "text": "シリーズや状態で絞り込めるよ。「入門」に絞ると、運営が入門と設定したクエストだけを探せるよ。",
         "screen": "quest"
       },
       {
         "target": "quest-card",
-        "label": "「詳細」",
-        "text": "「詳細」を押すと、内容や締切、受けている人を確かめられるよ。",
+        "label": "内容を見る",
+        "text": "「内容を見る」は閲覧だけ。まだ参加にはならないよ。やることや締切・完走条件を確かめてから、受けるか決めてね。",
         "click": true,
         "note": "「受ける」・応募・報告・報酬受取は完了条件にしない",
         "screen": "quest"
@@ -635,7 +635,7 @@
   register("emu-share","03 一日シェア",v2["emu-share"].steps.map(specificationStep),null,"emuIchinichiFrame");
   register("emu-discussion","04 議論",v2["emu-debate"].steps.map(specificationStep),null,"emuDiscussionFrame");
   register('sp-guild','ギルドの詳細',[
-    step('screen-heading','ギルドの詳細','活動や参加条件を確認できます。'),
+    step('screen-heading','ギルドの詳細','まずは活動を読むだけでも大丈夫。「参加したい」は意思の登録で、クエストの受注とは別の操作です。'),
     step('guild-detail','決めごとの見方','ルールと議題を読んでから判断できます。投票や参加はこの案内の条件ではありません。')
   ],'guild');
   register('sp-quest-detail','クエストの詳細',[
