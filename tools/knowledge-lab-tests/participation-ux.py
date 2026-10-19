@@ -2,7 +2,9 @@
 import json,os,pathlib,urllib.request,urllib.parse,urllib.error
 from playwright.sync_api import sync_playwright
 
-BASE='http://127.0.0.1:4210'
+PORT=int(os.environ.get('PARTICIPATION_UX_PORT','4210'))
+assert 1024<=PORT<=65535
+BASE='http://127.0.0.1:'+str(PORT)
 OUT=pathlib.Path(os.environ.get('PARTICIPATION_UX_OUTPUT','/workspace/outputs/participation-ux'));OUT.mkdir(parents=True,exist_ok=True)
 if (OUT/'local-results.json').exists():(OUT/'local-results.json').rename(OUT/'previous-local-results.json')
 TOURS=['sp-home','sp-guilds','sp-quests','sp-passport','sp-guild','sp-quest-detail','emu-feed','emu-requests','emu-share','emu-discussion']
@@ -60,13 +62,19 @@ with sync_playwright() as p:
         # Real parent bridge and existing entry checks, using the new header switch.
         switch=d.locator('[data-sp-head] .service-switch')
         assert switch.bounding_box()['height']>=44
+        assert d.locator('.service-mobile-menu').is_hidden()
+        if width<700:
+            assert d.locator('[data-sp-head] [data-tour~="menu"]:visible').count()==1
         switch.click();menu=g.locator('#spMobileMenu')
         menu.wait_for(state='visible')
+        assert menu.get_by_role('button',name='SchoolPark パスポート',exact=False).is_visible()
+        assert menu.get_by_role('button',name='お問い合わせ・イベント申込',exact=False).is_visible()
         assert menu.locator('[data-brand="schoolpark"]').get_attribute('aria-current')=='page'
         g.keyboard.press('Escape');menu.wait_for(state='hidden');assert switch.evaluate('async el=>{for(let i=0;i<30;i++){if(el.ownerDocument.querySelector("[data-sp-head] .service-switch")===el.ownerDocument.activeElement)return true;await new Promise(requestAnimationFrame)}return false}')
         d.locator('html').evaluate('()=>app.setState({})');assert switch.evaluate('async el=>{await new Promise(requestAnimationFrame);return document.querySelector("[data-sp-head] .service-switch")===document.activeElement}')
         switch.click();menu.locator('[data-brand="emu"]').click()
         g.locator('#mainApp .service-switch').wait_for(state='visible')
+        assert g.locator('#emuMenuBtn').is_hidden()
         assert g.evaluate('auth.currentUser.uid')==identity['uid']
         g.screenshot(path=str(OUT/f'LOCAL-Emu-switch-{width}.png'))
         g.locator('#mainApp .service-switch').click();menu.locator('[data-brand="schoolpark"]').click()

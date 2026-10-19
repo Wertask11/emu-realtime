@@ -3,7 +3,9 @@ if(process.env.LAB_EMULATOR_PROJECT!=='demo-emu-knowledge-lab-ux19')throw Error(
 const {main}=require('./native-fixture.cjs');
 const path=require('node:path');
 const {Server}=require('../../backend/node_modules/socket.io');
-main({port:4210,reset:true,platformRegression:true}).then(async f=>{
+const port=Number(process.env.PARTICIPATION_UX_PORT||4210);
+if(!Number.isInteger(port)||port<1024||port>65535)throw Error('LOCAL_UX_PORT_REQUIRED');
+main({port,reset:true,platformRegression:true}).then(async f=>{
  // Real local Socket.IO transport prevents irrelevant missing-server errors.
  // Chat/business event handlers are outside this UI test.
  new Server(f.server,{cors:{origin:true,credentials:true}});
@@ -19,5 +21,5 @@ main({port:4210,reset:true,platformRegression:true}).then(async f=>{
   for(const path of ['sp_notifications','sp_quest_certificates','sp_stars','emuer_v2_rewards','emuer_v2_ledger'])counts[path]=(await f.db.collection(path).get()).size;
   res.json({guildJoins:await docs('sp_guild_members/learn/joins'),guildSupports:await docs('sp_guild_members/learn/supports'),entryCommits:await docs('sp_quests/ux-entry/commits'),approvedCommits:await docs('sp_quests/ux-approved/commits'),counts});
  });
- console.log('LOCAL UX fixture ready: 4210; real Auth/Firestore; no Production data');
+ console.log('LOCAL UX fixture ready: '+port+'; real Auth/Firestore; no Production data');
 }).catch(e=>{console.error(e.stack||e.code||e.message);process.exitCode=1});
