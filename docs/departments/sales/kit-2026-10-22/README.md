@@ -56,12 +56,17 @@
 - 8・12 にある「確認できませんでした」（削除機能・議論の保存期間・イベントの個人情報）は、**オーナーが対面で説明する**（2026-10-22 オーナー）。部署は文面の書き直しを求めない。
 - 「契約だけが成功ではない」。各訪問で小さなYES（資料を受け取った・QRで見た・次回連絡OK など）と NEXT ACTION を 14 に書く。
 
+## 3.5 オーナーの決定（2026-10-22）
+- **Emu の投稿**：無料（見学）は投稿0件、light から月5件（`backend/membership-policy.js`）。投稿してくれるお店の人には、その場で SchoolPark Passport を作ってもらい、**運営が light を付与する**（運営画面の付与。SchoolPark ID で渡せる）。
+- **City Spot・Camellia Place**：どちらも今は**デモを公開中**。声をかけるのは約15店で、**実店舗が2店決まれば勝ち**。残りは順番待ち（2店が決まった時点でいったん区切る）。実店舗がそろったら、デモを実店舗に差し替える。
+- 営業先の候補は `SchoolPark 営業先候補リスト（2026-10-22）`（姪浜→今宿→九大学研都市）。
+
 ## 4. 本番との照合（2026-10-22）
 | 資料の記述 | 本番 | 結果 |
 |---|---|---|
 | Camellia の会話（YURA／Lactone）は α版で公開中、Gemini を使う | `GET camellia-beta.vercel.app/api/camellia/chat` → `enabled:true`。プライバシーポリシー（最終改定 10/15）にも Gemini と記載 | 合っている。**ブリーフの「Camellia の AI は本番 OFF」は古い** |
 | Circle は α版で公開中 | `/api/camellia/circle` → ログインが必要（401）。窓口はある | 合っている |
-| Place は準備・先行実証中、実在の掲載はまだない | `/api/camellia/place` → 503 `PLACE_UNAVAILABLE` | 合っている |
+| Place は準備・先行実証中、実在の掲載はまだない（説明用デモは公開中） | `/api/camellia/place` → 503 `PLACE_UNAVAILABLE`。デモ画面は公開中（オーナー） | 合っている |
 | 対象は 18〜45歳の女性 | プライバシーポリシー第11条 | 合っている |
 | Knowledge Lab の AI は同意済みの公開投稿だけ | `/api/knowledge-lab/config` → `aiAvailable:true`・`semanticAvailable:true` | 合っている |
 | SchoolPark・Emu のプライバシーポリシー 8/17 改定・9/1 施行、一日シェアは light で30日表示・1年保持 | `schoolpark-emu.vercel.app/privacy.html` | 合っている |
