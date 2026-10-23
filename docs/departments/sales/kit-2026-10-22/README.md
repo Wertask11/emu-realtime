@@ -45,7 +45,7 @@
 - Emu・SchoolPark の QR（6・7・9・10・11・13）→ `https://schoolpark-emu.vercel.app/`
 - **1 の⑤ 持ち帰り案内「FOR SHOPS」の QR** → `https://school-park-homepage.vercel.app/camellia-place.html`
   - 元は「URL 確定後に差し替え」の空き枠だった。2026-10-22 オーナー指示で、**読むと①店舗さま向けご案内がそのまま出る**ページを作り、QR を入れた（このフォルダの 01 は差し替え後）。
-  - ページはホームページ（SchoolPark_homepage）の PR #6。**main にマージされるまで、本番では開けない。**
+  - ページはホームページ（SchoolPark_homepage）の PR #6。**2026-10-22 にマージ済みで、本番で開ける**（HTML・画像・PDF とも 200 を確認）。
 - QR に流入元の印（UTM）は付けない（2026-10-22 オーナー決定）。
 
 ## 3. 使い方のきまり（資料とオーナーの言葉から）
