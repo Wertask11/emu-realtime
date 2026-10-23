@@ -222,6 +222,12 @@ test('existing navigation and native behavior remain identical outside the expli
    current=current.replace(/        <div class="service-tools" aria-label="アカウントとサポート">[\s\S]*?\n        <\/div>/, before.slice(start,end));
   }
   if(name==='knowledge.html')current=current.replace('<button type="button" data-command="experience">分類・出典を付けた経験知を書く →</button>','').replace("(['wallet','room1','knowledge-lab','experience'].includes(b.dataset.command))","(b.dataset.command==='wallet'||b.dataset.command==='room1')");
+  // Reviewed 2026-10-23: the logo screen uses the visible mobile height (dvh)
+  // so the logo stays centred while the address bar is shown.
+  if(name==='index.html') {
+   const dvh='  /* スマホは 100vh がアドレスバーを隠したときの高さになり、出ているあいだは画面より長い。\n     はみ出した分だけロゴが上下にずれるので、いま見えている高さ（dvh）にそろえる。 */\n  height: 100dvh;\n';
+   assert.ok(current.includes(dvh));current=current.replace(dvh,'');
+  }
   // Reviewed 2026-10-23: the monthly theme chip looks like the others, and each
   // card can be shared (/p/<id>). tools/emu-tests/share-post.test.cjs covers both.
   if(name==='knowledge.html') {
