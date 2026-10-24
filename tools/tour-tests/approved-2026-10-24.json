@@ -1,90 +1,122 @@
-[
- [
-  "    <img id=\"logoImg\" src=\"logo-640.webp\" alt=\"SchoolPark ロゴ\"\n",
-  "    <img id=\"logoImg\" src=\"logo.jpg\" alt=\"SchoolPark ロゴ\"\n"
+{
+ "index.html": [
+  [
+   "    <img id=\"logoImg\" src=\"logo-640.webp\" alt=\"SchoolPark ロゴ\"\n",
+   "    <img id=\"logoImg\" src=\"logo.jpg\" alt=\"SchoolPark ロゴ\"\n"
+  ],
+  [
+   "  { text: '左上の切り替えから、EmuとSchoolParkを行き来できるよ！\\n🌐Emuは知識を伝え合う場所、そしてここがSchoolPark！\\n🌸Camellia（女性ウェルネス）は独立したアプリ、💍Heartoo（スマート結婚指輪）は準備中だよ。', hint: 'タップして次へ', mode: 'tap' },\n",
+   "  { text: '左上のCHESをタップすると、4つのブランドに移動できるよ！\\n🌸Camelliaは女性ウェルネス、💍Heartooはスマート結婚指輪、🌐Emuは知識を伝え合うSNS、そしてここがSchoolPark！', hint: 'タップして次へ', mode: 'tap' },\n"
+  ],
+  [
+   "  /* メタデータは NFT を作った人が書いたもの。そのまま HTML に入れると、\n     名前や説明にタグを書かれたとき、この画面でスクリプトが動く（2026-10-24 監査 B-2）。\n     文字として出し、画像は http(s) の行き先だけを使う。 */\n  const esc = (v) => String(v == null ? \"\" : v).replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\").replace(/'/g, \"&#39;\");\n  const rawImage = metadata.image ? String(normalizeTokenURI(metadata.image)) : \"\";\n  const imageUrl = /^https?:\\/\\//i.test(rawImage) ? rawImage : null;\n",
+   "  const imageUrl = metadata.image ? normalizeTokenURI(metadata.image) : null;\n"
+  ],
+  [
+   "        <h3 style=\"margin-right:80px;\">${esc(metadata.name || `NFT #${tokenId}`)}</h3>\n",
+   "        <h3 style=\"margin-right:80px;\">${metadata.name || `NFT #${tokenId}`}</h3>\n"
+  ],
+  [
+   "            ? `<img src=\"${esc(imageUrl)}\" style=\"width:100%;border-radius:8px;margin:10px 0;\">`\n",
+   "            ? `<img src=\"${imageUrl}\" style=\"width:100%;border-radius:8px;margin:10px 0;\">`\n"
+  ],
+  [
+   "            <p><strong>ジャンル:</strong> ${esc(metadata.genre || \"未設定\")}</p>\n            <p><strong>用途:</strong> ${esc(metadata.usage || \"未設定\")}</p>\n            <p><strong>特典:</strong> ${esc(metadata.perks || \"未設定\")}</p>\n            <p>${esc(metadata.description || \"\")}</p>\n",
+   "            <p><strong>ジャンル:</strong> ${metadata.genre || \"未設定\"}</p>\n            <p><strong>用途:</strong> ${metadata.usage || \"未設定\"}</p>\n            <p><strong>特典:</strong> ${metadata.perks || \"未設定\"}</p>\n            <p>${metadata.description || \"\"}</p>\n"
+  ],
+  [
+   "\n/* 書き手のプラン名（Emu light / plus / pro）。\n\n   2026-10-24 オーナー決定：「無料利用者」は出さない。公式パスを持っていれば\n   「公式パス」、プランがあれば「Emu light」などを出し、両方あれば両方出す。\n   プランは本人しか読めない記録にあるので、サーバー（/api/billing/public-plans）が\n   契約と付与だけを見てプラン名だけを返す（公式パスによる plus 相当は入れない）。\n   1人1回だけ聞いて覚える。同じ瞬間に頼まれた分は1回にまとめて聞く。\n   読めなかったときは何も出さない（推測で出さない）。 */\nconst _emuPlanOfCache = new Map();\nlet _emuPlanQueue = null;\nfunction _emuPlanAsk(addr) {\n  if (_emuPlanOfCache.has(addr)) return _emuPlanOfCache.get(addr);\n  if (!_emuPlanQueue) {\n    const q = _emuPlanQueue = { addrs: [], done: null };\n    q.done = new Promise(function (resolve) { setTimeout(resolve, 0); }).then(function () {\n      _emuPlanQueue = null;\n      const parts = [];\n      for (let i = 0; i < q.addrs.length; i += 60) parts.push(q.addrs.slice(i, i + 60));\n      return Promise.all(parts.map(function (part) {\n        return fetch('https://emu-realtime.onrender.com/api/billing/public-plans', {\n          method: 'POST', headers: { 'Content-Type': 'application/json' },\n          body: JSON.stringify({ addresses: part })\n        }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })\n          .then(function (j) { return (j && j.plans) || {}; });\n      })).then(function (maps) { return Object.assign.apply(null, [{}].concat(maps)); });\n    });\n  }\n  const q = _emuPlanQueue;\n  q.addrs.push(addr);\n  const one = q.done.then(function (m) { return ['light', 'plus', 'pro'].indexOf(m[addr]) >= 0 ? m[addr] : null; });\n  _emuPlanOfCache.set(addr, one);\n  /* 読めなかった人は覚えない（次に開いたとき、もう一度聞く） */\n  one.catch(function () { if (_emuPlanOfCache.get(addr) === one) _emuPlanOfCache.delete(addr); });\n  return one;\n}\nfunction emuAuthorPlans(addrs) {\n  const list = Array.from(new Set((addrs || []).map(function (a) { return String(a || '').toLowerCase(); })\n    .filter(function (a) { return /^0x[0-9a-f]{40}$/.test(a); })));\n  const out = {};\n  return Promise.all(list.map(function (a) {\n    return _emuPlanAsk(a).then(function (p) { if (p) out[a] = p; }, function () {});\n  })).then(function () { return out; });\n}\nwindow.emuAuthorPlans = emuAuthorPlans;\nfunction emuPlanLabel(plan) {\n  return ({ light: 'Emu light', plus: 'Emu plus', pro: 'Emu pro' })[plan] || '';\n}\n\nfunction getUserTypeBadge(type, address) {\n",
+   "\nfunction getUserTypeBadge(type, address) {\n"
+  ],
+  [
+   "  /* 公式パスだけを出す。持っていない人には何も出さない（「無料利用者」とは書かない） */\n  let badge = type === 'paid' ? `<span class=\"badge badge-paid\">公式パス</span>` : '';\n",
+   "  let badge = '';\n  switch (type) {\n    case 'paid':  badge = `<span class=\"badge badge-paid\">有料利用者</span>`; break;\n    default:      badge = `<span class=\"badge badge-free\">無料利用者</span>`;\n  }\n"
+  ],
+  [
+   "/* escapeHtml: 簡易エスケープ（本文やタグをそのまま挿入するより安全） */\n/* 文字と、属性の値（src=\"…\" など）の両方に入れるので、引用符も置き換える。\n   引用符を残すと、投稿の画像の欄に細工した文字列から属性を抜け出され、\n   ほかの人の画面でスクリプトが動いてしまう（2026-10-24 に見つかった）。 */\nfunction escapeHtml(s) {\n",
+   "/* escapeHtml: 簡易エスケープ（本文やタグをそのまま挿入するより安全） */\nfunction escapeHtml(s) {\n"
+  ],
+  [
+   "    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\")\n    .replace(/'/g, \"&#39;\");\n",
+   "    .replace(/>/g, \"&gt;\");\n"
+  ],
+  [
+   "/* addPostToFeed: 投稿を追加（表示上は reaction の数 = 0 で始まる） */\n/* 投稿の画像として出してよいか。投稿の画面が作る形（端末で縮めた data URL）だけ。 */\nfunction _emuSafePostImage(v) {\n  return typeof v === 'string' && v.length <= 1048000\n    && /^data:image\\/(jpeg|png|webp);base64,[A-Za-z0-9+\\/]+=*$/.test(v);\n}\nfunction createPostElementFromData(post) {\n",
+   "/* addPostToFeed: 投稿を追加（表示上は reaction の数 = 0 で始まる） */\nfunction createPostElementFromData(post) {\n"
+  ],
+  [
+   "      <div class=\"kw-author-line\"><b>${escapeHtml(_kwName)}</b>${_kwPaid ? `<span class=\"kw-access paid\">公式パス</span>` : \"\"}<span class=\"kw-access\" data-plan-of=\"${escapeHtml(_kwAddrLc)}\" hidden></span></div>\n",
+   "      <div class=\"kw-author-line\"><b>${escapeHtml(_kwName)}</b><span class=\"kw-access ${_kwPaid ? \"paid\" : \"\"}\">${_kwPaid ? \"有料パス\" : \"無料利用者\"}</span></div>\n"
+  ],
+  [
+   "  ${_emuSafePostImage(post.imageUrl) ? `<img class=\"kw-img\" src=\"${escapeHtml(post.imageUrl)}\" alt=\"\">` : \"\"}\n",
+   "  ${post.imageUrl ? `<img class=\"kw-img\" src=\"${escapeHtml(post.imageUrl)}\" alt=\"\">` : \"\"}\n"
+  ],
+  [
+   "`;\n\n/* 書き手のプラン名（Emu light など）。あとから届く。無ければ何も出さない */\nconst _kwPlanEl = postElement.querySelector(\"[data-plan-of]\");\nif (_kwPlanEl && _kwAddrLc) emuAuthorPlans([_kwAddrLc]).then(function (m) {\n  const label = emuPlanLabel(m[_kwAddrLc]);\n  if (label) { _kwPlanEl.textContent = label; _kwPlanEl.hidden = false; }\n});\n\n",
+   "`;\n\n"
+  ],
+  [
+   "       断られる（入るのは1回だけ、という決まりのため）。 */\n    /* getDoc は見切る前に「client is offline」で断ってくることがある。\n       前はその断りがそのまま下の catch へ落ち、普通の通信で読み直す前に\n       「うまくいきませんでした」を出していた。何度か押すと通ったのはこのため\n       （2026-10-24、CONNECT Guild の応援）。断られても、読めなかったとして扱う。 */\n    const coll = 'sp_guild_members/' + encodeURIComponent(guildId) + '/' + sub;\n    const path = coll + '/' + encodeURIComponent(p.addr);\n    let joined = null;\n",
+   "       断られる（入るのは1回だけ、という決まりのため）。 */\n    let joined = null;\n"
+  ],
+  [
+   "    const cur = await _spSoon(fb.getDoc(ref).catch(function () { return null; }), 4000);\n",
+   "    const cur = await _spSoon(fb.getDoc(ref), 4000);\n"
+  ],
+  [
+   "        joined = !!(await _spRestDoc(path, true, true));\n",
+   "        const d = await _spRestDoc('sp_guild_members/' + encodeURIComponent(guildId)\n          + '/' + sub + '/' + encodeURIComponent(p.addr), true);\n        joined = !!d;\n"
+  ],
+  [
+   "    const data = { name: p.name, at: Date.now() };\n    /* 書くほうも同じ。SDK が返事をしない・offline で断るときは、\n       普通の通信で、書けているかを確かめてから書く。決まりは SDK と同じように効く。\n       断られた（決まりで拒まれた）ときだけは、そのまま理由を出す。 */\n    const sdk = (joined ? fb.deleteDoc(ref) : fb.setDoc(ref, data))\n      .then(function () { return true; }, function (err) { return err || new Error('保存できませんでした'); });\n    const done = await _spSoon(sdk, 6000);\n    if (done.ok && done.value !== true && _spDenied(done.value)) throw done.value;\n    if (!(done.ok && done.value === true)) {\n      const has = async function () { return !!(await _spRestDoc(path + '?mask.fieldPaths=at', true, true)); };\n      if ((await has()) === joined) {\n        if (joined) await _spRestDelete(path);\n        else await _spRestCreate(coll, p.addr, data);\n        if ((await has()) === joined) throw new Error('保存が返ってきませんでした');\n      }\n      console.warn('ギルドの参加・応援を、普通の通信で保存しました。');\n    }\n    try { _spRestDrop('sp_guild_members/'); } catch (e3) {}\n    /* 読み直しの取り置き（25秒）も捨てる。捨てないと、下の読み直しが押す前の\n       人数を返し、押したはずの「✓」と数字が元に戻って見えた（もう一度押すと取り消しになる）。 */\n    try { _spMemoDrop('readall:sp_guild_members/' + encodeURIComponent(guildId) + '/'); } catch (e4) {}\n",
+   "    const write = joined ? fb.deleteDoc(ref) : fb.setDoc(ref, { name: p.name, at: Date.now() });\n    const done = await _spSoon(write, 6000);\n    if (!done.ok) throw new Error('保存が返ってきませんでした');\n"
+  ],
+  [
+   "  if (post) headers['Content-Type'] = 'application/json';\n  /* ':runQuery' だけのときは、いちばん上（posts など）への問い合わせ */\n  const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId\n",
+   "  if (post) headers['Content-Type'] = 'application/json';\n  const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId\n"
+  ],
+  [
+   "            + '/databases/(default)/documents' + (path.charAt(0) === ':' ? '' : '/') + path\n",
+   "            + '/databases/(default)/documents/' + path\n"
+  ],
+  [
+   "   新しい順に並べ替えるのは、読んだあとこちら側でやる。\n\n   一覧は欄を絞って普通の通信で読む（runQuery の select）。\n   前は SDK で posts を丸ごと読んでいた。投稿には画像（1枚で最大1MB）が\n   そのまま入っているので、全投稿だと数MBになる。スマホでは途中で\n   通信が切れたとみなされ、SDK は例外を出さずに端末の控えから返す。\n   控えにあるのは見たことのある投稿だけなので、一覧が1件しか出ず、\n   ほかの投稿を選べなかった（一般 #001 LEARN、2026-10-24）。 */\nconst SP_LOG_POST_FIELDS = ['title', 'body', 'tags', 'displayName', 'address', 'goodCount', 'createdAt'];\nfunction _spLogPostRow(id, x) {\n  return { id: id, title: x.title || '（題名なし）', body: String(x.body || ''),\n    tags: String(x.tags || ''), name: x.displayName || _spShortAddr(x.address) || '匿名',\n    good: Number(x.goodCount) || 0, at: _spPostTime(x.createdAt) };\n}\nasync function _spLogFetchPosts() {\n  try {\n    const j = await _spRestGet(':runQuery', false, true, {\n      structuredQuery: { from: [{ collectionId: 'posts' }],\n        select: { fields: SP_LOG_POST_FIELDS.map(function (f) { return { fieldPath: f }; }) },\n        limit: 1000 } });\n    return (Array.isArray(j) ? j : []).filter(function (x) { return x && x.document; }).map(function (x) {\n      return _spLogPostRow(decodeURIComponent(String(x.document.name || '').split('/').pop()),\n        _spRestFields(x.document.fields || {}));\n    });\n  } catch (e) {\n    console.warn('投稿を絞って読めませんでした:', e && (e.message || e));\n  }\n  /* 絞って読めなかったときだけ、これまでどおり SDK で丸ごと読む */\n  const fb = window.fbLib;\n  const snap = await fb.getDocs(fb.collection(window.db, 'posts'));\n  /* 控えから返ってきたものは、一部しか無いことがある。読めなかったとして扱う */\n  if (snap.metadata && snap.metadata.fromCache) return null;\n  const rows = [];\n  snap.forEach(function (d) { rows.push(_spLogPostRow(d.id, d.data() || {})); });\n  return rows;\n}\n",
+   "   新しい順に並べ替えるのは、読んだあとこちら側でやる。 */\n"
+  ],
+  [
+   "    const rows = await _spLogFetchPosts();\n    if (!rows) {\n",
+   "    const fb = window.fbLib;\n    const snap = await fb.getDocs(fb.collection(window.db, 'posts'));\n    const rows = [];\n    snap.forEach(function (d) {\n      const x = d.data() || {};\n      rows.push({ id: d.id, title: x.title || '（題名なし）', body: String(x.body || ''),\n        tags: String(x.tags || ''), name: x.displayName || _spShortAddr(x.address) || '匿名',\n        good: Number(x.goodCount) || 0, at: _spPostTime(x.createdAt) });\n    });\n    /* getDocs は通信が切れていても例外を出さず、控えから空で返ってくる。\n       「本当に0件」と「読めていない」を取り違えないよう、ここで見分ける。 */\n    if (!rows.length && snap.metadata && snap.metadata.fromCache) {\n"
+  ],
+  [
+   "  closeSpQuestForm();\n  /* 一覧の取り置き（25秒）を捨ててから読み直す。捨てないと、出したクエストが\n     しばらく一覧にもギルドの数にも出てこなかった。 */\n  try { _spMemoDrop('readall:sp_quests'); } catch (e) {}\n  if (_spQuestFormApp) {\n",
+   "  closeSpQuestForm();\n  if (_spQuestFormApp) {\n"
+  ],
+  [
+   "  if (!r.ok) throw new Error('HTTP ' + r.status);\n  return true;\n}\n\n/* 普通の通信で、1件を消す。SDK の書き込みが返ってこないときの逃げ道。\n   決まり（firestore.rules）は SDK と同じように効く。もう無ければ、それでよい。 */\nasync function _spRestDelete(path) {\n  let opt = {};\n  try { opt = (window.db && window.db.app && window.db.app.options) || {}; } catch (e) {}\n  const u = window.auth && window.auth.currentUser;\n  if (!opt.projectId || !opt.apiKey || !u) throw new Error('設定かログインが読めない');\n  const token = String((await u.getIdToken()) || '');\n  if (!token) throw new Error('ログインの証が取れない');\n  const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId\n    + '/databases/(default)/documents/' + path + '?key=' + opt.apiKey;\n  let signal;\n  try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) signal = AbortSignal.timeout(15000); } catch (e) {}\n  const r = await fetch(url, { method: 'DELETE', cache: 'no-store', signal: signal,\n    headers: { 'Authorization': 'Bearer ' + token } });\n  if (r.status === 404) return true;\n  if (!r.ok) {\n    const err = new Error('HTTP ' + r.status);\n    err.code = r.status === 403 ? 'permission-denied' : '';\n    throw err;\n  }\n  return true;\n",
+   "  if (!r.ok) throw new Error('HTTP ' + r.status);\n  return true;\n"
+  ],
+  [
+   "/* view … Mall の「SchoolPark Cityを開く」は買い物の画面（commerce）へ。\n   前は view を渡せず City の入口に出ていて、単独で開いたとき（/?cityView=commerce）と\n   行き先が違っていた。 */\nfunction openEmuShopping(view) {\n  openSpRoom('/schoolpark/dao.html?screen=city'\n    + (view === 'orders' || view === 'commerce' ? '&cityView=' + view : ''), 'SchoolPark City');\n",
+   "function openEmuShopping() {\n  openSpRoom('/schoolpark/dao.html?screen=city', 'SchoolPark City');\n"
+  ],
+  [
+   "  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');\n",
+   "  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');\n"
+  ],
+  [
+   "  }\n  /* 書き手のプラン名（Emu light / plus / pro）。読めなければ付けない（何も出さない） */\n  async function markKnowledgePlans(rows, addrs) {\n    if (!addrs.length || typeof window.emuAuthorPlans !== 'function') return;\n    const r = await _spSoon(window.emuAuthorPlans(addrs), 2500);\n    if (!r || !r.ok) return;\n    rows.forEach(row => { const p = r.value[String(row.address || '').toLowerCase()]; if (p) row.authorPlan = p; });\n  }\n  function knowledgeAuthorAddrs(rows) {\n",
+   "  }\n  function knowledgeAuthorAddrs(rows) {\n"
+  ],
+  [
+   "      await Promise.all([markKnowledgePassHolders(rows, authorAddrs), markKnowledgePlans(rows, authorAddrs)]);\n",
+   "      await markKnowledgePassHolders(rows, authorAddrs);\n"
+  ]
  ],
- [
-  "  { text: '左上の切り替えから、EmuとSchoolParkを行き来できるよ！\\n🌐Emuは知識を伝え合う場所、そしてここがSchoolPark！\\n🌸Camellia（女性ウェルネス）は独立したアプリ、💍Heartoo（スマート結婚指輪）は準備中だよ。', hint: 'タップして次へ', mode: 'tap' },\n",
-  "  { text: '左上のCHESをタップすると、4つのブランドに移動できるよ！\\n🌸Camelliaは女性ウェルネス、💍Heartooはスマート結婚指輪、🌐Emuは知識を伝え合うSNS、そしてここがSchoolPark！', hint: 'タップして次へ', mode: 'tap' },\n"
- ],
- [
-  "  /* メタデータは NFT を作った人が書いたもの。そのまま HTML に入れると、\n     名前や説明にタグを書かれたとき、この画面でスクリプトが動く（2026-10-24 監査 B-2）。\n     文字として出し、画像は http(s) の行き先だけを使う。 */\n  const esc = (v) => String(v == null ? \"\" : v).replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\").replace(/'/g, \"&#39;\");\n  const rawImage = metadata.image ? String(normalizeTokenURI(metadata.image)) : \"\";\n  const imageUrl = /^https?:\\/\\//i.test(rawImage) ? rawImage : null;\n",
-  "  const imageUrl = metadata.image ? normalizeTokenURI(metadata.image) : null;\n"
- ],
- [
-  "        <h3 style=\"margin-right:80px;\">${esc(metadata.name || `NFT #${tokenId}`)}</h3>\n",
-  "        <h3 style=\"margin-right:80px;\">${metadata.name || `NFT #${tokenId}`}</h3>\n"
- ],
- [
-  "            ? `<img src=\"${esc(imageUrl)}\" style=\"width:100%;border-radius:8px;margin:10px 0;\">`\n",
-  "            ? `<img src=\"${imageUrl}\" style=\"width:100%;border-radius:8px;margin:10px 0;\">`\n"
- ],
- [
-  "            <p><strong>ジャンル:</strong> ${esc(metadata.genre || \"未設定\")}</p>\n            <p><strong>用途:</strong> ${esc(metadata.usage || \"未設定\")}</p>\n            <p><strong>特典:</strong> ${esc(metadata.perks || \"未設定\")}</p>\n            <p>${esc(metadata.description || \"\")}</p>\n",
-  "            <p><strong>ジャンル:</strong> ${metadata.genre || \"未設定\"}</p>\n            <p><strong>用途:</strong> ${metadata.usage || \"未設定\"}</p>\n            <p><strong>特典:</strong> ${metadata.perks || \"未設定\"}</p>\n            <p>${metadata.description || \"\"}</p>\n"
- ],
- [
-  "/* escapeHtml: 簡易エスケープ（本文やタグをそのまま挿入するより安全） */\n/* 文字と、属性の値（src=\"…\" など）の両方に入れるので、引用符も置き換える。\n   引用符を残すと、投稿の画像の欄に細工した文字列から属性を抜け出され、\n   ほかの人の画面でスクリプトが動いてしまう（2026-10-24 に見つかった）。 */\nfunction escapeHtml(s) {\n",
-  "/* escapeHtml: 簡易エスケープ（本文やタグをそのまま挿入するより安全） */\nfunction escapeHtml(s) {\n"
- ],
- [
-  "    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\")\n    .replace(/'/g, \"&#39;\");\n",
-  "    .replace(/>/g, \"&gt;\");\n"
- ],
- [
-  "/* addPostToFeed: 投稿を追加（表示上は reaction の数 = 0 で始まる） */\n/* 投稿の画像として出してよいか。投稿の画面が作る形（端末で縮めた data URL）だけ。 */\nfunction _emuSafePostImage(v) {\n  return typeof v === 'string' && v.length <= 1048000\n    && /^data:image\\/(jpeg|png|webp);base64,[A-Za-z0-9+\\/]+=*$/.test(v);\n}\nfunction createPostElementFromData(post) {\n",
-  "/* addPostToFeed: 投稿を追加（表示上は reaction の数 = 0 で始まる） */\nfunction createPostElementFromData(post) {\n"
- ],
- [
-  "  ${_emuSafePostImage(post.imageUrl) ? `<img class=\"kw-img\" src=\"${escapeHtml(post.imageUrl)}\" alt=\"\">` : \"\"}\n",
-  "  ${post.imageUrl ? `<img class=\"kw-img\" src=\"${escapeHtml(post.imageUrl)}\" alt=\"\">` : \"\"}\n"
- ],
- [
-  "       断られる（入るのは1回だけ、という決まりのため）。 */\n    /* getDoc は見切る前に「client is offline」で断ってくることがある。\n       前はその断りがそのまま下の catch へ落ち、普通の通信で読み直す前に\n       「うまくいきませんでした」を出していた。何度か押すと通ったのはこのため\n       （2026-10-24、CONNECT Guild の応援）。断られても、読めなかったとして扱う。 */\n    const coll = 'sp_guild_members/' + encodeURIComponent(guildId) + '/' + sub;\n    const path = coll + '/' + encodeURIComponent(p.addr);\n    let joined = null;\n",
-  "       断られる（入るのは1回だけ、という決まりのため）。 */\n    let joined = null;\n"
- ],
- [
-  "    const cur = await _spSoon(fb.getDoc(ref).catch(function () { return null; }), 4000);\n",
-  "    const cur = await _spSoon(fb.getDoc(ref), 4000);\n"
- ],
- [
-  "        joined = !!(await _spRestDoc(path, true, true));\n",
-  "        const d = await _spRestDoc('sp_guild_members/' + encodeURIComponent(guildId)\n          + '/' + sub + '/' + encodeURIComponent(p.addr), true);\n        joined = !!d;\n"
- ],
- [
-  "    const data = { name: p.name, at: Date.now() };\n    /* 書くほうも同じ。SDK が返事をしない・offline で断るときは、\n       普通の通信で、書けているかを確かめてから書く。決まりは SDK と同じように効く。\n       断られた（決まりで拒まれた）ときだけは、そのまま理由を出す。 */\n    const sdk = (joined ? fb.deleteDoc(ref) : fb.setDoc(ref, data))\n      .then(function () { return true; }, function (err) { return err || new Error('保存できませんでした'); });\n    const done = await _spSoon(sdk, 6000);\n    if (done.ok && done.value !== true && _spDenied(done.value)) throw done.value;\n    if (!(done.ok && done.value === true)) {\n      const has = async function () { return !!(await _spRestDoc(path + '?mask.fieldPaths=at', true, true)); };\n      if ((await has()) === joined) {\n        if (joined) await _spRestDelete(path);\n        else await _spRestCreate(coll, p.addr, data);\n        if ((await has()) === joined) throw new Error('保存が返ってきませんでした');\n      }\n      console.warn('ギルドの参加・応援を、普通の通信で保存しました。');\n    }\n    try { _spRestDrop('sp_guild_members/'); } catch (e3) {}\n    /* 読み直しの取り置き（25秒）も捨てる。捨てないと、下の読み直しが押す前の\n       人数を返し、押したはずの「✓」と数字が元に戻って見えた（もう一度押すと取り消しになる）。 */\n    try { _spMemoDrop('readall:sp_guild_members/' + encodeURIComponent(guildId) + '/'); } catch (e4) {}\n",
-  "    const write = joined ? fb.deleteDoc(ref) : fb.setDoc(ref, { name: p.name, at: Date.now() });\n    const done = await _spSoon(write, 6000);\n    if (!done.ok) throw new Error('保存が返ってきませんでした');\n"
- ],
- [
-  "  if (post) headers['Content-Type'] = 'application/json';\n  /* ':runQuery' だけのときは、いちばん上（posts など）への問い合わせ */\n  const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId\n",
-  "  if (post) headers['Content-Type'] = 'application/json';\n  const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId\n"
- ],
- [
-  "            + '/databases/(default)/documents' + (path.charAt(0) === ':' ? '' : '/') + path\n",
-  "            + '/databases/(default)/documents/' + path\n"
- ],
- [
-  "   新しい順に並べ替えるのは、読んだあとこちら側でやる。\n\n   一覧は欄を絞って普通の通信で読む（runQuery の select）。\n   前は SDK で posts を丸ごと読んでいた。投稿には画像（1枚で最大1MB）が\n   そのまま入っているので、全投稿だと数MBになる。スマホでは途中で\n   通信が切れたとみなされ、SDK は例外を出さずに端末の控えから返す。\n   控えにあるのは見たことのある投稿だけなので、一覧が1件しか出ず、\n   ほかの投稿を選べなかった（一般 #001 LEARN、2026-10-24）。 */\nconst SP_LOG_POST_FIELDS = ['title', 'body', 'tags', 'displayName', 'address', 'goodCount', 'createdAt'];\nfunction _spLogPostRow(id, x) {\n  return { id: id, title: x.title || '（題名なし）', body: String(x.body || ''),\n    tags: String(x.tags || ''), name: x.displayName || _spShortAddr(x.address) || '匿名',\n    good: Number(x.goodCount) || 0, at: _spPostTime(x.createdAt) };\n}\nasync function _spLogFetchPosts() {\n  try {\n    const j = await _spRestGet(':runQuery', false, true, {\n      structuredQuery: { from: [{ collectionId: 'posts' }],\n        select: { fields: SP_LOG_POST_FIELDS.map(function (f) { return { fieldPath: f }; }) },\n        limit: 1000 } });\n    return (Array.isArray(j) ? j : []).filter(function (x) { return x && x.document; }).map(function (x) {\n      return _spLogPostRow(decodeURIComponent(String(x.document.name || '').split('/').pop()),\n        _spRestFields(x.document.fields || {}));\n    });\n  } catch (e) {\n    console.warn('投稿を絞って読めませんでした:', e && (e.message || e));\n  }\n  /* 絞って読めなかったときだけ、これまでどおり SDK で丸ごと読む */\n  const fb = window.fbLib;\n  const snap = await fb.getDocs(fb.collection(window.db, 'posts'));\n  /* 控えから返ってきたものは、一部しか無いことがある。読めなかったとして扱う */\n  if (snap.metadata && snap.metadata.fromCache) return null;\n  const rows = [];\n  snap.forEach(function (d) { rows.push(_spLogPostRow(d.id, d.data() || {})); });\n  return rows;\n}\n",
-  "   新しい順に並べ替えるのは、読んだあとこちら側でやる。 */\n"
- ],
- [
-  "    const rows = await _spLogFetchPosts();\n    if (!rows) {\n",
-  "    const fb = window.fbLib;\n    const snap = await fb.getDocs(fb.collection(window.db, 'posts'));\n    const rows = [];\n    snap.forEach(function (d) {\n      const x = d.data() || {};\n      rows.push({ id: d.id, title: x.title || '（題名なし）', body: String(x.body || ''),\n        tags: String(x.tags || ''), name: x.displayName || _spShortAddr(x.address) || '匿名',\n        good: Number(x.goodCount) || 0, at: _spPostTime(x.createdAt) });\n    });\n    /* getDocs は通信が切れていても例外を出さず、控えから空で返ってくる。\n       「本当に0件」と「読めていない」を取り違えないよう、ここで見分ける。 */\n    if (!rows.length && snap.metadata && snap.metadata.fromCache) {\n"
- ],
- [
-  "  closeSpQuestForm();\n  /* 一覧の取り置き（25秒）を捨ててから読み直す。捨てないと、出したクエストが\n     しばらく一覧にもギルドの数にも出てこなかった。 */\n  try { _spMemoDrop('readall:sp_quests'); } catch (e) {}\n  if (_spQuestFormApp) {\n",
-  "  closeSpQuestForm();\n  if (_spQuestFormApp) {\n"
- ],
- [
-  "  if (!r.ok) throw new Error('HTTP ' + r.status);\n  return true;\n}\n\n/* 普通の通信で、1件を消す。SDK の書き込みが返ってこないときの逃げ道。\n   決まり（firestore.rules）は SDK と同じように効く。もう無ければ、それでよい。 */\nasync function _spRestDelete(path) {\n  let opt = {};\n  try { opt = (window.db && window.db.app && window.db.app.options) || {}; } catch (e) {}\n  const u = window.auth && window.auth.currentUser;\n  if (!opt.projectId || !opt.apiKey || !u) throw new Error('設定かログインが読めない');\n  const token = String((await u.getIdToken()) || '');\n  if (!token) throw new Error('ログインの証が取れない');\n  const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId\n    + '/databases/(default)/documents/' + path + '?key=' + opt.apiKey;\n  let signal;\n  try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) signal = AbortSignal.timeout(15000); } catch (e) {}\n  const r = await fetch(url, { method: 'DELETE', cache: 'no-store', signal: signal,\n    headers: { 'Authorization': 'Bearer ' + token } });\n  if (r.status === 404) return true;\n  if (!r.ok) {\n    const err = new Error('HTTP ' + r.status);\n    err.code = r.status === 403 ? 'permission-denied' : '';\n    throw err;\n  }\n  return true;\n",
-  "  if (!r.ok) throw new Error('HTTP ' + r.status);\n  return true;\n"
- ],
- [
-  "/* view … Mall の「SchoolPark Cityを開く」は買い物の画面（commerce）へ。\n   前は view を渡せず City の入口に出ていて、単独で開いたとき（/?cityView=commerce）と\n   行き先が違っていた。 */\nfunction openEmuShopping(view) {\n  openSpRoom('/schoolpark/dao.html?screen=city'\n    + (view === 'orders' || view === 'commerce' ? '&cityView=' + view : ''), 'SchoolPark City');\n",
-  "function openEmuShopping() {\n  openSpRoom('/schoolpark/dao.html?screen=city', 'SchoolPark City');\n"
- ],
- [
-  "  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');\n",
-  "  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');\n"
+ "knowledge.html": [
+  [
+   "function card(p){const mine=state.account&&String(p.address).toLowerCase()===state.account,gooded=p.goodUsers?.includes(state.account),changed=p.changeUsers?.includes(state.account),who=author(p),name=who.name,date=p.createdAt?new Intl.DateTimeFormat(emuLocaleTag(),{month:'numeric',day:'numeric'}).format(new Date(p.createdAt)):'';return`<article class=\"card\"><div class=\"author\"><div class=\"avatar\" data-initial=\"${esc((name||'?')[0])}\">${who.avatar?`<img src=\"${esc(who.avatar)}\" alt=\"\">`:esc((name||'?')[0])}</div><div class=\"author-meta\"><b>${esc(name)}</b>${['paid','paidNFT'].includes(p.userType)?`<span class=\"access\">${esc(emuT('k.paidPass'))}</span>`:''}${({light:'Emu light',plus:'Emu plus',pro:'Emu pro'})[p.authorPlan]?`<span class=\"access plan\">${esc(({light:'Emu light',plus:'Emu plus',pro:'Emu pro'})[p.authorPlan])}</span>`:''}<small>${esc(date)}</small></div></div><h3 data-tour=\"knowledge-card emu-card\">${esc(p.title)}</h3><div class=\"body clamp\">${esc(p.body)}</div><button class=\"more\" hidden>${esc(emuT('k.readMore'))}</button>${p.imageUrl?`<img class=\"post-img\" loading=\"lazy\" src=\"${esc(p.imageUrl)}\" alt=\"\">`:''}<div class=\"tags\">${tags(p).map(t=>`<span>#${esc(t)}</span>`).join('')}</div><div class=\"impact\"><div><span>${esc(emuT('k.impactLabel'))}</span><b>${esc(emuT('k.impactValue',{n:p.goodCount||0}))}</b></div><div class=\"stats\"><span><b>${p.goodCount||0}</b>${esc(emuT('k.stat.good'))}</span><span><b>${p.changeCount||0}</b>${esc(emuT('k.stat.change'))}</span><span><b>${p.acceptedChangeCount||0}</b>${esc(emuT('k.stat.accepted'))}</span></div></div><div class=\"actions\" data-tour=\"emu-card-acts\">${mine?'':`<button data-react=\"good\" data-id=\"${esc(p.id)}\" ${gooded?'disabled':''}>${esc(gooded?emuT('k.action.gooded'):emuT('k.action.good'))}</button><button data-react=\"change\" data-id=\"${esc(p.id)}\" ${changed?'disabled':''}>${esc(changed?emuT('k.action.changed'):emuT('k.action.change'))}</button>`}<button data-react=\"voices\" data-id=\"${esc(p.id)}\" ${p.goodCount?'':'disabled'}>${esc(emuT('k.action.voices'))}${p.goodCount?` <b>${p.goodCount}</b>`:''}</button><button data-react=\"propose\" data-id=\"${esc(p.id)}\" title=\"${esc(emuT('k.action.proposeHint'))}\">${esc(emuT('k.action.propose'))}</button><button data-react=\"history\" data-id=\"${esc(p.id)}\">${esc(emuT('k.action.history'))}</button><button class=\"share-btn\" data-share data-id=\"${esc(p.id)}\">${esc(emuT('k.action.share'))}</button></div></article>`}\n",
+   "function card(p){const mine=state.account&&String(p.address).toLowerCase()===state.account,gooded=p.goodUsers?.includes(state.account),changed=p.changeUsers?.includes(state.account),who=author(p),name=who.name,date=p.createdAt?new Intl.DateTimeFormat(emuLocaleTag(),{month:'numeric',day:'numeric'}).format(new Date(p.createdAt)):'';return`<article class=\"card\"><div class=\"author\"><div class=\"avatar\" data-initial=\"${esc((name||'?')[0])}\">${who.avatar?`<img src=\"${esc(who.avatar)}\" alt=\"\">`:esc((name||'?')[0])}</div><div class=\"author-meta\"><b>${esc(name)}</b><span class=\"access\">${esc(['paid','paidNFT'].includes(p.userType)?emuT('k.paidPass'):emuT('k.freeUser'))}</span><small>${esc(date)}</small></div></div><h3 data-tour=\"knowledge-card emu-card\">${esc(p.title)}</h3><div class=\"body clamp\">${esc(p.body)}</div><button class=\"more\" hidden>${esc(emuT('k.readMore'))}</button>${p.imageUrl?`<img class=\"post-img\" loading=\"lazy\" src=\"${esc(p.imageUrl)}\" alt=\"\">`:''}<div class=\"tags\">${tags(p).map(t=>`<span>#${esc(t)}</span>`).join('')}</div><div class=\"impact\"><div><span>${esc(emuT('k.impactLabel'))}</span><b>${esc(emuT('k.impactValue',{n:p.goodCount||0}))}</b></div><div class=\"stats\"><span><b>${p.goodCount||0}</b>${esc(emuT('k.stat.good'))}</span><span><b>${p.changeCount||0}</b>${esc(emuT('k.stat.change'))}</span><span><b>${p.acceptedChangeCount||0}</b>${esc(emuT('k.stat.accepted'))}</span></div></div><div class=\"actions\" data-tour=\"emu-card-acts\">${mine?'':`<button data-react=\"good\" data-id=\"${esc(p.id)}\" ${gooded?'disabled':''}>${esc(gooded?emuT('k.action.gooded'):emuT('k.action.good'))}</button><button data-react=\"change\" data-id=\"${esc(p.id)}\" ${changed?'disabled':''}>${esc(changed?emuT('k.action.changed'):emuT('k.action.change'))}</button>`}<button data-react=\"voices\" data-id=\"${esc(p.id)}\" ${p.goodCount?'':'disabled'}>${esc(emuT('k.action.voices'))}${p.goodCount?` <b>${p.goodCount}</b>`:''}</button><button data-react=\"propose\" data-id=\"${esc(p.id)}\" title=\"${esc(emuT('k.action.proposeHint'))}\">${esc(emuT('k.action.propose'))}</button><button data-react=\"history\" data-id=\"${esc(p.id)}\">${esc(emuT('k.action.history'))}</button><button class=\"share-btn\" data-share data-id=\"${esc(p.id)}\">${esc(emuT('k.action.share'))}</button></div></article>`}\n"
+  ]
  ]
-]
+}

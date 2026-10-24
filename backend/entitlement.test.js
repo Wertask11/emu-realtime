@@ -393,3 +393,24 @@ test("調べるほうも SchoolPark ID で引ける", async () => {
   assert.strictEqual(w.uid, "u9", "番号から引けていない");
   assert.strictEqual(w.spid, SPID, "どの番号で引いたかを返していない");
 });
+
+/* ───────── 投稿の書き手に出すプラン名（2026-10-24 オーナー決定） ─────────
+   「無料利用者」は出さない。公式パスは「公式パス」として別に出すので、
+   ここは契約と付与だけ。公式パスによる plus 相当は入れない。読むだけで書かない。 */
+test("書き手のプラン名：契約・付与だけを見て、公式パスの plus 相当は入れない", async () => {
+  const A = "0x" + "a".repeat(40), B = "0x" + "b".repeat(40), C = "0x" + "c".repeat(40), D = "0x" + "d".repeat(40), E = "0x" + "e".repeat(40);
+  const db = makeDb({
+    ches_wallets: { [A]: { uid: "ua" }, [B]: { uid: "ub" }, [C]: { uid: "uc" }, [D]: { uid: "ud" }, [E]: { uid: "ue" } },
+    subscriptions: { ua: { plan: "light", status: "active" }, ud: { plan: "pro", status: "canceled" } },
+    entitlements: { ub: { plan: "plus", source: "owner" }, ue: { plan: "pro", source: "owner", expiresAt: "2020-01-01T00:00:00Z" } },
+    paid_users: { [C]: { paid: true } }
+  });
+  const ent = createEntitlement({ db });
+  assert.equal(await ent.memberPlanOfAddress(A), "light", "契約");
+  assert.equal(await ent.memberPlanOfAddress(B), "plus", "付与");
+  assert.equal(await ent.memberPlanOfAddress(C), null, "公式パスだけの人はプラン名を出さない");
+  assert.equal(await ent.memberPlanOfAddress(D), null, "解約した契約は出さない");
+  assert.equal(await ent.memberPlanOfAddress(E), null, "期限切れの付与は出さない");
+  assert.equal(await ent.memberPlanOfAddress("0x" + "f".repeat(40)), null, "知らない名義");
+  assert.deepEqual(Object.keys(db._data).sort(), ["ches_wallets", "entitlements", "paid_users", "subscriptions"], "読むだけで、何も書かない");
+});

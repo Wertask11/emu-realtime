@@ -12237,12 +12237,57 @@ async function getUserBadges(address) {
   return badges;
 }
 
-function getUserTypeBadge(type, address) {
-  let badge = '';
-  switch (type) {
-    case 'paid':  badge = `<span class="badge badge-paid">有料利用者</span>`; break;
-    default:      badge = `<span class="badge badge-free">無料利用者</span>`;
+/* 書き手のプラン名（Emu light / plus / pro）。
+
+   2026-10-24 オーナー決定：「無料利用者」は出さない。公式パスを持っていれば
+   「公式パス」、プランがあれば「Emu light」などを出し、両方あれば両方出す。
+   プランは本人しか読めない記録にあるので、サーバー（/api/billing/public-plans）が
+   契約と付与だけを見てプラン名だけを返す（公式パスによる plus 相当は入れない）。
+   1人1回だけ聞いて覚える。同じ瞬間に頼まれた分は1回にまとめて聞く。
+   読めなかったときは何も出さない（推測で出さない）。 */
+const _emuPlanOfCache = new Map();
+let _emuPlanQueue = null;
+function _emuPlanAsk(addr) {
+  if (_emuPlanOfCache.has(addr)) return _emuPlanOfCache.get(addr);
+  if (!_emuPlanQueue) {
+    const q = _emuPlanQueue = { addrs: [], done: null };
+    q.done = new Promise(function (resolve) { setTimeout(resolve, 0); }).then(function () {
+      _emuPlanQueue = null;
+      const parts = [];
+      for (let i = 0; i < q.addrs.length; i += 60) parts.push(q.addrs.slice(i, i + 60));
+      return Promise.all(parts.map(function (part) {
+        return fetch('https://emu-realtime.onrender.com/api/billing/public-plans', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ addresses: part })
+        }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(function (j) { return (j && j.plans) || {}; });
+      })).then(function (maps) { return Object.assign.apply(null, [{}].concat(maps)); });
+    });
   }
+  const q = _emuPlanQueue;
+  q.addrs.push(addr);
+  const one = q.done.then(function (m) { return ['light', 'plus', 'pro'].indexOf(m[addr]) >= 0 ? m[addr] : null; });
+  _emuPlanOfCache.set(addr, one);
+  /* 読めなかった人は覚えない（次に開いたとき、もう一度聞く） */
+  one.catch(function () { if (_emuPlanOfCache.get(addr) === one) _emuPlanOfCache.delete(addr); });
+  return one;
+}
+function emuAuthorPlans(addrs) {
+  const list = Array.from(new Set((addrs || []).map(function (a) { return String(a || '').toLowerCase(); })
+    .filter(function (a) { return /^0x[0-9a-f]{40}$/.test(a); })));
+  const out = {};
+  return Promise.all(list.map(function (a) {
+    return _emuPlanAsk(a).then(function (p) { if (p) out[a] = p; }, function () {});
+  })).then(function () { return out; });
+}
+window.emuAuthorPlans = emuAuthorPlans;
+function emuPlanLabel(plan) {
+  return ({ light: 'Emu light', plus: 'Emu plus', pro: 'Emu pro' })[plan] || '';
+}
+
+function getUserTypeBadge(type, address) {
+  /* 公式パスだけを出す。持っていない人には何も出さない（「無料利用者」とは書かない） */
+  let badge = type === 'paid' ? `<span class="badge badge-paid">公式パス</span>` : '';
 
   if (address) {
     getUserBadges(address).then(badges => {
@@ -13073,7 +13118,7 @@ postElement.innerHTML = `
   <div class="kw-author">
     <div class="kw-avatar ${_kwPaid ? "paid" : ""}">${escapeHtml(_kwAvatarChar)}</div>
     <div>
-      <div class="kw-author-line"><b>${escapeHtml(_kwName)}</b><span class="kw-access ${_kwPaid ? "paid" : ""}">${_kwPaid ? "有料パス" : "無料利用者"}</span></div>
+      <div class="kw-author-line"><b>${escapeHtml(_kwName)}</b>${_kwPaid ? `<span class="kw-access paid">公式パス</span>` : ""}<span class="kw-access" data-plan-of="${escapeHtml(_kwAddrLc)}" hidden></span></div>
       ${_kwDate ? `<small>${_kwDate}</small>` : ""}
     </div>
     <button class="edit-button kw-more" title="編集">•••</button>
@@ -13100,6 +13145,13 @@ postElement.innerHTML = `
   </div>
   <div class="post-value-note kw-note">Goodは「役に立った」、Changeは「一緒にもっと良くする」。数字だけでなく、この投稿が生んだ価値として残ります。</div>
 `;
+
+/* 書き手のプラン名（Emu light など）。あとから届く。無ければ何も出さない */
+const _kwPlanEl = postElement.querySelector("[data-plan-of]");
+if (_kwPlanEl && _kwAddrLc) emuAuthorPlans([_kwAddrLc]).then(function (m) {
+  const label = emuPlanLabel(m[_kwAddrLc]);
+  if (label) { _kwPlanEl.textContent = label; _kwPlanEl.hidden = false; }
+});
 
 // 「続きを読む」トグル
 const _readMore = postElement.querySelector(".kw-readmore");
@@ -28963,6 +29015,13 @@ async function sendEmuFeedback() {
     const holders = new Set(r && r.ok ? r.value.filter(Boolean) : []);
     rows.forEach(row => { if (holders.has(String(row.address || '').toLowerCase())) row.userType = 'paid'; });
   }
+  /* 書き手のプラン名（Emu light / plus / pro）。読めなければ付けない（何も出さない） */
+  async function markKnowledgePlans(rows, addrs) {
+    if (!addrs.length || typeof window.emuAuthorPlans !== 'function') return;
+    const r = await _spSoon(window.emuAuthorPlans(addrs), 2500);
+    if (!r || !r.ok) return;
+    rows.forEach(row => { const p = r.value[String(row.address || '').toLowerCase()]; if (p) row.authorPlan = p; });
+  }
   function knowledgeAuthorAddrs(rows) {
     return [...new Set(rows.map(r => String(r.address || '').toLowerCase()).filter(a => /^0x[0-9a-f]{40}$/.test(a)))];
   }
@@ -29167,7 +29226,7 @@ async function sendEmuFeedback() {
       const authorAddrs = knowledgeAuthorAddrs(rows);
       const authorsRead = Promise.all(authorAddrs.map(a =>
         typeof window.emuProfileOf === 'function' ? window.emuProfileOf(a).catch(() => null) : null));
-      await markKnowledgePassHolders(rows, authorAddrs);
+      await Promise.all([markKnowledgePassHolders(rows, authorAddrs), markKnowledgePlans(rows, authorAddrs)]);
       const drafts = await readKnowledgeDrafts(account);
       /* テーマは記録から。一度読んだら覚えているので、2ページ目以降は待たない。 */
       await _spMonthlyTheme();

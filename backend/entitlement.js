@@ -331,6 +331,39 @@ function createEntitlement(deps) {
     return uid;
   }
 
+  /* 投稿の書き手に出すプラン名（Emu light / plus / pro）。
+
+     契約（Stripe）と運営の付与だけを見る。公式パスによる plus 相当は入れない
+     （画面では「公式パス」として別に出すため。2026-10-24 オーナー決定）。
+     どれも無ければ null。画面には何も出さない（「無料利用者」とは書かない）。
+
+     getEntitlement は ID の結び付けや回数の移しを書き込むので、ほかの人の分を
+     表示のために呼ぶと、見ただけで書き込みが起きる。こちらは読むだけ。 */
+  const memberPlanCache = new Map();
+  async function memberPlanOfAddress(address) {
+    const key = String(address || "").trim().toLowerCase();
+    if (!key || !db) return null;
+    const hit = memberPlanCache.get(key);
+    if (hit && hit.expiresAt > Date.now()) return hit.plan;
+    const uid = await uidOfAddress(address);
+    let best = null;
+    if (uid) {
+      for (const subject of await linkedUids(uid)) {
+        try {
+          const snap = await db.collection("subscriptions").doc(subject).get();
+          const v = snap.exists ? (snap.data() || {}) : null;
+          if (v && LIVE_STATUS.has(String(v.status)) && PLAN_RANK[v.plan] > 0
+              && (!best || PLAN_RANK[v.plan] > PLAN_RANK[best])) best = v.plan;
+        } catch (e) { /* 読めなければ、その分は出さない */ }
+        const grant = await grantOf(subject);
+        if (grant && PLAN_RANK[grant.plan] > 0 && (!best || PLAN_RANK[grant.plan] > PLAN_RANK[best])) best = grant.plan;
+      }
+    }
+    memberPlanCache.set(key, { plan: best, expiresAt: Date.now() + 10 * 60 * 1000 });
+    if (memberPlanCache.size > 5000) memberPlanCache.delete(memberPlanCache.keys().next().value);
+    return best;
+  }
+
   async function getEntitlementByAddress(address) {
     const uid = await uidOfAddress(address);
     if (!uid) return { plan: "guest", source: "none" };
@@ -762,7 +795,7 @@ function createEntitlement(deps) {
     };
   }
 
-  return { getEntitlement, getEntitlementByAddress, uidOfAddress, holdsOfficialPass, requirePlan, forget, atLeast,
+  return { getEntitlement, getEntitlementByAddress, memberPlanOfAddress, uidOfAddress, holdsOfficialPass, requirePlan, forget, atLeast,
     grantInitial, grantOne, revokeOne, listGrants, whois,
     consume, usageOf, usageWindow, limitOf, enforcing, PLAN_RANK, LIMITS, GRANTS_COL, ENFORCE_FROM };
 }

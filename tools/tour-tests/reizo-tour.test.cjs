@@ -65,9 +65,10 @@ test('existing navigation and native behavior remain identical outside the expli
   const before=cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
   let current=fs.readFileSync(path.join(root,file),'utf8');
   // Reviewed 2026-10-24: audit fixes (post image, NFT detail, tutorial copy, City
-  // link, logo), the quest report post list and the guild offline fallback.
+  // link, logo), the quest report post list, the guild offline fallback and the
+  // author badges (公式パス / Emu light・plus・pro, no 「無料利用者」).
   // Each pair is [now, before]; undo exactly these, then the older steps apply.
-  if(name==='index.html') for(const [now,was] of require('./approved-2026-10-24.json')){
+  for(const [now,was] of require('./approved-2026-10-24.json')[name]||[]){
    assert.equal(current.split(now).length,2,now.slice(0,60));current=current.replace(now,()=>was);
   }
   // Participation UX changes only these read/navigation regions. Keep the
