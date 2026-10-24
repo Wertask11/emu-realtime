@@ -665,31 +665,41 @@ service cloud.firestore {
         && request.resource.data.get('goodUsers', []).size() == 0
         && request.resource.data.get('changeUsers', []).size() == 0;
 
+      /* どの欄を変えるか（changedOnly）を、どの分かれ道でも先に見る。
+
+         ルールには1回の書き込みで評価できる式の上限（1000）がある。
+         段の判定（canWriteAs）は、付与・契約・Passport の参照先・公式パスを
+         たどるので重い。前は Good の分かれ道でも段を先に数えていたため、
+         Change を送ると「Good の分かれ道で段を数えて外れる → Change の分かれ道で
+         もう一度数える」になり、上限を超えて断られていた（2026-10-24 に、
+         light・公式パスの全員が改善案を送れなかった）。
+         欄の確認は軽いので、外れる分かれ道は段を数える前に抜ける。 */
       // 投稿者本人による本文編集。反応数・反応者一覧・投稿者は変更不可。
-      allow update: if !resource.data.keys().hasAny(['knowledgeLab'])
-        && isMyWallet(resource.data.get('address', '')) && changedOnly([
-        'title', 'body', 'tags', 'userType', 'userId', 'updatedAt', 'imageUrl',
-        'displayName'
-      ])
-      || (isMyWallet(resource.data.get('address', ''))
-        && changedOnly(['acceptedChangeCount', 'lastChangedAt'])
+      allow update: if changedOnly([
+          'title', 'body', 'tags', 'userType', 'userId', 'updatedAt', 'imageUrl',
+          'displayName'
+        ])
+        && !resource.data.keys().hasAny(['knowledgeLab'])
+        && isMyWallet(resource.data.get('address', ''))
+      || (changedOnly(['acceptedChangeCount', 'lastChangedAt'])
+        && isMyWallet(resource.data.get('address', ''))
         && request.resource.data.get('acceptedChangeCount', 0) == resource.data.get('acceptedChangeCount', 0) + 1)
       // Good は、認証ユーザー自身のウォレットを1件追加し、件数を1増やす場合だけ許可。
-      || (canWriteAs(1)
+      || (changedOnly(['goodCount', 'goodUsers'])
+        && request.resource.data.get('goodCount', 0) == resource.data.get('goodCount', 0) + 1
         && resource.data.get('visibility', 'public') == 'public'
+        && canWriteAs(1)
         && !isMyWallet(resource.data.get('address', ''))
         && !isOwnLabPost(resource.data)
-        && changedOnly(['goodCount', 'goodUsers'])
-        && request.resource.data.get('goodCount', 0) == resource.data.get('goodCount', 0) + 1
         && addedMeOnce(get(accountPath()).data,
              resource.data.get('goodUsers', []), request.resource.data.get('goodUsers', [])))
       // Change も同じく、1ユーザーにつき1件だけ許可。
-      || (canWriteAs(1)
+      || (changedOnly(['changeCount', 'changeUsers'])
+        && request.resource.data.get('changeCount', 0) == resource.data.get('changeCount', 0) + 1
         && resource.data.get('visibility', 'public') == 'public'
+        && canWriteAs(1)
         && !isMyWallet(resource.data.get('address', ''))
         && !isOwnLabPost(resource.data)
-        && changedOnly(['changeCount', 'changeUsers'])
-        && request.resource.data.get('changeCount', 0) == resource.data.get('changeCount', 0) + 1
         && addedMeOnce(get(accountPath()).data,
              resource.data.get('changeUsers', []), request.resource.data.get('changeUsers', [])));
 
