@@ -222,6 +222,26 @@ test('existing navigation and native behavior remain identical outside the expli
    current=current.replace(/        <div class="service-tools" aria-label="アカウントとサポート">[\s\S]*?\n        <\/div>/, before.slice(start,end));
   }
   if(name==='knowledge.html')current=current.replace('<button type="button" data-command="experience">分類・出典を付けた経験知を書く →</button>','').replace("(['wallet','room1','knowledge-lab','experience'].includes(b.dataset.command))","(b.dataset.command==='wallet'||b.dataset.command==='room1')");
+  // Reviewed 2026-10-23: the logo screen uses the visible mobile height (dvh)
+  // so the logo stays centred while the address bar is shown.
+  if(name==='index.html') {
+   const dvh='  /* スマホは 100vh がアドレスバーを隠したときの高さになり、出ているあいだは画面より長い。\n     はみ出した分だけロゴが上下にずれるので、いま見えている高さ（dvh）にそろえる。 */\n  height: 100dvh;\n';
+   assert.ok(current.includes(dvh));current=current.replace(dvh,'');
+  }
+  // Reviewed 2026-10-23: the monthly theme chip looks like the others, and each
+  // card can be shared (/p/<id>). tools/emu-tests/share-post.test.cjs covers both.
+  if(name==='knowledge.html') {
+   const cut=(a,b)=>{const i=current.indexOf(a),j=current.indexOf(b,i);assert.ok(i>=0&&j>i,a);current=current.slice(0,i)+current.slice(j);};
+   const drop=(s)=>{assert.ok(current.includes(s),s);current=current.replace(s,'');};
+   assert.ok(current.includes('padding:12px 16px}\n\n.field input[readonly]'));
+   current=current.replace('padding:12px 16px}\n\n.field input[readonly]','padding:12px 16px}.choices button[data-monthly]{border-color:#e0c08a;background:#fdf6ea;color:#8a5726}\n.choices button[data-monthly].active{border-color:#c98b2e;background:#f8ead2;color:#7a4c17}\n.field input[readonly]');
+   drop('<button class="share-btn" data-share data-id="${esc(p.id)}">${esc(emuT(\'k.action.share\'))}</button>');
+   drop(";document.querySelectorAll('[data-share]').forEach(b=>b.onclick=()=>openShare(b.dataset.id))");
+   drop(";if($('#shareSheet').classList.contains('open'))closeOverlay($('#shareSheet'))");
+   cut('<div class="overlay" id="shareSheet"','<div class="toast" id="toast"');
+   cut('/* シェア。行き先は投稿1件だけのページ','function openComposer(){');
+   cut('.share-modal{','</style>');
+  }
   assert.ok(current===before,file+' differs outside approved changes');
  }
 });
