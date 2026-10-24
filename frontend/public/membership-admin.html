@@ -712,6 +712,8 @@ async function renderCamellia() {
   await window.renderCamelliaDashboard({element:dashboard,api,esc,fmt});
 }
 
+/* LINE などにそのまま貼る案内文。利用者が友だちへ送る文（camellia-beta の components/MemberInvite.tsx）と同じにする。 */
+const CAM_INVITE_MESSAGE = "Camelliaに招待します 🌸";
 const CAM_STOP_REASON = { not_eligible: "対象外（女性ではない）", terms: "規約違反", other: "その他" };
 async function paintCamAccess() {
   const state = $("#camAccessState"), toggle = $("#camAccessToggle");
@@ -747,7 +749,8 @@ async function paintCamAccess() {
         + (x.expiresAt ? '　' + esc(fmt(x.expiresAt)) + ' まで' : '　期限なし')
         + (x.revoked ? '　<b style="color:#b3261e">取り消し済み</b>' : done ? '　<b>終了</b>' : '')
         + '</small><br><small style="word-break:break-all">' + esc(x.url) + '</small></span><span>'
-        + (done ? '' : '<button class="act" data-invcopy="' + esc(x.url) + '">リンクをコピー</button>'
+        + (done ? '' : '<button class="act" data-invcopy="' + esc(CAM_INVITE_MESSAGE + x.url) + '">案内文をコピー</button>'
+          + '<button class="act" data-invcopy="' + esc(x.url) + '">リンクだけコピー</button>'
           + '<button class="act no" data-invrevoke="' + esc(x.code) + '">取り消す</button>')
         + '</span></div>';
     }).join("") : '<p class="empty">まだ招待コードはありません。</p>')
@@ -756,7 +759,7 @@ async function paintCamAccess() {
   box.querySelectorAll("[data-invcopy]").forEach(function (b) {
     b.onclick = async function () {
       try { await navigator.clipboard.writeText(b.dataset.invcopy); b.textContent = "コピーしました"; }
-      catch (_) { prompt("このリンクをコピーしてください", b.dataset.invcopy); }
+      catch (_) { prompt("これをコピーしてください", b.dataset.invcopy); }
     };
   });
   box.querySelectorAll("[data-invrevoke]").forEach(function (b) {

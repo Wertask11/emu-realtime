@@ -12,7 +12,7 @@ const { chromium } = require('playwright');
 const root = path.join(__dirname, '../..');
 const ADMIN = fs.readFileSync(path.join(root, 'frontend/public/membership-admin.html'), 'utf8');
 const CARD = ADMIN.slice(ADMIN.indexOf('  const access = document.createElement("div");'), ADMIN.indexOf('  el.replaceChildren(dashboard, access'));
-const SRC = ADMIN.slice(ADMIN.indexOf('const CAM_STOP_REASON'), ADMIN.indexOf('async function paintCamReports()'));
+const SRC = ADMIN.slice(ADMIN.indexOf('const CAM_INVITE_MESSAGE'), ADMIN.indexOf('async function paintCamReports()'));
 assert.ok(CARD.length > 500 && SRC.length > 1500, '招待と利用停止の欄が見つかりません');
 
 const STATE = {
@@ -54,7 +54,11 @@ test('招待コードの一覧・作る・取り消す・招待制の切り替�
     assert.ok(list.includes('終了'), '使い切ったコードは終了と出す');
     assert.ok(list.includes('2 人が使いました'), '利用者が配ったコードは数だけ出す');
     assert.equal(await page.locator('#camInvites b').filter({ hasText: 'old<b>' }).count(), 1, '配り先の名前は文字のまま出す');
-    assert.equal(await page.locator('[data-invcopy]').count(), 1, '終わったコードにはコピーを出さない');
+    assert.equal(await page.locator('[data-invcopy]').count(), 2, '終わったコードにはコピーを出さない');
+    assert.equal(await page.getAttribute('[data-invcopy]:has-text("案内文をコピー")', 'data-invcopy'),
+      'Camelliaに招待します 🌸https://camellia-beta.vercel.app/?invite=K7QM2XPA&utm_source=invite&utm_campaign=instagram_1027', 'LINE などにそのまま貼れる文');
+    assert.equal(await page.getAttribute('[data-invcopy]:has-text("リンクだけコピー")', 'data-invcopy'),
+      'https://camellia-beta.vercel.app/?invite=K7QM2XPA&utm_source=invite&utm_campaign=instagram_1027', 'プロフィール欄などに貼るリンク');
 
     await page.fill('#camInvLabel', 'LINE 営業');
     await page.click('#camInvCreate');
