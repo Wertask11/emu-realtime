@@ -630,7 +630,39 @@ async function renderCamellia() {
     + '<iframe id="camFrame" src="/camellia/control-admin.html" title="Camellia 管理センター"'
     + ' style="width:100%;height:74vh;border:1px solid var(--line);border-radius:12px;background:#fff"'
     + '></iframe>';
-  el.replaceChildren(dashboard, records, reports, center);
+  /* 招待と利用停止。Camellia は女性限定。招待制を入れると、招待コードが無い新しい方は入れない。
+     コードは営業の配り先ごとに作る（配り先の名前が PostHog の utm_campaign になる）。 */
+  const access = document.createElement("div");
+  access.className = "card";
+  access.style.marginTop = "16px";
+  access.innerHTML = '<h2 style="margin:0 0 4px">招待と利用停止</h2>'
+    + '<p class="hint" style="margin:0 0 10px">招待制を入れると、招待コードを持っていない新しい方は入れません。'
+    + 'それまでに入っていた方は、そのまま使えます。<br>'
+    + '利用している方も、友だちに3人まで招待コードを配れます。</p>'
+    + '<div class="actions" style="margin:0 0 10px;align-items:center">'
+    + '<b id="camAccessState">読み込み中…</b>'
+    + '<button class="btn" id="camAccessToggle" disabled>…</button>'
+    + '</div>'
+    + '<h3 style="margin:14px 0 6px;font-size:14px">招待コードを作る</h3>'
+    + '<div class="actions" style="margin:0 0 6px;flex-wrap:wrap">'
+    + '<input id="camInvLabel" placeholder="配り先（例 instagram_1027）" maxlength="32" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px">'
+    + '<label class="hint">人数 <input id="camInvUses" type="number" min="1" max="1000" value="30" style="width:70px;padding:8px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px"></label>'
+    + '<label class="hint">有効 <input id="camInvDays" type="number" min="0" max="365" value="30" style="width:60px;padding:8px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px"> 日（0は期限なし）</label>'
+    + '<button class="btn primary" id="camInvCreate">作る</button>'
+    + '</div>'
+    + '<p class="hint" style="margin:0 0 8px">配り先は、英小文字・数字・ - _ だけで書いてください。</p>'
+    + '<div id="camInvites"><p class="empty">読み込み中…</p></div>'
+    + '<h3 style="margin:14px 0 6px;font-size:14px">利用を止める</h3>'
+    + '<p class="hint" style="margin:0 0 6px">女性ではないと分かった方・規約に反した方の利用を止めます。止めた方は、Camellia を開くと「利用を止めています」と出ます。記録は消しません。</p>'
+    + '<div class="actions" style="margin:0 0 8px;flex-wrap:wrap">'
+    + '<input id="camStopUser" placeholder="Camellia ID（CAM-…）または uid" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px">'
+    + '<select id="camStopReason" style="padding:8px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px">'
+    + '<option value="not_eligible">対象外（女性ではない）</option><option value="terms">規約違反</option><option value="other">その他</option></select>'
+    + '<button class="btn" id="camStop" style="color:#b3261e">止める</button>'
+    + '</div>'
+    + '<div id="camStopped"></div>';
+  el.replaceChildren(dashboard, access, records, reports, center);
+  paintCamAccess();
   /* 送ってもらった画面は2つある。同じ枠で切り替える。 */
   center.querySelectorAll("[data-cam]").forEach(function (b) {
     b.onclick = function () {
@@ -677,6 +709,96 @@ async function renderCamellia() {
   paintCamellia();
   paintCamReports();
   await window.renderCamelliaDashboard({element:dashboard,api,esc,fmt});
+}
+
+const CAM_STOP_REASON = { not_eligible: "対象外（女性ではない）", terms: "規約違反", other: "その他" };
+async function paintCamAccess() {
+  const state = $("#camAccessState"), toggle = $("#camAccessToggle");
+  if (!state) return;
+  let r;
+  try { r = await api("/api/billing/admin/camellia-access/"); }
+  catch (e) {
+    state.textContent = "読み込めませんでした（" + (e.code || e.message) + "）";
+    return;
+  }
+  const on = r.config.inviteRequired;
+  state.textContent = on ? "いまは招待制です（" + fmt(r.config.requiredSince) + " から）" : "いまは誰でも入れます";
+  state.style.color = on ? "#1b5e20" : "";
+  toggle.disabled = false;
+  toggle.textContent = on ? "招待制をやめる" : "招待制にする";
+  toggle.onclick = async function () {
+    const msg = on
+      ? "招待制をやめると、招待コードが無くても誰でも入れるようになります。よろしいですか？"
+      : "招待制にします。これから入る方は招待コードが必要になります。\nいま入っている方は、そのまま使えます。よろしいですか？";
+    if (!confirm(msg)) return;
+    toggle.disabled = true;
+    try { await api("/api/billing/admin/camellia-access/config", { method: "POST", body: { inviteRequired: !on } }); }
+    catch (e) { alert("切り替えられませんでした（" + (e.code || e.message) + "）"); }
+    paintCamAccess();
+  };
+  const operator = r.invites.filter(function (x) { return x.kind === "operator"; });
+  const members = r.invites.filter(function (x) { return x.kind === "member"; });
+  const box = $("#camInvites");
+  box.innerHTML = (operator.length ? operator.map(function (x) {
+      const done = x.revoked || (x.expiresAt && x.expiresAt < Date.now()) || x.uses >= x.maxUses;
+      return '<div class="row"><span><b>' + esc(x.label) + '</b>　<code>' + esc(x.code.slice(0, 4) + "-" + x.code.slice(4)) + '</code><br>'
+        + '<small style="color:var(--muted)">' + x.uses + ' / ' + x.maxUses + ' 人'
+        + (x.expiresAt ? '　' + esc(fmt(x.expiresAt)) + ' まで' : '　期限なし')
+        + (x.revoked ? '　<b style="color:#b3261e">取り消し済み</b>' : done ? '　<b>終了</b>' : '')
+        + '</small><br><small style="word-break:break-all">' + esc(x.url) + '</small></span><span>'
+        + (done ? '' : '<button class="act" data-invcopy="' + esc(x.url) + '">リンクをコピー</button>'
+          + '<button class="act no" data-invrevoke="' + esc(x.code) + '">取り消す</button>')
+        + '</span></div>';
+    }).join("") : '<p class="empty">まだ招待コードはありません。</p>')
+    + (members.length ? '<p class="hint" style="margin:8px 0 0">利用している方が配っているコード：' + members.length + ' 件・'
+      + members.reduce(function (n, x) { return n + x.uses; }, 0) + ' 人が使いました</p>' : '');
+  box.querySelectorAll("[data-invcopy]").forEach(function (b) {
+    b.onclick = async function () {
+      try { await navigator.clipboard.writeText(b.dataset.invcopy); b.textContent = "コピーしました"; }
+      catch (_) { prompt("このリンクをコピーしてください", b.dataset.invcopy); }
+    };
+  });
+  box.querySelectorAll("[data-invrevoke]").forEach(function (b) {
+    b.onclick = async function () {
+      if (!confirm("この招待コードを取り消します。もう誰も使えなくなります。よろしいですか？")) return;
+      try { await api("/api/billing/admin/camellia-access/invites/revoke", { method: "POST", body: { code: b.dataset.invrevoke } }); }
+      catch (e) { alert("取り消せませんでした（" + (e.code || e.message) + "）"); return; }
+      paintCamAccess();
+    };
+  });
+  $("#camInvCreate").onclick = async function () {
+    const label = $("#camInvLabel").value.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(label)) { alert("配り先は、英小文字・数字・ - _ だけで書いてください。"); return; }
+    try {
+      await api("/api/billing/admin/camellia-access/invites", { method: "POST",
+        body: { label, maxUses: Number($("#camInvUses").value), expiresInDays: Number($("#camInvDays").value) } });
+    } catch (e) { alert("作れませんでした（" + (e.code || e.message) + "）"); return; }
+    $("#camInvLabel").value = "";
+    paintCamAccess();
+  };
+  const stopped = $("#camStopped");
+  stopped.innerHTML = r.suspended.length ? r.suspended.map(function (x) {
+      return '<div class="row"><span><b>' + esc(x.camelliaId || x.uid) + '</b><br><small style="color:var(--muted)">'
+        + esc(CAM_STOP_REASON[x.reason] || x.reason) + '　' + esc(fmt(x.suspendedAt)) + '</small></span><span>'
+        + '<button class="act" data-restore="' + esc(x.uid) + '">止めるのをやめる</button></span></div>';
+    }).join("") : '<p class="empty">止めている方はいません。</p>';
+  stopped.querySelectorAll("[data-restore]").forEach(function (b) {
+    b.onclick = async function () {
+      if (!confirm("この方の利用を、もう一度できるようにします。よろしいですか？")) return;
+      try { await api("/api/billing/admin/camellia-access/restore", { method: "POST", body: { user: b.dataset.restore } }); }
+      catch (e) { alert("戻せませんでした（" + (e.code || e.message) + "）"); return; }
+      paintCamAccess();
+    };
+  });
+  $("#camStop").onclick = async function () {
+    const user = $("#camStopUser").value.trim(), reason = $("#camStopReason").value;
+    if (!user) return;
+    if (!confirm(user + " の利用を止めます（理由：" + CAM_STOP_REASON[reason] + "）。\n記録は消しません。よろしいですか？")) return;
+    try { await api("/api/billing/admin/camellia-access/suspend", { method: "POST", body: { user, reason } }); }
+    catch (e) { alert("止められませんでした（" + (e.code || e.message) + "）"); return; }
+    $("#camStopUser").value = "";
+    paintCamAccess();
+  };
 }
 
 async function paintCamReports() {

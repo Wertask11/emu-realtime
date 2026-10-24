@@ -42,7 +42,9 @@ function makeFirestore(seed) {
       throw err;
     }
     const base = (merge && entry) ? entry.data : {};
-    store.set(k, { data: Object.assign({}, base, clone(value)), version: ++clock });
+    /* 作られた時刻は最初の書き込みで決まり、あとから変わらない（本物の createTime と同じ）。 */
+    const createdAt = entry ? entry.createdAt : (store._now ? store._now() : Date.now());
+    store.set(k, { data: Object.assign({}, base, clone(value)), version: ++clock, createdAt });
   }
 
   function snapshotOf(col, id) {
@@ -52,6 +54,7 @@ function makeFirestore(seed) {
       id,
       ref: docRef(col, id),
       data: () => (entry ? clone(entry.data) : undefined),
+      createTime: entry ? { toMillis: () => entry.createdAt } : undefined,
       _version: entry ? entry.version : 0
     };
   }
@@ -196,6 +199,8 @@ function makeFirestore(seed) {
       return out;
     },
     _count(col) { return Object.keys(db._dump(col)).length; },
+    /* 作られた時刻を決めて書き込む（「招待制より前からいた人」のテスト用）。 */
+    _setNow(fn) { store._now = fn; },
     _failOnce(message) { failNext = message || "NETWORK_DOWN"; },
     _breakAll(message) { store._alwaysFail = message || "NETWORK_DOWN"; },
     _repair() { store._alwaysFail = null; failNext = null; }

@@ -2,12 +2,16 @@
 
 const express = require("express");
 const { createHash, randomBytes, randomUUID } = require("crypto");
+const { createCamelliaAccess, sendError } = require("./camellia-access");
 
 const TICKET_TTL_MS = 5 * 60 * 1000;
 const hash = (value) => createHash("sha256").update(String(value)).digest("hex");
 
-function createCamelliaAuthRouter({ db, firebaseAdmin, identity, requireFirebaseUser }) {
+function createCamelliaAuthRouter({ db, firebaseAdmin, identity, requireFirebaseUser, rateLimit }) {
   const router = express.Router();
+  const access = db ? createCamelliaAccess({ db }) : null;
+  /* 招待コードを総当たりで探されないように、1人10分で10回まで。 */
+  const redeemLimit = rateLimit ? rateLimit({ windowMs: 10 * 60_000, max: 10, key: "camellia-invite" }) : (req, res, next) => next();
 
   async function optionalUser(req) {
     const value = String(req.headers.authorization || "");
@@ -64,6 +68,39 @@ function createCamelliaAuthRouter({ db, firebaseAdmin, identity, requireFirebase
       console.error("Camellia identity status failed:", error.message);
       return res.status(500).json({ error: "IDENTITIES_FAILED" });
     }
+  });
+
+  /* 招待と利用停止。ゲスト（匿名）のままでは入れない。招待はログインした本人に結び付ける。 */
+  function requireSignedInCamelliaUser(req, res, next) {
+    if (req.camelliaUser.firebase?.sign_in_provider === "anonymous") return res.status(403).json({ error: "LOGIN_REQUIRED" });
+    req.identity = { uid: req.camelliaUser.uid };
+    next();
+  }
+
+  router.get("/access", requireCamelliaUser, async (req, res) => {
+    try {
+      if (req.camelliaUser.firebase?.sign_in_provider === "anonymous") {
+        const config = await access.readConfig();
+        return res.json({ ok: true, inviteRequired: config.inviteRequired, admitted: false, needsInvite: config.inviteRequired, suspended: false, signedIn: false });
+      }
+      const status = await access.statusFor(req.camelliaUser.uid);
+      return res.json({ ok: true, inviteRequired: status.inviteRequired, admitted: status.admitted, via: status.via, needsInvite: status.needsInvite, suspended: status.suspended, signedIn: true });
+    } catch (error) { return sendError(res, error, "ACCESS_FAILED"); }
+  });
+
+  router.post("/invite/redeem", requireCamelliaUser, requireSignedInCamelliaUser, redeemLimit, async (req, res) => {
+    try { return res.json(await access.redeem(req.camelliaUser.uid, (req.body || {}).code)); }
+    catch (error) { return sendError(res, error, "INVITE_FAILED"); }
+  });
+
+  router.get("/invite/mine", requireCamelliaUser, requireSignedInCamelliaUser, async (req, res) => {
+    try { return res.json({ ok: true, invite: await access.memberInvite(req.camelliaUser.uid) }); }
+    catch (error) { return sendError(res, error, "INVITE_FAILED"); }
+  });
+
+  router.post("/invite/mine", requireCamelliaUser, requireSignedInCamelliaUser, async (req, res) => {
+    try { return res.json({ ok: true, invite: await access.memberInvite(req.camelliaUser.uid, { create: true }) }); }
+    catch (error) { return sendError(res, error, "INVITE_FAILED"); }
   });
 
   router.post("/line", async (req, res) => {

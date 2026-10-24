@@ -291,6 +291,8 @@ const questCompletion = require("./quest-completion").createQuestCompletionRoute
 app.post(STRIPE_WEBHOOK_PATH, billing.webhookHandler, billing.handleWebhook);
 app.use("/api/billing", billing.router);
 app.use("/api/billing/admin/camellia-identities", require("./camellia-admin-identities").createCamelliaAdminIdentityRouter({ db, requireOwner }));
+/* Camellia の招待と利用停止（運営だけ）。 */
+app.use("/api/billing/admin/camellia-access", require("./camellia-access").createCamelliaAccessAdminRouter({ db, requireOwner, rateLimit }));
 app.use("/api/kyc", kyc.router);
 app.use("/api/dialogue", dialogue.router);
 app.use("/api/feedback", feedback.router);
@@ -2047,7 +2049,7 @@ const identityApi = require("./identity-router").createIdentityRouter({
 app.use("/api/identity", identityApi.router);
 
 const camelliaAuthApi = require("./camellia-auth").createCamelliaAuthRouter({
-  db, firebaseAdmin, identity, requireFirebaseUser
+  db, firebaseAdmin, identity, requireFirebaseUser, rateLimit
 });
 app.use("/api/camellia-auth", camelliaAuthApi.router);
 
