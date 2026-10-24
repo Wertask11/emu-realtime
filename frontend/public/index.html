@@ -23578,6 +23578,10 @@ let _fwTimer = null;
 function getCurrentUserType() {
   // 1. 有料NFT判定（window.checkHexaNFT の結果を使う）
   if (window.hasPaidNFT) return "paid";
+  /* LINE・Google で入ると、上の印はログインのたびに false に戻る（ウォレットを
+     確かめる処理が走らないため）。Passport に連携したウォレットで公式パスを
+     持っていることは、サーバーが確かめて返している。それも見る。 */
+  if (window._spIdentity && window._spIdentity.hasOfficialPass) return "paid";
 
   // 2. それ以外はすべて無料ユーザー（ウォレット接続が前提）
   return "free";
@@ -28839,6 +28843,31 @@ async function sendEmuFeedback() {
      投稿には書いたときの名前しか入っていない（写真は入っていない）。書き手ごとに表示のときに引くので、
      名前や写真を変えると、前の投稿にもそのまま出る。投稿のデータは書き換えない。
      読むのは出ている投稿の書き手だけで、1ページで1人1回（emuProfileOf が覚える）。 */
+  /* 書き手が公式パスの持ち主か。投稿に残っている userType は、投稿した瞬間の
+     端末の判定で、LINE・Google で入っていると公式パスがあっても free になっていた。
+     paid_users は誰でも読めるので、書き手ごとに1回だけ読んで覚えておく。 */
+  const knowledgePassCache = new Map();
+  function knowledgePassOf(addr) {
+    if (knowledgePassCache.has(addr)) return knowledgePassCache.get(addr);
+    const p = (async () => {
+      const forms = [addr];
+      try { if (window.ethers) forms.push(window.ethers.utils.getAddress(addr)); } catch (e) {}
+      for (const id of forms) {
+        const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'paid_users', id));
+        if (snap.exists()) return true;
+      }
+      return false;
+    })().catch(() => { knowledgePassCache.delete(addr); return false; });
+    knowledgePassCache.set(addr, p);
+    return p;
+  }
+  async function markKnowledgePassHolders(rows, addrs) {
+    const need = addrs.filter(a => rows.some(r => String(r.address || '').toLowerCase() === a && r.userType !== 'paid' && r.userType !== 'paidNFT'));
+    if (!need.length) return;
+    const r = await _spSoon(Promise.all(need.map(a => knowledgePassOf(a).then(ok => ok ? a : ''))), 2500);
+    const holders = new Set(r && r.ok ? r.value.filter(Boolean) : []);
+    rows.forEach(row => { if (holders.has(String(row.address || '').toLowerCase())) row.userType = 'paid'; });
+  }
   function knowledgeAuthorAddrs(rows) {
     return [...new Set(rows.map(r => String(r.address || '').toLowerCase()).filter(a => /^0x[0-9a-f]{40}$/.test(a)))];
   }
@@ -29043,6 +29072,7 @@ async function sendEmuFeedback() {
       const authorAddrs = knowledgeAuthorAddrs(rows);
       const authorsRead = Promise.all(authorAddrs.map(a =>
         typeof window.emuProfileOf === 'function' ? window.emuProfileOf(a).catch(() => null) : null));
+      await markKnowledgePassHolders(rows, authorAddrs);
       const drafts = await readKnowledgeDrafts(account);
       /* テーマは記録から。一度読んだら覚えているので、2ページ目以降は待たない。 */
       await _spMonthlyTheme();

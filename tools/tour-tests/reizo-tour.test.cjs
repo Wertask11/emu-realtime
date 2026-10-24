@@ -235,6 +235,13 @@ test('existing navigation and native behavior remain identical outside the expli
    for(const s of [allowedGood,allowedChange,whyPlan]){assert.ok(current.includes(s),s);current=current.replace(s,'');}
    const a=current.indexOf('/* 反応（Good / Change）を送れる段か。'),b=current.indexOf('/* 反応（Good / Change）を保存する。',a);
    assert.ok(a>=0&&b>a);current=current.slice(0,a)+current.slice(b);
+   // Reviewed 2026-10-24: the official-pass badge also uses the server-verified
+   // Passport pass and the public paid_users list (LINE/Google logins showed "free").
+   const passPost="  /* LINE・Google で入ると、上の印はログインのたびに false に戻る（ウォレットを\n     確かめる処理が走らないため）。Passport に連携したウォレットで公式パスを\n     持っていることは、サーバーが確かめて返している。それも見る。 */\n  if (window._spIdentity && window._spIdentity.hasOfficialPass) return \"paid\";\n";
+   const passMark="      await markKnowledgePassHolders(rows, authorAddrs);\n";
+   for(const s of [passPost,passMark]){assert.ok(current.includes(s),s);current=current.replace(s,'');}
+   const pa=current.indexOf('  /* 書き手が公式パスの持ち主か。'),pb=current.indexOf('  function knowledgeAuthorAddrs(rows) {',pa);
+   assert.ok(pa>=0&&pb>pa);current=current.slice(0,pa)+current.slice(pb);
   }
   // Reviewed 2026-10-23: the monthly theme chip looks like the others, and each
   // card can be shared (/p/<id>). tools/emu-tests/share-post.test.cjs covers both.
