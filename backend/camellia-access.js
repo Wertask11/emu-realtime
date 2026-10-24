@@ -52,9 +52,11 @@ function normalizeCode(value) {
   for (const ch of code) if (CODE_CHARS.indexOf(ch) < 0) return "";
   return code;
 }
+/* Camellia の PostHog は、utm_campaign を「英字で始まり、数字が7つ続かない」ものだけ受け取る
+   （電話番号などを送らないため。camellia-beta の lib/analytics/attribution.ts）。同じ形に合わせる。 */
 function normalizeLabel(value) {
   const label = String(value || "").trim().toLowerCase();
-  return /^[a-z0-9][a-z0-9_-]{0,31}$/.test(label) ? label : "";
+  return /^[a-z][a-z0-9_-]{0,31}$/.test(label) && !/\d{7}/.test(label) ? label : "";
 }
 function inviteUrl(code, kind, label) {
   const url = new URL(CAMELLIA_ORIGIN + "/");

@@ -42,6 +42,9 @@ test("code and label are normalized; ambiguous letters are refused", () => {
   assert.equal(normalizeLabel(" Instagram_1027 "), "instagram_1027");
   assert.equal(normalizeLabel("営業"), "");
   assert.equal(normalizeLabel("a".repeat(33)), "");
+  assert.equal(normalizeLabel("1027_instagram"), "", "must start with a letter");
+  assert.equal(normalizeLabel("line_20261101"), "", "seven digits in a row are dropped by Camellia analytics");
+  assert.equal(normalizeLabel("line_261101"), "line_261101");
 });
 
 test("while invites are off nobody is stopped; turning them on keeps everyone who was already in", async () => {

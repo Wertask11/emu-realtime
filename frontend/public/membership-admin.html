@@ -650,7 +650,8 @@ async function renderCamellia() {
     + '<label class="hint">有効 <input id="camInvDays" type="number" min="0" max="365" value="30" style="width:60px;padding:8px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px"> 日（0は期限なし）</label>'
     + '<button class="btn primary" id="camInvCreate">作る</button>'
     + '</div>'
-    + '<p class="hint" style="margin:0 0 8px">配り先は、英小文字・数字・ - _ だけで書いてください。</p>'
+    + '<p class="hint" style="margin:0 0 8px">配り先は、英小文字で始めて、英小文字・数字・ - _ だけで書いてください（例 instagram_1027、line_261101）。'
+    + 'この名前が PostHog の utm_campaign になります。</p>'
     + '<div id="camInvites"><p class="empty">読み込み中…</p></div>'
     + '<h3 style="margin:14px 0 6px;font-size:14px">利用を止める</h3>'
     + '<p class="hint" style="margin:0 0 6px">女性ではないと分かった方・規約に反した方の利用を止めます。止めた方は、Camellia を開くと「利用を止めています」と出ます。記録は消しません。</p>'
@@ -768,7 +769,7 @@ async function paintCamAccess() {
   });
   $("#camInvCreate").onclick = async function () {
     const label = $("#camInvLabel").value.trim().toLowerCase();
-    if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(label)) { alert("配り先は、英小文字・数字・ - _ だけで書いてください。"); return; }
+    if (!/^[a-z][a-z0-9_-]{0,31}$/.test(label) || /\d{7}/.test(label)) { alert("配り先は、英小文字で始めて、英小文字・数字・ - _ だけで書いてください（数字は6けたまで続けられます）。"); return; }
     try {
       await api("/api/billing/admin/camellia-access/invites", { method: "POST",
         body: { label, maxUses: Number($("#camInvUses").value), expiresInDays: Number($("#camInvDays").value) } });
