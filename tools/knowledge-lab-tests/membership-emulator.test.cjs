@@ -12,7 +12,12 @@ const express = require("../../backend/node_modules/express");
 let f, service, alice, bob, guest, ids;
 let clock = Date.parse("2026-11-02T03:00:00Z");
 const realNow = Date.now;
-async function at(time, fn) { const prev = clock; clock = time; Date.now = () => clock; try { return await fn(); } finally { Date.now = realNow; clock = prev; } }
+/* 時計を決めた時刻に止める。ただし Firestore の通信（grpc・gax）には本物の時刻を返す。
+   @grpc/grpc-js 1.14.6 から、締切の計算に Date.now を使うようになり、止めた時計が
+   本物より先（11月）だと、どの読み書きも「締切切れ 0.000s」で落ちていた。 */
+const COMM = /[\\/]node_modules[\\/](?:@grpc|google-gax|@google-cloud)[\\/]/;
+function fakeNow() { return COMM.test(new Error().stack || "") ? realNow() : clock; }
+async function at(time, fn) { const prev = clock; clock = time; Date.now = fakeNow; try { return await fn(); } finally { Date.now = realNow; clock = prev; } }
 async function plan(a, value) { await f.db.collection("entitlements").doc(a.uid).set({ plan: value, source: "local-only" }); f.entitlement.forget(a.uid); }
 const actor = role => ({ ...f.users[role], owner: role === "owner", walletAddress: f.users[role].account.walletAddress.toLowerCase() });
 before(async () => {

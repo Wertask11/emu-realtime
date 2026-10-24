@@ -64,8 +64,12 @@ const card = (addr, extra) => Object.assign({
   fromPostId: '', fromPostTitle: ''
 }, extra || {});
 
-test('受けた人は、走っているクエストに知恵カードを置ける', async () => {
-  await assertSucceeds(fb.addDoc(fb.collection(taker, 'sp_wisdom'), card(TAKER)));
+/* その後（10月）、置くのはサーバーだけになった（firestore.rules の sp_wisdom）。
+   「やってみた・つまずいた・気づいた が揃っている」はルールでは数えられないため、
+   backend/quest-completion.js の POST /:questId/wisdom が数えてから置く
+   （backend/quest-completion.test.js）。画面から直に置く道は、受けた人でも閉じている。 */
+test('受けた人でも、画面から直に知恵カードは置けない（置くのはサーバー）', async () => {
+  await assertFails(fb.addDoc(fb.collection(taker, 'sp_wisdom'), card(TAKER)));
 });
 
 test('受けていない人は置けない', async () => {
@@ -76,11 +80,11 @@ test('出した本人でも、受けていなければ置けない（やった�
   await assertFails(fb.addDoc(fb.collection(owner, 'sp_wisdom'), card(OWNER)));
 });
 
-test('出した本人も、受ければ置ける', async () => {
+test('出した本人が受けていても、画面から直には置けない（置くのはサーバー）', async () => {
   await env.withSecurityRulesDisabled(async (c) => {
     await fb.setDoc(fb.doc(c.firestore(), 'sp_quests', QUEST, 'commits', OWNER), { name: '運営', tookAt: 1 });
   });
-  await assertSucceeds(fb.addDoc(fb.collection(owner, 'sp_wisdom'), card(OWNER)));
+  await assertFails(fb.addDoc(fb.collection(owner, 'sp_wisdom'), card(OWNER)));
 });
 
 test('他人の名義では置けない', async () => {
@@ -102,11 +106,11 @@ test('残った一文が200字を超えると置けない', async () => {
   await assertFails(fb.addDoc(fb.collection(taker, 'sp_wisdom'), card(TAKER, { insight: 'あ'.repeat(201) })));
 });
 
-test('閉じたあとでも置ける（締切のあとに書き上げる人がいるため）', async () => {
+test('閉じたあとも、画面から直には置けない（締切のあとの分もサーバーが置く）', async () => {
   await env.withSecurityRulesDisabled(async (c) => {
     await fb.setDoc(fb.doc(c.firestore(), 'sp_quests', QUEST), { status: 'CLOSED' }, { merge: true });
   });
-  await assertSucceeds(fb.addDoc(fb.collection(taker, 'sp_wisdom'), card(TAKER)));
+  await assertFails(fb.addDoc(fb.collection(taker, 'sp_wisdom'), card(TAKER)));
 });
 
 test('いちど置いた知恵は、書き換えも削除もできない', async () => {
@@ -178,6 +182,11 @@ function app(opts) {
       return opts.quest || { title: 'クエスト', owner: '0xowner', status: 'OPEN' };
     },
     openSpWisdomForm: function (q) { opened.push(q); },
+    /* SDK を見切る仕組みと、報告の共有の読み口（切り出しの外にある） */
+    _spSdkStalled: function () { return false; },
+    _spSdkNoted: function (r) { return r; },
+    _spSoon: function (pr) { return Promise.resolve(pr).then(function (v) { return { ok: true, value: v }; }); },
+    _spReadLogs: async function () { return (opts.logs || []).slice(); },
     SpQuestStore: { FOUNDER_ID: 'founder-quest-000' },
     window: {
       db: {},

@@ -766,7 +766,8 @@ test('時刻が同じときは、報告の多いほうが先', () => {
 /* ───────── 右の列が切れる ───────── */
 
 test('狭い列の長い値は、切らずに折り返す', () => {
-  const i = DAO.indexOf('配分予算');
+  /* 10/19 から「参加前に確認」（<dl>）にも配分予算の字があるので、受けている人の札の行を探す */
+  const i = DAO.indexOf('>配分予算</div>');
   assert.ok(i > 0);
   const seg = DAO.slice(i - 500, i + 900);
   assert.ok(seg.indexOf('flex-wrap:wrap') >= 0, '折り返せない');
@@ -814,7 +815,7 @@ function toggleSrc() {
 test('参加したい・応援するは、返ってこなくても固まらない', () => {
   const seg = toggleSrc();
   assert.ok(seg.indexOf('_spSoon(fb.getDoc(ref)') >= 0, 'いまの状態の読み取りを見切れない');
-  assert.ok(seg.indexOf('_spSoon(write') >= 0, '保存を見切れない');
+  assert.ok(seg.indexOf('_spSoon(sdk, ') >= 0, '保存を見切れない');
   assert.ok(seg.indexOf('} finally {') >= 0, '途中で抜けると次から押せなくなる');
   /* finally の中で必ず戻すこと。ここが無いと _spGuildBusy が居座る。 */
   const fin = seg.indexOf('} finally {');
