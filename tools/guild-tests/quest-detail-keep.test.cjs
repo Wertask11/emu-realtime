@@ -53,7 +53,10 @@ before(async () => {
     }
     fs.readFile(path.join(PUB, u), (e, d) => {
       if (e) { res.writeHead(404); return res.end('nf'); }
-      res.writeHead(200, { 'Content-Type': u.endsWith('.html') ? 'text/html' : 'text/javascript' });
+      /* 共通の見出し（service-header.css）を CSS として返す。JS として返すと
+         見出しが崩れて背が高くなり、ACCEPT の位置を測り違える */
+      res.writeHead(200, { 'Content-Type': u.endsWith('.html') ? 'text/html'
+        : u.endsWith('.css') ? 'text/css' : 'text/javascript' });
       res.end(d);
     });
   });
@@ -130,8 +133,10 @@ test('#000 の章も、開いたまま', async () => {
   try {
     await frame.locator('summary', { hasText: '第2章 原点' }).click();
     await redraw(frame);
+    /* #000 には章のあとに「7. 手書きの言葉」の折りたたみもある。章だけを見る */
     const opened = await frame.evaluate(() => [...document.querySelectorAll('details')]
-      .map(d => d.querySelector('summary').textContent.trim() + ':' + d.open));
+      .map(d => d.querySelector('summary').textContent.trim() + ':' + d.open)
+      .filter(s => /^第\d+章/.test(s)));
     assert.deepEqual(opened, ['第1章 はじまり:false', '第2章 原点:true']);
   } finally { await ctx.close(); }
 });
@@ -147,8 +152,12 @@ async function measure(frame, scroll) {
     const side = document.querySelector('.sp-quest-side');
     const label = [...side.querySelectorAll('div')].find(x => x.textContent.trim() === 'ACCEPT');
     const card = label.closest('div[style*="background:#141310"]').getBoundingClientRect();
+    /* 受ける・受けているのボタン */
+    const accept = [...side.querySelectorAll('button')].find(b => /受け(る|ている)/.test(b.textContent));
     return {
       headBottom: head.bottom, cardTop: card.top, cardBottom: card.bottom, vh: window.innerHeight,
+      acceptBottom: accept ? accept.getBoundingClientRect().bottom : Infinity,
+      sideScrolls: side.scrollHeight > side.clientHeight && getComputedStyle(side).overflowY !== 'visible',
       position: getComputedStyle(side).position,
       cols: getComputedStyle(document.querySelector('.sp-quest-detail-grid')).gridTemplateColumns.split(' ').length,
       overflowX: side.scrollWidth - side.clientWidth
@@ -166,7 +175,10 @@ for (const [w, h] of [[1853, 961], [1440, 900], [1440, 640]]) {
       assert.equal(m.position, 'sticky');
       assert.ok(m.cardTop >= m.headBottom, `見出しの下に潜っている: card ${m.cardTop} < head ${m.headBottom}`);
       assert.ok(m.cardTop <= m.headBottom + 40, `見出しから離れすぎ: ${m.cardTop - m.headBottom}px`);
-      assert.ok(m.cardBottom <= m.vh, `下が切れている: ${m.cardBottom} > ${m.vh}`);
+      /* 10/19 から ACCEPT に「参加前に確認」が入り、低い画面では札ごとは収まらない。
+         そのときも「受ける」は見えていて、残りは右の列の中で読めること。 */
+      assert.ok(m.acceptBottom <= m.vh, `「受ける」が画面の外: ${m.acceptBottom} > ${m.vh}`);
+      assert.ok(m.cardBottom <= m.vh || m.sideScrolls, `下が切れていて、右の列も動かせない: ${m.cardBottom} > ${m.vh}`);
       assert.ok(m.overflowX <= 0, '右の列が横にはみ出している');
     } finally { await ctx.close(); }
   });

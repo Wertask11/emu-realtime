@@ -17769,6 +17769,9 @@ window.spGuildToggle = async function (guildId, kind, app) {
       console.warn('ギルドの参加・応援を、普通の通信で保存しました。');
     }
     try { _spRestDrop('sp_guild_members/'); } catch (e3) {}
+    /* 読み直しの取り置き（25秒）も捨てる。捨てないと、下の読み直しが押す前の
+       人数を返し、押したはずの「✓」と数字が元に戻って見えた（もう一度押すと取り消しになる）。 */
+    try { _spMemoDrop('readall:sp_guild_members/' + encodeURIComponent(guildId) + '/'); } catch (e4) {}
   } catch (e) {
     console.warn('ギルドの参加・応援を保存できませんでした:', e && (e.message || e));
     /* 先に動かした画面を、元へ戻す。戻さないと、入っていないのに
@@ -20192,6 +20195,9 @@ async function _spCreateQuestRetry(fb, body) {
   }
   spQuestSubmitting = false;
   closeSpQuestForm();
+  /* 一覧の取り置き（25秒）を捨ててから読み直す。捨てないと、出したクエストが
+     しばらく一覧にもギルドの数にも出てこなかった。 */
+  try { _spMemoDrop('readall:sp_quests'); } catch (e) {}
   if (_spQuestFormApp) {
     await window.spDaoLoadQuests(_spQuestFormApp);
     /* ギルド側の「このギルドから生まれたクエスト」も数え直す */

@@ -44,6 +44,9 @@ function guildSection() {
 
 const STUBS = String.raw`
 const SP_CURRENCIES = ['JPY','JPYC','EMUER'];
+/* 切り出しの外にある部品（金額の書き方・共通プロフィールの名前） */
+function spMoney(n, cur){ return String(n) + ' ' + cur; }
+function emuProfileOf(){ return Promise.resolve(null); }
 window.__store = new Map();
 const S = window.__store;
 function _spShortAddr(a){ a=String(a||''); return a.slice(0,6)+'…'+a.slice(-4); }
@@ -96,6 +99,7 @@ window.__app = {
 `;
 
 const PAGE = `<!doctype html><meta charset="utf-8"><title>guild flow</title>
+<link rel="icon" href="data:,">
 <body>
 <div id="spVoteSheet"><select id="spvGuild"></select>
   <select id="spvKind"><option value="free">free</option><option value="special">special</option></select>
@@ -105,7 +109,10 @@ const PAGE = `<!doctype html><meta charset="utf-8"><title>guild flow</title>
   <input id="sqTitle"><input id="sqKnowledge"><textarea id="sqHypothesis"></textarea>
   <textarea id="sqAction"></textarea><textarea id="sqMeasure"></textarea>
   <input id="sqBudget"><select id="sqCurrency"><option value="JPY">円</option></select>
-  <input id="sqNeed"><input id="sqDays"></div>
+  <input id="sqNeed"><input id="sqDays">
+  <!-- クエストの番号（系列・番号・枝番・段階）。自動では振らないので、ここで入れる -->
+  <select id="sqSeries"><option value="general">一般</option></select>
+  <input id="sqNumber" value="11"><input id="sqBranch" value="0"><input id="sqStage" value=""></div>
 <script src="/schoolpark/quest-store.js"></script>
 <script src="/schoolpark/guild-store.js"></script>
 <script src="/guild-section.js"></script>
@@ -264,6 +271,7 @@ test('議題を通さない直接クエストと、Quest #000', async () => {
     ok('直接のときは元の議題の欄が出ない',
        document.getElementById('sqFromRow').style.display === 'none' && document.getElementById('sqGuild').disabled === false);
     document.getElementById('sqGuild').value = '';
+    document.getElementById('sqNumber').value = '12';
     document.getElementById('sqTitle').value = 'ひとりで試す';
     document.getElementById('sqHypothesis').value = 'やってみる';
     document.getElementById('sqBudget').value = '0';

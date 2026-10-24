@@ -20,7 +20,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const PUB = path.join(__dirname, '..', '..', 'frontend', 'public');
-const START = 'window.spDaoReloadAll = function () {';
+/* 読む一覧（SP_DAO_LOADERS）は呼び直しのすぐ上にある。そこから切る。 */
+const START = 'const SP_DAO_LOADERS = [';
 const END = "window.addEventListener('ches-firebase-ready'";
 
 /* 行番号ではなく目印で切る（前後に手が入っても、ここが壊れないように） */
@@ -35,7 +36,8 @@ function reloadSection() {
 }
 
 const LOADERS = ['spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
-                 'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark'];
+                 'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark',
+                 'spDaoLoadYearDoc'];
 
 /* 画面のかわりに、呼ばれた名前を書き留めるだけの入れ物を用意する */
 function makeWindow(opts) {
@@ -88,7 +90,7 @@ function fire(win) {
   fns.forEach(function (fn) { fn(); });
 }
 
-test('用意ができた合図で、8つとも読み直す', () => {
+test('用意ができた合図で、一覧のぜんぶ（9つ）を読み直す', () => {
   const win = run(makeWindow());
   fire(win);
   assert.deepEqual(win.__called, LOADERS);

@@ -19,6 +19,9 @@ function setup() {
     emuMyIdentity: async()=>({uid:'owner',wallet:'0xowner',ches:'0xowner'}),
     emuEnsureEntitlement: ()=>billing,
     _spShortAddr: a=>a, _spIsOwnerAddr: ()=>true,
+    /* 名前は共通プロフィール（user_profiles）から読むようになった。ここでは無しで返す */
+    emuProfileOf: async()=>null,
+    spMoney: (n,cur)=>String(n)+' '+cur,
     SpGuildStore: require('../../frontend/public/schoolpark/guild-store.js'),
     SpQuestStore: require('../../frontend/public/schoolpark/quest-store.js'),
     SP_CURRENCIES: ['JPY','JPYC','EMUER'],

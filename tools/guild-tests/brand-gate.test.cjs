@@ -195,9 +195,15 @@ test('SchoolPark とつなぐ窓口は、消していない', () => {
   assert.ok(exists('backend/camellia-auth.js'), 'つなぐ窓口の本体が消えています');
   assert.ok(exists('frontend/public/camellia-connect.html'), '橋渡しのページが消えています');
   /* 戻り先は Camellia β に限る。どこへでも返すと、証を横取りされる。 */
+  /* 確かめは camellia-return-policy.js にまとめてある（行き先の一覧は backend の
+     camellia-return-policy.test.js でも確かめている）。 */
   const bridge = read('frontend/public/camellia-connect.html');
-  assert.match(bridge, /startsWith\('https:\/\/camellia-beta\.vercel\.app\/'\)/,
+  assert.match(bridge, /<script src="\/camellia-return-policy\.js"><\/script>/);
+  assert.match(bridge, /CamelliaReturnPolicy\.validateReturn\(returnUrl\)/,
     '戻り先の確かめが消えています');
+  const policy = require(path.join(__dirname, '../../frontend/public/camellia-return-policy.js'));
+  assert.ok(policy.validateReturn('https://camellia-beta.vercel.app/'));
+  assert.equal(policy.validateReturn('https://evil.example/'), null);
 });
 
 /* ───────── 残すと決めたものが、巻き添えで消えていない ───────── */
@@ -263,7 +269,10 @@ test('案内は、Camellia が別のアプリだと言っている', () => {
   /* 「準備中」ではない。戻ってくる予定が無いので、待たせる言い方はしない。
      オーナーの決め: Camellia は独自アプリ。SchoolPark・Emu の中からは行けない。 */
   const tutorial = read('frontend/public/schoolpark/tutorial.html');
-  [['index.html', html], ['tutorial.html', tutorial]].forEach(([name, t]) => {
+  /* 冷蔵庫くんの答えは index.html から /reizo/knowledge.js へ移った */
+  const kb = read('frontend/public/reizo/knowledge.js');
+  assert.ok(html.indexOf('Camellia・Heartoo は') < 0);
+  [['reizo/knowledge.js', kb], ['tutorial.html', tutorial]].forEach(([name, t]) => {
     assert.ok(t.indexOf('🌸 Camellia — 独立したアプリ（この中からは行けません）') > 0,
       name + ' の案内が、いまの決まりと合っていません');
     assert.ok(t.indexOf('Camellia・Heartoo は') < 0,
@@ -277,5 +286,5 @@ test('Heartoo の準備中は、消さずに残してある', () => {
   const tutorial = read('frontend/public/schoolpark/tutorial.html');
   assert.ok(tutorial.indexOf('<td><strong>Heartoo</strong></td><td>準備中</td>') > 0);
   assert.match(tutorial, /💍 Heartoo — 準備中/);
-  assert.match(html, /💍 Heartoo — 準備中/);
+  assert.match(read('frontend/public/reizo/knowledge.js'), /💍 Heartoo — 準備中/);
 });
