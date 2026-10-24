@@ -6826,6 +6826,11 @@ async function emuWhyDenied(kind, postId) {
   const listField = kind === 'change' ? 'changeUsers' : 'goodUsers';
   const label = kind === 'change' ? '改善案' : '「役に立った」';
 
+  // ルール: canWriteAs(1)。見学（無料）では送れない
+  if (typeof emuHasPlan === 'function' && !emuHasPlan('light')) {
+    return { message: label + 'を送るのは、Emu light（月額500円）以上です。' };
+  }
+
   const user = window.auth && window.auth.currentUser;
   if (!user) {
     return { message: 'ログインの状態が切れていました。\n\n一度ページを開き直して、もう一度お試しください。' };
@@ -6859,6 +6864,20 @@ async function emuWhyDenied(kind, postId) {
   /* ここまで全部通るなら、送った時点で使っていた名義が違っていたということ。
      emuMyIdentity() が正しい名義に直したので、一度だけやり直す。 */
   return { retry: true };
+}
+
+/* 反応（Good / Change）を送れる段か。送れなければプランの案内を出し、
+   押したボタン（知識を読むのカード）を元に戻すために結果を返す。 */
+async function emuReactionAllowed(postId, kind) {
+  if (typeof emuEnsureEntitlement === 'function') {
+    try { await emuEnsureEntitlement(); } catch (e) {}
+  }
+  if (typeof emuHasPlan !== 'function' || emuHasPlan('light')) return true;
+  const what = kind === 'change' ? '改善案（Change）を届けること' : '「役に立った」を送ること';
+  emuNeedPlan('light', what);
+  window.dispatchEvent(new CustomEvent('emu-reaction-result', { detail:{ postId, action:kind, ok:false,
+    error: what + 'は、Emu light 以上でご利用いただけます。' } }));
+  return false;
 }
 
 /* 反応（Good / Change）を保存する。拒否されたら理由を調べ、
@@ -12847,6 +12866,9 @@ async function attachReactionHandlers(postElement) {
       if (!me) {
         return rejectGood("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");
       }
+      /* 「役に立った」を送るのは light 以上（9/1から。ルールの canWriteAs(1)）。
+         先に確かめないと、送ってから断られて「まだ保存できませんでした」になる。 */
+      if (!await emuReactionAllowed(postId, 'good')) return;
 
       // 【不正防止1】自分の投稿には押せない（別名義で書いた投稿も自分と見なす）
       if (emuIsMine(postData.address, me)) {
@@ -12925,6 +12947,7 @@ async function attachReactionHandlers(postElement) {
       if (!me) {
         return rejectChange("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");
       }
+      if (!await emuReactionAllowed(postId, 'change')) return;
 
       // 【不正防止1】自分の投稿には押せない（別名義で書いた投稿も自分と見なす）
       if (emuIsMine(postData.address, me)) {

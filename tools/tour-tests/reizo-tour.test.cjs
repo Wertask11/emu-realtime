@@ -227,6 +227,14 @@ test('existing navigation and native behavior remain identical outside the expli
   if(name==='index.html') {
    const dvh='  /* スマホは 100vh がアドレスバーを隠したときの高さになり、出ているあいだは画面より長い。\n     はみ出した分だけロゴが上下にずれるので、いま見えている高さ（dvh）にそろえる。 */\n  height: 100dvh;\n';
    assert.ok(current.includes(dvh));current=current.replace(dvh,'');
+   // Reviewed 2026-10-24: Good/Change check the plan before writing and explain
+   // a plan denial. tools/knowledge-lab-tests/reaction-rules.test.cjs covers the Rules.
+   const allowedGood="      /* 「役に立った」を送るのは light 以上（9/1から。ルールの canWriteAs(1)）。\n         先に確かめないと、送ってから断られて「まだ保存できませんでした」になる。 */\n      if (!await emuReactionAllowed(postId, 'good')) return;\n";
+   const allowedChange="      if (!await emuReactionAllowed(postId, 'change')) return;\n";
+   const whyPlan="\n  // ルール: canWriteAs(1)。見学（無料）では送れない\n  if (typeof emuHasPlan === 'function' && !emuHasPlan('light')) {\n    return { message: label + 'を送るのは、Emu light（月額500円）以上です。' };\n  }\n";
+   for(const s of [allowedGood,allowedChange,whyPlan]){assert.ok(current.includes(s),s);current=current.replace(s,'');}
+   const a=current.indexOf('/* 反応（Good / Change）を送れる段か。'),b=current.indexOf('/* 反応（Good / Change）を保存する。',a);
+   assert.ok(a>=0&&b>a);current=current.slice(0,a)+current.slice(b);
   }
   // Reviewed 2026-10-23: the monthly theme chip looks like the others, and each
   // card can be shared (/p/<id>). tools/emu-tests/share-post.test.cjs covers both.
