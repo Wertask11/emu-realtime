@@ -84,11 +84,16 @@ test('長めに待っても返事が無かったら、すぐ後にまた待た�
   assert.equal(calls, 2);
 });
 
-test('ログイン後の着地：入口の画面は行き先が決まってからしまう（待つあいだ真っ白にしない）', () => {
-  const land = html.slice(html.indexOf('async function chesLandAfterLogin() {'));
-  const access = land.indexOf('const access = await spEnsureSchoolParkAccess(true);');
+test('ログイン後の着地：誰でも Emu に着く。入口の画面は Emu を出す直前にしまう', () => {
+  /* 2026-10-24 オーナー決定：ログイン後は Emu。SchoolPark は切り替えから。 */
+  const start = html.indexOf('async function chesLandAfterLogin() {');
+  const land = html.slice(start, html.indexOf('function accountGo(', start));
+  assert.ok(land.indexOf('spDaoOpenWhenReady') < 0, 'ログイン後に SchoolPark を開いている');
+  assert.ok(land.indexOf('await spEnsureSchoolParkAccess') < 0, 'SchoolPark の確認を待ってから着地している');
+  assert.ok(land.indexOf('spEnsureSchoolParkAccess(true)') > 0, '切り替えに備えた確認をしていない');
   const tidy = land.indexOf('chesTidyEntryScreens();');
-  assert.ok(access > 0 && tidy > access, '行き先を決める前に入口の画面をしまっている');
+  const emu = land.indexOf('showEmuToday();');
+  assert.ok(tidy > 0 && emu > tidy, '入口の画面をしまう前に Emu を出している');
   const me = html.slice(html.indexOf('async function emuMyIdentity() {'));
   assert.ok(me.indexOf('if (_emuIdentity && _emuIdentity.uid === user.uid) return _emuIdentity;') < me.indexOf('await _emuEnsureServerAccount(user);'),
     '確かめ済みなのにサーバーへ聞き直している');
