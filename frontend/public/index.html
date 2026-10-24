@@ -11969,13 +11969,19 @@ window.onclick = (e) => {
 };
 
 function openNFTDetail(metadata, tokenId, emuPrice, jpycPrice) {
-  const imageUrl = metadata.image ? normalizeTokenURI(metadata.image) : null;
+  /* メタデータは NFT を作った人が書いたもの。そのまま HTML に入れると、
+     名前や説明にタグを書かれたとき、この画面でスクリプトが動く（2026-10-24 監査 B-2）。
+     文字として出し、画像は http(s) の行き先だけを使う。 */
+  const esc = (v) => String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const rawImage = metadata.image ? String(normalizeTokenURI(metadata.image)) : "";
+  const imageUrl = /^https?:\/\//i.test(rawImage) ? rawImage : null;
   let showingImage = true;
 
   function renderModal() {
     modalBody.innerHTML = `
       <div style="position:relative;">
-        <h3 style="margin-right:80px;">${metadata.name || `NFT #${tokenId}`}</h3>
+        <h3 style="margin-right:80px;">${esc(metadata.name || `NFT #${tokenId}`)}</h3>
 
         <!-- ★ 表裏切り替えボタン -->
         <button id="flipBtn" style="
@@ -11987,14 +11993,14 @@ function openNFTDetail(metadata, tokenId, emuPrice, jpycPrice) {
 
       ${showingImage
         ? `${imageUrl
-            ? `<img src="${imageUrl}" style="width:100%;border-radius:8px;margin:10px 0;">`
+            ? `<img src="${esc(imageUrl)}" style="width:100%;border-radius:8px;margin:10px 0;">`
             : "<p>画像なし</p>"}`
         : `
           <div style="margin:10px 0;line-height:1.8;">
-            <p><strong>ジャンル:</strong> ${metadata.genre || "未設定"}</p>
-            <p><strong>用途:</strong> ${metadata.usage || "未設定"}</p>
-            <p><strong>特典:</strong> ${metadata.perks || "未設定"}</p>
-            <p>${metadata.description || ""}</p>
+            <p><strong>ジャンル:</strong> ${esc(metadata.genre || "未設定")}</p>
+            <p><strong>用途:</strong> ${esc(metadata.usage || "未設定")}</p>
+            <p><strong>特典:</strong> ${esc(metadata.perks || "未設定")}</p>
+            <p>${esc(metadata.description || "")}</p>
             <hr>
             <p><strong>EMUER価格:</strong> ${ethers.utils.formatUnits(emuPrice, 18)} EMUER</p>
             <p><strong>JPYC価格:</strong> ${jpycPrice.eq(0) ? "なし" : ethers.utils.formatUnits(jpycPrice, 18) + " JPYC"}</p>

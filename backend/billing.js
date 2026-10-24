@@ -900,6 +900,8 @@ function createBillingRouter(deps) {
           location: profile.location || null,
           chat: profile.chat || null,
           control: profile.control || null,
+          /* 運営が決めた入り切り（admin/control）。読んでいたのに返していなかった */
+          adminControl: adminControl,
           activity: profile.activity || null,
           imports: imports
         });

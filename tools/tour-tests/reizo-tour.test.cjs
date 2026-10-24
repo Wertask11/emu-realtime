@@ -64,6 +64,12 @@ test('existing navigation and native behavior remain identical outside the expli
   const file='frontend/public/'+name;
   const before=cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
   let current=fs.readFileSync(path.join(root,file),'utf8');
+  // Reviewed 2026-10-24: audit fixes (post image, NFT detail, tutorial copy, City
+  // link, logo), the quest report post list and the guild offline fallback.
+  // Each pair is [now, before]; undo exactly these, then the older steps apply.
+  if(name==='index.html') for(const [now,was] of require('./approved-2026-10-24.json')){
+   assert.equal(current.split(now).length,2,now.slice(0,60));current=current.replace(now,()=>was);
+  }
   // Participation UX changes only these read/navigation regions. Keep the
   // previous full-file regression around the remaining native implementation.
   const uxBefore=cp.execFileSync('git',['show','f52dc21cbe20c7e09ea21bf7496a0f4e5487cd8a:'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
