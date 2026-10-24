@@ -8,9 +8,7 @@
     return window.emuAuthHeaders(!!interactive);
   }
   async function config() {
-    const response = await fetch(API + "/config");
-    const value = await response.json();
-    return response.ok ? value : null;
+    return (window.emuerV2ConfigOnce ? window.emuerV2ConfigOnce() : fetch(API + "/config").then(r => r.json().then(c => (r.ok ? c : null))));
   }
   async function request(path, options) {
     const response = await fetch(API + path, Object.assign({ headers: await headers(true) }, options || {}));

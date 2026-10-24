@@ -32,8 +32,12 @@ beforeEach(async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async c => {
     const d = c.firestore();
-    await fb.setDoc(fb.doc(d, 'ches_verified_accounts', 'asker'), { walletAddress: ASKER });
-    await fb.setDoc(fb.doc(d, 'ches_verified_accounts', 'answerer'), { walletAddress: ANSWERER });
+    /* 採用は「別の二人か」を Passport（SPID）で確かめる（自分への採用を防ぐため）。
+       サーバーが結び付けたときと同じ形（passportBindingVersion: 1）で置く。 */
+    await fb.setDoc(fb.doc(d, 'ches_verified_accounts', 'asker'), { walletAddress: ASKER, spid: 'SP-ASKR-ASKR-ASKR-ASK1', passportBindingVersion: 1 });
+    await fb.setDoc(fb.doc(d, 'ches_verified_accounts', 'answerer'), { walletAddress: ANSWERER, spid: 'SP-ANSR-ANSR-ANSR-ANS1', passportBindingVersion: 1 });
+    await fb.setDoc(fb.doc(d, 'ches_wallets', ASKER), { uid: 'asker', address: ASKER, spid: 'SP-ASKR-ASKR-ASKR-ASK1', passportBindingVersion: 1 });
+    await fb.setDoc(fb.doc(d, 'ches_wallets', ANSWERER), { uid: 'answerer', address: ANSWERER, spid: 'SP-ANSR-ANSR-ANSR-ANS1', passportBindingVersion: 1 });
     await fb.setDoc(fb.doc(d, 'entitlements', 'asker'), { plan: 'plus' });
     await fb.setDoc(fb.doc(d, 'entitlements', 'answerer'), { plan: 'plus' });
   });

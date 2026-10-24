@@ -118,8 +118,14 @@ const TOGGLE = INDEX.slice(INDEX.indexOf('window.spGuildToggle = async function'
 
 test('SDKで読めなくても、普通の通信で確かめ直す', () => {
   assert.ok(TOGGLE.length > 300, 'ギルドの切り替えが見つかりません');
-  assert.match(TOGGLE, /_spRestDoc\('sp_guild_members\/'/,
+  assert.match(TOGGLE, /const coll = 'sp_guild_members\/'/);
+  assert.match(TOGGLE, /_spRestDoc\(path, true, true\)/,
     '読めなかったときの逃げ道が無い');
+  /* offline の断りも、逃げ道へ回す（2026-10-24 CONNECT Guild の応援） */
+  assert.match(TOGGLE, /fb\.getDoc\(ref\)\.catch\(/);
+  /* 書くほうも、返事が無ければ普通の通信で確かめて書く */
+  assert.match(TOGGLE, /_spRestCreate\(coll, p\.addr, data\)/);
+  assert.match(TOGGLE, /_spRestDelete\(path\)/);
   assert.match(TOGGLE, /joined === null/,
     '読めたかどうかと、入っているかどうかを区別していない');
 });

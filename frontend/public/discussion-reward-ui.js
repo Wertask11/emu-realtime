@@ -4,9 +4,8 @@
   let installed = false;
   async function report(conclusionId) {
     try {
-      const configRes = await fetch(api + "/config");
-      const config = await configRes.json();
-      if (!config.enabled || Date.now() < Date.parse(config.startsAt) || typeof window.emuAuthHeaders !== "function") return;
+      const config = await (window.emuerV2ConfigOnce ? window.emuerV2ConfigOnce() : fetch(api + "/config").then(r => r.json().then(c => (r.ok ? c : null))));
+      if (!config || !config.enabled || Date.now() < Date.parse(config.startsAt) || typeof window.emuAuthHeaders !== "function") return;
       const headers = await window.emuAuthHeaders(false);
       await fetch(api + "/activity/discussion-conclusion", {
         method: "POST", headers: { ...headers, "Content-Type": "application/json" },

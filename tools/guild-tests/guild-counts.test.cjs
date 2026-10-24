@@ -128,7 +128,7 @@ test('状態そのものが読めなくても、落ちない', () => {
 
 test('押してだめだったときの文言が、そこを通る', () => {
   const at = INDEX.indexOf('window.spGuildToggle = async function');
-  const src = INDEX.slice(at, at + 3000);
+  const src = INDEX.slice(at, INDEX.indexOf('/* 採択する。運営だけ。', at));
   assert.match(src, /alert\(_spWhyFailed\(e\)\)/,
     'どこで転んでも同じ文言を出している');
 });

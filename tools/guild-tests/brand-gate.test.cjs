@@ -249,9 +249,11 @@ test('入った方の記録と、その権限のルールは消していない',
   assert.match(rules, /match \/camellia_community\/\{postId\}/);
   assert.match(rules, /match \/camellia_reports\/\{reportId\}/);
   /* いちばん下の受け皿へ落とさないこと。落ちると誰でも読み書きできる。 */
-  ["coll != 'camellia_users'", "coll != 'camellia_community'",
-   "coll != 'camellia_reports'"].forEach(line => {
-    assert.ok(rules.indexOf(line) > 0, line + ' が受け皿の除外から消えています');
+  /* 受け皿の除外は「!(coll in [...])」の一覧（2026-10-24 に「coll != '…'」の並びから変えた）。 */
+  const tail = rules.slice(rules.indexOf('match /{coll}/{document=**}'));
+  const list = tail.slice(tail.indexOf('!(coll in ['), tail.indexOf(']);'));
+  ['camellia_users', 'camellia_community', 'camellia_reports'].forEach(name => {
+    assert.ok(list.indexOf("'" + name + "'") > 0, name + ' が受け皿の除外から消えています');
   });
 });
 

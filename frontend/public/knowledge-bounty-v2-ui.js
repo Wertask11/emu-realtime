@@ -3,7 +3,7 @@
   const api = "https://emu-realtime.onrender.com/api/emuer/v2";
   const addr = () => String(window._emuAddress ? window._emuAddress() : "").toLowerCase();
   async function enabled() {
-    try { const r = await fetch(api + "/config"); const c = await r.json(); return !!c.enabled; } catch (_) { return false; }
+    try { const c = await (window.emuerV2ConfigOnce ? window.emuerV2ConfigOnce() : fetch(api + "/config").then(r => r.json().then(c => (r.ok ? c : null)))); return !!c && !!c.enabled; } catch (_) { return false; }
   }
   async function headers() {
     if (typeof window.emuAuthHeaders !== "function") throw new Error("AUTH_REQUIRED");
@@ -11,8 +11,8 @@
   }
   async function record(requestId, answerId) {
     try {
-      const c = await (await fetch(api + "/config")).json();
-      if (!c.enabled || Date.now() < Date.parse(c.startsAt)) return;
+      const c = await (window.emuerV2ConfigOnce ? window.emuerV2ConfigOnce() : fetch(api + "/config").then(r => r.json().then(c => (r.ok ? c : null))));
+      if (!c || !c.enabled || Date.now() < Date.parse(c.startsAt)) return;
       await fetch(api + "/activity/knowledge-answer", { method: "POST", headers: await headers(), body: JSON.stringify({ requestId, answerId }) });
     } catch (_) { /* Opening the accepted answer again retries the idempotent verification. */ }
   }
@@ -81,5 +81,13 @@
     const note = document.querySelector("#emuRequestSheet p"); if (note) note.textContent = "募集者の残高は減りません。採用後、基準を満たす回答は運営トレジャリーから回答者へ1 EMUERが付与されます。";
     replaceRequestSubmit(); return true;
   }
-  const timer = setInterval(async () => { if (await enabled() && install()) clearInterval(timer); }, 500);
+  /* 設定は1回だけ聞く。前は0.5秒ごとに /config を聞き直していて、Render が
+     眠っているあいだは返事を待つ問い合わせが重なり続けた。画面の部品がそろうのを
+     待つ見回りは、通信を伴わない install() だけにする。 */
+  let busy = false;
+  const timer = setInterval(async () => {
+    if (busy) return;
+    busy = true;
+    try { if (await enabled() && install()) clearInterval(timer); } finally { busy = false; }
+  }, 500);
 })();

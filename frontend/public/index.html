@@ -4116,7 +4116,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <div id="logoScreen">
   <canvas id="logoStarCanvas"></canvas>
   <div class="logo-wordmark-wrap">
-    <img id="logoImg" src="logo.jpg" alt="SchoolPark ロゴ"
+    <img id="logoImg" src="logo-640.webp" alt="SchoolPark ロゴ"
          onload="this.classList.add('loaded')" />
     <!-- 画像の上に HTML の文字「SchoolPark」を黒い帯で重ねていたが、帯の下から
          画像の文字（School Park）の端が透け、円の線も帯で切れて、ロゴが壊れて見えた。
@@ -11543,7 +11543,7 @@ const SP_TUT_STEPS = [
   { text: 'また会ったね！改めて、ようこそSchoolParkへ！\n学校より学べて・公園より楽しくて・会社より稼げる場所を。まずはオンラインで表したのがここだよ！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'この画面は、SchoolParkのマップ画面。中央エリア・東エリア・西エリア・南エリア・北エリアの５つのエリアで構成されてるんだ。\nまずは、エリアを選択してみよう！', hint: '← 左のエリアを選んでね', mode: 'area' },
   { text: 'ぼくたちは今、「CHES（チェス）」っていう一つの世界の中にいるんだ！\nCamellia・Heartoo・Emu・SchoolPark、4つのブランドで一つの世界。それがCHES！', hint: 'タップして次へ', mode: 'tap' },
-  { text: '左上のCHESをタップすると、4つのブランドに移動できるよ！\n🌸Camelliaは女性ウェルネス、💍Heartooはスマート結婚指輪、🌐Emuは知識を伝え合うSNS、そしてここがSchoolPark！', hint: 'タップして次へ', mode: 'tap' },
+  { text: '左上の切り替えから、EmuとSchoolParkを行き来できるよ！\n🌐Emuは知識を伝え合う場所、そしてここがSchoolPark！\n🌸Camellia（女性ウェルネス）は独立したアプリ、💍Heartoo（スマート結婚指輪）は準備中だよ。', hint: 'タップして次へ', mode: 'tap' },
   { text: 'CHESメニューのSchoolParkを押すと、お知らせやログも確認できるからチェックしてみてね！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'まだ品数は少ないけれど…現実でも使えるサービスと言ったらSchoolParkのショッピングとグルメ！', hint: 'タップして次へ', mode: 'tap' },
   { text: 'SchoolParkの独自教材や遊具、デジタルコンテンツやコラボアイテムが表示・購入できるのがショッピングだよ！', hint: 'タップして次へ', mode: 'tap' },
@@ -12571,11 +12571,16 @@ libraryDraftsButton.addEventListener("click", () => {
 
 /* ======= 投稿 / リアクション ======= */
 /* escapeHtml: 簡易エスケープ（本文やタグをそのまま挿入するより安全） */
+/* 文字と、属性の値（src="…" など）の両方に入れるので、引用符も置き換える。
+   引用符を残すと、投稿の画像の欄に細工した文字列から属性を抜け出され、
+   ほかの人の画面でスクリプトが動いてしまう（2026-10-24 に見つかった）。 */
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 const EMU_GOOD_REASONS = [
@@ -13020,6 +13025,11 @@ async function attachReactionHandlers(postElement) {
 
 
 /* addPostToFeed: 投稿を追加（表示上は reaction の数 = 0 で始まる） */
+/* 投稿の画像として出してよいか。投稿の画面が作る形（端末で縮めた data URL）だけ。 */
+function _emuSafePostImage(v) {
+  return typeof v === 'string' && v.length <= 1048000
+    && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/]+=*$/.test(v);
+}
 function createPostElementFromData(post) {
   const postElement = document.createElement("div");
 postElement.classList.add("post");
@@ -13066,7 +13076,7 @@ postElement.innerHTML = `
   <h3 class="kw-title">${escapeHtml(post.title)}</h3>
   <p class="kw-body ${_kwLong ? "clamp" : ""}">${escapeHtml(post.body)}</p>
   ${_kwLong ? `<button type="button" class="kw-readmore">続きを読む</button>` : ""}
-  ${post.imageUrl ? `<img class="kw-img" src="${escapeHtml(post.imageUrl)}" alt="">` : ""}
+  ${_emuSafePostImage(post.imageUrl) ? `<img class="kw-img" src="${escapeHtml(post.imageUrl)}" alt="">` : ""}
   <div class="kw-tags">${_kwTags.map((t) => `<span>#${escapeHtml(t)}</span>`).join("")}</div>
   <div class="kw-impact">
     <div><span>この知識が生んだ価値</span><b>${post.goodCount ?? 0}人の次の一歩に</b></div>
@@ -17716,24 +17726,43 @@ window.spGuildToggle = async function (guildId, kind, app) {
        ここを飛ばして書くことはできない。すでに入っているのに
        もう一度 setDoc すると、記録の決まりが update を認めていないので
        断られる（入るのは1回だけ、という決まりのため）。 */
+    /* getDoc は見切る前に「client is offline」で断ってくることがある。
+       前はその断りがそのまま下の catch へ落ち、普通の通信で読み直す前に
+       「うまくいきませんでした」を出していた。何度か押すと通ったのはこのため
+       （2026-10-24、CONNECT Guild の応援）。断られても、読めなかったとして扱う。 */
+    const coll = 'sp_guild_members/' + encodeURIComponent(guildId) + '/' + sub;
+    const path = coll + '/' + encodeURIComponent(p.addr);
     let joined = null;
-    const cur = await _spSoon(fb.getDoc(ref), 4000);
+    const cur = await _spSoon(fb.getDoc(ref).catch(function () { return null; }), 4000);
     if (cur.ok && cur.value && typeof cur.value.exists === 'function') {
       joined = cur.value.exists();
     }
     if (joined === null) {
       try {
-        const d = await _spRestDoc('sp_guild_members/' + encodeURIComponent(guildId)
-          + '/' + sub + '/' + encodeURIComponent(p.addr), true);
-        joined = !!d;
+        joined = !!(await _spRestDoc(path, true, true));
         console.warn('ギルドの参加・応援を、普通の通信で確かめました。');
       } catch (e2) {
         throw new Error('いまの状態を確かめられませんでした');
       }
     }
-    const write = joined ? fb.deleteDoc(ref) : fb.setDoc(ref, { name: p.name, at: Date.now() });
-    const done = await _spSoon(write, 6000);
-    if (!done.ok) throw new Error('保存が返ってきませんでした');
+    const data = { name: p.name, at: Date.now() };
+    /* 書くほうも同じ。SDK が返事をしない・offline で断るときは、
+       普通の通信で、書けているかを確かめてから書く。決まりは SDK と同じように効く。
+       断られた（決まりで拒まれた）ときだけは、そのまま理由を出す。 */
+    const sdk = (joined ? fb.deleteDoc(ref) : fb.setDoc(ref, data))
+      .then(function () { return true; }, function (err) { return err || new Error('保存できませんでした'); });
+    const done = await _spSoon(sdk, 6000);
+    if (done.ok && done.value !== true && _spDenied(done.value)) throw done.value;
+    if (!(done.ok && done.value === true)) {
+      const has = async function () { return !!(await _spRestDoc(path + '?mask.fieldPaths=at', true, true)); };
+      if ((await has()) === joined) {
+        if (joined) await _spRestDelete(path);
+        else await _spRestCreate(coll, p.addr, data);
+        if ((await has()) === joined) throw new Error('保存が返ってきませんでした');
+      }
+      console.warn('ギルドの参加・応援を、普通の通信で保存しました。');
+    }
+    try { _spRestDrop('sp_guild_members/'); } catch (e3) {}
   } catch (e) {
     console.warn('ギルドの参加・応援を保存できませんでした:', e && (e.message || e));
     /* 先に動かした画面を、元へ戻す。戻さないと、入っていないのに
@@ -18309,8 +18338,9 @@ async function _spRestGetOnce(path, needAuth, post) {
   if (token) headers['Authorization'] = 'Bearer ' + token;
   /* post … 問い合わせ（runQuery）。欄を絞って読むときに使う。 */
   if (post) headers['Content-Type'] = 'application/json';
+  /* ':runQuery' だけのときは、いちばん上（posts など）への問い合わせ */
   const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
-            + '/databases/(default)/documents/' + path
+            + '/databases/(default)/documents' + (path.charAt(0) === ':' ? '' : '/') + path
             + (path.indexOf('?') >= 0 ? '&' : '?') + 'key=' + opt.apiKey;
   /* 返事が来ないまま待ち続けると、同時に走らせる3本の枠が埋まったままになり、
      あとから来た読み取り（知恵カードの「受けているか」など）が全部止まる。15秒で見切る。 */
@@ -19622,7 +19652,42 @@ function _spPostTime(v) {
 }
 
 /* Emu の投稿を読む。where も orderBy も使わない（複合の索引が要るため）。
-   新しい順に並べ替えるのは、読んだあとこちら側でやる。 */
+   新しい順に並べ替えるのは、読んだあとこちら側でやる。
+
+   一覧は欄を絞って普通の通信で読む（runQuery の select）。
+   前は SDK で posts を丸ごと読んでいた。投稿には画像（1枚で最大1MB）が
+   そのまま入っているので、全投稿だと数MBになる。スマホでは途中で
+   通信が切れたとみなされ、SDK は例外を出さずに端末の控えから返す。
+   控えにあるのは見たことのある投稿だけなので、一覧が1件しか出ず、
+   ほかの投稿を選べなかった（一般 #001 LEARN、2026-10-24）。 */
+const SP_LOG_POST_FIELDS = ['title', 'body', 'tags', 'displayName', 'address', 'goodCount', 'createdAt'];
+function _spLogPostRow(id, x) {
+  return { id: id, title: x.title || '（題名なし）', body: String(x.body || ''),
+    tags: String(x.tags || ''), name: x.displayName || _spShortAddr(x.address) || '匿名',
+    good: Number(x.goodCount) || 0, at: _spPostTime(x.createdAt) };
+}
+async function _spLogFetchPosts() {
+  try {
+    const j = await _spRestGet(':runQuery', false, true, {
+      structuredQuery: { from: [{ collectionId: 'posts' }],
+        select: { fields: SP_LOG_POST_FIELDS.map(function (f) { return { fieldPath: f }; }) },
+        limit: 1000 } });
+    return (Array.isArray(j) ? j : []).filter(function (x) { return x && x.document; }).map(function (x) {
+      return _spLogPostRow(decodeURIComponent(String(x.document.name || '').split('/').pop()),
+        _spRestFields(x.document.fields || {}));
+    });
+  } catch (e) {
+    console.warn('投稿を絞って読めませんでした:', e && (e.message || e));
+  }
+  /* 絞って読めなかったときだけ、これまでどおり SDK で丸ごと読む */
+  const fb = window.fbLib;
+  const snap = await fb.getDocs(fb.collection(window.db, 'posts'));
+  /* 控えから返ってきたものは、一部しか無いことがある。読めなかったとして扱う */
+  if (snap.metadata && snap.metadata.fromCache) return null;
+  const rows = [];
+  snap.forEach(function (d) { rows.push(_spLogPostRow(d.id, d.data() || {})); });
+  return rows;
+}
 async function _spLogLoadPosts() {
   if (_spLogPosts) return;
   const box = document.getElementById('slResults');
@@ -19632,18 +19697,8 @@ async function _spLogLoadPosts() {
     return;
   }
   try {
-    const fb = window.fbLib;
-    const snap = await fb.getDocs(fb.collection(window.db, 'posts'));
-    const rows = [];
-    snap.forEach(function (d) {
-      const x = d.data() || {};
-      rows.push({ id: d.id, title: x.title || '（題名なし）', body: String(x.body || ''),
-        tags: String(x.tags || ''), name: x.displayName || _spShortAddr(x.address) || '匿名',
-        good: Number(x.goodCount) || 0, at: _spPostTime(x.createdAt) });
-    });
-    /* getDocs は通信が切れていても例外を出さず、控えから空で返ってくる。
-       「本当に0件」と「読めていない」を取り違えないよう、ここで見分ける。 */
-    if (!rows.length && snap.metadata && snap.metadata.fromCache) {
+    const rows = await _spLogFetchPosts();
+    if (!rows) {
       if (box) box.innerHTML = '<div class="sl-msg">投稿を読み込めませんでした。時間をおいて開き直してください。</div>';
       return;
     }
@@ -20248,6 +20303,30 @@ async function _spRestPatch(path, fields) {
     headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: body }) });
   if (!r.ok) throw new Error('HTTP ' + r.status);
+  return true;
+}
+
+/* 普通の通信で、1件を消す。SDK の書き込みが返ってこないときの逃げ道。
+   決まり（firestore.rules）は SDK と同じように効く。もう無ければ、それでよい。 */
+async function _spRestDelete(path) {
+  let opt = {};
+  try { opt = (window.db && window.db.app && window.db.app.options) || {}; } catch (e) {}
+  const u = window.auth && window.auth.currentUser;
+  if (!opt.projectId || !opt.apiKey || !u) throw new Error('設定かログインが読めない');
+  const token = String((await u.getIdToken()) || '');
+  if (!token) throw new Error('ログインの証が取れない');
+  const url = 'https://firestore.googleapis.com/v1/projects/' + opt.projectId
+    + '/databases/(default)/documents/' + path + '?key=' + opt.apiKey;
+  let signal;
+  try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) signal = AbortSignal.timeout(15000); } catch (e) {}
+  const r = await fetch(url, { method: 'DELETE', cache: 'no-store', signal: signal,
+    headers: { 'Authorization': 'Bearer ' + token } });
+  if (r.status === 404) return true;
+  if (!r.ok) {
+    const err = new Error('HTTP ' + r.status);
+    err.code = r.status === 403 ? 'permission-denied' : '';
+    throw err;
+  }
   return true;
 }
 
@@ -22269,8 +22348,12 @@ function openSpRoom(url, title) {
 }
 /* 「みてみる」の行き先。以前は取引所（NFTの出品一覧）だったが、
    旧SchoolParkのショッピングをここに移した。 */
-function openEmuShopping() {
-  openSpRoom('/schoolpark/dao.html?screen=city', 'SchoolPark City');
+/* view … Mall の「SchoolPark Cityを開く」は買い物の画面（commerce）へ。
+   前は view を渡せず City の入口に出ていて、単独で開いたとき（/?cityView=commerce）と
+   行き先が違っていた。 */
+function openEmuShopping(view) {
+  openSpRoom('/schoolpark/dao.html?screen=city'
+    + (view === 'orders' || view === 'commerce' ? '&cityView=' + view : ''), 'SchoolPark City');
 }
 
 /* Event QR entry stays in the authenticated SchoolPark shell, then opens the
@@ -26496,7 +26579,7 @@ function renderConfirm() {
 }
 
 function escapeHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ══════════════════════════

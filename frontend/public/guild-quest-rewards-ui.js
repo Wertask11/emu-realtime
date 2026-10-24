@@ -9,9 +9,8 @@
   }
   async function enabled() {
     try {
-      const response = await fetch(API + "/config");
-      const config = await response.json();
-      return response.ok && config.enabled && Date.now() >= Date.parse(config.startsAt);
+      const config = await (window.emuerV2ConfigOnce ? window.emuerV2ConfigOnce() : fetch(API + "/config").then(r => r.json().then(c => (r.ok ? c : null))));
+      return !!config && config.enabled && Date.now() >= Date.parse(config.startsAt);
     } catch (_) { return false; }
   }
   function questIdFromPath(path) {

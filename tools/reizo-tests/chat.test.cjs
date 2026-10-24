@@ -33,8 +33,19 @@ test('all existing FAQ data and exact matcher outputs are preserved', () => {
   const before=execFileSync('git',['show','63fd3ee:frontend/public/index.html'],{cwd:root,encoding:'utf8',maxBuffer:8e6});
   const slice=before.slice(before.indexOf('const SP_REIZO_KB = ['),before.indexOf('let _reizoAgentsStarted'));
   const ctx={}; vm.runInNewContext(slice+';this.kb=SP_REIZO_KB;this.answer=spReizoAnswer;',ctx);
-  assert.deepEqual(JSON.parse(JSON.stringify(ctx.kb)),faq.items);
-  for(const item of faq.items) for(const keyword of item.k) assert.equal(faq.answer(keyword),ctx.answer(keyword));
+  const kb=JSON.parse(JSON.stringify(ctx.kb));
+  // Reviewed answer rewrites (ca588f7 on 10/19; the quest tax note on 10/24).
+  // Keywords, order and every other answer stay byte-for-byte the same.
+  const rewritten=['ches','クエスト','ギルド','スマホ','チュートリアル','問い合わせ'];
+  assert.equal(faq.items.length,kb.length);
+  const now=new Map();
+  kb.forEach((item,i)=>{
+    assert.deepEqual(faq.items[i].k,item.k);
+    if(rewritten.includes(item.k[0])) assert.notEqual(faq.items[i].a,''); else assert.equal(faq.items[i].a,item.a);
+    now.set(item.a,faq.items[i].a);
+  });
+  for(const item of faq.items) for(const keyword of item.k){const was=ctx.answer(keyword);assert.equal(faq.answer(keyword),was===null?null:now.get(was));}
+  assert.match(faq.answer('クエスト'),/確定申告/);
   assert.match(faq.answer('Questって何？'),/クエスト/);
   assert.equal(faq.answer('月でラーメンを作りたい'), null);
 });
@@ -94,4 +105,14 @@ test('REST provider keeps key in header, no tools, short deadline, blocked/empty
   assert.ok(!captured.url.includes(env.GEMINI_API_KEY));assert.equal(captured.headers['x-goog-api-key'],env.GEMINI_API_KEY);assert.ok(captured.signal);
   const body=JSON.parse(captured.body);assert.equal(body.tools,undefined);assert.equal(body.generationConfig.maxOutputTokens,768);
   await assert.rejects(generate({env,contents:[],systemInstruction:'prompt',fetcher:async()=>new Response('{"candidates":[{"finishReason":"SAFETY"}]}')}));
+});
+test('the tutorial guide answers quests and guilds with the same words as the chat', () => {
+  // tutorial.html keeps its own copy of the FAQ; these two drifted apart once (10/24).
+  const html=fs.readFileSync(path.join(root,'frontend/public/schoolpark/tutorial.html'),'utf8');
+  const slice=html.slice(html.indexOf('const REIZO_KB = ['),html.indexOf('\n];',html.indexOf('const REIZO_KB = ['))+3);
+  const ctx={}; vm.runInNewContext(slice+';this.kb=REIZO_KB;',ctx);
+  for(const key of ['クエスト','ギルド']){
+    const mine=ctx.kb.find(x=>x.k[0]===key), chat=faq.items.find(x=>x.k[0]===key);
+    assert.equal(mine.a,chat.a,key);
+  }
 });

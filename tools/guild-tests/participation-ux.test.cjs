@@ -11,7 +11,9 @@ const before=file=>cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,en
 
 test('UX does not change enrollment writes, Passport resolution, reports or wisdom submission',()=>{
  const file='frontend/public/index.html',old=before(file),now=fs.readFileSync(path.join(root,file),'utf8');
- for(const name of ['spGuildToggle','spQuestToggle','spPassportLoad','spLogSubmit','spWisdomSubmit'])
+ // spGuildToggle was changed on purpose on 2026-10-24 (offline fallback for
+ // read and write); quest-order.test.cjs and guild-counts.test.cjs cover it.
+ for(const name of ['spQuestToggle','spPassportLoad','spLogSubmit','spWisdomSubmit'])
   assert.equal(grab(now,name),grab(old,name),name+' must preserve the existing action and identity rules');
 });
 

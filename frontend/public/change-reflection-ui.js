@@ -4,7 +4,7 @@
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
   const addr = () => String(window._emuAddress ? window._emuAddress() : "").toLowerCase();
   const active = async () => {
-    try { const r = await fetch(api + "/config"); const c = await r.json(); return !!c.enabled && Date.now() >= Date.parse(c.startsAt); }
+    try { const c = await (window.emuerV2ConfigOnce ? window.emuerV2ConfigOnce() : fetch(api + "/config").then(r => r.json().then(c => (r.ok ? c : null)))); return !!c && !!c.enabled && Date.now() >= Date.parse(c.startsAt); }
     catch (_) { return false; }
   };
   const authHeaders = async () => {
