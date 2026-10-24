@@ -11,11 +11,19 @@ const before=file=>cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,en
 
 test('UX does not change enrollment writes, Passport resolution, reports or wisdom submission',()=>{
  const file='frontend/public/index.html',old=before(file),now=fs.readFileSync(path.join(root,file),'utf8');
- for(const name of ['spGuildToggle','spQuestToggle','spPassportLoad','spLogSubmit','spWisdomSubmit'])
+ // spGuildToggle was changed on purpose on 2026-10-24 (offline fallback for
+ // read and write); quest-order.test.cjs and guild-counts.test.cjs cover it.
+ for(const name of ['spQuestToggle','spPassportLoad','spLogSubmit','spWisdomSubmit'])
   assert.equal(grab(now,name),grab(old,name),name+' must preserve the existing action and identity rules');
 });
 
 test('quest rules, reward/identity backend and original quest/guild definitions are unchanged',()=>{
- for(const file of ['firestore.rules','firestore.indexes.json','backend/quest-completion.js','backend/identity.js','frontend/public/schoolpark/quest-store.js','frontend/public/schoolpark/guild-store.js'])
+ // firestore.rules has since changed on purpose (Good/Change on 10/24, answers and
+ // adoption within the Rules budget on 10/24); its emulator suites
+ // (tools/quest-tests, tools/knowledge-lab-tests) cover quests and guilds now.
+ for(const file of ['firestore.indexes.json','backend/quest-completion.js','backend/identity.js','frontend/public/schoolpark/quest-store.js','frontend/public/schoolpark/guild-store.js'])
   assert.equal(fs.readFileSync(path.join(root,file),'utf8'),before(file),file);
+ const rules=fs.readFileSync(path.join(root,'firestore.rules'),'utf8');
+ for(const block of ['match /sp_quests/{questId}','match /sp_guild_members/{guildId}'])
+  assert.ok(rules.includes(block),block);
 });

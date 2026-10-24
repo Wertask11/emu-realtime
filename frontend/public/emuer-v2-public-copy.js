@@ -147,7 +147,7 @@
     }
   }
   async function start() {
-    try { const response = await fetch(API + "/config"); const next = await response.json(); if (!response.ok || Number(next.chainId) !== 137) return; config = next;
+    try { const next = await (window.emuerV2ConfigOnce ? window.emuerV2ConfigOnce() : fetch(API + "/config").then(r => r.json().then(c => (r.ok ? c : null)))); if (!next || Number(next.chainId) !== 137) return; config = next;
       /* 受け取ったあとに、ページの数字を書き替えるため外へ出す。
          札ごと描き直すより軽い（balanceOf 一度で四か所そろう）。 */
       window.emuerV2RefreshBalance = refreshBalance; applyCopy(); wrapLegacyRender(); wrapWalletCard(); observeLegacyWrites(); await refreshBalance(); } catch (_) {}

@@ -600,7 +600,10 @@ test("限定星は、包括ルールの素通しから外してある", () => {
   const fs = require("node:fs");
   const path = require("node:path");
   const rules = fs.readFileSync(path.join(__dirname, "..", "firestore.rules"), "utf8");
-  assert.match(rules, /coll != 'sp_stars'/,
+  /* 除外は「!(coll in [...])」の一覧（2026-10-24 に「coll != '…'」の並びから変えた） */
+  const tail = rules.slice(rules.indexOf("match /{coll}/{document=**}"));
+  const list = tail.slice(tail.indexOf("!(coll in ["), tail.indexOf("]);"));
+  assert.ok(list.indexOf("'sp_stars'") > 0,
     "sp_stars が包括ルールの除外に入っていない（誰でも星を配れてしまう）");
 });
 

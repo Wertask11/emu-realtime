@@ -115,7 +115,8 @@ async function fixture(width=390, visits=[]) {
   const frame=page.frames().find(f=>f.url().endsWith('/schoolpark/dao.html'));
   await frame.waitForFunction(()=>window.app?.state.me.name==='テスト用Passport');
   async function nav(n) {
-    const names={'01':/広場/,'02':/ギルド/,'03':/クエスト/,'04':/知恵/,'05':/公園/,'06':/メンバー/,'07':/会計|トレジャリー/,'08':/CITY/};
+    // Sidebar labels as of 10/19 (01 ホーム, 06 貢献, 07 treasury); older names still accepted.
+    const names={'01':/ホーム|広場/,'02':/ギルド/,'03':/クエスト/,'04':/知恵/,'05':/公園/,'06':/貢献|メンバー/,'07':/treasury|会計|トレジャリー/i,'08':/CITY/};
     const item=frame.getByText(n,{exact:true}).locator('..').filter({hasText:names[n]}).filter({visible:true});
     if(width>=700 && !(await item.count())) {
       await frame.getByTitle('サイドバーを開く',{exact:true}).click();

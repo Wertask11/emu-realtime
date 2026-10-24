@@ -27,7 +27,14 @@ const DESIGN_END = '<script>\n/* ═══════════════�
 
 test('デザインの部分が、元と1バイトも違わない', () => {
   const a = BEFORE.slice(0, BEFORE.indexOf(DESIGN_END));
-  const b = NOW.slice(0, NOW.indexOf(DESIGN_END));
+  let b = NOW.slice(0, NOW.indexOf(DESIGN_END));
+  /* 確認済みの変更：買い物の入口が City へ移ったことを知らせる帯（5行）。
+     ボタンは City の買い物の画面（cityView=commerce）を開く。帯だけを外して比べる。 */
+  const band = b.indexOf('  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px clamp(16px,4vw,36px);background:#eaf1e6');
+  assert.ok(band > 0, 'City への案内の帯が見つかりません');
+  const bandEnd = b.indexOf('  </div>\n\n', band) + '  </div>\n\n'.length;
+  assert.match(b.slice(band, bandEnd), /openEmuShopping\('commerce'\)/);
+  b = b.slice(0, band) + b.slice(bandEnd);
   assert.ok(a.length > 30000, '元の版を取れていません');
   assert.equal(b, a, 'CSS か HTML の骨組みが変わっています');
 });

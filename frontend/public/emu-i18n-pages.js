@@ -72,7 +72,7 @@
       "k.saveDraft": "下書き保存",
       "k.schedulePost": "予約投稿",
       "k.publish": "知識を公開する",
-      "k.paidPass": "有料パス",
+      "k.paidPass": "公式パス",
       "k.freeUser": "無料利用者",
       "k.anonymous": "匿名",
       "k.readMore": "続きを読む",

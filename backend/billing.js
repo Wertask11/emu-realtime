@@ -129,6 +129,27 @@ function createBillingRouter(deps) {
 
   router.get("/features", (req, res) => res.set("Cache-Control", "no-store").json(membershipPolicy.catalog()));
 
+  /* 投稿の書き手のプラン名（Emu light / plus / pro）。ログインは要らない。
+     投稿に「公式パス」「Emu plus」などを出すため（2026-10-24 オーナー決定：プラン名は
+     公開してよい。何も無い人には何も出さない）。返すのはプラン名だけ。
+     1回に60人まで。書き手の名義（0x…）だけを受け取る。 */
+  const publicPlansRateLimit = rateLimit({ windowMs: 60_000, max: 60, key: "public-plans" });
+  router.post("/public-plans", publicPlansRateLimit, async (req, res) => {
+    const list = Array.isArray(req.body && req.body.addresses) ? req.body.addresses : null;
+    if (!list || list.length > 60) return res.status(400).json({ error: "BAD_ADDRESSES" });
+    const addrs = [...new Set(list.map(a => String(a || "").trim().toLowerCase()))]
+      .filter(a => /^0x[0-9a-f]{40}$/.test(a));
+    if (!entitlement || typeof entitlement.memberPlanOfAddress !== "function") return res.status(503).json({ error: "UNAVAILABLE" });
+    try {
+      const plans = {};
+      await Promise.all(addrs.map(async a => { plans[a] = await entitlement.memberPlanOfAddress(a); }));
+      return res.set("Cache-Control", "no-store").json({ ok: true, plans });
+    } catch (e) {
+      console.error("public plans error:", e.message);
+      return res.status(500).json({ error: "PUBLIC_PLANS_FAILED" });
+    }
+  });
+
   async function audit(actorUid, action, target, detail) {
     try {
       await db.collection(AUDIT_COL).add({
@@ -900,6 +921,8 @@ function createBillingRouter(deps) {
           location: profile.location || null,
           chat: profile.chat || null,
           control: profile.control || null,
+          /* 運営が決めた入り切り（admin/control）。読んでいたのに返していなかった */
+          adminControl: adminControl,
           activity: profile.activity || null,
           imports: imports
         });

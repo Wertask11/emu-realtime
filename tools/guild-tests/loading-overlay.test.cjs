@@ -147,10 +147,12 @@ test('入場は、読み込みが返らなくても先へ進む', () => {
   assert.ok(hub.length > 500, '入場のところが見つかりません');
   assert.ok(hub.indexOf('await chesLandAfterLogin()') < 0,
     '返ってくるまで待っている。返ってこないと覆いが残る');
-  assert.match(hub, /_spSoon\(Promise\.resolve\(chesLandAfterLogin\(\)\)/,
+  /* 着地を一度だけ始めて（landing）、それを時間で区切って待つ形 */
+  assert.match(hub, /const landing = Promise\.resolve\(chesLandAfterLogin\(\)\)/);
+  assert.match(hub, /_spSoon\(landing, \d+\)/,
     '時間を区切って待っていない');
   /* 時間を区切ったあと、必ず覆いを外すところへ落ちること。 */
-  const at = hub.indexOf('_spSoon(Promise.resolve(chesLandAfterLogin()');
+  const at = hub.lastIndexOf('_spSoon(landing');
   assert.ok(hub.indexOf('_hideSpLoadingOverlay()', at) > at,
     '待ったあとに覆いを外していない');
 });

@@ -107,3 +107,33 @@ test("投稿者本人の本文の編集と、改善案の反映は今までど�
   await assertSucceeds(fb.updateDoc(fb.doc(db, "posts", id), { acceptedChangeCount: 1, lastChangedAt: new Date() }));
   await assertFails(fb.updateDoc(fb.doc(env.authenticatedContext("light").firestore(), "posts", id), { body: "他人が書き換え" }));
 });
+
+/* 投稿の画像の欄。2026-10-24、細工した文字列で属性を抜け出し、
+   ほかの人の画面でスクリプトを動かせた。画像のデータだけを通す。 */
+const IMG = "data:image/jpeg;base64," + Buffer.from("jpeg").toString("base64");
+const EVIL = 'x" onerror="alert(1)';
+test("投稿の画像は、画像のデータなら作れる・直せる", async () => {
+  const db = env.authenticatedContext("light").firestore();
+  const ref = fb.doc(fb.collection(db, "posts"));
+  const id = ref.id;
+  await env.withSecurityRulesDisabled(async (c) => {
+    await fb.setDoc(fb.doc(c.firestore(), "posts", id), { address: users.light.addr, title: "t", body: "b", visibility: "public", goodCount: 0, changeCount: 0, goodUsers: [], changeUsers: [], createdAt: new Date() });
+  });
+  await assertSucceeds(fb.updateDoc(fb.doc(db, "posts", id), { imageUrl: IMG, updatedAt: new Date() }));
+  await assertSucceeds(fb.updateDoc(fb.doc(db, "posts", id), { imageUrl: "", updatedAt: new Date() }));
+});
+test("画像の欄に画像のデータ以外は入れられない（作るときも直すときも）", async () => {
+  const db = env.authenticatedContext("light").firestore();
+  const ref = fb.doc(fb.collection(db, "posts"));
+  await env.withSecurityRulesDisabled(async (c) => {
+    await fb.setDoc(fb.doc(c.firestore(), "posts", ref.id), { address: users.light.addr, title: "t", body: "b", visibility: "public", goodCount: 0, changeCount: 0, goodUsers: [], changeUsers: [], createdAt: new Date() });
+  });
+  for (const bad of [EVIL, "javascript:alert(1)", "https://example.com/a.png", IMG + '" onerror="x']) {
+    await assertFails(fb.updateDoc(fb.doc(db, "posts", ref.id), { imageUrl: bad, updatedAt: new Date() }));
+  }
+  /* 作るとき。回数の記録と一緒に書いても、画像が悪ければ断る */
+  const b = fb.writeBatch(db), key = (() => { const d = new Date(Date.now() + 9 * 3600000); return "light_r_m" + d.getUTCFullYear() + "-" + (d.getUTCMonth() + 1); })();
+  b.set(fb.doc(db, "plan_usage", key), { post: 1 });
+  b.set(fb.doc(fb.collection(db, "posts")), { address: users.light.addr, title: "t", body: "b", imageUrl: EVIL, goodCount: 0, changeCount: 0, goodUsers: [], changeUsers: [], createdAt: new Date() });
+  await assertFails(b.commit());
+});

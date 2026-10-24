@@ -71,16 +71,29 @@ service cloud.firestore {
     function verifiedKnowledgeSpid(binding) {
       return binding.get('passportBindingVersion', 0) == 1 ? binding.get('spid', '') : '';
     }
+    /* 別の二人か。アカウントは1回だけ読んで、両方の判定に使い回す。
+
+       知識の採用は、回答・募集（・懸賞の受け取り）を一度に書くので、
+       この判定が書類の数だけ走る。1回の書き込みで評価できる式には上限（1000）があり、
+       以前は採用が全員この上限で断られていた（2026-10-24）。
+       安い比較を先に見て、重い読み取りの回数を減らす。 */
     function distinctKnowledgePeople(from, to) {
-      let left = knowledgeSpid(from);
-      let right = knowledgeSpid(to);
-      return from.lower() != to.lower() && left.size() > 0
-        && right.size() > 0 && left != right;
+      return from.lower() != to.lower()
+        && distinctKnowledgeSpids(get(accountPath()).data, from, to);
     }
-    function validKnowledgeAdoption(requestData) {
-      let answer = getAfter(/databases/$(database)/documents/knowledge_answers/$(requestData.acceptedAnswerId)).data;
-      return distinctKnowledgePeople(requestData.author, answer.answerAuthor)
-        && answer.status == 'accepted';
+    function distinctKnowledgeSpids(account, from, to) {
+      let left = knowledgeSpidWith(account, from);
+      let right = knowledgeSpidWith(account, to);
+      return left.size() > 0 && right.size() > 0 && left != right;
+    }
+    /* 採用した回答が、この募集の・この回答者の・承認済みの回答であること。
+       回答は getAfter で1回だけ読む。 */
+    function adoptionLinked(requestId, d) {
+      let answer = getAfter(/databases/$(database)/documents/knowledge_answers/$(d.acceptedAnswerId)).data;
+      return answer.requestId == requestId
+        && answer.answerAuthor == d.acceptedAnswerAuthor
+        && answer.status == 'accepted'
+        && distinctKnowledgePeople(d.author, answer.answerAuthor);
     }
     function addrIsMine(a, value) {
       return (a.get('walletAddress', '') is string
@@ -182,6 +195,16 @@ service cloud.firestore {
         && after.hasAll(before)
         && a.get('walletAddress', '').lower() in after
         && !(a.get('walletAddress', '').lower() in before);
+    }
+
+    /* 投稿の画像。投稿の画面が端末で縮めて作る data URL だけを通す。
+       形を見ていなかったため、細工した文字列を画像の欄に入れて、ほかの人の
+       画面でスクリプトを動かせた（2026-10-24）。無い・空も通す。 */
+    function postImageOk(d) {
+      return d.get('imageUrl', '') == ''
+        || (d.get('imageUrl', '') is string
+            && d.get('imageUrl', '').size() <= 1048000
+            && d.get('imageUrl', '').matches('data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*'));
     }
 
     function changedOnly(fields) {
@@ -310,9 +333,38 @@ service cloud.firestore {
       return signedIn() && addr is string && addr.size() > 0
         && mayCreateWith(get(accountPath()).data, addr, minRank, kind);
     }
+    /* 段は、まず公式パスを見ずに（付与・契約だけで）確かめる。それで足りれば、そこで終わる。
+       1回の書き込みで見に行ける文書は10件まで。light の人の回答は、
+       アカウント・ID・付与・契約・回数・相手の名義・募集に、公式パスの記録
+       （2〜4件）が加わって上限を超え、条件を満たしていても断られていた
+       （2026-10-24）。上限は段が上がるほど広いので、パスなしで足りるなら
+       パスを含めても結果は同じ。足りないときだけ公式パス（plus 相当）を見る。
+       回数の記録の場所と書いたあとの数は1回だけ求めて持ち回る
+       （1回の書き込みで評価できる式にも上限（1000）がある）。 */
     function mayCreateWith(a, addr, minRank, kind) {
       return addrIsMine(a, addr)
-        && (!enforcing() || mayWriteAs(rankOfUser(a), minRank, kind));
+        && (!enforcing() || mayCreateRanked(a, rankWithoutPass(), minRank, kind, usagePath()));
+    }
+    function rankWithoutPass() {
+      let g = grantRank();
+      return g == 3 ? 3 : higherOf(g, subRank());
+    }
+    function mayCreateRanked(a, r0, minRank, kind, path) {
+      let after = getAfter(path).data.get(kind, 0);
+      return after == usedBeforeAt(path, kind) + 1
+        && (rankFits(r0, minRank, kind, path, after)
+            || (r0 < 2 && hasPassFor(a) && rankFits(2, minRank, kind, path, after)));
+    }
+    function rankFits(rank, minRank, kind, path, after) {
+      return rank >= minRank && limitOf(rank, kind) > 0
+        && after <= limitOf(rank, kind) + transitionCreditAt(path, kind);
+    }
+    function usedBeforeAt(path, kind) {
+      return exists(path) ? get(path).data.get(kind, 0) : 0;
+    }
+    function transitionCreditAt(path, kind) {
+      return request.time >= timestamp.date(2026, 11, 1) - duration.value(9, 'h')
+        && exists(path) ? get(path).data.get('transitionCredits', {}).get(kind, 0) : 0;
     }
 
     /* クエストのための投稿。月の回数に数えない代わりに、
@@ -383,31 +435,12 @@ service cloud.firestore {
       return /databases/$(database)/documents/plan_usage/$(membershipCounterId() + '_r_' + usageKey());
     }
 
-    /* 書く前の回数。記録がまだ無ければ0。 */
-    function usedBefore(kind) {
-      return exists(usagePath()) ? get(usagePath()).data.get(kind, 0) : 0;
-    }
-
-    /* 書いたあとの回数が「ちょうど1つ増えていて」「上限以内」か。
+    /* 書いたあとの回数が「ちょうど1つ増えていて」「上限以内」か（上の mayCreateRanked）。
        施行日より前は数えない（掲示した約束どおり）。
 
        上限以内かだけを見ていたときは、記録を増やさずに投稿すれば
        0 <= 2 で何度でも通ってしまった。
        ちょうど1増えることまで確かめないと、上限を守れない。 */
-    /* 段と回数を、いちどの判定でまとめて確かめる。
-       段は myRank() で1回だけ数え、あとは引数で持ち回る。
-       getAfter も1回だけ呼んで、その値を渡す。 */
-    function mayWriteAs(rank, minRank, kind) {
-      return rank >= minRank && hasRoomIn(limitOf(rank, kind), kind);
-    }
-    function hasRoomIn(limit, kind) {
-      let credit = request.time >= timestamp.date(2026, 11, 1) - duration.value(9, 'h')
-        && exists(usagePath()) ? get(usagePath()).data.get('transitionCredits', {}).get(kind, 0) : 0;
-      return limit > 0 && roomLeft(limit + credit, kind, getAfter(usagePath()).data.get(kind, 0));
-    }
-    function roomLeft(limit, kind, after) {
-      return after <= limit && after == usedBefore(kind) + 1;
-    }
 
     /* ───────── いま持っている数（マイライブラリー） ─────────
        回数と違って、これは月でリセットしない「いまの総数」。
@@ -653,6 +686,7 @@ service cloud.firestore {
          questId はあとから足せない（下の update の changedOnly に無い）。 */
       allow create: if !request.resource.data.keys().hasAny(['knowledgeLab', 'authorSchoolParkId'])
         && request.resource.data.get('visibility', 'public') == 'public'
+        && postImageOk(request.resource.data)
         && (
           mayCreateForQuest(request.resource.data.get('address', ''),
                             request.resource.data.get('questId', ''))
@@ -680,6 +714,7 @@ service cloud.firestore {
           'displayName'
         ])
         && !resource.data.keys().hasAny(['knowledgeLab'])
+        && postImageOk(request.resource.data)
         && isMyWallet(resource.data.get('address', ''))
       || (changedOnly(['acceptedChangeCount', 'lastChangedAt'])
         && isMyWallet(resource.data.get('address', ''))
@@ -757,29 +792,22 @@ service cloud.firestore {
             || (request.resource.data.settlementStatus == 'treasury_review'
                 && request.resource.data.get('rewardPolicy', '') == 'emuer-v2-treasury-1'
                 && request.resource.data.get('bounty', 0) == 1));
+      /* 回答が付いた数（いちばん多い書き込み）を先に見る。採用の形は、
+         これまでの形（募集者の残高から）と v2（運営トレジャリー）の2通り。
+         形を先に決めてから、重い本人確認を1回だけする。 */
       allow update: if signedIn() && (
-        (isMyWallet(resource.data.get('author', '')) && changedOnly([
-          'status', 'acceptedAnswerId', 'acceptedAnswerAuthor', 'awardedAt', 'settlementStatus'
-        ])
-          && request.resource.data.status == 'awarded'
-          && request.resource.data.settlementStatus == 'pending_distribution'
-          && resource.data.status == 'open'
-          && validKnowledgeAdoption(request.resource.data)
-          && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.requestId == requestId
-          && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.answerAuthor == request.resource.data.acceptedAnswerAuthor)
-        /* v2 の採用：募集中の募集だけ。運営トレジャリーの確認待ちにする */
-        || (isMyWallet(resource.data.get('author', '')) && resource.data.status == 'open'
-          && changedOnly([
-            'status', 'acceptedAnswerId', 'acceptedAnswerAuthor', 'awardedAt', 'settlementStatus', 'rewardPolicy'
-          ])
-          && request.resource.data.status == 'awarded'
-          && request.resource.data.settlementStatus == 'treasury_review'
-          && validKnowledgeAdoption(request.resource.data)
-          && request.resource.data.rewardPolicy == 'emuer-v2-treasury-1'
-          && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.requestId == requestId
-          && getAfter(/databases/$(database)/documents/knowledge_answers/$(request.resource.data.acceptedAnswerId)).data.answerAuthor == request.resource.data.acceptedAnswerAuthor)
-        || (changedOnly(['answerCount'])
+        (changedOnly(['answerCount'])
           && request.resource.data.answerCount == resource.data.answerCount + 1)
+        || (resource.data.status == 'open'
+          && request.resource.data.status == 'awarded'
+          && ((request.resource.data.settlementStatus == 'pending_distribution'
+                && changedOnly(['status', 'acceptedAnswerId', 'acceptedAnswerAuthor', 'awardedAt', 'settlementStatus']))
+              /* v2 の採用：募集中の募集だけ。運営トレジャリーの確認待ちにする */
+              || (request.resource.data.settlementStatus == 'treasury_review'
+                && request.resource.data.get('rewardPolicy', '') == 'emuer-v2-treasury-1'
+                && changedOnly(['status', 'acceptedAnswerId', 'acceptedAnswerAuthor', 'awardedAt', 'settlementStatus', 'rewardPolicy'])))
+          && isMyWallet(resource.data.get('author', ''))
+          && adoptionLinked(requestId, request.resource.data))
       );
       allow delete: if isMyWallet(resource.data.get('author', '')) && resource.data.status == 'open';
     }
@@ -793,25 +821,31 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.status == 'open'
         && get(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.author == request.resource.data.requestAuthor;
       allow update: if signedIn()
-        && isMyWallet(get(/databases/$(database)/documents/knowledge_requests/$(resource.data.requestId)).data.author)
         && changedOnly(['status', 'acceptedAt'])
         && resource.data.status == 'submitted'
-        && distinctKnowledgePeople(resource.data.requestAuthor, resource.data.answerAuthor)
-        && request.resource.data.status == 'accepted';
+        && request.resource.data.status == 'accepted'
+        && isMyWallet(get(/databases/$(database)/documents/knowledge_requests/$(resource.data.requestId)).data.author)
+        && distinctKnowledgePeople(resource.data.requestAuthor, resource.data.answerAuthor);
       allow delete: if false;
+    }
+
+    /* 懸賞の受け取りが、採用したあとの募集と一致すること（募集は1回だけ読む） */
+    function claimMatchesAward(c, r) {
+      return r.status == 'awarded'
+        && r.settlementStatus == 'pending_distribution'
+        && c.requestAuthor == r.author
+        && c.recipient == r.acceptedAnswerAuthor
+        && c.amount == r.bounty;
     }
 
     match /emuer_bounty_claims/{claimId} {
       allow read: if signedIn();
       allow create: if signedIn()
-        && isMyWallet(request.resource.data.get('requestAuthor', ''))
         && request.resource.data.status == 'pending'
-        && distinctKnowledgePeople(request.resource.data.requestAuthor, request.resource.data.recipient)
-        && getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.status == 'awarded'
-        && getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.settlementStatus == 'pending_distribution'
-        && request.resource.data.requestAuthor == getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.author
-        && request.resource.data.recipient == getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.acceptedAnswerAuthor
-        && request.resource.data.amount == getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data.bounty;
+        && claimMatchesAward(request.resource.data,
+             getAfter(/databases/$(database)/documents/knowledge_requests/$(request.resource.data.requestId)).data)
+        && isMyWallet(request.resource.data.get('requestAuthor', ''))
+        && distinctKnowledgePeople(request.resource.data.requestAuthor, request.resource.data.recipient);
       allow update, delete: if false;
     }
 
@@ -1577,98 +1611,104 @@ service cloud.firestore {
 
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
     match /{coll}/{document=**} {
-      /* 未使用の旧コレクションも汎用許可へ漏らさない。 */
+      /* 未使用の旧コレクションも汎用許可へ漏らさない。
+         一覧は「in」1回で照らす。以前は「coll != '…'」を80近く並べていて、
+         書き込みの文書ごとにそれを全部数えていた。回答（回数の記録・回答・募集の
+         3件を一度に書く）が、1回の書き込みで評価できる式の上限（1000）を
+         超えて断られていた（2026-10-24）。中身（どれを通さないか）は同じ。 */
       allow read, write: if !coll.matches('knowledge_lab_.*')
-        && coll != 'sp_members'
-        && coll != 'sp_votes'
-        && coll != 'sp_quests'
-        && coll != 'sp_quest_counters'
-        && coll != 'sp_quest_numbers'
-        && coll != 'sp_quest_certificates'
-        /* 限定星。運営が配り、サーバーだけが書く。
-           ここに入れないと、包括許可のほうで誰でも自分に星を書けてしまい、
-           そのままNFTまで発行できてしまう。 */
-        && coll != 'sp_stars'
         /* EMUER v2 の予算・貢献・報酬・認可履歴はサーバー専用。
            Admin SDK は Rules を経由しない。 */
         && !coll.matches('emuer_v2_.*')
         /* みてみる（商品・注文・使った送金）。お金の記録なのでサーバー専用。
            ここに入れないと、誰でも自分の注文を「支払い済み」に書けてしまう。 */
         && !coll.matches('mitemiru_.*')
-        && coll != 'sp_tasks'
-        && coll != 'sp_wisdom'
-        && coll != 'sp_park'
-        && coll != 'sp_trust'
-        && coll != 'sp_guilds'
-        && coll != 'sp_guild_members'
-        && coll != 'sp_treasury'
-        && coll != 'sp_docs'
-        /* SchoolPark ID の一式。汎用許可へ漏らさない。 */
-        && coll != 'sp_identities'
-        && coll != 'sp_auth_links'
-        && coll != 'sp_link_tickets'
-        && coll != 'sp_identity_duplicates'
-        && coll != 'sp_identity_audit'
-        && coll != 'paid_users'
-        && coll != 'emuer_offchain'
-        && coll != 'emuer_offchain_ledger'
-        && coll != 'ches_accounts'
-        && coll != 'ches_verified_accounts'
-        && coll != 'rank_badges'
-        && coll != 'evolve_users'
-        && coll != 'sp_stats'
-        && coll != 'sp_entrants'
-        && coll != 'sp_brand_entrants'
-        && coll != 'sp_pass_logs'
-        && coll != 'sp_paid_pass'
-        && coll != 'sp_free_pass'
-        && coll != 'sp_activity_limits'
-        && coll != 'ches_wallets'
-        && coll != 'posts'
-        && coll != 'knowledge_drafts'
-        && coll != 'post_good_impacts'
-        && coll != 'post_changes'
-        && coll != 'knowledge_requests'
-        && coll != 'knowledge_answers'
-        && coll != 'emuer_bounty_claims'
-        && coll != 'ichinichi_days'
-        && coll != 'ichinichi_goods'
-        && coll != 'ichinichi_reports'
-        && coll != 'ichinichi_adopts'
-        && coll != 'scheduled_posts'
-        && coll != 'sp_notifications'
-        && coll != 'room1_contents'
-        && coll != 'room1_submissions'
-        && coll != 'contact_submissions'
-        && coll != 'user_profiles'
-        && coll != 'emuer_rate'
-        && coll != 'airdrop_registrations'
-        && coll != 'secret_door_rewards'
-        && coll != 'monthly_distributions'
-        && coll != 'bonus_rewards'
-        // 個別ルールの契約・利用枠・招待の制限を包括許可で上書きしない。
-        && coll != 'entitlements'
-        && coll != 'plan_usage'
-        && coll != 'plan_counts'
-        && coll != 'sp_invite_codes'
-        && coll != 'subscriptions'
-        && coll != 'billing_events'
-        && coll != 'refund_requests'
-        && coll != 'kyc_submissions'
-        && coll != 'dialogue_sessions'
-        && coll != 'dialogue_slots'
-        && coll != 'admin_audit_logs'
-        && coll != 'emu_feedback'
-        && coll != 'discussion_conclusions'
-        && coll != 'discussion_rooms'
-        && coll != 'member_profiles'
-        && coll != 'camellia_users'
-        && coll != 'camellia_admin'
-        && coll != 'camellia_community'
-        && coll != 'camellia_reports'
         /* Camellia のログイン記録（LINE・Passport との対応表、引換券）。サーバー専用。
            誰でも書けると、引換券を自作して他人の Camellia アカウントへ入れてしまう。 */
-        && !coll.matches('camellia_auth_.*');
+        && !coll.matches('camellia_auth_.*')
+        && !(coll in [
+              'sp_members',
+              'sp_votes',
+              'sp_quests',
+              'sp_quest_counters',
+              'sp_quest_numbers',
+              'sp_quest_certificates',
+              /* 限定星。運営が配り、サーバーだけが書く。
+                 ここに入れないと、包括許可のほうで誰でも自分に星を書けてしまい、
+                 そのままNFTまで発行できてしまう。 */
+              'sp_stars',
+              'sp_tasks',
+              'sp_wisdom',
+              'sp_park',
+              'sp_trust',
+              'sp_guilds',
+              'sp_guild_members',
+              'sp_treasury',
+              'sp_docs',
+              /* SchoolPark ID の一式。汎用許可へ漏らさない。 */
+              'sp_identities',
+              'sp_auth_links',
+              'sp_link_tickets',
+              'sp_identity_duplicates',
+              'sp_identity_audit',
+              'paid_users',
+              'emuer_offchain',
+              'emuer_offchain_ledger',
+              'ches_accounts',
+              'ches_verified_accounts',
+              'rank_badges',
+              'evolve_users',
+              'sp_stats',
+              'sp_entrants',
+              'sp_brand_entrants',
+              'sp_pass_logs',
+              'sp_paid_pass',
+              'sp_free_pass',
+              'sp_activity_limits',
+              'ches_wallets',
+              'posts',
+              'knowledge_drafts',
+              'post_good_impacts',
+              'post_changes',
+              'knowledge_requests',
+              'knowledge_answers',
+              'emuer_bounty_claims',
+              'ichinichi_days',
+              'ichinichi_goods',
+              'ichinichi_reports',
+              'ichinichi_adopts',
+              'scheduled_posts',
+              'sp_notifications',
+              'room1_contents',
+              'room1_submissions',
+              'contact_submissions',
+              'user_profiles',
+              'emuer_rate',
+              'airdrop_registrations',
+              'secret_door_rewards',
+              'monthly_distributions',
+              'bonus_rewards',
+              // 個別ルールの契約・利用枠・招待の制限を包括許可で上書きしない。
+              'entitlements',
+              'plan_usage',
+              'plan_counts',
+              'sp_invite_codes',
+              'subscriptions',
+              'billing_events',
+              'refund_requests',
+              'kyc_submissions',
+              'dialogue_sessions',
+              'dialogue_slots',
+              'admin_audit_logs',
+              'emu_feedback',
+              'discussion_conclusions',
+              'discussion_rooms',
+              'member_profiles',
+              'camellia_users',
+              'camellia_admin',
+              'camellia_community',
+              'camellia_reports'
+            ]);
     }
   }
 }

@@ -2,6 +2,19 @@
 const EMUER_V2_API="https://emu-realtime.onrender.com/api/emuer/v2";
 const EMUER_V2_ABI=["function claimReward(bytes32,uint256,uint256,bytes) returns (uint256)"];
 let emuerV2Config=null;
+/* EMUER v2 の設定（/config）は、このページで1回だけ読んで分け合う。
+   前は下で読み込む6つの部品がそれぞれ読みに行き、知識の募集の部品は
+   0.5秒ごとに読み直していた。Render が起きるまでの数十秒、同じ問い合わせが
+   何十本も積み上がっていた。返ってきたら5分は使い回す。失敗したら次に読み直す。
+   読めたが断られた（!ok）ときは null。 */
+window.emuerV2ConfigOnce=function(){
+  const now=Date.now(),c=window.__emuerV2Config;
+  if(c&&now-c.at<300000)return c.promise;
+  const promise=fetch(EMUER_V2_API+"/config").then(r=>r.json().then(v=>r.ok?v:null));
+  window.__emuerV2Config={at:now,promise};
+  promise.catch(()=>{if(window.__emuerV2Config&&window.__emuerV2Config.promise===promise)window.__emuerV2Config=null;});
+  return promise;
+};
 const emuerReflectionScript=document.createElement("script");
 emuerReflectionScript.src="/change-reflection-ui.js";
 document.head.appendChild(emuerReflectionScript);
@@ -184,7 +197,7 @@ async function claimEmuV2LoginReward(){
     alert(e.message||"ログイン報酬の受取に失敗しました");
   }
 }
-window.addEventListener("load",async()=>{try{const r=await fetch(EMUER_V2_API+"/config"),c=await r.json();if(!r.ok||!c.enabled||Number(c.chainId)!==137)return;emuerV2Config=c;wsAddWalletButton();}catch(_){}});
+window.addEventListener("load",async()=>{try{const c=await window.emuerV2ConfigOnce();if(!c||!c.enabled||Number(c.chainId)!==137)return;emuerV2Config=c;wsAddWalletButton();}catch(_){}});
 /* 毎日のぶんは、受け取りの modal を開いたときに wsDaily() が読む。
    ここで先に読むと、開いていない人のぶんまで毎回サーバーに聞くことになる。 */
 window.addEventListener("emu-reaction-result",async e=>{const d=e?.detail;if(!emuerV2Config?.enabled||!d?.ok||!["good","change"].includes(d.action))return;try{await fetch(EMUER_V2_API+"/activity/reaction",{method:"POST",headers:await wsHeaders(false),body:JSON.stringify({postId:d.postId,action:d.action,address:wsAccount()})});}catch(_){}});

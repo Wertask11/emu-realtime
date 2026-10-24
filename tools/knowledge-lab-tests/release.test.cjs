@@ -43,6 +43,15 @@ test('light-plan native answer still fits Rules document budget and existing mon
  const rid=(await f.call('POST','/requests','alice',requestBody('light-request'))).body.id,db=await client('bob'),a=actor('bob'),d=new Date(Date.now()+9*3600000),usage=a.uid+'_r_m'+d.getUTCFullYear()+'-'+(d.getUTCMonth()+1),prior=(await f.db.collection('plan_usage').doc(usage).get()).data(),b=fb.writeBatch(db);
  b.set(fb.doc(db,'plan_usage',usage),{answer:(prior.answer||0)+1},{merge:true});b.set(fb.doc(db,'knowledge_answers','light-client-answer'),{...answerBody('unused'),requestId:rid,requestAuthor:actor('alice').walletAddress,answerAuthor:a.walletAddress,status:'submitted',createdAt:new Date()});b.update(fb.doc(db,'knowledge_requests',rid),{answerCount:1});await b.commit();assert.equal((await f.db.collection('knowledge_answers').doc('light-client-answer').get()).data().status,'submitted');
 });
+test('official-pass holder without a grant can also answer within the Rules document budget',async()=>{
+ const a=actor('bob'),acc=f.users.bob.account;
+ await f.db.collection('entitlements').doc(f.users.bob.uid).delete();
+ for(const v of new Set([acc.walletAddress,String(acc.walletAddress).toLowerCase(),acc.chesAddress,String(acc.chesAddress||'').toLowerCase()].filter(Boolean)))await f.db.collection('paid_users').doc(v).set({paid:true,source:'emulator-only'});
+ const rid=(await f.call('POST','/requests','alice',requestBody('pass-request'))).body.id,db=await client('bob'),d=new Date(Date.now()+9*3600000),usage=a.uid+'_r_m'+d.getUTCFullYear()+'-'+(d.getUTCMonth()+1),prior=(await f.db.collection('plan_usage').doc(usage).get()).data()||{},b=fb.writeBatch(db);
+ b.set(fb.doc(db,'plan_usage',usage),{answer:(prior.answer||0)+1},{merge:true});b.set(fb.doc(db,'knowledge_answers','pass-client-answer'),{...answerBody('unused'),requestId:rid,requestAuthor:actor('alice').walletAddress,answerAuthor:a.walletAddress,status:'submitted',createdAt:new Date()});b.update(fb.doc(db,'knowledge_requests',rid),{answerCount:1});await b.commit();
+ assert.equal((await f.db.collection('knowledge_answers').doc('pass-client-answer').get()).data().status,'submitted');
+ await f.db.collection('entitlements').doc(f.users.bob.uid).set({plan:'light',source:'emulator-only',startsAt:new Date(0)});
+});
 test('clients cannot forge Passport attribution in protected reverse aliases',async()=>{
  const db=await client('bob'),key=actor('bob').walletAddress,ref=f.db.collection('ches_wallets').doc(key),old=(await ref.get()).data();
  await assert.rejects(fb.updateDoc(fb.doc(db,'ches_wallets',key),{spid:actor('alice').spid}),e=>e.code==='permission-denied');

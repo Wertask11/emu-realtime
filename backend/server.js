@@ -7,6 +7,7 @@ const { Server } = require("socket.io");
 const { randomUUID } = require("crypto");
 const path = require("path");
 const cors = require("cors");
+const { corsOptions } = require("./cors-policy");
 const ethers = require("ethers");
 const cron = require("node-cron");
 const { ensureVerifiedAccount, accountRouter, activityRouter, awardRankingBadge } = require("./verified-platform");
@@ -29,7 +30,7 @@ const io = new Server(server, {
 // =====================
 // Middleware
 // =====================
-app.use(cors());
+app.use(cors(corsOptions(process.env)));
 app.use((req, res, next) => {
   const contentLength = Number(req.headers["content-length"] || 0);
   if (contentLength > 8 * 1024 * 1024) return res.status(413).json({ error: "PAYLOAD_TOO_LARGE" });
