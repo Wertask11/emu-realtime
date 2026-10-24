@@ -101,8 +101,24 @@
    "function openEmuShopping() {\n  openSpRoom('/schoolpark/dao.html?screen=city', 'SchoolPark City');\n"
   ],
   [
+   "   2026-10-24 オーナー決定：ログインしたら、誰でも Emu に着く。\n   SchoolPark へは、左上の切り替えから行く。\n\n   前は、SchoolPark に入れる人（サーバーが決める）は SchoolPark、\n   入れない人は Emu に着いていた。\n\n   SchoolPark に入れるかどうかは、切り替えたときにすぐ分かるよう、\n   ここで先に聞いておく（待たない）。\n",
+   "   以前は CHES ハブ（4ブランドを選ぶ画面）だった。ハブは廃止したので、\n   入れる人は SchoolPark、入れない人は Emu に直接着く。\n"
+  ],
+  [
+   "  try {\n    const warm = spEnsureSchoolParkAccess(true);\n    if (warm && typeof warm.catch === 'function') warm.catch(function () {});\n  } catch (e) { /* 聞けなくても Emu には着ける */ }\n",
+   "\n  /* SchoolPark に入れるかはサーバーが決める（公式パスの有無・公開日）。\n     入れる人は SchoolPark へ。\n\n     入口の画面（ロゴ・ログイン）は、行き先が決まってからしまう。\n     前は先にしまっていたので、サーバーの返事を待つあいだ（呼び出し元は\n     12秒で覆いを外す）何も出ていない真っ白な画面になっていた。 */\n  const access = await spEnsureSchoolParkAccess(true);\n"
+  ],
+  [
+   "  chesTidyEntryScreens();\n  if (typeof showEmuToday === 'function') { showEmuToday(); return; }\n",
+   "  chesTidyEntryScreens();\n  if (access && access.allowed) {\n    if (typeof spDaoOpenWhenReady === 'function') await spDaoOpenWhenReady();\n    return;\n  }\n\n  /* 入れない人は Emu へ。\n\n     公式パスを持たない人（先行公開の期間中）や、まだ番号に連携していない\n     別のログイン方法で入った人がここへ来る。\n     Emu は通常営業（BRAND_MAINTENANCE.emu = false）なので誰でも入れる。\n\n     SchoolPark へ行こうとしたときは、これまでどおり\n     spShowSchoolParkUnavailable が理由を出す。 */\n  if (typeof showEmuToday === 'function') { showEmuToday(); return; }\n"
+  ],
+  [
    "  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');\n",
    "  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');\n"
+  ],
+  [
+   "    // ログイン後は Emu へ（chesLandAfterLogin。2026-10-24 から）。\n",
+   "    // ログイン後は SchoolPark へ。\n"
   ],
   [
    "  }\n  /* 書き手のプラン名（Emu light / plus / pro）。読めなければ付けない（何も出さない） */\n  async function markKnowledgePlans(rows, addrs) {\n    if (!addrs.length || typeof window.emuAuthorPlans !== 'function') return;\n    const r = await _spSoon(window.emuAuthorPlans(addrs), 2500);\n    if (!r || !r.ok) return;\n    rows.forEach(row => { const p = r.value[String(row.address || '').toLowerCase()]; if (p) row.authorPlan = p; });\n  }\n  function knowledgeAuthorAddrs(rows) {\n",
