@@ -7,7 +7,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const root = path.resolve(__dirname, '../..');
 const express = require('../../backend/node_modules/express');
-const { createReizoRouter, generate, contentsFor, redact, enabled, SYSTEM_PROMPT } = require('../../backend/reizo/chat');
+const { createReizoRouter, generate, contentsFor, redact, enabled, SYSTEM_PROMPT, GENERATE_TIMEOUT_MS } = require('../../backend/reizo/chat');
 const knowledge = require('../../backend/reizo/knowledge');
 const faq = require('../../frontend/public/reizo/knowledge');
 const env = { REIZO_GEMINI_ENABLED:'true', GEMINI_API_KEY:'TEST-NOT-A-REAL-KEY', GEMINI_FREE_TIER_CONFIRMED:'true' };
@@ -115,4 +115,10 @@ test('the tutorial guide answers quests and guilds with the same words as the ch
     const mine=ctx.kb.find(x=>x.k[0]===key), chat=faq.items.find(x=>x.k[0]===key);
     assert.equal(mine.a,chat.a,key);
   }
+});
+test('a slow free-tier answer is waited for (not cut off at 12s), and the browser waits longer than the server',()=>{
+  assert.ok(GENERATE_TIMEOUT_MS>=20000);
+  const client=fs.readFileSync(path.join(root,'frontend/public/reizo/chat.js'),'utf8');
+  const browserMs=Number(client.match(/reject\(Object\.assign\(Error\('TIMEOUT'\)[^)]*\)\); \}, (\d+)\)/)[1]);
+  assert.ok(browserMs>GENERATE_TIMEOUT_MS,'the browser must not give up before the server answers');
 });

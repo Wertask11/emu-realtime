@@ -11419,9 +11419,13 @@ async function spReizoSend() {
   try {
     const reply = await window.ReizoChat.ask(q);
     _spReizoAppendMsg(reply, false);
-  } catch (_) {
+  } catch (error) {
     // Never show an in-flight answer in a different signed-in session.
     if (userAtSend !== (window.auth && window.auth.currentUser)) return;
+    // A slow or busy moment is not "AI is unavailable": say so, so she just sends again.
+    const category = error && error.category;
+    if (category === 'timeout') { _spReizoAppendMsg('ごめんね、考えるのに時間がかかりすぎちゃった🧊\n少しだけ待って、もう一度送ってみてね。', false); return; }
+    if (category === 'rate_limited') { _spReizoAppendMsg('いま少し混んでいるみたい🧊\n1分くらい待ってから、もう一度送ってみてね。', false); return; }
     const msgDiv = _spReizoAppendMsg('いまはAIの会話を使えないみたい🧊\n画面の案内や、いつもの質問には答えられるよ。くわしくは問い合わせフォームから聞いてみてね！', false);
     const btn = document.createElement('button');
     btn.className = 'sp-reizo-contact-btn';

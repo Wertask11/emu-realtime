@@ -32,13 +32,16 @@ function enabled(env) {
   return env.REIZO_GEMINI_ENABLED === 'true' && !!env.GEMINI_API_KEY
     && env.GEMINI_FREE_TIER_CONFIRMED === 'true';
 }
+// The free-tier model sometimes takes well over 10s (a long or emotional question). 12s cut real
+// answers off as 504; the browser waits a little longer than this (frontend/public/reizo/chat.js).
+const GENERATE_TIMEOUT_MS = 25000;
 function classify(error) {
   if (error?.status === 429) return 'rate_limited';
   if (['AbortError', 'TimeoutError'].includes(error?.name)) return 'timeout';
   if (error instanceof TypeError) return 'network';
   return 'provider_error';
 }
-async function generate({ env, contents, systemInstruction, fetcher = fetch, timeoutMs = 12000 }) {
+async function generate({ env, contents, systemInstruction, fetcher = fetch, timeoutMs = GENERATE_TIMEOUT_MS }) {
   const model = env.REIZO_GEMINI_MODEL || env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
   if (!/^[a-zA-Z0-9.-]{1,80}$/.test(model)) throw Error('INVALID_MODEL');
   const response = await fetcher(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -93,4 +96,4 @@ function createReizoRouter({ env = process.env, requireFirebaseUser, rateLimit, 
     });
   return router;
 }
-module.exports = { createReizoRouter, generate, contentsFor, redact, enabled, classify, SYSTEM_PROMPT };
+module.exports = { createReizoRouter, generate, contentsFor, redact, enabled, classify, SYSTEM_PROMPT, GENERATE_TIMEOUT_MS };
