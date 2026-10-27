@@ -27,7 +27,8 @@
     var page = currentPage();
     var timer;
     var deadline = new Promise(function(_, reject) {
-      timer = setTimeout(function() { controller.abort(); reject(Error('TIMEOUT')); }, 15000);
+      // A little longer than the server's own limit (backend/reizo/chat.js GENERATE_TIMEOUT_MS = 25s).
+      timer = setTimeout(function() { controller.abort(); reject(Object.assign(Error('TIMEOUT'), { category:'timeout' })); }, 30000);
     });
     try {
       return await Promise.race([deadline, (async function() {
@@ -38,7 +39,12 @@
           signal:controller.signal,
           body:JSON.stringify({ message:message, history:history.slice(-6), currentPage:page })
         });
-        if (!response.ok) throw Error('AI_UNAVAILABLE');
+        if (!response.ok) {
+          // Only the server's short category (timeout / rate_limited / ...) is read, to choose the words shown.
+          var category = '';
+          try { category = String((await response.json()).category || ''); } catch (_) {}
+          throw Object.assign(Error('AI_UNAVAILABLE'), { category:category });
+        }
         var data = await response.json();
         if (!data || data.provider !== 'gemini' || typeof data.reply !== 'string' || !data.reply.trim()) throw Error('EMPTY_REPLY');
         if (controller.signal.aborted || !window.auth.currentUser || window.auth.currentUser.uid !== user.uid) throw Error('SESSION_CHANGED');

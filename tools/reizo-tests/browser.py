@@ -13,7 +13,9 @@ with sync_playwright() as p:
    if '/api/reizo/chat' in r.request.url:
     body=r.request.post_data_json;calls.append(body)
     if mode['value']=='hold':held.append(r);return
-    if mode['value']=='fail':return r.fulfill(status=429,content_type='application/json',body='{"category":"rate_limited"}')
+    if mode['value']=='fail':return r.fulfill(status=502,content_type='application/json',body='{"category":"provider_error"}')
+    if mode['value']=='busy':return r.fulfill(status=429,content_type='application/json',body='{"category":"rate_limited"}')
+    if mode['value']=='slow':return r.fulfill(status=504,content_type='application/json',body='{"category":"timeout"}')
     reply='<img src=x onerror=alert(1)> ぼくと一緒に考えてみよう🧊' if mode['value']=='html' else 'ぼくと一緒に考えてみよう🧊'
     return r.fulfill(status=200,content_type='application/json',body=json.dumps({'reply':reply,'provider':'gemini'},ensure_ascii=False))
    if r.request.url.startswith(origin+'/'):return r.continue_()
@@ -32,6 +34,9 @@ with sync_playwright() as p:
   send('何からやればいい？');g.wait_for_function('document.querySelectorAll(".sp-reizo-typing").length===0');assert calls[-1]['currentPage']=='quest'
   mode['value']='fail';send('月面で麺をゆでたい');expect(g.locator('#spReizoMessages')).to_contain_text('いまはAIの会話を使えない');expect(g.locator('.sp-reizo-contact-btn').last).to_be_visible()
   count=len(calls);send('Questって何？');expect(g.locator('#spReizoMessages .sp-reizo-msg-bot').last).to_contain_text('クエストは「仕事」');assert len(calls)==count
+  # A slow or busy moment says "send again", not "AI is unavailable".
+  mode['value']='slow';send('子どもたちに会いたい');expect(g.locator('#spReizoMessages .sp-reizo-msg-bot').last).to_contain_text('もう一度送ってみてね');expect(g.locator('#spReizoMessages .sp-reizo-msg-bot').last).not_to_contain_text('使えない')
+  mode['value']='busy';send('月の石を拾いたい');expect(g.locator('#spReizoMessages .sp-reizo-msg-bot').last).to_contain_text('少し混んでいる')
   mode['value']='html';send('宇宙で何を食べる？');expect(g.locator('#spReizoMessages .sp-reizo-msg-bot').last).to_contain_text('<img');assert g.locator('#spReizoMessages .sp-reizo-bubble img').count()==0
   # A pending AI request leaves local rules and the rest of the app usable.
   mode['value']='hold';send('月の景色を想像したい');expect(g.locator('[aria-label="考え中…"]')).to_be_visible()

@@ -127,6 +127,10 @@
   [
    "      await Promise.all([markKnowledgePassHolders(rows, authorAddrs), markKnowledgePlans(rows, authorAddrs)]);\n",
    "      await markKnowledgePassHolders(rows, authorAddrs);\n"
+  ],
+  [
+   "  } catch (error) {\n    // Never show an in-flight answer in a different signed-in session.\n    if (userAtSend !== (window.auth && window.auth.currentUser)) return;\n    // A slow or busy moment is not \"AI is unavailable\": say so, so she just sends again.\n    const category = error && error.category;\n    if (category === 'timeout') { _spReizoAppendMsg('ごめんね、考えるのに時間がかかりすぎちゃった🧊\\n少しだけ待って、もう一度送ってみてね。', false); return; }\n    if (category === 'rate_limited') { _spReizoAppendMsg('いま少し混んでいるみたい🧊\\n1分くらい待ってから、もう一度送ってみてね。', false); return; }\n",
+   "  } catch (_) {\n    // Never show an in-flight answer in a different signed-in session.\n    if (userAtSend !== (window.auth && window.auth.currentUser)) return;\n"
   ]
  ],
  "knowledge.html": [

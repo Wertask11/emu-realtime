@@ -31,3 +31,29 @@ test('sign-out cancels in-flight text and no stale answer is returned',async()=>
  let finish;const {chat,window}=client(async()=>new Promise(r=>{finish=r;}));
  const pending=chat.ask('hi');await new Promise(r=>setImmediate(r));window.auth.currentUser=null;chat.reset();finish({ok:true,json:async()=>({reply:'PRIVATE_OLD_REPLY',provider:'gemini'})});await assert.rejects(pending,/SESSION_CHANGED/);
 });
+test('the server category (timeout / rate_limited) reaches the screen, so it can say "send again" instead of "unavailable"',async()=>{
+ for(const category of ['timeout','rate_limited']){
+  const {chat}=client(async()=>({ok:false,json:async()=>({category})}));
+  await assert.rejects(chat.ask('hi'),error=>error.message==='AI_UNAVAILABLE'&&error.category===category);
+ }
+ const {chat}=client(async()=>({ok:false,json:async()=>{throw Error('not json');}}));
+ await assert.rejects(chat.ask('hi'),error=>error.category==='');
+ const hung=client(async()=>new Promise(()=>{}),{shortTimeout:true});
+ await assert.rejects(hung.chat.ask('hi'),error=>error.message==='TIMEOUT'&&error.category==='timeout');
+});
+test('the chat panel says "send again" for a slow or busy moment, and "unavailable" (with the form) only otherwise',async()=>{
+ const {grab}=require('../year-goals-tests/extract.cjs');
+ const send=grab(fs.readFileSync(path.join(__dirname,'../../frontend/public/index.html'),'utf8'),'spReizoSend');
+ for(const [category,expected,form] of [['timeout','もう一度送ってみてね',false],['rate_limited','少し混んでいる',false],['provider_error','いまはAIの会話を使えない',true],[undefined,'いまはAIの会話を使えない',true]]){
+  const shown=[];let buttons=0;const user={uid:'U'};
+  const ctx={window:{auth:{currentUser:user},ReizoChat:{ask:async()=>{throw Object.assign(Error('AI_UNAVAILABLE'),category?{category}:{});}}},
+   document:{getElementById:()=>({value:'子どもたちに会いたい'}),createElement:()=>({})},
+   _spReizoAppendMsg:(text)=>{shown.push(text);return {querySelector:()=>({appendChild:()=>{buttons++;}})};},
+   _matchReizoSkill:()=>null,spReizoAnswer:()=>null,_spReizoShowTyping:()=>({remove(){}}),_openReizoContactForm(){}};
+  vm.runInNewContext(send+'\nthis.spReizoSend=spReizoSend;',ctx);
+  await ctx.spReizoSend();
+  assert.ok(shown.at(-1).includes(expected),`${category}: ${shown.at(-1)}`);
+  assert.equal(buttons>0,form,`${category}: the contact form only when AI is really unavailable`);
+  if(!form)assert.ok(!shown.at(-1).includes('使えない'));
+ }
+});
