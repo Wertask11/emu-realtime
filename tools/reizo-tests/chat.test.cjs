@@ -37,11 +37,15 @@ test('all existing FAQ data and exact matcher outputs are preserved', () => {
   // Reviewed answer rewrites (ca588f7 on 10/19; the quest tax note on 10/24).
   // Keywords, order and every other answer stay byte-for-byte the same.
   const rewritten=['ches','クエスト','ギルド','スマホ','チュートリアル','問い合わせ'];
+  // Reviewed rename (#232, 10/27): the plan names became 「Emu for SchoolPark light/plus/pro」; nothing else in these answers changed.
+  const renamed=['プラン','公式パス'],rename=text=>text.replace(/Emu (light|plus|pro)/g,'Emu for SchoolPark $1');
   assert.equal(faq.items.length,kb.length);
   const now=new Map();
   kb.forEach((item,i)=>{
     assert.deepEqual(faq.items[i].k,item.k);
-    if(rewritten.includes(item.k[0])) assert.notEqual(faq.items[i].a,''); else assert.equal(faq.items[i].a,item.a);
+    if(rewritten.includes(item.k[0])) assert.notEqual(faq.items[i].a,'');
+    else if(renamed.includes(item.k[0])) {assert.notEqual(rename(item.a),item.a);assert.equal(faq.items[i].a,rename(item.a));}
+    else assert.equal(faq.items[i].a,item.a);
     now.set(item.a,faq.items[i].a);
   });
   for(const item of faq.items) for(const keyword of item.k){const was=ctx.answer(keyword);assert.equal(faq.answer(keyword),was===null?null:now.get(was));}
