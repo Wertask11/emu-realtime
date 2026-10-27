@@ -5,7 +5,7 @@
  *
  * ここが緩むと、light をただで何度でも受け取れたり、払っている人や運営が渡した
  * 付与を短い体験で上書きしてしまったりする。確かめること:
- *   ・11/1 より前は受け取れない
+ *   ・始まる時刻（2026-10-27 0:00 JST）より前は受け取れない
  *   ・見学の人だけが、1人1回、7日だけ受け取れる（連携した別のログインでも2回目は無い）
  *   ・生きている付与（運営・Founding など）や契約・公式パスがある人には渡さない
  *   ・延長はパスポートIDのある人が体験のあとに1回だけ申し込め、運営だけが決められる
@@ -64,7 +64,7 @@ async function setup({ at = GIFT_STARTS_AT + DAY, spids = {} } = {}) {
   return { db, call, grant, plan, close, advance: d => { clock += d; } };
 }
 
-test("before 11/1 the gift is closed and cannot be claimed", async () => {
+test("before the start the gift is closed and cannot be claimed", async () => {
   const t = await setup({ at: GIFT_STARTS_AT - 1 });
   try {
     const s = await t.call("GET", "/gift/status", { user: "u1" });

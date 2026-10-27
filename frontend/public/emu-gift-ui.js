@@ -1,4 +1,4 @@
-/* 運営からのギフト（11/1から）。サーバーは backend/emu-gift.js。
+/* 運営からのギフト（2026-10-27から）。サーバーは backend/emu-gift.js。
 
    見学（無料）の人は、画面上の「🎁 ギフト」から Emu for SchoolPark light を1週間ためせる。
    そのあと SchoolPark パスポートID を運営に送ると、運営が確かめて、さらに1か月使える。
@@ -8,8 +8,8 @@
 (function () {
   'use strict';
   var API = 'https://emu-realtime.onrender.com/api/emu-gift';
-  /* サーバーの GIFT_STARTS_AT（新プランの施行日）と必ず同じにすること。 */
-  var EMU_GIFT_FROM = Date.parse('2026-11-01T00:00:00+09:00');
+  /* サーバーの GIFT_STARTS_AT と必ず同じにすること。 */
+  var EMU_GIFT_FROM = Date.parse('2026-10-27T00:00:00+09:00');
   var state = null, loadedAt = 0, loading = null;
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -104,7 +104,7 @@
     return head + body + (message ? '<p class="emu-gift-message" role="alert">' + esc(message) + '</p>' : '');
   }
   var ERRORS = {
-    NOT_STARTED: 'ギフトは11月1日から受け取れます。',
+    NOT_STARTED: 'ギフトはまだ受け取れません。始まるまで少し待ってください。',
     ALREADY_CLAIMED: 'ギフトはもう受け取っています（1人1回です）。',
     ALREADY_MEMBER: 'いまのプランで、もう投稿できます。ギフトは見学（無料）の方向けです。',
     SIGN_IN_REQUIRED: 'LINE・Google・メール・ウォレットのどれかでログインしてから受け取ってください。',
@@ -169,7 +169,7 @@
   // いま使えるもの（entitlement）が読めた＝ログインが分かったときに、ギフトの様子も見る。
   window.addEventListener('emu-entitlement', function () { refresh(false); });
   if (window.emuEntitlement) refresh(false);
-  // 11/1 0:00 をまたいで開いている画面でも、時刻が来たら出す。
+  // 始まる時刻をまたいで開いている画面でも、時刻が来たら出す。
   if (Date.now() < EMU_GIFT_FROM && EMU_GIFT_FROM - Date.now() < 24 * 60 * 60 * 1000)
     setTimeout(function () { refresh(true).catch(function () {}); }, EMU_GIFT_FROM - Date.now() + 1000);
   window.emuGiftRefresh = refresh;
