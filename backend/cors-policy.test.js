@@ -5,6 +5,7 @@ const { originAllowed } = require("./cors-policy");
 test("our own pages can call the server", () => {
   for (const o of [
     "https://schoolpark-emu.vercel.app",
+    "https://emu-for-schoolpark.vercel.app",
     "https://emu-realtime-qzrq-git-claude-loving-hamilton-3xb95f-school-park.vercel.app",
     "https://emu-realtime-qzrq-k8x9zmpow-school-park.vercel.app",
     "https://camellia-beta.vercel.app",
@@ -23,6 +24,7 @@ test("other sites cannot use the server from a browser", () => {
   for (const o of [
     "https://evil.example", "https://schoolpark-emu.vercel.app.evil.example",
     "http://schoolpark-emu.vercel.app", "https://evil-schoolpark-emu.vercel.app",
+    "https://emu-for-schoolpark.vercel.app.evil.example", "http://emu-for-schoolpark.vercel.app",
     "https://camellia-beta.vercel.app.evil.example", "null",
     "https://emu-realtime-evil.vercel.app", "https://emu-realtime-qzrq-x-other-team.vercel.app", "http://localhost.evil.example"
   ]) assert.equal(originAllowed(o, {}), false, o);

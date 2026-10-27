@@ -21,7 +21,9 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "https://schoolpark-emu.vercel.app",
+    /* API と同じ許可リストを使う（旧URL・新URL Emu for SchoolPark・プレビュー）。
+       ここだけ旧URL固定だと、新URLから開いた人の広場チャットがつながらない。 */
+    origin: corsOptions(process.env).origin,
     methods: ["GET", "POST"],
     credentials: true
   }

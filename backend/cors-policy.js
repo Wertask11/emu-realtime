@@ -9,6 +9,8 @@
    足りないときは環境変数 CORS_EXTRA_ORIGINS にカンマ区切りで足す。 */
 const PATTERNS = [
   /^https:\/\/schoolpark-emu\.vercel\.app$/,
+  /* 新しい名前（Emu for SchoolPark）の URL。旧 URL は移行が終わるまで残す。 */
+  /^https:\/\/emu-for-schoolpark\.vercel\.app$/,
   /^https:\/\/camellia-beta\.vercel\.app$/,
   /^https:\/\/school-park-homepage\.vercel\.app$/,
   /* プレビュー。末尾がチーム名（school-park）のものだけ。
