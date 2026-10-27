@@ -42,7 +42,7 @@ test('知識を読むの一覧は、書き手が paid_users に載っていれ�
   assert.ok(i > 0 && j > i, '送る前に印を付けていない');
 });
 
-/* 2026-10-24 オーナー決定：「無料利用者」は出さない。公式パスとプラン名（Emu light /
+/* 2026-10-24 オーナー決定：「無料利用者」は出さない。公式パスとプラン名（Emu for SchoolPark light /
    plus / pro）を、あるものだけ出す（両方あれば両方）。 */
 const knowledge = fs.readFileSync(path.join(__dirname, '../../frontend/public/knowledge.html'), 'utf8');
 const i18n = fs.readFileSync(path.join(__dirname, '../../frontend/public/emu-i18n-pages.js'), 'utf8');
@@ -55,7 +55,7 @@ test('「無料利用者」はどこにも出さない', () => {
 test('公式パスとプラン名は、あるものだけ出す（両方あれば両方）', () => {
   const card = knowledge.slice(knowledge.indexOf('function card(p)'), knowledge.indexOf('function card(p)') + 1400);
   assert.match(card, /\['paid','paidNFT'\]\.includes\(p\.userType\)\?`<span class="access">/);
-  assert.match(card, /\{light:'Emu light',plus:'Emu plus',pro:'Emu pro'\}\)\[p\.authorPlan\]\?`<span class="access plan">/);
+  assert.match(card, /\{light:'Emu for SchoolPark light',plus:'Emu for SchoolPark plus',pro:'Emu for SchoolPark pro'\}\)\[p\.authorPlan\]\?`<span class="access plan">/);
   /* プラン名はサーバーが契約と付与だけで返す。公式パスの plus 相当は入れない */
   assert.match(html, /'https:\/\/emu-realtime\.onrender\.com\/api\/billing\/public-plans'/);
   assert.match(html, /function emuPlanLabel\(plan\)/);

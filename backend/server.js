@@ -21,7 +21,9 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "https://schoolpark-emu.vercel.app",
+    /* API と同じ許可リストを使う（旧URL・新URL Emu for SchoolPark・プレビュー）。
+       ここだけ旧URL固定だと、新URLから開いた人の広場チャットがつながらない。 */
+    origin: corsOptions(process.env).origin,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -1799,7 +1801,7 @@ io.on("connection", (socket) => {
       if (entitlement.enforcing() && !entitlement.atLeast(ent.plan, "light")) {
         socket.emit("room3 denied", {
           error: "PLAN_REQUIRED", required: "light", current: ent.plan,
-          message: "議論への発言は Emu light（月額500円）以上でご利用いただけます。"
+          message: "議論への発言は Emu for SchoolPark light（月額500円）以上でご利用いただけます。"
         });
         return;
       }
@@ -2278,7 +2280,7 @@ app.get("/api/ichinichi/history", requireFirebaseUser, requireOwnAddress, async 
     });
     history.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
-    /* 見られる期間の制限（9/1から）。Emu light は過去30日分まで。
+    /* 見られる期間の制限（9/1から）。Emu for SchoolPark light は過去30日分まで。
        消してはいない。プランを上げると再び見えるようにするため、
        記録そのものは残したまま、返す範囲だけを絞る（保持期間は1年）。 */
     const ent = await entitlement.getEntitlement(req.identity.uid, req.identity.account);
@@ -2320,7 +2322,7 @@ app.get("/api/ichinichi/history", requireFirebaseUser, requireOwnAddress, async 
          プランを上げれば再び見える。 */
       hiddenOlder,
       hiddenNote: hiddenOlder > 0
-        ? "30日より前の記録が " + hiddenOlder + " 日ぶんあります。Emu plus 以上で、また見られるようになります。"
+        ? "30日より前の記録が " + hiddenOlder + " 日ぶんあります。Emu for SchoolPark plus 以上で、また見られるようになります。"
         : null,
       stats: {
         streak,

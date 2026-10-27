@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>プラン・お支払い | SchoolPark・Emu</title>
+<title>プラン・お支払い — Emu for SchoolPark</title>
 <style>
 :root{
   --ink:#1a1840; --muted:#6f6a86; --line:#e6e2dc; --bg:#faf8f5; --card:#fff;
@@ -215,7 +215,7 @@ let parentSession = null;
 try { if (parent !== window && parent.location.origin === location.origin && typeof parent.emuAuthHeaders === "function" && parent.auth) parentSession = parent; } catch (_) {}
 const app = parentSession ? null : initializeApp({
   apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
-  authDomain: "schoolpark-emu.vercel.app",
+  authDomain: (location.hostname === "emu-for-schoolpark.vercel.app" ? "emu-for-schoolpark.vercel.app" : "schoolpark-emu.vercel.app"),
   projectId: "emusch-2a111",
   storageBucket: "emusch-2a111.firebasestorage.app",
   messagingSenderId: "795496371585",
@@ -343,7 +343,7 @@ async function loadBilling() {
   }
   window._emuActivePlan = active ? s.plan : null;
 
-  /* 保証がつくのは Emu pro だけ。ほかのプランでは保証の行も申請欄も出さない。
+  /* 保証がつくのは Emu for SchoolPark pro だけ。ほかのプランでは保証の行も申請欄も出さない。
      出してしまうと、約束していない返金を約束したことになる。 */
   show($("#guaranteeRow"), !!s.guaranteed);
   if (s.guarantee && s.guaranteed) {
@@ -361,7 +361,7 @@ async function loadBilling() {
     show($("#refundForm"), false);
     $("#refundWindow").textContent = "—";
     if ($("#refundNote")) $("#refundNote").textContent =
-      "「語り合える一人」保証は Emu pro（月額10,000円）のみが対象です。";
+      "「語り合える一人」保証は Emu for SchoolPark pro（月額10,000円）のみが対象です。";
   }
   const rs = { pending:"確認中", refunded:"返金済み", rejected:"却下" };
   if (s.refundStatus) $("#refundState").textContent = rs[s.refundStatus] || s.refundStatus;
