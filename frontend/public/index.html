@@ -26090,7 +26090,7 @@ function closeBadgePanel() {
 import {
     getFirestore, initializeFirestore, collection, addDoc, getDocs, query, orderBy, limit, startAfter, onSnapshot,
     doc, updateDoc, setDoc, deleteDoc, increment, where, writeBatch,
-    arrayUnion, getDoc, runTransaction
+    arrayUnion, getDoc, runTransaction, getCountFromServer
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   // 認証機能（CHES Identity：LINE / Google ログイン、MetaMask等で使用）
   import {
@@ -26176,7 +26176,7 @@ import {
   };
   window.fbLib = {
     collection, getDocs, query, orderBy, limit, startAfter, onSnapshot,
-    doc, increment, where, arrayUnion, getDoc, runTransaction,
+    doc, increment, where, arrayUnion, getDoc, runTransaction, getCountFromServer,
     signInAnonymously,
     addDoc:    _spAfterWrite(addDoc),
     updateDoc: _spAfterWrite(updateDoc),
@@ -29149,6 +29149,27 @@ async function sendEmuFeedback() {
      そのまま返していた。その問い合わせは依頼より前に始まっているので、
      たったいま保存した投稿は入っていない。
      いまは、走っているものを待ってから、あらためて読み直す。 */
+  /* 「◯件の知識」に出す実際の投稿数。
+     画面の件数は読み込んだ分（1回20件）しか数えていなかったため、
+     投稿が何件あっても「20件の知識」と出ていた。サーバーで数える。
+     削除済み（tombstone）は一覧に出さないので、数からも引く。
+     数えられなかったときは null を返し、画面は「表示中の件数」に切り替える。 */
+  async function knowledgeTotalCount() {
+    try {
+      const L = window.fbLib;
+      if (!L || typeof L.getCountFromServer !== 'function') return null;
+      const col = L.collection(window.db, 'posts');
+      const [all, removed] = await Promise.all([
+        L.getCountFromServer(col),
+        L.getCountFromServer(L.query(col, L.where('knowledgeLab.tombstone', '==', true)))
+      ]);
+      return Math.max(0, all.data().count - removed.data().count);
+    } catch (e) {
+      console.warn('知識の総数を数えられませんでした', e);
+      return null;
+    }
+  }
+
   async function syncKnowledgeFrame(options) {
     options = options || {};
     if (!knowledgeSyncing) return runKnowledgeSync(options);
@@ -29166,6 +29187,8 @@ async function sendEmuFeedback() {
     const run = (async () => {
       sendKnowledge({ type:'emu-knowledge-loading', append:!!options.append });
       if (!await waitForKnowledgeFirebase()) throw new Error('投稿データの準備に時間がかかっています。');
+      // 総数は一覧の読み込みと並べて数え始める（待ち時間を増やさない）
+      const totalCountRead = options.append ? null : knowledgeTotalCount();
       const account = String(window.connectedAccount || localStorage.getItem('emuWallet') || '').toLowerCase();
       if (!options.append) { knowledgeLastDoc = null; knowledgeHasMore = true; knowledgeShown = 0; }
       if (!knowledgeHasMore && options.append) return;
@@ -29221,6 +29244,8 @@ async function sendEmuFeedback() {
       await _spMonthlyTheme();
       sendKnowledge({
         type:'emu-knowledge-posts', posts:rows, append:!!options.append, hasMore:knowledgeHasMore,
+        /* 実際の投稿数。1ページ目のときだけ数える（続きを読むでは変わらない）。 */
+        totalCount: options.append ? undefined : await totalCountRead,
         /* 見学の範囲で止まったか。止まったことを画面で伝えるために渡す。 */
         guestCapped: guestCapped, guestLimit: GUEST_KNOWLEDGE_LIMIT,
         account,
