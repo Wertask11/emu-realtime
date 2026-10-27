@@ -928,7 +928,7 @@ test('SchoolPark を開いていないときは、何もしない', () => {
     '閉じているのに読みに行く');
 });
 
-test('資格（Emu light など）も取り直す', () => {
+test('資格（Emu for SchoolPark light など）も取り直す', () => {
   /* 管理画面で付けた期限付きの資格が、すぐ効くように。 */
   const i = INDEX.indexOf('async function spDaoRefreshNow');
   const seg = INDEX.slice(i, i + 1400);

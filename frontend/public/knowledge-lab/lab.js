@@ -95,7 +95,7 @@
     ARCHIVED_NOTE_RESTORE_REQUIRED:
       "保管したノートは復元してから編集できます。",
     READER_PLAN_REQUIRED:
-      "見学では新着20件を読めます。続きの知識は既存のEmu light以上で利用できます。",
+      "見学では新着20件を読めます。続きの知識は既存のEmu for SchoolPark light以上で利用できます。",
     LAUNCH_HOLD: "公開準備中です。保存・投稿はまだ利用できません。",
     RULES_NOT_VERIFIED: "データ保護の確認中です。保存・投稿は停止しています。",
     AUTH_REQUIRED: "ログインしてから続けてください。",
@@ -425,7 +425,7 @@
     $("#moreResults").hidden = !data.next;
     status(
       data.guestCapped
-        ? "見学では新着20件から検索しています。それより前の知識は既存のEmu light以上で利用できます。"
+        ? "見学では新着20件から検索しています。それより前の知識は既存のEmu for SchoolPark light以上で利用できます。"
         : "検索結果を表示しました。",
     );
     if (parent === window) history.replaceState(null, "", sharedURL());

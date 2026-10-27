@@ -17,13 +17,13 @@ const membershipPolicy = require("./membership-policy");
    クライアントから渡ってくるのはキー（light/standard/member）だけにする。
    金額を客側に決めさせない。 */
 const PLANS = {
-  light:    { key: "light",    amount: membershipPolicy.PLANS.light.amount, envPrice: "STRIPE_PRICE_LIGHT", label: "Emu light" },
-  plus:     { key: "plus",     amount: membershipPolicy.PLANS.plus.amount, envPrice: "STRIPE_PRICE_PLUS",  label: "Emu plus" },
-  pro:      { key: "pro",      amount: membershipPolicy.PLANS.pro.amount, envPrice: "STRIPE_PRICE_PRO",   label: "Emu pro" }
+  light:    { key: "light",    amount: membershipPolicy.PLANS.light.amount, envPrice: "STRIPE_PRICE_LIGHT", label: "Emu for SchoolPark light" },
+  plus:     { key: "plus",     amount: membershipPolicy.PLANS.plus.amount, envPrice: "STRIPE_PRICE_PLUS",  label: "Emu for SchoolPark plus" },
+  pro:      { key: "pro",      amount: membershipPolicy.PLANS.pro.amount, envPrice: "STRIPE_PRICE_PRO",   label: "Emu for SchoolPark pro" }
 };
 const DEFAULT_PLAN = "pro";
 
-// 「語り合える一人」保証は Emu pro（月額10,000円）にだけ付く
+// 「語り合える一人」保証は Emu for SchoolPark pro（月額10,000円）にだけ付く
 const GUARANTEED_PLAN = "pro";
 const PLAN_AMOUNT_JPY = PLANS.pro.amount;   // 既存の呼び出し互換のため残す
 
@@ -129,8 +129,8 @@ function createBillingRouter(deps) {
 
   router.get("/features", (req, res) => res.set("Cache-Control", "no-store").json(membershipPolicy.catalog()));
 
-  /* 投稿の書き手のプラン名（Emu light / plus / pro）。ログインは要らない。
-     投稿に「公式パス」「Emu plus」などを出すため（2026-10-24 オーナー決定：プラン名は
+  /* 投稿の書き手のプラン名（Emu for SchoolPark light / plus / pro）。ログインは要らない。
+     投稿に「公式パス」「Emu for SchoolPark plus」などを出すため（2026-10-24 オーナー決定：プラン名は
      公開してよい。何も無い人には何も出さない）。返すのはプラン名だけ。
      1回に60人まで。書き手の名義（0x…）だけを受け取る。 */
   const publicPlansRateLimit = rateLimit({ windowMs: 60_000, max: 60, key: "public-plans" });
@@ -348,7 +348,7 @@ function createBillingRouter(deps) {
       const sub = await readSubscription(uid);
       if (!sub) return res.status(404).json({ error: "NO_SUBSCRIPTION" });
 
-      /* 「語り合える一人」保証は Emu pro（月額10,000円）の約束。
+      /* 「語り合える一人」保証は Emu for SchoolPark pro（月額10,000円）の約束。
          下位プランでこの返金を受けられると、規約に書いていない返金になってしまう。 */
       if ((sub.plan || DEFAULT_PLAN) !== GUARANTEED_PLAN) {
         return res.status(400).json({ error: "PLAN_NOT_GUARANTEED", plan: sub.plan || null });
@@ -581,7 +581,7 @@ function createBillingRouter(deps) {
     }
   });
 
-  /* 月次の「学びの軌跡」（Emu plus 以上）。
+  /* 月次の「学びの軌跡」（Emu for SchoolPark plus 以上）。
      「今月あなたは、18個の知識を受け取り、7人へ経験を届け、3つの考えを改善しました。」
 
      新しいデータは持たない。価値プロフィールと同じ元データから数える。
@@ -1169,7 +1169,7 @@ function createBillingRouter(deps) {
 
   /* ───────── 公式パスの持ち主の一覧 ─────────
 
-     paid_users にいる人は、買い切りで期限なしの Emu plus 相当。
+     paid_users にいる人は、買い切りで期限なしの Emu for SchoolPark plus 相当。
      管理画面には付与と契約しか出ておらず、いちばん人数の多いここが
      どこにも見えなかった。
 
@@ -1214,7 +1214,7 @@ function createBillingRouter(deps) {
      ところが Firestore のルールは小文字でしか探せない
      （ルールの中でチェックサム表記は作れない）。
      そのため大文字まじりで入っている人は、
-     画面には Emu plus と出るのに、投稿しようとすると断られる状態だった。
+     画面には Emu for SchoolPark plus と出るのに、投稿しようとすると断られる状態だった。
 
      ルール側で両方を探すこともできるが、そうすると
      ほかの文書を見に行く回数が増え、10回の上限に触れる。

@@ -184,7 +184,7 @@ test("7b. paid_users がチェックサム表記（大文字まじり）でも�
   assert.equal(await identity.holdsOfficialPass(line.spid), true);
 });
 
-test("10. 既存の Emu plus 相当（公式パス）が、SchoolPark ID 経由でも保たれる", async () => {
+test("10. 既存の Emu for SchoolPark plus 相当（公式パス）が、SchoolPark ID 経由でも保たれる", async () => {
   const { db, identity } = setup({ paid_users: { [WALLET_ADDR]: {} } });
   const entitlement = createEntitlement({ db, identity });
 

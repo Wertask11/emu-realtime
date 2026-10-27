@@ -8,7 +8,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Emu 会員管理</title>
+<title>Emu for SchoolPark 会員管理</title>
 <style>
 :root{--ink:#1a1840;--muted:#6f6a86;--line:#e6e2dc;--bg:#faf8f5;--card:#fff;--accent:#f08300;--ok:#1f8a4c;--warn:#c0392b}
 *{box-sizing:border-box}
@@ -93,7 +93,7 @@ const SP_OWNER_ADDRS = [
 ];
 const app = initializeApp({
   apiKey: "AIzaSyBKHS1D8Or6gfMd4NbzhDI7dG5Je7BLtbs",
-  authDomain: "schoolpark-emu.vercel.app",
+  authDomain: (location.hostname === "emu-for-schoolpark.vercel.app" ? "emu-for-schoolpark.vercel.app" : "schoolpark-emu.vercel.app"),
   projectId: "emusch-2a111",
   storageBucket: "emusch-2a111.firebasestorage.app",
   messagingSenderId: "795496371585",
@@ -889,9 +889,9 @@ async function renderMembers() {
 
     const head = headcountCard(counted)
       + '<div class="card"><h3>いまの会員</h3>'
-      + '<div class="row"><span>Emu light</span><span>' + summary.light + ' 人</span></div>'
-      + '<div class="row"><span>Emu plus</span><span>' + summary.plus + ' 人</span></div>'
-      + '<div class="row"><span>Emu pro</span><span>' + summary.pro + ' 人</span></div>'
+      + '<div class="row"><span>Emu for SchoolPark light</span><span>' + summary.light + ' 人</span></div>'
+      + '<div class="row"><span>Emu for SchoolPark plus</span><span>' + summary.plus + ' 人</span></div>'
+      + '<div class="row"><span>Emu for SchoolPark pro</span><span>' + summary.pro + ' 人</span></div>'
       + '<div class="row"><span>利用中の合計</span><span>' + summary.active + ' 人</span></div>'
       + '<div class="row"><span>月あたりの売上</span><span>' + Number(summary.mrr || 0).toLocaleString("ja-JP") + ' 円</span></div>'
       + '</div>';
@@ -903,8 +903,8 @@ async function renderMembers() {
        「公式パスを持っている人」なので、有料会員がいなくても配る相手はいる。 */
     const grant = '<div class="card" style="border:2px solid #f08300;background:#fff8f0;">'
       + '<h3 style="color:#b45309;">最初の付与（9月1日の制限に備える）</h3>'
-      + '<p class="hint">オーナーに Emu pro（期限なし）、公式パス（NFT）をお持ちの方に Emu plus を6か月、'
-      + 'それ以外の既存の方に Emu light を6か月お渡しします。<b>重なる場合は公式パスを優先します。</b><br>'
+      + '<p class="hint">オーナーに Emu for SchoolPark pro（期限なし）、公式パス（NFT）をお持ちの方に Emu for SchoolPark plus を6か月、'
+      + 'それ以外の既存の方に Emu for SchoolPark light を6か月お渡しします。<b>重なる場合は公式パスを優先します。</b><br>'
       + '実行した時点より後に登録した方には渡しません。二度押しても増えません。</p>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">'
       + '<button id="grantDry" class="btn">まず人数を数える（配らない）</button>'
@@ -915,15 +915,15 @@ async function renderMembers() {
        期限は入れなければ「期限なし」。同じ人に渡し直すと上書きする。 */
     const one = '<div class="card">'
       + '<h3>1人に渡す（SchoolParkパスポートのID）</h3>'
-      + '<p class="hint">Emu light・plus・pro を、指定した方に渡します。'
+      + '<p class="hint">Emu for SchoolPark light・plus・pro を、指定した方に渡します。'
       + 'お金のやりとりはありません。Stripeの契約には触りません。<br>'
       + '契約と重なった場合は、上の段のほうが使われます。</p>'
       + '<label>SchoolPark パスポートのID</label>'
       + '<input id="gOneAddr" placeholder="SP-… か 0x…（パスポートの「番号をコピー」で SP- が取れます）" spellcheck="false">'
       + '<label>渡すもの</label><select id="gOnePlan">'
-      + '<option value="light">Emu light（月額500円ぶん）</option>'
-      + '<option value="plus">Emu plus（月額3,000円ぶん）</option>'
-      + '<option value="pro">Emu pro（月額10,000円ぶん）</option>'
+      + '<option value="light">Emu for SchoolPark light（月額500円ぶん）</option>'
+      + '<option value="plus">Emu for SchoolPark plus（月額3,000円ぶん）</option>'
+      + '<option value="pro">Emu for SchoolPark pro（月額10,000円ぶん）</option>'
       + '</select>'
       + '<label>いつまで有効か</label>'
       + '<input id="gOneUntil" type="date">'
@@ -939,7 +939,7 @@ async function renderMembers() {
          押すと小文字の鍵をそろえる（もとの記録は消さない）。 */
       + '<h3 style="margin-top:18px">公式パスの鍵をそろえる</h3>'
       + '<p class="hint" style="margin:0 0 8px">大文字まじりで登録されている方は、'
-      + 'Emu plus と表示されるのに投稿できない状態になります。'
+      + 'Emu for SchoolPark plus と表示されるのに投稿できない状態になります。'
       + '押すと小文字にそろえます。もとの記録は消しません。何度押しても安全です。</p>'
       + '<div class="actions"><button class="btn" id="passCheck">まず調べるだけ</button>'
       + '<button class="btn primary" id="passFix">そろえる</button></div>'
@@ -981,7 +981,7 @@ async function renderMembers() {
 
     el.innerHTML = head + grant + one + cards;
 
-    const PLAN_JA = { light: "Emu light", plus: "Emu plus", pro: "Emu pro" };
+    const PLAN_JA = { light: "Emu for SchoolPark light", plus: "Emu for SchoolPark plus", pro: "Emu for SchoolPark pro" };
     const DUP_JA = {
       "auth-already-linked": "このログイン方法が、別の SchoolPark ID にも使われています",
       "wallet-already-linked": "このウォレットが、別の SchoolPark ID にも連携されています"
@@ -1046,10 +1046,10 @@ async function renderMembers() {
             bulk.length ? bulk.map(grantRow).join("")
               : '<p class="empty">ありません。</p>')
         + section('公式パスの持ち主',
-            '買い切りで期限なし。Emu plus 相当が、持っているあいだずっと続きます。',
+            '買い切りで期限なし。Emu for SchoolPark plus 相当が、持っているあいだずっと続きます。',
             passes.length
               ? passes.map(p =>
-                  '<div class="row"><span>Emu plus 相当'
+                  '<div class="row"><span>Emu for SchoolPark plus 相当'
                   + (p.readableByRules ? '' : ' <b style="color:#b91c1c">★鍵が大文字まじり。投稿できません</b>')
                   + '<br><small style="color:var(--muted)">' + esc(p.address) + '</small>'
                   + (p.label ? '<br><small style="color:var(--muted)">' + esc(p.label) + '</small>' : '')
@@ -1208,9 +1208,9 @@ async function renderMembers() {
         });
         out.innerHTML = (dryRun ? "<b>数えただけです（まだ配っていません）</b><br>" : "<b>配りました</b><br>")
           + "見たアカウント " + r.scanned + " 件<br>"
-          + "Emu pro（オーナー）: <b>" + r.proTarget + " 人</b><br>"
-          + "Emu plus（公式パス保有者）: <b>" + r.plusTarget + " 人</b><br>"
-          + "Emu light（それ以外の既存の方）: <b>" + r.lightTarget + " 人</b><br>"
+          + "Emu for SchoolPark pro（オーナー）: <b>" + r.proTarget + " 人</b><br>"
+          + "Emu for SchoolPark plus（公式パス保有者）: <b>" + r.plusTarget + " 人</b><br>"
+          + "Emu for SchoolPark light（それ以外の既存の方）: <b>" + r.lightTarget + " 人</b><br>"
           + (dryRun ? "配る予定" : "配った") + ": <b>" + r.granted + " 件</b>　"
           + "すでに配ってあった: " + r.skipped + " 件<br>"
           + "対象外（実行時点より後に登録）: " + r.tooNew + " 人<br>"
@@ -2892,7 +2892,7 @@ async function renderSchoolPark() {
     + CURRENCIES.filter(c => pot[c].promised > 0).map(c => asMoney(pot[c].promised, c)).join("／")
     + (CURRENCIES.some(c => pot[c].promised > 0) ? '' : '0')
     + '。何人が完走するかは入っていないので、支払う額そのものではありません。</p>'
-    + '<label>何のお金か</label><input id="atLabel" placeholder="例：Emu light 会費（8月分）／サーバー代">'
+    + '<label>何のお金か</label><input id="atLabel" placeholder="例：Emu for SchoolPark light 会費（8月分）／サーバー代">'
     + '<label>入金か支出か</label><select id="atKind">'
     + '<option value="in">入金（入ってきた）</option>'
     + '<option value="out">支出（出ていった）</option></select>'
