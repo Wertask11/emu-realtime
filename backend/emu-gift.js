@@ -3,7 +3,7 @@
 /* ───────── Emu for SchoolPark：運営からのギフト ─────────
 
    見学（無料）のままでは投稿・募集・回答・一日シェアができない。書いてみる前に
-   500円の壁があると、書き手が増えない。そこで 11/1（新プランの施行日）から、
+   500円の壁があると、書き手が増えない。そこで 2026-10-27 から（最初は 11/1 の予定を前倒し）、
    画面の「🎁 ギフト」で次の2段を渡す。
 
      1. 1週間の体験   見学の人が自分で受け取る。1人1回。light を7日。
@@ -28,14 +28,15 @@
    オーナーが確かめるので、そこで止められる。 */
 
 const express = require("express");
-const membershipPolicy = require("./membership-policy");
 
 const GIFT_COL = "emu_gifts";
 const AUDIT_COL = "emu_gift_audit";
 const GRANTS_COL = "entitlements";
 const DAY = 24 * 60 * 60 * 1000;
-/* 始まるのは新プランと同じ瞬間（日本時間 2026-11-01 0:00）。画面の EMU_GIFT_FROM と必ず同じにすること。 */
-const GIFT_STARTS_AT = membershipPolicy.EFFECTIVE_AT;
+/* 始まる時刻（日本時間 2026-10-27 0:00）。画面の EMU_GIFT_FROM と必ず同じにすること。
+   最初は新プランの施行日（11/1）にしていたが、オーナーの判断で前倒しした。
+   新プランとは別に動く（体験の途中で 11/1 をまたいでも、light の投稿は月5件のまま）。 */
+const GIFT_STARTS_AT = Date.parse("2026-10-27T00:00:00+09:00");
 const TRIAL_DAYS = 7;
 const EXTENSION_DAYS = 30;
 const PLAN_RANK = { guest: 0, light: 1, plus: 2, pro: 3 };

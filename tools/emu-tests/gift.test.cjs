@@ -1,4 +1,4 @@
-/* 運営からのギフト（11/1から）。画面・サーバー・ルールの約束がずれていないかを見る。
+/* 運営からのギフト（2026-10-27から）。画面・サーバー・ルールの約束がずれていないかを見る。
    渡す・断るの中身は backend/emu-gift.test.js が確かめる。 */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -8,12 +8,12 @@ const path = require('node:path');
 const root = path.join(__dirname, '../..');
 const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
 
-test('the gift starts at the same moment on screen and on the server (11/1 0:00 JST, the new plans)', () => {
+test('the gift starts at the same moment on screen and on the server (2026-10-27 0:00 JST)', () => {
   const ui = read('frontend/public/emu-gift-ui.js');
   const at = Date.parse(ui.match(/var EMU_GIFT_FROM = Date\.parse\('([^']+)'\)/)[1]);
   const { GIFT_STARTS_AT } = require(path.join(root, 'backend/emu-gift.js'));
   assert.equal(at, GIFT_STARTS_AT);
-  assert.equal(at, Date.parse('2026-11-01T00:00:00+09:00'));
+  assert.equal(at, Date.parse('2026-10-27T00:00:00+09:00'));
 });
 
 test('the header has the gift button (hidden until the script decides) and loads the gift screen', () => {
