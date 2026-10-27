@@ -49,7 +49,7 @@ test('知識の画面に、区切りを出す場所がある', () => {
   assert.ok(KNOW.indexOf('id="guestWall"') >= 0, '出す箱が無い');
   assert.ok(KNOW.indexOf('state.guestCapped=!!m.guestCapped') >= 0, '受け取っていない');
   assert.ok(KNOW.indexOf('どなたでも読める新着') >= 0, '何も言わずに終わっている');
-  assert.ok(KNOW.indexOf('Emu light') >= 0, 'この先どうすれば読めるか書いていない');
+  assert.ok(KNOW.indexOf('Emu for SchoolPark light') >= 0, 'この先どうすれば読めるか書いていない');
 });
 
 /* ───────── 旧ログインボーナス ─────────

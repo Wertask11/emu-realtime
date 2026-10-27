@@ -66,7 +66,7 @@ test('existing navigation and native behavior remain identical outside the expli
   let current=fs.readFileSync(path.join(root,file),'utf8');
   // Reviewed 2026-10-24: audit fixes (post image, NFT detail, tutorial copy, City
   // link, logo), the quest report post list, the guild offline fallback and the
-  // author badges (公式パス / Emu light・plus・pro, no 「無料利用者」).
+  // author badges (公式パス / Emu for SchoolPark light・plus・pro, no 「無料利用者」).
   // Each pair is [now, before]; undo exactly these, then the older steps apply.
   for(const [now,was] of require('./approved-2026-10-24.json')[name]||[]){
    assert.equal(current.split(now).length,2,now.slice(0,60));current=current.replace(now,()=>was);
@@ -238,7 +238,7 @@ test('existing navigation and native behavior remain identical outside the expli
    // a plan denial. tools/knowledge-lab-tests/reaction-rules.test.cjs covers the Rules.
    const allowedGood="      /* 「役に立った」を送るのは light 以上（9/1から。ルールの canWriteAs(1)）。\n         先に確かめないと、送ってから断られて「まだ保存できませんでした」になる。 */\n      if (!await emuReactionAllowed(postId, 'good')) return;\n";
    const allowedChange="      if (!await emuReactionAllowed(postId, 'change')) return;\n";
-   const whyPlan="\n  // ルール: canWriteAs(1)。見学（無料）では送れない\n  if (typeof emuHasPlan === 'function' && !emuHasPlan('light')) {\n    return { message: label + 'を送るのは、Emu light（月額500円）以上です。' };\n  }\n";
+   const whyPlan="\n  // ルール: canWriteAs(1)。見学（無料）では送れない\n  if (typeof emuHasPlan === 'function' && !emuHasPlan('light')) {\n    return { message: label + 'を送るのは、Emu for SchoolPark light（月額500円）以上です。' };\n  }\n";
    for(const s of [allowedGood,allowedChange,whyPlan]){assert.ok(current.includes(s),s);current=current.replace(s,'');}
    const a=current.indexOf('/* 反応（Good / Change）を送れる段か。'),b=current.indexOf('/* 反応（Good / Change）を保存する。',a);
    assert.ok(a>=0&&b>a);current=current.slice(0,a)+current.slice(b);

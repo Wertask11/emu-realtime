@@ -190,7 +190,7 @@ function createEntitlement(deps) {
     /* 契約・付与・公式パスのうち、いちばん上の段を採る。
 
        公式パス（NFT）は買い切りで、画面には
-       「公式パスをお持ちの方には、Emu plus 相当を無償でお渡しします」
+       「公式パスをお持ちの方には、Emu for SchoolPark plus 相当を無償でお渡しします」
        と書いてある。期限は書いていない。
        以前は施行時の一括付与でしか見ておらず、その付与には6か月の期限が
        付いていたので、切れたあと見学に落ちてしまう形だった。
@@ -331,7 +331,7 @@ function createEntitlement(deps) {
     return uid;
   }
 
-  /* 投稿の書き手に出すプラン名（Emu light / plus / pro）。
+  /* 投稿の書き手に出すプラン名（Emu for SchoolPark light / plus / pro）。
 
      契約（Stripe）と運営の付与だけを見る。公式パスによる plus 相当は入れない
      （画面では「公式パス」として別に出すため。2026-10-24 オーナー決定）。

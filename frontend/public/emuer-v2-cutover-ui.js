@@ -44,7 +44,7 @@
       alert("EMUERへの変換が完了しました。");
     } catch (error) {
       const code = String(error.message || "");
-      const message = code === "PLAN_REQUIRED" ? "EMUERに変換できるのはEmu Light以上かつウォレットを持つ方です。"
+      const message = code === "PLAN_REQUIRED" ? "EMUERに変換できるのはEmu for SchoolPark Light以上かつウォレットを持つ方です。"
         : code === "PERIOD_LIMIT_REACHED" ? "この期間の変換回数を使っています。Lightは月1回、Plusは週1回です。"
         : code === "NO_VERIFIED_LEGACY_BALANCE" ? "変換できる過去Good・届いた改善案はまだありません。"
         : code === "LEGACY_BALANCE_ALREADY_CONVERTED" ? "この過去分はすでに変換済みです。"
