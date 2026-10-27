@@ -3902,7 +3902,7 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
        表示したあと実際の位置から測り直す（知識を読む：emuFitKnowledgeFrame、
        一日シェア・議論：emuFitPhoneFrames）。ヘッダーの高さは端末で変わるため。 */
     width:calc(100% + 24px); margin-left:-12px;
-    height:calc(100dvh - 81px - var(--emu-bnav-h) - env(safe-area-inset-bottom));
+    height:calc(100dvh - 81px - var(--emu-bnav-h));
     min-height:320px; border-radius:0; box-shadow:none;
   }
 }
@@ -3925,8 +3925,12 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   body.emu-profile-open #emuBottomNav { display:flex; }
   #emuBottomNav {
     position:fixed; left:0; right:0; bottom:0; z-index:950; box-sizing:border-box;
-    height:calc(var(--emu-bnav-h) + env(safe-area-inset-bottom));
-    padding:0 6px env(safe-area-inset-bottom);
+    /* 下の安全領域（env(safe-area-inset-bottom)）は足さない。
+       この画面は viewport-fit=cover を指定していないので、ページは端末の下端やブラウザの
+       下のツールバーの「上」で終わっており、ナビが安全領域に潜ることはない。
+       それでもMetaMaskなどのアプリ内ブラウザはこの値を大きく返し、足すとタブの下に空白ができる。 */
+    height:var(--emu-bnav-h);
+    padding:0 6px;
     background:rgba(255,255,255,.97); border-top:1px solid #eee;
     -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
   }
@@ -3942,7 +3946,7 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   /* いちばん下のフッター（利用規約など）も、下までスクロールしたときにナビの上に出るようにする */
   body.emu-knowledge-open #siteFooter, body.emu-requests-open #siteFooter,
   body.emu-ichinichi-open #siteFooter, body.emu-discussion-open #siteFooter,
-  body.emu-profile-open #siteFooter { padding-bottom:calc(16px + var(--emu-bnav-h) + env(safe-area-inset-bottom)) !important; }
+  body.emu-profile-open #siteFooter { padding-bottom:calc(16px + var(--emu-bnav-h)) !important; }
   /* キーボードが出ているあいだは隠す。出したままだと、キーボードの上に浮いて入力欄にかぶる。 */
   body.emu-kb-open #emuBottomNav { display:none !important; }
   /* マイライブラリーは名前のメニューへ移動。Room1は全端末で「知識を探す」内。
