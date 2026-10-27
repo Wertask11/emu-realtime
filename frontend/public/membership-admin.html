@@ -979,7 +979,56 @@ async function renderMembers() {
         + '</div>';
     }).join("");
 
-    el.innerHTML = head + grant + one + cards;
+    /* 運営からのギフト（11/1から）。見学の人が自分で1週間の体験を受け取り、
+       パスポートIDを送ってきたら、ここで確かめて1か月延長する（backend/emu-gift.js）。 */
+    const gift = '<div class="card" id="giftCard" style="border:2px solid #f0c27a;background:#fffaf0;">'
+      + '<h3 style="color:#8a4b00;">🎁 運営からのギフト（延長の申し込み）</h3>'
+      + '<p class="hint">11月1日から、見学（無料）の方が画面の「🎁 ギフト」で Emu for SchoolPark light を7日間受け取れます（1人1回）。<br>'
+      + 'そのあと SchoolPark パスポートID を送ってきた方が、ここに並びます。確かめて「1か月延長する」を押すと、'
+      + 'いまの体験の終わり（もう終わっていれば今）から30日、light を渡します。plus・pro を渡してある方は下げません。</p>'
+      + '<div class="actions"><button class="btn" data-gift-list="pending">確認待ち</button>'
+      + '<button class="btn" data-gift-list="approved">延長した方</button>'
+      + '<button class="btn" data-gift-list="rejected">見送った方</button></div>'
+      + '<div id="giftList"><p class="empty">読み込み中…</p></div></div>';
+    el.innerHTML = head + grant + one + gift + cards;
+    async function paintGift(status) {
+      const box = $("#giftList");
+      if (!box) return;
+      box.innerHTML = '<p class="empty">読み込み中…</p>';
+      try {
+        const r = await api("/api/emu-gift/admin/requests?status=" + encodeURIComponent(status));
+        const label = { pending: "確認待ち", approved: "延長した方", rejected: "見送った方" }[status];
+        box.innerHTML = '<p class="hint" style="margin:8px 0">体験を受け取った方：' + Number(r.trialsClaimed || 0) + ' 人 ／ ' + esc(label) + '：' + r.rows.length + ' 人</p>'
+          + (!r.rows.length ? '<p class="empty">いまはいません。</p>' : r.rows.map(function (x) {
+            return '<div class="row" style="flex-wrap:wrap;gap:6px;align-items:center">'
+              + '<span><b>' + esc(x.schoolParkId || "（番号なし）") + '</b> ' + esc(x.displayName || "") + '<br>'
+              + '<small class="hint">体験 ' + esc(fmt(x.trialClaimedAt)) + ' 〜 ' + esc(fmt(x.trialExpiresAt))
+              + ' ／ 申し込み ' + esc(fmt(x.requestedAt))
+              + (x.extensionExpiresAt ? ' ／ 延長 ' + esc(fmt(x.extensionExpiresAt)) + ' まで' : '') + '</small></span>'
+              + (status === "pending"
+                ? '<span><button class="btn primary" data-gift-key="' + esc(x.key) + '" data-gift-do="approve">1か月延長する</button> '
+                  + '<button class="btn" data-gift-key="' + esc(x.key) + '" data-gift-do="reject">見送る</button></span>'
+                : '')
+              + '</div>';
+          }).join(""));
+        box.querySelectorAll("[data-gift-do]").forEach(function (b) {
+          b.onclick = async function () {
+            const approve = b.dataset.giftDo === "approve";
+            if (!window.confirm(approve ? "この方に light を30日延長しますか？" : "この方の延長を見送りますか？")) return;
+            b.disabled = true;
+            try {
+              const out = await api("/api/emu-gift/admin/requests/" + encodeURIComponent(b.dataset.giftKey) + "/" + (approve ? "approve" : "reject"), { method: "POST", body: {} });
+              if (out.keptStronger) window.alert("この方には、すでに light より上のプランを渡してあるので、そのままにしました。");
+            } catch (e) { window.alert("できませんでした：" + (e.code || e.message)); }
+            paintGift(status);
+          };
+        });
+      } catch (e) {
+        box.innerHTML = '<p class="empty" style="text-align:left">読めませんでした（' + esc(e.code || e.message) + '）。サーバー（Render）の再デプロイがまだかもしれません。</p>';
+      }
+    }
+    el.querySelectorAll("[data-gift-list]").forEach(function (b) { b.onclick = function () { paintGift(b.dataset.giftList); }; });
+    paintGift("pending");
 
     const PLAN_JA = { light: "Emu for SchoolPark light", plus: "Emu for SchoolPark plus", pro: "Emu for SchoolPark pro" };
     const DUP_JA = {
