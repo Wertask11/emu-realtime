@@ -33,25 +33,28 @@ let fixture, browser;
 before(async () => { fixture = await startFixture(); browser = await chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage'] }); });
 after(async () => { await browser?.close(); await fixture?.close(); });
 
-async function open(width = 390, { me = ME() } = {}) {
+async function open(width = 390, { me = ME(), products = PRODUCTS, admin = null } = {}) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: width < 700, acceptDownloads: true });
-  const posts = [], errors = [], gets = [];
+  const posts = [], errors = [], gets = [], puts = [];
   await context.route('**/*', async route => {
     const req = route.request(), url = new URL(req.url());
     if (url.hostname === 'emu-realtime.onrender.com') {
       const json = body => route.fulfill({ json: body, headers: { 'Access-Control-Allow-Origin': '*' } });
       const p = url.pathname;
       if (req.method() === 'POST' && p.startsWith('/api/mitemiru/')) posts.push({ path: p, body: JSON.parse(req.postData() || '{}') });
+      else if (req.method() === 'PUT' && p.startsWith('/api/mitemiru/')) puts.push({ path: p, body: JSON.parse(req.postData() || '{}') });
       else if (p.startsWith('/api/mitemiru/')) gets.push(p + url.search);
       if (p === '/api/mitemiru/shops') return json(SHOPS);
-      if (p === '/api/mitemiru/products') return json({ ok: true, products: PRODUCTS });
+      if (p === '/api/mitemiru/products') return json({ ok: true, products });
       if (p === '/api/mitemiru/me') return json(me);
       if (p === '/api/mitemiru/orders' && req.method() === 'POST') return json({ ok: true, order: { id: 'new', status: 'paid' } });
       if (p === '/api/mitemiru/orders') return json(ORDERS);
       if (p === '/api/mitemiru/orders/o-ship/cancel') return json({ ok: true, refunded: true });
       if (p === '/api/mitemiru/orders/o-wall/digital') return route.fulfill({ body: 'PK-zip', contentType: 'application/zip', headers: { 'Access-Control-Allow-Origin': '*' } });
       if (p === '/api/mitemiru/metrics') return json({ ok: true });
-      if (p === '/api/mitemiru/admin/products') return json({ ok: true, products: [] });
+      if (admin && p === '/api/mitemiru/admin/city/official-catalog') { admin.rows = admin.seed.map(x => ({ ...x })); return json({ ok: true, results: admin.rows.map(x => ({ id: x.id, result: 'created' })) }); }
+      if (admin && req.method() === 'PUT' && p.startsWith('/api/mitemiru/admin/products/')) { const row = admin.rows.find(x => x.id === decodeURIComponent(p.split('/').pop())); Object.assign(row, JSON.parse(req.postData() || '{}')); return json({ ok: true, product: row }); }
+      if (p === '/api/mitemiru/admin/products') return json({ ok: true, products: admin ? admin.rows : [] });
       if (p === '/api/mitemiru/admin/shipping') return json({ ok: true, orders: [{ id: 'o-ship', productName: 'Guild バッジ', pickupCode: 'K7Q2MX', orderDeadline: Date.now() + DAY,
         shipTo: { name: '山田 太郎', postalCode: '819-0001', address: '福岡県福岡市西区小戸1-2-3', phone: '09012345678' } }] });
       if (p === '/api/mitemiru/admin/orders/o-ship/ship') return json({ ok: true });
@@ -71,7 +74,7 @@ async function open(width = 390, { me = ME() } = {}) {
   if (width >= 700 && !(await frame.getByText('08', { exact: true }).filter({ visible: true }).count())) await frame.getByTitle('サイドバーを開く', { exact: true }).click();
   await frame.getByText('08', { exact: true }).filter({ visible: true }).click();
   await frame.locator('.city-doors').waitFor();
-  return { page, frame, posts, gets, errors, text: () => frame.locator('#sp-city').innerText(), close: () => context.close() };
+  return { page, frame, posts, puts, gets, errors, text: () => frame.locator('#sp-city').innerText(), close: () => context.close() };
 }
 const openProduct = async (f, id) => { await f.frame.locator(`.city-product[data-value="${id}"]`).click(); await f.frame.locator('.city-wallet').waitFor(); };
 
@@ -174,5 +177,69 @@ test('運営：配送待ちの一覧と住所、「発送した」、公式シ�
     await f.frame.locator('[data-action="ship-order"][data-value="o-ship"]').click();
     await f.frame.getByText('発送したことを記録しました。').waitFor();
     assert.ok(f.posts.some(p => p.path === '/api/mitemiru/admin/orders/o-ship/ship'));
+  } finally { await f.close(); }
+});
+
+const GUILD = { ...base, id: 'guild', name: 'Guild バッジ（5種）', fulfillmentMode: 'ship_or_pickup', orderDeadline: Date.now() + 10 * DAY, orderClosed: false,
+  choices: ['LEARN', 'WORK', 'PLAY'], gallery: ['https://schoolpark-emu.vercel.app/schoolpark/shop/official/10_design_guild-badges.webp'] };
+const SEAT = { ...base, id: 'seat', name: 'イベント優先席', fulfillmentMode: 'pickup', onePerPerson: true, remaining: 5 };
+
+test('選ぶものがある品：種類を選ぶまで交換できず、選んだ種類を注文に添える。デザイン案の画像も出す', async () => {
+  const f = await open(390, { products: [GUILD, SEAT] });
+  try {
+    await openProduct(f, 'guild');
+    assert.equal(await f.frame.locator('.city-gallery img').count(), 1);
+    assert.match(await f.frame.locator('.city-gallery img').getAttribute('alt'), /Guild バッジ（5種）の画像 1/);
+    await f.frame.getByLabel('イベント会場で受け取る').check();
+    const ledger = f.frame.locator('[data-action="exchange"]');
+    assert.equal(await ledger.isDisabled(), true);
+    assert.match(await f.text(), /種類を選ぶと交換できます。/);
+    await f.frame.getByLabel('WORK').check();
+    await f.frame.waitForFunction(() => !document.querySelector('[data-action="exchange"]').disabled);
+    await ledger.click();
+    for (let i = 0; i < 100 && !f.posts.some(p => p.path === '/api/mitemiru/orders'); i += 1) await f.page.waitForTimeout(50);
+    const sent = f.posts.find(p => p.path === '/api/mitemiru/orders');
+    assert.equal(sent.body.choice, 'WORK'); assert.equal(sent.body.delivery, 'pickup');
+    assert.equal(sent.body.shipping, undefined);
+    assert.deepEqual(f.errors, []);
+  } finally { await f.close(); }
+});
+
+test('1人1つまでの品は、そのことを商品ページに書く', async () => {
+  const f = await open(390, { products: [GUILD, SEAT] });
+  try {
+    await openProduct(f, 'seat');
+    assert.match(await f.text(), /この品は1人1つまでです。/);
+    assert.equal(await f.frame.locator('.city-choice').count(), 0, '選ぶものが無い品には出さない');
+  } finally { await f.close(); }
+});
+
+test('運営：11品を下書きで登録し、1品ずつ確かめてから販売を始める', async () => {
+  const seed = [
+    { ...base, id: 'reizo-kun-sticker-v1', name: '冷蔵庫くん デジタルステッカー', status: 'draft', prices: { EMUER: 5 }, stock: null, imageUrl: 'https://schoolpark-emu.vercel.app/schoolpark/shop/official/01_shop_sticker.webp' },
+    { ...base, id: 'official-guild-badge-v1', name: 'Guild バッジ', status: 'draft', prices: { EMUER: 100 }, stock: 10, remaining: 10, orderDeadlineMs: Date.parse('2026-11-30T23:59:59+09:00'), choices: ['LEARN', 'WORK'] },
+    { ...base, id: 'official-planning-meeting-v1', name: '企画会議への参加権', status: 'draft', prices: { EMUER: 300 }, stock: 3, remaining: 3, onePerPerson: true }
+  ];
+  const admin = { seed, rows: [] };
+  const f = await open(1440, { me: ME({ isOwner: true }), admin });
+  try {
+    await f.frame.locator('.city-door[data-value="commerce"]').click();
+    await f.frame.locator('.city-nav [data-value="event-ops"]').click();
+    await f.frame.getByText('公式ショップの商品（0品）').waitFor();
+    await f.frame.locator('[data-action="seed-official"]').click();
+    await f.frame.getByText('下書きを登録しました（新しく 3 品・入れ直し 0 品・そのまま 0 品）', { exact: false }).waitFor();
+    await f.frame.getByText('公式ショップの商品（3品）').waitFor();
+    const t = await f.text();
+    assert.match(t, /公式ショップの商品（3品）/);
+    assert.match(t, /Guild バッジ[\s\S]*100 EMUER · 下書き · 在庫 10（残り 10） · 締切 2026\/11\/30 · 選ぶ: LEARN・WORK/);
+    assert.match(t, /企画会議への参加権[\s\S]*1人1つまで/);
+    assert.equal(await f.frame.locator('.city-ops-product img').count(), 1);
+    await f.frame.locator('[data-action="publish-product"][data-value="official-guild-badge-v1"]').click();
+    await f.frame.getByText('「Guild バッジ」の販売を始めました。').waitFor();
+    assert.deepEqual(f.puts.map(p => [p.path, p.body.status]), [['/api/mitemiru/admin/products/official-guild-badge-v1', 'live']]);
+    await f.frame.locator('[data-action="publish-product"][data-value="official-guild-badge-v1"]').waitFor({ state: 'detached' });
+    assert.match(await f.frame.locator('.city-ops-product', { hasText: 'Guild バッジ' }).innerText(), /100 EMUER · 販売中/);
+    assert.equal(await f.frame.locator('[data-action="publish-product"]').count(), 2, 'ほかの品は下書きのまま');
+    assert.deepEqual(f.errors, []);
   } finally { await f.close(); }
 });

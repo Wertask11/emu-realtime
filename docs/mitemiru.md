@@ -89,7 +89,12 @@ EMUER だけで交換する店。商品ごとに「渡し方」（`fulfillmentMo
 - **配送先**：`mitemiru_shipping/{注文ID}` に注文とは別に置く（ブラウザからは読めない）。電話番号は運営の配送一覧にだけ出る。取り消し・期限切れ・返金で消し、発送から1年たつと `purgeShipping` で消す（プライバシーポリシー第7条）。
 - **デジタルの品**：ファイルを `backend/private-assets/` に置き、`catalog.json` に `{ "<ID>": { "file": "...", "downloadName": "..." } }` を足す。商品の `digitalAssetId` にその ID を入れる。買った本人だけが `/orders/:id/digital` で受け取れる。
 - **数字**：`mitemiru_metrics/{日付}` に「ショップを開いた・商品を見た」の回数だけを数える（個人の情報は入れない）。交換の件数は注文から数える。City の「イベント運営」に出る。
-- 規約は第5条の6。
+- 規約は第5条の6。特定商取引法の表記にも「City 公式ショップでの商品交換について」の欄がある。
+- **11品の登録**：中身は `backend/official-shop-products.json`（名前・説明・EMUER・在庫・締切・画像）。City の「イベント運営」で「11品を下書きで登録」を押すと下書きで入る。何度押しても同じで、販売中・交換済みの品には触らない。確かめてから1品ずつ「販売を始める」。
+- **画像**：`frontend/public/schoolpark/shop/official/`（Vercel）。URL は `PUBLIC_SITE_ORIGIN`（無ければ `https://schoolpark-emu.vercel.app`）から組む。
+- **1人1つまで**（`onePerPerson`）：投票権・優先席・企画会議。`mitemiru_claims/{商品とuidのハッシュ}` で持っているかを示し、取消・期限切れ・返金で消す。
+- **選ぶもの**（`choices`）：Guild バッジの5種。注文の `choice` に残り、交換履歴と配送の一覧に出る。
+- **商品ページの画像**（`gallery`）：デザイン案など6枚まで。
 
 ## 気をつけること
 

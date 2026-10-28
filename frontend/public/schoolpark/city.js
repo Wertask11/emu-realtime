@@ -32,7 +32,9 @@ const errors = {
   CHAIN_PAYMENT_MISMATCH:'支払いの内容が注文と合いませんでした。運営へお問い合わせください。',
   ORDER_EXPIRED:'この注文は期限が切れました。もう一度、商品から交換してください。',
   ORDER_NOT_PENDING:'この注文は、もう支払い待ちではありません。交換履歴を更新してください。',
-  ALREADY_DONE:'この注文は、もう支払いが済んでいます。交換履歴を更新してください。'
+  ALREADY_DONE:'この注文は、もう支払いが済んでいます。交換履歴を更新してください。',
+  ALREADY_OWNED:'この品は1人1つまでです。もう交換しています（交換履歴でご確認ください）。',
+  INVALID_CHOICE:'種類を選んでから交換してください。'
 };
 const newRequestId = () => (crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0,80);
 const emuerNumber = v => { const n = Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
@@ -46,7 +48,7 @@ const MODE_TEXT = {
   ship:'ご自宅へ配送します（送料は SchoolPark が負担します）。',
   ship_or_pickup:'ご自宅への配送か、イベント会場での手渡しを選べます（送料は SchoolPark が負担します）。',
   pickup:'イベント会場で、引換コードを見せて受け取ります。',
-  online:'オンラインで行います。日時は運営からご連絡します。'
+  online:'オンラインで行います。日時や参加のしかたは、運営からご案内します。'
 };
 const isPhysical = p => ['ship','ship_or_pickup'].includes(modeOf(p));
 const shipValid = f => !!f.name.trim() && /^\d{3}-?\d{4}$/.test(f.postalCode.trim()) && !!f.address.trim() && f.phone.replace(/[^0-9]/g,'').length >= 10;
@@ -64,6 +66,8 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
   let walletBalance;
   /* 配送先の入力。画面は描き直すので、入れた文字はここに持っておく。 */
   let shipForm = { delivery:'ship', name:'', postalCode:'', address:'', phone:'' };
+  /* 注文のときに選ぶもの（Guild バッジの5種など）。商品ごとに覚えておく。 */
+  let choiceFor = {};
   let opsShipping = null, opsMetrics = null;
   let message = '', error = '', loading = false, recording = false, myLoading = false;
   let catalogAt = 0, myAt = 0, epoch = 0, myGeneration = 0, share = null, loadJob = null, myJob = null;
@@ -113,7 +117,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     pending_payment:'お支払い待ち',
     paid: (o.digitalAvailable || o.digitalStickerAvailable) ? '受け取れます（ダウンロード）'
       : o.delivery === 'ship' ? '発送準備中 · 締切のあと、翌月の中ごろに発送します'
-      : o.delivery === 'online' ? '運営から日時をご連絡します'
+      : o.delivery === 'online' ? '運営からご案内します'
       : '受け取り待ち · 引換コードを受付で見せてください',
     fulfilled: o.delivery === 'ship' ? '発送済み' : '受け取り済み',
     refunded:'返金済み', cancelled:'取り消し', expired:'期限切れ'
@@ -133,7 +137,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       ${p.imageUrl ? `<img src="${escape(p.imageUrl)}" alt="" loading="lazy">` : `<span class="city-product-emoji" aria-hidden="true">${escape(p.emoji || '🎁')}</span>`}
       <b>${escape(p.name)}</b><span>${priceLabel(p)}${p.remaining === 0 ? ' · 在庫なし' : ''}</span></button>`;
   const productCard = p => `<article class="city-card">${p.imageUrl ? `<img src="${escape(p.imageUrl)}" alt="" loading="lazy">` : ''}<span class="city-badge virtual">EMUERで交換</span>
-      <h3>${escape(p.emoji || '🎁')} ${escape(p.name)}</h3><p>${escape(p.description || '')}</p><p><b>${priceLabel(p)}</b>${stockLabel(p) ? ` · ${stockLabel(p)}` : ''}</p>
+      <h3>${escape(p.emoji || '🎁')} ${escape(p.name)}</h3><p class="city-card-desc">${escape(p.description || '')}</p><p><b>${priceLabel(p)}</b>${stockLabel(p) ? ` · ${stockLabel(p)}` : ''}</p>
       ${button('product','くわしく見る・交換する',p.id)}</article>`;
   /* 使えるEMUERは2つある。
        ・ウォレットのEMUER … 受け取り済み（Emu のウォレットの「使えるEMUER」と同じ）。MetaMask で払う
@@ -210,7 +214,9 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     /* 物は配送が基本。ship_or_pickup の品は、会場での手渡しも選べる。配送なら住所が揃うまで押せない。 */
     const delivery = mode === 'ship' ? 'ship' : mode === 'ship_or_pickup' ? shipForm.delivery : mode;
     const shipReady = delivery !== 'ship' || shipValid(shipForm);
-    const ready = base && !closed && shipReady;
+    const choices = Array.isArray(p.choices) ? p.choices : [];
+    const choiceReady = !choices.length || choices.includes(choiceFor[p.id]);
+    const ready = base && !closed && shipReady && choiceReady;
     const canWallet = ready && p.methods?.includes('emuer_chain') && !!commerceMe?.wallet && (walletBalance == null || walletBalance >= price);
     const canLedger = ready && p.methods?.includes('emuer_ledger') && emuerNumber(commerceMe?.emuer?.unconverted) >= price;
     const ok = canWallet || canLedger;
@@ -219,6 +225,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       : !commerceMe ? 'あなたのEMUERを確かめています…' : !commerceMe.emuer?.ok
       ? emuerWhy(commerceMe.emuer?.error)
       : !p.methods?.some(m => m === 'emuer_ledger' || m === 'emuer_chain') ? 'この商品は、いまはEMUERで交換できません。'
+      : !choiceReady ? '種類を選ぶと交換できます。'
       : !shipReady ? '配送先を入れると交換できます。'
       : !ok ? 'EMUERが足りません。ウォレットのEMUERか、ウォレットに移す前のEMUERのどちらかが、価格以上あれば交換できます。' : '';
     return `<button type="button" class="city-link" data-action="${isVirtual ? 'page' : 'products'}" data-value="${isVirtual ? 'commerce' : escape(p.shopId)}">← ${isVirtual ? '公式ショップ' : '商品一覧'}</button>
@@ -228,12 +235,25 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       ${isVirtual ? `<p>受け取り方: ${escape(MODE_TEXT[mode] || '')}${p.fulfillment ? ` ${escape(p.fulfillment)}` : ''}</p>` : p.fulfillment ? `<p>受け取り方: ${escape(p.fulfillment)}</p>` : ''}
       ${isVirtual && p.orderDeadline ? `<p>注文の締切: <b>${escape(dateOnly(p.orderDeadline))}</b>（締切のあとにまとめて作り、翌月の中ごろに発送します）</p>` : ''}
       ${p.cancelPolicy ? `<p>キャンセル: ${escape(p.cancelPolicy)}</p>` : ''}
+      ${isVirtual && p.onePerPerson ? '<p>この品は1人1つまでです。</p>' : ''}
+      ${galleryHtml(p)}
+      ${isVirtual && choices.length && !closed ? choiceHtml(p, choices) : ''}
       ${isVirtual && isPhysical(p) && !closed ? shipFormHtml(mode) : ''}
       ${reason ? `<p class="city-note">${escape(reason)}</p>` : ''}
       ${isVirtual ? `<div class="city-pay">${button('exchange-chain',commerceBusy ? '交換中…' : 'ウォレットのEMUERで交換する',p.id,false,commerceBusy || !canWallet)}
         ${button('exchange',commerceBusy ? '交換中…' : 'ウォレットに移す前のEMUERで交換する',p.id,true,commerceBusy || !canLedger)}</div>
         <p class="city-muted">ウォレットのEMUERで払うときは、MetaMask で確認します（Polygon のガス代がかかります）。交換すると、交換履歴に引換コードが出ます。</p>
         ${productNotes(p)}` : ''}</article>`;
+  }
+  /* 商品ページの画像（デザイン案など）。押すと大きい画像を開く。 */
+  function galleryHtml(p) {
+    const list = Array.isArray(p.gallery) ? p.gallery : [];
+    if (!list.length) return '';
+    return `<div class="city-gallery" aria-label="${escape(p.name)}の画像">${list.map((src, i) => `<a href="${escape(src)}" target="_blank" rel="noopener"><img src="${escape(src)}" alt="${escape(p.name)}の画像 ${i + 1}" loading="lazy"></a>`).join('')}</div>`;
+  }
+  /* 注文のときに選ぶもの。選ぶまで交換ボタンは押せない。 */
+  function choiceHtml(p, choices) {
+    return `<fieldset class="city-ship-choice city-choice"><legend>種類を選ぶ</legend>${choices.map(c => `<label><input type="radio" name="city-choice" data-choice-field="${escape(p.id)}" value="${escape(c)}"${choiceFor[p.id] === c ? ' checked' : ''}> ${escape(c)}</label>`).join('')}</fieldset>`;
   }
   /* 配送先の入力。住所は運営だけが見て、配送してから1年で消す（プライバシーポリシーのとおり）。 */
   function shipFormHtml(mode) {
@@ -262,16 +282,15 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
   function ordersPage() {
     if (!commerceOrders) return `<section class="city-section"><h2 data-city-heading tabindex="-1">交換履歴</h2><p role="status">履歴を読み込んでいます…</p></section>`;
     return `<section class="city-section"><h2 data-city-heading tabindex="-1">交換履歴</h2><p class="city-muted">交換した商品と引換コードです。受付で引換コードを見せて受け取ってください。</p>
-      ${commerceOrders.length ? `<ul class="city-list">${commerceOrders.map(o => `<li><b>${escape(o.productName)}</b> · ${escape(o.amount)} ${escape(o.currency)}<span class="city-order-status" data-status="${escape(o.status)}">${escape(orderStatus(o))}</span><small>${escape(date(o.createdAt))}${o.pickupCode ? ` · 引換コード <b class="city-code">${escape(o.pickupCode)}</b>` : o.status === 'pending_payment' ? ' · 引換コードはお支払いのあとに出ます' : ''}</small>${o.shipTo ? `<small>配送先: 〒${escape(o.shipTo.postalCode)} ${escape(o.shipTo.address)}（${escape(o.shipTo.name)}）${o.shippedAt ? ` · ${escape(dateOnly(o.shippedAt))} に発送` : ''}</small>` : ''}${o.cancelRequested ? '<small>取り消しを受け付けました。運営がEMUERを返す手続きをします。</small>' : ''}${(o.digitalAvailable || o.digitalStickerAvailable) ? button('download-digital','ダウンロードする',o.id) : ''}${o.cancellable ? button('cancel-paid','注文を取り消す',o.id,true,commerceBusy) : ''}${o.status === 'pending_payment' && o.method === 'emuer_chain' ? `<div class="city-row">${button('resume-pay','MetaMaskで払う',o.id,false,commerceBusy)}${button('confirm-order','支払いを確かめる',o.id,true,commerceBusy)}${button('cancel-order','取り消す',o.id,true,commerceBusy)}</div>` : ''}</li>`).join('')}</ul>` : empty('交換履歴はありません','公式ショップやイベントで交換すると、ここに並びます。')}${button('page','公式ショップを見る','commerce')}
+      ${commerceOrders.length ? `<ul class="city-list">${commerceOrders.map(o => `<li><b>${escape(o.productName)}</b>${o.choice ? `（${escape(o.choice)}）` : ''} · ${escape(o.amount)} ${escape(o.currency)}<span class="city-order-status" data-status="${escape(o.status)}">${escape(orderStatus(o))}</span><small>${escape(date(o.createdAt))}${o.pickupCode ? ` · 引換コード <b class="city-code">${escape(o.pickupCode)}</b>` : o.status === 'pending_payment' ? ' · 引換コードはお支払いのあとに出ます' : ''}</small>${o.shipTo ? `<small>配送先: 〒${escape(o.shipTo.postalCode)} ${escape(o.shipTo.address)}（${escape(o.shipTo.name)}）${o.shippedAt ? ` · ${escape(dateOnly(o.shippedAt))} に発送` : ''}</small>` : ''}${o.cancelRequested ? '<small>取り消しを受け付けました。運営がEMUERを返す手続きをします。</small>' : ''}${(o.digitalAvailable || o.digitalStickerAvailable) ? button('download-digital','ダウンロードする',o.id) : ''}${o.cancellable ? button('cancel-paid','注文を取り消す',o.id,true,commerceBusy) : ''}${o.status === 'pending_payment' && o.method === 'emuer_chain' ? `<div class="city-row">${button('resume-pay','MetaMaskで払う',o.id,false,commerceBusy)}${button('confirm-order','支払いを確かめる',o.id,true,commerceBusy)}${button('cancel-order','取り消す',o.id,true,commerceBusy)}</div>` : ''}</li>`).join('')}</ul>` : empty('交換履歴はありません','公式ショップやイベントで交換すると、ここに並びます。')}${button('page','公式ショップを見る','commerce')}
       ${button('refresh-orders','履歴を更新','',true)}</section>`;
   }
   function eventOpsPage() {
     if (!commerceMe?.isOwner) return `<section class="city-section"><h2 data-city-heading tabindex="-1">イベント運営</h2><p class="city-note">SchoolPark運営者権限が必要です。</p></section>`;
     const products = (commerceProducts || []).filter(p => p.storeType === 'schoolpark_virtual');
-    const stickerProduct = products.find(p => p.id === 'reizo-kun-sticker-v1');
     return `<section class="city-section"><h2 data-city-heading tabindex="-1">公式イベント運営</h2>
       <p class="city-muted">商品QRはCityの商品詳細を開きます。QRを読むだけでは注文もEMUER消費も起きません。注文確定・引渡しは既存みてみる注文APIを使います。</p>
-      <article class="city-card"><h3>冷蔵庫くんデジタルステッカー</h3><p>所有者専用の準備操作です。商品を1 EMUERの下書きとして作成し、内容を確認してから販売開始できます。</p>${commerceMe.emuer?.ok ? '' : '<p class="city-note">EMUER交換機能は停止中です。商品は下書きで作成できますが、交換受付は有効化できません。</p>'}${stickerProduct?.imageUrl ? `<img src="${escape(stickerProduct.imageUrl)}" alt="冷蔵庫くんステッカーの商品プレビュー" loading="lazy">` : ''}${!stickerProduct ? button('seed-sticker','下書きを作成') : `<p>状態: ${escape(stickerProduct.status)} · 価格: ${priceLabel(stickerProduct)}</p>${stickerProduct.status === 'draft' ? button('publish-sticker','確認して販売開始',stickerProduct.id,true,!commerceMe.emuer?.ok) : '<p class="city-status">商品は販売中です。</p>'}`}</article>
+      ${officialCatalogHtml(products)}
       ${opsLoading ? '<p role="status">商品・注文情報を確認しています…</p>' : ''}
       <div class="city-grid">${products.filter(p => p.status === 'live').map(p => `<article class="city-card"><h3>${escape(p.name)}</h3><p>${priceLabel(p)} · 在庫 ${p.remaining == null ? '制限なし' : escape(p.remaining)}</p>${button('event-qr','商品QRを表示・印刷',p.id)}</article>`).join('')}</div>
       ${opsQr ? `<article class="city-card city-qr"><h3>${escape(opsQr.productName)} · イベント商品QR</h3><img src="${escape(opsQr.image)}" alt="${escape(opsQr.productName)} City商品QR"><p class="city-muted">${escape(opsQr.url)}</p><div class="city-row">${button('print-qr','QRを印刷')}${button('close-qr','閉じる','',true)}</div></article>` : ''}
@@ -279,6 +298,18 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       <form class="city-ops-form" data-ops-form><label for="city-pickup-code">引換コード照合</label><input id="city-pickup-code" name="code" autocomplete="off" maxlength="12" value="${escape(opsCode)}" placeholder="6文字の引換コード"><button type="submit" class="city-button">注文を検索</button></form>
       ${opsOrders ? opsOrders.length ? `<ul class="city-list">${opsOrders.map(o => `<li>${escape(o.productName)} · ${escape(o.amount)} ${escape(o.currency)} · ${escape(o.status)}<small>${escape(o.pickupCode)} · Passport ${escape(o.passportId || '旧注文')}</small>${o.status === 'paid' ? button('fulfill','引渡しを記録',o.id) : o.status === 'fulfilled' ? '<small>引渡し済み · 二重引渡しは記録されません</small>' : '<small>支払確定後に引き渡してください。</small>'}</li>`).join('')}</ul>` : empty('注文がありません','コードを確認してもう一度検索してください。') : ''}
     </section>`;
+  }
+  /* 運営：公式ショップの商品。決めた11品を下書きで入れ、1品ずつ確かめてから販売を始める。 */
+  const STATUS_TEXT = { draft:'下書き', live:'販売中', ended:'終了' };
+  function officialCatalogHtml(products) {
+    const rows = products.filter(p => p.shopId === officialShop()?.id);
+    return `<article class="city-card city-ops-catalog"><h3>公式ショップの商品（${escape(rows.length)}品）</h3>
+      <p class="city-muted">「11品を下書きで登録」を押すと、決めた11品が下書きで入ります。何度押しても同じです（販売中・交換済みの品には触りません）。内容と画像を確かめてから、1品ずつ「販売を始める」を押してください。</p>
+      ${commerceMe.emuer?.ok ? '' : '<p class="city-note">EMUERの交換がいま止まっているので、下書きは作れますが、販売は始められません。</p>'}
+      ${button('seed-official','11品を下書きで登録','',rows.length > 0,opsLoading)}
+      ${rows.length ? `<ul class="city-list">${rows.map(p => `<li class="city-ops-product">${p.imageUrl ? `<img class="city-ops-thumb" src="${escape(p.imageUrl)}" alt="" loading="lazy">` : ''}<div><b>${escape(p.name)}</b>
+        <small>${priceLabel(p)} · ${escape(STATUS_TEXT[p.status] || p.status || '')} · 在庫 ${p.stock == null ? '制限なし' : `${escape(p.stock)}（残り ${escape(p.remaining ?? p.stock)}）`}${p.orderDeadlineMs ? ` · 締切 ${escape(dateOnly(p.orderDeadlineMs))}` : ''}${p.onePerPerson ? ' · 1人1つまで' : ''}${p.choices?.length ? ` · 選ぶ: ${escape(p.choices.join('・'))}` : ''}</small>
+        ${p.status === 'draft' ? button('publish-product','販売を始める',p.id,true,opsLoading || !commerceMe.emuer?.ok) : ''}</div></li>`).join('')}</ul>` : ''}</article>`;
   }
   /* 運営：公式ショップの見られ方（30日）。誰が見たかは数えていない。 */
   function opsMetricsHtml() {
@@ -293,7 +324,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
   function opsShippingHtml() {
     if (!opsShipping) return '';
     return `<article class="city-card"><h3>配送待ち（${escape(opsShipping.length)}件）</h3>
-      ${opsShipping.length ? `<ul class="city-list">${opsShipping.map(o => `<li><b>${escape(o.productName)}</b> · 引換コード ${escape(o.pickupCode)}${o.cancelRequested ? ' · <b>取り消しの申し出あり</b>' : ''}
+      ${opsShipping.length ? `<ul class="city-list">${opsShipping.map(o => `<li><b>${escape(o.productName)}</b>${o.choice ? `（${escape(o.choice)}）` : ''} · 引換コード ${escape(o.pickupCode)}${o.cancelRequested ? ' · <b>取り消しの申し出あり</b>' : ''}
         <small>${o.shipTo ? `〒${escape(o.shipTo.postalCode)} ${escape(o.shipTo.address)} · ${escape(o.shipTo.name)} · ${escape(o.shipTo.phone)}` : '配送先がありません'}${o.orderDeadline ? ` · 締切 ${escape(dateOnly(o.orderDeadline))}` : ''}</small>
         ${button('ship-order','発送した',o.id,false,opsLoading)}</li>`).join('')}</ul>` : '<p>配送待ちの注文はありません。</p>'}
       <p class="city-muted">住所は配送のためだけに使い、ほかへ写さないでください。発送した日から1年で消えます。</p></article>`;
@@ -637,15 +668,18 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
         message = '発送したことを記録しました。';
         return await loadEventOps();
       }
-      if (action === 'seed-sticker') {
-        const result = await bridge.seedReizoSticker();
-        message = result.created ? '冷蔵庫くんステッカーの下書きを作成しました。内容を確認してください。' : '既存の冷蔵庫くんステッカー下書きを読み込みました。';
+      if (action === 'seed-official') {
+        const result = await bridge.seedOfficialCatalog();
+        const count = kind => (result.results || []).filter(r => r.result === kind).length;
+        message = `下書きを登録しました（新しく ${count('created')} 品・入れ直し ${count('updated')} 品・そのまま ${count('kept')} 品）。内容を確かめてください。`;
         return await loadEventOps();
       }
-      if (action === 'publish-sticker') {
-        if (!commerceMe?.emuer?.ok) { error = 'EMUER交換機能が停止中のため、販売を開始できません。'; return; }
+      if (action === 'publish-product') {
+        if (!commerceMe?.emuer?.ok) { error = 'EMUERの交換がいま止まっているので、販売を始められません。'; return; }
+        const p = (commerceProducts || []).find(x => x.id === value);
+        if (!window.confirm(`「${p?.name || 'この商品'}」の販売を始めますか？ 公式ショップに並び、交換できるようになります。`)) return;
         await bridge.publishCommerceProduct(value);
-        message = '冷蔵庫くんステッカーを販売開始しました。';
+        message = `「${p?.name || '商品'}」の販売を始めました。`;
         return await loadEventOps();
       }
       if (action === 'event-qr') {
@@ -725,11 +759,12 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
   /* 注文に添える受け取り方と配送先。物でなければ何も添えない。 */
   function deliveryFor(productId) {
     const p = commerceProducts?.find(x => x.id === productId);
-    if (!p || !isPhysical(p)) return {};
+    const picked = p && Array.isArray(p.choices) && p.choices.length ? { choice: choiceFor[p.id] || '' } : {};
+    if (!p || !isPhysical(p)) return picked;
     const delivery = modeOf(p) === 'ship' ? 'ship' : shipForm.delivery;
-    if (delivery !== 'ship') return { delivery };
+    if (delivery !== 'ship') return { ...picked, delivery };
     const { name, postalCode, address, phone } = shipForm;
-    return { delivery, shipping: { name: name.trim(), postalCode: postalCode.trim(), address: address.trim(), phone: phone.trim() } };
+    return { ...picked, delivery, shipping: { name: name.trim(), postalCode: postalCode.trim(), address: address.trim(), phone: phone.trim() } };
   }
   /* 配送先の入力。文字を打つたびには描き直さない（入力中の欄が消えるため）。
      押せるかどうかが変わったときだけ描き直す。受け取り方を選び直したら描き直す。 */
@@ -741,6 +776,8 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     if (key === 'delivery' || before !== shipValid(shipForm)) render();
   });
   host.addEventListener('change', event => {
+    const forProduct = event.target?.dataset?.choiceField;
+    if (forProduct) { choiceFor = { ...choiceFor, [forProduct]: String(event.target.value || '') }; render(); return; }
     if (event.target?.dataset?.shipField !== 'delivery') return;
     shipForm = { ...shipForm, delivery: event.target.value === 'pickup' ? 'pickup' : 'ship' };
     render();
