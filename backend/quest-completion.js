@@ -743,6 +743,36 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     return res.json({ ok: true, id: ref.id, ...row });
   });
 
+  function certContractOrEmpty() { return ethers.utils.isAddress(certContract) ? certContract : ""; }
+
+  /* 自分の証明書。パスポートで「受け取り済み」「どのウォレットに届いたか」を出し、
+     MetaMask に追加するときのトークン ID を渡すためのもの。
+     受け取った人からは、MetaMask が Polygon の NFT を自動では拾わないので
+     「届いていない」ように見えていた（10/28、手で1枚ずつ足して見えた）。
+     証明書の記録は承認のときか、受け取りを押したとき（backfillCertificates）に作られる。
+     まだ記録が無いクエストはここに出ないが、画面では「受け取る」が出たままになる。 */
+  router.get("/certificates/mine", requireFirebaseUser, async (req, res) => {
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const spid = String((req.identity.account || {}).spid || "");
+    if (!spid) return res.json({ ok: true, certificates: [], contract: certContractOrEmpty() });
+    try {
+      const snap = await db.collection("sp_quest_certificates").where("spid", "==", spid).limit(500).get();
+      const certificates = [];
+      snap.forEach(d => {
+        const v = d.data() || {};
+        certificates.push({
+          questId: String(v.questId || ""), round: Math.max(1, Number(v.round) || 1),
+          minted: v.status === "minted", tokenId: v.status === "minted" ? String(v.tokenId || "") : "",
+          wallet: v.status === "minted" ? String(v.mintedTo || "") : ""
+        });
+      });
+      return res.json({ ok: true, certificates, contract: certContractOrEmpty() });
+    } catch (e) {
+      console.error("証明書の一覧:", e.message);
+      return res.status(500).json({ error: "CERTIFICATE_LIST_FAILED" });
+    }
+  });
+
   router.post("/:questId/certificate/claim", requireFirebaseUser, async (req, res) => {
     if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
     const questId = String(req.params.questId || "");
@@ -785,7 +815,8 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       if (made) await scan();
     }
     if (!found) return res.status(404).json({ error: "NOT_COMPLETED" });
-    if (!pick) return res.json({ ok: true, tokenId: last.tokenId, txHash: last.txHash, alreadyMinted: true });
+    if (!pick) return res.json({ ok: true, tokenId: last.tokenId, txHash: last.txHash, alreadyMinted: true,
+      wallet: last.mintedTo || "", contract: certContractOrEmpty() });
     const ref = pick.ref;
     const row = pick.row;
     const key = pick.key;
@@ -820,8 +851,9 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
         tokenId = await contract.tokenForCompletion(key);
       }
       if (tokenId.isZero()) throw new Error("MINT_NOT_CONFIRMED");
-      await ref.set({ status: "minted", tokenId: tokenId.toString(), txHash, mintedTo: (await contract.ownerOf(tokenId)).toLowerCase(), mintedAt: new Date() }, { merge: true });
-      return res.json({ ok: true, tokenId: tokenId.toString(), txHash });
+      const mintedTo = (await contract.ownerOf(tokenId)).toLowerCase();
+      await ref.set({ status: "minted", tokenId: tokenId.toString(), txHash, mintedTo, mintedAt: new Date() }, { merge: true });
+      return res.json({ ok: true, tokenId: tokenId.toString(), txHash, wallet: mintedTo, contract: certContractOrEmpty() });
     } catch (error) {
       console.error("Quest certificate claim failed:", error);
       readyCache = { at: 0, body: null };   /* 次に聞かれたら、いまの状態を見に行く */
@@ -918,10 +950,10 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
         key: d.id, starId: v.starId || "", label: v.label || "限定星",
         color: v.color || "#D4A843", note: v.note || "",
         minted: v.status === "minted",
-        tokenId: v.tokenId || "", grantedAt: v.createdAt || null
+        tokenId: v.tokenId || "", wallet: v.mintedTo || "", grantedAt: v.createdAt || null
       });
     });
-    return res.json({ ok: true, stars });
+    return res.json({ ok: true, stars, contract: certContractOrEmpty() });
   });
 
   /* NFTで受け取る。証明書と同じ形。
@@ -939,7 +971,8 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     if (!snap.exists) return res.status(404).json({ error: "STAR_NOT_GRANTED" });
     const row = snap.data() || {};
     if (row.status === "minted")
-      return res.json({ ok: true, tokenId: row.tokenId, txHash: row.txHash, alreadyMinted: true });
+      return res.json({ ok: true, tokenId: row.tokenId, txHash: row.txHash, alreadyMinted: true,
+        wallet: row.mintedTo || "", contract: certContractOrEmpty() });
 
     const identity = await db.collection("sp_identities").doc(spid).get();
     const links = identity.exists ? (identity.data() || {}).links || [] : [];
@@ -970,9 +1003,9 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
         tokenId = await contract.tokenForCompletion(key);
       }
       if (tokenId.isZero()) throw new Error("MINT_NOT_CONFIRMED");
-      await ref.set({ status: "minted", tokenId: tokenId.toString(), txHash,
-        mintedTo: (await contract.ownerOf(tokenId)).toLowerCase(), mintedAt: new Date() }, { merge: true });
-      return res.json({ ok: true, tokenId: tokenId.toString(), txHash });
+      const mintedTo = (await contract.ownerOf(tokenId)).toLowerCase();
+      await ref.set({ status: "minted", tokenId: tokenId.toString(), txHash, mintedTo, mintedAt: new Date() }, { merge: true });
+      return res.json({ ok: true, tokenId: tokenId.toString(), txHash, wallet: mintedTo, contract: certContractOrEmpty() });
     } catch (error) {
       console.error("Limited star claim failed:", error);
       readyCache = { at: 0, body: null };

@@ -1050,3 +1050,63 @@ test("別の番号のアカウントが2つ当たったら、止める", AT(asyn
   assert.equal(r.body.error, "PASSPORT_LINK_REQUIRED",
     "どちらの人か決まらないのに渡している");
 }));
+
+/* ───────── 受け取った証明書が、どこに届いたか ─────────
+
+   MetaMask は Polygon の NFT を自動では拾わないので、受け取っても
+   ウォレットに出ず「届いていない」ように見えていた（10/28）。
+   画面は、届いた先のアドレスとトークン ID・コントラクトを使って
+   「MetaMaskに追加」を出す。ここではその材料が返ることを見る。 */
+const myCertificates = routes.find(r => r.path === "/certificates/mine").handler;
+function myCerts(spid = "spid-a") {
+  const { res } = reply();
+  return myCertificates({ identity: { account: { spid } } }, res);
+}
+
+test("自分の証明書は、受け取り済みか・届いた先・トークン ID を返す", AT(async () => {
+  seed();
+  await request();
+  const k = [...records.keys()].find(x => x.startsWith("sp_quest_certificates/"));
+  let out = await myCerts();
+  assert.equal(out.status, 200);
+  assert.equal(out.body.certificates.length, 1);
+  assert.equal(out.body.certificates[0].questId, "quest-001");
+  assert.equal(out.body.certificates[0].minted, false);
+  assert.equal(out.body.certificates[0].tokenId, "", "まだ受け取っていないのにトークン ID を出している");
+  records.set(k, Object.assign({}, records.get(k), { status: "minted", tokenId: "7", mintedTo: wallet }));
+  out = await myCerts();
+  assert.deepEqual({ ...out.body.certificates[0] }, { questId: "quest-001", round: 1, minted: true, tokenId: "7", wallet });
+  assert.equal((await myCerts("spid-z")).body.certificates.length, 0, "他人の証明書が出ている");
+  assert.equal((await myCerts("")).body.certificates.length, 0);
+}));
+
+test("受け取り済みのときも、届いた先を返す", AT(async () => {
+  seed();
+  await request();
+  const k = [...records.keys()].find(x => x.startsWith("sp_quest_certificates/"));
+  records.set(k, Object.assign({}, records.get(k), { status: "minted", tokenId: "7", txHash: "0x7", mintedTo: wallet }));
+  const out = await claimFor();
+  assert.equal(out.body.alreadyMinted, true);
+  assert.equal(out.body.wallet, wallet);
+}));
+
+test("限定星も、届いた先を返す", async () => {
+  records.clear();
+  const g = await grant({ starId: "fes-2026-10", spid: SPID, label: "解剖フェス 2026" });
+  records.set("sp_stars/" + g.body.key, Object.assign({}, records.get("sp_stars/" + g.body.key),
+    { status: "minted", tokenId: "9", mintedTo: wallet }));
+  assert.equal((await mine()).body.stars[0].wallet, wallet);
+  assert.equal((await claimStarFor()).body.wallet, wallet);
+});
+
+test("コントラクトのアドレスは、設定してあるときだけ返す", AT(async () => {
+  const CONTRACT = "0x" + "c".repeat(40);
+  const before = routes.length;
+  createQuestCompletionRouter({ db, requireOwner: (_req, _res, next) => next(),
+    requireFirebaseUser: (_req, _res, next) => next(), env: { SP_QUEST_STAR_CONTRACT: CONTRACT }, emuerEnabled: () => true });
+  const withContract = routes.slice(before).find(r => r.path === "/certificates/mine").handler;
+  seed();
+  const { res } = reply();
+  assert.equal((await withContract({ identity: { account: { spid: "spid-a" } } }, res)).body.contract, CONTRACT);
+  assert.equal((await myCerts()).body.contract, "", "設定が無いのにアドレスを返している");
+}));

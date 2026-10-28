@@ -1,6 +1,19 @@
 /* Separate, authenticated Lab activity history. Existing stars/NFT counts are untouched. */
 (() => {
   "use strict";
+  /* 星空の左下には「あなたの星座記録」（#starInfo）も固定で出ている。
+     どちらも左下に置くと重なって、星座記録の下の行が隠れていた（10/28）。
+     この欄の高さぶん、星座記録を上へ持ち上げて縦に並べる。
+     開く・閉じるで高さが変わるので、そのたびに合わせる。 */
+  const GAP = 8;
+  const BOTTOM = 16;
+  let watcher = null;
+  function placeStarInfo() {
+    const info = document.getElementById("starInfo");
+    if (!info) return;
+    const panel = document.getElementById("knowledgeLabActivity");
+    info.style.bottom = panel ? (BOTTOM + panel.offsetHeight + GAP) + "px" : "";
+  }
   window.addEventListener("message", (event) => {
     if (
       event.origin === location.origin &&
@@ -8,6 +21,9 @@
       event.data?.type === "EMU_LAB_ACTIVITY_CLEAR"
     ) {
       document.getElementById("knowledgeLabActivity")?.remove();
+      watcher?.disconnect();
+      watcher = null;
+      placeStarInfo();
       return;
     }
     if (
@@ -23,8 +39,14 @@
       panel = document.createElement("details");
       panel.id = "knowledgeLabActivity";
       panel.style.cssText =
-        "position:fixed;left:12px;bottom:16px;z-index:120;max-width:calc(100vw - 24px);max-height:35vh;overflow:auto;background:#101827;color:#f1f5f9;padding:12px;border:1px solid #64748b;border-radius:10px;font:14px sans-serif";
+        "position:fixed;left:20px;bottom:" + BOTTOM + "px;z-index:120;box-sizing:border-box;max-width:calc(100vw - 24px);max-height:35vh;overflow:auto;background:#101827;color:#f1f5f9;padding:12px;border:1px solid #64748b;border-radius:10px;font:14px sans-serif";
       document.body.appendChild(panel);
+      panel.addEventListener("toggle", placeStarInfo);
+      if (typeof ResizeObserver === "function") {
+        watcher = new ResizeObserver(placeStarInfo);
+        watcher.observe(panel);
+      }
+      window.addEventListener("resize", placeStarInfo);
     }
     panel.replaceChildren();
     const summary = document.createElement("summary");
@@ -47,5 +69,6 @@
       "本人専用の活動履歴です。保管後も記録は残ります。星・NFT・EMUERの追加発行ではありません。";
     note.style.maxWidth = "280px";
     panel.appendChild(note);
+    placeStarInfo();
   });
 })();
