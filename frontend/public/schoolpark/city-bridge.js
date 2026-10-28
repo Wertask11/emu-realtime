@@ -76,8 +76,16 @@ export function createBridge(parent, app) {
     publishCommerceProduct: (id) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/products/' + encodeURIComponent(id), { status:'live' }, 'PUT'),
     /* method は emuer_ledger（ウォレットに移す前のEMUER）か emuer_chain（ウォレットのEMUER）。
        金額はサーバーが商品から決める。ここからは送らない。 */
-    placeCommerceOrder: (productId, requestId, method = 'emuer_ledger') => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/orders',
-      { productId, method: method === 'emuer_chain' ? 'emuer_chain' : 'emuer_ledger', requestId }),
+    /* extra は物の受け取り方と配送先（{ delivery, shipping }）。物でなければ空。 */
+    placeCommerceOrder: (productId, requestId, method = 'emuer_ledger', extra = {}) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/orders',
+      { productId, method: method === 'emuer_chain' ? 'emuer_chain' : 'emuer_ledger', requestId,
+        ...(extra.delivery ? { delivery: extra.delivery } : {}), ...(extra.shipping ? { shipping: extra.shipping } : {}) }),
+    adminShipping: (status = 'pending') => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/shipping?status=' + (status === 'shipped' ? 'shipped' : 'pending')),
+    shipOrder: (id) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/orders/' + encodeURIComponent(id) + '/ship', {}),
+    adminMetrics: (days = 30) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/metrics?days=' + encodeURIComponent(days)),
+    /* 公式ショップの見られ方（回数だけ）。 */
+    trackShop: (event, productId) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/metrics',
+      { event, ...(productId ? { productId } : {}) }),
     confirmCommerceOrder: (id) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/orders/' + encodeURIComponent(id) + '/confirm', {}),
     cancelCommerceOrder: (id) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/orders/' + encodeURIComponent(id) + '/cancel', {}),
     exchangeAuthorization: (id) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/orders/' + encodeURIComponent(id) + '/exchange-authorization', {}),
@@ -120,11 +128,12 @@ export function createBridge(parent, app) {
       stillCurrent(version);
       return tx.hash;
     },
-    async downloadReizoSticker(orderId) {
+    /* 交換したデジタルの品を受け取る。ファイル名はサーバーが一覧から決めたもの。 */
+    async downloadDigital(orderId, fileName) {
       const version = checkSession();
       const headers = await bounded(parent.emuAuthHeaders(false, { interactive:false }));
       stillCurrent(version);
-      const res = await bounded(fetch('https://emu-realtime.onrender.com/api/mitemiru/orders/' + encodeURIComponent(orderId) + '/digital-sticker',
+      const res = await bounded(fetch('https://emu-realtime.onrender.com/api/mitemiru/orders/' + encodeURIComponent(orderId) + '/digital',
         { headers, cache:'no-store' }));
       stillCurrent(version);
       if (!res.ok) {
@@ -134,7 +143,7 @@ export function createBridge(parent, app) {
       const blob = await res.blob();
       stillCurrent(version);
       const url = URL.createObjectURL(blob), link = document.createElement('a');
-      link.href = url; link.download = 'reizo-kun-sticker-v1.png'; link.click();
+      link.href = url; link.download = /^[A-Za-z0-9._-]{1,120}$/.test(String(fileName || '')) ? fileName : 'schoolpark-item'; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     },
     getOpsOrders: (code) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/orders?code=' + encodeURIComponent(code)),
