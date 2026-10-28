@@ -189,7 +189,9 @@ for(const width of [375,390,412,768,1440]) test(`City UI ${width}px: 01–08, RE
     await f.frame.locator('[data-action="passport"]').first().click();
     await f.page.getByRole('heading',{name:/Passport \/ 星空/}).waitFor();
     await f.page.getByRole('button',{name:'SchoolParkへ戻る',exact:true}).click();
-    await f.frame.locator('[data-action="home"]').click();
+    // City has no own "back to plaza" link since 10/28; the sidebar returns home.
+    assert.equal(await f.frame.locator('[data-action="home"]').count(),0);
+    await f.nav('01');
     assert.equal(await f.frame.evaluate(()=>app.state.screen),'home');
     assert.deepEqual(f.errors,[]);
     for(const req of f.requests.filter(r=>r.method==='POST')) assert.deepEqual(Object.keys(JSON.parse(req.body)).sort(),['checkInType','spotId']);

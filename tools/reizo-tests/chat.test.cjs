@@ -36,7 +36,9 @@ test('all existing FAQ data and exact matcher outputs are preserved', () => {
   const kb=JSON.parse(JSON.stringify(ctx.kb));
   // Reviewed answer rewrites (ca588f7 on 10/19; the quest tax note on 10/24).
   // Keywords, order and every other answer stay byte-for-byte the same.
-  const rewritten=['ches','クエスト','ギルド','スマホ','チュートリアル','問い合わせ'];
+  // Reviewed rewrite (10/28): EMUER exchange in the City official shop is open; the old
+  // "受付停止中" note was removed from the answers that carried it.
+  const rewritten=['ches','クエスト','ギルド','スマホ','チュートリアル','問い合わせ','emuerで何ができる','かっこの中','emuer','ショッピング'];
   // Reviewed rename (#232, 10/27): the plan names became 「Emu for SchoolPark light/plus/pro」; nothing else in these answers changed.
   const renamed=['プラン','公式パス'],rename=text=>text.replace(/Emu (light|plus|pro)/g,'Emu for SchoolPark $1');
   assert.equal(faq.items.length,kb.length);

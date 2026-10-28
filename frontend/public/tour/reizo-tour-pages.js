@@ -352,13 +352,49 @@
     ]
   },
   "city": {
-    "name": "CITY（入口のみ）",
+    "name": "CITY",
     "steps": [
       {
-        "target": "city-card",
-        "label": "CITYの入口",
-        "text": "ここからCITYに入れるよ。今日は入口を覚えておけばOK。",
-        "note": "3D移動・Spot操作・チェックイン・購入は別フェーズ",
+        "target": "city-doors",
+        "label": "CITYでできること",
+        "text": "CITYでできることは3つ。公式ショップ・街のお店・3Dの街だよ。",
+        "screen": "city"
+      },
+      {
+        "target": "city-shop",
+        "label": "公式ショップ",
+        "text": "SchoolPark公式のお店。活動でたまったEMUERで、商品と交換できるよ。ウォレットのEMUERでも、ウォレットに移す前のEMUERでも払えるよ。",
+        "note": "EMUERでの交換は Light・Plus・Pro プラン",
+        "screen": "city"
+      },
+      {
+        "target": "city-showcase",
+        "label": "公式ショップの商品",
+        "text": "公式ショップの商品は、ここに並ぶよ。押すと交換の画面に進むよ。",
+        "screen": "city"
+      },
+      {
+        "target": "city-partners",
+        "label": "街のお店",
+        "text": "SchoolParkとつながる街のお店だよ。支払いは円・JPYCで、お店でするよ（EMUERは使えないよ）。",
+        "screen": "city"
+      },
+      {
+        "target": "city-3d",
+        "label": "3Dの街",
+        "text": "3Dの街では、お店に入って歩いて、商品を見られるよ。公式ショップも3Dにあるよ。",
+        "screen": "city"
+      },
+      {
+        "target": "city-orders",
+        "label": "交換履歴",
+        "text": "交換した商品と引換コードはここ。受付で引換コードを見せて受け取ってね。デジタルの商品は、ここからダウンロードできるよ。",
+        "screen": "city"
+      },
+      {
+        "target": "city-join",
+        "label": "出店のご案内",
+        "text": "お店の人は、ここから出店の相談ができるよ。",
         "screen": "city"
       }
     ]
@@ -595,6 +631,8 @@
     if(item.target==='emu-library' && window.innerWidth<=700 && !document.querySelector('#emuAccountMenu.open')) { requestAnimationFrame(function(){var running=tour.running();if(running?.id==='emu-feed' && running.index===6 && !document.querySelector('#emuAccountMenu.open'))window.toggleAccountMenu?.();}); }
     if(item.target==='passport-entry' && dao()?.state.device !== 'mobile' && dao()?.state.sidebarOpen === false) dao().toggleSidebar();
     if(item.pp && window._sppCurrentPage?.() !== item.pp) window.spPassportGoPage?.(item.pp);
+    // CITY steps point at City's own home page; bring City back there if it is on another page.
+    if(item.screen==='city' && /^city-/.test(item.target||'')) frameDoc('spDaoFrame')?.getElementById('sp-city')?.dispatchEvent(new CustomEvent('city-tour-home'));
     var kd=frameDoc('emuKnowledgeFrame'), kw=kd?.defaultView;
     if(item.lib && !kd?.querySelector('#panel.open')) { kd?.documentElement.removeAttribute('data-tour-library-ready'); kw?.openPanel?.('library'); }
     if(item.target === 'emu-tabs' && kd?.querySelector('#panel.open')) kw?.closeOverlay?.(kd.querySelector('#panel'));
@@ -628,7 +666,7 @@
   register("sp-park","公園",v2["park"].steps.map(specificationStep),"park",null);
   register("sp-contribution","貢献",v2["contrib"].steps.map(specificationStep),"members",null);
   register("sp-treasury","treasury",v2["treasury"].steps.map(specificationStep),"treasury",null);
-  register("sp-city","CITY（入口のみ）",v2["city"].steps.map(specificationStep),"city",null);
+  register("sp-city","CITY",v2["city"].steps.map(specificationStep),"city",null);
   register("sp-passport","SchoolPark パスポート",v2["passport"].steps.map(specificationStep),"passport",null);
   register("emu-feed","01 知識を読む",v2["emu-read"].steps.map(specificationStep),null,"emuKnowledgeFrame");
   register("emu-requests","02 知識を探す",v2["emu-search"].steps.map(specificationStep),null,null);
