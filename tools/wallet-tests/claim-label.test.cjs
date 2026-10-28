@@ -34,7 +34,8 @@ function stage(rows, ok) {
     wsHideClaim: (why) => { seen.hidden = true; seen.why = why; },
     document: { getElementById: () => ({ set textContent(v) { seen.status = v; } }) },
     wsClaimLabel: (text, fn) => { seen.label = text; seen.fn = fn; },
-    wsClaim: () => {},
+    wsClaim: (row) => { seen.claimed = { one: row }; },
+    wsClaimAll: (rows) => { seen.claimed = { all: rows }; },
     fetch: async () => ({ ok: ok !== false, json: async () => ({ rewards: rows }) })
   });
   vm.runInContext(REWARDS, ctx);
@@ -90,10 +91,22 @@ test('読めなかったときも、ボタンを出さない', async () => {
   assert.equal(s.seen.hidden, true);
 });
 
-test('押す相手は、1件目', async () => {
-  const s = stage([{ claimId: 'first', amount: '100' }, { claimId: 'second', amount: '100' }]);
+test('1件なら、その1件を受け取る', async () => {
+  const s = stage([{ claimId: 'only', amount: '100' }]);
   await s.run();
   assert.equal(typeof s.seen.fn, 'function', '押せるようになっていない');
+  s.seen.fn();
+  assert.equal(s.seen.claimed.one.claimId, 'only');
+});
+
+/* 1件ずつだと、そのたびに MetaMask の承認とガス代がかかっていた。 */
+test('2件以上なら、まとめて1回で受け取る', async () => {
+  const s = stage([{ claimId: 'first', amount: '100' }, { claimId: 'second', amount: '50' }]);
+  await s.run();
+  assert.match(s.seen.label, /150 EMUER（2件）をまとめて受け取る/, '出た文字: ' + s.seen.label);
+  assert.doesNotMatch(s.seen.label, /うち1件/);
+  s.seen.fn();
+  assert.deepEqual(s.seen.claimed.all.map(x => x.claimId), ['first', 'second']);
 });
 
 /* ───────── 受け取ったあと ───────── */
@@ -117,4 +130,50 @@ test('チェーンが違えば、先に止める', () => {
                           SRC.indexOf('async function claimEmuV2LoginReward(){'));
   assert.match(claim, /chainId\)!==137/, '別のチェーンへ投げてしまう');
   assert.match(claim, /Polygon Mainnet/, 'どこへ切り替えればよいか言っていない');
+});
+
+/* ───────── まとめて受け取る ───────── */
+
+const ALL = SRC.slice(SRC.indexOf('async function wsClaimAll(rows){'),
+                      SRC.indexOf('async function claimEmuV2LoginReward(){'));
+assert.ok(ALL.length > 400, 'まとめて受け取るところが見つかりません');
+
+function stageAll(reply) {
+  const seen = { posted: null, sent: null, status: null, done: new Set(), alerts: [], reloaded: 0 };
+  const ctx = vm.createContext({
+    EMUER_V2_API: 'https://x', Number, String, JSON, wsDone: seen.done,
+    wsAccount: () => '0xme', wsHeaders: async () => ({}),
+    wsClaimLabel: () => {}, wsBalance: async () => {}, wsRewards: async () => { seen.reloaded++; },
+    window: {}, alert: (m) => seen.alerts.push(m),
+    emuerV2Config: { contract: '0xc' }, EMUER_V2_ABI: [],
+    document: { getElementById: () => ({ set textContent(v) { seen.status = v; } }) },
+    fetch: async (url, init) => { seen.posted = { url, body: JSON.parse(init.body) }; return { ok: reply.ok !== false, json: async () => reply.body }; },
+    ethers: {
+      providers: { Web3Provider: function () { return { getNetwork: async () => ({ chainId: 137 }), getSigner: () => ({}) }; } },
+      Contract: function () { return { claimReward: async (...a) => { seen.sent = a; return { wait: async () => {} }; } }; }
+    }
+  });
+  vm.runInContext(ALL, ctx);
+  return { run: (rows) => ctx.wsClaimAll(rows), seen };
+}
+
+test('まとめた札を1回だけ送り、元の報酬もまとめた札も一覧から外す', async () => {
+  const s = stageAll({ body: { ok: true, count: 2, amount: '150',
+    reward: { claimId: '0xbundle', totalAmount: '150000000000000000000', deadline: 9, authorization: '0xsig' } } });
+  await s.run([{ claimId: 'first' }, { claimId: 'second' }]);
+  assert.equal(s.seen.posted.url, 'https://x/rewards/bundle');
+  assert.deepEqual(s.seen.posted.body, { address: '0xme' });
+  assert.deepEqual(s.seen.sent, ['0xbundle', '150000000000000000000', 9, '0xsig']);
+  assert.equal(s.seen.status, '150 EMUER を受け取りました（2件）');
+  assert.deepEqual([...s.seen.done].sort(), ['0xbundle', 'first', 'second']);
+  assert.equal(s.seen.alerts.length, 0);
+});
+
+test('まとめられなかったときは、何も送らずに知らせて一覧を読み直す', async () => {
+  const s = stageAll({ ok: false, body: { error: 'NOTHING_TO_BUNDLE' } });
+  await s.run([{ claimId: 'first' }, { claimId: 'second' }]);
+  assert.equal(s.seen.sent, null, '札が無いのに送っている');
+  assert.equal(s.seen.alerts.length, 1);
+  assert.equal(s.seen.reloaded, 1);
+  assert.equal(s.seen.done.size, 0);
 });
