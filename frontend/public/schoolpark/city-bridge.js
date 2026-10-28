@@ -128,6 +128,31 @@ export function createBridge(parent, app) {
     async openEmu() { await allowNavigation(); await parent.chesHubGo('emu'); },
     async openPassport() { await allowNavigation(); await parent.openSpPassport(); },
     goHome() { app.cityReturn = false; app.go('home')(); },
+    /* お問い合わせ（出店の相談など）。Emu の画面のお問い合わせを、その種類で開く。
+       入力の途中（2つ目より先の手順）なら、そのまま開くだけにする。
+       次へを押すと、途中の内容を確かめて送信まで進んでしまうため。
+       Emu の画面が無いときは、同じフォームを別のタブで開く。 */
+    openContact(type) {
+      const kind = /^[a-z]{1,20}$/.test(String(type || '')) ? String(type) : 'general';
+      try {
+        const doc = parent.document;
+        const panel = doc.getElementById('emu-contact-panel');
+        const pick = doc.querySelector('.w-cat-btn[data-type="' + kind + '"]');
+        if (panel && pick && typeof parent.toggleContactPanel === 'function' && typeof parent.selectCategory === 'function') {
+          if (!panel.classList.contains('open')) parent.toggleContactPanel();
+          if (typeof parent.switchContactTab === 'function') parent.switchContactTab('contact');
+          const back = doc.getElementById('w-back');
+          const firstStep = !back || back.style.display === 'none' || back.style.display === '';
+          if (firstStep) {
+            parent.selectCategory(pick);
+            if (typeof parent.nextStep === 'function') parent.nextStep();
+          }
+          return true;
+        }
+      } catch (_) { /* 別の場所から開かれている */ }
+      window.open('https://emu-for-schoolpark.vercel.app/?contact=' + encodeURIComponent(kind), '_blank', 'noopener');
+      return false;
+    },
     onSessionChange(fn) {
       changed = fn;
       // Register only after City is first opened. Nothing is subscribed at app startup.
