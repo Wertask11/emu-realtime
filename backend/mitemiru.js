@@ -36,6 +36,21 @@ const CITY_OFFICIAL_SHOP_ID = "schoolpark-official";
 const REIZO_STICKER_PRODUCT_ID = "reizo-kun-sticker-v1";
 const REIZO_STICKER_ASSET_ID = "reizo-kun-digital-sticker-v1";
 const ORDERS = "mitemiru_orders";
+/* 配送先。注文とは別に置き、運営だけが読む（firestore.rules は mitemiru_* を閉じている）。
+   配送後1年で消す（プライバシーポリシー「注文完了・配送確認後、1年以内に削除」）。 */
+const SHIPPING = "mitemiru_shipping";
+const SHIPPING_KEEP_MS = 365 * 24 * 60 * 60 * 1000;
+/* 公式ショップの見られ方の回数（日ごと）。誰が見たかは残さない。 */
+const METRICS = "mitemiru_metrics";
+/* 受け取り方。
+     digital        … 交換したらその場でダウンロード
+     ship           … 配送（物）
+     ship_or_pickup … 配送か、イベント会場での手渡しを選ぶ（物）
+     pickup         … 会場で引換コードを見せて受け取る（イベントの席など）
+     online         … オンラインで提供（企画会議など。運営から日時を連絡）
+   前からある商品には無い。そのときは、デジタルの品なら digital、それ以外は pickup とみなす。 */
+const FULFILLMENT_MODES = ["digital", "ship", "ship_or_pickup", "pickup", "online"];
+const PHYSICAL_MODES = ["ship", "ship_or_pickup"];
 const CHAIN_PAYMENTS = "mitemiru_chain_payments";
 const REWARDS = "emuer_v2_rewards";
 const USAGE = "emuer_v2_access_usage";
@@ -63,6 +78,26 @@ const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const STATUS = ["pending_payment", "paid", "fulfilled", "refunded", "cancelled", "expired"];
 
 const text = (value, max) => (typeof value === "string" ? value.trim().slice(0, max) : "");
+
+/* 交換で渡すデジタルの品の一覧（backend/private-assets/catalog.json）。
+   ファイルは公開の場所に置かず、交換した本人だけがダウンロードできる。
+   品を増やすときは、ファイルを置いて一覧に1行足す（コードは変えない）。 */
+const ASSET_TYPES = { ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg", ".pdf": "application/pdf", ".zip": "application/zip" };
+function loadDigitalAssets(dir) {
+  const fs = require("node:fs");
+  let raw = {};
+  try { raw = JSON.parse(fs.readFileSync(path.join(dir, "catalog.json"), "utf8")); } catch (_) { return {}; }
+  const out = {};
+  for (const [id, a] of Object.entries(raw || {})) {
+    const file = String((a && a.file) || "");
+    if (!/^[a-z0-9-]{1,80}$/.test(id) || !/^[A-Za-z0-9._-]{1,120}$/.test(file) || file.startsWith(".")) continue;
+    const type = ASSET_TYPES[path.extname(file).toLowerCase()];
+    if (!type || !fs.existsSync(path.join(dir, file))) continue;
+    const downloadName = /^[A-Za-z0-9._-]{1,120}$/.test(String(a.downloadName || "")) ? a.downloadName : file;
+    out[id] = { file, type, downloadName, path: path.join(dir, file) };
+  }
+  return out;
+}
 function tsMs(v) {
   if (!v) return 0;
   if (typeof v.toMillis === "function") return v.toMillis();
@@ -84,7 +119,7 @@ function price(value) {
   return n;
 }
 
-function cleanProduct(body, previous) {
+function cleanProduct(body, previous, assets) {
   const b = body && typeof body === "object" && !Array.isArray(body) ? body : null;
   if (!b) throw new Error("INVALID_PRODUCT");
   const base = previous || {};
@@ -125,11 +160,41 @@ function cleanProduct(body, previous) {
   /* 画面に出す絵文字。1〜4文字まで（絵文字は1文字でも長さが2以上になる）。 */
   const emoji = text(pick("emoji"), 8);
   const sortOrder = Number(pick("sortOrder") || 0);
+  /* デジタルの品。一覧（catalog.json）にあるものだけ。 */
+  const digitalAssetId = typeof pick("digitalAssetId") === "string" ? pick("digitalAssetId").trim() : "";
+  if (digitalAssetId && (!/^[a-z0-9-]{1,80}$/.test(digitalAssetId) || (assets && !assets[digitalAssetId]))) throw new Error("INVALID_DIGITAL_ASSET");
+  const fulfillmentMode = typeof pick("fulfillmentMode") === "string" ? pick("fulfillmentMode").trim() : "";
+  if (fulfillmentMode && !FULFILLMENT_MODES.includes(fulfillmentMode)) throw new Error("INVALID_FULFILLMENT_MODE");
+  if (fulfillmentMode === "digital" && !digitalAssetId) throw new Error("INVALID_FULFILLMENT_MODE");
+  if (digitalAssetId && fulfillmentMode && fulfillmentMode !== "digital") throw new Error("INVALID_FULFILLMENT_MODE");
+  /* 受注生産の注文の締切（この時刻を過ぎたら注文も取消もできない）。無ければ締切なし。 */
+  const rawDeadline = pick("orderDeadlineMs");
+  let orderDeadlineMs = null;
+  if (rawDeadline !== null && rawDeadline !== undefined && rawDeadline !== "") {
+    orderDeadlineMs = Number(rawDeadline);
+    if (!Number.isSafeInteger(orderDeadlineMs) || orderDeadlineMs <= 0) throw new Error("INVALID_ORDER_DEADLINE");
+  }
   return {
     name, description: text(pick("description"), 600), imageUrl, prices, cashAtVenue, stock, status,
     fulfillment, cancelPolicy, shopId, storeType, emoji,
-    sortOrder: Number.isSafeInteger(sortOrder) ? sortOrder : 0
+    sortOrder: Number.isSafeInteger(sortOrder) ? sortOrder : 0,
+    digitalAssetId, fulfillmentMode, orderDeadlineMs
   };
+}
+/* 受け取り方。前からある商品には無いので、品の種類から決める。 */
+function fulfillmentModeOf(p) {
+  if (p && FULFILLMENT_MODES.includes(p.fulfillmentMode)) return p.fulfillmentMode;
+  return p && p.digitalAssetId ? "digital" : "pickup";
+}
+/* 配送先。名前・郵便番号・住所・電話番号。ここで形を確かめ、余計な欄は捨てる。 */
+function cleanShipping(value) {
+  const v = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const name = text(v.name, 60);
+  const postalCode = text(v.postalCode, 10).replace(/[^0-9]/g, "");
+  const address = text(v.address, 200);
+  const phone = text(v.phone, 20).replace(/[^0-9+]/g, "");
+  if (!name || !/^\d{7}$/.test(postalCode) || !address || !/^\+?\d{10,15}$/.test(phone)) throw new Error("INVALID_SHIPPING");
+  return { name, postalCode: postalCode.slice(0, 3) + "-" + postalCode.slice(3), address, phone };
 }
 
 /* ショップ。みてみるの画面に出るカードの中身。
@@ -252,6 +317,7 @@ function createMitemiruRouter(deps) {
   const stripe = deps.stripe === undefined
     ? (env.STRIPE_SECRET_KEY ? require("stripe")(env.STRIPE_SECRET_KEY) : null) : deps.stripe;
   const emuerEnabled = deps.emuerEnabled || (() => false);
+  const assets = deps.digitalAssets || loadDigitalAssets(path.join(__dirname, "private-assets"));
   const isOwner = deps.isOwner || (() => false);
   const entitlement = deps.entitlement;
   const policy = require("./emuer-v2/policy");
@@ -287,6 +353,9 @@ function createMitemiruRouter(deps) {
       PARTNER_CHECKOUT_NOT_READY: 409, IDEMPOTENCY_KEY_REQUIRED: 400,
       IDEMPOTENCY_KEY_CONFLICT: 409, EVENT_QR_PRODUCT_NOT_READY: 409,
       PRODUCT_ALREADY_EXISTS: 409,
+      INVALID_DIGITAL_ASSET: 400, INVALID_FULFILLMENT_MODE: 400, INVALID_ORDER_DEADLINE: 400,
+      INVALID_SHIPPING: 400, INVALID_DELIVERY: 400, ORDER_CLOSED: 409, NOT_CANCELLABLE: 409,
+      DIGITAL_ASSET_NOT_AVAILABLE: 409, INVALID_METRIC: 400,
       EVENT_QR_CONFIG_INVALID: 503
     };
     if (known[code]) return res.status(known[code]).json({ error: code, ...(error.extra || {}) });
@@ -318,8 +387,16 @@ function createMitemiruRouter(deps) {
       id, name: p.name, description: p.description || "", imageUrl: p.imageUrl || "",
       prices: p.prices, methods: methodsFor(p), remaining: left, soldOut: left === 0,
       fulfillment: p.fulfillment, cancelPolicy: p.cancelPolicy,
-      shopId: p.shopId || "", storeType: p.shopId === CITY_OFFICIAL_SHOP_ID ? "schoolpark_virtual" : (p.storeType || "legacy"), emoji: p.emoji || ""
+      shopId: p.shopId || "", storeType: p.shopId === CITY_OFFICIAL_SHOP_ID ? "schoolpark_virtual" : (p.storeType || "legacy"), emoji: p.emoji || "",
+      fulfillmentMode: fulfillmentModeOf(p), orderDeadline: p.orderDeadlineMs || null,
+      orderClosed: !!(p.orderDeadlineMs && now() > p.orderDeadlineMs)
     };
+  }
+  /* 買った人が自分で取り消せるか。物（配送・手渡し）で、まだ渡していなくて、締切の前だけ。
+     デジタル・イベントの席・オンラインは、運営都合の返金だけ。 */
+  function buyerCancellable(o) {
+    return o.status === "paid" && o.physical === true && !o.cancelRequestedAtMs
+      && (!o.orderDeadlineMs || now() <= o.orderDeadlineMs);
   }
   function publicOrder(id, o) {
     const shown = ["paid", "fulfilled"].includes(o.status);
@@ -329,6 +406,11 @@ function createMitemiruRouter(deps) {
       method: o.method, currency: o.currency,
       amount: o.amount, status: o.status, pickupCode: shown ? o.pickupCode : null,
       digitalStickerAvailable: o.digitalAssetId === REIZO_STICKER_ASSET_ID && shown,
+      digitalAvailable: !!(o.digitalAssetId && assets[o.digitalAssetId]) && shown,
+      digitalFileName: o.digitalAssetId && assets[o.digitalAssetId] ? assets[o.digitalAssetId].downloadName : null,
+      delivery: o.delivery || (o.digitalAssetId ? "digital" : "pickup"),
+      orderDeadline: o.orderDeadlineMs || null,
+      cancellable: buyerCancellable(o), cancelRequested: !!o.cancelRequestedAtMs,
       fulfillment: o.fulfillment || "", createdAt: o.createdAtMs, paidAt: o.paidAtMs || null,
       fulfilledAt: o.fulfilledAtMs || null, expiresAt: o.status === "pending_payment" ? o.expiresAtMs : null,
       stripeUrl: o.status === "pending_payment" && o.method === "jpy_card" ? (o.stripeUrl || null) : null,
@@ -382,10 +464,11 @@ function createMitemiruRouter(deps) {
       await db.runTransaction(async tx => {
         const [os, ps] = await Promise.all([tx.get(orderRef(d.id)), tx.get(productRef(o.productId))]);
         const cur = os.exists ? os.data() || {} : {};
-        if (cur.status !== "pending_payment" || !(cur.expiresAtMs < now())) return;
+        if (cur.status !== "pending_payment" || !(cur.expiresAtMs < now())) return false;
         tx.set(orderRef(d.id), { status: "expired", expiredAtMs: now() }, { merge: true });
         if (ps.exists) tx.set(productRef(o.productId), { reserved: Math.max(0, Number(ps.data().reserved || 0) - 1) }, { merge: true });
-      }).catch(() => { /* 次の機会に外す */ });
+        return true;
+      }).then(expired => expired ? dropShipping(d.id) : null).catch(() => { /* 次の機会に外す */ });
     }
   }
 
@@ -512,27 +595,42 @@ function createMitemiruRouter(deps) {
       // Older Mitemiru orders predate Passport linkage. Project the current
       // server-resolved Passport ID into this authenticated user's response
       // without rewriting historical orders or accepting a client-supplied ID.
-      return res.json({ ok: true, orders: rows.map(r => publicOrder(r.id,
-        { ...r.data, passportId: r.data.passportId || passportId || null })) });
+      /* 配送の注文には、自分が入れた配送先を添える（本人にだけ返す）。 */
+      const shipTo = {};
+      await Promise.all(rows.filter(r => r.data.delivery === "ship" && ["paid", "fulfilled"].includes(r.data.status)).map(async r => {
+        const s = await db.collection(SHIPPING).doc(r.id).get();
+        if (s.exists && (s.data() || {}).uid === req.identity.uid) {
+          const v = s.data() || {};
+          shipTo[r.id] = { name: v.name, postalCode: v.postalCode, address: v.address };
+        }
+      }));
+      return res.json({ ok: true, orders: rows.map(r => ({ ...publicOrder(r.id,
+        { ...r.data, passportId: r.data.passportId || passportId || null }),
+        shipTo: shipTo[r.id] || null, shippedAt: r.data.delivery === "ship" ? (r.data.fulfilledAtMs || null) : null })) });
     } catch (e) { return fail(res, e); }
   });
 
-  router.get("/orders/:id/digital-sticker", deps.requireFirebaseUser, async (req, res) => {
+  /* 交換したデジタルの品を渡す。交換した本人で、支払いが済んだ注文だけ。
+     前は冷蔵庫くんのステッカー専用だった（/digital-sticker は前の画面のために残す）。 */
+  async function sendDigital(req, res) {
     try {
       const id = String(req.params.id || "");
-      if (!/^[a-f0-9]{40}$/.test(id)) return res.status(404).json({ error: "ORDER_NOT_FOUND" });
+      if (!/^[a-f0-9]{24,40}$/.test(id)) return res.status(404).json({ error: "ORDER_NOT_FOUND" });
       const snap = await orderRef(id).get();
       if (!snap.exists) return res.status(404).json({ error: "ORDER_NOT_FOUND" });
       const order = snap.data() || {};
       if (order.uid !== req.identity.uid) return res.status(404).json({ error: "ORDER_NOT_FOUND" });
-      if (order.productId !== REIZO_STICKER_PRODUCT_ID || order.digitalAssetId !== REIZO_STICKER_ASSET_ID
-          || order.storeType !== "schoolpark_virtual" || !["paid", "fulfilled"].includes(order.status)) {
+      const asset = order.digitalAssetId ? assets[order.digitalAssetId] : null;
+      if (!asset || !["paid", "fulfilled"].includes(order.status)) {
         return res.status(409).json({ error: "DIGITAL_ASSET_NOT_AVAILABLE" });
       }
       res.set("Cache-Control", "private, no-store");
-      return res.download(path.join(__dirname, "private-assets", `${REIZO_STICKER_ASSET_ID}.png`), "reizo-kun-sticker-v1.png");
+      res.type(asset.type);
+      return res.download(asset.path, asset.downloadName);
     } catch (e) { return fail(res, e); }
-  });
+  }
+  router.get("/orders/:id/digital", deps.requireFirebaseUser, sendDigital);
+  router.get("/orders/:id/digital-sticker", deps.requireFirebaseUser, sendDigital);
 
   router.post("/orders", deps.requireFirebaseUser, limited, async (req, res) => {
     const b = req.body || {};
@@ -568,8 +666,19 @@ function createMitemiruRouter(deps) {
         if (!person || person.status !== "active") throw err("PASSPORT_LINK_REQUIRED");
       }
       if (product.status !== "live") throw err("NOT_FOR_SALE");
+      if (product.orderDeadlineMs && now() > product.orderDeadlineMs) throw err("ORDER_CLOSED");
       if (!methodsFor(product).includes(method)) throw err("METHOD_NOT_AVAILABLE");
       if (remaining(product) === 0) throw err("SOLD_OUT");
+      /* 受け取り方。物は配送が基本で、ship_or_pickup の品は会場での手渡しも選べる。
+         配送なら、ここで住所の形を確かめる（住所は注文とは別の場所に置く）。 */
+      const mode = fulfillmentModeOf(product);
+      let delivery = mode;
+      if (mode === "ship") delivery = "ship";
+      if (mode === "ship_or_pickup") {
+        delivery = String(b.delivery || "ship");
+        if (!["ship", "pickup"].includes(delivery)) throw err("INVALID_DELIVERY");
+      }
+      const shipping = delivery === "ship" ? cleanShipping(b.shipping) : null;
       const currency = METHODS[method].currency;
       const amount = product.prices[currency];
       const pickupCode = await newPickupCode();
@@ -577,7 +686,9 @@ function createMitemiruRouter(deps) {
         uid: identity.uid, wallet, productId, productName: product.name, fulfillment: product.fulfillment,
         cancelPolicy: product.cancelPolicy, method, currency, amount, pickupCode, createdAtMs: now(),
         shopId: product.shopId || "", storeType,
-        ...(product.digitalAssetId === REIZO_STICKER_ASSET_ID ? { digitalAssetId: REIZO_STICKER_ASSET_ID } : {}),
+        ...(product.digitalAssetId && assets[product.digitalAssetId] ? { digitalAssetId: product.digitalAssetId } : {}),
+        delivery, physical: PHYSICAL_MODES.includes(mode),
+        ...(product.orderDeadlineMs ? { orderDeadlineMs: product.orderDeadlineMs } : {}),
         ...(storeType === "schoolpark_virtual" ? { requestId } : {})
       };
 
@@ -593,7 +704,7 @@ function createMitemiruRouter(deps) {
       }
 
       if (method === "emuer_ledger") {
-        const order = await payFromLedger(id, base, product, wallet);
+        const order = await payFromLedger(id, base, product, wallet, shipping);
         return res.json({ ok: true, order: publicOrder(id, order) });
       }
 
@@ -617,7 +728,7 @@ function createMitemiruRouter(deps) {
         order.receiver = jpycReceiver;
         order.amountWei = (BigInt(amount) * 10n ** BigInt(decimals)).toString();
       }
-      await reserve(id, order);
+      await reserve(id, order, shipping);
       try {
         if (method === "emuer_chain") {
           const authorization = await chain.signOrder({ orderId: order.chainOrderId, productId: order.chainProductId,
@@ -649,7 +760,7 @@ function createMitemiruRouter(deps) {
     } catch (e) { return fail(res, e); }
   });
 
-  async function reserve(id, order) {
+  async function reserve(id, order, shipping) {
     await db.runTransaction(async tx => {
       const ps = await tx.get(productRef(order.productId));
       const p = ps.exists ? ps.data() || {} : null;
@@ -657,17 +768,24 @@ function createMitemiruRouter(deps) {
       if (remaining(p) === 0) throw err("SOLD_OUT");
       tx.set(productRef(order.productId), { reserved: Number(p.reserved || 0) + 1 }, { merge: true });
       tx.create(orderRef(id), order);
+      if (shipping) tx.create(db.collection(SHIPPING).doc(id), { ...shipping, orderId: id, uid: order.uid, createdAtMs: now() });
     });
   }
+  /* 渡さないと決まった注文の住所は、すぐ消す（取消・期限切れ・返金）。 */
+  async function dropShipping(id) {
+    await db.collection(SHIPPING).doc(String(id)).delete().catch(() => {});
+  }
   async function release(id, status) {
-    await db.runTransaction(async tx => {
+    const closed = await db.runTransaction(async tx => {
       const os = await tx.get(orderRef(id));
       const o = os.exists ? os.data() || {} : null;
-      if (!o || o.status !== "pending_payment") return;
+      if (!o || o.status !== "pending_payment") return false;
       const ps = await tx.get(productRef(o.productId));
       tx.set(orderRef(id), { status, closedAtMs: now() }, { merge: true });
       if (ps.exists) tx.set(productRef(o.productId), { reserved: Math.max(0, Number(ps.data().reserved || 0) - 1) }, { merge: true });
+      return true;
     });
+    if (closed) await dropShipping(id);
   }
 
   /* 未変換の EMUER から払う。
@@ -675,7 +793,7 @@ function createMitemiruRouter(deps) {
      払ったぶんは status を spent にして、二度と受け取りの署名を出さない。
      ただし直近に署名を出した報酬（authorizedUntilMs）はまだ使われうるので選ばない。
      多く取りすぎたぶんは、おつりとして新しい報酬にする。 */
-  async function payFromLedger(id, base, product, wallet) {
+  async function payFromLedger(id, base, product, wallet, shipping) {
     if (!/^0x[0-9a-f]{40}$/.test(wallet)) throw err("WALLET_REQUIRED");
     const priceWei = BigInt(wei(base.amount));
     const rows = await spendableRewards(wallet);
@@ -737,6 +855,7 @@ function createMitemiruRouter(deps) {
       }
       tx.set(productRef(base.productId), { sold: Number(p.sold || 0) + 1 }, { merge: true });
       tx.create(orderRef(id), order);
+      if (shipping) tx.create(db.collection(SHIPPING).doc(id), { ...shipping, orderId: id, uid: base.uid, createdAtMs: now() });
       consumeUsage(tx, order, us);
       return { order, already: false };
     });
@@ -823,6 +942,18 @@ function createMitemiruRouter(deps) {
       const snap = await orderRef(id).get();
       const o = snap.exists ? snap.data() || {} : null;
       if (!o || o.uid !== req.identity.uid) throw err("ORDER_NOT_FOUND");
+      /* 支払い済みの物（配送・手渡し）は、渡す前で締切の前なら取り消せる（10/28 オーナー決定）。
+         未変換のEMUERで払ったものは、その場で全額返す（運営都合の返金と同じ処理）。
+         ウォレットのEMUERは鎖の上で返す必要があるので、取消の申し出として残し、運営が返す。 */
+      if (o.status === "paid") {
+        if (!buyerCancellable(o)) throw err("NOT_CANCELLABLE");
+        if (o.method === "emuer_ledger") {
+          const order = await refundOrder(id, req.identity.uid, { note: "buyer_cancel" });
+          return res.json({ ok: true, refunded: true, order: publicOrder(id, order) });
+        }
+        await orderRef(id).set({ cancelRequestedAtMs: now() }, { merge: true });
+        return res.json({ ok: true, requested: true });
+      }
       if (o.status !== "pending_payment") throw err("ORDER_NOT_PENDING");
       // 鎖の上で払い終えているのに取り消すと、お金だけ消える。先に確かめる
       if (o.method === "emuer_chain" && chain) {
@@ -917,7 +1048,7 @@ function createMitemiruRouter(deps) {
 
   router.post("/admin/products", owner, async (req, res) => {
     try {
-      const clean = cleanProduct(req.body, null);
+      const clean = cleanProduct(req.body, null, assets);
       const authoritative = validateStoreProduct(clean, await authoritativeStoreType(clean.shopId));
       const id = "p_" + crypto.randomBytes(6).toString("hex");
       const row = { ...authoritative, sold: 0, reserved: 0, createdAtMs: now(), updatedAtMs: now(), createdBy: req.identity.uid };
@@ -934,7 +1065,7 @@ function createMitemiruRouter(deps) {
         const s = await tx.get(productRef(id));
         if (!s.exists) throw err("PRODUCT_NOT_FOUND");
         const prev = s.data() || {};
-        const clean = cleanProduct(req.body, prev);
+        const clean = cleanProduct(req.body, prev, assets);
         const authoritative = validateStoreProduct(clean, await authoritativeStoreType(clean.shopId));
         // 在庫は、すでに売れた・取り置き中の数より少なくできない
         if (clean.stock !== null && clean.stock < Number(prev.sold || 0) + Number(prev.reserved || 0)) throw err("INVALID_STOCK");
@@ -1017,7 +1148,8 @@ function createMitemiruRouter(deps) {
           amount: o.amount, status: o.status, pickupCode: o.pickupCode, wallet: o.wallet, uid: o.uid,
           createdAt: o.createdAtMs, paidAt: o.paidAtMs || null, fulfilledAt: o.fulfilledAtMs || null,
           refundedAt: o.refundedAtMs || null, expiresAt: o.expiresAtMs || null, txHash: o.txHash || null,
-          chainOrderId: o.chainOrderId || null, lateAfterExpiry: !!o.lateAfterExpiry }));
+          chainOrderId: o.chainOrderId || null, lateAfterExpiry: !!o.lateAfterExpiry,
+          delivery: o.delivery || (o.digitalAssetId ? "digital" : "pickup"), cancelRequested: !!o.cancelRequestedAtMs }));
       return res.json({ ok: true, orders: rows });
     } catch (e) { return fail(res, e); }
   });
@@ -1063,8 +1195,14 @@ function createMitemiruRouter(deps) {
      EMUER の回数消費も取り消す。商品の在庫は戻す。 */
   router.post("/admin/orders/:id/refund", owner, async (req, res) => {
     const id = String(req.params.id || "");
-    const b = req.body || {};
     try {
+      const order = await refundOrder(id, req.identity.uid, req.body || {});
+      return res.json({ ok: true, order: { id, ...order } });
+    } catch (e) { return fail(res, e); }
+  });
+
+  async function refundOrder(id, by, b) {
+    {
       const snap = await orderRef(id).get();
       const o = snap.exists ? snap.data() || {} : null;
       if (!o) throw err("ORDER_NOT_FOUND");
@@ -1101,7 +1239,7 @@ function createMitemiruRouter(deps) {
         if (cur.status === "refunded") throw err("ALREADY_DONE");
         if (usedLog && usedLog.exists) throw err("TX_ALREADY_USED");
         if (patch.refundLog) tx.create(db.collection(CHAIN_PAYMENTS).doc(patch.refundLog), { orderId: id, kind: "jpyc-refund", createdAtMs: now() });
-        tx.set(orderRef(id), { ...patch, status: "refunded", refundedAtMs: now(), refundedBy: req.identity.uid,
+        tx.set(orderRef(id), { ...patch, status: "refunded", refundedAtMs: now(), refundedBy: by,
           refundRewardId: refundReward ? refundReward.id : null }, { merge: true });
         if (ps.exists) tx.set(productRef(o.productId), { sold: Math.max(0, Number(ps.data().sold || 0) - 1) }, { merge: true });
         if (o.usageId && usageSnap && usageSnap.exists) {
@@ -1115,8 +1253,101 @@ function createMitemiruRouter(deps) {
           });
         }
       });
-      const fresh = (await orderRef(id).get()).data();
-      return res.json({ ok: true, order: { id, ...fresh } });
+      await dropShipping(id);
+      return (await orderRef(id).get()).data();
+    }
+  }
+
+  /* 配送の一覧（運営）。発送待ちと発送済み。住所はここでだけ返す。
+     開くたびに、配送から1年を過ぎた住所を消す。 */
+  async function purgeShipping() {
+    const snap = await db.collection(SHIPPING).limit(500).get();
+    const cutoff = now() - SHIPPING_KEEP_MS;
+    await Promise.all(snap.docs.filter(d => {
+      const v = d.data() || {};
+      return Number(v.shippedAtMs || 0) > 0 && Number(v.shippedAtMs) < cutoff;
+    }).map(d => db.collection(SHIPPING).doc(d.id).delete().catch(() => {})));
+  }
+  router.get("/admin/shipping", owner, async (req, res) => {
+    try {
+      await purgeShipping();
+      const want = req.query.status === "shipped" ? "fulfilled" : "paid";
+      const snap = await db.collection(ORDERS).where("delivery", "==", "ship").limit(500).get();
+      const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) })).filter(o => o.status === want)
+        .sort((a, b) => (a.paidAtMs || a.createdAtMs || 0) - (b.paidAtMs || b.createdAtMs || 0)).slice(0, 300);
+      const out = await Promise.all(rows.map(async o => {
+        const s = await db.collection(SHIPPING).doc(o.id).get();
+        const v = s.exists ? s.data() || {} : null;
+        return { id: o.id, productName: o.productName, amount: o.amount, currency: o.currency, method: o.method,
+          pickupCode: o.pickupCode, paidAt: o.paidAtMs || null, shippedAt: o.fulfilledAtMs || null,
+          orderDeadline: o.orderDeadlineMs || null, cancelRequested: !!o.cancelRequestedAtMs,
+          shipTo: v ? { name: v.name, postalCode: v.postalCode, address: v.address, phone: v.phone } : null };
+      }));
+      return res.json({ ok: true, orders: out });
+    } catch (e) { return fail(res, e); }
+  });
+  /* 発送した。注文は fulfilled になり、住所はこの日から1年で消える。 */
+  router.post("/admin/orders/:id/ship", owner, async (req, res) => {
+    const id = String(req.params.id || "");
+    try {
+      const snap = await orderRef(id).get();
+      const o = snap.exists ? snap.data() || {} : null;
+      if (!o) throw err("ORDER_NOT_FOUND");
+      if (o.delivery !== "ship") throw err("INVALID_DELIVERY");
+      const done = await fulfill(id, req.identity.uid);
+      await db.collection(SHIPPING).doc(id).set({ shippedAtMs: done.order.fulfilledAtMs || now() }, { merge: true }).catch(() => {});
+      return res.json({ ok: true, already: done.already });
+    } catch (e) { return fail(res, e); }
+  });
+
+  /* 公式ショップの見られ方（日ごとの回数だけ。誰が見たかは残さない）。 */
+  const METRIC_EVENTS = ["shop_view", "product_view"];
+  const metricsLimited = deps.rateLimit
+    ? deps.rateLimit({ windowMs: 60_000, max: 60, key: "mitemiru-metrics" })
+    : (req, res, next) => next();
+  const dayOf = (ms) => new Date(ms + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);   // 日本時間の日付
+  router.post("/metrics", deps.requireFirebaseUser, metricsLimited, async (req, res) => {
+    const b = req.body || {};
+    const event = String(b.event || "");
+    const productId = String(b.productId || "");
+    if (!METRIC_EVENTS.includes(event) || (productId && !/^[A-Za-z0-9_-]{1,64}$/.test(productId))) return res.status(400).json({ error: "INVALID_METRIC" });
+    try {
+      const ref = db.collection(METRICS).doc(dayOf(now()));
+      await db.runTransaction(async tx => {
+        const cur = await tx.get(ref);
+        const v = cur.exists ? cur.data() || {} : {};
+        const patch = { day: dayOf(now()), [event]: Number(v[event] || 0) + 1, updatedAtMs: now() };
+        if (event === "product_view" && productId) {
+          const views = { ...(v.productViews || {}) };
+          views[productId] = Number(views[productId] || 0) + 1;
+          patch.productViews = views;
+        }
+        tx.set(ref, patch, { merge: true });
+      });
+      return res.json({ ok: true });
+    } catch (e) { return fail(res, e); }
+  });
+  router.get("/admin/metrics", owner, async (req, res) => {
+    try {
+      const days = Math.min(90, Math.max(1, Number(req.query.days) || 30));
+      const since = now() - days * 24 * 60 * 60 * 1000;
+      const keys = Array.from({ length: days }, (_, i) => dayOf(now() - i * 24 * 60 * 60 * 1000));
+      const snaps = await Promise.all(keys.map(k => db.collection(METRICS).doc(k).get()));
+      const orders = await db.collection(ORDERS).where("storeType", "==", "schoolpark_virtual").limit(1000).get();
+      const exchanges = {};
+      orders.docs.forEach(d => {
+        const o = d.data() || {};
+        if (!["paid", "fulfilled"].includes(o.status) || !(Number(o.createdAtMs || 0) >= since)) return;
+        const k = dayOf(o.createdAtMs);
+        exchanges[k] = (exchanges[k] || 0) + 1;
+      });
+      const rows = keys.map((k, i) => {
+        const v = snaps[i].exists ? snaps[i].data() || {} : {};
+        return { day: k, shopViews: Number(v.shop_view || 0), productViews: Number(v.product_view || 0), exchanges: exchanges[k] || 0 };
+      });
+      const total = rows.reduce((t, r) => ({ shopViews: t.shopViews + r.shopViews, productViews: t.productViews + r.productViews,
+        exchanges: t.exchanges + r.exchanges }), { shopViews: 0, productViews: 0, exchanges: 0 });
+      return res.json({ ok: true, days, total, rows });
     } catch (e) { return fail(res, e); }
   });
 
