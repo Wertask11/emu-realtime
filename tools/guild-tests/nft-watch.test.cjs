@@ -147,7 +147,7 @@ test('完走したクエストは10件で切らない（古い完走にも「受
   const body = html.slice(i, html.indexOf('/* 限定星。運営が配った', i));
   assert.doesNotMatch(body, /done\.slice\(0, 10\)/, '10件で切っている');
   assert.match(body, /done\.forEach\(/);
-  assert.match(body, /data-done-more hidden/, '11件目からは畳んで出す');
+  assert.match(body, /if \(doneIndex >= DONE_FIRST\)[\s\S]{0,200}data-done-more hidden/, '11件目からは畳んで出す');
   assert.match(body, /残り' \+ \(done\.length - DONE_FIRST\) \+ '件を見る/);
   assert.match(html, /\.spp-row\[hidden\] \{ display:none; \}/, '.spp-row の display が hidden を上書きしないように');
 });

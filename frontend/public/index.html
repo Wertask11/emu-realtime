@@ -21972,23 +21972,26 @@ async function openSpPassport() {
 
          出さないのは #000（創業クエスト）だけ。あちらは受けるものではなく、
          承認の口でも FOUNDER_QUEST_ID として弾いているので証明書が無い。 */
-      const rounds = Math.max(1, Number(q.rounds) || 0);
       /* 全部の周を受け取り済みなら、届いた先と「MetaMaskに追加」を出す。 */
       const certificate = !q.isFounder
-        ? (_spCertMintedHtml(certs, q.id, rounds)
+        ? (_spCertMintedHtml(certs, q.id, Math.max(1, Number(q.rounds) || 0))
           || '<br><button type="button" data-quest-star="' + escapeHtml(q.id) + '" class="spp-star-claim">証明書NFTを受け取る</button>') : '';
+      const rowStart = doneHtml.length;
       /* 2周以上なら、そう書く。行はクエストごとに1つなので、
          書かないと「1回しか認められていない」ように見える。 */
+      const rounds = Math.max(1, Number(q.rounds) || 0);
       const roundTag = (!q.isFounder && rounds > 1)
         ? '<span style="display:inline-block;border:1px solid rgba(244,241,234,.35);'
           + 'color:rgba(244,241,234,.75);font-size:10px;font-weight:700;'
           + 'padding:1px 6px;border-radius:999px;margin-left:6px;vertical-align:1px">'
           + rounds + '周</span>'
         : '';
-      const row = _sppRowHtml('　' + escapeHtml(_sppDate(q.at)),
+      doneHtml += _sppRowHtml('　' + escapeHtml(_sppDate(q.at)),
         tag + escapeHtml(name) + roundTag + certificate);
-      doneHtml += doneIndex < DONE_FIRST ? row
-        : row.replace('<div class="spp-row">', '<div class="spp-row" data-done-more hidden>');
+      /* 11件目からは畳んでおく（「残りを見る」で開く）。 */
+      if (doneIndex >= DONE_FIRST)
+        doneHtml = doneHtml.slice(0, rowStart)
+          + doneHtml.slice(rowStart).replace('<div class="spp-row">', '<div class="spp-row" data-done-more hidden>');
     });
     if (done.length > DONE_FIRST)
       doneHtml += _sppRowHtml('', '<button type="button" class="spp-star-claim" data-done-more-open>'

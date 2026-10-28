@@ -9,23 +9,15 @@
    "    /* 多すぎると記録欄が1つのことで埋まるので、新しいほうから10件まで。 */\n    done.slice(0, 10).forEach(function (q) {\n"
   ],
   [
-   "      const rounds = Math.max(1, Number(q.rounds) || 0);\n      /* 全部の周を受け取り済みなら、届いた先と「MetaMaskに追加」を出す。 */\n",
+   "      /* 全部の周を受け取り済みなら、届いた先と「MetaMaskに追加」を出す。 */\n",
    ""
   ],
   [
-   "        ? (_spCertMintedHtml(certs, q.id, rounds)\n          || '<br><button type=\"button\" data-quest-star=\"' + escapeHtml(q.id) + '\" class=\"spp-star-claim\">証明書NFTを受け取る</button>') : '';\n",
+   "        ? (_spCertMintedHtml(certs, q.id, Math.max(1, Number(q.rounds) || 0))\n          || '<br><button type=\"button\" data-quest-star=\"' + escapeHtml(q.id) + '\" class=\"spp-star-claim\">証明書NFTを受け取る</button>') : '';\n      const rowStart = doneHtml.length;\n",
    "        ? '<br><button type=\"button\" data-quest-star=\"' + escapeHtml(q.id) + '\" class=\"spp-star-claim\">証明書NFTを受け取る</button>' : '';\n"
   ],
   [
-   "         書かないと「1回しか認められていない」ように見える。 */\n      const roundTag = (!q.isFounder && rounds > 1)\n",
-   "         書かないと「1回しか認められていない」ように見える。 */\n      const rounds = Math.max(1, Number(q.rounds) || 0);\n      const roundTag = (!q.isFounder && rounds > 1)\n"
-  ],
-  [
-   "      const row = _sppRowHtml('　' + escapeHtml(_sppDate(q.at)),\n",
-   "      doneHtml += _sppRowHtml('　' + escapeHtml(_sppDate(q.at)),\n"
-  ],
-  [
-   "      doneHtml += doneIndex < DONE_FIRST ? row\n        : row.replace('<div class=\"spp-row\">', '<div class=\"spp-row\" data-done-more hidden>');\n",
+   "      /* 11件目からは畳んでおく（「残りを見る」で開く）。 */\n      if (doneIndex >= DONE_FIRST)\n        doneHtml = doneHtml.slice(0, rowStart)\n          + doneHtml.slice(rowStart).replace('<div class=\"spp-row\">', '<div class=\"spp-row\" data-done-more hidden>');\n",
    ""
   ],
   [
