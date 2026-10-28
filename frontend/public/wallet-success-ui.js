@@ -150,10 +150,13 @@ async function wsRewards(){
       wsHideClaim(daily?"活動でたまった報酬は、いまはありません。":"受け取り待ちの報酬はありません。");
       return;}
     const total=a.reduce((n,x)=>n+(Number(x.amount)||0),0);
+    /* 2件以上あれば、まとめて1回で受け取る（MetaMask の承認もガス代も1回）。
+       1件ずつだと、そのたびにガス代がかかっていた。
+       前にまとめたぶん（kind:"bundle"）が1件だけ残っているときは、その札のまま受け取る。 */
     const label=a.length>1
-      ? `未請求の報酬 ${total.toLocaleString("ja-JP")} EMUER（${a.length}件）のうち1件を受け取る`
+      ? `未請求の報酬 ${total.toLocaleString("ja-JP")} EMUER（${a.length}件）をまとめて受け取る`
       : `未請求の報酬 ${total.toLocaleString("ja-JP")} EMUER を受け取る`;
-    wsClaimLabel(label,()=>wsClaim(a[0]),false);
+    wsClaimLabel(label,a.length>1?()=>wsClaimAll(a):()=>wsClaim(a[0]),false);
   }catch(e){wsHideClaim(String(e&&e.message||"報酬を読めませんでした"));}
 }
 async function wsClaim(row){
@@ -169,6 +172,34 @@ async function wsClaim(row){
        同じ画面で違う数字が出るので、まとめて書き替える。 */
     try{if(typeof window.emuerV2RefreshBalance==="function")await window.emuerV2RefreshBalance();}catch(_){}
     await wsBalance(wsAccount());await wsRewards();}catch(e){wsClaimLabel("報酬を受け取る",wsRewards,false);alert(e.message||"報酬の受取に失敗しました");}
+}
+/* まとめて受け取る。サーバーが未請求のぶんを1枚の札（合計額）にまとめて署名する。
+   まとめた元の報酬はサーバー側で「まとめ済み」になり、一覧にもう出てこない。
+   月の上限やトレジャリーで一部しか払われなかったときは、まとめた札が一覧に残り、
+   次にその札のまま残りを受け取れる。 */
+async function wsClaimAll(rows){
+  try{
+    wsClaimLabel("署名を準備中…",null,true);
+    const r=await fetch(EMUER_V2_API+"/rewards/bundle",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount()})}),d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error==="NOTHING_TO_BUNDLE"?"まとめられる報酬がありませんでした。少し待ってからもう一度お試しください。":(d.error||"報酬を準備できませんでした"));
+    const p=new ethers.providers.Web3Provider(window.ethereum);
+    if(Number((await p.getNetwork()).chainId)!==137)throw new Error("Polygon Mainnetに切り替えてください");
+    const x=d.reward,c=new ethers.Contract(emuerV2Config.contract,EMUER_V2_ABI,p.getSigner());
+    wsClaimLabel("MetaMaskで確認…",null,true);
+    await(await c.claimReward(x.claimId,x.totalAmount,x.deadline,x.authorization)).wait();
+    const got=Number(d.amount)||0;
+    document.getElementById("wsStatus").textContent=
+      (got?`${got.toLocaleString("ja-JP")} EMUER を受け取りました`:"受け取りました")+(d.count>1?`（${d.count}件）`:"");
+    (rows||[]).forEach(row=>wsDone.add(String(row&&row.claimId)));
+    wsDone.add(String(x&&x.claimId));
+    try{if(typeof window.emuerV2RefreshBalance==="function")await window.emuerV2RefreshBalance();}catch(_){}
+    await wsBalance(wsAccount());await wsRewards();
+  }catch(e){
+    /* まとめた札を作ったあとで止まったとき（MetaMask で断った等）は、まとめた札が一覧に出る。
+       一覧を読み直して、出ているものを押せるようにする。 */
+    await wsRewards();
+    alert(e.message||"報酬の受取に失敗しました");
+  }
 }
 async function claimEmuV2LoginReward(){
   try{

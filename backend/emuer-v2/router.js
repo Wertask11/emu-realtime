@@ -45,8 +45,9 @@ function createEmuerV2Router(deps) {
   const rpcUrl = env.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com";
   const privateKey = env.EMUER_V2_AUTHORIZER_PRIVATE_KEY || "";
   const provider = privateKey ? new ethers.providers.JsonRpcProvider(rpcUrl) : null;
-  const signer = provider ? new ethers.Wallet(privateKey, provider) : null;
-  const contract = provider ? new ethers.Contract(CONTRACT, ABI, provider) : null;
+  // テストからは、本物の鍵やチェーンの代わりを差し込める（本番は環境変数のとおり）。
+  const signer = deps.signer || (provider ? new ethers.Wallet(privateKey, provider) : null);
+  const contract = deps.contract || (provider ? new ethers.Contract(CONTRACT, ABI, provider) : null);
 
   async function signerReady() {
     if (!signer || !contract) return { ok: false, code: "AUTHORIZER_NOT_CONFIGURED" };
@@ -83,6 +84,8 @@ function createEmuerV2Router(deps) {
       row = snap.data() || {};
       if (String(row.recipient || "").toLowerCase() !== String(recipient || "").toLowerCase()) throw new Error("REWARD_NOT_OWNED");
       if (row.status === "spent") throw new Error("REWARD_SPENT");
+      // まとめ受け取りに入ったものは、まとめた札のほうで受け取る（元の札も出すと二重に払える）
+      if (row.status === "bundled") throw new Error("REWARD_BUNDLED");
       tx.set(ref, { authorizedUntilMs: Math.max(Number(row.authorizedUntilMs || 0), deadline * 1000), updatedAt: new Date() }, { merge: true });
     });
     return { row, deadline };
@@ -585,8 +588,108 @@ function createEmuerV2Router(deps) {
       const recipient = String(req.identity.walletAddress).toLowerCase();
       const rewards = await db.collection("emuer_v2_rewards").where("recipient", "==", recipient).where("status", "==", "pending").limit(50).get();
       const rows = await unpaidOnly(rewards.docs);
-      return res.json({ rewards: rows.map(row => ({ claimId: row.id, kind: row.data.kind, amount: row.data.amount, postTitle: row.data.postTitle || "" })) });
+      return res.json({ rewards: rows.map(row => ({ claimId: row.id, kind: row.data.kind, amount: row.data.amount, postTitle: row.data.postTitle || "", ...(row.data.kind === "bundle" ? { memberCount: row.data.memberCount || 0 } : {}) })) });
     } catch (error) { return res.status(500).json({ error: "REWARDS_LIST_FAILED" }); }
+  });
+
+  /* 知識の募集の報酬は、採用された回答で、別の二人であることを、受け取りの署名を出す前に確かめる。
+     問題が無ければ null、あれば理由のコードを返す（1件ずつの受け取りとまとめ受け取りで同じ確認）。 */
+  async function knowledgeAnswerProblem(reward) {
+    const [rs, as] = await Promise.all([
+      db.collection('knowledge_requests').doc(String(reward.requestId)).get(),
+      db.collection('knowledge_answers').doc(String(reward.answerId)).get()
+    ]);
+    if (!rs.exists || !as.exists) return 'IDENTITY_REVIEW_REQUIRED';
+    if (String(as.data().requestId) !== String(reward.requestId) ||
+      String(as.data().answerAuthor || '').toLowerCase() !== String(reward.recipient || '').toLowerCase() ||
+      rs.data().status !== 'awarded' || as.data().status !== 'accepted' ||
+      String(rs.data().acceptedAnswerId) !== String(reward.answerId))
+      return 'KNOWLEDGE_ANSWER_NOT_VERIFIED';
+    const people = await identity.knowledgeParticipants(rs.data(), as.data());
+    return people.ok ? null : people.code;
+  }
+
+  /* 未請求の報酬を、まとめて1回で受け取る。
+
+     コントラクトは「受け取り札（claimId・受取人・合計額・期限）」にサーバーの署名があれば払う。
+     札が何件分の報酬かは問わないので、まとめた合計を1枚の札にすれば、MetaMask の承認も
+     ガス代も1回で済む（DECISIONS.md の「申請時点で確定済みの未変換報酬を全額まとめる」）。
+
+     二重に払わないために:
+       ・まとめた元の報酬は、同じ取引の中で status を "bundled" にする。一覧（pending だけ）にも、
+         みてみる（pending だけを支払いに使う）にも、1件ずつの受け取りにも、もう出てこない。
+       ・元の報酬の札をすでに出していて、その期限（とみてみると同じ余白）が切れていないものは入れない。
+         期限内なら、その札でも受け取れてしまうため。
+       ・チェーン上で1円でも受け取り済みのものは入れない（元の札のまま受け取る）。チェーンに聞けない
+         ときは、まとめない（推測でまとめると、二重に払うおそれがある）。
+       ・知識の募集の報酬は、1件ずつの受け取りと同じ確認を通ったものだけを入れる。
+     月の配布上限とトレジャリーの残高は、これまでどおりコントラクトが守る（足りなければ一部だけ払われ、
+     残りは同じ札でまた受け取れる）。 */
+  const BUNDLE_MAX = 200;
+  const BUNDLE_GRACE_MS = 60 * 1000;   // みてみる（mitemiru.js の AUTH_GRACE_MS）と同じ余白
+  router.post("/rewards/bundle", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const recipient = String(req.identity.walletAddress || "").toLowerCase();
+    if (!validAddress(recipient)) return res.status(400).json({ error: "SELF_CUSTODY_WALLET_REQUIRED" });
+    try {
+      const ready = await signerReady();
+      if (!ready.ok) return res.status(503).json({ error: ready.code });
+      const snap = await db.collection("emuer_v2_rewards").where("recipient", "==", recipient).where("status", "==", "pending").limit(500).get();
+      const now = Date.now();
+      const candidates = [];
+      for (const doc of snap.docs) {
+        const row = doc.data() || {};
+        if (Number(row.authorizedUntilMs || 0) + BUNDLE_GRACE_MS > now) continue;
+        if (!/^\d+$/.test(String(row.amountWei || "")) || BigInt(row.amountWei) <= 0n) continue;
+        candidates.push({ id: doc.id, row });
+      }
+      // チェーンに聞いて、少しでも受け取られているものは外す。聞けなければ、まとめない。
+      let paid;
+      try { paid = await Promise.all(candidates.map(c => contract.claimPaid(String(c.row.claimId || c.id)))); }
+      catch (_) { return res.status(503).json({ error: "CHAIN_UNAVAILABLE" }); }
+      const unpaid = candidates.filter((c, i) => BigInt(String(paid[i])) === 0n);
+      const members = [];
+      for (const c of unpaid) {
+        if (members.length >= BUNDLE_MAX) break;
+        if (c.row.kind === "knowledge-answer" && await knowledgeAnswerProblem(c.row)) continue;
+        members.push(c);
+      }
+      if (!members.length) return res.status(409).json({ error: "NOTHING_TO_BUNDLE" });
+      const ids = members.map(m => m.id).sort();
+      const key = JSON.stringify(["emuer-v2", "bundle", recipient, ethers.utils.keccak256(ethers.utils.toUtf8Bytes(ids.join(",")))]);
+      const id = claimId(key);
+      const deadline = Math.floor(Date.now() / 1000) + 15 * 60;
+      const bundleRef = db.collection("emuer_v2_rewards").doc(id);
+      let bundle;
+      await db.runTransaction(async tx => {
+        const refs = ids.map(memberId => db.collection("emuer_v2_rewards").doc(memberId));
+        const [existing, ...rows] = await Promise.all([tx.get(bundleRef), ...refs.map(ref => tx.get(ref))]);
+        if (existing.exists) throw new Error("BUNDLE_ALREADY_EXISTS");
+        let total = 0n;
+        rows.forEach(memberSnap => {
+          const r = memberSnap.exists ? memberSnap.data() || {} : null;
+          // 取引の中でもう一度確かめる（同時にみてみるで使われた・札を出した、などを拾う）
+          if (!r || r.status !== "pending" || String(r.recipient || "").toLowerCase() !== recipient
+              || Number(r.authorizedUntilMs || 0) + BUNDLE_GRACE_MS > Date.now()) throw new Error("BUNDLE_CHANGED");
+          total += BigInt(r.amountWei);
+        });
+        bundle = {
+          schema: "emuer-v2-reward-v1", kind: "bundle", key, claimId: id, uid: req.identity.uid,
+          recipient, amountWei: total.toString(), amount: (total / policy.UNIT).toString(),
+          members: ids, memberCount: ids.length, status: "pending", authorizedUntilMs: deadline * 1000,
+          createdAt: new Date(), updatedAt: new Date()
+        };
+        tx.create(bundleRef, bundle);
+        refs.forEach(ref => tx.set(ref, { status: "bundled", bundleClaimId: id, bundledAt: new Date(), updatedAt: new Date() }, { merge: true }));
+      });
+      return res.json({ ok: true, count: ids.length, amount: bundle.amount, reward: await signReward(bundle, deadline) });
+    } catch (error) {
+      const code = String(error.message || "");
+      if (code === "BUNDLE_CHANGED" || code === "BUNDLE_ALREADY_EXISTS") return res.status(409).json({ error: "BUNDLE_CHANGED" });
+      console.error("EMUER v2 bundle error:", error.message); return res.status(500).json({ error: "BUNDLE_FAILED" });
+    }
   });
 
   router.post("/rewards/:claimId/authorization", requireFirebaseUser, requireOwnAddress, async (req, res) => {
@@ -599,19 +702,8 @@ function createEmuerV2Router(deps) {
       if(existing.exists && String(existing.data().recipient||'').toLowerCase() !== String(req.identity.walletAddress).toLowerCase())
         return res.status(403).json({error:'REWARD_NOT_OWNED'});
       if (existing.exists && existing.data().kind === 'knowledge-answer') {
-        const reward = existing.data();
-        const [rs, as] = await Promise.all([
-          db.collection('knowledge_requests').doc(String(reward.requestId)).get(),
-          db.collection('knowledge_answers').doc(String(reward.answerId)).get()
-        ]);
-        if (!rs.exists || !as.exists) return res.status(409).json({ error: 'IDENTITY_REVIEW_REQUIRED' });
-        if(String(as.data().requestId)!==String(reward.requestId) ||
-          String(as.data().answerAuthor||'').toLowerCase()!==String(reward.recipient||'').toLowerCase() ||
-          rs.data().status!=='awarded' || as.data().status!=='accepted' ||
-          String(rs.data().acceptedAnswerId)!==String(reward.answerId))
-          return res.status(409).json({error:'KNOWLEDGE_ANSWER_NOT_VERIFIED'});
-        const people = await identity.knowledgeParticipants(rs.data(), as.data());
-        if (!people.ok) return res.status(409).json({ error: people.code });
+        const problem = await knowledgeAnswerProblem(existing.data());
+        if (problem) return res.status(409).json({ error: problem });
       }
       const ready = await signerReady();
       if (!ready.ok) return res.status(503).json({ error: ready.code });
@@ -621,7 +713,7 @@ function createEmuerV2Router(deps) {
       const code = String(error.message || "");
       if (code === "REWARD_NOT_FOUND") return res.status(404).json({ error: code });
       if (code === "REWARD_NOT_OWNED") return res.status(403).json({ error: code });
-      if (code === "REWARD_SPENT") return res.status(409).json({ error: code });
+      if (code === "REWARD_SPENT" || code === "REWARD_BUNDLED") return res.status(409).json({ error: code });
       console.error("EMUER v2 reward auth error:", error.message); return res.status(500).json({ error: "REWARD_ISSUE_FAILED" });
     }
   });
@@ -654,7 +746,7 @@ function createEmuerV2Router(deps) {
       const authorization = await signReward(reserved.row, reserved.deadline);
       return res.json({ ok: true, alreadyCreated: !!row.createdAt && row.key === key, reward: authorization });
     } catch (error) {
-      if (String(error.message || "") === "REWARD_SPENT") return res.status(409).json({ error: "REWARD_SPENT" });
+      if (["REWARD_SPENT", "REWARD_BUNDLED"].includes(String(error.message || ""))) return res.status(409).json({ error: String(error.message) });
       console.error("EMUER v2 login reward error:", error.message);
       return res.status(500).json({ error: "REWARD_ISSUE_FAILED" });
     }
