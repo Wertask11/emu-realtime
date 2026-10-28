@@ -13,8 +13,8 @@ const SHOPS = { ok: true, shops: [
   { id: 'cafe-nagi', name: 'カフェ 凪', emoji: '☕', storeType: 'real_partner', description: '本と珈琲', address: '東京都渋谷区 1-2-3', paymentGuide: 'レジで円・JPYC' },
   { id: 'old-shop', name: '昔のお店', storeType: 'legacy' }] };
 const PRODUCTS = [
-  { id: 'sticker', shopId: 'schoolpark-official', storeType: 'schoolpark_virtual', name: '冷蔵庫くんステッカー', prices: { EMUER: 1 }, methods: ['emuer_ledger'], remaining: null, fulfillment: 'その場でダウンロード' },
-  { id: 'note', shopId: 'schoolpark-official', storeType: 'schoolpark_virtual', name: '探究ノート', prices: { EMUER: 30 }, methods: ['emuer_ledger'], remaining: 12 },
+  { id: 'sticker', shopId: 'schoolpark-official', storeType: 'schoolpark_virtual', name: '冷蔵庫くんステッカー', prices: { EMUER: 1 }, methods: ['emuer_ledger', 'emuer_chain'], remaining: null, fulfillment: 'その場でダウンロード' },
+  { id: 'note', shopId: 'schoolpark-official', storeType: 'schoolpark_virtual', name: '探究ノート', prices: { EMUER: 30 }, methods: ['emuer_ledger', 'emuer_chain'], remaining: 12 },
   { id: 'coffee', shopId: 'cafe-nagi', storeType: 'real_partner', name: '探究ブレンド', prices: { JPY: 600, JPYC: 600 }, methods: [], remaining: null }];
 const ME = { ok: true, isOwner: false, emuer: { ok: false, error: 'PLAN_REQUIRED', unconverted: '42' } };
 const ORDERS = { ok: true, orders: [
@@ -28,9 +28,28 @@ before(async () => {
 });
 after(async () => { await browser?.close(); await fixture?.close(); });
 
-async function open(width = 390, { products = PRODUCTS, shopsFail = false } = {}) {
+/* MetaMask と ethers の代わり。親の画面（Emu）にだけ置く。 */
+function walletMock({ account, balance = '1852', reject = false }) {
+  return `if (window.top === window) {
+    window.__chain = [];
+    window.emuerV2ConfigOnce = async () => ({ enabled: true, chainId: 137, contract: '0x9c102cC3016C70767082b60196565878D9314864' });
+    window.ethereum = { request: async ({ method, params }) => { __chain.push(method); return method === 'eth_requestAccounts' ? ['${account}'] : method === 'eth_chainId' ? '0x89' : null; } };
+    window.ethers = {
+      utils: { formatUnits: v => String(v) },
+      providers: { Web3Provider: function () { this.getNetwork = async () => ({ chainId: 137 }); this.getSigner = () => ({}); } },
+      Contract: function (address, abi) {
+        this.balanceOf = async a => { __chain.push('balanceOf:' + a); return '${balance}'; };
+        this.payExchange = async (...args) => { __chain.push('payExchange:' + args[0]);
+          if (${reject}) throw Object.assign(new Error('user rejected transaction'), { code: 'ACTION_REJECTED' });
+          return { hash: '0xtx', wait: async () => ({}) }; };
+      }
+    };
+  }`;
+}
+async function open(width = 390, { products = PRODUCTS, shopsFail = false, me = ME, wallet = null } = {}) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, hasTouch: width < 700 });
-  const calls = [], errors = [];
+  if (wallet) await context.addInitScript(walletMock(wallet));
+  const calls = [], errors = [], posts = [];
   await context.route('**/*', async route => {
     const req = route.request(), url = new URL(req.url());
     if (url.hostname === 'emu-realtime.onrender.com') {
@@ -38,7 +57,14 @@ async function open(width = 390, { products = PRODUCTS, shopsFail = false } = {}
       const json = body => route.fulfill({ json: body, headers: { 'Access-Control-Allow-Origin': '*' } });
       if (url.pathname === '/api/mitemiru/shops') return shopsFail ? route.fulfill({ status: 503, json: { error: 'X' }, headers: { 'Access-Control-Allow-Origin': '*' } }) : json(SHOPS);
       if (url.pathname === '/api/mitemiru/products') { const id = url.searchParams.get('shopId'); return json({ ok: true, products: products.filter(p => !id || p.shopId === id) }); }
-      if (url.pathname === '/api/mitemiru/me') return json(ME);
+      if (url.pathname === '/api/mitemiru/me') return json(me);
+      if (url.pathname === '/api/mitemiru/orders' && req.method() === 'POST') {
+        const body = JSON.parse(req.postData() || '{}'); posts.push(body);
+        return json(body.method === 'emuer_chain'
+          ? { ok: true, order: { id: 'c1', status: 'pending_payment' }, exchange: { contract: '0xc', orderId: '0xorder', productId: '0xp', price: '30', deadline: 1, authorization: '0xsig' } }
+          : { ok: true, order: { id: 'l1', status: 'paid' } });
+      }
+      if (/^\/api\/mitemiru\/orders\/c1\/(confirm|cancel)$/.test(url.pathname)) { posts.push({ path: url.pathname }); return json({ ok: true }); }
       if (url.pathname === '/api/mitemiru/orders') return json(ORDERS);
       const r = await fetch(fixture.base + url.pathname, { method: req.method(), headers: req.headers(), body: req.postData() || undefined });
       return route.fulfill({ status: r.status, body: await r.text(), contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' } });
@@ -56,7 +82,7 @@ async function open(width = 390, { products = PRODUCTS, shopsFail = false } = {}
   await frame.getByText('08', { exact: true }).filter({ visible: true }).click();
   await frame.locator('.city-doors').waitFor();
   const text = () => frame.locator('#sp-city').innerText();
-  return { page, frame, calls, errors, text, close: () => context.close() };
+  return { page, frame, calls, errors, posts, text, chain: () => page.evaluate(() => window.__chain || []), close: () => context.close() };
 }
 
 test('トップは3つの入口と、公式ショップの商品。残高（/me）は読まない', async () => {
@@ -89,10 +115,12 @@ test('トップの商品から開いて、交換できない理由を分かる�
   const f = await open();
   try {
     await f.frame.locator('.city-product[data-value="note"]').click();
-    await f.frame.getByText('あなたの使えるEMUER: 42 EMUER').waitFor();
+    await f.frame.locator('.city-wallet').waitFor();
     const t = await f.text();
+    assert.match(t, /ウォレットに移す前のEMUER\s*42 EMUER/);
     assert.match(t, /Light・Plus・Pro プランで使えます/);
-    assert.equal(await f.frame.getByRole('button', { name: 'EMUERで交換する', exact: true }).isDisabled(), true);
+    assert.equal(await f.frame.getByRole('button', { name: 'ウォレットのEMUERで交換する', exact: true }).isDisabled(), true);
+    assert.equal(await f.frame.getByRole('button', { name: 'ウォレットに移す前のEMUERで交換する', exact: true }).isDisabled(), true);
     assert.doesNotMatch(t, /PLAN_REQUIRED|未変換|既存のEMUER注文処理/);
   } finally { await f.close(); }
 });
@@ -146,5 +174,67 @@ test('出店の相談は、Emu の画面が無ければ同じフォームを別�
     assert.ok(asked, 'お問い合わせのフォームを開いていない');
     assert.equal(new URL(asked).searchParams.get('contact'), 'general');
     await opened.close();
+  } finally { await f.close(); }
+});
+
+/* 10/28：全部ウォレットに受け取った人は、City の「使えるEMUER」が 0 に見えた。
+   Emu のウォレットは受け取り済み（ウォレット）の数字、City は受け取る前の数字だけを出していたため。 */
+const WALLET = '0xdcc6800000000000000000000000000000006edf';
+const ME_OK = { ok: true, isOwner: false, wallet: WALLET, emuer: { ok: true, error: null, unconverted: '0' } };
+
+test('公式ショップは、ウォレットのEMUERと、移す前のEMUERの両方を出す', async () => {
+  const f = await open(1440, { me: ME_OK, wallet: { account: WALLET } });
+  try {
+    await f.frame.locator('.city-door[data-value="commerce"]').click();
+    await f.frame.getByText('1,852 EMUER').waitFor();
+    assert.match(await f.text(), /ウォレットのEMUER\s*1,852 EMUER[\s\S]*ウォレットに移す前のEMUER\s*0 EMUER/);
+    assert.ok((await f.chain()).includes('balanceOf:' + WALLET), '連携済みのウォレットの残高を読む');
+    assert.equal((await f.chain()).includes('eth_requestAccounts'), false, '残高を読むだけで MetaMask の許可は求めない');
+    assert.equal(await f.frame.locator('[data-action="walk"][data-value="schoolpark-official"]').count(), 1, '公式ショップも3Dで入れる');
+  } finally { await f.close(); }
+});
+
+test('ウォレットのEMUERで交換：注文 → MetaMask → 確かめる', async () => {
+  const f = await open(390, { me: ME_OK, wallet: { account: WALLET } });
+  try {
+    await f.frame.locator('.city-product[data-value="note"]').click();
+    const pay = f.frame.getByRole('button', { name: 'ウォレットのEMUERで交換する', exact: true });
+    await f.frame.getByText('1,852 EMUER').waitFor();
+    assert.equal(await f.frame.getByRole('button', { name: 'ウォレットに移す前のEMUERで交換する', exact: true }).isDisabled(), true, '移す前のEMUERは 0');
+    await pay.click();
+    await f.frame.getByText('ウォレットのEMUERで交換しました。引換コードは下の交換履歴にあります。').waitFor();
+    assert.equal(f.posts[0].method, 'emuer_chain'); assert.equal(f.posts[0].productId, 'note');
+    assert.equal('amount' in f.posts[0] || 'price' in f.posts[0], false, '金額は画面から送らない');
+    assert.ok((await f.chain()).includes('payExchange:0xorder'));
+    assert.deepEqual(f.posts.slice(1).map(p => p.path), ['/api/mitemiru/orders/c1/confirm']);
+    assert.deepEqual(f.errors, []);
+  } finally { await f.close(); }
+});
+
+test('MetaMask で断ったら注文を取り消す。別のアカウントなら払わない', async () => {
+  let f = await open(390, { me: ME_OK, wallet: { account: WALLET, reject: true } });
+  try {
+    await f.frame.locator('.city-product[data-value="note"]').click();
+    await f.frame.getByText('1,852 EMUER').waitFor();
+    await f.frame.getByRole('button', { name: 'ウォレットのEMUERで交換する', exact: true }).click();
+    await f.frame.getByText('支払いを取り消しました。EMUERは使われていません。').waitFor();
+    assert.deepEqual(f.posts.slice(1).map(p => p.path), ['/api/mitemiru/orders/c1/cancel']);
+  } finally { await f.close(); }
+  f = await open(390, { me: ME_OK, wallet: { account: '0x195f0000000000000000000000000000000042ac' } });
+  try {
+    await f.frame.locator('.city-product[data-value="note"]').click();
+    await f.frame.getByText('1,852 EMUER').waitFor();
+    await f.frame.getByRole('button', { name: 'ウォレットのEMUERで交換する', exact: true }).click();
+    await f.frame.getByText(/いま MetaMask で開いているアカウントが違います/).waitFor();
+    assert.equal((await f.chain()).some(c => c.startsWith('payExchange')), false);
+    assert.deepEqual(f.posts.slice(1).map(p => p.path), ['/api/mitemiru/orders/c1/cancel'], '払っていない注文は取り消して在庫を戻す');
+  } finally { await f.close(); }
+});
+
+test('City の中に「SchoolParkの広場へ」と「08 CITY / 3D EXPLORER」は出さない', async () => {
+  const f = await open(1440);
+  try {
+    const t = await f.text();
+    assert.doesNotMatch(t, /SchoolParkの広場へ|3D EXPLORER/);
   } finally { await f.close(); }
 });

@@ -74,8 +74,52 @@ export function createBridge(parent, app) {
     getCommerceAdminProducts: () => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/products'),
     seedReizoSticker: () => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/city/reizo-sticker', {}),
     publishCommerceProduct: (id) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/admin/products/' + encodeURIComponent(id), { status:'live' }, 'PUT'),
-    placeCommerceOrder: (productId, requestId) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/orders',
-      { productId, method:'emuer_ledger', requestId }),
+    /* method は emuer_ledger（ウォレットに移す前のEMUER）か emuer_chain（ウォレットのEMUER）。
+       金額はサーバーが商品から決める。ここからは送らない。 */
+    placeCommerceOrder: (productId, requestId, method = 'emuer_ledger') => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/orders',
+      { productId, method: method === 'emuer_chain' ? 'emuer_chain' : 'emuer_ledger', requestId }),
+    confirmCommerceOrder: (id) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/orders/' + encodeURIComponent(id) + '/confirm', {}),
+    cancelCommerceOrder: (id) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/orders/' + encodeURIComponent(id) + '/cancel', {}),
+    exchangeAuthorization: (id) => jsonRequest('https://emu-realtime.onrender.com/api/mitemiru/orders/' + encodeURIComponent(id) + '/exchange-authorization', {}),
+    /* ウォレットのEMUER（受け取り済みのぶん）。Emu のウォレットの「使えるEMUER」と同じ数字。
+       読むだけなので MetaMask の許可は求めない（eth_requestAccounts は呼ばない）。
+       読めないときは null（0 とは書かない）。 */
+    async walletEmuer(address) {
+      const eth = parent.ethereum, E = parent.ethers;
+      if (!eth || !E || typeof parent.emuerV2ConfigOnce !== 'function' || !/^0x[0-9a-fA-F]{40}$/.test(String(address || ''))) return null;
+      try {
+        const config = await bounded(parent.emuerV2ConfigOnce());
+        if (!config?.contract) return null;
+        const provider = new E.providers.Web3Provider(eth);
+        if (Number((await bounded(provider.getNetwork())).chainId) !== 137) return null;
+        const token = new E.Contract(config.contract, ['function balanceOf(address) view returns (uint256)'], provider);
+        const value = await bounded(token.balanceOf(address));
+        return Number(E.utils.formatUnits(value, 18));
+      } catch (_) { return null; }
+    },
+    /* ウォレットのEMUERで払う。サーバーの署名つきで EMUERv2.payExchange を呼ぶ（みてみると同じ）。
+       払うのは、注文の宛先になっているウォレット（MetaMask で別のアカウントを開いていたら止める）。
+       MetaMask の確認は人が待つので、時間で打ち切らない。 */
+    async payExchange(x, expectedWallet) {
+      const eth = parent.ethereum, E = parent.ethers;
+      if (!eth || !E) throw new Error('WALLET_NOT_FOUND');
+      const version = checkSession();
+      const accounts = await eth.request({ method: 'eth_requestAccounts' });
+      stillCurrent(version);
+      const now = String((accounts || [])[0] || '').toLowerCase();
+      if (expectedWallet && now !== String(expectedWallet).toLowerCase()) throw new Error('WALLET_MISMATCH');
+      const provider = new E.providers.Web3Provider(eth);
+      if (Number((await provider.getNetwork()).chainId) !== 137) {
+        try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x89' }] }); }
+        catch (_) { throw new Error('POLYGON_REQUIRED'); }
+      }
+      const signer = new E.providers.Web3Provider(eth).getSigner();
+      const c = new E.Contract(x.contract, ['function payExchange(bytes32,bytes32,uint256,uint256,bytes)'], signer);
+      const tx = await c.payExchange(x.orderId, x.productId, x.price, x.deadline, x.authorization);
+      await tx.wait();
+      stillCurrent(version);
+      return tx.hash;
+    },
     async downloadReizoSticker(orderId) {
       const version = checkSession();
       const headers = await bounded(parent.emuAuthHeaders(false, { interactive:false }));
@@ -127,7 +171,6 @@ export function createBridge(parent, app) {
     async openGuild(id) { await allowNavigation(); leaveForExisting(); await parent.spGuildOpen(id, app); },
     async openEmu() { await allowNavigation(); await parent.chesHubGo('emu'); },
     async openPassport() { await allowNavigation(); await parent.openSpPassport(); },
-    goHome() { app.cityReturn = false; app.go('home')(); },
     /* お問い合わせ（出店の相談など）。Emu の画面のお問い合わせを、その種類で開く。
        入力の途中（2つ目より先の手順）なら、そのまま開くだけにする。
        次へを押すと、途中の内容を確かめて送信まで進んでしまうため。

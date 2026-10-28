@@ -20,8 +20,25 @@ const errors = {
   SOLD_OUT:'在庫がなくなりました。',
   EMUER_NOT_ACTIVE:'EMUER交換機能は停止中です。',
   METHOD_NOT_AVAILABLE:'この店舗ではこの決済方法を利用できません。',
-  NOT_FOR_SALE:'この商品は現在交換できません。'
+  NOT_FOR_SALE:'この商品は現在交換できません。',
+  WALLET_NOT_FOUND:'ウォレット（MetaMask など）が見つかりません。',
+  WALLET_REQUIRED:'Passportにウォレットを連携すると、ウォレットのEMUERで交換できます。',
+  WALLET_MISMATCH:'注文のウォレットと、いま MetaMask で開いているアカウントが違います。MetaMask で連携済みのアカウントに切り替えてから、もう一度お試しください。',
+  POLYGON_REQUIRED:'MetaMask のネットワークを Polygon に切り替えてください。',
+  PLAN_REQUIRED:'EMUERでの交換は、Light・Plus・Pro プランで使えます（無料プランでは使えません）。',
+  AUTHORIZER_NOT_READY:'いまはウォレットのEMUERで交換できません。時間をおいて、もう一度お試しください。',
+  CHAIN_UNAVAILABLE:'ブロックチェーンに繋がりませんでした。時間をおいて、もう一度お試しください。',
+  CHAIN_PAYMENT_NOT_FOUND:'支払いの記録がまだ届いていません。少し待ってから、交換履歴の「支払いを確かめる」を押してください。',
+  CHAIN_PAYMENT_MISMATCH:'支払いの内容が注文と合いませんでした。運営へお問い合わせください。',
+  ORDER_EXPIRED:'この注文は期限が切れました。もう一度、商品から交換してください。',
+  ORDER_NOT_PENDING:'この注文は、もう支払い待ちではありません。交換履歴を更新してください。',
+  ALREADY_DONE:'この注文は、もう支払いが済んでいます。交換履歴を更新してください。'
 };
+const newRequestId = () => (crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0,80);
+const emuerNumber = v => { const n = Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
+const amountText = n => Number(n).toLocaleString('ja-JP', { maximumFractionDigits: 2 });
+/* MetaMask で「拒否」したとき。ethers は ACTION_REJECTED、MetaMask は 4001 を返す。 */
+const rejected = e => e?.code === 4001 || e?.code === 'ACTION_REJECTED' || /user (rejected|denied)/i.test(String(e?.message || ''));
 
 export function createCity(host, app, bridge = createBridge(window.parent, app)) {
   let page = 'home', selected = '', productShopId = '', spots = null, history = null, achievements = null;
@@ -31,6 +48,8 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
      どちらも公開の読み取りだけで、EMUER残高（/me）は読まない。
      残高は自分の記録なので、公式ショップや商品を開いたときに読む。 */
   let showcase = null, showcaseState = 'idle', demoShops = null;
+  /* ウォレットのEMUER（受け取り済み）。undefined はまだ読んでいない、null は読めなかった。 */
+  let walletBalance;
   let message = '', error = '', loading = false, recording = false, myLoading = false;
   let catalogAt = 0, myAt = 0, epoch = 0, myGeneration = 0, share = null, loadJob = null, myJob = null;
   const recorded = new Map();
@@ -80,11 +99,11 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
   /* 使い方。はじめての人が、3つで分かるように。 */
   const howTo = () => `<ol class="city-howto" aria-label="公式ショップの使い方">
       <li><b>1</b><span><strong>EMUERをためる</strong>知識の投稿やクエストなど、SchoolParkでの活動でたまります。</span></li>
-      <li><b>2</b><span><strong>商品と交換する</strong>公式ショップで商品を選んで「EMUERで交換する」を押します。</span></li>
+      <li><b>2</b><span><strong>商品と交換する</strong>公式ショップで商品を選び、ウォレットのEMUERか、ウォレットに移す前のEMUERで交換します。</span></li>
       <li><b>3</b><span><strong>受け取る</strong>交換履歴の引換コードを受付で見せます。デジタルの商品はその場でダウンロードできます。</span></li>
     </ol>`;
   /* 営業先にそのまま見せられる、出店の案内。 */
-  const joinCta = () => `<section class="city-join"><p class="city-eyebrow">FOR SHOPS · 出店のご案内</p>
+  const joinCta = () => `<section class="city-join" data-tour="city-join"><p class="city-eyebrow">FOR SHOPS · 出店のご案内</p>
       <h3>あなたのお店も、SchoolPark City に出店できます</h3>
       <p>教室・カフェ・本屋など、学びや挑戦につながるお店を募集しています。お店の商品やイベントを、SchoolParkのメンバーに届けませんか。</p>
       ${button('contact','出店の相談をする','general')}</section>`;
@@ -94,9 +113,16 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
   const productCard = p => `<article class="city-card">${p.imageUrl ? `<img src="${escape(p.imageUrl)}" alt="" loading="lazy">` : ''}<span class="city-badge virtual">EMUERで交換</span>
       <h3>${escape(p.emoji || '🎁')} ${escape(p.name)}</h3><p>${escape(p.description || '')}</p><p><b>${priceLabel(p)}</b>${stockLabel(p) ? ` · ${stockLabel(p)}` : ''}</p>
       ${button('product','くわしく見る・交換する',p.id)}</article>`;
+  /* 使えるEMUERは2つある。
+       ・ウォレットのEMUER … 受け取り済み（Emu のウォレットの「使えるEMUER」と同じ）。MetaMask で払う
+       ・ウォレットに移す前のEMUER … まだ受け取っていない報酬。その場で引ける
+     前は後者だけを「あなたの使えるEMUER」と出していたので、全部受け取った人は 0 に見えた（10/28）。 */
   function myEmuer() {
     if (!commerceMe?.emuer) return '';
-    return `<div class="city-wallet"><span>あなたの使えるEMUER</span><b>${escape(commerceMe.emuer.unconverted ?? '0')} EMUER</b>
+    const wallet = walletBalance === undefined ? '確認中…' : walletBalance === null ? '—' : `${amountText(walletBalance)} EMUER`;
+    return `<div class="city-wallet"><div><span>ウォレットのEMUER</span><b>${escape(wallet)}</b></div>
+      <div><span>ウォレットに移す前のEMUER</span><b class="city-wallet-sub">${escape(commerceMe.emuer.unconverted ?? '0')} EMUER</b></div>
+      ${walletBalance === null ? '<small class="city-wallet-note">ウォレットのEMUERは、MetaMask を Polygon で接続すると表示されます。</small>' : ''}
       ${commerceMe.emuer.ok ? '' : `<small>${escape(emuerWhy(commerceMe.emuer.error))}</small>`}</div>`;
   }
   function officialPage() {
@@ -112,7 +138,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
         : products.length ? `<div class="city-grid">${products.map(productCard).join('')}</div>`
         : empty('商品はこれから並びます','新しい商品が入ったら、ここに並びます。')}
       ${howTo()}
-      <div class="city-row">${button('page','街のお店を見る','partners',true)}${button('page','交換履歴を見る','orders',true)}</div></section>`;
+      <div class="city-row">${shop ? button('walk','🗺 3Dのお店に入る',shop.id,true) : ''}${button('page','街のお店を見る','partners',true)}${button('page','交換履歴を見る','orders',true)}</div></section>`;
   }
   /* 3Dの展示店が読めなかったときの控え。3Dの街に入れば同じお店がある。 */
   const FIELD_STORE = { id:'field-store', name:'THE FIELD STORE', subtitle:'学びと暮らしの、小さなお店。' };
@@ -124,7 +150,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       ${!commerceShops && demoShops === null ? '<p role="status">お店を読み込んでいます…</p>' : ''}
       <div class="city-grid">${partners.map(s => `<article class="city-card">${s.imageUrl ? `<img src="${escape(s.imageUrl)}" alt="${escape(s.name)}" loading="lazy">` : ''}<span class="city-badge real">お店 · 円 / JPYC</span>
         <h3>${escape(s.emoji || '🏪')} ${escape(s.name)}</h3><p>${escape(s.description || '')}</p>${s.address ? `<p>📍 ${escape(s.address)}</p>` : ''}
-        ${s.paymentGuide ? `<p class="city-note">${escape(s.paymentGuide)}</p>` : ''}${button('products','商品・サービスを見る',s.id)}</article>`).join('')}
+        ${s.paymentGuide ? `<p class="city-note">${escape(s.paymentGuide)}</p>` : ''}${button('products','商品・サービスを見る',s.id)}${button('walk','3Dで入る',s.id,true)}</article>`).join('')}
         ${demos.map(d => `<article class="city-card"><span class="city-badge">デモ · 3Dの展示店</span>
         <h3>🏪 ${escape(d.name)}</h3><p>${escape(d.subtitle || d.description || '')}</p>
         <p>3Dの街で、お店に入って歩き、商品を見られます。展示用のお店なので、商品は購入できません。</p>${button('walk','3Dで入る',d.id,true)}</article>`).join('')}</div>
@@ -144,23 +170,30 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     const p = commerceProducts?.find(x => x.id === selected);
     if (!p) return unavailable('商品');
     const isVirtual = p.storeType === 'schoolpark_virtual';
-    const ok = isVirtual && commerceMe?.emuer?.ok === true && p.methods?.includes('emuer_ledger') && p.remaining !== 0;
+    const price = emuerNumber(p.prices?.EMUER);
+    const base = isVirtual && commerceMe?.emuer?.ok === true && p.remaining !== 0;
+    const canWallet = base && p.methods?.includes('emuer_chain') && !!commerceMe?.wallet && (walletBalance == null || walletBalance >= price);
+    const canLedger = base && p.methods?.includes('emuer_ledger') && emuerNumber(commerceMe?.emuer?.unconverted) >= price;
+    const ok = canWallet || canLedger;
     const reason = !isVirtual ? '支払いは円・JPYCで、お店で行います。価格・在庫は、お店でご確認ください（EMUERは使えません）。'
       : p.remaining === 0 ? '在庫がなくなりました。' : !commerceMe ? 'あなたのEMUERを確かめています…' : !commerceMe.emuer?.ok
       ? emuerWhy(commerceMe.emuer?.error)
-      : !p.methods?.includes('emuer_ledger') ? 'この商品は、いまはEMUERで交換できません。' : '';
+      : !p.methods?.some(m => m === 'emuer_ledger' || m === 'emuer_chain') ? 'この商品は、いまはEMUERで交換できません。'
+      : !ok ? 'EMUERが足りません。ウォレットのEMUERか、ウォレットに移す前のEMUERのどちらかが、価格以上あれば交換できます。' : '';
     return `<button type="button" class="city-link" data-action="${isVirtual ? 'page' : 'products'}" data-value="${isVirtual ? 'commerce' : escape(p.shopId)}">← ${isVirtual ? '公式ショップ' : '商品一覧'}</button>
       <article class="city-card city-commerce-detail">${p.imageUrl ? `<img src="${escape(p.imageUrl)}" alt="${escape(p.name)}">` : ''}<span class="city-badge ${isVirtual?'virtual':'real'}">${isVirtual?'SchoolPark公式ショップ · EMUERで交換':'街のお店 · 円 / JPYC'}</span><h2 data-city-heading tabindex="-1">${escape(p.emoji || '🎁')} ${escape(p.name)}</h2>
       <p>${escape(p.description || '')}</p><p><b>${isVirtual ? `交換価格: ${priceLabel(p)}` : `円価格: ${p.prices?.JPY == null ? '店舗確認' : '¥'+escape(p.prices.JPY)} · JPYC価格: ${p.prices?.JPYC == null ? '店舗確認' : escape(p.prices.JPYC)}`}</b></p>${p.remaining == null ? '' : `<p>在庫: ${p.remaining === 0 ? 'なし' : `残り ${escape(p.remaining)}`}</p>`}
-      ${isVirtual && commerceMe?.emuer ? `<p>あなたの使えるEMUER: ${escape(commerceMe.emuer.unconverted ?? '0')} EMUER</p>` : ''}
+      ${isVirtual ? myEmuer() : ''}
       ${p.fulfillment ? `<p>受け取り方: ${escape(p.fulfillment)}</p>` : ''}${p.cancelPolicy ? `<p>キャンセル: ${escape(p.cancelPolicy)}</p>` : ''}
-      ${reason ? `<p class="city-note">${escape(reason)}</p>` : ''}${isVirtual ? button('exchange',commerceBusy ? '交換中…' : 'EMUERで交換する',p.id,false,commerceBusy || !ok) : ''}
-      ${isVirtual ? '<p class="city-muted">交換するとEMUERが使われ、交換履歴に引換コードが出ます。</p>' : ''}</article>`;
+      ${reason ? `<p class="city-note">${escape(reason)}</p>` : ''}
+      ${isVirtual ? `<div class="city-pay">${button('exchange-chain',commerceBusy ? '交換中…' : 'ウォレットのEMUERで交換する',p.id,false,commerceBusy || !canWallet)}
+        ${button('exchange',commerceBusy ? '交換中…' : 'ウォレットに移す前のEMUERで交換する',p.id,true,commerceBusy || !canLedger)}</div>
+        <p class="city-muted">ウォレットのEMUERで払うときは、MetaMask で確認します（Polygon のガス代がかかります）。交換すると、交換履歴に引換コードが出ます。</p>` : ''}</article>`;
   }
   function ordersPage() {
     if (!commerceOrders) return `<section class="city-section"><h2 data-city-heading tabindex="-1">交換履歴</h2><p role="status">履歴を読み込んでいます…</p></section>`;
     return `<section class="city-section"><h2 data-city-heading tabindex="-1">交換履歴</h2><p class="city-muted">交換した商品と引換コードです。受付で引換コードを見せて受け取ってください。</p>
-      ${commerceOrders.length ? `<ul class="city-list">${commerceOrders.map(o => `<li><b>${escape(o.productName)}</b> · ${escape(o.amount)} ${escape(o.currency)}<span class="city-order-status" data-status="${escape(o.status)}">${escape(orderStatus(o))}</span><small>${escape(date(o.createdAt))}${o.pickupCode ? ` · 引換コード <b class="city-code">${escape(o.pickupCode)}</b>` : o.status === 'pending_payment' ? ' · 引換コードはお支払いのあとに出ます' : ''}</small>${o.digitalStickerAvailable ? button('download-sticker','冷蔵庫くんステッカーをダウンロード',o.id) : ''}</li>`).join('')}</ul>` : empty('交換履歴はありません','公式ショップやイベントで交換すると、ここに並びます。')}${button('page','公式ショップを見る','commerce')}
+      ${commerceOrders.length ? `<ul class="city-list">${commerceOrders.map(o => `<li><b>${escape(o.productName)}</b> · ${escape(o.amount)} ${escape(o.currency)}<span class="city-order-status" data-status="${escape(o.status)}">${escape(orderStatus(o))}</span><small>${escape(date(o.createdAt))}${o.pickupCode ? ` · 引換コード <b class="city-code">${escape(o.pickupCode)}</b>` : o.status === 'pending_payment' ? ' · 引換コードはお支払いのあとに出ます' : ''}</small>${o.digitalStickerAvailable ? button('download-sticker','冷蔵庫くんステッカーをダウンロード',o.id) : ''}${o.status === 'pending_payment' && o.method === 'emuer_chain' ? `<div class="city-row">${button('resume-pay','MetaMaskで払う',o.id,false,commerceBusy)}${button('confirm-order','支払いを確かめる',o.id,true,commerceBusy)}${button('cancel-order','取り消す',o.id,true,commerceBusy)}</div>` : ''}</li>`).join('')}</ul>` : empty('交換履歴はありません','公式ショップやイベントで交換すると、ここに並びます。')}${button('page','公式ショップを見る','commerce')}
       ${button('refresh-orders','履歴を更新','',true)}</section>`;
   }
   function eventOpsPage() {
@@ -243,19 +276,18 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       : showcase === null ? '<p role="status" class="city-muted">商品を読み込んでいます…</p>'
       : items.length ? `<div class="city-products">${items.map(productTile).join('')}</div>`
       : '<p class="city-muted">商品はこれから並びます。新しい商品が入ったら、ここに出ます。</p>';
-    return `<section class="city-showcase" aria-label="公式ショップの商品"><div class="city-section-title"><h3>🏫 公式ショップの商品</h3>${button('page','すべて見る','commerce',true)}</div>${body}</section>`;
+    return `<section class="city-showcase" aria-label="公式ショップの商品" data-tour="city-showcase"><div class="city-section-title"><h3>🏫 公式ショップの商品</h3>${button('page','すべて見る','commerce',true)}</div>${body}</section>`;
   }
   function render() {
     const focus = host.contains(document.activeElement) ? document.activeElement : null;
     const focusAction = focus?.dataset.action, focusValue = focus?.dataset.value;
-    host.innerHTML = `<div class="city-toolbar"><button type="button" class="city-link" data-action="home">← SchoolParkの広場へ</button><span class="city-eyebrow">08 CITY / 3D EXPLORER</span></div>
-      ${page === 'home' ? `<section class="city-hero city-hero-3d"><img src="/schoolpark/city-showroom-preview.webp" alt="SchoolPark Cityの3Dショールーム。木の棚、商品、カウンターのある店内。" width="1200" height="675"><div class="city-hero-copy"><p class="city-eyebrow">SCHOOLPARK CITY</p><h2 data-city-heading tabindex="-1">SchoolPark City</h2><p>活動でたまったEMUERで、公式ショップの商品と交換できる街。<br>街のお店や、3Dの街も歩けます。</p>${button('walk','3Dの街へ入る ↗','',false,loading || !spots)}</div></section>` : ''}
-      ${page === 'home' ? `<div class="city-doors" role="navigation" aria-label="Cityでできること">${[
-        ['page','commerce','🏫','公式ショップ','EMUERで商品と交換'],
-        ['page','partners','🏪','街のお店','円・JPYCで使えるお店'],
-        ['walk','','🗺','3Dの街を歩く','お店に入って商品を見る']
-      ].map(([action,value,icon,label,note]) => `<button type="button" class="city-door" data-action="${action}" data-value="${value}"${action === 'walk' && (loading || !spots) ? ' disabled' : ''}><span class="city-door-icon" aria-hidden="true">${icon}</span><b>${label}</b><span>${note}</span></button>`).join('')}</div>${showcaseSection()}` : ''}
-      <nav class="city-nav ${page === 'home' ? 'city-nav-sub' : 'city-nav-compact'}" aria-label="Cityのページ">${[...(page === 'home' ? [] : [['commerce','公式ショップ','EMUERで交換'],['partners','街のお店','円・JPYC']]),['orders','交換履歴','引換コード'],...(commerceMe?.isOwner?[['event-ops','イベント運営','商品QR・引渡し']]:[]),['real','REAL','街の体験スポット'],['virtual','VIRTUAL','仮想の入口'],['quest','QUEST','クエストへ'],['my','MY CITY','自分の記録']].map(([id,label,note]) => `<button type="button" data-action="${id === 'quest' ? 'quest' : 'page'}" data-value="${id === 'quest' ? '' : id}"${page === id || (id === 'commerce' && ['products','product'].includes(page) && officialShop()?.id === productShopId) ? ' aria-current="page"' : ''}><b>${label}</b><span>${note}</span></button>`).join('')}</nav>
+    host.innerHTML = `${page === 'home' ? `<section class="city-hero city-hero-3d"><img src="/schoolpark/city-showroom-preview.webp" alt="SchoolPark Cityの3Dショールーム。木の棚、商品、カウンターのある店内。" width="1200" height="675"><div class="city-hero-copy"><p class="city-eyebrow">SCHOOLPARK CITY</p><h2 data-city-heading tabindex="-1">SchoolPark City</h2><p>活動でたまったEMUERで、公式ショップの商品と交換できる街。<br>街のお店や、3Dの街も歩けます。</p>${button('walk','3Dの街へ入る ↗','',false,loading || !spots)}</div></section>` : ''}
+      ${page === 'home' ? `<div class="city-doors" role="navigation" aria-label="Cityでできること" data-tour="city-doors">${[
+        ['page','commerce','🏫','公式ショップ','EMUERで商品と交換','city-shop'],
+        ['page','partners','🏪','街のお店','円・JPYCで使えるお店','city-partners'],
+        ['walk','','🗺','3Dの街を歩く','お店に入って商品を見る','city-3d']
+      ].map(([action,value,icon,label,note,tourId]) => `<button type="button" class="city-door" data-tour="${tourId}" data-action="${action}" data-value="${value}"${action === 'walk' && (loading || !spots) ? ' disabled' : ''}><span class="city-door-icon" aria-hidden="true">${icon}</span><b>${label}</b><span>${note}</span></button>`).join('')}</div>${showcaseSection()}` : ''}
+      <nav class="city-nav ${page === 'home' ? 'city-nav-sub' : 'city-nav-compact'}" aria-label="Cityのページ">${[...(page === 'home' ? [] : [['commerce','公式ショップ','EMUERで交換'],['partners','街のお店','円・JPYC']]),['orders','交換履歴','引換コード'],...(commerceMe?.isOwner?[['event-ops','イベント運営','商品QR・引渡し']]:[]),['real','REAL','街の体験スポット'],['virtual','VIRTUAL','仮想の入口'],['quest','QUEST','クエストへ'],['my','MY CITY','自分の記録']].map(([id,label,note]) => `<button type="button"${id === 'orders' ? ' data-tour="city-orders"' : ''} data-action="${id === 'quest' ? 'quest' : 'page'}" data-value="${id === 'quest' ? '' : id}"${page === id || (id === 'commerce' && ['products','product'].includes(page) && officialShop()?.id === productShopId) ? ' aria-current="page"' : ''}><b>${label}</b><span>${note}</span></button>`).join('')}</nav>
       ${page !== 'home' ? '<button type="button" class="city-link" data-action="page" data-value="home">← City HOME</button>' : ''}
       ${error ? `<div role="alert" class="city-status city-error">${escape(error)}</div>` : ''}
       ${message ? `<div role="status" class="city-status">${escape(message)}</div>` : ''}
@@ -315,6 +347,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       const [catalog, me] = await Promise.all([commerceShops ? null : bridge.getCommerceShops(), bridge.getCommerceMe()]);
       if (catalog) commerceShops = shopsOf(catalog);
       commerceMe = me;
+      loadWallet();
       const official = officialShop();
       if (official) await loadProducts(official.id);
     } catch (e) { fail(e); }
@@ -322,6 +355,14 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
   }
   async function loadMe() {
     try { commerceMe = await bridge.getCommerceMe(); } catch (e) { fail(e); }
+    render();
+    await loadWallet();
+  }
+  async function loadWallet() {
+    const version = epoch;
+    const value = commerceMe?.wallet ? await bridge.walletEmuer(commerceMe.wallet).catch(() => null) : null;
+    if (version !== epoch) return;
+    walletBalance = value;
     render();
   }
   async function loadShowcase() {
@@ -411,7 +452,6 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
         } finally { immersiveOpening=false; }
         return;
       }
-      if (action === 'home') return bridge.goHome();
       if (action === 'page') return go(value);
       if (action === 'products') return go('products', value);
       if (action === 'contact') { bridge.openContact(value || 'general'); return; }
@@ -426,7 +466,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       if (action === 'exchange') {
         if (commerceBusy) return;
         commerceBusy = true; error = ''; message = ''; render();
-        const requestId = (crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0,80);
+        const requestId = newRequestId();
         try {
           const result = await bridge.placeCommerceOrder(value, requestId);
           message = result.already ? 'この交換注文はすでに受け付け済みです。' : 'EMUER交換を受け付けました。注文履歴で引換情報を確認してください。';
@@ -434,6 +474,53 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
           page = 'orders';
         } finally { commerceBusy = false; }
         return;
+      }
+      /* ウォレットのEMUERで交換する。注文 → MetaMask で payExchange → サーバーが鎖を見て確定。
+         MetaMask で断ったら注文を取り消して在庫を戻す（EMUERは動いていない）。
+         払ったあとに確かめられなかったときは、注文は支払い待ちのまま残り、交換履歴から確かめ直せる。 */
+      if (action === 'exchange-chain' || action === 'resume-pay') {
+        if (commerceBusy) return;
+        commerceBusy = true; error = ''; message = ''; render();
+        let orderId = action === 'resume-pay' ? value : '';
+        try {
+          let exchange;
+          if (action === 'resume-pay') exchange = (await bridge.exchangeAuthorization(orderId)).exchange;
+          else {
+            const result = await bridge.placeCommerceOrder(value, newRequestId(), 'emuer_chain');
+            orderId = result.order?.id || '';
+            exchange = result.exchange;
+            if (!exchange) { message = 'この交換注文はすでに受け付け済みです。'; }
+          }
+          if (exchange) {
+            message = 'MetaMask で支払いを確認してください。'; render();
+            try { await bridge.payExchange(exchange, commerceMe?.wallet); }
+            catch (e) {
+              /* 払う前に止まったもの（断った・別のアカウント・ウォレットが無い・Polygon でない）は、
+                 EMUERが動いていないので注文を取り消して在庫を戻す。新しく作った注文だけ。 */
+              const beforePaying = rejected(e) || ['WALLET_MISMATCH','WALLET_NOT_FOUND','POLYGON_REQUIRED'].includes(e?.message);
+              if (beforePaying && orderId && action === 'exchange-chain') await bridge.cancelCommerceOrder(orderId).catch(() => {});
+              if (rejected(e)) { message = '支払いを取り消しました。EMUERは使われていません。'; return; }
+              throw e;
+            }
+            message = '支払いを確かめています…'; render();
+            await bridge.confirmCommerceOrder(orderId);
+            message = 'ウォレットのEMUERで交換しました。引換コードは下の交換履歴にあります。';
+          }
+          await Promise.all([loadCommerceOrders(), productShopId ? loadProducts(productShopId) : null]);
+          page = 'orders';
+        } finally { commerceBusy = false; if (version === epoch) render(); }
+        return;
+      }
+      if (action === 'confirm-order') {
+        await bridge.confirmCommerceOrder(value);
+        message = '支払いを確かめました。引換コードが出ています。';
+        return await loadCommerceOrders();
+      }
+      if (action === 'cancel-order') {
+        if (!window.confirm('この注文を取り消しますか？\nMetaMask で払っていなければ、EMUERは使われていません。')) return;
+        await bridge.cancelCommerceOrder(value);
+        message = '注文を取り消しました。';
+        return await loadCommerceOrders();
       }
       if (action === 'refresh-orders') return loadCommerceOrders();
       if (action === 'download-sticker') return await bridge.downloadReizoSticker(value);
@@ -522,6 +609,8 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     const target = event.target.closest('[data-action]');
     if (target && host.contains(target) && !target.disabled) act(target.dataset.action,target.dataset.value);
   });
+  /* チュートリアル（reizo-tour-pages.js）が CITY のトップを指すときに送ってくる。 */
+  host.addEventListener('city-tour-home', () => { if (page !== 'home') go('home'); });
   host.addEventListener('submit', event => {
     if (!event.target.matches('[data-ops-form]')) return;
     event.preventDefault(); act('lookup','');
@@ -531,7 +620,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     epoch++; myGeneration++; spots = null; history = null; achievements = null; share = null;
     recorded.clear(); catalogAt = 0; myAt = 0; loadJob = null; myJob = null;
     commerceShops = null; commerceProducts = null; commerceMe = null; commerceOrders = null;
-    showcase = null; showcaseState = 'idle'; demoShops = null;
+    showcase = null; showcaseState = 'idle'; demoShops = null; walletBalance = undefined;
     loading = false; recording = false; myLoading = false; page = 'home';
     message = ''; error = errors.SESSION_CHANGED; render();
   });
