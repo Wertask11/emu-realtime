@@ -3542,6 +3542,8 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
 .spp-star:hover { border-color:#D0E2BE; }
 .spp-star-claim { margin-top:8px; padding:7px 11px; border-radius:7px; border:1px solid #D0E2BE; color:#D0E2BE; background:transparent; font:700 11px 'Zen Kaku Gothic New',sans-serif; cursor:pointer; }
 .spp-star-claim:disabled { opacity:.65; cursor:default; }
+.spp-minted { display:inline-block; margin-top:6px; color:rgba(244,241,234,.62); font-size:11px; }
+.spp-row[hidden] { display:none; }
 .spp-star small { display:block; font-size:11px; font-weight:400; color:rgba(244,241,234,.55); margin-top:4px; }
 /* SchoolPark の公園から遊び（ECHO FIELD・林檎の方程式）を開いたときも、SchoolPark(1500)より手前に出す。
    どちらも Emu のために作った覆い（ECHO FIELD は #room3Overlay 1400、林檎は #ringoOverlay 1100）で、
@@ -21943,8 +21945,15 @@ async function openSpPassport() {
       return n + (q.isFounder ? 0 : Math.max(1, Number(q.rounds) || 0));
     }, 0);
     doneHtml = _sppRow('SchoolPark｜完走したクエスト', doneRounds + '件');
-    /* 多すぎると記録欄が1つのことで埋まるので、新しいほうから10件まで。 */
-    done.slice(0, 10).forEach(function (q) {
+    /* 自分の証明書（受け取り済みか・どこに届いたか・トークン ID）。
+       読めなくても一覧は出す。そのときは今までどおり「受け取る」が出る。 */
+    const certs = await _spMyCertificates();
+    /* 多すぎると記録欄が1つのことで埋まるので、最初は新しいほうから10件。
+       前は10件で切っていたので、11件目より古い完走には「受け取る」が出ず、
+       証明書NFTを受け取る手立てが無かった（10/28、#002 WORK を全部やった人）。
+       残りは「残りを見る」で開く。 */
+    const DONE_FIRST = 10;
+    done.forEach(function (q, doneIndex) {
       const name = ((q.label && !q.isFounder ? q.label + ' ' : '') + (q.title || '（題名なし）')).trim();
       /* ギルドは色の札で出す。文字色にすると、WORK(#141310) や WEB3(#3B382F) が
          パスポートの暗い紙に沈んで読めない。札の地色にして、上に明るい字を置く。 */
@@ -21963,8 +21972,11 @@ async function openSpPassport() {
 
          出さないのは #000（創業クエスト）だけ。あちらは受けるものではなく、
          承認の口でも FOUNDER_QUEST_ID として弾いているので証明書が無い。 */
+      /* 全部の周を受け取り済みなら、届いた先と「MetaMaskに追加」を出す。 */
       const certificate = !q.isFounder
-        ? '<br><button type="button" data-quest-star="' + escapeHtml(q.id) + '" class="spp-star-claim">証明書NFTを受け取る</button>' : '';
+        ? (_spCertMintedHtml(certs, q.id, Math.max(1, Number(q.rounds) || 0))
+          || '<br><button type="button" data-quest-star="' + escapeHtml(q.id) + '" class="spp-star-claim">証明書NFTを受け取る</button>') : '';
+      const rowStart = doneHtml.length;
       /* 2周以上なら、そう書く。行はクエストごとに1つなので、
          書かないと「1回しか認められていない」ように見える。 */
       const rounds = Math.max(1, Number(q.rounds) || 0);
@@ -21976,7 +21988,14 @@ async function openSpPassport() {
         : '';
       doneHtml += _sppRowHtml('　' + escapeHtml(_sppDate(q.at)),
         tag + escapeHtml(name) + roundTag + certificate);
+      /* 11件目からは畳んでおく（「残りを見る」で開く）。 */
+      if (doneIndex >= DONE_FIRST)
+        doneHtml = doneHtml.slice(0, rowStart)
+          + doneHtml.slice(rowStart).replace('<div class="spp-row">', '<div class="spp-row" data-done-more hidden>');
     });
+    if (done.length > DONE_FIRST)
+      doneHtml += _sppRowHtml('', '<button type="button" class="spp-star-claim" data-done-more-open>'
+        + '残り' + (done.length - DONE_FIRST) + '件を見る</button>');
   }
 
   /* 限定星。運営が配った、完走とは別の星。
@@ -21987,14 +22006,16 @@ async function openSpPassport() {
     const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/stars/mine',
       { headers: await emuAuthHeaders(false) });
     if (r.ok) {
-      const rows = ((await r.json()) || {}).stars || [];
+      const body = (await r.json()) || {};
+      const rows = body.stars || [];
+      const starContract = String(body.contract || '');
       rows.slice(0, 10).forEach(function (x) {
         const tag = '<span style="display:inline-block;background:'
           + escapeHtml(/^#[0-9A-Fa-f]{6}$/.test(String(x.color || '')) ? x.color : '#D4A843')
           + ';color:#14202A;font-size:10px;font-weight:700;letter-spacing:.06em;'
           + 'padding:2px 6px;border-radius:999px;margin-right:6px;vertical-align:1px">星</span>';
         const btn = x.minted
-          ? '<br><small style="color:rgba(244,241,234,.55)">NFTで受け取り済み</small>'
+          ? _spMintedHtml('NFTで受け取り済み', x.wallet, [x.tokenId], starContract)
           : '<br><button type="button" data-limited-star="' + escapeHtml(x.starId)
             + '" class="spp-star-claim">NFTで受け取る</button>';
         limitedHtml += _sppRowHtml('　' + escapeHtml(_sppDate(x.grantedAt)),
@@ -22011,6 +22032,13 @@ async function openSpPassport() {
     + _sppRow('SchoolPark｜応援ギルド', supported.length ? supported.join(' / ') : 'まだありません');
   if (rec) rec.querySelectorAll('[data-quest-star]').forEach(function (button) {
     button.onclick = function () { spClaimQuestStar(button.dataset.questStar, button); };
+  });
+  if (rec) rec.querySelectorAll('[data-done-more-open]').forEach(function (button) {
+    button.onclick = function () {
+      rec.querySelectorAll('[data-done-more]').forEach(function (row) { row.hidden = false; });
+      const row = button.closest('.spp-row');
+      if (row) row.remove();
+    };
   });
   if (rec) rec.querySelectorAll('[data-limited-star]').forEach(function (button) {
     button.onclick = function () { spClaimLimitedStar(button.dataset.limitedStar, button); };
@@ -22030,6 +22058,107 @@ async function openSpPassport() {
     } catch (e) { /* 通信が届かない間は受取操作でエラーを説明する。 */ }
   }
 }
+
+/* ───── 受け取ったNFTを、どこに届いたか・MetaMaskに出す ─────
+
+   MetaMask は Polygon の NFT を自動では全部拾わない。受け取ったのに
+   ウォレットに出ず「届いていない」ように見えていた（10/28、証明書を
+   手で1枚ずつ「NFTをインポート」して、やっと見えた）。
+   受け取ったあとと、受け取り済みの証明書に、届いた先のアドレスと
+   「MetaMaskに追加」（コントラクトとトークン ID を入れた状態で開く）を出す。
+
+   受け取りの宛先を決めるのはサーバー（連携済みのウォレット）。
+   ここで window.ethereum を使うのは、追加の画面を開くときだけ。 */
+function _spNftAddr(a) {
+  a = String(a || '');
+  return /^0x[0-9a-fA-F]{40}$/.test(a) ? a.slice(0, 6) + '…' + a.slice(-4) : '';
+}
+/* label が空なら「〇〇 に届きました」だけを出す（受け取った直後用）。 */
+function _spMintedHtml(label, wallet, tokenIds, contract) {
+  const to = _spNftAddr(wallet);
+  const ids = (tokenIds || []).map(String).filter(function (t) { return /^\d+$/.test(t); });
+  const c = /^0x[0-9a-fA-F]{40}$/.test(String(contract || '')) ? String(contract) : '';
+  const text = label ? '✓ ' + label + (to ? '（' + to + ' に届きました）' : '') : (to ? to + ' に届きました' : '');
+  let html = text ? '<br><small class="spp-minted">' + escapeHtml(text) + '</small>' : '';
+  if (ids.length && c)
+    html += '<br><button type="button" class="spp-star-claim" data-watch-nft="' + escapeHtml(ids.join(','))
+      + '" data-watch-contract="' + escapeHtml(c) + '" data-watch-wallet="'
+      + escapeHtml(String(wallet || '').toLowerCase()) + '">MetaMaskに追加</button>';
+  return html;
+}
+/* 自分の証明書。読めなければ null（そのときは「受け取る」を出したままにする）。 */
+async function _spMyCertificates() {
+  try {
+    const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/certificates/mine',
+      { headers: await emuAuthHeaders(false) });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d && Array.isArray(d.certificates) ? d : null;
+  } catch (e) { return null; }
+}
+/* そのクエストの周回が全部受け取り済みなら、その欄を返す。まだ残りがあれば空。 */
+function _spCertMintedHtml(certs, questId, rounds) {
+  if (!certs || !Array.isArray(certs.certificates)) return '';
+  const mine = certs.certificates.filter(function (c) {
+    return c && c.questId === questId && c.minted && /^\d+$/.test(String(c.tokenId || ''));
+  }).sort(function (a, b) { return (Number(a.round) || 1) - (Number(b.round) || 1); });
+  if (!mine.length || mine.length < Math.max(1, Number(rounds) || 1)) return '';
+  return _spMintedHtml('証明書NFTを受け取り済み', mine[mine.length - 1].wallet,
+    mine.map(function (c) { return c.tokenId; }), certs.contract);
+}
+/* 受け取った直後。ボタンのすぐ後ろに、届いた先と「MetaMaskに追加」を足す。 */
+function _spShowMinted(button, data) {
+  if (!button || typeof button.insertAdjacentHTML !== 'function' || !data) return;
+  const html = _spMintedHtml('', data.wallet, [data.tokenId], data.contract);
+  if (html) button.insertAdjacentHTML('afterend', html);
+}
+async function spWatchNft(button) {
+  if (!button || button.disabled) return;
+  const contract = String(button.dataset.watchContract || '');
+  const ids = String(button.dataset.watchNft || '').split(',').filter(function (t) { return /^\d+$/.test(t); });
+  const wallet = String(button.dataset.watchWallet || '').toLowerCase();
+  const manual = '\n\nMetaMask の「NFTをインポート」で、次を入れても追加できます（ネットワークは Polygon）。'
+    + '\nアドレス：' + contract + '\nトークンID：' + ids.join('、');
+  if (!window.ethereum || typeof window.ethereum.request !== 'function') {
+    alert('MetaMask が見つかりませんでした。' + manual);
+    return;
+  }
+  const before = button.textContent;
+  button.disabled = true;
+  button.textContent = 'MetaMaskで確認…';
+  try {
+    /* 届いた先と違うアカウントを開いていると、MetaMask は「持ち主ではない」で断る。
+       先にこちらで分かる言葉にする。 */
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const now = String((accounts || [])[0] || '').toLowerCase();
+    if (wallet && now && now !== wallet)
+      throw new Error('このNFTは ' + _spNftAddr(wallet) + ' に届いています。いま MetaMask で開いているのは '
+        + _spNftAddr(now) + ' です。\nMetaMask で届いた先のアカウントに切り替えてから、もう一度押してください。');
+    if ((await window.ethereum.request({ method: 'eth_chainId' })) !== '0x89')
+      await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x89' }] });
+    for (const id of ids) {
+      try {
+        await window.ethereum.request({ method: 'wallet_watchAsset',
+          params: { type: 'ERC721', options: { address: contract, tokenId: id } } });
+      } catch (e) {
+        if (e && e.code === 4001) throw e;                            /* 断った */
+        if (/already/i.test(String(e && e.message || ''))) continue;   /* もう出ている */
+        throw e;
+      }
+    }
+    button.textContent = '✓ MetaMaskに追加しました';
+  } catch (e) {
+    button.disabled = false;
+    button.textContent = before;
+    if (e && e.code === 4001) return;
+    alert((e && e.message ? e.message : 'MetaMask に追加できませんでした。') + manual);
+  }
+}
+/* 一覧は組み立て直すことがあるので、押したときに拾う。 */
+document.addEventListener('click', function (e) {
+  const b = e.target && e.target.closest && e.target.closest('[data-watch-nft]');
+  if (b) spWatchNft(b);
+});
 
 /* パスポートに連携済みのウォレットを取り出す。
 
@@ -22108,6 +22237,7 @@ async function spClaimLimitedStar(starId, button) {
     const data = await r.json();
     if (!r.ok) throw new Error(_spMintErrorText(data.error, '星のNFT', '星空の星'));
     button.textContent = '✓ NFTを受け取りました';
+    if (typeof _spShowMinted === 'function') _spShowMinted(button, data);
   } catch (e) {
     button.disabled = false;
     button.textContent = 'NFTで受け取る';
@@ -22130,6 +22260,7 @@ async function spClaimQuestStar(questId, button) {
     const data = await r.json();
     if (!r.ok) throw new Error(_spMintErrorText(data.error, '証明書NFT', '完走の記録と星'));
     button.textContent = '✓ 証明書NFTを受け取りました';
+    if (typeof _spShowMinted === 'function') _spShowMinted(button, data);
   } catch (e) {
     button.disabled = false;
     button.textContent = '証明書NFTを受け取る';

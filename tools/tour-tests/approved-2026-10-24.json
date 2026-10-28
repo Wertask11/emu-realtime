@@ -1,6 +1,54 @@
 {
  "index.html": [
   [
+   ".spp-minted { display:inline-block; margin-top:6px; color:rgba(244,241,234,.62); font-size:11px; }\n.spp-row[hidden] { display:none; }\n",
+   ""
+  ],
+  [
+   "    /* 自分の証明書（受け取り済みか・どこに届いたか・トークン ID）。\n       読めなくても一覧は出す。そのときは今までどおり「受け取る」が出る。 */\n    const certs = await _spMyCertificates();\n    /* 多すぎると記録欄が1つのことで埋まるので、最初は新しいほうから10件。\n       前は10件で切っていたので、11件目より古い完走には「受け取る」が出ず、\n       証明書NFTを受け取る手立てが無かった（10/28、#002 WORK を全部やった人）。\n       残りは「残りを見る」で開く。 */\n    const DONE_FIRST = 10;\n    done.forEach(function (q, doneIndex) {\n",
+   "    /* 多すぎると記録欄が1つのことで埋まるので、新しいほうから10件まで。 */\n    done.slice(0, 10).forEach(function (q) {\n"
+  ],
+  [
+   "      /* 全部の周を受け取り済みなら、届いた先と「MetaMaskに追加」を出す。 */\n",
+   ""
+  ],
+  [
+   "        ? (_spCertMintedHtml(certs, q.id, Math.max(1, Number(q.rounds) || 0))\n          || '<br><button type=\"button\" data-quest-star=\"' + escapeHtml(q.id) + '\" class=\"spp-star-claim\">証明書NFTを受け取る</button>') : '';\n      const rowStart = doneHtml.length;\n",
+   "        ? '<br><button type=\"button\" data-quest-star=\"' + escapeHtml(q.id) + '\" class=\"spp-star-claim\">証明書NFTを受け取る</button>' : '';\n"
+  ],
+  [
+   "      /* 11件目からは畳んでおく（「残りを見る」で開く）。 */\n      if (doneIndex >= DONE_FIRST)\n        doneHtml = doneHtml.slice(0, rowStart)\n          + doneHtml.slice(rowStart).replace('<div class=\"spp-row\">', '<div class=\"spp-row\" data-done-more hidden>');\n",
+   ""
+  ],
+  [
+   "    if (done.length > DONE_FIRST)\n      doneHtml += _sppRowHtml('', '<button type=\"button\" class=\"spp-star-claim\" data-done-more-open>'\n        + '残り' + (done.length - DONE_FIRST) + '件を見る</button>');\n",
+   ""
+  ],
+  [
+   "      const body = (await r.json()) || {};\n      const rows = body.stars || [];\n      const starContract = String(body.contract || '');\n",
+   "      const rows = ((await r.json()) || {}).stars || [];\n"
+  ],
+  [
+   "          ? _spMintedHtml('NFTで受け取り済み', x.wallet, [x.tokenId], starContract)\n",
+   "          ? '<br><small style=\"color:rgba(244,241,234,.55)\">NFTで受け取り済み</small>'\n"
+  ],
+  [
+   "  });\n  if (rec) rec.querySelectorAll('[data-done-more-open]').forEach(function (button) {\n    button.onclick = function () {\n      rec.querySelectorAll('[data-done-more]').forEach(function (row) { row.hidden = false; });\n      const row = button.closest('.spp-row');\n      if (row) row.remove();\n    };\n",
+   ""
+  ],
+  [
+   "\n/* ───── 受け取ったNFTを、どこに届いたか・MetaMaskに出す ─────\n\n   MetaMask は Polygon の NFT を自動では全部拾わない。受け取ったのに\n   ウォレットに出ず「届いていない」ように見えていた（10/28、証明書を\n   手で1枚ずつ「NFTをインポート」して、やっと見えた）。\n   受け取ったあとと、受け取り済みの証明書に、届いた先のアドレスと\n   「MetaMaskに追加」（コントラクトとトークン ID を入れた状態で開く）を出す。\n\n   受け取りの宛先を決めるのはサーバー（連携済みのウォレット）。\n   ここで window.ethereum を使うのは、追加の画面を開くときだけ。 */\nfunction _spNftAddr(a) {\n  a = String(a || '');\n  return /^0x[0-9a-fA-F]{40}$/.test(a) ? a.slice(0, 6) + '…' + a.slice(-4) : '';\n}\n/* label が空なら「〇〇 に届きました」だけを出す（受け取った直後用）。 */\nfunction _spMintedHtml(label, wallet, tokenIds, contract) {\n  const to = _spNftAddr(wallet);\n  const ids = (tokenIds || []).map(String).filter(function (t) { return /^\\d+$/.test(t); });\n  const c = /^0x[0-9a-fA-F]{40}$/.test(String(contract || '')) ? String(contract) : '';\n  const text = label ? '✓ ' + label + (to ? '（' + to + ' に届きました）' : '') : (to ? to + ' に届きました' : '');\n  let html = text ? '<br><small class=\"spp-minted\">' + escapeHtml(text) + '</small>' : '';\n  if (ids.length && c)\n    html += '<br><button type=\"button\" class=\"spp-star-claim\" data-watch-nft=\"' + escapeHtml(ids.join(','))\n      + '\" data-watch-contract=\"' + escapeHtml(c) + '\" data-watch-wallet=\"'\n      + escapeHtml(String(wallet || '').toLowerCase()) + '\">MetaMaskに追加</button>';\n  return html;\n}\n/* 自分の証明書。読めなければ null（そのときは「受け取る」を出したままにする）。 */\nasync function _spMyCertificates() {\n  try {\n    const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/certificates/mine',\n      { headers: await emuAuthHeaders(false) });\n    if (!r.ok) return null;\n    const d = await r.json();\n    return d && Array.isArray(d.certificates) ? d : null;\n  } catch (e) { return null; }\n}\n/* そのクエストの周回が全部受け取り済みなら、その欄を返す。まだ残りがあれば空。 */\nfunction _spCertMintedHtml(certs, questId, rounds) {\n  if (!certs || !Array.isArray(certs.certificates)) return '';\n  const mine = certs.certificates.filter(function (c) {\n    return c && c.questId === questId && c.minted && /^\\d+$/.test(String(c.tokenId || ''));\n  }).sort(function (a, b) { return (Number(a.round) || 1) - (Number(b.round) || 1); });\n  if (!mine.length || mine.length < Math.max(1, Number(rounds) || 1)) return '';\n  return _spMintedHtml('証明書NFTを受け取り済み', mine[mine.length - 1].wallet,\n    mine.map(function (c) { return c.tokenId; }), certs.contract);\n}\n/* 受け取った直後。ボタンのすぐ後ろに、届いた先と「MetaMaskに追加」を足す。 */\nfunction _spShowMinted(button, data) {\n  if (!button || typeof button.insertAdjacentHTML !== 'function' || !data) return;\n  const html = _spMintedHtml('', data.wallet, [data.tokenId], data.contract);\n  if (html) button.insertAdjacentHTML('afterend', html);\n}\nasync function spWatchNft(button) {\n  if (!button || button.disabled) return;\n  const contract = String(button.dataset.watchContract || '');\n  const ids = String(button.dataset.watchNft || '').split(',').filter(function (t) { return /^\\d+$/.test(t); });\n  const wallet = String(button.dataset.watchWallet || '').toLowerCase();\n  const manual = '\\n\\nMetaMask の「NFTをインポート」で、次を入れても追加できます（ネットワークは Polygon）。'\n    + '\\nアドレス：' + contract + '\\nトークンID：' + ids.join('、');\n  if (!window.ethereum || typeof window.ethereum.request !== 'function') {\n    alert('MetaMask が見つかりませんでした。' + manual);\n    return;\n  }\n  const before = button.textContent;\n  button.disabled = true;\n  button.textContent = 'MetaMaskで確認…';\n  try {\n    /* 届いた先と違うアカウントを開いていると、MetaMask は「持ち主ではない」で断る。\n       先にこちらで分かる言葉にする。 */\n    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });\n    const now = String((accounts || [])[0] || '').toLowerCase();\n    if (wallet && now && now !== wallet)\n      throw new Error('このNFTは ' + _spNftAddr(wallet) + ' に届いています。いま MetaMask で開いているのは '\n        + _spNftAddr(now) + ' です。\\nMetaMask で届いた先のアカウントに切り替えてから、もう一度押してください。');\n    if ((await window.ethereum.request({ method: 'eth_chainId' })) !== '0x89')\n      await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x89' }] });\n    for (const id of ids) {\n      try {\n        await window.ethereum.request({ method: 'wallet_watchAsset',\n          params: { type: 'ERC721', options: { address: contract, tokenId: id } } });\n      } catch (e) {\n        if (e && e.code === 4001) throw e;                            /* 断った */\n        if (/already/i.test(String(e && e.message || ''))) continue;   /* もう出ている */\n        throw e;\n      }\n    }\n    button.textContent = '✓ MetaMaskに追加しました';\n  } catch (e) {\n    button.disabled = false;\n    button.textContent = before;\n    if (e && e.code === 4001) return;\n    alert((e && e.message ? e.message : 'MetaMask に追加できませんでした。') + manual);\n  }\n}\n/* 一覧は組み立て直すことがあるので、押したときに拾う。 */\ndocument.addEventListener('click', function (e) {\n  const b = e.target && e.target.closest && e.target.closest('[data-watch-nft]');\n  if (b) spWatchNft(b);\n});\n",
+   ""
+  ],
+  [
+   "    button.textContent = '✓ NFTを受け取りました';\n    if (typeof _spShowMinted === 'function') _spShowMinted(button, data);\n  } catch (e) {\n",
+   "    button.textContent = '✓ NFTを受け取りました';\n  } catch (e) {\n"
+  ],
+  [
+   "    button.textContent = '✓ 証明書NFTを受け取りました';\n    if (typeof _spShowMinted === 'function') _spShowMinted(button, data);\n  } catch (e) {\n",
+   "    button.textContent = '✓ 証明書NFTを受け取りました';\n  } catch (e) {\n"
+  ],
+  [
    "    height:calc(100dvh - 81px - var(--emu-bnav-h));\n",
    "    height:calc(100dvh - 81px - var(--emu-bnav-h) - env(safe-area-inset-bottom));\n"
   ],
