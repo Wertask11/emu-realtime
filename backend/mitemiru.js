@@ -42,6 +42,9 @@ const SHIPPING = "mitemiru_shipping";
 const SHIPPING_KEEP_MS = 365 * 24 * 60 * 60 * 1000;
 /* 公式ショップの見られ方の回数（日ごと）。誰が見たかは残さない。 */
 const METRICS = "mitemiru_metrics";
+/* 1人1つまでの品（投票権・優先席・企画会議）。誰が持っているかを {商品}__{uid} の1行で示す。
+   取消・期限切れ・返金で消すので、また交換できるようになる。 */
+const CLAIMS = "mitemiru_claims";
 /* 受け取り方。
      digital        … 交換したらその場でダウンロード
      ship           … 配送（物）
@@ -174,12 +177,42 @@ function cleanProduct(body, previous, assets) {
     orderDeadlineMs = Number(rawDeadline);
     if (!Number.isSafeInteger(orderDeadlineMs) || orderDeadlineMs <= 0) throw new Error("INVALID_ORDER_DEADLINE");
   }
+  /* 商品ページに並べる画像（デザイン案など）。6枚まで、https だけ。 */
+  const rawGallery = pick("gallery");
+  if (rawGallery !== undefined && rawGallery !== null && !Array.isArray(rawGallery)) throw new Error("INVALID_GALLERY");
+  const gallery = (rawGallery || []).map(v => text(v, 500));
+  if (gallery.length > 6 || gallery.some(v => { try { return new URL(v).protocol !== "https:"; } catch (_) { return true; } })) throw new Error("INVALID_GALLERY");
+  /* 注文のときに選ぶもの（Guild バッジの5種など）。8つまで、1つ20文字まで。 */
+  const rawChoices = pick("choices");
+  if (rawChoices !== undefined && rawChoices !== null && !Array.isArray(rawChoices)) throw new Error("INVALID_CHOICES");
+  const choices = (rawChoices || []).map(v => text(v, 20));
+  if (choices.length > 8 || choices.some(v => !v) || new Set(choices).size !== choices.length) throw new Error("INVALID_CHOICES");
   return {
     name, description: text(pick("description"), 600), imageUrl, prices, cashAtVenue, stock, status,
     fulfillment, cancelPolicy, shopId, storeType, emoji,
     sortOrder: Number.isSafeInteger(sortOrder) ? sortOrder : 0,
-    digitalAssetId, fulfillmentMode, orderDeadlineMs
+    digitalAssetId, fulfillmentMode, orderDeadlineMs,
+    gallery, choices, onePerPerson: pick("onePerPerson") === true
   };
+}
+/* 公式ショップの11品（backend/official-shop-products.json）。運営が「下書きで登録」を押すと、
+   この中身で下書きを作る。画像はアプリ（Vercel）の中に置いてあるので、サイトの住所から URL を組む。 */
+function loadOfficialCatalog(file, siteOrigin) {
+  const raw = JSON.parse(require("node:fs").readFileSync(file, "utf8"));
+  const url = (name) => new URL(raw.imageDir + name, siteOrigin).href;
+  return raw.products.map(p => ({
+    id: p.id,
+    body: {
+      name: p.name, description: p.description, emoji: p.emoji || "", sortOrder: p.sortOrder || 0,
+      imageUrl: url(p.image), gallery: (p.gallery || []).map(url),
+      prices: { EMUER: p.price, JPYC: null, JPY: null }, cashAtVenue: false,
+      stock: p.stock === undefined ? null : p.stock, status: "draft",
+      fulfillment: p.fulfillment, cancelPolicy: p.cancelPolicy, shopId: CITY_OFFICIAL_SHOP_ID,
+      digitalAssetId: p.digitalAssetId || "", fulfillmentMode: p.fulfillmentMode,
+      orderDeadlineMs: p.orderDeadline ? Date.parse(p.orderDeadline) : null,
+      choices: p.choices || [], onePerPerson: p.onePerPerson === true
+    }
+  }));
 }
 /* 受け取り方。前からある商品には無いので、品の種類から決める。 */
 function fulfillmentModeOf(p) {
@@ -330,6 +363,7 @@ function createMitemiruRouter(deps) {
 
   const productRef = (id) => db.collection(PRODUCTS).doc(String(id));
   const orderRef = (id) => db.collection(ORDERS).doc(String(id));
+  const claimRef = (id) => db.collection(CLAIMS).doc(String(id));
   const chainIdOf = (value) => chain.id(value).toLowerCase();
 
   function fail(res, error) {
@@ -356,6 +390,7 @@ function createMitemiruRouter(deps) {
       INVALID_DIGITAL_ASSET: 400, INVALID_FULFILLMENT_MODE: 400, INVALID_ORDER_DEADLINE: 400,
       INVALID_SHIPPING: 400, INVALID_DELIVERY: 400, ORDER_CLOSED: 409, NOT_CANCELLABLE: 409,
       DIGITAL_ASSET_NOT_AVAILABLE: 409, INVALID_METRIC: 400,
+      INVALID_GALLERY: 400, INVALID_CHOICES: 400, INVALID_CHOICE: 400, ALREADY_OWNED: 409,
       EVENT_QR_CONFIG_INVALID: 503
     };
     if (known[code]) return res.status(known[code]).json({ error: code, ...(error.extra || {}) });
@@ -389,7 +424,8 @@ function createMitemiruRouter(deps) {
       fulfillment: p.fulfillment, cancelPolicy: p.cancelPolicy,
       shopId: p.shopId || "", storeType: p.shopId === CITY_OFFICIAL_SHOP_ID ? "schoolpark_virtual" : (p.storeType || "legacy"), emoji: p.emoji || "",
       fulfillmentMode: fulfillmentModeOf(p), orderDeadline: p.orderDeadlineMs || null,
-      orderClosed: !!(p.orderDeadlineMs && now() > p.orderDeadlineMs)
+      orderClosed: !!(p.orderDeadlineMs && now() > p.orderDeadlineMs),
+      gallery: p.gallery || [], choices: p.choices || [], onePerPerson: p.onePerPerson === true
     };
   }
   /* 買った人が自分で取り消せるか。物（配送・手渡し）で、まだ渡していなくて、締切の前だけ。
@@ -409,7 +445,7 @@ function createMitemiruRouter(deps) {
       digitalAvailable: !!(o.digitalAssetId && assets[o.digitalAssetId]) && shown,
       digitalFileName: o.digitalAssetId && assets[o.digitalAssetId] ? assets[o.digitalAssetId].downloadName : null,
       delivery: o.delivery || (o.digitalAssetId ? "digital" : "pickup"),
-      orderDeadline: o.orderDeadlineMs || null,
+      orderDeadline: o.orderDeadlineMs || null, choice: o.choice || "",
       cancellable: buyerCancellable(o), cancelRequested: !!o.cancelRequestedAtMs,
       fulfillment: o.fulfillment || "", createdAt: o.createdAtMs, paidAt: o.paidAtMs || null,
       fulfilledAt: o.fulfilledAtMs || null, expiresAt: o.status === "pending_payment" ? o.expiresAtMs : null,
@@ -467,6 +503,7 @@ function createMitemiruRouter(deps) {
         if (cur.status !== "pending_payment" || !(cur.expiresAtMs < now())) return false;
         tx.set(orderRef(d.id), { status: "expired", expiredAtMs: now() }, { merge: true });
         if (ps.exists) tx.set(productRef(o.productId), { reserved: Math.max(0, Number(ps.data().reserved || 0) - 1) }, { merge: true });
+        if (cur.claimId) tx.delete(claimRef(cur.claimId));
         return true;
       }).then(expired => expired ? dropShipping(d.id) : null).catch(() => { /* 次の機会に外す */ });
     }
@@ -492,6 +529,8 @@ function createMitemiruRouter(deps) {
       tx.set(productRef(o.productId), productPatch, { merge: true });
       const next = { ...patch, status: "paid", paidAtMs: now(), lateAfterExpiry: o.status !== "pending_payment" };
       tx.set(orderRef(orderId), next, { merge: true });
+      // 期限切れのあとに届いた支払いでも、払った注文は「持っている」ことにする
+      if (o.claimId) tx.set(claimRef(o.claimId), { productId: o.productId, uid: o.uid, orderId, createdAtMs: now() }, { merge: true });
       consumeUsage(tx, o, us);
       return { already: false, order: { ...o, ...next } };
     });
@@ -679,6 +718,14 @@ function createMitemiruRouter(deps) {
         if (!["ship", "pickup"].includes(delivery)) throw err("INVALID_DELIVERY");
       }
       const shipping = delivery === "ship" ? cleanShipping(b.shipping) : null;
+      /* 選ぶものがある品（Guild バッジなど）は、選んだものを注文に残す。 */
+      const choices = Array.isArray(product.choices) ? product.choices : [];
+      const choice = choices.length ? String(b.choice || "") : "";
+      if (choices.length && !choices.includes(choice)) throw err("INVALID_CHOICE");
+      /* 1人1つまでの品。持っていれば、ここで断る（取り置きの中でもう一度確かめる）。 */
+      const claimId = product.onePerPerson === true
+        ? crypto.createHash("sha256").update(`${productId}:${identity.uid}`).digest("hex").slice(0, 40) : null;
+      if (claimId && (await claimRef(claimId).get()).exists) throw err("ALREADY_OWNED");
       const currency = METHODS[method].currency;
       const amount = product.prices[currency];
       const pickupCode = await newPickupCode();
@@ -689,6 +736,7 @@ function createMitemiruRouter(deps) {
         ...(product.digitalAssetId && assets[product.digitalAssetId] ? { digitalAssetId: product.digitalAssetId } : {}),
         delivery, physical: PHYSICAL_MODES.includes(mode),
         ...(product.orderDeadlineMs ? { orderDeadlineMs: product.orderDeadlineMs } : {}),
+        ...(choice ? { choice } : {}), ...(claimId ? { claimId } : {}),
         ...(storeType === "schoolpark_virtual" ? { requestId } : {})
       };
 
@@ -763,11 +811,14 @@ function createMitemiruRouter(deps) {
   async function reserve(id, order, shipping) {
     await db.runTransaction(async tx => {
       const ps = await tx.get(productRef(order.productId));
+      const cs = order.claimId ? await tx.get(claimRef(order.claimId)) : null;
       const p = ps.exists ? ps.data() || {} : null;
       if (!p || p.status !== "live") throw err("NOT_FOR_SALE");
       if (remaining(p) === 0) throw err("SOLD_OUT");
+      if (cs && cs.exists) throw err("ALREADY_OWNED");
       tx.set(productRef(order.productId), { reserved: Number(p.reserved || 0) + 1 }, { merge: true });
       tx.create(orderRef(id), order);
+      if (order.claimId) tx.create(claimRef(order.claimId), { productId: order.productId, uid: order.uid, orderId: id, createdAtMs: now() });
       if (shipping) tx.create(db.collection(SHIPPING).doc(id), { ...shipping, orderId: id, uid: order.uid, createdAtMs: now() });
     });
   }
@@ -783,6 +834,7 @@ function createMitemiruRouter(deps) {
       const ps = await tx.get(productRef(o.productId));
       tx.set(orderRef(id), { status, closedAtMs: now() }, { merge: true });
       if (ps.exists) tx.set(productRef(o.productId), { reserved: Math.max(0, Number(ps.data().reserved || 0) - 1) }, { merge: true });
+      if (o.claimId) tx.delete(claimRef(o.claimId));
       return true;
     });
     if (closed) await dropShipping(id);
@@ -831,10 +883,12 @@ function createMitemiruRouter(deps) {
       const reads = [tx.get(productRef(base.productId))];
       if (base.usageId) reads.push(tx.get(db.collection(USAGE).doc(base.usageId)));
       const [ps, us] = await Promise.all(reads);
+      const cs = base.claimId ? await tx.get(claimRef(base.claimId)) : null;
       const rewardSnaps = await Promise.all(chosen.map(rid => tx.get(db.collection(REWARDS).doc(rid))));
       const p = ps.exists ? ps.data() || {} : null;
       if (!p || p.status !== "live") throw err("NOT_FOR_SALE");
       if (remaining(p) === 0) throw err("SOLD_OUT");
+      if (cs && cs.exists) throw err("ALREADY_OWNED");
       if (base.usageId) {
         const used = us && us.exists ? Number((us.data() || {}).used || 0) : 0;
         if (used >= 1) throw err("PERIOD_LIMIT_REACHED");
@@ -856,6 +910,7 @@ function createMitemiruRouter(deps) {
       tx.set(productRef(base.productId), { sold: Number(p.sold || 0) + 1 }, { merge: true });
       tx.create(orderRef(id), order);
       if (shipping) tx.create(db.collection(SHIPPING).doc(id), { ...shipping, orderId: id, uid: base.uid, createdAtMs: now() });
+      if (base.claimId) tx.create(claimRef(base.claimId), { productId: base.productId, uid: base.uid, orderId: id, createdAtMs: now() });
       consumeUsage(tx, order, us);
       return { order, already: false };
     });
@@ -1023,6 +1078,31 @@ function createMitemiruRouter(deps) {
     } catch (e) { return fail(res, e); }
   });
 
+  /* 公式ショップの11品を下書きでまとめて登録する（運営だけ）。何度押してもよい。
+     まだ下書きで一度も交換されていない品は、一覧の中身で上書きする。販売中・交換済みの品には触らない。 */
+  router.post("/admin/city/official-catalog", owner, async (req, res) => {
+    try {
+      const items = deps.officialCatalog || loadOfficialCatalog(path.join(__dirname, "official-shop-products.json"), siteOrigin);
+      const results = [];
+      for (const item of items) {
+        const clean = validateStoreProduct(cleanProduct(item.body, null, assets), "schoolpark_virtual");
+        const result = await db.runTransaction(async tx => {
+          const snap = await tx.get(productRef(item.id));
+          if (!snap.exists) {
+            tx.create(productRef(item.id), { ...clean, sold: 0, reserved: 0, createdAtMs: now(), updatedAtMs: now(), createdBy: req.identity.uid });
+            return "created";
+          }
+          const row = snap.data() || {};
+          if (row.status !== "draft" || Number(row.sold || 0) > 0 || Number(row.reserved || 0) > 0) return "kept";
+          tx.set(productRef(item.id), { ...clean, updatedAtMs: now() }, { merge: true });
+          return "updated";
+        });
+        results.push({ id: item.id, name: clean.name, result });
+      }
+      return res.json({ ok: true, results });
+    } catch (e) { return fail(res, e); }
+  });
+
   router.get("/admin/products/:id/event-qr", owner, async (req, res) => {
     try {
       const id = String(req.params.id || "");
@@ -1149,7 +1229,8 @@ function createMitemiruRouter(deps) {
           createdAt: o.createdAtMs, paidAt: o.paidAtMs || null, fulfilledAt: o.fulfilledAtMs || null,
           refundedAt: o.refundedAtMs || null, expiresAt: o.expiresAtMs || null, txHash: o.txHash || null,
           chainOrderId: o.chainOrderId || null, lateAfterExpiry: !!o.lateAfterExpiry,
-          delivery: o.delivery || (o.digitalAssetId ? "digital" : "pickup"), cancelRequested: !!o.cancelRequestedAtMs }));
+          delivery: o.delivery || (o.digitalAssetId ? "digital" : "pickup"), cancelRequested: !!o.cancelRequestedAtMs,
+          choice: o.choice || "" }));
       return res.json({ ok: true, orders: rows });
     } catch (e) { return fail(res, e); }
   });
@@ -1242,6 +1323,7 @@ function createMitemiruRouter(deps) {
         tx.set(orderRef(id), { ...patch, status: "refunded", refundedAtMs: now(), refundedBy: by,
           refundRewardId: refundReward ? refundReward.id : null }, { merge: true });
         if (ps.exists) tx.set(productRef(o.productId), { sold: Math.max(0, Number(ps.data().sold || 0) - 1) }, { merge: true });
+        if (o.claimId) tx.delete(claimRef(o.claimId));
         if (o.usageId && usageSnap && usageSnap.exists) {
           tx.set(db.collection(USAGE).doc(o.usageId), { used: Math.max(0, Number((usageSnap.data() || {}).used || 0) - 1), updatedAt: new Date() }, { merge: true });
         }
@@ -1280,7 +1362,7 @@ function createMitemiruRouter(deps) {
         const v = s.exists ? s.data() || {} : null;
         return { id: o.id, productName: o.productName, amount: o.amount, currency: o.currency, method: o.method,
           pickupCode: o.pickupCode, paidAt: o.paidAtMs || null, shippedAt: o.fulfilledAtMs || null,
-          orderDeadline: o.orderDeadlineMs || null, cancelRequested: !!o.cancelRequestedAtMs,
+          orderDeadline: o.orderDeadlineMs || null, cancelRequested: !!o.cancelRequestedAtMs, choice: o.choice || "",
           shipTo: v ? { name: v.name, postalCode: v.postalCode, address: v.address, phone: v.phone } : null };
       }));
       return res.json({ ok: true, orders: out });
@@ -1354,4 +1436,4 @@ function createMitemiruRouter(deps) {
   return { router, handleStripeEvent, markPaid, sweepExpired };
 }
 
-module.exports = { createMitemiruRouter, createChainAdapter, cleanProduct, emuerOf, METHODS, JPYC, EMUER_V2, TREASURY };
+module.exports = { createMitemiruRouter, createChainAdapter, cleanProduct, loadOfficialCatalog, loadDigitalAssets, emuerOf, METHODS, JPYC, EMUER_V2, TREASURY };

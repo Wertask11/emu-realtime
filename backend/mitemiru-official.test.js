@@ -14,13 +14,14 @@ const path = require("node:path");
 const express = require("express");
 const { makeFirestore } = require("./fake-firestore");
 const { createMitemiruRouter, cleanProduct } = require("./mitemiru");
+const CATALOG = require("./official-shop-products.json");
 
 const UNIT = 10n ** 18n;
 const W = (n) => (BigInt(n) * UNIT).toString();
 const ALICE = "0x" + "a".repeat(40);
 const DAY = 24 * 60 * 60 * 1000;
 
-function setup() {
+function setup(opts = {}) {
   const db = makeFirestore({});
   let clock = Date.parse("2026-11-14T13:00:00+09:00");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shop-assets-"));
@@ -42,7 +43,8 @@ function setup() {
   const requireOwner = (req, res, next) => requireFirebaseUser(req, res, () =>
     req.identity.uid === "owner" ? next() : res.status(403).json({ error: "OWNER_ONLY" }));
   const m = createMitemiruRouter({
-    db, chain, stripe: null, env: {}, now: () => clock, emuerEnabled: () => true, digitalAssets,
+    db, chain, stripe: null, env: {}, now: () => clock, emuerEnabled: () => true,
+    ...(opts.realAssets ? {} : { digitalAssets }),
     identity: { findByUid: async uid => uid === "alice" ? "SP-AAAA-AAAA-AAAA-AAAA" : null,
       readIdentity: async spid => spid === "SP-AAAA-AAAA-AAAA-AAAA" ? { status: "active" } : null },
     requireFirebaseUser, requireOwner, isOwner: (i) => i.uid === "owner",
@@ -223,4 +225,122 @@ test("商品の受け取り方と締切は、決まった形だけを受け付�
   assert.throws(() => cleanProduct(official({ orderDeadlineMs: -1 }), null, {}), /INVALID_ORDER_DEADLINE/);
   const old = cleanProduct(official({}), null, {});
   assert.equal(old.fulfillmentMode, ""); assert.equal(old.orderDeadlineMs, null, "前からある商品はそのまま");
+});
+
+/* 11品（10/29 オーナー決定：おすすめの値段・優先席5席・企画会議3名・物の品は各10個）。 */
+test("11品を下書きでまとめて登録できる。何度押しても同じで、販売中の品には触らない", async () => {
+  const t = setup({ realAssets: true });
+  try {
+    assert.equal((await t.call("alice", "POST", "/admin/city/official-catalog")).status, 403, "運営だけ");
+    // 前に作った「1 EMUER の下書き」は、決まった中身に入れ直す
+    await t.call("owner", "POST", "/admin/city/reizo-sticker", {});
+    const first = await t.call("owner", "POST", "/admin/city/official-catalog");
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+    assert.equal(first.body.results.length, 11);
+    assert.deepEqual(first.body.results.map(r => r.result), ["updated", ...Array(10).fill("created")]);
+    const rows = t.db._dump("mitemiru_products");
+    const price = id => rows[id].prices.EMUER;
+    assert.deepEqual(CATALOG.products.map(p => price(p.id)), [5, 15, 25, 30, 30, 80, 150, 150, 100, 100, 300]);
+    for (const p of CATALOG.products) {
+      const row = rows[p.id];
+      assert.equal(row.status, "draft", p.id);
+      assert.equal(row.shopId, "schoolpark-official"); assert.equal(row.storeType, "schoolpark_virtual");
+      assert.deepEqual({ JPY: row.prices.JPY, JPYC: row.prices.JPYC }, { JPY: null, JPYC: null }, "EMUERだけ");
+      for (const url of [row.imageUrl, ...row.gallery]) {
+        assert.match(url, /^https:\/\/schoolpark-emu\.vercel\.app\/schoolpark\/shop\/official\//);
+        assert.ok(fs.existsSync(path.join(__dirname, "../frontend/public", new URL(url).pathname)), url);
+      }
+    }
+    assert.equal(rows["reizo-kun-sticker-v1"].digitalAssetId, "reizo-kun-digital-sticker-v2");
+    assert.equal(rows["official-event-seat-v1"].stock, 5); assert.equal(rows["official-planning-meeting-v1"].stock, 3);
+    for (const id of ["official-sticker-set-v1", "official-acrylic-keyholder-v1", "official-can-badge-v1", "official-guild-badge-v1"]) {
+      assert.equal(rows[id].stock, 10, id); assert.equal(rows[id].fulfillmentMode, "ship_or_pickup", id);
+      assert.equal(rows[id].orderDeadlineMs, Date.parse("2026-11-30T23:59:59+09:00"), id);
+    }
+    assert.deepEqual(rows["official-guild-badge-v1"].choices, ["LEARN", "WORK", "PLAY", "CONNECT", "WEB3"]);
+    assert.deepEqual(["official-goods-vote-1", "official-event-seat-v1", "official-planning-meeting-v1"].map(id => rows[id].onePerPerson), [true, true, true]);
+    assert.equal((await t.call("alice", "GET", "/products?shopId=schoolpark-official")).body.products.length, 0, "下書きは並ばない");
+
+    await t.call("owner", "PUT", "/admin/products/official-can-badge-v1", { status: "live", prices: { EMUER: 120 } });
+    const again = await t.call("owner", "POST", "/admin/city/official-catalog");
+    assert.equal(again.body.results.find(r => r.id === "official-can-badge-v1").result, "kept");
+    assert.equal(again.body.results.filter(r => r.result === "updated").length, 10);
+    assert.equal(t.db._dump("mitemiru_products")["official-can-badge-v1"].prices.EMUER, 120, "販売中の品はそのまま");
+    const shown = (await t.call("alice", "GET", "/products?shopId=schoolpark-official")).body.products;
+    assert.deepEqual(shown.map(p => p.id), ["official-can-badge-v1"]);
+    assert.equal(shown[0].gallery.length, 1);
+  } finally { t.close(); }
+});
+
+test("11品の配布ファイル：一覧のファイルがそろっていて、本人がダウンロードできる", async () => {
+  const t = setup({ realAssets: true });
+  try {
+    await t.call("owner", "POST", "/admin/city/official-catalog");
+    const want = { "reizo-kun-sticker-v1": "reizo-kun-sticker.png", "official-wallpaper-icons-v1": "reizo-kun-wallpaper-icons.zip",
+      "official-wisdom-cards-v1": "wisdom-cards-hajime.zip", "official-tankyu-note-v1": "tankyu-note-hajime.pdf" };
+    for (const [id, name] of Object.entries(want)) {
+      await t.call("owner", "PUT", `/admin/products/${id}`, { status: "live" });
+      const r = await order(t, id);
+      assert.equal(r.status, 200, id + " " + JSON.stringify(r.body));
+      const mine = (await t.call("alice", "GET", "/orders")).body.orders.find(o => o.id === r.body.order.id);
+      assert.equal(mine.digitalFileName, name);
+      const file = await t.call("alice", "GET", `/orders/${mine.id}/digital`);
+      assert.equal(file.status, 200, id);
+      assert.ok((file.text || "").length > 1000, id + " は中身がある");
+    }
+  } finally { t.close(); }
+});
+
+test("1人1つまでの品：持っていれば交換できない。返金・取り消し・期限切れで、また交換できる", async () => {
+  const t = setup();
+  try {
+    const id = await product(t, { fulfillmentMode: "pickup", onePerPerson: true });
+    const first = await order(t, id);
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+    const second = await order(t, id);
+    assert.equal(second.status, 409); assert.equal(second.body.error, "ALREADY_OWNED");
+    assert.equal(t.db._dump("mitemiru_products")[id].sold, 1, "2つ目は数えない");
+    const refunded = await t.call("owner", "POST", `/admin/orders/${first.body.order.id}/refund`, { note: "運営都合" });
+    assert.equal(refunded.status, 200, JSON.stringify(refunded.body));
+    assert.equal((await order(t, id)).status, 200, "返金したら、また交換できる");
+
+    // ウォレット払いの取り置きも1つと数える。取り消し・期限切れで外れる
+    const chainId = await product(t, { fulfillmentMode: "online", onePerPerson: true });
+    const pending = await order(t, chainId, { method: "emuer_chain" });
+    assert.equal(pending.status, 200, JSON.stringify(pending.body));
+    assert.equal((await order(t, chainId, { method: "emuer_chain" })).body.error, "ALREADY_OWNED");
+    assert.equal((await t.call("alice", "POST", `/orders/${pending.body.order.id}/cancel`)).status, 200);
+    const again = await order(t, chainId, { method: "emuer_chain" });
+    assert.equal(again.status, 200, "取り消したら、また交換できる");
+    t.advance(31 * 60 * 1000);
+    assert.equal((await order(t, chainId, { method: "emuer_chain" })).status, 200, "期限が切れたら、また交換できる");
+  } finally { t.close(); }
+});
+
+test("選ぶものがある品：選ばないと交換できない。選んだものは注文・履歴・配送の一覧に出る", async () => {
+  const t = setup();
+  try {
+    const id = await product(t, { fulfillmentMode: "ship_or_pickup", choices: ["LEARN", "WORK"] });
+    assert.equal((await order(t, id, { shipping: SHIP })).body.error, "INVALID_CHOICE");
+    assert.equal((await order(t, id, { shipping: SHIP, choice: "PLAY" })).body.error, "INVALID_CHOICE");
+    const r = await order(t, id, { shipping: SHIP, choice: "WORK" });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(t.db._dump("mitemiru_orders")[r.body.order.id].choice, "WORK");
+    assert.equal((await t.call("alice", "GET", "/orders")).body.orders[0].choice, "WORK");
+    assert.equal((await t.call("owner", "GET", "/admin/shipping")).body.orders[0].choice, "WORK");
+    const plain = await product(t, {});
+    const o = await order(t, plain, { choice: "WORK" });
+    assert.equal(o.status, 200);
+    assert.equal(t.db._dump("mitemiru_orders")[o.body.order.id].choice, undefined, "選ぶものが無い品には残さない");
+  } finally { t.close(); }
+});
+
+test("商品ページの画像と選ぶものは、決まった形だけを受け付ける", () => {
+  assert.throws(() => cleanProduct(official({ gallery: ["http://example.com/a.png"] }), null, {}), /INVALID_GALLERY/);
+  assert.throws(() => cleanProduct(official({ gallery: Array(7).fill("https://example.com/a.png") }), null, {}), /INVALID_GALLERY/);
+  assert.throws(() => cleanProduct(official({ gallery: "https://example.com/a.png" }), null, {}), /INVALID_GALLERY/);
+  assert.throws(() => cleanProduct(official({ choices: ["A", "A"] }), null, {}), /INVALID_CHOICES/);
+  assert.throws(() => cleanProduct(official({ choices: ["A", ""] }), null, {}), /INVALID_CHOICES/);
+  const old = cleanProduct(official({}), null, {});
+  assert.deepEqual([old.gallery, old.choices, old.onePerPerson], [[], [], false], "前からある商品はそのまま");
 });
