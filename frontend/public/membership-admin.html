@@ -65,6 +65,7 @@ label{display:block;margin-top:12px;font-size:12px;font-weight:600;color:var(--m
       <button data-tab="schoolpark">SchoolPark</button>
       <button data-tab="emu">Emu</button>
       <button data-tab="camellia">Camellia</button>
+      <button data-tab="contacts">お問い合わせ</button>
     </div>
 
     <section id="tab-members"></section>
@@ -76,6 +77,7 @@ label{display:block;margin-top:12px;font-size:12px;font-weight:600;color:var(--m
     <section id="tab-schoolpark" class="hide"></section>
     <section id="tab-emu" class="hide"></section>
     <section id="tab-camellia" class="hide"></section>
+    <section id="tab-contacts" class="hide"></section>
   </main>
 </div>
 
@@ -3916,6 +3918,51 @@ const R1_THEMES = {
   }}
 };
 
+/* お問い合わせ。ホームページの「企業・店舗として相談する」「問い合わせ」「投資家/取材」や、
+   Emu の中のお問い合わせフォームから届いたもの（backend/contact-admin.js）。
+   Notion にも入るが、ここでは Firestore の記録を新しい順に読み、対応済みの印を付ける。 */
+const CONTACT_TYPE_LABEL = { general: "💬一般", event: "🎪イベント", media: "📰取材", investor: "💰投資家",
+  account: "🔑アカウント", bug: "🐛不具合", membership: "🎫有料会員", nft: "🎟️公式パス" };
+const CONTACT_EXTRA_LABEL = { company: "会社・店舗", scale: "規模", topic: "ご用件", login_method: "ふだんの入り方",
+  place: "起きた画面", device: "端末・ブラウザ", child_age: "お子様の年齢", participants: "参加人数", passport: "パスポート", source: "送られた場所" };
+let _contactStatus = "open";
+async function renderContacts() {
+  const el = $("#tab-contacts");
+  el.innerHTML = '<p class="empty">読み込み中…</p>';
+  let r;
+  try { r = await api("/api/contact/admin?status=" + _contactStatus); }
+  catch (e) {
+    el.innerHTML = '<div class="card"><h3>お問い合わせを開けませんでした</h3><p class="empty" style="text-align:left">'
+      + esc(e.code === "OWNER_ONLY" ? "この画面はオーナー専用です。" : "サーバー（Render）の再デプロイがまだかもしれません。") + '</p><p class="meta">' + esc(e.code || e.message) + '</p></div>';
+    return;
+  }
+  const tabs = [["open", "未対応", r.counts.open], ["done", "対応済み", r.counts.done], ["all", "すべて", r.counts.open + r.counts.done]];
+  el.innerHTML = '<div class="card"><h3>お問い合わせ</h3>'
+    + '<p class="hint">ホームページ（企業・店舗の相談、問い合わせ、投資家・取材）と、Emu の中のお問い合わせフォームから届いたものです。返事はメールアドレスあてに送ってください。</p>'
+    + '<div class="actions">' + tabs.map(t => '<button class="btn' + (t[0] === _contactStatus ? ' primary' : '') + '" data-contact-tab="' + t[0] + '">' + esc(t[1]) + '（' + t[2] + '）</button>').join("") + '</div></div>'
+    + (!r.rows.length ? '<p class="empty">いまはありません。</p>' : r.rows.map(x => {
+        const extras = Object.keys(CONTACT_EXTRA_LABEL).filter(k => x[k]).map(k => '<div class="row"><span>' + esc(CONTACT_EXTRA_LABEL[k]) + '</span><span>' + esc(x[k]) + '</span></div>').join("");
+        return '<div class="card">'
+          + '<div class="row"><span><b>' + esc(CONTACT_TYPE_LABEL[x.type] || x.type || "") + '</b> ' + esc(x.name || "") + '</span><span class="meta">' + esc(fmt(x.submittedAt)) + '</span></div>'
+          + '<div class="row"><span>メール</span><span><a href="mailto:' + esc(x.email || "") + '">' + esc(x.email || "") + '</a></span></div>'
+          + extras
+          + '<p style="white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 0">' + esc(x.message || "") + '</p>'
+          + '<div class="actions">' + (x.status === "done"
+              ? '<span class="meta">対応済み' + (x.handledAt ? '（' + esc(fmt(x.handledAt)) + '）' : '') + '</span> <button class="btn" data-contact-id="' + esc(x.id) + '" data-contact-to="open">未対応に戻す</button>'
+              : '<button class="btn primary" data-contact-id="' + esc(x.id) + '" data-contact-to="done">対応済みにする</button>') + '</div>'
+          + '</div>';
+      }).join(""));
+  el.querySelectorAll("[data-contact-tab]").forEach(b => { b.onclick = () => { _contactStatus = b.dataset.contactTab; renderContacts(); }; });
+  el.querySelectorAll("[data-contact-id]").forEach(b => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try { await api("/api/contact/admin/" + encodeURIComponent(b.dataset.contactId) + "/status", { method: "POST", body: { status: b.dataset.contactTo } }); }
+      catch (e) { window.alert("できませんでした：" + (e.code || e.message)); }
+      renderContacts();
+    };
+  });
+}
+
 async function renderEmu() {
   const el = $("#tab-emu");
   el.innerHTML = '<p class="empty">読み込み中…</p>';
@@ -4105,11 +4152,11 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) refr
 document.querySelectorAll(".tabs button").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
-    ["members","review","refunds","kyc","dialogue","metrics","schoolpark","emu","camellia"].forEach(t =>
+    ["members","review","refunds","kyc","dialogue","metrics","schoolpark","emu","camellia","contacts"].forEach(t =>
       document.getElementById("tab-" + t).classList.toggle("hide", t !== b.dataset.tab));
     /* Emuタブを離れたら、お預かり箱の読み直しを止める */
     if (b.dataset.tab !== "emu") stopInboxWatch();
-    ({ members: renderMembers, review: renderReview, refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics, schoolpark: renderSchoolPark, emu: renderEmu, camellia: renderCamellia })[b.dataset.tab]();
+    ({ members: renderMembers, review: renderReview, refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics, schoolpark: renderSchoolPark, emu: renderEmu, camellia: renderCamellia, contacts: renderContacts })[b.dataset.tab]();
   };
 });
 

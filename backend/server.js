@@ -295,6 +295,8 @@ app.use("/api/billing", billing.router);
 app.use("/api/billing/admin/camellia-identities", require("./camellia-admin-identities").createCamelliaAdminIdentityRouter({ db, requireOwner }));
 /* Camellia の招待と利用停止（運営だけ）。 */
 app.use("/api/billing/admin/camellia-access", require("./camellia-access").createCamelliaAccessAdminRouter({ db, requireOwner, rateLimit }));
+/* 運営：お問い合わせを読む・対応済みにする（オーナーだけ）。 */
+app.use("/api/contact/admin", require("./contact-admin").createContactAdminRouter({ db, requireOwner }));
 /* 運営からのギフト（11/1から）。見学の人に light を1週間、パスポートIDを確かめたら1か月。 */
 app.use("/api/emu-gift", require("./emu-gift").createEmuGiftRouter({ db, requireFirebaseUser, requireOwner, entitlement, identity, rateLimit }));
 app.use("/api/kyc", kyc.router);
