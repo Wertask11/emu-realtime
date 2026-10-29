@@ -160,11 +160,25 @@ async function wsRewards(){
     /* 2件以上あれば、まとめて1回で受け取る（MetaMask の承認もガス代も1回）。
        1件ずつだと、そのたびにガス代がかかっていた。
        前にまとめたぶん（kind:"bundle"）が1件だけ残っているときは、その札のまま受け取る。 */
+    /* MetaMask が無いところでは、ウォレットへ移せない。押せそうな「受け取る」を出すと、
+       押しても案内が出るだけで「受け取れない」ように見える（10/29 オーナーから）。
+       受け取る前のEMUERは公式ショップでそのまま使えるので、そう書いて、公式ショップを開くボタンにする。 */
+    if(!wsCanSign()){
+      const st=document.getElementById("wsStatus");
+      if(st)st.textContent=`受け取る前のEMUERが ${total.toLocaleString("ja-JP")} EMUER あります（${a.length}件）。City の公式ショップでそのまま使えます。ウォレットへ移すときは、MetaMask の入ったブラウザで開いてください。`;
+      wsClaimLabel("City の公式ショップで使う",wsOpenShop,false);
+      return;}
     const label=a.length>1
       ? `未請求の報酬 ${total.toLocaleString("ja-JP")} EMUER（${a.length}件）をまとめて受け取る`
       : `未請求の報酬 ${total.toLocaleString("ja-JP")} EMUER を受け取る`;
     wsClaimLabel(label,a.length>1?()=>wsClaimAll(a):()=>wsClaim(a[0]),false);
   }catch(e){wsHideClaim(String(e&&e.message||"報酬を読めませんでした"));}
+}
+/* 受け取りの画面を閉じて、City の公式ショップ（EMUERで交換する画面）を開く。 */
+function wsOpenShop(){
+  document.getElementById("walletSuccessOverlay").classList.remove("active");
+  wsFromWallet=false;
+  if(typeof window.openEmuShopping==="function")window.openEmuShopping("commerce");
 }
 async function wsClaim(row){
   if(!wsCanSign()){alert(WS_NO_WALLET);return;}

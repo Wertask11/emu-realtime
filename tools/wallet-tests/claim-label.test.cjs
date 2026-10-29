@@ -27,6 +27,7 @@ function stage(rows, ok) {
   const ctx = vm.createContext({
     EMUER_V2_API: 'https://x',
     Number, Array, String, Set,
+    wsCanSign: () => true, wsOpenShop: () => {},
     encodeURIComponent,
     wsAccount: () => '0xme',
     wsHeaders: async () => ({}),
