@@ -138,10 +138,11 @@ const ALL = SRC.slice(SRC.indexOf('async function wsClaimAll(rows){'),
                       SRC.indexOf('async function claimEmuV2LoginReward(){'));
 assert.ok(ALL.length > 400, 'まとめて受け取るところが見つかりません');
 
-function stageAll(reply) {
+function stageAll(reply, { canSign = true } = {}) {
   const seen = { posted: null, sent: null, status: null, done: new Set(), alerts: [], reloaded: 0 };
   const ctx = vm.createContext({
     EMUER_V2_API: 'https://x', Number, String, JSON, wsDone: seen.done,
+    wsCanSign: () => canSign, WS_NO_WALLET: 'MetaMask が要ります',
     wsAccount: () => '0xme', wsHeaders: async () => ({}),
     wsClaimLabel: () => {}, wsBalance: async () => {}, wsRewards: async () => { seen.reloaded++; },
     window: {}, alert: (m) => seen.alerts.push(m),
@@ -176,4 +177,11 @@ test('まとめられなかったときは、何も送らずに知らせて一�
   assert.equal(s.seen.alerts.length, 1);
   assert.equal(s.seen.reloaded, 1);
   assert.equal(s.seen.done.size, 0);
+});
+
+test('MetaMask が無いところでは、まとめる前に止める（まとめると、その札は署名の期限まで使えない）', async () => {
+  const s = stageAll({ body: {} }, { canSign: false });
+  await s.run([{ claimId: 'first' }, { claimId: 'second' }]);
+  assert.equal(s.seen.posted, null, 'サーバーに頼まない');
+  assert.deepEqual(s.seen.alerts, ['MetaMask が要ります']);
 });

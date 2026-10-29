@@ -724,9 +724,16 @@ function createEmuerV2Router(deps) {
     const recipient = String(req.identity.walletAddress || "").toLowerCase();
     if (!validAddress(recipient)) return res.status(400).json({ error: "SELF_CUSTODY_WALLET_REQUIRED" });
     if (Date.now() < policy.START_MS) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    /* MetaMask の無いところ（LINE・Google のアプリ内ブラウザなど）は、鎖の上で受け取れない。
+       そのときは今日のぶんを「待っている報酬」として作るだけにする（claim:false）。
+       署名は出さないので、ウォレットに移す前のEMUERとして、すぐ公式ショップで使える。
+       あとで MetaMask のあるところから「未請求の報酬」として受け取ることもできる。 */
+    const recordOnly = req.body && req.body.claim === false;
     try {
-      const ready = await signerReady();
-      if (!ready.ok) return res.status(503).json({ error: ready.code });
+      if (!recordOnly) {
+        const ready = await signerReady();
+        if (!ready.ok) return res.status(503).json({ error: ready.code });
+      }
       const key = rewardKey(req.identity.uid, Date.now());
       const id = claimId(key);
       const ref = db.collection("emuer_v2_rewards").doc(id);
@@ -742,6 +749,7 @@ function createEmuerV2Router(deps) {
         tx.create(ref, row);
       });
       if (String(row.recipient || "").toLowerCase() !== recipient) return res.status(409).json({ error: "REWARD_BOUND_TO_ANOTHER_WALLET" });
+      if (recordOnly) return res.json({ ok: true, recorded: true, amount: String(row.amount || "1"), status: row.status || "pending" });
       const reserved = await reserveAuthorization(ref, recipient);
       const authorization = await signReward(reserved.row, reserved.deadline);
       return res.json({ ok: true, alreadyCreated: !!row.createdAt && row.key === key, reward: authorization });
