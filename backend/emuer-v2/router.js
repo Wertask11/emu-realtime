@@ -445,6 +445,101 @@ function createEmuerV2Router(deps) {
     }
   });
 
+  /* 取りこぼした Good・Change の報酬（10/1 以降）を数えて、作り直す（運営だけ）。
+
+     画面が JSON の印を付けずに送っていたので、Good・Change を受け取った投稿者への報酬が
+     記録されていなかった（10/29 に分かった）。押した人の一覧（goodUsers / changeUsers）は
+     投稿に残っていて、押した順に並ぶ（arrayUnion は後ろに足す）。
+
+     10/1 より前の分は、移行のときに別の台帳へ記録し直した（emuer_v2_backfill に、そのときの数）。
+     その数より後ろにいる人が、10/1 以降に押した人。10/1 以降にできた投稿は、全員が対象。
+     10/1 より前の投稿で、記録し直しの控えが無いもの（数が合わず保留にしたもの）は、
+     どこからが 10/1 以降か分からないので、作らずに「要確認」として出す。
+
+     作るときの鍵は、ふだんの記録と同じ（reactionKey）。だから二重にならず、
+     何度押しても、まだ無いものだけができる。 */
+  const RECOVERY_CUTOFF_MS = Date.parse("2026-09-30T15:00:00.000Z");
+  const recoveryTsMs = v => !v ? 0 : typeof v.toMillis === "function" ? v.toMillis()
+    : v instanceof Date ? v.getTime() : (Number.isFinite(Date.parse(String(v))) ? Date.parse(String(v)) : 0);
+  function recoveryActors(list, author) {
+    return [...new Set((Array.isArray(list) ? list : []).map(x => String(x || "").trim().toLowerCase())
+      .filter(x => validAddress(x) && x !== author))];
+  }
+  async function scanReactionRecovery() {
+    const [posts, snapshots] = await Promise.all([
+      db.collection("posts").get(), db.collection("emuer_v2_backfill").get()
+    ]);
+    const before = new Map();
+    snapshots.forEach(d => before.set(d.id, d.data() || {}));
+    const candidates = [], review = [];
+    let scanned = 0;
+    posts.forEach(doc => {
+      scanned += 1;
+      const data = doc.data() || {};
+      const author = String(data.address || "").toLowerCase();
+      const good = recoveryActors(data.goodUsers, author), change = recoveryActors(data.changeUsers, author);
+      if (!good.length && !change.length) return;
+      const title = String(data.title || "").slice(0, 160);
+      if (!validAddress(author)) { review.push({ postId: doc.id, title, reason: "投稿した人のアドレスが読めない" }); return; }
+      const snap = before.get(doc.id);
+      let goodFrom = 0, changeFrom = 0;
+      if (snap) { goodFrom = Number(snap.goodCount || 0); changeFrom = Number(snap.changeCount || 0); }
+      else if (recoveryTsMs(data.createdAt) < RECOVERY_CUTOFF_MS) {
+        review.push({ postId: doc.id, title, reason: recoveryTsMs(data.createdAt) ? "10/1より前の投稿で、移行のときの数の控えが無い" : "投稿した日が読めない" });
+        return;
+      }
+      good.slice(goodFrom).forEach(actor => candidates.push({ postId: doc.id, title, author, actor, action: "good" }));
+      change.slice(changeFrom).forEach(actor => candidates.push({ postId: doc.id, title, author, actor, action: "change" }));
+    });
+    const missing = [];
+    for (const c of candidates) {
+      const snap = await db.collection("emuer_v2_rewards").doc(claimId(reactionKey(c.postId, c.action, c.actor))).get();
+      if (!snap.exists) missing.push(c);
+    }
+    return { scanned, candidates: candidates.length, missing, review };
+  }
+  function recoverySummary(scan) {
+    const good = scan.missing.filter(x => x.action === "good").length;
+    return {
+      scannedPosts: scan.scanned, checked: scan.candidates, missingGood: good, missingChange: scan.missing.length - good,
+      missingEmuer: scan.missing.length, authors: new Set(scan.missing.map(x => x.author)).size,
+      review: scan.review.slice(0, 50), reviewCount: scan.review.length,
+      sample: scan.missing.slice(0, 20).map(x => ({ postId: x.postId, title: x.title, action: x.action, author: x.author }))
+    };
+  }
+  router.get("/admin/reaction-recovery", requireFirebaseUser, requireOperator, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    try { return res.json({ ok: true, ...recoverySummary(await scanReactionRecovery()) }); }
+    catch (error) { console.error("EMUER v2 reaction recovery scan error:", error.message); return res.status(500).json({ error: "REACTION_RECOVERY_FAILED" }); }
+  });
+  router.post("/admin/reaction-recovery", requireFirebaseUser, requireOperator, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!policy.isActive(Date.now())) return res.status(409).json({ error: "NOT_STARTED", startsAt: policy.START_MS });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    try {
+      const scan = await scanReactionRecovery();
+      /* 数えたときと数が変わっていたら、作らずに数え直してもらう（確かめた数と違うものを出さない）。 */
+      const expected = Number(req.body && req.body.expectedMissing);
+      if (!Number.isSafeInteger(expected) || expected !== scan.missing.length) {
+        return res.status(409).json({ error: "RECOVERY_CHANGED", ...recoverySummary(scan) });
+      }
+      let created = 0;
+      for (const c of scan.missing) {
+        const row = await createReward({
+          key: reactionKey(c.postId, c.action, c.actor), kind: c.action === "good" ? "good-received" : "change-received",
+          recipient: c.author, meta: { postId: c.postId, actor: c.actor, postTitle: c.title, recovered: true,
+            recoveredBy: String(req.identity.walletAddress || "").toLowerCase() }
+        });
+        if (row && row.recovered) created += 1;
+      }
+      return res.json({ ok: true, created, authors: new Set(scan.missing.map(x => x.author)).size });
+    } catch (error) {
+      console.error("EMUER v2 reaction recovery error:", error.message);
+      return res.status(500).json({ error: "REACTION_RECOVERY_FAILED" });
+    }
+  });
+
   // A public daily reflection is eligible once per Passport and JST day.  The
   // server rereads the saved day, so a client cannot reward a private or empty
   // draft by merely sending a request.
