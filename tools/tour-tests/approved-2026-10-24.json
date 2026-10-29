@@ -1,6 +1,18 @@
 {
  "index.html": [
   [
+   "  /* SchoolPark は2つの枠のどちらかで開く。ふつうは spDaoFrame。\n     「みてみる」「City の公式ショップで使う」などからは spRoomFrame（小部屋）で開く。\n     前は spDaoFrame だけを見ていたので、小部屋で開いた SchoolPark の右上は👤のままだった（10/29）。 */\n  ['spDaoFrame', 'spRoomFrame'].forEach(function (id) {\n    try { buttons.push(document.getElementById(id)?.contentDocument?.querySelector('[data-sp-head] .service-profile')); } catch (_) {}\n  });\n",
+   "  try { buttons.push(document.getElementById('spDaoFrame')?.contentDocument?.querySelector('[data-sp-head] .service-profile')); } catch (_) {}\n"
+  ],
+  [
+   "/* 小部屋で開いた SchoolPark は、描き直すたびに右上のボタンが👤に戻る。\n   読み込むたびに中の dao-root を見張り、描き直したら写真（または名前）を入れ直す。\n   見張るのは dao-root のすぐ下だけ（ボタンの中を書き換えても、また呼ばれることはない）。 */\nfunction spRoomWatchRender() {\n  if (window._spRoomMO) { window._spRoomMO.disconnect(); window._spRoomMO = null; }\n  let root = null;\n  try { root = document.getElementById('spRoomFrame').contentDocument.getElementById('dao-root'); } catch (_) {}\n  emuPaintHeaderIdentity();\n  if (!root) return;\n  window._spRoomMO = new MutationObserver(function () { emuPaintHeaderIdentity(); });\n  window._spRoomMO.observe(root, { childList: true });\n}\n",
+   ""
+  ],
+  [
+   "  if (!frame._spRoomWatch) { frame._spRoomWatch = true; frame.addEventListener('load', spRoomWatchRender); }\n",
+   ""
+  ],
+  [
    "  /* 下書きを開き直して保存したとき。同じ下書きを上書きする（数は増やさない）。 */\n  async function updateKnowledgeDraft(account, draftId, payload) {\n    await emuEnsureEntitlement();\n    const patch = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString() };\n    if (account && window.db && window.fbLib && !/^\\d+$/.test(String(draftId))) {\n      await window.fbLib.updateDoc(window.fbLib.doc(window.db, 'knowledge_drafts', String(draftId)), patch);\n      return;\n    }\n    const items = readLocalKnowledgeDrafts();\n    if (!items.some(item => String(item.id) === String(draftId))) throw new Error('DRAFT_NOT_FOUND');\n    writeLocalKnowledgeDrafts(items.map(item => String(item.id) === String(draftId) ? { ...item, ...patch } : item));\n  }\n  /* 下書きを開き直して投稿・予約したら、その下書きは消す（同じ内容が2つ残らないように）。 */\n  const knowledgePublishDrafts = new Map();\n  async function dropPublishedDraft(draftId) {\n    if (!draftId) return;\n    try {\n      const account = _emuAddress();\n      await deleteKnowledgeDraft(account, draftId);\n      sendKnowledge({ type:'emu-knowledge-drafts', drafts:await readKnowledgeDrafts(account) });\n    } catch (error) { console.warn('投稿した下書きを消せませんでした:', error); }\n  }\n",
    ""
   ],
