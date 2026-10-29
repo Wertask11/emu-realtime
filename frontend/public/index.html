@@ -29103,6 +29103,28 @@ async function sendEmuFeedback() {
     writeLocalKnowledgeDrafts([localDraft, ...items].slice(0,30));
     return localDraft;
   }
+  /* 下書きを開き直して保存したとき。同じ下書きを上書きする（数は増やさない）。 */
+  async function updateKnowledgeDraft(account, draftId, payload) {
+    await emuEnsureEntitlement();
+    const patch = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString() };
+    if (account && window.db && window.fbLib && !/^\d+$/.test(String(draftId))) {
+      await window.fbLib.updateDoc(window.fbLib.doc(window.db, 'knowledge_drafts', String(draftId)), patch);
+      return;
+    }
+    const items = readLocalKnowledgeDrafts();
+    if (!items.some(item => String(item.id) === String(draftId))) throw new Error('DRAFT_NOT_FOUND');
+    writeLocalKnowledgeDrafts(items.map(item => String(item.id) === String(draftId) ? { ...item, ...patch } : item));
+  }
+  /* 下書きを開き直して投稿・予約したら、その下書きは消す（同じ内容が2つ残らないように）。 */
+  const knowledgePublishDrafts = new Map();
+  async function dropPublishedDraft(draftId) {
+    if (!draftId) return;
+    try {
+      const account = _emuAddress();
+      await deleteKnowledgeDraft(account, draftId);
+      sendKnowledge({ type:'emu-knowledge-drafts', drafts:await readKnowledgeDrafts(account) });
+    } catch (error) { console.warn('投稿した下書きを消せませんでした:', error); }
+  }
   async function deleteKnowledgeDraft(account, draftId) {
     await emuEnsureEntitlement();
     if (account && window.db && window.fbLib && !/^\d+$/.test(String(draftId))) {
@@ -29513,6 +29535,9 @@ async function sendEmuFeedback() {
   window.addEventListener('emu-post-save-result', event => {
     const detail = event.detail || {};
     sendKnowledge({ type:'emu-knowledge-save-result', kind:'publish', ...detail });
+    const draftId = knowledgePublishDrafts.get(String(detail.requestId || ''));
+    knowledgePublishDrafts.delete(String(detail.requestId || ''));
+    if (detail.ok && draftId) dropPublishedDraft(draftId);
   });
   window.addEventListener('emu-reaction-result', event => {
     const detail = event.detail || {};
@@ -29608,6 +29633,7 @@ async function sendEmuFeedback() {
       postTitleInput.disabled = false;
       postForm._knowledgeImageDataUrl = String(payload.imageUrl || '');
       postForm._knowledgeRequestId = String(message.requestId || Date.now());
+      if (payload.draftId) knowledgePublishDrafts.set(postForm._knowledgeRequestId, String(payload.draftId));
       postForm.requestSubmit();
       return;
     }
@@ -29619,7 +29645,8 @@ async function sendEmuFeedback() {
       }
       try {
         const account = _emuAddress();
-        await createKnowledgeDraft(account, payload);
+        if (payload.draftId) await updateKnowledgeDraft(account, payload.draftId, payload);
+        else await createKnowledgeDraft(account, payload);
         const items = await readKnowledgeDrafts(account);
         sendKnowledge({ type:'emu-knowledge-save-result', kind:'draft', requestId:message.requestId, ok:true, drafts:items });
         syncKnowledgeFrame();
@@ -29651,6 +29678,7 @@ async function sendEmuFeedback() {
         if (!response.ok) throw new Error(data.error || '予約に失敗しました。');
         knowledgeScheduleCache.fetchedAt = 0;
         sendKnowledge({ type:'emu-knowledge-save-result', kind:'schedule', requestId:message.requestId, ok:true });
+        if (payload.draftId) dropPublishedDraft(String(payload.draftId));
         syncKnowledgeFrame();
       } catch (error) { sendKnowledge({ type:'emu-knowledge-save-result', kind:'schedule', requestId:message.requestId, ok:false, error:error.message || '予約に失敗しました。' }); }
       return;

@@ -118,6 +118,7 @@
       "k.toast.saving": "保存しています…",
       "k.toast.scheduling": "予約しています…",
       "k.toast.draftSaved": "下書きを保存しました",
+      "k.toast.draftUpdated": "下書きを上書きしました",
       "k.toast.scheduled": "投稿を予約しました",
       "k.toast.published": "知識を公開しました",
       "k.toast.failed": "処理に失敗しました。",
@@ -134,6 +135,8 @@
       "k.panel.drafts": "下書き",
       "k.panel.noDrafts": "下書きはありません。",
       "k.panel.delete": "削除",
+      "k.panel.edit": "編集",
+      "k.editingDraft": "下書きを編集しています。「知識を公開する」か予約をすると、この下書きはライブラリーから消えます。",
       "k.panel.noRanking": "ランキング対象の投稿はありません。",
 
       /* ── 議論（discussion.html） ── */
