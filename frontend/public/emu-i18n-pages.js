@@ -132,6 +132,7 @@
       "k.panel.loading": "読み込んでいます…",
       "k.panel.myPosts": "自分の投稿",
       "k.panel.noPosts": "投稿はありません。",
+      "k.panel.postsUnread": "投稿を読み込めませんでした。時間をおいて、開き直してください。",
       "k.panel.drafts": "下書き",
       "k.panel.noDrafts": "下書きはありません。",
       "k.panel.delete": "削除",
