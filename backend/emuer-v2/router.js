@@ -15,6 +15,13 @@ const CONTRACT = "0x9c102cC3016C70767082b60196565878D9314864";
 const CHAIN_ID = 137;
 const TREASURY = "0x1c156b6a8caa6772430eda2cbb0d20cf41b9cfe4";
 const FOUNDER_QUEST_ID = "founder-quest-000";
+/* 初投稿キャンペーン：2026/10/29 0:00 から 11/28 いっぱい（日本時間）。100 EMUER。
+   画面の送り直しが期間後に届いても受けられるよう、3日だけ余白を持つ（投稿そのものは期間内に限る）。 */
+const FIRST_POST_CAMPAIGN = {
+  id: "first-post-campaign-2026-10", amount: 100,
+  startMs: Date.parse("2026-10-29T00:00:00+09:00"), endMs: Date.parse("2026-11-29T00:00:00+09:00"),
+  resendGraceMs: 3 * 24 * 60 * 60 * 1000
+};
 const ABI = [
   "function hasRole(bytes32 role,address account) view returns (bool)",
   "function claimPaid(bytes32) view returns (uint256)",
@@ -566,6 +573,74 @@ function createEmuerV2Router(deps) {
     } catch (error) {
       console.error("EMUER v2 public reflection reward error:", error.message);
       return res.status(500).json({ error: "PUBLIC_REFLECTION_REWARD_FAILED" });
+    }
+  });
+
+  /* 初投稿キャンペーン（10/29 オーナーから）。初めて知識を公開したら、その場で 100 EMUER を
+     「受け取る前のEMUER」に入れる。公式ショップでそのまま使える。
+       ・パスポートごとに1回。同じパスポートにつないだ別のアカウントで投稿しても、2回目は出ない
+       ・期間中に公開した、そのパスポートの最初の投稿だけ（前に投稿したことがある人は対象外）
+       ・送り直し（電波が切れたとき）に備えて、期間が終わってからも少しだけ受け付ける
+     画面から来た postId は「どの投稿か」の手がかりにだけ使い、中身はサーバーで読み直す。 */
+  const tsMs = v => v && typeof v.toMillis === "function" ? v.toMillis()
+    : v instanceof Date ? v.getTime() : typeof v === "number" ? v : Date.parse(v) || 0;
+  async function passportAddresses(req) {
+    const own = [req.identity.walletAddress, req.identity.account && req.identity.account.walletAddress,
+      req.identity.account && req.identity.account.chesAddress];
+    const uids = (await identity.linkedUidsForUid(req.identity.uid)).filter(u => u !== req.identity.uid);
+    const others = await Promise.all(uids.slice(0, 10).map(async uid => {
+      const snap = await db.collection("ches_accounts").doc(String(uid)).get();
+      const a = snap.exists ? snap.data() || {} : {};
+      return [a.walletAddress, a.chesAddress];
+    }));
+    const forms = new Set();
+    for (const value of [...own, ...others.flat()]) {
+      if (!validAddress(value)) continue;
+      forms.add(String(value).toLowerCase());
+      forms.add(ethers.utils.getAddress(String(value)));
+    }
+    return [...forms].slice(0, 30);
+  }
+  router.get("/campaign/first-post", (req, res) => res.json({
+    startsAt: new Date(FIRST_POST_CAMPAIGN.startMs).toISOString(),
+    endsAt: new Date(FIRST_POST_CAMPAIGN.endMs).toISOString(),
+    amount: FIRST_POST_CAMPAIGN.amount, active: Date.now() >= FIRST_POST_CAMPAIGN.startMs && Date.now() < FIRST_POST_CAMPAIGN.endMs
+  }));
+  router.post("/activity/first-post", requireFirebaseUser, requireOwnAddress, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const t = Date.now();
+    const c = FIRST_POST_CAMPAIGN;
+    if (t < c.startMs || t >= c.endMs + c.resendGraceMs) return res.status(409).json({ error: "CAMPAIGN_NOT_ACTIVE" });
+    const postId = String(req.body.postId || "").trim();
+    const recipient = String(req.identity.walletAddress || "").toLowerCase();
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(postId) || !validAddress(recipient)) return res.status(400).json({ error: "INVALID_FIRST_POST" });
+    try {
+      const spid = await identity.findByUid(req.identity.uid);
+      if (!spid) return res.status(409).json({ error: "PASSPORT_REQUIRED" });
+      const key = JSON.stringify(["emuer-v2", c.id, spid]);
+      const already = await db.collection("emuer_v2_rewards").doc(claimId(key)).get();
+      if (already.exists) return res.json({ ok: true, alreadyRecorded: true, amount: String(already.data().amount || c.amount) });
+      const post = await db.collection("posts").doc(postId).get();
+      if (!post.exists) return res.status(404).json({ error: "POST_NOT_FOUND" });
+      const data = post.data() || {};
+      const own = [req.identity.walletAddress, req.identity.account && req.identity.account.walletAddress,
+        req.identity.account && req.identity.account.chesAddress].map(a => String(a || "").toLowerCase()).filter(Boolean);
+      const created = tsMs(data.createdAt);
+      if (!own.includes(String(data.address || "").toLowerCase())) return res.status(409).json({ error: "FIRST_POST_NOT_VERIFIED" });
+      if (!(created >= c.startMs && created < c.endMs)) return res.status(409).json({ error: "OUTSIDE_CAMPAIGN" });
+      // このパスポートのどの名義でも、この投稿より前の投稿があれば「初めて」ではない
+      const earlier = await db.collection("posts").where("address", "in", await passportAddresses(req))
+        .where("createdAt", "<", data.createdAt).limit(1).get();
+      if (!earlier.empty) return res.status(409).json({ error: "NOT_FIRST_POST" });
+      const row = await createReward({
+        key, kind: "first-post", recipient, amountEmuer: c.amount,
+        meta: { postId, campaign: c.id, postTitle: String(data.title || "").slice(0, 160) }
+      });
+      return res.json({ ok: true, rewardId: row.claimId, amount: String(row.amount) });
+    } catch (error) {
+      console.error("EMUER v2 first post reward error:", error.message);
+      return res.status(500).json({ error: "FIRST_POST_REWARD_FAILED" });
     }
   });
 
