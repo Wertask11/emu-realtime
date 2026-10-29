@@ -13350,39 +13350,9 @@ postForm.addEventListener("submit", async function (e) {
       ...(postImageUrl ? { imageUrl: postImageUrl } : {})
     };
 const editingId = editingPostId;
-// ★ 初投稿ボーナス判定
-    if (!editingId && window.connectedAccount) {
-      const myAddr = window.connectedAccount.toLowerCase();
-      const postsRef = window.fbLib.collection(window.db, "posts");
-      const myPostsQ = window.fbLib.query(
-        postsRef, window.fbLib.where("address", "==", myAddr), window.fbLib.limit(1)
-      );
-      const myPostsSnap = await window.fbLib.getDocs(myPostsQ);
-      if (myPostsSnap.empty) {
-        // 初投稿！サーバーに登録
-        fetch("https://emu-realtime.onrender.com/first-post/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ address: myAddr })
-        }).then(r => r.json()).then(data => {
-          if (data.success) {
-            console.log("🎉 初投稿ボーナス登録完了！30 EMUER 受取予約");
-            // トースト表示
-            const toast = document.createElement("div");
-            toast.style.cssText = `
-              position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
-              background:linear-gradient(135deg,#1a8a5a,#0d6e45);
-              color:#fff;padding:12px 24px;border-radius:12px;
-              font-size:14px;font-weight:bold;z-index:9999;
-              box-shadow:0 4px 12px rgba(0,0,0,0.3);
-            `;
-            toast.textContent = "🎉 初投稿ボーナス！+30 EMUER 受取予約完了";
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
-          }
-        }).catch(e => console.error("初投稿ボーナス登録失敗:", e));
-      }
-    }
+    /* 前の初投稿ボーナス（/first-post/register）は、サーバーに窓口が無くなっていて
+       届いていなかった。初投稿キャンペーンは、公開できたあとに emu-post-published で
+       知らせて、wallet-success-ui.js がサーバーに送る（初めてかどうかはサーバーが決める）。 */
 
     if (editingId) {
       // 【更新モード】
@@ -13408,6 +13378,7 @@ const editingId = editingPostId;
       if (!_questId) await _emuAddUsage(_postBatch, 'post');
       await _postBatch.commit();
       window.emuLabSyncIndex?.(_labPostRef.id);
+      window.dispatchEvent(new CustomEvent("emu-post-published", { detail: { postId: _labPostRef.id, address: authorAddress } }));
       console.log("✅ 新規投稿を作成しました");
     }
 

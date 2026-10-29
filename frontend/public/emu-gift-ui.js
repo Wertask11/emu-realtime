@@ -101,7 +101,15 @@
           + '<button type="button" class="emu-gift-primary" data-gift="extension">パスポートIDを運営に送る</button>';
       }
     }
-    return head + body + (message ? '<p class="emu-gift-message" role="alert">' + esc(message) + '</p>' : '');
+    return head + body + campaign(now) + (message ? '<p class="emu-gift-message" role="alert">' + esc(message) + '</p>' : '');
+  }
+  /* 初投稿キャンペーン（2026/10/29〜11/28、日本時間）。受け取るのはサーバーが決める（backend/emuer-v2/router.js）。 */
+  var FIRST_POST_FROM = Date.parse('2026-10-29T00:00:00+09:00'), FIRST_POST_UNTIL = Date.parse('2026-11-29T00:00:00+09:00');
+  function campaign(now) {
+    if (now < FIRST_POST_FROM || now >= FIRST_POST_UNTIL) return '';
+    return '<div class="emu-gift-campaign"><p><b>🎉 初投稿キャンペーン（11/28まで）</b></p>'
+      + '<p>初めて知識を公開すると、その場で <b>100 EMUER</b> が「受け取る前のEMUER」に入ります。SchoolPark City の公式ショップで、そのまま使えます。</p>'
+      + '<p class="emu-gift-note">パスポートごとに1回です。前に投稿したことがある方は対象外です。</p></div>';
   }
   var ERRORS = {
     NOT_STARTED: 'ギフトはまだ受け取れません。始まるまで少し待ってください。',
@@ -160,6 +168,8 @@
     + '.emu-gift-eyebrow{margin:0;color:#b25d00;font-size:13px;font-weight:700}'
     + '.emu-gift-note{color:#6b6459;font-size:13px}'
     + '.emu-gift-ok{padding:10px 12px;border-radius:12px;background:#f2f8ec;color:#2f5d1f}'
+    + '.emu-gift-campaign{margin-top:14px;padding:10px 12px;border:1px solid #9fd3b7;border-radius:12px;background:#eef8f2;color:#1f4a33}'
+    + '.emu-gift-campaign p{margin:4px 0}'
     + '.emu-gift-message{padding:10px 12px;border-radius:12px;background:#fff1dc;color:#8a4b00;font-size:14px}'
     + '.emu-gift-primary{width:100%;min-height:48px;margin-top:6px;border:0;border-radius:12px;background:#ef7d00;color:#fff;font:inherit;font-weight:700;cursor:pointer}'
     + '.emu-gift-primary:disabled{opacity:.6}'

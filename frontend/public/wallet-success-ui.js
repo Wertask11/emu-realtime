@@ -326,3 +326,79 @@ window.addEventListener("emu-reaction-result",e=>{
 });
 /* 前に届かなかったぶんを、開いたときに送り直す（ログインの確かめが済むのを少し待つ）。 */
 window.addEventListener("load",()=>{setTimeout(wsFlushReactions,3000);});
+
+/* 初投稿キャンペーン（2026/10/29〜11/28、日本時間）。初めて知識を公開したら、その場で
+   100 EMUER が「受け取る前のEMUER」に入る。公式ショップでそのまま使える。パスポートごとに1回。
+   本当に初めての投稿か・期間内か・1回目かは、サーバーが投稿を読み直して決める。
+   ここは、新しく公開した投稿を知らせるだけ。届かなかったら端末に残して、次に開いたときに送り直す。
+   決着がついた（受け取れた／対象外だった）名義には、もう送らない。 */
+const WS_FIRST_POST_QUEUE="emuFirstPostCampaign";
+const WS_FIRST_POST_END=Date.parse("2026-11-29T00:00:00+09:00");
+function wsFirstPostState(){try{const v=JSON.parse(localStorage.getItem(WS_FIRST_POST_QUEUE)||"{}");return v&&typeof v==="object"?v:{};}catch(_){return{};}}
+function wsSaveFirstPostState(s){try{localStorage.setItem(WS_FIRST_POST_QUEUE,JSON.stringify(s));}catch(_){}}
+function wsFirstPostNotice(text,withShop){
+  document.getElementById("wsFirstPostNotice")?.remove();
+  const box=document.createElement("div");
+  box.id="wsFirstPostNotice";box.setAttribute("role","status");
+  box.style.cssText="position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:10050;width:min(92vw,420px);"+
+    "background:#fff;color:#1f2a24;border:2px solid #1a8a5a;border-radius:14px;padding:14px 16px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-size:14px;line-height:1.6";
+  const p=document.createElement("div");p.textContent=text;box.appendChild(p);
+  const row=document.createElement("div");row.style.cssText="display:flex;gap:8px;justify-content:flex-end;margin-top:10px";
+  const btn=(label,primary,fn)=>{const b=document.createElement("button");b.type="button";b.textContent=label;
+    b.style.cssText="border-radius:999px;padding:8px 14px;font-weight:700;cursor:pointer;"+(primary?"background:#1a8a5a;color:#fff;border:0":"background:#fff;color:#1a8a5a;border:1px solid #1a8a5a");
+    b.onclick=()=>{box.remove();fn&&fn();};row.appendChild(b);};
+  if(withShop)btn("公式ショップで使う",true,()=>{if(typeof window.openEmuShopping==="function")window.openEmuShopping("commerce");});
+  btn("閉じる",!withShop,null);
+  box.appendChild(row);document.body.appendChild(box);
+}
+/* 1件送る。"done"（決着がついた）か "later"（あとで送り直す）を返す。 */
+async function wsSendFirstPost(item){
+  let c=null;
+  try{c=await window.emuerV2ConfigOnce();}catch(_){return "later";}
+  if(!c)return "later";
+  if(!c.enabled)return "done";
+  if(typeof window.emuAuthHeaders!=="function")return "later";
+  try{
+    const headers=await window.emuAuthHeaders(true,{interactive:false});
+    const r=await fetch(EMUER_V2_API+"/activity/first-post",{method:"POST",headers,body:JSON.stringify({postId:item.postId})});   // 名義はサーバーがログインから決める
+    const d=await r.json().catch(()=>({}));
+    if(r.ok){
+      if(!d.alreadyRecorded)wsFirstPostNotice(`🎉 初投稿キャンペーン：${Number(d.amount||100).toLocaleString("ja-JP")} EMUER を受け取りました。「受け取る前のEMUER」に入っています。SchoolPark City の公式ショップで、そのまま使えます。`,true);
+      return "done";
+    }
+    // パスポートがまだ無い人は、作ったあとに送り直せば受け取れる。一度だけ知らせる
+    if(d.error==="PASSPORT_REQUIRED"){
+      if(!item.toldPassport){item.toldPassport=true;wsFirstPostNotice("初投稿キャンペーンの 100 EMUER は、パスポート（SchoolPark ID）を作ると受け取れます。作ったあと、Emu を開き直してください。",false);}
+      return "later";
+    }
+    return r.status>=500||r.status===401?"later":"done";
+  }catch(_){return "later";}
+}
+let wsFirstPostBusy=false;
+async function wsFlushFirstPost(){
+  if(wsFirstPostBusy)return;
+  wsFirstPostBusy=true;
+  try{
+    const s=wsFirstPostState();
+    const item=s.pending;
+    if(!item||!item.postId||!item.address)return;
+    // 期間が終わって1週間たっても届かないものは捨てる（端末に溜め続けない）
+    const result=Date.now()-WS_FIRST_POST_END>7*24*60*60*1000?"done":await wsSendFirstPost(item);
+    const now=wsFirstPostState();
+    if(result==="done"){now.settled={...(now.settled||{}),[item.address]:Date.now()};delete now.pending;}
+    else now.pending=item;   // toldPassport を残す
+    wsSaveFirstPostState(now);
+  }finally{wsFirstPostBusy=false;}
+}
+window.addEventListener("emu-post-published",e=>{
+  const d=e?.detail;
+  const address=String(d?.address||"").toLowerCase();
+  if(!d?.postId||!address||Date.now()>=WS_FIRST_POST_END)return;
+  const s=wsFirstPostState();
+  if(s.settled&&s.settled[address])return;
+  // 送り直し待ちがあれば、そちらが先の投稿。新しい投稿で置き換えない
+  if(!s.pending||s.pending.address!==address)s.pending={postId:String(d.postId),address,at:Date.now()};
+  wsSaveFirstPostState(s);
+  wsFlushFirstPost();
+});
+window.addEventListener("load",()=>{setTimeout(wsFlushFirstPost,3500);});
