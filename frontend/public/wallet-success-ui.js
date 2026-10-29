@@ -51,12 +51,19 @@ const wsBtn=()=>document.getElementById("wsClaim");
 
    受け取りの modal は実在するので、そこに置く。 */
 const wsLoginBtn=()=>document.getElementById("wsLogin");
+/* 鎖の上で受け取れるか（MetaMask などが入っているか）。
+   LINE・Google のアプリ内ブラウザには無い。無いのにサーバーへ署名を頼むと、
+   画面は「missing provider」で止まり、報酬は署名の期限（15分）のあいだ公式ショップでも使えなくなる。
+   だから無いときは、署名を頼む前に止める。 */
+const wsCanSign=()=>!!window.ethereum;
+const WS_NO_WALLET="ウォレットへ移すには、MetaMask の入ったブラウザ（パソコンや MetaMask アプリ）で開いてください。受け取る前のEMUERは、このまま City の公式ショップで使えます。";
 async function wsHeaders(interactive){if(typeof window.emuAuthHeaders!=="function")throw new Error("再ログインしてください。");return window.emuAuthHeaders(!!interactive);}
 function wsClaimLabel(text,fn,disabled){const b=wsBtn();if(!b)return;b.hidden=false;b.textContent=text;b.disabled=!!disabled;b.onclick=fn;}
 /* 受け取るものが無い・読めないときは、黙らずに理由を出す。
    お金の画面で何も出ないのは、壊れているのと見分けがつかない。 */
 function wsHideClaim(why){const b=wsBtn();if(b)b.hidden=true;const s=document.getElementById("wsStatus");if(s&&why)s.textContent=why;}
 async function wsBalance(account){
+  if(!wsCanSign()){document.getElementById("wsBalance").textContent="—";document.getElementById("wsStatus").textContent="ウォレットの残高は、MetaMask の入ったブラウザで出ます。";return;}
   try{const p=new ethers.providers.Web3Provider(window.ethereum);const addr=emuerV2Config?.enabled?emuerV2Config.contract:window.EMUER_CONTRACT_ADDRESS;const abi=emuerV2Config?.enabled?["function balanceOf(address) view returns (uint256)"]:window.EMUER_CONTRACT_ABI;const x=await new ethers.Contract(addr,abi,p).balanceOf(account);document.getElementById("wsBalance").textContent=Number(ethers.utils.formatUnits(x,18)).toLocaleString("ja-JP");document.getElementById("wsStatus").textContent="残高を確認しました";}catch(_){document.getElementById("wsStatus").textContent="残高を取得できませんでした";}
 }
 async function showWalletSuccessModal(account){document.getElementById("walletSuccessOverlay").classList.add("active");document.getElementById("wsAddress").textContent=account.slice(0,6)+"…"+account.slice(-4);await wsBalance(account);if(emuerV2Config?.enabled){await wsDaily();await wsRewards();}}
@@ -160,6 +167,7 @@ async function wsRewards(){
   }catch(e){wsHideClaim(String(e&&e.message||"報酬を読めませんでした"));}
 }
 async function wsClaim(row){
+  if(!wsCanSign()){alert(WS_NO_WALLET);return;}
   try{wsClaimLabel("署名を準備中…",null,true);const r=await fetch(EMUER_V2_API+"/rewards/"+encodeURIComponent(row.claimId)+"/authorization",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount()})}),d=await r.json();if(!r.ok)throw new Error(d.error||"報酬を準備できませんでした");const p=new ethers.providers.Web3Provider(window.ethereum);if(Number((await p.getNetwork()).chainId)!==137)throw new Error("Polygon Mainnetに切り替えてください");const x=d.reward,c=new ethers.Contract(emuerV2Config.contract,EMUER_V2_ABI,p.getSigner());wsClaimLabel("MetaMaskで確認…",null,true);await(await c.claimReward(x.claimId,x.totalAmount,x.deadline,x.authorization)).wait();
     /* 受け取れたことを、はっきり出す。お金が動いたのに画面が
        黙っていると、通ったのかどうか分からない。 */
@@ -178,6 +186,7 @@ async function wsClaim(row){
    月の上限やトレジャリーで一部しか払われなかったときは、まとめた札が一覧に残り、
    次にその札のまま残りを受け取れる。 */
 async function wsClaimAll(rows){
+  if(!wsCanSign()){alert(WS_NO_WALLET);return;}
   try{
     wsClaimLabel("署名を準備中…",null,true);
     const r=await fetch(EMUER_V2_API+"/rewards/bundle",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount()})}),d=await r.json().catch(()=>({}));
@@ -201,9 +210,22 @@ async function wsClaimAll(rows){
     alert(e.message||"報酬の受取に失敗しました");
   }
 }
+/* MetaMask が無いときは、今日のぶんを「待っている報酬」として作るだけにする（サーバーは署名を出さない）。
+   ウォレットに移す前のEMUERとして、すぐ公式ショップで使える。 */
+async function wsRecordLoginReward(b){
+  b.disabled=true;b.textContent="受け取っています…";
+  const r=await fetch(EMUER_V2_API+"/daily/login",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount(),claim:false})}),d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(d.error==="SELF_CUSTODY_WALLET_REQUIRED"?"ウォレットを連携すると受け取れます。":(d.error||"ログイン報酬を受け取れませんでした"));
+  b.disabled=true;b.textContent="今日のぶんは受け取り済み";b.onclick=null;
+  const st=document.getElementById("wsStatus");
+  if(st)st.textContent="1 EMUER を受け取りました。ウォレットに移す前のEMUERとしてたまり、City の公式ショップでそのまま使えます。";
+  try{if(typeof window.emuerV2RefreshBalance==="function")await window.emuerV2RefreshBalance();}catch(_){}
+}
 async function claimEmuV2LoginReward(){
   try{
-    const b=wsLoginBtn();b.disabled=true;b.textContent="署名を準備中…";
+    const b=wsLoginBtn();
+    if(!wsCanSign())return await wsRecordLoginReward(b);
+    b.disabled=true;b.textContent="署名を準備中…";
     const r=await fetch(EMUER_V2_API+"/daily/login",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount()})}),d=await r.json();
     if(!r.ok)throw new Error(d.error||"ログイン報酬を準備できませんでした");
     const p=new ethers.providers.Web3Provider(window.ethereum);
@@ -231,4 +253,62 @@ async function claimEmuV2LoginReward(){
 window.addEventListener("load",async()=>{try{const c=await window.emuerV2ConfigOnce();if(!c||!c.enabled||Number(c.chainId)!==137)return;emuerV2Config=c;wsAddWalletButton();}catch(_){}});
 /* 毎日のぶんは、受け取りの modal を開いたときに wsDaily() が読む。
    ここで先に読むと、開いていない人のぶんまで毎回サーバーに聞くことになる。 */
-window.addEventListener("emu-reaction-result",async e=>{const d=e?.detail;if(!emuerV2Config?.enabled||!d?.ok||!["good","change"].includes(d.action))return;try{await fetch(EMUER_V2_API+"/activity/reaction",{method:"POST",headers:await wsHeaders(false),body:JSON.stringify({postId:d.postId,action:d.action,address:wsAccount()})});}catch(_){}});
+/* Good・Change を受け取った投稿者への報酬（1件 1 EMUER）を、サーバーに記録してもらう。
+
+   前は、JSON の印（Content-Type）を付けずに送っていたので、サーバーは中身を読めずに断っていた。
+   しかも失敗を黙って捨て、設定（/config）を読み終える前に押されたときは送りもしなかった。
+   だから Good・Change の報酬は、記録されていなかった（10/29 に分かった）。
+
+   いまは設定を待って送り、届かなかったものは端末に残して、次に開いたときに送り直す。
+   サーバーは同じ反応を1つとしか数えないので、何度送っても二重にはならない。 */
+const WS_REACTION_QUEUE="emuReactionRewardQueue";
+function wsReactionQueue(){try{const v=JSON.parse(localStorage.getItem(WS_REACTION_QUEUE)||"[]");return Array.isArray(v)?v:[];}catch(_){return[];}}
+function wsSaveReactionQueue(q){try{q.length?localStorage.setItem(WS_REACTION_QUEUE,JSON.stringify(q.slice(-50))):localStorage.removeItem(WS_REACTION_QUEUE);}catch(_){}}
+/* 1件送る。"done"（記録できた／送っても意味がない）か "later"（あとで送り直す）を返す。 */
+async function wsSendReaction(item){
+  let c=null;
+  try{c=await window.emuerV2ConfigOnce();}catch(_){return "later";}
+  if(!c)return "later";
+  if(!c.enabled)return "done";
+  const address=wsAccount();
+  if(!address)return "later";
+  try{
+    // 裏で送るので、ログインの確かめで MetaMask などを開かせない（interactive:false）
+    if(typeof window.emuAuthHeaders!=="function")return "later";
+    const headers=await window.emuAuthHeaders(true,{interactive:false});
+    const r=await fetch(EMUER_V2_API+"/activity/reaction",{method:"POST",headers,
+      body:JSON.stringify({postId:item.postId,action:item.action,address})});
+    if(r.ok)return "done";
+    // 送り方が悪い・投稿が無い・反応がまだ見えない（409）は、送り直しても同じなので捨てる。
+    // サーバーの不調（5xx）や、ログインが切れていた（401）は、あとで送り直す。
+    return r.status>=500||r.status===401?"later":"done";
+  }catch(_){return "later";}
+}
+let wsFlushing=false,wsFlushAgain=false;
+const wsReactionKey=x=>x.postId+":"+x.action+":"+x.at;
+async function wsFlushReactions(){
+  if(wsFlushing){wsFlushAgain=true;return;}
+  wsFlushing=true;
+  try{
+    do{
+      wsFlushAgain=false;
+      const done=new Set();
+      for(const item of wsReactionQueue()){
+        // 1週間たっても届かないものは捨てる（端末に溜め続けない）
+        if(Date.now()-Number(item.at||0)>7*24*60*60*1000||await wsSendReaction(item)==="done")done.add(wsReactionKey(item));
+      }
+      // 送っているあいだに足されたものは残す
+      wsSaveReactionQueue(wsReactionQueue().filter(x=>!done.has(wsReactionKey(x))));
+    }while(wsFlushAgain);
+  }finally{wsFlushing=false;}
+}
+window.addEventListener("emu-reaction-result",e=>{
+  const d=e?.detail;
+  if(!d?.ok||!d.postId||!["good","change"].includes(d.action))return;
+  const q=wsReactionQueue().filter(x=>!(x.postId===String(d.postId)&&x.action===d.action));
+  q.push({postId:String(d.postId),action:d.action,at:Date.now()});
+  wsSaveReactionQueue(q);
+  wsFlushReactions();
+});
+/* 前に届かなかったぶんを、開いたときに送り直す（ログインの確かめが済むのを少し待つ）。 */
+window.addEventListener("load",()=>{setTimeout(wsFlushReactions,3000);});
