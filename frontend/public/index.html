@@ -19768,6 +19768,60 @@ async function _spLogFetchPosts() {
   snap.forEach(function (d) { rows.push(_spLogPostRow(d.id, d.data() || {})); });
   return rows;
 }
+/* 自分の投稿を、欄を絞って読む（Emu のマイライブラリー・運営への依頼など）。
+
+   SDK は常時接続が切れていると、例外を出さずに端末の控えから答える。控えに無ければ0件になる。
+   Emu の「自分の投稿」はそれをそのまま「ありません」と出していた
+   （10/29、投稿が7件あるのに、運営への依頼が「まず、知識をひとつ届けてみてください」になった）。
+   SchoolPark の報告で 10/24 に直したのと同じ。まず普通の通信（runQuery）で欄を絞って読み、
+   だめなら SDK で読む。SDK の控えから来た答えは使わない。
+
+   「自分」はアカウントの2つの名義（ウォレット・CHES）の両方。片方だけで探すと、
+   もう片方で書いた投稿が出てこない（星空は前から両方で数えていた）。
+   返すのは配列。読めなかったときは null（0件とは違う）。 */
+async function emuReadMyPosts(fields, max) {
+  let aliases = [];
+  try {
+    const r = await _spSoon(emuMyIdentity(), 5000);
+    if (r.ok && r.value && Array.isArray(r.value.aliases)) aliases = r.value.aliases.slice();
+  } catch (e) {}
+  if (!aliases.length) aliases = emuAliasesNow();
+  aliases = aliases.map(function (a) { return String(a || '').toLowerCase(); })
+    .filter(function (a, i, l) { return a && l.indexOf(a) === i; }).slice(0, 10);
+  if (!aliases.length) return [];
+  const limit = Number(max) || 100;
+  const where = aliases.length === 1
+    ? { fieldFilter: { field: { fieldPath: 'address' }, op: 'EQUAL', value: { stringValue: aliases[0] } } }
+    : { fieldFilter: { field: { fieldPath: 'address' }, op: 'IN',
+        value: { arrayValue: { values: aliases.map(function (a) { return { stringValue: a }; }) } } } };
+  try {
+    const j = await _spRestGet(':runQuery', false, true, {
+      structuredQuery: { from: [{ collectionId: 'posts' }], where: where,
+        select: { fields: fields.map(function (f) { return { fieldPath: f }; }) }, limit: limit } });
+    return (Array.isArray(j) ? j : []).filter(function (x) { return x && x.document; }).map(function (x) {
+      return Object.assign({ id: decodeURIComponent(String(x.document.name || '').split('/').pop()) },
+        _spRestFields(x.document.fields || {}));
+    });
+  } catch (e) {
+    console.warn('自分の投稿を普通の通信で読めませんでした:', e && (e.message || e));
+  }
+  const fb = window.fbLib;
+  if (!fb || !window.db) return null;
+  try {
+    const r = await _spSoon(fb.getDocs(fb.query(fb.collection(window.db, 'posts'),
+      fb.where('address', 'in', aliases), fb.limit(limit))), 6000);
+    if (!r.ok || (r.value.metadata && r.value.metadata.fromCache)) return null;
+    const rows = [];
+    r.value.forEach(function (d) {
+      const x = d.data() || {}, o = { id: d.id };
+      fields.forEach(function (k) { o[k] = x[k]; });
+      rows.push(o);
+    });
+    return rows;
+  } catch (e) { return null; }
+}
+window.emuReadMyPosts = emuReadMyPosts;
+
 async function _spLogLoadPosts() {
   if (_spLogPosts) return;
   const box = document.getElementById('slResults');
@@ -23127,16 +23181,14 @@ async function _emuLoadReview() {
       return;
     }
 
-    // 自分の投稿から選んでもらう
-    const addr = _emuAddress();
-    let mine = [];
-    try {
-      const snap = await window.fbLib.getDocs(window.fbLib.query(
-        window.fbLib.collection(window.db, 'posts'),
-        window.fbLib.where('address', '==', addr),
-        window.fbLib.limit(20)));
-      snap.forEach(d => mine.push({ id: d.id, title: (d.data() || {}).title || '（無題）' }));
-    } catch (e) {}
+    // 自分の投稿から選んでもらう（両方の名義から。読めなかったときは「無い」と言わない）
+    const rows = await emuReadMyPosts(['title', 'createdAt'], 50);
+    if (rows === null) {
+      body.innerHTML = '<p style="margin:0;">投稿を読み込めませんでした。時間をおいて、開き直してください。</p>';
+      return;
+    }
+    const mine = rows.sort((a, b) => _emuTimestampMs(b.createdAt) - _emuTimestampMs(a.createdAt)).slice(0, 20)
+      .map(p => ({ id: p.id, title: p.title || '（無題）' }));
 
     if (!mine.length) {
       body.innerHTML = '<p style="margin:0;">まず、知識をひとつ届けてみてください。'
@@ -29055,7 +29107,12 @@ async function sendEmuFeedback() {
     try {
       const q = window.fbLib.query(
         window.fbLib.collection(window.db, 'knowledge_drafts'),
-        window.fbLib.where('owner', '==', account),
+        /* 下書きも両方の名義から（もう片方の名義で保存したものが見えなくならないように） */
+        (function () {
+          const mine = emuAliasesNow().filter(function (a) { return a; });
+          return mine.length > 1 && mine.indexOf(account) >= 0
+            ? window.fbLib.where('owner', 'in', mine.slice(0, 10)) : window.fbLib.where('owner', '==', account);
+        })(),
         window.fbLib.limit(30)
       );
       const snap = await window.fbLib.getDocs(q);
@@ -29534,16 +29591,16 @@ async function sendEmuFeedback() {
     const account = _emuAddress();
     try {
       if (!account) throw new Error('ウォレットを接続してください。');
-      const q = window.fbLib.query(
-        window.fbLib.collection(window.db, 'posts'),
-        window.fbLib.where('address', '==', account),
-        window.fbLib.limit(100)
-      );
-      const snap = await window.fbLib.getDocs(q);
-      const posts = [];
-      snap.forEach(docSnap => posts.push(plainKnowledgePost(docSnap)));
+      /* 一覧に出すのは題名と Good・Change の数だけ。本文や画像は読まない。
+         両方の名義から読み、読めなかったときは「投稿はありません」と言わない（emuReadMyPosts）。 */
+      const rows = await emuReadMyPosts(['title', 'goodCount', 'changeCount', 'createdAt', 'address'], 100);
+      const posts = (rows || []).map(r => ({
+        id: r.id, title: r.title || '', address: r.address || '',
+        goodCount: Number(r.goodCount) || 0, changeCount: Number(r.changeCount) || 0,
+        createdAt: _emuTimestampMs(r.createdAt) ? new Date(_emuTimestampMs(r.createdAt)).toISOString() : ''
+      }));
       posts.sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-      sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:{ posts, drafts:await readKnowledgeDrafts(account) } });
+      sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:{ posts, postsUnread: rows === null, drafts:await readKnowledgeDrafts(account) } });
     } catch (error) {
       sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:{ posts:[], drafts:[] } });
       sendKnowledge({ type:'emu-knowledge-error', error:error.message || 'データを取得できませんでした。' });

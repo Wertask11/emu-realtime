@@ -591,6 +591,11 @@ function createBillingRouter(deps) {
       if (!db || !entitlement) return res.status(503).json({ error: "UNAVAILABLE" });
       const uid = req.identity.uid;
       const address = String(req.identity.walletAddress || "").toLowerCase();
+      /* 「自分」はアカウントの2つの名義（ウォレット・CHES）の両方。片方だけで数えると、
+         もう片方で書いた投稿・押した Good が数に入らない（画面の星空は前から両方で数えていた）。 */
+      const acc = req.identity.account || {};
+      const aliases = [...new Set([address, acc.walletAddress, acc.chesAddress]
+        .map(a => String(a || "").toLowerCase()).filter(a => /^0x[0-9a-f]{40}$/.test(a)))];
       const ent = await entitlement.getEntitlement(uid, req.identity.account);
       if (entitlement.enforcing() && !entitlement.atLeast(ent.plan, "plus")) {
         return res.status(403).json({ error: "PLAN_REQUIRED", required: "plus", current: ent.plan });
@@ -609,9 +614,13 @@ function createBillingRouter(deps) {
          plus の主力なのに数字が合っていないことになる。
          そこで、ここは累計として数え、文面でも累計だと言い切る。 */
       try {
-        const got = await db.collection("posts")
-          .where("goodUsers", "array-contains", address).limit(500).get();
-        j.receivedTotal = got.size;
+        const seen = new Set();
+        for (const a of aliases) {
+          const got = await db.collection("posts").where("goodUsers", "array-contains", a).limit(500).get();
+          // 自分の投稿に、自分の別の名義で押したものは「受け取った学び」に入れない
+          got.forEach(d => { if (!aliases.includes(String((d.data() || {}).address || "").toLowerCase())) seen.add(d.id); });
+        }
+        j.receivedTotal = seen.size;
       } catch (e) {
         // 握りつぶすと本番で全部0になっていても気づけない
         console.error("学びの軌跡: 受け取った学びを数えられません:", e.message);
@@ -620,7 +629,7 @@ function createBillingRouter(deps) {
 
       // 届けた相手の数（重複なし）と、自分の投稿・改善が育った数
       try {
-        const mine = await db.collection("posts").where("address", "==", address)
+        const mine = await db.collection("posts").where("address", "in", aliases)
           .where("createdAt", ">=", since).limit(500).get();
         const people = new Set();
         mine.forEach(d => {
@@ -628,7 +637,10 @@ function createBillingRouter(deps) {
           j.posted += 1;
           j.helpful += Number(p.goodCount) || 0;
           if ((Number(p.acceptedChangeCount) || 0) > 0) j.improved += 1;
-          (Array.isArray(p.goodUsers) ? p.goodUsers : []).forEach(a => { if (a) people.add(String(a).toLowerCase()); });
+          (Array.isArray(p.goodUsers) ? p.goodUsers : []).forEach(a => {
+            const v = String(a || "").toLowerCase();
+            if (v && !aliases.includes(v)) people.add(v);   // 自分の別の名義で押したものは「役に立った人」に数えない
+          });
         });
         j.deliveredTo = people.size;
       } catch (e) {
@@ -639,7 +651,7 @@ function createBillingRouter(deps) {
       // 誰かの募集に答えた数（今月つくったもの）
       try {
         const ans = await db.collection("knowledge_answers")
-          .where("answerAuthor", "==", address)
+          .where("answerAuthor", "in", aliases)
           .where("createdAt", ">=", since).limit(500).get();
         j.answered = ans.size;
       } catch (e) {
