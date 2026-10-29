@@ -21,6 +21,8 @@ const ROOT = path.join(__dirname, '../../frontend/public');
 const ME = '0x' + 'a'.repeat(40);
 const PAGE = `<!doctype html><meta charset="utf-8"><body><script>
 window.connectedAccount = ${JSON.stringify(ME)};
+window.opened = [];
+window.openEmuShopping = view => window.opened.push(view);
 window.emuAuthHeaders = async (json, options) => { window.authCalls = (window.authCalls || []).concat([options || null]);
   return Object.assign(json ? { 'Content-Type': 'application/json' } : {}, { Authorization: 'Bearer test' }); };
 </script><script src="/wallet-success-ui.js"></script></body>`;
@@ -91,19 +93,21 @@ test('MetaMask が無いとき：今日のぶんは「作るだけ」で受け�
   } finally { await w.close(); }
 });
 
-test('MetaMask が無いとき：未請求の報酬の「受け取る」は、サーバーに署名を頼まずに理由を出す', async () => {
+test('MetaMask が無いとき：未請求の報酬は「公式ショップで使える」と出し、ボタンで公式ショップを開く（署名は頼まない）', async () => {
   const w = await open({
     'GET /daily/login/status': () => ({ json: { claimedToday: true } }),
-    'GET /rewards': () => ({ json: { rewards: [{ claimId: '0x01', kind: 'good-received', amount: '1' }, { claimId: '0x02', kind: 'change-received', amount: '1' }] } })
+    'GET /rewards': () => ({ json: { rewards: [{ claimId: '0x01', kind: 'good-received', amount: '1' }, { claimId: '0x02', kind: 'login', amount: '1' }] } })
   });
   try {
     await w.page.evaluate(() => window.wsOpenRewards());
     await w.page.waitForFunction(() => !document.getElementById('wsClaim').hidden);
-    assert.equal(await w.page.locator('#wsClaim').innerText(), '未請求の報酬 2 EMUER（2件）をまとめて受け取る');
+    assert.equal(await w.page.locator('#wsClaim').innerText(), 'City の公式ショップで使う');
+    assert.equal(await w.page.locator('#wsStatus').innerText(),
+      '受け取る前のEMUERが 2 EMUER あります（2件）。City の公式ショップでそのまま使えます。ウォレットへ移すときは、MetaMask の入ったブラウザで開いてください。');
     await w.page.locator('#wsClaim').click();
-    await w.page.waitForFunction(() => true);
-    for (let i = 0; i < 20 && !w.alerts.length; i += 1) await w.page.waitForTimeout(50);
-    assert.match(w.alerts[0] || '', /MetaMask の入ったブラウザ.*このまま City の公式ショップで使えます/);
+    assert.deepEqual(await w.page.evaluate(() => window.opened), ['commerce']);
+    assert.equal(await w.page.locator('#walletSuccessOverlay').evaluate(el => el.classList.contains('active')), false, '受け取りの画面は閉じる');
+    assert.deepEqual(w.alerts, []);
     assert.equal(w.calls.some(c => c.key === 'POST /rewards/bundle' || c.key.endsWith('/authorization')), false, '署名を頼まない');
   } finally { await w.close(); }
 });

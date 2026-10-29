@@ -156,6 +156,7 @@ function rewards(opts) {
   const seen = { hidden: false, why: null, label: null };
   const ctx = vm.createContext({
     EMUER_V2_API: 'https://x', Number, Array, String, Set, encodeURIComponent,
+    wsCanSign: () => true, wsOpenShop: () => {},
     wsAccount: () => '0xme',
     wsHeaders: async () => { if (o.throws) throw new Error(o.throws); return {}; },
     wsBtn: () => ({ set hidden(v) { seen.hidden = v; } }),
@@ -249,6 +250,7 @@ test('覚えているぶんを外した結果が空なら、無いと出す', as
   const seen = { hidden: false, why: null, label: null };
   const ctx = vm.createContext({
     EMUER_V2_API: 'https://x', Number, Array, String, Set, encodeURIComponent,
+    wsCanSign: () => true, wsOpenShop: () => {},
     wsAccount: () => '0xme',
     wsHeaders: async () => ({}),
     wsBtn: () => ({ set hidden(v) { seen.hidden = v; } }),
@@ -273,6 +275,7 @@ test('覚えていないぶんは、これまでどおり出す', async () => {
   const seen = { label: null };
   const ctx = vm.createContext({
     EMUER_V2_API: 'https://x', Number, Array, String, Set, encodeURIComponent,
+    wsCanSign: () => true, wsOpenShop: () => {},
     wsAccount: () => '0xme',
     wsHeaders: async () => ({}),
     wsBtn: () => ({ set hidden(v) {} }),
