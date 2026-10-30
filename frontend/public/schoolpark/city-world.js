@@ -1,5 +1,13 @@
 import * as T from './vendor/city-three.min.js';
 import { isBlocked, slideMove } from './city-motion.js';
+import { buildProduct, PLACEMENTS } from './city-products-3d.js';
+import { decorateHalloween } from './city-halloween-3d.js';
+
+/* ハロウィンの飾りを出す期間。毎年 10/24〜11/1（日本時間）。 */
+export function isHalloweenSeason(ms = Date.now()) {
+  const d = new Date(ms + 9 * 60 * 60 * 1000), m = d.getUTCMonth() + 1, day = d.getUTCDate();
+  return (m === 10 && day >= 24) || (m === 11 && day === 1);
+}
 
 const VIEWPOINTS = {
   street:{x:7,z:11,lookX:0,lookZ:1}, entrance:{x:0,z:2.6,lookX:0,lookZ:-3,lookY:1.25},
@@ -9,7 +17,7 @@ const VIEWPOINTS = {
 
 // A real perspective scene, not a panorama or an image with click areas.
 // All geometry/textures are original, generated locally. No remote asset/CDN.
-export function createWorld(canvas, { products = [], onSelect = () => {}, onFocus = () => {}, onLost = () => {} } = {}) {
+export function createWorld(canvas, { products = [], onSelect = () => {}, onFocus = () => {}, onLost = () => {}, halloween = isHalloweenSeason() } = {}) {
   const renderer = new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'low-power'});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.5));
   renderer.outputColorSpace=T.SRGBColorSpace;
@@ -102,7 +110,8 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
     for(let i=0;i<24;i++){dummy.position.set(-2.13+(i%12)*.36+colorIndex*.082,.49+Math.floor(i/12)*.67,.29);dummy.scale.set(.8, .72+random()*.35,1);dummy.rotation.z=(random()-.5)*.12;dummy.updateMatrix();im.setMatrixAt(i,dummy.matrix);}
     shelf.add(im);
   });
-  for(let y=0;y<3;y++)for(let i=0;i<8;i++){
+  // 目の高さの段（1.55）は公式ショップの商品を置くので、びんは下の2段だけ
+  for(let y=0;y<2;y++)for(let i=0;i<8;i++){
     const xx=-1.55+i*.44;cylinder(xx,.48+y*.66,.23,.08,.09,.36,green,backShelf);
     cylinder(xx,.72+y*.66,.23,.035,.035,.13,brass,backShelf);
   }
@@ -143,8 +152,30 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
   label('STEP INSIDE',-2.15,1.08,5.78,.88,.35,undefined,undefined,62);
   label('3D SHOWROOM',-2.15,.64,5.78,.85,.3,undefined,undefined,41);
   // Products are selectable meshes; each has its own visible physical model.
+  /* 公式ショップの11品は、Claude デザインの模型（city-products-3d.js）を決まった場所に置く。
+     値段はサーバーの値（EMUER）を出す。ほかの店の商品は、これまでどおり4つの台に置く。 */
+  const helpers={mat,texture,label,image(file){
+    const t=new T.TextureLoader().load('/schoolpark/shop/official/'+String(file).replace(/[^\w.-]/g,''));t.colorSpace=T.SRGBColorSpace;disposables.add(t);return t;
+  }};
+  const placed=new Map();
+  for(const product of products){
+    const at=PLACEMENTS[product.id];if(!at)continue;
+    const price=product.prices?.EMUER??undefined;
+    const g=buildProduct(T,{id:product.id,name:product.name,...(price!=null?{price}:{})},helpers);
+    g.position.set(at[0],at[1],at[2]);g.rotation.y=at[3];g.userData.productId=product.id;scene.add(g);
+    placed.set(product.id,[...at,middleHeight(g)]);
+  }
+  /* 模型の高さの真ん中。正面から見たとき、画面の真ん中がちょうど模型に当たるようにする
+     （アクリルキーホルダーのように、台より上が本体のものがある）。 */
+  function middleHeight(g){
+    g.updateMatrixWorld(true);let lo=Infinity,hi=-Infinity;const v=new T.Vector3();
+    g.traverse(o=>{if(!o.isMesh||o.parent?.name==='price-tag')return;const b=(o.geometry.boundingBox||(o.geometry.computeBoundingBox(),o.geometry.boundingBox));
+      for(const x of [b.min.x,b.max.x])for(const y of [b.min.y,b.max.y])for(const z of [b.min.z,b.max.z]){v.set(x,y,z).applyMatrix4(o.matrixWorld);lo=Math.min(lo,v.y);hi=Math.max(hi,v.y);}});
+    return Number.isFinite(lo)?(lo+hi)/2:g.position.y+.12;
+  }
   const positions=[[-.68,.94,-1.45],[.68,.94,-1.43],[.42,.94,-2.05],[3.25,1.31,-3.75]];
-  products.slice(0,4).forEach((product,i)=>{
+  const generic=placed.size?[]:products;
+  generic.slice(0,4).forEach((product,i)=>{
     const [x,y,z]=positions[i], g=new T.Group();g.position.set(x,y,z);g.userData.productId=product.id;scene.add(g);
     const color=mat(product.color), cream=mat('#eee3ca');
     if(product.kind==='mug'){
@@ -164,13 +195,27 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
     }
     const tag=label(String(product.priceJPY ? '¥ '+product.priceJPY.toLocaleString('ja-JP') : product.name),0,.012,.37,.43,.12,'#f4efdf','#244936',65,0,g);tag.rotation.x=-Math.PI*.32;
   });
+  // ハロウィン（Claude デザインの city-halloween-3d.js）。歩けない場所は当たり判定に足す。
+  // クモの巣やコウモリの糸（線）は、床を押したときの邪魔にならないよう、当たり判定から外す。
+  if(halloween){
+    try{
+      const deco=decorateHalloween(T,scene,{texture});
+      for(const [x,z,w,d] of deco.obstacles||[])obstacle(x,z,w,d);
+      deco.group?.traverse(o=>{if(o.isLine)o.raycast=()=>{};});
+      canvas.dataset.halloween='true';
+    }catch(error){console.warn('ハロウィンの飾りを置けませんでした:',error?.message||error);}
+  }
   function resize(){const r=canvas.getBoundingClientRect();if(r.width<1||r.height<1)return;renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();}
   function look(){camera.rotation.set(pitch,yaw,0,'YXZ');}
   function publishPose(){canvas.dataset.position=JSON.stringify({x:+camera.position.x.toFixed(3),z:+camera.position.z.toFixed(3),yaw:+yaw.toFixed(3)});}
   function cancelWalk(state='idle'){moveTarget=null;blockedFrames=0;canvas.dataset.navigation=state;delete canvas.dataset.navigationTarget;publishPose();}
   function view(v){camera.position.set(v.x,1.68,v.z);yaw=Math.atan2(v.x-v.lookX,v.z-v.lookZ);pitch=Math.atan2((v.lookY??1.68)-1.68,Math.hypot(v.x-v.lookX,v.z-v.lookZ));look();keys.clear();joystick={x:0,y:0};cancelWalk();moveMarker.visible=false;}
   function waypoint(name){const v=VIEWPOINTS[name];if(v)view(v);}
-  function focusProduct(id){const i=products.findIndex(p=>p.id===id);if(i<0||i>3)return;const [x,y,z]=positions[i];const from=[[-2,.4],[2,.5],[2,-2.8],[1.6,-2.3]][i];view({x:from[0],z:from[1],lookX:x,lookZ:z,lookY:y+.18});}
+  function focusProduct(id){
+    // 公式ショップの品は、その正面（模型の +z の向き）1.3m から見る
+    const at=placed.get(id);
+    if(at){const [x,,z,r,mid]=at;view({x:x+Math.sin(r)*1.3,z:z+Math.cos(r)*1.3,lookX:x,lookZ:z,lookY:mid});return;}
+    const i=generic.findIndex(p=>p.id===id);if(i<0||i>3)return;const [x,y,z]=positions[i];const from=[[-2,.4],[2,.5],[2,-2.8],[1.6,-2.3]][i];view({x:from[0],z:from[1],lookX:x,lookZ:z,lookY:y+.18});}
   function productAt(x,y){
     pointer.set(x,y);ray.setFromCamera(pointer,camera);
     const hits=ray.intersectObjects(scene.children,true);
