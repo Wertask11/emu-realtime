@@ -42,9 +42,9 @@ before(async () => {
     if (url.pathname === '/test/plain') return res.end(page(false));
     if (url.pathname === '/test/bundle') return res.end('<!doctype html><meta charset="utf-8"><script src="/vendor/walletconnect/ethereum-provider-2.26.0.js"></script>');
     res.setHeader('content-type', 'text/javascript; charset=utf-8');
-    // プロジェクトID を入れた版（?ready）と、まだ入っていない版（いまの本番）
-    if (url.pathname === '/wallet-choice.js') return res.end(req.headers.referer && /ready/.test(req.headers.referer)
-      ? CHOICE.replace("var WC_PROJECT_ID = '';", "var WC_PROJECT_ID = 'test-project';") : CHOICE);
+    // 試験用のプロジェクトID を入れた版（?ready）と、ID が空の版（入れる前の状態）
+    if (url.pathname === '/wallet-choice.js') return res.end(CHOICE.replace(/var WC_PROJECT_ID = '[^']*';/,
+      req.headers.referer && /ready/.test(req.headers.referer) ? "var WC_PROJECT_ID = 'test-project';" : "var WC_PROJECT_ID = '';"));
     if (url.pathname.startsWith('/vendor/walletconnect/') && req.headers.referer && !/bundle/.test(req.headers.referer)) return res.end(FAKE_WC);
     const file = path.normalize(path.join(ROOT, decodeURIComponent(url.pathname)));
     if (!file.startsWith(ROOT) || !fs.existsSync(file)) { res.statusCode = 404; return res.end(); }
@@ -168,5 +168,6 @@ test('同梱した WalletConnect の部品が、ブラウザで読み込める',
     const notice = fs.readFileSync(path.join(ROOT, 'vendor/walletconnect/readme.txt'), 'utf8');
     assert.match(notice, /Portions © 2025 Reown, Inc\. All Rights Reserved/, 'ライセンスが求める表記');
     assert.match(CHOICE, /var WC_SRC = '\/vendor\/walletconnect\/ethereum-provider-2\.26\.0\.js';/);
+    assert.match(CHOICE, /var WC_PROJECT_ID = '80d72a3cd33769b8dfc50bd48b224c6a';/, '本番は Reown の Emu for SchoolPark');
   } finally { await context.close(); }
 });

@@ -13,7 +13,7 @@
    プロジェクトID は Reown（cloud.reown.com）で発行したもの。公開して使う値で、秘密ではない。 */
 (function () {
   'use strict';
-  var WC_PROJECT_ID = '';
+  var WC_PROJECT_ID = '80d72a3cd33769b8dfc50bd48b224c6a';   // Reown「Emu for SchoolPark」（2026-10-30 オーナー発行）
   var WC_SRC = '/vendor/walletconnect/ethereum-provider-2.26.0.js';
   var POLYGON = 137;
 
