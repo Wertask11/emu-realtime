@@ -106,7 +106,10 @@ export function createBridge(parent, app) {
         return Number(E.utils.formatUnits(value, 18));
       } catch (_) { return null; }
     },
-    /* ウォレットのEMUERで払う。サーバーの署名つきで EMUERv2.payExchange を呼ぶ（みてみると同じ）。
+    /* ウォレットのEMUERで払う。サーバーの署名つきで EMUERv2.exchange を呼ぶ（みてみると同じ）。
+       コントラクトの関数の名前は exchange（contracts-v2/src/EMUERv2.sol）。前は payExchange という
+       無い名前で呼んでいて、送る前に必ず失敗していた（10/30 オーナーの交換で分かった）。
+       送る前に止まったもの（ガス代が足りない・送っても通らない）は、名前を付けて返す。EMUERは動いていない。
        払うのは、注文の宛先になっているウォレット（MetaMask で別のアカウントを開いていたら止める）。
        MetaMask の確認は人が待つので、時間で打ち切らない。 */
     async payExchange(x, expectedWallet) {
@@ -123,8 +126,14 @@ export function createBridge(parent, app) {
         catch (_) { throw new Error('POLYGON_REQUIRED'); }
       }
       const signer = new E.providers.Web3Provider(eth).getSigner();
-      const c = new E.Contract(x.contract, ['function payExchange(bytes32,bytes32,uint256,uint256,bytes)'], signer);
-      const tx = await c.payExchange(x.orderId, x.productId, x.price, x.deadline, x.authorization);
+      const c = new E.Contract(x.contract, ['function exchange(bytes32,bytes32,uint256,uint256,bytes)'], signer);
+      let tx;
+      try { tx = await c.exchange(x.orderId, x.productId, x.price, x.deadline, x.authorization); }
+      catch (e) {
+        if (e?.code === 'INSUFFICIENT_FUNDS' || /insufficient funds/i.test(String(e?.message || ''))) throw new Error('GAS_REQUIRED');
+        if (e?.code === 'UNPREDICTABLE_GAS_LIMIT' || e?.code === 'CALL_EXCEPTION') throw new Error('PAYMENT_WOULD_FAIL');
+        throw e;
+      }
       await tx.wait();
       stillCurrent(version);
       return tx.hash;

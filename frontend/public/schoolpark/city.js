@@ -34,7 +34,9 @@ const errors = {
   ORDER_NOT_PENDING:'この注文は、もう支払い待ちではありません。交換履歴を更新してください。',
   ALREADY_DONE:'この注文は、もう支払いが済んでいます。交換履歴を更新してください。',
   ALREADY_OWNED:'この品は1人1つまでです。もう交換しています（交換履歴でご確認ください）。',
-  INVALID_CHOICE:'種類を選んでから交換してください。'
+  INVALID_CHOICE:'種類を選んでから交換してください。',
+  GAS_REQUIRED:'ウォレットに POL（Polygon のガス代）が足りません。EMUERは使われていません。POL を少し入れるか、「ウォレットに移す前のEMUERで交換する」をお使いください。',
+  PAYMENT_WOULD_FAIL:'この支払いは通らないため、送りませんでした。EMUERは使われていません。時間をおいて、もう一度お試しください。'
 };
 const newRequestId = () => (crypto.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '').slice(0,80);
 const emuerNumber = v => { const n = Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
@@ -604,7 +606,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
         } finally { commerceBusy = false; }
         return;
       }
-      /* ウォレットのEMUERで交換する。注文 → MetaMask で payExchange → サーバーが鎖を見て確定。
+      /* ウォレットのEMUERで交換する。注文 → MetaMask で EMUERv2.exchange → サーバーが鎖を見て確定。
          MetaMask で断ったら注文を取り消して在庫を戻す（EMUERは動いていない）。
          払ったあとに確かめられなかったときは、注文は支払い待ちのまま残り、交換履歴から確かめ直せる。 */
       if (action === 'exchange-chain' || action === 'resume-pay') {
@@ -621,12 +623,13 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
             if (!exchange) { message = 'この交換注文はすでに受け付け済みです。'; }
           }
           if (exchange) {
-            message = 'MetaMask で支払いを確認してください。'; render();
+            message = 'ウォレット（MetaMask など）で支払いを確認してください。'; render();
             try { await bridge.payExchange(exchange, commerceMe?.wallet); }
             catch (e) {
-              /* 払う前に止まったもの（断った・別のアカウント・ウォレットが無い・Polygon でない）は、
-                 EMUERが動いていないので注文を取り消して在庫を戻す。新しく作った注文だけ。 */
-              const beforePaying = rejected(e) || ['WALLET_MISMATCH','WALLET_NOT_FOUND','POLYGON_REQUIRED'].includes(e?.message);
+              /* 払う前に止まったもの（断った・別のアカウント・ウォレットが無い・Polygon でない・
+                 ガス代が足りない・送っても通らない）は、EMUERが動いていないので注文を取り消して在庫を戻す。
+                 新しく作った注文だけ。 */
+              const beforePaying = rejected(e) || ['WALLET_MISMATCH','WALLET_NOT_FOUND','POLYGON_REQUIRED','GAS_REQUIRED','PAYMENT_WOULD_FAIL'].includes(e?.message);
               if (beforePaying && orderId && action === 'exchange-chain') await bridge.cancelCommerceOrder(orderId).catch(() => {});
               if (rejected(e)) { message = '支払いを取り消しました。EMUERは使われていません。'; return; }
               throw e;
@@ -637,6 +640,10 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
           }
           await Promise.all([loadCommerceOrders(), productShopId ? loadProducts(productShopId) : null]);
           page = 'orders';
+        } catch (e) {
+          // 「確認してください」「確かめています…」を、失敗の知らせと一緒に残さない
+          message = '';
+          throw e;
         } finally { commerceBusy = false; if (version === epoch) render(); }
         return;
       }
