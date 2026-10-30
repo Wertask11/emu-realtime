@@ -6174,6 +6174,8 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 <script src="/actionhub.js"></script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script src="/wallet-success-ui.js"></script>
+<!-- 「ウォレットではじめる」でウォレットを選ぶ（MetaMask／WalletConnect で HashPort Wallet など）。 -->
+<script src="/wallet-choice.js"></script>
 <!-- 運営からのギフト（11/1から）。🎁 ボタンと受け取りの画面。 -->
 <script src="/emu-gift-ui.js"></script>
 <script>
@@ -6303,6 +6305,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const parsed = JSON.parse(auth);
   // CHES（LINE / Google）セッションは CHES Identity レイヤーが復元するのでスキップ
   if (parsed.type === "chesFree" || localStorage.getItem("ches_uid")) return;
+  /* WalletConnect（HashPort Wallet など）で入った人に、ブラウザの MetaMask のアドレスを
+     入れてしまわない。もう一度「ウォレットではじめる」から入ってもらう（QR は前のつなぎが残っていれば出ない）。 */
+  if (parsed.provider === "walletconnect") return;
   if (!window.ethereum) return;
 
   const provider = new ethers.providers.Web3Provider(window.ethereum);
@@ -11622,7 +11627,19 @@ function _emuIsMobile() {
 }
 
 // --- [2] 接続ボタン（connectWalletButton）の本番用 ---
+/* まず、どのウォレットで入るかを選んでもらう（wallet-choice.js）。
+   MetaMask はこれまでどおり。HashPort Wallet などは WalletConnect でつなぎ、
+   つないだウォレットを window.ethereum に置くので、ここから下の流れは同じ。 */
 document.getElementById("connectWalletButton").addEventListener("click", async () => {
+  let kind = "metamask";
+  if (typeof window.emuChooseWallet === "function") {
+    kind = await window.emuChooseWallet();
+    if (!kind) return;   // 閉じた・つなげなかった（理由は選ぶ画面に出ている）
+  }
+  await emuStartWalletLogin(kind);
+});
+async function emuStartWalletLogin(kind) {
+  const _viaWalletConnect = kind === "walletconnect";
   // ★ ボタンを押した瞬間にローディング表示
   _showSpLoadingOverlay();
 
@@ -11730,7 +11747,7 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
     // 署名でウォレット所有を証明し、CHESアカウントを用意する。
     // これが無いと Emu のサーバーAPI（ログインボーナス等）と Firestore への書き込みが
     // 「ログイン情報を確認できません」で弾かれる。署名を断られても入場自体は続行する。
-    window.emuAuth = { type: "wallet", address: account, provider: "metamask" };
+    window.emuAuth = { type: "wallet", address: account, provider: _viaWalletConnect ? "walletconnect" : "metamask" };
     localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
     try {
       const _walletSession = await window.CHES.signInWithWallet(account);
@@ -11802,14 +11819,18 @@ if (typeof updateConvertButton === "function") {
     const _ws = document.getElementById("walletStatus");
     if (_ws) {
       const isTimeout = err && (err.message || "").toLowerCase().includes("timeout");
-      _ws.textContent = isTimeout
-        ? "⚠️ MetaMaskが応答していません。MetaMaskアイコンをクリックして起動してから再試行してください。"
-        : "❌ 接続に失敗しました。MetaMaskを確認して再試行してください。";
+      _ws.textContent = _viaWalletConnect
+        ? (isTimeout
+          ? "⚠️ ウォレットが応答していません。スマホのウォレットアプリを開いて承認してから、もう一度お試しください。"
+          : "❌ 接続に失敗しました。スマホのウォレットアプリを確認して、もう一度お試しください。")
+        : (isTimeout
+          ? "⚠️ MetaMaskが応答していません。MetaMaskアイコンをクリックして起動してから再試行してください。"
+          : "❌ 接続に失敗しました。MetaMaskを確認して再試行してください。");
       _ws.style.color = "#c0392b";
       _ws.style.fontSize = "12px";
     }
   }
-});
+}
 
 
 // --- [3] checkHexaNFT の修正（本番用） ---
@@ -28242,6 +28263,11 @@ async function sendEmuFeedback() {
   /* ───── ウォレットを連携する（署名で所有を確認） ─────
      アドレスを名乗るだけでは連携できない。手数料はかからない。 */
   SPID.linkWallet = async function () {
+    // ログインと同じく、どのウォレットを足すかを選んでもらう（HashPort Wallet などは WalletConnect）
+    if (typeof window.emuChooseWallet === "function") {
+      var kind = await window.emuChooseWallet();
+      if (!kind) throw new Error("ウォレットを選べませんでした。");
+    }
     if (!window.ethereum) throw new Error("ウォレットが見つかりません。");
     var accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
     if (!accounts || !accounts.length) throw new Error("ウォレットを選べませんでした。");

@@ -1911,6 +1911,10 @@ app.post("/api/auth/line", async (req, res) => {
 // ════════════════════════════════════════
 const WALLET_NONCE_TTL_MS = 5 * 60 * 1000;
 const walletNonces = new Map(); // nonce → { address, message, expiresAt }
+// 署名の確かめ（ふつうのウォレット＋スマートコントラクト型は Polygon に聞く）。ログインとパスポートへの追加で同じものを使う
+const verifyWalletSignature = require("./wallet-signature").createWalletSignatureVerifier({
+  ethers, provider: new ethers.providers.StaticJsonRpcProvider(POLYGON_RPC_URL, { name: "matic", chainId: 137 })
+});
 
 // CHESアドレス（アドレスのみ・決定論的生成／秘密鍵なし）。
 // LINE / Google はこれがそのまま walletAddress になる。ウォレットログインでも
@@ -1970,13 +1974,12 @@ app.post("/api/auth/wallet", async (req, res) => {
     }
     if (checksummed !== issued.address) return res.status(401).json({ error: "ADDRESS_MISMATCH" });
 
-    let recovered;
-    try {
-      recovered = ethers.utils.verifyMessage(issued.message, String(signature));
-    } catch (e) {
-      return res.status(401).json({ error: "INVALID_SIGNATURE" });
+    // ふつうのウォレットに加え、スマートコントラクト型（WalletConnect のスマホのウォレットなど）も確かめる
+    const verified = await verifyWalletSignature(checksummed, issued.message, String(signature));
+    if (!verified.ok) {
+      console.warn("ウォレットの署名を確かめられませんでした:", verified.code);
+      return res.status(verified.code === "SIGNATURE_CHECK_UNAVAILABLE" ? 503 : 401).json({ error: verified.code });
     }
-    if (recovered !== checksummed) return res.status(401).json({ error: "INVALID_SIGNATURE" });
 
     if (!firebaseAdmin || !db) return res.status(503).json({ error: "AUTH_UNAVAILABLE" });
 
@@ -2048,7 +2051,7 @@ app.post("/api/auth/wallet", async (req, res) => {
    ════════════════════════════════════════ */
 const identityApi = require("./identity-router").createIdentityRouter({
   db, identity, requireFirebaseUser, requireOwner, rateLimit,
-  ethers, walletNonces,
+  ethers, walletNonces, verifyWalletSignature,
   purgeWalletNonces: _purgeWalletNonces,
   walletNonceTtlMs: WALLET_NONCE_TTL_MS
 });

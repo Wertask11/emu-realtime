@@ -18,6 +18,10 @@ function createIdentityRouter(deps) {
     db, identity, requireFirebaseUser, requireOwner, rateLimit,
     ethers, walletNonces, purgeWalletNonces, walletNonceTtlMs
   } = deps || {};
+  /* 署名の確かめ。server.js からはスマートコントラクト型も確かめられるもの（wallet-signature.js）が来る。
+     渡されないとき（試験など）は、ふつうのウォレットだけを確かめる。 */
+  const verifyWalletSignature = deps.verifyWalletSignature ||
+    require("./wallet-signature").createWalletSignatureVerifier({ ethers, provider: null });
   const router = express.Router();
 
   const NONCE_TTL = Number(walletNonceTtlMs) || 5 * 60 * 1000;
@@ -266,10 +270,10 @@ function createIdentityRouter(deps) {
       catch (e) { return res.status(400).json({ error: "INVALID_ADDRESS" }); }
       if (checksummed !== issued.address) return res.status(401).json({ error: "ADDRESS_MISMATCH" });
 
-      let recovered;
-      try { recovered = ethers.utils.verifyMessage(issued.message, String(signature)); }
-      catch (e) { return res.status(401).json({ error: "INVALID_SIGNATURE" }); }
-      if (recovered !== checksummed) return res.status(401).json({ error: "INVALID_SIGNATURE" });
+      const verified = await verifyWalletSignature(checksummed, issued.message, String(signature));
+      if (!verified.ok) {
+        return res.status(verified.code === "SIGNATURE_CHECK_UNAVAILABLE" ? 503 : 401).json({ error: verified.code });
+      }
 
       const me = await identity.resolveForUid(req.identity.uid, {
         signInProvider: req.identity.signInProvider, linkedBy: "login"
