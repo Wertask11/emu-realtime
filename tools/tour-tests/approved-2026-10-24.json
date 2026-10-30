@@ -1,6 +1,22 @@
 {
  "index.html": [
   [
+   "/* WalletConnect（スマホのウォレット）で入る途中・入っていた人は、ページが開き直されても続きから入る。\n   スマホでは、ウォレットのアプリで承認して戻ってきたときに、ブラウザがページを開き直すことがある。\n   前はそのたびにログイン画面に戻り、何回も入り直すことになった（10/30 オーナー）。\n   つなぎが残っていれば QR も選ぶ画面も出さず、Firebase のログインが残っていれば署名も求めない。 */\nwindow.addEventListener(\"load\", async () => {\n  if (typeof window.emuWalletConnectResume !== \"function\") return;\n  if (_fpDirectReturn || _billingReturn || window._chesEntered || window.connectedAccount) return;\n  if (await window.emuWalletConnectResume()) await emuStartWalletLogin(\"walletconnect\");\n});\n",
+   ""
+  ],
+  [
+   "    // ここから先でページが開き直されても、emu_auth を見て続きから入れる（wallet-choice.js）\n    if (_viaWalletConnect && window.emuWalletConnectDone) window.emuWalletConnectDone();\n",
+   ""
+  ],
+  [
+   "    _cancelSpLoadingOverlay();\n    if (_viaWalletConnect && window.emuWalletConnectDone) window.emuWalletConnectDone();\n    // MetaMask TransportTimeoutError など接続失敗時のメッセージ\n",
+   "    _cancelSpLoadingOverlay();\n    // MetaMask TransportTimeoutError など接続失敗時のメッセージ\n"
+  ],
+  [
+   "    localStorage.removeItem(\"emuWcLogin\");   // WalletConnect で続きから入る印（wallet-choice.js）\n",
+   ""
+  ],
+  [
    "<!-- 「ウォレットではじめる」でウォレットを選ぶ（MetaMask／WalletConnect で HashPort Wallet など）。 -->\n<script src=\"/wallet-choice.js\"></script>\n",
    ""
   ],
