@@ -29,7 +29,7 @@ before(async () => {
 after(async () => { await browser?.close(); await fixture?.close(); });
 
 /* MetaMask と ethers の代わり。親の画面（Emu）にだけ置く。 */
-function walletMock({ account, balance = '1852', reject = false }) {
+function walletMock({ account, balance = '1852', reject = false, fail = '' }) {
   return `if (window.top === window) {
     window.__chain = [];
     window.emuerV2ConfigOnce = async () => ({ enabled: true, chainId: 137, contract: '0x9c102cC3016C70767082b60196565878D9314864' });
@@ -38,9 +38,11 @@ function walletMock({ account, balance = '1852', reject = false }) {
       utils: { formatUnits: v => String(v) },
       providers: { Web3Provider: function () { this.getNetwork = async () => ({ chainId: 137 }); this.getSigner = () => ({}); } },
       Contract: function (address, abi) {
+        (abi || []).forEach(f => __chain.push('abi:' + f));
         this.balanceOf = async a => { __chain.push('balanceOf:' + a); return '${balance}'; };
-        this.payExchange = async (...args) => { __chain.push('payExchange:' + args[0]);
+        this.exchange = async (...args) => { __chain.push('exchange:' + args[0]);
           if (${reject}) throw Object.assign(new Error('user rejected transaction'), { code: 'ACTION_REJECTED' });
+          if ('${fail}') throw Object.assign(new Error('${fail}'), { code: '${fail}' });
           return { hash: '0xtx', wait: async () => ({}) }; };
       }
     };
@@ -205,7 +207,12 @@ test('ウォレットのEMUERで交換：注文 → MetaMask → 確かめる', 
     await f.frame.getByText('ウォレットのEMUERで交換しました。引換コードは下の交換履歴にあります。').waitFor();
     assert.equal(f.posts[0].method, 'emuer_chain'); assert.equal(f.posts[0].productId, 'note');
     assert.equal('amount' in f.posts[0] || 'price' in f.posts[0], false, '金額は画面から送らない');
-    assert.ok((await f.chain()).includes('payExchange:0xorder'));
+    assert.ok((await f.chain()).includes('exchange:0xorder'));
+    /* 呼ぶ関数は、本当にコントラクトにあるもの（前は payExchange という無い名前で呼んでいて、必ず失敗していた） */
+    const abi = (await f.chain()).filter(c => c.startsWith('abi:function exchange('));
+    assert.deepEqual(abi, ['abi:function exchange(bytes32,bytes32,uint256,uint256,bytes)']);
+    const sol = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../contracts-v2/src/EMUERv2.sol'), 'utf8');
+    assert.match(sol, /function exchange\(\s*bytes32 orderId, bytes32 productId, uint256 price, uint256 deadline,\s*bytes calldata authorization\s*\)/);
     assert.deepEqual(f.posts.slice(1).map(p => p.path), ['/api/mitemiru/orders/c1/confirm']);
     assert.deepEqual(f.errors, []);
   } finally { await f.close(); }
@@ -226,9 +233,27 @@ test('MetaMask で断ったら注文を取り消す。別のアカウントな�
     await f.frame.getByText('1,852 EMUER').waitFor();
     await f.frame.getByRole('button', { name: 'ウォレットのEMUERで交換する', exact: true }).click();
     await f.frame.getByText(/いま MetaMask で開いているアカウントが違います/).waitFor();
-    assert.equal((await f.chain()).some(c => c.startsWith('payExchange')), false);
+    assert.equal((await f.chain()).some(c => c.startsWith('exchange:')), false);
     assert.deepEqual(f.posts.slice(1).map(p => p.path), ['/api/mitemiru/orders/c1/cancel'], '払っていない注文は取り消して在庫を戻す');
   } finally { await f.close(); }
+});
+
+test('送る前に止まった支払い（ガス代が足りない・通らない）は、理由を出して注文を取り消す。「確認してください」は残さない', async () => {
+  for (const [fail, text] of [
+    ['INSUFFICIENT_FUNDS', /POL（Polygon のガス代）が足りません/],
+    ['UNPREDICTABLE_GAS_LIMIT', /この支払いは通らないため、送りませんでした/]
+  ]) {
+    const f = await open(390, { me: ME_OK, wallet: { account: WALLET, fail } });
+    try {
+      await f.frame.locator('.city-product[data-value="note"]').click();
+      await f.frame.getByText('1,852 EMUER').waitFor();
+      await f.frame.getByRole('button', { name: 'ウォレットのEMUERで交換する', exact: true }).click();
+      await f.frame.getByText(text).waitFor();
+      assert.deepEqual(f.posts.slice(1).map(p => p.path), ['/api/mitemiru/orders/c1/cancel'], fail);
+      assert.equal(await f.frame.getByText('支払いを確認してください。').count(), 0, '止まったあとに「確認してください」を残さない');
+      assert.deepEqual(f.errors, []);
+    } finally { await f.close(); }
+  }
 });
 
 test('City の中に「SchoolParkの広場へ」と「08 CITY / 3D EXPLORER」は出さない', async () => {
