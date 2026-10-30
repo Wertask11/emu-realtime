@@ -1,6 +1,38 @@
 {
  "index.html": [
   [
+   "<!-- 「ウォレットではじめる」でウォレットを選ぶ（MetaMask／WalletConnect で HashPort Wallet など）。 -->\n<script src=\"/wallet-choice.js\"></script>\n",
+   ""
+  ],
+  [
+   "  /* WalletConnect（HashPort Wallet など）で入った人に、ブラウザの MetaMask のアドレスを\n     入れてしまわない。もう一度「ウォレットではじめる」から入ってもらう（QR は前のつなぎが残っていれば出ない）。 */\n  if (parsed.provider === \"walletconnect\") return;\n",
+   ""
+  ],
+  [
+   "/* まず、どのウォレットで入るかを選んでもらう（wallet-choice.js）。\n   MetaMask はこれまでどおり。HashPort Wallet などは WalletConnect でつなぎ、\n   つないだウォレットを window.ethereum に置くので、ここから下の流れは同じ。 */\n",
+   ""
+  ],
+  [
+   "  let kind = \"metamask\";\n  if (typeof window.emuChooseWallet === \"function\") {\n    kind = await window.emuChooseWallet();\n    if (!kind) return;   // 閉じた・つなげなかった（理由は選ぶ画面に出ている）\n  }\n  await emuStartWalletLogin(kind);\n});\nasync function emuStartWalletLogin(kind) {\n  const _viaWalletConnect = kind === \"walletconnect\";\n",
+   ""
+  ],
+  [
+   "    window.emuAuth = { type: \"wallet\", address: account, provider: _viaWalletConnect ? \"walletconnect\" : \"metamask\" };\n",
+   "    window.emuAuth = { type: \"wallet\", address: account, provider: \"metamask\" };\n"
+  ],
+  [
+   "      _ws.textContent = _viaWalletConnect\n        ? (isTimeout\n          ? \"⚠️ ウォレットが応答していません。スマホのウォレットアプリを開いて承認してから、もう一度お試しください。\"\n          : \"❌ 接続に失敗しました。スマホのウォレットアプリを確認して、もう一度お試しください。\")\n        : (isTimeout\n          ? \"⚠️ MetaMaskが応答していません。MetaMaskアイコンをクリックして起動してから再試行してください。\"\n          : \"❌ 接続に失敗しました。MetaMaskを確認して再試行してください。\");\n",
+   "      _ws.textContent = isTimeout\n        ? \"⚠️ MetaMaskが応答していません。MetaMaskアイコンをクリックして起動してから再試行してください。\"\n        : \"❌ 接続に失敗しました。MetaMaskを確認して再試行してください。\";\n"
+  ],
+  [
+   "    }\n  }\n}\n\n\n",
+   "    }\n  }\n});\n\n\n"
+  ],
+  [
+   "    // ログインと同じく、どのウォレットを足すかを選んでもらう（HashPort Wallet などは WalletConnect）\n    if (typeof window.emuChooseWallet === \"function\") {\n      var kind = await window.emuChooseWallet();\n      if (!kind) throw new Error(\"ウォレットを選べませんでした。\");\n    }\n",
+   ""
+  ],
+  [
    "    /* 前の初投稿ボーナス（/first-post/register）は、サーバーに窓口が無くなっていて\n       届いていなかった。初投稿キャンペーンは、公開できたあとに emu-post-published で\n       知らせて、wallet-success-ui.js がサーバーに送る（初めてかどうかはサーバーが決める）。 */\n",
    "// ★ 初投稿ボーナス判定\n    if (!editingId && window.connectedAccount) {\n      const myAddr = window.connectedAccount.toLowerCase();\n      const postsRef = window.fbLib.collection(window.db, \"posts\");\n      const myPostsQ = window.fbLib.query(\n        postsRef, window.fbLib.where(\"address\", \"==\", myAddr), window.fbLib.limit(1)\n      );\n      const myPostsSnap = await window.fbLib.getDocs(myPostsQ);\n      if (myPostsSnap.empty) {\n        // 初投稿！サーバーに登録\n        fetch(\"https://emu-realtime.onrender.com/first-post/register\", {\n          method: \"POST\",\n          headers: { \"Content-Type\": \"application/json\" },\n          body: JSON.stringify({ address: myAddr })\n        }).then(r => r.json()).then(data => {\n          if (data.success) {\n            console.log(\"🎉 初投稿ボーナス登録完了！30 EMUER 受取予約\");\n            // トースト表示\n            const toast = document.createElement(\"div\");\n            toast.style.cssText = `\n              position:fixed;bottom:80px;left:50%;transform:translateX(-50%);\n              background:linear-gradient(135deg,#1a8a5a,#0d6e45);\n              color:#fff;padding:12px 24px;border-radius:12px;\n              font-size:14px;font-weight:bold;z-index:9999;\n              box-shadow:0 4px 12px rgba(0,0,0,0.3);\n            `;\n            toast.textContent = \"🎉 初投稿ボーナス！+30 EMUER 受取予約完了\";\n            document.body.appendChild(toast);\n            setTimeout(() => toast.remove(), 4000);\n          }\n        }).catch(e => console.error(\"初投稿ボーナス登録失敗:\", e));\n      }\n    }\n"
   ],
