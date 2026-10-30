@@ -20,13 +20,17 @@ const ME = '0x' + 'a'.repeat(40), PHONE = '0x' + 'b'.repeat(40);
 const FAKE_WC = `window.EmuWalletConnect = { EthereumProvider: { init: async (opts) => {
   window.wcInit = opts;
   const handlers = {};
-  const p = { isFakeWc: true, session: null,
+  const session = { topic: 't', peer: { metadata: { name: 'HashPort Wallet', redirect: { native: 'hashport://' } } } };
+  const p = { isFakeWc: true, session: window.wcHasSession ? session : null,
     on: (e, f) => { handlers[e] = f; },
     connect: async () => { window.wcConnects = (window.wcConnects || 0) + 1;
+      window.flagWhileConnecting = localStorage.getItem('emuWcLogin');
       if (window.wcResult === 'closed') throw new Error('Connection request reset. Please try again.');
       if (window.wcResult === 'error') throw new Error('relay down');
-      p.session = { topic: 't' }; },
-    request: async ({ method }) => method === 'eth_requestAccounts' || method === 'eth_accounts' ? [${JSON.stringify(PHONE)}] : null,
+      p.session = session; },
+    request: async ({ method }) => {
+      if (method === 'personal_sign') { await new Promise(r => { window.approveSign = r; }); return '0xsig'; }
+      return method === 'eth_requestAccounts' || method === 'eth_accounts' ? [${JSON.stringify(PHONE)}] : null; },
     disconnect: () => handlers.disconnect && handlers.disconnect() };
   return p; } } };`;
 const page = (withInjected) => `<!doctype html><meta charset="utf-8"><body><script>
@@ -56,8 +60,9 @@ before(async () => {
 });
 after(async () => { await browser?.close(); server?.close(); });
 
-async function open(p) {
-  const context = await browser.newContext();
+async function open(p, { mobile = false, init = null } = {}) {
+  const context = await browser.newContext(mobile ? { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148' } : {});
+  if (init) await context.addInitScript(init);
   await context.route('**/*', route => (new URL(route.request().url()).origin === base ? route.continue() : route.abort()));
   const pg = await context.newPage();
   const errors = [];
@@ -170,4 +175,90 @@ test('同梱した WalletConnect の部品が、ブラウザで読み込める',
     assert.match(CHOICE, /var WC_SRC = '\/vendor\/walletconnect\/ethereum-provider-2\.26\.0\.js';/);
     assert.match(CHOICE, /var WC_PROJECT_ID = '80d72a3cd33769b8dfc50bd48b224c6a';/, '本番は Reown の Emu for SchoolPark');
   } finally { await context.close(); }
+});
+
+test('スマホ：署名を待つあいだ「ウォレットで承認 → Emu に戻る」を出し、ウォレットを開くボタンを置く。承認したら消す', async () => {
+  const w = await open('/test/plain?ready', { mobile: true });
+  try {
+    await choose(w.pg);
+    await w.pg.click('[data-wc="walletconnect"]');
+    assert.equal(await chosen(w.pg), 'walletconnect');
+    assert.ok(await w.pg.evaluate(() => window.flagWhileConnecting), 'つないでいるあいだは、続きから入る印を置く');
+    assert.equal(await w.pg.evaluate(() => window.wcInit.metadata.redirect.universal), base + '/', '承認後の戻り先を伝える');
+    await w.pg.evaluate(() => { window.signed = window.ethereum.request({ method: 'personal_sign', params: ['m', '0x'] }); });
+    await w.pg.waitForSelector('#emuWalletGuide:not([hidden])');
+    assert.match(await w.pg.textContent('.emu-wc-guide-title'), /HashPort Wallet で「署名」を承認してください/);
+    assert.match(await w.pg.textContent('.emu-wc-steps'), /このページ（Emu）に戻ってくる/);
+    assert.equal(await w.pg.getAttribute('.emu-wc-open', 'href'), 'hashport://');
+    assert.match(await w.pg.textContent('.emu-wc-open'), /HashPort Wallet を開く/);
+    await w.pg.evaluate(() => window.approveSign());
+    assert.equal(await w.pg.evaluate(() => window.signed), '0xsig');
+    assert.equal(await w.pg.$eval('#emuWalletGuide', g => g.hidden), true);
+    // 読むだけ（アカウント）では出さない
+    await w.pg.evaluate(() => window.ethereum.request({ method: 'eth_accounts' }));
+    assert.equal(await w.pg.$eval('#emuWalletGuide', g => g.hidden), true);
+    assert.deepEqual(w.errors, []);
+  } finally { await w.close(); }
+});
+
+test('パソコン：署名を待つあいだ「スマホで承認」を出す（ウォレットを開くボタンは出さない）', async () => {
+  const w = await open('/test/plain?ready');
+  try {
+    await choose(w.pg);
+    await w.pg.click('[data-wc="walletconnect"]');
+    await chosen(w.pg);
+    await w.pg.evaluate(() => { window.ethereum.request({ method: 'personal_sign', params: ['m', '0x'] }); });
+    await w.pg.waitForSelector('#emuWalletGuide:not([hidden])');
+    assert.match(await w.pg.textContent('.emu-wc-steps'), /スマホの HashPort Wallet に届いた「署名」を承認する/);
+    assert.equal(await w.pg.$eval('.emu-wc-open', a => a.hidden), true);
+  } finally { await w.close(); }
+});
+
+test('ページが開き直されたとき：つなぐ途中・WalletConnect で入っていた人は、QR も選ぶ画面も出さずに続きから', async () => {
+  // つなぐ途中（印あり）＋つなぎが残っている
+  let w = await open('/test/plain?ready', { init: () => { localStorage.setItem('emuWcLogin', String(Date.now())); window.wcHasSession = true; } });
+  try {
+    assert.equal(await w.pg.evaluate(() => window.emuWalletConnectResume()), true);
+    assert.equal(await w.pg.evaluate(() => window.ethereum.isFakeWc), true);
+    assert.equal(await w.pg.evaluate(() => window.wcConnects || 0), 0, 'QR を出し直さない');
+    assert.equal(await w.pg.$('#emuWalletChoice'), null, '選ぶ画面も出さない');
+  } finally { await w.close(); }
+  // WalletConnect で入っていた人
+  w = await open('/test/plain?ready', { init: () => { localStorage.setItem('emu_auth', JSON.stringify({ type: 'wallet', provider: 'walletconnect' })); window.wcHasSession = true; } });
+  try { assert.equal(await w.pg.evaluate(() => window.emuWalletConnectResume()), true); } finally { await w.close(); }
+  // つなぎが切れていたら、何もしない（ログイン画面のまま）
+  w = await open('/test/plain?ready', { init: () => { localStorage.setItem('emuWcLogin', String(Date.now())); } });
+  try {
+    assert.equal(await w.pg.evaluate(() => window.emuWalletConnectResume()), false);
+    assert.equal(await w.pg.evaluate(() => typeof window.ethereum), 'undefined');
+  } finally { await w.close(); }
+  // MetaMask・LINE の人、古い印（30分より前）は、部品も読み込まない
+  for (const init of [
+    () => { localStorage.setItem('emu_auth', JSON.stringify({ type: 'wallet', provider: 'metamask' })); },
+    () => { localStorage.setItem('emu_auth', JSON.stringify({ type: 'chesFree', provider: 'line' })); },
+    () => { localStorage.setItem('emuWcLogin', String(Date.now() - 31 * 60 * 1000)); }
+  ]) {
+    w = await open('/test/injected?ready', { init });
+    try {
+      assert.equal(await w.pg.evaluate(() => window.emuWalletConnectResume()), false);
+      assert.equal(await w.pg.evaluate(() => !!window.EmuWalletConnect), false);
+      assert.equal(await w.pg.evaluate(() => window.ethereum.isMetaMask), true);
+    } finally { await w.close(); }
+  }
+});
+
+test('QR を閉じたら、続きから入る印を消す。index.html は開いたときに続きから入り、終わったら印を消す', async () => {
+  const w = await open('/test/plain?ready');
+  try {
+    await w.pg.evaluate(() => { window.wcResult = 'closed'; });
+    await choose(w.pg);
+    await w.pg.click('[data-wc="walletconnect"]');
+    await w.pg.waitForSelector('#emuWalletChoice:not([hidden])');
+    assert.equal(await w.pg.evaluate(() => localStorage.getItem('emuWcLogin')), null);
+  } finally { await w.close(); }
+  const INDEX = readHtml('frontend/public/index.html');
+  assert.ok(INDEX.includes('if (await window.emuWalletConnectResume()) await emuStartWalletLogin("walletconnect");'));
+  assert.ok(INDEX.includes('if (_fpDirectReturn || _billingReturn || window._chesEntered || window.connectedAccount) return;'));
+  assert.equal(INDEX.split('if (_viaWalletConnect && window.emuWalletConnectDone) window.emuWalletConnectDone();').length - 1, 2, '入れたとき・失敗したとき');
+  assert.ok(INDEX.includes('localStorage.removeItem("emuWcLogin");'), 'ログアウトで消す');
 });

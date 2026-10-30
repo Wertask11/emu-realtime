@@ -11638,6 +11638,15 @@ document.getElementById("connectWalletButton").addEventListener("click", async (
   }
   await emuStartWalletLogin(kind);
 });
+/* WalletConnect（スマホのウォレット）で入る途中・入っていた人は、ページが開き直されても続きから入る。
+   スマホでは、ウォレットのアプリで承認して戻ってきたときに、ブラウザがページを開き直すことがある。
+   前はそのたびにログイン画面に戻り、何回も入り直すことになった（10/30 オーナー）。
+   つなぎが残っていれば QR も選ぶ画面も出さず、Firebase のログインが残っていれば署名も求めない。 */
+window.addEventListener("load", async () => {
+  if (typeof window.emuWalletConnectResume !== "function") return;
+  if (_fpDirectReturn || _billingReturn || window._chesEntered || window.connectedAccount) return;
+  if (await window.emuWalletConnectResume()) await emuStartWalletLogin("walletconnect");
+});
 async function emuStartWalletLogin(kind) {
   const _viaWalletConnect = kind === "walletconnect";
   // ★ ボタンを押した瞬間にローディング表示
@@ -11749,6 +11758,8 @@ async function emuStartWalletLogin(kind) {
     // 「ログイン情報を確認できません」で弾かれる。署名を断られても入場自体は続行する。
     window.emuAuth = { type: "wallet", address: account, provider: _viaWalletConnect ? "walletconnect" : "metamask" };
     localStorage.setItem("emu_auth", JSON.stringify(window.emuAuth));
+    // ここから先でページが開き直されても、emu_auth を見て続きから入れる（wallet-choice.js）
+    if (_viaWalletConnect && window.emuWalletConnectDone) window.emuWalletConnectDone();
     try {
       const _walletSession = await window.CHES.signInWithWallet(account);
       window.emuAuth.chesUid = _walletSession.uid;
@@ -11815,6 +11826,7 @@ if (typeof updateConvertButton === "function") {
   } catch (err) {
     console.error("❌ 接続エラー:", err);
     _cancelSpLoadingOverlay();
+    if (_viaWalletConnect && window.emuWalletConnectDone) window.emuWalletConnectDone();
     // MetaMask TransportTimeoutError など接続失敗時のメッセージ
     const _ws = document.getElementById("walletStatus");
     if (_ws) {
@@ -28949,6 +28961,7 @@ async function sendEmuFeedback() {
     localStorage.removeItem("emu_auth");
     localStorage.removeItem("emuWallet");
     localStorage.removeItem("spPassType");
+    localStorage.removeItem("emuWcLogin");   // WalletConnect で続きから入る印（wallet-choice.js）
     whenFirebaseReady(function () {
       window.fbAuth.signOut(window.auth).finally(function () { location.reload(); });
     });

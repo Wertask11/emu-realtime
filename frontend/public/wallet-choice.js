@@ -59,7 +59,8 @@
     return wcLoading;
   }
 
-  async function connectWalletConnect() {
+  /* WalletConnect の窓口を作る（つなぐのは connect）。前のつなぎが端末に残っていれば、それを読み込む */
+  async function initProvider() {
     await loadWalletConnect();
     if (!wcProvider) {
       wcProvider = await window.EmuWalletConnect.EthereumProvider.init({
@@ -73,19 +74,121 @@
           name: 'Emu for SchoolPark',
           description: 'SchoolPark / Emu にウォレットで入ります',
           url: location.origin,
-          icons: [location.origin + '/logo.jpg']
+          icons: [location.origin + '/logo.jpg'],
+          // 承認したあと、ウォレットから Emu に戻ってくる先（対応しているウォレットだけが使う）
+          redirect: { universal: location.origin + '/' }
         },
         qrModalOptions: { themeMode: 'light' }
       });
       wcProvider.on('disconnect', function () {
         if (window.ethereum === wcProvider) useInjected();
+        try { localStorage.removeItem(RESUME_KEY); } catch (e) {}
       });
+      guideRequests(wcProvider);
     }
+    return wcProvider;
+  }
+  async function connectWalletConnect() {
+    await initProvider();
     // 前につないだぶんが残っていれば、QR を出さずにそのまま使う
-    if (!wcProvider.session) await wcProvider.connect();
+    if (!wcProvider.session) {
+      try { localStorage.setItem(RESUME_KEY, String(Date.now())); } catch (e) {}
+      await wcProvider.connect();
+    }
     if (!useProvider(wcProvider)) throw new Error('ETHEREUM_LOCKED');
     return wcProvider;
   }
+
+  /* ───── スマホで、ウォレットのアプリと行き来するときの案内 ─────
+     スマホでは「接続」と「署名」で2回、ウォレットのアプリに切り替わる。承認しても、
+     ウォレットによっては Emu に自動で戻らない。戻ってきたときにブラウザがページを
+     開き直すこともある（10/30 オーナー：何回もログイン画面が出る）。
+       - 署名などを待つあいだは「ウォレットで承認 → Emu に戻る」を画面に出し、ウォレットを開くボタンを置く
+       - 接続の途中・ログインのあとでページが開き直されたら、つなぎ（端末に残る）を使って続きから入る */
+  var RESUME_KEY = 'emuWcLogin';
+  var RESUME_MS = 30 * 60 * 1000;
+  var NEEDS_WALLET = { personal_sign: '署名', eth_signTypedData_v4: '署名', eth_sendTransaction: '取引', wallet_switchEthereumChain: 'ネットワークの切り替え', wallet_addEthereumChain: 'ネットワークの追加' };
+  var isMobile = function () { return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || ''); };
+  function walletName() {
+    try { return (wcProvider.session.peer.metadata.name || '').slice(0, 40) || 'ウォレット'; } catch (e) { return 'ウォレット'; }
+  }
+  /* ウォレットのアプリを開くリンク。WalletConnect がスマホで選んだウォレットを覚えている（WALLETCONNECT_DEEPLINK_CHOICE）。
+     無ければ、ウォレットが名乗った戻り先を使う。 */
+  function walletLink() {
+    try {
+      var c = JSON.parse(localStorage.getItem('WALLETCONNECT_DEEPLINK_CHOICE') || 'null');
+      if (c && typeof c.href === 'string' && /^[a-z][a-z0-9+.-]*:/i.test(c.href)) return c.href;
+    } catch (e) {}
+    try {
+      var r = wcProvider.session.peer.metadata.redirect || {};
+      return r.native || r.universal || '';
+    } catch (e) { return ''; }
+  }
+  function guideEl() {
+    var el = document.getElementById('emuWalletGuide');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'emuWalletGuide';
+    el.className = 'emu-wc-guide';
+    el.setAttribute('role', 'status');
+    el.hidden = true;
+    el.innerHTML = '<div class="emu-wc-card"><h2 class="emu-wc-guide-title"></h2>'
+      + '<ol class="emu-wc-steps"></ol>'
+      + '<a class="emu-wc-open" target="_self" rel="noopener" hidden></a>'
+      + '<button type="button" class="emu-wc-later" data-wc="hide-guide">この案内を閉じる</button></div>';
+    el.querySelector('[data-wc="hide-guide"]').onclick = function () { el.hidden = true; };
+    document.body.appendChild(el);
+    return el;
+  }
+  function showGuide(what) {
+    var el = guideEl(), name = walletName(), mobile = isMobile();
+    el.querySelector('.emu-wc-guide-title').textContent = name + ' で「' + what + '」を承認してください';
+    el.querySelector('.emu-wc-steps').innerHTML = mobile
+      ? '<li>' + escapeText(name) + ' のアプリを開く（自動で開かなければ、下のボタン）</li>'
+        + '<li>「' + escapeText(what) + '」を承認する</li>'
+        + '<li>このページ（Emu）に戻ってくる。自動で戻らないときは、ブラウザのアプリに切り替える</li>'
+        + '<li>戻ってきたら、そのまま待つと続きます</li>'
+      : '<li>スマホの ' + escapeText(name) + ' に届いた「' + escapeText(what) + '」を承認する</li>'
+        + '<li>承認すると、この画面が自動で続きます</li>';
+    var link = mobile ? walletLink() : '';
+    var a = el.querySelector('.emu-wc-open');
+    a.hidden = !link;
+    if (link) { a.href = link; a.textContent = name + ' を開く'; }
+    el.hidden = false;
+  }
+  function hideGuide() { var el = document.getElementById('emuWalletGuide'); if (el) el.hidden = true; }
+  function escapeText(s) { var d = document.createElement('span'); d.textContent = String(s); return d.innerHTML; }
+  function guideRequests(p) {
+    var original = p.request.bind(p);
+    p.request = async function (args) {
+      var what = args && NEEDS_WALLET[args.method];
+      if (what) showGuide(what);
+      try { return await original(args); }
+      finally { if (what) hideGuide(); }
+    };
+  }
+
+  /* ページが開き直されたとき：WalletConnect のつなぎが残っていれば、それを使って続きから入る。
+     使えるつなぎがあれば window.ethereum に置いて true を返す（QR は出さない）。 */
+  window.emuWalletConnectResume = async function () {
+    if (!WC_PROJECT_ID) return false;
+    var auth = null, started = 0;
+    try { auth = JSON.parse(localStorage.getItem('emu_auth') || 'null'); } catch (e) {}
+    try { started = Number(localStorage.getItem(RESUME_KEY) || 0); } catch (e) {}
+    var connecting = started && Date.now() - started < RESUME_MS;
+    var loggedIn = !!(auth && auth.type === 'wallet' && auth.provider === 'walletconnect');
+    // WalletConnect で入る途中か、WalletConnect で入っていた人だけ（ほかの人には部品を読み込まない）。
+    // つなぎそのものは WalletConnect が端末（IndexedDB）に持っているので、作ってみて確かめる
+    if (!connecting && !loggedIn) return false;
+    rememberInjected();
+    try {
+      await initProvider();   // QR は出さない。つなぎが無ければ何もしない
+      if (!wcProvider.session) return false;
+      return useProvider(wcProvider);
+    } catch (e) { return false; }
+  };
+  /* ログインが終わった・やめたときに呼ぶ。続きから入る印を消す */
+  window.emuWalletConnectDone = function () { try { localStorage.removeItem(RESUME_KEY); } catch (e) {} };
 
   var CLOSED = /reset|closed|rejected|cancel|denied|User disconnected/i;
   function failText(e) {
@@ -156,6 +259,7 @@
         await connectWalletConnect();
         finish('walletconnect');
       } catch (err) {
+        window.emuWalletConnectDone();
         el.hidden = false;
         el.querySelectorAll('button[data-wc]').forEach(function (x) { x.disabled = false; });
         b.querySelector('.emu-wc-note').textContent = 'WalletConnect でつなぎます。パソコンでは、出てくる QR コードをスマホのウォレットで読み取ります。';
@@ -187,6 +291,14 @@
     + '.emu-wc-hint{color:#6b6459;font-size:12px;margin:6px 2px 0}'
     + '.emu-wc-message{margin:10px 0 0;padding:10px 12px;border-radius:12px;background:#fff1dc;color:#8a4b00;font-size:14px}'
     + '.emu-wc-close{position:absolute;top:8px;right:8px;width:44px;height:44px;border:0;background:transparent;font-size:24px;color:#6b6459;cursor:pointer}'
-    + '.emu-wc-option:focus-visible,.emu-wc-close:focus-visible{outline:3px solid #ef7d00;outline-offset:2px}';
+    + '.emu-wc-option:focus-visible,.emu-wc-close:focus-visible{outline:3px solid #ef7d00;outline-offset:2px}'
+    + '.emu-wc-guide{position:fixed;inset:0;z-index:100002;display:flex;align-items:flex-end;justify-content:center;padding:16px;background:rgba(33,31,28,.35)}'
+    + '.emu-wc-guide[hidden]{display:none}'
+    + '.emu-wc-guide h2{font-size:17px;margin:0 0 8px}'
+    + '.emu-wc-steps{margin:0 0 12px;padding-left:1.4em;font-size:14px}'
+    + '.emu-wc-steps li{margin:4px 0}'
+    + '.emu-wc-open{display:block;margin:0 0 8px;padding:12px;border-radius:12px;background:#ef7d00;color:#fff;font-weight:700;text-align:center;text-decoration:none}'
+    + '.emu-wc-open[hidden]{display:none}'
+    + '.emu-wc-later{width:100%;padding:10px;border:1px solid #e3d9c8;border-radius:12px;background:#fff;color:#6b6459;font:inherit;cursor:pointer}';
   document.head.appendChild(css);
 })();
