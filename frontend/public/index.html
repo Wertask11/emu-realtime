@@ -15949,10 +15949,34 @@ function emuSyncMyProfile() {
     try {
       if (v && v.avatar) localStorage.setItem('ches_avatar', v.avatar);
       else localStorage.removeItem('ches_avatar');
+      /* 右上に写真を出すかどうかも控えておく。次に開いたとき、読み終わるのを待たずに出せる */
+      localStorage.setItem('emu_head_mode', JSON.stringify({ addr: addr, mode: v && v.headerIdentityMode === 'avatar' ? 'avatar' : 'name' }));
     } catch (e) {}
     emuPaintHeaderIdentity();
     return v;
-  }, function () { return null; });
+  }, function () {
+    /* 読めなかった（スマホで通信が切れていたなど）。覚えていないので、少しおいて読み直す */
+    _emuProfileRetry(addr);
+    return null;
+  });
+}
+let _emuProfileRetryAt = 0, _emuProfileRetryTimer = 0;
+function _emuProfileRetry(addr) {
+  if (_emuProfileRetryTimer) return;
+  _emuProfileRetryAt = Math.min(_emuProfileRetryAt ? _emuProfileRetryAt * 2 : 5000, 60000);
+  _emuProfileRetryTimer = setTimeout(function () {
+    _emuProfileRetryTimer = 0;
+    if (_emuAddress() === addr && emuProfileKnown(addr) === undefined) emuSyncMyProfile();
+  }, _emuProfileRetryAt);
+}
+/* 前に読めた自分の写真と表示のしかた（読み終わるまでのあいだだけ使う）。同じ人のときだけ。 */
+function _emuHeadCached(addr) {
+  try {
+    const c = JSON.parse(localStorage.getItem('emu_head_mode') || 'null');
+    const avatar = _emuSafeAvatar(localStorage.getItem('ches_avatar') || '');
+    if (c && c.addr === addr && c.mode === 'avatar' && avatar) return { headerIdentityMode: 'avatar', avatar: avatar };
+  } catch (e) {}
+  return undefined;
 }
 
 /* 「名前と写真」の保存が通ったあと。avatar は null なら変えていない、'' なら消した。 */
@@ -15995,7 +16019,12 @@ function _emuPaintIdentityButton(btn) {
     return;
   }
   const name = (typeof emuDisplayName === 'function' && emuDisplayName()) || _emuHeadLabel || '';
-  const me = emuProfileKnown(addr);
+  let me = emuProfileKnown(addr);
+  if (me === undefined) {
+    /* まだ読めていない。前に読めた控えがあればそれで出し、読みに行く（読めなかったときは読み直す） */
+    me = _emuHeadCached(addr);
+    if (!_emuProfiles.has(addr) && !_emuProfileRetryTimer) emuSyncMyProfile();
+  }
   const avatar = (me && me.headerIdentityMode === 'avatar' && me.avatar && me.avatar !== _emuHeadBroken) ? me.avatar : '';
   if (avatar) {
     const cur = btn.querySelector('img.emu-head-avatar');
@@ -22706,13 +22735,17 @@ function spDaoPlaceContact() {
    画面を描いていない環境でも届くよう、rAF や resize ではなく DOM の変化を見る。 */
 function spDaoWatchRender() {
   spDaoPlaceContact();
-  if (window._spDaoMO) return;
   const frame = document.getElementById('spDaoFrame');
   const d = frame && frame.contentDocument;
   const root = d && d.getElementById('dao-root');
   if (!root) return;
+  /* 枠が読み直されると dao-root は新しいものになる。前は最初の dao-root を見張りつづけ、
+     読み直したあとは右上の写真もお問い合わせの位置も追いつかなかった（10/30 スマホ）。 */
+  if (window._spDaoMO && window._spDaoMORoot === root) return;
+  if (window._spDaoMO) window._spDaoMO.disconnect();
   window._spDaoMO = new MutationObserver(spDaoPlaceContact);
   window._spDaoMO.observe(root, { childList: true });
+  window._spDaoMORoot = root;
 }
 
 /* 大きさが変わったときの後始末。
@@ -28962,6 +28995,7 @@ async function sendEmuFeedback() {
     localStorage.removeItem("emuWallet");
     localStorage.removeItem("spPassType");
     localStorage.removeItem("emuWcLogin");   // WalletConnect で続きから入る印（wallet-choice.js）
+    localStorage.removeItem("emu_head_mode"); // 右上に写真を出すかの控え
     whenFirebaseReady(function () {
       window.fbAuth.signOut(window.auth).finally(function () { location.reload(); });
     });

@@ -404,7 +404,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     const focusAction = focus?.dataset.action, focusValue = focus?.dataset.value;
     const focusField = focus?.dataset.shipField && focus.type !== 'radio' ? focus.dataset.shipField : '';
     const caret = focusField ? focus.selectionStart : null;
-    host.innerHTML = `${page === 'home' ? `<section class="city-hero city-hero-3d"><img src="/schoolpark/city-showroom-preview.webp" alt="SchoolPark Cityの3Dショールーム。木の棚、商品、カウンターのある店内。" width="1200" height="675"><div class="city-hero-copy"><p class="city-eyebrow">SCHOOLPARK CITY</p><h2 data-city-heading tabindex="-1">SchoolPark City</h2><p>活動でたまったEMUERで、公式ショップの商品と交換できる街。<br>街のお店や、3Dの街も歩けます。</p>${button('walk','3Dの街へ入る ↗','',false,loading || !spots)}</div></section>` : ''}
+    host.innerHTML = `${page === 'home' ? `<section class="city-hero city-hero-3d"><img src="/schoolpark/city-showroom-preview.webp" alt="SchoolPark Cityの3Dのお店。木の棚と台とカウンターに、公式ショップの商品が並ぶ店内。" width="1200" height="675"><div class="city-hero-copy"><p class="city-eyebrow">SCHOOLPARK CITY</p><h2 data-city-heading tabindex="-1">SchoolPark City</h2><p>活動でたまったEMUERで、公式ショップの商品と交換できる街。<br>街のお店や、3Dの街も歩けます。</p>${button('walk','3Dの街へ入る ↗','',false,loading || !spots)}</div></section>` : ''}
       ${page === 'home' ? `<div class="city-doors" role="navigation" aria-label="Cityでできること" data-tour="city-doors">${[
         ['page','commerce','🏫','公式ショップ','EMUERで商品と交換','city-shop'],
         ['page','partners','🏪','街のお店','円・JPYCで使えるお店','city-partners'],

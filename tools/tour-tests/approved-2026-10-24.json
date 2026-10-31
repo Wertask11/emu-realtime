@@ -1,6 +1,34 @@
 {
  "index.html": [
   [
+   "      /* 右上に写真を出すかどうかも控えておく。次に開いたとき、読み終わるのを待たずに出せる */\n      localStorage.setItem('emu_head_mode', JSON.stringify({ addr: addr, mode: v && v.headerIdentityMode === 'avatar' ? 'avatar' : 'name' }));\n",
+   ""
+  ],
+  [
+   "  }, function () {\n    /* 読めなかった（スマホで通信が切れていたなど）。覚えていないので、少しおいて読み直す */\n    _emuProfileRetry(addr);\n    return null;\n  });\n}\nlet _emuProfileRetryAt = 0, _emuProfileRetryTimer = 0;\nfunction _emuProfileRetry(addr) {\n  if (_emuProfileRetryTimer) return;\n  _emuProfileRetryAt = Math.min(_emuProfileRetryAt ? _emuProfileRetryAt * 2 : 5000, 60000);\n  _emuProfileRetryTimer = setTimeout(function () {\n    _emuProfileRetryTimer = 0;\n    if (_emuAddress() === addr && emuProfileKnown(addr) === undefined) emuSyncMyProfile();\n  }, _emuProfileRetryAt);\n}\n/* 前に読めた自分の写真と表示のしかた（読み終わるまでのあいだだけ使う）。同じ人のときだけ。 */\nfunction _emuHeadCached(addr) {\n  try {\n    const c = JSON.parse(localStorage.getItem('emu_head_mode') || 'null');\n    const avatar = _emuSafeAvatar(localStorage.getItem('ches_avatar') || '');\n    if (c && c.addr === addr && c.mode === 'avatar' && avatar) return { headerIdentityMode: 'avatar', avatar: avatar };\n  } catch (e) {}\n  return undefined;\n",
+   "  }, function () { return null; });\n"
+  ],
+  [
+   "  let me = emuProfileKnown(addr);\n  if (me === undefined) {\n    /* まだ読めていない。前に読めた控えがあればそれで出し、読みに行く（読めなかったときは読み直す） */\n    me = _emuHeadCached(addr);\n    if (!_emuProfiles.has(addr) && !_emuProfileRetryTimer) emuSyncMyProfile();\n  }\n",
+   "  const me = emuProfileKnown(addr);\n"
+  ],
+  [
+   "  spDaoPlaceContact();\n  const frame = document.getElementById('spDaoFrame');\n",
+   "  spDaoPlaceContact();\n  if (window._spDaoMO) return;\n  const frame = document.getElementById('spDaoFrame');\n"
+  ],
+  [
+   "  /* 枠が読み直されると dao-root は新しいものになる。前は最初の dao-root を見張りつづけ、\n     読み直したあとは右上の写真もお問い合わせの位置も追いつかなかった（10/30 スマホ）。 */\n  if (window._spDaoMO && window._spDaoMORoot === root) return;\n  if (window._spDaoMO) window._spDaoMO.disconnect();\n",
+   ""
+  ],
+  [
+   "  window._spDaoMORoot = root;\n",
+   ""
+  ],
+  [
+   "    localStorage.removeItem(\"emu_head_mode\"); // 右上に写真を出すかの控え\n",
+   ""
+  ],
+  [
    "/* WalletConnect（スマホのウォレット）で入る途中・入っていた人は、ページが開き直されても続きから入る。\n   スマホでは、ウォレットのアプリで承認して戻ってきたときに、ブラウザがページを開き直すことがある。\n   前はそのたびにログイン画面に戻り、何回も入り直すことになった（10/30 オーナー）。\n   つなぎが残っていれば QR も選ぶ画面も出さず、Firebase のログインが残っていれば署名も求めない。 */\nwindow.addEventListener(\"load\", async () => {\n  if (typeof window.emuWalletConnectResume !== \"function\") return;\n  if (_fpDirectReturn || _billingReturn || window._chesEntered || window.connectedAccount) return;\n  if (await window.emuWalletConnectResume()) await emuStartWalletLogin(\"walletconnect\");\n});\n",
    ""
   ],
@@ -525,6 +553,12 @@
   [
    "<title>開催中の議論 — Emu for SchoolPark</title>\n",
    "<title>開催中の議論 — Emu</title>\n"
+  ]
+ ],
+ "schoolpark/dao.html": [
+  [
+   "  /* 描き直すと右上のボタンは👤で作り直される。親（Emu）に、写真か名前を入れ直してもらう。\n     親の見張り（MutationObserver）だけに頼ると、枠が読み直されたときなどに見張りが外れて\n     👤のまま残ることがあった（10/30 スマホ）。 */\n  try { if (window.parent !== window && window.parent.emuPaintHeaderIdentity) window.parent.emuPaintHeaderIdentity(); } catch (e) {}\n",
+   ""
   ]
  ]
 }

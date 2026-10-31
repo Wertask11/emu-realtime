@@ -25,15 +25,28 @@ window.pickAfterFocus = id => new Promise(r => { window.selected = []; window.w.
 window.w = createWorld(document.getElementById('c'), { products: ${JSON.stringify(products)}, halloween: ${halloween}, onSelect: id => window.selected.push(id) });
 </script>`;
 
+/* 3Dのお店の画面（city-shop.js）。サーバーの代わりに、公式ショップの商品を返す（画像あり・1品だけ画像なし）。 */
+const SHOP_PRODUCTS = PRODUCTS.map((p, i) => ({ ...p, description: 'せつめい', remaining: 10, methods: ['emuer_ledger'],
+  ...(i === 0 ? {} : { imageUrl: '/schoolpark/shop/official/' + (raw.products || raw)[i].image }) }));
+const shopPage = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body><script type="module">
+import { openShopWorld } from '/schoolpark/city-shop.js';
+openShopWorld({ spots: [], wantedShop: 'schoolpark-official', bridge: {
+  getShops: async () => ({ shops: [{ id: 'field-store', name: 'THE FIELD STORE', subtitle: '', status: 'demo', products: [] }], partnerSlots: [], goal: '' }),
+  getCommerceShops: async () => ({ shops: [{ id: 'schoolpark-official', storeType: 'schoolpark_virtual', name: 'SchoolPark公式仮想店舗' }] }),
+  getCommerceProducts: async () => ({ products: ${JSON.stringify(SHOP_PRODUCTS)} })
+} });
+</script></body>`;
+
 let server, base, browser;
 before(async () => {
   server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     if (url.pathname === '/t/official') return res.end(page(PRODUCTS, false));
     if (url.pathname === '/t/halloween') return res.end(page(PRODUCTS, true));
+    if (url.pathname === '/t/shop') return res.end(shopPage);
     const file = path.normalize(path.join(ROOT, decodeURIComponent(url.pathname)));
     if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.statusCode = 404; return res.end(); }
-    res.setHeader('content-type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.webp') ? 'image/webp' : 'application/octet-stream');
+    res.setHeader('content-type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.webp') ? 'image/webp' : file.endsWith('.css') ? 'text/css' : 'application/octet-stream');
     fs.createReadStream(file).pipe(res);
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -94,4 +107,52 @@ test('ハロウィンの期間は、毎年 10/24〜11/1（日本時間）', asyn
     assert.equal(await at('2026-11-02T00:00:00+09:00'), false);
     assert.equal(await at('2027-10-31T12:00:00+09:00'), true, '来年も');
   } finally { await pg.close(); }
+});
+
+test('商品を選ぶと、右の説明に商品の写真を出す（写真の無い商品は 🎁）', async () => {
+  const pg = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const errors = [];
+  pg.on('pageerror', e => errors.push(e.message));
+  try {
+    await pg.goto(base + '/t/shop');
+    await pg.waitForSelector('.cs-canvas[data-ready="true"]', { timeout: 60000 });
+    await pg.click('[data-shop="products"]');
+    await pg.click('[data-shop="product"][data-value="official-can-badge-v1"]');
+    const img = pg.locator('.cs-panel .cs-product-photo img');
+    await img.waitFor();
+    assert.equal(await img.getAttribute('src'), '/schoolpark/shop/official/09_shop_canbadge.webp');
+    assert.match(await img.getAttribute('alt'), /缶バッジ/);
+    await pg.waitForFunction(() => document.querySelector('.cs-panel .cs-product-photo img')?.naturalWidth > 0);
+    assert.equal(await pg.locator('.cs-panel .cs-product-mark').count(), 0, '🎁 は出さない');
+    assert.equal(await pg.evaluate(() => document.querySelector('.cs-panel').scrollTop), 0, '一覧の下のほうから開いても、説明は上から見せる');
+    await pg.click('[data-shop="panel-close"]');
+    await pg.click('[data-shop="products"]');
+    await pg.click('[data-shop="product"][data-value="' + PRODUCTS[0].id + '"]');
+    await pg.locator('.cs-panel .cs-product-mark').waitFor();
+    assert.match(await pg.textContent('.cs-panel .cs-product-mark'), /🎁/);
+    assert.deepEqual(errors, []);
+  } finally { await pg.close(); }
+});
+
+test('スマホ：下のボタンが Passport の下にもぐらない。商品の一覧は番号と EMUER の値段', async () => {
+  for (const width of [360, 390, 412]) {
+    const ctx = await browser.newContext({ viewport: { width, height: 800 }, isMobile: true, hasTouch: true });
+    const pg = await ctx.newPage();
+    try {
+      await pg.goto(base + '/t/shop');
+      await pg.waitForSelector('.cs-canvas[data-ready="true"]', { timeout: 60000 });
+      const boxes = await pg.evaluate(() => [...document.querySelectorAll('.cs-route button, .cs-passport')].map(b => { const r = b.getBoundingClientRect(); return { t: b.textContent.trim(), l: r.left, r: r.right, top: r.top, b: r.bottom, sw: b.scrollWidth, cw: b.clientWidth }; }));
+      const passport = boxes.find(b => /Passport/.test(b.t));
+      for (const b of boxes.filter(x => x !== passport)) {
+        assert.ok(b.r <= passport.l + 0.5, `${width}px: 「${b.t}」が Passport に重なる（${b.r} > ${passport.l}）`);
+        assert.ok(b.sw <= b.cw + 1, `${width}px: 「${b.t}」の文字がはみ出す`);
+      }
+      assert.ok(passport.r <= width, `${width}px: Passport が画面の外`);
+      await pg.click('[data-shop="products"]');
+      const rows = await pg.$$eval('.cs-products button', bs => bs.map(b => b.textContent.replace(/\s+/g, ' ').trim()));
+      assert.match(rows[0], /^01冷蔵庫くん/);
+      assert.match(rows[10], /^11/);
+      assert.ok(rows.every(r => /\d+ EMUER/.test(r)), '値段は EMUER（「店舗でご確認ください」ではない）');
+    } finally { await ctx.close(); }
+  }
 });
