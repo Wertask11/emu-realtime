@@ -26,14 +26,16 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
   const pick=root.querySelector('.cs-pick'),toast=root.querySelector('.cs-toast');
   let focusedProduct=null,toastTimer=null;
   function say(message){clearTimeout(toastTimer);toast.textContent=message;toast.hidden=false;toastTimer=setTimeout(()=>{toast.hidden=true;},6000);}
-  function showPanel(html){panel.innerHTML=`<button type="button" class="cs-panel-close" data-shop="panel-close" aria-label="商品パネルを閉じる">×</button>${html}`;panel.hidden=false;world?.pause(true);pick.hidden=true;panel.querySelector('button')?.focus({preventScroll:true});}
+  function showPanel(html){panel.innerHTML=`<button type="button" class="cs-panel-close" data-shop="panel-close" aria-label="商品パネルを閉じる">×</button>${html}`;panel.scrollTop=0;panel.hidden=false;world?.pause(true);pick.hidden=true;panel.querySelector('button')?.focus({preventScroll:true});}
   function closePanel(){request++;busy=false;panel.hidden=true;panel.innerHTML='';selected=null;world?.pause(false);world?.focus();}
   function destroy(){if(closed)return;closed=true;request++;loadNumber++;abort.abort();clearTimeout(toastTimer);world?.destroy();world=null;root.remove();priorFocus?.isConnected&&priorFocus.focus?.({preventScroll:true});onClose();}
   function productPanel(id){
     const product=shop?.products.find(p=>p.id===id);if(!product)return;request++;busy=false;selected=product;world?.focusProduct(id);
     if(shop.storeType==='schoolpark_virtual'){
       const canExchange=product.methods?.includes('emuer_ledger')&&product.remaining!==0;
-      showPanel(`<p class="cs-kicker">${esc(shop.name)} / EMUER STORE</p><div class="cs-product-mark"><span>🎁</span></div>
+      /* 商品の写真（公式ショップの画像）。無い商品だけ 🎁 */
+      const photo=product.imageUrl?`<figure class="cs-product-photo"><img src="${esc(product.imageUrl)}" alt="${esc(product.name)}" loading="lazy"></figure>`:'<div class="cs-product-mark"><span>🎁</span></div>';
+      showPanel(`<p class="cs-kicker">${esc(shop.name)} / EMUER STORE</p>${photo}
         <h3>${esc(product.name)}</h3><p>${esc(product.description)}</p><div class="cs-price">${esc(product.prices?.EMUER??'価格未設定')} EMUER</div>
         <p class="cs-caption">在庫：${product.remaining==null?'制限なし':esc(product.remaining)} · 交換条件と引渡しは登録済みの商品情報を確認してください。</p>
         <button type="button" class="cs-primary" data-shop="exchange" ${canExchange?'':'disabled'}>EMUERで交換する</button>
@@ -54,7 +56,7 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
   function productsPanel(){
     if(!shop){say('店舗の読み込みをお待ちください。');return;}
     selected=null;request++;
-    showPanel(`<p class="cs-kicker">COLLECTION / ${shop.products.length} ITEMS</p><h3>店内の商品</h3><p>棚やテーブルの商品を、直接選ぶこともできます。</p><div class="cs-products">${shop.products.map(p=>`<button type="button" data-shop="product" data-value="${esc(p.id)}"><span class="cs-product-number">${glyph(p.kind)}</span><span><b>${esc(p.name)}</b><small>${esc(money(p))}${shop.status==='demo'?' / 参考価格':''}</small></span><span>↗</span></button>`).join('')}</div>${catalog.shops.length>1?`<h3>Cityのお店</h3>${catalog.shops.map(s=>`<button type="button" class="cs-secondary" data-shop="shop" data-value="${esc(s.id)}">${esc(s.name)}</button>`).join('')}`:''}<p class="cs-caption">${esc(catalog.goal)}</p><div class="cs-partners">${catalog.partnerSlots.map(p=>`<div><span>${esc(p.name)}</span><b>${p.status==='live'?'連携店舗':'出店準備中'}</b></div>`).join('')}</div>${preview?'':'<button type="button" class="cs-secondary" data-shop="mycity">MY CITYで記録を見る</button>'}`);
+    showPanel(`<p class="cs-kicker">COLLECTION / ${shop.products.length} ITEMS</p><h3>店内の商品</h3><p>棚やテーブルの商品を、直接選ぶこともできます。</p><div class="cs-products">${shop.products.map((p,i)=>`<button type="button" data-shop="product" data-value="${esc(p.id)}"><span class="cs-product-number">${shop.storeType==='schoolpark_virtual'?String(i+1).padStart(2,'0'):glyph(p.kind)}</span><span><b>${esc(p.name)}</b><small>${esc(shop.storeType==='schoolpark_virtual'?(p.priceLabel||money(p)):money(p))}${shop.status==='demo'?' / 参考価格':''}</small></span><span>↗</span></button>`).join('')}</div>${catalog.shops.length>1?`<h3>Cityのお店</h3>${catalog.shops.map(s=>`<button type="button" class="cs-secondary" data-shop="shop" data-value="${esc(s.id)}">${esc(s.name)}</button>`).join('')}`:''}<p class="cs-caption">${esc(catalog.goal)}</p><div class="cs-partners">${catalog.partnerSlots.map(p=>`<div><span>${esc(p.name)}</span><b>${p.status==='live'?'連携店舗':'出店準備中'}</b></div>`).join('')}</div>${preview?'':'<button type="button" class="cs-secondary" data-shop="mycity">MY CITYで記録を見る</button>'}`);
   }
   function help(){showPanel('<p class="cs-kicker">HOW TO EXPLORE</p><h3>行きたい場所を、選ぶだけ。</h3><dl class="cs-help"><dt>移動する</dt><dd>PCは床をクリックまたはダブルクリック。スマートフォンは床をタップすると、そこまで歩きます。</dd><dt>周囲を見る</dt><dd>画面をドラッグ／スワイプします。スワイプしただけでは移動しません。</dd><dt>商品を見る</dt><dd>商品を直接クリック／タップします。</dd><dt>迷ったら</dt><dd>「入店する」「商品棚」「カウンター」から場所を選べます。PCではWASDも補助操作として使えます。</dd></dl><button type="button" class="cs-primary" data-shop="panel-close">歩いてみる</button>');}
   async function checkout(){

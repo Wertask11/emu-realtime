@@ -2064,6 +2064,10 @@ function draw() {
   app.tourRenderedDataReady = Object.assign({}, app.tourDataReady);
   app.tourRenderedScreen = app.state.screen;
   try { if (window.parent.ReizoTourSchoolParkRendered) window.parent.ReizoTourSchoolParkRendered(); } catch (e) {}
+  /* 描き直すと右上のボタンは👤で作り直される。親（Emu）に、写真か名前を入れ直してもらう。
+     親の見張り（MutationObserver）だけに頼ると、枠が読み直されたときなどに見張りが外れて
+     👤のまま残ることがあった（10/30 スマホ）。 */
+  try { if (window.parent !== window && window.parent.emuPaintHeaderIdentity) window.parent.emuPaintHeaderIdentity(); } catch (e) {}
 }
 /* まとめて1回だけ描き直す。
    requestAnimationFrame は、画面が描画されていない状態（背景タブなど）では
