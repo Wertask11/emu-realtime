@@ -1,13 +1,6 @@
 import * as T from './vendor/city-three.min.js';
 import { isBlocked, slideMove } from './city-motion.js';
 import { buildProduct, PLACEMENTS } from './city-products-3d.js';
-import { decorateHalloween } from './city-halloween-3d.js';
-
-/* ハロウィンの飾りを出す期間。毎年 10/24〜11/1（日本時間）。 */
-export function isHalloweenSeason(ms = Date.now()) {
-  const d = new Date(ms + 9 * 60 * 60 * 1000), m = d.getUTCMonth() + 1, day = d.getUTCDate();
-  return (m === 10 && day >= 24) || (m === 11 && day === 1);
-}
 
 const VIEWPOINTS = {
   street:{x:7,z:11,lookX:0,lookZ:1}, entrance:{x:0,z:2.6,lookX:0,lookZ:-3,lookY:1.25},
@@ -17,7 +10,7 @@ const VIEWPOINTS = {
 
 // A real perspective scene, not a panorama or an image with click areas.
 // All geometry/textures are original, generated locally. No remote asset/CDN.
-export function createWorld(canvas, { products = [], onSelect = () => {}, onFocus = () => {}, onLost = () => {}, halloween = isHalloweenSeason() } = {}) {
+export function createWorld(canvas, { products = [], onSelect = () => {}, onFocus = () => {}, onLost = () => {} } = {}) {
   const renderer = new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'low-power'});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.5));
   renderer.outputColorSpace=T.SRGBColorSpace;
@@ -195,16 +188,6 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
     }
     const tag=label(String(product.priceJPY ? '¥ '+product.priceJPY.toLocaleString('ja-JP') : product.name),0,.012,.37,.43,.12,'#f4efdf','#244936',65,0,g);tag.rotation.x=-Math.PI*.32;
   });
-  // ハロウィン（Claude デザインの city-halloween-3d.js）。歩けない場所は当たり判定に足す。
-  // クモの巣やコウモリの糸（線）は、床を押したときの邪魔にならないよう、当たり判定から外す。
-  if(halloween){
-    try{
-      const deco=decorateHalloween(T,scene,{texture});
-      for(const [x,z,w,d] of deco.obstacles||[])obstacle(x,z,w,d);
-      deco.group?.traverse(o=>{if(o.isLine)o.raycast=()=>{};});
-      canvas.dataset.halloween='true';
-    }catch(error){console.warn('ハロウィンの飾りを置けませんでした:',error?.message||error);}
-  }
   function resize(){const r=canvas.getBoundingClientRect();if(r.width<1||r.height<1)return;renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();}
   function look(){camera.rotation.set(pitch,yaw,0,'YXZ');}
   function publishPose(){canvas.dataset.position=JSON.stringify({x:+camera.position.x.toFixed(3),z:+camera.position.z.toFixed(3),yaw:+yaw.toFixed(3)});}
