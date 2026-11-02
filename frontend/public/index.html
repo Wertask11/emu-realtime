@@ -4042,6 +4042,7 @@ html, body { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 <link rel="stylesheet" href="/service-header.css">
 <script defer src="/tour/reizo-tour.js"></script>
 <script defer src="/tour/reizo-tour-pages.js"></script>
+  <script src="/emu-analytics.js"></script>
 </head>
 <body>
 
@@ -12374,6 +12375,7 @@ function openPostForm() {
     return false;
   }
   postFormModal.style.display = 'flex';
+  if (!editingPostId) window.EmuAnalytics?.track('post_create_start', { surface:'legacy' });
   return true;
 }
 function closePostForm() { postFormModal.style.display = 'none'; _emuSetPostQuest(null); }
@@ -13411,6 +13413,7 @@ const editingId = editingPostId;
       if (!_questId) await _emuAddUsage(_postBatch, 'post');
       await _postBatch.commit();
       window.emuLabSyncIndex?.(_labPostRef.id);
+      window.EmuAnalytics?.track('post_publish', { surface:'feed' }, _labPostRef.id);
       window.dispatchEvent(new CustomEvent("emu-post-published", { detail: { postId: _labPostRef.id, address: authorAddress } }));
       console.log("✅ 新規投稿を作成しました");
     }
@@ -18142,7 +18145,7 @@ async function spOpenProposalFromPost(postId, postTitle) {
   } catch (e) {}
   /* 02 ギルドの画面。中では 'logs' という名前になっている。 */
   if (app) { try { app.setState({ screen: 'logs' }); app.toTop(); } catch (e) {} }
-  try { await window.openSpVoteForm(app, '', from); }
+  try { await window.openSpVoteForm(app, '', from); if (document.body.classList.contains('sp-vote-open')) window.EmuAnalytics?.track('knowledge_action',{action:'discussion'},from.postId+':discussion'); }
   catch (e) { console.warn('議題フォームを開けませんでした:', e && (e.message || e)); }
 }
 
@@ -19058,6 +19061,7 @@ async function _spDaoLoadQuestsOnce(app, attempt) {
     quests: quests, noQuests: quests.length === 0,
     questsDenied: false, questsNote: ''
   });
+  if (mine) quests.filter(q=>q.iTook).forEach(q=>window.EmuAnalytics?.observeQuestCompletion(q.id, Number(q.myRounds)||0));
   _spWatchApprovals(quests, mine);
   /* 画像つきの報告の画像は、一覧を出したあとで読んで足す */
   _spLogImagesFill(app);
@@ -19080,6 +19084,7 @@ function _spWatchApprovals(quests, mine) {
   _spApprovalWaiting = mine ? (quests || []).filter(function (q) {
     return q && q.iTook && q.iWisdom && !q.isFounder;
   }).map(function (q) {
+    if (typeof window !== 'undefined') window.EmuAnalytics?.observeQuestCompletion(q.id, Number(q.myRounds)||0);
     return { id: q.id, rounds: Number(q.myRounds) || 0,
       path: 'sp_quests/' + encodeURIComponent(q.id) + '/commits/' + encodeURIComponent(mine) };
   }) : [];
@@ -19097,6 +19102,7 @@ async function _spCheckApprovals() {
         const c = await _spRestDoc(w.path, true, true);
         const rounds = c ? Math.max(c.approved === true ? 1 : 0, Number(c.approvedRounds) || 0) : 0;
         if (rounds > w.rounds) {
+          if (typeof window !== 'undefined') window.EmuAnalytics?.observeQuestCompletion(w.id, rounds);
           /* 読み直すと、この見張りも新しい一覧で張り直される */
           _spOnQuestChanged();
           return;
@@ -19510,6 +19516,7 @@ window.spQuestToggle = async function (questId, app) {
     await _spSoon(cur ? fb.deleteDoc(ref) : fb.setDoc(ref, { name: p.name, tookAt: Date.now() }), 8000);
     const saved = await _spRestDoc(path, true, true);
     if (!!saved !== joined) throw new Error('参加記録を確認できませんでした');
+    if (joined) window.EmuAnalytics?.track('quest_join', {}, questId + ':' + saved.tookAt);
     /* 一覧の再取得が失敗しても、確認済みの本人状態はすぐ画面に出す。 */
     if (app && app.state && Array.isArray(app.state.quests)) {
       app.setState({ quests: app.state.quests.map(function (q) {
@@ -21080,6 +21087,7 @@ window.spOpenEmuPost = async function (postId) {
       + '<p style="white-space:pre-wrap">' + _emuEsc(d.body || '') + '</p>'
       + (tags.length ? '<p style="color:#8e88a8">' + tags.map(function (t) { return '#' + _emuEsc(t); }).join(' ') + '</p>' : '')
       + '</article>';
+    window.EmuAnalytics?.view('knowledge_detail_view', {surface:'source'}, postId);
   } catch (e) {
     console.error('元の投稿を読めませんでした:', e);
     list.innerHTML = '<div class="emu-history-item">元の投稿を読めませんでした。</div>';
@@ -30156,6 +30164,14 @@ async function sendEmuFeedback() {
     <button class="sp-reizo-send" aria-label="送信" onclick="spReizoSend()">↑</button>
   </div>
 </div>
+
+
+<script>
+window.addEventListener('emu-reaction-result', function(event) {
+  const d=event.detail||{}, action={good:'helpful',change:'improvement',propose:'discussion'}[d.action];
+  if(d.ok && action) window.EmuAnalytics?.track('knowledge_action',{action},String(d.postId)+':'+action);
+});
+</script>
 
 </body>
 </html>

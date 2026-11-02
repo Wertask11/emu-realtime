@@ -48,6 +48,7 @@ html, body                 { height: 100%; width:100%; overflow-x:hidden; }
   }
 }
 </style>
+  <script src="/emu-analytics.js"></script>
 </head>
 <body>
 <script>
@@ -1458,6 +1459,12 @@ class Component extends DCLogic {
   tabScrollLeft = 0;
 
   componentDidMount(){ /* 読むものの一覧は親（index.html の SP_DAO_LOADERS）が持っている。 ここで名前を並べると、足したときに片方だけ直して取りこぼす。 */ try { window.parent.spDaoReloadAll(this); } catch (e) {} this._r = () => { const device = window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'; if(device !== this.state.device) this.setState({vw:window.innerWidth, vh:window.innerHeight, device}); }; window.addEventListener('resize', this._r); }
+  componentDidUpdate(previousProps, previousState){
+    const s=this.state;
+    if(s.screen==='experiments' && !s.questsDenied && ((s.quests||[]).length || s.noQuests===true)) window.EmuAnalytics?.view('quest_list_view',{});
+    else if(s.screen==='detail' && (s.quests||[]).some(q=>q.id===s.expId)) window.EmuAnalytics?.view('quest_detail_view',{},s.expId);
+    else window.EmuAnalytics?.view('session_start',{},s.screen);
+  }
   componentWillUnmount(){ window.removeEventListener('resize', this._r); }
 
   scroller = React.createRef();
