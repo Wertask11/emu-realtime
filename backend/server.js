@@ -108,7 +108,11 @@ async function requireFirebaseUser(req, res, next) {
        ブラウザ側で名乗り変えることはできない。SchoolPark ID の
        「連携済みログイン方法」の表示にだけ使う（権限には使わない）。 */
     const signInProvider = String((decoded.firebase && decoded.firebase.sign_in_provider) || "");
-    req.identity = { uid: decoded.uid, walletAddress, account: accountData, signInProvider };
+    /* 投稿の記録（post-audit.js）用。LINE とウォレットは Firebase から見ると "custom" なので、
+       サーバーが発行時に付けた provider を見る。authTimeMs は、このログインをした時刻。 */
+    const loginMethod = signInProvider === "custom" ? String(decoded.provider || "custom") : signInProvider;
+    const authTimeMs = Number(decoded.auth_time) ? Number(decoded.auth_time) * 1000 : null;
+    req.identity = { uid: decoded.uid, walletAddress, account: accountData, signInProvider, loginMethod, authTimeMs };
     next();
   } catch (_) {
     return res.status(401).json({ error: "INVALID_AUTH_TOKEN" });
@@ -273,6 +277,12 @@ const dialogue = require("./dialogue").createDialogueRouter(membershipDeps);
 const feedback = require("./feedback").createFeedbackRouter(membershipDeps);
 // 運営の受領コメント（light 以上）。light の存在理由そのもの。
 const review = require("./review").createReviewRouter(membershipDeps);
+/* 投稿の記録（端末の種類・ブラウザ・時刻。運営だけが見る）。11/2 */
+app.use("/api/post-audit", require("./post-audit").createPostAuditRouter({ db, requireFirebaseUser, requireOwner, rateLimit }).router);
+/* 投稿を消す（本人・運営。消した記録を残す）。11/2 */
+app.use("/api/posts", require("./post-audit").createPostDeleteRouter({ db, requireFirebaseUser, rateLimit,
+  isOwner: (identity) => [identity.walletAddress, identity.account && identity.account.chesAddress]
+    .some(address => SP_OWNER_ADDRESSES.includes(String(address || "").toLowerCase())) }).router);
 const emuerV2 = require("./emuer-v2/router").createEmuerV2Router({
   db, identity, requireFirebaseUser, requireOwnAddress, entitlement, env: process.env
 });

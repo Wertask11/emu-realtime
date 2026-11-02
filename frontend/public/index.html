@@ -12727,6 +12727,19 @@ document.addEventListener("keydown", event => {
   if (document.getElementById("emuGoodSheet")?.classList.contains("open")) closeEmuSheet("emuGoodSheet");
   if (document.getElementById("emuChangeSheet")?.classList.contains("open")) closeEmuSheet("emuChangeSheet");
 });
+/* 投稿の記録（運営だけが見る。backend/post-audit.js）。投稿・書き直しのすぐあとに、投稿ID だけを送る。
+   端末の種類・ブラウザはサーバーが User-Agent から読む。届かなくても投稿そのものには影響しない（1回だけ送り直す）。 */
+function emuRecordPostAudit(postId, kind) {
+  if (!postId) return;
+  const send = async function () {
+    const headers = await emuAuthHeaders(true, { interactive: false });
+    const r = await fetch("https://emu-realtime.onrender.com/api/post-audit", {
+      method: "POST", headers: headers, keepalive: true, body: JSON.stringify({ postId: String(postId), kind: kind === "edit" ? "edit" : "create" })
+    });
+    if (r.status >= 500 || r.status === 401) throw new Error("RETRY");
+  };
+  send().catch(function () { setTimeout(function () { send().catch(function () {}); }, 8000); });
+}
 function _emuAddress() {
   return String(window.connectedAccount || localStorage.getItem("emuWallet") || "").toLowerCase();
 }
@@ -13393,6 +13406,7 @@ const editingId = editingPostId;
       // 【更新モード】
       const postRef = window.fbLib.doc(window.db, "posts", editingId);
       await window.fbLib.updateDoc(postRef, postData);
+      emuRecordPostAudit(editingId, "edit");
       window.emuLabSyncIndex?.(editingId);
       console.log("✅ 投稿を更新しました:", editingId);
       editingPostId = null;
@@ -13415,6 +13429,7 @@ const editingId = editingPostId;
       window.emuLabSyncIndex?.(_labPostRef.id);
       window.EmuAnalytics?.track('post_publish', { surface:'feed' }, _labPostRef.id);
       window.dispatchEvent(new CustomEvent("emu-post-published", { detail: { postId: _labPostRef.id, address: authorAddress } }));
+      emuRecordPostAudit(_labPostRef.id, "create");
       console.log("✅ 新規投稿を作成しました");
     }
 
@@ -29541,6 +29556,8 @@ async function sendEmuFeedback() {
         /* 見学の範囲で止まったか。止まったことを画面で伝えるために渡す。 */
         guestCapped: guestCapped, guestLimit: GUEST_KNOWLEDGE_LIMIT,
         account,
+        /* 運営か（「運営として削除」を出すため。消せるかはサーバーが決める） */
+        isOwner: typeof _spIsOwnerAddr === 'function' && !!account && _spIsOwnerAddr(account),
         monthlyTheme:String(typeof currentTheme === 'string' ? currentTheme : 'はじめる'),
         monthlyCopy:String(typeof currentThemeCopy === 'string' ? currentThemeCopy : ''),
         drafts, scheduledCount:await scheduledKnowledgeCount(account),
@@ -29743,6 +29760,33 @@ async function sendEmuFeedback() {
     }
     if (message.type === 'emu-knowledge-panel') {
       await loadKnowledgePanel(message.kind);
+      return;
+    }
+    /* 投稿を消す（11/2）。本人は自分の投稿、運営はどの投稿でも。消すのはサーバー
+       （backend/post-audit.js）。だれが・いつ・どの端末から消したかが、運営だけの記録に残る。 */
+    if (message.type === 'emu-knowledge-delete-post' && message.postId) {
+      const postId = String(message.postId);
+      let reason = '';
+      if (message.asOwner) {
+        reason = window.prompt('運営として、この投稿を削除します。\n理由を書いてください（運営だけが見る記録に残ります）。', '不適切な内容');
+        if (reason === null) return;
+      } else if (!window.confirm('この投稿を削除しますか？\n削除すると元に戻せません。届いた「役に立った」「改善案」も見られなくなります。')) {
+        return;
+      }
+      try {
+        const headers = await emuAuthHeaders(true);
+        const r = await fetch('https://emu-realtime.onrender.com/api/posts/' + encodeURIComponent(postId) + '/delete', {
+          method: 'POST', headers: headers, body: JSON.stringify({ reason: String(reason || '').slice(0, 200) })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error === 'NOT_YOUR_POST' ? 'この投稿は削除できません（ご自身の投稿だけ削除できます）。' : '削除できませんでした。時間をおいて、もう一度お試しください。');
+        window.emuLabSyncIndex?.(postId);   // 知識を探すの索引からも外す
+        sendKnowledge({ type:'emu-knowledge-notice', text:'投稿を削除しました。' });
+        await syncKnowledgeFrame({ append:false });
+        if (message.fromLibrary) await loadKnowledgePanel('library');
+      } catch (error) {
+        sendKnowledge({ type:'emu-knowledge-error', error: error.message || '削除できませんでした。' });
+      }
       return;
     }
     if (message.type === 'emu-knowledge-publish') {
