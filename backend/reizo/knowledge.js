@@ -15,7 +15,7 @@ function loadPages() {
     features: guide.steps.map(step => step.text).slice(0, 10)
   }]));
   // These detail screens already have separate native guide registrations.
-  for (const [id, parent] of Object.entries({ guild: 'guild', 'quest-detail': 'quest', plaza: 'park', tasks: 'home', 'year-goals': 'home' })) {
+  for (const [id, parent] of Object.entries({ guild: 'guild', 'quest-detail': 'quest', tasks: 'emu-practice', 'year-goals': 'quest' })) {
     if (!pages[id] && pages[parent]) pages[id] = { ...pages[parent], name: { 'quest-detail': 'クエストの詳細', plaza: '公園の広場', tasks: '自分の宿題', 'year-goals': '年内目標' }[id] || pages[parent].name };
   }
   return pages;

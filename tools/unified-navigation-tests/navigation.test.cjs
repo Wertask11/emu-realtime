@@ -1,0 +1,37 @@
+'use strict';
+const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm'),fs=require('node:fs');
+function fixture(gate=async()=>({allowed:true})) {
+ const opened=[],alerts=[],initials=[],classes=new Set();
+ const app={go:screen=>()=>opened.push(screen)};
+ const nodes={mainApp:{style:{display:'block'}},spDaoFrame:{contentWindow:{app}}};
+ const document={body:{classList:{add(...v){v.forEach(x=>classes.add(x));},remove(...v){v.forEach(x=>classes.delete(x));},contains:v=>classes.has(v)}},documentElement:{style:{setProperty(){}}},getElementById:id=>nodes[id],querySelector:()=>null,querySelectorAll:()=>[]};
+ const location={href:'http://local.invalid/?lab=library'};
+ const window={auth:{currentUser:{uid:'fixture'}},_setEmuHomeTab(){},_emuEnsureAppVisible(){},scrollTo(){},spEnsureSchoolParkAccess:gate,spShowSchoolParkUnavailable(){alerts.push('denied')},openSpDao(screen){initials.push(screen);opened.push('open')},alert:m=>alerts.push(m),addEventListener(){}};
+ const context={window,document,location,history:{replaceState(_s,_t,url){location.href='http://local.invalid'+url;}},URL,Set,Date,Promise,console,setTimeout,queueMicrotask,MutationObserver:class{observe(){}}};
+ vm.runInNewContext(fs.readFileSync('frontend/public/unified-navigation.js','utf8'),context);
+ return {nav:window.EmuNavigation,window,opened,alerts,classes,location,initials};
+}
+test('five canonical views retain existing query parameters and select only valid workspace screens',async()=>{
+ const f=fixture();assert.equal(await f.nav.existing('unknown'),false);assert.deepEqual(f.opened,[]);
+ await f.nav.existing('library');assert.deepEqual(f.opened,['open','library']);assert.deepEqual(f.initials,['library']);assert.equal(f.nav.current,'wisdom');assert.equal(new URL(f.location.href).searchParams.get('lab'),'library');
+ for(const screen of ['logs','experiments','city','tasks','yeargoals'])await f.nav.existing(screen);
+ assert.deepEqual(f.opened.slice(-2),['open','yeargoals']);assert.equal(f.nav.current,'practice');
+});
+test('denied entry and account change while waiting never open a workspace',async()=>{
+ const denied=fixture(async()=>({allowed:false}));assert.equal(await denied.nav.existing('city'),false);assert.deepEqual(denied.opened,[]);
+ let release;const changed=fixture(()=>new Promise(r=>{release=r}));const pending=changed.nav.existing('city');changed.window.auth.currentUser={uid:'other'};release({allowed:true});assert.equal(await pending,false);assert.deepEqual(changed.opened,[]);
+});
+test('an explicit read/search/practice navigation cancels a late workspace entry; repeated clicks share one gate',async()=>{
+ for(const view of ['read','search','practice']){
+  let release,calls=0;const f=fixture(()=>{calls++;return new Promise(r=>{release=r})});const a=f.nav.existing('experiments'),b=f.nav.existing('experiments');
+  assert.equal(calls,1);f.nav.activate(view);release({allowed:true});assert.equal(await a,false);assert.equal(await b,false);assert.deepEqual(f.opened,[]);assert.equal(f.nav.current,view);
+  let releaseDenied;const denied=fixture(()=>new Promise(r=>{releaseDenied=r}));const late=denied.nav.existing('city');denied.nav.activate(view);releaseDenied({allowed:false});assert.equal(await late,false);assert.deepEqual(denied.alerts,[]);
+ }
+});
+test('the booked dialogue URL reuses scheduled sessions and never restores the public discussion directory',async()=>{
+ for(const sessions of [[],[{outcome:'held',venue:'emu'}],[{outcome:'scheduled',venue:'zoom',meetingUrl:'https://zoom.example.invalid/meeting'}],[{outcome:'scheduled',venue:'emu'}]]){
+  const f=fixture();f.window.emuAuthHeaders=async()=>({Authorization:'LOCAL_TEST_ONLY'});
+  f.window.fetch=async()=>({ok:true,json:async()=>({sessions})});f.window.accountGo=page=>f.opened.push(page);f.window.openRoom3=()=>f.opened.push('booked-room');
+  const booked=sessions.some(s=>s.outcome==='scheduled' && s.venue==='emu');assert.equal(await f.nav.resumeDialogue(),booked);assert.deepEqual(f.opened,[booked?'booked-room':'sessions']);
+ }
+});

@@ -483,7 +483,7 @@
         )
         .join(
           "",
-        )}<p class="hint">医療・法律・金融などの内容は個人の経験であり、専門的な助言や結果を保証するものではありません。出典の有無と正しさの検証は別です。</p>${lab.sourceAnswer ? `<p class="hint">元募集 ${esc(lab.sourceAnswer.requestId)}・元回答 ${esc(lab.sourceAnswer.answerId)}</p><button type="button" id="answerSource">元の募集・回答を見る</button>` : ""}<div class="actions"><button type="button" id="saveKnowledge">マイライブラリーに保存</button><button type="button" id="unsaveKnowledge">保存を外す</button><button type="button" id="useKnowledge">研究に使う</button>${p.editable ? '<button type="button" id="editKnowledge">編集</button><button type="button" id="withdrawKnowledge">公開を取り下げる</button><button type="button" id="archiveKnowledge">削除して非公開で保管</button><button type="button" id="restoreKnowledge" hidden>下書きに復元</button><button type="button" id="postHistory">編集履歴</button>' : ""}${p.authorSchoolParkId ? '<button type="button" id="openWriter">書き手を見る</button>' : ""}<button type="button" id="goodKnowledge">役に立った</button><button type="button" id="changeKnowledge">改善案を届ける</button><button type="button" id="proposeKnowledge">議題にする</button><button type="button" id="discussKnowledge">議論へ</button></div><div class="report-controls"><label for="reportReason">通報する理由</label><textarea id="reportReason" maxlength="1500"></textarea><button type="button" id="reportKnowledge">運営へ通報</button></div>`;
+        )}<p class="hint">医療・法律・金融などの内容は個人の経験であり、専門的な助言や結果を保証するものではありません。出典の有無と正しさの検証は別です。</p>${lab.sourceAnswer ? `<p class="hint">元募集 ${esc(lab.sourceAnswer.requestId)}・元回答 ${esc(lab.sourceAnswer.answerId)}</p><button type="button" id="answerSource">元の募集・回答を見る</button>` : ""}<div class="actions"><button type="button" id="saveKnowledge">マイライブラリーに保存</button><button type="button" id="unsaveKnowledge">保存を外す</button><button type="button" id="useKnowledge">研究に使う</button>${p.editable ? '<button type="button" id="editKnowledge">編集</button><button type="button" id="withdrawKnowledge">公開を取り下げる</button><button type="button" id="archiveKnowledge">削除して非公開で保管</button><button type="button" id="restoreKnowledge" hidden>下書きに復元</button><button type="button" id="postHistory">編集履歴</button>' : ""}${p.authorSchoolParkId ? '<button type="button" id="openWriter">書き手を見る</button>' : ""}<button type="button" id="goodKnowledge">役に立った</button><button type="button" id="changeKnowledge">改善案を届ける</button><button type="button" id="proposeKnowledge">議題にする</button></div><div class="report-controls"><label for="reportReason">通報する理由</label><textarea id="reportReason" maxlength="1500"></textarea><button type="button" id="reportKnowledge">運営へ通報</button></div>`;
     $("#detailDialog").showModal();
     window.EmuAnalytics?.view("knowledge_detail_view", { surface:"lab" }, postId);
     $("#detailTitle").insertAdjacentHTML(
@@ -618,7 +618,6 @@
       ["#goodKnowledge", "good"],
       ["#changeKnowledge", "change"],
       ["#proposeKnowledge", "propose"],
-      ["#discussKnowledge", "discussion"],
     ].forEach(
       ([selector, action]) =>
         ($(selector).onclick = () => {
@@ -1162,7 +1161,7 @@
         )
         .join(
           "",
-        )}<h3>元になった知識</h3>${n.sourceIds.map((id) => `<p><button type="button" data-post="${esc(id)}">元知識 ${esc(id)} を読む</button></p>`).join("")}<div class="actions">${state.me?.schoolParkId === n.authorSchoolParkId && !n.archived ? '<button type="button" id="continueNote">結果を追記・編集</button><button type="button" id="archiveNote">ノートを非公開で保管</button><button type="button" id="publishExperience">試した結果を経験知として書く</button>' : ""}${n.archived && state.me?.schoolParkId === n.authorSchoolParkId ? '<button type="button" id="restoreNote">自分用に復元</button>' : ""}${state.me?.schoolParkId === n.authorSchoolParkId || state.me?.owner ? '<button type="button" id="noteHistory">更新履歴</button>' : ""}<button type="button" id="discussNote" ${n.archived ? "disabled" : ""}>既存の議論へ</button><button type="button" id="practiceNote" ${n.archived ? "disabled" : ""}>Quest・Guildで実践する</button></div><div class="report-controls"><label for="noteReport">通報理由</label><textarea id="noteReport" maxlength="1500"></textarea><button type="button" id="reportNote">運営へ通報</button></div>`;
+        )}<h3>元になった知識</h3>${n.sourceIds.map((id) => `<p><button type="button" data-post="${esc(id)}">元知識 ${esc(id)} を読む</button></p>`).join("")}<div class="actions">${state.me?.schoolParkId === n.authorSchoolParkId && !n.archived ? '<button type="button" id="continueNote">結果を追記・編集</button><button type="button" id="archiveNote">ノートを非公開で保管</button><button type="button" id="publishExperience">試した結果を経験知として書く</button>' : ""}${n.archived && state.me?.schoolParkId === n.authorSchoolParkId ? '<button type="button" id="restoreNote">自分用に復元</button>' : ""}${state.me?.schoolParkId === n.authorSchoolParkId || state.me?.owner ? '<button type="button" id="noteHistory">更新履歴</button>' : ""}<button type="button" id="discussNote" ${n.archived ? "disabled" : ""}>ギルドの議題にする</button><button type="button" id="practiceNote" ${n.archived ? "disabled" : ""}>Quest・Guildで実践する</button></div><div class="report-controls"><label for="noteReport">通報理由</label><textarea id="noteReport" maxlength="1500"></textarea><button type="button" id="reportNote">運営へ通報</button></div>`;
     if (n.aiAnalysis)
       $("#detailBody").insertAdjacentHTML("beforeend", renderAI(n));
     $("#detailBody").insertAdjacentHTML(
@@ -1262,7 +1261,7 @@
     }
     $("#discussNote").onclick = () => {
       $("#detailDialog").close();
-      integration("discussion", { noteId: n.id });
+      integration("guild-proposal", { noteId: n.id });
     };
     $("#practiceNote").onclick = () => {
       $("#detailDialog").close();

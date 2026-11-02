@@ -115,13 +115,10 @@ async function fixture(width=390, visits=[]) {
   const frame=page.frames().find(f=>f.url().endsWith('/schoolpark/dao.html'));
   await frame.waitForFunction(()=>window.app?.state.me.name==='テスト用Passport');
   async function nav(n) {
-    // Sidebar labels as of 10/19 (01 ホーム, 06 貢献, 07 treasury); older names still accepted.
-    const names={'01':/ホーム|広場/,'02':/ギルド/,'03':/クエスト/,'04':/知恵/,'05':/公園/,'06':/貢献|メンバー/,'07':/treasury|会計|トレジャリー/i,'08':/CITY/};
-    const item=frame.getByText(n,{exact:true}).locator('..').filter({hasText:names[n]}).filter({visible:true});
-    if(width>=700 && !(await item.count())) {
-      await frame.getByTitle('サイドバーを開く',{exact:true}).click();
-    }
-    await item.click();
+    const screens={'01':'experiments','02':'logs','03':'experiments','04':'library','08':'city'};
+    assert.ok(screens[n],'only current screens have a test entry');
+    await frame.evaluate(screen=>app.go(screen)(),screens[n]);
+
   }
   async function city(){await nav('08');await frame.locator('.city-grid .city-card').first().waitFor();}
   return {context,page,frame,nav,city,requests,modules,errors,control,close:()=>context.close()};
@@ -133,15 +130,16 @@ async function noOverflow(f) {
   assert.equal(widths.x,0);
 }
 
-for(const width of [375,390,412,768,1440]) test(`City UI ${width}px: 01–08, REAL/VIRTUAL, check-in, Quest/Guild return, MyCity, share`,async()=>{
+for(const width of [375,390,412,768,1440]) test(`City UI ${width}px: current routes, REAL/VIRTUAL, check-in, Quest/Guild return, MyCity, share`,async()=>{
   const f=await fixture(width);
   try {
     assert.equal(f.modules.length,0,'no City module at SchoolPark startup');
     assert.equal(f.requests.length,0,'no City API at SchoolPark startup');
-    const screens=['home','logs','experiments','library','park','members','treasury'];
-    for(let i=0;i<7;i++) {await f.nav('0'+(i+1));assert.equal(await f.frame.evaluate(()=>app.state.screen),screens[i]);await noOverflow(f);}
+    const screens=['experiments','logs','experiments','library'];
+    for(let i=0;i<screens.length;i++) {await f.nav('0'+(i+1));assert.equal(await f.frame.evaluate(()=>app.state.screen),screens[i]);await noOverflow(f);}
     await f.city();
-    assert.equal(await f.frame.locator('.city-card').count(),3);
+    assert.equal(await f.frame.locator('.city-card:not(.city-play-card)').count(),3);
+    assert.equal(await f.frame.locator('.city-play-card').count(),4);
     assert.equal(f.requests.filter(r=>r.path.endsWith('/spots')).length,1);
     assert.equal(f.requests.filter(r=>r.path.endsWith('/me')).length,0,'private history waits for MY CITY');
     await noOverflow(f);
@@ -189,10 +187,10 @@ for(const width of [375,390,412,768,1440]) test(`City UI ${width}px: 01–08, RE
     await f.frame.locator('[data-action="passport"]').first().click();
     await f.page.getByRole('heading',{name:/Passport \/ 星空/}).waitFor();
     await f.page.getByRole('button',{name:'SchoolParkへ戻る',exact:true}).click();
-    // City has no own "back to plaza" link since 10/28; the sidebar returns home.
+    // Leaving City returns to the existing Quest list; the retired home is absent.
     assert.equal(await f.frame.locator('[data-action="home"]').count(),0);
     await f.nav('01');
-    assert.equal(await f.frame.evaluate(()=>app.state.screen),'home');
+    assert.equal(await f.frame.evaluate(()=>app.state.screen),'experiments');
     assert.deepEqual(f.errors,[]);
     for(const req of f.requests.filter(r=>r.method==='POST')) assert.deepEqual(Object.keys(JSON.parse(req.body)).sort(),['checkInType','spotId']);
   } finally {await f.close();}

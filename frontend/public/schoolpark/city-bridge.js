@@ -178,6 +178,18 @@ export function createBridge(parent, app) {
         guilds: guilds.status === 'fulfilled' ? guilds.value : null
       };
     },
+    async openPlay(kind) {
+      if (!['echo','ringo','gods'].includes(kind)) throw new Error('PLAY_UNAVAILABLE');
+      const version = checkSession();
+      await allowNavigation(); stillCurrent(version);
+      // Existing entry owns plan checks and guest-play counters. City does not duplicate them.
+      return parent.spOpenPlay(kind);
+    },
+    async openElevator() {
+      const version = checkSession();
+      await allowNavigation(); stillCurrent(version);
+      return parent.openSpRoom('/schoolpark/south-elevator.html', 'エレベーター');
+    },
     async openQuest(id) {
       const version = checkSession();
       await allowNavigation();

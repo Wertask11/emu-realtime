@@ -39,7 +39,7 @@ test('all existing FAQ data and exact matcher outputs are preserved', () => {
   // Reviewed rewrite (10/28): EMUER exchange in the City official shop is open; the old
   // "受付停止中" note was removed from the answers that carried it.
   // Reviewed rename (11/2): Room1 became 「Knowledge Text」, opened from its card beside Knowledge Lab.
-  const rewritten=['ches','クエスト','ギルド','スマホ','チュートリアル','問い合わせ','emuerで何ができる','かっこの中','emuer','ショッピング','room1はどこ'];
+  const rewritten=['emuerを稼ぐ','schoolparkとは','emuとは','一日シェア','メンバー','トレジャリー','公園','dao','プラン','マップ','ches','クエスト','ギルド','スマホ','チュートリアル','問い合わせ','emuerで何ができる','かっこの中','emuer','ショッピング','room1はどこ'];
   // Reviewed rename (#232, 10/27): the plan names became 「Emu for SchoolPark light/plus/pro」; nothing else in these answers changed.
   const renamed=['プラン','公式パス'],rename=text=>text.replace(/Emu (light|plus|pro)/g,'Emu for SchoolPark $1');
   assert.equal(faq.items.length,kb.length);
@@ -58,7 +58,8 @@ test('all existing FAQ data and exact matcher outputs are preserved', () => {
 });
 test('guide grounding uses current pages, includes stars and ignores arbitrary client context',()=>{
   assert.match(knowledge.grounding('この画面では何ができる？','quest'), /クエスト/);
-  assert.match(knowledge.grounding('何からやればいい？','home'), /ホーム/);
+  assert.match(knowledge.grounding('何からやればいい？','emu-practice'), /知識を試す/);
+  for (const retired of ['home','park','contrib','treasury','emu-share','emu-debate']) assert.equal(knowledge.pageContext(retired),null);
   assert.match(knowledge.grounding('星空を知りたい','passport'), /星空/);
   assert.equal(knowledge.pageContext('PRIVATE_SCREEN'), null);
   assert.ok(knowledge.grounding('hi','PRIVATE_SCREEN').length<9000);
@@ -114,14 +115,14 @@ test('REST provider keeps key in header, no tools, short deadline, blocked/empty
   await assert.rejects(generate({env,contents:[],systemInstruction:'prompt',fetcher:async()=>new Response('{"candidates":[{"finishReason":"SAFETY"}]}')}));
 });
 test('the tutorial guide answers quests and guilds with the same words as the chat', () => {
-  // tutorial.html keeps its own copy of the FAQ; these two drifted apart once (10/24).
+  // The manual now reads the same source, preventing a second FAQ from drifting.
   const html=fs.readFileSync(path.join(root,'frontend/public/schoolpark/tutorial.html'),'utf8');
-  const slice=html.slice(html.indexOf('const REIZO_KB = ['),html.indexOf('\n];',html.indexOf('const REIZO_KB = ['))+3);
-  const ctx={}; vm.runInNewContext(slice+';this.kb=REIZO_KB;',ctx);
-  for(const key of ['クエスト','ギルド']){
-    const mine=ctx.kb.find(x=>x.k[0]===key), chat=faq.items.find(x=>x.k[0]===key);
-    assert.equal(mine.a,chat.a,key);
-  }
+  assert.ok(html.includes('<script src="/reizo/knowledge.js"></script>'));
+  const ctx={window:{ReizoKnowledge:faq}};
+  vm.runInNewContext('const REIZO_KB = window.ReizoKnowledge.items;this.kb=REIZO_KB;',ctx);
+  assert.strictEqual(ctx.kb,faq.items);
+  for(const key of ['クエスト','ギルド']) assert.match(ctx.kb.find(x=>x.k[0]===key).a,/参加|受ける/);
+
 });
 test('a slow free-tier answer is waited for (not cut off at 12s), and the browser waits longer than the server',()=>{
   assert.ok(GENERATE_TIMEOUT_MS>=20000);

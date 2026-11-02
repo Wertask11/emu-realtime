@@ -2,8 +2,8 @@
 (function (window, document) {
   'use strict';
   var tour = window.ReizoTour; if (!tour) return;
-  var SP = {home:'home',logs:'guilds',guild:'guild',experiments:'quests',detail:'quest-detail',library:'wisdom',park:'park',plaza:'plaza',members:'contribution',treasury:'treasury',city:'city',tasks:'tasks',yeargoals:'year-goals',passport:'passport'};
-  var EMU = {'emu-knowledge-open':'feed','emu-requests-open':'requests','emu-ichinichi-open':'share','emu-discussion-open':'discussion'};
+  var SP = {logs:'guilds',guild:'guild',experiments:'quests',detail:'quest-detail',library:'wisdom',city:'city',tasks:'tasks',yeargoals:'year-goals',passport:'passport'};
+  var EMU = {'emu-knowledge-open':'feed','emu-requests-open':'requests','emu-practice-open':'practice'};
   function frameDoc(id) { try { var fr = document.getElementById(id); return fr && fr.contentDocument; } catch (error) { return null; } }
   function dao() { try { var fr = document.getElementById('spDaoFrame'); return fr && fr.contentWindow && fr.contentWindow.app; } catch (error) { return null; } }
   function visible(el) { return !!el && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0 && getComputedStyle(el).visibility !== 'hidden'; }
@@ -16,11 +16,8 @@
     var app = dao();
     if (!app || app.tourRenderedScreen !== spScreen || !visible(document.getElementById('spDaoFrame'))) return false;
     var required = {
-      // Homework has an independent request that may fail after the main home content is ready.
-      // Its guide only points to the existing section heading, so it must not block the whole tour.
-      home:['me','wisdom','quests'], logs:['guilds'], guild:[],
+      logs:['guilds'], guild:[],
       experiments:['quests'], detail:['quests'], library:['wisdom'],
-      park:['board'], plaza:['board'], members:['members'], treasury:['treasury'],
       tasks:['tasks'], yeargoals:['yearDoc'], city:[]
     }[spScreen];
     if (!required || !required.every(function (key) { return app.tourRenderedDataReady?.[key] === true; })) return false;
@@ -29,7 +26,6 @@
       if (app.state.questsDenied) return false;
       if (spScreen === 'detail') return app.state.quests.some(function (quest) { return quest.id === app.state.expId; });
     }
-    if (spScreen === 'members' && app.state.membersNote && !app.state.members.length) return false;
     if (spScreen === 'yeargoals') return !!app.state.yearDoc;
     return true;
   }
@@ -41,8 +37,6 @@
       if(!deliveries.get(doc)?.posts && !doc.documentElement.hasAttribute('data-tour-posts-ready')) return false;
       if(item?.target.includes('emu-lib-list') && doc.querySelector('#panel.open') && !deliveries.get(doc)?.library && !doc.documentElement.hasAttribute('data-tour-library-ready')) return false;
     }
-    if(id==='emu-share' && doc.querySelector('[data-tour-ready="false"]')) return false;
-    if(id==='emu-discussion' && !deliveries.get(doc)?.rooms && !doc.documentElement.hasAttribute('data-tour-rooms-ready')) return false;
     if(id==='emu-requests') {
       var list=document.getElementById('emuRequestList');
       // A real result (including an empty result) replaces the native loading/retry status.
@@ -63,14 +57,14 @@
     if (document.body.classList.contains('sp-dao-open')) { var app = dao(); return app && SP[app.state.screen] ? 'sp-' + SP[app.state.screen] : null; }
     if (!visible(document.getElementById('mainApp'))) return null;
     for (var cls of Object.keys(EMU)) if (document.body.classList.contains(cls)) {
-      var doc = frameDoc(cls === 'emu-knowledge-open' ? 'emuKnowledgeFrame' : cls === 'emu-ichinichi-open' ? 'emuIchinichiFrame' : 'emuDiscussionFrame');
+      var doc = cls === 'emu-knowledge-open' ? frameDoc('emuKnowledgeFrame') : null;
       if (doc && doc.querySelector('.overlay.open:not(#panel)')) return null;
       if(doc?.querySelector('#panel.open') && !(running?.id==='emu-feed' && [6,7].includes(running.index))) return null;
       return 'emu-' + EMU[cls];
     }
     return null;
   }
-  function synchronize() { var doc=frameDoc('spDaoFrame');var names=['home','guild','quest','wisdom','park','contrib','treasury','city'];if(doc)names.forEach(function(name,i){doc.querySelectorAll('[data-tour~=nav-0'+(i+1)+']').forEach(function(el){if(!el.dataset.tour.includes('nav-'+name))el.dataset.tour+=' nav-'+name;});});tour.enter(screen()); }
+  function synchronize() { tour.enter(screen()); }
   var routeFrame = 0;
   function scheduleRoute() { if (!routeFrame) routeFrame = requestAnimationFrame(function () { routeFrame = 0; synchronize(); }); }
   function step(target, label, text, read) {
@@ -78,13 +72,7 @@
     if (read) item.advanceOn = {read:read};
     return item;
   }
-  function bottomInset(brand) {
-    if (brand === 'SchoolPark') {
-      var app = dao(), bar = app && app.bottomRef.current;
-      return bar && bar.getBoundingClientRect().height && bar.ownerDocument.defaultView.getComputedStyle(bar).display !== 'none' ? bar.getBoundingClientRect().height : 0;
-    }
-    var nav = document.getElementById('emuBottomNav'); return visible(nav) ? nav.getBoundingClientRect().height : 0;
-  }
+  function bottomInset() { var nav=document.getElementById('emuBottomNav');return visible(nav)?nav.getBoundingClientRect().height:0; }
   function waitFor(test, message) {
     return new Promise(function (resolve,reject) {
       var started = Date.now();
@@ -93,11 +81,7 @@
     });
   }
   async function goSchoolPark(name) {
-    if (!document.body.classList.contains('sp-dao-open')) {
-      if (typeof window.chesHubGo !== 'function') throw new Error('SchoolParkの入口を開けませんでした。');
-      await window.chesHubGo('schoolpark');
-      await waitFor(function () { return document.body.classList.contains('sp-dao-open') && dao(); },'SchoolParkに入れる状態で、もう一度お試しください。');
-    }
+    if (!await window.EmuNavigation.existing(['guild','detail'].includes(name) ? (name==='guild'?'logs':'experiments') : name)) throw Error('画面を開けませんでした。');
     var app = dao(); if (!app) throw new Error('画面の読み込みが終わっていません。');
     if (name === 'detail') {
       if (app.state.screen === 'detail') return;
@@ -118,17 +102,13 @@
   }
   async function goEmu(name) {
     if (document.body.classList.contains('sp-room-open') && typeof window.closeSpRoom === 'function') window.closeSpRoom();
-    if (document.body.classList.contains('sp-dao-open')) {
-      if (typeof window.chesHubGo !== 'function') throw new Error('Emuの入口を開けませんでした。');
-      await window.chesHubGo('emu');
-    }
-    var fn = {feed:'showEmuFeed',requests:'showEmuRequests',share:'showEmuIchinichi',discussion:'showEmuDiscussion'}[name];
+    var fn = {feed:'showEmuFeed',requests:'showEmuRequests',practice:'showEmuPractice'}[name];
     if (typeof window[fn] !== 'function') throw new Error('この画面の入口を開けませんでした。');
     window[fn]();
     await new Promise(function (resolve) { requestAnimationFrame(resolve); });
   }
   function register(id, label, steps, spScreen, emuFrame) {
-    var brand = spScreen ? 'SchoolPark' : 'Emu';
+    var brand = 'Emu for SchoolPark';
     tour.register(id,steps,{
       label:label,brand:brand,isActive:function () { return screen() === id; },
       isReady:function (item) { return ready(spScreen) && emuReady(id,emuFrame,item); },
@@ -143,69 +123,6 @@
     });
   }
   var v2 = {
-  "home": {
-    "name": "ホーム",
-    "steps": [
-      {
-        "target": "home-main",
-        "label": "THIS WEEK",
-        "text": "ここがSchoolParkのホームだよ。これまでの知恵や、走っているクエストをここで見られるよ。",
-        "screen": "home"
-      },
-      {
-        "target": "menu",
-        "label": "メニュー",
-        "text": "上の「SchoolPark 切替」からEmuやパスポート、お問い合わせを開けるよ。活動の画面には下のナビやサイドバーから移動できるよ。",
-        "screen": "home"
-      },
-      {
-        "target": "home-wisdom",
-        "label": "今週生まれた知恵",
-        "text": "今週生まれた知恵はここ。カードを押すと知恵のページへ行けるよ。",
-        "click": true,
-        "screen": "home"
-      },
-      {
-        "target": "home-quests",
-        "label": "走っているクエスト",
-        "text": "いま走っているクエストはここ。押すと一覧を見られるよ。",
-        "click": true,
-        "screen": "home"
-      },
-      {
-        "target": "home-todo",
-        "label": "自分の宿題",
-        "text": "受けているクエストや、自分のタスクはここにまとまるよ。",
-        "screen": "home"
-      },
-      {
-        "target": "passport-entry",
-        "label": "SchoolPark パスポート",
-        "text": "自分の名前を押すと、SchoolPark パスポートが開くよ。スマホは左上の ☰ から開けるよ。",
-        "click": true,
-        "screen": "home"
-      },
-      {
-        "target": "fridge",
-        "label": "冷蔵庫くん",
-        "text": "わからないときは、ここを押してね。この画面のガイドも、ぼくへの質問もここからだよ。",
-        "screen": "home"
-      },
-      {
-        "target": "support-btn",
-        "label": "お問い合わせ",
-        "text": "困ったときは、お問い合わせからいつでもガイドや動画を見返せるよ。",
-        "screen": "home"
-      },
-      {
-        "target": "nav-guild",
-        "label": "メニュー「ギルド」",
-        "text": "次はギルドへ行ってみよう。押すとギルドの案内が始まるよ。",
-        "click": true,
-        "screen": "home"
-      }
-    ]
-  },
   "guild": {
     "name": "ギルド",
     "steps": [
@@ -257,7 +174,7 @@
     ]
   },
   "wisdom": {
-    "name": "知恵",
+    "name": "知恵ライブラリ",
     "steps": [
       {
         "target": "wisdom-hero",
@@ -277,77 +194,6 @@
         "text": "カードは「元の知識 → 通した経験 → 残った一文」でできているよ。",
         "note": "「参考にする（引用）」は完了条件にしない",
         "screen": "wisdom"
-      }
-    ]
-  },
-  "park": {
-    "name": "公園",
-    "steps": [
-      {
-        "target": "park-hero",
-        "label": "公園",
-        "text": "ここは公園。みんなが集まる場所だよ。まずは中を見てみよう。",
-        "screen": "park"
-      },
-      {
-        "target": "park-side",
-        "label": "遊び・エレベーター",
-        "text": "右のならびから、遊びやエレベーターにも行けるよ。",
-        "note": "「公園に置く」（投稿）は案内の対象外",
-        "screen": "park"
-      },
-      {
-        "target": "park-map",
-        "label": "公園の地図",
-        "text": "地図の「広場」や「すべり台」を押すと、その場所へ行けるよ。",
-        "click": true,
-        "screen": "park"
-      }
-    ]
-  },
-  "contrib": {
-    "name": "貢献",
-    "steps": [
-      {
-        "target": "contrib-intro",
-        "label": "貢献",
-        "text": "ここでは、SchoolParkへの貢献が見られるよ。貢献は「知恵を残したか」で測るんだ。",
-        "screen": "contrib"
-      },
-      {
-        "target": "contrib-note",
-        "label": "お支払いについて",
-        "text": "分配はまだ計算額だけ。お支払いの始まりはここで知らせるよ。",
-        "screen": "contrib"
-      },
-      {
-        "target": "contrib-table",
-        "label": "メンバー一覧",
-        "text": "知恵・完走・引用され・分配（計算額）が並ぶよ。今日は見るだけでも大丈夫。",
-        "screen": "contrib"
-      }
-    ]
-  },
-  "treasury": {
-    "name": "treasury",
-    "steps": [
-      {
-        "target": "treasury-card",
-        "label": "TREASURY",
-        "text": "treasuryの入口だよ。お金の情報は、表示を読んで確かめよう。",
-        "screen": "treasury"
-      },
-      {
-        "target": "treasury-tx",
-        "label": "直近の動き",
-        "text": "入金や支出の記録は、ここに並ぶよ。",
-        "screen": "treasury"
-      },
-      {
-        "target": "treasury-help",
-        "label": "言葉の意味",
-        "text": "「ある」「渡したぶん」「使える」の意味は、ここに書いてあるよ。",
-        "screen": "treasury"
       }
     ]
   },
@@ -395,6 +241,12 @@
         "target": "city-join",
         "label": "出店のご案内",
         "text": "お店の人は、ここから出店の相談ができるよ。",
+        "screen": "city"
+      },
+      {
+        "target": "city-play",
+        "label": "遊びとエレベーター",
+        "text": "ECHO FIELD・林檎の方程式・日常の神々・エレベーターはここから。利用条件と保存先はこれまでと同じだよ。",
         "screen": "city"
       }
     ]
@@ -515,7 +367,7 @@
       {
         "target": "emu-tabs",
         "label": "タブ",
-        "text": "ほかの画面へは、ここで切り替えられるよ。",
+        "text": "知識を読む・知識を探す・知識を試す・知恵ライブラリ・Cityを、一続きのメニューから開けるよ。",
         "screen": "read"
       }
     ]
@@ -561,75 +413,33 @@
       }
     ]
   },
-  "emu-share": {
-    "name": "03 一日シェア",
+  "emu-practice": {
+    "name": "知識を試す",
     "steps": [
       {
-        "target": "emu-share-tabs",
-        "label": "一日シェアのタブ",
-        "text": "一日シェアは「今日の一日」「みんなの一日」「わたしの記録」の3つだよ。",
-        "tab": "everyone",
-        "screen": "share"
+        "target": "practice-intro",
+        "label": "知識を試す",
+        "text": "知識を読んだら、活動やクエストの内容を見てみよう。開くだけでは参加にならないよ。"
       },
       {
-        "target": "emu-everyone",
-        "label": "みんなの一日",
-        "text": "みんなの一日の過ごし方を見られるよ。気になる予定は「＋取り入れる」で自分の今日に入れられるよ。",
-        "tab": "everyone",
-        "note": "取り入れる・投稿は完了条件にしない",
-        "screen": "share"
+        "target": "practice-guild",
+        "label": "ギルド",
+        "text": "どんな活動や決めごとがあるか、参加する前に確認できるよ。"
       },
       {
-        "target": "emu-filter",
-        "label": "カテゴリ",
-        "text": "生活・学び・仕事・健康などで絞り込めるよ。",
-        "tab": "everyone",
-        "screen": "share"
-      },
-      {
-        "target": "emu-today",
-        "label": "今日の一日",
-        "text": "今日の予定と学びは「今日の一日」に書くよ。公開するかは自分で決められるよ。",
-        "tab": "today",
-        "note": "入力内容は案内・計測の対象外",
-        "screen": "share"
-      },
-      {
-        "target": "emu-mystats",
-        "label": "わたしの記録",
-        "text": "連続日数・達成率・役に立った人の数はここ。毎日がちゃんと積み重なっていくよ。",
-        "tab": "mine",
-        "screen": "share"
-      },
-      {
-        "target": "emu-history",
-        "label": "これまでの一日シェア",
-        "text": "これまでの一日シェアは、ここで見返したり消したりできるよ。",
-        "tab": "mine",
-        "screen": "share"
-      }
-    ]
-  },
-  "emu-debate": {
-    "name": "04 議論",
-    "steps": [
-      {
-        "target": "emu-debate-list",
-        "label": "議論",
-        "text": "問いについて考える場所だよ。読むだけでも参加できるよ。",
-        "note": "発言は完了条件にしない",
-        "screen": "debate"
+        "target": "practice-quest",
+        "label": "クエスト",
+        "text": "やること・期限・完了条件・報酬を読んでから、自分で参加を決めよう。"
       }
     ]
   }
 };
   function viewState() {
     var kd=frameDoc('emuKnowledgeFrame');
-    return [document.body.className.split(/\s+/).filter(function(cls){return /^(?:sp-(?:passport|menu|room)-open|emu-(?:knowledge|requests|ichinichi|discussion)-open)$/.test(cls);}).join(' '),dao()?.state.screen,!!document.querySelector('#emuRequestSheet.open'),kd?.querySelector('#panel')?.classList.contains('open'),kd?.querySelector('#topFilters .active')?.dataset.filter,window._sppCurrentPage?.()].join('|');
+    return [document.body.className.split(/\s+/).filter(function(cls){return /^(?:sp-(?:passport|menu|room)-open|emu-(?:knowledge|requests|practice)-open)$/.test(cls);}).join(' '),dao()?.state.screen,!!document.querySelector('#emuRequestSheet.open'),kd?.querySelector('#panel')?.classList.contains('open'),kd?.querySelector('#topFilters .active')?.dataset.filter,window._sppCurrentPage?.()].join('|');
   }
   function openView(item) {
     if(item.target==='emu-library' && window.innerWidth<=700 && !document.querySelector('#emuAccountMenu.open')) { requestAnimationFrame(function(){var running=tour.running();if(running?.id==='emu-feed' && running.index===6 && !document.querySelector('#emuAccountMenu.open'))window.toggleAccountMenu?.();}); }
-    if(item.target==='passport-entry' && dao()?.state.device !== 'mobile' && dao()?.state.sidebarOpen === false) dao().toggleSidebar();
     if(item.pp && window._sppCurrentPage?.() !== item.pp) window.spPassportGoPage?.(item.pp);
     // CITY steps point at City's own home page; bring City back there if it is on another page.
     if(item.screen==='city' && /^city-/.test(item.target||'')) frameDoc('spDaoFrame')?.getElementById('sp-city')?.dispatchEvent(new CustomEvent('city-tour-home'));
@@ -641,10 +451,6 @@
       if(window.emuHasPlan?.('light') && window._emuAddress?.()) window.openEmuSheet?.('emuRequestSheet');
     }
     if(item.target === 'emu-room1' && document.querySelector('#emuRequestSheet.open')) window.closeEmuSheet?.('emuRequestSheet');
-    if(item.tab) {
-      var doc=frameDoc('emuIchinichiFrame'), tab=item.tab==='everyone'?'explore':item.tab;
-      if(doc && !doc.querySelector('[data-tab="'+tab+'"].active')) doc.defaultView.selectTab?.(tab);
-    }
   }
   function specificationStep(item) {
     var entry=step(item.target,item.label,item.text);
@@ -659,19 +465,14 @@
     if(item.req) entry.advanceOn={target:'.emu-sheet-actions button:first-child',read:function(){return !!document.querySelector('#emuRequestSheet.open');}};
     return entry;
   }
-  register("sp-home","ホーム",v2["home"].steps.map(specificationStep),"home",null);
+  register("emu-practice","03 知識を試す",v2["emu-practice"].steps.map(specificationStep),null,null);
   register("sp-guilds","ギルド",v2["guild"].steps.map(specificationStep),"logs",null);
   register("sp-quests","クエスト",v2["quest"].steps.map(specificationStep),"experiments",null);
-  register("sp-wisdom","知恵",v2["wisdom"].steps.map(specificationStep),"library",null);
-  register("sp-park","公園",v2["park"].steps.map(specificationStep),"park",null);
-  register("sp-contribution","貢献",v2["contrib"].steps.map(specificationStep),"members",null);
-  register("sp-treasury","treasury",v2["treasury"].steps.map(specificationStep),"treasury",null);
-  register("sp-city","CITY",v2["city"].steps.map(specificationStep),"city",null);
+  register("sp-wisdom","04 知恵ライブラリ",v2["wisdom"].steps.map(specificationStep),"library",null);
+  register("sp-city","05 City",v2["city"].steps.map(specificationStep),"city",null);
   register("sp-passport","SchoolPark パスポート",v2["passport"].steps.map(specificationStep),"passport",null);
   register("emu-feed","01 知識を読む",v2["emu-read"].steps.map(specificationStep),null,"emuKnowledgeFrame");
   register("emu-requests","02 知識を探す",v2["emu-search"].steps.map(specificationStep),null,null);
-  register("emu-share","03 一日シェア",v2["emu-share"].steps.map(specificationStep),null,"emuIchinichiFrame");
-  register("emu-discussion","04 議論",v2["emu-debate"].steps.map(specificationStep),null,"emuDiscussionFrame");
   register('sp-guild','ギルドの詳細',[
     step('screen-heading','ギルドの詳細','まずは活動を読むだけでも大丈夫。「参加したい」は意思の登録で、クエストの受注とは別の操作です。'),
     step('guild-detail','決めごとの見方','ルールと議題を読んでから判断できます。投票や参加はこの案内の条件ではありません。')
@@ -680,10 +481,6 @@
     step('screen-heading','内容を読む','概要と現場の資料を確認する画面です。'),
     step('quest-detail','条件を確かめる','期限や報告の説明を読んでから判断してください。受ける・提出する必要はありません。')
   ],'detail');
-  register('sp-plaza','公園の広場',[
-    step('screen-heading','広場の見方','活動の表示内容を確認できます。'),
-    step('plaza-list','一覧を読む','予定や挑戦を見られます。参加・投稿は必要ありません。')
-  ],'plaza');
   register('sp-tasks','自分の宿題',[
     step('screen-heading','自分の宿題','取り組むことを確認できます。'),
     step('tasks-list','一覧の見方','締切やメモを読めます。追加・完了・削除はこの案内では行いません。')
@@ -717,10 +514,10 @@
     if (mode==='guides') {
       var defs=tour.list(), unfinished=defs.filter(function(def){return tour.progress(def.id).state==='in_progress';});
       if(unfinished.length){var resume=element('section',undefined,'rk-resume-list');resume.append(element('h3','途中のガイド'));unfinished.forEach(function(def){resume.append(guideRow(def,'unfinished-'));});catalog.append(resume);}
-      ['SchoolPark','Emu'].forEach(function(brand){catalog.append(element('h3',brand));defs.filter(function(def){return def.brand===brand;}).forEach(function(def){catalog.append(guideRow(def));});});
+      ['Emu for SchoolPark'].forEach(function(brand){catalog.append(element('h3',brand));defs.filter(function(def){return def.brand===brand;}).forEach(function(def){catalog.append(guideRow(def));});});
     } else {
       catalog.append(element('p','実際の操作動画は準備中です。画面別ガイドは今すぐ使えます。'));
-      ['SchoolPark','Emu'].forEach(function(brand){['PC版','スマホ版'].forEach(function(device){var row=element('section',undefined,'rk-video-row');row.append(element('strong',brand+' · '+device),element('p','動画準備中'));catalog.append(row);});});
+      ['Emu for SchoolPark'].forEach(function(brand){['PC版','スマホ版'].forEach(function(device){var row=element('section',undefined,'rk-video-row');row.append(element('strong',brand+' · '+device),element('p','動画準備中'));catalog.append(row);});});
     }
     var link=element('a','文章のチュートリアルを読む');link.href='/schoolpark/tutorial.html';link.target='_blank';link.rel='noopener';catalog.append(link);
     catalog.parentElement.scrollTop=scrolling;
@@ -741,7 +538,6 @@
       if(type==='emu-knowledge-loading'){meta.posts=false;}
       if(type==='emu-knowledge-posts'){meta.posts=true;}
       if(type==='emu-knowledge-panel-data' && event.data.kind==='library'){meta.library=true;}
-      if(type==='emu-discussion-rooms'){meta.rooms=true;}
       tour.refresh();
     });
     var wasLibrary=false;
