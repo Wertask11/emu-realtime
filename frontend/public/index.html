@@ -3604,7 +3604,7 @@ body.sp-star-open #room3Overlay { z-index:1900; }
 #spRoomPage { display:none; position:fixed; inset:0; z-index:1700; background:#141310; }
 body.sp-room-open #spRoomPage { display:block; }
 #spRoomFrame { width:100%; height:100%; border:0; display:block; }
-/* 小部屋（Room1・エレベーターなど）を見ているあいだは、
+/* 小部屋（Knowledge Text・エレベーターなど）を見ているあいだは、
    お問い合わせの浮きボタンを引っ込める。中身の上に重なるため。 */
 body.sp-room-open #emu-contact-btn,
 body.sp-room-open #emu-contact-label { display:none !important; }
@@ -3915,12 +3915,11 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
 :root { --emu-bnav-h:60px; }
 #emuBottomNav, #emuAccountMenu .emu-phone-only { display:none; }
 #emuRequestsPage { position:relative; }
-.emu-room1-entry {
-  display:inline-flex; float:right; align-items:center; gap:5px; min-height:32px;
-  margin:0 0 10px 10px; padding:0 12px; border:1px solid #e6e2dc;
-  border-radius:999px; background:#fff; color:#9c5100; cursor:pointer;
-  font-family:inherit; font-size:12px; font-weight:700; line-height:1;
-}
+/* Knowledge Lab と Knowledge Text（旧 Room1）。同じ大きさで横に2枚。ボタンは下にそろえる */
+.emu-knowledge-pair { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; margin:0 0 18px; }
+.emu-knowledge-pair > .eth-card { display:flex; flex-direction:column; align-items:flex-start; margin:0; min-width:0; }
+.emu-knowledge-pair > .eth-card > p { flex:1 1 auto; }
+.emu-knowledge-pair > .eth-card > .eth-btn { max-width:100%; white-space:normal; text-align:left; }
 @media (max-width:700px) {
   body.emu-knowledge-open #emuBottomNav, body.emu-requests-open #emuBottomNav,
   body.emu-ichinichi-open #emuBottomNav, body.emu-discussion-open #emuBottomNav,
@@ -3951,7 +3950,7 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   body.emu-profile-open #siteFooter { padding-bottom:calc(16px + var(--emu-bnav-h)) !important; }
   /* キーボードが出ているあいだは隠す。出したままだと、キーボードの上に浮いて入力欄にかぶる。 */
   body.emu-kb-open #emuBottomNav { display:none !important; }
-  /* マイライブラリーは名前のメニューへ移動。Room1は全端末で「知識を探す」内。
+  /* マイライブラリーは名前のメニューへ移動。Knowledge Text（旧 Room1）は全端末で「知識を探す」内。
      「設定」（右上のユーザー表示）も名前のメニューに置く。 */
   #emuAccountMenu .emu-phone-only { display:block; }
   /* 右上を「プロフィール画像」にしている人（設定）。名前の代わりに丸い写真を出す */
@@ -3963,7 +3962,7 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
     display:block; width:100%; height:100%; object-fit:cover;
     border-radius:50%; border:1px solid #e6e2dc; box-sizing:border-box;
   }
-  .emu-room1-entry { margin-bottom:8px; }
+  .emu-knowledge-pair { grid-template-columns:minmax(0, 1fr); gap:12px; margin-bottom:16px; }
 }
 /* ③ タップ時に画面が青くなるのを防止（スマホ全体のタップハイライト無効化） */
 *, *::before, *::after { -webkit-tap-highlight-color: transparent; }
@@ -4980,7 +4979,7 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <button type="button" role="menuitem" onclick="accountGo('plan')">プラン・お支払い</button>
         <button type="button" role="menuitem" onclick="accountGo('profile')">プロフィール</button>
         <button type="button" role="menuitem" onclick="accountGo('themes')">興味のあるテーマ</button>
-        <!-- Room1は独立タブではなく、全端末で「知識を探す」から開く -->
+        <!-- Knowledge Text（旧 Room1）は独立タブではなく、全端末で「知識を探す」から開く -->
         <button type="button" role="menuitem" data-tour="emu-library" onclick="accountGo('library')">マイライブラリー</button>
         <!-- 共通の設定（名前 / プロフィール画像もここから） -->
         <button type="button" role="menuitem" onclick="accountGo('settings')">設定</button>
@@ -5232,10 +5231,12 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 
   <section class="emu-request-page" id="emuRequestsPage">
     <aside class="emu-practice-entry" data-tour="emu-practice-entry"><div><b>知ったことを、試してみたくなったら</b><p>SchoolParkでギルドの活動やクエストの内容を見られます。見るだけでは参加になりません。</p></div><button type="button" onclick="chesHubGo('schoolpark')">SchoolParkの活動を見る →</button></aside>
-    <div class="eth-card" data-tour="emu-lab-entry"><h3>Emu Knowledge Lab</h3><p>経験知を分野から探し、異なる知識を掛け合わせて、新しい問いや実践案へ。</p><button type="button" class="eth-btn primary" onclick="openEmuKnowledgeLab()">知識図書館・掛け合わせ研究所を開く →</button></div>
-    <!-- Room1は独立タブではなく、全端末で「知識を探す」から開く -->
-    <button type="button" class="emu-room1-entry" data-tour="room1-entry emu-room1" onclick="openSpRoom('/admin/room1/index.html', 'Room1')"
-            aria-label="Room1（学習コンテンツ）を開く"><span aria-hidden="true">◪</span>Room1</button>
+    <!-- Knowledge Lab（みんなの経験知）と Knowledge Text（運営の学習教材。旧 Room1）を、同じ大きさのカードで並べる。
+         パソコンは横に2枚、スマホは縦に。Knowledge Text は独立タブではなく、全端末でここから開く（11/2 オーナーから） -->
+    <div class="emu-knowledge-pair">
+      <div class="eth-card" data-tour="emu-lab-entry"><h3>Emu Knowledge Lab</h3><p>経験知を分野から探し、異なる知識を掛け合わせて、新しい問いや実践案へ。</p><button type="button" class="eth-btn primary" onclick="openEmuKnowledgeLab()">知識図書館・掛け合わせ研究所を開く →</button></div>
+      <div class="eth-card" data-tour="room1-entry emu-room1"><h3>Emu Knowledge Text</h3><p>お金・ネット・暮らしの基本と、リーダーシップのブルーファイル。運営がまとめた教材で、いつでも学べます。</p><button type="button" class="eth-btn primary emu-text-entry" onclick="openSpRoom('/admin/room1/index.html', 'Knowledge Text')">教材を開く →</button></div>
+    </div>
     <div class="eth-section-head">
       <div>
         <span class="eth-badge">KNOWLEDGE REQUEST</span>
@@ -9531,8 +9532,8 @@ const _SP_REIZO_LOADING_LINES = [
   "🔁 Changeは否定じゃないよ。一緒にもっと良くするための提案なんだ！",
   "💬 議論はその日かぎり。言い争いを持ち越さないための決まりなんだ！",
   "🗓️ 一日シェアで時間割を決めると、今日がちょっと有意義になるかも！",
-  "📗 Room1にはマネー・ネット・ライフのリテラシーが並んでるよ。のぞいてみてね！",
-  "📮 Room1のお預かり箱に送った気づきは、学習コンテンツになることがあるよ！",
+  "📗 Knowledge Textにはマネー・ネット・ライフのリテラシーが並んでるよ。のぞいてみてね！",
+  "📮 Knowledge Textのお預かり箱に送った気づきは、教材になることがあるよ！",
   "🔎 困りごとは「知識を探す」へ。出すのは答えじゃなくて、問いのほうだよ！",
   "🎮 ECHO FIELDと林檎の方程式、SchoolParkの公園で待ってるよ！",
   "🧊 困ったらいつでもぼくに聞いてね。答えられないときは問い合わせに繋ぐからね！",
@@ -24025,7 +24026,7 @@ function openRoom(roomId) {
 
   // 🚫 無料NFTユーザーは room1 NG
  if (roomId === 1 && isFreeOnlyUser()) {
-    alert("無料NFTユーザーはRoom1を利用できません。\n有料NFTを取得すると解放されます。");
+    alert("無料NFTユーザーはKnowledge Textを利用できません。\n有料NFTを取得すると解放されます。");
     return;
   }
 
@@ -26664,7 +26665,7 @@ const FORMS = {
       { id:'email', label:'ご連絡先メールアドレス', type:'email', placeholder:'hello@example.com', required: true },
       {
         id:'place', label:'どの画面で起きましたか', type:'select',
-        options:['','Emu（知識・議論など）','Room1（学習コンテンツ）',
+        options:['','Emu（知識・議論など）','Knowledge Text（学習教材・旧Room1）',
                  'SchoolPark（クエスト・ギルド・知恵ライブラリなど）',
                  'SchoolPark パスポート','プラン・お支払い',
                  'ログイン・入場画面','その他・わからない']
@@ -29858,10 +29859,10 @@ async function sendEmuFeedback() {
       if (message.command === 'wallet') myWalletButton.click();
       if (message.command === 'knowledge-lab') window.openEmuKnowledgeLab();
       if (message.command === 'experience') window.openEmuKnowledgeLab('library', {compose:true});
-      /* Room1 は別のページなので、小部屋の枠で全画面に開く
+      /* Knowledge Text（旧 Room1）は別のページなので、小部屋の枠で全画面に開く
          （エレベーターやショッピングと同じ出し方） */
       if (message.command === 'room1' && typeof openSpRoom === 'function') {
-        openSpRoom('/admin/room1/index.html', 'Room1');
+        openSpRoom('/admin/room1/index.html', 'Knowledge Text');
       }
       return;
     }

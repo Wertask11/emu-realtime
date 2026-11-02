@@ -1,6 +1,50 @@
 {
  "index.html": [
   [
+   "/* 小部屋（Knowledge Text・エレベーターなど）を見ているあいだは、\n",
+   "/* 小部屋（Room1・エレベーターなど）を見ているあいだは、\n"
+  ],
+  [
+   "/* Knowledge Lab と Knowledge Text（旧 Room1）。同じ大きさで横に2枚。ボタンは下にそろえる */\n.emu-knowledge-pair { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; margin:0 0 18px; }\n.emu-knowledge-pair > .eth-card { display:flex; flex-direction:column; align-items:flex-start; margin:0; min-width:0; }\n.emu-knowledge-pair > .eth-card > p { flex:1 1 auto; }\n.emu-knowledge-pair > .eth-card > .eth-btn { max-width:100%; white-space:normal; text-align:left; }\n",
+   ".emu-room1-entry {\n  display:inline-flex; float:right; align-items:center; gap:5px; min-height:32px;\n  margin:0 0 10px 10px; padding:0 12px; border:1px solid #e6e2dc;\n  border-radius:999px; background:#fff; color:#9c5100; cursor:pointer;\n  font-family:inherit; font-size:12px; font-weight:700; line-height:1;\n}\n"
+  ],
+  [
+   "  /* マイライブラリーは名前のメニューへ移動。Knowledge Text（旧 Room1）は全端末で「知識を探す」内。\n",
+   "  /* マイライブラリーは名前のメニューへ移動。Room1は全端末で「知識を探す」内。\n"
+  ],
+  [
+   "  .emu-knowledge-pair { grid-template-columns:minmax(0, 1fr); gap:12px; margin-bottom:16px; }\n",
+   "  .emu-room1-entry { margin-bottom:8px; }\n"
+  ],
+  [
+   "        <!-- Knowledge Text（旧 Room1）は独立タブではなく、全端末で「知識を探す」から開く -->\n",
+   "        <!-- Room1は独立タブではなく、全端末で「知識を探す」から開く -->\n"
+  ],
+  [
+   "    <!-- Knowledge Lab（みんなの経験知）と Knowledge Text（運営の学習教材。旧 Room1）を、同じ大きさのカードで並べる。\n         パソコンは横に2枚、スマホは縦に。Knowledge Text は独立タブではなく、全端末でここから開く（11/2 オーナーから） -->\n    <div class=\"emu-knowledge-pair\">\n      <div class=\"eth-card\" data-tour=\"emu-lab-entry\"><h3>Emu Knowledge Lab</h3><p>経験知を分野から探し、異なる知識を掛け合わせて、新しい問いや実践案へ。</p><button type=\"button\" class=\"eth-btn primary\" onclick=\"openEmuKnowledgeLab()\">知識図書館・掛け合わせ研究所を開く →</button></div>\n      <div class=\"eth-card\" data-tour=\"room1-entry emu-room1\"><h3>Emu Knowledge Text</h3><p>お金・ネット・暮らしの基本と、リーダーシップのブルーファイル。運営がまとめた教材で、いつでも学べます。</p><button type=\"button\" class=\"eth-btn primary emu-text-entry\" onclick=\"openSpRoom('/admin/room1/index.html', 'Knowledge Text')\">教材を開く →</button></div>\n    </div>\n",
+   "    <div class=\"eth-card\" data-tour=\"emu-lab-entry\"><h3>Emu Knowledge Lab</h3><p>経験知を分野から探し、異なる知識を掛け合わせて、新しい問いや実践案へ。</p><button type=\"button\" class=\"eth-btn primary\" onclick=\"openEmuKnowledgeLab()\">知識図書館・掛け合わせ研究所を開く →</button></div>\n    <!-- Room1は独立タブではなく、全端末で「知識を探す」から開く -->\n    <button type=\"button\" class=\"emu-room1-entry\" data-tour=\"room1-entry emu-room1\" onclick=\"openSpRoom('/admin/room1/index.html', 'Room1')\"\n            aria-label=\"Room1（学習コンテンツ）を開く\"><span aria-hidden=\"true\">◪</span>Room1</button>\n"
+  ],
+  [
+   "  \"📗 Knowledge Textにはマネー・ネット・ライフのリテラシーが並んでるよ。のぞいてみてね！\",\n  \"📮 Knowledge Textのお預かり箱に送った気づきは、教材になることがあるよ！\",\n",
+   "  \"📗 Room1にはマネー・ネット・ライフのリテラシーが並んでるよ。のぞいてみてね！\",\n  \"📮 Room1のお預かり箱に送った気づきは、学習コンテンツになることがあるよ！\",\n"
+  ],
+  [
+   "    alert(\"無料NFTユーザーはKnowledge Textを利用できません。\\n有料NFTを取得すると解放されます。\");\n",
+   "    alert(\"無料NFTユーザーはRoom1を利用できません。\\n有料NFTを取得すると解放されます。\");\n"
+  ],
+  [
+   "        options:['','Emu（知識・議論など）','Knowledge Text（学習教材・旧Room1）',\n",
+   "        options:['','Emu（知識・議論など）','Room1（学習コンテンツ）',\n"
+  ],
+  [
+   "      /* Knowledge Text（旧 Room1）は別のページなので、小部屋の枠で全画面に開く\n",
+   "      /* Room1 は別のページなので、小部屋の枠で全画面に開く\n"
+  ],
+  [
+   "        openSpRoom('/admin/room1/index.html', 'Knowledge Text');\n",
+   "        openSpRoom('/admin/room1/index.html', 'Room1');\n"
+  ],
+  [
    "/* 投稿の記録（運営だけが見る。backend/post-audit.js）。投稿・書き直しのすぐあとに、投稿ID だけを送る。\n   端末の種類・ブラウザはサーバーが User-Agent から読む。届かなくても投稿そのものには影響しない（1回だけ送り直す）。 */\nfunction emuRecordPostAudit(postId, kind) {\n  if (!postId) return;\n  const send = async function () {\n    const headers = await emuAuthHeaders(true, { interactive: false });\n    const r = await fetch(\"https://emu-realtime.onrender.com/api/post-audit\", {\n      method: \"POST\", headers: headers, keepalive: true, body: JSON.stringify({ postId: String(postId), kind: kind === \"edit\" ? \"edit\" : \"create\" })\n    });\n    if (r.status >= 500 || r.status === 401) throw new Error(\"RETRY\");\n  };\n  send().catch(function () { setTimeout(function () { send().catch(function () {}); }, 8000); });\n}\n",
    ""
   ],
