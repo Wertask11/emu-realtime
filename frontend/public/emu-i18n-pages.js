@@ -97,6 +97,8 @@
       "k.action.voices": "届いた声",
       "k.action.history": "変更履歴",
       "k.action.share": "シェア",
+      "k.action.delete": "削除",
+      "k.action.ownerDelete": "運営として削除",
       "k.share.title": "この知識をシェアする",
       "k.share.x": "X（旧Twitter）",
       "k.share.line": "LINE",
