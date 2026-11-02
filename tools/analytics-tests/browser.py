@@ -9,6 +9,7 @@ async def main():
   browser=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
   for width in [375,390,412,768,1280]:
    c=await browser.new_context(viewport={'width':width,'height':950});packets=[];errors=[]
+   await c.add_init_script("localStorage.setItem('emu.analytics.internal.v1','yes')")
    async def route(r):
     url=r.request.url
     if url==BASE+'/__analytics-test.html':
@@ -20,9 +21,8 @@ async def main():
     await r.abort()
    await c.route('**/*',route);page=await c.new_page();page.on('pageerror',lambda e:errors.append(str(e)))
    await page.goto(BASE+'/__analytics-test.html');await page.wait_for_timeout(700)
-   assert len(packets)==0
-   # Fixture is not a production route, so explicit test controller chooses consent; no phantom UI flow.
-   await page.evaluate('EmuAnalytics.setTestTraffic(true); EmuAnalytics.consent(true)')
+   assert await page.locator('#emuAnalyticsChoice').count()==0
+   assert [x['event'] for x in packets]==['session_start']
    frame=page.frames[1];await frame.locator('#posts').wait_for()
    await page.evaluate('''()=>document.querySelector('iframe').contentWindow.postMessage({type:'emu-knowledge-posts',posts:[{id:'LOCAL_ONLY_POST',title:'LOCAL ONLY',body:'これは隔離したテスト用の長い本文です。'.repeat(90),address:'LOCAL_PRIVATE_WALLET',createdAt:Date.now()}],account:'',canDraft:true,canSchedule:false},location.origin)''')
    await frame.locator('.more').first.wait_for();await frame.locator('.more').first.click();await page.wait_for_timeout(350)

@@ -53,7 +53,7 @@
     let busy = false, timer, failures = 0, memoryVisitor, memorySession;
     const seen = new Set();
     const environment = /^(emu-for-schoolpark|schoolpark-emu)\.vercel\.app$/.test(location.hostname) ? 'production' : /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? 'local' : 'preview';
-    const permitted = () => !dnt() && get(localStorage, CONSENT) === 'yes';
+    const permitted = () => !dnt() && get(localStorage, CONSENT) !== 'no';
     const internal = () => environment !== 'production' || get(localStorage,INTERNAL) === 'yes';
     function readQueue() {
       try { const q = JSON.parse(get(sessionStorage,QUEUE) || '[]'); return Array.isArray(q) ? q.filter(p => p && Date.now()-p.at < 86400000).slice(-100) : []; } catch (_) { return []; }
@@ -133,21 +133,15 @@
     window.addEventListener('storage', e=>{if (e.key === CONSENT && !permitted()) remove(sessionStorage,QUEUE);});
     document.addEventListener('visibilitychange',()=>{if (visible()) {failures=0;flush();}});
     if (visible() && permitted()) core.track('session_start',{});
-    function consentUI() {
-      if (parent !== window || document.getElementById('emuAnalyticsChoice')) return;
-      if (!dnt() && get(localStorage,CONSENT) === null && /^(\/|\/index\.html|\/knowledge(?:-lab)?\.html)$/.test(location.pathname)) {
-        const box=document.createElement('aside'); box.id='emuAnalyticsChoice'; box.setAttribute('aria-label','利用状況の計測');
-        box.style.cssText='position:fixed;left:12px;right:12px;bottom:84px;z-index:2900;max-width:520px;margin:auto;padding:14px;border:1px solid #d8d3ca;border-radius:12px;background:#fff;color:#25241e;box-shadow:0 4px 20px #0002;font:14px/1.6 sans-serif';
-        box.innerHTML='<p style="margin:0 0 8px">使いやすさの改善のため、匿名の利用状況を計測してよいですか？ 投稿や検索の内容は送りません。</p><a href="/privacy.html#usage-measurement">詳しく見る・設定</a> <button type="button" data-analytics-consent="yes" style="min-height:44px;margin:4px;padding:8px 16px">許可する</button><button type="button" data-analytics-consent="no" style="min-height:44px;padding:8px 16px">許可しない</button>';
-        document.body.appendChild(box);
-      }
+    function bindAnalyticsSettings() {
+      if (parent !== window) return;
       document.querySelectorAll('[data-analytics-consent]').forEach(button=>button.addEventListener('click',()=>{
-        core.consent(button.dataset.analyticsConsent==='yes'); document.getElementById('emuAnalyticsChoice')?.remove(); updateStatus();
+        core.consent(button.dataset.analyticsConsent==='yes'); updateStatus();
       }));
       updateStatus();
     }
-    function updateStatus(){const el=document.getElementById('analyticsConsentStatus');if(el)el.textContent=dnt()?'ブラウザのプライバシー設定に従い停止中です。':core.permitted()?'このブラウザでは許可しています。':'このブラウザでは停止しています。';}
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',consentUI,{once:true}); else consentUI();
+    function updateStatus(){const el=document.getElementById('analyticsConsentStatus');if(el)el.textContent=dnt()?'ブラウザのプライバシー設定に従い停止中です。':core.permitted()?'このブラウザでは匿名計測が有効です。':'このブラウザでは停止しています。';}
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',bindAnalyticsSettings,{once:true}); else bindAnalyticsSettings();
   }
   const completedRounds = new Map();
   let candidate=null,lastView='';

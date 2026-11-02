@@ -10,12 +10,13 @@ function browser({dnt='0',hostname='emu-for-schoolpark.vercel.app',fail=false,re
  fetch:async(url,options)=>{calls.push({url,...options,body:JSON.parse(options.body)});if(fail)throw Error('offline');return{ok:true,json:async()=>({status:responseStatus})}},addEventListener:(n,fn)=>{(listeners[n]||=[]).push(fn)},dispatchEvent:e=>(listeners[e.type]||[]).forEach(fn=>fn(e))};
  context.window=context;context.parent=context;vm.runInNewContext(source,context);return{context,api:context.EmuAnalytics,calls,intervals,localStorage,sessionStorage};
 }
-test('only explicit permission starts anonymous sessions; DNT/GPC and withdrawal stop sending',async()=>{
- const b=browser();assert.equal(b.api.track('post_publish',{}),false);await b.api.flush();assert.equal(b.calls.length,0);
- b.api.consent(true);await b.api.flush();assert.equal(b.calls[0].body.batch[0].event,'session_start');
+test('anonymous measurement starts without a prompt; prior opt-out, DNT/GPC and withdrawal stay respected',async()=>{
+ const b=browser();await b.api.flush();assert.equal(b.calls[0].body.batch[0].event,'session_start');
  b.api.consent(false);assert.equal(b.api.track('post_publish',{}),false);assert.equal(b.localStorage.getItem('emu.analytics.visitor.v1'),null);assert.equal(b.sessionStorage.getItem('emu.analytics.queue.v1'),null);
+ const stopped=memory();stopped.setItem('emu.analytics.consent.v1','no');const prior=browser({localStorage:stopped});await prior.api.flush();assert.equal(prior.calls.length,0);prior.api.consent(true);await prior.api.flush();assert.equal(prior.calls.length,1);
  const d=browser({dnt:'1'});d.api.consent(true);await d.api.flush();assert.equal(d.calls.length,0);
- const g=browser();g.context.navigator.globalPrivacyControl=true;g.api.consent(true);await g.api.flush();assert.equal(g.calls.length,0);
+ const g=browser({dnt:'1'});g.context.navigator.doNotTrack='0';g.context.navigator.globalPrivacyControl=true;g.api.consent(true);await g.api.flush();assert.equal(g.calls.length,0);
+ assert.doesNotMatch(source,/createElement\('aside'\)|emuAnalyticsChoice|計測してよいですか/);
 });
 test('strict enum/count allowlist removes all free text, identity, money, unknown events and URLs',async()=>{
  const b=browser();b.api.consent(true);

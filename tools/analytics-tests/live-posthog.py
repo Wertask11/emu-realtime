@@ -11,6 +11,7 @@ def send(req):
 async def main():
  async with async_playwright() as p:
   b=await p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);c=await b.new_context(viewport={'width':390,'height':950});errors=[]
+  await c.add_init_script("localStorage.setItem('emu.analytics.internal.v1','yes')")
   async def route(r):
    if r.request.url.startswith('https://us.i.posthog.com/batch/') and r.request.method=='POST':
     payload=json.loads(r.request.post_data);events.extend(payload['batch']);assert all(x['properties']['traffic_type']=='internal' for x in payload['batch']);assert 'api_key' in payload
@@ -20,8 +21,7 @@ async def main():
    if r.request.url.startswith('http://127.0.0.1:8761/'):await r.continue_();return
    await r.abort()
   await c.route('**/*',route);page=await c.new_page();page.on('pageerror',lambda e:errors.append(str(e)));await page.goto('http://127.0.0.1:8761/__analytics-test.html');await page.wait_for_timeout(500)
-  assert not receipts
-  await page.evaluate('EmuAnalytics.setTestTraffic(true);EmuAnalytics.consent(true)')
+  assert await page.locator('#emuAnalyticsChoice').count()==0
   await page.evaluate('''()=>document.querySelector('iframe').contentWindow.postMessage({type:'emu-knowledge-posts',posts:[{id:'LOCAL_SYNTHETIC',title:'LOCAL ONLY',body:'隔離された匿名計測検証です。'.repeat(100),createdAt:Date.now()}],account:'',canDraft:true},location.origin)''')
   f=page.frames[1];await f.locator('.more').first.click();await f.locator('[data-compose]').first.click();await page.evaluate('EmuAnalytics.flush()');await page.wait_for_timeout(700)
   await page.evaluate('EmuAnalytics.flush()');state=await page.evaluate('EmuAnalytics.status()');assert state['delivery']=='http_accepted',(state,receipts)
