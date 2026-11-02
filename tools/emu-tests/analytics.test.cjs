@@ -2,12 +2,12 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');const {randomUUID}=require('node:crypto');
 const source=fs.readFileSync('frontend/public/emu-analytics.js','utf8');
 const memory=()=>{const values=new Map();return {getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,String(v)),removeItem:k=>values.delete(k)}};
-function browser({dnt='0',hostname='emu-for-schoolpark.vercel.app',fail=false,localStorage=memory(),sessionStorage=memory()}={}) {
+function browser({dnt='0',hostname='emu-for-schoolpark.vercel.app',fail=false,responseStatus=1,localStorage=memory(),sessionStorage=memory()}={}) {
  const calls=[],listeners={},intervals=[];let clock=0;const timers=new Map();
  const document={visibilityState:'visible',readyState:'loading',addEventListener(){},getElementById:()=>null,querySelectorAll:()=>[]};
  const context={document,navigator:{doNotTrack:dnt},location:{hostname,origin:'https://'+hostname,pathname:'/'},localStorage,sessionStorage,crypto:{randomUUID},AbortController,Event,console,
  setTimeout(fn){timers.set(++clock,fn);return clock},clearTimeout:id=>timers.delete(id),setInterval:fn=>intervals.push(fn),
- fetch:async(url,options)=>{calls.push({url,...options,body:JSON.parse(options.body)});if(fail)throw Error('offline');return{ok:true,json:async()=>({status:1})}},addEventListener:(n,fn)=>{(listeners[n]||=[]).push(fn)},dispatchEvent:e=>(listeners[e.type]||[]).forEach(fn=>fn(e))};
+ fetch:async(url,options)=>{calls.push({url,...options,body:JSON.parse(options.body)});if(fail)throw Error('offline');return{ok:true,json:async()=>({status:responseStatus})}},addEventListener:(n,fn)=>{(listeners[n]||=[]).push(fn)},dispatchEvent:e=>(listeners[e.type]||[]).forEach(fn=>fn(e))};
  context.window=context;context.parent=context;vm.runInNewContext(source,context);return{context,api:context.EmuAnalytics,calls,intervals,localStorage,sessionStorage};
 }
 test('only explicit permission starts anonymous sessions; DNT/GPC and withdrawal stop sending',async()=>{
@@ -33,6 +33,10 @@ test('retry keeps exact insert IDs, concurrent sends and duplicate committed ope
  assert.equal(b.calls[0].body.batch.filter(x=>x.event==='post_publish').length,1);assert.equal(b.api.status().delivery,'pending');
  const c=browser({localStorage:b.localStorage,sessionStorage:b.sessionStorage});await c.api.flush();assert.equal(c.api.status().delivery,'http_accepted');assert.deepEqual(c.calls[0].body.batch,b.calls[0].body.batch);
  await c.api.flush();assert.equal(c.calls.length,1);
+});
+test('real PostHog Ok receipts acknowledge packets; status zero or unknown strings stay pending',async()=>{
+ const accepted=browser({responseStatus:'Ok'});accepted.api.consent(true);await accepted.api.flush();assert.equal(accepted.api.status().delivery,'http_accepted');await accepted.api.flush();assert.equal(accepted.calls.length,1);
+ for(const responseStatus of [0,'unknown']){const denied=browser({responseStatus});denied.api.consent(true);await denied.api.flush();assert.equal(denied.api.status().delivery,'pending');assert.notEqual(denied.sessionStorage.getItem('emu.analytics.queue.v1'),'[]');}
 });
 test('view rerenders and hidden views do not create events; returning after visibility does',async()=>{
  const b=browser();b.api.consent(true);b.context.document.visibilityState='hidden';b.api.view('knowledge_list_view',{surface:'feed'});await b.api.flush();assert.equal(b.calls[0].body.batch.length,1);

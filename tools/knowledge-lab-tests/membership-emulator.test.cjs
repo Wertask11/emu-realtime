@@ -7,6 +7,7 @@ const assert = require("node:assert/strict");
 const { createFixture } = require("./fixture.cjs");
 const { createService } = require("../../backend/knowledge-lab/service");
 const { linkIdFor } = require("../../backend/identity");
+const { ensureVerifiedAccount } = require("../../backend/verified-platform");
 const policy = require("../../backend/membership-policy");
 const express = require("../../backend/node_modules/express");
 let f, service, alice, bob, guest, ids;
@@ -98,6 +99,16 @@ test("reciprocal Passport binding shares subscription; forged editable SPID and 
 });
 test("November migration is retry-safe and login changes share monthly and retained counters", async () => {
   await at(clock, async () => {
+    // A first migration needs identities that have not already seeded November counters.
+    // Earlier cases deliberately resolve alice/guest after the cutover; reusing them
+    // would add a legacy subscription only AFTER their one-time migration completed.
+    async function freshActor(uid) {
+      const account = await ensureVerifiedAccount(f.db, { uid, firebase: { sign_in_provider: "custom" } });
+      const identity = await f.identity.resolveForUid(uid);
+      return { uid, spid: identity.spid, account, walletAddress: account.walletAddress.toLowerCase() };
+    }
+    const alice = await freshActor("local-migration-subscriber");
+    const guest = await freshActor("local-migration-linked-login");
     await link(guest.uid, alice.spid);
     await f.db.collection("subscriptions").doc(alice.uid).set({ plan: "light", status: "active", currentPeriodEnd: new Date("2026-11-15T00:00:00Z") });
     await plan(alice, "light");
@@ -128,6 +139,7 @@ test("November migration is retry-safe and login changes share monthly and retai
 });
 test("checkout refuses already entitled users before any Stripe creation; linked billing remains on original owner", async () => {
   Date.now = realNow;
+  await link(guest.uid, alice.spid); // This case owns its linked-login precondition.
   process.env.STRIPE_PRICE_LIGHT = "price_local_light"; process.env.STRIPE_PRICE_PLUS = "price_local_plus"; process.env.STRIPE_PRICE_PRO = "price_local_pro";
   const calls = [];
   const stripeClient = { customers: { create: async () => { calls.push("customer"); return { id: "cus_local" }; } },

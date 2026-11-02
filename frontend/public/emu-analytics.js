@@ -77,7 +77,7 @@
           body:JSON.stringify({api_key:TOKEN,batch:queue.map(x=>x.payload)}), signal:controller.signal
         });
         const body = await response.json().catch(()=>null);
-        if (!response.ok || !body || body.status !== 1) throw new Error('not_accepted');
+        if (!response.ok || !body || ![1, 'Ok'].includes(body.status)) throw new Error('not_accepted');
         // Remove only the accepted packet IDs; new events may have arrived while awaiting HTTP.
         const accepted = new Set(queue.map(x=>x.id));
         put(sessionStorage,QUEUE,JSON.stringify(readQueue().filter(x=>!accepted.has(x.id))));
