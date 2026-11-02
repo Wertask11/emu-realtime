@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<link rel="stylesheet" href="/emu-theme.css">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SchoolPark DAO</title>
@@ -10,10 +11,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Zen+Old+Mincho:wght@700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   body { margin:0; background:#D0E2BE; }
-  a { color:#0F5C3F; text-decoration:none; }
+  a { color:var(--emu-brand-strong); text-decoration:none; }
   a:hover { color:#0A3F2B; }
   ::-webkit-scrollbar { width:10px; height:10px }
   ::-webkit-scrollbar-thumb { background:rgba(20,19,16,.18); border-radius:8px }
+
+.sp-section-header {padding:18px 24px;border-bottom:1px solid #e1dcd2;background:var(--emu-paper);}
+.sp-section-header p {margin:0;color:var(--emu-brand-strong);font-size:11px;letter-spacing:.1em;}
+.sp-section-header h2 {margin:4px 0 0;font-size:21px;}
 </style>
 <style>
 /* 枠のまわりの余白・角丸・影を外す。
@@ -58,82 +63,32 @@ if (window.top === window.self) window.location.replace('/');
 </script>
 <div id="dao-root"></div>
 
-<!-- 設計ファイルのテンプレート。ここは1文字も変えていない -->
+<!-- Existing activity/workspace templates; global navigation is owned by the unified parent. -->
 <template id="dao-template">
 
-<div style="min-height:100vh; background:#D0E2BE; font-family:'Zen Kaku Gothic New',sans-serif; padding:0 0 60px">
+<div style="min-height:100vh; background:var(--emu-paper); font-family:'Zen Kaku Gothic New',sans-serif; padding:0">
 
 
-  <div style="padding:24px 20px 0; display:flex; justify-content:center; overflow:hidden; height:{{ L.boxH }}">
+  <div style="padding:0; display:flex; justify-content:center; overflow:hidden; height:{{ L.boxH }}">
   <div style="width:{{ L.w }}; height:{{ L.h }}; flex:none; transform:{{ L.scale }}; transform-origin:top center; background:#F4F1EA; color:#141310; border-radius:{{ L.frameR }}; overflow:hidden; box-shadow:0 18px 48px rgba(20,19,16,.14); display:flex">
 
-    <div style="display:{{ L.sidebarShow }}; width:248px; flex:0 0 248px; background:#141310; color:#F4F1EA; flex-direction:column; overflow-y:auto">
-      <div style="padding:24px 18px 22px 24px; display:flex; align-items:flex-start; gap:12px; border-bottom:1px solid rgba(244,241,234,.12)">
-        <div style="display:flex; flex:1; flex-direction:column; gap:6px; position:relative">
-          <button type="button" class="sp-sidebar-switch" onClick="{{ toggleBrand }}" aria-haspopup="menu" aria-expanded="{{ brandOpen }}" aria-label="SchoolParkを表示中。SchoolPark / Emu を切り替える"><span>SchoolPark</span><small>切替</small><span aria-hidden="true">{{ brandIcon }}</span></button>
-          <sc-if value="{{ brandOpen }}">
-            <div role="menu" aria-label="SchoolPark / Emu" style="position:absolute; top:48px; left:0; z-index:20; min-width:168px; background:#1D1B16; border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:6px; display:flex; flex-direction:column; gap:2px; box-shadow:0 18px 40px -14px rgba(0,0,0,.7)">
-              <sc-for list="{{ brands }}" as="b">
-                <button type="button" role="menuitem" onClick="{{ b.go }}" style="min-height:44px; padding:9px 11px; border:0; text-align:left; border-radius:7px; cursor:{{ b.cursor }}; font-size:14px; font-weight:700; background:{{ b.bg }}; color:{{ b.fg }}" style-hover="background:rgba(244,241,234,.09)">{{ b.label }}</button>
-              </sc-for>
-            </div>
-          </sc-if>
-        </div>
-        <div onClick="{{ toggleSidebar }}" title="サイドバーを閉じる" style="width:32px; height:32px; border:1px solid rgba(244,241,234,.18); border-radius:7px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-family:Inter,sans-serif; font-size:18px; color:#D0E2BE" style-hover="background:rgba(244,241,234,.1)">‹</div>
-      </div>
-      <div data-tour="menu" style="flex:1; padding:16px 12px; display:flex; flex-direction:column; gap:2px">
-        <sc-for list="{{ nav }}" as="item" hint-placeholder-count="8">
-          <div data-tour="nav-{{ item.num }}" onClick="{{ item.go }}" style="display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500; line-height:1.3; background:{{ item.bg }}; color:{{ item.fg }}" style-hover="background:rgba(244,241,234,.09)">
-            <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.12em; width:18px; opacity:.55">{{ item.num }}</div>
-            <div>{{ item.label }}</div>
-          </div>
-        </sc-for>
-      </div>
-      <div style="padding:18px 20px 22px; border-top:1px solid rgba(244,241,234,.12); display:flex; flex-direction:column; gap:12px">
-        <div style="display:flex; justify-content:space-between; align-items:baseline">
-          <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; opacity:.5" title="{{ mine.note }}">{{ mine.label }}</div>
-          <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:#D0E2BE">{{ mine.balance }}</div>
-        </div>
-        <div data-tour="passport-entry" onClick="{{ openPassport }}" title="SchoolPark パスポートを見る" style="display:flex; align-items:center; gap:10px; padding:4px 8px 6px; margin:0 -8px; border-radius:8px; cursor:pointer" style-hover="background:rgba(244,241,234,.08)">
-          <div style="width:32px; height:32px; border-radius:50%; background:#0F5C3F; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700">{{ me.initial }}</div>
-          <div style="display:flex; flex-direction:column; gap:2px">
-            <div style="font-size:13px; font-weight:500">{{ me.name }}</div>
-            <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.1em; color:#D0E2BE">{{ me.line }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
+
 
     <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow-y:{{ L.scrollY }}" ref="{{ scrollRef }}">
 
-      <div class="service-header" data-sp-head data-tour="screen-heading guild-intro contribution-intro quest-intro park-intro city-card" style="background:#F4F1EA; border-bottom:1px solid rgba(20,19,16,.12); padding:{{ L.headPad }}; position:sticky; top:0; z-index:6; display:flex; align-items:center; gap:16px">
-        <!-- スマホのメニュー。左側に置く。
-             ここは狭い画面のときだけ出る（パソコン・タブレットでは
-             同じ場所にサイドバーの開け閉めボタンが出て、こちらは display:none）。
-             押しどころは44pxにしてある。38pxだと指の腹より小さい。 -->
-        <div class="service-mobile-menu" data-tour="menu support-btn passport-entry" onClick="{{ openMenu }}" title="メニュー" style="display:{{ L.menuShow }}; width:44px; height:44px; flex:0 0 44px; border:1px solid rgba(20,19,16,.16); border-radius:8px; align-items:center; justify-content:center; cursor:pointer; font-family:Inter,sans-serif; font-size:18px; color:#0F5C3F" style-hover="background:#E7E2D6">☰</div>
-        <div data-tour="menu support-btn" onClick="{{ toggleSidebar }}" title="{{ sidebarButtonTitle }}" style="display:{{ L.sidebarToggle }}; width:38px; height:38px; flex:0 0 38px; border:1px solid rgba(20,19,16,.16); border-radius:7px; align-items:center; justify-content:center; cursor:pointer; font-family:Inter,sans-serif; font-size:18px; color:#0F5C3F" style-hover="background:#E7E2D6">{{ sidebarButtonIcon }}</div>
-        <div class="service-heading service-schoolpark-heading" style="flex:1; min-width:0">
-          <button type="button" class="service-switch" data-tour="brand-switch menu support-btn passport-entry" onClick="{{ openSwitch }}" aria-haspopup="dialog" aria-label="SchoolParkを表示中。SchoolPark / Emu を切り替える"><span class="service-brand-name">SchoolPark</span><span class="brand-switch-label">切替</span><span class="service-switch-caret" aria-hidden="true">▾</span></button>
-          <span class="service-section-title">{{ head.title }}</span>
-        </div>
-        <div class="service-tools" aria-label="アカウントとサポート">
-          <button type="button" class="service-tool service-profile" onClick="{{ openProfile }}" title="プロフィール" aria-label="プロフィール" aria-haspopup="menu" aria-expanded="false">👤</button>
-          <button type="button" class="service-tool" data-tour="fridge" onClick="{{ askReizo }}" title="冷蔵庫くんに聞く・使い方案内" aria-label="冷蔵庫くんに聞く・使い方案内"><img src="/assets/mascot.jpg" alt=""></button>
-        </div>
-      </div>
+      <header class="sp-section-header" data-sp-head data-tour="screen-heading guild-intro quest-intro"><p>{{ head.kicker }}</p><h2>{{ head.title }}</h2></header>
 
       <div style="padding:{{ L.pad }}; display:flex; flex-direction:column; gap:36px">
 
         <sc-if value="{{ showCityReturn }}">
-          <button type="button" onClick="{{ goCity }}" style="align-self:flex-start; min-height:44px; padding:10px 16px; border:1px solid #0F5C3F; border-radius:7px; background:transparent; color:#0F5C3F; font:inherit; cursor:pointer">← Cityへ戻る</button>
+          <button type="button" onClick="{{ goCity }}" style="align-self:flex-start; min-height:44px; padding:10px 16px; border:1px solid var(--emu-brand-strong); border-radius:7px; background:transparent; color:var(--emu-brand-strong); font:inherit; cursor:pointer">← Cityへ戻る</button>
         </sc-if>
         <sc-if value="{{ isCity }}"><div data-city-slot=""></div></sc-if>
 
 
         <sc-if value="{{ showFounder }}">
-          <section style="background:#0F5C3F; color:#F4F1EA; border-radius:12px; padding:24px; margin-bottom:24px; overflow-wrap:anywhere">
-            <div style="font-size:11px; letter-spacing:.12em; color:#D0E2BE">FOUNDER QUEST · 恒久の原点</div>
+          <section style="background:var(--emu-brand-strong); color:#F4F1EA; border-radius:12px; padding:24px; margin-bottom:24px; overflow-wrap:anywhere">
+            <div style="font-size:11px; letter-spacing:.12em; color:var(--emu-brand-soft)">FOUNDER QUEST · 恒久の原点</div>
             <h2 style="font-size:24px; line-height:1.5">SchoolPark Quest #000</h2>
             <p style="line-height:1.9">目印にしてスタート、ゴールにして原点、原点にして頂点</p>
             <sc-if value="{{ showFounderToggle }}"><button onClick="{{ toggleFounderSummary }}" style="font:inherit; background:#D0E2BE; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">{{ founderToggleLabel }}</button></sc-if>
@@ -150,16 +105,16 @@ if (window.top === window.self) window.location.replace('/');
              記録がまだ無いときは showYearGoals が false になり、カードごと出ない。 -->
         <sc-if value="{{ showYearGoals }}">
           <section style="background:#FBF9F3; border:1px solid rgba(20,19,16,.16); border-radius:12px; padding:24px; margin-bottom:24px; overflow-wrap:anywhere">
-            <div style="font-family:Inter,sans-serif; font-size:11px; letter-spacing:.12em; color:#0F5C3F">YEAR GOALS</div>
+            <div style="font-family:Inter,sans-serif; font-size:11px; letter-spacing:.12em; color:var(--emu-brand-strong)">YEAR GOALS</div>
             <h2 style="font-size:24px; line-height:1.5; margin:6px 0 8px">{{ yearDoc.title }}</h2>
             <p style="font-size:13px; line-height:1.9; color:#3B382F; margin:0 0 16px" data-tour="year-goals">{{ yearDoc.summary }}</p>
-            <button onClick="{{ openYearGoals }}" style="font:inherit; background:#0F5C3F; color:#F4F1EA; border:0; border-radius:6px; padding:12px 18px; cursor:pointer">全文を読む</button>
+            <button onClick="{{ openYearGoals }}" style="font:inherit; background:var(--emu-brand-strong); color:#F4F1EA; border:0; border-radius:6px; padding:12px 18px; cursor:pointer">全文を読む</button>
           </section>
         </sc-if>
         <sc-if value="{{ isFounderDetail }}">
           <article style="max-width:860px; width:100%; min-width:0; margin:0 auto; overflow-wrap:anywhere">
             <button onClick="{{ goExperiments }}" style="font:inherit; padding:10px 16px; cursor:pointer">← クエスト</button>
-            <p style="color:#0F5C3F; font-weight:700">FOUNDER QUEST · 恒久の原点</p>
+            <p style="color:var(--emu-brand-strong); font-weight:700">FOUNDER QUEST · 恒久の原点</p>
             <h1 style="font-size:28px; line-height:1.5">SchoolPark Quest #000</h1>
             <p style="font-weight:700; line-height:1.9">目印にしてスタート、ゴールにして原点、原点にして頂点</p>
             <p style="line-height:1.9">SchoolParkは何のために存在するのか。どんな社会をつくりたいのか。何を大切にするのか。その原点を記録する。</p>
@@ -184,7 +139,7 @@ if (window.top === window.self) window.location.replace('/');
         <sc-if value="{{ isYearGoals }}">
           <article style="max-width:860px; width:100%; min-width:0; margin:0 auto; overflow-wrap:anywhere">
             <button onClick="{{ goExperiments }}" style="font:inherit; padding:10px 16px; cursor:pointer">← クエスト</button>
-            <p style="font-family:Inter,sans-serif; color:#0F5C3F; font-weight:700; letter-spacing:.12em; font-size:11px">YEAR GOALS</p>
+            <p style="font-family:Inter,sans-serif; color:var(--emu-brand-strong); font-weight:700; letter-spacing:.12em; font-size:11px">YEAR GOALS</p>
             <h1 style="font-size:28px; line-height:1.5">{{ yearDoc.title }}</h1>
             <p data-tour="year-goals" style="line-height:1.9">{{ yearDoc.summary }}</p>
             <sc-if value="{{ yearDoc.hasUpdated }}">
@@ -192,7 +147,7 @@ if (window.top === window.self) window.location.replace('/');
             </sc-if>
             <sc-for list="{{ yearDoc.blocks }}" as="b">
               <sc-if value="{{ b.isHeading }}">
-                <h2 style="font-size:19px; font-weight:700; line-height:1.6; margin:28px 0 4px; color:#0F5C3F">{{ b.text }}</h2>
+                <h2 style="font-size:19px; font-weight:700; line-height:1.6; margin:28px 0 4px; color:var(--emu-brand-strong)">{{ b.text }}</h2>
               </sc-if>
               <sc-if value="{{ b.isText }}">
                 <p style="white-space:pre-wrap; line-height:1.95; margin:10px 0">{{ b.text }}</p>
@@ -236,304 +191,12 @@ if (window.top === window.self) window.location.replace('/');
           </article>
         </sc-if>
 
-        <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
-          <aside class="sp-ux-note sp-ux-home-entry"><div><b>Emuで知ったことを、SchoolParkで試す。</b><p>まずは活動やクエストの内容を見てみませんか。閲覧だけでは参加になりません。</p></div><div class="sp-ux-actions"><button type="button" class="sp-ux-button" onClick="{{ goLogs }}">ギルドの活動を見る</button><button type="button" class="sp-ux-button" onClick="{{ goExperiments }}">クエストの内容を見る</button></div></aside>
-          <div style="display:flex; flex-direction:column; gap:36px">
 
-            <div style="background:#141310; color:#F4F1EA; padding:{{ L.cardPad }}; border-radius:12px; display:grid; grid-template-columns:{{ L.hero }}; gap:32px">
-              <div style="display:flex; flex-direction:column; gap:16px">
-                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE">THIS WEEK</div>
-                <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.45" data-tour="home-main">今まで、{{ stats.newWisdom }}個の知識が知恵になった。</div>
-                <sc-if value="{{ showWeekToggle }}"><button onClick="{{ toggleWeekSummary }}" style="align-self:flex-start; font:inherit; background:#D0E2BE; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">{{ weekToggleLabel }}</button></sc-if>
-                <sc-if value="{{ showWeekDetails }}"><div style="font-size:14px; line-height:1.9; color:rgba(244,241,234,.68)">走っている{{ word }}は{{ stats.running }}本、受けている仲間は{{ stats.people }}人。</div></sc-if>
-              </div>
-              <sc-if value="{{ showWeekDetails }}"><div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; align-content:center">
-                <div style="border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:6px">
-                  <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; color:#D0E2BE">{{ stats.myCommit }}</div>
-                  <div style="font-size:12px; color:rgba(244,241,234,.6)">受けているクエスト</div>
-                </div>
-                <div style="border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:6px">
-                  <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; color:#D0E2BE">{{ stats.due }}</div>
-                  <div style="font-size:12px; color:rgba(244,241,234,.6)">今週締切の報告</div>
-                </div>
-                <div style="border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:6px">
-                  <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; color:#D0E2BE">{{ stats.wisdomTotal }}</div>
-                  <div style="font-size:12px; color:rgba(244,241,234,.6)">ライブラリの知恵</div>
-                </div>
-                <div style="border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:6px">
-                  <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; color:#D0E2BE">{{ stats.payout }}</div>
-                  <div style="font-size:12px; color:rgba(244,241,234,.6)">今月の分配の計算額<br><span style="font-size:10px; opacity:.7">お支払いはまだ始めていません</span></div>
-                </div>
-              </div></sc-if>
-            </div>
 
-            <div style="display:flex; flex-direction:column; gap:18px">
-              <div style="display:flex; align-items:baseline; gap:14px">
-                <div style="font-size:17px; font-weight:700" data-tour="home-wisdom-heading">今週生まれた知恵</div>
-                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-                <div data-tour="home-wisdom" onClick="{{ goLibrary }}" style="font-size:13px; color:#0F5C3F; cursor:pointer; font-weight:500">ライブラリへ →</div>
-              </div>
-              <div style="display:grid; grid-template-columns:{{ L.g3 }}; gap:16px">
-                <sc-for list="{{ freshWisdom }}" as="w" hint-placeholder-count="3">
-                  <div onClick="{{ w.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:14px; cursor:pointer" style-hover="border-color:#0F5C3F">
-                    <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:{{ w.tagColor }}">{{ w.tag }}</div>
-                    <div style="font-family:'Zen Old Mincho',serif; font-size:20px; font-weight:900; line-height:1.55; text-wrap:pretty; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:4" data-tour="wisdom-list wisdom-card">{{ w.insight }}</div>
-                    <div style="display:flex; flex-direction:column; gap:6px; padding-top:4px; border-top:1px dashed rgba(20,19,16,.16); font-size:12px; color:#6E695C; line-height:1.7">
-                      <div style="display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:2">知識：{{ w.from }}</div>
-                      <div style="display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:2">{{ wordShort }}：{{ w.experiment }}</div>
-                    </div>
-                    <div style="font-size:12px; color:#6E695C">by {{ w.author }} · 引用 {{ w.uses }}</div>
-                  </div>
-                </sc-for>
-              </div>
-            </div>
 
-            <div style="display:grid; grid-template-columns:{{ L.g2b }}; gap:28px">
-              <div style="display:flex; flex-direction:column; gap:18px">
-                <div style="display:flex; align-items:baseline; gap:14px">
-                  <div style="font-size:17px; font-weight:700" data-tour="home-quests-heading">走っている{{ word }}</div>
-                  <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-                  <div data-tour="home-quests" onClick="{{ goExperiments }}" style="font-size:13px; color:#0F5C3F; cursor:pointer; font-weight:500">すべて →</div>
-                </div>
-                <div style="display:flex; flex-direction:column; gap:12px">
-                  <sc-for list="{{ runningExps }}" as="e" hint-placeholder-count="3">
-                    <div onClick="{{ e.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:10px; padding:18px 20px; display:flex; align-items:center; gap:20px; cursor:pointer; flex-wrap:wrap" style-hover="border-color:#0F5C3F">
-                      <div style="flex:1; min-width:160px; display:flex; flex-direction:column; gap:7px">
-                        <div style="font-size:15px; font-weight:700; line-height:1.5">{{ e.title }}</div>
-                        <div style="font-size:12px; color:#6E695C">{{ e.owner }} · 締切 {{ e.due }}</div>
-                      </div>
-                      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; white-space:nowrap">
-                        <div style="font-family:Inter,sans-serif; font-size:13px; font-weight:600; color:#0F5C3F">{{ e.commits }} 人が受けてる</div>
-                        <div style="width:120px; height:5px; background:rgba(20,19,16,.1); border-radius:3px; overflow:hidden">
-                          <div style="height:100%; background:#0F5C3F; width:{{ e.progress }}"></div>
-                        </div>
-                      </div>
-                    </div>
-                  </sc-for>
-                </div>
-              </div>
-
-              <div style="display:flex; flex-direction:column; gap:18px">
-                <div style="display:flex; align-items:baseline; gap:14px">
-                  <div style="font-size:17px; font-weight:700" data-tour="home-todo">自分の宿題</div>
-                  <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-                  <div style="font-size:12px; color:#6E695C">{{ todoLeft }}</div>
-                </div>
-                <div style="background:#E7E2D6; border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:16px">
-                  <sc-if value="{{ noHomework }}">
-                    <div style="font-size:13px; line-height:1.9; color:#6E695C">いまは何も残っていません。<br>下の「タスク管理 →」から書けます。</div>
-                  </sc-if>
-                  <!-- 受けているクエスト。押すとそのクエストが開く。 -->
-                  <sc-for list="{{ myQuests }}" as="mq">
-                    <div onClick="{{ mq.open }}" style="display:flex; gap:12px; align-items:flex-start; padding-bottom:14px; border-bottom:1px solid rgba(20,19,16,.1); cursor:pointer" style-hover="opacity:.8">
-                      <div style="font-family:Inter,sans-serif; font-size:9px; letter-spacing:.12em; padding:3px 6px; border-radius:3px; background:#0F5C3F; color:#F4F1EA; margin-top:3px; flex:0 0 auto">QUEST</div>
-                      <div style="display:flex; flex-direction:column; gap:5px; min-width:0">
-                        <div style="font-size:14px; font-weight:500; line-height:1.6">{{ mq.title }}</div>
-                        <div style="font-size:12px; color:#0F5C3F">{{ mq.next }}</div>
-                        <div style="display:{{ mq.metaShow }}; font-size:12px; color:#6E695C">{{ mq.meta }}</div>
-                      </div>
-                    </div>
-                  </sc-for>
-                  <sc-for list="{{ todos }}" as="t" hint-placeholder-count="3">
-                    <div style="display:flex; gap:12px; align-items:flex-start; padding-bottom:14px; border-bottom:1px solid rgba(20,19,16,.1)">
-                      <div onClick="{{ t.toggle }}" title="終わったことにする" style="width:16px; height:16px; border:1.5px solid #0F5C3F; border-radius:4px; margin-top:3px; flex:0 0 16px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:11px; line-height:1; color:#0F5C3F" style-hover="background:#D0E2BE"></div>
-                      <div style="display:flex; flex-direction:column; gap:5px">
-                        <div style="font-size:14px; font-weight:500; line-height:1.6">{{ t.label }}</div>
-                        <div style="font-size:12px; color:{{ t.dueColor }}">{{ t.meta }}</div>
-                      </div>
-                    </div>
-                  </sc-for>
-                  <div onClick="{{ goTasks }}" style="text-align:center; font-size:13px; font-weight:700; color:#0F5C3F; cursor:pointer; padding-top:2px">タスク管理 →</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </sc-if>
-
-        <sc-if value="{{ isPark }}" hint-placeholder-val="{{ false }}">
-          <div style="display:flex; flex-direction:column; gap:28px">
-
-            <div style="background:#E7E2D6; border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:12px">
-              <div data-tour="park-hero" style="font-family:'Zen Old Mincho',serif; font-size:{{ L.parkHeroSize }}; font-weight:900; line-height:1.5">ここには締切も、報酬も、進捗バーもない。</div>
-            </div>
-
-            <!-- 公園の地図と、右のならび。
-                 パソコンでは横に2つ、タブレット・スマホでは縦に積む（L.gPark）。 -->
-            <div style="display:grid; grid-template-columns:{{ L.gPark }}; gap:24px; align-items:start">
-
-              <!-- 地図。押せる場所は画像に対する割合で置くので、大きさが変わってもズレない -->
-              <div data-tour="park-map" style="position:relative; width:100%; line-height:0">
-                <img src="/park.jpg" alt="SchoolPark の公園" style="width:100%; height:auto; display:block; border-radius:12px">
-                <div onClick="{{ goPlaza }}"      title="広場"     style="left:39%; top:22%; width:54%; height:56%; position:absolute; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px"><span style="font-size:12px; font-weight:700; color:#141310; background:rgba(244,241,234,.92); border-radius:14px; padding:4px 12px; white-space:nowrap">広場</span></div>
-                <div onClick="{{ goSlide }}"      title="すべり台" style="left:11%; top:16%; width:29%; height:22%; position:absolute; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px"><span style="font-size:12px; font-weight:700; color:#141310; background:rgba(244,241,234,.92); border-radius:14px; padding:4px 12px; white-space:nowrap">すべり台</span></div>
-                <div onClick="{{ goSwing }}"      title="ブランコ" style="left:9%;  top:38%; width:27%; height:25%; position:absolute; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px"><span style="font-size:12px; font-weight:700; color:#141310; background:rgba(244,241,234,.92); border-radius:14px; padding:4px 12px; white-space:nowrap">ブランコ</span></div>
-                <div onClick="{{ goSandbox }}"    title="砂場"     style="left:12%; top:62%; width:30%; height:28%; position:absolute; cursor:pointer; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px"><span style="font-size:12px; font-weight:700; color:#141310; background:rgba(244,241,234,.92); border-radius:14px; padding:4px 12px; white-space:nowrap">砂場</span></div>
-              </div>
-
-              <!-- 右のならび -->
-              <div style="display:flex; flex-direction:column; gap:26px; min-width:0">
-
-                <div style="display:flex; flex-direction:column; gap:14px">
-                  <div style="display:flex; align-items:baseline; gap:14px">
-                    <div style="font-size:17px; font-weight:700">遊具作成</div>
-                    <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-                  </div>
-                  <div onClick="{{ toggleMake }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
-                    <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">🧰</div>
-                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
-                      <div style="font-size:14px; font-weight:700; line-height:1.5">公園に置く</div>
-                      <div style="font-size:12px; color:#6E695C">今日ひま？ボード ／ バカな挑戦</div>
-                    </div>
-                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">{{ makeLabel }}</div>
-                  </div>
-
-                  <sc-if value="{{ makeOpen }}">
-                    <div style="display:flex; flex-direction:column; gap:18px">
-                      <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:10px">
-                        <div style="font-size:13px; font-weight:700">今日ひま？ボード</div>
-                        <input onInput="{{ onBoardWhen }}" value="{{ boardDraft.when }}" placeholder="いつ？（例：今夜20時〜）" style="padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
-                        <input onInput="{{ onBoardTitle }}" value="{{ boardDraft.title }}" placeholder="題名（例：誰か通話つないで作業しない？）" style="padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
-                        <textarea onInput="{{ onBoardBody }}" placeholder="ひとこと（任意）。無言でいい。カメラも要らない。" style="min-height:60px; padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none; line-height:1.8; resize:vertical">{{ boardDraft.body }}</textarea>
-                        <div onClick="{{ addBoard }}" style="padding:12px 22px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; align-self:flex-start" style-hover="background:#0A3F2B">ボードに出す</div>
-                      </div>
-                      <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:10px">
-                        <div style="font-size:13px; font-weight:700">バカな挑戦</div>
-                        <input onInput="{{ onDumbTitle }}" value="{{ dumbDraft.title }}" placeholder="題名（例：牛乳パックだけで椅子を作る）" style="padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
-                        <textarea onInput="{{ onDumbBody }}" placeholder="何をやるのか。どこまで本気か。" style="min-height:60px; padding:12px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:14px; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none; line-height:1.8; resize:vertical">{{ dumbDraft.body }}</textarea>
-                        <div onClick="{{ addDumb }}" style="padding:12px 22px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; align-self:flex-start" style-hover="background:#0A3F2B">挑戦を置く</div>
-                      </div>
-                      <div style="font-size:12px; line-height:1.9; color:#6E695C">出したものは、地図の「広場」で見られます。</div>
-                    </div>
-                  </sc-if>
-                </div>
-
-                <div data-tour="park-side" style="display:flex; flex-direction:column; gap:14px">
-                  <div style="display:flex; align-items:baseline; gap:14px">
-                    <div style="font-size:17px; font-weight:700">エレベーター</div>
-                    <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-                  </div>
-                  <div onClick="{{ goElevator }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
-                    <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">🛗</div>
-                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
-                      <div style="font-size:14px; font-weight:700; line-height:1.5">6つの階をのぼりおりする</div>
-                      <div style="font-size:12px; color:#6E695C">屋上・星空ホール・ラボ・たんけん・カフェ・エントランス</div>
-                    </div>
-                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">乗る</div>
-                  </div>
-                </div>
-
-                <div style="display:flex; flex-direction:column; gap:14px">
-                  <div style="display:flex; align-items:baseline; gap:14px">
-                    <div style="font-size:17px; font-weight:700">遊び</div>
-                    <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-                  </div>
-                  <div onClick="{{ goEcho }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
-                    <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">🎴</div>
-                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
-                      <div style="font-size:14px; font-weight:700; line-height:1.5">ECHO FIELD</div>
-                      <div style="font-size:12px; color:#6E695C">伏せた駒の読み合い。SchoolParkオリジナル</div>
-                    </div>
-                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">遊ぶ</div>
-                  </div>
-                  <div onClick="{{ goRingo }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
-                    <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">🍎</div>
-                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
-                      <div style="font-size:14px; font-weight:700; line-height:1.5">林檎の方程式</div>
-                      <div style="font-size:12px; color:#6E695C">数の並びから、隠された式を見つける</div>
-                    </div>
-                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">遊ぶ</div>
-                  </div>
-                  <div onClick="{{ goGods }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="background:#F4F1EA">
-                    <div style="flex:0 0 24px; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1">⛩️</div>
-                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px">
-                      <div style="font-size:14px; font-weight:700; line-height:1.5">日常の神々</div>
-                      <div style="font-size:12px; color:#6E695C">九柱のカードで、CPUと気力を削り合う</div>
-                    </div>
-                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">遊ぶ</div>
-                  </div>
-                </div>
-
-                <div style="display:flex; flex-direction:column; gap:14px">
-                  <div style="display:flex; align-items:baseline; gap:14px">
-                    <div style="font-size:17px; font-weight:700">月例、リアルの集まり</div>
-                    <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-                  </div>
-                  <sc-for list="{{ events }}" as="ev" hint-placeholder-count="2">
-                    <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:20px; display:flex; gap:18px; align-items:flex-start">
-                      <div style="display:flex; flex-direction:column; align-items:center; gap:2px; padding:10px 12px; background:#C2703D; color:#F4F1EA; border-radius:10px; flex:0 0 auto">
-                        <div style="font-family:Inter,sans-serif; font-size:11px; letter-spacing:.14em">{{ ev.month }}</div>
-                        <div style="font-family:Inter,sans-serif; font-size:24px; font-weight:600; line-height:1">{{ ev.day }}</div>
-                      </div>
-                      <div style="display:flex; flex-direction:column; gap:8px; min-width:0">
-                        <div style="font-size:16px; font-weight:700; line-height:1.55">{{ ev.title }}</div>
-                        <div style="font-size:13px; line-height:1.9; color:#3B382F">{{ ev.body }}</div>
-                        <div style="font-size:12px; color:#6E695C">{{ ev.place }} · {{ ev.who }}</div>
-                      </div>
-                    </div>
-                  </sc-for>
-                  <sc-if value="{{ noEvents }}"><div style="font-size:12px; line-height:1.9; color:#6E695C">いまは予定がありません。</div></sc-if>
-                </div>
-
-              </div>
-            </div>
-
-          </div>
-        </sc-if>
 
         <!-- 広場。地図の広場を押すと来る。公園に建てられたものが並ぶ。 -->
-        <sc-if value="{{ isPlaza }}" hint-placeholder-val="{{ false }}">
-          <div style="display:flex; flex-direction:column; gap:34px">
 
-            <div onClick="{{ goPark }}" style="align-self:flex-start; padding:10px 16px; border:1px solid rgba(20,19,16,.16); border-radius:8px; font-size:13px; font-weight:700; cursor:pointer" style-hover="background:#E7E2D6">← 公園にもどる</div>
-
-            <sc-if value="{{ noPark }}"><div style="font-size:13px; line-height:1.9; color:#6E695C">まだ何も建てられていません。公園の「遊具作成」から置けます。</div></sc-if>
-
-            <div style="display:flex; flex-direction:column; gap:14px">
-              <div style="display:flex; align-items:baseline; gap:14px">
-                <div style="font-size:17px; font-weight:700" data-tour="plaza-list">今日ひま？ボード</div>
-                <div style="font-size:12px; color:#6E695C">思いついたら投げる。返事がなくても気にしない。</div>
-                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-              </div>
-              <div style="display:grid; grid-template-columns:{{ L.g3 }}; gap:16px">
-                <sc-for list="{{ board }}" as="b" hint-placeholder-count="3">
-                  <div style="background:#FBF9F3; border:1px dashed rgba(20,19,16,.24); border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px">
-                    <div style="font-family:Inter,sans-serif; font-size:11px; letter-spacing:.14em; color:#C2703D">{{ b.when }}</div>
-                    <div style="font-size:16px; font-weight:700; line-height:1.6; text-wrap:pretty">{{ b.title }}</div>
-                    <div style="font-size:13px; line-height:1.85; color:#6E695C">{{ b.body }}</div>
-                    <div style="display:flex; align-items:center; gap:10px; padding-top:10px; border-top:1px solid rgba(20,19,16,.1); flex-wrap:wrap">
-                      <div style="font-size:12px; color:#6E695C">{{ b.who }}</div>
-                      <div style="flex:1"></div>
-                      <div onClick="{{ b.join }}" style="padding:9px 16px; border-radius:18px; font-size:13px; font-weight:700; cursor:pointer; border:1px solid #C2703D; background:{{ b.bg }}; color:{{ b.fg }}">{{ b.label }}</div>
-                      <div onClick="{{ b.del }}" style="display:{{ b.delShow }}; font-size:12px; color:#8A8474; cursor:pointer; align-items:center; white-space:nowrap">消す</div>
-                    </div>
-                  </div>
-                </sc-for>
-              </div>
-            </div>
-
-            <div style="display:flex; flex-direction:column; gap:14px">
-              <div style="display:flex; align-items:baseline; gap:14px">
-                <div style="font-size:17px; font-weight:700">バカな挑戦</div>
-                <div style="font-size:12px; color:#6E695C">役に立たないことを、本気で。</div>
-                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
-              </div>
-              <div style="display:flex; flex-direction:column; gap:12px">
-                <sc-for list="{{ dumb }}" as="d" hint-placeholder-count="3">
-                  <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:20px 22px; display:flex; flex-direction:column; gap:10px">
-                    <div style="font-family:'Zen Old Mincho',serif; font-size:20px; font-weight:900; line-height:1.5">{{ d.title }}</div>
-                    <div style="font-size:13px; line-height:1.9; color:rgba(244,241,234,.66)">{{ d.body }}</div>
-                    <div style="display:flex; align-items:center; gap:12px">
-                      <div style="font-size:12px; color:#D0E2BE">{{ d.who }}</div>
-                      <div style="flex:1"></div>
-                      <div onClick="{{ d.del }}" style="display:{{ d.delShow }}; font-size:12px; color:rgba(244,241,234,.6); cursor:pointer; align-items:center; white-space:nowrap">消す</div>
-                    </div>
-                  </div>
-                </sc-for>
-              </div>
-            </div>
-
-          </div>
-        </sc-if>
 
         <sc-if value="{{ isExperiments }}" hint-placeholder-val="{{ false }}">
           <p class="sp-ux-note">Emuで読んだ知識や自分の経験を、実際の課題で試してみる。結果やつまずきを報告し、次にも使える学びを知恵カードに残せます。気になる課題の「内容を見る」から、試したいことを探してみてください。閲覧だけでは参加登録されません。</p>
@@ -542,7 +205,7 @@ if (window.top === window.self) window.location.replace('/');
           <div style="display:flex; flex-direction:column; gap:24px">
             <div style="background:#E7E2D6; border-radius:12px; padding:20px 22px; display:flex; gap:18px; align-items:center; flex-wrap:wrap">
               <details data-keep-open="quest-purpose" style="flex:1 1 380px; min-width:0; font-size:13px; line-height:1.95; color:#3B382F"><summary style="cursor:pointer; min-height:44px; font-weight:700">クエストの位置づけ・報酬・税の説明</summary><div>クエストは<b>仕事</b>です。SchoolPark・Emu・Camellia などの仕事を、DAOのメンバーやそれ以外の方が引き受けて動かします。<br><b>予算は SchoolPark が決めて出します。</b>報酬は EMUER・JPYC・円 のいずれかです。<br>受け取ったぶんは<b>雑所得</b>にあたります。ほかの所得と合わせて年20万円を超えると、確定申告が必要になります。<br>クエストの始まり方は2つあります。<b>ギルド</b>の議題をみんなで決めてから動かす道と、小さな実験・個人の挑戦をここから直接出す道です。どちらも残しています。</div></details>
-              <div onClick="{{ goPropose }}" style="padding:12px 18px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap; flex:0 0 auto" style-hover="background:#0A3F2B">＋ クエストを出す</div>
+              <div onClick="{{ goPropose }}" style="padding:12px 18px; background:var(--emu-brand-strong); color:#F4F1EA; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap; flex:0 0 auto" style-hover="background:#0A3F2B">＋ クエストを出す</div>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
               <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:#6E695C; margin-right:2px">SERIES</div>
@@ -571,14 +234,14 @@ if (window.top === window.self) window.location.replace('/');
                     </div>
                     <div style="font-size:12px; color:#6E695C">締切 {{ e.due }}</div>
                   </div>
-                  <div onClick="{{ e.open }}" style="font-size:19px; font-weight:700; line-height:1.55; cursor:pointer; text-wrap:pretty" style-hover="color:#0F5C3F" data-tour="quest-list">{{ e.title }}</div>
+                  <div onClick="{{ e.open }}" style="font-size:19px; font-weight:700; line-height:1.55; cursor:pointer; text-wrap:pretty" style-hover="color:var(--emu-brand-strong)" data-tour="quest-list">{{ e.title }}</div>
                   <div style="font-size:13px; line-height:1.9; color:#3B382F; white-space:pre-wrap">{{ e.cardText }}</div>
                   <div style="display:{{ e.knowledgeShow }}; align-items:center; gap:8px; font-size:12px; color:#6E695C; padding:10px 12px; background:#F4F1EA; border-radius:8px; line-height:1.6">
-                    <span style="color:#0F5C3F; font-weight:700">元の知識</span>{{ e.knowledge }}
+                    <span style="color:var(--emu-brand-strong); font-weight:700">元の知識</span>{{ e.knowledge }}
                   </div>
                   <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding-top:4px; border-top:1px solid rgba(20,19,16,.1); flex-wrap:wrap">
                     <div style="display:flex; flex-direction:column; gap:4px">
-                      <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:#0F5C3F">{{ e.commits }} / {{ e.need }} 人が受けた</div>
+                      <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; color:var(--emu-brand-strong)">{{ e.commits }} / {{ e.need }} 人が受けた</div>
                       <div style="font-size:11px; color:#6E695C">予算 {{ e.budget }} · {{ e.owner }}</div>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px">
@@ -603,7 +266,7 @@ if (window.top === window.self) window.location.replace('/');
                 <sc-if value="{{ cur.hasFrom }}">
                   <div onClick="{{ cur.goFrom }}" style="background:#E7E2D6; border-radius:8px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; flex-wrap:wrap" style-hover="background:#DDD7C8">
                     <div style="flex:1 1 200px; min-width:0; font-size:12px; line-height:1.85; color:#3B382F">{{ cur.fromLabel }}</div>
-                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">議題を見る →</div>
+                    <div style="font-size:12px; font-weight:700; color:var(--emu-brand-strong); white-space:nowrap">議題を見る →</div>
                   </div>
                 </sc-if>
                 <div style="display:{{ cur.introShow }}; font-size:14px; line-height:2.05; color:#3B382F; white-space:pre-wrap; background:#F4F1EA; border-radius:10px; padding:18px 20px">{{ cur.intro }}</div>
@@ -611,16 +274,16 @@ if (window.top === window.self) window.location.replace('/');
                 <sc-if value="{{ cur.showTrial }}">
                   <div style="display:flex; flex-direction:column; gap:18px">
                     <div style="display:grid; grid-template-columns:88px 1fr; gap:16px; font-size:14px; line-height:1.95">
-                      <div style="color:#0F5C3F; font-weight:700">元の知識</div><div style="color:#3B382F">{{ cur.knowledge }}</div>
+                      <div style="color:var(--emu-brand-strong); font-weight:700">元の知識</div><div style="color:#3B382F">{{ cur.knowledge }}</div>
                     </div>
                     <div style="display:grid; grid-template-columns:88px 1fr; gap:16px; font-size:14px; line-height:1.95">
-                      <div style="color:#0F5C3F; font-weight:700">予想</div><div style="color:#3B382F">{{ cur.hypothesis }}</div>
+                      <div style="color:var(--emu-brand-strong); font-weight:700">予想</div><div style="color:#3B382F">{{ cur.hypothesis }}</div>
                     </div>
                     <div style="display:grid; grid-template-columns:88px 1fr; gap:16px; font-size:14px; line-height:1.95">
-                      <div style="color:#0F5C3F; font-weight:700">やること</div><div style="color:#3B382F">{{ cur.action }}</div>
+                      <div style="color:var(--emu-brand-strong); font-weight:700">やること</div><div style="color:#3B382F">{{ cur.action }}</div>
                     </div>
                     <div style="display:grid; grid-template-columns:88px 1fr; gap:16px; font-size:14px; line-height:1.95">
-                      <div style="color:#0F5C3F; font-weight:700">確かめ方</div><div style="color:#3B382F">{{ cur.measure }}</div>
+                      <div style="color:var(--emu-brand-strong); font-weight:700">確かめ方</div><div style="color:#3B382F">{{ cur.measure }}</div>
                     </div>
                   </div>
                 </sc-if>
@@ -630,7 +293,7 @@ if (window.top === window.self) window.location.replace('/');
                 <sc-if value="{{ cur.isCase }}">
                   <div style="display:flex; flex-direction:column; gap:18px">
                     <details data-keep-open="brief-{{ cur.id }}" style="display:{{ cur.briefShow }}; background:#F4F1EA; border-radius:10px; border:1px solid rgba(20,19,16,.12)">
-                      <summary style="cursor:pointer; padding:14px 18px; font-size:14px; font-weight:700; color:#0F5C3F">現場の資料を読む</summary>
+                      <summary style="cursor:pointer; padding:14px 18px; font-size:14px; font-weight:700; color:var(--emu-brand-strong)">現場の資料を読む</summary>
                       <div style="padding:0 18px 18px; font-size:14px; line-height:2.05; color:#3B382F; white-space:pre-wrap">{{ cur.brief }}</div>
                       <!-- 現場の図。文字だけでは位置関係が掴めないので、資料の中に置く。 -->
                       <div style="display:{{ cur.briefImageShow }}; padding:0 18px 18px">
@@ -639,15 +302,15 @@ if (window.top === window.self) window.location.replace('/');
                       </div>
                     </details>
                     <div style="display:flex; flex-direction:column; gap:6px">
-                      <div style="color:#0F5C3F; font-weight:700; font-size:14px">与件</div>
+                      <div style="color:var(--emu-brand-strong); font-weight:700; font-size:14px">与件</div>
                       <div style="color:#3B382F; font-size:14px; line-height:2.05; white-space:pre-wrap">{{ cur.given }}</div>
                     </div>
                     <div style="display:flex; flex-direction:column; gap:6px">
-                      <div style="color:#0F5C3F; font-weight:700; font-size:14px">提出するもの</div>
+                      <div style="color:var(--emu-brand-strong); font-weight:700; font-size:14px">提出するもの</div>
                       <div style="color:#3B382F; font-size:14px; line-height:2.05; white-space:pre-wrap">{{ cur.deliverable }}</div>
                     </div>
                     <div style="display:flex; flex-direction:column; gap:6px">
-                      <div style="color:#0F5C3F; font-weight:700; font-size:14px">評価</div>
+                      <div style="color:var(--emu-brand-strong); font-weight:700; font-size:14px">評価</div>
                       <div style="color:#3B382F; font-size:14px; line-height:2.05; white-space:pre-wrap">{{ cur.criteria }}</div>
                     </div>
                   </div>
@@ -675,20 +338,20 @@ if (window.top === window.self) window.location.replace('/');
                 <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:14px">
                   <div style="font-size:15px; font-weight:700">完走までの手順</div>
                   <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85">
-                    <div style="font-family:Inter,sans-serif; font-size:11px; color:#0F5C3F; padding-top:2px">1</div>
+                    <div style="font-family:Inter,sans-serif; font-size:11px; color:var(--emu-brand-strong); padding-top:2px">1</div>
                     <div style="color:#3B382F"><b>このクエストを受ける</b></div>
                   </div>
                   <sc-for list="{{ cur.reportSteps }}" as="s" hint-placeholder-count="4">
                     <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85">
-                      <div style="font-family:Inter,sans-serif; font-size:11px; color:#0F5C3F; padding-top:2px">{{ s.no }}</div>
+                      <div style="font-family:Inter,sans-serif; font-size:11px; color:var(--emu-brand-strong); padding-top:2px">{{ s.no }}</div>
                       <div style="display:flex; flex-direction:column; gap:2px; min-width:0">
-                        <div style="color:#3B382F"><b>{{ s.head }}</b> <span style="display:{{ s.markShow }}; font-size:11px; color:#0F5C3F; font-weight:700; margin-left:6px">{{ s.mark }}</span></div>
+                        <div style="color:#3B382F"><b>{{ s.head }}</b> <span style="display:{{ s.markShow }}; font-size:11px; color:var(--emu-brand-strong); font-weight:700; margin-left:6px">{{ s.mark }}</span></div>
                         <div style="color:#6E695C; white-space:pre-wrap; overflow-wrap:anywhere">{{ s.ask }}</div>
                       </div>
                     </div>
                   </sc-for>
                   <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85">
-                    <div style="font-family:Inter,sans-serif; font-size:11px; color:#0F5C3F; padding-top:2px">6</div>
+                    <div style="font-family:Inter,sans-serif; font-size:11px; color:var(--emu-brand-strong); padding-top:2px">6</div>
                     <div style="color:#3B382F"><b>運営が確認して完走</b></div>
                   </div>
                   <div style="font-size:12px; line-height:1.8; color:#6E695C; padding-top:10px; border-top:1px solid rgba(20,19,16,.1)">報告は3種類すべてが必要です。「つまずいた」「気づいた」は「やってみた」のあとに出せます。</div>
@@ -704,9 +367,9 @@ if (window.top === window.self) window.location.replace('/');
                 <sc-if value="{{ cur.canLog }}">
                   <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:20px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
                     <div style="font-size:13px; color:#6E695C; flex:1; min-width:160px">{{ cur.logLead }}</div>
-                    <div onClick="{{ cur.logDid }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">やってみた</div>
-                    <div onClick="{{ cur.logStuck }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">つまずいた</div>
-                    <div onClick="{{ cur.logFound }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">気づいた</div>
+                    <div onClick="{{ cur.logDid }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">やってみた</div>
+                    <div onClick="{{ cur.logStuck }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">つまずいた</div>
+                    <div onClick="{{ cur.logFound }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">気づいた</div>
                   </div>
                   <!-- ここに「Emuに投稿する」を置いていた。#003 PLAY を出すときに戻す。
 
@@ -719,7 +382,7 @@ if (window.top === window.self) window.location.replace('/');
 
                        <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:20px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
                          <div style="font-size:13px; color:#6E695C; flex:1; min-width:160px">写真や記録をEmuに残す（月の投稿回数に数えません）</div>
-                         <div onClick="{{ cur.postEmu }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:#0F5C3F; color:#0F5C3F">Emuに投稿する</div>
+                         <div onClick="{{ cur.postEmu }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">Emuに投稿する</div>
                        </div>
                   -->
                 </sc-if>
@@ -728,7 +391,7 @@ if (window.top === window.self) window.location.replace('/');
                 </sc-if>
                 <sc-for list="{{ curLogs }}" as="l" hint-placeholder-count="3">
                   <div style="display:flex; gap:16px; padding:20px 0; border-bottom:1px solid rgba(20,19,16,.1)">
-                    <div style="width:36px; height:36px; flex:0 0 36px; border-radius:50%; background:#E7E2D6; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#0F5C3F">{{ l.initial }}</div>
+                    <div style="width:36px; height:36px; flex:0 0 36px; border-radius:50%; background:#E7E2D6; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:var(--emu-brand-strong)">{{ l.initial }}</div>
                     <div style="display:flex; flex-direction:column; gap:8px; min-width:0">
                       <div style="display:flex; gap:10px; align-items:baseline; flex-wrap:wrap">
                         <div style="font-size:14px; font-weight:700">{{ l.author }}</div>
@@ -739,14 +402,14 @@ if (window.top === window.self) window.location.replace('/');
                            横に崩れていた。どこでも折り返す。URL は押して開けるリンクにする
                            （欠片は親の _spTextParts が作る。sc-for の間に空白を入れないこと。
                            改行を残すので、空白もそのまま出る）。 -->
-                      <div style="font-size:14px; line-height:1.95; color:#3B382F; text-wrap:pretty; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; min-width:0"><sc-for list="{{ l.bodyParts }}" as="t"><span style="display:{{ t.textShow }}">{{ t.text }}</span><a href="{{ t.href }}" target="_blank" rel="noopener noreferrer" style="display:{{ t.linkShow }}; color:#0F5C3F; text-decoration:underline">{{ t.text }}</a></sc-for></div>
+                      <div style="font-size:14px; line-height:1.95; color:#3B382F; text-wrap:pretty; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; min-width:0"><sc-for list="{{ l.bodyParts }}" as="t"><span style="display:{{ t.textShow }}">{{ t.text }}</span><a href="{{ t.href }}" target="_blank" rel="noopener noreferrer" style="display:{{ t.linkShow }}; color:var(--emu-brand-strong); text-decoration:underline">{{ t.text }}</a></sc-for></div>
                       <!-- 報告に添えた画像（「やってみた」）。押すと大きく開く。 -->
                       <div style="display:{{ l.imagesShow }}; flex-wrap:wrap; gap:8px; min-width:0"><sc-for list="{{ l.images }}" as="im"><img src="{{ im.src }}" alt="報告に添えた画像" title="押すと大きく開きます" onClick="{{ im.open }}" loading="lazy" style="display:block; max-width:100%; max-height:420px; width:auto; height:auto; border:1px solid rgba(20,19,16,.12); border-radius:8px; background:#fff; cursor:zoom-in"></sc-for></div>
-                      <div style="display:{{ l.threadShow }}; font-size:12px; line-height:1.7; color:#0F5C3F">{{ l.threadLabel }}</div>
+                      <div style="display:{{ l.threadShow }}; font-size:12px; line-height:1.7; color:var(--emu-brand-strong)">{{ l.threadLabel }}</div>
                       <div onClick="{{ l.openPost }}" style="display:{{ l.fromShow }}; align-items:center; gap:10px; flex-wrap:wrap; background:#F4F1EA; border-radius:8px; padding:10px 12px; cursor:pointer; font-size:12px; line-height:1.7" style-hover="background:#E7E2D6">
-                        <span style="color:#0F5C3F; font-weight:700">元にした知識</span>
+                        <span style="color:var(--emu-brand-strong); font-weight:700">元にした知識</span>
                         <span style="flex:1 1 140px; min-width:0; color:#3B382F">{{ l.fromTitle }}</span>
-                        <span style="color:#0F5C3F; font-weight:700; white-space:nowrap">投稿を見る →</span>
+                        <span style="color:var(--emu-brand-strong); font-weight:700; white-space:nowrap">投稿を見る →</span>
                       </div>
                     </div>
                   </div>
@@ -757,11 +420,11 @@ if (window.top === window.self) window.location.replace('/');
             <div class="sp-quest-side" style="display:flex; flex-direction:column; gap:20px; min-width:0; max-width:100%">
               <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:26px; display:flex; flex-direction:column; gap:20px; min-width:0; box-sizing:border-box; overflow-wrap:anywhere">
                 <div style="display:flex; flex-direction:column; gap:8px">
-                  <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; color:#D0E2BE">ACCEPT</div>
+                  <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; color:var(--emu-brand-soft)">ACCEPT</div>
                   <div style="font-size:14px; line-height:1.8; color:rgba(244,241,234,.72)">賛成/反対ではなく、<b style="color:#F4F1EA">自分も受けるか</b>で決める。受けた人数が予算配分になる。</div>
                 </div>
                 <div style="display:flex; align-items:baseline; gap:8px">
-                  <div style="font-family:Inter,sans-serif; font-size:38px; font-weight:600; color:#D0E2BE">{{ cur.commits }}</div>
+                  <div style="font-family:Inter,sans-serif; font-size:38px; font-weight:600; color:var(--emu-brand-soft)">{{ cur.commits }}</div>
                   <div style="font-size:13px; color:rgba(244,241,234,.6)">/ 成立ライン {{ cur.need }}人</div>
                 </div>
                 <div style="height:6px; background:rgba(244,241,234,.14); border-radius:3px; overflow:hidden">
@@ -770,7 +433,7 @@ if (window.top === window.self) window.location.replace('/');
                 <section class="sp-ux-before-accept" data-tour="quest-before-join"><b>参加前に確認</b><p>内容を見るだけでは参加になりません。「受ける」を押すと、あなたの名前が参加者一覧に載り、報告を書けるようになります。</p><dl><div><dt>締切</dt><dd>{{ cur.due }}</dd></div><div><dt>所要時間</dt><dd>要確認（本文・提出物・手順を確認）</dd></div><div><dt>配分予算</dt><dd>{{ cur.budget }}</dd></div></dl><p>完走には、3種類の報告と知恵カード、運営の確認が必要です。個別のやること・評価・手順も確認してください。受けるだけで報酬は確定しません。</p></section>
                 <button type="button" class="sp-ux-accept" onClick="{{ cur.commit }}" style="text-align:center; padding:14px; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; background:{{ cur.btnBg2 }}; color:{{ cur.btnFg2 }}; border:1px solid #D0E2BE">{{ cur.btnLabel }}</button>
                 <sc-if value="{{ cur.canWisdom }}">
-                  <div onClick="{{ cur.wisdom }}" style="text-align:center; padding:12px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:#D0E2BE; border:1px solid rgba(208,226,190,.45)" style-hover="background:rgba(208,226,190,.12)">知恵カードを置く</div>
+                  <div onClick="{{ cur.wisdom }}" style="text-align:center; padding:12px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:var(--emu-brand-soft); border:1px solid rgba(208,226,190,.45)" style-hover="background:rgba(208,226,190,.12)">知恵カードを置く</div>
                 </sc-if>
                 <sc-if value="{{ cur.canClose }}">
                   <div onClick="{{ cur.close }}" style="text-align:center; padding:12px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:rgba(244,241,234,.66); border:1px solid rgba(244,241,234,.28)" style-hover="background:rgba(244,241,234,.08)">クエストを完了にする</div>
@@ -790,11 +453,11 @@ if (window.top === window.self) window.location.replace('/');
                      折り返しを許し、入らなければ値を次の行へ落とす。 -->
                 <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; font-size:13px; padding-top:14px; border-top:1px solid rgba(20,19,16,.1)">
                   <div style="color:#6E695C; min-width:0">配分予算</div>
-                  <div style="font-family:Inter,sans-serif; font-weight:600; color:#0F5C3F; min-width:0; text-align:right; overflow-wrap:anywhere">{{ cur.budget }}</div>
+                  <div style="font-family:Inter,sans-serif; font-weight:600; color:var(--emu-brand-strong); min-width:0; text-align:right; overflow-wrap:anywhere">{{ cur.budget }}</div>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; font-size:13px">
                   <div style="color:#6E695C; min-width:0">完走1人あたりの目安</div>
-                  <div style="font-family:Inter,sans-serif; font-weight:600; color:#0F5C3F; min-width:0; text-align:right; overflow-wrap:anywhere">{{ cur.perHead }} / 人</div>
+                  <div style="font-family:Inter,sans-serif; font-weight:600; color:var(--emu-brand-strong); min-width:0; text-align:right; overflow-wrap:anywhere">{{ cur.perHead }} / 人</div>
                 </div>
               </div>
             </div>
@@ -822,14 +485,14 @@ if (window.top === window.self) window.location.replace('/');
                       <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:#9A9484">{{ g.code }}</div>
                       <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:700; letter-spacing:.08em; color:{{ g.accent }}">{{ g.short }}</div>
                       <div style="flex:1; min-width:0"></div>
-                      <div style="display:{{ g.meShow }}; font-size:10px; padding:4px 8px; border-radius:4px; background:#D0E2BE; color:#0F5C3F; white-space:nowrap">{{ g.meLabel }}</div>
+                      <div style="display:{{ g.meShow }}; font-size:10px; padding:4px 8px; border-radius:4px; background:#D0E2BE; color:var(--emu-brand-strong); white-space:nowrap">{{ g.meLabel }}</div>
                     </div>
                     <div style="font-size:15px; font-weight:700; line-height:1.6; text-wrap:pretty">{{ g.concept }}</div>
                     <div style="display:flex; flex-wrap:wrap; gap:6px 16px; padding-top:10px; border-top:1px solid rgba(20,19,16,.1); font-size:11px; color:#6E695C">
-                      <div>参加したい <b style="font-family:Inter,sans-serif; font-size:13px; color:#0F5C3F">{{ g.joinCount }}</b></div>
-                      <div>応援 <b style="font-family:Inter,sans-serif; font-size:13px; color:#0F5C3F">{{ g.supportCount }}</b></div>
-                      <div>議題 <b style="font-family:Inter,sans-serif; font-size:13px; color:#0F5C3F">{{ g.proposalCount }}</b></div>
-                      <div>クエスト <b style="font-family:Inter,sans-serif; font-size:13px; color:#0F5C3F">{{ g.questCount }}</b></div>
+                      <div>参加したい <b style="font-family:Inter,sans-serif; font-size:13px; color:var(--emu-brand-strong)">{{ g.joinCount }}</b></div>
+                      <div>応援 <b style="font-family:Inter,sans-serif; font-size:13px; color:var(--emu-brand-strong)">{{ g.supportCount }}</b></div>
+                      <div>議題 <b style="font-family:Inter,sans-serif; font-size:13px; color:var(--emu-brand-strong)">{{ g.proposalCount }}</b></div>
+                      <div>クエスト <b style="font-family:Inter,sans-serif; font-size:13px; color:var(--emu-brand-strong)">{{ g.questCount }}</b></div>
                       <span class="sp-ux-browse-label">活動を見る →</span>
                     </div>
                   </div>
@@ -839,7 +502,7 @@ if (window.top === window.self) window.location.replace('/');
               <sc-if value="{{ hasUnsorted }}">
                 <div onClick="{{ guildUnsorted.open }}" style="background:#FBF9F3; border:1px dashed rgba(20,19,16,.22); border-radius:12px; padding:18px 20px; display:flex; align-items:center; gap:12px; cursor:pointer; flex-wrap:wrap" style-hover="background:#F4F1EA">
                   <div style="flex:1; min-width:0; font-size:13px; line-height:1.8; color:#6E695C">ギルドができる前に出された議題があります。投票はこれまでどおりできます。</div>
-                  <div style="font-size:13px; font-weight:700; color:#0F5C3F; white-space:nowrap">{{ guildUnsorted.label }} →</div>
+                  <div style="font-size:13px; font-weight:700; color:var(--emu-brand-strong); white-space:nowrap">{{ guildUnsorted.label }} →</div>
                 </div>
               </sc-if>
             </div>
@@ -854,15 +517,15 @@ if (window.top === window.self) window.location.replace('/');
               <div style="font-size:13px; line-height:1.95; color:#3B382F">議題を出せるのは、運営・有料の方・信用が足りている方です。<b>一般議題</b>は誰でも投票できます。<b>特殊議題</b>は、関われる方だけが投票できます。これはギルドの分類ではなく、議題ごとの決め方です。同じギルドの中に両方が並びます。票は1つのパスポートにつき1票で、入れた票は取り消しも書き換えもできません。</div>
               <div style="background:#F4F1EA; border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:6px">
                 <div style="font-size:12px; color:#6E695C">あなたの信用スコア</div>
-                <div style="font-family:Inter,sans-serif; font-size:22px; font-weight:600; color:#0F5C3F">{{ trust.total }} <span style="font-size:12px; color:#6E695C">/ {{ trust.need }}</span></div>
+                <div style="font-family:Inter,sans-serif; font-size:22px; font-weight:600; color:var(--emu-brand-strong)">{{ trust.total }} <span style="font-size:12px; color:#6E695C">/ {{ trust.need }}</span></div>
                 <div style="font-size:11px; line-height:1.8; color:#6E695C">{{ trust.detail }}</div>
               </div>
               <div style="display:flex; flex-direction:column; gap:10px; padding-top:6px">
-                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">01</div>ギルドを選ぶ</div>
-                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">02</div>議題を出す</div>
-                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">03</div>締切まで投票する</div>
-                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">04</div>採択された議題をクエストにする</div>
-                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:#0F5C3F; letter-spacing:.1em">05</div>実際にやって、結果が残る</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:var(--emu-brand-strong); letter-spacing:.1em">01</div>ギルドを選ぶ</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:var(--emu-brand-strong); letter-spacing:.1em">02</div>議題を出す</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:var(--emu-brand-strong); letter-spacing:.1em">03</div>締切まで投票する</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:var(--emu-brand-strong); letter-spacing:.1em">04</div>採択された議題をクエストにする</div>
+                <div style="display:flex; gap:12px; align-items:center; font-size:13px"><div style="font-family:Inter,sans-serif; font-size:10px; color:var(--emu-brand-strong); letter-spacing:.1em">05</div>実際にやって、結果が残る</div>
               </div>
               <div style="font-size:12px; line-height:1.9; color:#6E695C; padding-top:4px; border-top:1px solid rgba(20,19,16,.12)">小さな実験や個人の挑戦は、議題を通さずクエストから直接始められます。</div>
             </div>
@@ -879,7 +542,7 @@ if (window.top === window.self) window.location.replace('/');
             <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:16px">
               <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
                 <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#9A9484">{{ curGuild.code }}</div>
-                <div style="font-family:Inter,sans-serif; font-size:16px; font-weight:700; letter-spacing:.1em; color:#D0E2BE" data-tour="guild-detail">{{ curGuild.short }}</div>
+                <div style="font-family:Inter,sans-serif; font-size:16px; font-weight:700; letter-spacing:.1em; color:var(--emu-brand-soft)" data-tour="guild-detail">{{ curGuild.short }}</div>
               </div>
               <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.5; text-wrap:pretty">{{ curGuild.concept }}</div>
               <div style="font-size:14px; line-height:1.95; color:rgba(244,241,234,.72)">{{ curGuild.body }}</div>
@@ -906,7 +569,7 @@ if (window.top === window.self) window.location.replace('/');
             <sc-if value="{{ curGuild.canAct }}">
               <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:14px">
                 <div style="display:flex; flex-direction:column; gap:8px">
-                  <button type="button" class="sp-ux-guild-action" onClick="{{ curGuild.join }}" style="text-align:center; padding:14px; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; background:{{ curGuild.joinBg }}; color:{{ curGuild.joinFg }}; border:1px solid #0F5C3F">{{ curGuild.joinLabel }}　{{ curGuild.joinCount }}</button>
+                  <button type="button" class="sp-ux-guild-action" onClick="{{ curGuild.join }}" style="text-align:center; padding:14px; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; background:{{ curGuild.joinBg }}; color:{{ curGuild.joinFg }}; border:1px solid var(--emu-brand-strong)">{{ curGuild.joinLabel }}　{{ curGuild.joinCount }}</button>
                   <div style="font-size:11px; line-height:1.8; color:#6E695C; text-align:center">{{ curGuild.joinHint }}</div>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:8px">
@@ -925,7 +588,7 @@ if (window.top === window.self) window.location.replace('/');
                 <div style="font-size:17px; font-weight:700">現在の議題</div>
                 <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
                 <sc-if value="{{ curGuild.canAct }}">
-                  <div onClick="{{ curGuild.propose }}" style="font-size:12px; font-weight:700; color:#0F5C3F; cursor:pointer; white-space:nowrap">＋ 議題を出す</div>
+                  <div onClick="{{ curGuild.propose }}" style="font-size:12px; font-weight:700; color:var(--emu-brand-strong); cursor:pointer; white-space:nowrap">＋ 議題を出す</div>
                 </sc-if>
               </div>
               <sc-if value="{{ curGuild.noVotes }}">
@@ -948,27 +611,27 @@ if (window.top === window.self) window.location.replace('/');
                         <div style="position:absolute; left:0; top:0; bottom:0; width:{{ o.pct }}; background:{{ o.barBg }}"></div>
                         <div style="position:relative; display:flex; justify-content:space-between; gap:12px; font-size:14px; font-weight:{{ o.weight }}; color:#141310">
                           <div>{{ o.label }}</div>
-                          <div style="font-family:Inter,sans-serif; color:#0F5C3F">{{ o.countLabel }}</div>
+                          <div style="font-family:Inter,sans-serif; color:var(--emu-brand-strong)">{{ o.countLabel }}</div>
                         </div>
                       </div>
                     </sc-for>
                   </div>
                   <sc-if value="{{ v.isAdopted }}">
-                    <div style="font-size:12px; font-weight:700; color:#0F5C3F">{{ v.adoptedLabel }}</div>
+                    <div style="font-size:12px; font-weight:700; color:var(--emu-brand-strong)">{{ v.adoptedLabel }}</div>
                   </sc-if>
                   <div style="font-size:12px; color:#6E695C">{{ v.note }}</div>
                   <sc-if value="{{ v.hasQuest }}">
                     <div onClick="{{ v.goQuest }}" style="display:flex; align-items:center; gap:10px; padding:12px 14px; background:#E7E2D6; border-radius:8px; cursor:pointer; flex-wrap:wrap" style-hover="background:#DDD7C8">
                       <div style="font-size:11px; color:#6E695C">この議題から生まれたクエスト</div>
-                      <div style="font-size:13px; font-weight:700; color:#0F5C3F">{{ v.questLabel }} →</div>
+                      <div style="font-size:13px; font-weight:700; color:var(--emu-brand-strong)">{{ v.questLabel }} →</div>
                     </div>
                   </sc-if>
                   <div style="display:flex; gap:8px; flex-wrap:wrap">
                     <sc-if value="{{ v.canAdopt }}">
-                      <div onClick="{{ v.adopt }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:#0F5C3F; border:1px solid #0F5C3F" style-hover="background:#E7E2D6">採択する（運営）</div>
+                      <div onClick="{{ v.adopt }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:var(--emu-brand-strong); border:1px solid var(--emu-brand-strong)" style-hover="background:#E7E2D6">採択する（運営）</div>
                     </sc-if>
                     <sc-if value="{{ v.canQuest }}">
-                      <div onClick="{{ v.toQuest }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:#0F5C3F; color:#F4F1EA; border:1px solid #0F5C3F" style-hover="background:#0A3F2B">Questにする</div>
+                      <div onClick="{{ v.toQuest }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:var(--emu-brand-strong); color:#F4F1EA; border:1px solid var(--emu-brand-strong)" style-hover="background:#0A3F2B">Questにする</div>
                     </sc-if>
                     <sc-if value="{{ v.canSetGuild }}">
                       <div onClick="{{ v.setGuild }}" style="padding:10px 16px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:#6E695C; border:1px solid rgba(20,19,16,.2)" style-hover="background:#E7E2D6">ギルドを割り当てる（運営）</div>
@@ -992,7 +655,7 @@ if (window.top === window.self) window.location.replace('/');
                   <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ q.statusBg }}; color:{{ q.statusFg }}">{{ q.status }}</div>
                   <div style="flex:1; min-width:140px; font-size:14px; font-weight:700; line-height:1.6">{{ q.title }}</div>
                   <div style="font-size:11px; color:#6E695C; white-space:nowrap">{{ q.fromLabel }}</div>
-                  <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">詳細 →</div>
+                  <div style="font-size:12px; font-weight:700; color:var(--emu-brand-strong); white-space:nowrap">詳細 →</div>
                 </div>
               </sc-for>
             </div>
@@ -1010,13 +673,13 @@ if (window.top === window.self) window.location.replace('/');
                 <sc-if value="{{ showLibraryDetails }}"><div style="font-size:13px; line-height:1.9; color:rgba(244,241,234,.66)">知恵カードは「元の知識 → 通した経験 → 残った一文」で1枚。引用はほかの人がこの知恵を参考にした記録です。書き手の信用スコアに反映されます。EMUERの自動付与はまだありません。</div></sc-if>
               </div>
               <sc-if value="{{ showLibraryDetails }}"><div style="display:flex; gap:28px">
-                <div style="display:flex; flex-direction:column; gap:6px"><div style="font-family:Inter,sans-serif; font-size:30px; font-weight:600; color:#D0E2BE">{{ stats.wisdomTotal }}</div><div style="font-size:12px; color:rgba(244,241,234,.6)">知恵</div></div>
-                <div style="display:flex; flex-direction:column; gap:6px"><div style="font-family:Inter,sans-serif; font-size:30px; font-weight:600; color:#D0E2BE">{{ stats.citations }}</div><div style="font-size:12px; color:rgba(244,241,234,.6)">引用</div></div>
+                <div style="display:flex; flex-direction:column; gap:6px"><div style="font-family:Inter,sans-serif; font-size:30px; font-weight:600; color:var(--emu-brand-soft)">{{ stats.wisdomTotal }}</div><div style="font-size:12px; color:rgba(244,241,234,.6)">知恵</div></div>
+                <div style="display:flex; flex-direction:column; gap:6px"><div style="font-family:Inter,sans-serif; font-size:30px; font-weight:600; color:var(--emu-brand-soft)">{{ stats.citations }}</div><div style="font-size:12px; color:rgba(244,241,234,.6)">引用</div></div>
               </div></sc-if>
             </div>
             <div data-tour="wisdom-tags" style="display:flex; gap:8px; flex-wrap:wrap">
               <sc-for list="{{ tags }}" as="t" hint-placeholder-count="5">
-                <div data-tour="nav-{{ t.n }}" onClick="{{ t.go }}" style="padding:8px 14px; border:1px solid {{ t.border }}; border-radius:18px; font-size:12px; cursor:pointer; background:{{ t.bg }}; color:{{ t.fg }}" style-hover="border-color:#0F5C3F">{{ t.label }}</div>
+                <div data-tour="nav-{{ t.n }}" onClick="{{ t.go }}" style="padding:8px 14px; border:1px solid {{ t.border }}; border-radius:18px; font-size:12px; cursor:pointer; background:{{ t.bg }}; color:{{ t.fg }}" style-hover="border-color:var(--emu-brand-strong)">{{ t.label }}</div>
               </sc-for>
             </div>
             <sc-if value="{{ noWisdom }}">
@@ -1045,17 +708,17 @@ if (window.top === window.self) window.location.replace('/');
                   </div>
                   <sc-if value="{{ w.reportsOn }}">
                     <div style="display:flex; flex-direction:column; gap:8px; padding-top:12px; border-top:1px dashed rgba(20,19,16,.16)">
-                      <div style="font-size:12px; font-weight:700; color:#0F5C3F">この知恵につながる報告</div>
+                      <div style="font-size:12px; font-weight:700; color:var(--emu-brand-strong)">この知恵につながる報告</div>
                       <sc-for list="{{ w.reports }}" as="r" hint-placeholder-count="3">
-                        <div style="font-size:12px; line-height:1.75; white-space:pre-wrap; overflow-wrap:anywhere; color:#3B382F"><strong style="color:#0F5C3F">{{ r.kind }}：</strong><sc-for list="{{ r.bodyParts }}" as="t"><span style="display:{{ t.textShow }}">{{ t.text }}</span><a href="{{ t.href }}" target="_blank" rel="noopener noreferrer" style="display:{{ t.linkShow }}; color:#0F5C3F; text-decoration:underline">{{ t.text }}</a></sc-for></div>
+                        <div style="font-size:12px; line-height:1.75; white-space:pre-wrap; overflow-wrap:anywhere; color:#3B382F"><strong style="color:var(--emu-brand-strong)">{{ r.kind }}：</strong><sc-for list="{{ r.bodyParts }}" as="t"><span style="display:{{ t.textShow }}">{{ t.text }}</span><a href="{{ t.href }}" target="_blank" rel="noopener noreferrer" style="display:{{ t.linkShow }}; color:var(--emu-brand-strong); text-decoration:underline">{{ t.text }}</a></sc-for></div>
                         <div style="display:{{ r.imagesShow }}; flex-wrap:wrap; gap:6px"><sc-for list="{{ r.images }}" as="im"><img src="{{ im.src }}" alt="報告に添えた画像" onClick="{{ im.open }}" loading="lazy" style="display:block; width:72px; height:72px; object-fit:cover; border:1px solid rgba(20,19,16,.12); border-radius:6px; cursor:zoom-in"></sc-for></div>
                       </sc-for>
                     </div>
                   </sc-if>
-                  <div onClick="{{ w.toggleMore }}" role="button" tabindex="0" aria-expanded="{{ w.moreOpen }}" style="display:{{ w.moreShow }}; align-self:flex-start; font-size:12px; font-weight:700; color:#0F5C3F; cursor:pointer; text-decoration:underline; text-underline-offset:3px">{{ w.moreLabel }}</div>
+                  <div onClick="{{ w.toggleMore }}" role="button" tabindex="0" aria-expanded="{{ w.moreOpen }}" style="display:{{ w.moreShow }}; align-self:flex-start; font-size:12px; font-weight:700; color:var(--emu-brand-strong); cursor:pointer; text-decoration:underline; text-underline-offset:3px">{{ w.moreLabel }}</div>
                   <div style="margin-top:auto; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
                     <div style="font-size:12px; color:#6E695C; min-width:0">by {{ w.author }}</div>
-                    <div onClick="{{ w.cite }}" style="display:{{ w.citeShow }}; padding:7px 13px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; background:{{ w.citeBg }}; color:{{ w.citeFg }}; border:1px solid #0F5C3F; white-space:nowrap" style-hover="opacity:.85">{{ w.citeLabel }}</div>
+                    <div onClick="{{ w.cite }}" style="display:{{ w.citeShow }}; padding:7px 13px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; background:{{ w.citeBg }}; color:{{ w.citeFg }}; border:1px solid var(--emu-brand-strong); white-space:nowrap" style-hover="opacity:.85">{{ w.citeLabel }}</div>
                     <div style="display:{{ w.mineShow }}; padding:7px 13px; font-size:12px; color:#6E695C; white-space:nowrap">自分の知恵</div>
                   </div>
                 </div>
@@ -1064,112 +727,9 @@ if (window.top === window.self) window.location.replace('/');
           </div>
         </sc-if>
 
-        <sc-if value="{{ isMembers }}" hint-placeholder-val="{{ false }}">
-          <div style="display:flex; flex-direction:column; gap:22px">
-            <div data-tour="contrib-intro" style="font-size:14px; line-height:1.9; color:#3B382F; max-width:720px">貢献は「発言量」ではなく、<b>知恵を残したか</b>で測る。完走率が低い人は同時に受けられる数に上限がかかる。</div>
-            <sc-if value="{{ hasMembersNote }}">
-              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">{{ membersNote }}</div>
-            </sc-if>
-            <sc-if value="{{ noMembers }}">
-              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだ活動の記録がありません。クエストを受ける・知恵を残す・議題に投票すると、ここに出ます。</div>
-            </sc-if>
-            <div style="background:#FFF6E6; border:1px solid rgba(180,130,40,.35); border-radius:12px; padding:14px 18px; font-size:13px; line-height:1.9; color:#6B4E14">
-              <b data-tour="contrib-note">お支払いはまだ始めていません。</b>「分配」の欄に出ているのは、決まった割合（完走した人へ80%／DAOプールへ20%）で計算した額です。実際にお渡しする方法と時期は、法務と税務の確認が済んでからお知らせします。
-            </div>
-            <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; overflow:hidden">
-              <!-- スマホでも、パソコンと同じ5列（完走・引用されも出す）。
-                   幅が足りないぶんは、頭文字の丸を外し、すき間を詰めて入れる。 -->
-              <div style="display:grid; grid-template-columns:{{ L.table }}; gap:{{ L.tableGap }}; padding:16px {{ L.tablePad }}; background:#E7E2D6; font-size:12px; font-weight:700; color:#3B382F">
-                <div>メンバー</div><div>知恵</div><div style="display:{{ L.colHide }}">完走</div><div style="display:{{ L.colHide }}">引用され</div><div>分配（計算額）</div>
-              </div>
-              <sc-for list="{{ members }}" as="m" hint-placeholder-count="6">
-                <div style="display:grid; grid-template-columns:{{ L.table }}; gap:{{ L.tableGap }}; padding:18px {{ L.tablePad }}; border-top:1px solid rgba(20,19,16,.09); align-items:center; font-size:14px">
-                  <div style="display:flex; align-items:center; gap:12px; min-width:0">
-                    <div style="width:32px; height:32px; flex:0 0 32px; border-radius:50%; background:#E7E2D6; display:{{ L.memAvatar }}; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#0F5C3F">{{ m.initial }}</div>
-                    <div style="display:flex; flex-direction:column; gap:3px; min-width:0">
-                      <div data-tour="contribution-list contrib-table" style="font-weight:700; overflow-wrap:anywhere">{{ m.name }}</div>
-                      <div style="font-size:11px; color:#6E695C">{{ m.role }}</div>
-                    </div>
-                  </div>
-                  <div style="font-family:Inter,sans-serif; font-weight:600">{{ m.wisdom }}</div>
-                  <div style="font-family:Inter,sans-serif; font-weight:600; display:{{ L.colHide }}">{{ m.done }}</div>
-                  <div style="font-family:Inter,sans-serif; font-weight:600; display:{{ L.colHide }}">{{ m.cited }}</div>
-                  <div style="font-family:Inter,sans-serif; font-weight:600; color:#0F5C3F">{{ m.share }}</div>
-                </div>
-              </sc-for>
-            </div>
-          </div>
-        </sc-if>
 
-        <sc-if value="{{ isTreasury }}" hint-placeholder-val="{{ false }}">
-          <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:24px; align-items:start">
-            <div style="background:#141310; color:#F4F1EA; border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:26px">
-              <div style="display:flex; flex-direction:column; gap:20px">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap">
-                  <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE" data-tour="treasury-card">TREASURY</div>
-                  <div style="display:flex; gap:6px; flex-wrap:wrap">
-                    <sc-for list="{{ treasury.curTabs }}" as="ct" hint-placeholder-count="3">
-                      <div onClick="{{ ct.go }}" style="padding:6px 14px; border-radius:14px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid rgba(244,241,234,.24); background:{{ ct.bg }}; color:{{ ct.fg }}">{{ ct.label }}</div>
-                    </sc-for>
-                  </div>
-                </div>
-                <div style="display:flex; flex-direction:column; gap:12px">
-                  <div style="display:flex; gap:26px; flex-wrap:wrap">
-                    <div style="display:flex; flex-direction:column; gap:4px">
-                      <div style="font-size:11px; color:rgba(244,241,234,.55)">ある</div>
-                      <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; line-height:1.1">{{ treasury.card.have }}</div>
-                    </div>
-                    <div style="display:flex; flex-direction:column; gap:4px">
-                      <div style="font-size:11px; color:rgba(244,241,234,.55)">渡したぶん</div>
-                      <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; line-height:1.1">{{ treasury.card.paid }}</div>
-                    </div>
-                    <div style="display:flex; flex-direction:column; gap:4px">
-                      <div style="font-size:11px; color:rgba(244,241,234,.55)">使える</div>
-                      <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; line-height:1.1; color:{{ treasury.card.freeColor }}">{{ treasury.card.free }}</div>
-                    </div>
-                  </div>
-                  <div style="font-size:11px; color:rgba(244,241,234,.5)">{{ treasury.card.month }}</div>
-                  <div style="font-size:11px; line-height:1.8; color:rgba(244,241,234,.6)">{{ treasury.card.reserved }}</div>
-                  <div style="font-size:11px; color:#E08A7A">{{ treasury.card.warn }}</div>
-                  <sc-if value="{{ treasury.startNotice }}">
-                    <div style="font-size:12px; line-height:1.7; color:#D0E2BE; padding:10px 12px; border:1px solid rgba(208,226,190,.3); border-radius:8px">{{ treasury.startNotice }}</div>
-                  </sc-if>
-                </div>
-              </div>
-              <div style="display:flex; flex-direction:column; gap:14px">
-                <div style="font-size:13px; font-weight:700; color:#D0E2BE">{{ treasury.allocTitle }}</div>
-                <sc-for list="{{ treasury.alloc }}" as="a" hint-placeholder-count="4">
-                  <div style="display:flex; flex-direction:column; gap:8px">
-                    <div style="display:flex; justify-content:space-between; gap:12px; font-size:13px">
-                      <div style="color:rgba(244,241,234,.8); min-width:0">{{ a.label }}</div>
-                      <div style="font-family:Inter,sans-serif; color:#D0E2BE; white-space:nowrap">{{ a.amount }} · {{ a.pct }}</div>
-                    </div>
-                    <div style="height:6px; background:rgba(244,241,234,.14); border-radius:3px; overflow:hidden"><div style="height:100%; background:#D0E2BE; width:{{ a.pct }}"></div></div>
-                  </div>
-                </sc-for>
-                <div style="font-size:11px; line-height:1.8; color:rgba(244,241,234,.45)">{{ treasury.allocNote }}</div>
-              </div>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:16px">
-              <div style="font-size:17px; font-weight:700" data-tour="treasury-transactions treasury-tx">直近の動き</div>
-              <sc-if value="{{ noTreasury }}">
-                <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだお金の動きがありません。管理画面から入金を記録するか、クエストに予算が付くと、ここに出ます。</div>
-              </sc-if>
-              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; overflow:hidden">
-                <sc-for list="{{ treasury.txs }}" as="t" hint-placeholder-count="5">
-                  <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:18px 22px; border-bottom:1px solid rgba(20,19,16,.09)">
-                    <div style="display:flex; flex-direction:column; gap:5px; min-width:0">
-                      <div style="font-size:14px; font-weight:500; line-height:1.5">{{ t.label }}</div>
-                      <div style="font-size:11px; color:#6E695C">{{ t.date }} · {{ t.kind }}</div>
-                    </div>
-                    <div style="font-family:Inter,sans-serif; font-size:15px; font-weight:600; white-space:nowrap; color:{{ t.color }}">{{ t.amount }}</div>
-                  </div>
-                </sc-for>
-              </div>
-              <div data-tour="treasury-help" style="font-size:12px; line-height:1.9; color:#6E695C"><b>ある</b>は、記録された入金から支出を引いた額。<b>渡したぶん</b>は、運営が完走を認めて実際に引き当てた額。<b>使える</b>はその差です。<br>クエストに予算を出しただけでは EMUER は動きません。「確保してある上限」は「ここまでなら渡せる」という数で、支出でも借りでもありません。実際に減るのは、運営が1人ずつ完走を認めたときだけです。<br>円と JPYC には、この帳簿がありません。内訳に出るのはクエストのカードに書いた1人あたりの報酬額を足したもので、支払う額そのものではありません。実際の支出は、支払ったときに入出金として記録してください。</div>
-            </div>
-          </div>
-        </sc-if>
+
+
 
         <sc-if value="{{ isPropose }}" hint-placeholder-val="{{ false }}">
           <div style="display:grid; grid-template-columns:{{ L.gPropose }}; gap:32px; align-items:start">
@@ -1187,7 +747,7 @@ if (window.top === window.self) window.location.replace('/');
 
             <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:26px">
               <div style="display:flex; flex-direction:column; gap:10px">
-                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; color:#0F5C3F">STEP {{ stepNum }} / 4</div>
+                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.2em; color:var(--emu-brand-strong)">STEP {{ stepNum }} / 4</div>
                 <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.5">{{ step.title }}</div>
                 <div style="font-size:14px; line-height:1.95; color:#3B382F; max-width:620px">{{ step.desc }}</div>
               </div>
@@ -1202,7 +762,7 @@ if (window.top === window.self) window.location.replace('/');
               <div style="display:flex; align-items:center; gap:12px; padding:16px 18px; background:#E7E2D6; border-radius:8px; font-size:13px; line-height:1.8; color:#3B382F">{{ step.note }}</div>
               <div style="display:flex; gap:12px; justify-content:flex-end; padding-top:6px">
                 <div onClick="{{ prevStep }}" style="padding:13px 22px; border:1px solid rgba(20,19,16,.2); border-radius:6px; font-size:14px; font-weight:500; cursor:pointer">戻る</div>
-                <div onClick="{{ nextStep }}" style="padding:13px 26px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer" style-hover="background:#0A3F2B">{{ nextLabel }}</div>
+                <div onClick="{{ nextStep }}" style="padding:13px 26px; background:var(--emu-brand-strong); color:#F4F1EA; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer" style-hover="background:#0A3F2B">{{ nextLabel }}</div>
               </div>
             </div>
           </div>
@@ -1214,18 +774,18 @@ if (window.top === window.self) window.location.replace('/');
         <sc-if value="{{ isTasks }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex; flex-direction:column; gap:28px">
 
-            <div onClick="{{ goHome }}" style="font-size:12px; color:#6E695C; cursor:pointer">← ホーム</div>
+            <div onClick="{{ goPractice }}" style="font-size:12px; color:#6E695C; cursor:pointer">← 知識を試す</div>
 
             <div style="background:#141310; color:#F4F1EA; padding:{{ L.cardPad }}; border-radius:12px; display:grid; grid-template-columns:{{ L.hero }}; gap:32px">
               <div style="display:flex; flex-direction:column; gap:16px">
-                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#D0E2BE">MY WORK</div>
+                <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:var(--emu-brand-soft)">MY WORK</div>
                 <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.45" data-tour="tasks-list">{{ taskHead }}</div>
                 <div style="font-size:14px; line-height:1.9; color:rgba(244,241,234,.68)">{{ taskLine }}</div>
               </div>
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; align-content:center">
                 <sc-for list="{{ taskStats }}" as="st" hint-placeholder-count="4">
                   <div style="border:1px solid rgba(244,241,234,.16); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:6px">
-                    <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; color:#D0E2BE">{{ st.value }}</div>
+                    <div style="font-family:Inter,sans-serif; font-size:26px; font-weight:600; color:var(--emu-brand-soft)">{{ st.value }}</div>
                     <div style="font-size:12px; color:rgba(244,241,234,.6)">{{ st.label }}</div>
                   </div>
                 </sc-for>
@@ -1243,7 +803,7 @@ if (window.top === window.self) window.location.replace('/');
                   <sc-for list="{{ myQuests }}" as="mq">
                     <div onClick="{{ mq.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-left:4px solid #0F5C3F; border-radius:10px; padding:18px 20px; display:flex; flex-direction:column; gap:7px; cursor:pointer" style-hover="background:#F4F1EA">
                       <div style="font-size:15px; font-weight:700; line-height:1.6">{{ mq.title }}</div>
-                      <div style="font-size:13px; color:#0F5C3F">{{ mq.next }}</div>
+                      <div style="font-size:13px; color:var(--emu-brand-strong)">{{ mq.next }}</div>
                       <div style="display:{{ mq.metaShow }}; font-size:12px; color:#6E695C">{{ mq.meta }}</div>
                     </div>
                   </sc-for>
@@ -1288,7 +848,7 @@ if (window.top === window.self) window.location.replace('/');
                   <input type="date" onInput="{{ onTaskDue }}" value="{{ draft.due }}" style="max-width:100%; box-sizing:border-box; touch-action:manipulation; padding:13px 14px; background:#F4F1EA; border:1px solid rgba(20,19,16,.12); border-radius:8px; font-size:{{ L.inputSize }}; font-family:'Zen Kaku Gothic New',sans-serif; color:#141310; outline:none">
                 </div>
                 <div style="flex:1"></div>
-                <div onClick="{{ addTask }}" style="padding:14px 26px; background:#0F5C3F; color:#F4F1EA; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer" style-hover="background:#0A3F2B">これを宿題にする</div>
+                <div onClick="{{ addTask }}" style="padding:14px 26px; background:var(--emu-brand-strong); color:#F4F1EA; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer" style-hover="background:#0A3F2B">これを宿題にする</div>
               </div>
             </div>
 
@@ -1303,14 +863,14 @@ if (window.top === window.self) window.location.replace('/');
               <div style="display:flex; flex-direction:column; gap:12px">
                 <sc-for list="{{ openTasks }}" as="t" hint-placeholder-count="3">
                   <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:10px; padding:18px 20px; display:flex; align-items:flex-start; gap:16px">
-                    <div onClick="{{ t.toggle }}" title="終わったことにする" style="width:20px; height:20px; border:1.5px solid #0F5C3F; border-radius:5px; margin-top:2px; flex:0 0 20px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; line-height:1; background:{{ t.markBg }}; color:{{ t.markFg }}">{{ t.mark }}</div>
+                    <div onClick="{{ t.toggle }}" title="終わったことにする" style="width:20px; height:20px; border:1.5px solid var(--emu-brand-strong); border-radius:5px; margin-top:2px; flex:0 0 20px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; line-height:1; background:{{ t.markBg }}; color:{{ t.markFg }}">{{ t.mark }}</div>
                     <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:7px">
                       <div style="font-size:15px; font-weight:700; line-height:1.6; color:{{ t.titleColor }}; text-decoration:{{ t.titleLine }}">{{ t.title }}</div>
                       <sc-if value="{{ t.hasNote }}">
                         <div style="font-size:13px; line-height:1.85; color:#3B382F; white-space:pre-wrap">{{ t.note }}</div>
                       </sc-if>
                       <sc-if value="{{ t.hasQuest }}">
-                        <div style="font-size:12px; color:#0F5C3F">{{ t.questLabel }}</div>
+                        <div style="font-size:12px; color:var(--emu-brand-strong)">{{ t.questLabel }}</div>
                       </sc-if>
                     </div>
                     <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; white-space:nowrap">
@@ -1336,14 +896,14 @@ if (window.top === window.self) window.location.replace('/');
                 <!-- 完走したクエスト（運営が認めたもの）。押すとそのクエストが開く。 -->
                 <sc-for list="{{ doneQuests }}" as="dq">
                   <div onClick="{{ dq.open }}" style="background:#E7E2D6; border-radius:10px; padding:14px 18px; display:flex; align-items:center; gap:14px; cursor:pointer" style-hover="opacity:.85">
-                    <div style="width:20px; height:20px; border-radius:5px; flex:0 0 20px; display:flex; align-items:center; justify-content:center; font-size:13px; line-height:1; background:#0F5C3F; color:#F4F1EA">✓</div>
+                    <div style="width:20px; height:20px; border-radius:5px; flex:0 0 20px; display:flex; align-items:center; justify-content:center; font-size:13px; line-height:1; background:var(--emu-brand-strong); color:#F4F1EA">✓</div>
                     <div style="flex:1; min-width:0; font-size:14px; line-height:1.6; color:#6E695C">{{ dq.title }}</div>
-                    <div style="font-size:12px; font-weight:700; color:#0F5C3F; white-space:nowrap">完走</div>
+                    <div style="font-size:12px; font-weight:700; color:var(--emu-brand-strong); white-space:nowrap">完走</div>
                   </div>
                 </sc-for>
                 <sc-for list="{{ doneTasks }}" as="t" hint-placeholder-count="3">
                   <div style="background:#E7E2D6; border-radius:10px; padding:14px 18px; display:flex; align-items:center; gap:14px">
-                    <div onClick="{{ t.toggle }}" title="やっぱりまだにする" style="width:20px; height:20px; border:1.5px solid #0F5C3F; border-radius:5px; flex:0 0 20px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; line-height:1; background:{{ t.markBg }}; color:{{ t.markFg }}">{{ t.mark }}</div>
+                    <div onClick="{{ t.toggle }}" title="やっぱりまだにする" style="width:20px; height:20px; border:1.5px solid var(--emu-brand-strong); border-radius:5px; flex:0 0 20px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; line-height:1; background:{{ t.markBg }}; color:{{ t.markFg }}">{{ t.mark }}</div>
                     <div style="flex:1; min-width:0; font-size:14px; line-height:1.6; color:{{ t.titleColor }}; text-decoration:{{ t.titleLine }}">{{ t.title }}</div>
                     <div style="font-size:12px; color:{{ t.brandColor }}; white-space:nowrap">{{ t.brandLabel }}</div>
                     <div onClick="{{ t.remove }}" title="消す" style="font-size:12px; color:#9A9484; cursor:pointer; white-space:nowrap">消す</div>
@@ -1357,14 +917,7 @@ if (window.top === window.self) window.location.replace('/');
 
       </div>
 
-      <div data-tour="menu" ref="{{ bottomRef }}" style="display:{{ L.bottom }}; position:sticky; bottom:0; z-index:8; flex:0 0 64px; margin-top:auto; width:100%; max-width:100vw; min-height:64px; box-sizing:border-box; background:#141310; padding:6px 6px 8px; justify-content:flex-start; align-items:stretch; gap:2px; overflow-x:auto; overflow-y:hidden; overscroll-behavior:contain; touch-action:pan-x; -webkit-overflow-scrolling:touch">
-        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="9">
-          <div data-tour="nav-{{ t.n }}" onClick="{{ t.go }}" style="flex:0 0 62px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:5px 3px; border-radius:7px; cursor:pointer; min-height:42px; background:{{ t.bg }}">
-            <div style="font-family:Inter,sans-serif; font-size:9px; letter-spacing:.1em; color:{{ t.num }}">{{ t.n }}</div>
-            <div style="font-size:11px; font-weight:700; color:{{ t.fg }}">{{ t.label }}</div>
-          </div>
-        </sc-for>
-      </div>
+
     </div>
   </div>
   </div>
@@ -1381,11 +934,12 @@ DCLogic.prototype.setState = function (upd) {
   /* 読み込み結果が実際に渡った項目だけを覚える。初期値の空配列とは区別する。
      ガイド専用の一時フラグで、データや進捗として保存しない。 */
   if (next && this.tourDataReady) {
-    ['me','tasks','guilds','quests','wisdom','members','treasury','board','yearDoc'].forEach(function (key) {
+    ['me','tasks','guilds','quests','wisdom','yearDoc'].forEach(function (key) {
       if (Object.prototype.hasOwnProperty.call(next, key)) this.tourDataReady[key] = true;
     }, this);
   }
   this.state = Object.assign({}, this.state, next);
+  if(next && Object.hasOwn(next,'screen')) { try { window.parent.EmuNavigation?.sync(this.state.screen); } catch(_) {} }
   schedule();
 };
 
@@ -1395,7 +949,7 @@ const WISDOM = [];
 
 const LOGS = [];
 
-const MEMBERS = [];
+
 
 const STEPS = [
   {label:'元の知識', hint:'どこで得た何か', title:'その知識は、どこから来た？', desc:'Emuの講座でも、本でも、人から聞いた話でもいい。出どころが書けない知識は、まだ知恵にできない。',
@@ -1412,9 +966,9 @@ const STEPS = [
    note:'公開すると、5人が受けた時点で成立。成立したクエストにトレジャリーから予算が付きます。'}
 ];
 
-const BOARD = [];
-const DUMB = [];
-const EVENTS = [];
+
+
+
 
 /* 宿題をどの仕事に付けるか。
    色はブランドの色そのままだと明るい紙の上で読みにくいので、少し濃くしてある。 */
@@ -1437,22 +991,19 @@ const LAYOUTS = {
        gPropose:'1fr', libCols:'1', table:'minmax(0,1.5fr) repeat(4,minmax(0,1fr))', colHide:'block', tableGap:'8px', tablePad:'12px', memAvatar:'none', stick:'static', cardPad:'22px', bigNum:'38px', ctaLabel:'＋'}
 };
 
+const requestedScreen = new URLSearchParams(window.location.search).get('screen');
+const initialScreen = ['logs','experiments','library','city','tasks','yeargoals','propose'].includes(requestedScreen) ? requestedScreen : 'experiments';
+
 class Component extends DCLogic {
   tourDataReady = Object.create(null);
   tourRenderedDataReady = Object.create(null);
   tourRenderedScreen = null;
-  state = { screen:(new URLSearchParams(window.location.search).get('screen') === 'city' ? 'city' : 'home'), expId:'', filter:'すべて', series:'general', entryOnly:false, yearDoc:null, questsDenied:false, questsNote:'', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), sidebarOpen:false, brandOpen:false, me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, quests:[], noQuests:true, guilds:[], guildCount:'', guildUnsorted:{count:0, label:'', open:function(){}}, hasUnsorted:false, curGuild:{},  wisdom:[], wOpen:{}, noWisdom:true, citations:0, members:[], noMembers:true, membersNote:'', noTreasury:true, wtag:'すべて', canGuild:false, trust:{total:0, need:20, detail:'読み込んでいます…'}, board:[], dumb:[], events:[], noPark:true, treasury:{card:{have:'¥0', promised:'¥0', free:'¥0', freeColor:'#D0E2BE', warn:'', month:'今月 +¥0 / -¥0'}, curTabs:[], allocTitle:'内訳（円）', startNotice:'', allocNote:'', alloc:[], txs:[]}, vw: window.innerWidth, vh: window.innerHeight, joined:{}, tasks:[], noTasks:true, today:'' };
+  state = { screen:initialScreen, expId:'', filter:'すべて', series:'general', entryOnly:false, yearDoc:null, questsDenied:false, questsNote:'', step:0, committed:{}, device:(window.innerWidth < 700 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'pc'), me:{name:'ゲスト', initial:'ー', line:'WISDOM 0 · クエスト 0'}, quests:[], noQuests:true, guilds:[], guildCount:'', guildUnsorted:{count:0, label:'', open:function(){}}, hasUnsorted:false, curGuild:{},  wisdom:[], wOpen:{}, noWisdom:true, citations:0, wtag:'すべて', canGuild:false, trust:{total:0, need:20, detail:'読み込んでいます…'}, vw: window.innerWidth, vh: window.innerHeight, tasks:[], noTasks:true, today:'' };
 
   /* 追加欄に打った途中の中身。
      ここを state に入れると、1文字打つたびに画面を作り直してしまい
      入力欄からカーソルが外れる。だから state の外に置いてある。 */
   draft = { title:'', note:'', brand:'schoolpark', questId:'', questTitle:'', due:'' };
-  /* 公園に出すときの下書き。ボードと挑戦で別に持つ（片方を書いている間に
-     もう片方が消えないように）。 */
-  makeOpen = false;   /* 遊具作成を開いているか */
-  boardDraft = { when:'', title:'', body:'' };
-  dumbDraft  = { title:'', body:'' };
-  weekExpanded = false;
   founderExpanded = false;
   libraryExpanded = false;
   bottomRef = React.createRef();
@@ -1473,7 +1024,7 @@ class Component extends DCLogic {
   setQuestFilter(patch){
     this.setState(patch);
   }
-  go(screen){ return () => { if(this.bottomRef.current) this.tabScrollLeft = this.bottomRef.current.scrollLeft; this.setState({screen}); this.toTop(); }; }
+  go(screen){ const aliases={home:'experiments',park:'city',plaza:'city',members:'library',treasury:'experiments'};screen=aliases[screen]||screen;return () => { if(this.bottomRef.current) this.tabScrollLeft = this.bottomRef.current.scrollLeft; this.setState({screen}); this.toTop(); }; }
   openExp(id){ return () => { this.setState({screen:'detail', expId:id}); this.toTop(); }; }
   /* 知恵カードをたたむ。知恵は4行・知識と経験は3行まで、報告は「詳細を見る」で出す。
      短いカードはたたむものが無いので、ボタンも出さない。 */
@@ -1489,34 +1040,8 @@ class Component extends DCLogic {
       moreLabel: (s.wOpen || {})[w.id] ? '閉じる' : '詳細を見る' + (nReports ? '（報告' + nReports + '件）' : ''),
       toggleMore: () => this.setState(st => ({ wOpen: { ...(st.wOpen || {}), [w.id]: !(st.wOpen || {})[w.id] } })) };
   }
-  joinBoard(id){ return () => this.setState(s => ({joined:{...s.joined, [id]:!s.joined[id]}})); }
+
   commit(id){ return (ev) => { if(ev) ev.stopPropagation(); try { window.parent.spQuestToggle(id, this); } catch (e) {} }; }
-  toggleSidebar = () => this.setState(s => ({sidebarOpen:!s.sidebarOpen}));
-  openSwitch = () => { try { window.parent.openSpMobileMenu('schoolpark', document.querySelector('[data-sp-head] .service-switch')); } catch (e) {} };
-  openProfile = () => { try { window.parent.toggleAccountMenu(null, document.querySelector('[data-sp-head] .service-profile')); } catch (e) {} };
-  openPassport = () => { try { window.parent.openSpPassport(); } catch (e) {} };
-  askReizo = (ev) => { try { if (window.parent.ReizoTourAsk) window.parent.ReizoTourAsk(ev && ev.currentTarget); else window.parent.spReizoOpen(); } catch (e) {} };
-  keyAskReizo = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); this.askReizo(ev); } };
-  goElevator = () => { try { window.parent.openSpRoom('/schoolpark/south-elevator.html', 'エレベーター'); } catch (e) {} };
-  /* 遊び。プランの判定（見学は林檎の方程式だけ・回数制限）は親が持っている。 */
-  goEcho  = () => { try { window.parent.spOpenPlay('echo'); } catch (e) {} };
-  goRingo = () => { try { window.parent.spOpenPlay('ringo'); } catch (e) {} };
-  goGods  = () => { try { window.parent.spOpenPlay('gods'); } catch (e) {} };
-  toggleBrand = () => this.setState(s => ({brandOpen:!s.brandOpen}));
-  /* 準備中かどうかは親（Emu側）の BRAND_MAINTENANCE に合わせる。
-     ここで名指しの決め打ちはしない。並びに足したブランドが
-     親の表で止まっていれば、ここも一緒に止まる。 */
-  brandClosed(id){
-    if (id === 'schoolpark') return false;        /* いま居る場所 */
-    try { return !!window.parent.isBrandUnderMaintenance(id); } catch (e) { return false; }
-  }
-
-  goBrand(id){ return () => {
-    this.setState({brandOpen:false});
-    if (id === 'schoolpark') return;              /* いま居る場所なので何もしない */
-    try { window.parent.chesHubGo(id); } catch (e) {}
-  }; }
-
   decorate(e){
     const on = !!e.iTook;
     /* 運営が認めて完走したら「完走した」。受けている途中と見分けられるようにする。
@@ -1570,35 +1095,21 @@ class Component extends DCLogic {
     const L = {...base, menuShow: hasSidebar ? 'none' : 'flex', sidebarShow:sidebarOpen ? 'flex' : 'none', sidebarToggle:hasSidebar && !sidebarOpen ? 'flex' : 'none', w: '100%', h: '100%', scale: 'none', boxH: '100vh', frameR: '0'};
     /* 左の並び。「考える → 決める → やる → 残す」の順に置き、
        公園（報酬のない遊び）はそのあとに続ける。番号は並びに合わせて振り直す。 */
-    const navDefs = [['home','01','ホーム'],['logs','02','ギルド'],['experiments','03',W],['library','04','知恵'],['park','05','公園'],['members','06','貢献'],['treasury','07','treasury'],['city','08','CITY']];
+
     const heads = {
-      home:['Home / ホーム','おはよう、' + s.me.name],
-      park:['THE PARK / 公園','公園'],
-      plaza:['THE PARK / 広場','建てられたもの'],
       experiments:['QUESTS', W],
       detail:['QUEST', W+'の詳細'],
       tasks:['MY WORK / 自分の宿題','自分の宿題'],
       logs:['GUILD','ギルド'],
       guild:['GUILD', (s.curGuild && s.curGuild.name) ? s.curGuild.name : 'ギルド'],
-      library:['WISDOM','知恵'],
-      members:['CONTRIBUTION','貢献'],
-      treasury:['TREASURY','treasury'],
-      city:['08 CITY / 分散型複合現実','CITY'],
+      library:['WISDOM','知恵ライブラリ'],
+      city:['CITY','City'],
       propose:['NEW QUEST', W+'を出す'],
       yeargoals:['YEAR GOALS', (s.yearDoc && s.yearDoc.title) ? s.yearDoc.title : '年内目標']
     };
     const allQuests = (s.quests || []).map(e => this.decorate(e));
     const founder = allQuests.find(e => e.isFounder);
     const exps = allQuests.filter(e => !e.isFounder);
-    /* 走っているクエスト＝締め切られていないもの全部（募集中・進行中、#000 も入れる）。
-       前は「誰かが受けているもの」だけを数えていたので、出ているクエストが22本あるのに
-       「4本」と出ていた。一覧（下の3件）は #000 を除き、進行中を先に、受けている人が
-       多い順に並べる（#000 はクエスト一覧の頭に別に出している）。 */
-    const liveAll = allQuests.filter(e => e.status !== 'CLOSED');
-    const runningAll = liveAll.filter(e => !e.isFounder)
-      .sort((a, b) => ((b.status === 'RUNNING') - (a.status === 'RUNNING')) || ((Number(b.commits) || 0) - (Number(a.commits) || 0)));
-    /* 受けている仲間＝走っているクエストのどれかを受けている人（同じ人は1人と数える） */
-    const runningPeople = new Set([].concat(...liveAll.map(e => e.peopleAddrs || [])).filter(Boolean)).size;
     const cur = allQuests.find(e => e.id === s.expId) || exps[0] || {};
     /* 系列の切り替え。一般が最初に出る。
        番号の無い古いクエストは series が '' なので、親が 'general' 扱いで
@@ -1705,10 +1216,6 @@ class Component extends DCLogic {
 
     return {
       L, word:W, wordShort:'経験', scrollRef:this.scroller, bottomRef:this.bottomRef,
-      showWeekToggle:isMobile,
-      showWeekDetails:!isMobile || this.weekExpanded,
-      weekToggleLabel:this.weekExpanded ? '閉じる' : '詳しく見る',
-      toggleWeekSummary:() => { this.weekExpanded = !this.weekExpanded; this.setState({}); },
       showFounderToggle:isMobile,
       showFounderDetails:!isMobile || this.founderExpanded,
       founderToggleLabel:this.founderExpanded ? '閉じる' : '詳しく見る',
@@ -1717,7 +1224,6 @@ class Component extends DCLogic {
       showLibraryDetails:!isMobile || this.libraryExpanded,
       libraryToggleLabel:this.libraryExpanded ? '閉じる' : '詳しく見る',
       toggleLibrarySummary:() => { this.libraryExpanded = !this.libraryExpanded; this.setState({}); },
-      toggleSidebar:this.toggleSidebar,
       me:s.me,
       openMenu:() => { try { window.parent.openSpMobileMenu(); } catch (e) {} },
       canGuild:s.canGuild, trust:s.trust,
@@ -1726,60 +1232,13 @@ class Component extends DCLogic {
       guildUnsorted:s.guildUnsorted || {label:'', open:function(){}},
       hasUnsorted:!!s.hasUnsorted, curGuild:s.curGuild || {},
       entryOnly:!!s.entryOnly, toggleEntryOnly:()=>this.setQuestFilter({entryOnly:!s.entryOnly}), noShownQuests:shownExps.length===0, resetQuestFilters:()=>this.setQuestFilter({entryOnly:false,filter:'すべて'}),
-      noQuests:exps.length === 0, noPark:s.noPark,
+      noQuests:exps.length === 0,
       noWisdom:s.noWisdom,
-      noHit:!s.noWisdom && s.wtag !== 'すべて' && !(s.wisdom || []).some(w => w.tag === s.wtag), noMembers:s.noMembers, membersNote:s.membersNote || '',
-      /* 読めなかったときに出す一言。「記録がありません」とは別に出す。
-         読めなかったのに「無い」と言い切ると嘘になるため。 */
-      hasMembersNote:!!s.membersNote, noTreasury:s.noTreasury,
-      openSwitch:this.openSwitch, openProfile:this.openProfile, openPassport:this.openPassport,
-      askReizo:this.askReizo, keyAskReizo:this.keyAskReizo,
-      goElevator:this.goElevator,
-      goEcho:this.goEcho, goRingo:this.goRingo, goGods:this.goGods,
-      /* 地図の押せる場所。広場だけ中身があり、遊具は順に作っていく。 */
-      goPlaza:   () => { this.setState({screen:'plaza'}); this.toTop(); },
-      goPark:    () => { this.setState({screen:'park'}); this.toTop(); },
-      goSandbox: () => alert('砂場「サバイバル遊び」は準備中です。\n\nもうしばらくお待ちください。'),
-      goSwing:   () => alert('ブランコ「靴を遠くに飛ばす」は準備中です。\n\nもうしばらくお待ちください。'),
-      goSlide:   () => alert('すべり台の遊びは準備中です。\n\nもうしばらくお待ちください。'),
-      makeOpen: this.makeOpen,
-      makeLabel: this.makeOpen ? '閉じる' : '開く',
-      toggleMake: () => { this.makeOpen = !this.makeOpen; this.setState({}); },
-      noEvents: (s.events || []).length === 0,
-      toggleBrand:this.toggleBrand,
-      brandOpen:s.brandOpen,
-      brandIcon:s.brandOpen ? '▴' : '▾',
-      /* 準備中のブランドは一覧から消さず、入れないことが押す前に分かるようにする。
-         判定は親に合わせるので、運営には準備中を出さずそのまま通す。 */
-      brands: [['emu','Emu','#F08300'],['schoolpark','SchoolPark','#D0E2BE']]
-        .map(([id,label,color]) => {
-          const soon = this.brandClosed(id);
-          return {
-            label: soon ? label + '（準備中）' : label,
-            fg: soon ? 'rgba(244,241,234,.38)' : color,
-            cursor: soon ? 'default' : 'pointer',
-            go: this.goBrand(id),
-            bg: id==='schoolpark' ? 'rgba(244,241,234,.08)' : 'transparent'};
-        }),
-      sidebarButtonIcon:sidebarOpen ? '‹' : '☰',
-      sidebarButtonTitle:sidebarOpen ? 'サイドバーを閉じる' : 'サイドバーを開く',
-      devices: [['pc','パソコン'],['tablet','タブレット'],['mobile','スマホ']].map(([id,label]) => ({
-        label, go:()=>this.setState({device:id}),
-        bg: s.device===id ? '#D0E2BE' : 'rgba(244,241,234,.1)',
-        fg: s.device===id ? '#141310' : 'rgba(244,241,234,.8)'})),
-      /* ギルドの中にいるあいだも、サイドバーの「ギルド」を選んだ状態にする */
-      nav: navDefs.map(([id,num,label]) => { const on = s.screen===id || (id==='logs' && s.screen==='guild'); return {num, label, go:this.go(id),
-        bg: on ? '#0F5C3F' : 'transparent',
-        fg: on ? '#F4F1EA' : 'rgba(244,241,234,.72)'}; }),
-      tabs: [['home','01','ホーム'],['logs','02','ギルド'],['experiments','03',W],['library','04','知恵'],['park','05','公園'],['members','06','貢献'],['treasury','07','treasury'],['city','08','CITY']].map(([id,n,label]) => ({
-        n, label, go:this.go(id),
-        bg: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#0F5C3F' : 'transparent',
-        fg: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#F4F1EA' : 'rgba(244,241,234,.6)',
-        num: (s.screen===id || (id==='logs' && s.screen==='guild')) ? '#D0E2BE' : 'rgba(244,241,234,.35)'})),
-      head: {kicker: (heads[s.screen] || heads.home)[0], title: (heads[s.screen] || heads.home)[1]},
+      noHit:!s.noWisdom && s.wtag !== 'すべて' && !(s.wisdom || []).some(w => w.tag === s.wtag),
+      head: {kicker: (heads[s.screen] || heads.experiments)[0], title: (heads[s.screen] || heads.experiments)[1]},
       isCity:s.screen==='city', goCity:this.go('city'),
       showCityReturn:!!this.cityReturn && ['experiments','detail','guild'].includes(s.screen),
-      isHome:s.screen==='home', isPark:s.screen==='park', isPlaza:s.screen==='plaza', isExperiments:s.screen==='experiments', isDetail:s.screen==='detail' && !cur.isFounder,
+      isExperiments:s.screen==='experiments', isDetail:s.screen==='detail' && !cur.isFounder,
       isFounderDetail:s.screen==='detail' && !!cur.isFounder,
       /* #000 はクエストの画面にだけ出す。広場には出さない。
          広場は「今週どうだったか」を見る場所で、恒久の原点は毎回そこに
@@ -1792,24 +1251,13 @@ class Component extends DCLogic {
       yearDoc:s.yearDoc || {},
       openYearGoals:() => { this.setState({screen:'yeargoals'}); this.toTop(); },
       founder:founder || {}, founderSections:(founder && Array.isArray(founder.founderSections)) ? founder.founderSections : [],
-      isLogs:s.screen==='logs', isGuild:s.screen==='guild', isLibrary:s.screen==='library', isMembers:s.screen==='members',
-      isTreasury:s.screen==='treasury', isPropose:s.screen==='propose', isTasks:s.screen==='tasks',
-      goTasks:this.go('tasks'), goHome:this.go('home'),
+      isLogs:s.screen==='logs', isGuild:s.screen==='guild', isLibrary:s.screen==='library',
+      isPropose:s.screen==='propose', isTasks:s.screen==='tasks',
+      goTasks:this.go('tasks'), goPractice:() => { try { window.parent.showEmuPractice(); } catch (_) {} },
       goPropose:() => { try { window.parent.openSpQuestForm(this); } catch (e) { this.setState({screen:'propose'}); } }, goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
-      stats: {newWisdom:(s.wisdom || []).length, running:liveAll.length, people:runningPeople, myCommit:myQuests.length,   /* 実際に受けている記録（commits）から数える。宿題と同じ数 */
-         due:0, wisdomTotal:(s.wisdom || []).length, payout:'¥0', citations:s.citations || 0},
-      /* 左下は本人の数字。まだ数え終わっていないときは、0ではなく空で待つ。
-         ここに DAO のトレジャリーを出していたころは、誰が開いても同じ額が出て、
-         クエストの予算が残高を超えていると本人に「-1,250,000」と見えていた。 */
-      mine: Object.assign({ label:'あなたの分配（計算額）', balance:'—', note:'数えています…' }, s.mine || {}),
-      freshWisdom: (s.wisdom || []).slice(0,3).map(w => ({...w, open:this.go('library')})),
-      runningExps: runningAll.slice(0,3).map(e => ({...e, title: e.fullTitle || e.title})),
-      /* 広場のカードには、残っているものを上から3つだけ出す */
-      todos: openTasks.slice(0, 3),
-      noTasks: openTasks.length === 0,
+      stats: {wisdomTotal:(s.wisdom || []).length, citations:s.citations || 0},
       myQuests, hasMyQuests: myQuests.length > 0,
       noHomework: openTasks.length === 0 && myQuests.length === 0,
-      todoLeft: openTasks.length > 3 ? ('ほか ' + (openTasks.length - 3) + '件') : '',
       openTasks, doneTasks,
       noOpenTasks: openTasks.length === 0,
       noDoneTasks: doneTasks.length === 0 && doneQuests.length === 0,
@@ -1851,29 +1299,6 @@ class Component extends DCLogic {
         this.draft = { title:'', note:'', brand:this.draft.brand, questId:'', questTitle:'', due:'' };
         this.setState({});
       },
-      boardDraft: this.boardDraft,
-      onBoardWhen:  (ev) => { this.boardDraft.when  = ev.target.value; },
-      onBoardTitle: (ev) => { this.boardDraft.title = ev.target.value; },
-      onBoardBody:  (ev) => { this.boardDraft.body  = ev.target.value; },
-      addBoard: async () => {
-        let ok = false;
-        try { ok = await window.parent.spParkAdd('board', this.boardDraft, this); } catch (e) {}
-        if (!ok) return;
-        this.boardDraft = { when:'', title:'', body:'' };
-        this.setState({});
-      },
-      dumbDraft: this.dumbDraft,
-      onDumbTitle: (ev) => { this.dumbDraft.title = ev.target.value; },
-      onDumbBody:  (ev) => { this.dumbDraft.body  = ev.target.value; },
-      addDumb: async () => {
-        let ok = false;
-        try { ok = await window.parent.spParkAdd('dumb', this.dumbDraft, this); } catch (e) {}
-        if (!ok) return;
-        this.dumbDraft = { title:'', body:'' };
-        this.setState({});
-      },
-      board: s.board || [],
-      dumb: s.dumb || [], events: s.events || [],
       filters, seriesFilters, shownExps, cur,
       questsDenied:!!s.questsDenied, questsNote:s.questsNote || '',
       curLogs: cur.logs || [],
@@ -1884,8 +1309,6 @@ class Component extends DCLogic {
         bg: s.wtag===x.t ? x.c : 'transparent',
         fg: s.wtag===x.t ? '#F4F1EA' : x.c,
         border: s.wtag===x.t ? x.c : 'rgba(20,19,16,.16)'})),
-      members: s.members || [],
-      treasury: s.treasury,
       steps: STEPS.map((st,i) => ({num:'0'+(i+1), label:st.label, hint:st.hint, go:()=>this.setState({step:i}),
         bg: s.step===i ? '#E7E2D6' : 'transparent',
         fg: s.step===i ? '#141310' : '#6E695C',
@@ -2094,7 +1517,6 @@ if (app.componentDidMount) app.componentDidMount();
 // Native keyboard activation for the read-only guild cards and sidebar switch.
 document.addEventListener('keydown', function(e) {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.sp-ux-guild-card')) { e.preventDefault(); e.target.click(); }
-  if (e.key === 'Escape' && app.state.brandOpen) { app.setState({brandOpen:false}); requestAnimationFrame(() => document.querySelector('.sp-sidebar-switch')?.focus()); }
 });
 // Clicking elsewhere inside the SchoolPark frame dismisses the shared profile.
 document.addEventListener('click', function(e) {

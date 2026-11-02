@@ -12,10 +12,10 @@
     if (document.body.classList.contains('sp-dao-open')) {
       try {
         var app = document.getElementById('spDaoFrame').contentWindow.app;
-        return { home:'home', logs:'guild', guild:'guild', experiments:'quest', detail:'quest-detail', library:'wisdom', park:'park', plaza:'plaza', members:'contrib', treasury:'treasury', city:'city', tasks:'tasks', yeargoals:'year-goals' }[app.state.screen] || '';
+        return { logs:'guild', guild:'guild', experiments:'quest', detail:'quest-detail', library:'wisdom', city:'city', tasks:'tasks', yeargoals:'year-goals' }[app.state.screen] || '';
       } catch (_) { return ''; }
     }
-    var classes = { 'emu-knowledge-open':'emu-read', 'emu-requests-open':'emu-search', 'emu-ichinichi-open':'emu-share', 'emu-discussion-open':'emu-debate' };
+    var classes = { 'emu-knowledge-open':'emu-read', 'emu-requests-open':'emu-search', 'emu-practice-open':'emu-practice' };
     return Object.keys(classes).map(function(key) { return document.body.classList.contains(key) ? classes[key] : ''; }).find(Boolean) || '';
   }
   async function ask(message) {

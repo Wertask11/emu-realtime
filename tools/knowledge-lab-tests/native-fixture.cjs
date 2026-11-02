@@ -63,7 +63,7 @@ async function main(options={}){
       .replace('const auth = parentSession ? parentSession.auth : getAuth(app);','const auth = parentSession ? parentSession.auth : getAuth(app); if (!parentSession) connectAuthEmulator(auth,"http://127.0.0.1:9199",{disableWarnings:true});');
     res.type('html').send(page.replace(/demo-emu-knowledge-lab/g,PROJECT).replace(/127\.0\.0\.1:9199/g,process.env.LAB_AUTH_EMULATOR_HOST||'127.0.0.1:9199'));
   });
-  router.use((req,res,next)=>{if(!/\.(?:html|js)$/.test(req.path))return next();const publicRoot=path.join(ROOT,'frontend/public'),file=path.resolve(publicRoot,'.'+req.path);if(!file.startsWith(publicRoot+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile())return next();res.type(path.extname(file)).send(fs.readFileSync(file,'utf8').replace(/https:\/\/emu-realtime\.onrender\.com/g,base).replace(/https:\/\/firestore\.googleapis\.com/g,'http://127.0.0.1:8787').replace(/emusch-2a111/g,'demo-emu-knowledge-lab'));});
+  router.use((req,res,next)=>{if(!/\.(?:html|js)$/.test(req.path))return next();const publicRoot=path.join(ROOT,'frontend/public'),file=path.resolve(publicRoot,'.'+req.path);if(!file.startsWith(publicRoot+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile())return next();res.type(path.extname(file)).send(fs.readFileSync(file,'utf8').replace(/https:\/\/emu-realtime\.onrender\.com/g,base).replace(/https:\/\/firestore\.googleapis\.com/g,'http://127.0.0.1:8787').replace(/emusch-2a111/g,PROJECT));});
   // Missing integrations stay visibly unavailable, never return fabricated success.
   router.use('/api',(req,res,next)=>req.path.startsWith('/knowledge-lab')?next():res.status(503).json({error:'NOT_MOUNTED_IN_LOCAL_FIXTURE'}));
   const stack=app.router.stack;

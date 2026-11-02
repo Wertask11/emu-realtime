@@ -239,7 +239,7 @@
         return;
       }
       if (
-        action === "discussion" &&
+        action === "guild-proposal" &&
         (validId(message.postId) || validId(message.noteId))
       ) {
         const id = message.noteId || message.postId,
@@ -252,35 +252,15 @@
         );
         const data = await r.json();
         if (!r.ok) throw new Error("元の知識・研究を確認できませんでした。");
+        if (!await window.openEmuPractice('logs')) return;
         window.closeSpRoom();
-        window.showEmuDiscussion();
-        // Open the existing composer. The user still decides whether to create/send the topic.
-        const url = new URL(
-          "/knowledge-lab.html?" +
-            (message.noteId ? "note" : "post") +
-            "=" +
-            id,
-          location.origin,
-        );
-        const discussion = document.getElementById("emuDiscussionFrame");
-        const prefill = () => {
-          try {
-            const input =
-              discussion?.contentDocument?.getElementById("ownTopic");
-            if (input) {
-              input.value = (String(data.title || "") + " " + url).slice(
-                0,
-                120,
-              );
-              input.focus();
-              discussion.removeEventListener("load", prefill);
-              return true;
-            }
-          } catch (_) {}
-          return false;
-        };
-        if (!prefill())
-          discussion?.addEventListener("load", prefill, { once: true });
+        const app = document.getElementById('spDaoFrame')?.contentWindow?.app;
+        if (message.postId) await window.spOpenProposalFromPost(message.postId, data.title);
+        else {
+          await window.openSpVoteForm(app, '', null);
+          const input = document.getElementById('spvTitle');
+          if (input) { input.value = (String(data.title || '') + ' ' + new URL('/knowledge-lab.html?note=' + id, location.origin)).slice(0,120); input.focus(); }
+        }
         return;
       }
     } catch (e) {

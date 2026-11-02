@@ -18,9 +18,6 @@ window.emuerV2ConfigOnce=function(){
 const emuerReflectionScript=document.createElement("script");
 emuerReflectionScript.src="/change-reflection-ui.js";
 document.head.appendChild(emuerReflectionScript);
-const emuerDiscussionRewardScript=document.createElement("script");
-emuerDiscussionRewardScript.src="/discussion-reward-ui.js";
-document.head.appendChild(emuerDiscussionRewardScript);
 const emuerKnowledgeBountyScript=document.createElement("script");
 emuerKnowledgeBountyScript.src="/knowledge-bounty-v2-ui.js";
 document.head.appendChild(emuerKnowledgeBountyScript);

@@ -29,13 +29,6 @@
         ["公開投稿／月", (p) => number(p.post)],
         ["経験者への質問募集／月", (p) => number(p.request)],
         ["募集への回答／月", (p) => number(p.answer)],
-        [
-          "一日シェアの記録",
-          (p) =>
-            p.ichinichi === 31 ? "毎日" : p.ichinichi ? "月7日" : "閲覧のみ",
-        ],
-        ["議論で発言", (p) => (p.key === "guest" ? "対象外" : "利用可能")],
-        ["議論を立てる／月", (p) => number(p.discussion)],
         ...[
           ["保存した知識", "saved"],
           ["下書き・自分用の経験知", "drafts"],
