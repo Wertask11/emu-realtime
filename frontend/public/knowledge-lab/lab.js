@@ -14,6 +14,7 @@
             "'": "&#39;",
           })[c],
       );
+  const measure = (name, values, key) => window.EmuAnalytics?.track(name, values, key);
   const axes = {
     field: "分野",
     industry: "業種",
@@ -415,6 +416,7 @@
           : ""),
     );
     bindCards("#results", data.items);
+    measure("knowledge_lab_search", { mode: p.get("mode") === "semantic" ? "semantic" : "lexical", result_count: data.items.length, more });
     $("#emptyReset")?.addEventListener("click", () =>
       $("#resetFilters").click(),
     );
@@ -448,6 +450,8 @@
       );
     if (!state.enabled) return;
     tour?.enter(tourId(name));
+    if (name !== "admin") window.EmuAnalytics?.view("knowledge_lab_view", { section: name }, name);
+    if (name === "writer") measure("knowledge_lab_writer_profile", { stage:"view" }, "writer-form-view");
     if (["mine", "writer", "requests", "admin"].includes(name) && !state.me)
       showLogin();
     if (state.loadedViews[name] && Date.now() - state.loadedViews[name] < 30000)
@@ -481,6 +485,7 @@
           "",
         )}<p class="hint">医療・法律・金融などの内容は個人の経験であり、専門的な助言や結果を保証するものではありません。出典の有無と正しさの検証は別です。</p>${lab.sourceAnswer ? `<p class="hint">元募集 ${esc(lab.sourceAnswer.requestId)}・元回答 ${esc(lab.sourceAnswer.answerId)}</p><button type="button" id="answerSource">元の募集・回答を見る</button>` : ""}<div class="actions"><button type="button" id="saveKnowledge">マイライブラリーに保存</button><button type="button" id="unsaveKnowledge">保存を外す</button><button type="button" id="useKnowledge">研究に使う</button>${p.editable ? '<button type="button" id="editKnowledge">編集</button><button type="button" id="withdrawKnowledge">公開を取り下げる</button><button type="button" id="archiveKnowledge">削除して非公開で保管</button><button type="button" id="restoreKnowledge" hidden>下書きに復元</button><button type="button" id="postHistory">編集履歴</button>' : ""}${p.authorSchoolParkId ? '<button type="button" id="openWriter">書き手を見る</button>' : ""}<button type="button" id="goodKnowledge">役に立った</button><button type="button" id="changeKnowledge">改善案を届ける</button><button type="button" id="proposeKnowledge">議題にする</button><button type="button" id="discussKnowledge">議論へ</button></div><div class="report-controls"><label for="reportReason">通報する理由</label><textarea id="reportReason" maxlength="1500"></textarea><button type="button" id="reportKnowledge">運営へ通報</button></div>`;
     $("#detailDialog").showModal();
+    window.EmuAnalytics?.view("knowledge_detail_view", { surface:"lab" }, postId);
     $("#detailTitle").insertAdjacentHTML(
       "afterend",
       `<p class="hint">Gemini利用：${esc(aiSourceLabel(p))}。${p.editable ? "変更する場合は「編集」からAI利用の確認欄を設定して保存してください。" : "AI利用への同意を変更できるのは投稿者本人です。"}</p>`,
@@ -516,6 +521,7 @@
         body: { saved: true },
         auth: true,
       });
+      measure("knowledge_lab_save", { kind:"knowledge" }, p.id);
       status("マイライブラリーに保存しました。");
     });
     bindAsync($("#unsaveKnowledge"), async () => {
@@ -665,6 +671,7 @@
         lab[key] || (key === "verification" ? "self-reported" : "");
     facetUI("#postFacets", lab.facets || p?.facets || {});
     $("#editorDialog").showModal();
+    if (!p) measure("post_create_start", {surface:"lab"});
     $("#postTitle").focus();
   }
   $("#postForm").addEventListener("submit", (e) => {
@@ -717,6 +724,8 @@
           auth: true,
           body: { ...payload, key: keyFor("post", payload) },
         });
+        if (payload.visibility === "public" && (!p || p.visibility !== "public")) measure("post_publish", {surface:"lab"}, result.id);
+        else if (payload.visibility !== "public") measure("knowledge_lab_save", {kind:"draft"}, result.id + ":" + result.revision);
         state.post = await api("/posts/" + result.id, { auth: true });
         if (state.selected.has(result.id)) {
           state.selected.set(result.id, state.post);
@@ -800,6 +809,7 @@
       body: { sourceIds: [...state.selected.keys()] },
     });
     $("#comparison").hidden = false;
+    measure("knowledge_lab_research", {stage:"compare",method:"manual"}, keyFor("analytics-compare", [...state.selected.keys()]));
     $("#comparison").innerHTML =
       `<section class="card"><h3>比較：元の知識と、あなたの問い</h3><p>分類の共通点・違いを実データから表示しています。文章の意味をAIで分析した結果ではありません。</p><p><b>共通の分類：</b>${esc(Object.values(data.common).map(names).filter(Boolean).join("／") || "共通する分類は未登録です。")}</p><p><b>異なる分類：</b>${esc(Object.values(data.differences).map(names).filter(Boolean).join("／"))}</p>${data.sources.map((p) => `<div class="source"><a href="/knowledge-lab.html?post=${encodeURIComponent(p.id)}" target="_blank" rel="noopener">${esc(p.title)}</a><p>${esc(p.body.slice(0, 300))}</p><small>元知識・更新 ${date(p.updatedAt)} ${esc(p.displayName)}</small></div>`).join("")}<h3>考えるための問い（定型）</h3>${data.prompts.map((p) => `<p>${esc(p)}</p>`).join("")}<p class="hint">この下に書く問い・仮説は、元投稿の事実や検証済みの結果とは別です。</p></section>`;
     status("比較を表示しました。あなたの問いと仮説を記入してください。");
@@ -916,6 +926,7 @@
         },
       });
       state.aiRun = run;
+      measure("knowledge_lab_research", {stage:"ai_success",method:"ai"}, run.id);
       state.selected.clear();
       for (const source of run.sources)
         state.selected.set(source.id, {
@@ -1076,6 +1087,8 @@
           body: { ...payload, key: keyFor("note", payload) },
         });
         state.note = { ...payload, ...result };
+        measure("knowledge_lab_research", {stage:"save",method:payload.aiRunId?"ai":"manual"}, result.id + ":" + result.revision);
+        measure("knowledge_lab_save", {kind:"research"}, result.id + ":" + result.revision);
         status(
           "研究ノートを保存しました。次回はマイライブラリーから結果を追記できます。",
         );
@@ -1476,6 +1489,7 @@
       revision: state.writerRevision,
     };
     const w = await api("/me/writer", { method: "PUT", body, auth: true });
+    measure("knowledge_lab_writer_profile", {stage:"save"}, String(w.revision));
     state.writerRevision = w.revision;
     state.me.writer = w;
     $("#writerPublished").checked = w.published;
@@ -2278,6 +2292,7 @@
     }
     renderFacets();
     await search();
+    window.EmuAnalytics?.view("knowledge_lab_view", {section:"library"}, "library");
     const p = initialParams,
       initial = p.get("view");
     if (initial && initial !== "library") await view(initial);
