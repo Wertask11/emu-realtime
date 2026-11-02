@@ -26,12 +26,16 @@ test('blocked localStorage does not prevent definitions or progress reads',()=>{
 test('invalid definitions fail without registering an incomplete guide',()=>{
  const {tour}=load();assert.throws(()=>tour.register('post/private-id',steps));assert.throws(()=>tour.register('sp-home',[]));assert.throws(()=>tour.register('sp-home',[{}]));assert.equal(tour.list().length,0);
 });
-test('Room1 has one search entrance and no read-screen DOM entrance',()=>{
+test('Knowledge Text (formerly Room1) has one search entrance, as a card beside Knowledge Lab, and no read-screen DOM entrance',()=>{
  const index=fs.readFileSync(path.join(root,'frontend/public/index.html'),'utf8'),knowledge=fs.readFileSync(path.join(root,'frontend/public/knowledge.html'),'utf8');
  assert.ok(!knowledge.includes('data-command="room1"'));
- assert.equal((index.match(/class="emu-room1-entry"/g)||[]).length,1);
+ assert.equal((index.match(/emu-text-entry/g)||[]).length,1);
+ assert.equal((index.match(/data-tour="room1-entry emu-room1"/g)||[]).length,1);
  const start=index.indexOf('id="emuRequestsPage"'),end=index.indexOf('id="emuIchinichiPage"');assert.ok(index.indexOf('data-tour="room1-entry emu-room1"')>start&&index.indexOf('data-tour="room1-entry emu-room1"')<end);
- assert.ok(index.includes("openSpRoom('/admin/room1/index.html', 'Room1')"));
+ // Knowledge Lab と同じ並び（emu-knowledge-pair）の中に、同じ eth-card として置く
+ const pair=index.slice(index.indexOf('<div class="emu-knowledge-pair">'),index.indexOf('<div class="eth-section-head">',index.indexOf('<div class="emu-knowledge-pair">')));
+ assert.ok(pair.includes('data-tour="emu-lab-entry"')&&pair.includes('<div class="eth-card" data-tour="room1-entry emu-room1"><h3>Emu Knowledge Text</h3>'));
+ assert.ok(index.includes("openSpRoom('/admin/room1/index.html', 'Knowledge Text')"));
 });
 test('core state/UI never dispatch network requests or app clicks',()=>{
  assert.ok(!/\b(?:fetch|XMLHttpRequest|sendBeacon|postMessage)\s*\(/.test(source));assert.ok(!/\.click\s*\(/.test(source));

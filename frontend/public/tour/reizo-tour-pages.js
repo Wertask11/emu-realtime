@@ -553,10 +553,10 @@
       },
       {
         "target": "emu-room1",
-        "label": "Room1の入口",
-        "text": "Room1もここから入れるよ。",
+        "label": "Knowledge Textの入口",
+        "text": "運営がまとめた教材「Knowledge Text」もここから入れるよ。お金・ネット・暮らしの基本が学べるよ。",
         "click": true,
-        "note": "Room1は「知識を探す」の中だけに表示",
+        "note": "Knowledge Text（旧 Room1）は「知識を探す」の中だけに表示",
         "screen": "search"
       }
     ]
