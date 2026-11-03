@@ -21,7 +21,11 @@ h1{font-size:20px;margin:0 0 4px}
 .lead{color:var(--muted);font-size:12px;margin:0 0 20px}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
 .tabs button{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:8px 16px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--muted)}
-.tabs button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* よく開く場所への入口（11/3） */
+.quick{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.quick a{display:inline-flex;align-items:center;min-height:36px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:#fff;color:#b85f00;font-size:12px;font-weight:700;text-decoration:none}
+.quick a:hover{border-color:var(--accent)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
 .card h3{font-size:14px;margin:0 0 8px}
 .meta{font-size:12px;color:var(--muted);word-break:break-all}
@@ -48,8 +52,18 @@ label{display:block;margin-top:12px;font-size:12px;font-weight:600;color:var(--m
 </head>
 <body>
 <div class="wrap">
-  <h1>Emu 会員管理</h1>
-  <p class="lead">オーナー専用。返金の承認と本人確認の判定は取り消せません。</p>
+  <h1>Emu for SchoolPark 運営画面</h1>
+  <p class="lead">オーナー専用。返金の承認と本人確認の判定は取り消せません。<br>
+    画面の並びは本番と同じ（知識を読む・探す → 知識を試す（ギルド・クエスト）→ City）。11/2 に利用者向けの一日シェア・公開の議論・公園・トレジャリーの画面は終了しました（運営のトレジャリーの集計は「知識を試す」のタブに残っています）。</p>
+  <!-- 11/3：本番の画面統合（#265）に合わせて、よく開く場所への入口を並べる -->
+  <nav class="quick" aria-label="よく開く場所">
+    <a href="/" target="_blank" rel="noopener">本番を開く ↗</a>
+    <a href="/knowledge-lab.html" target="_blank" rel="noopener">Knowledge Lab ↗</a>
+    <a href="/?view=city" target="_blank" rel="noopener">City（公式ショップの配送は City の中で）↗</a>
+    <a href="/schoolpark/emuer-paper.html" target="_blank" rel="noopener">EMUER論文 ↗</a>
+    <a href="/terms.html" target="_blank" rel="noopener">利用規約 ↗</a>
+    <a href="/privacy.html" target="_blank" rel="noopener">プライバシーポリシー ↗</a>
+  </nav>
 
   <div id="gate" class="gate">確認しています…</div>
 
@@ -65,8 +79,8 @@ label{display:block;margin-top:12px;font-size:12px;font-weight:600;color:var(--m
       <button data-tab="kyc">本人確認</button>
       <button data-tab="dialogue">対話記録</button>
       <button data-tab="metrics">指標</button>
-      <button data-tab="schoolpark">SchoolPark</button>
-      <button data-tab="emu">Emu</button>
+      <button data-tab="emu">知識（読む・探す）</button>
+      <button data-tab="schoolpark">知識を試す（ギルド・クエスト）</button>
       <button data-tab="camellia">Camellia</button>
       <button data-tab="contacts">お問い合わせ</button>
     </div>
@@ -2927,7 +2941,7 @@ async function renderSchoolPark() {
     + '<div class="row"><span>クエスト</span><span>' + quests.length + ' 本</span></div>'
     + '<div class="row"><span>議題</span><span>' + votes.length + ' 件</span></div>'
     + '<div class="row"><span>知恵カード</span><span>' + wisdomCount + ' 枚</span></div>'
-    + '<div class="row"><span>公園に置いたもの</span><span>' + park.length + ' 件</span></div></div>'
+    + '<div class="row"><span>公園に置いたもの（終了した画面）</span><span>' + park.length + ' 件</span></div></div>'
 
     + '<div class="card"><h3>トレジャリー</h3>'
     + '<p class="empty" style="text-align:left;margin:0 0 10px">'
@@ -3245,22 +3259,10 @@ async function renderSchoolPark() {
     + 'ほかの5つの節（A・B・起業観①②・人生観）は変わりません。</p>'
     + '<div class="actions"><button class="btn primary" id="spFounderPaper">論文を新しい版にする</button></div></div>'
 
-    + '<div class="card"><h3>公園に置く</h3>'
-    + '<p class="empty" style="text-align:left;margin:0 0 10px">締切も報酬もない場所。'
-    + '「乗る」はどなたでもできます。</p>'
-    + '<label>種類</label><select id="apKind">'
-    + '<option value="board">今日ひま？ボード</option>'
-    + '<option value="dumb">バカな挑戦</option>'
-    + '<option value="event">月例、リアルの集まり</option></select>'
-    + '<label>題名</label><input id="apTitle" placeholder="例：誰か通話つないで作業しない？">'
-    + '<label>説明</label><textarea id="apBody" rows="2" placeholder="無言でいい。カメラも要らない。"></textarea>'
-    + '<label>いつ（ボードのみ）</label><input id="apWhen" placeholder="例：今夜 20:00〜 ／ いつでも">'
-    + '<label>日付（集まりのみ）</label><input id="apAt" type="date">'
-    + '<label>場所（集まりのみ）</label><input id="apPlace" placeholder="例：代々木公園">'
-    + '<label>ひとこと（挑戦・集まり）</label><input id="apWho" placeholder="例：12人が行く ／ 3日目で心が折れた">'
-    + '<div class="actions"><button class="btn primary" id="apSubmit">公園に置く</button></div></div>'
-
-    + '<div class="card"><h3>公園にあるもの</h3>'
+    /* 公園の画面は 11/2 の画面統合（#265）で終了した。利用者には出ないので、新しく置く欄は外す（11/3）。
+       これまでの記録は消さずに残し、しまう・消すだけできるようにしておく。 */
+    + '<details class="card"><summary style="cursor:pointer;font-weight:700">公園（終了した画面）の記録 ' + park.length + ' 件</summary>'
+    + '<p class="empty" style="text-align:left;margin:8px 0 10px">公園の画面は 11/2 の画面統合で終了しました。利用者には表示されず、新しく置くこともできません。これまでの記録は残しています。</p>'
     + (park.length ? park.map(x =>
         '<div class="row"><span>' + esc(x.title || "")
         + '<br><small style="color:var(--muted)">' + (PARK_KIND[x.kind] || x.kind)
@@ -3269,7 +3271,7 @@ async function renderSchoolPark() {
         + (x.hidden ? '1' : '0') + '">' + (x.hidden ? '出す' : 'しまう') + '</button> '
         + '<button class="act no" data-pdel="' + esc(x.id) + '">消す</button></span></div>').join("")
       : '<p class="empty">まだ何もありません。</p>')
-    + '</div>'
+    + '</details>'
 
     + '<div class="card"><h3>ギルドに関われる人</h3>'
     + '<p class="empty" style="text-align:left;margin:0 0 10px">議題を出せるのは、運営・公式パスの方・ここで認めた方です。'
@@ -3855,7 +3857,7 @@ async function renderSchoolPark() {
       renderSchoolPark();
     };
   });
-  $("#apSubmit").onclick = async () => {
+  if ($("#apSubmit")) $("#apSubmit").onclick = async () => {
     const v = id => ($("#" + id).value || "").trim();
     if (!v("apTitle")) { alert("題名を書いてください。"); return; }
     const kind = v("apKind") || "board";
@@ -4097,7 +4099,7 @@ function paintInbox(subs) {
   /* タブにも件数を出す。開かないと気づけない、を無くす */
   const tab = document.querySelector('.tabs button[data-tab="emu"]');
   if (tab) {
-    tab.textContent = waiting.length ? ("Emu 📮" + waiting.length) : "Emu";
+    tab.textContent = waiting.length ? ("知識（読む・探す） 📮" + waiting.length) : "知識（読む・探す）";
     tab.style.borderColor = waiting.length ? "#f08300" : "";
     tab.style.color = waiting.length ? "#b45309" : "";
   }
