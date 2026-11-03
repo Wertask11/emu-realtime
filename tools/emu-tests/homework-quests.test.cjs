@@ -12,12 +12,9 @@ test('受けているクエスト（#000 以外）を宿題に並べ、次に出
   assert.ok(DAO.indexOf("next: next ? ('次：' + next.head + ' を出す')") > 0);
   assert.ok(DAO.indexOf(": '次：知恵カードを置く（報告は3つそろっています）',") > 0);
   assert.ok(DAO.indexOf('open: this.openExp(q.id)') > 0);
-  /* ホームの「自分の宿題」とタスク管理の両方 */
-  assert.equal(DAO.split('<sc-for list="{{ myQuests }}" as="mq">').length - 1, 2);
-  assert.ok(DAO.indexOf('<sc-if value="{{ noHomework }}">') > 0, '受けているクエストがあるのに「何も残っていません」と出る');
-  /* 「受けているクエスト」の数も、実際に受けた記録から数える */
-  assert.ok(DAO.indexOf('myCommit:myQuests.length,') > 0);
-  assert.equal(DAO.indexOf('myCommit:Object.values(s.committed)'), -1);
+  /* 11/2 の画面統合（#265）で SchoolPark のホームは無くなり、「自分の宿題」は知識を試す → 自分の宿題（タスク管理）の1か所になった */
+  assert.equal(DAO.split('<sc-for list="{{ myQuests }}" as="mq">').length - 1, 1);
+  assert.equal(DAO.indexOf('myCommit:Object.values(s.committed)'), -1, '受けた記録ではなく、押しただけの数を数えている');
 });
 
 test('自分の宿題・ギルドの定義は共有の読み口で読む（SDK が止まっても待ち続けない）', () => {
@@ -107,12 +104,11 @@ test('クエストを受ける・降りる：書く前と書いたあとは取�
   assert.ok(c.indexOf('return') < 0, '失敗したとき読み直さずに引き返している');
 });
 
-test('広場の一文：走っているクエストは締め切られていない全部（#000 も）、仲間は受けている人の実数', () => {
+/* 11/2 の画面統合（#265）で、SchoolPark の広場（公園）の画面は終了した。11/3 テストを今の形に合わせる */
+test('広場の一文は終了した画面と一緒に無くなり、数えていない「0」を決め打ちで出す箇所も残っていない', () => {
   const DAO = readHtml('frontend/public/schoolpark/dao.html');
   assert.ok(DAO.indexOf('読んで終わった知識は0') < 0, '数えていない「0」を決め打ちで出している');
-  /* 締め切られていないクエストは全部（#000・誰も受けていないものも）走っている */
-  assert.ok(DAO.indexOf("const liveAll = allQuests.filter(e => e.status !== 'CLOSED');") > 0, '締め切られていないクエストを全部数えていない');
-  assert.ok(DAO.indexOf('running:liveAll.length, people:runningPeople,') > 0, '数が一文と合っていない');
-  assert.ok(DAO.indexOf('runningExps: runningAll.slice(0,3)') > 0, '「走っているクエスト」の並びが一文と食い違う');
+  assert.equal(DAO.indexOf('runningExps'), -1, '終了した広場の一文が残っている');
+  /* 受けている人の番号は、クエストの一覧（参加者）でいまも使う */
   assert.ok(INDEX.indexOf("peopleAddrs: (cs || []).map(") > 0, '受けている人の番号を渡していない');
 });

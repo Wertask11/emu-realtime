@@ -35,9 +35,9 @@ function reloadSection() {
   return src.slice(a, eol);
 }
 
+/* 11/2 の画面統合（#265）で、トレジャリーと公園の画面は終了し、読み込みも外れた（11/3 テストを今の形に合わせる） */
 const LOADERS = ['spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
-                 'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadTreasury', 'spDaoLoadPark',
-                 'spDaoLoadYearDoc'];
+                 'spDaoLoadWisdom', 'spDaoLoadMembers', 'spDaoLoadYearDoc'];
 
 /* 画面のかわりに、呼ばれた名前を書き留めるだけの入れ物を用意する */
 function makeWindow(opts) {
@@ -90,7 +90,7 @@ function fire(win) {
   fns.forEach(function (fn) { fn(); });
 }
 
-test('用意ができた合図で、一覧のぜんぶ（9つ）を読み直す', () => {
+test('用意ができた合図で、一覧のぜんぶ（7つ）を読み直す', () => {
   const win = run(makeWindow());
   fire(win);
   assert.deepEqual(win.__called, LOADERS);

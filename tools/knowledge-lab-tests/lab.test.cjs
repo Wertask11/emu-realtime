@@ -3,6 +3,7 @@ const {test,before,after}=require('node:test');const assert=require('node:assert
 const {createFixture}=require('./fixture.cjs');const m=require('../../backend/knowledge-lab/model');
 let f,alice,bob,owner;
 const actor=role=>({...f.users[role],walletAddress:f.users[role].account.walletAddress.toLowerCase(),owner:role==='owner'});
+// 11/1 から利用枠（plan_usage・plan_counts）はパスポートID（spid）ごとに数える。11/3 テストを今の形に合わせる
 const post=(key,extra={})=>({key,title:'独立して学んだこと',body:'小さく試してから準備を整えました。条件の違いも確認することが大切でした。',facets:{field:['field-business'],job:['job-independent'],experience:['experience-failure'],purpose:['purpose-learn'],kind:['kind-story']},visibility:'public',...extra});
 before(async()=>{f=await createFixture();alice=actor('alice');bob=actor('bob');owner=actor('owner');await f.api.service.rebuild(owner);await f.api.service.waitForRebuild();});after(async()=>{await f?.close();});
 test('real emulator auth, Passport and Owner middleware; public read vs private write',async()=>{
@@ -15,7 +16,7 @@ test('real emulator auth, Passport and Owner middleware; public read vs private 
 test('canonical public post, shared quota and idempotent retry',async()=>{
   const input=post('once');const saved=await f.api.service.savePost(alice,input);const again=await f.api.service.savePost(alice,input);assert.deepEqual(again,saved);
   const s=await f.db.collection('posts').doc(saved.id).get();assert.equal(s.data().address,alice.walletAddress);assert.equal(s.data().authorSchoolParkId,alice.spid);assert.equal(s.data().quotaUid,undefined);
-  const d=new Date(Date.now()+9*3600000),usage=await f.db.collection('plan_usage').doc(alice.uid+'_r_m'+d.getUTCFullYear()+'-'+(d.getUTCMonth()+1)).get();assert.equal(usage.data().post,1);
+  const d=new Date(Date.now()+9*3600000),usage=await f.db.collection('plan_usage').doc(alice.spid+'_r_m'+d.getUTCFullYear()+'-'+(d.getUTCMonth()+1)).get();assert.equal(usage.data().post,1);
   await assert.rejects(f.api.service.savePost(alice,{...input,body:'changed'}),/IDEMPOTENCY_CONFLICT/);
 });
 test('draft privacy, attacker read/edit denial, publish and withdrawal preserve data',async()=>{
@@ -23,7 +24,7 @@ test('draft privacy, attacker read/edit denial, publish and withdrawal preserve 
   await assert.rejects(f.api.service.post(draft.id),/NOT_FOUND/);await assert.rejects(f.api.service.post(draft.id,bob),/NOT_FOUND/);
   await assert.rejects(f.api.service.savePost(bob,post('steal',{id:draft.id,revision:1})),/NOT_OWNER|NOT_FOUND/);
   const published=await f.api.service.savePost(alice,post('publish',{id:draft.id,revision:1}));assert.equal(published.revision,2);assert.equal((await f.api.service.ref('private_posts',draft.id).get()).exists,false);
-  assert.equal((await f.db.collection('plan_counts').doc(alice.uid).get()).data().drafts,0);
+  assert.equal((await f.db.collection('plan_counts').doc(alice.spid).get()).data().drafts,0);
   const withdrawn=await f.api.service.removePost(alice,draft.id,2,'withdraw');assert.equal(withdrawn.visibility,'private');assert.equal((await f.db.collection('posts').doc(draft.id).get()).data().body,'');
   assert.equal((await f.api.service.post(draft.id,alice)).body,post('private').body);
   await assert.rejects(f.api.service.post(draft.id,bob),/NOT_FOUND/);
@@ -36,7 +37,7 @@ test('concurrent editing allows one revision and preserves the other editor inpu
 });
 test('guest cannot bypass existing paid-post quota; quota is transactional under concurrency',async()=>{
   await assert.rejects(f.api.service.savePost(actor('guest'),post('no-plan')),/PLAN_LIMIT_REACHED/);
-  const d=new Date(Date.now()+9*3600000),r=f.db.collection('plan_usage').doc(bob.uid+'_r_m'+d.getUTCFullYear()+'-'+(d.getUTCMonth()+1));await r.set({post:29});
+  const d=new Date(Date.now()+9*3600000),r=f.db.collection('plan_usage').doc(bob.spid+'_r_m'+d.getUTCFullYear()+'-'+(d.getUTCMonth()+1));await r.set({post:29});
   const result=await Promise.allSettled(['limit-a','limit-b'].map(key=>f.api.service.savePost(bob,post(key))));assert.equal(result.filter(r=>r.status==='fulfilled').length,1);assert.equal((await r.get()).data().post,30);
 });
 test('writer consent, partial nonpublic profile restore and public fields only',async()=>{
@@ -91,9 +92,9 @@ test('input validation rejects paths, oversized body and malformed classificatio
   await assert.rejects(f.api.service.savePost(alice,post('large',{body:'x'.repeat(5001)})),/INVALID_TEXT/);
 });
 test('delete/archive and restore release the private quota while retaining recoverable content',async()=>{
-  const saved=await f.api.service.savePost(alice,post('archivable',{visibility:'draft'}));const before=(await f.db.collection('plan_counts').doc(alice.uid).get()).data().drafts;
-  await f.api.service.archivePost(alice,saved.id,1);assert.equal((await f.api.service.ref('private_posts',saved.id).get()).exists,false);assert.equal((await f.db.collection('plan_counts').doc(alice.uid).get()).data().drafts,before-1);
-  await assert.rejects(f.api.service.post(saved.id,bob),/NOT_FOUND/);await f.api.service.restorePost(alice,saved.id,2);assert.equal((await f.api.service.post(saved.id,alice)).body,post('archivable').body);assert.equal((await f.db.collection('plan_counts').doc(alice.uid).get()).data().drafts,before);
+  const saved=await f.api.service.savePost(alice,post('archivable',{visibility:'draft'}));const before=(await f.db.collection('plan_counts').doc(alice.spid).get()).data().drafts;
+  await f.api.service.archivePost(alice,saved.id,1);assert.equal((await f.api.service.ref('private_posts',saved.id).get()).exists,false);assert.equal((await f.db.collection('plan_counts').doc(alice.spid).get()).data().drafts,before-1);
+  await assert.rejects(f.api.service.post(saved.id,bob),/NOT_FOUND/);await f.api.service.restorePost(alice,saved.id,2);assert.equal((await f.api.service.post(saved.id,alice)).body,post('archivable').body);assert.equal((await f.db.collection('plan_counts').doc(alice.spid).get()).data().drafts,before);
 });
 test('real Passport link ticket preserves ownership across another emulator login method',async()=>{
   const {ensureVerifiedAccount}=require('../../backend/verified-platform'),{signIn}=require('./fixture.cjs');

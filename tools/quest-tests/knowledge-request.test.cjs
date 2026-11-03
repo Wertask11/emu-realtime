@@ -10,6 +10,10 @@ const ASKER = '0xaaaa000000000000000000000000000000000001';
 const ANSWERER = '0xbbbb000000000000000000000000000000000002';
 let env;
 
+/* 11/1 からの利用回数は、パスポートID（SPID）ごとに数える（firestore.rules の membershipCounterId）。
+   その月の記録はサーバー（/api/billing/status）が migratedUids 付きで先に作る。画面はそれを1つ増やすだけ。
+   11/3 テストを今の形に合わせる（前は UID の記録を画面から作っていた）。 */
+const SPID = { asker: 'SP-ASKR-ASKR-ASKR-ASK1', answerer: 'SP-ANSR-ANSR-ANSR-ANS1' };
 function usageId(uid) {
   const d = new Date(Date.now() + 9 * 60 * 60 * 1000);
   return `${uid}_r_m${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`;
@@ -40,6 +44,9 @@ beforeEach(async () => {
     await fb.setDoc(fb.doc(d, 'ches_wallets', ANSWERER), { uid: 'answerer', address: ANSWERER, spid: 'SP-ANSR-ANSR-ANSR-ANS1', passportBindingVersion: 1 });
     await fb.setDoc(fb.doc(d, 'entitlements', 'asker'), { plan: 'plus' });
     await fb.setDoc(fb.doc(d, 'entitlements', 'answerer'), { plan: 'plus' });
+    /* サーバーが作る今月の記録（パスポートID）。migratedUids で本人のログインと結び付く */
+    for (const uid of ['asker', 'answerer'])
+      await fb.setDoc(fb.doc(d, 'plan_usage', usageId(SPID[uid])), { request: 0, migratedUids: [uid], migratedAt: new Date() });
   });
 });
 
@@ -47,7 +54,7 @@ async function create(uid, data) {
   const db = env.authenticatedContext(uid).firestore();
   const batch = fb.writeBatch(db);
   batch.set(fb.doc(fb.collection(db, 'knowledge_requests')), data);
-  batch.set(fb.doc(db, 'plan_usage', usageId(uid)), { request: 1 }, { merge: true });
+  batch.set(fb.doc(db, 'plan_usage', usageId(SPID[uid] || uid)), { request: 1 }, { merge: true });
   return batch.commit();
 }
 

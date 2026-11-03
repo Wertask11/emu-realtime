@@ -149,7 +149,7 @@ function caller(opts) {
     API: 'https://x',
     console: { warn() {} },
     JSON, Object, Error,
-    auth: { currentUser: {
+    auth: o.noUser ? { currentUser: null } : { currentUser: {
       getIdToken: async function (force) {
         seen.forced.push(!!force);
         if (o.refreshThrows) throw new Error('network');
@@ -197,6 +197,13 @@ test('取り直せなかったときは、断られたことをそのまま返�
     assert.equal(e.status, 401);
     return true;
   });
+});
+
+/* 11/3 点検 11：ログイン前に外のパネルが読みにいき、401 が出ていた。だれもログインしていなければ聞きに行かない */
+test('だれもログインしていないときは、サーバーへ聞きに行かずに LOGIN_REQUIRED で止める', async () => {
+  const c = caller({ noUser: true });
+  await assert.rejects(() => c.ctx.api('/x'), (e) => e.code === 'LOGIN_REQUIRED' && e.status === 401);
+  assert.equal(c.seen.calls, 0, 'ログイン前に聞きに行っている');
 });
 
 test('2回目も断られたら、そこであきらめる（無限にやり直さない）', async () => {

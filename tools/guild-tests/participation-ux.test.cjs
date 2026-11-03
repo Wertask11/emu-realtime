@@ -13,8 +13,17 @@ test('UX does not change enrollment writes, Passport resolution, reports or wisd
  const file='frontend/public/index.html',old=before(file),now=fs.readFileSync(path.join(root,file),'utf8');
  // spGuildToggle was changed on purpose on 2026-10-24 (offline fallback for
  // read and write); quest-order.test.cjs and guild-counts.test.cjs cover it.
- for(const name of ['spQuestToggle','spPassportLoad','spLogSubmit','spWisdomSubmit'])
-  assert.equal(grab(now,name),grab(old,name),name+' must preserve the existing action and identity rules');
+ // 11/2 (#260) added one opt-in anonymous measurement line after a confirmed join
+ // (window.EmuAnalytics?.track('quest_join', …)). It does not change the action or
+ // identity rules, so compare without that line (tools/emu-tests/analytics.test.cjs covers it).
+ const withoutMeasure=src=>src.split('\n').filter(l=>!/window\.EmuAnalytics\?\.track\(/.test(l)).join('\n');
+ // spPassportLoad changed on purpose: plan names (#232, 10/27) and, on 11/3 (#267),
+ // tying the cached Passport to the signed-in UID so a previous user's Passport is never shown.
+ // tools/unified-navigation-tests/navigation.test.cjs covers the account switch.
+ for(const name of ['spQuestToggle','spLogSubmit','spWisdomSubmit'])
+  assert.equal(withoutMeasure(grab(now,name)),grab(old,name),name+' must preserve the existing action and identity rules');
+ const passport=grab(now,'spPassportLoad');
+ assert.ok(passport.includes('window.auth?.currentUser?.uid'),'the Passport must stay tied to the signed-in UID');
 });
 
 test('quest rules, reward/identity backend and original quest/guild definitions are unchanged',()=>{
