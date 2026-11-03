@@ -280,6 +280,8 @@ const feedback = require("./feedback").createFeedbackRouter(membershipDeps);
 const review = require("./review").createReviewRouter(membershipDeps);
 /* 投稿の記録（端末の種類・ブラウザ・時刻。運営だけが見る）。11/2 */
 app.use("/api/post-audit", require("./post-audit").createPostAuditRouter({ db, requireFirebaseUser, requireOwner, rateLimit }).router);
+// 画面のエラー（人を特定する情報は受け取らない。運営だけが見る。11/3 点検 15）
+app.use("/api/client-errors", require("./client-errors").createClientErrorsRouter({ db, requireOwner, rateLimit }).router);
 /* 投稿を消す（本人・運営。消した記録を残す）。11/2 */
 app.use("/api/posts", require("./post-audit").createPostDeleteRouter({ db, requireFirebaseUser, rateLimit,
   isOwner: (identity) => [identity.walletAddress, identity.account && identity.account.chesAddress]

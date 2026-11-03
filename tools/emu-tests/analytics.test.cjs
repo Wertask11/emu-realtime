@@ -62,6 +62,7 @@ test('hooks follow persistence and real UI; no invented quest_start or business/
  assert.match(root,/if \(!!saved !== joined\) throw[\s\S]{0,140}if \(joined\).*track\('quest_join'/);
  assert.match(root,/const c = await _spRestDoc\(w.path, true, true\);[\s\S]{0,230}if \(rounds > w.rounds\)/);
  assert.match(lab,/const result = await api\("\/posts",[\s\S]{0,400}payload.visibility === "public" && \(!p \|\| p.visibility !== "public"\)/);
- assert.match(lab,/const result = await api\("\/notes",[\s\S]{0,380}knowledge_lab_research/);
+ // 11/3：#267 で「保存した版だけを保存済みにする」処理が保存のあとに入った。計測が保存の成功のあとにあることは同じ
+ assert.match(lab,/const result = await api\("\/notes",[\s\S]{0,700}knowledge_lab_research/);
  assert.doesNotMatch(source,/quest_start|identify\(|autocapture:|capture_pageview:/); // comment contains autocapture: inspect actual code below instead
 });

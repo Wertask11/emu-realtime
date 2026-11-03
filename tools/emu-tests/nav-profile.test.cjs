@@ -12,17 +12,19 @@ const INDEX = readHtml('frontend/public/index.html');
 const KNOW = readHtml('frontend/public/knowledge.html');
 const PAGES = readHtml('frontend/public/emu-i18n-pages.js');
 
-test('左ナビは 01 知識を読む / 02 知識を探す / 03 一日シェア / 04 議論 で、最初に光るのは知識を読む', () => {
-  const items = [...INDEX.matchAll(/class="esn-item( active)?"\s+id="(\w+)"\s+onclick="(\w+)\(\)"><i>(\d\d)<\/i>([^<]+)<\/button>/g)]
-    .map(m => (m[1] ? '*' : '') + m[4] + m[5]);
-  assert.deepEqual(items, ['*01知識を読む', '02知識を探す', '03一日シェア', '04議論']);
+/* 11/2 の画面統合（#265）で、左ナビは5つになった（一日シェア・議論は終了）。11/3 テストを今の形に合わせる */
+test('左ナビは 01 知識を読む / 02 知識を探す / 03 知識を試す / 04 知恵ライブラリ / 05 City で、最初に光るのは知識を読む', () => {
+  const items = [...INDEX.matchAll(/class="esn-item( active)?"\s+id="(\w+)"\s+data-unified-view="(\w+)"\s+onclick="(\w+)\(\)"><i>(\d\d)<\/i>([^<]+)<\/button>/g)]
+    .map(m => (m[1] ? '*' : '') + m[5] + m[6]);
+  assert.deepEqual(items, ['*01知識を読む', '02知識を探す', '03知識を試す', '04知恵ライブラリ', '05City']);
 });
 
 test('今日のEmu の入口（左ナビ・上のタブ・旧ナビ）が無い', () => {
   for (const id of ['esnToday', 'emuTodayTab', 'emuTodayNavBtn']) {
     assert.equal(INDEX.indexOf('id="' + id + '"'), -1, id + ' が残っている');
   }
-  assert.ok(/class="eth-tab active" id="emuFeedTab"/.test(INDEX), '上のタブで最初に光るのが知識を読むになっていない');
+  // 上のタブは共通ナビ（unified-navigation.js）が今の画面に合わせて光らせる。並びの最初は知識を読む
+  assert.ok(/<div class="eth-tabs"[^>]*><button type="button" class="eth-tab" id="emuFeedTab" data-unified-view="read"/.test(INDEX), '上のタブの最初が知識を読むになっていない');
 });
 
 test('Emuに入る・戻る処理（showEmuToday）は知識を読むを開き、今日のEmu の画面は開かない', () => {
@@ -39,7 +41,7 @@ test('Emuに入る・戻る処理（showEmuToday）は知識を読むを開き�
 
 test('今日のEmu の中身はどの幅でも出さず、EMUER が使う残高の欄は残っている', () => {
   assert.ok(/\n#emuTodayDashboard \{ display:none !important; \}/.test(INDEX), 'パソコンで出てしまう');
-  assert.ok(INDEX.indexOf('<strong id="emuTodayBalance">') >= 0, '残高の欄が無いと左下の EMUER と EMUER v2 が書く先を失う');
+  assert.ok(INDEX.indexOf('<span id="emuTodayBalance">') >= 0, '残高の欄が無いと左下の EMUER と EMUER v2 が書く先を失う');
   assert.ok(INDEX.indexOf("set('esnBalance', from('emuTodayBalance') || '0');") >= 0);
 });
 

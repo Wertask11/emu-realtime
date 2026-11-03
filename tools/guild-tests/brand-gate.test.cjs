@@ -118,18 +118,16 @@ test('Emu の3つの入口から Camellia の行が消えている', () => {
   assert.doesNotMatch(html, /case 'camellia':/, '振り分けに残っています');
 });
 
-test('SchoolPark の左上の切り替えに Camellia が無い', () => {
-  const brands = dao.slice(dao.indexOf('brands: ['), dao.indexOf('sidebarButtonIcon:'));
-  assert.ok(brands, '切り替えの並びが見つかりません');
-  assert.doesNotMatch(brands, /'camellia'/, '並びに残っています');
-  assert.match(brands, /'emu'/);
-  assert.match(brands, /'schoolpark'/);
+/* 11/2 の画面統合（#265）で、SchoolPark の左上のブランド切り替えそのものが無くなった（共通ナビに一本化）。
+   11/3 テストを今の形に合わせる：切り替えが戻っていないこと、Camellia へ行く道が無いこと。 */
+test('SchoolPark の左上の切り替えは無くなり、Camellia へ行く道も無い', () => {
+  assert.equal(dao.indexOf('brands: ['), -1, '終了したブランド切り替えが残っています');
+  assert.doesNotMatch(dao, /goBrand\('camellia'\)|emuBrandGo\('camellia'\)/, 'Camellia へ行く道が残っています');
 });
 
 test('dao.html に Camellia だけを名指しで閉じる書き方が残っていない', () => {
-  const b = dao.slice(dao.indexOf('  brandClosed(id){'), dao.indexOf('  goBrand(id){'));
-  assert.ok(b, 'brandClosed が見つかりません');
-  assert.doesNotMatch(b, /id === 'camellia'/, '名指しの決め打ちが戻っています');
+  assert.equal(dao.indexOf('  brandClosed(id){'), -1, '終了したブランド切り替えの判定が残っています');
+  assert.doesNotMatch(dao, /id === 'camellia'/, '名指しの決め打ちが戻っています');
 });
 
 /* ───────── 消した画面が、どこからも呼ばれていない ───────── */
@@ -272,9 +270,10 @@ test('案内は、Camellia が別のアプリだと言っている', () => {
   /* 冷蔵庫くんの答えは index.html から /reizo/knowledge.js へ移った */
   const kb = read('frontend/public/reizo/knowledge.js');
   assert.ok(html.indexOf('Camellia・Heartoo は') < 0);
+  /* 11/2 の画面統合（#265）で、冷蔵庫くんの「全体の案内」からブランドの一覧は外れた。Camellia 自身の答えで言う */
+  assert.match(kb, /Camellia（カメリア）は[^']*独立したアプリになっていて、SchoolPark や Emu の中からは行けない/,
+    'reizo/knowledge.js の案内が、いまの決まりと合っていません');
   [['reizo/knowledge.js', kb], ['tutorial.html', tutorial]].forEach(([name, t]) => {
-    assert.ok(t.indexOf('🌸 Camellia — 独立したアプリ（この中からは行けません）') > 0,
-      name + ' の案内が、いまの決まりと合っていません');
     assert.ok(t.indexOf('Camellia・Heartoo は') < 0,
       name + ' が Camellia を Heartoo と同じ「順番に開ける」扱いのままです');
   });
@@ -285,6 +284,5 @@ test('案内は、Camellia が別のアプリだと言っている', () => {
 test('Heartoo の準備中は、消さずに残してある', () => {
   const tutorial = read('frontend/public/schoolpark/tutorial.html');
   assert.ok(tutorial.indexOf('<td><strong>Heartoo</strong></td><td>準備中</td>') > 0);
-  assert.match(tutorial, /💍 Heartoo — 準備中/);
-  assert.match(read('frontend/public/reizo/knowledge.js'), /💍 Heartoo — 準備中/);
+  assert.match(read('frontend/public/reizo/knowledge.js'), /Heartoo（ハートゥー）は[^']*いまは準備中/);
 });

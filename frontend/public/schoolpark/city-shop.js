@@ -118,7 +118,9 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     // A disposed/lost WebGL context cannot be reused reliably on the same canvas.
     const fresh=canvas.cloneNode(false);for(const key of Object.keys(fresh.dataset))delete fresh.dataset[key];
     canvas.replaceWith(fresh);canvas=fresh;focusedProduct=null;pick.hidden=true;
-    const [data,module,commerce]=await Promise.allSettled([bridge.getShops(),import('./city-world.js'),bridge.getCommerceShops()]);
+    /* 呼べない口（お試しページには getCommerceShops が無い）で止まらないよう、どれも失敗として受け止める（11/3 点検 5） */
+    const call=(name,...a)=>Promise.resolve().then(()=>bridge[name](...a));
+    const [data,module,commerce]=await Promise.allSettled([call('getShops'),import('./city-world.js'),call('getCommerceShops')]);
     if(closed||version!==loadNumber)return;
     if(data.status!=='fulfilled'||!data.value.shops?.length){load.innerHTML='店舗を読み込めませんでした。<button type="button" data-shop="retry">もう一度読み込む</button>';return;}
     catalog=data.value;

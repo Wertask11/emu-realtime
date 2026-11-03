@@ -2280,7 +2280,10 @@
     for (const [name, steps] of Object.entries(guides))
       tour.register(
         tourId(name),
-        steps.map(([target, label, text]) => ({ target, label, text })),
+        /* 案内は target をそのまま「探す条件（CSSセレクタ）」として使う。名前のままだと
+           <lab-intro> というタグを探して何も見つからず、2.5秒ごとに「対象が見つからない」と
+           全部飛ばしていた（10/13 から。11/3 直す）。Emu 側と同じ [data-tour~="名前"] にする。 */
+        steps.map(([target, label, text]) => ({ target: '[data-tour~="' + target + '"]', label, text })),
         {
           label: "Knowledge Lab",
           brand: "Emu",

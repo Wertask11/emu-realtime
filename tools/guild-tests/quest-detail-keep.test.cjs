@@ -173,8 +173,12 @@ for (const [w, h] of [[1853, 961], [1440, 900], [1440, 640]]) {
       const m = await measure(frame, 600);
       assert.equal(m.cols, 2);
       assert.equal(m.position, 'sticky');
-      assert.ok(m.cardTop >= m.headBottom, `見出しの下に潜っている: card ${m.cardTop} < head ${m.headBottom}`);
-      assert.ok(m.cardTop <= m.headBottom + 40, `見出しから離れすぎ: ${m.cardTop - m.headBottom}px`);
+      /* 11/2 の画面統合から、上の見出しは止まらずに流れる（読み進めると画面の外へ出る）。
+         そのときは画面のいちばん上のすぐ下で止まる（11/3 点検 8：前は見出しのぶん約100px空いていた）。
+         見出しが見えているあいだは、その下に潜らず、離れすぎないこと。 */
+      const top = Math.max(0, m.headBottom);
+      assert.ok(m.cardTop >= top, `見出しの下に潜っている: card ${m.cardTop} < ${top}`);
+      assert.ok(m.cardTop <= top + 40, `上から離れすぎ: ${m.cardTop - top}px`);
       /* 10/19 から ACCEPT に「参加前に確認」が入り、低い画面では札ごとは収まらない。
          そのときも「受ける」は見えていて、残りは右の列の中で読めること。 */
       assert.ok(m.acceptBottom <= m.vh, `「受ける」が画面の外: ${m.acceptBottom} > ${m.vh}`);

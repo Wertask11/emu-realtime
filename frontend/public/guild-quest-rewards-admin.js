@@ -46,12 +46,14 @@
         try { await window.emuerV2AdminApi("/guild-quest/contributions/" + encodeURIComponent(id) + "/approve", { method:"POST", body:{ amountEmuer:Number(input.value) } }); refresh(); }
         catch (error) { alert(error.message || "承認できませんでした"); }
       }; });
-    } catch (error) { box.textContent = error.message === "OPERATOR_REQUIRED" ? "このパネルはEMUER v2運営ウォレットでのみ使えます。" : "読み込めませんでした：" + (error.message || ""); }
+    } catch (error) { box.textContent = error.message === "OPERATOR_REQUIRED" ? "このパネルはEMUER v2運営ウォレットでのみ使えます。" : error.message === "LOGIN_REQUIRED" ? "ログインすると読み込みます。" : "読み込めませんでした：" + (error.message || ""); }
   }
   window.addEventListener("load", function () {
     const tab = document.getElementById("tab-schoolpark");
     if (!tab) return;
     new MutationObserver(function () { panel(); }).observe(tab, { childList:true });
     setTimeout(panel, 800);
+    // ログインが済んで運営と分かったら、読み直す（ログイン前には読みにいかない）
+    window.addEventListener("emu-admin-ready", function () { panel(); refresh(); });
   });
 })();

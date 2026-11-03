@@ -3984,6 +3984,7 @@ html, body { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 <link rel="stylesheet" href="/service-header.css">
 <script defer src="/tour/reizo-tour.js"></script>
 <script defer src="/tour/reizo-tour-pages.js"></script>
+  <script src="/client-errors.js"></script><!-- 画面のエラーを運営に知らせる（人を特定する情報は送らない） -->
   <script src="/emu-analytics.js"></script>
 <link rel="stylesheet" href="/emu-theme.css">
 </head>
@@ -4629,8 +4630,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <!-- 前から使っている人が、別の入り方で「はじめる」を押してしまうと
            2つ目のパスポートができてしまう。押す前に気づいてもらう。 -->
       <p class="ches-returning-note">
-        前に使ったことがある方は、<b>そのときと同じ方法</b>でログインしてください。<br>
-        入ったあと、パスポートから別の方法を追加できます。
+        <!-- 「い。」だけが次の行に落ちていた（11/3 点検 10）。意味のかたまりごとに折り返す -->
+        <span style="display:inline-block">前に使ったことがある方は、</span><span style="display:inline-block"><b>そのときと同じ方法</b>でログインしてください。</span><br>
+        <span style="display:inline-block">入ったあと、パスポートから</span><span style="display:inline-block">別の方法を追加できます。</span>
       </p>
 
       <div class="ches-advanced">
@@ -25077,6 +25079,22 @@ function _emuUsageDocId() {
     ? (window.emuEntitlementSchoolParkId || uid) : uid;
   return subject + '_r_m' + jst.getUTCFullYear() + '-' + (jst.getUTCMonth() + 1);
 }
+/* 11/1 からの利用回数・下書きの数は、パスポートID（SP-…）ごとに数える
+   （firestore.rules の membershipCounterId）。その番号はサーバー（/api/billing/status）から受け取る。
+   受け取りに失敗したまま書くと、ふつうのIDの記録を作りにいってルールに弾かれ、
+   投稿・募集・回答・下書きが「権限がない」で失敗していた（11/3 点検 3）。
+   今月分を受け取れていなければ1回だけ聞き直し、それでもだめなら分かる言葉で止める。 */
+async function emuEnsureMembershipSubject() {
+  if (Date.now() < Date.parse('2026-11-01T00:00:00+09:00')) return;
+  const epoch = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 7);
+  if (window.emuEntitlementEpoch === epoch) return;
+  await emuEnsureEntitlement(true);
+  if (window.emuEntitlementEpoch === epoch) return;
+  const err = new Error('サーバーにつながらず、利用回数を確かめられませんでした。少し待ってから、もう一度お試しください。');
+  err.emuUserMessage = true;   /* そのまま見せてよい文言 */
+  throw err;
+}
+window.emuEnsureMembershipSubject = emuEnsureMembershipSubject;
 function _emuUsageRef() {
   const id = _emuUsageDocId();
   if (!id) return null;
@@ -25102,6 +25120,7 @@ function _emuUsageRef() {
    数が狂うより、弾かれて出し直すほうが安全。 */
 async function _emuAddUsage(batch, kind) {
   await emuEnsureEntitlement();
+  await emuEnsureMembershipSubject();
   const ref = _emuUsageRef();
   const id = _emuUsageDocId();
   if (!ref || !id) throw new Error('ログインの状態を確認できませんでした。一度読み込み直してからお試しください。');
@@ -28477,6 +28496,7 @@ async function sendEmuFeedback() {
       try {
         // 下書きと、持っている数の記録を同じ一括処理で書く
         const ref = window.fbLib.doc(window.fbLib.collection(window.db, 'knowledge_drafts'));
+        await emuEnsureMembershipSubject();   // 下書きの数もパスポートIDで数える（点検 3）
         const batch = window.fbLib.writeBatch(window.db);
         batch.set(ref, { ...draft, owner:account, createdAt:new Date() });
         batch.set(_emuCountsRef(), { drafts: window.fbLib.increment(1), updatedAt: new Date() }, { merge:true });
@@ -28513,6 +28533,7 @@ async function sendEmuFeedback() {
   }
   async function deleteKnowledgeDraft(account, draftId) {
     await emuEnsureEntitlement();
+    await emuEnsureMembershipSubject();
     if (account && window.db && window.fbLib && !/^\d+$/.test(String(draftId))) {
       try {
         // 消すときは、持っている数も1つ減らす。減らさないと枠が空かない。

@@ -42,6 +42,8 @@ function makeUsage(opts) {
   const stubs = {
     // The current counter prepares the canonical Passport before reading usage.
     emuEnsureEntitlement: async function () { calls.entitlement++; },
+    // 11/3：書く前に、今月分のパスポートIDを受け取れているか確かめる（受け取れている前提）
+    emuEnsureMembershipSubject: async function () {},
     _emuUsageRef: function () { return { path: 'plan_usage/u_r_m2026-9' }; },
     _emuUsageDocId: function () { return 'u_r_m2026-9'; },
     /* 本物と同じ契約にする（index.html の _spSoon）。

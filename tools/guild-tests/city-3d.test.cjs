@@ -30,8 +30,10 @@ async function open(width){
  const frame=page.frames().find(f=>f.url().endsWith('/schoolpark/dao.html'));
  await frame.waitForFunction(()=>window.app?.state.me.name==='テスト用Passport');
  assert.equal(requests.some(p=>p.includes('city-three')||p.includes('city-world')),false);
- if(width>=700&&!(await frame.getByText('08',{exact:true}).filter({visible:true}).count()))await frame.getByTitle('サイドバーを開く',{exact:true}).click();
- await frame.getByText('08',{exact:true}).filter({visible:true}).click();
+ /* 11/2 の画面統合で SchoolPark の「08 CITY」ナビは無くなった。City は共通ナビから開く（中では screen:'city'）。
+    ここでは dao.html の中で City の画面へ切り替える（11/3 点検 13：City のテストが止まっていた）。 */
+ await frame.waitForFunction(() => window.app && typeof window.app.setState === 'function');
+ await frame.evaluate(() => window.app.setState({ screen: 'city' }));
  await frame.getByRole('button',{name:'3Dの街へ入る ↗',exact:true}).click();
  await frame.locator('.cs-canvas[data-ready="true"]').waitFor({timeout:30000});
  return {page,frame,context,touch:width<700,errors,requests,canvas:frame.locator('.cs-canvas'),close:()=>context.close()};

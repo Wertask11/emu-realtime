@@ -166,9 +166,11 @@ test('知恵カードを置いたあと、信用スコアとメンバーを数�
   assert.ok(after.indexOf('spDaoLoadVotes(_spWisdomApp)') >= 0, '信用スコアを数え直していない');
 });
 
-test('画面に、読めなかったときの一言が出る口がある', () => {
-  assert.ok(DAO.indexOf('hasMembersNote') >= 0, '結び付けが無い');
-  assert.ok(DAO.indexOf('{{ membersNote }}') >= 0, '出す場所が無い');
+/* 11/2 の画面統合（#265）で、メンバー表のあった「貢献」の画面は終了した（数え方は信用スコアのために残っている）。
+   11/3 テストを今の形に合わせる：読めなかったことは数え方の側で分かるようにしておき、終了した表は出さない。 */
+test('読めなかったときの一言は数え方の側に残り、終了したメンバー表は出さない', () => {
+  assert.ok(INDEX.indexOf("membersNote: 'いまメンバーの記録を読めませんでした。") > 0, '読めなかったことを覚えていない');
+  assert.equal(DAO.indexOf('{{ membersNote }}'), -1, '終了したメンバー表が残っている');
 });
 
 /* ───────── 信用スコアそのもの ─────────
@@ -701,18 +703,12 @@ test('本人情報の読み取りは、返ってこなければ見切る', () =>
    残高を超えていると、本人のところに「-1,250,000 EMUER」と出る。
    自分が借金しているように見える。 */
 
-test('左下は、DAOのトレジャリーではなく本人の数字を出す', () => {
+/* 11/2 の画面統合（#265）で、SchoolPark の左下の欄は無くなった。左下の数字は Emu の共通ナビ（EMUER の欄）が出す。
+   11/3 テストを今の形に合わせる：DAO のトレジャリーの額を本人の数字のように出していないこと。 */
+test('左下は、DAOのトレジャリーではなく本人の EMUER を出す（共通ナビの欄）', () => {
   assert.equal(DAO.indexOf('{{ treasury.total }}'), -1, 'まだDAOの額を出している');
-  assert.ok(DAO.indexOf('{{ mine.balance }}') >= 0, '本人の数字になっていない');
-  assert.ok(DAO.indexOf('{{ mine.label }}') >= 0, '見出しが TREASURY のまま');
-});
-
-test('数え終わるまでは、0ではなく空で待つ', () => {
-  const i = DAO.indexOf("mine: Object.assign({");
-  assert.ok(i > 0, '既定値が無い');
-  const seg = DAO.slice(i, i + 220);
-  assert.ok(seg.indexOf("balance:'—'") >= 0, '0を出してしまう');
-  assert.ok(seg.indexOf('数えています') >= 0);
+  assert.ok(INDEX.indexOf('<span class="esn-foot-val" id="esnBalance">') > 0, '共通ナビに本人の EMUER の欄が無い');
+  assert.ok(INDEX.indexOf("set('esnBalance', from('emuTodayBalance') || '0');") > 0, '本人の残高から写していない');
 });
 
 test('本人の分配は、パスポートの名義で引く', () => {
@@ -1031,13 +1027,11 @@ test('サーバーが本当に0件と答えたら、0件として返す', async 
   assert.deepEqual(await r.read('sp_quests'), []);
 });
 
-test('メンバー・トレジャリー・公園・名前が、その道具を通る', () => {
+/* 11/2 の画面統合（#265）で、トレジャリーと公園の画面は終了した（読み込みも無くなった）。残っているものを見る */
+test('メンバー・知恵・クエスト・議題が、その道具を通る', () => {
   [['sp_wisdom', "const ws = await _spReadAll('sp_wisdom')"],
    ['sp_quests（メンバー）', "const qsRows = await _spReadAll('sp_quests')"],
    ['受けた記録', "_spReadAll('sp_quests/' + encodeURIComponent(q.id) + '/commits')"],
-   ['入出金', "const es = await _spReadAll('sp_treasury')"],
-   ['公園', "const snap = await _spReadAll('sp_park')"],
-   ['乗った人', "_spReadAll('sp_park/' + encodeURIComponent(i.id) + '/joins')"],
    ['議題', "const snap = await _spReadAll('sp_votes')"]].forEach(function (x) {
     assert.ok(INDEX.indexOf(x[1]) >= 0, x[0] + ' が共通の読み取りを通っていない');
   });

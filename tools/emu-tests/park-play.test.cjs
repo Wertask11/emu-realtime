@@ -88,6 +88,7 @@ test('08 CITY の「もう一度読み込む」（City 本体を読み込めな�
   assert.equal(body.indexOf('retry.onclick = function () { app.setState({}); };'), -1, 'まだ描き直すだけ');
   assert.ok(body.indexOf("u.searchParams.set('screen', 'city');") > 0);
   assert.ok(body.indexOf('window.location.replace(u.toString());') > 0);
-  /* 開き直した枠は ?screen=city で City から始まる */
-  assert.ok(DAO.indexOf("state = { screen:(new URLSearchParams(window.location.search).get('screen') === 'city' ? 'city' : 'home')") > 0);
+  /* 開き直した枠は ?screen=city で City から始まる（11/2 の画面統合からは initialScreen で受ける。ホームは無くなった） */
+  assert.ok(DAO.indexOf("const requestedScreen = new URLSearchParams(window.location.search).get('screen');") > 0);
+  assert.ok(/const initialScreen = \[[^\]]*'city'[^\]]*\]\.includes\(requestedScreen\) \? requestedScreen : 'experiments';/.test(DAO), '?screen=city で City から始まらない');
 });

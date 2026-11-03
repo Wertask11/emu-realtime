@@ -69,11 +69,13 @@ test('パスポートの名前：プロフィールを読めなかったとき�
   assert.ok(p.indexOf('snap.metadata && snap.metadata.fromCache') > 0, '手元の控えの「無い」を「無い」と読んでしまう');
 });
 
-test('スマホのメンバー表も、パソコンと同じ5列（完走・引用されを隠さない）', () => {
+/* 11/2 の画面統合（#265）で、メンバー表のあった「貢献」の画面は終了した。11/3 テストを今の形に合わせる。
+   スマホで列を隠さない約束（表の幅の決まり）は、ほかの表のために残っている。 */
+test('メンバー表（貢献の画面）は終了し、スマホでも列を隠さない幅の決まりは残っている', () => {
   const mobile = DAO.slice(DAO.indexOf('  mobile: {'), DAO.indexOf('};', DAO.indexOf('  mobile: {')));
   assert.ok(mobile.indexOf("colHide:'block'") > 0, 'スマホで列を隠している');
   assert.ok(mobile.indexOf("table:'minmax(0,1.5fr) repeat(4,minmax(0,1fr))'") > 0, 'スマホの表が5列になっていない');
-  assert.ok(DAO.indexOf('display:{{ L.memAvatar }}') > 0);
+  assert.equal(DAO.indexOf('display:{{ L.memAvatar }}'), -1, '終了したメンバー表が残っている');
 });
 
 test('知恵ライブラリのカードに height:100% を付けない（スマホで下のカードに重なる）', () => {
