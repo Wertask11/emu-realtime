@@ -2610,6 +2610,8 @@ body.spmap-open #emu-contact-label {
    夜空の上に浮くと目立ちすぎるうえ、星と重なって押し間違える。 */
 body.emu-sky-open #emuFeedbackFab { display:none !important; }
 /* 議論ルーム表示中。ルーム内に×があるので、重なる浮きボタンは引っ込める */
+body.room3-open .dsc-conclude,
+body.room3-open #dscConcludeBtn,
 body.room3-open #emu-contact-btn,
 body.room2-open #emu-contact-btn,
 body.room2-open #emu-contact-label {
@@ -5371,12 +5373,12 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
       <!-- ヘッダー -->
       <header class="dsc-head">
         <div class="dsc-head-main">
-          <span class="dsc-eyebrow">開催中の議論</span>
-          <h2 id="topic" class="dsc-topic">議題を読み込んでいます…</h2>
+          <span class="dsc-eyebrow">予約した対話の補助チャット</span>
+          <h2 id="topic" class="dsc-topic">音声・映像の通話とあわせて使うメモ</h2>
         </div>
         <!-- closeBtn は position:absolute で、ヘッダーの外へ飛んで押しづらかった。
              .dsc-close だけにしてヘッダー内に固定する。 -->
-        <button class="dsc-close" onclick="closePopup()" aria-label="議論を閉じる" title="議論を閉じる">✕</button>
+        <button class="dsc-close" onclick="closePopup()" aria-label="補助チャットを閉じる" title="補助チャットを閉じる">✕</button>
       </header>
 
       <!-- 進め方（折りたたみ。旧Step1・Step2の内容をここに集約） -->
@@ -5407,7 +5409,9 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
         <div class="dsc-modes" id="dscModes" aria-label="発言の種類"></div>
         <p class="dsc-mode-hint" id="dscModeHint"></p>
         <div id="replyInfo" class="dsc-reply-info" style="display:none;"></div>
-        <textarea id="userInput" autocomplete="off" rows="3"></textarea>
+        <a id="dialogueCallLink" class="eth-btn primary" target="_blank" rel="noopener noreferrer" hidden>音声・映像の通話を開く</a>
+        <p id="dialogueStatus" role="status" aria-live="polite"></p>
+        <textarea id="userInput" autocomplete="off" rows="3" maxlength="1900"></textarea>
         <div class="dsc-composer-actions">
           <button type="button" class="dsc-cancel-reply" id="dscCancelReply" style="display:none;">返信をやめる</button>
           <button type="button" class="dsc-cancel-reply" id="dscConclude">この議論をまとめる</button>
@@ -6630,6 +6634,7 @@ async function emuMyIdentity() {
     try { await window.CHES.ensureChesIdentity(user.uid, d.walletAddress, d.provider, d); }
     catch (e) { console.warn('chesAddress を補えませんでした:', e && (e.message || e)); }
   }
+  if (window.auth?.currentUser?.uid !== user.uid) return null;
   _emuIdentity = {
     uid: user.uid,
     wallet: wallet,
@@ -14612,6 +14617,7 @@ function showEmuValueProfile(fromPassport) {
   /* タブから開き直したときは、前に覚えた戻り先を捨てる。
      残すと、押していない戻り口の行き先だけが生き続ける。 */
   if (!fromPassport) { _sppValueReturn = 0; _sppReturnDao = false; }
+  window.EmuNavigation?.activate('profile');
   loadEmuValueProfile();
   window.scrollTo({ top:0, behavior:'smooth' });
 }
@@ -16327,6 +16333,29 @@ document.addEventListener('keydown', function(e) {
    開くまで「ゲスト」と出ていた。ここを直した。 */
 window._spPassport = null;
 let _spPassportBusy = null;
+let _spPassportBusyUid = null, _spPassportGeneration = 0, _spViewUid;
+function spResetIdentityView(uid) {
+  if (_spViewUid === uid) return;
+  const changed = _spViewUid !== undefined;
+  _spViewUid = uid; _spPassportGeneration++;
+  window._spPassport = null; _spPassportBusy = null; _spPassportBusyUid = null;
+  if (!changed) return;
+  window.EmuDialogue?.close();
+  window.EmuNavigation?.activate('read', false, { replace: true });
+  closeAccountMenu(); closeAllSpPanels();
+  window.closeLegal?.();
+  window.closeMeSheet?.();
+  window.closeSpRoom({ force: true });
+  const frame = document.getElementById('spDaoFrame');
+  if (frame) frame.removeAttribute('src'); // Unload the previous person's DOM and pending loaders.
+  document.body.classList.remove('sp-dao-open','emu-workspace-open','emu-profile-open');
+  _sppStarReturn = 0; _sppValueReturn = 0; _sppReturnDao = false;
+  if (document.body.classList.contains('room3-open') || document.body.classList.contains('room2-open') || document.body.classList.contains('emu-sky-open')) closePopup();
+}
+window.addEventListener('ches-firebase-ready', function () {
+  if (!window.auth || !window.fbAuth?.onAuthStateChanged) return;
+  window.fbAuth.onAuthStateChanged(window.auth, user => spResetIdentityView(user?.uid || null));
+});
 
 /* いまの表示名。「名前と写真」で決めたもの。
    決めていなければ空を返す（呼び出し側でアドレスに落とす）。 */
@@ -16366,8 +16395,12 @@ function _spIsOwnerAddr(a) {
 }
 
 async function spPassportLoad(force) {
-  if (window._spPassport && !force) return window._spPassport;
-  if (_spPassportBusy) return _spPassportBusy;
+  const uid = window.auth?.currentUser?.uid;
+  if (!uid) return null;
+  if (window._spPassport?.uid === uid && !force) return window._spPassport;
+  if (_spPassportBusy && _spPassportBusyUid === uid) return _spPassportBusy;
+  const generation = _spPassportGeneration;
+  _spPassportBusyUid = uid;
   _spPassportBusy = (async function () {
    /* 途中で落ちても、必ず後始末する。戻さないと、失敗した約束を以後ずっと
       返し続け、パスポートを見るところ（ギルド・クエスト・宿題）が
@@ -16375,7 +16408,7 @@ async function spPassportLoad(force) {
    try {
     let me = null;
     try { me = await emuMyIdentity(); } catch (e) {}
-    if (!me) { return null; }
+    if (!me || me.uid !== uid || window.auth?.currentUser?.uid !== uid) { return null; }
     let d = {};
     try {
       /* 戻ってこないことがある（SDK の常時接続が止まっているとき）。待ち続けると、
@@ -16522,6 +16555,7 @@ async function spPassportLoad(force) {
     const tierLabel = { free: '見学（無料）', light: 'Emu for SchoolPark light', plus: 'Emu for SchoolPark plus', pro: 'Emu for SchoolPark pro' }[tier] || tier;
 
 
+    if (generation !== _spPassportGeneration || window.auth?.currentUser?.uid !== uid) return null;
     window._spPassport = {
       uid: me.uid, addr: addr, short: _spShortAddr(addr),
       /* 固定の SchoolPark ID と、その下にぶら下がっているもの。 */
@@ -16561,7 +16595,7 @@ async function spPassportLoad(force) {
     try { paintBrandMaintenance(); } catch (e) {}
     return window._spPassport;
    } finally {
-    _spPassportBusy = null;
+    if (generation === _spPassportGeneration && _spPassportBusyUid === uid) { _spPassportBusy = null; _spPassportBusyUid = null; }
    }
   })();
   return _spPassportBusy;
@@ -21904,6 +21938,7 @@ function openSpRoom(url, title) {
   const page = document.getElementById('spRoomPage');
   const frame = document.getElementById('spRoomFrame');
   if (!page || !frame) return;
+  if (document.body.classList.contains('sp-room-open') && frame.getAttribute('src') !== url && closeSpRoom() === false) return false;
   if (!frame._spRoomWatch) { frame._spRoomWatch = true; frame.addEventListener('load', spRoomWatchRender); }
   frame.src = url;
   if (title) frame.title = title;
@@ -21933,10 +21968,18 @@ function openCityEventLink() {
 }
 window.addEventListener('DOMContentLoaded', openCityEventLink, { once:true });
 
-function closeSpRoom() {
+function closeSpRoom(options) {
   const frame = document.getElementById('spRoomFrame');
+  if (options?.force) {
+    try { frame?.contentWindow.EmuLabUnsaved?.discard(); } catch (_) {}
+  }
+  if (!options?.force && /^\/knowledge-lab\.html(?:[?#]|$)/.test(frame?.getAttribute('src') || '')) {
+    try { if (frame.contentWindow.EmuLabUnsaved?.canLeave() === false) return false; }
+    catch (_) { return false; }
+  }
   document.body.classList.remove('sp-room-open');
   if (frame) frame.src = 'about:blank';   /* 音や読み上げを止める */
+  return true;
 }
 /* 小部屋の中にある「← もどる」は、親に spContentClose を送ってくる作りになっている。
    旧SchoolParkのマップへ戻る合図だったものを、そのまま閉じる合図として受ける。 */
@@ -23341,22 +23384,18 @@ function openEchoFieldDirect() {
    ②⑤ 「×を押したらメイン画面に戻ってしまう」の原因がこれ。 */
 let room3BackScrollY = 0;
 
-function openRoom3() {
+async function openRoom3(sessionId) {
+  if (!sessionId || !window.auth?.currentUser) { window.accountGo?.('sessions'); return false; }
   room3BackScrollY = window.scrollY || 0;
-  document.body.classList.add('room3-open');   // 浮きボタンを隠す
+  document.body.classList.add('room3-open');
   overlay.style.display = "flex";
+  const topic = document.getElementById('topic');
+  if (topic) topic.textContent = '音声・映像の通話とあわせて使うメモ';
   room3ShowStep(1);
-  if (socket && !socket.connected && typeof socket.connect === "function") {
-    socket.once("connect", () => socket.emit("join room3", { wallet:walletAddress }));
-    socket.connect();
-  }
-
-  if (socket && socket.connected) {
-    socket.emit("join room3", { wallet: walletAddress });
-    // ★ 開くたびに議題を再リクエスト
-    if (!room3TopicOverride) socket.emit("request topic");
-  }
-
+  return window.EmuDialogue?.connect(sessionId);
+}
+/* Preserve the former topic helper for stored public history only. */
+function room3LegacyTopicFallback() {
   // ★ フォールバック：socket未接続時も議題を表示
   const topicEl = document.getElementById("topic");
   if (topicEl && !topicEl.textContent) {
@@ -23425,7 +23464,7 @@ function closePopup(){
   setRoom3ContributionMode('opinion');
 }
 
-document.getElementById('postBtn').addEventListener('click', ()=>{
+document.getElementById('postBtn').addEventListener('click', async ()=>{
   const input = document.getElementById('userInput');
   const rawText = input.value.trim();
   if(!rawText) return;
@@ -23440,13 +23479,13 @@ document.getElementById('postBtn').addEventListener('click', ()=>{
     return;   // 入力内容は消さずに残す
   }
 
-  console.log("送信:", { text, replyTarget });
-
-  socket.emit("room3 message", {
-    text,
-    replyTo: replyTarget
-  });
-
+  const button = document.getElementById('postBtn');
+  button.disabled = true;
+  let accepted = false;
+  try { accepted = await window.EmuDialogue?.send(text, replyTarget); }
+  finally { button.disabled = false; }
+  if (!accepted) return;
+  if (input.value.trim() !== rawText) return;
 
   // 送信後は返信状態を解除して入力欄を空にする
   replyTarget = null;
@@ -23623,7 +23662,9 @@ function renderMessage(data) {
   room3RefreshOverview();
 }
 
-socket.on("room3 history", (history) => {
+socket.on("room3 history", (envelope) => {
+  if (!window.EmuDialogue?.sessionId || envelope?.sessionId !== window.EmuDialogue.sessionId || !Array.isArray(envelope.messages)) return;
+  const history = envelope.messages;
   const disc = document.getElementById("discussion");
   disc.innerHTML = "";
 
@@ -23633,6 +23674,7 @@ socket.on("room3 history", (history) => {
 });
 
 socket.on("room3 message", (data) => {
+  if (!window.EmuDialogue?.sessionId || data?.sessionId !== window.EmuDialogue.sessionId) return;
   renderMessage(data);
   const disc = document.getElementById("discussion");
   disc.scrollTop = disc.scrollHeight;
@@ -23991,6 +24033,7 @@ function openRoom2() {
 }
 
 function closePopup() {
+  window.EmuDialogue?.close();
   const overlay = document.getElementById("room3Overlay");
   const iframe = document.getElementById("room2Frame");
   const popup = document.querySelector("#room3Overlay .popup");
@@ -29419,6 +29462,7 @@ window.addEventListener('emu-reaction-result', function(event) {
 });
 </script>
 
+<script src="/dialogue-client.js"></script>
 <script src="/unified-navigation.js"></script>
 </body>
 </html>

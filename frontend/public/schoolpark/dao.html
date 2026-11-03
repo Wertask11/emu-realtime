@@ -19,6 +19,7 @@
 .sp-section-header {padding:18px 24px;border-bottom:1px solid #e1dcd2;background:var(--emu-paper);}
 .sp-section-header p {margin:0;color:var(--emu-brand-strong);font-size:11px;letter-spacing:.1em;}
 .sp-section-header h2 {margin:4px 0 0;font-size:21px;}
+[role="button"]:focus-visible { outline: 3px solid var(--emu-brand-strong); outline-offset: 4px; }
 </style>
 <style>
 /* 枠のまわりの余白・角丸・影を外す。
@@ -1397,7 +1398,12 @@ function walk(node, scope, out) {
          大文字で判定すると空振りするので、大小を区別せずに見る。 */
       if (/^on[a-z]+$/i.test(name)) {
         var fn = whole(val, scope);
-        if (typeof fn === 'function') el.addEventListener(name.slice(2).toLowerCase(), fn);
+        if (typeof fn === 'function') {
+          el.addEventListener(name.slice(2).toLowerCase(), fn);
+          if (name.toLowerCase() === 'onclick' && /^(DIV|SPAN)$/.test(el.tagName)) {
+            el.setAttribute('role', 'button'); el.setAttribute('tabindex', '0');
+          }
+        }
         continue;
       }
       if (name.indexOf('hint-') === 0) continue;   // 編集画面用の目印。表示には要らない
@@ -1514,9 +1520,12 @@ if (app.componentDidMount) app.componentDidMount();
 
 </script>
 <script>
-// Native keyboard activation for the read-only guild cards and sidebar switch.
+// Match click behaviour for all custom controls, including wisdom details/cite.
 document.addEventListener('keydown', function(e) {
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.sp-ux-guild-card')) { e.preventDefault(); e.target.click(); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"]')
+      && !/^(BUTTON|A)$/.test(e.target.tagName) && e.target.getAttribute('aria-disabled') !== 'true') {
+    e.preventDefault(); if (!e.repeat) e.target.click();
+  }
 });
 // Clicking elsewhere inside the SchoolPark frame dismisses the shared profile.
 document.addEventListener('click', function(e) {

@@ -30,10 +30,15 @@ const MIN_THEMES = 2;          // 返金条件：興味・関心テーマを2つ
 const MIN_SLOTS_PER_WEEK = 3;  // 返金条件：毎週3枠以上
 
 // 記録できる結果。canceled_by_emu と no_partner は Emu 側の不履行に数える。
-/* 対話の場。相手は創業者本人なので、実際に話す手段だけを扱う。
-   emu … Emu内の議論ルーム（room3）でそのまま話す
-   zoom … 希望者向け。オーナーがURLを入れて渡す */
+/* Old `emu` bookings remain readable. New Pro sessions use the existing
+   audio/video call link; booking chat is supplemental and never attendance. */
 const VENUES = ["emu", "zoom"];
+function callURL(value) {
+  try {
+    const u = new URL(String(value || ""));
+    return u.protocol === "https:" && !u.username && !u.password && u.href.length <= 300 ? u.href : "";
+  } catch (_) { return ""; }
+}
 
 const OUTCOMES = ["scheduled", "held", "member_no_show", "member_canceled", "canceled_by_emu", "no_partner"];
 const EMU_FAULT_OUTCOMES = ["canceled_by_emu", "no_partner"];
@@ -246,6 +251,22 @@ function createDialogueRouter(deps) {
     }
   });
 
+  // Both the booked member and the existing verified owner may open this booking.
+  router.get("/:id/access", requireFirebaseUser, async (req, res) => {
+    try {
+      if (!db) return res.status(503).json({ error: "UNAVAILABLE" });
+      if (!/^[A-Za-z0-9_-]{1,100}$/.test(req.params.id)) return res.status(400).json({ error: "INVALID_ID" });
+      const doc = await db.collection(DIALOGUE_COL).doc(req.params.id).get();
+      if (!doc.exists) return res.status(404).json({ error: "NOT_FOUND" });
+      const v = doc.data();
+      const respond = () => v.outcome !== "scheduled"
+        ? res.status(409).json({ error: "ALREADY_DONE" })
+        : res.json({ ok: true, session: { id: doc.id, outcome: v.outcome, venue: v.venue || "emu", meetingUrl: callURL(v.meetingUrl) } });
+      if (v.uid === req.identity.uid) return respond();
+      return requireOwner(req, res, respond);
+    } catch (_) { return res.status(503).json({ error: "UNAVAILABLE" }); }
+  });
+
   // 対話後の評価（「また話したい」か）
   router.post("/:id/rate", requireFirebaseUser, writeLimit, async (req, res) => {
     try {
@@ -279,14 +300,9 @@ function createDialogueRouter(deps) {
       if (!uid) return res.status(400).json({ error: "MISSING_UID" });
       if (isNaN(scheduledAt.getTime())) return res.status(400).json({ error: "INVALID_DATE" });
 
-      const venue = VENUES.includes(req.body.venue) ? req.body.venue : "emu";
-      // Zoom を選んだときだけURLを持たせる。URLの形だけ確かめる。
-      let meetingUrl = String(req.body.meetingUrl || "").trim().slice(0, 300);
-      if (venue === "zoom") {
-        if (!/^https:\/\//.test(meetingUrl)) return res.status(400).json({ error: "INVALID_MEETING_URL" });
-      } else {
-        meetingUrl = "";
-      }
+      const venue = "zoom";
+      const meetingUrl = callURL(req.body.meetingUrl);
+      if (!meetingUrl || req.body.venue === "emu") return res.status(400).json({ error: "VOICE_LINK_REQUIRED" });
 
       const doc = await db.collection(DIALOGUE_COL).add({
         uid, scheduledAt, outcome: "scheduled",
@@ -301,6 +317,22 @@ function createDialogueRouter(deps) {
     }
   });
 
+  // Repair the call destination of an existing booking without replacing its
+  // ID, date, ratings, guarantee record, or attendance outcome.
+  router.post("/admin/:id/call", requireOwner, async (req, res) => {
+    try {
+      const meetingUrl = callURL(req.body.meetingUrl);
+      if (!meetingUrl) return res.status(400).json({ error: "INVALID_MEETING_URL" });
+      const ref = db.collection(DIALOGUE_COL).doc(String(req.params.id));
+      const doc = await ref.get();
+      if (!doc.exists) return res.status(404).json({ error: "NOT_FOUND" });
+      if (doc.data().outcome !== "scheduled") return res.status(409).json({ error: "ALREADY_DONE" });
+      await ref.update({ venue: "zoom", meetingUrl });
+      await audit(req.identity.uid, "dialogue_call_link", doc.data().uid, { sessionId: doc.id });
+      return res.json({ ok: true });
+    } catch (_) { return res.status(500).json({ error: "SAVE_FAILED" }); }
+  });
+
   // 実施結果を記録する
   router.post("/admin/:id/record", requireOwner, async (req, res) => {
     try {
@@ -309,6 +341,9 @@ function createDialogueRouter(deps) {
       const ref = db.collection(DIALOGUE_COL).doc(String(req.params.id));
       const snap = await ref.get();
       if (!snap.exists) return res.status(404).json({ error: "NOT_FOUND" });
+
+      if (outcome === "held" && snap.data().outcome !== "held" && !callURL(snap.data().meetingUrl))
+        return res.status(409).json({ error: "VOICE_LINK_REQUIRED" });
 
       await ref.update({
         outcome,

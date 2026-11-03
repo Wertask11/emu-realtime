@@ -5,12 +5,15 @@ const {main}=require('../knowledge-lab-tests/native-fixture.cjs');
 const {Server}=require('../../backend/node_modules/socket.io');
 const fs=require('node:fs'),path=require('node:path');
 const {initializeTestEnvironment}=require('../quest-tests/node_modules/@firebase/rules-unit-testing');
-async function start(){
+async function start(options={}){
  // Install the unchanged repository rules only in this local demo namespace; never clear records.
  const localRules=await initializeTestEnvironment({projectId:process.env.LAB_EMULATOR_PROJECT,firestore:{host:'127.0.0.1',port:8787,rules:fs.readFileSync(path.join(__dirname,'../../firestore.rules'),'utf8')}});
  await localRules.cleanup();
- const f=await main({port:4220,reset:false,platformRegression:true,profileSettings:true});
- new Server(f.server,{cors:{origin:true,credentials:true}});
+ const f=await main({port:4220,reset:false,platformRegression:true,profileSettings:true,...options});
+ const io=new Server(f.server,{cors:{origin:true,credentials:true},maxHttpBufferSize:16384});
+ require('../../backend/dialogue-socket').attachDialogueSocket(io,{
+   db:f.db,requireFirebaseUser:f.middleware.requireFirebaseUser,ownerAddresses:f.middleware.SP_OWNER_ADDRESSES
+ });
  const actor=f.users.owner.account.walletAddress.toLowerCase();
  async function seed(collection,id,data){try{await f.db.collection(collection).doc(id).create(data);}catch(e){if(e.code!==6 && e.code!=='already-exists')throw e;}}
  await seed('sp_quests','unified-quest',{owner:actor,ownerName:'LOCAL 運営',title:'LOCAL 知識を試すクエスト',knowledge:'LOCAL 元の知識',hypothesis:'LOCAL 小さく試す',action:'LOCAL 一度試し、気づきを記録する',measure:'LOCAL 結果を確認する',intro:'隔離エミュレーターの導線検証専用です。',budget:'1000',budgetCurrency:'JPY',need:1,status:'OPEN',createdAt:Date.now(),closesAt:Date.parse('2026-12-31T00:00:00+09:00'),series:'general',questNumber:9,branch:0,stage:'入門',guildId:'learn'});
