@@ -20,6 +20,7 @@ app.set("trust proxy", 1);
 const server = http.createServer(app);
 
 const io = new Server(server, {
+  maxHttpBufferSize: 16 * 1024,
   cors: {
     /* API と同じ許可リストを使う（旧URL・新URL Emu for SchoolPark・プレビュー）。
        ここだけ旧URL固定だと、新URLから開いた人の広場チャットがつながらない。 */
@@ -112,7 +113,7 @@ async function requireFirebaseUser(req, res, next) {
        サーバーが発行時に付けた provider を見る。authTimeMs は、このログインをした時刻。 */
     const loginMethod = signInProvider === "custom" ? String(decoded.provider || "custom") : signInProvider;
     const authTimeMs = Number(decoded.auth_time) ? Number(decoded.auth_time) * 1000 : null;
-    req.identity = { uid: decoded.uid, walletAddress, account: accountData, signInProvider, loginMethod, authTimeMs };
+    req.identity = { uid: decoded.uid, walletAddress, account: accountData, signInProvider, loginMethod, authTimeMs, tokenExpiresAtMs: Number(decoded.exp) * 1000 };
     next();
   } catch (_) {
     return res.status(401).json({ error: "INVALID_AUTH_TOKEN" });
@@ -1720,69 +1721,9 @@ app.get('/api/ranking', async (req, res) => {
 // =====================
 // Room3 リアルタイム
 // =====================
-const topics = [
-  "なぜ空は青いのか？", "AIに感情や権利は認めるべきか？", "日本の義務教育は本当に必要か？",
-  "仕事と趣味、どちらを優先すべきか？", "SNSは社会にとってプラスかマイナスか？",
-  "遺伝子編集は許されるべきか？", "自動運転車の事故責任は誰が取るべきか？",
-  "人は動物園で動物を見るべきか？", "給料は能力で決まるべきか？年功序列でよいか？",
-  "本を紙で読むのと電子書籍で読むの、どちらがよいか？", "学校でプログラミングは必修にすべきか？",
-  "旅行は国内と海外どちらが価値があるか？", "長時間労働は本当に悪か？",
-  "宇宙旅行は一般人も行くべきか？", "服装の自由はどこまで許されるべきか？",
-  "ゲームは教育に役立つか？", "自然エネルギーだけで日本はやっていけるか？",
-  "タバコやお酒の規制はもっと厳しくすべきか？", "結婚は必ず必要か？",
-  "犬と猫、どちらが飼いやすいか？", "健康のために運動は義務化すべきか？",
-  "ロボットが人間の仕事を奪うのは良いことか？", "音楽はジャンルで人を判断できるか？",
-  "美術館や博物館は学校に必修にすべきか？", "お金よりも時間を優先すべきか？",
-  "お祭りや伝統行事は続けるべきか？", "記憶力より創造力が大事か？",
-  "動物実験は許されるべきか？", "日本は移民をもっと受け入れるべきか？",
-  "成功するために努力と才能、どちらが重要か？"
-];
-
-function getTodayTopic() {
-  const day = new Date().getDate();
-  return topics[(day - 1) % topics.length];
-}
-
-const messages = new Map();
-
-io.on("connection", (socket) => {
-  console.log("接続:", socket.id);
-  socket.emit("today topic", getTodayTopic());
-  socket.emit("room3 history", Array.from(messages.values()));
-
-  socket.on("join room3", ({ wallet }) => { socket.wallet = wallet; });
-
-  // ★ 議題の再リクエスト
-  socket.on("request topic", () => {
-    socket.emit("today topic", getTodayTopic());
-  });
-
-  socket.on("room3 message", async (data) => {
-    /* 議論への発言は light 以上（9/1から）。
-       ここは Socket.io なので uid を持っておらず、アドレスから引き直す。
-       ここを開けたままだと、掲示した「議論への発言はできなくなる」が守れない。 */
-    try {
-      const ent = await entitlement.getEntitlementByAddress(socket.wallet);
-      if (entitlement.enforcing() && !entitlement.atLeast(ent.plan, "light")) {
-        socket.emit("room3 denied", {
-          error: "PLAN_REQUIRED", required: "light", current: ent.plan,
-          message: "議論への発言は Emu for SchoolPark light（月額500円）以上でご利用いただけます。"
-        });
-        return;
-      }
-    } catch (e) {
-      console.error("議論の資格判定に失敗:", e.message);
-      return;   // 判定できないときは通さない（開けっぱなしにしない）
-    }
-
-    const messageId = randomUUID();
-    const message = {
-      id: socket.id, wallet: socket.wallet, messageId,
-      text: data.text, replyTo: data.replyTo || null, timestamp: Date.now()
-    };
-    messages.set(messageId, message);
-    io.emit("room3 message", message);
-  });
+// Private booking chat shares the existing Firebase identity and owner policy.
+require("./dialogue-socket").attachDialogueSocket(io, {
+  db, requireFirebaseUser, ownerAddresses: SP_OWNER_ADDRESSES
 });
 
 // =====================

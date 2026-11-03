@@ -50,6 +50,26 @@
     adminKind: "writers",
     loadedViews: {},
   };
+  // Keep unsaved manual/AI research in its existing iframe until the user
+  // explicitly saves or confirms discarding it. Never persist private text in localStorage.
+  function noteSnapshot() {
+    const fields = [...document.querySelectorAll('#noteForm input,#noteForm textarea,#noteForm select')]
+      .map(el => [el.id, el.type === 'checkbox' ? el.checked : el.value]);
+    return JSON.stringify({ fields, sources: [...state.selected.keys()], selectedFields: selectedFields() });
+  }
+  let savedNoteSnapshot = noteSnapshot(), noteEditorGeneration = 0;
+  function noteSaved() { savedNoteSnapshot = noteSnapshot(); }
+  const noteDirty = () => noteSnapshot() !== savedNoteSnapshot;
+  window.EmuLabUnsaved = {
+    isDirty: noteDirty,
+    discard: noteSaved, // Identity changes must unload the previous user's input without a prompt.
+    canLeave() {
+      if (!noteDirty()) return true;
+      if (!confirm('保存していない研究内容があります。破棄して閉じますか？ 保存する場合は「キャンセル」で戻ってください。')) return false;
+      noteSaved(); return true;
+    }
+  };
+  window.addEventListener('beforeunload', e => { if (noteDirty()) { e.preventDefault(); e.returnValue = ''; } });
   const messages = {
     AI_DISABLED: "AIは現在停止しています。手動の研究機能を利用できます。",
     AI_SOURCE_CONSENT_REQUIRED:
@@ -1063,6 +1083,7 @@
     e.preventDefault();
     run(async () => {
       const fields = selectedFields();
+      const snapshotAtSubmit = noteSnapshot(), editorAtSubmit = noteEditorGeneration;
       const payload = {
         ...(state.note
           ? { id: state.note.id, revision: state.note.revision }
@@ -1085,7 +1106,11 @@
           auth: true,
           body: { ...payload, key: keyFor("note", payload) },
         });
-        state.note = { ...payload, ...result };
+        if (editorAtSubmit === noteEditorGeneration) {
+          state.note = { ...payload, ...result };
+          // A response saves the submitted values, not edits made while awaiting it.
+          savedNoteSnapshot = snapshotAtSubmit;
+        }
         measure("knowledge_lab_research", {stage:"save",method:payload.aiRunId?"ai":"manual"}, result.id + ":" + result.revision);
         measure("knowledge_lab_save", {kind:"research"}, result.id + ":" + result.revision);
         status(
@@ -1098,6 +1123,8 @@
     });
   });
   $("#newNote").onclick = () => {
+    if (!window.EmuLabUnsaved.canLeave()) return;
+    noteEditorGeneration++;
     state.note = null;
     state.aiRun = null;
     $("#detachAI").hidden = true;
@@ -1108,6 +1135,7 @@
     selected();
     $("#comparison").hidden = true;
     status("新しい研究ノートを始めます。");
+    noteSaved();
   };
   $("#detachAI").onclick = () => {
     state.aiRun = null;
@@ -1201,6 +1229,8 @@
       bindAsync($("#noteHistory"), () => showNoteHistory(n.id));
     if ($("#continueNote")) {
       bindAsync($("#continueNote"), async () => {
+        if (!window.EmuLabUnsaved.canLeave()) return;
+        noteEditorGeneration++;
         state.note = n;
         state.aiRun = n.aiRunId ? { id: n.aiRunId } : null;
         $("#detachAI").hidden = !state.aiRun;
@@ -1222,6 +1252,7 @@
         for (const key of ["question", "hypothesis", "plan", "result"])
           $("#note" + key[0].toUpperCase() + key.slice(1)).value = n[key] || "";
         $("#noteVisibility").value = n.visibility;
+        noteSaved();
         $("#researchFields")
           .querySelectorAll("input")
           .forEach((el) => (el.checked = n.fields.includes(el.value)));

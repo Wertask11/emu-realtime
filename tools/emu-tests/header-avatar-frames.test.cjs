@@ -15,7 +15,7 @@ const { readHtml, grab } = require('../year-goals-tests/extract.cjs');
 
 const INDEX = readHtml('frontend/public/index.html');
 const PHOTO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
-const FUNCS = ['_emuHeadPut', '_emuHeadIsOurs', '_emuPaintIdentityButton', 'emuPaintHeaderIdentity', 'spRoomWatchRender', 'openSpRoom']
+const FUNCS = ['_emuHeadPut', '_emuHeadIsOurs', '_emuPaintIdentityButton', 'emuPaintHeaderIdentity', 'spRoomWatchRender', 'closeSpRoom', 'openSpRoom']
   .map(n => grab(INDEX, n)).join('\n');
 /* 偽物の SchoolPark。描き直すと、右上のボタンを👤で作り直す（本物の draw と同じ）。 */
 const FRAME = `<!doctype html><meta charset="utf-8"><div id="dao-root"></div><script>

@@ -578,19 +578,20 @@ async function loadDialogue() {
         let html = '<div class="session">'
           + '<div class="when">' + when + '</div>'
           + '<div class="meta">' + (outcomes[s.outcome] || s.outcome)
-          + '　/　' + (isZoom ? "Zoom" : "Emu内で対話") + '</div>';
+          + '　/　' + (isZoom ? "音声・映像通話" : "通話URLの準備が必要") + '</div>';
 
-        // 予定のものには参加導線と、場の希望を出す
+        // Audio/video is the Pro session. Text chat is an optional booking aid.
         if (s.outcome === "scheduled") {
-          if (isZoom && s.meetingUrl) {
-            html += '<a class="join" href="' + s.meetingUrl + '" target="_blank" rel="noopener">Zoomに参加する</a>';
+          let callUrl = "";
+          try { const u = new URL(s.meetingUrl); if (u.protocol === "https:" && !u.username && !u.password) callUrl = u.href; } catch (_) {}
+          if (callUrl) {
+            const safeUrl = callUrl.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+            html += '<a class="join" href="' + safeUrl + '" target="_blank" rel="noopener noreferrer">音声・映像の通話に参加する</a>';
           } else {
-            html += '<a class="join" href="/?emuDiscussion=1">Emuで対話する</a>';
+            html += '<p class="note">音声・映像の通話URLは準備中です。運営に依頼できます。文字だけのやりとりはProの対話回数に含まれません。</p>';
           }
-          html += '<div class="venue">'
-            + '<button data-venue="emu"  data-id="' + s.id + '"' + (!isZoom?' class="on"':'') + '>Emu内で話す</button>'
-            + '<button data-venue="zoom" data-id="' + s.id + '"' + (isZoom?' class="on"':'') + '>Zoomを希望する</button>'
-            + '</div>';
+          html += '<p><a href="/?emuDiscussion=1&amp;dialogueSession=' + encodeURIComponent(s.id) + '">予約の補助チャットを開く</a></p>';
+          html += '<div class="venue"><button data-venue="zoom" data-id="' + s.id + '">通話URLを運営に依頼する</button></div>';
         }
 
         // 実施済みで未評価のものだけ、その場で評価できるようにする

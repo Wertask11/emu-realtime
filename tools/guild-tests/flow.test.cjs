@@ -57,6 +57,16 @@ function spPassportLoad(){ return Promise.resolve(window.__me); }
 window.alert = m => { (window.__alerts=window.__alerts||[]).push(String(m)); };
 window.confirm = () => window.__confirm !== false;
 window.prompt = () => window.__prompt;
+// The in-memory guild fixture does not mount the optional reward-budget API.
+// Return its real unavailable shape locally; never call Production from a test.
+const localFetch = window.fetch.bind(window);
+window.fetch = (url, options) => {
+  const u = new URL(url, location.href);
+  if (u.origin === location.origin) return localFetch(url, options);
+  if (u.pathname === '/api/emuer/v2/guild-quest/budgets')
+    return Promise.resolve(new Response(JSON.stringify({error:'NOT_MOUNTED_IN_LOCAL_FIXTURE'}), {status:503,headers:{'Content-Type':'application/json'}}));
+  return Promise.reject(new Error('UNEXPECTED_EXTERNAL_REQUEST_IN_LOCAL_TEST'));
+};
 window.db = {};
 let _id = 0;
 window.fbLib = {

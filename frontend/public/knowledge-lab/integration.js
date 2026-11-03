@@ -147,7 +147,7 @@
         ["good", "change", "propose"].includes(action) &&
         validId(message.postId)
       ) {
-        window.closeSpRoom();
+        if (window.closeSpRoom() === false) return;
         await window.emuKnowledgeReact({
           type: "emu-knowledge-react",
           action,
@@ -156,17 +156,17 @@
         return;
       }
       if (action === "library") {
-        window.closeSpRoom();
+        if (window.closeSpRoom() === false) return;
         window.emuOpenKnowledgeLibrary();
         return;
       }
       if (action === "close") {
-        window.closeSpRoom();
+        if (window.closeSpRoom() === false) return;
         window.showEmuRequests();
         return;
       }
       if (action === "passport") {
-        window.closeSpRoom();
+        if (window.closeSpRoom() === false) return;
         window.openSpPassport();
         return;
       }
@@ -193,7 +193,7 @@
             source = await first.json();
           if (!first.ok || source.visibility !== "public")
             throw new Error("元の知識の公開状態を確認してください。");
-          window.closeSpRoom();
+          if (window.closeSpRoom() === false) return;
           await window.spOpenProposalFromPost(note.sourceIds[0], note.title);
           const body = document.getElementById("spvBody");
           if (body)
@@ -213,12 +213,12 @@
               .slice(0, 600);
           return;
         }
-        window.closeSpRoom();
+        if (window.closeSpRoom() === false) return;
         await window.spDaoOpenWhenReady();
         return;
       }
       if (action === "request") {
-        window.closeSpRoom();
+        if (window.closeSpRoom() === false) return;
         window.showEmuRequests();
         window.openKnowledgeRequestComposer();
         return;
@@ -232,7 +232,7 @@
         );
         if (!snap.exists()) throw new Error("募集が見つかりません。");
         const request = { id: snap.id, ...snap.data() };
-        window.closeSpRoom();
+        if (window.closeSpRoom() === false) return;
         window.showEmuRequests();
         if (action === "answer") window.openKnowledgeAnswer(request);
         else window.openKnowledgeAnswers(request);
@@ -253,7 +253,7 @@
         const data = await r.json();
         if (!r.ok) throw new Error("元の知識・研究を確認できませんでした。");
         if (!await window.openEmuPractice('logs')) return;
-        window.closeSpRoom();
+        if (window.closeSpRoom() === false) return;
         const app = document.getElementById('spDaoFrame')?.contentWindow?.app;
         if (message.postId) await window.spOpenProposalFromPost(message.postId, data.title);
         else {
@@ -312,7 +312,7 @@
               );
           } catch (_) {}
         }
-        if (current !== previous && labFrame()) window.closeSpRoom();
+        if (current !== previous && labFrame()) if (window.closeSpRoom() === false) return;
         previous = current;
       });
     }, 250);

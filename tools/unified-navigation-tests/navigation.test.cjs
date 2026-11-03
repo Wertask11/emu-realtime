@@ -5,9 +5,9 @@ function fixture(gate=async()=>({allowed:true})) {
  const app={go:screen=>()=>opened.push(screen)};
  const nodes={mainApp:{style:{display:'block'}},spDaoFrame:{contentWindow:{app}}};
  const document={body:{classList:{add(...v){v.forEach(x=>classes.add(x));},remove(...v){v.forEach(x=>classes.delete(x));},contains:v=>classes.has(v)}},documentElement:{style:{setProperty(){}}},getElementById:id=>nodes[id],querySelector:()=>null,querySelectorAll:()=>[]};
- const location={href:'http://local.invalid/?lab=library'};
+ const location=new URL('http://local.invalid/?lab=library');
  const window={auth:{currentUser:{uid:'fixture'}},_setEmuHomeTab(){},_emuEnsureAppVisible(){},scrollTo(){},spEnsureSchoolParkAccess:gate,spShowSchoolParkUnavailable(){alerts.push('denied')},openSpDao(screen){initials.push(screen);opened.push('open')},alert:m=>alerts.push(m),addEventListener(){}};
- const context={window,document,location,history:{replaceState(_s,_t,url){location.href='http://local.invalid'+url;}},URL,Set,Date,Promise,console,setTimeout,queueMicrotask,MutationObserver:class{observe(){}}};
+ const context={window,document,location,history:{state:null,replaceState(state,_t,url){this.state=state;location.href='http://local.invalid'+url;},pushState(state,_t,url){this.state=state;location.href='http://local.invalid'+url;}},URL,Set,Date,Promise,console,setTimeout,queueMicrotask,MutationObserver:class{observe(){}}};
  vm.runInNewContext(fs.readFileSync('frontend/public/unified-navigation.js','utf8'),context);
  return {nav:window.EmuNavigation,window,opened,alerts,classes,location,initials};
 }
@@ -28,10 +28,13 @@ test('an explicit read/search/practice navigation cancels a late workspace entry
   let releaseDenied;const denied=fixture(()=>new Promise(r=>{releaseDenied=r}));const late=denied.nav.existing('city');denied.nav.activate(view);releaseDenied({allowed:false});assert.equal(await late,false);assert.deepEqual(denied.alerts,[]);
  }
 });
-test('the booked dialogue URL reuses scheduled sessions and never restores the public discussion directory',async()=>{
- for(const sessions of [[],[{outcome:'held',venue:'emu'}],[{outcome:'scheduled',venue:'zoom',meetingUrl:'https://zoom.example.invalid/meeting'}],[{outcome:'scheduled',venue:'emu'}]]){
+test('the booked dialogue URL uses server booking authorization for both voice and auxiliary chat',async()=>{
+ for(const outcome of ['held','scheduled']){
   const f=fixture();f.window.emuAuthHeaders=async()=>({Authorization:'LOCAL_TEST_ONLY'});
-  f.window.fetch=async()=>({ok:true,json:async()=>({sessions})});f.window.accountGo=page=>f.opened.push(page);f.window.openRoom3=()=>f.opened.push('booked-room');
-  const booked=sessions.some(s=>s.outcome==='scheduled' && s.venue==='emu');assert.equal(await f.nav.resumeDialogue(),booked);assert.deepEqual(f.opened,[booked?'booked-room':'sessions']);
+  f.window.fetch=async url=>({ok:true,json:async()=>url.endsWith('/my')?({sessions:[{id:'booking',outcome}]}):({session:{id:'booking',outcome}})});
+  f.window.accountGo=page=>f.opened.push(page);f.window.openRoom3=id=>{f.opened.push(id);return true;};
+  assert.equal(await f.nav.resumeDialogue(),outcome==='scheduled');assert.deepEqual(f.opened,[outcome==='scheduled'?'booking':'sessions']);
  }
+ const denied=fixture();denied.window.emuAuthHeaders=async()=>({});denied.window.fetch=async url=>({ok:!url.endsWith('/access'),json:async()=>({sessions:[{id:'booking',outcome:'scheduled'}]})});
+ denied.window.accountGo=page=>denied.opened.push(page);assert.equal(await denied.nav.resumeDialogue(),false);assert.deepEqual(denied.opened,['sessions']);
 });

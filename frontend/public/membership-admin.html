@@ -1521,12 +1521,12 @@ async function renderDialogue() {
       '<div class="card"><h3>対話機会を提示する</h3>'
       + '<input id="offerUid" placeholder="会員の uid">'
       + '<input id="offerAt" type="datetime-local">'
-      + '<select id="offerVenue"><option value="emu">Emu内で対話する</option>'
+      + '<select id="offerVenue">'
       + '<option value="zoom">Zoomで対話する</option></select>'
-      + '<input id="offerUrl" placeholder="ZoomのURL（Zoomのときだけ）">'
+      + '<input id="offerUrl" placeholder="音声・映像通話の https:// URL（必須）">'
       + '<div class="actions"><button class="act ok" id="offerBtn">この日時で提示する</button></div></div>'
       + (items.length ? items.map(s => {
-          const venueLabel = s.venue === "zoom" ? "Zoom" : "Emu内";
+          const venueLabel = s.venue === "zoom" ? "音声・映像通話" : "通話URLを設定してください";
           const req = s.venueRequest && s.venueRequest !== s.venue
             ? '<span class="pill warn">' + (s.venueRequest === "zoom" ? "Zoom希望" : "Emu希望") + '</span>' : "";
           const ownerRated = typeof s.ownerWantsAgain === "boolean";
@@ -1547,6 +1547,7 @@ async function renderDialogue() {
           + (s.outcome === "held" && !ownerRated
               ? '<div class="actions"><button class="act ok" data-orate="1">また話したい</button>'
                 + '<button class="act no" data-orate="0">合わなかった</button></div>' : '')
+          + (s.outcome === "scheduled" ? '<p><a href="/?emuDiscussion=1&amp;dialogueSession=' + encodeURIComponent(s.id) + '" target="_blank" rel="noopener">予約の補助チャットを開く</a></p><input data-call-url type="url" placeholder="音声・映像通話の https:// URL" value="' + esc(s.meetingUrl || '') + '"><button class="act neutral" data-call-save>通話URLを保存</button>' : '')
           + '<select data-outcome>' + Object.entries(outcomes).map(([k,v]) =>
               '<option value="' + k + '"' + (k === s.outcome ? " selected" : "") + '>' + v + '</option>').join("")
           + '</select><div class="actions"><button class="act neutral" data-record>結果を記録</button></div></div>';
@@ -1570,6 +1571,15 @@ async function renderDialogue() {
         renderDialogue();
       } catch (e) { alert("失敗しました: " + (e.code || e.message)); offerBtn.disabled = false; }
     };
+
+    el.querySelectorAll("[data-call-save]").forEach(btn => {
+      btn.onclick = async () => {
+        const card = btn.closest(".card"), meetingUrl = card.querySelector("[data-call-url]").value.trim();
+        btn.disabled = true;
+        try { await api("/api/dialogue/admin/" + encodeURIComponent(card.dataset.id) + "/call", {method:"POST",body:{meetingUrl}}); renderDialogue(); }
+        catch (e) { alert("通話URLを保存できませんでした: " + (e.code || e.message)); btn.disabled = false; }
+      };
+    });
 
     el.querySelectorAll("[data-orate]").forEach(btn => {
       btn.onclick = async () => {

@@ -70,7 +70,7 @@
 
   function view(s, message) {
     var light = 'Emu for SchoolPark light';
-    var can = '投稿・知識の募集・回答・一日シェアができます（light の月の回数まで）。';
+    var can = '投稿・知識の募集・回答ができます（light の月の回数まで）。';
     var head = '<button type="button" class="emu-gift-close" aria-label="閉じる" data-gift="close">×</button>'
       + '<p class="emu-gift-eyebrow">🎁 運営からのギフト</p>';
     var body;
