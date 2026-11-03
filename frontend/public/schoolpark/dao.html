@@ -54,6 +54,7 @@ html, body                 { height: 100%; width:100%; overflow-x:hidden; }
   }
 }
 </style>
+  <script src="/client-errors.js"></script><!-- 画面のエラーを運営に知らせる（人を特定する情報は送らない） -->
   <script src="/emu-analytics.js"></script>
 </head>
 <body>
@@ -132,6 +133,22 @@ if (window.top === window.self) window.location.replace('/');
             <details style="background:#FBF9F3; border:1px solid rgba(20,19,16,.16); border-radius:10px; padding:18px; margin:16px 0; min-width:0">
               <summary style="font-size:17px; font-weight:700; line-height:1.7; cursor:pointer">7. 手書きの言葉</summary>
               <img src="/schoolpark/images/quest-000-tegaki.webp" alt="方眼紙に手書きされた言葉。「私はなんでもできる」「私は私のままでいい」などが並び、最後に「いつもありがとうございます。感謝しています！！ Tsubaki」と書かれている。" loading="lazy" width="886" height="1380" style="display:block; width:100%; max-width:560px; height:auto; margin:20px auto 0; border-radius:6px">
+            </details>
+            <!-- 8. EMUER論文（11/3 オーナーから）。#000 を思想的原点とする研究論文（2026年11月2日 精査改訂版）。
+                 手書きの言葉と同じく、Firestore の founderSections とは別に画面側に置く（#000 の照合用ハッシュには入らない）。
+                 全文は長いので別のページ（/schoolpark/emuer-paper.html）で読む。ここには要旨と章立てだけを出す。 -->
+            <details data-keep-open="founder-emuer-paper" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.16); border-radius:10px; padding:18px; margin:16px 0; min-width:0">
+              <summary style="font-size:17px; font-weight:700; line-height:1.7; cursor:pointer">8. EMUER論文</summary>
+              <div style="font-size:15px; line-height:2; margin-top:16px">
+                <p style="margin:0; font-weight:700">貢献価値の創出・評価・循環に基づく分散型経済圏の理論と制度設計</p>
+                <p style="margin:0 0 12px; font-size:13px; color:#6E695C">SchoolParkの創設思想を起点とした経済・技術・法制度・実証の統合的研究｜研究論文・精査改訂版（2026年11月2日）</p>
+                <p style="margin:0 0 6px; font-weight:700">要旨</p>
+                <p style="margin:0 0 14px">本論文は、学校、企業、地域、オンラインサービスに分散して存在する知識、経験、挑戦、貢献を、本人の尊厳と自律性を保ちながら次の学習・仕事・消費の機会へ接続する制度の可能性を研究する。創設資料であるSchoolPark Quest #000とSchool Park論文を思想的原点とし、EMUERを人間の価値そのものではなく、限定的に認定された貢献と利用可能な便益を接続する単位として定義する。コモンズ、公共財、外部性、内発的動機に関する理論を参照し、貢献認定、有限予算による配分、未使用残高、交換原資、加盟店の経済合理性、本人性確認、技術基盤、法的分類、共同ガバナンスを一体的に検討する。数量台帳と交換費用のモデルを提示し、SchoolPark Cityおよび外部加盟店での段階的な実証計画を提案する。EMUERの外部利用と自由流通を区別し、暗号資産化を制度成立の前提としない。実際の外部経済圏が成立したという実証結果はなく、本論文の結論は、成立に必要な条件と反証可能な仮説の整理である。</p>
+                <p style="margin:0 0 6px; font-weight:700">章立て</p>
+                <p style="margin:0 0 14px; font-size:14px; line-height:1.9">第1章 序論／第2章 思想的基盤――Quest #000とCHES・DXR／第3章 先行研究と理論的枠組み／第4章 EMUERの定義と権利構造／第5章 貢献の認定と配分／第6章 発行・交換・財務の数理モデル／第7章 外部経済圏と加盟店設計／第8章 技術アーキテクチャと安全性／第9章 法制度・倫理・ガバナンス／第10章 実証研究の設計／第11章 批判的検討と代替案／第12章 結論と段階的な展望／付録A〜E・参考文献</p>
+                <a href="/schoolpark/emuer-paper.html" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; min-height:44px; padding:10px 18px; border-radius:6px; background:var(--emu-brand-strong); color:#fff; font-weight:700; text-decoration:none">全文を読む（別のページ）→</a>
+                <p style="margin:12px 0 0; font-size:12px; color:#6E695C">制度の考え方と確かめるための仮説をまとめたもので、外の経済圏が実際にできたことを示すものではありません。査読・法務意見・監査を経た文書でもありません。</p>
+              </div>
             </details>
             <p><a href="https://note.com/paberuuu11/n/nb4417c69b0c6" target="_blank" rel="noopener noreferrer">SchoolPark論文の出典（note）</a></p>
           </article>
@@ -1472,7 +1489,12 @@ function reopen(frag, open) {
    見出しは幅によって高さが変わるので、決め打ちせずに測る。 */
 function syncHeadHeight() {
   var head = host.querySelector('[data-sp-head]');
-  if (head) host.style.setProperty('--sp-head-h', head.offsetHeight + 'px');
+  if (!head) return;
+  /* 11/2 の画面統合から、見出しは止まらず一緒に流れる。そのときに見出しの高さぶん
+     空けると、ACCEPT の上に約100pxの空きができていた（11/3 点検 8）。
+     見出しが止まっている（sticky・fixed）ときだけ、その高さを空ける。 */
+  var pos = getComputedStyle(head).position;
+  host.style.setProperty('--sp-head-h', (pos === 'sticky' || pos === 'fixed') ? head.offsetHeight + 'px' : '0px');
 }
 
 function draw() {
