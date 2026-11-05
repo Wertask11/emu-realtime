@@ -38,7 +38,7 @@ export function exact(o, fields) {
     fail("INVALID_FIELDS");
 }
 export async function publicFromJwk(jwk) {
-  exact(jwk, ["kty", "crv", "x", "y", "key_ops", "ext", "alg", "use"]);
+  exact(jwk, ["kty", "crv", "x", "y", "key_ops", "ext", "alg", "use", "kid"]);
   if (
     jwk.kty !== "EC" ||
     jwk.crv !== "P-256" ||
@@ -327,4 +327,8 @@ async function unrevoked(options) {
       result.results?.length === 1 &&
       result.results.every((r) => r.status === false),
   };
+}
+
+export async function publicJwk(publicKey) {
+  return multikey.toJwk({ keyPair: await multikey.from(publicKey) });
 }

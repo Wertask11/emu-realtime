@@ -1,5 +1,7 @@
 # SchoolPark Passport 2.0 作業報告 — 2026-11-05
 
+> 初回フェーズの履歴です。完成フェーズの現在の実装・未解決事項・公開判定は [completion-report.md](completion-report.md) を参照してください。
+
 **判定：開発用VC基盤を実装・検証。本番公開不可。本番への反映・push・mainマージ・Rules公開は行っていません。**
 
 ブランチ `feat/passport-2-vc-20261105`。監査対象・実装の基点は最新main `8ac3dd3`（PR #270）。最終fetchでもorigin/mainが同じコミットであることを確認。監査結果と予定ファイルを利用者へ報告してから機能実装を開始しました。既存の未コミット変更はありませんでした。監査の詳細は [phase-0-audit.md](phase-0-audit.md)。

@@ -13,11 +13,19 @@ import {
   exact,
   fail,
   publicFromJwk,
+  publicJwk,
   issue,
   makeStatus,
   verifyAccount,
   verifyPresentation,
 } from "./crypto.mjs";
+import {
+  issueSelective,
+  verifySelective,
+  SD_FIELDS,
+  SD_VCT,
+} from "./selective.mjs";
+export const SD_CONFIG_ID = "schoolpark_account_sd_v1";
 const opaque = () => randomBytes(32).toString("base64url");
 const hash = (s) => createHash("sha256").update(s).digest("hex");
 const equal = (a, b) =>
@@ -35,6 +43,7 @@ export function createService({
   keys,
   verifiers = [],
   clock = Date.now,
+  operational = async () => {},
 }) {
   if (
     !issuer ||
@@ -67,17 +76,32 @@ export function createService({
     if (!c || c.revoked || c.deleted) fail("CREDENTIAL_NOT_AVAILABLE");
     return c;
   }
+  let cachedStatus;
   async function status() {
-    return makeStatus({
+    await operational(signer.id);
+    const state = await store.status(),
+      fingerprint = signer.id + ":" + state.revoked.join(",");
+    if (
+      cachedStatus &&
+      cachedStatus.fingerprint === fingerprint &&
+      cachedStatus.until > clock()
+    )
+      return structuredClone(cachedStatus.value);
+    const value = await makeStatus({
       url: statusUrl,
       issuer,
       signer,
       keys,
-      revoked: (await store.status()).revoked,
+      revoked: state.revoked,
       now: clock(),
     });
+    cachedStatus = { fingerprint, until: clock() + 60000, value };
+    return structuredClone(value);
   }
-  async function offer(owner) {
+  async function offer(owner, configurationId = CONFIG_ID) {
+    if (![CONFIG_ID, SD_CONFIG_ID].includes(configurationId))
+      fail("INVALID_FIELDS");
+    await operational(signer.id);
     const code = opaque(),
       pin = String(randomInt(10000000, 100000000));
     await store.ticket(hash(code), (old) => {
@@ -85,6 +109,7 @@ export function createService({
       return {
         next: {
           kind: "code",
+          configurationId,
           owner,
           pinHash: hash(pin),
           expires: clock() + 300000,
@@ -96,8 +121,9 @@ export function createService({
     });
     return {
       credential_offer: {
-        credential_issuer: base,
-        credential_configuration_ids: [CONFIG_ID],
+        credential_issuer:
+          configurationId === SD_CONFIG_ID ? base + "/sd" : base,
+        credential_configuration_ids: [configurationId],
         grants: {
           [PRE_AUTH]: {
             "pre-authorized_code": code,
@@ -108,7 +134,7 @@ export function createService({
       tx_code: pin,
     };
   }
-  async function exchange(code, pin) {
+  async function exchange(code, pin, scope) {
     if (
       typeof code !== "string" ||
       !/^[\w-]{43}$/.test(code) ||
@@ -125,30 +151,56 @@ export function createService({
         g.attempts >= 5
       )
         return { next: g, result: null };
+      if (scope !== undefined && scope !== (g.configurationId || CONFIG_ID))
+        return { next: g, result: null };
       g.attempts++;
       if (!equal(g.pinHash, hash(pin))) return { next: g, result: null };
       g.used = true;
-      return { next: g, result: g.owner };
+      return {
+        next: g,
+        result: {
+          owner: g.owner,
+          configurationId: g.configurationId || CONFIG_ID,
+        },
+      };
     });
     if (!owner) fail("INVALID_GRANT");
     const token = opaque();
     await store.ticket(hash(token), () => ({
-      next: { kind: "token", owner, expires: clock() + 300000, used: false },
+      next: {
+        kind: "token",
+        owner: owner.owner,
+        configurationId: owner.configurationId,
+        expires: clock() + 300000,
+        used: false,
+      },
       result: true,
     }));
     return { access_token: token, token_type: "Bearer", expires_in: 300 };
   }
-  async function consumeToken(token) {
+  async function consumeToken(token, configurationId = CONFIG_ID) {
     if (typeof token !== "string" || !/^[\w-]{43}$/.test(token))
       fail("INVALID_TOKEN");
     const owner = await store.ticket(hash(token), (g) => {
-      if (!g || g.kind !== "token" || g.used || g.expires <= clock())
+      if (
+        !g ||
+        g.kind !== "token" ||
+        g.used ||
+        g.expires <= clock() ||
+        (g.configurationId || CONFIG_ID) !== configurationId
+      )
         return { next: g, result: null };
       g.used = true;
-      return { next: g, result: g.owner };
+      return {
+        next: g,
+        result: {
+          owner: g.owner,
+          configurationId: g.configurationId || CONFIG_ID,
+        },
+      };
     });
     if (!owner) fail("INVALID_TOKEN");
-    return owner;
+    return owner.owner;
   }
   async function nonce() {
     const n = opaque();
@@ -161,7 +213,13 @@ export function createService({
     });
     return n;
   }
-  async function issueCredential(owner, { proof, nonce: expected }) {
+  async function issueCredential(
+    owner,
+    { proof, nonce: expected, configurationId = CONFIG_ID },
+  ) {
+    if (![CONFIG_ID, SD_CONFIG_ID].includes(configurationId))
+      fail("INVALID_FIELDS");
+    await operational(signer.id);
     if (typeof proof !== "string" || proof.length > 4096) fail("INVALID_PROOF");
     const header = jose.decodeProtectedHeader(proof);
     exact(header, ["typ", "alg", "jwk"]);
@@ -171,13 +229,13 @@ export function createService({
     const key = await jose.importJWK(header.jwk, "ES256");
     const { payload } = await jose.jwtVerify(proof, key, {
       algorithms: ["ES256"],
-      audience: base,
+      audience: configurationId === SD_CONFIG_ID ? base + "/sd" : base,
       typ: "openid4vci-proof+jwt",
       maxTokenAge: 300,
       clockTolerance: 0,
       currentDate: new Date(clock()),
     });
-    exact(payload, ["aud", "iat", "nonce", "iss"]);
+    exact(payload, ["aud", "iat", "nonce", "iss", "exp", "nbf", "jti"]);
     if (
       !equal(payload.nonce, expected) ||
       !Number.isFinite(payload.iat) ||
@@ -200,31 +258,45 @@ export function createService({
       do {
         index = randomInt(131072);
       } while (s.used.includes(index));
-      const c = await issue(
-        {
-          "@context": CONTEXT,
-          id,
-          type: ["VerifiableCredential", TYPE],
-          issuer,
-          validFrom: new Date(now).toISOString(),
-          validUntil: new Date(now + 30 * 86400000).toISOString(),
-          credentialSubject: {
-            id: holderKey.controller,
-            accountAccess: true,
-            assurance: "platform-account",
-            schemaVersion: "1",
-          },
-          credentialStatus: {
-            id: `${statusUrl}#${index}`,
-            type: "BitstringStatusListEntry",
-            statusPurpose: "revocation",
-            statusListCredential: statusUrl,
-            statusListIndex: String(index),
-          },
-        },
-        signer,
-        keys,
-      );
+      const c =
+        configurationId === SD_CONFIG_ID
+          ? await issueSelective({
+              issuer,
+              signer,
+              holderJwk: {
+                kty: header.jwk.kty,
+                crv: header.jwk.crv,
+                x: header.jwk.x,
+                y: header.jwk.y,
+              },
+              statusId: id,
+              now,
+            })
+          : await issue(
+              {
+                "@context": CONTEXT,
+                id,
+                type: ["VerifiableCredential", TYPE],
+                issuer,
+                validFrom: new Date(now).toISOString(),
+                validUntil: new Date(now + 30 * 86400000).toISOString(),
+                credentialSubject: {
+                  id: holderKey.controller,
+                  accountAccess: true,
+                  assurance: "platform-account",
+                  schemaVersion: "1",
+                },
+                credentialStatus: {
+                  id: `${statusUrl}#${index}`,
+                  type: "BitstringStatusListEntry",
+                  statusPurpose: "revocation",
+                  statusListCredential: statusUrl,
+                  statusListIndex: String(index),
+                },
+              },
+              signer,
+              keys,
+            );
       delete s.nonces[hash(expected)];
       s.used.push(index);
       a.credentials.push({
@@ -232,6 +304,7 @@ export function createService({
         index,
         holderKey,
         credential: c,
+        format: configurationId === SD_CONFIG_ID ? "dc+sd-jwt" : "ldp_vc",
         revoked: false,
         deleted: false,
       });
@@ -239,7 +312,7 @@ export function createService({
       return c;
     });
   }
-  async function request(owner, credentialId, verifierId) {
+  async function request(owner, credentialId, verifierId, selected) {
     const v = verifiers.find((v) => v.id === verifierId);
     if (!v) fail("UNTRUSTED_VERIFIER");
     const id = opaque(),
@@ -248,6 +321,16 @@ export function createService({
     return store.run(owner, (a) => {
       prune(a);
       const c = active(a, credentialId);
+      const format = c.format || "ldp_vc";
+      const required = format === "dc+sd-jwt" ? ["accountAccess"] : SD_FIELDS;
+      const chosen = selected || required;
+      if (
+        !Array.isArray(chosen) ||
+        chosen.some((k) => !SD_FIELDS.includes(k)) ||
+        required.some((k) => !chosen.includes(k)) ||
+        (format !== "dc+sd-jwt" && selected)
+      )
+        fail("REQUIRED_DISCLOSURE_MISSING");
       if (Object.keys(a.requests).length >= 10) fail("LIMIT_REACHED");
       const r = {
         id,
@@ -260,7 +343,45 @@ export function createService({
         response_uri: v.responseUri,
         expires: clock() + 300000,
         status: "pending",
-        disclosure: structuredClone(c.credential),
+        format,
+        required,
+        selected: chosen,
+        legalName: v.legalName || v.name,
+        trustStatus:
+          v.trusted === true ? "sandbox-registered" : "configured-only",
+        retentionNotice:
+          v.retentionNotice ||
+          "提示済み情報は相手に保存される可能性があります。削除は相手側の規定に従います。",
+        hiddenFields:
+          format === "dc+sd-jwt"
+            ? SD_FIELDS.filter((k) => !chosen.includes(k))
+            : [],
+        disclosure:
+          format === "dc+sd-jwt"
+            ? {
+                claims: Object.fromEntries(
+                  chosen.map((k) => [
+                    k,
+                    {
+                      accountAccess: true,
+                      assurance: "platform-account",
+                      schemaVersion: "1",
+                    }[k],
+                  ]),
+                ),
+                alwaysDisclosed: [
+                  "iss",
+                  "iat",
+                  "nbf",
+                  "exp",
+                  "vct",
+                  "cnf",
+                  "status_id",
+                  "issuer signature",
+                  "key-binding proof",
+                ],
+              }
+            : structuredClone(c.credential),
       };
       const authorizationRequest = {
         response_type: "vp_token",
@@ -273,18 +394,32 @@ export function createService({
           credentials: [
             {
               id: "account",
-              format: "ldp_vc",
-              meta: { type_values: [["VerifiableCredential", TYPE]] },
+              format,
+              meta:
+                format === "dc+sd-jwt"
+                  ? { vct_values: [SD_VCT] }
+                  : { type_values: [["VerifiableCredential", TYPE]] },
+              ...(format === "dc+sd-jwt"
+                ? { claims: chosen.map((k) => ({ path: [k] })) }
+                : {}),
             },
           ],
         },
         client_metadata: {
-          vp_formats_supported: {
-            ldp_vc: {
-              proof_type_values: ["DataIntegrityProof"],
-              cryptosuite_values: ["ecdsa-rdfc-2019"],
-            },
-          },
+          vp_formats_supported:
+            format === "dc+sd-jwt"
+              ? {
+                  "dc+sd-jwt": {
+                    "sd-jwt_alg_values": ["ES256"],
+                    "kb-jwt_alg_values": ["ES256"],
+                  },
+                }
+              : {
+                  ldp_vc: {
+                    proof_type_values: ["DataIntegrityProof"],
+                    cryptosuite_values: ["ecdsa-rdfc-2019"],
+                  },
+                },
         },
       };
       a.requests[id] = r;
@@ -311,18 +446,21 @@ export function createService({
         recipient: r.recipient,
         purpose: r.purpose,
         requestId: id,
-        disclosedFields: [
-          "accountAccess",
-          "assurance",
-          "schemaVersion",
-          "pseudonymousHolderId",
-          "credentialId",
-          "issuer",
-          "validFrom",
-          "validUntil",
-          "credentialStatus",
-          "proof",
-        ],
+        disclosedFields:
+          r.format === "dc+sd-jwt"
+            ? r.selected
+            : [
+                "accountAccess",
+                "assurance",
+                "schemaVersion",
+                "pseudonymousHolderId",
+                "credentialId",
+                "issuer",
+                "validFrom",
+                "validUntil",
+                "credentialStatus",
+                "proof",
+              ],
       });
       return { status: r.status, state: r.state, expires: r.expires };
     });
@@ -349,20 +487,42 @@ export function createService({
     const c = await store.run(owner, (a) =>
       structuredClone(active(a, r.credentialId)),
     );
-    if (presentation?.verifiableCredential?.[0]?.id !== c.id)
-      fail("CREDENTIAL_MISMATCH");
-    // The approved disclosure is immutable. No credential substitution after consent.
-    if (!isDeepStrictEqual(presentation.verifiableCredential[0], r.disclosure))
-      fail("DISCLOSURE_MISMATCH");
-    await verifyPresentation(presentation, {
-      request: r,
-      holderKey: c.holderKey,
-      issuer,
-      keys,
-      status: await status(),
-      statusUrl,
-      now: clock(),
-    });
+    if (c.format === "dc+sd-jwt") {
+      if (
+        typeof presentation !== "string" ||
+        presentation.split("~")[0] !== c.credential.split("~")[0]
+      )
+        fail("CREDENTIAL_MISMATCH");
+      const keyId = jose.decodeProtectedHeader(presentation.split("~")[0]).kid;
+      await operational(keyId);
+      const pub = keys.find((k) => k.id === keyId);
+      if (!pub) fail("UNTRUSTED_ISSUER_KEY");
+      await verifySelective(presentation, {
+        issuer,
+        issuerJwk: await publicJwk(pub),
+        request: r,
+        now: clock(),
+        isRevoked: async (statusId) => statusId !== c.id || c.revoked,
+      });
+    } else {
+      await operational(c.credential.proof.verificationMethod);
+      if (presentation?.verifiableCredential?.[0]?.id !== c.id)
+        fail("CREDENTIAL_MISMATCH");
+      // The approved disclosure is immutable. No credential substitution after consent.
+      if (
+        !isDeepStrictEqual(presentation.verifiableCredential[0], r.disclosure)
+      )
+        fail("DISCLOSURE_MISMATCH");
+      await verifyPresentation(presentation, {
+        request: r,
+        holderKey: c.holderKey,
+        issuer,
+        keys,
+        status: await status(),
+        statusUrl,
+        now: clock(),
+      });
+    }
     return store.run(owner, (a, s) => {
       prune(a);
       const live = a.requests[id];
@@ -436,6 +596,14 @@ export function createService({
             id: c.id,
             revoked: c.revoked,
             credential: c.credential,
+            format: c.format || "ldp_vc",
+            issuerTrusted: keys.some(
+              (k) =>
+                k.id ===
+                (c.format === "dc+sd-jwt"
+                  ? jose.decodeProtectedHeader(c.credential.split("~")[0]).kid
+                  : c.credential.proof.verificationMethod),
+            ),
           })),
         history: a.history,
         verifiers: verifiers.map(({ id, name, purpose }) => ({
@@ -461,6 +629,49 @@ export function createService({
         now: clock(),
       });
     },
+    sdMetadata() {
+      return {
+        credential_issuer: base + "/sd",
+        authorization_servers: [base],
+        credential_endpoint: base + "/credential",
+        nonce_endpoint: base + "/nonce",
+        credential_configurations_supported: {
+          [SD_CONFIG_ID]: {
+            format: "dc+sd-jwt",
+            scope: SD_CONFIG_ID,
+            vct: SD_VCT,
+            credential_metadata: {
+              display: [
+                {
+                  name: "SchoolPark account access (selective)",
+                  locale: "en-US",
+                },
+              ],
+            },
+            cryptographic_binding_methods_supported: ["jwk"],
+            credential_signing_alg_values_supported: ["ES256"],
+            proof_types_supported: {
+              jwt: { proof_signing_alg_values_supported: ["ES256"] },
+            },
+          },
+        },
+      };
+    },
+    async issuerMetadata() {
+      return {
+        issuer,
+        jwks: {
+          keys: await Promise.all(
+            keys.map(async (k) => ({
+              ...(await publicJwk(k)),
+              kid: k.id,
+              alg: "ES256",
+              use: "sig",
+            })),
+          ),
+        },
+      };
+    },
     metadata() {
       return {
         credential_issuer: base,
@@ -468,8 +679,27 @@ export function createService({
         credential_endpoint: base + "/credential",
         nonce_endpoint: base + "/nonce",
         credential_configurations_supported: {
+          [SD_CONFIG_ID]: {
+            format: "dc+sd-jwt",
+            scope: SD_CONFIG_ID,
+            vct: SD_VCT,
+            credential_metadata: {
+              display: [
+                {
+                  name: "SchoolPark account access (selective)",
+                  locale: "en-US",
+                },
+              ],
+            },
+            cryptographic_binding_methods_supported: ["jwk"],
+            credential_signing_alg_values_supported: ["ES256"],
+            proof_types_supported: {
+              jwt: { proof_signing_alg_values_supported: ["ES256"] },
+            },
+          },
           [CONFIG_ID]: {
             format: "ldp_vc",
+            scope: CONFIG_ID,
             credential_metadata: {
               display: [{ name: "SchoolPark account access", locale: "en-US" }],
             },
@@ -478,7 +708,7 @@ export function createService({
               type: ["VerifiableCredential", TYPE],
             },
             cryptographic_binding_methods_supported: ["did:key"],
-            credential_signing_alg_values_supported: ["ecdsa-rdfc-2019"],
+            credential_signing_alg_values_supported: ["DataIntegrityProof"],
             proof_types_supported: {
               jwt: { proof_signing_alg_values_supported: ["ES256"] },
             },

@@ -23,8 +23,8 @@ Issuer: HTTPS controller URI with locally pinned public Multikey documents. Hold
 | did:key holder (chosen) | No network DID discovery; fresh local key | Cannot rotate the DID; revoke/reissue after loss; repeated credential correlatable |
 | did:ion / did:ethr | Decentralized updates / ecosystem | Network, cost and correlation implications; not implemented |
 | VC2 JOSE `vc+jwt` | Simple compact JOSE packaging | VC2 direct payload differs from old `vc` wrapper; legacy jwt_vc_json must not be mislabelled |
-| SD-JWT VC | Selective attribute disclosure | Not a predicate ZKP; would require separate schema/trust/interop profile |
-| BBS derived proofs | Unlinkable proof of signed attributes under conditions | Not implemented; predicates/age range are a separate requirement |
+| SD-JWT VC (implemented) | Selective attribute disclosure with holder KB-JWT | Separate from JSON-LD VC2; app-specific revocation, not a predicate ZKP |
+| BBS+ / Bulletproofs++ prototype | Hidden signed-attribute predicates and accumulator membership | Experimental Dock profile, known deserialization issue; not W3C BBS suite or OpenID format |
 
 ## Wire behavior actually tested
 
@@ -38,6 +38,8 @@ VC2 first context, explicit versioned application context, types, issuer, opaque
 
 Independent OpenWallet Foundation `@openid4vc/openid4vci@0.9.2` detects V1 metadata and completes discovery → token → nonce → proof → credential over local HTTP with synthetic HTTPS metadata routed only to localhost. `@openid4vc/openid4vp@0.9.2` parses request and validates final DCQL response structure/state; Digital Bazaar plus application checks validate actual signature, trust, holder binding, revocation and consent. SDK structural validation alone is not cryptographic verification.
 
-No real third-party wallet product, OS wallet, production verifier, trust federation or certification service has been tested. No wallet product is advertised as compatible. External wallets would also need a way to show this service's consent confirmation and verifier registration policy; that product flow is not complete. No authorization-code flow, deferred issuance, DPoP, encrypted response, mdoc, SD-JWT, remote DID resolver or arbitrary issuer federation is exposed. These are explicit scope limits, not silently successful mocks.
+Actual unmodified walt.id Wallet API2 1.2.1 completed SD-JWT receipt and presentation, including replay and revoked-credential rejection, over loopback with synthetic accounts. Product image digest and exact limits are in [completion-report.md](completion-report.md). It was operated through product APIs, not a physical phone. VC2 LDP and the Dock ZKP prototype are not claimed interoperable with that product.
 
-Selecting an entire account credential is NOT cryptographic selective disclosure. Stable signed VC IDs, holder keys and status indices permit correlation across presentations. No ZKP claim is enabled.
+Authorization-code + S256 PKCE is implemented/tested for registered clients; the product test uses pre-authorized issuance. `/sd` discovery separates SD metadata from the LDP profile. The VP client ID uses `redirect_uri:` for unsigned requests and exact response URI. Unknown verifier registration and arbitrary callback forwarding remain unsupported. No deferred issuance, DPoP, encrypted response, mdoc or remote DID federation is exposed.
+
+Ordinary account VC selection is whole disclosure. SD-JWT performs real claim selection, but its issuer JWT, holder key and opaque status reference remain correlatable. The synthetic ZKP profile proves ranges using published library primitives; it is not a standard OpenID credential format. Strict proof deserialization is unresolved and the release criterion remains a failing TODO. Never advertise ZKP as production-ready.

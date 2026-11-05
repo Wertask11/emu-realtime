@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import express from "express";
 import { once } from "node:events";
 import { SignJWT } from "jose";
-import { createRouter, localSandbox } from "./router.cjs";
+import {
+  createRouter,
+  localSandbox,
+  experimentalZkpEnabled,
+} from "./router.cjs";
 import { present } from "./crypto.mjs";
 import { fixture } from "./fixture-support.mjs";
 import { Openid4vciClient } from "@openid4vc/openid4vci";
@@ -13,13 +17,17 @@ import {
   parseDcqlVpToken,
 } from "@openid4vc/openid4vp";
 import { createHash, randomBytes } from "node:crypto";
-async function server(t) {
+async function server(t, options = {}) {
   const f = await fixture(),
     app = express();
   const auth = (req, res, next) => {
     if (req.headers.authorization !== "Bearer fixture-alice")
       return res.status(401).json({ error: "AUTH_REQUIRED" });
-    req.identity = { uid: "alice", signInProvider: "google.com" };
+    req.identity = {
+      uid: "alice",
+      signInProvider: "google.com",
+      authTimeMs: options.authTimeMs ?? Date.now(),
+    };
     next();
   };
   const router = createRouter({
@@ -28,6 +36,7 @@ async function server(t) {
         uid === "alice" ? "SP-TEST-TEST-TEST-TEST" : null,
     },
     requireFirebaseUser: auth,
+    checkSensitiveSession: options.checkSensitiveSession,
     servicePromise: Promise.resolve(f.svc),
   });
   app.use("/api/passport-v2", router);
@@ -224,4 +233,88 @@ test("OpenID invalid grant errors are fixed OAuth codes without request content"
   );
   assert.equal(r.status, 400);
   assert.deepEqual(await r.json(), { error: "invalid_grant" });
+});
+
+test("sensitive actions reject old or revoked sessions while existing read/login behavior stays available", async (t) => {
+  const old = await server(t, { authTimeMs: Date.now() - 3600000 });
+  assert.equal((await old.send("/credentials")).status, 200);
+  const r = await old.send("/offers", {});
+  assert.equal(r.status, 409);
+  assert.deepEqual(await r.json(), { error: "RECENT_LOGIN_REQUIRED" });
+  const revoked = await server(t, {
+    checkSensitiveSession: async () => {
+      throw Error("revoked");
+    },
+  });
+  assert.equal((await revoked.send("/offers", {})).status, 401);
+});
+test("SD-JWT VCI endpoint binds configuration, strips JWK metadata, confirms selected disclosure and prevents replay", async (t) => {
+  const { svc, holder, send } = await server(t),
+    offer = await (
+      await send("/offers", { configurationId: "schoolpark_account_sd_v1" })
+    ).json(),
+    code =
+      offer.credential_offer.grants[
+        "urn:ietf:params:oauth:grant-type:pre-authorized_code"
+      ]["pre-authorized_code"];
+  const access = await (
+    await send(
+      "/token",
+      {
+        grant_type: "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+        "pre-authorized_code": code,
+        tx_code: offer.tx_code,
+      },
+      null,
+    )
+  ).json();
+  const n = (await (await send("/nonce", {}, null)).json()).c_nonce;
+  const proof = await new SignJWT({ nonce: n })
+    .setProtectedHeader({
+      typ: "openid4vci-proof+jwt",
+      alg: "ES256",
+      jwk: { ...holder.jwk, kid: "untrusted-metadata" },
+    })
+    .setAudience(svc.base + "/sd")
+    .setIssuedAt()
+    .sign(holder.privateKey);
+  const response = await send(
+    "/credential",
+    {
+      credential_configuration_id: "schoolpark_account_sd_v1",
+      proofs: { jwt: [proof] },
+    },
+    access.access_token,
+  );
+  assert.equal(response.status, 200);
+  const credential = (await response.json()).credentials[0].credential;
+  const { decodeJwt } = await import("jose");
+  assert.equal(decodeJwt(credential.split("~")[0]).cnf.jwk.kid, undefined);
+  const cid = decodeJwt(credential.split("~")[0]).status_id,
+    r = await svc.request("SP-TEST-TEST-TEST-TEST", cid, "demo", [
+      "accountAccess",
+    ]);
+  await svc.decide("SP-TEST-TEST-TEST-TEST", r.id, true);
+  const { presentSelective } = await import("./selective.mjs");
+  const p = await presentSelective(credential, holder, r, ["accountAccess"]);
+  assert.equal((await svc.receive(r.state, p)).verified, true);
+  await assert.rejects(svc.receive(r.state, p));
+});
+
+test("unaudited ZKP requires explicit local-only opt-in and can never activate in production", () => {
+  const env = {
+    PASSPORT_V2_ENABLED: "true",
+    PASSPORT_V2_SANDBOX: "true",
+    APP_ENV: "local",
+    GCLOUD_PROJECT: "demo-test",
+    FIRESTORE_EMULATOR_HOST: "127.0.0.1:8787",
+    FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9199",
+  };
+  assert.equal(experimentalZkpEnabled(env), false);
+  env.PASSPORT_ZKP_UNAUDITED_TEST_ONLY = "true";
+  assert.equal(experimentalZkpEnabled(env), true);
+  assert.equal(
+    experimentalZkpEnabled({ ...env, NODE_ENV: "production" }),
+    false,
+  );
 });

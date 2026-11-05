@@ -26,3 +26,22 @@ python tools/passport-v2-tests/browser.py
 Fixture: http://127.0.0.1:4240/test/native.html . Use the LOCAL login button; open Passport → certificate development entry. Synthetic users only. The issuer key is ephemeral; restarting the fixture invalidates old sandbox certificates. Retire/delete certificates created by a test rather than clearing user/project data. `PASSPORT_WIDTHS='[375,390]' python ...` selects a subset. The seven-width default pauses 60 seconds after each three widths to respect the real rate limit. Browser denies all non-loopback network and applies the actual new-page CSP in intercepted local responses. It tests issue, deny, approve, signature verification, revoke/delete, return and retained login; screenshots/results go to `/workspace/outputs/passport-v2-20261105`.
 
 Independent OpenWallet Foundation SDK tests live in backend/passport-v2/router.test.mjs. They use synthetic HTTPS metadata routed by the test fetch callback to localhost only; no external wallet or production identity is contacted. Rules tests deny all client access including the legacy catch-all and nested paths. Backend security tests cover replay races, spoofing, consent withdrawal, unknown fields, invalid/expired/revoked proofs, device key loss, key-ring rotation and government mocks.
+
+## Completion-phase tests
+
+The root production gate remains forced off. Never point the fixture or these scripts at production.
+
+```
+node --test backend/passport-v2/kms.test.mjs backend/passport-v2/authorization.test.mjs backend/passport-v2/selective.test.mjs
+# Synthetic-only, known deserialization gap explicitly acknowledged:
+PASSPORT_TEST_PORT=4246 PASSPORT_ZKP_UNAUDITED_TEST_ONLY=true node tools/passport-v2-tests/fixture.cjs
+python tools/passport-v2-tests/completion-browser.py
+```
+
+The browser script uses 4246, real local Firebase login, SD issuance/denial/approval, three synthetic predicates, all seven widths, same-page CSP and no non-loopback requests. It waits for each proof dialog to close, avoiding a stale success message being mistaken for completion. Outputs are under `/workspace/outputs/passport-completion-20261105`. Measurements are desktop Chromium at 390px with 6x CPU throttling; RSS samples include the full renderer, not just WASM. Physical mobile testing remains required.
+
+`zkp.test.mjs` retains a deliberately failing TODO assertion named `RELEASE BLOCKER: Dock rejects appended proof bytes`. Test runner exits zero with TODO, so **inspect the TODO count, not only the process exit code**. This is not a green security release. The prototype must remain off by default pending upstream review/strict deserialization and external audit. Core tamper/invalid predicates/revocation are tested separately and pass.
+
+`external-wallet.py` requires the actual unmodified walt.id Wallet API2 1.2.1 running on loopback 7280 (Java 21 product or Docker image `waltid/wallet-api2:latest`, pinned digest in report). Use dev-only loopback/auth/persistence settings, not an internet-facing wallet or real users. It creates a synthetic local wallet and P-256 key, receives SD-JWT, resolves an actual VP request, explicitly authorizes consent, presents, then checks replay/revocation rejection. It needs the local fixture at 4246. It never logs the offer code/PIN/token/credential/private key. The product test is pre-authorized issuance, not the separately tested authorization-code flow. A Java product installation was used in this environment; no product source/binary patch was made.
+
+`independent-zkp-verifier.cjs` is a separate process calling the same published Dock library with public inputs only. It demonstrates process/secret separation, not independent implementation or external audit. Live KMS/cloud government/production TLS, formal conformance and physical-wallet UI tests are not simulated as successful.

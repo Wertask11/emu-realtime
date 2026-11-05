@@ -1963,11 +1963,14 @@ app.use("/api/identity", identityApi.router);
 
 // New namespace is disabled outside isolated local emulators; existing auth is reused.
 const passportV2Router = require("./passport-v2/router.cjs").createRouter({
-  db, identity, requireFirebaseUser, env: process.env
+  db, identity, requireFirebaseUser, env: process.env,
+  checkSensitiveSession: token => firebaseAdmin.auth().verifyIdToken(token,true)
 });
 app.use("/api/passport-v2", passportV2Router);
 app.get("/.well-known/openid-credential-issuer/api/passport-v2", (req,res,next) => { req.url="/metadata"; passportV2Router(req,res,next); });
 app.get("/.well-known/oauth-authorization-server/api/passport-v2", (req,res,next) => { req.url="/oauth-metadata"; passportV2Router(req,res,next); });
+app.get("/.well-known/openid-credential-issuer/api/passport-v2/sd", (req,res,next) => { req.url="/sd/metadata"; passportV2Router(req,res,next); });
+app.get("/.well-known/jwt-vc-issuer/api/passport-v2/issuer", (req,res,next) => { req.url="/jwt-vc-issuer"; passportV2Router(req,res,next); });
 
 const camelliaAuthApi = require("./camellia-auth").createCamelliaAuthRouter({
   db, firebaseAdmin, identity, requireFirebaseUser, rateLimit

@@ -21095,17 +21095,26 @@ window.sppCopyAddress = function (addr) {
   } catch (e) {}
 };
 
-function openPassportCertificates() {
+function openPassportCertificates(authorizationId) {
   var dialog=document.getElementById('passportV2Dialog');
   if(!dialog){
     dialog=document.createElement('dialog');dialog.id='passportV2Dialog';
     dialog.style.cssText='width:min(96vw,960px);height:90vh;padding:0;border:1px solid #c69a61;border-radius:14px';
-    var frame=document.createElement('iframe');frame.src='/passport-v2/';frame.title='SchoolPark Passport 証明書';
+    var frame=document.createElement('iframe');frame.src='/passport-v2/'+(typeof authorizationId==='string'&&/^[\w-]{43}$/.test(authorizationId)?'?authorization='+encodeURIComponent(authorizationId):'');frame.title='SchoolPark Passport 証明書';
     frame.referrerPolicy='no-referrer';frame.style.cssText='width:100%;height:100%;border:0';dialog.appendChild(frame);document.body.appendChild(dialog);
     dialog.addEventListener('close',function(){dialog.remove();});
   }
   dialog.showModal();
 }
+
+// Only an opaque OAuth transaction reference is carried across the existing login.
+(function resumePassportAuthorization(){
+  var params=new URLSearchParams(location.search),id=params.get('passport_authorization');
+  if(!id||!/^[\w-]{43}$/.test(id))return;
+  var until=Date.now()+300000;
+  function check(){if(Date.now()>until)return;if(window.auth&&auth.currentUser&&!auth.currentUser.isAnonymous&&window._chesEntered){params.delete('passport_authorization');history.replaceState(null,'',location.pathname+(params.toString()?'?'+params:'')+location.hash);openPassportCertificates(id);}else setTimeout(check,500);}
+  setTimeout(check,0);
+})();
 
 async function openSpPassport() {
   const body = document.getElementById('sppBody');

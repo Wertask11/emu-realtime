@@ -3,7 +3,7 @@ All non-local requests are blocked. Never logs tokens, UID/SPID, credentials or 
 """
 from playwright.sync_api import sync_playwright
 import json,pathlib,urllib.parse,os,time
-BASE='http://127.0.0.1:4240';OUT=pathlib.Path('/workspace/outputs/passport-v2-20261105');OUT.mkdir(parents=True,exist_ok=True)
+BASE=os.environ.get('PASSPORT_TEST_BASE','http://127.0.0.1:4240');OUT=pathlib.Path('/workspace/outputs/passport-v2-20261105');OUT.mkdir(parents=True,exist_ok=True)
 results=[]
 with sync_playwright() as p:
  browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
@@ -15,14 +15,14 @@ with sync_playwright() as p:
    u=urllib.parse.urlparse(r.request.url)
    if u.hostname not in ['localhost','127.0.0.1']:r.abort();return
    if u.path.startswith('/passport-v2/'):
-    response=r.fetch();r.fulfill(response=response,headers={**response.headers,'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'",'Referrer-Policy':'no-referrer','Cache-Control':'no-store'})
+    response=r.fetch();r.fulfill(response=response,headers={**response.headers,'Content-Security-Policy':"default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'",'Referrer-Policy':'no-referrer','Cache-Control':'no-store'})
    else:r.continue_()
   c.route('**/*',isolated)
   g=c.new_page();errors=[];private_errors=[]
   g.on('pageerror',lambda e:errors.append(str(e)))
   g.on('response',lambda r:private_errors.append(r.status) if '/api/passport-v2/' in r.url and r.status>=400 else None)
   try:
-   g.goto(BASE+'/test/native.html',wait_until='domcontentloaded');g.wait_for_function('typeof __localEmulatorLogin==="function"');g.locator('#localEmulatorLogin').click();g.evaluate('window.__localLoginResult');g.wait_for_function('_chesEntered===true');g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000)
+   g.goto(BASE+'/test/native.html',wait_until='domcontentloaded');g.wait_for_function('typeof __localEmulatorLogin==="function"');g.evaluate('__localEmulatorLogin("'+os.environ.get('PASSPORT_TEST_ROLE','alice')+'")');g.wait_for_function('_chesEntered===true');g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000)
    g.locator('#localEmulatorLogin').evaluate('e=>e.remove()');g.evaluate('openSpPassport()');g.locator('#sppCertificatesEntry').wait_for(state='visible');g.locator('#sppCertificatesEntry button').click()
    frame=g.frame_locator('#passportV2Dialog iframe');frame.locator('#controls').wait_for(state='visible');frame.locator('#issue').click();frame.locator('#message').get_by_text('この端末用の証明書を発行しました。',exact=True).wait_for(timeout=20000)
    card=frame.locator('#credentials article').last

@@ -12,16 +12,31 @@ function localSandbox(env) {
     /^127\.0\.0\.1:\d+$/.test(env.FIREBASE_AUTH_EMULATOR_HOST || "")
   );
 }
+function experimentalZkpEnabled(env) {
+  return localSandbox(env) && env.PASSPORT_ZKP_UNAUDITED_TEST_ONLY === "true";
+}
 function createRouter({
   db,
   identity,
   requireFirebaseUser,
   env = process.env,
+  checkSensitiveSession,
   servicePromise,
 }) {
   const router = express.Router();
   const enabled = !!servicePromise || localSandbox(env);
   let init = servicePromise;
+  let zkpInit;
+  async function zkpService() {
+    if (servicePromise || !experimentalZkpEnabled(env))
+      throw Error("SANDBOX_REQUIRED");
+    return (zkpInit ||= import("./experimental-zkp.mjs").then((m) =>
+      m.zkpSandbox({
+        store: firestoreStore(db),
+        base: env.PASSPORT_V2_SANDBOX_BASE,
+      }),
+    ));
+  }
   async function service() {
     if (!init)
       init = Promise.all([
@@ -34,8 +49,8 @@ function createRouter({
           throw Error("UNAVAILABLE");
         const key = await deviceKey();
         key.publicKey.controller = base + "/issuer";
-        key.publicKey.id = base + "/issuer#sandbox-key";
-        return createService({
+        key.publicKey.id = base + "/issuer#" + key.publicKey.publicKeyMultibase;
+        const core = createService({
           store: firestoreStore(db),
           issuer: key.publicKey.controller,
           base,
@@ -46,11 +61,26 @@ function createRouter({
               id: "sandbox",
               name: "この開発環境の検証画面",
               purpose: "アカウント証明の署名と同意の動作確認",
-              clientId: base,
+              clientId: "redirect_uri:" + base + "/response",
               responseUri: base + "/response",
             },
           ],
         });
+        const auth = await import("./authorization.mjs");
+        return {
+          ...core,
+          authorization: auth.authorizationServer({
+            store: firestoreStore(db),
+            clients: [
+              {
+                id: "http://127.0.0.1:7280",
+                name: "walt.id Wallet（隔離検証用）",
+                redirectUri: "http://127.0.0.1:7280/callback",
+              },
+            ],
+            frontendUrl: new URL("/test/native.html", base).href,
+          }),
+        };
       });
     return init;
   }
@@ -61,7 +91,7 @@ function createRouter({
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
     });
-    if (Object.keys(req.query).length)
+    if (Object.keys(req.query).length && req.path !== "/authorize")
       return res.status(400).json({ error: "QUERY_NOT_ALLOWED" });
     next();
   });
@@ -71,7 +101,8 @@ function createRouter({
       sandbox: enabled,
       government: false,
       zkp: false,
-      selectiveDisclosure: false,
+      selectiveDisclosure: enabled,
+      zkpSandbox: !servicePromise && experimentalZkpEnabled(env),
       externalWalletCertified: false,
     }),
   );
@@ -89,6 +120,10 @@ function createRouter({
     } catch (e) {
       const safe = new Set([
         "INVALID_FIELDS",
+        "INVALID_AUTHORIZATION_REQUEST",
+        "REQUIRED_DISCLOSURE_MISSING",
+        "CREDENTIAL_REVOKED",
+        "INVALID_KEY",
         "INVALID_GRANT",
         "INVALID_TOKEN",
         "INVALID_PROOF",
@@ -132,15 +167,13 @@ function createRouter({
             "NONCE_USED_OR_EXPIRED",
             "INVALID_KEY",
           ].includes(e.code);
-        return res
-          .status(badProof || safe.has(e.code) ? 400 : 503)
-          .json({
-            error: badProof
-              ? "invalid_proof"
-              : safe.has(e.code)
-                ? "invalid_credential_request"
-                : "server_error",
-          });
+        return res.status(badProof || safe.has(e.code) ? 400 : 503).json({
+          error: badProof
+            ? "invalid_proof"
+            : safe.has(e.code)
+              ? "invalid_credential_request"
+              : "server_error",
+        });
       }
       res
         .status(safe.has(e.code) ? 400 : 503)
@@ -178,6 +211,33 @@ function createRouter({
     if (!req.identity?.uid || req.identity.signInProvider === "anonymous")
       return res.status(403).json({ error: "ACCOUNT_REQUIRED" });
     try {
+      if (
+        req.method === "POST" &&
+        [
+          "/offers",
+          "/consent",
+          "/revoke",
+          "/delete",
+          "/history/delete",
+          "/authorization/decision",
+        ].includes(req.path)
+      ) {
+        if (
+          !Number.isFinite(req.identity.authTimeMs) ||
+          req.identity.authTimeMs > Date.now() + 30000 ||
+          Date.now() - req.identity.authTimeMs > 15 * 60000
+        )
+          return res.status(409).json({ error: "RECENT_LOGIN_REQUIRED" });
+        if (checkSensitiveSession) {
+          try {
+            await checkSensitiveSession(
+              String(req.headers.authorization || "").slice(7),
+            );
+          } catch (_) {
+            return res.status(401).json({ error: "INVALID_AUTH_TOKEN" });
+          }
+        }
+      }
       const spid = await identity.findByUid(req.identity.uid);
       if (!spid)
         return res.status(409).json({ error: "EXISTING_PASSPORT_REQUIRED" });
@@ -197,8 +257,20 @@ function createRouter({
       res.json({
         issuer: s.base,
         token_endpoint: s.base + "/token",
+        ...(s.authorization
+          ? {
+              authorization_endpoint: s.base + "/authorize",
+              response_types_supported: ["code"],
+              code_challenge_methods_supported: ["S256"],
+              scopes_supported: [
+                "schoolpark_account_v1",
+                "schoolpark_account_sd_v1",
+              ],
+            }
+          : {}),
         grant_types_supported: [
           "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+          ...(s.authorization ? ["authorization_code"] : []),
         ],
         token_endpoint_auth_methods_supported: ["none"],
         "pre-authorized_grant_anonymous_access_supported": true,
@@ -206,15 +278,24 @@ function createRouter({
     ),
   );
   router.get(
+    "/sd/metadata",
+    run(async (req, res, s) => res.json(s.sdMetadata())),
+  );
+  router.get(
+    "/jwt-vc-issuer",
+    run(async (req, res, s) => res.json(await s.issuerMetadata())),
+  );
+  router.get(
     "/issuer",
-    run(async (req, res, s) =>
-      res.json({
+    run(async (req, res, s) => {
+      const keys = s.publicKeys ? await s.publicKeys() : s.keys;
+      return res.json({
         "@context": ["https://www.w3.org/ns/did/v1"],
         id: s.issuer,
-        verificationMethod: s.keys,
-        assertionMethod: s.keys.map((k) => k.id),
-      }),
-    ),
+        verificationMethod: keys,
+        assertionMethod: keys.map((k) => k.id),
+      });
+    }),
   );
   router.get(
     "/status/account-v1",
@@ -227,6 +308,14 @@ function createRouter({
       res.json({ c_nonce: await s.nonce() });
     }),
   );
+  router.get(
+    "/authorize",
+    run(async (req, res, s) => {
+      if (!s.authorization) throw Error("UNAVAILABLE");
+      const r = await s.authorization.begin(req.query);
+      res.redirect(303, r.location);
+    }),
+  );
   router.post(
     "/token",
     run(async (req, res, s) => {
@@ -235,14 +324,24 @@ function createRouter({
         "pre-authorized_code",
         "tx_code",
         "resource",
+        "scope",
         "user_pin",
+        "code",
+        "code_verifier",
+        "client_id",
+        "redirect_uri",
       ]);
+      if (req.body.grant_type === "authorization_code" && s.authorization)
+        return res.json(await s.authorization.token(req.body));
       if (
         req.body.user_pin !== undefined &&
         req.body.user_pin !== req.body.tx_code
       )
         throw Object.assign(Error(), { code: "INVALID_GRANT" });
-      if (req.body.resource && req.body.resource !== s.base)
+      if (
+        req.body.resource &&
+        ![s.base, s.base + "/sd"].includes(req.body.resource)
+      )
         throw Object.assign(Error(), { code: "INVALID_GRANT" });
       if (
         req.body.grant_type !==
@@ -250,7 +349,11 @@ function createRouter({
       )
         throw Object.assign(Error(), { code: "INVALID_GRANT" });
       res.json(
-        await s.exchange(req.body["pre-authorized_code"], req.body.tx_code),
+        await s.exchange(
+          req.body["pre-authorized_code"],
+          req.body.tx_code,
+          req.body.scope,
+        ),
       );
     }),
   );
@@ -260,7 +363,9 @@ function createRouter({
       fields(req.body, ["credential_configuration_id", "proofs"]);
       fields(req.body.proofs, ["jwt"]);
       if (
-        req.body.credential_configuration_id !== "schoolpark_account_v1" ||
+        !["schoolpark_account_v1", "schoolpark_account_sd_v1"].includes(
+          req.body.credential_configuration_id,
+        ) ||
         !Array.isArray(req.body.proofs.jwt) ||
         req.body.proofs.jwt.length !== 1
       )
@@ -270,10 +375,17 @@ function createRouter({
       const n = decodeJwt(proof).nonce;
       const o = await s.consumeToken(
         String(req.headers.authorization || "").replace(/^Bearer /, ""),
+        req.body.credential_configuration_id,
       );
       res.json({
         credentials: [
-          { credential: await s.issueCredential(o, { proof, nonce: n }) },
+          {
+            credential: await s.issueCredential(o, {
+              proof,
+              nonce: n,
+              configurationId: req.body.credential_configuration_id,
+            }),
+          },
         ],
       });
     }),
@@ -304,19 +416,20 @@ function createRouter({
   router.post(
     "/offers",
     run(async (req, res, s) => {
-      fields(req.body, []);
-      res.json(await s.offer(req.passportOwner));
+      fields(req.body, ["configurationId"]);
+      res.json(await s.offer(req.passportOwner, req.body.configurationId));
     }),
   );
   router.post(
     "/requests",
     run(async (req, res, s) => {
-      fields(req.body, ["credentialId", "verifierId"]);
+      fields(req.body, ["credentialId", "verifierId", "selected"]);
       res.json(
         await s.request(
           req.passportOwner,
           req.body.credentialId,
           req.body.verifierId,
+          req.body.selected,
         ),
       );
     }),
@@ -355,6 +468,53 @@ function createRouter({
       res.json(await s.clearHistory(req.passportOwner));
     }),
   );
+  router.post(
+    "/authorization/details",
+    run(async (req, res, s) => {
+      fields(req.body, ["requestId"]);
+      res.json(await s.authorization.details(req.body.requestId));
+    }),
+  );
+  router.post(
+    "/authorization/decision",
+    run(async (req, res, s) => {
+      fields(req.body, ["requestId", "approved"]);
+      res.json(
+        await s.authorization.decide(
+          req.passportOwner,
+          req.body.requestId,
+          req.body.approved,
+        ),
+      );
+    }),
+  );
+  for (const [path, fieldsAllowed, action] of [
+    ["/zkp/sample", ["useCase"], (z, o, b) => z.sample(o, b.useCase)],
+    [
+      "/zkp/request",
+      ["credentialId"],
+      (z, o, b) => z.request(o, b.credentialId),
+    ],
+    [
+      "/zkp/consent",
+      ["requestId", "approved"],
+      (z, o, b) => z.consent(o, b.requestId, b.approved),
+    ],
+    [
+      "/zkp/response",
+      ["requestId", "presentation"],
+      (z, o, b) => z.receive(o, b.requestId, b.presentation),
+    ],
+    ["/zkp/revoke", ["credentialId"], (z, o, b) => z.revoke(o, b.credentialId)],
+  ])
+    router.post(path, async (req, res) => {
+      try {
+        fields(req.body, fieldsAllowed);
+        res.json(await action(await zkpService(), req.passportOwner, req.body));
+      } catch (_) {
+        res.status(400).json({ error: "ZKP_REJECTED" });
+      }
+    });
   router.use((err, req, res, next) =>
     res
       .status(err.type === "entity.too.large" ? 413 : 400)
@@ -362,4 +522,4 @@ function createRouter({
   );
   return router;
 }
-module.exports = { createRouter, localSandbox, PREFIX };
+module.exports = { createRouter, localSandbox, experimentalZkpEnabled, PREFIX };
