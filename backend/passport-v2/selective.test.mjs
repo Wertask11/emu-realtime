@@ -48,6 +48,21 @@ test("real SD-JWT issuance, selected disclosures and holder binding, absent requ
       options,
     ),
   );
+  await assert.rejects(
+    verifySelective(presentation, {
+      ...options,
+      issuer: "https://unknown-issuer.example",
+    }),
+  );
+  await assert.rejects(
+    verifySelective(presentation, { ...options, issuerJwk: attacker.jwk }),
+  );
+  await assert.rejects(
+    verifySelective(presentation, {
+      ...options,
+      request: { ...request, client_id: "https://wrong-audience.example" },
+    }),
+  );
   revoked = true;
   await assert.rejects(verifySelective(presentation, options));
 });

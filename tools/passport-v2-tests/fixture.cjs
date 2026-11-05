@@ -26,6 +26,20 @@ async function start() {
       PASSPORT_V2_SANDBOX_BASE: f.base + "/api/passport-v2",
     },
   });
+  // Research assets are never part of the public RC directory.
+  if (
+    process.env.PASSPORT_ZKP_UNAUDITED_TEST_ONLY === "true" &&
+    process.env.PASSPORT_ZKP_BUILD_DIR?.startsWith("/tmp/")
+  ) {
+    const path = require("node:path");
+    f.app.get("/passport-v2/zkp-wallet.js", (req, res) =>
+      res.sendFile(
+        path.join(process.env.PASSPORT_ZKP_BUILD_DIR, "zkp-wallet.js"),
+      ),
+    );
+    const assets = f.app.router.stack.pop();
+    f.app.router.stack.unshift(assets);
+  }
   f.app.use("/api/passport-v2", router);
   const layer = f.app.router.stack.pop();
   f.app.router.stack.unshift(layer);

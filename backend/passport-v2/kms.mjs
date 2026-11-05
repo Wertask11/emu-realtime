@@ -60,9 +60,9 @@ export async function awsKmsSigner({
       id: verificationMethod,
       algorithm: "P-256",
       async sign({ data }) {
-        await assertOperational(verificationMethod);
-        await describe();
         try {
+          await assertOperational(verificationMethod);
+          await describe();
           const { Signature, KeyId, SigningAlgorithm } = await client.send(
             new SignCommand({
               KeyId: keyArn,
@@ -92,12 +92,15 @@ export async function awsKmsSigner({
           });
           return raw;
         } catch (_) {
-          await audit({
-            event: "issuer_sign",
-            keyId: verificationMethod,
-            outcome: "failed",
-          });
-          fail("KMS_SIGNATURE_FAILED");
+          try {
+            await audit({
+              event: "issuer_sign",
+              keyId: verificationMethod,
+              outcome: "failed",
+            });
+          } finally {
+            fail("KMS_SIGNATURE_FAILED");
+          }
         }
       },
     },

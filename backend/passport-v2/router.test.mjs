@@ -318,3 +318,39 @@ test("unaudited ZKP requires explicit local-only opt-in and can never activate i
     false,
   );
 });
+
+test("DCQL boundary rejects injected request queries, extra result identifiers and wrong formats", async (t) => {
+  const { send } = await server(t);
+  assert.equal(
+    (
+      await send("/requests", {
+        credentialId: "x",
+        verifierId: "demo",
+        dcql_query: { credentials: [] },
+      })
+    ).status,
+    400,
+  );
+  for (const vp_token of [
+    { account: "not-an-array" },
+    { account: [], tracking: [] },
+    { account: [{}, {}] },
+    [],
+    null,
+  ]) {
+    assert.equal(
+      (await send("/response", { vp_token, state: "s".repeat(43) }, null))
+        .status,
+      400,
+    );
+  }
+  assert.equal(
+    (await send("/offers", { configurationId: "unsupported_zkp" })).status,
+    400,
+  );
+  const m = await (await send("/metadata", undefined, null)).json();
+  assert.deepEqual(Object.keys(m.credential_configurations_supported).sort(), [
+    "schoolpark_account_sd_v1",
+    "schoolpark_account_v1",
+  ]);
+});

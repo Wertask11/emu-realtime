@@ -5,6 +5,7 @@ const fs = require("node:fs"),
 const {
   initializeTestEnvironment,
   assertFails,
+  assertSucceeds,
 } = require("../quest-tests/node_modules/@firebase/rules-unit-testing");
 const fb = require("../quest-tests/node_modules/firebase/firestore");
 let env;
@@ -39,6 +40,9 @@ for (const role of ["anonymous", "alice", "bob", "owner"])
       "passport_v2_accounts",
       "passport_v2_status",
       "passport_v2_tickets",
+      "passport_v2_controls",
+      "passport_v2_audit",
+      "passport_v2_rate_limits",
       "passport_v2_future",
     ]) {
       const ref = fb.doc(db, col, id);
@@ -51,3 +55,19 @@ for (const role of ["anonymous", "alice", "bob", "owner"])
       );
     }
   });
+test("server bypass can persist a synthetic proof record while authenticated client cannot read it", async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const ref = fb.doc(context.firestore(), "passport_v2_accounts", id);
+    await assertSucceeds(fb.setDoc(ref, { synthetic: true }));
+    await assertSucceeds(fb.getDoc(ref));
+  });
+  await assertFails(
+    fb.getDoc(
+      fb.doc(
+        env.authenticatedContext("lab-alice").firestore(),
+        "passport_v2_accounts",
+        id,
+      ),
+    ),
+  );
+});

@@ -22,6 +22,9 @@ function createRouter({
   env = process.env,
   checkSensitiveSession,
   servicePromise,
+  sharedRequestLimit,
+  operationalGuard,
+  releaseCandidate = false,
 }) {
   const router = express.Router();
   const enabled = !!servicePromise || localSandbox(env);
@@ -98,7 +101,8 @@ function createRouter({
   router.get("/capabilities", (req, res) =>
     res.json({
       enabled,
-      sandbox: enabled,
+      sandbox: enabled && !releaseCandidate,
+      releaseCandidate: enabled && releaseCandidate,
       government: false,
       zkp: false,
       selectiveDisclosure: enabled,
@@ -109,6 +113,25 @@ function createRouter({
   router.use((req, res, next) =>
     enabled ? next() : res.status(404).json({ error: "PASSPORT_V2_DISABLED" }),
   );
+  // RC always excludes ZKP, even if an experimental environment flag is set.
+  router.use((req, res, next) => {
+    if (releaseCandidate && /^\/zkp(?:\/|$)/.test(req.path))
+      return res.status(404).json({ error: "ZKP_EXCLUDED_FROM_RC" });
+    next();
+  });
+  router.use(async (req, res, next) => {
+    try {
+      if (
+        sharedRequestLimit &&
+        !(await sharedRequestLimit(req.ip || "unknown"))
+      )
+        return res.status(429).json({ error: "RATE_LIMITED" });
+      if (operationalGuard) await operationalGuard();
+      next();
+    } catch (_) {
+      res.status(503).json({ error: "PASSPORT_UNAVAILABLE" });
+    }
+  });
   // Scoped parsers; never expose parser input/stack in Express default handlers.
   router.use(express.json({ limit: "32kb", strict: true }));
   router.use(

@@ -114,7 +114,7 @@ export function firestoreOperations(
       if (!Number.isInteger(limit) || limit < 1 || limit > 500)
         fail("INVALID_LIMIT");
       let removed = 0;
-      for (const col of ["passport_v2_tickets", "passport_v2_audit"]) {
+      for (const col of ["passport_v2_tickets", "passport_v2_audit", "passport_v2_rate_limits"]) {
         const snap = await db
           .collection(col)
           .where("realm", "==", realm)
