@@ -43,9 +43,11 @@ for (const useCase of ["age18", "identity", "city"])
           publicData: data,
         }),
       );
-      const bad = structuredClone(proof);
-      bad.proof = (bad.proof[0] === "2" ? "3" : "2") + bad.proof.slice(1);
-      await assert.rejects(verifyZkp(bad, { request: r, publicData: data }));
+      const bad = dock.Presentation.fromJSON(proof);
+      const changed = Uint8Array.from(bad.proof.bytes);
+      changed[Math.floor(changed.length / 2)] ^= 1;
+      bad.proof.value = changed;
+      await assert.rejects(verifyZkp(bad.toJSON(), { request: r, publicData: data }));
       await issuer.revoke(id);
       await assert.rejects(
         verifyZkp(proof, { request: r, publicData: issuer.publicData() }),

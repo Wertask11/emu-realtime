@@ -2,7 +2,7 @@
 
 **開発実装を拡張しました。本番公開は不可です。ZKPの未解決検証事項、実KMS・公的認証・外部監査・実機検証が残っています。mainへのマージ、本番デプロイ、Rules公開は行いません。**
 
-前回の `feat/passport-2-vc-20261105` / `270bd4d` を復元し、報告対象35ファイルの存在と未コミット変更なしを確認。前回backend 448件、既存Emu回帰226件を再実行しました。今回の専用ブランチは `feat/passport-2-completion-20261105`。調査・変更予定の報告後に実装しました。途中でmainが `8ac3dd3` から `f9be01a`（運営画面のPR #271）へ更新されたため、その差分も保持して取り込みます。以前の [report.md](report.md) は初回成果物の履歴です。現在の判定は本書を参照してください。
+前回の `feat/passport-2-vc-20261105` / `270bd4d` を復元し、報告対象35ファイルの存在と未コミット変更なしを確認。前回backend 448件、既存Emu回帰226件を再実行しました。今回の専用ブランチは `feat/passport-2-completion-20261105`。調査・変更予定の報告後に実装しました。途中でmainが `8ac3dd3` から `f9be01a`（運営画面のPR #271）へ更新されたため、その差分も保持して取り込みました。以前の [report.md](report.md) は初回成果物の履歴です。現在の判定は本書を参照してください。
 
 ## 1. 実装した機能
 
@@ -70,7 +70,7 @@ SD-JWTの `status_id` はアプリの不透明参照とサーバーの失効検�
 
 この未達要件は `zkp.test.mjs` の `RELEASE BLOCKER: Dock rejects appended proof bytes` に**失敗するTODOテストとして残しています**。単なるテストの削除・成功扱いにはしません。通常環境でも `PASSPORT_ZKP_UNAUDITED_TEST_ONLY=true` がなければZKP API/UIは無効。productionでは同設定でも有効になりません。公開には上流レビュー/厳密な標準デシリアライズと外部監査が必要です。代替は信頼できる発行者の条件付きSD-JWT等ですが、これはZKPではなく関連付け可能性が残る方式です。
 
-ブラウザ測定値は成果物 `completion-browser.json` を参照。390px、Chromiumデスクトップ、CPUを6倍遅延させた検証であり、**実スマートフォンではありません**。生成からサーバー検証完了までの時間で、証明生成だけの時間ではありません。メモリは50ms間隔のrenderer RSS（アプリ/JS/WASMを含む）とJS heap差分。WASM専用ピークやGCを除いた割当量ではありません。ZKPバンドル約7.8MiBは操作時だけロードします。実端末の速度/メモリ/電池負荷は公開前の条件です。
+ブラウザ測定値は成果物 `completion-browser.json` を参照。年齢21,467ms、本人確認資格14,490ms、City資格15,986ms。renderer RSSは最大約451MiB（年齢ケース、約111MiB増分）。390px、Chromiumデスクトップ、CPUを6倍遅延させた検証であり、**実スマートフォンではありません**。生成からサーバー検証完了までの時間で、証明生成だけの時間ではありません。メモリは50ms間隔のrenderer RSS（アプリ/JS/WASMを含む）とJS heap差分。WASM専用ピークやGCを除いた割当量ではありません。ZKPバンドル約7.8MiBは操作時だけロードします。実端末の速度/メモリ/電池負荷は公開前の条件です。
 
 ランダム化されたproofでも、発行/提示時刻、共通発行者・schema・期限の集団、通信メタデータ、発行者へのwitness取得要求から相関され得ます。公開一括witness更新や共謀モデルの監査は未完了。完全な追跡不能とは表示しません。UTC暦日の18年境界は試験ポリシーで、法域・閏日・時差の運用確定も必要です。
 
@@ -115,9 +115,11 @@ SD-JWTの `status_id` はアプリの不透明参照とサーバーの失効検�
 
 ## 11. 検証・デプロイ手順
 
-再現手順は [tools README](../../tools/passport-v2-tests/README.md)。結果ログ/画像/安全な集計JSONは `/workspace/outputs/passport-completion-20261105/`。テスト件数の最終結果はPRと成果物ログを参照してください。TODOは成功数に加えません。
+再現手順は [tools README](../../tools/passport-v2-tests/README.md)。結果ログ/画像/安全な集計JSONは `/workspace/outputs/passport-completion-20261105/`。最新main取り込み後：backend **467件成功、失敗0、既知の失敗するTODO 1件**（全468件）、Emu既存回帰 **226/226**、Rules **4/4**、取り込んだ運営画面 **4/4**。TODOは成功数に加えません。実ウォレット/ブラウザ結果と安全な集計は [validation-20261105.json](validation-20261105.json)。
 
 実施した範囲：backend単体/HTTP/暗号、既存Emu回帰、Rules4ロール、実ブラウザ7幅（375/390/412/768/1280/1440/1920）、専用CSP、SD受領/拒否/同意、架空ZKP3条件、既存ログイン維持/戻る、実ウォレット製品、依存audit、構文/ビルド/差分。
+
+隔離環境の画面：[スマホ390px](screenshots/wallet-390.png) / [PC1280px](screenshots/wallet-1280.png)。実在利用者や本番認証を撮影したものではありません。
 
 実施できない範囲：実KMS・公的認証・本番アカウント操作/課金/報酬、実端末、全製品Wallet、独立暗号実装、外部侵入/暗号監査、長期運用/負荷・障害訓練。既存重要10モジュールは基点と同一で、ID/LINE/Google/Wallet/課金/権利/City/EMUER/KYCを移行しません。Quest/星空を含む実利用者データの書込みなし。
 

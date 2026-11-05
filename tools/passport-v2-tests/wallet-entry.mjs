@@ -182,15 +182,15 @@ async function refresh() {
               });
               $("recipient").textContent =
                 "提示先の登録名称：" +
-                pending.recipient +
+                (pending.legalName || pending.recipient) +
                 "（" +
                 pending.client_id +
                 "）";
               $("purpose").textContent = "利用目的：" + pending.purpose;
               $("trust").textContent =
                 "信頼状態：" +
-                (pending.trustStatus === "sandbox-registered"
-                  ? "開発環境の登録先（外部事業者の実査なし）"
+                (pending.trustStatus === "registered"
+                  ? "登録済みの検証先（第三者認証を意味しません）"
                   : "設定済みの検証先（外部認定なし）");
               $("retention").textContent = pending.retentionNotice;
               $("hidden").textContent =
@@ -501,7 +501,9 @@ $("back").onclick = (e) => {
       $("approveAuthorization").onclick = () => decide(true);
     }
     say(
-      "開発環境です。公的本人確認は未接続です。ZKPは架空資格の検証に限定しています。",
+      c.zkpSandbox
+        ? "開発環境です。公的本人確認は未接続です。ZKPは未監査の架空資格試験に限定しています。"
+        : "開発環境です。公的本人確認は未接続です。未監査のZKP試験は無効です。",
     );
     parent.fbAuth?.onAuthStateChanged(parent.auth, (u) => {
       if (!u || u.uid !== user.uid) {

@@ -348,7 +348,7 @@ export function createService({
         selected: chosen,
         legalName: v.legalName || v.name,
         trustStatus:
-          v.trusted === true ? "sandbox-registered" : "configured-only",
+          v.trusted === true ? "registered" : "configured-only",
         retentionNotice:
           v.retentionNotice ||
           "提示済み情報は相手に保存される可能性があります。削除は相手側の規定に従います。",
