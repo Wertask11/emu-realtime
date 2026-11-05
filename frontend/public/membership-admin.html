@@ -79,8 +79,8 @@ label{display:block;margin-top:12px;font-size:12px;font-weight:600;color:var(--m
       <button data-tab="kyc">本人確認</button>
       <button data-tab="dialogue">対話記録</button>
       <button data-tab="metrics">指標</button>
-      <button data-tab="emu">知識（読む・探す）</button>
-      <button data-tab="schoolpark">知識を試す（ギルド・クエスト）</button>
+      <button data-tab="emu">Emu（知識を読む・探す）</button>
+      <button data-tab="schoolpark">SchoolPark（ギルド・クエスト・#000）</button>
       <button data-tab="camellia">Camellia</button>
       <button data-tab="contacts">お問い合わせ</button>
     </div>
@@ -2645,6 +2645,73 @@ function ydToDocBlock(b) {
   };
 }
 
+/* ───── Quest #000 の中身（11/5） ─────
+   統合のあと、運営画面から #000 の中身を見る場所が無く、起業観①などに書き足す道も無かった。
+   ここで6つの節をすべて読めるようにし、論文以外の節（A・B・起業観①②・人生観）は本文を書き直せるようにする。
+   #000 はブラウザからは書けない（記録の決まり）ので、保存はサーバー（/api/schoolpark/founder/section）が行う。
+   書き直す前の本文はサーバーが sp_founder_history に残す。論文は下の「論文を新しい版にする」からだけ替える。 */
+function founderCardHtml(fq) {
+  if (!fq) return '<div class="card"><h3>Quest #000 の中身</h3><p class="empty">#000 の記録が読めませんでした。</p></div>';
+  const secs = SpQuestStore.sections(fq);
+  const ver = Number(fq.founderVersion) || 1;
+  const when = fq.founderUpdatedAt ? new Date(Number(fq.founderUpdatedAt)).toLocaleString("ja-JP") : "—";
+  return '<div class="card" id="spFounderCard" data-fversion="' + ver + '"><h3>Quest #000 の中身</h3>'
+    + '<p class="empty" style="text-align:left;margin:0 0 10px">第' + ver + '版・最後に書き換えた日時：' + esc(when)
+    + '。節を開くと全文が読めます。論文以外の節は「書き直す」から本文を直せます（前の本文は消さずに残ります）。</p>'
+    + secs.map(function (sec, i) {
+        return '<details class="fsec" style="border-top:1px solid var(--line,#eee);padding:8px 0">'
+          + '<summary style="cursor:pointer;font-weight:700">' + (i + 1) + '. ' + esc(sec.title)
+          + ' <small style="color:var(--muted);font-weight:400">' + sec.body.length.toLocaleString("ja-JP") + '文字</small></summary>'
+          + '<div class="fsec-view" data-fview="' + i + '" style="white-space:pre-wrap;line-height:1.8;margin:8px 0;max-height:420px;overflow:auto">' + esc(sec.body) + '</div>'
+          + (i === 0
+              ? '<p class="empty" style="text-align:left;margin:0">論文は、下の「論文を新しい版にする」から差し替えます。</p>'
+              : '<div class="actions"><button class="btn" data-fedit="' + i + '">書き直す</button></div>'
+                + '<div class="fsec-edit hide" data-fform="' + i + '">'
+                + '<textarea data-ftext="' + i + '" rows="14" style="width:100%;box-sizing:border-box;font:inherit;line-height:1.7">' + esc(sec.body) + '</textarea>'
+                + '<div class="actions"><button class="btn primary" data-fsave="' + i + '" data-ftitle="' + esc(sec.title) + '">保存する</button> '
+                + '<button class="btn" data-fcancel="' + i + '">やめる</button></div></div>')
+          + '</details>';
+      }).join('')
+    + '</div>';
+}
+
+function wireFounderCard(el) {
+  const card = el.querySelector("#spFounderCard");
+  if (!card) return;
+  const form = i => card.querySelector('[data-fform="' + i + '"]');
+  card.querySelectorAll("[data-fedit]").forEach(b => {
+    b.onclick = () => { form(b.dataset.fedit).classList.remove("hide"); b.classList.add("hide"); };
+  });
+  card.querySelectorAll("[data-fcancel]").forEach(b => {
+    b.onclick = () => {
+      const i = b.dataset.fcancel;
+      form(i).classList.add("hide");
+      card.querySelector('[data-fedit="' + i + '"]').classList.remove("hide");
+    };
+  });
+  card.querySelectorAll("[data-fsave]").forEach(b => {
+    b.onclick = async () => {
+      const i = Number(b.dataset.fsave);
+      const body = card.querySelector('[data-ftext="' + i + '"]').value;
+      if (!body.trim()) { alert("本文が空です。"); return; }
+      if (!confirm("Quest #000 の「" + b.dataset.ftitle + "」を書き直します。\n前の本文は消さずに残ります。よろしいですか？")) return;
+      b.disabled = true;
+      try {
+        const r = await api("/api/schoolpark/founder/section", { method: "POST",
+          body: { index: i, title: b.dataset.ftitle, version: Number(card.dataset.fversion), body } });
+        alert(r.updated ? "「" + b.dataset.ftitle + "」を書き直しました（第" + r.version + "版）。" : "変わっていなかったので、そのままにしました。");
+        renderSchoolPark();
+      } catch (e) {
+        const code = (e && (e.code || e.message)) || "";
+        alert(code === "VERSION_CONFLICT"
+          ? "この画面を開いたあとに、#000 が別のところで書き換えられていました。読み直してから、もう一度書いてください（書いた文は消えないよう、先にコピーしてください）。"
+          : code === "BODY_TOO_LONG" ? "長すぎます（1つの節は3万文字まで）。"
+          : "保存できませんでした（" + code + "）");
+      } finally { b.disabled = false; }
+    };
+  });
+}
+
 async function renderSchoolPark() {
   const el = $("#tab-schoolpark");
   el.innerHTML = '<p class="empty">読み込み中…</p>';
@@ -3254,6 +3321,7 @@ async function renderSchoolPark() {
     /* Quest #000 の論文（1番目の節）を、リポジトリにある新しい版へ差し替える。
        #000 はブラウザからは書けない（記録の決まり）ので、サーバーが書く。
        本文は画面から送らない。サーバーがリポジトリのファイルを読む。 */
+    + founderCardHtml(quests.find(q => SpQuestStore.isFounder(q)))
     + '<div class="card"><h3>Quest #000 の論文</h3>'
     + '<p class="empty" style="text-align:left;margin:0 0 10px">リポジトリにある新しい版の「SchoolPark論文」に差し替えます。'
     + 'ほかの5つの節（A・B・起業観①②・人生観）は変わりません。</p>'
@@ -3575,6 +3643,7 @@ async function renderSchoolPark() {
   /* 条件を満たしていない人を認めるときは、一度確かめる。
      承認待ちの一覧からは「あと◯本」の人も押せるようにしてあるので、
      押し間違いがそのまま通らないようにする。 */
+  wireFounderCard(el);
   const paperBtn = el.querySelector("#spFounderPaper");
   if (paperBtn) paperBtn.onclick = async () => {
     paperBtn.disabled = true;

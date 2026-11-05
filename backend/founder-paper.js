@@ -48,6 +48,41 @@ function nextFounder(current, body) {
   };
 }
 
+/* ───── 論文以外の節（A・B・起業観①②・人生観）を、運営画面から書き直す ─────
+   11/5：運営画面から #000 の中身を見られず、起業観①に書き足す道も無かった。
+   論文（1番目の節）は、これまでどおりリポジトリのファイルからだけ差し替える（ここでは触らない）。
+
+   - 節の数・順番・題名は変えない（本文だけ）。どの節かは番号と題名の両方で確かめる。
+   - 画面を開いたあとに別の人（別のタブ）が書き換えていたら、上書きせずに止める（版の番号で照らす）。
+   - 書き直す前の本文は sp_founder_history に残す（消さない）。 */
+const SECTION_MAX_CHARS = 30000;
+
+function editFounderSection(current, { index, title, body, version }) {
+  const sections = Array.isArray(current.founderSections) ? current.founderSections : [];
+  if (current.kind !== "founder" || !sections.length) throw new Error("FOUNDER_MISSING");
+  const i = Number(index);
+  if (!Number.isInteger(i) || i < 1 || i >= sections.length) throw new Error("SECTION_NOT_EDITABLE");
+  if (String(sections[i] && sections[i].title || "") !== String(title || "")) throw new Error("SECTION_MISMATCH");
+  const curVersion = Number(current.founderVersion) || 1;
+  if (Number(version) !== curVersion) throw new Error("VERSION_CONFLICT");
+  if (typeof body !== "string") throw new Error("BODY_REQUIRED");
+  const text = body.replace(/\r\n?/g, "\n").replace(/\s+$/, "");
+  if (!text) throw new Error("BODY_REQUIRED");
+  if (text.length > SECTION_MAX_CHARS) throw new Error("BODY_TOO_LONG");
+  if (String(sections[i].body || "") === text) return null;   /* 変わっていない */
+  const nextVersion = curVersion + 1;
+  const next = sections.map((s, k) => (k === i ? { ...s, body: text } : s));
+  return {
+    previous: { title: String(sections[i].title || ""), body: String(sections[i].body || "") },
+    patch: {
+      founderSections: next,
+      founderVersion: nextVersion,
+      founderHash: sha256(JSON.stringify({ version: nextVersion, sections: next })),
+      founderUpdatedAt: Date.now()
+    }
+  };
+}
+
 function createFounderPaperRouter({ db, requireOwner, file, expected }) {
   const router = express.Router();
 
@@ -95,7 +130,40 @@ function createFounderPaperRouter({ db, requireOwner, file, expected }) {
     }
   });
 
+  router.post("/section", requireOwner, async (req, res) => {
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    const input = req.body || {};
+    try {
+      const ref = db.collection("sp_quests").doc(FOUNDER_ID);
+      const result = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) throw new Error("FOUNDER_MISSING");
+        const cur = snap.data() || {};
+        const edit = editFounderSection(cur, input);
+        if (!edit) return { updated: false, version: Number(cur.founderVersion) || 1 };
+        const prevVersion = Number(cur.founderVersion) || 1;
+        tx.set(db.collection("sp_founder_history").doc("v" + prevVersion + "_s" + Number(input.index)), {
+          questId: FOUNDER_ID, sectionIndex: Number(input.index),
+          title: edit.previous.title, body: edit.previous.body,
+          version: prevVersion, replacedByVersion: edit.patch.founderVersion,
+          replacedAt: edit.patch.founderUpdatedAt,
+          by: String((req.identity && req.identity.uid) || "")
+        });
+        tx.update(ref, edit.patch);
+        return { updated: true, version: edit.patch.founderVersion, characters: edit.patch.founderSections[Number(input.index)].body.length };
+      });
+      return res.json({ ok: true, ...result });
+    } catch (error) {
+      const code = String(error.message || "");
+      if (code === "VERSION_CONFLICT") return res.status(409).json({ error: code });
+      if (["FOUNDER_MISSING", "SECTION_NOT_EDITABLE", "SECTION_MISMATCH"].includes(code)) return res.status(409).json({ error: code });
+      if (["BODY_REQUIRED", "BODY_TOO_LONG"].includes(code)) return res.status(400).json({ error: code });
+      console.error("Founder section update failed:", error);
+      return res.status(500).json({ error: "SECTION_UPDATE_FAILED" });
+    }
+  });
+
   return router;
 }
 
-module.exports = { createFounderPaperRouter, nextFounder, readPaper, PAPER_SHA256, PAPER_TITLE };
+module.exports = { createFounderPaperRouter, nextFounder, editFounderSection, readPaper, PAPER_SHA256, PAPER_TITLE, SECTION_MAX_CHARS };

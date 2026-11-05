@@ -39,7 +39,8 @@ function fakeDb(initial) {
     collection: (c) => ({ doc: (id) => ref(c + "/" + id) }),
     runTransaction: async (fn) => fn({
       get: (r) => r.get(),
-      update: (r, patch) => { store[r.path] = { ...store[r.path], ...patch }; }
+      update: (r, patch) => { store[r.path] = { ...store[r.path], ...patch }; },
+      set: (r, data) => { store[r.path] = data; }
     })
   };
 }
@@ -48,9 +49,9 @@ function route(router, method, p) {
   const layer = router.stack.find((l) => l.route && l.route.path === p && l.route.methods[method]);
   return layer.route.stack.at(-1).handle;
 }
-async function call(handler) {
+async function call(handler, body) {
   const out = { status: 200 };
-  await handler({}, { status(c) { out.status = c; return this; }, json(v) { out.body = v; return out; } });
+  await handler({ body, identity: { uid: "line:owner" } }, { status(c) { out.status = c; return this; }, json(v) { out.body = v; return out; } });
   return out;
 }
 const pass = (_req, _res, next) => next();
@@ -114,4 +115,54 @@ test("運営でなければ通さない（requireOwner を通る）", async () =
 test("サーバーに、運営だけの窓口としてつながっている", () => {
   const src = fs.readFileSync(path.join(__dirname, "server.js"), "utf8");
   assert.ok(src.includes('app.use("/api/schoolpark/founder", require("./founder-paper").createFounderPaperRouter({ db, requireOwner }));'));
+});
+
+/* ───── 論文以外の節を、運営画面から書き直す（11/5） ───── */
+const { editFounderSection } = require("./founder-paper");
+
+test("起業観①の本文だけを書き直し、前の本文は消さずに残す。ほかの節と論文には触らない", async () => {
+  const db = fakeDb(founder());
+  const r = await call(route(createFounderPaperRouter({ db, requireOwner: pass }), "post", "/section"),
+    { index: 3, title: "起業観①", version: 1, body: "1\nヒルヤー・ヒュヴァー・トゥレー\n" });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.updated, true);
+  const q = db.store["sp_quests/founder-quest-000"];
+  assert.equal(q.founderSections[3].body, "1\nヒルヤー・ヒュヴァー・トゥレー");
+  assert.equal(q.founderSections[3].title, "起業観①");
+  assert.deepEqual(q.founderSections.filter((_, i) => i !== 3), founder().founderSections.filter((_, i) => i !== 3));
+  assert.equal(q.founderVersion, 2);
+  assert.equal(q.founderHash, sha(JSON.stringify({ version: 2, sections: q.founderSections })));
+  const h = db.store["sp_founder_history/v1_s3"];
+  assert.equal(h.body, "1", "前の本文を残していない");
+  assert.equal(h.title, "起業観①");
+  assert.equal(h.replacedByVersion, 2);
+});
+
+test("論文（1番目の節）・無い番号・題名が合わない節は、ここからは書けない", () => {
+  assert.throws(() => editFounderSection(founder(), { index: 0, title: "SchoolPark論文", version: 1, body: "x" }), /SECTION_NOT_EDITABLE/);
+  assert.throws(() => editFounderSection(founder(), { index: 6, title: "x", version: 1, body: "x" }), /SECTION_NOT_EDITABLE/);
+  assert.throws(() => editFounderSection(founder(), { index: 3, title: "人生観", version: 1, body: "x" }), /SECTION_MISMATCH/);
+});
+
+test("画面を開いたあとに別のところで書き換わっていたら、上書きせずに止める", async () => {
+  const db = fakeDb({ ...founder(), founderVersion: 3 });
+  const r = await call(route(createFounderPaperRouter({ db, requireOwner: pass }), "post", "/section"),
+    { index: 3, title: "起業観①", version: 2, body: "新しい" });
+  assert.equal(r.status, 409);
+  assert.equal(r.body.error, "VERSION_CONFLICT");
+  assert.equal(db.store["sp_quests/founder-quest-000"].founderSections[3].body, "1");
+});
+
+test("空・長すぎる本文は書かない。変わっていなければ版を上げない", async () => {
+  assert.throws(() => editFounderSection(founder(), { index: 3, title: "起業観①", version: 1, body: "  \n" }), /BODY_REQUIRED/);
+  assert.throws(() => editFounderSection(founder(), { index: 3, title: "起業観①", version: 1, body: "あ".repeat(30001) }), /BODY_TOO_LONG/);
+  assert.equal(editFounderSection(founder(), { index: 3, title: "起業観①", version: 1, body: "1" }), null);
+});
+
+test("節の書き直しも、運営でなければ通さない", async () => {
+  const db = fakeDb(founder());
+  const deny = (_req, res) => res.status(403).json({ error: "OWNER_ONLY" });
+  const router = createFounderPaperRouter({ db, requireOwner: deny });
+  const layer = router.stack.find((l) => l.route && l.route.path === "/section");
+  assert.equal(layer.route.stack[0].handle, deny);
 });
