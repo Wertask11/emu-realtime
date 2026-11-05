@@ -1609,6 +1609,11 @@ service cloud.firestore {
       allow read, write: if labCollection.matches('knowledge_lab_.*') && false;
     }
 
+    // Passport 2.0: private issuance, consent, grants and revocation mappings.
+    match /{passportCollection}/{document=**} {
+      allow read, write: if passportCollection.matches('passport_v2_.*') && false;
+    }
+
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
     match /{coll}/{document=**} {
       /* 未使用の旧コレクションも汎用許可へ漏らさない。
@@ -1617,6 +1622,7 @@ service cloud.firestore {
          3件を一度に書く）が、1回の書き込みで評価できる式の上限（1000）を
          超えて断られていた（2026-10-24）。中身（どれを通さないか）は同じ。 */
       allow read, write: if !coll.matches('knowledge_lab_.*')
+        && !coll.matches('passport_v2_.*')
         /* EMUER v2 の予算・貢献・報酬・認可履歴はサーバー専用。
            Admin SDK は Rules を経由しない。 */
         && !coll.matches('emuer_v2_.*')

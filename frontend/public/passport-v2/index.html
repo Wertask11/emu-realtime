@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ja">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><meta name="referrer" content="no-referrer" /><title>
+    証明書 · SchoolPark Passport</title
+  ><link rel="stylesheet" href="style.css" />
+  <body>
+    <header>
+      <a href="/" id="back">← Passportに戻る</a>
+      <h1>証明書とプライバシー</h1>
+    </header>
+    <main>
+      <p class="notice">
+        公開前の開発環境です。アカウント証明を検証できます。公的本人確認は未接続です。
+      </p>
+      <p id="message" role="status" aria-live="polite">状態を確認しています…</p>
+      <section id="controls" hidden>
+        <nav aria-label="Passport証明メニュー">
+          <a href="#verification">本人確認</a
+          ><a href="#certificatesSection">証明書・提示</a
+          ><a href="#privacy">プライバシー</a><a href="#device">端末・鍵管理</a
+          ><a href="#historySection">提示履歴</a>
+        </nav>
+        <section id="authorizationSection" hidden>
+          <h2>Walletへ証明書を発行する確認</h2>
+          <p id="authorizationDetails"></p>
+          <button id="denyAuthorization">発行しない</button
+          ><button id="approveAuthorization">
+            確認してWalletへの発行を承認する
+          </button>
+        </section>
+        <section id="verification">
+          <h2>確認状態</h2>
+          <dl>
+            <dt>アカウント所有</dt>
+            <dd>既存のログインで確認済み。公的な本人確認とは別です。</dd>
+            <dt>公的本人確認</dt>
+            <dd>未確認 · 正式接続・承認待ち</dd>
+            <dt>出店資格の証明</dt>
+            <dd>未確認 · 既存Cityの権限判定はそのまま利用されます</dd>
+            <dt>年齢条件の証明</dt>
+            <dd>未確認 · 自己申告を本人確認済みの証明にはしません</dd>
+          </dl>
+        </section>
+        <section id="certificatesSection">
+          <h2>証明書を受け取る</h2>
+          <p>
+            氏名・SchoolPark
+            ID・メール・ウォレットアドレスは含めません。端末の鍵は外へ取り出せない形で保管します。
+          </p>
+          <button id="issue">通常VCをこの端末用に発行する</button
+          ><button id="issueSelective">選択的開示の証明書を受け取る</button>
+          <div id="credentials"></div>
+        </section>
+        <section id="privacy">
+          <h2>プライバシー設定</h2>
+          <p>
+            提示先・利用目的・実際の開示項目は、毎回確認して承認します。通常VCは全項目提示です。SD-JWTは選んだ属性を隠せますが、同じ証明書や所持者鍵から関連付けられる可能性があります。
+          </p>
+          <label
+            ><input
+              id="rememberSelections"
+              type="checkbox"
+            />この端末で選択した属性を次回の初期値にする（同意は毎回必要）</label
+          >
+          <p>この画面では操作内容や証明内容を分析ツールへ送りません。</p>
+        </section>
+        <section id="device">
+          <h2>セキュリティ・端末と鍵</h2>
+          <button id="clearDevice">この端末の証明を失効し、鍵を削除する</button>
+          <h3>紛失・機種変更</h3>
+          <p>
+            元のLINE・Googleなどでログインし、古い証明書を失効して新しい端末で発行してください。SchoolPark
+            IDは変わりません。秘密鍵はバックアップ・復元できません。復元できない分、サーバーへ端末秘密鍵を預けません。ログイン自体の復旧は既存窓口をご利用ください。
+          </p>
+          <p>
+            端末の乗っ取りや同じサイトの不正スクリプトは、非抽出鍵でも操作できる可能性があります。ZKPの資格情報は生成時に端末メモリを使うため、本番で個人情報を扱う前に追加監査が必要です。
+          </p>
+        </section>
+        <section id="historySection">
+          <h2>同意・提示の履歴</h2>
+          <p>
+            履歴の削除は、未完了の同意も撤回します。提示済みの情報は、相手から自動的に消せません。記録は直近50件です。
+          </p>
+          <button id="clear">履歴を削除し、未完了の同意を撤回</button>
+          <ol id="history"></ol>
+        </section>
+        <section id="zkpSection" hidden>
+          <p class="notice">
+            未監査の試験機能です。証明データ末尾の厳密な検証に未解決事項があり、本番では使用できません。
+          </p>
+          <h2>ZKPの動作を確かめる（架空資格のみ）</h2>
+          <p>
+            実際の本人確認・年齢・出店承認は行いません。テスト発行者の署名と、隠された属性の条件を証明します。この方式は外部ウォレット用の標準形式としては公開していません。
+          </p>
+          <label
+            >条件
+            <select id="zkpCase">
+              <option value="age18">生年月日を渡さず18歳以上</option>
+              <option value="identity">
+                氏名・住所を渡さず本人確認済み資格
+              </option>
+              <option value="city">個人情報を渡さず出店資格</option>
+            </select></label
+          ><button id="tryZkp">架空資格で提示内容を確認する</button>
+          <p id="zkpMetrics" role="status"></p>
+        </section>
+      </section>
+      <dialog id="consent" aria-labelledby="consentHeading">
+        <h2 id="consentHeading">提示する内容を確認</h2>
+        <p id="recipient"></p>
+        <p id="trust"></p>
+        <p id="purpose"></p>
+        <p id="formatNotice"></p>
+        <p id="hidden"></p>
+        <p id="retention"></p>
+        <details>
+          <summary>実際に開示する全項目</summary>
+          <pre id="disclosure"></pre>
+        </details>
+        <p id="claims"></p>
+        <div>
+          <button id="deny">提示しない</button
+          ><button id="approve">確認して提示する</button>
+        </div>
+      </dialog>
+      <dialog id="zkpConsent" aria-labelledby="zkpConsentHeading">
+        <h2 id="zkpConsentHeading">テストZKPの提示確認</h2>
+        <p id="zkpSummary"></p>
+        <button id="denyZkp">提示しない</button
+        ><button id="approveZkp">確認してテスト証明を提示する</button>
+      </dialog>
+    </main>
+    <script type="module" src="wallet.js"></script>
+  </body>
+</html>
