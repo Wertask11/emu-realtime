@@ -45,3 +45,27 @@ The browser script uses 4246, real local Firebase login, SD issuance/denial/appr
 `external-wallet.py` requires the actual unmodified walt.id Wallet API2 1.2.1 running on loopback 7280 (Java 21 product or Docker image `waltid/wallet-api2:latest`, pinned digest in report). Use dev-only loopback/auth/persistence settings, not an internet-facing wallet or real users. It creates a synthetic local wallet and P-256 key, receives SD-JWT, resolves an actual VP request, explicitly authorizes consent, presents, then checks replay/revocation rejection. It needs the local fixture at 4246. It never logs the offer code/PIN/token/credential/private key. The product test is pre-authorized issuance, not the separately tested authorization-code flow. A Java product installation was used in this environment; no product source/binary patch was made.
 
 `independent-zkp-verifier.cjs` is a separate process calling the same published Dock library with public inputs only. It demonstrates process/secret separation, not independent implementation or external audit. Live KMS/cloud government/production TLS, formal conformance and physical-wallet UI tests are not simulated as successful.
+
+## Account-proof RC1 (current)
+
+Current scope/readiness: `docs/passport-v2/final-release-readiness.md` and `rc-profile.json`.
+
+- `node tools/passport-v2-tests/run-rc-tests.cjs`: all backend test files except the **entire excluded ZKP experimental feature** (470 pass).
+- `node tools/passport-v2-tests/run-rc-tests.cjs --all`: full backend, including the unchanged failing ZKP TODO (475 pass + 1 TODO). Run/report both, never count TODO as pass.
+- `node tools/passport-v2-tests/zkp-reproduction.mjs`: synthetic mutation matrix, no credentials/proofs in output.
+- `node --test tools/passport-v2-tests/rules.test.cjs tools/passport-v2-tests/rc-infrastructure.test.cjs tools/passport-v2-tests/managed-integration.test.cjs`: actual demo Auth/Firestore emulators; the native fixture must be running to seed synthetic accounts. Managed integration uses a nonextractable test key through the AWS SDK-shaped client, **not AWS**.
+- `python tools/passport-v2-tests/rc-browser.py`: SD-JWT flow, keyboard Escape/Tab, seven widths, paced ten open/return cycles, reload/login restoration. No physical phone or screen-reader product is simulated as successful.
+
+The normal build no longer generates or ships `zkp-wallet.js`, and production CSP does not grant WASM evaluation. The RC router rejects every ZKP endpoint before body parsing. To reproduce the **excluded** browser research experiment:
+
+```
+PASSPORT_ZKP_BUILD_DIR=/tmp/passport-zkp-research node tools/passport-v2-tests/build-wallet.cjs
+PASSPORT_TEST_PORT=4246 PASSPORT_ZKP_UNAUDITED_TEST_ONLY=true PASSPORT_ZKP_BUILD_DIR=/tmp/passport-zkp-research node tools/passport-v2-tests/fixture.cjs
+python tools/passport-v2-tests/completion-browser.py
+```
+
+Research code is not a release fix. The original TODO still blocks any ZKP release.
+
+Fresh-environment fixture prerequisites: the native fixture serves `/tmp/knowledge-lab-ethers.js` and `/tmp/knowledge-lab-socket.js`. Copy the installed `backend/node_modules/ethers/dist/ethers.umd.min.js` and `backend/node_modules/socket.io-client/dist/socket.io.min.js` to those paths if absent (do not overwrite another task's files). Firebase CLI's emulator cache must be writable; use `FIREBASE_EMULATORS_PATH=/tmp/...` and `XDG_CONFIG_HOME=/tmp/...` if needed. Keep HTTPS verification enabled when downloading the official emulator JAR.
+
+All final logs and images: `/workspace/outputs/passport-rc-20261105/`. Nothing in these scripts deploys Rules, merges main, modifies production users, or creates a real KMS key. Live IAM/KMS, public infrastructure, long-duration soak, real devices, independent audit/legal and government approval remain outside the completed internal RC validation.

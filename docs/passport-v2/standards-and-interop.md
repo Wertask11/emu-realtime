@@ -1,5 +1,7 @@
 # Standards and compatibility — 2026-11-05
 
+> 現在のRC判定・ZKP除外・公式資料再確認は [final-release-readiness.md](final-release-readiness.md) を参照。この文書は前フェーズの記録を含みます。
+
 ## Normative baselines
 
 | Standard | Canonical publication | Reviewed official source |

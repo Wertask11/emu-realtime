@@ -1,5 +1,7 @@
 # Passport 2.0 development architecture
 
+> 現在のRC判定・ZKP除外・公式資料再確認は [final-release-readiness.md](final-release-readiness.md) を参照。この文書は前フェーズの記録を含みます。
+
 Existing Firebase login → existing identity.findByUid → stable existing SchoolPark ID → private account record. No new identity resolution, user merge, entitlements, pass issuance or EMUER action. Missing existing SPID fails closed; anonymous auth rejected. Read/write through Admin SDK only; Rules explicitly exclude the new prefix from the legacy catch-all.
 
 | Component | Responsibility |

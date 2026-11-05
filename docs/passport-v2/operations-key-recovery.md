@@ -1,5 +1,7 @@
 # Operations, retention and recovery
 
+> 現在のRC判定・ZKP除外・公式資料再確認は [final-release-readiness.md](final-release-readiness.md) を参照。この文書は前フェーズの記録を含みます。
+
 This branch is **development only**. Runtime gate requires PASSPORT_V2_ENABLED=true, PASSPORT_V2_SANDBOX=true, APP_ENV=local, NODE_ENV other than production, demo-* Firebase project and loopback Auth/Firestore emulators. PASSPORT_V2_SANDBOX_BASE must be a loopback URL. Every other deployment returns disabled; existing Passport remains unchanged. `servicePromise` dependency injection is for isolated tests only, never environment-controlled.
 
 ## Keys and trust

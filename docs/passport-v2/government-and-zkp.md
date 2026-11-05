@@ -1,5 +1,7 @@
 # Government authentication and ZKP readiness
 
+> 現在のRC判定・ZKP除外・公式資料再確認は [final-release-readiness.md](final-release-readiness.md) を参照。この文書は前フェーズの記録を含みます。
+
 ## Government authentication
 
 Digital Agency portal attempted: https://developers.digital.go.jp/documents/auth-and-sign/ . Session policy denied outbound access before the page could be verified. The owner reported saving/publishing the official-host setting. The selected running environment still did not include those hosts in its effective allowlist and returned tunnel 403 on the final retry. Treat runtime propagation as unconfirmed; do not claim the owner failed to configure it. No formal API specification, current terms, service agreement, connection approval, test credentials, certificate chain or assurance mapping can be confirmed from this environment. Do not interpret a public GitHub example or successful mock as approval.

@@ -1,5 +1,7 @@
 # SchoolPark Passport 2.0 作業報告 — 2026-11-05
 
+> 現在のRC判定・ZKP除外・公式資料再確認は [final-release-readiness.md](final-release-readiness.md) を参照。この文書は前フェーズの記録を含みます。
+
 > 初回フェーズの履歴です。完成フェーズの現在の実装・未解決事項・公開判定は [completion-report.md](completion-report.md) を参照してください。
 
 **判定：開発用VC基盤を実装・検証。本番公開不可。本番への反映・push・mainマージ・Rules公開は行っていません。**
