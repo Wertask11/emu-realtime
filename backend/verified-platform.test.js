@@ -32,6 +32,18 @@ test('wallet identities require server-issued signature claims that match the to
   assert.equal(linked.walletAddress, a.walletAddress);
 });
 
+test('LINE で入った人は、記録の入り方を "custom" ではなく line と書く（パスポートで「不明」にしない）', async () => {
+  const db = makeFirestore();
+  const line = await ensureVerifiedAccount(db, { uid: 'line:U123', provider: 'line', firebase: { sign_in_provider: 'custom' }, name: 'メンマ' });
+  assert.equal(line.provider, 'line');
+  // token に provider が無くても、uid が line: なら LINE
+  const again = await ensureVerifiedAccount(db, { uid: 'line:U123', firebase: { sign_in_provider: 'custom' } });
+  assert.equal(again.provider, 'line');
+  assert.equal(again.displayName, 'メンマ', '名前を消している');
+  assert.equal(again.createdAt, line.createdAt, '入った日を変えている');
+  assert.equal((await ensureVerifiedAccount(db, decoded('g1'))).provider, 'google.com');
+});
+
 async function serve(app, fn) {
   const server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));

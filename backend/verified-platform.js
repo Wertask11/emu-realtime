@@ -30,7 +30,12 @@ async function ensureVerifiedAccount(db, decoded) {
     const now = Date.now();
     const account = {
       ...old, ...(spid ? {spid} : {}), uid, walletAddress, chesAddress,
-      provider: walletLogin ? 'wallet' : (decoded.firebase?.sign_in_provider || 'custom'),
+      /* LINE は自前の custom token で入るので、Firebase から見ると "custom"。
+         そのまま書くとパスポートの「入り方」が「不明」になっていた。uid（line:…）か
+         token の provider で LINE と書く。表示と記録のためだけの欄（権限には使わない）。 */
+      provider: walletLogin ? 'wallet'
+        : ((String(uid).indexOf('line:') === 0 || decoded.provider === 'line') ? 'line'
+        : (decoded.firebase?.sign_in_provider || 'custom')),
       displayName: old.displayName || decoded.name || '', email: old.email || decoded.email || '',
       photoURL: old.photoURL || decoded.picture || '', createdAt: old.createdAt || now, lastLogin: now,
       membership: old.membership || { tier: 'free', offchain: true, issuedAt: now },
