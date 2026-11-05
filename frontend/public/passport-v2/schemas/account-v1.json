@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://emu-for-schoolpark.vercel.app/passport-v2/schemas/account-v1.json",
+  "title": "SchoolPark account access profile v1 (VC Data Model 2.0)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "@context",
+    "id",
+    "type",
+    "issuer",
+    "validFrom",
+    "validUntil",
+    "credentialSubject",
+    "credentialStatus",
+    "proof"
+  ],
+  "properties": {
+    "@context": {
+      "const": [
+        "https://www.w3.org/ns/credentials/v2",
+        "https://emu-for-schoolpark.vercel.app/passport-v2/contexts/account-v1.jsonld"
+      ]
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^urn:uuid:[0-9a-f-]{36}$"
+    },
+    "type": {
+      "const": [
+        "VerifiableCredential",
+        "SchoolParkAccountCredential"
+      ]
+    },
+    "issuer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "validFrom": {
+      "type": "string"
+    },
+    "validUntil": {
+      "type": "string"
+    },
+    "credentialSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "accountAccess",
+        "assurance",
+        "schemaVersion"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^did:key:z[1-9A-HJ-NP-Za-km-z]{20,150}$"
+        },
+        "accountAccess": {
+          "const": true
+        },
+        "assurance": {
+          "const": "platform-account"
+        },
+        "schemaVersion": {
+          "const": "1"
+        }
+      }
+    },
+    "credentialStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "statusPurpose",
+        "statusListCredential",
+        "statusListIndex"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "BitstringStatusListEntry"
+        },
+        "statusPurpose": {
+          "const": "revocation"
+        },
+        "statusListCredential": {
+          "type": "string"
+        },
+        "statusListIndex": {
+          "type": "string",
+          "pattern": "^[0-9]{1,6}$"
+        }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "cryptosuite",
+        "created",
+        "verificationMethod",
+        "proofPurpose",
+        "proofValue"
+      ],
+      "properties": {
+        "type": {
+          "const": "DataIntegrityProof"
+        },
+        "cryptosuite": {
+          "const": "ecdsa-rdfc-2019"
+        },
+        "created": {
+          "type": "string"
+        },
+        "verificationMethod": {
+          "type": "string"
+        },
+        "proofPurpose": {
+          "const": "assertionMethod"
+        },
+        "proofValue": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
