@@ -1,8 +1,8 @@
 'use strict';
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm'),fs=require('node:fs');
-function fixture(gate=async()=>({allowed:true})) {
+function fixture(gate=async()=>({allowed:true}),custom=null) {
  const opened=[],alerts=[],initials=[],classes=new Set();
- const app={go:screen=>()=>opened.push(screen)};
+ const app=custom?custom(opened):{go:screen=>()=>opened.push(screen)};
  const nodes={mainApp:{style:{display:'block'}},spDaoFrame:{contentWindow:{app}}};
  const document={body:{classList:{add(...v){v.forEach(x=>classes.add(x));},remove(...v){v.forEach(x=>classes.delete(x));},contains:v=>classes.has(v)}},documentElement:{style:{setProperty(){}}},getElementById:id=>nodes[id],querySelector:()=>null,querySelectorAll:()=>[]};
  const location=new URL('http://local.invalid/?lab=library');
@@ -37,4 +37,10 @@ test('the booked dialogue URL uses server booking authorization for both voice a
  }
  const denied=fixture();denied.window.emuAuthHeaders=async()=>({});denied.window.fetch=async url=>({ok:!url.endsWith('/access'),json:async()=>({sessions:[{id:'booking',outcome:'scheduled'}]})});
  denied.window.accountGo=page=>denied.opened.push(page);assert.equal(await denied.nav.resumeDialogue(),false);assert.deepEqual(denied.opened,['sessions']);
+});
+test('a hidden frame left on City is switched to the quest screen before the workspace is shown (11/6)',async()=>{
+ const f=fixture(undefined,opened=>{const a={state:{screen:'city'},go:screen=>()=>{a.state.screen=screen;opened.push('go:'+screen);}};return a;});
+ f.window.openSpDao=()=>f.opened.push('shown');
+ assert.equal(await f.nav.existing('experiments'),true);
+ assert.deepEqual(f.opened.slice(0,2),['go:experiments','shown'],'the frame was shown while still on City');
 });

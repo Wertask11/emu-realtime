@@ -56,6 +56,10 @@
       window._emuEnsureAppVisible();
       window.scrollTo({top:0});
       const view=screen==='library'?'wisdom':screen==='city'?'city':'practice';
+      // 11/6: the hidden frame keeps its last screen (often City). Switch it before showing the frame,
+      // so opening quests never shows City first.
+      const ready=document.getElementById('spDaoFrame')?.contentWindow?.app;
+      if(ready?.state && ready.state.screen!==screen){try{ready.go(screen)();}catch(_){}}
       activate(view,true,{screen});window.openSpDao(screen);
       const frame=document.getElementById('spDaoFrame');
       const start=Date.now();

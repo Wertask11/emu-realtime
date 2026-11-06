@@ -124,6 +124,42 @@ test('ウォレットが要るのは報酬のほうだと書いてある', () =>
     'ウォレットが要る範囲が書いてありません');
 });
 
+test('「クエスト #005 を見る」は、クエストの一覧から #005 を開く（前に見ていた City を出さない）', async () => {
+  /* 11/6：openSpDao() だけだと、枠の中で前に開いていた画面（City など）がそのまま出ていた。 */
+  const calls = [];
+  const buttons = {};
+  const app = { state: { quests: [
+    { id: 'g4', series: 'general', questNumber: 4 },
+    { id: 'g5b', series: 'general', questNumber: 5, branch: 1 },
+    { id: 'g5', series: 'general', questNumber: 5, branch: 0 },
+    { id: 's5', series: 'special', questNumber: 5 }
+  ] } };
+  const box = { style: {}, innerHTML: '', setAttribute() { }, addEventListener() { }, remove() { },
+    querySelector: (sel) => (buttons[sel] = buttons[sel] || { onclick: null, focus() { } }) };
+  const ctx = vm.createContext({
+    String, Number, Boolean, Date, JSON, Promise,
+    localStorage: { getItem: () => null, setItem() { } },
+    document: {
+      body: { appendChild() { } },
+      createElement: () => box,
+      getElementById: (id) => (id === 'spDaoFrame' ? { contentWindow: { app } } : null)
+    },
+    location: { href: '' },
+    window: {
+      addEventListener() { },
+      openEmuPractice: (screen) => { calls.push('practice:' + screen); return Promise.resolve(true); },
+      spQuestOpen: (a, id) => { calls.push('quest:' + id); },
+      openSpDao: () => { calls.push('openSpDao'); }
+    }
+  });
+  ctx.window.document = ctx.document;
+  vm.runInContext(WELCOME, ctx);
+  ctx.window.SpPassportWelcome.show({ schoolParkId: 'SP-AAAA-BBBB-CCCC-DDDD', isNew: true });
+  buttons['#spwGo'].onclick();
+  await new Promise(r => setTimeout(r, 0));
+  assert.deepEqual(calls, ['practice:experiments', 'quest:g5']);
+});
+
 test('index.html が、共有を先に読み込む', () => {
   const i = INDEX.indexOf('/schoolpark/share-invite.js');
   const j = INDEX.indexOf('/schoolpark/passport-welcome.js');
