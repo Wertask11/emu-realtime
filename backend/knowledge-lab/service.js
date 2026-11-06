@@ -332,7 +332,7 @@ function createService({
       aiAvailable: false,
     };
   }
-  async function rawPost(postId, a = null) {
+  async function rawPost(postId, a = null, publicOnly = false) {
     m.id(postId);
     const pub = await db.collection("posts").doc(postId).get();
     if (pub.exists && m.publicPost(pub.data())) {
@@ -352,7 +352,7 @@ function createService({
       }
       return pub.data();
     }
-    if (!a) m.fail("NOT_FOUND", 404);
+    if (publicOnly || !a) m.fail("NOT_FOUND", 404);
     const priv = await ref("private_posts", postId).get();
     if (priv.exists && (a.owner || m.owner(priv.data(), a))) return priv.data();
     const archived = await ref("archived_posts", postId).get();

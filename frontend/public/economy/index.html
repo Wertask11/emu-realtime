@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>EMUER・サービス — Emu for SchoolPark</title>
+    <link rel="stylesheet" href="/economy/style.css" />
+    <script src="/economy/app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <button id="back" type="button">← 戻る</button
+      ><span>Emu for SchoolPark</span>
+    </header>
+    <main>
+      <div class="intro">
+        <p class="eyebrow">EMUER・サービス</p>
+        <h1>学びの次の一歩を、探そう。</h1>
+        <p>EMUERの残高、使えるサービス、依頼の結果をここで確認できます。</p>
+      </div>
+      <p id="notice" role="status" aria-live="polite">
+        ログイン状態を確認しています…
+      </p>
+      <section aria-labelledby="balanceTitle">
+        <h2 id="balanceTitle">あなたのEMUER</h2>
+        <div class="balances">
+          <div>
+            <small>このサービスに使える未受取EMUER</small
+            ><strong id="spendable">—</strong>
+          </div>
+          <div><small>ウォレット残高</small><strong id="wallet">—</strong></div>
+          <div>
+            <small>未受取報酬の記録</small><strong id="pending">—</strong>
+          </div>
+          <div>
+            <small>受取承認中の拘束額</small><strong id="held">—</strong>
+          </div>
+          <div>
+            <small>依頼処理中（支払い済み）</small
+            ><strong id="processing">—</strong>
+          </div>
+        </div>
+        <p class="sub">
+          各残高は別の記録です。依頼処理中の額は、既に支払った額で、残高への加算はできません。受取承認中の報酬は、重複利用を防ぐため支払いに使えません。確認できない残高は「未確認」と表示します。
+        </p>
+        <button id="city" type="button">City公式ショップで使う →</button>
+      </section>
+      <section aria-labelledby="explorerTitle">
+        <div class="title">
+          <h2 id="explorerTitle">SchoolPark Explorer</h2>
+          <b class="price">1依頼 5 EMUER</b>
+        </div>
+        <p>
+          知識・Knowledge Lab・Knowledge
+          Text・ギルド・クエスト・Cityの商品から、あなたの目的に関連する公開情報を探します。
+        </p>
+        <p class="sub">
+          検索・比較・提案まで。購入・参加・契約・送金を代わりに行うことはありません。既存の無料AI機能の条件は変わりません。
+        </p>
+        <p id="availability" class="availability">提供状況を確認しています…</p>
+        <form id="requestForm">
+          <label for="goal">何を見つけたいですか？</label
+          ><textarea
+            id="goal"
+            rows="3"
+            maxlength="300"
+            placeholder="例：福岡でコーヒーを学びたい"
+            required
+          ></textarea>
+          <p class="sub">
+            氏名・連絡先・秘密は入力しないでください。入力文はサービス内で照合します。承認後、目的の種類と関連順の公開資料をGoogle
+            Geminiへ送信します。入力文そのものや内部IDは送りません。
+          </p>
+          <button id="quoteButton" class="primary" type="submit" disabled>
+            料金と条件を確認する
+          </button>
+        </form>
+        <div id="approval" hidden>
+          <h3>依頼の確認</h3>
+          <p id="quoteTerms"></p>
+          <label class="check"
+            ><input
+              id="paymentConsent"
+              type="checkbox"
+            />料金と返却条件を確認し、未受取EMUERから5
+            EMUERを支払います。</label
+          ><label class="check"
+            ><input id="aiConsent" type="checkbox" />目的の種類と対象の公開資料をGoogle
+            Geminiへ送信することに同意します。<a
+              href="/privacy.html"
+              target="_blank"
+              rel="noopener"
+              >データの取り扱い</a
+            ></label
+          >
+          <div class="actions">
+            <button id="pay" class="primary" type="button">
+              5 EMUERで依頼する</button
+            ><button id="cancel" type="button">やめる</button>
+          </div>
+        </div>
+        <p class="sub">
+          本人3依頼／日・全体20依頼／日・同時2件まで（日本時間）。Explorer専用の上限は入力・出力合計100,000
+          tokens／日、1依頼目標5,000
+          tokensです。初期運用は設定された開始時点から7日間です。受付した依頼は失敗時も当日の枠に数えます。Cityの商品交換回数とは別枠です。
+        </p>
+      </section>
+      <section id="operations" hidden>
+        <h2>運用状況（運営者のみ）</h2>
+        <button id="refreshOperations" type="button">監視状況を更新</button>
+        <pre
+          id="operationsStatus"
+          style="white-space: pre-wrap; overflow-wrap: anywhere"
+        ></pre>
+      </section>
+      <section aria-labelledby="historyTitle">
+        <div class="title">
+          <h2 id="historyTitle">依頼の結果・支払い履歴</h2>
+          <button id="refresh" type="button">更新</button>
+        </div>
+        <div id="history">読み込み中…</div>
+      </section>
+      <section>
+        <h2>外部交換の対応状況</h2>
+        <p>
+          現在のEMUERは自由移転を制限しているため、外部トークンへの交換には対応していません。交換レートや市場価格は表示しません。
+        </p>
+        <button id="simulate" type="button">接続の模擬確認</button>
+        <p id="simulation" role="status"></p>
+      </section>
+      <p class="sub">
+        AIの候補は関連性を保証するものではありません。参加条件や販売状況は、移動先の最新情報を確認してください。
+      </p>
+    </main>
+  </body>
+</html>
