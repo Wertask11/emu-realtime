@@ -133,11 +133,23 @@ test('#000 の章も、開いたまま', async () => {
   try {
     await frame.locator('summary', { hasText: '第2章 原点' }).click();
     await redraw(frame);
-    /* #000 には章のあとに「7. 手書きの言葉」の折りたたみもある。章だけを見る */
+    /* #000 には章のあとに「手書きの言葉」「EMUER論文」の折りたたみもある。章だけを見る */
     const opened = await frame.evaluate(() => [...document.querySelectorAll('details')]
       .map(d => d.querySelector('summary').textContent.trim() + ':' + d.open)
       .filter(s => /^第\d+章/.test(s)));
     assert.deepEqual(opened, ['第1章 はじまり:false', '第2章 原点:true']);
+  } finally { await ctx.close(); }
+});
+
+test('#000 の並び：SchoolPark論文 → EMUER論文 → ほかの節 → 手書きの言葉（番号なし）', async () => {
+  const sections = [{ title: 'SchoolPark論文', body: '本文' }, { title: 'A：要素', body: 'a' },
+    { title: '起業観①', body: 'b' }, { title: '人生観', body: 'c' }];
+  const founder = Object.assign({}, FOUNDER, { founderSections: sections });
+  const { frame, ctx, errors } = await open(1440, 900, { expId: founder.id, quests: [founder].concat(QUESTS) });
+  try {
+    const titles = await frame.evaluate(() => [...document.querySelectorAll('details > summary')].map(s => s.textContent.trim()));
+    assert.deepEqual(titles, ['SchoolPark論文', 'EMUER論文', 'A：要素', '起業観①', '人生観', '手書きの言葉']);
+    assert.deepEqual(errors, []);
   } finally { await ctx.close(); }
 });
 
