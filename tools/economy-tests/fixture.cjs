@@ -22,6 +22,7 @@ const ROOT = path.resolve(__dirname, "../..");
 async function createFixture({
   port = 0,
   providerDown = false,
+  providerStatus = null,
   enabled = true,
 } = {}) {
   const reset = await fetch(
@@ -103,6 +104,7 @@ async function createFixture({
           ok: true,
           text: async () => JSON.stringify({ totalTokens: 100 }),
         };
+      if (providerStatus) return { ok: false, status: providerStatus };
       if (providerDown) throw Error("isolated provider failure");
       const sources = JSON.parse(
         JSON.parse(opts.body).contents[0].parts[0].text,
@@ -284,6 +286,7 @@ async function createFixture({
   for (const [key, title, summary] of records)
     await economy.service.ref("source_approvals", hash(key)).set({
       piiReviewed: true,
+      aiUseApproved: true,
       purpose: SERVICE.termsVersion,
       contentHash: hash([title, summary]),
       validUntilMs: Date.now() + 86400000,

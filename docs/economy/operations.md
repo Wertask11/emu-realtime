@@ -79,7 +79,8 @@ Textはroom1_contents、Guildは既存公式定義とsp_guilds、Questはsp_ques
 
 ```
 { piiReviewed: true,
-  purpose: "explorer-20261106-v2",
+  aiUseApproved: true, // このExplorer用途の利用許諾を確認済み（個人情報確認とは別）
+  purpose: "explorer-20261107-v3",
   contentHash: sha256(JSON.stringify([送信するtitle,送信するsummary])),
   validUntilMs: 検証期限のミリ秒数 }
 ```
@@ -149,3 +150,17 @@ sourceKeyは `knowledge:ID` / `knowledge_lab:ID` / `knowledge_text:ID` / `guild:
 - 7日終了/新規受付停止後もworkerを維持し、既払依頼・返却を照合する。障害時も返却未確定は「返却待ち」。
 - Renderの環境設定・GCP請求/共有クォータにはこの作業環境からの管理権限がない。コード配備の成功と、実設定済み・有料公開可能を分ける。
 - 本番の5 EMUER試験は対象アカウント・金額・成功依頼/返却操作ごとのFounder承認後に限る。現時点では未実施。
+
+## Free Tier運用の追加条件（2026-11-07）
+
+確定情報：FounderがAI StudioでCHES-SchoolPark / `emusch-2a111` / Gemini 3.5 Flash Lite / Free / RPM15・入力TPM250,000・RPD500、確認画面時点の使用量0、Render既存キーとの一致を確認。これは管理者提供の確認記録で、サーバーがGoogleのquotaをライブ照会した結果ではない。
+
+- `ECONOMY_GEMINI_BILLING_TIER=free`を追加必須とする。既存`ECONOMY_AI_BILLING_ATTESTED`は無料枠のみ・有料契約へ自動移行しない確認にも使う。有効なPaid Tierや新しいカードは必須ではない。`ECONOMY_BUDGET_APPROVAL_REF`は無料枠のみ・金銭支出0円の確認記録への参照でよい。Google/Renderの既存設定を勝手に変更しない。
+- modelは`gemini-3.5-flash-lite`だけを許可する。別モデル、有料fallback、Search/Maps有料ツール、Billing upgradeを実装しない。
+- 通常のJST 20件/本人3件/100,000予約tokensに加え、`America/Los_Angeles`の日付でも全体20件/100,000予約tokens、rolling60秒で受付2件・推論2回・全provider HTTP10回を強制。countTokensもHTTP枠に含める。DSTはIANA timezoneで処理する。既存City交換・Lab/冷蔵庫くんの枠は減らさない。
+- provider日付の予約は`emuer_v2_agent_free_usage/{YYYY-MM-DD}`。短時間制御は既存private system領域の`free-admissions`と`free-provider-window`。クライアントは直接読書きできない。資料承認の新purposeは`explorer-20261107-v3`で、`aiUseApproved:true`と`piiReviewed:true`の両方が必要。既存Labの同意を自動で新用途へ拡張しない。
+- 分間枠は決済前にもチェックするため、上限で新しい注文/引落を作らない。既払依頼が内部の分間枠に当たったときは、永続queuedへ戻して待ち、再課金しない。期限/日付が過ぎれば処理せず全額返却する。
+- Googleから429/モデル404/認証401・403/要求400/障害503、または通信タイムアウトの場合、新規受付をprovider-safetyで停止する。処理失敗はrefund_pendingを経て実際に元台帳へ返った場合のみrefunded。使用量不明の推論を自動再実行しない。返却workerは停止状態でも復旧を継続する。
+- Owner運用画面はExplorerのJST/PT予約・取得した実使用量・直近HTTP数・停止理由・返却待ちを表示する。**他サービスを含むGoogle project全体のライブ残枠ではない**。AI Studio Rate limitsで実使用量を照合する。snapshotの使用量0を将来の残量として固定しない。
+- 429後：Renderの受付フラグはOFFのまま、AI Studioでproject/model/RPM/TPM/RPD/利用tierを再確認→queued/running/refund_pendingを照合→不明使用量/返却未確定を解決→provider-safetyの停止をOwnerが解除する。キー/モデルのローテーションで枠を迂回しない。停止を解除するために無料/年齢/許諾ゲートを外さない。
+- GoogleのAPI Client対象年齢・professional/business用途・提供地域、対象者/資料の実確認、Founderの本番有効化承認が成立するまで`ECONOMY_EXPLORER_ENABLED=false`。コード完成やFree Tier確認を公開承認に置き換えない。

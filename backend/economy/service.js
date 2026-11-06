@@ -2,6 +2,7 @@
 const { configuration, hash, fail, day } = require("./config");
 const { safeText } = require("./agent");
 const { randomUUID } = require("node:crypto");
+const { createFreeTierGuard, providerDay, LIMITS } = require("./free-tier");
 const PRODUCT = "agent_schoolpark-explorer-v1";
 const LIVE = [
   "awaiting_payment",
@@ -23,6 +24,7 @@ function createEconomy({
 }) {
   const config = () => configuration(env, now());
   const ref = (kind, id) => db.collection("emuer_v2_agent_" + kind).doc(id);
+  const freeTier = createFreeTierGuard({ db, now });
   async function actor(auth) {
     if (!auth?.uid) fail("AUTH_REQUIRED", 401);
     const spid = await identity.findByUid(auth.uid),
@@ -33,10 +35,17 @@ function createEconomy({
   async function status() {
     const c = config(),
       p = (await ref("products", PRODUCT).get()).data(),
-      safety = (await ref("system", "provider-safety").get()).data();
+      safety = (await ref("system", "provider-safety").get()).data(),
+      providerUsage =
+        (await ref("free_usage", providerDay(now())).get()).data() || {};
     const blockers = [...c.blockers];
     if (safety?.stopped === true)
       blockers.push("PROVIDER_USAGE_REVIEW_REQUIRED");
+    if (
+      (providerUsage.count || 0) >= LIMITS.dailyRequests ||
+      (providerUsage.reservedTokens || 0) + c.reserveTokens > LIMITS.dailyTokens
+    )
+      blockers.push("AI_PROVIDER_DAY_LIMIT");
     if (
       !p ||
       p.status !== "live" ||
@@ -50,9 +59,16 @@ function createEconomy({
       external: require("./external").capability,
     };
   }
-  async function allowed(a) {
+  async function allowed(a, reserved = false) {
     const c = (await status()).service;
-    if (!c.enabled) fail("SERVICE_DISABLED", 503);
+    if (!reserved && c.blockers.includes("AI_PROVIDER_DAY_LIMIT"))
+      fail("AI_PROVIDER_DAY_LIMIT", 429);
+    if (
+      c.blockers.some(
+        (reason) => !reserved || reason !== "AI_PROVIDER_DAY_LIMIT",
+      )
+    )
+      fail("SERVICE_DISABLED", 503);
     const plan = (await entitlement.getEntitlement(a.uid, a.account)).plan;
     if (!c.plans.includes(plan)) fail("SERVICE_NOT_ELIGIBLE", 403);
     const e = (await ref("eligibility", hash(a.spid)).get()).data();
@@ -106,7 +122,7 @@ function createEconomy({
         concurrency: c.concurrency,
       },
       notice:
-        "未受取EMUERから支払います。入力文はサービス内で照合し、AIへ目的の種類と対象の公開資料だけを送信します。氏名・住所・秘密は入力しないでください。受付した依頼は失敗時も当日の利用枠に数えます。商品交換枠は消費しません。",
+        "未受取EMUERから支払います。入力文はサービス内で照合し、AIへ目的の種類と対象の公開資料だけを送信します。氏名・住所・秘密は入力しないでください。受付した依頼は失敗時も当日の利用枠に数えます。商品交換枠は消費しません。無料AI枠を保護するため、全体2依頼/分・米国太平洋時間でも20依頼/日の追加制限があります。枠不足や障害では受付を停止し、処理を提供できない依頼は全額返却します。",
     };
   }
   async function owned(a, id) {
@@ -167,6 +183,7 @@ function createEconomy({
         fail("AI_DAILY_LIMIT", 429);
       if ((g.reservedTokens || 0) + c.reserveTokens > c.tokenBudget)
         fail("AI_BUDGET_LIMIT", 429);
+      const providerReservation = await freeTier.admission(tx, c.reserveTokens);
       tx.create(jr, {
         spid: a.spid,
         uid: a.uid,
@@ -179,6 +196,7 @@ function createEconomy({
         updatedAtMs: now(),
         paymentUntilMs: now() + 10 * 60000,
         bucket,
+        providerBucket: providerReservation.bucket,
         price: q.price,
         quoteId: b.quoteId,
         termsVersion: q.termsVersion,
@@ -197,6 +215,7 @@ function createEconomy({
         { merge: true },
       );
       tx.set(pr, { count: (p.count || 0) + 1 }, { merge: true });
+      providerReservation.commit();
     });
     await pay(id);
     return view(a, id);
@@ -236,7 +255,7 @@ function createEconomy({
     try {
       a = await actor({ uid: j.uid, walletAddress: j.walletAddress });
       if (a.spid !== j.spid) fail("IDENTITY_CHANGED");
-      await allowed(a);
+      await allowed(a, true); // Capacity is already reserved by this durable job.
       await payments.pay({
         id: j.orderId,
         actor: a,
@@ -252,6 +271,8 @@ function createEconomy({
             )
               fail("SERVICE_PRICE_CHANGED");
             const cur = s.data();
+            if (cur?.providerBucket !== providerDay(now()))
+              fail("FREE_QUOTA_WINDOW_EXPIRED");
             if (
               !cur ||
               cur.state !== "awaiting_payment" ||
@@ -277,6 +298,7 @@ function createEconomy({
           "SERVICE_NOT_ELIGIBLE",
           "AI_AUDIENCE_NOT_VERIFIED",
           "IDENTITY_CHANGED",
+          "FREE_QUOTA_WINDOW_EXPIRED",
         ].includes(e.message)
       )
         await transition(id, ["awaiting_payment"], {
@@ -381,7 +403,7 @@ function createEconomy({
     const leased = await db.runTransaction(async (tx) => {
       const [js, ss] = await Promise.all([tx.get(jr), tx.get(slots)]),
         j = js.data();
-      if (!j || j.state !== "queued") return false;
+      if (!j || j.state !== "queued" || j.retryAfterMs > now()) return false;
       const active = (ss.data()?.active || []).filter((v) => v.untilMs > now());
       if (active.length >= config().concurrency) return false;
       tx.set(
@@ -405,11 +427,12 @@ function createEconomy({
       const j = (await jr.get()).data(),
         a = await actor({ uid: j.uid, walletAddress: j.walletAddress });
       if (a.spid !== j.spid) fail("IDENTITY_CHANGED");
-      const c = await allowed(a);
+      const c = await allowed(a, true);
       const budget = (await ref("usage", j.bucket).get()).data();
       if (
         j.termsVersion !== c.termsVersion ||
         j.bucket !== day(now()) ||
+        j.providerBucket !== providerDay(now()) ||
         now() > j.paymentUntilMs ||
         !budget ||
         budget.reservedTokens > c.tokenBudget
@@ -427,24 +450,29 @@ function createEconomy({
       )
         fail("LEASE_EXPIRED");
       await jr.set({ providerAttemptedAtMs: now() }, { merge: true });
-      const result = await agent(j.goal, material, async (selected) => {
-        await allowed(a);
-        const current = new Map(
-          (await sources.candidates(a, j.goal)).map((s) => [s.key, s]),
-        );
-        for (const s of selected) {
-          const live = current.get(s.key);
-          if (!live || live.title !== s.title || live.summary !== s.summary)
-            fail("AI_SOURCE_CHANGED", 409);
-        }
-        const ready = (await jr.get()).data();
-        if (
-          ready.state !== "running" ||
-          ready.leaseToken !== token ||
-          ready.leaseUntilMs < now() + 60000
-        )
-          fail("LEASE_EXPIRED");
-      });
+      const result = await agent(
+        j.goal,
+        material,
+        async (selected) => {
+          await allowed(a, true);
+          const current = new Map(
+            (await sources.candidates(a, j.goal)).map((s) => [s.key, s]),
+          );
+          for (const s of selected) {
+            const live = current.get(s.key);
+            if (!live || live.title !== s.title || live.summary !== s.summary)
+              fail("AI_SOURCE_CHANGED", 409);
+          }
+          const ready = (await jr.get()).data();
+          if (
+            ready.state !== "running" ||
+            ready.leaseToken !== token ||
+            ready.leaseUntilMs < now() + 60000
+          )
+            fail("LEASE_EXPIRED");
+        },
+        (operation) => freeTier.beforeCall(operation, id, token),
+      );
       await recordUsage(id, j.bucket, result.usage);
       if (
         await transition(
@@ -456,6 +484,47 @@ function createEconomy({
       )
         await settle(id);
     } catch (error) {
+      if (
+        error.message === "AI_PROVIDER_THROTTLED" &&
+        error.generationAttempted === false
+      ) {
+        await transition(
+          id,
+          ["running"],
+          {
+            state: "queued",
+            retryAfterMs: now() + 60000,
+            providerAttemptedAtMs: null,
+          },
+          token,
+        );
+        return;
+      }
+      if (error.providerFault) {
+        await ref("system", "provider-safety").set(
+          {
+            stopped: true,
+            reason: [
+              "AI_FREE_QUOTA_EXHAUSTED",
+              "AI_MODEL_UNAVAILABLE",
+              "AI_PROVIDER_AUTH_FAILED",
+              "AI_PROVIDER_REQUEST_REJECTED",
+            ].includes(error.message)
+              ? error.message
+              : "AI_PROVIDER_UNAVAILABLE",
+            providerError: [
+              "AI_FREE_QUOTA_EXHAUSTED",
+              "AI_MODEL_UNAVAILABLE",
+              "AI_PROVIDER_AUTH_FAILED",
+              "AI_PROVIDER_REQUEST_REJECTED",
+            ].includes(error.message)
+              ? error.message
+              : "AI_PROVIDER_UNAVAILABLE",
+            atMs: now(),
+          },
+          { merge: true },
+        );
+      }
       if (error.generationAttempted === false && !error.usage)
         await recordUsage(id, (await jr.get()).data().bucket, {
           inputTokens: 0,
@@ -467,11 +536,14 @@ function createEconomy({
       if (error.usage)
         await recordUsage(id, (await jr.get()).data().bucket, error.usage);
       if (error.usageReviewRequired) {
-        await ref("system", "provider-safety").set({
-          stopped: true,
-          reason: "USAGE_ACCOUNTING_UNVERIFIED",
-          atMs: now(),
-        });
+        await ref("system", "provider-safety").set(
+          {
+            stopped: true,
+            reason: "USAGE_ACCOUNTING_UNVERIFIED",
+            atMs: now(),
+          },
+          { merge: true },
+        );
         if (!error.usage) await markUnknownUsage(id);
       }
       await transition(
@@ -508,11 +580,14 @@ function createEconomy({
       return true;
     });
     if (uncertain)
-      await ref("system", "provider-safety").set({
-        stopped: true,
-        reason: "USAGE_ACCOUNTING_UNVERIFIED",
-        atMs: now(),
-      });
+      await ref("system", "provider-safety").set(
+        {
+          stopped: true,
+          reason: "USAGE_ACCOUNTING_UNVERIFIED",
+          atMs: now(),
+        },
+        { merge: true },
+      );
   }
   async function recordUsage(id, bucket, usage) {
     if (
@@ -567,6 +642,9 @@ function createEconomy({
     return {
       worker: (await ref("system", "worker-health").get()).data() || null,
       usage: (await ref("usage", day(now())).get()).data() || {},
+      freeTier: await freeTier.snapshot(),
+      providerSafety:
+        (await ref("system", "provider-safety").get()).data() || null,
       pending: counts,
     };
   }

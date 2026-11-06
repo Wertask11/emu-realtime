@@ -65,7 +65,22 @@ function createAgent({ env, fetcher = fetch, config }) {
     return "learn";
   }
   async function json(response) {
-    if (!response.ok) fail("AI_PROVIDER_UNAVAILABLE", 502);
+    if (!response.ok) {
+      const code =
+        response.status === 429
+          ? "AI_FREE_QUOTA_EXHAUSTED"
+          : response.status === 404
+            ? "AI_MODEL_UNAVAILABLE"
+            : [401, 403].includes(response.status)
+              ? "AI_PROVIDER_AUTH_FAILED"
+              : response.status === 400
+                ? "AI_PROVIDER_REQUEST_REJECTED"
+                : "AI_PROVIDER_UNAVAILABLE";
+      throw Object.assign(new Error(code), {
+        status: 502,
+        providerFault: true,
+      });
+    }
     const raw = await response.text();
     if (Buffer.byteLength(raw) > 65536) fail("AI_INVALID_OUTPUT", 502);
     try {
@@ -103,7 +118,12 @@ function createAgent({ env, fetcher = fetch, config }) {
       });
     return usage;
   }
-  return async function run(goal, sources, beforeGenerate = async () => {}) {
+  return async function run(
+    goal,
+    sources,
+    beforeGenerate = async () => {},
+    beforeProviderCall = async () => {},
+  ) {
     safeText(goal, 300);
     if (!sources.length)
       return {
@@ -175,7 +195,10 @@ function createAgent({ env, fetcher = fetch, config }) {
                   items: {
                     type: "OBJECT",
                     properties: {
-                      key: { type: "STRING", enum: externalSources.map((s) => s.key) },
+                      key: {
+                        type: "STRING",
+                        enum: externalSources.map((s) => s.key),
+                      },
                       evidence: { type: "STRING", enum: ["summary"] },
                     },
                     required: ["key", "evidence"],
@@ -188,6 +211,7 @@ function createAgent({ env, fetcher = fetch, config }) {
         };
         if (Buffer.byteLength(JSON.stringify(payload)) > 65536)
           fail("AI_INPUT_LIMIT", 400);
+        await beforeProviderCall("countTokens");
         const counted = await json(
           await fetcher(base + ":countTokens", {
             method: "POST",
@@ -213,6 +237,7 @@ function createAgent({ env, fetcher = fetch, config }) {
         selected = selected.slice(0, Math.ceil(selected.length / 2));
       }
       await beforeGenerate(selected);
+      await beforeProviderCall("generateContent");
       generated = true;
       const data = await json(
         await fetcher(base + ":generateContent", {
@@ -235,9 +260,21 @@ function createAgent({ env, fetcher = fetch, config }) {
       } catch (_) {
         fail("AI_INVALID_OUTPUT", 502);
       }
-      return { results: resolve(value, externalSources), outcome: "success", usage };
+      return {
+        results: resolve(value, externalSources),
+        outcome: "success",
+        usage,
+      };
     } catch (error) {
       error.generationAttempted = generated;
+      if (
+        ["AI_INVALID_OUTPUT", "AI_TOKEN_COUNT_UNAVAILABLE"].includes(
+          error.message,
+        )
+      )
+        error.providerFault = true;
+      if (["TimeoutError", "AbortError", "TypeError"].includes(error.name))
+        error.providerFault = true;
       if (usage) error.usage = usage;
       if (generated && !usage && !error.usage) error.usageReviewRequired = true;
       throw error;

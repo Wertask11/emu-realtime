@@ -2,7 +2,7 @@
 const SERVICE = Object.freeze({
   id: "schoolpark-explorer-v1",
   name: "SchoolPark Explorer",
-  version: 2,
+  version: 3,
   price: 5,
   currency: "EMUER",
   globalDaily: 20,
@@ -11,7 +11,7 @@ const SERVICE = Object.freeze({
   dailyTokens: 100000,
   requestTokens: 5000,
   trialDays: 7,
-  termsVersion: "explorer-20261106-v2",
+  termsVersion: "explorer-20261107-v3",
   refund:
     "処理失敗時は全額を元の未受取EMUERへ返却します。未確定の場合は返却待ちと表示します。",
   scope:
@@ -38,10 +38,13 @@ function configuration(env = process.env, now = Date.now()) {
   }))
     if (env[key] !== "true") blockers.push(reason);
   if (!env.GEMINI_API_KEY) blockers.push("PROVIDER_NOT_CONFIGURED");
+  if (env.ECONOMY_GEMINI_BILLING_TIER !== "free")
+    blockers.push("FREE_TIER_UNVERIFIED");
   if (
     !/^[a-z][a-z0-9.-]{1,99}$/.test(model) ||
     !model.includes("flash") ||
-    /pro|image|audio|video|tts/i.test(model)
+    /pro|image|audio|video|tts/i.test(model) ||
+    model !== "gemini-3.5-flash-lite"
   )
     blockers.push("MODEL_NOT_ALLOWED");
   if (!/^[a-z][a-z0-9-]{4,62}$/.test(env.ECONOMY_GEMINI_PROJECT_ID || ""))
@@ -71,6 +74,7 @@ function configuration(env = process.env, now = Date.now()) {
     trialStartMs: Number.isFinite(trialStartMs) ? trialStartMs : null,
     trialEndMs: Number.isFinite(trialEndMs) ? trialEndMs : null,
     chainPaymentEnabled: false,
+    billingMode: "free-only",
   };
 }
 const hash = (v) =>

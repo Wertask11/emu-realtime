@@ -77,6 +77,8 @@ function createEconomyRouter(deps) {
         trialDays: c.trialDays,
         trialStartMs: c.trialStartMs,
         trialEndMs: c.trialEndMs,
+        billingMode: c.billingMode,
+        freeTierLimits: require("./free-tier").LIMITS,
         blockers: [...new Set(blockers)],
       },
       worker: {
