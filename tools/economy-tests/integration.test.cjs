@@ -209,3 +209,76 @@ test("検索索引が古くてもExplorerは非公開コレクションを取得
     f.db.collection = collection;
   }
 });
+test("OS worker停止・別プロセス再起動後も注文を保持し、再生成せず一度だけ返却", async () => {
+  const { fork } = require("node:child_process"),
+    path = require("node:path");
+  const q = await quote("alice"),
+    j = (await submit("alice", q, "os-worker-restart-" + Date.now())).body.job;
+  const launch = (mode) => {
+    const c = fork(path.join(__dirname, "worker-process.cjs"), {
+      env: { ...process.env, GEMINI_API_KEY: "isolated-test-placeholder" },
+      stdio: ["ignore", "ignore", "pipe", "ipc"],
+    });
+    c.send({
+      env: {
+        ...f.economy.service.config(),
+        ...require("../../backend/economy/fixture").fixture().env,
+      },
+      jobId: j.id,
+      mode,
+    });
+    return c;
+  };
+  const message = (c, event) =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(Error("WORKER_PROCESS_TIMEOUT")),
+        20000,
+      );
+      c.on("message", (m) => {
+        if (m.event === "failed") {
+          clearTimeout(timer);
+          reject(Error(m.code));
+        }
+        if (m.event === event) {
+          clearTimeout(timer);
+          resolve(m);
+        }
+      });
+      c.on("error", reject);
+    });
+  let first = launch("hang");
+  try {
+    await message(first, "generation_started");
+    first.kill("SIGTERM");
+    await new Promise((r) => first.once("exit", r));
+    const jr = f.economy.service.ref("jobs", j.id);
+    assert.equal((await jr.get()).data().state, "running");
+    assert.equal(
+      (await f.commerce.servicePayments.get("agent_" + j.id)).status,
+      "paid",
+    );
+    // Advance only isolated test leases instead of sleeping five minutes.
+    await jr.set({ leaseUntilMs: Date.now() - 1 }, { merge: true });
+    const slot = f.economy.service.ref("system", "slots"),
+      s = (await slot.get()).data();
+    await slot.set({
+      active: (s.active || []).map((v) => ({ ...v, untilMs: Date.now() - 1 })),
+    });
+    const second = launch("recover");
+    const done = await message(second, "done");
+    await new Promise((r) => second.once("exit", r));
+    assert.equal(done.state, "refunded");
+    assert.equal(done.payment, "refunded");
+    assert.equal(done.generations, 0);
+    await f.economy.tick();
+    const credit = await f.db
+      .collection("emuer_v2_rewards")
+      .where("orderId", "==", "agent_" + j.id)
+      .where("kind", "==", "mitemiru-refund")
+      .get();
+    assert.equal(credit.size, 1);
+  } finally {
+    if (first.exitCode === null) first.kill("SIGTERM");
+  }
+});

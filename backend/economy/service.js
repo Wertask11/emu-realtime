@@ -21,7 +21,7 @@ function createEconomy({
   env = process.env,
   now = Date.now,
 }) {
-  const config = () => configuration(env);
+  const config = () => configuration(env, now());
   const ref = (kind, id) => db.collection("emuer_v2_agent_" + kind).doc(id);
   async function actor(auth) {
     if (!auth?.uid) fail("AUTH_REQUIRED", 401);
@@ -32,8 +32,11 @@ function createEconomy({
   }
   async function status() {
     const c = config(),
-      p = (await ref("products", PRODUCT).get()).data();
+      p = (await ref("products", PRODUCT).get()).data(),
+      safety = (await ref("system", "provider-safety").get()).data();
     const blockers = [...c.blockers];
+    if (safety?.stopped === true)
+      blockers.push("PROVIDER_USAGE_REVIEW_REQUIRED");
     if (
       !p ||
       p.status !== "live" ||
@@ -60,6 +63,9 @@ function createEconomy({
       !(e.validUntilMs > now())
     )
       fail("AI_AUDIENCE_NOT_VERIFIED", 403);
+    const worker = (await ref("system", "worker-health").get()).data();
+    if (worker?.healthy !== true || !(worker.validUntilMs > now()))
+      fail("WORKER_UNHEALTHY", 503);
     return c;
   }
   async function quote(a, input) {
@@ -100,7 +106,7 @@ function createEconomy({
         concurrency: c.concurrency,
       },
       notice:
-        "未受取EMUERから支払います。AIへ目的と公開資料を送信します。氏名・住所・秘密は入力しないでください。受付した依頼は失敗時も当日の利用枠に数えます。商品交換枠は消費しません。",
+        "未受取EMUERから支払います。入力文はサービス内で照合し、AIへ目的の種類と対象の公開資料だけを送信します。氏名・住所・秘密は入力しないでください。受付した依頼は失敗時も当日の利用枠に数えます。商品交換枠は消費しません。",
     };
   }
   async function owned(a, id) {
@@ -402,6 +408,7 @@ function createEconomy({
       const c = await allowed(a);
       const budget = (await ref("usage", j.bucket).get()).data();
       if (
+        j.termsVersion !== c.termsVersion ||
         j.bucket !== day(now()) ||
         now() > j.paymentUntilMs ||
         !budget ||
@@ -416,10 +423,29 @@ function createEconomy({
       if (
         fresh.state !== "running" ||
         fresh.leaseToken !== token ||
-        fresh.leaseUntilMs < now() + 60000
+        fresh.leaseUntilMs < now() + 90000
       )
         fail("LEASE_EXPIRED");
-      const result = await agent(j.goal, material);
+      await jr.set({ providerAttemptedAtMs: now() }, { merge: true });
+      const result = await agent(j.goal, material, async (selected) => {
+        await allowed(a);
+        const current = new Map(
+          (await sources.candidates(a, j.goal)).map((s) => [s.key, s]),
+        );
+        for (const s of selected) {
+          const live = current.get(s.key);
+          if (!live || live.title !== s.title || live.summary !== s.summary)
+            fail("AI_SOURCE_CHANGED", 409);
+        }
+        const ready = (await jr.get()).data();
+        if (
+          ready.state !== "running" ||
+          ready.leaseToken !== token ||
+          ready.leaseUntilMs < now() + 60000
+        )
+          fail("LEASE_EXPIRED");
+      });
+      await recordUsage(id, j.bucket, result.usage);
       if (
         await transition(
           id,
@@ -429,7 +455,25 @@ function createEconomy({
         )
       )
         await settle(id);
-    } catch (_) {
+    } catch (error) {
+      if (error.generationAttempted === false && !error.usage)
+        await recordUsage(id, (await jr.get()).data().bucket, {
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          providerReported: true,
+          providerCalled: false,
+        });
+      if (error.usage)
+        await recordUsage(id, (await jr.get()).data().bucket, error.usage);
+      if (error.usageReviewRequired) {
+        await ref("system", "provider-safety").set({
+          stopped: true,
+          reason: "USAGE_ACCOUNTING_UNVERIFIED",
+          atMs: now(),
+        });
+        if (!error.usage) await markUnknownUsage(id);
+      }
       await transition(
         id,
         ["running"],
@@ -445,6 +489,86 @@ function createEconomy({
         });
       });
     }
+  }
+  async function markUnknownUsage(id) {
+    const uncertain = await db.runTransaction(async (tx) => {
+      const jr = ref("jobs", id),
+        js = await tx.get(jr),
+        j = js.data();
+      if (!j || j.usageRecorded) return false;
+      if (j.usageUncertain) return true;
+      const gr = ref("usage", j.bucket),
+        gs = await tx.get(gr);
+      tx.set(jr, { usageUncertain: true }, { merge: true });
+      tx.set(
+        gr,
+        { unknownCalls: (gs.data()?.unknownCalls || 0) + 1 },
+        { merge: true },
+      );
+      return true;
+    });
+    if (uncertain)
+      await ref("system", "provider-safety").set({
+        stopped: true,
+        reason: "USAGE_ACCOUNTING_UNVERIFIED",
+        atMs: now(),
+      });
+  }
+  async function recordUsage(id, bucket, usage) {
+    if (
+      !usage ||
+      usage.providerReported !== true ||
+      !Number.isSafeInteger(usage.totalTokens) ||
+      usage.totalTokens < 0
+    )
+      throw Object.assign(new Error("AI_USAGE_UNREPORTED"), {
+        usageReviewRequired: true,
+      });
+    await db.runTransaction(async (tx) => {
+      const jr = ref("jobs", id),
+        gr = ref("usage", bucket),
+        [js, gs] = await Promise.all([tx.get(jr), tx.get(gr)]);
+      if (js.data()?.usageRecorded) return;
+      const g = gs.data() || {};
+      tx.set(jr, { usageRecorded: true, tokenUsage: usage }, { merge: true });
+      tx.set(
+        gr,
+        {
+          observedTokens: (g.observedTokens || 0) + usage.totalTokens,
+          inputTokens: (g.inputTokens || 0) + (usage.inputTokens || 0),
+          outputTokens: (g.outputTokens || 0) + (usage.outputTokens || 0),
+        },
+        { merge: true },
+      );
+    });
+  }
+  async function workerHealth(success, complete = true) {
+    await ref("system", "worker-health").set(
+      {
+        healthy: success,
+        lastCycleAtMs: now(),
+        ...(success && complete ? { lastSuccessAtMs: now() } : {}),
+        validUntilMs: success ? now() + 90000 : now(),
+        error: success ? null : "WORKER_CYCLE_FAILED",
+      },
+      { merge: true },
+    );
+  }
+  async function operations() {
+    const counts = {};
+    for (const state of LIVE)
+      counts[state] = (
+        await db
+          .collection("emuer_v2_agent_jobs")
+          .where("state", "==", state)
+          .limit(101)
+          .get()
+      ).size;
+    return {
+      worker: (await ref("system", "worker-health").get()).data() || null,
+      usage: (await ref("usage", day(now())).get()).data() || {},
+      pending: counts,
+    };
   }
   async function purge() {
     const cutoff = new Date(now());
@@ -497,6 +621,8 @@ function createEconomy({
       for (const d of s.docs) {
         if (state === "awaiting_payment") await pay(d.id);
         if (state === "running" && d.data().leaseUntilMs <= now()) {
+          if (d.data().providerAttemptedAtMs && !d.data().usageRecorded)
+            await markUnknownUsage(d.id);
           await transition(
             d.id,
             ["running"],
@@ -530,6 +656,8 @@ function createEconomy({
     allowed,
     processing,
     purge,
+    workerHealth,
+    operations,
     LIVE,
     TERMINAL,
   };

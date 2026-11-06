@@ -20,7 +20,12 @@ function fixture(options = {}) {
     ECONOMY_AI_AUDIENCE_ATTESTED: "true",
     ECONOMY_AI_SOURCE_USE_ATTESTED: "true",
     ECONOMY_AI_BUDGET_ATTESTED: "true",
-    ECONOMY_EXPLORER_DAILY_TOKEN_BUDGET: "655360",
+    ECONOMY_AI_BILLING_ATTESTED: "true",
+    ECONOMY_AI_PROJECT_ATTESTED: "true",
+    ECONOMY_GEMINI_PROJECT_ID: "demo-emu-economy",
+    ECONOMY_BUDGET_APPROVAL_REF: "isolated-test-approval",
+    ECONOMY_EXPLORER_TRIAL_START: "2026-11-05T15:00:00Z",
+    ECONOMY_EXPLORER_DAILY_TOKEN_BUDGET: "100000",
     ECONOMY_EXPLORER_PLANS: "light,plus,pro",
     GEMINI_API_KEY: "isolated-test-placeholder",
     ...options.env,
@@ -75,7 +80,13 @@ function fixture(options = {}) {
     candidates: async () => (options.empty ? [] : [source]),
     revalidate: async (a, g, r) => r,
   };
-  const fetcher = async () => {
+  const fetcher = async (url) => {
+    if (url.endsWith(":countTokens"))
+      return {
+        ok: true,
+        text: async () =>
+          JSON.stringify({ totalTokens: options.countTokens ?? 100 }),
+      };
     calls++;
     if (options.providerDown) throw Error("provider secret must not leak");
     if (options.providerWait) await options.providerWait();
@@ -83,6 +94,11 @@ function fixture(options = {}) {
       ok: true,
       text: async () =>
         JSON.stringify({
+          usageMetadata: options.usageMetadata || {
+            promptTokenCount: 100,
+            candidatesTokenCount: 10,
+            totalTokenCount: 110,
+          },
           candidates: [
             {
               content: {
@@ -90,7 +106,7 @@ function fixture(options = {}) {
                   {
                     text: JSON.stringify(
                       options.invalidOutput || {
-                        matches: [{ key: source.key, evidence: "summary" }],
+                        matches: [{ key: "s0", evidence: "summary" }],
                       },
                     ),
                   },
@@ -103,11 +119,14 @@ function fixture(options = {}) {
   };
   const agent = createAgent({
     env,
-    config: () => require("./config").configuration(env),
+    config: () => require("./config").configuration(env, now()),
     fetcher,
   });
   const economy = createEconomyRouter({
     startWorker: false,
+    isOwner: (a) => a.uid === "owner",
+    requireOwner: (req, res, next) =>
+      req.identity?.uid === "owner" ? next() : res.sendStatus(403),
     db,
     identity,
     entitlement,
@@ -119,6 +138,7 @@ function fixture(options = {}) {
     agent,
   });
   async function seed() {
+    await economy.service.workerHealth(true);
     await db
       .collection("emuer_v2_agent_products")
       .doc("agent_schoolpark-explorer-v1")

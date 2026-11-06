@@ -25,12 +25,19 @@ const fs = require("node:fs");
       }),
     );
   let providerStatus = null;
+  const calls = [];
   const run = createAgent({
     env,
     config: () => configuration(env),
     fetcher: async (...args) => {
       const r = await fetch(...args);
       providerStatus = r.status;
+      calls.push({
+        operation: args[0].endsWith(":countTokens")
+          ? "countTokens"
+          : "generateContent",
+        status: r.status,
+      });
       return r;
     },
   });
@@ -48,6 +55,7 @@ const fs = require("node:fs");
     );
     evidence.success = true;
     evidence.results = result.results;
+    evidence.usage = result.usage;
   } catch (e) {
     evidence.success = false;
     evidence.error = /^[A-Z_]+$/.test(e.message)
@@ -55,8 +63,9 @@ const fs = require("node:fs");
       : "PROVIDER_CONNECTION_FAILED";
   }
   evidence.httpStatus = providerStatus;
+  evidence.calls = calls;
   fs.writeFileSync(
-    "/tmp/emuer-stage2-live-provider.json",
+    process.env.EXPLORER_EVIDENCE_PATH || "/tmp/emuer-live-provider.json",
     JSON.stringify(evidence, null, 2),
   );
   console.log(JSON.stringify(evidence));

@@ -1,6 +1,6 @@
-# EMUER経済圏 第2工程：構成と第3工程の運用
+# EMUER経済圏：構成と第3工程の運用
 
-これは第2工程の開発資料です。本番へ設定・登録・課金・送金・デプロイしていません。
+第3工程の運用資料です。公開結果は `stage3-report.md` を正本とします。有料受付は公開条件を満たすまでOFFです。
 
 ## 対象と禁止事項
 
@@ -12,10 +12,12 @@ SchoolPark Explorerは共通プロフィールとウォレット、およびLab/
 
 ## HTTP API
 
-全経路が既存Firebase ID token検証を使い、SchoolPark IDをサーバー側で引く。Cookieのみで支払えない。`Cache-Control: private, no-store`。本人用APIに任意のUID/Passport ID/送金先を渡す仕様はない。
+公開の読取専用 `/status` を除く全経路が既存Firebase ID token検証を使い、SchoolPark IDをサーバー側で引く。Cookieのみで支払えない。`Cache-Control: private, no-store`。本人用APIに任意のUID/Passport ID/送金先を渡す仕様はない。
 
 | Method | `/api/economy` 配下 | 内容 |
 |---|---|---|
+| GET | `/status` | DB・外部AIを呼ばない公開稼働状態。個人・残高・秘密情報は返さない |
+| GET | `/admin/operations` | 既存Owner認証必須。worker・JST日別トークン・未解決件数 |
 | GET | `/me` | 受付状況・本人資格・各残高・外部接続状況 |
 | POST | `/quotes` | `{goal}` 300文字以内。料金・条件版・10分の有効期限を提示 |
 | POST | `/jobs` | `{quoteId, requestId, termsVersion, paymentConsent:true, aiConsent:true}`。methodを指定するならemuer_ledgerのみ |
@@ -55,9 +57,11 @@ SchoolPark Explorerは共通プロフィールとウォレット、およびLab/
 - 未決済のRPC障害はawaiting_payment。10分後はexpired。期限後に復旧して勝手に決済しない。
 - 本人の枠3件/日、全体20件/日、同時実行2件。日付はJST。商品交換枠を使わない。
 - 受付した依頼は失敗時も当日枠に残す。これは決済前に表示する。
-- 1依頼32,768トークンを保守的に予算予約する。20件分で655,360。既存AIの枠と同一視しない。
+- 1依頼5,000トークンを保守的に予算予約する。全体100,000/日（JST）、初期運用7日。実入力・出力使用量も別記録し、予約枠は当日中解放しない。既存AIの枠と同一視しない。
 - 日付をまたいだ依頼、10分経過、受付条件失効・予算減額によって実行できなくなった依頼は実行せず返却する。
 - runningのleaseは5分。provider HTTPは45秒上限。外部送信直前にもlease残りを確認する。
+- workerは90秒以内の成功heartbeatがなければ新規決済を拒否する。
+- 推論前にcountTokensで実リクエストを計数し、出力1,024＋余裕256を確保。資料を減らしても収まらないときは推論せず返却。使用量不明・目標超過はprovider-safetyを停止し、運営照合まで新規受付しない。
 - worker消失・不明な外部AI応答は再生成せず `refund_pending` へ。外部APIの「厳密に一度だけの実行」は保証しない。
 - `result_saved`からは再生成せず、既存Mitemiruの引渡しだけを再開する。
 - 返却失敗・通信不明はrefund_pendingを保持。既存Mitemiruで元台帳への全額返却が確認できたときだけrefunded。
@@ -75,18 +79,18 @@ Textはroom1_contents、Guildは既存公式定義とsp_guilds、Questはsp_ques
 
 ```
 { piiReviewed: true,
-  purpose: "explorer-20261106-v1",
+  purpose: "explorer-20261106-v2",
   contentHash: sha256(JSON.stringify([送信するtitle,送信するsummary])),
   validUntilMs: 検証期限のミリ秒数 }
 ```
 
 sourceKeyは `knowledge:ID` / `knowledge_lab:ID` / `knowledge_text:ID` / `guild:ID` / `quest:ID` / `city_product:ID`。summaryはサーバーが抽出する最大400文字の対象部分。利用許諾と個人情報確認を済ませた資料だけを承認する。既存の意味検索・掛け合わせへの同意を、勝手にこの有料用途へ拡大しない。編集でハッシュが変われば自動で対象外。
 
-モデルは資料keyを選ぶ。名称・理由・根拠・リンクはサーバーが正規資料から復元し、自由な生成URL・架空ID・生成された追加主張を採用しない。関連候補がなければ空結果。**正常に探索完了した場合は候補なしでも5 EMUER**と決済前に表示する。処理失敗時は全額返却する。
+入力文はサービス内の字句照合で関連順を計算する。Googleへは固定の目的種別（learn/practice/compare/shop）と確認済みタイトル・要約・関連順のみ送り、自由入力文は送らない。資料IDも依頼内の仮番号s0…へ置換する。モデルは仮番号を選ぶ。名称・理由・根拠・リンクはサーバーが正規資料から復元し、自由な生成URL・架空ID・生成された追加主張を採用しない。関連候補がなければ空結果。**正常に探索完了した場合は候補なしでも5 EMUER**と決済前に表示する。処理失敗時は全額返却する。
 
 目的の既知の識別子・連絡先・秘密を検出して拒否するが、正規表現を個人情報完全判定とは呼ばない。本人への注意表示、資料の内容ハッシュに結び付いた人による確認、固定フィールド射影、送信前の任意同意を併用する。ログ・PostHogに目的・生成内容・残高・個人IDを追加しない。
 
-## 第3工程の設定（今回は実施していない）
+## 第3工程の設定（有料受付の有効化条件）
 
 価格5、20/3/2は決定済み。再承認は不要。以下は事実・提供条件を確認してから設定する。
 
@@ -105,7 +109,12 @@ sourceKeyは `knowledge:ID` / `knowledge_lab:ID` / `knowledge_text:ID` / `guild:
 | `ECONOMY_AI_SOURCE_USE_ATTESTED` | 対象資料の新用途の許諾確認後のみtrue |
 | `ECONOMY_AI_BUDGET_ATTESTED` | 他AIを含む実予算との配分・監視確認後のみtrue |
 | `ECONOMY_EXPLORER_PLANS` | 確定したguest/light/plus/proのCSV。既定は空（受付不可） |
-| `ECONOMY_EXPLORER_DAILY_TOKEN_BUDGET` | 32768〜655360の整数。未設定なら受付不可 |
+| `ECONOMY_EXPLORER_DAILY_TOKEN_BUDGET` | 5000〜100000の整数。既定100000。承認上限を超える値は受付不可 |
+| `ECONOMY_EXPLORER_TRIAL_START` | ISO日時。設定時刻から7日経過後は新規受付を停止 |
+| `ECONOMY_GEMINI_PROJECT_ID` | 実際のAPIキーと請求先を確認したプロジェクトID |
+| `ECONOMY_AI_PROJECT_ATTESTED` | 上記の実キー・プロジェクト対応確認後のみtrue |
+| `ECONOMY_AI_BILLING_ATTESTED` | 料金・請求モード・費用制限と停止手順を確認後のみtrue |
+| `ECONOMY_BUDGET_APPROVAL_REF` | 実際に承認済みの金銭上限・監視記録への参照名。トークン承認を金銭承認に代用しない |
 | `ECONOMY_EXPLORER_MODEL` | 既定gemini-3.5-flash-lite。許可されたFlashモデルのみ |
 | `GEMINI_API_KEY` | 既存の安全な秘密管理。許諾・料金の合うプロジェクト |
 | `POLYGON_RPC_URL` | 既存Mitemiruの読取RPC。台帳支払時にclaimPaidを照合 |
@@ -124,10 +133,19 @@ sourceKeyは `knowledge:ID` / `knowledge_lab:ID` / `knowledge_text:ID` / `guild:
 - `npm ci --prefix backend --ignore-scripts`
 - `npm ci --prefix tools/economy-tests --ignore-scripts`
 - `npm --prefix backend test`
-- 既存のFirebase CLI（必要なら`npm ci --prefix tools/quest-tests --ignore-scripts`）で `tools/quest-tests/node_modules/.bin/firebase emulators:start --only auth,firestore --project demo-emu-economy-stage2 --config tools/economy-tests/firebase.json` を起動する。
+- 既存のFirebase CLI（必要なら`npm ci --prefix tools/quest-tests --ignore-scripts`）で `tools/quest-tests/node_modules/.bin/firebase emulators:start --only auth,firestore --project demo-emu-economy-stage2 --config firebase.economy-tests.json` を起動する。
 - 分離エミュレーター：project `demo-emu-economy-stage2`、Firestore127.0.0.1:8892、Auth127.0.0.1:9292。Rulesは既存全文。外部Firebaseを指定するとfixtureが拒否する。
 - `node --test tools/economy-tests/integration.test.cjs tools/economy-tests/rules.test.cjs`
 - `node tools/economy-tests/fixture.cjs` → localhost4257。`python3 tools/economy-tests/browser.py`（Python Playwrightと/usr/bin/chromium）。ブラウザは外部への全通信を遮断。
 - `EXPLORER_LIVE_TEST_APPROVED=true NODE_USE_ENV_PROXY=1 node tools/economy-tests/live-provider.cjs` は別途明示した実AIテスト。公開Guild説明のみ1回送信。実行せずに実API成功と扱わない。
 
 テスト用資格・商品・報酬を本番へコピーしない。fixture・Rules拒否テストのlocalhost限定を解除しない。
+
+## インフラ確認・有料受付OFFでの部分公開
+
+- Vercel: `vercel.json` の既存静的配備＋`/api/economy/*`のRenderへのrewriteを確認。Render: backend/server.jsを起動し、常駐workerはECONOMY_WORKER_ENABLED=true時のみ開始する。
+- 公開確認は `GET /api/economy/status` のschema/releaseCommit/受付OFF、認証なし `/me` の401、静的ファイルの一致、既存商品の一覧で行う。公開確認だけでpaidフラグや商品を作らない。
+- 照合はOwner→EMUER・サービス→運用状況で、worker成功時刻・予約量・実使用量・不明呼出し・返却待ちを確認する。不明使用量は請求側と照合してからprivate system/provider-safetyの停止を解除する。ジョブを削除・再生成しない。
+- 7日終了/新規受付停止後もworkerを維持し、既払依頼・返却を照合する。障害時も返却未確定は「返却待ち」。
+- Renderの環境設定・GCP請求/共有クォータにはこの作業環境からの管理権限がない。コード配備の成功と、実設定済み・有料公開可能を分ける。
+- 本番の5 EMUER試験は対象アカウント・金額・成功依頼/返却操作ごとのFounder承認後に限る。現時点では未実施。

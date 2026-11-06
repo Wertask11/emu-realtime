@@ -60,6 +60,7 @@ async def main():
    if route.request.url.startswith(BASE+'/'):return await route.continue_()
    await route.abort()
   await context.route('**/*',pending);await page.goto(BASE+'/test/shell');f=page.frame_locator('iframe');await f.locator('#history').filter(has_text='返却はまだ確定していません').wait_for()
+  await f.locator('#history').scroll_into_view_if_needed()
   await page.screenshot(path=str(OUT/'refund-pending-390.png'),full_page=True)
   await browser.close();(OUT/'browser.json').write_text(json.dumps({'matrix':records,'paymentAndIdentitySwitch':'390px isolated demo','pendingRefundPresentation':'HTTP fixture only'},ensure_ascii=False,indent=2))
 asyncio.run(main())

@@ -211,7 +211,7 @@ test("全体20件/日・費用上限は決済前に強制", async () => {
   assert.equal(rewards(f), 100n);
   await f.economy.service
     .ref("usage", "2026-11-06")
-    .set({ count: 0, reservedTokens: 655360 });
+    .set({ count: 0, reservedTokens: 100000 });
   await assert.rejects(submit(f), /AI_BUDGET_LIMIT/);
   assert.equal(rewards(f), 100n);
 });

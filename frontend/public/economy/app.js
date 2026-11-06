@@ -57,6 +57,8 @@
     identityKey = user();
     clearApproval();
     $("history").replaceChildren();
+    $("operations").hidden = true;
+    $("operationsStatus").textContent = "";
     $("goal").value = "";
     for (const id of ["spendable", "wallet", "pending", "held", "processing"])
       $(id).textContent = "—";
@@ -98,8 +100,48 @@
       });
     else app.openSpRoom?.(target, "Emu for SchoolPark");
   }
+  async function publicStatus() {
+    try {
+      const r = await fetch("/api/economy/status", { cache: "no-store" }),
+        d = await r.json();
+      if (!r.ok || d.schema !== "economy-release-v2")
+        throw Error("STATUS_UNAVAILABLE");
+      $("availability").textContent = d.service.enabled
+        ? "受付状況はログイン後に確認できます。"
+        : "有料受付は停止中です。提供条件・予算・運用設定を確認しています。";
+    } catch (_) {
+      $("availability").textContent =
+        "サービスは準備中です。提供状態を確認できるまで有料依頼はできません。";
+    }
+  }
+  async function operations() {
+    try {
+      const d = await api("/admin/operations"),
+        o = d.operations;
+      $("operationsStatus").textContent = JSON.stringify(
+        {
+          worker: o.worker?.healthy ? "稼働確認済み" : "未確認・停止",
+          lastSuccess: o.worker?.lastSuccessAtMs || null,
+          tokenReservations: o.usage.reservedTokens || 0,
+          reportedTokens: o.usage.observedTokens || 0,
+          unknownCalls: o.usage.unknownCalls || 0,
+          pending: o.pending,
+          blockers: d.service.blockers,
+        },
+        null,
+        2,
+      );
+    } catch (_) {
+      $("operationsStatus").textContent = "運用状況を確認できません。";
+    }
+  }
   async function refresh() {
     const g = generation;
+    if (!user()) {
+      await publicStatus();
+      notice("ログインして残高・依頼履歴を確認してください。");
+      return;
+    }
     try {
       const [me, history] = await Promise.all([api("/me"), api("/jobs")]);
       if (g !== generation) return;
@@ -115,6 +157,8 @@
         $("availability").textContent =
           messages[me.eligibility.reason] ||
           "現在の提供条件では依頼できません。";
+      $("operations").hidden = !me.isOwner;
+      if (me.isOwner) operations();
       $("history").replaceChildren();
       if (!history.jobs.length)
         $("history").textContent = "まだ依頼はありません。";
@@ -272,6 +316,7 @@
     }
   });
   $("refresh").addEventListener("click", refresh);
+  $("refreshOperations").addEventListener("click", operations);
   $("simulate").addEventListener("click", async () => {
     try {
       const d = await api("/external/simulate", {

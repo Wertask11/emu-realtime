@@ -329,6 +329,8 @@ app.use("/api/mitemiru", mitemiru.router);
 /* Common economy: existing Mitemiru ledger, independent agent quota, default OFF. */
 const economy = require("./economy/router").createEconomyRouter({
   db, identity, entitlement, requireFirebaseUser, rateLimit, env: process.env,
+  requireOwner,
+  isOwner: person => [person.walletAddress, person.account && person.account.chesAddress].some(address => SP_OWNER_ADDRESSES.includes(String(address || "").toLowerCase())),
   knowledge: knowledgeLab.service, payments: mitemiru.servicePayments
 });
 app.use("/api/economy", economy.router);

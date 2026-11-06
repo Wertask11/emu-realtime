@@ -98,6 +98,11 @@ async function createFixture({
     env: f.env,
     config: () => require("../../backend/economy/config").configuration(f.env),
     fetcher: async (url, opts) => {
+      if (url.endsWith(":countTokens"))
+        return {
+          ok: true,
+          text: async () => JSON.stringify({ totalTokens: 100 }),
+        };
       if (providerDown) throw Error("isolated provider failure");
       const sources = JSON.parse(
         JSON.parse(opts.body).contents[0].parts[0].text,
@@ -106,6 +111,11 @@ async function createFixture({
         ok: true,
         text: async () =>
           JSON.stringify({
+            usageMetadata: {
+              promptTokenCount: 100,
+              candidatesTokenCount: 10,
+              totalTokenCount: 110,
+            },
             candidates: [
               {
                 content: {
@@ -137,6 +147,7 @@ async function createFixture({
     agent,
   });
   const { hash, SERVICE } = require("../../backend/economy/config");
+  await economy.service.workerHealth(true);
   await db
     .collection("emuer_v2_agent_products")
     .doc("agent_schoolpark-explorer-v1")
