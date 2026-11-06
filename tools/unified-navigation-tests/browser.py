@@ -71,6 +71,19 @@ with sync_playwright() as p:
    assert g.evaluate('document.getElementById("spDaoFrame").contentDocument.querySelectorAll(".bottom-nav,.sidebar").length')==0
    assert state()==before,'Viewing Guild/Quest/Wisdom/City must not join, commit, publish, cite or reward'
    g.screenshot(path=str(OUT/f'AFTER-{width}-city.png'))
+   if width>1024:
+    # 11/6: closing the side tab must widen the SchoolPark workspace and the search/practice pages too.
+    g.evaluate('emuNavToggle()');g.wait_for_timeout(300)
+    assert g.evaluate('Math.round(document.getElementById("spDaoPage").getBoundingClientRect().left)')==0,('workspace keeps side gap',width)
+    g.evaluate('showEmuPractice()');g.wait_for_timeout(300)
+    practice_w='document.getElementById("emuPracticePage").getBoundingClientRect().width'
+    closed_w=g.evaluate(practice_w)
+    g.evaluate('emuNavToggle()');g.wait_for_timeout(300)
+    assert g.evaluate('document.body.classList.contains("emu-nav-closed")')==False
+    assert closed_w>g.evaluate(practice_w)+40,('practice does not widen when the side tab closes',width)
+    go('city');g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="city"');g.wait_for_timeout(300)
+    side=g.evaluate('Math.round(document.getElementById("emuSideNav").getBoundingClientRect().right)')
+    assert g.evaluate('Math.round(document.getElementById("spDaoPage").getBoundingClientRect().left)')==side,('workspace overlaps reopened side tab',width)
    assert g.evaluate('auth.currentUser!==null')
    # The shared account/profile and fridge triggers remain available above the child workspace.
    assert g.locator('#emuHeaderProfile').is_visible();assert g.locator('#emuHeaderReizo').is_visible()

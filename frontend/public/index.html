@@ -3631,7 +3631,12 @@ body.emu-knowledge-open #emuTodayDashboard,
 body.emu-knowledge-open #emuValueProfile,
 body.emu-knowledge-open #emuRequestsPage{ display:none; }
 body.emu-knowledge-open #emuKnowledgePage { display:block; }
-body.emu-knowledge-open #emuTodayHome {
+/* 知識を探す・知識を試すも、知識を読むと同じ幅まで広げる（11/6）。
+   1180px で止めていたため、左タブを閉じても広がらなかった。
+   見出しは下のカードと左端をそろえる（知識を読むだけは、中の画面に合わせて見出しを 1180px の中央に置いたまま）。 */
+body.emu-knowledge-open #emuTodayHome,
+body.emu-requests-open #emuTodayHome,
+body.emu-practice-open #emuTodayHome {
   max-width:1760px;
   width:100%;
   padding-left:clamp(18px,3vw,54px);
@@ -14382,6 +14387,9 @@ function emuSideNavSync() {
 function emuNavToggle() {
   document.body.classList.toggle('emu-nav-closed');
   emuFitContact();
+  /* 知恵ライブラリ・City・ギルド/クエストの画面（#spDaoPage）は、左タブの右端から始まる。
+     その位置は画面を開いたときにしか測っていなかったので、閉じても左に空白が残り、広がらなかった（11/6）。 */
+  if (window.EmuNavigation && typeof window.EmuNavigation.fit === 'function') window.EmuNavigation.fit();
 }
 
 /* お問い合わせボタンを、左タブの中（残高と名前の上）に置く。
