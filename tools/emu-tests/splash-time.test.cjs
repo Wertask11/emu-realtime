@@ -1,5 +1,5 @@
 'use strict';
-/* 起動画面の時間帯（11/6）。朝 5:00–9:59 / 昼 10:00–16:59 / それ以外は夜。
+/* 起動画面の時間帯（11/6）。朝 4:00–9:59 / 昼 10:00–15:59 / 夜 16:00–3:59。
    ?splash= で確かめられる。夜は今までのまま（クラスも画像も変えない）。 */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -33,7 +33,7 @@ function run(hour, search) {
 
 test('時刻で朝・昼・夜を決める', () => {
   const at = h => run(h).mode;
-  assert.deepEqual([4, 5, 9, 10, 16, 17, 23, 0].map(at), ['night', 'morning', 'morning', 'day', 'day', 'night', 'night', 'night']);
+  assert.deepEqual([3, 4, 9, 10, 15, 16, 23, 0].map(at), ['night', 'morning', 'morning', 'day', 'day', 'night', 'night', 'night']);
 });
 
 test('朝：クラスと朝のロゴ、星70個', () => {
