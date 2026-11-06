@@ -100,4 +100,10 @@ backend/economyのconfig・service・agent・sources・router、専用free-tier�
 
 ## 8. PR / Preview / 本番状態
 
-PR作成・Previewの確認結果を反映後に記録する。Production受付はOFFのまま、本番デプロイ・main mergeは行わない。
+- PR： https://github.com/Wertask11/emu-realtime/pull/280 （open、未マージ）。実装・全テスト対象commit：`bfb0a03b401910900e8c3e14be38e4195570b4cd`。本報告の追記commitはPRの最新履歴を参照。
+- Vercel Preview build：GitHub Deployment `7605183244` がsuccess。コード候補のPreview： https://emu-realtime-qzrq-6ltb3yxrk-school-park.vercel.app/economy/index.html 。
+- Previewの実画面/API：この実行環境の接続許可外のため、HTTPSトンネルが403で拒否された。アプリの403や表示成功ではない。[試行記録](free-tier-evidence/preview.json)。Preview実接続は未検証。ログイン/支払/DB書込みを試していない。Preview frontendが接続する既存Renderには本PRのbackendを配備していないため、フロント表示だけで新backendの結合確認済みとは判定しない。
+- Productionの安全なeconomy/statusを2つの公開URLとRenderで再取得し全てHTTP200。既存backend commit `3a3a6286d402796df443d1c7e25b035f5d66943b`、受付false、worker disabled、wallet支払falseを確認。[記録](free-tier-evidence/production-readonly.json)。今回のコードは本番に反映していない。
+- 判定：**分離環境での実装・検証済み、PRレビュー可能。本番有料受付は公開不可（第6節の外部/運用条件が残る）。**
+
+このPRに含めない別のKnowledge Lab監査では、先に公開AI statusを取得した後、共通GET middlewareが一時Rules-probe文書を作成・削除し得ることが判明した。実行された可能性を否定せず、以後本番Lab APIは呼ばず静的画面/隔離環境だけを検証している。投稿・契約・報酬の本番書込みテストは実施していない。
