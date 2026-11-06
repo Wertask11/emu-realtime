@@ -294,6 +294,7 @@ function createChainAdapter(env) {
   const emuer = new ethers.Contract(EMUER_V2, [
     "function hasRole(bytes32 role,address account) view returns (bool)",
     "function claimPaid(bytes32) view returns (uint256)",
+    "function balanceOf(address) view returns (uint256)",
     "function orders(bytes32) view returns (address buyer, bytes32 productId, uint256 paid, bool fulfilled, bool refunded)"
   ], provider);
   const transferTopic = ethers.utils.id("Transfer(address,address,uint256)");
@@ -310,6 +311,7 @@ function createChainAdapter(env) {
       if (!signer) return false;
       return emuer.hasRole(ethers.utils.id("AUTHORIZER_ROLE"), signer.address);
     },
+    async balanceOf(wallet) { return (await emuer.balanceOf(wallet)).toString(); },
     async claimPaid(claimId) { return BigInt((await emuer.claimPaid(claimId)).toString()); },
     async exchangeOrder(orderId) {
       const o = await emuer.orders(orderId);
@@ -361,7 +363,7 @@ function createMitemiruRouter(deps) {
     : (req, res, next) => next();
   const router = express.Router();
 
-  const productRef = (id) => db.collection(PRODUCTS).doc(String(id));
+  const productRef = (id) => db.collection(String(id) === "agent_schoolpark-explorer-v1" ? "emuer_v2_agent_products" : PRODUCTS).doc(String(id));
   const orderRef = (id) => db.collection(ORDERS).doc(String(id));
   const claimRef = (id) => db.collection(CLAIMS).doc(String(id));
   const chainIdOf = (value) => chain.id(value).toLowerCase();
@@ -675,6 +677,7 @@ function createMitemiruRouter(deps) {
     const b = req.body || {};
     const method = String(b.method || "");
     const productId = String(b.productId || "");
+    if (productId.startsWith("agent_")) return res.status(409).json({ error: "SERVICE_CHECKOUT_REQUIRED" });
     if (!METHODS[method]) return res.status(400).json({ error: "INVALID_METHOD" });
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(productId)) return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
     const identity = req.identity;
@@ -845,7 +848,7 @@ function createMitemiruRouter(deps) {
      払ったぶんは status を spent にして、二度と受け取りの署名を出さない。
      ただし直近に署名を出した報酬（authorizedUntilMs）はまだ使われうるので選ばない。
      多く取りすぎたぶんは、おつりとして新しい報酬にする。 */
-  async function payFromLedger(id, base, product, wallet, shipping) {
+  async function payFromLedger(id, base, product, wallet, shipping, serviceGate = null) {
     if (!/^0x[0-9a-f]{40}$/.test(wallet)) throw err("WALLET_REQUIRED");
     const priceWei = BigInt(wei(base.amount));
     const rows = await spendableRewards(wallet);
@@ -885,6 +888,8 @@ function createMitemiruRouter(deps) {
       const [ps, us] = await Promise.all(reads);
       const cs = base.claimId ? await tx.get(claimRef(base.claimId)) : null;
       const rewardSnaps = await Promise.all(chosen.map(rid => tx.get(db.collection(REWARDS).doc(rid))));
+      const gate = serviceGate ? await tx.get(serviceGate.ref) : null;
+      if (serviceGate) serviceGate.validate(gate, ps);
       const p = ps.exists ? ps.data() || {} : null;
       if (!p || p.status !== "live") throw err("NOT_FOR_SALE");
       if (remaining(p) === 0) throw err("SOLD_OUT");
@@ -909,6 +914,7 @@ function createMitemiruRouter(deps) {
       }
       tx.set(productRef(base.productId), { sold: Number(p.sold || 0) + 1 }, { merge: true });
       tx.create(orderRef(id), order);
+      if (serviceGate) tx.set(serviceGate.ref, serviceGate.patch, { merge: true });
       if (shipping) tx.create(db.collection(SHIPPING).doc(id), { ...shipping, orderId: id, uid: base.uid, createdAtMs: now() });
       if (base.claimId) tx.create(claimRef(base.claimId), { productId: base.productId, uid: base.uid, orderId: id, createdAtMs: now() });
       consumeUsage(tx, order, us);
@@ -1433,7 +1439,66 @@ function createMitemiruRouter(deps) {
     } catch (e) { return fail(res, e); }
   });
 
-  return { router, handleStripeEvent, markPaid, sweepExpired };
+  // Internal service interface. Not an HTTP endpoint, not a second ledger.
+  // Only deterministic service orders can call existing ledger/refund/fulfillment primitives.
+  const servicePayments = {
+    async get(id) { const s = await orderRef(id).get(); return s.exists ? s.data() : null; },
+    async pay({ id, actor, jobId, productId, gate }) {
+      if (!/^agent_[a-f0-9]{40}$/.test(id) || productId !== "agent_schoolpark-explorer-v1") throw err("INVALID_SERVICE_ORDER");
+      const old = await this.get(id);
+      if (old) {
+        if (old.passportId !== actor.spid || old.serviceJobId !== jobId || old.productId !== productId) throw err("IDEMPOTENCY_KEY_CONFLICT");
+        return old;
+      }
+      if (!emuerEnabled()) throw err("EMUER_NOT_ACTIVE");
+      const ps = await productRef(productId).get(), product = ps.data();
+      if (!product || product.prices?.EMUER !== 5 || product.status !== "live") throw err("SERVICE_PRICE_UNAVAILABLE");
+      const wallet = String(actor.walletAddress || "").toLowerCase();
+      return payFromLedger(id, { uid: actor.uid, passportId: actor.spid, wallet, productId, serviceJobId: jobId,
+        productName: product.name, amount: product.prices.EMUER, currency: "EMUER", method: "emuer_ledger",
+        storeType: "agent_service", status: "pending_payment", createdAtMs: now(), usageId: null }, product, wallet, null, gate);
+    },
+    async refund(id, jobId) {
+      const o = await this.get(id);
+      if (!o || o.serviceJobId !== jobId || o.storeType !== "agent_service" || o.method !== "emuer_ledger") throw err("INVALID_SERVICE_ORDER");
+      if (o.status === "refunded") return o;
+      try { return await refundOrder(id, "economy-worker", { note: "agent_failure" }); }
+      catch (e) { if (e.message === "ALREADY_DONE") return this.get(id); throw e; }
+    },
+    async fulfill(id, jobId) {
+      const o = await this.get(id);
+      if (!o || o.serviceJobId !== jobId || o.storeType !== "agent_service") throw err("INVALID_SERVICE_ORDER");
+      return fulfill(id, "economy-worker");
+    },
+    async balances(wallet) {
+      if (!/^0x[0-9a-f]{40}$/.test(wallet)) return { wallet: null, pending: "0", spendable: "0", held: "0", verified: false };
+      const snap = await db.collection(REWARDS).where("recipient", "==", wallet).where("status", "==", "pending").limit(501).get();
+      if (snap.size > 500) throw err("BALANCE_SCAN_LIMIT");
+      let pending = 0n, held = 0n, spendable = 0n, verified = true, balance = null;
+      const available = [], deadline = Date.now() + 5000;
+      const bounded = promise => { let timer; return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error("BALANCE_TIMEOUT")),Math.max(1,deadline-Date.now()));})]).finally(()=>clearTimeout(timer)); };
+      for (const d of snap.docs) {
+        const r = d.data(), amount = BigInt(r.amountWei || "0"); pending += amount;
+        if (Number(r.authorizedUntilMs || 0) + AUTH_GRACE_MS > now()) held += amount;
+        else available.push({ id: String(r.claimId || d.id), amount });
+      }
+      // Bound RPC fan-out and time. An unknown balance must not be presented as spendable.
+      if (available.length > 50) verified = false;
+      else {
+        let at = 0;
+        await Promise.all(Array.from({length:Math.min(5,available.length)},async()=>{
+          while(at<available.length){const r=available[at++];
+            if(Date.now()>=deadline){verified=false;continue;}
+            try { if(chain && await bounded(chain.claimPaid(r.id)) === 0n) spendable += r.amount; else verified=false; }
+            catch(_){verified=false;}
+          }
+        }));
+      }
+      try { balance = chain && chain.balanceOf ? emuerOf(await bounded(chain.balanceOf(wallet))) : null; } catch (_) { /* Unknown is not zero. */ }
+      return { wallet: balance, pending: emuerOf(pending), spendable: verified ? emuerOf(spendable) : null, held: emuerOf(held), verified };
+    }
+  };
+  return { router, handleStripeEvent, markPaid, sweepExpired, servicePayments };
 }
 
 module.exports = { createMitemiruRouter, createChainAdapter, cleanProduct, loadOfficialCatalog, loadDigitalAssets, emuerOf, METHODS, JPYC, EMUER_V2, TREASURY };

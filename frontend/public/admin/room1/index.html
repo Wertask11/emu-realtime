@@ -100,6 +100,7 @@ h2{font:700 21px/1.5 Georgia,'Yu Mincho',serif; margin:0 0 14px}
   .mode-btns .card{white-space:nowrap}
 }
 </style>
+<script src="/economy/entry.js" defer></script>
 </head>
 
 <body>
@@ -114,7 +115,7 @@ h2{font:700 21px/1.5 Georgia,'Yu Mincho',serif; margin:0 0 14px}
     <button id="backToEmuBtn" class="header-btn" onclick="backToEmu()">← 戻る</button>
     <h1 id="headerTitle">Knowledge Text</h1>
   </div>
-</header>
+</header><div data-economy-slot style="height:60px;min-height:60px;flex-basis:100%;width:100%"></div>
 
 <div id="container">
   <div class="mode-btns">
@@ -239,6 +240,16 @@ function init() {
   loadContents(function(data) {
     room1Contents = data;
     renderList();
+    const contentId = new URLSearchParams(location.search).get('contentId');
+    if (contentId && /^[A-Za-z0-9_-]{1,100}$/.test(contentId)) {
+      const selected = room1Contents.find(c => c.id === contentId);
+      if (selected) {
+        document.getElementById('list').style.display = 'none';
+        document.getElementById('sub').style.display = 'none';
+        document.getElementById('detail').style.display = 'block';
+        currentHits = [selected]; openPost(0);
+      }
+    }
   });
 
   // 30秒ごとにバックグラウンドポーリング

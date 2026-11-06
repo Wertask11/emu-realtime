@@ -326,6 +326,12 @@ const knowledgeLab = require("./knowledge-lab/router").createKnowledgeLabRouter(
 });
 app.use("/api/knowledge-lab", knowledgeLab.router);
 app.use("/api/mitemiru", mitemiru.router);
+/* Common economy: existing Mitemiru ledger, independent agent quota, default OFF. */
+const economy = require("./economy/router").createEconomyRouter({
+  db, identity, entitlement, requireFirebaseUser, rateLimit, env: process.env,
+  knowledge: knowledgeLab.service, payments: mitemiru.servicePayments
+});
+app.use("/api/economy", economy.router);
 app.use("/api/schoolpark/quest-completions", questCompletion);
 /* Quest #000 の論文を、リポジトリの新しい版へ差し替える（運営だけ） */
 app.use("/api/schoolpark/founder", require("./founder-paper").createFounderPaperRouter({ db, requireOwner }));
