@@ -87,3 +87,7 @@ test('ログイン画面：見た目だけを時間帯で変え、ボタンと�
   const a = INDEX.indexOf('id="chesLineButton"'), b = INDEX.indexOf('id="chesGoogleButton"'), c = INDEX.indexOf('id="chesEmailButton"');
   assert.ok(a > 0 && a < b && b < c);
 });
+
+test('LINE ボタンは、どの時間帯も指示書の #10c552', () => {
+  assert.match(INDEX, /html\[data-sp-time\] \.ches-btn-line \{ background:#10c552;/);
+});
