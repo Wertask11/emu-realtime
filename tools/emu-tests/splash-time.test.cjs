@@ -22,13 +22,15 @@ function run(hour, search) {
     querySelector: sel => (sel.includes('sp-stars') ? stars : null),
     querySelectorAll: () => clouds
   };
+  const attrs = {};
   class FakeDate { getHours() { return hour; } }
   const window = {};
   vm.runInNewContext(SRC, {
     window, Date: FakeDate, Math, URLSearchParams, location: { search: search || '' },
-    document: { getElementById: id => (id === 'logoScreen' ? el : id === 'logoImg' ? img : null) }
+    document: { documentElement: { setAttribute: (k, v) => { attrs[k] = v; } },
+      getElementById: id => (id === 'logoScreen' ? el : id === 'logoImg' ? img : null) }
   });
-  return { mode: window.SP_SPLASH_MODE, classes: [...classes], src: img.src, stars: (stars.innerHTML.match(/sp-star/g) || []).length, clouds };
+  return { time: attrs['data-sp-time'], mode: window.SP_SPLASH_MODE, classes: [...classes], src: img.src, stars: (stars.innerHTML.match(/sp-star/g) || []).length, clouds };
 }
 
 test('時刻で朝・昼・夜を決める', () => {
@@ -66,4 +68,22 @@ test('朝・昼の画像がある。夜の星は朝・昼に描かない', () =>
   for (const f of ['logo-morning-640.webp', 'logo-day-640.webp']) assert.ok(fs.existsSync(path.join(root, 'frontend/public', f)), f);
   assert.match(INDEX, /if \(window\.SP_SPLASH_MODE && window\.SP_SPLASH_MODE !== 'night'\) return;\n  const canvas = document\.getElementById\('logoStarCanvas'\);/);
   assert.match(INDEX, /@media \(prefers-reduced-motion: reduce\)[\s\S]{0,200}#logoScreen \.sp-sky \*/);
+});
+
+test('ログイン画面にも同じ時間帯を渡す（夜も）', () => {
+  assert.equal(run(7).time, 'morning');
+  assert.equal(run(13).time, 'day');
+  assert.equal(run(21).time, 'night');
+});
+
+test('ログイン画面：見た目だけを時間帯で変え、ボタンと動きは変えない', () => {
+  const css = INDEX.slice(INDEX.indexOf('<style id="ws-time-styles">'), INDEX.indexOf('</style>', INDEX.indexOf('<style id="ws-time-styles">')));
+  for (const t of ['morning', 'day', 'night']) {
+    assert.match(css, new RegExp('html\\[data-sp-time="' + t + '"\\] #walletScreen \\.ws-sky-' + t));
+    assert.match(css, new RegExp('html\\[data-sp-time="' + t + '"\\] \\.ches-btn-email'));
+  }
+  assert.doesNotMatch(css, /display:\s*none[^;]*;[^}]*ches-btn|#chesLineButton|#chesGoogleButton/, 'ボタンを隠したり差し替えたりしない');
+  // ボタンの順番は LINE → Google → メール のまま
+  const a = INDEX.indexOf('id="chesLineButton"'), b = INDEX.indexOf('id="chesGoogleButton"'), c = INDEX.indexOf('id="chesEmailButton"');
+  assert.ok(a > 0 && a < b && b < c);
 });
