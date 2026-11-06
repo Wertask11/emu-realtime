@@ -42,6 +42,21 @@
      開き方は index.html が持っているので、あれば借りる。 */
   function goSchoolPark() {
     close();
+    /* 11/6：openSpDao() だけだと、枠の中で前に開いていた画面がそのまま出ていた。
+       City を見たあとだと「クエスト #005 を見る」で City が出て、左のタブも「知識を読む」のままだった。
+       「知識を試す」の入口と同じ道でクエストの一覧を開き、#005 があればその詳細を開く。 */
+    if (typeof window.openEmuPractice === "function") {
+      Promise.resolve(window.openEmuPractice("experiments")).then(function (ok) {
+        if (!ok) return;
+        var fr = document.getElementById("spDaoFrame");
+        var app = fr && fr.contentWindow && fr.contentWindow.app;
+        var list = (app && app.state && app.state.quests) || [];
+        var q = list.filter(function (x) { return x && x.series === "general" && Number(x.questNumber) === 5; })
+          .sort(function (a, b) { return (Number(a.branch) || 0) - (Number(b.branch) || 0); })[0];
+        if (q && typeof window.spQuestOpen === "function") return window.spQuestOpen(app, q.id);
+      }).catch(function () { });
+      return;
+    }
     if (typeof window.openSpDao === "function") { try { window.openSpDao(); return; } catch (e) { } }
     try { location.href = "/schoolpark/dao.html"; } catch (e) { }
   }

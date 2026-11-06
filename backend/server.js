@@ -1471,6 +1471,27 @@ app.delete("/api/room1/contents/all", requireRoom1Admin, async (req, res) => {
   }
 });
 
+// ── コンテンツを1件だけ削除（管理者のみ）──
+// 11/6：テスト投稿だけを消したかったのに、消す手段が「全削除」しかなかった。
+// 上の /contents/all より後ろに置く（"all" をこちらで受けないため）。
+app.delete("/api/room1/contents/:id", requireRoom1Admin, async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    if (id === "all" || !/^[A-Za-z0-9_-]{1,100}$/.test(id)) return res.status(400).json({ error: "INVALID_ID" });
+    if (!db) return res.status(500).json({ error: "Firestore未接続" });
+    const ref = db.collection(ROOM1_CONTENTS_COL).doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "NOT_FOUND" });
+    await ref.delete();
+    _room1Cache.data = null; // キャッシュ無効化
+    console.log(`🗑️ room1_contents 削除: ${id} (${String(snap.data().title || "").slice(0, 60)})`);
+    res.json({ success: true, deleted: id });
+  } catch (err) {
+    console.error("contents delete error:", err);
+    res.status(500).json({ error: "delete failed: " + err.message });
+  }
+});
+
 // ════════════════════════════════════════════════════════
 // ユーザープロフィール API + ランキング API v3
 // server.js の既存ランキングAPIを全てこれに置き換える
