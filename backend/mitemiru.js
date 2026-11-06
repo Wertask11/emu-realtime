@@ -1456,6 +1456,7 @@ function createMitemiruRouter(deps) {
       const wallet = String(actor.walletAddress || "").toLowerCase();
       return payFromLedger(id, { uid: actor.uid, passportId: actor.spid, wallet, productId, serviceJobId: jobId,
         productName: product.name, amount: product.prices.EMUER, currency: "EMUER", method: "emuer_ledger",
+        delivery: "online", fulfillment: "EMUER・サービスの依頼履歴で結果を確認します。", cancelPolicy: "処理失敗時は元の未受取EMUERへ全額返却します。",
         storeType: "agent_service", status: "pending_payment", createdAtMs: now(), usageId: null }, product, wallet, null, gate);
     },
     async refund(id, jobId) {

@@ -11,7 +11,7 @@ async def main():
   for width in [375,390,412,768,1280,1440,1920]:
    context=await browser.new_context(viewport={'width':width,'height':900},device_scale_factor=1)
    await context.route('**/*',lambda route:route.continue_() if route.request.url.startswith(BASE+'/') else route.abort())
-   page=await context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+   page=await context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.on('console',lambda m:errors.append(m.text) if m.type=='error' else None)
    await page.goto(BASE+'/test/shell');frame=page.frame_locator('iframe')
    await frame.locator('#spendable').filter(has_text='EMUER').wait_for()
    if width>=1280:

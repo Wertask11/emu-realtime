@@ -56,7 +56,9 @@ function createEconomyRouter(deps) {
       } catch (e) {
         eligibility = {
           eligible: false,
-          reason: e.status ? e.message : "ECONOMY_UNAVAILABLE",
+          reason: /^[A-Z][A-Z_]{2,60}$/.test(e.message || "")
+            ? e.message
+            : "ECONOMY_UNAVAILABLE",
         };
       }
       return {

@@ -180,13 +180,11 @@ async function createFixture({
       .collection("entitlements")
       .doc(decoded.uid)
       .set({ plan: "plus", source: "emulator-test", startsAt: new Date(0) });
-    await economy.service
-      .ref("eligibility", hash(person.spid))
-      .set({
-        adultVerified: true,
-        providerAllowed: true,
-        validUntilMs: Date.now() + 86400000,
-      });
+    await economy.service.ref("eligibility", hash(person.spid)).set({
+      adultVerified: true,
+      providerAllowed: true,
+      validUntilMs: Date.now() + 86400000,
+    });
     await db
       .collection("emuer_v2_rewards")
       .doc("0x" + hash("seed-" + role))
@@ -205,32 +203,26 @@ async function createFixture({
     body: "コーヒーの抽出温度を比べる。個人を含まない検証用資料。",
     visibility: "public",
     createdAt: new Date(),
-    knowledgeLab: { aiUseConsent: { allowed: true } },
+    knowledgeLab: { revision: 1, aiUseConsent: { allowed: true } },
   };
   await db.collection("posts").doc("economy-coffee-public").set(publicPost);
   await db
     .collection("posts")
     .doc("economy-private")
     .set({ ...publicPost, title: "非公開の秘密", visibility: "private" });
-  await db
-    .collection("room1_contents")
-    .doc("economy-text")
-    .set({
-      title: "LOCAL検証用：コーヒーと学び",
-      summary: "コーヒーを学ぶための検証教材。",
-      body: "非公開情報は含みません。",
-      theme: "yellow",
-      subTheme: "検証用",
-      createdAt: new Date().toISOString(),
-    });
-  await db
-    .collection("sp_quests")
-    .doc("economy-quest")
-    .set({
-      title: "LOCAL検証用：コーヒーの比較クエスト",
-      brief: "コーヒーを比べて学ぶ検証。",
-      status: "OPEN",
-    });
+  await db.collection("room1_contents").doc("economy-text").set({
+    title: "LOCAL検証用：コーヒーと学び",
+    summary: "コーヒーを学ぶための検証教材。",
+    body: "非公開情報は含みません。",
+    theme: "yellow",
+    subTheme: "検証用",
+    createdAt: new Date().toISOString(),
+  });
+  await db.collection("sp_quests").doc("economy-quest").set({
+    title: "LOCAL検証用：コーヒーの比較クエスト",
+    brief: "コーヒーを比べて学ぶ検証。",
+    status: "OPEN",
+  });
   await db
     .collection("mitemiru_products")
     .doc("economy-item")
@@ -246,8 +238,18 @@ async function createFixture({
     .collection("knowledge_lab_system")
     .doc("index")
     .set({ state: "ready", finishedAtMs: Date.now() });
+  const legacy = {
+    title: "LOCAL公開知識：コーヒーを学ぶ",
+    body: "コーヒーの淹れ方を記録して比べる公開知識。",
+    visibility: "public",
+    createdAt: new Date(),
+    knowledgeLab: { aiUseConsent: { allowed: true } },
+  };
+  await db.collection("posts").doc("economy-legacy-public").set(legacy);
+  await knowledge.syncPublicPost("economy-legacy-public");
   await knowledge.syncPublicPost("economy-coffee-public");
   const records = [
+    ["knowledge:economy-legacy-public", legacy.title, legacy.body],
     ["knowledge_lab:economy-coffee-public", publicPost.title, publicPost.body],
     [
       "knowledge_text:economy-text",
@@ -269,14 +271,12 @@ async function createFixture({
     .OFFICIAL)
     records.push(["guild:" + g.id, g.name, g.concept]);
   for (const [key, title, summary] of records)
-    await economy.service
-      .ref("source_approvals", hash(key))
-      .set({
-        piiReviewed: true,
-        purpose: SERVICE.termsVersion,
-        contentHash: hash([title, summary]),
-        validUntilMs: Date.now() + 86400000,
-      });
+    await economy.service.ref("source_approvals", hash(key)).set({
+      piiReviewed: true,
+      purpose: SERVICE.termsVersion,
+      contentHash: hash([title, summary]),
+      validUntilMs: Date.now() + 86400000,
+    });
   const app = express();
   app.use(express.json({ limit: "4kb" }));
   app.use("/api/economy", economy.router);

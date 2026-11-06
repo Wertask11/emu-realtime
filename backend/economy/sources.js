@@ -81,7 +81,9 @@ function createSources({ db, knowledge, now = Date.now }) {
         continue;
       out.push(
         row(
-          raw.knowledgeLab ? "knowledge_lab" : "knowledge",
+          Number.isInteger(raw.knowledgeLab?.revision)
+            ? "knowledge_lab"
+            : "knowledge",
           p.postId,
           raw.title,
           raw.body,

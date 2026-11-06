@@ -44,7 +44,13 @@ test("実Firestoreの公開知識・Text・Quest・Cityを探索、余分な人�
     c = await f.economy.service.sources.candidates(a, "コーヒーを学びたい");
   assert.deepEqual(
     new Set(c.map((s) => s.kind)),
-    new Set(["knowledge_lab", "knowledge_text", "quest", "city_product"]),
+    new Set([
+      "knowledge",
+      "knowledge_lab",
+      "knowledge_text",
+      "quest",
+      "city_product",
+    ]),
   );
   assert.ok(
     c.every(
@@ -163,4 +169,23 @@ test("30日後は目的・結果のみ削除し、決済・返却監査は保持
     (await f.db.collection("mitemiru_orders").doc(orderId).get()).exists,
   );
   assert.ok(after.events.length >= 4);
+});
+test("Cityの汎用購入APIからAI商品を直接支払う迂回を拒否する", async () => {
+  const before = (await f.db.collection("mitemiru_orders").get()).size;
+  const r = await fetch(f.base + "/api/mitemiru/orders", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      Authorization: "Bearer " + f.users.alice.token,
+    },
+    body: JSON.stringify({
+      productId: "agent_schoolpark-explorer-v1",
+      method: "emuer_ledger",
+      amount: 1,
+      requestId: "bypass-service-order-0001",
+    }),
+  });
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).error, "SERVICE_CHECKOUT_REQUIRED");
+  assert.equal((await f.db.collection("mitemiru_orders").get()).size, before);
 });

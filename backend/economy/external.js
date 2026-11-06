@@ -13,6 +13,9 @@ const capability = Object.freeze({
 function simulate(request = {}) {
   // Test the future adapter's request/quote shape, not a fictional EMUER market.
   if (
+    !request ||
+    typeof request !== "object" ||
+    Array.isArray(request) ||
     request.chainId !== 137 ||
     request.token !== "EMUER" ||
     !/^[1-9][0-9]{0,7}$/.test(String(request.amount || ""))
@@ -37,4 +40,8 @@ function simulate(request = {}) {
     ],
   };
 }
-module.exports = { capability, simulate };
+module.exports = {
+  capability,
+  simulate,
+  quoteSchema: require("./quote.schema.json"),
+};
