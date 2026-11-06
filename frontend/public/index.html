@@ -4067,10 +4067,71 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   user-select: none;
   text-transform: uppercase;
 }
+
+/* ── 朝・昼の起動画面（11/6。Claude Design の指示書 design_handoff_schoolpark_splash から）──
+   朝 5:00–9:59 / 昼 10:00–16:59 / それ以外は今までの夜。端末の時刻で、開いたときに1回だけ決める。
+   ?splash=morning|day|night で確かめられる。ロゴは指示書どおりに描いた画像（logo-morning/day-640.webp）。 */
+#logoScreen .sp-sky { position:absolute; inset:0; overflow:hidden; pointer-events:none; display:none; }
+#logoScreen.sp-splash-morning .sp-sky-morning,
+#logoScreen.sp-splash-day .sp-sky-day { display:block; }
+#logoScreen.sp-splash-morning #logoStarCanvas,
+#logoScreen.sp-splash-day #logoStarCanvas { display:none; }
+#logoScreen.sp-splash-morning { background:linear-gradient(180deg,#141c45 0%,#2c3266 30%,#6a5a8f 56%,#c9858a 76%,#f4b98e 90%,#ffd9a8 100%); }
+#logoScreen.sp-splash-day { background:linear-gradient(180deg,#5aa8e6 0%,#8cc6f0 40%,#c4e3f8 75%,#e8f5fd 100%); }
+.sp-sky-morning .sp-horizon { position:absolute; left:50%; bottom:-420px; width:1400px; height:700px; margin-left:-700px; border-radius:50%;
+  background:radial-gradient(ellipse,rgba(255,236,196,.85) 0%,rgba(255,200,150,.35) 40%,transparent 70%); }
+.sp-sky-morning .sp-horizon-breathe { position:absolute; left:50%; bottom:-260px; width:1100px; height:420px; margin-left:-550px; border-radius:50%;
+  background:radial-gradient(ellipse,rgba(255,240,210,.7) 0%,transparent 70%); animation:spSplashBreathe 9s ease-in-out infinite; }
+.sp-sky-morning .sp-star { position:absolute; border-radius:50%; background:#fff; opacity:var(--o); animation:spSplashTw var(--t) ease-in-out infinite; }
+.sp-sky-morning .sp-shoot { position:absolute; left:120px; top:60px; width:130px; height:1.5px; opacity:0;
+  background:linear-gradient(90deg,transparent,#fff); animation:spSplashShoot 11s linear 2s infinite; }
+.sp-sky-day .sp-sun { position:absolute; right:-180px; top:-220px; width:620px; height:620px; border-radius:50%;
+  background:radial-gradient(circle,rgba(255,253,240,.95) 0%,rgba(255,250,225,.5) 25%,transparent 65%); }
+.sp-sky-day .sp-sun-pulse { position:absolute; right:-120px; top:-160px; width:500px; height:500px; border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,248,.9) 0%,transparent 60%); animation:spSplashPulse 6s ease-in-out infinite; }
+.sp-sky-day .sp-cloud { position:absolute; left:0; border-radius:50%; filter:blur(4px); transform:translateX(-520px);
+  background:radial-gradient(ellipse at 50% 60%,rgba(255,255,255,var(--a)) 0%,rgba(255,255,255,calc(var(--a) * .6)) 35%,transparent 70%);
+  animation:spSplashDrift var(--d) linear infinite; }
+#logoScreen.sp-splash-morning #logoImg,
+#logoScreen.sp-splash-day #logoImg { filter:none; }
+#logoScreen.sp-splash-morning #logoImg { box-shadow:0 0 60px rgba(255,214,176,.55),0 0 0 1px rgba(255,255,255,.08); }
+#logoScreen.sp-splash-day #logoImg { box-shadow:0 0 50px rgba(255,255,255,.8),0 18px 44px rgba(18,48,92,.18); }
+#logoScreen.sp-splash-morning .tap-to-start-text,
+#logoScreen.sp-splash-day .tap-to-start-text { margin-top:30px; font-family:'Noto Sans JP',sans-serif; font-size:14px; letter-spacing:.32em;
+  animation:spSplashTap 3.2s ease-in-out infinite; }
+#logoScreen.sp-splash-morning .tap-to-start-text { color:#fff7ea; }
+#logoScreen.sp-splash-day .tap-to-start-text { color:#12305c; }
+@keyframes spSplashTw { 0%,100% { opacity:var(--o); } 50% { opacity:calc(var(--o) * .2); } }
+@keyframes spSplashShoot { 0% { transform:translate(0,0) rotate(18deg); opacity:0; } 2% { opacity:.9; }
+  9% { transform:translate(420px,136px) rotate(18deg); opacity:0; } 100% { transform:translate(420px,136px) rotate(18deg); opacity:0; } }
+@keyframes spSplashBreathe { 0%,100% { opacity:.75; transform:scale(1); } 50% { opacity:1; transform:scale(1.06); } }
+@keyframes spSplashDrift { from { transform:translateX(-520px); } to { transform:translateX(calc(100vw + 520px)); } }
+@keyframes spSplashPulse { 0%,100% { opacity:.8; } 50% { opacity:1; } }
+@keyframes spSplashTap { 0%,100% { opacity:.55; } 50% { opacity:1; } }
+@media (prefers-reduced-motion: reduce) {
+  #logoScreen .sp-sky *,
+  #logoScreen.sp-splash-morning .tap-to-start-text,
+  #logoScreen.sp-splash-day .tap-to-start-text { animation:none !important; }
+  #logoScreen .sp-sky-morning .sp-shoot { display:none; }
+}
 </style>
 
 <div id="logoScreen">
   <canvas id="logoStarCanvas"></canvas>
+  <div class="sp-sky sp-sky-morning" aria-hidden="true">
+    <div class="sp-horizon"></div><div class="sp-horizon-breathe"></div>
+    <div class="sp-stars"></div><div class="sp-shoot"></div>
+  </div>
+  <div class="sp-sky sp-sky-day" aria-hidden="true">
+    <div class="sp-sun"></div><div class="sp-sun-pulse"></div>
+    <!-- 雲6つ。大きく低い雲ほど速い（手前に見える） -->
+    <div class="sp-cloud" style="top:90px;width:260px;height:80px;--a:.9;--d:95s"></div>
+    <div class="sp-cloud" style="top:200px;width:380px;height:110px;--a:.85;--d:120s"></div>
+    <div class="sp-cloud" style="top:470px;width:520px;height:150px;--a:.95;--d:70s"></div>
+    <div class="sp-cloud" style="top:560px;width:340px;height:100px;--a:.9;--d:85s"></div>
+    <div class="sp-cloud" style="top:130px;width:180px;height:60px;--a:.7;--d:140s"></div>
+    <div class="sp-cloud" style="top:610px;width:440px;height:120px;--a:.9;--d:75s"></div>
+  </div>
   <div class="logo-wordmark-wrap">
     <img id="logoImg" src="logo-640.webp" alt="SchoolPark ロゴ"
          onload="this.classList.add('loaded')" />
@@ -4082,8 +4143,48 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
 </div>
 
 <script>
+/* ── 起動画面の時間帯（11/6）──
+   朝 5:00–9:59 / 昼 10:00–16:59 / それ以外は夜（今までの宇宙）。端末の時刻で、開いたときに1回だけ決める。
+   ?splash=morning|day|night を付けると、その時間帯で確かめられる。 */
+(function () {
+  var el = document.getElementById('logoScreen');
+  if (!el) return;
+  var asked = '';
+  try { asked = new URLSearchParams(location.search).get('splash') || ''; } catch (e) {}
+  var h = new Date().getHours();
+  var mode = /^(morning|day|night)$/.test(asked) ? asked : (h >= 5 && h < 10 ? 'morning' : (h >= 10 && h < 17 ? 'day' : 'night'));
+  window.SP_SPLASH_MODE = mode;
+  if (mode === 'night') return;
+  el.classList.add('sp-splash-' + mode);
+  var img = document.getElementById('logoImg');
+  if (img) img.src = 'logo-' + mode + '-640.webp';
+  if (mode === 'morning') {
+    /* 星70個。上のほうに寄せ、下にいくほど薄くする（夜明けで消えかけ）。 */
+    var box = el.querySelector('.sp-sky-morning .sp-stars');
+    var html = '';
+    for (var i = 0; i < 70; i++) {
+      var y = Math.pow(Math.random(), 1.6) * 55;
+      var r = 1 + Math.random() * 1.6;
+      var o = (1 - y / 60) * (0.5 + Math.random() * 0.5);
+      var t = 3 + Math.random() * 5;
+      html += '<i class="sp-star" style="left:' + (Math.random() * 100).toFixed(2) + '%;top:' + y.toFixed(2) + '%;width:' + r.toFixed(2)
+        + 'px;height:' + r.toFixed(2) + 'px;--o:' + o.toFixed(3) + ';--t:' + t.toFixed(2) + 's;animation-delay:-' + (Math.random() * t).toFixed(2) + 's"></i>';
+    }
+    if (box) box.innerHTML = html;
+  } else {
+    /* 雲は、それぞれ途中の位置から流し始める */
+    el.querySelectorAll('.sp-sky-day .sp-cloud').forEach(function (c) {
+      var d = parseFloat(c.style.getPropertyValue('--d')) || 90;
+      c.style.animationDelay = '-' + (Math.random() * d).toFixed(1) + 's';
+    });
+  }
+})();
+</script>
+<script>
 /* ── 宇宙の星を描画 ── */
 (function() {
+  /* 朝・昼の起動画面では、夜の星は描かない */
+  if (window.SP_SPLASH_MODE && window.SP_SPLASH_MODE !== 'night') return;
   const canvas = document.getElementById('logoStarCanvas');
   const ctx    = canvas.getContext('2d');
 
