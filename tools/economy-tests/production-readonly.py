@@ -2,6 +2,9 @@
 import asyncio, json, os
 from pathlib import Path
 from playwright.async_api import async_playwright
+# Keep TLS verification enabled. The browser's Linux certificate store does not
+# include the managed session CA; route.fetch uses Node's verified HTTPS stack.
+os.environ.setdefault('NODE_EXTRA_CA_CERTS', '/etc/ssl/certs/ca-certificates.crt')
 ORIGIN = os.environ.get('ECONOMY_PUBLIC_ORIGIN', 'https://schoolpark-emu.vercel.app')
 if ORIGIN not in ['https://schoolpark-emu.vercel.app', 'https://emu-for-schoolpark.vercel.app']:
     raise RuntimeError('EXPLICIT_PRODUCTION_ORIGIN_ONLY')
@@ -20,7 +23,8 @@ async def main():
                 r = route.request
                 allowed = r.url.startswith(ORIGIN + '/economy/') or r.url == ORIGIN + '/api/economy/status'
                 if r.method == 'GET' and allowed:
-                    return await route.continue_()
+                    response = await route.fetch()
+                    return await route.fulfill(response=response)
                 if r.url == ORIGIN + '/favicon.ico':
                     return await route.fulfill(status=204)
                 blocked.append({'method': r.method, 'url': r.url.split('?')[0]})
@@ -44,5 +48,5 @@ async def main():
             await context.close()
         await browser.close()
         (OUT / 'production-browser.json').write_text(json.dumps({'origin': ORIGIN,
-            'scope': 'logged-out common screen only; no production writes', 'matrix': records}, ensure_ascii=False, indent=2))
+            'scope': 'logged-out production responses via verified TLS route.fetch; Chromium rendering; no production writes', 'matrix': records}, ensure_ascii=False, indent=2))
 asyncio.run(main())
