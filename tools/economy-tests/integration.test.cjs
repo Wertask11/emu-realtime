@@ -189,3 +189,23 @@ test("Cityの汎用購入APIからAI商品を直接支払う迂回を拒否す�
   assert.equal((await r.json()).error, "SERVICE_CHECKOUT_REQUIRED");
   assert.equal((await f.db.collection("mitemiru_orders").get()).size, before);
 });
+test("検索索引が古くてもExplorerは非公開コレクションを取得しない", async () => {
+  const collection = f.db.collection.bind(f.db);
+  f.db.collection = (name) => {
+    assert.ok(
+      !/^knowledge_lab_(?:private_posts|archived_posts)$/.test(name),
+      "private collection must not be queried",
+    );
+    return collection(name);
+  };
+  try {
+    const a = await f.economy.service.actor({
+      uid: f.users.alice.uid,
+      account: f.users.alice.account,
+    });
+    const c = await f.economy.service.sources.candidates(a, "コーヒーを学ぶ");
+    assert.ok(!c.some((s) => s.id === "economy-coffee-public"));
+  } finally {
+    f.db.collection = collection;
+  }
+});

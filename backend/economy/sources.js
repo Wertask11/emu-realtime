@@ -69,7 +69,7 @@ function createSources({ db, knowledge, now = Date.now }) {
     for (const p of posts) {
       let raw;
       try {
-        raw = await knowledge.rawPost(p.postId, actor);
+        raw = await knowledge.rawPost(p.postId, actor, true);
       } catch (e) {
         if (["NOT_FOUND", "READER_PLAN_REQUIRED"].includes(e.message)) continue;
         throw e;
