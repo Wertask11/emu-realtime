@@ -2,15 +2,15 @@
 
 対象：Emu for SchoolPark / Wertask11/emu-realtime。2026-11-06 UTC（最終確認はJST 11月7日）。
 
-**判定：有料Explorerは未完成・受付OFF。共通画面の安全な部分公開を進める。有料サービス完成とは判定しない。**
+**判定：共通画面・APIはProductionへ部分公開済み。有料Explorerは未完成・受付OFF。有料サービス完成とは判定しない。**
 
 ## A. 成果物と配備の区別
 
 - 基準057c3c5を実在確認し、stage2-report.md・operations.mdと46ファイルの変更を照合した。
 - 専用worktree/ブランチ `feat/emuer-economy-production-20261106` を作成。元のPassport作業ブランチと未コミット作業を保持した。
 - mainの追加更新PR #277（朝/昼/夜の起動・ログインテーマ）は競合なく取り込み、維持した。
-- 本報告の配備前時点では本番設定・DB・Rules・コントラクトを変更していない。実EMUERの消費・返却も行っていない。
-- PR、本番SHA、Vercel/Render配備、公開URLの反映後証跡は下の「配備結果」へ追記する。コードが存在することと本番稼働を区別する。
+- 本番コードはPR #278で配備した。本番設定・DB・Rules・コントラクトは変更していない。実EMUERの消費・返却も行っていない。
+- PR、本番SHA、Vercel/Render配備、公開URLの反映後証跡は下の「配備結果」に記載。コードが存在することと本番稼働を区別する。
 
 ## B. 第3工程で実装した内容
 
@@ -79,9 +79,22 @@ Stage2からの変更一覧： [changes-from-stage2.txt](stage3-evidence/changes
 
 主な第3工程対象：backend/economy/{agent,config,service,router,fixture,economy.test,release.test}.js、backend/server.js、frontend/public/economy/{app.js,index.html}、frontend/public/privacy.html、firebase.economy-tests.json、tools/economy-tests/{fixture,worker-process,integration.test,live-provider}.cjs・browser.py・production-readonly.py、docs/economy/{operations,service-product.example,stage3-report}と証跡。
 
-## G. 配備結果（反映後に追記）
+## G. 配備結果
 
-PR/main/フロント/バックエンドの配備は未判定。配備前の本番 /api/economy/status は404、既存City商品一覧は200/11品、Lab AI statusはavailable:true、既存EMUER v2はchain137のまま。新しい有料受付は有効にしていない。
+- PR： [#278](https://github.com/Wertask11/emu-realtime/pull/278)、2026-11-06 15:10:26 UTCにmainへmerge済み。
+- 本番機能コードのmain SHA：`3a3a6286d402796df443d1c7e25b035f5d66943b`。以降の証跡専用更新は同一機能コードを保持する。
+- Vercel：GitHub deployment `7603428008` / Production / success、15:10:39 UTC。両ドメインの共通HTML/JSと実ソースのhash一致を確認。
+- Render：`GET https://emu-realtime.onrender.com/api/economy/status` が200、schema=economy-release-v2、releaseCommitが上記main SHAと一致。worker=disabled、service.enabled=false、walletPaymentEnabled=false、externalExchangeExecutable=false。新しいコードの稼働を公開APIで確認した（Render管理ダッシュボードを閲覧したという意味ではない）。
+- 公開： [schoolpark-emu](https://schoolpark-emu.vercel.app/economy/index.html) / [emu-for-schoolpark](https://emu-for-schoolpark.vercel.app/economy/index.html)。通常利用は既存アプリ内の「EMUER・サービス」から開き、本人の既存ログインを利用する。直接URLでは残高・履歴にログインが必要。
+- Vercel両ドメイン→Renderの新rewriteが200。本人API `/me` は認証なし401で拒否。
+- 入口4ファイル（index、Knowledge Lab、Text、Guild/Quest/City）も配備ソースとhash一致。
+- 既存City商品API：200、11品。Lab AI status：200、available:true。EMUER v2 config：200、chain137。認証済みの購入・参加・報酬は本番で操作していない。
+- 本番共通画面を375/390/412/768/1280/1440/1920pxで描画し、受付OFF、料金ボタン無効、残高未表示、横はみ出し/console errorなしを確認。
+- 環境のChromium証明書ストアにsession proxy CAがなく直接通信は証明書エラーになった。証明書検証を無効化せず、OS CAを参照するPlaywright route.fetchの検証済みHTTPSで実本番レスポンスを取得し、Chromiumで描画した。通信はGETの共通画面/静的asset/statusだけに制限し、書込み・ログイン・テストデータ注入は行っていない。
+
+反映後証拠： [HTTP/API/SHA/hash](stage3-evidence/production-http.json) / [本番7幅](stage3-evidence/production-browser.json) / [本番PC](stage3-evidence/production-1280.png) / [本番スマホ](stage3-evidence/production-390.png)。
+
+本番の有料検索・本人残高・決済・履歴・返却は未確認で、受付を有効にしていない。分離環境/実Geminiの成功を本番課金成功とは扱わない。
 
 ## H. 最終判定
 
