@@ -30,7 +30,7 @@ async def main():
     await page.wait_for_timeout(1600);await frame.locator('#refresh').click()
     await frame.locator('#history').filter(has_text='完了').wait_for()
     assert await frame.locator('#spendable').inner_text()=='95 EMUER'
-    await frame.locator('#simulate').click();await frame.locator('#simulation').filter(has_text='停止').wait_for()
+    await frame.get_by_text('外部交換の対応状況',exact=True).click();await frame.locator('#simulate').click();await frame.locator('#simulation').filter(has_text='停止').wait_for()
     show=frame.get_by_role('button',name='結果を見る')
     if await show.count(): await show.first.click()
     await frame.locator('#history').filter(has_text='ID:').wait_for()

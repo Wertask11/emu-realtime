@@ -11,7 +11,11 @@
     requestId = null,
     identityKey = null,
     generation = 0,
-    busy = false;
+    busy = false,
+    progressTimer = null,
+    progressBusy = false;
+  const watchedJobs = new Map();
+  const activeStates = new Set(["awaiting_payment", "queued", "running", "result_saved", "refund_pending"]);
   const labels = {
     awaiting_payment: "決済確認待ち",
     queued: "支払い済み・実行待ち",
@@ -58,6 +62,9 @@
   }
   function reset() {
     generation++;
+    clearTimeout(progressTimer);
+    progressTimer = null;
+    watchedJobs.clear();
     identityKey = user();
     clearApproval();
     $("history").replaceChildren();
@@ -154,6 +161,169 @@
       $("operationsStatus").textContent = "運用状況を確認できません。";
     }
   }
+  function sourceInfo(r) {
+    const details = node("details");
+    details.className = "source-info";
+    details.append(node("summary", "出典情報"), node("small", r.kind + " / ID: " + r.id));
+    return details;
+  }
+  function renderJob(job) {
+    const article = node("article");
+    article.dataset.jobId = job.id;
+    article.dataset.state = job.state;
+    article.tabIndex = -1;
+    article.append(
+      node("b", labels[job.state] || "状態を確認中"),
+      node(
+        "p",
+        new Date(job.createdAtMs).toLocaleString("ja-JP") +
+          " · " +
+          job.price +
+          " EMUER",
+      ),
+    );
+    if (job.payment)
+      article.append(
+        node(
+          "p",
+          job.payment.refunded
+            ? "支払いを全額返却しました。"
+            : "支払い：" +
+                ({ paid: "確認済み", fulfilled: "提供完了" }[
+                  job.payment.status
+                ] || job.payment.status),
+        ),
+      );
+    if (activeStates.has(job.state))
+      article.append(node("p", "状態は自動で確認します。このままお待ちください。再度依頼する必要はありません。"));
+    if (job.state === "refund_pending")
+      article.append(
+        node(
+          "p",
+          "返却はまだ確定していません。処理の確認・再開を待っています。",
+        ),
+      );
+    if (job.error && messages[job.error])
+      article.append(node("p", messages[job.error]));
+    if (job.hasResult && !job.result) {
+      const show = node("button", "結果を見る");
+      show.type = "button";
+      show.onclick = async () => {
+        show.disabled = true;
+        try {
+          const g = generation;
+          const d = await api("/jobs/" + job.id);
+          if (g !== generation) return;
+          const result = node("div");
+          if (!d.job.result?.results?.length)
+            result.append(
+              node("p", "目的に関連する公開情報は見つかりませんでした。"),
+            );
+          for (const r of d.job.result?.results || []) {
+            result.append(
+              node("h3", r.title),
+              node("p", r.reason),
+              node("blockquote", r.evidence),
+              sourceInfo(r),
+            );
+            const link = node("button", "内容を確認する →");
+            link.type = "button";
+            link.onclick = () => openTarget(r.target);
+            result.append(node("p"), link);
+          }
+          show.replaceWith(result);
+        } catch (_) {
+          show.disabled = false;
+          notice(
+            "結果を再確認できませんでした。公開範囲が変わった場合は表示されません。",
+          );
+        }
+      };
+      article.append(show);
+    }
+    if (job.result?.results?.length === 0)
+      article.append(
+        node(
+          "p",
+          "目的に関連する公開情報は見つかりませんでした。架空の候補は追加していません。",
+        ),
+      );
+    for (const r of job.result?.results || []) {
+      const card = node("div");
+      card.append(
+        node("h3", r.title),
+        node("p", r.reason),
+        node("blockquote", r.evidence),
+        sourceInfo(r),
+      );
+      const b = node("button", "内容を確認する →");
+      b.type = "button";
+      b.addEventListener("click", () => openTarget(r.target));
+      card.append(node("p"), b);
+      article.append(card);
+    }
+    return article;
+  }
+  function showJob(job) {
+    const old = Array.from($("history").children).find((el) => el.dataset.jobId === job.id);
+    const article = renderJob(job);
+    if (old) old.replaceWith(article);
+    else $("history").prepend(article);
+    return article;
+  }
+  function scheduleProgress() {
+    if (!progressTimer && watchedJobs.size)
+      progressTimer = setTimeout(checkProgress, 5000);
+  }
+  function watchJobs(jobs) {
+    const active = jobs.filter((j) => activeStates.has(j.state));
+    const ids = new Set(active.map((j) => j.id));
+    for (const id of watchedJobs.keys()) if (!ids.has(id)) watchedJobs.delete(id);
+    for (const job of active)
+      if (!watchedJobs.has(job.id)) watchedJobs.set(job.id, Date.now() + 180000);
+    scheduleProgress();
+  }
+  async function checkProgress() {
+    progressTimer = null;
+    for (const [id, until] of watchedJobs) {
+      if (Date.now() > until) {
+        watchedJobs.delete(id);
+        if (!quote) notice("状態確認に時間がかかっています。再依頼せず、履歴の「更新」で確認してください。");
+      }
+    }
+    if (!watchedJobs.size) return;
+    if (progressBusy || busy || document.hidden) { scheduleProgress(); return; }
+    const g = generation;
+    progressBusy = true;
+    let terminal = false;
+    try {
+      for (const id of watchedJobs.keys()) {
+        const d = await api("/jobs/" + id);
+        if (g !== generation) return;
+        const shown = Array.from($("history").children).find((el) => el.dataset.jobId === id);
+        if (!shown || shown.dataset.state !== d.job.state) showJob(d.job);
+        if (!activeStates.has(d.job.state)) {
+          watchedJobs.delete(id);
+          terminal = true;
+          if (!quote) notice(d.job.state === "completed" ? "依頼が完了しました。結果を下に表示しています。" : (labels[d.job.state] || "依頼の状態を更新しました。"));
+        }
+      }
+      if (terminal) {
+        const me = await api("/me");
+        if (g !== generation) return;
+        updateBalances(me);
+      }
+    } catch (_) {
+      if (g === generation && !quote) notice("状態を再確認しています。追加の支払いは行いません。");
+    } finally {
+      progressBusy = false;
+      scheduleProgress();
+    }
+  }
+  function updateBalances(me) {
+    for (const id of ["spendable", "wallet", "pending", "held", "processing"])
+      $(id).textContent = me.balances[id] == null ? "未確認" : me.balances[id] + " EMUER";
+  }
   async function refresh() {
     const g = generation;
     if (!user()) {
@@ -164,9 +334,7 @@
     try {
       const [me, history] = await Promise.all([api("/me"), api("/jobs")]);
       if (g !== generation) return;
-      for (const id of ["spendable", "wallet", "pending", "held", "processing"])
-        $(id).textContent =
-          me.balances[id] == null ? "未確認" : me.balances[id] + " EMUER";
+      updateBalances(me);
       $("availability").textContent = me.service.enabled
         ? "受付中です。料金と条件を確認してから依頼できます。"
         : me.service.blockers?.includes("AI_PROVIDER_DAY_LIMIT")
@@ -179,100 +347,12 @@
           messages[me.eligibility.reason] ||
           "現在の提供条件では依頼できません。";
       $("operations").hidden = !me.isOwner;
-      if (me.isOwner) operations();
+      if (me.isOwner && $("operationsPanel").open) operations();
       $("history").replaceChildren();
       if (!history.jobs.length)
         $("history").textContent = "まだ依頼はありません。";
-      for (const job of history.jobs) {
-        const article = node("article");
-        article.append(
-          node("b", labels[job.state] || "状態を確認中"),
-          node(
-            "p",
-            new Date(job.createdAtMs).toLocaleString("ja-JP") +
-              " · " +
-              job.price +
-              " EMUER",
-          ),
-        );
-        if (job.payment)
-          article.append(
-            node(
-              "p",
-              job.payment.refunded
-                ? "支払いを全額返却しました。"
-                : "支払い：" +
-                    ({ paid: "確認済み", fulfilled: "提供完了" }[
-                      job.payment.status
-                    ] || job.payment.status),
-            ),
-          );
-        if (job.state === "refund_pending")
-          article.append(
-            node(
-              "p",
-              "返却はまだ確定していません。処理の確認・再開を待っています。",
-            ),
-          );
-        if (job.error && messages[job.error])
-          article.append(node("p", messages[job.error]));
-        if (job.hasResult && !job.result) {
-          const show = node("button", "結果を見る");
-          show.type = "button";
-          show.onclick = async () => {
-            show.disabled = true;
-            try {
-              const d = await api("/jobs/" + job.id);
-              const result = node("div");
-              if (!d.job.result?.results?.length)
-                result.append(
-                  node("p", "目的に関連する公開情報は見つかりませんでした。"),
-                );
-              for (const r of d.job.result?.results || []) {
-                result.append(
-                  node("h3", r.title),
-                  node("p", r.reason),
-                  node("blockquote", r.evidence),
-                  node("small", r.kind + " / ID: " + r.id),
-                );
-                const link = node("button", "内容を確認する →");
-                link.type = "button";
-                link.onclick = () => openTarget(r.target);
-                result.append(node("p"), link);
-              }
-              show.replaceWith(result);
-            } catch (_) {
-              show.disabled = false;
-              notice(
-                "結果を再確認できませんでした。公開範囲が変わった場合は表示されません。",
-              );
-            }
-          };
-          article.append(show);
-        }
-        if (job.result?.results?.length === 0)
-          article.append(
-            node(
-              "p",
-              "目的に関連する公開情報は見つかりませんでした。架空の候補は追加していません。",
-            ),
-          );
-        for (const r of job.result?.results || []) {
-          const card = node("div");
-          card.append(
-            node("h3", r.title),
-            node("p", r.reason),
-            node("blockquote", r.evidence),
-            node("small", r.kind + " / ID: " + r.id),
-          );
-          const b = node("button", "内容を確認する →");
-          b.type = "button";
-          b.addEventListener("click", () => openTarget(r.target));
-          card.append(node("p"), b);
-          article.append(card);
-        }
-        $("history").append(article);
-      }
+      for (const job of history.jobs) $("history").append(renderJob(job));
+      watchJobs(history.jobs);
       notice("残高と履歴を更新しました。");
     } catch (e) {
       if (g === generation)
@@ -325,7 +405,16 @@
       if (g !== generation) return;
       clearApproval();
       await refresh();
-      notice(labels[d.job.state] || "受付状態を確認しました。");
+      const current = await api("/jobs/" + d.job.id);
+      if (g !== generation) return;
+      const article = showJob(current.job);
+      if (activeStates.has(current.job.state)) {
+        if (!watchedJobs.has(current.job.id)) watchedJobs.set(current.job.id, Date.now() + 180000);
+        scheduleProgress();
+      } else watchedJobs.delete(current.job.id);
+      notice(current.job.state === "completed" ? "依頼が完了しました。結果を下に表示しています。" : (labels[current.job.state] || "受付状態を確認しました。"));
+      article.scrollIntoView({ block: "start" });
+      article.focus({ preventScroll: true });
     } catch (e) {
       if (["SERVICE_NOT_ELIGIBLE", "AI_AUDIENCE_NOT_VERIFIED", "AUTH_REQUIRED"].includes(e.message)) {
         clearApproval();
@@ -342,6 +431,9 @@
   });
   $("refresh").addEventListener("click", refresh);
   $("refreshOperations").addEventListener("click", operations);
+  $("operationsPanel").addEventListener("toggle", () => {
+    if ($("operationsPanel").open && !$("operations").hidden) operations();
+  });
   $("simulate").addEventListener("click", async () => {
     try {
       const d = await api("/external/simulate", {
@@ -364,6 +456,9 @@
     ),
   );
   $("back").addEventListener("click", () => {
+    clearTimeout(progressTimer);
+    progressTimer = null;
+    watchedJobs.clear();
     const a = parentApp();
     if (a !== window && typeof a.closeSpRoom === "function") a.closeSpRoom();
     else location.assign("/");
@@ -376,5 +471,11 @@
       refresh();
     }
   }, 1000);
-  // No background polling that could overwrite unconfirmed input or double-submit a payment.
+  window.addEventListener("pagehide", () => {
+    clearTimeout(progressTimer);
+    progressTimer = null;
+    watchedJobs.clear();
+  });
+  // Poll only active, owned jobs with GETs for up to 3 minutes. Never resubmit a
+  // payment, reset the form/consents, or poll completed history indefinitely.
 })();

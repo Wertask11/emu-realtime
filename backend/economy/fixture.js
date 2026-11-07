@@ -140,7 +140,7 @@ function fixture(options = {}) {
     fetcher,
   });
   const economy = createEconomyRouter({
-    startWorker: false,
+    startWorker: options.startWorker === true,
     isOwner: (a) => a.uid === "owner",
     requireOwner: (req, res, next) =>
       req.identity?.uid === "owner" ? next() : res.sendStatus(403),
