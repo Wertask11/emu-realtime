@@ -16422,6 +16422,11 @@ async function spDaoRefreshNow(why) {
   } catch (e) {}
   const now = Date.now();
   if (now - _spRefreshAt < 8000) return;
+  /* 11/7（オーナー）：画面に戻るたびの読み直しを減らす。Firestore の1日の読み取り枠を使い切っていた。
+     パソコンでは SchoolPark の枠の中と外をクリックで行き来するだけでも「画面に戻った」（focus）が起き、
+     8秒あけるたびに6種類の一覧を読み直していた。戻ったときは、前の読み直しから5分たっているときだけにする
+     （5分ごとの定期と同じ間隔。運営が承認を変えたときなどの読み直しは今までどおりすぐ） */
+  if ((why === 'タブに戻った' || why === '画面に戻った') && now - _spRefreshAt < SP_RETURN_MIN_MS) return;
   _spRefreshAt = now;
   let app = null;
   try {
@@ -16455,6 +16460,8 @@ window.spDaoRefreshNow = spDaoRefreshNow;
    触れば（押す・打つ・動かす・タブに戻る）その場で読み直るので、
    止まっていたことに気づくことはない。 */
 const SP_IDLE_STOP_MS = 30 * 60 * 1000;
+/* 画面・タブに戻ったときに読み直すのは、前の読み直しから少なくともこれだけたってから（11/7） */
+const SP_RETURN_MIN_MS = 5 * 60 * 1000;
 let _spLastTouch = Date.now();
 function _spTouched() { _spLastTouch = Date.now(); }
 ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (ev) {
