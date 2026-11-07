@@ -346,3 +346,12 @@ test("実Firestoreでprovider 429→受付停止→返却待ち→停止中も�
   );
   assert.equal((await f.db.collection("emuer_v2_access_usage").get()).size, 0);
 });
+test('旧サービス名の取引履歴は新名称で返し、保存済み取引と台帳は変更しない', async()=>{
+ const snap=await f.db.collection('mitemiru_orders').get();const order=snap.docs[0];assert.ok(order);
+ await order.ref.set({productName:'SchoolPark Explorer'},{merge:true});
+ const before=(await order.ref.get()).data();
+ const r=await fetch(f.base+'/api/mitemiru/orders',{headers:{Authorization:'Bearer '+f.users.alice.token}});
+ assert.equal(r.status,200);const shown=(await r.json()).orders.find(x=>x.id===order.id);
+ assert.equal(shown.productName,'冷蔵庫くんに頼む');assert.equal(shown.amount,5);
+ assert.deepEqual((await order.ref.get()).data(),before);
+});

@@ -49,7 +49,7 @@ function createEconomy({
     if (
       !p ||
       p.status !== "live" ||
-      p.name !== c.name ||
+      ![c.name, "SchoolPark Explorer"].includes(p.name) ||
       p.prices?.EMUER !== c.price ||
       p.termsVersion !== c.termsVersion
     )
@@ -122,7 +122,7 @@ function createEconomy({
         concurrency: c.concurrency,
       },
       notice:
-        "未受取EMUERから支払います。入力文はサービス内で照合し、AIへ目的の種類と対象の公開資料だけを送信します。氏名・住所・秘密は入力しないでください。受付した依頼は失敗時も当日の利用枠に数えます。商品交換枠は消費しません。無料AI枠を保護するため、全体2依頼/分・米国太平洋時間でも20依頼/日の追加制限があります。枠不足や障害では受付を停止し、処理を提供できない依頼は全額返却します。",
+        "未受取EMUERから支払います。入力文はサービス内で照合し、AIへ目的の種類と対象の公開資料だけを送信します。氏名・住所・秘密は入力しないでください。受付した依頼は失敗時も当日の利用枠に数えます。商品交換枠は消費しません。無料AI枠を保護するため、依頼全体で2件/分・米国太平洋時間でも20依頼/日の追加制限があります。枠不足や障害では受付を停止し、処理を提供できない依頼は全額返却します。",
     };
   }
   async function owned(a, id) {

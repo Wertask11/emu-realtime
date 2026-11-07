@@ -1,7 +1,7 @@
 "use strict";
 const SERVICE = Object.freeze({
   id: "schoolpark-explorer-v1",
-  name: "SchoolPark Explorer",
+  name: "冷蔵庫くんに頼む",
   version: 3,
   price: 5,
   currency: "EMUER",

@@ -387,7 +387,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       <ul class="city-list">${visits.map(v => `<li>${escape(spots?.find(s => s.spotId === v.spotId)?.name || v.spotId)} · ${escape(v.locationType)}${v.isDemo ? ' / DEMO' : ''}<small>${escape(date(v.occurredAt))} · ${v.verification === 'demo-only' ? '体験例の操作記録（現地未検証）' : 'Virtual Spotへの明示入場'}</small></li>`).join('')}</ul></section>
       ${button('preview-share','MyCityをシェア','',true,visits.length === 0)}<p class="city-muted">共有前に内容を確認できます。Passport IDや非公開情報は共有しません。</p>
       ${share ? `<section class="city-share" role="region" aria-label="共有内容の確認"><h3>この内容だけを共有します</h3><pre>${escape(share.text)}\n${escape(share.url)}</pre><div class="city-row">${button('share','共有する')}${button('cancel-share','キャンセル','',true)}</div></section>` : ''}
-      <div class="city-soon"><b>MY AGENTS</b><span>Explorer · Coming Soon</span></div>
+      <div class="city-soon"><b>冷蔵庫くんに頼む</b><span>知識や実践候補の探索を依頼できます。受付状況・料金は冷蔵庫くんから確認してください。</span></div>
       <p class="city-muted">公式ショップで交換したものは「交換履歴」で見られます。</p>${button('page','交換履歴を見る','orders',true)}</section>`;
   }
   /* トップの「公式ショップの商品」。読めなかったら、ページ全体の失敗にはしない。 */

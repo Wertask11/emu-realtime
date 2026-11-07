@@ -36,7 +36,7 @@
     AI_DAILY_LIMIT: "本日の利用枠に達しました。",
     AI_BUDGET_LIMIT: "本日のAI受付を停止しています。",
     AI_PROVIDER_DAY_LIMIT:
-      "無料AI枠を保護するため、本日のExplorer受付は終了しました。",
+      "無料AI枠を保護するため、本日の「冷蔵庫くんに頼む」の受付は終了しました。",
     AI_ADMISSION_RATE_LIMIT:
       "依頼が続いています。1分ほど待って料金を確認し直してください。料金は請求していません。",
     INSUFFICIENT_EMUER: "支払いに使える未受取EMUERが不足しています。",

@@ -91,7 +91,7 @@ function createFreeTierGuard({ db, now = Date.now }) {
       limits: LIMITS,
       usage: daily.data() || {},
       recentHttpCalls: recent(minute.data()?.recent).length,
-      scope: "explorer-only; not a live Google project quota measurement",
+      scope: "reizo-request-only; not a live Google project quota measurement",
     };
   }
   return { admission, beforeCall, snapshot };

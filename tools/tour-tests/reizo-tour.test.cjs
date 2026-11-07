@@ -80,3 +80,8 @@ test('unified navigation preserves existing auth, contracts, Quest business logi
  for(const view of ['isHome','isPark','isPlaza','isMembers','isTreasury']) assert.ok(!retired.includes('value="{{ '+view+' }}"'),view);
  for(const view of ['ichinichi','discussion']) assert.match(fs.readFileSync(path.join(root,'frontend/public/'+view+'.html'),'utf8'),/view=practice/);
 });
+test('removed service brand is absent from current public UI, including privacy and City',()=>{
+ const publicRoot=path.join(root,'frontend/public');
+ const files=fs.readdirSync(publicRoot,{recursive:true}).filter(n=>/\.(?:html|js|json)$/.test(n));
+ for(const file of files){const text=fs.readFileSync(path.join(publicRoot,file),'utf8');assert.ok(!/SchoolPark Explorer|Explorer専用|Explorer · Coming Soon|本日のExplorer受付/.test(text),file);}
+});

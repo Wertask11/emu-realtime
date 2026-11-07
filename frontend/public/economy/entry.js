@@ -2,7 +2,18 @@
   "use strict";
   window.openEmuEconomy = () => {
     if (typeof window.openSpRoom === "function")
-      window.openSpRoom("/economy/index.html", "EMUER・サービス");
+      return window.openSpRoom("/economy/index.html", "冷蔵庫くんに頼む・EMUER");
+  };
+  // One dependency-free entry for the existing mascot. No quote or payment is
+  // requested here; the authenticated economy screen handles explicit consent.
+  window.openReizoRequest = (source) => {
+    window.spReizoClose?.();
+    const opened = window.openEmuEconomy();
+    if (opened === false) source?.focus?.();
+    else {
+      const frame = document.getElementById("spRoomFrame");
+      if (frame) frame.title = "冷蔵庫くんに頼む";
+    }
   };
   function init() {
     const menu = document.getElementById("emuAccountMenu");

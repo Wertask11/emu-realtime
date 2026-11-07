@@ -300,6 +300,7 @@ async function createFixture({
     if (!u) return res.sendStatus(404);
     res.set("Cache-Control", "no-store").json({ uid: u.uid, token: u.token });
   });
+  app.get("/test/reizo-shell", (req, res) => res.type("html").send(require("./reizo-shell.cjs").reizoShell()));
   app.get("/test/shell", (req, res) =>
     res
       .type("html")

@@ -164,3 +164,13 @@ sourceKeyは `knowledge:ID` / `knowledge_lab:ID` / `knowledge_text:ID` / `guild:
 - Owner運用画面はExplorerのJST/PT予約・取得した実使用量・直近HTTP数・停止理由・返却待ちを表示する。**他サービスを含むGoogle project全体のライブ残枠ではない**。AI Studio Rate limitsで実使用量を照合する。snapshotの使用量0を将来の残量として固定しない。
 - 429後：Renderの受付フラグはOFFのまま、AI Studioでproject/model/RPM/TPM/RPD/利用tierを再確認→queued/running/refund_pendingを照合→不明使用量/返却未確定を解決→provider-safetyの停止をOwnerが解除する。キー/モデルのローテーションで枠を迂回しない。停止を解除するために無料/年齢/許諾ゲートを外さない。
 - GoogleのAPI Client対象年齢・professional/business用途・提供地域、対象者/資料の実確認、Founderの本番有効化承認が成立するまで`ECONOMY_EXPLORER_ENABLED=false`。コード完成やFree Tier確認を公開承認に置き換えない。
+
+## 冷蔵庫くんに頼むへの統合（2026-11-07）
+
+現在の正式なユーザー向け名称は **冷蔵庫くんに頼む**。冷蔵庫くんの選択メニューで「画面のガイド」「聞く」「頼む」の順に表示する。「聞く」の既存チャット/案内は維持する。「頼む」を開くだけでは注文や引落を作らず、既存の共通EMUER画面で料金・条件・AI送信の同意後だけ決済する。
+
+内部の `ECONOMY_EXPLORER_*`、`schoolpark-explorer-v1`、商品ID、URL、コレクション、条件版v3は互換性のため維持する。正規商品IDに限り旧表示名の登録も認識する。過去の注文名は読取時に新名称で表示し、取引原本/台帳は移行しない。新規サービス商品の例は新名称。料金5 EMUER、JST20/3/2、100,000予約tokens/日、5,000予約/件、7日間、Free専用の保守的追加制限は維持する。
+
+APIキー所属は前回Founderから `emusch-2a111` と一致の申告を受けているが、今回の指示では未確認として再照合を求められている。実Renderキーの管理API照合権限はこの環境にないため、過去の申告と今回の直接確認を混同せず、有効化前に管理画面で再確認する。キー値をチャットに貼らない。Public statusやモデルmetadata成功からBilling Tier/所属を推定しない。
+
+最新の変更・分離試験・Preview・公開条件・有効化手順は [reizo-request-readiness-20261107.md](reizo-request-readiness-20261107.md)。本番設定/資料/利用資格の承認はこの表示統合によって自動成立しない。新規受付はOFFのまま。#280を含む統合候補PRをレビューし、コード反映・有効化・実EMUER試験を別々に判定する。
