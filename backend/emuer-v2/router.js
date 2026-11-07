@@ -547,6 +547,97 @@ function createEmuerV2Router(deps) {
     }
   });
 
+  /* 取りこぼした初投稿キャンペーンの報酬を、さかのぼって作る（運営だけ・11/7 創業者承認）。
+
+     11/7 まで、Knowledge Lab で公開した投稿は「初めて公開した」の知らせを出していなかった。
+     そのため Lab で最初に公開した人は 100 EMUER の申し込みが届かず、そのあと通常の投稿をしても
+     「初めてではない」（NOT_FIRST_POST）と断られていた。ほかの理由で申し込みが届かなかった人も同じ。
+
+     ふだんの申し込みと同じ決まりで数える：
+       ・同じパスポートのどの名義の投稿よりも早い投稿（取り下げた投稿も「前の投稿」に数える）が、
+         キャンペーンの期間内（10/29〜11/28 日本時間）にあること
+       ・その投稿が今も公開されていること（取り下げ・非表示なら作らず「要確認」）
+       ・名義からパスポートを1つに決められること（決められなければ「要確認」）
+     鍵は、ふだんの申し込みと同じ（["emuer-v2", キャンペーン, パスポートID]）。だから二重にならない。 */
+  async function scanFirstPostRecovery() {
+    const c = FIRST_POST_CAMPAIGN;
+    const posts = await db.collection("posts").get();
+    const byAddress = new Map();
+    let scanned = 0;
+    posts.forEach(doc => {
+      scanned += 1;
+      const data = doc.data() || {};
+      const address = String(data.address || "").toLowerCase();
+      const created = tsMs(data.createdAt);
+      if (!validAddress(address) || !created) return;
+      const live = !(data.knowledgeLab && (data.knowledgeLab.tombstone || data.knowledgeLab.hidden))
+        && (!data.visibility || data.visibility === "public");
+      if (!byAddress.has(address)) byAddress.set(address, []);
+      byAddress.get(address).push({ postId: doc.id, created, live, title: String(data.title || "").slice(0, 160), address });
+    });
+    const byPassport = new Map(), review = [];
+    for (const [address, list] of byAddress) {
+      const inCampaign = list.some(p => p.created >= c.startMs && p.created < c.endMs);
+      const spid = await identity.spidForAddress(address);
+      if (!spid) {
+        if (inCampaign) review.push({ address, postId: list.sort((a, b) => a.created - b.created)[0].postId, reason: "名義からパスポートを1つに決められない" });
+        continue;
+      }
+      if (!byPassport.has(spid)) byPassport.set(spid, []);
+      byPassport.get(spid).push(...list);
+    }
+    const missing = [];
+    for (const [spid, list] of byPassport) {
+      list.sort((a, b) => a.created - b.created || a.postId.localeCompare(b.postId));
+      const first = list[0];
+      if (!(first.created >= c.startMs && first.created < c.endMs)) continue;
+      const key = JSON.stringify(["emuer-v2", c.id, spid]);
+      if ((await db.collection("emuer_v2_rewards").doc(claimId(key)).get()).exists) continue;
+      if (!first.live) { review.push({ address: first.address, postId: first.postId, reason: "最初の投稿が取り下げ・非表示になっている" }); continue; }
+      missing.push({ spid, key, postId: first.postId, title: first.title, recipient: first.address });
+    }
+    return { scanned, passports: byPassport.size, missing, review };
+  }
+  function firstPostRecoverySummary(scan) {
+    return {
+      scannedPosts: scan.scanned, passports: scan.passports, missing: scan.missing.length,
+      missingEmuer: scan.missing.length * FIRST_POST_CAMPAIGN.amount,
+      review: scan.review.slice(0, 50), reviewCount: scan.review.length,
+      sample: scan.missing.slice(0, 20).map(x => ({ postId: x.postId, title: x.title, recipient: x.recipient }))
+    };
+  }
+  router.get("/admin/first-post-recovery", requireFirebaseUser, requireOperator, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    try { return res.json({ ok: true, ...firstPostRecoverySummary(await scanFirstPostRecovery()) }); }
+    catch (error) { console.error("EMUER v2 first post recovery scan error:", error.message); return res.status(500).json({ error: "FIRST_POST_RECOVERY_FAILED" }); }
+  });
+  router.post("/admin/first-post-recovery", requireFirebaseUser, requireOperator, async (req, res) => {
+    if (!isEnabled()) return res.status(409).json({ error: "EMUER_V2_NOT_ACTIVE" });
+    if (!db) return res.status(503).json({ error: "FIRESTORE_UNAVAILABLE" });
+    try {
+      const scan = await scanFirstPostRecovery();
+      // 数えたときと数が変わっていたら、作らずに数え直してもらう（確かめた数と違うものを出さない）
+      const expected = Number(req.body && req.body.expectedMissing);
+      if (!Number.isSafeInteger(expected) || expected !== scan.missing.length) {
+        return res.status(409).json({ error: "RECOVERY_CHANGED", ...firstPostRecoverySummary(scan) });
+      }
+      const by = String(req.identity.walletAddress || "").toLowerCase();
+      let created = 0;
+      for (const m of scan.missing) {
+        const row = await createReward({
+          key: m.key, kind: "first-post", recipient: m.recipient, amountEmuer: FIRST_POST_CAMPAIGN.amount,
+          meta: { postId: m.postId, campaign: FIRST_POST_CAMPAIGN.id, postTitle: m.title, recovered: true, recoveredBy: by }
+        });
+        if (row && row.recovered && row.recoveredBy === by && row.postId === m.postId) created += 1;
+      }
+      return res.json({ ok: true, created, emuer: created * FIRST_POST_CAMPAIGN.amount });
+    } catch (error) {
+      console.error("EMUER v2 first post recovery error:", error.message);
+      return res.status(500).json({ error: "FIRST_POST_RECOVERY_FAILED" });
+    }
+  });
+
   // A public daily reflection is eligible once per Passport and JST day.  The
   // server rereads the saved day, so a client cannot reward a private or empty
   // draft by merely sending a request.

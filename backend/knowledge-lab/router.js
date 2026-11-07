@@ -216,9 +216,37 @@ function createKnowledgeLabRouter(deps) {
       rulesCheck = null;
     }
   }
+  /* LAB-08（11/7）：閲覧の GET が、権限の確認（確認用の文書を書いて消す）を始めないようにする。
+
+     前は、確認の結果が5分より古いと、次に来た GET がその場で確認を始めていた。
+     閲覧するだけで本番の Firestore に書き込みが起き、確認が失敗するとその GET ごと 503 になっていた。
+
+     server.js（本番）は scheduleRulesCheck を渡す。そのときは:
+     - 確認は、起動時と30分ごとの決まった時刻にだけ行う（unref した timer）。
+     - リクエストは、記録した結果を見るだけ。確認の途中なら、その結果を待つ。
+     - 結果が無い・失敗・70分より古い（定期の確認が止まっている）ときは、今までどおり 503 で止める（fail-closed）。
+     書き込みの量は、利用が多い時間でも1時間に2回分に減る（前は最大12回分）。
+     テストなど scheduleRulesCheck を渡さないときは、前と同じ動き（必要なら、その場で確認する）。 */
+  const RULES_INTERVAL_MS = 30 * 60000,
+    RULES_MAX_AGE_MS = 70 * 60000;
+  const scheduled = deps.scheduleRulesCheck === true;
+  let rulesTimer = null;
+  if (scheduled) {
+    const run = () => checkRules().catch(() => false);
+    run();
+    rulesTimer = setInterval(run, RULES_INTERVAL_MS);
+    rulesTimer.unref?.();
+  }
+  async function rulesReady() {
+    if (!scheduled) return checkRules();
+    if (rulesCheck) {
+      try { return await rulesCheck; } catch (e) { return false; }
+    }
+    return rulesSafe && rulesNow() - rulesCheckedAt < RULES_MAX_AGE_MS;
+  }
   const enabled = () => env.KNOWLEDGE_LAB_ENABLED === "true";
   router.get("/config", async (req, res) => {
-    const safe = enabled() && !!db && (await checkRules());
+    const safe = enabled() && !!db && (await rulesReady());
     res.set("Cache-Control", "no-store").json({
       enabled: safe,
       reason: !enabled() ? "LAUNCH_HOLD" : !safe ? "RULES_NOT_VERIFIED" : null,
@@ -239,12 +267,17 @@ function createKnowledgeLabRouter(deps) {
     res.set("Cache-Control", "no-store");
     if (!enabled() || !db)
       return res.status(503).json({ error: "LAUNCH_HOLD" });
-    if (!(await checkRules()))
+    if (!(await rulesReady()))
       return res.status(503).json({ error: "RULES_NOT_VERIFIED", safetyCheck: rulesDiagnostic() });
     next();
   });
   router.use(
     rateLimit({ windowMs: 60000, max: 90, key: "knowledge-lab-read" }),
+  );
+  // LAB-10：投稿の保存だけは画像（最大 1,048,000 文字）を含められるようにする。ほかは今までどおり 100kb まで。
+  const postBody = express.json({ limit: "1500kb" });
+  router.use((req, res, next) =>
+    req.method === "PUT" && req.path === "/posts" ? postBody(req, res, next) : next(),
   );
   router.use(express.json({ limit: "100kb" }));
   const wrap = (fn) => async (req, res, next) => {
@@ -480,6 +513,12 @@ function createKnowledgeLabRouter(deps) {
     "/me/posts",
     ...signed,
     wrap((req) => service.myPosts(req.labActor, req.query)),
+  );
+  // 下書きの置き場所をひとつに（11/7）：知識を読むの下書きを、本人の分だけ Lab の下書きへ移す
+  router.post(
+    "/me/drafts/import",
+    ...write,
+    wrap((req) => service.importLegacyDrafts(req.labActor)),
   );
   router.get(
     "/me/public-posts",
@@ -1288,7 +1327,7 @@ function createKnowledgeLabRouter(deps) {
       return;
     maintaining = true;
     try {
-      if ((await ai.status()).semanticAvailable && (await checkRules()))
+      if ((await ai.status()).semanticAvailable && (await rulesReady()))
         await semantic.maintenance();
     } catch (e) {
       if (
@@ -1308,7 +1347,10 @@ function createKnowledgeLabRouter(deps) {
     ai,
     semantic,
     checkRules,
-    close: () => clearInterval(maintenanceTimer),
+    close: () => {
+      clearInterval(maintenanceTimer);
+      if (rulesTimer) clearInterval(rulesTimer);
+    },
   };
 }
 module.exports = { createKnowledgeLabRouter };

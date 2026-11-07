@@ -13377,6 +13377,9 @@ postForm.addEventListener("submit", async function (e) {
   e.preventDefault();
 
   const knowledgeRequestId = postForm._knowledgeRequestId || "";
+  /* 詳しく整理する（任意）。この投稿の1回にだけ使う（次の投稿へ持ち越さない） */
+  const knowledgeLabDetails = postForm._knowledgeLab || null;
+  postForm._knowledgeLab = null;
   const finishKnowledgeRequest = (ok, error) => {
     if (!knowledgeRequestId) return;
     window.dispatchEvent(new CustomEvent("emu-post-save-result", {
@@ -13511,6 +13514,7 @@ const editingId = editingPostId;
       window.emuLabSyncIndex?.(_labPostRef.id);
       window.EmuAnalytics?.track('post_publish', { surface:'feed' }, _labPostRef.id);
       window.dispatchEvent(new CustomEvent("emu-post-published", { detail: { postId: _labPostRef.id, address: authorAddress } }));
+      if (knowledgeLabDetails) emuAttachLabDetails(_labPostRef.id, postData, knowledgeLabDetails);
       emuRecordPostAudit(_labPostRef.id, "create");
       console.log("✅ 新規投稿を作成しました");
     }
@@ -14846,6 +14850,41 @@ function showEmuFeed(mode) {
    中身（自分の投稿・下書き）は知識を読む（knowledge.html）の中にあるので、
    知識を読むに切り替えてから、中の「マイライブラリー」を開いてもらう。
    まだ読み込み中なら、準備ができたところ（emu-knowledge-ready）で開く。 */
+/* 詳しく整理する（任意・11/7）：公開したばかりの投稿に、同じ投稿ID のまま Knowledge Lab の分類を付ける。
+   Knowledge Lab の「既存の投稿を本人が整理する」窓口（PUT /posts に id を渡す）を使う。
+   新しい投稿は作らない・投稿の回数も使わない・画像や作成日はそのまま。初投稿の知らせは公開のときに1回だけ出ている。
+   付けられなかったときも、投稿は公開されたまま（あとから Knowledge Lab で整理できると知らせる）。 */
+async function emuAttachLabDetails(postId, post, lab) {
+  let ok = false;
+  try {
+    const r = await fetch('/api/knowledge-lab/posts', {
+      method:'PUT', headers:await emuAuthHeaders(true, { interactive:false }),
+      body:JSON.stringify({ ...lab, id:String(postId), revision:0, key:'compose-' + String(postId),
+        title:post.title, body:post.body, tags:post.tags || '', visibility:'public' }) });
+    ok = r.ok;
+  } catch (_) { ok = false; }
+  // 計測は数と はい/いいえ だけ（分類の名前や本文は送らない）
+  window.EmuAnalytics?.track('post_details', { stage: ok ? 'attached' : 'attach_failed',
+    facet_count: Object.values(lab.facets || {}).reduce((n, ids) => n + ids.length, 0), ai_consent: lab.aiUseConsent === true }, String(postId));
+  if (!ok) {
+    const frame = document.getElementById('emuKnowledgeFrame');
+    frame?.contentWindow?.postMessage({ type:'emu-knowledge-notice',
+      text:'投稿は公開しました。「詳しく整理する」の内容は保存できませんでした。Knowledge Lab の「自分の経験知」から付け直せます。' }, window.location.origin);
+  }
+  return ok;
+}
+window.emuAttachLabDetails = emuAttachLabDetails;
+/* 投稿の入口をひとつに（11/7）：Knowledge Lab の「経験知を届ける」も、知識を読むの投稿画面を開く。 */
+function emuOpenKnowledgeComposer() {
+  showEmuFeed();
+  const frame = document.getElementById('emuKnowledgeFrame');
+  if (frame && frame.dataset.ready === 'true' && frame.contentWindow) {
+    frame.contentWindow.postMessage({ type:'emu-knowledge-open-composer' }, window.location.origin);
+  } else {
+    window._emuOpenComposerWhenReady = true;
+  }
+}
+window.emuOpenKnowledgeComposer = emuOpenKnowledgeComposer;
 function emuOpenKnowledgeLibrary() {
   showEmuFeed();
   const frame = document.getElementById('emuKnowledgeFrame');
@@ -25881,7 +25920,7 @@ function closeBadgePanel() {
   // Firebase 本体と Firestore 機能を読み込む
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
-    getFirestore, initializeFirestore, collection, addDoc, getDocs, query, orderBy, limit, startAfter, onSnapshot,
+    getFirestore, initializeFirestore, collection, addDoc, getDocs, query, orderBy, limit, startAfter, startAt, onSnapshot,
     doc, updateDoc, setDoc, deleteDoc, increment, where, writeBatch,
     arrayUnion, getDoc, runTransaction, getCountFromServer
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -25968,7 +26007,7 @@ import {
     };
   };
   window.fbLib = {
-    collection, getDocs, query, orderBy, limit, startAfter, onSnapshot,
+    collection, getDocs, query, orderBy, limit, startAfter, startAt, onSnapshot,
     doc, increment, where, arrayUnion, getDoc, runTransaction, getCountFromServer,
     signInAnonymously,
     addDoc:    _spAfterWrite(addDoc),
@@ -28642,16 +28681,7 @@ async function sendEmuFeedback() {
 /* 新しい「知識を読む」iframeと、既存Firebase投稿処理をつなぐ */
 (function () {
   const KNOWLEDGE_PAGE_SIZE = 20;
-  /* 見学の人（無料・パスなし）に見せる、新着の本数。
-
-     前は「運営が選んだ知識だけ（recommended == true）」を見せる作りだった。
-     ところが recommended を持つ投稿は1件も無く、立てる画面もサーバーの
-     入口も作られていなかった。だから見学の人には、106件あっても
-     「該当する知識がありません」しか出なかった。
-
-     選ぶ手間をかけずに「一部だけ見せる」を成り立たせるため、
-     新着の頭から数えて、この本数までを見学の範囲にする。 */
-  const GUEST_KNOWLEDGE_LIMIT = 20;
+  /* 見学の人（無料・パスなし）も、公開している知識を最後まで読める（11/7 創業者決定：「新着20件」の制限は廃止）。 */
   let knowledgeShown = 0;
   const KNOWLEDGE_ORIGIN = window.location.origin;
   let knowledgeLastDoc = null;
@@ -28688,38 +28718,169 @@ async function sendEmuFeedback() {
   function writeLocalKnowledgeDrafts(items) {
     localStorage.setItem(knowledgeDraftKey(), JSON.stringify(items));
   }
-  async function readKnowledgeDrafts(account) {
-    if (!account || !window.db || !window.fbLib) return readLocalKnowledgeDrafts();
+  /* LAB-04（11/7）：下書きの一覧は30件ずつ読む。続きは「もっと見る」（cursor）で開く。
+     前は limit(30) で読んだ30件だけを出していて、31件目からは開けなかった（消えてはいない）。
+     並び順は文書のIDで固定する（savedAt で並べるには複合索引が要り、savedAt の無い古い下書きが
+     一覧から落ちるため）。読み込んだ分は、画面では新しく保存した順に並べる。 */
+  const KNOWLEDGE_DRAFT_PAGE = 30;
+  function _emuDraftOwnerFilter(account) {
+    /* 下書きも両方の名義から（もう片方の名義で保存したものが見えなくならないように） */
+    const mine = emuAliasesNow().filter(function (a) { return a; });
+    return mine.length > 1 && mine.indexOf(account) >= 0
+      ? window.fbLib.where('owner', 'in', mine.slice(0, 10)) : window.fbLib.where('owner', '==', account);
+  }
+  async function readKnowledgeDraftPage(account, cursor) {
+    const parts = [window.fbLib.collection(window.db, 'knowledge_drafts'), _emuDraftOwnerFilter(account), window.fbLib.orderBy('__name__')];
+    if (cursor) parts.push(window.fbLib.startAfter(String(cursor)));
+    parts.push(window.fbLib.limit(KNOWLEDGE_DRAFT_PAGE + 1));
+    const snap = await window.fbLib.getDocs(window.fbLib.query(...parts));
+    const docs = snap.docs.slice(0, KNOWLEDGE_DRAFT_PAGE);
+    const items = docs.map(d => ({ id:d.id, ...d.data(), source:'emu' }));
+    return { items, next: snap.docs.length > KNOWLEDGE_DRAFT_PAGE && docs.length ? docs[docs.length - 1].id : null };
+  }
+  /* 保存できる上限。Rules（libraryLimitOf）と同じ：見学1件・light 30件・plus 以上（公式パスを含む）1,000件。
+     Knowledge Lab の下書きも同じ枠（plan_counts.drafts）を使う。 */
+  function emuLibraryCap() {
+    return emuHasPlan('plus') ? 1000 : (emuHasPlan('light') ? 30 : 1);
+  }
+  window.emuLibraryCap = emuLibraryCap;
+  /* いま使っている枠（通常の下書き＋Knowledge Lab の下書き）。読めないときは null。 */
+  async function readLibraryUsed() {
     try {
-      const q = window.fbLib.query(
-        window.fbLib.collection(window.db, 'knowledge_drafts'),
-        /* 下書きも両方の名義から（もう片方の名義で保存したものが見えなくならないように） */
-        (function () {
-          const mine = emuAliasesNow().filter(function (a) { return a; });
-          return mine.length > 1 && mine.indexOf(account) >= 0
-            ? window.fbLib.where('owner', 'in', mine.slice(0, 10)) : window.fbLib.where('owner', '==', account);
-        })(),
-        window.fbLib.limit(30)
-      );
-      const snap = await window.fbLib.getDocs(q);
-      const items = [];
-      snap.forEach(docSnap => items.push({ id:docSnap.id, ...docSnap.data() }));
-      if (!items.length) {
-        const localItems = readLocalKnowledgeDrafts();
-        for (const draft of localItems.slice(0,30)) {
-          const ref = await window.fbLib.addDoc(window.fbLib.collection(window.db, 'knowledge_drafts'), {
+      await emuEnsureMembershipSubject();
+      const snap = await window.fbLib.getDoc(_emuCountsRef());
+      return snap.exists() ? Math.max(0, Number(snap.data().drafts) || 0) : 0;
+    } catch (e) { return null; }
+  }
+  async function countKnowledgeDrafts(account) {
+    try {
+      const r = await window.fbLib.getCountFromServer(window.fbLib.query(window.fbLib.collection(window.db, 'knowledge_drafts'), _emuDraftOwnerFilter(account)));
+      return r.data().count;
+    } catch (e) { return null; }
+  }
+  /* LAB-06（11/7）：端末に残っている古い下書きを、クラウドへ移す。
+     前は addDoc だけで書いていて、今の Rules（枠の数 plan_counts を同じ処理で1つ増やす）に断られ、
+     そのうえ端末の原本を消していた（失敗しても、その場では分からなかった）。
+     いまは1件ずつ、下書きと枠の数を同じ一括処理で書く。同じ下書きは、端末のIDから決めた同じ文書名に書くので、
+     やり直しても二重にならない（すでにあれば書かない）。移せた分だけ端末から消し、移せなかった分は残す。 */
+  async function importLocalKnowledgeDrafts(account) {
+    const localItems = readLocalKnowledgeDrafts();
+    if (!localItems.length) return 0;
+    await emuEnsureEntitlement();
+    await emuEnsureMembershipSubject();
+    const cap = emuLibraryCap();
+    let used = await readLibraryUsed();
+    const left = [];
+    let moved = 0;
+    for (const draft of localItems) {
+      const localId = String(draft.id || '');
+      if (!/^[0-9]{1,20}$/.test(localId) || (used !== null && used >= cap)) { left.push(draft); continue; }
+      const ref = window.fbLib.doc(window.db, 'knowledge_drafts', 'local-' + String(account).toLowerCase().slice(2, 14) + '-' + localId);
+      try {
+        /* まだ無い文書を getDoc で読むと Rules（持ち主の確認）に断られるので、名義で絞った一覧の中で探す
+           （文書名の == 指定も1件読みとして断られるため、文書名の順で その名前から1件だけ読む） */
+        const near = await window.fbLib.getDocs(window.fbLib.query(window.fbLib.collection(window.db, 'knowledge_drafts'),
+          _emuDraftOwnerFilter(account), window.fbLib.orderBy('__name__'), window.fbLib.startAt(ref.id), window.fbLib.limit(1)));
+        if (!near.docs.some(function (d) { return d.id === ref.id; })) {
+          const batch = window.fbLib.writeBatch(window.db);
+          batch.set(ref, {
             owner:account, title:String(draft.title||''), body:String(draft.body||''), tags:String(draft.tags||''),
             imageUrl:String(draft.imageUrl||''), savedAt:draft.savedAt || new Date().toISOString(), createdAt:new Date()
           });
-          items.push({ ...draft, id:ref.id, owner:account });
+          batch.set(_emuCountsRef(), { drafts: window.fbLib.increment(1), updatedAt: new Date() }, { merge:true });
+          await batch.commit();
+          if (used !== null) used++;
         }
-        if (localItems.length) localStorage.removeItem(knowledgeDraftKey());
+        moved++;
+      } catch (error) {
+        console.warn('端末の下書きをクラウドへ移せませんでした（端末に残します）:', error && (error.code || error.message));
+        left.push(draft);
       }
-      items.sort((a,b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
-      return items;
+    }
+    if (left.length) writeLocalKnowledgeDrafts(left); else localStorage.removeItem(knowledgeDraftKey());
+    return moved;
+  }
+  /* 下書きの置き場所をひとつに（11/7 創業者承認）。
+     下書きは Knowledge Lab の下書き（サーバーが守る置き場所。版・履歴・画像・分類を持てる）に置く。
+     前の置き場所（knowledge_drafts）の分は、本人が開いたときにサーバーが移す（元は消さず、移した印だけ付ける）。
+     Lab に届かないときだけ、前の置き場所に書いておき、次に開いたときに移す（書いた内容は失わない）。 */
+  async function _emuLabApi(path, opts) {
+    opts = opts || {};
+    const uid = window.auth?.currentUser?.uid;
+    if (!uid || typeof window.emuAuthHeaders !== 'function') return { ok:false, status:0, body:{} };
+    try {
+      const r = await fetch('/api/knowledge-lab' + path, { method:opts.method || 'GET', cache:'no-store',
+        headers: await window.emuAuthHeaders(true, { interactive:false }),
+        ...(opts.body ? { body:JSON.stringify(opts.body) } : {}) });
+      const body = await r.json().catch(() => ({}));
+      if (window.auth?.currentUser?.uid !== uid) return { ok:false, status:0, body:{} };
+      return { ok:r.ok, status:r.status, body };
+    } catch (e) { return { ok:false, status:0, body:{} }; }
+  }
+  /* Lab の下書きを、知識を読むの投稿画面で開ける形にする。研究・回答から書いたもの、一度公開して取り下げたもの、
+     自分用は、公開の同意や参照を扱う Lab の画面で開く（labOnly）。 */
+  function _emuLabDraftItem(p) {
+    const k = p.knowledgeLab || {};
+    return {
+      id: String(p.id), title: String(p.title || ''), body: String(p.body || ''),
+      tags: Array.isArray(p.tags) ? p.tags.join(',') : String(p.tags || ''),
+      visibility: p.visibility === 'private' ? 'private' : 'draft', revision: Number(p.revision || 0) || 0,
+      savedAt: p.updatedAt ? new Date(p.updatedAt).toISOString() : '', source: 'lab', hasImage: !!p.hasImage,
+      labOnly: p.visibility === 'private' || !!(k.sourceAnswer || k.sourceResearch || k.publishedOnce),
+      lab: { facets: p.facets || k.facets || {}, period: k.period || '', happened: k.happened || '', learned: k.learned || '',
+        advice: k.advice || '', sources: k.sources || '', verification: k.verification || 'self-reported',
+        aiUseConsent: k.aiUseConsent?.allowed === true }
+    };
+  }
+  async function readLabDraftPage(cursor) {
+    const r = await _emuLabApi('/me/posts' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : ''));
+    if (!r.ok) return null;
+    return { items: (r.body.items || []).map(_emuLabDraftItem), next: r.body.next || null };
+  }
+  const _emuDraftImports = new Map();
+  function importLegacyDraftsOnce(account, force) {
+    const key = String(account || '') + ':' + String(window.auth?.currentUser?.uid || '');
+    if (force) _emuDraftImports.delete(key);
+    if (!_emuDraftImports.has(key)) {
+      _emuDraftImports.set(key, _emuLabApi('/me/drafts/import', { method:'POST', body:{} })
+        .then(r => { if (!r.ok) _emuDraftImports.delete(key); return r.ok ? r.body : null; }));
+    }
+    return _emuDraftImports.get(key);
+  }
+  /* 1ページ目（配列）を返す。opts.page なら { items, next, nextSource } を返す。
+     まず前の置き場所の分を移し、Lab の下書き（20件ずつ）を出す。移しきれなかった分があれば、その前に並べる。 */
+  async function readKnowledgeDrafts(account, opts) {
+    opts = opts || {};
+    if (!account || !window.db || !window.fbLib) {
+      const local = readLocalKnowledgeDrafts();
+      return opts.page ? { items:local, next:null } : local;
+    }
+    try {
+      if (!opts.cursor && readLocalKnowledgeDrafts().length) await importLocalKnowledgeDrafts(account);
+      if (!opts.cursor) await importLegacyDraftsOnce(account, !!opts.refresh);
+      const lab = (!opts.cursor || opts.source === 'lab') ? await readLabDraftPage(opts.cursor || null) : null;
+      if (lab) {
+        if (opts.cursor) return opts.page ? { items:lab.items, next:lab.next, nextSource:'lab' } : lab.items;
+        // 移しきれなかった分（あれば少し）だけを前に並べる。続きは Lab の下書きを20件ずつ
+        const first = await readKnowledgeDraftPage(account, null);
+        const legacy = first.items.filter(d => !d.movedTo)
+          .sort((a,b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
+        const items = [...legacy, ...lab.items];
+        return opts.page ? { items, next:lab.next, nextSource:'lab' } : items;
+      }
+      // Lab に届かないとき：前の置き場所だけで出す（移した印のある文書は出さない）
+      const page = await readKnowledgeDraftPage(account, opts.source === 'emu' ? opts.cursor : null);
+      const legacy = page.items.filter(d => !d.movedTo)
+        .sort((a,b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
+      if (!opts.cursor && !legacy.length && readLocalKnowledgeDrafts().length) {
+        const stillLocal = readLocalKnowledgeDrafts();
+        return opts.page ? { items:stillLocal, next:null } : stillLocal;
+      }
+      return opts.page ? { items:legacy, next:page.next, nextSource:'emu', labUnread:true } : legacy;
     } catch (error) {
       console.warn('クラウド下書き取得失敗。端末保存を使用します:', error);
-      return readLocalKnowledgeDrafts();
+      const local = readLocalKnowledgeDrafts();
+      return opts.page ? { items:local, next:null } : local;
     }
   }
   /* いま持っている下書きの数。ルールがこの数を見て上限を判断する。
@@ -28731,23 +28892,63 @@ async function sendEmuFeedback() {
     return window.fbLib.doc(window.db, 'plan_counts', subject);
   }
 
+  /* 詳しく整理する（任意・11/7）。知識を読むの投稿画面から来た値を、決まった形・長さにそろえる。
+     何も書いていなければ null（付けない）。AI の利用は、本人がチェックしたときだけ true。 */
+  function _emuLabDetails(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const text = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
+    const facets = {};
+    if (raw.facets && typeof raw.facets === 'object' && !Array.isArray(raw.facets)) {
+      for (const axis of Object.keys(raw.facets).slice(0, 12)) {
+        if (!/^[a-z]{1,20}$/.test(axis) || !Array.isArray(raw.facets[axis])) continue;
+        const ids = raw.facets[axis].map(String).filter(id => /^[A-Za-z0-9_-]{1,100}$/.test(id)).slice(0, 20);
+        if (ids.length) facets[axis] = ids;
+      }
+    }
+    const out = { facets, period:text(raw.period,120), happened:text(raw.happened,2000), learned:text(raw.learned,2000),
+      advice:text(raw.advice,2000), sources:text(raw.sources,1500),
+      verification:['self-reported','tested-by-author','in-progress','needs-update'].includes(raw.verification) ? raw.verification : 'self-reported',
+      aiUseConsent: raw.aiUseConsent === true };
+    const has = Object.keys(facets).length || out.period || out.happened || out.learned || out.advice || out.sources || out.aiUseConsent || out.verification !== 'self-reported';
+    return has ? out : null;
+  }
+  window._emuLabDetails = _emuLabDetails;
+  /* Lab の下書きとして送る形。画像は、選んだときだけ送る（送らなければ今の画像のまま）。 */
+  function _emuLabDraftBody(draft, lab, current) {
+    const rand = (window.crypto && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, '') : String(Date.now()) + Math.random().toString(36).slice(2);
+    return {
+      ...(current ? { id:current.id, revision:current.revision } : {}),
+      key: current ? ('draft-' + current.id + '-r' + current.revision).slice(0, 100) : 'draft-' + rand.slice(0, 40),
+      title: draft.title, body: draft.body, tags: draft.tags, visibility: 'draft',
+      ...(draft.imageUrl ? { imageUrl: draft.imageUrl } : {}),
+      facets: (lab && lab.facets) || {}, period: lab?.period || '', happened: lab?.happened || '', learned: lab?.learned || '',
+      advice: lab?.advice || '', sources: lab?.sources || '', verification: lab?.verification || 'self-reported',
+      aiUseConsent: lab?.aiUseConsent === true
+    };
+  }
   async function createKnowledgeDraft(account, payload) {
     await emuEnsureEntitlement();
     /* マイライブラリーの上限（9/1から）。light は30件、plus 以上は1,000件。
        「無制限」にしないのは、荒らしや自動投稿で膨らむのを防ぐため。
        実際に止めるのは Firestore のルール。ここは先に知らせるためのもの。 */
-    const cap = emuHasPlan('plus') ? 1000 : 30;
-    try {
-      const now = await readKnowledgeDrafts(account);
-      if (Array.isArray(now) && now.length >= cap) {
-        const e = new Error('LIBRARY_FULL');
-        e.cap = cap;
-        throw e;
-      }
-    } catch (e) {
-      if (e && e.message === 'LIBRARY_FULL') throw e;
+    /* LAB-05（11/7）：上限は段で決める（見学1件・light 30件・plus 以上1,000件）。前は「plus 以上か、それ以外は30件」で、
+       見学の1件を数えていなかった。使っている数は、Knowledge Lab の下書きと共通の記録（plan_counts）で数える。 */
+    const cap = emuLibraryCap();
+    const used = await readLibraryUsed();
+    if (used !== null && used >= cap) {
+      const e = new Error('LIBRARY_FULL');
+      e.cap = cap;
+      throw e;
     }
-    const draft = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString() };
+    const lab = _emuLabDetails(payload.lab);
+    const draft = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString(), ...(lab ? { lab } : {}) };
+    /* 下書きの置き場所をひとつに（11/7）：まず Knowledge Lab の下書きに置く（数・上限はサーバーが確かめる） */
+    const viaLab = await _emuLabApi('/posts', { method:'PUT', body:_emuLabDraftBody(draft, lab, null) });
+    if (viaLab.ok) return { id:String(viaLab.body.id), ...draft, source:'lab' };
+    if (viaLab.status === 403 && viaLab.body.error === 'LIBRARY_FULL') { const e = new Error('LIBRARY_FULL'); e.cap = cap; throw e; }
+    if (viaLab.status >= 400 && viaLab.status < 500 && viaLab.status !== 401) throw new Error(viaLab.body.error || 'DRAFT_REJECTED');
+    // Lab に届かない（つながらない・一時的な止まり）ときだけ、前の置き場所に書く。次に開いたときに移す
+    _emuDraftImports.clear();
     if (account && window.db && window.fbLib) {
       try {
         // 下書きと、持っている数の記録を同じ一括処理で書く
@@ -28768,7 +28969,17 @@ async function sendEmuFeedback() {
   /* 下書きを開き直して保存したとき。同じ下書きを上書きする（数は増やさない）。 */
   async function updateKnowledgeDraft(account, draftId, payload) {
     await emuEnsureEntitlement();
-    const patch = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString() };
+    const patch = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString(), lab:_emuLabDetails(payload.lab) };
+    if (payload.draftSource === 'lab') {
+      // いまの版を読み直してから上書きする（ほかの画面で直していたら、断られて上書きしない）
+      const cur = await _emuLabApi('/posts/' + encodeURIComponent(String(draftId)));
+      if (!cur.ok) throw new Error('DRAFT_NOT_FOUND');
+      // 画像は、新しく選んだときだけ送る（送らなければ、下書きの今の画像のまま。この画面からは外さない）
+      const body = _emuLabDraftBody(patch, patch.lab, { id:String(draftId), revision:Number(cur.body.revision || 0) });
+      const r = await _emuLabApi('/posts', { method:'PUT', body });
+      if (!r.ok) throw new Error(r.body.error || 'DRAFT_SAVE_FAILED');
+      return;
+    }
     if (account && window.db && window.fbLib && !/^\d+$/.test(String(draftId))) {
       await window.fbLib.updateDoc(window.fbLib.doc(window.db, 'knowledge_drafts', String(draftId)), patch);
       return;
@@ -28779,16 +28990,24 @@ async function sendEmuFeedback() {
   }
   /* 下書きを開き直して投稿・予約したら、その下書きは消す（同じ内容が2つ残らないように）。 */
   const knowledgePublishDrafts = new Map();
-  async function dropPublishedDraft(draftId) {
+  async function dropPublishedDraft(draftId, source) {
     if (!draftId) return;
     try {
       const account = _emuAddress();
-      await deleteKnowledgeDraft(account, draftId);
+      await deleteKnowledgeDraft(account, draftId, source);
       sendKnowledge({ type:'emu-knowledge-drafts', drafts:await readKnowledgeDrafts(account) });
     } catch (error) { console.warn('投稿した下書きを消せませんでした:', error); }
   }
-  async function deleteKnowledgeDraft(account, draftId) {
+  async function deleteKnowledgeDraft(account, draftId, source) {
     await emuEnsureEntitlement();
+    if (source === 'lab') {
+      // Lab の下書きは「アーカイブ」へ移す（Knowledge Lab のアーカイブから戻せる）。下書きの数は1つ減る
+      const cur = await _emuLabApi('/posts/' + encodeURIComponent(String(draftId)));
+      if (!cur.ok) throw new Error('DRAFT_NOT_FOUND');
+      const r = await _emuLabApi('/posts/' + encodeURIComponent(String(draftId)) + '/archive', { method:'POST', body:{ revision:Number(cur.body.revision || 0) } });
+      if (!r.ok) throw new Error(r.body.error || 'DRAFT_DELETE_FAILED');
+      return;
+    }
     await emuEnsureMembershipSubject();
     if (account && window.db && window.fbLib && !/^\d+$/.test(String(draftId))) {
       try {
@@ -29030,11 +29249,7 @@ async function sendEmuFeedback() {
       if (typeof emuEnsureEntitlement === 'function') {
         try { await emuEnsureEntitlement(); } catch (e) {}
       }
-      const guest = !emuHasPlan('light');
 
-      /* 見学の人にも、新着の頭から一部は見せる。
-         全部読めてしまうと「見学」ではなくなり、light に進む理由が薄くなる。
-         読むこと自体は無料のままなので、閲覧を止めるのではなく範囲を絞る。 */
       const constraints = [window.fbLib.orderBy('createdAt', 'desc')];
       if (knowledgeLastDoc && options.append) constraints.push(window.fbLib.startAfter(knowledgeLastDoc));
       constraints.push(window.fbLib.limit(KNOWLEDGE_PAGE_SIZE + 1));
@@ -29046,18 +29261,7 @@ async function sendEmuFeedback() {
       const _labPhysicalLast = visibleDocs.length ? visibleDocs[visibleDocs.length - 1] : knowledgeLastDoc;
       visibleDocs = visibleDocs.filter(d => !d.data().knowledgeLab?.tombstone);
 
-      /* 見学の人は、新着 GUEST_KNOWLEDGE_LIMIT 件まで。
-         そこから先があることは画面で伝える（黙って終わらせない）。 */
-      let guestCapped = false;
-      if (guest) {
-        const room = Math.max(0, GUEST_KNOWLEDGE_LIMIT - knowledgeShown);
-        const cut = visibleDocs.length > room;
-        if (cut) visibleDocs = visibleDocs.slice(0, room);
-        if (cut || (knowledgeHasMore && visibleDocs.length >= room)) {
-          guestCapped = true;
-          knowledgeHasMore = false;
-        }
-      }
+      /* 11/7 創業者決定：見学の「新着20件」の制限は廃止。見学の人も、公開している知識を最後まで読める。 */
       knowledgeShown += visibleDocs.length;
 
       visibleDocs.forEach(docSnap => rows.push(plainKnowledgePost(docSnap)));
@@ -29074,8 +29278,6 @@ async function sendEmuFeedback() {
         type:'emu-knowledge-posts', posts:rows, append:!!options.append, hasMore:knowledgeHasMore,
         /* 実際の投稿数。1ページ目のときだけ数える（続きを読むでは変わらない）。 */
         totalCount: options.append ? undefined : await totalCountRead,
-        /* 見学の範囲で止まったか。止まったことを画面で伝えるために渡す。 */
-        guestCapped: guestCapped, guestLimit: GUEST_KNOWLEDGE_LIMIT,
         account,
         /* 運営か（「運営として削除」を出すため。消せるかはサーバーが決める） */
         isOwner: typeof _spIsOwnerAddr === 'function' && !!account && _spIsOwnerAddr(account),
@@ -29085,7 +29287,8 @@ async function sendEmuFeedback() {
         helpedCount:await countMyGoodPosts(account, !options.append),
         // 議論から生まれた「みんなの結論」。1ページ目にだけ添える。
         conclusions: options.append ? [] : await readDiscussionConclusions(),
-        canDraft:typeof isFreeOnlyUser === 'function' ? !isFreeOnlyUser() : false,
+        /* LAB-05：下書きの可否は、古い無料NFT（isFreeOnlyUser）ではなく段の枠で決める。見学でも1件は保存できる（Rules と同じ） */
+        canDraft:!!account,
         canSchedule:!!window.hasScheduleNFT,
         authors:knowledgeAuthorsKnown(authorAddrs)
       });
@@ -29190,7 +29393,16 @@ async function sendEmuFeedback() {
         createdAt: _emuTimestampMs(r.createdAt) ? new Date(_emuTimestampMs(r.createdAt)).toISOString() : ''
       }));
       posts.sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-      sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:{ posts, postsUnread: rows === null, drafts:await readKnowledgeDrafts(account) } });
+      /* 下書きの置き場所をひとつに（11/7）：開いたときに前の置き場所の分を移し、下書き・自分用をひとつの一覧で出す。
+         続きは「もっと見る」。数は共通の枠（plan_counts：使っている数・上限）で出す。 */
+      const draftPage = await readKnowledgeDrafts(account, { page:true, refresh:true });
+      const used = await readLibraryUsed();
+      sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:{
+        posts, postsUnread: rows === null,
+        drafts: draftPage.items, draftsNext: draftPage.next, draftsNextSource: draftPage.nextSource || 'lab',
+        draftsTotal: Number.isFinite(used) ? used : undefined, draftsUnread: !!draftPage.labUnread,
+        libraryUsed: used, libraryCap: emuLibraryCap()
+      } });
     } catch (error) {
       sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:{ posts:[], drafts:[] } });
       sendKnowledge({ type:'emu-knowledge-error', error:error.message || 'データを取得できませんでした。' });
@@ -29200,9 +29412,9 @@ async function sendEmuFeedback() {
   window.addEventListener('emu-post-save-result', event => {
     const detail = event.detail || {};
     sendKnowledge({ type:'emu-knowledge-save-result', kind:'publish', ...detail });
-    const draftId = knowledgePublishDrafts.get(String(detail.requestId || ''));
+    const draft = knowledgePublishDrafts.get(String(detail.requestId || ''));
     knowledgePublishDrafts.delete(String(detail.requestId || ''));
-    if (detail.ok && draftId) dropPublishedDraft(draftId);
+    if (detail.ok && draft) dropPublishedDraft(draft.id, draft.source);
   });
   window.addEventListener('emu-reaction-result', event => {
     const detail = event.detail || {};
@@ -29271,6 +29483,10 @@ async function sendEmuFeedback() {
           window._emuOpenLibraryWhenReady = false;
           sendKnowledge({ type:'emu-knowledge-open-library' });
         }
+        if (window._emuOpenComposerWhenReady) {
+          window._emuOpenComposerWhenReady = false;
+          sendKnowledge({ type:'emu-knowledge-open-composer' });
+        }
       }
       syncKnowledgeFrame({ append:false });
       return;
@@ -29281,6 +29497,26 @@ async function sendEmuFeedback() {
     }
     if (message.type === 'emu-knowledge-panel') {
       await loadKnowledgePanel(message.kind);
+      return;
+    }
+    /* 下書きの続き（30件ずつ）。source は 'emu'（通常）か 'lab'（Knowledge Lab） */
+    if (message.type === 'emu-knowledge-more-drafts') {
+      const account = _emuAddress();
+      const source = message.source === 'emu' ? 'emu' : 'lab';
+      const page = account ? await readKnowledgeDrafts(account, { page:true, source, cursor:String(message.cursor || '') }) : null;
+      sendKnowledge({ type:'emu-knowledge-drafts-page', source, items: page ? page.items : [], next: page ? page.next : null,
+        nextSource: page ? page.nextSource : source, failed: !page });
+      return;
+    }
+    /* Lab の下書きを開き直すとき、画像だけはあとから届ける（一覧には大きな画像を載せない） */
+    if (message.type === 'emu-knowledge-draft-image' && message.draftId) {
+      const cur = await _emuLabApi('/posts/' + encodeURIComponent(String(message.draftId)));
+      sendKnowledge({ type:'emu-knowledge-draft-image', draftId:String(message.draftId), imageUrl: cur.ok ? String(cur.body.imageUrl || '') : '', ok:cur.ok });
+      return;
+    }
+    /* Knowledge Lab の下書きは、Knowledge Lab の編集画面で開く（置き場所が違うため） */
+    if (message.type === 'emu-knowledge-open-lab-draft' && message.draftId) {
+      window.openEmuKnowledgeLab?.('mine', { edit: String(message.draftId) });
       return;
     }
     /* 投稿を消す（11/2）。本人は自分の投稿、運営はどの投稿でも。消すのはサーバー
@@ -29324,17 +29560,19 @@ async function sendEmuFeedback() {
       postTagsInput.value = String(payload.tags || '').slice(0, 500);
       postTitleInput.disabled = false;
       postForm._knowledgeImageDataUrl = String(payload.imageUrl || '');
+      postForm._knowledgeLab = _emuLabDetails(payload.lab);
       postForm._knowledgeRequestId = String(message.requestId || Date.now());
-      if (payload.draftId) knowledgePublishDrafts.set(postForm._knowledgeRequestId, String(payload.draftId));
+      if (payload.draftId) knowledgePublishDrafts.set(postForm._knowledgeRequestId, { id:String(payload.draftId), source:payload.draftSource === 'lab' ? 'lab' : 'emu' });
+      /* Lab の下書きから公開するとき、画像がまだ画面に届いていなければ、下書きの画像を読んで一緒に公開する */
+      if (payload.draftSource === 'lab' && !postForm._knowledgeImageDataUrl) {
+        const cur = await _emuLabApi('/posts/' + encodeURIComponent(String(payload.draftId)));
+        if (cur.ok && cur.body.imageUrl) postForm._knowledgeImageDataUrl = String(cur.body.imageUrl);
+      }
       postForm.requestSubmit();
       return;
     }
     if (message.type === 'emu-knowledge-draft') {
       const payload = message.payload || {};
-      if (typeof isFreeOnlyUser === 'function' && isFreeOnlyUser()) {
-        sendKnowledge({ type:'emu-knowledge-save-result', kind:'draft', requestId:message.requestId, ok:false, error:'下書きは有料パス限定です。' });
-        return;
-      }
       try {
         const account = _emuAddress();
         if (payload.draftId) await updateKnowledgeDraft(account, payload.draftId, payload);
@@ -29343,14 +29581,18 @@ async function sendEmuFeedback() {
         sendKnowledge({ type:'emu-knowledge-save-result', kind:'draft', requestId:message.requestId, ok:true, drafts:items });
         syncKnowledgeFrame();
       } catch (error) {
-        sendKnowledge({ type:'emu-knowledge-save-result', kind:'draft', requestId:message.requestId, ok:false, error:'下書きを保存できませんでした。容量をご確認ください。' });
+        const full = error && error.message === 'LIBRARY_FULL';
+        sendKnowledge({ type:'emu-knowledge-save-result', kind:'draft', requestId:message.requestId, ok:false,
+          error: full
+            ? '下書きは' + error.cap + '件まで保存できます（Knowledge Lab の下書きも含みます）。いらない下書きを消すと、また保存できます。'
+            : '下書きを保存できませんでした。容量をご確認ください。' });
       }
       return;
     }
     if (message.type === 'emu-knowledge-delete-draft') {
       try {
         const account = _emuAddress();
-        await deleteKnowledgeDraft(account, message.draftId);
+        await deleteKnowledgeDraft(account, message.draftId, message.source === 'lab' ? 'lab' : 'emu');
         const items = await readKnowledgeDrafts(account);
         sendKnowledge({ type:'emu-knowledge-drafts', drafts:items });
       } catch (error) {
@@ -29370,7 +29612,7 @@ async function sendEmuFeedback() {
         if (!response.ok) throw new Error(data.error || '予約に失敗しました。');
         knowledgeScheduleCache.fetchedAt = 0;
         sendKnowledge({ type:'emu-knowledge-save-result', kind:'schedule', requestId:message.requestId, ok:true });
-        if (payload.draftId) dropPublishedDraft(String(payload.draftId));
+        if (payload.draftId) dropPublishedDraft(String(payload.draftId), payload.draftSource === 'lab' ? 'lab' : 'emu');
         syncKnowledgeFrame();
       } catch (error) { sendKnowledge({ type:'emu-knowledge-save-result', kind:'schedule', requestId:message.requestId, ok:false, error:error.message || '予約に失敗しました。' }); }
       return;
@@ -29378,7 +29620,7 @@ async function sendEmuFeedback() {
     if (message.type === 'emu-knowledge-command') {
       if (message.command === 'wallet') myWalletButton.click();
       if (message.command === 'knowledge-lab') window.openEmuKnowledgeLab();
-      if (message.command === 'experience') window.openEmuKnowledgeLab('library', {compose:true});
+      if (message.command === 'experience') emuOpenKnowledgeComposer();
       /* Knowledge Text（旧 Room1）は別のページなので、小部屋の枠で全画面に開く
          （エレベーターやショッピングと同じ出し方） */
       if (message.command === 'room1' && typeof openSpRoom === 'function') {

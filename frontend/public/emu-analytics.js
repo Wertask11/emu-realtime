@@ -17,7 +17,11 @@
     knowledge_lab_search: { mode: ['lexical','semantic'], result_count: 'count', more: 'boolean' },
     knowledge_lab_research: { stage: ['compare','ai_success','save'], method: ['manual','ai'] },
     knowledge_lab_writer_profile: { stage: ['view','save'] },
-    knowledge_lab_save: { kind: ['knowledge','research','draft'] }
+    knowledge_lab_save: { kind: ['knowledge','research','draft'] },
+    /* 11/7 投稿の入口をひとつに。数・はい/いいえ・決まった語だけ（本文・題名・分類名・検索語は送らない） */
+    post_details: { stage: ['open','attached','attach_failed'], facet_count: 'count', ai_consent: 'boolean' },
+    post_after_save: { kind: ['publish','draft','schedule'], action: ['library','write','close'] },
+    post_entry_redirect: { from: ['lab'] }
   };
   const get = (storage, key) => { try { return storage.getItem(key); } catch (_) { return null; } };
   const put = (storage, key, value) => { try { storage.setItem(key,value); return true; } catch (_) { return false; } };

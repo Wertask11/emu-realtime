@@ -277,6 +277,17 @@ function parseCursor(value) {
     fail("INVALID_CURSOR");
   }
 }
+/* LAB-10（11/7）：投稿の画像。Firestore Rules（posts の imageUrl）と同じ決まり：
+   空、または 1,048,000 文字以内の data:image/(jpeg|png|webp);base64。それ以外（http の画像・SVG など）は受け付けない。 */
+const IMAGE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/;
+function validImage(v) {
+  return typeof v === "string" && v.length > 0 && v.length <= 1048000 && IMAGE.test(v);
+}
+function imageUrl(v) {
+  if (v === "") return "";
+  if (!validImage(v)) fail("INVALID_IMAGE");
+  return v;
+}
 function safePost(postId, p, actor) {
   return {
     id: postId,
@@ -294,6 +305,8 @@ function safePost(postId, p, actor) {
     visibility: p.visibility || "public",
     revision: p.knowledgeLab?.revision || 0,
     editable: owner(p, actor),
+    // 画像そのもの（大きい）は一覧では返さない。あるかどうかだけ。本人の編集では post() が添える。
+    hasImage: validImage(p.imageUrl),
   };
 }
 module.exports = {
@@ -318,4 +331,6 @@ module.exports = {
   cursor,
   parseCursor,
   safePost,
+  validImage,
+  imageUrl,
 };

@@ -265,20 +265,8 @@ function createService({
       (await savedMetrics.status()).state !== "ready"
     )
       m.fail("SAVED_METRICS_NOT_READY", 503);
-    const plan = a
-      ? (await entitlement.getEntitlement(a.uid, a.account)).plan
-      : "guest";
-    const guest = entitlement.limitOf(plan, "post") <= 0;
-    const scope = guest
-      ? [...all]
-          .filter((p) => p.active)
-          .sort(
-            (x, y) =>
-              y.createdAtMs - x.createdAtMs || x.postId.localeCompare(y.postId),
-          )
-          .slice(0, 20)
-      : all;
-    const rows = m.select(scope, params, terms);
+    /* 11/7 創業者決定：見学の「新着20件」の制限は廃止。どの段の人も、公開している知識全体を探せる。 */
+    const rows = m.select(all, params, terms);
     const fp = m.hash(params),
       version = m.hash(rows.map((r) => [r.postId, r.indexedAtMs]));
     let start = 0;
@@ -325,8 +313,6 @@ function createService({
           ? m.cursor({ q: fp, v: version, after: rows[scanned - 1].postId })
           : null,
       indexedMatches: rows.length,
-      guestCapped: guest && all.length > 20,
-      guestLimit: guest ? 20 : null,
       indexCheckedAt: cacheUntil - 60000,
       searchMethod: "japanese-lexical",
       aiAvailable: false,
@@ -335,23 +321,8 @@ function createService({
   async function rawPost(postId, a = null, publicOnly = false) {
     m.id(postId);
     const pub = await db.collection("posts").doc(postId).get();
-    if (pub.exists && m.publicPost(pub.data())) {
-      if (!a?.owner && !m.owner(pub.data(), a)) {
-        const plan = a
-          ? (await entitlement.getEntitlement(a.uid, a.account)).plan
-          : "guest";
-        if (entitlement.limitOf(plan, "post") <= 0) {
-          const s = await db
-            .collection("posts")
-            .orderBy("createdAt", "desc")
-            .limit(20)
-            .get();
-          if (!s.docs.some((d) => d.id === postId))
-            m.fail("READER_PLAN_REQUIRED", 403);
-        }
-      }
-      return pub.data();
-    }
+    /* 公開している投稿は、どの段の人も読める（11/7 創業者決定：見学の「新着20件」は廃止）。 */
+    if (pub.exists && m.publicPost(pub.data())) return pub.data();
     if (publicOnly || !a) m.fail("NOT_FOUND", 404);
     const priv = await ref("private_posts", postId).get();
     if (priv.exists && (a.owner || m.owner(priv.data(), a))) return priv.data();
@@ -392,11 +363,11 @@ function createService({
     };
   }
   async function post(postId, a = null) {
-    return m.safePost(
-      postId,
-      await publicProof(postId, await rawPost(postId, a)),
-      a,
-    );
+    const raw = await publicProof(postId, await rawPost(postId, a));
+    const out = m.safePost(postId, raw, a);
+    // LAB-10：本人が編集するときは、いまの画像を確かめ・変え・外せるように画像も返す
+    if (out.editable && m.validImage(raw.imageUrl)) out.imageUrl = raw.imageUrl;
+    return out;
   }
   async function quota(tx, a, kind, prepared = a.membership) {
     const ent = prepared;
@@ -579,6 +550,8 @@ function createService({
         ? input.verification
         : "self-reported",
     };
+    // LAB-10：画像は、送られたときだけ変える（送られなければ今の画像のまま。"" なら外す）
+    const image = input.imageUrl === undefined ? undefined : m.imageUrl(input.imageUrl);
     const tags = m
       .text(input.tags || "", 500)
       .split(",")
@@ -698,6 +671,10 @@ function createService({
           hidden: false,
         },
       };
+      if (image !== undefined) {
+        if (image) value.imageUrl = image;
+        else delete value.imageUrl;
+      }
       const recordActivity = await activity.prepare(tx, a, [
         {
           kind: "experience-posted",
@@ -899,6 +876,134 @@ function createService({
     const s = await ownCollection("private_posts", a, q);
     s.items = s.items.map((p) => m.safePost(p.id, p, a));
     return s;
+  }
+  /* 下書きの置き場所をひとつに（11/7 創業者承認）。
+     知識を読むの下書き（knowledge_drafts）を、本人が開いたときに Knowledge Lab の下書き（private_posts）へ移す。
+     ・元の文書は消さない（β のデータを残す）。移した印（movedTo）だけを付け、一覧には出さない
+     ・移した先の名前は元の文書から決まる（kd-<元のID>）。やり直しても二重にならない
+     ・下書きの数（plan_counts）は、移しても変えない（1件は1件のまま。数え直しで二重に数えない）
+     ・分類は、今も使える分類だけを残す。AI の同意は、本人が下書きで付けていたときだけ引き継ぐ */
+  function draftOwnerForms(a) {
+    const forms = new Set();
+    for (const address of [a.walletAddress, a.account?.walletAddress, a.account?.chesAddress]) {
+      if (!ethersUtils.isAddress(address || "")) continue;
+      forms.add(address);
+      forms.add(address.toLowerCase());
+      forms.add(ethersUtils.getAddress(address.toLowerCase()));
+    }
+    return [...forms].slice(0, 10);
+  }
+  async function importLegacyDrafts(a) {
+    const forms = draftOwnerForms(a);
+    if (!forms.length) return { moved: 0, remaining: 0 };
+    // 移したあとの文書も残るので、文書名の順に最後まで読む（上限は保存枠の最大 1,000 件＋余白）
+    const docs = [];
+    let last = null;
+    do {
+      let q = db
+        .collection("knowledge_drafts")
+        .where("owner", "in", forms)
+        .orderBy("__name__")
+        .limit(200);
+      if (last) q = q.startAfter(last);
+      const page = await q.get();
+      docs.push(...page.docs);
+      last = page.size === 200 ? page.docs[page.size - 1] : null;
+    } while (last && docs.length < 1200);
+    const snap = { docs };
+    const terms = await taxonomy(),
+      valid = new Map(terms.map((t) => [t.id, t]));
+    const clip = (v, n) => String(v == null ? "" : v).trim().slice(0, n);
+    let moved = 0,
+      remaining = 0;
+    for (const doc of snap.docs) {
+      const d = doc.data() || {};
+      if (d.movedTo) continue;
+      const target = "kd-" + doc.id;
+      try {
+        m.id(target);
+      } catch (_) {
+        continue;
+      }
+      const lab = d.lab && typeof d.lab === "object" ? d.lab : {};
+      const facets = {};
+      for (const axis of m.AXES) {
+        const ids = (Array.isArray(lab.facets?.[axis]) ? lab.facets[axis] : [])
+          .map(String)
+          .filter((id) => {
+            const t = valid.get(id);
+            return t && t.axis === axis && t.active && !t.mergedInto;
+          });
+        facets[axis] = [...new Set(ids)].slice(0, 20);
+      }
+      const t = now();
+      const done = await db.runTransaction(async (tx) => {
+        const [src, dst, pub] = await Promise.all([
+          tx.get(doc.ref),
+          tx.get(ref("private_posts", target)),
+          tx.get(db.collection("posts").doc(target)),
+        ]);
+        if (!src.exists || src.data().movedTo) return false;
+        if (!m.owner({ owner: src.data().owner }, a)) return false;
+        if (!dst.exists && !pub.exists) {
+          const created = d.createdAt || (d.savedAt ? new Date(d.savedAt) : new Date(t));
+          tx.set(ref("private_posts", target), {
+            title: clip(d.title, 160) || "（無題の下書き）",
+            body: clip(d.body, 5000),
+            tags: clip(d.tags, 500),
+            ...(m.validImage(d.imageUrl) ? { imageUrl: d.imageUrl } : {}),
+            address: d.owner,
+            userId: d.owner,
+            displayName: "Emuer",
+            authorSchoolParkId: a.spid,
+            visibility: "draft",
+            createdAt: created,
+            updatedAt: new Date(t),
+            goodCount: 0,
+            changeCount: 0,
+            knowledgeLab: {
+              facets,
+              period: clip(lab.period, 120),
+              happened: clip(lab.happened, 2000),
+              learned: clip(lab.learned, 2000),
+              advice: clip(lab.advice, 2000),
+              sources: clip(lab.sources, 1500),
+              aiUseConsent:
+                lab.aiUseConsent === true
+                  ? { allowed: true, version: 1, actorSchoolParkId: a.spid, atMs: t }
+                  : { allowed: false },
+              verification: [
+                "self-reported",
+                "tested-by-author",
+                "in-progress",
+                "needs-update",
+              ].includes(lab.verification)
+                ? lab.verification
+                : "self-reported",
+              revision: 1,
+              publishedOnce: false,
+              quality: "本人の経験（自己申告）",
+              thirdPartyConfirmation: null,
+              hidden: false,
+              importedFrom: { collection: "knowledge_drafts", id: doc.id, atMs: t },
+            },
+          });
+          // 数（plan_counts）は、元の下書きを作ったときに数えてある。ここでは増やさない。
+          // 公開・アーカイブしたときに1つ減らせるよう、数えている人を控える。
+          tx.set(
+            ref("post_control", target),
+            { authorSchoolParkId: a.spid, privateQuotaUid: a.uid },
+            { merge: true },
+          );
+        }
+        tx.update(doc.ref, { movedTo: target, movedAtMs: t });
+        return true;
+      });
+      if (done) moved++;
+    }
+    for (const doc of snap.docs) if (!doc.data().movedTo) remaining++;
+    // 移せなかった分（名前が長すぎる・読み直したら他の人の分だった など）は、元の場所に残る
+    return { moved, remaining: Math.max(0, remaining - moved) };
   }
   async function myPublicPosts(a, q = {}) {
     // Older Emu posts have no Passport attribution. Use only authenticated
@@ -1433,6 +1538,7 @@ function createService({
     archivePost,
     restorePost,
     myPosts,
+    importLegacyDrafts,
     myPublicPosts,
     ownCollection,
     profile,

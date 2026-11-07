@@ -27,29 +27,23 @@ test('知識一覧と見張りが、recommended で絞るのをやめている',
     "知識一覧か見張りが、まだ recommended で絞っている");
 });
 
-test('見学の範囲が、本数で決まっている', () => {
-  assert.ok(INDEX.indexOf('const GUEST_KNOWLEDGE_LIMIT = 20;') >= 0, '本数が決まっていない');
-  assert.ok(INDEX.indexOf('GUEST_KNOWLEDGE_LIMIT - knowledgeShown') >= 0, '残りを数えていない');
+/* 11/7 創業者決定：見学の「新着20件」の制限は廃止。見学の人も、公開している知識を最後まで読める。
+   一覧（index.html）でも Knowledge Lab（検索・投稿の詳細）でも、20件で止めない。 */
+test('見学でも、20件で止めない（一覧）', () => {
+  assert.equal(INDEX.indexOf('GUEST_KNOWLEDGE_LIMIT'), -1, '見学の本数の制限が残っている');
+  assert.equal(INDEX.indexOf('guestCapped: guestCapped'), -1, '止まったことを渡している');
+  assert.equal(INDEX.indexOf('knowledgeHasMore = false;'), -1, '見学で続きを止めている');
 });
 
-test('段が届くのを待ってから、見学かどうかを決める', () => {
-  const i = INDEX.indexOf('const guest = !emuHasPlan');
-  assert.ok(i > 0, '判定が見当たらない');
-  const before = INDEX.slice(Math.max(0, i - 400), i);
-  assert.ok(before.indexOf('await emuEnsureEntitlement()') >= 0, '段を待っていない');
-});
-
-test('見学で止まったことを、画面へ伝えている', () => {
-  assert.ok(INDEX.indexOf('guestCapped: guestCapped, guestLimit: GUEST_KNOWLEDGE_LIMIT') >= 0,
-    '止まったことを渡していない');
-  assert.ok(INDEX.indexOf('knowledgeHasMore = false;') >= 0, '続きがあるように見せてしまう');
-});
-
-test('知識の画面に、区切りを出す場所がある', () => {
-  assert.ok(KNOW.indexOf('id="guestWall"') >= 0, '出す箱が無い');
-  assert.ok(KNOW.indexOf('state.guestCapped=!!m.guestCapped') >= 0, '受け取っていない');
-  assert.ok(KNOW.indexOf('どなたでも読める新着') >= 0, '何も言わずに終わっている');
-  assert.ok(KNOW.indexOf('Emu for SchoolPark light') >= 0, 'この先どうすれば読めるか書いていない');
+test('見学でも、20件で止めない（Knowledge Lab の検索・投稿の詳細・料金表）', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const read = (f) => fs.readFileSync(path.join(__dirname, '../..', f), 'utf8');
+  const service = read('backend/knowledge-lab/service.js'), semantic = read('backend/knowledge-lab/semantic.js');
+  assert.doesNotMatch(service, /READER_PLAN_REQUIRED|guestCapped|\.limit\(20\)\s*\.get\(\);\s*if \(!s\.docs\.some/);
+  assert.doesNotMatch(semantic, /guestCapped|plan\.guest/);
+  assert.doesNotMatch(read('backend/membership-policy.js'), /latest-20/);
+  assert.doesNotMatch(read('frontend/public/membership-features.js'), /新着20件/);
+  assert.doesNotMatch(read('frontend/public/knowledge-lab/lab.js'), /新着20件/);
 });
 
 /* ───────── 旧ログインボーナス ─────────

@@ -60,16 +60,102 @@
   let savedNoteSnapshot = noteSnapshot(), noteEditorGeneration = 0;
   function noteSaved() { savedNoteSnapshot = noteSnapshot(); }
   const noteDirty = () => noteSnapshot() !== savedNoteSnapshot;
+  /* LAB-03（11/7）：経験知の入力画面も、保存していない内容を確認なしで捨てない。
+     前は × や Esc で閉じると、そのまま消えて、開き直すと空欄だった。
+     研究ノートと同じく、本文を localStorage には置かない（画面の中だけで持つ）。 */
+  /* LAB-10（11/7）：Lab で整理した投稿でも、画像を確かめ・変え・外せる。
+     縮め方は知識を読むの投稿画面と同じ（長い辺900px・JPEG 0.75・元の画像は8MBまで）。
+     state.postImage：undefined＝変えない、""＝外す、data:image/...＝新しい画像。 */
+  function setPostImage(src, changed) {
+    const img = $("#postImagePreview");
+    if (!img) return;
+    if (changed !== false) state.postImage = src;
+    img.hidden = !src;
+    if (src) img.src = src;
+    else img.removeAttribute("src");
+    $("#postImageRemove").hidden = !src;
+  }
+  async function showPostImage(p) {
+    state.postImage = undefined;
+    if ($("#postImage")) $("#postImage").value = "";
+    setPostImage(p?.imageUrl || "", false);
+    if (!p?.imageUrl && p?.hasImage && p?.id && p?.editable) {
+      try {
+        const full = await api("/posts/" + p.id, { auth: true });
+        if (state.post === p && state.postImage === undefined) setPostImage(full.imageUrl || "", false);
+      } catch (_) {}
+    }
+  }
+  function shrinkImage(file) {
+    return new Promise((resolve, reject) => {
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return reject(new Error("JPEG・PNG・WebP の画像を選んでください。"));
+      if (file.size > 8 * 1024 * 1024) return reject(new Error("画像は8MB以下にしてください。"));
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("画像を読み込めませんでした。"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("画像を読み込めませんでした。"));
+        img.onload = () => {
+          const scale = Math.min(1, 900 / Math.max(img.width, img.height)),
+            canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return reject(new Error("画像を読み込めませんでした。"));
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const url = canvas.toDataURL("image/jpeg", 0.75);
+          if (url.length > 1048000) return reject(new Error("画像が大きすぎます。小さい画像を選んでください。"));
+          resolve(url);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  $("#postImage")?.addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      setPostImage(await shrinkImage(file));
+    } catch (error) {
+      e.target.value = "";
+      status(error.message, true);
+    }
+  });
+  $("#postImageRemove")?.addEventListener("click", () => {
+    if ($("#postImage")) $("#postImage").value = "";
+    setPostImage("");
+  });
+  function postSnapshot() {
+    if (!$("#editorDialog")?.open) return "";
+    const fields = [...document.querySelectorAll('#postForm input,#postForm textarea,#postForm select')]
+      .filter(el => el.type !== 'file')
+      .map(el => [el.id || el.name || el.value, el.type === 'checkbox' ? el.checked : el.value]);
+    // 画像を選んだ・外した（まだ保存していない）も、書きかけとして数える
+    fields.push(['image', state.postImage === undefined ? '' : 'changed:' + String(state.postImage).length]);
+    return JSON.stringify(fields);
+  }
+  let savedPostSnapshot = "";
+  function postSaved() { savedPostSnapshot = postSnapshot(); }
+  const postDirty = () => !!$("#editorDialog")?.open && postSnapshot() !== savedPostSnapshot;
+  function closePostEditor() {
+    if (postDirty() && !confirm('保存していない経験知があります。破棄して閉じますか？ 保存する場合は「キャンセル」で戻ってください。')) return false;
+    savedPostSnapshot = "";
+    $("#editorDialog").close();
+    return true;
+  }
   window.EmuLabUnsaved = {
-    isDirty: noteDirty,
-    discard: noteSaved, // Identity changes must unload the previous user's input without a prompt.
+    isDirty: () => noteDirty() || postDirty(),
+    // Identity changes must unload the previous user's input without a prompt.
+    discard() { noteSaved(); if ($("#editorDialog")?.open) { $("#postForm").reset(); $("#editorDialog").close(); } savedPostSnapshot = ""; },
     canLeave() {
+      if (postDirty() && !closePostEditor()) return false;
       if (!noteDirty()) return true;
       if (!confirm('保存していない研究内容があります。破棄して閉じますか？ 保存する場合は「キャンセル」で戻ってください。')) return false;
       noteSaved(); return true;
     }
   };
-  window.addEventListener('beforeunload', e => { if (noteDirty()) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('beforeunload', e => { if (noteDirty() || postDirty()) { e.preventDefault(); e.returnValue = ''; } });
   const messages = {
     AI_DISABLED: "AIは現在停止しています。手動の研究機能を利用できます。",
     AI_SOURCE_CONSENT_REQUIRED:
@@ -116,7 +202,7 @@
     ARCHIVED_NOTE_RESTORE_REQUIRED:
       "保管したノートは復元してから編集できます。",
     READER_PLAN_REQUIRED:
-      "見学では新着20件を読めます。続きの知識は既存のEmu for SchoolPark light以上で利用できます。",
+      "この知識は、いまは読めません。時間をおいて開き直してください。",
     LAUNCH_HOLD: "公開準備中です。保存・投稿はまだ利用できません。",
     RULES_NOT_VERIFIED: "データ保護の確認中です。保存・投稿は停止しています。",
     AUTH_REQUIRED: "ログインしてから続けてください。",
@@ -445,11 +531,7 @@
     );
     state.cursors.search = data.next;
     $("#moreResults").hidden = !data.next;
-    status(
-      data.guestCapped
-        ? "見学では新着20件から検索しています。それより前の知識は既存のEmu for SchoolPark light以上で利用できます。"
-        : "検索結果を表示しました。",
-    );
+    status("検索結果を表示しました。");
     if (parent === window) history.replaceState(null, "", sharedURL());
   }
   async function view(name) {
@@ -676,6 +758,8 @@
       ? p.tags.join(",")
       : p?.tags || "";
     $("#postVisibility").value = p?.visibility || "draft";
+    postSubmitLabel();
+    showPostImage(p);
     const lab = p?.knowledgeLab || {};
     $("#postAIConsent").checked = lab.aiUseConsent?.allowed === true;
     for (const key of [
@@ -690,6 +774,7 @@
         lab[key] || (key === "verification" ? "self-reported" : "");
     facetUI("#postFacets", lab.facets || p?.facets || {});
     $("#editorDialog").showModal();
+    postSaved(); // 開いた直後の内容を「保存済み」として覚える（ここから変えたら確認する）
     if (!p) measure("post_create_start", {surface:"lab"});
     $("#postTitle").focus();
   }
@@ -725,6 +810,8 @@
           facets: facetValue("#postFacets"),
           visibility: $("#postVisibility").value,
           aiUseConsent: $("#postAIConsent").checked,
+          // LAB-10：画像は、選んだ・外したときだけ送る（送らなければ今の画像のまま）
+          ...(state.postImage !== undefined ? { imageUrl: state.postImage } : {}),
         };
       for (const key of [
         "period",
@@ -743,15 +830,29 @@
           auth: true,
           body: { ...payload, key: keyFor("post", payload) },
         });
-        if (payload.visibility === "public" && (!p || p.visibility !== "public")) measure("post_publish", {surface:"lab"}, result.id);
+        if (payload.visibility === "public" && (!p || p.visibility !== "public")) {
+          measure("post_publish", {surface:"lab"}, result.id);
+          // 初投稿キャンペーンの知らせ（通常投稿と同じ。初めてかどうかはサーバーが決める）
+          if (parent !== window)
+            parent.postMessage({ type: "emu-lab-action", action: "published", postId: result.id }, location.origin);
+        }
         else if (payload.visibility !== "public") measure("knowledge_lab_save", {kind:"draft"}, result.id + ":" + result.revision);
         state.post = await api("/posts/" + result.id, { auth: true });
         if (state.selected.has(result.id)) {
           state.selected.set(result.id, state.post);
           selected();
         }
+        savedPostSnapshot = "";
         $("#editorDialog").close();
-        status("経験知を保存しました。");
+        /* Claude 監査 P2-1：公開範囲ごとに言い分ける。下書きのまま「保存しました」だけだと、
+           公開されたと思って終わってしまう。 */
+        status(
+          payload.visibility === "public"
+            ? "公開しました。知識を読む・知識図書館に表示されます。"
+            : payload.visibility === "private"
+              ? "自分用として保存しました（公開されていません）。"
+              : "下書きに保存しました（まだ公開されていません）。マイライブラリーから続きを書いて公開できます。",
+        );
         await search();
       } finally {
         submit.disabled = false;
@@ -1437,6 +1538,12 @@
     const kind = state.mineKind,
       isNote = ["notes", "archived-notes"].includes(kind);
     if (!more) {
+      /* 下書きの置き場所をひとつに（11/7）：知識を読むで保存した下書きも、ここ（下書き・自分用）へ移す。
+         元は消さない。移せなくても一覧は出す（次に開いたときにもう一度移す）。 */
+      if (!state.draftsImported)
+        await api("/me/drafts/import", { method: "POST", auth: true, body: {} })
+          .then(() => (state.draftsImported = true))
+          .catch(() => {});
       const usage = await api("/me/storage", { auth: true });
       const names = {
         saved: "保存した知識",
@@ -2175,19 +2282,49 @@
       ? params.get("sort")
       : "new";
   }
-  document.querySelectorAll("[data-compose]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        if (!state.enabled) return status(messages.LAUNCH_HOLD, true);
-        edit();
-      }),
-  );
+  /* 投稿の入口をひとつに（11/7）：Emu の中で開いているときは、新しい投稿を共通の投稿画面（知識を読む）で書く。
+     分類などは、その画面の「詳しく整理する（任意）」で付けられる。研究・回答から書くとき、既存の投稿を直すときは、
+     元への参照と公開の同意が要るので、ここ（Lab の画面）で書く。単独で開いたときも、ここで書く。 */
+  function composeInEmu() {
+    try {
+      return (
+        window.parent !== window &&
+        typeof window.parent.emuOpenKnowledgeComposer === "function"
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+  function compose() {
+    if (!state.enabled) return status(messages.LAUNCH_HOLD, true);
+    if (composeInEmu()) {
+      window.EmuAnalytics?.track("post_entry_redirect", { from: "lab" });
+      parent.postMessage(
+        { type: "emu-lab-action", action: "compose" },
+        location.origin,
+      );
+      return;
+    }
+    edit();
+  }
+  document
+    .querySelectorAll("[data-compose]")
+    .forEach((b) => (b.onclick = compose));
   document
     .querySelectorAll("[data-view]")
     .forEach((b) => bindAsync(b, () => view(b.dataset.view)));
   document
     .querySelectorAll("[data-close]")
-    .forEach((b) => (b.onclick = () => b.closest("dialog").close()));
+    .forEach((b) => (b.onclick = () => {
+      const d = b.closest("dialog");
+      if (d?.id === "editorDialog") closePostEditor();
+      else d.close();
+    }));
+  // Esc で閉じるときも同じ確認をする
+  $("#editorDialog")?.addEventListener("cancel", (e) => {
+    e.preventDefault();
+    closePostEditor();
+  });
   $("#searchForm").addEventListener("submit", (e) => {
     e.preventDefault();
     run(() => search());
@@ -2220,7 +2357,7 @@
         [
           "lab-intro",
           "まずは、経験を探してみよう",
-          "図書館では投稿済みの経験を検索できるよ。経験者へ新しく質問したいときは「経験者に質問する」へ。",
+          "図書館では投稿済みの経験を検索できるよ。経験者へ新しく聞きたいときは「知識を募集する」へ。",
         ],
         [
           "lab-library",
@@ -2331,7 +2468,7 @@
     if (initial && initial !== "library") await view(initial);
     if (p.get("post")) await detail(p.get("post"));
     if (p.get("note")) await showNote(p.get("note"));
-    if (p.get("compose") === "1") edit();
+    if (p.get("compose") === "1") compose();
     if (p.get("edit"))
       edit(await api("/posts/" + p.get("edit"), { auth: true }));
     if ($("#searchFacets input:checked"))
@@ -2341,3 +2478,18 @@
   }
   run(init);
 })();
+
+/* P2-1（11/7）：保存ボタンの文字を公開範囲に合わせる。下書きのまま「公開した」と思い込まないように。 */
+function postSubmitLabel() {
+  const b = document.getElementById("postSubmit");
+  const v = document.getElementById("postVisibility");
+  if (!b || !v) return;
+  b.textContent =
+    v.value === "public"
+      ? "公開する"
+      : v.value === "private"
+        ? "自分用として保存"
+        : "下書きに保存（公開しない）";
+}
+document.getElementById("postVisibility")?.addEventListener("change", postSubmitLabel);
+postSubmitLabel();

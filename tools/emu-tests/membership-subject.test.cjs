@@ -53,8 +53,9 @@ test('11/1 より前は、これまでどおり確かめない', async () => {
 test('投稿・募集・回答（回数）と、下書きを作る・消すときに、書く前に確かめている', () => {
   const add = INDEX.slice(INDEX.indexOf('async function _emuAddUsage(batch, kind) {'));
   assert.ok(add.slice(0, 200).includes('await emuEnsureMembershipSubject();'));
-  const del = INDEX.slice(INDEX.indexOf('async function deleteKnowledgeDraft(account, draftId) {'));
-  assert.ok(del.slice(0, 200).includes('await emuEnsureMembershipSubject();'));
+  // 11/7：Lab の下書きはサーバーが数える。前の置き場所を消す前には、今までどおり確かめる
+  const del = INDEX.slice(INDEX.indexOf('async function deleteKnowledgeDraft(account, draftId, source) {'));
+  assert.ok(del.slice(0, del.indexOf('batch.delete(')).includes('await emuEnsureMembershipSubject();'));
   const create = INDEX.slice(INDEX.indexOf('async function createKnowledgeDraft(account, payload) {'));
   const before = create.slice(0, create.indexOf("batch.set(_emuCountsRef(), { drafts: window.fbLib.increment(1)"));
   assert.ok(before.includes('await emuEnsureMembershipSubject();'));

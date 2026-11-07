@@ -67,6 +67,10 @@ test('unified navigation preserves existing auth, contracts, Quest business logi
  const readBefore=file=>cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
  // 11/3: the only allowed addition is the screen-error reporter line (client-errors.js; it sends no personal data).
  const withoutErrorReporter=src=>src.replace(/[ \t]*<script src="\/client-errors\.js"><\/script><!--[^\n]*-->\n/,'');
+ // 11/7: knowledge.html のマイライブラリー（下書きを30件ずつ・Knowledge Lab の下書きも並べる）、投稿画面の「詳しく整理する（任意）」、投稿のあとの案内、下書きの一覧（置き場所をひとつに）を変えた。
+ // 同じ日、創業者の決定で見学の「新着20件」を廃止した（membership-policy.js の readerScope を全段 all-public に）。
+ // 認めた変更（approved-2026-11-07.json）をそれぞれちょうど1か所だけ元に戻してから比べる。ほかの変更は今までどおり落ちる。
+ const undoApproved=(file,src)=>{for(const [now,was] of (require('./approved-2026-11-07.json')[file.replace('frontend/public/','')]||[])){assert.equal(src.split(now).length,2,file+': 認めた変更が見つからない');src=src.replace(now,was);}return src;};
  const before=readBefore('frontend/public/index.html'),current=fs.readFileSync(path.join(root,'frontend/public/index.html'),'utf8');
  // These functions enforce identity, authorisation, saves, completion and rewards.
  // Presentation adapters may change; these underlying implementations must not.
@@ -75,7 +79,7 @@ test('unified navigation preserves existing auth, contracts, Quest business logi
  assert.ok(grab(current,'spPassportLoad').includes('window.auth?.currentUser?.uid'),'spPassportLoad must stay tied to the signed-in UID');
  // backend/dialogue.js changed on purpose on 11/3 (#267, booked dialogue security); backend/dialogue*.test.js cover it.
  for(const fn of ['spEnsureSchoolParkAccess','emuAuthHeaders','accountGo','spQuestToggle','spQuestLog','spQuestWisdom','spWisdomSubmit','spWisdomCite','spOpenPlay']) assert.equal(grab(current,fn),grab(before,fn),fn);
- for(const file of ['firestore.rules','backend/identity.js','backend/entitlement.js','backend/membership-policy.js','backend/quest-completion.js','frontend/public/knowledge.html','frontend/public/Emu_room2/echo-field.html','frontend/public/ringo-game.html','frontend/public/daily-gods/index.html','frontend/public/daily-gods/game.js','frontend/public/schoolpark/south-elevator.html']) assert.equal(withoutErrorReporter(fs.readFileSync(path.join(root,file),'utf8')),readBefore(file),file);
+ for(const file of ['firestore.rules','backend/identity.js','backend/entitlement.js','backend/membership-policy.js','backend/quest-completion.js','frontend/public/knowledge.html','frontend/public/Emu_room2/echo-field.html','frontend/public/ringo-game.html','frontend/public/daily-gods/index.html','frontend/public/daily-gods/game.js','frontend/public/schoolpark/south-elevator.html']) assert.equal(withoutErrorReporter(undoApproved(file,fs.readFileSync(path.join(root,file),'utf8'))),readBefore(file),file);
  const retired=fs.readFileSync(path.join(root,'frontend/public/schoolpark/dao.html'),'utf8');
  for(const view of ['isHome','isPark','isPlaza','isMembers','isTreasury']) assert.ok(!retired.includes('value="{{ '+view+' }}"'),view);
  for(const view of ['ichinichi','discussion']) assert.match(fs.readFileSync(path.join(root,'frontend/public/'+view+'.html'),'utf8'),/view=practice/);
