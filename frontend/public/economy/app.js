@@ -295,7 +295,11 @@
         card.append(
           node(
             "p",
-            "資料の更新：" + new Date(r.updatedAtMs).toLocaleString("ja-JP"),
+            "資料の更新：" +
+              new Date(r.updatedAtMs).toLocaleString("ja-JP", {
+                timeZone: "Asia/Tokyo",
+              }) +
+              "（日本時間）",
           ),
         );
       const link = node("button", "内容を確認する →");
@@ -380,7 +384,10 @@
       node("b", labels[job.state] || "状態を確認中"),
       node(
         "p",
-        new Date(job.createdAtMs).toLocaleString("ja-JP") +
+        new Date(job.createdAtMs).toLocaleString("ja-JP", {
+          timeZone: "Asia/Tokyo",
+        }) +
+          "（日本時間）" +
           " · " +
           job.price +
           " EMUER",

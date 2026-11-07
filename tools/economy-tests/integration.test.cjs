@@ -261,14 +261,11 @@ test("OS worker停止・別プロセス再起動後も注文を保持し、再�
   };
   const message = (c, event) =>
     new Promise((resolve, reject) => {
-      let observed = [];
       const timer = setTimeout(
-        () =>
-          reject(Error("WORKER_PROCESS_TIMEOUT: " + JSON.stringify(observed))),
+        () => reject(Error("WORKER_PROCESS_TIMEOUT")),
         20000,
       );
       c.on("message", (m) => {
-        observed.push(m);
         if (m.event === "failed") {
           clearTimeout(timer);
           reject(Error(m.code));
@@ -349,76 +346,34 @@ test("実Firestoreでprovider 429→受付停止→返却待ち→停止中も�
   );
   assert.equal((await f.db.collection("emuer_v2_access_usage").get()).size, 0);
 });
-test("旧サービス名の取引履歴は新名称で返し、保存済み取引と台帳は変更しない", async () => {
-  const snap = await f.db.collection("mitemiru_orders").get();
-  const order = snap.docs[0];
-  assert.ok(order);
-  await order.ref.set({ productName: "SchoolPark Explorer" }, { merge: true });
-  const before = (await order.ref.get()).data();
-  const r = await fetch(f.base + "/api/mitemiru/orders", {
-    headers: { Authorization: "Bearer " + f.users.alice.token },
-  });
-  assert.equal(r.status, 200);
-  const shown = (await r.json()).orders.find((x) => x.id === order.id);
-  assert.equal(shown.productName, "冷蔵庫くんに頼む");
-  assert.equal(shown.amount, 5);
-  assert.deepEqual((await order.ref.get()).data(), before);
+test('旧サービス名の取引履歴は新名称で返し、保存済み取引と台帳は変更しない', async()=>{
+ const snap=await f.db.collection('mitemiru_orders').get();const order=snap.docs[0];assert.ok(order);
+ await order.ref.set({productName:'SchoolPark Explorer'},{merge:true});
+ const before=(await order.ref.get()).data();
+ const r=await fetch(f.base+'/api/mitemiru/orders',{headers:{Authorization:'Bearer '+f.users.alice.token}});
+ assert.equal(r.status,200);const shown=(await r.json()).orders.find(x=>x.id===order.id);
+ assert.equal(shown.productName,'冷蔵庫くんに頼む');assert.equal(shown.amount,5);
+ assert.deepEqual((await order.ref.get()).data(),before);
 });
 
 test("Plus/Pro限定: 実会員情報・7日Lightギフト・期限切れ・見積後の降格を即時反映し無課金で拒否", async () => {
-  await f.close();
-  f = await createFixture();
-  for (const role of ["guest", "light"]) {
-    const me = await f.call(role, "GET", "/me");
-    assert.equal(me.body.eligibility.reason, "SERVICE_NOT_ELIGIBLE");
-    const q = await f.call(role, "POST", "/quotes", {
-      goal: "知識を試す",
-      plan: "pro",
-    });
-    assert.equal(q.status, 403);
-    assert.equal(q.body.error, "SERVICE_NOT_ELIGIBLE");
+  await f.close(); f = await createFixture();
+  for (const role of ['guest','light']) {
+    const me=await f.call(role,'GET','/me');
+    assert.equal(me.body.eligibility.reason,'SERVICE_NOT_ELIGIBLE');
+    const q=await f.call(role,'POST','/quotes',{goal:'知識を試す',plan:'pro'});
+    assert.equal(q.status,403);assert.equal(q.body.error,'SERVICE_NOT_ELIGIBLE');
   }
-  for (const role of ["alice", "pro"]) {
-    assert.equal(
-      (await f.call(role, "GET", "/me")).body.eligibility.eligible,
-      true,
-    );
-    assert.equal(
-      (await f.call(role, "POST", "/quotes", { goal: "知識を試す" })).status,
-      200,
-    );
+  for (const role of ['alice','pro']) {
+    assert.equal((await f.call(role,'GET','/me')).body.eligibility.eligible,true);
+    assert.equal((await f.call(role,'POST','/quotes',{goal:'知識を試す'})).status,200);
   }
-  const q = (await f.call("alice", "POST", "/quotes", { goal: "知識を試す" }))
-    .body.quote;
-  await f.db
-    .collection("entitlements")
-    .doc(f.users.alice.uid)
-    .set({
-      plan: "plus",
-      source: "emulator-test",
-      startsAt: new Date(0),
-      expiresAt: new Date(Date.now() - 1000),
-    });
-  assert.equal(
-    (await f.call("alice", "GET", "/me")).body.eligibility.reason,
-    "SERVICE_NOT_ELIGIBLE",
-  );
-  const denied = await f.call("alice", "POST", "/jobs", {
-    quoteId: q.id,
-    termsVersion: q.termsVersion,
-    requestId: "expired-plus-no-charge",
-    paymentConsent: true,
-    aiConsent: true,
-  });
-  assert.equal(denied.status, 403);
-  assert.equal(denied.body.error, "SERVICE_NOT_ELIGIBLE");
-  assert.equal((await f.db.collection("mitemiru_orders").get()).size, 0);
-  await f.db
-    .collection("entitlements")
-    .doc(f.users.alice.uid)
-    .set({ plan: "plus", source: "emulator-test", startsAt: new Date(0) });
-  assert.equal(
-    (await f.call("alice", "GET", "/me")).body.eligibility.eligible,
-    true,
-  );
+  const q=(await f.call('alice','POST','/quotes',{goal:'知識を試す'})).body.quote;
+  await f.db.collection('entitlements').doc(f.users.alice.uid).set({plan:'plus',source:'emulator-test',startsAt:new Date(0),expiresAt:new Date(Date.now()-1000)});
+  assert.equal((await f.call('alice','GET','/me')).body.eligibility.reason,'SERVICE_NOT_ELIGIBLE');
+  const denied=await f.call('alice','POST','/jobs',{quoteId:q.id,termsVersion:q.termsVersion,requestId:'expired-plus-no-charge',paymentConsent:true,aiConsent:true});
+  assert.equal(denied.status,403);assert.equal(denied.body.error,'SERVICE_NOT_ELIGIBLE');
+  assert.equal((await f.db.collection('mitemiru_orders').get()).size,0);
+  await f.db.collection('entitlements').doc(f.users.alice.uid).set({plan:'plus',source:'emulator-test',startsAt:new Date(0)});
+  assert.equal((await f.call('alice','GET','/me')).body.eligibility.eligible,true);
 });
