@@ -80,14 +80,15 @@
       before = user();
     if (!before || typeof app.emuAuthHeaders !== "function")
       throw Error("AUTH_REQUIRED");
-    const headers = await app.emuAuthHeaders(true, { interactive: false });
+    const headers = new Headers(await app.emuAuthHeaders(true, { interactive: false }));
+    headers.set("Content-Type", "application/json");
     if (user() !== before) {
       syncIdentity();
       throw Error("AUTH_REQUIRED");
     }
     const r = await fetch("/api/economy" + path, {
       method: body ? "POST" : "GET",
-      headers: { ...headers, "content-type": "application/json" },
+      headers,
       body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
     });
