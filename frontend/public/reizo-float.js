@@ -261,7 +261,8 @@
     document.body.appendChild(win);
     win.querySelector('.rrw-close').onclick = closeRequest;
     draggable(win, win.querySelector('.rrw-bar'));
-    resizable(win, 'request', { w: 560, h: 780 }, { w: 320, h: 360 });
+    // 11/7：頼む窓も、選ぶ窓・聞く窓と同じ大きさで開く（はじめは 690×470）。どれかで大きさを変えたら、ほかもその大きさで開く
+    resizable(win, 'choice', { w: 690, h: 470 }, { w: 300, h: 320 });
     req = win;
     return win;
   }
