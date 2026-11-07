@@ -439,7 +439,7 @@
     return [document.body.className.split(/\s+/).filter(function(cls){return /^(?:sp-(?:passport|menu|room)-open|emu-(?:knowledge|requests|practice)-open)$/.test(cls);}).join(' '),dao()?.state.screen,!!document.querySelector('#emuRequestSheet.open'),kd?.querySelector('#panel')?.classList.contains('open'),kd?.querySelector('#topFilters .active')?.dataset.filter,window._sppCurrentPage?.()].join('|');
   }
   function openView(item) {
-    if(item.target==='emu-library' && window.innerWidth<=700 && !document.querySelector('#emuAccountMenu.open')) { requestAnimationFrame(function(){var running=tour.running();if(running?.id==='emu-feed' && running.index===6 && !document.querySelector('#emuAccountMenu.open'))window.toggleAccountMenu?.();}); }
+    if(item.target==='emu-library' && !Array.from(frameDoc('emuKnowledgeFrame')?.querySelectorAll('[data-tour~="emu-library"]')||[]).some(visible) && !document.querySelector('#emuAccountMenu.open')) { requestAnimationFrame(function(){var running=tour.running();if(running?.id==='emu-feed' && running.index===6 && !document.querySelector('#emuAccountMenu.open'))window.toggleAccountMenu?.();}); }
     if(item.pp && window._sppCurrentPage?.() !== item.pp) window.spPassportGoPage?.(item.pp);
     // CITY steps point at City's own home page; bring City back there if it is on another page.
     if(item.screen==='city' && /^city-/.test(item.target||'')) frameDoc('spDaoFrame')?.getElementById('sp-city')?.dispatchEvent(new CustomEvent('city-tour-home'));

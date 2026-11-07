@@ -2757,6 +2757,26 @@ body.paypay-mode #pp-post-fab {
   .dsc-post{flex:1}
 }
 
+/* 知識を読む（11/7）：右上の冷蔵庫くんとプロフィールは、知識を読むの左の列（＋知識を届けるの下）へ移した。
+   この画面のあいだだけ右上から外す（ほかの画面は今までどおり右上）。 */
+body.emu-knowledge-open #emuHeaderProfile, body.emu-knowledge-open #emuHeaderReizo { display:none !important; }
+/* 知識を読む・知識を探す・知識を試す（11/7）：上の見出しと説明の一文を出さず、空いた分を詰める。
+   パソコン（左にタブ列がある幅）は見出しの行ごと外す。タブレットは行き来に使うタブ列だけ残す。スマホはもともと出さない。 */
+body.emu-knowledge-open #emuTodayHome > .eth-topbar > div:first-child,
+body.emu-requests-open #emuTodayHome > .eth-topbar > div:first-child,
+body.emu-practice-open #emuTodayHome > .eth-topbar > div:first-child { display:none; }
+@media (min-width:1025px) {
+  body.emu-knowledge-open #emuTodayHome > .eth-topbar,
+  body.emu-requests-open #emuTodayHome > .eth-topbar,
+  body.emu-practice-open #emuTodayHome > .eth-topbar { display:none; }
+}
+/* 知恵ライブラリ・City（11/7）：上の「← 知識を試す」を出さず、SchoolPark の枠を上へ詰める。
+   ギルド・クエストなど、知識を試すから開いた画面には残す。 */
+body.emu-workspace-open[data-emu-view="wisdom"] #spDaoPage > .emu-workspace-tools,
+body.emu-workspace-open[data-emu-view="city"] #spDaoPage > .emu-workspace-tools { display:none; }
+/* 知識を試す：この画面の説明（知識を自分の現場で試して〜）と、スマホだけの見出しも出さない */
+#emuPracticePage > .emu-practice-title,
+#emuPracticePage > .eth-subtitle:first-of-type { display:none; }
 </style>
 <style>
 /* ═══════════════════════════════════════
@@ -15600,10 +15620,16 @@ function emuSetWalletLabel(text) {
    プラン・プロフィール・対話の予定はすべて会員ページの中にあるので、
    該当の場所を開くよう会員ページへ「どこを見たいか」を伝える。 */
 let _emuProfileAnchor = null;
+/* 知識を読むでは、プロフィールのボタンは左の列（knowledge.html の #sideProfile）にある */
+function _emuKnowledgeSideProfile() {
+  if (!document.body.classList.contains('emu-knowledge-open')) return null;
+  try { return document.getElementById('emuKnowledgeFrame')?.contentDocument?.getElementById('sideProfile') || null; } catch (_) { return null; }
+}
+window._emuKnowledgeSideProfile = _emuKnowledgeSideProfile;
 function toggleAccountMenu(e, anchor) {
   if (e) e.stopPropagation();
   const menu = document.getElementById('emuAccountMenu');
-  const btn = anchor || (e && e.currentTarget) || document.getElementById('emuHeaderProfile');
+  const btn = anchor || (e && e.currentTarget) || _emuKnowledgeSideProfile() || document.getElementById('emuHeaderProfile');
   if (!menu || !btn) return;
   const willOpen = !menu.classList.contains('open') || _emuProfileAnchor !== btn;
   closeAccountMenu();
@@ -15977,6 +16003,17 @@ function emuPaintHeaderIdentity() {
     btn.setAttribute('aria-label', 'プロフィール');
     btn.title = name ? 'プロフィール：' + name : 'プロフィール';
   });
+  /* 知識を読むの左の列（11/7）：写真と名前を両方出す。写真が無ければ名前の頭文字 */
+  try {
+    const kw = document.getElementById('emuKnowledgeFrame')?.contentWindow;
+    if (kw && typeof kw.emuSideIdentity === 'function') {
+      const addr = _emuAddress();
+      let me = addr ? emuProfileKnown(addr) : null;
+      if (addr && me === undefined) me = _emuHeadCached(addr);
+      const avatar = (me && me.avatar && me.avatar !== _emuHeadBroken) ? String(me.avatar) : '';
+      kw.emuSideIdentity({ signedIn: !!addr, name: addr ? (name || 'Emuer') : '', avatar });
+    }
+  } catch (_) {}
 }
 window.emuPaintHeaderIdentity = emuPaintHeaderIdentity;
 
