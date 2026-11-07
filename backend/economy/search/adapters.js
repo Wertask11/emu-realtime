@@ -43,6 +43,7 @@ const FIELDS = {
     "deadline",
     "deadlineMs",
     "deadlineAt",
+    "closesAt",
     "conditions",
   ],
   knowledge_text: [
@@ -134,12 +135,25 @@ function createAdapters({ db, knowledge, now = Date.now }) {
     const p = d.data();
     if (!publicRow(p) || !["OPEN", "RUNNING"].includes(p.status || "OPEN"))
       return null;
-    const end = Number(p.deadlineMs || 0);
+    const rawDeadline =
+      p.deadlineMs || p.closesAt || p.deadlineAt || p.deadline || p.due;
+    const deadlineText =
+      typeof rawDeadline === "string" ? rawDeadline.trim() : "";
+    const end =
+      typeof rawDeadline?.toMillis === "function"
+        ? rawDeadline.toMillis()
+        : typeof rawDeadline === "number"
+          ? rawDeadline
+          : /^\d{4}-\d{2}-\d{2}$/.test(deadlineText)
+            ? Date.parse(deadlineText + "T23:59:59.999+09:00")
+            : /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(deadlineText)
+              ? Date.parse(deadlineText)
+              : 0;
     if (end && end <= now()) return null;
     const info = [
       p.brief || p.given || p.title,
       p.conditions ? "参加条件: " + String(p.conditions) : null,
-      p.deadline ? "期限: " + String(p.deadline) : null,
+      p.deadline || p.due ? "期限: " + String(p.deadline || p.due) : null,
     ]
       .filter(Boolean)
       .join("。")

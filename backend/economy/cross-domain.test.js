@@ -361,3 +361,24 @@ test("disabling new cross search leaves previously paid history readable with fr
   assert.ok(done.result.limitations.some((s) => s.includes("新規受付は停止")));
   assert.equal(f.calls(), 1);
 });
+
+test("private scope changes invalidate the consent fingerprint, and past due dates cannot be proposed", async () => {
+  const f = await crossFixture();
+  assert.notEqual(
+    profile(f.env).fingerprint,
+    profile({ ...f.env, ECONOMY_PRIVATE_BALANCE_ENABLED: "false" }).fingerprint,
+  );
+  const ref = f.db.collection("sp_quests").doc("dated");
+  await ref.set({
+    title: "過去の活動",
+    brief: "確認用",
+    status: "OPEN",
+    due: "2020-01-01",
+  });
+  assert.equal(
+    await require("./search/adapters")
+      .createAdapters({ db: f.db, now: f.now })
+      .quest.get("dated", f.a),
+    null,
+  );
+});

@@ -11,7 +11,7 @@ async def main():
    c=await b.new_context(viewport={'width':width,'height':900});await c.route('**/*',lambda r:r.continue_() if r.request.url.startswith(BASE+'/') else r.abort())
    g=await c.new_page();errors=[];posts=[]
    g.on('pageerror',lambda e:errors.append(str(e)));g.on('request',lambda r:posts.append(r.url) if r.method=='POST' else None)
-   await g.goto(BASE+'/test/shell');f=g.frame_locator('iframe');await f.locator('#crossOptions').wait_for(state='visible');await f.locator('#spendable').filter(has_text='EMUER').wait_for()
+   await g.goto(BASE+'/test/reizo-shell');await g.wait_for_function('auth.currentUser?.uid === "economy-alice"');await g.locator('#emuHeaderReizo').click();await g.get_by_role('button',name='冷蔵庫くんに頼む',exact=True).click();f=g.frame_locator('#reizoRequestWin iframe');await f.locator('#crossOptions').wait_for(state='visible');await f.locator('#spendable').filter(has_text='EMUER').wait_for()
    if width>=1280:await g.evaluate("testSignIn('bob')");await f.locator('#history').filter(has_text='まだ依頼はありません').wait_for();await g.wait_for_timeout(1200)
    await f.get_by_role('button',name='Web3を試したい',exact=True).click();assert await f.locator('#goal').input_value()=='Web3を学んで実際に試したい';assert not any(x.endswith('/jobs') for x in posts)
    await f.locator('#goal').fill('コーヒーを学んで実際に試したい')
