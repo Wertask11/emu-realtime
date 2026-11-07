@@ -14,7 +14,13 @@ const publicRow = (p) =>
     p.status,
   ) &&
   (!p.visibility || p.visibility === "public");
-function createSources({ db, knowledge, now = Date.now }) {
+function createSources({
+  db,
+  knowledge,
+  payments,
+  env = process.env,
+  now = Date.now,
+}) {
   function row(kind, id, title, summary, target) {
     if (!ID.test(id)) return null;
     try {
@@ -195,6 +201,16 @@ function createSources({ db, knowledge, now = Date.now }) {
         : [];
     });
   }
-  return { candidates, revalidate };
+  return {
+    candidates,
+    revalidate,
+    cross: require("./search/registry").createRegistry({
+      db,
+      knowledge,
+      payments,
+      env,
+      now,
+    }),
+  };
 }
 module.exports = { createSources };
