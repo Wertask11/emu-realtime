@@ -321,6 +321,8 @@ app.use("/api/emuer/v2", emuerV2.router);
 const knowledgeLab = require("./knowledge-lab/router").createKnowledgeLabRouter({
   db, identity, entitlement, requireFirebaseUser, requireOwner, rateLimit,
   env: process.env, emuerEnabled: () => emuerV2.isEnabled(),
+  /* LAB-08：権限の確認は起動時と30分ごとに行い、閲覧の GET からは始めない */
+  scheduleRulesCheck: true,
   isOwner: person => [person.walletAddress, person.account && person.account.chesAddress]
     .some(address => SP_OWNER_ADDRESSES.includes(String(address || "").toLowerCase()))
 });

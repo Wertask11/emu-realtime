@@ -219,8 +219,15 @@ function createAI({
       });
     });
     try {
-      const result = await budget.call(a, "analysis", () =>
-        provider.analyze(config.model, fieldLabels, src),
+      const result = await budget.call(
+        a,
+        "analysis",
+        () => provider.analyze(config.model, fieldLabels, src),
+        // LAB-01：呼ぶ前に、この分析で使いうる最大の量を見積もって予約する
+        budget.estimateAnalysis([
+          ...fieldLabels.map((f) => JSON.stringify(f)),
+          ...src.flatMap((p) => [p.title, p.body]),
+        ]),
       );
       const latest = await sources(a, ids);
       if (latest.some((p, i) => p.hash !== src[i].hash))

@@ -155,11 +155,15 @@ function createSemantic({ db, service, ai, now = Date.now }) {
       sources.push({ id: d.id, text, hash: sourceHash(p) });
     }
     if (!sources.length) return { processed: 0, blocked: queue.size };
-    const result = await ai.budget.call(a, "embedding", () =>
-      ai.provider.embedMany(
-        config.embeddingModel,
-        sources.map((s) => s.text),
-      ),
+    const result = await ai.budget.call(
+      a,
+      "embedding",
+      () =>
+        ai.provider.embedMany(
+          config.embeddingModel,
+          sources.map((s) => s.text),
+        ),
+      ai.budget.estimateEmbedding(sources.map((s) => s.text)),
     );
     let processed = 0;
     for (let i = 0; i < sources.length; i++) {
@@ -235,8 +239,11 @@ function createSemantic({ db, service, ai, now = Date.now }) {
       vector = unpack(previous.data().vector);
       await ai.budget.cacheHit();
     } else {
-      const out = await ai.budget.call(a, "embedding", () =>
-        ai.provider.embed(config.embeddingModel, params.q),
+      const out = await ai.budget.call(
+        a,
+        "embedding",
+        () => ai.provider.embed(config.embeddingModel, params.q),
+        ai.budget.estimateEmbedding([params.q]),
       );
       vector = unpack(pack(out.vector));
       await queryRef.set({
