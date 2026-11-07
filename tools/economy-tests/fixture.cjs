@@ -19,6 +19,9 @@ const fs = require("node:fs"),
   path = require("node:path"),
   vm = require("node:vm");
 const ROOT = path.resolve(__dirname, "../..");
+const authHeadersSource = require("../year-goals-tests/extract.cjs").grab(
+  fs.readFileSync(path.join(ROOT, "frontend/public/index.html"), "utf8"), "emuAuthHeaders",
+);
 async function createFixture({
   port = 0,
   providerDown = false,
@@ -307,7 +310,7 @@ async function createFixture({
     res
       .type("html")
       .send(
-        `<!doctype html><html lang="ja"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LOCAL ECONOMY ONLY</title><style>body{margin:0}iframe{display:block;width:100%;height:100dvh;border:0}</style><iframe title="EMUER・サービス" src="/economy/index.html"></iframe><script>window.auth={currentUser:null};let token;window.emuAuthHeaders=async()=>{if(!token)throw Error('AUTH_REQUIRED');return {Authorization:'Bearer '+token}};window.openSpRoom=(url)=>{document.querySelector('iframe').src=url};window.closeSpRoom=()=>{window.closedEconomy=true};window.testSignIn=async(role)=>{const r=await fetch('/test/login?role='+role),d=await r.json();token=d.token;window.auth.currentUser={uid:d.uid};};window.testSignIn('alice');</script></html>`,
+        `<!doctype html><html lang="ja"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LOCAL ECONOMY ONLY</title><style>body{margin:0}iframe{display:block;width:100%;height:100dvh;border:0}</style><iframe title="EMUER・サービス" src="/economy/index.html"></iframe><script>window.auth={currentUser:null};${authHeadersSource};window.openSpRoom=(url)=>{document.querySelector('iframe').src=url};window.closeSpRoom=()=>{window.closedEconomy=true};window.testSignIn=async(role)=>{const r=await fetch('/test/login?role='+role),d=await r.json();window.auth.currentUser={uid:d.uid,getIdToken:async()=>d.token};};window.testSignIn('alice');</script></html>`,
       ),
   );
   app.use(express.static(path.join(ROOT, "frontend/public")));
