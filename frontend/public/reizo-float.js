@@ -63,6 +63,8 @@
   function applySize(el, v) {
     if (!v) return;
     var vp = viewport(), min = el._emuSize.min;
+    // 覚える大きさは枠線を含めた見た目の大きさ。同じ数え方にそろえないと、開き直すたびに枠線の分だけ大きくなる
+    el.style.setProperty('box-sizing', 'border-box', 'important');
     if (v.w) el.style.setProperty('width', Math.round(Math.max(min.w, Math.min(v.w, vp.w - 2 * MARGIN))) + 'px', 'important');
     if (v.h) {
       el.style.setProperty('height', Math.round(Math.max(min.h, Math.min(v.h, vp.h - 2 * MARGIN))) + 'px', 'important');
@@ -237,7 +239,8 @@
     if (!panel || panel._emuFloatWatch) return;
     panel._emuFloatWatch = true;
     draggable(panel, panel.querySelector('.sp-reizo-header'));
-    resizable(panel, 'chat', { w: 520, h: 680 }, { w: 300, h: 320 });
+    // 11/7：聞く窓は、選ぶ窓と同じ大きさで開く（はじめは 690×470）。どちらかで大きさを変えたら、もう片方もその大きさで開く
+    resizable(panel, 'choice', { w: 690, h: 470 }, { w: 300, h: 320 });
     var was = false;
     new MutationObserver(function () {
       var now = panel.classList.contains('open');
