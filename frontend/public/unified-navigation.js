@@ -26,6 +26,7 @@
     current=view;
     workspaceScreen=workspace?(options.screen||workspaceScreen||requestedScreen):null;
     document.body.classList.add('emu-unified');
+    if(document.body.dataset)document.body.dataset.emuScreen=workspaceScreen||''; // 11/7：ギルド・クエストの一覧では「← 知識を試す」を出さない
     if(document.body.dataset)document.body.dataset.emuView=view; // 11/7：いまの画面（知恵ライブラリ・City では「← 知識を試す」を出さない）
     document.body.classList.remove(...CLASSES);
     document.body.classList.add(workspace?'emu-workspace-open':view==='read'?'emu-knowledge-open':view==='search'?'emu-requests-open':view==='profile'?'emu-profile-open':'emu-practice-open');
