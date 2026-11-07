@@ -444,7 +444,8 @@
   register("sp-wisdom","04 知恵ライブラリ",v2["wisdom"].steps.map(specificationStep),"library",null);
   register("sp-city","05 City",v2["city"].steps.map(specificationStep),"city",null);
   register("sp-passport","SchoolPark パスポート",v2["passport"].steps.map(specificationStep),"passport",null);
-  register("emu-feed","01 知識を読む",v2["emu-read"].steps.map(specificationStep),null,"emuKnowledgeFrame");
+  // 11/7：スマホでは知識を読むの検索欄を「知識を探す」へ移したので、その案内は飛ばす
+  register("emu-feed","01 知識を読む",v2["emu-read"].steps.filter(function(item){return !(item.target==='emu-search'&&window.matchMedia&&window.matchMedia('(max-width:760px)').matches);}).map(specificationStep),null,"emuKnowledgeFrame");
   register("emu-requests","02 知識を探す",v2["emu-search"].steps.map(specificationStep),null,null);
   register('sp-guild','ギルドの詳細',[
     step('screen-heading','ギルドの詳細','まずは活動を読むだけでも大丈夫。「参加したい」は意思の登録で、クエストの受注とは別の操作です。'),

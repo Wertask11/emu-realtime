@@ -2795,6 +2795,16 @@ html.emu-float-dragging iframe { pointer-events:none; }
   body.emu-unified.sp-room-open.sp-room-embed { overflow:hidden; }
   body.emu-unified.sp-room-open.sp-room-embed:not(.emu-nav-closed):not(.emu-sky-open):not(.spmap-open):not(.room2-open):not(.room3-open):not(.paypay-mode):not(.emu-contact-off):not(.cam-contact-off) #emu-contact-btn { display:flex !important; }
 }
+/* 知識を探す（スマホ・11/7）：「知識を試す」の入口は見出しだけにする。検索を Knowledge Lab の上に置く。パソコンは今までどおり */
+.pe-phone, .emu-search-entry { display:none; }
+@media (max-width:760px) {
+  .emu-practice-entry .pe-wide, .emu-practice-entry .pe-desc { display:none; }
+  .emu-practice-entry .pe-phone { display:inline; }
+  .emu-search-entry { display:flex; align-items:center; gap:4px; margin:0 0 16px; padding:0 15px;
+    background:#fff; border:1px solid #e5dfd7; border-radius:12px; }
+  .emu-search-entry span { color:#ef7d00; }
+  .emu-search-entry input { flex:1; min-width:0; border:0; outline:0; background:transparent; padding:14px; font:inherit; font-size:16px; }
+}
 /* 知識を探す：廃止した「知識を探しています」は出さない */
 #emuRequestsPage > [data-retired] { display:none !important; }
 /* 知識を読む・知識を探す・知識を試す（11/7）：上の見出しと説明の一文を出さず、空いた分を詰める。
@@ -5379,7 +5389,9 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
   </section>
 
   <section class="emu-request-page" id="emuRequestsPage">
-    <aside class="emu-practice-entry" data-tour="emu-practice-entry"><div><b>知ったことを、試してみたくなったら</b><p>ギルドの活動やクエストの内容を見られます。見るだけでは参加になりません。</p></div><button type="button" onclick="showEmuPractice()">知識を試す →</button></aside>
+    <aside class="emu-practice-entry" data-tour="emu-practice-entry"><div><b><span class="pe-wide">知ったことを、試してみたくなったら</span><span class="pe-phone">知ったことを、試してみたくなった？？</span></b><p class="pe-desc">ギルドの活動やクエストの内容を見られます。見るだけでは参加になりません。</p></div><button type="button" onclick="showEmuPractice()">知識を試す →</button></aside>
+    <!-- スマホ（11/7 オーナー）：知識を読むの検索をここへ。探すと「知識を読む」でその言葉の知識を出す（パソコンは出さない） -->
+    <form class="emu-search-entry" role="search" onsubmit="emuSearchKnowledge(this.q.value);return false;"><span aria-hidden="true">⌕</span><input name="q" type="search" enterkeyhint="search" placeholder="悩み・体験・タグから探す" aria-label="知識を検索"></form>
     <!-- Knowledge Lab（みんなの経験知）と Knowledge Text（運営の学習教材。旧 Room1）を、同じ大きさのカードで並べる。
          パソコンは横に2枚、スマホは縦に。Knowledge Text は独立タブではなく、全端末でここから開く（11/2 オーナーから） -->
     <div class="emu-knowledge-pair">
@@ -14995,6 +15007,21 @@ function showEmuValueProfile(fromPassport) {
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
+/* 知識を探す（スマホ）の検索：知識を読むを開いて、その中の検索欄に言葉を入れる（並びや絞り込みは今までと同じ処理） */
+function emuSearchKnowledge(q) {
+  q = String(q || '').trim().slice(0, 200);
+  window.showEmuFeed?.();
+  const started = Date.now();
+  (function put() {
+    const frame = document.getElementById('emuKnowledgeFrame');
+    let box = null;
+    try { box = frame && frame.dataset.ready === 'true' ? frame.contentDocument?.getElementById('search') : null; } catch (_) {}
+    if (box) { box.value = q; box.dispatchEvent(new Event('input', { bubbles:true })); return; }
+    if (Date.now() - started < 10000) setTimeout(put, 120);
+  })();
+  const field = document.querySelector('.emu-search-entry input');
+  if (field) field.value = '';
+}
 function showEmuRequests() {
   _emuEnsureAppVisible();
   document.body.classList.remove('emu-today-open','emu-profile-open','emu-knowledge-open');
