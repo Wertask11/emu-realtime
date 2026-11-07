@@ -141,9 +141,11 @@ function createEconomyRouter(deps) {
   router.post(
     "/jobs",
     limited,
-    handle(async (req, a) => ({
-      job: await service.submit(a, req.body || {}),
-    })),
+    handle(async (req, a) => {
+      const job = await service.submit(a, req.body || {});
+      wakeFor(job);
+      return { job };
+    }),
   );
   router.get(
     "/external",
@@ -166,9 +168,22 @@ function createEconomyRouter(deps) {
   );
   let timer = null,
     ticking = false,
+    wakePending = false,
+    closed = false,
     cleanupAfter = 0;
+  const awakenedJobs = new Set();
+  function wakeFor(job) {
+    if (closed || env.ECONOMY_WORKER_ENABLED !== "true" || deps.startWorker === false ||
+        job.state !== "queued" || awakenedJobs.has(job.id)) return;
+    awakenedJobs.add(job.id);
+    if (awakenedJobs.size > 64) awakenedJobs.delete(awakenedJobs.values().next().value);
+    // A new durable paid job wakes the existing worker. Replays do not create
+    // more scans, and a busy cycle gets one coalesced follow-up pass.
+    if (ticking) wakePending = true;
+    else queueMicrotask(tick);
+  }
   const tick = async () => {
-    if (ticking) return;
+    if (ticking || closed) return;
     ticking = true;
     try {
       await service.workerHealth(true, false);
@@ -190,6 +205,10 @@ function createEconomyRouter(deps) {
       /* state is durable; no inputs or secrets in logs */
     } finally {
       ticking = false;
+      if (wakePending && !closed) {
+        wakePending = false;
+        queueMicrotask(tick);
+      }
     }
   };
   if (env.ECONOMY_WORKER_ENABLED === "true" && deps.startWorker !== false) {
@@ -205,6 +224,7 @@ function createEconomyRouter(deps) {
     service,
     tick,
     close() {
+      closed = true;
       if (timer) clearInterval(timer);
     },
   };
