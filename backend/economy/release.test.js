@@ -25,10 +25,31 @@ test("provider receives fixed intent and ephemeral aliases, never raw goal or so
     const request = JSON.parse(raw), payload = request.generateContentRequest || request,
       input = JSON.parse(payload.contents[0].parts[0].text);
     assert.equal(input.goalType, "practice");
+    assert.equal(input.goalDescription, "学んだ知識を実際に試すため、活動する場所（ギルド）やクエストの候補を探す。");
     assert.equal(input.sources[0].key, "s0");
     assert.equal(Object.hasOwn(input, "goal"), false);
   }
   assert.equal(result.results[0].id, "internal-source-id");
+});
+test("an empty provider selection remains empty; no candidate is invented", async () => {
+  const { createAgent } = require("./agent");
+  const run = createAgent({
+    env: { GEMINI_API_KEY: "isolated-test" },
+    config: () => ({ model: "gemini-3.5-flash-lite", reserveTokens: 5000 }),
+    fetcher: async (url) => ({ ok: true, text: async () => JSON.stringify(
+      url.endsWith(":countTokens") ? { totalTokens: 100 } : {
+        usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 4, totalTokenCount: 104 },
+        candidates: [{ content: { parts: [{ text: '{"matches":[]}' }] } }],
+      },
+    ) }),
+  });
+  const result = await run("イベントのチケットを探したい", [{
+    key: "guild:learn", kind: "guild", id: "learn", title: "LEARN Guild",
+    summary: "知識を、やってみるに変える。", target: "/local-only",
+  }]);
+  assert.deepEqual(result.results, []);
+  assert.equal(result.outcome, "success");
+  assert.equal(result.usage.providerCalled, true);
 });
 async function ready(opts) {
   const f = fixture(opts);
