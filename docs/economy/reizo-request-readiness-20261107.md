@@ -87,13 +87,13 @@
 |---|---|
 |ECONOMY_EXPLORER_ENABLED|最終承認までfalse。条件成立後のみtrue|
 |ECONOMY_WORKER_ENABLED|配備/運用確認後true。停止時も既払分の照合・返却を続ける|
-|ECONOMY_GEMINI_PROJECT_ID / BILLING_TIER|emusch-2a111 / free（再照合済みの事実を記録）|
+|ECONOMY_GEMINI_PROJECT_ID / ECONOMY_GEMINI_BILLING_TIER|emusch-2a111 / free（再照合済みの事実を記録）|
 |ECONOMY_EXPLORER_MODEL|gemini-3.5-flash-lite|
 |ECONOMY_EXPLORER_DAILY_TOKEN_BUDGET|100000。1依頼予約5000はコードで固定|
-|ECONOMY_EXPLORER_TRIAL_START / PLANS|承認したISO開始日時 / 対象planのCSV。未設定ならOFF|
-|ECONOMY_AI_PROJECT_ATTESTED / BILLING_ATTESTED|実キー所属・Free-only/支出0円の確認後true|
-|ECONOMY_AI_BUDGET_ATTESTED / BUDGET_APPROVAL_REF|共用枠監視・停止手順を確認後true / 実承認記録参照|
-|ECONOMY_AI_TERMS_ATTESTED / AUDIENCE_ATTESTED|規約・用途・年齢・地域適合の確認後true|
+|ECONOMY_EXPLORER_TRIAL_START / ECONOMY_EXPLORER_PLANS|承認したISO開始日時 / 対象planのCSV。未設定ならOFF|
+|ECONOMY_AI_PROJECT_ATTESTED / ECONOMY_AI_BILLING_ATTESTED|実キー所属・Free-only/支出0円の確認後true|
+|ECONOMY_AI_BUDGET_ATTESTED / ECONOMY_BUDGET_APPROVAL_REF|共用枠監視・停止手順を確認後true / 実承認記録参照|
+|ECONOMY_AI_TERMS_ATTESTED / ECONOMY_AI_AUDIENCE_ATTESTED|規約・用途・年齢・地域適合の確認後true|
 |ECONOMY_AI_SOURCE_USE_ATTESTED|実資料の新用途許諾の確認後true|
 
 Firestoreは既存private領域を利用し、Rules変更/公開不要。商品 `emuer_v2_agent_products/agent_schoolpark-explorer-v1` は5 EMUER・条件版 `explorer-20261107-v3`。正式表示名は「冷蔵庫くんに頼む」だが、過去の正規商品表示名も互換で受け入れるので名前だけの移行は不要。statusは最終条件成立までdraft。有資格者は `emuer_v2_agent_eligibility/{hash(spid)}`、資料は `emuer_v2_agent_source_approvals/{hash(sourceKey)}` の既存形式（operations.md）。本人確認済み・公開済み・AI同意・用途許諾を混同しない。
@@ -122,5 +122,5 @@ Firestoreは既存private領域を利用し、Rules変更/公開不要。商品 
 - Preview URL： https://emu-realtime-qzrq-9ex1d8v4q-school-park.vercel.app/economy/index.html 。ブランチaliasは https://emu-realtime-qzrq-git-feat-reizo-request-eco-b09a30-school-park.vercel.app/ 。
 - Preview実接続：この環境の接続許可外のため、HTTPS proxyが403で拒否。[試行証跡](reizo-request-evidence/preview.json)。アプリの認証403や表示成功と混同しない。実Preview表示は未検証で、ローカル7幅の検証とは別。以前承認されたローカル代替確認を引き継ぎ、通信制限を迂回していない。
 - Previewは既存Production Render/Firebaseに接続される構成。本PR backendはそこへ配備していないため、Previewを開けても新しい決済/worker結合試験の証拠にはならない。認証/支払等の書込みを試していない。
-- [全変更ファイル](reizo-request-files.txt)はmainとの差分を列挙。#280の29ファイルも含む。今回の主な追加変更はtour controller/adapter、共通economy entry/画面/メッセージ、root header、FAQ/privacy/Cityコピー、SERVICE表示名・旧商品名互換・取引投影、関連テスト/fixture/証拠/運用資料。
+- [全変更ファイル](reizo-request-files.txt)はmainとの差分を列挙。#280の28ファイルも含む。今回の主な追加変更はtour controller/adapter、共通economy entry/画面/メッセージ、root header、FAQ/privacy/Cityコピー、SERVICE表示名・旧商品名互換・取引投影、関連テスト/fixture/証拠/運用資料。
 - main/Production/Rulesは変更しない。**コードと分離検証は完了、PRレビュー可能。本番で有料依頼の一連の経済活動が成立したとは判定しない。** 第5〜6節の条件と本番受入が残る。
