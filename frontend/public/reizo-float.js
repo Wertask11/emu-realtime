@@ -69,7 +69,7 @@
       el.style.setProperty('max-height', 'none', 'important');
     }
   }
-  function gripStyle() {
+  function gripStyle() {   // 角の見た目と、選ぶ窓の中の並べ方
     if (document.getElementById('emuFloatResizeStyle')) return;
     var st = document.createElement('style');
     st.id = 'emuFloatResizeStyle';
@@ -77,7 +77,31 @@
     st.textContent = '.emu-float-resize{position:fixed;z-index:10070;width:22px;height:22px;cursor:nwse-resize;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:0 0 12px 0;'
       + 'background:linear-gradient(135deg,transparent 0 45%,rgba(160,110,40,.75) 45% 52%,transparent 52% 64%,rgba(160,110,40,.75) 64% 71%,transparent 71%)}'
       + '.emu-float-resize[hidden]{display:none}.emu-float-resize:focus-visible{outline:2px solid #f08300;outline-offset:1px}'
-      + 'html.emu-float-resizing,html.emu-float-resizing *{cursor:nwse-resize!important}';
+      + 'html.emu-float-resizing,html.emu-float-resizing *{cursor:nwse-resize!important}'
+      /* 選ぶ窓の中の並べ方（11/7）。窓の大きさに合わせて、3つの選択肢で空いた所を埋める。
+         広いとき（600px 以上）はカードを横に3枚、狭いときは縦に3段。文字はガイドの部品（reizo-tour.js）が作るまま。
+         カードの下の説明はここで足す飾りで、読み上げには出さない（ボタンの名前は今までどおり） */
+      + '#rk-tour .rk-panel.rk-choice{display:flex;flex-direction:column;padding:20px 22px;container-type:inline-size}'
+      + '#rk-tour .rk-panel.rk-choice .rk-mascot{width:56px;height:56px}'
+      + '#rk-tour .rk-panel.rk-choice .rk-header h2{font-size:22px}'
+      + '#rk-tour .rk-panel.rk-choice .rk-count{font-size:13px;display:block}'
+      + '#rk-tour .rk-panel.rk-choice .rk-text{font-size:16px;margin:8px 0 4px}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions{flex:1 1 auto;min-height:0;grid-template-columns:1fr;grid-auto-rows:minmax(56px,1fr);gap:10px;margin-top:14px}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>button{display:flex;align-items:center;justify-content:center;gap:10px;min-height:56px;padding:10px 14px;border-radius:12px;font-size:16px;font-weight:700;text-align:center;text-wrap:balance}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>button:not([hidden]):hover{border-color:#155c40;box-shadow:0 4px 14px #00160f22}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>button::before{font-size:22px;line-height:1}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>.rk-primary::before{content:"📖"/""}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>button:not(.rk-primary):not(.rk-request)::before{content:"💬"/""}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>.rk-request::before{content:"🧾"/""}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>button::after{display:none;font-size:12.5px;font-weight:400;line-height:1.6;opacity:.85}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>.rk-primary::after{content:"この画面の使い方を、順番に案内します"/""}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>button:not(.rk-primary):not(.rk-request)::after{content:"使い方やきまりの質問に答えます"/""}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>.rk-request::after{content:"EMUERで仕事を頼めます。開くだけでは支払いません"/""}'
+      + '@container (min-width:600px){'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions{grid-template-columns:repeat(3,1fr);grid-auto-rows:1fr;gap:12px}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>button{flex-direction:column;gap:8px;padding:16px 12px;font-size:15px}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>button::before{font-size:34px}'
+      + '#rk-tour .rk-panel.rk-choice .rk-actions>button::after{display:block}}';
     document.head.appendChild(st);
   }
   function resizable(el, name, base, min, canResize) {
@@ -190,8 +214,8 @@
     panel._emuFloatWatch = true;
     var choice = function () { return panel.classList.contains('rk-choice') && !panel.hidden; };
     draggable(panel, panel.querySelector('.rk-header'), choice);
-    // はじめは前（330px）より広く。高さは中身に合わせる（引いて変えたときだけ高さも覚える）
-    resizable(panel, 'choice', { w: 420, h: 0 }, { w: 280, h: 220 }, choice);
+    // 11/7：はじめの大きさは 690×470（オーナーが引いて決めた大きさ）。画面より大きいときは画面に合わせる
+    resizable(panel, 'choice', { w: 690, h: 470 }, { w: 280, h: 260 }, choice);
     var was = false;
     new MutationObserver(function () {
       var now = choice();
