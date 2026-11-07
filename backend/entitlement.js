@@ -149,11 +149,11 @@ function createEntitlement(deps) {
    * accountData を渡せば ches_accounts の読み直しを省ける
    * （requireFirebaseUser が req.identity.account に入れている）。
    */
-  async function getEntitlement(uid, accountData) {
+  async function getEntitlement(uid, accountData, options = {}) {
     if (!uid) return { plan: "guest", source: "none", status: null, foundingUntil: null };
 
     const hit = cache.get(uid);
-    if (hit && hit.expiresAt > Date.now()) return hit.value;
+    if (!options.fresh && hit && hit.expiresAt > Date.now()) return hit.value;
 
     let paid = null;      // 契約から得た段
     let status = null;
@@ -185,6 +185,10 @@ function createEntitlement(deps) {
       return grant ? { ...grant, uid: subject } : null;
     }));
     const granted = grants.filter(Boolean).sort((a, b) => PLAN_RANK[b.plan] - PLAN_RANK[a.plan])[0] || null;
+    if (options.fresh && identity?.findByUid && identity?.forget) {
+      const spid = await identity.findByUid(uid);
+      if (spid) identity.forget(spid);
+    }
     const hasPass = await holdsOfficialPass(uid, accountData);
 
     /* 契約・付与・公式パスのうち、いちばん上の段を採る。

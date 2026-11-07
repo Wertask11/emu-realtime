@@ -68,6 +68,7 @@ function createEconomyRouter(deps) {
         name: c.name,
         price: c.price,
         currency: c.currency,
+        allowedPlans: c.allowedPlans,
         enabled: c.enabled && snapshot?.service.enabled === true && healthy,
         globalDaily: c.globalDaily,
         personDaily: c.personDaily,
