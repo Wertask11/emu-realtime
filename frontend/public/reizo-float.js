@@ -74,7 +74,7 @@
     var st = document.createElement('style');
     st.id = 'emuFloatResizeStyle';
     // 窓より上（ガイドの窓 10060 より上）。右下の角に、斜めの線を2本
-    st.textContent = '.emu-float-resize{position:fixed;z-index:10070;width:22px;height:22px;cursor:nwse-resize;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:0 0 12px 0;'
+    st.textContent = '.emu-float-resize{position:fixed;z-index:10070;width:22px;height:22px;cursor:nwse-resize;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:0 0 10px 0;'
       + 'background:linear-gradient(135deg,transparent 0 45%,rgba(160,110,40,.75) 45% 52%,transparent 52% 64%,rgba(160,110,40,.75) 64% 71%,transparent 71%)}'
       + '.emu-float-resize[hidden]{display:none}.emu-float-resize:focus-visible{outline:2px solid #f08300;outline-offset:1px}'
       + 'html.emu-float-resizing,html.emu-float-resizing *{cursor:nwse-resize!important}'
@@ -120,8 +120,9 @@
       grip.hidden = !show;
       if (!show) return;
       var r = el.getBoundingClientRect();
-      grip.style.left = Math.round(r.right - 22) + 'px';
-      grip.style.top = Math.round(r.bottom - 22) + 'px';
+      // 窓の丸い角（半径14〜16px）の内側に収める
+      grip.style.left = Math.round(r.right - 25) + 'px';
+      grip.style.top = Math.round(r.bottom - 25) + 'px';
     }
     el._emuSize = { name: name, base: base, min: min, sync: sync };
     var start = null;
@@ -160,6 +161,9 @@
       saveSize(el); sync();
     });
     new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
+    // ガイドの窓は開くときに少しずれた所から動いて出る（rk-pop）。動き終わってから測り直さないと、角がずれたまま残る
+    el.addEventListener('animationend', sync);
+    el.addEventListener('transitionend', sync);
     if (window.ResizeObserver) new ResizeObserver(sync).observe(el);
     window.addEventListener('resize', sync);
     sync();
