@@ -36,6 +36,22 @@ header h1{margin:0; font:700 19px/1.4 Georgia,'Yu Mincho',serif; color:var(--ink
 /* 11/7：右上の冷蔵庫くん（Emu と同じく、ガイド・聞く・頼む） */
 .reizo-btn{margin-left:auto; display:inline-flex; align-items:center; gap:6px; flex:none}
 .reizo-btn[hidden]{display:none}
+.lbl-phone{display:none}
+/* スマホ（11/7）：上の帯を Knowledge Lab とそろえる。
+   1段目に「Emu KNOWLEDGE TEXT」と、右に冷蔵庫くん（Emu の右上と同じ四角いボタン・絵だけ）。2段目に「← Emuに戻る」。パソコンは変えない */
+@media(max-width:760px){
+  body > header{display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"brand reizo" "back back";
+    align-items:center; gap:10px 12px; padding:12px 16px; background:transparent}
+  body > header .header-actions{display:contents}
+  #headerTitle{grid-area:brand; min-width:0; display:flex; align-items:baseline; gap:14px;
+    font:800 12px/1.2 system-ui,-apple-system,"Noto Sans JP",sans-serif; letter-spacing:.1em; text-transform:uppercase; color:#f08300}
+  #headerTitle::before{content:"Emu"; font-size:24px; letter-spacing:0; text-transform:none}
+  #backToEmuBtn{grid-area:back; justify-self:start; font-weight:500; font-size:12px; padding:8px; border-radius:10px; background:#fff; min-height:44px}
+  .lbl-wide{display:none} .lbl-phone{display:inline}
+  #reizoBtn:not([hidden]){grid-area:reizo; margin:0; box-sizing:border-box; width:44px; height:44px; padding:0; border:1px solid #d8d4cb;
+    border-radius:10px; background:#fffdf8; font-size:0; overflow:hidden; justify-content:center}
+  #reizoBtn img{width:100%; height:100%; border-radius:0}
+}
 .reizo-btn img{width:24px; height:24px; border-radius:50%; object-fit:cover}
 #container{padding:clamp(18px,3vw,30px); max-width:1100px; margin:0 auto}
 .section-title{margin:0 0 14px; font-size:13px; font-weight:800; color:var(--muted); letter-spacing:.06em}
@@ -119,7 +135,7 @@ h2{font:700 21px/1.5 Georgia,'Yu Mincho',serif; margin:0 0 14px}
 
 <header>
   <div class="header-actions">
-    <button id="backToEmuBtn" class="header-btn" onclick="backToEmu()">← 戻る</button>
+    <button id="backToEmuBtn" class="header-btn" onclick="backToEmu()"><span class="lbl-wide">← 戻る</span><span class="lbl-phone">← Emuに戻る</span></button>
     <h1 id="headerTitle">Knowledge Text</h1>
   </div>
   <button id="reizoBtn" class="header-btn reizo-btn" type="button" aria-label="冷蔵庫くん（ガイド・聞く・頼む）" title="冷蔵庫くんのガイド・聞く・頼む" onclick="openReizo(this)" hidden><img src="/assets/mascot.jpg" alt="">冷蔵庫くん</button>
