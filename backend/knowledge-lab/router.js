@@ -514,6 +514,12 @@ function createKnowledgeLabRouter(deps) {
     ...signed,
     wrap((req) => service.myPosts(req.labActor, req.query)),
   );
+  // 下書きの置き場所をひとつに（11/7）：知識を読むの下書きを、本人の分だけ Lab の下書きへ移す
+  router.post(
+    "/me/drafts/import",
+    ...write,
+    wrap((req) => service.importLegacyDrafts(req.labActor)),
+  );
   router.get(
     "/me/public-posts",
     ...signed,

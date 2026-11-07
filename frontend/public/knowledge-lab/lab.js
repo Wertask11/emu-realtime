@@ -1538,6 +1538,12 @@
     const kind = state.mineKind,
       isNote = ["notes", "archived-notes"].includes(kind);
     if (!more) {
+      /* 下書きの置き場所をひとつに（11/7）：知識を読むで保存した下書きも、ここ（下書き・自分用）へ移す。
+         元は消さない。移せなくても一覧は出す（次に開いたときにもう一度移す）。 */
+      if (!state.draftsImported)
+        await api("/me/drafts/import", { method: "POST", auth: true, body: {} })
+          .then(() => (state.draftsImported = true))
+          .catch(() => {});
       const usage = await api("/me/storage", { auth: true });
       const names = {
         saved: "保存した知識",

@@ -133,9 +133,11 @@ test('親：下書きから来た保存は上書きし、投稿・予約が済�
   assert.match(fn, /fbLib\.updateDoc\(window\.fbLib\.doc\(window\.db, 'knowledge_drafts', String\(draftId\)\), patch\)/, '同じ下書きを書き換える');
   assert.doesNotMatch(fn, /increment\(/, '上書きでは持っている数を増やさない');
   assert.ok(INDEX.includes("if (payload.draftId) await updateKnowledgeDraft(account, payload.draftId, payload);\n        else await createKnowledgeDraft(account, payload);"), '下書きから来たら上書き');
-  assert.ok(INDEX.includes("if (payload.draftId) knowledgePublishDrafts.set(postForm._knowledgeRequestId, String(payload.draftId));"), '投稿の申し込みと下書きを結ぶ');
-  assert.ok(INDEX.includes("if (detail.ok && draftId) dropPublishedDraft(draftId);"), '投稿できたときだけ消す');
-  assert.ok(INDEX.includes("if (payload.draftId) dropPublishedDraft(String(payload.draftId));"), '予約できたら消す');
+  // 11/7 下書きの置き場所をひとつに：どちらの置き場所の下書きかも一緒に結ぶ（Lab の下書きは Lab の窓口で上書き・アーカイブ）
+  assert.ok(INDEX.includes("if (payload.draftId) knowledgePublishDrafts.set(postForm._knowledgeRequestId, { id:String(payload.draftId), source:payload.draftSource === 'lab' ? 'lab' : 'emu' });"), '投稿の申し込みと下書きを結ぶ');
+  assert.ok(INDEX.includes("if (detail.ok && draft) dropPublishedDraft(draft.id, draft.source);"), '投稿できたときだけ消す');
+  assert.ok(INDEX.includes("if (payload.draftId) dropPublishedDraft(String(payload.draftId), payload.draftSource === 'lab' ? 'lab' : 'emu');"), '予約できたら消す');
+  assert.match(fn, /if \(payload\.draftSource === 'lab'\) \{[\s\S]*?_emuLabApi\('\/posts', \{ method:'PUT', body \}\)/, 'Lab の下書きは Lab で上書きする');
   // 上書きは Firestore のルールで本人にだけ許されている（作り直しではないので、件数の上限に引っかからない）
   const RULES = fs.readFileSync(path.join(__dirname, '../../firestore.rules'), 'utf8');
   assert.match(RULES, /match \/knowledge_drafts\/\{draftId\} \{[\s\S]*?allow read, update: if isMyWallet\(resource\.data\.get\('owner', ''\)\);/);
