@@ -19,6 +19,10 @@
 .sp-section-header {padding:18px 24px;border-bottom:1px solid #e1dcd2;background:var(--emu-paper);}
 .sp-section-header p {margin:0;color:var(--emu-brand-strong);font-size:11px;letter-spacing:.1em;}
 .sp-section-header h2 {margin:4px 0 0;font-size:21px;}
+/* 知恵ライブラリ・City（11/7）：上の見出し（WISDOM／CITY・画面名・EMUER・サービス）を出さず、空いた分を詰める。
+   EMUER・サービスへは冷蔵庫くんから入る。ほかの画面（ギルド・クエスト・自分の宿題など）の見出しは今までどおり。 */
+.sp-section-header[data-sp-screen="library"],
+.sp-section-header[data-sp-screen="city"] {display:none;}
 [role="button"]:focus-visible { outline: 3px solid var(--emu-brand-strong); outline-offset: 4px; }
 </style>
 <style>
@@ -79,7 +83,7 @@ if (window.top === window.self) window.location.replace('/');
 
     <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow-y:{{ L.scrollY }}" ref="{{ scrollRef }}">
 
-      <header class="sp-section-header" data-sp-head data-tour="screen-heading guild-intro quest-intro"><p>{{ head.kicker }}</p><h2>{{ head.title }}</h2><div data-economy-slot style="height:60px;min-height:60px;flex-basis:100%;width:100%"></div></header>
+      <header class="sp-section-header" data-sp-head data-sp-screen="{{ headScreen }}" data-tour="screen-heading guild-intro quest-intro"><p>{{ head.kicker }}</p><h2>{{ head.title }}</h2><div data-economy-slot style="height:60px;min-height:60px;flex-basis:100%;width:100%"></div></header>
 
       <div style="padding:{{ L.pad }}; display:flex; flex-direction:column; gap:36px">
 
@@ -1263,6 +1267,7 @@ class Component extends DCLogic {
       noWisdom:s.noWisdom,
       noHit:!s.noWisdom && s.wtag !== 'すべて' && !(s.wisdom || []).some(w => w.tag === s.wtag),
       head: {kicker: (heads[s.screen] || heads.experiments)[0], title: (heads[s.screen] || heads.experiments)[1]},
+      headScreen: String(s.screen || ''),
       isCity:s.screen==='city', goCity:this.go('city'),
       showCityReturn:!!this.cityReturn && ['experiments','detail','guild'].includes(s.screen),
       isExperiments:s.screen==='experiments', isDetail:s.screen==='detail' && !cur.isFounder,
