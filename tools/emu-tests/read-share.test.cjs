@@ -76,15 +76,16 @@ test('走っている最中に聞かれても、2本目を走らせない', asyn
   assert.equal(s.seen.peak, 1, '同時に ' + s.seen.peak + '本走っている');
 });
 
-test('25秒たてば、ちゃんと読み直す', async () => {
+/* 11/7：取っておく時間は 25秒 → 4分（Firestore の1日の読み取り枠を使い切っていたため） */
+test('4分たてば、ちゃんと読み直す', async () => {
   const s = stage();
   await s.ctx._spReadAll('sp_quests');
-  s.tick(24000);
+  s.tick(4 * 60 * 1000 - 1000);
   await s.ctx._spReadAll('sp_quests');
   assert.equal(s.seen.calls, 1, '早すぎる読み直し');
   s.tick(2000);
   await s.ctx._spReadAll('sp_quests');
-  assert.equal(s.seen.calls, 2, '25秒たっても古いものを返している');
+  assert.equal(s.seen.calls, 2, '4分たっても古いものを返している');
 });
 
 test('行き先が違えば、別のものとして読む', async () => {
@@ -122,7 +123,7 @@ test('書き換えたら捨てる（押した結果がすぐ出る）', async ()
   await s.ctx._spReadAll('sp_quests');
   s.ctx._spMemoDrop();
   await s.ctx._spReadAll('sp_quests');
-  assert.equal(s.seen.calls, 2, '捨てていない。押しても25秒変わらない');
+  assert.equal(s.seen.calls, 2, '捨てていない。押しても4分変わらない');
 });
 
 test('捨てる先を絞れる', async () => {
@@ -201,10 +202,11 @@ test('完走の数えは、短いあいだ取っておく', () => {
 
 /* ───────── 回す速さ ───────── */
 
-test('定期の読み直しは5分ごと', () => {
+/* 11/7：5分 → 15分（Firestore の1日の読み取り枠を使い切っていたため） */
+test('定期の読み直しは15分ごと', () => {
   const at = INDEX.indexOf('_spRefreshTimer = setInterval(');
   const near = INDEX.slice(at, at + 400);
-  assert.match(near, /\}, 5 \* 60 \* 1000\);/,
+  assert.match(near, /\}, 15 \* 60 \* 1000\);/,
     '読み直しの間隔が短すぎます: ' + near.slice(0, 120));
 });
 
