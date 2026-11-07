@@ -170,6 +170,12 @@
         });
         return;
       }
+      /* 投稿の入口をひとつに（11/7）：Lab の「経験知を届ける」は、知識を読むの投稿画面を開く */
+      if (action === "compose") {
+        if (window.closeSpRoom() === false) return;
+        window.emuOpenKnowledgeComposer?.();
+        return;
+      }
       if (action === "library") {
         if (window.closeSpRoom() === false) return;
         window.emuOpenKnowledgeLibrary();

@@ -75,7 +75,7 @@
       "k.addImage": "＋ 画像を追加",
       "k.imageAlt": "選択した画像のプレビュー",
       "k.field.scheduledAt": "公開日時",
-      "k.saveDraft": "下書き保存",
+      "k.saveDraft": "下書きに保存",
       "k.schedulePost": "予約投稿",
       "k.publish": "知識を公開する",
       "k.paidPass": "公式パス",

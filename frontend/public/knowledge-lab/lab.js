@@ -2211,13 +2211,33 @@
       ? params.get("sort")
       : "new";
   }
-  document.querySelectorAll("[data-compose]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        if (!state.enabled) return status(messages.LAUNCH_HOLD, true);
-        edit();
-      }),
-  );
+  /* 投稿の入口をひとつに（11/7）：Emu の中で開いているときは、新しい投稿を共通の投稿画面（知識を読む）で書く。
+     分類などは、その画面の「詳しく整理する（任意）」で付けられる。研究・回答から書くとき、既存の投稿を直すときは、
+     元への参照と公開の同意が要るので、ここ（Lab の画面）で書く。単独で開いたときも、ここで書く。 */
+  function composeInEmu() {
+    try {
+      return (
+        window.parent !== window &&
+        typeof window.parent.emuOpenKnowledgeComposer === "function"
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+  function compose() {
+    if (!state.enabled) return status(messages.LAUNCH_HOLD, true);
+    if (composeInEmu()) {
+      parent.postMessage(
+        { type: "emu-lab-action", action: "compose" },
+        location.origin,
+      );
+      return;
+    }
+    edit();
+  }
+  document
+    .querySelectorAll("[data-compose]")
+    .forEach((b) => (b.onclick = compose));
   document
     .querySelectorAll("[data-view]")
     .forEach((b) => bindAsync(b, () => view(b.dataset.view)));
@@ -2376,7 +2396,7 @@
     if (initial && initial !== "library") await view(initial);
     if (p.get("post")) await detail(p.get("post"));
     if (p.get("note")) await showNote(p.get("note"));
-    if (p.get("compose") === "1") edit();
+    if (p.get("compose") === "1") compose();
     if (p.get("edit"))
       edit(await api("/posts/" + p.get("edit"), { auth: true }));
     if ($("#searchFacets input:checked"))

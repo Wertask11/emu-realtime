@@ -13377,6 +13377,9 @@ postForm.addEventListener("submit", async function (e) {
   e.preventDefault();
 
   const knowledgeRequestId = postForm._knowledgeRequestId || "";
+  /* 詳しく整理する（任意）。この投稿の1回にだけ使う（次の投稿へ持ち越さない） */
+  const knowledgeLabDetails = postForm._knowledgeLab || null;
+  postForm._knowledgeLab = null;
   const finishKnowledgeRequest = (ok, error) => {
     if (!knowledgeRequestId) return;
     window.dispatchEvent(new CustomEvent("emu-post-save-result", {
@@ -13511,6 +13514,7 @@ const editingId = editingPostId;
       window.emuLabSyncIndex?.(_labPostRef.id);
       window.EmuAnalytics?.track('post_publish', { surface:'feed' }, _labPostRef.id);
       window.dispatchEvent(new CustomEvent("emu-post-published", { detail: { postId: _labPostRef.id, address: authorAddress } }));
+      if (knowledgeLabDetails) emuAttachLabDetails(_labPostRef.id, postData, knowledgeLabDetails);
       emuRecordPostAudit(_labPostRef.id, "create");
       console.log("✅ 新規投稿を作成しました");
     }
@@ -14846,6 +14850,38 @@ function showEmuFeed(mode) {
    中身（自分の投稿・下書き）は知識を読む（knowledge.html）の中にあるので、
    知識を読むに切り替えてから、中の「マイライブラリー」を開いてもらう。
    まだ読み込み中なら、準備ができたところ（emu-knowledge-ready）で開く。 */
+/* 詳しく整理する（任意・11/7）：公開したばかりの投稿に、同じ投稿ID のまま Knowledge Lab の分類を付ける。
+   Knowledge Lab の「既存の投稿を本人が整理する」窓口（PUT /posts に id を渡す）を使う。
+   新しい投稿は作らない・投稿の回数も使わない・画像や作成日はそのまま。初投稿の知らせは公開のときに1回だけ出ている。
+   付けられなかったときも、投稿は公開されたまま（あとから Knowledge Lab で整理できると知らせる）。 */
+async function emuAttachLabDetails(postId, post, lab) {
+  let ok = false;
+  try {
+    const r = await fetch('/api/knowledge-lab/posts', {
+      method:'PUT', headers:await emuAuthHeaders(true, { interactive:false }),
+      body:JSON.stringify({ ...lab, id:String(postId), revision:0, key:'compose-' + String(postId),
+        title:post.title, body:post.body, tags:post.tags || '', visibility:'public' }) });
+    ok = r.ok;
+  } catch (_) { ok = false; }
+  if (!ok) {
+    const frame = document.getElementById('emuKnowledgeFrame');
+    frame?.contentWindow?.postMessage({ type:'emu-knowledge-notice',
+      text:'投稿は公開しました。「詳しく整理する」の内容は保存できませんでした。Knowledge Lab の「自分の経験知」から付け直せます。' }, window.location.origin);
+  }
+  return ok;
+}
+window.emuAttachLabDetails = emuAttachLabDetails;
+/* 投稿の入口をひとつに（11/7）：Knowledge Lab の「経験知を届ける」も、知識を読むの投稿画面を開く。 */
+function emuOpenKnowledgeComposer() {
+  showEmuFeed();
+  const frame = document.getElementById('emuKnowledgeFrame');
+  if (frame && frame.dataset.ready === 'true' && frame.contentWindow) {
+    frame.contentWindow.postMessage({ type:'emu-knowledge-open-composer' }, window.location.origin);
+  } else {
+    window._emuOpenComposerWhenReady = true;
+  }
+}
+window.emuOpenKnowledgeComposer = emuOpenKnowledgeComposer;
 function emuOpenKnowledgeLibrary() {
   showEmuFeed();
   const frame = document.getElementById('emuKnowledgeFrame');
@@ -28801,6 +28837,27 @@ async function sendEmuFeedback() {
     return window.fbLib.doc(window.db, 'plan_counts', subject);
   }
 
+  /* 詳しく整理する（任意・11/7）。知識を読むの投稿画面から来た値を、決まった形・長さにそろえる。
+     何も書いていなければ null（付けない）。AI の利用は、本人がチェックしたときだけ true。 */
+  function _emuLabDetails(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const text = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
+    const facets = {};
+    if (raw.facets && typeof raw.facets === 'object' && !Array.isArray(raw.facets)) {
+      for (const axis of Object.keys(raw.facets).slice(0, 12)) {
+        if (!/^[a-z]{1,20}$/.test(axis) || !Array.isArray(raw.facets[axis])) continue;
+        const ids = raw.facets[axis].map(String).filter(id => /^[A-Za-z0-9_-]{1,100}$/.test(id)).slice(0, 20);
+        if (ids.length) facets[axis] = ids;
+      }
+    }
+    const out = { facets, period:text(raw.period,120), happened:text(raw.happened,2000), learned:text(raw.learned,2000),
+      advice:text(raw.advice,2000), sources:text(raw.sources,1500),
+      verification:['self-reported','tested-by-author','in-progress','needs-update'].includes(raw.verification) ? raw.verification : 'self-reported',
+      aiUseConsent: raw.aiUseConsent === true };
+    const has = Object.keys(facets).length || out.period || out.happened || out.learned || out.advice || out.sources || out.aiUseConsent || out.verification !== 'self-reported';
+    return has ? out : null;
+  }
+  window._emuLabDetails = _emuLabDetails;
   async function createKnowledgeDraft(account, payload) {
     await emuEnsureEntitlement();
     /* マイライブラリーの上限（9/1から）。light は30件、plus 以上は1,000件。
@@ -28815,7 +28872,8 @@ async function sendEmuFeedback() {
       e.cap = cap;
       throw e;
     }
-    const draft = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString() };
+    const lab = _emuLabDetails(payload.lab);
+    const draft = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString(), ...(lab ? { lab } : {}) };
     if (account && window.db && window.fbLib) {
       try {
         // 下書きと、持っている数の記録を同じ一括処理で書く
@@ -28836,7 +28894,7 @@ async function sendEmuFeedback() {
   /* 下書きを開き直して保存したとき。同じ下書きを上書きする（数は増やさない）。 */
   async function updateKnowledgeDraft(account, draftId, payload) {
     await emuEnsureEntitlement();
-    const patch = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString() };
+    const patch = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString(), lab:_emuLabDetails(payload.lab) };
     if (account && window.db && window.fbLib && !/^\d+$/.test(String(draftId))) {
       await window.fbLib.updateDoc(window.fbLib.doc(window.db, 'knowledge_drafts', String(draftId)), patch);
       return;
@@ -29372,6 +29430,10 @@ async function sendEmuFeedback() {
           window._emuOpenLibraryWhenReady = false;
           sendKnowledge({ type:'emu-knowledge-open-library' });
         }
+        if (window._emuOpenComposerWhenReady) {
+          window._emuOpenComposerWhenReady = false;
+          sendKnowledge({ type:'emu-knowledge-open-composer' });
+        }
       }
       syncKnowledgeFrame({ append:false });
       return;
@@ -29440,6 +29502,7 @@ async function sendEmuFeedback() {
       postTagsInput.value = String(payload.tags || '').slice(0, 500);
       postTitleInput.disabled = false;
       postForm._knowledgeImageDataUrl = String(payload.imageUrl || '');
+      postForm._knowledgeLab = _emuLabDetails(payload.lab);
       postForm._knowledgeRequestId = String(message.requestId || Date.now());
       if (payload.draftId) knowledgePublishDrafts.set(postForm._knowledgeRequestId, String(payload.draftId));
       postForm.requestSubmit();
@@ -29494,7 +29557,7 @@ async function sendEmuFeedback() {
     if (message.type === 'emu-knowledge-command') {
       if (message.command === 'wallet') myWalletButton.click();
       if (message.command === 'knowledge-lab') window.openEmuKnowledgeLab();
-      if (message.command === 'experience') window.openEmuKnowledgeLab('library', {compose:true});
+      if (message.command === 'experience') emuOpenKnowledgeComposer();
       /* Knowledge Text（旧 Room1）は別のページなので、小部屋の枠で全画面に開く
          （エレベーターやショッピングと同じ出し方） */
       if (message.command === 'room1' && typeof openSpRoom === 'function') {
