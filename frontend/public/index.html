@@ -2803,7 +2803,8 @@ body.emu-workspace-open[data-emu-view="wisdom"] #spDaoPage > .emu-workspace-tool
 body.emu-workspace-open[data-emu-view="city"] #spDaoPage > .emu-workspace-tools,
 /* ギルド・クエストの一覧（11/7）も同じ。詳しい画面（ギルドの詳細・クエストの内容など）には残す */
 body.emu-workspace-open[data-emu-screen="logs"] #spDaoPage > .emu-workspace-tools,
-body.emu-workspace-open[data-emu-screen="experiments"] #spDaoPage > .emu-workspace-tools { display:none; }
+body.emu-workspace-open[data-emu-screen="experiments"] #spDaoPage > .emu-workspace-tools,
+body.emu-workspace-open[data-emu-screen="tasks"] #spDaoPage > .emu-workspace-tools { display:none; }
 /* 知識を試す：この画面の説明（知識を自分の現場で試して〜）と、スマホだけの見出しも出さない */
 #emuPracticePage > .emu-practice-title,
 #emuPracticePage > .eth-subtitle:first-of-type { display:none; }
@@ -5391,9 +5392,8 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
     <article class="eth-card" data-tour="guild-entry"><h3>ギルド</h3><p>関心の近い人の問いや活動を知り、知識をどう使うか考える場所です。</p><button type="button" class="eth-btn primary" data-tour="practice-guild" onclick="openEmuPractice('logs')">ギルドの活動を見る →</button></article>
     <article class="eth-card" data-tour="quest-entry"><h3>クエスト</h3><p>やること・条件・期限を確かめて、知識を実際に試せる活動を探します。</p><button type="button" class="eth-btn primary" data-tour="practice-quest" onclick="openEmuPractice('experiments')">クエストの内容を見る →</button></article>
   </div>
-  <!-- 11/7：「カードを開くだけでは参加登録されません…」の一文と「年内目標」の入口は外した。
-       「自分の宿題」は、知識を読むの左の列（＋知識を届けるの下）からも開ける -->
-  <div class="emu-secondary-actions"><button class="eth-btn" type="button" onclick="openEmuPractice('tasks')">自分の宿題</button></div>
+  <!-- 11/7：「カードを開くだけでは参加登録されません…」の一文と「年内目標」「自分の宿題」の入口は外した。
+       「自分の宿題」は、知識を読むの左の列（＋知識を届けるの下）から開く -->
 </section>
 
   <div id="emuKnowledgePage">
@@ -14717,9 +14717,16 @@ function emuFitContact() {
     btn.style.left = ''; btn.style.bottom = '';
     return;
   }
+  _emuContactAboveFoot(btn);
+}
+/* お問い合わせを、左のメニューのいちばん下の段（EMUER とプロフィール）の上に置く。置けたら true */
+function _emuContactAboveFoot(btn) {
+  const nav = document.getElementById('emuSideNav'), foot = document.querySelector('.esn-foot');
+  if (!btn || !nav || !foot || getComputedStyle(nav).display === 'none') return false;
   const r = foot.getBoundingClientRect();
   btn.style.left = '16px';
   btn.style.bottom = (Math.round(window.innerHeight - r.top) + 14) + 'px';
+  return true;
 }
 window.addEventListener('resize', function () {
   clearTimeout(window._emuFitTimer);
@@ -22388,6 +22395,9 @@ function spDaoPlaceContact() {
   emuPaintHeaderIdentity();
   document.body.classList.remove('sp-dao-sidebar');
   const btn = document.getElementById('emu-contact-btn');
+  /* 11/7：知恵ライブラリ・City・ギルドなど（左のメニューの右に SchoolPark の枠を出す画面）では、
+     ほかの画面と同じく左のメニューの下の段の上に置く。前は位置を消していたため、下の段（プロフィール）に重なっていた */
+  if (btn && document.body.classList.contains('emu-workspace-open') && typeof _emuContactAboveFoot === 'function' && _emuContactAboveFoot(btn)) return;
   if(btn) { btn.style.left='';btn.style.bottom=''; }
 }
 
