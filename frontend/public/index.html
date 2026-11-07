@@ -25820,7 +25820,9 @@ setInterval(() => {
   if (document.hidden || !document.body.classList.contains('emu-knowledge-open')) return;
   const frame = document.getElementById('emuKnowledgeFrame');
   if (!frame || frame.dataset.ready !== 'true') return;
-  refreshAllPosts();
+  /* 裏の読み直し。通信が切れていても画面にエラーを出さない（quiet） */
+  if (typeof window.syncKnowledgeFrame === 'function') window.syncKnowledgeFrame({ append:false, quiet:true });
+  else refreshAllPosts();
 }, 3 * 60 * 1000);
 
 // ════════ 秋モーダル（投稿を公開したあとの演出） ════════
@@ -28844,7 +28846,16 @@ async function sendEmuFeedback() {
   function knowledgeFrame() {
     return document.getElementById('emuKnowledgeFrame');
   }
+  /* 11/7：通信が切れているときの Firebase の英語のエラー（Failed to get document because the client is offline など）を、
+     そのまま画面に出さない。わかる言葉に置き換える。ほかのエラー文はそのまま */
+  function _emuFriendlyError(text) {
+    const s = String(text || '');
+    if (/client is offline|offline|unavailable|network ?error|failed to fetch|load failed|deadline|timed? ?out/i.test(s))
+      return '通信が不安定なため、読み込めませんでした。電波のよい所で、少し待ってからもう一度お試しください。';
+    return s;
+  }
   function sendKnowledge(message) {
+    if (message && typeof message.error === 'string') message = Object.assign({}, message, { error:_emuFriendlyError(message.error) });
     const frame = knowledgeFrame();
     if (frame && frame.contentWindow) frame.contentWindow.postMessage(message, KNOWLEDGE_ORIGIN);
   }
@@ -29450,6 +29461,8 @@ async function sendEmuFeedback() {
       startKnowledgeWatch();
     })().catch(error => {
       console.error('知識iframe同期失敗:', error);
+      /* 3分ごとの裏の読み直し（quiet）が失敗しても、読んでいる人には知らせない。いま出ている一覧はそのまま残る */
+      if (options.quiet) return;
       sendKnowledge({ type:'emu-knowledge-error', error:error.message || '投稿を読み込めませんでした。' });
     /* 自分が登録したものだけ消す。あとから始まった同期の登録を
        消してしまうと、そちらが素通しになってまた同じ不具合が出る。 */
