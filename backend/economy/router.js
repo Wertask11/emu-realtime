@@ -194,7 +194,10 @@ function createEconomyRouter(deps) {
   };
   if (env.ECONOMY_WORKER_ENABLED === "true" && deps.startWorker !== false) {
     tick();
-    timer = setInterval(tick, 10000);
+    // Eight minimum reads per idle cycle: 30s keeps the baseline near
+    // 23,040/day (rather than 69,120/day), below the verified free 50k quota.
+    // The immediate first tick and 90s heartbeat validity are unchanged.
+    timer = setInterval(tick, 30000);
     timer.unref();
   }
   return {

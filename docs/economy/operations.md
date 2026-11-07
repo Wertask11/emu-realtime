@@ -104,7 +104,7 @@ sourceKeyは `knowledge:ID` / `knowledge_lab:ID` / `knowledge_text:ID` / `guild:
 | 変数 | 条件 |
 |---|---|
 | `ECONOMY_EXPLORER_ENABLED` | 確認完了後のみtrue。初期false |
-| `ECONOMY_WORKER_ENABLED` | trueで永続ジョブ・返却・内容除去を10秒/毎時実行。未設定なら新規受付も拒否 |
+| `ECONOMY_WORKER_ENABLED` | trueで永続ジョブ・返却・内容除去を30秒/毎時実行。未設定なら新規受付も拒否 |
 | `ECONOMY_AI_TERMS_ATTESTED` | 利用規約・データ取扱いの確認が成立した場合のみtrue |
 | `ECONOMY_AI_AUDIENCE_ATTESTED` | 対象者条件との整合確認後のみtrue |
 | `ECONOMY_AI_SOURCE_USE_ATTESTED` | 対象資料の新用途の許諾確認後のみtrue |
@@ -174,3 +174,10 @@ sourceKeyは `knowledge:ID` / `knowledge_lab:ID` / `knowledge_text:ID` / `guild:
 APIキー所属は前回Founderから `emusch-2a111` と一致の申告を受けているが、今回の指示では未確認として再照合を求められている。実Renderキーの管理API照合権限はこの環境にないため、過去の申告と今回の直接確認を混同せず、有効化前に管理画面で再確認する。キー値をチャットに貼らない。Public statusやモデルmetadata成功からBilling Tier/所属を推定しない。
 
 最新の変更・分離試験・Preview・公開条件・有効化手順は [reizo-request-readiness-20261107.md](reizo-request-readiness-20261107.md)。本番設定/資料/利用資格の承認はこの表示統合によって自動成立しない。新規受付はOFFのまま。#280を含む統合候補PRをレビューし、コード反映・有効化・実EMUER試験を別々に判定する。
+
+
+## 2026-11-07 workerの無料枠対策
+
+Firestoreの実APIで既定DBの無料読取50,000/日・書込20,000/日を確認。常時起動時の空巡回は、5状態の問い合わせ＋3文書読取で最低8読取/周期。10秒周期では約69,120読取/日・17,280 heartbeat書込/日になるため、30秒周期（約23,040読取/日・5,760書込/日）へ変更した。実データの読取・通常アプリの使用量はこのほかに加算される。
+
+初回tick・永続キュー・90秒の健全性有効時間・失敗返却は維持。空の巡回が無料枠を単独で超える状態を避けるための変更で、24時間稼働保証やGoogle全体の残枠取得を意味しない。返却待ちを止めず、処理中の依頼がないことを確認して配備する。
