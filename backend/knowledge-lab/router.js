@@ -222,17 +222,33 @@ function createKnowledgeLabRouter(deps) {
      閲覧するだけで本番の Firestore に書き込みが起き、確認が失敗するとその GET ごと 503 になっていた。
 
      server.js（本番）は scheduleRulesCheck を渡す。そのときは:
-     - 確認は、起動時と30分ごとの決まった時刻にだけ行う（unref した timer）。
+     - 確認は、起動時と3時間ごとの決まった時刻にだけ行う（unref した timer。失敗したときだけ10分後にやり直す）。
      - リクエストは、記録した結果を見るだけ。確認の途中なら、その結果を待つ。
-     - 結果が無い・失敗・70分より古い（定期の確認が止まっている）ときは、今までどおり 503 で止める（fail-closed）。
-     書き込みの量は、利用が多い時間でも1時間に2回分に減る（前は最大12回分）。
+     - 結果が無い・失敗・3時間40分より古い（定期の確認が止まっている）ときは、今までどおり 503 で止める（fail-closed）。
+     書き込みの量は、3時間に1回分に減る（前は最大で1時間に12回分）。
      テストなど scheduleRulesCheck を渡さないときは、前と同じ動き（必要なら、その場で確認する）。 */
-  const RULES_INTERVAL_MS = 30 * 60000,
-    RULES_MAX_AGE_MS = 70 * 60000;
+  /* 11/7：確認の間隔を30分から3時間へ。
+     1回の確認で、32の置き場所それぞれに「わざと断られる読み・書き」を2件ずつ送る（64件）。
+     30分ごとだと、誰も使っていない夜中でも Firebase の「規則で拒否」が1時間に約130件、
+     確認用の書き込み・削除も1日に約1,500件ずつ積み上がっていた。
+     ルールが変わるのは運営が反映したときだけなので、3時間ごとで足りる。
+     確認が失敗したときだけ、10分後にやり直す（ナレッジラボを3時間止めないため）。
+     結果が古すぎる（定期の確認が止まっている）ときに 503 で止める fail-closed はそのまま。 */
+  const RULES_INTERVAL_MS = 3 * 3600000,
+    RULES_MAX_AGE_MS = 3 * 3600000 + 40 * 60000,
+    RULES_RETRY_MS = 10 * 60000;
   const scheduled = deps.scheduleRulesCheck === true;
-  let rulesTimer = null;
+  let rulesTimer = null,
+    rulesRetry = null;
   if (scheduled) {
-    const run = () => checkRules().catch(() => false);
+    const run = () =>
+      checkRules()
+        .catch(() => false)
+        .then((ok) => {
+          if (ok || rulesRetry) return;
+          rulesRetry = setTimeout(() => { rulesRetry = null; run(); }, RULES_RETRY_MS);
+          rulesRetry.unref?.();
+        });
     run();
     rulesTimer = setInterval(run, RULES_INTERVAL_MS);
     rulesTimer.unref?.();
@@ -1350,6 +1366,7 @@ function createKnowledgeLabRouter(deps) {
     close: () => {
       clearInterval(maintenanceTimer);
       if (rulesTimer) clearInterval(rulesTimer);
+      if (rulesRetry) clearTimeout(rulesRetry);
     },
   };
 }

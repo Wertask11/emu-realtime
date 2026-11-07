@@ -49,8 +49,12 @@ test("scheduled Rules check: GETs never start a probe, stale results fail closed
       assert.notEqual(r.status, 503, path);
     }
     assert.equal(probes, afterStartup, "GET が確認（書き込み）を始めた");
-    // 定期の確認が止まって70分を過ぎたら、GET は 503（fail-closed）。それでも確認は始めない
-    time += 65 * 60000;
+    // 3時間たっても、定期の確認の結果が使える（間隔は3時間・期限は3時間40分）
+    time += 174 * 60000;
+    assert.notEqual((await get("/taxonomy")).status, 503);
+    assert.equal(probes, afterStartup);
+    // 定期の確認が止まって3時間40分を過ぎたら、GET は 503（fail-closed）。それでも確認は始めない
+    time += 41 * 60000;
     const stale = await get("/taxonomy");
     assert.equal(stale.status, 503);
     assert.equal(stale.body.error, "RULES_NOT_VERIFIED");
