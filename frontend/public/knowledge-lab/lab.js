@@ -2372,7 +2372,7 @@
         [
           "lab-back",
           "Emuへはここから戻れるよ",
-          "「Emuに戻る」で、もとのEmu画面へ。上の「使い方案内」から、この説明や今開いている画面の案内をいつでも見返せるよ。",
+          "「Emuに戻る」で、もとのEmu画面へ。上の「冷蔵庫くん」から、この説明や今開いている画面の案内をいつでも見返せるよ。",
         ],
       ],
       research: [
@@ -2429,10 +2429,28 @@
             state.enabled && state.terms.length > 0 && state.view === name,
         },
       );
-    $("#guide").onclick = () => {
+    // 11/7：「使い方案内」は「冷蔵庫くん」に。Emu の上の帯と同じく、ガイド・聞く・頼むを選べる。
+    // 聞く・頼むは Emu（親の画面）の窓で開く。Lab だけを開いているときはガイドだけ
+    $("#guide").onclick = (event) => {
       if (state.view === "admin")
-        run(() => view("library").then(() => tour.restart(tourId("library"))));
-      else tour.restart(tourId(state.view));
+        return run(() =>
+          view("library").then(() => tour.restart(tourId("library"))),
+        );
+      let host = null;
+      try {
+        if (parent !== window && typeof parent.spReizoOpen === "function")
+          host = parent;
+      } catch (_) {}
+      if (typeof tour.choose !== "function" || !host)
+        return tour.restart(tourId(state.view));
+      tour.choose(
+        tourId(state.view),
+        () => host.spReizoOpen(),
+        event.currentTarget,
+        typeof host.openReizoRequest === "function"
+          ? () => host.openReizoRequest()
+          : undefined,
+      );
     };
   }
   window.addEventListener("message", (e) => {

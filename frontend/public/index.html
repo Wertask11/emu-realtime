@@ -2760,6 +2760,33 @@ body.paypay-mode #pp-post-fab {
 /* 知識を読む（11/7）：右上の冷蔵庫くんとプロフィールは、知識を読むの左の列（＋知識を届けるの下）へ移した。
    この画面のあいだだけ右上から外す（ほかの画面は今までどおり右上）。 */
 body.emu-knowledge-open #emuHeaderProfile, body.emu-knowledge-open #emuHeaderReizo { display:none !important; }
+/* 冷蔵庫くんの窓（11/7・reizo-float.js）：上の帯をつかんで動かせる。指でも動かせるよう、帯の上ではスクロールしない */
+.emu-float-handle { cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; }
+.emu-float-handle:focus-visible { outline:2px solid #f08300; outline-offset:-2px; }
+html.emu-float-dragging, html.emu-float-dragging * { cursor:grabbing !important; user-select:none !important; }
+html.emu-float-dragging iframe { pointer-events:none; }
+#rk-tour .rk-panel:not(.rk-choice) .rk-header.emu-float-handle { cursor:auto; touch-action:auto; }
+/* 冷蔵庫くんに頼む（/economy/）の浮かぶ窓（reizo-float.js が作る #reizoRequestWin） */
+#reizoRequestWin { position:fixed; z-index:2600; display:none; flex-direction:column; overflow:hidden;
+  width:min(460px, calc(100vw - 16px)); height:min(720px, calc(100dvh - 96px));
+  border-radius:14px; border:1px solid rgba(212,168,67,.35); box-shadow:0 18px 50px rgba(0,0,0,.35); background:#fff; }
+#reizoRequestWin.open { display:flex; }
+#reizoRequestWin .rrw-bar { display:flex; align-items:center; gap:9px; flex:none; height:44px; padding:0 4px 0 12px;
+  background:#1a1208; color:#D4A843; font-weight:700; font-size:14px; }
+#reizoRequestWin .rrw-bar img { width:26px; height:26px; border-radius:50%; object-fit:cover; }
+#reizoRequestWin .rrw-bar span { flex:1; min-width:0; }
+#reizoRequestWin .rrw-close { border:0; background:transparent; color:#D4A843; width:40px; height:40px; font-size:16px; cursor:pointer; border-radius:8px; }
+#reizoRequestWin .rrw-close:hover { background:rgba(212,168,67,.15); }
+#reizoRequestWin iframe { flex:1; min-height:0; width:100%; border:0; display:block; }
+/* Knowledge Lab・Knowledge Text（11/7）：パソコンでは左のメニューと上の帯を残して本文の場所に出す。左のメニューを閉じると広くなる */
+@media (min-width:1025px) {
+  body.emu-unified.sp-room-open.sp-room-embed #spRoomPage { top:var(--emu-room-top, 90px); left:248px; right:0; bottom:0; z-index:22; background:#f8f6f2; }
+  body.emu-unified.emu-nav-closed.sp-room-open.sp-room-embed #spRoomPage { left:0; }
+  body.emu-unified.sp-room-open.sp-room-embed { overflow:hidden; }
+  body.emu-unified.sp-room-open.sp-room-embed:not(.emu-nav-closed):not(.emu-sky-open):not(.spmap-open):not(.room2-open):not(.room3-open):not(.paypay-mode):not(.emu-contact-off):not(.cam-contact-off) #emu-contact-btn { display:flex !important; }
+}
+/* 知識を探す：廃止した「知識を探しています」は出さない */
+#emuRequestsPage > [data-retired] { display:none !important; }
 /* 知識を読む・知識を探す・知識を試す（11/7）：上の見出しと説明の一文を出さず、空いた分を詰める。
    パソコン（左にタブ列がある幅）は見出しの行ごと外す。タブレットは行き来に使うタブ列だけ残す。スマホはもともと出さない。 */
 body.emu-knowledge-open #emuTodayHome > .eth-topbar > div:first-child,
@@ -2773,7 +2800,10 @@ body.emu-practice-open #emuTodayHome > .eth-topbar > div:first-child { display:n
 /* 知恵ライブラリ・City（11/7）：上の「← 知識を試す」を出さず、SchoolPark の枠を上へ詰める。
    ギルド・クエストなど、知識を試すから開いた画面には残す。 */
 body.emu-workspace-open[data-emu-view="wisdom"] #spDaoPage > .emu-workspace-tools,
-body.emu-workspace-open[data-emu-view="city"] #spDaoPage > .emu-workspace-tools { display:none; }
+body.emu-workspace-open[data-emu-view="city"] #spDaoPage > .emu-workspace-tools,
+/* ギルド・クエストの一覧（11/7）も同じ。詳しい画面（ギルドの詳細・クエストの内容など）には残す */
+body.emu-workspace-open[data-emu-screen="logs"] #spDaoPage > .emu-workspace-tools,
+body.emu-workspace-open[data-emu-screen="experiments"] #spDaoPage > .emu-workspace-tools { display:none; }
 /* 知識を試す：この画面の説明（知識を自分の現場で試して〜）と、スマホだけの見出しも出さない */
 #emuPracticePage > .emu-practice-title,
 #emuPracticePage > .eth-subtitle:first-of-type { display:none; }
@@ -4013,6 +4043,7 @@ html, body { -webkit-tap-highlight-color: rgba(0,0,0,0); }
   <script src="/emu-analytics.js"></script>
 <link rel="stylesheet" href="/emu-theme.css">
 <script src="/economy/entry.js" defer></script>
+<script src="/reizo-float.js" defer></script><!-- 冷蔵庫くんの窓を本文の近くに出し、つかんで動かせるようにする（11/7） -->
 </head>
 <body>
 
@@ -5338,7 +5369,9 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
       <div class="eth-card" data-tour="emu-lab-entry"><h3>Emu Knowledge Lab</h3><p>経験知を分野から探し、異なる知識を掛け合わせて、新しい問いや実践案へ。</p><button type="button" class="eth-btn primary" onclick="openEmuKnowledgeLab()">知識図書館・掛け合わせ研究所を開く →</button></div>
       <div class="eth-card" data-tour="room1-entry emu-room1"><h3>Emu Knowledge Text</h3><p>騙されないお金の守り方、炎上しないSNSの使い方、折れない心のつくり方。学校では教わらない「生きる知識」を、ここで。</p><button type="button" class="eth-btn primary emu-text-entry" onclick="openSpRoom('/admin/room1/index.html', 'Knowledge Text')">教科書をひらく →</button></div>
     </div>
-    <div class="eth-section-head">
+    <!-- 11/7 オーナー決定：「知識を探しています（KNOWLEDGE REQUEST）」は廃止。知識を探すは Knowledge Lab と Knowledge Text の2つが主。
+         募集の仕組み（knowledge_requests・Lab の「知識を募集する」）は残す。ここは出さず、一覧も読まない。 -->
+    <div class="eth-section-head" data-retired hidden>
       <div>
         <span class="eth-badge">KNOWLEDGE REQUEST</span>
         <h2 data-tour="request-intro emu-req-head" style="margin:7px 0 3px;" data-i18n="req.title">知識を探しています</h2>
@@ -5346,7 +5379,7 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
       </div>
       <button type="button" class="eth-btn primary" data-tour="emu-req-btn" onclick="openKnowledgeRequestComposer()" data-i18n="req.new">＋ 知識を募集する</button>
     </div>
-    <div class="emu-request-grid" id="emuRequestList" data-tour="emu-req-list">
+    <div class="emu-request-grid" id="emuRequestList" data-tour="emu-req-list" data-retired hidden>
       <div class="eth-card emu-request-empty" data-i18n="req.loading">募集を読み込んでいます...</div>
     </div>
   </section>
@@ -5358,8 +5391,9 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
     <article class="eth-card" data-tour="guild-entry"><h3>ギルド</h3><p>関心の近い人の問いや活動を知り、知識をどう使うか考える場所です。</p><button type="button" class="eth-btn primary" data-tour="practice-guild" onclick="openEmuPractice('logs')">ギルドの活動を見る →</button></article>
     <article class="eth-card" data-tour="quest-entry"><h3>クエスト</h3><p>やること・条件・期限を確かめて、知識を実際に試せる活動を探します。</p><button type="button" class="eth-btn primary" data-tour="practice-quest" onclick="openEmuPractice('experiments')">クエストの内容を見る →</button></article>
   </div>
-  <p class="eth-subtitle">カードを開くだけでは参加登録されません。参加条件や必要な行動は、各活動の画面で確認できます。</p>
-  <div class="emu-secondary-actions"><button class="eth-btn" type="button" onclick="openEmuPractice('tasks')">自分の宿題</button><button class="eth-btn" type="button" onclick="openEmuPractice('yeargoals')">年内目標</button></div>
+  <!-- 11/7：「カードを開くだけでは参加登録されません…」の一文と「年内目標」の入口は外した。
+       「自分の宿題」は、知識を読むの左の列（＋知識を届けるの下）からも開ける -->
+  <div class="emu-secondary-actions"><button class="eth-btn" type="button" onclick="openEmuPractice('tasks')">自分の宿題</button></div>
 </section>
 
   <div id="emuKnowledgePage">
@@ -14943,7 +14977,7 @@ function showEmuRequests() {
   window.EmuNavigation?.activate('search');
   _setEmuHomeTab('emuRequestsTab');
   _setEmuPageTitle('tab.requests', '知識を探す');
-  loadKnowledgeRequests();
+  // 11/7：「知識を探しています」の一覧は廃止したので読まない（Firestore の読み取りを使わない）
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
@@ -15640,7 +15674,10 @@ function toggleAccountMenu(e, anchor) {
   const frame = btn.ownerDocument.defaultView.frameElement;
   const offset = frame ? frame.getBoundingClientRect() : {left:0,top:0};
   menu.style.top = Math.max(8, Math.min(rect.bottom + offset.top + 8, innerHeight - 160)) + 'px';
-  menu.style.right = Math.max(8, Math.min(innerWidth - rect.right - offset.left, innerWidth - 248)) + 'px';
+  /* 右端はボタンの右端にそろえる。innerWidth はスクロールバーの幅を含むので、その分（約15px）左に寄っていた（11/7）。
+     position:fixed の right はスクロールバーの手前から測るので、スクロールバーを除いた幅で計算する。 */
+  const vw = document.documentElement.clientWidth || innerWidth;
+  menu.style.right = Math.max(8, Math.min(vw - rect.right - offset.left, vw - 248)) + 'px';
   menu.style.maxHeight = 'calc(100dvh - ' + (parseFloat(menu.style.top) + 12) + 'px)';
   const name = localStorage.getItem('ches_name') || '';
   const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
@@ -22272,12 +22309,28 @@ function openSpRoom(url, title) {
   const page = document.getElementById('spRoomPage');
   const frame = document.getElementById('spRoomFrame');
   if (!page || !frame) return;
-  if (document.body.classList.contains('sp-room-open') && frame.getAttribute('src') !== url && closeSpRoom() === false) return false;
+  /* 冷蔵庫くんに頼む（/economy/）は、小部屋ではなく浮かぶ窓で開く（reizo-float.js）。
+     Knowledge Lab などを開いたまま、見ながら頼めるように（11/7） */
+  if (/^\/economy\//.test(String(url)) && window.EmuReizoFloat?.openRequest) return window.EmuReizoFloat.openRequest(url, title);
+  if (document.body.classList.contains('sp-room-open') && frame.getAttribute('src') !== url && closeSpRoom({ room: true }) === false) return false;
   if (!frame._spRoomWatch) { frame._spRoomWatch = true; frame.addEventListener('load', spRoomWatchRender); }
   frame.src = url;
   if (title) frame.title = title;
+  /* Knowledge Lab・Knowledge Text は、パソコンでは左のメニューと上の帯を残して、本文の場所に出す（11/7）。
+     ほかの画面と同じく、左のメニューを閉じると広くなる。ほかの小部屋は今までどおり画面いっぱい */
+  document.body.classList.toggle('sp-room-embed', /^\/(?:knowledge-lab(?:-guide)?\.html|admin\/room1\/)/.test(String(url)));
+  window._emuRoomFit?.();
   document.body.classList.add('sp-room-open');
 }
+function _emuRoomFit() {
+  try {
+    const head = document.querySelector('#mainApp header.service-header');
+    if (!head) return;
+    if (document.body.classList.contains('sp-room-embed')) window.scrollTo(0, 0);
+    document.documentElement.style.setProperty('--emu-room-top', Math.max(0, Math.round(head.getBoundingClientRect().bottom)) + 'px');
+  } catch (_) {}
+}
+addEventListener('resize', function () { if (document.body.classList.contains('sp-room-embed')) _emuRoomFit(); });
 /* 「みてみる」の行き先。以前は取引所（NFTの出品一覧）だったが、
    旧SchoolParkのショッピングをここに移した。 */
 /* view … Mall の「SchoolPark Cityを開く」は買い物の画面（commerce）へ。
@@ -22303,6 +22356,9 @@ function openCityEventLink() {
 window.addEventListener('DOMContentLoaded', openCityEventLink, { once:true });
 
 function closeSpRoom(options) {
+  /* 冷蔵庫くんに頼むの窓の「← 戻る」も closeSpRoom を呼ぶ。その窓を操作しているときは、その窓だけを閉じる
+     （options.room … 小部屋を入れ替えるときは、小部屋のほうを閉じる） */
+  if (!options?.room && window.EmuReizoFloat?.requestActive?.()) { window.EmuReizoFloat.closeRequest(); return true; }
   const frame = document.getElementById('spRoomFrame');
   if (options?.force) {
     try { frame?.contentWindow.EmuLabUnsaved?.discard(); } catch (_) {}
@@ -22311,7 +22367,7 @@ function closeSpRoom(options) {
     try { if (frame.contentWindow.EmuLabUnsaved?.canLeave() === false) return false; }
     catch (_) { return false; }
   }
-  document.body.classList.remove('sp-room-open');
+  document.body.classList.remove('sp-room-open', 'sp-room-embed');
   if (frame) frame.src = 'about:blank';   /* 音や読み上げを止める */
   return true;
 }

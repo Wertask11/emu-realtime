@@ -55,7 +55,7 @@ with sync_playwright() as p:
    g.locator('#emuPracticePage').get_by_role('button',name='ギルドの活動を見る →').click()
    g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="logs"')
    f=g.frame_locator('#spDaoFrame');f.locator('[data-tour~=guild-list]').wait_for();fits()
-   g.locator('#emuWorkspaceBack').click();g.locator('#emuPracticePage').get_by_role('button',name='クエストの内容を見る →').click()
+   g.evaluate('showEmuPractice()');g.locator('#emuPracticePage').get_by_role('button',name='クエストの内容を見る →').click()
    g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="experiments"')
    f.get_by_text('LOCAL 知識を試すクエスト',exact=False).first.wait_for();fits()
    g.screenshot(path=str(OUT/f'AFTER-{width}-quests.png'))

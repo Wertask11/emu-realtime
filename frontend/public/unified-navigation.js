@@ -21,9 +21,12 @@
   function activate(view, workspace=false, options={}) {
     if (!ROUTES[view]) return;
     if (!workspace) { sequence++;opening=null;requestedScreen=''; }
+    // 11/7：左のメニューの中に開いた Knowledge Lab・Knowledge Text は、ほかの画面へ移るときに閉じる
+    if(!options.keepRoom && document.body.classList.contains('sp-room-embed'))window.closeSpRoom?.({room:true});
     current=view;
     workspaceScreen=workspace?(options.screen||workspaceScreen||requestedScreen):null;
     document.body.classList.add('emu-unified');
+    if(document.body.dataset)document.body.dataset.emuScreen=workspaceScreen||''; // 11/7：ギルド・クエストの一覧では「← 知識を試す」を出さない
     if(document.body.dataset)document.body.dataset.emuView=view; // 11/7：いまの画面（知恵ライブラリ・City では「← 知識を試す」を出さない）
     document.body.classList.remove(...CLASSES);
     document.body.classList.add(workspace?'emu-workspace-open':view==='read'?'emu-knowledge-open':view==='search'?'emu-requests-open':view==='profile'?'emu-profile-open':'emu-practice-open');
@@ -90,7 +93,7 @@
   }
   function sync(screen) {
     if(!SCREENS.has(screen)||!document.body.classList.contains('emu-workspace-open'))return;
-    activate(screen==='library'?'wisdom':screen==='city'?'city':'practice',true,{screen});
+    activate(screen==='library'?'wisdom':screen==='city'?'city':'practice',true,{screen,keepRoom:true});
   }
   async function resumeDialogue() {
     // The existing membership UI offers this URL for scheduled sessions only.

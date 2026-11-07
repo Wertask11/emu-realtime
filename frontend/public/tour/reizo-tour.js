@@ -17,7 +17,7 @@
       var legacy = value.version === 1 && value.tours && !Array.isArray(value.tours);
       if ('version' in value && !legacy) throw new Error('version');
       var records = legacy ? value.tours : value;
-      var oldIndices = {'sp-home':[0,1,2,3,4,6,7], 'sp-guilds':[0,2], 'sp-park':[0,2], 'sp-contribution':[0,2], 'emu-feed':[2,4,8], 'emu-requests':[0,1,4], 'emu-share':[0,5], 'emu-discussion':[0,0]};
+      var oldIndices = {'sp-home':[0,1,2,3,4,6,7], 'sp-guilds':[0,2], 'sp-park':[0,2], 'sp-contribution':[0,2], 'emu-feed':[2,4,8], 'emu-requests':[0,0,1], 'emu-share':[0,5], 'emu-discussion':[0,0]};
       Object.keys(records).forEach(function (id) {
         if (!/^(sp|emu)-[a-z-]+$/.test(id)) return;
         var item = records[id], status, index;

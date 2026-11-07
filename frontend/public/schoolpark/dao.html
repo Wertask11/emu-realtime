@@ -22,7 +22,9 @@
 /* 知恵ライブラリ・City（11/7）：上の見出し（WISDOM／CITY・画面名・EMUER・サービス）を出さず、空いた分を詰める。
    EMUER・サービスへは冷蔵庫くんから入る。ほかの画面（ギルド・クエスト・自分の宿題など）の見出しは今までどおり。 */
 .sp-section-header[data-sp-screen="library"],
-.sp-section-header[data-sp-screen="city"] {display:none;}
+.sp-section-header[data-sp-screen="city"],
+.sp-section-header[data-sp-screen="logs"],
+.sp-section-header[data-sp-screen="experiments"] {display:none;}
 [role="button"]:focus-visible { outline: 3px solid var(--emu-brand-strong); outline-offset: 4px; }
 </style>
 <style>
@@ -83,7 +85,7 @@ if (window.top === window.self) window.location.replace('/');
 
     <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow-y:{{ L.scrollY }}" ref="{{ scrollRef }}">
 
-      <header class="sp-section-header" data-sp-head data-sp-screen="{{ headScreen }}" data-tour="screen-heading guild-intro quest-intro"><p>{{ head.kicker }}</p><h2>{{ head.title }}</h2><div data-economy-slot style="height:60px;min-height:60px;flex-basis:100%;width:100%"></div></header>
+      <header class="sp-section-header" data-sp-head data-sp-screen="{{ headScreen }}" data-tour="screen-heading guild-intro"><p>{{ head.kicker }}</p><h2>{{ head.title }}</h2><div data-economy-slot style="height:60px;min-height:60px;flex-basis:100%;width:100%"></div></header>
 
       <div style="padding:{{ L.pad }}; display:flex; flex-direction:column; gap:36px">
 
@@ -94,17 +96,12 @@ if (window.top === window.self) window.location.replace('/');
 
 
         <sc-if value="{{ showFounder }}">
+          <!-- 11/7：#000 の入口を短く（恒久の原点・物語はこの場所から。・ひとこと・全文を読む）。全文の画面（isFounderDetail）は変えない -->
           <section style="background:var(--emu-brand-strong); color:#F4F1EA; border-radius:12px; padding:24px; margin-bottom:24px; overflow-wrap:anywhere">
-            <div style="font-size:11px; letter-spacing:.12em; color:var(--emu-brand-soft)">FOUNDER QUEST · 恒久の原点</div>
-            <h2 style="font-size:24px; line-height:1.5">SchoolPark Quest #000</h2>
-            <p style="line-height:1.9">目印にしてスタート、ゴールにして原点、原点にして頂点</p>
-            <sc-if value="{{ showFounderToggle }}"><button onClick="{{ toggleFounderSummary }}" style="font:inherit; background:#fff2e5; color:#141310; border:0; border-radius:6px; padding:10px 16px; cursor:pointer">{{ founderToggleLabel }}</button></sc-if>
-            <sc-if value="{{ showFounderDetails }}">
-              <p style="font-size:13px; line-height:1.9">SchoolParkは何のために存在するのか。どんな社会をつくりたいのか。何を大切にするのか。その原点を記録する。</p>
-              <p style="font-size:13px">報酬 0円 · Founder 1人 · 期限なし</p>
-              <button onClick="{{ founder.open }}" style="font:inherit; background:#fff2e5; color:#141310; border:0; border-radius:6px; padding:12px 18px; cursor:pointer">#000の全文を読む</button>
-              <p style="font-size:12px; line-height:1.8">実際の活動・行動・検証は #001 から開始します。</p>
-            </sc-if>
+            <div style="font-size:11px; letter-spacing:.12em; color:var(--emu-brand-soft)">恒久の原点</div>
+            <h2 style="font-size:24px; line-height:1.5; margin:6px 0 8px">SchoolPark<span style="font-size:17px; font-weight:600; margin-left:.6em">物語はこの場所から。</span></h2>
+            <p style="font-size:13px; line-height:1.9; margin:0 0 16px">SchoolParkは何のために存在するのか。どんな社会をつくりたいのか。何を大切にするのか。</p>
+            <button onClick="{{ founder.open }}" style="font:inherit; background:#fff2e5; color:#141310; border:0; border-radius:6px; padding:12px 18px; cursor:pointer">全文を読む</button>
           </section>
         </sc-if>
         <!-- SchoolParkの年内目標。中身は Firestore の sp_docs/year-goals に1件だけ。
@@ -113,8 +110,7 @@ if (window.top === window.self) window.location.replace('/');
         <sc-if value="{{ showYearGoals }}">
           <section style="background:#FBF9F3; border:1px solid rgba(20,19,16,.16); border-radius:12px; padding:24px; margin-bottom:24px; overflow-wrap:anywhere">
             <div style="font-family:Inter,sans-serif; font-size:11px; letter-spacing:.12em; color:var(--emu-brand-strong)">YEAR GOALS</div>
-            <h2 style="font-size:24px; line-height:1.5; margin:6px 0 8px">{{ yearDoc.title }}</h2>
-            <p style="font-size:13px; line-height:1.9; color:#3B382F; margin:0 0 16px" data-tour="year-goals">{{ yearDoc.summary }}</p>
+            <h2 style="font-size:24px; line-height:1.5; margin:6px 0 16px">{{ yearDoc.title }}</h2>
             <button onClick="{{ openYearGoals }}" style="font:inherit; background:var(--emu-brand-strong); color:#F4F1EA; border:0; border-radius:6px; padding:12px 18px; cursor:pointer">全文を読む</button>
           </section>
         </sc-if>
@@ -230,7 +226,7 @@ if (window.top === window.self) window.location.replace('/');
 
 
         <sc-if value="{{ isExperiments }}" hint-placeholder-val="{{ false }}">
-          <p class="sp-ux-note">Emuで読んだ知識や自分の経験を、実際の課題で試してみる。結果やつまずきを報告し、次にも使える学びを知恵カードに残せます。気になる課題の「内容を見る」から、試したいことを探してみてください。閲覧だけでは参加登録されません。</p>
+          <p class="sp-ux-note" data-tour="quest-intro">Emuで読んだ知識や自分の経験を、実際の課題で試してみる。結果やつまずきを報告し、次にも使える学びを知恵カードに残せます。気になる課題の「内容を見る」から、試したいことを探してみてください。閲覧だけでは参加登録されません。</p>
           <div class="sp-ux-actions"><button type="button" class="sp-ux-button" aria-pressed="{{ entryOnly }}" onClick="{{ toggleEntryOnly }}">「入門」のクエストに絞る</button><span class="sp-ux-note">運営が「入門」と設定したものだけを表示します。</span></div>
           <sc-if value="{{ noShownQuests }}"><p class="sp-ux-note">この条件に合うクエストはありません。<button type="button" class="sp-ux-button" onClick="{{ resetQuestFilters }}">絞り込みを解除する</button></p></sc-if>
           <div style="display:flex; flex-direction:column; gap:24px">
