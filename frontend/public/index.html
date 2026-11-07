@@ -25816,12 +25816,15 @@ function openMarketplace() {
 // 新しい知識iframeは表示時・投稿/反応時に必要な件数だけ同期する。
 
 // 予約投稿の反映確認は「知識を読む」を実際に表示しているタブだけで行う。
+// 11/7（オーナー）：3分ごと → 30分ごとに（Firestore の1日の読み取り枠を使い切っていたため）。新着の先頭は見張り（onSnapshot）でも気づける
 setInterval(() => {
   if (document.hidden || !document.body.classList.contains('emu-knowledge-open')) return;
   const frame = document.getElementById('emuKnowledgeFrame');
   if (!frame || frame.dataset.ready !== 'true') return;
-  refreshAllPosts();
-}, 3 * 60 * 1000);
+  /* 裏の読み直し。通信が切れていても画面にエラーを出さない（quiet） */
+  if (typeof window.syncKnowledgeFrame === 'function') window.syncKnowledgeFrame({ append:false, quiet:true });
+  else refreshAllPosts();
+}, 30 * 60 * 1000);
 
 // ════════ 秋モーダル（投稿を公開したあとの演出） ════════
 document.body.insertAdjacentHTML('beforeend', `
@@ -27100,18 +27103,14 @@ row.appendChild(medal);
   // ══════════════════════════════════════════
   // 初回ロード・定期更新
   // ══════════════════════════════════════════
+  /* 11/7（オーナー）：5分ごとの読み直しはやめた（Firestore の1日の読み取り枠を使い切っていたため）。
+     いまの画面ではランキングを出していないので、見えているときだけ最初に1回読む */
   setTimeout(function() {
-    if (document.getElementById('rankingPanel')) {
+    const panel = document.getElementById('rankingPanel');
+    if (panel && panel.getClientRects().length) {
       loadRanking('good_post');
     }
   }, 1500);
- 
-  setInterval(function() {
-    _rankCache = {};
-    if (document.getElementById('rankingPanel')) {
-      loadRanking(_rankType);
-    }
-  }, 5 * 60 * 1000);
  
 })(); // IIFE で変数汚染を防ぐ
 </script>
@@ -28844,7 +28843,19 @@ async function sendEmuFeedback() {
   function knowledgeFrame() {
     return document.getElementById('emuKnowledgeFrame');
   }
+  /* 11/7：通信が切れているときの Firebase の英語のエラー（Failed to get document because the client is offline など）を、
+     そのまま画面に出さない。わかる言葉に置き換える。ほかのエラー文はそのまま */
+  function _emuFriendlyError(text) {
+    const s = String(text || '');
+    /* その日の読み取りの上限（Firestore の無料枠）を使い切ったとき */
+    if (/quota|resource[-_ ]exhausted/i.test(s))
+      return 'ただいま混み合っているため、読み込めませんでした。時間をおいて、もう一度お試しください。';
+    if (/client is offline|offline|unavailable|network ?error|failed to fetch|load failed|deadline|timed? ?out/i.test(s))
+      return '通信が不安定なため、読み込めませんでした。電波のよい所で、少し待ってからもう一度お試しください。';
+    return s;
+  }
   function sendKnowledge(message) {
+    if (message && typeof message.error === 'string') message = Object.assign({}, message, { error:_emuFriendlyError(message.error) });
     const frame = knowledgeFrame();
     if (frame && frame.contentWindow) frame.contentWindow.postMessage(message, KNOWLEDGE_ORIGIN);
   }
@@ -29450,6 +29461,8 @@ async function sendEmuFeedback() {
       startKnowledgeWatch();
     })().catch(error => {
       console.error('知識iframe同期失敗:', error);
+      /* 3分ごとの裏の読み直し（quiet）が失敗しても、読んでいる人には知らせない。いま出ている一覧はそのまま残る */
+      if (options.quiet) return;
       sendKnowledge({ type:'emu-knowledge-error', error:error.message || '投稿を読み込めませんでした。' });
     /* 自分が登録したものだけ消す。あとから始まった同期の登録を
        消してしまうと、そちらが素通しになってまた同じ不具合が出る。 */
