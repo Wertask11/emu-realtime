@@ -93,6 +93,7 @@ function createEconomyRouter(deps) {
         state: !workerEnabled ? "disabled" : healthy ? "healthy" : "not_ready",
         lastSuccessAtMs: lastSuccessAtMs || null,
         error: lastError,
+        retryAfterMs: Math.max(0, quotaRetryAt - Date.now()),
       },
       walletPaymentEnabled: false,
       externalExchangeExecutable: false,
@@ -205,7 +206,9 @@ function createEconomyRouter(deps) {
     ticking = false,
     wakePending = false,
     closed = false,
-    cleanupAfter = 0;
+    cleanupAfter = 0,
+    quotaRetryAt = 0,
+    quotaFailures = 0;
   const awakenedJobs = new Set();
   function wakeFor(job) {
     if (
@@ -225,7 +228,7 @@ function createEconomyRouter(deps) {
     else queueMicrotask(tick);
   }
   const tick = async () => {
-    if (ticking || closed) return;
+    if (ticking || closed || Date.now() < quotaRetryAt) return;
     ticking = true;
     try {
       await service.workerHealth(true, false);
@@ -238,7 +241,15 @@ function createEconomyRouter(deps) {
         await service.purge();
         cleanupAfter = Date.now() + 3600000;
       }
-    } catch (_) {
+      quotaFailures = 0;
+      quotaRetryAt = 0;
+    } catch (error) {
+      // A daily-quota outage is not repaired by scanning every 30 seconds.
+      // Back off only quota faults; ordinary recovery and immediate wake stay.
+      if (error.code === 8 || /RESOURCE_EXHAUSTED|quota exceeded/i.test(error.message || "")) {
+        quotaFailures = Math.min(quotaFailures + 1, 4);
+        quotaRetryAt = Date.now() + Math.min(300000, 30000 * 2 ** quotaFailures);
+      }
       lastError = "WORKER_CYCLE_FAILED";
       snapshot = null;
       try {
@@ -255,9 +266,10 @@ function createEconomyRouter(deps) {
   };
   if (env.ECONOMY_WORKER_ENABLED === "true" && deps.startWorker !== false) {
     tick();
-    // Eight minimum reads per idle cycle: 30s keeps the baseline near
-    // 23,040/day (rather than 69,120/day), below the verified free 50k quota.
-    // The immediate first tick and 90s heartbeat validity are unchanged.
+    // Four minimum reads per idle cycle (one queue probe + three readiness
+    // documents), about 11,520/day rather than 23,040. Shared app traffic is
+    // additional. The 30s recovery cadence and 90s heartbeat remain unchanged;
+    // quota failures wait 60/120/240/300s without additional Firestore reads.
     timer = setInterval(tick, 30000);
     timer.unref();
   }

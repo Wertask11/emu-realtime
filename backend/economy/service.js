@@ -348,7 +348,12 @@ function createEconomy({
     }
   }
   async function view(a, id, includeResult = true) {
-    const j = await owned(a, id);
+    return present(a, id, await owned(a, id), includeResult);
+  }
+  async function present(a, id, j, includeResult) {
+    // Query snapshots come only from our actor-scoped history query. Recheck
+    // ownership here too; no caller-supplied data is accepted by an HTTP route.
+    if (!j || j.spid !== a.spid) fail("JOB_NOT_FOUND", 404);
     const order = await payments.get(j.orderId);
     let result = includeResult ? j.result : null;
     if (result?.results && j.searchProfile) {
@@ -418,7 +423,7 @@ function createEconomy({
       s.docs
         .sort((x, y) => y.data().createdAtMs - x.data().createdAtMs)
         .slice(0, 50)
-        .map((d) => view(a, d.id, false)),
+        .map((d) => present(a, d.id, d.data(), false)),
     );
   }
   async function refund(id) {
@@ -821,7 +826,13 @@ function createEconomy({
       });
   }
   async function tick() {
-    // Per-state queries avoid completed jobs starving recovery. No automatic retries of unknown AI outcomes.
+    // One indexed existence query replaces five empty queries on idle cycles.
+    // Nonempty cycles retain the per-state scans and ordering: payment recovery
+    // can become queued and finish in the same cycle, and a large queued set
+    // cannot starve refunds/result_saved. Completed history is never scanned.
+    const active = await db.collection("emuer_v2_agent_jobs")
+      .where("state", "in", LIVE).limit(1).get();
+    if (active.empty) return;
     for (const state of LIVE) {
       const s = await db
         .collection("emuer_v2_agent_jobs")
