@@ -455,7 +455,7 @@
     step('quest-detail','条件を確かめる','期限や報告の説明を読んでから判断してください。受ける・提出する必要はありません。')
   ],'detail');
   register('sp-tasks','自分の宿題',[
-    step('screen-heading','自分の宿題','取り組むことを確認できます。'),
+    step('tasks-intro','自分の宿題','取り組むことを確認できます。'),
     step('tasks-list','一覧の見方','締切やメモを読めます。追加・完了・削除はこの案内では行いません。')
   ],'tasks');
   register('sp-year-goals','年内目標',[

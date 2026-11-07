@@ -44,7 +44,102 @@
     el.style.setProperty('bottom', 'auto', 'important');
     return c;
   }
-  function place(el) { if (!el) return; put(el, read() || home(el)); }
+  function place(el) { if (!el) return; if (el._emuSize) applySize(el, sizeOf(el)); put(el, read() || home(el)); if (el._emuSize) el._emuSize.sync(); }
+
+  /* 大きさを変える（11/7）。右下の角をつかんで引く（マウスでも指でも）。角にフォーカスして矢印キーでも変えられる。
+     窓ごとに大きさを覚える（この端末の localStorage に、幅と高さの数字だけ）。
+     角は窓の外（body の直下）に置いて窓の右下に重ねる。窓の中身（ガイド・会話・依頼の画面）には触れない。 */
+  var SIZE_KEY = 'emu.reizo.size.v1';
+  function sizes() { try { var v = JSON.parse(localStorage.getItem(SIZE_KEY) || '{}'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (_) { return {}; } }
+  function sizeOf(el) {
+    var v = sizes()[el._emuSize.name];
+    return v && Number.isFinite(v.w) && Number.isFinite(v.h) ? v : el._emuSize.base;
+  }
+  function saveSize(el) {
+    var all = sizes(), r = el.getBoundingClientRect();
+    all[el._emuSize.name] = { w: Math.round(r.width), h: Math.round(r.height) };
+    try { localStorage.setItem(SIZE_KEY, JSON.stringify(all)); } catch (_) {}
+  }
+  function applySize(el, v) {
+    if (!v) return;
+    var vp = viewport(), min = el._emuSize.min;
+    if (v.w) el.style.setProperty('width', Math.round(Math.max(min.w, Math.min(v.w, vp.w - 2 * MARGIN))) + 'px', 'important');
+    if (v.h) {
+      el.style.setProperty('height', Math.round(Math.max(min.h, Math.min(v.h, vp.h - 2 * MARGIN))) + 'px', 'important');
+      el.style.setProperty('max-height', 'none', 'important');
+    }
+  }
+  function gripStyle() {
+    if (document.getElementById('emuFloatResizeStyle')) return;
+    var st = document.createElement('style');
+    st.id = 'emuFloatResizeStyle';
+    // 窓より上（ガイドの窓 10060 より上）。右下の角に、斜めの線を2本
+    st.textContent = '.emu-float-resize{position:fixed;z-index:10070;width:22px;height:22px;cursor:nwse-resize;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:0 0 12px 0;'
+      + 'background:linear-gradient(135deg,transparent 0 45%,rgba(160,110,40,.75) 45% 52%,transparent 52% 64%,rgba(160,110,40,.75) 64% 71%,transparent 71%)}'
+      + '.emu-float-resize[hidden]{display:none}.emu-float-resize:focus-visible{outline:2px solid #f08300;outline-offset:1px}'
+      + 'html.emu-float-resizing,html.emu-float-resizing *{cursor:nwse-resize!important}';
+    document.head.appendChild(st);
+  }
+  function resizable(el, name, base, min, canResize) {
+    if (!el || el._emuSize) return;
+    gripStyle();
+    var grip = document.createElement('div');
+    grip.className = 'emu-float-resize';
+    grip.setAttribute('role', 'separator');
+    grip.setAttribute('tabindex', '0');
+    grip.setAttribute('aria-label', '窓の大きさを変える（矢印キーでも変えられます）');
+    grip.hidden = true;
+    document.body.appendChild(grip);
+    function on() { return visible(el) && (!canResize || canResize()); }
+    function sync() {
+      var show = on();
+      grip.hidden = !show;
+      if (!show) return;
+      var r = el.getBoundingClientRect();
+      grip.style.left = Math.round(r.right - 22) + 'px';
+      grip.style.top = Math.round(r.bottom - 22) + 'px';
+    }
+    el._emuSize = { name: name, base: base, min: min, sync: sync };
+    var start = null;
+    grip.addEventListener('pointerdown', function (e) {
+      if (e.button !== undefined && e.button !== 0) return;
+      var r = el.getBoundingClientRect();
+      start = { id: e.pointerId, x: e.clientX, y: e.clientY, w: r.width, h: r.height, left: r.left, top: r.top };
+      try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+      document.documentElement.classList.add('emu-float-dragging', 'emu-float-resizing');
+      e.preventDefault();
+    });
+    grip.addEventListener('pointermove', function (e) {
+      if (!start || e.pointerId !== start.id) return;
+      var vp = viewport();
+      applySize(el, {
+        w: Math.min(start.w + e.clientX - start.x, vp.w - start.left - MARGIN),
+        h: Math.min(start.h + e.clientY - start.y, vp.h - start.top - MARGIN)
+      });
+      sync();
+    });
+    function end(e) {
+      if (!start || (e && e.pointerId !== start.id)) return;
+      start = null;
+      document.documentElement.classList.remove('emu-float-dragging', 'emu-float-resizing');
+      saveSize(el); sync();
+    }
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
+    grip.addEventListener('lostpointercapture', end);
+    grip.addEventListener('keydown', function (e) {
+      var step = e.shiftKey ? 40 : 10, d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      var r = el.getBoundingClientRect(), vp = viewport();
+      applySize(el, { w: Math.min(r.width + d[0], vp.w - r.left - MARGIN), h: Math.min(r.height + d[1], vp.h - r.top - MARGIN) });
+      saveSize(el); sync();
+    });
+    new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
+    if (window.ResizeObserver) new ResizeObserver(sync).observe(el);
+    window.addEventListener('resize', sync);
+    sync();
+  }
   /* つかんで動かす。ボタン・入力欄・リンクを押したときは動かさない。 */
   function draggable(el, handle, canDrag) {
     if (!el || !handle || handle._emuFloat) return;
@@ -95,10 +190,14 @@
     panel._emuFloatWatch = true;
     var choice = function () { return panel.classList.contains('rk-choice') && !panel.hidden; };
     draggable(panel, panel.querySelector('.rk-header'), choice);
+    // はじめは前（330px）より広く。高さは中身に合わせる（引いて変えたときだけ高さも覚える）
+    resizable(panel, 'choice', { w: 420, h: 0 }, { w: 280, h: 220 }, choice);
     var was = false;
     new MutationObserver(function () {
       var now = choice();
       if (now && !was) place(panel);
+      // ガイドの途中に移るときは、選ぶ窓で付けた高さを外す（ガイドは説明する場所に合わせて大きさを決める）
+      if (!now && was) { panel.style.removeProperty('height'); panel.style.removeProperty('max-height'); }
       was = now;
     }).observe(panel, { attributes: true, attributeFilter: ['class', 'hidden'] });
     if (choice()) { was = true; place(panel); }
@@ -110,6 +209,7 @@
     if (!panel || panel._emuFloatWatch) return;
     panel._emuFloatWatch = true;
     draggable(panel, panel.querySelector('.sp-reizo-header'));
+    resizable(panel, 'chat', { w: 520, h: 680 }, { w: 300, h: 320 });
     var was = false;
     new MutationObserver(function () {
       var now = panel.classList.contains('open');
@@ -130,6 +230,7 @@
     document.body.appendChild(win);
     win.querySelector('.rrw-close').onclick = closeRequest;
     draggable(win, win.querySelector('.rrw-bar'));
+    resizable(win, 'request', { w: 560, h: 780 }, { w: 320, h: 360 });
     req = win;
     return win;
   }
@@ -161,7 +262,11 @@
   function keepInside() {
     ['spReizoPanel'].map(function (id) { return document.getElementById(id); })
       .concat([document.querySelector('#rk-tour .rk-panel.rk-choice'), req && req.classList.contains('open') ? req : null])
-      .forEach(function (el) { if (visible(el)) { var r = el.getBoundingClientRect(); put(el, { x: r.left, y: r.top }); } });
+      .forEach(function (el) {
+        if (!visible(el)) return;
+        if (el._emuSize && (el.style.getPropertyValue('width') || el.style.getPropertyValue('height'))) { var b = el.getBoundingClientRect(); applySize(el, { w: b.width, h: el.style.getPropertyValue('height') ? b.height : 0 }); }
+        var r = el.getBoundingClientRect(); put(el, { x: r.left, y: r.top });
+      });
   }
   function init() {
     watchChat();
@@ -171,6 +276,6 @@
     }
     window.addEventListener('resize', keepInside);
   }
-  window.EmuReizoFloat = { place: place, home: home, openRequest: openRequest, closeRequest: closeRequest, requestActive: requestActive, reset: function () { try { localStorage.removeItem(KEY); } catch (_) {} } };
+  window.EmuReizoFloat = { place: place, home: home, openRequest: openRequest, closeRequest: closeRequest, requestActive: requestActive, reset: function () { try { localStorage.removeItem(KEY); localStorage.removeItem(SIZE_KEY); } catch (_) {} } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true }); else init();
 })();
