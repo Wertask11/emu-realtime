@@ -37,12 +37,7 @@
       if(!deliveries.get(doc)?.posts && !doc.documentElement.hasAttribute('data-tour-posts-ready')) return false;
       if(item?.target.includes('emu-lib-list') && doc.querySelector('#panel.open') && !deliveries.get(doc)?.library && !doc.documentElement.hasAttribute('data-tour-library-ready')) return false;
     }
-    if(id==='emu-requests') {
-      var list=document.getElementById('emuRequestList');
-      // A real result (including an empty result) replaces the native loading/retry status.
-      if(!list?.children.length || list.querySelector('.emu-request-empty button')) return false;
-      if(list.querySelector('.emu-request-empty') && /読み込|ログイン/.test(list.textContent)) return false;
-    }
+    // 11/7：知識を探すの「知識を探しています」の一覧は廃止。Knowledge Lab と Knowledge Text の入口だけなので、読み込みを待たない
     if(id==='sp-passport' && item?.target.includes('pp-record') && /読み込/.test(document.getElementById('sppRecords')?.textContent||'')) return false;
     return true;
   }
@@ -376,31 +371,9 @@
     "name": "02 知識を探す",
     "steps": [
       {
-        "target": "emu-req-head",
-        "label": "知識を探しています",
-        "text": "ここには、みんなが探している知識が並ぶよ。",
-        "screen": "search"
-      },
-      {
-        "target": "emu-req-list",
-        "label": "募集の一覧",
-        "text": "答えられそうな募集があったら、知識を届けてみよう。採用されるとEMUERがもらえるよ。",
-        "note": "回答・採用は完了条件にしない",
-        "screen": "search"
-      },
-      {
-        "target": "emu-req-btn",
-        "label": "知識を募集する",
-        "text": "自分が知りたいことは「知識を募集する」から募集できるよ。押してみよう。",
-        "click": true,
-        "screen": "search"
-      },
-      {
-        "target": "emu-req-form",
-        "label": "募集の書き方",
-        "text": "何について知りたいか、困っている状況、回答期限を書くよ。今日は見るだけでOK。「やめる」で閉じられるよ。",
-        "req": true,
-        "note": "募集の公開は完了条件にしない",
+        "target": "emu-lab-entry",
+        "label": "Knowledge Labの入口",
+        "text": "みんなの経験知を分野・仕事・目的から探して、異なる知識を掛け合わせられるよ。",
         "screen": "search"
       },
       {

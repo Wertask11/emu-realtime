@@ -40,7 +40,7 @@ with sync_playwright() as p:
  with g.expect_response(lambda r:r.request.method=='PUT' and urllib.parse.urlparse(r.url).path=='/api/knowledge-lab/posts') as saved:f.locator('#postForm button[type=submit]').click()
  assert saved.value.status==200;f.locator('#editorDialog').wait_for(state='hidden')
  f.locator('[data-view="requests"]').click();assert '同じデータ' in f.locator('#requests').inner_text();f.locator('#searchExistingKnowledge').click();assert f.locator('#library').is_visible()
- f.locator('[data-view="research"]').click();f.locator('#guide').click();f.locator('#rk-tour .rk-panel:not([hidden])').wait_for();assert '組み合わせたい分野' in f.locator('#rk-tour-title').inner_text();f.locator('#rk-tour .rk-close').click();assert f.locator('#research').is_visible()
+ f.locator('[data-view="research"]').click();f.locator('#guide').click();f.locator('#rk-tour .rk-panel.rk-choice:not([hidden])').wait_for();f.locator('#rk-tour').get_by_role('button',name='この画面のガイドを見る').click();f.locator('#rk-tour .rk-panel:not([hidden])').wait_for();assert '組み合わせたい分野' in f.locator('#rk-tour-title').inner_text();f.locator('#rk-tour .rk-close').click();assert f.locator('#research').is_visible()
  f.locator('[data-view="library"]').click()
  with c.expect_page() as guide:f.locator('a[href="/knowledge-lab-guide.html"]').click()
  page=guide.value;page.wait_for_load_state('domcontentloaded');assert page.get_by_role('link',name='← Knowledge Labに戻る').get_attribute('href')=='/?lab=library';assert page.get_by_role('link',name='← Emuに戻る').get_attribute('href')=='/'

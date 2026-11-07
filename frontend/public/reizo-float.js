@@ -1,6 +1,6 @@
 /* 冷蔵庫くんの窓を、画面を見ながら使えるように浮かせる（11/7）。
    対象：ガイド・質問・依頼を選ぶ窓（#rk-tour の rk-choice）、「冷蔵庫くんに聞く」（#spReizoPanel）、
-   「冷蔵庫くんに頼む」（小部屋 #spRoomPage で /economy/ を開いたとき）。
+   「冷蔵庫くんに頼む」（/economy/。小部屋ではなく、別の浮かぶ窓 #reizoRequestWin で開く）。
    ・はじめは本文の真ん中あたり（左のメニューより右・見出しの下）に出す。右上の隅ではなく、読んでいる画面の近くに。
    ・上の帯をつかんで、好きな場所へ動かせる（マウスでも指でも。Pointer Events）。置いた場所は覚えて、次も同じ場所に出す。
    ・画面の外へは出さない。画面の大きさが変わったら、内側へ戻す。
@@ -117,42 +117,60 @@
       was = now;
     }).observe(panel, { attributes: true, attributeFilter: ['class'] });
   }
-  /* ③ 冷蔵庫くんに頼む（小部屋で /economy/ を開いたとき）。窓にして、ほかの画面を見ながら使えるようにする。 */
-  function watchRequest() {
-    var page = document.getElementById('spRoomPage'), frame = document.getElementById('spRoomFrame');
-    if (!page || !frame || page._emuFloatWatch) return;
-    page._emuFloatWatch = true;
-    var bar = document.createElement('div');
-    bar.className = 'sp-room-float-bar';
-    bar.innerHTML = '<img src="/assets/mascot.jpg" alt=""><span>冷蔵庫くんに頼む</span><button type="button" class="sp-room-float-close" aria-label="閉じる">✕</button>';
-    bar.querySelector('button').onclick = function () { if (typeof window.closeSpRoom === 'function') window.closeSpRoom(); };
-    page.insertBefore(bar, frame);
-    draggable(page, bar, function () { return document.body.classList.contains('sp-room-float'); });
-    function sync() {
-      var src = frame.getAttribute('src') || '';
-      var on = document.body.classList.contains('sp-room-open') && /^\/economy\//.test(src);
-      var was = document.body.classList.contains('sp-room-float');
-      document.body.classList.toggle('sp-room-float', on);
-      if (on && !was) requestAnimationFrame(function () { place(page); });
-      if (!on) ['left', 'top', 'right', 'bottom'].forEach(function (p) { page.style.removeProperty(p); });
-    }
-    new MutationObserver(sync).observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    new MutationObserver(sync).observe(frame, { attributes: true, attributeFilter: ['src'] });
-    sync();
+  /* ③ 冷蔵庫くんに頼む（/economy/）。小部屋とは別の、浮かぶ窓（#reizoRequestWin）で開く。
+     Knowledge Lab などの画面を開いたまま、見ながら頼めるように（11/7）。中の画面（economy）には触れない。 */
+  var req = null;
+  function requestWin() {
+    if (req) return req;
+    var win = document.createElement('div');
+    win.id = 'reizoRequestWin';
+    win.setAttribute('role', 'dialog');
+    win.setAttribute('aria-label', '冷蔵庫くんに頼む');
+    win.innerHTML = '<div class="rrw-bar"><img src="/assets/mascot.jpg" alt=""><span>冷蔵庫くんに頼む</span><button type="button" class="rrw-close" aria-label="閉じる">✕</button></div><iframe title="冷蔵庫くんに頼む" src="about:blank"></iframe>';
+    document.body.appendChild(win);
+    win.querySelector('.rrw-close').onclick = closeRequest;
+    draggable(win, win.querySelector('.rrw-bar'));
+    req = win;
+    return win;
+  }
+  function openRequest(url, title) {
+    var win = requestWin(), frame = win.querySelector('iframe');
+    // economy/entry.js は開いたあと小部屋の題を「冷蔵庫くんに頼む」に書き換える。開いている小部屋の題は元に戻す
+    var room = document.getElementById('spRoomFrame'), roomTitle = room && room.title;
+    if (room) Promise.resolve().then(function () { room.title = roomTitle; });
+    if (frame.getAttribute('src') !== url) frame.src = url;
+    if (title) frame.title = title;
+    var was = win.classList.contains('open');
+    win.classList.add('open');
+    if (!was) place(win);
+    try { frame.focus(); } catch (_) {}
+    return true;
+  }
+  function closeRequest() {
+    if (!req) return;
+    req.classList.remove('open');
+    req.querySelector('iframe').src = 'about:blank';   // 音や読み込みを止める
+  }
+  /* 「← 戻る」（economy/app.js）は親の closeSpRoom を呼ぶ。いま頼む窓を操作しているかどうか */
+  function requestActive() {
+    if (!req || !req.classList.contains('open')) return false;
+    var frame = req.querySelector('iframe');
+    try { if (frame.contentWindow && frame.contentWindow.event) return true; } catch (_) {}   // 窓の中のボタンを押した、その最中
+    return document.activeElement === frame;
   }
   function keepInside() {
     ['spReizoPanel'].map(function (id) { return document.getElementById(id); })
-      .concat([document.querySelector('#rk-tour .rk-panel.rk-choice'), document.body.classList.contains('sp-room-float') ? document.getElementById('spRoomPage') : null])
+      .concat([document.querySelector('#rk-tour .rk-panel.rk-choice'), req && req.classList.contains('open') ? req : null])
       .forEach(function (el) { if (visible(el)) { var r = el.getBoundingClientRect(); put(el, { x: r.left, y: r.top }); } });
   }
   function init() {
-    watchChat(); watchRequest();
+    watchChat();
     if (!watchTour()) {
       var mo = new MutationObserver(function () { if (watchTour()) mo.disconnect(); });
       mo.observe(document.body, { childList: true });
     }
     window.addEventListener('resize', keepInside);
   }
-  window.EmuReizoFloat = { place: place, home: home, reset: function () { try { localStorage.removeItem(KEY); } catch (_) {} } };
+  window.EmuReizoFloat = { place: place, home: home, openRequest: openRequest, closeRequest: closeRequest, requestActive: requestActive, reset: function () { try { localStorage.removeItem(KEY); } catch (_) {} } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true }); else init();
 })();

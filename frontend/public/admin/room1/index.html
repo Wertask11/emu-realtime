@@ -33,6 +33,10 @@ header h1{margin:0; font:700 19px/1.4 Georgia,'Yu Mincho',serif; color:var(--ink
   background:var(--card); font-family:inherit;
 }
 .header-btn:hover{background:var(--soft); border-color:#f2c48a; color:var(--deep)}
+/* 11/7：右上の冷蔵庫くん（Emu と同じく、ガイド・聞く・頼む） */
+.reizo-btn{margin-left:auto; display:inline-flex; align-items:center; gap:6px; flex:none}
+.reizo-btn[hidden]{display:none}
+.reizo-btn img{width:24px; height:24px; border-radius:50%; object-fit:cover}
 #container{padding:clamp(18px,3vw,30px); max-width:1100px; margin:0 auto}
 .section-title{margin:0 0 14px; font-size:13px; font-weight:800; color:var(--muted); letter-spacing:.06em}
 .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px}
@@ -115,7 +119,8 @@ h2{font:700 21px/1.5 Georgia,'Yu Mincho',serif; margin:0 0 14px}
     <button id="backToEmuBtn" class="header-btn" onclick="backToEmu()">← 戻る</button>
     <h1 id="headerTitle">Knowledge Text</h1>
   </div>
-</header><div data-economy-slot style="height:60px;min-height:60px;flex-basis:100%;width:100%"></div>
+  <button id="reizoBtn" class="header-btn reizo-btn" type="button" aria-label="冷蔵庫くん（ガイド・聞く・頼む）" title="冷蔵庫くんのガイド・聞く・頼む" onclick="openReizo(this)" hidden><img src="/assets/mascot.jpg" alt="">冷蔵庫くん</button>
+</header><!-- 11/7：「EMUER・サービス」は外した（依頼は冷蔵庫くんから） --><div data-economy-slot hidden></div>
 
 <div id="container">
   <div class="mode-btns">
@@ -291,6 +296,19 @@ function backToEmu() {
   try { window.top.postMessage({ type: "spContentClose" }, "*"); } catch (e) {}
   try { if (parent && parent.closeRoom1) parent.closeRoom1(); } catch (e) {}
 }
+
+/* 右上の冷蔵庫くん。Emu の中で開いているときだけ出し、Emu の冷蔵庫くん（ガイド・聞く・頼む）を開く */
+function reizoHost() {
+  try { if (parent !== window && (typeof parent.ReizoTourAsk === "function" || typeof parent.spReizoOpen === "function")) return parent; } catch (e) {}
+  return null;
+}
+function openReizo(btn) {
+  const host = reizoHost();
+  if (!host) return;
+  if (typeof host.ReizoTourAsk === "function") host.ReizoTourAsk(btn);
+  else host.spReizoOpen();
+}
+window.addEventListener('load', function () { const b = document.getElementById('reizoBtn'); if (b && reizoHost()) b.hidden = false; });
 
 function switchMode(mode) {
   currentMode = mode;
