@@ -189,6 +189,7 @@ test("モデルが架空ID/URL/根拠を返したら結果不採用・返却", a
 test("本人3件/日本時間日・ログイン切替でも同じSchoolPark ID枠、別人は履歴不可", async () => {
   const f = await ready();
   for (let i = 0; i < 3; i++) {
+    if (i === 2) f.advance(60001); // Short-term admission is separate from the daily quota.
     await submit(f, "request-person-key-" + i);
     await f.economy.tick();
   }
@@ -222,8 +223,10 @@ test("同時worker上限2件は永続トランザクションで強制", async (
   });
   const f = await ready({ providerWait: () => waiting }),
     jobs = [];
-  for (let i = 0; i < 3; i++)
+  for (let i = 0; i < 3; i++) {
+    if (i === 2) f.advance(60001);
     jobs.push(await submit(f, "request-concurrent-" + i));
+  }
   const all = Promise.all(jobs.map((j) => f.economy.service.work(j.id)));
   for (let i = 0; i < 100 && f.calls() < 2; i++)
     await new Promise((r) => setTimeout(r, 1));
@@ -236,6 +239,7 @@ test("同時worker上限2件は永続トランザクションで強制", async (
   );
   release();
   await all;
+  f.advance(60001); // Third generation waits for a new provider minute.
   await f.economy.tick();
   assert.equal(f.calls(), 3);
 });

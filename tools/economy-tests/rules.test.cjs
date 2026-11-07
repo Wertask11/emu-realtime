@@ -18,6 +18,7 @@ const cols = [
   "quotes",
   "jobs",
   "usage",
+  "free_usage",
   "system",
   "eligibility",
   "source_approvals",

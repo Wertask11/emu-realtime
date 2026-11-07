@@ -439,7 +439,7 @@ function createMitemiruRouter(deps) {
   function publicOrder(id, o) {
     const shown = ["paid", "fulfilled"].includes(o.status);
     return {
-      id, productId: o.productId, productName: o.productName, shopId: o.shopId || "",
+      id, productId: o.productId, productName: o.productId === "agent_schoolpark-explorer-v1" ? "冷蔵庫くんに頼む" : o.productName, shopId: o.shopId || "",
       storeType: o.storeType || "legacy", passportId: o.passportId || null,
       method: o.method, currency: o.currency,
       amount: o.amount, status: o.status, pickupCode: shown ? o.pickupCode : null,
@@ -1229,7 +1229,7 @@ function createMitemiruRouter(deps) {
       const snap = await q.get();
       const rows = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }))
         .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0)).slice(0, 300)
-        .map(o => ({ id: o.id, productId: o.productId, productName: o.productName, shopId: o.shopId || "",
+        .map(o => ({ id: o.id, productId: o.productId, productName: o.productId === "agent_schoolpark-explorer-v1" ? "冷蔵庫くんに頼む" : o.productName, shopId: o.shopId || "",
           storeType: o.storeType || "legacy", passportId: o.passportId || null, method: o.method, currency: o.currency,
           amount: o.amount, status: o.status, pickupCode: o.pickupCode, wallet: o.wallet, uid: o.uid,
           createdAt: o.createdAtMs, paidAt: o.paidAtMs || null, fulfilledAt: o.fulfilledAtMs || null,
@@ -1366,7 +1366,7 @@ function createMitemiruRouter(deps) {
       const out = await Promise.all(rows.map(async o => {
         const s = await db.collection(SHIPPING).doc(o.id).get();
         const v = s.exists ? s.data() || {} : null;
-        return { id: o.id, productName: o.productName, amount: o.amount, currency: o.currency, method: o.method,
+        return { id: o.id, productName: o.productId === "agent_schoolpark-explorer-v1" ? "冷蔵庫くんに頼む" : o.productName, amount: o.amount, currency: o.currency, method: o.method,
           pickupCode: o.pickupCode, paidAt: o.paidAtMs || null, shippedAt: o.fulfilledAtMs || null,
           orderDeadline: o.orderDeadlineMs || null, cancelRequested: !!o.cancelRequestedAtMs, choice: o.choice || "",
           shipTo: v ? { name: v.name, postalCode: v.postalCode, address: v.address, phone: v.phone } : null };
@@ -1455,7 +1455,7 @@ function createMitemiruRouter(deps) {
       if (!product || product.prices?.EMUER !== 5 || product.status !== "live") throw err("SERVICE_PRICE_UNAVAILABLE");
       const wallet = String(actor.walletAddress || "").toLowerCase();
       return payFromLedger(id, { uid: actor.uid, passportId: actor.spid, wallet, productId, serviceJobId: jobId,
-        productName: product.name, amount: product.prices.EMUER, currency: "EMUER", method: "emuer_ledger",
+        productName: "冷蔵庫くんに頼む", amount: product.prices.EMUER, currency: "EMUER", method: "emuer_ledger",
         delivery: "online", fulfillment: "EMUER・サービスの依頼履歴で結果を確認します。", cancelPolicy: "処理失敗時は元の未受取EMUERへ全額返却します。",
         storeType: "agent_service", status: "pending_payment", createdAtMs: now(), usageId: null }, product, wallet, null, gate);
     },

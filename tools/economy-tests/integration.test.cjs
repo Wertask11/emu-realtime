@@ -93,6 +93,30 @@ test("native transactionの競合時も一注文・一請求、workerで実デ�
   assert.equal((await f.call("bob", "GET", "/jobs/" + id)).status, 404);
   assert.deepEqual((await f.call("bob", "GET", "/jobs")).body.jobs, []);
 });
+test("個人情報確認だけでは新用途のAI許諾に代用せず、明示承認のない資料を除外", async () => {
+  const { hash } = require("../../backend/economy/config"),
+    approval = f.economy.service.ref(
+      "source_approvals",
+      hash("knowledge:economy-legacy-public"),
+    ),
+    saved = (await approval.get()).data(),
+    a = await f.economy.service.actor({
+      uid: f.users.alice.uid,
+      account: f.users.alice.account,
+      walletAddress: f.users.alice.account.walletAddress,
+    });
+  try {
+    await approval.set({ ...saved, aiUseApproved: false });
+    const rows = await f.economy.service.sources.candidates(
+      a,
+      "コーヒーを学ぶ",
+    );
+    assert.ok(!rows.some((s) => s.id === "economy-legacy-public"));
+    assert.ok(rows.some((s) => s.kind === "knowledge_text"));
+  } finally {
+    await approval.set(saved);
+  }
+});
 test("公開撤回・資料編集で既存結果からも削除し、再承認なしに外部へ送らない", async () => {
   const alice = await f.economy.service.actor({
     uid: f.users.alice.uid,
@@ -210,6 +234,12 @@ test("検索索引が古くてもExplorerは非公開コレクションを取得
   }
 });
 test("OS worker停止・別プロセス再起動後も注文を保持し、再生成せず一度だけ返却", async () => {
+  // Independent restart scenario; isolate only the short-term admission window.
+  // Do not reset ledger, daily/person counters, payments or recovery history.
+  await f.db
+    .collection("emuer_v2_agent_system")
+    .doc("free-admissions")
+    .set({ recent: [] });
   const { fork } = require("node:child_process"),
     path = require("node:path");
   const q = await quote("alice"),
@@ -281,4 +311,47 @@ test("OS worker停止・別プロセス再起動後も注文を保持し、再�
   } finally {
     if (first.exitCode === null) first.kill("SIGTERM");
   }
+});
+test("実Firestoreでprovider 429→受付停止→返却待ち→停止中も一度だけ全額返却", async () => {
+  // A fresh dedicated demo fixture after previous scenarios; never production storage.
+  await f.close();
+  f = await createFixture({ providerStatus: 429 });
+  const q = await quote(),
+    r = await submit("alice", q, "native-free-quota-429-" + Date.now());
+  assert.equal(r.status, 200);
+  const refund = f.economy.service.payments.refund;
+  f.economy.service.payments.refund = async () => {
+    throw Error("local refund temporarily unavailable");
+  };
+  await f.economy.tick();
+  assert.equal(
+    (await f.call("alice", "GET", "/jobs/" + r.body.job.id)).body.job.state,
+    "refund_pending",
+  );
+  const count = (await f.db.collection("mitemiru_orders").get()).size;
+  assert.equal(
+    (await f.call("bob", "POST", "/quotes", { goal: "学びたい" })).status,
+    503,
+  );
+  assert.equal((await f.db.collection("mitemiru_orders").get()).size, count);
+  f.economy.service.payments.refund = refund;
+  await f.economy.tick();
+  await f.economy.tick();
+  const got = (await f.call("alice", "GET", "/jobs/" + r.body.job.id)).body.job;
+  assert.equal(got.state, "refunded");
+  assert.equal(got.payment.refunded, true);
+  assert.equal(
+    (await f.call("alice", "GET", "/me")).body.balances.spendable,
+    "100",
+  );
+  assert.equal((await f.db.collection("emuer_v2_access_usage").get()).size, 0);
+});
+test('旧サービス名の取引履歴は新名称で返し、保存済み取引と台帳は変更しない', async()=>{
+ const snap=await f.db.collection('mitemiru_orders').get();const order=snap.docs[0];assert.ok(order);
+ await order.ref.set({productName:'SchoolPark Explorer'},{merge:true});
+ const before=(await order.ref.get()).data();
+ const r=await fetch(f.base+'/api/mitemiru/orders',{headers:{Authorization:'Bearer '+f.users.alice.token}});
+ assert.equal(r.status,200);const shown=(await r.json()).orders.find(x=>x.id===order.id);
+ assert.equal(shown.productName,'冷蔵庫くんに頼む');assert.equal(shown.amount,5);
+ assert.deepEqual((await order.ref.get()).data(),before);
 });

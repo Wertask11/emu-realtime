@@ -171,6 +171,7 @@ function createSources({ db, knowledge, now = Date.now }) {
       // Exact content hash makes edits revoke the review automatically. No private identifiers go to AI.
       if (
         approval?.piiReviewed !== true ||
+        approval.aiUseApproved !== true ||
         approval.purpose !== SERVICE.termsVersion ||
         approval.contentHash !== hash([s.title, s.summary]) ||
         !(approval.validUntilMs > now())

@@ -92,12 +92,14 @@
     var back = button('戻る', backStep), next = button('次へ', nextStep);
     next.className = 'rk-primary';
     var skip = button('今回はスキップ', skipTour), later = button('あとで続きを見る', function () { pause(); });
-    actions.append(back, next, skip, later);
+    var request = button('冷蔵庫くんに頼む', function () {});
+    request.hidden = true; request.className = 'rk-request';
+    actions.append(back, next, skip, later, request);
     var note=node('p','rk-note'); text.id='rk-tour-text'; note.id='rk-tour-note';panel.setAttribute('aria-describedby','rk-tour-text rk-tour-note');
     var live=node('p','rk-sr-only');live.setAttribute('role','status');live.setAttribute('aria-live','polite'); panel.append(header, count, text, note, status, actions, live);
     var toast = node('p', 'rk-toast'); toast.setAttribute('role', 'status'); toast.setAttribute('aria-live', 'polite');
     root.append(spot, panel, toast); document.body.append(root);
-    ui = {mini:mini,expandedByUser:false,live:live,fold:fold,note:note,service:service,root:root, spot:spot, panel:panel, title:title, text:text, count:count, status:status, back:back, next:next, skip:skip, later:later, toast:toast};
+    ui = {request:request,mini:mini,expandedByUser:false,live:live,fold:fold,note:note,service:service,root:root, spot:spot, panel:panel, title:title, text:text, count:count, status:status, back:back, next:next, skip:skip, later:later, toast:toast};
     panel.hidden = true; spot.hidden = true; toast.hidden = true;
   }
   function announce(text) {
@@ -336,6 +338,7 @@
     ui.next.textContent = active.index === def.steps.length-1 ? '完了' : '次へ';
     ui.mini.textContent=ui.next.textContent;ui.next.disabled = false; ui.later.textContent = 'あとで続きを見る';
     [ui.back,ui.next,ui.skip,ui.later].forEach(function (el) { el.hidden = false; });
+    ui.request.hidden = true; ui.request.onclick = function () {};
     ui.next.onclick = nextStep; ui.later.onclick = function () { pause(); };
     var el = findTarget(def, step); scrolled = false;
     var token = generation;
@@ -443,23 +446,25 @@
       : Array.from(definitions.keys()).find(function (key) { return progress(key).state === 'in_progress'; });
     return id ? navigate(id,false) : Promise.resolve(false);
   }
-  function choose(id, onChat, originalSource) {
+  function choose(id, onChat, originalSource, onRequest) {
     if (active) pause(false); else close(false); mount();
     source = originalSource || document.activeElement;
     sourceSelector = ''; sourceRestore = null;
     ui.panel.hidden = false; ui.spot.hidden = true; ui.panel.classList.add('rk-choice');
-    ui.live.textContent='';ui.title.textContent = '冷蔵庫くん'; ui.fold.hidden=true; ui.note.hidden=true; ui.panel.classList.remove('rk-collapsed'); ui.service.textContent='冷蔵庫くんの画面ガイド';
+    ui.live.textContent='';ui.title.textContent = '冷蔵庫くん'; ui.fold.hidden=true; ui.note.hidden=true; ui.panel.classList.remove('rk-collapsed'); ui.service.textContent='ガイド・質問・仕事の依頼';
     var saved = definitions.has(id) ? progress(id) : null;
     ui.count.textContent = saved && saved.state === 'in_progress'
       ? '前回のガイドは途中です（'+(saved.index+1)+'/'+saved.total+'）。続きから再開できます。'
       : saved && saved.state === 'done' ? 'この画面のガイドは完了しています。もう一度見られます。'
       : saved && saved.state === 'skipped' ? '前回はガイドをスキップしました。ここから再生できます。'
       : '今の画面で、何を見たい？';
-    ui.text.textContent = '操作の案内を見ることも、いつものチャットで質問することもできます。'; ui.status.textContent = '';
+    ui.text.textContent = '画面のガイド、いつもの質問、EMUERを使う仕事の依頼を選べます。開くだけでは支払いません。'; ui.status.textContent = '';
     ui.back.hidden = true; ui.skip.hidden = true; ui.next.hidden = false; ui.later.hidden = false;
     ui.next.textContent = definitions.has(id) ? 'この画面のガイドを見る' : 'この画面のガイドは準備中'; ui.next.disabled = !definitions.has(id);
     ui.next.onclick = function () { var invoker = source; close(false); navigate(id,false,invoker); };
     ui.later.textContent = '冷蔵庫くんに聞く'; ui.later.onclick = function () { close(false); onChat(); };
+    ui.request.hidden = typeof onRequest !== 'function';
+    ui.request.onclick = function () { var invoker = source; close(false); if (typeof onRequest === 'function') onRequest(invoker); };
     setStyle(ui.panel,{width:Math.min(window.innerWidth-16,330)+'px',maxHeight:'calc(100dvh - 24px)',top:'16px',left:Math.max(8,window.innerWidth-Math.min(window.innerWidth-16,330)-16)+'px'});
     var escape = function (event) { if (event.key === 'Escape') { event.preventDefault(); close(); } };
     watch(document,escape,'keydown'); if (originalSource) watch(originalSource.ownerDocument,escape,'keydown');

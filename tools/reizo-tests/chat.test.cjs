@@ -42,16 +42,18 @@ test('all existing FAQ data and exact matcher outputs are preserved', () => {
   const rewritten=['emuerを稼ぐ','schoolparkとは','emuとは','一日シェア','メンバー','トレジャリー','公園','dao','プラン','マップ','ches','クエスト','ギルド','スマホ','チュートリアル','問い合わせ','emuerで何ができる','かっこの中','emuer','ショッピング','room1はどこ'];
   // Reviewed rename (#232, 10/27): the plan names became 「Emu for SchoolPark light/plus/pro」; nothing else in these answers changed.
   const renamed=['プラン','公式パス'],rename=text=>text.replace(/Emu (light|plus|pro)/g,'Emu for SchoolPark $1');
-  assert.equal(faq.items.length,kb.length);
+  const legacyItems = faq.items.filter(x=>x.k[0]!=='冷蔵庫くんに頼む');
+  assert.equal(faq.items.length,kb.length+1);
+  assert.equal(legacyItems.length,kb.length);
   const now=new Map();
   kb.forEach((item,i)=>{
-    assert.deepEqual(faq.items[i].k,item.k);
-    if(rewritten.includes(item.k[0])) assert.notEqual(faq.items[i].a,'');
-    else if(renamed.includes(item.k[0])) {assert.notEqual(rename(item.a),item.a);assert.equal(faq.items[i].a,rename(item.a));}
-    else assert.equal(faq.items[i].a,item.a);
-    now.set(item.a,faq.items[i].a);
+    assert.deepEqual(legacyItems[i].k,item.k);
+    if(rewritten.includes(item.k[0])) assert.notEqual(legacyItems[i].a,'');
+    else if(renamed.includes(item.k[0])) {assert.notEqual(rename(item.a),item.a);assert.equal(legacyItems[i].a,rename(item.a));}
+    else assert.equal(legacyItems[i].a,item.a);
+    now.set(item.a,legacyItems[i].a);
   });
-  for(const item of faq.items) for(const keyword of item.k){const was=ctx.answer(keyword);assert.equal(faq.answer(keyword),was===null?null:now.get(was));}
+  for(const item of legacyItems) for(const keyword of item.k){const was=ctx.answer(keyword);assert.equal(faq.answer(keyword),was===null?null:now.get(was));}
   assert.match(faq.answer('クエスト'),/確定申告/);
   assert.match(faq.answer('Questって何？'),/クエスト/);
   assert.equal(faq.answer('月でラーメンを作りたい'), null);
@@ -129,4 +131,10 @@ test('a slow free-tier answer is waited for (not cut off at 12s), and the browse
   const client=fs.readFileSync(path.join(root,'frontend/public/reizo/chat.js'),'utf8');
   const browserMs=Number(client.match(/reject\(Object\.assign\(Error\('TIMEOUT'\)[^)]*\)\); \}, (\d+)\)/)[1]);
   assert.ok(browserMs>GENERATE_TIMEOUT_MS,'the browser must not give up before the server answers');
+});
+
+test('paid request FAQ distinguishes consent, empty results, refunds and the existing chat',()=>{
+ const a=faq.answer('冷蔵庫くんに頼む');
+ for(const word of ['5 EMUER','同意','候補なし','全額返却','返却待ち','聞く'])assert.ok(a.includes(word));
+ assert.match(knowledge.grounding('仕事を依頼','city'),/冷蔵庫くんに頼む/);
 });

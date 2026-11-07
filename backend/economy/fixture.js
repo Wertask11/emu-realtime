@@ -21,6 +21,7 @@ function fixture(options = {}) {
     ECONOMY_AI_SOURCE_USE_ATTESTED: "true",
     ECONOMY_AI_BUDGET_ATTESTED: "true",
     ECONOMY_AI_BILLING_ATTESTED: "true",
+    ECONOMY_GEMINI_BILLING_TIER: "free",
     ECONOMY_AI_PROJECT_ATTESTED: "true",
     ECONOMY_GEMINI_PROJECT_ID: "demo-emu-economy",
     ECONOMY_BUDGET_APPROVAL_REF: "isolated-test-approval",
@@ -81,6 +82,22 @@ function fixture(options = {}) {
     revalidate: async (a, g, r) => r,
   };
   const fetcher = async (url) => {
+    if (
+      options.providerTimeout &&
+      (options.failureStage === "countTokens"
+        ? url.endsWith(":countTokens")
+        : url.endsWith(":generateContent"))
+    )
+      throw Object.assign(Error("isolated timeout; do not log"), {
+        name: "TimeoutError",
+      });
+    if (
+      options.providerStatus &&
+      (options.failureStage === "countTokens"
+        ? url.endsWith(":countTokens")
+        : url.endsWith(":generateContent"))
+    )
+      return { ok: false, status: options.providerStatus };
     if (url.endsWith(":countTokens"))
       return {
         ok: true,

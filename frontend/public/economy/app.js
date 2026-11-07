@@ -35,6 +35,10 @@
       "連絡先や個人を識別する情報を含めず、目的だけを入力してください。",
     AI_DAILY_LIMIT: "本日の利用枠に達しました。",
     AI_BUDGET_LIMIT: "本日のAI受付を停止しています。",
+    AI_PROVIDER_DAY_LIMIT:
+      "無料AI枠を保護するため、本日の「冷蔵庫くんに頼む」の受付は終了しました。",
+    AI_ADMISSION_RATE_LIMIT:
+      "依頼が続いています。1分ほど待って料金を確認し直してください。料金は請求していません。",
     INSUFFICIENT_EMUER: "支払いに使える未受取EMUERが不足しています。",
     QUOTE_EXPIRED_OR_CHANGED:
       "料金確認の期限が切れたか、条件が変わりました。もう一度確認してください。",
@@ -108,7 +112,9 @@
         throw Error("STATUS_UNAVAILABLE");
       $("availability").textContent = d.service.enabled
         ? "受付状況はログイン後に確認できます。"
-        : "有料受付は停止中です。提供条件・予算・運用設定を確認しています。";
+        : d.service.blockers?.includes("AI_PROVIDER_DAY_LIMIT")
+          ? messages.AI_PROVIDER_DAY_LIMIT
+          : "有料受付は停止中です。提供条件・予算・運用設定を確認しています。";
     } catch (_) {
       $("availability").textContent =
         "サービスは準備中です。提供状態を確認できるまで有料依頼はできません。";
@@ -125,6 +131,8 @@
           tokenReservations: o.usage.reservedTokens || 0,
           reportedTokens: o.usage.observedTokens || 0,
           unknownCalls: o.usage.unknownCalls || 0,
+          freeTier: o.freeTier,
+          providerSafety: o.providerSafety,
           pending: o.pending,
           blockers: d.service.blockers,
         },
@@ -150,7 +158,9 @@
           me.balances[id] == null ? "未確認" : me.balances[id] + " EMUER";
       $("availability").textContent = me.service.enabled
         ? "受付中です。料金と条件を確認してから依頼できます。"
-        : "提供準備中です。条件確認が完了するまで有料依頼は停止しています。";
+        : me.service.blockers?.includes("AI_PROVIDER_DAY_LIMIT")
+          ? messages.AI_PROVIDER_DAY_LIMIT
+          : "提供準備中です。条件確認が完了するまで有料依頼は停止しています。";
       $("quoteButton").disabled =
         !me.service.enabled || me.eligibility?.eligible === false;
       if (me.service.enabled && me.eligibility?.eligible === false)
