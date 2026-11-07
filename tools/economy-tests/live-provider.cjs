@@ -50,10 +50,15 @@ const fs = require("node:fs");
   };
   try {
     const result = await run(
-      "学んだ知識を実際に試し、学びを深める場所を探したい",
+      "学んだ知識を実際に試すギルドを探したい",
       sources,
     );
-    evidence.success = true;
+    // This known public-source scenario must find the matching Guild, not merely
+    // receive HTTP 200 with an empty answer. Never substitute a fixture result.
+    evidence.success = result.results.some(
+      (r) => r.kind === "guild" && r.id === "learn",
+    );
+    if (!evidence.success) evidence.error = "EXPECTED_OFFICIAL_GUILD_NOT_SELECTED";
     evidence.results = result.results;
     evidence.usage = result.usage;
   } catch (e) {
