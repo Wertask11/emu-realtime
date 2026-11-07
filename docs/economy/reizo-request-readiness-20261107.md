@@ -116,4 +116,11 @@ Firestoreは既存private領域を利用し、Rules変更/公開不要。商品 
 
 ## 8. PR・Preview・変更ファイル
 
-PR/Preview・commitを作成後にここへ実結果を追記する。PR #280を含む統合候補であり、重複した新しい経済基盤を作っていない。main/本番へ自動反映しない。
+- PR： https://github.com/Wertask11/emu-realtime/pull/281 （OPEN、未マージ）。#280のFree保護を含む統合候補としてレビューする。
+- 実装commit：`4faa4a3a9cc05b7e022c52d420447d08f5220849`。後続は報告/証拠の追記で、最終SHAはPR履歴を参照。
+- Vercel Preview build：Deployment `7614658186` がsuccess。
+- Preview URL： https://emu-realtime-qzrq-9ex1d8v4q-school-park.vercel.app/economy/index.html 。ブランチaliasは https://emu-realtime-qzrq-git-feat-reizo-request-eco-b09a30-school-park.vercel.app/ 。
+- Preview実接続：この環境の接続許可外のため、HTTPS proxyが403で拒否。[試行証跡](reizo-request-evidence/preview.json)。アプリの認証403や表示成功と混同しない。実Preview表示は未検証で、ローカル7幅の検証とは別。以前承認されたローカル代替確認を引き継ぎ、通信制限を迂回していない。
+- Previewは既存Production Render/Firebaseに接続される構成。本PR backendはそこへ配備していないため、Previewを開けても新しい決済/worker結合試験の証拠にはならない。認証/支払等の書込みを試していない。
+- [全変更ファイル](reizo-request-files.txt)はmainとの差分を列挙。#280の29ファイルも含む。今回の主な追加変更はtour controller/adapter、共通economy entry/画面/メッセージ、root header、FAQ/privacy/Cityコピー、SERVICE表示名・旧商品名互換・取引投影、関連テスト/fixture/証拠/運用資料。
+- main/Production/Rulesは変更しない。**コードと分離検証は完了、PRレビュー可能。本番で有料依頼の一連の経済活動が成立したとは判定しない。** 第5〜6節の条件と本番受入が残る。
