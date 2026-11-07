@@ -185,3 +185,5 @@ Firestoreの実APIで既定DBの無料読取50,000/日・書込20,000/日を確�
 ## 冷蔵庫くんに頼む Phase 2
 
 横断探索の資料許諾・個別フラグ・本人情報の任意参照・停止/復旧は [cross-domain-phase2.md](cross-domain-phase2.md) を参照。全連携の既定はOFF。既存有料受付・試験開始日時を変更せず、コード配備と資料承認を分ける。横断OFF時は既存の公式5ギルド探索を継続する。
+
+2026-11-07の資料別確認・6領域の初期有効化対象・除外根拠は [cross-domain-activation-20261107.md](cross-domain-activation-20261107.md)、内容ハッシュ付きレビュー一覧は [source-reviews-20261107.json](source-reviews-20261107.json)。既存の試験期限を延長しない。
