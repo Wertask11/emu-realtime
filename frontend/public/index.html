@@ -2758,8 +2758,18 @@ body.paypay-mode #pp-post-fab {
 }
 
 /* 知識を読む（11/7）：右上の冷蔵庫くんとプロフィールは、知識を読むの左の列（＋知識を届けるの下）へ移した。
-   この画面のあいだだけ右上から外す（ほかの画面は今までどおり右上）。 */
-body.emu-knowledge-open #emuHeaderProfile, body.emu-knowledge-open #emuHeaderReizo { display:none !important; }
+   この画面のあいだだけ右上から外す（ほかの画面は今までどおり右上）。
+   スマホ（760px 以下）は左の列が横一列になるので、今までどおり右上に出す（11/7 オーナー） */
+/* 自分の宿題（11/7 オーナー）：スマホの知識を読むのときだけ、右上の冷蔵庫くんの右に出す。
+   パソコン・タブレットは知識を読むの左の列にあるので、右上には出さない。ほかの画面でも出さない */
+#emuHeaderTasks { display:none !important; }
+#emuHeaderTasks span { font:700 20px/1 sans-serif; color:#bd6100; }
+@media (max-width:760px) {
+  body.emu-knowledge-open #emuHeaderTasks { display:inline-flex !important; }
+}
+@media (min-width:761px) {
+  body.emu-knowledge-open #emuHeaderProfile, body.emu-knowledge-open #emuHeaderReizo { display:none !important; }
+}
 /* 冷蔵庫くんの窓（11/7・reizo-float.js）：上の帯をつかんで動かせる。指でも動かせるよう、帯の上ではスクロールしない */
 .emu-float-handle { cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; }
 .emu-float-handle:focus-visible { outline:2px solid #f08300; outline-offset:-2px; }
@@ -3947,6 +3957,9 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   /* いちばん下のフッター（利用規約など）も、下までスクロールしたときにナビの上に出るようにする */
   body.emu-knowledge-open #siteFooter, body.emu-requests-open #siteFooter,
   body.emu-profile-open #siteFooter { padding-bottom:calc(16px + var(--emu-bnav-h)) !important; }
+  /* 知識を読む（11/7 オーナー）：投稿だけを見られるように、いちばん下のフッター（利用規約など）は出さない。
+     利用規約などは、ほかの画面の下や、会員登録・プランの画面から読める */
+  body.emu-knowledge-open #siteFooter { display:none !important; }
   /* キーボードが出ているあいだは隠す。出したままだと、キーボードの上に浮いて入力欄にかぶる。 */
   body.emu-kb-open #emuBottomNav { display:none !important; }
   /* マイライブラリーは名前のメニューへ移動。Knowledge Text（旧 Room1）は全端末で「知識を探す」内。
@@ -5226,7 +5239,7 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
       </div>
     </div>
     <button type="button" class="service-tool service-profile" id="emuHeaderProfile" onclick="toggleAccountMenu(event)" title="プロフィール" aria-label="プロフィール" aria-haspopup="menu" aria-expanded="false">👤</button>
-    <button type="button" class="service-tool" id="emuHeaderReizo" data-tour="fridge" aria-label="冷蔵庫くんのガイド・聞く・頼む" title="冷蔵庫くんのガイド・聞く・頼む" onclick="if(window.ReizoTourAsk) window.ReizoTourAsk(this); else spReizoOpen();"><img src="/assets/mascot.jpg" alt=""></button>
+    <button type="button" class="service-tool" id="emuHeaderReizo" data-tour="fridge" aria-label="冷蔵庫くんのガイド・聞く・頼む" title="冷蔵庫くんのガイド・聞く・頼む" onclick="if(window.ReizoTourAsk) window.ReizoTourAsk(this); else spReizoOpen();"><img src="/assets/mascot.jpg" alt=""></button><button type="button" class="service-tool" id="emuHeaderTasks" aria-label="自分の宿題" title="自分の宿題" onclick="openEmuPractice('tasks')"><span aria-hidden="true">✓</span></button>
   </div>
 </header>
 
