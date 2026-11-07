@@ -80,7 +80,7 @@ function catalog(at = Date.now()) {
       ...p,
       storage: storageLimits(key, at),
       announcedStorage: { saved: p.saved, notes: p.notes, drafts: p.library },
-      readerScope: key === "guest" ? "latest-20" : "all-public",
+      readerScope: "all-public", // 11/7：見学の「新着20件」は廃止
       dialogue: key === "pro",
       dialogueOpportunitiesPer30Days: key === "pro" ? 4 : 0,
     })),

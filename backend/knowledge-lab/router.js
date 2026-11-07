@@ -274,6 +274,11 @@ function createKnowledgeLabRouter(deps) {
   router.use(
     rateLimit({ windowMs: 60000, max: 90, key: "knowledge-lab-read" }),
   );
+  // LAB-10：投稿の保存だけは画像（最大 1,048,000 文字）を含められるようにする。ほかは今までどおり 100kb まで。
+  const postBody = express.json({ limit: "1500kb" });
+  router.use((req, res, next) =>
+    req.method === "PUT" && req.path === "/posts" ? postBody(req, res, next) : next(),
+  );
   router.use(express.json({ limit: "100kb" }));
   const wrap = (fn) => async (req, res, next) => {
     try {

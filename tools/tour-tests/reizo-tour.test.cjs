@@ -67,7 +67,8 @@ test('unified navigation preserves existing auth, contracts, Quest business logi
  const readBefore=file=>cp.execFileSync('git',['show',baseline+':'+file],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
  // 11/3: the only allowed addition is the screen-error reporter line (client-errors.js; it sends no personal data).
  const withoutErrorReporter=src=>src.replace(/[ \t]*<script src="\/client-errors\.js"><\/script><!--[^\n]*-->\n/,'');
- // 11/7: knowledge.html のマイライブラリー（下書きを30件ずつ・Knowledge Lab の下書きも並べる）と、投稿画面の「詳しく整理する（任意）」を変えた。
+ // 11/7: knowledge.html のマイライブラリー（下書きを30件ずつ・Knowledge Lab の下書きも並べる）、投稿画面の「詳しく整理する（任意）」、投稿のあとの案内を変えた。
+ // 同じ日、創業者の決定で見学の「新着20件」を廃止した（membership-policy.js の readerScope を全段 all-public に）。
  // 認めた変更（approved-2026-11-07.json）をそれぞれちょうど1か所だけ元に戻してから比べる。ほかの変更は今までどおり落ちる。
  const undoApproved=(file,src)=>{for(const [now,was] of (require('./approved-2026-11-07.json')[file.replace('frontend/public/','')]||[])){assert.equal(src.split(now).length,2,file+': 認めた変更が見つからない');src=src.replace(now,was);}return src;};
  const before=readBefore('frontend/public/index.html'),current=fs.readFileSync(path.join(root,'frontend/public/index.html'),'utf8');

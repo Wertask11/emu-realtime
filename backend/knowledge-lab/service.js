@@ -265,20 +265,8 @@ function createService({
       (await savedMetrics.status()).state !== "ready"
     )
       m.fail("SAVED_METRICS_NOT_READY", 503);
-    const plan = a
-      ? (await entitlement.getEntitlement(a.uid, a.account)).plan
-      : "guest";
-    const guest = entitlement.limitOf(plan, "post") <= 0;
-    const scope = guest
-      ? [...all]
-          .filter((p) => p.active)
-          .sort(
-            (x, y) =>
-              y.createdAtMs - x.createdAtMs || x.postId.localeCompare(y.postId),
-          )
-          .slice(0, 20)
-      : all;
-    const rows = m.select(scope, params, terms);
+    /* 11/7 創業者決定：見学の「新着20件」の制限は廃止。どの段の人も、公開している知識全体を探せる。 */
+    const rows = m.select(all, params, terms);
     const fp = m.hash(params),
       version = m.hash(rows.map((r) => [r.postId, r.indexedAtMs]));
     let start = 0;
@@ -325,8 +313,6 @@ function createService({
           ? m.cursor({ q: fp, v: version, after: rows[scanned - 1].postId })
           : null,
       indexedMatches: rows.length,
-      guestCapped: guest && all.length > 20,
-      guestLimit: guest ? 20 : null,
       indexCheckedAt: cacheUntil - 60000,
       searchMethod: "japanese-lexical",
       aiAvailable: false,
@@ -335,23 +321,8 @@ function createService({
   async function rawPost(postId, a = null, publicOnly = false) {
     m.id(postId);
     const pub = await db.collection("posts").doc(postId).get();
-    if (pub.exists && m.publicPost(pub.data())) {
-      if (!a?.owner && !m.owner(pub.data(), a)) {
-        const plan = a
-          ? (await entitlement.getEntitlement(a.uid, a.account)).plan
-          : "guest";
-        if (entitlement.limitOf(plan, "post") <= 0) {
-          const s = await db
-            .collection("posts")
-            .orderBy("createdAt", "desc")
-            .limit(20)
-            .get();
-          if (!s.docs.some((d) => d.id === postId))
-            m.fail("READER_PLAN_REQUIRED", 403);
-        }
-      }
-      return pub.data();
-    }
+    /* 公開している投稿は、どの段の人も読める（11/7 創業者決定：見学の「新着20件」は廃止）。 */
+    if (pub.exists && m.publicPost(pub.data())) return pub.data();
     if (publicOnly || !a) m.fail("NOT_FOUND", 404);
     const priv = await ref("private_posts", postId).get();
     if (priv.exists && (a.owner || m.owner(priv.data(), a))) return priv.data();
@@ -392,11 +363,11 @@ function createService({
     };
   }
   async function post(postId, a = null) {
-    return m.safePost(
-      postId,
-      await publicProof(postId, await rawPost(postId, a)),
-      a,
-    );
+    const raw = await publicProof(postId, await rawPost(postId, a));
+    const out = m.safePost(postId, raw, a);
+    // LAB-10：本人が編集するときは、いまの画像を確かめ・変え・外せるように画像も返す
+    if (out.editable && m.validImage(raw.imageUrl)) out.imageUrl = raw.imageUrl;
+    return out;
   }
   async function quota(tx, a, kind, prepared = a.membership) {
     const ent = prepared;
@@ -579,6 +550,8 @@ function createService({
         ? input.verification
         : "self-reported",
     };
+    // LAB-10：画像は、送られたときだけ変える（送られなければ今の画像のまま。"" なら外す）
+    const image = input.imageUrl === undefined ? undefined : m.imageUrl(input.imageUrl);
     const tags = m
       .text(input.tags || "", 500)
       .split(",")
@@ -698,6 +671,10 @@ function createService({
           hidden: false,
         },
       };
+      if (image !== undefined) {
+        if (image) value.imageUrl = image;
+        else delete value.imageUrl;
+      }
       const recordActivity = await activity.prepare(tx, a, [
         {
           kind: "experience-posted",

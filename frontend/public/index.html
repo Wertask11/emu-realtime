@@ -14863,6 +14863,9 @@ async function emuAttachLabDetails(postId, post, lab) {
         title:post.title, body:post.body, tags:post.tags || '', visibility:'public' }) });
     ok = r.ok;
   } catch (_) { ok = false; }
+  // 計測は数と はい/いいえ だけ（分類の名前や本文は送らない）
+  window.EmuAnalytics?.track('post_details', { stage: ok ? 'attached' : 'attach_failed',
+    facet_count: Object.values(lab.facets || {}).reduce((n, ids) => n + ids.length, 0), ai_consent: lab.aiUseConsent === true }, String(postId));
   if (!ok) {
     const frame = document.getElementById('emuKnowledgeFrame');
     frame?.contentWindow?.postMessage({ type:'emu-knowledge-notice',
@@ -28678,16 +28681,7 @@ async function sendEmuFeedback() {
 /* 新しい「知識を読む」iframeと、既存Firebase投稿処理をつなぐ */
 (function () {
   const KNOWLEDGE_PAGE_SIZE = 20;
-  /* 見学の人（無料・パスなし）に見せる、新着の本数。
-
-     前は「運営が選んだ知識だけ（recommended == true）」を見せる作りだった。
-     ところが recommended を持つ投稿は1件も無く、立てる画面もサーバーの
-     入口も作られていなかった。だから見学の人には、106件あっても
-     「該当する知識がありません」しか出なかった。
-
-     選ぶ手間をかけずに「一部だけ見せる」を成り立たせるため、
-     新着の頭から数えて、この本数までを見学の範囲にする。 */
-  const GUEST_KNOWLEDGE_LIMIT = 20;
+  /* 見学の人（無料・パスなし）も、公開している知識を最後まで読める（11/7 創業者決定：「新着20件」の制限は廃止）。 */
   let knowledgeShown = 0;
   const KNOWLEDGE_ORIGIN = window.location.origin;
   let knowledgeLastDoc = null;
@@ -29156,11 +29150,7 @@ async function sendEmuFeedback() {
       if (typeof emuEnsureEntitlement === 'function') {
         try { await emuEnsureEntitlement(); } catch (e) {}
       }
-      const guest = !emuHasPlan('light');
 
-      /* 見学の人にも、新着の頭から一部は見せる。
-         全部読めてしまうと「見学」ではなくなり、light に進む理由が薄くなる。
-         読むこと自体は無料のままなので、閲覧を止めるのではなく範囲を絞る。 */
       const constraints = [window.fbLib.orderBy('createdAt', 'desc')];
       if (knowledgeLastDoc && options.append) constraints.push(window.fbLib.startAfter(knowledgeLastDoc));
       constraints.push(window.fbLib.limit(KNOWLEDGE_PAGE_SIZE + 1));
@@ -29172,18 +29162,7 @@ async function sendEmuFeedback() {
       const _labPhysicalLast = visibleDocs.length ? visibleDocs[visibleDocs.length - 1] : knowledgeLastDoc;
       visibleDocs = visibleDocs.filter(d => !d.data().knowledgeLab?.tombstone);
 
-      /* 見学の人は、新着 GUEST_KNOWLEDGE_LIMIT 件まで。
-         そこから先があることは画面で伝える（黙って終わらせない）。 */
-      let guestCapped = false;
-      if (guest) {
-        const room = Math.max(0, GUEST_KNOWLEDGE_LIMIT - knowledgeShown);
-        const cut = visibleDocs.length > room;
-        if (cut) visibleDocs = visibleDocs.slice(0, room);
-        if (cut || (knowledgeHasMore && visibleDocs.length >= room)) {
-          guestCapped = true;
-          knowledgeHasMore = false;
-        }
-      }
+      /* 11/7 創業者決定：見学の「新着20件」の制限は廃止。見学の人も、公開している知識を最後まで読める。 */
       knowledgeShown += visibleDocs.length;
 
       visibleDocs.forEach(docSnap => rows.push(plainKnowledgePost(docSnap)));
@@ -29200,8 +29179,6 @@ async function sendEmuFeedback() {
         type:'emu-knowledge-posts', posts:rows, append:!!options.append, hasMore:knowledgeHasMore,
         /* 実際の投稿数。1ページ目のときだけ数える（続きを読むでは変わらない）。 */
         totalCount: options.append ? undefined : await totalCountRead,
-        /* 見学の範囲で止まったか。止まったことを画面で伝えるために渡す。 */
-        guestCapped: guestCapped, guestLimit: GUEST_KNOWLEDGE_LIMIT,
         account,
         /* 運営か（「運営として削除」を出すため。消せるかはサーバーが決める） */
         isOwner: typeof _spIsOwnerAddr === 'function' && !!account && _spIsOwnerAddr(account),

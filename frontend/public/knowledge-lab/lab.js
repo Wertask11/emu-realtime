@@ -63,10 +63,76 @@
   /* LAB-03（11/7）：経験知の入力画面も、保存していない内容を確認なしで捨てない。
      前は × や Esc で閉じると、そのまま消えて、開き直すと空欄だった。
      研究ノートと同じく、本文を localStorage には置かない（画面の中だけで持つ）。 */
+  /* LAB-10（11/7）：Lab で整理した投稿でも、画像を確かめ・変え・外せる。
+     縮め方は知識を読むの投稿画面と同じ（長い辺900px・JPEG 0.75・元の画像は8MBまで）。
+     state.postImage：undefined＝変えない、""＝外す、data:image/...＝新しい画像。 */
+  function setPostImage(src, changed) {
+    const img = $("#postImagePreview");
+    if (!img) return;
+    if (changed !== false) state.postImage = src;
+    img.hidden = !src;
+    if (src) img.src = src;
+    else img.removeAttribute("src");
+    $("#postImageRemove").hidden = !src;
+  }
+  async function showPostImage(p) {
+    state.postImage = undefined;
+    if ($("#postImage")) $("#postImage").value = "";
+    setPostImage(p?.imageUrl || "", false);
+    if (!p?.imageUrl && p?.hasImage && p?.id && p?.editable) {
+      try {
+        const full = await api("/posts/" + p.id, { auth: true });
+        if (state.post === p && state.postImage === undefined) setPostImage(full.imageUrl || "", false);
+      } catch (_) {}
+    }
+  }
+  function shrinkImage(file) {
+    return new Promise((resolve, reject) => {
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return reject(new Error("JPEG・PNG・WebP の画像を選んでください。"));
+      if (file.size > 8 * 1024 * 1024) return reject(new Error("画像は8MB以下にしてください。"));
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("画像を読み込めませんでした。"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("画像を読み込めませんでした。"));
+        img.onload = () => {
+          const scale = Math.min(1, 900 / Math.max(img.width, img.height)),
+            canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return reject(new Error("画像を読み込めませんでした。"));
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const url = canvas.toDataURL("image/jpeg", 0.75);
+          if (url.length > 1048000) return reject(new Error("画像が大きすぎます。小さい画像を選んでください。"));
+          resolve(url);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  $("#postImage")?.addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      setPostImage(await shrinkImage(file));
+    } catch (error) {
+      e.target.value = "";
+      status(error.message, true);
+    }
+  });
+  $("#postImageRemove")?.addEventListener("click", () => {
+    if ($("#postImage")) $("#postImage").value = "";
+    setPostImage("");
+  });
   function postSnapshot() {
     if (!$("#editorDialog")?.open) return "";
     const fields = [...document.querySelectorAll('#postForm input,#postForm textarea,#postForm select')]
+      .filter(el => el.type !== 'file')
       .map(el => [el.id || el.name || el.value, el.type === 'checkbox' ? el.checked : el.value]);
+    // 画像を選んだ・外した（まだ保存していない）も、書きかけとして数える
+    fields.push(['image', state.postImage === undefined ? '' : 'changed:' + String(state.postImage).length]);
     return JSON.stringify(fields);
   }
   let savedPostSnapshot = "";
@@ -136,7 +202,7 @@
     ARCHIVED_NOTE_RESTORE_REQUIRED:
       "保管したノートは復元してから編集できます。",
     READER_PLAN_REQUIRED:
-      "見学では新着20件を読めます。続きの知識は既存のEmu for SchoolPark light以上で利用できます。",
+      "この知識は、いまは読めません。時間をおいて開き直してください。",
     LAUNCH_HOLD: "公開準備中です。保存・投稿はまだ利用できません。",
     RULES_NOT_VERIFIED: "データ保護の確認中です。保存・投稿は停止しています。",
     AUTH_REQUIRED: "ログインしてから続けてください。",
@@ -465,11 +531,7 @@
     );
     state.cursors.search = data.next;
     $("#moreResults").hidden = !data.next;
-    status(
-      data.guestCapped
-        ? "見学では新着20件から検索しています。それより前の知識は既存のEmu for SchoolPark light以上で利用できます。"
-        : "検索結果を表示しました。",
-    );
+    status("検索結果を表示しました。");
     if (parent === window) history.replaceState(null, "", sharedURL());
   }
   async function view(name) {
@@ -697,6 +759,7 @@
       : p?.tags || "";
     $("#postVisibility").value = p?.visibility || "draft";
     postSubmitLabel();
+    showPostImage(p);
     const lab = p?.knowledgeLab || {};
     $("#postAIConsent").checked = lab.aiUseConsent?.allowed === true;
     for (const key of [
@@ -747,6 +810,8 @@
           facets: facetValue("#postFacets"),
           visibility: $("#postVisibility").value,
           aiUseConsent: $("#postAIConsent").checked,
+          // LAB-10：画像は、選んだ・外したときだけ送る（送らなければ今の画像のまま）
+          ...(state.postImage !== undefined ? { imageUrl: state.postImage } : {}),
         };
       for (const key of [
         "period",
@@ -2227,6 +2292,7 @@
   function compose() {
     if (!state.enabled) return status(messages.LAUNCH_HOLD, true);
     if (composeInEmu()) {
+      window.EmuAnalytics?.track("post_entry_redirect", { from: "lab" });
       parent.postMessage(
         { type: "emu-lab-action", action: "compose" },
         location.origin,
@@ -2285,7 +2351,7 @@
         [
           "lab-intro",
           "まずは、経験を探してみよう",
-          "図書館では投稿済みの経験を検索できるよ。経験者へ新しく質問したいときは「経験者に質問する」へ。",
+          "図書館では投稿済みの経験を検索できるよ。経験者へ新しく聞きたいときは「知識を募集する」へ。",
         ],
         [
           "lab-library",

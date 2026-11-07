@@ -147,3 +147,25 @@ test('画面：Lab から「経験知を届ける」を押すと、親が共通�
   await send(labWindow, 'https://emu.example');
   assert.equal(opened, 1);
 });
+
+test('名前：同じ募集（knowledge_requests）は、Emu でも Lab でも「知識を募集する」と呼ぶ', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/public/knowledge-lab.html'), 'utf8');
+  for (const src of [html, LAB, fs.readFileSync(path.join(__dirname, '../../frontend/public/membership-features.js'), 'utf8')])
+    assert.doesNotMatch(src, /経験者に質問する|経験者への質問募集/);
+  assert.match(html, /data-view="requests"[^>]*>\s*知識を募集する</);
+  assert.match(INDEX, /＋ 知識を募集する/);
+});
+
+test('計測：新しい出来事は、数・はい/いいえ・決まった語だけ。本文・題名・分類名・検索語は送れない', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../../frontend/public/emu-analytics.js'), 'utf8');
+  const schemas = between(src, 'const schemas = {', '\n  };');
+  for (const name of ['post_details', 'post_after_save', 'post_entry_redirect']) {
+    const row = schemas.match(new RegExp(name + ': \\{([^}]*)\\}'));
+    assert.ok(row, name);
+    // どの項目も、決まった語の一覧・'count'・'boolean' のどれか（自由な文字は通さない）
+    for (const [, rule] of row[1].matchAll(/\w+: (\[[^\]]*\]|'count'|'boolean')/g)) assert.ok(rule);
+    assert.equal(row[1].split(':').length - 1, [...row[1].matchAll(/\w+: (\[[^\]]*\]|'count'|'boolean')/g)].length, name + ' に自由な項目がある');
+  }
+  assert.match(KNOWLEDGE, /track\('post_details',\{stage:'open'\}\)/);
+  assert.match(INDEX, /track\('post_details', \{ stage: ok \? 'attached' : 'attach_failed',/);
+});

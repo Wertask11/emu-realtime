@@ -204,17 +204,9 @@ function createSemantic({ db, service, ai, now = Date.now }) {
     const params = m.searchParams(q);
     if (!params.q) m.fail("SEMANTIC_QUERY_REQUIRED");
     const plan = await service.readerPlan(a);
+    /* 11/7：見学の「新着20件」の制限は廃止。同意のある公開知識全体から探す */
     const all = await service.catalog(),
-      scope = plan.guest
-        ? [...all]
-            .filter((p) => p.active)
-            .sort(
-              (x, y) =>
-                y.createdAtMs - x.createdAtMs ||
-                x.postId.localeCompare(y.postId),
-            )
-            .slice(0, 20)
-        : all;
+      scope = all;
     const terms = await service.taxonomy(),
       filtered = m.select(scope, { ...params, q: "", sort: "new" }, terms),
       allowed = new Map(filtered.map((v) => [v.postId, v]));
@@ -229,7 +221,6 @@ function createSemantic({ db, service, ai, now = Date.now }) {
         searchMethod: "gemini-embedding-cosine",
         semanticCoverage: 0,
         reason: "NO_CONSENTED_EMBEDDINGS",
-        guestCapped: plan.guest && all.length > 20,
       };
     const queryId = m.hash([a.spid, config.embeddingModel, params.q]),
       queryRef = service.ref("query_vectors", queryId),
@@ -309,8 +300,6 @@ function createSemantic({ db, service, ai, now = Date.now }) {
       indexedMatches: rows.length,
       searchMethod: "gemini-embedding-cosine",
       semanticCoverage: vectors.length,
-      guestCapped: plan.guest && all.length > 20,
-      guestLimit: plan.guest ? 20 : null,
     };
   }
   return { enqueue, seedPage, indexPage, search, maintenance };
