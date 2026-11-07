@@ -3112,7 +3112,8 @@ body.emu-workspace-open[data-emu-screen="tasks"] #spDaoPage > .emu-workspace-too
 }
 .emu-sheet.open { display:flex; }
 .emu-sheet-card {
-  width:min(680px,100%); max-height:92vh; overflow:auto; background:#fff;
+  box-sizing:border-box; /* 上限に内側の余白も含める（含めないと余白の分だけはみ出す） */
+  width:min(724px,100%); max-height:92vh; max-height:calc(100dvh - 36px); overflow:auto; background:#fff;
   border-radius:18px; padding:22px; box-shadow:0 22px 70px rgba(0,0,0,.24);
 }
 .emu-sheet-head { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; }
@@ -3858,7 +3859,9 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   .eth-tab { flex:1; padding:8px 7px; }
   .emu-choice-grid { grid-template-columns:1fr; }
   .emu-sheet { padding:8px; align-items:flex-end; }
-  .emu-sheet-card { border-radius:18px 18px 8px 8px; }
+  /* 11/7：上限を「いま見えている高さ」（dvh）で決める。vh はアドレスバーの分まで含むので、
+     下にそろえた窓の上が画面の外へはみ出し、見出しが切れていた */
+  .emu-sheet-card { border-radius:18px 18px 8px 8px; max-height:calc(100dvh - 16px); }
 }
 /* タブレット／スマホ：新しいEmuの情報密度とタップ操作を最適化 */
 @media (max-width:1024px) {
@@ -12846,6 +12849,8 @@ let _emuAnswerContext = null;
 function openEmuSheet(id) {
   const el = document.getElementById(id);
   if (el) el.classList.add("open");
+  /* 前に開いたときの途中から出さない。いつも見出し（いちばん上）から見せる */
+  try { el?.querySelector('.emu-sheet-card')?.scrollTo(0, 0); } catch (_) {}
 }
 function _finishReactionContext(action, context, error) {
   if (!context) return;
