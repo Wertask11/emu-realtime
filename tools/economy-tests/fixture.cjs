@@ -161,7 +161,7 @@ async function createFixture({
       termsVersion: SERVICE.termsVersion,
     });
   const users = {};
-  for (const role of ["alice", "bob"]) {
+  for (const role of ["alice", "bob", "guest", "light", "pro"]) {
     const email = role + "@economy.example.invalid",
       password = "Emulator-only-password-123";
     try {
@@ -192,7 +192,9 @@ async function createFixture({
     await db
       .collection("entitlements")
       .doc(decoded.uid)
-      .set({ plan: "plus", source: "emulator-test", startsAt: new Date(0) });
+      .set({ plan: ["guest", "light", "pro"].includes(role) ? role : "plus",
+        source: role === "light" ? "emu-gift" : "emulator-test", startsAt: new Date(0),
+        ...(role === "light" ? { expiresAt: new Date(Date.now() + 7 * 86400000) } : {}) });
     await economy.service.ref("eligibility", hash(person.spid)).set({
       adultVerified: true,
       providerAllowed: true,

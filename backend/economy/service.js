@@ -69,7 +69,9 @@ function createEconomy({
       )
     )
       fail("SERVICE_DISABLED", 503);
-    const plan = (await entitlement.getEntitlement(a.uid, a.account)).plan;
+    // Paid requests must re-read membership on quote, payment and execution:
+    // an expired grant or a changed subscription cannot use a cached higher tier.
+    const plan = (await entitlement.getEntitlement(a.uid, a.account, { fresh: true })).plan;
     if (!c.plans.includes(plan)) fail("SERVICE_NOT_ELIGIBLE", 403);
     const e = (await ref("eligibility", hash(a.spid)).get()).data();
     // Do not infer age from LINE/Google login or self-declared dates. Provider policy gate is server-owned.

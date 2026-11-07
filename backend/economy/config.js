@@ -5,6 +5,7 @@ const SERVICE = Object.freeze({
   version: 3,
   price: 5,
   currency: "EMUER",
+  allowedPlans: Object.freeze(["plus", "pro"]),
   globalDaily: 20,
   personDaily: 3,
   concurrency: 2,
@@ -15,12 +16,12 @@ const SERVICE = Object.freeze({
   refund:
     "処理失敗時は全額を元の未受取EMUERへ返却します。未確定の場合は返却待ちと表示します。",
   scope:
-    "公開情報の検索・比較・提案と既存画面への案内。購入・送金・契約・連絡は行いません。探索が正常に完了した場合、候補が見つからない場合も料金対象です。",
+    "初期運用では公式5ギルドの名称・短い説明を検索・比較し、活動紹介へ案内します。購入・送金・契約・連絡は行いません。探索が正常に完了した場合、候補が見つからない場合も料金対象です。",
 });
 function configuration(env = process.env, now = Date.now()) {
   const plans = String(env.ECONOMY_EXPLORER_PLANS || "")
     .split(",")
-    .filter((v) => ["guest", "light", "plus", "pro"].includes(v));
+    .filter((v) => SERVICE.allowedPlans.includes(v));
   const budget = Number(
     env.ECONOMY_EXPLORER_DAILY_TOKEN_BUDGET || SERVICE.dailyTokens,
   );

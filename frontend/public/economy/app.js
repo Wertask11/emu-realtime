@@ -28,7 +28,7 @@
     PASSPORT_REQUIRED: "SchoolParkパスポートの連携を確認してください。",
     SERVICE_DISABLED:
       "提供条件の確認中のため、現在は依頼を受け付けていません。",
-    SERVICE_NOT_ELIGIBLE: "現在の利用条件では依頼できません。",
+    SERVICE_NOT_ELIGIBLE: "「冷蔵庫くんに頼む」はPlus・Pro限定です。Free・Light（7日間のLight体験を含む）では利用できません。",
     AI_AUDIENCE_NOT_VERIFIED:
       "AI提供対象の確認が済んでいないため、依頼できません。",
     SENSITIVE_INPUT:
@@ -68,13 +68,23 @@
       $(id).textContent = "—";
     $("quoteButton").disabled = true;
   }
+  function syncIdentity() {
+    if (user() === identityKey) return;
+    reset();
+    // An old response can arrive before the periodic identity check. Reload the
+    // new account once, rather than leaving it with cleared balances forever.
+    queueMicrotask(refresh);
+  }
   async function api(path, body) {
     const app = parentApp(),
       before = user();
     if (!before || typeof app.emuAuthHeaders !== "function")
       throw Error("AUTH_REQUIRED");
     const headers = await app.emuAuthHeaders(true, { interactive: false });
-    if (user() !== before) throw Error("AUTH_REQUIRED");
+    if (user() !== before) {
+      syncIdentity();
+      throw Error("AUTH_REQUIRED");
+    }
     const r = await fetch("/api/economy" + path, {
       method: body ? "POST" : "GET",
       headers: { ...headers, "content-type": "application/json" },
@@ -83,7 +93,7 @@
     });
     const d = await r.json();
     if (user() !== before) {
-      reset();
+      syncIdentity();
       throw Error("AUTH_REQUIRED");
     }
     if (!r.ok) throw Error(d.error || "ECONOMY_UNAVAILABLE");
@@ -316,6 +326,10 @@
       await refresh();
       notice(labels[d.job.state] || "受付状態を確認しました。");
     } catch (e) {
+      if (["SERVICE_NOT_ELIGIBLE", "AI_AUDIENCE_NOT_VERIFIED", "AUTH_REQUIRED"].includes(e.message)) {
+        clearApproval();
+        $("quoteButton").disabled = true;
+      }
       notice(
         messages[e.message] ||
           "受付を確認できませんでした。同じ依頼の再送では二重に請求しません。履歴を更新してください。",

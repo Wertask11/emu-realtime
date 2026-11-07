@@ -27,7 +27,7 @@ function fixture(options = {}) {
     ECONOMY_BUDGET_APPROVAL_REF: "isolated-test-approval",
     ECONOMY_EXPLORER_TRIAL_START: "2026-11-05T15:00:00Z",
     ECONOMY_EXPLORER_DAILY_TOKEN_BUDGET: "100000",
-    ECONOMY_EXPLORER_PLANS: "light,plus,pro",
+    ECONOMY_EXPLORER_PLANS: "plus,pro",
     GEMINI_API_KEY: "isolated-test-placeholder",
     ...options.env,
   };
