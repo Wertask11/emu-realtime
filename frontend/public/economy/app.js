@@ -13,9 +13,16 @@
     generation = 0,
     busy = false,
     progressTimer = null,
-    progressBusy = false;
+    progressBusy = false,
+    searchProfile = null;
   const watchedJobs = new Map();
-  const activeStates = new Set(["awaiting_payment", "queued", "running", "result_saved", "refund_pending"]);
+  const activeStates = new Set([
+    "awaiting_payment",
+    "queued",
+    "running",
+    "result_saved",
+    "refund_pending",
+  ]);
   const labels = {
     awaiting_payment: "決済確認待ち",
     queued: "支払い済み・実行待ち",
@@ -32,7 +39,8 @@
     PASSPORT_REQUIRED: "SchoolParkパスポートの連携を確認してください。",
     SERVICE_DISABLED:
       "提供条件の確認中のため、現在は依頼を受け付けていません。",
-    SERVICE_NOT_ELIGIBLE: "「冷蔵庫くんに頼む」はPlus・Pro限定です。Free・Light（7日間のLight体験を含む）では利用できません。",
+    SERVICE_NOT_ELIGIBLE:
+      "「冷蔵庫くんに頼む」はPlus・Pro限定です。Free・Light（7日間のLight体験を含む）では利用できません。",
     AI_AUDIENCE_NOT_VERIFIED:
       "AI提供対象の確認が済んでいないため、依頼できません。",
     SENSITIVE_INPUT:
@@ -44,6 +52,12 @@
     AI_ADMISSION_RATE_LIMIT:
       "依頼が続いています。1分ほど待って料金を確認し直してください。料金は請求していません。",
     INSUFFICIENT_EMUER: "支払いに使える未受取EMUERが不足しています。",
+    CROSS_SEARCH_DISABLED:
+      "横断探索を停止しています。料金確認からやり直してください。",
+    PRIVATE_CONTEXT_UNAVAILABLE:
+      "本人情報の参照は現在利用できません。チェックを外して料金を確認してください。",
+    SEARCH_SOURCES_UNAVAILABLE:
+      "検索元を確認できないため、処理を提供できませんでした。支払い済みの場合は返却状態を確認してください。",
     QUOTE_EXPIRED_OR_CHANGED:
       "料金確認の期限が切れたか、条件が変わりました。もう一度確認してください。",
   };
@@ -66,6 +80,11 @@
     progressTimer = null;
     watchedJobs.clear();
     identityKey = user();
+    searchProfile = null;
+    $("crossOptions").hidden = true;
+    $("balanceConsent").checked = false;
+    $("achievementsConsent").checked = false;
+    $("contextPreview").textContent = "";
     clearApproval();
     $("history").replaceChildren();
     $("operations").hidden = true;
@@ -87,7 +106,9 @@
       before = user();
     if (!before || typeof app.emuAuthHeaders !== "function")
       throw Error("AUTH_REQUIRED");
-    const headers = new Headers(await app.emuAuthHeaders(true, { interactive: false }));
+    const headers = new Headers(
+      await app.emuAuthHeaders(true, { interactive: false }),
+    );
     headers.set("Content-Type", "application/json");
     if (user() !== before) {
       syncIdentity();
@@ -108,19 +129,74 @@
     return d;
   }
   function openTarget(target) {
-    // No provider-generated URL is accepted. The server also derives all targets from source IDs.
-    if (
-      !/^\/(?:\?lab=library&labPost=[A-Za-z0-9_-]+|admin\/room1\/index\.html\?contentId=[A-Za-z0-9_-]+|schoolpark\/dao\.html\?screen=(?:experiments&explorer(?:Quest|Guild)=[A-Za-z0-9_-]+|city&productId=[A-Za-z0-9_-]+))$/.test(
-        target,
-      )
-    )
-      return;
+    if (!window.ReizoRequestTargets?.allowed(target)) return;
     const app = parentApp();
-    if (target.startsWith("/?lab="))
-      app.openEmuKnowledgeLab?.("library", {
-        post: new URL(target, location.origin).searchParams.get("labPost"),
+    if (target.startsWith("/?lab=")) {
+      const url = new URL(target, location.origin);
+      app.openEmuKnowledgeLab?.(url.searchParams.get("lab"), {
+        post: url.searchParams.get("labPost"),
+        note: url.searchParams.get("labNote"),
       });
-    else app.openSpRoom?.(target, "Emu for SchoolPark");
+    } else if (target.startsWith("/?view=")) {
+      const view = new URL(target, location.origin).searchParams.get("view");
+      if (app.EmuNavigation?.go) {
+        app.closeSpRoom?.();
+        app.EmuNavigation.go(view);
+      } else location.assign(target);
+    } else if (app !== window && app.openSpRoom)
+      app.openSpRoom(target, "Emu for SchoolPark");
+    else location.assign(target);
+  }
+  const domainNames = {
+    knowledge_lab: "Knowledge Lab",
+    knowledge_text: "Knowledge Text",
+    guild: "ギルド",
+    quest: "クエスト",
+    city: "City",
+    emuer: "EMUER",
+    passport: "Passport・星空",
+    activities: "遊び・体験",
+    service: "使い方・プラン",
+  };
+  function paintService(service) {
+    const next = service.searchProfile || null;
+    if (
+      quote &&
+      (quote.searchProfile?.fingerprint || null) !== (next?.fingerprint || null)
+    )
+      clearApproval();
+    searchProfile = next;
+    $("crossOptions").hidden = !searchProfile;
+    $("balanceOption").hidden = !searchProfile?.balanceAvailable;
+    $("achievementsOption").hidden = !searchProfile?.achievementsAvailable;
+    if (!searchProfile?.balanceAvailable) $("balanceConsent").checked = false;
+    if (!searchProfile?.achievementsAvailable)
+      $("achievementsConsent").checked = false;
+    if (searchProfile) {
+      $("workScope").textContent =
+        "目的に関連する公開資料を複数の機能から探し、比較と次の行動を提案します。利用できなかった領域も結果に表示します。";
+      $("workTypes").replaceChildren(
+        node(
+          "li",
+          "検索を試す領域：" +
+            searchProfile.domains
+              .map((d) => domainNames[d] || "確認中")
+              .join("・"),
+        ),
+        node("li", "閲覧権限・AI利用許諾を確認できた資料だけを使います。"),
+      );
+      $("aiConsentText").textContent =
+        "目的から抽出した定義済みのテーマ・種類と、許諾済みの公開資料をGoogle Geminiへ送信することに同意します。入力原文・残高・本人実績は送りません。";
+    } else {
+      $("workScope").textContent =
+        "初期運用では、公式5ギルドの名称と短い説明から、あなたの目的に関連する活動を探します。";
+      $("workTypes").replaceChildren(
+        node("li", "LEARN・WORK・PLAY・CONNECT・WEB3の公式ギルドを探す"),
+        node("li", "公式の説明を比較し、活動紹介の画面へ案内する"),
+      );
+      $("aiConsentText").textContent =
+        "目的の種類と対象の公開資料をGoogle Geminiへ送信することに同意します。";
+    }
   }
   async function publicStatus() {
     try {
@@ -128,6 +204,7 @@
         d = await r.json();
       if (!r.ok || d.schema !== "economy-release-v2")
         throw Error("STATUS_UNAVAILABLE");
+      paintService(d.service);
       $("availability").textContent = d.service.enabled
         ? "受付状況はログイン後に確認できます。"
         : d.service.blockers?.includes("AI_PROVIDER_DAY_LIMIT")
@@ -164,19 +241,153 @@
   function sourceInfo(r) {
     const details = node("details");
     details.className = "source-info";
-    details.append(node("summary", "出典情報"), node("small", r.kind + " / ID: " + r.id));
+    details.append(
+      node("summary", "出典情報"),
+      node("small", r.kind + " / ID: " + r.id),
+    );
     return details;
+  }
+  function answerNode(answer) {
+    const content = node("div");
+    if (answer.profileVersion) {
+      const names = [
+        ...new Set(
+          (answer.results || [])
+            .map((r) => domainNames[r.domain])
+            .filter(Boolean),
+        ),
+      ];
+      content.append(
+        node(
+          "p",
+          "参照した領域：" +
+            (names.join("・") || "今回利用できる参照情報はありません"),
+        ),
+        node("h3", "調べた情報・出典"),
+      );
+    }
+    if (!answer.results?.length)
+      content.append(
+        node(
+          "p",
+          "目的に関連する公開情報は見つかりませんでした。架空の候補は追加していません。",
+        ),
+      );
+    for (const r of answer.results || []) {
+      const card = node("div");
+      card.className = "source-card";
+      card.append(
+        node("h3", r.title),
+        node("p", r.reason),
+        node("blockquote", r.evidence),
+        sourceInfo(r),
+      );
+      if (Number.isSafeInteger(r.facts?.priceEmuer))
+        card.append(
+          node(
+            "p",
+            "公開価格：" +
+              r.facts.priceEmuer +
+              " EMUER（利用条件・在庫・期限は移動先で再確認）",
+          ),
+        );
+      if (r.updatedAtMs)
+        card.append(
+          node(
+            "p",
+            "資料の更新：" +
+              new Date(r.updatedAtMs).toLocaleString("ja-JP", {
+                timeZone: "Asia/Tokyo",
+              }) +
+              "（日本時間）",
+          ),
+        );
+      const link = node("button", "内容を確認する →");
+      link.type = "button";
+      link.onclick = () => openTarget(r.target);
+      card.append(link);
+      content.append(card);
+    }
+    if (answer.comparisons?.length) {
+      content.append(node("h3", "比較（AIの提案）"));
+      for (const c of answer.comparisons)
+        content.append(node("p", c.titles.join(" ／ ") + "：" + c.text));
+    }
+    if (answer.steps?.length) {
+      content.append(node("h3", "次の行動（AIの提案）"));
+      const list = node("ol");
+      for (const step of answer.steps) {
+        const item = node("li");
+        item.append(node("strong", step.title), node("p", step.text));
+        const link = node("button", "参照先を開く");
+        link.type = "button";
+        link.onclick = () => openTarget(step.target);
+        item.append(link);
+        list.append(item);
+      }
+      content.append(list);
+      content.append(
+        node(
+          "p",
+          "この順序は提案です。参加・投稿・購入などは、移動先で条件を確認して自分で判断してください。",
+        ),
+      );
+    }
+    if (answer.privateContext?.balance?.state === "ready")
+      content.append(
+        node(
+          "p",
+          "本人の許可に基づき、依頼料金支払い後の利用可能残高で商品候補を確認しました。残高はAIへ送信していません。",
+        ),
+      );
+    const own = answer.privateContext?.achievements;
+    if (own?.state === "ready")
+      content.append(
+        node(
+          "p",
+          "本人にだけ表示する確認結果：クエスト証明書の記録 " +
+            own.questCertificateRecords +
+            "件・星の記録 " +
+            own.starRecords +
+            "件。" +
+            (own.truncated ? "先頭200件ずつまでの確認です。" : "") +
+            "AIへは送信していません。公的本人確認や年齢の証明とは別です。",
+        ),
+      );
+    if (answer.coverage || answer.limitations?.length) {
+      const details = node("details");
+      details.append(node("summary", "調べた領域・今回の制限"));
+      const stateNames = {
+        ready: "許諾済み資料を確認",
+        disabled: "連携対象外・停止中",
+        unavailable: "取得できませんでした",
+        no_approved_data: "AI許諾済み資料なし",
+        empty: "該当資料なし",
+        not_requested: "今回の検索対象外",
+      };
+      for (const d of answer.coverage || [])
+        details.append(
+          node("p", d.label + "：" + (stateNames[d.state] || "未確認")),
+        );
+      for (const v of answer.limitations || []) details.append(node("p", v));
+      content.append(details);
+    }
+    return content;
   }
   function renderJob(job) {
     const article = node("article");
     article.dataset.jobId = job.id;
     article.dataset.state = job.state;
+    article.dataset.progress = job.progress || "";
     article.tabIndex = -1;
     article.append(
       node("b", labels[job.state] || "状態を確認中"),
       node(
         "p",
-        new Date(job.createdAtMs).toLocaleString("ja-JP") +
+        new Date(job.createdAtMs).toLocaleString("ja-JP", {
+          timeZone: "Asia/Tokyo",
+        }) +
+          "（日本時間）" +
           " · " +
           job.price +
           " EMUER",
@@ -194,8 +405,20 @@
                 ] || job.payment.status),
         ),
       );
+    const stage = {
+      collecting_public_sources:
+        "公開範囲・AI許諾を確認しながら、関連する領域を探しています。",
+      comparing_verified_sources:
+        "確認できた資料を意味で比較し、出典付きの提案を組み立てています。",
+    }[job.progress];
+    if (stage && job.state === "running") article.append(node("p", stage));
     if (activeStates.has(job.state))
-      article.append(node("p", "状態は自動で確認します。このままお待ちください。再度依頼する必要はありません。"));
+      article.append(
+        node(
+          "p",
+          "状態は自動で確認します。このままお待ちください。再度依頼する必要はありません。",
+        ),
+      );
     if (job.state === "refund_pending")
       article.append(
         node(
@@ -214,23 +437,7 @@
           const g = generation;
           const d = await api("/jobs/" + job.id);
           if (g !== generation) return;
-          const result = node("div");
-          if (!d.job.result?.results?.length)
-            result.append(
-              node("p", "目的に関連する公開情報は見つかりませんでした。"),
-            );
-          for (const r of d.job.result?.results || []) {
-            result.append(
-              node("h3", r.title),
-              node("p", r.reason),
-              node("blockquote", r.evidence),
-              sourceInfo(r),
-            );
-            const link = node("button", "内容を確認する →");
-            link.type = "button";
-            link.onclick = () => openTarget(r.target);
-            result.append(node("p"), link);
-          }
+          const result = answerNode(d.job.result || { results: [] });
           show.replaceWith(result);
         } catch (_) {
           show.disabled = false;
@@ -241,31 +448,13 @@
       };
       article.append(show);
     }
-    if (job.result?.results?.length === 0)
-      article.append(
-        node(
-          "p",
-          "目的に関連する公開情報は見つかりませんでした。架空の候補は追加していません。",
-        ),
-      );
-    for (const r of job.result?.results || []) {
-      const card = node("div");
-      card.append(
-        node("h3", r.title),
-        node("p", r.reason),
-        node("blockquote", r.evidence),
-        sourceInfo(r),
-      );
-      const b = node("button", "内容を確認する →");
-      b.type = "button";
-      b.addEventListener("click", () => openTarget(r.target));
-      card.append(node("p"), b);
-      article.append(card);
-    }
+    if (job.result) article.append(answerNode(job.result));
     return article;
   }
   function showJob(job) {
-    const old = Array.from($("history").children).find((el) => el.dataset.jobId === job.id);
+    const old = Array.from($("history").children).find(
+      (el) => el.dataset.jobId === job.id,
+    );
     const article = renderJob(job);
     if (old) old.replaceWith(article);
     else $("history").prepend(article);
@@ -278,9 +467,11 @@
   function watchJobs(jobs) {
     const active = jobs.filter((j) => activeStates.has(j.state));
     const ids = new Set(active.map((j) => j.id));
-    for (const id of watchedJobs.keys()) if (!ids.has(id)) watchedJobs.delete(id);
+    for (const id of watchedJobs.keys())
+      if (!ids.has(id)) watchedJobs.delete(id);
     for (const job of active)
-      if (!watchedJobs.has(job.id)) watchedJobs.set(job.id, Date.now() + 180000);
+      if (!watchedJobs.has(job.id))
+        watchedJobs.set(job.id, Date.now() + 180000);
     scheduleProgress();
   }
   async function checkProgress() {
@@ -288,11 +479,17 @@
     for (const [id, until] of watchedJobs) {
       if (Date.now() > until) {
         watchedJobs.delete(id);
-        if (!quote) notice("状態確認に時間がかかっています。再依頼せず、履歴の「更新」で確認してください。");
+        if (!quote)
+          notice(
+            "状態確認に時間がかかっています。再依頼せず、履歴の「更新」で確認してください。",
+          );
       }
     }
     if (!watchedJobs.size) return;
-    if (progressBusy || busy || document.hidden) { scheduleProgress(); return; }
+    if (progressBusy || busy || document.hidden) {
+      scheduleProgress();
+      return;
+    }
     const g = generation;
     progressBusy = true;
     let terminal = false;
@@ -300,12 +497,24 @@
       for (const id of watchedJobs.keys()) {
         const d = await api("/jobs/" + id);
         if (g !== generation) return;
-        const shown = Array.from($("history").children).find((el) => el.dataset.jobId === id);
-        if (!shown || shown.dataset.state !== d.job.state) showJob(d.job);
+        const shown = Array.from($("history").children).find(
+          (el) => el.dataset.jobId === id,
+        );
+        if (
+          !shown ||
+          shown.dataset.state !== d.job.state ||
+          shown.dataset.progress !== (d.job.progress || "")
+        )
+          showJob(d.job);
         if (!activeStates.has(d.job.state)) {
           watchedJobs.delete(id);
           terminal = true;
-          if (!quote) notice(d.job.state === "completed" ? "依頼が完了しました。結果を下に表示しています。" : (labels[d.job.state] || "依頼の状態を更新しました。"));
+          if (!quote)
+            notice(
+              d.job.state === "completed"
+                ? "依頼が完了しました。結果を下に表示しています。"
+                : labels[d.job.state] || "依頼の状態を更新しました。",
+            );
         }
       }
       if (terminal) {
@@ -314,7 +523,8 @@
         updateBalances(me);
       }
     } catch (_) {
-      if (g === generation && !quote) notice("状態を再確認しています。追加の支払いは行いません。");
+      if (g === generation && !quote)
+        notice("状態を再確認しています。追加の支払いは行いません。");
     } finally {
       progressBusy = false;
       scheduleProgress();
@@ -322,7 +532,8 @@
   }
   function updateBalances(me) {
     for (const id of ["spendable", "wallet", "pending", "held", "processing"])
-      $(id).textContent = me.balances[id] == null ? "未確認" : me.balances[id] + " EMUER";
+      $(id).textContent =
+        me.balances[id] == null ? "未確認" : me.balances[id] + " EMUER";
   }
   async function refresh() {
     const g = generation;
@@ -335,6 +546,7 @@
       const [me, history] = await Promise.all([api("/me"), api("/jobs")]);
       if (g !== generation) return;
       updateBalances(me);
+      paintService(me.service);
       $("availability").textContent = me.service.enabled
         ? "受付中です。料金と条件を確認してから依頼できます。"
         : me.service.blockers?.includes("AI_PROVIDER_DAY_LIMIT")
@@ -369,7 +581,11 @@
     const g = generation;
     clearApproval();
     try {
-      const d = await api("/quotes", { goal: $("goal").value });
+      const d = await api("/quotes", {
+        goal: $("goal").value,
+        balanceConsent: $("balanceConsent").checked,
+        achievementsConsent: $("achievementsConsent").checked,
+      });
       if (g !== generation) return;
       quote = d.quote;
       requestId = crypto.randomUUID();
@@ -384,6 +600,50 @@
     }
   });
   $("goal").addEventListener("input", clearApproval);
+  for (const id of ["balanceConsent", "achievementsConsent"])
+    $(id).addEventListener("change", () => {
+      clearApproval();
+      $("contextPreview").textContent = "";
+    });
+  $("requestExamples").addEventListener("click", (event) => {
+    const example = event.target.closest("[data-example]");
+    if (!example) return;
+    $("goal").value = example.dataset.example;
+    clearApproval();
+    $("goal").focus();
+  });
+  $("inspectContext").addEventListener("click", async () => {
+    if (!$("balanceConsent").checked && !$("achievementsConsent").checked) {
+      $("contextPreview").textContent =
+        "参照する本人情報をチェックしてください。";
+      return;
+    }
+    const g = generation;
+    try {
+      const d = await api("/context", {
+        balanceConsent: $("balanceConsent").checked,
+        achievementsConsent: $("achievementsConsent").checked,
+      });
+      if (g !== generation) return;
+      const parts = [];
+      if (d.context.balance.state === "ready")
+        parts.push("利用可能：" + d.context.balance.spendable + " EMUER");
+      if (d.context.achievements.state === "ready")
+        parts.push(
+          "確認できた証明書の記録：" +
+            d.context.achievements.questCertificateRecords +
+            "件、星：" +
+            d.context.achievements.starRecords +
+            "件",
+        );
+      $("contextPreview").textContent =
+        (parts.join("。") || "許可した情報を現在確認できません。") +
+        " AIへは送信していません。";
+    } catch (_) {
+      if (g === generation)
+        $("contextPreview").textContent = "本人情報を確認できませんでした。";
+    }
+  });
   $("cancel").addEventListener("click", clearApproval);
   $("pay").addEventListener("click", async () => {
     if (busy || !quote) return;
@@ -401,6 +661,9 @@
         requestId,
         paymentConsent: true,
         aiConsent: true,
+        searchConsentVersion: quote.searchProfile?.version,
+        balanceConsent: $("balanceConsent").checked,
+        achievementsConsent: $("achievementsConsent").checked,
       });
       if (g !== generation) return;
       clearApproval();
@@ -409,14 +672,25 @@
       if (g !== generation) return;
       const article = showJob(current.job);
       if (activeStates.has(current.job.state)) {
-        if (!watchedJobs.has(current.job.id)) watchedJobs.set(current.job.id, Date.now() + 180000);
+        if (!watchedJobs.has(current.job.id))
+          watchedJobs.set(current.job.id, Date.now() + 180000);
         scheduleProgress();
       } else watchedJobs.delete(current.job.id);
-      notice(current.job.state === "completed" ? "依頼が完了しました。結果を下に表示しています。" : (labels[current.job.state] || "受付状態を確認しました。"));
+      notice(
+        current.job.state === "completed"
+          ? "依頼が完了しました。結果を下に表示しています。"
+          : labels[current.job.state] || "受付状態を確認しました。",
+      );
       article.scrollIntoView({ block: "start" });
       article.focus({ preventScroll: true });
     } catch (e) {
-      if (["SERVICE_NOT_ELIGIBLE", "AI_AUDIENCE_NOT_VERIFIED", "AUTH_REQUIRED"].includes(e.message)) {
+      if (
+        [
+          "SERVICE_NOT_ELIGIBLE",
+          "AI_AUDIENCE_NOT_VERIFIED",
+          "AUTH_REQUIRED",
+        ].includes(e.message)
+      ) {
         clearApproval();
         $("quoteButton").disabled = true;
       }

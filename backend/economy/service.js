@@ -71,7 +71,9 @@ function createEconomy({
       fail("SERVICE_DISABLED", 503);
     // Paid requests must re-read membership on quote, payment and execution:
     // an expired grant or a changed subscription cannot use a cached higher tier.
-    const plan = (await entitlement.getEntitlement(a.uid, a.account, { fresh: true })).plan;
+    const plan = (
+      await entitlement.getEntitlement(a.uid, a.account, { fresh: true })
+    ).plan;
     if (!c.plans.includes(plan)) fail("SERVICE_NOT_ELIGIBLE", 403);
     const e = (await ref("eligibility", hash(a.spid)).get()).data();
     // Do not infer age from LINE/Google login or self-declared dates. Provider policy gate is server-owned.
@@ -89,6 +91,16 @@ function createEconomy({
   async function quote(a, input) {
     const c = await allowed(a),
       goal = safeText(input.goal, 300);
+    const searchProfile = c.searchProfile;
+    const contextPermissions = {
+      balance: input.balanceConsent === true,
+      achievements: input.achievementsConsent === true,
+    };
+    if (
+      (contextPermissions.balance && !searchProfile?.balanceAvailable) ||
+      (contextPermissions.achievements && !searchProfile?.achievementsAvailable)
+    )
+      fail("PRIVATE_CONTEXT_UNAVAILABLE", 403);
     const qr = ref("quote_usage", hash([a.spid, Math.floor(now() / 60000)]));
     await db.runTransaction(async (tx) => {
       const s = await tx.get(qr),
@@ -105,6 +117,9 @@ function createEconomy({
         serviceId: c.id,
         price: c.price,
         termsVersion: c.termsVersion,
+        searchProfile,
+        scopeSnapshot: c.scope,
+        contextPermissions,
         expiresAtMs: now() + 10 * 60000,
         deleteAfter: new Date(now() + 30 * 86400000),
       };
@@ -114,6 +129,8 @@ function createEconomy({
       price: c.price,
       currency: c.currency,
       scope: c.scope,
+      searchProfile,
+      contextPermissions,
       refund: c.refund,
       termsVersion: c.termsVersion,
       expiresAtMs: q.expiresAtMs,
@@ -124,6 +141,11 @@ function createEconomy({
         concurrency: c.concurrency,
       },
       notice:
+        (searchProfile
+          ? "横断探索の同意版: " +
+            searchProfile.version +
+            "。Googleへ送るのは定義済みのテーマ・目的と検証済み公開資料です。入力原文・残高・本人実績は送りません。本人情報で絞る場合は依頼料金支払い後の状態を参照します。 "
+          : "") +
         "未受取EMUERから支払います。入力文はサービス内で照合し、AIへ目的の種類と対象の公開資料だけを送信します。氏名・住所・秘密は入力しないでください。受付した依頼は失敗時も当日の利用枠に数えます。商品交換枠は消費しません。無料AI枠を保護するため、依頼全体で2件/分・米国太平洋時間でも20依頼/日の追加制限があります。枠不足や障害では受付を停止し、処理を提供できない依頼は全額返却します。",
     };
   }
@@ -178,7 +200,16 @@ function createEconomy({
         q.wallet !== String(a.walletAddress || "").toLowerCase() ||
         q.price !== c.price ||
         q.termsVersion !== c.termsVersion ||
-        b.termsVersion !== q.termsVersion
+        b.termsVersion !== q.termsVersion ||
+        (q.searchProfile?.fingerprint || null) !==
+          (c.searchProfile?.fingerprint || null) ||
+        (q.searchProfile &&
+          b.searchConsentVersion !== q.searchProfile.version) ||
+        (q.contextPermissions?.balance &&
+          (b.balanceConsent !== true || !c.searchProfile?.balanceAvailable)) ||
+        (q.contextPermissions?.achievements &&
+          (b.achievementsConsent !== true ||
+            !c.searchProfile?.achievementsAvailable))
       )
         fail("QUOTE_EXPIRED_OR_CHANGED");
       if ((g.count || 0) >= c.globalDaily || (p.count || 0) >= c.personDaily)
@@ -202,6 +233,12 @@ function createEconomy({
         price: q.price,
         quoteId: b.quoteId,
         termsVersion: q.termsVersion,
+        searchProfile: q.searchProfile || null,
+        scopeSnapshot: q.scopeSnapshot || null,
+        contextPermissions: q.contextPermissions || {
+          balance: false,
+          achievements: false,
+        },
         consentAtMs: now(),
         events: [{ state: "awaiting_payment", atMs: now() }],
         deleteAfter: new Date(now() + 30 * 86400000),
@@ -314,7 +351,14 @@ function createEconomy({
     const j = await owned(a, id);
     const order = await payments.get(j.orderId);
     let result = includeResult ? j.result : null;
-    if (result?.results)
+    if (result?.results && j.searchProfile) {
+      result = await sources.cross.revalidateResult(
+        a,
+        result,
+        j.searchProfile,
+        j.contextPermissions,
+      );
+    } else if (result?.results)
       result = {
         ...result,
         results: await sources.revalidate(a, j.goal, result.results),
@@ -327,6 +371,9 @@ function createEconomy({
       updatedAtMs: j.updatedAtMs,
       error: j.error || null,
       hasResult: !!j.result,
+      searchProfile: j.searchProfile || null,
+      scopeSnapshot: j.scopeSnapshot || null,
+      progress: j.progress || null,
       events: (j.events || []).map((e) => ({ state: e.state, atMs: e.atMs })),
       payment: order
         ? {
@@ -398,6 +445,21 @@ function createEconomy({
       /* Saved result survives a restart; do not invoke AI again. */
     }
   }
+  async function reportProgress(id, token, progress) {
+    await db.runTransaction(async (tx) => {
+      const r = ref("jobs", id),
+        snap = await tx.get(r),
+        j = snap.data();
+      if (
+        !j ||
+        j.state !== "running" ||
+        j.leaseToken !== token ||
+        j.leaseUntilMs <= now()
+      )
+        fail("LEASE_EXPIRED");
+      tx.set(r, { progress }, { merge: true });
+    });
+  }
   async function work(id) {
     const token = randomUUID(),
       slots = ref("system", "slots"),
@@ -442,7 +504,25 @@ function createEconomy({
         fail("EXECUTION_BUDGET_EXPIRED");
       const payment = await payments.get(j.orderId);
       if (payment?.status !== "paid") fail("PAYMENT_NOT_CONFIRMED");
-      const material = await sources.candidates(a, j.goal);
+      let bundle = null;
+      if (j.searchProfile) {
+        try {
+          if (!sources.cross) fail("CROSS_SEARCH_DISABLED", 503);
+          await reportProgress(id, token, "collecting_public_sources");
+          bundle = await sources.cross.collect(
+            a,
+            j.goal,
+            j.searchProfile,
+            j.contextPermissions,
+          );
+        } catch (error) {
+          error.generationAttempted = false;
+          throw error;
+        }
+      }
+      const material = bundle
+        ? bundle.sources
+        : await sources.candidates(a, j.goal);
       // Source scans may be slow. A fenced worker must not begin a provider request after losing its lease.
       const fresh = (await jr.get()).data();
       if (
@@ -457,14 +537,25 @@ function createEconomy({
         material,
         async (selected) => {
           await allowed(a, true);
-          const current = new Map(
-            (await sources.candidates(a, j.goal)).map((s) => [s.key, s]),
-          );
+          const checked = j.searchProfile
+            ? (
+                await sources.cross.current(
+                  a,
+                  selected,
+                  j.searchProfile,
+                  j.contextPermissions,
+                  { checkPrivate: false },
+                )
+              ).sources
+            : await sources.candidates(a, j.goal);
+          const current = new Map(checked.map((s) => [s.key, s]));
           for (const s of selected) {
             const live = current.get(s.key);
             if (!live || live.title !== s.title || live.summary !== s.summary)
               fail("AI_SOURCE_CHANGED", 409);
           }
+          if (j.searchProfile)
+            await reportProgress(id, token, "comparing_verified_sources");
           const ready = (await jr.get()).data();
           if (
             ready.state !== "running" ||
@@ -474,7 +565,50 @@ function createEconomy({
             fail("LEASE_EXPIRED");
         },
         (operation) => freeTier.beforeCall(operation, id, token),
+        bundle
+          ? { profileVersion: j.searchProfile.version, plan: bundle.plan }
+          : {},
       );
+      if (bundle) {
+        result.coverage = bundle.coverage;
+        result.profileVersion = j.searchProfile.version;
+        result.searchMetrics = {
+          searchMs: bundle.searchMs,
+          searchRounds: 2,
+          candidateLimit: 12,
+          selectedByProvider: result.results.length,
+          generationCalls: result.usage.providerCalled ? 1 : 0,
+        };
+        result.privateContext = bundle.context;
+        result.referencedDomains = [
+          ...new Set(result.results.map((s) => s.domain)),
+        ];
+        result.limitations = bundle.coverage
+          .filter((d) =>
+            ["disabled", "unavailable", "no_approved_data"].includes(d.state),
+          )
+          .map(
+            (d) =>
+              d.label +
+              {
+                disabled: "はこの依頼の連携対象外です。",
+                unavailable: "の取得に失敗したため回答に使っていません。",
+                no_approved_data:
+                  "には今回利用できるAI許諾済み資料がありません。",
+              }[d.state],
+          );
+        if (bundle.plan.domains.includes("knowledge_lab"))
+          result.limitations.push(
+            "研究ノートの直接探索はAI利用許諾の連携待ちです。公開投稿として残された研究成果は、投稿の許諾に従って扱います。",
+          );
+        if (
+          j.contextPermissions?.balance &&
+          bundle.context.balance.state !== "ready"
+        )
+          result.limitations.push(
+            "利用可能残高を確認できなかったため、所持額に収まることは保証していません。",
+          );
+      }
       await recordUsage(id, j.bucket, result.usage);
       if (
         await transition(

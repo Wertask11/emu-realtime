@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>冷蔵庫くんに頼む — Emu for SchoolPark</title>
     <link rel="stylesheet" href="/economy/style.css" />
+    <script src="/economy/targets.js" defer></script>
     <script src="/economy/app.js" defer></script>
   </head>
   <body>
@@ -28,7 +29,7 @@
           <h2 id="explorerTitle">依頼できる仕事と料金</h2>
           <b class="price">1依頼 5 EMUER</b>
         </div>
-        <p>
+        <p id="workScope">
           初期運用では、公式5ギルドの名称と短い説明から、あなたの目的に関連する活動を探します。
         </p>
         <details>
@@ -36,7 +37,7 @@
         <p class="sub">
           検索・比較・提案まで。購入・参加・契約・送金を代わりに行うことはありません。既存の無料AI機能の条件は変わりません。
         </p>
-        <ul class="work-types" aria-label="依頼できる仕事の範囲">
+        <ul id="workTypes" class="work-types" aria-label="依頼できる仕事の範囲">
           <li>LEARN・WORK・PLAY・CONNECT・WEB3の公式ギルドを探す</li>
           <li>公式の説明を比較し、活動紹介の画面へ案内する</li>
         </ul>
@@ -48,6 +49,21 @@
         <p class="sub">正常に探索が完了した場合、候補が見つからなくても5 EMUERがかかります。</p>
         <p id="availability" class="availability">提供状況を確認しています…</p>
         <p class="sub">Free・Light（7日間のLight体験を含む）では利用できません。Plus・Proでも、年齢・提供地域などのAI利用資格の確認が必要です。</p>
+        <div id="crossOptions" hidden>
+          <p class="sub">例を押すと入力欄に入ります。料金確認や支払いは別の操作です。</p>
+          <div class="actions" id="requestExamples">
+            <button type="button" data-example="美容師としての経験を誰かの役に立てたい">経験を知識にしたい</button>
+            <button type="button" data-example="今のEMUERで何ができる？">EMUERの使い道</button>
+            <button type="button" data-example="Web3を学んで実際に試したい">Web3を試したい</button>
+          </div>
+          <details><summary>本人の情報を参照して絞る（任意）</summary>
+            <p class="sub">チェックした情報だけを本人認証後に参照します。残高・実績はGoogle Geminiへ送りません。商品候補は依頼料金の支払い後の残高で確認します。</p>
+            <label id="balanceOption" class="check"><input type="checkbox" id="balanceConsent">利用可能なEMUERで商品候補を絞ることを許可する</label>
+            <label id="achievementsOption" class="check"><input type="checkbox" id="achievementsConsent">自分の星・クエスト証明書の記録件数を確認することを許可する</label>
+            <button id="inspectContext" type="button">許可した本人情報を確認する（決済なし）</button>
+            <p id="contextPreview" role="status"></p>
+          </details>
+        </div>
         <form id="requestForm">
           <label for="goal">何を見つけたいですか？</label
           ><textarea
@@ -109,8 +125,7 @@
             ><input
               id="aiConsent"
               type="checkbox"
-            />目的の種類と対象の公開資料をGoogle
-            Geminiへ送信することに同意します。<a
+            /><span id="aiConsentText">目的の種類と対象の公開資料をGoogle Geminiへ送信することに同意します。</span><a
               href="/privacy.html"
               target="_blank"
               rel="noopener"

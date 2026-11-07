@@ -7,7 +7,13 @@ const { configuration } = require("./config");
 function createEconomyRouter(deps) {
   const env = deps.env || process.env;
   const sources =
-    deps.sources || createSources({ db: deps.db, knowledge: deps.knowledge });
+    deps.sources ||
+    createSources({
+      db: deps.db,
+      knowledge: deps.knowledge,
+      payments: deps.payments,
+      env,
+    });
   const service = createEconomy({
     ...deps,
     env,
@@ -69,6 +75,7 @@ function createEconomyRouter(deps) {
         price: c.price,
         currency: c.currency,
         allowedPlans: c.allowedPlans,
+        searchProfile: c.searchProfile,
         enabled: c.enabled && snapshot?.service.enabled === true && healthy,
         globalDaily: c.globalDaily,
         personDaily: c.personDaily,
@@ -132,6 +139,34 @@ function createEconomyRouter(deps) {
     handle(async (req, a) => ({ job: await service.view(a, req.params.id) })),
   );
   router.post(
+    "/context",
+    limited,
+    handle(async (req, a) => {
+      const c = await service.allowed(a);
+      if (!c.searchProfile || !sources.cross)
+        require("./config").fail("CROSS_SEARCH_DISABLED", 503);
+      if (
+        Object.keys(req.body || {}).some(
+          (k) => !["balanceConsent", "achievementsConsent"].includes(k),
+        )
+      )
+        require("./config").fail("INVALID_INPUT", 400);
+      if (
+        (req.body?.balanceConsent === true &&
+          !c.searchProfile.balanceAvailable) ||
+        (req.body?.achievementsConsent === true &&
+          !c.searchProfile.achievementsAvailable)
+      )
+        require("./config").fail("PRIVATE_CONTEXT_UNAVAILABLE", 403);
+      return {
+        context: await sources.cross.privateContext(a, {
+          balance: req.body?.balanceConsent === true,
+          achievements: req.body?.achievementsConsent === true,
+        }),
+      };
+    }),
+  );
+  router.post(
     "/quotes",
     limited,
     handle(async (req, a) => ({
@@ -173,10 +208,17 @@ function createEconomyRouter(deps) {
     cleanupAfter = 0;
   const awakenedJobs = new Set();
   function wakeFor(job) {
-    if (closed || env.ECONOMY_WORKER_ENABLED !== "true" || deps.startWorker === false ||
-        job.state !== "queued" || awakenedJobs.has(job.id)) return;
+    if (
+      closed ||
+      env.ECONOMY_WORKER_ENABLED !== "true" ||
+      deps.startWorker === false ||
+      job.state !== "queued" ||
+      awakenedJobs.has(job.id)
+    )
+      return;
     awakenedJobs.add(job.id);
-    if (awakenedJobs.size > 64) awakenedJobs.delete(awakenedJobs.values().next().value);
+    if (awakenedJobs.size > 64)
+      awakenedJobs.delete(awakenedJobs.values().next().value);
     // A new durable paid job wakes the existing worker. Replays do not create
     // more scans, and a busy cycle gets one coalesced follow-up pass.
     if (ticking) wakePending = true;

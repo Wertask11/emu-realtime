@@ -41,7 +41,7 @@ async function page(width=390){
 }
 test('completion and result appear automatically without resubmission, losing a new draft/consent, or extra polling',async()=>{
  const t=await page();try{
- await t.submit();assert.equal(t.state.payments,1);assert.equal(t.state.operations,0);
+ await t.submit();assert.equal(t.state.payments,1);assert.equal(t.state.operations,0);assert.ok((await t.f.locator('#history').innerText()).includes('15:48:46（日本時間）'));
  await t.f.locator('#goal').fill('次の依頼の下書き');await t.f.locator('#quoteButton').click();await t.f.locator('#paymentConsent').check();await t.f.locator('#goal').focus();
  t.state.jobState='completed';await t.tick();await t.f.locator('#history h3').filter({hasText:'LEARN Guild'}).waitFor();
  assert.equal(await t.f.locator('#goal').inputValue(),'次の依頼の下書き');assert.equal(await t.f.locator('#paymentConsent').isChecked(),true);

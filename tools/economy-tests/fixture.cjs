@@ -20,13 +20,15 @@ const fs = require("node:fs"),
   vm = require("node:vm");
 const ROOT = path.resolve(__dirname, "../..");
 const authHeadersSource = require("../year-goals-tests/extract.cjs").grab(
-  fs.readFileSync(path.join(ROOT, "frontend/public/index.html"), "utf8"), "emuAuthHeaders",
+  fs.readFileSync(path.join(ROOT, "frontend/public/index.html"), "utf8"),
+  "emuAuthHeaders",
 );
 async function createFixture({
   port = 0,
   providerDown = false,
   providerStatus = null,
   enabled = true,
+  crossDomain = false,
 } = {}) {
   const reset = await fetch(
     "http://" +
@@ -70,7 +72,21 @@ async function createFixture({
   const f = require("../../backend/economy/fixture").fixture({
     db,
     providerDown,
-    env: { ECONOMY_EXPLORER_ENABLED: enabled ? "true" : "false" },
+    env: {
+      ECONOMY_EXPLORER_ENABLED: enabled ? "true" : "false",
+      ...(crossDomain
+        ? {
+            ECONOMY_CROSS_DOMAIN_ENABLED: "true",
+            ECONOMY_PRIVATE_BALANCE_ENABLED: "true",
+            ECONOMY_PRIVATE_ACHIEVEMENTS_ENABLED: "true",
+            ...Object.fromEntries(
+              Object.keys(
+                require("../../backend/economy/search/profile").DOMAINS,
+              ).map((d) => ["ECONOMY_SOURCE_" + d.toUpperCase(), "true"]),
+            ),
+          }
+        : {}),
+    },
   });
   // Replace test-header authentication and fake identities with actual production middleware, identity and entitlement.
   const { createService } = require("../../backend/knowledge-lab/service");
@@ -79,10 +95,6 @@ async function createFixture({
     identity,
     entitlement,
     isOwner: () => false,
-  });
-  const sources = require("../../backend/economy/sources").createSources({
-    db,
-    knowledge,
   });
   const commerce = require("../../backend/mitemiru").createMitemiruRouter({
     db,
@@ -98,6 +110,13 @@ async function createFixture({
     requireFirebaseUser: context.requireFirebaseUser,
     requireOwner: (req, res) => res.sendStatus(403),
   });
+  const sources = require("../../backend/economy/sources").createSources({
+    db,
+    knowledge,
+    env: f.env,
+    payments: commerce.servicePayments,
+  });
+  const providerPayloads = [];
   const agent = require("../../backend/economy/agent").createAgent({
     env: f.env,
     config: () => require("../../backend/economy/config").configuration(f.env),
@@ -109,9 +128,21 @@ async function createFixture({
         };
       if (providerStatus) return { ok: false, status: providerStatus };
       if (providerDown) throw Error("isolated provider failure");
-      const sources = JSON.parse(
-        JSON.parse(opts.body).contents[0].parts[0].text,
-      ).sources;
+      const payload = JSON.parse(opts.body);
+      providerPayloads.push(payload);
+      const sources = JSON.parse(payload.contents[0].parts[0].text).sources;
+      const cross = !!payload.generationConfig.responseSchema.properties.steps;
+      const selected = sources.slice(0, cross ? 6 : 3);
+      const action = (s) =>
+        ["guild", "quest"].includes(s.kind)
+          ? "review_activity"
+          : ["city_product", "emuer_guide"].includes(s.kind)
+            ? "review_conditions"
+            : s.kind === "passport_guide"
+              ? "check_profile"
+              : s.kind === "activity_guide"
+                ? "open_play_guide"
+                : "read_source";
       return {
         ok: true,
         text: async () =>
@@ -127,9 +158,29 @@ async function createFixture({
                   parts: [
                     {
                       text: JSON.stringify({
-                        matches: sources
-                          .slice(0, 3)
-                          .map((s) => ({ key: s.key, evidence: "summary" })),
+                        matches: selected.map((s) => ({
+                          key: s.key,
+                          evidence: "summary",
+                        })),
+                        ...(cross
+                          ? {
+                              steps: selected.map((s) => ({
+                                key: s.key,
+                                action: action(s),
+                              })),
+                              comparisons:
+                                selected.length > 1
+                                  ? [
+                                      {
+                                        keys: selected
+                                          .slice(0, 2)
+                                          .map((s) => s.key),
+                                        basis: "perspectives",
+                                      },
+                                    ]
+                                  : [],
+                            }
+                          : {}),
                       }),
                     },
                   ],
@@ -195,9 +246,14 @@ async function createFixture({
     await db
       .collection("entitlements")
       .doc(decoded.uid)
-      .set({ plan: ["guest", "light", "pro"].includes(role) ? role : "plus",
-        source: role === "light" ? "emu-gift" : "emulator-test", startsAt: new Date(0),
-        ...(role === "light" ? { expiresAt: new Date(Date.now() + 7 * 86400000) } : {}) });
+      .set({
+        plan: ["guest", "light", "pro"].includes(role) ? role : "plus",
+        source: role === "light" ? "emu-gift" : "emulator-test",
+        startsAt: new Date(0),
+        ...(role === "light"
+          ? { expiresAt: new Date(Date.now() + 7 * 86400000) }
+          : {}),
+      });
     await economy.service.ref("eligibility", hash(person.spid)).set({
       adultVerified: true,
       providerAllowed: true,
@@ -296,6 +352,49 @@ async function createFixture({
       contentHash: hash([title, summary]),
       validUntilMs: Date.now() + 86400000,
     });
+  if (crossDomain) {
+    await db
+      .collection("sp_stars")
+      .doc("alice-star")
+      .set({
+        spid: users.alice.spid,
+        status: "minted",
+        label: "LOCAL-PRIVATE-LABEL",
+      });
+    await db
+      .collection("sp_stars")
+      .doc("bob-star")
+      .set({
+        spid: users.bob.spid,
+        status: "minted",
+        label: "LOCAL-OTHER-PERSON",
+      });
+    await db
+      .collection("sp_quest_certificates")
+      .doc("alice-certificate")
+      .set({ spid: users.alice.spid, status: "pending" });
+    const a = await economy.service.actor({
+      uid: users.alice.uid,
+      account: users.alice.account,
+      walletAddress: users.alice.account.walletAddress,
+    });
+    for (const adapter of Object.values(sources.cross.adapters))
+      for (const source of await adapter.list(a)) {
+        if (source.kind === "guild") continue;
+        await economy.service
+          .ref("source_approvals", hash(source.key))
+          .set({
+            piiReviewed: true,
+            aiUseApproved: true,
+            rightsVerified: true,
+            authorPermissionConfirmed: true,
+            purpose: require("../../backend/economy/search/profile").PURPOSE,
+            contentHash: hash([source.title, source.summary]),
+            originHash: source.originHash || null,
+            validUntilMs: Date.now() + 86400000,
+          });
+      }
+  }
   const app = express();
   app.use(express.json({ limit: "4kb" }));
   app.use("/api/economy", economy.router);
@@ -305,7 +404,9 @@ async function createFixture({
     if (!u) return res.sendStatus(404);
     res.set("Cache-Control", "no-store").json({ uid: u.uid, token: u.token });
   });
-  app.get("/test/reizo-shell", (req, res) => res.type("html").send(require("./reizo-shell.cjs").reizoShell()));
+  app.get("/test/reizo-shell", (req, res) =>
+    res.type("html").send(require("./reizo-shell.cjs").reizoShell()),
+  );
   app.get("/test/shell", (req, res) =>
     res
       .type("html")
@@ -337,6 +438,8 @@ async function createFixture({
     economy,
     commerce,
     knowledge,
+    providerPayloads,
+    env: f.env,
     call,
     close: async () => {
       economy.close();
@@ -347,7 +450,10 @@ async function createFixture({
   };
 }
 if (require.main === module)
-  createFixture({ port: 4257 })
+  createFixture({
+    port: 4257,
+    crossDomain: process.env.ECONOMY_TEST_CROSS === "true",
+  })
     .then((f) => {
       setInterval(() => f.economy.tick(), 1000).unref();
       console.log("LOCAL isolated economy fixture: " + f.base + "/test/shell");

@@ -66,6 +66,8 @@ function configuration(env = process.env, now = Date.now()) {
     blockers.push("BUDGET_UNCONFIGURED");
   return {
     ...SERVICE,
+    searchProfile: require("./search/profile").profile(env),
+    scope: require("./search/profile").profile(env) ? require("./search/profile").SCOPE : SERVICE.scope,
     enabled: !blockers.length,
     blockers: [...new Set(blockers)],
     plans,

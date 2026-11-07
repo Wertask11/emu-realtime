@@ -81,7 +81,7 @@ function fixture(options = {}) {
     candidates: async () => (options.empty ? [] : [source]),
     revalidate: async (a, g, r) => r,
   };
-  const fetcher = async (url) => {
+  const fetcher = async (url, requestOptions = {}) => {
     if (
       options.providerTimeout &&
       (options.failureStage === "countTokens"
@@ -98,6 +98,8 @@ function fixture(options = {}) {
         : url.endsWith(":generateContent"))
     )
       return { ok: false, status: options.providerStatus };
+    if (url.endsWith(":countTokens") && options.onCount)
+      await options.onCount();
     if (url.endsWith(":countTokens"))
       return {
         ok: true,
@@ -122,7 +124,9 @@ function fixture(options = {}) {
                 parts: [
                   {
                     text: JSON.stringify(
-                      options.invalidOutput || {
+                      (options.providerReply
+                        ? options.providerReply(JSON.parse(requestOptions.body))
+                        : options.invalidOutput) || {
                         matches: [{ key: "s0", evidence: "summary" }],
                       },
                     ),
