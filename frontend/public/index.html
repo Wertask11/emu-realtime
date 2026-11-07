@@ -2760,6 +2760,28 @@ body.paypay-mode #pp-post-fab {
 /* 知識を読む（11/7）：右上の冷蔵庫くんとプロフィールは、知識を読むの左の列（＋知識を届けるの下）へ移した。
    この画面のあいだだけ右上から外す（ほかの画面は今までどおり右上）。 */
 body.emu-knowledge-open #emuHeaderProfile, body.emu-knowledge-open #emuHeaderReizo { display:none !important; }
+/* 冷蔵庫くんの窓（11/7・reizo-float.js）：上の帯をつかんで動かせる。指でも動かせるよう、帯の上ではスクロールしない */
+.emu-float-handle { cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; }
+.emu-float-handle:focus-visible { outline:2px solid #f08300; outline-offset:-2px; }
+html.emu-float-dragging, html.emu-float-dragging * { cursor:grabbing !important; user-select:none !important; }
+html.emu-float-dragging iframe { pointer-events:none; }
+#rk-tour .rk-panel:not(.rk-choice) .rk-header.emu-float-handle { cursor:auto; touch-action:auto; }
+/* 冷蔵庫くんに頼む（/economy/）は、画面いっぱいではなく窓で出す。ほかの小部屋は今までどおり画面いっぱい */
+.sp-room-float-bar { display:none; }
+body.sp-room-open.sp-room-float #spRoomPage {
+  inset:auto; width:min(460px, calc(100vw - 16px)); height:min(720px, calc(100dvh - 96px));
+  display:flex; flex-direction:column; overflow:hidden; border-radius:14px;
+  border:1px solid rgba(212,168,67,.35); box-shadow:0 18px 50px rgba(0,0,0,.35); background:#fff;
+}
+body.sp-room-open.sp-room-float .sp-room-float-bar {
+  display:flex; align-items:center; gap:9px; flex:none; height:44px; padding:0 4px 0 12px;
+  background:#1a1208; color:#D4A843; font-weight:700; font-size:14px;
+}
+.sp-room-float-bar img { width:26px; height:26px; border-radius:50%; object-fit:cover; }
+.sp-room-float-bar span { flex:1; min-width:0; }
+.sp-room-float-close { border:0; background:transparent; color:#D4A843; width:40px; height:40px; font-size:16px; cursor:pointer; border-radius:8px; }
+.sp-room-float-close:hover { background:rgba(212,168,67,.15); }
+body.sp-room-open.sp-room-float #spRoomFrame { flex:1; height:auto; min-height:0; }
 /* 知識を読む・知識を探す・知識を試す（11/7）：上の見出しと説明の一文を出さず、空いた分を詰める。
    パソコン（左にタブ列がある幅）は見出しの行ごと外す。タブレットは行き来に使うタブ列だけ残す。スマホはもともと出さない。 */
 body.emu-knowledge-open #emuTodayHome > .eth-topbar > div:first-child,
@@ -4013,6 +4035,7 @@ html, body { -webkit-tap-highlight-color: rgba(0,0,0,0); }
   <script src="/emu-analytics.js"></script>
 <link rel="stylesheet" href="/emu-theme.css">
 <script src="/economy/entry.js" defer></script>
+<script src="/reizo-float.js" defer></script><!-- 冷蔵庫くんの窓を本文の近くに出し、つかんで動かせるようにする（11/7） -->
 </head>
 <body>
 
@@ -15640,7 +15663,10 @@ function toggleAccountMenu(e, anchor) {
   const frame = btn.ownerDocument.defaultView.frameElement;
   const offset = frame ? frame.getBoundingClientRect() : {left:0,top:0};
   menu.style.top = Math.max(8, Math.min(rect.bottom + offset.top + 8, innerHeight - 160)) + 'px';
-  menu.style.right = Math.max(8, Math.min(innerWidth - rect.right - offset.left, innerWidth - 248)) + 'px';
+  /* 右端はボタンの右端にそろえる。innerWidth はスクロールバーの幅を含むので、その分（約15px）左に寄っていた（11/7）。
+     position:fixed の right はスクロールバーの手前から測るので、スクロールバーを除いた幅で計算する。 */
+  const vw = document.documentElement.clientWidth || innerWidth;
+  menu.style.right = Math.max(8, Math.min(vw - rect.right - offset.left, vw - 248)) + 'px';
   menu.style.maxHeight = 'calc(100dvh - ' + (parseFloat(menu.style.top) + 12) + 'px)';
   const name = localStorage.getItem('ches_name') || '';
   const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
