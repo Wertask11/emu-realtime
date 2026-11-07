@@ -25881,7 +25881,7 @@ function closeBadgePanel() {
   // Firebase 本体と Firestore 機能を読み込む
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
-    getFirestore, initializeFirestore, collection, addDoc, getDocs, query, orderBy, limit, startAfter, onSnapshot,
+    getFirestore, initializeFirestore, collection, addDoc, getDocs, query, orderBy, limit, startAfter, startAt, onSnapshot,
     doc, updateDoc, setDoc, deleteDoc, increment, where, writeBatch,
     arrayUnion, getDoc, runTransaction, getCountFromServer
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -25968,7 +25968,7 @@ import {
     };
   };
   window.fbLib = {
-    collection, getDocs, query, orderBy, limit, startAfter, onSnapshot,
+    collection, getDocs, query, orderBy, limit, startAfter, startAt, onSnapshot,
     doc, increment, where, arrayUnion, getDoc, runTransaction, getCountFromServer,
     signInAnonymously,
     addDoc:    _spAfterWrite(addDoc),
@@ -28688,38 +28688,108 @@ async function sendEmuFeedback() {
   function writeLocalKnowledgeDrafts(items) {
     localStorage.setItem(knowledgeDraftKey(), JSON.stringify(items));
   }
-  async function readKnowledgeDrafts(account) {
-    if (!account || !window.db || !window.fbLib) return readLocalKnowledgeDrafts();
+  /* LAB-04（11/7）：下書きの一覧は30件ずつ読む。続きは「もっと見る」（cursor）で開く。
+     前は limit(30) で読んだ30件だけを出していて、31件目からは開けなかった（消えてはいない）。
+     並び順は文書のIDで固定する（savedAt で並べるには複合索引が要り、savedAt の無い古い下書きが
+     一覧から落ちるため）。読み込んだ分は、画面では新しく保存した順に並べる。 */
+  const KNOWLEDGE_DRAFT_PAGE = 30;
+  function _emuDraftOwnerFilter(account) {
+    /* 下書きも両方の名義から（もう片方の名義で保存したものが見えなくならないように） */
+    const mine = emuAliasesNow().filter(function (a) { return a; });
+    return mine.length > 1 && mine.indexOf(account) >= 0
+      ? window.fbLib.where('owner', 'in', mine.slice(0, 10)) : window.fbLib.where('owner', '==', account);
+  }
+  async function readKnowledgeDraftPage(account, cursor) {
+    const parts = [window.fbLib.collection(window.db, 'knowledge_drafts'), _emuDraftOwnerFilter(account), window.fbLib.orderBy('__name__')];
+    if (cursor) parts.push(window.fbLib.startAfter(String(cursor)));
+    parts.push(window.fbLib.limit(KNOWLEDGE_DRAFT_PAGE + 1));
+    const snap = await window.fbLib.getDocs(window.fbLib.query(...parts));
+    const docs = snap.docs.slice(0, KNOWLEDGE_DRAFT_PAGE);
+    const items = docs.map(d => ({ id:d.id, ...d.data(), source:'emu' }));
+    return { items, next: snap.docs.length > KNOWLEDGE_DRAFT_PAGE && docs.length ? docs[docs.length - 1].id : null };
+  }
+  /* 保存できる上限。Rules（libraryLimitOf）と同じ：見学1件・light 30件・plus 以上（公式パスを含む）1,000件。
+     Knowledge Lab の下書きも同じ枠（plan_counts.drafts）を使う。 */
+  function emuLibraryCap() {
+    return emuHasPlan('plus') ? 1000 : (emuHasPlan('light') ? 30 : 1);
+  }
+  window.emuLibraryCap = emuLibraryCap;
+  /* いま使っている枠（通常の下書き＋Knowledge Lab の下書き）。読めないときは null。 */
+  async function readLibraryUsed() {
     try {
-      const q = window.fbLib.query(
-        window.fbLib.collection(window.db, 'knowledge_drafts'),
-        /* 下書きも両方の名義から（もう片方の名義で保存したものが見えなくならないように） */
-        (function () {
-          const mine = emuAliasesNow().filter(function (a) { return a; });
-          return mine.length > 1 && mine.indexOf(account) >= 0
-            ? window.fbLib.where('owner', 'in', mine.slice(0, 10)) : window.fbLib.where('owner', '==', account);
-        })(),
-        window.fbLib.limit(30)
-      );
-      const snap = await window.fbLib.getDocs(q);
-      const items = [];
-      snap.forEach(docSnap => items.push({ id:docSnap.id, ...docSnap.data() }));
-      if (!items.length) {
-        const localItems = readLocalKnowledgeDrafts();
-        for (const draft of localItems.slice(0,30)) {
-          const ref = await window.fbLib.addDoc(window.fbLib.collection(window.db, 'knowledge_drafts'), {
+      await emuEnsureMembershipSubject();
+      const snap = await window.fbLib.getDoc(_emuCountsRef());
+      return snap.exists() ? Math.max(0, Number(snap.data().drafts) || 0) : 0;
+    } catch (e) { return null; }
+  }
+  async function countKnowledgeDrafts(account) {
+    try {
+      const r = await window.fbLib.getCountFromServer(window.fbLib.query(window.fbLib.collection(window.db, 'knowledge_drafts'), _emuDraftOwnerFilter(account)));
+      return r.data().count;
+    } catch (e) { return null; }
+  }
+  /* LAB-06（11/7）：端末に残っている古い下書きを、クラウドへ移す。
+     前は addDoc だけで書いていて、今の Rules（枠の数 plan_counts を同じ処理で1つ増やす）に断られ、
+     そのうえ端末の原本を消していた（失敗しても、その場では分からなかった）。
+     いまは1件ずつ、下書きと枠の数を同じ一括処理で書く。同じ下書きは、端末のIDから決めた同じ文書名に書くので、
+     やり直しても二重にならない（すでにあれば書かない）。移せた分だけ端末から消し、移せなかった分は残す。 */
+  async function importLocalKnowledgeDrafts(account) {
+    const localItems = readLocalKnowledgeDrafts();
+    if (!localItems.length) return 0;
+    await emuEnsureEntitlement();
+    await emuEnsureMembershipSubject();
+    const cap = emuLibraryCap();
+    let used = await readLibraryUsed();
+    const left = [];
+    let moved = 0;
+    for (const draft of localItems) {
+      const localId = String(draft.id || '');
+      if (!/^[0-9]{1,20}$/.test(localId) || (used !== null && used >= cap)) { left.push(draft); continue; }
+      const ref = window.fbLib.doc(window.db, 'knowledge_drafts', 'local-' + String(account).toLowerCase().slice(2, 14) + '-' + localId);
+      try {
+        /* まだ無い文書を getDoc で読むと Rules（持ち主の確認）に断られるので、名義で絞った一覧の中で探す
+           （文書名の == 指定も1件読みとして断られるため、文書名の順で その名前から1件だけ読む） */
+        const near = await window.fbLib.getDocs(window.fbLib.query(window.fbLib.collection(window.db, 'knowledge_drafts'),
+          _emuDraftOwnerFilter(account), window.fbLib.orderBy('__name__'), window.fbLib.startAt(ref.id), window.fbLib.limit(1)));
+        if (!near.docs.some(function (d) { return d.id === ref.id; })) {
+          const batch = window.fbLib.writeBatch(window.db);
+          batch.set(ref, {
             owner:account, title:String(draft.title||''), body:String(draft.body||''), tags:String(draft.tags||''),
             imageUrl:String(draft.imageUrl||''), savedAt:draft.savedAt || new Date().toISOString(), createdAt:new Date()
           });
-          items.push({ ...draft, id:ref.id, owner:account });
+          batch.set(_emuCountsRef(), { drafts: window.fbLib.increment(1), updatedAt: new Date() }, { merge:true });
+          await batch.commit();
+          if (used !== null) used++;
         }
-        if (localItems.length) localStorage.removeItem(knowledgeDraftKey());
+        moved++;
+      } catch (error) {
+        console.warn('端末の下書きをクラウドへ移せませんでした（端末に残します）:', error && (error.code || error.message));
+        left.push(draft);
       }
-      items.sort((a,b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
-      return items;
+    }
+    if (left.length) writeLocalKnowledgeDrafts(left); else localStorage.removeItem(knowledgeDraftKey());
+    return moved;
+  }
+  /* 1ページ目（配列）を返す。opts.page なら { items, next } を返す。 */
+  async function readKnowledgeDrafts(account, opts) {
+    opts = opts || {};
+    if (!account || !window.db || !window.fbLib) {
+      const local = readLocalKnowledgeDrafts();
+      return opts.page ? { items:local, next:null } : local;
+    }
+    try {
+      let page = await readKnowledgeDraftPage(account, opts.cursor);
+      if (!opts.cursor && !page.items.length && readLocalKnowledgeDrafts().length) {
+        if (await importLocalKnowledgeDrafts(account)) page = await readKnowledgeDraftPage(account);
+        const stillLocal = readLocalKnowledgeDrafts();
+        if (!page.items.length && stillLocal.length) page = { items:stillLocal, next:null };
+      }
+      page.items.sort((a,b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
+      return opts.page ? page : page.items;
     } catch (error) {
       console.warn('クラウド下書き取得失敗。端末保存を使用します:', error);
-      return readLocalKnowledgeDrafts();
+      const local = readLocalKnowledgeDrafts();
+      return opts.page ? { items:local, next:null } : local;
     }
   }
   /* いま持っている下書きの数。ルールがこの数を見て上限を判断する。
@@ -28736,16 +28806,14 @@ async function sendEmuFeedback() {
     /* マイライブラリーの上限（9/1から）。light は30件、plus 以上は1,000件。
        「無制限」にしないのは、荒らしや自動投稿で膨らむのを防ぐため。
        実際に止めるのは Firestore のルール。ここは先に知らせるためのもの。 */
-    const cap = emuHasPlan('plus') ? 1000 : 30;
-    try {
-      const now = await readKnowledgeDrafts(account);
-      if (Array.isArray(now) && now.length >= cap) {
-        const e = new Error('LIBRARY_FULL');
-        e.cap = cap;
-        throw e;
-      }
-    } catch (e) {
-      if (e && e.message === 'LIBRARY_FULL') throw e;
+    /* LAB-05（11/7）：上限は段で決める（見学1件・light 30件・plus 以上1,000件）。前は「plus 以上か、それ以外は30件」で、
+       見学の1件を数えていなかった。使っている数は、Knowledge Lab の下書きと共通の記録（plan_counts）で数える。 */
+    const cap = emuLibraryCap();
+    const used = await readLibraryUsed();
+    if (used !== null && used >= cap) {
+      const e = new Error('LIBRARY_FULL');
+      e.cap = cap;
+      throw e;
     }
     const draft = { title:String(payload.title||''), body:String(payload.body||''), tags:String(payload.tags||''), imageUrl:String(payload.imageUrl||''), savedAt:new Date().toISOString() };
     if (account && window.db && window.fbLib) {
@@ -29085,7 +29153,8 @@ async function sendEmuFeedback() {
         helpedCount:await countMyGoodPosts(account, !options.append),
         // 議論から生まれた「みんなの結論」。1ページ目にだけ添える。
         conclusions: options.append ? [] : await readDiscussionConclusions(),
-        canDraft:typeof isFreeOnlyUser === 'function' ? !isFreeOnlyUser() : false,
+        /* LAB-05：下書きの可否は、古い無料NFT（isFreeOnlyUser）ではなく段の枠で決める。見学でも1件は保存できる（Rules と同じ） */
+        canDraft:!!account,
         canSchedule:!!window.hasScheduleNFT,
         authors:knowledgeAuthorsKnown(authorAddrs)
       });
@@ -29177,6 +29246,27 @@ async function sendEmuFeedback() {
     if (knowledgeWatchStop) startKnowledgeWatch();
   });
 
+  /* Knowledge Lab の下書き・自分用（サーバーだけが読める置き場所）を、本人として API から30件ずつ読む。
+     本文は一覧に要る頭だけ。読めないときは null（「ない」とは言わない）。 */
+  async function readLabDraftPage(cursor) {
+    try {
+      const uid = window.auth?.currentUser?.uid;
+      if (!uid) return null;
+      const r = await fetch('/api/knowledge-lab/me/posts' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : ''), {
+        headers: await window.emuAuthHeaders(true, { interactive: false }), cache: 'no-store'
+      });
+      if (!r.ok || window.auth?.currentUser?.uid !== uid) return null;
+      const d = await r.json();
+      return {
+        items: (d.items || []).map(p => ({
+          id: String(p.id), title: String(p.title || ''), body: String(p.body || '').slice(0, 100),
+          visibility: p.visibility === 'private' ? 'private' : 'draft',
+          savedAt: p.updatedAt ? new Date(p.updatedAt).toISOString() : '', source: 'lab'
+        })),
+        next: d.next || null
+      };
+    } catch (e) { return null; }
+  }
   async function loadKnowledgePanel(kind) {
     const account = _emuAddress();
     try {
@@ -29190,7 +29280,18 @@ async function sendEmuFeedback() {
         createdAt: _emuTimestampMs(r.createdAt) ? new Date(_emuTimestampMs(r.createdAt)).toISOString() : ''
       }));
       posts.sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-      sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:{ posts, postsUnread: rows === null, drafts:await readKnowledgeDrafts(account) } });
+      /* LAB-04・下書きの表示統合（11/7）：通常の下書き（knowledge_drafts）と、Knowledge Lab の下書き・自分用
+         （knowledge_lab_private_posts）を、置き場所はそのままに同じ一覧で見せる。どちらも30件ずつで、続きは「もっと見る」。
+         置き場所（source）とIDを持たせ、編集はそれぞれの元の画面で開く。件数と、共通の枠（使っている数・上限）も出す。 */
+      const [draftPage, labPage, draftsTotal, used] = await Promise.all([
+        readKnowledgeDrafts(account, { page:true }), readLabDraftPage(null), countKnowledgeDrafts(account), readLibraryUsed()
+      ]);
+      sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:{
+        posts, postsUnread: rows === null,
+        drafts: draftPage.items, draftsNext: draftPage.next, draftsTotal,
+        labDrafts: labPage ? labPage.items : [], labDraftsNext: labPage ? labPage.next : null, labDraftsUnread: !labPage,
+        libraryUsed: used, libraryCap: emuLibraryCap()
+      } });
     } catch (error) {
       sendKnowledge({ type:'emu-knowledge-panel-data', kind, items:{ posts:[], drafts:[] } });
       sendKnowledge({ type:'emu-knowledge-error', error:error.message || 'データを取得できませんでした。' });
@@ -29283,6 +29384,21 @@ async function sendEmuFeedback() {
       await loadKnowledgePanel(message.kind);
       return;
     }
+    /* 下書きの続き（30件ずつ）。source は 'emu'（通常）か 'lab'（Knowledge Lab） */
+    if (message.type === 'emu-knowledge-more-drafts') {
+      const account = _emuAddress();
+      const source = message.source === 'lab' ? 'lab' : 'emu';
+      const page = source === 'lab'
+        ? await readLabDraftPage(String(message.cursor || ''))
+        : (account ? await readKnowledgeDrafts(account, { page:true, cursor:String(message.cursor || '') }) : null);
+      sendKnowledge({ type:'emu-knowledge-drafts-page', source, items: page ? page.items : [], next: page ? page.next : null, failed: !page });
+      return;
+    }
+    /* Knowledge Lab の下書きは、Knowledge Lab の編集画面で開く（置き場所が違うため） */
+    if (message.type === 'emu-knowledge-open-lab-draft' && message.draftId) {
+      window.openEmuKnowledgeLab?.('mine', { edit: String(message.draftId) });
+      return;
+    }
     /* 投稿を消す（11/2）。本人は自分の投稿、運営はどの投稿でも。消すのはサーバー
        （backend/post-audit.js）。だれが・いつ・どの端末から消したかが、運営だけの記録に残る。 */
     if (message.type === 'emu-knowledge-delete-post' && message.postId) {
@@ -29331,10 +29447,6 @@ async function sendEmuFeedback() {
     }
     if (message.type === 'emu-knowledge-draft') {
       const payload = message.payload || {};
-      if (typeof isFreeOnlyUser === 'function' && isFreeOnlyUser()) {
-        sendKnowledge({ type:'emu-knowledge-save-result', kind:'draft', requestId:message.requestId, ok:false, error:'下書きは有料パス限定です。' });
-        return;
-      }
       try {
         const account = _emuAddress();
         if (payload.draftId) await updateKnowledgeDraft(account, payload.draftId, payload);
@@ -29343,7 +29455,11 @@ async function sendEmuFeedback() {
         sendKnowledge({ type:'emu-knowledge-save-result', kind:'draft', requestId:message.requestId, ok:true, drafts:items });
         syncKnowledgeFrame();
       } catch (error) {
-        sendKnowledge({ type:'emu-knowledge-save-result', kind:'draft', requestId:message.requestId, ok:false, error:'下書きを保存できませんでした。容量をご確認ください。' });
+        const full = error && error.message === 'LIBRARY_FULL';
+        sendKnowledge({ type:'emu-knowledge-save-result', kind:'draft', requestId:message.requestId, ok:false,
+          error: full
+            ? '下書きは' + error.cap + '件まで保存できます（Knowledge Lab の下書きも含みます）。いらない下書きを消すと、また保存できます。'
+            : '下書きを保存できませんでした。容量をご確認ください。' });
       }
       return;
     }

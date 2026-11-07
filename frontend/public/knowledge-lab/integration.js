@@ -138,6 +138,21 @@
     const message = event.data,
       action = message.action;
     try {
+      /* 初投稿キャンペーン（11/7）：Knowledge Lab で初めて公開したときも、通常投稿と同じ知らせを出す。
+         前は通常投稿だけが知らせていたので、Lab で最初に投稿した人は 100 EMUER を受け取れず、
+         そのあと通常投稿をしても「初めてではない」と断られていた。
+         初めてかどうか・期間・本人の投稿かは、サーバー（/activity/first-post）が決める。
+         同じ人に二重に付かないことも、サーバーの記録（同じ鍵）と画面側の控え（settled）で守る。 */
+      if (action === "published" && validId(message.postId)) {
+        const address = typeof window._emuAddress === "function" ? window._emuAddress() : "";
+        if (address)
+          window.dispatchEvent(
+            new CustomEvent("emu-post-published", {
+              detail: { postId: message.postId, address, surface: "lab" },
+            }),
+          );
+        return;
+      }
       if (action === "membership") {
         // A separate existing account overlay preserves the Lab frame and inputs.
         window.accountGo("plan");

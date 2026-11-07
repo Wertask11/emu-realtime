@@ -60,16 +60,36 @@
   let savedNoteSnapshot = noteSnapshot(), noteEditorGeneration = 0;
   function noteSaved() { savedNoteSnapshot = noteSnapshot(); }
   const noteDirty = () => noteSnapshot() !== savedNoteSnapshot;
+  /* LAB-03（11/7）：経験知の入力画面も、保存していない内容を確認なしで捨てない。
+     前は × や Esc で閉じると、そのまま消えて、開き直すと空欄だった。
+     研究ノートと同じく、本文を localStorage には置かない（画面の中だけで持つ）。 */
+  function postSnapshot() {
+    if (!$("#editorDialog")?.open) return "";
+    const fields = [...document.querySelectorAll('#postForm input,#postForm textarea,#postForm select')]
+      .map(el => [el.id || el.name || el.value, el.type === 'checkbox' ? el.checked : el.value]);
+    return JSON.stringify(fields);
+  }
+  let savedPostSnapshot = "";
+  function postSaved() { savedPostSnapshot = postSnapshot(); }
+  const postDirty = () => !!$("#editorDialog")?.open && postSnapshot() !== savedPostSnapshot;
+  function closePostEditor() {
+    if (postDirty() && !confirm('保存していない経験知があります。破棄して閉じますか？ 保存する場合は「キャンセル」で戻ってください。')) return false;
+    savedPostSnapshot = "";
+    $("#editorDialog").close();
+    return true;
+  }
   window.EmuLabUnsaved = {
-    isDirty: noteDirty,
-    discard: noteSaved, // Identity changes must unload the previous user's input without a prompt.
+    isDirty: () => noteDirty() || postDirty(),
+    // Identity changes must unload the previous user's input without a prompt.
+    discard() { noteSaved(); if ($("#editorDialog")?.open) { $("#postForm").reset(); $("#editorDialog").close(); } savedPostSnapshot = ""; },
     canLeave() {
+      if (postDirty() && !closePostEditor()) return false;
       if (!noteDirty()) return true;
       if (!confirm('保存していない研究内容があります。破棄して閉じますか？ 保存する場合は「キャンセル」で戻ってください。')) return false;
       noteSaved(); return true;
     }
   };
-  window.addEventListener('beforeunload', e => { if (noteDirty()) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('beforeunload', e => { if (noteDirty() || postDirty()) { e.preventDefault(); e.returnValue = ''; } });
   const messages = {
     AI_DISABLED: "AIは現在停止しています。手動の研究機能を利用できます。",
     AI_SOURCE_CONSENT_REQUIRED:
@@ -676,6 +696,7 @@
       ? p.tags.join(",")
       : p?.tags || "";
     $("#postVisibility").value = p?.visibility || "draft";
+    postSubmitLabel();
     const lab = p?.knowledgeLab || {};
     $("#postAIConsent").checked = lab.aiUseConsent?.allowed === true;
     for (const key of [
@@ -690,6 +711,7 @@
         lab[key] || (key === "verification" ? "self-reported" : "");
     facetUI("#postFacets", lab.facets || p?.facets || {});
     $("#editorDialog").showModal();
+    postSaved(); // 開いた直後の内容を「保存済み」として覚える（ここから変えたら確認する）
     if (!p) measure("post_create_start", {surface:"lab"});
     $("#postTitle").focus();
   }
@@ -743,15 +765,29 @@
           auth: true,
           body: { ...payload, key: keyFor("post", payload) },
         });
-        if (payload.visibility === "public" && (!p || p.visibility !== "public")) measure("post_publish", {surface:"lab"}, result.id);
+        if (payload.visibility === "public" && (!p || p.visibility !== "public")) {
+          measure("post_publish", {surface:"lab"}, result.id);
+          // 初投稿キャンペーンの知らせ（通常投稿と同じ。初めてかどうかはサーバーが決める）
+          if (parent !== window)
+            parent.postMessage({ type: "emu-lab-action", action: "published", postId: result.id }, location.origin);
+        }
         else if (payload.visibility !== "public") measure("knowledge_lab_save", {kind:"draft"}, result.id + ":" + result.revision);
         state.post = await api("/posts/" + result.id, { auth: true });
         if (state.selected.has(result.id)) {
           state.selected.set(result.id, state.post);
           selected();
         }
+        savedPostSnapshot = "";
         $("#editorDialog").close();
-        status("経験知を保存しました。");
+        /* Claude 監査 P2-1：公開範囲ごとに言い分ける。下書きのまま「保存しました」だけだと、
+           公開されたと思って終わってしまう。 */
+        status(
+          payload.visibility === "public"
+            ? "公開しました。知識を読む・知識図書館に表示されます。"
+            : payload.visibility === "private"
+              ? "自分用として保存しました（公開されていません）。"
+              : "下書きに保存しました（まだ公開されていません）。マイライブラリーから続きを書いて公開できます。",
+        );
         await search();
       } finally {
         submit.disabled = false;
@@ -2187,7 +2223,16 @@
     .forEach((b) => bindAsync(b, () => view(b.dataset.view)));
   document
     .querySelectorAll("[data-close]")
-    .forEach((b) => (b.onclick = () => b.closest("dialog").close()));
+    .forEach((b) => (b.onclick = () => {
+      const d = b.closest("dialog");
+      if (d?.id === "editorDialog") closePostEditor();
+      else d.close();
+    }));
+  // Esc で閉じるときも同じ確認をする
+  $("#editorDialog")?.addEventListener("cancel", (e) => {
+    e.preventDefault();
+    closePostEditor();
+  });
   $("#searchForm").addEventListener("submit", (e) => {
     e.preventDefault();
     run(() => search());
@@ -2341,3 +2386,18 @@
   }
   run(init);
 })();
+
+/* P2-1（11/7）：保存ボタンの文字を公開範囲に合わせる。下書きのまま「公開した」と思い込まないように。 */
+function postSubmitLabel() {
+  const b = document.getElementById("postSubmit");
+  const v = document.getElementById("postVisibility");
+  if (!b || !v) return;
+  b.textContent =
+    v.value === "public"
+      ? "公開する"
+      : v.value === "private"
+        ? "自分用として保存"
+        : "下書きに保存（公開しない）";
+}
+document.getElementById("postVisibility")?.addEventListener("change", postSubmitLabel);
+postSubmitLabel();
