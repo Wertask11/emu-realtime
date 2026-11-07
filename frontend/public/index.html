@@ -25816,6 +25816,7 @@ function openMarketplace() {
 // 新しい知識iframeは表示時・投稿/反応時に必要な件数だけ同期する。
 
 // 予約投稿の反映確認は「知識を読む」を実際に表示しているタブだけで行う。
+// 11/7（オーナー）：3分ごと → 30分ごとに（Firestore の1日の読み取り枠を使い切っていたため）。新着の先頭は見張り（onSnapshot）でも気づける
 setInterval(() => {
   if (document.hidden || !document.body.classList.contains('emu-knowledge-open')) return;
   const frame = document.getElementById('emuKnowledgeFrame');
@@ -25823,7 +25824,7 @@ setInterval(() => {
   /* 裏の読み直し。通信が切れていても画面にエラーを出さない（quiet） */
   if (typeof window.syncKnowledgeFrame === 'function') window.syncKnowledgeFrame({ append:false, quiet:true });
   else refreshAllPosts();
-}, 3 * 60 * 1000);
+}, 30 * 60 * 1000);
 
 // ════════ 秋モーダル（投稿を公開したあとの演出） ════════
 document.body.insertAdjacentHTML('beforeend', `
@@ -27102,18 +27103,14 @@ row.appendChild(medal);
   // ══════════════════════════════════════════
   // 初回ロード・定期更新
   // ══════════════════════════════════════════
+  /* 11/7（オーナー）：5分ごとの読み直しはやめた（Firestore の1日の読み取り枠を使い切っていたため）。
+     いまの画面ではランキングを出していないので、見えているときだけ最初に1回読む */
   setTimeout(function() {
-    if (document.getElementById('rankingPanel')) {
+    const panel = document.getElementById('rankingPanel');
+    if (panel && panel.getClientRects().length) {
       loadRanking('good_post');
     }
   }, 1500);
- 
-  setInterval(function() {
-    _rankCache = {};
-    if (document.getElementById('rankingPanel')) {
-      loadRanking(_rankType);
-    }
-  }, 5 * 60 * 1000);
  
 })(); // IIFE で変数汚染を防ぐ
 </script>
