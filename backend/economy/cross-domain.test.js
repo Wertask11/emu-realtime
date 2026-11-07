@@ -382,3 +382,13 @@ test("private scope changes invalidate the consent fingerprint, and past due dat
     null,
   );
 });
+
+test("provider receives per-source allowed actions without original IDs", async () => {
+  const f=await crossFixture();
+  const j=await f.economy.service.submit(f.a,await f.request("自分の経験を知識として届けたい"));await f.economy.tick();
+  assert.equal((await f.economy.service.view(f.a,j.id)).state,"completed");
+  const data=f.payloads.find(p=>p.contents);
+  const body=JSON.parse(data.contents[0].parts[0].text);
+  assert.ok(body.sources.every(s=>Array.isArray(s.allowedActions)&&!Object.hasOwn(s,"id")));
+  for(const s of body.sources){if(s.kind==='guild')assert.deepEqual(s.allowedActions,['review_activity']);if(s.kind==='knowledge_lab')assert.deepEqual(s.allowedActions,['read_source']);}
+});
