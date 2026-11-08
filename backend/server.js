@@ -10,7 +10,7 @@ const cors = require("cors");
 const { corsOptions } = require("./cors-policy");
 const ethers = require("ethers");
 const cron = require("node-cron");
-const { ensureVerifiedAccount, accountRouter, activityRouter, awardRankingBadge, noteQuotaError } = require("./verified-platform");
+const { ensureVerifiedAccount, accountRouter, activityRouter, awardRankingBadge, noteQuotaError, quotaMaintenance } = require("./verified-platform");
 
 // =====================
 // App / Server
@@ -260,6 +260,11 @@ async function schoolParkEntryStatus(req, res) {
       publicStartsAt: new Date(SCHOOLPARK_PUBLIC_AT).toISOString()
     });
   } catch (error) {
+    // Firestore の1日の上限に達したとき：「先行公開」ではなく「メンテナンス中」を出してもらう（verified-platform.js）
+    if (noteQuotaError(error)) {
+      const { retryAt } = quotaMaintenance();
+      return res.status(503).json({ error: "SERVICE_MAINTENANCE", retryAt });
+    }
     const invalidToken = /token|auth|credential|jwt/i.test(String(error && error.message || ""));
     return res.status(invalidToken ? 401 : 500).json({ error: invalidToken ? "INVALID_AUTH_TOKEN" : "ACCESS_CHECK_FAILED" });
   }
