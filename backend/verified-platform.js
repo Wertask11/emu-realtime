@@ -52,8 +52,42 @@ async function ensureVerifiedAccount(db, decoded) {
   });
 }
 
+/* 11/8：Firestore の1日の上限（無料枠）を使い切ったときは「メンテナンス中」と返す。
+
+   上限に達すると、読み書きは RESOURCE_EXHAUSTED（code 8）で断られる。
+   前はここで ACCOUNT_UNAVAILABLE を返していたので、画面は保存済みの控えで入場を続け、
+   何も読めないまま真っ白になっていた。
+
+   上限が戻るのは米国太平洋時間の0時（日本時間の夕方）。その時刻を retryAt で返す。
+   覚えるのはこのプロセスの中だけ（DB は読まない）。再起動すれば、次の失敗でまた気づく。 */
+const quotaState = { until: 0 };
+function isQuotaError(error) {
+  return !!error && (error.code === 8 || error.code === 'resource-exhausted'
+    || /RESOURCE_EXHAUSTED|quota exceeded/i.test(String(error.message || '')));
+}
+function nextQuotaReset(now = Date.now()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles', hourCycle: 'h23',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(now)).map(p => [p.type, p.value]));
+  const sinceMidnight = ((Number(parts.hour) % 24) * 3600 + Number(parts.minute) * 60 + Number(parts.second)) * 1000 + (now % 1000);
+  return now - sinceMidnight + 86400000;
+}
+function noteQuotaError(error, now = Date.now()) {
+  if (!isQuotaError(error)) return false;
+  quotaState.until = Math.max(quotaState.until, nextQuotaReset(now));
+  return true;
+}
+function quotaMaintenance(now = Date.now()) {
+  return now < quotaState.until ? { maintenance: true, retryAt: quotaState.until } : { maintenance: false, retryAt: null };
+}
+
 function accountRouter({ db, firebaseAdmin, onVerified = () => {} }) {
   const router = express.Router();
+  // 画面が「メンテナンス中」を出すかどうかを聞く。DB は読まない。
+  router.get('/status', (req, res) => {
+    res.set('Cache-Control', 'no-store').json(quotaMaintenance());
+  });
   router.post('/account', async (req, res) => {
     if (!db || !firebaseAdmin) return res.status(503).json({ error: 'AUTH_UNAVAILABLE' });
     const header = String(req.headers.authorization || '');
@@ -67,6 +101,7 @@ function accountRouter({ db, firebaseAdmin, onVerified = () => {} }) {
       return res.json({ account });
     } catch (error) {
       if (['WALLET_LOGIN_REQUIRED', 'ADDRESS_MISMATCH', 'INVALID_UID'].includes(error.message)) return res.status(403).json({ error: error.message });
+      if (noteQuotaError(error)) return res.status(503).json({ error: 'SERVICE_MAINTENANCE', retryAt: quotaState.until });
       return res.status(503).json({ error: 'ACCOUNT_UNAVAILABLE' });
     }
   });
@@ -136,4 +171,4 @@ function activityRouter({ db, requireFirebaseUser }) {
   });
   return router;
 }
-module.exports = { deriveAddress, ensureVerifiedAccount, accountRouter, awardRankingBadge, activityRouter };
+module.exports = { deriveAddress, ensureVerifiedAccount, accountRouter, awardRankingBadge, activityRouter, noteQuotaError, quotaMaintenance, nextQuotaReset };
