@@ -4404,6 +4404,97 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
   </div>
 </div>
 
+<!-- 11/8：Firestore の1日の上限に達したときのメンテナンス表示。
+     上限に達すると、ログインはできても何も読めず、画面が真っ白になっていた。
+     サーバーが SERVICE_MAINTENANCE（/api/auth/account・/api/auth/status）を返したら、これを出す。
+     上限が戻る時刻（日本時間の夕方）を過ぎたら、自動で読み込み直す。 -->
+<div id="emuMaintenance" role="alertdialog" aria-modal="true" aria-labelledby="emuMaintenanceTitle" hidden>
+  <div class="emu-mt-card">
+    <div class="emu-mt-icon" aria-hidden="true">🛠️</div>
+    <h1 id="emuMaintenanceTitle">ただいまメンテナンス中です</h1>
+    <p>アクセスが集中したため、一時的にログインや読み込みができなくなっています。</p>
+    <p class="emu-mt-when" id="emuMaintenanceWhen">本日夕方ごろに再開する予定です。</p>
+    <p class="emu-mt-note">これまでの投稿・EMUER・パスポートなどのデータは消えていません。<br>再開まで、少しだけお待ちください。</p>
+    <button type="button" id="emuMaintenanceReload">もう一度読み込む</button>
+  </div>
+</div>
+<style>
+#emuMaintenance{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;
+  padding:16px;background:#f4f6fb;font-family:'Noto Sans JP','Hiragino Sans',sans-serif;color:#1f2937}
+#emuMaintenance[hidden]{display:none}
+#emuMaintenance .emu-mt-card{box-sizing:border-box;width:min(440px,100%);background:#fff;border-radius:20px;
+  padding:32px 24px 28px;text-align:center;box-shadow:0 10px 40px rgba(31,41,55,.10)}
+#emuMaintenance .emu-mt-icon{font-size:2.6rem;line-height:1;margin-bottom:14px}
+#emuMaintenance h1{font-size:1.25rem;margin:0 0 14px;font-weight:700}
+#emuMaintenance p{font-size:.92rem;line-height:1.8;margin:0 0 10px}
+#emuMaintenance .emu-mt-when{font-weight:700;color:#0f766e;background:#ecfdf5;border-radius:12px;padding:10px 12px;margin:14px 0}
+#emuMaintenance .emu-mt-note{font-size:.82rem;color:#6b7280}
+#emuMaintenance button{margin-top:12px;border:0;border-radius:999px;padding:12px 24px;font-size:.95rem;font-weight:700;
+  color:#fff;background:linear-gradient(135deg,#14b8a6,#6366f1);cursor:pointer}
+body.emu-maintenance-open{overflow:hidden}
+</style>
+<script>
+(function () {
+  'use strict';
+  var STATUS_URL = 'https://emu-realtime.onrender.com/api/auth/status';
+  var reloadTimer = null, checking = null;
+  function when(retryAt) {
+    var at = Number(retryAt);
+    if (!at || !isFinite(at)) return '本日夕方ごろに再開する予定です。';
+    var time = '';
+    try {
+      time = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', hour: 'numeric', minute: '2-digit' }).format(new Date(at));
+    } catch (e) { return '本日夕方ごろに再開する予定です。'; }
+    var sameDay = false;
+    try {
+      var d = new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'numeric', day: 'numeric' });
+      sameDay = d.format(new Date(at)) === d.format(new Date());
+    } catch (e) {}
+    return (sameDay ? '本日 ' : '明日 ') + time + ' ごろ（日本時間）に再開する予定です。';
+  }
+  /* 出す。ログイン中の覆い・ログイン画面は隠す（後ろで動いても見えないように）。 */
+  function show(retryAt) {
+    var el = document.getElementById('emuMaintenance');
+    if (!el) return;
+    var label = document.getElementById('emuMaintenanceWhen');
+    if (label) label.textContent = when(retryAt);
+    el.hidden = false;
+    document.body.classList.add('emu-maintenance-open');
+    try { if (typeof _cancelSpLoadingOverlay === 'function') _cancelSpLoadingOverlay(); } catch (e) {}
+    try { document.documentElement.classList.remove('ches-resuming'); } catch (e) {}
+    try { window._chesBusy = false; } catch (e) {}
+    /* 再開の時刻を少し過ぎたら、自動で読み込み直す（開いたままの画面を取り残さない）。 */
+    var at = Number(retryAt);
+    if (reloadTimer) clearTimeout(reloadTimer);
+    if (at && isFinite(at) && at > Date.now()) {
+      var wait = Math.min(at - Date.now() + 2 * 60 * 1000, 2147483000);
+      reloadTimer = setTimeout(function () { location.reload(); }, wait);
+    }
+  }
+  /* ログインがうまくいかなかったときに、サーバーへ「メンテナンス中か」を聞く。DB は読まない。 */
+  function check() {
+    if (checking) return checking;
+    checking = (async function () {
+      try {
+        var controller = typeof AbortController === 'function' ? new AbortController() : null;
+        var t = controller ? setTimeout(function () { controller.abort(); }, 8000) : null;
+        var r = await fetch(STATUS_URL, { cache: 'no-store', signal: controller ? controller.signal : undefined });
+        if (t) clearTimeout(t);
+        var data = await r.json();
+        if (r.ok && data && data.maintenance) { show(data.retryAt); return true; }
+      } catch (e) {}
+      return false;
+    })().finally(function () { checking = null; });
+    return checking;
+  }
+  document.addEventListener('click', function (event) {
+    if (event.target && event.target.id === 'emuMaintenanceReload') location.reload();
+  });
+  window.emuShowMaintenance = show;
+  window.emuCheckMaintenance = check;
+})();
+</script>
+
 <!-- 先行公開ブロック画面（paid_users未登録ユーザー用） -->
 <div id="paidOnlyScreen" style="display:none;position:fixed;inset:0;z-index:2000;
   background:linear-gradient(160deg,#0d1117 0%,#131a24 50%,#0a0f18 100%);
@@ -6870,7 +6961,11 @@ async function _emuEnsureServerAccount(user) {
     }
     var result = await response.json();
     if (window.auth && window.auth.currentUser?.uid !== user.uid) throw new Error('ACCOUNT_CHANGED');
-    if (!response.ok || !result.account) throw new Error(result.error || 'ACCOUNT_UNAVAILABLE');
+    if (!response.ok || !result.account) {
+      var failure = new Error(result.error || 'ACCOUNT_UNAVAILABLE');
+      if (result.retryAt) failure.retryAt = result.retryAt;
+      throw failure;
+    }
     _emuAccountVerified.set(user.uid, result.account);
     return result.account;
   })();
@@ -28396,6 +28491,8 @@ async function sendEmuFeedback() {
     var logo = document.getElementById("logoScreen"); if (logo) logo.style.display = "none";
     var ws = document.getElementById("walletScreen"); if (ws) ws.style.display = "flex";
     statusMsg(message || "ログイン情報を確認できませんでした。もう一度お試しください。", true);
+    /* ログインできなかった理由が、Firestore の1日の上限（メンテナンス中）なら、それを出す（11/8）。 */
+    if (typeof window.emuCheckMaintenance === "function") window.emuCheckMaintenance();
   }
 
   function cachedAccountFor(user) {
@@ -28469,6 +28566,14 @@ async function sendEmuFeedback() {
       await CHES.enterSchoolPark(account, provider);
     } catch (e) {
       console.error("[CHES] 共通フロー失敗:", e);
+      /* Firestore の1日の上限に達している（11/8）。保存済みの控えで入場すると、
+         何も読めないまま画面が真っ白になる。入場せずに「メンテナンス中」を出す。 */
+      if (e && e.message === "SERVICE_MAINTENANCE" && typeof window.emuShowMaintenance === "function") {
+        cancelLoading();
+        window._chesBusy = false;
+        window.emuShowMaintenance(e.retryAt);
+        return;
+      }
       var cached = cachedAccountFor(user);
       if (cached) {
         console.warn("[CHES] アカウント取得失敗のため保存済みセッションで復帰します");
@@ -28782,7 +28887,7 @@ async function sendEmuFeedback() {
     /* spDaoPage を入れておくこと。ログイン後の着地は SchoolPark で、
        そのときハブは隠れている。ここに無いと「画面が1枚も出ていない」と
        判定され、18秒後にログイン画面へ戻されてしまう。 */
-    var ids = ["logoScreen", "walletScreen", "mainApp", "maintenanceScreen", "spDaoPage"];
+    var ids = ["logoScreen", "walletScreen", "mainApp", "maintenanceScreen", "spDaoPage", "emuMaintenance"];
     var hasVisibleScreen = ids.some(function (id) {
       var el = document.getElementById(id);
       return el && window.getComputedStyle(el).display !== "none";

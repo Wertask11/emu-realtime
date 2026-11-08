@@ -10,7 +10,7 @@ const cors = require("cors");
 const { corsOptions } = require("./cors-policy");
 const ethers = require("ethers");
 const cron = require("node-cron");
-const { ensureVerifiedAccount, accountRouter, activityRouter, awardRankingBadge } = require("./verified-platform");
+const { ensureVerifiedAccount, accountRouter, activityRouter, awardRankingBadge, noteQuotaError } = require("./verified-platform");
 
 // =====================
 // App / Server
@@ -1831,6 +1831,8 @@ app.post("/api/auth/line", async (req, res) => {
     });
   } catch (e) {
     console.error("❌ /api/auth/line 失敗:", e);
+    // Firestore の1日の上限に達したとき：画面に「メンテナンス中」を出してもらう（verified-platform.js）
+    if (noteQuotaError(e)) return res.status(503).json({ error: "SERVICE_MAINTENANCE" });
     return res.status(500).json({ error: "サーバーエラー" });
   }
 });
@@ -1975,6 +1977,8 @@ app.post("/api/auth/wallet", async (req, res) => {
     return res.json({ firebaseToken, uid, address: checksummed, chesAddress, schoolParkId });
   } catch (e) {
     console.error("❌ /api/auth/wallet 失敗:", e);
+    // Firestore の1日の上限に達したとき：画面に「メンテナンス中」を出してもらう（verified-platform.js）
+    if (noteQuotaError(e)) return res.status(503).json({ error: "SERVICE_MAINTENANCE" });
     return res.status(500).json({ error: "サーバーエラー" });
   }
 });
