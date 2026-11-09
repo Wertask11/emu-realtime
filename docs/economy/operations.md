@@ -1,5 +1,7 @@
 # EMUER経済圏：構成と第3工程の運用
 
+> 2026-11-09の最新公開状態：冷蔵庫くん Phase 3の全5作業をPlus/Pro向けに本番有効化。公式Quest20件・City11件のみ追加承認。元の11/14試験終了・5 EMUER・20/3/2・無料枠を維持。[全5作業の公開報告](phase3-full-release-20261109.md)、[本番証跡](phase3-full-production-20261109.json)を優先。下記の過去のOFF/3作業のみの記載は当時の履歴。新規Phase 3本番決済は未承認・未実施。
+
 Phase 3の実行・成果物保存の範囲、生成用途の個別許諾、API、停止/残条件は [Phase 3報告](phase3-report.md)。経済圏の第3工程と、AIエージェントのPhase 3を区別する。料金・試験期間は引き継ぐ。
 
 **最新運用状況（2026-11-09）：冷蔵庫くんに頼むPhase 2は許諾済み6領域19資料でPASS。Plus/Pro向け7日間試験の受付・workerは正常。既存1件の実Gemini・5 EMUER引落と過去2件の返却を原本照合済み。詳細は [最終検証報告](phase2-final-verification-20261109.md)、次工程は [Phase 3準備](phase3-preparation.md)。以下には過去工程の未確認/受付OFF時点の手順も含むため、現在の判定は最新報告を優先する。**
