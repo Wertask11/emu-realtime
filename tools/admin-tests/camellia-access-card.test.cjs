@@ -60,6 +60,15 @@ test('招待コードの一覧・作る・取り消す・招待制の切り替�
     assert.equal(await page.getAttribute('[data-invcopy]:has-text("リンクだけコピー")', 'data-invcopy'),
       'https://camellia-beta.vercel.app/?invite=K7QM2XPA&utm_source=invite&utm_campaign=instagram_1027', 'プロフィール欄などに貼るリンク');
 
+    assert.equal(await page.locator('[data-invqr]').count(), 1, '終わったコードには QR を出さない');
+    await page.addScriptTag({ path: path.join(root, 'frontend/public/vendor/qrcode/qrcode-generator-1.4.4.js') });
+    await page.click('[data-invqr="K7QM2XPA"]');
+    const qr = await page.textContent('#camInviteQr');
+    assert.ok(qr.includes('instagram_1027') && qr.includes('K7QM-2XPA') && qr.includes('カメラで読み取って'), 'QR の画面に配り先と8文字のコードを出す');
+    assert.equal(await page.locator('#camInviteQr [data-qr] svg').count(), 1, '招待リンクを QR にする');
+    await page.click('#camInviteQr [data-qrclose]');
+    assert.equal(await page.locator('#camInviteQr').count(), 0, '閉じると消える');
+
     await page.fill('#camInvLabel', 'LINE 営業');
     await page.click('#camInvCreate');
     assert.equal((await page.evaluate(() => window.calls)).some((c) => c[0].endsWith('/invites')), false, '書けない名前は送らない');
