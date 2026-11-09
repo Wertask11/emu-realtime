@@ -126,7 +126,7 @@
   }
   function q(sel){return document.querySelector(sel);}
   function show(msg,sug){var p=q('[data-proofread-panel]');if(!p)return;p.hidden=false;q('[data-proofread-msg]').textContent=msg;
-    q('[data-proofread-title]').textContent=sug&&sug.title?'タイトル案：'+sug.title:'';q('[data-proofread-body]').textContent=sug?sug.body:'';
+    q('[data-proofread-title]').textContent=(sug&&sug.title?'タイトル案：'+sug.title:'')+(sug&&sug.tags&&sug.tags.length?(sug.title?'\n':'')+'タグ案：'+sug.tags.join(', '):'');q('[data-proofread-body]').textContent=sug?sug.body:'';
     q('[data-proofread-body]').style.display=sug?'block':'none';q('[data-proofread-lab]').textContent=sug&&sug.lab?labSummary(sug.lab):'';q('[data-proofread-use]').style.display=sug?'inline-block':'none';
     q('[data-proofread-cancel]').textContent=sug?'やめる（今のままにする）':'閉じる';}
   function busy(on){var b=q('[data-proofread]');if(b){b.disabled=on;b.textContent=on?'🧊 冷蔵庫くんが読んでいます…':'🧊 冷蔵庫くんに整えてもらう';}}
@@ -144,6 +144,8 @@
       var b=q('#body'),ti=q('#title');
       if(b&&!b.readOnly){b.value=suggestion.body;b.dispatchEvent(new Event('input',{bubbles:true}));}
       if(ti&&!ti.readOnly&&!ti.value.trim()&&suggestion.title){ti.value=suggestion.title;ti.dispatchEvent(new Event('input',{bubbles:true}));}
+      /* タグも、空のときだけ入れる（11/9）。本人が書いたタグは上書きしない。 */
+      var tg=q('#tags');if(tg&&!tg.readOnly&&!tg.value.trim()&&suggestion.tags&&suggestion.tags.length){tg.value=suggestion.tags.join(', ');tg.dispatchEvent(new Event('input',{bubbles:true}));}
       applyLab(suggestion.lab);check();q('[data-proofread-panel]').hidden=true;suggestion=null;return;
     }
     if(t.closest('[data-proofread-cancel]')){q('[data-proofread-panel]').hidden=true;suggestion=null;}
@@ -154,7 +156,7 @@
     pending=null;busy(false);
     var left=typeof m.remaining==='number'?'（今日あと'+m.remaining+'回）':'';
     if(!m.ok){show(m.error||'うまく整えられなかったみたい🧊',null);return;}
-    suggestion={title:String(m.title||''),body:String(m.body||''),lab:m.lab&&typeof m.lab==='object'?m.lab:null};
+    suggestion={title:String(m.title||''),body:String(m.body||''),tags:Array.isArray(m.tags)?m.tags.map(String).slice(0,5):[],lab:m.lab&&typeof m.lab==='object'?m.lab:null};
     show('🧊 こう整えてみたよ'+(m.note?'：'+m.note:'')+left,suggestion);
   });
 })();

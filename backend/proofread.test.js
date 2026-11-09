@@ -54,7 +54,7 @@ test("空・長すぎる本文は送らない。無効のときは使えない",
 });
 
 test("AI の返事は JSON の本文だけを使う", () => {
-  assert.deepEqual(parseReply('```json\n{"title":"題","body":"本文です","note":"誤字"}\n```'), { title: "題", body: "本文です", note: "誤字", lab: null });
+  assert.deepEqual(parseReply('```json\n{"title":"題","body":"本文です","note":"誤字"}\n```'), { title: "題", body: "本文です", note: "誤字", tags: [], lab: null });
   assert.throws(() => parseReply("こんにちは"), /BAD_REPLY/);
   assert.throws(() => parseReply('{"title":"題","body":""}'), /BAD_REPLY/);
 });
@@ -90,4 +90,12 @@ test("分類の候補を送ると、サーバーは AI の選んだ分類を候�
     const plain = await s.post({ body: "本文" });
     assert.equal(plain.body.lab, null, "候補を送らなければ整理の下書きは返さない");
   } finally { await s.close(); }
+});
+
+test("タグ案：5個まで・# やカンマは外す・重複は1つ", () => {
+  const { cleanTags, parseReply } = require("./proofread");
+  assert.deepEqual(cleanTags(["#習慣", "朝時間", "朝時間", "小さく,始める", "音読", "会議", "6個目"]), ["習慣", "朝時間", "小さく始める", "音読", "会議"]);
+  assert.deepEqual(cleanTags("習慣、朝時間"), ["習慣", "朝時間"]);
+  assert.deepEqual(cleanTags(null), []);
+  assert.deepEqual(parseReply('{"body":"本文","tags":["音読","#会議"]}').tags, ["音読", "会議"]);
 });
