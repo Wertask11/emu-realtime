@@ -397,3 +397,69 @@ test("lost artifact-commit acknowledgement preserves saved work for settlement w
   assert.equal(f.calls(), 1);
   assert.equal(Object.keys(f.db._dump("emuer_v2_agent_artifacts")).length, 1);
 });
+
+test("expired/Free/Light membership blocks new work and artifact retrieval/editing without deleting saved data", async () => {
+  const f = await setup(),
+    { body } = await f.work("guild_plan"),
+    j = await f.economy.service.submit(f.a, body);
+  await f.economy.tick();
+  const original = f.entitlement.getEntitlement;
+  const second = await f.economy.service.quote(f.a, {
+    goal: "ギルド活動を準備したい",
+    taskType: "guild_plan",
+  });
+  for (const plan of ["guest", "light"]) {
+    f.entitlement.getEntitlement = async (uid, account, options) => {
+      assert.equal(options.fresh, true);
+      return { plan };
+    };
+    await assert.rejects(
+      () => f.economy.service.artifacts.view(f.a, j.id),
+      /SERVICE_NOT_ELIGIBLE/,
+    );
+    await assert.rejects(
+      () => f.economy.service.artifacts.list(f.a),
+      /SERVICE_NOT_ELIGIBLE/,
+    );
+    await assert.rejects(
+      () =>
+        f.economy.service.artifacts.edit(f.a, j.id, {
+          editConsent: true,
+          revision: 1,
+          title: "test",
+          content: "test",
+        }),
+      /SERVICE_NOT_ELIGIBLE/,
+    );
+    await assert.rejects(
+      () =>
+        f.economy.service.quote(f.a, {
+          goal: "ギルド活動",
+          taskType: "guild_plan",
+        }),
+      /SERVICE_NOT_ELIGIBLE/,
+    );
+    await assert.rejects(
+      () =>
+        f.economy.service.submit(f.a, {
+          ...body,
+          quoteId: second.id,
+          requestId: "new-work-request-00002",
+        }),
+      /SERVICE_NOT_ELIGIBLE/,
+    );
+  }
+  f.entitlement.getEntitlement = async () => ({ plan: "pro" });
+  assert.ok((await f.economy.service.artifacts.view(f.a, j.id)).content);
+  await f.economy.service
+    .ref("eligibility", hash(f.a.spid))
+    .set({ providerAllowed: false }, { merge: true });
+  await assert.rejects(
+    () => f.economy.service.artifacts.view(f.a, j.id),
+    /AI_AUDIENCE_NOT_VERIFIED/,
+  );
+  assert.ok(
+    (await f.economy.service.ref("artifacts", j.id).get()).data().content,
+  );
+  f.entitlement.getEntitlement = original;
+});

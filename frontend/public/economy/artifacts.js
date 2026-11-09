@@ -18,6 +18,22 @@
       $("artifactReferences").replaceChildren();
       $("artifactEditConsent").checked = false;
     }
+    function denyAccess(error) {
+      if (
+        ![
+          "SERVICE_NOT_ELIGIBLE",
+          "AI_AUDIENCE_NOT_VERIFIED",
+          "AUTH_REQUIRED",
+          "PASSPORT_REQUIRED",
+        ].includes(error.message)
+      )
+        return false;
+      reset();
+      notice(
+        "成果物の利用には、有効なPlus・ProプランとAI提供資格が必要です。保存データは削除していません。",
+      );
+      return true;
+    }
     function show(a) {
       current = a;
       $("artifactTitle").value = a.title;
@@ -34,7 +50,37 @@
           b = node("button", r.title + " →");
         b.type = "button";
         b.onclick = () => openTarget(r.target);
-        p.append(node("span", r.evidence), b);
+        p.append(node("span", r.evidence));
+        if (Number.isSafeInteger(r.facts?.priceEmuer))
+          p.append(node("small", "公開価格：" + r.facts.priceEmuer + " EMUER"));
+        if (Number.isSafeInteger(r.facts?.stockAvailable))
+          p.append(
+            node(
+              "small",
+              "確認時点の在庫：" +
+                r.facts.stockAvailable +
+                "（確保・購入はしていません）",
+            ),
+          );
+        if (r.facts?.deadlineMs)
+          p.append(
+            node(
+              "small",
+              "受付期限：" +
+                new Date(r.facts.deadlineMs).toLocaleString("ja-JP", {
+                  timeZone: "Asia/Tokyo",
+                }) +
+                "（日本時間）",
+            ),
+          );
+        if (r.facts?.scenario === "exercise")
+          p.append(
+            node(
+              "small",
+              "公式の演習課題です。架空の店舗設定を実在の協力先として扱いません。",
+            ),
+          );
+        p.append(b);
         $("artifactReferences").append(p);
       }
       if (!$("artifactDialog").open) $("artifactDialog").showModal();
@@ -44,7 +90,8 @@
       try {
         const d = await api("/artifacts/" + id);
         if (g === generation()) show(d.artifact);
-      } catch (_) {
+      } catch (error) {
+        if (g === generation() && denyAccess(error)) return;
         if (g === generation())
           notice(
             "成果物を確認できませんでした。引渡し・公開範囲・許諾を確認してから開き直してください。",
@@ -76,7 +123,8 @@
           );
           $("artifactList").append(row);
         }
-      } catch (_) {
+      } catch (error) {
+        if (g === generation() && denyAccess(error)) return;
         if (g === generation()) notice("成果物一覧を確認できませんでした。");
       } finally {
         $("loadArtifacts").disabled = false;
@@ -97,7 +145,8 @@
           return;
         }
         verifiedReferences = fresh.artifact.references;
-      } catch (_) {
+      } catch (error) {
+        if (g === generation() && denyAccess(error)) return;
         if (g === generation())
           $("artifactNotice").textContent =
             "資料の許諾を確認できないため、コピーを中止しました。";
@@ -147,6 +196,7 @@
             "本人専用に編集保存しました。AI送信・投稿の公開はしていません。";
         }
       } catch (e) {
+        if (g === generation() && denyAccess(e)) return;
         if (g === generation())
           $("artifactNotice").textContent =
             e.message === "ARTIFACT_VERSION_CONFLICT"

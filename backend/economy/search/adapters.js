@@ -1,7 +1,8 @@
 "use strict";
-const { row, publicRow, text } = require("./contracts");
+const { row, publicRow, text, millis } = require("./contracts");
 const guildStore = require("../../../frontend/public/schoolpark/guild-store");
 const { guides } = require("./guides");
+const { hash } = require("../config");
 const labModel = require("../../knowledge-lab/model");
 const { decideSchoolParkAccess } = require("../../schoolpark-access");
 const FIELDS = {
@@ -24,6 +25,7 @@ const FIELDS = {
   ],
   quest: [
     "title",
+    "owner",
     "brief",
     "given",
     "status",
@@ -45,6 +47,9 @@ const FIELDS = {
     "deadlineAt",
     "closesAt",
     "conditions",
+    "startsAt",
+    "startAtMs",
+    "startDate",
   ],
   knowledge_text: [
     "title",
@@ -67,6 +72,8 @@ const FIELDS = {
   ],
   city: [
     "name",
+    "createdBy",
+    "aiUseConsent",
     "description",
     "fulfillment",
     "cancelPolicy",
@@ -122,7 +129,7 @@ function createAdapters({ db, knowledge, now = Date.now }) {
   }
   function guild(d) {
     const p = d.data();
-    if (!publicRow(p)) return null;
+    if (!publicRow(p) || p.aiUseConsent?.allowed === false) return null;
     return row("guild", "guild", d.id, p.name, p.concept || p.body || p.name, {
       ...p,
       authorAIConsent:
@@ -133,7 +140,11 @@ function createAdapters({ db, knowledge, now = Date.now }) {
   }
   function quest(d) {
     const p = d.data();
-    if (!publicRow(p) || !["OPEN", "RUNNING"].includes(p.status || "OPEN"))
+    if (
+      !publicRow(p) ||
+      p.aiUseConsent?.allowed === false ||
+      !["OPEN", "RUNNING"].includes(p.status || "OPEN")
+    )
       return null;
     const rawDeadline =
       p.deadlineMs || p.closesAt || p.deadlineAt || p.deadline || p.due;
@@ -149,11 +160,35 @@ function createAdapters({ db, knowledge, now = Date.now }) {
             : /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(deadlineText)
               ? Date.parse(deadlineText)
               : 0;
+    if (rawDeadline && (!Number.isFinite(end) || end <= 0)) return null;
     if (end && end <= now()) return null;
+    const scenario = /架空|演習用/.test(
+      String(p.brief || "") + String(p.given || ""),
+    );
+    const conditions = String(p.conditions || "").trim();
+    const guild =
+      guildStore.OFFICIAL.find((g) => g.id === p.guildId)?.name || null;
+    const start = millis(p.startsAt || p.startAtMs || p.startDate);
+    const facts = {
+      participation: "conditions-at-destination",
+      status: p.status || "OPEN",
+      deadlineMs: end || null,
+      startsAtMs: start,
+      scenario: scenario ? "exercise" : "public-activity",
+      conditions: conditions
+        ? conditions.slice(0, 160)
+        : "詳細な参加条件はクエスト画面で確認",
+      guild,
+    };
     const info = [
-      p.brief || p.given || p.title,
-      p.conditions ? "参加条件: " + String(p.conditions) : null,
-      p.deadline || p.due ? "期限: " + String(p.deadline || p.due) : null,
+      scenario
+        ? "公式の演習課題（架空の設定を含む）。実在の店舗・主催者との連携を保証しません"
+        : "公式公開課題。参加資格・報酬の獲得は保証しません",
+      guild ? "分野: " + guild : null,
+      String(p.brief || p.given || p.title).slice(0, 170) +
+        (String(p.brief || p.given || p.title).length > 170 ? "…" : ""),
+      "参加条件: " + facts.conditions.slice(0, 80),
+      end ? "受付期限: " + new Date(end).toISOString() : "受付期限は未設定",
     ]
       .filter(Boolean)
       .join("。")
@@ -162,9 +197,22 @@ function createAdapters({ db, knowledge, now = Date.now }) {
       ...p,
       authorAIConsent: p.aiUseConsent?.allowed === true,
       origin: "公開クエスト",
-      facts: { participation: "conditions-at-destination" },
+      facts,
+      originHash: hash([
+        p.title,
+        p.brief || null,
+        p.given || null,
+        conditions,
+        p.status || "OPEN",
+        guild,
+        end || null,
+        start,
+        scenario,
+        p.owner || null,
+      ]),
     });
   }
+
   function content(d) {
     const p = d.data();
     if (!publicRow(p)) return null;
@@ -185,6 +233,7 @@ function createAdapters({ db, knowledge, now = Date.now }) {
     const p = d.data();
     if (
       !publicRow(p) ||
+      p.aiUseConsent?.allowed === false ||
       p.status !== "live" ||
       p.shopId !== "schoolpark-official" ||
       (p.orderDeadlineMs && p.orderDeadlineMs <= now()) ||
@@ -194,27 +243,60 @@ function createAdapters({ db, knowledge, now = Date.now }) {
       return null;
     const price = p.prices?.EMUER;
     if (!Number.isSafeInteger(price) || price < 0) return null;
-    const details =
-      String(p.description || p.fulfillment || p.name).slice(0, 200) +
-      "。価格 " +
-      price +
-      " EMUER。" +
-      (p.orderDeadlineMs
-        ? "受付期限 " + new Date(p.orderDeadlineMs).toISOString() + "。"
-        : "") +
-      String(p.cancelPolicy || "条件は商品画面で確認").slice(0, 100);
-    return row("city", "city_product", d.id, p.name, details.slice(0, 400), {
+    const available =
+      p.stock == null
+        ? null
+        : p.stock - Number(p.sold || 0) - Number(p.reserved || 0);
+    if (
+      available !== null &&
+      (!Number.isSafeInteger(available) || available < 0)
+    )
+      return null;
+    const deadline = p.orderDeadlineMs || null;
+    if (deadline !== null && !Number.isSafeInteger(deadline)) return null;
+    const facts = {
+      priceEmuer: price,
+      deadlineMs: deadline,
+      stockAvailable: available,
+      availability: "live-at-check",
+      conditions: "商品画面の利用資格・交換枠を確認",
+    };
+    const details = [
+      String(p.description || p.fulfillment || p.name).slice(0, 160) +
+        (String(p.description || p.fulfillment || p.name).length > 160
+          ? "…"
+          : ""),
+      "価格 " + price + " EMUER",
+      available === null
+        ? "在庫上限は未設定（提供保証ではありません）"
+        : "確認時点の残り在庫 " + available,
+      deadline
+        ? "受付期限 " + new Date(deadline).toISOString()
+        : "受付期限は未設定",
+      String(p.cancelPolicy || "条件は商品画面で確認").slice(0, 90),
+    ]
+      .join("。")
+      .slice(0, 400);
+    return row("city", "city_product", d.id, p.name, details, {
       ...p,
       authorAIConsent: true,
       origin: "SchoolPark公式ショップ",
-      facts: {
-        priceEmuer: price,
-        deadlineMs: p.orderDeadlineMs || null,
-        availability: "live-at-check",
-        conditions: "商品画面の利用資格・交換枠を確認",
-      },
+      facts,
+      originHash: hash([
+        p.name,
+        p.description || null,
+        p.fulfillment || null,
+        p.cancelPolicy || null,
+        p.shopId,
+        p.status,
+        price,
+        deadline,
+        available,
+        p.createdBy || null,
+      ]),
     });
   }
+
   async function post(id, a) {
     if (typeof knowledge?.rawPost !== "function")
       throw Error("ADAPTER_CONTRACT_CHANGED");
@@ -303,6 +385,7 @@ function createAdapters({ db, knowledge, now = Date.now }) {
       },
     },
     quest: {
+      project: (id, data) => quest({ id, data: () => data }),
       list: async (a) => {
         schoolParkRead(a);
         return (await scan("sp_quests", FIELDS.quest))
@@ -316,6 +399,7 @@ function createAdapters({ db, knowledge, now = Date.now }) {
       },
     },
     city: {
+      project: (id, data) => product({ id, data: () => data }),
       list: async () =>
         (await scan("mitemiru_products", FIELDS.city, ["status", "==", "live"]))
           .map(product)

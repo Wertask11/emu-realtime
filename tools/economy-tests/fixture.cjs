@@ -435,6 +435,22 @@ async function createFixture({
   app.use(express.json({ limit: "32kb" }));
   app.use("/api/economy", economy.router);
   app.use("/api/mitemiru", commerce.router);
+  app.post("/test/membership", async (req, res) => {
+    const role = req.body?.role,
+      plan = req.body?.plan;
+    if (!users[role] || !["guest", "light", "plus", "pro"].includes(plan))
+      return res.sendStatus(400);
+    await db
+      .collection("entitlements")
+      .doc(users[role].uid)
+      .set({
+        plan,
+        source: "emulator-test",
+        startsAt: new Date(0),
+        ...(req.body.expired ? { expiresAt: new Date(Date.now() - 1000) } : {}),
+      });
+    res.json({ ok: true });
+  });
   app.get("/test/login", (req, res) => {
     const u = users[req.query.role];
     if (!u) return res.sendStatus(404);

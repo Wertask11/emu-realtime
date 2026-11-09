@@ -11,8 +11,11 @@ for (const type of Object.keys(TASKS))
       ": auth/payment/save/list/edit/reopen/private ownership and withdrawal",
     async () => {
       const f = await createFixture({ crossDomain: true, phase3: true });
+      const role = ["quest_plan", "city_comparison"].includes(type)
+        ? "pro"
+        : "alice";
       try {
-        const q = await f.call("alice", "POST", "/quotes", {
+        const q = await f.call(role, "POST", "/quotes", {
           goal: "コーヒーの経験を整理してWeb3クエスト・ギルド・City商品を比較したい",
           taskType: type,
         });
@@ -26,20 +29,20 @@ for (const type of Object.keys(TASKS))
           searchConsentVersion: q.body.quote.searchProfile.version,
           workConsentVersion: VERSION,
         };
-        const j = await f.call("alice", "POST", "/jobs", body);
+        const j = await f.call(role, "POST", "/jobs", body);
         assert.equal(j.status, 200, JSON.stringify(j.body));
         await f.economy.tick();
-        const done = await f.call("alice", "GET", "/jobs/" + j.body.job.id);
+        const done = await f.call(role, "GET", "/jobs/" + j.body.job.id);
         assert.equal(
           done.body.job.state,
           "completed",
           JSON.stringify(done.body),
         );
         const id = done.body.job.artifactId;
-        const list = await f.call("alice", "GET", "/artifacts");
+        const list = await f.call(role, "GET", "/artifacts");
         assert.equal(list.status, 200);
         assert.equal(list.body.artifacts.length, 1);
-        const read = await f.call("alice", "GET", "/artifacts/" + id);
+        const read = await f.call(role, "GET", "/artifacts/" + id);
         assert.equal(read.status, 200);
         assert.equal(read.body.artifact.artifactType, type);
         assert.ok(read.body.artifact.content);
@@ -66,14 +69,14 @@ for (const type of Object.keys(TASKS))
           404,
         );
         const writes = await Promise.all([
-          f.call("alice", "POST", "/artifacts/" + id, edit),
-          f.call("alice", "POST", "/artifacts/" + id, edit),
+          f.call(role, "POST", "/artifacts/" + id, edit),
+          f.call(role, "POST", "/artifacts/" + id, edit),
         ]);
         assert.deepEqual(writes.map((x) => x.status).sort(), [200, 409]);
-        const reopen = await f.call("alice", "GET", "/artifacts/" + id);
+        const reopen = await f.call(role, "GET", "/artifacts/" + id);
         assert.equal(reopen.body.artifact.revision, 2);
         assert.equal(reopen.body.artifact.content, edit.content);
-        const replay = await f.call("alice", "POST", "/jobs", body);
+        const replay = await f.call(role, "POST", "/jobs", body);
         assert.equal(replay.body.job.id, id);
         await f.economy.tick();
         assert.equal(f.providerPayloads.length, 1);
@@ -82,7 +85,7 @@ for (const type of Object.keys(TASKS))
         await f.economy.service
           .ref("source_approvals", hash(r.kind + ":" + r.id))
           .set({ artifactUseApproved: false }, { merge: true });
-        const revoked = await f.call("alice", "GET", "/artifacts/" + id);
+        const revoked = await f.call(role, "GET", "/artifacts/" + id);
         assert.equal(revoked.body.artifact.content, null);
         assert.equal(revoked.body.artifact.status, "references_unavailable");
         // Real Timestamp comparison, unlike the small JSON unit fake.
@@ -95,7 +98,7 @@ for (const type of Object.keys(TASKS))
           null,
         );
         assert.equal(
-          (await f.call("alice", "GET", "/artifacts")).body.artifacts.length,
+          (await f.call(role, "GET", "/artifacts")).body.artifacts.length,
           0,
         );
       } finally {
@@ -103,3 +106,108 @@ for (const type of Object.keys(TASKS))
       }
     },
   );
+
+test("native membership expiry and Light gift reject every new-work/artifact route; renewal restores the retained artifact", async () => {
+  const f = await createFixture({ crossDomain: true, phase3: true });
+  try {
+    const q = await f.call("alice", "POST", "/quotes", {
+        goal: "ギルド活動の準備",
+        taskType: "guild_plan",
+      }),
+      q2 = await f.call("alice", "POST", "/quotes", {
+        goal: "次の活動の準備",
+        taskType: "guild_plan",
+      });
+    assert.equal(q.status, 200);
+    const b = {
+        quoteId: q.body.quote.id,
+        termsVersion: q.body.quote.termsVersion,
+        searchConsentVersion: q.body.quote.searchProfile.version,
+        workConsentVersion: VERSION,
+        requestId: "access-test-request-0001",
+        paymentConsent: true,
+        aiConsent: true,
+      },
+      j = await f.call("alice", "POST", "/jobs", b);
+    await f.economy.tick();
+    const id = j.body.job.id;
+    for (const r of ["guest", "light"])
+      assert.equal(
+        (
+          await f.call(r, "POST", "/quotes", {
+            goal: "活動の準備",
+            taskType: "guild_plan",
+          })
+        ).status,
+        403,
+      );
+    for (const entitlement of [
+      {
+        plan: "light",
+        source: "emu-gift",
+        expiresAt: new Date(Date.now() + 86400000),
+      },
+      {
+        plan: "pro",
+        source: "emulator-test",
+        expiresAt: new Date(Date.now() - 1000),
+      },
+    ]) {
+      await f.db
+        .collection("entitlements")
+        .doc(f.users.alice.uid)
+        .set({ startsAt: new Date(0), ...entitlement });
+      for (const route of ["/artifacts", "/artifacts/" + id])
+        assert.equal((await f.call("alice", "GET", route)).status, 403);
+      assert.equal(
+        (
+          await f.call("alice", "POST", "/artifacts/" + id, {
+            editConsent: true,
+            revision: 1,
+            title: "test",
+            content: "test",
+          })
+        ).status,
+        403,
+      );
+      assert.equal(
+        (
+          await f.call("alice", "POST", "/quotes", {
+            goal: "活動",
+            taskType: "guild_plan",
+          })
+        ).status,
+        403,
+      );
+      assert.equal(
+        (
+          await f.call("alice", "POST", "/jobs", {
+            ...b,
+            quoteId: q2.body.quote.id,
+            requestId: "access-test-request-0002",
+          })
+        ).status,
+        403,
+      );
+    }
+    await f.db
+      .collection("entitlements")
+      .doc(f.users.alice.uid)
+      .set({ plan: "plus", startsAt: new Date(0), source: "emulator-test" });
+    assert.equal(
+      (await f.call("alice", "GET", "/artifacts/" + id)).status,
+      200,
+    );
+    assert.equal(
+      (
+        await f.db
+          .collection("mitemiru_orders")
+          .where("serviceJobId", "==", id)
+          .get()
+      ).size,
+      1,
+    );
+  } finally {
+    await f.close();
+  }
+});
