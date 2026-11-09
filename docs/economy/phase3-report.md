@@ -1,6 +1,10 @@
 # 冷蔵庫くんに頼む Phase 3 — 実行・成果物保存
 
-2026-11-09。判定：**PARTIAL**。5種類の作業エンジンを実装したが、本番のQuest/City生成用途の資料許諾と、Phase 3の本人本番決済試験は未完了。コード・分離試験・実Gemini試験と、本番の有効化範囲を分けて報告する。新規の本番EMUER消費・返却・付与は行わない。
+2026-11-09。判定：**PARTIAL**。
+
+**本番反映済み**：[PR #311](https://github.com/Wertask11/emu-realtime/pull/311)、マージ/Render release `a6e63effdceda3f58aaa9e6f11e09dc5cae2ab1e`。Vercelの画面とRenderを配備し、OFFでの正常起動を確認後、公式9資料を使う投稿準備・Guild計画・WILの3種類をONにした。Quest/CityはOFFのまま。worker healthy・既存受付ON、7画面幅の本番未ログイン表示・4経路の認証なし401を確認。新規の本番決済は実行していない。詳細は [本番証跡](phase3-production-20261109.json)。
+
+5種類の作業エンジンを実装したが、本番のQuest/City生成用途の資料許諾と、Phase 3の本人本番決済試験は未完了。コード・分離試験・実Gemini試験と、本番の有効化範囲を分けて報告する。新規の本番EMUER消費・返却・付与は行わない。
 
 ## 実装
 
@@ -39,6 +43,8 @@
 ## 資料レビュー
 
 生成用途は探索用途とは別に、`artifactUseApproved`、`artifactPurpose=reizo-work-20261109-v1`、`artifactAllowedTasks`、確認日時・承認根拠を既存承認文書へ追加する。元のpurpose・内容ハッシュ・有効期限・投稿者同意を上書き/延長しない。
+
+追加の本番書込はサーバー管理の資料承認9文書への生成用途フィールドだけ。注文・台帳・利用者資格・契約・Rulesは変更していない。
 
 初期対象は [レビュー一覧](phase3-source-reviews-20261109.json) の公式案内4件と公式5Guild。既存のSchoolPark権利確認・元資料/内容ハッシュ・今回のFounder実装指示を根拠に、投稿準備/Guild計画/WILだけを対象とする。権利保有を確認した運営資料に限る純粋な登録builderを追加し、ユーザー投稿/Quest/City/不明なレビューからの自動付与を拒否する。
 
@@ -100,3 +106,7 @@ Knowledge Labの公開投稿2件に対するPhase 2のAI探索同意を、生成
 - 実AIの結合確認は明示opt-inの`EXPLORER_LIVE_TEST_APPROVED=true NODE_USE_ENV_PROXY=1 node tools/economy-tests/live-work.cjs`。本番Firebase・実EMUERは使わず、公式公開文以外を送る場合は停止する。自動再試行しない。
 
 追加の再現用ファイル：`tools/economy-tests/work-browser.py`。
+
+## 本人本番試験の承認対象
+
+対象：既存の「俺たちの青春」アカウント。作業：ギルド活動の準備。入力例：「Web3を学び、実際に試すギルド活動の計画を作って」。1回のみ・最大5 EMUER、支払可能な未受取残高5以上が必要。影響は本人の1依頼・残高・支払/依頼履歴・本人専用成果物。自動再依頼や追加付与はしない。停止はPhase 3フラグOFF、照合/返却用workerは維持。実行にはFounderの別途承認と本人ログイン操作が必要であり、現時点は未実施。失敗時の全額返却は既存経路を使用し、返却未確定なら返却待ちを維持する。
