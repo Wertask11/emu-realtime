@@ -346,25 +346,53 @@ const SP_REIZO_KB = [
   { k:['死にたい','消えたい','いなくなりたい','生きていたくない','自殺','首を','リストカット'],
     a:'つらいことを書いてくれて、ありがとう。\n\nぼくは案内役だから、いのちに関わることには十分に応えられないんだ。いまの気持ちを、話を聞いてくれるところへ届けてほしい。\n\n・まもろうよ こころ（厚生労働省）\n　https://www.mhlw.go.jp/mamorouyokokoro/\n・よりそいホットライン 0120-279-338（24時間・通話無料）\n\n急を要するときは 119 番も使えるよ。\n\n落ち着いたら、またここに来てね。待ってる🧊' },
 
+  // ── 何を書けばいいか分からない（11/9）。「投稿」(2点)より強く、書き方の案内まで出す。
+  { k:['何を書いて','何書いて','何を書けば','何書けば','なにを書','何を書こう','書くことがない','書くことない',
+       '書くことが無い','ネタがない','ネタが無い','ネタがな','何を投稿','何投稿','投稿したいけど','何を届け'],
+    a:'書くことが浮かばないときは、大きな話じゃなくていいんだ🧊\n\nこんなことが、そのまま知識になるよ。\n・最近やってみて、うまくいったこと\n・失敗して「次はこうする」と決めたこと\n・仕事・家事・子育て・勉強・趣味で「こうすると楽」と気づいたこと\n・前に誰かに聞かれて、答えたことがあること\n\n書き方の型（4行でOK）\n① 何があった？\n② 何をした？\n③ どうなった？\n④ 次の人へひとこと\n\n迷ったら「今月のテーマ」に合わせて書くのもおすすめ。\n届けた知識は、誰かが SchoolPark のクエストで「やってみた」になって、あなたのところに返ってくることもあるよ。\n\n出すときは「＋ 知識を届ける」から。下書きにも残せるよ！' },
+
 ];
 
 /* ── スコアリング式マッチング（長いキーワードほど高スコア）
-   「利用制限て何？」→ '利用制限'(4点) > '何'(1点) で正しい回答を返す ── */
-function spReizoAnswer(q) {
-  const lq = q.toLowerCase().replace(/\s+/g, '');
+   「利用制限て何？」→ '利用制限'(4点) > '何'(1点) で正しい回答を返す
+
+   11/9：英字のキーワードは、英字の単語の途中では当てない。
+   「Emu for SchoolPark で投稿したい」の SchoolPark の中の park に、公園の答え（park）が当たっていた。
+   空白は前と同じく無視する（'echo field' は 'echofield' でも当たる）。 ── */
+function _spReizoHit(spaced, kl) {
+  const body = Array.from(kl).map(function (c) { return c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('\\s*');
+  const pre = /^[a-z0-9]/.test(kl) ? '(?<![a-z0-9])' : '';
+  const post = /[a-z0-9]$/.test(kl) ? '(?![a-z0-9])' : '';
+  return new RegExp(pre + body + post).test(spaced);
+}
+function _spReizoBest(q) {
+  const spaced = String(q || '').toLowerCase();
   let best = null;
   let bestScore = 0;
   for (const item of SP_REIZO_KB) {
     let score = 0;
     for (const k of item.k) {
       const kl = k.toLowerCase().replace(/\s+/g, '');
-      if (lq.includes(kl)) score += kl.length;
+      if (_spReizoHit(spaced, kl)) score += kl.length;
     }
     if (score > bestScore) { bestScore = score; best = item; }
   }
+  return { item: best, score: bestScore, length: spaced.replace(/\s+/g, '').length };
+}
+function spReizoAnswer(q) {
+  const best = _spReizoBest(q).item;
   return best ? best.a : null; // nullのときは呼び出し元でフォールバック処理
+}
+/* 決まった答えを先に出してよいほど、はっきり当たっているか（11/9）。
+   長い質問の中で短い語が1つ当たっただけ（「〜を投稿したいけど…」の「投稿」2点など）は、
+   決まった答えより、FAQを根拠に読んだ AI のほうが質問に合う。そのときは null を返し、AI に回す。
+   当たった長さが6字以上、または質問の3割以上なら、決まった答えを出す。 */
+function spReizoConfident(q) {
+  const m = _spReizoBest(q);
+  if (!m.item) return null;
+  return (m.score >= 6 || m.score / Math.max(1, m.length) >= 0.3) ? m.item.a : null;
 }
 
 
-return { items: SP_REIZO_KB, answer: spReizoAnswer };
+return { items: SP_REIZO_KB, answer: spReizoAnswer, confident: spReizoConfident };
 });
