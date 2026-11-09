@@ -329,6 +329,30 @@
               " EMUER（利用条件・在庫・期限は移動先で再確認）",
           ),
         );
+      if (Number.isSafeInteger(r.facts?.stockAvailable))
+        card.append(
+          node(
+            "p",
+            "確認時点の在庫：" +
+              r.facts.stockAvailable +
+              "（在庫の確保はしていません）",
+          ),
+        );
+      if (r.facts?.deadlineMs)
+        card.append(
+          node(
+            "p",
+            "受付期限：" +
+              new Date(r.facts.deadlineMs).toLocaleString("ja-JP", {
+                timeZone: "Asia/Tokyo",
+              }) +
+              "（日本時間）",
+          ),
+        );
+      if (r.facts?.scenario === "exercise")
+        card.append(
+          node("p", "公式の演習課題です。架空の店舗・主催者設定を含みます。"),
+        );
       if (r.updatedAtMs)
         card.append(
           node(

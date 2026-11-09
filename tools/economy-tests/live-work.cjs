@@ -6,9 +6,14 @@ if (process.env.EXPLORER_LIVE_TEST_APPROVED !== "true")
 const fs = require("node:fs"),
   assert = require("node:assert/strict");
 const { createFixture } = require("./fixture.cjs"),
-  { VERSION } = require("../../backend/economy/tasks");
+  { VERSION, TASKS } = require("../../backend/economy/tasks");
+const type = process.env.EXPLORER_LIVE_TASK || "guild_plan";
+if (!["guild_plan", "quest_plan", "city_comparison"].includes(type))
+  throw Error("EXPLICIT_LOCAL_TASK_REQUIRED");
+const role = type === "quest_plan" ? "pro" : "alice";
 (async () => {
   const evidence = {
+    taskType: type,
     provider: "real Gemini",
     firebase: "dedicated local emulator",
     payment: "demo ledger only",
@@ -62,9 +67,100 @@ const { createFixture } = require("./fixture.cjs"),
       "ACTIVITIES",
     ])
       f.env["ECONOMY_SOURCE_" + domain] = "false";
-    const q = await f.call("alice", "POST", "/quotes", {
-      goal: "学んだ知識を実践するギルド活動の準備をしたい",
-      taskType: "guild_plan",
+    if (type !== "guild_plan") {
+      const manifest = JSON.parse(
+        fs.readFileSync(process.env.EXPLORER_OFFICIAL_REVIEW_PATH || ""),
+      );
+      assert.equal(manifest.success, true);
+      const domain = type === "quest_plan" ? "quest" : "city";
+      const record =
+        manifest.records.find(
+          (r) =>
+            r.domain === domain &&
+            (domain !== "quest" || r.facts.guild === "WEB3 Guild"),
+        ) || manifest.records.find((r) => r.domain === domain);
+      assert.ok(record);
+      const originals = require("./official-material-review.cjs"),
+        { hash } = require("../../backend/economy/config");
+      const id = record.sourceKey.split(":")[1];
+      let raw;
+      if (domain === "quest") {
+        const seed = originals.seeds.find(
+          (s) =>
+            s.file === record.originalFile &&
+            hash([
+              s.row.title,
+              s.row.brief || null,
+              s.row.given || null,
+              s.row.conditions || null,
+            ]) === record.originalHash,
+        );
+        assert.ok(seed);
+        raw = {
+          ...seed.row,
+          status: "OPEN",
+          visibility: "public",
+          owner: "local-test-operator",
+          closesAt: record.facts.deadlineMs,
+        };
+      } else {
+        const c = originals.catalog.find((c) => c.id === id);
+        assert.ok(c);
+        raw = {
+          name: c.name,
+          description: c.description,
+          fulfillment: c.fulfillment,
+          cancelPolicy: c.cancelPolicy,
+          status: "live",
+          shopId: "schoolpark-official",
+          createdBy: "local-test-operator",
+          prices: { EMUER: record.facts.priceEmuer },
+          stock: record.facts.stockAvailable,
+          sold: 0,
+          reserved: 0,
+          orderDeadlineMs: record.facts.deadlineMs,
+        };
+      }
+      const collection = domain === "quest" ? "sp_quests" : "mitemiru_products";
+      const existing = await f.db.collection(collection).get();
+      for (const d of existing.docs) await d.ref.delete();
+      await f.db.collection(collection).doc(id).set(raw);
+      const source =
+        await f.economy.service.sources.cross.adapters[domain].get(id);
+      assert.equal(
+        hash([source.title, source.summary]),
+        record.contentHash,
+        "EXACT_REVIEWED_PUBLIC_TEXT_ONLY",
+      );
+      await f.economy.service
+        .ref("source_approvals", hash(source.key))
+        .set({
+          purpose: require("../../backend/economy/search/profile").PURPOSE,
+          piiReviewed: true,
+          aiUseApproved: true,
+          rightsVerified: true,
+          authorPermissionConfirmed: true,
+          contentHash: record.contentHash,
+          originHash: source.originHash,
+          validUntilMs: Date.now() + 86400000,
+          artifactUseApproved: true,
+          artifactPurpose: VERSION,
+          artifactAllowedTasks: Object.keys(TASKS),
+        });
+      for (const d of ["GUILD", "SERVICE", "QUEST", "CITY"])
+        f.env["ECONOMY_SOURCE_" + d] = "false";
+      f.env["ECONOMY_SOURCE_" + domain.toUpperCase()] = "true";
+      allowed.length = 0;
+      allowed.push([source.title, source.summary]);
+      evidence.corpus =
+        "repository text matched to reviewed current official public-source snapshot; private operator identifiers replaced by local test identifiers";
+    }
+    const q = await f.call(role, "POST", "/quotes", {
+      goal:
+        type === "city_comparison"
+          ? "EMUERで商品と体験を比較する準備をしたい"
+          : "Web3を学んでクエストとギルドの活動を準備したい",
+      taskType: type,
     });
     assert.equal(q.status, 200, JSON.stringify(q.body));
     const b = {
@@ -76,10 +172,10 @@ const { createFixture } = require("./fixture.cjs"),
       paymentConsent: true,
       aiConsent: true,
     };
-    const j = await f.call("alice", "POST", "/jobs", b);
+    const j = await f.call(role, "POST", "/jobs", b);
     assert.equal(j.status, 200);
     await f.economy.tick();
-    const done = await f.call("alice", "GET", "/jobs/" + j.body.job.id);
+    const done = await f.call(role, "GET", "/jobs/" + j.body.job.id);
     assert.equal(
       done.body.job.state,
       "completed",
@@ -88,18 +184,18 @@ const { createFixture } = require("./fixture.cjs"),
         error: done.body.job.error,
       }),
     );
-    const a = await f.call("alice", "GET", "/artifacts/" + j.body.job.id);
+    const a = await f.call(role, "GET", "/artifacts/" + j.body.job.id);
     assert.equal(a.status, 200);
     assert.ok(a.body.artifact.content);
-    const edit = await f.call("alice", "POST", "/artifacts/" + j.body.job.id, {
+    const edit = await f.call(role, "POST", "/artifacts/" + j.body.job.id, {
       editConsent: true,
       revision: 1,
-      title: "本人が確認したギルド活動の準備",
+      title: "本人が確認した準備用の計画",
       content: a.body.artifact.content + "\n自分で確認する項目を追加します。",
     });
     assert.equal(edit.status, 200);
     assert.equal(edit.body.artifact.revision, 2);
-    const replay = await f.call("alice", "POST", "/jobs", b);
+    const replay = await f.call(role, "POST", "/jobs", b);
     assert.equal(replay.body.job.id, j.body.job.id);
     assert.equal(
       evidence.calls.filter((c) => c.operation === "generateContent").length,

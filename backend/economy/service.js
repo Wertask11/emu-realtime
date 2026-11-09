@@ -32,6 +32,7 @@ function createEconomy({
     sources,
     payments,
     now,
+    requireAccess: (a) => qualified(a),
   });
   async function actor(auth) {
     if (!auth?.uid) fail("AUTH_REQUIRED", 401);
@@ -67,6 +68,22 @@ function createEconomy({
       external: require("./external").capability,
     };
   }
+  async function qualified(a, plans = configuration(env, now()).allowedPlans) {
+    // Paid requests must re-read membership on quote, payment and execution:
+    // an expired grant or a changed subscription cannot use a cached higher tier.
+    const plan = (
+      await entitlement.getEntitlement(a.uid, a.account, { fresh: true })
+    ).plan;
+    if (!plans.includes(plan)) fail("SERVICE_NOT_ELIGIBLE", 403);
+    const e = (await ref("eligibility", hash(a.spid)).get()).data();
+    // Do not infer age from LINE/Google login or self-declared dates. Provider policy gate is server-owned.
+    if (
+      e?.adultVerified !== true ||
+      e?.providerAllowed !== true ||
+      !(e.validUntilMs > now())
+    )
+      fail("AI_AUDIENCE_NOT_VERIFIED", 403);
+  }
   async function allowed(a, reserved = false) {
     const c = (await status()).service;
     if (!reserved && c.blockers.includes("AI_PROVIDER_DAY_LIMIT"))
@@ -77,20 +94,7 @@ function createEconomy({
       )
     )
       fail("SERVICE_DISABLED", 503);
-    // Paid requests must re-read membership on quote, payment and execution:
-    // an expired grant or a changed subscription cannot use a cached higher tier.
-    const plan = (
-      await entitlement.getEntitlement(a.uid, a.account, { fresh: true })
-    ).plan;
-    if (!c.plans.includes(plan)) fail("SERVICE_NOT_ELIGIBLE", 403);
-    const e = (await ref("eligibility", hash(a.spid)).get()).data();
-    // Do not infer age from LINE/Google login or self-declared dates. Provider policy gate is server-owned.
-    if (
-      e?.adultVerified !== true ||
-      e?.providerAllowed !== true ||
-      !(e.validUntilMs > now())
-    )
-      fail("AI_AUDIENCE_NOT_VERIFIED", 403);
+    await qualified(a, c.plans);
     const worker = (await ref("system", "worker-health").get()).data();
     if (worker?.healthy !== true || !(worker.validUntilMs > now()))
       fail("WORKER_UNHEALTHY", 503);

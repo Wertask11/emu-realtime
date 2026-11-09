@@ -1,7 +1,7 @@
 "use strict";
 const { hash, fail } = require("./config");
 const { TASKS } = require("./tasks");
-function createArtifacts({ db, ref, sources, payments, now }) {
+function createArtifacts({ db, ref, sources, payments, now, requireAccess }) {
   const index = (uid) =>
     db
       .collection("emuer_v2_agent_artifact_owners")
@@ -45,6 +45,7 @@ function createArtifacts({ db, ref, sources, payments, now }) {
     return v;
   }
   async function checked(a, id) {
+    await requireAccess(a);
     const v = await owned(a, id);
     const j = (await ref("jobs", v.jobId).get()).data();
     if (
@@ -101,6 +102,8 @@ function createArtifacts({ db, ref, sources, payments, now }) {
         title: s.title,
         evidence: s.summary,
         target: s.target,
+        facts: s.facts,
+        checkedAtMs: s.checkedAtMs,
       })),
       notice: c.valid
         ? "AIの提案・記入用下書きです。内容を確認してからコピー・編集し、公開は既存画面で別途行ってください。"
@@ -108,6 +111,7 @@ function createArtifacts({ db, ref, sources, payments, now }) {
     };
   }
   async function list(a) {
+    await requireAccess(a);
     const rows = await index(a.uid)
       .orderBy("createdAt", "desc")
       .limit(20)
@@ -121,6 +125,7 @@ function createArtifacts({ db, ref, sources, payments, now }) {
     }));
   }
   async function edit(a, id, b) {
+    const c = await checked(a, id);
     if (b?.editConsent !== true) fail("ARTIFACT_EDIT_CONSENT_REQUIRED", 400);
     if (
       Object.keys(b).some(
@@ -133,7 +138,6 @@ function createArtifacts({ db, ref, sources, payments, now }) {
       content = safeText(b.content, 12000);
     if (!Number.isSafeInteger(b.revision))
       fail("ARTIFACT_VERSION_CONFLICT", 409);
-    const c = await checked(a, id);
     if (!c.valid) fail("ARTIFACT_REFERENCES_UNAVAILABLE", 409);
     await db.runTransaction(async (tx) => {
       const r = ref("artifacts", id),
