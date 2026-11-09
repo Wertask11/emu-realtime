@@ -30036,7 +30036,9 @@ async function sendEmuFeedback() {
         const timer = controller ? setTimeout(function () { controller.abort(); }, 45000) : null;
         const r = await fetch('https://emu-realtime.onrender.com/api/emu/proofread', {
           method: 'POST', headers: headers, signal: controller ? controller.signal : undefined,
-          body: JSON.stringify({ title: String(message.title || '').slice(0, 160), body: String(message.body || '').slice(0, 3001) })
+          /* terms … 「詳しく整理する」の分類の候補（11/9）。AI はこの中からだけ選ぶ（サーバーでも絞る）。 */
+          body: JSON.stringify({ title: String(message.title || '').slice(0, 160), body: String(message.body || '').slice(0, 3001),
+            terms: message.terms && typeof message.terms === 'object' ? message.terms : undefined })
         });
         if (timer) clearTimeout(timer);
         const d = await r.json().catch(function () { return {}; });
@@ -30053,7 +30055,7 @@ async function sendEmuFeedback() {
           reply({ ok:false, error: words[d.error] || 'うまく整えられなかったみたい🧊 時間をおいて、もう一度押してね。', remaining: d.remaining });
           return;
         }
-        reply({ ok:true, title: d.title || '', body: d.body || '', note: d.note || '', remaining: d.remaining });
+        reply({ ok:true, title: d.title || '', body: d.body || '', note: d.note || '', lab: d.lab || null, remaining: d.remaining });
       } catch (error) {
         reply({ ok:false, error: /ログイン/.test(String(error && error.message)) ? '整えてもらうには、ログインしてね🧊' : 'うまくつながらなかったみたい🧊 もう一度押してね。' });
       }
