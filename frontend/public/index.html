@@ -11696,8 +11696,13 @@ async function spReizoSend() {
   // Keep existing explicit skills and deterministic FAQ ahead of AI.
   const skill = _matchReizoSkill(q);
   if (skill) { await skill.handler(); return; }
-  const ans = spReizoAnswer(q);
+  /* 11/9：決まった答えは、はっきり当たったときだけ先に出す。
+     長い質問の中で短い語が1つ当たっただけなら、FAQを根拠に読む AI に回す（そのほうが質問に合う）。
+     AI が使えないときだけ、その弱い当たりの答えに戻る。 */
+  const K = window.ReizoKnowledge;
+  const ans = K && typeof K.confident === 'function' ? K.confident(q) : spReizoAnswer(q);
   if (ans !== null) { _spReizoAppendMsg(ans, false); return; }
+  const weak = spReizoAnswer(q);
   const typing = _spReizoShowTyping();
   try {
     const reply = await window.ReizoChat.ask(q);
@@ -11705,6 +11710,9 @@ async function spReizoSend() {
   } catch (error) {
     // Never show an in-flight answer in a different signed-in session.
     if (userAtSend !== (window.auth && window.auth.currentUser)) return;
+    if (weak !== null && !(error && (error.category === 'timeout' || error.category === 'rate_limited'))) {
+      _spReizoAppendMsg(weak, false); return;
+    }
     // A slow or busy moment is not "AI is unavailable": say so, so she just sends again.
     const category = error && error.category;
     if (category === 'timeout') { _spReizoAppendMsg('ごめんね、考えるのに時間がかかりすぎちゃった🧊\n少しだけ待って、もう一度送ってみてね。', false); return; }

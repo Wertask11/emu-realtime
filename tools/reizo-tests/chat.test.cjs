@@ -42,8 +42,10 @@ test('all existing FAQ data and exact matcher outputs are preserved', () => {
   const rewritten=['emuerを稼ぐ','schoolparkとは','emuとは','一日シェア','メンバー','トレジャリー','公園','dao','プラン','マップ','ches','クエスト','ギルド','スマホ','チュートリアル','問い合わせ','emuerで何ができる','かっこの中','emuer','ショッピング','room1はどこ'];
   // Reviewed rename (#232, 10/27): the plan names became 「Emu for SchoolPark light/plus/pro」; nothing else in these answers changed.
   const renamed=['プラン','公式パス'],rename=text=>text.replace(/Emu (light|plus|pro)/g,'Emu for SchoolPark $1');
-  const legacyItems = faq.items.filter(x=>x.k[0]!=='冷蔵庫くんに頼む');
-  assert.equal(faq.items.length,kb.length+1);
+  // Reviewed addition (11/9): 「何を書けばいいか分からない」 — the most common first-post question.
+  const added=['冷蔵庫くんに頼む','何を書いて'];
+  const legacyItems = faq.items.filter(x=>!added.includes(x.k[0]));
+  assert.equal(faq.items.length,kb.length+added.length);
   assert.equal(legacyItems.length,kb.length);
   const now=new Map();
   kb.forEach((item,i)=>{
@@ -57,6 +59,22 @@ test('all existing FAQ data and exact matcher outputs are preserved', () => {
   assert.match(faq.answer('クエスト'),/確定申告/);
   assert.match(faq.answer('Questって何？'),/クエスト/);
   assert.equal(faq.answer('月でラーメンを作りたい'), null);
+});
+test('English keywords do not match inside a longer word, and weak matches go to the AI (11/9)', () => {
+  // 「SchoolPark」の中の park が、公園の答えに当たっていた。
+  const q='Emu for SchoolParkで投稿したいけど何書いていいかわからない';
+  assert.doesNotMatch(faq.answer(q), /公園/);
+  assert.match(faq.confident(q), /書き方の型/);
+  assert.match(faq.answer('park'), /公園/);
+  assert.match(faq.answer('echo field'), /ECHO FIELD/);
+  // 長い質問の中の短い一語だけなら、決まった答えではなく AI へ（answer は AI が使えないときの控え）。
+  const long='クエストを受けたあとに報告を出す方法を教えてほしいです';
+  assert.ok(faq.answer(long));
+  assert.equal(faq.confident(long), null);
+  assert.match(faq.confident('Questって何？'), /クエスト/);
+  assert.equal(faq.confident('月でラーメンを作りたい'), null);
+  const page=fs.readFileSync(path.join(root,'frontend/public/index.html'),'utf8');
+  assert.ok(page.includes("K.confident(q)"), 'the chat asks for a confident match first');
 });
 test('guide grounding uses current pages, includes stars and ignores arbitrary client context',()=>{
   assert.match(knowledge.grounding('この画面では何ができる？','quest'), /クエスト/);
