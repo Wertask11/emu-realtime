@@ -108,11 +108,14 @@ test('他人の投稿には付けられない。付けられなかったとき�
   assert.match(notices[0].text, /投稿は公開しました/);
 });
 
-test('画面：入口はひとつ（Lab の「経験知を届ける」は Emu の中では共通の投稿画面を開く）。AI 同意は初期オフ。予約投稿には付かないと確かめる', () => {
+test('画面：入口はひとつ（Lab の「経験知を届ける」は Emu の中では共通の投稿画面を開く）。AI 同意のチェックは出さない（11/9 オーナー：ログイン時の同意が前提）。予約投稿には付かないと確かめる', () => {
   assert.doesNotMatch(KNOWLEDGE, /data-command="experience"/, '投稿画面から Lab の別の入力画面へ飛ばさない');
   assert.match(KNOWLEDGE, /<summary>詳しく整理する（任意）<\/summary>/);
-  assert.match(KNOWLEDGE, /<input id="labAIConsent" type="checkbox">/, 'AI 同意が初めからチェックされている');
-  assert.doesNotMatch(KNOWLEDGE, /id="labAIConsent"[^>]*checked/);
+  // 11/9 オーナー決定：投稿ごとの同意は聞かない（ログイン・登録時の利用規約・プライバシーポリシーへの同意が前提）。
+  // 画面に同意の文言・チェックは出さない。「詳しく整理する」を付けたときだけ AI 利用可として送り、同意だけでは整理の記録を作らない。
+  assert.doesNotMatch(KNOWLEDGE, /Geminiの意味検索・掛け合わせに利用することに同意する/);
+  assert.match(KNOWLEDGE, /<input id="labAIConsent" type="checkbox" hidden checked>/);
+  assert.match(KNOWLEDGE, /aiUseConsent:true\};return\(Object\.keys\(v\.facets\)\.length\|\|v\.period\|\|v\.happened\|\|v\.learned\|\|v\.advice\|\|v\.sources\|\|v\.verification!=='self-reported'\)\?v:null/);
   assert.match(KNOWLEDGE, /kind==='schedule'&&labPayload\(\)&&!confirm\(/);
   assert.match(LAB, /typeof window\.parent\.emuOpenKnowledgeComposer === "function"/);
   assert.match(LAB, /action: "compose"/);

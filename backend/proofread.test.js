@@ -54,7 +54,48 @@ test("空・長すぎる本文は送らない。無効のときは使えない",
 });
 
 test("AI の返事は JSON の本文だけを使う", () => {
-  assert.deepEqual(parseReply('```json\n{"title":"題","body":"本文です","note":"誤字"}\n```'), { title: "題", body: "本文です", note: "誤字" });
+  assert.deepEqual(parseReply('```json\n{"title":"題","body":"本文です","note":"誤字"}\n```'), { title: "題", body: "本文です", note: "誤字", tags: [], lab: null });
   assert.throws(() => parseReply("こんにちは"), /BAD_REPLY/);
   assert.throws(() => parseReply('{"title":"題","body":""}'), /BAD_REPLY/);
+});
+
+test("詳しく整理する：候補にある分類だけ・軸ごとに3つまで・本文に無いことは空", async () => {
+  const { cleanTerms, cleanLab } = require("./proofread");
+  const terms = cleanTerms({
+    field: [["field-education", "教育"], ["field-it", "IT"], ["BAD ID", "x"]],
+    period: [["period-student", "学生時代"]],
+    job: [["job-x", "使わない軸"]],
+    nope: "x"
+  });
+  assert.deepEqual(Object.keys(terms), ["field", "period"], "決まった軸だけ・形の悪い id は捨てる");
+  assert.equal(terms.field.length, 2);
+  const lab = cleanLab({ facets: { field: ["field-it", "field-made-up", "field-it"], period: ["period-student"], job: ["job-x"] },
+    period: "社会人3年目", happened: "会議で声が震えた", learned: "", advice: "まず5分から" }, terms);
+  assert.deepEqual(lab.facets, { field: ["field-it"], period: ["period-student"] }, "候補にない id・重複・別の軸は入れない");
+  assert.equal(lab.period, "社会人3年目");
+  assert.equal(lab.learned, "");
+  assert.equal(cleanLab({ facets: {} }, terms), null, "何も無ければ出さない");
+  assert.equal(cleanLab({ facets: { field: ["field-it"] } }, {}), null, "候補が無いときは出さない");
+});
+
+test("分類の候補を送ると、サーバーは AI の選んだ分類を候補で絞って返す", async () => {
+  let seen = null;
+  const s = await serve({ generate: async (args) => { seen = args; return { body: "本文。", lab: { facets: { field: ["field-it", "evil"] }, happened: "起きたこと" } }; } });
+  try {
+    const r = await s.post({ body: "本文", terms: { field: [["field-it", "IT"]] } });
+    assert.equal(r.status, 200);
+    assert.deepEqual(seen.terms, { field: [["field-it", "IT"]] });
+    assert.deepEqual(r.body.lab.facets, { field: ["field-it"] });
+    assert.equal(r.body.lab.happened, "起きたこと");
+    const plain = await s.post({ body: "本文" });
+    assert.equal(plain.body.lab, null, "候補を送らなければ整理の下書きは返さない");
+  } finally { await s.close(); }
+});
+
+test("タグ案：5個まで・# やカンマは外す・重複は1つ", () => {
+  const { cleanTags, parseReply } = require("./proofread");
+  assert.deepEqual(cleanTags(["#習慣", "朝時間", "朝時間", "小さく,始める", "音読", "会議", "6個目"]), ["習慣", "朝時間", "小さく始める", "音読", "会議"]);
+  assert.deepEqual(cleanTags("習慣、朝時間"), ["習慣", "朝時間"]);
+  assert.deepEqual(cleanTags(null), []);
+  assert.deepEqual(parseReply('{"body":"本文","tags":["音読","#会議"]}').tags, ["音読", "会議"]);
 });
