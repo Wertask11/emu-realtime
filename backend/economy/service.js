@@ -25,6 +25,14 @@ function createEconomy({
   const config = () => configuration(env, now());
   const ref = (kind, id) => db.collection("emuer_v2_agent_" + kind).doc(id);
   const freeTier = createFreeTierGuard({ db, now });
+  const tasks = require("./tasks");
+  const artifacts = require("./artifacts").createArtifacts({
+    db,
+    ref,
+    sources,
+    payments,
+    now,
+  });
   async function actor(auth) {
     if (!auth?.uid) fail("AUTH_REQUIRED", 401);
     const spid = await identity.findByUid(auth.uid),
@@ -91,6 +99,8 @@ function createEconomy({
   async function quote(a, input) {
     const c = await allowed(a),
       goal = safeText(input.goal, 300);
+    const taskType = input.taskType || null;
+    if (taskType) tasks.task(taskType, c);
     const searchProfile = c.searchProfile;
     const contextPermissions = {
       balance: input.balanceConsent === true,
@@ -108,6 +118,29 @@ function createEconomy({
       if (count >= 6) fail("QUOTE_RATE_LIMIT", 429);
       tx.set(qr, { count: count + 1, deleteAfter: new Date(now() + 86400000) });
     });
+    let workBundle = null;
+    if (taskType) {
+      workBundle = await sources.cross.collect(
+        a,
+        goal,
+        searchProfile,
+        contextPermissions,
+      );
+      workBundle.sources = tasks.material(taskType, workBundle.sources);
+      workBundle.coverage = workBundle.coverage.map((r) =>
+        r.state === "ready"
+          ? {
+              ...r,
+              approvedCount: workBundle.sources.filter(
+                (s) => s.domain === r.domain,
+              ).length,
+              state: workBundle.sources.some((s) => s.domain === r.domain)
+                ? "ready"
+                : "no_approved_data",
+            }
+          : r,
+      );
+    }
     const id = randomUUID(),
       q = {
         spid: a.spid,
@@ -118,7 +151,9 @@ function createEconomy({
         price: c.price,
         termsVersion: c.termsVersion,
         searchProfile,
-        scopeSnapshot: c.scope,
+        scopeSnapshot: taskType ? tasks.scope(taskType) : c.scope,
+        taskType,
+        workBundle,
         contextPermissions,
         expiresAtMs: now() + 10 * 60000,
         deleteAfter: new Date(now() + 30 * 86400000),
@@ -128,7 +163,12 @@ function createEconomy({
       id,
       price: c.price,
       currency: c.currency,
-      scope: c.scope,
+      scope: q.scopeSnapshot,
+      taskType,
+      workConsentVersion: taskType ? tasks.VERSION : null,
+      executionPlan: taskType
+        ? Object.values(tasks.TASKS[taskType].sections)
+        : null,
       searchProfile,
       contextPermissions,
       refund: c.refund,
@@ -177,85 +217,119 @@ function createEconomy({
       bucket = day(now()),
       gr = ref("usage", bucket),
       pr = ref("usage", hash([bucket, a.spid]));
-    await db.runTransaction(async (tx) => {
-      const [js, qs, gs, ps] = await Promise.all([
-        tx.get(jr),
-        tx.get(qr),
-        tx.get(gr),
-        tx.get(pr),
-      ]);
-      if (js.exists) {
-        if (js.data().fingerprint !== fingerprint)
+    await db
+      .runTransaction(async (tx) => {
+        const [js, qs, gs, ps] = await Promise.all([
+          tx.get(jr),
+          tx.get(qr),
+          tx.get(gr),
+          tx.get(pr),
+        ]);
+        if (js.exists) {
+          if (js.data().fingerprint !== fingerprint)
+            fail("IDEMPOTENCY_KEY_CONFLICT");
+          return;
+        }
+        const q = qs.data(),
+          g = gs.data() || {},
+          p = ps.data() || {};
+        if (
+          !q ||
+          q.spid !== a.spid ||
+          q.expiresAtMs <= now() ||
+          q.usedBy ||
+          q.wallet !== String(a.walletAddress || "").toLowerCase() ||
+          q.price !== c.price ||
+          q.termsVersion !== c.termsVersion ||
+          b.termsVersion !== q.termsVersion ||
+          (q.searchProfile?.fingerprint || null) !==
+            (c.searchProfile?.fingerprint || null) ||
+          (q.taskType &&
+            (b.workConsentVersion !== tasks.VERSION ||
+              !c.workflow?.enabled ||
+              !c.workflow.tasks.find((t) => t.id === q.taskType)?.available)) ||
+          (q.searchProfile &&
+            b.searchConsentVersion !== q.searchProfile.version) ||
+          (q.contextPermissions?.balance &&
+            (b.balanceConsent !== true ||
+              !c.searchProfile?.balanceAvailable)) ||
+          (q.contextPermissions?.achievements &&
+            (b.achievementsConsent !== true ||
+              !c.searchProfile?.achievementsAvailable))
+        )
+          fail("QUOTE_EXPIRED_OR_CHANGED");
+        if ((g.count || 0) >= c.globalDaily || (p.count || 0) >= c.personDaily)
+          fail("AI_DAILY_LIMIT", 429);
+        if ((g.reservedTokens || 0) + c.reserveTokens > c.tokenBudget)
+          fail("AI_BUDGET_LIMIT", 429);
+        const providerReservation = await freeTier.admission(
+          tx,
+          c.reserveTokens,
+        );
+        tx.create(jr, {
+          spid: a.spid,
+          uid: a.uid,
+          walletAddress: q.wallet,
+          goal: q.goal,
+          fingerprint,
+          orderId: "agent_" + id,
+          state: "awaiting_payment",
+          createdAtMs: now(),
+          updatedAtMs: now(),
+          paymentUntilMs: now() + 10 * 60000,
+          bucket,
+          providerBucket: providerReservation.bucket,
+          price: q.price,
+          quoteId: b.quoteId,
+          termsVersion: q.termsVersion,
+          searchProfile: q.searchProfile || null,
+          scopeSnapshot: q.scopeSnapshot || null,
+          taskType: q.taskType || null,
+          workBundle: q.workBundle || null,
+          execution: q.taskType ? tasks.execution(q.taskType, now()) : null,
+          contextPermissions: q.contextPermissions || {
+            balance: false,
+            achievements: false,
+          },
+          consentAtMs: now(),
+          events: [{ state: "awaiting_payment", atMs: now() }],
+          deleteAfter: new Date(now() + 30 * 86400000),
+          result: null,
+        });
+        tx.set(qr, { usedBy: id }, { merge: true });
+        tx.set(
+          gr,
+          {
+            count: (g.count || 0) + 1,
+            reservedTokens: (g.reservedTokens || 0) + c.reserveTokens,
+          },
+          { merge: true },
+        );
+        tx.set(pr, { count: (p.count || 0) + 1 }, { merge: true });
+        providerReservation.commit();
+      })
+      .catch(async (error) => {
+        // A concurrent winner may have committed while this transaction exhausted
+        // SDK retries or lost its acknowledgement. Resume only that exact owned
+        // durable request; never create another payment or loosen a quota gate.
+        if (
+          ![
+            4,
+            6,
+            10,
+            14,
+            "deadline-exceeded",
+            "already-exists",
+            "aborted",
+            "unavailable",
+          ].includes(error.code)
+        )
+          throw error;
+        const durable = (await jr.get()).data();
+        if (!durable || durable.spid !== a.spid) throw error;
+        if (durable.fingerprint !== fingerprint)
           fail("IDEMPOTENCY_KEY_CONFLICT");
-        return;
-      }
-      const q = qs.data(),
-        g = gs.data() || {},
-        p = ps.data() || {};
-      if (
-        !q ||
-        q.spid !== a.spid ||
-        q.expiresAtMs <= now() ||
-        q.usedBy ||
-        q.wallet !== String(a.walletAddress || "").toLowerCase() ||
-        q.price !== c.price ||
-        q.termsVersion !== c.termsVersion ||
-        b.termsVersion !== q.termsVersion ||
-        (q.searchProfile?.fingerprint || null) !==
-          (c.searchProfile?.fingerprint || null) ||
-        (q.searchProfile &&
-          b.searchConsentVersion !== q.searchProfile.version) ||
-        (q.contextPermissions?.balance &&
-          (b.balanceConsent !== true || !c.searchProfile?.balanceAvailable)) ||
-        (q.contextPermissions?.achievements &&
-          (b.achievementsConsent !== true ||
-            !c.searchProfile?.achievementsAvailable))
-      )
-        fail("QUOTE_EXPIRED_OR_CHANGED");
-      if ((g.count || 0) >= c.globalDaily || (p.count || 0) >= c.personDaily)
-        fail("AI_DAILY_LIMIT", 429);
-      if ((g.reservedTokens || 0) + c.reserveTokens > c.tokenBudget)
-        fail("AI_BUDGET_LIMIT", 429);
-      const providerReservation = await freeTier.admission(tx, c.reserveTokens);
-      tx.create(jr, {
-        spid: a.spid,
-        uid: a.uid,
-        walletAddress: q.wallet,
-        goal: q.goal,
-        fingerprint,
-        orderId: "agent_" + id,
-        state: "awaiting_payment",
-        createdAtMs: now(),
-        updatedAtMs: now(),
-        paymentUntilMs: now() + 10 * 60000,
-        bucket,
-        providerBucket: providerReservation.bucket,
-        price: q.price,
-        quoteId: b.quoteId,
-        termsVersion: q.termsVersion,
-        searchProfile: q.searchProfile || null,
-        scopeSnapshot: q.scopeSnapshot || null,
-        contextPermissions: q.contextPermissions || {
-          balance: false,
-          achievements: false,
-        },
-        consentAtMs: now(),
-        events: [{ state: "awaiting_payment", atMs: now() }],
-        deleteAfter: new Date(now() + 30 * 86400000),
-        result: null,
       });
-      tx.set(qr, { usedBy: id }, { merge: true });
-      tx.set(
-        gr,
-        {
-          count: (g.count || 0) + 1,
-          reservedTokens: (g.reservedTokens || 0) + c.reserveTokens,
-        },
-        { merge: true },
-      );
-      tx.set(pr, { count: (p.count || 0) + 1 }, { merge: true });
-      providerReservation.commit();
-    });
     await pay(id);
     return view(a, id);
   }
@@ -294,7 +368,21 @@ function createEconomy({
     try {
       a = await actor({ uid: j.uid, walletAddress: j.walletAddress });
       if (a.spid !== j.spid) fail("IDENTITY_CHANGED");
-      await allowed(a, true); // Capacity is already reserved by this durable job.
+      const paymentConfig = await allowed(a, true);
+      if (j.taskType) {
+        tasks.task(j.taskType, paymentConfig);
+        const checked = await sources.cross.current(
+          a,
+          j.workBundle.sources,
+          j.searchProfile,
+          j.contextPermissions,
+          { checkPrivate: false },
+        );
+        const approved = tasks.material(j.taskType, checked.sources);
+        if (approved.length !== j.workBundle.sources.length)
+          fail("WORK_MATERIAL_UNAVAILABLE", 409);
+      } // reject disabled or withdrawn work material before any payment
+      // Capacity is already reserved by this durable job.
       await payments.pay({
         id: j.orderId,
         actor: a,
@@ -338,6 +426,9 @@ function createEconomy({
           "AI_AUDIENCE_NOT_VERIFIED",
           "IDENTITY_CHANGED",
           "FREE_QUOTA_WINDOW_EXPIRED",
+          "WORKFLOW_DISABLED",
+          "WORK_SOURCE_DISABLED",
+          "WORK_MATERIAL_UNAVAILABLE",
         ].includes(e.message)
       )
         await transition(id, ["awaiting_payment"], {
@@ -379,6 +470,9 @@ function createEconomy({
       searchProfile: j.searchProfile || null,
       scopeSnapshot: j.scopeSnapshot || null,
       progress: j.progress || null,
+      taskType: j.taskType || null,
+      execution: j.execution || null,
+      artifactId: j.artifactId || null,
       events: (j.events || []).map((e) => ({ state: e.state, atMs: e.atMs })),
       payment: order
         ? {
@@ -462,7 +556,16 @@ function createEconomy({
         j.leaseUntilMs <= now()
       )
         fail("LEASE_EXPIRED");
-      tx.set(r, { progress }, { merge: true });
+      tx.set(
+        r,
+        {
+          progress,
+          ...(j.execution
+            ? { execution: tasks.advance(j.execution, progress, now()) }
+            : {}),
+        },
+        { merge: true },
+      );
     });
   }
   async function work(id) {
@@ -497,6 +600,10 @@ function createEconomy({
         a = await actor({ uid: j.uid, walletAddress: j.walletAddress });
       if (a.spid !== j.spid) fail("IDENTITY_CHANGED");
       const c = await allowed(a, true);
+      if (j.taskType) {
+        tasks.task(j.taskType, c);
+        await reportProgress(id, token, "planning");
+      }
       const budget = (await ref("usage", j.bucket).get()).data();
       if (
         j.termsVersion !== c.termsVersion ||
@@ -513,13 +620,33 @@ function createEconomy({
       if (j.searchProfile) {
         try {
           if (!sources.cross) fail("CROSS_SEARCH_DISABLED", 503);
-          await reportProgress(id, token, "collecting_public_sources");
-          bundle = await sources.cross.collect(
-            a,
-            j.goal,
-            j.searchProfile,
-            j.contextPermissions,
+          await reportProgress(
+            id,
+            token,
+            j.taskType ? "collecting" : "collecting_public_sources",
           );
+          bundle = j.taskType
+            ? {
+                ...j.workBundle,
+                sources: tasks.material(
+                  j.taskType,
+                  (
+                    await sources.cross.current(
+                      a,
+                      j.workBundle.sources,
+                      j.searchProfile,
+                      j.contextPermissions,
+                      { checkPrivate: false },
+                    )
+                  ).sources,
+                ),
+              }
+            : await sources.cross.collect(
+                a,
+                j.goal,
+                j.searchProfile,
+                j.contextPermissions,
+              );
         } catch (error) {
           error.generationAttempted = false;
           throw error;
@@ -556,11 +683,23 @@ function createEconomy({
           const current = new Map(checked.map((s) => [s.key, s]));
           for (const s of selected) {
             const live = current.get(s.key);
-            if (!live || live.title !== s.title || live.summary !== s.summary)
+            if (
+              !live ||
+              live.title !== s.title ||
+              live.summary !== s.summary ||
+              (j.taskType &&
+                (!live.permission.artifactUseApproved ||
+                  !live.permission.artifactAllowedTasks.includes(j.taskType)))
+            )
               fail("AI_SOURCE_CHANGED", 409);
           }
+          if (j.taskType) tasks.material(j.taskType, checked);
           if (j.searchProfile)
-            await reportProgress(id, token, "comparing_verified_sources");
+            await reportProgress(
+              id,
+              token,
+              j.taskType ? "working" : "comparing_verified_sources",
+            );
           const ready = (await jr.get()).data();
           if (
             ready.state !== "running" ||
@@ -571,7 +710,11 @@ function createEconomy({
         },
         (operation) => freeTier.beforeCall(operation, id, token),
         bundle
-          ? { profileVersion: j.searchProfile.version, plan: bundle.plan }
+          ? {
+              profileVersion: j.searchProfile.version,
+              plan: bundle.plan,
+              taskType: j.taskType || null,
+            }
           : {},
       );
       if (bundle) {
@@ -615,7 +758,75 @@ function createEconomy({
           );
       }
       await recordUsage(id, j.bucket, result.usage);
-      if (
+      if (j.taskType) {
+        await reportProgress(id, token, "validating");
+        if (
+          !result.artifact ||
+          result.artifact.artifactType !== j.taskType ||
+          result.usage.providerCalled !== true
+        )
+          fail("ARTIFACT_INVALID_OUTPUT", 502);
+        const current = await sources.cross.current(
+          a,
+          result.artifact.references,
+          j.searchProfile,
+          j.contextPermissions,
+          { checkPrivate: false },
+        );
+        if (
+          current.sources.length !== result.artifact.references.length ||
+          current.sources.some(
+            (s) =>
+              !s.permission.artifactUseApproved ||
+              !s.permission.artifactAllowedTasks.includes(j.taskType),
+          )
+        )
+          fail("ARTIFACT_REFERENCES_UNAVAILABLE", 409);
+        const value = artifacts.record(id, j, result.artifact);
+        delete result.artifact;
+        result.artifactId = id;
+        await reportProgress(id, token, "saving");
+        const saved = await db.runTransaction(async (tx) => {
+          const snap = await tx.get(jr),
+            currentJob = snap.data();
+          if (
+            !currentJob ||
+            currentJob.state !== "running" ||
+            currentJob.leaseToken !== token ||
+            currentJob.leaseUntilMs <= now()
+          )
+            return false;
+          artifacts.save(tx, id, value);
+          const execution = tasks.advance(
+            currentJob.execution,
+            "saving",
+            now(),
+          );
+          execution.steps = execution.steps.map((s) => ({
+            ...s,
+            state: "completed",
+            completedAt: s.completedAt || now(),
+          }));
+          tx.set(
+            jr,
+            {
+              state: "result_saved",
+              result,
+              artifactId: id,
+              workBundle: null,
+              execution,
+              updatedAtMs: now(),
+              events: [
+                ...(currentJob.events || []),
+                { state: "result_saved", atMs: now() },
+              ],
+            },
+            { merge: true },
+          );
+          return true;
+        });
+        if (saved) await settle(id);
+      } else if (
         await transition(
           id,
           ["running"],
@@ -687,10 +898,39 @@ function createEconomy({
         );
         if (!error.usage) await markUnknownUsage(id);
       }
+      const failedJob = (await jr.get()).data();
+      if (failedJob?.execution) {
+        const currentJob = failedJob;
+        const stage =
+          currentJob.execution.steps.find((s) => s.state === "running")?.id ||
+          "planning";
+        await db.runTransaction(async (tx) => {
+          const snap = await tx.get(jr),
+            v = snap.data();
+          if (v?.state === "running" && v.leaseToken === token)
+            tx.set(
+              jr,
+              {
+                execution: tasks.advance(
+                  v.execution,
+                  stage,
+                  now(),
+                  "WORK_FAILED",
+                ),
+              },
+              { merge: true },
+            );
+        });
+      }
       await transition(
         id,
         ["running"],
-        { state: "refund_pending", error: "AGENT_FAILED", result: null },
+        {
+          state: "refund_pending",
+          error: "AGENT_FAILED",
+          result: null,
+          workBundle: null,
+        },
         token,
       );
       await refund(id);
@@ -812,17 +1052,20 @@ function createEconomy({
       await db.runTransaction(async (tx) => {
         const s = await tx.get(d.ref),
           j = s.data();
-        if (j && TERMINAL.includes(j.state))
+        if (j && TERMINAL.includes(j.state)) {
+          if (j.artifactId) artifacts.expire(tx, j.artifactId, j.uid);
           tx.set(
             d.ref,
             {
               goal: null,
               result: null,
+              workBundle: null,
               deleteAfter: null,
               contentDeletedAtMs: now(),
             },
             { merge: true },
           );
+        }
       });
   }
   async function tick() {
@@ -830,8 +1073,11 @@ function createEconomy({
     // Nonempty cycles retain the per-state scans and ordering: payment recovery
     // can become queued and finish in the same cycle, and a large queued set
     // cannot starve refunds/result_saved. Completed history is never scanned.
-    const active = await db.collection("emuer_v2_agent_jobs")
-      .where("state", "in", LIVE).limit(1).get();
+    const active = await db
+      .collection("emuer_v2_agent_jobs")
+      .where("state", "in", LIVE)
+      .limit(1)
+      .get();
     if (active.empty) return;
     for (const state of LIVE) {
       const s = await db
@@ -855,6 +1101,19 @@ function createEconomy({
               state: "refund_pending",
               result: null,
               error: "WORKER_INTERRUPTED",
+              ...(d.data().execution
+                ? {
+                    execution: tasks.advance(
+                      d.data().execution,
+                      d
+                        .data()
+                        .execution.steps.find((s) => s.state === "running")
+                        ?.id || "planning",
+                      now(),
+                      "WORKER_INTERRUPTED",
+                    ),
+                  }
+                : {}),
             },
             d.data().leaseToken,
           );
@@ -867,6 +1126,7 @@ function createEconomy({
   }
   return {
     config,
+    artifacts,
     status,
     actor,
     quote,

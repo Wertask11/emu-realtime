@@ -74,6 +74,14 @@ function createRegistry({
         ...s.permission,
         authorAIConsent: true,
         operatorReviewed: true,
+        artifactUseApproved:
+          r.artifactUseApproved === true &&
+          r.artifactPurpose === require("../tasks").VERSION,
+        artifactAllowedTasks: Array.isArray(r.artifactAllowedTasks)
+          ? r.artifactAllowedTasks.filter((t) =>
+              Object.hasOwn(require("../tasks").TASKS, t),
+            )
+          : [],
       },
       sourceVersion: hash([s.title, s.summary]),
     };

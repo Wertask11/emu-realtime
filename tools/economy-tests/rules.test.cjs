@@ -14,6 +14,8 @@ const {
 } = require("firebase/firestore");
 let env;
 const cols = [
+  "artifacts",
+  "artifact_owners",
   "products",
   "quotes",
   "jobs",
