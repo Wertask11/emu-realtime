@@ -23279,6 +23279,7 @@ async function loadEmuValueProfile() {
     let changed = 0;
     let acceptedChanges = 0;
     let elevatedPosts = 0;   // 改善を採り入れて育った自分の投稿の数（学びへ昇華）
+    const myPostRefs = [];   // 返り道（11/9）：自分の投稿が SchoolPark で試された数を引くため
     const helped = new Set();
     const valuePosts = [];
     snap.forEach(function(doc) {
@@ -23294,6 +23295,7 @@ async function loadEmuValueProfile() {
         if (a) helped.add(String(a).toLowerCase());
       });
       if (good > 0 || change > 0) valuePosts.push({ title:p.title || emuT('value.untitled'), good:good, change:change });
+      myPostRefs.push({ id: doc.id, title: p.title || emuT('value.untitled') });
     });
     const helpedEl = document.getElementById('emuHelpedPeople');
     const helpfulEl = document.getElementById('emuHelpfulCount');
@@ -23365,7 +23367,28 @@ async function loadEmuValueProfile() {
     const deliveredEl = document.getElementById('emuKnowledgeDeliveredCount');
     if (deliveredEl) deliveredEl.textContent = emuT('unit.items', { n: deliveredKnowledge.length });
 
+    /* 返り道（11/9）：自分の知識が SchoolPark で実際に試された記録。いちばん上に出す。
+       数はサーバーがまとめて数えたもの（Firestore は読まない）。6秒で返らなければ出さない。 */
+    let trials = {};
+    try {
+      if (typeof window.emuKnowledgeTrials === 'function') {
+        trials = await Promise.race([window.emuKnowledgeTrials(), new Promise(function(r){ setTimeout(function(){ r({}); }, 6000); })]) || {};
+      }
+    } catch (trialsError) { trials = {}; }
+    const triedPosts = myPostRefs.map(function(p) { return { title: p.title, t: trials[p.id] }; })
+      .filter(function(p) { return p.t && (p.t.tried || p.t.wisdom || p.t.quests); })
+      .sort(function(a,b) { return (b.t.tried||0) - (a.t.tried||0); });
+
     timeline.innerHTML = '';
+    triedPosts.slice(0,5).forEach(function(p) {
+      const parts = [];
+      if (p.t.wisdom) parts.push(emuT('value.trialWisdom', { n: p.t.wisdom }));
+      if (p.t.quests) parts.push(emuT('value.trialQuests', { n: p.t.quests }));
+      timeline.appendChild(_emuValueEvent(
+        p.t.tried ? emuT('value.trialTitle', { title: p.title, n: p.t.tried }) : emuT('value.trialTitleNoTry', { title: p.title }),
+        parts.length ? emuT('value.trialDetail', { parts: parts.join('・') }) : emuT('value.trialDetailTried')
+      ));
+    });
     valuePosts.sort(function(a,b) { return (b.good+b.change) - (a.good+a.change); });
     valuePosts.slice(0,5).forEach(function(p) {
       const parts = [];
@@ -23399,7 +23422,7 @@ async function loadEmuValueProfile() {
         String(answer.knowledge || '').slice(0,100)
       ));
     });
-    if (!valuePosts.length && !changesGiven.length && !learnedPosts.length && !deliveredKnowledge.length) {
+    if (!triedPosts.length && !valuePosts.length && !changesGiven.length && !learnedPosts.length && !deliveredKnowledge.length) {
       timeline.appendChild(_emuValueEvent(emuT('value.firstTitle'), emuT('value.firstText')));
     }
   } catch (e) {
@@ -29503,6 +29526,60 @@ async function sendEmuFeedback() {
     }
   }
 
+  /* 返り道（11/9）。Emu の知識が SchoolPark でどう使われたか（数だけ）。
+     サーバー（/api/emu/knowledge-trials）が1時間に1回まとめて数えたものを読む。Firestore は読まない。
+     ここでも30分は覚えておく。読めなければ何も出さない（今までどおりの表示になる）。 */
+  let _emuTrials = null, _emuTrialsAt = 0, _emuTrialsReq = null;
+  function emuKnowledgeTrials() {
+    if (_emuTrials && Date.now() - _emuTrialsAt < 30 * 60 * 1000) return Promise.resolve(_emuTrials);
+    if (_emuTrialsReq) return _emuTrialsReq;
+    _emuTrialsReq = (async () => {
+      try {
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => controller.abort(), 40000) : null;
+        const r = await fetch('https://emu-realtime.onrender.com/api/emu/knowledge-trials',
+          { cache:'no-store', signal: controller ? controller.signal : undefined });
+        if (timer) clearTimeout(timer);
+        const j = await r.json();
+        if (r.ok && j && j.posts && typeof j.posts === 'object') { _emuTrials = j.posts; _emuTrialsAt = Date.now(); }
+      } catch (e) {}
+      return _emuTrials || {};
+    })().finally(() => { _emuTrialsReq = null; });
+    return _emuTrialsReq;
+  }
+  window.emuKnowledgeTrials = emuKnowledgeTrials;
+  /* 一覧に出ている投稿の分だけ送る。自分の投稿が新しく試されていたら、ひとこと知らせる。
+     「前に見た数」は端末に覚えておく（emu.trials.seen.v1）。消えても、もう一度知らせるだけ。 */
+  function emuSendKnowledgeTrials(rows, trials, account) {
+    const list = {};
+    (rows || []).forEach(r => {
+      const t = trials && trials[r.id];
+      if (t) list[r.id] = { tried: Number(t.tried) || 0, wisdom: Number(t.wisdom) || 0, quests: Number(t.quests) || 0 };
+    });
+    if (!Object.keys(list).length) return;
+    sendKnowledge({ type:'emu-knowledge-trials', trials:list });
+    if (!account) return;
+    let seen = {};
+    try { seen = JSON.parse(localStorage.getItem('emu.trials.seen.v1') || '{}') || {}; } catch (e) { seen = {}; }
+    const fresh = [];
+    (rows || []).forEach(r => {
+      const t = list[r.id];
+      if (!t || !t.tried) return;
+      const mine = typeof emuIsMine === 'function' ? emuIsMine(r.address) : String(r.address || '').toLowerCase() === account;
+      if (!mine) return;
+      const before = Number(seen[r.id]) || 0;
+      if (t.tried > before) fresh.push({ title: String(r.title || '').slice(0, 40), n: t.tried - before });
+      seen[r.id] = t.tried;
+    });
+    try { localStorage.setItem('emu.trials.seen.v1', JSON.stringify(seen)); } catch (e) {}
+    if (!fresh.length) return;
+    const first = fresh[0];
+    const text = fresh.length === 1
+      ? 'あなたの知識「' + first.title + '」を、新しく' + first.n + '人が SchoolPark でやってみました🧪'
+      : 'あなたの知識を、新しく' + fresh.reduce((n, f) => n + f.n, 0) + '人が SchoolPark でやってみました🧪';
+    sendKnowledge({ type:'emu-knowledge-notice', text });
+  }
+
   async function syncKnowledgeFrame(options) {
     options = options || {};
     if (!knowledgeSyncing) return runKnowledgeSync(options);
@@ -29581,6 +29658,9 @@ async function sendEmuFeedback() {
       /* 送ったときにまだ読めていなかった書き手は、読めたところで送る */
       const authorsLeft = authorAddrs.filter(a => typeof window.emuProfileKnown !== 'function' || window.emuProfileKnown(a) === undefined);
       if (authorsLeft.length) authorsRead.then(() => window.emuKnowledgeSendAuthors(authorsLeft));
+      /* 返り道（11/9）：この知識を SchoolPark でやってみた人・知恵カード・クエストの数を、あとから添える。
+         一覧は待たせない（サーバーが起きるまで時間がかかることがある）。 */
+      emuKnowledgeTrials().then(trials => emuSendKnowledgeTrials(rows, trials, account)).catch(() => {});
       /* 出し終わったところで見張りを始める。
          いま出ている先頭を覚えてから始めるので、開いた直後に
          むだな読み直しが走らない。 */

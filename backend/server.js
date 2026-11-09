@@ -342,6 +342,8 @@ const economy = require("./economy/router").createEconomyRouter({
 });
 app.use("/api/economy", economy.router);
 app.use("/api/schoolpark/quest-completions", questCompletion);
+/* 返り道（11/9）：Emu の投稿ごとに「やってみた人・知恵カード・クエスト」の数を返す（backend/knowledge-trials.js）。 */
+app.use("/api/emu/knowledge-trials", require("./knowledge-trials").createKnowledgeTrialsRouter({ db }).router);
 /* Quest #000 の論文を、リポジトリの新しい版へ差し替える（運営だけ） */
 app.use("/api/schoolpark/founder", require("./founder-paper").createFounderPaperRouter({ db, requireOwner }));
 app.use("/api/schoolpark/city", require("./city").createCityRouter({
