@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 本人が選んで公開した1件だけを見せるページ。検索には載せない（URLを渡された人だけが見る）。 -->
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>完走証明 | SchoolPark</title>
+<link rel="icon" href="/assets/mascot.jpg">
+<style>
+:root{--ink:#141310;--sub:#5c5850;--paper:#f4f1ea;--card:#fffdf8;--line:rgba(20,19,16,.14);--brand:#0f5c3f;--soft:#ecfdf5;--accent:#6E695C}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Noto Sans JP','Hiragino Sans',system-ui,sans-serif;line-height:1.8}
+main{max-width:720px;margin:0 auto;padding:32px 16px 48px}
+.eyebrow{font-size:11px;letter-spacing:.18em;color:var(--brand);font-weight:700}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:clamp(20px,5vw,36px);box-shadow:0 18px 50px rgba(20,19,16,.08);margin-top:12px}
+h1{font-size:clamp(22px,6vw,30px);line-height:1.4;margin:10px 0 6px}
+.label{display:inline-block;font-size:12px;font-weight:700;color:#fff;background:var(--accent);border-radius:999px;padding:2px 10px;margin-right:6px}
+.round{display:inline-block;font-size:12px;font-weight:700;border:1px solid var(--line);border-radius:999px;padding:1px 8px}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:20px 0 0}
+dt{color:var(--sub);font-size:13px}
+dd{margin:0;font-weight:700;overflow-wrap:anywhere}
+.wisdom{margin-top:24px;background:var(--soft);border-radius:12px;padding:18px}
+.wisdom h2{font-size:15px;margin:0 0 10px;color:var(--brand)}
+.wisdom p{margin:6px 0;font-size:14px}
+.wisdom .k{display:block;font-size:11px;letter-spacing:.08em;color:var(--sub);font-weight:700}
+.insight{font-size:17px!important;font-weight:700}
+.about{font-size:13px;color:var(--sub);margin-top:24px}
+.about a{color:var(--brand)}
+.state{text-align:center;color:var(--sub);padding:40px 8px}
+.verified{display:inline-flex;align-items:center;gap:6px;margin-top:16px;font-size:13px;font-weight:700;color:var(--brand)}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">SCHOOLPARK · QUEST COMPLETION</div>
+  <div class="card" id="proof" aria-live="polite">
+    <p class="state" id="state">完走証明を読み込んでいます…<br><small>（はじめは30秒ほどかかることがあります）</small></p>
+  </div>
+  <div class="about">
+    <p>SchoolPark のクエストは、知識を実際に試し、「やってみた・つまずいた・気づいた」の報告と知恵カードを残し、運営が中身を確かめて完走になります。</p>
+    <p>このページは、合同会社型DAO SchoolPark のサーバーが、運営の承認記録から表示しています。公開するかどうかは本人が選び、本人はいつでも公開をやめられます。ウォレットのアドレスや報告の本文・写真は表示しません。</p>
+    <p><a href="/">Emu for SchoolPark をひらく</a></p>
+  </div>
+</main>
+<script>
+(function () {
+  'use strict';
+  var API = 'https://emu-realtime.onrender.com/api/schoolpark/proofs/view/';
+  var box = document.getElementById('proof');
+  var token = new URLSearchParams(location.search).get('t') || '';
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function day(ms) {
+    if (!ms) return '—';
+    try { return new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(ms)); }
+    catch (e) { return new Date(ms).toISOString().slice(0, 10); }
+  }
+  function fail(text) { box.innerHTML = '<p class="state">' + esc(text) + '</p>'; }
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) { fail('このURLの完走証明は見つかりませんでした。'); return; }
+  var controller = typeof AbortController === 'function' ? new AbortController() : null;
+  var timer = controller ? setTimeout(function () { controller.abort(); }, 45000) : null;
+  fetch(API + encodeURIComponent(token), { cache: 'no-store', signal: controller ? controller.signal : undefined })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
+    .then(function (res) {
+      if (timer) clearTimeout(timer);
+      if (res.status === 404) return fail('この完走証明は見つかりませんでした。公開がやめられたか、URLが違う可能性があります。');
+      if (!res.ok || !res.j || !res.j.proof) return fail('いま完走証明を読み込めませんでした。時間をおいて、もう一度ひらいてください。');
+      var p = res.j.proof;
+      document.title = '完走証明：' + (p.questLabel ? p.questLabel + ' ' : '') + p.questTitle + ' | SchoolPark';
+      var html = '<div><span class="label" style="background:' + esc(p.guildColor) + '">' + esc(p.questLabel || 'クエスト') + '</span>'
+        + (p.round > 1 ? '<span class="round">' + esc(p.round) + '周目</span>' : '') + '</div>'
+        + '<h1>' + esc(p.questTitle || '（題名なし）') + '</h1>'
+        + '<div class="verified">✓ 運営が中身を確かめて、完走と認めました</div>'
+        + '<dl><dt>完走した人</dt><dd>' + (p.name ? esc(p.name) + ' <small style="font-weight:400;color:var(--sub)">（本人が名乗っている名前）</small>' : 'SchoolPark の参加者（名前は非公開）') + '</dd>'
+        + '<dt>認められた日</dt><dd>' + esc(day(p.completedAt)) + '</dd>'
+        + (p.nft ? '<dt>証明書NFT</dt><dd>#' + esc(p.nft.tokenId) + '（Polygon）'
+          + (p.nft.contract ? ' <a href="https://polygonscan.com/nft/' + esc(p.nft.contract) + '/' + esc(p.nft.tokenId) + '" target="_blank" rel="noopener noreferrer">記録を確かめる</a>' : '') + '</dd>' : '')
+        + '</dl>';
+      if (p.wisdom && p.wisdom.insight) {
+        html += '<section class="wisdom"><h2>💡 この完走から生まれた知恵カード</h2>'
+          + (p.wisdom.knowledge ? '<p><span class="k">元の知識</span>' + esc(p.wisdom.knowledge) + (p.wisdom.fromPostTitle ? '（Emu「' + esc(p.wisdom.fromPostTitle) + '」）' : '') + '</p>' : '')
+          + (p.wisdom.experiment ? '<p><span class="k">通した経験</span>' + esc(p.wisdom.experiment) + '</p>' : '')
+          + '<p class="insight"><span class="k">残った一文</span>' + esc(p.wisdom.insight) + '</p></section>';
+      }
+      box.innerHTML = html;
+    })
+    .catch(function () { if (timer) clearTimeout(timer); fail('いま完走証明を読み込めませんでした。時間をおいて、もう一度ひらいてください。'); });
+})();
+</script>
+</body>
+</html>

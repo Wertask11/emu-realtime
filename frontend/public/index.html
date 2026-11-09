@@ -4661,6 +4661,8 @@ body.emu-maintenance-open{overflow:hidden}
 }
 .ws-welcome-label { font-size: 10px; letter-spacing: 0.22em; font-weight: 600; color: #9b8ec4; text-transform: uppercase; margin-bottom: 6px; }
 .ws-app-name { font-size: clamp(22px, 7vw, 28px); font-weight: 800; color: #1a1840; letter-spacing: -0.01em; line-height: 1.1; }
+.ws-app-promise { margin: 10px auto 0; max-width: 330px; font-size: 12.5px; line-height: 1.7; font-weight: 600; color: #5e5670; }
+.ws-app-promise span { display: inline-block; }
 
 .ws-btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
 #connectWalletButton {
@@ -4837,9 +4839,10 @@ body.emu-maintenance-open{overflow:hidden}
   <h2>できること</h2>
   <ul>
     <li>知識を読む・届ける（経験から生まれた知識を交換する）</li>
-    <li>知識を探す（困りごとを募集し、経験のある人が答える）</li>
-
-
+    <li>知識を探す（分野・仕事・目的から経験知を探し、掛け合わせる。運営がまとめた教材も読める）</li>
+    <li>知識を試す（Emuの知識をSchoolParkのクエストで実際にやってみて、報告を残す）</li>
+    <li>知恵として残す（やってみて分かったことを知恵カードにする。試された数は、知識を書いた人にも返る）</li>
+    <li>完走が記録に残る（完走したクエストと知恵カードが、SchoolParkパスポートと星空に積み上がる）</li>
     <li>価値プロフィール（投稿数ではなく、誰にどれだけ届いたかを記録する）</li>
   </ul>
   <h2>料金</h2>
@@ -4897,6 +4900,8 @@ body.emu-maintenance-open{overflow:hidden}
         </div>
         <div class="ws-welcome-label">Welcome to</div>
         <div class="ws-app-name">Emu for SchoolPark</div>
+        <!-- 入口でいちばん強い体験を一言で（11/9）。ここにはログインボタンしか無く、何ができる場所かが書かれていなかった。 -->
+        <p class="ws-app-promise"><span>あなたの経験が、</span><span>誰かの「やってみた」になって返ってくる。</span><br><span>知識を読んで、試して、</span><span>知恵として残す場所。</span></p>
       </div>
 
       <div class="ches-btn-col">
@@ -5011,7 +5016,8 @@ html[data-sp-time="morning"] .ws-mascot-hint-dots { color:#a99be0; }
 html[data-sp-time="morning"] .ws-welcome-label { color:#9a7f9a; }
 html[data-sp-time="morning"] .ws-app-name,
 html[data-sp-time="morning"] .ches-returning-note b { color:#2c2f63; }
-html[data-sp-time="morning"] .ches-returning-note { color:#5e5670; }
+html[data-sp-time="morning"] .ches-returning-note,
+html[data-sp-time="morning"] .ws-app-promise { color:#5e5670; }
 html[data-sp-time="morning"] .ches-adv-toggle,
 html[data-sp-time="morning"] .ches-consent,
 html[data-sp-time="morning"] .ches-email-note,
@@ -5029,7 +5035,8 @@ html[data-sp-time="day"] .ws-mascot-hint-dots { color:#7fb0de; }
 html[data-sp-time="day"] .ws-welcome-label { color:#5a7fa6; }
 html[data-sp-time="day"] .ws-app-name,
 html[data-sp-time="day"] .ches-returning-note b { color:#12305c; }
-html[data-sp-time="day"] .ches-returning-note { color:#5b6878; }
+html[data-sp-time="day"] .ches-returning-note,
+html[data-sp-time="day"] .ws-app-promise { color:#5b6878; }
 html[data-sp-time="day"] .ches-adv-toggle,
 html[data-sp-time="day"] .ches-consent,
 html[data-sp-time="day"] .ches-email-note,
@@ -5049,7 +5056,8 @@ html[data-sp-time="night"] .ws-mascot-hint-dots { color:#c9d2ff; }
 html[data-sp-time="night"] .ws-welcome-label { color:#9fa9d6; }
 html[data-sp-time="night"] .ws-app-name,
 html[data-sp-time="night"] .ches-returning-note b { color:#ffffff; }
-html[data-sp-time="night"] .ches-returning-note { color:#c3c9e6; }
+html[data-sp-time="night"] .ches-returning-note,
+html[data-sp-time="night"] .ws-app-promise { color:#c3c9e6; }
 html[data-sp-time="night"] .ches-adv-toggle,
 html[data-sp-time="night"] .ches-consent,
 html[data-sp-time="night"] .ches-email-note,
@@ -21881,7 +21889,10 @@ async function openSpPassport() {
       /* 全部の周を受け取り済みなら、届いた先と「MetaMaskに追加」を出す。 */
       const certificate = !q.isFounder
         ? (_spCertMintedHtml(certs, q.id, Math.max(1, Number(q.rounds) || 0))
-          || '<br><button type="button" data-quest-star="' + escapeHtml(q.id) + '" class="spp-star-claim">証明書NFTを受け取る</button>') : '';
+          || '<br><button type="button" data-quest-star="' + escapeHtml(q.id) + '" class="spp-star-claim">証明書NFTを受け取る</button>')
+          /* 完走証明ページ（11/9）。本人が選んだ周だけを、URLで外の人に見せられる。 */
+          + ' <button type="button" class="spp-star-claim" data-proof-quest="' + escapeHtml(q.id)
+          + '" data-proof-name="' + escapeHtml(name) + '">🔗 完走証明ページ</button>' : '';
       const rowStart = doneHtml.length;
       /* 2周以上なら、そう書く。行はクエストごとに1つなので、
          書かないと「1回しか認められていない」ように見える。 */
@@ -22065,6 +22076,99 @@ document.addEventListener('click', function (e) {
   const b = e.target && e.target.closest && e.target.closest('[data-watch-nft]');
   if (b) spWatchNft(b);
 });
+
+/* 完走証明ページ（11/9）。パスポートの「完走したクエスト」から、周ごとに公開・停止する。
+   公開するのは本人が選んだものだけ（名前を出すか・知恵カードを載せるか）。
+   ウォレットのアドレス・SchoolPark ID・報告の本文と写真は、どれを選んでも出ない（backend/public-proof.js）。 */
+const SP_PROOF_API = 'https://emu-realtime.onrender.com/api/schoolpark/proofs';
+/* パスポートのボタン（暗い紙用）は、明るい窓では読みにくいので、ここだけの形にする。 */
+const SP_PROOF_BTN = 'border:0;border-radius:999px;background:#0f5c3f;color:#fff;font:inherit;font-size:13px;font-weight:700;padding:8px 14px;margin:4px 4px 0 0;cursor:pointer;';
+function _spProofUrl(token) { return location.origin + '/proof.html?t=' + encodeURIComponent(token); }
+async function _spProofCall(path, body) {
+  const headers = await emuAuthHeaders(!!body);
+  const r = await fetch(SP_PROOF_API + path, body
+    ? { method: 'POST', headers: headers, body: JSON.stringify(body) } : { headers: headers, cache: 'no-store' });
+  let j = null;
+  try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+  return j || {};
+}
+function _spProofClose() { const el = document.getElementById('spProofDialog'); if (el) el.remove(); }
+async function spOpenProof(questId, title) {
+  _spProofClose();
+  const wrap = document.createElement('div');
+  wrap.id = 'spProofDialog';
+  wrap.setAttribute('role', 'dialog');
+  wrap.setAttribute('aria-modal', 'true');
+  wrap.setAttribute('aria-label', '完走証明ページ');
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:2147482000;background:rgba(20,19,16,.55);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+  wrap.innerHTML = '<div style="box-sizing:border-box;width:min(520px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:#fffdf8;color:#141310;border-radius:16px;padding:22px 20px;font-family:inherit;line-height:1.75">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div><div style="font-size:11px;letter-spacing:.14em;color:#0f5c3f;font-weight:700">完走証明ページ</div>'
+    + '<div style="font-weight:800;font-size:16px;margin-top:2px">' + escapeHtml(title || '') + '</div></div>'
+    + '<button type="button" data-proof-close aria-label="閉じる" style="border:0;background:none;font-size:22px;cursor:pointer;line-height:1">×</button></div>'
+    + '<p style="font-size:13px;color:#5c5850;margin:10px 0 0">選んだ周だけを、URLを知っている人に見せられます。塾・学校・会社などに「動いた証明」として渡せます。'
+    + 'ウォレットのアドレス・SchoolPark ID・報告の本文と写真は出ません。いつでも公開をやめられます。</p>'
+    + '<div data-proof-body style="margin-top:14px"><p style="color:#5c5850">読み込んでいます…</p></div></div>';
+  wrap.addEventListener('click', function (e) { if (e.target === wrap || (e.target.closest && e.target.closest('[data-proof-close]'))) _spProofClose(); });
+  document.body.appendChild(wrap);
+  const body = wrap.querySelector('[data-proof-body]');
+  let list;
+  try { list = (await _spProofCall('/mine')).proofs || []; }
+  catch (e) { body.innerHTML = '<p style="color:#9b2c2c">いま読み込めませんでした。時間をおいて、もう一度お試しください。</p>'; return; }
+  const rows = list.filter(function (p) { return p.questId === questId; }).sort(function (a, b) { return a.round - b.round; });
+  if (!rows.length) { body.innerHTML = '<p style="color:#5c5850">このクエストの完走の記録がまだ見つかりません。運営が完走を認めると、ここから公開できます。</p>'; return; }
+  const myName = String(localStorage.getItem('ches_name') || '').trim();
+  body.innerHTML = rows.map(function (p) {
+    const when = p.completedAt ? _sppDate(p.completedAt) : '';
+    const head = '<div style="font-weight:700">' + (rows.length > 1 ? escapeHtml(p.round + '周目') + '　' : '') + '<small style="font-weight:400;color:#5c5850">' + escapeHtml(when ? when + ' に完走' : '') + '</small></div>';
+    if (p.token) {
+      const url = _spProofUrl(p.token);
+      return '<div style="border:1px solid rgba(20,19,16,.14);border-radius:12px;padding:12px;margin-bottom:10px">' + head
+        + '<div style="font-size:12px;word-break:break-all;background:#ecfdf5;border-radius:8px;padding:8px;margin:8px 0">' + escapeHtml(url) + '</div>'
+        + '<button type="button" style="' + SP_PROOF_BTN + '" data-proof-copy="' + escapeHtml(url) + '">URLをコピー</button> '
+        + '<a style="' + SP_PROOF_BTN + 'text-decoration:none;display:inline-block" href="' + escapeHtml(url) + '" target="_blank" rel="noopener">ひらく</a> '
+        + '<button type="button" style="' + SP_PROOF_BTN + '" data-proof-unpublish="' + escapeHtml(p.key) + '">公開をやめる</button></div>';
+    }
+    return '<div style="border:1px solid rgba(20,19,16,.14);border-radius:12px;padding:12px;margin-bottom:10px">' + head
+      + '<label style="display:flex;gap:8px;align-items:flex-start;margin-top:8px;font-size:13px"><input type="checkbox" data-proof-name ' + (myName ? '' : 'disabled') + '>'
+      + '<span>名前を出す' + (myName ? '（' + escapeHtml(myName) + '）' : '（名前がまだ決まっていません）') + '</span></label>'
+      + '<label style="display:flex;gap:8px;align-items:flex-start;margin-top:4px;font-size:13px"><input type="checkbox" data-proof-wisdom checked><span>この周の知恵カードを載せる</span></label>'
+      + '<button type="button" style="' + SP_PROOF_BTN + 'margin-top:8px" data-proof-publish="' + escapeHtml(p.key) + '">この周を公開する</button></div>';
+  }).join('');
+  body.addEventListener('click', async function (e) {
+    const t = e.target && e.target.closest ? e.target.closest('button') : null;
+    if (!t) return;
+    if (t.dataset.proofCopy) {
+      try { await navigator.clipboard.writeText(t.dataset.proofCopy); t.textContent = '✓ コピーしました'; }
+      catch (err) { window.prompt('このURLをコピーしてください', t.dataset.proofCopy); }
+      return;
+    }
+    const key = t.dataset.proofPublish || t.dataset.proofUnpublish;
+    if (!key) return;
+    t.disabled = true;
+    try {
+      if (t.dataset.proofPublish) {
+        const box = t.parentElement;
+        const showName = !!(box.querySelector('[data-proof-name]') || {}).checked;
+        const withWisdom = !!(box.querySelector('[data-proof-wisdom]') || {}).checked;
+        await _spProofCall('/' + key + '/publish', { showName: showName, name: myName, withWisdom: withWisdom });
+      } else {
+        if (!confirm('公開をやめますか？ このURLはすぐ見られなくなります（完走の記録は消えません）。')) { t.disabled = false; return; }
+        await _spProofCall('/' + key + '/unpublish', {});
+      }
+      spOpenProof(questId, title);
+    } catch (err) {
+      t.disabled = false;
+      alert('うまくいきませんでした。時間をおいて、もう一度お試しください。（' + (err && err.message ? err.message : '') + '）');
+    }
+  });
+}
+window.spOpenProof = spOpenProof;
+document.addEventListener('click', function (e) {
+  const b = e.target && e.target.closest && e.target.closest('[data-proof-quest]');
+  if (b) spOpenProof(b.dataset.proofQuest, b.dataset.proofName || '');
+});
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') _spProofClose(); });
 
 /* パスポートに連携済みのウォレットを取り出す。
 
@@ -23279,6 +23383,7 @@ async function loadEmuValueProfile() {
     let changed = 0;
     let acceptedChanges = 0;
     let elevatedPosts = 0;   // 改善を採り入れて育った自分の投稿の数（学びへ昇華）
+    const myPostRefs = [];   // 返り道（11/9）：自分の投稿が SchoolPark で試された数を引くため
     const helped = new Set();
     const valuePosts = [];
     snap.forEach(function(doc) {
@@ -23294,6 +23399,7 @@ async function loadEmuValueProfile() {
         if (a) helped.add(String(a).toLowerCase());
       });
       if (good > 0 || change > 0) valuePosts.push({ title:p.title || emuT('value.untitled'), good:good, change:change });
+      myPostRefs.push({ id: doc.id, title: p.title || emuT('value.untitled') });
     });
     const helpedEl = document.getElementById('emuHelpedPeople');
     const helpfulEl = document.getElementById('emuHelpfulCount');
@@ -23365,7 +23471,28 @@ async function loadEmuValueProfile() {
     const deliveredEl = document.getElementById('emuKnowledgeDeliveredCount');
     if (deliveredEl) deliveredEl.textContent = emuT('unit.items', { n: deliveredKnowledge.length });
 
+    /* 返り道（11/9）：自分の知識が SchoolPark で実際に試された記録。いちばん上に出す。
+       数はサーバーがまとめて数えたもの（Firestore は読まない）。6秒で返らなければ出さない。 */
+    let trials = {};
+    try {
+      if (typeof window.emuKnowledgeTrials === 'function') {
+        trials = await Promise.race([window.emuKnowledgeTrials(), new Promise(function(r){ setTimeout(function(){ r({}); }, 6000); })]) || {};
+      }
+    } catch (trialsError) { trials = {}; }
+    const triedPosts = myPostRefs.map(function(p) { return { title: p.title, t: trials[p.id] }; })
+      .filter(function(p) { return p.t && (p.t.tried || p.t.wisdom || p.t.quests); })
+      .sort(function(a,b) { return (b.t.tried||0) - (a.t.tried||0); });
+
     timeline.innerHTML = '';
+    triedPosts.slice(0,5).forEach(function(p) {
+      const parts = [];
+      if (p.t.wisdom) parts.push(emuT('value.trialWisdom', { n: p.t.wisdom }));
+      if (p.t.quests) parts.push(emuT('value.trialQuests', { n: p.t.quests }));
+      timeline.appendChild(_emuValueEvent(
+        p.t.tried ? emuT('value.trialTitle', { title: p.title, n: p.t.tried }) : emuT('value.trialTitleNoTry', { title: p.title }),
+        parts.length ? emuT('value.trialDetail', { parts: parts.join('・') }) : emuT('value.trialDetailTried')
+      ));
+    });
     valuePosts.sort(function(a,b) { return (b.good+b.change) - (a.good+a.change); });
     valuePosts.slice(0,5).forEach(function(p) {
       const parts = [];
@@ -23399,7 +23526,7 @@ async function loadEmuValueProfile() {
         String(answer.knowledge || '').slice(0,100)
       ));
     });
-    if (!valuePosts.length && !changesGiven.length && !learnedPosts.length && !deliveredKnowledge.length) {
+    if (!triedPosts.length && !valuePosts.length && !changesGiven.length && !learnedPosts.length && !deliveredKnowledge.length) {
       timeline.appendChild(_emuValueEvent(emuT('value.firstTitle'), emuT('value.firstText')));
     }
   } catch (e) {
@@ -29503,6 +29630,60 @@ async function sendEmuFeedback() {
     }
   }
 
+  /* 返り道（11/9）。Emu の知識が SchoolPark でどう使われたか（数だけ）。
+     サーバー（/api/emu/knowledge-trials）が1時間に1回まとめて数えたものを読む。Firestore は読まない。
+     ここでも30分は覚えておく。読めなければ何も出さない（今までどおりの表示になる）。 */
+  let _emuTrials = null, _emuTrialsAt = 0, _emuTrialsReq = null;
+  function emuKnowledgeTrials() {
+    if (_emuTrials && Date.now() - _emuTrialsAt < 30 * 60 * 1000) return Promise.resolve(_emuTrials);
+    if (_emuTrialsReq) return _emuTrialsReq;
+    _emuTrialsReq = (async () => {
+      try {
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => controller.abort(), 40000) : null;
+        const r = await fetch('https://emu-realtime.onrender.com/api/emu/knowledge-trials',
+          { cache:'no-store', signal: controller ? controller.signal : undefined });
+        if (timer) clearTimeout(timer);
+        const j = await r.json();
+        if (r.ok && j && j.posts && typeof j.posts === 'object') { _emuTrials = j.posts; _emuTrialsAt = Date.now(); }
+      } catch (e) {}
+      return _emuTrials || {};
+    })().finally(() => { _emuTrialsReq = null; });
+    return _emuTrialsReq;
+  }
+  window.emuKnowledgeTrials = emuKnowledgeTrials;
+  /* 一覧に出ている投稿の分だけ送る。自分の投稿が新しく試されていたら、ひとこと知らせる。
+     「前に見た数」は端末に覚えておく（emu.trials.seen.v1）。消えても、もう一度知らせるだけ。 */
+  function emuSendKnowledgeTrials(rows, trials, account) {
+    const list = {};
+    (rows || []).forEach(r => {
+      const t = trials && trials[r.id];
+      if (t) list[r.id] = { tried: Number(t.tried) || 0, wisdom: Number(t.wisdom) || 0, quests: Number(t.quests) || 0 };
+    });
+    if (!Object.keys(list).length) return;
+    sendKnowledge({ type:'emu-knowledge-trials', trials:list });
+    if (!account) return;
+    let seen = {};
+    try { seen = JSON.parse(localStorage.getItem('emu.trials.seen.v1') || '{}') || {}; } catch (e) { seen = {}; }
+    const fresh = [];
+    (rows || []).forEach(r => {
+      const t = list[r.id];
+      if (!t || !t.tried) return;
+      const mine = typeof emuIsMine === 'function' ? emuIsMine(r.address) : String(r.address || '').toLowerCase() === account;
+      if (!mine) return;
+      const before = Number(seen[r.id]) || 0;
+      if (t.tried > before) fresh.push({ title: String(r.title || '').slice(0, 40), n: t.tried - before });
+      seen[r.id] = t.tried;
+    });
+    try { localStorage.setItem('emu.trials.seen.v1', JSON.stringify(seen)); } catch (e) {}
+    if (!fresh.length) return;
+    const first = fresh[0];
+    const text = fresh.length === 1
+      ? 'あなたの知識「' + first.title + '」を、新しく' + first.n + '人が SchoolPark でやってみました🧪'
+      : 'あなたの知識を、新しく' + fresh.reduce((n, f) => n + f.n, 0) + '人が SchoolPark でやってみました🧪';
+    sendKnowledge({ type:'emu-knowledge-notice', text });
+  }
+
   async function syncKnowledgeFrame(options) {
     options = options || {};
     if (!knowledgeSyncing) return runKnowledgeSync(options);
@@ -29581,6 +29762,9 @@ async function sendEmuFeedback() {
       /* 送ったときにまだ読めていなかった書き手は、読めたところで送る */
       const authorsLeft = authorAddrs.filter(a => typeof window.emuProfileKnown !== 'function' || window.emuProfileKnown(a) === undefined);
       if (authorsLeft.length) authorsRead.then(() => window.emuKnowledgeSendAuthors(authorsLeft));
+      /* 返り道（11/9）：この知識を SchoolPark でやってみた人・知恵カード・クエストの数を、あとから添える。
+         一覧は待たせない（サーバーが起きるまで時間がかかることがある）。 */
+      emuKnowledgeTrials().then(trials => emuSendKnowledgeTrials(rows, trials, account)).catch(() => {});
       /* 出し終わったところで見張りを始める。
          いま出ている先頭を覚えてから始めるので、開いた直後に
          むだな読み直しが走らない。 */
