@@ -36,6 +36,17 @@ module.exports = function reply(payload) {
   const result = {
     artifact: {
       title: "LOCAL検証用の具体的な準備計画",
+      ...(p.workType === "wil_plan"
+        ? {
+            learningGoal:
+              "コーヒーの香りと見た目を観察し、実践前後の気づきを比較できる記録を残す。",
+            preparation: [
+              "香りと見た目を観察するためのコーヒーを本人が選ぶ",
+              "比較に使う観察用のカップを用意する",
+              "日時と観察内容を書き留めるノートと筆記具を用意する",
+            ],
+          }
+        : {}),
       summary:
         rows.length > 1
           ? "候補ごとの目的を比べ、最初の資料を使って小さな実践と記録から始める提案です。"
