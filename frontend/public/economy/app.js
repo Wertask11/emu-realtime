@@ -14,7 +14,8 @@
     busy = false,
     progressTimer = null,
     progressBusy = false,
-    searchProfile = null;
+    searchProfile = null,
+    artifactUI = null;
   const watchedJobs = new Map();
   const activeStates = new Set([
     "awaiting_payment",
@@ -35,6 +36,11 @@
     expired: "決済期限切れ",
   };
   const messages = {
+    WORKFLOW_DISABLED: "準備作業は停止中です。既存の探索を選択してください。",
+    WORK_SOURCE_DISABLED:
+      "この作業の資料連携は未承認のため利用できません。料金は請求していません。",
+    WORK_MATERIAL_UNAVAILABLE:
+      "この作業に必要な許諾済み資料が見つかりませんでした。料金は請求していません。",
     AUTH_REQUIRED: "ログインしてから開いてください。",
     PASSPORT_REQUIRED: "SchoolParkパスポートの連携を確認してください。",
     SERVICE_DISABLED:
@@ -71,16 +77,20 @@
     quote = null;
     requestId = null;
     $("approval").hidden = true;
+    $("executionPlan").replaceChildren();
     $("paymentConsent").checked = false;
     $("aiConsent").checked = false;
   }
   function reset() {
     generation++;
+    artifactUI?.reset();
     clearTimeout(progressTimer);
     progressTimer = null;
     watchedJobs.clear();
     identityKey = user();
     searchProfile = null;
+    $("workOptions").hidden = true;
+    $("taskType").value = "";
     $("crossOptions").hidden = true;
     $("balanceConsent").checked = false;
     $("achievementsConsent").checked = false;
@@ -159,6 +169,34 @@
     service: "使い方・プラン",
   };
   function paintService(service) {
+    const work = service.workflow;
+    $("introDescription").textContent = work?.enabled
+      ? "Plus・Pro会員向けに、許諾済み情報を調べ、本人専用の下書き・活動計画を作成して保存します。作業と料金を確認してからお申し込みください。"
+      : "Plus・Pro会員向けに、活動の候補を探す仕事を冷蔵庫くんに依頼できます。料金と条件を確認してからお申し込みください。";
+    const chosen = $("taskType").value;
+    $("workLimit").textContent = work?.enabled
+      ? "準備作業では、AIの提案と本人記入欄を分けた下書き・計画を保存します。資料不足は決済前に拒否し、生成・保存に失敗した場合は全額返却します。既存の探索は候補0件も料金対象です。"
+      : "現在は探索・比較・候補提案が対象です。正常に探索が完了した場合は候補0件も5 EMUERがかかります。";
+    $("workOptions").hidden = !work?.enabled;
+    $("taskType").replaceChildren(
+      node("option", "調べて比較する（既存の探索）"),
+    );
+    $("taskType").firstChild.value = "";
+    for (const t of work?.tasks || []) {
+      const o = node(
+        "option",
+        t.label + (t.available ? "" : "（許諾済み資料の連携待ち）"),
+      );
+      o.value = t.id;
+      o.disabled = !t.available;
+      $("taskType").append(o);
+    }
+    $("taskType").value =
+      work?.enabled && work.tasks.some((t) => t.id === chosen && t.available)
+        ? chosen
+        : "";
+    if (quote?.taskType && $("taskType").value !== quote.taskType)
+      clearApproval();
     const next = service.searchProfile || null;
     if (
       quote &&
@@ -381,7 +419,12 @@
     article.dataset.progress = job.progress || "";
     article.tabIndex = -1;
     article.append(
-      node("b", labels[job.state] || "状態を確認中"),
+      node(
+        "b",
+        job.taskType && job.state === "running"
+          ? "下書き・計画を作成中"
+          : labels[job.state] || "状態を確認中",
+      ),
       node(
         "p",
         new Date(job.createdAtMs).toLocaleString("ja-JP", {
@@ -447,6 +490,37 @@
         }
       };
       article.append(show);
+    }
+    if (job.execution?.steps) {
+      const ol = node("ol");
+      const stageNames = {
+        planning: "作業計画",
+        collecting: "資料確認",
+        working: "下書き・計画の生成",
+        validating: "成果物の検証",
+        saving: "本人専用に保存",
+      };
+      for (const step of job.execution.steps)
+        ol.append(
+          node(
+            "li",
+            stageNames[step.id] +
+              "：" +
+              ({
+                pending: "待機",
+                running: "処理中",
+                completed: "完了",
+                failed: "失敗・返却状態を確認",
+              }[step.state] || step.state),
+          ),
+        );
+      article.append(ol);
+    }
+    if (job.artifactId && job.state === "completed") {
+      const b = node("button", "保存した下書き・計画を開く");
+      b.type = "button";
+      b.onclick = () => artifactUI.open(job.artifactId);
+      article.append(b);
     }
     if (job.result) article.append(answerNode(job.result));
     return article;
@@ -583,6 +657,7 @@
     try {
       const d = await api("/quotes", {
         goal: $("goal").value,
+        taskType: $("taskType").value || undefined,
         balanceConsent: $("balanceConsent").checked,
         achievementsConsent: $("achievementsConsent").checked,
       });
@@ -591,6 +666,9 @@
       requestId = crypto.randomUUID();
       $("quoteTerms").textContent =
         quote.scope + " " + quote.refund + " " + quote.notice;
+      $("executionPlan").replaceChildren(
+        ...(quote.executionPlan || []).map((p) => node("li", p)),
+      );
       $("approval").hidden = false;
       $("approval").scrollIntoView({ block: "nearest" });
     } catch (e) {
@@ -600,6 +678,12 @@
     }
   });
   $("goal").addEventListener("input", clearApproval);
+  $("taskType").addEventListener("change", () => {
+    clearApproval();
+    $("goalLabel").textContent = $("taskType").value
+      ? "どんな作業を頼みたいですか？"
+      : "何を見つけたいですか？";
+  });
   for (const id of ["balanceConsent", "achievementsConsent"])
     $(id).addEventListener("change", () => {
       clearApproval();
@@ -662,6 +746,7 @@
         paymentConsent: true,
         aiConsent: true,
         searchConsentVersion: quote.searchProfile?.version,
+        workConsentVersion: quote.workConsentVersion || undefined,
         balanceConsent: $("balanceConsent").checked,
         achievementsConsent: $("achievementsConsent").checked,
       });
@@ -737,6 +822,19 @@
     if (a !== window && typeof a.closeSpRoom === "function") a.closeSpRoom();
     else location.assign("/");
   });
+  artifactUI = window.ReizoArtifacts({
+    api,
+    node,
+    openTarget,
+    notice,
+    generation: () => generation,
+  });
+  $("openPosting").onclick = () => {
+    const app = parentApp();
+    if (app.openEmuKnowledgeLab)
+      app.openEmuKnowledgeLab("library", { compose: true });
+    else location.assign("/knowledge-lab.html?view=library&compose=1");
+  };
   reset();
   refresh();
   setInterval(() => {

@@ -27,8 +27,10 @@ async function createFixture({
   port = 0,
   providerDown = false,
   providerStatus = null,
+  providerFetcher = null,
   enabled = true,
   crossDomain = false,
+  phase3 = false,
 } = {}) {
   const reset = await fetch(
     "http://" +
@@ -74,6 +76,7 @@ async function createFixture({
     providerDown,
     env: {
       ECONOMY_EXPLORER_ENABLED: enabled ? "true" : "false",
+      ECONOMY_PHASE3_ENABLED: phase3 ? "true" : "false",
       ...(crossDomain
         ? {
             ECONOMY_CROSS_DOMAIN_ENABLED: "true",
@@ -121,6 +124,7 @@ async function createFixture({
     env: f.env,
     config: () => require("../../backend/economy/config").configuration(f.env),
     fetcher: async (url, opts) => {
+      if (providerFetcher) return providerFetcher(url, opts);
       if (url.endsWith(":countTokens"))
         return {
           ok: true,
@@ -133,6 +137,8 @@ async function createFixture({
       const sources = JSON.parse(payload.contents[0].parts[0].text).sources;
       const cross = !!payload.generationConfig.responseSchema.properties.steps;
       const selected = sources.slice(0, cross ? 6 : 3);
+      const work =
+        JSON.parse(payload.contents[0].parts[0].text).workType || null;
       const action = (s) =>
         ["guild", "quest"].includes(s.kind)
           ? "review_activity"
@@ -157,31 +163,49 @@ async function createFixture({
                 content: {
                   parts: [
                     {
-                      text: JSON.stringify({
-                        matches: selected.map((s) => ({
-                          key: s.key,
-                          evidence: "summary",
-                        })),
-                        ...(cross
+                      text: JSON.stringify(
+                        work
                           ? {
-                              steps: selected.map((s) => ({
-                                key: s.key,
-                                action: action(s),
-                              })),
-                              comparisons:
-                                selected.length > 1
-                                  ? [
-                                      {
-                                        keys: selected
-                                          .slice(0, 2)
-                                          .map((s) => s.key),
-                                        basis: "perspectives",
-                                      },
-                                    ]
-                                  : [],
+                              artifact: {
+                                title: "LOCAL 準備用の下書き",
+                                sections: Object.keys(
+                                  require("../../backend/economy/tasks").TASKS[
+                                    work
+                                  ].sections,
+                                ).map((section) => ({
+                                  section,
+                                  prompt:
+                                    "資料の条件を確認し、自分が実践することを記入してください。",
+                                  references: [sources[0].key],
+                                })),
+                              },
                             }
-                          : {}),
-                      }),
+                          : {
+                              matches: selected.map((s) => ({
+                                key: s.key,
+                                evidence: "summary",
+                              })),
+                              ...(cross
+                                ? {
+                                    steps: selected.map((s) => ({
+                                      key: s.key,
+                                      action: action(s),
+                                    })),
+                                    comparisons:
+                                      selected.length > 1
+                                        ? [
+                                            {
+                                              keys: selected
+                                                .slice(0, 2)
+                                                .map((s) => s.key),
+                                              basis: "perspectives",
+                                            },
+                                          ]
+                                        : [],
+                                  }
+                                : {}),
+                            },
+                      ),
                     },
                   ],
                 },
@@ -353,22 +377,16 @@ async function createFixture({
       validUntilMs: Date.now() + 86400000,
     });
   if (crossDomain) {
-    await db
-      .collection("sp_stars")
-      .doc("alice-star")
-      .set({
-        spid: users.alice.spid,
-        status: "minted",
-        label: "LOCAL-PRIVATE-LABEL",
-      });
-    await db
-      .collection("sp_stars")
-      .doc("bob-star")
-      .set({
-        spid: users.bob.spid,
-        status: "minted",
-        label: "LOCAL-OTHER-PERSON",
-      });
+    await db.collection("sp_stars").doc("alice-star").set({
+      spid: users.alice.spid,
+      status: "minted",
+      label: "LOCAL-PRIVATE-LABEL",
+    });
+    await db.collection("sp_stars").doc("bob-star").set({
+      spid: users.bob.spid,
+      status: "minted",
+      label: "LOCAL-OTHER-PERSON",
+    });
     await db
       .collection("sp_quest_certificates")
       .doc("alice-certificate")
@@ -381,22 +399,40 @@ async function createFixture({
     for (const adapter of Object.values(sources.cross.adapters))
       for (const source of await adapter.list(a)) {
         if (source.kind === "guild") continue;
-        await economy.service
-          .ref("source_approvals", hash(source.key))
-          .set({
-            piiReviewed: true,
-            aiUseApproved: true,
-            rightsVerified: true,
-            authorPermissionConfirmed: true,
-            purpose: require("../../backend/economy/search/profile").PURPOSE,
-            contentHash: hash([source.title, source.summary]),
-            originHash: source.originHash || null,
-            validUntilMs: Date.now() + 86400000,
-          });
+        await economy.service.ref("source_approvals", hash(source.key)).set({
+          piiReviewed: true,
+          aiUseApproved: true,
+          rightsVerified: true,
+          authorPermissionConfirmed: true,
+          purpose: require("../../backend/economy/search/profile").PURPOSE,
+          contentHash: hash([source.title, source.summary]),
+          originHash: source.originHash || null,
+          validUntilMs: Date.now() + 86400000,
+        });
+      }
+  }
+  if (phase3 && crossDomain) {
+    const a = await economy.service.actor({
+      uid: users.alice.uid,
+      account: users.alice.account,
+      walletAddress: users.alice.account.walletAddress,
+    });
+    for (const adapter of Object.values(sources.cross.adapters))
+      for (const source of await adapter.list(a)) {
+        await economy.service.ref("source_approvals", hash(source.key)).set(
+          {
+            artifactUseApproved: true,
+            artifactAllowedTasks: Object.keys(
+              require("../../backend/economy/tasks").TASKS,
+            ),
+            artifactPurpose: require("../../backend/economy/tasks").VERSION,
+          },
+          { merge: true },
+        );
       }
   }
   const app = express();
-  app.use(express.json({ limit: "4kb" }));
+  app.use(express.json({ limit: "32kb" }));
   app.use("/api/economy", economy.router);
   app.use("/api/mitemiru", commerce.router);
   app.get("/test/login", (req, res) => {
@@ -453,6 +489,7 @@ if (require.main === module)
   createFixture({
     port: 4257,
     crossDomain: process.env.ECONOMY_TEST_CROSS === "true",
+    phase3: process.env.ECONOMY_TEST_PHASE3 === "true",
   })
     .then((f) => {
       setInterval(() => f.economy.tick(), 1000).unref();

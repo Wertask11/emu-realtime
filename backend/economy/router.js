@@ -76,6 +76,7 @@ function createEconomyRouter(deps) {
         currency: c.currency,
         allowedPlans: c.allowedPlans,
         searchProfile: c.searchProfile,
+        workflow: c.workflow,
         enabled: c.enabled && snapshot?.service.enabled === true && healthy,
         globalDaily: c.globalDaily,
         personDaily: c.personDaily,
@@ -138,6 +139,25 @@ function createEconomyRouter(deps) {
   router.get(
     "/jobs/:id",
     handle(async (req, a) => ({ job: await service.view(a, req.params.id) })),
+  );
+  router.get(
+    "/artifacts",
+    limited,
+    handle(async (_req, a) => ({ artifacts: await service.artifacts.list(a) })),
+  );
+  router.get(
+    "/artifacts/:id",
+    limited,
+    handle(async (req, a) => ({
+      artifact: await service.artifacts.view(a, req.params.id),
+    })),
+  );
+  router.post(
+    "/artifacts/:id",
+    limited,
+    handle(async (req, a) => ({
+      artifact: await service.artifacts.edit(a, req.params.id, req.body || {}),
+    })),
   );
   router.post(
     "/context",
@@ -246,9 +266,13 @@ function createEconomyRouter(deps) {
     } catch (error) {
       // A daily-quota outage is not repaired by scanning every 30 seconds.
       // Back off only quota faults; ordinary recovery and immediate wake stay.
-      if (error.code === 8 || /RESOURCE_EXHAUSTED|quota exceeded/i.test(error.message || "")) {
+      if (
+        error.code === 8 ||
+        /RESOURCE_EXHAUSTED|quota exceeded/i.test(error.message || "")
+      ) {
         quotaFailures = Math.min(quotaFailures + 1, 4);
-        quotaRetryAt = Date.now() + Math.min(300000, 30000 * 2 ** quotaFailures);
+        quotaRetryAt =
+          Date.now() + Math.min(300000, 30000 * 2 ** quotaFailures);
       }
       lastError = "WORKER_CYCLE_FAILED";
       snapshot = null;
