@@ -60,6 +60,13 @@
         return s;
       };
       section("目的と結論・AIの提案").append(node("p", d.summary));
+      if (d.learningGoal) {
+        section("学習目標（AIの提案）").append(node("p", d.learningGoal));
+        const list = node("ul");
+        for (const x of d.preparation) list.append(node("li", x));
+        section("準備物（所持・利用条件は本人確認）").append(list);
+      }
+
       const cs = section("候補比較（公開資料の事実とAIの選定理由）");
       for (const c of d.candidates) {
         const card = node("article");
@@ -119,6 +126,26 @@
         const list = node("ul");
         for (const x of items) list.append(node("li", x));
         section(title).append(list);
+      }
+      if (d.recordSheet) {
+        const sheet = section("観察・記録シート");
+        sheet.append(
+          node(
+            "p",
+            "下の本文欄で記入・編集して保存できます。未実践の記録は空欄です。",
+          ),
+        );
+        for (const r of d.recordSheet) {
+          const card = node("article");
+          card.append(
+            node("h4", r.timing),
+            node("p", "日時：" + r.datetime),
+            node("p", "試した方法：" + r.method),
+            node("p", "観察：" + r.observation),
+            node("p", "次の条件：" + r.nextCondition),
+          );
+          sheet.append(card);
+        }
       }
       if (d.draft)
         section("知識として残す本文下書き").append(node("pre", d.draft));

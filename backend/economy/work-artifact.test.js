@@ -211,3 +211,49 @@ test("a single recommendation is selected by a validated key, not independent mo
   assert.deepEqual(p.recommendedKey.enum, ["s0", "s1"]);
   assert.deepEqual(p.candidates.items.properties.key.enum, ["s0", "s1"]);
 });
+
+test("WIL delivers an explicit goal, concrete materials and a fillable observation sheet", () => {
+  const f = sample("wil_plan"),
+    r = work.resolve("wil_plan", f.value, f.rows, {
+      topics: ["coffee"],
+    }).artifact;
+  assert.ok(r.document.learningGoal.includes("コーヒー"));
+  assert.ok(r.document.preparation.length >= 3);
+  assert.deepEqual(
+    r.document.recordSheet.map((x) => x.timing),
+    ["実践前", "実践中", "実践後"],
+  );
+  assert.match(r.content, /観察・記録シート/);
+  assert.match(r.content, /試した方法/);
+  assert.ok(
+    r.document.recordSheet.every(
+      (x) =>
+        x.datetime.includes("本人記入") && x.observation.includes("本人記入"),
+    ),
+  );
+});
+test("WIL cannot ask the user to create the materials list instead of delivering it", () => {
+  const f = sample("wil_plan");
+  f.value.artifact.preparation = [
+    "使う準備物をリストに書き出すこと",
+    "実践に必要な道具を用意すること",
+    "記録用のノートを手元に用意する",
+  ];
+  assert.throws(
+    () => work.resolve("wil_plan", f.value, f.rows),
+    /WIL_PREPARATION_MISSING/,
+  );
+});
+
+test("official past-tense template headings immediately followed by unknown slots do not assert real experiences", () => {
+  const f = sample("wil_plan");
+  f.value.artifact.draft =
+    "こんな状況でした：［本人記入：抽出時の状況や環境］。これを試しました：［本人記入：試した抽出方法や手順］。こうなりました：［本人記入：観察された香りや味わいの変化］。この条件では別のやり方が必要かもしれません：［本人記入：次に試す条件や改善点］。観察シートには時点、試した方法、気づき、次に試す条件を整理して記録する予定である。今後の学習や記録の際にもこの型を活用して知識を深めていく。";
+  const r = work.resolve("wil_plan", f.value, f.rows);
+  assert.ok(r.artifact.document.recordSheet);
+  f.value.artifact.draft += "結果として味の安定性が向上しました。";
+  assert.throws(
+    () => work.resolve("wil_plan", f.value, f.rows),
+    /UNSUPPORTED_CLAIM/,
+  );
+});

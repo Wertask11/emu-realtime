@@ -108,6 +108,9 @@ function schema(type, keys, candidateKeys = keys) {
   return obj({
     artifact: obj({
       title: { ...str, maxLength: "100" },
+      ...(type === "wil_plan"
+        ? { learningGoal: str, preparation: list(str, 3, 6) }
+        : {}),
       summary: str,
       candidates: list(
         obj({
@@ -148,6 +151,7 @@ function resolve(type, value, rows, plan = {}) {
     !exact(v, [
       "title",
       "summary",
+      ...(type === "wil_plan" ? ["learningGoal", "preparation"] : []),
       "candidates",
       "recommendedKey",
       "steps",
@@ -259,7 +263,12 @@ function resolve(type, value, rows, plan = {}) {
     draft = clean(v.draft, 1600);
     if (
       /ました|でした|だった|していた|行った|できた|確認でき|につなが|(?:改善|成功|達成|向上|短縮)(?:した|しました|できた)/.test(
-        draft.replace(/[［\[]本人(?:が)?記入[：:][^］\]]*[］\]]/g, ""),
+        draft
+          .replace(
+            /(?:こんな状況でした|これを試しました|こうなりました)(?=[：:]\s*[［\[]本人(?:が)?記入[：:])/g,
+            "本文項目",
+          )
+          .replace(/[［\[]本人(?:が)?記入[：:][^］\]]*[］\]]/g, ""),
       )
     )
       fail("ARTIFACT_UNSUPPORTED_CLAIM", 502);
@@ -312,8 +321,24 @@ function resolve(type, value, rows, plan = {}) {
     missing.push(
       "コーヒーの専門的な技法や数値条件は今回の資料では未確認です。本人の実践と観察を残す準備用の下書きとして使用してください。",
     );
+  let learningGoal, preparation, recordSheet;
+  if (type === "wil_plan") {
+    learningGoal = clean(v.learningGoal, 200);
+    preparation = arr(v.preparation, 3, 6).map((x) => clean(x, 160));
+    unique(preparation);
+    if (preparation.some((x) => /リストを作|準備物を|項目を決め/.test(x)))
+      fail("ARTIFACT_WIL_PREPARATION_MISSING", 502);
+    recordSheet = ["実践前", "実践中", "実践後"].map((timing) => ({
+      timing,
+      datetime: "［本人記入：日時］",
+      method: "［本人記入：試した方法・変えた条件］",
+      observation: "［本人記入：観察した事実・気づき］",
+      nextCondition: "［本人記入：次に試す条件］",
+    }));
+  }
   const document = {
     summary,
+    ...(type === "wil_plan" ? { learningGoal, preparation, recordSheet } : {}),
     candidates,
     steps,
     checklist,
@@ -342,6 +367,14 @@ function render(title, d) {
     "AIの提案です。本人の経験・結果・参加資格は未確認です。未確認の実体験は本人が確認・記入します。公開・参加・購入は実行していません。",
     "## 目的と結論",
     d.summary,
+    ...(d.learningGoal
+      ? [
+          "## 学習目標（AIの提案）",
+          d.learningGoal,
+          "## 準備物（所持・利用条件は本人確認）",
+          ...d.preparation.map((s) => "- " + s),
+        ]
+      : []),
     "## 候補比較",
     ...d.candidates.map(
       (c) =>
@@ -356,6 +389,24 @@ function render(title, d) {
     ...d.steps.map((s) => s.order + ". " + s.action + "\n完了条件：" + s.done),
     "## チェックリスト",
     ...d.checklist.map((c) => "[ ] " + c.text),
+    ...(d.recordSheet
+      ? [
+          "## 観察・記録シート",
+          ...d.recordSheet.map(
+            (r) =>
+              "### " +
+              r.timing +
+              "\n日時：" +
+              r.datetime +
+              "\n試した方法：" +
+              r.method +
+              "\n観察：" +
+              r.observation +
+              "\n次の条件：" +
+              r.nextCondition,
+          ),
+        ]
+      : []),
     "## 未確認事項",
     ...d.unknowns.map((s) => "- " + s),
     "## 実践後の記録・振り返り",
