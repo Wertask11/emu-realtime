@@ -23492,11 +23492,22 @@ async function spEnsureSchoolParkAccess(force) {
 }
 window.spEnsureSchoolParkAccess = spEnsureSchoolParkAccess;
 
-function spShowSchoolParkUnavailable(access) {
+async function spShowSchoolParkUnavailable(access) {
+  const unavailable = !!(access && access.unavailable);
+  /* 公開状態を確認できなかった理由が、Firestore の1日の上限（11/8）なら「メンテナンス中」を出す。
+     入場の判定（spEnsureSchoolParkAccess）は変えない。サーバーの /api/auth/status に聞くだけ（DB は読まない）。 */
+  if (unavailable && typeof window.emuCheckMaintenance === 'function') {
+    try { if (await window.emuCheckMaintenance()) return; } catch (e) {}
+  }
   const screen = document.getElementById('spAccessScreen');
   const lead = document.getElementById('spAccessLead');
+  const title = document.getElementById('spAccessTitle');
+  const eyebrow = document.getElementById('spAccessEyebrow');
   if (!screen) return;
-  if (lead) lead.textContent = access && access.unavailable
+  /* 確認できなかっただけのときに「公式パス保有者向け先行公開」と見出しを出さない（いまは一般公開中）。 */
+  if (title) title.textContent = unavailable ? 'SchoolParkを開けませんでした' : '公式パス保有者向け先行公開';
+  if (eyebrow) eyebrow.textContent = unavailable ? 'SCHOOLPARK' : 'SCHOOLPARK EARLY ACCESS';
+  if (lead) lead.textContent = unavailable
     ? '公開状態を確認できませんでした。通信を確認して、もう一度お試しください。'
     : 'SchoolParkは現在、公式パス保有者向けに先行公開中です。';
   screen.style.display = 'flex';
@@ -29926,7 +29937,7 @@ async function sendEmuFeedback() {
   style="display:none;position:fixed;inset:0;z-index:2100;background:#F4F1EA;color:#141310;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:'Noto Sans JP',sans-serif">
   <div style="width:min(520px,100%);border:1px solid rgba(20,19,16,.14);border-radius:14px;padding:clamp(24px,6vw,42px);box-sizing:border-box;background:#fff;text-align:center;box-shadow:0 18px 50px rgba(20,19,16,.1)">
     <div style="font-size:28px;margin-bottom:12px">🎫</div>
-    <div style="font-size:11px;letter-spacing:.18em;color:#b85f00;margin-bottom:10px">SCHOOLPARK EARLY ACCESS</div>
+    <div id="spAccessEyebrow" style="font-size:11px;letter-spacing:.18em;color:#b85f00;margin-bottom:10px">SCHOOLPARK EARLY ACCESS</div>
     <h2 id="spAccessTitle" style="font-size:clamp(21px,5vw,28px);margin:0 0 16px">公式パス保有者向け先行公開</h2>
     <p id="spAccessLead" style="font-size:14px;line-height:1.9;margin:0 0 10px">SchoolParkは現在、公式パス保有者向けに先行公開中です。</p>
     <p style="font-size:14px;line-height:1.9;margin:0 0 24px">SchoolParkは一般公開中です。<br>LINE・Google・メールから無料で見学できます。</p>
