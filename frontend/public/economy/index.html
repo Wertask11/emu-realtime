@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/economy/style.css" />
     <script src="/economy/targets.js" defer></script>
     <script src="/economy/artifacts.js" defer></script>
+    <script src="/economy/practice.js" defer></script>
     <script src="/economy/app.js" defer></script>
   </head>
   <body>
@@ -216,6 +217,9 @@
           <button id="closeArtifact" type="button">閉じる</button>
         </div>
         <p id="artifactNotice" role="status" aria-live="polite"></p>
+        <button id="startPractice" type="button" hidden>
+          やってみる（追加料金なし）
+        </button>
         <div id="artifactStructured"></div>
         <button id="saveChecklist" type="button" hidden>
           チェック状態を保存
@@ -245,6 +249,83 @@
         <button id="openPosting" type="button">
           投稿画面を開く（自動入力・公開はしません）
         </button>
+      </dialog>
+      <section
+        id="practiceSection"
+        hidden
+        aria-labelledby="practiceSectionTitle"
+      >
+        <h2 id="practiceSectionTitle">実践して、知識として届ける</h2>
+        <p>
+          保存した計画から、やってみる → 記録する → 振り返る →
+          知識として届ける。実践の開始・記録・手動整理は追加料金なしです。
+        </p>
+        <button id="loadPractice" type="button">実践記録を開く</button>
+        <div id="practiceList"></div>
+      </section>
+      <dialog id="practiceDialog" aria-labelledby="practiceHeading">
+        <div class="title">
+          <h2 id="practiceHeading">やってみる・実践の記録</h2>
+          <button id="closePractice" type="button">閉じる</button>
+        </div>
+        <p id="practiceNotice" role="status" aria-live="polite"></p>
+        <p id="practiceStatus"></p>
+        <progress
+          id="practiceProgress"
+          value="0"
+          max="1"
+          aria-label="保存済みの実践進捗"
+        ></progress>
+        <p id="practiceRetention" class="sub"></p>
+        <p class="sub">
+          氏名・連絡先・第三者の個人情報・職場の秘密は書かないでください。入力は本人専用です。途中入力はこのタブに最大2時間保持し、アカウント切替時に消去します。
+        </p>
+        <div class="actions">
+          <button id="pausePractice" type="button">一時中断</button
+          ><button id="resumePractice" type="button">再開</button
+          ><button id="completePractice" type="button">完了にする</button
+          ><button id="cancelPractice" type="button">中止</button>
+        </div>
+        <div id="practiceFields"></div>
+        <div class="actions">
+          <button id="savePractice" type="button">保存・再送</button
+          ><button id="refreshPractice" type="button">最新を確認</button>
+        </div>
+        <label id="practiceRecoveryLabel" for="practiceRecovery" hidden
+          >別の画面で更新される前の入力（必要な部分だけ入力欄へ戻してください）</label
+        ><textarea id="practiceRecovery" rows="5" readonly hidden></textarea>
+        <h3>投稿用の下書き</h3>
+        <fieldset id="practicePostingChecks">
+          <legend>投稿前に確認すること</legend>
+          <label class="check"
+            ><input
+              type="checkbox"
+              value="experience"
+            />自分が実際に行ったことと、提案・未確認事項を区別した</label
+          >
+          <label class="check"
+            ><input
+              type="checkbox"
+              value="privacy"
+            />第三者の個人情報・職場の秘密を含めていない</label
+          >
+          <label class="check"
+            ><input
+              type="checkbox"
+              value="rights"
+            />引用・写真・資料の権利と出典を確認した</label
+          >
+        </fieldset>
+        <p id="practiceMissing" class="sub"></p>
+        <p class="sub">
+          保存した本人の記録だけで整理します。公開前に第三者の情報・引用・事実関係を確認してください。自動入力・公開は行いません。
+        </p>
+        <label for="practicePreview">保存済みの記録を整理した文章</label
+        ><textarea id="practicePreview" rows="12" readonly></textarea>
+        <div class="actions">
+          <button id="copyPractice" type="button">投稿用の文章をコピー</button
+          ><button id="practicePosting" type="button">投稿画面を開く</button>
+        </div>
       </dialog>
       <section id="operations" hidden>
         <details id="operationsPanel">

@@ -38,7 +38,8 @@ function createEconomyRouter(deps) {
     } catch (e) {
       const known = /^[A-Z][A-Z_]{2,60}$/.test(e.message || "");
       const status =
-        known && [400, 401, 403, 404, 409, 429, 502, 503].includes(e.status)
+        known &&
+        [400, 401, 403, 404, 409, 410, 429, 502, 503].includes(e.status)
           ? e.status
           : known
             ? 409
@@ -77,6 +78,7 @@ function createEconomyRouter(deps) {
         allowedPlans: c.allowedPlans,
         searchProfile: c.searchProfile,
         workflow: c.workflow,
+        practice: c.practice,
         enabled: c.enabled && snapshot?.service.enabled === true && healthy,
         globalDaily: c.globalDaily,
         personDaily: c.personDaily,
@@ -157,6 +159,32 @@ function createEconomyRouter(deps) {
     limited,
     handle(async (req, a) => ({
       artifact: await service.artifacts.edit(a, req.params.id, req.body || {}),
+    })),
+  );
+  router.get(
+    "/practice",
+    limited,
+    handle(async (_req, a) => ({ sessions: await service.practice.list(a) })),
+  );
+  router.post(
+    "/practice",
+    limited,
+    handle(async (req, a) => ({
+      session: await service.practice.start(a, req.body || {}),
+    })),
+  );
+  router.get(
+    "/practice/:id",
+    limited,
+    handle(async (req, a) => ({
+      session: await service.practice.view(a, req.params.id),
+    })),
+  );
+  router.post(
+    "/practice/:id",
+    limited,
+    handle(async (req, a) => ({
+      session: await service.practice.edit(a, req.params.id, req.body || {}),
     })),
   );
   router.post(

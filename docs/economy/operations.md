@@ -199,3 +199,7 @@ Firestoreの実APIで既定DBの無料読取50,000/日・書込20,000/日を確�
 ## Firestore復旧確認と読取削減
 
 現在の復旧判定・空巡回/履歴の読取削減・quota backoff・Phase 3着手条件は [firestore-recovery.md](firestore-recovery.md)。待機中はDBを再読込せず、公開statusの`worker.retryAfterMs`を確認できる。既存の5 EMUER受入1件の照合に新しい支払いを使わない。
+
+## 実践・記録（Phase 4）
+
+[実践と記録の操作・データ・権限・保存・停止手順](phase4-practice.md)。`ECONOMY_PHASE4_ENABLED`はコード既定OFF。手動操作は追加0 EMUER・モデル送信なし。新規成果物生成の5 EMUERと試験期限は変更しない。

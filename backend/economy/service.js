@@ -34,6 +34,14 @@ function createEconomy({
     now,
     requireAccess: (a) => qualified(a),
   });
+  const practice = require("./practice").createPractice({
+    db,
+    ref,
+    artifacts,
+    now,
+    env,
+    requireAccess: (a) => qualified(a),
+  });
   async function actor(auth) {
     if (!auth?.uid) fail("AUTH_REQUIRED", 401);
     const spid = await identity.findByUid(auth.uid),
@@ -1034,6 +1042,7 @@ function createEconomy({
     };
   }
   async function purge() {
+    await practice.purge();
     const cutoff = new Date(now());
     const throttle = await db
       .collection("emuer_v2_agent_quote_usage")
@@ -1131,6 +1140,7 @@ function createEconomy({
   return {
     config,
     artifacts,
+    practice,
     status,
     actor,
     quote,
