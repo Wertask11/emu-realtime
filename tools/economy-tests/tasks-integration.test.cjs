@@ -76,6 +76,29 @@ for (const type of Object.keys(TASKS))
         const reopen = await f.call(role, "GET", "/artifacts/" + id);
         assert.equal(reopen.body.artifact.revision, 2);
         assert.equal(reopen.body.artifact.content, edit.content);
+        assert.equal(reopen.body.artifact.formatVersion, 2);
+        const checkId = reopen.body.artifact.document.checklist[0].id;
+        const checked = await f.call(role, "POST", "/artifacts/" + id, {
+          editConsent: true,
+          revision: 2,
+          checkedItems: [checkId],
+        });
+        assert.equal(checked.status, 200);
+        assert.deepEqual(
+          (await f.call(role, "GET", "/artifacts/" + id)).body.artifact
+            .checkedItems,
+          [checkId],
+        );
+        assert.equal(
+          (
+            await f.call("bob", "POST", "/artifacts/" + id, {
+              editConsent: true,
+              revision: 3,
+              checkedItems: [],
+            })
+          ).status,
+          404,
+        );
         const replay = await f.call(role, "POST", "/jobs", body);
         assert.equal(replay.body.job.id, id);
         await f.economy.tick();
@@ -87,6 +110,8 @@ for (const type of Object.keys(TASKS))
           .set({ artifactUseApproved: false }, { merge: true });
         const revoked = await f.call(role, "GET", "/artifacts/" + id);
         assert.equal(revoked.body.artifact.content, null);
+        assert.equal(revoked.body.artifact.document, null);
+        assert.deepEqual(revoked.body.artifact.checkedItems, []);
         assert.equal(revoked.body.artifact.status, "references_unavailable");
         // Real Timestamp comparison, unlike the small JSON unit fake.
         await f.economy.service
