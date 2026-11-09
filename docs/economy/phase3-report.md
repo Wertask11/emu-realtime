@@ -52,7 +52,7 @@ Knowledge Labの公開投稿2件に対するPhase 2のAI探索同意を、生成
 
 ## 検証結果
 
-**956件合格**（backend565、frontend331、専用Auth/Firestore/Rules/登録/Phase 3/レビュー32、Quest3、知恵25）。失敗/skip/TODOは0。詳細は [phase3-evidence.json](phase3-evidence.json) を参照。5種類の正常系・本人所有・編集競合・二重依頼・許諾撤回・429/503・保存時Firestore quotaエラー・再起動/応答喪失・30日内容除去を分離環境で検証する。既存Phase 2/City/Auth/Rules/Quest回帰と、375/390/412/768/1280/1440/1920pxを確認する。本番本人の追加決済ではない。
+**957件合格**（backend565、frontend332、専用Auth/Firestore/Rules/登録/Phase 3/レビュー32、Quest3、知恵25）。失敗/skip/TODOは0。詳細は [phase3-evidence.json](phase3-evidence.json) を参照。5種類の正常系・本人所有・編集競合・二重依頼・許諾撤回・429/503・保存時Firestore quotaエラー・再起動/応答喪失・30日内容除去を分離環境で検証する。既存Phase 2/City/Auth/Rules/Quest回帰と、375/390/412/768/1280/1440/1920pxを確認する。本番本人の追加決済ではない。
 
 実Geminiと専用Auth/Firestoreエミュレーターを結合した1件も、デモ5 EMUER→実生成915tokens→本人専用保存→編集→再表示→同一依頼再送で生成1回に合格。本番EMUERではない。
 
@@ -90,3 +90,13 @@ Knowledge Labの公開投稿2件に対するPhase 2のAI探索同意を、生成
 - `tools/economy-tests/artifact-review.test.cjs`
 - `tools/economy-tests/live-work.cjs`
 - `tools/economy-tests/tasks-integration.test.cjs`
+
+## ローカル再現
+
+専用エミュレーターの起動は既存operations.mdを使用する。nativeテストと画面fixtureは同じdemoデータを初期化するため並行起動しない。
+
+- `node --test --test-concurrency=1 tools/economy-tests/tasks-integration.test.cjs tools/economy-tests/artifact-review.test.cjs`
+- 新しいfixtureを`ECONOMY_TEST_CROSS=true ECONOMY_TEST_PHASE3=true node tools/economy-tests/fixture.cjs`で起動し、`python3 tools/economy-tests/work-browser.py`。外部通信を遮断し、7画面幅で検証する。
+- 実AIの結合確認は明示opt-inの`EXPLORER_LIVE_TEST_APPROVED=true NODE_USE_ENV_PROXY=1 node tools/economy-tests/live-work.cjs`。本番Firebase・実EMUERは使わず、公式公開文以外を送る場合は停止する。自動再試行しない。
+
+追加の再現用ファイル：`tools/economy-tests/work-browser.py`。
