@@ -344,6 +344,8 @@ app.use("/api/economy", economy.router);
 app.use("/api/schoolpark/quest-completions", questCompletion);
 /* 返り道（11/9）：Emu の投稿ごとに「やってみた人・知恵カード・クエスト」の数を返す（backend/knowledge-trials.js）。 */
 app.use("/api/emu/knowledge-trials", require("./knowledge-trials").createKnowledgeTrialsRouter({ db }).router);
+/* 冷蔵庫くんに整えてもらう（11/9）：投稿の本文の自動校正。1人1日3回（backend/proofread.js）。 */
+app.use("/api/emu/proofread", require("./proofread").createProofreadRouter({ env: process.env, requireFirebaseUser }));
 /* 完走証明ページ（11/9）：本人が選んだ完走1件だけを、推測できないURLで公開する（backend/public-proof.js）。 */
 app.use("/api/schoolpark/proofs", require("./public-proof").createPublicProofRouter({
   db, requireFirebaseUser, contract: String(process.env.SP_QUEST_STAR_CONTRACT || "") }));

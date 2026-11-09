@@ -30026,6 +30026,39 @@ async function sendEmuFeedback() {
       }
       return;
     }
+    /* 冷蔵庫くんに整えてもらう（11/9）。本文を校正した案をもらって、投稿画面へ返す。
+       書き換えるかは投稿画面で本人が決める。本文はサーバーに保存しない（backend/proofread.js）。 */
+    if (message.type === 'emu-knowledge-proofread') {
+      const reply = function (extra) { sendKnowledge(Object.assign({ type:'emu-knowledge-proofread-result', requestId: message.requestId }, extra)); };
+      try {
+        const headers = await emuAuthHeaders(true);
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = controller ? setTimeout(function () { controller.abort(); }, 45000) : null;
+        const r = await fetch('https://emu-realtime.onrender.com/api/emu/proofread', {
+          method: 'POST', headers: headers, signal: controller ? controller.signal : undefined,
+          body: JSON.stringify({ title: String(message.title || '').slice(0, 160), body: String(message.body || '').slice(0, 3001) })
+        });
+        if (timer) clearTimeout(timer);
+        const d = await r.json().catch(function () { return {}; });
+        if (!r.ok) {
+          const words = {
+            DAILY_LIMIT: '今日の「整えてもらう」は3回使いました。また明日使えるよ🧊',
+            BODY_TOO_LONG: '本文が長すぎるみたい（3,000字まで）。少し分けてから試してね🧊',
+            BODY_REQUIRED: '本文を書いてから押してね🧊',
+            DISABLED: 'いまは冷蔵庫くんの校正を使えないみたい🧊',
+            BUSY: 'いま少し混んでいるみたい🧊 1分くらい待ってから、もう一度押してね。',
+            RATE_LIMITED: 'いま少し混んでいるみたい🧊 1分くらい待ってから、もう一度押してね。',
+            TIMEOUT: '考えるのに時間がかかりすぎちゃった🧊 もう一度押してみてね。'
+          };
+          reply({ ok:false, error: words[d.error] || 'うまく整えられなかったみたい🧊 時間をおいて、もう一度押してね。', remaining: d.remaining });
+          return;
+        }
+        reply({ ok:true, title: d.title || '', body: d.body || '', note: d.note || '', remaining: d.remaining });
+      } catch (error) {
+        reply({ ok:false, error: /ログイン/.test(String(error && error.message)) ? '整えてもらうには、ログインしてね🧊' : 'うまくつながらなかったみたい🧊 もう一度押してね。' });
+      }
+      return;
+    }
     if (message.type === 'emu-knowledge-publish') {
       if (!_emuAddress()) {
         sendKnowledge({ type:'emu-knowledge-save-result', kind:'publish', requestId:message.requestId, ok:false, error:'投稿するにはウォレットを接続してください。' });
