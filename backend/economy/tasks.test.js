@@ -4,22 +4,7 @@ const { test } = require("node:test"),
 const { crossFixture } = require("./search/test-support"),
   { hash } = require("./config"),
   tasks = require("./tasks");
-function reply(payload) {
-  const p = JSON.parse(payload.contents[0].parts[0].text);
-  if (!p.workType) return { matches: [], steps: [], comparisons: [] };
-  return {
-    artifact: {
-      title: tasks.TASKS[p.workType].label + "の下書き",
-      sections: Object.keys(tasks.TASKS[p.workType].sections).map(
-        (section) => ({
-          section,
-          prompt: "目的と資料を比較して、自分が試すことを記入してください。",
-          references: [p.sources[0].key],
-        }),
-      ),
-    },
-  };
-}
+const reply = require("../../tools/economy-tests/work-reply.cjs");
 async function setup(options = {}) {
   const f = await crossFixture({
     ...options,
@@ -227,12 +212,12 @@ test("forged reference, injected URL or fabricated first-person history is rejec
     const f = await setup({
         providerReply: (p) => {
           const r = reply(p);
-          if (mode === "id") r.artifact.sections[0].references = ["invented"];
+          if (mode === "id") r.artifact.steps[0].references = ["invented"];
           else if (mode === "url")
-            r.artifact.sections[0].prompt =
+            r.artifact.steps[0].action =
               "https://example.invalid へ送信してください。";
           else
-            r.artifact.sections[0].prompt =
+            r.artifact.steps[0].action =
               "私はすでに成功しました。結果を記入してください。";
           return r;
         },
@@ -305,9 +290,11 @@ test("a quoted writing template is an instruction, while an asserted personal pa
   const f = await setup({
       providerReply: (p) => {
         const v = reply(p);
-        v.artifact.sections[0].prompt =
+        v.artifact.summary =
           "こんな状況でした、これを試しましたという型を使って記入しましょう。";
-        v.artifact.sections[1].prompt = "活動の準備はできましたか？";
+        v.artifact.unknowns = [
+          "本人の活動準備は未確認です。使う資料とノートの有無を照合する必要があります。",
+        ];
         return v;
       },
     }),
@@ -462,4 +449,108 @@ test("expired/Free/Light membership blocks new work and artifact retrieval/editi
     (await f.economy.service.ref("artifacts", j.id).get()).data().content,
   );
   f.entitlement.getEntitlement = original;
+});
+
+test("private checklist state persists without editing text, inference, payment or another owner access", async () => {
+  const f = await setup(),
+    { body } = await f.work("quest_plan"),
+    j = await f.economy.service.submit(f.a, body);
+  await f.economy.tick();
+  const before = await f.economy.service.artifacts.view(f.a, j.id),
+    b = {
+      editConsent: true,
+      revision: 1,
+      checkedItems: [before.document.checklist[0].id],
+    };
+  assert.equal(before.formatVersion, 2);
+  const after = await f.economy.service.artifacts.edit(f.a, j.id, b);
+  assert.deepEqual(after.checkedItems, b.checkedItems);
+  assert.equal(after.content, before.content);
+  assert.equal(after.revision, 2);
+  const reread = await f.economy.service.artifacts.view(f.a, j.id);
+  assert.deepEqual(reread.checkedItems, b.checkedItems);
+  assert.equal(f.calls(), 1);
+  assert.equal(pending(f), 95n);
+  await assert.rejects(() =>
+    f.economy.service.artifacts.edit(otherActor(f), j.id, b),
+  );
+  await assert.rejects(
+    () => f.economy.service.artifacts.edit(f.a, j.id, b),
+    /VERSION_CONFLICT/,
+  );
+  await assert.rejects(
+    () =>
+      f.economy.service.artifacts.edit(f.a, j.id, {
+        editConsent: true,
+        revision: 2,
+        checkedItems: ["invented"],
+      }),
+    /INVALID_CHECKLIST_STATE/,
+  );
+  await assert.rejects(
+    () =>
+      f.economy.service.artifacts.edit(f.a, j.id, {
+        editConsent: true,
+        revision: 2,
+        checkedItems: [b.checkedItems[0], b.checkedItems[0]],
+      }),
+    /INVALID_CHECKLIST_STATE/,
+  );
+});
+function otherActor(f) {
+  return { ...f.a, uid: "another-account" };
+}
+test("old stored format remains readable/editable without regeneration or migration", async () => {
+  const f = await setup(),
+    { body } = await f.work("guild_plan"),
+    j = await f.economy.service.submit(f.a, body);
+  await f.economy.tick();
+  await f.economy.service.ref("artifacts", j.id).set(
+    {
+      formatVersion: 1,
+      document: null,
+      checkedItems: [],
+      content: "旧形式の本文。本人が確認・記入してください。",
+    },
+    { merge: true },
+  );
+  const a = await f.economy.service.artifacts.view(f.a, j.id);
+  assert.equal(a.formatVersion, 1);
+  assert.equal(a.document, null);
+  assert.match(a.content, /旧形式/);
+  const b = await f.economy.service.artifacts.edit(f.a, j.id, {
+    editConsent: true,
+    revision: 1,
+    title: "本人が編集した旧形式",
+    content: "元の経験を本人が確認して追記した本文です。",
+  });
+  assert.equal(b.document, null);
+  assert.equal(f.calls(), 1);
+  assert.equal(pending(f), 95n);
+});
+test("withdrawal hides structured comparisons and saved checks, not just the plaintext", async () => {
+  const f = await setup(),
+    { body } = await f.work("guild_plan"),
+    j = await f.economy.service.submit(f.a, body);
+  await f.economy.tick();
+  const raw = (await f.economy.service.ref("artifacts", j.id).get()).data();
+  await f.economy.service
+    .ref(
+      "source_approvals",
+      hash(raw.references[0].kind + ":" + raw.references[0].id),
+    )
+    .set({ artifactUseApproved: false }, { merge: true });
+  const a = await f.economy.service.artifacts.view(f.a, j.id);
+  assert.equal(a.content, null);
+  assert.equal(a.document, null);
+  assert.deepEqual(a.checkedItems, []);
+  await assert.rejects(
+    () =>
+      f.economy.service.artifacts.edit(f.a, j.id, {
+        editConsent: true,
+        revision: 1,
+        checkedItems: [],
+      }),
+    /REFERENCES_UNAVAILABLE/,
+  );
 });

@@ -165,21 +165,7 @@ async function createFixture({
                     {
                       text: JSON.stringify(
                         work
-                          ? {
-                              artifact: {
-                                title: "LOCAL 準備用の下書き",
-                                sections: Object.keys(
-                                  require("../../backend/economy/tasks").TASKS[
-                                    work
-                                  ].sections,
-                                ).map((section) => ({
-                                  section,
-                                  prompt:
-                                    "資料の条件を確認し、自分が実践することを記入してください。",
-                                  references: [sources[0].key],
-                                })),
-                              },
-                            }
+                          ? require("./work-reply.cjs")(payload)
                           : {
                               matches: selected.map((s) => ({
                                 key: s.key,

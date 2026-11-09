@@ -93,7 +93,12 @@ function material(type, rows) {
   const approved = rows.filter(
     (s) =>
       s.permission?.artifactUseApproved === true &&
-      s.permission.artifactAllowedTasks?.includes(type),
+      s.permission.artifactAllowedTasks?.includes(type) &&
+      (!(
+        ["knowledge_draft", "wil_plan"].includes(type) &&
+        s.kind === "service_guide"
+      ) ||
+        ["posting", "research"].includes(s.id)),
   );
   if (!t || !approved.some((s) => t.required.includes(s.kind)))
     fail("WORK_MATERIAL_UNAVAILABLE", 409);
@@ -104,7 +109,7 @@ function material(type, rows) {
         Number(t.required.includes(b.kind)) -
         Number(t.required.includes(a.kind)),
     )
-    .slice(0, 8);
+    .slice(0, 3);
 }
 function scope(type) {
   return (
@@ -112,135 +117,11 @@ function scope(type) {
     "として、許諾済み資料を比較し、AIの提案と本人が記入する箇所を分けた成果物を本人専用に保存します。実体験・実績・店舗・参加資格を作りません。公開・参加・購入・交換・送金・外部サービスへの成果物送信は行いません。資料不足・生成失敗・保存失敗は全額返却対象です。保存した下書きは本人が確認・編集して使ってください。"
   );
 }
-function schema(type, keys) {
-  return {
-    type: "OBJECT",
-    properties: {
-      artifact: {
-        type: "OBJECT",
-        properties: {
-          title: { type: "STRING" },
-          sections: {
-            type: "ARRAY",
-            minItems: 5,
-            maxItems: 5,
-            items: {
-              type: "OBJECT",
-              properties: {
-                section: {
-                  type: "STRING",
-                  enum: Object.keys(TASKS[type].sections),
-                },
-                prompt: { type: "STRING" },
-                references: {
-                  type: "ARRAY",
-                  minItems: 1,
-                  maxItems: 3,
-                  items: { type: "STRING", enum: keys },
-                },
-              },
-              required: ["section", "prompt", "references"],
-            },
-          },
-        },
-        required: ["title", "sections"],
-      },
-    },
-    required: ["artifact"],
-  };
+function schema(type, keys, candidateKeys) {
+  return require("./work-artifact").schema(type, keys, candidateKeys);
 }
-function exact(v, keys) {
-  return (
-    v &&
-    typeof v === "object" &&
-    !Array.isArray(v) &&
-    Object.keys(v).length === keys.length &&
-    keys.every((k) => Object.hasOwn(v, k))
-  );
-}
-function text(v, max) {
-  const t = require("./agent").safeText(v, max);
-  if (/[<>\u0000-\u0008]|https?:|www\.|\]\(|javascript:|data:/i.test(t))
-    fail("ARTIFACT_UNSAFE_OUTPUT", 502);
-  return t;
-}
-function resolve(type, value, rows) {
-  const t = TASKS[type];
-  if (
-    !t ||
-    !exact(value, ["artifact"]) ||
-    !exact(value.artifact, ["title", "sections"]) ||
-    !Array.isArray(value.artifact.sections) ||
-    value.artifact.sections.length !== 5
-  )
-    fail("ARTIFACT_INVALID_OUTPUT", 502);
-  const keys = [
-    ...new Set(
-      value.artifact.sections.flatMap((s) =>
-        Array.isArray(s?.references) ? s.references : [],
-      ),
-    ),
-  ];
-  const resolved = require("./search/synthesis").resolve(
-    {
-      matches: keys.map((key) => ({ key, evidence: "summary" })),
-      steps: [],
-      comparisons: [],
-    },
-    rows,
-  );
-  const chosen = new Map(
-    keys.map((key) => [key, rows.find((s) => s.key === key)]),
-  );
-  material(type, [...chosen.values()]);
-  const seen = new Set();
-  const sections = value.artifact.sections.map((s) => {
-    if (
-      !exact(s, ["section", "prompt", "references"]) ||
-      !Object.hasOwn(t.sections, s.section) ||
-      seen.has(s.section) ||
-      !Array.isArray(s.references) ||
-      !s.references.length ||
-      s.references.length > 3 ||
-      s.references.some((k) => !chosen.has(k))
-    )
-      fail("ARTIFACT_INVALID_CITATION", 502);
-    seen.add(s.section);
-    const prompt = text(s.prompt, 220);
-    // Output is an actionable prompt/template, never an asserted personal story.
-    if (
-      !/(ください。|ましょう。|か[？?])$/.test(prompt) ||
-      /しました(?:[。！!]|$)|(?:確認済み|認証済み|参加済み|購入済み)(?:です|だ)|保証します/.test(
-        prompt,
-      )
-    )
-      fail("ARTIFACT_UNSUPPORTED_CLAIM", 502);
-    return {
-      heading: t.sections[s.section],
-      prompt,
-      references: s.references.map(
-        (k) => chosen.get(k).kind + ":" + chosen.get(k).id,
-      ),
-    };
-  });
-  const content =
-    "AIが作成した準備用の提案・記入用下書きです。本人の経験・結果・参加資格は未確認です。公開や参加は実行していません。\n\n" +
-    sections
-      .map(
-        (s) => "## " + s.heading + "\n" + s.prompt + "\n［本人が確認・記入］",
-      )
-      .join("\n\n");
-  return {
-    ...resolved,
-    artifact: {
-      artifactType: type,
-      title: text(value.artifact.title, 100),
-      content,
-      sections,
-      references: resolved.results,
-    },
-    outcome: "success",
-  };
+function resolve(type, value, rows, plan) {
+  return require("./work-artifact").resolve(type, value, rows, plan);
 }
 function execution(type, at) {
   return {

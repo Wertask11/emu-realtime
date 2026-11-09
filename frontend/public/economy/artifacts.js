@@ -17,8 +17,18 @@
       $("artifactContent").value = "";
       $("artifactReferences").replaceChildren();
       $("artifactEditConsent").checked = false;
+      $("artifactStructured").replaceChildren();
+      $("saveChecklist").hidden = true;
+      $("artifactStructuredNote").hidden = true;
     }
     function denyAccess(error) {
+      if (error.message === "ARTIFACT_REFERENCES_UNAVAILABLE") {
+        reset();
+        notice(
+          "資料の公開・利用許諾を確認できないため、成果物を閉じました。保存データは保持しています。",
+        );
+        return true;
+      }
       if (
         ![
           "SERVICE_NOT_ELIGIBLE",
@@ -34,8 +44,123 @@
       );
       return true;
     }
+    function structured(a) {
+      const root = $("artifactStructured");
+      root.replaceChildren();
+      const d = a.document;
+      $("saveChecklist").hidden = !d;
+      $("saveChecklist").disabled = false;
+      $("artifactStructuredNote").hidden = !d;
+      if (!d || !a.content) return;
+      const section = (title) => {
+        const s = node("section"),
+          h = node("h3", title);
+        s.append(h);
+        root.append(s);
+        return s;
+      };
+      section("目的と結論・AIの提案").append(node("p", d.summary));
+      const cs = section("候補比較（公開資料の事実とAIの選定理由）");
+      for (const c of d.candidates) {
+        const card = node("article");
+        card.append(
+          node("h4", (c.recommended ? "推奨：" : "候補：") + c.title),
+          node("p", c.reason),
+          node("blockquote", c.details),
+        );
+        if (Number.isSafeInteger(c.facts?.priceEmuer))
+          card.append(node("p", "公開価格：" + c.facts.priceEmuer + " EMUER"));
+        if (c.facts?.deadlineMs)
+          card.append(
+            node(
+              "p",
+              "受付期限：" +
+                new Date(c.facts.deadlineMs).toLocaleString("ja-JP", {
+                  timeZone: "Asia/Tokyo",
+                }) +
+                "（日本時間）",
+            ),
+          );
+        const b = node("button", "公式ページを開く →");
+        b.type = "button";
+        b.onclick = () => openTarget(c.target);
+        card.append(b);
+        cs.append(card);
+      }
+      const evidenceName = (key) =>
+        (d.evidence || []).find((x) => x.kind + ":" + x.id === key)?.title ||
+        "参照元を下で確認";
+      const steps = node("ol");
+      for (const s of d.steps) {
+        const li = node("li");
+        li.append(
+          node("p", s.action),
+          node("small", "完了条件：" + s.done),
+          node("small", "根拠：" + s.references.map(evidenceName).join("・")),
+        );
+        steps.append(li);
+      }
+      section("順番付きの実行手順").append(steps);
+      const checks = section("実行チェックリスト");
+      for (const c of d.checklist) {
+        const label = node("label"),
+          input = node("input");
+        input.type = "checkbox";
+        input.value = c.id;
+        input.checked = (a.checkedItems || []).includes(c.id);
+        label.className = "check";
+        label.append(input, node("span", c.text));
+        checks.append(label);
+      }
+      for (const [title, items] of [
+        ["未確認事項・本人の確認が必要な点", d.unknowns],
+        ["実践後の記録・振り返り", d.reflection],
+      ]) {
+        const list = node("ul");
+        for (const x of items) list.append(node("li", x));
+        section(title).append(list);
+      }
+      if (d.draft)
+        section("知識として残す本文下書き").append(node("pre", d.draft));
+    }
+    $("saveChecklist").onclick = async () => {
+      if (!current?.content) return;
+      if (
+        $("artifactTitle").value !== current.title ||
+        $("artifactContent").value !== current.content
+      ) {
+        $("artifactNotice").textContent =
+          "本文の変更を先に保存してから、チェック状態を保存してください。";
+        return;
+      }
+      const g = generation();
+      $("saveChecklist").disabled = true;
+      try {
+        const d = await api("/artifacts/" + current.id, {
+          editConsent: true,
+          revision: current.revision,
+          checkedItems: [
+            ...$("artifactStructured").querySelectorAll(
+              'input[type="checkbox"]:checked',
+            ),
+          ].map((x) => x.value),
+        });
+        if (g === generation()) {
+          show(d.artifact);
+          $("artifactNotice").textContent =
+            "チェック状態を本人専用に保存しました。追加のAI実行・課金はありません。";
+        }
+      } catch (e) {
+        if (g === generation() && !denyAccess(e))
+          $("artifactNotice").textContent =
+            "保存できませんでした。再度開いて状態と許諾を確認してください。";
+      } finally {
+        if (g === generation()) $("saveChecklist").disabled = false;
+      }
+    };
     function show(a) {
       current = a;
+      structured(a);
       $("artifactTitle").value = a.title;
       $("artifactContent").value = a.content || "";
       $("artifactNotice").textContent = a.notice;
@@ -137,6 +262,7 @@
       const g = generation(),
         id = current.id;
       let verifiedReferences = [];
+      let verifiedChecklist = "";
       try {
         const fresh = await api("/artifacts/" + id);
         if (g !== generation()) return;
@@ -145,6 +271,17 @@
           return;
         }
         verifiedReferences = fresh.artifact.references;
+        if (fresh.artifact.document)
+          verifiedChecklist =
+            "\n\n生成時のチェック項目（保存済みの本人記録）\n" +
+            fresh.artifact.document.checklist
+              .map(
+                (c) =>
+                  ((fresh.artifact.checkedItems || []).includes(c.id)
+                    ? "[x] "
+                    : "[ ] ") + c.text,
+              )
+              .join("\n");
       } catch (error) {
         if (g === generation() && denyAccess(error)) return;
         if (g === generation())
@@ -157,6 +294,7 @@
           $("artifactTitle").value +
             "\n\n" +
             $("artifactContent").value +
+            verifiedChecklist +
             "\n\n参考資料（現在の公開・許諾を再確認）\n" +
             verifiedReferences
               .map((r) => r.title + " " + location.origin + r.target)

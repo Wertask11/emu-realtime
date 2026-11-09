@@ -19,6 +19,9 @@ function createArtifacts({ db, ref, sources, payments, now, requireAccess }) {
       content: artifact.content,
       references: artifact.references,
       sections: artifact.sections,
+      formatVersion: artifact.formatVersion || 1,
+      document: artifact.document || null,
+      checkedItems: [],
       createdAt: now(),
       updatedAt: now(),
       status: "draft",
@@ -91,6 +94,9 @@ function createArtifacts({ db, ref, sources, payments, now, requireAccess }) {
       artifactType: v.artifactType,
       title: c.valid ? v.title : TASKS[v.artifactType].label,
       content: c.valid ? v.content : null,
+      formatVersion: v.formatVersion || 1,
+      document: c.valid ? v.document || null : null,
+      checkedItems: c.valid ? v.checkedItems || [] : [],
       status: c.status,
       revision: v.revision,
       createdAt: v.createdAt,
@@ -129,16 +135,46 @@ function createArtifacts({ db, ref, sources, payments, now, requireAccess }) {
     if (b?.editConsent !== true) fail("ARTIFACT_EDIT_CONSENT_REQUIRED", 400);
     if (
       Object.keys(b).some(
-        (k) => !["editConsent", "revision", "title", "content"].includes(k),
+        (k) =>
+          ![
+            "editConsent",
+            "revision",
+            "title",
+            "content",
+            "checkedItems",
+          ].includes(k),
       )
     )
       fail("INVALID_INPUT", 400);
     const { safeText } = require("./agent");
-    const title = safeText(b.title, 100),
-      content = safeText(b.content, 12000);
     if (!Number.isSafeInteger(b.revision))
       fail("ARTIFACT_VERSION_CONFLICT", 409);
     if (!c.valid) fail("ARTIFACT_REFERENCES_UNAVAILABLE", 409);
+    const editingText =
+      Object.hasOwn(b, "title") || Object.hasOwn(b, "content");
+    if (!editingText && !Object.hasOwn(b, "checkedItems"))
+      fail("INVALID_INPUT", 400);
+    const patch = editingText
+      ? {
+          title: safeText(b.title, 100),
+          content: safeText(b.content, 12000),
+          status: "edited",
+        }
+      : {};
+    if (Object.hasOwn(b, "checkedItems")) {
+      const validIds = new Set(
+        (c.v.document?.checklist || []).map((x) => x.id),
+      );
+      if (
+        !validIds.size ||
+        !Array.isArray(b.checkedItems) ||
+        b.checkedItems.length > validIds.size ||
+        new Set(b.checkedItems).size !== b.checkedItems.length ||
+        b.checkedItems.some((x) => !validIds.has(x))
+      )
+        fail("INVALID_CHECKLIST_STATE", 400);
+      patch.checkedItems = b.checkedItems;
+    }
     await db.runTransaction(async (tx) => {
       const r = ref("artifacts", id),
         snap = await tx.get(r),
@@ -150,10 +186,8 @@ function createArtifacts({ db, ref, sources, payments, now, requireAccess }) {
       tx.set(
         r,
         {
-          title,
-          content,
+          ...patch,
           revision: v.revision + 1,
-          status: "edited",
           updatedAt: now(),
         },
         { merge: true },
@@ -168,6 +202,8 @@ function createArtifacts({ db, ref, sources, payments, now, requireAccess }) {
         title: null,
         content: null,
         sections: null,
+        document: null,
+        checkedItems: [],
         references: [],
         status: "expired",
         updatedAt: now(),
