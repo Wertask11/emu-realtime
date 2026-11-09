@@ -344,6 +344,9 @@ app.use("/api/economy", economy.router);
 app.use("/api/schoolpark/quest-completions", questCompletion);
 /* 返り道（11/9）：Emu の投稿ごとに「やってみた人・知恵カード・クエスト」の数を返す（backend/knowledge-trials.js）。 */
 app.use("/api/emu/knowledge-trials", require("./knowledge-trials").createKnowledgeTrialsRouter({ db }).router);
+/* 完走証明ページ（11/9）：本人が選んだ完走1件だけを、推測できないURLで公開する（backend/public-proof.js）。 */
+app.use("/api/schoolpark/proofs", require("./public-proof").createPublicProofRouter({
+  db, requireFirebaseUser, contract: String(process.env.SP_QUEST_STAR_CONTRACT || "") }));
 /* Quest #000 の論文を、リポジトリの新しい版へ差し替える（運営だけ） */
 app.use("/api/schoolpark/founder", require("./founder-paper").createFounderPaperRouter({ db, requireOwner }));
 app.use("/api/schoolpark/city", require("./city").createCityRouter({
