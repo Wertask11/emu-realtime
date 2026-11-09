@@ -47,8 +47,8 @@ function createArtifacts({ db, ref, sources, payments, now, requireAccess }) {
       fail("ARTIFACT_NOT_FOUND", 404);
     return v;
   }
-  async function checked(a, id) {
-    await requireAccess(a);
+  async function checked(a, id, alreadyQualified = false) {
+    if (!alreadyQualified) await requireAccess(a);
     const v = await owned(a, id);
     const j = (await ref("jobs", v.jobId).get()).data();
     if (
@@ -85,8 +85,8 @@ function createArtifacts({ db, ref, sources, payments, now, requireAccess }) {
       references: refs,
     };
   }
-  async function view(a, id) {
-    const c = await checked(a, id),
+  async function view(a, id, alreadyQualified = false) {
+    const c = await checked(a, id, alreadyQualified),
       v = c.v;
     return {
       id,
@@ -212,6 +212,16 @@ function createArtifacts({ db, ref, sources, payments, now, requireAccess }) {
     );
     tx.delete(index(uid).doc(id));
   }
-  return { record, save, view, list, edit, expire };
+  // Internal only: practice has already performed the same fresh qualification.
+  // No route accepts an alreadyQualified parameter from clients.
+  return {
+    record,
+    save,
+    view,
+    viewAfterQualification: (a, id) => view(a, id, true),
+    list,
+    edit,
+    expire,
+  };
 }
 module.exports = { createArtifacts };

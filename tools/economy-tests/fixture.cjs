@@ -31,6 +31,7 @@ async function createFixture({
   enabled = true,
   crossDomain = false,
   phase3 = false,
+  phase4 = false,
 } = {}) {
   const reset = await fetch(
     "http://" +
@@ -77,6 +78,7 @@ async function createFixture({
     env: {
       ECONOMY_EXPLORER_ENABLED: enabled ? "true" : "false",
       ECONOMY_PHASE3_ENABLED: phase3 ? "true" : "false",
+      ECONOMY_PHASE4_ENABLED: phase4 ? "true" : "false",
       ...(crossDomain
         ? {
             ECONOMY_CROSS_DOMAIN_ENABLED: "true",
@@ -492,6 +494,7 @@ if (require.main === module)
     port: 4257,
     crossDomain: process.env.ECONOMY_TEST_CROSS === "true",
     phase3: process.env.ECONOMY_TEST_PHASE3 === "true",
+    phase4: process.env.ECONOMY_TEST_PHASE4 === "true",
   })
     .then((f) => {
       setInterval(() => f.economy.tick(), 1000).unref();

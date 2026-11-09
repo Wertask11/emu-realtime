@@ -15,7 +15,8 @@
     progressTimer = null,
     progressBusy = false,
     searchProfile = null,
-    artifactUI = null;
+    artifactUI = null,
+    practiceUI = null;
   const watchedJobs = new Map();
   const activeStates = new Set([
     "awaiting_payment",
@@ -84,6 +85,7 @@
   function reset() {
     generation++;
     artifactUI?.reset();
+    practiceUI?.reset();
     clearTimeout(progressTimer);
     progressTimer = null;
     watchedJobs.clear();
@@ -169,6 +171,7 @@
     service: "使い方・プラン",
   };
   function paintService(service) {
+    practiceUI?.configure(service.practice);
     const work = service.workflow;
     $("introDescription").textContent = work?.enabled
       ? "Plus・Pro会員向けに、許諾済み情報を調べ、本人専用の下書き・活動計画を作成して保存します。作業と料金を確認してからお申し込みください。"
@@ -846,19 +849,29 @@
     if (a !== window && typeof a.closeSpRoom === "function") a.closeSpRoom();
     else location.assign("/");
   });
+  const openPosting = () => {
+    const app = parentApp();
+    if (app.openEmuKnowledgeLab)
+      app.openEmuKnowledgeLab("library", { compose: true });
+    else location.assign("/knowledge-lab.html?view=library&compose=1");
+  };
+  practiceUI = window.ReizoPractice({
+    api,
+    node,
+    generation: () => generation,
+    identity: user,
+    openPosting,
+  });
   artifactUI = window.ReizoArtifacts({
     api,
     node,
     openTarget,
     notice,
     generation: () => generation,
+    practiceAvailable: () => practiceUI.enabled(),
+    startPractice: (a) => practiceUI.start(a),
   });
-  $("openPosting").onclick = () => {
-    const app = parentApp();
-    if (app.openEmuKnowledgeLab)
-      app.openEmuKnowledgeLab("library", { compose: true });
-    else location.assign("/knowledge-lab.html?view=library&compose=1");
-  };
+  $("openPosting").onclick = openPosting;
   reset();
   refresh();
   setInterval(() => {

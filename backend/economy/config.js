@@ -66,6 +66,7 @@ function configuration(env = process.env, now = Date.now()) {
     blockers.push("BUDGET_UNCONFIGURED");
   return {
     ...SERVICE,
+    practice: require("./practice").settings(env),
     workflow: require("./tasks").workflow(
       env,
       require("./search/profile").profile(env),

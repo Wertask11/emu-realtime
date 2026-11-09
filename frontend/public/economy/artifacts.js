@@ -6,6 +6,8 @@
     openTarget,
     notice,
     generation,
+    practiceAvailable = () => false,
+    startPractice,
   }) {
     const $ = (id) => document.getElementById(id);
     let current = null;
@@ -20,6 +22,7 @@
       $("artifactStructured").replaceChildren();
       $("saveChecklist").hidden = true;
       $("artifactStructuredNote").hidden = true;
+      $("startPractice").hidden = true;
     }
     function denyAccess(error) {
       if (error.message === "ARTIFACT_REFERENCES_UNAVAILABLE") {
@@ -59,15 +62,15 @@
         root.append(s);
         return s;
       };
-      section("目的と結論・AIの提案").append(node("p", d.summary));
+      section("目的と結論・提案").append(node("p", d.summary));
       if (d.learningGoal) {
-        section("学習目標（AIの提案）").append(node("p", d.learningGoal));
+        section("学習目標（提案）").append(node("p", d.learningGoal));
         const list = node("ul");
         for (const x of d.preparation) list.append(node("li", x));
         section("準備物（所持・利用条件は本人確認）").append(list);
       }
 
-      const cs = section("候補比較（公開資料の事実とAIの選定理由）");
+      const cs = section("候補比較（公開資料の事実と選定理由）");
       for (const c of d.candidates) {
         const card = node("article");
         card.append(
@@ -187,6 +190,7 @@
     };
     function show(a) {
       current = a;
+      $("startPractice").hidden = !a.content || !practiceAvailable();
       structured(a);
       $("artifactTitle").value = a.title;
       $("artifactContent").value = a.content || "";
@@ -378,6 +382,20 @@
         }
       } finally {
         if (g === generation()) $("saveArtifact").disabled = !current?.content;
+      }
+    };
+    $("startPractice").onclick = async () => {
+      if (!current?.content || !practiceAvailable()) return;
+      const g = generation();
+      $("startPractice").disabled = true;
+      try {
+        if (await startPractice(current)) $("artifactDialog").close();
+      } catch (e) {
+        if (g === generation() && !denyAccess(e))
+          $("artifactNotice").textContent =
+            "実践を開始できませんでした。通信状態・資料の期限を確認して開き直してください。追加料金は発生していません。";
+      } finally {
+        if (g === generation()) $("startPractice").disabled = !current?.content;
       }
     };
     return { open, reset };

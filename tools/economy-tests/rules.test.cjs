@@ -16,6 +16,8 @@ let env;
 const cols = [
   "artifacts",
   "artifact_owners",
+  "practice",
+  "practice_owners",
   "products",
   "quotes",
   "jobs",
