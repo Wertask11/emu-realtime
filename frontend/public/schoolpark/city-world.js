@@ -1,24 +1,29 @@
 import * as T from './vendor/city-three.min.js';
 import { isBlocked, slideMove } from './city-motion.js';
 import { buildProduct, PLACEMENTS } from './city-products-3d.js';
+import { createAtmosphere, PLAZA } from './city-atmosphere.js';
 
 const VIEWPOINTS = {
   street:{x:7,z:11,lookX:0,lookZ:1}, entrance:{x:0,z:2.6,lookX:0,lookZ:-3,lookY:1.25},
   table:{x:1.6,z:1.5,lookX:0,lookZ:-1.7,lookY:1.12}, shelves:{x:-2.9,z:-3.3,lookX:-4.4,lookZ:-4.5},
-  counter:{x:1.7,z:-2.5,lookX:3.25,lookZ:-3.75,lookY:1.48}
+  counter:{x:1.7,z:-2.5,lookX:3.25,lookZ:-3.75,lookY:1.48},
+  // 広場（朝は噴水、昼はクリスタル、夜はやぐら）を、少し見上げる
+  plaza:{x:PLAZA.x+9.5,z:PLAZA.z+5.5,lookX:PLAZA.x,lookZ:PLAZA.z,lookY:3.4}
 };
 
 // A real perspective scene, not a panorama or an image with click areas.
 // All geometry/textures are original, generated locally. No remote asset/CDN.
-export function createWorld(canvas, { products = [], onSelect = () => {}, onFocus = () => {}, onLost = () => {} } = {}) {
+// time は 'morning' | 'day' | 'night'。外の世界（空・光・広場）だけが変わり、店内は同じ。
+export function createWorld(canvas, { products = [], time = 'day', onSelect = () => {}, onFocus = () => {}, onLost = () => {} } = {}) {
   const renderer = new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'low-power'});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.5));
   renderer.outputColorSpace=T.SRGBColorSpace;
   renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
   const scene=new T.Scene();scene.background=new T.Color('#dce3da');scene.fog=new T.Fog('#dce3da',24,70);
-  const camera=new T.PerspectiveCamera(64,1,.08,85);camera.rotation.order='YXZ';
-  const bounds={minX:-10,maxX:10,minZ:-8,maxZ:15}, boxes=[], disposables=new Set();
+  const camera=new T.PerspectiveCamera(64,1,.08,240);camera.rotation.order='YXZ';
+  // 店の南の広場まで歩ける（前は x±10・z15 まで）
+  const bounds={minX:-16,maxX:12,minZ:-8,maxZ:24}, boxes=[], disposables=new Set();
   let yaw=0,pitch=0,drag=null,joystick={x:0,y:0},moveTarget=null,blockedFrames=0,raf=0,last=0,dead=false,paused=false,visible=true,frames=0;
   const keys=new Set(), ray=new T.Raycaster(), pointer=new T.Vector2(), abort=new AbortController();
   const options={signal:abort.signal};
@@ -49,7 +54,7 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
   const paving=mat('#e3dfcf',{map:stoneTexture}), linen=mat('#e2d7ba'), soil=mat('#433a2a');
   const glass=mat('#c9ddcd',{transparent:true,opacity:.15,roughness:.15,metalness:.2});
   const glow=mat('#ffe8b7',{emissive:'#ffd89a',emissiveIntensity:.7});
-  scene.add(new T.HemisphereLight('#edf5e6','#847057',2.25));
+  const hemi=new T.HemisphereLight('#edf5e6','#847057',2.25);scene.add(hemi);
   const sun=new T.DirectionalLight('#fff0cd',3.7);sun.position.set(-8,13,10);sun.castShadow=true;
   sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-13,right:13,top:13,bottom:-13,near:1,far:40});
   sun.shadow.bias=-.0006;sun.shadow.normalBias=.025;scene.add(sun);sun.target.position.set(0,0,-2);scene.add(sun.target);
@@ -60,7 +65,7 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
   // first opaque ray hit must be this surface, so walls, furniture and objects
   // never become click-to-move destinations.
   const walkMaterial=new T.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false});disposables.add(walkMaterial);
-  const walkSurface=mesh(new T.PlaneGeometry(20,23),walkMaterial,0,.075,3.5);walkSurface.rotation.x=-Math.PI/2;walkSurface.userData.walkable=true;walkSurface.castShadow=false;walkSurface.receiveShadow=false;
+  const walkSurface=mesh(new T.PlaneGeometry(28,32),walkMaterial,-2,.075,8);walkSurface.rotation.x=-Math.PI/2;walkSurface.userData.walkable=true;walkSurface.castShadow=false;walkSurface.receiveShadow=false;
   const markerMaterial=new T.MeshBasicMaterial({color:'#f7efd9',transparent:true,opacity:.82,depthWrite:false,side:T.DoubleSide});disposables.add(markerMaterial);
   const moveMarker=mesh(new T.TorusGeometry(.22,.025,8,32),markerMaterial,0,.085,0);moveMarker.rotation.x=-Math.PI/2;moveMarker.visible=false;moveMarker.castShadow=false;moveMarker.receiveShadow=false;moveMarker.userData.navigationMarker=true;
   let markerPulseUntil=0;
@@ -188,6 +193,10 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
     }
     const tag=label(String(product.priceJPY ? '¥ '+product.priceJPY.toLocaleString('ja-JP') : product.name),0,.012,.37,.43,.12,'#f4efdf','#244936',65,0,g);tag.rotation.x=-Math.PI*.32;
   });
+  // 外の世界。時間帯で変わる（city-atmosphere.js）。失敗しても、店はこれまでどおり見られる。
+  let atmosphere=null;
+  try{atmosphere=createAtmosphere(T,{scene,camera,renderer,lights:{hemi,sun,fill},texture,label,obstacle,disposables},time);canvas.dataset.time=atmosphere.mode;}
+  catch(error){console.warn('City atmosphere unavailable',error);}
   function resize(){const r=canvas.getBoundingClientRect();if(r.width<1||r.height<1)return;renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();}
   function look(){camera.rotation.set(pitch,yaw,0,'YXZ');}
   function publishPose(){canvas.dataset.position=JSON.stringify({x:+camera.position.x.toFixed(3),z:+camera.position.z.toFixed(3),yaw:+yaw.toFixed(3)});}
@@ -300,6 +309,7 @@ export function createWorld(canvas, { products = [], onSelect = () => {}, onFocu
     }
     if(moveMarker.visible&&markerPulseUntil>ms){const phase=1-(markerPulseUntil-ms)/520;moveMarker.scale.setScalar(1+phase*.7);markerMaterial.opacity=.82*(1-phase);}
     else if(markerPulseUntil&&markerPulseUntil<=ms){markerPulseUntil=0;markerMaterial.opacity=.82;if(!moveTarget&&matchMedia('(pointer:coarse)').matches)moveMarker.visible=false;}
+    atmosphere?.update(ms);
     renderer.render(scene,camera);
     if(frames===0){renderer.shadowMap.autoUpdate=false;canvas.dataset.ready='true';}
     if(++frames%10===0){

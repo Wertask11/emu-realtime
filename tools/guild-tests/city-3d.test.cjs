@@ -24,6 +24,8 @@ async function open(width){
   }
   if(url.origin!==fixture.base)return route.abort();return route.continue();
  });
+  /* CITY_TIME=morning|day|night で、時間帯ごとの街を確かめられる（無ければ端末の時刻） */
+ if(process.env.CITY_TIME)await context.addInitScript(v=>{window.__SP_CITY_TIME=v;},process.env.CITY_TIME);
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
  page.on('console',m=>{if(m.type()==='error'&&/WebGL|THREE|shader/i.test(m.text()))errors.push(m.text());});
  await page.goto(fixture.base+'/test/parent');
