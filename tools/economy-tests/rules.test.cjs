@@ -30,6 +30,9 @@ const cols = [
   "wallet_challenges",
   "chain_ops",
   "operator_gas",
+  "gas_reservations",
+  "signatures",
+  "signer_nonces",
 ];
 before(async () => {
   env = await initializeTestEnvironment({

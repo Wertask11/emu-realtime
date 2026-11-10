@@ -1,11 +1,19 @@
 "use strict";
 const ethers = require("ethers"),
-  { hash, fail, day } = require("./config");
+  { hash, fail } = require("./config");
 const { policy } = require("./polygon-config");
 // One durable signing/broadcast slot. No user/administrator private key is accepted here.
-function createOperator({ db, ref, rpc, env, now, signTransaction }) {
+function createOperator({
+  db,
+  ref,
+  rpc,
+  env,
+  now,
+  signTransaction,
+  gasBudget,
+}) {
   const lock = ref("system", "polygon-operator-slot");
-  async function remote(tx) {
+  async function remote(tx, context) {
     if (!env.ECONOMY_POLYGON_SIGNER_TOKEN)
       fail("POLYGON_SIGNER_UNCONFIGURED", 503);
     const r = await fetch(env.ECONOMY_POLYGON_SIGNER_URL, {
@@ -18,6 +26,8 @@ function createOperator({ db, ref, rpc, env, now, signTransaction }) {
       body: JSON.stringify({
         transaction: tx,
         purpose: "schoolpark-emuer-service",
+        version: 1,
+        ...context,
       }),
       signal: AbortSignal.timeout(15000),
     });
@@ -25,6 +35,28 @@ function createOperator({ db, ref, rpc, env, now, signTransaction }) {
     const body = await r.text();
     if (body.length > 32000) fail("POLYGON_SIGNER_INVALID_RESPONSE", 503);
     return JSON.parse(body).signedTransaction;
+  }
+  async function ready() {
+    if (signTransaction) return; // Isolated test injection only; production has no local signer.
+    const url = new URL(env.ECONOMY_POLYGON_SIGNER_URL);
+    url.pathname = "/ready";
+    const r = await fetch(url, {
+      redirect: "error",
+      headers: { Authorization: "Bearer " + env.ECONOMY_POLYGON_SIGNER_TOKEN },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!r.ok) fail("POLYGON_SIGNER_UNAVAILABLE", 503);
+    const text = await r.text();
+    if (text.length > 2000) fail("POLYGON_SIGNER_INVALID_RESPONSE", 503);
+    const body = JSON.parse(text);
+    if (
+      body.ready !== true ||
+      body.chainId !== rpc.chainId ||
+      body.tokenAddress?.toLowerCase() !== rpc.token.toLowerCase() ||
+      body.operatorAddress?.toLowerCase() !==
+        env.ECONOMY_POLYGON_OPERATOR_ADDRESS.toLowerCase()
+    )
+      fail("POLYGON_SIGNER_INVALID_RESPONSE", 503);
   }
   async function ensure(q, method) {
     if (!["refundExchange", "markExchangeFulfilled"].includes(method))
@@ -80,35 +112,41 @@ function createOperator({ db, ref, rpc, env, now, signTransaction }) {
       )
         fail("POLYGON_REFUND_NOT_READY", 503);
       const data = rpc.iface.encodeFunctionData(method, [q.chainOrderId]);
-      const gas = await rpc.provider.estimateGas({
+      const estimated = await rpc.provider.estimateGas({
         from: operator,
         to: rpc.token,
         data,
         value: 0,
       });
+      const gas = estimated.mul(125).add(99).div(100);
       const gasPrice = await rpc.provider.getGasPrice(),
         cost = BigInt(gas.toString()) * BigInt(gasPrice.toString());
-      if (cost > BigInt(env.ECONOMY_POLYGON_MAX_GAS_WEI))
+      const gasLimitCap = gasBudget.config(
+        method === "refundExchange" ? "REFUND_GAS_LIMIT" : "FULFILL_GAS_LIMIT",
+      );
+      if (
+        BigInt(gas.toString()) > gasLimitCap ||
+        BigInt(gasPrice.toString()) > gasBudget.config("MAX_FEE_WEI") ||
+        cost > BigInt(env.ECONOMY_POLYGON_MAX_GAS_WEI)
+      )
         fail("POLYGON_GAS_CAP_EXCEEDED", 503);
       if ((await rpc.provider.getBalance(operator)).lt(gas.mul(gasPrice)))
         fail("POLYGON_OPERATOR_GAS_UNAVAILABLE", 503);
-      const nonce = await rpc.provider.getTransactionCount(operator, "pending"),
-        gasDay = day(now()),
-        gr = ref("operator_gas", gasDay);
+      const nonce = await rpc.provider.getTransactionCount(operator, "pending");
       await db.runTransaction(async (tx) => {
-        const [s, l, g] = await Promise.all([
-          tx.get(or),
-          tx.get(lock),
-          tx.get(gr),
-        ]);
+        const [s, l] = await Promise.all([tx.get(or), tx.get(lock)]);
         if (s.exists) return;
         if (l.data()?.active && l.data().active !== opId)
           fail("POLYGON_OPERATOR_BUSY", 409);
-        const reserved = BigInt(g.data()?.reservedWei || "0");
-        if (reserved + cost > BigInt(env.ECONOMY_POLYGON_DAILY_GAS_WEI))
-          fail("POLYGON_GAS_CAP_EXCEEDED", 503);
+        await gasBudget.authorize(
+          tx,
+          q.serviceOrderId || "agent_" + q.serviceJobId,
+          cost,
+        );
         tx.create(or, {
           chainOrderId: q.chainOrderId,
+          orderId: "agent_" + q.serviceJobId,
+          jobId: q.serviceJobId,
           method,
           state: "signing",
           createdAt: now(),
@@ -123,19 +161,17 @@ function createOperator({ db, ref, rpc, env, now, signTransaction }) {
             gasPrice: gasPrice.toHexString(),
           },
           reservedGasWei: cost.toString(),
-          gasDay,
         });
         tx.set(lock, { active: opId });
-        tx.set(
-          gr,
-          { reservedWei: (reserved + cost).toString() },
-          { merge: true },
-        );
       });
       o = (await or.get()).data();
     }
     if (!o.transactionHash) {
-      const raw = await (signTransaction || remote)(o.transaction);
+      const raw = await (signTransaction || remote)(o.transaction, {
+        operationId: opId,
+        requestId: opId,
+        expiresAtMs: now() + 60000,
+      });
       if (
         typeof raw !== "string" ||
         !/^0x[0-9a-f]+$/i.test(raw) ||
@@ -187,6 +223,6 @@ function createOperator({ db, ref, rpc, env, now, signTransaction }) {
     }
     fail("POLYGON_OPERATION_PENDING", 409);
   }
-  return { ensure };
+  return { ensure, ready };
 }
 module.exports = { createOperator };

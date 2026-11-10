@@ -91,6 +91,10 @@ function env() {
     ["ECONOMY_POLYGON_OPERATOR_ADDRESS", admin.address],
     ["ECONOMY_POLYGON_MAX_GAS_WEI", "100000000000000000"],
     ["ECONOMY_POLYGON_DAILY_GAS_WEI", "1000000000000000000"],
+    ["ECONOMY_POLYGON_TRIAL_GAS_WEI", "7000000000000000000"],
+    ["ECONOMY_POLYGON_MAX_FEE_WEI", "100000000000"],
+    ["ECONOMY_POLYGON_REFUND_GAS_LIMIT", "150000"],
+    ["ECONOMY_POLYGON_FULFILL_GAS_LIMIT", "100000"],
     ["ECONOMY_POLYGON_SIGNER_URL", "https://signer.example.test/sign"],
     ["ECONOMY_POLYGON_SIGNER_HOST", "signer.example.test"],
     ["ECONOMY_POLYGON_SIGNER_TOKEN", "isolated-test-only"],
@@ -98,7 +102,34 @@ function env() {
 }
 function rpc(p = provider, extra = {}) {
   return createPolygonRPC({
-    provider: p,
+    // TEST ONLY: Ganache lacks estimateGas state overrides. Snapshot, mutate
+    // isolated EVM storage, estimate real execution, then revert everything.
+    provider: new Proxy(p, {
+      get(t, k) {
+        if (k === "send")
+          return async (method, args) => {
+            if (method !== "eth_estimateGas" || !args[2])
+              return t.send(method, args);
+            const snap = await gp.request({
+              method: "evm_snapshot",
+              params: [],
+            });
+            try {
+              for (const [address, override] of Object.entries(args[2]))
+                for (const [slot, value] of Object.entries(override.stateDiff))
+                  await gp.request({
+                    method: "evm_setAccountStorageAt",
+                    params: [address, slot, value],
+                  });
+              return await t.send("eth_estimateGas", args.slice(0, 2));
+            } finally {
+              await gp.request({ method: "evm_revert", params: [snap] });
+            }
+          };
+        const v = t[k];
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    }),
     profile: {
       localTest: true,
       chainId: 137,

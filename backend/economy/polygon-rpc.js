@@ -285,11 +285,18 @@ function createPolygonRPC({ provider, profile = {}, signer, codeHash }) {
       (!live.fulfilled || live.refunded)
     )
       fail("POLYGON_FULFILL_MISMATCH", 409);
+    const transaction = await provider.getTransaction(receipt.transactionHash);
+    const block = await provider.getBlock(receipt.blockNumber);
+    if (!transaction || !block || !receipt.effectiveGasPrice)
+      fail("POLYGON_GAS_RECEIPT_UNAVAILABLE", 503);
     return {
       transactionHash: receipt.transactionHash.toLowerCase(),
       blockNumber: receipt.blockNumber,
       blockHash: receipt.blockHash,
       confirmationStatus: "finalized",
+      gasPayer: transaction.from.toLowerCase(),
+      gasCostWei: receipt.gasUsed.mul(receipt.effectiveGasPrice).toString(),
+      minedAtMs: block.timestamp * 1000,
     };
   }
   return {

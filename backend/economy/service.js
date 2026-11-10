@@ -1116,6 +1116,7 @@ function createEconomy({
       providerSafety:
         (await ref("system", "provider-safety").get()).data() || null,
       pending: counts,
+      polygon: await polygon.operations(),
     };
   }
   async function purge() {

@@ -5,6 +5,7 @@ const { hash, fail } = require("./config");
 const { AMOUNT, TERMS, policy } = require("./polygon-config");
 const { createPolygonRPC } = require("./polygon-rpc");
 const { createOperator } = require("./polygon-operator");
+const { createGasBudget } = require("./polygon-gas");
 // Shares Mitemiru orders and the existing economy jobs; no second balance/ledger.
 function createPolygonPayments({
   db,
@@ -17,6 +18,7 @@ function createPolygonPayments({
   requireIntake,
   rpc: injectedRPC,
   signTransaction,
+  gasEstimate,
 }) {
   let rpc = injectedRPC;
   const walletSlots = ref("system", "polygon-wallet-slots");
@@ -156,8 +158,18 @@ function createPolygonPayments({
     )
       fail("JOB_NOT_FOUND", 404);
   }
+  const gasBudget = () =>
+    createGasBudget({ db, ref, rpc: chain(), env, now, estimate: gasEstimate });
   const operator = () =>
-    createOperator({ db, ref, rpc: chain(), env, now, signTransaction });
+    createOperator({
+      db,
+      ref,
+      rpc: chain(),
+      env,
+      now,
+      signTransaction,
+      gasBudget: gasBudget(),
+    });
   async function pay(args) {
     if (args.paymentSource !== "polygon_wallet") return base.pay(args);
     const { id, actor: a, jobId, productId, gate } = args;
@@ -169,6 +181,17 @@ function createPolygonPayments({
     const wallet = await ready(a),
       r = chain(),
       createdBlock = await r.provider.getBlockNumber();
+    let gasSnapshot;
+    try {
+      await operator().ready();
+      gasSnapshot = await gasBudget().snapshot();
+    } catch (e) {
+      await ref("system", "polygon-safety").set(
+        { stopped: true, reason: "POLYGON_GAS_REVIEW_REQUIRED", atMs: now() },
+        { merge: true },
+      );
+      throw e;
+    }
     const metadata = {
       wallet,
       chainId: r.chainId,
@@ -183,47 +206,69 @@ function createPolygonPayments({
     };
     const pr = ref("products", productId),
       or = orderRef(id);
-    await db.runTransaction(async (tx) => {
-      const [os, ps, js, slots] = await Promise.all([
-        tx.get(or),
-        tx.get(pr),
-        tx.get(gate.ref),
-        tx.get(walletSlots),
-      ]);
-      if (os.exists) {
-        own(os.data(), a, jobId);
-        return;
-      }
-      const active = slots.data()?.active || [];
-      if (active.length >= 2) fail("POLYGON_WALLET_BUSY", 429);
-      gate.validate(js, ps);
-      if (ps.data()?.status !== "live" || ps.data()?.prices?.EMUER !== 5)
-        fail("SERVICE_PRICE_UNAVAILABLE", 409);
-      tx.create(or, {
-        ...metadata,
-        uid: a.uid,
-        passportId: a.spid,
-        serviceJobId: jobId,
-        productId,
-        productName: "冷蔵庫くんに頼む",
-        amount: 5,
-        currency: "EMUER",
-        paymentSource: "polygon_wallet",
-        method: "emuer_chain",
-        storeType: "agent_service",
-        status: "pending_payment",
-        paymentStatus: "pending",
-        refundStatus: "none",
-        createdAtMs: now(),
-        updatedAtMs: now(),
-        // Shop reservation sweeper must not expire a possibly broadcast payment.
-        // Only finalized chain time + an empty order can close this intent.
-        walletPaymentUntilMs: args.paymentUntilMs,
-        paymentTermsVersion: TERMS,
+    await db
+      .runTransaction(async (tx) => {
+        const [os, ps, js, slots] = await Promise.all([
+          tx.get(or),
+          tx.get(pr),
+          tx.get(gate.ref),
+          tx.get(walletSlots),
+        ]);
+        if (os.exists) {
+          own(os.data(), a, jobId);
+          return;
+        }
+        const active = slots.data()?.active || [];
+        if (active.length >= 2) fail("POLYGON_WALLET_BUSY", 429);
+        gate.validate(js, ps);
+        if (ps.data()?.status !== "live" || ps.data()?.prices?.EMUER !== 5)
+          fail("SERVICE_PRICE_UNAVAILABLE", 409);
+        const reserveGas = await gasBudget().reserve(tx, id, gasSnapshot);
+        reserveGas();
+        tx.create(or, {
+          ...metadata,
+          uid: a.uid,
+          passportId: a.spid,
+          serviceJobId: jobId,
+          productId,
+          productName: "冷蔵庫くんに頼む",
+          amount: 5,
+          currency: "EMUER",
+          paymentSource: "polygon_wallet",
+          method: "emuer_chain",
+          storeType: "agent_service",
+          status: "pending_payment",
+          paymentStatus: "pending",
+          refundStatus: "none",
+          createdAtMs: now(),
+          updatedAtMs: now(),
+          // Shop reservation sweeper must not expire a possibly broadcast payment.
+          // Only finalized chain time + an empty order can close this intent.
+          walletPaymentUntilMs: args.paymentUntilMs,
+          paymentTermsVersion: TERMS,
+        });
+        tx.set(gate.ref, gate.patch, { merge: true });
+        tx.set(walletSlots, { active: [...active, id] });
+      })
+      .catch(async (e) => {
+        if (
+          /^POLYGON_(?:GAS_|REFUND_RESERVE_|OPERATOR_ROTATION_)/.test(e.message)
+        ) {
+          try {
+            await ref("system", "polygon-safety").set(
+              {
+                stopped: true,
+                reason: "POLYGON_GAS_REVIEW_REQUIRED",
+                atMs: now(),
+              },
+              { merge: true },
+            );
+          } catch (_) {
+            /* Preserve original error; never accept an unfunded order. */
+          }
+        }
+        throw e;
       });
-      tx.set(gate.ref, gate.patch, { merge: true });
-      tx.set(walletSlots, { active: [...active, id] });
-    });
     return base.get(id);
   }
   async function manifest(a, id, j) {
@@ -239,6 +284,7 @@ function createPolygonPayments({
       o.deadline * 1000 <= now()
     )
       fail("POLYGON_PAYMENT_CLOSED", 409);
+    await gasBudget().check(j.orderId);
     return {
       orderId: j.orderId,
       jobId: id,
@@ -307,7 +353,12 @@ function createPolygonPayments({
         fail("POLYGON_PAYMENT_MISMATCH", 409);
       if (us?.exists && us.data().orderId !== j.orderId)
         fail("POLYGON_TX_ALREADY_USED", 409);
+      const releaseGas =
+        v.state === "expired"
+          ? await gasBudget().release(tx, j.orderId)
+          : () => {};
       const state = v.state === "paid" ? "queued" : "expired";
+      releaseGas();
       if (v.state === "expired") releaseSlot(tx, slots, j.orderId);
       if (used && !us.exists)
         tx.create(used, {
@@ -404,6 +455,8 @@ function createPolygonPayments({
       const s = os.data();
       if (s.status === status) return;
       if (s.status !== "paid") fail("POLYGON_OPERATION_CONFLICT", 409);
+      const settleGas = await gasBudget().release(tx, id, v);
+      settleGas();
       releaseSlot(tx, slots, id);
       tx.set(
         orderRef(id),
@@ -430,6 +483,12 @@ function createPolygonPayments({
     beforeWork,
     polygon: {
       admission,
+      operations: async () => ({
+        enabled: policy(env).enabled,
+        safety: (await ref("system", "polygon-safety").get()).data() || null,
+        coverage:
+          (await ref("system", "polygon-gas-coverage").get()).data() || null,
+      }),
       policy: () => policy(env),
       status,
       purge,

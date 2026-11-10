@@ -1,5 +1,7 @@
 # Phase 5 実装前監査・方式
 
+> 2026-11-10追補：[実チェーン照合・署名器・POL予約](phase5-operator-release.md)。以下はPR #324時点の記録。RPC通信は追補で成功しており、未照合という記述は当時の状態です。現判定はPARTIAL / Polygon OFF。
+
 2026-11-10、基点main e0e04f9（PR #323）。未コミット変更なしから専用ブランチを作成。
 
 既存ソース：contracts-v2/src/EMUERv2.sol、artifacts/EMUERv2.json、DEPLOYMENT.md、backend/emuer-v2/router.js、mitemiru.js、economy、identity/router/wallet-signatureを調査。

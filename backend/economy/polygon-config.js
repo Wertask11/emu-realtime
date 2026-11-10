@@ -20,7 +20,14 @@ function policy(env = {}) {
     blockers.push("POLYGON_CODE_UNVERIFIED");
   if (!/^0x[a-f0-9]{40}$/i.test(env.ECONOMY_POLYGON_OPERATOR_ADDRESS || ""))
     blockers.push("POLYGON_OPERATOR_UNCONFIGURED");
-  for (const k of ["MAX_GAS_WEI", "DAILY_GAS_WEI"])
+  for (const k of [
+    "MAX_GAS_WEI",
+    "DAILY_GAS_WEI",
+    "TRIAL_GAS_WEI",
+    "MAX_FEE_WEI",
+    "REFUND_GAS_LIMIT",
+    "FULFILL_GAS_LIMIT",
+  ])
     if (!/^[1-9][0-9]{0,29}$/.test(env["ECONOMY_POLYGON_" + k] || ""))
       blockers.push("POLYGON_GAS_BUDGET_UNCONFIGURED");
   try {
