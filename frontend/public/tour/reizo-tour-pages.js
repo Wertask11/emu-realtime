@@ -501,6 +501,8 @@
   window.ReizoTourCatalogRefresh=renderCatalog;
   window.ReizoTourSchoolParkRendered=function(){if(document.body.classList.contains('sp-dao-open'))scheduleRoute();tour.refresh();};
   window.ReizoTourAsk=function(source){var id=screen();tour.choose(id,function(){if(typeof window.spReizoOpen==='function')window.spReizoOpen();},source,function(invoker){if(typeof window.openReizoRequest==='function')window.openReizoRequest(invoker);else tour.announce('依頼画面を開けませんでした。再読み込みしてからお試しください。');});};
+  /* 11/10：冷蔵庫くんの左上の切り替え（reizo/mode-switch.js）が「この画面のガイド」を開くために、いまの画面を知らせる */
+  window.ReizoTourScreen=function(){return screen();};
   var observed=new WeakSet();
   function watchFrame(fr) {
     var doc;try{doc=fr.contentDocument;}catch(error){return;}

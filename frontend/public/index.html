@@ -4077,6 +4077,7 @@ html, body { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 <script src="/illustrations/sp-illustrations.js" defer></script>
 <script src="/economy/entry.js" defer></script>
 <script src="/reizo-float.js" defer></script><!-- 冷蔵庫くんの窓を本文の近くに出し、つかんで動かせるようにする（11/7） -->
+<script src="/reizo/mode-switch.js" defer></script><!-- 冷蔵庫くんを開くとまず「聞く」。左上の名前から 聞く・頼む・ガイド を切り替える（11/10） -->
 </head>
 <body>
 
@@ -11757,7 +11758,10 @@ function spReizoAsk(q) {
    'emuer' や '残高' のような短い語を入れると、
    「EMUERってなに？」のような普通の質問まで拾ってしまうため。 */
 const REIZO_SKILLS = [
-  { id: 'emuer',     keywords: ['残高教えて', '残高を教えて', 'いまの残高', '今の残高', '残高は？', '残高知りたい', '残高が知りたい'], handler: () => _reizoSkillEmuer() },
+  { id: 'emuer',     keywords: ['残高教えて', '残高を教えて', 'いまの残高', '今の残高', '残高は？', '残高知りたい', '残高が知りたい'], handler: () => _reizoSkillEmuer(),
+    /* 11/10：「実EMUERは？」「EMUERいくら？」のような短い聞き方も、数字で答える（説明より数字が知りたい） */
+    test: q => /^(実|じつ)?\s*emuer\s*(は|って|の残高|いくら|何枚|どれくらい)?\s*[？?]?$/i.test(String(q).trim())
+      || /(実emuer|emuer|残高)\s*(は|が|って)?\s*(いくら|何枚|どれくらい|何emuer)/i.test(String(q)) },
   { id: 'task',      keywords: ['リマインド', '予約して', 'あとで教えて', '思い出させて'], handler: () => _reizoSkillTask() },
   { id: 'alert',     keywords: ['アラート', '通知して', '監視して'], handler: () => _reizoSkillAlert() },
 ];
@@ -11766,7 +11770,7 @@ const REIZO_SKILLS = [
 function _matchReizoSkill(q) {
   const lq = q.toLowerCase();
   for (const s of REIZO_SKILLS) {
-    if (s.keywords.some(k => lq.includes(k.toLowerCase()))) return s;
+    if (s.keywords.some(k => lq.includes(k.toLowerCase())) || (typeof s.test === 'function' && s.test(q))) return s;
   }
   return null;
 }
@@ -11774,21 +11778,45 @@ function _matchReizoSkill(q) {
 /* ── 💎 残高を答える ──
    旧マップの施設コスト台帳（EMUER_RATE_CONFIG / emuer_rate）ではなく、
    いま画面に出ているのと同じ残高（実EMUER＋まだ換えていない分）を読む。 */
+/* 11/10：残高は「いまの EMUER（v2）」で答える。
+   前は旧コントラクト（0x4418…）と旧台帳の「150（8）」を出していて、左下の EMUER（v2・1,841 など）と食い違っていた。
+   いまは種類ごとに分けて出す：
+     実EMUER（v2・ウォレット）／受け取り前の報酬（v2・受け取ると実EMUERになる）／
+     アプリ内の EMUER（実EMUERに換える前・応援・協賛・投票に使える）／旧EMUER（前のしくみ・あれば）。 */
+async function _reizoTokenBalance(contractAddress, addr) {
+  if (!window.ethers || !contractAddress || !addr) return null;
+  const abi = ['function balanceOf(address) view returns (uint256)'];
+  const read = async (provider) => Number(ethers.utils.formatUnits(await new ethers.Contract(contractAddress, abi, provider).balanceOf(addr), 18));
+  if (window.ethereum) { try { return await read(new ethers.providers.Web3Provider(window.ethereum)); } catch (e) {} }
+  for (const url of (typeof _EMU_POLYGON_RPCS !== 'undefined' ? _EMU_POLYGON_RPCS : [])) {
+    try { return await read(new ethers.providers.StaticJsonRpcProvider(url, { name: 'matic', chainId: 137 })); } catch (e) {}
+  }
+  return null;
+}
 async function _reizoSkillEmuer() {
-  let pair = null;
-  try { pair = await _emuReadBalancePair(); } catch (e) {}
-  if (!pair) {
-    _spReizoAppendMsg('残高がまだ読み込めていないみたい。少し待ってから、もう一回聞いてね🧊', false);
-    return;
-  }
-  const real = Math.floor(Number(pair.real) || 0);
-  const un   = Math.round((Number(pair.unconverted) || 0) * 10) / 10;
-  let msg = `💎 いまの残高は ${_emuFormatBalancePair(pair)} EMUER だよ！`;
-  if (un > 0) {
-    msg += `\n（　）の中は、まだ実EMUERに換えていない分だよ。`;
-  }
-  msg += `\nログイン報酬は1日1回 +1 EMUERだよ。EMUERは、SchoolPark Cityの公式ショップで商品と交換できるよ（Light・Plus・Pro プラン）。`;
-  _spReizoAppendMsg(msg, false);
+  const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
+  if (!addr) { _spReizoAppendMsg('残高を見るには、ログインしてね🧊', false); return; }
+  const typing = typeof _spReizoShowTyping === 'function' ? _spReizoShowTyping() : null;
+  let real = null, pending = null, app = null, legacy = null;
+  try {
+    const cfg = window.emuerV2ConfigOnce ? await window.emuerV2ConfigOnce() : null;
+    if (cfg && cfg.enabled && cfg.contract) real = await _reizoTokenBalance(cfg.contract, addr);
+  } catch (e) {}
+  try {
+    const r = await fetch('https://emu-realtime.onrender.com/api/emuer/v2/rewards?address=' + encodeURIComponent(addr), { headers: await emuAuthHeaders(false, { interactive: false }) });
+    if (r.ok) { const d = await r.json(); pending = (d.rewards || []).reduce((n, x) => n + (Number(x.amount) || 0), 0); }
+  } catch (e) {}
+  try { app = await _emuOffchainBalance(addr, { fresh: true }); } catch (e) {}
+  try { if (!_emuIsChesWallet()) legacy = await _emuOnchainBalance(addr); } catch (e) {}
+  if (typing) typing.remove();
+  const n = v => (Math.round(Number(v) * 10) / 10).toLocaleString('ja-JP');
+  const lines = ['💎 いまのEMUERだよ！'];
+  lines.push(real === null ? '・実EMUER（ウォレット）：いまは読み込めなかったよ。少し待って、もう一回聞いてね' : '・実EMUER（ウォレット）：' + n(real) + ' EMUER');
+  if (pending) lines.push('・受け取り前の報酬：' + n(pending) + ' EMUER（「受け取る」を押すと実EMUERになるよ）');
+  if (app !== null) lines.push('・アプリ内のEMUER：' + n(app) + ' EMUER（実EMUERに換える前の分。応援・協賛・投票に使えるよ）');
+  if (legacy) lines.push('・旧EMUER（前のしくみの分）：' + n(legacy) + ' EMUER');
+  lines.push('\n左下のEMUERの数字は、実EMUERだよ。交換は「City」の公式ショップでできるよ🧊');
+  _spReizoAppendMsg(lines.join('\n'), false);
 }
 
 /* ── 🔍 コンテンツ推薦 ── */
