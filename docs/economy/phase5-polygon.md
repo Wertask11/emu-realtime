@@ -24,7 +24,7 @@
 - 共通 `mitemiru_chain_payments` のchain/token/tx hashの原子的利用記録で別注文への再使用を拒否。AI実行前・提供確定前にも支払証拠を再確認する。
 - 未送信・未確定では生成しない。署名拒否は送信しない。wall clockの期限切れだけで注文を破棄せず、finalized時刻が署名期限を過ぎ、finalizedのordersが空である場合だけ未払い失効を確定する。
 - ブラウザがhashを送れなくても、orderId索引のイベントを作成blockから最大4,096block、512blockずつで発見する。未解決は保留し、全チェーンスキャンはしない。これを超える障害・最終性の巻き戻りは運営レビューが必要。
-- ショップ用の弱いconfirm・authorization・cancel・admin経路はservice-order guardで拒否する。既存mitemiru本体は変更しない。新wallet注文は通常ショップの取り置きexpiresAtMsを持たず、専用のfinality照合のみが失効を判断する。
+- walletサービス注文をショップ用の弱いconfirm・authorization・cancel・admin経路へ渡さない。予約されたagent注文IDは作成前も拒否し、作成と確認の競合でguardを抜けない。既存ledgerサービスの管理経路は維持する。既存mitemiru本体は変更しない。新wallet注文は通常ショップの取り置きexpiresAtMsを持たず、専用のfinality照合のみが失効を判断する。
 
 ## 返却・再起動
 
@@ -74,4 +74,6 @@ walletは未確定・実行・返却を通じて最大2件の永続in-flight slo
 
 `npm audit --omit=dev`（backend）はhigh/critical 0、moderate 11 / low 14（既存ethers5/Firebase等の依存系統）。今回backend依存は追加・更新しない。contracts-v2の全依存監査はhigh 6 / critical 1 / moderate 1 / low 1。Ganache・関連暗号/WS等の開発用ツールとsolc/tmpが対象で、既存固定バージョンのまま。Ganacheは外部公開RPCを立てず、合成鍵のin-process検証だけに使い、本番backendからimportしない。この開発用指摘は解消済みとはしない。署名処理を本番ONにする前の依存・独立レビューに含める。
 
-最終ローカル検証：[検証集計](phase5-evidence-20261110.json)。バックエンド620、画面関連288、City/Wallet/会員397、分離Auth/Firestore/Rules32、Knowledge Lab182、実ローカル決済24、wallet画面7幅の7、既存コントラクト16、**合計1,566項目合格**。重複再実行は合計へ加算しない。別途、7幅の実践開始・保存・再表示・中断再開・コピーも実ブラウザで合格。先行Lab全体試験の1件はエミュレーター競合エラーがあり、単独16/16と最終全体182/182で再確認した。既存の期待値を緩めていない。
+最終ローカル検証：[検証集計](phase5-evidence-20261110.json)。バックエンド623、画面関連288、City/Wallet/会員397、分離Auth/Firestore/Rules32、Knowledge Lab182、実ローカル決済24、wallet画面7幅の7、既存コントラクト16、**合計1,569項目合格**。重複再実行は合計へ加算しない。別途、7幅の実践開始・保存・再表示・中断再開・コピーも実ブラウザで合格。先行Lab全体試験の1件はエミュレーター競合エラーがあり、単独16/16と最終全体182/182で再確認した。既存の期待値を緩めていない。
+
+PR：[ #324](https://github.com/Wertask11/emu-realtime/pull/324)。実装・検証は完了、本番wallet受付の判定は上記未解決条件によりPARTIAL/OFF。
