@@ -214,6 +214,11 @@ function createOperator({
     const receipt = await rpc.provider.getTransactionReceipt(o.transactionHash);
     if (receipt?.status === 0) fail("POLYGON_OPERATOR_TX_FAILED", 503);
     if (!receipt) {
+      // A durable signature is not proof the role still exists after an incident.
+      if (
+        !(await rpc.contract.hasRole(ethers.utils.id("REFUND_ROLE"), operator))
+      )
+        fail("POLYGON_REFUND_NOT_READY", 503);
       // The exact signed bytes/hash survive a timeout/restart. No replacement nonce or automatic gas bump.
       try {
         await rpc.provider.sendTransaction(o.rawTransaction);

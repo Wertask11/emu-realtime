@@ -122,10 +122,12 @@ PR/SHA・最終試験件数・本番反映は [release evidence](phase5-release-
 
 ## 最終ローカル検証・変更範囲
 
-1,113件のnode:testと17の実Solidityシナリオ、合計1,130項目成功。内訳はrelease evidence参照。ウォレットUIは375/390/412/768/1280/1440/1920px、実本番の非ログイン画面も同幅を読み取りで確認。Geminiは今回の決済試験では既存の分離doubleで、追加の本番生成/EMUER消費はしない。Amoy・実KMS・本番返却は未検証。
+1,114件のnode:testと17の実Solidityシナリオ、合計1,131項目成功。内訳はrelease evidence参照。ウォレットUIは375/390/412/768/1280/1440/1920px、実本番の非ログイン画面も同幅を読み取りで確認。Geminiは今回の決済試験では既存の分離doubleで、追加の本番生成/EMUER消費はしない。Amoy・実KMS・本番返却は未検証。
 
 初回のFirestore一斉送信で1つ503、依存する保存期間assertionも失敗した。静かなfresh emulatorで同じ63件が成功。失敗ログも実行成果物に保持。既存Solidity月跨ぎ試験はethersの短期RPC cacheが時間移動前の失敗見積もりを再利用したため、**試験providerだけcacheTimeout:-1**を指定した。コントラクトやassertionは変えず17項目成功。新native POL試験はbalance guardとdaily guardの両方へ同時に当たるfixtureを修正し、十分な合成残高でdaily制限を単独検証した。
 
 依存監査：backend high/critical 0、signer high/critical 0。既存ethers/Firebase由来などのlow/moderateは残る（JSONに件数）。新署名器の初期依存選択で検出したcritical XML parser系は、同サービスのAWS SDK/Firebase依存を更新して解消。既存backend依存は変更しない。Ganache等の開発用依存リスクは既存Phase5報告どおりで、公開signerへGanacheをimportしない。
 
 変更ファイル：backend/economyのpolygon-config/operator/payments/rpc/gas/gas.test/service、contracts-v2/testのeconomy-payment/v2-policy、tools/economy-testsのrules/polygon-gas-integration、独立services/polygon-signerのpackage/lock/identity/kms/policy/serverと各試験・README・IAM雛形、docs/economyのoperations/phase5-audit/phase5-polygonと追補・証拠JSON。Knowledge Lab/City/ログイン/台帳/本番Rules/コントラクトの製品実装は変更しない。
+
+追補：PR #333後の最終レビューで、保存済みtxの再送直前にも実REFUND_ROLEを確認するよう修正。新たなローカルEVM試験で、接続断→同一raw bytes保存→role撤回後の再送ゼロと返却待ちを検証した。既存の本番roleは変更していない。
