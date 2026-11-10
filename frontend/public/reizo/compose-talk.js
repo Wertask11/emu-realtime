@@ -31,7 +31,7 @@
       + '<button type="button" data-talk-close style="' + BTN + ';background:#fff;color:#0b5cab;border:1px solid #c9dcf2">閉じる</button></div>'
       + '<small data-talk-note style="display:block;margin-top:4px;color:#8a8070;font-size:12px">まとめるのは1日3回まで。話した中身は保存しないよ。</small>'
       + '<div data-talk-preview hidden style="margin-top:10px;border:1px solid #cfe3da;background:#f3faf6;border-radius:12px;padding:12px">'
-      + '<div data-talk-preview-msg style="font-size:13px;font-weight:700;color:#1f6f5c"></div>'
+      + '<div data-talk-preview-msg style="font-size:13px;font-weight:700;color:#1f6f5c;white-space:pre-wrap"></div>'
       + '<div data-talk-preview-title style="margin-top:8px;font-weight:700;white-space:pre-wrap;overflow-wrap:anywhere"></div>'
       + '<div data-talk-preview-lab style="margin-top:6px;font-size:12px;color:#1f6f5c;white-space:pre-wrap;overflow-wrap:anywhere"></div>'
       + '<div data-talk-preview-body style="margin-top:6px;font-size:14px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;background:#fff;border-radius:8px;padding:10px"></div>'
@@ -201,7 +201,9 @@
       if (m.empty) { line('reizo', (m.note || 'まだ知識にできる体験が見つからなかったよ') + '🧊 やってみたことや、うまくいったこと・失敗したことを話してみてね。'); return; }
       draft = { title: String(m.title || ''), body: String(m.body || ''), tags: Array.isArray(m.tags) ? m.tags.map(String).slice(0, 5) : [], lab: m.lab && typeof m.lab === 'object' ? m.lab : null };
       var left = typeof m.remaining === 'number' ? '（今日あと' + m.remaining + '回）' : '';
-      showPreview(draft, '🧊 こうまとめてみたよ' + (m.note ? '：' + m.note : '') + left);
+      var missing = Array.isArray(m.missing) ? m.missing.map(String).slice(0, 4) : [];
+      showPreview(draft, '🧊 こうまとめてみたよ' + (m.note ? '：' + m.note : '') + left
+        + (missing.length ? '\n' + missing.join('') + 'は、まだ話に出てこなかったので空けてあるよ。冷蔵庫くんにもう少し話すか、使ってから書き足してね。' : ''));
       return;
     }
     /* 冷蔵庫くんに聞くの会話からまとめた下書き。投稿画面を開いて入れる。 */
