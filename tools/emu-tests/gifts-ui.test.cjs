@@ -17,6 +17,8 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
 /* 親の EmuGifts の偽物。呼ばれた中身を残す。 */
 const FAKE_GIFTS = `window.calls=[];window.EmuGifts={
   signedIn:()=>true, petals:()=>{window.petaled=(window.petaled||0)+1;},
+  me:async ()=>({ok:true,balance:6,sentToday:0,dailyLimit:100}),
+  on:fn=>{window.giftListener=fn;return ()=>{};},
   cheerCounts:async ids=>{window.calls.push(['counts',ids]);return {ok:true,counts:{p1:{people:2,total:8}}};},
   cheer:async (id,n)=>{window.calls.push(['cheer',id,n]);return {ok:true,people:3,total:8+n,balance:42};},
   polls:async ()=>({ok:true,polls:[{id:'poll1',question:'次のグッズは？',options:[{id:'o1',label:'マグ',votes:2},{id:'o2',label:'トート',votes:1}],cost:0,votes:3,open:true,closesAt:null,myVote:null}]}),
@@ -69,10 +71,18 @@ test('知識を読む：応援のボタン（自分の投稿には出さない�
     assert.equal(await k.locator('[data-cheer-line="p1"]').textContent(), '💐 応援 2人・8 EMUER');
 
     await k.locator('[data-cheer="p1"]').click();
+    await k.locator('[data-cheer-have]').getByText('いまの未変換のEMUER：6 EMUER').waitFor();
+    assert.equal(await k.locator('[data-cheer-amount="10"]').isDisabled(), true, '足りない額は押せない');
+    assert.equal(await k.locator('[data-cheer-amount="5"]').isDisabled(), false);
     await k.locator('[data-cheer-amount="5"]').click();
     await k.locator('[data-cheer-line="p1"]').getByText('3人・13 EMUER').waitFor();
     assert.deepEqual((await page.evaluate(() => window.calls)).find((c) => c[0] === 'cheer'), ['cheer', 'p1', 5]);
     assert.ok(await page.evaluate(() => window.petaled >= 1), '花びらが舞う');
+    /* 自分に応援が届いたと親が知らせたら、その投稿の数をすぐ取り直す */
+    const before = (await page.evaluate(() => window.calls)).filter((c) => c[0] === 'counts').length;
+    await page.evaluate(() => window.giftListener({ type: 'cheers', postIds: ['p1'] }));
+    await page.waitForFunction((n) => window.calls.filter((c) => c[0] === 'counts').length > n, before);
+    await k.locator('[data-cheer-line="p1"]').getByText('2人・8 EMUER').waitFor();
 
     await k.locator('#emuPolls').getByText('次のグッズは？').waitFor();
     await k.locator('[data-poll-vote="o1"]').click();
@@ -133,15 +143,17 @@ test('体験チケット：交換履歴のボタンで QR を出す。チケッ�
   } finally { await page.close(); }
 });
 
-test('届いた応援：「応援が届いたよ」を出して、見たことにする（1回のログインで1回）', async () => {
+test('届いた応援：「応援が届いたよ」と使える残高を出して、見たことにする。そのあとは quick で聞き、届いたらまた出す', async () => {
   const page = await browser.newPage();
-  const seen = [];
+  const seen = [], asked = [];
+  let fresh = true;
   await page.route('https://emu-realtime.onrender.com/api/emu/gifts/**', async (route) => {
     const u = new URL(route.request().url());
     const h = { 'Access-Control-Allow-Origin': '*' };
-    if (u.pathname.endsWith('/inbox')) return route.fulfill({ status: 200, contentType: 'application/json', headers: h, body: JSON.stringify({ ok: true, total: 8,
-      items: [{ id: 'cheer-' + 'a'.repeat(40), kind: 'cheer', amount: 5, fromName: 'ありす', postTitle: '朝の音読' }, { id: 'cheer-' + 'b'.repeat(40), kind: 'cheer', amount: 3, fromName: 'ぼぶ', postTitle: '朝の音読' }] }) });
-    if (u.pathname.endsWith('/inbox/seen')) { seen.push(JSON.parse(route.request().postData()).ids); return route.fulfill({ status: 200, contentType: 'application/json', headers: h, body: '{"ok":true}' }); }
+    if (u.pathname.endsWith('/inbox')) { asked.push(u.search); if (!fresh) return route.fulfill({ status: 200, contentType: 'application/json', headers: h, body: '{"ok":true,"items":[],"quick":true}' });
+      return route.fulfill({ status: 200, contentType: 'application/json', headers: h, body: JSON.stringify({ ok: true, total: 8,
+      items: [{ id: 'cheer-' + 'a'.repeat(40), kind: 'cheer', amount: 5, fromName: 'ありす', postTitle: '朝の音読' }, { id: 'cheer-' + 'b'.repeat(40), kind: 'cheer', amount: 3, fromName: 'ぼぶ', postTitle: '朝の音読' }] }) }); }
+    if (u.pathname.endsWith('/inbox/seen')) { fresh = false; seen.push(JSON.parse(route.request().postData()).ids); return route.fulfill({ status: 200, contentType: 'application/json', headers: h, body: '{"ok":true,"balance":20}' }); }
     return route.fulfill({ status: 404, headers: h, body: '{}' });
   });
   try {
@@ -149,10 +161,15 @@ test('届いた応援：「応援が届いたよ」を出して、見たこと�
     await page.evaluate(() => window.EmuGifts.checkInbox());
     await page.getByText('応援が届いたよ！').waitFor();
     assert.match(await page.textContent('[role=dialog]'), /ありすさん、ぼぶさんから、あなたの知恵に合計 8 EMUER/);
+    assert.match(await page.textContent('[role=dialog]'), /もう使えます。いま未変換のEMUERは 20 EMUER。応援・協賛・投票に使えます/);
     await page.getByText('うれしい！').click();
     await page.waitForFunction(() => !document.querySelector('[role=dialog]'));
     await page.evaluate(() => window.EmuGifts.checkInbox());
     assert.equal(seen.length, 1, '見たことにして、同じログインでは2回出さない');
     assert.equal(seen[0].length, 2);
+    assert.deepEqual(asked, ['', '?quick=1'], '2回目からは quick で聞く');
+    fresh = true;   // 開いている間に、また応援が届いた
+    await page.evaluate(() => window.EmuGifts.checkInbox());
+    await page.getByText('応援が届いたよ！').waitFor();
   } finally { await page.close(); }
 });

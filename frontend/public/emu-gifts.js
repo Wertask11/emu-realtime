@@ -7,7 +7,10 @@
 (function (window, document) {
   'use strict';
   var BASE = 'https://emu-realtime.onrender.com/api/emu/gifts';
-  var inboxCheckedFor = null;
+  var inboxCheckedFor = null;   // 最初の確認（台帳まで見る）を済ませた uid
+  var inboxBusy = false, lastQuickAt = 0;
+  var listeners = [];           // 知識の画面など：応援が届いた投稿の数を新しくするため
+  var POLL_MS = 20000;
 
   var WORDS = {
     INSUFFICIENT_EMUER: '未変換のEMUERが足りないみたい🧊',
@@ -81,13 +84,14 @@
   }
 
   /* ── 届いた応援・ご褒美のお知らせ ── */
-  function showInbox(items, total) {
+  function showInbox(items, total, balance) {
     var names = [];
     items.forEach(function (x) { if (x.fromName && names.indexOf(x.fromName) < 0) names.push(x.fromName); });
     var who = names.length > 2 ? names.slice(0, 2).join('さん、') + 'さん ほか' + (names.length - 2) + '人' : names.join('さん、') + 'さん';
     var titles = [];
     items.forEach(function (x) { var t = x.postTitle || x.questTitle; if (t && titles.indexOf(t) < 0) titles.push(t); });
     var wrap = document.createElement('div');
+    wrap.setAttribute('data-emu-gift-inbox', '');
     wrap.setAttribute('role', 'dialog'); wrap.setAttribute('aria-modal', 'true'); wrap.setAttribute('aria-label', '応援が届きました');
     wrap.style.cssText = 'position:fixed;inset:0;z-index:2147482000;background:rgba(20,19,16,.45);display:flex;align-items:center;justify-content:center;padding:16px';
     var box = document.createElement('div');
@@ -102,8 +106,10 @@
       t.textContent = '「' + titles.slice(0, 3).join('」「') + '」' + (titles.length > 3 ? ' ほか' : '');
       box.appendChild(t);
     }
-    var note = document.createElement('p'); note.style.cssText = 'margin:8px 0 0;font-size:12px;color:#6e695c';
-    note.textContent = '届いたEMUERは、未変換のEMUER（残高の（ ）の中）に入っています。';
+    var note = document.createElement('p'); note.style.cssText = 'margin:10px 0 0;padding:8px 10px;border-radius:10px;background:#fdf2f8;font-size:13px;line-height:1.7;color:#9d174d';
+    note.textContent = '届いたEMUERは、もう使えます。'
+      + (typeof balance === 'number' ? 'いま未変換のEMUERは ' + balance + ' EMUER。' : '未変換のEMUER（残高の（ ）の中）に入っています。')
+      + '応援・協賛・投票に使えます。';
     var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'うれしい！';
     btn.style.cssText = 'margin-top:14px;border:0;border-radius:999px;padding:10px 22px;background:#c2185b;color:#fff;font:inherit;font-weight:700;cursor:pointer';
     btn.onclick = function () { wrap.remove(); };
@@ -113,23 +119,67 @@
     btn.focus();
     petals(big);
   }
-  async function checkInbox() {
-    var u = window.auth && window.auth.currentUser;
-    if (!u || inboxCheckedFor === u.uid) return;
-    inboxCheckedFor = u.uid;
-    var d = await call('GET', '/inbox', null, true);
-    if (!d.ok || !Array.isArray(d.items) || !d.items.length) return;
-    var cheers = d.items.filter(function (x) { return x.kind === 'cheer'; });
-    if (cheers.length) showInbox(cheers, cheers.reduce(function (s, x) { return s + (Number(x.amount) || 0); }, 0));
-    call('POST', '/inbox/seen', { ids: d.items.map(function (x) { return x.id; }) }, true);
-    refreshBalance();
+  /* 文字を打っている途中なら、お知らせはあとにする（打っている手を止めない）。 */
+  function typing() {
+    function editable(el) {
+      if (!el) return false;
+      var tag = (el.tagName || '').toLowerCase();
+      return tag === 'textarea' || el.isContentEditable || (tag === 'input' && !/^(button|checkbox|radio|submit|range|file)$/i.test(el.type || ''));
+    }
+    try {
+      var el = document.activeElement;
+      if (el && el.tagName === 'IFRAME' && el.contentDocument) el = el.contentDocument.activeElement;
+      return editable(el);
+    } catch (_) { return false; }
   }
+  function tell(event) {
+    listeners = listeners.filter(function (fn) { try { fn(event); return true; } catch (_) { return false; } });
+  }
+  /* 届いた応援を見る。
+     - 最初（ログインした人ごとに1回）は必ずサーバーの記録まで見る。
+     - そのあと（画面に戻ったとき・開いている間は20秒ごと）は quick で聞く。何も届いていなければサーバーは記録を読まずに返す。
+     見たしるしを付けると、サーバーが「いま使える未変換のEMUER」を返すので、それをお知らせに出す。 */
+  async function checkInbox(opts) {
+    var u = window.auth && window.auth.currentUser;
+    if (!u || inboxBusy) return;
+    if (document.visibilityState === 'hidden') return;
+    if (document.querySelector('[data-emu-gift-inbox]')) return;
+    var first = inboxCheckedFor !== u.uid;
+    if (!first && typing()) return;
+    inboxBusy = true;
+    try {
+      var d = await call('GET', '/inbox' + (first ? '' : '?quick=1'), null, true);
+      if (!d.ok) return;
+      inboxCheckedFor = u.uid;
+      if (!Array.isArray(d.items) || !d.items.length) return;
+      var cheers = d.items.filter(function (x) { return x.kind === 'cheer'; });
+      var seen = await call('POST', '/inbox/seen', { ids: d.items.map(function (x) { return x.id; }) }, true);
+      if (seen.ok && typeof seen.balance === 'number') {
+        try { window._emuSetOffchainBalance && window._emuSetOffchainBalance(window.connectedAccount || localStorage.getItem('emuWallet') || '', seen.balance); } catch (_) {}
+      }
+      refreshBalance();
+      if (cheers.length) {
+        showInbox(cheers, cheers.reduce(function (s, x) { return s + (Number(x.amount) || 0); }, 0), seen.ok ? seen.balance : undefined);
+        tell({ type: 'cheers', postIds: cheers.map(function (x) { return x.postId; }).filter(Boolean) });
+      }
+    } finally { inboxBusy = false; }
+  }
+  function soon() {
+    var t = Date.now();
+    if (t - lastQuickAt < 3000) return;
+    lastQuickAt = t;
+    checkInbox();
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') soon(); });
+  window.addEventListener('focus', soon);
+  window.addEventListener('online', soon);
+  setInterval(function () { if (document.visibilityState === 'visible') checkInbox(); }, POLL_MS);
 
   window.EmuGifts = {
     config: function () { return call('GET', '/config', null, false); },
     me: function () { return call('GET', '/me', null, true); },
     cheer: async function (postId, amount) { var d = await call('POST', '/cheer', { postId: String(postId), amount: Number(amount), requestId: rid() }, true); if (d.ok) refreshBalance(); return d; },
-    cheerCounts: function (ids) { return call('GET', '/cheers?ids=' + encodeURIComponent(ids.join(',')), null, false); },
+    cheerCounts: function (ids, fresh) { return call('GET', '/cheers?ids=' + encodeURIComponent(ids.join(',')) + (fresh ? '&t=' + Date.now() : ''), null, false); },
     pot: function (questId) { return call('GET', '/sponsor/' + encodeURIComponent(questId), null, false); },
     mine: function (questId) { return call('GET', '/sponsor/' + encodeURIComponent(questId) + '/mine', null, true); },
     sponsor: async function (questId, amount) { var d = await call('POST', '/sponsor', { questId: String(questId), amount: Number(amount), requestId: rid() }, true); if (d.ok) refreshBalance(); return d; },
@@ -139,6 +189,8 @@
     signedIn: function () { return !!(window.auth && window.auth.currentUser); },
     petals: petals,
     checkInbox: checkInbox,
+    /* 応援が届いたときに呼ばれる（知識の画面が、その投稿の数を新しくする）。やめるときは返った関数を呼ぶ。 */
+    on: function (fn) { if (typeof fn === 'function') listeners.push(fn); return function () { listeners = listeners.filter(function (f) { return f !== fn; }); }; },
     word: word
   };
 })(window, document);
