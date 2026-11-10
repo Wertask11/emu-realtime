@@ -98,7 +98,14 @@ function createEconomyRouter(deps) {
         error: lastError,
         retryAfterMs: Math.max(0, quotaRetryAt - Date.now()),
       },
-      walletPaymentEnabled: false,
+      walletPaymentEnabled:
+        snapshot?.walletPayment?.enabled === true &&
+        healthy &&
+        snapshot?.service.enabled === true,
+      walletPayment: snapshot?.walletPayment || {
+        ...service.polygon.policy(),
+        enabled: false,
+      },
       externalExchangeExecutable: false,
     });
   });
@@ -216,6 +223,35 @@ function createEconomyRouter(deps) {
     }),
   );
   router.post(
+    "/wallet/challenge",
+    limited,
+    handle(async (_req, a) => ({
+      challenge: await service.polygon.challenge(a),
+    })),
+  );
+  router.get(
+    "/jobs/:id/wallet-payment",
+    limited,
+    handle(async (req, a) => ({
+      payment: await service.polygon.manifest(
+        a,
+        req.params.id,
+        await service.owned(a, req.params.id),
+      ),
+    })),
+  );
+  router.post(
+    "/jobs/:id/wallet-payment",
+    limited,
+    handle(async (req, a) => {
+      const j = await service.owned(a, req.params.id);
+      await service.polygon.attach(a, req.params.id, j, req.body || {});
+      const job = await service.view(a, req.params.id);
+      wakeFor(job);
+      return { job };
+    }),
+  );
+  router.post(
     "/quotes",
     limited,
     handle(async (req, a) => ({
@@ -263,7 +299,7 @@ function createEconomyRouter(deps) {
       closed ||
       env.ECONOMY_WORKER_ENABLED !== "true" ||
       deps.startWorker === false ||
-      job.state !== "queued" ||
+      !["queued", "awaiting_wallet_payment"].includes(job.state) ||
       awakenedJobs.has(job.id)
     )
       return;

@@ -32,6 +32,7 @@ function fixture(options = {}) {
     ...options.env,
   };
   const identity = {
+    findByAddress: async () => SPID,
     findByUid: async (uid) => (uid === "bob" ? "SP-BBBB-BBBB-BBBB-BBBB" : SPID),
     readIdentity: async () => ({ status: "active" }),
   };
@@ -155,6 +156,7 @@ function fixture(options = {}) {
     env,
     requireFirebaseUser,
     payments: options.payments || commerce.servicePayments,
+    polygonOptions: options.polygonOptions,
     sources,
     agent,
   });
@@ -194,7 +196,7 @@ function fixture(options = {}) {
   const app = express();
   app.use(express.json({ limit: "4kb" }));
   app.use("/api/economy", economy.router);
-  app.use("/api/mitemiru", commerce.router);
+  app.use("/api/mitemiru", require("./shop-guard").serviceOrderGuard(db, requireFirebaseUser), commerce.router);
   return {
     db,
     env,

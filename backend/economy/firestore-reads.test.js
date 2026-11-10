@@ -23,7 +23,7 @@ test('nonempty recovery keeps per-state scans and recovers payment then complete
  const opts={rpcDown:true},f=await setup(opts);try{
   const j=await submit(f);assert.equal(j.state,'awaiting_payment');opts.rpcDown=false;
   const r=trace(f);await f.economy.tick();
-  assert.deepEqual(r.queries.filter(x=>x[1]==='==').map(x=>x[2]),['awaiting_payment','queued','running','result_saved','refund_pending']);
+  assert.deepEqual(r.queries.filter(x=>x[1]==='==').map(x=>x[2]),['awaiting_payment','awaiting_wallet_payment','queued','running','result_saved','refund_pending']);
   const done=await f.economy.service.view(f.a,j.id);assert.equal(done.state,'completed');assert.equal(done.payment.amount,5);assert.equal(f.calls(),1);
   await f.economy.tick();assert.equal(f.calls(),1);assert.equal(Object.keys(f.db._dump('mitemiru_orders')).length,1);
  }finally{f.economy.close();}

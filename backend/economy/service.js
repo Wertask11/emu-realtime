@@ -6,6 +6,7 @@ const { createFreeTierGuard, providerDay, LIMITS } = require("./free-tier");
 const PRODUCT = "agent_schoolpark-explorer-v1";
 const LIVE = [
   "awaiting_payment",
+  "awaiting_wallet_payment",
   "queued",
   "running",
   "result_saved",
@@ -16,7 +17,8 @@ function createEconomy({
   db,
   identity,
   entitlement,
-  payments,
+  payments: basePayments,
+  polygonOptions,
   sources,
   agent,
   env = process.env,
@@ -26,6 +28,18 @@ function createEconomy({
   const ref = (kind, id) => db.collection("emuer_v2_agent_" + kind).doc(id);
   const freeTier = createFreeTierGuard({ db, now });
   const tasks = require("./tasks");
+  const payments = require("./polygon-payments").createPolygonPayments({
+    db,
+    ref,
+    base: basePayments,
+    identity,
+    env,
+    now,
+    requireAccess: (a) => qualified(a),
+    requireIntake: (a) => allowed(a, true),
+    ...polygonOptions,
+  });
+  const polygon = payments.polygon;
   const artifacts = require("./artifacts").createArtifacts({
     db,
     ref,
@@ -73,6 +87,7 @@ function createEconomy({
       blockers.push("SERVICE_PRODUCT_UNVERIFIED");
     return {
       service: { ...c, enabled: !blockers.length, blockers },
+      walletPayment: await polygon.status(),
       external: require("./external").capability,
     };
   }
@@ -111,6 +126,13 @@ function createEconomy({
   async function quote(a, input) {
     const c = await allowed(a),
       goal = safeText(input.goal, 300);
+    const method = input.method || "emuer_ledger";
+    if (!["emuer_ledger", "emuer_chain"].includes(method))
+      fail("PAYMENT_METHOD_DISABLED", 400);
+    if (method === "emuer_chain") {
+      await polygon.ready(a);
+      await polygon.admission();
+    }
     const taskType = input.taskType || null;
     if (taskType) tasks.task(taskType, c);
     const searchProfile = c.searchProfile;
@@ -159,6 +181,10 @@ function createEconomy({
         uid: a.uid,
         wallet: String(a.walletAddress || "").toLowerCase(),
         goal,
+        method,
+        paymentSource: method === "emuer_chain" ? "polygon_wallet" : "ledger",
+        paymentTermsVersion:
+          method === "emuer_chain" ? require("./polygon-config").TERMS : null,
         serviceId: c.id,
         price: c.price,
         termsVersion: c.termsVersion,
@@ -183,10 +209,12 @@ function createEconomy({
         : null,
       searchProfile,
       contextPermissions,
-      refund: c.refund,
+      refund: method === "emuer_chain" ? polygon.policy().refund : c.refund,
       termsVersion: c.termsVersion,
       expiresAtMs: q.expiresAtMs,
-      method: "emuer_ledger",
+      method,
+      paymentTermsVersion: q.paymentTermsVersion,
+      walletPayment: method === "emuer_chain" ? polygon.policy() : null,
       quotas: {
         globalDaily: c.globalDaily,
         personDaily: c.personDaily,
@@ -198,7 +226,10 @@ function createEconomy({
             searchProfile.version +
             "。Googleへ送るのは定義済みのテーマ・目的と検証済み公開資料です。入力原文・残高・本人実績は送りません。本人情報で絞る場合は依頼料金支払い後の状態を参照します。 "
           : "") +
-        "未受取EMUERから支払います。入力文はサービス内で照合し、AIへ目的の種類と対象の公開資料だけを送信します。氏名・住所・秘密は入力しないでください。受付した依頼は失敗時も当日の利用枠に数えます。商品交換枠は消費しません。無料AI枠を保護するため、依頼全体で2件/分・米国太平洋時間でも20依頼/日の追加制限があります。枠不足や障害では受付を停止し、処理を提供できない依頼は全額返却します。",
+        (method === "emuer_chain"
+          ? "Polygonの登録済みウォレットからexchangeで5 EMUERを消費します。署名前に実ガス見積もりを確認し、本人が送信します。approveは不要です。 "
+          : "未受取EMUERから支払います。 ") +
+        "入力文はサービス内で照合し、AIへ目的の種類と対象の公開資料だけを送信します。氏名・住所・秘密は入力しないでください。受付した依頼は失敗時も当日の利用枠に数えます。商品交換枠は消費しません。無料AI枠を保護するため、依頼全体で2件/分・米国太平洋時間でも20依頼/日の追加制限があります。枠不足や障害では受付を停止し、処理を提供できない依頼は全額返却します。",
     };
   }
   async function owned(a, id) {
@@ -208,7 +239,8 @@ function createEconomy({
     return j;
   }
   async function submit(a, b) {
-    if (b.method && b.method !== "emuer_ledger")
+    const method = b.method || "emuer_ledger";
+    if (!["emuer_ledger", "emuer_chain"].includes(method))
       fail("PAYMENT_METHOD_DISABLED", 400);
     if (!/^[A-Za-z0-9_-]{16,80}$/.test(b.requestId || ""))
       fail("IDEMPOTENCY_KEY_REQUIRED", 400);
@@ -216,13 +248,17 @@ function createEconomy({
       fail("CONSENT_REQUIRED", 400);
     const id = hash([a.spid, b.requestId]).slice(0, 40),
       jr = ref("jobs", id);
-    const fingerprint = hash([b.quoteId, b.termsVersion, "emuer_ledger"]);
+    const fingerprint = hash([b.quoteId, b.termsVersion, method]);
     const prior = (await jr.get()).data();
     if (prior) {
       if (prior.fingerprint !== fingerprint) fail("IDEMPOTENCY_KEY_CONFLICT");
       return view(a, id);
     }
     const c = await allowed(a);
+    if (method === "emuer_chain") {
+      await polygon.ready(a);
+      await polygon.admission();
+    }
     if (typeof b.quoteId !== "string" || !/^[a-f0-9-]{36}$/.test(b.quoteId))
       fail("INVALID_QUOTE", 400);
     const qr = ref("quotes", b.quoteId),
@@ -247,6 +283,10 @@ function createEconomy({
           p = ps.data() || {};
         if (
           !q ||
+          (q.method || "emuer_ledger") !== method ||
+          (method === "emuer_chain" &&
+            (q.uid !== a.uid ||
+              b.paymentTermsVersion !== q.paymentTermsVersion)) ||
           q.spid !== a.spid ||
           q.expiresAtMs <= now() ||
           q.usedBy ||
@@ -274,6 +314,8 @@ function createEconomy({
           fail("AI_DAILY_LIMIT", 429);
         if ((g.reservedTokens || 0) + c.reserveTokens > c.tokenBudget)
           fail("AI_BUDGET_LIMIT", 429);
+        const commitProof =
+          method === "emuer_chain" ? await polygon.proof(tx, a, b, id) : null;
         const providerReservation = await freeTier.admission(
           tx,
           c.reserveTokens,
@@ -285,6 +327,9 @@ function createEconomy({
           goal: q.goal,
           fingerprint,
           orderId: "agent_" + id,
+          method,
+          paymentSource: method === "emuer_chain" ? "polygon_wallet" : "ledger",
+          paymentTermsVersion: q.paymentTermsVersion || null,
           state: "awaiting_payment",
           createdAtMs: now(),
           updatedAtMs: now(),
@@ -319,6 +364,7 @@ function createEconomy({
         );
         tx.set(pr, { count: (p.count || 0) + 1 }, { merge: true });
         providerReservation.commit();
+        if (commitProof) commitProof();
       })
       .catch(async (error) => {
         // A concurrent winner may have committed while this transaction exhausted
@@ -400,6 +446,9 @@ function createEconomy({
         actor: a,
         jobId: id,
         productId: PRODUCT,
+        paymentSource: j.paymentSource || "ledger",
+        paymentUntilMs: j.paymentUntilMs,
+        trialEndMs: paymentConfig.trialEndMs,
         gate: {
           ref: jr,
           validate(s, product) {
@@ -421,10 +470,24 @@ function createEconomy({
               fail("PAYMENT_CLOSED");
           },
           patch: {
-            state: "queued",
-            paidAtMs: now(),
+            state:
+              j.paymentSource === "polygon_wallet"
+                ? "awaiting_wallet_payment"
+                : "queued",
+            ...(j.paymentSource === "polygon_wallet"
+              ? {}
+              : { paidAtMs: now() }),
             updatedAtMs: now(),
-            events: [...(j.events || []), { state: "queued", atMs: now() }],
+            events: [
+              ...(j.events || []),
+              {
+                state:
+                  j.paymentSource === "polygon_wallet"
+                    ? "awaiting_wallet_payment"
+                    : "queued",
+                atMs: now(),
+              },
+            ],
           },
         },
       });
@@ -474,6 +537,7 @@ function createEconomy({
     return {
       id,
       state: j.state,
+      paymentSource: j.paymentSource || "ledger",
       price: j.price,
       createdAtMs: j.createdAtMs,
       updatedAtMs: j.updatedAtMs,
@@ -492,6 +556,18 @@ function createEconomy({
             method: order.method,
             amount: order.amount,
             refunded: order.status === "refunded",
+            paymentSource: order.paymentSource || "ledger",
+            ...(order.method === "emuer_chain"
+              ? {
+                  chainId: order.chainId,
+                  tokenAddress: order.tokenAddress,
+                  transactionHash: order.transactionHash || null,
+                  blockNumber: order.blockNumber || null,
+                  confirmationStatus: order.confirmationStatus || "pending",
+                  refundStatus: order.refundStatus,
+                  refundTransactionHash: order.refundTransactionHash || null,
+                }
+              : {}),
           }
         : null,
       result,
@@ -628,6 +704,7 @@ function createEconomy({
         fail("EXECUTION_BUDGET_EXPIRED");
       const payment = await payments.get(j.orderId);
       if (payment?.status !== "paid") fail("PAYMENT_NOT_CONFIRMED");
+      await payments.beforeWork(j);
       let bundle = null;
       if (j.searchProfile) {
         try {
@@ -1043,6 +1120,7 @@ function createEconomy({
   }
   async function purge() {
     await practice.purge();
+    await polygon.purge();
     const cutoff = new Date(now());
     const throttle = await db
       .collection("emuer_v2_agent_quote_usage")
@@ -1104,6 +1182,13 @@ function createEconomy({
       }
       for (const d of s.docs) {
         if (state === "awaiting_payment") await pay(d.id);
+        if (state === "awaiting_wallet_payment") {
+          try {
+            await polygon.reconcile(d.id, d.data());
+          } catch (_) {
+            /* Unknown RPC/finality stays pending; never create a second payment. */
+          }
+        }
         if (state === "running" && d.data().leaseUntilMs <= now()) {
           if (d.data().providerAttemptedAtMs && !d.data().usageRecorded)
             await markUnknownUsage(d.id);
@@ -1138,6 +1223,8 @@ function createEconomy({
     }
   }
   return {
+    polygon,
+    owned,
     config,
     artifacts,
     practice,

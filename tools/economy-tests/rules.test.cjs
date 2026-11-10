@@ -27,6 +27,9 @@ const cols = [
   "eligibility",
   "source_approvals",
   "quote_usage",
+  "wallet_challenges",
+  "chain_ops",
+  "operator_gas",
 ];
 before(async () => {
   env = await initializeTestEnvironment({

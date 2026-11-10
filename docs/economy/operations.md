@@ -205,3 +205,13 @@ Firestoreの実APIで既定DBの無料読取50,000/日・書込20,000/日を確�
 2026-11-10：[旧形式／新形式の判定、本番保存原本の照合、操作改善](final-quality-audit-20261110.md)。既存の記録は再生成・移行せず、本人専用に保持する。
 
 [実践と記録の操作・データ・権限・保存・停止手順](phase4-practice.md)。`ECONOMY_PHASE4_ENABLED`はコード既定OFF。手動操作は追加0 EMUER・モデル送信なし。新規成果物生成の5 EMUERと試験期限は変更しない。
+
+## Phase 5 Polygon（既定OFF・本番資産操作は未承認）
+
+詳細：[Polygon決済の監査・復旧・公開条件](phase5-polygon.md)。既存台帳決済とは独立して停止できる。
+
+必要な非秘密設定：`ECONOMY_POLYGON_ENABLED=false`（未設定もOFF）、`ECONOMY_POLYGON_CONTRACT_ATTESTED`、`LEGAL_ATTESTED`、`EXTERNAL_AUDIT_ATTESTED`、`OPERATOR_ATTESTED`、`GAS_BUDGET_ATTESTED`（いずれも同じECONOMY_POLYGON_接頭辞）、`CODE_HASH`、`OPERATOR_ADDRESS`、`SIGNER_URL`、`SIGNER_HOST`、`MAX_GAS_WEI`、`DAILY_GAS_WEI`。既存POLYGON_RPC_URL・authorizerを使う。`ECONOMY_POLYGON_SIGNER_TOKEN` はシークレットとして管理し、値をログ・Git・チャットへ出さない。金額や未確認のattestationを仮値でtrueにしない。
+
+停止は **ECONOMY_POLYGON_ENABLEDだけをfalse** にし、worker・既存署名器と既払返却能力を維持する。`result_saved`・`refund_pending` がある状態で前版へロールバックしない。新コードのままwallet入口をOFFにして未完了を先に照合する。原本ジョブ・台帳・outbox・nonceを削除しない。署名器の障害・署名不正・ガス不足等で自動停止した `system/polygon-safety` は、原因と全未完了注文を確認してから運営が復旧する。単に停止フラグを解除して再請求しない。
+
+外部署名器は専用アドレス・chain137・固定コントラクト・value0・refundExchange/markExchangeFulfilledだけを許可する。新規nonce作成・gas bump・別送金の自動代替はない。長期pending、nonce外部使用、実最終性の巻き戻り、期限を超える索引範囲のイベント、署名器鍵交代は個別の運営対応が必要。本番の手動tx・ガス支出・権限変更・資産返却はFounderの個別承認なしに行わない。
