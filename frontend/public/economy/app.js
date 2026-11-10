@@ -869,7 +869,7 @@
     notice,
     generation: () => generation,
     practiceAvailable: () => practiceUI.enabled(),
-    startPractice: (a) => practiceUI.start(a),
+    startPractice: (a, manualItems) => practiceUI.start(a, manualItems),
   });
   $("openPosting").onclick = openPosting;
   reset();

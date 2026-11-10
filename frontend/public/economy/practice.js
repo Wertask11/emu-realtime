@@ -40,6 +40,7 @@
     const draftTimers = new Map();
     const message = (s) => {
       $("practiceNotice").textContent = s;
+      $("practiceSaveStatus").textContent = s;
     };
     const key = (id) => prefix + identity() + ":" + id;
     function removeDraft(id) {
@@ -79,6 +80,7 @@
       $("practiceRecoveryLabel").hidden = true;
       $("practiceStatus").textContent = "";
       $("practiceNotice").textContent = "";
+      $("practiceSaveStatus").textContent = "";
       for (const c of $("practicePostingChecks").querySelectorAll("input"))
         c.checked = false;
     }
@@ -239,8 +241,13 @@
           timeZone: "Asia/Tokyo",
         }) +
         "（日本時間）";
+      const heading = (id, text) => {
+        const h = node("h3", text);
+        h.id = id;
+        return h;
+      };
       $("practiceFields").append(
-        node("h3", "実践チェックリスト"),
+        heading("practiceChecklistHeading", "実践チェックリスト"),
         node(
           "p",
           s.sourceAvailable
@@ -275,14 +282,18 @@
         );
         memo.disabled = false;
       }
-      $("practiceFields").append(node("h3", "記録する"));
+      $("practiceFields").append(heading("practiceRecordHeading", "記録する"));
       input("全体のメモ", "practiceNotes", s.notes);
       for (const [k, label] of Object.entries(observationLabels))
         input(label, "practiceObservation-" + k, s.observations[k]);
-      $("practiceFields").append(node("h3", "振り返る"));
+      $("practiceFields").append(
+        heading("practiceReflectionHeading", "振り返る"),
+      );
       for (const [k, label] of Object.entries(reflectionLabels))
         input(label, "practiceReflection-" + k, s.reflections[k]);
-      $("practiceFields").append(node("h3", "知識として届ける"));
+      $("practiceFields").append(
+        heading("practicePostingHeading", "知識として届ける"),
+      );
       input(
         "投稿タイトル案（自分で編集）",
         "practicePostTitle",
@@ -341,26 +352,20 @@
         render(d.session);
         $("practiceRecovery").hidden = true;
         $("practiceRecovery").value = "";
-        message("本人専用の記録です。操作・保存に追加料金はかかりません。");
+        message(
+          "保存済みの実践記録を開きました（更新" +
+            d.session.revision +
+            "）。本人専用で、操作・保存に追加料金はかかりません。",
+        );
         restore(d.session);
         if (!$("practiceDialog").open) $("practiceDialog").showModal();
+        $("practiceDialog").scrollTop = 0;
       } catch (e) {
         if (g === generation()) error(e);
       }
     }
-    async function start(a) {
+    async function start(a, manualItems) {
       const g = generation();
-      let manualItems;
-      if (!a.document?.checklist?.length) {
-        const value = prompt(
-          "この計画には実践チェック項目がありません。自分で実行する項目を1行に1つ入力してください。追加生成・課金は行いません。",
-        );
-        if (!value?.trim()) return false;
-        manualItems = value
-          .split("\n")
-          .map((s) => s.trim())
-          .filter(Boolean);
-      }
       try {
         const d = await api("/practice", {
           sourceArtifactId: a.id,
@@ -369,10 +374,11 @@
         if (g !== generation()) return false;
         render(d.session);
         message(
-          "やってみるを開始しました。元の計画は変更していません。追加料金はありません。",
+          "この計画の実践記録を開きました。元の計画は変更していません。追加料金はありません。",
         );
         restore(d.session);
         $("practiceDialog").showModal();
+        $("practiceDialog").scrollTop = 0;
         return true;
       } catch (e) {
         if (g === generation()) error(e);
@@ -435,7 +441,9 @@
         removeDraft(id);
         render(d.session);
         message(
-          "本人専用に保存しました。追加料金・外部送信・公開はありません。",
+          "本人専用に保存しました（更新" +
+            d.session.revision +
+            "）。追加料金・外部送信・公開はありません。",
         );
         return true;
       } catch (e) {
@@ -452,6 +460,10 @@
       }
     }
     $("savePractice").onclick = () => save();
+    for (const b of $("practiceJourney").querySelectorAll("button"))
+      b.onclick = () => {
+        $(b.dataset.practiceSection)?.scrollIntoView({ block: "start" });
+      };
     for (const c of $("practicePostingChecks").querySelectorAll("input"))
       c.onchange = remember;
     for (const [id, state] of [

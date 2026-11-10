@@ -8,6 +8,7 @@ from playwright.async_api import async_playwright
 
 OUT = Path(os.environ.get('PRACTICE_BROWSER_OUTPUT', '/tmp/reizo-phase4-browser'))
 OUT.mkdir(parents=True, exist_ok=True)
+LEGACY=os.environ.get('PRACTICE_LEGACY')=='true'
 
 async def main():
  async with async_playwright() as p:
@@ -35,10 +36,25 @@ async def main():
     await f.locator('#quoteButton').click(); await f.locator('#approval').wait_for(state='visible')
     await f.locator('#paymentConsent').check(); await f.locator('#aiConsent').check(); await f.locator('#pay').click()
     await f.locator('#history article').first.get_by_role('button',name='保存した下書き・計画を開く').wait_for(timeout=20000)
+    if LEGACY:
+     r=await context.request.post('http://127.0.0.1:4257/test/legacy-artifact',data={'role':'alice'}); assert r.ok
     await f.locator('#history article').first.get_by_role('button',name='保存した下書き・計画を開く').click()
    else:
     await f.locator('#loadArtifacts').click(); await f.get_by_role('button',name='ギルド活動の準備を開く').first.click()
+   await f.locator('#artifactDialog').wait_for(state='visible')
+   assert await f.locator('#artifactPlanName').inner_text()
+   assert '計画の保存' in await f.locator('#artifactSavedAt').inner_text()
+   assert await f.locator('#artifactEditor').get_attribute('open') is None
+   if LEGACY:
+    assert await f.locator('#legacyPracticeSetup').is_visible()
+    assert '以前の形式' in await f.locator('#artifactFormatNotice').inner_text()
+    assert 'WEB3 Guild' in await f.locator('#legacyPracticeItems').input_value()
+   else: assert await f.locator('#legacyPracticeSetup').is_hidden()
+   assert await page.frames[1].evaluate('document.querySelectorAll("dialog[open]").length')==1
+   if LEGACY and width in [390,1280]: await page.screenshot(path=str(OUT/f'legacy-plan-{width}.png'),full_page=True)
    await f.locator('#startPractice').click(); await f.locator('#practiceDialog').wait_for(state='visible')
+   assert await page.frames[1].evaluate('document.querySelectorAll("dialog[open]").length')==1
+   assert await f.locator('#practiceDialog').evaluate('(e)=>e.scrollTop')==0
    assert await f.locator('#artifactDialog').is_hidden()
    await f.locator('#practiceState-0').select_option('in_progress')
    await f.locator('#practiceNote-0').fill('本人が記入した準備メモ '+str(width))
@@ -61,6 +77,10 @@ async def main():
     await f.locator('#savePractice').click(); await f.locator('#practiceNotice').filter(has_text='保存を確認できません').wait_for()
     await context.unroute('**/api/economy/practice/*',lose_ack)
    await f.locator('#savePractice').click(); await f.locator('#practiceNotice').filter(has_text='本人専用に保存しました').wait_for()
+   assert await f.locator('#practiceSaveStatus').is_visible()
+   assert '本人専用に保存しました' in await f.locator('#practiceSaveStatus').inner_text()
+   for section in ['practiceRecordHeading','practiceReflectionHeading','practicePostingHeading']:
+    await f.locator('[data-practice-section="'+section+'"]').click(); await f.locator('#'+section).wait_for(state='visible')
    await f.locator('#pausePractice').click(); await f.locator('#practiceStatus').filter(has_text='一時中断').wait_for()
    await f.locator('#resumePractice').click(); await f.locator('#practiceStatus').filter(has_text='実践中').wait_for()
    await f.locator('#practiceNotes').fill('通信が戻るまでの途中入力 '+str(width))
@@ -106,9 +126,10 @@ async def main():
    assert await f.locator('#practiceFields').inner_text()==''
    assert await f.locator('#practicePreview').input_value()==''
    assert await f.locator('#practiceRecovery').input_value()==''
+   assert await f.locator('#artifactPlanName').inner_text()==''
    assert await page.frames[1].evaluate("Object.keys(sessionStorage).filter(k=>k.startsWith('reizo-practice-v1:')).length")==0
    assert not blocked, blocked; assert not errors, errors
-   results.append({'width':width,'startPauseResume':True,'checklistAndRecordSaved':True,'draftReloadRecovered':True,'copyAndPostingEntry':True,'noPracticePolling':True,'accountSwitchCleared':True,'noOverflow':True,'pageErrors':errors})
+   results.append({'width':width,'legacyMode':LEGACY,'oneDialogOnly':True,'startPauseResume':True,'checklistAndRecordSaved':True,'draftReloadRecovered':True,'copyAndPostingEntry':True,'noPracticePolling':True,'accountSwitchCleared':True,'noOverflow':True,'pageErrors':errors})
    await context.close()
   await browser.close()
   (OUT/'results.json').write_text(json.dumps(results,ensure_ascii=False,indent=2))
