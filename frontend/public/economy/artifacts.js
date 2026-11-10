@@ -23,6 +23,13 @@
       $("saveChecklist").hidden = true;
       $("artifactStructuredNote").hidden = true;
       $("startPractice").hidden = true;
+      $("artifactFormatNotice").textContent = "";
+      $("artifactFormatNotice").hidden = true;
+      $("legacyPracticeItems").value = "";
+      $("legacyPracticeSetup").hidden = true;
+      $("artifactEditor").open = false;
+      $("artifactPlanName").textContent = "";
+      $("artifactSavedAt").textContent = "";
     }
     function denyAccess(error) {
       if (error.message === "ARTIFACT_REFERENCES_UNAVAILABLE") {
@@ -189,12 +196,36 @@
       }
     };
     function show(a) {
+      const opening = current?.id !== a.id || !$("artifactDialog").open;
       current = a;
       $("startPractice").hidden = !a.content || !practiceAvailable();
+      const prep = window.ReizoPracticePlan(a);
+      $("artifactFormatNotice").hidden =
+        !a.content || (!prep.legacy && !prep.invalid);
+      $("artifactFormatNotice").textContent =
+        prep.notice ||
+        (prep.invalid
+          ? "実践項目を確認できません。計画を開き直してください。"
+          : "");
+      $("legacyPracticeSetup").hidden =
+        !a.content || !prep.legacy || !practiceAvailable();
+      $("legacyPracticeItems").value = prep.items.join("\n");
+      $("startPractice").disabled = !a.content || prep.invalid;
+      if (opening) $("artifactEditor").open = false;
       structured(a);
       $("artifactTitle").value = a.title;
       $("artifactContent").value = a.content || "";
-      $("artifactNotice").textContent = a.notice;
+      $("artifactNotice").textContent =
+        a.content && prep.legacy
+          ? "確認項目を確認・編集して「やってみる」へ進めます。実践の記録は本人専用です。"
+          : a.notice;
+      $("artifactPlanName").textContent = a.title;
+      $("artifactSavedAt").textContent =
+        "計画の保存：" +
+        new Date(a.createdAt).toLocaleString("ja-JP", {
+          timeZone: "Asia/Tokyo",
+        }) +
+        "（日本時間）";
       $("artifactTitle").disabled = !a.content;
       $("artifactContent").disabled = !a.content;
       $("copyArtifact").disabled = !a.content;
@@ -240,6 +271,7 @@
         $("artifactReferences").append(p);
       }
       if (!$("artifactDialog").open) $("artifactDialog").showModal();
+      if (opening) $("artifactDialog").scrollTop = 0;
     }
     async function open(id) {
       const g = generation();
@@ -386,14 +418,45 @@
     };
     $("startPractice").onclick = async () => {
       if (!current?.content || !practiceAvailable()) return;
+      const prep = window.ReizoPracticePlan(current);
+      if (prep.invalid) return;
+      const manualItems = prep.legacy
+        ? $("legacyPracticeItems")
+            .value.split("\n")
+            .map((x) => x.trim())
+            .filter(Boolean)
+        : undefined;
+      if (
+        prep.legacy &&
+        (!manualItems.length ||
+          manualItems.length > 20 ||
+          manualItems.some((x) => x.length > 300))
+      ) {
+        $("artifactNotice").textContent =
+          "実践する項目を1〜20件、1行300文字以内で入力してください。追加料金は発生していません。";
+        $("legacyPracticeItems").focus();
+        return;
+      }
+      if (
+        $("artifactTitle").value !== current.title ||
+        $("artifactContent").value !== current.content
+      ) {
+        $("artifactEditor").open = true;
+        $("artifactNotice").textContent =
+          "下書きの編集中です。編集を保存してから実践へ進むと、途中入力を失わずに使えます。";
+        return;
+      }
       const g = generation();
       $("startPractice").disabled = true;
+      $("artifactDialog").close();
       try {
-        if (await startPractice(current)) $("artifactDialog").close();
+        await startPractice(current, manualItems);
       } catch (e) {
-        if (g === generation() && !denyAccess(e))
+        if (g === generation() && !denyAccess(e)) {
           $("artifactNotice").textContent =
             "実践を開始できませんでした。通信状態・資料の期限を確認して開き直してください。追加料金は発生していません。";
+          if (!$("artifactDialog").open) $("artifactDialog").showModal();
+        }
       } finally {
         if (g === generation()) $("startPractice").disabled = !current?.content;
       }

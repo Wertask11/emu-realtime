@@ -33,6 +33,7 @@ async def main():
    assert await f.locator('#artifactStructured input[type=checkbox]').count()>=5
    await f.locator('#artifactStructured input[type=checkbox]').first.check();await f.locator('#saveChecklist').click();await f.locator('#artifactNotice').filter(has_text='チェック状態を本人専用に保存').wait_for()
    await f.locator('#closeArtifact').click();await f.locator('#loadArtifacts').click();await f.get_by_role('button',name=LABEL+'を開く').first.click();await f.locator('#artifactDialog').wait_for(state='visible');assert await f.locator('#artifactStructured input[type=checkbox]').first.is_checked()
+   await f.locator('#artifactEditor summary').click()
    await f.locator('#artifactTitle').fill('本人が確認した計画');await f.locator('#artifactContent').fill('資料を確認して、小さく実践する計画です。')
    await f.locator('#artifactEditConsent').check();await f.locator('#saveArtifact').click();await f.locator('#artifactNotice').filter(has_text='編集保存しました').wait_for()
    assert not await f.locator('body').evaluate('(el)=>el.scrollWidth>innerWidth');assert not await f.locator('#artifactDialog').evaluate('(el)=>el.scrollWidth>el.clientWidth+2')
@@ -42,6 +43,7 @@ async def main():
    await f.locator('#closeArtifact').click();await f.locator('#loadArtifacts').click();await f.get_by_role('button',name=LABEL+'を開く').first.click();await f.locator('#artifactDialog').wait_for(state='visible');assert await f.locator('#artifactContent').input_value()=='資料を確認して、小さく実践する計画です。'
    if width==1920:
     r=await context.request.post('http://127.0.0.1:4257/test/membership',data={'role':'alice','plan':'light'});assert r.ok
+    await f.locator('#artifactEditor summary').click()
     await f.locator('#copyArtifact').click();await f.locator('#artifactDialog').wait_for(state='hidden');assert await f.locator('#artifactContent').input_value()==''
     await context.request.post('http://127.0.0.1:4257/test/membership',data={'role':'alice','plan':'plus'})
     await f.locator('#loadArtifacts').click();await f.get_by_role('button',name=LABEL+'を開く').first.click();await f.locator('#artifactDialog').wait_for(state='visible')

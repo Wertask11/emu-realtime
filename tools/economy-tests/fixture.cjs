@@ -423,6 +423,27 @@ async function createFixture({
   app.use(express.json({ limit: "32kb" }));
   app.use("/api/economy", economy.router);
   app.use("/api/mitemiru", commerce.router);
+  app.post("/test/legacy-artifact", async (req, res) => {
+    // Dedicated demo fixture only; never mounted by the production server.
+    const u = users[req.body?.role];
+    if (!u) return res.sendStatus(400);
+    const rows = await db
+      .collection("emuer_v2_agent_artifacts")
+      .where("ownerUid", "==", u.uid)
+      .limit(1)
+      .get();
+    if (rows.empty) return res.sendStatus(404);
+    await rows.docs[0].ref.set(
+      {
+        formatVersion: 1,
+        document: null,
+        content: "公開資料を比較してください。\n［本人が確認・記入］",
+        sections: [{ title: "以前の構成", prompt: "内容を確認してください。" }],
+      },
+      { merge: true },
+    );
+    res.json({ ok: true });
+  });
   app.post("/test/membership", async (req, res) => {
     const role = req.body?.role,
       plan = req.body?.plan;

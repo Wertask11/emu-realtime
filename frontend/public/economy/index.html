@@ -6,6 +6,7 @@
     <title>冷蔵庫くんに頼む — Emu for SchoolPark</title>
     <link rel="stylesheet" href="/economy/style.css" />
     <script src="/economy/targets.js" defer></script>
+    <script src="/economy/practice-plan.js" defer></script>
     <script src="/economy/artifacts.js" defer></script>
     <script src="/economy/practice.js" defer></script>
     <script src="/economy/app.js" defer></script>
@@ -201,22 +202,36 @@
         <div id="history">読み込み中…</div>
       </section>
       <section aria-labelledby="artifactsTitle">
-        <h2 id="artifactsTitle">保存済みの下書き・計画</h2>
+        <h2 id="artifactsTitle">保存した計画</h2>
         <p class="sub">
           本人専用です。公開投稿・Knowledge
           Labの下書きとは別に保存します。原則30日間、最新20件を表示します。
         </p>
-        <button id="loadArtifacts" type="button">
-          保存済み成果物を確認する
-        </button>
+        <button id="loadArtifacts" type="button">保存した計画を開く</button>
         <div id="artifactList"></div>
       </section>
       <dialog id="artifactDialog" aria-labelledby="artifactHeading">
         <div class="title">
-          <h2 id="artifactHeading">下書き・計画の確認と編集</h2>
+          <h2 id="artifactHeading">保存した計画</h2>
           <button id="closeArtifact" type="button">閉じる</button>
         </div>
         <p id="artifactNotice" role="status" aria-live="polite"></p>
+        <h3 id="artifactPlanName"></h3>
+        <p id="artifactSavedAt" class="sub"></p>
+        <p id="artifactFormatNotice" class="availability" hidden></p>
+        <div id="legacyPracticeSetup" hidden>
+          <label for="legacyPracticeItems"
+            >やってみる項目（本人が確認・編集）</label
+          >
+          <textarea
+            id="legacyPracticeItems"
+            rows="6"
+            maxlength="6000"
+          ></textarea>
+          <p class="sub">
+            1行に1項目。実行前の確認項目です。実践した結果は、開始後にご自身で記録してください。
+          </p>
+        </div>
         <button id="startPractice" type="button" hidden>
           やってみる（追加料金なし）
         </button>
@@ -227,23 +242,30 @@
         <p class="sub" id="artifactStructuredNote" hidden>
           上は生成時の計画です。下の本文は自由に編集できます。チェック状態も本人専用です。
         </p>
-        <label for="artifactTitle">提案タイトル</label
-        ><input id="artifactTitle" maxlength="100" />
-        <label for="artifactContent">本人が確認する下書き・計画</label
-        ><textarea id="artifactContent" rows="16" maxlength="12000"></textarea>
-        <p class="sub">
-          本人の経験や結果を確認して書き換えてください。氏名・連絡先・職場の秘密は入力しないでください。編集内容をAIや外部サービスへ送りません。
-        </p>
-        <label class="check"
-          ><input
-            id="artifactEditConsent"
-            type="checkbox"
-          />この内容で本人専用の成果物を編集保存します。</label
-        >
-        <div class="actions">
-          <button id="saveArtifact" type="button">編集を保存</button
-          ><button id="copyArtifact" type="button">コピー</button>
-        </div>
+        <details id="artifactEditor">
+          <summary>下書き本文を確認・編集する</summary>
+          <label for="artifactTitle">提案タイトル</label
+          ><input id="artifactTitle" maxlength="100" />
+          <label for="artifactContent">本人が確認する下書き・計画</label
+          ><textarea
+            id="artifactContent"
+            rows="16"
+            maxlength="12000"
+          ></textarea>
+          <p class="sub">
+            本人の経験や結果を確認して書き換えてください。氏名・連絡先・職場の秘密は入力しないでください。編集内容をAIや外部サービスへ送りません。
+          </p>
+          <label class="check"
+            ><input
+              id="artifactEditConsent"
+              type="checkbox"
+            />この内容で本人専用の成果物を編集保存します。</label
+          >
+          <div class="actions">
+            <button id="saveArtifact" type="button">編集を保存</button
+            ><button id="copyArtifact" type="button">コピー</button>
+          </div>
+        </details>
         <h3>参照元・関連する画面</h3>
         <div id="artifactReferences"></div>
         <button id="openPosting" type="button">
@@ -269,6 +291,26 @@
           <button id="closePractice" type="button">閉じる</button>
         </div>
         <p id="practiceNotice" role="status" aria-live="polite"></p>
+        <nav id="practiceJourney" class="actions" aria-label="実践の進め方">
+          <button
+            type="button"
+            data-practice-section="practiceChecklistHeading"
+          >
+            実践する
+          </button>
+          <button type="button" data-practice-section="practiceRecordHeading">
+            記録する
+          </button>
+          <button
+            type="button"
+            data-practice-section="practiceReflectionHeading"
+          >
+            振り返る
+          </button>
+          <button type="button" data-practice-section="practicePostingHeading">
+            知識として届ける
+          </button>
+        </nav>
         <p id="practiceStatus"></p>
         <progress
           id="practiceProgress"
@@ -287,10 +329,6 @@
           ><button id="cancelPractice" type="button">中止</button>
         </div>
         <div id="practiceFields"></div>
-        <div class="actions">
-          <button id="savePractice" type="button">保存・再送</button
-          ><button id="refreshPractice" type="button">最新を確認</button>
-        </div>
         <label id="practiceRecoveryLabel" for="practiceRecovery" hidden
           >別の画面で更新される前の入力（必要な部分だけ入力欄へ戻してください）</label
         ><textarea id="practiceRecovery" rows="5" readonly hidden></textarea>
@@ -325,6 +363,15 @@
         <div class="actions">
           <button id="copyPractice" type="button">投稿用の文章をコピー</button
           ><button id="practicePosting" type="button">投稿画面を開く</button>
+        </div>
+        <div id="practiceSaveBar">
+          <p id="practiceSaveStatus" role="status" aria-live="polite">
+            本人専用の記録です。
+          </p>
+          <div class="actions">
+            <button id="savePractice" type="button">保存・再送</button
+            ><button id="refreshPractice" type="button">最新を確認</button>
+          </div>
         </div>
       </dialog>
       <section id="operations" hidden>
