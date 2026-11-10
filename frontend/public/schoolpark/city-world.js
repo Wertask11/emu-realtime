@@ -64,7 +64,8 @@ export function createWorld(canvas, { products = [], time = 'day', onSelect = ()
   // One invisible navigation surface sits just above the visible floors. The
   // first opaque ray hit must be this surface, so walls, furniture and objects
   // never become click-to-move destinations.
-  const walkMaterial=new T.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false});disposables.add(walkMaterial);
+  const walkMaterial=new T.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false});walkMaterial.visible=false; // 描かない（当たり判定には残る）。透明な床を1枚塗る分だけ軽くなる。
+  disposables.add(walkMaterial);
   const walkSurface=mesh(new T.PlaneGeometry(28,32),walkMaterial,-2,.075,8);walkSurface.rotation.x=-Math.PI/2;walkSurface.userData.walkable=true;walkSurface.castShadow=false;walkSurface.receiveShadow=false;
   const markerMaterial=new T.MeshBasicMaterial({color:'#f7efd9',transparent:true,opacity:.82,depthWrite:false,side:T.DoubleSide});disposables.add(markerMaterial);
   const moveMarker=mesh(new T.TorusGeometry(.22,.025,8,32),markerMaterial,0,.085,0);moveMarker.rotation.x=-Math.PI/2;moveMarker.visible=false;moveMarker.castShadow=false;moveMarker.receiveShadow=false;moveMarker.userData.navigationMarker=true;

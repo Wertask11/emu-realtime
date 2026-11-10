@@ -26,7 +26,9 @@ export function createAtmosphere(T, kit, mode = 'day') {
   function add(geometry, material, x, y, z, parent = scene, { solid = false, shadow = false } = {}) {
     disposables.add(geometry);
     const o = new T.Mesh(geometry, material); o.position.set(x, y, z);
-    o.castShadow = shadow; o.receiveShadow = shadow; if (!solid) noRay(o); parent.add(o); return o;
+    o.castShadow = shadow; o.receiveShadow = shadow; if (!solid) noRay(o);
+    // 店（手前の壁や床）を先に描かせる。うしろに隠れる飾りは、描く前に捨てられるので軽い。
+    o.renderOrder = 2; parent.add(o); return o;
   }
   const box = (x, y, z, w, h, d, m, parent, opt) => add(new T.BoxGeometry(w, h, d), m, x, y, z, parent, opt);
   const cyl = (x, y, z, r1, r2, h, m, parent, opt, seg = 16) => add(new T.CylinderGeometry(r1, r2, h, seg), m, x, y, z, parent, opt);
@@ -34,11 +36,17 @@ export function createAtmosphere(T, kit, mode = 'day') {
   function instanced(geometry, material, count, parent = scene) {
     disposables.add(geometry);
     const im = new T.InstancedMesh(geometry, material, count);
-    im.castShadow = false; im.receiveShadow = false; im.frustumCulled = false; noRay(im); parent.add(im); return im;
+    im.castShadow = false; im.receiveShadow = false; im.frustumCulled = false; im.renderOrder = 2; noRay(im); parent.add(im); return im;
   }
   const group = (x = 0, y = 0, z = 0, parent = scene) => { const g = new T.Group(); g.position.set(x, y, z); parent.add(g); return g; };
   const stripes = (a, b, n = 8) => texture((c, w, h) => { for (let i = 0; i < n; i++) { c.fillStyle = i % 2 ? b : a; c.fillRect(i * w / n, 0, w / n + 1, h); } }, 256, 64);
-  const radial = (inner, outer) => texture((c, w, h) => { const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); g.addColorStop(0, inner); g.addColorStop(1, outer); c.fillStyle = g; c.fillRect(0, 0, w, h); }, 256, 256);
+  // ぼかしの丸。模様が無いので補間は最小限（大きく重ねても軽い）。同じ色の組は使い回す。
+  const radials = new Map();
+  const radial = (inner, outer) => {
+    const key = inner + outer; if (radials.has(key)) return radials.get(key);
+    const map = texture((c, w, h) => { const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); g.addColorStop(0, inner); g.addColorStop(1, outer); c.fillStyle = g; c.fillRect(0, 0, w, h); }, 128, 128);
+    map.anisotropy = 1; map.generateMipmaps = false; map.minFilter = 1006; radials.set(key, map); return map;
+  };
   // 地面に落とす、やわらかい丸い影（太陽の影は店のまわりだけなので、広場はこれで足す）
   const blobMap = radial('rgba(0,0,0,.55)', 'rgba(0,0,0,0)');
   const blobMaterial = basic('#000000', { map: blobMap, transparent: true, opacity: mode === 'night' ? .5 : .32, depthWrite: false });
@@ -50,23 +58,26 @@ export function createAtmosphere(T, kit, mode = 'day') {
   tickers.push(() => { sky.position.copy(camera.position); });
   function skyDome(stops) {
     const map = texture((c, w, h) => { const g = c.createLinearGradient(0, 0, 0, h); for (const [at, color] of stops) g.addColorStop(at, color); c.fillStyle = g; c.fillRect(0, 0, w, h); }, 16, 512);
+    // 空は細かい模様が無いので、補間は最小限でいい（描くのが軽くなる）
+    map.anisotropy = 1; map.generateMipmaps = false; map.minFilter = 1006;
     const dome = add(new T.SphereGeometry(180, 24, 16), basic('#ffffff', { map, side: 1, fog: false }), 0, 0, 0, sky);
-    dome.renderOrder = -10; return dome;
+    dome.renderOrder = 3; return dome; // 空はいちばん最後（見えているところだけ塗る）
   }
   function atmosphere(background, fogNear, fogFar) {
     scene.background = new T.Color(background); scene.fog = new T.Fog(background, fogNear, fogFar);
   }
   function stars(count, opacity, minHeight = .12) {
     const material = basic('#ffffff', { transparent: true, opacity, fog: false, depthWrite: false, toneMapped: false });
-    const im = instanced(new T.SphereGeometry(.5, 5, 4), material, count, sky);
+    const im = instanced(new T.CircleGeometry(.5, 5), material, count, sky);
     for (let i = 0; i < count; i++) {
       const a = rnd() * Math.PI * 2, up = minHeight + rnd() * (1 - minHeight), flat = Math.sqrt(1 - up * up);
       dummy.position.set(Math.cos(a) * flat * 170, up * 170, Math.sin(a) * flat * 170);
-      dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(.35 + rnd() * rnd() * 1.3); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
+      dummy.scale.setScalar(.35 + rnd() * rnd() * 1.3); dummy.lookAt(0, 0, 0); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
     }
+    dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(1);
     return material;
   }
-  function ground(color) { cyl(0, -.24, 0, 190, 190, .1, std(color, { roughness: 1 }), scene, {}, 48); }
+  function ground(color) { cyl(0, -.24, 0, 190, 190, .1, basic(color), scene, {}, 48); }
 
   // ── 街の共通の部品 ────────────────────────────────────────
   function skyline({ wall, lit, count = 64, colors }) {
@@ -91,7 +102,7 @@ export function createAtmosphere(T, kit, mode = 'day') {
     for (let z = 6; z <= 24; z += 3.6) spots.push([14 + rnd() * 1.4, z + rnd()]);
     for (let x = -14; x <= 12; x += 3.8) spots.push([x + rnd(), -11.5 - rnd() * 2]);
     const trunks = instanced(new T.CylinderGeometry(.16, .24, 1, 7), std(trunkColor), spots.length);
-    const leaves = instanced(new T.SphereGeometry(1, 9, 7), std('#ffffff', { roughness: 1 }), spots.length * 3);
+    const leaves = instanced(new T.SphereGeometry(1, 7, 5), std('#ffffff', { roughness: 1 }), spots.length * 3);
     spots.forEach(([x, z], i) => {
       const h = 2.2 + rnd() * 1.6, s = 1.15 + rnd() * .7;
       dummy.rotation.set(0, 0, 0); dummy.position.set(x, h / 2, z); dummy.scale.set(1, h, 1); dummy.updateMatrix(); trunks.setMatrixAt(i, dummy.matrix);
@@ -146,7 +157,7 @@ export function createAtmosphere(T, kit, mode = 'day') {
   }
   // ふわふわ上っていく粒（朝の光、昼のきらめき、夜の火の粉）
   function motes(count, color, opacity, size, area) {
-    const im = instanced(new T.SphereGeometry(size, 5, 4), glow(color, opacity), count);
+    const im = instanced(new T.SphereGeometry(size, 4, 2), glow(color, opacity), count);
     const list = Array.from({ length: count }, () => ({ x: area.x + (rnd() - .5) * area.w, z: area.z + (rnd() - .5) * area.d, phase: rnd() * 10, speed: .25 + rnd() * .5, sway: .3 + rnd() * .8 }));
     const place = time => list.forEach((p, i) => {
       const y = .4 + ((time * p.speed + p.phase) % 1) * area.h * (.6 + p.sway * .4);
@@ -191,7 +202,7 @@ export function createAtmosphere(T, kit, mode = 'day') {
     cyl(fx, .9, fz, .32, .5, 1.4, stone, scene, { solid: true }); cyl(fx, 1.62, fz, 1.15, .4, .2, stone, scene, { solid: true }, 20);
     cyl(fx, 1.73, fz, 1.02, 1.02, .03, water, scene, {}, 20); cyl(fx, 2.1, fz, .14, .2, .8, stone); ball(fx, 2.6, fz, .2, std('#e9c07a', { metalness: .5, roughness: .35 }));
     obstacle(fx, fz, 5.3, 5.3); blob(fx, fz, 3.6);
-    const drops = instanced(new T.SphereGeometry(.034, 6, 4), basic('#f4fcff', { transparent: true, opacity: .8 }), 132);
+    const drops = instanced(new T.SphereGeometry(.034, 4, 2), basic('#f4fcff', { transparent: true, opacity: .8 }), 132);
     const spray = time => {
       for (let i = 0; i < 132; i++) {
         const arc = i % 12, t = ((i / 12 | 0) / 11 + time * .55 + arc * .083) % 1;
@@ -224,7 +235,7 @@ export function createAtmosphere(T, kit, mode = 'day') {
 
     // 風船。店のうしろや広場から、ゆっくり空へ。
     const balloonColors = ['#ef6f5e', '#f6c04e', '#62b89a', '#5d95dd', '#ee93b6', '#a98fe0'];
-    const N = 22, balloons = instanced(new T.SphereGeometry(.34, 12, 9), std('#ffffff', { roughness: .35 }), N), strings = instanced(new T.BoxGeometry(.008, .8, .008), basic('#f4efe2'), N);
+    const N = 22, balloons = instanced(new T.SphereGeometry(.34, 10, 7), std('#ffffff', { roughness: .35 }), N), strings = instanced(new T.BoxGeometry(.008, .8, .008), basic('#f4efe2'), N);
     const fleet = Array.from({ length: N }, (_, i) => {
       const tied = i < 6; // 店先に結んだ風船
       const home = tied ? [[-5.5, 4.5], [5.5, 4.5]][i % 2] : (i % 3 ? [-14 + rnd() * 24, -10 - rnd() * 8] : [PLAZA.x - 8 + rnd() * 16, PLAZA.z - 6 + rnd() * 12]);
@@ -264,7 +275,7 @@ export function createAtmosphere(T, kit, mode = 'day') {
     // 雲。足もとの雲海と、空の高い雲が、別々の速さでゆっくり回る。
     function clouds(count, radius, height, size, speed) {
       const holder = group(0, 0, 3);
-      const im = instanced(new T.SphereGeometry(1, 10, 7), std('#ffffff', { roughness: 1, emissive: '#bcd9ee', emissiveIntensity: .6, fog: false }), count * 6, holder);
+      const im = instanced(new T.SphereGeometry(1, 7, 5), std('#ffffff', { roughness: 1, emissive: '#bcd9ee', emissiveIntensity: .6, fog: false, flatShading: false }), count * 6, holder);
       for (let i = 0; i < count; i++) {
         const a = i / count * Math.PI * 2 + rnd() * .5, r = radius[0] + rnd() * (radius[1] - radius[0]), y = height[0] + rnd() * (height[1] - height[0]), s = size * (.7 + rnd() * .9);
         for (let k = 0; k < 6; k++) {
@@ -274,7 +285,7 @@ export function createAtmosphere(T, kit, mode = 'day') {
       }
       tickers.push((time) => { if (!reduced) holder.rotation.y = time * speed; });
     }
-    clouds(34, [48, 150], [-16, -5], 7, .006); clouds(16, [42, 140], [22, 60], 6, -.004); clouds(7, [26, 40], [9, 16], 2.2, .012);
+    clouds(26, [48, 150], [-16, -5], 8, .006); clouds(12, [42, 140], [22, 60], 7, -.004); clouds(6, [26, 40], [9, 16], 2.2, .012);
 
     // 遠くに浮かぶ島々。小さな家と木、いくつかは滝つき。
     const fall = texture((c, w, h) => { c.clearRect(0, 0, w, h); for (let i = 0; i < 60; i++) { c.fillStyle = `rgba(255,255,255,${.25 + rnd() * .6})`; c.fillRect(rnd() * w, rnd() * h, 2 + rnd() * 3, 20 + rnd() * 60); } }, 64, 256);
@@ -301,7 +312,6 @@ export function createAtmosphere(T, kit, mode = 'day') {
     const beam = add(new T.CylinderGeometry(.25, .8, 46, 16, 1, true), glow('#bff3ff', .08, { side: 2 }), cx, 26, cz);
     const rings = [[1.5, .04], [1.95, .032], [2.4, .026]].map(([r, tube], i) => { const ring = add(new T.TorusGeometry(r, tube, 8, 56), gold, cx, 3.5, cz); ring.rotation.set(i * 1.1, i * .7, 0); return ring; });
     const pebbles = Array.from({ length: 7 }, (_, i) => ball(cx, 3, cz, .16 + rnd() * .16, i % 2 ? rock : rockDark, scene, {}, 5, 3));
-    const light = new T.PointLight('#7fe6ff', 16, 15, 2); light.position.set(cx, 3.4, cz); scene.add(light);
     const spin = time => {
       crystal.position.y = 3.5 + Math.sin(time * .9) * .22; crystal.rotation.y = time * .5; halo.position.y = crystal.position.y; halo.lookAt(camera.position);
       halo.material.opacity = .26 + Math.sin(time * 1.7) * .08; beam.material.opacity = .075 + Math.sin(time * 1.3) * .02;
@@ -370,10 +380,10 @@ export function createAtmosphere(T, kit, mode = 'day') {
     hang(sagLine([-5.1, 3.12, 4.62], [5.1, 3.12, 4.62], 12, .1));
     hang(sagLine([6.1, 3.1, 3.25], [9.9, 3.1, 3.25], 5, .1));
     buildRopes('#2a2019');
-    const bodies = instanced(new T.SphereGeometry(.17, 12, 9), basic('#ffffff', { fog: false, toneMapped: false }), lanterns.length);
+    const bodies = instanced(new T.SphereGeometry(.17, 9, 6), basic('#ffffff', { fog: false, toneMapped: false }), lanterns.length);
     // ぼんやりした光。いつもカメラのほうを向く板。
     const halos = instanced(new T.PlaneGeometry(1.5, 1.5), glow('#ff9a4a', .5, { map: radial('rgba(255,255,255,1)', 'rgba(255,255,255,0)') }), lanterns.length);
-    const caps = instanced(new T.CylinderGeometry(.08, .08, .44, 8), basic('#1c1512'), lanterns.length);
+    const caps = instanced(new T.CylinderGeometry(.08, .08, .44, 6), basic('#1c1512'), lanterns.length);
     const lanternColors = ['#ff6a3c', '#ff6a3c', '#ffcf6a', '#ff5340'];
     lanterns.forEach(([x, y, z], i) => {
       dummy.position.set(x, y, z); dummy.scale.set(1, 1.28, 1); dummy.updateMatrix(); bodies.setMatrixAt(i, dummy.matrix); bodies.setColorAt(i, tint.set(lanternColors[i % 4]));
@@ -382,7 +392,8 @@ export function createAtmosphere(T, kit, mode = 'day') {
     const faceCamera = () => { dummy.scale.setScalar(1); lanterns.forEach(([x, y, z], i) => { dummy.position.set(x, y, z); dummy.quaternion.copy(camera.quaternion); dummy.updateMatrix(); halos.setMatrixAt(i, dummy.matrix); }); dummy.rotation.set(0, 0, 0); halos.instanceMatrix.needsUpdate = true; };
     faceCamera();
     tickers.push(time => { faceCamera(); if (!reduced) halos.material.opacity = .48 + Math.sin(time * 2.3) * .06 + Math.sin(time * 7.1) * .025; });
-    for (const [lx, ly, lz, power, reach] of [[yx, 5.2, yz, 60, 24], [-11.5, 3, 15, 34, 16], [-3, 3, 20.5, 34, 16]]) { const l = new T.PointLight('#ffb36b', power, reach, 1.8); l.position.set(lx, ly, lz); scene.add(l); }
+    // 広場の明かりは1つだけ（光源を増やすと、スマホで重くなる）
+    for (const [lx, ly, lz, power, reach] of [[yx - 2, 5.4, yz + 1.5, 95, 30]]) { const l = new T.PointLight('#ffb36b', power, reach, 1.8); l.position.set(lx, ly, lz); scene.add(l); }
 
     // 屋台
     const cream = '#fbf4e6';
@@ -394,7 +405,7 @@ export function createAtmosphere(T, kit, mode = 'day') {
     stall(2.5, 23.2, Math.PI, { lit: true, roof: ['#2fa58a', cream], name: 'ヨーヨー', sign: ['#1c7560', cream], goods: ['#ff6fa5', '#5fd0ff', '#ffe066', '#9be37a', '#c79bff'] });
 
     // 花火
-    const SHELLS = 4, SPARKS = 72, sparks = instanced(new T.SphereGeometry(.5, 5, 4), glow('#ffffff', 1), SHELLS * SPARKS);
+    const SHELLS = 4, SPARKS = 72, sparks = instanced(new T.SphereGeometry(.5, 4, 2), glow('#ffffff', 1), SHELLS * SPARKS);
     const palette = ['#ff5f6d', '#ffd166', '#7ae7ff', '#b28dff', '#8dffb0', '#ff9ad5', '#ffffff'];
     const shells = Array.from({ length: SHELLS }, (_, s) => ({ start: -s * 1.15, life: 3, origin: [0, 0, 0], size: 1, dirs: Array.from({ length: SPARKS }, () => [0, 0, 0]), index: s }));
     function launch(shell, time) {
