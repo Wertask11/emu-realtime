@@ -346,6 +346,8 @@ app.use("/api/schoolpark/quest-completions", questCompletion);
 app.use("/api/emu/knowledge-trials", require("./knowledge-trials").createKnowledgeTrialsRouter({ db }).router);
 /* 冷蔵庫くんに整えてもらう（11/9）：投稿の本文の自動校正。1人1日3回（backend/proofread.js）。 */
 app.use("/api/emu/proofread", require("./proofread").createProofreadRouter({ env: process.env, requireFirebaseUser }));
+/* 冷蔵庫くんと話して、知識の下書きにする（11/10）。投稿画面と冷蔵庫くんに聞くの2つから使う。下書きを返すだけ（backend/reizo-interview.js）。 */
+app.use("/api/emu/interview", require("./reizo-interview").createInterviewRouter({ env: process.env, requireFirebaseUser }));
 /* 完走証明ページ（11/9）：本人が選んだ完走1件だけを、推測できないURLで公開する（backend/public-proof.js）。 */
 app.use("/api/schoolpark/proofs", require("./public-proof").createPublicProofRouter({
   db, requireFirebaseUser, contract: String(process.env.SP_QUEST_STAR_CONTRACT || "") }));

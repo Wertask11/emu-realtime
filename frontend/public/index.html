@@ -3,6 +3,7 @@
 <head>
 <script src="/reizo/knowledge.js"></script>
 <script src="/reizo/chat.js"></script>
+<script src="/reizo/interview.js"></script>
 <script src="/knowledge-lab/integration.js"></script>
 <script src="/membership-entry.js"></script>
 <script src="/schoolpark/quest-store.js"></script>
@@ -11693,6 +11694,8 @@ async function spReizoSend() {
   const userAtSend = window.auth && window.auth.currentUser;
   input.value = '';
   _spReizoAppendMsg(q, true);
+  /* 11/10：「気づいたことを知識にしたい」を選んだあとは、冷蔵庫くんが聞き役になる（reizo/interview.js）。 */
+  if (window.ReizoSeed && window.ReizoSeed.handle(q)) return;
   // Keep existing explicit skills and deterministic FAQ ahead of AI.
   const skill = _matchReizoSkill(q);
   if (skill) { await skill.handler(); return; }
@@ -11707,6 +11710,8 @@ async function spReizoSend() {
   try {
     const reply = await window.ReizoChat.ask(q);
     _spReizoAppendMsg(reply, false);
+    /* 体験や気づきらしい話なら「知識のタネにする？」と一度だけ声をかける（reizo/interview.js）。 */
+    if (window.ReizoSeed) window.ReizoSeed.after(q, reply);
   } catch (error) {
     // Never show an in-flight answer in a different signed-in session.
     if (userAtSend !== (window.auth && window.auth.currentUser)) return;
@@ -29612,6 +29617,24 @@ async function sendEmuFeedback() {
     flushKnowledgePrefill();   // 既に準備できていれば、そのまま渡す
   };
 
+  /* 冷蔵庫くんとの会話をまとめた下書き（11/10・reizo/interview.js）を、知識を読むの投稿画面に入れて開く。
+     iframe の準備ができる前なら持っておき、準備できた時点で渡す。 */
+  let knowledgePrefillDraft = null;
+  function flushKnowledgeDraft() {
+    if (!knowledgePrefillDraft) return;
+    const frame = knowledgeFrame();
+    if (!frame || !frame.contentWindow || frame.dataset.ready !== 'true') return;
+    frame.contentWindow.postMessage({ type:'emu-knowledge-prefill-draft', draft: knowledgePrefillDraft }, window.location.origin);
+    knowledgePrefillDraft = null;
+  }
+  window.emuOpenKnowledgeDraft = function (draft) {
+    const d = draft && typeof draft === 'object' ? draft : {};
+    knowledgePrefillDraft = { title: String(d.title || '').slice(0, 160), body: String(d.body || '').slice(0, 5000),
+      tags: Array.isArray(d.tags) ? d.tags.map(String).slice(0, 5) : [], lab: d.lab && typeof d.lab === 'object' ? d.lab : null };
+    if (typeof showEmuFeed === 'function') showEmuFeed();
+    flushKnowledgeDraft();
+  };
+
   /* 投稿したのに一覧に出ない、の原因はここだった。
      読み込み中に「先頭から読み直して」と頼まれたとき、走っている問い合わせを
      そのまま返していた。その問い合わせは依頼より前に始まっているので、
@@ -29958,6 +29981,7 @@ async function sendEmuFeedback() {
         frame.dataset.ready = 'true';
         sendKnowledge({ type:'emu-knowledge-filter', mode:frame.dataset.pendingFilter || 'new' });
         flushKnowledgePrefill();   // 準備ができたので、待たせていた本文を渡す
+        flushKnowledgeDraft();     // 冷蔵庫くんとの会話をまとめた下書きも（11/10）
         // 名前のメニューから「マイライブラリー」を押してあった
         if (window._emuOpenLibraryWhenReady) {
           window._emuOpenLibraryWhenReady = false;
@@ -30024,6 +30048,13 @@ async function sendEmuFeedback() {
       } catch (error) {
         sendKnowledge({ type:'emu-knowledge-error', error: error.message || '削除できませんでした。' });
       }
+      return;
+    }
+    /* 冷蔵庫くんと話して書く（11/10）。投稿画面の会話を中継して、質問か下書きを返す（reizo/interview.js）。 */
+    if (message.type === 'emu-knowledge-interview') {
+      const d = window.ReizoInterview ? await window.ReizoInterview.request(message.mode, message.turns, message.terms)
+        : { ok:false, error:'いまは冷蔵庫くんと話せないみたい🧊' };
+      sendKnowledge(Object.assign({}, d, { type:'emu-knowledge-interview-result', requestId: message.requestId }));
       return;
     }
     /* 冷蔵庫くんに整えてもらう（11/9）。本文を校正した案をもらって、投稿画面へ返す。
@@ -30479,7 +30510,7 @@ async function sendEmuFeedback() {
     <div class="sp-reizo-msg sp-reizo-msg-bot">
       <img src="/assets/mascot.jpg" alt="">
       <!-- 吹き出しは white-space:pre-wrap。改行と字下げがそのまま出るので、1行で書く -->
-      <div class="sp-reizo-bubble">こんにちは！ぼくは冷蔵庫くん🧊<br>SchoolParkのことなら、僕に任せて！<br>何が知りたい？<div class="sp-reizo-quick-wrap" id="spReizoOpening"><button class="sp-reizo-quick-btn" onclick="spReizoAsk('ここは何をする場所？')">🏞️ ここは何をする場所？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('クエストって何？')">🎯 クエストって何？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('EMUERはどうやって貯める？')">💎 EMUERはどうやって貯める？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('残高教えて')">📊 いまの残高を教えて</button></div></div>
+      <div class="sp-reizo-bubble">こんにちは！ぼくは冷蔵庫くん🧊<br>SchoolParkのことなら、僕に任せて！<br>何が知りたい？<div class="sp-reizo-quick-wrap" id="spReizoOpening"><button class="sp-reizo-quick-btn" onclick="spReizoAsk('ここは何をする場所？')">🏞️ ここは何をする場所？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('クエストって何？')">🎯 クエストって何？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('EMUERはどうやって貯める？')">💎 EMUERはどうやって貯める？</button><button class="sp-reizo-quick-btn" onclick="spReizoAsk('残高教えて')">📊 いまの残高を教えて</button><button class="sp-reizo-quick-btn" onclick="window.ReizoSeed&&ReizoSeed.start()">📝 気づいたことを知識にしたい</button></div></div>
     </div>
   </div>
   <div class="sp-reizo-input-area">
