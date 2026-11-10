@@ -44,7 +44,8 @@ test('all existing FAQ data and exact matcher outputs are preserved', () => {
   // Reviewed rename (#232, 10/27): the plan names became 「Emu for SchoolPark light/plus/pro」; nothing else in these answers changed.
   const renamed=['プラン','公式パス'],rename=text=>text.replace(/Emu (light|plus|pro)/g,'Emu for SchoolPark $1');
   // Reviewed addition (11/9): 「何を書けばいいか分からない」 — the most common first-post question.
-  const added=['冷蔵庫くんに頼む','何を書いて'];
+  // Reviewed additions (11/10): the features added that day (話して書く・整える・テンプレート・予約投稿・応援・協賛・投票・体験チケット).
+  const added=['冷蔵庫くんに頼む','何を書いて','話して書く','整えてもらう','テンプレート','予約投稿','応援する','協賛','みんなで決める','体験チケット'];
   const legacyItems = faq.items.filter(x=>!added.includes(x.k[0]));
   assert.equal(faq.items.length,kb.length+added.length);
   assert.equal(legacyItems.length,kb.length);
