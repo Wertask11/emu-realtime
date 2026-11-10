@@ -10,7 +10,8 @@ fs.mkdirSync(path.join(root,'artifacts'),{recursive:true});
 fs.writeFileSync(path.join(root,'artifacts/EMUERv2.json'),JSON.stringify({compiler:solc.version(),settings:input.settings,...artifact},null,2));
 (async()=>{
  const gp=ganache.provider({logging:{quiet:true},chain:{hardfork:'shanghai',time:new Date('2026-09-30T14:59:55Z')},wallet:{totalAccounts:4}});
- const provider=new ethers.BrowserProvider(gp);provider.pollingInterval=10;
+ // EVM time travel must invalidate ethers RPC caching, including a prior failed gas estimate.
+ const provider=new ethers.BrowserProvider(gp,undefined,{cacheTimeout:-1});provider.pollingInterval=10;
  const accounts=gp.getInitialAccounts();const keys=Object.values(accounts).map(x=>x.secretKey);
  const admin=new ethers.Wallet(keys[0]),alice=new ethers.Wallet(keys[1]),bob=new ethers.Wallet(keys[2]);
  const adminTx=await provider.getSigner(0),aliceTx=await provider.getSigner(1),bobTx=await provider.getSigner(2);

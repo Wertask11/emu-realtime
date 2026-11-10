@@ -1,5 +1,7 @@
 # 冷蔵庫くんに頼む Phase 5 — Polygon決済
 
+> 2026-11-10追補：[実チェーン照合・署名器・POL予約](phase5-operator-release.md)。以下はPR #324時点の記録。RPC通信は追補で成功しており、未照合という記述は当時の状態です。現判定はPARTIAL / Polygon OFF。
+
 2026-11-10。基点main e0e04f9 / PR #323。公開判定 **PARTIAL（ウォレット決済OFF）**。
 既存のアプリ内5 EMUER、5種類の生成、追加料金なしの実践・記録を維持する。
 

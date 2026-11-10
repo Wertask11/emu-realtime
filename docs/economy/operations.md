@@ -215,3 +215,7 @@ Firestoreの実APIで既定DBの無料読取50,000/日・書込20,000/日を確�
 停止は **ECONOMY_POLYGON_ENABLEDだけをfalse** にし、worker・既存署名器と既払返却能力を維持する。`result_saved`・`refund_pending` がある状態で前版へロールバックしない。新コードのままwallet入口をOFFにして未完了を先に照合する。原本ジョブ・台帳・outbox・nonceを削除しない。署名器の障害・署名不正・ガス不足等で自動停止した `system/polygon-safety` は、原因と全未完了注文を確認してから運営が復旧する。単に停止フラグを解除して再請求しない。
 
 外部署名器は専用アドレス・chain137・固定コントラクト・value0・refundExchange/markExchangeFulfilledだけを許可する。新規nonce作成・gas bump・別送金の自動代替はない。長期pending、nonce外部使用、実最終性の巻き戻り、期限を超える索引範囲のイベント、署名器鍵交代は個別の運営対応が必要。本番の手動tx・ガス支出・権限変更・資産返却はFounderの個別承認なしに行わない。
+
+## Polygon Phase 5 署名器・POL予約（2026-11-10）
+
+[公開準備・Founder操作・費用・停止復旧](phase5-operator-release.md) と [実チェーン証拠](phase5-live-chain-20261110.json) を参照。PolygonはOFF。新しい署名器サービスはmainアプリと別配備・既定OFFであり、KMS/権限/POL/独立監査/法務は未完了。既存ledgerとworkerを止めず、試験期限を延長しない。
