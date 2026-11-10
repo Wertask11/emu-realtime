@@ -16,7 +16,7 @@
     if (document.getElementById('spReizoModeStyle')) return;
     var st = document.createElement('style'); st.id = 'spReizoModeStyle';
     st.textContent = [
-      '.sp-reizo-mode{display:flex;align-items:center;gap:9px;flex:0 1 auto;min-width:0;margin-right:auto;background:none;border:0;padding:4px 6px;margin:-4px -6px;border-radius:10px;cursor:pointer;color:inherit;font:inherit;text-align:left}',
+      '.sp-reizo-mode{display:flex;align-items:center;gap:9px;flex:0 1 auto;min-width:0;background:none;border:0;padding:4px 6px;margin:-4px auto -4px -6px;border-radius:10px;cursor:pointer;color:inherit;font:inherit;text-align:left}',
       '.sp-reizo-mode:hover,.sp-reizo-mode[aria-expanded="true"]{background:rgba(212,168,67,.12)}',
       '.sp-reizo-mode:focus-visible{outline:2px solid #D4A843;outline-offset:2px}',
       '.sp-reizo-mode-now{display:inline-flex;align-items:center;gap:4px;margin-left:6px;padding:1px 8px;border-radius:999px;background:rgba(212,168,67,.18);color:#e8c46a;font-size:12px;font-weight:700;white-space:nowrap}',
@@ -30,17 +30,22 @@
       '.sp-reizo-mode-item small{display:block;margin-top:2px;font-size:12px;line-height:1.5;color:#c8b48a}',
       '.sp-reizo-mode-item .ic{font-size:18px;line-height:1.2}',
       '.sp-reizo-mode-item .ok{margin-left:auto;color:#D4A843;font-weight:800}',
-      '.rrw-mode{background:none;border:0;padding:2px 6px;margin:-2px -6px;border-radius:8px;color:inherit;font:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px}',
+      '.rrw-mode{background:none;border:0;padding:2px 6px;margin:-2px auto -2px -6px;border-radius:8px;color:inherit;font:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;min-width:0}',
       '.rrw-mode:hover,.rrw-mode[aria-expanded="true"]{background:rgba(212,168,67,.15)}'
     ].join('\n');
     document.head.appendChild(st);
   }
 
   /* ── 3つの動き ── */
-  function screenId() {
-    try { if (typeof window.ReizoTourScreen === 'function') return window.ReizoTourScreen(); } catch (_) {}
-    try { return window.ReizoTour && window.ReizoTour.current ? window.ReizoTour.current() : ''; } catch (_) { return ''; }
+  /* いまの画面。reizo-tour-pages.js の screen() は、冷蔵庫くんの窓や頼む窓が開いていると「分からない」（null）を返す。
+     そのため、冷蔵庫くんを開く直前の画面を覚えておき、それを使う（前はここで null になり、いつも「準備中」と出ていた）。 */
+  var lastScreen = '';
+  function liveScreen() {
+    try { if (typeof window.ReizoTourScreen === 'function') return window.ReizoTourScreen() || ''; } catch (_) {}
+    try { return (window.ReizoTour && window.ReizoTour.current && window.ReizoTour.current()) || ''; } catch (_) { return ''; }
   }
+  function remember() { var id = liveScreen(); if (id) lastScreen = id; }
+  function screenId() { return liveScreen() || lastScreen; }
   function guideInfo() {
     var id = screenId(), T = window.ReizoTour;
     if (!id || !T || typeof T.list !== 'function') return { id: id, ok: false };
@@ -48,7 +53,14 @@
     var p = ok && typeof T.progress === 'function' ? T.progress(id) : null;
     return { id: id, ok: ok, progress: p };
   }
-  function closeRequestWin() { try { if (window.EmuReizoFloat && window.EmuReizoFloat.requestActive && window.EmuReizoFloat.requestActive()) window.EmuReizoFloat.closeRequest(); } catch (_) {} }
+  function closeRequestWin() {
+    var win = document.getElementById('reizoRequestWin');
+    try { if (win && win.classList.contains('open') && window.EmuReizoFloat && window.EmuReizoFloat.closeRequest) window.EmuReizoFloat.closeRequest(); } catch (_) {}
+  }
+  function closeChat() {
+    var panel = document.getElementById('spReizoPanel');
+    if (panel && panel.classList.contains('open') && typeof window.spReizoClose === 'function') window.spReizoClose();
+  }
   function go(mode, invoker) {
     closeMenus();
     if (mode === 'ask') {
@@ -58,7 +70,7 @@
       return;
     }
     if (mode === 'request') {
-      if (typeof window.spReizoClose === 'function') window.spReizoClose();
+      closeChat();
       if (typeof window.openReizoRequest === 'function') window.openReizoRequest(invoker);
       else if (window.ReizoTour && window.ReizoTour.announce) window.ReizoTour.announce('依頼画面を開けませんでした。再読み込みしてからお試しください。');
       return;
@@ -66,7 +78,7 @@
     if (mode === 'guide') {
       var g = guideInfo();
       if (!g.ok) return;
-      if (typeof window.spReizoClose === 'function') window.spReizoClose();
+      closeChat();
       closeRequestWin();
       window.ReizoTour.navigate(g.id, false, invoker);
     }
@@ -148,19 +160,48 @@
     btn.setAttribute('aria-label', '冷蔵庫くんの使い方を切り替える（いまは頼む）');
     bar.insertBefore(btn, img || label);
     if (img) btn.appendChild(img);
+    label.textContent = '冷蔵庫くん';
     btn.appendChild(label);
+    hideInnerBar(win);
     var now = document.createElement('span'); now.className = 'sp-reizo-mode-now'; now.textContent = '📋 頼む'; btn.appendChild(now);
     /* つかんで動かす処理（reizo-float.js）が、この帯の押し下げを使っているので、ボタンの上では止める */
     btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
     attach(win, btn, 'request', function () { return bar.offsetTop + bar.offsetHeight - 2; });
   }
 
+  /* 頼む窓の中（/economy/）の「← 戻る｜Emu for SchoolPark」の帯は、浮かぶ窓では要らない（閉じるは右上の ×、切り替えは左上）。
+     中の画面のファイルは変えず、頼む窓で開いたときだけ隠す（小部屋で開いたときは今までどおり出る）。 */
+  function hideInnerBar(win) {
+    var frame = win.querySelector('iframe'); if (!frame || frame._rrwHide) return;
+    frame._rrwHide = true;
+    var apply = function () {
+      try {
+        var doc = frame.contentDocument; if (!doc || !doc.head || doc.getElementById('rrwHideBar')) return;
+        if (!/\/economy\//.test(doc.location.pathname)) return;
+        var st = doc.createElement('style'); st.id = 'rrwHideBar'; st.textContent = 'body > header{display:none!important}';
+        doc.head.appendChild(st);
+      } catch (_) {}
+    };
+    frame.addEventListener('load', apply); apply();
+  }
+  /* ×：冷蔵庫くんの窓をまとめて閉じる（聞く・頼むのどちらの×でも、両方閉じる） */
+  function closeAll() { closeMenus(); closeChat(); closeRequestWin(); }
+
   function start() {
     css();
     mountChat();
     /* 開いたら、まず「聞く」。前の選ぶ窓は ReizoTourChooser に残す。 */
     if (typeof window.ReizoTourAsk === 'function' && !window.ReizoTourChooser) window.ReizoTourChooser = window.ReizoTourAsk;
-    window.ReizoTourAsk = function (source) { go('ask', source); };
+    window.ReizoTourAsk = function (source) { remember(); go('ask', source); };
+    /* ほかの入口（左下の💬など）から開いたときも、開く直前の画面を覚える */
+    if (typeof window.spReizoOpen === 'function' && !window.spReizoOpen._remember) {
+      var openChat = window.spReizoOpen;
+      window.spReizoOpen = function () { remember(); return openChat.apply(this, arguments); };
+      window.spReizoOpen._remember = true;
+    }
+    document.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('#spReizoPanel .sp-reizo-close, #reizoRequestWin .rrw-close')) closeAll();
+    }, true);
     if (typeof MutationObserver === 'function') {
       new MutationObserver(function () { mountChat(); mountRequest(); }).observe(document.body, { childList: true });
     }
