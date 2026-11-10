@@ -73,3 +73,5 @@ walletは未確定・実行・返却を通じて最大2件の永続in-flight slo
 内部レビューでは、共通shop confirmの迂回、未確定なのにwall clockで失効、保存前の返却予約解放、応答喪失後の別nonce送信、支払元切替、RPC停止中の未確定数増加を確認し、上記guard・finality・outbox・固定方法・in-flight上限で対処した。これは独立した外部監査の完了を意味しない。
 
 `npm audit --omit=dev`（backend）はhigh/critical 0、moderate 11 / low 14（既存ethers5/Firebase等の依存系統）。今回backend依存は追加・更新しない。contracts-v2の全依存監査はhigh 6 / critical 1 / moderate 1 / low 1。Ganache・関連暗号/WS等の開発用ツールとsolc/tmpが対象で、既存固定バージョンのまま。Ganacheは外部公開RPCを立てず、合成鍵のin-process検証だけに使い、本番backendからimportしない。この開発用指摘は解消済みとはしない。署名処理を本番ONにする前の依存・独立レビューに含める。
+
+最終ローカル検証：[検証集計](phase5-evidence-20261110.json)。バックエンド620、画面関連288、City/Wallet/会員397、分離Auth/Firestore/Rules32、Knowledge Lab182、実ローカル決済24、wallet画面7幅の7、既存コントラクト16、**合計1,566項目合格**。重複再実行は合計へ加算しない。別途、7幅の実践開始・保存・再表示・中断再開・コピーも実ブラウザで合格。先行Lab全体試験の1件はエミュレーター競合エラーがあり、単独16/16と最終全体182/182で再確認した。既存の期待値を緩めていない。
