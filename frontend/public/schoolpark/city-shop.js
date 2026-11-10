@@ -1,3 +1,4 @@
+import { cityTime, CITY_TIME_LABEL } from './city-time.js';
 const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = product => Number.isSafeInteger(product.priceJPY) ? '¥'+product.priceJPY.toLocaleString('ja-JP') : '価格は店舗でご確認ください';
 const glyph = kind => ({notebook:'01',mug:'02',tote:'03',coffee:'04'}[kind] || '—');
@@ -9,12 +10,14 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
   const priorFocus=document.activeElement,abort=new AbortController(),root=document.createElement('section');
   const listener={signal:abort.signal};
   let world=null,shop=null,catalog=null,selected=null,closed=false,busy=false,request=0,loadNumber=0;
-  root.id='city-explorer';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','SchoolPark City 3Dショールーム');
+  const time=cityTime(),timeLabel=CITY_TIME_LABEL[time];
+  root.id='city-explorer';root.dataset.time=time;root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','SchoolPark City 3Dショールーム');
   root.innerHTML=`<canvas class="cs-canvas" tabindex="0" aria-label="3D店内。行きたい床をクリックまたはタップして移動し、ドラッグまたはスワイプで見回せます。"></canvas>
     <div class="cs-wash" aria-hidden="true"></div>
     <header class="cs-top"><button type="button" data-shop="close" class="cs-exit">← City</button><div class="cs-brand">SchoolPark<span>CITY</span></div><div class="cs-top-actions"><button type="button" data-shop="products">商品を見る</button><button type="button" data-shop="help" aria-label="歩き方">?</button></div></header>
     <div class="cs-place"><span class="cs-kicker">A SMALL STORE. A BIG WORLD.</span><h2>THE FIELD STORE</h2><p>学びと暮らしの、小さなお店。</p><span class="cs-demo">3D SHOWROOM · 展示用店舗</span></div>
     <div class="cs-load" role="status"><span class="cs-spinner"></span>Cityの扉を開いています…</div>
+    <button type="button" class="cs-plaza" data-shop="waypoint" data-value="plaza">${timeLabel.plaza}</button>
     <div class="cs-aim" aria-hidden="true">+</div><button class="cs-pick" type="button" data-shop="pick" hidden></button>
     <div class="cs-toast" role="status" hidden></div>
     <aside class="cs-panel" hidden></aside>
@@ -142,7 +145,7 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     if(preview){const b=root.querySelector('[data-shop="checkin"]');b.disabled=true;b.innerHTML='操作プレビュー<br><b>記録・購入なし</b>';}
     try{
       if(module.status!=='fulfilled')throw module.reason;
-      world=module.value.createWorld(canvas,{products:shop.products,onSelect:productPanel,onFocus:id=>{
+      world=module.value.createWorld(canvas,{products:shop.products,time,onSelect:productPanel,onFocus:id=>{
         focusedProduct=id;const p=shop.products.find(p=>p.id===id);pick.hidden=!p||!panel.hidden;if(p)pick.textContent=p.name+' を見る ↗';
       },onLost:()=>{load.hidden=false;load.innerHTML='3D描画が中断しました。<button type="button" data-shop="retry">再開する</button>';}});
       load.hidden=true;world.focus();
