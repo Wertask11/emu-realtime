@@ -21,6 +21,8 @@
    - 新しい記録は emuer_v2_* の名前で置く。Firestore のルールで、サーバーしか読み書きできない。 */
 const crypto = require("node:crypto");
 const express = require("express");
+let ethers = null;
+try { ({ ethers } = require("ethers")); } catch (_) { ethers = null; }
 
 const LEDGER = "emuer_offchain";
 const AUDIT = "emuer_offchain_ledger";
@@ -54,6 +56,17 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
   router.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
   const ledgerRef = (addr) => db.collection(LEDGER).doc(addr);
   const countsCache = new Map();   // postId → { at, value }
+  /* もらった側に早く知らせる（11/10）。画面は20秒ごとに「届いた？」と聞きに来る。
+     そのたびに Firestore を読まないよう、このサーバーで「最後に応援が届いた時刻」と
+     「最後に本当に調べた時刻」を覚えておき、そのあと何も届いていなければ読まずに返す。
+     サーバーが複数台・再起動でも取りこぼさないよう、5分たったら必ず本当に調べる。 */
+  const lastGiftTo = new Map();    // 受け取る人のアドレス → 最後に届いた時刻
+  const lastFullCheck = new Map(); // 本人のアドレス → 最後に本当に調べた時刻
+  const QUICK_MS = 5 * 60 * 1000;
+  function remember(map, key, value) {
+    if (map.size > 20000) map.clear();
+    map.set(key, value);
+  }
 
   function fail(res, e) {
     if (e && e.code && e.status) return res.status(e.status).json({ error: e.code, ...e.extra });
@@ -63,6 +76,27 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
   function senderOf(req) {
     const addr = String((req.identity && req.identity.walletAddress) || "").toLowerCase();
     if (!ADDRESS.test(addr)) throw err("WALLET_REQUIRED", 403);
+    return addr;
+  }
+  /* 本人のアドレス（ログインの名義と、アプリが作ったアドレスの2つ）。
+     ウォレットでログインした人は、知識をどちらの名義でも書ける。 */
+  function addressesOf(req) {
+    const main = senderOf(req);
+    const ches = String(((req.identity || {}).account || {}).chesAddress || "").toLowerCase();
+    return ADDRESS.test(ches) && ches !== main ? [main, ches] : [main];
+  }
+  /* 応援を届ける先。投稿の名義がアプリの作ったアドレス（chesAddress）なら、
+     その人がログインしている名義（walletAddress）の台帳へ届ける。
+     そうしないと、ウォレットでログインしている人には「届いたよ」も出ず、受け取ったEMUERも使えない。 */
+  async function receiverOf(addr) {
+    const forms = [addr];
+    if (ethers) { try { const c = ethers.utils.getAddress(addr); if (c !== addr) forms.push(c); } catch (_) {} }
+    for (const form of forms) {
+      const snap = await db.collection("ches_accounts").where("chesAddress", "==", form).limit(1).get();
+      if (snap.empty) continue;
+      const wallet = String((snap.docs[0].data() || {}).walletAddress || "").toLowerCase();
+      return ADDRESS.test(wallet) ? wallet : addr;
+    }
     return addr;
   }
   function active(req, res, next) { return enabled() ? next() : res.status(503).json({ error: "GIFTS_NOT_ACTIVE" }); }
@@ -122,8 +156,10 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
       const postSnap = await db.collection("posts").doc(postId).get();
       const post = postSnap.exists ? postSnap.data() || {} : null;
       if (!post || post.deleted === true || post.status === "deleted") throw err("POST_NOT_FOUND", 404);
-      const to = String(post.address || "").toLowerCase();
-      if (!ADDRESS.test(to)) throw err("POST_NOT_FOUND", 404);
+      const named = String(post.address || "").toLowerCase();
+      if (!ADDRESS.test(named)) throw err("POST_NOT_FOUND", 404);
+      if (addressesOf(req).includes(named)) throw err("OWN_POST", 409);
+      const to = await receiverOf(named);
       if (to === from) throw err("OWN_POST", 409);
       const targetRef = db.collection(TARGETS).doc("post:" + postId);
       const personRef = db.collection(TARGETS).doc("post:" + postId + ":by:" + from);
@@ -145,6 +181,7 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
         return { already: false, event, people, total, balance: after.balance, sentToday: after.sentToday };
       });
       countsCache.delete(postId);
+      if (!result.already) remember(lastGiftTo, to, now());
       return res.json({ ok: true, ...result, event: undefined, amount });
     } catch (e) { return fail(res, e); }
   });
@@ -170,28 +207,57 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
     } catch (e) { return fail(res, e); }
   });
 
-  /* 届いた応援（まだ見ていないもの）。開いたときに「応援が届いたよ」と出すため。 */
+  /* 届いた応援（まだ見ていないもの）。開いたとき・画面に戻ったとき・開いている間は20秒ごとに見る。
+     ?quick=1 のときは、このサーバーで覚えている時刻から「何も届いていない」と分かれば Firestore を読まない。 */
   router.get("/inbox", requireFirebaseUser, async (req, res) => {
     try {
-      const to = senderOf(req);
-      const snap = await db.collection(EVENTS).where("to", "==", to).where("seen", "==", false).limit(30).get();
-      const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }))
-        .sort((a, b) => num(b.createdAtMs) - num(a.createdAtMs))
+      const mine = addressesOf(req);
+      const startedAt = now();
+      const checked = lastFullCheck.get(mine[0]);
+      if (String(req.query.quick || "") === "1" && checked && startedAt - checked < QUICK_MS
+          && mine.every((a) => (lastGiftTo.get(a) || 0) < checked)) {
+        return res.json({ ok: true, items: [], total: 0, quick: true });
+      }
+      const snaps = await Promise.all(mine.map((a) => db.collection(EVENTS).where("to", "==", a).where("seen", "==", false).limit(30).get()));
+      remember(lastFullCheck, mine[0], startedAt);
+      const items = snaps.flatMap((snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })))
+        .sort((a, b) => num(b.createdAtMs) - num(a.createdAtMs)).slice(0, 30)
         .map((e) => ({ id: e.id, kind: e.kind, amount: num(e.amount), fromName: e.fromName || "Emuer",
           postId: e.postId || "", postTitle: e.postTitle || "", questTitle: e.questTitle || "", at: num(e.createdAtMs) }));
       return res.json({ ok: true, items, total: items.reduce((s, x) => s + x.amount, 0) });
     } catch (e) { return fail(res, e); }
   });
+  /* 見たしるしを付ける。あわせて、アプリが作ったアドレスの台帳に届いていた応援の分を、
+     ログインの名義の台帳へ移す（この仕組みより前に届いた分。応援・協賛で受け取った分だけを動かす）。
+     返す balance は、いま使える未変換の EMUER。 */
   router.post("/inbox/seen", requireFirebaseUser, async (req, res) => {
     try {
-      const to = senderOf(req);
+      const mine = addressesOf(req);
+      const main = mine[0];
       const ids = (Array.isArray((req.body || {}).ids) ? req.body.ids : []).map(String).filter((s) => /^[a-z]+-[0-9a-f]{40}$/.test(s)).slice(0, 30);
       await Promise.all(ids.map(async (id) => {
         const ref = db.collection(EVENTS).doc(id);
         const s = await ref.get();
-        if (s.exists && (s.data() || {}).to === to) await ref.set({ seen: true, seenAtMs: now() }, { merge: true });
+        if (s.exists && mine.includes((s.data() || {}).to)) await ref.set({ seen: true, seenAtMs: now() }, { merge: true });
       }));
-      return res.json({ ok: true, count: ids.length });
+      let moved = 0;
+      if (mine[1]) {
+        const ches = mine[1];
+        moved = await db.runTransaction(async (tx) => {
+          const [cs, ms] = await Promise.all([tx.get(ledgerRef(ches)), tx.get(ledgerRef(main))]);
+          if (!cs.exists) return 0;
+          const c = cs.data() || {};
+          const amount = Math.max(0, Math.min(num(c.balance), num(c.giftIn) - num(c.giftOut)));
+          if (!amount) return 0;
+          const m = ms.exists ? ms.data() || {} : {};
+          tx.set(ledgerRef(ches), { address: ches, balance: num(c.balance) - amount, giftOut: num(c.giftOut) + amount, updatedAt: new Date(now()) }, { merge: true });
+          tx.set(ledgerRef(main), { address: main, balance: num(m.balance) + amount, giftIn: num(m.giftIn) + amount, updatedAt: new Date(now()) }, { merge: true });
+          audit(tx, "merge-" + hash([ches, main, now()].join(":")), { from: ches, to: main, amount, reason: "gift_merge_to_login_address" });
+          return amount;
+        });
+      }
+      const l = await ledgerRef(main).get();
+      return res.json({ ok: true, count: ids.length, moved, balance: l.exists ? num((l.data() || {}).balance) : 0 });
     } catch (e) { return fail(res, e); }
   });
 

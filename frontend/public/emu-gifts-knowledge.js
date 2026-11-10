@@ -10,7 +10,7 @@
   try { G = window.parent && window.parent !== window ? window.parent.EmuGifts : null; } catch (_) { G = null; }
   if (!G) return;
   var AMOUNTS = [1, 3, 5, 10];
-  var counts = {}, asked = {}, timer = null;
+  var counts = {}, asked = {}, timer = null, lastFresh = 0;
 
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function say(text) { if (typeof notify === 'function') notify(text); }
@@ -59,6 +59,28 @@
       });
     }
   }
+  /* 応援の数を新しくする（画面に戻ったとき・開いている間は45秒ごと・自分に応援が届いたとき）。
+     ids が無ければ、いま並んでいる投稿ぜんぶ。 */
+  function refreshCounts(ids) {
+    if (!ids) {
+      ids = [];
+      document.querySelectorAll('#posts article.card').forEach(function (card) { var id = postIdOf(card); if (id && ids.indexOf(id) < 0) ids.push(id); });
+    }
+    ids = ids.filter(Boolean);
+    for (var i = 0; i < ids.length; i += 40) (function (part) {
+      G.cheerCounts(part, true).then(function (d) {
+        if (!d || !d.ok) return;
+        part.forEach(function (id) { counts[id] = (d.counts && d.counts[id]) || null; asked[id] = true; });
+        document.querySelectorAll('#posts article.card').forEach(function (card) { var id = postIdOf(card); if (part.indexOf(id) >= 0) line(card, id); });
+      });
+    })(ids.slice(i, i + 40));
+  }
+  function refreshSoon() {
+    var t = Date.now();
+    if (t - lastFresh < 10000) return;
+    lastFresh = t;
+    refreshCounts();
+  }
   function closePicker() { var p = document.querySelector('[data-cheer-picker]'); if (p) p.remove(); }
   function openPicker(btn) {
     closePicker();
@@ -70,15 +92,29 @@
       + '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">'
       + AMOUNTS.map(function (n) { return '<button type="button" data-cheer-amount="' + n + '" style="border:1px solid #f0a6c6;background:#fff;color:#9d174d;border-radius:999px;padding:8px 14px;font:inherit;font-weight:700;cursor:pointer">' + n + ' EMUER</button>'; }).join('')
       + '<button type="button" data-cheer-cancel style="border:0;background:none;color:#8a8070;font:inherit;cursor:pointer;padding:8px">やめる</button></div>'
-      + '<small style="display:block;margin-top:6px;color:#8a8070;font-size:12px">未変換のEMUER（残高の（ ）の中）から贈ります。贈ったEMUERは、書いた人に届きます。1日100 EMUERまで。</small>';
+      + '<div data-cheer-have style="margin-top:8px;font-size:13px;font-weight:700;color:#9d174d">いまの未変換のEMUER：…</div>'
+      + '<small style="display:block;margin-top:4px;color:#8a8070;font-size:12px">未変換のEMUER（残高の（ ）の中）から贈ります。贈ったEMUERは、書いた人にすぐ届きます。1日100 EMUERまで。</small>';
     card.appendChild(box);
+    /* いま贈れる分を見せる。足りない額は押せないようにする（押してから断られないように）。 */
+    if (typeof G.me === 'function') G.me().then(function (d) {
+      if (!box.isConnected) return;
+      var have = box.querySelector('[data-cheer-have]');
+      if (!d || !d.ok || typeof d.balance !== 'number') { if (have) have.remove(); return; }
+      var left = Math.max(0, (Number(d.dailyLimit) || 100) - (Number(d.sentToday) || 0));
+      var can = Math.min(d.balance, left);
+      if (have) have.textContent = 'いまの未変換のEMUER：' + d.balance + ' EMUER' + (left < d.balance ? '（今日あと ' + left + ' EMUER 贈れます）' : '');
+      box.querySelectorAll('[data-cheer-amount]').forEach(function (b) {
+        if (Number(b.getAttribute('data-cheer-amount')) > can) { b.disabled = true; b.style.opacity = '.45'; b.style.cursor = 'not-allowed'; }
+      });
+      if (can < 1 && have) have.textContent += d.balance < 1 ? '　まだ贈れるEMUERがないよ🧊' : '　今日はもう贈れないよ。また明日ね🧊';
+    });
   }
   async function send(btn) {
     var box = btn.closest('[data-cheer-picker]'); var id = box.getAttribute('data-cheer-picker'); var amount = Number(btn.getAttribute('data-cheer-amount'));
     var card = box.closest('article.card');
     box.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
     var d = await G.cheer(id, amount);
-    if (!d.ok) { box.querySelectorAll('button').forEach(function (b) { b.disabled = false; }); say(d.error); return; }
+    if (!d.ok) { closePicker(); say(d.error); return; }
     closePicker();
     counts[id] = { people: d.people, total: d.total };
     line(card, id);
@@ -152,6 +188,13 @@
     new MutationObserver(function () { clearTimeout(timer); timer = setTimeout(decorate, 50); }).observe(posts, { childList: true, subtree: true });
     decorate();
   }
+  /* 応援の数を、ほかの人が贈った分も追いかける。 */
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') refreshSoon(); });
+  window.addEventListener('focus', refreshSoon);
+  setInterval(function () { if (document.visibilityState === 'visible') refreshCounts(); }, 45000);
+  /* 自分に応援が届いたら（親の emu-gifts.js が知らせる）、その投稿の数をすぐ新しくする。 */
+  var off = G.on && G.on(function (ev) { if (ev && ev.type === 'cheers' && ev.postIds && ev.postIds.length) refreshCounts(ev.postIds); });
+  window.addEventListener('pagehide', function () { if (typeof off === 'function') off(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { watch(); loadPolls(); });
   else { watch(); loadPolls(); }
 })();

@@ -8,11 +8,14 @@ const express = require("express");
 const { makeFirestore } = require("./fake-firestore");
 const { createGiftsRouter, DAILY_LIMIT, SPONSOR_BONUS } = require("./emuer-gifts");
 
+const { ethers } = require("ethers");
 const A = "0x" + "a".repeat(40), B = "0x" + "b".repeat(40), C = "0x" + "c".repeat(40);
+const D = "0x" + "d".repeat(40), E = "0x" + "e".repeat(40);   // だいち：ウォレットでログイン（D）。アプリが作ったアドレスは E
 const USERS = {
   alice: { uid: "ua", walletAddress: A, account: { displayName: "ありす", spid: "SP-A" } },
   bob: { uid: "ub", walletAddress: B, account: { displayName: "ぼぶ", spid: "SP-B" } },
-  carol: { uid: "uc", walletAddress: C, account: { displayName: "きゃろる", spid: "SP-C" } }
+  carol: { uid: "uc", walletAddress: C, account: { displayName: "きゃろる", spid: "SP-C" } },
+  daichi: { uid: "ud", walletAddress: D, account: { displayName: "だいち", spid: "SP-D", chesAddress: ethers.utils.getAddress(E) } }
 };
 async function serve(seed, { t = Date.UTC(2026, 10, 10, 3) } = {}) {
   const db = makeFirestore(seed);
@@ -141,5 +144,52 @@ test("投票：運営が作る。1人1票。決めた分の EMUER を使う。�
     await s.call("POST", "/admin/polls/" + id + "/close", "alice", {});
     assert.equal((await s.call("POST", "/polls/" + id + "/vote", "alice", { option: "o1" })).body.error, "POLL_CLOSED");
     assert.equal((await s.call("GET", "/polls")).body.polls[0].open, false);
+  } finally { await s.close(); }
+});
+
+test("もらった側：アプリが作ったアドレスの名義の投稿でも、ログインの名義に届いて使える。自分の投稿には贈れない", async () => {
+  const s = await serve({ ...seed(),
+    emuer_offchain: { [A]: { balance: 200 }, [D]: { balance: 0 }, [E]: { balance: 4, giftIn: 3, giftOut: 0, bountyBalance: 1 } },
+    posts: { ...seed().posts, p3: { title: "だいちの知恵", address: ethers.utils.getAddress(E) } },
+    ches_accounts: { ud: { walletAddress: ethers.utils.getAddress(D), chesAddress: ethers.utils.getAddress(E) } },
+    emuer_v2_gift_events: { ["cheer-" + "1".repeat(40)]: { kind: "cheer", to: E, amount: 3, fromName: "まえのひと", postTitle: "だいちの知恵", seen: false, createdAtMs: 1 } } });
+  try {
+    const ok = await s.call("POST", "/cheer", "alice", { postId: "p3", amount: 5, requestId: "req-10001" });
+    assert.equal(ok.status, 200);
+    assert.equal(bal(s.db, D), 5, "ログインの名義の台帳に入る");
+    assert.equal((await s.call("POST", "/cheer", "daichi", { postId: "p3", amount: 1, requestId: "req-10002" })).body.error, "OWN_POST");
+
+    const inbox = await s.call("GET", "/inbox", "daichi");
+    assert.equal(inbox.body.items.length, 2, "前にアプリのアドレスへ届いていた分も知らせる");
+    assert.equal(inbox.body.total, 8);
+    const seen = await s.call("POST", "/inbox/seen", "daichi", { ids: inbox.body.items.map((x) => x.id) });
+    assert.equal(seen.body.moved, 3, "応援で受け取った分だけを移す（懸賞の分は動かさない）");
+    assert.equal(seen.body.balance, 8);
+    assert.equal(bal(s.db, E), 1);
+    assert.equal(bal(s.db, A) + bal(s.db, D) + bal(s.db, E), 204, "合計は増えも減りもしない");
+    assert.equal((await s.call("GET", "/inbox", "daichi")).body.items.length, 0);
+    assert.equal((await s.call("POST", "/inbox/seen", "daichi", { ids: [] })).body.moved, 0, "2回目は動かさない");
+
+    const spend = await s.call("POST", "/cheer", "daichi", { postId: "p1", amount: 5, requestId: "req-10003" });
+    assert.equal(spend.status, 200, "もらったEMUERで、すぐ応援できる");
+    assert.equal(spend.body.balance, 3);
+  } finally { await s.close(); }
+});
+
+test("もらった側：20秒ごとの確認は、何も届いていなければ台帳を読まずに返す。届いたらすぐ出す。5分たったら必ず調べる", async () => {
+  const s = await serve(seed());
+  try {
+    assert.equal((await s.call("GET", "/inbox?quick=1", "bob")).body.quick, undefined, "はじめは必ず調べる");
+    assert.equal((await s.call("GET", "/inbox?quick=1", "bob")).body.quick, true);
+    s.setNow(Date.UTC(2026, 10, 10, 3, 0, 20));
+    await s.call("POST", "/cheer", "alice", { postId: "p1", amount: 3, requestId: "req-20001" });
+    s.setNow(Date.UTC(2026, 10, 10, 3, 0, 30));
+    const got = await s.call("GET", "/inbox?quick=1", "bob");
+    assert.equal(got.body.quick, undefined);
+    assert.equal(got.body.items.length, 1, "届いたら次の確認で出る");
+    s.setNow(Date.UTC(2026, 10, 10, 3, 0, 40));
+    assert.equal((await s.call("GET", "/inbox?quick=1", "bob")).body.quick, true);
+    s.setNow(Date.UTC(2026, 10, 10, 3, 6));
+    assert.equal((await s.call("GET", "/inbox?quick=1", "bob")).body.quick, undefined, "5分たったら調べ直す");
   } finally { await s.close(); }
 });
