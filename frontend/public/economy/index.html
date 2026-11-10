@@ -9,6 +9,7 @@
     <script src="/economy/practice-plan.js" defer></script>
     <script src="/economy/artifacts.js" defer></script>
     <script src="/economy/practice.js" defer></script>
+    <script src="/economy/polygon.js" defer></script>
     <script src="/economy/app.js" defer></script>
   </head>
   <body>
@@ -112,6 +113,18 @@
               作業では、本人専用の下書き・計画を保存します。利用許諾済み資料が不足する作業は決済前に停止します。公開・参加・購入はしません。
             </p>
           </div>
+          <label for="paymentMethod">支払い方法を選ぶ</label>
+          <select id="paymentMethod">
+            <option value="emuer_ledger">
+              アプリ内EMUERで支払う（5 EMUER）
+            </option>
+            <option id="walletMethodOption" value="emuer_chain" disabled>
+              ウォレットのEMUERで支払う（準備中）
+            </option>
+          </select>
+          <p id="walletAvailability" class="sub">
+            ウォレット決済は安全性・返却体制の確認中です。既存のアプリ内決済を利用できます。
+          </p>
           <label id="goalLabel" for="goal">何を見つけたいですか？</label
           ><textarea
             id="goal"
@@ -372,6 +385,35 @@
             <button id="savePractice" type="button">保存・再送</button
             ><button id="refreshPractice" type="button">最新を確認</button>
           </div>
+        </div>
+      </dialog>
+      <dialog id="polygonDialog" aria-labelledby="polygonHeading">
+        <h2 id="polygonHeading">Polygonウォレットで支払う</h2>
+        <p>
+          消費額：5
+          EMUER。操作：exchange（注文に指定された額のみ）。approve・無制限承認は不要です。
+        </p>
+        <p id="polygonDetails"></p>
+        <p id="polygonGas"></p>
+        <p>
+          ガス代は5
+          EMUERとは別にPOLで必要です。表示は接続ウォレットによる見積もりです。実際の料金は署名前にウォレットでも確認してください。
+        </p>
+        <p>
+          生成・保存失敗時は5
+          EMUERを元のウォレットへ返却します。確定前は返却待ちです。ガス代は返却対象外です。アドレス・取引は公開チェーンに記録されます。
+        </p>
+        <label class="check"
+          ><input
+            type="checkbox"
+            id="polygonConsent"
+          />操作・消費額・ガス代・返却条件・公開記録を確認した</label
+        >
+        <p id="polygonNotice" role="status"></p>
+        <div class="actions">
+          <button id="polygonSend" type="button" disabled>
+            ウォレットで確認して送信</button
+          ><button id="polygonClose" type="button">閉じる</button>
         </div>
       </dialog>
       <section id="operations" hidden>

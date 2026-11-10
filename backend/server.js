@@ -332,7 +332,7 @@ const knowledgeLab = require("./knowledge-lab/router").createKnowledgeLabRouter(
     .some(address => SP_OWNER_ADDRESSES.includes(String(address || "").toLowerCase()))
 });
 app.use("/api/knowledge-lab", knowledgeLab.router);
-app.use("/api/mitemiru", mitemiru.router);
+app.use("/api/mitemiru", require("./economy/shop-guard").serviceOrderGuard(db, requireFirebaseUser), mitemiru.router);
 /* Common economy: existing Mitemiru ledger, independent agent quota, default OFF. */
 const economy = require("./economy/router").createEconomyRouter({
   db, identity, entitlement, requireFirebaseUser, rateLimit, env: process.env,

@@ -16,10 +16,13 @@
     progressBusy = false,
     searchProfile = null,
     artifactUI = null,
-    practiceUI = null;
+    practiceUI = null,
+    walletManifest = null,
+    walletEstimate = null;
   const watchedJobs = new Map();
   const activeStates = new Set([
     "awaiting_payment",
+    "awaiting_wallet_payment",
     "queued",
     "running",
     "result_saved",
@@ -27,6 +30,7 @@
   ]);
   const labels = {
     awaiting_payment: "決済確認待ち",
+    awaiting_wallet_payment: "ウォレットの支払い・確定待ち",
     queued: "支払い済み・実行待ち",
     running: "探索中",
     result_saved: "結果保存済み・引渡し確認中",
@@ -37,6 +41,24 @@
     expired: "決済期限切れ",
   };
   const messages = {
+    PAYMENT_METHOD_DISABLED:
+      "ウォレット決済は現在停止中です。アプリ内EMUERを選択してください。",
+    POLYGON_WALLET_BUSY:
+      "ウォレット決済の確認中の依頼が2件あります。確定・完了後に料金を確認してください。まだ請求していません。",
+    POLYGON_PAYMENT_DISABLED: "ウォレット決済は現在停止中です。",
+    POLYGON_WALLET_UNAVAILABLE:
+      "登録済みウォレットを使えるブラウザで開いてください。",
+    POLYGON_WALLET_NOT_LINKED:
+      "Passportに登録済みのウォレットで接続してください。",
+    POLYGON_WALLET_CHANGED:
+      "接続アカウントと登録ウォレットが異なります。署名・送信を中止しました。",
+    POLYGON_WRONG_CHAIN: "ウォレットをPolygon PoSに切り替えてください。",
+    POLYGON_INSUFFICIENT_EMUER: "ウォレットのEMUERが不足しています。",
+    POLYGON_GAS_INSUFFICIENT: "Polygonのガス代（POL）が不足しています。",
+    POLYGON_PAYMENT_CLOSED:
+      "支払い期限が切れたか、既に処理済みです。履歴を更新してください。",
+    POLYGON_EOA_REQUIRED:
+      "現在は登録済みの通常ウォレットに対応しています。スマートアカウント決済は未対応です。",
     WORKFLOW_DISABLED: "準備作業は停止中です。既存の探索を選択してください。",
     WORK_SOURCE_DISABLED:
       "この作業の資料連携は未承認のため利用できません。料金は請求していません。",
@@ -84,6 +106,10 @@
   }
   function reset() {
     generation++;
+    walletManifest = walletEstimate = null;
+    $("polygonDialog").close();
+    $("paymentMethod").value = "emuer_ledger";
+    $("walletMethodOption").disabled = true;
     artifactUI?.reset();
     practiceUI?.reset();
     clearTimeout(progressTimer);
@@ -475,6 +501,28 @@
                 ] || job.payment.status),
         ),
       );
+    if (job.state === "awaiting_wallet_payment") {
+      const resume = node("button", "ウォレットの支払いを確認");
+      resume.type = "button";
+      resume.addEventListener("click", () => openWalletPayment(job.id));
+      article.append(resume);
+    }
+    if (job.payment?.method === "emuer_chain") {
+      article.append(
+        node("p", "支払元：Polygonウォレット。確定した支払いのみ実行します。"),
+      );
+      for (const [name, h] of [
+        ["決済取引", job.payment.transactionHash],
+        ["返却取引", job.payment.refundTransactionHash],
+      ])
+        if (/^0x[a-f0-9]{64}$/i.test(h || "")) {
+          const a = node("a", name);
+          a.href = "https://polygonscan.com/tx/" + h;
+          a.target = "_blank";
+          a.rel = "noopener";
+          article.append(a);
+        }
+    }
     const stage = {
       collecting_public_sources:
         "公開範囲・AI許諾を確認しながら、関連する領域を探しています。",
@@ -648,6 +696,13 @@
       if (g !== generation) return;
       updateBalances(me);
       paintService(me.service);
+      $("walletMethodOption").disabled = me.walletPayment?.enabled !== true;
+      $("walletMethodOption").textContent = me.walletPayment?.enabled
+        ? "ウォレットのEMUERで支払う（5 EMUER）"
+        : "ウォレットのEMUERで支払う（準備中）";
+      $("walletAvailability").textContent = me.walletPayment?.enabled
+        ? "Polygon PoSの登録済みウォレットを使用します。ガス代は別途必要です。"
+        : "ウォレット決済は安全性・返却体制の確認中です。アプリ内決済は従来どおりです。";
       $("availability").textContent = me.service.enabled
         ? "受付中です。料金と条件を確認してから依頼できます。"
         : me.service.blockers?.includes("AI_PROVIDER_DAY_LIMIT")
@@ -684,6 +739,7 @@
     try {
       const d = await api("/quotes", {
         goal: $("goal").value,
+        method: $("paymentMethod").value,
         taskType: $("taskType").value || undefined,
         balanceConsent: $("balanceConsent").checked,
         achievementsConsent: $("achievementsConsent").checked,
@@ -704,6 +760,7 @@
       busy = false;
     }
   });
+  $("paymentMethod").addEventListener("change", clearApproval);
   $("goal").addEventListener("input", clearApproval);
   $("taskType").addEventListener("change", () => {
     clearApproval();
@@ -766,7 +823,20 @@
     $("pay").disabled = true;
     const g = generation;
     try {
+      const method = quote.method || "emuer_ledger";
+      const assertCurrent = () => {
+        if (g !== generation || user() !== identityKey)
+          throw Error("AUTH_REQUIRED");
+      };
+      const walletProof =
+        method === "emuer_chain"
+          ? await window.ReizoPolygon.proof(api, assertCurrent)
+          : {};
+      assertCurrent();
       const d = await api("/jobs", {
+        ...walletProof,
+        method,
+        paymentTermsVersion: quote.paymentTermsVersion || undefined,
         quoteId: quote.id,
         termsVersion: quote.termsVersion,
         requestId,
@@ -795,6 +865,8 @@
       );
       article.scrollIntoView({ block: "start" });
       article.focus({ preventScroll: true });
+      if (current.job.state === "awaiting_wallet_payment")
+        await openWalletPayment(current.job.id);
     } catch (e) {
       if (
         [
@@ -813,6 +885,88 @@
     } finally {
       busy = false;
       $("pay").disabled = false;
+    }
+  });
+  async function openWalletPayment(id) {
+    const g = generation,
+      assertCurrent = () => {
+        if (g !== generation || user() !== identityKey)
+          throw Error("AUTH_REQUIRED");
+      };
+    walletManifest = walletEstimate = null;
+    $("polygonConsent").checked = false;
+    $("polygonSend").disabled = true;
+    $("polygonNotice").textContent =
+      "支払い内容と実ガス見積もりを確認しています。";
+    if (!$("polygonDialog").open) $("polygonDialog").showModal();
+    try {
+      const { payment: m } = await api("/jobs/" + id + "/wallet-payment");
+      assertCurrent();
+      const e = await window.ReizoPolygon.estimate(m, assertCurrent);
+      assertCurrent();
+      walletManifest = m;
+      walletEstimate = e;
+      $("polygonDetails").textContent =
+        "ネットワーク：Polygon PoS (137) ／ 消費先コントラクト：" +
+        m.to +
+        " ／ 利用ウォレット：" +
+        m.walletAddress;
+      $("polygonGas").textContent = "現在のガス見積もり：" + e.gasPOL + " POL";
+      $("polygonNotice").textContent =
+        "まだ送信していません。内容を確認してから本人が署名・送信してください。";
+    } catch (e) {
+      if (g !== generation || user() !== identityKey) return;
+      $("polygonNotice").textContent =
+        messages[e.message] ||
+        "ウォレット確認を完了できませんでした。署名拒否・残高・ネットワークを確認してください。新たな注文は作成しません。";
+    }
+  }
+  $("polygonConsent").addEventListener("change", () => {
+    $("polygonSend").disabled =
+      !walletManifest || !walletEstimate || !$("polygonConsent").checked;
+  });
+  $("polygonClose").addEventListener("click", () => {
+    $("polygonDialog").close();
+    walletManifest = walletEstimate = null;
+  });
+  $("polygonSend").addEventListener("click", async () => {
+    if (
+      busy ||
+      !walletManifest ||
+      !walletEstimate ||
+      !$("polygonConsent").checked
+    )
+      return;
+    busy = true;
+    $("polygonSend").disabled = true;
+    const g = generation,
+      m = walletManifest,
+      e = walletEstimate,
+      assertCurrent = () => {
+        if (g !== generation || user() !== identityKey)
+          throw Error("AUTH_REQUIRED");
+      };
+    try {
+      const transactionHash = await window.ReizoPolygon.broadcast(
+        m,
+        e,
+        assertCurrent,
+      );
+      assertCurrent();
+      walletManifest = walletEstimate = null;
+      $("polygonNotice").textContent =
+        "送信済みです。追加送信せず、チェーン上の確定を待っています。";
+      await api("/jobs/" + m.jobId + "/wallet-payment", { transactionHash });
+      assertCurrent();
+      $("polygonDialog").close();
+      await refresh();
+    } catch (err) {
+      if (g === generation)
+        $("polygonNotice").textContent =
+          messages[err.message] ||
+          "送信・確定状態を確認できません。再送せず履歴を更新してください。送信済み取引はサーバーでも照合します。";
+    } finally {
+      busy = false;
     }
   });
   $("refresh").addEventListener("click", refresh);
