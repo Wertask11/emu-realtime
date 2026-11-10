@@ -346,6 +346,12 @@ app.use("/api/schoolpark/quest-completions", questCompletion);
 app.use("/api/emu/knowledge-trials", require("./knowledge-trials").createKnowledgeTrialsRouter({ db }).router);
 /* 冷蔵庫くんに整えてもらう（11/9）：投稿の本文の自動校正。1人1日3回（backend/proofread.js）。 */
 app.use("/api/emu/proofread", require("./proofread").createProofreadRouter({ env: process.env, requireFirebaseUser }));
+/* 体験チケット（11/10）。交換した「その場で受け取る」品を QR で見せ、お店の人が暗証番号で使用済みにする（backend/shop-tickets.js）。 */
+app.use("/api/emu/tickets", rateLimit({ windowMs: 60_000, max: 30, key: "ticket" }), require("./shop-tickets").createTicketRouter({ db, requireOwner }));
+/* EMUER の応援・協賛・投票（11/10）。未変換の EMUER（emuer_offchain）だけを動かす。実EMUERは動かさない（backend/emuer-gifts.js）。
+   EMU_GIFTS_ENABLED=false で、贈る・協賛・投票を止められる（見るのはそのまま）。 */
+app.use("/api/emu/gifts", require("./emuer-gifts").createGiftsRouter({ db, requireFirebaseUser, requireOwner,
+  enabled: () => !!db && process.env.EMU_GIFTS_ENABLED !== "false" }));
 /* 冷蔵庫くんと話して、知識の下書きにする（11/10）。投稿画面と冷蔵庫くんに聞くの2つから使う。下書きを返すだけ（backend/reizo-interview.js）。 */
 app.use("/api/emu/interview", require("./reizo-interview").createInterviewRouter({ env: process.env, requireFirebaseUser }));
 /* 完走証明ページ（11/9）：本人が選んだ完走1件だけを、推測できないURLで公開する（backend/public-proof.js）。 */
@@ -940,8 +946,11 @@ async function runOffchainEmuerReconcile() {
       const bountyBalance = Number(ex.bountyBalance) || 0;   // 懸賞で受け取った累計
       const spentBounty = Number(ex.spentBounty) || 0;       // 募集者として支払った累計
       const loginBalance = Number(ex.loginBalance) || 0;     // 受取APIが積む（ここでは加算しない）
-      // 利用可能残高 = 受取(懸賞+評価+ログボ) - 支払い(懸賞)
-      const balance = bountyBalance + reactionBalance + loginBalance - spentBounty;
+      /* 応援・協賛・投票（11/10・emuer-gifts.js）。受け取った累計と使った累計。ここでは読むだけ。 */
+      const giftIn = Number(ex.giftIn) || 0;
+      const giftOut = Number(ex.giftOut) || 0;
+      // 利用可能残高 = 受取(懸賞+評価+ログボ+応援・協賛) - 支払い(懸賞+応援・協賛・投票)
+      const balance = bountyBalance + reactionBalance + loginBalance + giftIn - spentBounty - giftOut;
 
       const nextUid = acc.uid || accDoc.id;
       const balanceChanged = !existing.exists

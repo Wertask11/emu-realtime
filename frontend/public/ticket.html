@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>体験チケット｜SchoolPark</title>
+<!-- 体験チケットの確認（11/10）。交換した人の QR をお店の人が読むと、ここが開く。
+     見せるのは商品名・店名・未使用／使用済みだけ（個人の情報は出さない）。
+     「使用済みにする」には、運営がお店ごとに決めた暗証番号が要る（backend/shop-tickets.js）。 -->
+<style>
+:root{--ink:#141310;--muted:#6E695C;--line:rgba(20,19,16,.12);--bg:#F4F1EA;--ok:#0F5C3F;--warn:#b3261e;--accent:#C2703D}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:440px;margin:0 auto;padding:24px 16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;text-align:center}
+.eyebrow{margin:0;font-size:12px;letter-spacing:.2em;color:var(--accent)}
+h1{margin:6px 0 0;font-size:22px;overflow-wrap:anywhere}
+.shop{margin:4px 0 0;color:var(--muted);font-size:14px}
+.status{margin:18px 0 0;padding:14px;border-radius:12px;font-size:20px;font-weight:800}
+.status.unused{background:#e8f5ee;color:var(--ok)}
+.status.used{background:#f3f1ec;color:var(--muted)}
+.code{margin:10px 0 0;font:700 20px/1.3 ui-monospace,monospace;letter-spacing:.12em}
+form{margin-top:18px;text-align:left}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+input{width:100%;font:inherit;font-size:20px;letter-spacing:.3em;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+button{margin-top:10px;width:100%;border:0;border-radius:999px;padding:12px;font:inherit;font-size:16px;font-weight:800;background:var(--ink);color:#fff;cursor:pointer}
+button:disabled{opacity:.5}
+.msg{margin:10px 0 0;font-size:14px;line-height:1.7}
+.msg.err{color:var(--warn)}
+.note{margin:16px 0 0;font-size:12px;color:var(--muted);line-height:1.7;text-align:left}
+</style>
+</head>
+<body>
+<main>
+  <section class="card" aria-live="polite">
+    <p class="eyebrow">TICKET</p>
+    <h1 id="name">チケットを確かめています…</h1>
+    <p class="shop" id="shop"></p>
+    <div id="status" class="status" hidden></div>
+    <p class="code" id="code"></p>
+    <form id="use" hidden>
+      <label for="pin">お店の暗証番号</label>
+      <input id="pin" inputmode="numeric" autocomplete="off" pattern="[0-9]*" maxlength="8" required>
+      <button type="submit" id="go">使用済みにする</button>
+      <p class="msg" id="msg" role="status"></p>
+    </form>
+    <p class="note">お店の方へ：品物やサービスを渡したら、暗証番号を入れて「使用済みにする」を押してください。使用済みのチケットは、もう使えません。</p>
+  </section>
+</main>
+<script>
+(function () {
+  var API = 'https://emu-realtime.onrender.com/api/emu/tickets/';
+  var q = new URLSearchParams(location.search);
+  var order = q.get('o') || '', code = (q.get('c') || '').toUpperCase();
+  var $ = function (id) { return document.getElementById(id); };
+  function paint(t) {
+    $('name').textContent = '🎫 ' + t.productName + (t.choice ? '（' + t.choice + '）' : '');
+    $('shop').textContent = t.shopName || '';
+    $('code').textContent = '引換コード ' + t.code;
+    var s = $('status'); s.hidden = false;
+    s.className = 'status ' + t.status;
+    s.textContent = t.status === 'used' ? '使用済み' + (t.usedAt ? '（' + new Date(t.usedAt).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + '）' : '') : '未使用';
+    $('use').hidden = t.status !== 'unused';
+  }
+  function bad(text) { $('name').textContent = text; $('status').hidden = true; $('use').hidden = true; }
+  async function load() {
+    if (!order || !code) return bad('チケットが見つかりません');
+    try {
+      var r = await fetch(API + encodeURIComponent(order) + '?c=' + encodeURIComponent(code));
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok) return bad('チケットが見つかりません');
+      paint(d.ticket);
+    } catch (_) { bad('つながりませんでした。少し待って読み込み直してください。'); }
+  }
+  $('use').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var msg = $('msg'); msg.className = 'msg'; msg.textContent = '';
+    $('go').disabled = true;
+    try {
+      var r = await fetch(API + encodeURIComponent(order) + '/use', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code, pin: $('pin').value.trim() }) });
+      var d = await r.json().catch(function () { return {}; });
+      if (r.ok) { paint(d.ticket); msg.textContent = '使用済みにしました。ありがとうございました。'; return; }
+      var words = { WRONG_PIN: '暗証番号がちがいます。', TOO_MANY_TRIES: '間違いが続いたので、10分ほど待ってください。', STAFF_PIN_NOT_SET: 'このお店の暗証番号がまだ決まっていません。SchoolPark運営へ連絡してください。',
+        ALREADY_USED: 'このチケットは、もう使用済みです。', RATE_LIMITED: '少し待ってから、もう一度押してください。' };
+      if (d.ticket) paint(d.ticket);
+      msg.className = 'msg err'; msg.textContent = words[d.error] || '使用済みにできませんでした。もう一度ためしてください。';
+    } catch (_) { msg.className = 'msg err'; msg.textContent = 'つながりませんでした。もう一度ためしてください。'; }
+    finally { $('go').disabled = false; }
+  });
+  load();
+})();
+</script>
+</body>
+</html>
