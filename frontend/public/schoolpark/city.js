@@ -277,7 +277,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     const cancel = isPhysical(p) ? '<li>物の商品は、受け取る前で締切の前なら、交換履歴から取り消せます（ウォレットに移す前のEMUERで払ったときは、その場で全額戻ります。ウォレットのEMUERで払ったときは、運営が返す手続きをします）。</li>'
       : modeOf(p) === 'digital' ? '<li>デジタルの品は、交換したあとの取り消しはできません。</li>' : '';
     return `<ul class="city-notes" aria-label="注意">${cancel}
-      <li>EMUERは、お金・暗号資産・有価証券ではありません。売り買い・譲渡・換金はできません。</li>
+      <li>EMUERは、お金・暗号資産・有価証券ではありません。実EMUERの売り買い・譲渡・換金はできません（実EMUERに換える前のEMUERは、アプリの中で応援・協賛として贈れます）。</li>
       <li>この商品は、投資・換金・転売のためのものではありません。</li>
       <li>18歳未満の方は、保護者の同意を得てから交換してください。</li></ul>`;
   }

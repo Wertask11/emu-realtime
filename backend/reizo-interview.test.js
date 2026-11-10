@@ -104,8 +104,15 @@ test("AI の返事は JSON の中身だけを使う。指示は本人の言葉�
   assert.deepEqual(d.tags, ["a", "b"]);
   assert.deepEqual(d.lab.facets, { field: ["x"] }, "分類は候補にあるものだけ");
   assert.throws(() => parseDraft('{"title":"題","body":""}'), /BAD_REPLY/);
+  /* テンプレート①の4つの見出しを、いつもこの順で全部出す。話に無い見出しは空にして missing で知らせる */
+  const four = parseDraft('{"title":"寂しさの対処法","sections":{"happened":"静かな部屋で寂しくなった。","did":"【何をした？】音楽を流した。","result":"心が落ち着いた。","next":""},"tags":["寂しさ"]}');
+  assert.equal(four.body, "【何があった？】\n静かな部屋で寂しくなった。\n\n【何をした？】\n音楽を流した。\n\n【どうなった？】\n心が落ち着いた。\n\n【次の人へひとこと】\n");
+  assert.deepEqual(four.missing, ["【次の人へひとこと】"]);
+  assert.throws(() => parseDraft('{"title":"題","sections":{"happened":"","did":"","result":"","next":""}}'), /BAD_REPLY/, "中身が1つも無ければ使わない");
+  assert.match(DRAFT_SYSTEM, /状況を「何をした」に入れない/);
+  assert.match(ASK_SYSTEM, /4つの見出しの中身がすべて会話に出そろったときだけ/);
   assert.match(DRAFT_SYSTEM, /本人が話したことだけ/);
   assert.match(DRAFT_SYSTEM, /足さない/);
-  assert.match(ASK_SYSTEM, /質問を1つだけ/);
+  assert.match(ASK_SYSTEM, /1つだけ質問する/);
   assert.match(ASK_SYSTEM, /アドバイス・説教・評価・診断はしない/);
 });

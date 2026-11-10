@@ -1114,9 +1114,17 @@ app.post("/api/scheduled-posts", requireFirebaseUser, requireOwnAddress, async (
     return res.status(400).json({ error: "INVALID_DATE" });
   }
 
-  const hasNFT = await verifyScheduleNFT(address);
-  if (!hasNFT) {
-    return res.status(403).json({ error: "SCHEDULE_NFT_REQUIRED" });
+  /* 11/10 オーナー：予約投稿は誰でも使える（予約投稿NFT は要らない）。
+     そのかわり、ふつうの投稿と同じ「投稿」の回数を、予約したときに1つ使う（見学など投稿できない人は予約もできない）。
+     待っている予約は1人10件まで。 */
+  try {
+    const waiting = await db.collection(SCHEDULED_POSTS_COL).where("address", "==", String(address).toLowerCase()).where("status", "==", "scheduled").limit(11).get();
+    if (waiting.size >= 10) return res.status(429).json({ error: "SCHEDULE_LIMIT", limit: 10 });
+    const use = await entitlement.consume(req.identity.uid, "post", { account: req.identity.account });
+    if (!use.ok) return res.status(403).json({ error: "POST_LIMIT_REACHED", plan: use.plan, limit: use.limit, used: use.used });
+  } catch (e) {
+    console.error("scheduled-posts limit check error:", e.message);
+    return res.status(503).json({ error: "SCHEDULE_CHECK_FAILED" });
   }
 
   try {

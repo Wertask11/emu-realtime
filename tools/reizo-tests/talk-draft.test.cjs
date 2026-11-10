@@ -171,3 +171,43 @@ test('冷蔵庫くんに聞く：体験らしい話なら一度だけ声をか�
     assert.equal(await page.getByText('いい知恵かも').count(), 1, '声をかけるのは一度だけ');
   } finally { await page.close(); }
 });
+
+test('4つの見出しのうち空いているものを知らせる。「投稿にまとめるの手伝って」で聞き役になり、「ふつうの会話にもどる」で消える', async () => {
+  const page = await browser.newPage({ viewport: { width: 1000, height: 1700 } });
+  try {
+    await page.goto(base + '/parent.html');
+    await page.waitForFunction(() => window.ready === true);
+    await page.evaluate(() => window.toKnowledge({ type: 'emu-knowledge-open-composer' }));
+    const k = page.frameLocator('#k');
+    await k.locator('[data-talk-open]').click();
+    await page.evaluate(() => window.replies.push({ ok: true, mode: 'ask', reply: 'どうなった？', ready: false }));
+    await k.locator('[data-talk-input]').fill('ひざ掛けを使った');
+    await k.locator('[data-talk-send]').click();
+    await k.locator('[data-talk-log]').getByText('どうなった？').waitFor();
+    await page.evaluate(() => window.replies.push({ ok: true, mode: 'draft', title: '寒さ対策', body: '【何があった？】\n寒かった。\n\n【何をした？】\nひざ掛け。\n\n【どうなった？】\n暖かい。\n\n【次の人へひとこと】\n', missing: ['【次の人へひとこと】'], tags: [] }));
+    await k.locator('[data-talk-draft]').click();
+    await k.locator('[data-talk-preview]').waitFor({ state: 'visible' });
+    assert.match(await k.locator('[data-talk-preview-msg]').textContent(), /【次の人へひとこと】は、まだ話に出てこなかったので空けてある/);
+  } finally { await page.close(); }
+
+  const chat = await browser.newPage();
+  const calls = [];
+  await chat.route('https://emu-realtime.onrender.com/api/emu/interview', async (route) => {
+    calls.push(JSON.parse(route.request().postData()));
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ ok: true, mode: 'ask', reply: 'それはどんなとき？', ready: false }) });
+  });
+  try {
+    await chat.goto(base + '/chat.html');
+    await chat.fill('#spReizoInput', '投稿にまとめるの手伝って');
+    await chat.click('.sp-reizo-send');
+    await chat.locator('#spReizoMessages').getByText('いっしょにまとめよう').waitFor();
+    assert.equal(await chat.locator('#spReizoSeedBar').isVisible(), true, '聞き役になる');
+    assert.equal(calls.length, 0, '頼まれただけでは AI に送らない');
+    await chat.fill('#spReizoInput', 'ひざ掛けを使ったら暖かかった');
+    await chat.click('.sp-reizo-send');
+    await chat.locator('#spReizoMessages').getByText('それはどんなとき？').waitFor();
+    assert.equal(calls[0].mode, 'ask', '聞き役の質問になる（ふつうの会話には回さない）');
+    await chat.getByText('ふつうの会話にもどる').click();
+    assert.equal(await chat.locator('#spReizoSeedBar').isVisible(), false, 'ボタンが消える');
+  } finally { await chat.close(); }
+});

@@ -48,7 +48,8 @@
       return {
         ok: true, mode: d.mode, remaining: d.remaining, reply: String(d.reply || ''), ready: d.ready === true,
         empty: d.empty === true, title: String(d.title || ''), body: String(d.body || ''), note: String(d.note || ''),
-        tags: Array.isArray(d.tags) ? d.tags.map(String).slice(0, 5) : [], lab: d.lab && typeof d.lab === 'object' ? d.lab : null
+        tags: Array.isArray(d.tags) ? d.tags.map(String).slice(0, 5) : [], lab: d.lab && typeof d.lab === 'object' ? d.lab : null,
+        missing: Array.isArray(d.missing) ? d.missing.map(String).slice(0, 4) : []
       };
     } catch (error) {
       return { ok: false, error: /ログイン/.test(String(error && error.message)) ? '冷蔵庫くんと話して書くには、ログインしてね🧊'
@@ -81,7 +82,7 @@
   function buttons(div, list) {
     var b = bubbleOf(div); if (!b) return;
     var wrap = document.createElement('div'); wrap.className = 'sp-reizo-quick-wrap';
-    list.forEach(function (o) {
+    list.filter(Boolean).forEach(function (o) {
       var btn = document.createElement('button'); btn.className = 'sp-reizo-quick-btn'; btn.type = 'button'; btn.textContent = o.label;
       btn.onclick = function () { wrap.remove(); o.onClick(); };
       wrap.appendChild(btn);
@@ -96,32 +97,43 @@
     var panel = document.getElementById('spReizoPanel'); if (!panel) return null;
     var el = document.getElementById('spReizoSeedBar');
     if (!el) {
-      el = document.createElement('div'); el.id = 'spReizoSeedBar'; el.hidden = true;
-      el.style.cssText = 'padding:6px 12px 0;display:flex;gap:6px;flex-wrap:wrap';
+      el = document.createElement('div'); el.id = 'spReizoSeedBar';
+      /* 出し入れは style.display で行う（hidden 属性だと、display:flex に負けて消えなかった） */
+      el.style.cssText = 'padding:6px 12px 0;display:none;gap:6px;flex-wrap:wrap';
       el.innerHTML = '<button type="button" class="sp-reizo-quick-btn" data-seed-draft>📝 この話を知識のタネにする</button>'
         + '<button type="button" class="sp-reizo-quick-btn" data-seed-stop>ふつうの会話にもどる</button>';
       el.querySelector('[data-seed-draft]').onclick = function () { draft(); };
-      el.querySelector('[data-seed-stop]').onclick = function () { active = false; hideBar(); say('わかった！またいつでも話してね🧊'); };
+      el.querySelector('[data-seed-stop]').onclick = function () { active = false; offered = true; hideBar(); placeholder(false); say('わかった！またいつでも話してね🧊'); };
       var input = panel.querySelector('.sp-reizo-input-area');
       panel.insertBefore(el, input || null);
     }
     return el;
   }
-  function showBar() { var el = bar(); if (el) el.hidden = false; }
-  function hideBar() { var el = document.getElementById('spReizoSeedBar'); if (el) el.hidden = true; }
+  function showBar() { var el = bar(); if (el) el.style.display = 'flex'; }
+  function hideBar() { var el = document.getElementById('spReizoSeedBar'); if (el) el.style.display = 'none'; }
 
+  function placeholder(seed) { var input = document.getElementById('spReizoInput'); if (input) input.placeholder = seed ? '気づいたことを話してね…' : '冷蔵庫くんに聞く…'; }
+  /* 「投稿にまとめるのを手伝って」のように頼まれたら、ふつうの会話に回さず聞き役になる。 */
+  var WANTS_DRAFT = /(投稿|知識|知恵).{0,12}(まとめ|書き|書く|作り|作る|手伝)|(まとめ|書く|書き).{0,6}(手伝|一緒|いっしょ)/;
+  function wantsDraft(q) { return WANTS_DRAFT.test(String(q || '')); }
   function start() {
     own();
     var opening = document.getElementById('spReizoOpening'); if (opening) opening.remove();
     if (!uid()) { say('知識にするには、ログインしてね🧊'); return; }
     active = true; showBar();
     say('いいね！🧊 最近あったことや、やってみて気づいたことを、ぼくに話しかけるみたいに送ってね。\n短くても大丈夫。ぼくが少しずつ聞いて、投稿用にまとめるよ。');
-    var input = document.getElementById('spReizoInput'); if (input) { input.placeholder = '気づいたことを話してね…'; input.focus(); }
+    placeholder(true);
+    var input = document.getElementById('spReizoInput'); if (input) input.focus();
   }
 
   /* spReizoSend から呼ばれる。聞き役のときだけ、ふつうの会話の代わりにここで返事をする。 */
   function handle(q) {
     own();
+    if (!active && wantsDraft(q) && uid()) {
+      active = true; showBar(); placeholder(true);
+      say('うん、いっしょにまとめよう！🧊 投稿は「何があった → 何をした → どうなった → 次の人へひとこと」の4つで書くよ。\nまずは、どんなことがあったか教えて。');
+      return true;
+    }
     if (!active) return false;
     remember('me', q);
     if (busy) return true;
@@ -171,7 +183,8 @@
       say((d.note || 'まだ知識にできる体験が見つからなかったよ') + '🧊\nやってみたことや、うまくいったこと・失敗したことを話してみてね。');
       return;
     }
-    var div = say('🧊 こうまとめてみたよ！' + (d.note ? '（' + d.note + '）' : ''));
+    var div = say('🧊 こうまとめてみたよ！' + (d.note ? '（' + d.note + '）' : '')
+      + (d.missing.length ? '\n' + d.missing.join('') + 'は、まだ話に出てこなかったので空けてあるよ。投稿画面で書き足してね。' : ''));
     var b = bubbleOf(div);
     if (b) {
       var card = document.createElement('div');
@@ -184,13 +197,14 @@
     }
     buttons(div, [
       { label: '✍️ 投稿画面で仕上げる', onClick: function () { open(d); } },
+      d.missing.length ? { label: '空いているところを話す', onClick: function () { active = true; showBar(); placeholder(true); say('うん！' + d.missing[0] + 'を教えて🧊'); } } : null,
       { label: 'もう少し話す', onClick: function () { active = true; showBar(); say('うん！つづきを聞かせて🧊'); } },
       { label: 'やめる', onClick: function () {} }
     ]);
   }
   function open(d) {
     active = false; hideBar(); log = []; offered = false;
-    var input = document.getElementById('spReizoInput'); if (input) input.placeholder = '冷蔵庫くんに聞く…';
+    placeholder(false);
     if (typeof window.spReizoClose === 'function') window.spReizoClose();
     if (typeof window.emuOpenKnowledgeDraft === 'function') {
       window.emuOpenKnowledgeDraft({ title: d.title, body: d.body, tags: d.tags, lab: d.lab, from: 'reizo-chat' });

@@ -4071,6 +4071,10 @@ html, body { -webkit-tap-highlight-color: rgba(0,0,0,0); }
   <script src="/client-errors.js"></script><!-- 画面のエラーを運営に知らせる（人を特定する情報は送らない） -->
   <script src="/emu-analytics.js"></script>
 <link rel="stylesheet" href="/emu-theme.css">
+<!-- 知識を探す・知識を試すの挿絵（11/10・デザインのハンドオフ）。時間帯で色と小物が替わる -->
+<link rel="stylesheet" href="/illustrations/sp-illustrations.css">
+<link rel="stylesheet" href="/illustrations/sp-illustrations-page.css">
+<script src="/illustrations/sp-illustrations.js" defer></script>
 <script src="/economy/entry.js" defer></script>
 <script src="/reizo-float.js" defer></script><!-- 冷蔵庫くんの窓を本文の近くに出し、つかんで動かせるようにする（11/7） -->
 </head>
@@ -29788,7 +29792,7 @@ async function sendEmuFeedback() {
         conclusions: options.append ? [] : await readDiscussionConclusions(),
         /* LAB-05：下書きの可否は、古い無料NFT（isFreeOnlyUser）ではなく段の枠で決める。見学でも1件は保存できる（Rules と同じ） */
         canDraft:!!account,
-        canSchedule:!!window.hasScheduleNFT,
+        canSchedule:!!account,   // 11/10 オーナー：予約投稿は誰でも（NFT は要らない）。回数は投稿と同じ枠で数える（server.js）
         authors:knowledgeAuthorsKnown(authorAddrs)
       });
       /* 送ったときにまだ読めていなかった書き手は、読めたところで送る */
@@ -30151,14 +30155,10 @@ async function sendEmuFeedback() {
     }
     if (message.type === 'emu-knowledge-schedule') {
       const payload = message.payload || {};
-      if (!window.hasScheduleNFT) {
-        sendKnowledge({ type:'emu-knowledge-save-result', kind:'schedule', requestId:message.requestId, ok:false, error:'予約投稿NFTが必要です。' });
-        return;
-      }
       try {
         const response = await fetch('https://emu-realtime.onrender.com/api/scheduled-posts', { method:'POST', headers:await emuAuthHeaders(true), body:JSON.stringify({ address:window.connectedAccount, title:payload.title, body:payload.body, tags:payload.tags, scheduledAt:new Date(payload.scheduledAt).toISOString(), userId:currentUserId||window.connectedAccount, userType:getCurrentUserType() }) });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || '予約に失敗しました。');
+        if (!response.ok) throw new Error(({ POST_LIMIT_REACHED:'今月の投稿の回数を使い切っているので、予約できません。', SCHEDULE_LIMIT:'予約できるのは10件までです。公開されるのを待つか、予約を取り消してください。', INVALID_DATE:'公開日時は、これから先の日時にしてください。' })[data.error] || data.error || '予約に失敗しました。');
         knowledgeScheduleCache.fetchedAt = 0;
         sendKnowledge({ type:'emu-knowledge-save-result', kind:'schedule', requestId:message.requestId, ok:true });
         if (payload.draftId) dropPublishedDraft(String(payload.draftId), payload.draftSource === 'lab' ? 'lab' : 'emu');
