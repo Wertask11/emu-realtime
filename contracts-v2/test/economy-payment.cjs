@@ -716,3 +716,39 @@ test("wallet confirmation backlog shares two in-flight slots; third intent is re
     [],
   );
 });
+test("revoked operator role blocks rebroadcast of a persisted signed transaction", async () => {
+  const { f } = await setup({ providerDown: true }),
+    { j } = await funded(f, "revoked-recovery");
+  const send = provider.sendTransaction;
+  const attempts = [];
+  provider.sendTransaction = async (raw) => {
+    attempts.push(raw);
+    throw Error("isolated disconnected transport");
+  };
+  try {
+    await f.economy.tick();
+    const beforeRevocation = attempts.length;
+    assert(beforeRevocation > 0);
+    assert.equal(new Set(attempts).size, 1);
+    const op = Object.values(f.db._dump("emuer_v2_agent_chain_ops"))[0];
+    assert(op.transactionHash && op.rawTransaction);
+    // Native local administrative tx only. This is NOT a mainnet role change.
+    provider.sendTransaction = send;
+    await (
+      await contract.revokeRole(ethers.utils.id("REFUND_ROLE"), admin.address)
+    ).wait();
+    provider.sendTransaction = async (raw) => {
+      attempts.push(raw);
+      throw Error("must not broadcast after role revocation");
+    };
+    await finish(f);
+    assert.equal(attempts.length, beforeRevocation);
+    assert.equal(
+      (await f.economy.service.view(f.a, j.id)).state,
+      "refund_pending",
+    );
+    assert.equal((await f.economy.service.polygon.status()).enabled, false);
+  } finally {
+    provider.sendTransaction = send;
+  }
+});
