@@ -16,12 +16,17 @@ test("native Firestore serializes POL holds before payment and settles actual co
         FULFILL_GAS_LIMIT: "100000",
         MAX_GAS_WEI: "50000000",
         DAILY_GAS_WEI: "100000000",
+        MONTHLY_GAS_WEI: "200000000",
         TRIAL_GAS_WEI: "200000000",
       }).map(([k, v]) => ["ECONOMY_POLYGON_" + k, v]),
     );
     const ref = f.economy.service.ref,
       now = () => Date.parse("2026-11-10T14:00:00Z"),
       rpc = {
+        finalized: async () => ({
+          number: 100,
+          hash: ethers.constants.HashZero,
+        }),
         provider: {
           getBlockNumber: async () => 100,
           getGasPrice: async () => ethers.BigNumber.from(100),

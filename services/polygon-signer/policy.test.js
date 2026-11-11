@@ -41,6 +41,10 @@ async function fixture(method = "refundExchange") {
     ECONOMY_POLYGON_MAX_FEE_WEI: "200",
   };
   const ref = (k, id) => db.collection("emuer_v2_agent_" + k).doc(id);
+  await ref("system", "polygon-operator-control").set({
+    enabled: true,
+    revision: 1,
+  });
   await ref("chain_ops", opId).set({
     orderId,
     jobId,
@@ -137,6 +141,7 @@ async function fixture(method = "refundExchange") {
     orderId,
     jobId,
     provider,
+    managed,
   };
 }
 for (const method of ["refundExchange", "markExchangeFulfilled"])
@@ -266,4 +271,27 @@ test("readiness validates fixed chain/operator; it does not sign", async () => {
   assert.equal(f.signs(), 0);
   f.env.POLYGON_SIGNER_ENABLED = "false";
   await assert.rejects(f.policy.ready());
+});
+test("cached signature is not returned after KMS is disabled or emergency control stops", async () => {
+  const f = await fixture();
+  await f.policy.sign(f.b);
+  assert.equal(f.signs(), 1);
+  f.managed.validate = async () => {
+    throw Error("KMS disabled");
+  };
+  await assert.rejects(f.policy.sign(f.b), /KMS disabled/);
+  assert.equal(f.signs(), 1);
+  f.managed.validate = async () => {};
+  await f
+    .ref("system", "polygon-operator-control")
+    .set({ enabled: true, halted: true });
+  await assert.rejects(f.policy.sign(f.b));
+  await assert.rejects(f.policy.ready());
+  assert.equal(f.signs(), 1);
+});
+test("signing control is checked again inside durable transaction; missing control is closed", async () => {
+  const f = await fixture();
+  await f.ref("system", "polygon-operator-control").delete();
+  await assert.rejects(f.policy.sign(f.b));
+  assert.equal(f.signs(), 0);
 });

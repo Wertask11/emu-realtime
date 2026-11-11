@@ -17,11 +17,13 @@ function fixture() {
       FULFILL_GAS_LIMIT: "100000",
       MAX_GAS_WEI: "50000000",
       DAILY_GAS_WEI: "100000000",
+      MONTHLY_GAS_WEI: "200000000",
       TRIAL_GAS_WEI: "200000000",
       OPERATOR_ADDRESS: "0x" + "1".repeat(40),
     }).map(([k, v]) => ["ECONOMY_POLYGON_" + k, v]),
   );
   const rpc = {
+    finalized: async () => ({ number: 100, hash: ethers.constants.HashZero }),
     provider: {
       getBlockNumber: async () => 100,
       getBalance: async () => ethers.BigNumber.from(balance),
@@ -51,6 +53,7 @@ function fixture() {
     ref,
     env,
     g,
+    rpc,
     reserve,
     advance: (n) => (time += n),
     balance: (v) => (balance = v),
@@ -140,5 +143,70 @@ test("changing operator with outstanding holds cannot authorize old reserves", a
   await assert.rejects(
     f.db.runTransaction((tx) => f.g.authorize(tx, "a", 1000n)),
     /RESERVE_UNAVAILABLE/,
+  );
+});
+test("unfinalized POL deposits cannot cover refund reserves; newer outgoing spend is respected", async () => {
+  const f = fixture();
+  f.rpc.provider.getBalance = async (a, block) =>
+    ethers.BigNumber.from(block === "latest" ? "1000000000" : "0");
+  await assert.rejects(f.reserve("deposit"), /RESERVE_INSUFFICIENT/);
+  f.rpc.provider.getBalance = async (a, block) =>
+    ethers.BigNumber.from(block === "latest" ? "49999999" : "1000000000");
+  await assert.rejects(f.reserve("withdrawn"), /RESERVE_INSUFFICIENT/);
+});
+test("missing finalized funding evidence cannot admit or authorize an exchange", async () => {
+  const f = fixture();
+  f.rpc.finalized = async () => null;
+  await assert.rejects(f.reserve("no-finality"), /FINALITY_UNAVAILABLE/);
+  assert.deepEqual(f.db._dump("gas_reservations"), {});
+});
+test("monthly cap cannot be bypassed by crossing a JST day; actual settlement recorded once", async () => {
+  const f = fixture();
+  await f.ref("operator_month_gas", "2026-11").set({ spentWei: "150000001" });
+  await assert.rejects(f.reserve("monthly"), /GAS_CAP_EXCEEDED/);
+  await f.ref("operator_month_gas", "2026-11").set({ spentWei: "0" });
+  await f.reserve("paid");
+  const proof = {
+    gasPayer: f.env.ECONOMY_POLYGON_OPERATOR_ADDRESS,
+    gasCostWei: "1000",
+    minedAtMs: Date.parse("2026-11-11T00:00:00Z"),
+    blockNumber: 100,
+    transactionHash: "0x" + "1".repeat(64),
+  };
+  await f.db.runTransaction(async (tx) =>
+    (await f.g.release(tx, "paid", proof))(),
+  );
+  await f.db.runTransaction(async (tx) =>
+    (await f.g.release(tx, "paid", proof))(),
+  );
+  assert.equal(
+    (await f.ref("operator_month_gas", "2026-11").get()).data().spentWei,
+    "1000",
+  );
+});
+test("mined failed gas is booked once and removed from held coverage, without releasing refund obligation", async () => {
+  const f = fixture();
+  await f.reserve("failed");
+  const proof = {
+    transactionHash: "0x" + "1".repeat(64),
+    gasPayer: f.env.ECONOMY_POLYGON_OPERATOR_ADDRESS,
+    gasCostWei: "1000",
+    blockNumber: 100,
+    minedAtMs: Date.parse("2026-11-11T00:00:00Z"),
+  };
+  for (let i = 0; i < 2; i++)
+    await f.db.runTransaction(async (tx) =>
+      (await f.g.recordFailure(tx, "failed", proof))(),
+    );
+  const held = (await f.ref("gas_reservations", "failed").get()).data();
+  assert.equal(held.state, "held");
+  assert.equal(held.heldWei, "49999000");
+  assert.equal(held.failedGasWei, "1000");
+  const b = (await f.ref("system", "polygon-gas-coverage").get()).data();
+  assert.equal(b.spentWei, "1000");
+  assert.equal(b.heldWei, "49999000");
+  assert.equal(
+    (await f.ref("operator_month_gas", "2026-11").get()).data().spentWei,
+    "1000",
   );
 });

@@ -1,5 +1,7 @@
 # 冷蔵庫くんに頼む Phase 5 — Polygon決済
 
+> 2026-11-11追補：[最終完成・公開ゲート](phase5-final-completion.md)。KMS停止・独立停止・finalized資金・月間上限・失敗gas記帳・manual確定照合は追補を優先。以下は当時の記録。
+
 > 2026-11-10追補：[実チェーン照合・署名器・POL予約](phase5-operator-release.md)。以下はPR #324時点の記録。RPC通信は追補で成功しており、未照合という記述は当時の状態です。現判定はPARTIAL / Polygon OFF。
 
 2026-11-10。基点main e0e04f9 / PR #323。公開判定 **PARTIAL（ウォレット決済OFF）**。

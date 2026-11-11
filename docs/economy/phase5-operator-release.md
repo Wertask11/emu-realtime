@@ -1,5 +1,7 @@
 # Phase 5 返却署名器・POL予約・公開準備
 
+> 2026-11-11追補：[最終完成・公開ゲート](phase5-final-completion.md)。KMS停止・独立停止・finalized資金・月間上限・失敗gas記帳・manual確定照合は追補を優先。以下は当時の記録。
+
 2026-11-10。基点 `b784094ddeda196370249a1f1b1ae3d198fe108f`（PR #332）。
 
 判定：技術実装 **PARTIAL**、セキュリティ **PARTIAL**、法務 **PARTIAL**、本番Polygon決済 **OFF**。
