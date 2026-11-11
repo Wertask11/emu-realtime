@@ -22,7 +22,7 @@
 - POL予約はmin(finalized残高,latest残高)。未確定入金・新しい出金・古いsnapshot・operator変更を安全に扱う。
 - 既存日次/trialに加え承認済み月次上限を必須化。全未処理予約とJST月の実費を同一Firestore transactionで判定し、月替わりで予約を消さない。
 - mined status0もcanonical/finalized・tx/from/to/gas/priceを検証して費用を一度だけ記帳。残り予約と返却待ちを保持。新nonce/置換/追加支出を自動化しない。
-- 別途承認されたmanual refund/fulfillmentはprivate hash hintだけを受け、同一order/buyer/amount/event/実状態をcanonical/finalizedで照合。古い失敗txにより永久待ちにならない。成果物保存後にmanual refundを検出した場合も返却検証へ遷移する。成功表示を直接書き換えない。
+- 別途承認されたmanual refund/fulfillmentは、先行失敗txの費用と旧署名nonceの解決も確認する。旧nonceが有効なら予約を保持する。private hash hintだけを受け、同一order/buyer/amount/event/実状態をcanonical/finalizedで照合。古い失敗txにより永久待ちにならない。成果物保存後にmanual refundを検出した場合も返却検証へ遷移する。成功表示を直接書き換えない。
 - offline原build verifierを追加。Solc固定、全inline source hash、ABI、immutable、runtime全体、metadata CIDを比較。CIDのdigestをraw JSON SHA256と混同しない。元build不一致はexit2。URL import、未知library、曖昧なcontract/metadataを拒否する。
 - 監査図・権限・脅威・再現・事故対応・法務・費用・設定テンプレートを作成。独立署名サービスは本番アプリへmountしない。
 
@@ -66,7 +66,7 @@ KMS参考USD1/key/月＋ECC Sign USD0.15/10,000回。その他API/compute/networ
 
 ## 7. テスト・配備証跡
 
-[今回の試験集計](phase5-release-evidence-20261111.json)。既存1,114件を維持したうえで1,128 node tests＋既存Solidity17項目＝1,145項目成功。失敗0/skip0。SDK double、local EVM、実Auth/Firestore emulator、ブラウザを区別。新規実Gemini、本番EMUER/POL/署名、実KMS、Amoyは未実施。
+[今回の試験集計](phase5-release-evidence-20261111.json)。既存1,114件を維持したうえで1,130 node tests＋既存Solidity17項目＝1,147項目成功。失敗0/skip0。SDK double、local EVM、実Auth/Firestore emulator、ブラウザを区別。新規実Gemini、本番EMUER/POL/署名、実KMS、Amoyは未実施。
 
 PRと本番SHA・反映後確認はマージ後にPR本文と実行evidenceへ記録する。このpre-merge報告を配備成功証拠としない。本番では非課金・非署名の表示/HTTP/status/auth拒否、worker、既存ledger、5作業、wallet OFFを確認する。新Preview URLが通信制限/SSOで確認できない場合はその旨を記録し、build成功と実画面確認を分ける。
 

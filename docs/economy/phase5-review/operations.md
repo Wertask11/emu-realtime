@@ -33,7 +33,7 @@ Firestore制御やKMS状態の確認と送信の間の分散raceは完全には�
 - status0：canonical/finalizedになった失敗txのgasUsed/effectivePrice/支払者/宛先を照合し、一度だけ費用記帳する。残りPOL予約を残し、slotも解放しない。自動再署名しない。未確定receipt・不一致は支出確定扱いしない。
 - 資金不足：新規受付停止。既払返却を成功扱いしない。coverageと実残高、未処理/失敗費用、nonceを照合し、追加POL/上限変更はFounderの別承認後。全未処理予約を日/月替わりで消去しない。
 - どうしても専用keyで返却できない：既存adminによるoriginal buyerへのrefundを**別承認**する選択肢。対象orderId/金額5/chain/token/参照元/ガス上限/nonceを確認してから担当者が実行する。今回Codexは実行しない。
-- 別途承認済みmanual refund/fulfillmentがすでにchainで成功している場合：trusted operatorが該当private mitemiru_ordersのrefundTransactionHash/fulfillmentTransactionHashへ実hashだけを記録。status/paymentStatus/refundStatusを直接成功へ書き換えない。workerがcanonical/finalizedの同じorder・buyer・amount・event・実状態を検証し、費用/予約と履歴を整合させる。不一致/不明ならpendingのまま。
+- 別途承認済みmanual refund/fulfillmentがすでにchainで成功している場合：旧署名のnonceがまだ有効ならガス予約・slotを解放しない。先行失敗txの実費も一度だけ記帳する。旧nonceの解決（承認済み取消/置換等）を確認してから、trusted operatorが該当private mitemiru_ordersのrefundTransactionHash/fulfillmentTransactionHashへ実hashだけを記録。status/paymentStatus/refundStatusを直接成功へ書き換えない。workerがcanonical/finalizedの同じorder・buyer・amount・event・実状態を検証し、費用/予約と履歴を整合させる。不一致/不明ならpendingのまま。
 
 ## ローテーション・復旧
 
@@ -52,3 +52,5 @@ Firestore制御やKMS状態の確認と送信の間の分散raceは完全には�
 本体をOFFのまま配備する。signerは別サービスで未配備。既存Render/Vercelの通常コード配備以外に有料資源を追加しない。main更新を取り込み、Lab/City/Camellia/台帳を変更せず関連試験と7幅を確認。実稼働SHA・worker・5作業・ledger・wallet OFFを確認する。
 
 今回新設のmonthly accountingと失敗gas帳簿を運用開始した後は、それを読めない旧版へ無条件rollbackしない。intake OFF、既払完了/返却と監査snapshot、互換性のある版で復旧。未払い意図の期限切れもfinalized時刻と空ordersを確認してから。Rules公開・破壊的migrationは不要。
+
+manual返却のEMUER着金と、旧署名/ガス予約の最終解決は別の状態。資産着金があっても旧nonceが有効なら内部処理は保留し、wallet intakeを停止する。既送信txをKMS停止だけで取り消したことにしない。

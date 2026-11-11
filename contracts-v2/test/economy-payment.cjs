@@ -961,3 +961,101 @@ test("saved-result fulfillment incident can reconcile a canonical approved manua
     provider.sendTransaction = send;
   }
 });
+test("manual refund does not release gas coverage while an old signed nonce is still usable", async () => {
+  const { f } = await setup({ providerDown: true });
+  await (
+    await contract.grantRole(ethers.utils.id("REFUND_ROLE"), other.address)
+  ).wait();
+  const { j } = await funded(f, "unresolved-manual"),
+    send = provider.sendTransaction;
+  provider.sendTransaction = async () => {
+    throw Error("isolated offline");
+  };
+  try {
+    await f.economy.tick();
+    provider.sendTransaction = send;
+    const o = await f.commerce.servicePayments.get("agent_" + j.id),
+      r = await contract.connect(other).refundExchange(o.chainOrderId);
+    await r.wait();
+    await f.db
+      .collection("mitemiru_orders")
+      .doc("agent_" + j.id)
+      .set({ refundTransactionHash: r.hash }, { merge: true });
+    await finish(f);
+    assert.equal(
+      (await f.economy.service.view(f.a, j.id)).state,
+      "refund_pending",
+    );
+    assert.equal(
+      (
+        await f.economy.service.ref("gas_reservations", "agent_" + j.id).get()
+      ).data().state,
+      "held",
+    );
+    assert.equal((await f.economy.service.polygon.status()).enabled, false);
+  } finally {
+    provider.sendTransaction = send;
+  }
+});
+test("manual settlement books a previously unseen reverted operator receipt before releasing its reserve", async () => {
+  const { f } = await setup({ providerDown: true }),
+    { j } = await funded(f, "manual-unseen-failure"),
+    send = provider.sendTransaction,
+    getReceipt = provider.getTransactionReceipt;
+  let hash = null;
+  const roleSlot = ethers.utils.keccak256(
+    ethers.utils.defaultAbiCoder.encode(
+      ["bytes32", "uint256"],
+      [ethers.utils.id("REFUND_ROLE"), 5],
+    ),
+  );
+  const member = ethers.utils.keccak256(
+    ethers.utils.defaultAbiCoder.encode(
+      ["address", "uint256"],
+      [admin.address, roleSlot],
+    ),
+  );
+  provider.sendTransaction = async (raw) => {
+    await gp.request({
+      method: "evm_setAccountStorageAt",
+      params: [contract.address, member, ethers.constants.HashZero],
+    });
+    const t = await send.call(provider, raw);
+    hash = t.hash;
+    return t;
+  };
+  provider.getTransactionReceipt = async (h) =>
+    h === hash ? null : getReceipt.call(provider, h);
+  try {
+    await f.economy.tick();
+    assert(hash);
+    assert.deepEqual(f.db._dump("emuer_v2_agent_operator_gas_spend"), {});
+    provider.sendTransaction = send;
+    provider.getTransactionReceipt = getReceipt;
+    await (
+      await contract.grantRole(ethers.utils.id("REFUND_ROLE"), other.address)
+    ).wait();
+    const o = await f.commerce.servicePayments.get("agent_" + j.id),
+      r = await contract.connect(other).refundExchange(o.chainOrderId);
+    await r.wait();
+    await f.db
+      .collection("mitemiru_orders")
+      .doc("agent_" + j.id)
+      .set({ refundTransactionHash: r.hash }, { merge: true });
+    await finish(f);
+    assert.equal((await f.economy.service.view(f.a, j.id)).state, "refunded");
+    assert.equal(
+      Object.keys(f.db._dump("emuer_v2_agent_operator_gas_spend")).length,
+      1,
+    );
+    const reservation = (
+      await f.economy.service.ref("gas_reservations", "agent_" + j.id).get()
+    ).data();
+    assert.equal(reservation.state, "settled");
+    assert(BigInt(reservation.failedGasWei) > 0n);
+    assert.equal(reservation.costWei, reservation.failedGasWei);
+  } finally {
+    provider.sendTransaction = send;
+    provider.getTransactionReceipt = getReceipt;
+  }
+});

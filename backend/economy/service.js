@@ -629,10 +629,16 @@ function createEconomy({
       await payments.fulfill(j.orderId, id);
       await transition(id, ["result_saved"], { state: "completed" });
     } catch (error) {
-      if (j.paymentSource === "polygon_wallet" && error.message === "POLYGON_REFUND_DETECTED") {
+      if (
+        j.paymentSource === "polygon_wallet" &&
+        error.message === "POLYGON_REFUND_DETECTED"
+      ) {
         // Observe a separately approved manual return, then verify its canonical
         // refund receipt through the same durable path; never claim it early.
-        await transition(id, ["result_saved"], { state: "refund_pending", error: "REFUND_RECONCILIATION_REQUIRED" });
+        await transition(id, ["result_saved"], {
+          state: "refund_pending",
+          error: "REFUND_RECONCILIATION_REQUIRED",
+        });
         await refund(id);
       }
       /* Saved result survives a restart; do not invoke AI again. */
