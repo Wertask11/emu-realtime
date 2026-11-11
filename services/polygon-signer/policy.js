@@ -116,14 +116,17 @@ function createSigningPolicy({
         "signer_nonces",
         signer.address.toLowerCase() + "_" + p.t.nonce,
       );
-    const [os, cache, lock, nonce] = await Promise.all([
+    const [os, cache, lock, nonce, control] = await Promise.all([
       tx.get(opRef),
       tx.get(cacheRef),
       tx.get(lockRef),
       tx.get(nonceRef),
+      tx.get(ref("system", "polygon-operator-control")),
     ]);
     const op = os.data();
     if (
+      control.data()?.enabled !== true ||
+      control.data()?.halted === true ||
       !op ||
       lock.data()?.active !== b.operationId ||
       op.method !== p.method ||
@@ -188,6 +191,7 @@ function createSigningPolicy({
   }
   async function sign(b) {
     const p = request(b);
+    await ready();
     if (
       !/^0x[a-f0-9]{64}$/i.test(codeHash || "") ||
       (await provider.getNetwork()).chainId !== 137 ||
@@ -252,6 +256,10 @@ function createSigningPolicy({
       !/^0x[a-f0-9]{64}$/i.test(codeHash || "")
     )
       reject();
+    const control = (
+      await ref("system", "polygon-operator-control").get()
+    ).data();
+    if (control?.enabled !== true || control.halted === true) reject();
     await signer.validate();
     if (
       (await provider.getNetwork()).chainId !== 137 ||

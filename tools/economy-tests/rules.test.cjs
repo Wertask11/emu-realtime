@@ -30,6 +30,8 @@ const cols = [
   "wallet_challenges",
   "chain_ops",
   "operator_gas",
+  "operator_gas_spend",
+  "operator_month_gas",
   "gas_reservations",
   "signatures",
   "signer_nonces",

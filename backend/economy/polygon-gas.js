@@ -59,16 +59,25 @@ function createGasBudget({
       fail("POLYGON_GAS_BUDGET_UNCONFIGURED", 503);
     return BigInt(v);
   };
+  async function balances() {
+    const finalized = await rpc.finalized();
+    if (!finalized?.hash || !Number.isSafeInteger(finalized.number))
+      fail("POLYGON_FINALITY_UNAVAILABLE", 503);
+    const address = env.ECONOMY_POLYGON_OPERATOR_ADDRESS;
+    const [confirmed, latest] = await Promise.all([
+      rpc.provider.getBalance(address, finalized.number),
+      rpc.provider.getBalance(address, "latest"),
+    ]);
+    // Never rely on an unfinalized deposit; include newer outgoing spend conservatively.
+    return { finalized, balance: confirmed.lt(latest) ? confirmed : latest };
+  }
   async function snapshot() {
-    const blockNumber = await rpc.provider.getBlockNumber();
-    const [balance, fee, estimates] = await Promise.all([
-      rpc.provider.getBalance(
-        env.ECONOMY_POLYGON_OPERATOR_ADDRESS,
-        blockNumber,
-      ),
+    const [{ finalized, balance }, fee, estimates] = await Promise.all([
+      balances(),
       rpc.provider.getGasPrice(),
       estimate(rpc, env.ECONOMY_POLYGON_OPERATOR_ADDRESS),
     ]);
+    const blockNumber = finalized.number;
     const ceiling = config("MAX_FEE_WEI");
     // Current network fee +25% must fit the explicitly approved ceiling.
     if ((bn(fee) * 125n + 99n) / 100n > ceiling)
@@ -85,6 +94,7 @@ function createGasBudget({
     if (held > config("MAX_GAS_WEI")) fail("POLYGON_GAS_CAP_EXCEEDED", 503);
     return {
       blockNumber,
+      blockHash: finalized.hash,
       balanceWei: balance.toString(),
       feeWei: fee.toString(),
       heldWei: held.toString(),
@@ -94,11 +104,13 @@ function createGasBudget({
   }
   async function reserve(tx, id, s) {
     const rr = reservation(id),
-      dr = ref("operator_gas", day(now()));
-    const [r, b, d] = await Promise.all([
+      dr = ref("operator_gas", day(now())),
+      mr = ref("operator_month_gas", day(now()).slice(0, 7));
+    const [r, b, d, m] = await Promise.all([
       tx.get(rr),
       tx.get(budgetRef),
       tx.get(dr),
+      tx.get(mr),
     ]);
     if (r.exists) fail("POLYGON_GAS_RESERVATION_EXISTS", 409);
     if (now() - s.atMs > 15000 || s.blockNumber < (b.data()?.settledBlock || 0))
@@ -114,6 +126,7 @@ function createGasBudget({
     // Include ALL outstanding holds, including previous days and unmined txs.
     if (
       BigInt(d.data()?.spentWei || "0") + held > config("DAILY_GAS_WEI") ||
+      BigInt(m.data()?.spentWei || "0") + held > config("MONTHLY_GAS_WEI") ||
       BigInt(b.data()?.spentWei || "0") + held > config("TRIAL_GAS_WEI")
     )
       fail("POLYGON_GAS_CAP_EXCEEDED", 503);
@@ -152,15 +165,89 @@ function createGasBudget({
     )
       fail("POLYGON_REFUND_RESERVE_UNAVAILABLE", 503);
     const [b, fee, coverage] = await Promise.all([
-      rpc.provider.getBalance(env.ECONOMY_POLYGON_OPERATOR_ADDRESS),
+      balances(),
       rpc.provider.getGasPrice(),
       budgetRef.get(),
     ]);
     if (
-      bn(b) < BigInt(coverage.data()?.heldWei || "0") ||
+      bn(b.balance) < BigInt(coverage.data()?.heldWei || "0") ||
       bn(fee) > config("MAX_FEE_WEI")
     )
       fail("POLYGON_REFUND_RESERVE_UNAVAILABLE", 503);
+  }
+  async function recordFailure(tx, id, proof) {
+    if (
+      proof.gasPayer?.toLowerCase() !==
+        env.ECONOMY_POLYGON_OPERATOR_ADDRESS.toLowerCase() ||
+      !/^[0-9]+$/.test(proof.gasCostWei || "") ||
+      !/^0x[a-f0-9]{64}$/i.test(proof.transactionHash || "") ||
+      !Number.isSafeInteger(proof.minedAtMs)
+    )
+      fail("POLYGON_GAS_RECEIPT_UNAVAILABLE", 503);
+    const rr = reservation(id),
+      sr = ref("operator_gas_spend", proof.transactionHash.toLowerCase()),
+      dr = ref("operator_gas", day(proof.minedAtMs)),
+      mr = ref("operator_month_gas", day(proof.minedAtMs).slice(0, 7));
+    const [r, b, s, d, m] = await Promise.all([
+      tx.get(rr),
+      tx.get(budgetRef),
+      tx.get(sr),
+      tx.get(dr),
+      tx.get(mr),
+    ]);
+    if (s.exists) {
+      if (s.data().orderId !== id) fail("POLYGON_GAS_SETTLEMENT_INVALID", 503);
+      return () => {};
+    }
+    const cost = BigInt(proof.gasCostWei);
+    if (
+      r.data()?.state !== "held" ||
+      BigInt(r.data().heldWei) < cost ||
+      BigInt(b.data()?.heldWei || "0") < cost
+    )
+      fail("POLYGON_GAS_SETTLEMENT_INVALID", 503);
+    return () => {
+      tx.create(sr, {
+        orderId: id,
+        ...proof,
+        state: "failed",
+        createdAtMs: now(),
+      });
+      tx.set(
+        rr,
+        {
+          heldWei: (BigInt(r.data().heldWei) - cost).toString(),
+          failedGasWei: (
+            BigInt(r.data().failedGasWei || "0") + cost
+          ).toString(),
+          updatedAtMs: now(),
+        },
+        { merge: true },
+      );
+      tx.set(
+        budgetRef,
+        {
+          heldWei: (BigInt(b.data().heldWei) - cost).toString(),
+          spentWei: (BigInt(b.data()?.spentWei || "0") + cost).toString(),
+          settledBlock: Math.max(
+            b.data()?.settledBlock || 0,
+            proof.blockNumber,
+          ),
+          updatedAtMs: now(),
+        },
+        { merge: true },
+      );
+      tx.set(
+        dr,
+        { spentWei: (BigInt(d.data()?.spentWei || "0") + cost).toString() },
+        { merge: true },
+      );
+      tx.set(
+        mr,
+        { spentWei: (BigInt(m.data()?.spentWei || "0") + cost).toString() },
+        { merge: true },
+      );
+    };
   }
   async function release(tx, id, proof = null) {
     if (
@@ -171,11 +258,16 @@ function createGasBudget({
     )
       fail("POLYGON_GAS_RECEIPT_UNAVAILABLE", 503);
     const rr = reservation(id),
-      dr = ref("operator_gas", proof ? day(proof.minedAtMs) : day(now()));
-    const [r, b, d] = await Promise.all([
+      dr = ref("operator_gas", proof ? day(proof.minedAtMs) : day(now())),
+      mr = ref(
+        "operator_month_gas",
+        (proof ? day(proof.minedAtMs) : day(now())).slice(0, 7),
+      );
+    const [r, b, d, m] = await Promise.all([
       tx.get(rr),
       tx.get(budgetRef),
       tx.get(dr),
+      tx.get(mr),
     ]);
     if (!r.exists || r.data().state !== "held") return () => {};
     const cost =
@@ -193,7 +285,8 @@ function createGasBudget({
         rr,
         {
           state: proof ? "settled" : "unpaid_expired",
-          costWei: cost.toString(),
+          costWei: (BigInt(r.data().failedGasWei || "0") + cost).toString(),
+          terminalGasWei: cost.toString(),
           transactionHash: proof?.transactionHash || null,
           updatedAtMs: now(),
         },
@@ -212,14 +305,28 @@ function createGasBudget({
         },
         { merge: true },
       );
-      if (proof)
+      if (proof) {
+        tx.set(
+          mr,
+          { spentWei: (BigInt(m.data()?.spentWei || "0") + cost).toString() },
+          { merge: true },
+        );
         tx.set(
           dr,
           { spentWei: (BigInt(d.data()?.spentWei || "0") + cost).toString() },
           { merge: true },
         );
+      }
     };
   }
-  return { snapshot, reserve, authorize, check, release, config };
+  return {
+    snapshot,
+    reserve,
+    authorize,
+    check,
+    release,
+    recordFailure,
+    config,
+  };
 }
 module.exports = { createGasBudget, estimateTerminalGas };

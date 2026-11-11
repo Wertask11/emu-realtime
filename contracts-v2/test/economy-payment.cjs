@@ -91,6 +91,7 @@ function env() {
     ["ECONOMY_POLYGON_OPERATOR_ADDRESS", admin.address],
     ["ECONOMY_POLYGON_MAX_GAS_WEI", "100000000000000000"],
     ["ECONOMY_POLYGON_DAILY_GAS_WEI", "1000000000000000000"],
+    ["ECONOMY_POLYGON_MONTHLY_GAS_WEI", "7000000000000000000"],
     ["ECONOMY_POLYGON_TRIAL_GAS_WEI", "7000000000000000000"],
     ["ECONOMY_POLYGON_MAX_FEE_WEI", "100000000000"],
     ["ECONOMY_POLYGON_REFUND_GAS_LIMIT", "150000"],
@@ -154,6 +155,9 @@ async function setup(options = {}) {
       },
     });
   await f.seed();
+  await f.economy.service
+    .ref("system", "polygon-operator-control")
+    .set({ enabled: true, revision: 1 });
   f.a = { ...(await f.actor()), walletAddress: buyer.address.toLowerCase() };
   f.identity.findByAddress = async (a) =>
     a.toLowerCase() === buyer.address.toLowerCase() ? SPID : null;
@@ -637,6 +641,9 @@ for (const type of Object.keys(require("../../backend/economy/tasks").TASKS))
               },
             },
           );
+      await f.economy.service
+        .ref("system", "polygon-operator-control")
+        .set({ enabled: true, revision: 1 });
       f.a = { ...f.a, walletAddress: buyer.address.toLowerCase() };
       f.identity.findByAddress = async (a) =>
         a.toLowerCase() === buyer.address.toLowerCase() ? SPID : null;
@@ -750,5 +757,305 @@ test("revoked operator role blocks rebroadcast of a persisted signed transaction
     assert.equal((await f.economy.service.polygon.status()).enabled, false);
   } finally {
     provider.sendTransaction = send;
+  }
+});
+test("KMS outage prevents rebroadcast of cached raw bytes and resumes the same intent after recovery", async () => {
+  let kms = true;
+  const { f } = await setup({
+    providerDown: true,
+    polygonOptions: {
+      rpc: rpc(),
+      signTransaction: (t) => admin.signTransaction(t),
+      signerReady: async () => {
+        if (!kms) throw Error("POLYGON_SIGNER_UNAVAILABLE");
+      },
+    },
+  });
+  const { j } = await funded(f, "kms-recovery"),
+    send = provider.sendTransaction,
+    attempts = [];
+  provider.sendTransaction = async (raw) => {
+    attempts.push(raw);
+    throw Error("isolated RPC unavailable");
+  };
+  try {
+    await f.economy.tick();
+    const count = attempts.length;
+    assert(count > 0);
+    kms = false;
+    await finish(f);
+    assert.equal(attempts.length, count);
+    assert.equal(
+      (await f.economy.service.view(f.a, j.id)).state,
+      "refund_pending",
+    );
+    kms = true;
+    provider.sendTransaction = send;
+    await finish(f);
+    assert.equal((await f.economy.service.view(f.a, j.id)).state, "refunded");
+    assert.equal(Object.keys(f.db._dump("emuer_v2_agent_chain_ops")).length, 1);
+  } finally {
+    provider.sendTransaction = send;
+  }
+});
+test("independent operator emergency stop blocks signatures and cached broadcasts without disabling ledger", async () => {
+  const { f } = await setup({ providerDown: true }),
+    { j } = await funded(f, "emergency-recovery"),
+    send = provider.sendTransaction;
+  let sent = 0;
+  provider.sendTransaction = async () => {
+    sent++;
+    throw Error("isolated RPC unavailable");
+  };
+  try {
+    await f.economy.tick();
+    const before = sent;
+    assert(before > 0);
+    await f.economy.service
+      .ref("system", "polygon-operator-control")
+      .set({ enabled: true, halted: true });
+    await finish(f);
+    assert.equal(sent, before);
+    assert.equal(
+      (await f.economy.service.view(f.a, j.id)).state,
+      "refund_pending",
+    );
+    assert.equal((await f.economy.service.polygon.status()).enabled, false);
+    assert.equal(f.economy.service.config().enabled, true);
+    await f.economy.service
+      .ref("system", "polygon-operator-control")
+      .set({ enabled: true, halted: false });
+    provider.sendTransaction = send;
+    await finish(f);
+    assert.equal((await f.economy.service.view(f.a, j.id)).state, "refunded");
+  } finally {
+    provider.sendTransaction = send;
+  }
+});
+test("real local EVM reverted operator tx books spent gas once and holds refund pending for incident review", async () => {
+  const { f } = await setup({ providerDown: true }),
+    { j } = await funded(f, "mined-failure"),
+    send = provider.sendTransaction;
+  let changed = false;
+  const roleSlot = ethers.utils.keccak256(
+    ethers.utils.defaultAbiCoder.encode(
+      ["bytes32", "uint256"],
+      [ethers.utils.id("REFUND_ROLE"), 5],
+    ),
+  );
+  const membership = ethers.utils.keccak256(
+    ethers.utils.defaultAbiCoder.encode(
+      ["address", "uint256"],
+      [admin.address, roleSlot],
+    ),
+  );
+  provider.sendTransaction = async (raw) => {
+    // TEST ONLY: reproduce revocation racing the already-passed preflight, without using another operator nonce.
+    if (!changed) {
+      changed = true;
+      await gp.request({
+        method: "evm_setAccountStorageAt",
+        params: [contract.address, membership, ethers.constants.HashZero],
+      });
+    }
+    return send.call(provider, raw);
+  };
+  try {
+    await finish(f);
+    const v = await f.economy.service.view(f.a, j.id);
+    assert.equal(v.state, "refund_pending");
+    const ops = Object.values(f.db._dump("emuer_v2_agent_chain_ops"));
+    assert.equal(ops.length, 1);
+    assert.equal(ops[0].state, "failed");
+    assert(BigInt(ops[0].failedReceipt.gasCostWei) > 0n);
+    const before = JSON.stringify(
+      f.db._dump("emuer_v2_agent_operator_gas_spend"),
+    );
+    await finish(f);
+    assert.equal(
+      JSON.stringify(f.db._dump("emuer_v2_agent_operator_gas_spend")),
+      before,
+    );
+    assert.equal(
+      Object.keys(f.db._dump("emuer_v2_agent_operator_gas_spend")).length,
+      1,
+    );
+    assert.equal((await f.economy.service.polygon.status()).enabled, false);
+  } finally {
+    provider.sendTransaction = send;
+  }
+});
+test("canonical separately approved manual refund resolves a failed intent without signing again", async () => {
+  const { f } = await setup({ providerDown: true }),
+    { j } = await funded(f, "manual-refund"),
+    send = provider.sendTransaction;
+  let attempts = 0;
+  provider.sendTransaction = async () => {
+    attempts++;
+    throw Error("isolated offline");
+  };
+  try {
+    await f.economy.tick();
+    const before = attempts;
+    provider.sendTransaction = send;
+    // All operations below occur solely on the isolated local test contract.
+    await (
+      await contract.grantRole(ethers.utils.id("REFUND_ROLE"), other.address)
+    ).wait();
+    const order = await f.commerce.servicePayments.get("agent_" + j.id),
+      t = await contract.connect(other).refundExchange(order.chainOrderId);
+    await t.wait();
+    await f.db
+      .collection("mitemiru_orders")
+      .doc("agent_" + j.id)
+      .set({ refundTransactionHash: t.hash }, { merge: true });
+    provider.sendTransaction = async () => {
+      attempts++;
+      throw Error("unexpected operator tx");
+    };
+    await finish(f);
+    assert.equal(attempts, before);
+    const v = await f.economy.service.view(f.a, j.id);
+    assert.equal(v.state, "refunded");
+    assert.equal(v.payment.refundTransactionHash, t.hash.toLowerCase());
+  } finally {
+    provider.sendTransaction = send;
+  }
+});
+test("saved-result fulfillment incident can reconcile a canonical approved manual refund", async () => {
+  const { f } = await setup(),
+    { j } = await funded(f, "manual-after-result"),
+    send = provider.sendTransaction;
+  let attempts = 0;
+  provider.sendTransaction = async () => {
+    attempts++;
+    throw Error("isolated offline");
+  };
+  try {
+    await f.economy.tick();
+    assert.equal(
+      (await f.economy.service.view(f.a, j.id)).state,
+      "result_saved",
+    );
+    const before = attempts;
+    provider.sendTransaction = send;
+    await (
+      await contract.grantRole(ethers.utils.id("REFUND_ROLE"), other.address)
+    ).wait();
+    const o = await f.commerce.servicePayments.get("agent_" + j.id),
+      tx = await contract.connect(other).refundExchange(o.chainOrderId);
+    await tx.wait();
+    await f.db
+      .collection("mitemiru_orders")
+      .doc("agent_" + j.id)
+      .set({ refundTransactionHash: tx.hash }, { merge: true });
+    provider.sendTransaction = async () => {
+      attempts++;
+      throw Error("must only observe canonical refund");
+    };
+    await finish(f);
+    assert.equal(attempts, before);
+    assert.equal((await f.economy.service.view(f.a, j.id)).state, "refunded");
+    assert.equal(f.calls(), 1);
+  } finally {
+    provider.sendTransaction = send;
+  }
+});
+test("manual refund does not release gas coverage while an old signed nonce is still usable", async () => {
+  const { f } = await setup({ providerDown: true });
+  await (
+    await contract.grantRole(ethers.utils.id("REFUND_ROLE"), other.address)
+  ).wait();
+  const { j } = await funded(f, "unresolved-manual"),
+    send = provider.sendTransaction;
+  provider.sendTransaction = async () => {
+    throw Error("isolated offline");
+  };
+  try {
+    await f.economy.tick();
+    provider.sendTransaction = send;
+    const o = await f.commerce.servicePayments.get("agent_" + j.id),
+      r = await contract.connect(other).refundExchange(o.chainOrderId);
+    await r.wait();
+    await f.db
+      .collection("mitemiru_orders")
+      .doc("agent_" + j.id)
+      .set({ refundTransactionHash: r.hash }, { merge: true });
+    await finish(f);
+    assert.equal(
+      (await f.economy.service.view(f.a, j.id)).state,
+      "refund_pending",
+    );
+    assert.equal(
+      (
+        await f.economy.service.ref("gas_reservations", "agent_" + j.id).get()
+      ).data().state,
+      "held",
+    );
+    assert.equal((await f.economy.service.polygon.status()).enabled, false);
+  } finally {
+    provider.sendTransaction = send;
+  }
+});
+test("manual settlement books a previously unseen reverted operator receipt before releasing its reserve", async () => {
+  const { f } = await setup({ providerDown: true }),
+    { j } = await funded(f, "manual-unseen-failure"),
+    send = provider.sendTransaction,
+    getReceipt = provider.getTransactionReceipt;
+  let hash = null;
+  const roleSlot = ethers.utils.keccak256(
+    ethers.utils.defaultAbiCoder.encode(
+      ["bytes32", "uint256"],
+      [ethers.utils.id("REFUND_ROLE"), 5],
+    ),
+  );
+  const member = ethers.utils.keccak256(
+    ethers.utils.defaultAbiCoder.encode(
+      ["address", "uint256"],
+      [admin.address, roleSlot],
+    ),
+  );
+  provider.sendTransaction = async (raw) => {
+    await gp.request({
+      method: "evm_setAccountStorageAt",
+      params: [contract.address, member, ethers.constants.HashZero],
+    });
+    const t = await send.call(provider, raw);
+    hash = t.hash;
+    return t;
+  };
+  provider.getTransactionReceipt = async (h) =>
+    h === hash ? null : getReceipt.call(provider, h);
+  try {
+    await f.economy.tick();
+    assert(hash);
+    assert.deepEqual(f.db._dump("emuer_v2_agent_operator_gas_spend"), {});
+    provider.sendTransaction = send;
+    provider.getTransactionReceipt = getReceipt;
+    await (
+      await contract.grantRole(ethers.utils.id("REFUND_ROLE"), other.address)
+    ).wait();
+    const o = await f.commerce.servicePayments.get("agent_" + j.id),
+      r = await contract.connect(other).refundExchange(o.chainOrderId);
+    await r.wait();
+    await f.db
+      .collection("mitemiru_orders")
+      .doc("agent_" + j.id)
+      .set({ refundTransactionHash: r.hash }, { merge: true });
+    await finish(f);
+    assert.equal((await f.economy.service.view(f.a, j.id)).state, "refunded");
+    assert.equal(
+      Object.keys(f.db._dump("emuer_v2_agent_operator_gas_spend")).length,
+      1,
+    );
+    const reservation = (
+      await f.economy.service.ref("gas_reservations", "agent_" + j.id).get()
+    ).data();
+    assert.equal(reservation.state, "settled");
+    assert(BigInt(reservation.failedGasWei) > 0n);
+    assert.equal(reservation.costWei, reservation.failedGasWei);
+  } finally {
+    provider.sendTransaction = send;
+    provider.getTransactionReceipt = getReceipt;
   }
 });

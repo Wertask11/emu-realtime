@@ -18,6 +18,7 @@ function createPolygonPayments({
   requireIntake,
   rpc: injectedRPC,
   signTransaction,
+  signerReady,
   gasEstimate,
 }) {
   let rpc = injectedRPC;
@@ -49,8 +50,13 @@ function createPolygonPayments({
   async function ready(a) {
     if (!policy(env).enabled) fail("PAYMENT_METHOD_DISABLED", 503);
     await requireAccess(a);
-    if ((await ref("system", "polygon-safety").get()).data()?.stopped)
-      fail("POLYGON_SAFETY_STOPPED", 503);
+    const [safety, control] = await Promise.all([
+      ref("system", "polygon-safety").get(),
+      ref("system", "polygon-operator-control").get(),
+    ]);
+    if (safety.data()?.stopped) fail("POLYGON_SAFETY_STOPPED", 503);
+    if (control.data()?.enabled !== true || control.data()?.halted === true)
+      fail("POLYGON_OPERATOR_STOPPED", 503);
     const wallet = String(a.walletAddress || "").toLowerCase();
     if (
       !/^0x[0-9a-f]{40}$/.test(wallet) ||
@@ -66,8 +72,14 @@ function createPolygonPayments({
   async function status() {
     const p = policy(env);
     if (!p.enabled) return p;
-    if ((await ref("system", "polygon-safety").get()).data()?.stopped)
+    const [safety, control] = await Promise.all([
+      ref("system", "polygon-safety").get(),
+      ref("system", "polygon-operator-control").get(),
+    ]);
+    if (safety.data()?.stopped)
       return { ...p, enabled: false, blockers: ["POLYGON_SAFETY_STOPPED"] };
+    if (control.data()?.enabled !== true || control.data()?.halted === true)
+      return { ...p, enabled: false, blockers: ["POLYGON_OPERATOR_STOPPED"] };
     try {
       await chain().ready(env.ECONOMY_POLYGON_OPERATOR_ADDRESS);
       return p;
@@ -168,6 +180,7 @@ function createPolygonPayments({
       env,
       now,
       signTransaction,
+      signerReady,
       gasBudget: gasBudget(),
     });
   async function pay(args) {
@@ -187,7 +200,13 @@ function createPolygonPayments({
       gasSnapshot = await gasBudget().snapshot();
     } catch (e) {
       await ref("system", "polygon-safety").set(
-        { stopped: true, reason: "POLYGON_GAS_REVIEW_REQUIRED", atMs: now() },
+        {
+          stopped: true,
+          reason: /^POLYGON_(?:GAS_|REFUND_RESERVE_)/.test(e.message)
+            ? "POLYGON_GAS_REVIEW_REQUIRED"
+            : "POLYGON_OPERATOR_REVIEW_REQUIRED",
+          atMs: now(),
+        },
         { merge: true },
       );
       throw e;
@@ -423,11 +442,9 @@ function createPolygonPayments({
     try {
       if (!isRefund) {
         const p = await chain().verifyPayment(o, o.transactionHash);
-        if (
-          p.state !== "paid" ||
-          p.live.refunded ||
-          p.transactionHash !== o.transactionHash
-        )
+        if (p.state === "paid" && p.live.refunded)
+          fail("POLYGON_REFUND_DETECTED", 409);
+        if (p.state !== "paid" || p.transactionHash !== o.transactionHash)
           fail("POLYGON_PAYMENT_NOT_FINAL", 409);
       }
       v = await operator().ensure(o, method);
@@ -485,6 +502,9 @@ function createPolygonPayments({
       admission,
       operations: async () => ({
         enabled: policy(env).enabled,
+        control:
+          (await ref("system", "polygon-operator-control").get()).data() ||
+          null,
         safety: (await ref("system", "polygon-safety").get()).data() || null,
         coverage:
           (await ref("system", "polygon-gas-coverage").get()).data() || null,

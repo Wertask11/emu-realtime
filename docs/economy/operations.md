@@ -219,3 +219,7 @@ Firestoreの実APIで既定DBの無料読取50,000/日・書込20,000/日を確�
 ## Polygon Phase 5 署名器・POL予約（2026-11-10）
 
 [公開準備・Founder操作・費用・停止復旧](phase5-operator-release.md) と [実チェーン証拠](phase5-live-chain-20261110.json) を参照。PolygonはOFF。新しい署名器サービスはmainアプリと別配備・既定OFFであり、KMS/権限/POL/独立監査/法務は未完了。既存ledgerとworkerを止めず、試験期限を延長しない。
+
+### Phase 5 最終ゲート（2026-11-11）
+
+[完成報告](phase5-final-completion.md)・[停止/復旧/設定](phase5-review/operations.md)・[独立監査](phase5-review/auditor-handoff.md)・[法務](phase5-review/legal-questions.md)・[費用](phase5-review/costs.md)を参照。Polygon OFF、実KMS/監査/法務/公開承認は未了。

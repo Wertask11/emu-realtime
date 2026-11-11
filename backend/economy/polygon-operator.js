@@ -10,6 +10,7 @@ function createOperator({
   env,
   now,
   signTransaction,
+  signerReady,
   gasBudget,
 }) {
   const lock = ref("system", "polygon-operator-slot");
@@ -36,7 +37,14 @@ function createOperator({
     if (body.length > 32000) fail("POLYGON_SIGNER_INVALID_RESPONSE", 503);
     return JSON.parse(body).signedTransaction;
   }
+  async function control() {
+    const v = (await ref("system", "polygon-operator-control").get()).data();
+    if (v?.enabled !== true || v.halted === true)
+      fail("POLYGON_OPERATOR_STOPPED", 503);
+  }
   async function ready() {
+    await control();
+    if (signerReady) return signerReady();
     if (signTransaction) return; // Isolated test injection only; production has no local signer.
     const url = new URL(env.ECONOMY_POLYGON_SIGNER_URL);
     url.pathname = "/ready";
@@ -88,25 +96,89 @@ function createOperator({
       return v;
     }
     let o = (await or.get()).data();
+    async function bookFailedReceipt(receipt) {
+      if (!(await rpc.mature(receipt))) fail("POLYGON_OPERATION_PENDING", 409);
+      if (
+        !receipt.effectiveGasPrice ||
+        receipt.transactionHash.toLowerCase() !==
+          o.transactionHash.toLowerCase() ||
+        receipt.from?.toLowerCase() !== operator.toLowerCase() ||
+        receipt.to?.toLowerCase() !== rpc.token.toLowerCase() ||
+        receipt.gasUsed.gt(o.transaction.gasLimit) ||
+        !receipt.effectiveGasPrice.eq(o.transaction.gasPrice)
+      )
+        fail("POLYGON_GAS_RECEIPT_UNAVAILABLE", 503);
+      const block = await rpc.provider.getBlock(receipt.blockNumber);
+      const proof = {
+        transactionHash: receipt.transactionHash.toLowerCase(),
+        gasPayer: operator.toLowerCase(),
+        gasCostWei: receipt.gasUsed.mul(receipt.effectiveGasPrice).toString(),
+        blockNumber: receipt.blockNumber,
+        blockHash: receipt.blockHash,
+        minedAtMs: block.timestamp * 1000,
+      };
+      await db.runTransaction(async (tx) => {
+        await tx.get(or);
+        const commit = await gasBudget.recordFailure(
+          tx,
+          "agent_" + q.serviceJobId,
+          proof,
+        );
+        commit();
+        tx.set(
+          or,
+          {
+            state: "failed",
+            failedReceipt: proof,
+            rawTransaction: null,
+            updatedAt: now(),
+          },
+          { merge: true },
+        );
+      });
+    }
     const completed =
       method === "refundExchange" ? live.refunded : live.fulfilled;
     if (completed) {
-      const v = await rpc.verifyOperation(
-        q,
-        method,
-        o?.transactionHash ||
-          q[
-            method === "refundExchange"
-              ? "refundTransactionHash"
-              : "fulfillmentTransactionHash"
-          ],
-      );
-      if (v) return finish(v);
+      // A separately approved administrator may have settled a stuck obligation.
+      // A private hint is only evidence to verify, never proof of returned funds.
+      const manual =
+        q[
+          method === "refundExchange"
+            ? "refundTransactionHash"
+            : "fulfillmentTransactionHash"
+        ];
+      const hint = manual || o?.transactionHash;
+      const v = await rpc.verifyOperation(q, method, hint);
+      if (v) {
+        if (
+          o?.transactionHash &&
+          o.transactionHash.toLowerCase() !== v.transactionHash.toLowerCase()
+        ) {
+          const previous = await rpc.provider.getTransactionReceipt(
+            o.transactionHash,
+          );
+          if (previous?.status === 0) await bookFailedReceipt(previous);
+          else if (previous) fail("POLYGON_OPERATION_CONFLICT", 409);
+          else {
+            const f = await rpc.finalized();
+            // A still-valid old signature can incur future gas even after a
+            // manual refund. Hold its budget until its nonce is finally closed.
+            if (
+              (await rpc.provider.getTransactionCount(operator, f.number)) <=
+              o.transaction.nonce
+            )
+              fail("POLYGON_PRIOR_TX_UNRESOLVED", 409);
+          }
+        }
+        return finish(v);
+      }
       fail("POLYGON_OPERATION_PENDING", 409);
     }
     if (live.refunded || live.fulfilled)
       fail("POLYGON_OPERATION_CONFLICT", 409);
     if (!o) {
+      await control();
       if (
         !(await rpc.contract.hasRole(ethers.utils.id("REFUND_ROLE"), operator))
       )
@@ -138,11 +210,7 @@ function createOperator({
         if (s.exists) return;
         if (l.data()?.active && l.data().active !== opId)
           fail("POLYGON_OPERATOR_BUSY", 409);
-        await gasBudget.authorize(
-          tx,
-          q.serviceOrderId || "agent_" + q.serviceJobId,
-          cost,
-        );
+        await gasBudget.authorize(tx, "agent_" + q.serviceJobId, cost);
         tx.create(or, {
           chainOrderId: q.chainOrderId,
           orderId: "agent_" + q.serviceJobId,
@@ -167,6 +235,7 @@ function createOperator({
       o = (await or.get()).data();
     }
     if (!o.transactionHash) {
+      await ready();
       const raw = await (signTransaction || remote)(o.transaction, {
         operationId: opId,
         requestId: opId,
@@ -212,8 +281,13 @@ function createOperator({
       return finish(verified);
     }
     const receipt = await rpc.provider.getTransactionReceipt(o.transactionHash);
-    if (receipt?.status === 0) fail("POLYGON_OPERATOR_TX_FAILED", 503);
+    if (receipt?.status === 0) {
+      await bookFailedReceipt(receipt);
+      // Never free a slot or recreate a tx after a mined failure.
+      fail("POLYGON_OPERATOR_TX_FAILED", 503);
+    }
     if (!receipt) {
+      await ready();
       // A durable signature is not proof the role still exists after an incident.
       if (
         !(await rpc.contract.hasRole(ethers.utils.id("REFUND_ROLE"), operator))

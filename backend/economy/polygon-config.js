@@ -23,6 +23,7 @@ function policy(env = {}) {
   for (const k of [
     "MAX_GAS_WEI",
     "DAILY_GAS_WEI",
+    "MONTHLY_GAS_WEI",
     "TRIAL_GAS_WEI",
     "MAX_FEE_WEI",
     "REFUND_GAS_LIMIT",
