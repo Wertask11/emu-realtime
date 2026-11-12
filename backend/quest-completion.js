@@ -706,8 +706,12 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     });
     const commitSnap = await db.collection("sp_quests").doc(questId)
       .collection("commits").doc(address).get();
-    const approvedRounds = Math.max(0,
-      Number((commitSnap.data() || {}).approvedRounds) || 0);
+    /* 周回の数は、運営が認めた記録（approved === true）のときだけ信じる（11/11）。
+       受ける人が自分で approvedRounds を入れて受けると、承認なしで何枚でも置けた
+       （ルールでも作るときに入れられないようにした）。 */
+    const commitRow = commitSnap.data() || {};
+    const approvedRounds = commitRow.approved === true
+      ? Math.max(0, Number(commitRow.approvedRounds) || 0) : 0;
     if (placed > approvedRounds) {
       return res.status(409).json({ error: "ROUND_NOT_APPROVED",
         placed, approvedRounds });

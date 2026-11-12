@@ -1110,3 +1110,24 @@ test("コントラクトのアドレスは、設定してあるときだけ返�
   assert.equal((await withContract({ identity: { account: { spid: "spid-a" } } }, res)).body.contract, CONTRACT);
   assert.equal((await myCerts()).body.contract, "", "設定が無いのにアドレスを返している");
 }));
+
+/* 11/11 点検：受けるときに approvedRounds を自分で入れると、承認なしで何枚でも置けた。
+   周回の数は、運営が認めた記録（approved === true）のときだけ信じる。 */
+test("周回の数を自分で入れて受けても、認められるまで2枚目は置けない", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  records.set("sp_quests/quest-001/commits/" + address, { name:"member", approvedRounds: 99 });
+  assert.equal((await putCard({ insight: "1枚目" })).status, 200);
+  const second = await putCard({ insight: "2枚目" });
+  assert.equal(second.status, 409);
+  assert.equal(second.body.error, "ROUND_NOT_APPROVED");
+  assert.equal(cards().length, 1);
+});
+
+test("運営が認めた周回のぶんは、今までどおり次の1枚を置ける", async () => {
+  seedTaken(); seedReports(["やってみた","つまずいた","気づいた"]);
+  assert.equal((await putCard({ insight: "1枚目" })).status, 200);
+  records.set("sp_quests/quest-001/commits/" + address, { name:"member", approved: true, approvedRounds: 1 });
+  assert.equal((await putCard({ insight: "2枚目" })).status, 200);
+  assert.equal((await putCard({ insight: "3枚目" })).body.error, "ROUND_NOT_APPROVED");
+  assert.equal(cards().length, 2);
+});

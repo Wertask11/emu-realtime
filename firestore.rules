@@ -207,6 +207,23 @@ service cloud.firestore {
             && d.get('imageUrl', '').matches('data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*'));
     }
 
+    /* 投稿の題・本文・タグ・名前は文字だけ（11/11）。文字でないものを入れると一覧の画面が壊れる。
+       長さは、1件の記録の上限（約1MB）を画像と合わせて超えない大きさにだけ縛る。 */
+    function postTextOk(d) {
+      return d.get('title', '') is string && d.get('title', '').size() <= 400
+        && d.get('body', '') is string && d.get('body', '').size() <= 40000
+        && d.get('tags', '') is string && d.get('tags', '').size() <= 600
+        && d.get('displayName', '') is string && d.get('displayName', '').size() <= 80;
+    }
+
+    /* 「1人1回」を文書のIDで守っているところ用（11/11）。
+       本人かどうかは小文字にそろえて比べるが、文書のIDは大文字小文字を区別する。
+       0xAbc… と 0xabc… は別の文書になるので、書き方を変えれば同じ人が何票でも入れられた。
+       画面はいつも小文字で書く（index.html の emuMyIdentity）。小文字のIDだけを通す。 */
+    function isMyLowerAddr(addr) {
+      return addr == addr.lower() && isMyWallet(addr);
+    }
+
     function changedOnly(fields) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
@@ -529,8 +546,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    match /emuer_offchain/{document=**} {
-      allow read: if true;
+    /* アプリ内のEMUERの台帳。読めるのは本人が自分の分だけ（11/11）。
+       前は誰でも・一覧でも読めた。残高だけでなく uid（LINE のユーザーIDを含む）も
+       入っているので、アドレスから人をたどれてしまっていた。
+       文書のIDは小文字のアドレス。画面は自分の分しか読んでいない。 */
+    match /emuer_offchain/{addr} {
+      allow get: if isMyWallet(addr);
+      allow list: if false;
       allow write: if false;
     }
 
@@ -697,7 +719,12 @@ service cloud.firestore {
         && request.resource.data.get('goodCount', 0) == 0
         && request.resource.data.get('changeCount', 0) == 0
         && request.resource.data.get('goodUsers', []).size() == 0
-        && request.resource.data.get('changeUsers', []).size() == 0;
+        && request.resource.data.get('changeUsers', []).size() == 0
+        /* 数の欄は、作るときは 0 か無し（11/11）。ここを見ていなかったので、
+           採用の数の欄に文字（HTML）を入れた投稿を作れ、押した人の画面でスクリプトが動いた。 */
+        && request.resource.data.get('acceptedChangeCount', 0) == 0
+        && request.resource.data.get('reflectedChangeCount', 0) == 0
+        && postTextOk(request.resource.data);
 
       /* どの欄を変えるか（changedOnly）を、どの分かれ道でも先に見る。
 
@@ -715,10 +742,16 @@ service cloud.firestore {
         ])
         && !resource.data.keys().hasAny(['knowledgeLab'])
         && postImageOk(request.resource.data)
+        && postTextOk(request.resource.data)
         && isMyWallet(resource.data.get('address', ''))
       || (changedOnly(['acceptedChangeCount', 'lastChangedAt'])
         && isMyWallet(resource.data.get('address', ''))
         && request.resource.data.get('acceptedChangeCount', 0) == resource.data.get('acceptedChangeCount', 0) + 1)
+      /* 改善案を「反映した」記録（11/11）。画面（change-reflection-ui.js）はこの2つの欄を書くが、
+         ここで許していなかったので「反映記録を保存できませんでした」になっていた。 */
+      || (changedOnly(['reflectedChangeCount', 'lastChangedAt'])
+        && isMyWallet(resource.data.get('address', ''))
+        && request.resource.data.get('reflectedChangeCount', 0) == resource.data.get('reflectedChangeCount', 0) + 1)
       // Good は、認証ユーザー自身のウォレットを1件追加し、件数を1増やす場合だけ許可。
       || (changedOnly(['goodCount', 'goodUsers'])
         && request.resource.data.get('goodCount', 0) == resource.data.get('goodCount', 0) + 1
@@ -761,16 +794,30 @@ service cloud.firestore {
 
     match /post_changes/{changeId} {
       allow read: if signedIn();
+      /* 作るときは「まだ見てもらっていない」形だけ（11/11）。
+         status や反映の欄を縛っていなかったので、最初から「採用済み・反映済み」の改善案を作れ、
+         投稿者と組めば（同じ人の2つのアカウントでも）反映の報酬を何件でも作れた。 */
       allow create: if isMyWallet(request.resource.data.get('fromAddress', ''))
         && request.resource.data.postId is string
-        && request.resource.data.get('accepted', false) == false;
+        && request.resource.data.get('accepted', false) == false
+        && request.resource.data.get('status', 'pending') == 'pending'
+        && !request.resource.data.keys().hasAny(
+             ['acceptedAt', 'acceptedBy', 'reflectedAt', 'reflectedBy', 'reflectionNote']);
       // ここも素で参照しない。address や status が無い古い記録でエラーにならないように。
+      /* 採用するのは投稿した本人。投稿の名義はウォレットでもアプリの作ったアドレスでもよい
+         （11/11。前は walletAddress だけを見ていて、もう片方の名義の投稿では採用できなかった）。 */
       allow update: if signedIn()
-        && wallet().size() > 0
-        && get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.get('address', '').lower() == wallet().lower()
-        && resource.data.get('status', '') == 'pending'
-        && changedOnly(['status', 'acceptedAt', 'acceptedBy'])
-        && request.resource.data.status == 'accepted';
+        && isMyWallet(get(/databases/$(database)/documents/posts/$(resource.data.postId)).data.get('address', ''))
+        && ((resource.data.get('status', '') == 'pending'
+            && changedOnly(['status', 'acceptedAt', 'acceptedBy'])
+            && request.resource.data.status == 'accepted')
+          /* 採用した改善案に「反映した」を1回だけ記録する。記録する名義は本人のもの。 */
+          || (resource.data.get('status', '') == 'accepted'
+            && !resource.data.keys().hasAny(['reflectedAt'])
+            && changedOnly(['reflectedAt', 'reflectedBy', 'reflectionNote'])
+            && isMyWallet(request.resource.data.get('reflectedBy', ''))
+            && request.resource.data.get('reflectionNote', '') is string
+            && request.resource.data.get('reflectionNote', '').size() <= 1000));
       allow delete: if false;
     }
 
@@ -985,15 +1032,14 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/camellia_users/$(request.auth.uid));
     }
 
+    /* 11/11：ここは前の Circle の置き場。いまの Camellia は Circle をサーバー経由で扱い
+       （招待・利用停止をサーバーが確かめる）、画面からここを読み書きしない。
+       ここの条件は「camellia_users に自分の文書がある」だけで、その文書は誰でも自分で作れる。
+       招待されていない人・止められた人・Emu 側のアカウントだけの人も、画面を通さなければ
+       読めて書けたので、画面からは閉じる。残っている投稿は運営画面（サーバー）から見られる。 */
     match /camellia_community/{postId} {
-      allow read: if camelliaMember();
-      allow create: if camelliaMember()
-        && request.resource.data.get('uid', '') == request.auth.uid
-        && request.resource.data.text is string
-        && request.resource.data.text.size() > 0
-        && request.resource.data.text.size() <= 500
-        && request.resource.data.get('name', '') is string
-        && request.resource.data.get('name', '').size() <= 40;
+      allow read: if false;
+      allow create: if false;
       allow update: if false;
       allow delete: if isOwner() || (signedIn() && resource.data.get('uid', '') == request.auth.uid);
     }
@@ -1003,11 +1049,8 @@ service cloud.firestore {
        運営はサーバー（Admin SDK）か Firebase の管理画面から読む。 */
     match /camellia_reports/{reportId} {
       allow read: if false;
-      allow create: if camelliaMember()
-        && request.resource.data.get('by', '') == request.auth.uid
-        && request.resource.data.get('postId', '') is string
-        && request.resource.data.get('reason', '') is string
-        && request.resource.data.get('reason', '').size() <= 300;
+      /* 通報もいまはサーバー経由。前の置き場は閉じる（11/11）。 */
+      allow create: if false;
       allow update, delete: if false;
     }
 
@@ -1075,7 +1118,7 @@ service cloud.firestore {
         allow read: if canAccessSchoolPark();
         /* 文書のIDが自分のアドレスのときだけ作れる。他人の票は作れない。
            特殊ギルドの議題は、ギルドに関われる人だけが入れられる。 */
-        allow create: if canAccessSchoolPark() && isMyWallet(addr)
+        allow create: if canAccessSchoolPark() && isMyLowerAddr(addr)
           && request.resource.data.get('optionId', '') is string
           && request.resource.data.get('optionId', '').size() > 0
           && (
@@ -1200,9 +1243,12 @@ service cloud.firestore {
 
       match /commits/{addr} {
         allow read: if canAccessSchoolPark();
-        allow create: if canAccessSchoolPark() && questId != 'founder-quest-000' && isMyWallet(addr)
+        allow create: if canAccessSchoolPark() && questId != 'founder-quest-000' && isMyLowerAddr(addr)
           // 受けるときに自分で「認められた」ことにはできない
-          && !request.resource.data.keys().hasAny(['approved', 'approvedAt', 'approvedBy']);
+          /* 周回の数も同じ（11/11）。approvedRounds を自分で入れて受けると、
+             知恵カードを運営の承認なしで何枚でも置けた（サーバーはこの数を見て枚数を決める）。 */
+          && !request.resource.data.keys().hasAny(
+               ['approved', 'approvedAt', 'approvedBy', 'approvedRounds', 'lastApprovedAt']);
         /* 運営だけが「実際に動いたことを確かめた」印を付けられる。
            分配も、信用スコアの完走も、この印が立っている人だけが対象。
            受けただけでは分配しない。名前など他の欄は動かせない。 */
@@ -1350,7 +1396,7 @@ service cloud.firestore {
 
       match /joins/{addr} {
         allow read: if canAccessSchoolPark();
-        allow create: if canAccessSchoolPark() && isMyWallet(addr)
+        allow create: if canAccessSchoolPark() && isMyLowerAddr(addr)
           && request.resource.data.get('name', '') is string
           && request.resource.data.get('name', '').size() <= 60
           && request.resource.data.get('at', 0) is int;
@@ -1360,7 +1406,7 @@ service cloud.firestore {
 
       match /supports/{addr} {
         allow read: if canAccessSchoolPark();
-        allow create: if canAccessSchoolPark() && isMyWallet(addr)
+        allow create: if canAccessSchoolPark() && isMyLowerAddr(addr)
           && request.resource.data.get('name', '') is string
           && request.resource.data.get('name', '').size() <= 60
           && request.resource.data.get('at', 0) is int;
@@ -1400,7 +1446,7 @@ service cloud.firestore {
 
       match /joins/{addr} {
         allow read: if canAccessSchoolPark();
-        allow create: if canAccessSchoolPark() && isMyWallet(addr);
+        allow create: if canAccessSchoolPark() && isMyLowerAddr(addr);
         allow update: if false;
         allow delete: if canAccessSchoolPark() && isMyWallet(addr);
       }
@@ -1452,7 +1498,7 @@ service cloud.firestore {
          画面でもボタンを隠しているが、押せる道が残らないようここでも止める。 */
       match /cites/{addr} {
         allow read: if canAccessSchoolPark();
-        allow create: if canAccessSchoolPark() && isMyWallet(addr)
+        allow create: if canAccessSchoolPark() && isMyLowerAddr(addr)
           && get(/databases/$(database)/documents/sp_wisdom/$(wisdomId)).data.get('author', '') != addr;
         allow update: if false;
         allow delete: if canAccessSchoolPark() && isMyWallet(addr);
@@ -1609,6 +1655,29 @@ service cloud.firestore {
       allow read, write: if labCollection.matches('knowledge_lab_.*') && false;
     }
 
+    /* いま開いている人の数（混雑の表示）。ログインしていない人も自分の印を置く。
+       前はいちばん下の受け皿で通っていた。受け皿を閉じたので、ここに書く（11/11）。
+       置けるのは時刻（ts）だけ。文書のIDは画面が作る2つの形だけ。 */
+    match /sp_active_users/{sessionId} {
+      allow read: if true;
+      allow create, update: if sessionId.matches('^(wallet_0x[0-9a-f]{40}|client_[a-z0-9]{1,24})$')
+        && request.resource.data.keys().hasOnly(['ts'])
+        && request.resource.data.ts is number;
+      allow delete: if false;
+    }
+
+    /* 11/11：受け皿を閉じた。
+       前は「下の一覧に無い名前のコレクションは、ログインしていなくても誰でも読み書きできる」だった。
+       サーバーがあとから足した記録（投稿の記録 emu_post_audit・運営確認 review_requests・
+       画面のエラー emu_client_errors など）が一覧に入っておらず、運営だけが見るはずのものを
+       ログインなしで読めた。まだ無い名前で好きなだけ書き込むこともできた。
+       画面が使うコレクションは、どれも上に個別の決まりがある（無いものは sp_active_users だけだった）。
+       新しいコレクションを画面から使うときは、ここを開けずに個別の決まりを書くこと。
+       下の一覧は、閉じてあるものの控えとして残す。 */
+    function legacyOpenCollection(coll) {
+      return false;
+    }
+
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
     match /{coll}/{document=**} {
       /* 未使用の旧コレクションも汎用許可へ漏らさない。
@@ -1616,7 +1685,8 @@ service cloud.firestore {
          書き込みの文書ごとにそれを全部数えていた。回答（回数の記録・回答・募集の
          3件を一度に書く）が、1回の書き込みで評価できる式の上限（1000）を
          超えて断られていた（2026-10-24）。中身（どれを通さないか）は同じ。 */
-      allow read, write: if !coll.matches('knowledge_lab_.*')
+      allow read, write: if legacyOpenCollection(coll)
+        && !coll.matches('knowledge_lab_.*')
         /* EMUER v2 の予算・貢献・報酬・認可履歴はサーバー専用。
            Admin SDK は Rules を経由しない。 */
         && !coll.matches('emuer_v2_.*')

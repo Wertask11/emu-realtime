@@ -554,3 +554,32 @@ test("窓口: 招待から来た人も、数に入る", async () => {
     assert.equal(got.body.invitedThisMonth, 1);
   } finally { await s.close(); }
 });
+
+/* 11/11 点検：足せるログインの数に上限が無く、引換券を配れば1つの契約を何人でも共用できた。 */
+test("窓口: 1つのパスポートに足せるログインには上限がある。上限までは今までどおり足せる", async () => {
+  const friends = {};
+  for (let i = 1; i <= 8; i += 1) friends["friend-" + i] = account("friend-" + i, "google", "0x" + String(i).repeat(40));
+  const s = await startServer({ ches_accounts: {
+    [LINE_UID]: account(LINE_UID, "line", LINE_ADDR), [OWNER_UID]: account(OWNER_UID, "google", OWNER_ADDR), ...friends } });
+  try {
+    const mine = await s.call("POST", "/resolve", { uid: LINE_UID });
+    // いま1つ。7人足して8つ（上限）までは通る
+    for (let i = 1; i <= 7; i += 1) {
+      const t = await s.call("POST", "/link/ticket", { uid: LINE_UID });
+      const linked = await s.call("POST", "/link/complete", { uid: "friend-" + i, body: { ticket: t.body.ticket } });
+      assert.equal(linked.status, 200, "friend-" + i);
+      assert.equal(linked.body.schoolParkId, mine.body.schoolParkId);
+    }
+    const t = await s.call("POST", "/link/ticket", { uid: LINE_UID });
+    const over = await s.call("POST", "/link/complete", { uid: "friend-8", body: { ticket: t.body.ticket } });
+    assert.equal(over.status, 409);
+    assert.equal(over.body.error, "LINK_LIMIT_REACHED");
+    // 断られた人は入っていない（別の番号のまま）
+    const eighth = await s.call("POST", "/resolve", { uid: "friend-8" });
+    assert.notEqual(eighth.body.schoolParkId, mine.body.schoolParkId);
+    // すでに入っている人が同じ券の道を通っても、上限では断らない
+    const t2 = await s.call("POST", "/link/ticket", { uid: LINE_UID });
+    const again = await s.call("POST", "/link/complete", { uid: "friend-1", body: { ticket: t2.body.ticket } });
+    assert.equal(again.status, 200);
+  } finally { await s.close(); }
+});

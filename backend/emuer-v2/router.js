@@ -103,6 +103,12 @@ function createEmuerV2Router(deps) {
   function reflectionKey(postId, changeId) {
     return JSON.stringify(["emuer-v2", "change-reflection", String(postId), String(changeId)]);
   }
+  /* 11/11：反映の報酬は「投稿1件 × 提案した人1人」につき1回。
+     前は改善案1件ごとに鍵を作っていた。改善案の記録は何件でも作れるので、
+     投稿者と組めば（同じ人の2つのアカウントでも）報酬を何件でも作れた。 */
+  function reflectionPairKey(postId, proposer) {
+    return JSON.stringify(["emuer-v2", "change-reflection-person", String(postId), String(proposer).toLowerCase()]);
+  }
   async function createReward({ key, kind, recipient, meta, amountEmuer = 1 }) {
     if (!Number.isSafeInteger(amountEmuer) || amountEmuer < 1) throw new Error("INVALID_REWARD_AMOUNT");
     const id = claimId(key);
@@ -437,12 +443,24 @@ function createEmuerV2Router(deps) {
       const author = String(post.address || "").toLowerCase();
       const proposer = String(change.fromAddress || "").toLowerCase();
       const reflectedBy = String(change.reflectedBy || "").toLowerCase();
-      if (!validAddress(author) || !validAddress(proposer) || author !== actor || reflectedBy !== author ||
+      /* 投稿した本人の名義は2つある（ウォレットと、アプリが作ったアドレス）。どちらで書いた投稿でも本人。 */
+      const mine = [actor, req.identity.account && req.identity.account.walletAddress,
+        req.identity.account && req.identity.account.chesAddress].map(a => String(a || "").toLowerCase()).filter(Boolean);
+      if (!validAddress(author) || !validAddress(proposer) || !mine.includes(author) || !mine.includes(reflectedBy) ||
           String(change.postId || "") !== postId || change.status !== "accepted" || !change.reflectedAt) {
         return res.status(409).json({ error: "REFLECTION_NOT_VERIFIED" });
       }
+      /* 自分の別の名義からの提案には出さない。提案した人が、その投稿に実際に改善案を送っていること
+         （投稿の changeUsers に入っていること。入れられるのは light 以上で、1人1回だけ）。 */
+      const changeUsers = Array.isArray(post.changeUsers) ? post.changeUsers.map(x => String(x || "").toLowerCase()) : [];
+      if (mine.includes(proposer) || !changeUsers.includes(proposer)) {
+        return res.status(409).json({ error: "REFLECTION_NOT_VERIFIED" });
+      }
+      /* 前の鍵（改善案ごと）で作ってある報酬は、そのまま返す（開き直すたびに呼ばれるので、二重に作らない）。 */
+      const earlier = await db.collection("emuer_v2_rewards").doc(claimId(reflectionKey(postId, changeId))).get();
+      if (earlier.exists) return res.json({ ok: true, rewardId: earlier.data().claimId || earlier.id });
       const row = await createReward({
-        key: reflectionKey(postId, changeId), kind: "change-reflected", recipient: proposer,
+        key: reflectionPairKey(postId, proposer), kind: "change-reflected", recipient: proposer,
         meta: { postId, changeId, postTitle: String(post.title || "").slice(0, 160), reflectedBy: author }
       });
       return res.json({ ok: true, rewardId: row.claimId });
