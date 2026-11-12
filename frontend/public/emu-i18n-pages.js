@@ -120,6 +120,7 @@
       "k.empty.text": "条件を変えるか、最初の知識を届けてみましょう。",
       "k.empty.action": "知識を届ける",
       "k.loadingPosts": "知識を読み込んでいます…",
+      "k.reload": "もう一度読み込む",
       "k.toast.publishing": "公開しています…",
       "k.toast.saving": "保存しています…",
       "k.toast.scheduling": "予約しています…",

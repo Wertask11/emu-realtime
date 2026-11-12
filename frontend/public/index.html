@@ -29793,8 +29793,11 @@ async function sendEmuFeedback() {
          間に合わなければ guest 扱いになる。公式パスを持っている人でも、
          開いた直後は見学者として絞られていた。
          「読めるときと読めないときがある」の正体はこれ。 */
+      /* 11/12：待つのは3秒まで。サーバー（Render）が眠りから起きる間は返事が1分近く来ず、
+         そのあいだ一覧がずっと出なかった（「該当する知識がありません」のまま）。
+         見学の制限は 11/7 に無くしたので、段が遅れて届いても一覧の中身は変わらない。 */
       if (typeof emuEnsureEntitlement === 'function') {
-        try { await emuEnsureEntitlement(); } catch (e) {}
+        try { await _spSoon(emuEnsureEntitlement().catch(() => ''), 3000); } catch (e) {}
       }
 
       const constraints = [window.fbLib.orderBy('createdAt', 'desc')];
@@ -29817,8 +29820,14 @@ async function sendEmuFeedback() {
       const authorAddrs = knowledgeAuthorAddrs(rows);
       const authorsRead = Promise.all(authorAddrs.map(a =>
         typeof window.emuProfileOf === 'function' ? window.emuProfileOf(a).catch(() => null) : null));
+      /* 下書きもサーバーから読む。一覧はこれを待たない（3秒で先に出し、下書きは届いたら送る）。 */
+      const draftsRead = readKnowledgeDrafts(account).catch(() => []);
+      const scheduledRead = scheduledKnowledgeCount(account).catch(() => 0);
       await Promise.all([markKnowledgePassHolders(rows, authorAddrs), markKnowledgePlans(rows, authorAddrs)]);
-      const drafts = await readKnowledgeDrafts(account);
+      const draftsSoon = await _spSoon(draftsRead, 3000);
+      const drafts = draftsSoon.ok ? draftsSoon.value : [];
+      if (!draftsSoon.ok) draftsRead.then(list => sendKnowledge({ type:'emu-knowledge-drafts', drafts:list || [] }));
+      const scheduledSoon = await _spSoon(scheduledRead, 1000);
       /* テーマは記録から。一度読んだら覚えているので、2ページ目以降は待たない。 */
       await _spMonthlyTheme();
       sendKnowledge({
@@ -29830,7 +29839,7 @@ async function sendEmuFeedback() {
         isOwner: typeof _spIsOwnerAddr === 'function' && !!account && _spIsOwnerAddr(account),
         monthlyTheme:String(typeof currentTheme === 'string' ? currentTheme : 'はじめる'),
         monthlyCopy:String(typeof currentThemeCopy === 'string' ? currentThemeCopy : ''),
-        drafts, scheduledCount:await scheduledKnowledgeCount(account),
+        drafts, scheduledCount:scheduledSoon.ok ? scheduledSoon.value : 0,
         helpedCount:await countMyGoodPosts(account, !options.append),
         // 議論から生まれた「みんなの結論」。1ページ目にだけ添える。
         conclusions: options.append ? [] : await readDiscussionConclusions(),
