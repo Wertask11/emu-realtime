@@ -420,7 +420,8 @@ test('受け取った方の残高（loginBalance）は消していない', () =>
   const api = fs.readFileSync(path.join(root, 'backend/server.js'), 'utf8');
   assert.match(api, /const loginBalance = Number\(ex\.loginBalance\) \|\| 0;/,
     '台帳から読むところが消えています');
-  assert.match(api, /const balance = bountyBalance \+ reactionBalance \+ loginBalance - spentBounty;/,
+  /* 応援・協賛・投票（11/10）で、受け取った分（giftIn）と使った分（giftOut）が式に加わった。 */
+  assert.match(api, /const balance = bountyBalance \+ reactionBalance \+ loginBalance \+ giftIn - spentBounty - giftOut;/,
     'balance の計算から loginBalance が外れています');
 });
 

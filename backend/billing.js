@@ -550,11 +550,29 @@ function createBillingRouter(deps) {
       const item = current.items && current.items.data && current.items.data[0];
       if (!item) return res.status(500).json({ error: "NO_SUBSCRIPTION_ITEM" });
 
-      const updated = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
-        items: [{ id: item.id, price: price }],
-        proration_behavior: "always_invoice",
-        metadata: { ...(current.metadata || {}), plan: next, uid: sub._ownerUid || uid }
-      });
+      /* 差額の支払いが通ったときだけ、プランを変える（11/11）。
+         前は支払いの結果を見ずに新しいプランを写していた。カードの支払いが失敗しても
+         契約は新しいプランのまま「支払い再試行中」になり、その間は会員として扱われるので、
+         light の人が払えないカードのまま pro を使えた。
+         error_if_incomplete：支払いが通らなければ Stripe は契約を変えずに断る。 */
+      let updated;
+      try {
+        updated = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+          items: [{ id: item.id, price: price }],
+          proration_behavior: "always_invoice",
+          payment_behavior: "error_if_incomplete",
+          metadata: { ...(current.metadata || {}), plan: next, uid: sub._ownerUid || uid }
+        });
+      } catch (e) {
+        const declined = e && (e.type === "StripeCardError" || e.rawType === "card_error"
+          || e.statusCode === 402 || e.code === "card_declined");
+        if (declined) return res.status(402).json({ error: "PAYMENT_FAILED" });
+        throw e;
+      }
+      /* 念のため：それでも支払い待ちの状態で返ってきたら、新しいプランとしては写さない。 */
+      if (!["active", "trialing"].includes(String(updated.status))) {
+        return res.status(402).json({ error: "PAYMENT_FAILED" });
+      }
 
       // 画面をすぐ正しくするため、Webhook を待たずに写しを更新する
       await upsertSubscription(sub._ownerUid || uid, updated, {});

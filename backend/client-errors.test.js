@@ -87,3 +87,16 @@ test("見られるのは運営だけ。この7日分を、多い順にまとめ�
     assert.equal(r.body.errors[1].count, 1);
   } finally { t.close(); }
 });
+
+/* 11/11 点検：受け取る相手が旧URLだけだったので、URLを移してからのエラーは全部捨てられていた。 */
+test("いまのURL（emu-for-schoolpark）からのエラーも受け取る", async () => {
+  const t = await setup();
+  try {
+    assert.equal(await t.send({ ...REPORT,
+      source: "https://emu-for-schoolpark.vercel.app/index.html?v=3",
+      page: "https://emu-for-schoolpark.vercel.app/?view=search" }), 204);
+    const rows = Object.values(t.db._dump("emu_client_errors"));
+    assert.equal(rows.length, 1, "新しいURLのエラーが捨てられている");
+    assert.equal(rows[0].source, "/index.html");
+  } finally { t.close(); }
+});

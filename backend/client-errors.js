@@ -13,7 +13,9 @@ const crypto = require("crypto");
 
 const COLLECTION = "emu_client_errors";
 const KEEP_MS = 30 * 24 * 60 * 60 * 1000;
-const ALLOWED_HOSTS = new Set(["schoolpark-emu.vercel.app", "localhost", "127.0.0.1"]);
+/* 11/11：新しいURL（emu-for-schoolpark）を足した。旧URLだけだったので、
+   URLを移してからのエラーは全部「ほかのサイト」として捨てられていた。 */
+const ALLOWED_HOSTS = new Set(["emu-for-schoolpark.vercel.app", "schoolpark-emu.vercel.app", "localhost", "127.0.0.1"]);
 
 /* 人につながりそうな部分を伏せる */
 function scrub(text, max) {

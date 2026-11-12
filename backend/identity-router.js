@@ -13,6 +13,9 @@
 const express = require("express");
 const { randomUUID } = require("crypto");
 
+/* 1つのパスポートに引換券で足せるログインの上限（いまある数がこれ以上なら、足せない）。 */
+const MAX_LOGIN_LINKS = 8;
+
 function createIdentityRouter(deps) {
   const {
     db, identity, requireFirebaseUser, requireOwner, rateLimit,
@@ -186,11 +189,36 @@ function createIdentityRouter(deps) {
      Authorization は「これから足すログイン方法」の ID トークン。
      つまり、足す側の本人確認は Firebase の正式な認証結果で行う。
      名前・表示名・メールアドレスの一致では、絶対に結び付けない。 */
+  /* 券の行き先のパスポートに、もう上限までログインが付いているか。
+     券の形が違う・読めないときは false（その先の確認が、これまでどおり断る）。 */
+  async function loginLimitReached(ticket, uid) {
+    if (!/^[a-f0-9]{16,128}$/.test(ticket)) return false;
+    try {
+      const snap = await db.collection("sp_link_tickets").doc(ticket).get();
+      const spid = snap.exists ? String((snap.data() || {}).spid || "") : "";
+      if (!spid) return false;
+      const record = await identity.readIdentity(spid);
+      const logins = (record && Array.isArray(record.links) ? record.links : []).filter((l) => l && l.kind === "fb");
+      if (logins.some((l) => l.subject === uid)) return false;
+      return logins.length >= MAX_LOGIN_LINKS;
+    } catch (e) { return false; }
+  }
+
   router.post("/link/complete", requireFirebaseUser, limitWrite, async (req, res) => {
     if (!db || !identity) return unavailable(res);
     const ticket = String((req.body && req.body.ticket) || "").trim();
     if (!ticket) return res.status(400).json({ error: "MISSING_TICKET" });
     try {
+      /* 1つのパスポートに足せるログインの数に上限を置く（11/11）。
+         プランは、つながっている全部のログインに効く。上限が無かったので、引換券を配れば
+         1つの契約や公式パスを何人でも共用できた。LINE・Google・メール・ウォレットを
+         ひととおり足しても届かない数にしてある。すでに入っているログインは数えない。 */
+      if (await loginLimitReached(ticket, req.identity.uid)) {
+        return res.status(409).json({
+          error: "LINK_LIMIT_REACHED",
+          message: "このパスポートには、これ以上ログイン方法を足せません。運営にお問い合わせください。"
+        });
+      }
       const out = await identity.completeLinkWithTicket(ticket, req.identity.uid, {
         signInProvider: req.identity.signInProvider
       });
@@ -209,6 +237,7 @@ function createIdentityRouter(deps) {
       if (["TICKET_NOT_FOUND", "TICKET_USED", "TICKET_EXPIRED", "TICKET_BROKEN"].includes(code)) {
         return res.status(400).json({ error: code });
       }
+
       console.error("連携に失敗:", code);
       return res.status(500).json({ error: "LINK_FAILED" });
     }

@@ -13482,7 +13482,13 @@ const _kwMy = _kwAliases[0] || "";
 const _kwMine = !!_kwAddrLc && _kwAliases.indexOf(_kwAddrLc) !== -1;
 const _kwGooded = emuListHasMe(post.goodUsers, null);
 const _kwChanged = emuListHasMe(post.changeUsers, null);
-const _kwAccepted = post.acceptedChangeCount || 0;
+/* 数の欄は、数にしてから画面へ埋める（11/11）。
+   前は記録の値をそのまま HTML に埋めていた。採用の数の欄に文字（HTML）を入れた投稿を
+   作れたので、その投稿で「役に立った」を押した人の画面でスクリプトが動いた。 */
+const _kwCount = (v) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? n : 0; };
+const _kwAccepted = _kwCount(post.acceptedChangeCount);
+const _kwGoodCount = _kwCount(post.goodCount);
+const _kwChangeCount = _kwCount(post.changeCount);
 const _kwTags = String(post.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
 let _kwDate = "";
 try {
@@ -13507,17 +13513,17 @@ postElement.innerHTML = `
   ${_emuSafePostImage(post.imageUrl) ? `<img class="kw-img" src="${escapeHtml(post.imageUrl)}" alt="">` : ""}
   <div class="kw-tags">${_kwTags.map((t) => `<span>#${escapeHtml(t)}</span>`).join("")}</div>
   <div class="kw-impact">
-    <div><span>この知識が生んだ価値</span><b>${post.goodCount ?? 0}人の次の一歩に</b></div>
+    <div><span>この知識が生んだ価値</span><b>${_kwGoodCount}人の次の一歩に</b></div>
     <div class="kw-impact-stats">
-      <span><b class="post-helpful-count">${post.goodCount ?? 0}</b>役に立った</span>
-      <span><b class="post-change-count">${post.changeCount ?? 0}</b>改善参加</span>
+      <span><b class="post-helpful-count">${_kwGoodCount}</b>役に立った</span>
+      <span><b class="post-change-count">${_kwChangeCount}</b>改善参加</span>
       <span><b>${_kwAccepted}</b>採用済み</span>
     </div>
   </div>
   <div class="post-actions kw-actions">
-    <button class="good-button ${_kwGooded ? "reacted" : ""}" ${(_kwGooded || _kwMine) ? "disabled" : ""} title="この知識が役に立ったことを投稿者へ伝えます">♡ <span>${_kwGooded ? "届けました" : "役に立った"}</span> <b class="good-count">${post.goodCount ?? 0}</b></button>
-    <button class="change-button ${_kwChanged ? "reacted" : ""}" ${(_kwChanged || _kwMine) ? "disabled" : ""} title="この知識を一緒により良くする意思を伝えます">↻ <span>${_kwChanged ? "提案済み" : "改善案を届ける"}</span> <b class="change-count">${post.changeCount ?? 0}</b></button>
-    <button class="good-voices-button" title="この知識が役に立った理由を読む"${(post.goodCount ?? 0) ? "" : " disabled"}>届いた声${(post.goodCount ?? 0) ? ` <b>${post.goodCount}</b>` : ""}</button>
+    <button class="good-button ${_kwGooded ? "reacted" : ""}" ${(_kwGooded || _kwMine) ? "disabled" : ""} title="この知識が役に立ったことを投稿者へ伝えます">♡ <span>${_kwGooded ? "届けました" : "役に立った"}</span> <b class="good-count">${_kwGoodCount}</b></button>
+    <button class="change-button ${_kwChanged ? "reacted" : ""}" ${(_kwChanged || _kwMine) ? "disabled" : ""} title="この知識を一緒により良くする意思を伝えます">↻ <span>${_kwChanged ? "提案済み" : "改善案を届ける"}</span> <b class="change-count">${_kwChangeCount}</b></button>
+    <button class="good-voices-button" title="この知識が役に立った理由を読む"${_kwGoodCount ? "" : " disabled"}>届いた声${_kwGoodCount ? ` <b>${_kwGoodCount}</b>` : ""}</button>
     <button class="change-history-button" title="変更履歴">変更履歴${_kwAccepted ? ` <b>${_kwAccepted}</b>` : ""}</button>
   </div>
   <div class="post-value-note kw-note">Goodは「役に立った」、Changeは「一緒にもっと良くする」。数字だけでなく、この投稿が生んだ価値として残ります。</div>
@@ -15689,6 +15695,12 @@ async function _emuOffchainBalance(addr, options) {
   }
   try {
     if (!window.db || !window.fbLib) return null;
+    /* 台帳は本人が自分の分だけ読める（11/11・firestore.rules）。
+       開いた直後はログインがまだ戻っていないことがあるので、戻るのを待ってから読む。
+       待たずに読むと断られて、残高の（ ）が出ない。新しくログインを求めることはしない。 */
+    if (!(window.auth && window.auth.currentUser) && typeof emuEnsureSignedIn === 'function') {
+      try { await emuEnsureSignedIn({ interactive: false }); } catch (e) {}
+    }
     const snap = await window.fbLib.getDoc(window.fbLib.doc(window.db, 'emuer_offchain', key));
     if (!snap.exists()) return null;
     const balance = Math.max(0, Number(snap.data().balance) || 0);
@@ -27361,6 +27373,10 @@ row.appendChild(medal);
 
 
     if (event.data.type === 'room2_name_set') {
+      /* このサイトの画面（Room2）からの知らせだけ受ける（11/11）。
+         送り主を確かめていなかったので、ほかのサイトがこの画面を別タブで開いて
+         知らせを送れば、ログイン中の人の表示名を書き換えられた。 */
+      if (event.origin !== window.location.origin) return;
       var name    = event.data.displayName;
       var address = window.connectedAccount;
  
