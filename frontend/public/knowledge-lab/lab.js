@@ -1100,6 +1100,22 @@
             missing.map((p) => "「" + p.title + "」").join("、") +
             "。外して分析するか、投稿者本人が編集画面でAI利用への同意を保存してください。";
       }
+      /* 11/13：どの分野が足りないのかを出す。前は「各分野の知識を1件ずつ」とだけ出ていて、
+         選んだ知識の印（分野）を見比べないと、どれが足りないのか分からなかった。 */
+      if (code === "AI_FIELD_SOURCES_MISSING") {
+        const chosen = [...state.selected.values()];
+        const known = chosen.every((p) => Array.isArray((p.knowledgeLab?.facets || p.facets || {}).field));
+        const lacking = known
+          ? selectedFields().filter(
+              (id) => !chosen.some((p) => ((p.knowledgeLab?.facets || p.facets || {}).field || []).includes(id)),
+            )
+          : [];
+        if (lacking.length)
+          message +=
+            " 足りない分野：" +
+            lacking.map((id) => "「" + names([id]) + "」").join("、") +
+            "。この分野の知識を1件足すか、「1. 分野を2〜3つ選ぶ」でこの分野のチェックを外してください。";
+      }
       feedback.classList.add("error");
       feedback.textContent = `${message}（${code}）③には今回の分析結果を入力していません。`;
       throw e;
