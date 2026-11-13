@@ -193,3 +193,22 @@ test("もらった側：20秒ごとの確認は、何も届いていなければ
     assert.equal((await s.call("GET", "/inbox?quick=1", "bob")).body.quick, undefined, "5分たったら調べ直す");
   } finally { await s.close(); }
 });
+
+/* 11/13：ログインの記録に名前が無い人の応援が「Emuerさんから」と届き、誰からか分からなかった。
+   画面で付けた名前（user_profiles）を、本人の2つのアドレスの順に引く。前に届いた分も、いまの名前で出す。 */
+test("応援：送った人の名前は、画面で付けた名前（user_profiles）で届く。前に「Emuer」で届いた分も名前で出す", async () => {
+  const noName = { uid: "un", walletAddress: C, account: { spid: "SP-N", chesAddress: ethers.utils.getAddress(E) } };
+  const s = await serve({ ...seed(),
+    emuer_offchain: { [A]: { balance: 200 }, [B]: { balance: 3 }, [C]: { balance: 50 } },
+    user_profiles: { [E]: { address: E, displayName: "メンマ" }, [D]: { address: D, displayName: "だいちのなまえ" } },
+    emuer_v2_gift_events: { ["cheer-" + "f".repeat(40)]: { kind: "cheer", from: D, to: B, amount: 3, postId: "p1", postTitle: "朝の音読", fromName: "Emuer", seen: false, createdAtMs: 1 } } });
+  USERS.noname = noName;
+  try {
+    const ok = await s.call("POST", "/cheer", "noname", { postId: "p1", amount: 1, requestId: "req-name-01" });
+    assert.equal(ok.status, 200);
+    const inbox = await s.call("GET", "/inbox", "bob");
+    const names = inbox.body.items.map((x) => x.fromName).sort();
+    assert.deepEqual(names, ["だいちのなまえ", "メンマ"], "アプリが作ったアドレス側の名前も使う・前の分も名前で出す");
+    assert.ok(!JSON.stringify(inbox.body).includes(C) && !JSON.stringify(inbox.body).includes(D), "相手のアドレスは見せない");
+  } finally { delete USERS.noname; await s.close(); }
+});

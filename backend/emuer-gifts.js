@@ -49,6 +49,7 @@ function nameOf(identity) {
   return String(a.displayName || a.name || "Emuer").replace(/[\u0000-\u001f\u007f<>]/g, "").slice(0, 40) || "Emuer";
 }
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+function cleanName(v) { return String(v || "").replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 40); }
 
 function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => Date.now(), enabled = () => true }) {
   const router = express.Router();
@@ -72,6 +73,23 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
     if (e && e.code && e.status) return res.status(e.status).json({ error: e.code, ...e.extra });
     console.warn("emuer-gifts:", e && e.message);
     return res.status(500).json({ error: "GIFT_FAILED" });
+  }
+  /* 送った人の名前（11/13）。前はログインの記録（ches_accounts）の名前だけを見ていた。
+     そこにはふつう名前が無いので、ほぼ全員が「Emuerさん」になり、誰からの応援か分からなかった。
+     画面で付けた名前は user_profiles/{アドレス}.displayName にある。本人の2つのアドレスの順に引く。 */
+  async function profileName(addr) {
+    if (!ADDRESS.test(String(addr || ""))) return "";
+    try {
+      const snap = await db.collection("user_profiles").doc(addr).get();
+      return snap.exists ? cleanName((snap.data() || {}).displayName) : "";
+    } catch (_) { return ""; }
+  }
+  async function senderName(req) {
+    for (const a of addressesOf(req)) {
+      const name = await profileName(a);
+      if (name) return name;
+    }
+    return nameOf(req.identity);
   }
   function senderOf(req) {
     const addr = String((req.identity && req.identity.walletAddress) || "").toLowerCase();
@@ -161,6 +179,7 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
       if (addressesOf(req).includes(named)) throw err("OWN_POST", 409);
       const to = await receiverOf(named);
       if (to === from) throw err("OWN_POST", 409);
+      const fromName = await senderName(req);
       const targetRef = db.collection(TARGETS).doc("post:" + postId);
       const personRef = db.collection(TARGETS).doc("post:" + postId + ":by:" + from);
       const eventRef = db.collection(EVENTS).doc(id);
@@ -175,7 +194,7 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
         tx.set(targetRef, { kind: "post", postId, people, total, updatedAtMs: now() }, { merge: true });
         if (!person.exists) tx.set(personRef, { kind: "post-person", postId, address: from, firstAtMs: now() });
         const event = { kind: "cheer", from, to, amount, postId, postTitle: String(post.title || "").slice(0, 80),
-          fromName: nameOf(req.identity), seen: false, createdAtMs: now() };
+          fromName, seen: false, createdAtMs: now() };
         tx.create(eventRef, event);
         audit(tx, id, { from, to, amount, reason: "cheer", postId });
         return { already: false, event, people, total, balance: after.balance, sentToday: after.sentToday };
@@ -220,9 +239,15 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
       }
       const snaps = await Promise.all(mine.map((a) => db.collection(EVENTS).where("to", "==", a).where("seen", "==", false).limit(30).get()));
       remember(lastFullCheck, mine[0], startedAt);
-      const items = snaps.flatMap((snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })))
-        .sort((a, b) => num(b.createdAtMs) - num(a.createdAtMs)).slice(0, 30)
-        .map((e) => ({ id: e.id, kind: e.kind, amount: num(e.amount), fromName: e.fromName || "Emuer",
+      const events = snaps.flatMap((snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })))
+        .sort((a, b) => num(b.createdAtMs) - num(a.createdAtMs)).slice(0, 30);
+      /* 名前が「Emuer」のまま届いていた分（11/13 より前）は、送った人のいまの名前で出す */
+      const unnamed = [...new Set(events.filter((e) => !e.fromName || e.fromName === "Emuer").map((e) => String(e.from || "")))]
+        .filter((a) => ADDRESS.test(a)).slice(0, 10);
+      const names = new Map(await Promise.all(unnamed.map(async (a) => [a, await profileName(a)])));
+      const items = events
+        .map((e) => ({ id: e.id, kind: e.kind, amount: num(e.amount),
+          fromName: (e.fromName && e.fromName !== "Emuer" ? e.fromName : names.get(String(e.from || ""))) || "Emuer",
           postId: e.postId || "", postTitle: e.postTitle || "", questTitle: e.questTitle || "", at: num(e.createdAtMs) }));
       return res.json({ ok: true, items, total: items.reduce((s, x) => s + x.amount, 0) });
     } catch (e) { return fail(res, e); }
@@ -292,6 +317,7 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
       if (!SPONSOR_AMOUNTS.includes(amount)) throw err("INVALID_AMOUNT");
       if (!REQUEST_ID.test(requestId)) throw err("INVALID_REQUEST");
       const q = await questOf(questId);
+      const fromName = await senderName(req);
       const id = "sponsor-" + hash([from, requestId].join(":"));
       const targetRef = db.collection(TARGETS).doc("quest:" + questId);
       const personRef = db.collection(TARGETS).doc("quest:" + questId + ":by:" + from);
@@ -307,7 +333,7 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
         tx.set(targetRef, next, { merge: true });
         if (!person.exists) tx.set(personRef, { kind: "quest-person", questId, address: from, firstAtMs: now() });
         tx.create(eventRef, { kind: "sponsor", from, to: null, amount, questId, questTitle: String(q.title || "").slice(0, 80),
-          fromName: nameOf(req.identity), seen: true, createdAtMs: now() });
+          fromName, seen: true, createdAtMs: now() });
         audit(tx, id, { from, to: "quest-pot:" + questId, amount, reason: "quest_sponsor", questId });
         return { already: false, ...potView(next), balance: after.balance, sentToday: after.sentToday };
       });
