@@ -148,3 +148,74 @@ test('Good・Change の報酬：送っても意味がない返事（投稿が無
     assert.equal(await w.page.evaluate(() => localStorage.getItem('emuReactionRewardQueue')), null);
   } finally { await w.close(); }
 });
+
+/* 11/14 オーナー：ウォレットでログインしていても、受け取り方を選べるようにする。
+   実EMUER（ウォレットへ移す・署名とガス代が要る）か、アプリ内EMUER（オフチェーン・公式ショップですぐ使える）か。 */
+async function withWallet() {
+  const context = await browser.newContext();
+  await context.addInitScript(() => { window.ethereum = { isMetaMask: true }; });
+  return context;
+}
+
+test('ウォレットがあるとき：今日のぶんは「実EMUERでウォレットへ」と「アプリ内EMUERで受け取る」を選べる。アプリ内なら署名を頼まない', async () => {
+  let claimed = false;
+  const w = await open({
+    'GET /daily/login/status': () => ({ json: { claimedToday: claimed } }),
+    'POST /daily/login': () => { claimed = true; return { json: { ok: true, recorded: true, amount: '1' } }; },
+    'GET /rewards': () => ({ json: { rewards: claimed ? [{ claimId: '0x09', kind: 'login', amount: '1' }] : [] } })
+  }, await withWallet());
+  try {
+    await w.page.evaluate(() => window.wsOpenRewards());
+    await w.page.waitForFunction(() => !document.getElementById('wsLoginApp').hidden);
+    assert.equal(await w.page.locator('#wsLogin').innerText(), '今日のぶん +1 EMUER を実EMUERでウォレットへ');
+    assert.equal(await w.page.locator('#wsLoginApp').innerText(), '今日のぶん +1 EMUER をアプリ内EMUERで受け取る');
+    assert.match(await w.page.locator('#wsChoice').innerText(), /実EMUER：Polygon のウォレットに入ります.*アプリ内EMUER（オフチェーン）：City の公式ショップですぐ使えます/);
+    await w.page.locator('#wsLoginApp').click();
+    await w.page.waitForFunction(() => document.getElementById('wsLogin').textContent === '今日のぶんは受け取り済み');
+    assert.equal(await w.page.locator('#wsLoginApp').isHidden(), true);
+    const sent = w.calls.find(c => c.key === 'POST /daily/login');
+    assert.deepEqual(sent.body, { address: ME, claim: false }, 'アプリ内なら署名を頼まない（claim:false）');
+    assert.match(await w.page.locator('#wsStatus').innerText(), /1 EMUER を受け取りました。/);
+    // 受け取ったぶんは一覧に出て、あとでウォレットへ移すこともできる
+    await w.page.waitForFunction(() => !document.getElementById('wsClaim').hidden);
+    assert.equal(await w.page.locator('#wsClaim').innerText(), '実EMUERとしてウォレットへ：1 EMUER を受け取る');
+    assert.equal(w.calls.some(c => c.key.endsWith('/authorization') || c.key === 'POST /rewards/bundle'), false);
+    assert.deepEqual(w.alerts, []);
+    assert.deepEqual(w.errors, []);
+  } finally { await w.close(); }
+});
+
+test('ウォレットがあるとき：受け取る前の報酬は「実EMUERとしてウォレットへ」と「アプリ内EMUERのまま使う」を並べる', async () => {
+  const w = await open({
+    'GET /daily/login/status': () => ({ json: { claimedToday: true } }),
+    'GET /rewards': () => ({ json: { rewards: [{ claimId: '0x01', kind: 'good-received', amount: '1' }, { claimId: '0x02', kind: 'login', amount: '1' }] } })
+  }, await withWallet());
+  try {
+    await w.page.evaluate(() => window.wsOpenRewards());
+    await w.page.waitForFunction(() => !document.getElementById('wsClaimApp').hidden);
+    assert.equal(await w.page.locator('#wsClaim').innerText(), '実EMUERとしてウォレットへ：2 EMUER（2件）をまとめて受け取る');
+    assert.equal(await w.page.locator('#wsClaimApp').innerText(), 'アプリ内EMUERのまま使う（City の公式ショップ）');
+    assert.equal(await w.page.locator('#wsStatus').innerText(), '受け取る前のEMUER（アプリ内EMUER）が 2 EMUER あります（2件）。');
+    assert.equal(await w.page.locator('#wsChoice').isHidden(), false, '違いの説明を出す');
+    assert.equal(await w.page.locator('#wsLoginApp').isHidden(), true, '今日のぶんは受け取り済み');
+    await w.page.locator('#wsClaimApp').click();
+    assert.deepEqual(await w.page.evaluate(() => window.opened), ['commerce']);
+    assert.equal(w.calls.some(c => c.key.endsWith('/authorization') || c.key === 'POST /rewards/bundle'), false, '署名を頼まない');
+    assert.deepEqual(w.alerts, []);
+  } finally { await w.close(); }
+});
+
+test('ウォレットが無いとき：選ぶボタンは出さず、これまでどおりアプリ内EMUERだけ', async () => {
+  const w = await open({
+    'GET /daily/login/status': () => ({ json: { claimedToday: false } }),
+    'GET /rewards': () => ({ json: { rewards: [{ claimId: '0x01', kind: 'login', amount: '1' }] } })
+  });
+  try {
+    await w.page.evaluate(() => window.wsOpenRewards());
+    await w.page.waitForFunction(() => document.getElementById('wsClaim').textContent === 'City の公式ショップで使う');
+    assert.equal(await w.page.locator('#wsLogin').innerText(), '今日のぶん +1 EMUER を受け取る');
+    assert.equal(await w.page.locator('#wsLoginApp').isHidden(), true);
+    assert.equal(await w.page.locator('#wsClaimApp').isHidden(), true);
+    assert.equal(await w.page.locator('#wsChoice').isHidden(), true);
+  } finally { await w.close(); }
+});
