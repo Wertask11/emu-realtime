@@ -33,9 +33,9 @@ document.head.appendChild(emuerV2PublicCopyScript);
 
 (function(){
   const s=document.createElement("style");
-  s.textContent="#walletSuccessOverlay{display:none;position:fixed;inset:0;background:#000b;z-index:9999;align-items:center;justify-content:center}#walletSuccessOverlay.active{display:flex}#walletSuccessCard{background:#fff;border-radius:18px;padding:30px;max-width:360px;width:calc(100% - 44px);text-align:center;color:#172033}.ws-balance{font-size:32px;font-weight:700;color:#167653;margin:8px}.ws-sub{font-size:13px;color:#667085}.ws-btn{width:100%;border:0;border-radius:10px;padding:13px;margin-top:10px;background:#265dd7;color:#fff;font-weight:700;cursor:pointer}.ws-btn:disabled{background:#aab4c8}.ws-close{background:#eef2f8;color:#273047}";
+  s.textContent="#walletSuccessOverlay{display:none;position:fixed;inset:0;background:#000b;z-index:9999;align-items:center;justify-content:center}#walletSuccessOverlay.active{display:flex}#walletSuccessCard{background:#fff;border-radius:18px;padding:30px;max-width:360px;width:calc(100% - 44px);text-align:center;color:#172033}.ws-balance{font-size:32px;font-weight:700;color:#167653;margin:8px}.ws-sub{font-size:13px;color:#667085}.ws-btn{width:100%;border:0;border-radius:10px;padding:13px;margin-top:10px;background:#265dd7;color:#fff;font-weight:700;cursor:pointer}.ws-btn:disabled{background:#aab4c8}.ws-close{background:#eef2f8;color:#273047}.ws-alt{background:#fff;color:#265dd7;border:2px solid #265dd7}#wsChoice{text-align:left;line-height:1.6;margin-top:12px}";
   document.head.appendChild(s);
-  document.body.insertAdjacentHTML("beforeend",'<div id="walletSuccessOverlay"><section id="walletSuccessCard"><h2>ウォレット接続完了</h2><p id="wsAddress" class="ws-sub"></p><p class="ws-sub">EMUER残高</p><p id="wsBalance" class="ws-balance">---</p><p id="wsStatus" class="ws-sub"></p><button id="wsLogin" class="ws-btn" hidden></button><button id="wsClaim" class="ws-btn" hidden></button><button class="ws-btn ws-close" onclick="closeWalletSuccessAndStart()">SchoolParkを始める</button></section></div>');
+  document.body.insertAdjacentHTML("beforeend",'<div id="walletSuccessOverlay"><section id="walletSuccessCard"><h2>ウォレット接続完了</h2><p id="wsAddress" class="ws-sub"></p><p class="ws-sub">ウォレットのEMUER残高（実EMUER）</p><p id="wsBalance" class="ws-balance">---</p><p id="wsStatus" class="ws-sub"></p><button id="wsLogin" class="ws-btn" hidden></button><button id="wsLoginApp" class="ws-btn ws-alt" hidden></button><button id="wsClaim" class="ws-btn" hidden></button><button id="wsClaimApp" class="ws-btn ws-alt" hidden></button><p id="wsChoice" class="ws-sub" hidden></p><button class="ws-btn ws-close" onclick="closeWalletSuccessAndStart()">SchoolParkを始める</button></section></div>');
 })();
 const wsAccount=()=>String(window.connectedAccount||"").toLowerCase();
 const wsBtn=()=>document.getElementById("wsClaim");
@@ -55,10 +55,19 @@ const wsLoginBtn=()=>document.getElementById("wsLogin");
 const wsCanSign=()=>!!window.ethereum;
 const WS_NO_WALLET="ウォレットへ移すには、MetaMask の入ったブラウザ（パソコンや MetaMask アプリ）で開いてください。受け取る前のEMUERは、このまま City の公式ショップで使えます。";
 async function wsHeaders(interactive){if(typeof window.emuAuthHeaders!=="function")throw new Error("再ログインしてください。");return window.emuAuthHeaders(!!interactive);}
+/* 11/14 オーナー：ウォレットでログインしていても、受け取り方を選べるようにする。
+   実EMUER＝Polygon のウォレットへ移す（署名とガス代が要る）。
+   アプリ内EMUER（オフチェーン）＝受け取る前のEMUERのまま。公式ショップですぐ使え、あとでウォレットへ移すこともできる。
+   MetaMask などが無いところでは、これまでどおりアプリ内EMUERだけ（ウォレットへ移せないため）。 */
+const wsLoginAppBtn=()=>document.getElementById("wsLoginApp");
+const WS_CHOICE_NOTE="受け取り方を選べます。実EMUER：Polygon のウォレットに入ります（署名とガス代が要ります）。アプリ内EMUER（オフチェーン）：City の公式ショップですぐ使えます。あとでウォレットへ移すこともできます。";
+function wsAppOption(text,fn){const b=document.getElementById("wsClaimApp");if(b){if(!text){b.hidden=true;b.onclick=null;}else{b.hidden=false;b.disabled=false;b.textContent=text;b.onclick=fn;}}wsChoiceNote();}
+/* 2つのボタンが並んでいるときだけ、違いの説明を出す */
+function wsChoiceNote(){const n=document.getElementById("wsChoice");if(!n)return;const two=["wsLoginApp","wsClaimApp"].some(id=>{const b=document.getElementById(id);return b&&!b.hidden;});n.hidden=!two;n.textContent=two?WS_CHOICE_NOTE:"";}
 function wsClaimLabel(text,fn,disabled){const b=wsBtn();if(!b)return;b.hidden=false;b.textContent=text;b.disabled=!!disabled;b.onclick=fn;}
 /* 受け取るものが無い・読めないときは、黙らずに理由を出す。
    お金の画面で何も出ないのは、壊れているのと見分けがつかない。 */
-function wsHideClaim(why){const b=wsBtn();if(b)b.hidden=true;const s=document.getElementById("wsStatus");if(s&&why)s.textContent=why;}
+function wsHideClaim(why){const b=wsBtn();if(b)b.hidden=true;wsAppOption(null);const s=document.getElementById("wsStatus");if(s&&why)s.textContent=why;}
 async function wsBalance(account){
   if(!wsCanSign()){document.getElementById("wsBalance").textContent="—";document.getElementById("wsStatus").textContent="ウォレットの残高は、MetaMask の入ったブラウザで出ます。";return;}
   try{const p=new ethers.providers.Web3Provider(window.ethereum);const addr=emuerV2Config?.enabled?emuerV2Config.contract:window.EMUER_CONTRACT_ADDRESS;const abi=emuerV2Config?.enabled?["function balanceOf(address) view returns (uint256)"]:window.EMUER_CONTRACT_ABI;const x=await new ethers.Contract(addr,abi,p).balanceOf(account);document.getElementById("wsBalance").textContent=Number(ethers.utils.formatUnits(x,18)).toLocaleString("ja-JP");document.getElementById("wsStatus").textContent="残高を確認しました";}catch(_){document.getElementById("wsStatus").textContent="残高を取得できませんでした";}
@@ -132,11 +141,18 @@ async function wsDaily(){
     const d=await r.json().catch(()=>({}));
     if(!r.ok){b.hidden=true;return;}
     b.hidden=false;
+    const app=wsLoginAppBtn();
     /* サーバーが返すのは claimedToday。claimed を見ていたので、
        受け取り済みでも「受け取れます」と出ていた。 */
-    if(d.claimedToday){b.disabled=true;b.textContent="今日のぶんは受け取り済み";b.onclick=null;}
-    else{b.disabled=false;b.textContent="今日のぶん +1 EMUER を受け取る";b.onclick=claimEmuV2LoginReward;}
-  }catch(_){b.hidden=true;}
+    if(d.claimedToday){b.disabled=true;b.textContent="今日のぶんは受け取り済み";b.onclick=null;if(app)app.hidden=true;}
+    else if(wsCanSign()&&app){
+      /* ウォレットへ移せるところでは、どちらで受け取るかを選んでもらう */
+      b.disabled=false;b.textContent="今日のぶん +1 EMUER を実EMUERでウォレットへ";b.onclick=claimEmuV2LoginReward;
+      app.hidden=false;app.disabled=false;app.textContent="今日のぶん +1 EMUER をアプリ内EMUERで受け取る";app.onclick=claimEmuV2LoginRewardApp;
+    }
+    else{b.disabled=false;b.textContent="今日のぶん +1 EMUER を受け取る";b.onclick=claimEmuV2LoginReward;if(app)app.hidden=true;}
+    wsChoiceNote();
+  }catch(_){b.hidden=true;const app=wsLoginAppBtn();if(app)app.hidden=true;wsChoiceNote();}
 }
 async function wsRewards(){
   try{
@@ -164,11 +180,17 @@ async function wsRewards(){
       const st=document.getElementById("wsStatus");
       if(st)st.textContent=`受け取る前のEMUERが ${total.toLocaleString("ja-JP")} EMUER あります（${a.length}件）。City の公式ショップでそのまま使えます。ウォレットへ移すときは、MetaMask の入ったブラウザで開いてください。`;
       wsClaimLabel("City の公式ショップで使う",wsOpenShop,false);
+      if(typeof wsAppOption==="function")wsAppOption(null);
       return;}
+    /* ウォレットへ移せるところでも、アプリ内EMUERのまま使う道を並べる（11/14）。
+       受け取る前のEMUERは、そのままでアプリ内EMUER（オフチェーン）として公式ショップで使える。 */
+    const st=document.getElementById("wsStatus");
+    if(st)st.textContent=`受け取る前のEMUER（アプリ内EMUER）が ${total.toLocaleString("ja-JP")} EMUER あります（${a.length}件）。`;
     const label=a.length>1
-      ? `未請求の報酬 ${total.toLocaleString("ja-JP")} EMUER（${a.length}件）をまとめて受け取る`
-      : `未請求の報酬 ${total.toLocaleString("ja-JP")} EMUER を受け取る`;
+      ? `実EMUERとしてウォレットへ：${total.toLocaleString("ja-JP")} EMUER（${a.length}件）をまとめて受け取る`
+      : `実EMUERとしてウォレットへ：${total.toLocaleString("ja-JP")} EMUER を受け取る`;
     wsClaimLabel(label,a.length>1?()=>wsClaimAll(a):()=>wsClaim(a[0]),false);
+    if(typeof wsAppOption==="function")wsAppOption("アプリ内EMUERのまま使う（City の公式ショップ）",wsOpenShop);
   }catch(e){wsHideClaim(String(e&&e.message||"報酬を読めませんでした"));}
 }
 /* 受け取りの画面を閉じて、City の公式ショップ（EMUERで交換する画面）を開く。 */
@@ -179,7 +201,7 @@ function wsOpenShop(){
 }
 async function wsClaim(row){
   if(!wsCanSign()){alert(WS_NO_WALLET);return;}
-  try{wsClaimLabel("署名を準備中…",null,true);const r=await fetch(EMUER_V2_API+"/rewards/"+encodeURIComponent(row.claimId)+"/authorization",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount()})}),d=await r.json();if(!r.ok)throw new Error(d.error||"報酬を準備できませんでした");const p=new ethers.providers.Web3Provider(window.ethereum);if(Number((await p.getNetwork()).chainId)!==137)throw new Error("Polygon Mainnetに切り替えてください");const x=d.reward,c=new ethers.Contract(emuerV2Config.contract,EMUER_V2_ABI,p.getSigner());wsClaimLabel("MetaMaskで確認…",null,true);await(await c.claimReward(x.claimId,x.totalAmount,x.deadline,x.authorization)).wait();
+  try{if(typeof wsAppOption==="function")wsAppOption(null);wsClaimLabel("署名を準備中…",null,true);const r=await fetch(EMUER_V2_API+"/rewards/"+encodeURIComponent(row.claimId)+"/authorization",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount()})}),d=await r.json();if(!r.ok)throw new Error(d.error||"報酬を準備できませんでした");const p=new ethers.providers.Web3Provider(window.ethereum);if(Number((await p.getNetwork()).chainId)!==137)throw new Error("Polygon Mainnetに切り替えてください");const x=d.reward,c=new ethers.Contract(emuerV2Config.contract,EMUER_V2_ABI,p.getSigner());wsClaimLabel("MetaMaskで確認…",null,true);await(await c.claimReward(x.claimId,x.totalAmount,x.deadline,x.authorization)).wait();
     /* 受け取れたことを、はっきり出す。お金が動いたのに画面が
        黙っていると、通ったのかどうか分からない。 */
     const got=Number(row&&row.amount)||0;
@@ -199,6 +221,7 @@ async function wsClaim(row){
 async function wsClaimAll(rows){
   if(!wsCanSign()){alert(WS_NO_WALLET);return;}
   try{
+    if(typeof wsAppOption==="function")wsAppOption(null);
     wsClaimLabel("署名を準備中…",null,true);
     const r=await fetch(EMUER_V2_API+"/rewards/bundle",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount()})}),d=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(d.error==="NOTHING_TO_BUNDLE"?"まとめられる報酬がありませんでした。少し待ってからもう一度お試しください。":(d.error||"報酬を準備できませんでした"));
@@ -228,14 +251,29 @@ async function wsRecordLoginReward(b){
   const r=await fetch(EMUER_V2_API+"/daily/login",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount(),claim:false})}),d=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(d.error==="SELF_CUSTODY_WALLET_REQUIRED"?"ウォレットを連携すると受け取れます。":(d.error||"ログイン報酬を受け取れませんでした"));
   b.disabled=true;b.textContent="今日のぶんは受け取り済み";b.onclick=null;
+  const app=wsLoginAppBtn();if(app)app.hidden=true;wsChoiceNote();
   const st=document.getElementById("wsStatus");
   if(st)st.textContent="1 EMUER を受け取りました。ウォレットに移す前のEMUERとしてたまり、City の公式ショップでそのまま使えます。";
   try{if(typeof window.emuerV2RefreshBalance==="function")await window.emuerV2RefreshBalance();}catch(_){}
+}
+/* ウォレットへ移せるところで「アプリ内EMUERで受け取る」を選んだとき。署名は頼まない。
+   受け取ったぶんは一覧（受け取る前のEMUER）に出るので、あとでウォレットへ移すこともできる。 */
+async function claimEmuV2LoginRewardApp(){
+  const b=wsLoginBtn(),app=wsLoginAppBtn();
+  if(b)b.disabled=true;if(app)app.disabled=true;
+  try{
+    await wsRecordLoginReward(b);
+    const st=document.getElementById("wsStatus"),msg=st?st.textContent:"";
+    await wsRewards();
+    /* 一覧を読み直すと上の知らせが書き替わるので、受け取った知らせを先に戻す */
+    if(st&&msg)st.textContent=msg+" "+st.textContent;
+  }catch(e){await wsDaily();alert(e.message||"ログイン報酬の受取に失敗しました");}
 }
 async function claimEmuV2LoginReward(){
   try{
     const b=wsLoginBtn();
     if(!wsCanSign())return await wsRecordLoginReward(b);
+    const app=wsLoginAppBtn();if(app){app.hidden=true;wsChoiceNote();}
     b.disabled=true;b.textContent="署名を準備中…";
     const r=await fetch(EMUER_V2_API+"/daily/login",{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount()})}),d=await r.json();
     if(!r.ok)throw new Error(d.error||"ログイン報酬を準備できませんでした");
@@ -256,8 +294,8 @@ async function claimEmuV2LoginReward(){
     await wsBalance(wsAccount());
     await wsRewards();
   }catch(e){
-    const b=wsLoginBtn();
-    if(b){b.disabled=false;b.textContent="今日のぶん +1 EMUER を受け取る";b.onclick=claimEmuV2LoginReward;}
+    /* 断った・失敗したときは、2つの選び方をもう一度出す */
+    try{await wsDaily();}catch(_){const b=wsLoginBtn();if(b){b.disabled=false;b.textContent="今日のぶん +1 EMUER を受け取る";b.onclick=claimEmuV2LoginReward;}}
     alert(e.message||"ログイン報酬の受取に失敗しました");
   }
 }
