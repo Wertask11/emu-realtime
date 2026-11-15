@@ -195,7 +195,7 @@ test('ウォレットがあるとき：受け取る前の報酬は「実EMUERと
     await w.page.waitForFunction(() => !document.getElementById('wsClaimApp').hidden);
     assert.equal(await w.page.locator('#wsClaim').innerText(), '実EMUERとしてウォレットへ：2 EMUER（2件）をまとめて受け取る');
     assert.equal(await w.page.locator('#wsClaimApp').innerText(), 'アプリ内EMUERのまま使う（City の公式ショップ）');
-    assert.equal(await w.page.locator('#wsStatus').innerText(), '受け取る前のEMUER（アプリ内EMUER）が 2 EMUER あります（2件）。');
+    assert.equal(await w.page.locator('#wsStatus').innerText(), 'ウォレットへ移せるアプリ内EMUERが 2 EMUER あります（2件）。そのままでも、公式ショップ・応援・協賛・投票に使えます。');
     assert.equal(await w.page.locator('#wsChoice').isHidden(), false, '違いの説明を出す');
     assert.equal(await w.page.locator('#wsLoginApp').isHidden(), true, '今日のぶんは受け取り済み');
     await w.page.locator('#wsClaimApp').click();

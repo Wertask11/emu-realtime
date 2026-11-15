@@ -348,10 +348,13 @@ app.use("/api/emu/knowledge-trials", require("./knowledge-trials").createKnowled
 app.use("/api/emu/proofread", require("./proofread").createProofreadRouter({ env: process.env, requireFirebaseUser }));
 /* 体験チケット（11/10）。交換した「その場で受け取る」品を QR で見せ、お店の人が暗証番号で使用済みにする（backend/shop-tickets.js）。 */
 app.use("/api/emu/tickets", rateLimit({ windowMs: 60_000, max: 30, key: "ticket" }), require("./shop-tickets").createTicketRouter({ db, requireOwner }));
-/* EMUER の応援・協賛・投票（11/10）。未変換の EMUER（emuer_offchain）だけを動かす。実EMUERは動かさない（backend/emuer-gifts.js）。
+/* EMUER の応援・協賛・投票（11/10）。アプリ内EMUER（応援の台帳 emuer_offchain と受け取る前の報酬）を動かす。実EMUERは動かさない（backend/emuer-gifts.js）。
    EMU_GIFTS_ENABLED=false で、贈る・協賛・投票を止められる（見るのはそのまま）。 */
+/* 11/15：受け取る前の報酬（emuer_v2_rewards）からも払えるようにした。報酬が鎖の上で受け取り済みでないかを鎖に聞くため、読むだけの鎖の窓口を渡す。 */
+let giftsChain = null;
 app.use("/api/emu/gifts", require("./emuer-gifts").createGiftsRouter({ db, requireFirebaseUser, requireOwner,
-  enabled: () => !!db && process.env.EMU_GIFTS_ENABLED !== "false" }));
+  enabled: () => !!db && process.env.EMU_GIFTS_ENABLED !== "false",
+  chain: { claimPaid: (claimId) => (giftsChain || (giftsChain = require("./mitemiru").createChainAdapter({ POLYGON_RPC_URL: process.env.POLYGON_RPC_URL }))).claimPaid(claimId) } }));
 /* 冷蔵庫くんと話して、知識の下書きにする（11/10）。投稿画面と冷蔵庫くんに聞くの2つから使う。下書きを返すだけ（backend/reizo-interview.js）。 */
 app.use("/api/emu/interview", require("./reizo-interview").createInterviewRouter({ env: process.env, requireFirebaseUser }));
 /* 完走証明ページ（11/9）：本人が選んだ完走1件だけを、推測できないURLで公開する（backend/public-proof.js）。 */

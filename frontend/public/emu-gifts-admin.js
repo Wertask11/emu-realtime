@@ -14,7 +14,7 @@
     if (!tab) return;
     tab.insertAdjacentHTML("beforeend", '<div id="emuGiftsAdmin" class="card">'
       + '<h3>みんなで決める（投票）</h3>'
-      + '<p class="empty" style="text-align:left;margin:0 0 10px">知識を読むの一覧の上に出ます。1人1票。1票に使う EMUER は、未変換の EMUER から引きます（0 なら無料）。</p>'
+      + '<p class="empty" style="text-align:left;margin:0 0 10px">知識を読むの一覧の上に出ます。1人1票。1票に使う EMUER は、アプリ内EMUER から引きます（0 なら無料）。</p>'
       + '<div style="display:grid;gap:8px">'
       + '<input id="pollQuestion" maxlength="120" placeholder="問い（例：次のグッズは？）" ' + input + '>'
       + '<textarea id="pollOptions" rows="4" placeholder="選択肢を1行に1つ（2〜6）" ' + input + '></textarea>'

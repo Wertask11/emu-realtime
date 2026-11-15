@@ -1,11 +1,12 @@
 "use strict";
 /* EMUER を「誰かを喜ばせるために使う」（11/10）。応援・協賛・投票。
 
-   使うのは、まだ実EMUERに換えていない方の EMUER（未変換・emuer_offchain の balance）だけ。
-   画面の残高の（ ）の中の数字。実EMUER（チェーンの上のトークン）は一切動かさない。
+   使うのはアプリ内EMUER（応援の台帳 emuer_offchain の balance と、受け取る前の報酬 emuer_v2_rewards。11/15 から両方）。
+   実EMUER（チェーンの上のトークン）は一切動かさない。
    emuer_offchain は、いまはチェーンへの変換の元にならない（変換の元は emuer_v2_unconverted_legacy の確定済みの数字）。
+   だから台帳から出たぶんは台帳へ、報酬から出たぶんは報酬へ入れる（下の REWARDS の説明）。
 
-   C. 応援（送る型）… 知識の投稿に 1・3・5・10 EMUER を贈る。贈った分は投稿した人の未変換EMUERに入る。
+   C. 応援（送る型）… 知識の投稿に 1・3・5・10 EMUER を贈る。贈った分は投稿した人のアプリ内EMUERに入る。
    D. 協賛         … クエストに 5・10・30・50 EMUER を出し合い、完走した人へのご褒美の袋に積む。
                      完走（完走証明がある）した人は、袋から1人10 EMUERを1回だけ受け取れる（袋が空になるまで）。
    D. 投票         … 運営が作った「みんなで決める」に、1人1票。運営が決めた EMUER（0〜10）を使う。
@@ -30,6 +31,17 @@ const EVENTS = "emuer_v2_gift_events";
 const TARGETS = "emuer_v2_gift_targets";
 const DAILY = "emuer_v2_gift_daily";
 const POLLS = "emuer_v2_polls";
+/* 11/15 オーナー：アプリ内EMUERを1つにまとめる。
+   アプリ内EMUERは2か所にあった。応援の台帳（emuer_offchain）と、受け取る前の報酬（emuer_v2_rewards。公式ショップ・みてみるで使い、
+   ウォレットへも移せる）。応援・協賛・投票は台帳しか使えず、同じ人に「0」と「2」が出ていた。
+   いまは応援・協賛・投票も、台帳 → 受け取る前の報酬 の順に、両方から払える。
+     ・報酬から払うときは、みてみる（mitemiru.js の payFromLedger）と同じ確かめ方をする：鎖の上で受け取り済みのものと、
+       直近に受け取りの署名を出したもの（authorizedUntilMs ＋ 余白）は使わない。使った報酬は spent にし、多いぶんはおつりの報酬にする。
+     ・受け取る人には、払った元と同じ場所に入れる。報酬から払ったぶんは受け取る人の報酬（公式ショップ・ウォレットで使える）、
+       台帳から払ったぶんは台帳へ。台帳の EMUER は鎖への変換の元にならない決まりなので、報酬に変えない（逆向きは減るだけなので可）。
+     ・台帳の照合バッチ（server.js）は giftIn・giftOut で台帳の残高を数え直すので、そこには台帳から動いたぶんだけを書く。 */
+const REWARDS = "emuer_v2_rewards";
+const AUTH_GRACE_MS = 60 * 1000;   // みてみる（mitemiru.js の AUTH_GRACE_MS）と同じ余白
 const VOTES = "emuer_v2_poll_votes";
 
 const CHEER_AMOUNTS = [1, 3, 5, 10];
@@ -51,7 +63,7 @@ function nameOf(identity) {
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 function cleanName(v) { return String(v || "").replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 40); }
 
-function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => Date.now(), enabled = () => true }) {
+function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => Date.now(), enabled = () => true, chain = null }) {
   const router = express.Router();
   router.use(express.json({ limit: "16kb" }));
   router.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
@@ -119,28 +131,104 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
   }
   function active(req, res, next) { return enabled() ? next() : res.status(503).json({ error: "GIFTS_NOT_ACTIVE" }); }
 
+  function weiOf(amount) { return BigInt(Math.round(Number(amount) * 1e6)) * 10n ** 12n; }
+  function emuerOf(w) { return Math.round(Number(w / 10n ** 12n)) / 1e6; }
+  function tsMs(v) { if (!v) return 0; if (typeof v.toMillis === "function") return v.toMillis(); if (v instanceof Date) return v.getTime(); return num(v); }
+  function rewardRef(id) { return db.collection(REWARDS).doc(id); }
+  /* 受け取る前の報酬のうち、いま払いに使えるもの（古い順）。みてみると同じ選び方。 */
+  async function waitingRewards(addr) {
+    const snap = await db.collection(REWARDS).where("recipient", "==", addr).where("status", "==", "pending").limit(500).get();
+    const t = now();
+    return snap.docs.map((d) => ({ id: d.id, data: d.data() || {} }))
+      .filter((r) => !(num(r.data.authorizedUntilMs) + AUTH_GRACE_MS > t))
+      .filter((r) => { try { return BigInt(String(r.data.amountWei || "0")) > 0n; } catch (_) { return false; } })
+      .sort((a, b) => tsMs(a.data.createdAt) - tsMs(b.data.createdAt));
+  }
+  function sumWei(rows) { return rows.reduce((s, r) => s + BigInt(String(r.data.amountWei)), 0n); }
+  /* 取引の前に、払いに使う報酬の候補を選ぶ（台帳で足りるなら選ばない）。
+     鎖の上で受け取り済みのものは外す。鎖に聞けないときは、報酬は使わない（推測で使うと二重に払えるため）。 */
+  async function pickRewards(addr, amount) {
+    const ls = await ledgerRef(addr).get();
+    const ledger = ls.exists ? Math.max(0, num((ls.data() || {}).balance)) : 0;
+    if (ledger >= amount) return { chosen: [], chainDown: false, waitingWei: 0n };
+    const rows = await waitingRewards(addr);
+    const need = weiOf(amount - ledger);
+    const chosen = [];
+    let total = 0n, chainDown = false;
+    for (const r of rows) {
+      if (total >= need) break;
+      let paid = null;
+      try { paid = chain ? await chain.claimPaid(String(r.data.claimId || r.id)) : null; } catch (_) { paid = null; }
+      if (paid === null) { chainDown = true; break; }
+      if (paid > 0n) {
+        // 鎖の上で（一部でも）受け取り済み。使えない
+        await rewardRef(r.id).set({ status: paid >= BigInt(String(r.data.amountWei)) ? "claimed" : "pending", updatedAt: new Date(now()) }, { merge: true }).catch(() => {});
+        continue;
+      }
+      chosen.push(r.id);
+      total += BigInt(String(r.data.amountWei));
+    }
+    return { chosen, chainDown, waitingWei: sumWei(rows) };
+  }
+  function giftReward(tx, { keyParts, kind, recipient, wei, eventId, from }) {
+    if (!ethers) throw err("CHAIN_UNAVAILABLE", 503);
+    const key = JSON.stringify(keyParts);
+    const id = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(key));
+    tx.create(rewardRef(id), { schema: "emuer-v2-reward-v1", kind, key, claimId: id, recipient, amountWei: wei.toString(),
+      amount: String(emuerOf(wei)), status: "pending", giftEventId: eventId, ...(from ? { giftFrom: from } : {}),
+      createdAt: new Date(now()), updatedAt: new Date(now()) });
+    return id;
+  }
+
   /* お金の動き1回分。取引の中で使う。
-     from から amount を引き、to があれば足す（to が無いのは投票：使って消える）。
-     残高が足りなければ止める。 */
-  async function move(tx, { from, to, amount, dailyCount }) {
+     from から amount を引き、to があれば足す（to が無いのは協賛の袋と投票）。
+     引く順番は 台帳 → 受け取る前の報酬。足りなければ止める（無から作らない）。 */
+  async function move(tx, { from, to, amount, dailyCount, eventId, picked }) {
     const day = jstDay(now());
     const dailyRef = db.collection(DAILY).doc(from + "_" + day);
+    const chosen = picked ? picked.chosen : [];
     const fs = await tx.get(ledgerRef(from));
     const ts = to ? await tx.get(ledgerRef(to)) : null;
     const dsnap = dailyCount ? await tx.get(dailyRef) : null;
+    const rsnaps = await Promise.all(chosen.map((id) => tx.get(rewardRef(id))));
     const f = fs.exists ? fs.data() || {} : {};
     const balance = num(f.balance);
-    if (balance < amount) throw err("INSUFFICIENT_EMUER", 409, { balance });
+    const fromLedger = Math.max(0, Math.min(balance, amount));
+    const needWei = weiOf(amount - fromLedger);
+    const use = [];
+    let usedWei = 0n;
+    if (needWei > 0n) {
+      for (const s of rsnaps) {
+        if (usedWei >= needWei) break;
+        const r = s.exists ? s.data() || {} : {};
+        if (!s.exists || r.status !== "pending" || String(r.recipient || "").toLowerCase() !== from
+            || num(r.authorizedUntilMs) + AUTH_GRACE_MS > now()) continue;
+        use.push(s.id);
+        usedWei += BigInt(String(r.amountWei));
+      }
+      if (usedWei < needWei) {
+        if (picked && picked.chainDown) throw err("CHAIN_UNAVAILABLE", 503);
+        throw err("INSUFFICIENT_EMUER", 409, { balance: Math.max(0, balance) + emuerOf(picked ? picked.waitingWei : 0n) });
+      }
+    }
     const sent = dsnap && dsnap.exists ? num((dsnap.data() || {}).sent) : 0;
     if (dailyCount && sent + amount > DAILY_LIMIT) throw err("DAILY_LIMIT", 429, { limit: DAILY_LIMIT, sent });
+    const changeWei = usedWei > needWei ? usedWei - needWei : 0n;
     return function write() {
-      tx.set(ledgerRef(from), { address: from, balance: balance - amount, giftOut: num(f.giftOut) + amount, updatedAt: new Date(now()) }, { merge: true });
+      if (fromLedger > 0) tx.set(ledgerRef(from), { address: from, balance: balance - fromLedger, giftOut: num(f.giftOut) + fromLedger, updatedAt: new Date(now()) }, { merge: true });
+      use.forEach((id) => tx.set(rewardRef(id), { status: "spent", spentFor: "gift", spentEventId: eventId, spentAtMs: now(), updatedAt: new Date(now()) }, { merge: true }));
+      if (changeWei > 0n) giftReward(tx, { keyParts: ["emuer-v2", "gift-change", eventId], kind: "gift-change", recipient: from, wei: changeWei, eventId });
       if (to) {
-        const t = ts.exists ? ts.data() || {} : {};
-        tx.set(ledgerRef(to), { address: to, balance: num(t.balance) + amount, giftIn: num(t.giftIn) + amount, updatedAt: new Date(now()) }, { merge: true });
+        if (fromLedger > 0) {
+          const t = ts.exists ? ts.data() || {} : {};
+          tx.set(ledgerRef(to), { address: to, balance: num(t.balance) + fromLedger, giftIn: num(t.giftIn) + fromLedger, updatedAt: new Date(now()) }, { merge: true });
+        }
+        if (needWei > 0n) giftReward(tx, { keyParts: ["emuer-v2", "gift-received", eventId], kind: "gift-received", recipient: to, wei: needWei, eventId, from });
       }
       if (dailyCount) tx.set(dailyRef, { address: from, day, sent: sent + amount, updatedAtMs: now() }, { merge: true });
-      return { balance: balance - amount, sentToday: sent + (dailyCount ? amount : 0) };
+      const waitingLeft = (picked ? picked.waitingWei : 0n) - usedWei + changeWei;
+      return { balance: Math.max(0, balance - fromLedger) + emuerOf(waitingLeft > 0n ? waitingLeft : 0n),
+        sentToday: sent + (dailyCount ? amount : 0), fromLedger, fromRewards: emuerOf(needWei) };
     };
   }
   function audit(tx, id, row) {
@@ -153,8 +241,11 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
   router.get("/me", requireFirebaseUser, async (req, res) => {
     try {
       const addr = senderOf(req);
-      const [l, d] = await Promise.all([ledgerRef(addr).get(), db.collection(DAILY).doc(addr + "_" + jstDay(now())).get()]);
-      return res.json({ ok: true, balance: l.exists ? num((l.data() || {}).balance) : 0,
+      const [l, d, rows] = await Promise.all([ledgerRef(addr).get(), db.collection(DAILY).doc(addr + "_" + jstDay(now())).get(), waitingRewards(addr)]);
+      /* balance は使えるアプリ内EMUERの合計（台帳＋受け取る前の報酬）。ledger は応援・協賛・投票だけに使える台帳のぶん。 */
+      const ledger = l.exists ? Math.max(0, num((l.data() || {}).balance)) : 0;
+      const rewards = emuerOf(sumWei(rows));
+      return res.json({ ok: true, balance: ledger + rewards, ledger, rewards,
         sentToday: d.exists ? num((d.data() || {}).sent) : 0, dailyLimit: DAILY_LIMIT });
     } catch (e) { return fail(res, e); }
   });
@@ -180,13 +271,14 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
       const to = await receiverOf(named);
       if (to === from) throw err("OWN_POST", 409);
       const fromName = await senderName(req);
+      const picked = await pickRewards(from, amount);
       const targetRef = db.collection(TARGETS).doc("post:" + postId);
       const personRef = db.collection(TARGETS).doc("post:" + postId + ":by:" + from);
       const eventRef = db.collection(EVENTS).doc(id);
       const result = await db.runTransaction(async (tx) => {
         const [ev, target, person] = await Promise.all([tx.get(eventRef), tx.get(targetRef), tx.get(personRef)]);
         if (ev.exists) return { already: true, event: ev.data() };
-        const write = await move(tx, { from, to, amount, dailyCount: true });
+        const write = await move(tx, { from, to, amount, dailyCount: true, eventId: id, picked });
         const t = target.exists ? target.data() || {} : {};
         const people = num(t.people) + (person.exists ? 0 : 1);
         const total = num(t.total) + amount;
@@ -319,13 +411,14 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
       const q = await questOf(questId);
       const fromName = await senderName(req);
       const id = "sponsor-" + hash([from, requestId].join(":"));
+      const picked = await pickRewards(from, amount);
       const targetRef = db.collection(TARGETS).doc("quest:" + questId);
       const personRef = db.collection(TARGETS).doc("quest:" + questId + ":by:" + from);
       const eventRef = db.collection(EVENTS).doc(id);
       const result = await db.runTransaction(async (tx) => {
         const [ev, target, person] = await Promise.all([tx.get(eventRef), tx.get(targetRef), tx.get(personRef)]);
         if (ev.exists) return { already: true };
-        const write = await move(tx, { from, to: null, amount, dailyCount: true });
+        const write = await move(tx, { from, to: null, amount, dailyCount: true, eventId: id, picked });
         const t = target.exists ? target.data() || {} : {};
         const next = { kind: "quest", questId, pot: num(t.pot) + amount, total: num(t.total) + amount,
           sponsors: num(t.sponsors) + (person.exists ? 0 : 1), paidOut: num(t.paidOut), bonusCount: num(t.bonusCount), updatedAtMs: now() };
@@ -421,6 +514,9 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
       const from = senderOf(req);
       const pollRef = db.collection(POLLS).doc(pollId);
       const voteRef = db.collection(VOTES).doc(pollId + ":" + req.identity.uid);
+      const pre = await db.collection(POLLS).doc(pollId).get();
+      const preCost = pre.exists ? num((pre.data() || {}).cost) : 0;
+      const picked = preCost > 0 ? await pickRewards(from, preCost) : null;
       const result = await db.runTransaction(async (tx) => {
         const [ps, vs] = await Promise.all([tx.get(pollRef), tx.get(voteRef)]);
         const p = ps.exists ? ps.data() || {} : null;
@@ -430,7 +526,7 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
         if (!(p.options || []).some((o) => o.id === option)) throw err("INVALID_OPTION");
         const cost = num(p.cost);
         let after = null;
-        if (cost > 0) after = (await move(tx, { from, to: null, amount: cost, dailyCount: false }))();
+        if (cost > 0) after = (await move(tx, { from, to: null, amount: cost, dailyCount: false, eventId: "vote-" + hash(pollId + ":" + req.identity.uid), picked }))();
         const tallies = { ...(p.tallies || {}) };
         tallies[option] = num(tallies[option]) + 1;
         const next = { ...p, tallies, votes: num(p.votes) + 1, updatedAtMs: now() };

@@ -30,7 +30,7 @@
       + (m && m.claimed ? '<div style="margin-top:10px;font-size:13px;font-weight:700;color:#0F5C3F">🎉 協賛のご褒美 ' + m.amount + ' EMUER を受け取りました</div>' : '')
       + '<div style="margin-top:12px;font-size:13px;font-weight:700">このクエストに協賛する</div>'
       + '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">' + AMOUNTS.map(function (n) { return '<button type="button" data-sponsor-amount="' + n + '" style="' + BTN + '">' + n + ' EMUER</button>'; }).join('') + '</div>'
-      + '<div style="font-size:11px;line-height:1.7;color:#6E695C;margin-top:6px">未変換のEMUER（残高の（ ）の中）から出します。出したEMUERは袋に入り、完走した人へ届きます（返りません）。応援と合わせて1日100 EMUERまで。</div>';
+      + '<div style="font-size:11px;line-height:1.7;color:#6E695C;margin-top:6px">アプリ内EMUER（公式ショップと同じEMUER）から出します。出したEMUERは袋に入り、完走した人へ届きます（返りません）。応援と合わせて1日100 EMUERまで。</div>';
   }
   function card() {
     var side = document.querySelector('.sp-quest-side');
@@ -74,7 +74,7 @@
     if (a) {
       if (!G.signedIn()) { window.alert('協賛するには、ログインしてね🧊'); return; }
       var n = Number(a.getAttribute('data-sponsor-amount'));
-      if (!window.confirm('このクエストに ' + n + ' EMUER 協賛します。\n未変換のEMUERから出し、完走した人へのご褒美になります（返りません）。よろしいですか？')) return;
+      if (!window.confirm('このクエストに ' + n + ' EMUER 協賛します。\nアプリ内EMUERから出し、完走した人へのご褒美になります（返りません）。よろしいですか？')) return;
       a.disabled = true;
       var d = await G.sponsor(state.questId, n);
       if (!d.ok) { a.disabled = false; window.alert(d.error); return; }
