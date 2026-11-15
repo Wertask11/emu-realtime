@@ -80,13 +80,33 @@
         + '<p>' + can + '</p>'
         + '<p class="emu-gift-note">受け取れるのは1人1回です。お支払いの登録はいりません。1週間たつと自動で見学（無料）に戻り、書いた投稿はそのまま残ります。</p>'
         + '<button type="button" class="emu-gift-primary" data-gift="claim">ギフトを受け取る</button>';
+    } else if (s.extensionStatus === 'approved') {
+      /* 11/15 オーナー：延長が認められたあとも「1週間の体験は終わりました」が見出しで、
+         認められたのかどうかが分かりにくかった。認められたことと、いつまで使えるかを先に出す。 */
+      var extLive = !s.extensionExpiresAt || now < s.extensionExpiresAt;
+      var trialNote = s.trialExpiresAt
+        ? '<p class="emu-gift-note">1週間の体験（' + esc(day(s.trialExpiresAt)) + ' まで）のあと、パスポートIDを運営が確かめて延長しました。</p>' : '';
+      if (extLive) {
+        var left = s.extensionExpiresAt ? Math.max(1, Math.ceil((s.extensionExpiresAt - now) / 86400000)) : 0;
+        body = '<h2 id="emuGiftTitle">🎉 延長が認められました</h2>'
+          + '<div class="emu-gift-ok emu-gift-granted"><p>' + light + ' を</p>'
+          + '<p class="emu-gift-until">' + (s.extensionExpiresAt ? '<b>' + esc(day(s.extensionExpiresAt)) + '</b> まで' : 'いまのプランのまま') + '</p>'
+          + '<p>使えます' + (left ? '（あと ' + left + ' 日）' : '') + '。</p></div>'
+          + '<p>' + can + '</p>'
+          + '<button type="button" class="emu-gift-primary" data-gift="compose">知識を届ける</button>'
+          + trialNote;
+      } else {
+        body = '<h2 id="emuGiftTitle">延長の期間は終わりました</h2>'
+          + '<p>' + light + ' は <b>' + esc(day(s.extensionExpiresAt)) + '</b> まででした。いまは見学（無料）です。書いた投稿はそのまま残っています。</p>'
+          + '<p>続けて投稿するときは、プランを選んでください。</p>'
+          + '<button type="button" class="emu-gift-primary" data-gift="plans">プランを見る</button>'
+          + trialNote;
+      }
     } else {
       var trialLive = s.trialExpiresAt && now < s.trialExpiresAt;
       var lines = '<h2 id="emuGiftTitle">' + (trialLive ? light + ' を体験中です' : '1週間の体験は終わりました') + '</h2>'
         + (s.trialExpiresAt ? '<p>体験は <b>' + esc(day(s.trialExpiresAt)) + '</b> まで' + (trialLive ? 'です。' : 'でした。') + '</p>' : '');
-      if (s.extensionStatus === 'approved') {
-        body = lines + '<p class="emu-gift-ok">延長しました。' + (s.extensionExpiresAt ? '<b>' + esc(day(s.extensionExpiresAt)) + '</b> まで使えます。' : 'いまのプランのまま使えます。') + '</p>';
-      } else if (s.extensionStatus === 'pending') {
+      if (s.extensionStatus === 'pending') {
         body = lines + '<p class="emu-gift-ok">パスポートIDを運営に送りました。運営が確かめたら、さらに1か月使えるようになります。</p>'
           + '<p class="emu-gift-note">送った番号：' + esc(s.schoolParkId || '') + '</p>';
       } else if (s.extensionStatus === 'rejected') {
@@ -128,6 +148,8 @@
   async function act(what, b) {
     if (what === 'close') { close(); return; }
     if (what === 'passport') { close(); if (typeof window.openSpPassport === 'function') window.openSpPassport(); return; }
+    if (what === 'compose') { close(); if (typeof window.emuOpenKnowledgeComposer === 'function') window.emuOpenKnowledgeComposer(); return; }
+    if (what === 'plans') { close(); if (typeof window.openLegal === 'function') window.openLegal('membership', 'plan', 'light'); return; }
     b.disabled = true;
     try {
       if (what === 'claim') {
@@ -168,6 +190,8 @@
     + '.emu-gift-eyebrow{margin:0;color:#b25d00;font-size:13px;font-weight:700}'
     + '.emu-gift-note{color:#6b6459;font-size:13px}'
     + '.emu-gift-ok{padding:10px 12px;border-radius:12px;background:#f2f8ec;color:#2f5d1f}'
+    + '.emu-gift-granted{text-align:center;padding:14px 12px}.emu-gift-granted p{margin:2px 0}'
+    + '.emu-gift-until{font-size:22px;line-height:1.4;color:#1f4a14}'
     + '.emu-gift-campaign{margin-top:14px;padding:10px 12px;border:1px solid #9fd3b7;border-radius:12px;background:#eef8f2;color:#1f4a33}'
     + '.emu-gift-campaign p{margin:4px 0}'
     + '.emu-gift-message{padding:10px 12px;border-radius:12px;background:#fff1dc;color:#8a4b00;font-size:14px}'
