@@ -92,17 +92,26 @@
       + '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">'
       + AMOUNTS.map(function (n) { return '<button type="button" data-cheer-amount="' + n + '" style="border:1px solid #f0a6c6;background:#fff;color:#9d174d;border-radius:999px;padding:8px 14px;font:inherit;font-weight:700;cursor:pointer">' + n + ' EMUER</button>'; }).join('')
       + '<button type="button" data-cheer-cancel style="border:0;background:none;color:#8a8070;font:inherit;cursor:pointer;padding:8px">やめる</button></div>'
-      + '<div data-cheer-have style="margin-top:8px;font-size:13px;font-weight:700;color:#9d174d">いまの未変換のEMUER：…</div>'
-      + '<small style="display:block;margin-top:4px;color:#8a8070;font-size:12px">未変換のEMUER（残高の（ ）の中）から贈ります。贈ったEMUERは、書いた人にすぐ届きます。1日100 EMUERまで。</small>';
+      + '<div data-cheer-have style="margin-top:8px;font-size:13px;font-weight:700;color:#9d174d">応援に使えるアプリ内EMUERを読み込んでいます…</div>'
+      + '<small style="display:block;margin-top:4px;color:#8a8070;font-size:12px">アプリ内EMUER（応援・協賛・投票用）から贈ります。贈ったEMUERは、書いた人にすぐ届きます。1日100 EMUERまで。</small>';
     card.appendChild(box);
     /* いま贈れる分を見せる。足りない額は押せないようにする（押してから断られないように）。 */
     if (typeof G.me === 'function') G.me().then(function (d) {
       if (!box.isConnected) return;
       var have = box.querySelector('[data-cheer-have]');
-      if (!d || !d.ok || typeof d.balance !== 'number') { if (have) have.remove(); return; }
+      /* 11/15：読めなかったときに黙って消していたので、0 なのか読めなかったのか分からなかった。はっきり出す。 */
+      if (!d || !d.ok || typeof d.balance !== 'number') {
+        if (have) have.textContent = '応援に使えるアプリ内EMUERを読み込めませんでした（通信エラー）。0 ではなく、まだ分かりません。少し待って、もう一度開いてね🧊';
+        return;
+      }
       var left = Math.max(0, (Number(d.dailyLimit) || 100) - (Number(d.sentToday) || 0));
       var can = Math.min(d.balance, left);
-      if (have) have.textContent = 'いまの未変換のEMUER：' + d.balance + ' EMUER' + (left < d.balance ? '（今日あと ' + left + ' EMUER 贈れます）' : '');
+      if (have) have.textContent = '応援に使えるアプリ内EMUER：' + d.balance + ' EMUER' + (left < d.balance ? '（今日あと ' + left + ' EMUER 贈れます）' : '');
+      /* 公式ショップ用のアプリ内EMUERは応援に使えない。あるのに「無い」と見えないよう、別にあることを添える。 */
+      if (d.balance < 1 && typeof window.emuEmuerSummary === 'function') window.emuEmuerSummary(false).then(function (s) {
+        if (!box.isConnected || !have || !s || !s.shop || s.shop.state !== 'ok' || !(s.shop.value > 0)) return;
+        have.textContent += '（公式ショップ・みてみる用のアプリ内EMUERは ' + s.shop.value + ' EMUER あります。こちらは応援には使えません）';
+      }).catch(function () {});
       box.querySelectorAll('[data-cheer-amount]').forEach(function (b) {
         if (Number(b.getAttribute('data-cheer-amount')) > can) { b.disabled = true; b.style.opacity = '.45'; b.style.cursor = 'not-allowed'; }
       });

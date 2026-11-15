@@ -33,9 +33,9 @@ document.head.appendChild(emuerV2PublicCopyScript);
 
 (function(){
   const s=document.createElement("style");
-  s.textContent="#walletSuccessOverlay{display:none;position:fixed;inset:0;background:#000b;z-index:9999;align-items:center;justify-content:center}#walletSuccessOverlay.active{display:flex}#walletSuccessCard{background:#fff;border-radius:18px;padding:30px;max-width:360px;width:calc(100% - 44px);text-align:center;color:#172033}.ws-balance{font-size:32px;font-weight:700;color:#167653;margin:8px}.ws-sub{font-size:13px;color:#667085}.ws-btn{width:100%;border:0;border-radius:10px;padding:13px;margin-top:10px;background:#265dd7;color:#fff;font-weight:700;cursor:pointer}.ws-btn:disabled{background:#aab4c8}.ws-close{background:#eef2f8;color:#273047}.ws-alt{background:#fff;color:#265dd7;border:2px solid #265dd7}#wsChoice{text-align:left;line-height:1.6;margin-top:12px}";
+  s.textContent="#walletSuccessOverlay{display:none;position:fixed;inset:0;background:#000b;z-index:9999;align-items:center;justify-content:center}#walletSuccessOverlay.active{display:flex}#walletSuccessCard{background:#fff;border-radius:18px;padding:30px;max-width:360px;width:calc(100% - 44px);text-align:center;color:#172033}.ws-balance{font-size:32px;font-weight:700;color:#167653;margin:8px}.ws-sub{font-size:13px;color:#667085}.ws-btn{width:100%;border:0;border-radius:10px;padding:13px;margin-top:10px;background:#265dd7;color:#fff;font-weight:700;cursor:pointer}.ws-btn:disabled{background:#aab4c8}.ws-close{background:#eef2f8;color:#273047}.ws-alt{background:#fff;color:#265dd7;border:2px solid #265dd7}#wsChoice{text-align:left;line-height:1.6;margin-top:12px}.emu-sum{margin:12px 0 4px;padding:10px 12px;border-radius:12px;background:#f6f8fc;text-align:left;font-size:13px;line-height:1.7;color:#273047}.emu-sum-row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 10px}.emu-sum-row span{flex:1 1 12em}.emu-sum-row b{margin-left:auto;white-space:nowrap}.emu-sum-row b.emu-sum-err{white-space:normal}.emu-sum-err{color:#b42318}.emu-sum-total{margin-top:6px;padding-top:6px;border-top:1px solid #dfe5f0;font-weight:700}.emu-sum-reload{margin-top:6px;border:1px solid #265dd7;background:#fff;color:#265dd7;border-radius:999px;padding:6px 12px;font:inherit;font-weight:700;cursor:pointer}";
   document.head.appendChild(s);
-  document.body.insertAdjacentHTML("beforeend",'<div id="walletSuccessOverlay"><section id="walletSuccessCard"><h2>ウォレット接続完了</h2><p id="wsAddress" class="ws-sub"></p><p class="ws-sub">ウォレットのEMUER残高（実EMUER）</p><p id="wsBalance" class="ws-balance">---</p><p id="wsStatus" class="ws-sub"></p><button id="wsLogin" class="ws-btn" hidden></button><button id="wsLoginApp" class="ws-btn ws-alt" hidden></button><button id="wsClaim" class="ws-btn" hidden></button><button id="wsClaimApp" class="ws-btn ws-alt" hidden></button><p id="wsChoice" class="ws-sub" hidden></p><button class="ws-btn ws-close" onclick="closeWalletSuccessAndStart()">SchoolParkを始める</button></section></div>');
+  document.body.insertAdjacentHTML("beforeend",'<div id="walletSuccessOverlay"><section id="walletSuccessCard"><h2>ウォレット接続完了</h2><p id="wsAddress" class="ws-sub"></p><p class="ws-sub">ウォレットのEMUER残高（実EMUER）</p><p id="wsBalance" class="ws-balance">---</p><div id="wsBreakdown"></div><p id="wsStatus" class="ws-sub"></p><button id="wsLogin" class="ws-btn" hidden></button><button id="wsLoginApp" class="ws-btn ws-alt" hidden></button><button id="wsClaim" class="ws-btn" hidden></button><button id="wsClaimApp" class="ws-btn ws-alt" hidden></button><p id="wsChoice" class="ws-sub" hidden></p><button class="ws-btn ws-close" onclick="closeWalletSuccessAndStart()">SchoolParkを始める</button></section></div>');
 })();
 const wsAccount=()=>String(window.connectedAccount||"").toLowerCase();
 const wsBtn=()=>document.getElementById("wsClaim");
@@ -72,7 +72,7 @@ async function wsBalance(account){
   if(!wsCanSign()){document.getElementById("wsBalance").textContent="—";document.getElementById("wsStatus").textContent="ウォレットの残高は、MetaMask の入ったブラウザで出ます。";return;}
   try{const p=new ethers.providers.Web3Provider(window.ethereum);const addr=emuerV2Config?.enabled?emuerV2Config.contract:window.EMUER_CONTRACT_ADDRESS;const abi=emuerV2Config?.enabled?["function balanceOf(address) view returns (uint256)"]:window.EMUER_CONTRACT_ABI;const x=await new ethers.Contract(addr,abi,p).balanceOf(account);document.getElementById("wsBalance").textContent=Number(ethers.utils.formatUnits(x,18)).toLocaleString("ja-JP");document.getElementById("wsStatus").textContent="残高を確認しました";}catch(_){document.getElementById("wsStatus").textContent="残高を取得できませんでした";}
 }
-async function showWalletSuccessModal(account){document.getElementById("walletSuccessOverlay").classList.add("active");document.getElementById("wsAddress").textContent=account.slice(0,6)+"…"+account.slice(-4);await wsBalance(account);if(emuerV2Config?.enabled){await wsDaily();await wsRewards();}}
+async function showWalletSuccessModal(account){document.getElementById("walletSuccessOverlay").classList.add("active");document.getElementById("wsAddress").textContent=account.slice(0,6)+"…"+account.slice(-4);await wsBalance(account);if(emuerV2Config?.enabled){await wsDaily();await wsRewards();}if(typeof wsRenderBreakdown==="function")wsRenderBreakdown(true);}
 function closeWalletSuccessAndStart(){
   document.getElementById("walletSuccessOverlay").classList.remove("active");
   /* ウォレットの札から開いたときは、その場に戻すだけでよい。
@@ -185,7 +185,7 @@ async function wsRewards(){
     /* ウォレットへ移せるところでも、アプリ内EMUERのまま使う道を並べる（11/14）。
        受け取る前のEMUERは、そのままでアプリ内EMUER（オフチェーン）として公式ショップで使える。 */
     const st=document.getElementById("wsStatus");
-    if(st)st.textContent=`受け取る前のEMUER（アプリ内EMUER）が ${total.toLocaleString("ja-JP")} EMUER あります（${a.length}件）。`;
+    if(st)st.textContent=`公式ショップ・みてみる用のアプリ内EMUERが ${total.toLocaleString("ja-JP")} EMUER あります（${a.length}件）。`;
     const label=a.length>1
       ? `実EMUERとしてウォレットへ：${total.toLocaleString("ja-JP")} EMUER（${a.length}件）をまとめて受け取る`
       : `実EMUERとしてウォレットへ：${total.toLocaleString("ja-JP")} EMUER を受け取る`;
@@ -212,7 +212,7 @@ async function wsClaim(row){
        この modal の残高だけ直して、ページの数字は直していなかった。
        同じ画面で違う数字が出るので、まとめて書き替える。 */
     try{if(typeof window.emuerV2RefreshBalance==="function")await window.emuerV2RefreshBalance();}catch(_){}
-    await wsBalance(wsAccount());await wsRewards();}catch(e){wsClaimLabel("報酬を受け取る",wsRewards,false);alert(e.message||"報酬の受取に失敗しました");}
+    await wsBalance(wsAccount());await wsRewards();if(typeof wsRenderBreakdown==="function")wsRenderBreakdown(true);}catch(e){wsClaimLabel("報酬を受け取る",wsRewards,false);alert(e.message||"報酬の受取に失敗しました");}
 }
 /* まとめて受け取る。サーバーが未請求のぶんを1枚の札（合計額）にまとめて署名する。
    まとめた元の報酬はサーバー側で「まとめ済み」になり、一覧にもう出てこない。
@@ -236,7 +236,7 @@ async function wsClaimAll(rows){
     (rows||[]).forEach(row=>wsDone.add(String(row&&row.claimId)));
     wsDone.add(String(x&&x.claimId));
     try{if(typeof window.emuerV2RefreshBalance==="function")await window.emuerV2RefreshBalance();}catch(_){}
-    await wsBalance(wsAccount());await wsRewards();
+    await wsBalance(wsAccount());await wsRewards();if(typeof wsRenderBreakdown==="function")wsRenderBreakdown(true);
   }catch(e){
     /* まとめた札を作ったあとで止まったとき（MetaMask で断った等）は、まとめた札が一覧に出る。
        一覧を読み直して、出ているものを押せるようにする。 */
@@ -255,6 +255,7 @@ async function wsRecordLoginReward(b){
   const st=document.getElementById("wsStatus");
   if(st)st.textContent="1 EMUER を受け取りました。ウォレットに移す前のEMUERとしてたまり、City の公式ショップでそのまま使えます。";
   try{if(typeof window.emuerV2RefreshBalance==="function")await window.emuerV2RefreshBalance();}catch(_){}
+  if(typeof wsRenderBreakdown==="function")wsRenderBreakdown(true);
 }
 /* ウォレットへ移せるところで「アプリ内EMUERで受け取る」を選んだとき。署名は頼まない。
    受け取ったぶんは一覧（受け取る前のEMUER）に出るので、あとでウォレットへ移すこともできる。 */
@@ -299,6 +300,71 @@ async function claimEmuV2LoginReward(){
     alert(e.message||"ログイン報酬の受取に失敗しました");
   }
 }
+/* ── EMUERのうちわけ（11/15 オーナー：「ばらばらすぎる。通信エラーなのか、本当に無いのか、あるのか、はっきりして」）──
+
+   EMUERは3つの場所にある。画面ごとに別の場所だけを「残高」と呼んでいたので、同じ人に 0・2・0 と違う数が出ていた。
+     ・実EMUER（ウォレット）……Polygon のコントラクトの残高。読むのは公開のRPC（MetaMask が無くても読める）
+     ・アプリ内EMUER（公式ショップ・みてみる用）……受け取る前の報酬（/api/emuer/v2/rewards）
+     ・アプリ内EMUER（応援・協賛・投票用）……応援の台帳（/api/emu/gifts/me）
+   どの画面も、この1つの読み方で3つを同じ名前で出す。読めなかったものは 0 にせず「読み込めませんでした」と出す。 */
+const EMU_SUM_RPCS=["https://polygon-bor-rpc.publicnode.com","https://polygon.drpc.org","https://1rpc.io/matic"];
+const EMU_GIFTS_API="https://emu-realtime.onrender.com/api/emu/gifts";
+let emuSumCache=null;
+async function emuSumPart(fn){try{return{state:"ok",value:Number(await fn())||0};}catch(e){return{state:"error",message:String(e&&e.message||e)};}}
+async function emuSumChain(addr,cfg){
+  if(!cfg||!cfg.enabled||!cfg.contract)throw new Error("CONFIG_UNAVAILABLE");
+  if(!window.ethers)throw new Error("ETHERS_UNAVAILABLE");
+  let last=null;
+  for(const url of EMU_SUM_RPCS){
+    try{const p=new ethers.providers.StaticJsonRpcProvider(url,{name:"matic",chainId:137});
+      const v=await new ethers.Contract(cfg.contract,["function balanceOf(address) view returns (uint256)"],p).balanceOf(addr);
+      return Number(ethers.utils.formatUnits(v,18));}catch(e){last=e;}
+  }
+  throw last||new Error("RPC_UNAVAILABLE");
+}
+window.emuEmuerSummary=function(force){
+  const addr=wsAccount();
+  if(!force&&emuSumCache&&emuSumCache.addr===addr&&Date.now()-emuSumCache.at<20000)return emuSumCache.promise;
+  const promise=(async()=>{
+    if(!addr)return{address:"",chain:{state:"none"},shop:{state:"none"},cheer:{state:"none"}};
+    let cfg=null;try{cfg=await window.emuerV2ConfigOnce();}catch(_){}
+    const [chain,shop,cheer]=await Promise.all([
+      emuSumPart(()=>emuSumChain(addr,cfg)),
+      emuSumPart(async()=>{const r=await fetch(EMUER_V2_API+"/rewards?address="+encodeURIComponent(addr),{headers:await wsHeaders(false)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||("HTTP "+r.status));
+        return(Array.isArray(d.rewards)?d.rewards:[]).filter(x=>!wsDone.has(String(x&&x.claimId))).reduce((n,x)=>n+(Number(x.amount)||0),0);}),
+      emuSumPart(async()=>{const r=await fetch(EMU_GIFTS_API+"/me",{headers:await wsHeaders(true)});const d=await r.json().catch(()=>({}));if(!r.ok||typeof d.balance!=="number")throw new Error(d.error||("HTTP "+r.status));return d.balance;})
+    ]);
+    return{address:addr,chain,shop,cheer};
+  })();
+  emuSumCache={addr,at:Date.now(),promise};
+  return promise;
+};
+function emuSumValue(p){return p&&p.state==="ok"?Number(p.value).toLocaleString("ja-JP")+" EMUER":p&&p.state==="error"?"読み込めませんでした（通信エラー）":"—";}
+/* うちわけの表（文字はすべてこちらで決めたもの。数は数として出す） */
+window.emuEmuerBreakdownHtml=function(s){
+  const rows=[["実EMUER（ウォレット）",s.chain],["アプリ内EMUER（公式ショップ・みてみる用）",s.shop],["アプリ内EMUER（応援・協賛・投票用）",s.cheer]];
+  const all=rows.every(r=>r[1]&&r[1].state==="ok");
+  const anyErr=rows.some(r=>r[1]&&r[1].state==="error");
+  const total=all?rows.reduce((n,r)=>n+r[1].value,0):null;
+  return '<div class="emu-sum" data-emu-sum>'+rows.map(r=>'<div class="emu-sum-row"><span>'+r[0]+'</span><b class="'+(r[1]&&r[1].state==="error"?"emu-sum-err":"")+'">'+emuSumValue(r[1])+'</b></div>').join("")
+    +(all?'<div class="emu-sum-row emu-sum-total"><span>合計</span><b>'+total.toLocaleString("ja-JP")+' EMUER</b></div>':"")
+    +(anyErr?'<div class="emu-sum-err">読み込めなかったところは、0 ではなく「まだ分からない」です。</div><button type="button" class="emu-sum-reload" data-emu-sum-reload>もう一度読み込む</button>':"")
+    +'</div>';
+};
+window.emuEmuerSummaryTotal=function(s){return["chain","shop","cheer"].every(k=>s[k]&&s[k].state==="ok")?s.chain.value+s.shop.value+s.cheer.value:null;};
+/* 1つの箱にうちわけを描く。「もう一度読み込む」で読み直す。 */
+window.emuRenderEmuerBreakdown=async function(box,force,after){
+  if(!box)return null;
+  box.innerHTML='<div class="emu-sum">EMUERのうちわけを読み込んでいます…</div>';
+  const s=await window.emuEmuerSummary(force);
+  if(!box.isConnected)return s;
+  box.innerHTML=window.emuEmuerBreakdownHtml(s);
+  const b=box.querySelector("[data-emu-sum-reload]");
+  if(b)b.onclick=()=>window.emuRenderEmuerBreakdown(box,true,after);
+  if(typeof after==="function")try{after(s);}catch(_){}
+  return s;
+};
+function wsRenderBreakdown(force){return window.emuRenderEmuerBreakdown(document.getElementById("wsBreakdown"),force);}
 window.addEventListener("load",async()=>{try{const c=await window.emuerV2ConfigOnce();if(!c||!c.enabled||Number(c.chainId)!==137)return;emuerV2Config=c;wsAddWalletButton();}catch(_){}});
 /* 毎日のぶんは、受け取りの modal を開いたときに wsDaily() が読む。
    ここで先に読むと、開いていない人のぶんまで毎回サーバーに聞くことになる。 */

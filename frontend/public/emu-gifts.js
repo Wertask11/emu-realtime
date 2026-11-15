@@ -108,7 +108,7 @@
     }
     var note = document.createElement('p'); note.style.cssText = 'margin:10px 0 0;padding:8px 10px;border-radius:10px;background:#fdf2f8;font-size:13px;line-height:1.7;color:#9d174d';
     note.textContent = '届いたEMUERは、もう使えます。'
-      + (typeof balance === 'number' ? 'いま未変換のEMUERは ' + balance + ' EMUER。' : '未変換のEMUER（残高の（ ）の中）に入っています。')
+      + (typeof balance === 'number' ? 'いま応援用のアプリ内EMUERは ' + balance + ' EMUER。' : '応援用のアプリ内EMUERに入っています。')
       + '応援・協賛・投票に使えます。';
     var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'うれしい！';
     btn.style.cssText = 'margin-top:14px;border:0;border-radius:999px;padding:10px 22px;background:#c2185b;color:#fff;font:inherit;font-weight:700;cursor:pointer';

@@ -107,6 +107,21 @@
     line.style.display = "";
     line.textContent = "10月1日より前のEMUER：" + text + "（上の使えるEMUERとは別の記録です）";
   }
+  /* 11/15：札の大きな数は「合計」にして、その下に3つのうちわけを出す（wallet-success-ui.js の emuEmuerSummary）。
+     前は「使えるEMUER」にウォレットの数だけを出していて、アプリ内EMUERが 2 あっても 0 と出ていた。
+     読めなかったときは 0 と出さず「—」にして、うちわけに「読み込めませんでした」と出す。 */
+  function walletBreakdown() {
+    const box = document.querySelector("#emuValueProfile .eth-wallet-balance");
+    if (!box || typeof window.emuRenderEmuerBreakdown !== "function") return;
+    let slot = byId("emuWalletBreakdown");
+    if (!slot) { slot = document.createElement("div"); slot.id = "emuWalletBreakdown"; const amount = box.querySelector(".eth-wallet-amount"); if (amount && amount.nextSibling) box.insertBefore(slot, amount.nextSibling); else box.appendChild(slot); }
+    const label = box.querySelector(".eth-wallet-label");
+    if (label) { label.removeAttribute("data-i18n"); label.textContent = "持っているEMUER（合計）"; }
+    window.emuRenderEmuerBreakdown(slot, false, (s) => {
+      const total = window.emuEmuerSummaryTotal(s);
+      setText("emuWalletBalance", total === null ? "—" : total.toLocaleString("ja-JP"));
+    });
+  }
   function wrapWalletCard() {
     const original = window.loadEmuWalletCard;
     if (typeof original !== "function" || original.__emuerV2PublicCopy) return;
@@ -116,6 +131,7 @@
       const before = node ? node.textContent : "";
       const wrote = await refreshBalance();
       legacyLine(wrote ? before : "");
+      walletBreakdown();
       return result;
     };
     wrapped.__emuerV2PublicCopy = true; window.loadEmuWalletCard = wrapped;
