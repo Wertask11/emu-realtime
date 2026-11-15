@@ -161,7 +161,7 @@ test('届いた応援：「応援が届いたよ」と使える残高を出し�
     await page.evaluate(() => window.EmuGifts.checkInbox());
     await page.getByText('応援が届いたよ！').waitFor();
     assert.match(await page.textContent('[role=dialog]'), /ありすさん、ぼぶさんから、あなたの知恵に合計 8 EMUER/);
-    assert.match(await page.textContent('[role=dialog]'), /もう使えます。いま応援用のアプリ内EMUERは 20 EMUER。応援・協賛・投票に使えます/);
+    assert.match(await page.textContent('[role=dialog]'), /もう使えます。いまアプリ内EMUERは 20 EMUER。応援・協賛・投票に使えます/);
     await page.getByText('うれしい！').click();
     await page.waitForFunction(() => !document.querySelector('[role=dialog]'));
     await page.evaluate(() => window.EmuGifts.checkInbox());

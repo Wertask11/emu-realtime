@@ -1,8 +1,10 @@
 'use strict';
 /* EMUERのうちわけ（11/15 オーナー：「ばらばらすぎる。通信エラーなのか本当に無いのかあるのか、はっきりして」）。
 
-   EMUERは3つの場所にある：実EMUER（ウォレット）・アプリ内EMUER（公式ショップ・みてみる用）・アプリ内EMUER（応援・協賛・投票用）。
-   どの画面も同じ読み方（wallet-success-ui.js の emuEmuerSummary）で、同じ名前で3つを出す。
+   11/15「1つにまとめていいよ」：出すのは 実EMUER（ウォレット）・アプリ内EMUER・合計 の3行だけ。
+   アプリ内EMUERは /api/emu/gifts/me の balance（受け取る前の報酬＋応援の台帳）。台帳のぶんは使い道が狭いので一言添える。
+   サーバーが古く rewards を返さないときは、受け取る前の報酬を足して同じ数にする。
+   どの画面も同じ読み方（wallet-success-ui.js の emuEmuerSummary）。
    読めなかったものは 0 と出さず「読み込めませんでした（通信エラー）」と出し、合計も出さない。
    サーバーとチェーンは試験用の返事。本物のアカウントやお金は使わない。 */
 const { test, before, after } = require('node:test');
@@ -63,17 +65,26 @@ async function open({ rewards, giftsMe, chainDown }) {
 }
 const rowsOf = page => page.$$eval('#box .emu-sum-row', rs => rs.map(r => r.innerText.replace(/\s+/g, ' ').trim()));
 
-test('3つとも読めたら、同じ名前で3つと合計を出す', async () => {
-  const w = await open({ rewards: [{ claimId: '0x1', amount: '1' }, { claimId: '0x2', amount: '1' }], giftsMe: { ok: true, balance: 5, sentToday: 0, dailyLimit: 100 } });
+test('アプリ内EMUERは1つの数で出す。実EMUERと合計も出す。台帳のぶんがあれば一言添える', async () => {
+  const w = await open({ rewards: [], giftsMe: { ok: true, balance: 7, ledger: 5, rewards: 2, sentToday: 0, dailyLimit: 100 } });
   try {
     await w.page.evaluate(() => window.emuRenderEmuerBreakdown(document.getElementById('box'), true));
     assert.deepEqual(await rowsOf(w.page), [
       '実EMUER（ウォレット） 3 EMUER',
-      'アプリ内EMUER（公式ショップ・みてみる用） 2 EMUER',
-      'アプリ内EMUER（応援・協賛・投票用） 5 EMUER',
+      'アプリ内EMUER 7 EMUER',
       '合計 10 EMUER']);
+    assert.match(await w.page.locator('#box').innerText(), /うち 5 EMUER は、応援・協賛・投票にだけ使えます/);
     assert.equal(await w.page.locator('#box [data-emu-sum-reload]').count(), 0);
     assert.deepEqual(w.errors, []);
+  } finally { await w.close(); }
+});
+
+test('古いサーバー（rewards を返さない）でも、受け取る前の報酬を足して同じ1つの数にする', async () => {
+  const w = await open({ rewards: [{ claimId: '0x1', amount: '1' }, { claimId: '0x2', amount: '1' }], giftsMe: { ok: true, balance: 0, sentToday: 0, dailyLimit: 100 } });
+  try {
+    await w.page.evaluate(() => window.emuRenderEmuerBreakdown(document.getElementById('box'), true));
+    assert.deepEqual(await rowsOf(w.page), ['実EMUER（ウォレット） 3 EMUER', 'アプリ内EMUER 2 EMUER', '合計 5 EMUER']);
+    assert.doesNotMatch(await w.page.locator('#box').innerText(), /だけ使えます/, '台帳が0なら添え書きは出さない');
   } finally { await w.close(); }
 });
 
@@ -83,8 +94,7 @@ test('読めなかったところは 0 にせず「読み込めませんでし�
     await w.page.evaluate(() => window.emuRenderEmuerBreakdown(document.getElementById('box'), true));
     assert.deepEqual(await rowsOf(w.page), [
       '実EMUER（ウォレット） 読み込めませんでした（通信エラー）',
-      'アプリ内EMUER（公式ショップ・みてみる用） 2 EMUER',
-      'アプリ内EMUER（応援・協賛・投票用） 読み込めませんでした（通信エラー）']);
+      'アプリ内EMUER 読み込めませんでした（通信エラー）']);
     assert.match(await w.page.locator('#box').innerText(), /0 ではなく「まだ分からない」です/);
     // 通信が戻ったら、もう一度読み込むで正しい数に変わる
     await w.page.evaluate(() => { window.chainDown = false; });
@@ -94,7 +104,7 @@ test('読めなかったところは 0 にせず「読み込めませんでし�
     await w.page.context().route('**/*', route => {
       const url = new URL(route.request().url());
       if (url.pathname === '/api/emuer/v2/rewards') return route.fulfill({ json: { rewards: [{ claimId: '0x1', amount: '2' }] }, headers: H });
-      if (url.pathname === '/api/emu/gifts/me') return route.fulfill({ json: { ok: true, balance: 0, sentToday: 0, dailyLimit: 100 }, headers: H });
+      if (url.pathname === '/api/emu/gifts/me') return route.fulfill({ json: { ok: true, balance: 2, ledger: 0, rewards: 2, sentToday: 0, dailyLimit: 100 }, headers: H });
       if (url.pathname === '/api/emuer/v2/config') return route.fulfill({ json: { enabled: true, chainId: 137, contract: '0x' + '1'.repeat(40) }, headers: H });
       return route.continue();
     });
@@ -102,8 +112,7 @@ test('読めなかったところは 0 にせず「読み込めませんでし�
     await w.page.waitForFunction(() => /合計/.test(document.getElementById('box').innerText));
     assert.deepEqual(await rowsOf(w.page), [
       '実EMUER（ウォレット） 3 EMUER',
-      'アプリ内EMUER（公式ショップ・みてみる用） 2 EMUER',
-      'アプリ内EMUER（応援・協賛・投票用） 0 EMUER',
+      'アプリ内EMUER 2 EMUER',
       '合計 5 EMUER']);
     assert.deepEqual(w.errors, []);
   } finally { await w.close(); }

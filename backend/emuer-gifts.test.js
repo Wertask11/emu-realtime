@@ -17,13 +17,13 @@ const USERS = {
   carol: { uid: "uc", walletAddress: C, account: { displayName: "きゃろる", spid: "SP-C" } },
   daichi: { uid: "ud", walletAddress: D, account: { displayName: "だいち", spid: "SP-D", chesAddress: ethers.utils.getAddress(E) } }
 };
-async function serve(seed, { t = Date.UTC(2026, 10, 10, 3) } = {}) {
+async function serve(seed, { t = Date.UTC(2026, 10, 10, 3), chain = null } = {}) {
   const db = makeFirestore(seed);
   let clock = t;
   const app = express();
   const requireFirebaseUser = (req, res, next) => { const u = USERS[req.headers["x-user"]]; if (!u) return res.status(401).end(); req.identity = u; next(); };
   const requireOwner = (req, res, next) => requireFirebaseUser(req, res, () => (req.identity.uid === "ua" ? next() : res.status(403).end()));
-  app.use("/g", createGiftsRouter({ db, requireFirebaseUser, requireOwner, now: () => clock }));
+  app.use("/g", createGiftsRouter({ db, requireFirebaseUser, requireOwner, now: () => clock, chain }));
   const server = app.listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   const base = "http://127.0.0.1:" + server.address().port + "/g";
@@ -211,4 +211,94 @@ test("応援：送った人の名前は、画面で付けた名前（user_profil
     assert.deepEqual(names, ["だいちのなまえ", "メンマ"], "アプリが作ったアドレス側の名前も使う・前の分も名前で出す");
     assert.ok(!JSON.stringify(inbox.body).includes(C) && !JSON.stringify(inbox.body).includes(D), "相手のアドレスは見せない");
   } finally { delete USERS.noname; await s.close(); }
+});
+
+/* 11/15 オーナー「1つにまとめていいよ」：応援・協賛・投票も、受け取る前の報酬（公式ショップ・みてみるで使うEMUER）から払える。 */
+const W = (n) => (BigInt(Math.round(n * 1e6)) * 10n ** 12n).toString();
+const reward = (recipient, amount, extra = {}) => ({ schema: "emuer-v2-reward-v1", kind: "daily-login", recipient, amountWei: W(amount),
+  amount: String(amount), status: "pending", claimId: extra.claimId, createdAt: new Date(Date.UTC(2026, 10, 1)), ...extra });
+const paidChain = (paid = {}) => ({ claimPaid: async (id) => BigInt(paid[id] || "0") });
+const rewardsOf = (db, addr) => Object.entries(db._dump("emuer_v2_rewards")).filter(([, r]) => r.recipient === addr);
+
+test("ひとつのアプリ内EMUER：台帳で足りないぶんは受け取る前の報酬から払う。受け取った人には報酬として入り、台帳の giftIn/giftOut は台帳のぶんだけ", async () => {
+  const s = await serve({ ...seed(), emuer_offchain: { [C]: { balance: 2 } },
+    emuer_v2_rewards: { r1: reward(C, 2, { createdAt: new Date(Date.UTC(2026, 10, 1)) }), r2: reward(C, 3, { createdAt: new Date(Date.UTC(2026, 10, 2)) }) } },
+    { chain: paidChain() });
+  try {
+    const me = await s.call("GET", "/me", "carol");
+    assert.equal(me.body.balance, 7, "台帳2＋報酬5を1つの残高として見せる");
+    assert.equal(me.body.ledger, 2);
+    assert.equal(me.body.rewards, 5);
+    const ok = await s.call("POST", "/cheer", "carol", { postId: "p1", amount: 5, requestId: "mix-00001" });
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    assert.equal(ok.body.balance, 2, "7−5");
+    const l = s.db._dump("emuer_offchain");
+    assert.equal(l[C].balance, 0);
+    assert.equal(l[C].giftOut, 2, "giftOut は台帳から出たぶんだけ（照合バッチが数え直せるように）");
+    assert.equal(l[B].giftIn, 2);
+    assert.equal(l[B].balance, 2, "台帳から出たぶんは相手の台帳へ");
+    const rw = s.db._dump("emuer_v2_rewards");
+    assert.equal(rw.r1.status, "spent", "古い報酬から使う");
+    assert.equal(rw.r2.status, "spent");
+    const mine = rewardsOf(s.db, C).filter(([, r]) => r.status === "pending");
+    assert.equal(mine.length, 1);
+    assert.equal(mine[0][1].kind, "gift-change");
+    assert.equal(mine[0][1].amountWei, W(2), "5−3=2 のおつり");
+    assert.equal(mine[0][0], ethers.utils.id(mine[0][1].key), "おつりも鎖で受け取れる claimId");
+    const got = rewardsOf(s.db, B);
+    assert.equal(got.length, 1);
+    assert.equal(got[0][1].kind, "gift-received");
+    assert.equal(got[0][1].amountWei, W(3), "報酬から出たぶんは、相手の受け取る前の報酬へ（公式ショップ・ウォレットで使える）");
+    assert.equal(got[0][1].status, "pending");
+    assert.equal((await s.call("GET", "/me", "carol")).body.balance, 2);
+    assert.equal((await s.call("GET", "/me", "bob")).body.balance, 5);
+    const again = await s.call("POST", "/cheer", "carol", { postId: "p1", amount: 5, requestId: "mix-00001" });
+    assert.equal(again.body.already, true);
+    assert.equal(rewardsOf(s.db, B).length, 1, "押し直しで二重にならない");
+  } finally { await s.close(); }
+});
+
+test("ひとつのアプリ内EMUER：鎖で受け取り済み・受け取りの署名を出したばかりの報酬は使わない。鎖に聞けなければ止める", async () => {
+  const t = Date.UTC(2026, 10, 10, 3);
+  const seedR = () => ({ ...seed(), emuer_offchain: {},
+    emuer_v2_rewards: { r1: reward(C, 5, { claimId: "r1" }), r2: reward(C, 5, { claimId: "r2", authorizedUntilMs: t + 1000 }), r3: reward(C, 5, { claimId: "r3" }) } });
+  let s = await serve(seedR(), { chain: paidChain({ r1: W(5) }) });
+  try {
+    assert.equal((await s.call("GET", "/me", "carol")).body.balance, 10, "署名を出したばかりの r2 は数えない");
+    const ok = await s.call("POST", "/cheer", "carol", { postId: "p1", amount: 5, requestId: "skip-0001" });
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    const rw = s.db._dump("emuer_v2_rewards");
+    assert.equal(rw.r1.status, "claimed", "鎖で受け取り済みは受け取り済みにする");
+    assert.equal(rw.r2.status, "pending");
+    assert.equal(rw.r3.status, "spent");
+    const no = await s.call("POST", "/cheer", "carol", { postId: "p1", amount: 5, requestId: "skip-0002" });
+    assert.equal(no.body.error, "INSUFFICIENT_EMUER", "無から作らない");
+  } finally { await s.close(); }
+  s = await serve(seedR(), { chain: { claimPaid: async () => { throw new Error("rpc down"); } } });
+  try {
+    const down = await s.call("POST", "/cheer", "carol", { postId: "p1", amount: 5, requestId: "down-0001" });
+    assert.equal(down.status, 503);
+    assert.equal(down.body.error, "CHAIN_UNAVAILABLE");
+    assert.equal(s.db._dump("emuer_v2_rewards").r1.status, "pending", "止めたときは何も動かさない");
+  } finally { await s.close(); }
+});
+
+test("ひとつのアプリ内EMUER：協賛と投票も報酬から払える（相手のいない支払いは使って消える／袋に入る）", async () => {
+  const s = await serve({ ...seed(), emuer_offchain: {},
+    emuer_v2_rewards: { r1: reward(C, 10, { claimId: "r1" }) },
+    emuer_v2_polls: { pl: { visible: true, status: "open", cost: 1, options: [{ id: "x", label: "X" }], tallies: {}, votes: 0 } } },
+    { chain: paidChain() });
+  try {
+    const sp = await s.call("POST", "/sponsor", "carol", { questId: "q1", amount: 5, requestId: "spr-00001" });
+    assert.equal(sp.status, 200, JSON.stringify(sp.body));
+    assert.equal(sp.body.balance, 5);
+    const v = await s.call("POST", "/polls/pl/vote", "carol", { option: "x" });
+    assert.equal(v.status, 200, JSON.stringify(v.body));
+    assert.equal(v.body.balance, 4);
+    assert.equal((await s.call("GET", "/me", "carol")).body.balance, 4);
+    const pending = rewardsOf(s.db, C).filter(([, r]) => r.status === "pending");
+    assert.equal(pending.length, 1);
+    assert.equal(pending[0][1].amountWei, W(4));
+    assert.equal((s.db._dump("emuer_offchain")[C] || {}).giftOut || 0, 0, "台帳には何も書かない");
+  } finally { await s.close(); }
 });

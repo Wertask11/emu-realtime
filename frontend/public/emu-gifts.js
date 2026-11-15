@@ -13,8 +13,9 @@
   var POLL_MS = 20000;
 
   var WORDS = {
-    INSUFFICIENT_EMUER: '未変換のEMUERが足りないみたい🧊',
+    INSUFFICIENT_EMUER: 'アプリ内EMUERが足りないみたい🧊',
     DAILY_LIMIT: '応援と協賛は、1日100 EMUERまでだよ。また明日ね🧊',
+    CHAIN_UNAVAILABLE: 'いまEMUERの記録を確かめられなかったよ。少し待って、もう一度押してね（EMUERは減っていないよ）🧊',
     OWN_POST: '自分の投稿には応援できないよ🧊',
     POST_NOT_FOUND: 'この投稿は見つからなかったよ🧊',
     QUEST_NOT_FOUND: 'このクエストには協賛できないよ🧊',
@@ -108,7 +109,7 @@
     }
     var note = document.createElement('p'); note.style.cssText = 'margin:10px 0 0;padding:8px 10px;border-radius:10px;background:#fdf2f8;font-size:13px;line-height:1.7;color:#9d174d';
     note.textContent = '届いたEMUERは、もう使えます。'
-      + (typeof balance === 'number' ? 'いま応援用のアプリ内EMUERは ' + balance + ' EMUER。' : '応援用のアプリ内EMUERに入っています。')
+      + (typeof balance === 'number' ? 'いまアプリ内EMUERは ' + balance + ' EMUER。' : 'アプリ内EMUERに入っています。')
       + '応援・協賛・投票に使えます。';
     var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'うれしい！';
     btn.style.cssText = 'margin-top:14px;border:0;border-radius:999px;padding:10px 22px;background:#c2185b;color:#fff;font:inherit;font-weight:700;cursor:pointer';

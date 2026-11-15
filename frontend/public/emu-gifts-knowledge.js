@@ -93,7 +93,7 @@
       + AMOUNTS.map(function (n) { return '<button type="button" data-cheer-amount="' + n + '" style="border:1px solid #f0a6c6;background:#fff;color:#9d174d;border-radius:999px;padding:8px 14px;font:inherit;font-weight:700;cursor:pointer">' + n + ' EMUER</button>'; }).join('')
       + '<button type="button" data-cheer-cancel style="border:0;background:none;color:#8a8070;font:inherit;cursor:pointer;padding:8px">やめる</button></div>'
       + '<div data-cheer-have style="margin-top:8px;font-size:13px;font-weight:700;color:#9d174d">応援に使えるアプリ内EMUERを読み込んでいます…</div>'
-      + '<small style="display:block;margin-top:4px;color:#8a8070;font-size:12px">アプリ内EMUER（応援・協賛・投票用）から贈ります。贈ったEMUERは、書いた人にすぐ届きます。1日100 EMUERまで。</small>';
+      + '<small style="display:block;margin-top:4px;color:#8a8070;font-size:12px">アプリ内EMUER（公式ショップと同じEMUER）から贈ります。贈ったEMUERは、書いた人にすぐ届きます。1日100 EMUERまで。</small>';
     card.appendChild(box);
     /* いま贈れる分を見せる。足りない額は押せないようにする（押してから断られないように）。 */
     if (typeof G.me === 'function') G.me().then(function (d) {
@@ -107,11 +107,6 @@
       var left = Math.max(0, (Number(d.dailyLimit) || 100) - (Number(d.sentToday) || 0));
       var can = Math.min(d.balance, left);
       if (have) have.textContent = '応援に使えるアプリ内EMUER：' + d.balance + ' EMUER' + (left < d.balance ? '（今日あと ' + left + ' EMUER 贈れます）' : '');
-      /* 公式ショップ用のアプリ内EMUERは応援に使えない。あるのに「無い」と見えないよう、別にあることを添える。 */
-      if (d.balance < 1 && typeof window.emuEmuerSummary === 'function') window.emuEmuerSummary(false).then(function (s) {
-        if (!box.isConnected || !have || !s || !s.shop || s.shop.state !== 'ok' || !(s.shop.value > 0)) return;
-        have.textContent += '（公式ショップ・みてみる用のアプリ内EMUERは ' + s.shop.value + ' EMUER あります。こちらは応援には使えません）';
-      }).catch(function () {});
       box.querySelectorAll('[data-cheer-amount]').forEach(function (b) {
         if (Number(b.getAttribute('data-cheer-amount')) > can) { b.disabled = true; b.style.opacity = '.45'; b.style.cursor = 'not-allowed'; }
       });
@@ -174,7 +169,7 @@
     var box = btn.closest('[data-poll]'); var pollId = box.getAttribute('data-poll'); var option = btn.getAttribute('data-poll-vote');
     if (!G.signedIn()) { say('投票するには、ログインしてね🧊'); return; }
     var p = polls.filter(function (x) { return x.id === pollId; })[0];
-    if (p && p.cost && !window.confirm('「' + (btn.textContent || '') + '」に入れます。未変換のEMUERを ' + p.cost + ' 使います。よろしいですか？')) return;
+    if (p && p.cost && !window.confirm('「' + (btn.textContent || '') + '」に入れます。アプリ内EMUERを ' + p.cost + ' 使います。よろしいですか？')) return;
     box.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
     var d = await G.vote(pollId, option);
     if (!d.ok) { box.querySelectorAll('button').forEach(function (b) { b.disabled = false; }); say(d.error); if (d.code === 'ALREADY_VOTED') loadPolls(); return; }

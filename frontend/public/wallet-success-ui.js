@@ -33,7 +33,7 @@ document.head.appendChild(emuerV2PublicCopyScript);
 
 (function(){
   const s=document.createElement("style");
-  s.textContent="#walletSuccessOverlay{display:none;position:fixed;inset:0;background:#000b;z-index:9999;align-items:center;justify-content:center}#walletSuccessOverlay.active{display:flex}#walletSuccessCard{background:#fff;border-radius:18px;padding:30px;max-width:360px;width:calc(100% - 44px);text-align:center;color:#172033}.ws-balance{font-size:32px;font-weight:700;color:#167653;margin:8px}.ws-sub{font-size:13px;color:#667085}.ws-btn{width:100%;border:0;border-radius:10px;padding:13px;margin-top:10px;background:#265dd7;color:#fff;font-weight:700;cursor:pointer}.ws-btn:disabled{background:#aab4c8}.ws-close{background:#eef2f8;color:#273047}.ws-alt{background:#fff;color:#265dd7;border:2px solid #265dd7}#wsChoice{text-align:left;line-height:1.6;margin-top:12px}.emu-sum{margin:12px 0 4px;padding:10px 12px;border-radius:12px;background:#f6f8fc;text-align:left;font-size:13px;line-height:1.7;color:#273047}.emu-sum-row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 10px}.emu-sum-row span{flex:1 1 12em}.emu-sum-row b{margin-left:auto;white-space:nowrap}.emu-sum-row b.emu-sum-err{white-space:normal}.emu-sum-err{color:#b42318}.emu-sum-total{margin-top:6px;padding-top:6px;border-top:1px solid #dfe5f0;font-weight:700}.emu-sum-reload{margin-top:6px;border:1px solid #265dd7;background:#fff;color:#265dd7;border-radius:999px;padding:6px 12px;font:inherit;font-weight:700;cursor:pointer}";
+  s.textContent="#walletSuccessOverlay{display:none;position:fixed;inset:0;background:#000b;z-index:9999;align-items:center;justify-content:center}#walletSuccessOverlay.active{display:flex}#walletSuccessCard{background:#fff;border-radius:18px;padding:30px;max-width:360px;width:calc(100% - 44px);text-align:center;color:#172033}.ws-balance{font-size:32px;font-weight:700;color:#167653;margin:8px}.ws-sub{font-size:13px;color:#667085}.ws-btn{width:100%;border:0;border-radius:10px;padding:13px;margin-top:10px;background:#265dd7;color:#fff;font-weight:700;cursor:pointer}.ws-btn:disabled{background:#aab4c8}.ws-close{background:#eef2f8;color:#273047}.ws-alt{background:#fff;color:#265dd7;border:2px solid #265dd7}#wsChoice{text-align:left;line-height:1.6;margin-top:12px}.emu-sum{margin:12px 0 4px;padding:10px 12px;border-radius:12px;background:#f6f8fc;text-align:left;font-size:13px;line-height:1.7;color:#273047}.emu-sum-row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 10px}.emu-sum-row span{flex:1 1 12em}.emu-sum-row b{margin-left:auto;white-space:nowrap}.emu-sum-row b.emu-sum-err{white-space:normal}.emu-sum-err{color:#b42318}.emu-sum-total{margin-top:6px;padding-top:6px;border-top:1px solid #dfe5f0;font-weight:700}.emu-sum-note{margin-top:4px;font-size:12px;color:#667085}.emu-sum-reload{margin-top:6px;border:1px solid #265dd7;background:#fff;color:#265dd7;border-radius:999px;padding:6px 12px;font:inherit;font-weight:700;cursor:pointer}";
   document.head.appendChild(s);
   document.body.insertAdjacentHTML("beforeend",'<div id="walletSuccessOverlay"><section id="walletSuccessCard"><h2>ウォレット接続完了</h2><p id="wsAddress" class="ws-sub"></p><p class="ws-sub">ウォレットのEMUER残高（実EMUER）</p><p id="wsBalance" class="ws-balance">---</p><div id="wsBreakdown"></div><p id="wsStatus" class="ws-sub"></p><button id="wsLogin" class="ws-btn" hidden></button><button id="wsLoginApp" class="ws-btn ws-alt" hidden></button><button id="wsClaim" class="ws-btn" hidden></button><button id="wsClaimApp" class="ws-btn ws-alt" hidden></button><p id="wsChoice" class="ws-sub" hidden></p><button class="ws-btn ws-close" onclick="closeWalletSuccessAndStart()">SchoolParkを始める</button></section></div>');
 })();
@@ -185,7 +185,7 @@ async function wsRewards(){
     /* ウォレットへ移せるところでも、アプリ内EMUERのまま使う道を並べる（11/14）。
        受け取る前のEMUERは、そのままでアプリ内EMUER（オフチェーン）として公式ショップで使える。 */
     const st=document.getElementById("wsStatus");
-    if(st)st.textContent=`公式ショップ・みてみる用のアプリ内EMUERが ${total.toLocaleString("ja-JP")} EMUER あります（${a.length}件）。`;
+    if(st)st.textContent=`ウォレットへ移せるアプリ内EMUERが ${total.toLocaleString("ja-JP")} EMUER あります（${a.length}件）。そのままでも、公式ショップ・応援・協賛・投票に使えます。`;
     const label=a.length>1
       ? `実EMUERとしてウォレットへ：${total.toLocaleString("ja-JP")} EMUER（${a.length}件）をまとめて受け取る`
       : `実EMUERとしてウォレットへ：${total.toLocaleString("ja-JP")} EMUER を受け取る`;
@@ -302,11 +302,14 @@ async function claimEmuV2LoginReward(){
 }
 /* ── EMUERのうちわけ（11/15 オーナー：「ばらばらすぎる。通信エラーなのか、本当に無いのか、あるのか、はっきりして」）──
 
-   EMUERは3つの場所にある。画面ごとに別の場所だけを「残高」と呼んでいたので、同じ人に 0・2・0 と違う数が出ていた。
+   画面ごとに別の場所だけを「残高」と呼んでいたので、同じ人に 0・2・0 と違う数が出ていた。
+   11/15 オーナー「1つにまとめていいよ」：アプリ内EMUERは1つの数にした。応援・協賛・投票でも、公式ショップ・みてみると同じ
+   受け取る前の報酬から払える（backend/emuer-gifts.js）。出すのは2つと合計だけ。
      ・実EMUER（ウォレット）……Polygon のコントラクトの残高。読むのは公開のRPC（MetaMask が無くても読める）
-     ・アプリ内EMUER（公式ショップ・みてみる用）……受け取る前の報酬（/api/emuer/v2/rewards）
-     ・アプリ内EMUER（応援・協賛・投票用）……応援の台帳（/api/emu/gifts/me）
-   どの画面も、この1つの読み方で3つを同じ名前で出す。読めなかったものは 0 にせず「読み込めませんでした」と出す。 */
+     ・アプリ内EMUER……/api/emu/gifts/me の balance（受け取る前の報酬＋応援の台帳）。
+       台帳のぶん（ledger）は応援・協賛・投票にだけ使えるので、あるときだけ一言添える。
+       サーバーが古くて rewards を返さないときは、受け取る前の報酬（/api/emuer/v2/rewards）を足して同じ数にする。
+   読めなかったものは 0 にせず「読み込めませんでした」と出す。 */
 const EMU_SUM_RPCS=["https://polygon-bor-rpc.publicnode.com","https://polygon.drpc.org","https://1rpc.io/matic"];
 const EMU_GIFTS_API="https://emu-realtime.onrender.com/api/emu/gifts";
 let emuSumCache=null;
@@ -326,15 +329,19 @@ window.emuEmuerSummary=function(force){
   const addr=wsAccount();
   if(!force&&emuSumCache&&emuSumCache.addr===addr&&Date.now()-emuSumCache.at<20000)return emuSumCache.promise;
   const promise=(async()=>{
-    if(!addr)return{address:"",chain:{state:"none"},shop:{state:"none"},cheer:{state:"none"}};
+    if(!addr)return{address:"",chain:{state:"none"},app:{state:"none"}};
     let cfg=null;try{cfg=await window.emuerV2ConfigOnce();}catch(_){}
-    const [chain,shop,cheer]=await Promise.all([
+    let ledger=0;
+    const [chain,app]=await Promise.all([
       emuSumPart(()=>emuSumChain(addr,cfg)),
-      emuSumPart(async()=>{const r=await fetch(EMUER_V2_API+"/rewards?address="+encodeURIComponent(addr),{headers:await wsHeaders(false)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||("HTTP "+r.status));
-        return(Array.isArray(d.rewards)?d.rewards:[]).filter(x=>!wsDone.has(String(x&&x.claimId))).reduce((n,x)=>n+(Number(x.amount)||0),0);}),
-      emuSumPart(async()=>{const r=await fetch(EMU_GIFTS_API+"/me",{headers:await wsHeaders(true)});const d=await r.json().catch(()=>({}));if(!r.ok||typeof d.balance!=="number")throw new Error(d.error||("HTTP "+r.status));return d.balance;})
+      emuSumPart(async()=>{const r=await fetch(EMU_GIFTS_API+"/me",{headers:await wsHeaders(true)});const d=await r.json().catch(()=>({}));if(!r.ok||typeof d.balance!=="number")throw new Error(d.error||("HTTP "+r.status));
+        if(typeof d.rewards==="number"){ledger=Number(d.ledger)||0;return d.balance;}
+        ledger=d.balance;
+        const rr=await fetch(EMUER_V2_API+"/rewards?address="+encodeURIComponent(addr),{headers:await wsHeaders(false)});const rd=await rr.json().catch(()=>({}));if(!rr.ok)throw new Error(rd.error||("HTTP "+rr.status));
+        return d.balance+(Array.isArray(rd.rewards)?rd.rewards:[]).filter(x=>!wsDone.has(String(x&&x.claimId))).reduce((n,x)=>n+(Number(x.amount)||0),0);})
     ]);
-    return{address:addr,chain,shop,cheer};
+    if(app.state==="ok")app.ledger=ledger;
+    return{address:addr,chain,app};
   })();
   emuSumCache={addr,at:Date.now(),promise};
   return promise;
@@ -342,16 +349,17 @@ window.emuEmuerSummary=function(force){
 function emuSumValue(p){return p&&p.state==="ok"?Number(p.value).toLocaleString("ja-JP")+" EMUER":p&&p.state==="error"?"読み込めませんでした（通信エラー）":"—";}
 /* うちわけの表（文字はすべてこちらで決めたもの。数は数として出す） */
 window.emuEmuerBreakdownHtml=function(s){
-  const rows=[["実EMUER（ウォレット）",s.chain],["アプリ内EMUER（公式ショップ・みてみる用）",s.shop],["アプリ内EMUER（応援・協賛・投票用）",s.cheer]];
+  const rows=[["実EMUER（ウォレット）",s.chain],["アプリ内EMUER",s.app]];
   const all=rows.every(r=>r[1]&&r[1].state==="ok");
   const anyErr=rows.some(r=>r[1]&&r[1].state==="error");
   const total=all?rows.reduce((n,r)=>n+r[1].value,0):null;
   return '<div class="emu-sum" data-emu-sum>'+rows.map(r=>'<div class="emu-sum-row"><span>'+r[0]+'</span><b class="'+(r[1]&&r[1].state==="error"?"emu-sum-err":"")+'">'+emuSumValue(r[1])+'</b></div>').join("")
     +(all?'<div class="emu-sum-row emu-sum-total"><span>合計</span><b>'+total.toLocaleString("ja-JP")+' EMUER</b></div>':"")
+    +(s.app&&s.app.state==="ok"&&s.app.ledger>0?'<div class="emu-sum-note">アプリ内EMUERのうち '+Number(s.app.ledger).toLocaleString("ja-JP")+' EMUER は、応援・協賛・投票にだけ使えます（公式ショップ・ウォレットへは使えません）。</div>':"")
     +(anyErr?'<div class="emu-sum-err">読み込めなかったところは、0 ではなく「まだ分からない」です。</div><button type="button" class="emu-sum-reload" data-emu-sum-reload>もう一度読み込む</button>':"")
     +'</div>';
 };
-window.emuEmuerSummaryTotal=function(s){return["chain","shop","cheer"].every(k=>s[k]&&s[k].state==="ok")?s.chain.value+s.shop.value+s.cheer.value:null;};
+window.emuEmuerSummaryTotal=function(s){return["chain","app"].every(k=>s[k]&&s[k].state==="ok")?s.chain.value+s.app.value:null;};
 /* 1つの箱にうちわけを描く。「もう一度読み込む」で読み直す。 */
 window.emuRenderEmuerBreakdown=async function(box,force,after){
   if(!box)return null;
