@@ -30585,5 +30585,40 @@ window.addEventListener('emu-reaction-result', function(event) {
 
 <script src="/dialogue-client.js"></script>
 <script src="/unified-navigation.js"></script>
+<script>
+/* スマホで上から引っぱったときの、Emu の中の読み直し（11/16・emu-pull-refresh.js から呼ぶ）。
+   ブラウザの再読み込みはしない。いま見ている画面のデータだけを読み直す。
+   source は、引っぱられた中の枠（知識を読む・SchoolPark）。Emu 本体の画面なら null。 */
+window.emuInAppRefresh = async function (source) {
+  const frameOf = (id) => { const f = document.getElementById(id); return f && f.contentWindow === source ? f : null; };
+  if (source && frameOf('emuKnowledgeFrame')) {
+    if (typeof window.syncKnowledgeFrame === 'function') await window.syncKnowledgeFrame({ append:false });
+    return 'knowledge';
+  }
+  if (source && (frameOf('spDaoFrame') || frameOf('spRoomFrame'))) {
+    /* SchoolPark の読み直し。読み取り枠を守る間引き（8秒）と、枠を使い切ったときの見合わせはそのまま */
+    if (typeof window.spDaoRefreshNow === 'function') await window.spDaoRefreshNow('引っぱって読み直し');
+    return 'schoolpark';
+  }
+  const b = document.body.classList;
+  if (b.contains('emu-knowledge-open') && typeof window.syncKnowledgeFrame === 'function') {
+    await window.syncKnowledgeFrame({ append:false });
+    return 'knowledge';
+  }
+  if (b.contains('emu-profile-open') && typeof window.loadEmuValueProfile === 'function') {
+    await window.loadEmuValueProfile();
+    return 'profile';
+  }
+  if (b.contains('sp-dao-open') && typeof window.spDaoRefreshNow === 'function') {
+    await window.spDaoRefreshNow('引っぱって読み直し');
+    return 'schoolpark';
+  }
+  /* 知識を探す・知識を試すは読み込むデータが無いので、画面を出し直すだけ */
+  if (b.contains('emu-requests-open') && typeof window.showEmuRequests === 'function') window.showEmuRequests();
+  else if (b.contains('emu-practice-open') && typeof window.showEmuPractice === 'function') window.showEmuPractice();
+  return 'view';
+};
+</script>
+<script src="/emu-pull-refresh.js" defer></script>
 </body>
 </html>
