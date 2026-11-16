@@ -29,6 +29,8 @@
 
 変更はeconomy worker/readiness、対応試験、署名器の隔離受入ツール/IaC、経路別計測ツール、監査文書。Knowledge Lab製品コード、City、Camellia、契約、会員判定、既存台帳、token、Rulesのproduction変更なし。既存5 EMUER/Plus・Pro/3・20・2/token予算を変更しない。
 
+Render直近3回の配備はbuild_failedで、backendは旧版に留まっていた。rootDir=backendのbuildCommandがyarnだが、管理されているのはpackage-lock.jsonのみ。localのYarn解決は成功したため過去の失敗原因をYarnだけとは断定しない（Render logs APIは403）。npm ci --omit=dev --ignore-scriptsによる新規installと全runtime依存のimportは成功し、lock/overridesに従う再現可能な手順へ合わせる。変更する設定・実際のhost build結果は配備証拠に記録し、有料planや他設定は変更しない。
+
 再開時の本番backendは20e62e0、mainは046ca28だった。配備時はmainの既存更新を巻き戻さず統合する。Render/Vercel反映は実SHAと配信内容で照合する。新Previewの通信保護で表示できない場合は、build成功と実画面確認を分けて記録する。
 
 ## 4. Firestore安定性・台帳原本
