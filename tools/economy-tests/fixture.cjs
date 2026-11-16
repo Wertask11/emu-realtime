@@ -77,6 +77,9 @@ async function createFixture({
     providerDown,
     env: {
       ECONOMY_EXPLORER_ENABLED: enabled ? "true" : "false",
+      // Local demo only. Keep success-path tests valid after the historical
+      // production trial expires; real cutoff rejection has a separate test.
+      ECONOMY_EXPLORER_TRIAL_START: new Date(Date.now() - 86400000).toISOString(),
       ECONOMY_PHASE3_ENABLED: phase3 ? "true" : "false",
       ECONOMY_PHASE4_ENABLED: phase4 ? "true" : "false",
       ...(crossDomain

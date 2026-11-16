@@ -1,5 +1,7 @@
 # 冷蔵庫くんに頼む Phase 5 最終完成報告
 
+2026-11-16追補：[最新の実装・監査対象SHA・公開ゲート](phase5-closeout-20261116.md)。本書の過去時点の受付状態と混同しない。
+
 2026-11-11。基点main `098d2e8` / PR #333・#334。Production：https://schoolpark-emu.vercel.app/ （emu-for-schoolpark.vercel.appも同じbackendを参照）。
 
 **総合PARTIAL / Polygon受付OFF**。実装完成、安全性検証、本番運用準備、限定本番受入を別々に判定する。mockやローカルchainを実本番成功としない。

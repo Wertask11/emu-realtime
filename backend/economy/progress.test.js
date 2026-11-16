@@ -40,3 +40,12 @@ test("disabled automatic worker does not execute a paid request via HTTP wake",a
  assert.equal((await t.f.economy.service.view(await t.f.actor(),j.job.id)).state,"queued");
  }finally{await t.close();}
 });
+test("a durable payment-confirmation wait also wakes recovery after a transient RPC fault",async()=>{
+ let attempts=0;const options={};Object.defineProperty(options,"rpcDown",{get(){return attempts++===0;}});
+ const t=await setup(options);try{
+ const j=await t.call("/jobs",await t.body("wake-transient-payment-0001")),a=await t.f.actor();
+ await until(async()=> (await t.f.economy.service.view(a,j.job.id)).state==="completed");
+ assert.equal(t.f.calls(),1);assert.equal(t.f.db._count("mitemiru_orders"),1);
+ assert.equal((await t.f.commerce.servicePayments.balances(t.f.auth().walletAddress)).spendable,"95");
+ }finally{await t.close();}
+});
