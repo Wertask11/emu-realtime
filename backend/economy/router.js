@@ -51,7 +51,8 @@ function createEconomyRouter(deps) {
   };
   let snapshot = null,
     lastSuccessAtMs = 0,
-    lastError = null;
+    lastError = null,
+    lastFailureStage = null;
   // No database read, write, user identity or provider call from this public probe.
   router.get("/status", (req, res) => {
     const c = service.config(),
@@ -96,7 +97,15 @@ function createEconomyRouter(deps) {
         state: !workerEnabled ? "disabled" : healthy ? "healthy" : "not_ready",
         lastSuccessAtMs: lastSuccessAtMs || null,
         error: lastError,
+        errorStage: lastFailureStage,
         retryAfterMs: Math.max(0, quotaRetryAt - Date.now()),
+        // Process-local operation counts, not Firestore's billable usage meter.
+        activity: {
+          queueScans,
+          readinessRefreshes,
+          wakeups,
+          nextQueueCheckInMs: Math.max(0, queueAfter - Date.now()),
+        },
       },
       walletPaymentEnabled:
         snapshot?.walletPayment?.enabled === true &&
@@ -292,18 +301,25 @@ function createEconomyRouter(deps) {
     closed = false,
     cleanupAfter = 0,
     quotaRetryAt = 0,
-    quotaFailures = 0;
+    quotaFailures = 0,
+    queueAfter = 0,
+    readinessAfter = 0,
+    idleScans = 0,
+    queueScans = 0,
+    readinessRefreshes = 0,
+    wakeups = 0;
   const awakenedJobs = new Set();
   function wakeFor(job) {
     if (
       closed ||
       env.ECONOMY_WORKER_ENABLED !== "true" ||
       deps.startWorker === false ||
-      !["queued", "awaiting_wallet_payment"].includes(job.state) ||
+      !["awaiting_payment", "queued", "awaiting_wallet_payment"].includes(job.state) ||
       awakenedJobs.has(job.id)
     )
       return;
     awakenedJobs.add(job.id);
+    wakeups++;
     if (awakenedJobs.size > 64)
       awakenedJobs.delete(awakenedJobs.values().next().value);
     // A new durable paid job wakes the existing worker. Replays do not create
@@ -311,17 +327,34 @@ function createEconomyRouter(deps) {
     if (ticking) wakePending = true;
     else queueMicrotask(tick);
   }
-  const tick = async () => {
+  const tick = async ({ scheduled = false } = {}) => {
     if (ticking || closed || Date.now() < quotaRetryAt) return;
+    // Durable submissions wake immediately. The watchdog is only for lost wakes,
+    // process restarts and jobs created by another instance; no snapshot listener.
+    const scan = !scheduled || Date.now() >= queueAfter;
+    if (!scan && Date.now() < readinessAfter) return;
     ticking = true;
+    let stage = "queue_health";
     try {
-      await service.workerHealth(true, false);
-      await service.tick();
+      if (scan) {
+        await service.workerHealth(true, false);
+        stage = "queue";
+        const result = await service.tick();
+        queueScans++;
+        idleScans = result?.idle ? Math.min(idleScans + 1, 4) : 0;
+        queueAfter = Date.now() + Math.min(300000, 30000 * 2 ** idleScans);
+      }
+      stage = "heartbeat";
       await service.workerHealth(true);
+      stage = "readiness";
       snapshot = await service.status();
+      readinessRefreshes++;
+      readinessAfter = Date.now() + 60000;
       lastSuccessAtMs = Date.now();
       lastError = null;
+      lastFailureStage = null;
       if (Date.now() >= cleanupAfter) {
+        stage = "cleanup";
         await service.purge();
         cleanupAfter = Date.now() + 3600000;
       }
@@ -339,7 +372,10 @@ function createEconomyRouter(deps) {
           Date.now() + Math.min(300000, 30000 * 2 ** quotaFailures);
       }
       lastError = "WORKER_CYCLE_FAILED";
+      lastFailureStage = stage;
       snapshot = null;
+      queueAfter = readinessAfter = 0;
+      idleScans = 0;
       try {
         await service.workerHealth(false);
       } catch (_) {}
@@ -354,17 +390,18 @@ function createEconomyRouter(deps) {
   };
   if (env.ECONOMY_WORKER_ENABLED === "true" && deps.startWorker !== false) {
     tick();
-    // Four minimum reads per idle cycle (one queue probe + three readiness
-    // documents), about 11,520/day rather than 23,040. Shared app traffic is
-    // additional. The 30s recovery cadence and 90s heartbeat remain unchanged;
-    // quota failures wait 60/120/240/300s without additional Firestore reads.
-    timer = setInterval(tick, 30000);
+    // Empty queue checks back off to 5 minutes, but fresh readiness/health runs
+    // at least once a minute. Steady idle: ~4,608 reads/day vs 11,520, excluding
+    // hourly cleanup, startup, paid work and other services. Active recovery is
+    // still 30s. Financial admission independently re-reads all safety gates.
+    timer = setInterval(() => tick({ scheduled: true }), 30000);
     timer.unref();
   }
   return {
     router,
     service,
     tick,
+    tickScheduled: () => tick({ scheduled: true }),
     close() {
       closed = true;
       if (timer) clearInterval(timer);

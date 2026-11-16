@@ -250,10 +250,9 @@ test("OS worker停止・別プロセス再起動後も注文を保持し、再�
       stdio: ["ignore", "ignore", "pipe", "ipc"],
     });
     c.send({
-      env: {
-        ...f.economy.service.config(),
-        ...require("../../backend/economy/fixture").fixture().env,
-      },
+      // The restarted process must inherit this isolated scenario's actual
+      // trial/budget configuration, not the historical unit fixture's dates.
+      env: { ...f.env },
       jobId: j.id,
       mode,
     });

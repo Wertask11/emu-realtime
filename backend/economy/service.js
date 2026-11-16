@@ -64,8 +64,17 @@ function createEconomy({
     return { ...auth, spid };
   }
   async function status() {
-    const c = config(),
-      p = (await ref("products", PRODUCT).get()).data(),
+    const c = config();
+    // A disabled/expired service cannot admit a payment. Do not spend three
+    // document reads per heartbeat checking a product that cannot be sold.
+    // A future explicit reconfiguration must read all gates again; no cache.
+    if (!c.enabled)
+      return {
+        service: { ...c, enabled: false, blockers: [...c.blockers] },
+        walletPayment: await polygon.status(),
+        external: require("./external").capability,
+      };
+    const p = (await ref("products", PRODUCT).get()).data(),
       safety = (await ref("system", "provider-safety").get()).data(),
       providerUsage =
         (await ref("free_usage", providerDay(now())).get()).data() || {};
@@ -1182,7 +1191,7 @@ function createEconomy({
       .where("state", "in", LIVE)
       .limit(1)
       .get();
-    if (active.empty) return;
+    if (active.empty) return { idle: true };
     for (const state of LIVE) {
       const s = await db
         .collection("emuer_v2_agent_jobs")
@@ -1234,6 +1243,7 @@ function createEconomy({
         if (state === "result_saved") await settle(d.id);
       }
     }
+    return { idle: false };
   }
   return {
     polygon,
