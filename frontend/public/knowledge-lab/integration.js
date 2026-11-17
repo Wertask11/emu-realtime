@@ -61,7 +61,7 @@
         if (Date.now() < until) setTimeout(open, 150);
         return;
       }
-      window.openSpRoom("/knowledge-lab.html?" + p, "Emu Knowledge Lab");
+      window.openSpRoom("/knowledge-lab.html?" + p, "Knowledge Lab");
     };
     open();
   };

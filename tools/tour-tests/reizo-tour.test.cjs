@@ -35,7 +35,7 @@ test('Knowledge Text (formerly Room1) has one search entrance, as a card beside 
  const start=index.indexOf('id="emuRequestsPage"'),end=index.indexOf('id="emuPracticePage"');assert.ok(index.indexOf('data-tour="room1-entry emu-room1"')>start&&index.indexOf('data-tour="room1-entry emu-room1"')<end);
  // Knowledge Lab と同じ並び（emu-knowledge-pair）の中に、同じ eth-card として置く
  const pair=index.slice(index.indexOf('<div class="emu-knowledge-pair">'),index.indexOf('<div class="eth-section-head">',index.indexOf('<div class="emu-knowledge-pair">')));
- assert.ok(pair.includes('data-tour="emu-lab-entry"')&&pair.includes('<div class="eth-card" data-tour="room1-entry emu-room1"><h3>Emu Knowledge Text</h3>'));
+ assert.ok(pair.includes('data-tour="emu-lab-entry"')&&pair.includes('<div class="eth-card" data-tour="room1-entry emu-room1"><h3>Knowledge Text</h3>'));
  assert.ok(index.includes("openSpRoom('/admin/room1/index.html', 'Knowledge Text')"));
 });
 test('core state/UI never dispatch network requests or app clicks',()=>{
