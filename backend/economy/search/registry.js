@@ -59,7 +59,7 @@ function createRegistry({
     if (
       r?.piiReviewed !== true ||
       r.aiUseApproved !== true ||
-      !(r.validUntilMs > now()) ||
+      !require("../continuous-authorization").sourceCurrent(r, s, env, now()) ||
       r.contentHash !== hash([s.title, s.summary]) ||
       (!legacy && (r.purpose !== PURPOSE || r.rightsVerified !== true)) ||
       (s.originHash && s.originHash !== r?.originHash)

@@ -197,6 +197,9 @@
     service: "使い方・プラン",
   };
   function paintService(service) {
+    $("offeringMode").textContent = service.serviceMode === "continuous"
+      ? "Plus・Pro向け継続提供。実践・記録は追加料金なし。"
+      : "試験提供。実践・記録は追加料金なし。";
     practiceUI?.configure(service.practice);
     const work = service.workflow;
     $("introDescription").textContent = work?.enabled
@@ -276,7 +279,11 @@
         ? "受付状況はログイン後に確認できます。"
         : d.service.blockers?.includes("AI_PROVIDER_DAY_LIMIT")
           ? messages.AI_PROVIDER_DAY_LIMIT
-          : "有料受付は停止中です。提供条件・予算・運用設定を確認しています。";
+          : d.service.blockers?.includes("INTAKE_PAUSED")
+            ? "新しい依頼の受付を一時停止しています。支払い済みの依頼・返却は履歴で確認できます。"
+            : d.service.blockers?.includes("TRIAL_NOT_ACTIVE")
+              ? "試験提供期間が終了したため、新しい依頼の受付は停止しています。"
+              : "有料受付は停止中です。提供条件・予算・運用設定を確認しています。";
     } catch (_) {
       $("availability").textContent =
         "サービスは準備中です。提供状態を確認できるまで有料依頼はできません。";
@@ -707,7 +714,11 @@
         ? "受付中です。料金と条件を確認してから依頼できます。"
         : me.service.blockers?.includes("AI_PROVIDER_DAY_LIMIT")
           ? messages.AI_PROVIDER_DAY_LIMIT
-          : "提供準備中です。条件確認が完了するまで有料依頼は停止しています。";
+          : me.service.blockers?.includes("INTAKE_PAUSED")
+            ? "新しい依頼の受付を一時停止しています。支払い済みの依頼・返却は履歴で確認できます。"
+            : me.service.blockers?.includes("TRIAL_NOT_ACTIVE")
+              ? "試験提供期間が終了したため、新しい依頼の受付は停止しています。"
+              : "提供準備中です。条件確認が完了するまで有料依頼は停止しています。";
       $("quoteButton").disabled =
         !me.service.enabled || me.eligibility?.eligible === false;
       if (me.service.enabled && me.eligibility?.eligible === false)

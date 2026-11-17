@@ -63,14 +63,17 @@ function createEconomy({
     if (!p || p.status !== "active") fail("PASSPORT_REQUIRED", 403);
     return { ...auth, spid };
   }
-  async function status() {
+  async function status({ reserved = false } = {}) {
     const c = config();
+    const blockers = c.blockers.filter(
+      (b) => !(reserved && b === "INTAKE_PAUSED"),
+    );
     // A disabled/expired service cannot admit a payment. Do not spend three
     // document reads per heartbeat checking a product that cannot be sold.
     // A future explicit reconfiguration must read all gates again; no cache.
-    if (!c.enabled)
+    if (blockers.length)
       return {
-        service: { ...c, enabled: false, blockers: [...c.blockers] },
+        service: { ...c, enabled: false, blockers },
         walletPayment: await polygon.status(),
         external: require("./external").capability,
       };
@@ -78,7 +81,7 @@ function createEconomy({
       safety = (await ref("system", "provider-safety").get()).data(),
       providerUsage =
         (await ref("free_usage", providerDay(now())).get()).data() || {};
-    const blockers = [...c.blockers];
+    blockers.push(...require("./offering").productBlockers(c, p, reserved));
     if (safety?.stopped === true)
       blockers.push("PROVIDER_USAGE_REVIEW_REQUIRED");
     if (
@@ -112,12 +115,17 @@ function createEconomy({
     if (
       e?.adultVerified !== true ||
       e?.providerAllowed !== true ||
-      !(e.validUntilMs > now())
+      !require("./continuous-authorization").eligibilityCurrent(
+        e,
+        a.spid,
+        env,
+        now(),
+      )
     )
       fail("AI_AUDIENCE_NOT_VERIFIED", 403);
   }
   async function allowed(a, reserved = false) {
-    const c = (await status()).service;
+    const c = (await status({ reserved })).service;
     if (!reserved && c.blockers.includes("AI_PROVIDER_DAY_LIMIT"))
       fail("AI_PROVIDER_DAY_LIMIT", 429);
     if (
@@ -247,6 +255,7 @@ function createEconomy({
     if (!j || j.spid !== a.spid) fail("JOB_NOT_FOUND", 404);
     return j;
   }
+  const submissions = new Map();
   async function submit(a, b) {
     const method = b.method || "emuer_ledger";
     if (!["emuer_ledger", "emuer_chain"].includes(method))
@@ -256,8 +265,24 @@ function createEconomy({
     if (b.paymentConsent !== true || b.aiConsent !== true)
       fail("CONSENT_REQUIRED", 400);
     const id = hash([a.spid, b.requestId]).slice(0, 40),
-      jr = ref("jobs", id);
-    const fingerprint = hash([b.quoteId, b.termsVersion, method]);
+      fingerprint = hash([b.quoteId, b.termsVersion, method]);
+    const pending = submissions.get(id);
+    if (pending) {
+      if (pending.fingerprint !== fingerprint) fail("IDEMPOTENCY_KEY_CONFLICT");
+      return pending.promise;
+    }
+    // Coalesce same-process retries before any reads/payment. Firestore still
+    // arbitrates across instances and after restarts; this map is not a ledger.
+    const promise = submitOnce(a, b, { id, fingerprint, method });
+    submissions.set(id, { fingerprint, promise });
+    try {
+      return await promise;
+    } finally {
+      if (submissions.get(id)?.promise === promise) submissions.delete(id);
+    }
+  }
+  async function submitOnce(a, b, { id, fingerprint, method }) {
+    const jr = ref("jobs", id);
     const prior = (await jr.get()).data();
     if (prior) {
       if (prior.fingerprint !== fingerprint) fail("IDEMPOTENCY_KEY_CONFLICT");
@@ -276,17 +301,22 @@ function createEconomy({
       pr = ref("usage", hash([bucket, a.spid]));
     await db
       .runTransaction(async (tx) => {
-        const [js, qs, gs, ps] = await Promise.all([
+        const [js, qs, gs, ps, product] = await Promise.all([
           tx.get(jr),
           tx.get(qr),
           tx.get(gr),
           tx.get(pr),
+          c.serviceMode === "continuous"
+            ? tx.get(ref("products", PRODUCT))
+            : null,
         ]);
         if (js.exists) {
           if (js.data().fingerprint !== fingerprint)
             fail("IDEMPOTENCY_KEY_CONFLICT");
           return;
         }
+        if (require("./offering").productBlockers(c, product?.data()).length)
+          fail("SERVICE_DISABLED", 503);
         const q = qs.data(),
           g = gs.data() || {},
           p = ps.data() || {};
@@ -379,7 +409,11 @@ function createEconomy({
         // A concurrent winner may have committed while this transaction exhausted
         // SDK retries or lost its acknowledgement. Resume only that exact owned
         // durable request; never create another payment or loosen a quota gate.
+        const closedTransaction =
+          error.code === 3 &&
+          error.details === "Transaction is invalid or closed.";
         if (
+          !closedTransaction &&
           ![
             4,
             6,
