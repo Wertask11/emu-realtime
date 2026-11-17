@@ -3,7 +3,9 @@
    ・同じ分類の中は「どれか」、違う分類どうしは「すべて」で絞る（Knowledge Lab と同じ考え方）
    ・分類が付いているのは Knowledge Lab で整理した知識だけ。絞り込み中は、分類の無い知識は出ない
    ・本体（knowledge.html）の visible()・countText() を包むだけ。並べ替え・テーマ・言葉の検索はそのまま効く
-   ・分類の名前は Knowledge Lab と同じ一覧（/api/knowledge-lab/taxonomy）を読む。書き込みはしない */
+   ・分類の名前は Knowledge Lab と同じ一覧（/api/knowledge-lab/taxonomy）を読む。書き込みはしない
+   ・11/17 オーナー：スマホの検索は「知識を探す」にある。そこで選んだ分類は EmuKnowledgeFacets.set() で受け取る。
+     スマホではこの画面の検索バーが隠れるので、絞り込み中は投稿の上に「分類で絞り込み中」の帯を出し、そこから外せるようにする */
 (function () {
   'use strict';
   if (typeof state === 'undefined' || typeof visible !== 'function' || typeof render !== 'function') return;
@@ -49,7 +51,9 @@
     + '.kf-chips{display:flex;flex-wrap:wrap;gap:6px}.kf-chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font-size:13px;color:#555}'
     + '.kf-chip[aria-pressed="true"]{border-color:#f2ad62;background:#fff8ee;color:#b75c00;font-weight:700}'
     + '.kf-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}.kf-foot small{color:#85817a;font-size:12px}'
-    + '.kf-clear{border:0;background:transparent;color:#b75c00;font-weight:700;font-size:13px;padding:6px}';
+    + '.kf-clear{border:0;background:transparent;color:#b75c00;font-weight:700;font-size:13px;padding:6px}'
+    + '.kf-active{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff8ee;border:1px solid #f2ad62;border-radius:12px;padding:8px 12px;margin:0 0 14px;font-size:13px;color:#7a4a12}'
+    + '.kf-active[hidden]{display:none}.kf-active b{font-weight:800}.kf-active span{flex:1 1 auto;min-width:0}.kf-active .kf-clear{flex:none;min-height:36px}';
   document.head.appendChild(style);
 
   var bar = document.querySelector('.search');
@@ -62,11 +66,41 @@
   var panel = document.createElement('div');
   panel.className = 'kf-panel'; panel.id = 'facetPanel'; panel.hidden = true;
   bar.insertAdjacentElement('afterend', panel);
+  var active = document.createElement('div');
+  active.className = 'kf-active'; active.id = 'facetActive'; active.hidden = true;
+  active.setAttribute('role', 'status');
+  panel.insertAdjacentElement('afterend', active);
 
   function label() {
     var n = picked();
     btn.textContent = n ? '分類で絞る（' + n + '）' : '分類で絞る';
     btn.classList.toggle('on', n > 0);
+    showActive();
+  }
+  function nameOf(axis, id) {
+    var t = (Array.isArray(state.labTerms) ? state.labTerms : []).filter(function (x) { return x && x.axis === axis && x.id === id; })[0];
+    return t ? t.label : id;
+  }
+  function showActive() {
+    var names = [];
+    Object.keys(sel).forEach(function (axis) { sel[axis].forEach(function (id) { names.push(nameOf(axis, id)); }); });
+    active.hidden = !names.length;
+    if (!names.length) { active.innerHTML = ''; return; }
+    active.innerHTML = '<span><b>分類で絞り込み中：</b>' + esc(names.join('・')) + '</span><button type="button" class="kf-clear" data-kf-clear>絞り込みを外す</button>';
+  }
+  function clean(next) {
+    var out = {};
+    Object.keys(AXES).forEach(function (axis) {
+      var list = next && Array.isArray(next[axis]) ? next[axis] : [];
+      list = list.map(String).filter(function (id, i, a) { return id && id.length <= 80 && a.indexOf(id) === i; }).slice(0, 20);
+      if (list.length) out[axis] = list;
+    });
+    return out;
+  }
+  function syncChips() {
+    panel.querySelectorAll('[data-term]').forEach(function (b) {
+      b.setAttribute('aria-pressed', String((sel[b.getAttribute('data-axis')] || []).indexOf(b.getAttribute('data-term')) >= 0));
+    });
   }
   function draw(list) {
     var html = Object.keys(AXES).map(function (axis) {
@@ -86,6 +120,10 @@
     btn.setAttribute('aria-expanded', String(open));
     if (open) { panel.innerHTML = '<p class="kf-axis">分類を読み込んでいます…</p>'; terms().then(draw); }
   });
+  active.addEventListener('click', function (e) {
+    if (!(e.target.closest && e.target.closest('[data-kf-clear]'))) return;
+    sel = {}; syncChips(); label(); render();
+  });
   panel.addEventListener('click', function (e) {
     var chip = e.target.closest && e.target.closest('[data-term]');
     if (chip) {
@@ -101,5 +139,13 @@
     label();
     render();
   });
-  window.EmuKnowledgeFacets = { selected: function () { return JSON.parse(JSON.stringify(sel)); } };
+  window.EmuKnowledgeFacets = {
+    selected: function () { return JSON.parse(JSON.stringify(sel)); },
+    /* 知識を探す（親の Emu）から、選んだ分類をまるごと置きかえる。空なら絞り込みを外す */
+    set: function (next) {
+      sel = clean(next); syncChips(); label(); render();
+      if (picked()) terms().then(function () { showActive(); });
+      return JSON.parse(JSON.stringify(sel));
+    }
+  };
 })();

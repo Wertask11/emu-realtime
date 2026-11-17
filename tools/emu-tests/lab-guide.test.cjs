@@ -53,10 +53,11 @@ test('名前と文言：Knowledge Lab・Knowledge Text、説明文と3つのカ�
   const w = await openLab();
   try {
     const intro = await w.page.locator('.intro').innerText();
-    /* 11/18 オーナー：説明文と研究所の注意書きは消す。上の帯は「KNOWLEDGE LAB」と「← Emu for SchoolParkに戻る」 */
+    /* 11/18 オーナー：説明文と研究所の注意書きは消す。11/17 オーナー：上の帯の「KNOWLEDGE LAB」の文字も消す。単独で開いたときは「← Emu for SchoolParkに戻る」 */
     assert.doesNotMatch(intro, /誰かの経験が、あなたのヒントになる/);
     assert.doesNotMatch(await w.page.content(), /人が考える研究ノートとして利用できます/);
-    assert.equal((await w.page.locator('.lab-header > div:first-child').innerText()).trim(), 'KNOWLEDGE LAB');
+    assert.equal((await w.page.locator('.lab-header > div:first-child').innerText()).trim(), '');
+    assert.doesNotMatch(await w.page.locator('body').innerText(), /KNOWLEDGE LAB/);
     assert.equal((await w.page.locator('#backToEmu').innerText()).trim(), '← Emu for SchoolParkに戻る');
     assert.equal(await w.page.locator('.lab-step').count(), 0);
     /* 11/18 オーナー：知識図書館は廃止。掛け合わせる画面の名前は「Knowledge Lab」で、開いたら最初にここ */
@@ -187,7 +188,7 @@ addEventListener('message',e=>{if(e.source===f.contentWindow)window.sent.push(e.
     await frame.locator('[data-term="i-shop"]').click();
     await frame.waitForFunction(() => document.querySelectorAll('#posts .card').length === 1);
     assert.deepEqual(await titles(), ['AIで効率化'], '違う分類どうしは「すべて」');
-    await frame.locator('[data-kf-clear]').click();
+    await frame.locator('#facetPanel [data-kf-clear]').click();
     await frame.waitForFunction(() => document.querySelectorAll('#posts .card').length === 3);
     assert.match(await frame.locator('#facetFilter').innerText(), /^分類で絞る$/);
     assert.deepEqual(errors, []);
@@ -203,4 +204,131 @@ test('親（index.html）は、知識を読むへ渡す投稿に分類の ID を
   assert.deepEqual(fn({ facets: { field: ['x1'] } }), { field: ['x1'] });
   assert.deepEqual(fn({}), {});
   assert.match(index, /facets: knowledgeFacetIds\(data\),/);
+});
+
+/* 11/17 オーナー：スマホの検索は「知識を探す」にある。押しても何も起きなかった。分類で絞るもそこに置く */
+function searchParent() {
+  const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const start = index.indexOf('/* 知識を探す（スマホ）の検索：');
+  const code = index.slice(start, index.indexOf('function showEmuRequests()', start));
+  const form = index.match(/<form class="emu-search-entry"[\s\S]*?<\/form>\s*<div class="emu-search-facets"[^>]*><\/div>/)[0];
+  const css = index.match(/\.pe-phone, \.emu-search-entry[\s\S]*?\n\}\n/)[0];
+  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>${css}</style>
+<body style="margin:0;padding:12px">${form}
+<iframe id="emuKnowledgeFrame" src="/knowledge.html" style="width:100%;height:700px;border:0;display:block"></iframe>
+<script>window.feed=0;window.showEmuFeed=()=>{window.feed++;};
+const f=document.getElementById('emuKnowledgeFrame');window.toFrame=m=>f.contentWindow.postMessage(m,location.origin);
+addEventListener('message',e=>{if(e.source===f.contentWindow&&e.data&&e.data.type==='emu-knowledge-ready')f.dataset.ready='true';});</script>
+<script>${code}</script></body>`;
+}
+
+test('知識を探す（スマホ）：「探す」ボタンと「分類で絞る」。選んだ分類は知識を読むへ渡り、投稿の上に「絞り込み中」が出て外せる', async () => {
+  const terms = [{ id: 'f-edu', axis: 'field', label: '教育・学び', active: true }, { id: 'f-it', axis: 'field', label: 'IT・AI', active: true }, { id: 'i-shop', axis: 'industry', label: '小売', active: true }];
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const PARENT = searchParent();
+  await context.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/test/search') return route.fulfill({ contentType: 'text/html; charset=utf-8', body: PARENT });
+    if (url.pathname === '/api/knowledge-lab/taxonomy') return route.fulfill({ json: terms });
+    return url.origin === base ? route.continue() : route.abort();
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  try {
+    await page.goto(base + '/test/search');
+    await page.waitForFunction(() => document.getElementById('emuKnowledgeFrame').dataset.ready === 'true');
+    const frame = page.frames().find(f => f.url().endsWith('/knowledge.html'));
+    const now = new Date().toISOString();
+    await page.evaluate(p => window.toFrame({ type: 'emu-knowledge-posts', posts: p, hasMore: false, totalCount: 3 }), [
+      { id: 'a', title: '授業の工夫', body: '本文', address: '0x' + '1'.repeat(40), displayName: 'A', createdAt: now, facets: { field: ['f-edu'] } },
+      { id: 'b', title: 'AIで効率化', body: '本文', address: '0x' + '2'.repeat(40), displayName: 'B', createdAt: now, facets: { field: ['f-it'], industry: ['i-shop'] } },
+      { id: 'c', title: '分類なしの知識', body: '本文', address: '0x' + '3'.repeat(40), displayName: 'C', createdAt: now }]);
+    await frame.waitForFunction(() => document.querySelectorAll('#posts .card').length === 3);
+
+    // 「探す」ボタンが見えていて、押すと知識を読むで検索する（前は虫めがねの飾りだけで、押しても何も起きなかった）
+    assert.equal(await page.locator('.emu-search-entry .ese-go').isVisible(), true);
+    assert.equal(await page.locator('.emu-search-entry .ese-go').getAttribute('type'), 'submit');
+    await page.fill('.emu-search-entry input', 'AI');
+    await page.click('.emu-search-entry .ese-go');
+    await frame.waitForFunction(() => document.getElementById('search').value === 'AI');
+    assert.equal(await page.evaluate(() => window.feed), 1, '知識を読むを開く');
+    assert.equal(await page.inputValue('.emu-search-entry input'), '');
+
+    // 分類で絞る：選んで「探す」
+    await page.click('#emuSearchFacetBtn');
+    await page.locator('#emuSearchFacets [data-term="f-it"]').click();
+    await page.locator('#emuSearchFacets [data-term="f-edu"]').click();
+    assert.match(await page.locator('#emuSearchFacetBtn').innerText(), /分類で絞る（2）/);
+    await page.click('.emu-search-entry .ese-go');
+    await frame.waitForFunction(() => document.querySelectorAll('#posts .card').length === 2);
+    assert.deepEqual(await frame.evaluate(() => window.EmuKnowledgeFacets.selected()), { field: ['f-it', 'f-edu'] });
+    assert.equal(await frame.inputValue('#search'), '', '言葉なしでも分類だけで探せる');
+    assert.equal(await page.locator('#emuSearchFacets').isVisible(), false, '探したら選ぶ欄は閉じる');
+    // スマホでは知識を読むの検索バーが隠れるので、投稿の上に「絞り込み中」を出す
+    const bar = frame.locator('#facetActive');
+    assert.equal(await bar.isVisible(), true);
+    assert.match(await bar.innerText(), /分類で絞り込み中：IT・AI・教育・学び/);
+    await bar.locator('[data-kf-clear]').click();
+    await frame.waitForFunction(() => document.querySelectorAll('#posts .card').length === 3);
+    assert.equal(await bar.isVisible(), false);
+
+    // 選ぶのをやめて探すと、絞り込みも外れる
+    await page.click('#emuSearchFacetBtn');
+    await page.locator('#emuSearchFacets [data-esf-clear]').click();
+    assert.match(await page.locator('#emuSearchFacetBtn').innerText(), /^分類で絞る$/);
+    await page.click('.emu-search-entry .ese-go');
+    await frame.waitForFunction(() => JSON.stringify(window.EmuKnowledgeFacets.selected()) === '{}');
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+});
+
+test('EmuKnowledgeFacets.set は知らない分類の種類・長すぎる ID・重複を受け取らない', async () => {
+  const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  await context.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/api/knowledge-lab/taxonomy') return route.fulfill({ json: [] });
+    return url.origin === base ? route.continue() : route.abort();
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto(base + '/knowledge.html');
+    await page.waitForFunction(() => window.EmuKnowledgeFacets);
+    const got = await page.evaluate(() => window.EmuKnowledgeFacets.set({ field: ['a', 'a', 'x'.repeat(81), 'b'], evil: ['z'], industry: 'notlist' }));
+    assert.deepEqual(got, { field: ['a', 'b'] });
+    assert.deepEqual(await page.evaluate(() => window.EmuKnowledgeFacets.set(null)), {});
+  } finally { await context.close(); }
+});
+
+test('Knowledge Text のボタンは「Knowledge Textを開く」', () => {
+  const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.match(index, /openSpRoom\('\/admin\/room1\/index\.html', 'Knowledge Text'\)">Knowledge Textを開く →<\/button>/);
+  for (const f of ['index.html', 'reizo/knowledge.js', 'schoolpark/tutorial.html'])
+    assert.doesNotMatch(fs.readFileSync(path.join(ROOT, f), 'utf8'), /教科書をひらく/, f);
+});
+
+/* 11/17 オーナー：スマホで Lab・Text を開いても、上は Emu と同じ（Emu for SchoolPark・プロフィール・冷蔵庫くん）。
+   中の画面は自分の上の帯を隠す。タブレットは今までどおり（自分の「← 戻る」を出す） */
+test('スマホとパソコンでは、Emu の中の Lab・Text は自分の上の帯を隠す。タブレットは出す', async () => {
+  const PARENT = (src) => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><body class="sp-room-embed" style="margin:0"><iframe id="r" src="${src}" style="width:100%;height:700px;border:0"></iframe></body>`;
+  for (const [width, embedded] of [[390, true], [800, false], [1280, true]]) {
+    for (const [src, head] of [['/knowledge-lab.html', '.lab-header'], ['/admin/room1/index.html', 'body > header']]) {
+      const context = await browser.newContext({ viewport: { width, height: 844 } });
+      await context.route('**/*', route => {
+        const url = new URL(route.request().url());
+        if (url.pathname === '/test/room') return route.fulfill({ contentType: 'text/html; charset=utf-8', body: PARENT(src) });
+        return url.origin === base ? route.continue() : route.abort();
+      });
+      const page = await context.newPage();
+      try {
+        await page.goto(base + '/test/room');
+        const frame = page.frameLocator('#r');
+        await frame.locator(head).first().waitFor({ state: 'attached' });
+        assert.equal(await frame.locator('html').evaluate(h => h.classList.contains('emu-embedded')), embedded, `${width} ${src}`);
+        assert.equal(await frame.locator(head).first().isVisible(), !embedded, `${width} ${src} の上の帯`);
+      } finally { await context.close(); }
+    }
+  }
+  const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.match(index, /@media \(max-width:700px\) \{\n  body\.emu-unified\.sp-room-open\.sp-room-embed #spRoomPage \{ top:var\(--emu-room-top, 68px\); left:0; right:0; bottom:var\(--emu-bnav-h\);/);
 });

@@ -2797,15 +2797,35 @@ html.emu-float-dragging iframe { pointer-events:none; }
   body.emu-unified.sp-room-open.sp-room-embed { overflow:hidden; }
   body.emu-unified.sp-room-open.sp-room-embed:not(.emu-nav-closed):not(.emu-sky-open):not(.spmap-open):not(.room2-open):not(.room3-open):not(.paypay-mode):not(.emu-contact-off):not(.cam-contact-off) #emu-contact-btn { display:flex !important; }
 }
+/* Knowledge Lab・Knowledge Text（11/17 オーナー）：スマホも、上の帯（Emu for SchoolPark・プロフィール・冷蔵庫くん）と下のナビを残して、そのあいだに出す。
+   中の画面は自分の上の帯を隠す（emu-embedded.js）。タブレットは今までどおり画面いっぱい */
+@media (max-width:700px) {
+  body.emu-unified.sp-room-open.sp-room-embed #spRoomPage { top:var(--emu-room-top, 68px); left:0; right:0; bottom:var(--emu-bnav-h); z-index:22; background:#f8f6f2; }
+  body.emu-unified.sp-room-open.sp-room-embed { overflow:hidden; }
+}
 /* 知識を探す（スマホ・11/7）：「知識を試す」の入口は見出しだけにする。検索を Knowledge Lab の上に置く。パソコンは今までどおり */
-.pe-phone, .emu-search-entry { display:none; }
+.pe-phone, .emu-search-entry, .emu-search-facets { display:none; }
 @media (max-width:760px) {
   .emu-practice-entry .pe-wide, .emu-practice-entry .pe-desc { display:none; }
   .emu-practice-entry .pe-phone { display:inline; }
   .emu-search-entry { display:flex; align-items:center; gap:4px; margin:0 0 16px; padding:0 15px;
     background:#fff; border:1px solid #e5dfd7; border-radius:12px; }
   .emu-search-entry span { color:#ef7d00; }
-  .emu-search-entry input { flex:1; min-width:0; border:0; outline:0; background:transparent; padding:14px; font:inherit; font-size:16px; }
+  .emu-search-entry input { flex:1; min-width:0; border:0; outline:0; background:transparent; padding:14px 6px 14px 10px; font:inherit; font-size:16px; }
+  /* 11/17：「分類で絞る」と「探す」のボタン。選んだ分類はすぐ下に並べる */
+  .emu-search-entry button { flex:none; border-radius:999px; font:inherit; font-size:13px; font-weight:700; padding:8px 11px; white-space:nowrap; cursor:pointer; }
+  .emu-search-entry .ese-facet { border:1px solid #e5dfd7; background:#fff; color:#555; }
+  .emu-search-entry .ese-facet.on, .emu-search-entry .ese-facet[aria-expanded="true"] { border-color:#f2ad62; background:#fff8ee; color:#b75c00; }
+  .emu-search-entry .ese-go { border:0; background:#ef7d00; color:#fff; margin-right:-7px; }
+  .emu-search-facets:not([hidden]) { display:block; margin:-8px 0 16px; padding:12px 14px; background:#fff; border:1px solid #e5dfd7; border-radius:12px; }
+  .emu-search-facets .esf-axis { margin:4px 0 10px; }
+  .emu-search-facets .esf-axis b { display:block; font-size:12px; color:#85817a; margin-bottom:6px; }
+  .emu-search-facets .esf-chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .emu-search-facets .esf-chip { border:1px solid #e5dfd7; background:#fff; border-radius:999px; padding:7px 12px; font:inherit; font-size:13px; color:#555; cursor:pointer; }
+  .emu-search-facets .esf-chip[aria-pressed="true"] { border-color:#f2ad62; background:#fff8ee; color:#b75c00; font-weight:700; }
+  .emu-search-facets .esf-foot { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:4px; }
+  .emu-search-facets .esf-foot small { color:#85817a; font-size:12px; }
+  .emu-search-facets .esf-foot button { border:0; background:transparent; color:#b75c00; font:inherit; font-size:13px; font-weight:700; padding:6px; cursor:pointer; }
 }
 /* 知識を探す：廃止した「知識を探しています」は出さない */
 #emuRequestsPage > [data-retired] { display:none !important; }
@@ -5497,12 +5517,14 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
   <section class="emu-request-page" id="emuRequestsPage">
     <aside class="emu-practice-entry" data-tour="emu-practice-entry"><div><b><span class="pe-wide">知ったことを、試してみたくなったら</span><span class="pe-phone">知ったことを、試してみたくなった？？</span></b><p class="pe-desc">ギルドの活動やクエストの内容を見られます。見るだけでは参加になりません。</p></div><button type="button" onclick="showEmuPractice()">知識を試す →</button></aside>
     <!-- スマホ（11/7 オーナー）：知識を読むの検索をここへ。探すと「知識を読む」でその言葉の知識を出す（パソコンは出さない） -->
-    <form class="emu-search-entry" role="search" onsubmit="emuSearchKnowledge(this.q.value);return false;"><span aria-hidden="true">⌕</span><input name="q" type="search" enterkeyhint="search" placeholder="悩み・体験・タグから探す" aria-label="知識を検索"></form>
+    <!-- 11/17 オーナー：押しても何も起きないと言われたので「探す」ボタンを付けた。分類（分野・業種など）で絞るのもここ。選んだ分類は知識を読むへ渡す（knowledge-facets.js） -->
+    <form class="emu-search-entry" role="search" onsubmit="emuSearchKnowledge(this.q.value, emuSearchFacetsPicked());return false;"><span aria-hidden="true">⌕</span><input name="q" type="search" enterkeyhint="search" placeholder="悩み・体験・タグから探す" aria-label="知識を検索"><button type="button" class="ese-facet" id="emuSearchFacetBtn" aria-expanded="false" aria-controls="emuSearchFacets" onclick="emuSearchFacetsToggle()">分類で絞る</button><button type="submit" class="ese-go">探す</button></form>
+    <div class="emu-search-facets" id="emuSearchFacets" hidden></div>
     <!-- Knowledge Lab（みんなの経験知）と Knowledge Text（運営の学習教材。旧 Room1）を、同じ大きさのカードで並べる。
          パソコンは横に2枚、スマホは縦に。Knowledge Text は独立タブではなく、全端末でここから開く（11/2 オーナーから） -->
     <div class="emu-knowledge-pair">
       <div class="eth-card" data-tour="emu-lab-entry"><h3>Knowledge Lab</h3><p>教科書にない答えは、経験の中にある。違う経験同士を組み合わせて、自分だけの答えを探す場所。</p><button type="button" class="eth-btn primary" onclick="openEmuKnowledgeLab()">Knowledge Labを開く →</button></div>
-      <div class="eth-card" data-tour="room1-entry emu-room1"><h3>Knowledge Text</h3><p>騙されないお金の守り方、炎上しないSNSの使い方、折れない心のつくり方。学校では教わらない「生きる知識」を、ここで。</p><button type="button" class="eth-btn primary emu-text-entry" onclick="openSpRoom('/admin/room1/index.html', 'Knowledge Text')">教科書をひらく →</button></div>
+      <div class="eth-card" data-tour="room1-entry emu-room1"><h3>Knowledge Text</h3><p>騙されないお金の守り方、炎上しないSNSの使い方、折れない心のつくり方。学校では教わらない「生きる知識」を、ここで。</p><button type="button" class="eth-btn primary emu-text-entry" onclick="openSpRoom('/admin/room1/index.html', 'Knowledge Text')">Knowledge Textを開く →</button></div>
     </div>
     <!-- 11/7 オーナー決定：「知識を探しています（KNOWLEDGE REQUEST）」は廃止。知識を探すは Knowledge Lab と Knowledge Text の2つが主。
          募集の仕組み（knowledge_requests・Lab の「知識を募集する」）は残す。ここは出さず、一覧も読まない。 -->
@@ -15162,20 +15184,97 @@ function showEmuValueProfile(fromPassport) {
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
-/* 知識を探す（スマホ）の検索：知識を読むを開いて、その中の検索欄に言葉を入れる（並びや絞り込みは今までと同じ処理） */
-function emuSearchKnowledge(q) {
+/* 知識を探す（スマホ）の検索：知識を読むを開いて、その中の検索欄に言葉を入れる（並びや絞り込みは今までと同じ処理）。
+   11/17：選んだ分類（facets）も一緒に渡す。知識を読むの EmuKnowledgeFacets.set が受け取り、投稿の上に「絞り込み中」を出す */
+function emuSearchKnowledge(q, facets) {
   q = String(q || '').trim().slice(0, 200);
   window.showEmuFeed?.();
   const started = Date.now();
   (function put() {
     const frame = document.getElementById('emuKnowledgeFrame');
-    let box = null;
-    try { box = frame && frame.dataset.ready === 'true' ? frame.contentDocument?.getElementById('search') : null; } catch (_) {}
-    if (box) { box.value = q; box.dispatchEvent(new Event('input', { bubbles:true })); return; }
+    let box = null, win = null;
+    try {
+      if (frame && frame.dataset.ready === 'true') { box = frame.contentDocument?.getElementById('search'); win = frame.contentWindow; }
+    } catch (_) {}
+    const facetsReady = !facets || !!win?.EmuKnowledgeFacets || Date.now() - started > 3000;   /* 分類の部品が読めないときも、言葉の検索はする */
+    if (box && facetsReady) {
+      if (facets) { try { win.EmuKnowledgeFacets?.set(facets); } catch (_) {} }
+      box.value = q; box.dispatchEvent(new Event('input', { bubbles:true }));
+      return;
+    }
     if (Date.now() - started < 10000) setTimeout(put, 120);
   })();
   const field = document.querySelector('.emu-search-entry input');
   if (field) field.value = '';
+  if (facets) emuSearchFacetsClose();
+}
+/* 知識を探すの「分類で絞る」（11/17 オーナー）。分類の一覧は Knowledge Lab と同じ（読むだけ・ログイン不要） */
+const EMU_SEARCH_AXES = { field:'分野', industry:'業種', occupation:'職業', experience:'経験の種類', purpose:'目的' };
+let _emuSearchSel = {};
+let _emuSearchTerms = null;
+function emuSearchFacetsPicked() { return JSON.parse(JSON.stringify(_emuSearchSel)); }
+function _emuSearchFacetLabel() {
+  const n = Object.keys(_emuSearchSel).reduce((a, k) => a + _emuSearchSel[k].length, 0);
+  const btn = document.getElementById('emuSearchFacetBtn');
+  if (!btn) return;
+  btn.textContent = n ? '分類で絞る（' + n + '）' : '分類で絞る';
+  btn.classList.toggle('on', n > 0);
+}
+function _emuSearchFacetTerms() {
+  if (!_emuSearchTerms) _emuSearchTerms = fetch('/api/knowledge-lab/taxonomy')
+    .then(r => r.ok ? r.json() : [])
+    .then(j => Array.isArray(j) ? j : (j && j.items) || [])
+    .then(list => { if (!list.length) _emuSearchTerms = null; return list; })
+    .catch(() => { _emuSearchTerms = null; return []; });
+  return _emuSearchTerms;
+}
+function _emuSearchFacetDraw(list) {
+  const box = document.getElementById('emuSearchFacets');
+  if (!box) return;
+  const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const html = Object.keys(EMU_SEARCH_AXES).map(axis => {
+    const t = list.filter(x => x && x.axis === axis && x.active !== false && !x.mergedInto);
+    if (!t.length) return '';
+    return '<div class="esf-axis"><b>' + esc(EMU_SEARCH_AXES[axis]) + '</b><div class="esf-chips">' + t.map(x =>
+      '<button type="button" class="esf-chip" data-axis="' + esc(axis) + '" data-term="' + esc(x.id) + '" aria-pressed="' + ((_emuSearchSel[axis] || []).includes(x.id)) + '">' + esc(x.label) + '</button>'
+    ).join('') + '</div></div>';
+  }).join('');
+  box.innerHTML = (html || '<p class="esf-axis">分類を読み込めませんでした。少し待って、もう一度押してください。</p>')
+    + '<div class="esf-foot"><small>選んだら「探す」を押してね。分類が付いているのは Knowledge Lab で整理した知識です。</small><button type="button" data-esf-clear>選ぶのをやめる</button></div>';
+}
+function emuSearchFacetsClose() {
+  const box = document.getElementById('emuSearchFacets');
+  const btn = document.getElementById('emuSearchFacetBtn');
+  if (box) box.hidden = true;
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+function emuSearchFacetsToggle() {
+  const box = document.getElementById('emuSearchFacets');
+  const btn = document.getElementById('emuSearchFacetBtn');
+  if (!box || !btn) return;
+  if (!box.hidden) return emuSearchFacetsClose();
+  box.hidden = false;
+  btn.setAttribute('aria-expanded', 'true');
+  box.innerHTML = '<p class="esf-axis">分類を読み込んでいます…</p>';
+  if (!box._esfBound) {
+    box._esfBound = true;
+    box.addEventListener('click', e => {
+      const chip = e.target.closest && e.target.closest('[data-term]');
+      if (chip) {
+        const axis = chip.getAttribute('data-axis'), id = chip.getAttribute('data-term');
+        const list = _emuSearchSel[axis] || (_emuSearchSel[axis] = []);
+        const i = list.indexOf(id);
+        if (i >= 0) list.splice(i, 1); else list.push(id);
+        if (!list.length) delete _emuSearchSel[axis];
+        chip.setAttribute('aria-pressed', String(i < 0));
+      } else if (e.target.closest && e.target.closest('[data-esf-clear]')) {
+        _emuSearchSel = {};
+        box.querySelectorAll('[data-term]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+      } else return;
+      _emuSearchFacetLabel();
+    });
+  }
+  _emuSearchFacetTerms().then(_emuSearchFacetDraw);
 }
 function showEmuRequests() {
   _emuEnsureAppVisible();
