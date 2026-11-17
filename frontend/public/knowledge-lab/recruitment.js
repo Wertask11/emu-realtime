@@ -8,7 +8,7 @@
       const url = new URL("/knowledge-lab-writers.html", location.origin).href;
       if (navigator.share)
         await navigator.share({
-          title: "あなたの経験を、誰かの知識へ。Emu Knowledge Lab",
+          title: "あなたの経験を、誰かの知識へ。Knowledge Lab",
           url,
         });
       else {

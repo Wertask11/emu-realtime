@@ -46,7 +46,19 @@
   }
   function remember() { var id = liveScreen(); if (id) lastScreen = id; }
   function screenId() { return liveScreen() || lastScreen; }
+  /* 11/17：Knowledge Lab は Emu の中の小部屋（spRoomFrame）で開く。そのあいだ Emu 側は「画面なし」になり、
+     ガイドがいつも「準備中」だった。Lab は自分の画面ごとのガイドを持っているので、それを呼ぶ（lab.js の EmuLabGuide） */
+  function labGuide() {
+    try {
+      if (!document.body.classList.contains('sp-room-open')) return null;
+      var fr = document.getElementById('spRoomFrame');
+      var g = fr && fr.contentWindow && fr.contentWindow.EmuLabGuide;
+      return g && g.available() ? g : null;
+    } catch (_) { return null; }
+  }
   function guideInfo() {
+    var lab = labGuide();
+    if (lab) { var lp = null; try { lp = lab.progress(); } catch (_) {} return { id: 'lab', ok: true, lab: lab, progress: lp }; }
     var id = screenId(), T = window.ReizoTour;
     if (!id || !T || typeof T.list !== 'function') return { id: id, ok: false };
     var ok = T.list().some(function (x) { return x.id === id; });
@@ -80,6 +92,7 @@
       if (!g.ok) return;
       closeChat();
       closeRequestWin();
+      if (g.lab) { g.lab.start(); return; }
       window.ReizoTour.navigate(g.id, false, invoker);
     }
   }

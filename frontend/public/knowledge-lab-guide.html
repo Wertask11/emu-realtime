@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>初回投稿・研究ガイド — Emu Knowledge Lab</title>
+    <title>初回投稿・研究ガイド — Knowledge Lab</title>
     <meta
       name="description"
       content="長い文章でなくても大丈夫です。何が起き、何を試し、何が分かったかを、あなたの言葉で残してください。"
     />
     <meta
       property="og:title"
-      content="初回投稿・研究ガイド — Emu Knowledge Lab"
+      content="初回投稿・研究ガイド — Knowledge Lab"
     />
     <meta
       property="og:description"
@@ -43,7 +43,7 @@
     </header>
     <main class="shell">
       <section class="intro">
-        <p class="eyebrow">EMU KNOWLEDGE LAB</p>
+        <p class="eyebrow">KNOWLEDGE LAB</p>
         <h1>短い経験を、誰かの手がかりへ。</h1>
         <p>
           長い文章でなくても大丈夫です。何が起き、何を試し、何が分かったかを、あなたの言葉で残してください。
@@ -56,7 +56,7 @@
       <section class="card">
         <h2>最初の経験知を届ける</h2>
         <ol>
-          <li>「経験知を届ける」を開く</li>
+          <li>「自分の経験を書く」を開く</li>
           <li>タイトルと本文を書く。必須はこの2つだけ</li>
           <li>分野・業種・経験などを必要な範囲で選ぶ</li>
           <li>出典、注意点、使える条件は分かる範囲で補う</li>
@@ -108,6 +108,29 @@
       ><a href="/knowledge-lab-intro.html">Labについて</a
       ><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a>
     </footer>
+    <!-- 11/17：Knowledge Lab の中の窓（?embed=1）で開いたときは、上の帯を隠し、ページを移らない。
+         「経験知を書き始める」は窓を閉じて書く画面へ。戻る・Emu へのリンクは窓を閉じるだけ。ほかのページは別タブで開く -->
+    <style>html.lab-guide-embed .lab-header{display:none}</style>
+    <script>
+      (function () {
+        if (new URLSearchParams(location.search).get("embed") !== "1" || parent === window) return;
+        document.documentElement.classList.add("lab-guide-embed");
+        function send(action) { try { parent.postMessage({ type: "emu-lab-guide", action: action }, location.origin); } catch (_) {} }
+        document.addEventListener("click", function (event) {
+          var a = event.target.closest && event.target.closest("a[href]");
+          if (!a) return;
+          var href = a.getAttribute("href") || "";
+          if (href === "/" || href.indexOf("/?lab=") === 0 || href.indexOf("/knowledge-lab.html") === 0) {
+            event.preventDefault(); event.stopPropagation();
+            send(/書き始める/.test(a.textContent) ? "compose" : "close");
+          } else if (href === "/knowledge-lab-guide.html") {
+            event.preventDefault(); event.stopPropagation();
+          } else {
+            a.target = "_blank"; a.rel = "noopener";
+          }
+        }, true);
+      })();
+    </script>
     <script src="/knowledge-lab/availability.js"></script>
     <script src="/knowledge-lab/navigation.js"></script>
   </body>
