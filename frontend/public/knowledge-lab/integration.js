@@ -5,7 +5,6 @@
     "library",
     "research",
     "mine",
-    "requests",
     "writer",
     "admin",
   ];
