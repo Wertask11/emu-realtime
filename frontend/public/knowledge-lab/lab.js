@@ -165,7 +165,7 @@
     AI_FIELD_SOURCES_MISSING:
       "選んだ各分野の知識を、少なくとも1件ずつ選んでください。",
     AI_INSUFFICIENT_CONSENTED_SOURCES:
-      "最近の関連知識の中に、投稿者がAI利用に同意した知識が2件以上ありません。元知識を自分で選ぶか、知識を募集してください。",
+      "最近の関連知識の中に、投稿者がAI利用に同意した知識が2件以上ありません。元知識を自分で選んでください。",
     AI_FREE_QUOTA_EXHAUSTED:
       "Geminiの無料枠に達しました。時間をおいて再度お試しください。課金へ切り替えません。",
     AI_MODEL_UNAVAILABLE:
@@ -310,7 +310,6 @@
       integration("close");
     }
   });
-  bindAsync($("#searchExistingKnowledge"), () => view("library"));
   function showLogin() {
     const link = $("#loginLink");
     link.href = "/?lab=" + encodeURIComponent(state.view);
@@ -518,7 +517,7 @@
       "beforeend",
       data.items.map((p) => card(p)).join("") ||
         (!more
-          ? '<article class="card empty"><h3>この条件の知識はまだありません。</h3><p>条件を緩めるか、知りたい知識を募集できます。</p><button type="button" id="emptyReset">条件を緩める</button><button type="button" data-request-empty>知識を募集する</button></article>'
+          ? '<article class="card empty"><h3>この条件の知識はまだありません。</h3><p>条件を緩めるか、あなたの経験を最初の知識として届けてみませんか。</p><button type="button" id="emptyReset">条件を緩める</button><button type="button" data-compose-empty>経験知を届ける</button></article>'
           : ""),
     );
     bindCards("#results", data.items);
@@ -526,9 +525,7 @@
     $("#emptyReset")?.addEventListener("click", () =>
       $("#resetFilters").click(),
     );
-    $("[data-request-empty]")?.addEventListener("click", () =>
-      view("requests"),
-    );
+    $("[data-compose-empty]")?.addEventListener("click", () => compose());
     state.cursors.search = data.next;
     $("#moreResults").hidden = !data.next;
     status("検索結果を表示しました。");
@@ -536,11 +533,11 @@
   }
   async function view(name) {
     if (
-      !["library", "research", "mine", "requests", "writer", "admin"].includes(
-        name,
-      )
+      !["library", "research", "mine", "writer", "admin"].includes(name)
     )
       name = "library";
+    /* 11/17：前の画面のお知らせ（「検索結果を表示しました。」など）が、別の画面に移っても残っていた。移ったら消す */
+    if (state.view !== name && !$("#status").classList.contains("error")) status("");
     state.view = name;
     document
       .querySelectorAll(".view")
@@ -554,14 +551,13 @@
     tour?.enter(tourId(name));
     if (name !== "admin") window.EmuAnalytics?.view("knowledge_lab_view", { section: name }, name);
     if (name === "writer") measure("knowledge_lab_writer_profile", { stage:"view" }, "writer-form-view");
-    if (["mine", "writer", "requests", "admin"].includes(name) && !state.me)
+    if (["mine", "writer", "admin"].includes(name) && !state.me)
       showLogin();
     if (state.loadedViews[name] && Date.now() - state.loadedViews[name] < 30000)
       return;
     state.loadedViews[name] = Date.now();
     if (name === "mine") await loadMine();
     if (name === "research") await publicNotes();
-    if (name === "requests") await loadRequests();
     if (name === "writer") await loadWriters();
     if (name === "admin" && state.me?.owner) await adminSummary();
   }
@@ -1782,74 +1778,8 @@
     });
   }
 
-  async function loadRequests(more = false) {
-    const data = await api(
-      "/requests" +
-        (more && state.cursors.requests
-          ? "?cursor=" + encodeURIComponent(state.cursors.requests)
-          : ""),
-      { auth: true },
-    );
-    if (!more) $("#requestItems").innerHTML = "";
-    $("#requestItems").insertAdjacentHTML(
-      "beforeend",
-      data.items
-        .map(
-          (r) =>
-            `<article class="card"><span class="badge">${r.status === "open" ? "募集中" : "終了"}・回答 ${r.answerCount || 0}</span><h3>${esc(r.question)}</h3><p>${esc(r.context)}</p><p>${esc(r.targetExperience || "")}</p>${badges(r)}<div class="actions"><button type="button" data-answer="${esc(r.id)}">経験を届ける</button><button type="button" data-answers="${esc(r.id)}">届いた知識・採用を確認</button><button type="button" data-lab-answers="${esc(r.id)}">回答を知識として届ける</button></div></article>`,
-        )
-        .join("") ||
-        (!more
-          ? '<p class="card empty">まだ募集はありません。知りたい問いを届けてみませんか？</p>'
-          : ""),
-    );
-    $("#requestItems")
-      .querySelectorAll("[data-answer]")
-      .forEach(
-        (b) =>
-          (b.onclick = () =>
-            integration("answer", { requestId: b.dataset.answer })),
-      );
-    $("#requestItems")
-      .querySelectorAll("[data-answers]")
-      .forEach(
-        (b) =>
-          (b.onclick = () =>
-            integration("answers", { requestId: b.dataset.answers })),
-      );
-    $("#requestItems")
-      .querySelectorAll("[data-lab-answers]")
-      .forEach((b) => bindAsync(b, () => showAnswers(b.dataset.labAnswers)));
-    state.cursors.requests = data.next;
-    $("#requestMore").hidden = !data.next;
-  }
-  bindAsync($("#requestMore"), () => loadRequests(true));
-  $("#requestForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    run(async () => {
-      const payload = {
-        question: $("#requestQuestion").value,
-        context: $("#requestContext").value,
-        targetExperience: $("#requestTarget").value,
-        facets: facetValue("#requestFacets"),
-      };
-      try {
-        await api("/requests", {
-          method: "POST",
-          auth: true,
-          body: { ...payload, key: keyFor("request", payload) },
-        });
-        $("#requestForm").reset();
-        status("募集を保存しました。既存の募集一覧にも表示されます。");
-        await loadRequests();
-      } catch (e) {
-        if (e.message === "USE_EXISTING_REQUEST_FLOW") {
-          integration("request");
-          status("既存の募集画面で懸賞条件を確認して続けてください。");
-        } else throw e;
-      }
-    });
-  });
+  /* 11/17 オーナー：Knowledge Lab の募集の機能（質問を出す・一覧・回答の入口）は全部外した。
+     これまでの募集と回答の記録は消さない。元が募集の回答だった知識の「元の募集・回答を見る」は残す。 */
   async function adminSummary() {
     const s = await api("/admin/summary", { auth: true });
     const labels = {
@@ -2265,7 +2195,6 @@
         .split(",")
         .filter(Boolean);
     facetUI("#excludeFacets", excluded);
-    facetUI("#requestFacets");
     facetUI("#postFacets");
     facetUI("#classifyFacets");
     fillWriter();
@@ -2373,7 +2302,7 @@
         [
           "lab-intro",
           "まずは、経験を探してみよう",
-          "図書館では投稿済みの経験を検索できるよ。経験者へ新しく聞きたいときは「知識を募集する」へ。",
+          "図書館では投稿済みの経験を検索できるよ。見つからなかったら、あなたの経験を最初の知識として届けてみよう。",
         ],
         [
           "lab-library",
@@ -2413,13 +2342,6 @@
           "lab-mine",
           "自分の記録を続きから",
           "公開した経験知、下書き、保存した知識、研究ノートを切り替えられるよ。ノートを開くと編集・履歴・保管・復元へ進めるよ。",
-        ],
-      ],
-      requests: [
-        [
-          "lab-requests",
-          "見つからない答えは、経験者へ聞いてみよう",
-          "ここはEmu「知識を探す」と同じ質問募集だよ。投稿済みの知識を検索する図書館とは使い分けよう。募集内容を入力し、自分で公開ボタンを押すまで投稿されないよ。",
         ],
       ],
       writer: [

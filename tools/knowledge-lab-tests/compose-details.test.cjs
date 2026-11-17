@@ -151,12 +151,17 @@ test('画面：Lab から「経験知を届ける」を押すと、親が共通�
   assert.equal(opened, 1);
 });
 
-test('名前：同じ募集（knowledge_requests）は、Emu でも Lab でも「知識を募集する」と呼ぶ', () => {
+/* 11/17 オーナー：Knowledge Lab の「知識を募集する」は全部外した。タブ・画面・投稿・一覧・案内・運営の一覧のどれも残っていないこと。
+   これまでの記録（knowledge_requests）は消さないので、元が募集の回答だった知識の「元の募集・回答を見る」は残る。 */
+test('Knowledge Lab に「知識を募集する」は無い（タブ・画面・投稿・一覧・案内・運営の一覧）', () => {
   const html = fs.readFileSync(path.join(__dirname, '../../frontend/public/knowledge-lab.html'), 'utf8');
+  const integration = fs.readFileSync(path.join(__dirname, '../../frontend/public/knowledge-lab/integration.js'), 'utf8');
   for (const src of [html, LAB, fs.readFileSync(path.join(__dirname, '../../frontend/public/membership-features.js'), 'utf8')])
     assert.doesNotMatch(src, /経験者に質問する|経験者への質問募集/);
-  assert.match(html, /data-view="requests"[^>]*>\s*知識を募集する</);
-  assert.match(INDEX, /＋ 知識を募集する/);
+  assert.doesNotMatch(html, /知識を募集する|data-view="requests"|id="requests"|requestForm|data-admin-list="requests"/);
+  assert.doesNotMatch(LAB, /知識を募集する|loadRequests|requestForm|data-request-empty|lab-requests|view\("requests"\)/);
+  assert.doesNotMatch(integration, /"requests"/);
+  assert.match(LAB, /id="answerSource">元の募集・回答を見る/, '元が募集の回答だった知識は、元をたどれる');
 });
 
 test('計測：新しい出来事は、数・はい/いいえ・決まった語だけ。本文・題名・分類名・検索語は送れない', () => {
