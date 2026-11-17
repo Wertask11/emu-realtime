@@ -53,7 +53,11 @@ test('名前と文言：Knowledge Lab・Knowledge Text、説明文と3つのカ�
   const w = await openLab();
   try {
     const intro = await w.page.locator('.intro').innerText();
-    assert.match(intro, /誰かの経験が、あなたのヒントになる。見つけて、組み合わせて、今度はあなたの経験を誰かに届けよう。/);
+    /* 11/18 オーナー：説明文と研究所の注意書きは消す。上の帯は「KNOWLEDGE LAB」と「← Emu for SchoolParkに戻る」 */
+    assert.doesNotMatch(intro, /誰かの経験が、あなたのヒントになる/);
+    assert.doesNotMatch(await w.page.content(), /人が考える研究ノートとして利用できます/);
+    assert.equal((await w.page.locator('.lab-header > div:first-child').innerText()).trim(), 'KNOWLEDGE LAB');
+    assert.equal((await w.page.locator('#backToEmu').innerText()).trim(), '← Emu for SchoolParkに戻る');
     /* 11/17（2回目）：「ナレッジテキストと同じぐらいシンプルに」。3枚のカードはやめ、その文を各タブの最初の一言にした */
     assert.equal(await w.page.locator('.lab-step').count(), 0);
     assert.deepEqual(await w.page.$$eval('.view .lead', ps => ps.map(p => p.textContent.trim())), [
@@ -134,4 +138,13 @@ test('ガイドの自動のずらしは、1つの手順につき1回だけ（自
   assert.match(src, /scrolled = false; shifted = false;/, '次の手順に進んだら、また1回ずらせる');
   const lab = fs.readFileSync(path.join(ROOT, 'knowledge-lab/lab.js'), 'utf8');
   assert.match(lab, /"lab-search",\s*"キーワードだけでも探せるよ"/, '検索の案内は、画面全体ではなく検索欄を指す');
+});
+
+/* 11/18 オーナー：「冷蔵庫くんは全部、Emu の冷蔵庫くんの窓（聞く・頼む・この画面のガイドを左上で切り替える）に統一して」 */
+test('Lab の冷蔵庫くんボタンは、Emu の中では Emu の冷蔵庫くんの窓を開く（古い選ぶ窓は使わない）', () => {
+  const lab = fs.readFileSync(path.join(ROOT, 'knowledge-lab/lab.js'), 'utf8');
+  assert.doesNotMatch(lab, /tour\.choose\(/);
+  assert.match(lab, /host\.ReizoTourAsk\(event\.currentTarget\)/);
+  for (const f of ['admin/room1/index.html', 'knowledge.html', 'schoolpark/dao.html'])
+    assert.doesNotMatch(fs.readFileSync(path.join(ROOT, f), 'utf8'), /\.choose\(/, f + ' も古い選ぶ窓を開かない');
 });

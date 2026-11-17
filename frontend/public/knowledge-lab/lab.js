@@ -298,7 +298,8 @@
       });
     return data;
   }
-  $(".brand").addEventListener("click", (e) => {
+  // 11/18：上の帯の「Emu」の文字（.brand）は外した。ほかのページから戻ってきたときに残っている場合だけ動かす
+  $(".brand")?.addEventListener("click", (e) => {
     if (parent !== window) {
       e.preventDefault();
       integration("close");
@@ -2348,8 +2349,8 @@
         ],
         [
           "lab-back",
-          "Emuへはここから戻れるよ",
-          "「Emuに戻る」で、もとのEmu画面へ。上の「冷蔵庫くん」から、この説明や今開いている画面の案内をいつでも見返せるよ。",
+          "Emu for SchoolParkへはここから戻れるよ",
+          "「Emu for SchoolParkに戻る」で、もとの画面へ。上の「冷蔵庫くん」から、この説明や今開いている画面の案内をいつでも見返せるよ。",
         ],
       ],
       research: [
@@ -2422,16 +2423,12 @@
         if (parent !== window && typeof parent.spReizoOpen === "function")
           host = parent;
       } catch (_) {}
-      if (typeof tour.choose !== "function" || !host)
-        return tour.restart(tourId(state.view));
-      tour.choose(
-        tourId(state.view),
-        () => host.spReizoOpen(),
-        event.currentTarget,
-        typeof host.openReizoRequest === "function"
-          ? () => host.openReizoRequest()
-          : undefined,
-      );
+      /* 11/18 オーナー：「冷蔵庫くんは全部、Emu の冷蔵庫くんの窓に統一して」。
+         前はここだけ古い選ぶ窓（ガイド・聞く・頼むのボタン3つ）を開いていた。Emu の中では Emu の冷蔵庫くんを開く
+         （左上の切り替えで、聞く・頼む・この画面のガイド（Lab のガイド）を選べる）。Lab だけを開いているときはガイド */
+      if (!host) return tour.restart(tourId(state.view));
+      if (typeof host.ReizoTourAsk === "function") host.ReizoTourAsk(event.currentTarget);
+      else host.spReizoOpen();
     };
   }
   /* 11/17：はじめての使い方・投稿ガイドは、ページを移らずにこの中の窓で開く。
