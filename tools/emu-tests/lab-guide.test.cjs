@@ -54,10 +54,15 @@ test('名前と文言：Knowledge Lab・Knowledge Text、説明文と3つのカ�
   try {
     const intro = await w.page.locator('.intro').innerText();
     assert.match(intro, /誰かの経験が、あなたのヒントになる。見つけて、組み合わせて、今度はあなたの経験を誰かに届けよう。/);
-    assert.deepEqual(await w.page.$$eval('.lab-step', bs => bs.map(b => b.innerText.replace(/\s+/g, ' ').trim())), [
-      '1. 探す 気になる言葉で、みんなの経験を探す',
-      '2. 掛け合わせる 違う経験を2〜3つ重ねると、自分だけの答えが見えてくる',
-      '3. 届ける あなたの経験も、誰かの役に立つ。書いて届けよう']);
+    /* 11/17（2回目）：「ナレッジテキストと同じぐらいシンプルに」。3枚のカードはやめ、その文を各タブの最初の一言にした */
+    assert.equal(await w.page.locator('.lab-step').count(), 0);
+    assert.deepEqual(await w.page.$$eval('.view .lead', ps => ps.map(p => p.textContent.trim())), [
+      '気になる言葉で、みんなの経験を探す',
+      '違う経験を2〜3つ重ねると、自分だけの答えが見えてくる',
+      '保存した知識・自分の経験知・研究ノートの置き場所',
+      'あなたの経験も、誰かの役に立つ。書いて届けよう']);
+    assert.equal(await w.page.locator('#moreSearch').evaluate(d => d.open), false, '細かい条件はたたんでおく');
+    assert.equal(await w.page.locator('#searchForm .search-row #query').count(), 1, '検索は1行');
     assert.equal((await w.page.locator('#library [data-compose]').first().innerText()).trim(), '自分の経験を書く');
     assert.doesNotMatch(intro, /別タブ/);
     assert.deepEqual(w.errors, []);
@@ -114,4 +119,19 @@ test('冷蔵庫くんの「この画面のガイド」：Lab を開いている�
   classes.delete('sp-room-open');
   assert.equal(ctx.guideInfo().ok, false, '小部屋を閉じていれば、Emu の画面のガイドを見る（ここでは無い）');
   assert.match(src, /if \(g\.lab\) \{ g\.lab\.start\(\); return; \}/, '選んだら Lab のガイドを始める');
+});
+
+test('知識を試すの説明文はオーナーの指定どおり', () => {
+  const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.match(index, /<p>同じ興味の仲間が集まる場所。みんなの挑戦や悩みを見て、『自分もやってみよう』が見つかる。<\/p>/);
+  assert.match(index, /<p>知識を、実際にやってみよう。完了を報告して、知恵カードとして残そう。<\/p>/);
+});
+
+/* 冷蔵庫くんのガイド：大きな対象を案内しているとき、スクロールのたびに元の位置へ戻していた（「スクロール進まない」） */
+test('ガイドの自動のずらしは、1つの手順につき1回だけ（自分のスクロールを戻さない）', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'tour/reizo-tour.js'), 'utf8');
+  assert.match(src, /if \(!shifted\) \{\s*shifted = true;/);
+  assert.match(src, /scrolled = false; shifted = false;/, '次の手順に進んだら、また1回ずらせる');
+  const lab = fs.readFileSync(path.join(ROOT, 'knowledge-lab/lab.js'), 'utf8');
+  assert.match(lab, /"lab-search",\s*"キーワードだけでも探せるよ"/, '検索の案内は、画面全体ではなく検索欄を指す');
 });

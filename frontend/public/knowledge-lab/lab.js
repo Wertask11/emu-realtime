@@ -528,7 +528,9 @@
     $("[data-compose-empty]")?.addEventListener("click", () => compose());
     state.cursors.search = data.next;
     $("#moreResults").hidden = !data.next;
-    status("検索結果を表示しました。");
+    syncFieldCards();
+    /* 11/17：検索のたびの「検索結果を表示しました。」は出さない（結果そのものが見えるので）。前のお知らせは消す */
+    if (!$("#status").classList.contains("error")) status("");
     if (parent === window) history.replaceState(null, "", sharedURL());
   }
   async function view(name) {
@@ -2183,6 +2185,35 @@
     }),
   );
   bindAsync($("#adminMore"), () => adminList(true));
+  /* 11/17：分野のカード（Knowledge Text の「どれを磨く？」と同じ形）。押すと、その分野で探す。もう一度押すと外す。
+     中身は「詳しい条件」の分野のチェックと同じ（そちらと同期する） */
+  function fieldBox(id) {
+    return [...document.querySelectorAll('#searchFacets [data-axis="field"] input')].find((i) => i.value === id);
+  }
+  function syncFieldCards() {
+    document.querySelectorAll("#fieldCards [data-field]").forEach((b) =>
+      b.setAttribute("aria-pressed", String(!!fieldBox(b.dataset.field)?.checked)));
+  }
+  function renderFieldCards() {
+    const box = $("#fieldCards");
+    if (!box) return;
+    box.innerHTML = state.terms
+      .filter((t) => t.axis === "field" && t.active && !t.mergedInto)
+      .map((t) => `<button type="button" class="field-card" data-field="${esc(t.id)}" aria-pressed="false">${esc(t.label)}</button>`)
+      .join("");
+    if ($("#fieldLabel")) $("#fieldLabel").hidden = !box.children.length;
+    box.querySelectorAll("[data-field]").forEach((b) =>
+      bindAsync(b, async () => {
+        const input = fieldBox(b.dataset.field);
+        if (!input) return;
+        input.checked = !input.checked;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        syncFieldCards();
+        await search();
+      }));
+    $("#searchFacets")?.addEventListener("change", syncFieldCards);
+    syncFieldCards();
+  }
   function renderFacets() {
     const params = new URLSearchParams(location.search),
       value = {};
@@ -2205,6 +2236,7 @@
           `<label><input type="checkbox" value="${esc(t.id)}">${esc(t.label)}</label>`,
       )
       .join("");
+    renderFieldCards();
     $("#query").value = params.get("q") || "";
     $("#searchMode").value =
       params.get("mode") === "semantic" ? "semantic" : "lexical";
@@ -2305,9 +2337,9 @@
           "図書館では投稿済みの経験を検索できるよ。見つからなかったら、あなたの経験を最初の知識として届けてみよう。",
         ],
         [
-          "lab-library",
+          "lab-search",
           "キーワードだけでも探せるよ",
-          "知りたいことを入力して検索。分野・業種などの細かい条件は、必要なときだけ開こう。自分の経験は「自分の経験を書く」から書けるよ。",
+          "知りたいことを入力して「探す」。分野のカードを押すと、その分野だけで探せるよ。細かい条件は「詳しい条件で探す」にしまってあるよ。",
         ],
         [
           "lab-tabs",
