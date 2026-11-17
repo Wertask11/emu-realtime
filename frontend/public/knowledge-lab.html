@@ -57,22 +57,13 @@
         <p>
           誰かの経験が、あなたのヒントになる。見つけて、組み合わせて、今度はあなたの経験を誰かに届けよう。
         </p>
-        <!-- 11/17 オーナー：「ナレッジラボのページをわかりやすくしたい」。ここでできることを3つに絞って最初に見せる。
-             押すと、その画面（タブ）へ移る -->
-        <div class="lab-steps" aria-label="ここでできること">
-          <button type="button" class="lab-step" data-view="library"><b>1. 探す</b><span>気になる言葉で、みんなの経験を探す</span></button>
-          <button type="button" class="lab-step" data-view="research"><b>2. 掛け合わせる</b><span>違う経験を2〜3つ重ねると、自分だけの答えが見えてくる</span></button>
-          <button type="button" class="lab-step" data-view="writer"><b>3. 届ける</b><span>あなたの経験も、誰かの役に立つ。書いて届けよう</span></button>
-        </div>
         <!-- 11/17：前は別タブで開いていた。スマホ・アプリ内のブラウザでは同じ画面で開いてしまい、
              ガイドの「戻る」で Emu が最初（ロゴの画面）から読み直しになっていた。ナレッジラボの中の窓で開く -->
         <a href="/knowledge-lab-guide.html" id="openGuide"
           >はじめての使い方・投稿ガイド →</a
         >
       </section>
-      <div id="status" class="status" role="status" aria-live="polite">
-        準備を確認しています…
-      </div>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
       <div id="loginBox" class="notice" hidden>
         <p>
           読む・探すことはログインなしで。保存・投稿・研究には、記録をあなたにつなげるためにログインが必要です。
@@ -101,26 +92,28 @@
         </button>
       </nav>
       <section id="library" class="view" data-tour="lab-library">
-        <div class="section-heading">
-          <div>
-            <h2>経験知を探す</h2>
-            <p>分類を組み合わせて、今のあなたに必要な知識へ。</p>
-          </div>
+        <!-- 11/17 オーナー：「ナレッジテキストと同じぐらいシンプルに」。
+             一言の説明・1行の検索・分野のカードだけを見せ、細かい条件は「詳しい条件で探す」にたたむ -->
+        <div class="lab-lead-row">
+          <p class="lead">気になる言葉で、みんなの経験を探す</p>
           <button type="button" class="primary" data-compose>
             自分の経験を書く
           </button>
         </div>
-        <form id="searchForm" class="card">
-          <label for="query">キーワード</label
-          ><input
-            id="query"
-            name="q"
-            maxlength="120"
-            placeholder="例：独立、育児、失敗から学んだこと"
-          />
-          <p class="hint">
-            キーワードと複数の分類を組み合わせて探せます。検索方法は下で選べます。
-          </p>
+        <form id="searchForm" class="search-card" data-tour="lab-search">
+          <div class="search-row">
+            <label for="query" class="visually-hidden">キーワード</label
+            ><input
+              id="query"
+              name="q"
+              maxlength="120"
+              placeholder="例：独立、育児、失敗から学んだこと"
+            /><button class="primary" type="submit">探す</button>
+          </div>
+          <p class="lab-label" id="fieldLabel" hidden>どの分野から探す？</p>
+          <div id="fieldCards" class="field-grid"></div>
+          <details id="moreSearch">
+          <summary>詳しい条件で探す（任意）</summary>
           <details id="advancedSearch">
             <summary>検索方法・除外条件</summary>
             <div class="facets">
@@ -201,15 +194,13 @@
             ><button type="button" id="resetFilters">条件を緩める</button
             ><button type="button" id="shareSearch">条件のURLをコピー</button>
           </div>
+          </details>
         </form>
         <div id="results" class="grid" aria-live="polite"></div>
         <button type="button" id="moreResults" hidden>さらに読む</button>
       </section>
       <section id="research" class="view" hidden data-tour="lab-research">
-        <h2>知識掛け合わせ研究所</h2>
-        <p>
-          2〜3分野の知識を選び、比較して、新しい問いや実践案を考えます。仮説は事実や検証結果と区別して残します。
-        </p>
+        <p class="lead">違う経験を2〜3つ重ねると、自分だけの答えが見えてくる</p>
         <p class="notice">
           人が考える研究ノートとして利用できます。AIが有効な場合は、元知識を選ぶか、選択した分野から同意済みの公開知識を自動取得して分析できます。AIの結果は未検証の仮説です。
         </p>
@@ -307,8 +298,7 @@
         </button>
       </section>
       <section id="mine" class="view" hidden data-tour="lab-mine">
-        <h2>マイライブラリー</h2>
-        <p>保存した知識、自分の経験知、研究ノートの置き場所です。見たいものを下のボタンで選んでください。</p>
+        <p class="lead">保存した知識・自分の経験知・研究ノートの置き場所</p>
         <div class="card" id="storageUsage" role="status"></div>
         <div class="actions"><button type="button" id="membershipPlan">プラン・利用枠を確認する</button><a href="/membership-plans.html" target="_blank" rel="noopener">無料・各プラン・公式パスの違い</a></div>
         <div class="actions">
@@ -336,8 +326,8 @@
         </details>
       </section>
       <section id="writer" class="view" hidden data-tour="lab-writer">
-        <h2>あなたの経験を、誰かの知識へ。</h2>
-        <p>
+        <p class="lead">あなたの経験も、誰かの役に立つ。書いて届けよう</p>
+        <p class="hint">
           資格や肩書きは必須ではありません。書き手プロフィールはPassport
           IDとつながります。本名・勤務先・連絡先の入力は不要です。
         </p>

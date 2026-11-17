@@ -5,7 +5,7 @@
   var KEY = 'rk-tour-v1', definitions = new Map(), listeners = new Set();
   var state = { version: 1, tours: Object.create(null) }, storageAvailable = true;
   var active = null, currentScreen = null, generation = 0, cleanup = [], raf = 0, timeout = 0;
-  var targetObserver = null, observedTarget = null, scrolled = false;
+  var targetObserver = null, observedTarget = null, scrolled = false, shifted = false;
   var activeDocuments = [];
   var ui = null, source = null, sourceSelector = '', sourceDocument = document, sourceRestore = null, pendingNavigation = 0, navigationSequence = 0;
   var STATES = ['not_started', 'in_progress', 'done', 'skipped'];
@@ -220,9 +220,14 @@
             while (scroll && !/(auto|scroll)/.test(owner.getComputedStyle(scroll).overflowY)) scroll = scroll.parentElement;
             if (vw <= 768 && !ui.expandedByUser && !ui.panel.classList.contains('rk-collapsed')) { ui.panel.classList.add('rk-collapsed'); ui.fold.textContent='説明を開く'; h=ui.panel.getBoundingClientRect().height; top=bottom-h; }
             var delta = r.bottom - top + gap;
-            if (scroll && scroll.scrollHeight > scroll.clientHeight && delta > 0) scroll.scrollTop += delta;
-            else if (delta > 0 && el.ownerDocument.documentElement.scrollHeight > owner.innerHeight) owner.scrollBy(0, delta);
-            r = parentRect(el);
+            /* 11/17：ずらすのは1つの手順につき1回だけ。前はスクロールのたびにここが動き、自分でスクロールしても
+               元の位置へ戻されて「スクロールが進まない」になっていた（大きな対象を案内しているとき） */
+            if (!shifted) {
+              shifted = true;
+              if (scroll && scroll.scrollHeight > scroll.clientHeight && delta > 0) scroll.scrollTop += delta;
+              else if (delta > 0 && el.ownerDocument.documentElement.scrollHeight > owner.innerHeight) owner.scrollBy(0, delta);
+              r = parentRect(el);
+            }
           }
         }
       }
@@ -340,7 +345,7 @@
     [ui.back,ui.next,ui.skip,ui.later].forEach(function (el) { el.hidden = false; });
     ui.request.hidden = true; ui.request.onclick = function () {};
     ui.next.onclick = nextStep; ui.later.onclick = function () { pause(); };
-    var el = findTarget(def, step); scrolled = false;
+    var el = findTarget(def, step); scrolled = false; shifted = false;
     var token = generation;
     var docs = documentsFor(def), observed = new Set();
     activeDocuments = docs;
