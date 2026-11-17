@@ -180,7 +180,7 @@ function createSources({
         approval.aiUseApproved !== true ||
         approval.purpose !== SERVICE.termsVersion ||
         approval.contentHash !== hash([s.title, s.summary]) ||
-        !(approval.validUntilMs > now())
+        !require("./continuous-authorization").sourceCurrent(approval, s, env, now())
       )
         continue;
       approved.push(s);

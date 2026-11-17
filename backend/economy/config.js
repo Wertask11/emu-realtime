@@ -54,9 +54,13 @@ function configuration(env = process.env, now = Date.now()) {
     blockers.push("MONETARY_CAP_UNVERIFIED");
   const trialStartMs = Date.parse(env.ECONOMY_EXPLORER_TRIAL_START || ""),
     trialEndMs = trialStartMs + SERVICE.trialDays * 86400000;
-  if (!Number.isFinite(trialStartMs)) blockers.push("TRIAL_NOT_CONFIGURED");
-  else if (now < trialStartMs || now >= trialEndMs)
-    blockers.push("TRIAL_NOT_ACTIVE");
+  const offering = require("./offering").lifecycle(env, now);
+  blockers.push(...offering.offeringBlockers);
+  if (offering.serviceMode === "trial") {
+    if (!Number.isFinite(trialStartMs)) blockers.push("TRIAL_NOT_CONFIGURED");
+    else if (now < trialStartMs || now >= trialEndMs)
+      blockers.push("TRIAL_NOT_ACTIVE");
+  }
   if (!plans.length) blockers.push("ELIGIBILITY_UNCONFIGURED");
   if (
     !Number.isSafeInteger(budget) ||
@@ -83,6 +87,10 @@ function configuration(env = process.env, now = Date.now()) {
     reserveTokens: SERVICE.requestTokens,
     trialStartMs: Number.isFinite(trialStartMs) ? trialStartMs : null,
     trialEndMs: Number.isFinite(trialEndMs) ? trialEndMs : null,
+    serviceMode: offering.serviceMode,
+    intakeEnabled: offering.intakeEnabled,
+    offering: offering.offering,
+    continuousApprovalRef: offering.continuousApprovalRef,
     chainPaymentEnabled: false,
     billingMode: "free-only",
   };

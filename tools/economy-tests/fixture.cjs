@@ -32,6 +32,7 @@ async function createFixture({
   crossDomain = false,
   phase3 = false,
   phase4 = false,
+  continuous = false,
 } = {}) {
   const reset = await fetch(
     "http://" +
@@ -79,7 +80,21 @@ async function createFixture({
       ECONOMY_EXPLORER_ENABLED: enabled ? "true" : "false",
       // Local demo only. Keep success-path tests valid after the historical
       // production trial expires; real cutoff rejection has a separate test.
-      ECONOMY_EXPLORER_TRIAL_START: new Date(Date.now() - 86400000).toISOString(),
+      ECONOMY_EXPLORER_TRIAL_START: new Date(
+        Date.now() - 86400000,
+      ).toISOString(),
+      ...(continuous
+        ? {
+            ECONOMY_EXPLORER_TRIAL_START: "2026-11-07T06:48:46.671Z",
+            ECONOMY_SERVICE_MODE: "continuous",
+            ECONOMY_CONTINUOUS_START: new Date(
+              Date.now() - 60000,
+            ).toISOString(),
+            ECONOMY_CONTINUOUS_APPROVAL_REF:
+              "isolated_continuous_native_approval",
+            ECONOMY_INTAKE_ENABLED: "true",
+          }
+        : {}),
       ECONOMY_PHASE3_ENABLED: phase3 ? "true" : "false",
       ECONOMY_PHASE4_ENABLED: phase4 ? "true" : "false",
       ...(crossDomain
@@ -228,6 +243,17 @@ async function createFixture({
       prices: { EMUER: 5 },
       stock: null,
       termsVersion: SERVICE.termsVersion,
+      ...(continuous
+        ? {
+            offering: {
+              version: 1,
+              mode: "continuous",
+              approvalRef: f.env.ECONOMY_CONTINUOUS_APPROVAL_REF,
+              startedAtMs: Date.parse(f.env.ECONOMY_CONTINUOUS_START),
+              intakeEnabled: true,
+            },
+          }
+        : {}),
     });
   const users = {};
   for (const role of ["alice", "bob", "guest", "light", "pro"]) {
@@ -499,6 +525,8 @@ async function createFixture({
     base,
     db,
     users,
+    identity,
+    entitlement,
     economy,
     commerce,
     knowledge,
