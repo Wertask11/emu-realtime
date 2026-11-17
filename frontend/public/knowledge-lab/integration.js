@@ -37,8 +37,8 @@
       })
     );
   }
-  window.openEmuKnowledgeLab = (view = "library", options = {}) => {
-    if (!allowed.includes(view)) view = "library";
+  window.openEmuKnowledgeLab = (view = "research", options = {}) => {
+    if (!allowed.includes(view)) view = "research";
     const p = new URLSearchParams({ view });
     if (options.compose) p.set("compose", "1");
     if (validId(options.edit)) p.set("edit", options.edit);
